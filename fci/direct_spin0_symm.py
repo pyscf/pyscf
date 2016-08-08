@@ -178,6 +178,9 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
             x[addra,addrb] = x[addrb,addra] = numpy.sqrt(.5)
         ci0.append(x.ravel())
 
+    if len(ci0) == 0:
+        raise RuntimeError('No determinant matches the target symmetry %s' %
+                           wfnsym)
     return ci0
 
 
