@@ -667,19 +667,18 @@ class _NumInt(pyscf.dft.numint._NumInt):
             self.cache_ao(cell, kpt, deriv, grids.coords, nao, blksize)
 
         with h5py.File(self._ao.name, 'r') as f:
-            for ip0 in range(0, ngrids, blksize):
-                ip1 = min(ngrids, ip0+blksize)
-                coords = grids.coords[ip0:ip1]
-                weight = grids.weights[ip0:ip1]
-                non0 = non0tab[ip0//BLKSIZE:]
+            for p0, p1 in prange(0, ngrids, blksize):
+                coords = grids.coords[p0:p1]
+                weight = grids.weights[p0:p1]
+                non0 = non0tab[p0//BLKSIZE:]
                 #:ao_k2 = self.eval_ao(cell, coords, kpt2, deriv=deriv)
                 if comp == 1:
                     if self._deriv == 0:
-                        ao_k2 = f['ao'][ip0:ip1]
+                        ao_k2 = f['ao'][p0:p1]
                     else:
-                        ao_k2 = f['ao'][ip0:ip1][0]
+                        ao_k2 = f['ao'][0,p0:p1]
                 else:
-                    ao_k2 = f['ao'][ip0:ip1][:comp]
+                    ao_k2 = f['ao'][:comp,p0:p1]
                 if kpt_band is None or abs(kpt1-kpt2).sum() < 1e-9:
                     ao_k1 = ao_k2
                 else:
@@ -703,9 +702,11 @@ class _NumInt(pyscf.dft.numint._NumInt):
                 f.create_dataset('ao', shape, 'f8')
             else:
                 f.create_dataset('ao', shape, 'c16')
-            for ip0 in range(0, ngrids, blksize):
-                ip1 = min(ngrids, ip0+blksize)
-                f['ao'][ip0:ip1] = self.eval_ao(cell, coords[ip0:ip1], kpt, deriv=deriv)
+            for p0, p1 in prange(0, ngrids, blksize):
+                if comp == 1:
+                    f['ao'][p0:p1] = self.eval_ao(cell, coords[p0:p1], kpt, deriv=deriv)
+                else:
+                    f['ao'][:,p0:p1] = self.eval_ao(cell, coords[p0:p1], kpt, deriv=deriv)
 
     def _gen_rho_evaluator(self, cell, dms, hermi=0):
         return pyscf.dft.numint._NumInt._gen_rho_evaluator(self, cell, dms, 0)
@@ -837,19 +838,18 @@ class _KNumInt(pyscf.dft.numint._NumInt):
             self.cache_ao(cell, kpts, deriv, grids.coords, nao, blksize)
 
         with h5py.File(self._ao.name, 'r') as f:
-            for ip0 in range(0, ngrids, blksize):
-                ip1 = min(ngrids, ip0+blksize)
-                coords = grids.coords[ip0:ip1]
-                weight = grids.weights[ip0:ip1]
-                non0 = non0tab[ip0//BLKSIZE:]
+            for p0, p1 in prange(0, ngrids, blksize):
+                coords = grids.coords[p0:p1]
+                weight = grids.weights[p0:p1]
+                non0 = non0tab[p0//BLKSIZE:]
                 #:ao_k2 = self.eval_ao(cell, coords, kpts, deriv=deriv)
                 if comp == 1:
                     if self._deriv == 0:
-                        ao_k2 = [f['ao/%d'%k][ip0:ip1] for k in range(nkpts)]
+                        ao_k2 = [f['ao/%d'%k][p0:p1] for k in range(nkpts)]
                     else:
-                        ao_k2 = [f['ao/%d'%k][ip0:ip1][0] for k in range(nkpts)]
+                        ao_k2 = [f['ao/%d'%k][0,p0:p1] for k in range(nkpts)]
                 else:
-                    ao_k2 = [f['ao/%d'%k][ip0:ip1][:comp] for k in range(nkpts)]
+                    ao_k2 = [f['ao/%d'%k][:comp,p0:p1] for k in range(nkpts)]
                 if kpt_band is None:
                     ao_k1 = ao_k2
                 else:
@@ -879,11 +879,14 @@ class _KNumInt(pyscf.dft.numint._NumInt):
                     f.create_dataset('ao/%d'%k, shape, 'f8')
                 else:
                     f.create_dataset('ao/%d'%k, shape, 'c16')
-            for ip0 in range(0, ngrids, blksize):
-                ip1 = min(ngrids, ip0+blksize)
-                ao_kpts = self.eval_ao(cell, coords[ip0:ip1], kpts, deriv=deriv)
+            for p0, p1 in prange(0, ngrids, blksize):
+                ao_kpts = self.eval_ao(cell, coords[p0:p1], kpts, deriv=deriv)
                 for k in range(nkpts):
-                    f['ao/%d'%k][ip0:ip1] = ao_kpts[k]
+                    if comp == 1:
+                        f['ao/%d'%k][p0:p1] = ao_kpts[k]
+                    else:
+                        f['ao/%d'%k][:,p0:p1] = ao_kpts[k]
+                ao_kpts = None
 
     def _gen_rho_evaluator(self, cell, dms, hermi=1):
         if isinstance(dms, numpy.ndarray) and dms.ndim == 3:
@@ -898,3 +901,7 @@ class _KNumInt(pyscf.dft.numint._NumInt):
 
     large_rho_indices = large_rho_indices
 
+
+def prange(start, end, step):
+    for i in range(start, end, step):
+        yield i, min(i+step, end)
