@@ -33,9 +33,9 @@ from pyscf.fci import addons
 libfci = pyscf.lib.load_library('libfci')
 
 def reorder4irrep(eri, norb, link_index, orbsym):
-    if not list(orbsym):
+    if orbsym is None:
         return eri, link_index, numpy.array(norb, dtype=numpy.int32)
-    orbsym = numpy.array(orbsym)
+    orbsym = numpy.asarray(orbsym)
 # map irrep IDs of Dooh or Coov to D2h, C2v
 # see symm.basis.linearmole_symm_descent
     orbsym = orbsym % 10
@@ -55,7 +55,7 @@ def reorder4irrep(eri, norb, link_index, orbsym):
     link_index_irrep[:,:,0] = rank[link_index[:,:,0]]
     return numpy.asarray(eri, order='C'), link_index_irrep, dimirrep
 
-def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=[]):
+def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=None):
     return direct_spin1.contract_1e(f1e, fcivec, norb, nelec, link_index)
 
 # Note eri is NOT the 2e hamiltonian matrix, the 2e hamiltonian is
@@ -66,9 +66,9 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=[]):
 # to restore the symmetry between pq and rs,
 #       eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
 # Please refer to the treatment in direct_spin1.absorb_h1e
-def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
+def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None):
     fcivec = numpy.asarray(fcivec, order='C')
-    if not list(orbsym):
+    if orbsym is None:
         return direct_spin1.contract_2e(eri, fcivec, norb, nelec, link_index)
 
     eri = pyscf.ao2mo.restore(4, eri, norb)
@@ -97,7 +97,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
 
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
            lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
-           davidson_only=False, pspace_size=400, orbsym=[], wfnsym=None,
+           davidson_only=False, pspace_size=400, orbsym=None, wfnsym=None,
            **kwargs):
     assert(len(orbsym) == norb)
     cis = FCISolver(None)
@@ -160,7 +160,7 @@ def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
 def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
     return direct_spin1.trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)
 
-def energy(h1e, eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
+def energy(h1e, eri, fcivec, norb, nelec, link_index=None, orbsym=None):
     h2e = direct_spin1.absorb_h1e(h1e, eri, norb, nelec) * .5
     ci1 = contract_2e(h2e, fcivec, norb, nelec, link_index, orbsym)
     return numpy.dot(fcivec.ravel(), ci1.ravel())
@@ -215,8 +215,6 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
 
 class FCISolver(direct_spin1.FCISolver):
     def __init__(self, mol=None, **kwargs):
-        self.orbsym = []
-        self.wfnsym = None
         direct_spin1.FCISolver.__init__(self, mol, **kwargs)
         self.davidson_only = True
         self.pspace_size = 0  # Improper pspace size may break symmetry
@@ -245,8 +243,8 @@ class FCISolver(direct_spin1.FCISolver):
         return contract_1e(f1e, fcivec, norb, nelec, link_index, **kwargs)
 
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None,
-                    orbsym=[], **kwargs):
-        if not list(orbsym):
+                    orbsym=None, **kwargs):
+        if orbsym is None:
             orbsym = self.orbsym
         return contract_2e(eri, fcivec, norb, nelec, link_index, orbsym, **kwargs)
 
@@ -278,12 +276,10 @@ class FCISolver(direct_spin1.FCISolver):
             self.orbsym, orbsym_bak = orbsym, self.orbsym
         if wfnsym is not None:
             self.wfnsym, wfnsym_bak = wfnsym, self.wfnsym
-        else:
-            wfnsym_bak = None
         if self.verbose >= logger.WARN:
             self.check_sanity()
 
-        wfnsym = self.guess_wfnsym(norb, nelec, ci0, self.wfnsym, **kwargs)
+        wfnsym0 = self.guess_wfnsym(norb, nelec, ci0, self.wfnsym, **kwargs)
         e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
                                        tol, lindep, max_cycle, max_space, nroots,
                                        davidson_only, pspace_size, **kwargs)
@@ -291,13 +287,13 @@ class FCISolver(direct_spin1.FCISolver):
             # should I remove the non-symmetric contributions in each
             # call of contract_2e?
             if nroots > 1:
-                c = [addons.symmetrize_wfn(ci, norb, nelec, self.orbsym, wfnsym)
+                c = [addons.symmetrize_wfn(ci, norb, nelec, self.orbsym, wfnsym0)
                      for ci in c]
             else:
-                c = addons.symmetrize_wfn(c, norb, nelec, self.orbsym, wfnsym)
+                c = addons.symmetrize_wfn(c, norb, nelec, self.orbsym, wfnsym0)
         if orbsym is not None:
             self.orbsym = orbsym_bak
-        if wfnsym_bak is not None:
+        if wfnsym is not None:
             self.wfnsym = wfnsym_bak
         return e, c
 

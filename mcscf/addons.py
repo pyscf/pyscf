@@ -690,7 +690,9 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
             multip = numpy.sqrt(ss+.25)*2
             return ss, multip
 
-    return FakeCISolver()
+    fcisolver = FakeCISolver()
+    fcisolver.__dict__.update(casscf.fcisolver.__dict__)
+    return fcisolver
 
 def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
     casscf.fcisolver = state_average_mix(casscf, fcisolvers, weights)

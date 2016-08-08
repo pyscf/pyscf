@@ -497,6 +497,10 @@ class FCISolver(pyscf.lib.StreamObject):
         self.davidson_only = False
         self.nroots = 1
         self.pspace_size = 400
+# Initialize symmetry attributes for the compatibility with direct_spin1_symm
+# solver.  They are not used by direct_spin1 solver.
+        self.orbsym = None
+        self.wfnsym = None
 
         self._keys = set(self.__dict__.keys())
 
