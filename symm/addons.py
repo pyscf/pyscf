@@ -50,9 +50,9 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True):
         s = mol.intor_symmetric('cint1e_ovlp_sph')
     mo_s = numpy.dot(mo.T, s)
     norm = numpy.zeros((len(irrep_name), nmo))
-    for i,ir in enumerate(irrep_name):
-        moso = numpy.dot(mo_s, symm_orb[i])
-        ovlpso = reduce(numpy.dot, (moso.T, s, moso))
+    for i, csym in enumerate(symm_orb):
+        moso = numpy.dot(mo_s, csym)
+        ovlpso = reduce(numpy.dot, (csym.T, s, csym))
         norm[i] = numpy.einsum('ik,ki->i', moso, lib.cho_solve(ovlpso, moso.T))
     iridx = numpy.argmax(norm, axis=0)
     orbsym = [irrep_name[i] for i in iridx]
@@ -64,7 +64,7 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True):
             idx = numpy.where(largest_norm < 1-THRESHOLD*1e2)[0]
             if idx.size > 0:
                 logger.error(mol, 'orbitals %s not symmetrized, norm = %s',
-                             idx[1], norm[idx])
+                             idx, largest_norm[idx])
                 raise ValueError('orbitals %s not symmetrized' %
                                  numpy.unique(idx[1]))
             else:
@@ -72,7 +72,7 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True):
                             numpy.unique(orbidx[1]))
                 logger.warn(mol, 'They can be symmetrized with '
                             'pyscf.symm.symmetrize_orb function.')
-                logger.debug(mol, 'norm = %s', norm[orbidx])
+                logger.debug(mol, 'norm = %s', largest_norm[orbidx])
     return orbsym
 
 def symmetrize_orb(mol, mo, orbsym=None, s=None):
@@ -170,8 +170,7 @@ def symmetrize_space(mol, mo, s=None):
     nmo = mo.shape[1]
     mo_s = numpy.dot(mo.T, s)
     mo1 = []
-    for i, ir in enumerate(mol.irrep_id):
-        csym = mol.symm_orb[i]
+    for i, csym in enumerate(mol.symm_orb):
         moso = numpy.dot(mo_s, csym)
         ovlpso = reduce(numpy.dot, (csym.T, s, csym))
 
