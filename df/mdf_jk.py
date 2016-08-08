@@ -78,15 +78,23 @@ def density_fit(mf, auxbasis=None, gs=(10,10,10), with_df=None):
     return XDFHF()
 
 
-def get_jk(mydf, mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
+def get_jk(mydf, mol, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = (time.clock(), time.time())
     if mydf._cderi is None:
         mydf.build()
         t1 = log.timer('Init get_jk', *t1)
     auxmol = mydf.auxmol
-    nao = mol.nao_nr()
     naux = auxmol.nao_nr()
+
+    if len(dms) == 0:
+        return [], []
+    elif isinstance(dms, numpy.ndarray) and dms.ndim == 2:
+        nset = 1
+        dms = [dms]
+    else:
+        nset = len(dms)
+    nao = dms[0].shape[0]
 
     def read_Lpq():
         with mydf.load('Lpq') as Lpq:
@@ -135,11 +143,13 @@ def get_jk(mydf, mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
         return lib.unpack_tril(vj)
 
     Lpq = read_Lpq()
-    rho_coeff = numpy.einsum('kij,ji->k', Lpq.reshape(-1,nao,nao), dm)
+    rho_coeff = [numpy.einsum('kij,ji->k', Lpq.reshape(-1,nao,nao), dm)
+                 for dm in dms]
 
-    ovlp = mol.intor_symmetric('cint1e_ovlp_sph')
-    if with_k and hermi and numpy.einsum('ij,ij->', dm, ovlp) > 0.1:
-        Lpq = decompose_dm(dm, ovlp, Lpq)
+#    ovlp = mol.intor_symmetric('cint1e_ovlp_sph')
+#    if with_k and hermi and numpy.einsum('ij,ij->', dm, ovlp) > 0.1:
+#        Lpq = decompose_dm(dm, ovlp, Lpq)
+    if 0:
 
         def add_k_(vk, dm, pqk, Lk, coulG, Lpq, buf=None):
             nG = Lk.shape[1]
@@ -200,7 +210,7 @@ def get_jk(mydf, mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
             #:vk += numpy.einsum('pqrs,qr->ps', v4, dm)
             #:return vk
             pqk = numpy.asarray(pqk.reshape(nao,nao,nG), order='C')
-            pqk = lib.dot(Lpq.reshape(naux,-1).T, Lk, -1, pqk.reshape(-1,nG), 1)
+            pqk = pqk.reshape(-1,nG) - lib.dot(Lpq.reshape(naux,-1).T, Lk)
             pqk *= numpy.sqrt(coulG)
             ipk = lib.dot(dm, pqk.reshape(nao,-1)).reshape(nao,nao,-1)
             pik = numpy.ndarray((nao,nao,nG), buffer=buf)
@@ -238,27 +248,37 @@ def get_jk(mydf, mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
     sublk = min(max(16, int(mydf.max_memory*1e6/16/nao**2)), 8192)
     pikbuf = numpy.empty(nao*nao*sublk)
 
-    vj = 0
-    jaux = 0
-    vk = 0
+    vj = numpy.zeros((nset,nao*nao))
+    jaux = numpy.zeros((nset,naux))
+    vk = numpy.zeros((nset,nao,nao))
     for pqkR, LkR, pqkI, LkI, coulG \
             in mydf.pw_loop(mol, auxmol, mydf.gs, mydf.max_memory):
-        if with_j:
-            vj, jaux = add_j_(vj, jaux, dm, rho_coeff, pqkR, LkR, coulG)
-            vj, jaux = add_j_(vj, jaux, dm, rho_coeff, pqkI, LkI, coulG)
-        if with_k:
-            vk = add_k_(vk, dm, pqkR, LkR, coulG, Lpq, pikbuf)
-            vk = add_k_(vk, dm, pqkI, LkI, coulG, Lpq, pikbuf)
+        for i in range(nset):
+            if with_j:
+                add_j_(vj[i], jaux[i], dms[i], rho_coeff[i], pqkR, LkR, coulG)
+                add_j_(vj[i], jaux[i], dms[i], rho_coeff[i], pqkI, LkI, coulG)
+            if with_k:
+                add_k_(vk[i], dms[i], pqkR, LkR, coulG, Lpq, pikbuf)
+                add_k_(vk[i], dms[i], pqkI, LkI, coulG, Lpq, pikbuf)
     pqkR = LkR = pqkI = LkI = coulG = pikbuf = None
     t1 = log.timer('pw jk', *t1)
 
+    if with_j:
+        vj = vj.reshape(-1,nao,nao)
     for j3c, j2c in mydf.sr_loop(mol, auxmol, mydf.max_memory):
-        if with_j:
-            vj = vj.reshape(nao,nao)
-            vj += short_range_vj(jaux, dm, rho_coeff, Lpq, j3c, j2c)
-        if with_k:
-            vk += short_range_vk(dm, Lpq, j3c, j2c, hermi)
+        for i in range(nset):
+            if with_j:
+                vj[i] += short_range_vj(jaux[i], dms[i], rho_coeff[i], Lpq, j3c, j2c)
+            if with_k:
+                vk[i] += short_range_vk(dms[i], Lpq, j3c, j2c, hermi)
     j3c = j2c = None
+
+    if nset == 1:
+        vj = vj[0]
+        vk = vk[0]
+    else:
+        vj = numpy.asarray(vj)
+        vk = numpy.asarray(vk)
     t1 = log.timer('sr jk', *t1)
     return vj, vk
 
