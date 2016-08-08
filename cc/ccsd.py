@@ -448,7 +448,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         log.info('')
         log.info('******** %s flags ********', self.__class__)
         nocc = self.nocc()
-        nvir = nmo - nocc
+        nvir = self.nmo() - nocc
         log.info('CAS nocc = %d, nvir = %d', nocc, nvir)
         if self.frozen:
             log.info('frozen orbitals %s', str(self.frozen))

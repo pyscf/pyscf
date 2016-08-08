@@ -181,8 +181,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def dump_flags(self):
         pyscf.cc.ccsd.CCSD.dump_flags(self)
-        logger.info(self, '\n')
-        logger.info(self, '******** EOM CC flags ********')
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
@@ -203,6 +201,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def ccsd(self, t1=None, t2=None, mo_coeff=None, eris=None):
         if eris is None: eris = self.ao2mo(mo_coeff)
         self.eris = eris
+        self.dump_flags()
         self._conv, self.ecc, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                        tol=self.conv_tol,
