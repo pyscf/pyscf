@@ -5,16 +5,16 @@ import time
 import ctypes
 import _ctypes
 from functools import reduce
+import copy
 import numpy
 import scipy.linalg
+from pyscf import lib
 from pyscf.gto import mole
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import dhf
 from pyscf.scf import _vhf
 
-
-EXP_DROP = .2
 
 def sfx2c1e(mf):
     '''Spin-free X2C.
@@ -42,112 +42,98 @@ def sfx2c1e(mf):
         doc = ''
     else:
         doc = mf_class.__doc__
-    class SFX2C(mf_class):
+    class X2C_HF(mf_class):
         __doc__ = doc + \
         '''
         Attributes for spin-free X2C:
-            xuncontract : bool or str or list of str/int
-                Use uncontracted basis to expand X matrix.
-                When atom symbol (str type) is assigned to this attribute, the
-                uncontracted basis will be used for the specified atoms.  If a
-                list is given, the uncontracted basis will be applied for the
-                atoms or atom-ID specified by the given list.
+            with_x2c : X2C object
         '''
         def __init__(self):
-            self.xuncontract = True
-            self.xequation = '1e'
-            self._tag_x2c = True
+            self.with_x2c = SpinFreeX2C(mf.mol)
             self.__dict__.update(mf.__dict__)
-            self._keys = self._keys.union(['xequation', 'xuncontract'])
+            self._keys = self._keys.union(['with_x2c'])
 
         def get_hcore(self, mol=None):
-            if not self._tag_x2c:
+            if self.with_x2c:
+                return self.with_x2c.get_hcore(mol)
+            else:
                 return mf_class.get_hcore(self, mol)
 
-            mol = mf.mol
-            if self.xuncontract:
-                xmol, contr_coeff = _uncontract_mol(mol, self.xuncontract)
-            else:
-                xmol = mol
-            c = mol.light_speed
-            t = xmol.intor_symmetric('cint1e_kin_sph')
-            v = xmol.intor_symmetric('cint1e_nuc_sph')
-            s = xmol.intor_symmetric('cint1e_ovlp_sph')
-            w = xmol.intor_symmetric('cint1e_pnucp_sph')
-
-            nao = t.shape[0]
-            n2 = nao * 2
-            h = numpy.zeros((n2,n2))
-            m = numpy.zeros((n2,n2))
-            h[:nao,:nao] = v
-            h[:nao,nao:] = t
-            h[nao:,:nao] = t
-            h[nao:,nao:] = w * (.25/c**2) - t
-            m[:nao,:nao] = s
-            m[nao:,nao:] = t * (.5/c**2)
-
-            e, a = scipy.linalg.eigh(h, m)
-            cl = a[:nao,nao:]
-            cs = a[nao:,nao:]
-
-# Taking A matrix as basis and rewrite the FW Hcore formula, to avoid inversing matrix
-#   R^dag \tilde{S} R = S
-#   R = S^{-1/2} [S^{-1/2}\tilde{S}S^{-1/2}]^{-1/2} S^{1/2}
-#   R = (A^+ S A)^{1/2} = (A^+ S A)^{-1/2} A^+ S A
-#   h1 = (A^+)^{-1} R^+ (A^+ h1 A) R A^{-1}
-#      = \tilde{S} A R^+ A^+ h1 A R A^+ \tilde{S}   (1)
-#      = S A R^{-1}^+ A^+ h1 A R{-1} A^+ S          (2)
-            w, u = numpy.linalg.eigh(reduce(numpy.dot, (cl.T, s, cl)))
-            idx = w > 1e-14
-# Adopt (2) here becuase X is not appeared in Eq (2).
-            r = reduce(numpy.dot, (u[:,idx]/numpy.sqrt(w[idx]), u[:,idx].T, cl.T, s))
-            h1 = reduce(numpy.dot, (r.T.conj()*e[nao:], r))
-
-            if self.xuncontract:
-                h1 = reduce(numpy.dot, (contr_coeff.T, h1, contr_coeff))
-            return h1
-
-    return SFX2C()
+    return X2C_HF()
 
 sfx2c = sfx2c1e
 
 
-def get_hcore(mol, xuncontract=False):
+class X2C(lib.StreamObject):
+    def __init__(self, mol=None):
+        self.exp_drop = 0.2
+        self.approx = '1e'  # 'atom1e'
+        self.xuncontract = True
+        self.basis = None
+        self.mol = mol
+
+    def get_xmol(self, mol=None):
+        if mol is None:
+            mol = self.mol
+
+        if self.basis is not None:
+            xmol = copy.copy(mol)
+            xmol.build(False, False, basis=self.basis)
+            return xmol, None
+
+        elif self.xuncontract:
+            xmol, contr_coeff = _uncontract_mol(mol, self.xuncontract)
+            return xmol, contr_coeff
+        else:
+            return mol, None
+
+    def get_hcore(self, mol=None):
+        xmol, contr_coeff_nr = self.get_xmol(mol)
+        c = xmol.light_speed
+        assert('1E' in self.approx.upper())
+        s = xmol.intor_symmetric('cint1e_ovlp')
+        t = xmol.intor_symmetric('cint1e_spsp') * .5
+        v = xmol.intor_symmetric('cint1e_nuc')
+        w = xmol.intor_symmetric('cint1e_spnucsp')
+        if 'ATOM' in self.approx.upper():
+            atom_slices = [x[2:] for x in xmol.offset_2c_by_atom()]
+            h1 = _x2c1e_for_hcore(t, v, w, s, c, atom_slices)
+        else:
+            h1 = _x2c1e_for_hcore(t, v, w, s, c)
+
+        if self.xuncontract:
+            np, nc = contr_coeff_nr.shape
+            contr_coeff = numpy.zeros((np*2,nc*2))
+            contr_coeff[0::2,0::2] = contr_coeff_nr
+            contr_coeff[1::2,1::2] = contr_coeff_nr
+            h1 = reduce(numpy.dot, (contr_coeff.T.conj(), h1, contr_coeff))
+        return h1
+
+
+class SpinFreeX2C(X2C):
+    def get_hcore(self, mol=None):
+        xmol, contr_coeff = self.get_xmol(mol)
+        c = xmol.light_speed
+        assert('1E' in self.approx.upper())
+        t = xmol.intor_symmetric('cint1e_kin_sph')
+        v = xmol.intor_symmetric('cint1e_nuc_sph')
+        s = xmol.intor_symmetric('cint1e_ovlp_sph')
+        w = xmol.intor_symmetric('cint1e_pnucp_sph')
+        if 'ATOM' in self.approx.upper():
+            atom_slices = [x[2:] for x in xmol.offset_nr_by_atom()]
+            h1 = _x2c1e_for_hcore(t, v, w, s, c, atom_slices)
+        else:
+            h1 = _x2c1e_for_hcore(t, v, w, s, c)
+
+        if self.xuncontract:
+            h1 = reduce(numpy.dot, (contr_coeff.T, h1, contr_coeff))
+        return h1
+
+
+def get_hcore(mol):
     '''Foldy-Wouthuysen hcore'''
-    if xuncontract:
-        xmol, contr_coeff_nr = _uncontract_mol(mol, xuncontract)
-        np, nc = contr_coeff_nr.shape
-        contr_coeff = numpy.zeros((np*2,nc*2))
-        contr_coeff[0::2,0::2] = contr_coeff_nr
-        contr_coeff[1::2,1::2] = contr_coeff_nr
-    else:
-        xmol = mol
-
-    c = mol.light_speed
-    s = xmol.intor_symmetric('cint1e_ovlp')
-    t = xmol.intor_symmetric('cint1e_spsp') * .5
-    v = xmol.intor_symmetric('cint1e_nuc')
-    w = xmol.intor_symmetric('cint1e_spnucsp')
-
-    n2c = t.shape[0]
-    n4c = n2c * 2
-    h = numpy.zeros((n4c,n4c), dtype=numpy.complex)
-    m = numpy.zeros((n4c,n4c), dtype=numpy.complex)
-    h[:n2c,:n2c] = v
-    h[:n2c,n2c:] = t
-    h[n2c:,:n2c] = t
-    h[n2c:,n2c:] = w * (.25/c**2) - t
-    m[:n2c,:n2c] = s
-    m[n2c:,n2c:] = t * (.5/c**2)
-
-    e, a = scipy.linalg.eigh(h, m)
-    cl = a[:n2c,n2c:]
-    cs = a[n2c:,n2c:]
-    x = numpy.linalg.solve(cl.T, cs.T).T  # B = XA
-    h1 = _get_hcore_fw(t, v, w, s, x, c)
-    if xuncontract:
-        h1 = reduce(numpy.dot, (contr_coeff.T.conj(), h1, contr_coeff))
-    return h1
+    x2c = X2C(mol)
+    return x2c.get_hcore(mol)
 
 def get_jk(mol, dm, hermi=1, mf_opt=None):
     n2c = dm.shape[0]
@@ -198,14 +184,9 @@ def get_init_guess(mol, key='minao'):
 class UHF(hf.SCF):
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
-        self.xuncontract = False
-        self.xequation = '1e'
-        self._keys = self._keys.union(['xequation', 'xuncontract'])
-
-    def dump_flags(self):
-        hf.SCF.dump_flags(self)
-        logger.info(self, 'X equation %s', self.xequation)
-        return self
+        self.with_x2c = X2C(mol)
+        #self.with_x2c.xuncontract = False
+        self._keys = self._keys.union(['with_x2c'])
 
     def build(self, mol=None):
         if self.verbose >= logger.WARN:
@@ -234,7 +215,7 @@ class UHF(hf.SCF):
 
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
-        return get_hcore(mol, self.xuncontract)
+        return self.with_x2c.get_hcore(mol)
 
     def get_ovlp(self, mol=None):
         if mol is None: mol = self.mol
@@ -299,9 +280,9 @@ class UHF(hf.SCF):
         return dhf.analyze(self, verbose)
 
 
-def _uncontract_mol(mol, xuncontract=False):
+def _uncontract_mol(mol, xuncontract=False, exp_drop=0.2):
     '''mol._basis + uncontracted steep functions'''
-    pmol = mol.copy()
+    pmol = copy.copy(mol)
     _bas = []
     _env = []
     ptr = len(pmol._env)
@@ -324,11 +305,11 @@ def _uncontract_mol(mol, xuncontract=False):
         if uncontract_me:
             np = mol._bas[ib,mole.NPRIM_OF]
             nc = mol._bas[ib,mole.NCTR_OF]
-            l = mol.bas_angular(ib)
+            l = mol._bas[ib,mole.ANG_OF]
             pexp = mol._bas[ib,mole.PTR_EXP]
 # Modfied partially uncontraction to avoid potentially lindep in the
 # segment-contracted basis
-            nkept = (pmol._env[pexp:pexp+np] > EXP_DROP).sum()
+            nkept = (pmol._env[pexp:pexp+np] > exp_drop).sum()
             if nkept > nc:
                 b_coeff = mol.bas_ctr_coeff(ib)
                 norms = mole.gto_norm(l, mol._env[pexp:pexp+np])
@@ -385,7 +366,7 @@ def _uncontract_mol(mol, xuncontract=False):
             l = mol.bas_angular(ib)
             d = l * 2 + 1
             contr_coeff.append(numpy.eye(d*mol.bas_nctr(ib)))
-    pmol._bas = numpy.vstack(_bas)
+    pmol._bas = numpy.asarray(numpy.vstack(_bas), dtype=numpy.int32)
     pmol._env = numpy.hstack((mol._env, _env))
     return pmol, scipy.linalg.block_diag(*contr_coeff)
 
@@ -411,6 +392,73 @@ def _get_hcore_fw(t, v, w, s, x, c):
     sb = _invsqrt(reduce(numpy.dot, (sa, s1, sa)))
     r = reduce(numpy.dot, (sa, sb, sa, s))
     h1 = reduce(numpy.dot, (r.T.conj(), h1, r))
+    return h1
+
+def _x2c1e_for_hcore(t, v, w, s, c, atom_slices=None):
+    nao = s.shape[0]
+    n2 = nao * 2
+    h = numpy.zeros((n2,n2), dtype=v.dtype)
+    m = numpy.zeros((n2,n2), dtype=v.dtype)
+    h[:nao,:nao] = v
+    h[:nao,nao:] = t
+    h[nao:,:nao] = t
+    h[nao:,nao:] = w * (.25/c**2) - t
+    m[:nao,:nao] = s
+    m[nao:,nao:] = t * (.5/c**2)
+
+    if atom_slices is None:
+        e, a = scipy.linalg.eigh(h, m)
+        cl = a[:nao,nao:]
+        cs = a[nao:,nao:]
+# The so obtaied X seems not numerically stable.  We changed to the
+# transformed matrix
+# [1 1] [ V T ] [1 0]
+# [0 1] [ T W ] [1 1]
+#            h[:nao,:nao] = h[:nao,nao:] = h[nao:,:nao] = h[nao:,nao:] = w * (.25/c**2)
+#            m[:nao,:nao] = m[:nao,nao:] = m[nao:,:nao] = m[nao:,nao:] = t * (.5/c**2)
+#            h[:nao,:nao]+= v + t
+#            h[nao:,nao:]-= t
+#            m[:nao,:nao]+= s
+#            e, a = scipy.linalg.eigh(h, m)
+#            cl = a[:nao,nao:]
+#            cs = a[nao:,nao:]
+#            x = numpy.eye(nao) + numpy.linalg.solve(cl.T, cs.T).T  # B = XA
+#            h1 = _get_hcore_fw(t, v, w, s, x, c)
+
+# Taking A matrix as basis and rewrite the FW Hcore formula, to avoid inversing matrix
+#   R^dag \tilde{S} R = S
+#   R = S^{-1/2} [S^{-1/2}\tilde{S}S^{-1/2}]^{-1/2} S^{1/2}
+#   R = (A^+ S A)^{1/2} = (A^+ S A)^{-1/2} A^+ S A
+#   h1 = (A^+)^{-1} R^+ (A^+ h1 A) R A^{-1}
+#      = \tilde{S} A R^+ A^+ h1 A R A^+ \tilde{S}   (1)
+#      = S A R^{-1}^+ A^+ h1 A R^{-1} A^+ S         (2)
+        w, u = numpy.linalg.eigh(reduce(numpy.dot, (cl.T.conj(), s, cl)))
+        idx = w > 1e-14
+# Adopt (2) here becuase X is not appeared in Eq (2).
+        r = reduce(numpy.dot, (u[:,idx]/numpy.sqrt(w[idx]), u[:,idx].T.conj(),
+                               cl.T.conj(), s))
+        h1 = reduce(numpy.dot, (r.T.conj()*e[nao:], r))
+
+    else:
+        x = numpy.zeros((nao,nao))
+        for p0, p1 in atom_slices:
+            np = p1 - p0
+            h1 = numpy.empty((np*2,np*2), dtype=h.dtype)
+            s1 = numpy.empty((np*2,np*2), dtype=h.dtype)
+            h1[:np,:np] = h[    p0:    p1,    p0:    p1]
+            h1[:np,np:] = h[    p0:    p1,nao+p0:nao+p1]
+            h1[np:,:np] = h[nao+p0:nao+p1,    p0:    p1]
+            h1[np:,np:] = h[nao+p0:nao+p1,nao+p0:nao+p1]
+            s1[:np,:np] = m[    p0:    p1,    p0:    p1]
+            s1[:np,np:] = m[    p0:    p1,nao+p0:nao+p1]
+            s1[np:,:np] = m[nao+p0:nao+p1,    p0:    p1]
+            s1[np:,np:] = m[nao+p0:nao+p1,nao+p0:nao+p1]
+            e, a = scipy.linalg.eigh(h1, s1)
+            cl = a[:np,np:]
+            cs = a[np:,np:]
+            x[p0:p1,p0:p1] = numpy.linalg.solve(cl.T, cs.T).T  # B = XA
+        h1 = _get_hcore_fw(t, v, w, s, x, c)
+
     return h1
 
 
@@ -446,4 +494,5 @@ if __name__ == '__main__':
     method = UHF(mol)
     ex2c = method.kernel()
     print('E(X2C1E) = %.12g' % ex2c)
+
 
