@@ -66,10 +66,10 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True):
                 logger.error(mol, 'orbitals %s not symmetrized, norm = %s',
                              idx, largest_norm[idx])
                 raise ValueError('orbitals %s not symmetrized' %
-                                 numpy.unique(idx[1]))
+                                 numpy.unique(idx))
             else:
                 logger.warn(mol, 'orbitals %s not strictly symmetrized.',
-                            numpy.unique(orbidx[1]))
+                            numpy.unique(orbidx))
                 logger.warn(mol, 'They can be symmetrized with '
                             'pyscf.symm.symmetrize_orb function.')
                 logger.debug(mol, 'norm = %s', largest_norm[orbidx])

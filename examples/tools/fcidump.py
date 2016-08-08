@@ -18,6 +18,7 @@ mol = gto.M(
     basis = '6-31g',
     verbose = 0,
     symmetry = 1,
+    symmetry_subgroup = 'D2h',
 )
 myhf = scf.RHF(mol)
 myhf.kernel()
@@ -70,6 +71,7 @@ MOLPRO_ID = {'D2h': { 'Ag' : 1,
              'Ci' : { 'Ag' : 1,
                       'Au' : 2},
              'C1' : { 'A'  : 1,}}
+
 orbsym = [MOLPRO_ID[mol.groupname][i]
           for i in symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, c)]
 tools.fcidump.from_integrals('fcidump.example3', h1e, eri, c.shape[1],
