@@ -614,6 +614,8 @@ class CASCI(pyscf.lib.StreamObject):
 
     def make_rdm1s(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,
                    ncore=None):
+        '''One-particle density matrices for alpha and beta spin
+        '''
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if ci is None: ci = self.ci
         if ncas is None: ncas = self.ncas
@@ -630,6 +632,8 @@ class CASCI(pyscf.lib.StreamObject):
 
     def make_rdm1(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,
                   ncore=None):
+        '''One-particle density matrix in AO representation
+        '''
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if ci is None: ci = self.ci
         if ncas is None: ncas = self.ncas
