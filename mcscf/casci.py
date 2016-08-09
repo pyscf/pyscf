@@ -355,7 +355,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
                                            max_memory=max_memory)
 
     t1 = log.timer('FCI solver', *t1)
-    e_tot = e_cas + energy_core + casci.mol.energy_nuc()
+    e_tot = e_cas + energy_core + casci._scf.energy_nuc()
     log.timer('CASCI', *t0)
     return e_tot, e_cas, fcivec
 

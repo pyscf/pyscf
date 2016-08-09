@@ -209,7 +209,8 @@ def energy_tot(mf, dm=None, h1e=None, vhf=None):
     r'''Total Hartree-Fock energy, electronic part plus nuclear repulstion
     See :func:`scf.hf.energy_elec` for the electron part
     '''
-    return mf.energy_elec(dm, h1e, vhf)[0] + mf.mol.energy_nuc()
+    e_tot = mf.energy_elec(dm, h1e, vhf)[0] + mf.energy_nuc()
+    return e_tot.real
 
 
 def get_hcore(mol):
@@ -1134,6 +1135,9 @@ class SCF(lib.StreamObject):
 
     energy_elec = energy_elec
     energy_tot = energy_tot
+
+    def energy_nuc(self):
+        return self.mol.energy_nuc()
 
     def scf(self, dm0=None):
         '''main routine for SCF

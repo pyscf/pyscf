@@ -353,9 +353,8 @@ class RHF(pyscf.scf.hf.RHF):
             self._eri = self.with_df.get_ao_eri(kpt, compact=True)
         return self.get_jk(cell, dm, hermi, verbose, kpt)
 
-    def energy_tot(self, dm=None, h1e=None, vhf=None):
-        etot = self.energy_elec(dm, h1e, vhf)[0] + self.cell.energy_nuc()
-        return etot.real
+    def energy_nuc(self):
+        return self.cell.energy_nuc()
 
     get_bands = get_bands
 
