@@ -197,7 +197,7 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', verbose=None):
 
             for i in range(1, 4):
                 ao_re, ao_im = re_im(ao[i])
-                rho[0] = dot_bra(ao_re, ao_im, c0) * 2
+                rho[i] = dot_bra(ao_re, ao_im, c0) * 2
 
         else:
             # rho[4] = \nabla^2 rho, rho[5] = 1/2 |nabla f|^2
@@ -388,7 +388,7 @@ def nr_rks(ni, cell, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
                 in ni.block_loop(cell, grids, nao, ao_deriv, kpt_or_kpts,
                                  kpt_band, max_memory):
             for i in range(nset):
-                rho = make_rho(0, ao_k2, mask, xctype)
+                rho = make_rho(i, ao_k2, mask, xctype)
                 exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1)[:2]
                 vrho = vxc[0]
                 den = rho*weight
@@ -402,7 +402,7 @@ def nr_rks(ni, cell, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
                 in ni.block_loop(cell, grids, nao, ao_deriv, kpt_or_kpts,
                                  kpt_band, max_memory):
             for i in range(nset):
-                rho = make_rho(0, ao_k2, mask, xctype)
+                rho = make_rho(i, ao_k2, mask, xctype)
                 exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1)[:2]
                 den = rho[0]*weight
                 nelec[i] += den.sum()
@@ -416,7 +416,7 @@ def nr_rks(ni, cell, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
                 in ni.block_loop(cell, grids, nao, ao_deriv, kpt_or_kpts,
                                  kpt_band, max_memory):
             for i in range(nset):
-                rho = make_rho(0, ao_k2, mask, xctype)
+                rho = make_rho(i, ao_k2, mask, xctype)
                 exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1)[:2]
                 den = rho[0]*weight
                 nelec[i] += den.sum()
