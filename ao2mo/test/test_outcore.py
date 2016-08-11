@@ -125,7 +125,7 @@ class KnowValues(unittest.TestCase):
         segs = numpy.asarray(numpy.random.random(40)*50, dtype=int)
         ref = [(0, 7, 91), (7, 11, 82), (11, 15, 88), (15, 20, 96), (20, 22, 88),
                (22, 25, 92), (25, 30, 100), (30, 34, 98), (34, 37, 83), (37, 40, 78)]
-        out = ao2mo.outcore.group_segs_filling_block(segs, 100)
+        out = ao2mo.outcore.balance_segs(segs, 100)
         self.assertTrue(ref == out)
 
 def s2ij_s1(symmetry, eri, norb):

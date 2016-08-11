@@ -65,8 +65,8 @@ class localizer:
             self.y_orig = np.dot( np.dot( self.coeff.T, rvec[1] ) , self.coeff )
             self.z_orig = np.dot( np.dot( self.coeff.T, rvec[2] ) , self.coeff )
             self.x_symm = self.x_orig + self.x_orig.T
-            self.y_symm = self.x_orig + self.x_orig.T
-            self.z_symm = self.x_orig + self.x_orig.T
+            self.y_symm = self.y_orig + self.y_orig.T
+            self.z_symm = self.z_orig + self.z_orig.T
         
         if ( self.__which == 'edmiston' ):
             self.eri_orig = ao2mo.incore.full( _vhf.int2e_sph( mol._atm, mol._bas, mol._env ), self.coeff )
@@ -160,6 +160,7 @@ class localizer:
                                                + self.y_symm[p,q] * ( self.y_symm[q,q] - self.y_symm[p,p] ) \
                                                + self.z_symm[p,q] * ( self.z_symm[q,q] - self.z_symm[p,p] )
                     increment += 1
+            print self.gradient
             self.gradient *= -self.Norbs
         if ( self.__which == 'edmiston' ):
             increment = 0
@@ -353,7 +354,7 @@ class localizer:
         '''
 
         # To break up symmetrical orbitals
-        flatx = ( 0.0123 / self.numVars ) * np.ones( [ self.numVars ], dtype=float )
+        flatx = ( 0.0000 / self.numVars ) * np.ones( [ self.numVars ], dtype=float )
         self.__update_unitary( flatx )
 
         #self.__debug_gradient()
@@ -449,3 +450,20 @@ class localizer:
         converged_coeff = np.dot( self.coeff, self.u )
         return converged_coeff
 
+if __name__ == '__main__':
+    from pyscf import gto, scf
+
+    mol = gto.Mole()
+    mol.atom = '''
+         He   0.    0.     0.2
+         H    0.   -0.5   -0.4
+         H    0.    0.5   -0.4
+      '''
+    mol.basis = 'sto-3g'
+    mol.build()
+    mf = scf.RHF(mol).run()
+
+    loc  = localizer( mol, mf.mo_coeff[:,:2], 'boys' )
+    loc.verbose = 5
+    new_coeff = loc.optimize()
+    print new_coeff
