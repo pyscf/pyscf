@@ -107,7 +107,6 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     t1new +=   einsum('kc,ikca->ia',Fov, -t2)
     t1new +=   einsum('kc,ic,ka->ia',Fov,t1,t1)
     t1new += 2*einsum('akic,kc->ia',eris.voov,t1)
-    #t1new +=  -einsum('akci,kc->ia',eris.vovo,t1)
     t1new +=  -einsum('kaic,kc->ia',eris.ovov,t1)
     t1new += 2*einsum('akcd,ikcd->ia',eris.vovv,t2)
     t1new +=  -einsum('akdc,ikcd->ia',eris.vovv,t2)
@@ -123,8 +122,6 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     t2new = np.array(eris.oovv).conj()
     t2new += einsum('klij,klab->ijab',Woooo,t2)
     t2new += einsum('klij,ka,lb->ijab',Woooo,t1,t1)
-    #t2new += einsum('abcd,ijcd->ijab',Wvvvv,t2)
-    #t2new += einsum('abcd,ic,jd->ijab',Wvvvv,t1,t1)
     for a in range(nvir):
         Wvvvv_a = np.array(Wvvvv[a])
         t2new[:,:,a,:] += einsum('bcd,ijcd->ijb',Wvvvv_a,t2)
@@ -133,12 +130,10 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     t2new += (tmp + tmp.transpose(1,0,3,2))
     tmp = einsum('ki,kjab->ijab',Loo,t2)
     t2new -= (tmp + tmp.transpose(1,0,3,2))
-    #tmp2 = eris.vvov - einsum('kbic,ka->abic',eris.ovov,t1)
     tmp2 = np.array(eris.vovv).transpose(3,2,1,0).conj() \
             - einsum('kbic,ka->abic',eris.ovov,t1)
     tmp = einsum('abic,jc->ijab',tmp2,t1)
     t2new += (tmp + tmp.transpose(1,0,3,2))
-    #tmp2 = eris.vooo + einsum('akic,jc->akij',eris.voov,t1)
     tmp2 = np.array(eris.ooov).transpose(3,2,1,0).conj() \
             + einsum('akic,jc->akij',eris.voov,t1)
     tmp = einsum('akij,kb->ijab',tmp2,t1)
@@ -335,20 +330,21 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         Hr1 += einsum('ld,lda->a',  -imds.Fov,r2)
         Hr1 += 2*einsum('alcd,lcd->a',imds.Wvovv,r2)
         Hr1 +=  -einsum('aldc,lcd->a',imds.Wvovv,r2)
-
         # Eq. (31)
         Hr2 = einsum('abcj,c->jab',imds.Wvvvo,r1)
-        Hr2 += einsum('ac,jcb->jab',imds.Lvv,r2)
-        Hr2 += einsum('bd,jad->jab',imds.Lvv,r2)
-        Hr2 -= einsum('lj,lab->jab',imds.Loo,r2)
+        Hr2 +=  einsum('ac,jcb->jab',imds.Lvv,r2)
+        Hr2 +=  einsum('bd,jad->jab',imds.Lvv,r2)
+        Hr2 += -einsum('lj,lab->jab',imds.Loo,r2)
         Hr2 += 2*einsum('lbdj,lad->jab',imds.Wovvo,r2)
         Hr2 +=  -einsum('lbjd,lad->jab',imds.Wovov,r2)
         Hr2 +=  -einsum('lajc,lcb->jab',imds.Wovov,r2)
         Hr2 +=  -einsum('lbcj,lca->jab',imds.Wovvo,r2)
-        Hr2 += einsum('abcd,jcd->jab',imds.Wvvvv,r2)
+        nvir = self.nmo()-self.nocc()
+        for a in range(nvir):
+            Hr2[:,a,:] += einsum('bcd,jcd->jb',imds.Wvvvv[a],r2)
         tmp = (2*einsum('klcd,lcd->k',imds.Woovv,r2)
                 -einsum('kldc,lcd->k',imds.Woovv,r2))
-        Hr2 -= einsum('k,kjab->jab',tmp,self.t2)
+        Hr2 += -einsum('k,kjab->jab',tmp,self.t2)
 
         vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
         return vector
@@ -540,8 +536,6 @@ class _IMDS:
 def _mem_usage(nocc, nvir):
     incore = (nocc**4 + 2*nocc**3*nvir
         + 2*nocc**2*nvir**2 + nocc*nvir**3 + nvir**4)*8/1e6
-    # Additional ERIs to be removed, by symmetry
-    incore += (nocc**3*nvir + nocc**2*nvir**2 + nocc*nvir**3)*8/1e6
     # Roughly, factor of two for intermediates and factor of two 
     # for safety (temp arrays, copying, etc)
     incore *= 4

@@ -81,7 +81,7 @@ def einsum(idx_str, *tensors):
     insert_B_loc = 0
     for n in shared_idxAB:
         if rangeA[n] != rangeB[n]:
-            print "ERROR: Range of index", n, "is different in A (%d) and B (%d)"%(
+            print "ERROR: In index string", idx_str, ", the range of index", n, "is different in A (%d) and B (%d)"%(
                     rangeA[n], rangeB[n])
             raise SystemExit
 

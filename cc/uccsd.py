@@ -90,12 +90,6 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     Fvv -= fvv
     Foo -= foo
 
-    # TODO: Remove symmetry-related ERIs.
-    # eris might be an HDF5 Dataset, so cast to ndarray
-    eris_oovo = np.array(eris.ooov).transpose(1,0,3,2)
-    eris_ovvo = -np.array(eris.ovov).transpose(0,1,3,2)
-    eris_vvvo = np.array(eris.ovvv).transpose(3,2,1,0).conj()
-
     # T1 equation
     # TODO: Does this need a conj()? Usually zero w/ canonical HF.
     t1new = fov.copy()
@@ -104,7 +98,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     t1new +=  einsum('imae,me->ia',t2,Fov)
     t1new += -einsum('nf,naif->ia',t1,eris.ovov)
     t1new += -0.5*einsum('imef,maef->ia',t2,eris.ovvv)
-    t1new += -0.5*einsum('mnae,nmei->ia',t2,eris_oovo)
+    t1new += -0.5*einsum('mnae,mnie->ia',t2,eris.ooov)
     # T2 equation
     # For conj(), see Hirata and Bartlett, Eq. (36) 
     t2new = np.array(eris.oovv, copy=True).conj()
@@ -115,14 +109,13 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     tmp = einsum('imab,mj->ijab',t2,Ftmp)
     t2new -= (tmp - tmp.transpose(1,0,2,3))
     t2new += 0.5*einsum('mnab,mnij->ijab',tau,Woooo) 
-    #t2new += 0.5*einsum('ijef,abef->ijab',tau,Wvvvv)
     for a in range(nvir):
         t2new[:,:,a,:] += 0.5*einsum('ijef,bef->ijb',tau,Wvvvv[a])
     tmp = einsum('imae,mbej->ijab',t2,Wovvo) 
-    tmp -= einsum('ie,ma,mbej->ijab',t1,t1,eris_ovvo)
+    tmp -= -einsum('ie,ma,mbje->ijab',t1,t1,eris.ovov)
     t2new += ( tmp - tmp.transpose(0,1,3,2) 
              - tmp.transpose(1,0,2,3) + tmp.transpose(1,0,3,2) )
-    tmp = einsum('ie,abej->ijab',t1,eris_vvvo)
+    tmp = einsum('ie,jeba->ijab',t1,np.array(eris.ovvv).conj())
     t2new += (tmp - tmp.transpose(1,0,2,3))
     tmp = einsum('ma,mbij->ijab',t1,eris.ovoo)
     t2new -= (tmp - tmp.transpose(0,1,3,2))
@@ -301,7 +294,9 @@ class UCCSD(pyscf.cc.rccsd.RCCSD):
         Hr2 += (tmp1 - tmp1.transpose(0,2,1))
         Hr2 += -einsum('lj,lab->jab',imds.Foo,r2)
         Hr2 += (tmp2 - tmp2.transpose(0,2,1))
-        Hr2 += 0.5*einsum('abcd,jcd->jab',imds.Wvvvv,r2) 
+        nvir = self.nmo()-self.nocc()
+        for a in range(nvir):
+            Hr2[:,a,:] += 0.5*einsum('bcd,jcd->jb',imds.Wvvvv[a],r2) 
         Hr2 += -0.5*einsum('klcd,lcd,kjab->jab',imds.Woovv,r2,self.t2)
 
         vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
@@ -430,7 +425,6 @@ class _ERIS:
         nmo = cc.nmo()
         nvir = nmo - nocc
         mem_incore, mem_outcore, mem_basic = pyscf.cc.rccsd._mem_usage(nocc, nvir)
-        mem_incore *= 4
         mem_now = pyscf.lib.current_memory()[0]
 
         # Convert to spin-orbitals and anti-symmetrize 

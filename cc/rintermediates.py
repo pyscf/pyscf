@@ -89,7 +89,6 @@ def cc_Wvvvv(t1,t2,eris):
         Wabcd[a] = eris.vvvv[a]
         Wabcd[a] += -einsum('kcd,kb->bcd',eris.vovv[a],t1)
         Wabcd[a] += -einsum('bkdc,k->bcd',eris.vovv,t1[:,a])
-
     return Wabcd
 
 def cc_Wvoov(t1,t2,eris):
@@ -156,16 +155,34 @@ def Woooo(t1,t2,eris):
     return Wklij
 
 def Wvvvv(t1,t2,eris):
-    Wabcd = np.array(eris.vvvv)
-    Wabcd += einsum('klcd,klab->abcd',eris.oovv,t2)
-    Wabcd += einsum('klcd,ka,lb->abcd',eris.oovv,t1,t1)
-    Wabcd += -einsum('alcd,lb->abcd',eris.vovv,t1)
-    Wabcd += -einsum('bkdc,ka->abcd',eris.vovv,t1)
+    ## Memory intensive:
+    #Wabcd = np.array(eris.vvvv)
+    #Wabcd += einsum('klcd,klab->abcd',eris.oovv,t2)
+    #Wabcd += einsum('klcd,ka,lb->abcd',eris.oovv,t1,t1)
+    #Wabcd += -einsum('alcd,lb->abcd',eris.vovv,t1)
+    #Wabcd += -einsum('bkdc,ka->abcd',eris.vovv,t1)
+
+    ## HDF5
+    if t1.dtype == np.complex: ds_type = 'c16'
+    else: ds_type = 'f8'
+    _tmpfile1 = tempfile.NamedTemporaryFile()
+    fimd = h5py.File(_tmpfile1.name)
+    nocc,nvir = t1.shape
+    Wabcd = fimd.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)
+    for a in range(nvir):
+        Wabcd[a] = eris.vvvv[a]
+        Wabcd[a] += einsum('klcd,klb->bcd',eris.oovv,t2[:,:,a,:])
+        Wabcd[a] += einsum('klcd,k,lb->bcd',eris.oovv,t1[:,a],t1)
+        Wabcd[a] += -einsum('lcd,lb->bcd',eris.vovv[a],t1)
+        Wabcd[a] += -einsum('bkdc,k->bcd',eris.vovv,t1[:,a])
     return Wabcd
 
 def Wvvvo(t1,t2,eris):
+    nocc,nvir = t1.shape
     Wabcj = np.array(eris.vovv).transpose(2,3,0,1).conj()
-    Wabcj +=   einsum('abcd,jd->abcj',Wvvvv(t1,t2,eris),t1)
+    for a in range(nvir):
+        #TODO: Wasteful to create Wvvvv twice.
+        Wabcj[a] +=   einsum('bcd,jd->bcj',Wvvvv(t1,t2,eris)[a],t1)
     Wabcj +=  -einsum('alcj,lb->abcj',W1ovov(t1,t2,eris).transpose(1,0,3,2),t1)
     Wabcj +=  -einsum('kbcj,ka->abcj',W1ovvo(t1,t2,eris),t1)
     Wabcj += 2*einsum('alcd,ljdb->abcj',eris.vovv,t2)
