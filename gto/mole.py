@@ -1474,6 +1474,7 @@ class Mole(pyscf.lib.StreamObject):
         self.irrep_id = None
         self.irrep_name = None
         self.incore_anyway = False
+        self._nelectron = None
         self._atom = None
         self._basis = None
         self._ecp = None
@@ -1489,13 +1490,19 @@ class Mole(pyscf.lib.StreamObject):
         return len(self._bas)
 
     @property
-    def nelectron(self):
-        return tot_electrons(self)
-    @property
     def nelec(self):
         nalpha = (self.nelectron+self.spin)//2
         nbeta = nalpha - self.spin
         return nalpha, nbeta
+    @property
+    def nelectron(self):
+        if self._nelectron is None:
+            return tot_electrons(self)
+        else:
+            return self._nelectron
+    @nelectron.setter
+    def nelectron(self, n):
+        self._nelectron = n
 
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged
