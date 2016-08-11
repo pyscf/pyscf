@@ -258,9 +258,10 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
         g_op = lambda: g_orb
 
         for ah_end, ihop, w, dxi, hdxi, residual, seig \
-                in davidson_cc(h_op, g_op, precond, x0_guess,
-                               tol=ah_conv_tol, max_cycle=casscf.ah_max_cycle,
-                               lindep=casscf.ah_lindep, verbose=log):
+                in iah.davidson_cc(h_op, g_op, precond, x0_guess,
+                                   tol=ah_conv_tol, max_cycle=casscf.ah_max_cycle,
+                                   lindep=casscf.ah_lindep, verbose=log):
+            # residual = v[0] * (g+(h-e)x) ~ v[0] * grad
             norm_residual = numpy.linalg.norm(residual)
             if (ah_end or ihop == casscf.ah_max_cycle or # make sure to use the last step
                 ((norm_residual < ah_start_tol) and (ihop >= ah_start_cycle)) or
@@ -335,83 +336,6 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
         norm_gorb = norm_gkf = norm_gkf1
         x0_guess = dxi
         ah_start_cycle -= 1
-
-
-def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
-                max_cycle=30, lindep=1e-14, verbose=logger.WARN):
-
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(sys.stdout, verbose)
-
-    toloose = numpy.sqrt(tol)
-    # the first trial vector is (1,0,0,...), which is not included in xs
-    xs = list(xs)
-    ax = list(ax)
-    nx = len(xs)
-    if nx == 0:
-        xs.append(x0)
-        ax.append(h_op(x0))
-        nx = 1
-
-    heff = numpy.zeros((max_cycle+nx+1,max_cycle+nx+1))
-    ovlp = numpy.eye(max_cycle+nx+1)
-    w_t = 0
-    for istep in range(min(max_cycle,x0.size)):
-        g = g_op()
-        nx = len(xs)
-        for i in range(nx):
-            heff[i+1,0] = heff[0,i+1] = numpy.dot(xs[i], g)
-            heff[nx,i+1] = heff[i+1,nx] = numpy.dot(xs[nx-1], ax[i])
-            ovlp[nx,i+1] = ovlp[i+1,nx] = numpy.dot(xs[nx-1], xs[i])
-        nvec = nx + 1
-        wlast = w_t
-        xtrial, w_t, v_t, index, seig = \
-                _regular_step(heff[:nvec,:nvec], ovlp[:nvec,:nvec], xs,
-                              lindep, log)
-        s0 = seig[0]
-        hx = _dgemv(v_t[1:], ax)
-        # note g*v_t[0], as the first trial vector is (1,0,0,...)
-        dx = hx + g*v_t[0] - w_t * v_t[0]*xtrial
-        norm_dx = numpy.linalg.norm(dx)
-        log.debug1('... AH step %d  index= %d  |dx|= %.5g  eig= %.5g  v[0]= %.5g  lindep= %.5g', \
-                   istep+1, index, norm_dx, w_t, v_t[0], s0)
-        hx *= 1/v_t[0] # == h_op(xtrial)
-        if abs(w_t-wlast) < tol and norm_dx < toloose:
-            yield True, istep+1, w_t, xtrial, hx, dx, s0
-            break
-        else:
-            yield False, istep+1, w_t, xtrial, hx, dx, s0
-        x0 = precond(dx, w_t)
-        xs.append(x0)
-        ax.append(h_op(x0))
-
-
-def _regular_step(heff, ovlp, xs, lindep, log):
-    w, v, seig = lib.safe_eigh(heff, ovlp, lindep)
-    if log.verbose >= logger.DEBUG3:
-        numpy.set_printoptions(3, linewidth=1000)
-        log.debug3('v[0] %s', v[0])
-        log.debug3('AH eigs %s', w)
-        log.debug3('H eigs %s', scipy.linalg.eigh(heff[1:,1:])[0])
-        numpy.set_printoptions(8, linewidth=75)
-
-    idx = numpy.where(abs(v[0]) > 0.1)[0]
-    sel = idx[0]
-
-    if w[sel] < -1e-5:
-        log.debug1('AH might follow negative hessians %s', w[:sel])
-
-    w_t = w[sel]
-    xtrial = _dgemv(v[1:,sel]/v[0,sel], xs)
-    return xtrial, w_t, v[:,sel], sel, seig
-
-def _dgemv(v, m):
-    vm = v[0] * m[0]
-    for i,vi in enumerate(v[1:]):
-        vm += vi * m[i+1]
-    return vm
 
 
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
