@@ -63,7 +63,7 @@ def dump_scf(mf, filename, ignore_h=False):
             orbital_coeff(mf.mol, f, mf.mo_coeff,
                           ene=mf.mo_energy, occ=mf.mo_occ, ignore_h=ignore_h)
 
-def from_mcscf(mc, filename, cas_natorb=False, ignore_h=False):
+def from_mcscf(mc, filename, ignore_h=False, cas_natorb=False):
     mol = mc.mol
     dm1 = mc.make_rdm1()
     if cas_natorb:
