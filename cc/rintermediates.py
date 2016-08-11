@@ -2,9 +2,7 @@ import tempfile
 import numpy as np
 import h5py
 
-from pyscf import lib
 from pyscf.pbc import lib as pbclib
-from pyscf.cc.ccsd import _cp
 
 #einsum = np.einsum
 einsum = pbclib.einsum
