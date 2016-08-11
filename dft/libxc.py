@@ -687,7 +687,8 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
 
 
 SINGULAR_IDS = set((131,  # LYP functions
-                    402, 404, 411, 416, 419))  # hybrid LYP functions
+                    402, 404, 411, 416, 419,   # hybrid LYP functions
+                    74 , 75 , 226, 227))       # M11L and MN12L functional
 def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     assert(deriv <= 3)
     if spin == 0:
