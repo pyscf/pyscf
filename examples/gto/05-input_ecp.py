@@ -36,3 +36,13 @@ Na P
 2     54.5247759            423.3986704        
 2      0.9461106              7.1241813        
 ''')})
+
+
+#
+# Burkatzki-Filippi-Dolg pseudo potential and basis are prefixed with "bfd"
+#
+mol = gto.M(atom='Na 0. 0. 0.; H 0 0 2.',
+            basis={'Na':'bfd-vtz', 'H':'ccpvdz'},
+            ecp = {'Na':'bfd-pp'},
+            verbose=0)
+
