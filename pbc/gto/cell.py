@@ -518,6 +518,24 @@ def ewald(cell, ew_eta=None, ew_cut=None):
 energy_nuc = ewald
 
 
+def make_kpts(cell, nks):
+    '''Given number of kpoints along x,y,z , generate kpoints
+
+    Args:
+        nks : (3,) ndarray
+
+    Returns:
+        kpts in absolute value (unit 1/Bohr)
+
+    Examples:
+    >>> cell.make_kpts((4,4,4))
+    '''
+    ks_each_axis = [(np.arange(n)+.5)/n-.5 for n in nks]
+    scaled_kpts = lib.cartesian_prod(*ks_each_axis)
+    kpts = cell.get_abs_kpts(scaled_kpts)
+    return kpts
+
+
 class Cell(mole.Mole):
     '''A Cell object holds the basic information of a crystal.
 
@@ -720,17 +738,7 @@ class Cell(mole.Mole):
         '''
         return 1./(2*np.pi)*np.dot(abs_kpts, self._h)
 
-    def make_kpts(self, nks):
-        '''Given number of kpoints along x,y,z , generate kpoints
-
-        Args:
-            nks : (3,) ndarray
-
-        Returns:
-            kpts in absolute value (unit 1/Bohr)
-        '''
-        from pyscf.pbc.tools import pyscf_ase
-        return pyscf_ase.make_kpts(self, nks)
+    make_kpts = make_kpts
 
     def copy(self):
         return copy(self)
