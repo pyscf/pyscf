@@ -128,11 +128,10 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
     log = logger.Logger(casscf.stdout, casscf.verbose)
     if s is None:
         s = casscf._scf.get_ovlp()
-    orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id,
-                                       mol.symm_orb, mo_coeff, s)
+    orbsym = symm.label_orb_symm(mol, mol.irrep_id,
+                                 mol.symm_orb, mo_coeff, s)
     orbsym = numpy.asarray(orbsym)
     ncore = casscf.ncore
-    nocc = ncore + casscf.ncas
 
     irreps = set(orbsym)
 
@@ -326,7 +325,6 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
             s1 = reduce(numpy.dot, (mfmo.T, s, mo0core))
             s1core = reduce(numpy.dot, (mo0core.T, s, mo0core))
             coreocc = numpy.einsum('ij,ji->i', s1, lib.cho_solve(s1core, s1.T))
-            nmo = mfmo.shape[1]
             coreidx = numpy.sort(numpy.argsort(-coreocc)[:ncore])
             logger.debug(casscf, 'Core indices %s', coreidx)
             logger.debug(casscf, 'Core components %s', coreocc[coreidx])
@@ -659,7 +657,7 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
             else:
                 log = logger.Logger(sys.stdout, verbose)
             e, c = collect(solver.kernel(h1, h2, ncas, nelecas, ci0,
-                                         orbsym=self.orbsym, verbose=log)
+                                         orbsym=self.orbsym, verbose=log, **kwargs)
                            for solver in fcisolvers)
             for i, ei in enumerate(e):
                 ss = fci.spin_op.spin_square0(c[i], ncas, nelecas)
@@ -668,7 +666,7 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
 
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             e, c = collect(solver.kernel(h1, h2, norb, nelec, ci0, orbsym=self.orbsym,
-                                         max_cycle=ci_response_space)
+                                         max_cycle=ci_response_space, **kwargs)
                            for solver in fcisolvers)
             return numpy.einsum('i,i->', e, weights), c
         def make_rdm1(self, ci0, norb, nelec):
@@ -795,16 +793,14 @@ def hot_tuning_(casscf, configfile=None):
 
 
 if __name__ == '__main__':
-    from pyscf import scf
     from pyscf import gto
     from pyscf import mcscf
-    from pyscf import tools
-    import pyscf.tools.ring
+    from pyscf.tools import ring
 
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None
-    mol.atom = [['H', c] for c in tools.ring.make(6, 1.2)]
+    mol.atom = [['H', c] for c in ring.make(6, 1.2)]
     mol.basis = '6-31g'
     mol.build()
 
