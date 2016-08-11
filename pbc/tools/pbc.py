@@ -262,7 +262,7 @@ def madelung(cell, kpts):
 
 
 def get_monkhorst_pack_size(cell, kpts):
-    skpts = cell.get_scaled_kpts(kpts).round(9)
+    skpts = cell.get_scaled_kpts(kpts).round(decimals=6)
     Nk = np.array([len(np.unique(ki)) for ki in skpts.T])
     return Nk
 
@@ -274,7 +274,8 @@ def get_lattice_Ls(cell, nimgs=None):
     Ts = lib.cartesian_prod((np.arange(-nimgs[0],nimgs[0]+1),
                              np.arange(-nimgs[1],nimgs[1]+1),
                              np.arange(-nimgs[2],nimgs[2]+1)))
-    Ts = Ts[np.einsum('ix,ix->i',Ts,Ts) <= 1./3*np.dot(nimgs,nimgs)]
+    #Ts = Ts[np.einsum('ix,ix->i',Ts,Ts) <= 1./3*np.dot(nimgs,nimgs)]
+    Ts = Ts[np.einsum('ix,ix->i',Ts,Ts) <= max(nimgs)*max(nimgs)]
     Ls = np.dot(Ts, cell._h.astype(np.double).T)
     return Ls
 
