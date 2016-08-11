@@ -54,6 +54,7 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True):
         moso = numpy.dot(mo_s, csym)
         ovlpso = reduce(numpy.dot, (csym.T, s, csym))
         norm[i] = numpy.einsum('ik,ki->i', moso, lib.cho_solve(ovlpso, moso.T))
+    norm /= numpy.sum(norm, axis=0)  # for orbitals which are not normalized
     iridx = numpy.argmax(norm, axis=0)
     orbsym = [irrep_name[i] for i in iridx]
     logger.debug(mol, 'irreps of each MO %s', str(orbsym))
@@ -169,6 +170,7 @@ def symmetrize_space(mol, mo, s=None):
         s = mol.intor_symmetric('cint1e_ovlp_sph')
     nmo = mo.shape[1]
     mo_s = numpy.dot(mo.T, s)
+    assert(numpy.allclose(numpy.dot(mo_s, mo), numpy.eye(nmo)))
     mo1 = []
     for i, csym in enumerate(mol.symm_orb):
         moso = numpy.dot(mo_s, csym)

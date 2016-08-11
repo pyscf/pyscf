@@ -6,7 +6,6 @@
 # MOLDEN format:
 # http://www.cmbi.ru.nl/molden/molden_format.html
 
-import sys
 import numpy
 import pyscf.lib.parameters as param
 from pyscf import gto
@@ -46,7 +45,7 @@ def from_mo(mol, outfile, mo_coeff, spin='Alpha', symm=None, ene=None,
 
 
 def from_scf(mf, filename, ignore_h=False):
-    dump_scf(mf, filename)
+    dump_scf(mf, filename, ignore_h)
 def dump_scf(mf, filename, ignore_h=False):
     import pyscf.scf
     mol = mf.mol
@@ -64,17 +63,19 @@ def dump_scf(mf, filename, ignore_h=False):
             orbital_coeff(mf.mol, f, mf.mo_coeff,
                           ene=mf.mo_energy, occ=mf.mo_occ, ignore_h=ignore_h)
 
-def from_mcscf(mc, filename, ignore_h=False):
-    from pyscf import mcscf
+def from_mcscf(mc, filename, cas_natorb=False, ignore_h=False):
     mol = mc.mol
-    mo_coeff = mc.mo_coeff
     dm1 = mc.make_rdm1()
+    if cas_natorb:
+        mo_coeff, ci, mo_energy = mc.canonicalize(sort=True, cas_natorb=cas_natorb)
+    else:
+        mo_coeff, ci, mo_energy = mc.mo_coeff, mc.ci, mc.mo_energy
+
     mo_inv = numpy.dot(mc._scf.get_ovlp(), mo_coeff)
     occ = numpy.einsum('pi,pq,qi->i', mo_inv, dm1, mo_inv)
     with open(filename, 'w') as f:
         header(mol, f, ignore_h)
-        orbital_coeff(mc.mol, f, mc.mo_coeff,
-                      ene=mc.mo_energy, occ=occ, ignore_h=ignore_h)
+        orbital_coeff(mol, f, mo_coeff, ene=mo_energy, occ=occ, ignore_h=ignore_h)
 
 def from_chkfile(outfile, chkfile, key='scf/mo_coeff', ignore_h=False):
     import pyscf.scf
@@ -218,7 +219,7 @@ def _d2e(token):
 
 def header(mol, fout, ignore_h=False):
     if ignore_h:
-        mol = remove_high_l(mol)
+        mol = remove_high_l(mol)[0]
     fout.write('''[Molden Format]
 [Atoms] (AU)\n''')
     for ia in range(mol.natm):
@@ -298,7 +299,7 @@ def remove_high_l(mol, mo_coeff=None):
     '''Remove high angular momentum (l >= 5) functions before dumping molden file.
     If molden function raised error message ``RuntimeError l=5 is not supported``,
     you can use this function to format orbitals.
-    
+
     Note the formated orbitals may have normalization problem.  Some visualization
     tool will complain about the orbital normalization error.
 
@@ -313,7 +314,7 @@ def remove_high_l(mol, mo_coeff=None):
         pmol.basis[symb] = [b for b in bas if b[0] <= 4]
     pmol.build(0, 0)
     if mo_coeff is None:
-        return pmol
+        return pmol, None
     else:
         k = 0
         idx = []
@@ -329,7 +330,6 @@ def remove_high_l(mol, mo_coeff=None):
 
 
 if __name__ == '__main__':
-    from pyscf import gto
     from pyscf import scf
     import tempfile
     mol = gto.Mole()
