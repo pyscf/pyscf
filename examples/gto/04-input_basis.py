@@ -31,8 +31,21 @@ O    SP
 
 mol = gto.M(
     atom = '''O 0 0 0; H1 0 1 0; H2 0 0 1''',
-    basis = {'O': gto.uncontract(gto.load('ccpvdz', 'O')),
+    basis = {'O': 'unc-ccpvdz', # prefix "unc-" will uncontract the ccpvdz basis.
+                                # It is equivalent to assigning
+                                #   'O': gto.uncontract(gto.load('ccpvdz', 'O')),
              'H': 'ccpvdz'  # H1 H2 will use the same basis ccpvdz
+            }
+)
+
+
+mol = gto.M(
+    atom = '''O 0 0 0; H1 0 1 0; H2 0 0 1''',
+    basis = {'H': 'sto3g',
+# even-temper gaussians alpha*beta^i, where i = 0,..,n
+#                                  (l, n, alpha, beta)
+             'O': gto.expand_etbs([(0, 4, 1.5, 2.2),  # s-function
+                                   (1, 2, 0.5, 2.2)]) # p-function
             }
 )
 

@@ -1,5 +1,5 @@
 add_library(cgto SHARED 
-  fill_int2c.c fill_nr_3c.c fill_int2e.c
+  fill_int2c.c fill_nr_3c.c fill_int2e.c ft_ao.c
   grid_ao_drv.c fastexp.c deriv1.c nr_ecp.c pbcint1e.c
   autocode/auto_eval1.c)
 

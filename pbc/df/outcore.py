@@ -78,17 +78,20 @@ def aux_e2(cell, auxcell, erifile, intor='cint3c2e_sph', aosym='s1', comp=1,
             feri.create_dataset(key, (naux,nao_pair), dtype)
         else:
             feri.create_dataset(key, (comp,naux,nao_pair), dtype)
+    if naux == 0:
+        feri.close()
+        return erifile
 
     aux_loc = auxcell.ao_loc_nr('ssc' in intor)
     buflen = max(8, int(max_memory*1e6/16/(nkptij*nao**2*comp)))
-    auxranges = pyscf.ao2mo.outcore.group_segs_filling_block(aux_loc[1:]-aux_loc[:-1], buflen)
+    auxranges = pyscf.ao2mo.outcore.balance_segs(aux_loc[1:]-aux_loc[:-1], buflen)
     buflen = max([x[2] for x in auxranges])
     buf = [numpy.zeros(nao*nao*buflen*comp, dtype=numpy.complex128)
            for k in range(nkptij)]
     ints = incore._wrap_int3c(cell, auxcell, intor, comp, Ls, buf)
     atm, bas, env = ints._envs[:3]
 
-    xyz = cell.atom_coords().copy('C')
+    xyz = numpy.asarray(cell.atom_coords(), order='C')
     ptr_coordL = atm[:cell.natm,pyscf.gto.PTR_COORD]
     ptr_coordL = numpy.vstack((ptr_coordL,ptr_coordL+1,ptr_coordL+2)).T.copy('C')
     kpti = kptij_lst[:,0]

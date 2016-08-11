@@ -13,13 +13,31 @@ from pyscf import gto
 
 libpbc = lib.load_library('libpbc')
 
-def get_pp(cell, kpts=None):
-    return get_pp_loc_part2(cell, kpts) + get_pp_nl(cell, kpts)
-
 def get_pp_loc_part1(cell, kpts=None):
     '''PRB, 58, 3641 Eq (1), integrals associated to erf
     '''
-    pass
+    raise NotImplementedError
+
+def get_gth_vlocG_part1(cell, Gv):
+    '''PRB, 58, 3641 Eq (5) first term
+    '''
+    G2 = numpy.einsum('ix,ix->i', Gv, Gv)
+    with numpy.errstate(divide='ignore'):
+        coulG = 4*numpy.pi / G2
+        coulG[0] = 0
+
+    vlocG = numpy.zeros((cell.natm, len(G2)))
+    for ia in range(cell.natm):
+        Zia = cell.atom_charge(ia)
+        symb = cell.atom_symbol(ia)
+        vlocG[ia] = Zia * coulG
+        if symb in cell._pseudo:
+            pp = cell._pseudo[symb]
+            rloc, nexp, cexp = pp[1:3+1]
+            vlocG[ia] *= numpy.exp(-0.5*rloc**2 * G2)
+# Note the sign of G=0 differs to the rest, see get_gth_vlocG, get_alphas_gth
+            vlocG[ia,0] = -2*numpy.pi*Zia*rloc**2
+    return vlocG
 
 def get_pp_loc_part2(cell, kpts=None):
     '''PRB, 58, 3641 Eq (1), integrals associated to C1, C2, C3, C4

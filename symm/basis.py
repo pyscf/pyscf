@@ -35,12 +35,13 @@ def tot_parity_odd(op, l, m):
 def symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
     if gpname in ('Dooh', 'Coov'):
         return linearmole_symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab)
+    decimals = int(-numpy.log10(geom.TOLERANCE)) - 1
     opdic = geom.symm_ops(gpname)
     ops = [opdic[op] for op in param.OPERATOR_TABLE[gpname]]
     chartab = param.CHARACTER_TABLE[gpname]
     nirrep = chartab.__len__()
     nfn, basoff = _basis_offset_for_atoms(atoms, basis_tab)
-    coords = numpy.around([a[1] for a in atoms], decimals=geom.PLACE-1)
+    coords = numpy.around([a[1] for a in atoms], decimals=decimals)
 
     sodic = {}
     def add_so(ir, c):
@@ -52,7 +53,7 @@ def symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
         at0 = atoms[atom_ids[0]]
         symb = pyscf.gto.mole._symbol(at0[0])
         op_coords = numpy.around([numpy.dot(at0[1], op) for op in ops],
-                                 decimals=geom.PLACE-1)
+                                 decimals=decimals)
 # num atoms in atom_ids smaller than num ops?
 ## the coord-ids generated from the ops sequence
 #        id_coords = numpy.argsort(geom.argsort_coords(op_coords))

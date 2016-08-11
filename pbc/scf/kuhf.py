@@ -161,12 +161,12 @@ class KUHF(pyscf.scf.uhf.UHF, khf.KRHF):
     '''UHF class with k-point sampling.
     '''
     def __init__(self, cell, kpts=np.zeros((1,3)), exxdiv='ewald'):
-        from pyscf.pbc.df import PWDF
+        from pyscf.pbc import df
         self.cell = cell
         pyscf.scf.uhf.UHF.__init__(self, cell)
 
+        self.with_df = df.DF(cell)
         self.exxdiv = exxdiv
-        self.with_df = PWDF(cell)
         self.kpts = kpts
         self.direct_scf = False
 
@@ -188,17 +188,15 @@ class KUHF(pyscf.scf.uhf.UHF, khf.KRHF):
         logger.debug(self, 'kpts = %s', self.kpts)
         logger.info(self, 'DF object = %s', self.with_df)
         logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
-        if self.exxdiv == 'vcut_ws':
-            if self.exx_built is False:
-                self.precompute_exx()
-            logger.info(self, 'WS alpha = %s', self.exx_alpha)
+        #if self.exxdiv == 'vcut_ws':
+        #    if self.exx_built is False:
+        #        self.precompute_exx()
+        #    logger.info(self, 'WS alpha = %s', self.exx_alpha)
 
     def build(self, cell=None):
         pyscf.scf.uhf.UHF.build(self, cell)
-        if self.exxdiv == 'vcut_ws':
-            self.precompute_exx()
-
-    precompute_exx = khf.KRHF.precompute_exx
+        #if self.exxdiv == 'vcut_ws':
+        #    self.precompute_exx()
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell

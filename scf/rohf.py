@@ -10,7 +10,7 @@ Restricted Open-shell Hartree-Fock
 from functools import reduce
 import numpy
 import pyscf.gto
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import uhf
@@ -241,6 +241,7 @@ def analyze(mf, verbose=logger.DEBUG):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis
     '''
+    from pyscf.lo import orth
     from pyscf.tools import dump_mat
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
@@ -261,13 +262,15 @@ def analyze(mf, verbose=logger.DEBUG):
         for i,c in enumerate(mo_occ):
             log.note('MO #%-3d energy= %-18.15g | %-18.15g | %-18.15g occ= %g',
                      i+1, mo_energy[i], mo_ea[i], mo_eb[i], c)
+    ovlp_ao = mf.get_ovlp()
     if verbose >= logger.DEBUG:
-        log.debug(' ** MO coefficients **')
+        log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
         label = mf.mol.spheric_labels(True)
-        dump_mat.dump_rec(mf.stdout, mo_coeff, label, start=1)
+        orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
+        c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
+        dump_mat.dump_rec(mf.stdout, c, label, start=1)
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    #return mf.mulliken_pop(mf.mol, dm, s=mf.get_ovlp(), verbose=log)
-    return mf.mulliken_meta(mf.mol, dm, s=mf.get_ovlp(), verbose=log)
+    return mf.mulliken_meta(mf.mol, dm, s=s, verbose=log)
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the Fock matrix within occupied, open,
@@ -328,17 +331,16 @@ class ROHF(hf.RHF):
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
     get_fock = get_fock
-
     get_occ = get_occ
 
-    @pyscf.lib.with_doc(get_grad.__doc__)
+    @lib.with_doc(get_grad.__doc__)
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         if fock is None:
             dm1 = self.make_rdm1(mo_coeff, mo_occ)
             fock = self.get_hcore(self.mol) + self.get_veff(self.mol, dm1)
         return get_grad(mo_coeff, mo_occ, fock)
 
-    @pyscf.lib.with_doc(make_rdm1.__doc__)
+    @lib.with_doc(make_rdm1.__doc__)
     def make_rdm1(self, mo_coeff=None, mo_occ=None):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if mo_occ is None: mo_occ = self.mo_occ
@@ -346,7 +348,7 @@ class ROHF(hf.RHF):
 
     energy_elec = energy_elec
 
-    @pyscf.lib.with_doc(uhf.get_veff.__doc__)
+    @lib.with_doc(uhf.get_veff.__doc__)
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()

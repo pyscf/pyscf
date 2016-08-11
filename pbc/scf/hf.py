@@ -16,7 +16,7 @@ from pyscf.lib import logger
 from pyscf.scf.hf import make_rdm1
 from pyscf.pbc import tools
 from pyscf.pbc.gto import ewald
-from pyscf.pbc.gto.pseudo import get_pp, get_jvloc_G0
+from pyscf.pbc.gto.pseudo import get_pp
 from pyscf.pbc.scf import chkfile
 from pyscf.pbc.scf import addons
 
@@ -32,7 +32,7 @@ def get_hcore(cell, kpt=np.zeros(3)):
     '''
     hcore = get_t(cell, kpt)
     if cell.pseudo:
-        hcore += get_pp(cell, kpt) + get_jvloc_G0(cell, kpt)
+        hcore += get_pp(cell, kpt)
     else:
         hcore += get_nuc(cell, kpt)
 
@@ -50,19 +50,8 @@ def get_nuc(cell, kpt=np.zeros(3)):
 
     See Martin (12.16)-(12.21).
     '''
-    from pyscf.pbc.dft import gen_grid
-    from pyscf.pbc.dft import numint
-    coords = gen_grid.gen_uniform_grids(cell)
-    aoR = numint.eval_ao(cell, coords, kpt)
-
-    chargs = cell.atom_charges()
-    SI = cell.get_SI()
-    coulG = tools.get_coulG(cell)
-    vneG = -np.dot(chargs,SI) * coulG
-    vneR = tools.ifft(vneG, cell.gs).real
-
-    vne = np.dot(aoR.T.conj(), vneR.reshape(-1,1)*aoR)
-    return vne
+    from pyscf.pbc import df
+    return df.DF(cell).get_nuc(kpt)
 
 
 def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
@@ -91,32 +80,8 @@ def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
         The function returns one J matrix, corresponding to the input
         density matrix (both order and shape).
     '''
-    from pyscf.pbc.dft import gen_grid
-    from pyscf.pbc.dft import numint
-    dm = np.asarray(dm)
-    nao = dm.shape[-1]
-
-    coords = gen_grid.gen_uniform_grids(cell)
-    if kpt_band is None:
-        kpt1 = kpt2 = kpt
-        aoR_k1 = aoR_k2 = numint.eval_ao(cell, coords, kpt)
-    else:
-        kpt1 = kpt_band
-        kpt2 = kpt
-        aoR_k1 = numint.eval_ao(cell, coords, kpt1)
-        aoR_k2 = numint.eval_ao(cell, coords, kpt2)
-    ngs, nao = aoR_k1.shape
-
-    def contract(dm):
-        vjR_k2 = get_vjR(cell, dm, aoR_k2)
-        vj = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), vjR_k2.reshape(-1,1)*aoR_k1)
-        return vj
-
-    if dm.ndim == 2:
-        vj = contract(dm)
-    else:
-        vj = lib.asarray([contract(x) for x in dm.reshape(-1,nao,nao)])
-    return vj.reshape(dm.shape)
+    from pyscf.pbc import df
+    return df.DF(cell).get_jk(dm, hermi, kpt, kpt_band, with_k=False)[0]
 
 
 def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
@@ -145,109 +110,10 @@ def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
         The function returns one J and one K matrix, corresponding to the input
         density matrix (both order and shape).
     '''
-    from pyscf.pbc.dft import gen_grid
-    from pyscf.pbc.dft import numint
-    dm = np.asarray(dm)
-    nao = dm.shape[-1]
+    from pyscf.pbc import df
+    return df.DF(cell).get_jk(dm, hermi, kpt, kpt_band, with_j=False,
+                              exxdiv=mf.exxdiv)[1]
 
-    coords = gen_grid.gen_uniform_grids(cell)
-    if kpt_band is None:
-        kpt1 = kpt2 = kpt
-        aoR_k1 = aoR_k2 = numint.eval_ao(cell, coords, kpt)
-    else:
-        kpt1 = kpt_band
-        kpt2 = kpt
-        aoR_k1 = numint.eval_ao(cell, coords, kpt1)
-        aoR_k2 = numint.eval_ao(cell, coords, kpt2)
-
-    vkR_k1k2 = get_vkR(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2)
-
-    ngs, nao = aoR_k1.shape
-    def contract(dm):
-        vjR_k2 = get_vjR(cell, dm, aoR_k2)
-        vj = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), vjR_k2.reshape(-1,1)*aoR_k1)
-
-        #:vk = (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', dm, aoR_k1.conj(),
-        #:                                vkR_k1k2, aoR_k2)
-        aoR_dm_k2 = np.dot(aoR_k2, dm)
-        tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dm_k2)
-        vk = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), tmp_Rq)
-        return vj, vk
-
-    if dm.ndim == 2:
-        vj, vk = contract(dm)
-    else:
-        jk = [contract(x) for x in dm.reshape(-1,nao,nao)]
-        vj = lib.asarray([x[0] for x in jk])
-        vk = lib.asarray([x[1] for x in jk])
-    return vj.reshape(dm.shape), vk.reshape(dm.shape)
-
-
-def get_vjR(cell, dm, aoR):
-    '''Get the real-space Hartree potential of the given density matrix.
-
-    Returns:
-        vR : (ngs,) ndarray
-            The real-space Hartree potential at every grid point.
-    '''
-    from pyscf.pbc.dft import numint
-    coulG = tools.get_coulG(cell)
-
-    rhoR = numint.eval_rho(cell, aoR, dm)
-    rhoG = tools.fft(rhoR, cell.gs)
-
-    vG = coulG*rhoG
-    vR = tools.ifft(vG, cell.gs)
-    if rhoR.dtype == np.double:
-        vR = vR.real
-    return vR
-
-
-def get_vkR(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2):
-    '''Get the real-space 2-index "exchange" potential V_{i,k1; j,k2}(r)
-    where {i,k1} = exp^{i k1 r) |i> , {j,k2} = exp^{-i k2 r) <j|
-
-    Kwargs:
-        kpt1, kpt2 : (3,) ndarray
-            The sampled k-points; may be required for G=0 correction.
-
-    Returns:
-        vR : (ngs, nao, nao) ndarray
-            The real-space "exchange" potential at every grid point, for all
-            AO pairs.
-
-    Note:
-        This is essentially a density-fitting or resolution-of-the-identity.
-        The returned object is of size ngs*nao**2 and could be precomputed and
-        saved in vhfopt.
-    '''
-    from pyscf.pbc.dft import gen_grid
-    coords = gen_grid.gen_uniform_grids(cell)
-    ngs, nao = aoR_k1.shape
-
-    expmikr = np.exp(-1j*np.dot(kpt1-kpt2,coords.T))
-    coulG = tools.get_coulG(cell, kpt1-kpt2, exx=True, mf=mf)
-    def prod(ij):
-        i, j = divmod(ij, nao)
-        rhoR = aoR_k1[:,i] * aoR_k2[:,j].conj()
-        rhoG = tools.fftk(rhoR, cell.gs, expmikr)
-        vG = coulG*rhoG
-        vR = tools.ifftk(vG, cell.gs, expmikr.conj())
-        return vR
-
-    if aoR_k1.dtype == np.double and aoR_k2.dtype == np.double:
-        vR = tools.pbc._map(prod, ngs, nao**2).real
-    else:
-        vR = tools.pbc._map(prod, ngs, nao**2)
-    return vR.reshape(-1,nao,nao)
-
-#def get_veff(mf, cell, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None,
-#             kpt=np.zeros(3), kpt_band=None):
-#    '''Hartree-Fock potential matrix for the given density matrix.
-#    See :func:`scf.hf.get_veff` and :func:`scf.hf.RHF.get_veff`
-#    '''
-#    vj, vk = mf.get_jk(cell, dm, hermi, kpt, kpt_band)
-#    return vj - vk * .5
 
 def get_bands(mf, kpt_band, cell=None, dm=None, kpt=None):
     '''Get energy bands at a given (arbitrary) 'band' k-point.
@@ -336,7 +202,7 @@ def dot_eri_dm(eri, dm, hermi=0):
         or a list of J matrices and a list of K matrices, corresponding to the
         input density matrices.
     '''
-
+    dm = np.asarray(dm)
     if np.iscomplexobj(dm) or np.iscomplexobj(eri):
         nao = dm.shape[-1]
         eri = eri.reshape((nao,)*4)
@@ -348,8 +214,8 @@ def dot_eri_dm(eri, dm, hermi=0):
             vj, vk = contract(dm)
         else:
             vjk = [contract(dmi) for dmi in dm]
-            vj = lib.asarray([v[0] for v in vjk])
-            vk = lib.asarray([v[1] for v in vjk])
+            vj = lib.asarray([v[0] for v in vjk]).reshape(dm.shape)
+            vk = lib.asarray([v[1] for v in vjk]).reshape(dm.shape)
     else:
         vj, vk = pyscf.scf.hf.dot_eri_dm(eri, dm, hermi)
     return vj, vk
@@ -363,15 +229,15 @@ class RHF(pyscf.scf.hf.RHF):
             The AO k-point in Cartesian coordinates, in units of 1/Bohr.
     '''
     def __init__(self, cell, kpt=np.zeros(3), exxdiv='ewald'):
-        from pyscf.pbc.df import PWDF
+        from pyscf.pbc import df
         if not cell._built:
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()
         self.cell = cell
         pyscf.scf.hf.RHF.__init__(self, cell)
 
+        self.with_df = df.DF(cell)
         self.exxdiv = exxdiv
-        self.with_df = PWDF(cell)
         self.kpt = kpt
         self.direct_scf = False
 
@@ -395,10 +261,10 @@ class RHF(pyscf.scf.hf.RHF):
         if cell is None: cell = self.cell
         if kpt is None: kpt = self.kpt
         if cell.pseudo is None:
-            nuc = self.with_df.get_nuc(cell, kpt)
-            return nuc + cell.pbc_intor('cint1e_kin_sph', 1, 1, kpt)
+            nuc = self.with_df.get_nuc(kpt)
         else:
-            return get_hcore(cell, kpt)
+            nuc = self.with_df.get_pp(kpt)
+        return nuc + cell.pbc_intor('cint1e_kin_sph', 1, 1, kpt)
 
     def get_ovlp(self, cell=None, kpt=None):
         if cell is None: cell = self.cell
@@ -415,8 +281,6 @@ class RHF(pyscf.scf.hf.RHF):
         if kpt is None: kpt = self.kpt
 
         cpu0 = (time.clock(), time.time())
-        dm = np.asarray(dm)
-        nao = dm.shape[-1]
 
         if (kpt_band is None and
             (self.exxdiv == 'ewald' or self.exxdiv is None) and
@@ -424,16 +288,17 @@ class RHF(pyscf.scf.hf.RHF):
             if self._eri is None:
                 logger.debug(self, 'Building PBC AO integrals incore')
                 self._eri = self.with_df.get_ao_eri(kpt, compact=True)
-            vj, vk = dot_eri_dm(self._eri, dm.reshape(-1,nao,nao), hermi)
+            vj, vk = dot_eri_dm(self._eri, dm, hermi)
 
             if self.exxdiv == 'ewald':
                 # G=0 is not inculded in the ._eri integrals
-                vk = _ewald_exxdiv_for_G0(self, dm.reshape(-1,nao,nao), kpt, vk)
+                vk = _ewald_exxdiv_for_G0(self, dm, kpt, vk)
         else:
-            vj, vk = self.with_df.get_jk(cell, dm, hermi, kpt, kpt_band, mf=self)
+            vj, vk = self.with_df.get_jk(dm, hermi, kpt, kpt_band,
+                                         exxdiv=self.exxdiv)
 
         logger.timer(self, 'vj and vk', *cpu0)
-        return vj.reshape(dm.shape), vk.reshape(dm.shape)
+        return vj, vk
 
     def get_j(self, cell=None, dm=None, hermi=1, kpt=None, kpt_band=None):
         '''Compute J matrix for the given density matrix.
@@ -454,7 +319,7 @@ class RHF(pyscf.scf.hf.RHF):
                 self._eri = self.with_df.get_ao_eri(kpt, compact=True)
             vj, vk = dot_eri_dm(self._eri, dm.reshape(-1,nao,nao), hermi)
         else:
-            vj = self.with_df.get_jk(cell, dm.reshape(-1,nao,nao), hermi,
+            vj = self.with_df.get_jk(dm.reshape(-1,nao,nao), hermi,
                                      kpt, kpt_band, with_k=False)[0]
         logger.timer(self, 'vj', *cpu0)
         return vj.reshape(dm.shape)
@@ -488,9 +353,8 @@ class RHF(pyscf.scf.hf.RHF):
             self._eri = self.with_df.get_ao_eri(kpt, compact=True)
         return self.get_jk(cell, dm, hermi, verbose, kpt)
 
-    def energy_tot(self, dm=None, h1e=None, vhf=None):
-        etot = self.energy_elec(dm, h1e, vhf)[0] + self.cell.energy_nuc()
-        return etot.real
+    def energy_nuc(self):
+        return self.cell.energy_nuc()
 
     get_bands = get_bands
 

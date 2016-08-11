@@ -220,7 +220,10 @@ def format_atom(atoms, origin=0, axes=1, unit='Ang'):
 def format_basis(basis_tab):
     '''Convert the input :attr:`Mole.basis` to the internal data format.
 
-    ``{ atom: (l, kappa, ((-exp, c_1, c_2, ..), nprim, nctr, ptr-exps, ptr-contraction-coeff)), ... }``
+    ``{ atom: [(l, ((-exp, c_1, c_2, ..),
+                    (-exp, c_1, c_2, ..))),
+               (l, ((-exp, c_1, c_2, ..),
+                    (-exp, c_1, c_2, ..)))], ... }``
 
     Args:
         basis_tab : dict
@@ -291,6 +294,18 @@ def uncontract_basis(_basis):
 uncontract = uncontract_basis
 
 def format_ecp(ecp_tab):
+    '''
+    ``{ atom: (nelec,  # core electrons
+               ((l,  # l=-1 for UL, l>=0 for Ul to indicate |l><l|
+                 (((exp_1, c_1),  # for r^0
+                   (exp_2, c_2),
+                   ...),
+                  ((exp_1, c_1),  # for r^1
+                   (exp_2, c_2),
+                   ...),
+                  ((exp_1, c_1),  # for r^2
+                   ...))))), ...}
+    '''
     fmt_ecp = {}
     for atom in ecp_tab.keys():
         symb = _symbol(atom)
@@ -301,8 +316,8 @@ def format_ecp(ecp_tab):
         if isinstance(ecp_tab[atom], str):
             try:
                 fmt_ecp[symb] = basis.load_ecp(ecp_tab[atom], stdsymb)
-            except RuntimeError:
-                pass
+            except RuntimeError as e:
+                sys.stderr.write(str(e))
         else:
             fmt_ecp[symb] = ecp_tab[atom]
     return fmt_ecp
@@ -344,6 +359,7 @@ def expand_etbs(etbs):
     [[0, [6.0, 1]], [0, [3.0, 1]], [1, [1., 1]], [1, [2., 1]]]
     '''
     return pyscf.lib.flatten([expand_etb(*etb) for etb in etbs])
+etbs = expand_etbs
 
 # concatenate two mol
 def conc_env(atm1, bas1, env1, atm2, bas2, env2):
@@ -408,7 +424,6 @@ def conc_mol(mol1, mol2):
     mol3.light_speed = mol1.light_speed
     mol3.charge = mol1.charge + mol2.charge
     mol3.spin = mol1.spin + mol2.spin
-    mol3.nelectron = mol1.nelectron + mol2.nelectron
     mol3.symmetry = False
     mol3.symmetry_subgroup = None
     mol3._atom = mol1._atom + mol2._atom
@@ -1455,11 +1470,11 @@ class Mole(pyscf.lib.StreamObject):
         self.stdout = sys.stdout
         self.groupname = 'C1'
         self.topgroup = 'C1'
-        self.nelectron = 0
         self.symm_orb = None
         self.irrep_id = None
         self.irrep_name = None
         self.incore_anyway = False
+        self._nelectron = None
         self._atom = None
         self._basis = None
         self._ecp = None
@@ -1473,9 +1488,21 @@ class Mole(pyscf.lib.StreamObject):
     @property
     def nbas(self):
         return len(self._bas)
+
     @property
     def nelec(self):
-        return (self.nelectron+self.spin)//2, (self.nelectron-self.spin)//2
+        nalpha = (self.nelectron+self.spin)//2
+        nbeta = nalpha - self.spin
+        return nalpha, nbeta
+    @property
+    def nelectron(self):
+        if self._nelectron is None:
+            return tot_electrons(self)
+        else:
+            return self._nelectron
+    @nelectron.setter
+    def nelectron(self, n):
+        self._nelectron = n
 
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged
@@ -1628,7 +1655,6 @@ class Mole(pyscf.lib.StreamObject):
                 self.make_env(self._atom, self._basis, self._env, self.nucmod)
         self._atm, self._ecpbas, self._env = \
                 self.make_ecp_env(self._atm, self._ecp, self._env)
-        self.nelectron = self.tot_electrons()
         if (self.nelectron+self.spin) % 2 != 0:
             raise RuntimeError('Electron number %d and spin %d are not consistent\n'
                                'Note spin = 2S = Nalpha-Nbeta, not the definition 2S+1' %
@@ -1678,6 +1704,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     @pyscf.lib.with_doc(expand_etbs.__doc__)
     def expand_etbs(self, etbs):
         return expand_etbs(etbs)
+    etbs = expand_etbs
 
     def make_env(self, atoms, basis, pre_env=[], nucmod={}):
         return make_env(atoms, basis, pre_env, nucmod)
@@ -1722,17 +1749,18 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         try:
             pyscfdir = os.path.abspath(os.path.join(__file__, '..', '..'))
             self.stdout.write('PySCF path  %s\n' % pyscfdir)
+            with open(os.path.join(pyscfdir, '.git', 'ORIG_HEAD')) as f:
+                self.stdout.write('GIT ORIG_HEAD %s' % f.read())
             head = os.path.join(pyscfdir, '.git', 'HEAD')
             with open(head, 'r') as f:
                 head = f.read().splitlines()[0]
+                self.stdout.write('GIT HEAD      %s\n' % head)
             # or command(git log -1 --pretty=%H)
             if head.startswith('ref:'):
                 branch = os.path.basename(head)
                 head = os.path.join(pyscfdir, '.git', head.split(' ')[1])
                 with open(head, 'r') as f:
                     self.stdout.write('GIT %s branch  %s' % (branch, f.readline()))
-            else:
-                self.stdout.write('GIT HEAD %s' % head)
             self.stdout.write('\n')
         except IOError:
             pass

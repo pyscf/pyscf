@@ -169,6 +169,57 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(vmat[1][0]), (-2502.6531823220012-64.707798861780063j), 8)
         self.assertAlmostEqual(finger(vmat[1][1]), (-2506.9881499848775-125.33971814270384j), 8)
 
+    def test_eval_rho(self):
+        cell, grids = make_grids(30)
+        numpy.random.seed(10)
+        nao = 10
+        ngrids = 500
+        dm = numpy.random.random((nao,nao))
+        dm = dm + dm.T
+        ao =(numpy.random.random((10,ngrids,nao)) +
+             numpy.random.random((10,ngrids,nao))*1j)
+
+        rho0 = numpy.zeros((6,ngrids), dtype=numpy.complex128)
+        rho0[0] = numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[0].conj())
+        rho0[1] = numpy.einsum('pi,ij,pj->p', ao[1], dm, ao[0].conj()) + numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[1].conj())
+        rho0[2] = numpy.einsum('pi,ij,pj->p', ao[2], dm, ao[0].conj()) + numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[2].conj())
+        rho0[3] = numpy.einsum('pi,ij,pj->p', ao[3], dm, ao[0].conj()) + numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[3].conj())
+        rho0[4]+= numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[4].conj()) + numpy.einsum('pi,ij,pj->p', ao[4], dm, ao[0].conj())
+        rho0[4]+= numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[7].conj()) + numpy.einsum('pi,ij,pj->p', ao[7], dm, ao[0].conj())
+        rho0[4]+= numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[9].conj()) + numpy.einsum('pi,ij,pj->p', ao[9], dm, ao[0].conj())
+        rho0[5]+= numpy.einsum('pi,ij,pj->p', ao[1], dm, ao[1].conj())
+        rho0[5]+= numpy.einsum('pi,ij,pj->p', ao[2], dm, ao[2].conj())
+        rho0[5]+= numpy.einsum('pi,ij,pj->p', ao[3], dm, ao[3].conj())
+        rho0[4]+= rho0[5]*2
+        rho0[5] *= .5
+
+        rho1 = numint.eval_rho(cell, ao, dm, xctype='MGGA')
+        self.assertTrue(numpy.allclose(rho0, rho1))
+
+    def test_eval_mat(self):
+        cell, grids = make_grids(30)
+        numpy.random.seed(10)
+        nao = 10
+        ngrids = 500
+        rho = numpy.random.random((6,ngrids))
+        vxc = numpy.random.random((4,ngrids))
+        weight = numpy.random.random(ngrids)
+        ao =(numpy.random.random((10,ngrids,nao)) +
+             numpy.random.random((10,ngrids,nao))*1j)
+
+        mat0 = numpy.einsum('pi,p,pj->ij', ao[0].conj(), weight*vxc[0], ao[0])
+        mat1 = numint.eval_mat(cell, ao[0], weight, rho, vxc, xctype='LDA')
+        self.assertTrue(numpy.allclose(mat0, mat1))
+
+        vrho, vsigma = vxc[:2]
+        wv = weight * vsigma * 2
+        mat0  = numpy.einsum('pi,p,pj->ij', ao[0].conj(), weight*vrho, ao[0])
+        mat0 += numpy.einsum('pi,p,pj->ij', ao[0].conj(), rho[1]*wv, ao[1]) + numpy.einsum('pi,p,pj->ij', ao[1].conj(), rho[1]*wv, ao[0])
+        mat0 += numpy.einsum('pi,p,pj->ij', ao[0].conj(), rho[2]*wv, ao[2]) + numpy.einsum('pi,p,pj->ij', ao[2].conj(), rho[2]*wv, ao[0])
+        mat0 += numpy.einsum('pi,p,pj->ij', ao[0].conj(), rho[3]*wv, ao[3]) + numpy.einsum('pi,p,pj->ij', ao[3].conj(), rho[3]*wv, ao[0])
+        mat1 = numint.eval_mat(cell, ao, weight, rho, vxc, xctype='GGA')
+        self.assertTrue(numpy.allclose(mat0, mat1))
+
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.numint")
     unittest.main()

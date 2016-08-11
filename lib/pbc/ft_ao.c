@@ -1,44 +1,7 @@
-/*
- * Fourier transformed AO pair
- * \int e^{-i Gv \cdot r}  i(r) * j(r) dr^3
- *
- * eval_gz, invh, gxyz, gs:
- * - when eval_gz is    PBC_Gv_uniform_orth
- *   > invh is diagonal 3x3 matrix
- *   > Gv k-space grids = 2\pi * dot(invh.T,gxyz)
- *   > gxyz[3,nGv] = (kx[:nGv], ky[:nGv], kz[:nGv])
- *   > gs[3]: The number of *positive* G-vectors along each direction.
- * - when eval_gz is    PBC_Gv_uniform_nonorth
- *   > invh is 3x3 matrix = scipy.linalg.inv(cell.lattice_vectors)
- *     cell lattice vectors: a "three-column" array [a1|a2|a3]
- *   > Gv k-space grids = 2\pi * dot(invh.T,gxyz)
- *   > gxyz[3,nGv] = (kx[:nGv], ky[:nGv], kz[:nGv])
- *   > gs[3]: The number of *positive* G-vectors along each direction.
- * - when eval_gz is    PBC_Gv_general
- *   only Gv is needed
- * - when eval_gz is    PBC_Gv_nonuniform_orth
- *   > invh is the basic G value for each cartesian component
- *     Gx = invh[:gs[0]]
- *     Gy = invh[gs[0]:gs[0]+gs[1]]
- *     Gz = invh[gs[0]+gs[1]:]
- *   > gs[3]: Number of basic G values along each direction.
- *   > gxyz[3,nGv] are used to index the basic G value
- *   > Gv is not used
- */
-
-/*
- *
- */
-
 #include <stdlib.h>
-#include <string.h>
-#include <math.h>
-#include <assert.h>
 #include <complex.h>
-#include <omp.h>
-#include "cint.h"
-
 #define NCTRMAX         72
+<<<<<<< HEAD
 #define SQRTPI          1.7724538509055160272981674833411451
 #define EXPCUTOFF       100
 #define MIN(x,y)        ((x) < (y) ? (x) : (y))
@@ -1506,6 +1469,8 @@ void PBC_ft_ovlp_shls(int (*intor)(), void (*eval_gz)(), double complex *out,
 
 
 
+=======
+>>>>>>> upstream/master
 
 static void shift_bas(double *xyz, int *ptr_coords, double *L, int nxyz, double *env)
 {
@@ -1559,7 +1524,7 @@ void ft_ovlp_kpts(int (*intor)(), void (*eval_gz)(), double complex **out,
         shared(intor, out, exp_Lk, nkpts, Gv, invh, gxyz, gs, nGv, ao_loc, \
                eval_gz, hermi, atm, natm, bas, nbas, env)
 {
-        int i, j, k, ij, di, dj;
+        int i, j, ij, di, dj;
         int shls[2];
         size_t off;
         int dims[2];
@@ -1607,3 +1572,4 @@ void PBC_ft_latsum_kpts(int (*intor)(), void (*eval_gz)(), double complex **out,
                              atm, natm, bas, nbas, env);
         }
 }
+

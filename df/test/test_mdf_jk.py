@@ -2,8 +2,8 @@ import unittest
 import numpy
 from pyscf import gto, scf
 #from pyscf.df import poisson_jk_o2 as poisson_jk
-from pyscf.df import xdf
-from pyscf.df import xdf_jk
+from pyscf.df import mdf
+from pyscf.df import mdf_jk
 
 mol = gto.M(
     atom = '''C    3.    2.       3.
@@ -18,7 +18,7 @@ class KnowValues(unittest.TestCase):
         nao = mol.nao_nr()
         dm = numpy.random.random((nao,nao))
         dm = dm + dm.T
-        mf = xdf_jk.density_fit(scf.RHF(mol), auxbasis='weigend', gs=(10,)*3)
+        mf = mdf_jk.density_fit(scf.RHF(mol), auxbasis='weigend', gs=(10,)*3)
         vj1 = mf.get_j(mol, dm)
         self.assertAlmostEqual(numpy.einsum('ij,ij->', vj1, dm), 50.470715659848707, 9)
 
@@ -28,7 +28,7 @@ class KnowValues(unittest.TestCase):
         dm = numpy.random.random((nao,nao))
         dm = dm + dm.T
         #mf = poisson_jk.with_poisson_(scf.RHF(mol), auxbasis='weigend', gs=(10,)*3)
-        mf = xdf_jk.density_fit(scf.RHF(mol), auxbasis='weigend', gs=(10,)*3)
+        mf = mdf_jk.density_fit(scf.RHF(mol), auxbasis='weigend', gs=(10,)*3)
         vj1, vk1 = mf.get_jk(mol, dm)
         self.assertAlmostEqual(numpy.einsum('ij,ij->', vj1, dm), 50.470715659848707, 9)
         self.assertAlmostEqual(numpy.einsum('ij,ij->', vk1, dm), 66.448255856461131, 9)
@@ -44,7 +44,7 @@ class KnowValues(unittest.TestCase):
         vj0, vk0 = scf.RHF(mol).get_jk(mol, dm, hermi=0)
         ej0 = numpy.einsum('ij,ij->', vj0, dm)
         ek0 = numpy.einsum('ij,ij->', vk0, dm)
-        mf = xdf_jk.density_fit(scf.RHF(mol), auxbasis='weigend', gs=(10,)*3)
+        mf = mdf_jk.density_fit(scf.RHF(mol), auxbasis='weigend', gs=(10,)*3)
         vj1, vk1 = mf.get_jk(mol, dm, hermi=0)
         self.assertAlmostEqual(numpy.einsum('ij,ij->', vj1, dm)-ej0, 0.00010173096167420681, 9)
         self.assertAlmostEqual(numpy.einsum('ij,ij->', vk1, dm)-ek0, -6.4503261583581661e-5, 9)
@@ -57,29 +57,29 @@ class KnowValues(unittest.TestCase):
         vj0, vk0 = scf.RHF(mol).get_jk(mol, dm)
         ej0 = numpy.einsum('ij,ij->', vj0, dm)
         ek0 = numpy.einsum('ij,ij->', vk0, dm)
-        jkdf = xdf.XDF(mol)
+        jkdf = mdf.MDF(mol)
         jkdf.metric = 'S'
         jkdf.auxbasis = 'weigend'
         jkdf.gs = (10,)*3
-        mf = xdf_jk.density_fit(scf.RHF(mol), with_xdf=jkdf)
+        mf = mdf_jk.density_fit(scf.RHF(mol), with_df=jkdf)
         vj1, vk1 = mf.get_jk(mol, dm)
         self.assertAlmostEqual(numpy.einsum('ij,ij->', vj1, dm)-ej0, 9.5034429456575253e-5, 9)
         self.assertAlmostEqual(numpy.einsum('ij,ij->', vk1, dm)-ek0, -4.759826947520196e-5, 9)
 
-        jkdf = xdf.XDF(mol)
+        jkdf = mdf.MDF(mol)
         jkdf.metric = 'T'
         jkdf.auxbasis = 'weigend'
         jkdf.gs = (10,)*3
-        mf = xdf_jk.density_fit(scf.RHF(mol), with_xdf=jkdf)
+        mf = mdf_jk.density_fit(scf.RHF(mol), with_df=jkdf)
         vj1, vk1 = mf.get_jk(mol, dm)
         self.assertAlmostEqual(numpy.einsum('ij,ij->', vj1, dm)-ej0, 0.005304754655668375, 9)
         self.assertAlmostEqual(numpy.einsum('ij,ij->', vk1, dm)-ek0, 0.076335586801803856, 9)
 
-        jkdf = xdf.XDF(mol)
+        jkdf = mdf.MDF(mol)
         jkdf.metric = 'J'
         jkdf.auxbasis = 'weigend'
         jkdf.gs = (10,)*3
-        mf = xdf_jk.density_fit(scf.RHF(mol), with_xdf=jkdf)
+        mf = mdf_jk.density_fit(scf.RHF(mol), with_df=jkdf)
         vj1, vk1 = mf.get_jk(mol, dm)
         self.assertAlmostEqual(numpy.einsum('ij,ij->', vj1, dm)-ej0, -6.56455759013852e-5, 9)
         self.assertAlmostEqual(numpy.einsum('ij,ij->', vk1, dm)-ek0, -4.965601597461955e-5, 9)
@@ -92,31 +92,31 @@ class KnowValues(unittest.TestCase):
         vj0, vk0 = scf.RHF(mol).get_jk(mol, dm)
         ej0 = numpy.einsum('ij,ij->', vj0, dm)
         ek0 = numpy.einsum('ij,ij->', vk0, dm)
-        jkdf = xdf.XDF(mol)
+        jkdf = mdf.MDF(mol)
         jkdf.charge_constraint = False
         jkdf.auxbasis = 'weigend'
         jkdf.gs = (10,)*3
-        mf = xdf_jk.density_fit(scf.RHF(mol), with_xdf=jkdf)
+        mf = mdf_jk.density_fit(scf.RHF(mol), with_df=jkdf)
         vj1, vk1 = mf.get_jk(mol, dm)
         self.assertAlmostEqual(numpy.einsum('ij,ij->', vj1, dm)-ej0, 0.0003166388141693232, 9)
         self.assertAlmostEqual(numpy.einsum('ij,ij->', vk1, dm)-ek0, 0.0005799101835037845, 9)
 
-        jkdf = xdf.XDF(mol)
+        jkdf = mdf.MDF(mol)
         jkdf.charge_constraint = False
         jkdf.metric = 'T'
         jkdf.auxbasis = 'weigend'
         jkdf.gs = (10,)*3
-        mf = xdf_jk.density_fit(scf.RHF(mol), with_xdf=jkdf)
+        mf = mdf_jk.density_fit(scf.RHF(mol), with_df=jkdf)
         vj1, vk1 = mf.get_jk(mol, dm)
         self.assertAlmostEqual(numpy.einsum('ij,ij->', vj1, dm)-ej0, 0.12360821384800857, 9)
         self.assertAlmostEqual(numpy.einsum('ij,ij->', vk1, dm)-ek0, 0.4701984522179572, 9)
 
-        jkdf = xdf.XDF(mol)
+        jkdf = mdf.MDF(mol)
         jkdf.charge_constraint = False
         jkdf.metric = 'J'
         jkdf.auxbasis = 'weigend'
         jkdf.gs = (10,)*3
-        mf = xdf_jk.density_fit(scf.RHF(mol), with_xdf=jkdf)
+        mf = mdf_jk.density_fit(scf.RHF(mol), with_df=jkdf)
         vj1, vk1 = mf.get_jk(mol, dm)
         self.assertAlmostEqual(numpy.einsum('ij,ij->', vj1, dm)-ej0, -6.3466650786381251e-5, 9)
         self.assertAlmostEqual(numpy.einsum('ij,ij->', vk1, dm)-ek0, -4.5425207332527862e-5, 9)
@@ -124,5 +124,5 @@ class KnowValues(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    print('Full Tests for xdf_jk')
+    print('Full Tests for mdf_jk')
     unittest.main()

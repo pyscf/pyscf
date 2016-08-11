@@ -516,11 +516,6 @@ def parse_xc(description):
     elif not isinstance(description, str): #isinstance(description, (tuple,list)):
         return parse_xc('%s,%s' % tuple(description))
 
-    if ',' in description:
-        x_code, c_code = description.replace(' ','').replace('_','').upper().split(',')
-    else:
-        x_code, c_code = description.replace(' ','').replace('_','').upper(), ''
-
     hyb = [0]
     fn_facs = []
     def parse_token(token, possible_xc_for):
@@ -561,8 +556,9 @@ def parse_xc(description):
     def possible_x_for(key):
         return set(('XC_'+key,
                     'XC_LDA_X_'+key, 'XC_GGA_X_'+key, 'XC_MGGA_X_'+key,
-                    'XC_LDA_XC_'+key, 'XC_GGA_XC_'+key, 'XC_MGGA_XC_'+key,
-                    'XC_HYB_GGA_X_'+key, 'XC_HYB_MGGA_X_'+key,
+                    'XC_HYB_GGA_X_'+key, 'XC_HYB_MGGA_X_'+key))
+    def possible_xc_for(key):
+        return set(('XC_LDA_XC_'+key, 'XC_GGA_XC_'+key, 'XC_MGGA_XC_'+key,
                     'XC_HYB_GGA_XC_'+key, 'XC_HYB_MGGA_XC_'+key))
     def possible_k_for(key):
         return set(('XC_'+key,
@@ -583,10 +579,20 @@ def parse_xc(description):
                 n += 1
         return list(zip(fn_ids, facs))
 
-    for token in x_code.replace('-', '+-').split('+'):
-        parse_token(token, possible_x_for)
-    for token in c_code.replace('-', '+-').split('+'):
-        parse_token(token, possible_c_for)
+    if ',' in description:
+        x_code, c_code = description.replace(' ','').replace('_','').upper().split(',')
+        for token in x_code.replace('-', '+-').split('+'):
+            parse_token(token, possible_x_for)
+        for token in c_code.replace('-', '+-').split('+'):
+            parse_token(token, possible_c_for)
+    else:
+        x_code = description.replace(' ','').replace('_','').upper()
+        try:
+            for token in x_code.replace('-', '+-').split('+'):
+                parse_token(token, possible_xc_for)
+        except KeyError:
+            for token in x_code.replace('-', '+-').split('+'):
+                parse_token(token, possible_x_for)
     return hyb[0], remove_dup(fn_facs)
 
 
@@ -666,13 +672,13 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
           | v2sigmatau[:,6]
 
         * kxc for restricted case:
-          (v3rho3, v3rho2sigma, v3rhosigma2, v3sigma)
+          (v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3)
 
         * kxc for unrestricted case:
           | v3rho3[:,4]       = (u_u_u, u_u_d, u_d_d, d_d_d)
           | v3rho2sigma[:,9]  = (u_u_uu, u_u_ud, u_u_dd, u_d_uu, u_d_ud, u_d_dd, d_d_uu, d_d_ud, d_d_dd)
           | v3rhosigma2[:,12] = (u_uu_uu, u_uu_ud, u_uu_dd, u_ud_ud, u_ud_dd, u_dd_dd, d_uu_uu, d_uu_ud, d_uu_dd, d_ud_ud, d_ud_dd, d_dd_dd)
-          | v3sigma[:,10]     = (uu_uu_uu, uu_uu_ud, uu_uu_dd, uu_ud_ud, uu_ud_dd, uu_dd_dd, ud_ud_ud, ud_ud_dd, ud_dd_dd, dd_dd_dd)
+          | v3sigma3[:,10]    = (uu_uu_uu, uu_uu_ud, uu_uu_dd, uu_ud_ud, uu_ud_dd, uu_dd_dd, ud_ud_ud, ud_ud_dd, ud_dd_dd, dd_dd_dd)
 
         see also libxc_itrf.c
     '''
@@ -681,7 +687,8 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
 
 
 SINGULAR_IDS = set((131,  # LYP functions
-                    402, 404, 411, 416, 419))  # hybrid LYP functions
+                    402, 404, 411, 416, 419,   # hybrid LYP functions
+                    74 , 75 , 226, 227))       # M11L and MN12L functional
 def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     assert(deriv <= 3)
     if spin == 0:
@@ -717,7 +724,7 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     outlen = (math.factorial(nvar+deriv) //
               (math.factorial(nvar) * math.factorial(deriv)))
     if SINGULAR_IDS.intersection(fn_ids) and deriv > 1:
-        non0idx = (rho_u[0] > 5e-11) & (rho_d[0] > 5e-11)
+        non0idx = (rho_u[0] > 1e-10) & (rho_d[0] > 1e-10)
         rho_u = numpy.asarray(rho_u[:,non0idx], order='C')
         rho_d = numpy.asarray(rho_d[:,non0idx], order='C')
         outbuf = numpy.empty((outlen,non0idx.sum()))

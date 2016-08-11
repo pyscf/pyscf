@@ -5,6 +5,10 @@
 
 '''
 Generate DFT grids and weights, based on the code provided by Gerald Knizia <>
+
+Reference for Lebedev-Laikov grid:
+  V. I. Lebedev, and D. N. Laikov "A quadrature formula for the sphere of the
+  131st algebraic order of accuracy", Doklady Mathematics, 59, 477-481 (1999)
 '''
 
 
@@ -199,15 +203,10 @@ def stratmann(g):
 
 def original_becke(g):
     '''Becke, JCP, 88, 2547 (1988)'''
-    # g = (3 - g**2) * g * .5
-    # g = (3 - g**2) * g * .5
-    # g = (3 - g**2) * g * .5
-    # return g
-    g1 = numpy.empty_like(g)
-    libdft.VXCoriginal_becke(g1.ctypes.data_as(ctypes.c_void_p),
-                             g.ctypes.data_as(ctypes.c_void_p),
-                             ctypes.c_int(g.size))
-    return g1
+    g = (3 - g**2) * g * .5
+    g = (3 - g**2) * g * .5
+    g = (3 - g**2) * g * .5
+    return g
 
 def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
                      level=3, prune=nwchem_prune):
@@ -280,23 +279,45 @@ def gen_partition(mol, atom_grids_tab,
         f_radii_adjust = None
     atm_coords = numpy.array([mol.atom_coord(i) for i in range(mol.natm)])
     atm_dist = radi._inter_distance(mol)
-    def gen_grid_partition(coords):
-        ngrid = coords.shape[0]
-        grid_dist = numpy.empty((mol.natm,ngrid))
-        for ia in range(mol.natm):
-            dc = coords - atm_coords[ia]
-            grid_dist[ia] = numpy.sqrt(numpy.einsum('ij,ij->i',dc,dc))
-        pbecke = numpy.ones((mol.natm,ngrid))
-        for i in range(mol.natm):
-            for j in range(i):
-                g = 1/atm_dist[i,j] * (grid_dist[i]-grid_dist[j])
-                if f_radii_adjust is not None:
-                    g = f_radii_adjust(i, j, g)
-                g = becke_scheme(g)
-                pbecke[i] *= .5 * (1-g)
-                pbecke[j] *= .5 * (1+g)
-
-        return pbecke
+    if (becke_scheme == original_becke and
+        (f_radii_adjust is None or
+         radii_adjust in (radi.treutler_atomic_radii_adjust,
+                          radi.becke_atomic_radii_adjust))):
+        if f_radii_adjust is None:
+            p_radii_table = pyscf.lib.c_null_ptr()
+        else:
+            f_radii_table = numpy.asarray([f_radii_adjust(i, j, 0)
+                                           for i in range(mol.natm)
+                                           for j in range(mol.natm)])
+            p_radii_table = f_radii_table.ctypes.data_as(ctypes.c_void_p)
+        atm_coords = numpy.asarray(atm_coords, order='C')
+        def gen_grid_partition(coords):
+            coords = numpy.asarray(coords, order='C')
+            ngrids = coords.shape[0]
+            pbecke = numpy.empty((mol.natm,ngrids))
+            libdft.VXCgen_grid(pbecke.ctypes.data_as(ctypes.c_void_p),
+                               coords.ctypes.data_as(ctypes.c_void_p),
+                               atm_coords.ctypes.data_as(ctypes.c_void_p),
+                               p_radii_table,
+                               ctypes.c_int(mol.natm), ctypes.c_int(ngrids))
+            return pbecke
+    else:
+        def gen_grid_partition(coords):
+            ngrids = coords.shape[0]
+            grid_dist = numpy.empty((mol.natm,ngrids))
+            for ia in range(mol.natm):
+                dc = coords - atm_coords[ia]
+                grid_dist[ia] = numpy.sqrt(numpy.einsum('ij,ij->i',dc,dc))
+            pbecke = numpy.ones((mol.natm,ngrids))
+            for i in range(mol.natm):
+                for j in range(i):
+                    g = 1/atm_dist[i,j] * (grid_dist[i]-grid_dist[j])
+                    if f_radii_adjust is not None:
+                        g = f_radii_adjust(i, j, g)
+                    g = becke_scheme(g)
+                    pbecke[i] *= .5 * (1-g)
+                    pbecke[j] *= .5 * (1+g)
+            return pbecke
 
     coords_all = []
     weights_all = []
@@ -304,7 +325,7 @@ def gen_partition(mol, atom_grids_tab,
         coords, vol = atom_grids_tab[mol.atom_symbol(ia)]
         coords = coords + atm_coords[ia]
         pbecke = gen_grid_partition(coords)
-        weights = vol * pbecke[ia] / pbecke.sum(axis=0)
+        weights = vol * pbecke[ia] * (1./pbecke.sum(axis=0))
         coords_all.append(coords)
         weights_all.append(weights)
     return numpy.vstack(coords_all), numpy.hstack(weights_all)

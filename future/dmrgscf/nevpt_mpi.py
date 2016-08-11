@@ -62,7 +62,7 @@ def write_chk(mc,root,chkfile):
         mc.mo_coeff,_, mc.mo_energy = mc.canonicalize(mc.mo_coeff,ci=root)
 
 
-    fh5['mol']        =       format(mc.mol.pack())
+    fh5['mol']        =       mc.mol.dumps()
     fh5['mc/mo']      =       mc.mo_coeff
     fh5['mc/ncore']   =       mc.ncore
     fh5['mc/ncas']    =       mc.ncas

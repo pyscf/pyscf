@@ -25,8 +25,12 @@ def get_alphas_gth(cell):
 
     alphas = np.zeros(cell.natm)
     for ia in range(cell.natm):
+        symb = cell.atom_symbol(ia)
+        if symb not in cell._pseudo:
+            continue
+
         Zia = cell.atom_charge(ia)
-        pp = cell._pseudo[ cell.atom_symbol(ia) ]
+        pp = cell._pseudo[symb]
         rloc, nexp, cexp = pp[1:3+1]
 
         cfacs = [1., 3., 15., 105.]
@@ -34,13 +38,14 @@ def get_alphas_gth(cell):
                      + (2*np.pi)**(3/2.)*rloc**3*np.dot(cexp,cfacs[:nexp]) )
     return alphas
 
-def get_vlocG(cell):
+def get_vlocG(cell, Gv=None):
     '''Local PP kernel in G space: Vloc(G) for G!=0, 0 for G=0.
 
     Returns:
         (natm, ngs) ndarray
     '''
-    Gvnorm = lib.norm(cell.Gv, axis=1)
+    if Gv is None: Gv = cell.Gv
+    Gvnorm = lib.norm(Gv, axis=1)
     vlocG = get_gth_vlocG(cell, Gvnorm)
     vlocG[:,0] = 0.
     return vlocG
@@ -56,12 +61,16 @@ def get_gth_vlocG(cell, G):
     Returns:
          (natm, ngs) ndarray
     '''
+    with np.errstate(divide='ignore'):
+        coulG = 4*np.pi / G**2
+        coulG[0] = 0
+
     vlocG = np.zeros((cell.natm,len(G)))
     for ia in range(cell.natm):
         Zia = cell.atom_charge(ia)
         symb = cell.atom_symbol(ia)
         if symb not in cell._pseudo:
-            vlocG[ia] = cell.atom_charge(ia)
+            vlocG[ia] = Zia * coulG
             continue
         pp = cell._pseudo[symb]
         rloc, nexp, cexp = pp[1:3+1]
@@ -73,11 +82,10 @@ def get_gth_vlocG(cell, G):
                  15 - 10*G_red**2 + G_red**4,
                  105 - 105*G_red**2 + 21*G_red**4 - G_red**6])
 
-        with np.errstate(divide='ignore'):
-            # Note the signs -- potential here is positive
-            vlocG[ia,:] = ( 4*np.pi * Zia * np.exp(-0.5*G_red**2)/G**2
-                           - (2*np.pi)**(3/2.)*rloc**3*np.exp(-0.5*G_red**2)*(
-                                np.dot(cexp, cfacs[:nexp])) )
+        # Note the signs -- potential here is positive
+        vlocG[ia,:] = ( Zia * coulG * np.exp(-0.5*G_red**2)
+                       - (2*np.pi)**(3/2.)*rloc**3*np.exp(-0.5*G_red**2)*(
+                            np.dot(cexp, cfacs[:nexp])) )
     return vlocG
 
 def get_projG(cell, kpt=np.zeros(3)):
@@ -197,7 +205,7 @@ def cart2polar(rvec):
 
 
 def get_pp(cell, kpt=np.zeros(3)):
-    '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
+    '''Get the periodic pseudotential nuc-el AO matrix
     '''
     import pyscf.dft
     from pyscf.pbc import tools
@@ -210,6 +218,7 @@ def get_pp(cell, kpt=np.zeros(3)):
     SI = cell.get_SI()
     vlocG = get_vlocG(cell)
     vpplocG = -np.sum(SI * vlocG, axis=0)
+    vpplocG[0] = np.sum(get_alphas(cell)) # from get_jvloc_G0 function
 
     # vpploc evaluated in real-space
     vpplocR = tools.ifft(vpplocG, cell.gs).real

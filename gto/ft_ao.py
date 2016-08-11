@@ -13,8 +13,7 @@ import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf import gto
-
-libpbc = lib.load_library('libpbc')
+from pyscf.gto.moleintor import libcgto
 
 #
 # \int mu*nu*exp(-ik*r) dr
@@ -34,7 +33,7 @@ def ft_aopair(mol, Gv, shls_slice=None, hermi=False,
         p_gxyzT = lib.c_null_ptr()
         p_gs = (ctypes.c_int*3)(0,0,0)
         p_invh = (ctypes.c_double*1)(0)
-        eval_gz = 'PBC_Gv_general'
+        eval_gz = 'GTO_Gv_general'
     else:
         GvT = numpy.asarray(Gv.T, order='C')
         gxyzT = numpy.asarray(gxyz.T, order='C', dtype=numpy.int32)
@@ -44,22 +43,22 @@ def ft_aopair(mol, Gv, shls_slice=None, hermi=False,
         if isinstance(invh, numpy.ndarray) and invh.shape == (3,3):
             p_invh = invh.ctypes.data_as(ctypes.c_void_p)
             if numpy.allclose(invh-numpy.diag(invh.diagonal()), 0):
-                eval_gz = 'PBC_Gv_uniform_orth'
+                eval_gz = 'GTO_Gv_uniform_orth'
             else:
-                eval_gz = 'PBC_Gv_uniform_nonorth'
+                eval_gz = 'GTO_Gv_uniform_nonorth'
         else:
             invh = numpy.hstack(invh)
             p_invh = invh.ctypes.data_as(ctypes.c_void_p)
-            eval_gz = 'PBC_Gv_nonuniform_orth'
+            eval_gz = 'GTO_Gv_nonuniform_orth'
 
-    fn = libpbc.PBC_ft_ovlp_mat
-    intor = ctypes.c_void_p(_ctypes.dlsym(libpbc._handle, 'PBC_ft_ovlp_sph'))
-    eval_gz = ctypes.c_void_p(_ctypes.dlsym(libpbc._handle, eval_gz))
+    fn = libcgto.GTO_ft_ovlp_mat
+    intor = ctypes.c_void_p(_ctypes.dlsym(libcgto._handle, 'GTO_ft_ovlp_sph'))
+    eval_gz = ctypes.c_void_p(_ctypes.dlsym(libcgto._handle, eval_gz))
 
     ao_loc = numpy.asarray(mol.ao_loc_nr(), dtype=numpy.int32)
     ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
     nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
-    mat = numpy.empty((nGv,ni,nj), order='F', dtype=numpy.complex)
+    mat = numpy.empty((nGv,ni,nj), order='F', dtype=numpy.complex128)
 
     fn(intor, eval_gz, mat.ctypes.data_as(ctypes.c_void_p),
        (ctypes.c_int*4)(*shls_slice),
@@ -91,7 +90,7 @@ def ft_ao(mol, Gv, shls_slice=None,
         p_gxyzT = lib.c_null_ptr()
         p_gs = (ctypes.c_int*3)(0,0,0)
         p_invh = (ctypes.c_double*1)(0)
-        eval_gz = 'PBC_Gv_general'
+        eval_gz = 'GTO_Gv_general'
     else:
         GvT = numpy.asarray(Gv.T, order='C')
         gxyzT = numpy.asarray(gxyz.T, order='C', dtype=numpy.int32)
@@ -101,17 +100,17 @@ def ft_ao(mol, Gv, shls_slice=None,
         if isinstance(invh, numpy.ndarray) and invh.shape == (3,3):
             p_invh = invh.ctypes.data_as(ctypes.c_void_p)
             if numpy.allclose(invh-numpy.diag(invh.diagonal()), 0):
-                eval_gz = 'PBC_Gv_uniform_orth'
+                eval_gz = 'GTO_Gv_uniform_orth'
             else:
-                eval_gz = 'PBC_Gv_uniform_nonorth'
+                eval_gz = 'GTO_Gv_uniform_nonorth'
         else:
             invh = numpy.hstack(invh)
             p_invh = invh.ctypes.data_as(ctypes.c_void_p)
-            eval_gz = 'PBC_Gv_nonuniform_orth'
+            eval_gz = 'GTO_Gv_nonuniform_orth'
 
-    fn = libpbc.PBC_ft_ovlp_mat
-    intor = ctypes.c_void_p(_ctypes.dlsym(libpbc._handle, 'PBC_ft_ovlp_sph'))
-    eval_gz = ctypes.c_void_p(_ctypes.dlsym(libpbc._handle, eval_gz))
+    fn = libcgto.GTO_ft_ovlp_mat
+    intor = ctypes.c_void_p(_ctypes.dlsym(libcgto._handle, 'GTO_ft_ovlp_sph'))
+    eval_gz = ctypes.c_void_p(_ctypes.dlsym(libcgto._handle, eval_gz))
 
     ghost_atm = numpy.array([[0,0,0,0,0,0]], dtype=numpy.int32)
     ghost_bas = numpy.array([[0,0,1,1,0,0,3,0]], dtype=numpy.int32)

@@ -86,6 +86,7 @@ class KUKS(kuhf.KUHF):
 # don't modify the following attributes, they are not input options
         self._ecoul = 0
         self._exc = 0
+        # Note Do not refer to .with_df._numint because gs/coords may be different
         self._numint = numint._KNumInt(kpts)
         self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
 
@@ -93,13 +94,6 @@ class KUKS(kuhf.KUHF):
         kuhf.KUHF.dump_flags(self)
         logger.info(self, 'XC functionals = %s', self.xc)
         self.grids.dump_flags()
-
-    @kuhf.KUHF.kpts.setter
-    def kpts(self, x):
-        x = np.reshape(x, (-1,3))
-        if abs(self.with_df.kpts-x).sum() > 1e-9:
-            self._numint = numint._KNumInt(x)
-            self.with_df.kpts = x
 
     get_veff = get_veff
 

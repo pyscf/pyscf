@@ -6,6 +6,7 @@
 #
 
 MAXL = 8
+SPDF = ('S', 'P', 'D', 'F', 'G', 'H', 'I', 'J')
 MAPSPDF = {'S': 0,
            'P': 1,
            'D': 2,
@@ -91,6 +92,54 @@ def search_ecp(basisfile, symb):
             dat = fin.readline().splitlines()[0].strip()
     raise RuntimeError('Basis not found for  %s  in  %s' % (symb, basisfile))
 
+def convert_basis_to_nwchem(symb, basis):
+    '''Convert the internal basis format to NWChem format string'''
+    from pyscf.gto.mole import _std_symbol
+    res = []
+    symb = _std_symbol(symb)
+
+    # pass 1: comment line
+    ls = [b[0] for b in basis]
+    nprims = [len(b[1:]) for b in basis]
+    nctrs = [len(b[1])-1 for b in basis]
+    prim_to_ctr = {}
+    for i, l in enumerate(ls):
+        if l in prim_to_ctr:
+            prim_to_ctr[l][0] += nprims[i]
+            prim_to_ctr[l][1] += nctrs[i]
+        else:
+            prim_to_ctr[l] = [nprims[i], nctrs[i]]
+    nprims = []
+    nctrs = []
+    for l in set(ls):
+        nprims.append(str(prim_to_ctr[l][0])+SPDF[l].lower())
+        nctrs.append(str(prim_to_ctr[l][1])+SPDF[l].lower())
+    res.append('#BASIS SET: (%s) -> [%s]' % (','.join(nprims), ','.join(nctrs)))
+
+    # pass 2: basis data
+    for bas in basis:
+        res.append('%-2s    %s' % (symb, SPDF[bas[0]]))
+        for dat in bas[1:]:
+            res.append(' '.join('%15.9f'%x for x in dat))
+    return '\n'.join(res)
+
+def convert_ecp_to_nwchem(symb, ecp):
+    '''Convert the internal ecp format to NWChem format string'''
+    from pyscf.gto.mole import _std_symbol
+    symb = _std_symbol(symb)
+    res = ['%-2s nelec %d' % (symb, ecp[0])]
+
+    for ecp_block in ecp[1]:
+        l = ecp_block[0]
+        if l == -1:
+            res.append('%-2s ul' % symb)
+        else:
+            res.append('%-2s %s' % (symb, SPDF[l].lower()))
+        for r_order, dat in enumerate(ecp_block[1]):
+            for e,c in dat:
+                res.append('%d    %15.9f  %15.9f' % (r_order, e, c))
+    return '\n'.join(res)
+
 def _parse(raw_basis):
     basis_add = []
     for dat in raw_basis:
@@ -129,7 +178,7 @@ def _parse_ecp(raw_ecp):
                 ecp_add.append([-1])
             else:
                 ecp_add.append([MAPSPDF[key]])
-            by_ang = [[], [], []]
+            by_ang = [[], [], [], []]
             ecp_add[-1].append(by_ang)
         else:
             line = dat.replace('D','e').split()
@@ -143,4 +192,8 @@ def _parse_ecp(raw_ecp):
 if __name__ == '__main__':
     from pyscf import gto
     mol = gto.M(atom='O', basis='6-31g')
-    load_ecp('ecp_lanl2dz.dat', 'Na')
+    print(load_ecp('lanl2dz.dat', 'Na'))
+    b = load('ano.dat', 'Na')
+    print(convert_basis_to_nwchem('Na', b))
+    b = load_ecp('lanl2dz.dat', 'Na')
+    print(convert_ecp_to_nwchem('Na', b))

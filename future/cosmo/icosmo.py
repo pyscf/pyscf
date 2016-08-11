@@ -60,7 +60,7 @@ class COSMO(object):
         self.dm = None   # given system density, avoid potential being updated SCFly
         #self.x2c_correction = False
         self.casci_conv_tol = 1e-7
-        self.casci_state_id = None
+        self.casci_state_id = 0
         self.casci_max_cycle = 50
 
 ##################################################
@@ -565,11 +565,19 @@ def cosmo_for_mcscf(mc, cosmo):
             e_tot, e_cas, fcivec = oldCAS.casci(self, mo_coeff, ci0, eris,
                                                 verbose, envs)
 
-            if self.fcisolver.nroots > 1 and cosmo.casci_state_id is not None:
-                c = fcivec[cosmo.casci_state_id]
-                casdm1 = self.fcisolver.make_rdm1(c, self.ncas, self.nelecas)
-            else:
+            if not isinstance(e_cas, (float, numpy.number)):
+                raise RuntimeError('Multiple roots are detected in fcisolver.  '
+                                   'CASSCF does not know which state to optimize.\n'
+                                   'See also  mcscf.state_average  or  mcscf.state_specific  for excited states.')
+
+            try:
                 casdm1 = self.fcisolver.make_rdm1(fcivec, self.ncas, self.nelecas)
+            except Exception as err:
+                if self.fcisolver.nroots > 1:
+                    c = fcivec[cosmo.casci_state_id]
+                    casdm1 = self.fcisolver.make_rdm1(c, self.ncas, self.nelecas)
+                else:
+                    raise err
             mocore = mo_coeff[:,:self.ncore]
             mocas = mo_coeff[:,self.ncore:self.ncore+self.ncas]
             cosmo._dm_guess = reduce(numpy.dot, (mocas, casdm1, mocas.T))
@@ -620,6 +628,11 @@ def cosmo_for_casci(mc, cosmo):
                 self.mo_coeff = mo_coeff
             if ci0 is None:
                 ci0 = self.ci
+
+            if self.verbose >= lib.logger.WARN:
+                self.check_sanity()
+            self.dump_flags()
+
             if self.mol.symmetry:
                 mcscf.casci_symm.label_symmetry_(self, self.mo_coeff)
             log = lib.logger.Logger(self.stdout, self.verbose)
@@ -628,11 +641,13 @@ def cosmo_for_casci(mc, cosmo):
                 # casci.kernel call get_hcore, which initialized cosmo._v
                 e_tot, e_cas, fcivec = mcscf.casci.kernel(self, mo_coeff,
                                                           ci0=ci0, verbose=log)
-                if self.fcisolver.nroots > 1 and cosmo.casci_state_id is not None:
+                if isinstance(self.e_cas, (float, numpy.number)):
+                    casdm1 = self.fcisolver.make_rdm1(fcivec, self.ncas, self.nelecas)
+                else:
+                    log.debug('COSMO responses to DM of state %d', cosmo.casci_state_id)
                     c = fcivec[cosmo.casci_state_id]
                     casdm1 = self.fcisolver.make_rdm1(c, self.ncas, self.nelecas)
-                else:
-                    casdm1 = self.fcisolver.make_rdm1(fcivec, self.ncas, self.nelecas)
+
                 mocore = mo_coeff[:,:self.ncore]
                 mocas = mo_coeff[:,self.ncore:self.ncore+self.ncas]
                 cosmo._dm_guess = reduce(numpy.dot, (mocas, casdm1, mocas.T))
@@ -671,24 +686,34 @@ def cosmo_for_casci(mc, cosmo):
                 for icycle in range(cosmo.casci_max_cycle):
                     self.e_tot, self.e_cas, self.ci = casci_iter(mo_coeff, ci0,
                                                                  icycle)
-                    if abs(self.e_tot - e_tot) < cosmo.casci_conv_tol:
-                        log.debug('    delta E(CAS) = %.15g', self.e_tot - e_tot)
+                    if numpy.all(abs(self.e_tot-e_tot) < cosmo.casci_conv_tol):
+                        log.debug('    delta E(CAS) = %s', self.e_tot-e_tot)
                         break
-                    ci0 = self.ci
-                    e_tot = self.e_tot
+                    e_tot, ci0 = self.e_tot, self.ci
 
-            if not isinstance(self.e_cas, (float, numpy.number)):
-                self.mo_coeff, _, self.mo_energy = \
-                        self.canonicalize(mo_coeff, self.ci[0], verbose=log)
-            else:
-                self.mo_coeff, _, self.mo_energy = \
-                        self.canonicalize(mo_coeff, self.ci, verbose=log)
             self._finalize()
             return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
 
         def _finalize(self):
-            cosmo.e_tot = self.e_tot
-            self.e_tot = cosmo.cosmo_occ(self.make_rdm1())
+            if isinstance(self.e_tot, (float, numpy.number)):
+                cosmo.e_tot = self.e_tot
+                self.e_tot = cosmo.cosmo_occ(self.make_rdm1())
+            else:
+                cosmo.e_tot = self.e_tot[cosmo.casci_state_id]
+                c = self.ci[cosmo.casci_state_id]
+# Assuming the COSMO correction e_cosmo are the same for multiple roots.
+                e_cosmo = (cosmo.cosmo_occ(self.make_rdm1(self.mo_coeff, c)) -
+                           self.e_tot[cosmo.casci_state_id])
+                self.e_tot += e_cosmo
+
+            if self.canonicalization:
+                log = lib.logger.Logger(self.stdout, self.verbose)
+                if isinstance(self.e_cas, (float, numpy.number)):
+                    self.canonicalize_(self.mo_coeff, self.ci,
+                                       cas_natorb=self.natorb, verbose=log)
+                else:
+                    self.canonicalize_(self.mo_coeff, self.ci[0],
+                                       cas_natorb=self.natorb, verbose=log)
             return oldCAS._finalize(self)
 
     return CAS()

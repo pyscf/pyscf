@@ -384,6 +384,45 @@ def izip(*args):
     else:
         return zip(*args)
 
+import threading
+from multiprocessing import Queue, Process
+class ProcessWithReturnValue(Process):
+    def __init__(self, target=None, *args, **kwargs):
+        self._q = Queue()
+        def qwrap(*args, **kwargs):
+            self._q.put(target(*args, **kwargs))
+        Process.__init__(self, target=qwrap, *args, **kwargs)
+    def join(self):
+        Process.join(self)
+        return self._q.get()
+    get = join
+
+class ThreadWithReturnValue(threading.Thread):
+    def __init__(self, target=None, *args, **kwargs):
+        self._q = Queue()
+        def qwrap(*args, **kwargs):
+            self._q.put(target(*args, **kwargs))
+        threading.Thread.__init__(self, target=qwrap, *args, **kwargs)
+    def join(self):
+        threading.Thread.join(self)
+        return self._q.get()
+    get = join
+
+def background_thread(func, *args, **kwargs):
+    '''applying function in background'''
+    thread = ThreadWithReturnValue(target=func, args=args, kwargs=kwargs)
+    thread.start()
+    return thread
+
+def background_process(func, *args, **kwargs):
+    '''applying function in background'''
+    thread = ProcessWithReturnValue(target=func, args=args, kwargs=kwargs)
+    thread.start()
+    return thread
+
+bg = background = bg_thread = background_thread
+bp = bg_process = background_process
+
 
 if __name__ == '__main__':
     for i,j in tril_equal_pace(90, 30):

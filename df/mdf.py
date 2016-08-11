@@ -17,8 +17,8 @@ import h5py
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
-from pyscf.gto import ATOM_OF, ANG_OF, NPRIM_OF, NCTR_OF, PTR_EXP, PTR_COEFF
-from pyscf.df import ft_ao
+from pyscf.gto import ANG_OF, PTR_COEFF
+from pyscf.gto import ft_ao
 from pyscf.df import addons
 from pyscf.df import incore
 
@@ -53,12 +53,12 @@ def make_modrho_basis(mol, auxbasis=None):
         ptr = auxmol._bas[ib,PTR_COEFF]
         cs = auxmol._env[ptr:ptr+np*nc].reshape(nc,np).T
 
-        int1 = gto.mole._gaussian_int(l+2, es)
+# int1 is the multipole value. l*2+2 is due to the radial part integral
+# \int (r^l e^{-ar^2} * Y_{lm}) (r^l Y_{lm}) r^2 dr d\Omega
+        int1 = gto.mole._gaussian_int(l*2+2, es)
         s = numpy.einsum('pi,p->i', cs, int1)
         cs = numpy.einsum('pi,i->pi', cs, half_sph_norm/s)
         auxmol._env[ptr:ptr+np*nc] = cs.T.reshape(-1)
-    auxmol.natm = mol.natm
-    auxmol.nbas = len(auxmol._bas)
     auxmol._built = True
     logger.debug(mol, 'aux basis, num shells = %d, num cGTO = %d',
                  auxmol.nbas, auxmol.nao_nr())
@@ -105,7 +105,7 @@ def _uncontract_basis(mol, basis=None, eta=.1, l_max=None):
     return basis
 
 
-class XDF(lib.StreamObject):
+class MDF(lib.StreamObject):
     def __init__(self, mol):
         self.mol = mol
         self.stdout = mol.stdout
@@ -143,17 +143,18 @@ class XDF(lib.StreamObject):
         nao = mol.nao_nr()
         naux = auxmol.nao_nr()
 
-        if isinstance(self._cderi, str):
-            cderifile = self._cderi
-        else:
-            cderifile = self._cderi.name
+        if not isinstance(self._cderi, str):
+            if isinstance(self._cderi_file, str):
+                self._cderi = self._cderi_file
+            else:
+                self._cderi = self._cderi_file.name
 
         fLpq = _Lpq_solver(self.metric, self.charge_constraint)
         if self.approx_sr_level == 0:
-            with h5py.File(cderifile, 'w') as f:
+            with h5py.File(self._cderi, 'w') as f:
                 f['Lpq'] = fLpq(mol, auxmol)
         else:
-            with h5py.File(cderifile, 'w') as f:
+            with h5py.File(self._cderi, 'w') as f:
                 f['Lpq'] = _make_Lpq_atomic_approx(mol, auxmol, fLpq)
         return self
 
@@ -178,8 +179,8 @@ class XDF(lib.StreamObject):
         kws = kws[idx]
         gxyz = gxyz[idx]
 
-        blksize = min(max(16, int(max_memory*1e6*.7/16/nao**2)), 8192)
-        sublk = max(16,int(blksize//8))
+        blksize = min(max(16, int(max_memory*1e6*.7/16/nao**2)), 16384)
+        sublk = max(16,int(blksize//4))
         pqkRbuf = numpy.empty(nao*nao*sublk)
         pqkIbuf = numpy.empty(nao*nao*sublk)
         LkRbuf = numpy.empty(naux*sublk)
@@ -187,21 +188,21 @@ class XDF(lib.StreamObject):
 
         for p0, p1 in lib.prange(0, kws.size, blksize):
             aoao = ft_ao.ft_aopair(mol, Gv[p0:p1], None, True,
-                                   Gvbase, gxyz[p0:p1], nxyz).reshape(-1,nao**2)
+                                   Gvbase, gxyz[p0:p1], nxyz)
             aoaux = ft_ao.ft_ao(auxmol, Gv[p0:p1], None, Gvbase, gxyz[p0:p1], nxyz)
 
             for i0, i1 in lib.prange(0, p1-p0, sublk):
                 nG = i1 - i0
                 coulG = .5/numpy.pi**2 * kws[p0+i0:p0+i1] / kk[p0+i0:p0+i1]
-                pqkR = numpy.ndarray((nao*nao,nG), buffer=pqkRbuf)
-                pqkI = numpy.ndarray((nao*nao,nG), buffer=pqkIbuf)
+                pqkR = numpy.ndarray((nao,nao,nG), buffer=pqkRbuf)
+                pqkI = numpy.ndarray((nao,nao,nG), buffer=pqkIbuf)
                 LkR = numpy.ndarray((naux,nG), buffer=LkRbuf)
                 LkI = numpy.ndarray((naux,nG), buffer=LkIbuf)
-                pqkR[:] = aoao[i0:i1].real.T
+                pqkR[:] = aoao[i0:i1].real.transpose(1,2,0)
+                pqkI[:] = aoao[i0:i1].imag.transpose(1,2,0)
                 LkR [:] = aoaux[i0:i1].real.T
-                pqkI[:] = aoao[i0:i1].imag.T
                 LkI [:] = aoaux[i0:i1].imag.T
-                yield pqkR, LkR, pqkI, LkI, coulG
+                yield pqkR.reshape(-1,nG), LkR, pqkI.reshape(-1,nG), LkI, coulG
 
     def sr_loop(self, mol, auxmol, max_memory=2000):
         '''Short range part'''
@@ -212,12 +213,12 @@ class XDF(lib.StreamObject):
 
 
     def get_jk(self, mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
-        from pyscf.df import xdf_jk
-        return xdf_jk.get_jk(self, mol, dm, hermi, vhfopt, with_j, with_k)
+        from pyscf.df import mdf_jk
+        return mdf_jk.get_jk(self, mol, dm, hermi, vhfopt, with_j, with_k)
 
     def update_mf(self, mf):
-        from pyscf.df import xdf_jk
-        return xdf_jk.density_fit(mf, self.auxbasis, self.gs, with_df=self)
+        from pyscf.df import mdf_jk
+        return mdf_jk.density_fit(mf, self.auxbasis, self.gs, with_df=self)
 
     def update_mc(self):
         pass
@@ -232,16 +233,16 @@ class XDF(lib.StreamObject):
         pass
 
     def update_mf_(self, mf):
-        from pyscf.df import xdf_jk
+        from pyscf.df import mdf_jk
         def get_j(mol, dm, hermi=1):
-            return xdf_jk.get_jk(self, mol, dm, hermi, mf.opt,
+            return mdf_jk.get_jk(self, mol, dm, hermi, mf.opt,
                                  with_j=True, with_k=False)[0]
         def get_k(mol, dm, hermi=1):
-            return xdf_jk.get_jk(self, mol, dm, hermi, mf.opt,
+            return mdf_jk.get_jk(self, mol, dm, hermi, mf.opt,
                                  with_j=False, with_k=True)[1]
         mf.get_j = get_j
         mf.get_k = get_k
-        mf.get_jk = lambda mol, dm, hermi=1: xdf_jk.get_jk(self, mol, dm, hermi, mf.opt)
+        mf.get_jk = lambda mol, dm, hermi=1: mdf_jk.get_jk(self, mol, dm, hermi, mf.opt)
         return mf
 
     def gen_ft(self):
@@ -295,12 +296,9 @@ def _atomic_envs(mol, auxmol, symbol):
         es = mol2.bas_exp(ib)
         ptr = mol2._bas[ib,PTR_COEFF]
         cs = mol2._env[ptr:ptr+np*nc].reshape(nc,np).T
-        s = numpy.einsum('pi,p->i', cs, gto.mole._gaussian_int(l+2, es))
+        s = numpy.einsum('pi,p->i', cs, gto.mole._gaussian_int(l*2+2, es))
         cs = numpy.einsum('pi,i->pi', cs, half_sph_norm/s)
         mol2._env[ptr:ptr+np*nc] = cs.T.reshape(-1)
-    mol1.natm = mol2.natm = 1
-    mol1.nbas = mol1._bas.shape[0]
-    mol2.nbas = mol2._bas.shape[0]
     return mol1, mol2
 
 def _make_Lpq_atomic_approx(mol, auxmol, fLpq):

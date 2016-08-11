@@ -7,9 +7,9 @@ import time
 from functools import reduce
 import numpy
 import scipy.linalg
-import pyscf.lib
-from pyscf.lib import logger
+from pyscf import lib
 from pyscf import symm
+from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import hf_symm
 from pyscf.scf import uhf
@@ -17,12 +17,13 @@ from pyscf.scf import chkfile
 
 
 def analyze(mf, verbose=logger.DEBUG):
+    from pyscf.lo import orth
     from pyscf.tools import dump_mat
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
     mol = mf.mol
-    log = pyscf.lib.logger.Logger(mf.stdout, verbose)
+    log = logger.Logger(mf.stdout, verbose)
     nirrep = len(mol.irrep_id)
     ovlp_ao = mf.get_ovlp()
     orbsyma = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
@@ -77,6 +78,7 @@ def analyze(mf, verbose=logger.DEBUG):
             log.note('beta  MO #%d (%s #%d), energy= %.15g occ= %g',
                      k+1, irname_full[j], irorbcnt[j], mo_energy[1][k], mo_occ[1][k])
 
+    ovlp_ao = mf.get_ovlp()
     if mf.verbose >= logger.DEBUG:
         label = mol.spheric_labels(True)
         molabel = []
@@ -87,8 +89,10 @@ def analyze(mf, verbose=logger.DEBUG):
             else:
                 irorbcnt[j] = 1
             molabel.append('#%-d(%s #%d)' % (k+1, irname_full[j], irorbcnt[j]))
-        log.debug(' ** alpha MO coefficients **')
-        dump_mat.dump_rec(mol.stdout, mo_coeff[0], label, molabel, start=1)
+        log.debug(' ** alpha MO coefficients (expansion on meta-Lowdin AOs) **')
+        orth_coeff = orth.orth_ao(mol, 'meta_lowdin', s=ovlp_ao)
+        c_inv = numpy.dot(orth_coeff.T, ovlp_ao)
+        dump_mat.dump_rec(mol.stdout, c_inv.dot(mo_coeff[0]), label, molabel, start=1)
 
         molabel = []
         irorbcnt = {}
@@ -98,8 +102,8 @@ def analyze(mf, verbose=logger.DEBUG):
             else:
                 irorbcnt[j] = 1
             molabel.append('#%-d(%s #%d)' % (k+1, irname_full[j], irorbcnt[j]))
-        log.debug(' ** beta MO coefficients **')
-        dump_mat.dump_rec(mol.stdout, mo_coeff[1], label, molabel, start=1)
+        log.debug(' ** beta MO coefficients (expansion on meta-Lowdin AOs) **')
+        dump_mat.dump_rec(mol.stdout, c_inv.dot(mo_coeff[1]), label, molabel, start=1)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     return mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
@@ -382,7 +386,7 @@ class UHF(uhf.UHF):
         if verbose is None: verbose = self.verbose
         return analyze(self, verbose)
 
-    @pyscf.lib.with_doc(get_irrep_nelec.__doc__)
+    @lib.with_doc(get_irrep_nelec.__doc__)
     def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None, s=None):
         if mol is None: mol = self.mol
         if mo_occ is None: mo_occ = self.mo_occ

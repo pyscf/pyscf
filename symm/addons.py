@@ -5,7 +5,7 @@
 from functools import reduce
 import numpy
 import scipy.linalg
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.symm import basis
 from pyscf.symm import param
@@ -49,37 +49,44 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True):
     if s is None:
         s = mol.intor_symmetric('cint1e_ovlp_sph')
     mo_s = numpy.dot(mo.T, s)
-    norm = numpy.empty((len(irrep_name), nmo))
-    for i,ir in enumerate(irrep_name):
-        moso = numpy.dot(mo_s, symm_orb[i])
-        norm[i] = numpy.einsum('ij,ij->i', moso, moso)
+    norm = numpy.zeros((len(irrep_name), nmo))
+    for i, csym in enumerate(symm_orb):
+        moso = numpy.dot(mo_s, csym)
+        ovlpso = reduce(numpy.dot, (csym.T, s, csym))
+        norm[i] = numpy.einsum('ik,ki->i', moso, lib.cho_solve(ovlpso, moso.T))
+    norm /= numpy.sum(norm, axis=0)  # for orbitals which are not normalized
     iridx = numpy.argmax(norm, axis=0)
     orbsym = [irrep_name[i] for i in iridx]
     logger.debug(mol, 'irreps of each MO %s', str(orbsym))
     if check:
-        norm[iridx,numpy.arange(nmo)] = 0
-        orbidx = numpy.where(norm > THRESHOLD)
-        if orbidx[1].size > 0:
-            idx = numpy.where(norm > THRESHOLD*1e2)
-            if idx[1].size > 0:
+        largest_norm = norm[iridx,numpy.arange(nmo)]
+        orbidx = numpy.where(largest_norm < 1-THRESHOLD)[0]
+        if orbidx.size > 0:
+            idx = numpy.where(largest_norm < 1-THRESHOLD*1e2)[0]
+            if idx.size > 0:
                 logger.error(mol, 'orbitals %s not symmetrized, norm = %s',
-                             idx[1], norm[idx])
-                raise ValueError('orbitals %s not symmetrized' % idx[1])
+                             idx, largest_norm[idx])
+                raise ValueError('orbitals %s not symmetrized' %
+                                 numpy.unique(idx))
             else:
                 logger.warn(mol, 'orbitals %s not strictly symmetrized.',
-                            orbidx[1])
+                            numpy.unique(orbidx))
                 logger.warn(mol, 'They can be symmetrized with '
                             'pyscf.symm.symmetrize_orb function.')
-                logger.debug(mol, 'norm = %s', norm[orbidx])
+                logger.debug(mol, 'norm = %s', largest_norm[orbidx])
     return orbsym
 
 def symmetrize_orb(mol, mo, orbsym=None, s=None):
     '''Symmetrize the given orbitals.
-    
+
     This function is different to the :func:`symmetrize_space`:  In this
     function, each orbital is symmetrized by removing non-symmetric components.
     :func:`symmetrize_space` symmetrizes the entire space by mixing different
     orbitals.
+
+    Note this function might return non-orthorgonal orbitals.
+    Call :func:`symmetrize_space` to find the symmetrized orbitals that are
+    close to the given orbitals.
 
     Args:
         mo : 2D float array
@@ -125,13 +132,13 @@ def symmetrize_orb(mol, mo, orbsym=None, s=None):
         idx = orbsym == ir
         csym = mol.symm_orb[i]
         ovlpso = reduce(numpy.dot, (csym.T, s, csym))
-        sc = pyscf.lib.cho_solve(ovlpso, numpy.dot(mo_s[idx], csym).T)
+        sc = lib.cho_solve(ovlpso, numpy.dot(mo_s[idx], csym).T)
         mo1[:,idx] = numpy.dot(csym, sc)
     return mo1
 
 def symmetrize_space(mol, mo, s=None):
     '''Symmetrize the given orbital space.
-    
+
     This function is different to the :func:`symmetrize_orb`:  In this function,
     the given orbitals are mixed to reveal the symmtery; :func:`symmetrize_orb`
     projects out non-symmetric components for each orbital.
@@ -158,18 +165,19 @@ def symmetrize_space(mol, mo, s=None):
     >>> print(symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, mo))
     ['A', 'A', 'A', 'B1', 'B1', 'B2', 'B2', 'B3', 'B3']
     '''
+    from pyscf.tools import mo_mapping
     if s is None:
         s = mol.intor_symmetric('cint1e_ovlp_sph')
     nmo = mo.shape[1]
     mo_s = numpy.dot(mo.T, s)
+    assert(numpy.allclose(numpy.dot(mo_s, mo), numpy.eye(nmo)))
     mo1 = []
-    for i, ir in enumerate(mol.irrep_id):
-        csym = mol.symm_orb[i]
+    for i, csym in enumerate(mol.symm_orb):
         moso = numpy.dot(mo_s, csym)
         ovlpso = reduce(numpy.dot, (csym.T, s, csym))
 
 # excluding orbitals which are already symmetrized
-        diag = numpy.einsum('ik,ki->i', moso, pyscf.lib.cho_solve(ovlpso, moso.T))
+        diag = numpy.einsum('ik,ki->i', moso, lib.cho_solve(ovlpso, moso.T))
         idx = abs(1-diag) < 1e-8
         orb_exclude = mo[:,idx]
         mo1.append(orb_exclude)
@@ -187,7 +195,8 @@ def symmetrize_space(mol, mo, s=None):
     snorm = numpy.linalg.norm(reduce(numpy.dot, (mo1.T, s, mo1)) - numpy.eye(nmo))
     if snorm > 1e-6:
         raise ValueError('Orbitals are not orthogonalized')
-    return mo1
+    idx = mo_mapping.mo_1to1map(reduce(numpy.dot, (mo.T, s, mo1)))
+    return mo1[:,idx]
 
 def std_symb(gpname):
     '''std_symb('d2h') returns D2h; std_symb('D2H') returns D2h'''
@@ -255,6 +264,23 @@ def route(target, nelec, orbsym):
         orbsym = orbsym.tolist()
     return riter(target, nelec, orbsym)
 
+def eigh(h, orbsym):
+    '''Solve eigenvalue problem based on the symmetry information for basis.
+    See also pyscf/lib/linalg_helper.py :func:`eigh_by_blocks`
+
+    Examples:
+
+    >>> from pyscf import gto, symm
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='ccpvdz', symmetry=True)
+    >>> c = numpy.hstack(mol.symm_orb)
+    >>> vnuc_so = reduce(numpy.dot, (c.T, mol.intor('cint1e_nuc_sph'), c))
+    >>> orbsym = symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, c)
+    >>> symm.eigh(vnuc_so, orbsym)
+    (array([-4.50766885, -1.80666351, -1.7808565 , -1.7808565 , -1.74189134,
+            -0.98998583, -0.98998583, -0.40322226, -0.30242374, -0.07608981]),
+     ...)
+    '''
+    return lib.eigh_by_blocks(h, labels=orbsym)
 
 if __name__ == "__main__":
     from pyscf import gto

@@ -2,17 +2,21 @@
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
-# FCI solver for arbitary number of alpha and beta electrons with UHF MO
-# integrals.  This solver can be used to compute doublet, triplet,...  though
-# spin multiplicity is broken. 
-#
-# Other files in the directory
-# direct_spin0 singlet
-# direct_spin1 arbitary number of alpha and beta electrons, based on RHF/ROHF
-#              MO integrals
-# direct_uhf   arbitary number of alpha and beta electrons, based on UHF
-#              MO integrals
-#
+
+'''
+Different FCI solvers are implemented to support different type of symmetry.
+                    Symmetry
+File                Point group   Spin singlet   Real hermitian*    Alpha/beta degeneracy
+direct_spin0_symm   Yes           Yes            Yes                Yes
+direct_spin1_symm   Yes           No             Yes                Yes
+direct_spin0        No            Yes            Yes                Yes
+direct_spin1        No            No             Yes                Yes
+direct_uhf          No            No             Yes                No
+direct_nosym        No            No             No**               Yes
+
+*  Real hermitian Hamiltonian implies (ij|kl) = (ji|kl) = (ij|lk) = (ji|lk)
+** Hamiltonian is real but not hermitian, (ij|kl) != (ji|kl) ...
+'''
 
 import sys
 import ctypes
@@ -224,7 +228,8 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 # eigvalue of first davidson iter being equal to hdiag
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
            lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
-           davidson_only=False, pspace_size=400, **kwargs):
+           davidson_only=False, pspace_size=400, orbsym=None, wfnsym=None,
+           **kwargs):
     return direct_spin1._kfactory(FCISolver, h1e, eri, norb, nelec, ci0, level_shift,
                                   tol, lindep, max_cycle, max_space, nroots,
                                   davidson_only, pspace_size, **kwargs)

@@ -9,7 +9,6 @@ See Also:
 
 import numpy as np
 import pyscf.pbc.scf
-from pyscf.pbc.gto import pseudo
 from pyscf.pbc import gto as pgto
 
 
@@ -22,16 +21,10 @@ def get_hcore(cell, kpt=None):
     if cell.pseudo is None:
         hcore = pyscf.pbc.scf.hf.get_nuc(cell, kpt)
     else:
-        hcore = (pyscf.pbc.scf.hf.get_pp(cell, kpt) +
-                 get_jvloc_G0(cell, kpt))
+        hcore = pyscf.pbc.scf.hf.get_pp(cell, kpt)
     hcore += get_t(cell, kpt)
 
     return hcore
-
-def get_jvloc_G0(cell, kpt=None):
-    '''Get the (separately) divergent Hartree + Vloc G=0 contribution.'''
-
-    return 1./cell.vol * np.sum(pseudo.get_alphas(cell)) * get_ovlp(cell, kpt)
 
 def get_int1e_cross(intor, cell1, cell2, kpt=None, comp=1):
     r'''1-electron integrals from two molecules like

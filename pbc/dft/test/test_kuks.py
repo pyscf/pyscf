@@ -4,12 +4,12 @@ from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import dft as pbcdft
 import pyscf.pbc.tools.pyscf_ase as pyscf_ase
 import ase.lattice
+from ase.lattice.cubic import Diamond
 
 LATTICE_CONST = 3.5668
 
 class KnowValues(unittest.TestCase):
     def test_klda8_cubic_kpt_222(self):
-        from ase.lattice.cubic import Diamond
         ase_atom = Diamond(symbol='C', latticeconstant=LATTICE_CONST)
         cell = pbcgto.Cell()
         cell.unit = 'A'

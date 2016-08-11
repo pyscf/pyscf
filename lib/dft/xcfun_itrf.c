@@ -86,7 +86,7 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac,
 {
         int i, outlen;
         double *rho;
-        double *gxu, *gyu, *gzu, *gxd, *gyd, *gzd;
+        double *gxu, *gyu, *gzu, *gxd, *gyd, *gzd, *tau_u, *tau_d;
         xc_functional fun = xc_new_functional();
         for (i = 0; i < nfn; i++) {
                 assert(fn_id[i] < XC_NR_PARAMS);
@@ -112,8 +112,22 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac,
                         xc_eval_vec(fun, deriv, np, rho, 2, output, outlen);
                         free(rho);
                         break;
-                default:
-                        fprintf(stderr, "MGGA not implemented in xcfun\n");
+                case XC_MGGA:
+                        rho = malloc(sizeof(double) * np*3);
+                        gxu = rho_u + np;
+                        gyu = rho_u + np * 2;
+                        gzu = rho_u + np * 3;
+                        tau_u = rho_u + np * 5;
+                        for (i = 0; i < np; i++) {
+                                rho[i*3+0] = rho_u[i];
+                                rho[i*3+1] = gxu[i]*gxu[i] + gyu[i]*gyu[i] + gzu[i]*gzu[i];
+                                rho[i*3+2] = tau_u[i];
+                        }
+                        xc_eval_vec(fun, deriv, np, rho, 3, output, outlen);
+                        free(rho);
+                        break;
+                default:  // XC_MLGGA:
+                        fprintf(stderr, "MLGGA not implemented in xcfun\n");
                         exit(1);
                 }
 // xcfun computed rho*Exc[rho] for zeroth order deriviative instead of Exc[rho]
@@ -151,8 +165,30 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac,
                         xc_eval_vec(fun, deriv, np, rho, 5, output, outlen);
                         free(rho);
                         break;
-                default:
-                        fprintf(stderr, "MGGA not implemented in xcfun\n");
+                case XC_MGGA:
+                        rho = malloc(sizeof(double) * np*7);
+                        gxu = rho_u + np;
+                        gyu = rho_u + np * 2;
+                        gzu = rho_u + np * 3;
+                        gxd = rho_d + np;
+                        gyd = rho_d + np * 2;
+                        gzd = rho_d + np * 3;
+                        tau_u = rho_u + np * 5;
+                        tau_d = rho_d + np * 5;
+                        for (i = 0; i < np; i++) {
+                                rho[i*7+0] = rho_u[i];
+                                rho[i*7+1] = rho_d[i];
+                                rho[i*7+2] = gxu[i]*gxu[i] + gyu[i]*gyu[i] + gzu[i]*gzu[i];
+                                rho[i*7+3] = gxu[i]*gxd[i] + gyu[i]*gyd[i] + gzu[i]*gzd[i];
+                                rho[i*7+4] = gxd[i]*gxd[i] + gyd[i]*gyd[i] + gzd[i]*gzd[i];
+                                rho[i*7+5] = tau_u[i];
+                                rho[i*7+6] = tau_d[i];
+                        }
+                        xc_eval_vec(fun, deriv, np, rho, 7, output, outlen);
+                        free(rho);
+                        break;
+                default:  // XC_MLGGA:
+                        fprintf(stderr, "MLGGA not implemented in xcfun\n");
                         exit(1);
                 }
                 for (i = 0; i < np; i++) {

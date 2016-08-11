@@ -13,7 +13,7 @@ import copy
 from functools import reduce
 import numpy
 import scipy.linalg
-import pyscf.lib
+from pyscf import lib
 from pyscf import gto
 from pyscf import symm
 from pyscf.lib import logger
@@ -277,7 +277,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                        norm_gorb < norm_gkf*kf_trust_region)):
                     ikf = 0
                     u = mf.update_rotate_matrix(dr, mo_occ)
-                    mo1 = mf.update_mo_coeff(mo_coeff, u)
+                    mo1 = mf.rotate_mo(mo_coeff, u)
                     dm = mf.make_rdm1(mo1, mo_occ)
 # use mf._scf.get_veff to avoid density-fit mf polluting get_veff
                     vhf0 = mf._scf.get_veff(mf._scf.mol, dm, dm_last=dm0, vhf_last=vhf0)
@@ -369,7 +369,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         dm_last = dm
         last_hf_e = e_tot
         norm_gorb = numpy.linalg.norm(g_orb)
-        mo_coeff = mf.update_mo_coeff(mo_coeff, u)
+        mo_coeff = mf.rotate_mo(mo_coeff, u, log)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         vhf = mf._scf.get_veff(mol, dm, dm_last=dm_last, vhf_last=vhf)
         fock = mf.get_fock(h1e, s1e, vhf, dm, imacro, None)
@@ -484,7 +484,7 @@ def newton(mf):
             log.info('keyframe_interval_rate = %g', self.keyframe_interval_rate)
             log.info('augmented hessian decay rate = %g', self.ah_decay_rate)
             log.info('max_memory %d MB (current use %d MB)',
-                     self.max_memory, pyscf.lib.current_memory()[0])
+                     self.max_memory, lib.current_memory()[0])
 
         def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
                      diis_start_cycle=None, level_shift_factor=None,
@@ -492,8 +492,14 @@ def newton(mf):
             return h1e + vhf
 
         def kernel(self, mo_coeff=None, mo_occ=None):
-            if mo_coeff is None: mo_coeff = self.mo_coeff
-            if mo_occ is None: mo_occ = self.mo_occ
+            if mo_coeff is None:
+                mo_coeff = self.mo_coeff
+            else:  # save initial guess because some methods may access them
+                self.mo_coeff = mo_coeff
+            if mo_occ is None:
+                mo_occ = self.mo_occ
+            else:
+                self.mo_occ = mo_occ
             cput0 = (time.clock(), time.time())
 
             self.build(self.mol)
@@ -538,8 +544,16 @@ def newton(mf):
                 dr = mc1step_symm._symmetrize(dr, self._orbsym, None)
             return numpy.dot(u0, expmat(dr))
 
-        def update_mo_coeff(self, mo_coeff, u):
-            return numpy.dot(mo_coeff, u)
+        def rotate_mo(self, mo_coeff, u, log=None):
+            mo = numpy.dot(mo_coeff, u)
+            if log is not None and log.verbose >= logger.DEBUG:
+                s = reduce(numpy.dot, (mo[:,self.mo_occ>0].T, self.get_ovlp(),
+                                       self.mo_coeff[:,self.mo_occ>0]))
+                log.debug('Overlap to initial guess, SVD = %s',
+                          _effective_svd(s, 1e-5))
+                log.debug('Overlap to last step, SVD = %s',
+                          _effective_svd(u, 1e-5))
+            return mo
 
     if isinstance(mf, pyscf.scf.rohf.ROHF):
         class ROHF(RHF):
@@ -609,7 +623,7 @@ def newton(mf):
                     return numpy.asarray((numpy.dot(u0[0], expmat(dra)),
                                           numpy.dot(u0[1], expmat(drb))))
 
-            def update_mo_coeff(self, mo_coeff, u):
+            def rotate_mo(self, mo_coeff, u, log=None):
                 return numpy.asarray((numpy.dot(mo_coeff[0], u[0]),
                                       numpy.dot(mo_coeff[1], u[1])))
         return UHF()
@@ -619,6 +633,10 @@ def newton(mf):
 
     else:
         return RHF()
+
+def _effective_svd(a, tol=1e-5):
+    w = numpy.linalg.svd(a)[1]
+    return w[(tol<w) & (w<1-tol)]
 
 
 if __name__ == '__main__':

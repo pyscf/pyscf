@@ -9,7 +9,7 @@ Non-relativistic analytical nuclear gradients
 
 import time
 import numpy
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 
@@ -98,7 +98,7 @@ def make_rdm1e(mo_energy, mo_coeff, mo_occ):
     return numpy.dot(mo0e, mo0.T.conj())
 
 
-class Gradients(pyscf.lib.StreamObject):
+class Gradients(lib.StreamObject):
     '''Non-relativistic restricted Hartree-Fock gradients'''
     def __init__(self, scf_method):
         self.verbose = scf_method.verbose
@@ -120,7 +120,7 @@ class Gradients(pyscf.lib.StreamObject):
                  self.__class__, self._scf.__class__)
         log.info('chkfile = %s', self.chkfile)
         log.info('max_memory %d MB (current use %d MB)',
-                 self.max_memory, pyscf.lib.current_memory()[0])
+                 self.max_memory, lib.current_memory()[0])
         return self
 
     def get_hcore(self, mol=None):
@@ -131,7 +131,7 @@ class Gradients(pyscf.lib.StreamObject):
         if mol is None: mol = self.mol
         return get_ovlp(mol)
 
-    @pyscf.lib.with_doc(get_jk.__doc__)
+    @lib.with_doc(get_jk.__doc__)
     def get_jk(self, mol=None, dm=None, hermi=0):
         if mol is None: mol = self.mol
         if dm is None: dm = self._scf.make_rdm1()

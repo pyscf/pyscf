@@ -41,8 +41,8 @@ class UniformGrids(object):
         if cell == None: cell = self.cell
 
         self.coords = gen_uniform_grids(self.cell, self.gs)
-        self.weights = np.ones(self.coords.shape[0])
-        self.weights *= cell.vol/self.weights.shape[0]
+        self.weights = np.empty(self.coords.shape[0])
+        self.weights[:] = cell.vol/self.weights.shape[0]
 
         return self.coords, self.weights
 

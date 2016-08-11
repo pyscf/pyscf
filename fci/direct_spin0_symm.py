@@ -2,15 +2,21 @@
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
-# FCI solver for Singlet state
-#
-# Other files in the directory
-# direct_spin0 singlet
-# direct_spin1 arbitary number of alpha and beta electrons, based on RHF/ROHF
-#              MO integrals
-# direct_uhf   arbitary number of alpha and beta electrons, based on UHF
-#              MO integrals
-#
+
+'''
+Different FCI solvers are implemented to support different type of symmetry.
+                    Symmetry
+File                Point group   Spin singlet   Real hermitian*    Alpha/beta degeneracy
+direct_spin0_symm   Yes           Yes            Yes                Yes
+direct_spin1_symm   Yes           No             Yes                Yes
+direct_spin0        No            Yes            Yes                Yes
+direct_spin1        No            No             Yes                Yes
+direct_uhf          No            No             Yes                No
+direct_nosym        No            No             No**               Yes
+
+*  Real hermitian Hamiltonian implies (ij|kl) = (ji|kl) = (ij|lk) = (ji|lk)
+** Hamiltonian is real but not hermitian, (ij|kl) != (ji|kl) ...
+'''
 
 import sys
 import ctypes
@@ -28,7 +34,7 @@ from pyscf.fci import addons
 
 libfci = pyscf.lib.load_library('libfci')
 
-def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=[]):
+def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=None):
     return direct_spin0.contract_1e(f1e, fcivec, norb, nelec, link_index)
 
 # Note eri is NOT the 2e hamiltonian matrix, the 2e hamiltonian is
@@ -40,9 +46,9 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=[]):
 #       eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
 # Please refer to the treatment in direct_spin1.absorb_h1e
 # the input fcivec should be symmetrized
-def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
+def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None):
     fcivec = numpy.asarray(fcivec, order='C')
-    if not list(orbsym):
+    if orbsym is None:
         return direct_spin0.contract_2e(eri, fcivec, norb, nelec, link_index)
 
     eri = pyscf.ao2mo.restore(4, eri, norb)
@@ -68,7 +74,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
 
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
            lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
-           davidson_only=False, pspace_size=400, orbsym=[], wfnsym=None,
+           davidson_only=False, pspace_size=400, orbsym=None, wfnsym=None,
            **kwargs):
     assert(len(orbsym) == norb)
     cis = FCISolver(None)
@@ -131,7 +137,7 @@ def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
 def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
     return direct_spin0.trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)
 
-def energy(h1e, eri, fcivec, norb, nelec, link_index=None, orbsym=[]):
+def energy(h1e, eri, fcivec, norb, nelec, link_index=None, orbsym=None):
     h2e = direct_spin1.absorb_h1e(h1e, eri, norb, nelec, .5)
     ci1 = contract_2e(h2e, fcivec, norb, nelec, link_index, orbsym)
     return numpy.dot(fcivec.ravel(), ci1.ravel())
@@ -172,13 +178,14 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
             x[addra,addrb] = x[addrb,addra] = numpy.sqrt(.5)
         ci0.append(x.ravel())
 
+    if len(ci0) == 0:
+        raise RuntimeError('No determinant matches the target symmetry %s' %
+                           wfnsym)
     return ci0
 
 
 class FCISolver(direct_spin0.FCISolver):
     def __init__(self, mol=None, **kwargs):
-        self.orbsym = []
-        self.wfnsym = None
         direct_spin0.FCISolver.__init__(self, mol, **kwargs)
         self.davidson_only = True
         self.pspace_size = 0  # Improper pspace size may break symmetry
@@ -206,8 +213,8 @@ class FCISolver(direct_spin0.FCISolver):
         return contract_1e(f1e, fcivec, norb, nelec, link_index, **kwargs)
 
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None,
-                    orbsym=[], **kwargs):
-        if not list(orbsym):
+                    orbsym=None, **kwargs):
+        if orbsym is None:
             orbsym = self.orbsym
         return contract_2e(eri, fcivec, norb, nelec, link_index, orbsym, **kwargs)
 
@@ -239,24 +246,22 @@ class FCISolver(direct_spin0.FCISolver):
             self.orbsym, orbsym_bak = orbsym, self.orbsym
         if wfnsym is not None:
             self.wfnsym, wfnsym_bak = wfnsym, self.wfnsym
-        else:
-            wfnsym_bak = None
         if self.verbose >= logger.WARN:
             self.check_sanity()
 
-        wfnsym = self.guess_wfnsym(norb, nelec, ci0, self.wfnsym, **kwargs)
+        wfnsym0 = self.guess_wfnsym(norb, nelec, ci0, self.wfnsym, **kwargs)
         e, c = direct_spin0.kernel_ms0(self, h1e, eri, norb, nelec, ci0, None,
                                        tol, lindep, max_cycle, max_space, nroots,
                                        davidson_only, pspace_size, **kwargs)
         if self.wfnsym is not None:
             if self.nroots > 1:
-                c = [addons.symmetrize_wfn(ci, norb, nelec, self.orbsym, wfnsym)
+                c = [addons.symmetrize_wfn(ci, norb, nelec, self.orbsym, wfnsym0)
                      for ci in c]
             else:
-                c = addons.symmetrize_wfn(c, norb, nelec, self.orbsym, wfnsym)
+                c = addons.symmetrize_wfn(c, norb, nelec, self.orbsym, wfnsym0)
         if orbsym is not None:
             self.orbsym = orbsym_bak
-        if wfnsym_bak is not None:
+        if wfnsym is not None:
             self.wfnsym = wfnsym_bak
         return e, c
 

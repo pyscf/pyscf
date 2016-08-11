@@ -2,24 +2,27 @@
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
-# FCI solver for arbitary number of alpha and beta electrons.  The hamiltonian
-# requires spacial part of the integrals (RHF/ROHF MO integrals).  This solver
-# can be used to compute doublet, triplet,...
-#
-# Other files in the directory
-# direct_spin0 singlet
-# direct_spin1 arbitary number of alpha and beta electrons, based on RHF/ROHF
-#              MO integrals
-# direct_uhf   arbitary number of alpha and beta electrons, based on UHF
-#              MO integrals
-#
 
 '''
-Full CI solver for spin-free Hamiltonian.
+Full CI solver for spin-free Hamiltonian.  This solver can be used to compute
+doublet, triplet,...
 
 The CI wfn are stored as a 2D array [alpha,beta], where each row corresponds
 to an alpha string.  For each row (alpha string), there are
 total-num-beta-strings of columns.  Each column corresponds to a beta string.
+
+Different FCI solvers are implemented to support different type of symmetry.
+                    Symmetry
+File                Point group   Spin singlet   Real hermitian*    Alpha/beta degeneracy
+direct_spin0_symm   Yes           Yes            Yes                Yes
+direct_spin1_symm   Yes           No             Yes                Yes
+direct_spin0        No            Yes            Yes                Yes
+direct_spin1        No            No             Yes                Yes
+direct_uhf          No            No             Yes                No
+direct_nosym        No            No             No**               Yes
+
+*  Real hermitian Hamiltonian implies (ij|kl) = (ji|kl) = (ij|lk) = (ji|lk)
+** Hamiltonian is real but not hermitian, (ij|kl) != (ji|kl) ...
 '''
 
 import sys
@@ -198,7 +201,8 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 # preconditioner when the eigvalue of first davidson iter equals to hdiag
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
            lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
-           davidson_only=False, pspace_size=400, **kwargs):
+           davidson_only=False, pspace_size=400, orbsym=None, wfnsym=None,
+           **kwargs):
     return _kfactory(FCISolver, h1e, eri, norb, nelec, ci0, level_shift,
                      tol, lindep, max_cycle, max_space, nroots,
                      davidson_only, pspace_size, **kwargs)
@@ -223,7 +227,8 @@ def _kfactory(Solver, h1e, eri, norb, nelec, ci0=None, level_shift=1e-3,
     if unknown:
         sys.stderr.write('Unknown keys %s for FCI kernel %s\n' %
                          (str(unknown.keys()), __name__))
-    return cis.kernel(h1e, eri, norb, nelec, ci0, **unknown)
+    e, c = cis.kernel(h1e, eri, norb, nelec, ci0, **unknown)
+    return e, c
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
     '''Compute the FCI electronic energy for given Hamiltonian and FCI vector.
@@ -492,6 +497,10 @@ class FCISolver(pyscf.lib.StreamObject):
         self.davidson_only = False
         self.nroots = 1
         self.pspace_size = 400
+# Initialize symmetry attributes for the compatibility with direct_spin1_symm
+# solver.  They are not used by direct_spin1 solver.
+        self.orbsym = None
+        self.wfnsym = None
 
         self._keys = set(self.__dict__.keys())
 
@@ -552,7 +561,8 @@ class FCISolver(pyscf.lib.StreamObject):
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
-               nroots=None, davidson_only=None, pspace_size=None, **kwargs):
+               nroots=None, davidson_only=None, pspace_size=None,
+               orbsym=None, wfnsym=None, **kwargs):
         if self.verbose >= logger.WARN:
             self.check_sanity()
         return kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,

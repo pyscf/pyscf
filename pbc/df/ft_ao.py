@@ -13,8 +13,9 @@ import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf import gto
-import pyscf.df.ft_ao
-from pyscf.df.ft_ao import libpbc
+from pyscf.gto.ft_ao import ft_ao as mol_ft_ao
+
+libpbc = lib.load_library('libpbc')
 
 #
 # \int mu*nu*exp(-ik*r) dr
@@ -46,7 +47,7 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, hermi=False,
         p_gxyzT = lib.c_null_ptr()
         p_gs = (ctypes.c_int*3)(0,0,0)
         p_invh = (ctypes.c_double*1)(0)
-        eval_gz = 'PBC_Gv_general'
+        eval_gz = 'GTO_Gv_general'
     else:
         GvT = numpy.asarray(Gv.T, order='C')
         gxyzT = numpy.asarray(gxyz.T, order='C', dtype=numpy.int32)
@@ -56,16 +57,16 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, hermi=False,
         if isinstance(invh, numpy.ndarray) and invh.shape == (3,3):
             p_invh = invh.ctypes.data_as(ctypes.c_void_p)
             if abs(invh-numpy.diag(invh.diagonal())).sum() < 1e-8:
-                eval_gz = 'PBC_Gv_uniform_orth'
+                eval_gz = 'GTO_Gv_uniform_orth'
             else:
-                eval_gz = 'PBC_Gv_uniform_nonorth'
+                eval_gz = 'GTO_Gv_uniform_nonorth'
         else:
             invh = numpy.hstack(invh)
             p_invh = invh.ctypes.data_as(ctypes.c_void_p)
-            eval_gz = 'PBC_Gv_nonuniform_orth'
+            eval_gz = 'GTO_Gv_nonuniform_orth'
 
     drv = libpbc.PBC_ft_latsum_kpts
-    intor = getattr(libpbc, 'PBC_ft_ovlp_sph')
+    intor = getattr(libpbc, 'GTO_ft_ovlp_sph')
     eval_gz = getattr(libpbc, eval_gz)
 
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
@@ -122,10 +123,10 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, hermi=False,
 def ft_ao(mol, Gv, shls_slice=None,
           invh=None, gxyz=None, gs=None, kpt=numpy.zeros(3), verbose=None):
     if abs(kpt).sum() < 1e-9:
-        return pyscf.df.ft_ao.ft_ao(mol, Gv, shls_slice, invh, gxyz, gs, verbose)
+        return mol_ft_ao(mol, Gv, shls_slice, invh, gxyz, gs, verbose)
     else:
         kG = Gv + kpt
-        return pyscf.df.ft_ao.ft_ao(mol, kG, shls_slice, None, None, None, verbose)
+        return mol_ft_ao(mol, kG, shls_slice, None, None, None, verbose)
 
 if __name__ == '__main__':
     import pyscf.pbc.gto as pgto

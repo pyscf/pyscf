@@ -267,7 +267,7 @@ def prange(start, end, step):
         yield i, min(i+step, end)
 
 def _guess_shell_ranges(mol, buflen, aosym):
-    from pyscf.ao2mo.outcore import group_segs_filling_block
+    from pyscf.ao2mo.outcore import balance_segs
     ao_loc = mol.ao_loc_nr()
     nao = ao_loc[-1]
     if aosym == 's2ij':
@@ -275,7 +275,7 @@ def _guess_shell_ranges(mol, buflen, aosym):
                 for i in range(mol.nbas)]
     else:
         segs = [(ao_loc[i+1]-ao_loc[i])*nao for i in range(mol.nbas)]
-    return group_segs_filling_block(segs, buflen)
+    return balance_segs(segs, buflen)
 
 def _stand_sym_code(sym):
     if isinstance(sym, int):

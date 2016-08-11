@@ -10,9 +10,9 @@ class KnowValues(unittest.TestCase):
     def test_lda_grid30(self):
         cell = pbcgto.Cell()
         cell.unit = 'B'
-        L = 60
+        L = 10
         cell.h = np.diag([L]*3)
-        cell.gs = np.array([30]*3)
+        cell.gs = np.array([20]*3)
         cell.atom = [['He', (L/2.,L/2.,L/2.)], ]
 # these are some exponents which are not hard to integrate
         cell.basis = { 'He': [[0, (0.8, 1.0)],
@@ -26,7 +26,8 @@ class KnowValues(unittest.TestCase):
         mf.xc = 'LDA,VWN_RPA'
         mf.kpt = np.ones(3)
         e1 = mf.scf()
-        self.assertAlmostEqual(e1, -2.3464949914151378, 8)
+        self.assertAlmostEqual(e1, -2.6409616064015591, 8)
+
 
     def test_pp_RKS(self):
         cell = pbcgto.Cell()
@@ -55,7 +56,40 @@ class KnowValues(unittest.TestCase):
 
         mf = pbcdft.RKS(cell)
         mf.xc = 'lda,vwn'
-        self.assertAlmostEqual(mf.scf(), -31.0816167311604, 8)
+        self.assertAlmostEqual(mf.scf(), -31.081616722101646, 8)
+
+
+    def test_chkfile_k_point(self):
+        cell = pbcgto.Cell()
+        cell.h = np.eye(3) * 6
+        cell.gs = [10,10,10]
+        cell.unit = 'B'
+        cell.atom = '''He     2.    2.       3.
+                      He     3.    2.       3.'''
+        cell.basis = {'He': 'sto3g'}
+        cell.verbose = 0
+        cell.build()
+        mf1 = pbcdft.RKS(cell)
+        mf1.max_cycle = 1
+        mf1.kernel()
+
+        cell = pbcgto.Cell()
+        cell.h = np.eye(3) * 6
+        cell.gs = [20,20,20]
+        cell.unit = 'B'
+        cell.atom = '''He     2.    2.       3.
+                       He     3.    2.       3.'''
+        cell.basis = {'He': 'ccpvdz'}
+        cell.verbose = 5
+        cell.output = '/dev/null'
+        cell.nimgs = [2,2,2]
+        cell.build()
+        mf = pbcdft.RKS(cell)
+        np.random.seed(10)
+        mf.kpt = np.random.random(3)
+        mf.max_cycle = 1
+        dm = mf.from_chk(mf1.chkfile)
+        self.assertAlmostEqual(mf.scf(dm), -4.7088482555684914, 8)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.rks")

@@ -88,23 +88,13 @@ class UKS(pbcuhf.UHF):
 # don't modify the following attributes, they are not input options
         self._ecoul = 0
         self._exc = 0
-        self._numint = numint._NumInt(kpt)
+        self._numint = numint._NumInt()
         self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
 
     def dump_flags(self):
         pbcuhf.UHF.dump_flags(self)
         logger.info(self, 'XC functionals = %s', self.xc)
         self.grids.dump_flags()
-
-    @property
-    def kpt(self):
-        return self.with_df.kpts.reshape(3)
-    @kpt.setter
-    def kpt(self, x):
-        x = numpy.reshape(x, 3)
-        if abs(self.with_df.kpts.reshape(3)-x).sum() > 1e-9:
-            self._numint = numint._NumInt(x)
-            self.with_df.kpts = x.reshape(-1,3)
 
     get_veff = get_veff
     energy_elec = pyscf.dft.uks.energy_elec

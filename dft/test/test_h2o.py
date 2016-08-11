@@ -272,6 +272,13 @@ class KnowValues(unittest.TestCase):
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         self.assertAlmostEqual(method.scf(), -75.926526046608529, 9)
 
+    def test_nr_mgga(self):
+        method = dft.RKS(h2o)
+        method.xc = 'm06l,m06l'
+        method.grids.prune = None
+        method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
+        self.assertAlmostEqual(method.scf(), -76.3772366, 6)
+
 
 if __name__ == "__main__":
     print("Full Tests for H2O")

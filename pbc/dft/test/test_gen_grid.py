@@ -6,13 +6,13 @@ from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 
 
-def get_ovlp(cell, kpt=None, grids=None):
+def get_ovlp(cell, grids=None):
     if grids is None:
         grids = gen_grid.BeckeGrids(cell)
         grids.level = 3
         grids.build()
 
-    aoR = numint.eval_ao(cell, grids.coords, kpt)
+    aoR = numint.eval_ao(cell, grids.coords)
     s = numpy.dot(aoR.T.conj(), grids.weights.reshape(-1,1)*aoR).real
     return s
 
@@ -30,12 +30,11 @@ class KnowValues(unittest.TestCase):
                     ['He' , ( L/2+1., L/2+0. ,   L/2+1.)]]
         cell.basis = {'He': [[0, (1.0, 1.0)]]}
         cell.build()
-        kpt = None
         grids = gen_grid.BeckeGrids(cell)
         grids.level = 3
         grids.build()
-        s1 = get_ovlp(cell, kpt, grids)
-        s2 = scfint.get_ovlp(cell, kpt)
+        s1 = get_ovlp(cell, grids)
+        s2 = scfint.get_ovlp(cell)
         self.assertAlmostEqual(numpy.linalg.norm(s1-s2), 0, 5)
         self.assertEqual(grids.weights.size, 14829)
 

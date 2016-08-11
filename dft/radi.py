@@ -153,13 +153,20 @@ def becke_atomic_radii_adjust(mol, atomic_radii):
 # fac(i,j) = \frac{1}{4} ( \frac{ra(j)}{ra(i)} - \frac{ra(i)}{ra(j)}
 # fac(j,i) = -fac(i,j)
 
-    rad = numpy.array([atomic_radii[mol.atom_charge(ia)]
-                       for ia in range(mol.natm)])
-    rr = rad.reshape(-1,1)/rad
+    charges = mol.atom_charges()
+    rad = atomic_radii[charges]
+    rr = rad.reshape(-1,1) * (1./rad)
     a = .25 * (rr.T - rr)
     a[a<-.5] = -.5
     a[a>0.5] = 0.5
-    return lambda i,j,g: g + a[i,j]*(1-g**2)
+    #:return lambda i,j,g: g + a[i,j]*(1-g**2)
+    def fadjust(i, j, g):
+        g1 = g**2
+        g1 -= 1.
+        g1 *= -a[i,j]
+        g1 += g
+        return g1
+    return fadjust
 
 def treutler_atomic_radii_adjust(mol, atomic_radii):
     '''Treutler atomic radii adjust function: JCP, 102, 346'''
@@ -167,17 +174,24 @@ def treutler_atomic_radii_adjust(mol, atomic_radii):
 # i > j
 # fac(i,j) = \frac{1}{4} ( \frac{ra(j)}{ra(i)} - \frac{ra(i)}{ra(j)}
 # fac(j,i) = -fac(i,j)
-    rad = numpy.sqrt(numpy.array([atomic_radii[mol.atom_charge(ia)]
-                                  for ia in range(mol.natm)]))
-    rr = rad.reshape(-1,1)/rad
+    charges = mol.atom_charges()
+    rad = numpy.sqrt(atomic_radii[charges])
+    rr = rad.reshape(-1,1) * (1./rad)
     a = .25 * (rr.T - rr)
     a[a<-.5] = -.5
     a[a>0.5] = 0.5
-    return lambda i,j,g: g + a[i,j]*(1-g**2)
+    #:return lambda i,j,g: g + a[i,j]*(1-g**2)
+    def fadjust(i, j, g):
+        g1 = g**2
+        g1 -= 1.
+        g1 *= -a[i,j]
+        g1 += g
+        return g1
+    return fadjust
 
 def _inter_distance(mol):
 # see gto.mole.energy_nuc
-    coords = numpy.array([mol.atom_coord(i) for i in range(len(mol._atm))])
+    coords = mol.atom_coords()
     rr = numpy.dot(coords, coords.T)
     rd = rr.diagonal()
     rr = rd[:,None] + rd - rr*2

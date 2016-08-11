@@ -100,6 +100,13 @@ ALIAS = {
     'stuttgartdz': 'stuttgart_dz.dat',
     'stuttgartrlc': 'stuttgart_dz.dat',
     'stuttgartrsc': 'stuttgart_rsc.dat',
+# Burkatzki-Filippi-Dolg pseudo potential
+    'bfdvdz'     : 'bfd_vdz.dat',
+    'bfdvtz'     : 'bfd_vtz.dat',
+    'bfdvqz'     : 'bfd_vqz.dat',
+    'bfdv5z'     : 'bfd_v5z.dat',
+    'bfd'        : 'bfd_pp.dat',
+    'bfdpp'      : 'bfd_pp.dat',
 }
 
 def parse(string):

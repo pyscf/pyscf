@@ -77,14 +77,14 @@ def mm_charge(method, coords, charges, unit=None):
                 v = lib.unpack_tril(numpy.einsum('xk,k->x', j3c, -charges))
             return h1e + v
 
-        def energy_tot(self, dm=None, h1e=None, vhf=None):
+        def energy_nuc(self):
 # nuclei lattice interaction
-            nuc = 0.0
+            nuc = self.mol.energy_nuc()
             for j in range(self.mol.natm):
                 q2, r2 = self.mol.atom_charge(j), self.mol.atom_coord(j)
                 r = lib.norm(r2-coords, axis=1)
                 nuc += q2*(charges/r).sum()
-            return method_class.energy_tot(self, dm, h1e, vhf) + nuc
+            return nuc
 
     return QMMM()
 

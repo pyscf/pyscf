@@ -474,12 +474,12 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac,
         double *fbuf = NULL;
         double *kbuf = NULL;
         if (deriv > 0) {
-                vbuf = malloc(sizeof(double) * np*7);
+                vbuf = malloc(sizeof(double) * np*9);
         }
         if (deriv > 1) {
-                fbuf = malloc(sizeof(double) * np*28);
+                fbuf = malloc(sizeof(double) * np*48);
         }
-        if (deriv > 2) {  // *84 if mgga kxc available
+        if (deriv > 2) {  // *220 if mgga kxc available
                 kbuf = malloc(sizeof(double) * np*35);
         }
 

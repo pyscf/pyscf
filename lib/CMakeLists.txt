@@ -79,6 +79,7 @@ add_subdirectory(vhf)
 add_subdirectory(ao2mo)
 add_subdirectory(mcscf)
 add_subdirectory(cc)
+add_subdirectory(icmpspt)
 add_subdirectory(ri)
 add_subdirectory(localizer)
 
@@ -91,6 +92,7 @@ if(NOT DISABLE_DFT)
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND ENABLE_LIBXC)
   ExternalProject_Add(libxc
     URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.2.2.tar.gz
+    #URL https://launchpad.net/libxc/2.2/2.2.0/+download/libxc-2.2.0.tar.gz
     #URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.0.0.tar.gz
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps

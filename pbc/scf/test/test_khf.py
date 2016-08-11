@@ -43,17 +43,17 @@ class KnowValues(unittest.TestCase):
         abs_kpts = cell.get_abs_kpts(scaled_kpts)
         kmf = khf.KRHF(cell, abs_kpts, exxdiv='vcut_sph')
         ekpt = kmf.scf()
-        self.assertAlmostEqual(ekpt, -11.226211828358288, 8)
+        self.assertAlmostEqual(ekpt, -11.221426555985234, 8)
 
         nk = (5, 1, 1)
         scaled_kpts = ase.dft.kpoints.monkhorst_pack(nk)
         abs_kpts = cell.get_abs_kpts(scaled_kpts)
         kmf = khf.KRHF(cell, abs_kpts, exxdiv='vcut_sph')
         ekpt = kmf.scf()
-        self.assertAlmostEqual(ekpt, -12.342301887249597, 8)
+        self.assertAlmostEqual(ekpt, -12.337299038604856, 8)
 
         supcell = pyscf.pbc.tools.super_cell(cell, nk)
-        supcell.gs = np.array([nk[0]*ngs + (nk[0]-1)//2, 
+        supcell.gs = np.array([nk[0]*ngs + (nk[0]-1)//2,
                                nk[1]*ngs + (nk[1]-1)//2,
                                nk[2]*ngs + (nk[2]-1)//2])
         #print "supcell gs =", supcell.gs
@@ -96,7 +96,7 @@ class KnowValues(unittest.TestCase):
         dm = kmf1.from_chk(mf.chkfile)
         kmf1.max_cycle = 1
         ekpt = kmf1.scf(dm)
-        self.assertAlmostEqual(ekpt, -11.185182425048195, 8)
+        self.assertAlmostEqual(ekpt, -11.180713114145902, 8)
 
     def test_kuhf(self):
         ngs = 4
@@ -105,7 +105,7 @@ class KnowValues(unittest.TestCase):
         kpts = pyscf_ase.make_kpts(cell, nk)
         kmf1 = kuhf.KUHF(cell, kpts, exxdiv='vcut_sph')
         ekpt = kmf1.scf()
-        self.assertAlmostEqual(ekpt, -11.226211828358288, 8)
+        self.assertAlmostEqual(ekpt, -11.221426555985234, 8)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.scf.khf")

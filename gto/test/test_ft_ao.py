@@ -5,7 +5,7 @@ import unittest
 import numpy
 from pyscf import lib
 from pyscf import gto
-from pyscf.pbc.df import ft_ao
+from pyscf.gto import ft_ao
 
 libpbc = lib.load_library('libpbc')
 mol = gto.Mole()

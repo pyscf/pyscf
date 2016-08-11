@@ -5,7 +5,7 @@ import time
 from functools import reduce
 import numpy
 import scipy.linalg
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import _vhf
@@ -353,6 +353,7 @@ def analyze(mf, verbose=logger.DEBUG):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Dipole moment
     '''
+    from pyscf.lo import orth
     from pyscf.tools import dump_mat
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
@@ -371,16 +372,19 @@ def analyze(mf, verbose=logger.DEBUG):
         log.note('MO #%-3d energy= %-18.15g | %-18.15g occ= %g | %g',
                  i+1, mo_energy[0][i], mo_energy[1][i],
                  mo_occ[0][i], mo_occ[1][i])
+    ovlp_ao = mf.get_ovlp()
     if verbose >= logger.DEBUG:
-        log.debug(' ** MO coefficients for alpha spin **')
+        log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for alpha spin **')
         label = mf.mol.spheric_labels(True)
-        dump_mat.dump_rec(mf.stdout, mo_coeff[0], label, start=1)
-        log.debug(' ** MO coefficients for beta spin **')
-        dump_mat.dump_rec(mf.stdout, mo_coeff[1], label, start=1)
+        orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
+        c_inv = numpy.dot(orth_coeff.T, ovlp_ao)
+        dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[0]), label, start=1)
+        log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for beta spin **')
+        dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[1]), label, start=1)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_meta(mf.mol, dm, s=mf.get_ovlp(), verbose=log),\
-            mf.dip_moment(mf.mol, dm, verbose=log)
+    return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log),
+            mf.dip_moment(mf.mol, dm, verbose=log))
 
 def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     '''Mulliken population analysis
@@ -561,6 +565,7 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
 
     Args:
          mol: an instance of :class:`Mole`
+
          dm : a list of 2D ndarrays
               a list of density matrices
 
@@ -612,7 +617,7 @@ class UHF(hf.SCF):
     def eig(self, fock, s):
         e_a, c_a = hf.SCF.eig(self, fock[0], s)
         e_b, c_b = hf.SCF.eig(self, fock[1], s)
-        return pyscf.lib.asarray((e_a,e_b)), pyscf.lib.asarray((c_a,c_b))
+        return lib.asarray((e_a,e_b)), lib.asarray((c_a,c_b))
 
     get_fock = get_fock
 
@@ -624,7 +629,7 @@ class UHF(hf.SCF):
             fock = self.get_hcore(self.mol) + self.get_veff(self.mol, dm1)
         return get_grad(mo_coeff, mo_occ, fock)
 
-    @pyscf.lib.with_doc(make_rdm1.__doc__)
+    @lib.with_doc(make_rdm1.__doc__)
     def make_rdm1(self, mo_coeff=None, mo_occ=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
@@ -676,7 +681,7 @@ class UHF(hf.SCF):
             vj, vk = hf.SCF.get_jk(self, mol, dm.reshape(-1,nao,nao), hermi)
         return vj.reshape(dm.shape), vk.reshape(dm.shape)
 
-    @pyscf.lib.with_doc(get_veff.__doc__)
+    @lib.with_doc(get_veff.__doc__)
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
@@ -710,7 +715,7 @@ class UHF(hf.SCF):
         return mulliken_meta(mol, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
-    @pyscf.lib.with_doc(spin_square.__doc__)
+    @lib.with_doc(spin_square.__doc__)
     def spin_square(self, mo_coeff=None, s=None):
         if mo_coeff is None:
             mo_coeff = (self.mo_coeff[0][:,self.mo_occ[0]>0],
@@ -721,16 +726,16 @@ class UHF(hf.SCF):
 
     canonicalize = canonicalize
 
-    @pyscf.lib.with_doc(det_ovlp.__doc__)
+    @lib.with_doc(det_ovlp.__doc__)
     def det_ovlp(self, mo1, mo2, occ1, occ2, ovlp=None):
         if ovlp is None: ovlp = self.get_ovlp()
         return det_ovlp(mo1, mo2, occ1, occ2, ovlp)
 
-    @pyscf.lib.with_doc(make_asym_dm.__doc__)
+    @lib.with_doc(make_asym_dm.__doc__)
     def make_asym_dm(self, mo1, mo2, occ1, occ2, x):
         return make_asym_dm(mo1, mo2, occ1, occ2, x)
 
-    @pyscf.lib.with_doc(dip_moment.__doc__)
+    @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, mol=None, dm=None, unit_symbol=None, verbose=logger.NOTE):
         if mol is None: mol = self.mol
         if dm is None: dm =self.make_rdm1()
