@@ -185,6 +185,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     nelecas = mc.nelecas
     if casdm1 is None:
         casdm1 = mc.fcisolver.make_rdm1(ci, ncas, nelecas)
+    # orbital symmetry is reserved in this _eig call
     occ, ucas = mc._eig(-casdm1, ncore, nocc)
     if sort:
         idx = numpy.argsort(occ)
@@ -376,6 +377,9 @@ class CASCI(pyscf.lib.StreamObject):
             Core electron number.  In UHF-CASSCF, it's a tuple to indicate the different core eletron numbers.
         natorb : bool
             Whether to restore the natural orbital in CAS space.  Default is not.
+            Be very careful to set this parameter when CASCI/CASSCF are combined
+            with DMRG solver because this parameter changes the orbital ordering
+            which is highly sensitive to DMRG solver.
         canonicalization : bool
             Whether to canonicalize orbitals.  Default is True.
         fcisolver : an instance of :class:`FCISolver`
