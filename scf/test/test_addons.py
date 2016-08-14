@@ -137,8 +137,23 @@ class KnowValues(unittest.TestCase):
         occ[0][5] = 1.
         mf = scf.addons.mom_occ(mf, mo0, occ)
         dm = mf.make_rdm1(mo0, occ)
-        self.assertAlmostEqual(mf.scf(dm), -76.0606858736708, 9)
+        self.assertAlmostEqual(mf.scf(dm), -76.0606858747, 9)
         self.assertTrue(numpy.allclose(mf.mo_occ[0][:6], [1,1,1,1,0,1]))
+
+        mf = dft.ROKS(mol)
+        mf.xc = 'b3lyp'
+        mf.scf()
+        mo0 = mf.mo_coeff
+        occ = mf.mo_occ
+        setocc = numpy.zeros((2, occ.size))
+        setocc[:, occ==2] = 1
+        setocc[0][4] = 0
+        setocc[0][5] = 1
+        newocc = setocc[0][:] + setocc[1][:]
+        mf = scf.addons.mom_occ(mf, mo0, setocc)
+        dm = mf.make_rdm1(mo0, newocc)
+        self.assertAlmostEqual(mf.scf(dm), -76.0692546639, 9)
+        self.assertTrue(numpy.allclose(mf.mo_occ[:6], [2,2,2,2,1,1]))
 
 if __name__ == "__main__":
     print("Full Tests for addons")
