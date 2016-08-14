@@ -142,15 +142,26 @@ def follow_state(mf, occorb=None):
 
 def mom_occ_(mf, occorb, setocc):
     '''Use maximum overlap method to determine occupation number for each orbital in every
-    iteration.'''
-    assert(isinstance(mf, pyscf.scf.uhf.UHF))
-    coef_occ_a = occorb[0][:,setocc[0]>0]
-    coef_occ_b = occorb[1][:,setocc[1]>0]
-    def get_occ(mo_energy, mo_coeff=None): 
-        mo_occ = numpy.zeros_like(mo_energy)
+    iteration. It can be applied to unrestricted HF/KS and restricted open-shell
+    HF/KS.'''
+    if isinstance(mf, pyscf.scf.uhf.UHF):
+        coef_occ_a = occorb[0][:, setocc[0]>0] 
+        coef_occ_b = occorb[1][:, setocc[1]>0]
+    elif isinstance(mf, pyscf.scf.rohf.ROHF):
+        if mf.mol.spin != int(numpy.sum(setocc[0]) - numpy.sum(setocc[1])) :
+            raise ValueError('Wrong occupation setting for restricted open-shell calculation.') 
+        coef_occ_a = occorb[:, setocc[0]>0]
+        coef_occ_b = occorb[:, setocc[1]>0]
+    else:
+        raise AssertionError('Can not support this class of instance.')
+    def get_occ(mo_energy=None, mo_coeff=None): 
+        if mo_energy is None: mo_energy = mf.mo_energy
+        if mo_coeff is None: mo_coeff = mf.mo_coeff
+        if isinstance(mf, pyscf.scf.rohf.ROHF): mo_coeff = numpy.array([mo_coeff, mo_coeff])
+        mo_occ = numpy.zeros_like(setocc)
         nocc_a = int(numpy.sum(setocc[0]))
         nocc_b = int(numpy.sum(setocc[1]))
-        s_a = reduce(numpy.dot, (coef_occ_a.T, mf.get_ovlp(), mo_coeff[0]))
+        s_a = reduce(numpy.dot, (coef_occ_a.T, mf.get_ovlp(), mo_coeff[0])) 
         s_b = reduce(numpy.dot, (coef_occ_b.T, mf.get_ovlp(), mo_coeff[1]))
         #choose a subset of mo_coeff, which maximizes <old|now>
         idx_a = numpy.argsort(numpy.einsum('ij,ij->j', s_a, s_a))
@@ -162,8 +173,11 @@ def mom_occ_(mf, occorb, setocc):
             logger.info(mf, ' New alpha occ pattern: %s', mo_occ[0]) 
             logger.info(mf, ' New beta occ pattern: %s', mo_occ[1]) 
         if mf.verbose >= logger.DEBUG1:
-            logger.info(mf, ' Current alpha mo_energy(sorted) = %s', mo_energy[0]) 
-            logger.info(mf, ' Current beta mo_energy(sorted) = %s', mo_energy[1])
+            if mo_energy.ndim == 2: 
+                logger.info(mf, ' Current alpha mo_energy(sorted) = %s', mo_energy[0]) 
+                logger.info(mf, ' Current beta mo_energy(sorted) = %s', mo_energy[1])
+            elif mo_energy.ndim == 1:
+                logger.info(mf, ' Current mo_energy(sorted) = %s', mo_energy)
 
         if (int(numpy.sum(mo_occ[0])) != nocc_a):
             log.error(self, 'mom alpha electron occupation numbers do not match: %d, %d', 
@@ -172,6 +186,8 @@ def mom_occ_(mf, occorb, setocc):
             log.error(self, 'mom alpha electron occupation numbers do not match: %d, %d', 
                       nocc_b, int(numpy.sum(mo_occ[1])))
 
+        #output 1-dimension occupation number for restricted open-shell
+        if isinstance(mf, pyscf.scf.rohf.ROHF): mo_occ = mo_occ[0, :] + mo_occ[1, :]
         return mo_occ
     mf.get_occ = get_occ
     return mf
