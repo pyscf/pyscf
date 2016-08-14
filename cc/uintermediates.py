@@ -52,8 +52,8 @@ def cc_Woooo(t1,t2,eris):
     return Wmnij
 
 def cc_Wvvvv(t1,t2,eris):
-    #eris_vovv = _cp(eris.ovvv).transpose(1,0,3,2)
     tau = make_tau(t2,t1,t1)
+    #eris_vovv = _cp(eris.ovvv).transpose(1,0,3,2)
     #tmp = einsum('mb,amef->abef',t1,eris_vovv)
     #Wabef = eris.vvvv - tmp + tmp.transpose(1,0,2,3)
     #Wabef += 0.25*einsum('mnab,mnef->abef',tau,eris.oovv)
@@ -63,13 +63,9 @@ def cc_Wvvvv(t1,t2,eris):
     fimd = h5py.File(_tmpfile1.name)
     nocc, nvir = t1.shape
     Wabef = fimd.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)
-    for a in range(nvir):
-        #tmp = einsum('mb,mef->bef',t1,eris_vovv[a])
-        #tmp_tr = einsum('m,bmef->bef',t1[:,a],eris_vovv)
-        tmp = einsum('mb,mfe->bef',t1,eris.ovvv[:,a,:])
-        tmp_tr = einsum('m,mbfe->bef',t1[:,a],eris.ovvv)
-        Wabef[a] = eris.vvvv[a] - tmp[:] + tmp_tr[:]
-        Wabef[a] += 0.25*einsum('mnb,mnef->bef',tau[:,:,a,:],eris.oovv)
+    tmp = einsum('mb,mafe->abef',t1,eris.ovvv)
+    Wabef[:] = eris.vvvv[:] - tmp[:] + tmp.transpose(1,0,2,3)[:]
+    Wabef[:] += 0.25*einsum('mnab,mnef->abef',tau,eris.oovv)
     return Wabef
 
 def cc_Wovvo(t1,t2,eris):
@@ -112,10 +108,9 @@ def Wvvvv(t1,t2,eris):
     fimd = h5py.File(_tmpfile1.name)
     nocc, nvir = t1.shape
     Wabef = fimd.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)
-    for a in range(nvir):
-        #TODO: Wasteful to create cc_Wvvvv twice
-        Wabef[a] = cc_Wvvvv(t1,t2,eris)[a]
-        Wabef[a] += 0.25*einsum('mnb,mnef->bef',tau[:,:,a,:],eris.oovv) 
+    #TODO: Wasteful to create cc_Wvvvv twice
+    Wabef[:] = cc_Wvvvv(t1,t2,eris)[:]
+    Wabef[:] += 0.25*einsum('mnab,mnef->abef',tau,eris.oovv) 
     return Wabef
 
 def Wovvo(t1,t2,eris):
@@ -163,9 +158,10 @@ def Wvvvo(t1,t2,eris):
     Wabei += -tmp1 + tmp1.transpose(1,0,2,3)
     Wabei += -tmp2 + tmp2.transpose(1,0,2,3) 
     nocc,nvir = t1.shape
+    #TODO: Wasteful to create Wvvvv twice (now cc_Wvvvv three times!)
+    _Wvvvv = Wvvvv(t1,t2,eris)
     for a in range(nvir):
-        #TODO: Wasteful to create Wvvvv twice (now cc_Wvvvv three times!)
-        Wabei[a] += einsum('if,bef->bei',t1,Wvvvv(t1,t2,eris)[a])
+        Wabei[a] += einsum('if,bef->bei',t1,_Wvvvv[a])
     return Wabei
 
 def Wvvvo_incore(t1,t2,eris):
