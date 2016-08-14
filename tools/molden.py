@@ -13,16 +13,19 @@ from pyscf import gto
 
 def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None,
                   occ=None, ignore_h=False):
-    import pyscf.symm
+    from pyscf.symm import label_orb_symm
     if ignore_h:
         mol, mo_coeff = remove_high_l(mol, mo_coeff)
     aoidx = order_ao_index(mol)
     nmo = mo_coeff.shape[1]
     if symm is None:
+        symm = ['A']*nmo
         if mol.symmetry:
-            symm = pyscf.symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, mo_coeff)
-        else:
-            symm = ['A']*nmo
+            try:
+                symm = label_orb_symm(mol, mol.irrep_name, mol.symm_orb,
+                                      mo_coeff, tol=1e-5)
+            except ValueError:
+                pass
     if ene is None:
         ene = numpy.arange(nmo)
     if occ is None:

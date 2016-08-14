@@ -10,9 +10,8 @@ from pyscf.lib import logger
 from pyscf.symm import basis
 from pyscf.symm import param
 
-THRESHOLD = 1e-9
 
-def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True):
+def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True, tol=1e-9):
     '''Label the symmetry of given orbitals
 
     irrep_name can be either the symbol or the ID of the irreducible
@@ -60,9 +59,9 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True):
     logger.debug(mol, 'irreps of each MO %s', str(orbsym))
     if check:
         largest_norm = norm[iridx,numpy.arange(nmo)]
-        orbidx = numpy.where(largest_norm < 1-THRESHOLD)[0]
+        orbidx = numpy.where(largest_norm < 1-tol)[0]
         if orbidx.size > 0:
-            idx = numpy.where(largest_norm < 1-THRESHOLD*1e2)[0]
+            idx = numpy.where(largest_norm < 1-tol*1e2)[0]
             if idx.size > 0:
                 logger.error(mol, 'orbitals %s not symmetrized, norm = %s',
                              idx, largest_norm[idx])
