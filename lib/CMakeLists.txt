@@ -51,6 +51,8 @@ find_package(PythonInterp REQUIRED)
 #  OUTPUT_VARIABLE NUMPY_INCLUDE)
 #include_directories(${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE})
 
+option(ENABLE_LIBCINT "Using libcint for analytical gaussian integral" ON)
+if(ENABLE_LIBCINT)
 include(ExternalProject)
 # remove the following comment for if ... eles, to bypass the compilation of libcint
 #if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
@@ -63,6 +65,7 @@ include(ExternalProject)
             -DCMAKE_INSTALL_LIBDIR:PATH=lib -DBLA_VENDOR=${BLA_VENDOR}
   )
 #endif()
+endif(ENABLE_LIBCINT)
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/deps/include)
 link_directories(${PROJECT_SOURCE_DIR}/deps/lib ${PROJECT_SOURCE_DIR}/deps/lib64)
