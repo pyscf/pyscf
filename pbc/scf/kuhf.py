@@ -29,6 +29,29 @@ def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
               make_dm(mo_coeff_kpts[1], mo_occ_kpts[1]))
     return lib.asarray(dm_kpts).reshape(2,nkpts,nao,nao)
 
+def get_fock(mf, h1e_kpts, s_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
+             diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+    if diis_start_cycle is None:
+        diis_start_cycle = mf.diis_start_cycle
+    if level_shift_factor is None:
+        level_shift_factor = mf.level_shift
+    if damp_factor is None:
+        damp_factor = mf.damp
+
+    if isinstance(level_shift_factor, (tuple, list, numpy.ndarray)):
+        shifta, shiftb = level_shift_factor
+    else:
+        shifta = shiftb = level_shift_factor
+
+    f_kpts = h1e_kpts + vhf_kpts
+    if adiis and cycle >= diis_start_cycle:
+        f_kpts = adiis.update(s_kpts, dm_kpts, f_kpts)
+    if abs(level_shift_factor) > 1e-4:
+        f_kpts =([hf.level_shift(s, dm_kpts[0,k], f_kpts[0,k], shifta)
+                  for k, s in enumerate(s_kpts)] +
+                 [hf.level_shift(s, dm_kpts[1,k], f_kpts[1,k], shiftb)
+                  for k, s in enumerate(s_kpts)])
+    return lib.asarray(f_kpts)
 
 def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     '''Label the occupancies for each orbital for sampled k-points.
@@ -217,6 +240,7 @@ class KUHF(pyscf.scf.uhf.UHF, khf.KRHF):
     get_j = khf.KRHF.get_j
     get_k = khf.KRHF.get_k
 
+    get_fock = get_fock
     get_occ = get_occ
     energy_elec = energy_elec
 

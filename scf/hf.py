@@ -1288,7 +1288,7 @@ class SCF(lib.StreamObject):
     def hf_energy(self, x):
         sys.stderr.write('WARN: Attribute .hf_energy will be removed in PySCF v1.1. '
                          'It is replaced by attribute .e_tot\n')
-        self.level_shift = x
+        self.hf_energy = x
 
     @property
     def level_shift_factor(self):

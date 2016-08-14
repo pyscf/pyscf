@@ -88,6 +88,22 @@ def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
     return df.DF(cell).get_jk(dm_kpts, kpts, kpt_band, with_j=False,
                               exxdiv=mf.exxdiv)[0]
 
+def get_fock(mf, h1e_kpts, s_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
+             diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+    if diis_start_cycle is None:
+        diis_start_cycle = mf.diis_start_cycle
+    if level_shift_factor is None:
+        level_shift_factor = mf.level_shift
+    if damp_factor is None:
+        damp_factor = mf.damp
+
+    f_kpts = h1e_kpts + vhf_kpts
+    if adiis and cycle >= diis_start_cycle:
+        f_kpts = adiis.update(s_kpts, dm_kpts, f_kpts)
+    if abs(level_shift_factor) > 1e-4:
+        f_kpts = [hf.level_shift(s, dm_kpts[k], f_kpts[k], level_shift_factor)
+                  for k, s in enumerate(s_kpts)]
+    return lib.asarray(f_kpts)
 
 def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     '''Label the occupancies for each orbital for sampled k-points.
@@ -298,6 +314,7 @@ class KRHF(pyscf.scf.hf.RHF):
         return lib.asarray(nuc) + lib.asarray(t)
 
     get_ovlp = get_ovlp
+    get_fock = get_fock
     get_occ = get_occ
     energy_elec = energy_elec
 
