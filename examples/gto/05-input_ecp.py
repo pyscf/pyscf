@@ -43,6 +43,5 @@ Na P
 #
 mol = gto.M(atom='Na 0. 0. 0.; H 0 0 2.',
             basis={'Na':'bfd-vtz', 'H':'ccpvdz'},
-            ecp = {'Na':'bfd-pp'},
-            verbose=0)
+            ecp = {'Na':'bfd-pp'})
 
