@@ -279,11 +279,11 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             _load_from_h5g(fswap['%d'%icomp], row0, row1, buf)
     def async_read(icomp, row0, row1, thread_read):
         buf_current, buf_prefetch = reading_frame
+        reading_frame[:] = [buf_prefetch, buf_current]
         if thread_read is None:
             _load_from_h5g(fswap['%d'%icomp], row0, row1, buf_current)
         else:
             thread_read.join()
-            reading_frame[:] = [buf_prefetch, buf_current]
         thread_read = lib.background_thread(prefetch, icomp, row0, row1, buf_prefetch)
         return buf_current[:row1-row0], thread_read
 
