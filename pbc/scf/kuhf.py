@@ -8,7 +8,8 @@ See Also:
 import time
 import numpy as np
 import h5py
-import pyscf.scf.uhf
+from pyscf.scf import hf
+from pyscf.scf import uhf
 from pyscf.pbc.scf import khf
 from pyscf import lib
 from pyscf.lib import logger
@@ -180,13 +181,13 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
     return dm
 
 
-class KUHF(pyscf.scf.uhf.UHF, khf.KRHF):
+class KUHF(uhf.UHF, khf.KRHF):
     '''UHF class with k-point sampling.
     '''
     def __init__(self, cell, kpts=np.zeros((1,3)), exxdiv='ewald'):
         from pyscf.pbc import df
         self.cell = cell
-        pyscf.scf.uhf.UHF.__init__(self, cell)
+        uhf.UHF.__init__(self, cell)
 
         self.with_df = df.DF(cell)
         self.exxdiv = exxdiv
@@ -204,7 +205,7 @@ class KUHF(pyscf.scf.uhf.UHF, khf.KRHF):
         self.with_df.kpts = np.reshape(x, (-1,3))
 
     def dump_flags(self):
-        pyscf.scf.uhf.UHF.dump_flags(self)
+        uhf.UHF.dump_flags(self)
         logger.info(self, '\n')
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'N kpts = %d', len(self.kpts))
@@ -217,13 +218,13 @@ class KUHF(pyscf.scf.uhf.UHF, khf.KRHF):
         #    logger.info(self, 'WS alpha = %s', self.exx_alpha)
 
     def build(self, cell=None):
-        pyscf.scf.uhf.UHF.build(self, cell)
+        uhf.UHF.build(self, cell)
         #if self.exxdiv == 'vcut_ws':
         #    self.precompute_exx()
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell
-        dm = pyscf.scf.uhf.UHF.get_init_guess(self, cell, key)
+        dm = uhf.UHF.get_init_guess(self, cell, key)
         if key.lower() == 'chkfile':
             dm_kpts = dm
         else:
@@ -247,7 +248,7 @@ class KUHF(pyscf.scf.uhf.UHF, khf.KRHF):
     def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
                  kpts=None, kpt_band=None):
         vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpt_band)
-        vhf = pyscf.scf.uhf._makevhf(vj, vk)
+        vhf = uhf._makevhf(vj, vk)
         return vhf
 
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):
@@ -256,7 +257,7 @@ class KUHF(pyscf.scf.uhf.UHF, khf.KRHF):
             fock = self.get_hcore(self.cell, self.kpts) + self.get_veff(self.cell, dm1)
 
         nkpts = len(self.kpts)
-        grad_kpts = [pyscf.scf.uhf.get_grad(mo_coeff_kpts[:,k],
+        grad_kpts = [uhf.get_grad(mo_coeff_kpts[:,k],
                                             mo_occ_kpts[:,k], fock[:,k])
                      for k in range(nkpts)]
         return np.hstack(grad_kpts)
@@ -287,7 +288,7 @@ class KUHF(pyscf.scf.uhf.UHF, khf.KRHF):
         fock = self.get_hcore(cell, kpt_band)
         fock = fock + self.get_veff(cell, dm_kpts, kpts=kpts, kpt_band=kpt_band)
         s1e = self.get_ovlp(cell, kpt_band)
-        mo_energy, mo_coeff = pyscf.scf.uhf.eig(fock, s1e)
+        mo_energy, mo_coeff = uhf.eig(fock, s1e)
         return mo_energy, mo_coeff
 
     def init_guess_by_chkfile(self, chk=None, project=True, kpts=None):
@@ -298,7 +299,7 @@ class KUHF(pyscf.scf.uhf.UHF, khf.KRHF):
         return self.init_guess_by_chkfile(chk, project, kpts)
 
     def dump_chk(self, envs):
-        pyscf.scf.uhf.UHF.dump_chk(self, envs)
+        uhf.UHF.dump_chk(self, envs)
         if self.chkfile:
             with h5py.File(self.chkfile) as fh5:
                 fh5['scf/kpts'] = self.kpts

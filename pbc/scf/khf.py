@@ -9,9 +9,9 @@ import time
 import numpy as np
 import scipy.special
 import h5py
-import pyscf.scf.hf
 from pyscf.pbc.scf import hf as pbchf
 from pyscf import lib
+from pyscf.scf import hf
 from pyscf.lib import logger
 from pyscf.pbc import tools
 from pyscf.pbc.scf import addons
@@ -150,7 +150,7 @@ def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
         dm_kpts : (nkpts, nao, nao) ndarray
     '''
     nkpts = len(mo_occ_kpts)
-    dm_kpts = [pyscf.scf.hf.make_rdm1(mo_coeff_kpts[k], mo_occ_kpts[k])
+    dm_kpts = [hf.make_rdm1(mo_coeff_kpts[k], mo_occ_kpts[k])
                for k in range(nkpts)]
     return lib.asarray(dm_kpts)
 
@@ -230,7 +230,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
     return dm
 
 
-class KRHF(pyscf.scf.hf.RHF):
+class KRHF(hf.RHF):
     '''RHF class with k-point sampling.
 
     Compared to molecular SCF, some members such as mo_coeff, mo_occ
@@ -247,7 +247,7 @@ class KRHF(pyscf.scf.hf.RHF):
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()
         self.cell = cell
-        pyscf.scf.hf.RHF.__init__(self, cell)
+        hf.RHF.__init__(self, cell)
 
         self.with_df = df.DF(cell)
         self.exxdiv = exxdiv
@@ -277,7 +277,7 @@ class KRHF(pyscf.scf.hf.RHF):
         return self.mo_occ
 
     def dump_flags(self):
-        pyscf.scf.hf.RHF.dump_flags(self)
+        hf.RHF.dump_flags(self)
         logger.info(self, '\n')
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'N kpts = %d', len(self.kpts))
@@ -290,13 +290,13 @@ class KRHF(pyscf.scf.hf.RHF):
         #    logger.info(self, 'WS alpha = %s', self.exx_alpha)
 
     def build(self, cell=None):
-        pyscf.scf.hf.RHF.build(self, cell)
+        hf.RHF.build(self, cell)
         #if self.exxdiv == 'vcut_ws':
         #    self.precompute_exx()
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell
-        dm = pyscf.scf.hf.RHF.get_init_guess(self, cell, key)
+        dm = hf.RHF.get_init_guess(self, cell, key)
         if key.lower() == 'chkfile':
             dm_kpts = dm
         else:
@@ -360,7 +360,7 @@ class KRHF(pyscf.scf.hf.RHF):
             fock = self.get_hcore(self.cell, self.kpts) + self.get_veff(self.cell, dm1)
 
         nkpts = len(self.kpts)
-        grad_kpts = [pyscf.scf.hf.get_grad(mo_coeff_kpts[k], mo_occ_kpts[k], fock[k])
+        grad_kpts = [hf.get_grad(mo_coeff_kpts[k], mo_occ_kpts[k], fock[k])
                      for k in range(nkpts)]
         return np.hstack(grad_kpts)
 
@@ -370,7 +370,7 @@ class KRHF(pyscf.scf.hf.RHF):
         mo_coeff_kpts = []
 
         for k in range(nkpts):
-            e, c = pyscf.scf.hf.RHF.eig(self, h_kpts[k], s_kpts[k])
+            e, c = hf.RHF.eig(self, h_kpts[k], s_kpts[k])
             eig_kpts.append(e)
             mo_coeff_kpts.append(c)
         return lib.asarray(eig_kpts), lib.asarray(mo_coeff_kpts)
@@ -403,7 +403,7 @@ class KRHF(pyscf.scf.hf.RHF):
         fock = self.get_hcore(cell, kpt_band)
         fock = fock + self.get_veff(cell, dm_kpts, kpts=kpts, kpt_band=kpt_band)
         s1e = self.get_ovlp(cell, kpt_band)
-        mo_energy, mo_coeff = pyscf.scf.hf.eig(fock, s1e)
+        mo_energy, mo_coeff = hf.eig(fock, s1e)
         return mo_energy, mo_coeff
 
     def init_guess_by_chkfile(self, chk=None, project=True, kpts=None):
@@ -414,7 +414,7 @@ class KRHF(pyscf.scf.hf.RHF):
         return self.init_guess_by_chkfile(chk, project, kpts)
 
     def dump_chk(self, envs):
-        pyscf.scf.hf.RHF.dump_chk(self, envs)
+        hf.RHF.dump_chk(self, envs)
         if self.chkfile:
             with h5py.File(self.chkfile) as fh5:
                 fh5['scf/kpts'] = self.kpts
