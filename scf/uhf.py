@@ -217,11 +217,11 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     viridxa = ~occidxa
     viridxb = ~occidxb
 
-    focka = reduce(numpy.dot, (mo_coeff[0].T.conj(), fock_ao[0], mo_coeff[0]))
-    fockb = reduce(numpy.dot, (mo_coeff[1].T.conj(), fock_ao[1], mo_coeff[1]))
-    g = numpy.hstack((focka[viridxa.reshape(-1,1) & occidxa],
-                      fockb[viridxb.reshape(-1,1) & occidxb]))
-    return g.reshape(-1)
+    ga = reduce(numpy.dot, (mo_coeff[0][:,occidxa].T.conj(), fock_ao[0],
+                            mo_coeff[0][:,viridxa]))
+    gb = reduce(numpy.dot, (mo_coeff[1][:,occidxb].T.conj(), fock_ao[1],
+                            mo_coeff[1][:,viridxb]))
+    return numpy.hstack((ga.ravel(), gb.ravel()))
 
 def energy_elec(mf, dm=None, h1e=None, vhf=None):
     '''Electronic energy of Unrestricted Hartree-Fock
