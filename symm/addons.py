@@ -63,10 +63,8 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True, tol=1e-9):
         if orbidx.size > 0:
             idx = numpy.where(largest_norm < 1-tol*1e2)[0]
             if idx.size > 0:
-                logger.error(mol, 'orbitals %s not symmetrized, norm = %s',
-                             idx, largest_norm[idx])
-                raise ValueError('orbitals %s not symmetrized' %
-                                 numpy.unique(idx))
+                raise ValueError('orbitals %s not symmetrized, norm = %s' %
+                                 (idx, largest_norm[idx]))
             else:
                 logger.warn(mol, 'orbitals %s not strictly symmetrized.',
                             numpy.unique(orbidx))

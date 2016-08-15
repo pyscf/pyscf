@@ -24,8 +24,8 @@ def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None,
             try:
                 symm = label_orb_symm(mol, mol.irrep_name, mol.symm_orb,
                                       mo_coeff, tol=1e-5)
-            except ValueError:
-                pass
+            except ValueError as e:
+                logger.warn(mol, str(e))
     if ene is None:
         ene = numpy.arange(nmo)
     if occ is None:
