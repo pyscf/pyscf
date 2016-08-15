@@ -265,8 +265,8 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     time_1pass = log.timer('AO->MO transformation for %s 1 pass'%intor,
                            *time_0pass)
 
-    ioblk_size = max(max_memory//4, ioblk_size)
-    iobuflen = guess_e2bufsize(ioblk_size, nij_pair, nao_pair)[0]
+    ioblk_size = max(max_memory*.2, ioblk_size)
+    iobuflen = guess_e2bufsize(ioblk_size, nij_pair, max(nao_pair,nkl_pair))[0]
     reading_frame = [numpy.empty((iobuflen,nao_pair)),
                      numpy.empty((iobuflen,nao_pair))]
     def prefetch(icomp, row0, row1, buf):
@@ -693,10 +693,10 @@ def guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp):
 # part of the max_memory is used to hold the AO integrals.  The iobuf is the
 # buffer to temporary hold the transformed integrals before streaming to disk.
 # iobuf is then divided to small blocks (ioblk_words) and streamed to disk.
-    iobuf_words = max(int(mem_words//6), IOBUF_WORDS_PREFER)
+    iobuf_words = max(int(mem_words*.1), IOBUF_WORDS_PREFER)
     ioblk_words = int(min(ioblk_size*1e6/8, iobuf_words))
 
-    e1buflen = int(min(iobuf_words/(comp*nij_pair), mem_words*.66/(comp*nao_pair)))
+    e1buflen = int(min(iobuf_words/(comp*nij_pair), mem_words*.8/(comp*nao_pair)))
     e1buflen = max(e1buflen, IOBUF_ROW_MIN)
     return e1buflen, mem_words, iobuf_words, ioblk_words
 
