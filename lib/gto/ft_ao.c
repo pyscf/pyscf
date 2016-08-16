@@ -40,6 +40,7 @@
 
 #define SQRTPI          1.7724538509055160272981674833411451
 #define EXPCUTOFF       100
+#define NCTRMAX         72
 
 typedef struct {
         const int *atm;
@@ -1409,11 +1410,148 @@ int GTO_ft_ovlp_sph(double complex *out, int *shls, int *dims,
         return has_value;
 }
 
+
+/*************************************************
+ *
+ *************************************************/
+
+static void zcopy_s2_igtj(double complex *out, double complex *in,
+                          int ip, int di, int dj, int nGv)
+{
+        const size_t ip1 = ip + 1;
+        int i, j, n;
+        double complex *pin;
+        for (i = 0; i < di; i++) {
+                for (j = 0; j < dj; j++) {
+                        pin = in  + nGv * (j*di+i);
+                        for (n = 0; n < nGv; n++) {
+                                out[j*nGv+n] = pin[n];
+                        }
+                }
+                out += (ip1 + i) * nGv;
+        }
+}
+static void zcopy_s2_ieqj(double complex *out, double complex *in,
+                          int ip, int di, int dj, int nGv)
+{
+        const size_t ip1 = ip + 1;
+        int i, j, n;
+        double complex *pin;
+        for (i = 0; i < di; i++) {
+                for (j = 0; j <= i; j++) {
+                        pin = in  + nGv * (j*di+i);
+                        for (n = 0; n < nGv; n++) {
+                                out[j*nGv+n] = pin[n];
+                        }
+                }
+                out += (ip1 + i) * nGv;
+        }
+}
+
+void GTO_ft_fill_s1(int (*intor)(), void (*eval_gz)(), double complex *mat,
+                    int ish, int jsh, double *buf,
+                    int *shls_slice, int *ao_loc, double complex fac,
+                    double *Gv, double *invh, double *gxyz, int *gs, int nGv,
+                    int *atm, int natm, int *bas, int nbas, double *env)
+{
+        const int ish0 = shls_slice[0];
+        const int ish1 = shls_slice[1];
+        const int jsh0 = shls_slice[2];
+        const int jsh1 = shls_slice[3];
+        ish += ish0;
+        jsh += jsh0;
+        const int nrow = ao_loc[ish1] - ao_loc[ish0];
+        const int ncol = ao_loc[jsh1] - ao_loc[jsh0];
+        const size_t off = ao_loc[ish] - ao_loc[ish0] + (ao_loc[jsh] - ao_loc[jsh0]) * nrow;
+        int shls[2] = {ish, jsh};
+        int dims[2] = {nrow, ncol};
+        (*intor)(mat+off*nGv, shls, dims, NULL, eval_gz,
+                 fac, Gv, invh, gxyz, gs, nGv, atm, natm, bas, nbas, env);
+}
+
+void GTO_ft_fill_s1hermi(int (*intor)(), void (*eval_gz)(), double complex *mat,
+                         int ish, int jsh, double complex *buf,
+                         int *shls_slice, int *ao_loc, double complex fac,
+                         double *Gv, double *invh, double *gxyz, int *gs, int nGv,
+                         int *atm, int natm, int *bas, int nbas, double *env)
+{
+        const int ish0 = shls_slice[0];
+        const int jsh0 = shls_slice[2];
+        ish += ish0;
+        jsh += jsh0;
+        const int ip = ao_loc[ish] - ao_loc[ish0];
+        const int jp = ao_loc[jsh] - ao_loc[jsh0];
+        if (ip < jp) {
+                return;
+        }
+
+        const int ish1 = shls_slice[1];
+        const int jsh1 = shls_slice[3];
+        const int nrow = ao_loc[ish1] - ao_loc[ish0];
+        const int ncol = ao_loc[jsh1] - ao_loc[jsh0];
+        const size_t off = ao_loc[ish] - ao_loc[ish0] + (ao_loc[jsh] - ao_loc[jsh0]) * nrow;
+        int shls[2] = {ish, jsh};
+        int dims[2] = {nrow, ncol};
+        (*intor)(mat+off*nGv, shls, dims, NULL, eval_gz,
+                 fac, Gv, invh, gxyz, gs, nGv, atm, natm, bas, nbas, env);
+
+        if (ip != jp) {
+                const int di = ao_loc[ish+1] - ao_loc[ish];
+                const int dj = ao_loc[jsh+1] - ao_loc[jsh];
+                double complex *in = mat + off * nGv;
+                double complex *out = mat + (ao_loc[jsh] - ao_loc[jsh0] +
+                                             (ao_loc[ish] - ao_loc[ish0]) * nrow) * nGv;
+                int i, j, n;
+                double complex *pout, *pin;
+                for (i = 0; i < di; i++) {
+                        for (j = 0; j < dj; j++) {
+                                pin  = in  + nGv * (j*nrow+i);
+                                pout = out + nGv * (i*nrow+j);
+                                for (n = 0; n < nGv; n++) {
+                                        pout[n] = pin[n];
+                                }
+                        }
+                }
+        }
+}
+
+void GTO_ft_fill_s2(int (*intor)(), void (*eval_gz)(), double complex *mat,
+                    int ish, int jsh, double complex *buf,
+                    int *shls_slice, int *ao_loc, double complex fac,
+                    double *Gv, double *invh, double *gxyz, int *gs, int nGv,
+                    int *atm, int natm, int *bas, int nbas, double *env)
+{
+        const int ish0 = shls_slice[0];
+        const int jsh0 = shls_slice[2];
+        ish += ish0;
+        jsh += jsh0;
+        const int ip = ao_loc[ish];
+        const int jp = ao_loc[jsh] - ao_loc[jsh0];
+        if (ip < jp) {
+                return;
+        }
+
+        const int di = ao_loc[ish+1] - ao_loc[ish];
+        const int dj = ao_loc[jsh+1] - ao_loc[jsh];
+        const int i0 = ao_loc[ish0];
+        const size_t off = ip * (ip + 1) / 2 - i0 * (i0 + 1) / 2 + jp;
+        int shls[2] = {ish, jsh};
+        int dims[2] = {di, dj};
+        (*intor)(buf, shls, dims, NULL, eval_gz,
+                 fac, Gv, invh, gxyz, gs, nGv, atm, natm, bas, nbas, env);
+
+        if (ip != jp) {
+                zcopy_s2_igtj(mat+off*nGv, buf, ip, di, dj, nGv);
+        } else {
+                zcopy_s2_ieqj(mat+off*nGv, buf, ip, di, dj, nGv);
+        }
+}
+
 /*
  * Fourier transform AO pairs and add to mat (inplace)
  */
-void GTO_ft_ovlp_mat(int (*intor)(), void (*eval_gz)(), double complex *mat,
-                     int *shls_slice, int *ao_loc, int hermi, double phase,
+void GTO_ft_ovlp_mat(int (*intor)(), void (*eval_gz)(), void (*fill)(),
+                     double complex *mat, int *shls_slice, int *ao_loc, double phase,
                      double *Gv, double *invh, double *gxyz, int *gs, int nGv,
                      int *atm, int natm, int *bas, int nbas, double *env)
 {
@@ -1423,38 +1561,25 @@ void GTO_ft_ovlp_mat(int (*intor)(), void (*eval_gz)(), double complex *mat,
         const int jsh1 = shls_slice[3];
         const int nish = ish1 - ish0;
         const int njsh = jsh1 - jsh0;
-        const int nrow = ao_loc[ish1] - ao_loc[ish0];
-        const int ncol = ao_loc[jsh1] - ao_loc[jsh0];
-        const size_t off0 = ao_loc[ish0] + ao_loc[jsh0] * nrow;
         const double complex fac = cos(phase) + sin(phase)*_Complex_I;
 
 #pragma omp parallel default(none) \
-        shared(intor, mat, Gv, invh, gxyz, gs, nGv, ao_loc, \
-               eval_gz, hermi, atm, natm, bas, nbas, env)
+        shared(intor, eval_gz, fill, mat, shls_slice, ao_loc, \
+               Gv, invh, gxyz, gs, nGv, atm, natm, bas, nbas, env)
 {
-        int i, j, ij, di, dj;
-        int shls[2];
-        int dims[2] = {nrow, ncol};
-        size_t off;
+        int i, j, ij;
+        double complex *buf = malloc(sizeof(double complex) * NCTRMAX*NCTRMAX*nGv);
 #pragma omp for schedule(dynamic)
         for (ij = 0; ij < nish*njsh; ij++) {
                 i = ij / njsh;
                 j = ij % njsh;
-                if (hermi && i < j) {
-                        continue;
-                }
-                i += ish0;
-                j += jsh0;
-                shls[0] = i;
-                shls[1] = j;
-                di = ao_loc[i+1] - ao_loc[i];
-                dj = ao_loc[j+1] - ao_loc[j];
-                off = ao_loc[i] + ao_loc[j] * nrow - off0;
-                (*intor)(mat+off*nGv, shls, dims, NULL, eval_gz,
-                         fac, Gv, invh, gxyz, gs, nGv, atm, natm, bas, nbas, env);
+                (*fill)(intor, eval_gz, mat, i, j, buf, shls_slice, ao_loc, fac,
+                        Gv, invh, gxyz, gs, nGv, atm, natm, bas, nbas, env);
         }
+        free(buf);
 }
 }
+
 
 /*
  * Given npair of shls in shls_lst, FT their AO pair value and add to

@@ -214,11 +214,11 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', 
     else:
         feri = h5py.File(erifile, 'w')
     if comp == 1:
-        chunks = (min(int(16e3/nmoj),naoaux), nmoj) # 128K
+        chunks = (min(int(64e3/nmoj),naoaux), nmoj) # 512K
         h5d_eri = feri.create_dataset(dataname, (naoaux,nij_pair), 'f8',
                                       chunks=chunks)
     else:
-        chunks = (1, min(int(16e3/nmoj),naoaux), nmoj) # 128K
+        chunks = (1, min(int(64e3/nmoj),naoaux), nmoj) # 512K
         h5d_eri = feri.create_dataset(dataname, (comp,naoaux,nij_pair), 'f8',
                                       chunks=chunks)
     aopairblks = len(fswap[dataname+'/0'])

@@ -21,6 +21,8 @@ from pyscf.gto import ANG_OF, PTR_COEFF
 from pyscf.gto import ft_ao
 from pyscf.df import addons
 from pyscf.df import incore
+from pyscf.df import outcore
+from pyscf.df import _ri
 
 #
 # Split the Coulomb potential to two parts.  Computing short range part in
@@ -120,6 +122,7 @@ class MDF(lib.StreamObject):
         self.auxmol = None
         self._cderi_file = tempfile.NamedTemporaryFile()
         self._cderi = None
+        self.blockdim = 240
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -140,8 +143,6 @@ class MDF(lib.StreamObject):
 
         mol = self.mol
         auxmol = self.auxmol = make_modrho_basis(self.mol, self.auxbasis)
-        nao = mol.nao_nr()
-        naux = auxmol.nao_nr()
 
         if not isinstance(self._cderi, str):
             if isinstance(self._cderi_file, str):
@@ -149,23 +150,16 @@ class MDF(lib.StreamObject):
             else:
                 self._cderi = self._cderi_file.name
 
-        fLpq = _Lpq_solver(self.metric, self.charge_constraint)
-        if self.approx_sr_level == 0:
-            with h5py.File(self._cderi, 'w') as f:
-                f['Lpq'] = fLpq(mol, auxmol)
-        else:
-            with h5py.File(self._cderi, 'w') as f:
-                f['Lpq'] = _make_Lpq_atomic_approx(mol, auxmol, fLpq)
+        _make_j3c(self, mol, auxmol)
         return self
 
     def load(self, key):
         return addons.load(self._cderi, key)
 
-    def pw_loop(self, mol, auxmol, gs, max_memory=2000):
+    def pw_loop(self, mol, auxmol, gs, shls_slice=None, max_memory=2000):
         '''Plane wave part'''
         if isinstance(gs, int):
             gs = [gs]*3
-        nao = mol.nao_nr()
         naux = auxmol.nao_nr()
         Gv, Gvbase, kws = non_uniform_kgrids(gs)
         nxyz = [i*2 for i in gs]
@@ -178,39 +172,53 @@ class MDF(lib.StreamObject):
         Gv = Gv[idx]
         kws = kws[idx]
         gxyz = gxyz[idx]
+        coulG = .5/numpy.pi**2 * kws / kk
 
-        blksize = min(max(16, int(max_memory*1e6*.7/16/nao**2)), 16384)
+        if shls_slice is None:
+            ni = nj = mol.nao_nr()
+        else:
+            ao_loc = mol.ao_loc_nr()
+            ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
+            nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
+        nij = ni * nj
+        blksize = min(max(16, int(max_memory*1e6*.7/16/nij)), 16384)
         sublk = max(16,int(blksize//4))
-        pqkRbuf = numpy.empty(nao*nao*sublk)
-        pqkIbuf = numpy.empty(nao*nao*sublk)
+        pqkRbuf = numpy.empty(nij*sublk)
+        pqkIbuf = numpy.empty(nij*sublk)
         LkRbuf = numpy.empty(naux*sublk)
         LkIbuf = numpy.empty(naux*sublk)
 
-        for p0, p1 in lib.prange(0, kws.size, blksize):
-            aoao = ft_ao.ft_aopair(mol, Gv[p0:p1], None, True,
+        for p0, p1 in lib.prange(0, coulG.size, blksize):
+            aoao = ft_ao.ft_aopair(mol, Gv[p0:p1], shls_slice, 's1',
                                    Gvbase, gxyz[p0:p1], nxyz)
             aoaux = ft_ao.ft_ao(auxmol, Gv[p0:p1], None, Gvbase, gxyz[p0:p1], nxyz)
 
             for i0, i1 in lib.prange(0, p1-p0, sublk):
                 nG = i1 - i0
-                coulG = .5/numpy.pi**2 * kws[p0+i0:p0+i1] / kk[p0+i0:p0+i1]
-                pqkR = numpy.ndarray((nao,nao,nG), buffer=pqkRbuf)
-                pqkI = numpy.ndarray((nao,nao,nG), buffer=pqkIbuf)
+                pqkR = numpy.ndarray((ni,nj,nG), buffer=pqkRbuf)
+                pqkI = numpy.ndarray((ni,nj,nG), buffer=pqkIbuf)
                 LkR = numpy.ndarray((naux,nG), buffer=LkRbuf)
                 LkI = numpy.ndarray((naux,nG), buffer=LkIbuf)
                 pqkR[:] = aoao[i0:i1].real.transpose(1,2,0)
                 pqkI[:] = aoao[i0:i1].imag.transpose(1,2,0)
                 LkR [:] = aoaux[i0:i1].real.T
                 LkI [:] = aoaux[i0:i1].imag.T
-                yield pqkR.reshape(-1,nG), LkR, pqkI.reshape(-1,nG), LkI, coulG
+                yield (pqkR.reshape(-1,nG), LkR, pqkI.reshape(-1,nG), LkI,
+                       coulG[p0+i0:p0+i1])
+            aoao = aoaux = None
 
     def sr_loop(self, mol, auxmol, max_memory=2000):
         '''Short range part'''
-        j3c = incore.aux_e2(mol, auxmol, 'cint3c2e_sph', aosym='s2ij')
-        j2c = incore.fill_2c2e(mol, auxmol)
-        for i in range(1):
-            yield j3c, j2c
+        with addons.load(self._cderi, 'j3c') as j3c:
+            with addons.load(self._cderi, 'Lpq') as Lpq:
+                naoaux = j3c.shape[0]
+                for b0, b1 in self.prange(0, naoaux, self.blockdim):
+                    yield (numpy.asarray(Lpq[b0:b1], order='C'),
+                           numpy.asarray(j3c[b0:b1], order='C'))
 
+    def prange(self, start, end, step):
+        for i in range(start, end, step):
+            yield i, min(i+step, end)
 
     def get_jk(self, mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
         from pyscf.df import mdf_jk
@@ -250,36 +258,58 @@ class MDF(lib.StreamObject):
         pass
 
 
-def _Lpq_solver(metric, charge_constraint):
-    def solve_Lpq(mol, auxmol):
-        if metric.upper() == 'S':
-            j3c = incore.aux_e2(mol, auxmol, 'cint3c1e_sph', aosym='s2ij')
-            j2c = auxmol.intor_symmetric('cint1e_ovlp_sph')
-        elif metric.upper() == 'T':
-            j3c = incore.aux_e2(mol, auxmol, 'cint3c1e_p2_sph', aosym='s2ij')
-            j2c = auxmol.intor_symmetric('cint1e_kin_sph') * 2
-        else:  # metric.upper() == 'J'
-            j3c = incore.aux_e2(mol, auxmol, 'cint3c2e_sph', aosym='s2ij')
-            j2c = incore.fill_2c2e(mol, auxmol)
+def _make_Lpq(mydf, mol, auxmol):
+    atm, bas, env, ao_loc = incore._env_and_aoloc('cint3c1e_sph', mol, auxmol)
+    nao = ao_loc[mol.nbas]
+    naux = ao_loc[-1] - nao
+    nao_pair = nao * (nao+1) // 2
 
-        if charge_constraint:
-            ovlp = lib.pack_tril(mol.intor_symmetric('cint1e_ovlp_sph'))
-            ao_loc = auxmol.ao_loc_nr()
-            s_index = numpy.hstack([range(ao_loc[i],ao_loc[i+1])
-                                    for i,l in enumerate(auxmol._bas[:,ANG_OF]) if l == 0])
-            naux = ao_loc[-1]
-            b = numpy.hstack((j3c,ovlp.reshape(-1,1)))
-            a = numpy.zeros((naux+1,naux+1))
-            a[:naux,:naux] = j2c
-            a[naux,s_index] = a[s_index,naux] = 1
-            try:
-                Lpq = scipy.linalg.solve(a, b.T, sym_pos=True)[:naux]
-            except scipy.linalg.LinAlgError:
-                Lpq = scipy.linalg.solve(a, b.T)[:naux]
+    if mydf.metric.upper() == 'S':
+        intor = 'cint3c1e_sph'
+        s_aux = auxmol.intor_symmetric('cint1e_ovlp_sph')
+    elif mydf.metric.upper() == 'T':
+        intor = 'cint3c1e_p2_sph'
+        s_aux = auxmol.intor_symmetric('cint1e_kin_sph') * 2
+    else:  # metric.upper() == 'J'
+        intor = 'cint3c2e_sph'
+        s_aux = incore.fill_2c2e(mol, auxmol)
+    cintopt = gto.moleintor.make_cintopt(atm, bas, env, intor)
+
+    if mydf.charge_constraint:
+        ovlp = lib.pack_tril(mol.intor_symmetric('cint1e_ovlp_sph'))
+
+        aux_loc = auxmol.ao_loc_nr()
+        s_index = numpy.hstack([range(aux_loc[i],aux_loc[i+1])
+                                for i,l in enumerate(auxmol._bas[:,ANG_OF]) if l == 0])
+        a = numpy.zeros((naux+1,naux+1))
+        a[:naux,:naux] = s_aux
+        a[naux,s_index] = a[s_index,naux] = 1
+        try:
+            cd = scipy.linalg.cholesky(a)
+            def solve(Lpq):
+                return scipy.linalg.solve_triangular(cd, Lpq)
+        except scipy.linalg.LinAlgError:
+            def solve(Lpq):
+                return scipy.linalg.solve(a, Lpq)
+    else:
+        cd = scipy.linalg.cholesky(s_aux)
+        def solve(Lpq):
+            return scipy.linalg.solve_triangular(cd, Lpq, overwrite_b=True)
+
+    def get_Lpq(shls_slice, col0, col1, buf):
+        # Be cautious here, _ri.nr_auxe2 assumes buf in F-order
+        Lpq = _ri.nr_auxe2(intor, atm, bas, env, shls_slice, ao_loc,
+                           's2ij', 1, cintopt, buf).T
+        if mydf.charge_constraint:
+            Lpq = numpy.ndarray(shape=(naux+1,col1-col0), buffer=buf)
+            Lpq[naux,:] = ovlp[col0:col1]
+            Lpq1 = solve(Lpq)
+            assert(Lpq1.flags.f_contiguous)
+            lib.transpose(Lpq1.T, out=Lpq)
+            return Lpq[:naux]
         else:
-            Lpq = lib.cho_solve(j2c, j3c.T)
-        return Lpq
-    return solve_Lpq
+            return solve(Lpq)
+    return get_Lpq
 
 def _atomic_envs(mol, auxmol, symbol):
     mol1 = copy.copy(mol)
@@ -301,26 +331,121 @@ def _atomic_envs(mol, auxmol, symbol):
         mol2._env[ptr:ptr+np*nc] = cs.T.reshape(-1)
     return mol1, mol2
 
-def _make_Lpq_atomic_approx(mol, auxmol, fLpq):
+def _make_Lpq_atomic_approx(mydf, mol, auxmol):
     Lpqdb = {}
     for a in set([mol.atom_symbol(i) for i in range(mol.natm)]):
-        mol1, mol2 = _atomic_envs(mol, auxmol, a)
-        Lpqdb[a] = fLpq(mol1, mol2)
+        mol1, auxmol1 = _atomic_envs(mol, auxmol, a)
+        nao = mol1.nao_nr()
+        nao_pair = nao * (nao+1) // 2
+        naux = auxmol1.nao_nr()
+        buf = numpy.empty((naux+1,nao_pair))
+        get_Lpq = _make_Lpq(mydf, mol1, auxmol1)
+        shls_slice = (0, mol1.nbas, 0, mol1.nbas, mol1.nbas, mol1.nbas+auxmol1.nbas)
+        Lpqdb[a] = get_Lpq(shls_slice, 0, nao_pair, buf)
 
-    nao = mol.nao_nr()
     naux = auxmol.nao_nr()
-    Lpq = numpy.zeros((naux, nao*(nao+1)//2))
-    i0 = 0
-    j0 = 0
-    for ia in range(mol.natm):
-        atm_Lpq = Lpqdb[mol.atom_symbol(ia)]
-        di, dj2 = atm_Lpq.shape
-        dj = int(numpy.sqrt(dj2*2))
+    def get_Lpq(shls_slice, col0, col1, buf):
+        Lpq = numpy.ndarray((naux,col1-col0), buffer=buf)
+        Lpq[:] = 0
+        k0 = 0
+        j0 = 0
+        for ia in range(mol.natm):
+            if j0*(j0+1)//2 >= col1:
+                break
+            atm_Lpq = Lpqdb[mol.atom_symbol(ia)]
+            dk, dj2 = atm_Lpq.shape
+            dj = int(numpy.sqrt(dj2*2))
 # idx is the diagonal block of the lower triangular indices
-        idx = numpy.hstack([range(i*(i+1)//2+j0,i*(i+1)//2+i+1)
-                            for i in range(j0, j0+dj)])
-        Lpq[i0:i0+di,idx] = atm_Lpq
-        i0 += di
-        j0 += dj
-    return Lpq
+            idx = numpy.hstack([range(i*(i+1)//2+j0,i*(i+1)//2+i+1)
+                                for i in range(j0, j0+dj)])
+            mask = (col0 <= idx) & (idx < col1)
+            idx = idx[mask] - col0
+            Lpq[k0:k0+dk,idx] = atm_Lpq[:,mask]
+            k0 += dk
+            j0 += dj
+        return Lpq
+    return get_Lpq
 
+def _make_j3c(mydf, mol, auxmol):
+    log = logger.Logger(mydf.stdout, mydf.verbose)
+    atm, bas, env, ao_loc = incore._env_and_aoloc('cint3c2e_sph', mol, auxmol)
+    nao = ao_loc[mol.nbas]
+    naux = ao_loc[-1] - nao
+    nao_pair = nao * (nao+1) // 2
+    cintopt = gto.moleintor.make_cintopt(atm, bas, env, 'cint3c2e_sph')
+    if mydf.approx_sr_level == 0:
+        get_Lpq = _make_Lpq(mydf, mol, auxmol)
+    else:
+        get_Lpq = _make_Lpq_atomic_approx(mydf, mol, auxmol)
+
+    feri = h5py.File(mydf._cderi)
+    chunks = (min(256,naux), min(256,nao_pair)) # 512K
+    feri.create_dataset('j3c', (naux,nao_pair), 'f8', chunks=chunks)
+    feri.create_dataset('Lpq', (naux,nao_pair), 'f8', chunks=chunks)
+
+    def save(label, dat, col0, col1):
+        feri[label][:,col0:col1] = dat
+
+    Gv, Gvbase, kws = non_uniform_kgrids(mydf.gs)
+    nxyz = [i*2 for i in mydf.gs]
+    gxyz = lib.cartesian_prod([range(i) for i in nxyz])
+    kk = numpy.einsum('ki,ki->k', Gv, Gv)
+    idx = numpy.argsort(kk)[::-1]
+    kk = kk[idx]
+    Gv = Gv[idx]
+    kws = kws[idx]
+    gxyz = gxyz[idx]
+    coulG = .5/numpy.pi**2 * kws / kk
+
+    aoaux = ft_ao.ft_ao(auxmol, Gv, None, Gvbase, gxyz, nxyz)
+    kLR = numpy.asarray(aoaux.real, order='C')
+    kLI = numpy.asarray(aoaux.imag, order='C')
+    j2c = auxmol.intor('cint2c2e_sph', hermi=1).T  # .T to C-ordr
+    lib.dot(kLR.T*coulG, kLR, -1, j2c, 1)
+    lib.dot(kLI.T*coulG, kLI, -1, j2c, 1)
+
+    kLR *= coulG.reshape(-1,1)
+    kLI *= coulG.reshape(-1,1)
+    aoaux = coulG = kk = kws = idx = None
+
+    max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
+    buflen = min(max(int(max_memory*.3*1e6/8/naux), 1), nao_pair)
+    shranges = outcore._guess_shell_ranges(mol, buflen, 's2ij')
+    buflen = max([x[2] for x in shranges])
+    blksize = max(16, int(max_memory*.15*1e6/16/buflen))
+    pqkbuf = numpy.empty(buflen*blksize)
+    bufs1 = numpy.empty((buflen*naux))
+    # bufs2 holds either Lpq and ft_aopair
+    bufs2 = numpy.empty(max(buflen*(naux+1),buflen*blksize*2)) # *2 for cmplx
+
+    col1 = 0
+    for istep, sh_range in enumerate(shranges):
+        log.debug('int3c2e [%d/%d], AO [%d:%d], ncol = %d', \
+                  istep+1, len(shranges), *sh_range)
+        bstart, bend, ncol = sh_range
+        col0, col1 = col1, col1+ncol
+        shls_slice = (bstart, bend, 0, bend, mol.nbas, mol.nbas+auxmol.nbas)
+
+        Lpq = get_Lpq(shls_slice, col0, col1, bufs2)
+        save('Lpq', Lpq, col0, col1)
+
+        j3c = _ri.nr_auxe2('cint3c2e_sph', atm, bas, env, shls_slice, ao_loc,
+                           's2ij', 1, cintopt, bufs1)
+        j3c = j3c.T  # -> (L|pq) in C-order
+        lib.dot(j2c, Lpq, -.5, j3c, 1)
+        Lpq = None
+
+        for p0, p1 in lib.prange(0, Gv.shape[0], blksize):
+            aoao = ft_ao.ft_aopair(mol, Gv[p0:p1], shls_slice[:4], 's2',
+                                   Gvbase, gxyz[p0:p1], nxyz, buf=bufs2)
+            nG = p1 - p0
+            pqkR = numpy.ndarray((ncol,nG), buffer=pqkbuf)
+            pqkR[:] = aoao.real.T
+            lib.dot(kLR[p0:p1].T, pqkR.T, -1, j3c, 1)
+            pqkI = numpy.ndarray((ncol,nG), buffer=pqkbuf)
+            pqkI[:] = aoao.imag.T
+            lib.dot(kLI[p0:p1].T, pqkI.T, -1, j3c, 1)
+            aoao = aoaux = None
+        save('j3c', j3c, col0, col1)
+
+    feri.close()

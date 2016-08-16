@@ -93,16 +93,31 @@ def c2s_bra(l, gcart):
              gcart.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l))
         return gsph
 
+def finger(a):
+    return numpy.dot(a.ravel(), numpy.cos(numpy.arange(a.size)))
 
 class KnowValues(unittest.TestCase):
     def test_ft_ao(self):
         numpy.random.seed(12)
         invh = numpy.diag(numpy.random.random(3))
         Gv = 2*numpy.pi* numpy.dot(gxyz, invh)
-        Gv_C = numpy.asarray(Gv.T, order='C')
         ref = ft_ao_o0(mol, Gv)
         dat = ft_ao.ft_ao(mol, Gv)
         self.assertTrue(numpy.allclose(ref, dat))
+
+    def test_ft_aopair(self):
+        numpy.random.seed(12)
+        invh = numpy.diag(numpy.random.random(3))
+        Gv = 2*numpy.pi* numpy.dot(gxyz, invh)
+        dat = ft_ao.ft_aopair(mol, Gv)
+        self.assertAlmostEqual(finger(dat), (-5.9794759129252348+8.07254562525371j), 9)
+
+        dat_s2 = ft_ao.ft_aopair(mol, Gv, aosym='s2')
+        nao = dat.shape[-1]
+        for i in range(nao):
+            for j in range(i+1):
+                dat[:,i,j] = dat[:,j,i] = dat_s2[:,i*(i+1)//2+j]
+        self.assertAlmostEqual(finger(dat), (-5.9794759129252348+8.07254562525371j), 9)
 
 
 if __name__ == '__main__':

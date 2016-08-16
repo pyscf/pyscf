@@ -96,182 +96,76 @@ def get_jk(mydf, mol, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
         nset = len(dms)
     nao = dms[0].shape[0]
 
-    def read_Lpq():
-        with mydf.load('Lpq') as Lpq:
-            Lpq = lib.unpack_tril(Lpq.value)
-        return Lpq.reshape(naux,-1)
-
-    def decompose_dm(dm, ovlp, Lpq):
-        e, c = scipy.linalg.eigh(dm, ovlp, type=2)
-        pos = e > OCCDROP
-        neg = e < -OCCDROP
-        cpos = numpy.einsum('ij,j->ij', c[:,pos], numpy.sqrt(e[pos]))
-        cpos = numpy.asarray(cpos, order='F')
-        cneg = numpy.einsum('ij,j->ij', c[:,neg], numpy.sqrt(-e[neg]))
-        cneg = numpy.asarray(cneg, order='F')
-        Lpi_pos = lib.dot(Lpq.reshape(-1,nao), cpos).reshape(naux,nao,-1)
-        if cneg.shape[1] > 0:
-            Lpi_neg = lib.dot(Lpq.reshape(-1,nao), cneg).reshape(naux,nao,-1)
-        else:
-            Lpi_neg = None
-        return (cpos, cneg, Lpi_pos, Lpi_neg)
-
-    def add_j_(vj, jaux, dm, rho_coeff, pqk, Lk, coulG):
-        nG = Lk.shape[1]
+    def add_j_(vj, dm, pqk, coulG):
+        nG = coulG.shape[0]
         pqk = pqk.reshape(-1,nG)
-        rho = numpy.dot(dm.T.ravel(), pqk) - numpy.dot(rho_coeff, Lk)
+        rho = numpy.dot(dm.T.ravel(), pqk)
         rho *= coulG
         vj += numpy.dot(pqk, rho)
-        jaux += numpy.dot(Lk, rho)
-        return vj, jaux
+        return vj
 
-    def short_range_vj(jaux, dm, rho_coeff, Lpq, j3c, j2c):
-        nao = dm.shape[0]
-        dmtril = lib.pack_tril(dm+dm.T.conj())
-        i = numpy.arange(nao)
-        dmtril[i*(i+1)//2+i] *= .5
-        if isinstance(Lpq, tuple):
-            with mydf.load('Lpq') as Lpq:
-                Lpq = Lpq.value
-        assert(j3c.shape[0] != nao*nao)
-        jaux += j2c.dot(rho_coeff)
-        jaux = numpy.einsum('ik,i->k', j3c, dmtril) - jaux
-        vj = numpy.dot(Lpq.T, jaux)
-        if vj.size == nao*nao:
-            vj = lib.pack_tril(vj.reshape(nao,nao))
-        vj += numpy.einsum('ij,j->i', j3c, rho_coeff)
-        return lib.unpack_tril(vj)
-
-    Lpq = read_Lpq()
-    rho_coeff = [numpy.einsum('kij,ji->k', Lpq.reshape(-1,nao,nao), dm)
-                 for dm in dms]
-
-#    ovlp = mol.intor_symmetric('cint1e_ovlp_sph')
-#    if with_k and hermi and numpy.einsum('ij,ij->', dm, ovlp) > 0.1:
-#        Lpq = decompose_dm(dm, ovlp, Lpq)
-    if 0:
-
-        def add_k_(vk, dm, pqk, Lk, coulG, Lpq, buf=None):
-            nG = Lk.shape[1]
-            cpos, cneg, Lpi_pos, Lpi_neg = Lpq
-            naux = Lpi_pos.shape[0]
-            npos = cpos.shape[1]
-            nneg = cneg.shape[1]
-            coulG = numpy.sqrt(coulG)
-
-            ipk = lib.dot(cpos.T, pqk.reshape(nao,-1)).reshape(npos,nao,-1)
-            pik = numpy.ndarray((nao*npos,nG), buffer=buf)
-            pik[:] = ipk.transpose(1,0,2).reshape(nao*npos,-1)
-            pik = lib.dot(Lpi_pos.reshape(naux,-1).T, Lk, -1, pik, 1)
-            pik *= coulG
-            vk += lib.dot(pik.reshape(nao,-1), pik.reshape(nao,-1).T)
-            if nneg > 0:
-                ipk = lib.dot(cneg.T, pqk.reshape(nao,-1)).reshape(nneg,nao,-1)
-                pik = numpy.ndarray((nao*nneg,nG), buffer=buf)
-                pik[:] = ipk.transpose(1,0,2).reshape(nao*nneg,-1)
-                pik = lib.dot(Lpi_neg.reshape(naux,-1).T, Lk, -1, pik, 1)
-                pik *= coulG
-                vk -= lib.dot(pik.reshape(nao,-1), pik.reshape(nao,-1).T)
-            return vk
-
-        def short_range_vk(dm, Lpq, j3c, j2c, hermi):
-            j3c = lib.unpack_tril(j3c, axis=0).reshape(nao,-1)
-            cpos, cneg, Lpi_pos, Lpi_neg = Lpq
-            #:tmp = numpy.einsum('Lpi,LM->piM', Lpi_pos, j2c)
-            #:tmp = numpy.einsum('Lpi,qiL->pq', Lpi_pos, tmp)
-            #:vk = numpy.einsum('Lpi,qLi->pq', Lpi_pos, pLi.reshape(nao,naux,-1))*2 - tmp
-
-            pLi = lib.dot(j3c.T, cpos)
-            vk  = lib.dot(pLi.reshape(nao,-1),
-                          numpy.asarray(Lpi_pos.transpose(1,0,2).reshape(nao,-1), order='C').T)
-            tmp = lib.dot(Lpi_pos.reshape(naux,-1).T, j2c)
-            kaux = lib.dot(numpy.asarray(Lpi_pos.transpose(1,2,0).reshape(nao,-1),order='C'),
-                           tmp.reshape(nao,-1).T)
-
-            if cneg.shape[1] > 0:
-                pLi = lib.dot(j3c.T, cneg)
-                vk -= lib.dot(pLi.reshape(nao,-1),
-                              numpy.asarray(Lpi_neg.transpose(1,0,2).reshape(nao,-1),order='C').T)
-                tmp = lib.dot(Lpi_neg.reshape(naux,-1).T, j2c)
-                kaux -= lib.dot(numpy.asarray(Lpi_neg.transpose(1,2,0).reshape(nao,-1),order='C'),
-                                tmp.reshape(nao,-1).T)
-            vk = vk + vk.T - kaux
-            return vk
-
-    else:  # hermi == 0
-
-        def add_k_(vk, dm, pqk, Lk, coulG, Lpq, buf=None):
-            nG = Lk.shape[1]
-            #:with mydf.load('Lpq') as Lpq:
-            #:    Lpq = lib.unpack_tril(Lpq.value).reshape(naux,-1)
-            #:pqk -= numpy.dot(Lpq.T, Lk)
-            #:v4 = reduce(numpy.dot, (pqk*coulG, pqk.T))
-            #:v4 = v4.reshape((nao,)*4)
-            #:vk += numpy.einsum('pqrs,qr->ps', v4, dm)
-            #:return vk
-            pqk = numpy.asarray(pqk.reshape(nao,nao,nG), order='C')
-            pqk = pqk.reshape(-1,nG) - lib.dot(Lpq.reshape(naux,-1).T, Lk)
-            pqk *= numpy.sqrt(coulG)
-            ipk = lib.dot(dm, pqk.reshape(nao,-1)).reshape(nao,nao,-1)
-            pik = numpy.ndarray((nao,nao,nG), buffer=buf)
-            pik[:] = ipk.transpose(1,0,2)
-            vk += lib.dot(pqk.reshape(nao,-1), pik.reshape(nao,-1).T)
-            return vk
-
-        def short_range_vk(dm, Lpq, j3c, j2c, hermi):
-            j3c = lib.unpack_tril(j3c, axis=0).reshape(nao,-1)
-            #:Lpq = Lpq.reshape(naux,-1)
-            #:j3c = j3c.reshape(-1,naux)
-            #:v4 = numpy.dot(j3c,Lpq)
-            #:v4 = v4 + v4.T
-            #:v4 -= reduce(numpy.dot, (Lpq.T, j2c, Lpq))
-            #:v4 = v4.reshape((nao,)*4)
-            #:vk = numpy.einsum('pqrs,qr->ps', v4, dm)
-            #:return vk
-            iLp = lib.dot(dm, Lpq.reshape(-1,nao).T).reshape(-1,nao)
-            vk  = lib.dot(j3c, iLp)
-
-            Lip = iLp.reshape(nao,naux,nao).transpose(1,0,2)
-            tmp = lib.dot(j2c, Lpq.reshape(naux,-1))
-            vk1 = lib.dot(tmp.reshape(-1,nao).T,
-                          numpy.asarray(Lip.reshape(-1,nao), order='C'))
-            Lip = iLp = tmp = None
-
-            if hermi:
-                vk = vk + vk.T
-            else:
-                iLp = lib.dot(dm.T, Lpq.reshape(-1,nao).T).reshape(-1,nao)
-                vk += lib.dot(iLp.T, j3c.T)
-            vk -= vk1
-            return vk
+    def add_k_(vk, dm, pqk, coulG, buf=None):
+        nG = pqk.shape[-1]
+        pqk *= numpy.sqrt(coulG)
+        ipk = lib.dot(dm, pqk.reshape(nao,-1)).reshape(nao,nao,-1)
+        pik = numpy.ndarray((nao,nao,nG), buffer=buf)
+        pik[:] = ipk.transpose(1,0,2)
+        vk += lib.dot(pqk.reshape(nao,-1), pik.reshape(nao,-1).T)
+        return vk
 
     sublk = min(max(16, int(mydf.max_memory*1e6/16/nao**2)), 8192)
     pikbuf = numpy.empty(nao*nao*sublk)
 
     vj = numpy.zeros((nset,nao*nao))
-    jaux = numpy.zeros((nset,naux))
     vk = numpy.zeros((nset,nao,nao))
     for pqkR, LkR, pqkI, LkI, coulG \
-            in mydf.pw_loop(mol, auxmol, mydf.gs, mydf.max_memory):
+            in mydf.pw_loop(mol, auxmol, mydf.gs, max_memory=mydf.max_memory):
         for i in range(nset):
             if with_j:
-                add_j_(vj[i], jaux[i], dms[i], rho_coeff[i], pqkR, LkR, coulG)
-                add_j_(vj[i], jaux[i], dms[i], rho_coeff[i], pqkI, LkI, coulG)
+                add_j_(vj[i], dms[i], pqkR, coulG)
+                add_j_(vj[i], dms[i], pqkI, coulG)
             if with_k:
-                add_k_(vk[i], dms[i], pqkR, LkR, coulG, Lpq, pikbuf)
-                add_k_(vk[i], dms[i], pqkI, LkI, coulG, Lpq, pikbuf)
+                add_k_(vk[i], dms[i], pqkR, coulG, pikbuf)
+                add_k_(vk[i], dms[i], pqkI, coulG, pikbuf)
     pqkR = LkR = pqkI = LkI = coulG = pikbuf = None
     t1 = log.timer('pw jk', *t1)
 
+    def short_range_j(dmtril, Lpq, j3c):
+        jaux = numpy.einsum('ki,i->k', j3c, dmtril)
+        rho_coeff = numpy.einsum('ki,i->k', Lpq, dmtril)
+        vj  = numpy.dot(Lpq.T, jaux)
+        vj += numpy.dot(j3c.T, rho_coeff)
+        return lib.unpack_tril(vj)
+
+    def short_range_k(dm, Lpq, j3c):
+        j3c = j3c.transpose(1,0,2).reshape(-1,nao)
+        iLp = lib.dot(dm, Lpq.reshape(-1,nao).T).reshape(-1,nao)
+        vk  = lib.dot(j3c.T, iLp)
+        if hermi:
+            vk = vk + vk.T
+        else:
+            iLp = lib.dot(dm.T, Lpq.reshape(-1,nao).T).reshape(-1,nao)
+            vk += lib.dot(iLp.T, j3c)
+        return vk
+
     if with_j:
         vj = vj.reshape(-1,nao,nao)
-    for j3c, j2c in mydf.sr_loop(mol, auxmol, mydf.max_memory):
-        for i in range(nset):
-            if with_j:
-                vj[i] += short_range_vj(jaux[i], dms[i], rho_coeff[i], Lpq, j3c, j2c)
-            if with_k:
-                vk[i] += short_range_vk(dms[i], Lpq, j3c, j2c, hermi)
-    j3c = j2c = None
+        i = numpy.arange(nao)
+        def dm_for_vj_tril(dm):
+            dmtril = lib.pack_tril(dm+dm.T.conj())
+            dmtril[i*(i+1)//2+i] *= .5
+            return dmtril
+        dmstril = [dm_for_vj_tril(dm) for dm in dms]
+
+    for Lpq, j3c in mydf.sr_loop(mol, auxmol, mydf.max_memory):
+        if with_j:
+            for i in range(nset):
+                vj[i] += short_range_j(dmstril[i], Lpq, j3c)
+        if with_k:
+            Lpq = lib.unpack_tril(Lpq)
+            j3c = lib.unpack_tril(j3c)
+            for i in range(nset):
+                vk[i] += short_range_k(dms[i], Lpq, j3c)
 
     if nset == 1:
         vj = vj[0]
