@@ -9,13 +9,13 @@ import pyscf.ao2mo
 from pyscf.lib import logger
 from pyscf.pbc import lib as pbclib
 import pyscf.cc
-import pyscf.cc.ccsd
-from pyscf.cc.ccsd import _cp
-from pyscf.cc import intermediates as imd
-from pyscf.pbc.lib.linalg_helper import eigs 
+import pyscf.cc.rccsd
+from pyscf.cc import uintermediates as imd
 
 #einsum = np.einsum
 einsum = pbclib.einsum
+
+# This is unrestricted (U)CCSD, i.e. spin-orbital form.
 
 def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
            max_memory=2000, verbose=logger.INFO):
@@ -67,10 +67,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     time0 = time.clock(), time.time()
     log = logger.Logger(cc.stdout, cc.verbose)
     nocc, nvir = t1.shape
-    #nov = nocc*nvir
     fock = eris.fock
-    #t1new = numpy.zeros_like(t1)
-    #t2new = numpy.zeros_like(t2)
 
     fov = fock[:nocc,nocc:]
     foo = fock[:nocc,:nocc]
@@ -93,11 +90,6 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     Fvv -= fvv
     Foo -= foo
 
-    # eris might be an HDF5 Dataset, so _cp to ndarray
-    eris_oovo = - _cp(eris.ooov).transpose(0,1,3,2)
-    eris_ovvo = - _cp(eris.ovov).transpose(0,1,3,2)
-    eris_vvvo = - _cp(eris.ovvv).transpose(2,3,1,0).conj()
-
     # T1 equation
     # TODO: Does this need a conj()? Usually zero w/ canonical HF.
     t1new = fov.copy()
@@ -106,7 +98,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     t1new +=  einsum('imae,me->ia',t2,Fov)
     t1new += -einsum('nf,naif->ia',t1,eris.ovov)
     t1new += -0.5*einsum('imef,maef->ia',t2,eris.ovvv)
-    t1new += -0.5*einsum('mnae,nmei->ia',t2,eris_oovo)
+    t1new += -0.5*einsum('mnae,mnie->ia',t2,eris.ooov)
     # T2 equation
     # For conj(), see Hirata and Bartlett, Eq. (36) 
     t2new = np.array(eris.oovv, copy=True).conj()
@@ -116,13 +108,14 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     Ftmp = Foo + 0.5*einsum('je,me->mj',t1,Fov)
     tmp = einsum('imab,mj->ijab',t2,Ftmp)
     t2new -= (tmp - tmp.transpose(1,0,2,3))
-    t2new += ( 0.5*einsum('mnab,mnij->ijab',tau,Woooo) 
-             + 0.5*einsum('ijef,abef->ijab',tau,Wvvvv) )
+    t2new += 0.5*einsum('mnab,mnij->ijab',tau,Woooo) 
+    for a in range(nvir):
+        t2new[:,:,a,:] += 0.5*einsum('ijef,bef->ijb',tau,Wvvvv[a])
     tmp = einsum('imae,mbej->ijab',t2,Wovvo) 
-    tmp -= einsum('ie,ma,mbej->ijab',t1,t1,eris_ovvo)
+    tmp -= -einsum('ie,ma,mbje->ijab',t1,t1,eris.ovov)
     t2new += ( tmp - tmp.transpose(0,1,3,2) 
              - tmp.transpose(1,0,2,3) + tmp.transpose(1,0,3,2) )
-    tmp = einsum('ie,abej->ijab',t1,eris_vvvo)
+    tmp = einsum('ie,jeba->ijab',t1,np.array(eris.ovvv).conj())
     t2new += (tmp - tmp.transpose(1,0,2,3))
     tmp = einsum('ma,mbij->ijab',t1,eris.ovoo)
     t2new -= (tmp - tmp.transpose(0,1,3,2))
@@ -141,72 +134,39 @@ def energy(cc, t1, t2, eris):
     e = einsum('ia,ia', fock[:nocc,nocc:], t1)
     t1t1 = einsum('ia,jb->ijab',t1,t1)
     tau = t2 + 2*t1t1
-    eris_oovv = _cp(eris.oovv)
+    eris_oovv = np.array(eris.oovv)
     e += 0.25 * np.dot(tau.flatten(), eris_oovv.flatten())
     #e += (0.25*np.einsum('ijab,ijab',t2,eris_oovv)
     #      + 0.5*np.einsum('ia,jb,ijab',t1,t1,eris_oovv))
     return e.real
 
 
-class CCSD(pyscf.cc.ccsd.CCSD):
+class UCCSD(pyscf.cc.rccsd.RCCSD):
 
     def __init__(self, mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
-        nso = 2*mf.mo_energy.size
-        if mo_energy is None: 
-            mo_energy = np.zeros(nso)
-            mo_energy[0::2] = mo_energy[1::2] = mf.mo_energy
-        if mo_coeff is None:
-            mo_coeffT = mf.mo_coeff.T
-            so_coeffT = np.zeros((nso,nso), dtype=mo_coeffT.dtype)
-            for i in range(nso):
-                if i%2 == 0:
-                    so_coeffT[i][:nso/2] = mo_coeffT[i//2]
-                else:
-                    so_coeffT[i][nso/2:] = mo_coeffT[i//2]
-            # Each col is an eigenvector, first n/2 rows are alpha, then n/2 beta
-            mo_coeff = so_coeffT.T
-        if mo_occ is None: 
-            mo_occ = np.zeros(nso)
-            mo_occ[0:mf.mol.nelectron] = 1
-
-        pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_energy, mo_coeff, mo_occ)
+        # TODO(TCB): Check that RCCSD init is safe on UHF input
+        pyscf.cc.rccsd.RCCSD.__init__(self, mf, frozen, mo_energy, mo_coeff, mo_occ)
         # Spin-orbital CCSD needs a stricter tolerance
         self.conv_tol = 1e-8
         self.conv_tol_normt = 1e-6
 
     def nocc(self):
-        # Spin orbitals
-        self._nocc = 2*pyscf.cc.ccsd.CCSD.nocc(self)
+        self._nocc = self._scf.mol.nelectron
         return self._nocc
 
-    def dump_flags(self):
-        pyscf.cc.ccsd.CCSD.dump_flags(self)
-        logger.info(self, '\n')
-        logger.info(self, '******** EOM CC flags ********')
+    def nmo(self):
+        self._nmo = self.mo_energy[0].size + self.mo_energy[1].size
+        return self._nmo
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
         mo_e = eris.fock.diagonal()
         nocc = self.nocc()
-        nvir = mo_e.size - nocc
-        t1 = np.zeros((nocc,nvir), eris.dtype)
-        #eia = mo_e[:nocc,None] - mo_e[None,nocc:]
-        #t1 = eris.fock[:nocc,nocc:] / eia
-        t2 = np.zeros((nocc,nocc,nvir,nvir), eris.dtype)
-        self.emp2 = 0
-        foo = eris.fock[:nocc,:nocc]
-        fvv = eris.fock[nocc:,nocc:]
-        eia = np.zeros((nocc,nvir))
-        eijab = np.zeros((nocc,nocc,nvir,nvir))
-        for i in range(nocc):
-            for a in range(nvir):
-                eia[i,a] = (foo[i,i] - fvv[a,a]).real
-                for j in range(nocc):
-                    for b in range(nvir):
-                        eijab[i,j,a,b] = ( foo[i,i] + foo[j,j]
-                                         - fvv[a,a] - fvv[b,b] ).real
-                        t2[i,j,a,b] = eris.oovv[i,j,a,b]/eijab[i,j,a,b]
-        eris_oovv = _cp(eris.oovv)
+        eia = mo_e[:nocc,None] - mo_e[None,nocc:]
+        eijab = lib.direct_sum('ia,jb->ijab',eia,eia)
+        t1 = eris.fock[:nocc,nocc:] / eia
+        eris_oovv = np.array(eris.oovv)
+        t2 = eris_oovv/eijab
         self.emp2 = 0.25*einsum('ijab,ijab',t2,eris_oovv.conj()).real
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
         logger.timer(self, 'init mp2', *time0)
@@ -215,6 +175,7 @@ class CCSD(pyscf.cc.ccsd.CCSD):
     def ccsd(self, t1=None, t2=None, mo_coeff=None, eris=None):
         if eris is None: eris = self.ao2mo(mo_coeff)
         self.eris = eris
+        self.dump_flags()
         self._conv, self.ecc, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                        tol=self.conv_tol,
@@ -237,68 +198,181 @@ class CCSD(pyscf.cc.ccsd.CCSD):
     def update_amps(self, t1, t2, eris, max_memory=2000):
         return update_amps(self, t1, t2, eris, max_memory)
 
-    # EOM CCSD starts here
-
-    def eeccsd(self, nroots=2*4):
+    def nip(self):
         nocc = self.nocc()
         nvir = self.nmo() - nocc
-        size = nocc*nvir+nocc*(nocc-1)/2*nvir*(nvir-1)/2
-        evals, evecs = eigs(self.eeccsd_matvec, size, nroots)
-        return evals.real[:nroots], evecs
+        self._nip = nocc + nocc*(nocc-1)/2*nvir
+        return self._nip
+
+    def nea(self):
+        nocc = self.nocc()
+        nvir = self.nmo() - nocc
+        self._nea = nvir + nocc*nvir*(nvir-1)/2
+        return self._nea
+
+    def nee(self):
+        nocc = self.nocc()
+        nvir = self.nmo() - nocc
+        self._nee = nocc*nvir + nocc*(nocc-1)/2*nvir*(nvir-1)/2
+        return self._nee
+
+    def ipccsd_matvec(self, vector):
+        # Ref: Tu, Wang, and Li, J. Chem. Phys. 136, 174102 (2012) Eqs.(8)-(9)
+        if not self.made_ip_imds:
+            if not hasattr(self,'imds'):
+                self.imds = _IMDS(self)
+            self.imds.make_ip()
+            self.made_ip_imds = True
+        imds = self.imds
+
+        r1,r2 = self.vector_to_amplitudes_ip(vector)
+
+        # Eq. (8)
+        Hr1 = -einsum('mi,m->i',imds.Foo,r1)
+        Hr1 += einsum('me,mie->i',imds.Fov,r2)
+        Hr1 += -0.5*einsum('nmie,mne->i',imds.Wooov,r2)
+        # Eq. (9)
+        tmp1 = einsum('mi,mja->ija',imds.Foo,r2)
+        tmp2 = einsum('maei,mje->ija',imds.Wovvo,r2)
+        Hr2 =  einsum('ae,ije->ija',imds.Fvv,r2)
+        Hr2 += (-tmp1 + tmp1.transpose(1,0,2))
+        Hr2 += -einsum('maji,m->ija',imds.Wovoo,r1)
+        Hr2 += 0.5*einsum('mnij,mna->ija',imds.Woooo,r2)
+        Hr2 += (tmp2 - tmp2.transpose(1,0,2))
+        Hr2 += 0.5*einsum('mnef,ijae,mnf->ija',imds.Woovv,self.t2,r2)
+
+        vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
+        return vector
+
+    def vector_to_amplitudes_ip(self,vector):
+        nocc = self.nocc()
+        nvir = self.nmo() - nocc
+        r1 = vector[:nocc].copy()
+        r2 = np.zeros((nocc,nocc,nvir), vector.dtype)
+        index = nocc
+        for i in range(nocc):
+            for j in range(i):
+                for a in range(nvir):
+                    r2[i,j,a] =  vector[index]
+                    r2[j,i,a] = -vector[index]
+                    index += 1
+        return [r1,r2]
+
+    def amplitudes_to_vector_ip(self,r1,r2):
+        nocc = self.nocc()
+        nvir = self.nmo() - nocc
+        size = nocc + nocc*(nocc-1)/2*nvir
+        vector = np.zeros(size, r1.dtype)
+        vector[:nocc] = r1.copy()
+        index = nocc
+        for i in range(nocc):
+            for j in range(i):
+                for a in range(nvir):
+                    vector[index] = r2[i,j,a]
+                    index += 1
+        return vector
+
+    def eaccsd_matvec(self,vector):
+        # Ref: Nooijen and Bartlett, J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)
+        if not self.made_ea_imds:
+            if not hasattr(self,'imds'):
+                self.imds = _IMDS(self)
+            self.imds.make_ea()
+            self.made_ea_imds = True
+        imds = self.imds
+
+        r1,r2 = self.vector_to_amplitudes_ea(vector)
+
+        # Eq. (30)
+        Hr1 = einsum('ac,c->a',imds.Fvv,r1)
+        Hr1 += einsum('ld,lad->a',imds.Fov,r2)
+        Hr1 += 0.5*einsum('alcd,lcd->a',imds.Wvovv,r2)
+        # Eq. (31)
+        tmp1 = einsum('ac,jcb->jab',imds.Fvv,r2)
+        tmp2 = einsum('lbdj,lad->jab',imds.Wovvo,r2)
+        Hr2 = einsum('abcj,c->jab',imds.Wvvvo,r1)
+        Hr2 += (tmp1 - tmp1.transpose(0,2,1))
+        Hr2 += -einsum('lj,lab->jab',imds.Foo,r2)
+        Hr2 += (tmp2 - tmp2.transpose(0,2,1))
+        nvir = self.nmo()-self.nocc()
+        for a in range(nvir):
+            Hr2[:,a,:] += 0.5*einsum('bcd,jcd->jb',imds.Wvvvv[a],r2) 
+        Hr2 += -0.5*einsum('klcd,lcd,kjab->jab',imds.Woovv,r2,self.t2)
+
+        vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
+        return vector
+
+    def vector_to_amplitudes_ea(self,vector):
+        nocc = self.nocc()
+        nvir = self.nmo() - nocc
+        r1 = vector[:nvir].copy()
+        r2 = np.zeros((nocc,nvir,nvir), vector.dtype)
+        index = nvir
+        for i in range(nocc):
+            for a in range(nvir):
+                for b in range(a):
+                    r2[i,a,b] =  vector[index]
+                    r2[i,b,a] = -vector[index]
+                    index += 1
+        return [r1,r2]
+
+    def amplitudes_to_vector_ea(self,r1,r2):
+        nocc = self.nocc()
+        nvir = self.nmo() - nocc
+        size = nvir + nvir*(nvir-1)/2*nocc
+        vector = np.zeros(size, r1.dtype)
+        vector[:nvir] = r1.copy()
+        index = nvir
+        for i in range(nocc):
+            for a in range(nvir):
+                for b in range(a):
+                    vector[index] = r2[i,a,b]
+                    index += 1
+        return vector
 
     def eeccsd_matvec(self,vector):
-    ########################################################
-    # FOLLOWING:                                           #
-    # Z. Wang, Z. Tu, and F. Wang                          #
-    # J. Chem. Theory Comput. 10, 5567 (2014) Eqs.(9)-(10) #
-    # BUT THERE IS A TYPO.                                 #
-    # -- Last line in Eq. (10) is superfluous.             #
-    # -- See, e.g. Gwaltney, Nooijen, and Barlett          #
-    # --           Chem. Phys. Lett. 248, 189 (1996)       #
-    ########################################################
+        # Ref: Wang, Tu, and Wang, J. Chem. Theory Comput. 10, 5567 (2014) Eqs.(9)-(10)
+        # Note: Last line in Eq. (10) is superfluous.
+        # See, e.g. Gwaltney, Nooijen, and Barlett, Chem. Phys. Lett. 248, 189 (1996)
+        if not self.made_ee_imds:
+            if not hasattr(self,'imds'):
+                self.imds = _IMDS(self)
+            self.imds.make_ee()
+            self.made_ee_imds = True
+        imds = self.imds
+
+        #TODO: Check and clean-up intermediates for UCCSD
+
         r1,r2 = self.vector_to_amplitudes_ee(vector)
 
-        t1,t2,eris = self.t1, self.t2, self.eris
-        Fvv = imd.Fvv(t1,t2,eris)
-        Foo = imd.Foo(t1,t2,eris)
-        Fov = imd.Fov(t1,t2,eris)
-
-        Woooo = imd.Woooo(t1,t2,eris)
-        Wvvvv = imd.Wvvvv(t1,t2,eris)
-        Wovvo = imd.Wovvo(t1,t2,eris)
-        Wooov = imd.Wooov(t1,t2,eris)
-        Wvovv = imd.Wvovv(t1,t2,eris)
-        Wovoo = imd.Wovoo(t1,t2,eris)
-        Wvvvo = imd.Wvvvo(t1,t2,eris)
         # Additional intermediates
-        Woovv = eris.oovv
-        Wvoov =  Wovvo.transpose(1,0,3,2)
-        Wovvv = -Wvovv.transpose(1,0,2,3)
-        Woovo = -Wooov.transpose(0,1,3,2)
+        Wvoov =  imds.Wovvo.transpose(1,0,3,2)
+        Wovvv = -imds.Wvovv.transpose(1,0,2,3)
+        Woovo = -imds.Wooov.transpose(0,1,3,2)
 
         # Eq. (9)
-        Hr1 = ( einsum('ae,ie->ia',Fvv,r1) 
-               - einsum('mi,ma->ia',Foo,r1) 
-               + einsum('me,imae->ia',Fov,r2) 
-               + einsum('amie,me->ia',Wvoov,r1) 
-               - 0.5*einsum('mnie,mnae->ia',Wooov,r2) 
-               + 0.5*einsum('amef,imef->ia',Wvovv,r2) )
+        Hr1 = einsum('ae,ie->ia',imds.Fvv,r1) 
+        Hr1 += -einsum('mi,ma->ia',imds.Foo,r1) 
+        Hr1 += einsum('me,imae->ia',imds.Fov,r2) 
+        Hr1 += einsum('amie,me->ia',Wvoov,r1) 
+        Hr1 += -0.5*einsum('mnie,mnae->ia',imds.Wooov,r2) 
+        Hr1 += 0.5*einsum('amef,imef->ia',imds.Wvovv,r2)
         # Eq. (10)
-        tmpab = ( einsum('be,ijae->ijab',Fvv,r2)
-                 - 0.5*einsum('mnef,ijae,mnbf->ijab',Woovv,self.t2,r2)
-                 - einsum('mbij,ma->ijab',Wovoo,r1)
-                 + einsum('maef,ijfb,me->ijab',Wovvv,self.t2,r1) )
-        tmpij = (-einsum('mj,imab->ijab',Foo,r2)
-                 - 0.5*einsum('mnef,imab,jnef->ijab',Woovv,self.t2,r2)
-                 + einsum('abej,ie->ijab',Wvvvo,r1)
-                 - einsum('mnei,njab,me->ijab',Woovo,self.t2,r1) )
+        tmpab = einsum('be,ijae->ijab',imds.Fvv,r2)
+        tmpab += -0.5*einsum('mnef,ijae,mnbf->ijab',imds.Woovv,self.t2,r2)
+        tmpab += -einsum('mbij,ma->ijab',imds.Wovoo,r1)
+        tmpab += einsum('maef,ijfb,me->ijab',Wovvv,self.t2,r1)
+        tmpij = -einsum('mj,imab->ijab',imds.Foo,r2)
+        tmpij += -0.5*einsum('mnef,imab,jnef->ijab',imds.Woovv,self.t2,r2)
+        tmpij += einsum('abej,ie->ijab',imds.Wvvvo,r1)
+        tmpij += -einsum('mnei,njab,me->ijab',Woovo,self.t2,r1)
 
-        tmpabij = einsum('mbej,imae->ijab',Wovvo,r2)
+        tmpabij = einsum('mbej,imae->ijab',imds.Wovvo,r2)
 
         Hr2 = ( tmpab - tmpab.transpose(0,1,3,2)
                + tmpij - tmpij.transpose(1,0,2,3)
-               + 0.5*einsum('mnij,mnab->ijab',Woooo,r2)
-               + 0.5*einsum('abef,ijef->ijab',Wvvvv,r2)
+               + 0.5*einsum('mnij,mnab->ijab',imds.Woooo,r2)
+               + 0.5*einsum('abef,ijef->ijab',imds.Wvvvv,r2)
                + tmpabij - tmpabij.transpose(0,1,3,2)
                - tmpabij.transpose(1,0,2,3) + tmpabij.transpose(1,0,3,2) )
 
@@ -325,8 +399,7 @@ class CCSD(pyscf.cc.ccsd.CCSD):
     def amplitudes_to_vector_ee(self,r1,r2):
         nocc = self.nocc()
         nvir = self.nmo() - nocc
-        size = ( nocc*nvir
-                 + nocc*(nocc-1)/2*nvir*(nvir-1)/2 )
+        size = nocc*nvir + nocc*(nocc-1)/2*nvir*(nvir-1)/2
         vector = np.zeros(size, r1.dtype)
         vector[:nocc*nvir] = r1.copy().reshape(nocc*nvir)
         index = nocc*nvir
@@ -338,175 +411,37 @@ class CCSD(pyscf.cc.ccsd.CCSD):
 	                index += 1
         return vector
 
-    def ipccsd(self, nroots=2*4):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
-        size = nocc + nocc*(nocc-1)/2*nvir
-        evals, evecs = eigs(self.ipccsd_matvec, size, nroots)
-        return evals.real[:nroots], evecs
-
-    def ipccsd_matvec(self, vector):
-    ########################################################
-    # FOLLOWING:                                           #
-    # Z. Tu, F. Wang, and X. Li                            #
-    # J. Chem. Phys. 136, 174102 (2012) Eqs.(8)-(9)        #
-    ########################################################
-        r1,r2 = self.vector_to_amplitudes_ip(vector)
-
-        t1,t2,eris = self.t1, self.t2, self.eris
-        Fvv = imd.Fvv(t1,t2,eris)
-        Foo = imd.Foo(t1,t2,eris)
-        Fov = imd.Fov(t1,t2,eris)
-        Woovo = -imd.Wooov(t1,t2,eris).transpose(0,1,3,2)
-        Wvoov = imd.Wovvo(t1,t2,eris).transpose(1,0,3,2)
-        Wovoo = imd.Wovoo(t1,t2,eris)
-        Woooo = imd.Woooo(t1,t2,eris)
-        Woovv = eris.oovv
-
-        # Eq. (8)
-        Hr1 = (- einsum('mi,m->i',Foo,r1)
-               + einsum('me,mie->i',Fov,r2)
-               - 0.5*einsum('mnei,mne->i',Woovo,r2) )
-        # Eq. (9)
-        tmp1 = einsum('mi,mja->ija',Foo,r2)
-        tmp2 = einsum('amie,mje->ija',Wvoov,r2)
-        Hr2 = ( einsum('ae,ije->ija',Fvv,r2)
-               - tmp1 + tmp1.transpose(1,0,2)
-               - einsum('maji,m->ija',Wovoo,r1)
-               + 0.5*einsum('mnij,mna->ija',Woooo,r2)
-               + tmp2 - tmp2.transpose(1,0,2)
-               + 0.5*einsum('mnef,ijae,mnf->ija',Woovv,self.t2,r2) )
-
-        vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
-        return vector
-
-    def vector_to_amplitudes_ip(self,vector):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
-        r1 = vector[:nocc].copy()
-        r2 = np.zeros((nocc,nocc,nvir), vector.dtype)
-        index = nocc
-        for i in range(nocc):
-            for j in range(i):
-                for a in range(nvir):
-                    r2[i,j,a] =  vector[index]
-                    r2[j,i,a] = -vector[index]
-                    index += 1
-        return [r1,r2]
-
-    def amplitudes_to_vector_ip(self,r1,r2):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
-        size = nocc+nocc*(nocc-1)/2*nvir
-        vector = np.zeros(size, r1.dtype)
-        vector[:nocc] = r1.copy()
-        index = nocc
-        for i in range(nocc):
-            for j in range(i):
-                for a in range(nvir):
-                    vector[index] = r2[i,j,a]
-                    index += 1
-        return vector
-
-    def eaccsd(self, nroots=2*4):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
-        size = nvir + nvir*(nvir-1)/2*nocc
-        evals, evecs = eigs(self.eaccsd_matvec, size, nroots)
-        return evals.real[:nroots], evecs
-
-    def eaccsd_matvec(self,vector):
-    ########################################################
-    # FOLLOWING:                                           #
-    # M. Nooijen and R. J. Bartlett,                       #
-    # J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)        #
-    ########################################################
-        r1,r2 = self.vector_to_amplitudes_ea(vector)
-
-        t1,t2,eris = self.t1, self.t2, self.eris
-        Fvv = imd.Fvv(t1,t2,eris)
-        Foo = imd.Foo(t1,t2,eris)
-        Fov = imd.Fov(t1,t2,eris)
-        Wvovv = imd.Wvovv(t1,t2,eris)
-        Wvvvo = imd.Wvvvo(t1,t2,eris)
-        Wovvo = imd.Wovvo(t1,t2,eris)
-        Wvvvv = imd.Wvvvv(t1,t2,eris)
-        Woovv = eris.oovv
-
-        # Eq. (30)
-        Hr1 = ( einsum('ac,c->a',Fvv,r1)
-               + einsum('ld,lad->a',Fov,r2)
-               + 0.5*einsum('alcd,lcd->a',Wvovv,r2) )
-
-        # Eq. (31)
-        tmp1 = einsum('ac,jcb->jab',Fvv,r2)
-        tmp2 = einsum('lbdj,lad->jab',Wovvo,r2)
-        Hr2 = ( einsum('abcj,c->jab',Wvvvo,r1)
-               + tmp1 - tmp1.transpose(0,2,1)
-               - einsum('lj,lab->jab',Foo,r2)
-               + tmp2 - tmp2.transpose(0,2,1)
-               + 0.5*einsum('abcd,jcd->jab',Wvvvv,r2) 
-               - 0.5*einsum('klcd,lcd,kjab->jab',Woovv,r2,t2) )
-
-        vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
-        return vector
-
-    def vector_to_amplitudes_ea(self,vector):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
-        r1 = vector[:nvir].copy()
-        r2 = np.zeros((nocc,nvir,nvir), vector.dtype)
-        index = nvir
-        for i in range(nocc):
-            for a in range(nvir):
-                for b in range(a):
-                    r2[i,a,b] =  vector[index]
-                    r2[i,b,a] = -vector[index]
-                    index += 1
-        return [r1,r2]
-
-    def amplitudes_to_vector_ea(self,r1,r2):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
-        size = nvir+nvir*(nvir-1)/2*nocc
-        vector = np.zeros(size, r1.dtype)
-        vector[:nvir] = r1.copy()
-        index = nvir
-        for i in range(nocc):
-            for a in range(nvir):
-                for b in range(a):
-                    vector[index] = r2[i,a,b]
-                    index += 1
-        return vector
-
 
 class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore', 
                  ao2mofn=pyscf.ao2mo.outcore.general_iofree):
         cput0 = (time.clock(), time.time())
-        moidx = numpy.ones(cc.mo_energy.size, dtype=numpy.bool)
-        if isinstance(cc.frozen, (int, numpy.integer)):
-            moidx[:cc.frozen] = False
-        elif len(cc.frozen) > 0:
-            moidx[numpy.asarray(cc.frozen)] = False
         if mo_coeff is None:
-            self.mo_coeff = mo_coeff = cc.mo_coeff[:,moidx]
-            self.fock = numpy.diag(cc.mo_energy[moidx]).astype(mo_coeff.dtype)
-        else:  # If mo_coeff is not canonical orbital
-            self.mo_coeff = mo_coeff = mo_coeff[:,moidx]
-            dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
-            fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
-            self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
+            self.mo_coeff = mo_coeff = cc.mo_coeff
+            self.fock = numpy.diag(np.append(cc.mo_energy[np.array(cc.mo_occ,dtype=bool)], 
+                                             cc.mo_energy[np.logical_not(np.array(cc.mo_occ,dtype=bool))])).astype(mo_coeff.dtype)
 
         nocc = cc.nocc()
         nmo = cc.nmo()
         nvir = nmo - nocc
-        mem_incore, mem_outcore, mem_basic = pyscf.cc.ccsd._mem_usage(nocc, nvir)
+        mem_incore, mem_outcore, mem_basic = pyscf.cc.rccsd._mem_usage(nocc, nvir)
         mem_now = pyscf.lib.current_memory()[0]
 
         # Convert to spin-orbitals and anti-symmetrize 
         so_coeff = np.zeros((nmo/2,nmo), dtype=mo_coeff.dtype)
-        so_coeff[:,::2] = so_coeff[:,1::2] = mo_coeff[:nmo/2,::2]
+        nocc_a = int(sum(cc.mo_occ[0]))
+        nocc_b = int(sum(cc.mo_occ[1]))
+        nvir_a = nmo/2 - nocc_a
+        #nvir_b = nmo/2 - nocc_b
+        spin = np.zeros(nmo, dtype=int)
+        spin[:nocc_a] = 0
+        spin[nocc_a:nocc] = 1
+        spin[nocc:nocc+nvir_a] = 0
+        spin[nocc+nvir_a:nmo] = 1
+        so_coeff[:,:nocc_a] = mo_coeff[0][:,:nocc_a]
+        so_coeff[:,nocc_a:nocc] = mo_coeff[1][:,:nocc_b]
+        so_coeff[:,nocc:nocc+nvir_a] = mo_coeff[0][:,nocc_a:nmo/2]
+        so_coeff[:,nocc+nvir_a:nmo] = mo_coeff[1][:,nocc_b:nmo/2]
 
         log = logger.Logger(cc.stdout, cc.verbose)
         if (method == 'incore' and (mem_incore+mem_now < cc.max_memory) 
@@ -514,7 +449,11 @@ class _ERIS:
             eri = ao2mofn(cc._scf.mol, (so_coeff,so_coeff,so_coeff,so_coeff), compact=0)
             if mo_coeff.dtype == np.float: eri = eri.real
             eri = eri.reshape((nmo,)*4)
-            eri[::2,1::2] = eri[1::2,::2] = eri[:,:,::2,1::2] = eri[:,:,1::2,::2] = 0.
+            for i in range(nmo):
+                for j in range(i):
+                    if spin[i] != spin[j]:
+                        eri[i,j,:,:] = eri[j,i,:,:] = 0.
+                        eri[:,:,i,j] = eri[:,:,j,i] = 0.
             eri1 = eri - eri.transpose(0,3,2,1) 
             eri1 = eri1.transpose(0,2,1,3) 
 
@@ -526,13 +465,6 @@ class _ERIS:
             self.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
             self.ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
             self.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy() 
-            #ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
-            #self.ovvv = numpy.empty((nocc,nvir,nvir*(nvir+1)//2))
-            #for i in range(nocc):
-            #    for j in range(nvir):
-            #        self.ovvv[i,j] = lib.pack_tril(ovvv[i,j])
-            #self.vvvv = pyscf.ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:], nvir)
-
         else:
             print "*** Using HDF5 ERI storage ***"
             _tmpfile1 = tempfile.NamedTemporaryFile()
@@ -554,7 +486,11 @@ class _ERIS:
             buf = ao2mofn(cc._scf.mol, (orbo,so_coeff,orbo,so_coeff), compact=0)
             if mo_coeff.dtype == np.float: buf = buf.real
             buf = buf.reshape((nocc,nmo,nocc,nmo))
-            buf[::2,1::2] = buf[1::2,::2] = buf[:,:,::2,1::2] = buf[:,:,1::2,::2] = 0.
+            for i in range(nocc):
+                for p in range(nmo):
+                    if spin[i] != spin[p]:
+                        buf[i,p,:,:] = 0.
+                        buf[:,:,i,p] = 0.
             buf1 = buf - buf.transpose(0,3,2,1)
             buf1 = buf1.transpose(0,2,1,3) 
             cput1 = log.timer_debug1('transforming oopq', *cput1)
@@ -568,7 +504,13 @@ class _ERIS:
             buf = ao2mofn(cc._scf.mol, (orbo,so_coeff,orbv,so_coeff), compact=0)
             if mo_coeff.dtype == np.float: buf = buf.real
             buf = buf.reshape((nocc,nmo,nvir,nmo))
-            buf[::2,1::2] = buf[1::2,::2] = buf[:,:,::2,1::2] = buf[:,:,1::2,::2] = 0.
+            for p in range(nmo):
+                for i in range(nocc):
+                    if spin[i] != spin[p]:
+                        buf[i,p,:,:] = 0.
+                for a in range(nvir):
+                    if spin[nocc+a] != spin[p]:
+                        buf[:,:,a,p] = 0.
             buf1 = buf - buf.transpose(0,3,2,1)
             buf1 = buf1.transpose(0,2,1,3) 
             cput1 = log.timer_debug1('transforming ovpq', *cput1)
@@ -581,11 +523,12 @@ class _ERIS:
                 buf = ao2mofn(cc._scf.mol, (orbva,orbv,orbv,orbv), compact=0)
                 if mo_coeff.dtype == np.float: buf = buf.real
                 buf = buf.reshape((1,nvir,nvir,nvir))
-                if a%2 == 0:
-                    buf[0,1::2,:,:] = 0.
-                else:
-                    buf[0,0::2,:,:] = 0.
-                buf[:,:,::2,1::2] = buf[:,:,1::2,::2] = 0.
+                for b in range(nvir):
+                    if spin[nocc+a] != spin[nocc+b]:
+                        buf[0,b,:,:] = 0.
+                    for c in range(nvir):
+                        if spin[nocc+b] != spin[nocc+c]:
+                            buf[:,:,b,c] = buf[:,:,c,b] = 0.
                 buf1 = buf - buf.transpose(0,3,2,1) 
                 buf1 = buf1.transpose(0,2,1,3) 
                 self.vvvv[a] = buf1[:]
@@ -593,4 +536,71 @@ class _ERIS:
             cput1 = log.timer_debug1('transforming vvvv', *cput1)
 
         log.timer('CCSD integral transformation', *cput0)
+
+
+class _IMDS:
+    # Exactly the same as RCCSD IMDS except
+    # -- rintermediates --> uintermediates
+    # -- Loo, Lvv, cc_Fov --> Foo, Fvv, Fov
+    # -- One less 2-virtual intermediate
+    def __init__(self, cc):
+        self.cc = cc
+        self._made_shared = False
+
+    def _make_shared(self):
+        t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
+        self.Foo = imd.Foo(t1,t2,eris)
+        self.Fvv = imd.Fvv(t1,t2,eris)
+        self.Fov = imd.Fov(t1,t2,eris)
+
+        # 2 virtuals
+        self.Wovvo = imd.Wovvo(t1,t2,eris)
+        self.Woovv = eris.oovv
+
+    def make_ip(self):
+        if self._made_shared is False:
+            self._make_shared()
+            self._made_shared = True
+
+        t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
+
+        # 0 or 1 virtuals
+        self.Woooo = imd.Woooo(t1,t2,eris)
+        self.Wooov = imd.Wooov(t1,t2,eris)
+        self.Wovoo = imd.Wovoo(t1,t2,eris)
+
+    def make_ea(self):
+        if self._made_shared is False:
+            self._make_shared()
+            self._made_shared = True
+
+        t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
+
+        # 3 or 4 virtuals
+        self.Wvovv = imd.Wvovv(t1,t2,eris)
+        self.Wvvvo = imd.Wvvvo(t1,t2,eris)
+        self.Wvvvv = imd.Wvvvv(t1,t2,eris)
+
+    def make_ee(self):
+        t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
+
+        #TODO(TCB): Clean up for spin-orbital CCSD
+
+        self.Fvv = imd.Fvv(t1,t2,eris)
+        self.Foo = imd.Foo(t1,t2,eris)
+        self.Fov = imd.Fov(t1,t2,eris)
+
+        self.Woooo = imd.Woooo(t1,t2,eris)
+        self.Wvvvv = imd.Wvvvv(t1,t2,eris)
+        self.Wovvo = imd.Wovvo(t1,t2,eris)
+        self.Wooov = imd.Wooov(t1,t2,eris)
+        self.Wvovv = imd.Wvovv(t1,t2,eris)
+        self.Wovoo = imd.Wovoo(t1,t2,eris)
+        self.Wvvvo = imd.Wvvvo(t1,t2,eris)
+
+        # Additional intermediates
+        self.Wvoov =  self.Wovvo.transpose(1,0,3,2)
+        self.Wovvv = -self.Wvovv.transpose(1,0,2,3)
+        self.Woovo = -self.Wooov.transpose(0,1,3,2)
+        self.Woovv = eris.oovv
 

@@ -265,16 +265,10 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     time_1pass = log.timer('AO->MO transformation for %s 1 pass'%intor,
                            *time_0pass)
 
-    ioblk_size = max(max_memory//4, ioblk_size)
-    iobuflen = guess_e2bufsize(ioblk_size, nij_pair, nao_pair)[0]
-    buf_save = numpy.empty((comp,iobuflen,nkl_pair))
-    def save(icomp, row0, row1, buf):
-        buf1 = numpy.ndarray(buf.shape, buffer=buf_save)
-        buf1[:] = buf
-        if comp == 1:
-            h5d_eri[row0:row1] = buf1
-        else:
-            h5d_eri[icomp,row0:row1] = buf1
+    ioblk_size = max(max_memory*.2, ioblk_size)
+    iobuflen = guess_e2bufsize(ioblk_size, nij_pair, max(nao_pair,nkl_pair))[0]
+    reading_frame = [numpy.empty((iobuflen,nao_pair)),
+                     numpy.empty((iobuflen,nao_pair))]
     def prefetch(icomp, row0, row1, buf):
         if icomp+1 < comp:
             icomp += 1
@@ -283,6 +277,26 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             icomp = 0
         if row0 < row1:
             _load_from_h5g(fswap['%d'%icomp], row0, row1, buf)
+    def async_read(icomp, row0, row1, thread_read):
+        buf_current, buf_prefetch = reading_frame
+        reading_frame[:] = [buf_prefetch, buf_current]
+        if thread_read is None:
+            _load_from_h5g(fswap['%d'%icomp], row0, row1, buf_current)
+        else:
+            thread_read.join()
+        thread_read = lib.background_thread(prefetch, icomp, row0, row1, buf_prefetch)
+        return buf_current[:row1-row0], thread_read
+
+    def save(icomp, row0, row1, buf):
+        if comp == 1:
+            h5d_eri[row0:row1] = buf[:row1-row0]
+        else:
+            h5d_eri[icomp,row0:row1] = buf[:row1-row0]
+    def async_write(icomp, row0, row1, buf, thread_io):
+        if thread_io is not None:
+            thread_io.join()
+        thread_io = lib.background_thread(save, icomp, row0, row1, buf)
+        return thread_io
 
     log.debug('step2: kl-pair (ao %d, mo %d), mem %.8g MB, ioblock %.8g MB',
               nao_pair, nkl_pair, iobuflen*nao_pair*8/1e6,
@@ -293,41 +307,29 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     ao_loc = mol.ao_loc_nr('cart' in intor)
     ti0 = time_1pass
     bufs1 = numpy.empty((iobuflen,nkl_pair))
-    buf = numpy.empty((iobuflen, nao_pair))
-    buf_prefetch = numpy.empty((iobuflen, nao_pair))
+    buf_write = numpy.empty_like(bufs1)
     istep = 0
-    thread_io = None
+    read_handler = write_handler = None
+
     for row0, row1 in prange(0, nij_pair, iobuflen):
         nrow = row1 - row0
 
         for icomp in range(comp):
             istep += 1
-            tioi = 0
             log.debug1('step 2 [%d/%d], [%d,%d:%d], row = %d',
                        istep, ijmoblks, icomp, row0, row1, nrow)
 
-            if row0 == 0 and icomp == 0:
-                _load_from_h5g(fswap['%d'%icomp], row0, row1, buf)
-            else:
-                thread_read.join()
-                buf, buf_prefetch = buf_prefetch, buf
-            thread_read = lib.background_thread(prefetch, icomp, row0, row1, buf_prefetch)
-            tioi += time.time()-ti0[1]
-            pbuf = bufs1[:nrow]
-            _ao2mo.nr_e2(buf[:nrow], mokl, klshape, aosym, klmosym,
-                         ao_loc=ao_loc, out=pbuf)
-
-            tw1 = time.time()
-            if thread_io is not None:
-                thread_io.join()
-            thread_io = lib.background_thread(save, icomp, row0, row1, pbuf)
-            tioi += time.time()-tw1
+            buf, read_handler = async_read(icomp, row0, row1, read_handler)
+            _ao2mo.nr_e2(buf, mokl, klshape, aosym, klmosym,
+                         ao_loc=ao_loc, out=bufs1)
+            write_handler = async_write(icomp, row0, row1, bufs1, write_handler)
+            bufs1, buf_write = buf_write, bufs1  # avoid flushing writing buffer
 
             ti1 = (time.clock(), time.time())
-            log.debug1('step 2 [%d/%d] CPU time: %9.2f, Wall time: %9.2f, I/O time: %9.2f',
-                       istep, ijmoblks, ti1[0]-ti0[0], ti1[1]-ti0[1], tioi)
+            log.debug1('step 2 [%d/%d] CPU time: %9.2f, Wall time: %9.2f',
+                       istep, ijmoblks, ti1[0]-ti0[0], ti1[1]-ti0[1])
             ti0 = ti1
-    thread_io.join()
+    write_handler.join()
     fswap.close()
     if isinstance(erifile, str):
         feri.close()
@@ -412,8 +414,10 @@ def half_e1(mol, mo_coeffs, swapfile,
 
     e1buflen, mem_words, iobuf_words, ioblk_words = \
             guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp)
+    ioblk_size = ioblk_words * 8/1e6
 # The buffer to hold AO integrals in C code, see line (@)
-    aobuflen = int((mem_words - iobuf_words) // (nao_pair*comp))
+    aobuflen = max(int((mem_words - 2*comp*e1buflen*nij_pair) // (nao_pair*comp)),
+                   IOBUF_ROW_MIN)
     shranges = guess_shell_ranges(mol, (aosym in ('s4', 's2kl')), e1buflen, aobuflen)
     if ao2mopt is None:
         if intor == 'cint2e_sph':
@@ -433,23 +437,25 @@ def half_e1(mol, mo_coeffs, swapfile,
     log.debug('step1: (ij,kl) = (%d,%d), mem cache %.8g MB, iobuf %.8g MB',
               nij_pair, nao_pair, mem_words*8/1e6, iobuf_words*8/1e6)
     nstep = len(shranges)
-    maxbuflen = max([x[2] for x in shranges])
+    e1buflen = max([x[2] for x in shranges])
 
-    bufs0 = numpy.empty((comp*maxbuflen*nij_pair))
+    e2buflen, chunks = guess_e2bufsize(ioblk_size, nij_pair, e1buflen)
     def save(istep, iobuf):
-        iobuf1 = numpy.ndarray(iobuf.shape, buffer=bufs0)
-        iobuf1[:] = iobuf
-        buflen = iobuf.shape[1]
-        e2buflen, chunks = guess_e2bufsize(ioblk_size, nij_pair, buflen)
         for icomp in range(comp):
-            _transpose_to_h5g(fswap, '%d/%d'%(icomp,istep), iobuf1[icomp],
+            _transpose_to_h5g(fswap, '%d/%d'%(icomp,istep), iobuf[icomp],
                               e2buflen, None)
+    def async_write(istep, iobuf, thread_io):
+        if thread_io is not None:
+            thread_io.join()
+        thread_io = lib.background_thread(save, istep, iobuf)
+        return thread_io
 
     # transform e1
     ti0 = log.timer('Initializing ao2mo.outcore.half_e1', *time0)
-    bufs1 = numpy.empty((comp*maxbuflen,nao_pair))
-    bufs2 = numpy.empty((comp*maxbuflen,nij_pair))
-    thread_io = None
+    bufs1 = numpy.empty((comp*e1buflen,nao_pair))
+    bufs2 = numpy.empty((comp*e1buflen,nij_pair))
+    buf_write = numpy.empty_like(bufs2)
+    write_handler = None
     for istep,sh_range in enumerate(shranges):
         log.debug1('step 1 [%d/%d], AO [%d:%d], len(buf) = %d', \
                    istep+1, nstep, *(sh_range[:3]))
@@ -468,10 +474,9 @@ def half_e1(mol, mo_coeffs, swapfile,
             p0 += aoshs[2]
         ti0 = log.timer_debug1('gen AO/transform MO [%d/%d]'%(istep+1,nstep), *ti0)
 
-        if thread_io is not None:
-            thread_io.join()
-        thread_io = lib.background_thread(save, istep, iobuf)
-    thread_io.join()
+        write_handler = async_write(istep, iobuf, write_handler)
+        bufs2, buf_write = buf_write, bufs2  # avoid flushing writing buffer
+    write_handler.join()
     bufs1 = bufs2 = None
     if isinstance(swapfile, str):
         fswap.close()
@@ -688,11 +693,11 @@ def guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp):
 # part of the max_memory is used to hold the AO integrals.  The iobuf is the
 # buffer to temporary hold the transformed integrals before streaming to disk.
 # iobuf is then divided to small blocks (ioblk_words) and streamed to disk.
-    iobuf_words = max(int(mem_words//4), IOBUF_WORDS_PREFER)
+    iobuf_words = max(int(mem_words*.1), IOBUF_WORDS_PREFER)
     ioblk_words = int(min(ioblk_size*1e6/8, iobuf_words))
 
-    e1buflen = int(min(iobuf_words//(comp*nij_pair),
-                       mem_words//(comp*nao_pair), nao_pair))
+    e1buflen = int(min(iobuf_words/(comp*nij_pair), mem_words*.8/(comp*nao_pair)))
+    e1buflen = max(e1buflen, IOBUF_ROW_MIN)
     return e1buflen, mem_words, iobuf_words, ioblk_words
 
 def guess_e2bufsize(ioblk_size, nrows, ncols):

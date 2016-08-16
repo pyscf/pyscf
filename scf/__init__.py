@@ -200,28 +200,32 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
     if dm0 is not None:
         mo_coeff, mo_occ = mf1.from_dm(dm0)
     elif mo_coeff is None or mo_occ is None:
-        logger.note(mf, '========================================================')
-        logger.note(mf, 'Generating initial guess with DIIS-SCF for newton solver')
-        logger.note(mf, '========================================================')
-        mf0 = density_fit(mf, auxbasis)
-        mf0.conv_tol = .25
-        mf0.conv_tol_grad = .5
-        if mf0.level_shift == 0:
-            mf0.level_shift = .3
-        if hasattr(mf, 'grids'):
-            mf0.grids = approx_grids
-            mf0._numint = approx_numint
+        if mf.mo_coeff is not None and mf.mo_occ is not None:
+            mo_coeff, mo_occ = mf.mo_coeff, mf.mo_occ
+        else:
+            logger.note(mf, '========================================================')
+            logger.note(mf, 'Generating initial guess with DIIS-SCF for newton solver')
+            logger.note(mf, '========================================================')
+            mf0 = density_fit(mf, auxbasis)
+            mf0.conv_tol = .25
+            mf0.conv_tol_grad = .5
+            if mf0.level_shift == 0:
+                mf0.level_shift = .3
+            if hasattr(mf, 'grids'):
+                mf0.grids = approx_grids
+                mf0._numint = approx_numint
 # Note: by setting small_rho_cutoff, dft.get_veff function may overwrite
 # approx_grids and approx_numint.  It will further changes the corresponding
 # mf1 grids and _numint.  If inital guess dm0 or mo_coeff/mo_occ were given,
 # dft.get_veff are not executed so that more grid points may be found in
 # approx_grids.
-            mf0.small_rho_cutoff = 1e-5
-        mf0.kernel()
-        mo_coeff, mo_occ = mf0.mo_coeff, mf0.mo_occ
-        logger.note(mf, '============================')
-        logger.note(mf, 'Generating initial guess end')
-        logger.note(mf, '============================')
+                mf0.small_rho_cutoff = 1e-5
+            mf0.kernel()
+            mo_coeff, mo_occ = mf0.mo_coeff, mf0.mo_occ
+            logger.note(mf, '============================')
+            logger.note(mf, 'Generating initial guess end')
+            logger.note(mf, '============================')
+            mf0 = None
 
     mf1.kernel(mo_coeff, mo_occ)
     mf.converged = mf1.converged

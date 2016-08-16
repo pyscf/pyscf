@@ -681,8 +681,8 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     occidx = mo_occ > 0
     viridx = ~occidx
 
-    fock = reduce(numpy.dot, (mo_coeff.T.conj(), fock_ao, mo_coeff))
-    g = fock[viridx.reshape(-1,1) & occidx] * 2
+    g = reduce(numpy.dot, (mo_coeff[:,occidx].T.conj(), fock_ao,
+                           mo_coeff[:,viridx]))
     return g.reshape(-1)
 
 
@@ -1288,7 +1288,7 @@ class SCF(lib.StreamObject):
     def hf_energy(self, x):
         sys.stderr.write('WARN: Attribute .hf_energy will be removed in PySCF v1.1. '
                          'It is replaced by attribute .e_tot\n')
-        self.level_shift = x
+        self.hf_energy = x
 
     @property
     def level_shift_factor(self):

@@ -169,7 +169,6 @@ class KnowValues(unittest.TestCase):
         pmol = n2sym.copy()
         pmol.charge = 1
         pmol.spin = 1
-        pmol.nelectron -= 1
         mf = scf.hf_symm.ROHF(pmol)
         self.assertAlmostEqual(mf.scf(), -108.33899076078299, 9)
 
@@ -182,7 +181,6 @@ class KnowValues(unittest.TestCase):
         pmol = n2sym.copy()
         pmol.charge = 1
         pmol.spin = 1
-        pmol.nelectron -= 1
         mf = scf.hf_symm.ROHF(pmol)
         mf.irrep_nelec = {'A1g':6, 'A1u':3, 'E1ux':2, 'E1uy':2}
         self.assertAlmostEqual(mf.scf(), -108.21954550790898, 9)

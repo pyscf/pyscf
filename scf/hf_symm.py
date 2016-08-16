@@ -279,6 +279,22 @@ class RHF(hf.RHF):
         c = so2ao_mo_coeff(self.mol.symm_orb, cs)
         return e, c
 
+    def get_grad(self, mo_coeff, mo_occ, fock=None):
+        mol = self.mol
+        if fock is None:
+            dm1 = self.make_rdm1(mo_coeff, mo_occ)
+            fock = self.get_hcore(mol) + self.get_veff(self.mol, dm1)
+        orbsym = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
+                                     mo_coeff, self.get_ovlp(), False)
+        orbsym = numpy.asarray(orbsym)
+
+        occidx = mo_occ > 0
+        viridx = ~occidx
+        g = reduce(numpy.dot, (mo_coeff[:,occidx].T.conj(), fock,
+                               mo_coeff[:,viridx]))
+        idx = (orbsym[occidx].reshape(-1,1) == orbsym[viridx])
+        return g[idx]
+
     def get_occ(self, mo_energy=None, mo_coeff=None, orbsym=None):
         ''' We assumed mo_energy are grouped by symmetry irreps, (see function
         self.eig). The orbitals are sorted after SCF.
@@ -493,6 +509,29 @@ class ROHF(rohf.ROHF):
             f = adiis.update(s1e, dm[0], f)
         f = hf.level_shift(s1e, dm[0], f, level_shift_factor)
         return f
+
+    def get_grad(self, mo_coeff, mo_occ, fock=None):
+        mol = self.mol
+        if fock is None:
+            dm1 = self.make_rdm1(mo_coeff, mo_occ)
+            fock = self.get_hcore(mol) + self.get_veff(self.mol, dm1)
+        orbsym = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
+                                     mo_coeff, self.get_ovlp(), False)
+        orbsym = numpy.asarray(orbsym)
+        sym_allow = orbsym.reshape(-1,1) == orbsym
+
+        occidxa = mo_occ > 0
+        occidxb = mo_occ == 2
+        viridxa = ~occidxa
+        viridxb = ~occidxb
+        focka = reduce(numpy.dot, (mo_coeff.T, fock[0], mo_coeff))
+        fockb = reduce(numpy.dot, (mo_coeff.T, fock[1], mo_coeff))
+        uniq_var_a = viridxa.reshape(-1,1) & occidxa &  sym_allow
+        uniq_var_b = viridxb.reshape(-1,1) & occidxb &  sym_allow
+        g = numpy.zeros_like(focka)
+        g[uniq_var_a]  = focka[uniq_var_a]
+        g[uniq_var_b] += fockb[uniq_var_b]
+        return g[uniq_var_a | uniq_var_b]
 
     def get_occ(self, mo_energy=None, mo_coeff=None, orbsym=None):
         if mo_energy is None: mo_energy = self.mo_energy
@@ -755,7 +794,6 @@ def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym, title='',
                 log.warn('!! %s%s LUMO %.15g < system HOMO %.15g',
                          title, irname, e_ir[nocc], ehomo)
         log.debug('   mo_energy = %s', e_ir)
-
 
 
 if __name__ == '__main__':

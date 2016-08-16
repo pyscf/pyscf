@@ -239,6 +239,31 @@ class UHF(uhf.UHF):
         cb = hf_symm.so2ao_mo_coeff(self.mol.symm_orb, cs)
         return numpy.array((ea,eb)), (ca,cb)
 
+    def get_grad(self, mo_coeff, mo_occ, fock=None):
+        mol = self.mol
+        if fock is None:
+            dm1 = self.make_rdm1(mo_coeff, mo_occ)
+            fock = self.get_hcore(mol) + self.get_veff(self.mol, dm1)
+        ovlp_ao = self.get_ovlp()
+        orbsyma = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
+                                      mo_coeff[0], ovlp_ao, False)
+        orbsymb = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
+                                      mo_coeff[1], ovlp_ao, False)
+        orbsyma = numpy.asarray(orbsyma)
+        orbsymb = numpy.asarray(orbsymb)
+
+        occidxa = mo_occ[0] > 0
+        occidxb = mo_occ[1] > 0
+        viridxa = ~occidxa
+        viridxb = ~occidxb
+        ga = reduce(numpy.dot, (mo_coeff[0][:,occidxa].T.conj(), fock[0],
+                                mo_coeff[0][:,viridxa]))
+        ga = ga[orbsyma[occidxa].reshape(-1,1)==orbsyma[viridxa]]
+        gb = reduce(numpy.dot, (mo_coeff[1][:,occidxb].T.conj(), fock[1],
+                                mo_coeff[1][:,viridxb]))
+        gb = gb[orbsymb[occidxb].reshape(-1,1)==orbsymb[viridxb]]
+        return numpy.hstack((ga.ravel(), gb.ravel()))
+
     def get_occ(self, mo_energy=None, mo_coeff=None, orbsym=None):
         ''' We assumed mo_energy are grouped by symmetry irreps, (see function
         self.eig). The orbitals are sorted after SCF.

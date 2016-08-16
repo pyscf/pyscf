@@ -36,10 +36,11 @@ class DIIS(pyscf.lib.diis.DIIS):
             for i in range(f.shape[0]):
                 sdf = reduce(numpy.dot, (s[i], d[i], f[i]))
                 errvec.append((sdf.T.conj() - sdf))
-            errvec = numpy.hstack(errvec)
+            errvec = numpy.vstack(errvec)
 
         elif f.ndim == s.ndim+1 and f.shape[0] == 2:  # for UHF
-            s = pyscf.lib.asarray((s,s)).reshape(-1,s.shape[-2],s.shape[-1])
+            nao = s.shape[-1]
+            s = pyscf.lib.asarray((s,s)).reshape(-1,nao,nao)
             fnew = self.update(s, d.reshape(s.shape), f.reshape(s.shape))
             return fnew.reshape(f.shape)
         else:
