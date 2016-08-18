@@ -17,8 +17,9 @@ def write_head(fout, nmo, nelec, ms=0, orbsym=[]):
     fout.write(' &END\n')
 
 
-def write_eri(fout, eri, nmo, tol=1e-15):
+def write_eri(fout, eri, nmo, tol=1e-15, prec=16):
     npair = nmo*(nmo+1)//2
+    output_format = ' ' + _get_float_format(prec) + ' %4d %4d %4d %4d\n'
     if eri.ndim == 2: # 4-fold symmetry
         assert(eri.size == npair**2)
         ij = 0
@@ -28,8 +29,7 @@ def write_eri(fout, eri, nmo, tol=1e-15):
                 for k in range(0, nmo):
                     for l in range(0, k+1):
                         if abs(eri[ij,kl]) > tol:
-                            fout.write(' %.16g %4d %4d %4d %4d\n' \
-                                       % (eri[ij,kl], i+1, j+1, k+1, l+1))
+                            fout.write(output_format % (eri[ij,kl], i+1, j+1, k+1, l+1))
                         kl += 1
                 ij += 1
     else:  # 8-fold symmetry
@@ -43,21 +43,21 @@ def write_eri(fout, eri, nmo, tol=1e-15):
                     for l in range(0, k+1):
                         if ij >= kl:
                             if abs(eri[ijkl]) > tol:
-                                fout.write(' %.16g %4d %4d %4d %4d\n'
-                                           % (eri[ijkl], i+1, j+1, k+1, l+1))
+                                fout.write(output_format % (eri[ijkl], i+1, j+1, k+1, l+1))
                             ijkl += 1
                         kl += 1
                 ij += 1
 
-def write_hcore(fout, h, nmo, tol=1e-15):
+def write_hcore(fout, h, nmo, tol=1e-15, prec=16):
     h = h.reshape(nmo,nmo)
     for i in range(nmo):
         for j in range(0, i+1):
             if abs(h[i,j]) > tol:
-                fout.write(' %.16g %4d %4d  0  0\n' % (h[i,j], i+1, j+1))
+                output_format = ' ' + _get_float_format(prec) + ' %4d %4d  0  0\n'
+                fout.write(output_format % (h[i,j], i+1, j+1))
 
 
-def from_chkfile(output, chkfile, tol=1e-15):
+def from_chkfile(output, chkfile, tol=1e-15, prec=16):
     import pyscf.scf
     import pyscf.ao2mo
     import pyscf.symm
@@ -79,16 +79,20 @@ def from_chkfile(output, chkfile, tol=1e-15):
         v = mol.intor_symmetric('cint1e_nuc_sph')
         h = reduce(numpy.dot, (mo_coeff.T, t+v, mo_coeff))
         write_hcore(fout, h, nmo, tol=tol)
-        fout.write(' %.16g  0  0  0  0\n' % mol.energy_nuc())
+        output_format = ' ' + _get_float_format(prec) + '  0  0  0  0\n'
+        fout.write(output_format % mol.energy_nuc())
 
 def from_integrals(output, h1e, h2e, nmo, nelec, nuc=0, ms=0, orbsym=[],
-                   tol=1e-15):
+                   tol=1e-15, prec=16):
     with open(output, 'w') as fout:
         write_head(fout, nmo, nelec, ms, orbsym)
         write_eri(fout, h2e, nmo, tol=tol)
         write_hcore(fout, h1e, nmo, tol=tol)
-        fout.write(' %.16g  0  0  0  0\n' % nuc)
+        output_format = ' ' + _get_float_format(prec) + '  0  0  0  0\n'
+        fout.write(output_format % nuc)
 
+def _get_float_format(prec):
+    return '%.' + str(prec) + 'g'
 
 if __name__ == '__main__':
     import sys
