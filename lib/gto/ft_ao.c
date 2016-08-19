@@ -1495,7 +1495,7 @@ void GTO_ft_fill_s1hermi(int (*intor)(), void (*eval_gz)(), double complex *mat,
         (*intor)(mat+off*nGv, shls, dims, NULL, eval_gz,
                  fac, Gv, invh, gxyz, gs, nGv, atm, natm, bas, nbas, env);
 
-        if (ip != jp) {
+        if (ip != jp && ish0 == jsh0 && ish1 == jsh1) {
                 const int di = ao_loc[ish+1] - ao_loc[ish];
                 const int dj = ao_loc[jsh+1] - ao_loc[jsh];
                 double complex *in = mat + off * nGv;

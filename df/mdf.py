@@ -123,6 +123,7 @@ class MDF(lib.StreamObject):
         self._cderi_file = tempfile.NamedTemporaryFile()
         self._cderi = None
         self.blockdim = 240
+        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -424,7 +425,7 @@ def _make_j3c(mydf, mol, auxmol):
                   istep+1, len(shranges), *sh_range)
         bstart, bend, ncol = sh_range
         col0, col1 = col1, col1+ncol
-        shls_slice = (bstart, bend, 0, bend, mol.nbas, mol.nbas+auxmol.nbas)
+        shls_slice = (bstart, bend, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
 
         Lpq = get_Lpq(shls_slice, col0, col1, bufs2)
         save('Lpq', Lpq, col0, col1)

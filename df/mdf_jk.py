@@ -135,44 +135,45 @@ def get_jk(mydf, mol, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
         rho_coeff = numpy.einsum('ki,i->k', Lpq, dmtril)
         vj  = numpy.dot(Lpq.T, jaux)
         vj += numpy.dot(j3c.T, rho_coeff)
-        return lib.unpack_tril(vj)
+        return vj
 
     def short_range_k(dm, Lpq, j3c):
-        j3c = j3c.transpose(1,0,2).reshape(-1,nao)
-        iLp = lib.dot(dm, Lpq.reshape(-1,nao).T).reshape(-1,nao)
+        Lpq = Lpq.reshape(-1,nao)
+        j3c = j3c.reshape(-1,nao)
+        iLp = lib.dot(dm, Lpq.T).reshape(-1,nao)
         vk  = lib.dot(j3c.T, iLp)
         if hermi:
             vk = vk + vk.T
         else:
-            iLp = lib.dot(dm.T, Lpq.reshape(-1,nao).T).reshape(-1,nao)
+            iLp = lib.dot(dm.T, Lpq.T).reshape(-1,nao)
             vk += lib.dot(iLp.T, j3c)
         return vk
 
     if with_j:
-        vj = vj.reshape(-1,nao,nao)
         i = numpy.arange(nao)
         def dm_for_vj_tril(dm):
             dmtril = lib.pack_tril(dm+dm.T.conj())
             dmtril[i*(i+1)//2+i] *= .5
             return dmtril
-        dmstril = [dm_for_vj_tril(dm) for dm in dms]
+        dmstril = [dm_for_vj_tril(x) for x in dms]
+        vj1 = numpy.zeros((nset,nao*(nao+1)//2))
 
     for Lpq, j3c in mydf.sr_loop(mol, auxmol, mydf.max_memory):
         if with_j:
             for i in range(nset):
-                vj[i] += short_range_j(dmstril[i], Lpq, j3c)
+                vj1[i] += short_range_j(dmstril[i], Lpq, j3c)
         if with_k:
             Lpq = lib.unpack_tril(Lpq)
-            j3c = lib.unpack_tril(j3c)
+            j3c = lib.unpack_tril(j3c).transpose(1,0,2)
             for i in range(nset):
                 vk[i] += short_range_k(dms[i], Lpq, j3c)
+    if with_j:
+        vj = vj.reshape(-1,nao,nao)
+        vj += lib.unpack_tril(vj1)
 
     if nset == 1:
         vj = vj[0]
         vk = vk[0]
-    else:
-        vj = numpy.asarray(vj)
-        vk = numpy.asarray(vk)
     t1 = log.timer('sr jk', *t1)
     return vj, vk
 

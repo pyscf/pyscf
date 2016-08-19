@@ -519,9 +519,9 @@ if __name__ == '__main__':
     mf.with_df.gs = (5,) * 3
     mf.with_df.approx_sr_level = 3
     dm = mf.get_init_guess()
-    vj = mf.get_j(cell, dm)
+    vj = mf.with_df.get_jk(dm, exxdiv=mf.exxdiv, with_k=False)[0]
     print(numpy.einsum('ij,ji->', vj, dm), 'ref=46.69745030912447')
-    vj, vk = mf.get_jk(cell, dm)
+    vj, vk = mf.with_df.get_jk(dm, exxdiv=mf.exxdiv)
     print(numpy.einsum('ij,ji->', vj, dm), 'ref=46.69745030912447')
     print(numpy.einsum('ij,ji->', vk, dm), 'ref=37.33704732444835')
     print(numpy.einsum('ij,ji->', mf.get_hcore(cell), dm), 'ref=-75.574414055823766')
