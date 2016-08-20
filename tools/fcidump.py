@@ -3,6 +3,7 @@
 from functools import reduce
 import numpy
 
+DEFAULT_FLOAT_FORMAT = ' %.16g'
 
 def write_head(fout, nmo, nelec, ms=0, orbsym=[]):
     if not isinstance(nelec, (int, numpy.number)):
@@ -17,9 +18,9 @@ def write_head(fout, nmo, nelec, ms=0, orbsym=[]):
     fout.write(' &END\n')
 
 
-def write_eri(fout, eri, nmo, tol=1e-15, prec=16):
+def write_eri(fout, eri, nmo, tol=1e-15, float_format=DEFAULT_FLOAT_FORMAT):
     npair = nmo*(nmo+1)//2
-    output_format = ' ' + _get_float_format(prec) + ' %4d %4d %4d %4d\n'
+    output_format = float_format + ' %4d %4d %4d %4d\n'
     if eri.ndim == 2: # 4-fold symmetry
         assert(eri.size == npair**2)
         ij = 0
@@ -48,16 +49,16 @@ def write_eri(fout, eri, nmo, tol=1e-15, prec=16):
                         kl += 1
                 ij += 1
 
-def write_hcore(fout, h, nmo, tol=1e-15, prec=16):
+def write_hcore(fout, h, nmo, tol=1e-15, float_format=DEFAULT_FLOAT_FORMAT):
     h = h.reshape(nmo,nmo)
     for i in range(nmo):
         for j in range(0, i+1):
             if abs(h[i,j]) > tol:
-                output_format = ' ' + _get_float_format(prec) + ' %4d %4d  0  0\n'
+                output_format = float_format + ' %4d %4d  0  0\n'
                 fout.write(output_format % (h[i,j], i+1, j+1))
 
 
-def from_chkfile(output, chkfile, tol=1e-15, prec=16):
+def from_chkfile(output, chkfile, tol=1e-15, float_format=DEFAULT_FLOAT_FORMAT):
     import pyscf.scf
     import pyscf.ao2mo
     import pyscf.symm
@@ -79,20 +80,17 @@ def from_chkfile(output, chkfile, tol=1e-15, prec=16):
         v = mol.intor_symmetric('cint1e_nuc_sph')
         h = reduce(numpy.dot, (mo_coeff.T, t+v, mo_coeff))
         write_hcore(fout, h, nmo, tol=tol)
-        output_format = ' ' + _get_float_format(prec) + '  0  0  0  0\n'
+        output_format = ' ' + float_format + '  0  0  0  0\n'
         fout.write(output_format % mol.energy_nuc())
 
 def from_integrals(output, h1e, h2e, nmo, nelec, nuc=0, ms=0, orbsym=[],
-                   tol=1e-15, prec=16):
+                   tol=1e-15, float_format=DEFAULT_FLOAT_FORMAT):
     with open(output, 'w') as fout:
         write_head(fout, nmo, nelec, ms, orbsym)
-        write_eri(fout, h2e, nmo, tol=tol)
-        write_hcore(fout, h1e, nmo, tol=tol)
-        output_format = ' ' + _get_float_format(prec) + '  0  0  0  0\n'
+        write_eri(fout, h2e, nmo, tol=tol, float_format=float_format)
+        write_hcore(fout, h1e, nmo, tol=tol, float_format=float_format)
+        output_format = float_format + '  0  0  0  0\n'
         fout.write(output_format % nuc)
-
-def _get_float_format(prec):
-    return '%.' + str(prec) + 'g'
 
 if __name__ == '__main__':
     import sys
