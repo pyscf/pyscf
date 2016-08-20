@@ -40,9 +40,9 @@ def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None,
         for i,j in enumerate(aoidx):
             fout.write(' %3d    %18.14g\n' % (i+1, mo_coeff[j,imo]))
 
-def from_mo(mol, outfile, mo_coeff, spin='Alpha', symm=None, ene=None,
+def from_mo(mol, filename, mo_coeff, spin='Alpha', symm=None, ene=None,
             occ=None, ignore_h=False):
-    with open(outfile, 'w') as f:
+    with open(filename, 'w') as f:
         header(mol, f, ignore_h)
         orbital_coeff(mol, f, mo_coeff, spin, symm, ene, occ, ignore_h)
 
@@ -80,9 +80,9 @@ def from_mcscf(mc, filename, ignore_h=False, cas_natorb=False):
         header(mol, f, ignore_h)
         orbital_coeff(mol, f, mo_coeff, ene=mo_energy, occ=occ, ignore_h=ignore_h)
 
-def from_chkfile(outfile, chkfile, key='scf/mo_coeff', ignore_h=False):
+def from_chkfile(filename, chkfile, key='scf/mo_coeff', ignore_h=False):
     import pyscf.scf
-    with open(outfile, 'w') as f:
+    with open(filename, 'w') as f:
         if key == 'scf/mo_coeff':
             mol, mf = pyscf.scf.chkfile.load_scf(chkfile)
             header(mol, f, ignore_h)
