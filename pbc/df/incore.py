@@ -108,7 +108,7 @@ def fill_2c2e(cell, auxcell, intor='cint2c2e_sph', hermi=0, kpt=numpy.zeros(3)):
     '''2-center 2-electron AO integrals (L|ij), where L is the auxiliary basis.
     '''
     if hermi != 0:
-        hermi = pyscf.lib.SYMMETRIC
+        hermi = pyscf.lib.HERMITIAN
     return auxcell.pbc_intor(intor, 1, hermi, kpt)
 
 

@@ -1416,7 +1416,7 @@ int GTO_ft_ovlp_sph(double complex *out, int *shls, int *dims,
  *************************************************/
 
 static void zcopy_s2_igtj(double complex *out, double complex *in,
-                          int ip, int di, int dj, int nGv)
+                          int nGv, int ip, int di, int dj)
 {
         const size_t ip1 = ip + 1;
         int i, j, n;
@@ -1432,7 +1432,7 @@ static void zcopy_s2_igtj(double complex *out, double complex *in,
         }
 }
 static void zcopy_s2_ieqj(double complex *out, double complex *in,
-                          int ip, int di, int dj, int nGv)
+                          int nGv, int ip, int di, int dj)
 {
         const size_t ip1 = ip + 1;
         int i, j, n;
@@ -1541,9 +1541,9 @@ void GTO_ft_fill_s2(int (*intor)(), void (*eval_gz)(), double complex *mat,
                  fac, Gv, invh, gxyz, gs, nGv, atm, natm, bas, nbas, env);
 
         if (ip != jp) {
-                zcopy_s2_igtj(mat+off*nGv, buf, ip, di, dj, nGv);
+                zcopy_s2_igtj(mat+off*nGv, buf, nGv, ip, di, dj);
         } else {
-                zcopy_s2_ieqj(mat+off*nGv, buf, ip, di, dj, nGv);
+                zcopy_s2_ieqj(mat+off*nGv, buf, nGv, ip, di, dj);
         }
 }
 

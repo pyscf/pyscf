@@ -10,6 +10,7 @@ from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.lib import logger
 from pyscf.pbc import tools
+from pyscf.pbc.df.mdf_jk import zdotNN, zdotCN, zdotNC
 
 
 def get_eri(mydf, kpts=None, compact=True):
@@ -28,31 +29,23 @@ def get_eri(mydf, kpts=None, compact=True):
     nao = cell.nao_nr()
     naux = auxcell.nao_nr()
     nao_pair = nao * (nao+1) // 2
-
-    for Lpq in mydf.load_Lpq(kptijkl[:2]):
-        pass
-    for jpq in mydf.load_j3c(kptijkl[:2]):
-        pass
+    max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]) * .8)
 
 ####################
 # gamma point, the integral is real and with s4 symmetry
     if abs(kptijkl).sum() < 1e-9:
-        j2c = auxcell.pbc_intor('cint2c2e_sph', 1, lib.HERMITIAN, kptl-kptk)
-        eriR = lib.dot(jpq.T, Lpq)
+        eriR = numpy.zeros((nao_pair,nao_pair))
+        for LpqR, LpqI, j3cR, j3cI in mydf.sr_loop(kptijkl[:2], max_memory, True):
+            lib.ddot(j3cR.T, LpqR, 1, eriR, 1)
         eriR = lib.transpose_sum(eriR, inplace=True)
-        lib.dot(lib.dot(Lpq.T, j2c), Lpq, -1, eriR, 1)
-        jpq = j2c = None
 
         coulG = tools.get_coulG(cell, kptj-kpti, gs=mydf.gs) / cell.vol
         max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
         trilidx = numpy.tril_indices(nao)
-        for pqkR, LkR, pqkI, LkI, p0, p1 \
-                in mydf.pw_loop(cell, auxcell, mydf.gs, kptijkl[:2], max_memory):
+        for pqkR, pqkI, p0, p1 \
+                in mydf.pw_loop(cell, mydf.gs, kptijkl[:2], max_memory=max_memory):
             pqkR = numpy.asarray(pqkR.reshape(nao,nao,-1)[trilidx], order='C')
             pqkI = numpy.asarray(pqkI.reshape(nao,nao,-1)[trilidx], order='C')
-            # Lpq is real here
-            lib.dot(Lpq.T, LkR, -1, pqkR, 1)
-            lib.dot(Lpq.T, LkI, -1, pqkI, 1)
             vG = numpy.sqrt(coulG[p0:p1])
             pqkR *= vG
             pqkI *= vG
@@ -70,40 +63,21 @@ def get_eri(mydf, kpts=None, compact=True):
 #
 # complex integrals, N^4 elements
     elif (abs(kpti-kptl).sum() < 1e-9) and (abs(kptj-kptk).sum() < 1e-9):
-        if Lpq.shape[1] == nao_pair:
-            Lpq = lib.unpack_tril(Lpq).reshape(naux,-1)
-        if jpq.shape[1] == nao_pair:
-            jpq = lib.unpack_tril(jpq).reshape(naux,-1)
-
-        j2c = auxcell.pbc_intor('cint2c2e_sph', 1, lib.HERMITIAN, kptl-kptk)
-        Lpqc = Lpq.conj()
-        eriR  = lib.dot(jpq.T, Lpqc)
-        eriR += lib.dot(Lpq.T, jpq.conj())
-        eriR -= reduce(lib.dot, (Lpq.T, j2c, Lpqc))
-        eriI = eriR.imag.copy()
-        eriR = eriR.real.copy()
-        jpq = j2c = None
-
-        LpqR = Lpq.real.copy()
-        LpqI = Lpq.imag.copy()
-        Lpq = Lpqc = None
+        eriR = numpy.zeros((nao*nao,nao*nao))
+        eriI = numpy.zeros((nao*nao,nao*nao))
+        for LpqR, LpqI, j3cR, j3cI in mydf.sr_loop(kptijkl[:2], max_memory, False):
+            zdotNC(j3cR.T, j3cI.T, LpqR, LpqI, 1, eriR, eriI, 1)
+            zdotNC(LpqR.T, LpqI.T, j3cR, j3cI, 1, eriR, eriI, 1)
+        LpqR = LpqI = j3cR = j3cI = None
 
         coulG = tools.get_coulG(cell, kptj-kpti, gs=mydf.gs) / cell.vol
-        max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
-        for pqkR, LkR, pqkI, LkI, p0, p1 \
-                in mydf.pw_loop(cell, auxcell, mydf.gs, kptijkl[:2], max_memory):
+        for pqkR, pqkI, p0, p1 \
+                in mydf.pw_loop(cell, mydf.gs, kptijkl[:2], max_memory=max_memory):
             vG = numpy.sqrt(coulG[p0:p1])
-            lib.dot(LpqR.T, LkR, -1, pqkR, 1)
-            lib.dot(LpqR.T, LkI, -1, pqkI, 1)
-            lib.dot(LpqI.T, LkR, -1, pqkI, 1)
-            lib.dot(LpqI.T, LkI,  1, pqkR, 1)
             pqkR *= vG
             pqkI *= vG
 # rho_pq(G+k_pq) * conj(rho_rs(G-k_rs))
-            lib.dot(pqkR, pqkR.T, 1, eriR, 1)
-            lib.dot(pqkI, pqkI.T, 1, eriR, 1)
-            lib.dot(pqkI, pqkR.T, 1, eriI, 1)
-            lib.dot(pqkR, pqkI.T,-1, eriI, 1)
+            zdotNC(pqkR, pqkI, pqkR.T, pqkI.T, 1, eriR, eriI, 1)
 # transpose(0,1,3,2) because
 # j == k && i == l  =>
 # (L|ij).transpose(0,2,1).conj() = (L^*|ji) = (L^*|kl)  =>  (M|kl)
@@ -120,74 +94,28 @@ def get_eri(mydf, kpts=None, compact=True):
 # So  kptl/b - kptk/b  must be -1 < k/b < 1.
 #
     else:
-        if Lpq.shape[1] == nao_pair:
-            Lpq = lib.unpack_tril(Lpq).reshape(naux, -1)
-        if jpq.shape[1] == nao_pair:
-            jpq = lib.unpack_tril(jpq).reshape(naux, -1)
-        for Mrs in mydf.load_Lpq(kptijkl[2:]):
-            if Mrs.shape[1] == nao_pair:
-                Mrs = lib.unpack_tril(Mrs).reshape(naux, -1)
-        for jrs in mydf.load_j3c(kptijkl[2:]):
-            if jrs.shape[1] == nao_pair:
-                jrs = lib.unpack_tril(jrs).reshape(naux, -1)
-
-        j2c = auxcell.pbc_intor('cint2c2e_sph', 1, 0, kptl-kptk)
-        if numpy.iscomplexobj(jpq):
-            eriR  = lib.dot(jpq.T, Mrs)
-            eriR += lib.dot(Lpq.T, jrs)
-        else:
-            eriR  = lib.dot(Lpq.T, jrs)
-            eriR += lib.dot(jpq.T, Mrs)
-        eriR -= reduce(lib.dot, (Lpq.T, j2c, Mrs))
-        eriI = eriR.imag.copy()
-        eriR = eriR.real.copy()
-        jpq = jrs = j2c = None
-
-        LpqR = Lpq.real.copy()
-        LpqI = Lpq.imag.copy()
-        MrsR = Mrs.real.copy()
-        MrsI = Mrs.imag.copy()
-        Lpq = Mrs = None
+        eriR = numpy.zeros((nao*nao,nao*nao))
+        eriI = numpy.zeros((nao*nao,nao*nao))
+        for (LpqR, LpqI, jpqR, jpqI), (LrsR, LrsI, jrsR, jrsI) in \
+                lib.izip(mydf.sr_loop(kptijkl[:2], max_memory, False),
+                         mydf.sr_loop(kptijkl[2:], max_memory, False)):
+            zdotNN(jpqR.T, jpqI.T, LrsR, LrsI, 1, eriR, eriI, 1)
+            zdotNN(LpqR.T, LpqI.T, jrsR, jrsI, 1, eriR, eriI, 1)
+        LpqR = LpqI = jpqR = jpqI = LrsR = LrsI = jrsR = jrsI = None
 
         coulG = tools.get_coulG(cell, kptj-kpti, gs=mydf.gs) / cell.vol
         max_memory = (mydf.max_memory - lib.current_memory()[0]) * .4
 
-#:        for (pqkR, LkR, pqkI, LkI, p0, p1), (rskR, MkR, rskI, MkI, q0, q1) in \
-#:                lib.izip(mydf.pw_loop(cell, auxcell, mydf.gs, kptijkl[:2], max_memory),
-#:                         mydf.pw_loop(cell, auxcell, mydf.gs,-kptijkl[2:], max_memory)):
-#:            pqk = pqkR + pqkI*1j
-#:            Lk  = LkR  + LkI *1j
-#:            pqk -= numpy.dot(Lpq.T, Lk)
-#:            pqk *= numpy.sqrt(coulG[p0:p1])
-#:            rsk = rskR + rskI*1j
-#:            Mk  = MkR  + MkI *1j
-#:            rsk = rsk.conj() - numpy.dot(Mrs.T, Mk.conj())
-#:            rsk *= numpy.sqrt(coulG[p0:p1])
-#:            v = numpy.dot(pqk, rsk.T)
-#:            eriR += v.real
-#:            eriI += v.imag
-
-        for (pqkR, LkR, pqkI, LkI, p0, p1), (rskR, MkR, rskI, MkI, q0, q1) in \
-                lib.izip(mydf.pw_loop(cell, auxcell, mydf.gs, kptijkl[:2], max_memory),
-                         mydf.pw_loop(cell, auxcell, mydf.gs,-kptijkl[2:], max_memory)):
-            lib.dot(LpqR.T, LkR, -1, pqkR, 1)
-            lib.dot(LpqR.T, LkI, -1, pqkI, 1)
-            lib.dot(LpqI.T, LkR, -1, pqkI, 1)
-            lib.dot(LpqI.T, LkI,  1, pqkR, 1)
+        for (pqkR, pqkI, p0, p1), (rskR, rskI, q0, q1) in \
+                lib.izip(mydf.pw_loop(cell, mydf.gs, kptijkl[:2], max_memory=max_memory),
+                         mydf.pw_loop(cell, mydf.gs,-kptijkl[2:], max_memory=max_memory)):
             pqkR *= coulG[p0:p1]
             pqkI *= coulG[p0:p1]
 # rho'_rs(G-k_rs) = conj(rho_rs(-G+k_rs))
 #                 = conj(rho_rs(-G+k_rs) - d_{k_rs:Q,rs} * Q(-G+k_rs))
 #                 = rho_rs(G-k_rs) - conj(d_{k_rs:Q,rs}) * Q(G-k_rs)
-            lib.dot(MrsR.T, MkR, -1, rskR, 1)
-            lib.dot(MrsR.T, MkI, -1, rskI, 1)
-            lib.dot(MrsI.T, MkR,  1, rskI, 1)
-            lib.dot(MrsI.T, MkI, -1, rskR, 1)
 # rho_pq(G+k_pq) * conj(rho'_rs(G-k_rs))
-            lib.dot(pqkR, rskR.T, 1, eriR, 1)
-            lib.dot(pqkI, rskI.T, 1, eriR, 1)
-            lib.dot(pqkI, rskR.T, 1, eriI, 1)
-            lib.dot(pqkR, rskI.T,-1, eriI, 1)
+            zdotNC(pqkR, pqkI, rskR.T, rskI.T, 1, eriR, eriI, 1)
         return eriR + eriI*1j
 
 

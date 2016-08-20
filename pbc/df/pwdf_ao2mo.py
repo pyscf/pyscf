@@ -37,7 +37,7 @@ def get_eri(mydf, kpts=None, compact=True):
         max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
         trilidx = numpy.tril_indices(nao)
         for pqkR, pqkI, p0, p1 \
-                in mydf.pw_loop(cell, mydf.gs, kptijkl[:2], max_memory):
+                in mydf.pw_loop(cell, mydf.gs, kptijkl[:2], max_memory=max_memory):
             pqkR = numpy.asarray(pqkR.reshape(nao,nao,-1)[trilidx], order='C')
             pqkI = numpy.asarray(pqkI.reshape(nao,nao,-1)[trilidx], order='C')
             vG = numpy.sqrt(coulG[p0:p1])
@@ -61,7 +61,7 @@ def get_eri(mydf, kpts=None, compact=True):
         eriI = numpy.zeros((nao**2,nao**2))
         max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
         for pqkR, pqkI, p0, p1 \
-                in mydf.pw_loop(cell, mydf.gs, kptijkl[:2], max_memory):
+                in mydf.pw_loop(cell, mydf.gs, kptijkl[:2], max_memory=max_memory):
             vG = numpy.sqrt(coulG[p0:p1])
             pqkR *= vG
             pqkI *= vG
@@ -86,8 +86,8 @@ def get_eri(mydf, kpts=None, compact=True):
         eriI = numpy.zeros((nao**2,nao**2))
         max_memory = (mydf.max_memory - lib.current_memory()[0]) * .4
         for (pqkR, pqkI, p0, p1), (rskR, rskI, q0, q1) in \
-                lib.izip(mydf.pw_loop(cell, mydf.gs, kptijkl[:2], max_memory),
-                         mydf.pw_loop(cell, mydf.gs,-kptijkl[2:], max_memory)):
+                lib.izip(mydf.pw_loop(cell, mydf.gs, kptijkl[:2], max_memory=max_memory),
+                         mydf.pw_loop(cell, mydf.gs,-kptijkl[2:], max_memory=max_memory)):
             pqkR *= coulG[p0:p1]
             pqkI *= coulG[p0:p1]
 # rho_pq(G+k_pq) * conj(rho_rs(G-k_rs))

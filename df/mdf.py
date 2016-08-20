@@ -17,7 +17,7 @@ import h5py
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
-from pyscf.gto import ANG_OF, PTR_COEFF
+from pyscf.gto import ATOM_OF, ANG_OF, PTR_COEFF
 from pyscf.gto import ft_ao
 from pyscf.df import addons
 from pyscf.df import incore
@@ -286,16 +286,16 @@ def _make_Lpq(mydf, mol, auxmol):
         a[:naux,:naux] = s_aux
         a[naux,s_index] = a[s_index,naux] = 1
         try:
-            cd = scipy.linalg.cholesky(a)
+            cd = scipy.linalg.cho_factor(a)
             def solve(Lpq):
-                return scipy.linalg.solve_triangular(cd, Lpq)
+                return scipy.linalg.cho_solve(cd, Lpq)
         except scipy.linalg.LinAlgError:
             def solve(Lpq):
                 return scipy.linalg.solve(a, Lpq)
     else:
-        cd = scipy.linalg.cholesky(s_aux)
+        cd = scipy.linalg.cho_factor(s_aux)
         def solve(Lpq):
-            return scipy.linalg.solve_triangular(cd, Lpq, overwrite_b=True)
+            return scipy.linalg.cho_solve(cd, Lpq, overwrite_b=True)
 
     def get_Lpq(shls_slice, col0, col1, buf):
         # Be cautious here, _ri.nr_auxe2 assumes buf in F-order
@@ -312,40 +312,31 @@ def _make_Lpq(mydf, mol, auxmol):
             return solve(Lpq)
     return get_Lpq
 
-def _atomic_envs(mol, auxmol, symbol):
+def _atomic_envs(mol, auxmol, atm_id):
     mol1 = copy.copy(mol)
     mol2 = copy.copy(auxmol)
-    mol1._atm, mol1._bas, mol1._env = \
-            mol1.make_env([[symbol, (0,0,0)]], mol._basis, mol._env[:gto.PTR_ENV_START])
-    mol2._atm, mol2._bas, mol2._env = \
-        mol2.make_env([[symbol, (0,0,0)]], auxmol._basis, mol._env[:gto.PTR_ENV_START])
-    half_sph_norm = numpy.sqrt(.25/numpy.pi)
-    for ib in range(len(mol2._bas)):
-        l = mol2.bas_angular(ib)
-        np = mol2.bas_nprim(ib)
-        nc = mol2.bas_nctr(ib)
-        es = mol2.bas_exp(ib)
-        ptr = mol2._bas[ib,PTR_COEFF]
-        cs = mol2._env[ptr:ptr+np*nc].reshape(nc,np).T
-        s = numpy.einsum('pi,p->i', cs, gto.mole._gaussian_int(l*2+2, es))
-        cs = numpy.einsum('pi,i->pi', cs, half_sph_norm/s)
-        mol2._env[ptr:ptr+np*nc] = cs.T.reshape(-1)
+    mol1._atm = mol._atm   [atm_id:atm_id+1]
+    mol2._atm = auxmol._atm[atm_id:atm_id+1]
+    mol1._bas = numpy.copy(mol._bas   [mol._bas   [:,ATOM_OF] == atm_id])
+    mol2._bas = numpy.copy(auxmol._bas[auxmol._bas[:,ATOM_OF] == atm_id])
+    mol1._bas[:,ATOM_OF] = 0
+    mol2._bas[:,ATOM_OF] = 0
     return mol1, mol2
 
 def _make_Lpq_atomic_approx(mydf, mol, auxmol):
-    Lpqdb = {}
-    for a in set([mol.atom_symbol(i) for i in range(mol.natm)]):
-        mol1, auxmol1 = _atomic_envs(mol, auxmol, a)
+    Lpqdb = []
+    for ia in range(mol.natm):
+        mol1, auxmol1 = _atomic_envs(mol, auxmol, ia)
         nao = mol1.nao_nr()
         nao_pair = nao * (nao+1) // 2
         naux = auxmol1.nao_nr()
         buf = numpy.empty((naux+1,nao_pair))
         get_Lpq = _make_Lpq(mydf, mol1, auxmol1)
         shls_slice = (0, mol1.nbas, 0, mol1.nbas, mol1.nbas, mol1.nbas+auxmol1.nbas)
-        Lpqdb[a] = get_Lpq(shls_slice, 0, nao_pair, buf)
+        Lpqdb.append(get_Lpq(shls_slice, 0, nao_pair, buf))
 
     naux = auxmol.nao_nr()
-    def get_Lpq(shls_slice, col0, col1, buf):
+    def get_Lpq(shls_slice, col0, col1, buf=None):
         Lpq = numpy.ndarray((naux,col1-col0), buffer=buf)
         Lpq[:] = 0
         k0 = 0
@@ -353,7 +344,7 @@ def _make_Lpq_atomic_approx(mydf, mol, auxmol):
         for ia in range(mol.natm):
             if j0*(j0+1)//2 >= col1:
                 break
-            atm_Lpq = Lpqdb[mol.atom_symbol(ia)]
+            atm_Lpq = Lpqdb[ia]
             dk, dj2 = atm_Lpq.shape
             dj = int(numpy.sqrt(dj2*2))
 # idx is the diagonal block of the lower triangular indices
@@ -425,7 +416,7 @@ def _make_j3c(mydf, mol, auxmol):
                   istep+1, len(shranges), *sh_range)
         bstart, bend, ncol = sh_range
         col0, col1 = col1, col1+ncol
-        shls_slice = (bstart, bend, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
+        shls_slice = (bstart, bend, 0, bend, mol.nbas, mol.nbas+auxmol.nbas)
 
         Lpq = get_Lpq(shls_slice, col0, col1, bufs2)
         save('Lpq', Lpq, col0, col1)

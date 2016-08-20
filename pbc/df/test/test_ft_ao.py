@@ -53,12 +53,16 @@ class KnowValues(unittest.TestCase):
         ref = numpy.asarray([tools.fft(aoR[:,i].conj()*aoR[:,j], cell.gs)
                              for i in range(nao) for j in range(nao)])
         ref = ref.reshape(nao,nao,-1).transpose(2,0,1) * (cell.vol/ngs)
-        dat = ft_ao.ft_aopair(cell, cell.Gv, hermi=True)
+        dat = ft_ao.ft_aopair(cell, cell.Gv, aosym='s1hermi')
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,0,0]-dat[:,0,0])    , 1.869103994619606e-06 , 7)
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,1,1]-dat[:,1,1])    , 0.02315483195832373   , 4)
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,2:,2:]-dat[:,2:,2:]), 5.4648896424693173e-14, 9)
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,0,2:]-dat[:,0,2:])  , 4.0352047774658308e-11, 9)
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,2:,0]-dat[:,2:,0])  , 4.0352047774658308e-11, 9)
+        idx = numpy.tril_indices(nao)
+        ref = dat[:,idx[0],idx[1]]
+        dat = ft_ao.ft_aopair(cell, cell.Gv, aosym='s2')
+        self.assertAlmostEqual(abs(dat-ref).sum(), 0, 9)
 
     def test_ft_aoao_with_kpts(self):
         numpy.random.seed(1)

@@ -270,7 +270,7 @@ def _guess_shell_ranges(mol, buflen, aosym):
     from pyscf.ao2mo.outcore import balance_segs
     ao_loc = mol.ao_loc_nr()
     nao = ao_loc[-1]
-    if aosym == 's2ij':
+    if 's2' in aosym:
         segs = [ao_loc[i+1]*(ao_loc[i+1]+1)//2 - ao_loc[i]*(ao_loc[i]+1)//2
                 for i in range(mol.nbas)]
     else:

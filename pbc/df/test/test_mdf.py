@@ -89,6 +89,15 @@ class KnowValues(unittest.TestCase):
         kpt = kpts[0]
         odf.kpts = [kpt]
         odf.gs = (5,)*3
+        odf.approx_sr_level = 1
+        self.assertAlmostEqual(numpy.einsum('ij,ji->', odf.get_nuc(), dm),
+                               -150.61096857467683, 9)
+
+        odf = mdf.MDF(cell)
+        odf.auxbasis = 'weigend'
+        kpt = kpts[0]
+        odf.kpts = [kpt]
+        odf.gs = (5,)*3
         odf.approx_sr_level = 3
         vnuc = odf.get_nuc(kpts=kpt)
         ek0 = numpy.einsum('ij,ji->', vnuc, dm)

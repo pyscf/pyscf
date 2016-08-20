@@ -18,6 +18,8 @@ from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import pwdf_jk
 from pyscf.pbc.df import pwdf_ao2mo
 
+KPT_DIFF_TOL = 1e-6
+
 
 def get_nuc(mydf, kpts=None):
     log = logger.Logger(mydf.stdout, mydf.verbose)
@@ -35,21 +37,22 @@ def get_nuc(mydf, kpts=None):
     SI = cell.get_SI(Gv)
     rhoG = numpy.dot(charge, SI)
     kpt_allow = numpy.zeros(3)
-    gamma_point = abs(kpts_lst).sum() < 1e-9
+    real = gamma_point(kpts_lst)
     coulG = tools.get_coulG(cell, kpt_allow, gs=mydf.gs, Gv=Gv) / cell.vol
     vneG = rhoG * coulG
 
-    if gamma_point:
+    if real:
         vne = numpy.zeros((nkpts,nao**2))
     else:
         vne = numpy.zeros((nkpts,nao**2), dtype=numpy.complex128)
     max_memory = mydf.max_memory - lib.current_memory()[0]
     for k, pqkR, pqkI, p0, p1 \
-            in mydf.ft_loop(cell, mydf.gs, kpt_allow, kpts_lst, max_memory):
+            in mydf.ft_loop(cell, mydf.gs, kpt_allow, kpts_lst,
+                            max_memory=max_memory):
 # rho_ij(G) nuc(-G) / G^2
 # = [Re(rho_ij(G)) + Im(rho_ij(G))*1j] [Re(nuc(G)) - Im(nuc(G))*1j] / G^2
         vG = vneG[p0:p1]
-        if not gamma_point:
+        if not real:
             vne[k] += numpy.einsum('k,xk->x', vG.real, pqkI) * 1j
             vne[k] += numpy.einsum('k,xk->x', vG.imag, pqkR) *-1j
         vne[k] += numpy.einsum('k,xk->x', vG.real, pqkR)
@@ -93,17 +96,17 @@ def get_pp_loc_part1(mydf, cell, kpts):
     vpplocG = pseudo.pp_int.get_gth_vlocG_part1(cell, Gv)
     vpplocG = -1./cell.vol * numpy.einsum('ij,ij->j', SI, vpplocG)
     kpt_allow = numpy.zeros(3)
-    gamma_point = abs(kpts).sum() < 1e-9
+    real = gamma_point(kpts)
 
-    if gamma_point:
+    if real:
         vloc = numpy.zeros((nkpts,nao**2))
     else:
         vloc = numpy.zeros((nkpts,nao**2), dtype=numpy.complex128)
     max_memory = mydf.max_memory - lib.current_memory()[0]
     for k, pqkR, pqkI, p0, p1 \
-            in mydf.ft_loop(cell, mydf.gs, kpt_allow, kpts, max_memory):
+            in mydf.ft_loop(cell, mydf.gs, kpt_allow, kpts, max_memory=max_memory):
         vG = vpplocG[p0:p1]
-        if not gamma_point:
+        if not real:
             vloc[k] += numpy.einsum('k,xk->x', vG.real, pqkI) * 1j
             vloc[k] += numpy.einsum('k,xk->x', vG.imag, pqkR) *-1j
         vloc[k] += numpy.einsum('k,xk->x', vG.real, pqkR)
@@ -136,7 +139,8 @@ class PWDF(lib.StreamObject):
         logger.info(self, 'len(kpts) = %d', len(self.kpts))
         logger.debug1(self, '    kpts = %s', self.kpts)
 
-    def pw_loop(self, cell, gs=None, kpti_kptj=None, max_memory=2000):
+    def pw_loop(self, cell, gs=None, kpti_kptj=None, shls_slice=None,
+                max_memory=2000):
         '''Plane wave part'''
         if gs is None:
             gs = self.gs
@@ -146,10 +150,9 @@ class PWDF(lib.StreamObject):
             kpti, kptj = kpti_kptj
 
         nao = cell.nao_nr()
-        gxrange = numpy.append(range(gs[0]+1), range(-gs[0],0))
-        gyrange = numpy.append(range(gs[1]+1), range(-gs[1],0))
-        gzrange = numpy.append(range(gs[2]+1), range(-gs[2],0))
-        gxyz = lib.cartesian_prod((gxrange, gyrange, gzrange))
+        gxyz = lib.cartesian_prod((numpy.append(range(gs[0]+1), range(-gs[0],0)),
+                                   numpy.append(range(gs[1]+1), range(-gs[1],0)),
+                                   numpy.append(range(gs[2]+1), range(-gs[2],0))))
         invh = numpy.linalg.inv(cell._h)
         Gv = 2*numpy.pi * numpy.dot(gxyz, invh)
         ngs = gxyz.shape[0]
@@ -157,7 +160,10 @@ class PWDF(lib.StreamObject):
 # Theoretically, hermitian symmetry can be also found for kpti == kptj:
 #       f_ji(G) = \int f_ji exp(-iGr) = \int f_ij^* exp(-iGr) = [f_ij(-G)]^*
 # The hermi operation needs reordering the axis-0.  It is inefficient
-        hermi = abs(kpti).sum() < 1e-9 and abs(kptj).sum() < 1e-9  # gamma point
+        if gamma_point(kpti) and gamma_point(kptj):
+            aosym = 's1hermi'
+        else:
+            aosym = 's1'
 
         blksize = min(max(16, int(max_memory*1e6*.7/16/nao**2)), 16384)
         sublk = max(16, int(blksize//4))
@@ -165,7 +171,7 @@ class PWDF(lib.StreamObject):
         pqkIbuf = numpy.empty(nao*nao*sublk)
 
         for p0, p1 in lib.prange(0, ngs, blksize):
-            aoao = ft_ao.ft_aopair(cell, Gv[p0:p1], None, hermi, invh,
+            aoao = ft_ao.ft_aopair(cell, Gv[p0:p1], shls_slice, aosym, invh,
                                    gxyz[p0:p1], gs, (kpti, kptj))
             for i0, i1 in lib.prange(0, p1-p0, sublk):
                 nG = i1 - i0
@@ -173,27 +179,36 @@ class PWDF(lib.StreamObject):
                 pqkI = numpy.ndarray((nao,nao,nG), buffer=pqkIbuf)
                 pqkR[:] = aoao[i0:i1].real.transpose(1,2,0)
                 pqkI[:] = aoao[i0:i1].imag.transpose(1,2,0)
-                yield pqkR.reshape(-1,nG), pqkI.reshape(-1,nG), p0+i0, p0+i1
+                yield (pqkR.reshape(-1,nG),
+                       pqkI.reshape(-1,nG), p0+i0, p0+i1)
 
-    def ft_loop(self, cell, gs=None, kpt=numpy.zeros(3), kpts=None, max_memory=4000):
+    def ft_loop(self, cell, gs=None, kpt=numpy.zeros(3),
+                kpts=None, shls_slice=None, max_memory=4000):
         '''
         Fourier transform iterator for all kpti which satisfy  kpt = kpts - kpti
         '''
         if gs is None: gs = self.gs
         if kpts is None:
-            assert(abs(kpt).sum() < 1e-9)
+            assert(gamma_point(kpt))
             kpts = self.kpts
         kpts = numpy.asarray(kpts)
         nkpts = len(kpts)
 
         nao = cell.nao_nr()
-        gxrange = numpy.append(range(gs[0]+1), range(-gs[0],0))
-        gyrange = numpy.append(range(gs[1]+1), range(-gs[1],0))
-        gzrange = numpy.append(range(gs[2]+1), range(-gs[2],0))
-        gxyz = lib.cartesian_prod((gxrange, gyrange, gzrange))
+        gxyz = lib.cartesian_prod((numpy.append(range(gs[0]+1), range(-gs[0],0)),
+                                   numpy.append(range(gs[1]+1), range(-gs[1],0)),
+                                   numpy.append(range(gs[2]+1), range(-gs[2],0))))
         invh = numpy.linalg.inv(cell._h)
         Gv = 2*numpy.pi * numpy.dot(gxyz, invh)
         ngs = gxyz.shape[0]
+
+# Theoretically, hermitian symmetry can be also found for kpti == kptj:
+#       f_ji(G) = \int f_ji exp(-iGr) = \int f_ij^* exp(-iGr) = [f_ij(-G)]^*
+# The hermi operation needs reordering the axis-0.  It is inefficient
+        if gamma_point(kpt) and gamma_point(kpts):
+            aosym = 's1hermi'
+        else:
+            aosym = 's1'
 
         blksize = min(max(16, int(max_memory*1e6*.9/(nao**2*(nkpts+1)*16))), 16384)
         buf = [numpy.zeros(nao*nao*blksize, dtype=numpy.complex128)
@@ -202,7 +217,7 @@ class PWDF(lib.StreamObject):
         pqkIbuf = numpy.empty(nao*nao*blksize)
 
         for p0, p1 in self.prange(0, ngs, blksize):
-            ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], None, True, invh,
+            ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym, invh,
                                   gxyz[p0:p1], gs, kpt, kpts, out=buf)
             nG = p1 - p0
             for k in range(nkpts):
@@ -250,6 +265,9 @@ class PWDF(lib.StreamObject):
         mf = copy.copy(mf)
         mf.with_df = self
         return mf
+
+def gamma_point(kpt):
+    return abs(kpt).sum() < KPT_DIFF_TOL
 
 
 if __name__ == '__main__':

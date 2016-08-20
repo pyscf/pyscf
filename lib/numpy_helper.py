@@ -21,7 +21,7 @@ ANTIHERMI = 2
 SYMMETRIC = 3
 
 
-# 2d -> 1d
+# 2d -> 1d or 3d -> 2d
 def pack_tril(mat, axis=-1, out=None):
     '''flatten the lower triangular part of a matrix.
     Given mat, it returns mat[numpy.tril_indices(mat.shape[0])]
@@ -55,10 +55,9 @@ def pack_tril(mat, axis=-1, out=None):
         out = mat[numpy.tril_indices(nd)]
         return out
 
-# 1d -> 2d, write hermitian lower triangle to upper triangle
+# 1d -> 2d or 2d -> 3d, write hermitian lower triangle to upper triangle
 def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
-    '''Reverse operation of pack_tril.  Put a vector in the lower triangular
-    part of a matrix.
+    '''Reverse operation of pack_tril.
 
     Kwargs:
         filltriu : int
@@ -389,7 +388,12 @@ def zdot(a, b, alpha=1, c=None, beta=0):
     btype = b.dtype
 
     if atype == numpy.float64 and btype == numpy.float64:
-        return ddot(a, b, alpha, c, beta)
+        if c is None or c.dtype == numpy.float64:
+            return ddot(a, b, alpha, c, beta)
+        else:
+            cr = numpy.asarray(c.real, order='C')
+            c.real = ddot(a, b, alpha, cr, beta)
+            return c
 
     if atype == numpy.float64 and btype == numpy.complex128:
         br = numpy.asarray(b.real, order='C')
@@ -641,8 +645,11 @@ if __name__ == '__main__':
     print(abs(b[0]-x).sum())
     x = hermi_triu(b[1], hermi=2, inplace=0)
     print(abs(b[1]-x).sum())
+    print(abs(x - unpack_tril(pack_tril(x), 2)).sum())
     x = hermi_triu(a, hermi=1, inplace=0)
     print(abs(x-x.T.conj()).sum())
+    xs = numpy.asarray((x,x,x))
+    print(abs(xs - unpack_tril(pack_tril(xs))).sum())
 
     a = numpy.random.random((400,400))
     b = numpy.random.random((400,400))

@@ -50,6 +50,15 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(ej1, 242.17738846073865, 9)
         self.assertAlmostEqual(ek1, 280.27434674577881, 9)
 
+        numpy.random.seed(1)
+        kpt = numpy.random.random(3)
+        mydf = mdf.MDF(cell, [kpt])
+        vj, vk = mydf.get_jk(dm, 0, kpt)
+        ej1 = numpy.einsum('ij,ji->', vj, dm)
+        ek1 = numpy.einsum('ij,ji->', vk, dm)
+        self.assertAlmostEqual(ej1, 240.96357256500787, 9)
+        self.assertAlmostEqual(ek1, 691.41111361623132, 9)
+
     def test_hcore(self):
         mf = pscf.RHF(cell)
         odf = mdf.MDF(cell)
@@ -68,18 +77,11 @@ class KnowValues(unittest.TestCase):
         jkdf = mdf.MDF(cell)
         jkdf.auxbasis = 'weigend'
         jkdf.gs = (5,)*3
-        mf = mdf_jk.density_fit(mf0, with_df=jkdf)
-        vj0, vk0 = mf.get_jk(cell, dm, hermi=0)
+        vj0, vk0 = jkdf.get_jk(dm, hermi=0, exxdiv=None)
         ej0 = numpy.einsum('ij,ji->', vj0, dm)
         ek0 = numpy.einsum('ij,ji->', vk0, dm)
-        mf = mdf_jk.density_fit(mf0, with_df=jkdf)
-        vj1, vk1 = mf.get_jk(cell, dm, hermi=0)
-        ej1 = numpy.einsum('ij,ji->', vj1, dm)
-        ek1 = numpy.einsum('ij,ji->', vk1, dm)
-        self.assertTrue(numpy.allclose(vj0, vj1))
-        self.assertTrue(numpy.allclose(vk0, vk1))
-        self.assertAlmostEqual(ej1, 242.17214791834408, 9)
-        self.assertAlmostEqual(ek1, 280.69967132047987, 9)
+        self.assertAlmostEqual(ej0, 242.17214791834408, 9)
+        self.assertAlmostEqual(ek0, 280.69967132048043, 9)
 
     def test_jk_metric(self):
         numpy.random.seed(12)
@@ -90,8 +92,7 @@ class KnowValues(unittest.TestCase):
         jkdf.metric = 'S'
         jkdf.auxbasis = 'weigend'
         jkdf.gs = (5,)*3
-        mf = mdf_jk.density_fit(mf0, with_df=jkdf)
-        vj1, vk1 = mf.get_jk(cell, dm)
+        vj1, vk1 = jkdf.get_jk(dm, exxdiv=None)
         ej1 = numpy.einsum('ij,ji->', vj1, dm)
         ek1 = numpy.einsum('ij,ji->', vk1, dm)
         self.assertAlmostEqual(ej1, 242.15871646261877, 9)
@@ -101,8 +102,7 @@ class KnowValues(unittest.TestCase):
         jkdf.metric = 'T'
         jkdf.auxbasis = 'weigend'
         jkdf.gs = (5,)*3
-        mf = mdf_jk.density_fit(mf0, with_df=jkdf)
-        vj1, vk1 = mf.get_jk(cell, dm)
+        vj1, vk1 = jkdf.get_jk(dm, exxdiv=None)
         ej1 = numpy.einsum('ij,ji->', vj1, dm)
         ek1 = numpy.einsum('ij,ji->', vk1, dm)
         self.assertAlmostEqual(ej1, 242.17738846073865, 9)
@@ -136,18 +136,6 @@ class KnowValues(unittest.TestCase):
         ek1 = numpy.einsum('ij,ji->', vk1, dm)
         self.assertAlmostEqual(ej1, 242.17554856213894, 9)
         self.assertAlmostEqual(ek1, 280.27281092754305, 9)
-
-        jkdf = mdf.MDF(cell)
-        jkdf.metric = 'T'
-        jkdf.approx_sr_level = 4
-        jkdf.auxbasis = 'weigend'
-        jkdf.gs = (5,)*3
-        mf = mdf_jk.density_fit(mf0, with_df=jkdf)
-        vj1, vk1 = mf.get_jk(cell, dm)
-        ej1 = numpy.einsum('ij,ji->', vj1, dm)
-        ek1 = numpy.einsum('ij,ji->', vk1, dm)
-        self.assertAlmostEqual(ej1, 242.17944693058223, 9)
-        self.assertAlmostEqual(ek1, 280.27697544586277, 9)
 
     def test_j_kpts(self):
         numpy.random.seed(1)
