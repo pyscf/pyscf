@@ -584,9 +584,6 @@ class NEVPT(pyscf.lib.StreamObject):
         self.canonicalized = False
         nao,nmo = mc.mo_coeff.shape
         self.onerdm = numpy.zeros((nao,nao))
-
-        self.mo_coeff = None
-        self.mo_energy = None
         self._keys = set(self.__dict__.keys())
 
     def get_hcore(self):

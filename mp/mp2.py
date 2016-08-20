@@ -69,6 +69,8 @@ def make_rdm1_ao(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
 # *2 for beta electron
     rdm1[:nocc,:nocc] =-dm1occ * 2
     rdm1[nocc:,nocc:] = dm1vir * 2
+    for i in range(nocc):
+        rdm1[i,i] += 2
     rdm1 = reduce(numpy.dot, (mo_coeff, rdm1, mo_coeff.T))
     return rdm1
 
@@ -95,6 +97,8 @@ Given t2 amplitude, current function returns 1-RDM in MO basis''')
 # *2 for beta electron
     rdm1[:nocc,:nocc] =-dm1occ * 2
     rdm1[nocc:,nocc:] = dm1vir * 2
+    for i in range(nocc):
+        rdm1[i,i] += 2
     return rdm1
 
 
@@ -110,6 +114,11 @@ def make_rdm2(mp, t2, verbose=logger.NOTE):
         t2i = t2[i]
         dm2[i,nocc:,:nocc,nocc:] = t2i.transpose(1,0,2)*2 - t2i.transpose(2,0,1)
         dm2[nocc:,i,nocc:,:nocc] = dm2[i,nocc:,:nocc,nocc:].transpose(0,2,1)
+
+    for i in range(nocc):
+        for j in range(nocc):
+            dm2[i,i,j,j] += 4
+            dm2[i,j,j,i] -= 2
     return dm2
 
 
