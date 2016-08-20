@@ -184,7 +184,7 @@ def check_irrep_nelec(mol, irrep_nelec, nelec):
             else:
                 neleca, nelecb = irrep_nelec[irname]
             norb = mol.symm_orb[i].shape[1]
-            if nelecb >= norb:
+            if neleca > norb or nelecb > norb:
                 msg =('More electrons than orbitals for irrep %s '
                       'nelec = %d + %d, norb = %d' %
                       (irname, neleca,nelecb, norb))
