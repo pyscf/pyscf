@@ -9,6 +9,7 @@
 import numpy
 import pyscf.lib.parameters as param
 from pyscf import gto
+from pyscf.lib import logger
 
 
 def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None,
