@@ -303,8 +303,8 @@ class UHF(uhf.UHF):
                     neleca = self.irrep_nelec[irname] - nelecb
                 else:
                     neleca, nelecb = self.irrep_nelec[irname]
-                ea_idx = numpy.argsort(mo_energy[0][ir_idxa])
-                eb_idx = numpy.argsort(mo_energy[1][ir_idxb])
+                ea_idx = numpy.argsort(mo_energy[0][ir_idxa].round(9))
+                eb_idx = numpy.argsort(mo_energy[1][ir_idxb].round(9))
                 mo_occ[0,ir_idxa[ea_idx[:neleca]]] = 1
                 mo_occ[1,ir_idxb[eb_idx[:nelecb]]] = 1
                 neleca_fix += neleca
@@ -320,13 +320,13 @@ class UHF(uhf.UHF):
         if len(idx_ea_left) > 0:
             idx_ea_left = numpy.hstack(idx_ea_left)
             ea_left = mo_energy[0][idx_ea_left]
-            ea_sort = numpy.argsort(ea_left)
+            ea_sort = numpy.argsort(ea_left.round(9))
             occ_idx = idx_ea_left[ea_sort][:neleca_float]
             mo_occ[0][occ_idx] = 1
         if len(idx_eb_left) > 0:
             idx_eb_left = numpy.hstack(idx_eb_left)
             eb_left = mo_energy[1][idx_eb_left]
-            eb_sort = numpy.argsort(eb_left)
+            eb_sort = numpy.argsort(eb_left.round(9))
             occ_idx = idx_eb_left[eb_sort][:nelecb_float]
             mo_occ[1][occ_idx] = 1
 
@@ -382,10 +382,10 @@ class UHF(uhf.UHF):
 
         ea = numpy.hstack(self.mo_energy[0])
         eb = numpy.hstack(self.mo_energy[0])
-        oa_sort = numpy.argsort(ea[self.mo_occ[0]>0])
-        va_sort = numpy.argsort(ea[self.mo_occ[0]==0])
-        ob_sort = numpy.argsort(eb[self.mo_occ[1]>0])
-        vb_sort = numpy.argsort(eb[self.mo_occ[1]==0])
+        oa_sort = numpy.argsort(ea[self.mo_occ[0]>0 ].round(9))
+        va_sort = numpy.argsort(ea[self.mo_occ[0]==0].round(9))
+        ob_sort = numpy.argsort(eb[self.mo_occ[1]>0 ].round(9))
+        vb_sort = numpy.argsort(eb[self.mo_occ[1]==0].round(9))
         self.mo_energy = (numpy.hstack((ea[self.mo_occ[0]>0 ][oa_sort],
                                         ea[self.mo_occ[0]==0][va_sort])),
                           numpy.hstack((eb[self.mo_occ[1]>0 ][ob_sort],

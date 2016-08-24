@@ -156,7 +156,7 @@ def _symmetrize_canonicalization_(mol, mo_energy, mo_coeff, s):
             idx = abs(mo_energy) > emin
             es.append(mo_energy[idx])
             cs.append(numpy.dot(mol.symm_orb[i], u[:,idx]))
-        es = numpy.hstack(es)
+        es = numpy.hstack(es).round(9)
         idx = numpy.argsort(es)
         assert(numpy.allclose(es[idx], esub))
         mo_coeff[:,degidx] = numpy.hstack(cs)[:,idx]
@@ -322,7 +322,7 @@ class RHF(hf.RHF):
             ir_idx = numpy.where(orbsym == ir)[0]
             if irname in self.irrep_nelec:
                 n = self.irrep_nelec[irname]
-                occ_sort = numpy.argsort(mo_energy[ir_idx])
+                occ_sort = numpy.argsort(mo_energy[ir_idx].round(9))
                 occ_idx  = ir_idx[occ_sort[:n//2]]
                 mo_occ[occ_idx] = 2
                 nelec_fix += n
@@ -332,7 +332,7 @@ class RHF(hf.RHF):
         assert(nelec_float >= 0)
         if nelec_float > 0:
             rest_idx = numpy.hstack(rest_idx)
-            occ_sort = numpy.argsort(mo_energy[rest_idx])
+            occ_sort = numpy.argsort(mo_energy[rest_idx].round(9))
             occ_idx  = rest_idx[occ_sort[:nelec_float//2]]
             mo_occ[occ_idx] = 2
 
@@ -362,8 +362,8 @@ class RHF(hf.RHF):
         hf.RHF._finalize(self)
 
         # sort MOs wrt orbital energies, it should be done last.
-        o_sort = numpy.argsort(self.mo_energy[self.mo_occ>0])
-        v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0])
+        o_sort = numpy.argsort(self.mo_energy[self.mo_occ>0 ].round(9))
+        v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9))
         self.mo_energy = numpy.hstack((self.mo_energy[self.mo_occ>0][o_sort],
                                        self.mo_energy[self.mo_occ==0][v_sort]))
         self.mo_coeff = numpy.hstack((self.mo_coeff[:,self.mo_occ>0].take(o_sort, axis=1),
@@ -407,7 +407,7 @@ class HF1e(hf.SCF):
             e, c = hf.SCF.eig(self, h1e[ir], s1e[ir])
             cs.append(c)
             es.append(e)
-        e = numpy.hstack(es)
+        e = numpy.hstack(es).round(9)
         idx = numpy.argsort(e)
         self.mo_energy = e[idx]
         self.mo_coeff = so2ao_mo_coeff(self.mol.symm_orb, cs)[:,idx]
@@ -655,9 +655,9 @@ class ROHF(rohf.ROHF):
         rohf.ROHF._finalize(self)
 
         # sort MOs wrt orbital energies, it should be done last.
-        c_sort = numpy.argsort(self.mo_energy[self.mo_occ==2])
-        o_sort = numpy.argsort(self.mo_energy[self.mo_occ==1])
-        v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0])
+        c_sort = numpy.argsort(self.mo_energy[self.mo_occ==2].round(9))
+        o_sort = numpy.argsort(self.mo_energy[self.mo_occ==1].round(9))
+        v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9))
         self.mo_energy = numpy.hstack((self.mo_energy[self.mo_occ==2][c_sort],
                                        self.mo_energy[self.mo_occ==1][o_sort],
                                        self.mo_energy[self.mo_occ==0][v_sort]))
