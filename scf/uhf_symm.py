@@ -256,12 +256,12 @@ class UHF(uhf.UHF):
         occidxb = mo_occ[1] > 0
         viridxa = ~occidxa
         viridxb = ~occidxb
-        ga = reduce(numpy.dot, (mo_coeff[0][:,occidxa].T.conj(), fock[0],
-                                mo_coeff[0][:,viridxa]))
-        ga[orbsyma[occidxa].reshape(-1,1)!=orbsyma[viridxa]] = 0
-        gb = reduce(numpy.dot, (mo_coeff[1][:,occidxb].T.conj(), fock[1],
-                                mo_coeff[1][:,viridxb]))
-        gb[orbsymb[occidxb].reshape(-1,1)!=orbsymb[viridxb]] = 0
+        ga = reduce(numpy.dot, (mo_coeff[0][:,viridxa].T.conj(), fock[0],
+                                mo_coeff[0][:,occidxa]))
+        ga[orbsyma[viridxa].reshape(-1,1)!=orbsyma[occidxa]] = 0
+        gb = reduce(numpy.dot, (mo_coeff[1][:,viridxb].T.conj(), fock[1],
+                                mo_coeff[1][:,occidxb]))
+        gb[orbsymb[viridxb].reshape(-1,1)!=orbsymb[occidxb]] = 0
         return numpy.hstack((ga.ravel(), gb.ravel()))
 
     def get_occ(self, mo_energy=None, mo_coeff=None, orbsym=None):
