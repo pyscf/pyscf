@@ -337,7 +337,7 @@ class KnowValues(unittest.TestCase):
 
         mf = dft.UKS(mol)
         mf.grids.build()
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3p86'
         nao = mol.nao_nr()
         numpy.random.seed(1)
         mo =(numpy.random.random((nao,nao)),
@@ -348,7 +348,7 @@ class KnowValues(unittest.TestCase):
         dm1 = numpy.random.random(nvir*nocc*2)
         nr = scf.newton(mf)
         g, hop, hdiag = nr.gen_g_hop(mo, mo_occ, (mf.get_hcore(),)*2)
-        self.assertAlmostEqual(numpy.linalg.norm(hop(dm1)), 35542.277987080488, 7)
+        self.assertAlmostEqual(numpy.linalg.norm(hop(dm1)), 35550.357570127475, 7)
 
 
 if __name__ == "__main__":

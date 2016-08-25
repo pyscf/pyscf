@@ -217,10 +217,10 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     viridxa = ~occidxa
     viridxb = ~occidxb
 
-    ga = reduce(numpy.dot, (mo_coeff[0][:,occidxa].T.conj(), fock_ao[0],
-                            mo_coeff[0][:,viridxa]))
-    gb = reduce(numpy.dot, (mo_coeff[1][:,occidxb].T.conj(), fock_ao[1],
-                            mo_coeff[1][:,viridxb]))
+    ga = reduce(numpy.dot, (mo_coeff[0][:,viridxa].T.conj(), fock_ao[0],
+                            mo_coeff[0][:,occidxa]))
+    gb = reduce(numpy.dot, (mo_coeff[1][:,viridxb].T.conj(), fock_ao[1],
+                            mo_coeff[1][:,occidxb]))
     return numpy.hstack((ga.ravel(), gb.ravel()))
 
 def energy_elec(mf, dm=None, h1e=None, vhf=None):

@@ -290,9 +290,9 @@ class RHF(hf.RHF):
 
         occidx = mo_occ > 0
         viridx = ~occidx
-        g = reduce(numpy.dot, (mo_coeff[:,occidx].T.conj(), fock,
-                               mo_coeff[:,viridx]))
-        sym_allow = orbsym[occidx].reshape(-1,1) == orbsym[viridx]
+        g = reduce(numpy.dot, (mo_coeff[:,viridx].T.conj(), fock,
+                               mo_coeff[:,occidx])) * 2
+        sym_allow = orbsym[viridx].reshape(-1,1) == orbsym[occidx]
         g[~sym_allow] = 0
         return g.ravel()
 
@@ -529,7 +529,9 @@ class ROHF(rohf.ROHF):
         fockb = reduce(numpy.dot, (mo_coeff.T, fock[1], mo_coeff))
         uniq_var_a = viridxa.reshape(-1,1) & occidxa
         uniq_var_b = viridxb.reshape(-1,1) & occidxb
-        g = focka + fockb
+        g = numpy.zeros_like(focka)
+        g[uniq_var_a]  = focka[uniq_var_a]
+        g[uniq_var_b] += fockb[uniq_var_b]
         g[~sym_allow] = 0
         return g[uniq_var_a | uniq_var_b].ravel()
 
