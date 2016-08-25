@@ -292,8 +292,9 @@ class RHF(hf.RHF):
         viridx = ~occidx
         g = reduce(numpy.dot, (mo_coeff[:,occidx].T.conj(), fock,
                                mo_coeff[:,viridx]))
-        idx = (orbsym[occidx].reshape(-1,1) == orbsym[viridx])
-        return g[idx]
+        sym_allow = orbsym[occidx].reshape(-1,1) == orbsym[viridx]
+        g[~sym_allow] = 0
+        return g.ravel()
 
     def get_occ(self, mo_energy=None, mo_coeff=None, orbsym=None):
         ''' We assumed mo_energy are grouped by symmetry irreps, (see function
@@ -526,12 +527,11 @@ class ROHF(rohf.ROHF):
         viridxb = ~occidxb
         focka = reduce(numpy.dot, (mo_coeff.T, fock[0], mo_coeff))
         fockb = reduce(numpy.dot, (mo_coeff.T, fock[1], mo_coeff))
-        uniq_var_a = viridxa.reshape(-1,1) & occidxa &  sym_allow
-        uniq_var_b = viridxb.reshape(-1,1) & occidxb &  sym_allow
-        g = numpy.zeros_like(focka)
-        g[uniq_var_a]  = focka[uniq_var_a]
-        g[uniq_var_b] += fockb[uniq_var_b]
-        return g[uniq_var_a | uniq_var_b]
+        uniq_var_a = viridxa.reshape(-1,1) & occidxa
+        uniq_var_b = viridxb.reshape(-1,1) & occidxb
+        g = focka + fockb
+        g[~sym_allow] = 0
+        return g[uniq_var_a | uniq_var_b].ravel()
 
     def get_occ(self, mo_energy=None, mo_coeff=None, orbsym=None):
         if mo_energy is None: mo_energy = self.mo_energy

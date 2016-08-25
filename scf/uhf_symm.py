@@ -258,10 +258,10 @@ class UHF(uhf.UHF):
         viridxb = ~occidxb
         ga = reduce(numpy.dot, (mo_coeff[0][:,occidxa].T.conj(), fock[0],
                                 mo_coeff[0][:,viridxa]))
-        ga = ga[orbsyma[occidxa].reshape(-1,1)==orbsyma[viridxa]]
+        ga[orbsyma[occidxa].reshape(-1,1)!=orbsyma[viridxa]] = 0
         gb = reduce(numpy.dot, (mo_coeff[1][:,occidxb].T.conj(), fock[1],
                                 mo_coeff[1][:,viridxb]))
-        gb = gb[orbsymb[occidxb].reshape(-1,1)==orbsymb[viridxb]]
+        gb[orbsymb[occidxb].reshape(-1,1)!=orbsymb[viridxb]] = 0
         return numpy.hstack((ga.ravel(), gb.ravel()))
 
     def get_occ(self, mo_energy=None, mo_coeff=None, orbsym=None):
