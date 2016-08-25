@@ -51,10 +51,10 @@ def write_eri(fout, eri, nmo, tol=1e-15, float_format=DEFAULT_FLOAT_FORMAT):
 
 def write_hcore(fout, h, nmo, tol=1e-15, float_format=DEFAULT_FLOAT_FORMAT):
     h = h.reshape(nmo,nmo)
+    output_format = float_format + ' %4d %4d  0  0\n'
     for i in range(nmo):
         for j in range(0, i+1):
             if abs(h[i,j]) > tol:
-                output_format = float_format + ' %4d %4d  0  0\n'
                 fout.write(output_format % (h[i,j], i+1, j+1))
 
 
@@ -74,12 +74,12 @@ def from_chkfile(output, chkfile, tol=1e-15, float_format=DEFAULT_FLOAT_FORMAT):
             write_head(fout, nmo, mol.nelectron, mol.spin)
 
         eri = pyscf.ao2mo.outcore.full_iofree(mol, mo_coeff, verbose=0)
-        write_eri(fout, pyscf.ao2mo.restore(8, eri, nmo), nmo, tol=tol)
+        write_eri(fout, pyscf.ao2mo.restore(8, eri, nmo), nmo, tol, float_format)
 
         t = mol.intor_symmetric('cint1e_kin_sph')
         v = mol.intor_symmetric('cint1e_nuc_sph')
         h = reduce(numpy.dot, (mo_coeff.T, t+v, mo_coeff))
-        write_hcore(fout, h, nmo, tol=tol)
+        write_hcore(fout, h, nmo, tol, float_format)
         output_format = ' ' + float_format + '  0  0  0  0\n'
         fout.write(output_format % mol.energy_nuc())
 
