@@ -10,6 +10,9 @@ LIGHTSPEED = 137.0359895
 # BOHR = .529 177 210 92(17) e-10m  #http://physics.nist.gov/cgi-bin/cuu/Value?bohrrada0
 BOHR = 0.52917721092  # Angstroms
 
+OUTPUT_DIGITS = 5
+OUTPUT_COLS = 5
+
 ANGULAR = 'spdfghij'
 ANGULARMAP = {'s': 0,
               'p': 1,

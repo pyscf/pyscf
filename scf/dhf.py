@@ -201,7 +201,7 @@ def time_reversal_matrix(mol, mat):
     tmat[:,sign_mask] *= -1
     return tmat.T
 
-def analyze(mf, verbose=logger.DEBUG):
+def analyze(mf, verbose=logger.DEBUG, **kwargs):
     #from pyscf.tools import dump_mat
     if isinstance(verbose, logger.Logger):
         log = verbose

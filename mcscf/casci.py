@@ -50,7 +50,7 @@ def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
     h1eff = reduce(numpy.dot, (mo_cas.T, hcore+corevhf, mo_cas))
     return h1eff, energy_core
 
-def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
+def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO, **kwargs):
     from pyscf.lo import orth
     from pyscf.tools import dump_mat
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
@@ -76,9 +76,9 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
         dm1 = dm1a + dm1b
         if log.verbose >= logger.DEBUG1:
             log.info('alpha density matrix (on AO)')
-            dump_mat.dump_tri(log.stdout, dm1a, label)
+            dump_mat.dump_tri(log.stdout, dm1a, label, **kwargs)
             log.info('beta density matrix (on AO)')
-            dump_mat.dump_tri(log.stdout, dm1b, label)
+            dump_mat.dump_tri(log.stdout, dm1b, label, **kwargs)
     else:
         casdm1 = casscf.fcisolver.make_rdm1(ci, ncas, nelecas)
         mocore = mo_coeff[:,:ncore]
@@ -99,7 +99,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO):
         orth_coeff = orth.orth_ao(casscf.mol, 'meta_lowdin', s=ovlp_ao)
         mo_cas = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff[:,ncore:nocc], ucas))
         log.info('Natural orbital (expansion on meta-Lowdin AOs) in CAS space')
-        dump_mat.dump_rec(log.stdout, mo_cas, label, start=1)
+        dump_mat.dump_rec(log.stdout, mo_cas, label, start=1, **kwargs)
 
         if casscf._scf.mo_coeff is not None:
             s = reduce(numpy.dot, (casscf.mo_coeff.T, ovlp_ao, casscf._scf.mo_coeff))
