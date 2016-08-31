@@ -791,6 +791,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
             Gblksize = max(16, int(max_memory*.2*1e6/16/buflen/(nkptj+1)))
         else:
             Gblksize = max(16, int(max_memory*.4*1e6/16/buflen/(nkptj+1)))
+        Gblksize = min(Gblksize, ngs)
         pqkRbuf = numpy.empty(buflen*Gblksize)
         pqkIbuf = numpy.empty(buflen*Gblksize)
         # buf for ft_aopair
