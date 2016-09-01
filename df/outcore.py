@@ -214,11 +214,11 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', 
     else:
         feri = h5py.File(erifile, 'w')
     if comp == 1:
-        chunks = (min(int(16e3/nmoj),naoaux), nmoj) # 128K
+        chunks = (min(int(64e3/nmoj),naoaux), nmoj) # 512K
         h5d_eri = feri.create_dataset(dataname, (naoaux,nij_pair), 'f8',
                                       chunks=chunks)
     else:
-        chunks = (1, min(int(16e3/nmoj),naoaux), nmoj) # 128K
+        chunks = (1, min(int(64e3/nmoj),naoaux), nmoj) # 512K
         h5d_eri = feri.create_dataset(dataname, (comp,naoaux,nij_pair), 'f8',
                                       chunks=chunks)
     aopairblks = len(fswap[dataname+'/0'])
@@ -270,7 +270,7 @@ def _guess_shell_ranges(mol, buflen, aosym):
     from pyscf.ao2mo.outcore import balance_segs
     ao_loc = mol.ao_loc_nr()
     nao = ao_loc[-1]
-    if aosym == 's2ij':
+    if 's2' in aosym:
         segs = [ao_loc[i+1]*(ao_loc[i+1]+1)//2 - ao_loc[i]*(ao_loc[i]+1)//2
                 for i in range(mol.nbas)]
     else:

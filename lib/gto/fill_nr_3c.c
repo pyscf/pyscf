@@ -166,7 +166,7 @@ void GTOnr3c_fill_s2ij(int (*intor)(), double *out, int comp,
                 dk = ao_loc[ksh+1] - ao_loc[ksh];
                 k0 = ao_loc[ksh  ] - ao_loc[ksh0];
                 (*intor)(buf, shls, atm, natm, bas, nbas, env, cintopt);
-                if (ish != jsh) {
+                if (ip != jp) {
                         dcopy_s2_igtj(out+k0*nij, buf, comp, ip, nij, nijk, di, dj, dk);
                 } else {
                         dcopy_s2_ieqj(out+k0*nij, buf, comp, ip, nij, nijk, di, dj, dk);

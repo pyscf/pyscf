@@ -1169,6 +1169,24 @@ def offset_nr_by_atom(mol):
     aorange.append((b0, mol.nbas, p0, p1))
     return aorange
 
+def offset_2c_by_atom(mol):
+    '''2-component AO offset for each atom.  Return a list, each item
+    of the list gives (start-shell-id, stop-shell-id, start-AO-id, stop-AO-id)
+    '''
+    aorange = []
+    p0 = p1 = 0
+    b0 = b1 = 0
+    ia0 = 0
+    for ib in range(mol.nbas):
+        if ia0 != mol.bas_atom(ib):
+            aorange.append((b0, ib, p0, p1))
+            ia0 = mol.bas_atom(ib)
+            p0 = p1
+            b0 = ib
+        p1 += mol.bas_len_spinor(ib) * mol.bas_nctr(ib)
+    aorange.append((b0, mol.nbas, p0, p1))
+    return aorange
+
 def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
     '''Compare the two molecules whether they have the same structure.
 
@@ -2309,6 +2327,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     search_ao_r = search_ao_r
 
     offset_nr_by_atom = offset_nr_by_atom
+    offset_2c_by_atom = offset_2c_by_atom
 
     @pyscf.lib.with_doc(spinor_labels.__doc__)
     def spinor_labels(self):

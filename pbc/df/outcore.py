@@ -39,20 +39,6 @@ def aux_e2(cell, auxcell, erifile, intor='cint3c2e_sph', aosym='s1', comp=1,
     feri[dataname+'-kptij'] = kptij_lst
     nkptij = len(kptij_lst)
 
-    if nkptij == 1:
-        if numpy.linalg.norm(kptij_lst[0,0]-kptij_lst[0,1]) < 1e-9:
-            aosym = 's2ij'
-        else:
-            aosym = 's1'
-        mat = incore.aux_e2(cell, auxcell, intor, aosym, comp, kptij_lst[0])
-        if comp == 1:
-            feri[dataname+'/0'] = mat.T
-        else:
-            # (kpt,comp,i,j,L) -> (kpt,comp,L,i,j)
-            feri[dataname+'/0'] = mat.transpose(0,2,1)
-        feri.close()
-        return erifile
-
     # sum over largest number of images in either cell or auxcell
     nimgs = numpy.max((cell.nimgs, auxcell.nimgs), axis=0)
     Ls = cell.get_lattice_Ls(nimgs)
@@ -75,9 +61,11 @@ def aux_e2(cell, auxcell, erifile, intor='cint3c2e_sph', aosym='s1', comp=1,
         else:
             nao_pair = nao * nao
         if comp == 1:
-            feri.create_dataset(key, (naux,nao_pair), dtype)
+            shape = (naux,nao_pair)
         else:
-            feri.create_dataset(key, (comp,naux,nao_pair), dtype)
+            shape = (comp,naux,nao_pair)
+        chunks = (min(256,naux), min(256,nao_pair))  # 512 KB
+        feri.create_dataset(key, shape, dtype, chunks=chunks)
     if naux == 0:
         feri.close()
         return erifile

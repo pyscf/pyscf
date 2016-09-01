@@ -20,16 +20,16 @@ libpbc = lib.load_library('libpbc')
 #
 # \int mu*nu*exp(-ik*r) dr
 #
-def ft_aopair(cell, Gv, shls_slice=None, hermi=False,
+def ft_aopair(cell, Gv, shls_slice=None, aosym='s1',
               invh=None, gxyz=None, gs=None,
               kpti_kptj=numpy.zeros((2,3)), verbose=None):
     kpti, kptj = kpti_kptj
-    val = _ft_aopair_kpts(cell, Gv, shls_slice, hermi, invh, gxyz, gs,
+    val = _ft_aopair_kpts(cell, Gv, shls_slice, aosym, invh, gxyz, gs,
                           kptj-kpti, kptj.reshape(1,3))
     return val[0]
 
 
-def _ft_aopair_kpts(cell, Gv, shls_slice=None, hermi=False,
+def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
                     invh=None, gxyz=None, gs=None,
                     kpt=numpy.zeros(3), kptjs=numpy.zeros((2,3)), out=None):
     ''' FT transform AO pair
@@ -69,6 +69,7 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, hermi=False,
     intor = getattr(libpbc, 'GTO_ft_ovlp_sph')
     eval_gz = getattr(libpbc, eval_gz)
 
+    # make copy of atm,bas,env because they are modified in the lattice sum
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                  cell._atm, cell._bas, cell._env)
     ao_loc = cell.ao_loc_nr()
@@ -82,15 +83,21 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, hermi=False,
                       cell.nbas+shls_slice[2], cell.nbas+shls_slice[3])
     ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
     nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
-# Symmetry for Gamma point
-    hermi = (hermi and ni == nj and
-             abs(kpt).sum() < 1e-9 and abs(kptjs).sum() < 1e-9)
+    shape = (nGv, ni, nj)
+    fill = getattr(libpbc, 'PBC_ft_fill_'+aosym)
+    if aosym == 's1hermi': # Symmetry for Gamma point
+        assert(abs(kpt).sum() < 1e-9 and abs(kptjs).sum() < 1e-9)
+    elif aosym == 's2':
+        i0 = ao_loc[shls_slice[0]]
+        i1 = ao_loc[shls_slice[1]]
+        nij = i1*(i1+1)//2 - i0*(i0+1)//2
+        shape = (nGv, nij)
 
     if out is None:
-        out = [numpy.zeros((nGv,ni,nj), order='F', dtype=numpy.complex128)
+        out = [numpy.zeros(shape, order='F', dtype=numpy.complex128)
                for k in range(len(kptjs))]
     else:
-        out = [numpy.ndarray((nGv,ni,nj), order='F', dtype=numpy.complex128,
+        out = [numpy.ndarray(shape, order='F', dtype=numpy.complex128,
                              buffer=out[k]) for k in range(len(kptjs))]
     out_ptrs = (ctypes.c_void_p*len(out))(
             *[x.ctypes.data_as(ctypes.c_void_p) for x in out])
@@ -101,19 +108,19 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, hermi=False,
     Ls = numpy.asarray(cell.get_lattice_Ls(cell.nimgs), order='C')
     exp_Lk = numpy.einsum('ik,jk->ij', Ls, kptjs)
     exp_Lk = numpy.exp(1j * numpy.asarray(exp_Lk, order='C'))
-    drv(intor, eval_gz, out_ptrs, xyz.ctypes.data_as(ctypes.c_void_p),
+    drv(intor, eval_gz, fill, out_ptrs, xyz.ctypes.data_as(ctypes.c_void_p),
         ptr_coord.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(xyz)),
         Ls.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(Ls)),
         exp_Lk.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(kptjs)),
         (ctypes.c_int*4)(*shls_slice),
-        ao_loc.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(hermi),
+        ao_loc.ctypes.data_as(ctypes.c_void_p),
         GvT.ctypes.data_as(ctypes.c_void_p),
         p_invh, p_gxyzT, p_gs, ctypes.c_int(nGv),
         atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm*2),
         bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.nbas*2),
         env.ctypes.data_as(ctypes.c_void_p))
 
-    if hermi:
+    if aosym == 's1hermi':
         for mat in out:
             for i in range(1,ni):
                 mat[:,:i,i] = mat[:,i,:i]

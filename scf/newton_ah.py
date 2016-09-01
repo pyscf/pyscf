@@ -181,7 +181,7 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None):
 # Seems the high order terms do not help optimization?
 def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                   conv_tol_grad=None, verbose=None):
-    from pyscf.mcscf import mc1step
+    from pyscf.scf import iah
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -230,9 +230,9 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
         vhf0 = fock_ao - h1e
 
         for ah_end, ihop, w, dxi, hdxi, residual, seig \
-                in mc1step.davidson_cc(h_op, g_op, precond, x0_guess,
-                                       tol=ah_conv_tol, max_cycle=mf.ah_max_cycle,
-                                       lindep=mf.ah_lindep, verbose=log):
+                in iah.davidson_cc(h_op, g_op, precond, x0_guess,
+                                   tol=ah_conv_tol, max_cycle=mf.ah_max_cycle,
+                                   lindep=mf.ah_lindep, verbose=log):
             norm_residual = numpy.linalg.norm(residual)
             if (ah_end or ihop == mf.ah_max_cycle or # make sure to use the last step
                 ((norm_residual < ah_start_tol) and (ihop >= ah_start_cycle)) or
@@ -342,7 +342,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
     mol = mf._scf.mol
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(conv_tol)
-        logger.info(mf, 'Set conv_tol_grad to %g', conv_tol_grad)
+        log.info('Set conv_tol_grad to %g', conv_tol_grad)
     scf_conv = False
     e_tot = mf.e_tot
 
@@ -403,7 +403,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
 
     rotaiter.close()
     if mf.canonicalization:
-        logger.info(mf, 'Canonicalize SCF orbitals')
+        log.info('Canonicalize SCF orbitals')
         mo_energy, mo_coeff = mf.canonicalize(mo_coeff, mo_occ, fock)
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
     else:

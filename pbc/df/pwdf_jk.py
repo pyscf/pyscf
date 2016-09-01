@@ -33,7 +33,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
     vI = numpy.zeros((nset,ngs))
     max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
     for k, pqkR, pqkI, p0, p1 \
-            in mydf.ft_loop(cell, mydf.gs, kpt_allow, kpts, max_memory):
+            in mydf.ft_loop(cell, mydf.gs, kpt_allow, kpts, max_memory=max_memory):
         for i in range(nset):
             rhoR = numpy.dot(dmsR[i,k], pqkR)
             rhoR-= numpy.dot(dmsI[i,k], pqkI)
@@ -58,7 +58,8 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
     vjR = numpy.zeros((nset,nband,nao*nao))
     vjI = numpy.zeros((nset,nband,nao*nao))
     for k, pqkR, pqkI, p0, p1 \
-            in mydf.ft_loop(cell, mydf.gs, kpt_allow, kpts_band, max_memory):
+            in mydf.ft_loop(cell, mydf.gs, kpt_allow, kpts_band,
+                            max_memory=max_memory):
         for i in range(nset):
             vjR[i,k] += numpy.dot(pqkR, vR[i,p0:p1])
             vjR[i,k] += numpy.dot(pqkI, vI[i,p0:p1])
@@ -119,7 +120,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
         vkcoulG = tools.get_coulG(cell, kpt, True, mydf, mydf.gs) / cell.vol
         # <r|-G+k_rs|s> = conj(<s|G-k_rs|r>) = conj(<s|G+k_sr|r>)
         for k, pqkR, pqkI, p0, p1 \
-                in mydf.ft_loop(cell, mydf.gs, kpt, kpts[kptj_idx], max_memory):
+                in mydf.ft_loop(cell, mydf.gs, kpt, kpts[kptj_idx],
+                                max_memory=max_memory):
             ki = kpti_idx[k]
             kj = kptj_idx[k]
             coulG = numpy.sqrt(vkcoulG[p0:p1])
@@ -214,7 +216,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     vjI = numpy.zeros((nset,nao**2))
     max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
     for pqkR, pqkI, p0, p1 \
-            in mydf.pw_loop(cell, mydf.gs, kptii, max_memory):
+            in mydf.pw_loop(cell, mydf.gs, kptii, max_memory=max_memory):
         if with_j:
             for i in range(nset):
                 rhoR = numpy.dot(dmsR[i], pqkR)
