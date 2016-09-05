@@ -531,7 +531,7 @@ def make_kpts(cell, nks):
     >>> cell.make_kpts((4,4,4))
     '''
     ks_each_axis = [(np.arange(n)+.5)/n-.5 for n in nks]
-    scaled_kpts = lib.cartesian_prod(*ks_each_axis)
+    scaled_kpts = lib.cartesian_prod(ks_each_axis)
     kpts = cell.get_abs_kpts(scaled_kpts)
     return kpts
 

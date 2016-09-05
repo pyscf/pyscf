@@ -71,7 +71,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
     else:
         kpts_band = numpy.reshape(kpt_band, (-1,3))
     nband = len(kpts_band)
-    j_real = gamma_point(kpts_band) and abs(dms-dms.conj().transpose(0,1,3,2)).sum() < 1e-9
+    j_real = gamma_point(kpts_band)
 
     dmsR = dms.real.reshape(nset,nkpts,nao**2)
     dmsI = dms.imag.reshape(nset,nkpts,nao**2)
@@ -213,7 +213,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
         log.debug1('kpti_idx = %s', kpti_idx)
         log.debug1('kptj_idx = %s', kptj_idx)
         kk_todo[kpti_idx,kptj_idx] = False
-        if swap_2e and abs(kpt).sum() > 1e-9:
+        if swap_2e and not is_zero(kpt):
             kk_todo[kptj_idx,kpti_idx] = False
 
         max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
@@ -245,7 +245,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
 # case 2: k_pq = (iq|pi)
 #:v4 = numpy.einsum('iLj,lLk->ijkl', pqk, pqk.conj())
 #:vk += numpy.einsum('ijkl,li->kj', v4, dm)
-            if swap_2e and not gamma_point(kpt):
+            if swap_2e and not is_zero(kpt):
                 iLkR = iLkR.reshape(nao,-1)
                 iLkI = iLkI.reshape(nao,-1)
                 for i in range(nset):
@@ -279,7 +279,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
                 #:    vkR[i,kj] += vk1.real
                 #:    vkI[i,kj] += vk1.imag
 
-                #:if swap_2e and abs(kpt).sum() > 1e-9:
+                #:if swap_2e and not is_zero(kpt):
                 #:    # K ~ 'Lij,Llk*,jk->il' + 'Llk*,Lij,jk->il'
                 #:    for i in range(nset):
                 #:        dm = dms[i,kj]
@@ -311,7 +311,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
                                tmpR.reshape(-1,nao), tmpI.reshape(-1,nao),
                                1, vkR[i,kj], vkI[i,kj], 1)
 
-                if swap_2e and abs(kpt).sum() > 1e-9:
+                if swap_2e and not is_zero(kpt):
                     tmpR = numpy.ndarray((nao*nrow,nao), buffer=bufR)
                     tmpI = numpy.ndarray((nao*nrow,nao), buffer=bufI)
                     # K ~ 'iLj,lLk*,jk->il' + 'lLk*,iLj,jk->il'
@@ -338,7 +338,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
             if kk_todo[ki,kj]:
                 make_kpt(kptj-kpti)
 
-    if (abs(kpts).sum() < 1e-9 and abs(kpts_band).sum() < 1e-9 and
+    if (gamma_point(kpts) and gamma_point(kpts_band) and
         not numpy.iscomplexobj(dm_kpts)):
         vk_kpts = vkR
     else:
@@ -383,7 +383,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     dms = _format_dms(dm, [kpt])
     nset, _, nao = dms.shape[:3]
     dms = dms.reshape(nset,nao,nao)
-    j_real = gamma_point(kpt) and abs(dms-dms.conj().transpose(0,2,1)).sum() < 1e-9
+    j_real = gamma_point(kpt)
     k_real = gamma_point(kpt) and not numpy.iscomplexobj(dms)
 
     auxcell = mydf.auxcell
@@ -528,8 +528,9 @@ def _format_dms(dm_kpts, kpts):
     dms = dm_kpts.reshape(-1,nkpts,nao,nao)
     return dms
 
-def gamma_point(kpt):
+def is_zero(kpt):
     return kpt is None or abs(kpt).sum() < 1e-9
+gamma_point = is_zero
 
 def zdotNN(aR, aI, bR, bI, alpha=1, cR=None, cI=None, beta=0):
     '''c = a*b'''

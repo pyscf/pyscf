@@ -166,14 +166,14 @@ def get_nuc_less_accurate(mydf, kpts=None):
     vG = -1./cell.vol * numpy.einsum('ij,ij->j', SI, vpplocG)
     kpt_allow = numpy.zeros(3)
 
-    if gamma_point(kpts):
+    if is_zero(kpts_lst):
         vj = numpy.zeros((nkpts,nao**2))
     else:
         vj = numpy.zeros((nkpts,nao**2), dtype=numpy.complex128)
     max_memory = mydf.max_memory - lib.current_memory()[0]
     for k, pqkR, pqkI, p0, p1 \
             in mydf.ft_loop(cell, mydf.gs, kpt_allow, kpts_lst, max_memory=max_memory):
-        if not gamma_point(kpts):
+        if not gamma_point(kpts_lst[k]):
             vj[k] += numpy.einsum('k,xk->x', vG.real, pqkI) * 1j
             vj[k] += numpy.einsum('k,xk->x', vG.imag, pqkR) *-1j
         vj[k] += numpy.einsum('k,xk->x', vG.real, pqkR)
@@ -368,31 +368,26 @@ class MDF(pwdf.PWDF):
                 self._cderi = self._cderi_file
             else:
                 self._cderi = self._cderi_file.name
-        if len(self.kpts) == 1:
-            aosym = 's2ij'
-        else:
-            aosym = 's1'
 
         if with_j3c:
             if self.approx_sr_level == 0:
-                build_Lpq_pbc(self, auxcell, chgcell, aosym, kptij_lst)
+                build_Lpq_pbc(self, auxcell, chgcell, kptij_lst)
             elif self.approx_sr_level == 1:
-                build_Lpq_pbc(self, auxcell, chgcell, aosym, numpy.zeros((1,2,3)))
+                build_Lpq_pbc(self, auxcell, chgcell, numpy.zeros((1,2,3)))
             elif self.approx_sr_level == 2:
                 build_Lpq_nonpbc(self, auxcell, chgcell)
             elif self.approx_sr_level == 3:
                 build_Lpq_1c_approx(self, auxcell, chgcell)
+            t1 = log.timer_debug1('Lpq', *t1)
+
+            _make_j3c(self, cell, auxcell, chgcell, kptij_lst)
+            t1 = log.timer_debug1('j3c', *t1)
 
 # Merge chgcell into auxcell
         auxcell._atm, auxcell._bas, auxcell._env = \
                 gto.conc_env(auxcell._atm, auxcell._bas, auxcell._env,
                              chgcell._atm, chgcell._bas, chgcell._env)
         self.auxcell = auxcell
-        t1 = log.timer_debug1('Lpq', *t1)
-
-        if with_j3c:
-            _make_j3c(self, cell, auxcell, kptij_lst)
-            t1 = log.timer_debug1('j3c', *t1)
         return self
 
     def auxbar(self, auxcell=None):
@@ -429,7 +424,7 @@ class MDF(pwdf.PWDF):
                 return _load3c(self._cderi, 'Lpq', kpti_kptj)
             else:
                 kpti, kptj = kpti_kptj
-                if gamma_point(kpti-kptj):
+                if is_zero(kpti-kptj):
                     return pyscf.df.addons.load(self._cderi, 'Lpq/0')
                 else:
                     # See _fake_Lpq_kpts
@@ -442,7 +437,7 @@ class MDF(pwdf.PWDF):
                 compact=True, transpose102=False):
         '''Short range part'''
         kpti, kptj = kpti_kptj
-        unpack = gamma_point(kpti-kptj) and not compact
+        unpack = is_zero(kpti-kptj) and not compact
         nao = self.cell.nao_nr()
         if unpack:
             buf = numpy.empty((self.blockdim,nao*(nao+1)//2))
@@ -531,19 +526,19 @@ def unique(kpts):
     return numpy.asarray(uniq_kpts), numpy.asarray(uniq_index), uniq_inverse
 
 
-def build_Lpq_pbc(mydf, auxcell, chgcell, aosym, kptij_lst):
+def build_Lpq_pbc(mydf, auxcell, chgcell, kptij_lst):
     '''Fitting coefficients for auxiliary functions'''
     kpts_ji = kptij_lst[:,1] - kptij_lst[:,0]
     uniq_kpts, uniq_index, uniq_inverse = unique(kpts_ji)
-    max_memory = mydf.max_memory - lib.current_memory()[0]
+    max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]))
     if mydf.metric.upper() == 'S':
         outcore.aux_e2(mydf.cell, auxcell, mydf._cderi, 'cint3c1e_sph',
-                       aosym=aosym, kptij_lst=kptij_lst, dataname='Lpq',
+                       kptij_lst=kptij_lst, dataname='Lpq',
                        max_memory=max_memory)
         s_aux = auxcell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=uniq_kpts)
     else:  # mydf.metric.upper() == 'T'
         outcore.aux_e2(mydf.cell, auxcell, mydf._cderi, 'cint3c1e_p2_sph',
-                       aosym=aosym, kptij_lst=kptij_lst, dataname='Lpq',
+                       kptij_lst=kptij_lst, dataname='Lpq',
                        max_memory=max_memory)
         s_aux = [x*2 for x in auxcell.pbc_intor('cint1e_kin_sph', hermi=1, kpts=uniq_kpts)]
 
@@ -709,10 +704,14 @@ def _fake_nuc(cell):
 
 # kpti == kptj: s2 symmetry
 # kpti == kptj == 0 (gamma point): real
-def _make_j3c(mydf, cell, auxcell, kptij_lst):
+def _make_j3c(mydf, cell, auxcell, chgcell, kptij_lst):
     t1 = (time.clock(), time.time())
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
+    auxcell = copy.copy(auxcell)
+    auxcell._atm, auxcell._bas, auxcell._env = \
+            gto.conc_env(auxcell._atm, auxcell._bas, auxcell._env,
+                         chgcell._atm, chgcell._bas, chgcell._env)
     outcore.aux_e2(cell, auxcell, mydf._cderi, 'cint3c2e_sph',
                    kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
     t1 = log.timer_debug1('3c2e', *t1)
@@ -742,7 +741,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
         kLRs.append(numpy.asarray(aoauxG.real, order='C'))
         kLIs.append(numpy.asarray(aoauxG.imag, order='C'))
 
-        if gamma_point(kpt):
+        if is_zero(kpt):  # kpti == kptj
             j2c[k] -= lib.dot(kLRs[-1].T, numpy.asarray(aoaux.real,order='C'))
             j2c[k] -= lib.dot(kLIs[-1].T, numpy.asarray(aoaux.imag,order='C'))
         else:
@@ -769,11 +768,11 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
         kLR = kLRs[uniq_kptji_id]
         kLI = kLIs[uniq_kptji_id]
 
-        if gamma_point(kpt):
+        if is_zero(kpt):  # kpti == kptj
             aosym = 's2'
             nao_pair = nao*(nao+1)//2
 
-            vbar = mydf.auxbar()
+            vbar = mydf.auxbar(auxcell)
             ovlp = cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=adapted_kptjs)
             for k, ji in enumerate(adapted_ji_idx):
                 ovlp[k] = lib.pack_tril(ovlp[k])
@@ -815,7 +814,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
                     Lpq = numpy.asarray(Lpq_fake[:,col0:col1])
                 lib.dot(j2c[uniq_kptji_id], Lpq, -.5, v, 1)
                 j3cR.append(numpy.asarray(v.real, order='C'))
-                if gamma_point(kpt) and gamma_point(adapted_kptjs[k]):
+                if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
                     j3cI.append(None)
                 else:
                     j3cI.append(numpy.asarray(v.imag, order='C'))
@@ -837,7 +836,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
                         aoao[:] = 0
                         lib.dot(kLR[p0:p1].T, pqkR.T, -1, j3cR[k], 1)
                         lib.dot(kLI[p0:p1].T, pqkI.T, -1, j3cR[k], 1)
-                        if not (gamma_point(kpt) and gamma_point(adapted_kptjs[k])):
+                        if not (is_zero(kpt) and gamma_point(adapted_kptjs[k])):
                             lib.dot(kLR[p0:p1].T, pqkI.T, -1, j3cI[k], 1)
                             lib.dot(kLI[p0:p1].T, pqkR.T,  1, j3cI[k], 1)
             else:
@@ -860,7 +859,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
                         zdotCN(kLR[p0:p1].T, kLI[p0:p1].T, pqkR.T, pqkI.T,
                                -1, j3cR[k], j3cI[k], 1)
 
-            if gamma_point(kpt):
+            if is_zero(kpt):
                 for k, ji in enumerate(adapted_ji_idx):
                     if gamma_point(adapted_kptjs[k]):
                         for i, c in enumerate(vbar):
@@ -873,7 +872,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
                                 j3cI[k][i] -= c * ovlp[k][col0:col1].imag
 
             for k, ji in enumerate(adapted_ji_idx):
-                if gamma_point(kpt) and gamma_point(adapted_kptjs[k]):
+                if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
                     save('j3c/%d'%ji, j3cR[k], col0, col1)
                 else:
                     save('j3c/%d'%ji, j3cR[k]+j3cI[k]*1j, col0, col1)
@@ -884,8 +883,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
 
     feri.close()
 
-def gamma_point(kpt):
+def is_zero(kpt):
     return abs(kpt).sum() < KPT_DIFF_TOL
+gamma_point = is_zero
 
 class _load3c(object):
     def __init__(self, cderi, label, kpti_kptj):

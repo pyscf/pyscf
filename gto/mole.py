@@ -2335,6 +2335,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     condense_to_shell = condense_to_shell
 
+    __add__ = conc_mol
+
 _ELEMENTDIC = dict((k.upper(),v) for k,v in param.ELEMENTS_PROTON.items())
 
 def _rm_digit(symb):

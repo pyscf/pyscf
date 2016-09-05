@@ -271,10 +271,9 @@ def _guess_shell_ranges(mol, buflen, aosym):
     ao_loc = mol.ao_loc_nr()
     nao = ao_loc[-1]
     if 's2' in aosym:
-        segs = [ao_loc[i+1]*(ao_loc[i+1]+1)//2 - ao_loc[i]*(ao_loc[i]+1)//2
-                for i in range(mol.nbas)]
+        segs = ao_loc[1:]*(ao_loc[1:]+1)//2 - ao_loc[:-1]*(ao_loc[:-1]+1)//2
     else:
-        segs = [(ao_loc[i+1]-ao_loc[i])*nao for i in range(mol.nbas)]
+        segs = (ao_loc[1:]-ao_loc[:-1])*nao
     return balance_segs(segs, buflen)
 
 def _stand_sym_code(sym):
