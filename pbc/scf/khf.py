@@ -165,7 +165,7 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     nkpts = len(dm_kpts)
     e1 = 1./nkpts * np.einsum('kij,kji', dm_kpts, h1e_kpts)
     e_coul = 1./nkpts * np.einsum('kij,kji', dm_kpts, vhf_kpts) * 0.5
-    if abs(e_coul.imag > 1.e-10):
+    if abs(e_coul.imag > 1.e-7):
         raise RuntimeError("Coulomb energy has imaginary part, "
                            "something is wrong!", e_coul.imag)
     e1 = e1.real

@@ -120,7 +120,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
         kptii = numpy.asarray((kpt,kpt))
         p1 = 0
         for LpqR, LpqI, j3cR, j3cI in mydf.sr_loop(kptii, max_memory, False, False):
-            p0, p1 = p1, p1+LpqR.shape[1]
+            p0, p1 = p1, p1+LpqR.shape[0]
             #:Lpq = (LpqR + LpqI*1j).transpose(1,0,2)
             #:j3c = (j3cR + j3cI*1j).transpose(1,0,2)
             #:rho [:,p0:p1] += numpy.einsum('Lpq,xpq->xL', Lpq, dms[:,k])
@@ -145,7 +145,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
         kptii = numpy.asarray((kpt,kpt))
         p1 = 0
         for LpqR, LpqI, j3cR, j3cI in mydf.sr_loop(kptii, max_memory, True, False):
-            p0, p1 = p1, p1+LpqR.shape[1]
+            p0, p1 = p1, p1+LpqR.shape[0]
             #:v = numpy.dot(jaux, Lpq) + numpy.dot(rho, j3c)
             #:vj_kpts[:,k] += lib.unpack_tril(v)
             v  = numpy.dot(jauxR[:,p0:p1], LpqR)

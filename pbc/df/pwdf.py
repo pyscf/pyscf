@@ -170,7 +170,7 @@ class PWDF(lib.StreamObject):
         pqkRbuf = numpy.empty(nao*nao*sublk)
         pqkIbuf = numpy.empty(nao*nao*sublk)
 
-        for p0, p1 in lib.prange(0, ngs, blksize):
+        for p0, p1 in self.prange(0, ngs, blksize):
             aoao = ft_ao.ft_aopair(cell, Gv[p0:p1], shls_slice, aosym, invh,
                                    gxyz[p0:p1], gs, (kpti, kptj))
             for i0, i1 in lib.prange(0, p1-p0, sublk):
@@ -216,7 +216,7 @@ class PWDF(lib.StreamObject):
         pqkRbuf = numpy.empty(nao*nao*blksize)
         pqkIbuf = numpy.empty(nao*nao*blksize)
 
-        for p0, p1 in lib.prange(0, ngs, blksize):
+        for p0, p1 in self.prange(0, ngs, blksize):
             ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym, invh,
                                   gxyz[p0:p1], gs, kpt, kpts, out=buf)
             nG = p1 - p0
@@ -229,6 +229,9 @@ class PWDF(lib.StreamObject):
                 pqkI[:] = aoao.imag.transpose(1,2,0)
                 yield (k, pqkR.reshape(-1,nG), pqkI.reshape(-1,nG), p0, p1)
                 aoao[:] = 0  # == buf[k][:] = 0
+
+    def prange(self, start, stop, step):
+        return lib.prange(start, stop, step)
 
     get_pp = get_pp
     get_nuc = get_nuc
