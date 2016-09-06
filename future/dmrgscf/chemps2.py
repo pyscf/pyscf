@@ -10,10 +10,14 @@ import pyscf.ao2mo
 
 try:
     from pyscf.dmrgscf import settings
+    PyCheMPS2 = imp.load_dynamic('PyCheMPS2', settings.PYCHEMPS2BIN)
 except ImportError:
-    msg = '''settings.py not found.  Please create %s
-''' % os.path.join(os.path.dirname(__file__), 'settings.py')
-    sys.stderr.write(msg)
+    try:
+        import PyCheMPS2
+    except ImportError:
+        msg = ('settings.py not found.  Please create %s\n' %
+               os.path.join(os.path.dirname(__file__), 'settings.py'))
+        sys.stderr.write(msg)
 
 # point group ID defined in CheMPS2, see
 # http://sebwouters.github.io/CheMPS2/classCheMPS2_1_1Irreps.html
@@ -65,7 +69,6 @@ class CheMPS2(object):
         log.info('dmrg_maxiter_silent = %d', self.dmrg_maxiter_silent)
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
-        PyCheMPS2 = imp.load_dynamic('PyCheMPS2', settings.PYCHEMPS2BIN)
         Initializer = PyCheMPS2.PyInitialize()
         Initializer.Init()
 
