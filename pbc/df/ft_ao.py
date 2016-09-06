@@ -28,7 +28,7 @@ def ft_aopair(cell, Gv, shls_slice=None, aosym='s1',
                           kptj-kpti, kptj.reshape(1,3))
     return val[0]
 
-
+# NOTE buffer out must be initialized to 0
 def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
                     invh=None, gxyz=None, gs=None,
                     kpt=numpy.zeros(3), kptjs=numpy.zeros((2,3)), out=None):

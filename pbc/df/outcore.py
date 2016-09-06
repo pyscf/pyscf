@@ -41,7 +41,7 @@ def aux_e2(cell, auxcell, erifile, intor='cint3c2e_sph', aosym='s1', comp=1,
     # sum over largest number of images in either cell or auxcell
     nimgs = numpy.max((cell.nimgs, auxcell.nimgs), axis=0)
     Ls = cell.get_lattice_Ls(nimgs)
-    logger.debug1(cell, "Images %s", nimgs)
+    logger.debug1(cell, "pbc.df.outcore.Images %s", nimgs)
     logger.debug3(cell, "Ls = %s", Ls)
 
     nao = cell.nao_nr()

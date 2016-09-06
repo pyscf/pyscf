@@ -170,7 +170,7 @@ def get_nuc_less_accurate(mydf, kpts=None):
         vj = numpy.zeros((nkpts,nao**2))
     else:
         vj = numpy.zeros((nkpts,nao**2), dtype=numpy.complex128)
-    max_memory = mydf.max_memory - lib.current_memory()[0]
+    max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     for k, pqkR, pqkI, p0, p1 \
             in mydf.ft_loop(cell, mydf.gs, kpt_allow, kpts_lst, max_memory=max_memory):
         if not gamma_point(kpts_lst[k]):
@@ -257,7 +257,6 @@ def get_nuc(mydf, kpts=None):
 
     ovlp = cell.pbc_intor('cint1e_ovlp_sph', 1, lib.HERMITIAN, kpts_lst)
     nao = cell.nao_nr()
-    nao_pair = nao * (nao+1) // 2
     jaux -= charge.sum() * mydf.auxbar(auxcell)
     for k, kpt in enumerate(kpts_lst):
         with mydf.load_Lpq((kpt,kpt)) as Lpq:
@@ -794,7 +793,7 @@ def _make_j3c(mydf, cell, auxcell, chgcell, kptij_lst):
         pqkRbuf = numpy.empty(buflen*Gblksize)
         pqkIbuf = numpy.empty(buflen*Gblksize)
         # buf for ft_aopair
-        buf = numpy.empty((nkptj,buflen*Gblksize), dtype=numpy.complex128)
+        buf = numpy.zeros((nkptj,buflen*Gblksize), dtype=numpy.complex128)
 
         col1 = 0
         for istep, sh_range in enumerate(shranges):
