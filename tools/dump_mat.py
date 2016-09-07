@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 
-def dump_tri(stdout, c, label=None, ncol=5, digits=5, start=0):
+from pyscf.lib.parameters import OUTPUT_DIGITS, OUTPUT_COLS
+
+def dump_tri(stdout, c, label=None,
+             ncol=OUTPUT_COLS, digits=OUTPUT_DIGITS, start=0):
     ''' Format print for the lower triangular part of an array
 
     Args:
@@ -68,7 +71,8 @@ def dump_tri(stdout, c, label=None, ncol=5, digits=5, start=0):
             for k, v in enumerate(dc[ic+m:]):
                 stdout.write(('%12s' % label[ic+m+k]) + (fmt % tuple(v)))
 
-def dump_rec(stdout, c, label=None, label2=None, ncol=5, digits=5, start=0):
+def dump_rec(stdout, c, label=None, label2=None,
+             ncol=OUTPUT_COLS, digits=OUTPUT_DIGITS, start=0):
     ''' Print an array in rectangular format
 
     Args:
@@ -134,7 +138,8 @@ def dump_rec(stdout, c, label=None, label2=None, ncol=5, digits=5, start=0):
             for k, v in enumerate(dc):
                 stdout.write(('%12s' % label[k]) + (fmt % tuple(v)))
 
-def dump_mo(mol, c, label=None):
+def dump_mo(mol, c, label=None,
+            ncol=OUTPUT_COLS, digits=OUTPUT_DIGITS, start=1):
     ''' Format print for orbitals
 
     Args:
@@ -167,7 +172,7 @@ def dump_mo(mol, c, label=None):
     '''
     if label is None:
         label = mol.spheric_labels(True)
-    dump_rec(mol.stdout, c, label, start=1)
+    dump_rec(mol.stdout, c, label, None, ncol, digits, start)
 
 
 if __name__ == '__main__':

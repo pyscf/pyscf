@@ -237,7 +237,7 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
 def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     return uhf.get_veff(mol, dm, dm_last, vhf_last, hermi, vhfopt)
 
-def analyze(mf, verbose=logger.DEBUG):
+def analyze(mf, verbose=logger.DEBUG, **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis
     '''
@@ -268,7 +268,7 @@ def analyze(mf, verbose=logger.DEBUG):
         label = mf.mol.spheric_labels(True)
         orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
         c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
-        dump_mat.dump_rec(mf.stdout, c, label, start=1)
+        dump_mat.dump_rec(mf.stdout, c, label, start=1, **kwargs)
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     return mf.mulliken_meta(mf.mol, dm, s=s, verbose=log)
 
@@ -372,6 +372,10 @@ class ROHF(hf.RHF):
             vhf = uhf._makevhf(vj, vk) + numpy.asarray(vhf_last)
         return vhf
 
-    analyze = analyze
+    @lib.with_doc(analyze.__doc__)
+    def analyze(self, verbose=None, **kwargs):
+        if verbose is None: verbose = self.verbose
+        return analyze(self, verbose, **kwargs)
+
     canonicalize = canonicalize
 

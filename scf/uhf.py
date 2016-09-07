@@ -349,7 +349,7 @@ def spin_square(mo, s=1):
     s = numpy.sqrt(ss+.25) - .5
     return ss, s*2+1
 
-def analyze(mf, verbose=logger.DEBUG):
+def analyze(mf, verbose=logger.DEBUG, **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Dipole moment
     '''
@@ -378,9 +378,11 @@ def analyze(mf, verbose=logger.DEBUG):
         label = mf.mol.spheric_labels(True)
         orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
         c_inv = numpy.dot(orth_coeff.T, ovlp_ao)
-        dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[0]), label, start=1)
+        dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[0]), label, start=1,
+                          **kwargs)
         log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for beta spin **')
-        dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[1]), label, start=1)
+        dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[1]), label, start=1,
+                          **kwargs)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log),
@@ -698,9 +700,9 @@ class UHF(hf.SCF):
             vhf = _makevhf(vj, vk) + numpy.asarray(vhf_last)
         return vhf
 
-    def analyze(self, verbose=None):
+    def analyze(self, verbose=None, **kwargs):
         if verbose is None: verbose = self.verbose
-        return analyze(self, verbose)
+        return analyze(self, verbose, **kwargs)
 
     def mulliken_pop(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):
         if mol is None: mol = self.mol

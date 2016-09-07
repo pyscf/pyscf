@@ -16,7 +16,7 @@ from pyscf.scf import uhf
 from pyscf.scf import chkfile
 
 
-def analyze(mf, verbose=logger.DEBUG):
+def analyze(mf, verbose=logger.DEBUG, **kwargs):
     from pyscf.lo import orth
     from pyscf.tools import dump_mat
     mo_energy = mf.mo_energy
@@ -92,7 +92,8 @@ def analyze(mf, verbose=logger.DEBUG):
         log.debug(' ** alpha MO coefficients (expansion on meta-Lowdin AOs) **')
         orth_coeff = orth.orth_ao(mol, 'meta_lowdin', s=ovlp_ao)
         c_inv = numpy.dot(orth_coeff.T, ovlp_ao)
-        dump_mat.dump_rec(mol.stdout, c_inv.dot(mo_coeff[0]), label, molabel, start=1)
+        dump_mat.dump_rec(mol.stdout, c_inv.dot(mo_coeff[0]), label, molabel,
+                          start=1, **kwargs)
 
         molabel = []
         irorbcnt = {}
@@ -103,7 +104,8 @@ def analyze(mf, verbose=logger.DEBUG):
                 irorbcnt[j] = 1
             molabel.append('#%-d(%s #%d)' % (k+1, irname_full[j], irorbcnt[j]))
         log.debug(' ** beta MO coefficients (expansion on meta-Lowdin AOs) **')
-        dump_mat.dump_rec(mol.stdout, c_inv.dot(mo_coeff[1]), label, molabel, start=1)
+        dump_mat.dump_rec(mol.stdout, c_inv.dot(mo_coeff[1]), label, molabel,
+                          start=1, **kwargs)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     return mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
@@ -407,9 +409,9 @@ class UHF(uhf.UHF):
                              self.mo_coeff, self.mo_occ, overwrite_mol=True)
         return self
 
-    def analyze(self, verbose=None):
+    def analyze(self, verbose=None, **kwargs):
         if verbose is None: verbose = self.verbose
-        return analyze(self, verbose)
+        return analyze(self, verbose, **kwargs)
 
     @lib.with_doc(get_irrep_nelec.__doc__)
     def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None, s=None):

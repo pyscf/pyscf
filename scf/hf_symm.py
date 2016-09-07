@@ -26,7 +26,7 @@ from pyscf.scf import chkfile
 
 # mo_energy, mo_coeff, mo_occ are all in nosymm representation
 
-def analyze(mf, verbose=logger.DEBUG):
+def analyze(mf, verbose=logger.DEBUG, **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Occupancy for each irreps; Mulliken population analysis
     '''
@@ -73,7 +73,7 @@ def analyze(mf, verbose=logger.DEBUG):
         log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
         orth_coeff = orth.orth_ao(mol, 'meta_lowdin', s=ovlp_ao)
         c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
-        dump_mat.dump_rec(mf.stdout, c, label, molabel, start=1)
+        dump_mat.dump_rec(mf.stdout, c, label, molabel, start=1, **kwargs)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     return mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
@@ -377,9 +377,9 @@ class RHF(hf.RHF):
                              self.mo_coeff, self.mo_occ, overwrite_mol=False)
         return self
 
-    def analyze(self, verbose=None):
+    def analyze(self, verbose=None, **kwargs):
         if verbose is None: verbose = self.verbose
-        return analyze(self, verbose)
+        return analyze(self, verbose, **kwargs)
 
     @lib.with_doc(get_irrep_nelec.__doc__)
     def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None, s=None):
