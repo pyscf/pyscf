@@ -204,18 +204,15 @@ class DF(lib.StreamObject):
         else:
             kpts = numpy.asarray(kpts)
 
-        # Use DF object to mimic KRHF/KUHF object in function get_coulG
-        self.exxdiv = exxdiv
-
         vj = vk = None
         if kpts.shape == (3,):
             if with_k:
-                vk = fft_jk.get_k(self, dm, hermi, kpts, kpt_band)
+                vk = fft_jk.get_k(self, dm, hermi, kpts, kpt_band, exxdiv)
             if with_j:
                 vj = fft_jk.get_j(self, dm, hermi, kpts, kpt_band)
         else:
             if with_k:
-                vk = fft_jk.get_k_kpts(self, dm, hermi, kpts, kpt_band)
+                vk = fft_jk.get_k_kpts(self, dm, hermi, kpts, kpt_band, exxdiv)
             if with_j:
                 vj = fft_jk.get_j_kpts(self, dm, hermi, kpts, kpt_band)
         return vj, vk

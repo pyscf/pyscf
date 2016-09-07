@@ -245,15 +245,13 @@ class PWDF(lib.StreamObject):
             else:
                 kpts = self.kpts
 
-        # Use DF object to mimic KRHF/KUHF object in function get_coulG
-        self.exxdiv = exxdiv
-
         if kpts.shape == (3,):
-            return pwdf_jk.get_jk(self, dm, hermi, kpts, kpt_band, with_j, with_k)
+            return pwdf_jk.get_jk(self, dm, hermi, kpts, kpt_band, with_j,
+                                  with_k, exxdiv)
 
         vj = vk = None
         if with_k:
-            vk = pwdf_jk.get_k_kpts(self, dm, hermi, kpts, kpt_band)
+            vk = pwdf_jk.get_k_kpts(self, dm, hermi, kpts, kpt_band, exxdiv)
         if with_j:
             vj = pwdf_jk.get_j_kpts(self, dm, hermi, kpts, kpt_band)
         return vj, vk

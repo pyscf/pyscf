@@ -70,7 +70,8 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpt_band=None):
         vj_kpts = lib.asarray(vj_kpts).reshape(nkpts,nset,nao,nao)
         return vj_kpts.transpose(1,0,2,3).reshape(dm_kpts.shape)
 
-def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpt_band=None):
+def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpt_band=None,
+               exxdiv=None):
     '''Get the Coulomb (J) and exchange (K) AO matrices at sampled k-points.
 
     Args:
@@ -106,7 +107,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpt_band=None):
         for k2, ao_k2 in mydf.aoR_loop(cell, gs, kpts):
             kpt2 = kpts[k2]
             vkR_k1k2 = get_vkR(mydf, cell, aoR_kband, ao_k2, kpt_band, kpt2,
-                               coords, gs)
+                               coords, gs, exxdiv)
             #:vk_kpts = 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq',
             #:            dm_kpts[k2], aoR_kband.conj(), vkR_k1k2, ao_k2)
             for i in range(nset):
@@ -128,7 +129,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpt_band=None):
             for k1, ao_k1 in mydf.aoR_loop(cell, gs, kpts):
                 kpt1 = kpts[k1]
                 vkR_k1k2 = get_vkR(mydf, cell, ao_k1, ao_k2, kpt1, kpt2,
-                                   coords, gs)
+                                   coords, gs, exxdiv)
                 for i in range(nset):
                     tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dms[i])
                     vk_kpts[i,k1] += weight * lib.dot(ao_k1.T.conj(), tmp_Rq)
@@ -193,7 +194,7 @@ def get_j(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None):
     vj = get_j_kpts(mydf, dm_kpts, hermi, [kpt], kpt_band)
     return vj.reshape(dm.shape)
 
-def get_k(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None):
+def get_k(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None, exxdiv=None):
     '''Get the Coulomb (J) and exchange (K) AO matrices for the given density matrix.
 
     Args:
@@ -219,11 +220,11 @@ def get_k(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None):
     dm = np.asarray(dm, order='C')
     nao = dm.shape[-1]
     dm_kpts = dm.reshape(-1,1,nao,nao)
-    vk = get_k_kpts(mydf, dm_kpts, hermi, [kpt], kpt_band)
+    vk = get_k_kpts(mydf, dm_kpts, hermi, [kpt], kpt_band, exxdiv)
     return vk.reshape(dm.shape)
 
 
-def get_vkR(mydf, cell, aoR_k1, aoR_k2, kpt1, kpt2, coords, gs):
+def get_vkR(mydf, cell, aoR_k1, aoR_k2, kpt1, kpt2, coords, gs, exxdiv):
     '''Get the real-space 2-index "exchange" potential V_{i,k1; j,k2}(r)
     where {i,k1} = exp^{i k1 r) |i> , {j,k2} = exp^{-i k2 r) <j|
 
@@ -242,6 +243,7 @@ def get_vkR(mydf, cell, aoR_k1, aoR_k2, kpt1, kpt2, coords, gs):
     '''
     ngs, nao = aoR_k1.shape
     expmikr = np.exp(-1j*np.dot(kpt1-kpt2,coords.T))
+    mydf.exxdiv = exxdiv
     coulG = tools.get_coulG(cell, kpt1-kpt2, True, mydf, gs)
 
     def prod(ij):

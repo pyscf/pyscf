@@ -84,7 +84,8 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
     else:
         return vj_kpts.reshape(dm_kpts.shape)
 
-def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
+def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
+               exxdiv=None):
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = (time.clock(), time.time())
@@ -117,6 +118,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
         if swap_2e and abs(kpt).sum() > 1e-9:
             kk_todo[kptj_idx,kpti_idx] = False
 
+        mydf.exxdiv = exxdiv
         vkcoulG = tools.get_coulG(cell, kpt, True, mydf, mydf.gs) / cell.vol
         # <r|-G+k_rs|s> = conj(<s|G-k_rs|r>) = conj(<s|G+k_sr|r>)
         for k, pqkR, pqkI, p0, p1 \
@@ -180,13 +182,13 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
 ##################################################
 
 def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
-           kpt_band=None, with_j=True, with_k=True):
+           kpt_band=None, with_j=True, with_k=True, exxdiv=None):
     '''JK for given k-point'''
     vj = vk = None
     if kpt_band is not None and abs(kpt-kpt_band).sum() > 1e-9:
         kpt = numpy.reshape(kpt, (1,3))
         if with_k:
-            vk = get_k_kpts(mydf, [dm], hermi, kpt, kpt_band)
+            vk = get_k_kpts(mydf, [dm], hermi, kpt, kpt_band, exxdiv)
         if with_j:
             vj = get_j_kpts(mydf, [dm], hermi, kpt, kpt_band)
         return vj, vk
@@ -208,6 +210,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
         vjcoulG = tools.get_coulG(cell, kpt_allow, gs=mydf.gs) / cell.vol
     if with_k:
         vk = numpy.zeros((nset,nao,nao), dtype=numpy.complex128)
+        mydf.exxdiv = exxdiv
         vkcoulG = tools.get_coulG(cell, kpt_allow, True, mydf, mydf.gs) / cell.vol
 
     dmsR = dms.real.reshape(nset,nao**2)
