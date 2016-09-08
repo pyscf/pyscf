@@ -17,6 +17,7 @@ from pyscf.mcscf import mc_ao2mo
 from pyscf.mcscf import chkfile
 from pyscf import ao2mo
 from pyscf import scf
+from pyscf.scf import iah
 
 # ref. JCP, 82, 5053;  JCP, 73, 2342
 
