@@ -58,7 +58,8 @@ void NPdgemm(const char trans_a, const char trans_b,
 #if defined _OPENMP
                 nthread = omp_get_num_threads();
 #endif
-                nblk = MIN((int)((k-1)/nthread) + 1, k);
+                nblk = (k+nthread-1) / nthread;
+                nthread = (k+nblk-1) / nblk;
                 cpriv = malloc(sizeof(double) * m * n);
 #pragma omp for
                 for (i = 0; i < nthread; i++) {
@@ -96,7 +97,8 @@ void NPdgemm(const char trans_a, const char trans_b,
 #if defined _OPENMP
                 nthread = omp_get_num_threads();
 #endif
-                nblk = MIN((int)((m-1)/nthread) + 1, m);
+                nblk = (m+nthread-1) / nthread;
+                nthread = (m+nblk-1) / nblk;
 #pragma omp for
                 for (i = 0; i < nthread; i++) {
                         di = MIN(nblk, m-i*nblk);
@@ -123,7 +125,8 @@ void NPdgemm(const char trans_a, const char trans_b,
 #if defined _OPENMP
                 nthread = omp_get_num_threads();
 #endif
-                nblk = MIN((int)((n-1)/nthread) + 1, n);
+                nblk = (n+nthread-1) / nthread;
+                nthread = (n+nblk-1) / nblk;
 #pragma omp for
                 for (i = 0; i < nthread; i++) {
                         di = MIN(nblk, n-i*nblk);

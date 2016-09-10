@@ -13,8 +13,6 @@
 #include "np_helper/np_helper.h"
 #include "ao2mo/r_ao2mo.h"
 
-#define MAX(I,J)        ((I) > (J) ? (I) : (J))
-
 void zhemm_(const char*, const char*,
             const int*, const int*,
             const double complex*, const double complex*, const int*,

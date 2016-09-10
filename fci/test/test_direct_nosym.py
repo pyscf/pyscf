@@ -12,7 +12,7 @@ from pyscf.fci import fci_slow
 nelec = (3,4)
 norb = 8
 h2e = numpy.random.random((norb,norb,norb,norb))
-h2e += h2e.transpose(2,3,0,1)
+h2e = h2e + h2e.transpose(2,3,0,1)
 na = fci.cistring.num_strings(norb, nelec[0])
 nb = fci.cistring.num_strings(norb, nelec[1])
 ci0 = numpy.random.random((na,nb))
