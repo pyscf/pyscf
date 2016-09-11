@@ -255,13 +255,16 @@ def get_nuc(mydf, kpts=None):
     jaux -= numpy.einsum('x,xj->j', vG.real, aoaux[:,:naux].real)
     jaux -= numpy.einsum('x,xj->j', vG.imag, aoaux[:,:naux].imag)
 
+    jaux -= charge.sum() * mydf.auxbar(auxcell)
     ovlp = cell.pbc_intor('cint1e_ovlp_sph', 1, lib.HERMITIAN, kpts_lst)
     nao = cell.nao_nr()
-    jaux -= charge.sum() * mydf.auxbar(auxcell)
+    nao_pair = nao * (nao+1) // 2
+    max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
+    blksize = max(16, min(int(max_memory*1e6/16/nao_pair), mydf.blockdim))
     for k, kpt in enumerate(kpts_lst):
         with mydf.load_Lpq((kpt,kpt)) as Lpq:
             v = 0
-            for p0, p1 in lib.prange(0, jaux.size, mydf.blockdim):
+            for p0, p1 in lib.prange(0, jaux.size, blksize):
                 v += numpy.dot(jaux[p0:p1], numpy.asarray(Lpq[p0:p1]))
         vj[k] = vj[k].reshape(nao,nao) - nucbar * ovlp[k]
         if gamma_point(kpt):
@@ -438,8 +441,15 @@ class MDF(pwdf.PWDF):
         kpti, kptj = kpti_kptj
         unpack = is_zero(kpti-kptj) and not compact
         nao = self.cell.nao_nr()
+        max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
+        if is_zero(kpti_kptj):
+            nao_pair = nao * (nao+1) // 2
+            blksize = max(16, min(int(max_memory*1e6/8/nao_pair/2), mydf.blockdim))
+        else:
+            blksize = max(16, min(int(max_memory*1e6/16/nao**2/2), mydf.blockdim))
+
         if unpack:
-            buf = numpy.empty((self.blockdim,nao*(nao+1)//2))
+            buf = numpy.empty((blksize,nao*(nao+1)//2))
         def load(Lpq, bufR, bufI):
             shape = Lpq.shape
             if unpack:
@@ -462,7 +472,7 @@ class MDF(pwdf.PWDF):
         with self.load_j3c(kpti_kptj) as j3c:
             with self.load_Lpq(kpti_kptj) as Lpq:
                 naoaux = j3c.shape[0]
-                for b0, b1 in lib.prange(0, naoaux, self.blockdim):
+                for b0, b1 in lib.prange(0, naoaux, blksize):
                     LpqR, LpqI = load(numpy.asarray(Lpq[b0:b1]), LpqR, LpqI)
                     j3cR, j3cI = load(numpy.asarray(j3c[b0:b1]), j3cR, j3cI)
                     yield LpqR, LpqI, j3cR, j3cI
