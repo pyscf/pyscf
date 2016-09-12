@@ -90,58 +90,6 @@ TIMER_LEVEL  = param.TIMER_LEVEL
 
 sys.verbose = NOTE
 
-class Logger(object):
-    def __init__(self, stdout=sys.stdout, verbose=NOTE):
-        self.stdout = stdout
-        self.verbose = verbose
-        self._t0 = time.clock()
-        self._w0 = time.time()
-
-    def debug(self, msg, *args):
-        debug(self, msg, *args)
-
-    def debug1(self, msg, *args):
-        debug1(self, msg, *args)
-
-    def debug2(self, msg, *args):
-        debug2(self, msg, *args)
-
-    def debug3(self, msg, *args):
-        debug3(self, msg, *args)
-
-    def debug4(self, msg, *args):
-        debug4(self, msg, *args)
-
-    def info(self, msg, *args):
-        info(self, msg, *args)
-
-    def note(self, msg, *args):
-        note(self, msg, *args)
-
-    def warn(self, msg, *args):
-        warn(self, msg, *args)
-
-    def error(self, msg, *args):
-        error(self, msg, *args)
-
-    def log(self, msg, *args):
-        log(self, msg, *args)
-
-    def timer(self, msg, cpu0=None, wall0=None):
-        if cpu0:
-            return timer(self, msg, cpu0, wall0)
-        else:
-            self._t0, self._w0 = timer(self, msg, self._t0, wall0)
-            return self._t0, self._w0
-
-    def timer_debug1(self, msg, cpu0=None, wall0=None):
-        if self.verbose >= DEBUG1:
-            return self.timer(msg, cpu0, wall0)
-        elif wall0:
-            return time.clock(), time.time()
-        else:
-            return time.clock()
-
 def flush(rec, msg, *args):
     rec.stdout.write(msg%args)
     rec.stdout.write('\n')
@@ -195,24 +143,47 @@ def stdout(rec, msg, *args):
         flush(rec, msg, *args)
     sys.stdout.write('>>> %s\n' % msg)
 
-def timer(rec, msg, cpu0, wall0=None):
-    cpu1, wall1 = time.clock(), time.time()
+def timer(rec, msg, cpu0=None, wall0=None):
+    if cpu0 is None:
+        cpu0 = rec._t0
     if wall0:
+        rec._t0, rec._w0 = time.clock(), time.time()
         if rec.verbose >= TIMER_LEVEL:
-            flush(rec, ' '.join(('    CPU time for', msg,
-                                 '%9.2f sec, wall time %9.2f sec')),
-                  cpu1-cpu0, wall1-wall0)
-        return cpu1, wall1
+            flush(rec, '    CPU time for %s %9.2f sec, wall time %9.2f sec'
+                  % (msg, rec._t0-cpu0, rec._w0-wall0))
+        return rec._t0, rec._w0
     else:
+        rec._t0 = time.clock()
         if rec.verbose >= TIMER_LEVEL:
-            flush(rec, ' '.join(('    CPU time for', msg, '%9.2f sec')),
-                  cpu1-cpu0)
-        return cpu1
+            flush(rec, '    CPU time for %s %9.2f sec' % (rec._t0-cpu0))
+        return rec._t0
 
-def timer_debug1(rec, msg, cpu0, wall0=None):
+def timer_debug1(rec, msg, cpu0=None, wall0=None):
     if rec.verbose >= DEBUG1:
         return timer(rec, msg, cpu0, wall0)
     elif wall0:
-        return time.clock(), time.time()
+        rec._t0, rec._w0 = time.clock(), time.time()
+        return rec._t0, rec._w0
     else:
-        return time.clock()
+        rec._t0 = time.clock()
+        return rec._t0
+
+class Logger(object):
+    def __init__(self, stdout=sys.stdout, verbose=NOTE):
+        self.stdout = stdout
+        self.verbose = verbose
+        self._t0 = time.clock()
+        self._w0 = time.time()
+
+    log = log
+    error = error
+    warn = warn
+    note = note
+    info = info
+    debug  = debug
+    debug1 = debug1
+    debug2 = debug2
+    debug3 = debug3
+    debug4 = debug4
+    timer = timer
+    timer_debug1 = timer_debug1
