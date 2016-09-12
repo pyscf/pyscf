@@ -384,27 +384,29 @@ def izip(*args):
     else:
         return zip(*args)
 
-import threading
+from threading import Thread
 from multiprocessing import Queue, Process
 class ProcessWithReturnValue(Process):
-    def __init__(self, target=None, *args, **kwargs):
+    def __init__(self, group=None, target=None, name=None, args=(),
+                 kwargs=None, verbose=None):
         self._q = Queue()
         def qwrap(*args, **kwargs):
             self._q.put(target(*args, **kwargs))
-        Process.__init__(self, target=qwrap, *args, **kwargs)
+        Process.__init__(self, group, qwrap, name, args, kwargs)
     def join(self):
         Process.join(self)
         return self._q.get()
     get = join
 
-class ThreadWithReturnValue(threading.Thread):
-    def __init__(self, target=None, *args, **kwargs):
+class ThreadWithReturnValue(Thread):
+    def __init__(self, group=None, target=None, name=None, args=(),
+                 kwargs=None, verbose=None):
         self._q = Queue()
         def qwrap(*args, **kwargs):
             self._q.put(target(*args, **kwargs))
-        threading.Thread.__init__(self, target=qwrap, *args, **kwargs)
+        Thread.__init__(self, group, qwrap, name, args, kwargs, verbose)
     def join(self):
-        threading.Thread.join(self)
+        Thread.join(self)
         return self._q.get()
     get = join
 

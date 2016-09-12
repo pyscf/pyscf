@@ -19,6 +19,66 @@ double FCI_t1ci_sf(double *ci0, double *t1, int bcount,
                    int norb, int na, int nb, int nlinka, int nlinkb,
                    _LinkT *clink_indexa, _LinkT *clink_indexb);
 
+
+void FCIcontract_a_1e_nosym(double *h1e, double *ci0, double *ci1,
+                            int norb, int nstra, int nstrb, int nlinka, int nlinkb,
+                            int *link_indexa, int *link_indexb)
+{
+        int j, k, i, a, sign;
+        size_t str0, str1;
+        double *pci0, *pci1;
+        double tmp;
+        _LinkT *tab;
+        _LinkT *clink = malloc(sizeof(_LinkT) * nlinka * nstra);
+        FCIcompress_link(clink, link_indexa, norb, nstra, nlinka);
+
+        for (str0 = 0; str0 < nstra; str0++) {
+                tab = clink + str0 * nlinka;
+                for (j = 0; j < nlinka; j++) {
+                        a    = EXTRACT_CRE (tab[j]); // propagate from t1 to bra, through a^+ i
+                        i    = EXTRACT_DES (tab[j]);
+                        str1 = EXTRACT_ADDR(tab[j]);
+                        sign = EXTRACT_SIGN(tab[j]);
+                        pci0 = ci0 + str0 * nstrb;
+                        pci1 = ci1 + str1 * nstrb;
+                        tmp = sign * h1e[a*norb+i];
+                        for (k = 0; k < nstrb; k++) {
+                                pci1[k] += tmp * pci0[k];
+                        }
+                }
+        }
+        free(clink);
+}
+
+void FCIcontract_b_1e_nosym(double *h1e, double *ci0, double *ci1,
+                            int norb, int nstra, int nstrb, int nlinka, int nlinkb,
+                            int *link_indexa, int *link_indexb)
+{
+        int j, k, i, a, sign;
+        size_t str0, str1;
+        double *pci1;
+        double tmp;
+        _LinkT *tab;
+        _LinkT *clink = malloc(sizeof(_LinkT) * nlinkb * nstrb);
+        FCIcompress_link(clink, link_indexb, norb, nstrb, nlinkb);
+
+        for (str0 = 0; str0 < nstra; str0++) {
+                pci1 = ci1 + str0 * nstrb;
+                for (k = 0; k < nstrb; k++) {
+                        tab = clink + k * nlinkb;
+                        tmp = ci0[str0*nstrb+k];
+                        for (j = 0; j < nlinkb; j++) {
+                                a    = EXTRACT_CRE (tab[j]);
+                                i    = EXTRACT_DES (tab[j]);
+                                str1 = EXTRACT_ADDR(tab[j]);
+                                sign = EXTRACT_SIGN(tab[j]);
+                                pci1[str1] += sign * tmp * h1e[a*norb+i];
+                        }
+                }
+        }
+        free(clink);
+}
+
 static void spread_a_t1(double *ci1, double *t1,
                         int bcount, int stra_id, int strb_id,
                         int norb, int nstrb, int nlinka, _LinkT *clink_indexa)

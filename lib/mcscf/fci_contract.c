@@ -99,7 +99,8 @@ static double prog_b_t1(double *ci0, double *t1,
                         int norb, int nstrb, int nlinkb, int *clink_indexb)
 {
         const int nnorb = norb * (norb+1)/2;
-        int j, ia, str0, str1, sign;
+        int j, ia, sign;
+        size_t str0, str1;
         const _LinkTrilT *tab = clink_indexb + strb_id * nlinkb;
         double *pci = ci0 + stra_id*(size_t)nstrb;
         double csum = 0;
@@ -242,7 +243,8 @@ void FCIcontract_b_1e(double *f1e_tril, double *ci0, double *ci1,
                       int norb, int nstra, int nstrb, int nlinka, int nlinkb,
                       int *link_indexa, int *link_indexb)
 {
-        int j, k, ia, str0, str1, sign;
+        int j, k, ia, sign;
+        size_t str0, str1;
         double *pci1;
         double tmp;
         _LinkTrilT *tab;
@@ -250,19 +252,15 @@ void FCIcontract_b_1e(double *f1e_tril, double *ci0, double *ci1,
         FCIcompress_link_tril(clink, link_indexb, nstrb, nlinkb);
 
         for (str0 = 0; str0 < nstra; str0++) {
-                pci1 = ci1 + str0 * (size_t)nstrb;
+                pci1 = ci1 + str0 * nstrb;
                 for (k = 0; k < nstrb; k++) {
                         tab = clink + k * nlinkb;
-                        tmp = ci0[str0*(size_t)nstrb+k];
+                        tmp = ci0[str0*nstrb+k];
                         for (j = 0; j < nlinkb; j++) {
                                 ia   = EXTRACT_IA  (tab[j]);
                                 str1 = EXTRACT_ADDR(tab[j]);
                                 sign = EXTRACT_SIGN(tab[j]);
-                                if (sign > 0) {
-                                        pci1[str1] += tmp * f1e_tril[ia];
-                                } else {
-                                        pci1[str1] -= tmp * f1e_tril[ia];
-                                }
+                                pci1[str1] += sign * tmp * f1e_tril[ia];
                         }
                 }
         }

@@ -5,6 +5,7 @@
 #
 
 import os, sys
+import platform
 import gc
 import time
 import math
@@ -1762,7 +1763,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
             except IOError:
                 logger.warn(self, 'input file does not exist')
 
-        self.stdout.write('System: %s\n' % str(os.uname()))
+        self.stdout.write('System: %s\n' % platform.uname())
         self.stdout.write('Date: %s\n' % time.ctime())
         try:
             pyscfdir = os.path.abspath(os.path.join(__file__, '..', '..'))

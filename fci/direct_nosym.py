@@ -30,8 +30,33 @@ from pyscf.fci import direct_spin1
 
 libfci = pyscf.lib.load_library('libfci')
 
-def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
-    raise NotImplementedError
+def contract_1e(h1e, fcivec, norb, nelec, link_index=None):
+    h1e = numpy.asarray(h1e, order='C')
+    fcivec = numpy.asarray(fcivec, order='C')
+    link_indexa, link_indexb = _unpack(norb, nelec, link_index)
+
+    na, nlinka = link_indexa.shape[:2]
+    nb, nlinkb = link_indexb.shape[:2]
+    assert(fcivec.size == na*nb)
+    ci1 = numpy.zeros_like(fcivec)
+
+    libfci.FCIcontract_a_1e_nosym(h1e.ctypes.data_as(ctypes.c_void_p),
+                                  fcivec.ctypes.data_as(ctypes.c_void_p),
+                                  ci1.ctypes.data_as(ctypes.c_void_p),
+                                  ctypes.c_int(norb),
+                                  ctypes.c_int(na), ctypes.c_int(nb),
+                                  ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
+                                  link_indexa.ctypes.data_as(ctypes.c_void_p),
+                                  link_indexb.ctypes.data_as(ctypes.c_void_p))
+    libfci.FCIcontract_b_1e_nosym(h1e.ctypes.data_as(ctypes.c_void_p),
+                                  fcivec.ctypes.data_as(ctypes.c_void_p),
+                                  ci1.ctypes.data_as(ctypes.c_void_p),
+                                  ctypes.c_int(norb),
+                                  ctypes.c_int(na), ctypes.c_int(nb),
+                                  ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
+                                  link_indexa.ctypes.data_as(ctypes.c_void_p),
+                                  link_indexb.ctypes.data_as(ctypes.c_void_p))
+    return ci1
 
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     r'''Contract the 2-electron Hamiltonian with a FCI vector to get a new FCI
@@ -59,16 +84,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     See also :func:`direct_nosym.absorb_h1e`
     '''
     fcivec = numpy.asarray(fcivec, order='C')
-    if link_index is None:
-        if isinstance(nelec, (int, numpy.number)):
-            nelecb = nelec//2
-            neleca = nelec - nelecb
-        else:
-            neleca, nelecb = nelec
-        link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
-        link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
-    else:
-        link_indexa, link_indexb = link_index
+    link_indexa, link_indexb = _unpack(norb, nelec, link_index)
 
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
@@ -107,8 +123,8 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
 
 
 class FCISolver(direct_spin1.FCISolver):
-    def contract_1e(self, f1e, fcivec, norb, nelec, link_index=None):
-        return contract_1e(f1e, fcivec, norb, nelec, link_index)
+    def contract_1e(self, h1e, fcivec, norb, nelec, link_index=None):
+        return contract_1e(h1e, fcivec, norb, nelec, link_index)
 
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None):
         return contract_2e(eri, fcivec, norb, nelec, link_index)
@@ -133,6 +149,18 @@ class FCISolver(direct_spin1.FCISolver):
                                        davidson_only, pspace_size, **kwargs)
         return e, c
 
+def _unpack(norb, nelec, link_index):
+    if link_index is None:
+        if isinstance(nelec, (int, numpy.number)):
+            nelecb = nelec//2
+            neleca = nelec - nelecb
+        else:
+            neleca, nelecb = nelec
+        link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
+        link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
+        return link_indexa, link_indexb
+    else:
+        return link_index
 
 
 if __name__ == '__main__':
