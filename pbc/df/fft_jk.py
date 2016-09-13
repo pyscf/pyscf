@@ -246,19 +246,20 @@ def get_vkR(mydf, cell, aoR_k1, aoR_k2, kpt1, kpt2, coords, gs, exxdiv):
     mydf.exxdiv = exxdiv
     coulG = tools.get_coulG(cell, kpt1-kpt2, True, mydf, gs)
 
-    def prod(ij):
-        i, j = divmod(ij, nao)
-        rhoR = aoR_k1[:,i] * aoR_k2[:,j].conj()
+    aoR_k1 = numpy.asarray(aoR_k1.T, order='C')
+    aoR_k2 = numpy.asarray(aoR_k2.T, order='C')
+    vR = numpy.empty((nao,nao,ngs), dtype=numpy.complex128)
+    for i in range(nao):
+        rhoR = aoR_k1 * aoR_k2[i].conj()
         rhoG = tools.fftk(rhoR, gs, expmikr)
-        vG = coulG*rhoG
-        vR = tools.ifftk(vG, gs, expmikr.conj())
-        return vR
+        vG = rhoG * coulG
+        vR[:,i] = tools.ifftk(vG, gs, expmikr.conj())
+    vR = vR.transpose(2,0,1)
 
     if aoR_k1.dtype == np.double and aoR_k2.dtype == np.double:
-        vR = tools.pbc._map(prod, ngs, nao**2).real
+        return vR.real
     else:
-        vR = tools.pbc._map(prod, ngs, nao**2)
-    return vR.reshape(ngs,nao,nao)
+        return vR
 
 def _format_dms(dm_kpts, kpts):
     nkpts = len(kpts)

@@ -5,7 +5,17 @@ import numpy as np
 import scipy.linalg
 from pyscf import lib
 
-#import pyfftw
+nproc = lib.num_threads()
+try:
+    import pyfftw
+    pyfftw.interfaces.cache.enable()
+    fftn_wrapper = pyfftw.interfaces.numpy_fft.fftn
+    ifftn_wrapper = pyfftw.interfaces.numpy_fft.ifftn
+except ImportError:
+    def fftn_wrapper(a, s=None, axes=None, norm=None, **kwargs):
+        return np.fft.fftn(a, s, axes, norm)
+    def ifftn_wrapper(a, s=None, axes=None, norm=None, **kwargs):
+        return np.fft.ifftn(a, s, axes, norm)
 
 def fft(f, gs):
     '''Perform the 3D FFT from real (R) to reciprocal (G) space.
@@ -30,12 +40,12 @@ def fft(f, gs):
             numpy.fft).
 
     '''
-    ngs = 2*np.asarray(gs)+1
-    f3d = np.reshape(f, ngs)
-    g3d = np.fft.fftn(f3d)
-    #pyfftw.interfaces.cache.enable()
-    #g3d = pyfftw.interfaces.numpy_fft.fftn(f3d)
-    return np.ravel(g3d)
+    f3d = f.reshape([-1] + [2*x+1 for x in gs])
+    g3d = fftn_wrapper(f3d, axes=(1,2,3), threads=nproc)
+    if f.ndim == 1:
+        return g3d.ravel()
+    else:
+        return g3d.reshape(f.shape[0], -1)
 
 def ifft(g, gs):
     '''Perform the 3D inverse FFT from reciprocal (G) space to real (R) space.
@@ -56,12 +66,12 @@ def ifft(g, gs):
             of numpy.fft).
 
     '''
-    ngs = 2*np.asarray(gs)+1
-    g3d = np.reshape(g, ngs)
-    f3d = np.fft.ifftn(g3d)
-    #pyfftw.interfaces.cache.enable()
-    #f3d = pyfftw.interfaces.numpy_fft.ifftn(g3d)
-    return np.ravel(f3d)
+    g3d = g.reshape([-1] + [2*x+1 for x in gs])
+    f3d = ifftn_wrapper(g3d, axes=(1,2,3), threads=nproc)
+    if g.ndim == 1:
+        return f3d.ravel()
+    else:
+        return f3d.reshape(g.shape[0], -1)
 
 
 def fftk(f, gs, expmikr):
@@ -78,36 +88,6 @@ def ifftk(g, gs, expikr):
     fk(r) = (1/Ng) \sum_G fk(k+G) e^{i(k+G)r} = (1/Ng) \sum_G [fk(k+G)e^{iGr}] e^{ikr}
     '''
     return ifft(g, gs) * expikr
-
-def _map(fn, ngs, nv):
-    buf_ctypes = sharedctypes.RawArray('d', ngs*nv*2)  # *2 for complex number
-    out = np.ndarray((nv,ngs), dtype=np.complex128, buffer=buf_ctypes)
-    def f(i0, i1):
-        for i in range(i0,i1):
-            out[i] = fn(i)
-    nproc = lib.num_threads()
-    if nproc > 1:
-        seg = (nv+nproc-1) // nproc
-        ps = [Process(target=f, args=(i0,i1)) for i0,i1 in lib.prange(0, nv, seg)]
-        [p.start() for p in ps]
-        [p.join() for p in ps]
-    else:
-        f(0, nv)
-    return out.T
-
-def map_fft(vs, gs):
-    return _map(lambda i: fft(vs[:,i], gs), *(vs.shape))
-
-def map_ifft(vs, gs):
-    return _map(lambda i: ifft(vs[:,i], gs), *(vs.shape))
-
-def map_fftk(vs, gs, expmikr):
-    #expmikr = np.exp(-1j*np.dot(rk,k))
-    return _map(lambda i: fft(vs[:,i]*expmikr, gs), *(vs.shape))
-
-def map_ifftk(vs, gs, expmikr):
-    #expmikr = np.exp(1j*np.dot(rk,k))
-    return _map(lambda i: ifft(vs[:,i], gs)*expmikr, *(vs.shape))
 
 
 def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None):

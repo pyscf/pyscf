@@ -383,10 +383,10 @@ def get_vkR(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2):
         return vR
 
     if aoR_k1.dtype == np.double and aoR_k2.dtype == np.double:
-        vR = tools.pbc._map(prod, ngs, nao**2).real
+        vR = numpy.asarray([prod(ij).real for ij in range(nao**2)])
     else:
-        vR = tools.pbc._map(prod, ngs, nao**2)
-    return vR.reshape(-1,nao,nao)
+        vR = numpy.asarray([prod(ij) for ij in range(nao**2)])
+    return vR.reshape(nao,nao,-1).transpose(2,0,1)
 
 
 def get_j_kpts(mf, cell, dm_kpts, kpts, kpt_band=None):

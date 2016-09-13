@@ -166,31 +166,38 @@ def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), compact=False):
     nao = cell.nao_nr()
     ngs = len(coords)
 
+    def trans(aoiR, aojR, fac=1):
+        if id(aoiR) == id(aojR):
+            aoiR = aojR = numpy.asarray(aoiR.T, order='C')
+        else:
+            aoiR = numpy.asarray(aoiR.T, order='C')
+            aojR = numpy.asarray(aojR.T, order='C')
+        ao_pairs_G = numpy.empty((nao,nao,ngs), dtype=numpy.complex128)
+        for i in range(nao):
+            ao_pairs_G[i] = tools.fft(fac * aoiR[i].conj() * aojR, mydf.gs)
+        ao_pairs_G = ao_pairs_G.reshape(-1,ngs).T
+        return ao_pairs_G
+
     if compact and abs(kpts).sum() < 1e-9:  # gamma point
         aoR = mydf._numint.eval_ao(cell, coords, kpts[:1])[0]
+        aoR = numpy.asarray(aoR.T, order='C')
         npair = nao*(nao+1)//2
-        def fftprod(ij):
-            i = int(numpy.sqrt(ij*2+.25)-.5)
-            j = ij - i*(i+1)//2
-            return tools.fft(aoR[:,i] * aoR[:,j], mydf.gs)
-        ao_pairs_G = tools.pbc._map(fftprod, ngs, npair)
+        ao_pairs_G = numpy.empty((npair,ngs), dtype=numpy.complex128)
+        ij = 0
+        for i in range(nao):
+            ao_pairs_G[ij:ij+i+1] = tools.fft(aoR[i] * aoR[:i+1], mydf.gs)
+            ij += i + 1
+        ao_pairs_G = ao_pairs_G.T
 
     elif abs(kpts[0]-kpts[1]).sum() < 1e-9:
         aoR = mydf._numint.eval_ao(cell, coords, kpts[:1])[0]
-        def fftprod(ij):
-            i, j = divmod(ij, nao)
-            return tools.fft(aoR[:,i].conj() * aoR[:,j], mydf.gs)
-        ao_pairs_G = tools.pbc._map(fftprod, ngs, nao*nao)
+        ao_pairs_G = trans(aoR, aoR)
 
     else:
-        aoiR, aojR = mydf._numint.eval_ao(cell, coords, kpts)
+        aoiR, aojR = mydf._numint.eval_ao(cell, coords, kpts[:2])
         q = kpts[1] - kpts[0]
         fac = numpy.exp(-1j * numpy.dot(coords, q))
-        def fftprod(ij):
-            i, j = divmod(ij, nao)
-            #return tools.fftk(aoiR[:,i].conj() * aojR[:,j], mydf.gs, coords, q)
-            return tools.fft(aoiR[:,i].conj() * aojR[:,j] * fac, mydf.gs)
-        ao_pairs_G = tools.pbc._map(fftprod, ngs, nao*nao)
+        ao_pairs_G = trans(aoiR, aojR, fac)
 
     return ao_pairs_G
 
@@ -214,48 +221,41 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), compact=False):
     nmoj = mo_coeffs[1].shape[1]
     ngs = len(coords)
 
+    def trans(aoiR, aojR, fac=1):
+        if id(aoiR) == id(aojR) and ao2mo.incore.iden_coeffs(mo_coeffs[0], mo_coeffs[1]):
+            moiR = mojR = numpy.asarray(lib.dot(mo_coeffs[0].T,aoiR.T), order='C')
+        else:
+            moiR = numpy.asarray(lib.dot(mo_coeffs[0].T aoiR.T), order='C')
+            mojR = numpy.asarray(lib.dot(mo_coeffs[1].T aojR.T), order='C')
+        mo_pairs_G = numpy.empty((nmoi,nmoj,ngs), dtype=numpy.complex128)
+        for i in range(nmoi):
+            mo_pairs_G[i] = tools.fft(fac * moiR[i].conj() * mojR, mydf.gs)
+        mo_pairs_G = mo_pairs_G.reshape(-1,ngs).T
+        return mo_pairs_G
+
     if abs(kpts).sum() < 1e-9:  # gamma point, real
         aoR = mydf._numint.eval_ao(cell, coords, kpts[:1])[0]
         if compact and ao2mo.incore.iden_coeffs(mo_coeffs[0], mo_coeffs[1]):
-            moR = lib.dot(aoR, mo_coeffs[0])
+            moR = numpy.asarray(lib.dot(mo_coeffs[0].T, aoR.T), order='C')
             npair = nmoi*(nmoi+1)//2
-            def fftprod(ij):
-                i = int(numpy.sqrt(ij*2+.25)-.5)
-                j = ij - i*(i+1)//2
-                return tools.fft(moR[:,i].conj() * moR[:,j], mydf.gs)
-            mo_pairs_G = tools.pbc._map(fftprod, ngs, npair)
+            mo_pairs_G = numpy.empty((npair,ngs), dtype=numpy.complex128)
+            ij = 0
+            for i in range(nmoi):
+                mo_pairs_G[ij:ij+i+1] = tools.fft(moR[i].conj() * moR[:i+1], mydf.gs)
+                ij += i + 1
+            mo_pairs_G = mo_pairs_G.T
         else:
-            moiR = lib.dot(aoR, mo_coeffs[0])
-            mojR = lib.dot(aoR, mo_coeffs[1])
-            npair = nmoi * nmoj
-            def fftprod(ij):
-                i, j = divmod(ij, nmoj)
-                return tools.fft(moiR[:,i].conj() * mojR[:,j], mydf.gs)
-            mo_pairs_G = tools.pbc._map(fftprod, ngs, npair)
+            mo_pairs_G = trans(aoR, aoR)
 
     elif abs(kpts[0]-kpts[1]).sum() < 1e-9:
         aoR = mydf._numint.eval_ao(cell, coords, kpts[:1])[0]
-        if ao2mo.incore.iden_coeffs(mo_coeffs[0], mo_coeffs[1]):
-            moiR = mojR = lib.dot(aoR, mo_coeffs[0])
-        else:
-            moiR = lib.dot(aoR, mo_coeffs[0])
-            mojR = lib.dot(aoR, mo_coeffs[1])
-        def fftprod(ij):
-            i, j = divmod(ij, nmoj)
-            return tools.fft(moiR[:,i].conj() * mojR[:,j], mydf.gs)
-        mo_pairs_G = tools.pbc._map(fftprod, ngs, nmoi * nmoj)
+        mo_pairs_G = trans(aoR, aoR)
 
     else:
         aoiR, aojR = mydf._numint.eval_ao(cell, coords, kpts)
-        moiR = lib.dot(aoiR, mo_coeffs[0])
-        mojR = lib.dot(aojR, mo_coeffs[1])
         q = kpts[1] - kpts[0]
         fac = numpy.exp(-1j * numpy.dot(coords, q))
-        def fftprod(ij):
-            i, j = divmod(ij, nmoj)
-            #return tools.fftk(moiR[:,i].conj() * mojR[:,j], mydf.gs, coords, q)
-            return tools.fft(moiR[:,i].conj() * mojR[:,j] * fac, mydf.gs)
-        mo_pairs_G = tools.pbc._map(fftprod, ngs, nmoi * nmoj)
+        mo_pairs_G = trans(aoiR, aojR, fac)
 
     return mo_pairs_G
 
