@@ -13,9 +13,9 @@ try:
     ifftn_wrapper = pyfftw.interfaces.numpy_fft.ifftn
 except ImportError:
     def fftn_wrapper(a, s=None, axes=None, norm=None, **kwargs):
-        return np.fft.fftn(a, s, axes, norm)
+        return np.fft.fftn(a, s, axes)
     def ifftn_wrapper(a, s=None, axes=None, norm=None, **kwargs):
-        return np.fft.ifftn(a, s, axes, norm)
+        return np.fft.ifftn(a, s, axes)
 
 def fft(f, gs):
     '''Perform the 3D FFT from real (R) to reciprocal (G) space.

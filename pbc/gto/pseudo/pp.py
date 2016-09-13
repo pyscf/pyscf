@@ -225,7 +225,7 @@ def get_pp(cell, kpt=np.zeros(3)):
     vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR)
 
     # vppnonloc evaluated in reciprocal space
-    aokG = tools.fftk(numpy.asarray(aoR.T, order='C'),
+    aokG = tools.fftk(np.asarray(aoR.T, order='C'),
                       cell.gs, np.exp(-1j*np.dot(coords, kpt))).T
     ngs = len(aokG)
 

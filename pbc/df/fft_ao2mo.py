@@ -225,8 +225,8 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), compact=False):
         if id(aoiR) == id(aojR) and ao2mo.incore.iden_coeffs(mo_coeffs[0], mo_coeffs[1]):
             moiR = mojR = numpy.asarray(lib.dot(mo_coeffs[0].T,aoiR.T), order='C')
         else:
-            moiR = numpy.asarray(lib.dot(mo_coeffs[0].T aoiR.T), order='C')
-            mojR = numpy.asarray(lib.dot(mo_coeffs[1].T aojR.T), order='C')
+            moiR = numpy.asarray(lib.dot(mo_coeffs[0].T, aoiR.T), order='C')
+            mojR = numpy.asarray(lib.dot(mo_coeffs[1].T, aojR.T), order='C')
         mo_pairs_G = numpy.empty((nmoi,nmoj,ngs), dtype=numpy.complex128)
         for i in range(nmoi):
             mo_pairs_G[i] = tools.fft(fac * moiR[i].conj() * mojR, mydf.gs)

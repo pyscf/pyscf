@@ -53,7 +53,8 @@ def get_pp_nl(cell, kpt=np.zeros(3)):
     aoR = numint.eval_ao(cell, coords, kpt)
     nao = cell.nao_nr()
     SI = cell.get_SI()
-    aokG = tools.map_fftk(aoR, cell.gs, np.exp(-1j*np.dot(coords, kpt)))
+    aokG = tools.fftk(np.asarray(aoR.T, order='C'),
+                      cell.gs, np.exp(-1j*np.dot(coords, kpt))).T
     ngs = len(aokG)
 
     fakemol = pyscf.gto.Mole()

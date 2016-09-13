@@ -246,9 +246,9 @@ def get_vkR(mydf, cell, aoR_k1, aoR_k2, kpt1, kpt2, coords, gs, exxdiv):
     mydf.exxdiv = exxdiv
     coulG = tools.get_coulG(cell, kpt1-kpt2, True, mydf, gs)
 
-    aoR_k1 = numpy.asarray(aoR_k1.T, order='C')
-    aoR_k2 = numpy.asarray(aoR_k2.T, order='C')
-    vR = numpy.empty((nao,nao,ngs), dtype=numpy.complex128)
+    aoR_k1 = np.asarray(aoR_k1.T, order='C')
+    aoR_k2 = np.asarray(aoR_k2.T, order='C')
+    vR = np.empty((nao,nao,ngs), dtype=np.complex128)
     for i in range(nao):
         rhoR = aoR_k1 * aoR_k2[i].conj()
         rhoG = tools.fftk(rhoR, gs, expmikr)
