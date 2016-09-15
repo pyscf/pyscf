@@ -232,14 +232,42 @@ class UCCSD(pyscf.cc.rccsd.RCCSD):
         Hr1 += einsum('me,mie->i',imds.Fov,r2)
         Hr1 += -0.5*einsum('nmie,mne->i',imds.Wooov,r2)
         # Eq. (9)
-        tmp1 = einsum('mi,mja->ija',imds.Foo,r2)
-        tmp2 = einsum('maei,mje->ija',imds.Wovvo,r2)
         Hr2 =  einsum('ae,ije->ija',imds.Fvv,r2)
+        tmp1 = einsum('mi,mja->ija',imds.Foo,r2)
         Hr2 += (-tmp1 + tmp1.transpose(1,0,2))
         Hr2 += -einsum('maji,m->ija',imds.Wovoo,r1)
         Hr2 += 0.5*einsum('mnij,mna->ija',imds.Woooo,r2)
+        tmp2 = einsum('maei,mje->ija',imds.Wovvo,r2)
         Hr2 += (tmp2 - tmp2.transpose(1,0,2))
         Hr2 += 0.5*einsum('mnef,ijae,mnf->ija',imds.Woovv,self.t2,r2)
+
+        vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
+        return vector
+
+    def ipccsd_diag(self):
+        if not self.made_ip_imds:
+            if not hasattr(self,'imds'):
+                self.imds = _IMDS(self)
+            self.imds.make_ip()
+            self.made_ip_imds = True
+        imds = self.imds
+
+        t1, t2 = self.t1, self.t2
+        nocc, nvir = t1.shape
+
+        Hr1 = -np.diag(imds.Foo)
+        Hr2 = np.zeros((nocc,nocc,nvir),dtype=t1.dtype)
+        for i in range(nocc):
+            for j in range(nocc):
+                for a in range(nvir):
+                    Hr2[i,j,a] += imds.Fvv[a,a]
+                    Hr2[i,j,a] += -imds.Foo[i,i]
+                    Hr2[i,j,a] += -imds.Foo[j,j]
+                    Hr2[i,j,a] += 0.5*(imds.Woooo[i,j,i,j]-imds.Woooo[j,i,i,j])
+                    Hr2[i,j,a] += imds.Wovvo[i,a,a,i]
+                    Hr2[i,j,a] += imds.Wovvo[j,a,a,j]
+                    Hr2[i,j,a] += 0.5*(np.dot(imds.Woovv[i,j,:,a],t2[i,j,a,:])
+                                       -np.dot(imds.Woovv[j,i,:,a],t2[i,j,a,:]))
 
         vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
         return vector
@@ -288,16 +316,45 @@ class UCCSD(pyscf.cc.rccsd.RCCSD):
         Hr1 += einsum('ld,lad->a',imds.Fov,r2)
         Hr1 += 0.5*einsum('alcd,lcd->a',imds.Wvovv,r2)
         # Eq. (31)
-        tmp1 = einsum('ac,jcb->jab',imds.Fvv,r2)
-        tmp2 = einsum('lbdj,lad->jab',imds.Wovvo,r2)
         Hr2 = einsum('abcj,c->jab',imds.Wvvvo,r1)
+        tmp1 = einsum('ac,jcb->jab',imds.Fvv,r2)
         Hr2 += (tmp1 - tmp1.transpose(0,2,1))
         Hr2 += -einsum('lj,lab->jab',imds.Foo,r2)
+        tmp2 = einsum('lbdj,lad->jab',imds.Wovvo,r2)
         Hr2 += (tmp2 - tmp2.transpose(0,2,1))
         nvir = self.nmo()-self.nocc()
         for a in range(nvir):
             Hr2[:,a,:] += 0.5*einsum('bcd,jcd->jb',imds.Wvvvv[a],r2) 
         Hr2 += -0.5*einsum('klcd,lcd,kjab->jab',imds.Woovv,r2,self.t2)
+
+        vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
+        return vector
+
+    def eaccsd_diag(self):
+        if not self.made_ea_imds:
+            if not hasattr(self,'imds'):
+                self.imds = _IMDS(self)
+            self.imds.make_ea()
+            self.made_ea_imds = True
+        imds = self.imds
+
+        t1, t2 = self.t1, self.t2
+        nocc, nvir = t1.shape
+
+        Hr1 = np.diag(imds.Fvv)
+        Hr2 = np.zeros((nocc,nvir,nvir),dtype=t1.dtype)
+        for a in range(nvir):
+            _Wvvvva = np.array(imds.Wvvvv[a])
+            for b in range(a):
+                for j in range(nocc):
+                   Hr2[j,a,b] += imds.Fvv[a,a]
+                   Hr2[j,a,b] += imds.Fvv[b,b]
+                   Hr2[j,a,b] += -imds.Foo[j,j]
+                   Hr2[j,a,b] += imds.Wovvo[j,b,b,j]
+                   Hr2[j,a,b] += imds.Wovvo[j,a,a,j]
+                   Hr2[j,a,b] += 0.5*(_Wvvvva[b,a,b]-_Wvvvva[b,b,a])
+                   Hr2[j,a,b] += -0.5*(np.dot(imds.Woovv[:,j,a,b],t2[:,j,a,b])
+                                       -np.dot(imds.Woovv[:,j,b,a],t2[:,j,a,b]))
 
         vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
         return vector
@@ -466,7 +523,6 @@ class _ERIS:
             self.ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
             self.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy() 
         else:
-            print "*** Using HDF5 ERI storage ***"
             _tmpfile1 = tempfile.NamedTemporaryFile()
             self.feri1 = h5py.File(_tmpfile1.name)
             orbo = so_coeff[:,:nocc]
@@ -548,6 +604,9 @@ class _IMDS:
         self._made_shared = False
 
     def _make_shared(self):
+        cput0 = (time.clock(), time.time())
+        log = logger.Logger(self.cc.stdout, self.cc.verbose)
+
         t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
         self.Foo = imd.Foo(t1,t2,eris)
         self.Fvv = imd.Fvv(t1,t2,eris)
@@ -557,10 +616,15 @@ class _IMDS:
         self.Wovvo = imd.Wovvo(t1,t2,eris)
         self.Woovv = eris.oovv
 
+        log.timer('EOM-CCSD shared intermediates', *cput0)
+
     def make_ip(self):
         if self._made_shared is False:
             self._make_shared()
             self._made_shared = True
+
+        cput0 = (time.clock(), time.time())
+        log = logger.Logger(self.cc.stdout, self.cc.verbose)
 
         t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
 
@@ -569,10 +633,15 @@ class _IMDS:
         self.Wooov = imd.Wooov(t1,t2,eris)
         self.Wovoo = imd.Wovoo(t1,t2,eris)
 
+        log.timer('EOM-CCSD IP intermediates', *cput0)
+
     def make_ea(self):
         if self._made_shared is False:
             self._make_shared()
             self._made_shared = True
+
+        cput0 = (time.clock(), time.time())
+        log = logger.Logger(self.cc.stdout, self.cc.verbose)
 
         t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
 
@@ -580,6 +649,8 @@ class _IMDS:
         self.Wvovv = imd.Wvovv(t1,t2,eris)
         self.Wvvvo = imd.Wvvvo(t1,t2,eris)
         self.Wvvvv = imd.Wvvvv(t1,t2,eris)
+
+        log.timer('EOM-CCSD EA intermediates', *cput0)
 
     def make_ee(self):
         t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris

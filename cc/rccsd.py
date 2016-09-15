@@ -239,7 +239,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         log = logger.Logger(self.stdout, self.verbose)
         size = self.nip()
         nroots = min(nroots,size)
-        self._ipconv, self.eip, evecs = eigs(self.ipccsd_matvec, size, nroots, verbose=log)
+        self._ipconv, self.eip, evecs = eigs(self.ipccsd_matvec, size, nroots,
+                                             Adiag=self.ipccsd_diag(), verbose=log)
         if self._ipconv:
             logger.info(self, 'IP-CCSD converged')
         else:
@@ -266,8 +267,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         Hr1 += -2*einsum('klid,kld->i',imds.Wooov,r2)
         Hr1 +=    einsum('lkid,kld->i',imds.Wooov,r2)
 
-        tmp = 2*einsum('lkdc,kld->c',imds.Woovv,r2)
-        tmp += -einsum('kldc,kld->c',imds.Woovv,r2)
         Hr2 = einsum('bd,ijd->ijb',imds.Lvv,r2)
         Hr2 += -einsum('ki,kjb->ijb',imds.Loo,r2)
         Hr2 += -einsum('lj,ilb->ijb',imds.Loo,r2)
@@ -277,7 +276,39 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         Hr2 +=  -einsum('kbdj,kid->ijb',imds.Wovvo,r2)
         Hr2 +=  -einsum('lbjd,ild->ijb',imds.Wovov,r2) #typo in Nooijen's paper
         Hr2 +=  -einsum('kbid,kjd->ijb',imds.Wovov,r2)
+        tmp = 2*einsum('lkdc,kld->c',imds.Woovv,r2)
+        tmp += -einsum('kldc,kld->c',imds.Woovv,r2)
         Hr2 += -einsum('c,ijcb->ijb',tmp,self.t2)
+
+        vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
+        return vector
+
+    def ipccsd_diag(self):
+        if not self.made_ip_imds:
+            if not hasattr(self,'imds'):
+                self.imds = _IMDS(self)
+            self.imds.make_ip()
+            self.made_ip_imds = True
+        imds = self.imds
+
+        t1, t2 = self.t1, self.t2
+        nocc, nvir = t1.shape
+
+        Hr1 = -np.diag(imds.Loo)
+        Hr2 = np.zeros((nocc,nocc,nvir),dtype=t1.dtype)
+        for i in range(nocc):
+            for j in range(nocc):
+                for b in range(nvir):
+                    Hr2[i,j,b] += imds.Lvv[b,b]
+                    Hr2[i,j,b] += -imds.Loo[i,i]
+                    Hr2[i,j,b] += -imds.Loo[j,j]
+                    Hr2[i,j,b] += imds.Woooo[i,j,i,j]
+                    Hr2[i,j,b] += 2*imds.Wovvo[j,b,b,j]
+                    Hr2[i,j,b] += -imds.Wovvo[i,b,b,i]*(i==j)
+                    Hr2[i,j,b] += -imds.Wovov[j,b,j,b]
+                    Hr2[i,j,b] += -imds.Wovov[i,b,i,b]
+                    Hr2[i,j,b] += -2*np.dot(imds.Woovv[j,i,b,:],t2[i,j,:,b])
+                    Hr2[i,j,b] += np.dot(imds.Woovv[i,j,b,:],t2[i,j,:,b])
 
         vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
         return vector
@@ -303,7 +334,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         log = logger.Logger(self.stdout, self.verbose)
         size = self.nea()
         nroots = min(nroots,size)
-        self._eaconv, self.eea, evecs = eigs(self.eaccsd_matvec, size, nroots, verbose=log)
+        self._eaconv, self.eea, evecs = eigs(self.eaccsd_matvec, size, nroots, 
+                                             Adiag=self.eaccsd_diag(), verbose=log)
         if self._eaconv:
             logger.info(self, 'EA-CCSD converged')
         else:
@@ -345,6 +377,37 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         tmp = (2*einsum('klcd,lcd->k',imds.Woovv,r2)
                 -einsum('kldc,lcd->k',imds.Woovv,r2))
         Hr2 += -einsum('k,kjab->jab',tmp,self.t2)
+
+        vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
+        return vector
+
+    def eaccsd_diag(self):
+        if not self.made_ea_imds:
+            if not hasattr(self,'imds'):
+                self.imds = _IMDS(self)
+            self.imds.make_ea()
+            self.made_ea_imds = True
+        imds = self.imds
+
+        t1, t2 = self.t1, self.t2
+        nocc, nvir = t1.shape
+
+        Hr1 = np.diag(imds.Lvv)
+        Hr2 = np.zeros((nocc,nvir,nvir),dtype=t1.dtype)
+        for a in range(nvir):
+            _Wvvvva = np.array(imds.Wvvvv[a])
+            for b in range(nvir):
+                for j in range(nocc):
+                    Hr2[j,a,b] += imds.Lvv[a,a]
+                    Hr2[j,a,b] += imds.Lvv[b,b]
+                    Hr2[j,a,b] += -imds.Loo[j,j]
+                    Hr2[j,a,b] += 2*imds.Wovvo[j,b,b,j]
+                    Hr2[j,a,b] += -imds.Wovov[j,b,j,b]
+                    Hr2[j,a,b] += -imds.Wovov[j,a,j,a]
+                    Hr2[j,a,b] += -imds.Wovvo[j,b,b,j]*(a==b)
+                    Hr2[j,a,b] += _Wvvvva[b,a,b]
+                    Hr2[j,a,b] += -2*np.dot(imds.Woovv[:,j,a,b],t2[:,j,a,b])
+                    Hr2[j,a,b] += np.dot(imds.Woovv[:,j,b,a],t2[:,j,a,b])
 
         vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
         return vector
@@ -442,7 +505,6 @@ class _ERIS:
             self.vovv = eri[nocc:,:nocc,nocc:,nocc:].copy()
             self.vvvv = eri[nocc:,nocc:,nocc:,nocc:].copy()
         else:
-            print "*** Using HDF5 ERI storage ***"
             _tmpfile1 = tempfile.NamedTemporaryFile()
             self.feri1 = h5py.File(_tmpfile1.name)
             orbo = mo_coeff[:,:nocc]
@@ -495,6 +557,9 @@ class _IMDS:
         self._made_shared = False
 
     def _make_shared(self):
+        cput0 = (time.clock(), time.time())
+        log = logger.Logger(self.cc.stdout, self.cc.verbose)
+
         t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
         self.Loo = imd.Loo(t1,t2,eris)
         self.Lvv = imd.Lvv(t1,t2,eris)
@@ -505,10 +570,15 @@ class _IMDS:
         self.Wovvo = imd.Wovvo(t1,t2,eris)
         self.Woovv = eris.oovv
 
+        log.timer('EOM-CCSD shared intermediates', *cput0)
+
     def make_ip(self):
         if self._made_shared is False:
             self._make_shared()
             self._made_shared = True
+
+        cput0 = (time.clock(), time.time())
+        log = logger.Logger(self.cc.stdout, self.cc.verbose)
 
         t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
 
@@ -517,17 +587,25 @@ class _IMDS:
         self.Wooov = imd.Wooov(t1,t2,eris)
         self.Wovoo = imd.Wovoo(t1,t2,eris)
 
+        log.timer('EOM-CCSD IP intermediates', *cput0)
+
     def make_ea(self):
         if self._made_shared is False:
             self._make_shared()
             self._made_shared = True
+
+        cput0 = (time.clock(), time.time())
+        log = logger.Logger(self.cc.stdout, self.cc.verbose)
+
         
         t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
         
         # 3 or 4 virtuals
         self.Wvovv = imd.Wvovv(t1,t2,eris)
-        self.Wvvvo = imd.Wvvvo(t1,t2,eris)
         self.Wvvvv = imd.Wvvvv(t1,t2,eris)
+        self.Wvvvo = imd.Wvvvo(t1,t2,eris,self.Wvvvv)
+
+        log.timer('EOM-CCSD EA intermediates', *cput0)
 
     def make_ee(self):
         raise NotImplementedError
