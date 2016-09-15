@@ -2137,6 +2137,11 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         ptr = self._bas[bas_id,PTR_EXP]
         return self._env[ptr:ptr+nprim]
 
+    def _libcint_ctr_coeff(self, bas_id):
+        nprim = self.bas_nprim(bas_id)
+        nctr = self.bas_nctr(bas_id)
+        ptr = self._bas[bas_id,gto.PTR_COEFF]
+        return self._env[ptr:ptr+nprim*nctr].reshape(nctr,nprim).T
     def bas_ctr_coeff(self, bas_id):
         r'''Contract coefficients (ndarray) of the given shell
 
@@ -2146,16 +2151,17 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
         Examples:
 
-        >>> mol.build(atom='H 0 0 0; Cl 0 0 1.1', basis='cc-pvdz')
-        >>> mol.bas_ctr_coeff(3)
-        [[ 0.34068924]
-         [ 0.57789106]
-         [ 0.65774031]]
+        >>> mol.M(atom='H 0 0 0; Cl 0 0 1.1', basis='cc-pvdz')
+        >>> mol.bas_ctr_coeff(0)
+        [[ 10.03400444]
+         [  4.1188704 ]
+         [  1.53971186]]
         '''
-        nprim = self.bas_nprim(bas_id)
-        nctr = self.bas_nctr(bas_id)
-        ptr = self._bas[bas_id,PTR_COEFF]
-        return self._env[ptr:ptr+nprim*nctr].reshape(nctr,nprim).T
+        l = self.bas_angular(bas_id)
+        es = self.bas_exp(bas_id)
+        cs = self._libcint_ctr_coeff(bas_id)
+        cs = numpy.einsum('pi,p->pi', cs, 1/gto_norm(l, es))
+        return cs
 
     def bas_len_spinor(self, bas_id):
         '''The number of spinor associated with given basis

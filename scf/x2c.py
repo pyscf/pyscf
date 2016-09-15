@@ -312,8 +312,8 @@ def _uncontract_mol(mol, xuncontract=False, exp_drop=0.2):
             nkept = (pmol._env[pexp:pexp+np] > exp_drop).sum()
             if nkept > nc:
                 b_coeff = mol.bas_ctr_coeff(ib)
+                importance = abs(b_coeff)
                 norms = mole.gto_norm(l, mol._env[pexp:pexp+np])
-                importance = numpy.einsum('i,ij->i', 1/norms, abs(b_coeff))
                 idx = numpy.argsort(importance[:nkept])
                 contracted = numpy.sort(idx[nkept-nc:])
                 primitive  = numpy.sort(idx[:nkept-nc])
@@ -333,7 +333,7 @@ def _uncontract_mol(mol, xuncontract=False, exp_drop=0.2):
                 _bas.append(bs)
                 d = l * 2 + 1
                 part1 = numpy.zeros((d*(nkept-nc),d*nc))
-                c = numpy.einsum('i,ij->ij', 1/norms, b_coeff[primitive])
+                c = b_coeff[primitive]
                 for i in range(d):
                     part1[i::d,i::d] = c
 

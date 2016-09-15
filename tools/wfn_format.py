@@ -85,7 +85,7 @@ def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
         ia = mol.bas_atom(ib)
         l = mol.bas_angular(ib)
         es = mol.bas_exp(ib)
-        c = numpy.einsum('pi,p->pi', mol.bas_ctr_coeff(ib), 1/gto.gto_norm(l, es))
+        c = mol.bas_ctr_coeff(ib)
         np, nc = c.shape
         nd = nc*(2*l+1)
         mosub = mo_coeff[p0:p0+nd].reshape(-1,nc,nmo)

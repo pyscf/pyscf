@@ -415,7 +415,7 @@ class MDF(pwdf.PWDF):
                 else:
 # Remove the normalization to get the primitive contraction coeffcients
                     norms = half_sph_norm/gto.mole._gaussian_int(2, es)
-                    cs = numpy.einsum('i,ij->ij', 1/norms, auxcell.bas_ctr_coeff(i))
+                    cs = numpy.einsum('i,ij->ij', 1/norms, auxcell._libcint_ctr_coeff(i))
                     vbar[aux_loc[i]:aux_loc[i+1]] = numpy.einsum('in,i->n', cs, -1/es)
         vbar *= numpy.pi/auxcell.vol
         return vbar

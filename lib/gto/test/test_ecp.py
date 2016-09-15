@@ -63,14 +63,14 @@ def type1_by_shell(mol, shls, ecpatm_id, ecpbas):
     npi = mol.bas_nprim(ish)
     nci = mol.bas_nctr(ish)
     ai = mol.bas_exp(ish)
-    ci = mol.bas_ctr_coeff(ish)
+    ci = mol._libcint_ctr_coeff(ish)
     icart = (li+1) * (li+2) // 2
 
     lj = mol.bas_angular(jsh)
     npj = mol.bas_nprim(jsh)
     ncj = mol.bas_nctr(jsh)
     aj = mol.bas_exp(jsh)
-    cj = mol.bas_ctr_coeff(jsh)
+    cj = mol._libcint_ctr_coeff(jsh)
     jcart = (lj+1) * (lj+2) // 2
 
     rc = mol.atom_coord(ecpatm_id)
@@ -78,7 +78,7 @@ def type1_by_shell(mol, shls, ecpatm_id, ecpbas):
     r2ca = numpy.dot(rca, rca)
     rcb = rc - mol.bas_coord(jsh)
     r2cb = numpy.dot(rcb, rcb)
-# Note the Mole.bas_ctr_coeff are normalized to radial part
+# Note the Mole._libcint_ctr_coeff are normalized to radial part
     cei = numpy.einsum('ij,i->ij', ci, numpy.exp(-ai * r2ca))
     cej = numpy.einsum('ij,i->ij', cj, numpy.exp(-aj * r2cb))
     #rs, ws = radi.treutler(99)
@@ -173,14 +173,14 @@ def type2_by_shell(mol, shls, ecpatm_id, ecpbas):
     npi = mol.bas_nprim(ish)
     nci = mol.bas_nctr(ish)
     ai = mol.bas_exp(ish)
-    ci = mol.bas_ctr_coeff(ish)
+    ci = mol._libcint_ctr_coeff(ish)
     icart = (li+1) * (li+2) // 2
 
     lj = mol.bas_angular(jsh)
     npj = mol.bas_nprim(jsh)
     ncj = mol.bas_nctr(jsh)
     aj = mol.bas_exp(jsh)
-    cj = mol.bas_ctr_coeff(jsh)
+    cj = mol._libcint_ctr_coeff(jsh)
     jcart = (lj+1) * (lj+2) // 2
 
     rc = mol.atom_coord(ecpatm_id)
@@ -273,7 +273,7 @@ def facs_rad(mol, ish, lc, r_ca, rs):
     facs = []
     li = mol.bas_angular(ish)
     ai = mol.bas_exp(ish)
-    ci = mol.bas_ctr_coeff(ish)
+    ci = mol._libcint_ctr_coeff(ish)
     npi = mol.bas_nprim(ish)
     for ip in range(npi):
         ka = 2*ai[ip]*r_ca

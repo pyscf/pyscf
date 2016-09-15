@@ -65,6 +65,10 @@ API changes
 * In PySCF 1.2, one can pass the print relevant keyword arguments to SCF and
   MCSCF :func:`analyze` methods to control the orbital coefficients output format.
 
+* bas_ctr_coeff method of :class:`Mole` returns the normalized basis
+  contraction coefficients.  In PySCF 1.1 or older, it was the scaled by
+  spheric normalization coefficients which is only used by libcint library.
+
 
 Features
 ========

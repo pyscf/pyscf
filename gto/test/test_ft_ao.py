@@ -34,7 +34,7 @@ def ft_ao_o0(mol, Gv):
 
     i0 = 0
     for ib in range(mol.nbas):
-        ci = mol.bas_ctr_coeff(ib)
+        ci = mol._libcint_ctr_coeff(ib)
         ei = mol.bas_exp(ib)
         li = mol.bas_angular(ib)
         ri = mol.bas_coord(ib)

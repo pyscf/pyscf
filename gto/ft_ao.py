@@ -122,7 +122,7 @@ def ft_ao(mol, Gv, shls_slice=None,
     ghost_atm = numpy.array([[0,0,0,0,0,0]], dtype=numpy.int32)
     ghost_bas = numpy.array([[0,0,1,1,0,0,3,0]], dtype=numpy.int32)
     ghost_env = numpy.zeros(4)
-    ghost_env[3] = numpy.sqrt(4*numpy.pi)  # s function spheric norm for bas_ctr_coeff
+    ghost_env[3] = numpy.sqrt(4*numpy.pi)  # s function spheric norm
     atm, bas, env = gto.conc_env(mol._atm, mol._bas, mol._env,
                                  ghost_atm, ghost_bas, ghost_env)
     ao_loc = mol.ao_loc_nr()
