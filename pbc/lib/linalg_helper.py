@@ -35,7 +35,6 @@ def eigs(matvec, size, nroots, Adiag=None, guess=False, verbose=logger.INFO):
             conv, e, c, niter = davidson(matvec, size, nroots, Adiag, verbose)
         else:
             conv, e, c, niter = davidson_guess(matvec, size, nroots, Adiag)
-        #print "Davidson converged in %d iterations"%(niter)
         return conv, e, c
     elif method == 'arnoldi':
         # Currently not used:
@@ -55,7 +54,6 @@ def eigs(matvec, size, nroots, Adiag=None, guess=False, verbose=logger.INFO):
         return david.solve_iter()
 
 
-#@profile
 def davidson(mult_by_A, N, neig, Adiag=None, verbose=logger.INFO):
     """Diagonalize a matrix via non-symmetric Davidson algorithm.
 
@@ -133,11 +131,13 @@ def davidson(mult_by_A, N, neig, Adiag=None, verbose=logger.INFO):
                 break
             else:
                 target += 1
-        for i in range(N):
-            eps = 0.
-            if np.allclose(lamda_k,Adiag[i]):
-                eps = 1e-8
-            xi[i] = q[i]/(lamda_k-Adiag[i]+eps)
+        #for i in range(N):
+            #eps = 0.
+            #if np.allclose(lamda_k,Adiag[i]):
+            #    eps = 1e-10
+            #xi[i] = q[i]/(lamda_k-Adiag[i]+eps)
+        eps = 1e-10
+        xi = q/(lamda_k-Adiag+eps)
 
         # orthonormalize xi wrt b
         bxi,R = np.linalg.qr(np.column_stack((b,xi)))
