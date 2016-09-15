@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+#
+# Authors: James D. McClain <jmcclain@princeton.edu>
+#          Timothy Berkelbach <tim.berkelbach@gmail.com>
+#
+
 import pyscf.pbc.tools.pbc as tools
 import pyscf.pbc.ao2mo
 import pyscf.lib

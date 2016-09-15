@@ -87,9 +87,9 @@ class DF(lib.StreamObject):
         with addons.load(self._cderi) as feri:
             return feri.shape[0]
 
-    def get_jk(self, mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
+    def get_jk(self, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
         from pyscf.df import df_jk
-        return df_jk.get_jk(self, mol, dm, hermi, vhfopt, with_j, with_k)
+        return df_jk.get_jk(self, dm, hermi, vhfopt, with_j, with_k)
 
     def ao2mo(self, mo_coeffs):
         from pyscf.ao2mo import _ao2mo
@@ -154,9 +154,9 @@ class DF4C(DF):
                     eriss = numpy.asarray(feriss[b0:b1], order='C')
                     yield erill, eriss
 
-    def get_jk(self, mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
+    def get_jk(self, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
         from pyscf.df import df_jk
-        return df_jk.r_get_jk(self, mol, dm, hermi)
+        return df_jk.r_get_jk(self, dm, hermi)
 
     def ao2mo(self, mo_coeffs):
         pass

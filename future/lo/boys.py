@@ -159,7 +159,7 @@ class Boys(iah.IAHOptimizer):
         u0 = numpy.eye(nmo)
         if numpy.linalg.norm(self.get_grad(u0)) < 1e-5:
             # Add noise to kick initial guess out of saddle point
-            dr = numpy.cos(numpy.arange((nmo-1)*nmo//2)) * 1e-2
+            dr = numpy.cos(numpy.arange((nmo-1)*nmo//2)) * 1e-3
             u0 = self.extract_rotation(dr)
         return u0
 

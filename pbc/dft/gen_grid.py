@@ -1,3 +1,8 @@
+#!/usr/bin/env python
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
+
 import numpy as np
 import pyscf.lib
 from pyscf.lib import logger

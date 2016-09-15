@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8
-# Author: Qiming Sun <osirpt.sun@gmail.com>
-#         Timothy Berkelbach <tim.berkelbach@gmail.com>
+# Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 # parse CP2K PP format, following parse_nwchem.py
 
@@ -27,12 +26,12 @@ def _parse(plines):
     header_ln = plines.pop(0)
     nelecs = [ int(nelec) for nelec in plines.pop(0).split() ]
     rnc_ppl = plines.pop(0).split()
-    rloc = float(rnc_ppl[0]) 
+    rloc = float(rnc_ppl[0])
     nexp = int(rnc_ppl[1])
     cexp = [ float(c) for c in rnc_ppl[2:] ]
     nproj_types = int(plines.pop(0))
     r = []
-    nproj = [] 
+    nproj = []
     hproj = []
     for p in range(nproj_types):
         rnh_ppnl = plines.pop(0).split()
@@ -47,7 +46,7 @@ def _parse(plines):
         hproj_p = np.zeros((nproj[-1],nproj[-1]))
         hproj_p[np.triu_indices(nproj[-1])] = [ h for h in hproj_p_ij ]
         hproj_p_symm = hproj_p + hproj_p.T - np.diag(hproj_p.diagonal())
-        hproj.append(hproj_p_symm.tolist()) 
+        hproj.append(hproj_p_symm.tolist())
 
     pseudo_params = [nelecs,
                      rloc, nexp, cexp,

@@ -1,3 +1,8 @@
+#!/usr/bin/env python
+#
+# Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
+#
+
 import unittest
 import numpy as np
 

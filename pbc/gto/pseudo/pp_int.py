@@ -1,3 +1,8 @@
+#!/usr/bin/env python
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
+
 '''Analytic PP integrals.  See also pyscf/pbc/gto/pesudo/pp.py
 
 For GTH/HGH PPs, see:

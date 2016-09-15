@@ -1,3 +1,8 @@
+#!/usr/bin/env python
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
+
 '''
 Non-relativistic Restricted Kohn-Sham for periodic systems with k-point sampling
 

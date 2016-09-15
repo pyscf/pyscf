@@ -26,7 +26,7 @@ class KnowValues(unittest.TestCase):
         cell.output = '/dev/null'
         cell.build()
         mf = khf.KRHF(cell, exxdiv='vcut_ws')
-        mf.kpts = pyscf_ase.make_kpts(cell, [2,2,2])
+        mf.kpts = cell.make_kpts([2,2,2])
         coulG = tools.get_coulG(cell, mf.kpts[2], True, mf)
         self.assertAlmostEqual(finger(coulG), 166.15891996685517, 9)
 

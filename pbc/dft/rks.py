@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+#
+# Authors: Timothy Berkelbach <tim.berkelbach@gmail.com>
+#          Qiming Sun <osirpt.sun@gmail.com>
+#
+
 '''
 Non-relativistic Restricted Kohn-Sham for periodic systems at a single k-point 
 

@@ -1,3 +1,8 @@
+#!/usr/bin/env python
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
+
 import unittest
 import numpy
 import numpy as np
@@ -150,24 +155,25 @@ class KnowValues(unittest.TestCase):
         np.random.seed(1)
         kpts = np.random.random((2,3))
         dms = np.random.random((2,nao,nao))
+        dms = (dms + dms.transpose(0,2,1)) * .5
         ni = numint._NumInt()
         ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms[0], 0, kpts[0])
         self.assertAlmostEqual(ne, 5.0499199224525153, 8)
-        self.assertAlmostEqual(exc, -3.8351805868876574, 8)
-        self.assertAlmostEqual(finger(vmat), (-6.7127152097495877+0.18334126894647734j), 8)
+        self.assertAlmostEqual(exc, -3.8870579114663886, 8)
+        self.assertAlmostEqual(finger(vmat), 0.42538491159934377+0.14139753327162483j, 8)
 
         ni = numint._KNumInt()
         ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms, 0, kpts)
         self.assertAlmostEqual(ne, 6.0923292346269742, 8)
-        self.assertAlmostEqual(exc, -3.9775343008367003, 8)
-        self.assertAlmostEqual(finger(vmat[0]), (-2502.6531823220012-64.707798861780063j), 8)
-        self.assertAlmostEqual(finger(vmat[1]), (-2506.9881499848775-125.33971814270384j), 8)
+        self.assertAlmostEqual(exc, -3.9899423803106466, 8)
+        self.assertAlmostEqual(finger(vmat[0]), -2348.9577179701278-60.733087913116719j, 8)
+        self.assertAlmostEqual(finger(vmat[1]), -2353.0350086740673-117.74811536967495j, 8)
 
         ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', [dms,dms], 0, kpts)
         self.assertAlmostEqual(ne[1], 6.0923292346269742, 8)
-        self.assertAlmostEqual(exc[1], -3.9775343008367003, 8)
-        self.assertAlmostEqual(finger(vmat[1][0]), (-2502.6531823220012-64.707798861780063j), 8)
-        self.assertAlmostEqual(finger(vmat[1][1]), (-2506.9881499848775-125.33971814270384j), 8)
+        self.assertAlmostEqual(exc[1], -3.9899423803106466, 8)
+        self.assertAlmostEqual(finger(vmat[1][0]), -2348.9577179701278-60.733087913116719j, 8)
+        self.assertAlmostEqual(finger(vmat[1][1]), -2353.0350086740673-117.74811536967495j, 8)
 
     def test_eval_rho(self):
         cell, grids = make_grids(30)

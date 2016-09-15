@@ -47,7 +47,7 @@ class KnowValues(unittest.TestCase):
         mol.build(0, 0, symmetry='D2')
         mo = symm.symmetrize_space(mol, mf.mo_coeff)
         irreps = symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, mo)
-        self.assertEqual(irreps, ['A','A','B3','B1','B2','A','B1','B3','B2'])
+        self.assertEqual(irreps, ['A','A','B1','B3','B2','A','B1','B3','B2'])
 
     def test_route(self):
         orbsym = [0, 3, 0, 2, 5, 6]

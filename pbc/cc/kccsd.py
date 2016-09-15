@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+#
+# Authors: James D. McClain <jmcclain@princeton.edu>
+#          Timothy Berkelbach <tim.berkelbach@gmail.com>
+#
 
 import numpy
 import pyscf.pbc.scf

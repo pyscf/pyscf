@@ -1,3 +1,10 @@
+#!/usr/bin/env python
+#
+# Authors: Garnet Chan <gkc1000@gmail.com>
+#          Timothy Berkelbach <tim.berkelbach@gmail.com>
+#          Qiming Sun <osirpt.sun@gmail.com>
+#
+
 '''
 Hartree-Fock for periodic systems with k-point sampling
 
@@ -7,14 +14,13 @@ See Also:
 
 import time
 import numpy as np
-import scipy.special
 import h5py
 from pyscf.pbc.scf import hf as pbchf
 from pyscf import lib
 from pyscf.scf import hf
 from pyscf.lib import logger
-from pyscf.pbc import tools
 from pyscf.pbc.scf import addons
+from pyscf.pbc.scf import chkfile
 
 
 def get_ovlp(mf, cell=None, kpts=None):
@@ -181,7 +187,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
     Returns:
         Density matrix, 3D ndarray
     '''
-    chk_cell, scf_rec = pyscf.pbc.scf.chkfile.load_scf(chkfile_name)
+    chk_cell, scf_rec = chkfile.load_scf(chkfile_name)
 
     if kpts is None:
         kpts = scf_rec['kpts']

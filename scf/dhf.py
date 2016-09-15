@@ -273,6 +273,7 @@ class UHF(hf.SCF):
         hf.SCF.dump_flags(self)
         logger.info(self, 'with_ssss %s, with_gaunt %s, with_breit %s',
                     self.with_ssss, self.with_gaunt, self.with_breit)
+        return self
 
     def get_hcore(self, mol=None):
         if mol is None:

@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+#
+# Authors: Garnet Chan <gkc1000@gmail.com>
+#          Qiming Sun <osirpt.sun@gmail.com>
+#
+
 import unittest
 import numpy as np
 
@@ -74,7 +80,7 @@ class KnowValues(unittest.TestCase):
         nk = (1, 1, 1)
         cell = make_primitive_cell(ngs)
 
-        kpts = pyscf_ase.make_kpts(cell, nk)
+        kpts = cell.make_kpts(nk)
         kmf = khf.KRHF(cell, kpts, exxdiv='vcut_sph')
         ekpt = kmf.scf()
         dm1 = kmf.make_rdm1()
@@ -91,7 +97,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(e1, ekpt, 9)
 
         nk = (3, 1, 1)
-        kpts = pyscf_ase.make_kpts(cell, nk)
+        kpts = cell.make_kpts(nk)
         kmf1 = khf.KRHF(cell, kpts, exxdiv='vcut_sph')
         dm = kmf1.from_chk(mf.chkfile)
         kmf1.max_cycle = 1
@@ -102,7 +108,7 @@ class KnowValues(unittest.TestCase):
         ngs = 4
         cell = make_primitive_cell(ngs)
         nk = (3, 1, 1)
-        kpts = pyscf_ase.make_kpts(cell, nk)
+        kpts = cell.make_kpts(nk)
         kmf1 = kuhf.KUHF(cell, kpts, exxdiv='vcut_sph')
         ekpt = kmf1.scf()
         self.assertAlmostEqual(ekpt, -11.221426555985234, 8)

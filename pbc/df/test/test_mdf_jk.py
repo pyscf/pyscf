@@ -169,14 +169,13 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(vk[3]), (-0.79608989192947033+0.012002060547759118j), 9)
 
     def test_k_kpts_2(self):
-        import pyscf.pbc.tools.pyscf_ase as pyscf_ase
         cell = pgto.Cell()
         cell.atom = 'He 1. .5 .5; He .1 1.3 2.1'
         cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
         cell.h = numpy.eye(3) * 2.5
         cell.gs = [5] * 3
         cell.build()
-        kpts = pyscf_ase.make_kpts(cell, (2,2,2))
+        kpts = cell.make_kpts((2,2,2))
 
         numpy.random.seed(1)
         nao = cell.nao_nr()

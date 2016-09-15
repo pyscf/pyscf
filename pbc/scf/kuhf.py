@@ -1,3 +1,8 @@
+#!/usr/bin/env python
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
+
 '''
 Hartree-Fock for periodic systems with k-point sampling
 
@@ -39,7 +44,7 @@ def get_fock(mf, h1e_kpts, s_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
     if damp_factor is None:
         damp_factor = mf.damp
 
-    if isinstance(level_shift_factor, (tuple, list, numpy.ndarray)):
+    if isinstance(level_shift_factor, (tuple, list, np.ndarray)):
         shifta, shiftb = level_shift_factor
     else:
         shifta = shiftb = level_shift_factor

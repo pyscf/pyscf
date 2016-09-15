@@ -86,7 +86,7 @@ def density_fit(mf, auxbasis='weigend+etb', with_df=None):
             if self.with_df:
                 if mol is None: mol = self.mol
                 if dm is None: dm = self.make_rdm1()
-                return self.with_df.get_jk(mol, dm, hermi)
+                return self.with_df.get_jk(dm, hermi)
             else:
                 return mf_class.get_jk(self, mol, dm, hermi)
 
@@ -94,7 +94,7 @@ def density_fit(mf, auxbasis='weigend+etb', with_df=None):
             if self.with_df:
                 if mol is None: mol = self.mol
                 if dm is None: dm = self.make_rdm1()
-                return self.with_df.get_jk(mol, dm, hermi, with_k=False)[0]
+                return self.with_df.get_jk(dm, hermi, with_k=False)[0]
             else:
                 return mf_class.get_j(self, mol, dm, hermi)
 
@@ -102,7 +102,7 @@ def density_fit(mf, auxbasis='weigend+etb', with_df=None):
             if self.with_df:
                 if mol is None: mol = self.mol
                 if dm is None: dm = self.make_rdm1()
-                return self.with_df.get_jk(mol, dm, hermi, with_j=False)[1]
+                return self.with_df.get_jk(dm, hermi, with_j=False)[1]
             else:
                 return mf_class.get_k(self, mol, dm, hermi)
 
@@ -126,7 +126,7 @@ def density_fit(mf, auxbasis='weigend+etb', with_df=None):
     return DFHF()
 
 
-def get_jk(dfobj, mol, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
+def get_jk(dfobj, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
     t0 = t1 = (time.clock(), time.time())
     log = logger.Logger(dfobj.stdout, dfobj.verbose)
 
@@ -240,9 +240,10 @@ def get_jk(dfobj, mol, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
     return vj, vk
 
 
-def r_get_jk(dfobj, mol, dms, hermi=1):
+def r_get_jk(dfobj, dms, hermi=1):
     '''Relativistic density fitting JK'''
     t0 = t1 = (time.clock(), time.time())
+    mol = dfobj.mol
     n2c = mol.nao_2c()
     c1 = .5 / mol.light_speed
 

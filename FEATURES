@@ -71,7 +71,7 @@
   - DMRG-NEVPT2
   - IC-MPS-PT2
 
-* Extended systems with perodic boundary condition
+* Extended systems with periodic boundary condition
   - gamma point RHF, UHF, RKS, UKS
   - gamma point TDDFT, MP2, CCSD
   - PBC RHF, UHF, RKS, UKS with k-point sampling
@@ -92,11 +92,14 @@
   - 4 types of 3-center 2-electron real-GTO integrals
   - 6 types of 3-center 2-electron spinor-GTO integrals
   - General basis value evaluator (for numeric integration)
+  - PBC 1-electron integrals
+  - PBC 2-electron integrals
 
 * MO integrals
   - 2-electron integral transformation for any integrals provided by
     Libcint library
   - Support for 4-index integral transformation with 4 different orbitals
+  - PBC 2-electron MO integrals
 
 * Localizer
   - Boys

@@ -1,3 +1,8 @@
+#!/usr/bin/env python
+#
+# Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
+#
+
 '''PP with numeric integration.  See also pyscf/pbc/gto/pesudo/pp_int.py
 
 For GTH/HGH PPs, see:

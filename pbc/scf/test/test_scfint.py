@@ -1,3 +1,8 @@
+#!/usr/bin/env python
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
+
 import unittest
 import numpy
 import numpy as np
@@ -6,6 +11,7 @@ from pyscf.pbc import gto as pbcgto
 import pyscf.pbc.dft as pdft
 import pyscf.pbc.scf.hf as phf
 import pyscf.pbc.scf.khf as pkhf
+from pyscf.pbc.df import fft_jk
 
 
 def make_cell1(L, n, nimgs=None):
@@ -97,21 +103,10 @@ class KnowValues(unittest.TestCase):
         coords = pdft.gen_grid.gen_uniform_grids(cell)
         aoR_k1 = pdft.numint.eval_ao(cell, coords, kpt1)
         aoR_k2 = pdft.numint.eval_ao(cell, coords, kpt2)
-        vkR = phf.get_vkR(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2)
+        gs = cell.gs
+        coords = pdft.gen_grid.gen_uniform_grids(cell, gs)
+        vkR = fft_jk.get_vkR(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2, coords, gs, None)
         self.assertAlmostEqual(finger(vkR), -0.24716036343105258+0.078117253956143579j, 9)
-
-    def test_vjR(self):
-        cell = make_cell1(4, 20, [2,2,2])
-        numpy.random.seed(1)
-        kpts = numpy.random.random((2,3))
-        coords = pdft.gen_grid.gen_uniform_grids(cell)
-        aoR_kpts = [pdft.numint.eval_ao(cell, coords, k) for k in kpts]
-        nao = cell.nao_nr()
-        dm_kpts =(numpy.random.random((2,nao,nao)) +
-                  numpy.random.random((2,nao,nao)) * 1j)
-        dm_kpts = dm_kpts + dm_kpts.transpose(0,2,1).conj()
-        vjR = pkhf.get_vjR(cell, dm_kpts, aoR_kpts)
-        self.assertAlmostEqual(finger(vjR), -1.1032425249360371, 9)
 
 if __name__ == '__main__':
     print("Full Tests for scfint")

@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8
-# Author: Qiming Sun <osirpt.sun@gmail.com>
-#         Timothy Berkelbach <tim.berkelbach@gmail.com>
+# Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 # parse CP2K format
 #
@@ -45,7 +44,7 @@ def _parse(blines):
     for l in range(MAXL):
         bsort.extend([b for b in basis if b[0] == l])
     return bsort
-        
+
 def search_seg(basisfile, symb):
     fin = open(basisfile, 'r')
     fdata = fin.read().split('#BASIS SET')

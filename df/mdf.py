@@ -221,9 +221,9 @@ class MDF(lib.StreamObject):
         for i in range(start, end, step):
             yield i, min(i+step, end)
 
-    def get_jk(self, mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
+    def get_jk(self, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
         from pyscf.df import mdf_jk
-        return mdf_jk.get_jk(self, mol, dm, hermi, vhfopt, with_j, with_k)
+        return mdf_jk.get_jk(self, dm, hermi, vhfopt, with_j, with_k)
 
     def update_mf(self, mf):
         from pyscf.df import mdf_jk
@@ -244,14 +244,12 @@ class MDF(lib.StreamObject):
     def update_mf_(self, mf):
         from pyscf.df import mdf_jk
         def get_j(mol, dm, hermi=1):
-            return mdf_jk.get_jk(self, mol, dm, hermi, mf.opt,
-                                 with_j=True, with_k=False)[0]
+            return mdf_jk.get_jk(self, dm, hermi, mf.opt, with_j=True, with_k=False)[0]
         def get_k(mol, dm, hermi=1):
-            return mdf_jk.get_jk(self, mol, dm, hermi, mf.opt,
-                                 with_j=False, with_k=True)[1]
+            return mdf_jk.get_jk(self, dm, hermi, mf.opt, with_j=False, with_k=True)[1]
         mf.get_j = get_j
         mf.get_k = get_k
-        mf.get_jk = lambda mol, dm, hermi=1: mdf_jk.get_jk(self, mol, dm, hermi, mf.opt)
+        mf.get_jk = lambda mol, dm, hermi=1: mdf_jk.get_jk(self, dm, hermi, mf.opt)
         return mf
 
     def gen_ft(self):

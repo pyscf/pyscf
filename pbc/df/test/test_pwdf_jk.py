@@ -36,8 +36,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(vj[3]), (1.1397493412770023+0.010731970529096637j)   /4, 9)
 
     def test_pwdf_k(self):
-        import pyscf.pbc.tools.pyscf_ase as pyscf_ase
-        kpts = pyscf_ase.make_kpts(cell, (2,2,2))
+        kpts = cell.make_kpts((2,2,2))
 
         numpy.random.seed(1)
         nao = cell.nao_nr()

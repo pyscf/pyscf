@@ -1,3 +1,10 @@
+#!/usr/bin/env python
+#
+# Authors: Garnet Chan <gkc1000@gmail.com>
+#          Timothy Berkelbach <tim.berkelbach@gmail.com>
+#          Qiming Sun <osirpt.sun@gmail.com>
+#
+
 '''
 SCF (Hartree-Fock and DFT) tools for periodic systems at a *single* k-point,
     using analytical GTO integrals instead of PWs.

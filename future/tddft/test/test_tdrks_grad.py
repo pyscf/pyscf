@@ -31,7 +31,7 @@ class KnowValues(unittest.TestCase):
         td = tddft.TDA(mf).run(nstates=3)
         tdg = rks_grad.Gradients(td)
         g1 = tdg.kernel(state=2)
-        self.assertAlmostEqual(g1[0,2], -9.23916667e-02, 9)
+        self.assertAlmostEqual(g1[0,2], -9.23916667e-02, 8)
 
     def test_tda_b88(self):
         mf = dft.RKS(mol)
@@ -41,7 +41,7 @@ class KnowValues(unittest.TestCase):
         td = tddft.TDA(mf).run(nstates=3)
         tdg = rks_grad.Gradients(td)
         g1 = tdg.kernel(state=2)
-        self.assertAlmostEqual(g1[0,2], -9.32506535e-02, 9)
+        self.assertAlmostEqual(g1[0,2], -9.32506535e-02, 8)
 
     def test_tddft_lda(self):
         mf = dft.RKS(mol)
@@ -51,7 +51,7 @@ class KnowValues(unittest.TestCase):
         td = tddft.TDDFT(mf).run(nstates=3)
         tdg = rks_grad.Gradients(td)
         g1 = tdg.kernel(state=2)
-        self.assertAlmostEqual(g1[0,2], -1.31315477e-01, 9)
+        self.assertAlmostEqual(g1[0,2], -1.31315477e-01, 8)
 
     def test_tddft_b3lyp(self):
         mf = dft.RKS(mol)
@@ -61,7 +61,7 @@ class KnowValues(unittest.TestCase):
         td = tddft.TDDFT(mf).run(nstates=3)
         tdg = rks_grad.Gradients(td)
         g1 = tdg.kernel(state=2)
-        self.assertAlmostEqual(g1[0,2], -1.55778110e-01, 9)
+        self.assertAlmostEqual(g1[0,2], -1.55778110e-01, 8)
 
 
 if __name__ == "__main__":

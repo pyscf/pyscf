@@ -342,9 +342,10 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
 def _check_(c):
     c = pyscf.lib.transpose_sum(c, inplace=True)
     c *= .5
-    if abs(numpy.linalg.norm(c)-1) > 1e-8:
+    norm = numpy.linalg.norm(c)
+    if abs(norm-1) > 1e-6:
         raise ValueError('State not singlet %g' % abs(numpy.linalg.norm(c)-1))
-    return c
+    return c/norm
 
 
 class FCISolver(direct_spin1.FCISolver):

@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+#
+# Authors: Timothy Berkelbach <tim.berkelbach@gmail.com>
+#          Qiming Sun <osirpt.sun@gmail.com>
+#
+
 import unittest
 import numpy as np
 from pyscf.pbc import gto as pbcgto

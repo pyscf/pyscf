@@ -16,7 +16,7 @@ atom = [
     ['N',(  0.000000,  0.000000, -b/2)],
     ['N',(  0.000000,  0.000000,  b/2)], ],
 basis = {'N': 'ccpvdz', },
-symmetry = True, 
+symmetry = True,
 symmetry_subgroup = 'D2h'
 )
 m = scf.RHF(mol)
@@ -29,7 +29,7 @@ class KnowValues(unittest.TestCase):
         mc = mcscf.CASSCF(m, 4, 4)
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc,-108.91378640707609, 7)
-    
+
     def test_mc2step_6o6e_fci(self):
         mc = mcscf.CASSCF(m, 6, 6)
         emc = mc.mc2step()[0]
@@ -44,12 +44,12 @@ class KnowValues(unittest.TestCase):
         mc.fcisolver = fciqmcscf.FCIQMCCI(mol)
         mc.fcisolver.RDMSamples = 5000
 
-        emc, e_ci, fcivec, casscf_mo = mc.mc2step()
+        emc, e_ci, fcivec, casscf_mo, casscf_mo_e = mc.mc2step()
         self.assertAlmostEqual(emc,-108.91378666934476, 7)
 
         # Calculate dipole moment in casscf_mo basis
         # First find the 1RDM in the full space
-        one_pdm = fciqmc.find_full_casscf_12rdm(mc.fcisolver, casscf_mo, 
+        one_pdm = fciqmc.find_full_casscf_12rdm(mc.fcisolver, casscf_mo,
                 'spinfree_TwoRDM.1', norb, nelec)[0]
         dipmom = fciqmc.calc_dipole(mol,casscf_mo,one_pdm)
         print('Dipole moments: ',dipmom)

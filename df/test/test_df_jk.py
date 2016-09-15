@@ -89,7 +89,7 @@ class KnowValues(unittest.TestCase):
             vj0.append(numpy.einsum('kij,k->ij', cderi, v1))
             v1 = numpy.einsum('pij,jk->pki', cderi, dmi.T)
             vk0.append(numpy.einsum('pki,pkj->ij', cderi, v1))
-        vj1, vk1 = df_jk.get_jk(mf.with_df, mol, dm, 0)
+        vj1, vk1 = df_jk.get_jk(mf.with_df, dm, 0)
         self.assertTrue(numpy.allclose(vj0, vj1))
         self.assertTrue(numpy.allclose(numpy.array(vk0), vk1))
         vhf0 = vj1 - vk1 * .5
@@ -101,7 +101,7 @@ class KnowValues(unittest.TestCase):
         numpy.random.seed(1)
         dm = numpy.random.random((4,nao,nao))
         vhf = mf.get_veff(mol, dm, hermi=0)
-        self.assertAlmostEqual(numpy.linalg.norm(vhf), 288.09692010645102, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(vhf), 199.20550115531233, 9)
 
     def test_assign_cderi(self):
         nao = mol.nao_nr()

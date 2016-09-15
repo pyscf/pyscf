@@ -26,12 +26,13 @@ mol.build()
 
 m = scf.RHF(mol)
 m.conv_tol = 1e-15
+m.conv_tol_grad = 1e-7
 ehf = m.scf()
 
 norb = m.mo_coeff.shape[1]
 nelec = mol.nelectron
-h1e = reduce(numpy.dot, (m.mo_coeff.T, m.get_hcore(), m.mo_coeff))
-g2e = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False)
+h1e = reduce(numpy.dot, (m.mo_coeff.T, m.get_hcore(), m.mo_coeff)).round(9)
+g2e = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False).round(9)
 na = fci.cistring.num_strings(norb, nelec//2)
 numpy.random.seed(15)
 ci0 = numpy.random.random((na,na))
@@ -46,7 +47,7 @@ class KnowValues(unittest.TestCase):
         ci1 = fci.direct_spin0.contract_1e(h1e, ci0, norb, nelec)
         ci1ref = fci.direct_spin1.contract_1e(h1e, ci0, norb, nelec)
         self.assertTrue(numpy.allclose(ci1ref, ci1))
-        self.assertAlmostEqual(numpy.linalg.norm(ci1), 9.1191973750140729, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(ci1), 9.1191973750140729, 8)
         ci1 = fci.direct_spin0.contract_2e(g2e, ci0, norb, nelec)
         ci1ref = fci.direct_spin1.contract_2e(g2e, ci0, norb, nelec)
         self.assertTrue(numpy.allclose(ci1ref, ci1))

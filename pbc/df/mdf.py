@@ -441,12 +441,12 @@ class MDF(pwdf.PWDF):
         kpti, kptj = kpti_kptj
         unpack = is_zero(kpti-kptj) and not compact
         nao = self.cell.nao_nr()
-        max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
+        max_memory = max(2000, self.max_memory-lib.current_memory()[0])
         if is_zero(kpti_kptj):
             nao_pair = nao * (nao+1) // 2
-            blksize = max(16, min(int(max_memory*1e6/8/nao_pair/2), mydf.blockdim))
+            blksize = max(16, min(int(max_memory*1e6/8/nao_pair/2), self.blockdim))
         else:
-            blksize = max(16, min(int(max_memory*1e6/16/nao**2/2), mydf.blockdim))
+            blksize = max(16, min(int(max_memory*1e6/16/nao**2/2), self.blockdim))
 
         if unpack:
             buf = numpy.empty((blksize,nao*(nao+1)//2))

@@ -1,4 +1,39 @@
-Version 1.2 alpha (2016-8-5):
+PySCF 1.2 beta (2016-09-13)
+---------------------------
+* Added
+  - State average CASSCF helper function for mixed spin/spatial-symmetry FCI solvers
+  - Example for transition dipole momentum
+  - U-CCSD (based on spin-orbital formulation)
+  - Function to dump CASSCF canonical orbitals in molden format
+  - Analytical Fourier transformation for AO and AO product
+  - Iterative augmented hessian (IAH) orbital optimizer
+  - Optimized einsum function using numpy.tensordot function
+  - Burkatzi-Filippi-Dolg pseudo potential
+  - FCI solver to support integrals which do not have 8-fold symmetry
+  - Dual interface to call pyFFTW or numpy.fft
+  - Maximum overlap method (MOM) method for SCF method
+* Improved
+  - Memory usage for MDF method (molecular and PBC systems)
+  - PBC AO value evaluation performance
+  - Orbitals space symmetrization
+  - CASSCF subspace (core, active, external) symmetrization
+  - Created X2C object to hold X2C functions and parameters
+  - Boys, Edmiston, Pipek-Mezey Localization with general IAH optimizer
+  - PBC integrals to handle ghost atom in PBC calculation
+  - Asynchronized IO to overlap integration and IO for ao2mo integral transformation
+  - SCF gradients to eliminate the symmetry forbidden matrix elements
+  - Fixing orbital ordering for degenerated SCF orbitals
+  - Efficiency of transpose_sum function
+  - FCIDUMP output format
+* Bugfix
+  - CASSCF/QMMM interface for the missing term in nuclear repulsion
+  - Screening small density for MGGA functionals
+  - Molden interface to handle symmetry broken orbitals
+  - MP2 density matrix to include HF DM
+
+
+PySCF 1.2 alpha (2016-8-5)
+--------------------------
 * Added
   - MDF method for molecule and PBC 2-election integrals
   - GAMESS WFN wirter
@@ -8,16 +43,16 @@ Version 1.2 alpha (2016-8-5):
   - PBC MO integral transformation
   - PBC density fitting
   - IC-MPS-PT2
-  - DMEG-CAS for active space selection 
+  - DMET method to generate CASSCF active space
   - FCI electron-phonon coupling solver
   - meta-GGA for ground state DFT
 
 
 Version 1.1 (2016-6-4):
-* Modify
+* Improved
   - "unc-" prefix for uncontracted basis in the input
   - linear dependence problem in mcscf.project_init_guess
-* Bug fixing
+* Bugfix
   - CCSD(T) rdm
   - CASCI.analyze for multiple CI roots
   - function to write FCIDUMP when system has symmetry
@@ -29,13 +64,13 @@ Version 1.1 beta (2016-4-11):
   - (maximum overlap method) for Delta SCF
   - determinant overlap
   - Canonicalization flag for Newton solver
-* Modify
+* Improved
   - Default density fitting basis for heavy atoms
   - Density fitting MCSCF to allow inputing 3-center integrals
   - Rewriting NEVPT2 interface
   - Mole object serialization with json
   - Orbital energy output format for ROHF
-* Bug fixing
+* Bugfix
   - meta-lowdin orthogonalization for high angular memontum basis
   - Orbital occupancy for ROHF with symmetry
   - CASSCF initializing from x2c-UHF
@@ -52,11 +87,11 @@ Version 1.1 alpha-2 (2016-3-8):
   - Function to symmetrize given orbital space
   - General XC functional evaluator (using Libxc or Xcfun)
   - Intrinsic Atomic Orbital (IAO)
-* Modify
+* Improved
   - NEVPT interface
   - Default DFT pruning scheme
   - Improving linear dependence issue for X2C module
-* Bug fixing
+* Bugfix
   - CCSD density matrix
   - Atomic radii for DFT grids
   - Handling h function for molden
@@ -77,7 +112,7 @@ Version 1.1 alpha-1 (2016-2-8):
   - Stream operations: apply, run, set
   - General basis value evaluator
   - DMRG (Block) examples
-* Modify
+* Improved
   - Default DFT grids schemes (grid density, prune etc)
 
 

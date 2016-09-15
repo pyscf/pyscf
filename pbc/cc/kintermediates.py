@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+#
+# Authors: James D. McClain <jmcclain@princeton.edu>
+#          Timothy Berkelbach <tim.berkelbach@gmail.com>
+#
+
 #import numpy as np
 from pyscf.pbc import lib as pbclib
 import pyscf.pbc.tools.pbc as tools

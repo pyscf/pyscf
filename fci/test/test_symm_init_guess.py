@@ -30,14 +30,12 @@ class KnowValues(unittest.TestCase):
     def test_symm_spin1(self):
         fs = fci.FCI(mol, m.mo_coeff, singlet=False)
         fs.wfnsym = 'B1'
-        fs.nroots = 3
+        fs.nroots = 2
         e, c = fs.kernel()
         self.assertAlmostEqual(e[0], -19.303845373762, 9)
         self.assertAlmostEqual(e[1], -19.286003160337, 9)
-        self.assertAlmostEqual(e[2], -19.014838825548, 9)
         self.assertAlmostEqual(fci.spin_op.spin_square0(c[0], norb, nelec)[0], 2, 9)
         self.assertAlmostEqual(fci.spin_op.spin_square0(c[1], norb, nelec)[0], 0, 9)
-        self.assertAlmostEqual(fci.spin_op.spin_square0(c[2], norb, nelec)[0], 2, 9)
 
 
 if __name__ == "__main__":

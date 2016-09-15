@@ -1,4 +1,9 @@
 #!/usr/bin/env python
+#
+# Authors: Qiming Sun <osirpt.sun@gmail.com>
+#          Junzi Liu <latrix1247@gmail.com>
+#
+
 
 import sys
 import copy

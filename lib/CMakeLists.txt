@@ -57,16 +57,16 @@ option(ENABLE_LIBCINT "Using libcint for analytical gaussian integral" ON)
 if(ENABLE_LIBCINT)
 include(ExternalProject)
 # remove the following comment for if ... eles, to bypass the compilation of libcint
-#if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
   ExternalProject_Add(libcint
     GIT_REPOSITORY https://github.com/sunqm/libcint.git
-    GIT_TAG origin/master
+    GIT_TAG v2.8.6
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DWITH_RANGE_COULOMB=1 -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
             -DCMAKE_INSTALL_LIBDIR:PATH=lib -DBLA_VENDOR=${BLA_VENDOR}
   )
-#endif()
+endif()
 endif(ENABLE_LIBCINT)
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/deps/include)

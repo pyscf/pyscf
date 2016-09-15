@@ -43,7 +43,7 @@ class KnowValues(unittest.TestCase):
     def test_rcas_natorb(self):
         mo1, ci1, mocc1 = mcscf.addons.cas_natorb(mcr)
         self.assertAlmostEqual(numpy.linalg.norm(mo1)  , 9.9260608594977491, 6)
-        self.assertAlmostEqual(numpy.linalg.norm(mocc1), 2.59144951056707, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(mocc1), 5.1687145190800079, 6)
 
 #TODO:    def test_ucas_natorb(self):
 #TODO:        mo2, ci2, mocc2 = mcscf.addons.cas_natorb(mcu)

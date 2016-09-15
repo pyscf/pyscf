@@ -20,7 +20,7 @@ mol.basis = {'H': 'cc-pvdz',
 mol.build()
 mf = scf.RHF(mol)
 mf.conv_tol = 1e-14
-mf.scf()
+ehf = mf.scf()
 
 
 class KnowValues(unittest.TestCase):
@@ -38,14 +38,13 @@ class KnowValues(unittest.TestCase):
 
         pt = mp.MP2(mf)
         emp2, t2 = pt.kernel()
-        self.assertAlmostEqual(emp2, -0.204019967288338, 11)
-        #self.assertTrue(numpy.allclose(t2, t2ref0))
+        self.assertAlmostEqual(emp2, -0.204019967288338, 9)
 
     def test_mp2_outcore(self):
         pt = mp.mp2.MP2(mf)
         pt.max_memory = 1
         e, t2 = pt.kernel()
-        self.assertAlmostEqual(e, -0.20401996728747132, 11)
+        self.assertAlmostEqual(e, -0.20401996728747132, 9)
         self.assertAlmostEqual(numpy.linalg.norm(t2), 0.19379397642098622, 9)
 
     def test_mp2_dm(self):
@@ -75,6 +74,8 @@ class KnowValues(unittest.TestCase):
         dm1ref = numpy.zeros((nmo,nmo))
         dm1ref[:nocc,:nocc] = dm1occ[ ::2, ::2]+dm1occ[1::2,1::2]
         dm1ref[nocc:,nocc:] = dm1vir[ ::2, ::2]+dm1vir[1::2,1::2]
+        for i in range(nocc):
+            dm1ref[i,i] += 2
         dm1refao = reduce(numpy.dot, (mf.mo_coeff, dm1ref, mf.mo_coeff.T))
         rdm1 = mp.mp2.make_rdm1_ao(pt, mf.mo_energy, mf.mo_coeff)
         self.assertTrue(numpy.allclose(rdm1, dm1refao))
@@ -87,6 +88,10 @@ class KnowValues(unittest.TestCase):
                + dm2ref[ ::2, ::2,1::2,1::2] + dm2ref[1::2,1::2, ::2, ::2]
         eris = ao2mo.restore(1, ao2mo.full(mf._eri, mf.mo_coeff), mf.mo_coeff.shape[1])
         self.assertAlmostEqual(numpy.einsum('iajb,iajb', eris, dm2ref)*.5, emp2, 9)
+        for i in range(nocc):
+            for j in range(nocc):
+                dm2ref[i,i,j,j] += 4
+                dm2ref[i,j,j,i] -= 2
         self.assertTrue(numpy.allclose(pt.make_rdm2(), dm2ref))
 
 

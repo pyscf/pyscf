@@ -1,3 +1,8 @@
+#!/usr/bin/env python
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
+
 import unittest
 import ctypes
 import numpy
@@ -194,13 +199,13 @@ class KnowValues(unittest.TestCase):
         kpts = numpy.random.random((4,3))
         kpts[0] = 0
         s0 = cl1.pbc_intor('cint1e_ovlp_sph', hermi=0, kpts=kpts)
-        self.assertAlmostEqual(finger(s0[0]), 407.91937880939361, 10)
-        self.assertAlmostEqual(finger(s0[1]), (26.2774487084558-22.826365508130458j), 10)
-        self.assertAlmostEqual(finger(s0[2]), (-30.61736160830381-30.687642316942277j), 10)
-        self.assertAlmostEqual(finger(s0[3]), (155.98331785091904+111.19316774017074j), 10)
+        self.assertAlmostEqual(finger(s0[0]), 408.48676779104392, 10)
+        self.assertAlmostEqual(finger(s0[1]), 26.276205561297139-22.838328810200206j, 10)
+        self.assertAlmostEqual(finger(s0[2]), -30.646416383443931-30.660149830545681j, 10)
+        self.assertAlmostEqual(finger(s0[3]), 155.87522454574429+111.34811270637672j, 10)
 
         s1 = cl1.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpts[0])
-        self.assertAlmostEqual(finger(s1), 407.91937880939361, 10)
+        self.assertAlmostEqual(finger(s1), 408.48676779104392, 10)
 
 
 if __name__ == '__main__':

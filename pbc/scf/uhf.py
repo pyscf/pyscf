@@ -1,3 +1,8 @@
+#!/usr/bin/env python
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
+
 '''
 Unrestricted Hartree-Fock for periodic systems at a single k-point
 

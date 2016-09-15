@@ -46,10 +46,4 @@ mf.get_hcore = lambda *args: h1
 mf.get_ovlp = lambda *args: numpy.eye(n)
 mf._eri = ao2mo.restore(8, eri, n)
 
-e,c = scipy.linalg.eigh(h1)
-dm0 = numpy.dot(c[:,:3],c[:,:3].T) * 2
-# Another way to generate initial guess is to set .init_guess attribute to '1e'
-#mf.init_guess = '1e'
-
-# dm0 is the initial guess
-mf.scf(dm0)
+mf.scf()

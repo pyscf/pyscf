@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
 
 from functools import reduce
 import numpy
