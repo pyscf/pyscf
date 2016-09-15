@@ -1,3 +1,8 @@
+#!/usr/bin/env python
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
+
 import unittest
 import numpy as np
 
@@ -30,10 +35,10 @@ class KnowValues(unittest.TestCase):
 
         mf = pbcdft.UKS(cell)
         mf.xc = 'blyp'
-        self.assertAlmostEqual(mf.scf(), -7.6058257126239397, 8)
+        self.assertAlmostEqual(mf.scf(), -7.6058004283213396, 8)
 
         mf.xc = 'lda,vwn'
-        self.assertAlmostEqual(mf.scf(), -7.6162387360799881, 8)
+        self.assertAlmostEqual(mf.scf(), -7.6162130840535092, 8)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.uks")

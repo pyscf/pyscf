@@ -1,3 +1,8 @@
+#!/usr/bin/env python
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
+
 import unittest
 import numpy as np
 from pyscf.pbc import gto as pbcgto
@@ -22,13 +27,13 @@ class KnowValues(unittest.TestCase):
         cell.output = '/dev/null'
         cell.build()
 
-        kpts = pyscf_ase.make_kpts(cell, (2,2,2))
+        kpts = cell.make_kpts((2,2,2))
         mf = pbcdft.KUKS(cell, kpts)
         mf.xc = 'lda,vwn'
         e1 = mf.scf()
-        self.assertAlmostEqual(e1, -45.4260923810061, 8)
-        self.assertAlmostEqual(mf._ecoul, 3.2519841629129687, 8)
-        self.assertAlmostEqual(mf._exc, -13.937917984479245, 8)
+        self.assertAlmostEqual(e1, -45.42583489512954, 8)
+        self.assertAlmostEqual(mf._ecoul, 3.2519161200384685, 8)
+        self.assertAlmostEqual(mf._exc, -13.937886385300949, 8)
 
 
 if __name__ == '__main__':

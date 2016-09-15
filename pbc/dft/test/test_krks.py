@@ -1,4 +1,10 @@
-import unittest 
+#!/usr/bin/env python
+#
+# Authors: Timothy Berkelbach <tim.berkelbach@gmail.com>
+#          Qiming Sun <osirpt.sun@gmail.com>
+#
+
+import unittest
 import numpy as np
 
 from pyscf.pbc import gto as pbcgto
@@ -36,7 +42,7 @@ class KnowValues(unittest.TestCase):
         e1 = mf.scf()
         #print "mf._ecoul =", mf._ecoul
         #print "mf._exc =", mf._exc
-        self.assertAlmostEqual(e1, -44.892671432668408, 8)
+        self.assertAlmostEqual(e1, -44.892502703975893, 8)
 
     def test_klda8_cubic_kpt_222(self):
         ase_atom = Diamond(symbol='C', latticeconstant=LATTICE_CONST)
@@ -50,7 +56,7 @@ class KnowValues(unittest.TestCase):
         e1 = mf.scf()
         #print "mf._ecoul =", mf._ecoul
         #print "mf._exc =", mf._exc
-        self.assertAlmostEqual(e1, -45.426092381006072, 8)
+        self.assertAlmostEqual(e1, -45.425834895129569, 8)
 
     def test_klda8_primitive_gamma(self):
         ase_atom = bulk('C', 'diamond', a=LATTICE_CONST)
