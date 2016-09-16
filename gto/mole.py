@@ -2140,7 +2140,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def _libcint_ctr_coeff(self, bas_id):
         nprim = self.bas_nprim(bas_id)
         nctr = self.bas_nctr(bas_id)
-        ptr = self._bas[bas_id,gto.PTR_COEFF]
+        ptr = self._bas[bas_id,PTR_COEFF]
         return self._env[ptr:ptr+nprim*nctr].reshape(nctr,nprim).T
     def bas_ctr_coeff(self, bas_id):
         r'''Contract coefficients (ndarray) of the given shell
