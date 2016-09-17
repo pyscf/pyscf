@@ -9,7 +9,6 @@
 #         dm[p,q] = < q^+ p >
 
 import ctypes
-import _ctypes
 import numpy
 import pyscf.lib
 from pyscf.fci import cistring
@@ -123,8 +122,7 @@ def make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
     nb,nlinkb = link_indexb.shape[:2]
     rdm1 = numpy.empty((norb,norb))
     rdm2 = numpy.empty((norb,norb,norb,norb))
-    fn = _ctypes.dlsym(librdm._handle, fname)
-    librdm.FCIrdm12_drv(ctypes.c_void_p(fn),
+    librdm.FCIrdm12_drv(getattr(librdm, fname),
                         rdm1.ctypes.data_as(ctypes.c_void_p),
                         rdm2.ctypes.data_as(ctypes.c_void_p),
                         cibra.ctypes.data_as(ctypes.c_void_p),
@@ -166,8 +164,7 @@ def make_dm123(fname, cibra, ciket, norb, nelec):
     rdm1 = numpy.empty((norb,)*2)
     rdm2 = numpy.empty((norb,)*4)
     rdm3 = numpy.empty((norb,)*6)
-    kernel = _ctypes.dlsym(librdm._handle, fname)
-    librdm.FCIrdm3_drv(ctypes.c_void_p(kernel),
+    librdm.FCIrdm3_drv(getattr(librdm, fname),
                        rdm1.ctypes.data_as(ctypes.c_void_p),
                        rdm2.ctypes.data_as(ctypes.c_void_p),
                        rdm3.ctypes.data_as(ctypes.c_void_p),
@@ -234,7 +231,7 @@ def make_dm1234(fname, cibra, ciket, norb, nelec):
     rdm2 = numpy.empty((norb,)*4)
     rdm3 = numpy.empty((norb,)*6)
     rdm4 = numpy.empty((norb,)*8)
-    librdm.FCIrdm4_drv(ctypes.c_void_p(_ctypes.dlsym(librdm._handle, fname)),
+    librdm.FCIrdm4_drv(getattr(librdm, fname),
                        rdm1.ctypes.data_as(ctypes.c_void_p),
                        rdm2.ctypes.data_as(ctypes.c_void_p),
                        rdm3.ctypes.data_as(ctypes.c_void_p),

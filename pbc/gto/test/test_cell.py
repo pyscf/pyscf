@@ -45,7 +45,7 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
         drv_name = 'GTOint2c'
 
     drv = getattr(pyscf.gto.moleintor.libcgto, drv_name)
-    fintor = pyscf.gto.moleintor._fpointer(intor)
+    fintor = getattr(pyscf.gto.moleintor.libcgto, intor)
     intopt = lib.c_null_ptr()
 
     if kpts is None:

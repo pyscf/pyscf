@@ -6,7 +6,6 @@
 import copy
 import time
 import ctypes
-import _ctypes
 import numpy
 import scipy.linalg
 import pyscf.lib
@@ -16,8 +15,6 @@ from pyscf.df import _ri
 from pyscf.df import addons
 
 libri = pyscf.lib.load_library('libri')
-def _fpointer(name):
-    return ctypes.c_void_p(_ctypes.dlsym(libri._handle, name))
 
 def format_aux_basis(mol, auxbasis='weigend+etb'):
     '''Generate a fake Mole object which uses the density fitting auxbasis as

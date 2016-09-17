@@ -2,7 +2,6 @@
 
 import sys
 import ctypes
-import _ctypes
 import time
 import tempfile
 from functools import reduce
@@ -26,8 +25,6 @@ from pyscf.ao2mo import outcore
 # 750  150    16    85 GB
 
 libmcscf = pyscf.lib.load_library('libmcscf')
-def _fpointer(name):
-    return ctypes.c_void_p(_ctypes.dlsym(libmcscf._handle, name))
 
 def trans_e1_incore(eri_ao, mo, ncore, ncas):
     nmo = mo.shape[1]
@@ -111,8 +108,8 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     ti0 = log.timer('Initializing trans_e1_outcore', *time0)
 
     # fmmm, ftrans, fdrv for level 1
-    fmmm = _fpointer('MCSCFhalfmmm_nr_s2_ket')
-    ftrans = _fpointer('AO2MOtranse1_nr_s4')
+    fmmm = getattr(libmcscf, 'MCSCFhalfmmm_nr_s2_ket')
+    ftrans = getattr(libmcscf, 'AO2MOtranse1_nr_s4')
     fdrv = getattr(libmcscf, 'AO2MOnr_e2_drv')
     for istep,sh_range in enumerate(shranges):
         log.debug('[%d/%d], AO [%d:%d], len(buf) = %d',

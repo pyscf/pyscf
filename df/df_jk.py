@@ -139,9 +139,9 @@ def get_jk(dfobj, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
         nset = len(dms)
     nao = dms[0].shape[0]
 
-    fmmm = _ri._fpointer('RIhalfmmm_nr_s2_bra')
+    fmmm = _ri.libri.RIhalfmmm_nr_s2_bra
     fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
-    ftrans = _ao2mo._fpointer('AO2MOtranse2_nr_s2')
+    ftrans = _ao2mo.libao2mo.AO2MOtranse2_nr_s2
 
     vj = numpy.zeros((nset,nao,nao))
     vk = numpy.zeros((nset,nao,nao))
@@ -204,7 +204,7 @@ def get_jk(dfobj, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
     else:
         #:vk = numpy.einsum('pij,jk->pki', cderi, dm)
         #:vk = numpy.einsum('pki,pkj->ij', cderi, vk)
-        fcopy = _ri._fpointer('RImmm_nr_s2_copy')
+        fcopy = _ri.libri.RImmm_nr_s2_copy
         rargs = (ctypes.c_int(nao),
                  ctypes.c_int(0), ctypes.c_int(nao),
                  ctypes.c_int(0), ctypes.c_int(0), null, ctypes.c_int(0))
@@ -248,12 +248,12 @@ def r_get_jk(dfobj, dms, hermi=1):
     c1 = .5 / mol.light_speed
 
     def fjk(dm):
-        fmmm = _ri._fpointer('RIhalfmmm_r_s2_bra_noconj')
+        fmmm = _ri.libri.RIhalfmmm_r_s2_bra_noconj
         fdrv = _ao2mo.libao2mo.AO2MOr_e2_drv
-        ftrans = _ri._fpointer('RItranse2_r_s2')
+        ftrans = _ri.libri.RItranse2_r_s2
         vj = numpy.zeros_like(dm)
         vk = numpy.zeros_like(dm)
-        fcopy = _ri._fpointer('RImmm_r_s2_transpose')
+        fcopy = _ri.libri.RImmm_r_s2_transpose
         rargs = (ctypes.c_int(n2c),
                  ctypes.c_int(0), ctypes.c_int(n2c),
                  ctypes.c_int(0), ctypes.c_int(0))

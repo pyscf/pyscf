@@ -5,7 +5,6 @@
 
 import time
 import ctypes
-import _ctypes
 import tempfile
 import numpy
 import h5py
@@ -445,9 +444,7 @@ def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave=None, max_memory=2000):
             out = numpy.empty((nrow,nao_pair))
         fdrv = getattr(_ccsd.libcc, 'AO2MOnr_e2_drv')
         pao_loc = ctypes.POINTER(ctypes.c_void_p)()
-        ftrans = ctypes.c_void_p(_ctypes.dlsym(_ccsd.libcc._handle, 'AO2MOtranse2_nr_s1'))
-        fmmm = ctypes.c_void_p(_ctypes.dlsym(_ccsd.libcc._handle, 'CCmmm_transpose_sum'))
-        fdrv(ftrans, fmmm,
+        fdrv(_ccsd.libcc.AO2MOtranse2_nr_s1, _ccsd.libcc.CCmmm_transpose_sum,
              out.ctypes.data_as(ctypes.c_void_p),
              vin.ctypes.data_as(ctypes.c_void_p),
              mo_coeff.ctypes.data_as(ctypes.c_void_p),

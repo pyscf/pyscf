@@ -8,7 +8,6 @@ Analytic Fourier transformation AO-pair value for PBC
 '''
 
 import ctypes
-import _ctypes
 import numpy
 import scipy.linalg
 from pyscf import lib

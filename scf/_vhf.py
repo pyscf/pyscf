@@ -2,22 +2,19 @@
 
 import sys
 import ctypes
-import _ctypes
 import numpy
 import pyscf.lib
 from pyscf import gto
 from pyscf.gto.moleintor import make_cintopt
 
 libcvhf = pyscf.lib.load_library('libcvhf')
-def _fpointer(name):
-    return ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, name))
 
 class VHFOpt(object):
     def __init__(self, mol, intor,
                  prescreen='CVHFnoscreen', qcondname=None, dmcondname=None):
         self._this = ctypes.POINTER(_CVHFOpt)()
         #print self._this.contents, expect ValueError: NULL pointer access
-        self._intor = _fpointer(intor)
+        self._intor = getattr(libcvhf, intor)
         self._cintopt = pyscf.lib.c_null_ptr()
         self._dmcondname = dmcondname
         self.init_cvhf_direct(mol, intor, prescreen, qcondname)
@@ -49,7 +46,7 @@ class VHFOpt(object):
                                    c_atm.ctypes.data_as(ctypes.c_void_p), natm,
                                    c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
                                    c_env.ctypes.data_as(ctypes.c_void_p))
-        self._this.contents.fprescreen = _fpointer(prescreen)
+        self._this.contents.fprescreen = getattr(libcvhf, prescreen)
 
         if prescreen != 'CVHFnoscreen':
             fsetqcond = getattr(libcvhf, qcondname)
@@ -110,23 +107,23 @@ def incore(eri, dm, hermi=0):
     if eri.ndim == 2 and npair*npair == eri.size: # 4-fold symmetry eri
         fdrv = getattr(libcvhf, 'CVHFnrs4_incore_drv')
         # 'ijkl,kl->ij'
-        fvj = _fpointer('CVHFics4_kl_s2ij')
+        fvj = getattr(libcvhf, 'CVHFics4_kl_s2ij')
         # 'ijkl,il->jk'
-        fvk = _fpointer('CVHFics4_il_s1jk')
+        fvk = getattr(libcvhf, 'CVHFics4_il_s1jk')
         # or
         ## 'ijkl,ij->kl'
-        #fvj = _fpointer('CVHFics4_ij_s2kl')
+        #fvj = getattr(libcvhf, 'CVHFics4_ij_s2kl')
         ## 'ijkl,jk->il'
-        #fvk = _fpointer('CVHFics4_jk_s1il')
+        #fvk = getattr(libcvhf, 'CVHFics4_jk_s1il')
 
         tridm = dm
     elif eri.ndim == 1 and npair*(npair+1)//2 == eri.size: # 8-fold symmetry eri
         fdrv = getattr(libcvhf, 'CVHFnrs8_incore_drv')
-        fvj = _fpointer('CVHFics8_tridm_vj')
+        fvj = getattr(libcvhf, 'CVHFics8_tridm_vj')
         if hermi == 1:
-            fvk = _fpointer('CVHFics8_jk_s2il')
+            fvk = getattr(libcvhf, 'CVHFics8_jk_s2il')
         else:
-            fvk = _fpointer('CVHFics8_jk_s1il')
+            fvk = getattr(libcvhf, 'CVHFics8_jk_s1il')
         tridm = pyscf.lib.pack_tril(pyscf.lib.transpose_sum(dm))
         i = numpy.arange(nao)
         tridm[i*(i+1)//2+i] *= .5
@@ -165,7 +162,7 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0):
         dms = numpy.asarray(dms, order='C')
 
     if vhfopt is None:
-        cintor = _fpointer('cint2e_sph')
+        cintor = getattr(libcvhf, 'cint2e_sph')
         cintopt = make_cintopt(c_atm, c_bas, c_env, 'cint2e_sph')
         cvhfopt = pyscf.lib.c_null_ptr()
     else:
@@ -175,12 +172,12 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0):
         cintor = vhfopt._intor
 
     fdrv = getattr(libcvhf, 'CVHFnr_direct_drv')
-    fdot = _fpointer('CVHFdot_nrs8')
-    fvj = _fpointer('CVHFnrs8_ji_s2kl')
+    fdot = getattr(libcvhf, 'CVHFdot_nrs8')
+    fvj = getattr(libcvhf, 'CVHFnrs8_ji_s2kl')
     if hermi == 1:
-        fvk = _fpointer('CVHFnrs8_li_s2kj')
+        fvk = getattr(libcvhf, 'CVHFnrs8_li_s2kj')
     else:
-        fvk = _fpointer('CVHFnrs8_li_s1kj')
+        fvk = getattr(libcvhf, 'CVHFnrs8_li_s1kj')
     vjk = numpy.empty((2,n_dm,nao,nao))
     fjk = (ctypes.c_void_p*(2*n_dm))()
     dmsptr = (ctypes.c_void_p*(2*n_dm))()
@@ -240,7 +237,7 @@ def direct_mapdm(intor, aosym, jkdescript,
         njk = len(jkdescript)
 
     if vhfopt is None:
-        cintor = _fpointer(intor)
+        cintor = getattr(libcvhf, intor)
         cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
         cvhfopt = pyscf.lib.c_null_ptr()
     else:
@@ -251,7 +248,7 @@ def direct_mapdm(intor, aosym, jkdescript,
 
     fdrv = getattr(libcvhf, 'CVHFnr_direct_drv')
     dotsym = _INTSYMAP[aosym]
-    fdot = _fpointer('CVHFdot_nr'+dotsym)
+    fdot = getattr(libcvhf, 'CVHFdot_nr'+dotsym)
 
     if shls_slice is None:
         shls_slice = (0, c_bas.shape[0])*4
@@ -267,7 +264,7 @@ def direct_mapdm(intor, aosym, jkdescript,
             sys.stderr.write('not support DM description %s, transpose to %s\n' %
                              (dmsym, dmsym[::-1]))
             dmsym = dmsym[::-1]
-        f1 = _fpointer('CVHFnr%s_%s_%s'%(aosym, dmsym, vsym))
+        f1 = getattr(libcvhf, 'CVHFnr%s_%s_%s'%(aosym, dmsym, vsym))
 
         vshape = (n_dm,ncomp) + get_dims(vsym[-2:], shls_slice, ao_loc)
         vjk.append(numpy.empty(vshape))
@@ -323,7 +320,7 @@ def direct_bindm(intor, aosym, jkdescript,
     assert(njk == n_dm)
 
     if vhfopt is None:
-        cintor = _fpointer(intor)
+        cintor = getattr(libcvhf, intor)
         cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
         cvhfopt = pyscf.lib.c_null_ptr()
     else:
@@ -334,7 +331,7 @@ def direct_bindm(intor, aosym, jkdescript,
 
     fdrv = getattr(libcvhf, 'CVHFnr_direct_drv')
     dotsym = _INTSYMAP[aosym]
-    fdot = _fpointer('CVHFdot_nr'+dotsym)
+    fdot = getattr(libcvhf, 'CVHFdot_nr'+dotsym)
 
     if shls_slice is None:
         shls_slice = (0, c_bas.shape[0])*4
@@ -350,7 +347,7 @@ def direct_bindm(intor, aosym, jkdescript,
             sys.stderr.write('not support DM description %s, transpose to %s\n' %
                              (dmsym, dmsym[::-1]))
             dmsym = dmsym[::-1]
-        f1 = _fpointer('CVHFnr%s_%s_%s'%(aosym, dmsym, vsym))
+        f1 = getattr(libcvhf, 'CVHFnr%s_%s_%s'%(aosym, dmsym, vsym))
 
         assert(dms[i].shape == get_dims(dmsym, shls_slice, ao_loc))
         vshape = (ncomp,) + get_dims(vsym[-2:], shls_slice, ao_loc)
@@ -419,7 +416,7 @@ def rdirect_mapdm(intor, aosym, jkdescript,
         njk = len(jkdescript)
 
     if vhfopt is None:
-        cintor = _fpointer(intor)
+        cintor = getattr(libcvhf, intor)
         cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
         cvhfopt = pyscf.lib.c_null_ptr()
     else:
@@ -430,14 +427,14 @@ def rdirect_mapdm(intor, aosym, jkdescript,
 
     fdrv = getattr(libcvhf, 'CVHFr_direct_drv')
     dotsym = _INTSYMAP[aosym]
-    fdot = _fpointer('CVHFdot_r'+dotsym)
+    fdot = getattr(libcvhf, 'CVHFdot_r'+dotsym)
 
     unpackas = _INTUNPACKMAP_R[aosym]
     descr_sym = [x.split('->') for x in jkdescript]
     fjk = (ctypes.c_void_p*(njk*n_dm))()
     dm1 = (ctypes.c_void_p*(njk*n_dm))()
     for i, (dmsym, vsym) in enumerate(descr_sym):
-        f1 = _fpointer('CVHFr%s_%s_%s'%(unpackas, dmsym, vsym))
+        f1 = getattr(libcvhf, 'CVHFr%s_%s_%s'%(unpackas, dmsym, vsym))
         for j in range(n_dm):
             dm1[i*n_dm+j] = dms[j].ctypes.data_as(ctypes.c_void_p)
             fjk[i*n_dm+j] = f1
@@ -484,7 +481,7 @@ def rdirect_bindm(intor, aosym, jkdescript,
     assert(njk == n_dm)
 
     if vhfopt is None:
-        cintor = _fpointer(intor)
+        cintor = getattr(libcvhf, intor)
         cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
         cvhfopt = pyscf.lib.c_null_ptr()
     else:
@@ -495,14 +492,14 @@ def rdirect_bindm(intor, aosym, jkdescript,
 
     fdrv = getattr(libcvhf, 'CVHFr_direct_drv')
     dotsym = _INTSYMAP[aosym]
-    fdot = _fpointer('CVHFdot_r'+dotsym)
+    fdot = getattr(libcvhf, 'CVHFdot_r'+dotsym)
 
     unpackas = _INTUNPACKMAP_R[aosym]
     descr_sym = [x.split('->') for x in jkdescript]
     fjk = (ctypes.c_void_p*(n_dm))()
     dm1 = (ctypes.c_void_p*(n_dm))()
     for i, (dmsym, vsym) in enumerate(descr_sym):
-        f1 = _fpointer('CVHFr%s_%s_%s'%(unpackas, dmsym, vsym))
+        f1 = getattr(libcvhf, 'CVHFr%s_%s_%s'%(unpackas, dmsym, vsym))
         dm1[i] = dms[i].ctypes.data_as(ctypes.c_void_p)
         fjk[i] = f1
     vjk = numpy.empty((njk,ncomp,nao,nao), dtype=numpy.complex)

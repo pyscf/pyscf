@@ -26,7 +26,6 @@ import scipy
 #import time
 
 import ctypes
-import _ctypes
 from pyscf.lib import load_library
 liblocalizer = load_library('liblocalizer')
 

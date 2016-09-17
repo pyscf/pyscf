@@ -2,7 +2,6 @@
 
 import os
 import ctypes
-import _ctypes
 import unittest
 from functools import reduce
 import numpy
@@ -52,8 +51,6 @@ def s2ij_to_s1(eri1, norb):
             eri2[i,j] = eri2[j,i] = eri1[ij]
             ij += 1
     return eri2
-def f1pointer(name):
-    return ctypes.c_void_p(_ctypes.dlsym(libao2mo1._handle, name))
 
 class KnowValues(unittest.TestCase):
     def test_nr_transe2(self):
@@ -73,41 +70,41 @@ class KnowValues(unittest.TestCase):
                                      ctypes.c_void_p(), nbas)
             return eri2
 
-        ftrans2 = f1pointer('AO2MOtranse2_nr_s1')
-        fmmm = f1pointer('AO2MOmmm_nr_s1_iltj')
+        ftrans2 = getattr(libao2mo1, 'AO2MOtranse2_nr_s1')
+        fmmm = getattr(libao2mo1, 'AO2MOmmm_nr_s1_iltj')
         eri2 = numpy.zeros((nao,nao,nao,nao))
         eri2 = e2drv(ftrans2, fmmm, eri1, eri2)
         self.assertTrue(numpy.allclose(eri2, eriref))
 
-        ftrans2 = f1pointer('AO2MOtranse2_nr_s1')
-        fmmm = f1pointer('AO2MOmmm_nr_s1_igtj')
+        ftrans2 = getattr(libao2mo1, 'AO2MOtranse2_nr_s1')
+        fmmm = getattr(libao2mo1, 'AO2MOmmm_nr_s1_igtj')
         eri2 = numpy.zeros((nao,nao,nao,nao))
         eri2 = e2drv(ftrans2, fmmm, eri1, eri2)
         self.assertTrue(numpy.allclose(eri2, eriref))
 
-        ftrans2 = f1pointer('AO2MOtranse2_nr_s2kl')
-        fmmm = f1pointer('AO2MOmmm_nr_s2_iltj')
+        ftrans2 = getattr(libao2mo1, 'AO2MOtranse2_nr_s2kl')
+        fmmm = getattr(libao2mo1, 'AO2MOmmm_nr_s2_iltj')
         eri2 = numpy.zeros((nao,nao,nao,nao))
         tril = numpy.tril_indices(nao)
         eri2 = e2drv(ftrans2, fmmm, eri1[:,:,tril[0],tril[1]].copy(), eri2)
         self.assertTrue(numpy.allclose(eri2, eriref))
 
-        ftrans2 = f1pointer('AO2MOtranse2_nr_s2kl')
-        fmmm = f1pointer('AO2MOmmm_nr_s2_igtj')
+        ftrans2 = getattr(libao2mo1, 'AO2MOtranse2_nr_s2kl')
+        fmmm = getattr(libao2mo1, 'AO2MOmmm_nr_s2_igtj')
         eri2 = numpy.zeros((nao,nao,nao,nao))
         tril = numpy.tril_indices(nao)
         eri2 = e2drv(ftrans2, fmmm, eri1[:,:,tril[0],tril[1]].copy(), eri2)
         self.assertTrue(numpy.allclose(eri2, eriref))
 
-        ftrans2 = f1pointer('AO2MOtranse2_nr_s2kl')
-        fmmm = f1pointer('AO2MOmmm_nr_s2_s2')
+        ftrans2 = getattr(libao2mo1, 'AO2MOtranse2_nr_s2kl')
+        fmmm = getattr(libao2mo1, 'AO2MOmmm_nr_s2_s2')
         eri2 = numpy.zeros((nao,nao,naopair))
         eri2 = e2drv(ftrans2, fmmm, eri1[:,:,tril[0],tril[1]].copy(), eri2)
         eri2 = s2kl_to_s1(eri2, nao)
         self.assertTrue(numpy.allclose(eri2, eriref))
 
-        ftrans2 = f1pointer('AO2MOtranse2_nr_s2kl')
-        fmmm = f1pointer('AO2MOmmm_nr_s2_s2')
+        ftrans2 = getattr(libao2mo1, 'AO2MOtranse2_nr_s2kl')
+        fmmm = getattr(libao2mo1, 'AO2MOmmm_nr_s2_s2')
         eri1p = ao2mo.restore(4, eri1, nao)
         eri2 = numpy.zeros((naopair,naopair))
         libao2mo1.AO2MOnr_e2_drv(ftrans2, fmmm,
@@ -121,33 +118,33 @@ class KnowValues(unittest.TestCase):
 
 
 ###########################################################
-        ftrans2 = f1pointer('AO2MOtrans_nr_s1_iltj')
+        ftrans2 = getattr(libao2mo1, 'AO2MOtrans_nr_s1_iltj')
         fmmm = ctypes.c_void_p()
         eri2 = numpy.zeros((nao,nao,nao,nao))
         eri2 = e2drv(ftrans2, fmmm, eri1, eri2)
         self.assertTrue(numpy.allclose(eri2, eriref))
 
-        ftrans2 = f1pointer('AO2MOtrans_nr_s1_igtj')
+        ftrans2 = getattr(libao2mo1, 'AO2MOtrans_nr_s1_igtj')
         fmmm = ctypes.c_void_p()
         eri2 = numpy.zeros((nao,nao,nao,nao))
         eri2 = e2drv(ftrans2, fmmm, eri1, eri2)
         self.assertTrue(numpy.allclose(eri2, eriref))
 
-        ftrans2 = f1pointer('AO2MOtrans_nr_s2_iltj')
+        ftrans2 = getattr(libao2mo1, 'AO2MOtrans_nr_s2_iltj')
         fmmm = ctypes.c_void_p()
         eri2 = numpy.zeros((nao,nao,nao,nao))
         tril = numpy.tril_indices(nao)
         eri2 = e2drv(ftrans2, fmmm, eri1[:,:,tril[0],tril[1]].copy(), eri2)
         self.assertTrue(numpy.allclose(eri2, eriref))
 
-        ftrans2 = f1pointer('AO2MOtrans_nr_s2_igtj')
+        ftrans2 = getattr(libao2mo1, 'AO2MOtrans_nr_s2_igtj')
         fmmm = ctypes.c_void_p()
         eri2 = numpy.zeros((nao,nao,nao,nao))
         tril = numpy.tril_indices(nao)
         eri2 = e2drv(ftrans2, fmmm, eri1[:,:,tril[0],tril[1]].copy(), eri2)
         self.assertTrue(numpy.allclose(eri2, eriref))
 
-        ftrans2 = f1pointer('AO2MOtrans_nr_s2_s2')
+        ftrans2 = getattr(libao2mo1, 'AO2MOtrans_nr_s2_s2')
         fmmm = ctypes.c_void_p()
         eri2 = numpy.zeros((nao,nao,naopair))
         eri2 = e2drv(ftrans2, fmmm, eri1[:,:,tril[0],tril[1]].copy(), eri2)

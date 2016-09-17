@@ -2,7 +2,6 @@
 
 import os
 import ctypes
-import _ctypes
 import unittest
 import numpy
 from pyscf import lib
@@ -38,9 +37,6 @@ natm = ctypes.c_int(c_atm.shape[0])
 nbas = ctypes.c_int(c_bas.shape[0])
 cintopt = ctypes.c_void_p()
 
-def f1pointer(name):
-    return ctypes.c_void_p(_ctypes.dlsym(libri1._handle, name))
-
 class KnowValues(unittest.TestCase):
     def test_fill_auxe2(self):
         eriref = numpy.empty((nao,nao,nao))
@@ -58,12 +54,12 @@ class KnowValues(unittest.TestCase):
                 jp += dj
             ip += di
 
-        intor = f1pointer('cint3c2e_sph')
+        intor = getattr(libri1, 'cint3c2e_sph')
         r_atm = numpy.vstack((c_atm, c_atm))
         r_bas = numpy.vstack((c_bas, c_bas))
         fdrv = getattr(libri1, 'RInr_3c2e_auxe2_drv')
 
-        fill = f1pointer('RIfill_s1_auxe2')
+        fill = getattr(libri1, 'RIfill_s1_auxe2')
         eri1 = numpy.empty((nao,nao,nao))
         fdrv(intor, fill,
              eri1.ctypes.data_as(ctypes.c_void_p),
@@ -73,7 +69,7 @@ class KnowValues(unittest.TestCase):
              c_env.ctypes.data_as(ctypes.c_void_p))
         self.assertTrue(numpy.allclose(eriref, eri1))
 
-        fill = f1pointer('RIfill_s2ij_auxe2')
+        fill = getattr(libri1, 'RIfill_s2ij_auxe2')
         eri1 = numpy.empty((naopair,nao))
         fdrv(intor, fill,
              eri1.ctypes.data_as(ctypes.c_void_p),

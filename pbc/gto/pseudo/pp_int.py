@@ -276,7 +276,7 @@ def _int_vnl(cell, fakecell, hl_blocks, kpts):
                 *[x.ctypes.data_as(ctypes.c_void_p) for x in out])
         comp = 1
 
-        fintor = gto.moleintor._fpointer(intor)
+        fintor = getattr(gto.moleintor.libcgto, intor)
 
         ptr_coords = numpy.asarray(atm[:cell.natm,gto.PTR_COORD],
                                    dtype=numpy.int32, order='C')
