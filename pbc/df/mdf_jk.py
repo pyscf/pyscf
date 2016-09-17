@@ -63,8 +63,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
-    auxcell = mydf.auxcell
-    naux = auxcell.nao_nr()
+    naux = mydf.auxcell.nao_nr()
 
     if kpt_band is None:
         kpts_band = kpts
@@ -80,7 +79,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
     ngs = len(coulG)
     vR = numpy.zeros((nset,ngs))
     vI = numpy.zeros((nset,ngs))
-    max_memory = mydf.max_memory - lib.current_memory()[0]
+    max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]) * .9)
     for k, pqkR, pqkI, p0, p1 \
             in mydf.ft_loop(cell, mydf.gs, kpt_allow, kpts, max_memory=max_memory):
         # contract dm to rho_rs(-G+k_rs)  (Note no .T on dm)
@@ -187,8 +186,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
-    auxcell = mydf.auxcell
-    naux = auxcell.nao_nr()
+    naux = mydf.auxcell.nao_nr()
     nao_pair = nao * (nao+1) // 2
 
     if kpt_band is None:
@@ -217,7 +215,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
         if swap_2e and not is_zero(kpt):
             kk_todo[kptj_idx,kpti_idx] = False
 
-        max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
+        max_memory = max(2000, (mydf.max_memory-lib.current_memory()[0])*.9)
+        max_memory = max_memory * (nkptj+1)/(nkptj+5)
         # Use DF object to mimic KRHF/KUHF object in function get_coulG
         mydf.exxdiv = exxdiv
         vkcoulG = tools.get_coulG(cell, kpt, True, mydf, mydf.gs) / cell.vol
@@ -257,7 +256,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
                     zdotCN(pLqR.reshape(-1,nao).T, pLqI.reshape(-1,nao).T,
                            iLkR.reshape(-1,nao), iLkI.reshape(-1,nao),
                            1, vkR[i,kj], vkI[i,kj], 1)
-
+            pLqR = pLqI = iLkR = iLkI = None
         pqkR = pqkI = iLkR = iLkI = coulG = None
 
         # Note: kj-ki for electorn 1 and ki-kj for electron 2
@@ -266,6 +265,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
 
         bufR = numpy.empty((mydf.blockdim*nao**2))
         bufI = numpy.empty((mydf.blockdim*nao**2))
+        max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
         for ki,kj in zip(kpti_idx,kptj_idx):
             kpti = kpts_band[ki]
             kptj = kpts[kj]
@@ -389,8 +389,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     j_real = gamma_point(kpt)
     k_real = gamma_point(kpt) and not numpy.iscomplexobj(dms)
 
-    auxcell = mydf.auxcell
-    naux = auxcell.nao_nr()
+    naux = mydf.auxcell.nao_nr()
     kptii = numpy.asarray((kpt,kpt))
     kpt_allow = numpy.zeros(3)
 
@@ -405,7 +404,8 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
         vkI = numpy.zeros((nset,nao,nao))
     dmsR = dms.real.reshape(nset,nao,nao)
     dmsI = dms.imag.reshape(nset,nao,nao)
-    max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
+    max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]))
+    max_memory *= .8  # *.8 for the temporary data in vk
 
     # rho_rs(-G+k_rs) is computed as conj(rho_{rs^*}(G-k_rs))
     #               == conj(transpose(rho_sr(G+k_sr), (0,2,1)))
@@ -449,10 +449,12 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
                 if not k_real:
                     vkI[i] += lib.dot(iLkI.reshape(nao,-1), pLqR.reshape(nao,-1).T)
                     vkI[i] -= lib.dot(iLkR.reshape(nao,-1), pLqI.reshape(nao,-1).T)
+            pLqR = pLqI = iLkR = iLkI = None
     pqkR = pqkI = coulG = None
 
     bufR = numpy.empty((mydf.blockdim*nao**2))
     bufI = numpy.empty((mydf.blockdim*nao**2))
+    max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]))
     if with_j:
         vjR = vjR.reshape(nset,nao,nao)
         vjI = vjI.reshape(nset,nao,nao)

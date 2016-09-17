@@ -165,14 +165,18 @@ class PWDF(lib.StreamObject):
         else:
             aosym = 's1'
 
-        blksize = min(max(16, int(max_memory*1e6*.7/16/nao**2)), 16384)
+        blksize = min(max(16, int(max_memory*1e6*.75/16/nao**2)), 16384)
         sublk = max(16, int(blksize//4))
+        buf = [numpy.zeros(nao*nao*blksize, dtype=numpy.complex128)]
         pqkRbuf = numpy.empty(nao*nao*sublk)
         pqkIbuf = numpy.empty(nao*nao*sublk)
 
         for p0, p1 in self.prange(0, ngs, blksize):
-            aoao = ft_ao.ft_aopair(cell, Gv[p0:p1], shls_slice, aosym, invh,
-                                   gxyz[p0:p1], gs, (kpti, kptj))
+            #aoao = ft_ao.ft_aopair(cell, Gv[p0:p1], shls_slice, aosym, invh,
+            #                       gxyz[p0:p1], gs, (kpti, kptj))
+            aoao = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                         invh, gxyz[p0:p1], gs,
+                                         kptj-kpti, kptj.reshape(1,3), out=buf)[0]
             for i0, i1 in lib.prange(0, p1-p0, sublk):
                 nG = i1 - i0
                 pqkR = numpy.ndarray((nao,nao,nG), buffer=pqkRbuf)
@@ -181,6 +185,7 @@ class PWDF(lib.StreamObject):
                 pqkI[:] = aoao[i0:i1].imag.transpose(1,2,0)
                 yield (pqkR.reshape(-1,nG),
                        pqkI.reshape(-1,nG), p0+i0, p0+i1)
+            aoao[:] = 0
 
     def ft_loop(self, cell, gs=None, kpt=numpy.zeros(3),
                 kpts=None, shls_slice=None, max_memory=4000):
@@ -210,7 +215,7 @@ class PWDF(lib.StreamObject):
         else:
             aosym = 's1'
 
-        blksize = min(max(16, int(max_memory*1e6*.9/(nao**2*(nkpts+1)*16))), 16384)
+        blksize = min(max(16, int(max_memory*.9e6/(nao**2*(nkpts+1)*16))), 16384)
         buf = [numpy.zeros(nao*nao*blksize, dtype=numpy.complex128)
                for k in range(nkpts)]
         pqkRbuf = numpy.empty(nao*nao*blksize)
