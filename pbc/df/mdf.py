@@ -461,7 +461,7 @@ class MDF(pwdf.PWDF):
             blksize = max_memory*1e6/16/(nao_pair*2+nao*(nao+1)//2)
         if transpose102:
             blkszie = blksize*2/3  # actually scaled by 4/5 is enough
-        blksize = max(16, min(int(blksize), mydf.blockdim))
+        blksize = max(16, min(int(blksize), self.blockdim))
 
         if unpack:
             buf = numpy.empty((blksize,nao*(nao+1)//2))
