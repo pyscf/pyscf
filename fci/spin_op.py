@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import ctypes
-import _ctypes
 from functools import reduce
 import numpy
 import pyscf.lib
@@ -158,8 +157,7 @@ def _make_rdm2_baab(fcivec, norb, nelec):
     nb = cistring.num_strings(norb, nelecb)
     dm1 = numpy.empty((norb,norb))
     dm2 = numpy.empty((norb,norb,norb,norb))
-    fn = _ctypes.dlsym(librdm._handle, 'FCIdm2_baab_kern')
-    librdm.FCIspindm12_drv(ctypes.c_void_p(fn),
+    librdm.FCIspindm12_drv(librdm.FCIdm2_baab_kern,
                            dm1.ctypes.data_as(ctypes.c_void_p),
                            dm2.ctypes.data_as(ctypes.c_void_p),
                            fcivec.ctypes.data_as(ctypes.c_void_p),
@@ -190,8 +188,7 @@ def _make_rdm2_abba(fcivec, norb, nelec):
     nb = cistring.num_strings(norb, nelecb)
     dm1 = numpy.empty((norb,norb))
     dm2 = numpy.empty((norb,norb,norb,norb))
-    fn = _ctypes.dlsym(librdm._handle, 'FCIdm2_abba_kern')
-    librdm.FCIspindm12_drv(ctypes.c_void_p(fn),
+    librdm.FCIspindm12_drv(librdm.FCIdm2_abba_kern,
                            dm1.ctypes.data_as(ctypes.c_void_p),
                            dm2.ctypes.data_as(ctypes.c_void_p),
                            fcivec.ctypes.data_as(ctypes.c_void_p),

@@ -5,7 +5,6 @@
 
 import numpy
 import ctypes
-import _ctypes
 import pyscf.lib
 
 libcgto = pyscf.lib.load_library('libcgto')
@@ -21,9 +20,6 @@ KAPPA_OF   = 4
 PTR_EXP    = 5
 PTR_COEFF  = 6
 BAS_SLOTS  = 8
-
-def _fpointer(name):
-    return ctypes.c_void_p(_ctypes.dlsym(libcgto._handle, name))
 
 def getints(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
             aosym='s1', ao_loc=None, cintopt=None, out=None):
@@ -216,7 +212,7 @@ def getints2c(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
     intopt = pyscf.lib.c_null_ptr()
 
     fn = getattr(libcgto, drv_name)
-    fn(_fpointer(intor_name), mat.ctypes.data_as(ctypes.c_void_p),
+    fn(getattr(libcgto, intor_name), mat.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(comp), ctypes.c_int(hermi),
        (ctypes.c_int*4)(*(shls_slice[:4])),
        ao_loc.ctypes.data_as(ctypes.c_void_p), intopt,
@@ -270,7 +266,7 @@ def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
         intopt = cintopt
 
     drv = libcgto.GTOnr3c_drv
-    drv(_fpointer(intor_name), _fpointer('GTOnr3c_fill_'+aosym),
+    drv(getattr(libcgto, intor_name), getattr(libcgto, 'GTOnr3c_fill_'+aosym),
         mat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
         (ctypes.c_int*6)(*(shls_slice[:6])),
         ao_loc.ctypes.data_as(ctypes.c_void_p), intopt,
@@ -315,7 +311,7 @@ def getints2e(intor_name, atm, bas, env, shls_slice=None, comp=1,
         else:
             out = numpy.ndarray((nao_pair*(nao_pair+1)//2), buffer=out)
         drv = libcvhf.GTO2e_cart_or_sph
-        drv(_fpointer(intor_name), _fpointer(cgto_in_shell),
+        drv(getattr(libcgto, intor_name), getattr(libcgto, cgto_in_shell),
             out.ctypes.data_as(ctypes.c_void_p),
             c_atm, ctypes.c_int(natm), c_bas, ctypes.c_int(nbas), c_env)
         return out
@@ -354,8 +350,8 @@ def getints2e(intor_name, atm, bas, env, shls_slice=None, comp=1,
         cintopt = _vhf.make_cintopt(atm, bas, env, intor_name)
         prescreen = pyscf.lib.c_null_ptr()
         drv = libcgto.GTOnr2e_fill_drv
-        drv(_fpointer(intor_name), _fpointer(cgto_in_shell),
-            _fpointer('GTOnr2e_fill_'+aosym), prescreen,
+        drv(getattr(libcgto, intor_name), getattr(libcgto, cgto_in_shell),
+            getattr(libcgto, 'GTOnr2e_fill_'+aosym), prescreen,
             out.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
             bralst.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(bralst.size),
             ketlst.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(ketlst.size),

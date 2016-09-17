@@ -5,7 +5,6 @@
 
 import time
 import ctypes
-import _ctypes
 import numpy
 import scipy.linalg
 import pyscf.lib
@@ -15,8 +14,6 @@ from pyscf.df import incore
 from pyscf.scf import _vhf
 
 libri = pyscf.lib.load_library('libri')
-def _fpointer(name):
-    return ctypes.c_void_p(_ctypes.dlsym(libri._handle, name))
 
 # (ij|L)
 def aux_e2(mol, auxmol, intor='cint3c2e_spinor', aosym='s1', comp=1, hermi=0):
@@ -33,11 +30,11 @@ def aux_e2(mol, auxmol, intor='cint3c2e_spinor', aosym='s1', comp=1, hermi=0):
     naoaux = auxmol.nao_nr()
     if aosym == 's1':
         eri = numpy.empty((nao*nao,naoaux), dtype=numpy.complex)
-        fill = _fpointer('RIfill_r_s1_auxe2')
+        fill = getattr(libri, 'RIfill_r_s1_auxe2')
     else:
         eri = numpy.empty((nao*(nao+1)//2,naoaux), dtype=numpy.complex)
-        fill = _fpointer('RIfill_r_s2ij_auxe2')
-    fintor = _fpointer(intor)
+        fill = getattr(libri, 'RIfill_r_s2ij_auxe2')
+    fintor = getattr(libri, intor)
     cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, intor)
     libri.RIr_3c2e_auxe2_drv(fintor, fill,
                              eri.ctypes.data_as(ctypes.c_void_p),

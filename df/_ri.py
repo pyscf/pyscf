@@ -4,15 +4,12 @@
 #
 
 import ctypes
-import _ctypes
 import numpy
 import pyscf.lib
 from pyscf import gto
 
 libri = pyscf.lib.load_library('libri')
 libcgto = gto.moleintor.libcgto
-def _fpointer(name):
-    return ctypes.c_void_p(_ctypes.dlsym(libri._handle, name))
 
 def nr_auxe2(intor, atm, bas, env, shls_slice, ao_loc,
              aosym='s1', comp=1, cintopt=None, out=None):
@@ -33,7 +30,7 @@ def nr_auxe2(intor, atm, bas, env, shls_slice, ao_loc,
         else:
             intopt = cintopt
         drv = libcgto.GTOnr3c_drv
-        drv(_fpointer(intor), _fpointer('RInr3c_fill_s1'),
+        drv(getattr(libri, intor), getattr(libri, 'RInr3c_fill_s1'),
             mat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
             (ctypes.c_int*6)(*(shls_slice[:6])),
             ao_loc.ctypes.data_as(ctypes.c_void_p), intopt,

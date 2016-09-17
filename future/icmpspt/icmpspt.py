@@ -5,7 +5,6 @@
 #
 
 import ctypes
-import _ctypes
 import time
 import tempfile
 from functools import reduce

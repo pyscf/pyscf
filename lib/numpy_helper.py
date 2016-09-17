@@ -4,7 +4,6 @@
 #
 
 import ctypes
-import _ctypes
 import numpy
 from pyscf.lib import misc
 

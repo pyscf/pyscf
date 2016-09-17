@@ -261,7 +261,7 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
         assert('2e' not in intor)
         fill = getattr(libpbc, 'PBCnr2c_fill_'+aosym)
 
-    fintor = moleintor._fpointer(intor)
+    fintor = getattr(moleintor.libcgto, intor)
     intopt = lib.c_null_ptr()
 
     nimgs = np.max((cell1.nimgs, cell2.nimgs), axis=0)

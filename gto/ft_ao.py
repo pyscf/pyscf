@@ -8,7 +8,6 @@ Analytic Fourier transformation for AO and AO-pair value
 '''
 
 import ctypes
-import _ctypes
 import numpy
 import scipy.linalg
 from pyscf import lib

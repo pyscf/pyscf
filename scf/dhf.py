@@ -8,7 +8,6 @@ Dirac Hartree-Fock
 '''
 
 import ctypes
-import _ctypes
 import time
 from functools import reduce
 import numpy
@@ -341,8 +340,7 @@ class UHF(hf.SCF):
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol
         def set_vkscreen(opt, name):
-            opt._this.contents.r_vkscreen = \
-                ctypes.c_void_p(_ctypes.dlsym(_vhf.libcvhf._handle, name))
+            opt._this.contents.r_vkscreen = getattr(_vhf.libcvhf, name)
         opt_llll = _vhf.VHFOpt(mol, 'cint2e', 'CVHFrkbllll_prescreen',
                                'CVHFrkbllll_direct_scf',
                                'CVHFrkbllll_direct_scf_dm')

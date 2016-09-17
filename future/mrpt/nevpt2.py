@@ -5,7 +5,6 @@
 #
 
 import ctypes
-import _ctypes
 import time
 import tempfile
 from functools import reduce
@@ -775,7 +774,7 @@ def _contract4pdm(kern, eri, civec, norb, nelec, link_index=None):
     fdm3 = numpy.empty((norb,norb,norb,norb,norb,norb))
     eri = numpy.ascontiguousarray(eri)
 
-    libmc.NEVPTcontract(ctypes.c_void_p(_ctypes.dlsym(libmc._handle, kern)),
+    libmc.NEVPTcontract(getattr(libmc, kern)),
                         fdm2.ctypes.data_as(ctypes.c_void_p),
                         fdm3.ctypes.data_as(ctypes.c_void_p),
                         eri.ctypes.data_as(ctypes.c_void_p),

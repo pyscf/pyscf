@@ -5,7 +5,6 @@
 
 import time
 import ctypes
-import _ctypes
 import tempfile
 import numpy
 import scipy.linalg
@@ -24,8 +23,6 @@ from pyscf.df import _ri
 #
 
 libri = lib.load_library('libri')
-def _fpointer(name):
-    return ctypes.c_void_p(_ctypes.dlsym(libri._handle, name))
 
 def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir=None,
                  int3c='cint3c2e_sph', aosym='s2ij', int2c='cint2c2e_sph', comp=1,

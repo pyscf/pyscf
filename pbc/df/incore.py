@@ -131,7 +131,7 @@ def _wrap_int3c(cell, auxcell, intor, comp, Ls, out_lst):
         ao_loc = pyscf.gto.moleintor.make_loc(bas, intor)
 
     cintopt = _vhf.make_cintopt(atm, bas, env, intor)
-    fintor = pyscf.gto.moleintor._fpointer(intor)
+    fintor = getattr(pyscf.gto.moleintor.libcgto, intor)
     fill = getattr(libpbc, 'PBCnr3c_fill_s1')
     drv = libpbc.PBCnr3c_drv
     outs = (ctypes.c_void_p*len(out_lst))(

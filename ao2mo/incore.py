@@ -186,15 +186,15 @@ def half_e1(eri_ao, mo_coeffs, compact=True):
         return eri1
 
     if eri_ao.size == nao_pair**2: # 4-fold symmetry
-        ftrans = _ao2mo._fpointer('AO2MOtranse1_incore_s4')
+        ftrans = _ao2mo.libao2mo.AO2MOtranse1_incore_s4
     else:
-        ftrans = _ao2mo._fpointer('AO2MOtranse1_incore_s8')
+        ftrans = _ao2mo.libao2mo.AO2MOtranse1_incore_s8
     if ijmosym == 's2':
-        fmmm = _ao2mo._fpointer('AO2MOmmm_nr_s2_s2')
+        fmmm = _ao2mo.libao2mo.AO2MOmmm_nr_s2_s2
     elif nmoi <= nmoj:
-        fmmm = _ao2mo._fpointer('AO2MOmmm_nr_s2_iltj')
+        fmmm = _ao2mo.libao2mo.AO2MOmmm_nr_s2_iltj
     else:
-        fmmm = _ao2mo._fpointer('AO2MOmmm_nr_s2_igtj')
+        fmmm = _ao2mo.libao2mo.AO2MOmmm_nr_s2_igtj
     fdrv = getattr(_ao2mo.libao2mo, 'AO2MOnr_e1incore_drv')
 
     bufs = numpy.empty((BLOCK, nij_pair))
