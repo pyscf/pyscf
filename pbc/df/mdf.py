@@ -451,21 +451,25 @@ class MDF(pwdf.PWDF):
         unpack = is_zero(kpti-kptj) and not compact
         nao = self.cell.nao_nr()
         max_memory = max(2000, self.max_memory-lib.current_memory()[0])
-        if is_zero(kpti_kptj) and not unpack:
+        if is_zero(kpti_kptj) and compact:
             nao_pair = nao * (nao+1) // 2
         else:
             nao_pair = nao ** 2
-        if is_zero(kpti_kptj):
-            blksize = max_memory*1e6/8/(nao_pair*2+nao*(nao+1)//2)
-        else:
-            blksize = max_memory*1e6/16/(nao_pair*2+nao*(nao+1)//2)
         if transpose102:
-            blkszie = blksize*2/3  # actually scaled by 4/5 is enough
+            ncopy = 6
+        else:
+            ncopy = 4
+        if is_zero(kpti_kptj):
+            blksize = max_memory*1e6/8/(nao_pair*ncopy+nao*(nao+1)//2)
+        else:
+            blksize = max_memory*1e6/16/(nao_pair*ncopy+nao*(nao+1)//2)
         blksize = max(16, min(int(blksize), self.blockdim))
+        logger.debug2(self, 'max_memory %d MB, blksize %d', max_memory, blksize)
 
         if unpack:
             buf = numpy.empty((blksize,nao*(nao+1)//2))
-        def load(Lpq, bufR, bufI):
+        def load(Lpq, b0, b1, bufR, bufI):
+            Lpq = numpy.asarray(Lpq[b0:b1])
             shape = Lpq.shape
             if unpack:
                 tmp = numpy.ndarray(shape, buffer=buf)
@@ -478,6 +482,7 @@ class MDF(pwdf.PWDF):
                 LpqR[:] = Lpq.real
                 LpqI = numpy.ndarray(shape, buffer=bufI)
                 LpqI[:] = Lpq.imag
+            Lpq = None
             if transpose102:
                 LpqR = numpy.asarray(LpqR.reshape(-1,nao,nao).transpose(1,0,2), order='C')
                 LpqI = numpy.asarray(LpqI.reshape(-1,nao,nao).transpose(1,0,2), order='C')
@@ -488,8 +493,8 @@ class MDF(pwdf.PWDF):
             naux = Lpq.shape[0]
             with self.load_j3c(kpti_kptj) as j3c:
                 for b0, b1 in lib.prange(0, naux, blksize):
-                    LpqR, LpqI = load(numpy.asarray(Lpq[b0:b1]), LpqR, LpqI)
-                    j3cR, j3cI = load(numpy.asarray(j3c[b0:b1]), j3cR, j3cI)
+                    LpqR, LpqI = load(Lpq, b0, b1, LpqR, LpqI)
+                    j3cR, j3cI = load(j3c, b0, b1, j3cR, j3cI)
                     yield LpqR, LpqI, j3cR, j3cI
 
 
