@@ -6,6 +6,8 @@ from pyscf.pbc import scf as pscf
 import pyscf.pbc
 from pyscf.pbc.df import mdf
 from pyscf.pbc.df import mdf_jk
+#from mpi4pyscf.pbc.df import mdf
+#from mpi4pyscf.pbc.df import mdf_jk
 pyscf.pbc.DEBUG = False
 
 L = 5.
