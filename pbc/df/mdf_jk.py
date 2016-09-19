@@ -92,6 +92,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
             rhoI-= numpy.dot(dmsR[i,k], pqkI)
             vR[i,p0:p1] += rhoR * coulG[p0:p1]
             vI[i,p0:p1] += rhoI * coulG[p0:p1]
+        pqkR = pqkI = None
     weight = 1./nkpts
     vR *= weight
     vI *= weight
@@ -109,7 +110,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
             if not j_real:
                 vjI[i,k] += numpy.dot(pqkI, vR[i,p0:p1])
                 vjI[i,k] += numpy.dot(pqkR, vI[i,p0:p1])
-        pqkR = pqkI = coulG = None
+        pqkR = pqkI = None
 
     rhoR  = numpy.zeros((nset,naux))
     rhoI  = numpy.zeros((nset,naux))
@@ -132,6 +133,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
             jauxR[:,p0:p1]-= numpy.einsum('Lp,xp->xL', j3cI, dmsI[:,k])
             jauxI[:,p0:p1]+= numpy.einsum('Lp,xp->xL', j3cR, dmsI[:,k])
             jauxI[:,p0:p1]+= numpy.einsum('Lp,xp->xL', j3cI, dmsR[:,k])
+            LpqR = LpqI = j3cR = j3cI = None
 
     weight = 1./nkpts
     jauxR *= weight
@@ -158,6 +160,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
                 v += numpy.dot(rhoR [:,p0:p1], j3cI)
                 v += numpy.dot(rhoI [:,p0:p1], j3cR)
                 vjI[:,k] += lib.unpack_tril(v, lib.ANTIHERMI)
+            LpqR = LpqI = j3cR = j3cI = None
     t1 = log.timer_debug1('get_j pass 2', *t1)
 
     if j_real:
@@ -256,7 +259,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
                     zdotCN(pLqR.reshape(-1,nao).T, pLqI.reshape(-1,nao).T,
                            iLkR.reshape(-1,nao), iLkI.reshape(-1,nao),
                            1, vkR[i,kj], vkI[i,kj], 1)
-            pLqR = pLqI = iLkR = iLkI = None
+            pqkR = pqkI = pLqR = pLqI = iLkR = iLkI = None
         pqkR = pqkI = iLkR = iLkI = coulG = None
 
         # Note: kj-ki for electorn 1 and ki-kj for electron 2
@@ -334,6 +337,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
                             zdotNC(tmpR.reshape(nao,-1), tmpI.reshape(nao,-1),
                                    j3cR.reshape(nao,-1).T, j3cI.reshape(nao,-1).T,
                                    1, vkR[i,ki], vkI[i,ki], 1)
+                LpqR = LpqI = j3cR = j3cI = None
         return None
 
     for ki, kpti in enumerate(kpts_band):
@@ -449,8 +453,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
                 if not k_real:
                     vkI[i] += lib.dot(iLkI.reshape(nao,-1), pLqR.reshape(nao,-1).T)
                     vkI[i] -= lib.dot(iLkR.reshape(nao,-1), pLqI.reshape(nao,-1).T)
-            pLqR = pLqI = iLkR = iLkI = None
-    pqkR = pqkI = coulG = None
+        pqkR = pqkI = coulG = pLqR = pLqI = iLkR = iLkI = None
 
     bufR = numpy.empty((mydf.blockdim*nao**2))
     bufI = numpy.empty((mydf.blockdim*nao**2))
@@ -511,6 +514,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
                     zdotCN(j3cR.reshape(-1,nao).T, j3cI.reshape(-1,nao).T,
                            tmpR.reshape(-1,nao), tmpI.reshape(-1,nao),
                            1, vkR[i], vkI[i], 1)
+        LpqR = LpqI = j3cR = j3cI = None
 
     if with_j:
         if j_real:

@@ -431,7 +431,6 @@ class MDF(pwdf.PWDF):
         kpti, kptj = kpti_kptj
         unpack = is_zero(kpti-kptj) and not compact
         nao = self.cell.nao_nr()
-        max_memory = max(2000, self.max_memory-lib.current_memory()[0])
         if is_zero(kpti_kptj) and compact:
             nao_pair = nao * (nao+1) // 2
         else:
@@ -465,8 +464,10 @@ class MDF(pwdf.PWDF):
                 LpqI[:] = Lpq.imag
             Lpq = None
             if transpose102:
-                LpqR = numpy.asarray(LpqR.reshape(-1,nao,nao).transpose(1,0,2), order='C')
-                LpqI = numpy.asarray(LpqI.reshape(-1,nao,nao).transpose(1,0,2), order='C')
+                tmpR, tmpI = LpqR.reshape(-1,nao,nao), LpqI.reshape(-1,nao,nao)
+                LpqR = numpy.asarray(tmpR.transpose(1,0,2), order='C')
+                LpqI = numpy.ndarray(LpqR.shape, buffer=tmpR)
+                LpqI[:] = tmpI.transpose(1,0,2)
             return LpqR, LpqI
 
         LpqR = LpqI = j3cR = j3cI = None

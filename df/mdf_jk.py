@@ -127,7 +127,8 @@ def get_jk(mydf, mol, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
             if with_k:
                 add_k_(vk[i], dms[i], pqkR, coulG, pikbuf)
                 add_k_(vk[i], dms[i], pqkI, coulG, pikbuf)
-    pqkR = LkR = pqkI = LkI = coulG = pikbuf = None
+        pqkR = LkR = pqkI = LkI = coulG = None
+    pikbuf = None
     t1 = log.timer('pw jk', *t1)
 
     def short_range_j(dmtril, Lpq, j3c):
@@ -167,6 +168,7 @@ def get_jk(mydf, mol, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
             j3c = lib.unpack_tril(j3c).transpose(1,0,2)
             for i in range(nset):
                 vk[i] += short_range_k(dms[i], Lpq, j3c)
+        Lpq = j3c = None
     if with_j:
         vj = vj.reshape(-1,nao,nao)
         vj += lib.unpack_tril(vj1)

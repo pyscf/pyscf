@@ -37,6 +37,7 @@ def get_eri(mydf, kpts=None, compact=True):
         eriR = numpy.zeros((nao_pair,nao_pair))
         for LpqR, LpqI, j3cR, j3cI in mydf.sr_loop(kptijkl[:2], max_memory, True):
             lib.ddot(j3cR.T, LpqR, 1, eriR, 1)
+            LpqR = LpqI = j3cR = j3cI = None
         eriR = lib.transpose_sum(eriR, inplace=True)
 
         coulG = tools.get_coulG(cell, kptj-kpti, gs=mydf.gs) / cell.vol
@@ -51,6 +52,7 @@ def get_eri(mydf, kpts=None, compact=True):
             pqkI *= vG
             lib.dot(pqkR, pqkR.T, 1, eriR, 1)
             lib.dot(pqkI, pqkI.T, 1, eriR, 1)
+            pqkR = pqkI = None
         if not compact:
             eriR = ao2mo.restore(1, eriR, nao).reshape(nao**2,-1)
         return eriR
@@ -68,7 +70,7 @@ def get_eri(mydf, kpts=None, compact=True):
         for LpqR, LpqI, j3cR, j3cI in mydf.sr_loop(kptijkl[:2], max_memory, False):
             zdotNC(j3cR.T, j3cI.T, LpqR, LpqI, 1, eriR, eriI, 1)
             zdotNC(LpqR.T, LpqI.T, j3cR, j3cI, 1, eriR, eriI, 1)
-        LpqR = LpqI = j3cR = j3cI = None
+            LpqR = LpqI = j3cR = j3cI = None
 
         coulG = tools.get_coulG(cell, kptj-kpti, gs=mydf.gs) / cell.vol
         for pqkR, pqkI, p0, p1 \
@@ -78,6 +80,7 @@ def get_eri(mydf, kpts=None, compact=True):
             pqkI *= vG
 # rho_pq(G+k_pq) * conj(rho_rs(G-k_rs))
             zdotNC(pqkR, pqkI, pqkR.T, pqkI.T, 1, eriR, eriI, 1)
+            pqkR = pqkI = None
 # transpose(0,1,3,2) because
 # j == k && i == l  =>
 # (L|ij).transpose(0,2,1).conj() = (L^*|ji) = (L^*|kl)  =>  (M|kl)
@@ -101,7 +104,7 @@ def get_eri(mydf, kpts=None, compact=True):
                          mydf.sr_loop(kptijkl[2:], max_memory, False)):
             zdotNN(jpqR.T, jpqI.T, LrsR, LrsI, 1, eriR, eriI, 1)
             zdotNN(LpqR.T, LpqI.T, jrsR, jrsI, 1, eriR, eriI, 1)
-        LpqR = LpqI = jpqR = jpqI = LrsR = LrsI = jrsR = jrsI = None
+            LpqR = LpqI = jpqR = jpqI = LrsR = LrsI = jrsR = jrsI = None
 
         coulG = tools.get_coulG(cell, kptj-kpti, gs=mydf.gs) / cell.vol
         max_memory = (mydf.max_memory - lib.current_memory()[0]) * .4
@@ -116,6 +119,7 @@ def get_eri(mydf, kpts=None, compact=True):
 #                 = rho_rs(G-k_rs) - conj(d_{k_rs:Q,rs}) * Q(G-k_rs)
 # rho_pq(G+k_pq) * conj(rho'_rs(G-k_rs))
             zdotNC(pqkR, pqkI, rskR.T, rskI.T, 1, eriR, eriI, 1)
+            pqkR = pqkI = rskR = rskI = None
         return eriR + eriI*1j
 
 
