@@ -174,10 +174,11 @@ def format_atom(atoms, origin=0, axes=1, unit='Ang'):
     >>> gto.format_atom(['9,0,0,0', (1, (0, 0, 1))], origin=(1,1,1))
     [['F', [-1.0, -1.0, -1.0]], ['H', [-1, -1, 0]]]
     '''
-    if unit.startswith(('B','b','au','AU')):
-        convert = 1
-    elif unit.startswith(('A','a')):
-        convert = 1./param.BOHR
+    if isinstance(unit, str):
+        if unit.startswith(('B','b','au','AU')):
+            convert = 1
+        else: #if unit.startswith(('A','a')):
+            convert = 1./param.BOHR
     else:
         convert = 1./unit
     fmt_atoms = []
