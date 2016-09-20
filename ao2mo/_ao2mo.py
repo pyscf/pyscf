@@ -1,18 +1,21 @@
 #!/usr/bin/env python
 
 import ctypes
+import _ctypes
 import numpy
 import pyscf.lib
 from pyscf.scf import _vhf
 
 libao2mo = pyscf.lib.load_library('libao2mo')
+def _fpointer(name):
+    return ctypes.c_void_p(_ctypes.dlsym(libao2mo._handle, name))
 
 class AO2MOpt(object):
     def __init__(self, mol, intor,
                  prescreen='CVHFnoscreen', qcondname=None):
         self._this = ctypes.POINTER(_vhf._CVHFOpt)()
         #print self._this.contents, expect ValueError: NULL pointer access
-        self._intor = getattr(libao2mo, intor)
+        self._intor = _fpointer(intor)
 
         c_atm = numpy.asarray(mol._atm, dtype=numpy.int32, order='C')
         c_bas = numpy.asarray(mol._bas, dtype=numpy.int32, order='C')
@@ -25,7 +28,7 @@ class AO2MOpt(object):
                                     c_atm.ctypes.data_as(ctypes.c_void_p), natm,
                                     c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
                                     c_env.ctypes.data_as(ctypes.c_void_p))
-        self._this.contents.fprescreen = getattr(libao2mo, prescreen)
+        self._this.contents.fprescreen = _fpointer(prescreen)
 
         if prescreen != 'CVHFnoscreen':
             # for cint2e_sph, qcondname is 'CVHFsetnr_direct_scf'
@@ -60,11 +63,11 @@ def nr_e1fill(intor, sh_range, atm, bas, env,
     if '_cart' in intor:
         libao2mo.CINTtot_cgto_cart.restype = ctypes.c_int
         nao = libao2mo.CINTtot_cgto_cart(c_bas.ctypes.data_as(ctypes.c_void_p), nbas)
-        cgto_in_shell = getattr(libao2mo, 'CINTcgto_cart')
+        cgto_in_shell = _fpointer('CINTcgto_cart')
     elif '_sph' in intor:
         libao2mo.CINTtot_cgto_spheric.restype = ctypes.c_int
         nao = libao2mo.CINTtot_cgto_spheric(c_bas.ctypes.data_as(ctypes.c_void_p), nbas)
-        cgto_in_shell = getattr(libao2mo, 'CINTcgto_spheric')
+        cgto_in_shell = _fpointer('CINTcgto_spheric')
     else:
         raise NotImplementedError('cint2e spinor AO integrals')
 
@@ -85,11 +88,11 @@ def nr_e1fill(intor, sh_range, atm, bas, env,
         cintor = ao2mopt._intor
     else:
         cao2mopt = pyscf.lib.c_null_ptr()
-        cintor = getattr(libao2mo, intor)
+        cintor = _fpointer(intor)
         cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, intor)
 
-    fdrv = libao2mo.AO2MOnr_e1fill_drv
-    fill = getattr(libao2mo, 'AO2MOfill_nr_' + aosym)
+    fdrv = getattr(libao2mo, 'AO2MOnr_e1fill_drv')
+    fill = _fpointer('AO2MOfill_nr_' + aosym)
     fdrv(cintor, cgto_in_shell, fill,
          out.ctypes.data_as(ctypes.c_void_p),
          ctypes.c_int(klsh0), ctypes.c_int(klsh1-klsh0),
@@ -113,18 +116,18 @@ def nr_e1(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None):
 
     if aosym in ('s4', 's2ij'):
         if mosym == 's2':
-            fmmm = getattr(libao2mo, 'AO2MOmmm_nr_s2_s2')
+            fmmm = _fpointer('AO2MOmmm_nr_s2_s2')
             assert(icount == jcount)
             ij_count = icount * (icount+1) // 2
         elif icount <= jcount:
-            fmmm = getattr(libao2mo, 'AO2MOmmm_nr_s2_iltj')
+            fmmm = _fpointer('AO2MOmmm_nr_s2_iltj')
         else:
-            fmmm = getattr(libao2mo, 'AO2MOmmm_nr_s2_igtj')
+            fmmm = _fpointer('AO2MOmmm_nr_s2_igtj')
     else:
         if icount <= jcount:
-            fmmm = getattr(libao2mo, 'AO2MOmmm_nr_s1_iltj')
+            fmmm = _fpointer('AO2MOmmm_nr_s1_iltj')
         else:
-            fmmm = getattr(libao2mo, 'AO2MOmmm_nr_s1_igtj')
+            fmmm = _fpointer('AO2MOmmm_nr_s1_igtj')
 
     nrow = eri.shape[0]
 
@@ -138,7 +141,7 @@ def nr_e1(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None):
     fdrv = getattr(libao2mo, 'AO2MOnr_e2_drv')
     pao_loc = ctypes.POINTER(ctypes.c_void_p)()
     c_nbas = ctypes.c_int(0)
-    ftrans = getattr(libao2mo, 'AO2MOtranse1_nr_' + aosym)
+    ftrans = _fpointer('AO2MOtranse1_nr_' + aosym)
     fdrv(ftrans, fmmm,
          out.ctypes.data_as(ctypes.c_void_p),
          eri.ctypes.data_as(ctypes.c_void_p),
@@ -165,18 +168,18 @@ def nr_e2(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None,
 
     if aosym in ('s4', 's2', 's2kl'):
         if mosym == 's2':
-            fmmm = getattr(libao2mo, 'AO2MOmmm_nr_s2_s2')
+            fmmm = _fpointer('AO2MOmmm_nr_s2_s2')
             assert(kc == lc)
             kl_count = kc * (kc+1) // 2
         elif kc <= lc:
-            fmmm = getattr(libao2mo, 'AO2MOmmm_nr_s2_iltj')
+            fmmm = _fpointer('AO2MOmmm_nr_s2_iltj')
         else:
-            fmmm = getattr(libao2mo, 'AO2MOmmm_nr_s2_igtj')
+            fmmm = _fpointer('AO2MOmmm_nr_s2_igtj')
     else:
         if kc <= lc:
-            fmmm = getattr(libao2mo, 'AO2MOmmm_nr_s1_iltj')
+            fmmm = _fpointer('AO2MOmmm_nr_s1_iltj')
         else:
-            fmmm = getattr(libao2mo, 'AO2MOmmm_nr_s1_igtj')
+            fmmm = _fpointer('AO2MOmmm_nr_s1_igtj')
 
     nrow = eri.shape[0]
 
@@ -190,12 +193,12 @@ def nr_e2(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None,
     if ao_loc is None:
         pao_loc = ctypes.POINTER(ctypes.c_void_p)()
         c_nbas = ctypes.c_int(0)
-        ftrans = getattr(libao2mo, 'AO2MOtranse2_nr_' + aosym)
+        ftrans = _fpointer('AO2MOtranse2_nr_' + aosym)
     else:
         ao_loc = numpy.asarray(ao_loc, dtype=numpy.int32)
         c_nbas = ctypes.c_int(ao_loc.shape[0]-1)
         pao_loc = ao_loc.ctypes.data_as(ctypes.c_void_p)
-        ftrans = getattr(libao2mo, 'AO2MOsortranse2_nr_' + aosym)
+        ftrans = _fpointer('AO2MOsortranse2_nr_' + aosym)
 
     fdrv = getattr(libao2mo, 'AO2MOnr_e2_drv')
     fdrv(ftrans, fmmm,
@@ -229,9 +232,9 @@ def r_e1(intor, mo_coeff, orbs_slice, sh_range, atm, bas, env,
     klsh0, klsh1, nkl = sh_range
 
     if icount <= jcount:
-        fmmm = getattr(libao2mo, 'AO2MOmmm_r_iltj')
+        fmmm = _fpointer('AO2MOmmm_r_iltj')
     else:
-        fmmm = getattr(libao2mo, 'AO2MOmmm_r_igtj')
+        fmmm = _fpointer('AO2MOmmm_r_igtj')
 
     if out is None:
         out = numpy.empty((comp,nkl,ij_count), dtype=numpy.complex)
@@ -247,14 +250,14 @@ def r_e1(intor, mo_coeff, orbs_slice, sh_range, atm, bas, env,
         cintor = ao2mopt._intor
     else:
         cao2mopt = pyscf.lib.c_null_ptr()
-        cintor = getattr(libao2mo, intor)
+        cintor = _fpointer(intor)
         cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, intor)
 
     tao = numpy.asarray(tao, dtype=numpy.int32)
 
     fdrv = getattr(libao2mo, 'AO2MOr_e1_drv')
-    fill = getattr(libao2mo, 'AO2MOfill_r_' + aosym)
-    ftrans = getattr(libao2mo, 'AO2MOtranse1_r_' + aosym)
+    fill = _fpointer('AO2MOfill_r_' + aosym)
+    ftrans = _fpointer('AO2MOtranse1_r_' + aosym)
     fdrv(cintor, fill, ftrans, fmmm,
          out.ctypes.data_as(ctypes.c_void_p),
          mo_coeff.ctypes.data_as(ctypes.c_void_p),
@@ -283,9 +286,9 @@ def r_e2(eri, mo_coeff, orbs_slice, tao, ao_loc, aosym='s1', out=None):
     kl_count = kc * lc
 
     if kc <= lc:
-        fmmm = getattr(libao2mo, 'AO2MOmmm_r_iltj')
+        fmmm = _fpointer('AO2MOmmm_r_iltj')
     else:
-        fmmm = getattr(libao2mo, 'AO2MOmmm_r_igtj')
+        fmmm = _fpointer('AO2MOmmm_r_igtj')
 
     nrow = eri.shape[0]
 
@@ -301,12 +304,12 @@ def r_e2(eri, mo_coeff, orbs_slice, tao, ao_loc, aosym='s1', out=None):
     if ao_loc is None:
         c_ao_loc = ctypes.POINTER(ctypes.c_void_p)()
         c_nbas = ctypes.c_int(0)
-        ftrans = getattr(libao2mo, 'AO2MOtranse2_r_' + aosym)
+        ftrans = _fpointer('AO2MOtranse2_r_' + aosym)
     else:
         ao_loc = numpy.asarray(ao_loc, dtype=numpy.int32)
         c_ao_loc = ao_loc.ctypes.data_as(ctypes.c_void_p)
         c_nbas = ctypes.c_int(ao_loc.shape[0]-1)
-        ftrans = getattr(libao2mo, 'AO2MOsortranse2_r_' + aosym)
+        ftrans = _fpointer('AO2MOsortranse2_r_' + aosym)
 
     fdrv = getattr(libao2mo, 'AO2MOr_e2_drv')
     fdrv(ftrans, fmmm,
