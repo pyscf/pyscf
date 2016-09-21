@@ -340,7 +340,7 @@ class UHF(hf.SCF):
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol
         def set_vkscreen(opt, name):
-            opt._this.contents.r_vkscreen = getattr(_vhf.libcvhf, name)
+            opt._this.contents.r_vkscreen = _vhf._fpointer(name)
         opt_llll = _vhf.VHFOpt(mol, 'cint2e', 'CVHFrkbllll_prescreen',
                                'CVHFrkbllll_direct_scf',
                                'CVHFrkbllll_direct_scf_dm')

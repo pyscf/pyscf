@@ -41,7 +41,7 @@ class KnowValues(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    print("Full Tests for dhf")
+    print("Full Tests for x2c")
     unittest.main()
 
 
