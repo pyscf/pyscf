@@ -78,7 +78,7 @@ def eval_gto(eval_name, atm, bas, env, coords,
     atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
     env = numpy.asarray(env, dtype=numpy.double, order='C')
-    coords = numpy.asarray(coords, order='C')
+    coords = numpy.asarray(coords, dtype=numpy.double, order='C')
     natm = atm.shape[0]
     nbas = bas.shape[0]
     ngrids = coords.shape[0]
