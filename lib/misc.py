@@ -388,7 +388,7 @@ from threading import Thread
 from multiprocessing import Queue, Process
 class ProcessWithReturnValue(Process):
     def __init__(self, group=None, target=None, name=None, args=(),
-                 kwargs=None, verbose=None):
+                 kwargs=None):
         self._q = Queue()
         def qwrap(*args, **kwargs):
             self._q.put(target(*args, **kwargs))
@@ -400,11 +400,11 @@ class ProcessWithReturnValue(Process):
 
 class ThreadWithReturnValue(Thread):
     def __init__(self, group=None, target=None, name=None, args=(),
-                 kwargs=None, verbose=None):
+                 kwargs=None):
         self._q = Queue()
         def qwrap(*args, **kwargs):
             self._q.put(target(*args, **kwargs))
-        Thread.__init__(self, group, qwrap, name, args, kwargs, verbose)
+        Thread.__init__(self, group, qwrap, name, args, kwargs)
     def join(self):
         Thread.join(self)
         return self._q.get()
