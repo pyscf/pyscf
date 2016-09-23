@@ -119,6 +119,15 @@ def write_chk(mc,root,chkfile):
 
     logger.timer(mc,'Write MPS NEVPT integral', *t0)
 
+def default_nevpt_schedule(mol, maxM=500, tol=1e-7):
+        nevptsolver = dmrgci.DMRGCI(mol, maxM, tol)
+        nevptsolver.scheduleSweeps = [0, 4]
+        nevptsolver.scheduleMaxMs  = [maxM, maxM]
+        nevptsolver.scheduleTols   = [0.0001, tol]
+        nevptsolver.scheduleNoises = [0.0001, 0.0]
+        nevptsolver.twodot_to_onedot = 4
+        nevptsolver.maxIter = 6
+        return nevptsolver
 
 def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7):
     if (isinstance(mc, str)):
@@ -145,13 +154,7 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7):
         write_chk(mc, root, mc_chk)
 
     if nevptsolver is None:
-        nevptsolver = dmrgci.DMRGCI(mol, maxM, tol)
-        nevptsolver.scheduleSweeps = [0, 4]
-        nevptsolver.scheduleMaxMs  = [maxM, maxM]
-        nevptsolver.scheduleTols   = [0.0001, tol]
-        nevptsolver.scheduleNoises = [0.0001, 0.0]
-        nevptsolver.twodot_to_onedot = 4
-        nevptsolver.maxIter = 6
+        nevptsolver = default_nevpt_schedule(mol,maxM, tol)
         nevptsolver.wfnsym = wfnsym
         nevptsolver.block_extra_keyword = mc.fcisolver.block_extra_keyword
     nevptsolver.nroots = nroots
@@ -161,7 +164,7 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7):
     nevptsolver.scratchDirectory = ''
 
 
-    dmrgci.writeDMRGConfFile(nevptsolver, nelecas, True, with_2pdm=False,
+    dmrgci.writeDMRGConfFile(nevptsolver, nelecas, False, with_2pdm=False,
                              extraline=['fullrestart','nevpt_state_num %d'%root])
     nevptsolver.scratchDirectory = scratch
 
