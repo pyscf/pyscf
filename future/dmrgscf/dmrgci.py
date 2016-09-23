@@ -152,18 +152,21 @@ class DMRGCI(pyscf.lib.StreamObject):
     def generate_schedule(self):
 
         if self.startM is None:
-            self.startM = 200
+            if self.maxM < 200:
+                self.startM = 50
+            else:
+                self.startM = 200
         if len(self.scheduleSweeps) == 0:
             startM = self.startM
             N_sweep = 0
             if self.restart or self._restart :
                 Tol = self.tol / 10.0
             else:
-                Tol = 1.0e-4
+                Tol = 1.0e-5
             Noise = Tol
             while startM < self.maxM:
                 self.scheduleSweeps.append(N_sweep)
-                N_sweep += 2
+                N_sweep += 4
                 self.scheduleMaxMs.append(startM)
                 startM *= 2
                 self.scheduleTols.append(Tol)
@@ -174,14 +177,14 @@ class DMRGCI(pyscf.lib.StreamObject):
                 self.scheduleMaxMs.append(self.maxM)
                 self.scheduleTols.append(Tol)
                 Tol /= 10.0
-                self.scheduleNoises.append(0.0)
+                self.scheduleNoises.append(5.0e-5)
             self.scheduleSweeps.append(N_sweep)
             N_sweep += 2
             self.scheduleMaxMs.append(self.maxM)
             self.scheduleTols.append(self.tol)
             self.scheduleNoises.append(0.0)
             self.twodot_to_onedot = N_sweep + 2
-            self.maxIter = self.twodot_to_onedot + 20
+            self.maxIter = self.twodot_to_onedot + 12
         return self
 
 
