@@ -426,7 +426,7 @@ class MDF(pwdf.PWDF):
         return _load3c(self._cderi, 'j3c', kpti_kptj)
 
     def sr_loop(self, kpti_kptj=numpy.zeros((2,3)), max_memory=2000,
-                compact=True, transpose102=False):
+                compact=True):
         '''Short range part'''
         kpti, kptj = kpti_kptj
         unpack = is_zero(kpti-kptj) and not compact
@@ -435,14 +435,10 @@ class MDF(pwdf.PWDF):
             nao_pair = nao * (nao+1) // 2
         else:
             nao_pair = nao ** 2
-        if transpose102:
-            ncopy = 6
-        else:
-            ncopy = 4
         if is_zero(kpti_kptj):
-            blksize = max_memory*1e6/8/(nao_pair*ncopy+nao*(nao+1)//2)
+            blksize = max_memory*1e6/8/(nao_pair*5+nao*(nao+1)//2)
         else:
-            blksize = max_memory*1e6/16/(nao_pair*ncopy+nao*(nao+1)//2)
+            blksize = max_memory*1e6/16/(nao_pair*5+nao*(nao+1)//2)
         blksize = max(16, min(int(blksize), self.blockdim))
         logger.debug2(self, 'max_memory %d MB, blksize %d', max_memory, blksize)
 
@@ -462,12 +458,6 @@ class MDF(pwdf.PWDF):
                 LpqR[:] = Lpq.real
                 LpqI = numpy.ndarray(shape, buffer=bufI)
                 LpqI[:] = Lpq.imag
-            Lpq = None
-            if transpose102:
-                tmpR, tmpI = LpqR.reshape(-1,nao,nao), LpqI.reshape(-1,nao,nao)
-                LpqR = numpy.asarray(tmpR.transpose(1,0,2), order='C')
-                LpqI = numpy.ndarray(LpqR.shape, buffer=tmpR)
-                LpqI[:] = tmpI.transpose(1,0,2)
             return LpqR, LpqI
 
         LpqR = LpqI = j3cR = j3cI = None
