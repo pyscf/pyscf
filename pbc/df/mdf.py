@@ -178,6 +178,7 @@ def get_nuc_less_accurate(mydf, kpts=None):
             vj[k] += numpy.einsum('k,xk->x', vG.imag, pqkR) *-1j
         vj[k] += numpy.einsum('k,xk->x', vG.real, pqkR)
         vj[k] += numpy.einsum('k,xk->x', vG.imag, pqkI)
+        pqkR = pqkI = None
 
     Gv = cell.get_Gv(mydf.gs)
     aoaux = ft_ao.ft_ao(fused_cell, Gv)
@@ -243,6 +244,7 @@ def get_nuc(mydf, kpts=None):
             vj[k] += numpy.einsum('k,xk->x', vGI[p0:p1], pqkR) *-1j
         vj[k] += numpy.einsum('k,xk->x', vGR[p0:p1], pqkR)
         vj[k] += numpy.einsum('k,xk->x', vGI[p0:p1], pqkI)
+        pqkR = pqkI = None
     t1 = log.timer_debug1('contracting Vnuc', *t1)
 
     vG = numpy.einsum('i,xi,x->x', charge, ft_ao.ft_ao(nuccell, Gv), coulG)

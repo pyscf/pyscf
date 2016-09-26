@@ -111,6 +111,7 @@ def get_pp_loc_part1(mydf, cell, kpts):
             vloc[k] += numpy.einsum('k,xk->x', vG.imag, pqkR) *-1j
         vloc[k] += numpy.einsum('k,xk->x', vG.real, pqkR)
         vloc[k] += numpy.einsum('k,xk->x', vG.imag, pqkI)
+        pqkR = pqkI = None
     t1 = log.timer_debug1('contracting vloc part1', *t1)
     return vloc.reshape(-1,nao,nao)
 

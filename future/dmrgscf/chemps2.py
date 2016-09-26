@@ -10,7 +10,7 @@ import pyscf.ao2mo
 
 try:
     from pyscf.dmrgscf import settings
-    PyCheMPS2 = imp.load_dynamic('PyCheMPS2', settings.PYCHEMPS2BIN)
+    PyCheMPS2 = None
 except ImportError:
     try:
         import PyCheMPS2
@@ -69,6 +69,10 @@ class CheMPS2(object):
         log.info('dmrg_maxiter_silent = %d', self.dmrg_maxiter_silent)
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
+        global PyCheMPS2
+        if PyCheMPS2 is None:
+            PyCheMPS2 = imp.load_dynamic('PyCheMPS2', settings.PYCHEMPS2BIN)
+
         Initializer = PyCheMPS2.PyInitialize()
         Initializer.Init()
 
