@@ -591,7 +591,7 @@ class _NumInt(pyscf.dft.numint._NumInt):
         pyscf.dft.numint._NumInt.__init__(self)
         self.cell = None
 # cache AO values in ._ao
-        self._ao = tempfile.NamedTemporaryFile(prefix='numint')
+        self._ao = tempfile.NamedTemporaryFile(suffix='numint')
         self._coords = None
         self._deriv = None
         self._kpt = None
