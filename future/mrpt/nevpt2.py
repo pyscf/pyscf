@@ -660,7 +660,7 @@ class NEVPT(pyscf.lib.StreamObject):
 
         if hasattr(self.fcisolver, 'nevpt_intermediate'):
             logger.info(self, 'DMRG-NEVPT')
-            dm1, dm2, dm3 = self.fcisolver.make_rdm123(self.load_ci(),self.ncas,self.nelecas,None)
+            dm1, dm2, dm3 = self.fcisolver._make_dm123(self.load_ci(),self.ncas,self.nelecas,None)
         else:
             dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_sf',
                                                self.load_ci(), self.load_ci(), self.ncas, self.nelecas)

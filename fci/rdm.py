@@ -146,9 +146,13 @@ def make_dm123(fname, cibra, ciket, norb, nelec):
     r'''Spin traced 1, 2 and 3-particle density matrices.
 
     .. note::
-        The 2pdm is :math:`\langle p^\dagger q^\dagger r s\rangle` but is
+        In this function, 2pdm is :math:`\langle p^\dagger q r^\dagger s\rangle`;
+        3pdm is :math:`\langle p^\dagger q r^\dagger s t^\dagger u\rangle`.
+        After calling reorder_dm123, the 2pdm and 3pdm are transformed to
+        standard definition:
+        2pdm = :math:`\langle p^\dagger q^\dagger r s\rangle` but is
         stored as [p,s,q,r];
-        The 3pdm is :math:`\langle p^\dagger q^\dagger r^\dagger s t u\rangle`,
+        3pdm = :math:`\langle p^\dagger q^\dagger r^\dagger s t u\rangle`,
         stored as [p,u,q,t,r,s].
     '''
     cibra = numpy.asarray(cibra, order='C')
@@ -210,11 +214,16 @@ def make_dm1234(fname, cibra, ciket, norb, nelec):
     r'''Spin traced 1, 2, 3 and 4-particle density matrices.
 
     .. note::
-        The 2pdm is :math:`\langle p^\dagger q^\dagger s r\rangle` but is
+        In this function, 2pdm is :math:`\langle p^\dagger q r^\dagger s\rangle`;
+        3pdm is :math:`\langle p^\dagger q r^\dagger s t^\dagger u\rangle`;
+        4pdm is :math:`\langle p^\dagger q r^\dagger s t^\dagger u v^\dagger w\rangle`.
+        After calling reorder_dm1234, the 2pdm and 3pdm and 4pdm are transformed to
+        standard definition:
+        2pdm = :math:`\langle p^\dagger q^\dagger s r\rangle` but is
         stored as [p,r,q,s];
-        The 3pdm is :math:`\langle p^\dagger q^\dagger r^\dagger u t s\rangle`,
+        3pdm = :math:`\langle p^\dagger q^\dagger r^\dagger u t s\rangle`,
         stored as [p,s,q,t,r,u];
-        The 4pdm is :math:`\langle p^\dagger q^\dagger r^\dagger s^dagger w v u t\rangle`,
+        4pdm = :math:`\langle p^\dagger q^\dagger r^\dagger s^dagger w v u t\rangle`,
         stored as [p,w,q,v,r,u,s,t].
     '''
     cibra = numpy.asarray(cibra, order='C')

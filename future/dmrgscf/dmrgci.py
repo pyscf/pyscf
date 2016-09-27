@@ -301,7 +301,16 @@ class DMRGCI(pyscf.lib.StreamObject):
         twopdm /= (nelectrons-2)
         onepdm = numpy.einsum('ijjk->ik', twopdm)
         onepdm /= (nelectrons-1)
+        return onepdm, twopdm, threepdm
 
+    def _make_dm123(self, state, norb, nelec, link_index=None, **kwargs):
+        r'''Note this function does NOT compute the standard density matrix.
+        The density matrices are reordered to match the the fci.rdm.make_dm123
+        function (used by NEVPT code).
+        The returned "2pdm" is :math:`\langle p^\dagger q r^\dagger s\rangle`;
+        The returned "3pdm" is :math:`\langle p^\dagger q r^\dagger s t^\dagger u\rangle`.
+        '''
+        onepdm, twopdm, threepdm = self.make_rdm123(state, norb, nelec, None, **kwargs)
         threepdm = numpy.einsum('mkijln->ijklmn',threepdm).copy()
         threepdm += numpy.einsum('jk,lm,in->ijklmn',numpy.identity(norb),numpy.identity(norb),onepdm)
         threepdm += numpy.einsum('jk,miln->ijklmn',numpy.identity(norb),twopdm)
