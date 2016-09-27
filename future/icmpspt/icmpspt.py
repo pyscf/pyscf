@@ -4,6 +4,7 @@
 #         Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import os
 import ctypes
 import time
 import tempfile
@@ -28,6 +29,11 @@ libmc = pyscf.lib.load_library('libmcscf')
 float_precision = numpy.dtype('Float64')
 mpiprefix="" 
 executable="/home/sharma/apps/forServer/pyscf/future/icmpspt/icpt"
+
+if not os.path.isfile(executable):
+    msg = ('MPSLCC executable %s not found.  Please specify "executable" in %s'
+           % (executable, __file__))
+    raise ImportError(msg)
 
 NUMERICAL_ZERO = 1e-14
 def readIntegrals(infile, dt=numpy.dtype('Float64')):
