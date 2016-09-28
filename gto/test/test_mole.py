@@ -8,9 +8,9 @@ import pyscf.lib.parameters as param
 
 mol0 = gto.Mole()
 mol0.atom = [
-    [1  , (0.,1.,1.)],  # D
+    [1  , (0.,1.,1.)],
     ["O1", (0.,0.,0.)],
-    [1  , (1.,1.,0.)], ] # H
+    [1  , (1.,1.,0.)], ]
 mol0.nucmod = { "O":'gaussian', 3:'g' }
 mol0.unit = 'ang'
 mol0.basis = {
@@ -25,7 +25,7 @@ mol0.basis['O'].extend(gto.mole.expand_etbs(((0, 4, 1, 1.8),
                                             (2, 2, 1, 1.8),)))
 mol0.verbose = 4
 mol0.ecp = {'O1': 'lanl2dz'}
-mol0.output = 'test_mole.out'
+mol0.output = None
 mol0.build()
 
 class KnowValues(unittest.TestCase):
@@ -181,6 +181,19 @@ C    SP
                             H -0.9444878100 0.0000000000 1.3265673200
                             H -0.9444878100 0.0000000000 -1.3265673200''')
         self.assertTrue(gto.chiral_mol(mol1))
+
+    def test_format_atom(self):
+        atoms = [['h' , 0,1,1], ["O1", (0.,0.,0.)], [1, 1.,1.,0.],]
+        self.assertTrue(numpy.allclose(gto.mole.format_atom(atoms, unit='Ang')[0][1],
+                                       [0.0, 1.8897261245650618, 1.8897261245650618]))
+        atoms = '''h 0 1 1
+        O1 0 0 0; 1 1 1 0'''
+        self.assertTrue(numpy.allclose(gto.mole.format_atom(atoms, unit=1)[0][1],
+                                       [0.0, 1., 1.]))
+        atoms = 'O1; h 1 1; 1 1 1 2 90'
+        atoms = gto.mole.format_atom(atoms, unit=1)[2]
+        self.assertEqual(atoms[0], 'H')
+        self.assertTrue(numpy.allclose(atoms[1], [0, 0, 1.]))
 
 
 if __name__ == "__main__":

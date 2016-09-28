@@ -14,6 +14,8 @@ from pyscf import lib
 from pyscf import gto
 from pyscf.gto.moleintor import libcgto
 
+# TODO: in C code, store complex data in two vectors for real and imag part
+
 #
 # \int mu*nu*exp(-ik*r) dr
 #

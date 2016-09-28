@@ -140,7 +140,7 @@ def atom_types(atoms, basis=None):
     return atmgroup
 
 
-def format_atom(atoms, origin=0, axes=1, unit='Ang'):
+def format_atom(atoms, origin=0, axes=None, unit='Ang'):
     '''Convert the input :attr:`Mole.atom` to the internal data format.
     Including, changing the nuclear charge to atom symbol, converting the
     coordinates to AU, rotate and shift the molecule.
@@ -174,49 +174,52 @@ def format_atom(atoms, origin=0, axes=1, unit='Ang'):
     >>> gto.format_atom(['9,0,0,0', (1, (0, 0, 1))], origin=(1,1,1))
     [['F', [-1.0, -1.0, -1.0]], ['H', [-1, -1, 0]]]
     '''
+    def str2atm(line):
+        dat = line.split()
+        return [_atom_symbol(dat[0]), [float(x) for x in dat[1:4]]]
+
+    if isinstance(atoms, str):
+        atoms = atoms.replace(';','\n').replace(',',' ').replace('\t',' ')
+        fmt_atoms = []
+        for dat in atoms.split('\n'):
+            dat = dat.strip()
+            if dat and dat[0] != '#':
+                fmt_atoms.append(dat)
+
+        if len(fmt_atoms[0].split()) < 4:
+            fmt_atoms = from_zmatrix('\n'.join(fmt_atoms))
+        else:
+            fmt_atoms = [str2atm(line) for line in fmt_atoms]
+    else:
+        fmt_atoms = []
+        for atom in atoms:
+            if isinstance(atom, str):
+                if atom.lstrip()[0] != '#':
+                    fmt_atoms.append(str2atm(atom.replace(',',' ')))
+            else:
+                if isinstance(atom[1], (int, float)):
+                    fmt_atoms.append([_atom_symbol(atom[0]), atom[1:4]])
+                else:
+                    fmt_atoms.append([_atom_symbol(atom[0]), atom[1]])
+
+    if len(fmt_atoms) == 0:
+        return []
+
+    if axes is None:
+        axes = numpy.eye(3)
+
     if isinstance(unit, str):
         if unit.startswith(('B','b','au','AU')):
-            convert = 1
+            convert = 1.
         else: #if unit.startswith(('A','a')):
             convert = 1./param.BOHR
     else:
         convert = 1./unit
-    fmt_atoms = []
-    def str2atm(line):
-        dat = line.split()
-        if dat[0].isdigit():
-            symb = param.ELEMENTS[int(dat[0])][0]
-        else:
-            rawsymb = _rm_digit(dat[0])
-            symb = dat[0].replace(rawsymb, _std_symbol(rawsymb))
-        c = numpy.asarray([float(x) for x in dat[1:4]]) - origin
-        return [symb, numpy.dot(axes, c*convert).tolist()]
 
-    if isinstance(atoms, str):
-        atoms = atoms.replace(';','\n').replace(',',' ').replace('\t',' ')
-        for line in atoms.split('\n'):
-            line1 = line.strip()
-            if line1 and not line1.startswith('#'):
-                fmt_atoms.append(str2atm(line))
-    else:
-        for atom in atoms:
-            if isinstance(atom, str):
-                line1 = atom.strip()
-                if line1 and not line1.startswith('#'):
-                    fmt_atoms.append(str2atm(atom.replace(',',' ')))
-            else:
-                if isinstance(atom[0], int):
-                    symb = param.ELEMENTS[atom[0]][0]
-                else:
-                    a = atom[0].strip()
-                    rawsymb = _rm_digit(a)
-                    symb = a.replace(rawsymb, _std_symbol(rawsymb))
-                if isinstance(atom[1], (int, float)):
-                    c = numpy.asarray(atom[1:4]) - origin
-                else:
-                    c = numpy.asarray(atom[1]) - origin
-                fmt_atoms.append([symb, numpy.dot(axes, c*convert).tolist()])
-    return fmt_atoms
+    c = numpy.array([a[1] for a in fmt_atoms], dtype=numpy.double)
+    c = numpy.einsum('ix,kx->ki', axes, c - origin) * convert
+    z = [a[0] for a in fmt_atoms]
+    return list(zip(z, c.tolist()))
 
 #TODO: sort exponents
 def format_basis(basis_tab):
@@ -259,11 +262,8 @@ def format_basis(basis_tab):
 
     fmt_basis = {}
     for atom in basis_tab.keys():
-        symb = _symbol(atom)
-        rawsymb = _rm_digit(symb)
-        stdsymb = _std_symbol(rawsymb)
-        symb = symb.replace(rawsymb, stdsymb)
-
+        symb = _atom_symbol(atom)
+        stdsymb = _std_symbol(symb)
         atom_basis = basis_tab[atom]
         if isinstance(atom_basis, str):
             if atom_basis.lower().startswith('unc'):
@@ -310,11 +310,8 @@ def format_ecp(ecp_tab):
     '''
     fmt_ecp = {}
     for atom in ecp_tab.keys():
-        symb = _symbol(atom)
-        rawsymb = _rm_digit(symb)
-        stdsymb = _std_symbol(rawsymb)
-        symb = symb.replace(rawsymb, stdsymb)
-
+        symb = _atom_symbol(atom)
+        stdsymb = _std_symbol(symb)
         if isinstance(ecp_tab[atom], str):
             try:
                 fmt_ecp[symb] = basis.load_ecp(ecp_tab[atom], stdsymb)
@@ -1705,7 +1702,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     kernel = build
 
     @pyscf.lib.with_doc(format_atom.__doc__)
-    def format_atom(self, atom, origin=0, axes=1, unit='Ang'):
+    def format_atom(self, atom, origin=0, axes=None, unit='Ang'):
         return format_atom(atom, origin, axes, unit)
 
     @pyscf.lib.with_doc(format_basis.__doc__)
@@ -2371,6 +2368,19 @@ def _std_symbol(symb_or_chg):
     else:
         return param.ELEMENTS[symb_or_chg][0]
 
+def _atom_symbol(symb_or_chg):
+    if isinstance(symb_or_chg, int):
+        symb = param.ELEMENTS[symb_or_chg][0]
+    else:
+        a = symb_or_chg.strip()
+        if a.isdigit():
+            symb = param.ELEMENTS[int(a)][0]
+        else:
+            rawsymb = _rm_digit(a)
+            stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
+            symb = a.replace(rawsymb, stdsymb)
+    return symb
+
 def _parse_nuc_mod(str_or_int):
     if isinstance(str_or_int, int):
         return str_or_int
@@ -2428,9 +2438,9 @@ def from_zmatrix(atomstr):
         if line.strip():
             rawd = line.split()
             if len(rawd) < 3:
-                atoms.append([rawd[0], numpy.zeros(3)])
+                atoms.append([_atom_symbol(rawd[0]), numpy.zeros(3)])
             elif len(rawd) == 3:
-                atoms.append([rawd[0], numpy.array((float(rawd[2]), 0, 0))])
+                atoms.append([_atom_symbol(rawd[0]), numpy.array((float(rawd[2]), 0, 0))])
             elif len(rawd) == 5:
                 bonda = int(rawd[1]) - 1
                 bond  = float(rawd[2])
@@ -2443,7 +2453,7 @@ def from_zmatrix(atomstr):
                     vecn = numpy.array((0.,0.,1.))
                 rmat = pyscf.symm.rotation_mat(vecn, ang)
                 c = numpy.dot(rmat, v1) * (bond/numpy.linalg.norm(v1))
-                atoms.append([rawd[0], atoms[bonda][1]+c])
+                atoms.append([_atom_symbol(rawd[0]), atoms[bonda][1]+c])
             else: # FIXME
                 bonda = int(rawd[1]) - 1
                 bond  = float(rawd[2])
@@ -2458,7 +2468,7 @@ def from_zmatrix(atomstr):
                 vecn = numpy.dot(rmat, vecn) / numpy.linalg.norm(vecn)
                 rmat = pyscf.symm.rotation_mat(vecn, ang)
                 c = numpy.dot(rmat, v1) * (bond/numpy.linalg.norm(v1))
-                atoms.append([rawd[0], atoms[bonda][1]+c])
+                atoms.append([_atom_symbol(rawd[0]), atoms[bonda][1]+c])
     return atoms
 zmat2cart = zmat = from_zmatrix
 
