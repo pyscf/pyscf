@@ -19,6 +19,7 @@ from pyscf.pbc.scf import hf as pbchf
 from pyscf import lib
 from pyscf.scf import hf
 from pyscf.lib import logger
+from pyscf.pbc.gto import ecp
 from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile
 
@@ -316,6 +317,8 @@ class KRHF(hf.RHF):
             nuc = self.with_df.get_nuc(kpts)
         else:
             nuc = self.with_df.get_pp(kpts)
+            if cell._ecp:
+                nuc += ecp.int_ecp(cell, kpts)
         t = cell.pbc_intor('cint1e_kin_sph', 1, 1, kpts)
         return lib.asarray(nuc) + lib.asarray(t)
 

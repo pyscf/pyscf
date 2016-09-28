@@ -165,6 +165,7 @@ def dumps(cell):
     celldic['atom'] = repr(cell.atom)
     celldic['basis']= repr(cell.basis)
     celldic['pseudo' ] = repr(cell.pseudo)
+    celldic['ecp' ] = repr(cell.ecp)
 
     try:
         return json.dumps(celldic)
@@ -214,7 +215,7 @@ def loads(cellstr):
     cell._atm = np.array(cell._atm, dtype=np.int32)
     cell._bas = np.array(cell._bas, dtype=np.int32)
     cell._env = np.array(cell._env, dtype=np.double)
-    #cell._ecpbas = np.array(cell._ecpbas, dtype=np.int32)
+    cell._ecpbas = np.array(cell._ecpbas, dtype=np.int32)
     cell._h = np.asarray(cell._h)
 
     return cell
@@ -694,9 +695,11 @@ class Cell(mole.Mole):
     def format_basis(self, basis_tab):
         return format_basis(basis_tab)
 
-    def make_ecp_env(self, _atm, xxx, pre_env=[]):
+    def make_ecp_env(self, _atm, _ecp, pre_env=[]):
         if self._pseudo:
             _atm, _ecpbas, _env = make_pseudo_env(self, _atm, self._pseudo, pre_env)
+        elif _ecp:
+            _atm, _ecpbas, _env = mole.make_ecp_env(self, _atm, _ecp, pre_env)
         else:
             _atm, _ecpbas, _env = _atm, None, pre_env
         return _atm, _ecpbas, _env

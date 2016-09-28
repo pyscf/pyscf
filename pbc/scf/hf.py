@@ -23,6 +23,7 @@ from pyscf.lib import logger
 from pyscf.scf.hf import make_rdm1
 from pyscf.pbc import tools
 from pyscf.pbc.gto import ewald
+from pyscf.pbc.gto import ecp
 from pyscf.pbc.gto.pseudo import get_pp
 from pyscf.pbc.scf import chkfile
 from pyscf.pbc.scf import addons
@@ -42,6 +43,8 @@ def get_hcore(cell, kpt=np.zeros(3)):
         hcore += get_pp(cell, kpt)
     else:
         hcore += get_nuc(cell, kpt)
+        if cell._ecp:
+            hcore += ecp.int_ecp(cell, kpt)
 
     return hcore
 
@@ -269,6 +272,8 @@ class RHF(pyscf.scf.hf.RHF):
         if kpt is None: kpt = self.kpt
         if cell.pseudo is None:
             nuc = self.with_df.get_nuc(kpt)
+            if cell._ecp:
+                nuc += ecp.int_ecp(cell, kpt)
         else:
             nuc = self.with_df.get_pp(kpt)
         return nuc + cell.pbc_intor('cint1e_kin_sph', 1, 1, kpt)

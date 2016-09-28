@@ -1550,12 +1550,11 @@ class Mole(pyscf.lib.StreamObject):
         self.__dict__.update(loads(molstr).__dict__)
         return self
 
-#TODO: remove kwarg mass=None.  Here to keep compatibility to old chkfile format
     def build(self, dump_input=True, parse_arg=True,
               verbose=None, output=None, max_memory=None,
               atom=None, basis=None, unit=None, nucmod=None, ecp=None,
               charge=None, spin=None, symmetry=None,
-              symmetry_subgroup=None, light_speed=None, mass=None):
+              symmetry_subgroup=None, light_speed=None):
         '''Setup moleclue and initialize some control parameters.  Whenever you
         change the value of the attributes of :class:`Mole`, you need call
         this function to refresh the internal data of Mole.
