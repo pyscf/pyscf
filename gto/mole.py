@@ -1037,7 +1037,7 @@ def cart_labels(mol, fmt=True):
         be used as the print format.
 
     Returns:
-        List of [(atom-id, symbol-str, nl-str, str-of-real-spheric-notation]
+        List of [(atom-id, symbol-str, nl-str, str-of-real-spheric-notation)]
         or formatted strings based on the argument "fmt"
     '''
     count = numpy.zeros((mol.natm, 9), dtype=int)
@@ -1620,10 +1620,14 @@ class Mole(pyscf.lib.StreamObject):
 
         if isinstance(self.basis, str):
             # specify global basis for whole molecule
-            self._basis = self.format_basis(dict([(a, self.basis)
-                                                  for a in uniq_atoms]))
+            _basis = dict(((a, self.basis) for a in uniq_atoms))
+        elif 'default' in self.basis:
+            _basis = dict(((a, self.basis['default']) for a in uniq_atoms))
+            _basis.update(self.basis)
+            del(_basis['default'])
         else:
-            self._basis = self.format_basis(self.basis)
+            _basis = self.basis
+        self._basis = self.format_basis(_basis)
 
 # TODO: Consider ECP info into symmetry
         if self.ecp:

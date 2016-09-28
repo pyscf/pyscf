@@ -195,6 +195,11 @@ C    SP
         self.assertEqual(atoms[0], 'H')
         self.assertTrue(numpy.allclose(atoms[1], [0, 0, 1.]))
 
+    def test_default_basis(self):
+        mol = gto.M(atom=[['h' , 0,1,1], ["O1", (0.,0.,0.)], [1, 1.,1.,0.],],
+                    basis={'default':'321g', 'O1': 'sto3g'})
+        self.assertEqual(sorted(mol._basis.keys()), ['H', 'O1'])
+
 
 if __name__ == "__main__":
     print("test mole.py")
