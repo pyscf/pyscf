@@ -800,8 +800,9 @@ class _ERIS:
     def __del__(self):
         if hasattr(self, 'feri1'):
             for key in self.feri1.keys(): del(self.feri1[key])
-            for key in self.feri2.keys(): del(self.feri2[key])
             self.feri1.close()
+        if hasattr(self, 'feri2'):
+            for key in self.feri2.keys(): del(self.feri2[key])
             self.feri2.close()
 
 

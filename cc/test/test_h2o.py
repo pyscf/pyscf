@@ -47,6 +47,11 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(mcc.ecc, -0.2133432312951, 8)
         self.assertAlmostEqual(abs(mcc.t2).sum(), 5.63970279799556984, 6)
 
+        t2a = mcc.add_wvvVV(t1, t2, eris)
+        mcc.direct = True
+        t2b = mcc.add_wvvVV(t1, t2, eris)
+        self.assertTrue(numpy.allclose(t2a,t2b))
+
     def test_ccsd_frozen(self):
         mcc = cc.ccsd.CC(mf, frozen=range(1))
         mcc.conv_tol = 1e-10
