@@ -58,6 +58,7 @@ class KnowValues(unittest.TestCase):
         eri1 = ao2mo.restore(1, eri_ao, nao)
         eriref = numpy.einsum('ijpl,pk->ijkl', eri1, mo)
         eriref = numpy.einsum('ijkp,pl->ijkl', eriref, mo)
+        orbs_slice = (0, nao, 0, nao)
 
         def e2drv(ftrans2, fmmm, eri1, eri2):
             libao2mo1.AO2MOnr_e2_drv(ftrans2, fmmm,
@@ -65,8 +66,7 @@ class KnowValues(unittest.TestCase):
                                      eri1.ctypes.data_as(ctypes.c_void_p),
                                      mo.ctypes.data_as(ctypes.c_void_p),
                                      ctypes.c_int(nao*nao), ctypes.c_int(nao),
-                                     ctypes.c_int(0), ctypes.c_int(nao),
-                                     ctypes.c_int(0), ctypes.c_int(nao),
+                                     (ctypes.c_int*4)(*orbs_slice),
                                      ctypes.c_void_p(), nbas)
             return eri2
 
@@ -107,13 +107,14 @@ class KnowValues(unittest.TestCase):
         fmmm = getattr(libao2mo1, 'AO2MOmmm_nr_s2_s2')
         eri1p = ao2mo.restore(4, eri1, nao)
         eri2 = numpy.zeros((naopair,naopair))
+        orbs_slice = (0, nao, 0, nao)
         libao2mo1.AO2MOnr_e2_drv(ftrans2, fmmm,
                                  eri2.ctypes.data_as(ctypes.c_void_p),
                                  eri1p.ctypes.data_as(ctypes.c_void_p),
                                  mo.ctypes.data_as(ctypes.c_void_p),
                                  ctypes.c_int(naopair), ctypes.c_int(nao),
-                                 ctypes.c_int(0), ctypes.c_int(nao),
-                                 ctypes.c_int(0), ctypes.c_int(nao))
+                                 (ctypes.c_int*4)(*orbs_slice),
+                                 ctypes.c_void_p(), nbas)
         self.assertTrue(numpy.allclose(eri2, ao2mo.restore(4,eriref,nao)))
 
 

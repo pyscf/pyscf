@@ -796,16 +796,17 @@ void AO2MOsortranse2_r_a4(int (*fmmm)(),
 void AO2MOr_e1_drv(int (*intor)(), void (*fill)(),
                    void (*ftrans)(), int (*fmmm)(),
                    double complex *eri, double complex *mo_coeff,
-                   int klsh_start, int klsh_count, int nkl,
-                   int i_start, int i_count, int j_start, int j_count,
-                   int ncomp, CINTOpt *cintopt, CVHFOpt *vhfopt, int *tao,
+                   int klsh_start, int klsh_count, int nkl, int ncomp,
+                   int *orbs_slice, int *tao, int *ao_loc,
+                   CINTOpt *cintopt, CVHFOpt *vhfopt,
                    int *atm, int natm, int *bas, int nbas, double *env)
 {
-        int *ao_loc = malloc(sizeof(int)*(nbas+1));
-        CINTshells_spinor_offset(ao_loc, bas, nbas);
-        ao_loc[nbas] = ao_loc[nbas-1] + CINTcgto_spinor(nbas-1, bas);
+        const int i_start = orbs_slice[0];
+        const int i_count = orbs_slice[1] - orbs_slice[0];
+        const int j_start = orbs_slice[2];
+        const int j_count = orbs_slice[3] - orbs_slice[2];
         int nao = ao_loc[nbas];
-        int nmo = MAX(i_start+i_count, j_start+j_count);
+        int nmo = MAX(orbs_slice[1], orbs_slice[3]);
         int i;
         double *mo_r = malloc(sizeof(double) * nao * nmo);
         double *mo_i = malloc(sizeof(double) * nao * nmo);
@@ -846,7 +847,6 @@ void AO2MOr_e1_drv(int (*intor)(), void (*fill)(),
                 (*ftrans)(fmmm, eri, eri_ao, kl, &envs);
         }
 
-        free(ao_loc);
         free(eri_ao);
         free(mo_r);
         free(mo_i);
@@ -856,10 +856,9 @@ void AO2MOr_e2_drv(void (*ftrans)(), int (*fmmm)(),
                    double complex *vout, double complex *vin,
                    double complex *mo_coeff,
                    int nijcount, int nao,
-                   int i_start, int i_count, int j_start, int j_count,
-                   int *tao, int *ao_loc, int nbas)
+                   int *orbs_slice, int *tao, int *ao_loc, int nbas)
 {
-        int nmo = MAX(i_start+i_count, j_start+j_count);
+        int nmo = MAX(orbs_slice[1], orbs_slice[3]);
         int i;
         double *mo_r = malloc(sizeof(double) * nao * nmo);
         double *mo_i = malloc(sizeof(double) * nao * nmo);
@@ -868,10 +867,10 @@ void AO2MOr_e2_drv(void (*ftrans)(), int (*fmmm)(),
                 mo_i[i] = cimag(mo_coeff[i]);
         }
         struct _AO2MOEnvs envs;
-        envs.bra_start = i_start;
-        envs.bra_count = i_count;
-        envs.ket_start = j_start;
-        envs.ket_count = j_count;
+        envs.bra_start = orbs_slice[0];
+        envs.bra_count = orbs_slice[1] - orbs_slice[0];
+        envs.ket_start = orbs_slice[2];
+        envs.ket_count = orbs_slice[3] - orbs_slice[2];
         envs.nao = nao;
         envs.nbas = nbas;
         envs.tao = tao;

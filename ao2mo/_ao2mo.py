@@ -3,10 +3,11 @@
 import ctypes
 import _ctypes
 import numpy
-import pyscf.lib
+from pyscf import lib
+from pyscf.gto import moleintor
 from pyscf.scf import _vhf
 
-libao2mo = pyscf.lib.load_library('libao2mo')
+libao2mo = lib.load_library('libao2mo')
 def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libao2mo._handle, name))
 
@@ -57,19 +58,10 @@ def nr_e1fill(intor, sh_range, atm, bas, env,
     c_env = numpy.asarray(env, order='C')
     natm = ctypes.c_int(c_atm.shape[0])
     nbas = ctypes.c_int(c_bas.shape[0])
+    ao_loc = moleintor.make_loc(bas, intor)
+    nao = ao_loc[-1]
 
     klsh0, klsh1, nkl = sh_range
-
-    if '_cart' in intor:
-        libao2mo.CINTtot_cgto_cart.restype = ctypes.c_int
-        nao = libao2mo.CINTtot_cgto_cart(c_bas.ctypes.data_as(ctypes.c_void_p), nbas)
-        cgto_in_shell = _fpointer('CINTcgto_cart')
-    elif '_sph' in intor:
-        libao2mo.CINTtot_cgto_spheric.restype = ctypes.c_int
-        nao = libao2mo.CINTtot_cgto_spheric(c_bas.ctypes.data_as(ctypes.c_void_p), nbas)
-        cgto_in_shell = _fpointer('CINTcgto_spheric')
-    else:
-        raise NotImplementedError('cint2e spinor AO integrals')
 
     if aosym in ('s4', 's2ij'):
         nao_pair = nao * (nao+1) // 2
@@ -87,17 +79,16 @@ def nr_e1fill(intor, sh_range, atm, bas, env,
         cintopt = ao2mopt._cintopt
         cintor = ao2mopt._intor
     else:
-        cao2mopt = pyscf.lib.c_null_ptr()
+        cao2mopt = lib.c_null_ptr()
         cintor = _fpointer(intor)
         cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, intor)
 
     fdrv = getattr(libao2mo, 'AO2MOnr_e1fill_drv')
     fill = _fpointer('AO2MOfill_nr_' + aosym)
-    fdrv(cintor, cgto_in_shell, fill,
-         out.ctypes.data_as(ctypes.c_void_p),
+    fdrv(cintor, fill, out.ctypes.data_as(ctypes.c_void_p),
          ctypes.c_int(klsh0), ctypes.c_int(klsh1-klsh0),
          ctypes.c_int(nkl), ctypes.c_int(comp),
-         cintopt, cao2mopt,
+         ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cao2mopt,
          c_atm.ctypes.data_as(ctypes.c_void_p), natm,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))
@@ -147,9 +138,7 @@ def nr_e1(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None):
          eri.ctypes.data_as(ctypes.c_void_p),
          mo_coeff.ctypes.data_as(ctypes.c_void_p),
          ctypes.c_int(nrow), ctypes.c_int(nao),
-         ctypes.c_int(i0), ctypes.c_int(icount),
-         ctypes.c_int(j0), ctypes.c_int(jcount),
-         pao_loc, c_nbas)
+         (ctypes.c_int*4)(*orbs_slice), pao_loc, c_nbas)
     return out
 
 # if out is not None, transform AO to MO in-place
@@ -206,9 +195,7 @@ def nr_e2(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None,
          eri.ctypes.data_as(ctypes.c_void_p),
          mo_coeff.ctypes.data_as(ctypes.c_void_p),
          ctypes.c_int(nrow), ctypes.c_int(nao),
-         ctypes.c_int(k0), ctypes.c_int(kc),
-         ctypes.c_int(l0), ctypes.c_int(lc),
-         pao_loc, c_nbas)
+         (ctypes.c_int*4)(*orbs_slice), pao_loc, c_nbas)
     return out
 
 
@@ -249,11 +236,12 @@ def r_e1(intor, mo_coeff, orbs_slice, sh_range, atm, bas, env,
         cintopt = ao2mopt._cintopt
         cintor = ao2mopt._intor
     else:
-        cao2mopt = pyscf.lib.c_null_ptr()
+        cao2mopt = lib.c_null_ptr()
         cintor = _fpointer(intor)
         cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, intor)
 
     tao = numpy.asarray(tao, dtype=numpy.int32)
+    ao_loc = moleintor.make_loc(bas, 'spinor')
 
     fdrv = getattr(libao2mo, 'AO2MOr_e1_drv')
     fill = _fpointer('AO2MOfill_r_' + aosym)
@@ -262,11 +250,9 @@ def r_e1(intor, mo_coeff, orbs_slice, sh_range, atm, bas, env,
          out.ctypes.data_as(ctypes.c_void_p),
          mo_coeff.ctypes.data_as(ctypes.c_void_p),
          ctypes.c_int(klsh0), ctypes.c_int(klsh1-klsh0),
-         ctypes.c_int(nkl),
-         ctypes.c_int(i0), ctypes.c_int(icount),
-         ctypes.c_int(j0), ctypes.c_int(jcount),
-         ctypes.c_int(comp), cintopt, cao2mopt,
-         tao.ctypes.data_as(ctypes.c_void_p),
+         ctypes.c_int(nkl), ctypes.c_int(comp),
+         (ctypes.c_int*4)(*orbs_slice), tao.ctypes.data_as(ctypes.c_void_p),
+         ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cao2mopt,
          c_atm.ctypes.data_as(ctypes.c_void_p), natm,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))
@@ -317,8 +303,7 @@ def r_e2(eri, mo_coeff, orbs_slice, tao, ao_loc, aosym='s1', out=None):
          eri.ctypes.data_as(ctypes.c_void_p),
          mo_coeff.ctypes.data_as(ctypes.c_void_p),
          ctypes.c_int(nrow), ctypes.c_int(nao),
-         ctypes.c_int(k0), ctypes.c_int(kc),
-         ctypes.c_int(l0), ctypes.c_int(lc),
+         (ctypes.c_int*4)(*orbs_slice),
          tao.ctypes.data_as(ctypes.c_void_p), c_ao_loc, c_nbas)
     return out
 

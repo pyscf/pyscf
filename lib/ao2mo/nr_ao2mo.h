@@ -24,22 +24,19 @@ struct _AO2MOEnvs {
 };
 #endif
 
-void AO2MOnr_e1fill_drv(int (*intor)(), int (*cgto_in_shell)(), void (*fill)(),
-                        double *eri, int klsh_start, int klsh_count, int nkl,
-                        int ncomp, CINTOpt *cintopt, CVHFOpt *vhfopt,
+void AO2MOnr_e1fill_drv(int (*intor)(), void (*fill)(), double *eri,
+                        int klsh_start, int klsh_count, int nkl, int ncomp,
+                        int *ao_loc, CINTOpt *cintopt, CVHFOpt *vhfopt,
                         int *atm, int natm, int *bas, int nbas, double *env);
 
-void AO2MOnr_e1_drv(int (*intor)(), int (*cgto_in_shell)(), void (*fill)(),
-                    void (*ftrans)(), int (*fmmm)(),
+void AO2MOnr_e1_drv(int (*intor)(), void (*fill)(), void (*ftrans)(), int (*fmmm)(),
                     double *eri, double *mo_coeff,
-                    int klsh_start, int klsh_count, int nkl,
-                    int i_start, int i_count, int j_start, int j_count,
-                    int ncomp, CINTOpt *cintopt, CVHFOpt *vhfopt,
+                    int klsh_start, int klsh_count, int nkl, int ncomp,
+                    int *orbs_slice, int *ao_loc,
+                    CINTOpt *cintopt, CVHFOpt *vhfopt,
                     int *atm, int natm, int *bas, int nbas, double *env);
 
 void AO2MOnr_e2_drv(void (*ftrans)(), int (*fmmm)(),
                     double *vout, double *vin, double *mo_coeff,
-                    int nijcount, int nao,
-                    int i_start, int i_count, int j_start, int j_count,
-                    int *ao_loc, int nbas);
+                    int nij, int nao, int *orbs_slice, int *ao_loc, int nbas);
 
