@@ -5,6 +5,7 @@
 
 import ctypes
 import numpy
+import math
 from pyscf.lib import misc
 
 '''
@@ -650,6 +651,28 @@ def condense(opname, a, locs):
                           ctypes.c_int(nloc))
     return out
 
+def expm(a):
+    bs = [a.copy()]
+    n = 0
+    for n in range(1, 14):
+        bs.append(lib.ddot(bs[-1], a))
+        radius = (2**(n*(n+2))*math.factorial(n+2)*1e-16) **((n+1.)/(n+2))
+        #print(n, radius, bs[-1].max(), -bs[-1].min())
+        if bs[-1].max() < radius and -bs[-1].min() < radius:
+            break
+
+    y = numpy.eye(a.shape[0])
+    fac = 1
+    for i, b in enumerate(bs):
+        fac *= i + 1
+        b *= (.5**(n*(i+1)) / fac)
+        y += b
+    buf, bs = bs[0], None
+    for i in range(n):
+        lib.ddot(y, y, 1, buf, 0)
+        y, buf = buf, y
+    return y
+
 
 if __name__ == '__main__':
     a = numpy.random.random((400,900))
@@ -733,3 +756,7 @@ if __name__ == '__main__':
     print(numpy.allclose(abs(a), condense('absmax', a, locs)))
     print(numpy.allclose(abs(a), condense('absmin', a, locs)))
     print(numpy.allclose(abs(a), condense('norm', a, locs)))
+
+    a = numpy.random.random((300,300)) * .1
+    a = a - a.T
+    print abs(scipy.linalg.expm(a) - expm(a)).max()
