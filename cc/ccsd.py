@@ -4,13 +4,15 @@
 #
 
 import time
+import ctypes
 import tempfile
 from functools import reduce
 import numpy
 import h5py
 from pyscf import lib
 from pyscf.lib import logger
-import pyscf.ao2mo
+from pyscf import ao2mo
+from pyscf.ao2mo import _ao2mo
 from pyscf.cc import _ccsd
 
 BLKMIN = 4
@@ -101,7 +103,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     for p0, p1 in prange(0, nocc, blksize):
 # ==== read eris.ovvv ====
         eris_ovvv = _cp(eris.ovvv[p0:p1])
-        eris_ovvv = _ccsd.unpack_tril(eris_ovvv.reshape((p1-p0)*nvir,-1))
+        eris_ovvv = lib.unpack_tril(eris_ovvv.reshape((p1-p0)*nvir,-1))
         eris_ovvv = eris_ovvv.reshape(p1-p0,nvir,nvir,nvir)
 
         fvv += numpy.einsum('kc,kcba->ab', 2*t1[p0:p1], eris_ovvv)
@@ -407,6 +409,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.diis_start_cycle = 0
 # FIXME: Should we avoid DIIS starting early?
         self.diis_start_energy_diff = 1e9
+        self.direct = False
 
         self.frozen = frozen
 
@@ -544,8 +547,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         #nocc = self.nocc()
         #nmo = self.nmo()
         #nvir = nmo - nocc
-        #eri1 = pyscf.ao2mo.incore.full(self._scf._eri, mo_coeff)
-        #eri1 = pyscf.ao2mo.restore(1, eri1, nmo)
+        #eri1 = ao2mo.incore.full(self._scf._eri, mo_coeff)
+        #eri1 = ao2mo.restore(1, eri1, nmo)
         #eris = lambda:None
         #eris.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
         #eris.ooov = eri1[:nocc,:nocc,:nocc,nocc:].copy()
@@ -557,7 +560,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         #for i in range(nocc):
         #    for j in range(nvir):
         #        eris.ovvv[i,j] = lib.pack_tril(ovvv[i,j])
-        #eris.vvvv = pyscf.ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:].copy(), nvir)
+        #eris.vvvv = ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:].copy(), nvir)
         #eris.fock = numpy.diag(self.mo_energy)
         #return eris
         return _ERIS(self, mo_coeff)
@@ -567,32 +570,95 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         nocc, nvir = t1.shape
         #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
         #: t2new += numpy.einsum('ijcd,acdb->ijab', tau, vvvv)
-        tau = numpy.empty((nocc*(nocc+1)//2,nvir,nvir))
-        p0 = 0
-        for i in range(nocc):
-            tau[p0:p0+i+1] = numpy.einsum('a,jb->jab', t1[i], t1[:i+1])
-            tau[p0:p0+i+1] += t2[i,:i+1]
-            p0 += i + 1
-        time0 = logger.timer_debug1(self, 'vvvv-tau', *time0)
-
-        p0 = 0
-        outbuf = numpy.empty((nvir,nvir,nvir))
-        for a in range(nvir):
-            buf = _ccsd.unpack_tril(eris.vvvv[p0:p0+a+1], out=outbuf[:a+1])
-            #: t2new_tril[i,:i+1, a] += numpy.einsum('xcd,cdb->xb', tau[:,:a+1], buf)
+        def contract_(t2new_tril, tau, eri, a):
+            nvir = tau.shape[-1]
+            #: t2new[i,:i+1, a] += numpy.einsum('xcd,cdb->xb', tau[:,:a+1], buf)
             lib.numpy_helper._dgemm('N', 'N', nocc*(nocc+1)//2, nvir, (a+1)*nvir,
-                                    tau.reshape(-1,nvir*nvir), buf.reshape(-1,nvir),
+                                    tau.reshape(-1,nvir*nvir), eri.reshape(-1,nvir),
                                     t2new_tril.reshape(-1,nvir*nvir), 1, 1,
                                     0, 0, a*nvir)
 
-            #: t2new_tril[i,:i+1,:a] += numpy.einsum('xd,abd->xab', tau[:,a], buf[:a])
+            #: t2new[i,:i+1,:a] += numpy.einsum('xd,abd->xab', tau[:,a], eri[:a])
             if a > 0:
                 lib.numpy_helper._dgemm('N', 'T', nocc*(nocc+1)//2, a*nvir, nvir,
-                                        tau.reshape(-1,nvir*nvir), buf.reshape(-1,nvir),
+                                        tau.reshape(-1,nvir*nvir), eri.reshape(-1,nvir),
                                         t2new_tril.reshape(-1,nvir*nvir), 1, 1,
                                         a*nvir, 0, 0)
-            p0 += a+1
-            time0 = logger.timer_debug1(self, 'vvvv %d'%a, *time0)
+        def async_do(handler, fn, *args):
+            if handler is not None:
+                handler.join()
+            handler = lib.background_thread(fn, *args)
+            return handler
+
+        if self.direct:   # AO-direct CCSD
+            mol = self.mol
+            nao, nmo = self.mo_coeff.shape
+            aos = numpy.asarray(self.mo_coeff[:,nocc:].T, order='F')
+            outbuf = numpy.empty((nocc*(nocc+1)//2,nao,nao))
+            tau = numpy.ndarray((nocc*(nocc+1)//2,nvir,nvir), buffer=outbuf)
+            p0 = 0
+            for i in range(nocc):
+                tau[p0:p0+i+1] = numpy.einsum('a,jb->jab', t1[i], t1[:i+1])
+                tau[p0:p0+i+1] += t2[i,:i+1]
+                p0 += i + 1
+            tau = _ao2mo.nr_e2(tau.reshape(-1,nvir**2), aos, (0,nao,0,nao), 's1', 's1')
+            tau = tau.reshape(-1,nao,nao)
+            time0 = logger.timer_debug1(self, 'vvvv-tau', *time0)
+
+            ao2mopt = _ao2mo.AO2MOpt(mol, 'cint2e_sph', 'CVHFnr_schwarz_cond',
+                                     'CVHFsetnr_direct_scf')
+            outbuf[:] = 0
+            ao_loc = mol.ao_loc_nr()
+            dmax = max(ao_loc[1:] - ao_loc[:-1])
+            eribuf = numpy.empty((dmax*nao,nao**2))
+            loadbuf = numpy.empty((nao,nao,nao))
+            cload = _ccsd.libcc.CCload_eri_s4
+            def load(eri_pool, ish, idx):
+                cload(loadbuf.ctypes.data_as(ctypes.c_void_p),
+                      eri_pool.ctypes.data_as(ctypes.c_void_p),
+                      ao_loc.ctypes.data_as(ctypes.c_void_p),
+                      ctypes.c_int(ish), ctypes.c_int(idx), ctypes.c_int(nao))
+                return loadbuf[:ao_loc[ish+1]]
+
+            for ish in range(mol.nbas):
+                i0, i1 = ao_loc[ish:ish+2]
+                jobs = (ish*(ish+1)//2, (ish+1)*(ish+2)//2, i1*(i1+1)//2-i0*(i0+1)//2)
+                eri_pool = _ao2mo.nr_e1fill('cint2e_sph', jobs, mol._atm, mol._bas, mol._env,
+                                            's4', 1, ao2mopt, out=eribuf)[0]
+                di = ao_loc[ish+1] - ao_loc[ish]
+                for i in range(di):
+                    a = i + ao_loc[ish]
+                    eri = load(eri_pool, ish, i)
+                    contract_(outbuf, tau, eri, a)
+                time0 = logger.timer_debug1(self, 'vvvv %d'%ish, *time0)
+            eribuf = loadbuf = eri_pool = eri = None
+
+            mo = numpy.asarray(self.mo_coeff, order='F')
+            tau = _ao2mo.nr_e2(outbuf, mo, (nocc,nmo,nocc,nmo), 's1', 's1', out=tau)
+            t2new_tril += tau.reshape(-1,nvir,nvir)
+
+        else:
+            #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
+            #: t2new += numpy.einsum('ijcd,acdb->ijab', tau, vvvv)
+            tau = numpy.empty((nocc*(nocc+1)//2,nvir,nvir))
+            p0 = 0
+            for i in range(nocc):
+                tau[p0:p0+i+1] = numpy.einsum('a,jb->jab', t1[i], t1[:i+1])
+                tau[p0:p0+i+1] += t2[i,:i+1]
+                p0 += i + 1
+            time0 = logger.timer_debug1(self, 'vvvv-tau', *time0)
+
+            p0 = 0
+            outbuf = numpy.empty((nvir,nvir,nvir))
+            outbuf1 = numpy.empty((nvir,nvir,nvir))
+            handler = None
+            for a in range(nvir):
+                buf = lib.unpack_tril(eris.vvvv[p0:p0+a+1], out=outbuf)
+                outbuf, outbuf1 = outbuf1, outbuf
+                handler = async_do(handler, contract_, t2new_tril, tau, buf, a)
+                p0 += a+1
+                time0 = logger.timer_debug1(self, 'vvvv %d'%a, *time0)
+            handler.join()
         return t2new_tril
     def add_wvvVV(self, t1, t2, eris, max_memory=2000):
         nocc, nvir = t1.shape
@@ -642,13 +708,13 @@ class _ERIS:
         nmo = cc.nmo()
         nvir = nmo - nocc
         mem_incore, mem_outcore, mem_basic = _mem_usage(nocc, nvir)
-        mem_now = pyscf.lib.current_memory()[0]
+        mem_now = lib.current_memory()[0]
 
         log = logger.Logger(cc.stdout, cc.verbose)
         if (method == 'incore' and cc._scf._eri is not None and
             (mem_incore+mem_now < cc.max_memory) or cc.mol.incore_anyway):
-            eri1 = pyscf.ao2mo.incore.full(cc._scf._eri, mo_coeff)
-            #:eri1 = pyscf.ao2mo.restore(1, eri1, nmo)
+            eri1 = ao2mo.incore.full(cc._scf._eri, mo_coeff)
+            #:eri1 = ao2mo.restore(1, eri1, nmo)
             #:self.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
             #:self.ooov = eri1[:nocc,:nocc,:nocc,nocc:].copy()
             #:self.ovoo = eri1[:nocc,nocc:,:nocc,:nocc].copy()
@@ -659,7 +725,7 @@ class _ERIS:
             #:for i in range(nocc):
             #:    for j in range(nvir):
             #:        self.ovvv[i,j] = lib.pack_tril(ovvv[i,j])
-            #:self.vvvv = pyscf.ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:], nvir)
+            #:self.vvvv = ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:], nvir)
             nvir_pair = nvir * (nvir+1) // 2
             self.oooo = numpy.empty((nocc,nocc,nocc,nocc))
             self.ooov = numpy.empty((nocc,nocc,nocc,nvir))
@@ -671,7 +737,7 @@ class _ERIS:
             ij = 0
             outbuf = numpy.empty((nmo,nmo,nmo))
             for i in range(nocc):
-                buf = _ccsd.unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
+                buf = lib.unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
                 for j in range(i+1):
                     self.oooo[i,j] = self.oooo[j,i] = buf[j,:nocc,:nocc]
                     self.ooov[i,j] = self.ooov[j,i] = buf[j,:nocc,nocc:]
@@ -679,7 +745,7 @@ class _ERIS:
                 ij += i + 1
             ij1 = 0
             for i in range(nocc,nmo):
-                buf = _ccsd.unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
+                buf = lib.unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
                 self.ovoo[:,i-nocc] = buf[:nocc,:nocc,:nocc]
                 self.ovov[:,i-nocc] = buf[:nocc,:nocc,nocc:]
                 for j in range(nocc):
@@ -703,28 +769,29 @@ class _ERIS:
             self.ovov = self.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8')
             self.ovvv = self.feri1.create_dataset('ovvv', (nocc,nvir,nvpair), 'f8')
 
-            max_memory = max(2000,cc.max_memory-pyscf.lib.current_memory()[0])
-            self.feri2 = h5py.File(_tmpfile2.name, 'w')
-            pyscf.ao2mo.full(cc.mol, orbv, self.feri2, max_memory=max_memory, verbose=log)
-            self.vvvv = self.feri2['eri_mo']
-            cput1 = log.timer_debug1('transforming vvvv', *cput1)
+            if not cc.direct:
+                max_memory = max(2000,cc.max_memory-lib.current_memory()[0])
+                self.feri2 = h5py.File(_tmpfile2.name, 'w')
+                ao2mo.full(cc.mol, orbv, self.feri2, max_memory=max_memory, verbose=log)
+                self.vvvv = self.feri2['eri_mo']
+                cput1 = log.timer_debug1('transforming vvvv', *cput1)
 
             tmpfile3 = tempfile.NamedTemporaryFile()
             with h5py.File(tmpfile3.name, 'w') as feri:
-                max_memory = max(2000, cc.max_memory-pyscf.lib.current_memory()[0])
-                pyscf.ao2mo.general(cc.mol, (orbo,mo_coeff,mo_coeff,mo_coeff),
-                                    feri, max_memory=max_memory, verbose=log)
+                max_memory = max(2000, cc.max_memory-lib.current_memory()[0])
+                ao2mo.general(cc.mol, (orbo,mo_coeff,mo_coeff,mo_coeff),
+                              feri, max_memory=max_memory, verbose=log)
                 cput1 = log.timer_debug1('transforming oppp', *cput1)
                 eri1 = feri['eri_mo']
                 outbuf = numpy.empty((nmo,nmo,nmo))
                 for i in range(nocc):
-                    buf = _ccsd.unpack_tril(_cp(eri1[i*nmo:(i+1)*nmo]), out=outbuf)
+                    buf = lib.unpack_tril(_cp(eri1[i*nmo:(i+1)*nmo]), out=outbuf)
                     self.oooo[i] = buf[:nocc,:nocc,:nocc]
                     self.ooov[i] = buf[:nocc,:nocc,nocc:]
                     self.ovoo[i] = buf[nocc:,:nocc,:nocc]
                     self.oovv[i] = buf[:nocc,nocc:,nocc:]
                     self.ovov[i] = buf[nocc:,:nocc,nocc:]
-                    self.ovvv[i] = _ccsd.pack_tril(_cp(buf[nocc:,nocc:,nocc:]))
+                    self.ovvv[i] = lib.pack_tril(_cp(buf[nocc:,nocc:,nocc:]))
                     cput1 = log.timer_debug1('sorting %d'%i, *cput1)
                 for key in feri.keys():
                     del(feri[key])
@@ -862,6 +929,7 @@ if __name__ == '__main__':
     print(abs(mcc.t2).sum() - 5.63970304662375)
 
     mcc.max_memory = 1
+    mcc.direct = True
     mcc.ccsd()
     print(mcc.ecc - -0.213343234198275)
     print(abs(mcc.t2).sum() - 5.63970304662375)
