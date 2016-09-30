@@ -164,8 +164,8 @@ def dumps(cell):
             celldic[k] = celldic[k].tolist()
     celldic['atom'] = repr(cell.atom)
     celldic['basis']= repr(cell.basis)
-    celldic['pseudo' ] = repr(cell.pseudo)
-    celldic['ecp' ] = repr(cell.ecp)
+    celldic['pseudo'] = repr(cell.pseudo)
+    celldic['ecp'] = repr(cell.ecp)
 
     try:
         return json.dumps(celldic)
@@ -596,7 +596,7 @@ class Cell(mole.Mole):
 # don't modify the following variables, they are not input arguments
         self.vol = None
         self._h = None
-        self._pseudo = []
+        self._pseudo = {}
         self._keys = set(self.__dict__.keys())
 
 #Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
@@ -696,12 +696,19 @@ class Cell(mole.Mole):
         return format_basis(basis_tab)
 
     def make_ecp_env(self, _atm, _ecp, pre_env=[]):
+        if _ecp and self._pseudo:
+            conflicts = set(self._pseudo.keys()).intersection(set(_ecp.keys()))
+            if conflicts:
+                logger.warn(self, 'Pseudo potential for atoms %s are defined '
+                            'in both .ecp and .pseudo.  Definitions in .pseudo '
+                            'are taken.', list(conflicts))
+                _ecp = dict((k,_ecp[k]) for k in _ecp if k not in self._pseudo)
+
+        _ecpbas, _env = np.zeros((0,8)), pre_env
+        if _ecp:
+            _atm, _ecpbas, _env = mole.make_ecp_env(self, _atm, _ecp, _env)
         if self._pseudo:
-            _atm, _ecpbas, _env = make_pseudo_env(self, _atm, self._pseudo, pre_env)
-        elif _ecp:
-            _atm, _ecpbas, _env = mole.make_ecp_env(self, _atm, _ecp, pre_env)
-        else:
-            _atm, _ecpbas, _env = _atm, None, pre_env
+            _atm, _, _env = make_pseudo_env(self, _atm, self._pseudo, _env)
         return _atm, _ecpbas, _env
 
     def lattice_vectors(self):

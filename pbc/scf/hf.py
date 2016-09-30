@@ -43,8 +43,8 @@ def get_hcore(cell, kpt=np.zeros(3)):
         hcore += get_pp(cell, kpt)
     else:
         hcore += get_nuc(cell, kpt)
-        if cell._ecp:
-            hcore += ecp.int_ecp(cell, kpt)
+    if len(cell._ecpbas) > 0:
+        hcore += ecp.int_ecp(cell, kpt)
 
     return hcore
 
@@ -270,12 +270,12 @@ class RHF(pyscf.scf.hf.RHF):
     def get_hcore(self, cell=None, kpt=None):
         if cell is None: cell = self.cell
         if kpt is None: kpt = self.kpt
-        if cell.pseudo is None:
-            nuc = self.with_df.get_nuc(kpt)
-            if cell._ecp:
-                nuc += ecp.int_ecp(cell, kpt)
-        else:
+        if cell.pseudo:
             nuc = self.with_df.get_pp(kpt)
+        else:
+            nuc = self.with_df.get_nuc(kpt)
+        if len(cell._ecpbas) > 0:
+            nuc += ecp.int_ecp(cell, kpt)
         return nuc + cell.pbc_intor('cint1e_kin_sph', 1, 1, kpt)
 
     def get_ovlp(self, cell=None, kpt=None):

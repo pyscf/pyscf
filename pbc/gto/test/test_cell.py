@@ -207,6 +207,15 @@ class KnowValues(unittest.TestCase):
         s1 = cl1.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpts[0])
         self.assertAlmostEqual(finger(s1), 408.48676779104392, 10)
 
+    def test_ecp_pseudo(self):
+        cell = pgto.M(
+            h = np.eye(3)*5,
+            gs = [4]*3,
+            atom = 'Cu 0 0 1; Na 0 1 0',
+            ecp = 'lanl2dz',
+            pseudo = {'Cu': 'gthbp'})
+        self.assertTrue(all(cell._ecpbas[:,0] == 1))
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.cell")

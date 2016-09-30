@@ -313,12 +313,12 @@ class KRHF(hf.RHF):
     def get_hcore(self, cell=None, kpts=None):
         if cell is None: cell = self.cell
         if kpts is None: kpts = self.kpts
-        if cell.pseudo is None:
-            nuc = self.with_df.get_nuc(kpts)
-        else:
+        if cell.pseudo:
             nuc = self.with_df.get_pp(kpts)
-            if cell._ecp:
-                nuc += ecp.int_ecp(cell, kpts)
+        else:
+            nuc = self.with_df.get_nuc(kpts)
+        if len(cell._ecpbas) > 0:
+            nuc += ecp.int_ecp(cell, kpts)
         t = cell.pbc_intor('cint1e_kin_sph', 1, 1, kpts)
         return lib.asarray(nuc) + lib.asarray(t)
 
