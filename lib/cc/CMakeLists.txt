@@ -1,5 +1,5 @@
 add_library(cc SHARED
-  ccsd_pack.c ccsd_grad.c)
+  ccsd_pack.c ccsd_grad.c ccsd_t.c)
 
 set_target_properties(cc PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}

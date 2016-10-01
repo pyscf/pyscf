@@ -51,7 +51,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.dot(numpy.sin(l2new.flatten()), numpy.arange(35**2)), 507.656936701192, 8)
 
 if __name__ == "__main__":
-    print("Full Tests for H2O")
+    print("Full Tests for CCSD lambda")
     unittest.main()
 
 
