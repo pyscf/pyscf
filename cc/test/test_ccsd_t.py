@@ -21,7 +21,8 @@ class KnowValues(unittest.TestCase):
         mf = scf.RHF(mol)
         mcc = cc.CCSD(mf)
         mcc._scf.mo_energy = numpy.arange(0., nocc+nvir)
-        print(ccsd_t.kernel(mcc, eris, t1, t2) + 8.4953387936460398)
+        e = ccsd_t.kernel(mcc, eris, t1, t2)
+        self.assertAlmostEqual(e, -8.4953387936460398, 9)
 
 if __name__ == "__main__":
     print("Full Tests for CCSD(T)")

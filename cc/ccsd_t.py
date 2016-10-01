@@ -25,6 +25,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.INFO):
         log = verbose
     else:
         log = logger.Logger(mycc.stdout, verbose)
+    cpu1 = cpu0 = (time.clock(), time.time())
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
 
@@ -37,17 +38,21 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.INFO):
     eris_vvop = ftmp.create_dataset('vvop', (nvir,nvir,nocc,nmo), 'f8')
 
     max_memory = max(2000, mycc.max_memory - lib.current_memory()[0])
-    blksize = min(nvir, int(max_memory*.6e9/8/(nvir*nocc*nmo)))
+    max_memory = min(8000, max_memory*.5)
+    blksize = min(nvir, max(16, int(max_memory*1e6/8/(nvir*nocc*nmo))))
     buf = numpy.empty((blksize,nvir,nocc,nmo))
     ovvbuf = numpy.empty((nvir,nvir,nvir))
     for j0, j1 in lib.prange(0, nvir, blksize):
         vvopbuf = numpy.ndarray((j1-j0,nvir,nocc,nmo), buffer=buf)
+        tmp = numpy.asarray(eris.ovov[:,j0:j1])
         for i in range(nocc):
-            tmp = numpy.asarray(eris.ovov[i*nvir+j0:i*nvir+j1])
-            vvopbuf[:,:,i,:nocc] = tmp.reshape(j1-j0,nocc,nvir).transpose(0,2,1)
-            tmp = lib.unpack_tril(eris.ovvv[i*nvir+j0:i*nvir+j1],out=ovvbuf)
-            vvopbuf[:,:,i,nocc:] = tmp.reshape(j1-j0,nvir,nvir)
+            vvopbuf[:,:,i,:nocc] = lib.transpose(tmp[i], axes=(0,2,1), out=ovvbuf)
+        tmp = None
+        tmp = numpy.asarray(eris.ovvv[:,j0:j1])
+        for i in range(nocc):
+            vvopbuf[:,:,i,nocc:] = lib.unpack_tril(tmp[i], out=ovvbuf)
         eris_vvop[j0:j1] = vvopbuf
+        cpu1 = log.timer_debug1('transpose %d:%d'%(j0,j1), *cpu1)
     vvopbuf = tmp = ovvbuf = buf = None
     eris_vooo = numpy.asarray(eris.ovoo.transpose(1,0,2,3), order='C')
 
@@ -56,11 +61,13 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.INFO):
     t2T = lib.transpose(t2T, out=t2).reshape(nvir,nvir,nocc,nocc)
 
     # The rest 20% memory for cache b
-    bufsize = (max_memory*1e6/8/(nocc*nmo) - nocc**3*100) * .8
+    max_memory = max(2000, mycc.max_memory - lib.current_memory()[0])
+    bufsize = max(1, (max_memory*1e6/8-nocc**3*100)*.8/(nocc*nmo))
     def tril_prange(start, stop, step):
         cum_costs = numpy.arange(stop+1)**2
         tasks = balance_partition(cum_costs, step, start, stop)
         return tasks
+    log.debug('max_memory %d MB', max_memory)
 
     def contract(a0, a1, b0, b1, cache):
         cache_row_a, cache_col_a, cache_row_b, cache_col_b = cache
@@ -81,27 +88,26 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.INFO):
 
     et = 0
     handler = None
-    cache_col_a = cache_col_b = numpy.zeros((0,))
     for a0, a1, na in reversed(tril_prange(0, nvir, bufsize)):
         if handler is not None:
             et += handler.get()
-        # DO NOT prefetch here to reserve more memory to cache a
+        # DO NOT prefetch here to reserve more memory for cache_a
         cache_row_a = numpy.asarray(eris_vvop[a0:a1,:a1])
-        if a0 > 0:
-            cache_col_a = numpy.asarray(eris_vvop[:a0,a0:a1])
+        cache_col_a = numpy.asarray(eris_vvop[:a0,a0:a1])
         handler = lib.background_thread(contract, a0, a1, a0, a1,
                                         (cache_row_a,cache_col_a,
                                          cache_row_a,cache_col_a))
+        cpu1 = log.timer_debug1('contract %d:%d'%(a0,a1), *cpu1)
 
         for b0, b1, nb in tril_prange(0, a0, bufsize/10):
             cache_row_b = numpy.asarray(eris_vvop[b0:b1,:b1])
-            if b0 > 0:
-                cache_col_b = numpy.asarray(eris_vvop[:b0,b0:b1])
+            cache_col_b = numpy.asarray(eris_vvop[:b0,b0:b1])
             if handler is not None:
                 et += handler.get()
             handler = lib.background_thread(contract, a0, a1, b0, b1,
                                             (cache_row_a,cache_col_a,
                                              cache_row_b,cache_col_b))
+            cpu1 = log.timer_debug1('contract %d:%d,%d:%d'%(a0,a1,b0,b1), *cpu1)
             cache_row_b = cache_col_b = None
         cache_row_a = cache_col_a = None
     if handler is not None:
@@ -110,7 +116,10 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.INFO):
     t2[:] = ftmp['t2']
     ftmp.close()
     _tmpfile = None
-    return et*2
+    et *= 2
+    log.info('CCSD(T) correction = %.15g', et)
+    log.timer('CCSD(T)', *cpu0)
+    return et
 
 def permute_contract(z, w):
     z0, z1, z2, z3, z4, z5 = z
@@ -132,9 +141,9 @@ if __name__ == '__main__':
     numpy.random.seed(12)
     nocc, nvir = 5, 12
     eris = lambda :None
-    eris.ovvv = numpy.random.random((nocc*nvir,nvir*(nvir+1)//2)) * .1
+    eris.ovvv = numpy.random.random((nocc,nvir,nvir*(nvir+1)//2)) * .1
     eris.ovoo = numpy.random.random((nocc,nvir,nocc,nocc)) * .1
-    eris.ovov = numpy.random.random((nocc*nvir,nocc*nvir)) * .1
+    eris.ovov = numpy.random.random((nocc,nvir,nocc,nvir)) * .1
     t1 = numpy.random.random((nocc,nvir)) * .1
     t2 = numpy.random.random((nocc,nocc,nvir,nvir)) * .1
     t2 = t2 + t2.transpose(1,0,3,2)
@@ -157,10 +166,6 @@ if __name__ == '__main__':
     mcc = cc.CCSD(rhf)
     mcc.conv_tol = 1e-14
     mcc.ccsd()
-    print(mcc.ecc)
 
-    e3b = ccsd_t_o0.kernel2(mcc, mcc.ao2mo())
-    print(e3b, mcc.ecc+e3b)
     e3a = kernel(mcc, mcc.ao2mo())
-    print(e3a, mcc.ecc+e3a)
-
+    print(e3a - -0.0033300722698513989)

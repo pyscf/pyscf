@@ -627,7 +627,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                     a = i + ao_loc[ish]
                     eri = load(eri_pool, ish, i)
                     contract_(outbuf, tau, eri, a)
-                time0 = logger.timer_debug1(self, 'vvvv %d'%ish, *time0)
+                time0 = logger.timer_debug1(self, 'AO-vvvv %d'%ish, *time0)
             eribuf = loadbuf = eri_pool = eri = None
 
             mo = numpy.asarray(self.mo_coeff, order='F')
