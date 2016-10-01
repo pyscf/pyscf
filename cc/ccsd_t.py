@@ -54,7 +54,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
         eris_vvop[j0:j1] = vvopbuf
         cpu1 = log.timer_debug1('transpose %d:%d'%(j0,j1), *cpu1)
     vvopbuf = tmp = ovvbuf = buf = None
-    eris_vooo = numpy.asarray(eris.ovoo.transpose(1,0,2,3), order='C')
+    eris_vooo = numpy.asarray(eris.ovoo).transpose(1,0,2,3).copy('C')
 
     t1T = t1.T.copy()
     t2T = t2.transpose(1,0,2,3).copy().reshape(nocc**2,-1)
