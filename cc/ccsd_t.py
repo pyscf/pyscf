@@ -20,7 +20,7 @@ CCSD(T)
 # t3 as ijkabc
 
 # JCP, 94, 442.  Error in Eq (1), should be [ia] >= [jb] >= [kc]
-def kernel(mycc, eris, t1=None, t2=None, verbose=logger.INFO):
+def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -119,16 +119,6 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.INFO):
     et *= 2
     log.info('CCSD(T) correction = %.15g', et)
     log.timer('CCSD(T)', *cpu0)
-    return et
-
-def permute_contract(z, w):
-    z0, z1, z2, z3, z4, z5 = z
-    et = numpy.einsum('ijk,ijk', z[0], w)
-    et+= numpy.einsum('ikj,ijk', z[1], w)
-    et+= numpy.einsum('jik,ijk', z[2], w)
-    et+= numpy.einsum('jki,ijk', z[3], w)
-    et+= numpy.einsum('kij,ijk', z[4], w)
-    et+= numpy.einsum('kji,ijk', z[5], w)
     return et
 
 

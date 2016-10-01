@@ -16,21 +16,21 @@ CCSD(T)
 # t3 as ijkabc
 
 # JCP, 94, 442.  Error in Eq (1), should be [ia] >= [jb] >= [kc]
-def kernel(cc, eris, t1=None, t2=None, verbose=logger.INFO):
+def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
-        log = logger.Logger(cc.stdout, verbose)
+        log = logger.Logger(mycc.stdout, verbose)
 
-    if t1 is None: t1 = cc.t1
-    if t2 is None: t2 = cc.t2
+    if t1 is None: t1 = mycc.t1
+    if t2 is None: t2 = mycc.t2
 
     t1T = t1.T
     t2T = t2.transpose(2,3,0,1)
 
     nocc, nvir = t1.shape
     nmo = nocc + nvir
-    e_occ, e_vir = cc._scf.mo_energy[:nocc], cc._scf.mo_energy[nocc:]
+    e_occ, e_vir = mycc._scf.mo_energy[:nocc], mycc._scf.mo_energy[nocc:]
     eijk = lib.direct_sum('i,j,k->ijk', e_occ, e_occ, e_occ)
 
     eris_ovvv = lib.unpack_tril(eris.ovvv.reshape(nocc*nvir,-1))
@@ -114,7 +114,9 @@ def kernel(cc, eris, t1=None, t2=None, verbose=logger.INFO):
                 et+= numpy.einsum('jki,ijk', wbac, zcba)
                 et+= numpy.einsum('kij,ijk', wacb, zcba)
                 et+= numpy.einsum('kji,ijk', wabc, zcba)
-    return et*2
+    et *= 2
+    log.info('CCSD(T) correction = %.15g', et)
+    return et
 
 def r3(w):
     return (4 * w + w.transpose(1,2,0) + w.transpose(2,0,1)
@@ -131,7 +133,7 @@ if __name__ == '__main__':
     numpy.random.seed(12)
     nocc, nvir = 5, 12
     eris = lambda :None
-    eris.ovvv = numpy.random.random((nocc*nvir,nvir*(nvir+1)//2)) * .1
+    eris.ovvv = numpy.random.random((nocc,nvir,nvir*(nvir+1)//2)) * .1
     eris.ovoo = numpy.random.random((nocc,nvir,nocc,nocc)) * .1
     eris.ovov = numpy.random.random((nocc,nvir,nocc,nvir)) * .1
     t1 = numpy.random.random((nocc,nvir)) * .1
