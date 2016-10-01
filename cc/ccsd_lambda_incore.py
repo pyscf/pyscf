@@ -46,7 +46,7 @@ def kernel(mycc, eris, t1=None, t2=None, l1=None, l2=None,
         l1new = l2new = None
         if mycc.diis:
             l1, l2 = mycc.diis(l1, l2, istep, normt, 0, adiis)
-        log.info('istep = %d  norm(lambda1,lambda2) = %.6g', istep, normt)
+        log.info('cycle = %d  norm(lambda1,lambda2) = %.6g', istep+1, normt)
         cput0 = log.timer('CCSD iter', *cput0)
         if normt < tol:
             conv = True

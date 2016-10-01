@@ -69,6 +69,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
         return tasks
     log.debug('max_memory %d MB', max_memory)
 
+    cpu2 = list(cpu1)
     def contract(a0, a1, b0, b1, cache):
         cache_row_a, cache_col_a, cache_row_b, cache_col_b = cache
         drv = _ccsd.libcc.CCsd_t_contract
@@ -84,6 +85,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
                  cache_col_a.ctypes.data_as(ctypes.c_void_p),
                  cache_row_b.ctypes.data_as(ctypes.c_void_p),
                  cache_col_b.ctypes.data_as(ctypes.c_void_p))
+        cpu2[:] = log.timer_debug1('contract %d:%d,%d:%d'%(a0,a1,b0,b1), *cpu2)
         return et
 
     et = 0
@@ -97,7 +99,6 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
         handler = lib.background_thread(contract, a0, a1, a0, a1,
                                         (cache_row_a,cache_col_a,
                                          cache_row_a,cache_col_a))
-        cpu1 = log.timer_debug1('contract %d:%d'%(a0,a1), *cpu1)
 
         for b0, b1, nb in tril_prange(0, a0, bufsize/10):
             cache_row_b = numpy.asarray(eris_vvop[b0:b1,:b1])
@@ -107,7 +108,6 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
             handler = lib.background_thread(contract, a0, a1, b0, b1,
                                             (cache_row_a,cache_col_a,
                                              cache_row_b,cache_col_b))
-            cpu1 = log.timer_debug1('contract %d:%d,%d:%d'%(a0,a1,b0,b1), *cpu1)
             cache_row_b = cache_col_b = None
         cache_row_a = cache_col_a = None
     if handler is not None:

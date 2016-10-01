@@ -51,8 +51,8 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
         if cc.diis:
             t1, t2 = cc.diis(t1, t2, istep, normt, eccsd-eold, adiis)
         eold, eccsd = eccsd, energy(cc, t1, t2, eris)
-        log.info('istep = %d  E(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
-                 istep, eccsd, eccsd - eold, normt)
+        log.info('cycle = %d  E(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
+                 istep+1, eccsd, eccsd - eold, normt)
         cput1 = log.timer('CCSD iter', *cput1)
         if abs(eccsd-eold) < tol and normt < tolnormt:
             conv = True

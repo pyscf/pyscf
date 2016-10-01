@@ -52,8 +52,8 @@ def kernel(mycc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
         if mycc.diis:
             t1, t2 = mycc.diis(t1, t2, istep, normt, eccsd-eold, adiis)
         eold, eccsd = eccsd, energy(mycc, t1, t2, eris)
-        log.info('istep = %d  E(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
-                 istep, eccsd, eccsd - eold, normt)
+        log.info('cycle = %d  E(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
+                 istep+1, eccsd, eccsd - eold, normt)
         cput1 = log.timer('CCSD iter', *cput1)
         if abs(eccsd-eold) < tol and normt < tolnormt:
             conv = True
@@ -581,11 +581,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                                         tau.reshape(-1,nvir*nvir), eri.reshape(-1,nvir),
                                         t2new_tril.reshape(-1,nvir*nvir), 1, 1,
                                         a*nvir, 0, 0)
-        def async_do(handler, fn, *args):
-            if handler is not None:
-                handler.join()
-            handler = lib.background_thread(fn, *args)
-            return handler
 
         if self.direct:   # AO-direct CCSD
             mol = self.mol
@@ -608,7 +603,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             outbuf[:] = 0
             ao_loc = mol.ao_loc_nr()
             max_memory = max(2000, self.max_memory - lib.current_memory()[0])
-            dmax = max(1, int(max_memory*.75e6/8/nao_pair))
+            dmax = max(1, int(max_memory*.95e6/8/(nao_pair+2*nao)))
             sh_ranges = ao2mo.outcore.balance_partition(ao_loc**2, dmax)
             dmax = max(x[2] for x in sh_ranges)
             eribuf = numpy.empty((dmax,nao_pair))
@@ -770,6 +765,13 @@ class _ERIS:
             self.oovv = self.feri1.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8')
             self.ovov = self.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8')
             self.ovvv = self.feri1.create_dataset('ovvv', (nocc,nvir,nvpair), 'f8')
+            def save_frac(i, ppp):
+                self.oooo[i] = ppp[:nocc,:nocc,:nocc]
+                self.ooov[i] = ppp[:nocc,:nocc,nocc:]
+                self.ovoo[i] = ppp[nocc:,:nocc,:nocc]
+                self.oovv[i] = ppp[:nocc,nocc:,nocc:]
+                self.ovov[i] = ppp[nocc:,:nocc,nocc:]
+                self.ovvv[i] = lib.pack_tril(_cp(ppp[nocc:,nocc:,nocc:]))
 
             if not cc.direct:
                 max_memory = max(2000,cc.max_memory-lib.current_memory()[0])
@@ -786,15 +788,15 @@ class _ERIS:
                 cput1 = log.timer_debug1('transforming oppp', *cput1)
                 eri1 = feri['eri_mo']
                 outbuf = numpy.empty((nmo,nmo,nmo))
+                outbuf1 = numpy.empty((nmo,nmo,nmo))
+                handler = None
                 for i in range(nocc):
                     buf = lib.unpack_tril(_cp(eri1[i*nmo:(i+1)*nmo]), out=outbuf)
-                    self.oooo[i] = buf[:nocc,:nocc,:nocc]
-                    self.ooov[i] = buf[:nocc,:nocc,nocc:]
-                    self.ovoo[i] = buf[nocc:,:nocc,:nocc]
-                    self.oovv[i] = buf[:nocc,nocc:,nocc:]
-                    self.ovov[i] = buf[nocc:,:nocc,nocc:]
-                    self.ovvv[i] = lib.pack_tril(_cp(buf[nocc:,nocc:,nocc:]))
+                    outbuf, outbuf1 = outbuf1, outbuf
+                    handler = async_do(handler, save_frac, i, buf)
                     cput1 = log.timer_debug1('sorting %d'%i, *cput1)
+                if handler is not None:
+                    handler.join()
                 for key in feri.keys():
                     del(feri[key])
         log.timer('CCSD integral transformation', *cput0)
@@ -893,6 +895,12 @@ def prange(start, end, step):
 
 def _cp(a):
     return numpy.array(a, copy=False, order='C')
+
+def async_do(handler, fn, *args):
+    if handler is not None:
+        handler.join()
+    handler = lib.background_thread(fn, *args)
+    return handler
 
 
 if __name__ == '__main__':
