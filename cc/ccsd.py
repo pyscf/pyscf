@@ -590,6 +590,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if self.direct:   # AO-direct CCSD
             mol = self.mol
             nao, nmo = self.mo_coeff.shape
+            nao_pair = nao * (nao+1) // 2
             aos = numpy.asarray(self.mo_coeff[:,nocc:].T, order='F')
             outbuf = numpy.empty((nocc*(nocc+1)//2,nao,nao))
             tau = numpy.ndarray((nocc*(nocc+1)//2,nvir,nvir), buffer=outbuf)
@@ -606,8 +607,11 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                                      'CVHFsetnr_direct_scf')
             outbuf[:] = 0
             ao_loc = mol.ao_loc_nr()
-            dmax = max(ao_loc[1:] - ao_loc[:-1])
-            eribuf = numpy.empty((dmax*nao,nao**2))
+            max_memory = max(2000, self.max_memory - lib.current_memory()[0])
+            dmax = max(1, int(max_memory*.75e6/8/nao_pair))
+            sh_ranges = ao2mo.outcore.balance_partition(ao_loc**2, dmax)
+            dmax = max(x[2] for x in sh_ranges)
+            eribuf = numpy.empty((dmax,nao_pair))
             loadbuf = numpy.empty((nao,nao,nao))
             cload = _ccsd.libcc.CCload_eri_s4
             def load(eri_pool, ish, idx):
@@ -617,17 +621,18 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                       ctypes.c_int(ish), ctypes.c_int(idx), ctypes.c_int(nao))
                 return loadbuf[:ao_loc[ish+1]]
 
-            for ish in range(mol.nbas):
-                i0, i1 = ao_loc[ish:ish+2]
-                jobs = (ish*(ish+1)//2, (ish+1)*(ish+2)//2, i1*(i1+1)//2-i0*(i0+1)//2)
+            for ish0, ish1, _ in sh_ranges:
+                i0, i1 = ao_loc[ish0], ao_loc[ish1]
+                jobs = (ish0*(ish0+1)//2, ish1*(ish1+1)//2, i1*(i1+1)//2-i0*(i0+1)//2)
                 eri_pool = _ao2mo.nr_e1fill('cint2e_sph', jobs, mol._atm, mol._bas, mol._env,
                                             's4', 1, ao2mopt, out=eribuf)[0]
-                di = ao_loc[ish+1] - ao_loc[ish]
-                for i in range(di):
-                    a = i + ao_loc[ish]
-                    eri = load(eri_pool, ish, i)
-                    contract_(outbuf, tau, eri, a)
-                time0 = logger.timer_debug1(self, 'AO-vvvv %d'%ish, *time0)
+                for ish in range(ish0, ish1):
+                    p0, p1 = ao_loc[ish], ao_loc[ish+1]
+                    off = p0*(p0+1)//2 - i0*(i0+1)//2
+                    for a in range(p0, p1):
+                        eri = load(eri_pool[off:], ish, a-p0)
+                        contract_(outbuf, tau, eri, a)
+                time0 = logger.timer_debug1(self, 'AO-vvvv %d:%d'%(ish0,ish1), *time0)
             eribuf = loadbuf = eri_pool = eri = None
 
             mo = numpy.asarray(self.mo_coeff, order='F')
