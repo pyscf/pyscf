@@ -15,10 +15,8 @@ import pyscf.cc.ccsd_slow as ccsd
 
 # t2,l2 as ijab
 
-# default max_memory = 2000 MB
 def kernel(cc, eris=None, t1=None, t2=None, l1=None, l2=None,
-           max_cycle=50, tol=1e-8,
-           max_memory=2000, verbose=logger.INFO):
+           max_cycle=50, tol=1e-8, verbose=logger.INFO):
     cput0 = (time.clock(), time.time())
     if isinstance(verbose, logger.Logger):
         log = verbose

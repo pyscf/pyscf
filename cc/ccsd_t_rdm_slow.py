@@ -16,7 +16,7 @@ from pyscf.cc import _ccsd
 from pyscf.cc import ccsd_t_slow as ccsd_t
 from pyscf.cc import ccsd_rdm
 
-def gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, max_memory=2000):
+def gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None):
     doo, dov, dvo, dvv = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2)
 
     if eris is None: eris = ccsd._ERIS(mycc)
@@ -43,7 +43,7 @@ def gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, max_memory=2000):
     return doo, dov, dvo, dvv
 
 # gamma2 intermediates in Chemist's notation
-def gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None, max_memory=2000):
+def gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None):
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
             ccsd_rdm.gamma2_intermediates(mycc, t1, t2, l1, l2)
     if eris is None: eris = ccsd._ERIS(mycc)

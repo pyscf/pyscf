@@ -12,8 +12,6 @@ from pyscf.lib import logger
 
 raise RuntimeError('TODO: test davidson')
 
-# default max_memory 2000 MB
-
 def davidson(a, x0, precond=None, tol=1e-14, max_cycle=50, maxspace=12,
              nroots=1, hermi=1, lindep=1e-16, max_memory=2000,
              dot=numpy.dot, verbose=logger.WARN):

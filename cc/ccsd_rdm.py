@@ -19,7 +19,7 @@ from pyscf.cc import _ccsd
 # JCP, 95, 2639
 #
 
-def gamma1_intermediates(mycc, t1, t2, l1, l2, max_memory=2000):
+def gamma1_intermediates(mycc, t1, t2, l1, l2):
     nocc, nvir = t1.shape
     doo =-numpy.einsum('ja,ia->ij', l1, t1)
     dvv = numpy.einsum('ia,ib->ab', l1, t1)
@@ -34,7 +34,7 @@ def gamma1_intermediates(mycc, t1, t2, l1, l2, max_memory=2000):
     #:dov -= numpy.einsum('ma,ie,me->ia', t1, t1, l1)
     #:dov -= numpy.einsum('mi,ma->ia', xt1, t1)
     #:dov -= numpy.einsum('ie,ae->ia', t1, xt2)
-    max_memory = max_memory - lib.current_memory()[0]
+    max_memory = mycc.max_memory - lib.current_memory()[0]
     unit = nocc*nvir**2
     blksize = max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit))
     for p0, p1 in prange(0, nocc, blksize):
@@ -49,10 +49,10 @@ def gamma1_intermediates(mycc, t1, t2, l1, l2, max_memory=2000):
     return doo, dov, dvo, dvv
 
 # gamma2 intermediates in Chemist's notation
-def gamma2_intermediates(mycc, t1, t2, l1, l2, max_memory=2000):
+def gamma2_intermediates(mycc, t1, t2, l1, l2):
     tmpfile = tempfile.NamedTemporaryFile()
     with h5py.File(tmpfile.name, 'w') as f:
-        gamma2_outcore(mycc, t1, t2, l1, l2, f, max_memory)
+        gamma2_outcore(mycc, t1, t2, l1, l2, f)
         nocc, nvir = f['dovov'].shape[:2]
         nov = nocc * nvir
         dovvv = numpy.empty((nocc,nvir,nvir,nvir))
@@ -65,7 +65,7 @@ def gamma2_intermediates(mycc, t1, t2, l1, l2, max_memory=2000):
             del(f[key])
         return d2
 
-def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, max_memory=2000):
+def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
     nov = nocc * nvir
@@ -85,9 +85,9 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, max_memory=2000):
     moo = numpy.empty((nocc,nocc))
     mvv = numpy.zeros((nvir,nvir))
 
-    max_memory1 = max_memory - lib.current_memory()[0]
+    max_memory = mycc.max_memory - lib.current_memory()[0]
     unit = nocc*nvir**2 * 5
-    blksize = max(ccsd.BLKMIN, int(max_memory1*.95e6/8/unit))
+    blksize = max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit))
     log.debug1('rdm intermediates pass 1: block size = %d, nocc = %d in %d blocks',
                blksize, nocc, int((nocc+blksize-1)/blksize))
     time1 = time.clock(), time.time()
@@ -130,9 +130,9 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, max_memory=2000):
     mij = numpy.einsum('kc,jc->jk', l1, t1) + moo*.5
 
     gooov = numpy.einsum('ji,ka->jkia', moo*-.5, t1)
-    max_memory1 = max_memory - lib.current_memory()[0]
+    max_memory = mycc.max_memory - lib.current_memory()[0]
     unit = nocc**3 + nocc**2*nvir + nocc*nvir**2*6
-    blksize = max(ccsd.BLKMIN, int(max_memory1*.95e6/8/unit))
+    blksize = max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit))
     log.debug1('rdm intermediates pass 2: block size = %d, nocc = %d in %d blocks',
                blksize, nocc, int((nocc+blksize-1)/blksize))
     for p0, p1 in prange(0, nocc, blksize):
@@ -225,9 +225,9 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, max_memory=2000):
     h5fobj['dooov'][:] = gooov.transpose(0,2,1,3)*2 - gooov.transpose(1,2,0,3)
     gooov = None
 
-    max_memory1 = max_memory - lib.current_memory()[0]
+    max_memory = mycc.max_memory - lib.current_memory()[0]
     unit = max(nocc**2*nvir*2+nocc*nvir**2*2, nvir**3*2+nocc*nvir**2)
-    blksize = max(ccsd.BLKMIN, int(max_memory1*.95e6/8/unit))
+    blksize = max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit))
     iobuflen = int(256e6/8/blksize)
     log.debug1('rdm intermediates pass 3: block size = %d, nvir = %d in %d blocks',
                blksize, nocc, int((nvir+blksize-1)/blksize))

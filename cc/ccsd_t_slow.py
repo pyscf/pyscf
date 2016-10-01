@@ -17,10 +17,8 @@ CCSD(T)
 
 # t3 as ijkabc
 
-# default max_memory = 2000 MB
-
 # JCP, 94, 442.  Error in Eq (1), should be [ia] >= [jb] >= [kc]
-def kernel(cc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
+def kernel(cc, eris, t1=None, t2=None, verbose=logger.INFO):
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -71,8 +69,8 @@ def kernel(cc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     et = numpy.einsum('ijkabc,ijkabc,abc', wvd, r, wt) * 2
     return et
 
-def energy(cc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
-    return kernel(cc, eris, t1, t2, max_memory, verbose)
+def energy(cc, eris, t1=None, t2=None, verbose=logger.INFO):
+    return kernel(cc, eris, t1, t2, verbose)
 
 def p6_(t):
     #return (t + t.transpose(1,2,0,4,5,3) +

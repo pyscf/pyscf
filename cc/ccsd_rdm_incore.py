@@ -18,7 +18,7 @@ from pyscf.cc import _ccsd
 # JCP, 95, 2639
 #
 
-def gamma1_intermediates(mycc, t1, t2, l1, l2, max_memory=2000):
+def gamma1_intermediates(mycc, t1, t2, l1, l2):
     nocc, nvir = t1.shape
     doo =-numpy.einsum('ja,ia->ij', l1, t1)
     dvv = numpy.einsum('ia,ib->ab', l1, t1)
@@ -208,7 +208,7 @@ def gamma2_incore(mycc, t1, t2, l1, l2):
     tau = _ccsd.make_tau(t2, t1, t1)
     theta = make_theta(tau)
     tau = None
-    l2tmp = _ccsd.pack_tril(l2.reshape(-1,nvir,nvir))
+    l2tmp = lib.pack_tril(l2.reshape(-1,nvir,nvir))
     gtmp = lib.dot(l2tmp.T, theta.reshape(nocc**2,-1), .5).reshape(-1,nvir,nvir)
     l2tmp = theta = None
     nvir_pair = nvir * (nvir+1) //2

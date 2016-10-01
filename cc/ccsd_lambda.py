@@ -17,9 +17,8 @@ from pyscf.cc import _ccsd
 
 # t2,l2 as ijab
 
-# default max_memory = 2000 MB
 def kernel(mycc, eris, t1=None, t2=None, l1=None, l2=None,
-           max_cycle=50, tol=1e-8, max_memory=2000, verbose=logger.INFO):
+           max_cycle=50, tol=1e-8, verbose=logger.INFO):
     cput0 = (time.clock(), time.time())
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -32,7 +31,7 @@ def kernel(mycc, eris, t1=None, t2=None, l1=None, l2=None,
     if l2 is None: l2 = t2
 
     nocc, nvir = t1.shape
-    saved = make_intermediates(mycc, t1, t2, eris, max_memory)
+    saved = make_intermediates(mycc, t1, t2, eris)
 
     if mycc.diis:
         adiis = lib.diis.DIIS(mycc, mycc.diis_file)
@@ -43,8 +42,7 @@ def kernel(mycc, eris, t1=None, t2=None, l1=None, l2=None,
 
     conv = False
     for istep in range(max_cycle):
-        l1new, l2new = update_amps(mycc, t1, t2, l1, l2, eris, saved,
-                                   max_memory)
+        l1new, l2new = update_amps(mycc, t1, t2, l1, l2, eris, saved)
         normt = numpy.linalg.norm(l1new-l1) + numpy.linalg.norm(l2new-l2)
         l1, l2 = l1new, l2new
         l1new = l2new = None
@@ -59,7 +57,7 @@ def kernel(mycc, eris, t1=None, t2=None, l1=None, l2=None,
 
 
 # l2, t2 as ijab
-def make_intermediates(mycc, t1, t2, eris, max_memory=2000):
+def make_intermediates(mycc, t1, t2, eris):
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
     nov = nocc * nvir
@@ -94,16 +92,16 @@ def make_intermediates(mycc, t1, t2, eris, max_memory=2000):
     fswap = h5py.File(_tmpfile.name)
 
     time1 = time.clock(), time.time()
-    max_memory = max_memory - lib.current_memory()[0]
     unit = max(nocc*nvir**2*4 + nvir**3*2,
                nvir**3*3 + nocc*nvir**2,
                nocc*nvir**2*6 + nocc**2*nvir + nocc**3 + nocc**2*nvir)
+    max_memory = mycc.max_memory - lib.current_memory()[0]
     blksize = max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit))
     log.debug1('ccsd lambda make_intermediates: block size = %d, nocc = %d in %d blocks',
                blksize, nocc, int((nocc+blksize-1)//blksize))
     for istep, (p0, p1) in enumerate(prange(0, nocc, blksize)):
         eris_ovvv = _cp(eris.ovvv[p0:p1])
-        eris_ovvv = _ccsd.unpack_tril(eris_ovvv.reshape((p1-p0)*nvir,-1))
+        eris_ovvv = lib.unpack_tril(eris_ovvv.reshape((p1-p0)*nvir,-1))
         eris_ovvv = eris_ovvv.reshape(p1-p0,nvir,nvir,nvir)
         w1 += numpy.einsum('jcba,jc->ba', eris_ovvv, t1[p0:p1]*2)
         w1 -= numpy.einsum('jabc,jc->ba', eris_ovvv, t1[p0:p1])
@@ -303,7 +301,7 @@ def make_intermediates(mycc, t1, t2, eris, max_memory=2000):
 
         for j0, j1 in prange(0, nocc, blksize):
             eris_ovvv = _cp(eris.ovvv[j0:j1])
-            eris_ovvv = _ccsd.unpack_tril(eris_ovvv.reshape((j1-j0)*nvir,-1))
+            eris_ovvv = lib.unpack_tril(eris_ovvv.reshape((j1-j0)*nvir,-1))
             eris_ovvv = eris_ovvv.reshape(j1-j0,nvir,nvir,nvir)
             #:wovvv += numpy.einsum('jabd,kjdc->kabc', eris_ovvv, t2[p0:p1,j0:j1]) * -1.5
             tmp_ovvv = numpy.empty((j1-j0,nvir,nvir,nvir))
@@ -347,7 +345,7 @@ def make_intermediates(mycc, t1, t2, eris, max_memory=2000):
 
 
 # update L1, L2
-def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None, max_memory=2000):
+def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None):
     if saved is None:
         saved = make_intermediates(mycc, t1, t2, eris)
     time1 = time0 = time.clock(), time.time()
@@ -373,7 +371,7 @@ def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None, max_memory=2000):
          - numpy.einsum('bd,jd->jb', mba, t1)
          - numpy.einsum('lj,lb->jb', mij, t1))
 
-    tmp = mycc.add_wvvVV(numpy.zeros_like(l1), l2, eris, max_memory)
+    tmp = mycc.add_wvvVV(numpy.zeros_like(l1), l2, eris)
     l2new = numpy.empty((nocc,nocc,nvir,nvir))
     ij = 0
     for i in range(nocc):
@@ -419,14 +417,14 @@ def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None, max_memory=2000):
     l2t1 = lib.dot(l2.reshape(-1,nvir), t1.T).reshape(nocc,nocc,nvir,nocc)
     l2t1 = _cp(l2t1.transpose(1,0,3,2))
 
-    max_memory = max_memory - lib.current_memory()[0]
+    max_memory = mycc.max_memory - lib.current_memory()[0]
     unit = max(nvir**3*2+nocc*nvir**2, nocc*nvir**2*5)
     blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit)))
     log.debug1('block size = %d, nocc = %d is divided into %d blocks',
                blksize, nocc, int((nocc+blksize-1)/blksize))
     for p0, p1 in prange(0, nocc, blksize):
         eris_ovvv = _cp(eris.ovvv[p0:p1])
-        eris_ovvv = _ccsd.unpack_tril(eris_ovvv.reshape((p1-p0)*nvir,-1))
+        eris_ovvv = lib.unpack_tril(eris_ovvv.reshape((p1-p0)*nvir,-1))
         eris_ovvv = eris_ovvv.reshape(p1-p0,nvir,nvir,nvir)
 
         l1new[p0:p1] += numpy.einsum('iabc,bc->ia', eris_ovvv, mba1) * 2

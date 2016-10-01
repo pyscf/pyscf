@@ -22,18 +22,17 @@ from pyscf.scf import cphf
 BLKSIZE = 192
 
 
-def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None,
-                     max_memory=2000):
+def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
     if eris is None:
 # Note eris are in Chemist's notation
         eris = ccsd._ERIS(mycc)
     if d1 is None:
-        d1 = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2, max_memory)
+        d1 = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2)
     doo, dov, dvo, dvv = d1
     if d2 is None:
         _d2tmpfile = tempfile.NamedTemporaryFile()
         fd2intermediate = h5py.File(_d2tmpfile.name, 'w')
-        ccsd_rdm.gamma2_outcore(mycc, t1, t2, l1, l2, fd2intermediate, max_memory)
+        ccsd_rdm.gamma2_outcore(mycc, t1, t2, l1, l2, fd2intermediate)
         dovov = fd2intermediate['dovov']
         dvvvv = fd2intermediate['dvvvv']
         doooo = fd2intermediate['doooo']
@@ -92,9 +91,9 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None,
     fswap['dovvo'] = d_ovov.transpose(0,1,3,2)
     d_ovov = None
 
-    max_memory1 = max_memory - lib.current_memory()[0]
+    max_memory = mycc.max_memory - lib.current_memory()[0]
     unit = max(nvir**3*2.5, nvir**3*2+nocc*nvir**2)
-    blksize = max(ccsd.BLKMIN, int(max_memory1*1e6/8/unit))
+    blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/unit))
     iobuflen = int(256e6/8/(blksize*nvir))
     log.debug1('IX_intermediates pass 1: block size = %d, nocc = %d in %d blocks',
                blksize, nocc, int((nocc+blksize-1)/blksize))
@@ -169,7 +168,7 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None,
         Ivo += lib.dot(d_ovvv.reshape(-1,nvir).T, eris_ovvo.reshape(-1,nocc))
         eris_ovvo = eris_ovov = None
 
-        eris_ovvv = _ccsd.unpack_tril(eris_ovx.reshape(-1,nvir_pair))
+        eris_ovvv = lib.unpack_tril(eris_ovx.reshape(-1,nvir_pair))
         eris_ovx = None
         eris_ovvv = eris_ovvv.reshape(p1-p0,nvir,nvir,nvir)
         #:Ivv += numpy.einsum('icdb,icda->ab', d_ovvv, eris_ovvv)
@@ -184,9 +183,9 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None,
 
         d_ovvv = d_ovvo = eris_ovvv = None
 
-    max_memory1 = max_memory - lib.current_memory()[0]
+    max_memory = mycc.max_memory - lib.current_memory()[0]
     unit = nocc*nvir**2 + nvir**3*2.5
-    blksize = max(ccsd.BLKMIN, int(max_memory1*1e6/8/unit))
+    blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/unit))
     log.debug1('IX_intermediates pass 2: block size = %d, nocc = %d in %d blocks',
                blksize, nocc, int((nocc+blksize-1)/blksize))
     for p0, p1 in prange(0, nvir, blksize):
@@ -195,8 +194,8 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None,
         d_vvvv = _cp(dvvvv[off0:off1]) * 4
         for i in range(p0, p1):
             d_vvvv[i*(i+1)//2+i-off0] *= .5
-        d_vvvv = _ccsd.unpack_tril(d_vvvv)
-        eris_vvvv = _ccsd.unpack_tril(_cp(eris.vvvv[off0:off1]))
+        d_vvvv = lib.unpack_tril(d_vvvv)
+        eris_vvvv = lib.unpack_tril(_cp(eris.vvvv[off0:off1]))
         #:Ivv += numpy.einsum('decb,deca->ab', d_vvvv, eris_vvvv) * 2
         #:Xvo += numpy.einsum('dbic,dbca->ai', d_vvov, eris_vvvv)
         lib.dot(eris_vvvv.reshape(-1,nvir).T, d_vvvv.reshape(-1,nvir), 2, Ivv, 1)
@@ -236,18 +235,17 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None,
     return Ioo, Ivv, Ivo, Xvo
 
 
-def response_dm1(mycc, t1, t2, l1, l2, eris=None, IX=None, max_memory=2000):
+def response_dm1(mycc, t1, t2, l1, l2, eris=None, IX=None):
     if eris is None:
 # Note eris are in Chemist's notation
         eris = ccsd._ERIS(mycc)
     if IX is None:
-        Ioo, Ivv, Ivo, Xvo = IX_intermediates(mycc, t1, t2, l1, l2, eris,
-                                              max_memory=2000)
+        Ioo, Ivv, Ivo, Xvo = IX_intermediates(mycc, t1, t2, l1, l2, eris)
     else:
         Ioo, Ivv, Ivo, Xvo = IX
     nocc, nvir = t1.shape
     nmo = nocc + nvir
-    max_memory = max_memory - lib.current_memory()[0]
+    max_memory = mycc.max_memory - lib.current_memory()[0]
     blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/(nocc*nvir**2)))
     def fvind(x):
         x = x.reshape(Xvo.shape)
@@ -281,7 +279,7 @@ def response_dm1(mycc, t1, t2, l1, l2, eris=None, IX=None, max_memory=2000):
 # Non-canonical formula refers to JCP, 95, 2639
 #
 def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
-           mf_grad=None, max_memory=2000, verbose=logger.INFO):
+           mf_grad=None, verbose=logger.INFO):
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
     if l1 is None: l1 = mycc.l1
@@ -306,17 +304,17 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     nao_pair = nao * (nao+1) // 2
 
     log.debug('Build ccsd rdm1 intermediates')
-    d1 = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2, max_memory)
+    d1 = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2)
     doo, dov, dvo, dvv = d1
     time1 = log.timer('rdm1 intermediates', *time0)
 
     log.debug('Build ccsd rdm2 intermediates')
     _d2tmpfile = tempfile.NamedTemporaryFile()
     fd2intermediate = h5py.File(_d2tmpfile.name, 'w')
-    d2 = ccsd_rdm.gamma2_outcore(mycc, t1, t2, l1, l2, fd2intermediate, max_memory)
+    d2 = ccsd_rdm.gamma2_outcore(mycc, t1, t2, l1, l2, fd2intermediate)
     time1 = log.timer('rdm2 intermediates', *time1)
     log.debug('Build ccsd response_rdm1')
-    Ioo, Ivv, Ivo, Xvo = IX_intermediates(mycc, t1, t2, l1, l2, eris, d1, d2, max_memory)
+    Ioo, Ivv, Ivo, Xvo = IX_intermediates(mycc, t1, t2, l1, l2, eris, d1, d2)
     time1 = log.timer('response_rdm1 intermediates', *time1)
 
     dm1mo = response_dm1(mycc, t1, t2, l1, l2, eris, (Ioo, Ivv, Ivo, Xvo))
@@ -338,7 +336,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     dm1_with_hf = dm1mo.copy()
     for i in range(nocc):  # HF 2pdm ~ 4(ij)(kl)-2(il)(jk), diagonal+1 because of 4*dm2
         dm1_with_hf[i,i] += 1
-    _rdm2_mo2ao(mycc, d2, dm1_with_hf, mo_coeff, fdm2, max_memory)
+    _rdm2_mo2ao(mycc, d2, dm1_with_hf, mo_coeff, fdm2)
     time1 = log.timer('MO->AO transformation', *time1)
     for key in fd2intermediate.keys():
         del(fd2intermediate[key])
@@ -364,8 +362,8 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     if atmlst is None:
         atmlst = range(mol.natm)
     offsetdic = mol.offset_nr_by_atom()
-    max_memory1 = max_memory - lib.current_memory()[0]
-    blksize = max(1, int(max_memory1*1e6/8/(nao**3*2.5)))
+    max_memory = mycc.max_memory - lib.current_memory()[0]
+    blksize = max(1, int(max_memory*1e6/8/(nao**3*2.5)))
     ioblksize = fdm2['dm2/0'].shape[-1]
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
@@ -423,7 +421,7 @@ def shell_prange(mol, start, stop, blksize):
             nao = now
     yield (ib0, stop, nao)
 
-def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave=None, max_memory=2000):
+def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave=None):
     log = logger.Logger(mycc.stdout, mycc.verbose)
     if fsave is None:
         _dm2file = tempfile.NamedTemporaryFile()
@@ -438,7 +436,7 @@ def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave=None, max_memory=2000):
     nao_pair = nao * (nao+1) // 2
     nvir_pair = nvir * (nvir+1) //2
     mo_coeff = numpy.asarray(mo_coeff, order='F')
-    def _trans(vin, i0, icount, j0, jcount, out=None):
+    def _trans(vin, orbs_slice, out=None):
         nrow = vin.shape[0]
         if out is None:
             out = numpy.empty((nrow,nao_pair))
@@ -449,16 +447,14 @@ def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave=None, max_memory=2000):
              vin.ctypes.data_as(ctypes.c_void_p),
              mo_coeff.ctypes.data_as(ctypes.c_void_p),
              ctypes.c_int(nrow), ctypes.c_int(nao),
-             ctypes.c_int(i0), ctypes.c_int(icount),
-             ctypes.c_int(j0), ctypes.c_int(jcount),
-             pao_loc, ctypes.c_int(0))
+             (ctypes.c_int*4)(*orbs_slice), pao_loc, ctypes.c_int(0))
         return out
 
 # transform dm2_ij to get lower triangular (dm2+dm2.transpose(0,1,3,2))
     _tmpfile = tempfile.NamedTemporaryFile()
     fswap = h5py.File(_tmpfile.name)
-    max_memory1 = max_memory - lib.current_memory()[0]
-    blksize = max(1, int(max_memory1*1e6/8/(nmo*nao_pair+nmo**3+nvir**3)))
+    max_memory = mycc.max_memory - lib.current_memory()[0]
+    blksize = max(1, int(max_memory*1e6/8/(nmo*nao_pair+nmo**3+nvir**3)))
     iobuflen = int(256e6/8/(blksize*nmo))
     log.debug1('_rdm2_mo2ao pass 1: blksize = %d, iobuflen = %d', blksize, iobuflen)
     fswap.create_group('o')  # for h5py old version
@@ -482,7 +478,7 @@ def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave=None, max_memory=2000):
             buf1[i-p0,i,:,:] += dm1
             buf1[i-p0,:,:,i] -= dm1 * .5
         buf2 = pool2[:p1-p0].reshape(-1,nao_pair)
-        _trans(buf1.reshape(-1,nmo**2), 0, nmo, 0, nmo, buf2)
+        _trans(buf1.reshape(-1,nmo**2), (0,nmo,0,nmo), buf2)
         ao2mo.outcore._transpose_to_h5g(fswap, 'o/%d'%istep, buf2, iobuflen)
     pool1 = pool2 = bufd_ovvv = None
     time1 = log.timer_debug1('_rdm2_mo2ao pass 1', *time1)
@@ -492,15 +488,15 @@ def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave=None, max_memory=2000):
     pool2 = numpy.empty((blksize*nvir,nvir,nvir))
     for istep, (p0, p1) in enumerate(prange(0, nvir_pair, blksize*nvir)):
         buf1 = _cp(dvvvv[p0:p1])
-        buf2 = _ccsd.unpack_tril(buf1, out=pool2[:p1-p0])
-        buf1 = _trans(buf2, nocc, nvir, nocc, nvir, out=pool1[:p1-p0])
+        buf2 = lib.unpack_tril(buf1, out=pool2[:p1-p0])
+        buf1 = _trans(buf2, (nocc,nmo,nocc,nmo), out=pool1[:p1-p0])
         ao2mo.outcore._transpose_to_h5g(fswap, 'v/%d'%istep, buf1, iobuflen)
     pool1 = pool2 = None
     time1 = log.timer_debug1('_rdm2_mo2ao pass 2', *time1)
 
 # transform dm2_kl then dm2 + dm2.transpose(2,3,0,1)
-    max_memory1 = max_memory - lib.current_memory()[0]
-    blksize = max(nao, int(max_memory1*1e6/8/(nao_pair+nmo**2)))
+    max_memory = mycc.max_memory - lib.current_memory()[0]
+    blksize = max(nao, int(max_memory*1e6/8/(nao_pair+nmo**2)))
     iobuflen = int(256e6/8/blksize)
     log.debug1('_rdm2_mo2ao pass 3: blksize = %d, iobuflen = %d', blksize, iobuflen)
     gsave = fsave.create_group('dm2')
@@ -517,10 +513,10 @@ def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave=None, max_memory=2000):
         ao2mo.outcore._load_from_h5g(fswap['o'], p0, p1,
                                      buf1[:,:nocc].reshape(p1-p0,-1))
         buf2 = ao2mo.outcore._load_from_h5g(fswap['v'], p0, p1, pool2[:p1-p0])
-        buf3 = _ccsd.unpack_tril(buf2, out=pool3[:p1-p0])
+        buf3 = lib.unpack_tril(buf2, out=pool3[:p1-p0])
         buf1[:,nocc:,nocc:] = buf3
         buf1[:,nocc:,:nocc] = 0
-        buf2 = _trans(buf1, 0, nmo, 0, nmo, out=pool4[:p1-p0])
+        buf2 = _trans(buf1, (0,nmo,0,nmo), out=pool4[:p1-p0])
         ic = 0
         idx = diagidx[diagidx<p1]
         if p0 > 0:

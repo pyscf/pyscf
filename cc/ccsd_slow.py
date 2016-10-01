@@ -7,7 +7,7 @@ from pyscf.lib import logger
 
 
 def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
-           max_memory=2000, verbose=logger.INFO):
+           verbose=logger.INFO):
     if verbose is None:
         verbose = cc.verbose
     if isinstance(verbose, logger.Logger):
@@ -229,9 +229,7 @@ class CCSD(lib.StreamObject):
         eris = self.ao2mo()
         self._conv, self.ecc, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
-                       tol=self.conv_tol,
-                       tolnormt=self.conv_tol_normt,
-                       max_memory=self.max_memory-lib.current_memory()[0],
+                       tol=self.conv_tol, tolnormt=self.conv_tol_normt,
                        verbose=self.verbose)
         return self.ecc, self.t1, self.t2
 

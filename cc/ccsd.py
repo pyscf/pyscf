@@ -19,40 +19,39 @@ BLKMIN = 4
 
 # t2 as ijab
 
-# default max_memory = 2000 MB
-def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
-           max_memory=2000, verbose=logger.INFO):
+def kernel(mycc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
+           verbose=logger.INFO):
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
-        log = logger.Logger(cc.stdout, verbose)
+        log = logger.Logger(mycc.stdout, verbose)
 
     if t1 is None and t2 is None:
-        t1, t2 = cc.init_amps(eris)[1:]
+        t1, t2 = mycc.init_amps(eris)[1:]
     elif t1 is None:
         t1 = numpy.zeros((nocc,nvir))
     elif t2 is None:
-        t2 = cc.init_amps(eris)[2]
+        t2 = mycc.init_amps(eris)[2]
 
     cput1 = cput0 = (time.clock(), time.time())
     nocc, nvir = t1.shape
     eold = 0
     eccsd = 0
-    if cc.diis:
-        adiis = lib.diis.DIIS(cc, cc.diis_file)
-        adiis.space = cc.diis_space
+    if mycc.diis:
+        adiis = lib.diis.DIIS(mycc, mycc.diis_file)
+        adiis.space = mycc.diis_space
     else:
         adiis = lambda t1,t2,*args: (t1,t2)
 
     conv = False
     for istep in range(max_cycle):
-        t1new, t2new = cc.update_amps(t1, t2, eris, max_memory)
+        t1new, t2new = mycc.update_amps(t1, t2, eris)
         normt = numpy.linalg.norm(t1new-t1) + numpy.linalg.norm(t2new-t2)
         t1, t2 = t1new, t2new
         t1new = t2new = None
-        if cc.diis:
-            t1, t2 = cc.diis(t1, t2, istep, normt, eccsd-eold, adiis)
-        eold, eccsd = eccsd, energy(cc, t1, t2, eris)
+        if mycc.diis:
+            t1, t2 = mycc.diis(t1, t2, istep, normt, eccsd-eold, adiis)
+        eold, eccsd = eccsd, energy(mycc, t1, t2, eris)
         log.info('istep = %d  E(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
                  istep, eccsd, eccsd - eold, normt)
         cput1 = log.timer('CCSD iter', *cput1)
@@ -63,9 +62,9 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     return conv, eccsd, t1, t2
 
 
-def update_amps(cc, t1, t2, eris, max_memory=2000):
+def update_amps(mycc, t1, t2, eris):
     time0 = time.clock(), time.time()
-    log = logger.Logger(cc.stdout, cc.verbose)
+    log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
     nov = nocc*nvir
     fock = eris.fock
@@ -95,7 +94,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     time1 = log.timer_debug1('woooo', *time0)
 
     unit = _memory_usage_inloop(nocc, nvir)*1e6/8
-    max_memory = max_memory - lib.current_memory()[0]
+    max_memory = mycc.max_memory - lib.current_memory()[0]
     blksize = max(BLKMIN, int(max_memory*.95e6/8/unit))
     log.debug1('block size = %d, nocc = %d is divided into %d blocks',
                blksize, nocc, int((nocc+blksize-1)//blksize))
@@ -326,7 +325,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
             ij += 1
     t2new = None
     time1 = log.timer_debug1('t2 tril', *time1)
-    cc.add_wvvVV_(t1, t2, eris, t2new_tril, max_memory)
+    mycc.add_wvvVV_(t1, t2, eris, t2new_tril)
     time1 = log.timer_debug1('vvvv', *time1)
 
     mo_e = fock.diagonal()
@@ -361,7 +360,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
 
     return t1new, t2new
 
-def energy(cc, t1, t2, eris):
+def energy(mycc, t1, t2, eris):
     nocc, nvir = t1.shape
     fock = eris.fock
     e = numpy.einsum('ia,ia', fock[:nocc,nocc:], t1) * 2
@@ -494,9 +493,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if eris is None: eris = self.ao2mo(mo_coeff)
         self._conv, self.ecc, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
-                       tol=self.conv_tol,
-                       tolnormt=self.conv_tol_normt,
-                       max_memory=self.max_memory, verbose=self.verbose)
+                       tol=self.conv_tol, tolnormt=self.conv_tol_normt,
+                       verbose=self.verbose)
         self.e_corr = self.ecc
         if self._conv:
             logger.info(self, 'CCSD converged')
@@ -519,7 +517,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                 ccsd_lambda.kernel(self, eris, t1, t2, l1, l2,
                                    max_cycle=self.max_cycle,
                                    tol=self.conv_tol_normt,
-                                   max_memory=self.max_memory,
                                    verbose=self.verbose)
         return conv, self.l1, self.l2
 
@@ -565,7 +562,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         #return eris
         return _ERIS(self, mo_coeff)
 
-    def add_wvvVV_(self, t1, t2, eris, t2new_tril, max_memory=2000):
+    def add_wvvVV_(self, t1, t2, eris, t2new_tril):
         time0 = time.clock(), time.time()
         nocc, nvir = t1.shape
         #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
@@ -660,13 +657,13 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                 time0 = logger.timer_debug1(self, 'vvvv %d'%a, *time0)
             handler.join()
         return t2new_tril
-    def add_wvvVV(self, t1, t2, eris, max_memory=2000):
+    def add_wvvVV(self, t1, t2, eris):
         nocc, nvir = t1.shape
         t2new_tril = numpy.zeros((nocc*(nocc+1)//2,nvir,nvir))
-        return self.add_wvvVV_(t1, t2, eris, t2new_tril, max_memory)
+        return self.add_wvvVV_(t1, t2, eris, t2new_tril)
 
-    def update_amps(self, t1, t2, eris, max_memory=2000):
-        return update_amps(self, t1, t2, eris, max_memory)
+    def update_amps(self, t1, t2, eris):
+        return update_amps(self, t1, t2, eris)
 
     def diis(self, t1, t2, istep, normt, de, adiis):
         return self.diis_(t1, t2, istep, normt, de, adiis)

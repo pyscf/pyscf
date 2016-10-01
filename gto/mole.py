@@ -1479,10 +1479,10 @@ class Mole(pyscf.lib.StreamObject):
         self.ecp = {}
 ##################################################
 # don't modify the following private variables, they are not input options
-        self._atm = []
-        self._bas = []
+        self._atm = numpy.zeros((0,6))
+        self._bas = numpy.zeros((0,8))
         self._env = [0] * PTR_ENV_START
-        self._ecpbas = []
+        self._ecpbas = numpy.zeros((0,8))
 
         self.stdout = sys.stdout
         self.groupname = 'C1'

@@ -76,7 +76,7 @@ def make_intermediates(mycc, t1, t2, eris):
     w4 = fov.copy()
 
     eris_ovvv = _cp(eris.ovvv)
-    eris_ovvv = _ccsd.unpack_tril(eris_ovvv.reshape(nov,-1))
+    eris_ovvv = lib.unpack_tril(eris_ovvv.reshape(nov,-1))
     eris_ovvv = eris_ovvv.reshape(nocc,nvir,nvir,nvir)
 
     wovvv = numpy.empty((nocc,nvir,nvir,nvir))
@@ -348,7 +348,7 @@ def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None):
     l2t1 = numpy.einsum('ijcd,kc->ijkd', l2, t1)
 
     eris_ovvv = _cp(eris.ovvv)
-    eris_ovvv = _ccsd.unpack_tril(eris_ovvv.reshape(nov,-1))
+    eris_ovvv = lib.unpack_tril(eris_ovvv.reshape(nov,-1))
     eris_ovvv = eris_ovvv.reshape(nocc,nvir,nvir,nvir)
 
     l1new += numpy.einsum('iabc,bc->ia', eris_ovvv, mba1) * 2

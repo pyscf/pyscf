@@ -18,10 +18,8 @@ from pyscf.cc import ccsd_lambda_incore as ccsd_lambda
 
 # t2,l2 as ijab
 
-# default max_memory = 2000 MB
 def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
-           max_cycle=50, tol=1e-8,
-           max_memory=2000, verbose=logger.INFO):
+           max_cycle=50, tol=1e-8, verbose=logger.INFO):
     cput0 = (time.clock(), time.time())
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -129,6 +127,11 @@ if __name__ == '__main__':
     mcc = ccsd.CCSD(rhf)
     mcc.conv_tol = 1e-12
     ecc, t1, t2 = mcc.kernel()
-    conv, l1, l2 = kernel(mcc, eris, t1, t2, tol=1e-8)
-    print(numpy.linalg.norm(l1)-0.0132626841292)
-    print(numpy.linalg.norm(l2)-0.212575609057)
+    #conv, l1, l2 = mcc.solve_lambda()
+    #print(numpy.linalg.norm(l1)-0.0132626841292)
+    #print(numpy.linalg.norm(l2)-0.212575609057)
+
+    conv, l1, l2 = kernel(mcc, mcc.ao2mo(), t1, t2, tol=1e-8)
+    print(numpy.linalg.norm(l1)-0.013575484203926739)
+    print(numpy.linalg.norm(l2)-0.22029981372536928)
+

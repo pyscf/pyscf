@@ -18,7 +18,7 @@ einsum = pbclib.einsum
 # This is unrestricted (U)CCSD, i.e. spin-orbital form.
 
 def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
-           max_memory=2000, verbose=logger.INFO):
+           verbose=logger.INFO):
     """Exactly the same as pyscf.cc.ccsd.kernel, which calls a
     *local* energy() function."""
     if isinstance(verbose, logger.Logger):
@@ -47,7 +47,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
 
     conv = False
     for istep in range(max_cycle):
-        t1new, t2new = cc.update_amps(t1, t2, eris, max_memory)
+        t1new, t2new = cc.update_amps(t1, t2, eris)
         normt = numpy.linalg.norm(t1new-t1) + numpy.linalg.norm(t2new-t2)
         t1, t2 = t1new, t2new
         t1new = t2new = None
@@ -63,7 +63,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     log.timer('CCSD', *cput0)
     return conv, eccsd, t1, t2
 
-def update_amps(cc, t1, t2, eris, max_memory=2000):
+def update_amps(cc, t1, t2, eris):
     time0 = time.clock(), time.time()
     log = logger.Logger(cc.stdout, cc.verbose)
     nocc, nvir = t1.shape
@@ -178,9 +178,8 @@ class UCCSD(pyscf.cc.rccsd.RCCSD):
         self.dump_flags()
         self._conv, self.ecc, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
-                       tol=self.conv_tol,
-                       tolnormt=self.conv_tol_normt,
-                       max_memory=self.max_memory, verbose=self.verbose)
+                       tol=self.conv_tol, tolnormt=self.conv_tol_normt,
+                       verbose=self.verbose)
         if self._conv:
             logger.info(self, 'CCSD converged')
         else:
@@ -195,8 +194,8 @@ class UCCSD(pyscf.cc.rccsd.RCCSD):
     def ao2mo(self, mo_coeff=None):
         return _ERIS(self, mo_coeff)
 
-    def update_amps(self, t1, t2, eris, max_memory=2000):
-        return update_amps(self, t1, t2, eris, max_memory)
+    def update_amps(self, t1, t2, eris):
+        return update_amps(self, t1, t2, eris)
 
     def nip(self):
         nocc = self.nocc()

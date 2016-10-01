@@ -200,7 +200,7 @@ def kernel(cc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None):
 
     if atmlst is None:
         atmlst = range(mol.natm)
-    offsetdic = aorange_by_atom(mol)
+        offsetdic = mol.offset_nr_by_atom()
     de = numpy.empty((mol.natm,3))
     for k,ia in enumerate(atmlst):
         p0, p1 = offsetdic[ia]
@@ -241,20 +241,6 @@ def kernel(cc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None):
                + numpy.einsum('xji,ij->x', s1[:,p0:p1], dme0[:,p0:p1]))
 
     return de
-
-
-def aorange_by_atom(mol):
-    aorange = []
-    p0 = p1 = 0
-    ia0 = 0
-    for ib in range(mol.nbas):
-        if ia0 != mol.bas_atom(ib):
-            aorange.append((p0,p1))
-            ia0 = mol.bas_atom(ib)
-            p0 = p1
-        p1 += (mol.bas_angular(ib)*2+1) * mol.bas_nctr(ib)
-    aorange.append((p0,p1))
-    return aorange
 
 
 if __name__ == '__main__':

@@ -18,7 +18,6 @@ BLKMIN = 4
 
 # t2 as ijab
 
-# default max_memory = 2000 MB
 def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
            verbose=logger.INFO):
     if isinstance(verbose, logger.Logger):
@@ -93,7 +92,7 @@ def update_amps(cc, t1, t2, eris):
     time1 = log.timer_debug1('woooo', *time0)
 
     eris_ovvv = _cp(eris.ovvv)
-    eris_ovvv = _ccsd.unpack_tril(eris_ovvv.reshape(nov,-1))
+    eris_ovvv = lib.unpack_tril(eris_ovvv.reshape(nov,-1))
     eris_ovvv = eris_ovvv.reshape(nocc,nvir,nvir,nvir)
 
     fvv += numpy.einsum('kc,kcba->ab', 2*t1, eris_ovvv)
@@ -529,7 +528,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         p0 = 0
         outbuf = numpy.empty((nvir,nvir,nvir))
         for a in range(nvir):
-            buf = _ccsd.unpack_tril(eris.vvvv[p0:p0+a+1], out=outbuf[:a+1])
+            buf = lib.unpack_tril(eris.vvvv[p0:p0+a+1], out=outbuf[:a+1])
             #: t2new_tril[i,:i+1, a] += numpy.einsum('xcd,cdb->xb', tau[:,:a+1], buf)
             lib.numpy_helper._dgemm('N', 'N', nocc*(nocc+1)//2, nvir, (a+1)*nvir,
                                     tau.reshape(-1,nvir*nvir), buf.reshape(-1,nvir),
@@ -622,7 +621,7 @@ class _ERIS:
             ij = 0
             outbuf = numpy.empty((nmo,nmo,nmo))
             for i in range(nocc):
-                buf = _ccsd.unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
+                buf = lib.unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
                 for j in range(i+1):
                     self.oooo[i,j] = self.oooo[j,i] = buf[j,:nocc,:nocc]
                     self.ooov[i,j] = self.ooov[j,i] = buf[j,:nocc,nocc:]
@@ -630,7 +629,7 @@ class _ERIS:
                     ij += 1
             ij1 = 0
             for i in range(nocc,nmo):
-                buf = _ccsd.unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
+                buf = lib.unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
                 self.ovoo[:,i-nocc] = buf[:nocc,:nocc,:nocc]
                 self.ovov[:,i-nocc] = buf[:nocc,:nocc,nocc:]
                 for j in range(nocc):
@@ -668,13 +667,13 @@ class _ERIS:
                 eri1 = feri['eri_mo']
                 outbuf = numpy.empty((nmo,nmo,nmo))
                 for i in range(nocc):
-                    buf = _ccsd.unpack_tril(_cp(eri1[i*nmo:(i+1)*nmo]), out=outbuf)
+                    buf = lib.unpack_tril(_cp(eri1[i*nmo:(i+1)*nmo]), out=outbuf)
                     self.oooo[i] = buf[:nocc,:nocc,:nocc]
                     self.ooov[i] = buf[:nocc,:nocc,nocc:]
                     self.ovoo[i] = buf[nocc:,:nocc,:nocc]
                     self.oovv[i] = buf[:nocc,nocc:,nocc:]
                     self.ovov[i] = buf[nocc:,:nocc,nocc:]
-                    self.ovvv[i] = _ccsd.pack_tril(_cp(buf[nocc:,nocc:,nocc:]))
+                    self.ovvv[i] = lib.pack_tril(_cp(buf[nocc:,nocc:,nocc:]))
                     cput1 = log.timer_debug1('sorting %d'%i, *cput1)
                 for key in feri.keys():
                     del(feri[key])
