@@ -29,6 +29,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     if t1 is None and t2 is None:
         t1, t2 = mycc.init_amps(eris)[1:]
     elif t1 is None:
+        nocc, nvir = t2.shape[0], t2.shape[2]
         t1 = numpy.zeros((nocc,nvir))
     elif t2 is None:
         t2 = mycc.init_amps(eris)[2]
@@ -108,20 +109,20 @@ def update_amps(mycc, t1, t2, eris):
         fvv += numpy.einsum('kc,kcba->ab', 2*t1[p0:p1], eris_ovvv)
         fvv += numpy.einsum('kc,kbca->ab',  -t1[p0:p1], eris_ovvv)
 
-    #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
-    #: tmp = numpy.einsum('ijcd,kdcb->ijbk', tau, eris.ovvv)
-    #: t2new += numpy.einsum('ka,ijbk->ijba', -t1, tmp)
-        #: eris_vvov = eris_ovvv.transpose(1,2,0,3).copy()
-        eris_vvov = _cp(eris_ovvv.transpose(2,1,0,3).reshape(nvir*nvir,-1))
-        tmp = numpy.empty((nocc,nocc,p1-p0,nvir))
-        taubuf = numpy.empty((blksize,nocc,nvir,nvir))
-        for j0, j1 in prange(0, nocc, blksize):
-            tau = make_tau(t2[j0:j1], t1[j0:j1], t1, 1, out=taubuf[:j1-j0])
-            lib.dot(tau.reshape(-1,nvir*nvir), eris_vvov, 1,
-                    tmp[j0:j1].reshape((j1-j0)*nocc,-1), 0)
-        tmp = _cp(tmp.transpose(0,1,3,2).reshape(-1,p1-p0))
-        lib.dot(tmp, t1[p0:p1], -1, t2new.reshape(-1,nvir), 1)
-        tau = tmp = eris_vvov = None
+        #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
+        #: tmp = numpy.einsum('ijcd,kdcb->ijbk', tau, eris.ovvv)
+        #: t2new += numpy.einsum('ka,ijbk->ijba', -t1, tmp)
+        if not mycc.direct:
+            eris_vvov = _cp(eris_ovvv.transpose(2,1,0,3).reshape(nvir*nvir,-1))
+            tmp = numpy.empty((nocc,nocc,p1-p0,nvir))
+            taubuf = numpy.empty((blksize,nocc,nvir,nvir))
+            for j0, j1 in prange(0, nocc, blksize):
+                tau = make_tau(t2[j0:j1], t1[j0:j1], t1, 1, out=taubuf[:j1-j0])
+                lib.dot(tau.reshape(-1,nvir*nvir), eris_vvov, 1,
+                        tmp[j0:j1].reshape((j1-j0)*nocc,-1), 0)
+            tmp = _cp(tmp.transpose(0,1,3,2).reshape(-1,p1-p0))
+            lib.dot(tmp, t1[p0:p1], -1, t2new.reshape(-1,nvir), 1)
+        tau = eris_vvov = tmp = taubuf = None
         #==== mem usage blksize*(nvir**3*2+nvir*nocc**2*2)
 
     #: wOVov += numpy.einsum('iabc,jc->ijab', eris.ovvv, t1)
@@ -273,7 +274,7 @@ def update_amps(mycc, t1, t2, eris):
             for i in range(j1-j0):
                 tau[i] -= t2[j0+i] * .5
             #: woVoV[j0:j1] += numpy.einsum('jkca,ickb->jiab', tau, eris_ovov)
-            lib.dot(_cp(tau.transpose(0,3,1,2).reshape(-1,nov)),
+            lib.dot(lib.transpose(tau.reshape(-1,nov,nvir), axes=(0,2,1)).reshape(-1,nov),
                     eris_oVOv.reshape(-1,nov).T,
                     1, woVoV[j0:j1].reshape((j1-j0)*nvir,-1), 1)
             #==== mem usage blksize*(nocc*nvir**2*6)
@@ -569,7 +570,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         #: t2new += numpy.einsum('ijcd,acdb->ijab', tau, vvvv)
         def contract_(t2new_tril, tau, eri, a):
             nvir = tau.shape[-1]
-            #: t2new[i,:i+1, a] += numpy.einsum('xcd,cdb->xb', tau[:,:a+1], buf)
+            #: t2new[i,:i+1, a] += numpy.einsum('xcd,cdb->xb', tau[:,:a+1], eri)
             lib.numpy_helper._dgemm('N', 'N', nocc*(nocc+1)//2, nvir, (a+1)*nvir,
                                     tau.reshape(-1,nvir*nvir), eri.reshape(-1,nvir),
                                     t2new_tril.reshape(-1,nvir*nvir), 1, 1,
@@ -631,8 +632,20 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             eribuf = loadbuf = eri_pool = eri = None
 
             mo = numpy.asarray(self.mo_coeff, order='F')
-            tau = _ao2mo.nr_e2(outbuf, mo, (nocc,nmo,nocc,nmo), 's1', 's1', out=tau)
-            t2new_tril += tau.reshape(-1,nvir,nvir)
+            tmp = _ao2mo.nr_e2(outbuf, mo, (nocc,nmo,nocc,nmo), 's1', 's1', out=tau)
+            t2new_tril += tmp.reshape(-1,nvir,nvir)
+
+            #: tmp = numpy.einsum('ijcd,ka,kdcb->ijba', tau, t1, eris.ovvv)
+            #: t2new -= tmp + tmp.transpose(1,0,3,2)
+            tmp = _ao2mo.nr_e2(outbuf, mo, (nocc,nmo,0,nocc), 's1', 's1', out=tau)
+            t2new_tril -= lib.dot(tmp.reshape(-1,nocc), t1).reshape(-1,nvir,nvir)
+            tmp = _ao2mo.nr_e2(outbuf, mo, (0,nocc,nocc,nmo), 's1', 's1', out=tau)
+            #: t2new_tril -= numpy.einsum('xkb,ka->xab', tmp.reshape(-1,nocc,nvir), t1)
+            tmp = lib.transpose(tmp.reshape(-1,nocc,nvir), axes=(0,2,1), out=outbuf)
+            tmp = lib.dot(tmp.reshape(-1,nocc), t1, 1,
+                          numpy.ndarray(t2new_tril.shape, buffer=tau), 0)
+            tmp = lib.transpose(tmp.reshape(-1,nvir,nvir), axes=(0,2,1), out=outbuf)
+            t2new_tril -= tmp.reshape(-1,nvir,nvir)
 
         else:
             #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
