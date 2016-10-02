@@ -12,7 +12,7 @@ set_target_properties(fci PROPERTIES
 target_link_libraries(fci ${BLAS_LIBRARIES})
 
 add_library(mcscf SHARED
-  nevpt_contract.c mc_eri.c)
+  nevpt_contract.c)
 
 set_target_properties(mcscf PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}

@@ -131,8 +131,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
                  buf.ctypes.data_as(ctypes.c_void_p),
                  mo.ctypes.data_as(ctypes.c_void_p),
                  ctypes.c_int(sh_range[2]), ctypes.c_int(nao),
-                 ctypes.c_int(0), ctypes.c_int(nao),
-                 ctypes.c_int(0), ctypes.c_int(ncore),
+                 (ctypes.c_int*4)(0, nao, 0, ncore),
                  ctypes.POINTER(ctypes.c_void_p)(), ctypes.c_int(0))
             p0 = 0
             for ij in range(sh_range[0], sh_range[1]):

@@ -949,7 +949,7 @@ def time_reversal_map(mol):
                         tao.append(  i + dj - m)
                         tao.append(-(i + dj - m - 1))
                     i += dj
-    return tao
+    return numpy.asarray(tao, dtype=numpy.int32)
 
 def energy_nuc(mol):
     '''Nuclear repulsion energy, (AU)

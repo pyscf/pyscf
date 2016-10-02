@@ -9,7 +9,7 @@ import ctypes
 from functools import reduce
 import numpy
 import scipy.linalg
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf.df import _ri
@@ -139,13 +139,13 @@ def get_jk(dfobj, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
         nset = len(dms)
     nao = dms[0].shape[0]
 
-    fmmm = _ri.libri.RIhalfmmm_nr_s2_bra
+    fmmm = _ao2mo.libao2mo.AO2MOmmm_bra_nr_s2
     fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
     ftrans = _ao2mo.libao2mo.AO2MOtranse2_nr_s2
 
     vj = numpy.zeros((nset,nao,nao))
     vk = numpy.zeros((nset,nao,nao))
-    null = pyscf.lib.c_null_ptr()
+    null = lib.c_null_ptr()
 
     #:vj = reduce(numpy.dot, (cderi.reshape(-1,nao*nao), dm.reshape(-1),
     #:                        cderi.reshape(-1,nao*nao))).reshape(nao,nao)
@@ -157,7 +157,7 @@ def get_jk(dfobj, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
         cneg = []
         for k, dm in enumerate(dms):
             if with_j:
-                dmtril.append(pyscf.lib.pack_tril(dm+dm.T))
+                dmtril.append(lib.pack_tril(dm+dm.T))
                 i = numpy.arange(nao)
                 dmtril[k][i*(i+1)//2+i] *= .5
 
@@ -179,7 +179,7 @@ def get_jk(dfobj, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
             for k in range(nset):
                 if with_j:
                     buf1 = reduce(numpy.dot, (eri1, dmtril[k], eri1))
-                    vj[k] += pyscf.lib.unpack_tril(buf1, hermi)
+                    vj[k] += lib.unpack_tril(buf1, hermi)
                 if with_k and cpos[k].shape[1] > 0:
                     buf1 = buf[:naux*cpos[k].shape[1]]
                     fdrv(ftrans, fmmm,
@@ -187,9 +187,9 @@ def get_jk(dfobj, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
                          eri1.ctypes.data_as(ctypes.c_void_p),
                          cpos[k].ctypes.data_as(ctypes.c_void_p),
                          ctypes.c_int(naux), ctypes.c_int(nao),
-                         ctypes.c_int(0), ctypes.c_int(cpos[k].shape[1]),
-                         ctypes.c_int(0), ctypes.c_int(0), null, ctypes.c_int(0))
-                    vk[k] += pyscf.lib.dot(buf1.T, buf1)
+                         (ctypes.c_int*4)(0, cpos[k].shape[1], 0, 0),
+                         null, ctypes.c_int(0))
+                    vk[k] += lib.dot(buf1.T, buf1)
                 if with_k and cneg[k].shape[1] > 0:
                     buf1 = buf[:naux*cneg[k].shape[1]]
                     fdrv(ftrans, fmmm,
@@ -197,17 +197,15 @@ def get_jk(dfobj, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
                          eri1.ctypes.data_as(ctypes.c_void_p),
                          cneg[k].ctypes.data_as(ctypes.c_void_p),
                          ctypes.c_int(naux), ctypes.c_int(nao),
-                         ctypes.c_int(0), ctypes.c_int(cneg[k].shape[1]),
-                         ctypes.c_int(0), ctypes.c_int(0), null, ctypes.c_int(0))
-                    vk[k] -= pyscf.lib.dot(buf1.T, buf1)
+                         (ctypes.c_int*4)(0, cneg[k].shape[1], 0, 0),
+                         null, ctypes.c_int(0))
+                    vk[k] -= lib.dot(buf1.T, buf1)
             t1 = log.timer_debug1('jk', *t1)
     else:
         #:vk = numpy.einsum('pij,jk->pki', cderi, dm)
         #:vk = numpy.einsum('pki,pkj->ij', cderi, vk)
-        fcopy = _ri.libri.RImmm_nr_s2_copy
-        rargs = (ctypes.c_int(nao),
-                 ctypes.c_int(0), ctypes.c_int(nao),
-                 ctypes.c_int(0), ctypes.c_int(0), null, ctypes.c_int(0))
+        rargs = (ctypes.c_int(nao), (ctypes.c_int*4)(0, nao, 0, 0),
+                 null, ctypes.c_int(0))
         dms = [numpy.asarray(dm, order='F') for dm in dms]
         buf = numpy.empty((2,dfobj.blockdim,nao,nao))
         for eri1 in dfobj.loop():
@@ -220,17 +218,12 @@ def get_jk(dfobj, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
                      dms[k].ctypes.data_as(ctypes.c_void_p),
                      ctypes.c_int(naux), *rargs)
                 rho = numpy.einsum('kii->k', buf1)
-                vj[k] += pyscf.lib.unpack_tril(numpy.dot(rho, eri1), 1)
+                vj[k] += lib.unpack_tril(numpy.dot(rho, eri1), 1)
 
                 if with_k:
-                    buf2 = buf[1,:naux]
-                    fdrv(ftrans, fcopy,
-                         buf2.ctypes.data_as(ctypes.c_void_p),
-                         eri1.ctypes.data_as(ctypes.c_void_p),
-                         dms[k].ctypes.data_as(ctypes.c_void_p),
-                         ctypes.c_int(naux), *rargs)
-                    vk[k] += pyscf.lib.dot(buf1.reshape(-1,nao).T,
-                                           buf2.reshape(-1,nao))
+                    buf2 = lib.unpack_tril(eri1, out=buf[1])
+                    vk[k] += lib.dot(buf1.reshape(-1,nao).T,
+                                     buf2.reshape(-1,nao))
             t1 = log.timer_debug1('jk', *t1)
 
     if len(dms) == 1:
@@ -244,8 +237,10 @@ def r_get_jk(dfobj, dms, hermi=1):
     '''Relativistic density fitting JK'''
     t0 = t1 = (time.clock(), time.time())
     mol = dfobj.mol
-    n2c = mol.nao_2c()
     c1 = .5 / mol.light_speed
+    tao = mol.tmap()
+    ao_loc = mol.ao_loc_2c()
+    n2c = ao_loc[-1]
 
     def fjk(dm):
         fmmm = _ri.libri.RIhalfmmm_r_s2_bra_noconj
@@ -254,9 +249,10 @@ def r_get_jk(dfobj, dms, hermi=1):
         vj = numpy.zeros_like(dm)
         vk = numpy.zeros_like(dm)
         fcopy = _ri.libri.RImmm_r_s2_transpose
-        rargs = (ctypes.c_int(n2c),
-                 ctypes.c_int(0), ctypes.c_int(n2c),
-                 ctypes.c_int(0), ctypes.c_int(0))
+        rargs = (ctypes.c_int(n2c), (ctypes.c_int*4)(0, n2c, 0, 0),
+                 tao.ctypes.data_as(ctypes.c_void_p),
+                 ao_loc.ctypes.data_as(ctypes.c_void_p),
+                 ctypes.c_int(mol.nbas))
         dmll = numpy.asarray(dm[:n2c,:n2c], order='C')
         dmls = numpy.asarray(dm[:n2c,n2c:], order='C') * c1
         dmsl = numpy.asarray(dm[n2c:,:n2c], order='C') * c1
@@ -295,8 +291,8 @@ def r_get_jk(dfobj, dms, hermi=1):
                  dmss.ctypes.data_as(ctypes.c_void_p),
                  ctypes.c_int(naux), *rargs) # buf == (P|SS)
             rho += numpy.einsum('kii->k', buf)
-            vj[:n2c,:n2c] += pyscf.lib.unpack_tril(numpy.dot(rho, erill), 1)
-            vj[n2c:,n2c:] += pyscf.lib.unpack_tril(numpy.dot(rho, eriss), 1) * c1**2
+            vj[:n2c,:n2c] += lib.unpack_tril(numpy.dot(rho, erill), 1)
+            vj[n2c:,n2c:] += lib.unpack_tril(numpy.dot(rho, eriss), 1) * c1**2
 
             fdrv(ftrans, fcopy,
                  buf1.ctypes.data_as(ctypes.c_void_p),

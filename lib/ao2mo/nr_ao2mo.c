@@ -331,6 +331,112 @@ int AO2MOmmm_nr_s2_igtj(double *vout, double *eri, double *buf,
         return 0;
 }
 
+/*
+ * transform bra, s1 to label AO symmetry
+ */
+int AO2MOmmm_bra_nr_s1(double *vout, double *vin, double *buf,
+                       struct _AO2MOEnvs *envs, int seekdim)
+{
+        switch (seekdim) {
+                case 1: return envs->bra_count * envs->nao;
+                case 2: return envs->nao * envs->nao;
+        }
+        const double D0 = 0;
+        const double D1 = 1;
+        const char TRANS_N = 'N';
+        int nao = envs->nao;
+        int i_start = envs->bra_start;
+        int i_count = envs->bra_count;
+        double *mo_coeff = envs->mo_coeff;
+
+        dgemm_(&TRANS_N, &TRANS_N, &nao, &i_count, &nao,
+               &D1, vin, &nao, mo_coeff+i_start*nao, &nao,
+               &D0, vout, &nao);
+        return 0;
+}
+
+/*
+ * transform ket, s1 to label AO symmetry
+ */
+int AO2MOmmm_ket_nr_s1(double *vout, double *vin, double *buf,
+                       struct _AO2MOEnvs *envs, int seekdim)
+{
+        switch (seekdim) {
+                case OUTPUTIJ: return envs->nao * envs->ket_count;
+                case INPUT_IJ: return envs->nao * envs->nao;
+        }
+        const double D0 = 0;
+        const double D1 = 1;
+        const char TRANS_T = 'T';
+        const char TRANS_N = 'N';
+        int nao = envs->nao;
+        int j_start = envs->ket_start;
+        int j_count = envs->ket_count;
+        double *mo_coeff = envs->mo_coeff;
+
+        dgemm_(&TRANS_T, &TRANS_N, &j_count, &nao, &nao,
+               &D1, mo_coeff+j_start*nao, &nao, vin, &nao,
+               &D0, vout, &j_count);
+        return 0;
+}
+
+/*
+ * transform bra, s2 to label AO symmetry
+ */
+int AO2MOmmm_bra_nr_s2(double *vout, double *vin, double *buf,
+                       struct _AO2MOEnvs *envs, int seekdim)
+{
+        switch (seekdim) {
+                case OUTPUTIJ: return envs->bra_count * envs->nao;
+                case INPUT_IJ: return envs->nao * (envs->nao+1) / 2;
+        }
+        const double D0 = 0;
+        const double D1 = 1;
+        const char SIDE_L = 'L';
+        const char UPLO_U = 'U';
+        int nao = envs->nao;
+        int i_start = envs->bra_start;
+        int i_count = envs->bra_count;
+        double *mo_coeff = envs->mo_coeff;
+
+        dsymm_(&SIDE_L, &UPLO_U, &nao, &i_count,
+               &D1, vin, &nao, mo_coeff+i_start*nao, &nao,
+               &D0, vout, &nao);
+        return 0;
+}
+
+/*
+ * transform ket, s2 to label AO symmetry
+ */
+int AO2MOmmm_ket_nr_s2(double *vout, double *vin, double *buf,
+                       struct _AO2MOEnvs *envs, int seekdim)
+{
+        switch (seekdim) {
+                case OUTPUTIJ: return envs->nao * envs->ket_count;
+                case INPUT_IJ: return envs->nao * (envs->nao+1) / 2;
+        }
+        const double D0 = 0;
+        const double D1 = 1;
+        const char SIDE_L = 'L';
+        const char UPLO_U = 'U';
+        int nao = envs->nao;
+        int j_start = envs->ket_start;
+        int j_count = envs->ket_count;
+        double *mo_coeff = envs->mo_coeff;
+        int i, j;
+
+        dsymm_(&SIDE_L, &UPLO_U, &nao, &j_count,
+               &D1, vin, &nao, mo_coeff+j_start*nao, &nao,
+               &D0, buf, &nao);
+        for (j = 0; j < nao; j++) {
+                for (i = 0; i < j_count; i++) {
+                        vout[i] = buf[i*nao+j];
+                }
+                vout += j_count;
+        }
+        return 0;
+}
+
 
 /*
  * s1, s2ij, s2kl, s4 here to label the AO symmetry

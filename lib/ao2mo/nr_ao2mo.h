@@ -40,3 +40,11 @@ void AO2MOnr_e2_drv(void (*ftrans)(), int (*fmmm)(),
                     double *vout, double *vin, double *mo_coeff,
                     int nij, int nao, int *orbs_slice, int *ao_loc, int nbas);
 
+int AO2MOmmm_bra_nr_s1(double *vout, double *vin, double *buf,
+                       struct _AO2MOEnvs *envs, int seekdim);
+int AO2MOmmm_ket_nr_s1(double *vout, double *vin, double *buf,
+                       struct _AO2MOEnvs *envs, int seekdim);
+int AO2MOmmm_bra_nr_s2(double *vout, double *vin, double *buf,
+                       struct _AO2MOEnvs *envs, int seekdim);
+int AO2MOmmm_ket_nr_s2(double *vout, double *vin, double *buf,
+                       struct _AO2MOEnvs *envs, int seekdim);

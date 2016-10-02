@@ -92,8 +92,7 @@ def density_fit(casscf, auxbasis=None, with_df=None):
                          eri1.ctypes.data_as(ctypes.c_void_p),
                          mo.ctypes.data_as(ctypes.c_void_p),
                          ctypes.c_int(naux), ctypes.c_int(nao),
-                         ctypes.c_int(0), ctypes.c_int(nmo),
-                         ctypes.c_int(0), ctypes.c_int(nmo),
+                         (ctypes.c_int*4)(0, nmo, 0, nmo),
                          ctypes.c_void_p(0), ctypes.c_int(0))
                     b0 += naux
                 eri = pyscf.lib.dot(buf.T, buf)
@@ -225,8 +224,7 @@ def approx_hessian(casscf, auxbasis=None, with_df=None):
                      eri1.ctypes.data_as(ctypes.c_void_p),
                      mo.ctypes.data_as(ctypes.c_void_p),
                      ctypes.c_int(naux), ctypes.c_int(nao),
-                     ctypes.c_int(0), ctypes.c_int(nmo),
-                     ctypes.c_int(0), ctypes.c_int(nmo),
+                     (ctypes.c_int*4)(0, nmo, 0, nmo),
                      ctypes.c_void_p(0), ctypes.c_int(0))
                 bufd = numpy.einsum('kii->ki', buf)
                 eris.j_pc += numpy.einsum('ki,kj->ij', bufd, bufd[:,:ncore])
@@ -288,8 +286,7 @@ class _ERIS(object):
                  eri1.ctypes.data_as(ctypes.c_void_p),
                  mo.ctypes.data_as(ctypes.c_void_p),
                  ctypes.c_int(naux), ctypes.c_int(nao),
-                 ctypes.c_int(0), ctypes.c_int(nmo),
-                 ctypes.c_int(0), ctypes.c_int(nmo),
+                 (ctypes.c_int*4)(0, nmo, 0, nmo),
                  ctypes.c_void_p(0), ctypes.c_int(0))
             fxpp_keys.append([str(k), b0, b0+naux])
             fxpp[str(k)] = bufpp.transpose(1,2,0)
