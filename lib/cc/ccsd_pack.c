@@ -3,7 +3,7 @@
  */
 
 #include <stdlib.h>
-#include <assert.h>
+#include <math.h>
 //#include <omp.h>
 #include "config.h"
 #include "np_helper/np_helper.h"
@@ -125,6 +125,62 @@ void CCprecontract(double *out, double *in, int count, int m, double diagfac)
                         n++;
                 }
         }
+}
+}
+
+/*
+ * if i1 == j1:
+ *     eri = unpack_tril(eri, axis=0)
+ * unpack_tril(eri).reshape(i1-i0,j1-j0,nao,nao).transpose(0,2,1,3)
+ */
+void CCload_eri(double *out, double *eri, int *orbs_slice, int nao)
+{
+        int i0 = orbs_slice[0];
+        int i1 = orbs_slice[1];
+        int j0 = orbs_slice[2];
+        int j1 = orbs_slice[3];
+        size_t ni = i1 - i0;
+        size_t nj = j1 - j0;
+        size_t nn = nj * nao;
+        size_t nao_pair = nao * (nao + 1) / 2;
+
+#pragma omp parallel default(none) \
+        shared(out, eri, i1, j1, ni, nj, nn, nao, nao_pair)
+{
+        int i, j, k, l, ij;
+        double *pout;
+        double *buf = malloc(sizeof(double) * nao*nao);
+        if (i1 > j1) {
+#pragma omp for schedule (static)
+                for (ij = 0; ij < ni*nj; ij++) {
+                        i = ij / nj;
+                        j = ij % nj;
+                        NPdunpack_tril(nao, eri+ij*nao_pair, buf, 1);
+                        pout = out + (i*nn+j)*nao;
+                        for (k = 0; k < nao; k++) {
+                        for (l = 0; l < nao; l++) {
+                                pout[k*nn+l] = buf[k*nao+l];
+                        } }
+                }
+        } else {
+#pragma omp for schedule (static)
+                for (ij = 0; ij < ni*(ni+1)/2; ij++) {
+                        i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
+                        j = ij - i*(i+1)/2;
+                        NPdunpack_tril(nao, eri+ij*nao_pair, buf, 1);
+                        pout = out + (i*nn+j)*nao;
+                        for (k = 0; k < nao; k++) {
+                        for (l = 0; l < nao; l++) {
+                                pout[k*nn+l] = buf[k*nao+l];
+                        } }
+                        pout = out + (j*nn+i)*nao;
+                        for (k = 0; k < nao; k++) {
+                        for (l = 0; l < nao; l++) {
+                                pout[k*nn+l] = buf[k*nao+l];
+                        } }
+                }
+        }
+        free(buf);
 }
 }
 

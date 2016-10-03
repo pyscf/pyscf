@@ -615,14 +615,20 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
             for ip, (ish0, ish1, ni) in enumerate(sh_ranges):
                 for jsh0, jsh1, nj in sh_ranges[:ip+1]:
-                    eri = mol.intor('cint2e_sph', aosym='s2kl', out=eribuf,
-                                    shls_slice=(ish0,ish1,jsh0,jsh1))
+                    if ish1 == jsh1:
+                        eri = mol.intor('cint2e_sph', aosym='s4', out=eribuf,
+                                        shls_slice=(ish0,ish1,jsh0,jsh1))
+                    else:
+                        eri = mol.intor('cint2e_sph', aosym='s2kl', out=eribuf,
+                                        shls_slice=(ish0,ish1,jsh0,jsh1))
                     i0, i1 = ao_loc[ish0], ao_loc[ish1]
                     j0, j1 = ao_loc[jsh0], ao_loc[jsh1]
-                    tmp = lib.unpack_tril(eri, out=loadbuf)
-                    eri = numpy.ndarray((i1-i0,nao,j1-j0,nao), buffer=eribuf)
-                    eri[:] = tmp.reshape(i1-i0,j1-j0,nao,nao).transpose(0,2,1,3)
-                    contract_(outbuf, tau, eri, i0, i1, j0, j1)
+                    tmp = numpy.ndarray((i1-i0,nao,j1-j0,nao), buffer=loadbuf)
+                    _ccsd.libcc.CCload_eri(tmp.ctypes.data_as(ctypes.c_void_p),
+                                           eri.ctypes.data_as(ctypes.c_void_p),
+                                           (ctypes.c_int*4)(i0, i1, j0, j1),
+                                           ctypes.c_int(nao))
+                    contract_(outbuf, tau, tmp, i0, i1, j0, j1)
                     time0 = logger.timer_debug1(self, 'AO-vvvv [%d:%d,%d:%d]' %
                                                 (ish0,ish1,jsh0,jsh1), *time0)
             eribuf = loadbuf = eri = tmp = None
