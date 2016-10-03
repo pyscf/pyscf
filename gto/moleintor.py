@@ -319,43 +319,42 @@ def getints2e(intor_name, atm, bas, env, shls_slice=None, comp=1,
     else:
         from pyscf.scf import _vhf
         if shls_slice is None:
-            shls_slice = (0, nbas, 0, nbas)
+            shls_slice = (0, nbas, 0, nbas, 0, nbas, 0, nbas)
+        elif len(shls_slice) == 4:
+            shls_slice = shls_slice + (0, nbas, 0, nbas)
         else:
-            assert(shls_slice[1] <= nbas and shls_slice[3] <= nbas)
-        bralst = numpy.arange(shls_slice[0], shls_slice[1], dtype=numpy.int32)
-        ketlst = numpy.arange(shls_slice[2], shls_slice[3], dtype=numpy.int32)
-        num_cgto_of = getattr(libcgto, cgto_in_shell)
-        naoi = sum([num_cgto_of(ctypes.c_int(i), c_bas) for i in bralst])
-        naoj = sum([num_cgto_of(ctypes.c_int(i), c_bas) for i in ketlst])
+            assert(shls_slice[1] <= nbas and shls_slice[3] <= nbas and
+                   shls_slice[5] <= nbas and shls_slice[7] <= nbas)
+        ao_loc = make_loc(bas, intor_name)
+        i0, i1, j0, j1, k0, k1, l0, l1 = shls_slice
+        naoi = ao_loc[i1] - ao_loc[i0]
+        naoj = ao_loc[j1] - ao_loc[j0]
+        naok = ao_loc[k1] - ao_loc[k0]
+        naol = ao_loc[l1] - ao_loc[l0]
         if aosym in ('s4', 's2ij'):
             nij = naoi * (naoi + 1) // 2
-            assert(numpy.alltrue(bralst == ketlst))
+            assert(numpy.all(ao_loc[i0:i1]-ao_loc[i0] == ao_loc[j0:j1]-ao_loc[j0]))
         else:
             nij = naoi * naoj
         if aosym in ('s4', 's2kl'):
-            nkl = nao * (nao + 1) // 2
+            nkl = naok * (naok + 1) // 2
+            assert(numpy.all(ao_loc[k0:k1]-ao_loc[k0] == ao_loc[l0:l1]-ao_loc[l0]))
         else:
-            nkl = nao * nao
+            nkl = naok * naol
         if comp == 1:
-            if out is None:
-                out = numpy.empty((nij,nkl))
-            else:
-                out = numpy.ndarray((nij,nkl), buffer=out)
+            out = numpy.ndarray((nij,nkl), buffer=out)
         else:
-            if out is None:
-                out = numpy.empty((comp,nij,nkl))
-            else:
-                out = numpy.ndarray((comp,nij,nkl), buffer=out)
+            out = numpy.ndarray((comp,nij,nkl), buffer=out)
 
         cintopt = _vhf.make_cintopt(atm, bas, env, intor_name)
         prescreen = pyscf.lib.c_null_ptr()
         drv = libcgto.GTOnr2e_fill_drv
-        drv(getattr(libcgto, intor_name), getattr(libcgto, cgto_in_shell),
+        drv(getattr(libcgto, intor_name),
             getattr(libcgto, 'GTOnr2e_fill_'+aosym), prescreen,
             out.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
-            bralst.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(bralst.size),
-            ketlst.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(ketlst.size),
-            cintopt, c_atm, ctypes.c_int(natm), c_bas, ctypes.c_int(nbas), c_env)
+            (ctypes.c_int*8)(*shls_slice),
+            ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
+            c_atm, ctypes.c_int(natm), c_bas, ctypes.c_int(nbas), c_env)
         cintopt = None
         return out
 

@@ -2348,7 +2348,7 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         double rca[3];
         double rcb[3];
         double rij[3];
-        double r2ca, r2cb, fac;
+        double fac;
         double *rc, *pifac, *pjfac, *pout;
         int has_value = 0;
 

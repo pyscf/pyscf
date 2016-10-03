@@ -566,22 +566,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def add_wvvVV_(self, t1, t2, eris, t2new_tril):
         time0 = time.clock(), time.time()
         nocc, nvir = t1.shape
-        #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
-        #: t2new += numpy.einsum('ijcd,acdb->ijab', tau, vvvv)
-        def contract_(t2new_tril, tau, eri, a):
-            nvir = tau.shape[-1]
-            #: t2new[i,:i+1, a] += numpy.einsum('xcd,cdb->xb', tau[:,:a+1], eri)
-            lib.numpy_helper._dgemm('N', 'N', nocc*(nocc+1)//2, nvir, (a+1)*nvir,
-                                    tau.reshape(-1,nvir*nvir), eri.reshape(-1,nvir),
-                                    t2new_tril.reshape(-1,nvir*nvir), 1, 1,
-                                    0, 0, a*nvir)
-
-            #: t2new[i,:i+1,:a] += numpy.einsum('xd,abd->xab', tau[:,a], eri[:a])
-            if a > 0:
-                lib.numpy_helper._dgemm('N', 'T', nocc*(nocc+1)//2, a*nvir, nvir,
-                                        tau.reshape(-1,nvir*nvir), eri.reshape(-1,nvir),
-                                        t2new_tril.reshape(-1,nvir*nvir), 1, 1,
-                                        a*nvir, 0, 0)
 
         if self.direct:   # AO-direct CCSD
             mol = self.mol
@@ -604,32 +588,44 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             outbuf[:] = 0
             ao_loc = mol.ao_loc_nr()
             max_memory = max(2000, self.max_memory - lib.current_memory()[0])
-            dmax = max(1, int(max_memory*.95e6/8/(nao_pair+2*nao)))
-            sh_ranges = ao2mo.outcore.balance_partition(ao_loc**2, dmax)
+            dmax = max(1, int(numpy.sqrt(max_memory*.95e6/8/nao**2/2)))
+            sh_ranges = ao2mo.outcore.balance_partition(ao_loc, dmax)
             dmax = max(x[2] for x in sh_ranges)
-            eribuf = numpy.empty((dmax,nao_pair))
-            loadbuf = numpy.empty((nao,nao,nao))
-            cload = _ccsd.libcc.CCload_eri_s4
-            def load(eri_pool, ish, idx):
-                cload(loadbuf.ctypes.data_as(ctypes.c_void_p),
-                      eri_pool.ctypes.data_as(ctypes.c_void_p),
-                      ao_loc.ctypes.data_as(ctypes.c_void_p),
-                      ctypes.c_int(ish), ctypes.c_int(idx), ctypes.c_int(nao))
-                return loadbuf[:ao_loc[ish+1]]
+            eribuf = numpy.empty((dmax,dmax,nao,nao))
+            loadbuf = numpy.empty((dmax,dmax,nao,nao))
 
-            for ish0, ish1, _ in sh_ranges:
-                i0, i1 = ao_loc[ish0], ao_loc[ish1]
-                jobs = (ish0*(ish0+1)//2, ish1*(ish1+1)//2, i1*(i1+1)//2-i0*(i0+1)//2)
-                eri_pool = _ao2mo.nr_e1fill('cint2e_sph', jobs, mol._atm, mol._bas, mol._env,
-                                            's4', 1, ao2mopt, out=eribuf)[0]
-                for ish in range(ish0, ish1):
-                    p0, p1 = ao_loc[ish], ao_loc[ish+1]
-                    off = p0*(p0+1)//2 - i0*(i0+1)//2
-                    for a in range(p0, p1):
-                        eri = load(eri_pool[off:], ish, a-p0)
-                        contract_(outbuf, tau, eri, a)
-                time0 = logger.timer_debug1(self, 'AO-vvvv %d:%d'%(ish0,ish1), *time0)
-            eribuf = loadbuf = eri_pool = eri = None
+            #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
+            #: t2new += numpy.einsum('ijcd,acdb->ijab', tau, vvvv)
+            def contract_(t2new_tril, tau, eri, i0, i1, j0, j1):
+                ic = i1 - i0
+                jc = j1 - j0
+                nao = tau.shape[-1]
+                #: t2tril[:,j0:j1] += numpy.einsum('xcd,cdab->xab', tau[:,i0:i1], eri)
+                lib.numpy_helper._dgemm('N', 'N', nocc*(nocc+1)//2, jc*nao, ic*nao,
+                                        tau.reshape(-1,nao*nao), eri.reshape(-1,jc*nao),
+                                        t2new_tril.reshape(-1,nao*nao), 1, 1,
+                                        i0*nao, 0, j0*nao)
+
+                #: t2tril[:,i0:i1] += numpy.einsum('xcd,abcd->xab', tau[:,j0:j1], eri)
+                if i1 > j1:
+                    lib.numpy_helper._dgemm('N', 'T', nocc*(nocc+1)//2, ic*nao, jc*nao,
+                                            tau.reshape(-1,nao*nao), eri.reshape(-1,jc*nao),
+                                            t2new_tril.reshape(-1,nao*nao), 1, 1,
+                                            j0*nao, 0, i0*nao)
+
+            for ip, (ish0, ish1, ni) in enumerate(sh_ranges):
+                for jsh0, jsh1, nj in sh_ranges[:ip+1]:
+                    eri = mol.intor('cint2e_sph', aosym='s2kl', out=eribuf,
+                                    shls_slice=(ish0,ish1,jsh0,jsh1))
+                    i0, i1 = ao_loc[ish0], ao_loc[ish1]
+                    j0, j1 = ao_loc[jsh0], ao_loc[jsh1]
+                    tmp = lib.unpack_tril(eri, out=loadbuf)
+                    eri = numpy.ndarray((i1-i0,nao,j1-j0,nao), buffer=eribuf)
+                    eri[:] = tmp.reshape(i1-i0,j1-j0,nao,nao).transpose(0,2,1,3)
+                    contract_(outbuf, tau, eri, i0, i1, j0, j1)
+                    time0 = logger.timer_debug1(self, 'AO-vvvv [%d:%d,%d:%d]' %
+                                                (ish0,ish1,jsh0,jsh1), *time0)
+            eribuf = loadbuf = eri = tmp = None
 
             mo = numpy.asarray(self.mo_coeff, order='F')
             tmp = _ao2mo.nr_e2(outbuf, mo, (nocc,nmo,nocc,nmo), 's1', 's1', out=tau)
@@ -658,6 +654,19 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                 p0 += i + 1
             time0 = logger.timer_debug1(self, 'vvvv-tau', *time0)
 
+            def contract_(t2new_tril, tau, eri, a):
+                #: t2new[i,:i+1, a] += numpy.einsum('xcd,cdb->xb', tau[:,:a+1], eri)
+                lib.numpy_helper._dgemm('N', 'N', nocc*(nocc+1)//2, nvir, (a+1)*nvir,
+                                        tau.reshape(-1,nvir*nvir), eri.reshape(-1,nvir),
+                                        t2new_tril.reshape(-1,nvir*nvir), 1, 1,
+                                        0, 0, a*nvir)
+
+                #: t2new[i,:i+1,:a] += numpy.einsum('xd,abd->xab', tau[:,a], eri[:a])
+                if a > 0:
+                    lib.numpy_helper._dgemm('N', 'T', nocc*(nocc+1)//2, a*nvir, nvir,
+                                            tau.reshape(-1,nvir*nvir), eri.reshape(-1,nvir),
+                                            t2new_tril.reshape(-1,nvir*nvir), 1, 1,
+                                            a*nvir, 0, 0)
             p0 = 0
             outbuf = numpy.empty((nvir,nvir,nvir))
             outbuf1 = numpy.empty((nvir,nvir,nvir))

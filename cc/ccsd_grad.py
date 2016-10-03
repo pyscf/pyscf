@@ -386,7 +386,8 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         ip0 = p0
         for b0, b1, nf in shell_prange(mol, shl0, shl1, blksize):
             eri1 = mol.intor('cint2e_ip1_sph', comp=3, aosym='s2kl',
-                             shls_slice=(b0,b1,0,mol.nbas)).reshape(3,nf,nao,-1)
+                             shls_slice=(b0,b1,0,mol.nbas,0,mol.nbas,0,mol.nbas))
+            eri1 = eri1.reshape(3,nf,nao,-1)
             dm2buf = numpy.empty((nf,nao,nao_pair))
             for ic, (i0, i1) in enumerate(prange(0, nao_pair, ioblksize)):
                 _load_block_tril(fdm2['dm2/%d'%ic], ip0, ip0+nf, dm2buf[:,:,i0:i1])

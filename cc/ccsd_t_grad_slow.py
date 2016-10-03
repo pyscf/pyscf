@@ -207,7 +207,8 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
 
 # 2e AO integrals dot 2pdm
         eri1 = mol.intor('cint2e_ip1_sph', comp=3, aosym='s2kl',
-                         shls_slice=(shl0,shl1,0,mol.nbas)).reshape(3,p1-p0,nao,-1)
+                         shls_slice=(shl0,shl1,0,mol.nbas,0,mol.nbas,0,mol.nbas))
+        eri1 = eri1.reshape(3,p1-p0,nao,-1)
         dm2buf = ccsd_grad._load_block_tril(dm2ao, p0, p1)
         de[k] -= numpy.einsum('xijk,ijk->x', eri1, dm2buf) * 2
 

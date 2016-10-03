@@ -11,570 +11,474 @@
 
 #define NCTRMAX         64
 
-struct _Envs {
-        int natm;
-        int nbas;
-        const int *atm;
-        const int *bas;
-        const double *env;
-        int nao;
-        int *ao_loc; // size of nbas+1, last element = nao
-        int *tao; // time reversal mappings, index start from 1
-        CINTOpt *cintopt;
-};
-
 /*
  *************************************************
  * 2e AO integrals in s4, s2ij, s2kl, s1
  */
-static void s1_copy(double *eri, double *buf,
-                    int ncomp, int nao, int naoi, int naoj,
-                    int *shls, int *ao_loc, int *ishloc, int *jshloc)
-{
-        int ish = shls[0];
-        int jsh = shls[1];
-        int ksh = shls[2];
-        int lsh = shls[3];
-        int i0 = ishloc[ish];
-        int j0 = jshloc[jsh];
-        int k0 = ao_loc[ksh];
-        int l0 = ao_loc[lsh];
-        int di = ishloc[ish+1] - i0;
-        int dj = jshloc[jsh+1] - j0;
-        int dk = ao_loc[ksh+1] - k0;
-        int dl = ao_loc[lsh+1] - l0;
-        int dij = di * dj;
-        int dijk = dij * dk;
-        int dijkl = dijk * dl;
-        int i, j, k, l, icomp;
-        size_t nao2 = nao * nao;
-        size_t neri = nao2 * naoi * naoj;
-        double *peri, *pbuf;
-        eri += nao2 * (i0*naoj+j0) + k0*nao+l0;
-
-        for (icomp = 0; icomp < ncomp; icomp++) {
-                for (i = 0; i < di; i++) {
-                for (j = 0; j < dj; j++) {
-                        peri = eri + nao2*(i*naoj+j);
-                        for (k = 0; k < dk; k++) {
-                                pbuf = buf + k*dij + j*di + i;
-                                for (l = 0; l < dl; l++) {
-                                        peri[k*nao+l] = pbuf[l*dijk];
-                                }
-                        }
-                } }
-                buf += dijkl;
-                eri += neri;
-        }
-}
-
-static void s1_set0(double *eri, double *nop,
-                    int ncomp, int nao, int naoi, int naoj,
-                    int *shls, int *ao_loc, int *ishloc, int *jshloc)
-{
-        int ish = shls[0];
-        int jsh = shls[1];
-        int ksh = shls[2];
-        int lsh = shls[3];
-        int i, j, k, l, icomp;
-        size_t nao2 = nao * nao;
-        size_t neri = nao2 * naoi * naoj;
-        double *peri;
-
-        for (icomp = 0; icomp < ncomp; icomp++) {
-                for (i = ishloc[ish]; i < ishloc[ish+1]; i++) {
-                for (j = jshloc[jsh]; j < jshloc[jsh+1]; j++) {
-                        peri = eri + nao2*(i*naoj+j);
-                        for (k = ao_loc[ksh]; k < ao_loc[ksh+1]; k++) {
-                        for (l = ao_loc[lsh]; l < ao_loc[lsh+1]; l++) {
-                                peri[k*nao+l] = 0;
-                        } }
-                } }
-                eri += neri;
-        }
-}
-
-static void s2ij_copy(double *eri, double *buf,
-                      int ncomp, int nao, int naoi, int naoj,
-                      int *shls, int *ao_loc, int *ishloc, int *jshloc)
-{
-        int ish = shls[0];
-        int jsh = shls[1];
-        int ksh = shls[2];
-        int lsh = shls[3];
-        int i0 = ishloc[ish];
-        int j0 = jshloc[jsh];
-        int k0 = ao_loc[ksh];
-        int l0 = ao_loc[lsh];
-        int di = ishloc[ish+1] - i0;
-        int dj = jshloc[jsh+1] - j0;
-        int dk = ao_loc[ksh+1] - k0;
-        int dl = ao_loc[lsh+1] - l0;
-        int dij = di * dj;
-        int dijk = dij * dk;
-        int dijkl = dijk * dl;
-        int i, j, k, l, icomp;
-        size_t nao2 = nao * nao;
-        size_t neri = nao2 * naoi*(naoi+1)/2;
-        double *peri, *pbuf;
-        eri += k0*nao+l0;
-
-        if (ish > jsh) {
-                for (icomp = 0; icomp < ncomp; icomp++) {
-                        for (i0 = ishloc[ish], i = 0; i < di; i++, i0++) {
-                        for (j0 = jshloc[jsh], j = 0; j < dj; j++, j0++) {
-                                peri = eri + nao2*(i0*(i0+1)/2+j0);
-                                for (k = 0; k < dk; k++) {
-                                        pbuf = buf + k*dij + j*di + i;
-                                        for (l = 0; l < dl; l++) {
-                                                peri[k*nao+l] = pbuf[l*dijk];
-                                        }
-                                }
-                        } }
-                        buf += dijkl;
-                        eri += neri;
-                }
-        } else {
-                for (icomp = 0; icomp < ncomp; icomp++) {
-                        for (i0 = ishloc[ish], i = 0; i < di; i++, i0++) {
-                        for (j0 = jshloc[jsh], j = 0; j <= i; j++, j0++) {
-                                peri = eri + nao2*(i0*(i0+1)/2+j0);
-                                for (k = 0; k < dk; k++) {
-                                        pbuf = buf + k*dij + j*di + i;
-                                        for (l = 0; l < dl; l++) {
-                                                peri[k*nao+l] = pbuf[l*dijk];
-                                        }
-                                }
-                        } }
-                        buf += dijkl;
-                        eri += neri;
-                }
-        }
-}
-
-static void s2ij_set0(double *eri, double *nop,
-                      int ncomp, int nao, int naoi, int naoj,
-                      int *shls, int *ao_loc, int *ishloc, int *jshloc)
-{
-        int ish = shls[0];
-        int jsh = shls[1];
-        int ksh = shls[2];
-        int lsh = shls[3];
-        int i, j, k, l, icomp;
-        size_t nao2 = nao * nao;
-        size_t neri = nao2 * naoi*(naoi+1)/2;
-        double *peri;
-
-        if (ish > jsh) {
-                for (icomp = 0; icomp < ncomp; icomp++) {
-                        for (i = ishloc[ish]; i < ishloc[ish+1]; i++) {
-                        for (j = jshloc[jsh]; j < jshloc[jsh+1]; j++) {
-                                peri = eri + nao2*(i*(i+1)/2+j);
-                                for (k = ao_loc[ksh]; k < ao_loc[ksh+1]; k++) {
-                                for (l = ao_loc[lsh]; l < ao_loc[lsh+1]; l++) {
-                                        peri[k*nao+l] = 0;
-                                } }
-                        } }
-                        eri += neri;
-                }
-        } else {
-                for (icomp = 0; icomp < ncomp; icomp++) {
-                        for (i = ishloc[ish]; i < ishloc[ish+1]; i++) {
-                        for (j = jshloc[jsh]; j <= i; j++) {
-                                peri = eri + nao2*(i*(i+1)/2+j);
-                                for (k = ao_loc[ksh]; k < ao_loc[ksh+1]; k++) {
-                                for (l = ao_loc[lsh]; l < ao_loc[lsh+1]; l++) {
-                                        peri[k*nao+l] = 0;
-                                } }
-                        } }
-                        eri += neri;
-                }
-        }
-}
-
-static void s2kl_copy(double *eri, double *buf,
-                      int ncomp, int nao, int naoi, int naoj,
-                      int *shls, int *ao_loc, int *ishloc, int *jshloc)
-{
-        int ish = shls[0];
-        int jsh = shls[1];
-        int ksh = shls[2];
-        int lsh = shls[3];
-        int i0 = ishloc[ish];
-        int j0 = jshloc[jsh];
-        int k0 = ao_loc[ksh];
-        int l0 = ao_loc[lsh];
-        int di = ishloc[ish+1] - i0;
-        int dj = jshloc[jsh+1] - j0;
-        int dk = ao_loc[ksh+1] - k0;
-        int dl = ao_loc[lsh+1] - l0;
-        int dij = di * dj;
-        int dijk = dij * dk;
-        int dijkl = dijk * dl;
-        int i, j, k, l, icomp;
-        size_t nao2 = nao*(nao+1)/2;
-        size_t neri = nao2 * naoi * naoj;
-        double *peri, *pbuf;
-        eri += nao2 * (i0*naoj+j0) + k0*(k0+1)/2+l0;
-
-        if (ksh > lsh) {
-                for (icomp = 0; icomp < ncomp; icomp++) {
-                        for (i = 0; i < di; i++) {
-                        for (j = 0; j < dj; j++) {
-                                peri = eri + nao2*(i*naoj+j);
-                                for (k = 0; k < dk; k++) {
-                                        pbuf = buf + k*dij + j*di + i;
-                                        for (l = 0; l < dl; l++) {
-                                                peri[l] = pbuf[l*dijk];
-                                        }
-                                        peri += k0 + k + 1;
-                                }
-                        } }
-                        buf += dijkl;
-                        eri += neri;
-                }
-        } else {
-                for (icomp = 0; icomp < ncomp; icomp++) {
-                        for (i = 0; i < di; i++) {
-                        for (j = 0; j < dj; j++) {
-                                peri = eri + nao2*(i*naoj+j);
-                                for (k = 0; k < dk; k++) {
-                                        pbuf = buf + k*dij + j*di + i;
-                                        for (l = 0; l <= k; l++) {
-                                                peri[l] = pbuf[l*dijk];
-                                        }
-                                        peri += k0 + k + 1;
-                                }
-                        } }
-                        buf += dijkl;
-                        eri += neri;
-                }
-        }
-}
-
-static void s2kl_set0(double *eri, double *nop,
-                      int ncomp, int nao, int naoi, int naoj,
-                      int *shls, int *ao_loc, int *ishloc, int *jshloc)
-{
-        int ish = shls[0];
-        int jsh = shls[1];
-        int ksh = shls[2];
-        int lsh = shls[3];
-        int k0 = ao_loc[ksh];
-        int l0 = ao_loc[lsh];
-        int dk = ao_loc[ksh+1] - k0;
-        int dl = ao_loc[lsh+1] - l0;
-        int i, j, k, l, icomp;
-        size_t nao2 = nao*(nao+1)/2;
-        size_t neri = nao2 * naoi * naoj;
-        double *peri;
-        eri += k0*(k0+1)/2+l0;
-
-        if (ksh > lsh) {
-                for (icomp = 0; icomp < ncomp; icomp++) {
-                        for (i = ishloc[ish]; i < ishloc[ish+1]; i++) {
-                        for (j = jshloc[jsh]; j < jshloc[jsh+1]; j++) {
-                                peri = eri + nao2*(i*nao+j);
-                                for (k = 0; k < dk; k++) {
-                                        for (l = 0; l < dl; l++) {
-                                                peri[l] = 0;
-                                        }
-                                        peri += k0 + k + 1;
-                                }
-                        } }
-                        eri += neri;
-                }
-        } else {
-                for (icomp = 0; icomp < ncomp; icomp++) {
-                        for (i = ishloc[ish]; i < ishloc[ish+1]; i++) {
-                        for (j = jshloc[jsh]; j < jshloc[jsh+1]; j++) {
-                                peri = eri + nao2*(i*nao+j);
-                                for (k = 0; k < dk; k++) {
-                                        for (l = 0; l <= k; l++) {
-                                                peri[l] = 0;
-                                        }
-                                        peri += k0 + k + 1;
-                                }
-                        } }
-                        eri += neri;
-                }
-        }
-}
-
-static void s4_copy(double *eri, double *buf,
-                    int ncomp, int nao, int naoi, int naoj,
-                    int *shls, int *ao_loc, int *ishloc, int *jshloc)
-{
-        int ish = shls[0];
-        int jsh = shls[1];
-        int ksh = shls[2];
-        int lsh = shls[3];
-        int i0 = ishloc[ish];
-        int j0 = jshloc[jsh];
-        int k0 = ao_loc[ksh];
-        int l0 = ao_loc[lsh];
-        int di = ishloc[ish+1] - i0;
-        int dj = jshloc[jsh+1] - j0;
-        int dk = ao_loc[ksh+1] - k0;
-        int dl = ao_loc[lsh+1] - l0;
-        int dij = di * dj;
-        int dijk = dij * dk;
-        int dijkl = dijk * dl;
-        int i, j, k, l, icomp;
-        size_t nao2 = nao*(nao+1)/2;
-        size_t neri = nao2 * naoi*(naoi+1)/2;
-        double *peri, *pbuf;
-        eri += k0*(k0+1)/2+l0;
-
-        if (ksh > lsh && ish > jsh) {
-                for (icomp = 0; icomp < ncomp; icomp++) {
-                        for (i0 = ishloc[ish], i = 0; i < di; i++, i0++) {
-                        for (j0 = jshloc[jsh], j = 0; j < dj; j++, j0++) {
-                                peri = eri + nao2*(i0*(i0+1)/2+j0);
-                                for (k = 0; k < dk; k++) {
-                                        pbuf = buf + k*dij + j*di + i;
-                                        for (l = 0; l < dl; l++) {
-                                                peri[l] = pbuf[l*dijk];
-                                        }
-                                        peri += k0 + k + 1;
-                                }
-                        } }
-                        buf += dijkl;
-                        eri += neri;
-                }
-        } else if (ish > jsh) {
-                for (icomp = 0; icomp < ncomp; icomp++) {
-                        for (i0 = ishloc[ish], i = 0; i < di; i++, i0++) {
-                        for (j0 = jshloc[jsh], j = 0; j < dj; j++, j0++) {
-                                peri = eri + nao2*(i0*(i0+1)/2+j0);
-                                for (k = 0; k < dk; k++) {
-                                        pbuf = buf + k*dij + j*di + i;
-                                        for (l = 0; l <= k; l++) {
-                                                peri[l] = pbuf[l*dijk];
-                                        }
-                                        peri += k0 + k + 1;
-                                }
-                        } }
-                        buf += dijkl;
-                        eri += neri;
-                }
-        } else if (ksh > lsh) {
-                for (icomp = 0; icomp < ncomp; icomp++) {
-                        for (i0 = ishloc[ish], i = 0; i < di; i++, i0++) {
-                        for (j0 = jshloc[jsh], j = 0; j <= i; j++, j0++) {
-                                peri = eri + nao2*(i0*(i0+1)/2+j0);
-                                for (k = 0; k < dk; k++) {
-                                        pbuf = buf + k*dij + j*di + i;
-                                        for (l = 0; l < dl; l++) {
-                                                peri[l] = pbuf[l*dijk];
-                                        }
-                                        peri += k0 + k + 1;
-                                }
-                        } }
-                        buf += dijkl;
-                        eri += neri;
-                }
-        } else {
-                for (icomp = 0; icomp < ncomp; icomp++) {
-                        for (i0 = ishloc[ish], i = 0; i < di; i++, i0++) {
-                        for (j0 = jshloc[jsh], j = 0; j <= i; j++, j0++) {
-                                peri = eri + nao2*(i0*(i0+1)/2+j0);
-                                for (k = 0; k < dk; k++) {
-                                        pbuf = buf + k*dij + j*di + i;
-                                        for (l = 0; l <= k; l++) {
-                                                peri[l] = pbuf[l*dijk];
-                                        }
-                                        peri += k0 + k + 1;
-                                }
-                        } }
-                        buf += dijkl;
-                        eri += neri;
-                }
-        }
-}
-
-static void s4_set0(double *eri, double *nop,
-                    int ncomp, int nao, int naoi, int naoj,
-                    int *shls, int *ao_loc, int *ishloc, int *jshloc)
-{
-        int ish = shls[0];
-        int jsh = shls[1];
-        int ksh = shls[2];
-        int lsh = shls[3];
-        int k0 = ao_loc[ksh];
-        int l0 = ao_loc[lsh];
-        int dk = ao_loc[ksh+1] - k0;
-        int dl = ao_loc[lsh+1] - l0;
-        int i, j, k, l, icomp;
-        size_t nao2 = nao*(nao+1)/2;
-        size_t neri = nao2 * nao2;
-        double *peri;
-        eri += k0*(k0+1)/2+l0;
-
-        if (ksh > lsh && ish > jsh) {
-                for (icomp = 0; icomp < ncomp; icomp++) {
-                        for (i = ishloc[ish]; i < ishloc[ish+1]; i++) {
-                        for (j = jshloc[jsh]; j < jshloc[jsh+1]; j++) {
-                                peri = eri + nao2*(i*(i+1)/2+j);
-                                for (k = 0; k < dk; k++) {
-                                        for (l = 0; l < dl; l++) {
-                                                peri[l] = 0;
-                                        }
-                                        peri += k0 + k + 1;
-                                }
-                        } }
-                        eri += neri;
-                }
-        } else if (ish > jsh) {
-                for (icomp = 0; icomp < ncomp; icomp++) {
-                        for (i = ishloc[ish]; i < ishloc[ish+1]; i++) {
-                        for (j = jshloc[jsh]; j < jshloc[jsh+1]; j++) {
-                                peri = eri + nao2*(i*(i+1)/2+j);
-                                for (k = 0; k < dk; k++) {
-                                        for (l = 0; l <= k; l++) {
-                                                peri[l] = 0;
-                                        }
-                                        peri += k0 + k + 1;
-                                }
-                        } }
-                        eri += neri;
-                }
-        } else if (ksh > lsh) {
-                for (icomp = 0; icomp < ncomp; icomp++) {
-                        for (i = ishloc[ish]; i < ishloc[ish+1]; i++) {
-                        for (j = jshloc[jsh]; j <= i; j++) {
-                                peri = eri + nao2*(i*(i+1)/2+j);
-                                for (k = 0; k < dk; k++) {
-                                        for (l = 0; l < dl; l++) {
-                                                peri[l] = 0;
-                                        }
-                                        peri += k0 + k + 1;
-                                }
-                        } }
-                        eri += neri;
-                }
-        } else {
-                for (icomp = 0; icomp < ncomp; icomp++) {
-                        for (i = ishloc[ish]; i < ishloc[ish+1]; i++) {
-                        for (j = jshloc[jsh]; j <= i; j++) {
-                                peri = eri + nao2*(i*(i+1)/2+j);
-                                for (k = 0; k < dk; k++) {
-                                        for (l = 0; l <= k; l++) {
-                                                peri[l] = 0;
-                                        }
-                                        peri += k0 + k + 1;
-                                }
-                        } }
-                        eri += neri;
-                }
-        }
-}
-
-#define DISTR_INTS_BY(fcopy, fset0) \
-        if ((*fprescreen)(shls, envs->atm, envs->bas, envs->env) && \
-            (*intor)(buf, shls, envs->atm, envs->natm, \
-                     envs->bas, envs->nbas, envs->env, envs->cintopt)) { \
-                fcopy(eri, buf, ncomp, envs->nao, naoi, naoj, \
-                      shls, envs->ao_loc, ishloc, jshloc); \
-        } else { \
-                fset0(eri, buf, ncomp, envs->nao, naoi, naoj, \
-                      shls, envs->ao_loc, ishloc, jshloc); \
-        }
 
 void GTOnr2e_fill_s1(int (*intor)(), int (*fprescreen)(),
-                     double *eri, int ncomp, int ish, int jsh,
-                     struct _Envs *envs,
-                     int *ishloc, int *jshloc, int naoi, int naoj)
+                     double *eri, int ncomp, int ishp, int jshp,
+                     int *shls_slice, int *ao_loc, CINTOpt *cintopt,
+                     int *atm, int natm, int *bas, int nbas, double *env)
 {
-        int di = ishloc[ish+1] - ishloc[ish];
-        int dj = jshloc[jsh+1] - jshloc[jsh];
-        double *buf = malloc(sizeof(double)*di*dj*NCTRMAX*NCTRMAX*ncomp);
+        int ish0 = shls_slice[0];
+        int ish1 = shls_slice[1];
+        int jsh0 = shls_slice[2];
+        int jsh1 = shls_slice[3];
+        int ksh0 = shls_slice[4];
+        int ksh1 = shls_slice[5];
+        int lsh0 = shls_slice[6];
+        int lsh1 = shls_slice[7];
+        int ni = ao_loc[ish1] - ao_loc[ish0];
+        int nj = ao_loc[jsh1] - ao_loc[jsh0];
+        int nk = ao_loc[ksh1] - ao_loc[ksh0];
+        int nl = ao_loc[lsh1] - ao_loc[lsh0];
+        size_t nij = ni * nj;
+        size_t nkl = nk * nl;
+        size_t neri = nij * nkl;
+
+        int ish = ishp + ish0;
+        int jsh = jshp + jsh0;
+        int i0 = ao_loc[ish] - ao_loc[ish0];
+        int j0 = ao_loc[jsh] - ao_loc[jsh0];
+        eri += nkl * (i0 * nj + j0);
+
+        int di = ao_loc[ish+1] - ao_loc[ish];
+        int dj = ao_loc[jsh+1] - ao_loc[jsh];
+        int dij = di * dj;
+        int k0, l0, dk, dl, dijk, dijkl;
+        int i, j, k, l, icomp;
         int ksh, lsh;
         int shls[4];
+        double *buf = malloc(sizeof(double)*di*dj*NCTRMAX*NCTRMAX*ncomp);
+        double *eri0, *peri, *buf0, *pbuf;
 
         shls[0] = ish;
         shls[1] = jsh;
 
-        for (ksh = 0; ksh < envs->nbas; ksh++) {
-        for (lsh = 0; lsh < envs->nbas; lsh++) {
+        for (ksh = ksh0; ksh < ksh1; ksh++) {
+        for (lsh = lsh0; lsh < lsh1; lsh++) {
                 shls[2] = ksh;
                 shls[3] = lsh;
-                DISTR_INTS_BY(s1_copy, s1_set0);
+                k0 = ao_loc[ksh] - ao_loc[ksh0];
+                l0 = ao_loc[lsh] - ao_loc[lsh0];
+                dk = ao_loc[ksh+1] - ao_loc[ksh];
+                dl = ao_loc[lsh+1] - ao_loc[lsh];
+                if ((*fprescreen)(shls, atm, bas, env) &&
+                    (*intor)(buf, shls, atm, natm, bas, nbas, env, cintopt)) {
+                        dijk = dij * dk;
+                        dijkl = dijk * dl;
+                        eri0 = eri + k0*nl+l0;
+                        buf0 = buf;
+                        for (icomp = 0; icomp < ncomp; icomp++) {
+                                for (i = 0; i < di; i++) {
+                                for (j = 0; j < dj; j++) {
+                                        peri = eri0 + nkl*(i*nj+j);
+                                        for (k = 0; k < dk; k++) {
+                                        for (pbuf = buf0 + k*dij + j*di + i,
+                                             l = 0; l < dl; l++) {
+                                                peri[k*nl+l] = pbuf[l*dijk];
+                                        } }
+                                } }
+                                buf0 += dijkl;
+                                eri0 += neri;
+                        }
+                } else {
+                        eri0 = eri + k0*nl+l0;
+                        for (icomp = 0; icomp < ncomp; icomp++) {
+                                for (i = 0; i < di; i++) {
+                                for (j = 0; j < dj; j++) {
+                                        peri = eri0 + nkl*(i*nj+j);
+                                        for (k = 0; k < dk; k++) {
+                                                for (l = 0; l < dl; l++) {
+                                                        peri[k*nl+l] = 0;
+                                                }
+                                        }
+                                } }
+                                eri0 += neri;
+                        }
+                }
         } }
         free(buf);
 }
 
 void GTOnr2e_fill_s2ij(int (*intor)(), int (*fprescreen)(),
-                       double *eri, int ncomp, int ish, int jsh,
-                       struct _Envs *envs,
-                       int *ishloc, int *jshloc, int naoi, int naoj)
+                       double *eri, int ncomp, int ishp, int jshp,
+                       int *shls_slice, int *ao_loc, CINTOpt *cintopt,
+                       int *atm, int natm, int *bas, int nbas, double *env)
 {
-        if (ish < jsh) {
+        if (ishp < jshp) {
                 return;
         }
-        int di = ishloc[ish+1] - ishloc[ish];
-        int dj = jshloc[jsh+1] - jshloc[jsh];
-        double *buf = malloc(sizeof(double)*di*dj*NCTRMAX*NCTRMAX*ncomp);
-        int shls[4];
+
+        int ish0 = shls_slice[0];
+        int ish1 = shls_slice[1];
+        int jsh0 = shls_slice[2];
+        //int jsh1 = shls_slice[3];
+        int ksh0 = shls_slice[4];
+        int ksh1 = shls_slice[5];
+        int lsh0 = shls_slice[6];
+        int lsh1 = shls_slice[7];
+        int ni = ao_loc[ish1] - ao_loc[ish0];
+        //int nj = ao_loc[jsh1] - ao_loc[jsh0];
+        int nk = ao_loc[ksh1] - ao_loc[ksh0];
+        int nl = ao_loc[lsh1] - ao_loc[lsh0];
+        size_t nij = ni * (ni+1) / 2;
+        size_t nkl = nk * nl;
+        size_t neri = nij * nkl;
+
+        int ish = ishp + ish0;
+        int jsh = jshp + jsh0;
+        int i0 = ao_loc[ish] - ao_loc[ish0];
+        int j0 = ao_loc[jsh] - ao_loc[jsh0];
+        eri += nkl * (i0*(i0+1)/2 + j0);
+
+        int di = ao_loc[ish+1] - ao_loc[ish];
+        int dj = ao_loc[jsh+1] - ao_loc[jsh];
+        int dij = di * dj;
+        int k0, l0, dk, dl, dijk, dijkl;
+        int i, j, k, l, icomp;
         int ksh, lsh;
+        int shls[4];
+        double *buf = malloc(sizeof(double)*di*dj*NCTRMAX*NCTRMAX*ncomp);
+        double *eri0, *peri0, *peri, *buf0, *pbuf;
 
         shls[0] = ish;
         shls[1] = jsh;
 
-        for (ksh = 0; ksh < envs->nbas; ksh++) {
-        for (lsh = 0; lsh < envs->nbas; lsh++) {
+        for (ksh = ksh0; ksh < ksh1; ksh++) {
+        for (lsh = lsh0; lsh < lsh1; lsh++) {
                 shls[2] = ksh;
                 shls[3] = lsh;
-                DISTR_INTS_BY(s2ij_copy, s2ij_set0);
+                k0 = ao_loc[ksh] - ao_loc[ksh0];
+                l0 = ao_loc[lsh] - ao_loc[lsh0];
+                dk = ao_loc[ksh+1] - ao_loc[ksh];
+                dl = ao_loc[lsh+1] - ao_loc[lsh];
+                if ((*fprescreen)(shls, atm, bas, env) &&
+                    (*intor)(buf, shls, atm, natm, bas, nbas, env, cintopt)) {
+                        dijk = dij * dk;
+                        dijkl = dijk * dl;
+                        eri0 = eri + k0*nl+l0;
+                        buf0 = buf;
+                        for (icomp = 0; icomp < ncomp; icomp++) {
+                                peri0 = eri0;
+                                if (ishp > jshp) {
+                                for (i = 0; i < di; i++, peri0+=nkl*(i0+i)) {
+                                for (j = 0; j < dj; j++) {
+                                        peri = peri0 + nkl*j;
+                                        for (k = 0; k < dk; k++) {
+                                        for (pbuf = buf0 + k*dij + j*di + i,
+                                             l = 0; l < dl; l++) {
+                                                peri[k*nl+l] = pbuf[l*dijk];
+                                        } }
+                                } }
+                                } else {
+                                for (i = 0; i < di; i++, peri0+=nkl*(i0+i)) {
+                                for (j = 0; j <= i; j++) {
+                                        peri = peri0 + nkl*j;
+                                        for (k = 0; k < dk; k++) {
+                                        for (pbuf = buf0 + k*dij + j*di + i,
+                                             l = 0; l < dl; l++) {
+                                                peri[k*nl+l] = pbuf[l*dijk];
+                                        } }
+                                } }
+                                }
+                                buf0 += dijkl;
+                                eri0 += neri;
+                        }
+                } else {
+                        eri0 = eri + k0*nl+l0;
+                        for (icomp = 0; icomp < ncomp; icomp++) {
+                                peri0 = eri0;
+                                if (ishp > jshp) {
+                                for (i = 0; i < di; i++, peri0+=nkl*(i0+i)) {
+                                for (j = 0; j < dj; j++) {
+                                        peri = peri0 + nkl*j;
+                                        for (k = 0; k < dk; k++) {
+                                        for (l = 0; l < dl; l++) {
+                                                peri[k*nl+l] = 0;
+                                        } }
+                                } }
+                                } else {
+                                for (i = 0; i < di; i++, peri0+=nkl*(i0+i)) {
+                                for (j = 0; j <= i; j++) {
+                                        peri = peri0 + nkl*j;
+                                        for (k = 0; k < dk; k++) {
+                                        for (l = 0; l < dl; l++) {
+                                                peri[k*nl+l] = 0;
+                                        } }
+                                } }
+                                }
+                                eri0 += neri;
+                        }
+                }
         } }
         free(buf);
 }
 
 void GTOnr2e_fill_s2kl(int (*intor)(), int (*fprescreen)(),
-                       double *eri, int ncomp, int ish, int jsh,
-                       struct _Envs *envs,
-                       int *ishloc, int *jshloc, int naoi, int naoj)
+                       double *eri, int ncomp, int ishp, int jshp,
+                       int *shls_slice, int *ao_loc, CINTOpt *cintopt,
+                       int *atm, int natm, int *bas, int nbas, double *env)
 {
-        int di = ishloc[ish+1] - ishloc[ish];
-        int dj = jshloc[jsh+1] - jshloc[jsh];
-        double *buf = malloc(sizeof(double)*di*dj*NCTRMAX*NCTRMAX*ncomp);
+        int ish0 = shls_slice[0];
+        int ish1 = shls_slice[1];
+        int jsh0 = shls_slice[2];
+        int jsh1 = shls_slice[3];
+        int ksh0 = shls_slice[4];
+        int ksh1 = shls_slice[5];
+        int lsh0 = shls_slice[6];
+        //int lsh1 = shls_slice[7];
+        int ni = ao_loc[ish1] - ao_loc[ish0];
+        int nj = ao_loc[jsh1] - ao_loc[jsh0];
+        int nk = ao_loc[ksh1] - ao_loc[ksh0];
+        //int nl = ao_loc[lsh1] - ao_loc[lsh0];
+        size_t nij = ni * nj;
+        size_t nkl = nk * (nk+1) / 2;
+        size_t neri = nij * nkl;
+
+        int ish = ishp + ish0;
+        int jsh = jshp + jsh0;
+        int i0 = ao_loc[ish] - ao_loc[ish0];
+        int j0 = ao_loc[jsh] - ao_loc[jsh0];
+        eri += nkl * (i0 * nj + j0);
+
+        int di = ao_loc[ish+1] - ao_loc[ish];
+        int dj = ao_loc[jsh+1] - ao_loc[jsh];
+        int dij = di * dj;
+        int k0, l0, dk, dl, dijk, dijkl;
+        int i, j, k, l, icomp;
+        int ksh, lsh, kshp, lshp;
         int shls[4];
-        int ksh, lsh;
+        double *buf = malloc(sizeof(double)*di*dj*NCTRMAX*NCTRMAX*ncomp);
+        double *eri0, *peri, *buf0, *pbuf;
 
         shls[0] = ish;
         shls[1] = jsh;
 
-        for (ksh = 0; ksh < envs->nbas; ksh++) {
-        for (lsh = 0; lsh <= ksh; lsh++) {
+        for (kshp = 0; kshp < ksh1-ksh0; kshp++) {
+        for (lshp = 0; lshp <= kshp; lshp++) {
+                ksh = kshp + ksh0;
+                lsh = lshp + lsh0;
                 shls[2] = ksh;
                 shls[3] = lsh;
-                DISTR_INTS_BY(s2kl_copy, s2kl_set0);
+                k0 = ao_loc[ksh] - ao_loc[ksh0];
+                l0 = ao_loc[lsh] - ao_loc[lsh0];
+                dk = ao_loc[ksh+1] - ao_loc[ksh];
+                dl = ao_loc[lsh+1] - ao_loc[lsh];
+                if ((*fprescreen)(shls, atm, bas, env) &&
+                    (*intor)(buf, shls, atm, natm, bas, nbas, env, cintopt)) {
+                        dijk = dij * dk;
+                        dijkl = dijk * dl;
+                        eri0 = eri + k0*(k0+1)/2+l0;
+                        buf0 = buf;
+                        for (icomp = 0; icomp < ncomp; icomp++) {
+                                if (kshp > lshp) {
+                                for (i = 0; i < di; i++) {
+                                for (j = 0; j < dj; j++) {
+                                        peri = eri0 + nkl*(i*nj+j);
+                                        for (k = 0; k < dk; k++, peri+=k0+k) {
+                                        for (pbuf = buf0 + k*dij + j*di + i,
+                                             l = 0; l < dl; l++) {
+                                                peri[l] = pbuf[l*dijk];
+                                        } }
+                                } }
+                                } else {
+                                for (i = 0; i < di; i++) {
+                                for (j = 0; j < dj; j++) {
+                                        peri = eri0 + nkl*(i*nj+j);
+                                        for (k = 0; k < dk; k++, peri+=k0+k) {
+                                        for (pbuf = buf0 + k*dij + j*di + i,
+                                             l = 0; l <= k; l++) {
+                                                peri[l] = pbuf[l*dijk];
+                                        } }
+                                } }
+                                }
+                                buf0 += dijkl;
+                                eri0 += neri;
+                        }
+                } else {
+                        eri0 = eri + k0*(k0+1)/2+l0;
+                        for (icomp = 0; icomp < ncomp; icomp++) {
+                                if (kshp > lshp) {
+                                for (i = 0; i < di; i++) {
+                                for (j = 0; j < dj; j++) {
+                                        peri = eri0 + nkl*(i*nj+j);
+                                        for (k = 0; k < dk; k++, peri+=k0+k) {
+                                        for (l = 0; l < dl; l++) {
+                                                peri[l] = 0;
+                                        } }
+                                } }
+                                } else {
+                                for (i = 0; i < di; i++) {
+                                for (j = 0; j < dj; j++) {
+                                        peri = eri0 + nkl*(i*nj+j);
+                                        for (k = 0; k < dk; k++, peri+=k0+k) {
+                                        for (l = 0; l <= k; l++) {
+                                                peri[l] = 0;
+                                        } }
+                                } }
+                                }
+                                eri0 += neri;
+                        }
+                }
         } }
         free(buf);
 }
 
 void GTOnr2e_fill_s4(int (*intor)(), int (*fprescreen)(),
-                     double *eri, int ncomp, int ish, int jsh,
-                     struct _Envs *envs,
-                     int *ishloc, int *jshloc, int naoi, int naoj)
+                     double *eri, int ncomp, int ishp, int jshp,
+                     int *shls_slice, int *ao_loc, CINTOpt *cintopt,
+                     int *atm, int natm, int *bas, int nbas, double *env)
 {
-        if (ish < jsh) {
+        if (ishp < jshp) {
                 return;
         }
-        int di = ishloc[ish+1] - ishloc[ish];
-        int dj = jshloc[jsh+1] - jshloc[jsh];
-        double *buf = malloc(sizeof(double)*di*dj*NCTRMAX*NCTRMAX*ncomp);
+
+        int ish0 = shls_slice[0];
+        int ish1 = shls_slice[1];
+        int jsh0 = shls_slice[2];
+        //int jsh1 = shls_slice[3];
+        int ksh0 = shls_slice[4];
+        int ksh1 = shls_slice[5];
+        int lsh0 = shls_slice[6];
+        //int lsh1 = shls_slice[7];
+        int ni = ao_loc[ish1] - ao_loc[ish0];
+        //int nj = ao_loc[jsh1] - ao_loc[jsh0];
+        int nk = ao_loc[ksh1] - ao_loc[ksh0];
+        //int nl = ao_loc[lsh1] - ao_loc[lsh0];
+        size_t nij = ni * (ni+1) / 2;
+        size_t nkl = nk * (nk+1) / 2;
+        size_t neri = nij * nkl;
+
+        int ish = ishp + ish0;
+        int jsh = jshp + jsh0;
+        int i0 = ao_loc[ish] - ao_loc[ish0];
+        int j0 = ao_loc[jsh] - ao_loc[jsh0];
+        eri += nkl * (i0*(i0+1)/2 + j0);
+
+        int di = ao_loc[ish+1] - ao_loc[ish];
+        int dj = ao_loc[jsh+1] - ao_loc[jsh];
+        int dij = di * dj;
+        int k0, l0, dk, dl, dijk, dijkl;
+        int i, j, k, l, icomp;
+        int ksh, lsh, kshp, lshp;
         int shls[4];
-        int ksh, lsh;
+        double *buf = malloc(sizeof(double)*di*dj*NCTRMAX*NCTRMAX*ncomp);
+        double *eri0, *peri0, *peri, *buf0, *pbuf;
 
         shls[0] = ish;
         shls[1] = jsh;
 
-        for (ksh = 0; ksh < envs->nbas; ksh++) {
-        for (lsh = 0; lsh <= ksh; lsh++) {
+        for (kshp = 0; kshp < ksh1-ksh0; kshp++) {
+        for (lshp = 0; lshp <= kshp; lshp++) {
+                ksh = kshp + ksh0;
+                lsh = lshp + lsh0;
                 shls[2] = ksh;
                 shls[3] = lsh;
-                DISTR_INTS_BY(s4_copy, s4_set0);
+                k0 = ao_loc[ksh] - ao_loc[ksh0];
+                l0 = ao_loc[lsh] - ao_loc[lsh0];
+                dk = ao_loc[ksh+1] - ao_loc[ksh];
+                dl = ao_loc[lsh+1] - ao_loc[lsh];
+                if ((*fprescreen)(shls, atm, bas, env) &&
+                    (*intor)(buf, shls, atm, natm, bas, nbas, env, cintopt)) {
+                        dijk = dij * dk;
+                        dijkl = dijk * dl;
+                        eri0 = eri + k0*(k0+1)/2+l0;
+                        buf0 = buf;
+                        for (icomp = 0; icomp < ncomp; icomp++) {
+                                peri0 = eri0;
+                                if (kshp > lshp && ishp > jshp) {
+                                for (i = 0; i < di; i++, peri0+=nkl*(i0+i)) {
+                                for (j = 0; j < dj; j++) {
+                                        peri = peri0 + nkl*j;
+                                        for (k = 0; k < dk; k++, peri+=k0+k) {
+                                        for (pbuf = buf0 + k*dij + j*di + i,
+                                             l = 0; l < dl; l++) {
+                                                peri[l] = pbuf[l*dijk];
+                                        } }
+                                } }
+                                } else if (ish > jsh) {
+                                for (i = 0; i < di; i++, peri0+=nkl*(i0+i)) {
+                                for (j = 0; j < dj; j++) {
+                                        peri = peri0 + nkl*j;
+                                        for (k = 0; k < dk; k++, peri+=k0+k) {
+                                        for (pbuf = buf0 + k*dij + j*di + i,
+                                             l = 0; l <= k; l++) {
+                                                peri[l] = pbuf[l*dijk];
+                                        } }
+                                } }
+                                } else if (ksh > lsh) {
+                                for (i = 0; i < di; i++, peri0+=nkl*(i0+i)) {
+                                for (j = 0; j <= i; j++) {
+                                        peri = peri0 + nkl*j;
+                                        for (k = 0; k < dk; k++, peri+=k0+k) {
+                                        for (pbuf = buf0 + k*dij + j*di + i,
+                                             l = 0; l < dl; l++) {
+                                                peri[l] = pbuf[l*dijk];
+                                        } }
+                                } }
+                                } else {
+                                for (i = 0; i < di; i++, peri0+=nkl*(i0+i)) {
+                                for (j = 0; j <= i; j++) {
+                                        peri = peri0 + nkl*j;
+                                        for (k = 0; k < dk; k++, peri+=k0+k) {
+                                        for (pbuf = buf0 + k*dij + j*di + i,
+                                             l = 0; l <= k; l++) {
+                                                peri[l] = pbuf[l*dijk];
+                                        } }
+                                } }
+                                }
+                                buf0 += dijkl;
+                                eri0 += neri;
+                        }
+                } else {
+                        dijk = dij * dk;
+                        dijkl = dijk * dl;
+                        eri0 = eri + k0*(k0+1)/2+l0;
+                        buf0 = buf;
+                        for (icomp = 0; icomp < ncomp; icomp++) {
+                                peri0 = eri0;
+                                if (kshp > lshp && ishp > jshp) {
+                                for (i = 0; i < di; i++, peri0+=nkl*(i0+i)) {
+                                for (j = 0; j < dj; j++) {
+                                        peri = peri0 + nkl*j;
+                                        for (k = 0; k < dk; k++, peri+=k0+k) {
+                                        for (l = 0; l < dl; l++) {
+                                                peri[l] = 0;
+                                        } }
+                                } }
+                                } else if (ish > jsh) {
+                                for (i = 0; i < di; i++, peri0+=nkl*(i0+i)) {
+                                for (j = 0; j < dj; j++) {
+                                        peri = peri0 + nkl*j;
+                                        for (k = 0; k < dk; k++, peri+=k0+k) {
+                                        for (l = 0; l <= k; l++) {
+                                                peri[l] = 0;
+                                        } }
+                                } }
+                                } else if (ksh > lsh) {
+                                for (i = 0; i < di; i++, peri0+=nkl*(i0+i)) {
+                                for (j = 0; j <= i; j++) {
+                                        peri = peri0 + nkl*j;
+                                        for (k = 0; k < dk; k++, peri+=k0+k) {
+                                        for (l = 0; l < dl; l++) {
+                                                peri[l] = 0;
+                                        } }
+                                } }
+                                } else {
+                                for (i = 0; i < di; i++, peri0+=nkl*(i0+i)) {
+                                for (j = 0; j <= i; j++) {
+                                        peri = peri0 + nkl*j;
+                                        for (k = 0; k < dk; k++, peri+=k0+k) {
+                                        for (l = 0; l <= k; l++) {
+                                                peri[l] = 0;
+                                        } }
+                                } }
+                                }
+                                eri0 += neri;
+                        }
+                }
         } }
         free(buf);
 }
@@ -584,63 +488,34 @@ static int no_prescreen()
         return 1;
 }
 
-void GTOnr2e_fill_drv(int (*intor)(), int (*cgto_in_shell)(), void (*fill)(),
-                      int (*fprescreen)(), double *eri, int ncomp,
-                      int *ishlst, int nbra, int *jshlst, int nket,
-                      CINTOpt *cintopt,
+void GTOnr2e_fill_drv(int (*intor)(), void (*fill)(), int (*fprescreen)(),
+                      double *eri, int ncomp,
+                      int *shls_slice, int *ao_loc, CINTOpt *cintopt,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
-        int *ao_loc = malloc(sizeof(int)*(nbas+1));
-        int *ishloc = malloc(sizeof(int)*(nbas+1));
-        int *jshloc = malloc(sizeof(int)*(nbas+1));
-        int i, j, ij;
-        int nao = 0;
-        for (i = 0; i < nbas; i++) {
-                ao_loc[i] = nao;
-                nao += (*cgto_in_shell)(i, bas);
-        }
-        ao_loc[nbas] = nao;
-        memcpy(ishloc, ao_loc, sizeof(int)*(nbas+1));
-        memcpy(jshloc, ao_loc, sizeof(int)*(nbas+1));
-
-// ishloc (jshloc) is fake ao_loc.  For shell x which is given by ishlst[*],
-// ishloc stores the actual offset in ishloc[x] and the stop offset in ishloc[x+1] 
-        int naoi = 0;
-        int naoj = 0;
-        for (i = 0; i < nbra; i++) {
-                j = ishlst[i];
-                ishloc[j] = naoi;
-                naoi += ao_loc[j+1] - ao_loc[j];
-                ishloc[j+1] = naoi;
-        }
-        for (i = 0; i < nket; i++) {
-                j = jshlst[i];
-                jshloc[j] = naoj;
-                naoj += ao_loc[j+1] - ao_loc[j];
-                jshloc[j+1] = naoj;
-        }
-
-        struct _Envs envs = {natm, nbas, atm, bas, env, nao,
-                                ao_loc, NULL, cintopt};
-
         if (fprescreen == NULL) {
                 fprescreen = no_prescreen;
         }
 
-#pragma omp parallel default(none) \
-        shared(fill, fprescreen, eri, envs, intor, ncomp, nbra, nket, \
-               naoi, naoj, ishlst, jshlst, ishloc, jshloc) \
-        private(i, j, ij)
-#pragma omp for nowait schedule(dynamic)
-        for (ij = 0; ij < nbra*nket; ij++) {
-                i = ij / nket;
-                j = ij % nket;
-                (*fill)(intor, fprescreen, eri, ncomp, ishlst[i], jshlst[j],
-                        &envs, ishloc, jshloc, naoi, naoj);
-        }
+        const int ish0 = shls_slice[0];
+        const int ish1 = shls_slice[1];
+        const int jsh0 = shls_slice[2];
+        const int jsh1 = shls_slice[3];
+        const int nish = ish1 - ish0;
+        const int njsh = jsh1 - jsh0;
 
-        free(ao_loc);
-        free(ishloc);
-        free(jshloc);
+#pragma omp parallel default(none) \
+        shared(fill, fprescreen, eri, intor, ncomp, \
+               shls_slice, ao_loc, cintopt, atm, natm, bas, nbas, env)
+{
+        int ij, i, j;
+#pragma omp for nowait schedule(dynamic)
+        for (ij = 0; ij < nish*njsh; ij++) {
+                i = ij / njsh;
+                j = ij % njsh;
+                (*fill)(intor, fprescreen, eri, ncomp, i, j, shls_slice,
+                        ao_loc, cintopt, atm, natm, bas, nbas, env);
+        }
+}
 }
 

@@ -149,6 +149,37 @@ class KnowValues(unittest.TestCase):
         eri1 = mol1.intor('cint2e_ip1_sph', comp=3, aosym='s4')
         self.assertTrue(numpy.allclose(ref, eri1))
 
+
+        shls_slice = [0, 4, 2, 6, 1, 5, 3, 5]
+        i0,i1,j0,j1,k0,k1,l0,l1 = mol1.ao_loc_nr()[shls_slice]
+        eri1 = mol1.intor('cint2e_ip1_sph', comp=3, shls_slice=shls_slice)
+        eri1 = eri1.reshape(3,i1-i0,j1-j0,k1-k0,l1-l0)
+        self.assertTrue(numpy.allclose(eri0[:,i0:i1,j0:j1,k0:k1,l0:l1], eri1))
+
+        shls_slice = [5, 7, 7, 9, 1, 5, 4, 6]
+        i0,i1,j0,j1,k0,k1,l0,l1 = mol1.ao_loc_nr()[shls_slice]
+        idx = numpy.tril_indices(2)
+        ref = eri0[:,i0:i1,j0:j1,k0:k1,l0:l1][:,idx[0],idx[1]]
+        eri1 = mol1.intor('cint2e_ip1_sph', comp=3, aosym='s2ij', shls_slice=shls_slice)
+        eri1 = eri1.reshape(3,-1,k1-k0,l1-l0)
+        self.assertTrue(numpy.allclose(ref, eri1))
+
+        shls_slice = [1, 5, 4, 6, 5, 7, 7, 9]
+        i0,i1,j0,j1,k0,k1,l0,l1 = mol1.ao_loc_nr()[shls_slice]
+        idx = numpy.tril_indices(2)
+        ref = eri0[:,i0:i1,j0:j1,k0:k1,l0:l1][:,:,:,idx[0],idx[1]]
+        eri1 = mol1.intor('cint2e_ip1_sph', comp=3, aosym='s2kl', shls_slice=shls_slice)
+        eri1 = eri1.reshape(3,i1-i0,j1-j0,-1)
+        self.assertTrue(numpy.allclose(ref, eri1))
+
+        shls_slice = [5, 7, 7, 9, 7, 9, 5, 7]
+        i0,i1,j0,j1,k0,k1,l0,l1 = mol1.ao_loc_nr()[shls_slice]
+        idx = numpy.tril_indices(2)
+        ref = eri0[:,i0:i1,j0:j1,k0:k1,l0:l1][:,idx[0],idx[1]][:,:,idx[0],idx[1]]
+        eri1 = mol1.intor('cint2e_ip1_sph', comp=3, aosym='s4', shls_slice=shls_slice)
+        self.assertTrue(numpy.allclose(ref, eri1))
+
+
     def test_rinv_with_zeta(self):
         mol.set_rinv_orig((.2,.3,.4))
         mol.set_rinv_zeta(2.2)
