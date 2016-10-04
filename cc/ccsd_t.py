@@ -127,10 +127,10 @@ def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
     if mol.symmetry:
         orbsym = symm.addons.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
                                             mycc.mo_coeff)
+        orbsym = numpy.asarray(orbsym, dtype=numpy.int32) % 10
     else:
         orbsym = numpy.zeros(nmo, dtype=numpy.int32)
 
-    orbsym = numpy.asarray(orbsym, dtype=numpy.int32)
     o_sorted = _irrep_argsort(orbsym[:nocc])
     v_sorted = _irrep_argsort(orbsym[nocc:])
     vrank = numpy.argsort(v_sorted)
