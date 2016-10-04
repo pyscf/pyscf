@@ -566,6 +566,36 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def add_wvvVV_(self, t1, t2, eris, t2new_tril):
         time0 = time.clock(), time.time()
         nocc, nvir = t1.shape
+        dgemm = lib.numpy_helper._dgemm
+
+        #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
+        #: t2new += numpy.einsum('ijcd,acdb->ijab', tau, vvvv)
+        def contract_rec_(t2new_tril, tau, eri, i0, i1, j0, j1):
+            nao = tau.shape[-1]
+            ic = i1 - i0
+            jc = j1 - j0
+            #: t2tril[:,j0:j1] += numpy.einsum('xcd,cdab->xab', tau[:,i0:i1], eri)
+            dgemm('N', 'N', nocc*(nocc+1)//2, jc*nao, ic*nao,
+                  tau.reshape(-1,nao*nao), eri.reshape(-1,jc*nao),
+                  t2new_tril.reshape(-1,nao*nao), 1, 1, i0*nao, 0, j0*nao)
+
+            #: t2tril[:,i0:i1] += numpy.einsum('xcd,abcd->xab', tau[:,j0:j1], eri)
+            dgemm('N', 'T', nocc*(nocc+1)//2, ic*nao, jc*nao,
+                  tau.reshape(-1,nao*nao), eri.reshape(-1,jc*nao),
+                  t2new_tril.reshape(-1,nao*nao), 1, 1, j0*nao, 0, i0*nao)
+
+        def contract_tril_(t2new_tril, tau, eri, a0, a):
+            nvir = tau.shape[-1]
+            #: t2new[i,:i+1, a] += numpy.einsum('xcd,cdb->xb', tau[:,a0:a+1], eri)
+            dgemm('N', 'N', nocc*(nocc+1)//2, nvir, (a+1-a0)*nvir,
+                  tau.reshape(-1,nvir*nvir), eri.reshape(-1,nvir),
+                  t2new_tril.reshape(-1,nvir*nvir), 1, 1, a0*nvir, 0, a*nvir)
+
+            #: t2new[i,:i+1,a0:a] += numpy.einsum('xd,abd->xab', tau[:,a], eri[:a])
+            if a > a0:
+                dgemm('N', 'T', nocc*(nocc+1)//2, (a-a0)*nvir, nvir,
+                      tau.reshape(-1,nvir*nvir), eri.reshape(-1,nvir),
+                      t2new_tril.reshape(-1,nvir*nvir), 1, 1, a*nvir, 0, a0*nvir)
 
         if self.direct:   # AO-direct CCSD
             mol = self.mol
@@ -587,40 +617,17 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                                      'CVHFsetnr_direct_scf')
             outbuf[:] = 0
             ao_loc = mol.ao_loc_nr()
-            max_memory = max(2000, self.max_memory - lib.current_memory()[0])
-            dmax = max(1, int(numpy.sqrt(max_memory*.95e6/8/nao**2/2)))
+            max_memory = max(0, self.max_memory - lib.current_memory()[0])
+            dmax = max(4, int(numpy.sqrt(max_memory*.95e6/8/nao**2/2)))
             sh_ranges = ao2mo.outcore.balance_partition(ao_loc, dmax)
             dmax = max(x[2] for x in sh_ranges)
             eribuf = numpy.empty((dmax,dmax,nao,nao))
             loadbuf = numpy.empty((dmax,dmax,nao,nao))
 
-            #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
-            #: t2new += numpy.einsum('ijcd,acdb->ijab', tau, vvvv)
-            def contract_(t2new_tril, tau, eri, i0, i1, j0, j1):
-                ic = i1 - i0
-                jc = j1 - j0
-                nao = tau.shape[-1]
-                #: t2tril[:,j0:j1] += numpy.einsum('xcd,cdab->xab', tau[:,i0:i1], eri)
-                lib.numpy_helper._dgemm('N', 'N', nocc*(nocc+1)//2, jc*nao, ic*nao,
-                                        tau.reshape(-1,nao*nao), eri.reshape(-1,jc*nao),
-                                        t2new_tril.reshape(-1,nao*nao), 1, 1,
-                                        i0*nao, 0, j0*nao)
-
-                #: t2tril[:,i0:i1] += numpy.einsum('xcd,abcd->xab', tau[:,j0:j1], eri)
-                if i1 > j1:
-                    lib.numpy_helper._dgemm('N', 'T', nocc*(nocc+1)//2, ic*nao, jc*nao,
-                                            tau.reshape(-1,nao*nao), eri.reshape(-1,jc*nao),
-                                            t2new_tril.reshape(-1,nao*nao), 1, 1,
-                                            j0*nao, 0, i0*nao)
-
             for ip, (ish0, ish1, ni) in enumerate(sh_ranges):
-                for jsh0, jsh1, nj in sh_ranges[:ip+1]:
-                    if ish1 == jsh1:
-                        eri = mol.intor('cint2e_sph', aosym='s4', out=eribuf,
-                                        shls_slice=(ish0,ish1,jsh0,jsh1))
-                    else:
-                        eri = mol.intor('cint2e_sph', aosym='s2kl', out=eribuf,
-                                        shls_slice=(ish0,ish1,jsh0,jsh1))
+                for jsh0, jsh1, nj in sh_ranges[:ip]:
+                    eri = mol.intor('cint2e_sph', aosym='s2kl', out=eribuf,
+                                    shls_slice=(ish0,ish1,jsh0,jsh1))
                     i0, i1 = ao_loc[ish0], ao_loc[ish1]
                     j0, j1 = ao_loc[jsh0], ao_loc[jsh1]
                     tmp = numpy.ndarray((i1-i0,nao,j1-j0,nao), buffer=loadbuf)
@@ -628,9 +635,18 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                                            eri.ctypes.data_as(ctypes.c_void_p),
                                            (ctypes.c_int*4)(i0, i1, j0, j1),
                                            ctypes.c_int(nao))
-                    contract_(outbuf, tau, tmp, i0, i1, j0, j1)
+                    contract_rec_(outbuf, tau, tmp, i0, i1, j0, j1)
                     time0 = logger.timer_debug1(self, 'AO-vvvv [%d:%d,%d:%d]' %
                                                 (ish0,ish1,jsh0,jsh1), *time0)
+                eri = mol.intor('cint2e_sph', aosym='s4', out=eribuf,
+                                shls_slice=(ish0,ish1,ish0,ish1))
+                i0, i1 = ao_loc[ish0], ao_loc[ish1]
+                for i in range(i1-i0):
+                    p0, p1 = i*(i+1)//2, (i+1)*(i+2)//2
+                    tmp = lib.unpack_tril(eri[p0:p1], out=loadbuf)
+                    contract_tril_(outbuf, tau, tmp, i0, i0+i)
+                time0 = logger.timer_debug1(self, 'AO-vvvv [%d:%d,%d:%d]' %
+                                            (ish0,ish1,ish0,ish1), *time0)
             eribuf = loadbuf = eri = tmp = None
 
             mo = numpy.asarray(self.mo_coeff, order='F')
@@ -659,20 +675,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                 tau[p0:p0+i+1] += t2[i,:i+1]
                 p0 += i + 1
             time0 = logger.timer_debug1(self, 'vvvv-tau', *time0)
-
-            def contract_(t2new_tril, tau, eri, a):
-                #: t2new[i,:i+1, a] += numpy.einsum('xcd,cdb->xb', tau[:,:a+1], eri)
-                lib.numpy_helper._dgemm('N', 'N', nocc*(nocc+1)//2, nvir, (a+1)*nvir,
-                                        tau.reshape(-1,nvir*nvir), eri.reshape(-1,nvir),
-                                        t2new_tril.reshape(-1,nvir*nvir), 1, 1,
-                                        0, 0, a*nvir)
-
-                #: t2new[i,:i+1,:a] += numpy.einsum('xd,abd->xab', tau[:,a], eri[:a])
-                if a > 0:
-                    lib.numpy_helper._dgemm('N', 'T', nocc*(nocc+1)//2, a*nvir, nvir,
-                                            tau.reshape(-1,nvir*nvir), eri.reshape(-1,nvir),
-                                            t2new_tril.reshape(-1,nvir*nvir), 1, 1,
-                                            a*nvir, 0, 0)
             p0 = 0
             outbuf = numpy.empty((nvir,nvir,nvir))
             outbuf1 = numpy.empty((nvir,nvir,nvir))
@@ -680,7 +682,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             for a in range(nvir):
                 buf = lib.unpack_tril(eris.vvvv[p0:p0+a+1], out=outbuf)
                 outbuf, outbuf1 = outbuf1, outbuf
-                handler = async_do(handler, contract_, t2new_tril, tau, buf, a)
+                handler = async_do(handler, contract_tril_, t2new_tril, tau, buf, 0, a)
                 p0 += a+1
                 time0 = logger.timer_debug1(self, 'vvvv %d'%a, *time0)
             handler.join()
@@ -936,8 +938,6 @@ if __name__ == '__main__':
     from pyscf import scf
 
     mol = gto.Mole()
-    mol.verbose = 5
-    mol.output = 'out_h2o'
     mol.atom = [
         [8 , (0. , 0.     , 0.)],
         [1 , (0. , -0.757 , 0.587)],

@@ -150,35 +150,16 @@ void CCload_eri(double *out, double *eri, int *orbs_slice, int nao)
         int i, j, k, l, ij;
         double *pout;
         double *buf = malloc(sizeof(double) * nao*nao);
-        if (i1 > j1) {
 #pragma omp for schedule (static)
-                for (ij = 0; ij < ni*nj; ij++) {
-                        i = ij / nj;
-                        j = ij % nj;
-                        NPdunpack_tril(nao, eri+ij*nao_pair, buf, 1);
-                        pout = out + (i*nn+j)*nao;
-                        for (k = 0; k < nao; k++) {
-                        for (l = 0; l < nao; l++) {
-                                pout[k*nn+l] = buf[k*nao+l];
-                        } }
-                }
-        } else {
-#pragma omp for schedule (static)
-                for (ij = 0; ij < ni*(ni+1)/2; ij++) {
-                        i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
-                        j = ij - i*(i+1)/2;
-                        NPdunpack_tril(nao, eri+ij*nao_pair, buf, 1);
-                        pout = out + (i*nn+j)*nao;
-                        for (k = 0; k < nao; k++) {
-                        for (l = 0; l < nao; l++) {
-                                pout[k*nn+l] = buf[k*nao+l];
-                        } }
-                        pout = out + (j*nn+i)*nao;
-                        for (k = 0; k < nao; k++) {
-                        for (l = 0; l < nao; l++) {
-                                pout[k*nn+l] = buf[k*nao+l];
-                        } }
-                }
+        for (ij = 0; ij < ni*nj; ij++) {
+                i = ij / nj;
+                j = ij % nj;
+                NPdunpack_tril(nao, eri+ij*nao_pair, buf, 1);
+                pout = out + (i*nn+j)*nao;
+                for (k = 0; k < nao; k++) {
+                for (l = 0; l < nao; l++) {
+                        pout[k*nn+l] = buf[k*nao+l];
+                } }
         }
         free(buf);
 }
