@@ -128,8 +128,7 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
     log = logger.Logger(casscf.stdout, casscf.verbose)
     if s is None:
         s = casscf._scf.get_ovlp()
-    orbsym = symm.label_orb_symm(mol, mol.irrep_id,
-                                 mol.symm_orb, mo_coeff, s)
+    orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, mo_coeff, s)
     orbsym = numpy.asarray(orbsym)
     ncore = casscf.ncore
 
