@@ -114,8 +114,8 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     ftmp.close()
     _tmpfile = None
     et *= 2
-    log.info('CCSD(T) correction = %.15g', et)
     log.timer('CCSD(T)', *cpu0)
+    log.info('CCSD(T) correction = %.15g', et)
     return et
 
 def _sort_eri(mycc, eris, nocc, nvir, vvop, log):

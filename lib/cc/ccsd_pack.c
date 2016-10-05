@@ -3,6 +3,7 @@
  */
 
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 //#include <omp.h>
 #include "config.h"
@@ -160,6 +161,48 @@ void CCload_eri(double *out, double *eri, int *orbs_slice, int nao)
                 for (l = 0; l < nao; l++) {
                         pout[k*nn+l] = buf[k*nao+l];
                 } }
+        }
+        free(buf);
+}
+}
+
+/*
+ * eri put virtual orbital first
+ * [ v         ]
+ * [ v .       ]
+ * [ v . .     ]
+ * [ o . . .   ]
+ * [ o . . . . ]
+ */
+void CCsd_sort_inplace(double *eri, int nocc, int nvir, int count)
+{
+#pragma omp parallel default(none) \
+        shared(eri, nocc, nvir, count)
+{
+        int ic, i, j, ij;
+        size_t nmo = nocc + nvir;
+        size_t nmo_pair = nmo * (nmo+1) / 2;
+        size_t nocc_pair = nocc * (nocc+1) /2;
+        size_t nvir_pair = nvir * (nvir+1) /2;
+        double *peri, *pout;
+        double *buf = malloc(sizeof(double) * nocc*nvir);
+#pragma omp for schedule (static)
+        for (ic = 0; ic < count; ic++) {
+                peri = eri + ic*nmo_pair + nvir_pair;
+                for (i = 0; i < nocc; i++, peri+=nvir+i) {
+                        for (j = 0; j < nvir; j++) {
+                                buf[i*nvir+j] = peri[j];
+                        }
+                }
+                pout = eri + ic*nmo_pair + nvir_pair;
+                peri = eri + ic*nmo_pair + nvir_pair + nvir;
+                for (ij = 0, i = 0; i < nocc; i++, peri+=nvir+i) {
+                        for (j = 0; j <= i; j++, ij++) {
+                                pout[ij] = peri[j];
+                        }
+                }
+                pout = eri + ic*nmo_pair + nvir_pair + nocc_pair;
+                memcpy(pout, buf, sizeof(double)*nocc*nvir);
         }
         free(buf);
 }

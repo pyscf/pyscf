@@ -125,8 +125,8 @@ def update_amps(mycc, t1, t2, eris):
             eris_ovvv = eris_ovvv.reshape(p1-p0,q1-q0,nvir,nvir)
 
             #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
-            #: tmp = numpy.einsum('jidc,kdcb->jibk', tau, eris.ovvv)
-            #: t2new += numpy.einsum('ka,jibk->ijba', -t1, tmp)
+            #: tmp = numpy.einsum('ijcd,kcdb->ijbk', tau, eris.ovvv)
+            #: t2new += numpy.einsum('ka,ijbk->ijab', -t1, tmp)
             if not mycc.direct:
                 eris_vovv = lib.transpose(eris_ovvv.reshape(-1,nvir))
                 eris_vovv = eris_vovv.reshape(nvir*(p1-p0),-1)
@@ -804,13 +804,28 @@ class _ERIS:
             self.oovv = self.feri1.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8')
             self.ovov = self.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8')
             self.ovvv = self.feri1.create_dataset('ovvv', (nocc,nvir,nvpair), 'f8')
-            def save_frac(i, ppp):
-                self.oooo[i] = ppp[:nocc,:nocc,:nocc]
-                self.ooov[i] = ppp[:nocc,:nocc,nocc:]
-                self.ovoo[i] = ppp[nocc:,:nocc,:nocc]
-                self.oovv[i] = ppp[:nocc,nocc:,nocc:]
-                self.ovov[i] = ppp[nocc:,:nocc,nocc:]
-                self.ovvv[i] = lib.pack_tril(_cp(ppp[nocc:,nocc:,nocc:]))
+            fsort = _ccsd.libcc.CCsd_sort_inplace
+            nocc_pair = nocc*(nocc+1)//2
+            nvir_pair = nvir*(nvir+1)//2
+            def sort_inplace(eri):
+                fsort(eri.ctypes.data_as(ctypes.c_void_p),
+                      ctypes.c_int(nocc), ctypes.c_int(nvir),
+                      ctypes.c_int(eri.shape[0]))
+                vv = eri[:,:nvir_pair]
+                oo = eri[:,nvir_pair:nvir_pair+nocc_pair]
+                ov = eri[:,nvir_pair+nocc_pair:].reshape(-1,nocc,nvir)
+                return oo, ov, vv
+            buf = numpy.empty((nmo,nmo,nmo))
+            def save_occ_frac(i, p0, p1, eri):
+                oo, ov, vv = sort_inplace(eri)
+                self.oooo[i,p0:p1] = lib.unpack_tril(oo, out=buf)
+                self.ooov[i,p0:p1] = ov
+                self.oovv[i,p0:p1] = lib.unpack_tril(vv, out=buf)
+            def save_vir_frac(i, p0, p1, eri):
+                oo, ov, vv = sort_inplace(eri)
+                self.ovoo[i,p0:p1] = lib.unpack_tril(oo, out=buf)
+                self.ovov[i,p0:p1] = ov
+                self.ovvv[i,p0:p1] = vv
 
             if not cc.direct:
                 max_memory = max(2000,cc.max_memory-lib.current_memory()[0])
@@ -822,18 +837,21 @@ class _ERIS:
             tmpfile3 = tempfile.NamedTemporaryFile()
             with h5py.File(tmpfile3.name, 'w') as feri:
                 max_memory = max(2000, cc.max_memory-lib.current_memory()[0])
-                ao2mo.general(cc.mol, (orbo,mo_coeff,mo_coeff,mo_coeff),
+                mo = numpy.hstack((orbv, orbo))
+                ao2mo.general(cc.mol, (orbo,mo,mo,mo),
                               feri, max_memory=max_memory, verbose=log)
                 cput1 = log.timer_debug1('transforming oppp', *cput1)
-                eri1 = feri['eri_mo']
-                outbuf = numpy.empty((nmo,nmo,nmo))
-                outbuf1 = numpy.empty((nmo,nmo,nmo))
+                blksize = max(1, int(min(8e9,max_memory*.5e6)/8/nmo**2))
                 handler = None
                 for i in range(nocc):
-                    buf = lib.unpack_tril(_cp(eri1[i*nmo:(i+1)*nmo]), out=outbuf)
-                    outbuf, outbuf1 = outbuf1, outbuf
-                    handler = async_do(handler, save_frac, i, buf)
-                    cput1 = log.timer_debug1('sorting %d'%i, *cput1)
+                    for p0, p1 in lib.prange(0, nvir, blksize):
+                        eri = _cp(feri['eri_mo'][i*nmo+p0:i*nmo+p1])
+                        handler = async_do(handler, save_vir_frac, i, p0, p1, eri)
+                        cput1 = log.timer_debug1('sorting vir %d'%i, *cput1)
+                    for p0, p1 in lib.prange(0, nocc, blksize):
+                        eri = _cp(feri['eri_mo'][i*nmo+nvir+p0:i*nmo+nvir+p1])
+                        handler = async_do(handler, save_occ_frac, i, p0, p1, eri)
+                        cput1 = log.timer_debug1('sorting occ %d'%i, *cput1)
                 if handler is not None:
                     handler.join()
                 for key in feri.keys():
