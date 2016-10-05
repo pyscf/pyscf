@@ -19,24 +19,26 @@ from pyscf.scf import hf
 
 def frac_occ_(mf, tol=1e-3):
     assert(isinstance(mf, hf.RHF))
+    old_get_occ = mf.get_occ
     def get_occ(mo_energy, mo_coeff=None):
         mol = mf.mol
-        mo_occ = numpy.zeros_like(mo_energy)
         nocc = mol.nelectron // 2
         sort_mo_energy = numpy.sort(mo_energy)
         lumo = sort_mo_energy[nocc]
-        mo_occ[mo_energy<lumo] = 2
         if abs(sort_mo_energy[nocc-1] - lumo) < tol:
+            mo_occ = numpy.zeros_like(mo_energy)
+            mo_occ[mo_energy<lumo] = 2
             lst = abs(mo_energy-lumo) < tol
             degen = int(lst.sum())
-            lst = lst & (mo_occ == 2)
-            frac = 2.*numpy.count_nonzero(lst)/degen
+            frac = 2.*numpy.count_nonzero(lst & (mo_occ == 2))/degen
             mo_occ[lst] = frac
             logger.warn(mf, 'fraction occ = %6g  for orbitals %s',
                         frac, numpy.where(lst)[0])
-        logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
-                    sort_mo_energy[nocc-1], sort_mo_energy[nocc])
-        logger.debug(mf, '  mo_energy = %s', mo_energy)
+            logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
+                        sort_mo_energy[nocc-1], sort_mo_energy[nocc])
+            logger.debug(mf, '  mo_energy = %s', mo_energy)
+        else:
+            mo_occ = old_get_occ(mo_energy, mo_coeff)
         return mo_occ
     mf.get_occ = get_occ
     return mf
@@ -45,20 +47,23 @@ def frac_occ(mf, tol=1e-3):
 
 def dynamic_occ_(mf, tol=1e-3):
     assert(isinstance(mf, hf.RHF))
+    old_get_occ = mf.get_occ
     def get_occ(mo_energy, mo_coeff=None):
         mol = mf.mol
-        mo_occ = numpy.zeros_like(mo_energy)
         nocc = mol.nelectron // 2
         sort_mo_energy = numpy.sort(mo_energy)
         lumo = sort_mo_energy[nocc]
-        mo_occ[mo_energy<lumo] = 2
         if abs(sort_mo_energy[nocc-1] - lumo) < tol:
+            mo_occ = numpy.zeros_like(mo_energy)
+            mo_occ[mo_energy<lumo] = 2
             lst = abs(mo_energy - lumo) < tol
             mo_occ[lst] = 0
             logger.warn(mf, 'set charge = %d', mol.charge+int(lst.sum())*2)
-        logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
-                    sort_mo_energy[nocc-1], sort_mo_energy[nocc])
-        logger.debug(mf, '  mo_energy = %s', sort_mo_energy)
+            logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
+                        sort_mo_energy[nocc-1], sort_mo_energy[nocc])
+            logger.debug(mf, '  mo_energy = %s', sort_mo_energy)
+        else:
+            mo_occ = old_get_occ(mo_energy, mo_coeff)
         return mo_occ
     mf.get_occ = get_occ
     return mf
@@ -283,8 +288,8 @@ def remove_linear_dep(mf, threshold=1e-8):
         else:
             eig = eig_nosym
     return eig
-def remove_linear_dep_(mf):
-    mf.eig = remove_linear_dep(mf)
+def remove_linear_dep_(mf, threshold=1e-8):
+    mf.eig = remove_linear_dep(mf, threshold=1e-8)
     return mf
 
 def convert_to_uhf(mf, out=None):
