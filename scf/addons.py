@@ -23,20 +23,19 @@ def frac_occ_(mf, tol=1e-3):
         mol = mf.mol
         mo_occ = numpy.zeros_like(mo_energy)
         nocc = mol.nelectron // 2
-        mo_occ[:nocc] = 2
-        if abs(mo_energy[nocc-1] - mo_energy[nocc]) < tol:
-            lst = abs(mo_energy - mo_energy[nocc-1]) < tol
-            nsocc = int(lst.sum())
-            ndocc = nocc - int(lst[:nocc].sum())
-            frac = 2.*(nocc-ndocc)/nsocc
-            mo_occ[ndocc:nsocc+ndocc] = frac
-            logger.warn(mf, 'fraction occ = %6g  [%d:%d]',
-                        frac, ndocc, ndocc+nsocc)
-        if nocc < mo_occ.size:
-            logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
-                        mo_energy[nocc-1], mo_energy[nocc])
-        else:
-            logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])
+        sort_mo_energy = numpy.sort(mo_energy)
+        lumo = sort_mo_energy[nocc]
+        mo_occ[mo_energy<lumo] = 2
+        if abs(sort_mo_energy[nocc-1] - lumo) < tol:
+            lst = abs(mo_energy-lumo) < tol
+            degen = int(lst.sum())
+            lst = lst & (mo_occ == 2)
+            frac = 2.*numpy.count_nonzero(lst)/degen
+            mo_occ[lst] = frac
+            logger.warn(mf, 'fraction occ = %6g  for orbitals %s',
+                        frac, numpy.where(lst)[0])
+        logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
+                    sort_mo_energy[nocc-1], sort_mo_energy[nocc])
         logger.debug(mf, '  mo_energy = %s', mo_energy)
         return mo_occ
     mf.get_occ = get_occ
@@ -50,18 +49,16 @@ def dynamic_occ_(mf, tol=1e-3):
         mol = mf.mol
         mo_occ = numpy.zeros_like(mo_energy)
         nocc = mol.nelectron // 2
-        mo_occ[:nocc] = 2
-        if abs(mo_energy[nocc-1] - mo_energy[nocc]) < tol:
-            lst = abs(mo_energy - mo_energy[nocc-1]) < tol
-            ndocc = nocc - int(lst[:nocc].sum())
-            mo_occ[ndocc:nocc] = 0
-            logger.warn(mf, 'set charge = %d', mol.charge+(nocc-ndocc)*2)
-        if nocc < mo_occ.size:
-            logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
-                        mo_energy[nocc-1], mo_energy[nocc])
-        else:
-            logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])
-        logger.debug(mf, '  mo_energy = %s', mo_energy)
+        sort_mo_energy = numpy.sort(mo_energy)
+        lumo = sort_mo_energy[nocc]
+        mo_occ[mo_energy<lumo] = 2
+        if abs(sort_mo_energy[nocc-1] - lumo) < tol:
+            lst = abs(mo_energy - lumo) < tol
+            mo_occ[lst] = 0
+            logger.warn(mf, 'set charge = %d', mol.charge+int(lst.sum())*2)
+        logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
+                    sort_mo_energy[nocc-1], sort_mo_energy[nocc])
+        logger.debug(mf, '  mo_energy = %s', sort_mo_energy)
         return mo_occ
     mf.get_occ = get_occ
     return mf
@@ -75,7 +72,7 @@ def float_occ_(mf):
     def get_occ(mo_energy, mo_coeff=None):
         mol = mf.mol
         ee = numpy.sort(numpy.hstack(mo_energy))
-        n_a = int((mo_energy[0]<(ee[mol.nelectron-1]+1e-3)).sum())
+        n_a = numpy.count_nonzero(mo_energy[0]<(ee[mol.nelectron-1]+1e-3))
         n_b = mol.nelectron - n_a
         if n_a != mf.nelec[0]:
             logger.info(mf, 'change num. alpha/beta electrons '
@@ -237,11 +234,11 @@ def project_mo_r2r(mol1, mo1, mol2):
                          numpy.dot(ps, mo1[n2c:])))
 
 
-def remove_linear_dep(mf):
+def remove_linear_dep(mf, threshold=1e-8):
     mol = mf.mol
     def eig_nosym(h, s):
         d, t = numpy.linalg.eigh(s)
-        x = t[:,d>1e-8] / numpy.sqrt(d[d>1e-8])
+        x = t[:,d>threshold] / numpy.sqrt(d[d>threshold])
         xhx = reduce(numpy.dot, (x.T, h, x))
         e, c = numpy.linalg.eigh(xhx)
         c = numpy.dot(x, c)
@@ -255,7 +252,7 @@ def remove_linear_dep(mf):
         es = []
         for ir in range(nirrep):
             d, t = numpy.linalg.eigh(s[ir])
-            x = t[:,d>1e-8] / numpy.sqrt(d[d>1e-8])
+            x = t[:,d>threshold] / numpy.sqrt(d[d>threshold])
             xhx = reduce(numpy.dot, (x.T, h[ir], x))
             e, c = numpy.linalg.eigh(xhx)
             cs.append(reduce(numpy.dot, (mol.symm_orb[ir], x, c)))
