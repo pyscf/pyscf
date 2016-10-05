@@ -52,7 +52,11 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True, tol=1e-9):
     for i, csym in enumerate(symm_orb):
         moso = numpy.dot(mo_s, csym)
         ovlpso = reduce(numpy.dot, (csym.T, s, csym))
-        norm[i] = numpy.einsum('ik,ki->i', moso, lib.cho_solve(ovlpso, moso.T))
+        try:
+            norm[i] = numpy.einsum('ik,ki->i', moso, lib.cho_solve(ovlpso, moso.T))
+        except:
+            ovlpso[numpy.diag_indices(csym.shape[1])] += 1e-12
+            norm[i] = numpy.einsum('ik,ki->i', moso, lib.cho_solve(ovlpso, moso.T))
     norm /= numpy.sum(norm, axis=0)  # for orbitals which are not normalized
     iridx = numpy.argmax(norm, axis=0)
     orbsym = [irrep_name[i] for i in iridx]
@@ -174,7 +178,11 @@ def symmetrize_space(mol, mo, s=None):
         ovlpso = reduce(numpy.dot, (csym.T, s, csym))
 
 # excluding orbitals which are already symmetrized
-        diag = numpy.einsum('ik,ki->i', moso, lib.cho_solve(ovlpso, moso.T))
+        try:
+            diag = numpy.einsum('ik,ki->i', moso, lib.cho_solve(ovlpso, moso.T))
+        except:
+            ovlpso[numpy.diag_indices(csym.shape[1])] += 1e-12
+            diag = numpy.einsum('ik,ki->i', moso, lib.cho_solve(ovlpso, moso.T))
         idx = abs(1-diag) < 1e-8
         orb_exclude = mo[:,idx]
         mo1.append(orb_exclude)

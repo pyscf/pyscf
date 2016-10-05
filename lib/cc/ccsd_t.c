@@ -113,6 +113,7 @@ static void sym_wv(double *w, double *v, double *vooo, double *vv_op,
                                 jk0 = oo_ir_loc[jkr];
                                 jk1 = oo_ir_loc[jkr+1];
                                 djk = jk1 - jk0;
+                                if (djk > 0) {
 
         dgemm_(&TRANS_N, &TRANS_N, &djk, &di, &df,
                &D1, pt2T+f0*noo+jk0, &noo, vv_op+i0*nmo+nocc+f0, &nmo,
@@ -125,6 +126,7 @@ static void sym_wv(double *w, double *v, double *vooo, double *vv_op,
                         w[i*noo+j*nocc+k] += buf[n];
                 } }
         } }
+                                }
                         }
                 }
         }
@@ -148,6 +150,7 @@ static void sym_wv(double *w, double *v, double *vooo, double *vv_op,
                                 ij0 = oo_ir_loc[ijr];
                                 ij1 = oo_ir_loc[ijr+1];
                                 dij = ij1 - ij0;
+                                if (dij > 0) {
 
         dgemm_(&TRANS_N, &TRANS_N, &dk, &dij, &dm,
                &D1, pt2T+mk0, &dk, vooo+ij0*nocc+m0, &nocc,
@@ -160,6 +163,7 @@ static void sym_wv(double *w, double *v, double *vooo, double *vv_op,
                         w[i*noo+j*nocc+k] -= buf[n];
                 } }
         } }
+                                }
                                 mk0 += dm * dk;
                         }
                 }

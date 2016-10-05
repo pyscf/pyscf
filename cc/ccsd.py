@@ -14,6 +14,7 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.cc import _ccsd
+_dgemm = lib.numpy_helper._dgemm
 
 BLKMIN = 4
 
@@ -96,35 +97,13 @@ def update_amps(mycc, t1, t2, eris):
 
     unit = _memory_usage_inloop(nocc, nvir)*1e6/8
     max_memory = mycc.max_memory - lib.current_memory()[0]
-    blksize = max(BLKMIN, int(max_memory*.95e6/8/unit))
+    blksize = min(nocc, max(BLKMIN, int(max_memory*.95e6/8/unit)))
+    blknvir = int((max_memory*.8e6/8-3*blksize*nocc*nvir**2*4)/(blksize*nvir**2))
+    blknvir = min(nvir, max(BLKMIN, blknvir))
     log.debug1('block size = %d, nocc = %d is divided into %d blocks',
                blksize, nocc, int((nocc+blksize-1)//blksize))
 
     for p0, p1 in prange(0, nocc, blksize):
-# ==== read eris.ovvv ====
-        eris_ovvv = _cp(eris.ovvv[p0:p1])
-        eris_ovvv = lib.unpack_tril(eris_ovvv.reshape((p1-p0)*nvir,-1))
-        eris_ovvv = eris_ovvv.reshape(p1-p0,nvir,nvir,nvir)
-
-        fvv += numpy.einsum('kc,kcba->ab', 2*t1[p0:p1], eris_ovvv)
-        fvv += numpy.einsum('kc,kbca->ab',  -t1[p0:p1], eris_ovvv)
-
-        #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
-        #: tmp = numpy.einsum('ijcd,kdcb->ijbk', tau, eris.ovvv)
-        #: t2new += numpy.einsum('ka,ijbk->ijba', -t1, tmp)
-        if not mycc.direct:
-            eris_vvov = _cp(eris_ovvv.transpose(2,1,0,3).reshape(nvir*nvir,-1))
-            tmp = numpy.empty((nocc,nocc,p1-p0,nvir))
-            taubuf = numpy.empty((blksize,nocc,nvir,nvir))
-            for j0, j1 in prange(0, nocc, blksize):
-                tau = make_tau(t2[j0:j1], t1[j0:j1], t1, 1, out=taubuf[:j1-j0])
-                lib.dot(tau.reshape(-1,nvir*nvir), eris_vvov, 1,
-                        tmp[j0:j1].reshape((j1-j0)*nocc,-1), 0)
-            tmp = _cp(tmp.transpose(0,1,3,2).reshape(-1,p1-p0))
-            lib.dot(tmp, t1[p0:p1], -1, t2new.reshape(-1,nvir), 1)
-        tau = eris_vvov = tmp = taubuf = None
-        #==== mem usage blksize*(nvir**3*2+nvir*nocc**2*2)
-
     #: wOVov += numpy.einsum('iabc,jc->ijab', eris.ovvv, t1)
     #: wOVov -= numpy.einsum('jbik,ka->jiba', eris.ovoo, t1)
     #: t2new += woVoV.transpose()
@@ -133,32 +112,61 @@ def update_amps(mycc, t1, t2, eris):
         wOVov = lib.dot(tmp.reshape(-1,nocc), t1, -1)
         tmp = None
         wOVov = wOVov.reshape(nocc,p1-p0,nvir,nvir)
-        #: wOVov += numpy.einsum('iabc,jc->jiab', eris_ovvv, t1)
-        lib.dot(t1, eris_ovvv.reshape(-1,nvir).T, 1, wOVov.reshape(nocc,-1), 1)
-        t2new[p0:p1] += wOVov.transpose(1,0,2,3)
 
         eris_ooov = _cp(eris.ooov[p0:p1])
         #: woVoV = numpy.einsum('ka,ijkb->ijba', t1, eris.ooov[p0:p1])
-        #: woVoV -= numpy.einsum('jc,icab->ijab', t1, eris_ovvv)
         woVoV = lib.dot(_cp(eris_ooov.transpose(0,1,3,2).reshape(-1,nocc)), t1)
         woVoV = woVoV.reshape(p1-p0,nocc,nvir,nvir)
-        for i in range(eris_ovvv.shape[0]):
-            lib.dot(t1, eris_ovvv[i].reshape(nvir,-1), -1,
-                    woVoV[i].reshape(nocc,-1), 1)
 
-    #: theta = t2.transpose(0,1,3,2) * 2 - t2
-    #: t1new += numpy.einsum('ijcb,jcba->ia', theta, eris.ovvv)
-        theta = numpy.empty((p1-p0,nocc,nvir,nvir))
-        for i in range(p1-p0):
-            theta[i] = t2[p0+i].transpose(0,2,1) * 2
-            theta[i] -= t2[p0+i]
-            lib.dot(_cp(theta[i].transpose(0,2,1).reshape(nocc,-1)),
-                    eris_ovvv[i].reshape(-1,nvir), 1, t1new, 1)
-        eris_ovvv = None
+# ==== read eris.ovvv ====
+        for q0, q1 in lib.prange(0, nvir, blknvir):
+            eris_ovvv = _cp(eris.ovvv[p0:p1,q0:q1])
+            eris_ovvv = lib.unpack_tril(eris_ovvv.reshape((p1-p0)*(q1-q0),-1))
+            eris_ovvv = eris_ovvv.reshape(p1-p0,q1-q0,nvir,nvir)
+
+            #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
+            #: tmp = numpy.einsum('jidc,kdcb->jibk', tau, eris.ovvv)
+            #: t2new += numpy.einsum('ka,jibk->ijba', -t1, tmp)
+            if not mycc.direct:
+                eris_vovv = lib.transpose(eris_ovvv.reshape(-1,nvir))
+                eris_vovv = eris_vovv.reshape(nvir*(p1-p0),-1)
+                tmp = numpy.empty((nocc,nocc,nvir,p1-p0))
+                taubuf = numpy.empty((blksize,nocc,blknvir,nvir))
+                for j0, j1 in prange(0, nocc, blksize):
+                    tau = numpy.ndarray((j1-j0,nocc,q1-q0,nvir), buffer=taubuf)
+                    tau = numpy.einsum('ia,jb->ijab', t1[j0:j1,q0:q1], t1, out=taubuf)
+                    tau += t2[j0:j1,:,q0:q1]
+                    lib.dot(tau.reshape((j1-j0)*nocc,-1), eris_vovv.T, 1,
+                            tmp[j0:j1].reshape((j1-j0)*nocc,-1), 0)
+                tmp = _cp(tmp.transpose(1,0,2,3).reshape(-1,p1-p0))
+                lib.dot(tmp, t1[p0:p1], -1, t2new.reshape(-1,nvir), 1)
+                tau = eris_vovv = tmp = taubuf = None
+            #==== mem usage blksize*(nvir**2*blknvir*2+blknvir*nocc**2*2)
+
+            fvv += numpy.einsum('kc,kcba->ab', 2*t1[p0:p1,q0:q1], eris_ovvv)
+            fvv[:,q0:q1] += numpy.einsum('kc,kbca->ab', -t1[p0:p1], eris_ovvv)
+
+            #: wOVov += numpy.einsum('iabc,jc->jiab', eris_ovvv, t1)
+            tmp = lib.dot(t1, eris_ovvv.reshape(-1,nvir).T)
+            wOVov[:,:,q0:q1] += tmp.reshape(nocc,p1-p0,q1-q0,nvir)
+
+            #: woVoV -= numpy.einsum('jc,icab->ijab', t1, eris_ovvv)
+            tmp = t1[:,q0:q1].copy()
+            for i in range(eris_ovvv.shape[0]):
+                lib.dot(tmp, eris_ovvv[i].reshape(q1-q0,-1), -1,
+                        woVoV[i].reshape(nocc,-1), 1)
+
+            #: theta = t2.transpose(1,0,2,3) * 2 - t2
+            #: t1new += numpy.einsum('ijcb,jcba->ia', theta, eris.ovvv)
+            theta = t2[p0:p1,:,q0:q1,:].transpose(1,0,2,3) * 2
+            theta-= t2[:,p0:p1,q0:q1,:]
+            lib.dot(theta.reshape(nocc,-1), eris_ovvv.reshape(-1,nvir), 1, t1new, 1)
+            eris_ovvv = theta = None
         time2 = log.timer_debug1('ovvv [%d:%d]'%(p0, p1), *time1)
         #==== mem usage blksize*(nvir**3+nocc*nvir**2*4)
 
 # ==== read eris.ovov ====
+        t2new[p0:p1] += wOVov.transpose(1,0,2,3)
         eris_ovov = _cp(eris.ovov[p0:p1])
         #==== mem usage blksize*(nocc*nvir**2*4)
 
@@ -168,7 +176,11 @@ def update_amps(mycc, t1, t2, eris):
         fov[p0:p1] += numpy.einsum('kc,iakc->ia', t1, eris_ovov) * 2
         fov[p0:p1] -= numpy.einsum('kc,icka->ia', t1, eris_ovov)
 
-    #: theta = t2.transpose(1,0,2,3) * 2 - t2
+    #: theta = t2.transpose(0,1,3,2) * 2 - t2
+        theta = numpy.empty((p1-p0,nocc,nvir,nvir))
+        for i in range(p1-p0):
+            theta[i] = t2[p0+i].transpose(0,2,1) * 2
+            theta[i] -= t2[p0+i]
     #: t1new += numpy.einsum('jb,ijba->ia', fov, theta)
     #: t1new -= numpy.einsum('kijb,kjba->ia', eris_ooov, theta)
         t1new += numpy.einsum('jb,jiab->ia', fov[p0:p1], theta)
@@ -183,8 +195,8 @@ def update_amps(mycc, t1, t2, eris):
     #: wOVov += .5 * numpy.einsum('jakc,ikcb->jiba', eris.ovov, tau)
     #: wOVov -= .5 * numpy.einsum('jcka,ikcb->jiba', eris.ovov, t2)
     #: t2new += numpy.einsum('ikca,kjbc->ijba', theta, wOVov)
-        theta = _cp(theta.transpose(0,3,1,2))
-        wOVov = _cp(wOVov.transpose(0,3,1,2))
+        theta = lib.transpose(theta.reshape(p1-p0,-1,nvir), axes=(0,2,1)).reshape(-1,nvir,nocc,nvir)
+        wOVov = lib.transpose(wOVov.reshape(nocc,-1,nvir), axes=(0,2,1)).reshape(nocc,nvir,-1,nvir)
         eris_OVov = lib.transpose(eris_ovov.reshape(-1,nov)).reshape(nocc,nvir,-1,nvir)
         eris_OvoV = _cp(eris_OVov.transpose(0,3,2,1))
         wOVov += eris_OVov
@@ -266,11 +278,9 @@ def update_amps(mycc, t1, t2, eris):
         for j0, j1 in prange(0, nocc, blksize):
             tau = make_tau(t2[j0:j1], t1[j0:j1], t1, 1, out=taubuf[:j1-j0])
             #: woooo[p0:p1,:,j0:j1] += numpy.einsum('ijab,klab->ijkl', eris_oOvV, tau)
-            lib.numpy_helper._dgemm('N', 'T', (p1-p0)*nocc, (j1-j0)*nocc, nvir*nvir,
-                                    eris_oOvV.reshape(-1,nvir*nvir),
-                                    tau.reshape(-1,nvir*nvir),
-                                    woooo[p0:p1].reshape(-1,nocc*nocc), 1, 1,
-                                    0, 0, j0*nocc)
+            _dgemm('N', 'T', (p1-p0)*nocc, (j1-j0)*nocc, nvir*nvir,
+                   eris_oOvV.reshape(-1,nvir*nvir), tau.reshape(-1,nvir*nvir),
+                   woooo[p0:p1].reshape(-1,nocc*nocc), 1, 1, 0, 0, j0*nocc)
             for i in range(j1-j0):
                 tau[i] -= t2[j0+i] * .5
             #: woVoV[j0:j1] += numpy.einsum('jkca,ickb->jiab', tau, eris_ovov)
@@ -566,7 +576,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def add_wvvVV_(self, t1, t2, eris, t2new_tril):
         time0 = time.clock(), time.time()
         nocc, nvir = t1.shape
-        dgemm = lib.numpy_helper._dgemm
 
         #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
         #: t2new += numpy.einsum('ijcd,acdb->ijab', tau, vvvv)
@@ -575,27 +584,27 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             ic = i1 - i0
             jc = j1 - j0
             #: t2tril[:,j0:j1] += numpy.einsum('xcd,cdab->xab', tau[:,i0:i1], eri)
-            dgemm('N', 'N', nocc*(nocc+1)//2, jc*nao, ic*nao,
-                  tau.reshape(-1,nao*nao), eri.reshape(-1,jc*nao),
-                  t2new_tril.reshape(-1,nao*nao), 1, 1, i0*nao, 0, j0*nao)
+            _dgemm('N', 'N', nocc*(nocc+1)//2, jc*nao, ic*nao,
+                   tau.reshape(-1,nao*nao), eri.reshape(-1,jc*nao),
+                   t2new_tril.reshape(-1,nao*nao), 1, 1, i0*nao, 0, j0*nao)
 
             #: t2tril[:,i0:i1] += numpy.einsum('xcd,abcd->xab', tau[:,j0:j1], eri)
-            dgemm('N', 'T', nocc*(nocc+1)//2, ic*nao, jc*nao,
-                  tau.reshape(-1,nao*nao), eri.reshape(-1,jc*nao),
-                  t2new_tril.reshape(-1,nao*nao), 1, 1, j0*nao, 0, i0*nao)
+            _dgemm('N', 'T', nocc*(nocc+1)//2, ic*nao, jc*nao,
+                   tau.reshape(-1,nao*nao), eri.reshape(-1,jc*nao),
+                   t2new_tril.reshape(-1,nao*nao), 1, 1, j0*nao, 0, i0*nao)
 
         def contract_tril_(t2new_tril, tau, eri, a0, a):
             nvir = tau.shape[-1]
             #: t2new[i,:i+1, a] += numpy.einsum('xcd,cdb->xb', tau[:,a0:a+1], eri)
-            dgemm('N', 'N', nocc*(nocc+1)//2, nvir, (a+1-a0)*nvir,
-                  tau.reshape(-1,nvir*nvir), eri.reshape(-1,nvir),
-                  t2new_tril.reshape(-1,nvir*nvir), 1, 1, a0*nvir, 0, a*nvir)
+            _dgemm('N', 'N', nocc*(nocc+1)//2, nvir, (a+1-a0)*nvir,
+                   tau.reshape(-1,nvir*nvir), eri.reshape(-1,nvir),
+                   t2new_tril.reshape(-1,nvir*nvir), 1, 1, a0*nvir, 0, a*nvir)
 
             #: t2new[i,:i+1,a0:a] += numpy.einsum('xd,abd->xab', tau[:,a], eri[:a])
             if a > a0:
-                dgemm('N', 'T', nocc*(nocc+1)//2, (a-a0)*nvir, nvir,
-                      tau.reshape(-1,nvir*nvir), eri.reshape(-1,nvir),
-                      t2new_tril.reshape(-1,nvir*nvir), 1, 1, a*nvir, 0, a0*nvir)
+                _dgemm('N', 'T', nocc*(nocc+1)//2, (a-a0)*nvir, nvir,
+                       tau.reshape(-1,nvir*nvir), eri.reshape(-1,nvir),
+                       t2new_tril.reshape(-1,nvir*nvir), 1, 1, a*nvir, 0, a0*nvir)
 
         if self.direct:   # AO-direct CCSD
             mol = self.mol

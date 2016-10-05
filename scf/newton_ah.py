@@ -535,7 +535,7 @@ def newton(mf):
 # label the symmetry every time calling gen_g_hop because kernel function may
 # change mo_coeff ordering after calling self.eig
                 self._orbsym = symm.label_orb_symm(mol, mol.irrep_id,
-                        mol.symm_orb, mo_coeff, s=self.get_ovlp())
+                        mol.symm_orb, mo_coeff, self.get_ovlp(), False)
             return gen_g_hop_rhf(self, mo_coeff, mo_occ, fock_ao)
 
         def update_rotate_matrix(self, dx, mo_occ, u0=1):
@@ -564,7 +564,7 @@ def newton(mf):
 # label the symmetry every time calling gen_g_hop because kernel function may
 # change mo_coeff ordering after calling self.eig
                     self._orbsym = symm.label_orb_symm(mol, mol.irrep_id,
-                            mol.symm_orb, mo_coeff, s=self.get_ovlp())
+                            mol.symm_orb, mo_coeff, self.get_ovlp(), False)
                 return gen_g_hop_rohf(self, mo_coeff, mo_occ, fock_ao)
 
             def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
@@ -593,9 +593,9 @@ def newton(mf):
                 if mol.symmetry:
                     ovlp_ao = self.get_ovlp()
                     self._orbsym =(symm.label_orb_symm(mol, mol.irrep_id,
-                                            mol.symm_orb, mo_coeff[0], s=ovlp_ao),
+                                            mol.symm_orb, mo_coeff[0], ovlp_ao, False),
                                    symm.label_orb_symm(mol, mol.irrep_id,
-                                            mol.symm_orb, mo_coeff[1], s=ovlp_ao))
+                                            mol.symm_orb, mo_coeff[1], ovlp_ao, False))
                 return gen_g_hop_uhf(self, mo_coeff, mo_occ, fock_ao)
 
             def update_rotate_matrix(self, dx, mo_occ, u0=1):

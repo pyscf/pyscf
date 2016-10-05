@@ -59,22 +59,20 @@ def write_hcore(fout, h, nmo, tol=1e-15, float_format=DEFAULT_FLOAT_FORMAT):
 
 
 def from_chkfile(output, chkfile, tol=1e-15, float_format=DEFAULT_FLOAT_FORMAT):
-    import pyscf.scf
-    import pyscf.ao2mo
-    import pyscf.symm
+    from pyscf import scf, ao2mo, symm
     with open(output, 'w') as fout:
-        mol, scf_rec = pyscf.scf.chkfile.load_scf(chkfile)
+        mol, scf_rec = scf.chkfile.load_scf(chkfile)
         mo_coeff = numpy.array(scf_rec['mo_coeff'])
         nmo = mo_coeff.shape[1]
         if mol.symmetry:
-            orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id,
-                                               mol.symm_orb, mo_coeff)
+            orbsym = symm.label_orb_symm(mol, mol.irrep_id,
+                                         mol.symm_orb, mo_coeff, check=False)
             write_head(fout, nmo, mol.nelectron, mol.spin, orbsym)
         else:
             write_head(fout, nmo, mol.nelectron, mol.spin)
 
-        eri = pyscf.ao2mo.outcore.full_iofree(mol, mo_coeff, verbose=0)
-        write_eri(fout, pyscf.ao2mo.restore(8, eri, nmo), nmo, tol, float_format)
+        eri = ao2mo.full(mol, mo_coeff, verbose=0)
+        write_eri(fout, ao2mo.restore(8, eri, nmo), nmo, tol, float_format)
 
         t = mol.intor_symmetric('cint1e_kin_sph')
         v = mol.intor_symmetric('cint1e_nuc_sph')

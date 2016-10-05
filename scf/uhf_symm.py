@@ -27,9 +27,9 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     nirrep = len(mol.irrep_id)
     ovlp_ao = mf.get_ovlp()
     orbsyma = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                  mo_coeff[0], s=ovlp_ao)
+                                  mo_coeff[0], ovlp_ao, False)
     orbsymb = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                  mo_coeff[1], s=ovlp_ao)
+                                  mo_coeff[1], ovlp_ao, False)
     orbsyma = numpy.array(orbsyma)
     orbsymb = numpy.array(orbsymb)
     tot_sym = 0
@@ -135,9 +135,9 @@ def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
     {'A1': (3, 3), 'A2': (0, 0), 'B1': (1, 1), 'B2': (1, 0)}
     '''
     orbsyma = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                  mo_coeff[0], s)
+                                  mo_coeff[0], s, False)
     orbsymb = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                  mo_coeff[1], s)
+                                  mo_coeff[1], s, False)
     orbsyma = numpy.array(orbsyma)
     orbsymb = numpy.array(orbsymb)
     irrep_nelec = dict([(mol.irrep_name[k], (int(sum(mo_occ[0][orbsyma==ir])),

@@ -40,7 +40,7 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     nirrep = len(mol.irrep_id)
     ovlp_ao = mf.get_ovlp()
     orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, mo_coeff,
-                                 s=ovlp_ao)
+                                 s=ovlp_ao, check=False)
     orbsym = numpy.array(orbsym)
     wfnsym = 0
     noccs = [sum(orbsym[mo_occ>0]==ir) for ir in mol.irrep_id]
@@ -102,7 +102,7 @@ def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
     >>> scf.hf_symm.get_irrep_nelec(mol, mf.mo_coeff, mf.mo_occ)
     {'A1': 6, 'A2': 0, 'B1': 2, 'B2': 2}
     '''
-    orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, mo_coeff, s)
+    orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, mo_coeff, s, False)
     orbsym = numpy.array(orbsym)
     irrep_nelec = dict([(mol.irrep_name[k], int(sum(mo_occ[orbsym==ir])))
                         for k, ir in enumerate(mol.irrep_id)])
@@ -687,7 +687,7 @@ class ROHF(rohf.ROHF):
         nirrep = len(mol.irrep_id)
         ovlp_ao = self.get_ovlp()
         orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, mo_coeff,
-                                     s=ovlp_ao)
+                                     ovlp_ao, False)
         orbsym = numpy.array(orbsym)
         wfnsym = 0
         ndoccs = []

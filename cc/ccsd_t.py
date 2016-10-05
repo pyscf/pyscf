@@ -41,11 +41,6 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     ftmp['t2'] = t2  # read back late.  Cache t2T in t2 to reduce memory footprint
     mo_energy, t1T, t2T, vooo = _sort_t2_vooo(mycc, orbsym, t1, t2, numpy.asarray(eris.ovoo))
 
-    # The rest 20% memory for cache b
-    max_memory = max(2000, mycc.max_memory - lib.current_memory()[0])
-    bufsize = max(1, (max_memory*1e6/8-nocc**3*100)*.8/(nocc*nmo))
-    log.debug('max_memory %d MB', max_memory)
-
     cpu2 = [time.clock(), time.time()]
     orbsym = numpy.hstack((numpy.sort(orbsym[:nocc]),numpy.sort(orbsym[nocc:])))
     o_ir_loc = numpy.append(0, numpy.cumsum(numpy.bincount(orbsym[:nocc], minlength=8)))
@@ -82,6 +77,11 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
         cpu2[:] = log.timer_debug1('contract %d:%d,%d:%d'%(a0,a1,b0,b1), *cpu2)
         return et
 
+    # The rest 20% memory for cache b
+    mem_now = lib.current_memory()[0]
+    max_memory = max(2000, mycc.max_memory - mem_now)
+    bufsize = max(1, (max_memory*1e6/8-nocc**3*100)*.8/(nocc*nmo))
+    log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
     et = 0
     handler = None
     for a0, a1, na in reversed(tril_prange(0, nvir, bufsize)):
@@ -126,7 +126,7 @@ def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
     mol = mycc.mol
     if mol.symmetry:
         orbsym = symm.addons.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                            mycc.mo_coeff)
+                                            mycc.mo_coeff, check=False)
         orbsym = numpy.asarray(orbsym, dtype=numpy.int32) % 10
     else:
         orbsym = numpy.zeros(nmo, dtype=numpy.int32)
