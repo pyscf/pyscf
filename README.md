@@ -20,7 +20,7 @@ Installation
     - Python 2.6, 2.7, 3.2, 3.3, 3.4
     - Numpy 1.8.0 or higher
     - Scipy 0.10 or higher (0.12.0 or higher for python 3.3, 3.4)
-    - h5py 2.2.0 or higher (requires HDF5 1.8.4 or higher)
+    - h5py 2.3.0 or higher (requires HDF5 1.8.4 or higher)
 
 * Compile core module
 
@@ -122,7 +122,7 @@ Known problems
   If you got problems to install the latest h5py package,  you can try
   the old releases:
   https://www.hdfgroup.org/ftp/HDF5/releases/hdf5-1.8.12/
-  https://github.com/h5py/h5py/archive/2.2.1.tar.gz
+  https://github.com/h5py/h5py/archive/2.3.1.tar.gz
 
 
 

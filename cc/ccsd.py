@@ -9,6 +9,7 @@ import tempfile
 from functools import reduce
 import numpy
 import h5py
+from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
@@ -70,8 +71,6 @@ def update_amps(mycc, t1, t2, eris):
     nocc, nvir = t1.shape
     nov = nocc*nvir
     fock = eris.fock
-    t1new = numpy.zeros_like(t1)
-    t2new = numpy.zeros_like(t2)
 
 #** make_inter_F
     fov = fock[:nocc,nocc:].copy()
@@ -95,13 +94,28 @@ def update_amps(mycc, t1, t2, eris):
     eris_ooov = None
     time1 = log.timer_debug1('woooo', *time0)
 
-    unit = _memory_usage_inloop(nocc, nvir)*1e6/8
-    max_memory = mycc.max_memory - lib.current_memory()[0]
-    blksize = min(nocc, max(BLKMIN, int(max_memory*1e6/8/unit)))
-    blknvir = int((max_memory*1e6/8-blksize*nocc*nvir**2*7)/(blksize*nvir**2))
+    t1new = numpy.empty_like(t1)
+    t2new = numpy.empty_like(t2)
+    t1new[:] = 0
+    t2new[:] = 0
+
+    unit = _memory_usage_inloop(nocc, nvir)
+    max_memory = max(2000, mycc.max_memory - lib.current_memory()[0])
+    blksize = min(nocc, max(BLKMIN, int(max_memory/unit)))
+    blknvir = int((max_memory*.9e6/8-blksize*nocc*nvir**2*6)/(blksize*nvir**2*2))
     blknvir = min(nvir, max(BLKMIN, blknvir))
-    log.debug1('block size = %d, nocc = %d is divided into %d blocks',
-               blksize, nocc, int((nocc+blksize-1)//blksize))
+    log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d,%d',
+               max_memory, nocc, nvir, blksize, blknvir)
+    nvir_pair = nvir * (nvir+1) // 2
+    def prefect_ovvv(p0, p1, q0, q1, prefetch):
+        if q1 != nvir:
+            q0, q1 = q1, min(nvir, q1+blknvir)
+            readbuf = numpy.ndarray((p1-p0,q1-q0,nvir_pair), buffer=prefetch)
+            readbuf[:] = eris.ovvv[p0:p1,q0:q1]
+    def prefect_ovov(p0, p1, buf):
+        buf[:] = eris.ovov[p0:p1]
+    def prefect_oovv(p0, p1, buf):
+        buf[:] = eris.oovv[p0:p1]
 
     buflen = max(nocc*nvir**2, nocc**3)
     buf1 = numpy.empty((blksize*buflen))
@@ -112,22 +126,21 @@ def update_amps(mycc, t1, t2, eris):
     for p0, p1 in prange(0, nocc, blksize):
     #: wOoVv += numpy.einsum('iabc,jc->ijab', eris.ovvv, t1)
     #: wOoVv -= numpy.einsum('jbik,ka->jiba', eris.ovoo, t1)
-        tmp = numpy.ndarray((nocc,p1-p0,nvir,nocc), buffer=buf1)
-        tmp[:] = _cp(eris.ovoo[p0:p1]).transpose(2,0,1,3)
         wOoVv = numpy.ndarray((nocc,p1-p0,nvir,nvir), buffer=buf3)
-        lib.ddot(tmp.reshape(-1,nocc), t1, -1, wOoVv.reshape(-1,nvir))
-
-        eris_ooov = _cp(eris.ooov[p0:p1])
-        tmp = numpy.ndarray((p1-p0,nocc,nvir,nocc), buffer=buf1)
-        tmp[:] = eris_ooov.transpose(0,1,3,2)
-        #: wooVV = numpy.einsum('ka,ijkb->ijba', t1, eris.ooov[p0:p1])
         wooVV = numpy.ndarray((p1-p0,nocc,nvir,nvir), buffer=buf4)
-        lib.ddot(tmp.reshape(-1,nocc), t1, 1, wooVV.reshape(-1,nvir))
-
-# ==== read eris.ovvv ====
+        handler = None
+        readbuf = numpy.empty((p1-p0,blknvir,nvir_pair))
+        prefetchbuf = numpy.empty((p1-p0,blknvir,nvir_pair))
+        ovvvbuf = numpy.empty((p1-p0,blknvir,nvir,nvir))
         for q0, q1 in lib.prange(0, nvir, blknvir):
-            eris_ovvv = _cp(eris.ovvv[p0:p1,q0:q1])
-            eris_ovvv = lib.unpack_tril(eris_ovvv.reshape((p1-p0)*(q1-q0),-1))
+            if q0 == 0:
+                readbuf[:] = eris.ovvv[p0:p1,q0:q1]
+            else:
+                readbuf, prefetchbuf = prefetchbuf, readbuf
+            handler = async_do(handler, prefect_ovvv, p0, p1, q0, q1, prefetchbuf)
+            eris_ovvv = numpy.ndarray(((p1-p0)*(q1-q0),nvir_pair), buffer=readbuf)
+            #:eris_ovvv = _cp(eris.ovvv[p0:p1,q0:q1])
+            eris_ovvv = lib.unpack_tril(eris_ovvv, out=ovvvbuf)
             eris_ovvv = eris_ovvv.reshape(p1-p0,q1-q0,nvir,nvir)
 
             #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
@@ -147,7 +160,6 @@ def update_amps(mycc, t1, t2, eris):
                 tmp1[:] = tmp.transpose(1,0,2,3)
                 lib.ddot(tmp1.reshape(-1,p1-p0), t1[p0:p1], -1, t2new.reshape(-1,nvir), 1)
                 eris_vovv = tau = tmp1 = tmp = None
-            #==== mem usage blksize*(nvir**2*blknvir*2+blknvir*nocc**2*2)
 
             fvv += numpy.einsum('kc,kcba->ab', 2*t1[p0:p1,q0:q1], eris_ovvv)
             fvv[:,q0:q1] += numpy.einsum('kc,kbca->ab', -t1[p0:p1], eris_ovvv)
@@ -156,12 +168,12 @@ def update_amps(mycc, t1, t2, eris):
             tmp = t1[:,q0:q1].copy()
             for i in range(eris_ovvv.shape[0]):
                 lib.ddot(tmp, eris_ovvv[i].reshape(q1-q0,-1), -1,
-                         wooVV[i].reshape(nocc,-1), 1)
+                         wooVV[i].reshape(nocc,-1))
 
             #: wOoVv += numpy.einsum('ibac,jc->jiba', eris_ovvv, t1)
             tmp = numpy.ndarray((nocc,p1-p0,q1-q0,nvir), buffer=buf1)
             lib.ddot(t1, eris_ovvv.reshape(-1,nvir).T, 1, tmp.reshape(nocc,-1))
-            wOoVv[:,:,q0:q1] += tmp
+            wOoVv[:,:,q0:q1] = tmp
 
             #: theta = t2.transpose(1,0,2,3) * 2 - t2
             #: t1new += numpy.einsum('ijcb,jcba->ia', theta, eris.ovvv)
@@ -170,13 +182,28 @@ def update_amps(mycc, t1, t2, eris):
             theta *= 2
             theta -= t2[:,p0:p1,q0:q1,:]
             lib.ddot(theta.reshape(nocc,-1), eris_ovvv.reshape(-1,nvir), 1, t1new, 1)
-            eris_ovvv = theta = tmp = None
+            theta = tmp = None
+        handler.join()
+        readbuf = prefetchbuf = ovvvbuf = eris_ovvv = None
         time2 = log.timer_debug1('ovvv [%d:%d]'%(p0, p1), *time1)
-        #==== mem usage blksize*(nvir**3+nocc*nvir**2*4)
+
+        tmp = numpy.ndarray((nocc,p1-p0,nvir,nocc), buffer=buf1)
+        tmp[:] = _cp(eris.ovoo[p0:p1]).transpose(2,0,1,3)
+        lib.ddot(tmp.reshape(-1,nocc), t1, -1, wOoVv.reshape(-1,nvir), 1)
+
+        eris_ooov = _cp(eris.ooov[p0:p1])
+        eris_oovv = numpy.empty((p1-p0,nocc,nvir,nvir))
+        handler = lib.background_thread(prefect_oovv, p0, p1, eris_oovv)
+        tmp = numpy.ndarray((p1-p0,nocc,nvir,nocc), buffer=buf1)
+        tmp[:] = eris_ooov.transpose(0,1,3,2)
+        #: wooVV = numpy.einsum('ka,ijkb->ijba', t1, eris.ooov[p0:p1])
+        lib.ddot(tmp.reshape(-1,nocc), t1, 1, wooVV.reshape(-1,nvir), 1)
         t2new[p0:p1] += wOoVv.transpose(1,0,2,3)
 
-# ==== read eris.oovv eris.ovov ====
-        eris_oovv = _cp(eris.oovv[p0:p1])
+        #:eris_oovv = _cp(eris.oovv[p0:p1])
+        handler.join()
+        eris_ovov = numpy.empty((p1-p0,nvir,nocc,nvir))
+        handler = lib.background_thread(prefect_ovov, p0, p1, eris_ovov)
     #: g2 = 2 * eris.oOVv - eris.oovv
     #: t1new += numpy.einsum('jb,ijba->ia', t1, g2)
         t1new[p0:p1] += numpy.einsum('jb,ijba->ia',  -t1, eris_oovv)
@@ -190,9 +217,10 @@ def update_amps(mycc, t1, t2, eris):
             tmp = lib.ddot(t1, eris_oovv[j].reshape(-1,nvir).T, 1, tmp1)
             lib.transpose(tmp.reshape(nocc,nocc,nvir), axes=(0,2,1), out=tmp2)
             t2new[:,p0+j] -= lib.ddot(tmp2, t1).reshape(nocc,nvir,nvir)
-        eris_oovv = tmp = None
+        eris_oovv = None
 
-        eris_ovov = _cp(eris.ovov[p0:p1])
+        #:eris_ovov = _cp(eris.ovov[p0:p1])
+        handler.join()
         for i in range(p1-p0):
             t2new[p0+i] += eris_ovov[i].transpose(1,0,2) * .5
         t1new[p0:p1] += numpy.einsum('jb,iajb->ia', 2*t1, eris_ovov)
@@ -201,7 +229,7 @@ def update_amps(mycc, t1, t2, eris):
         for j in range(p1-p0):
             lib.ddot(t1, eris_ovov[j].reshape(-1,nvir).T, 1, tmp1)
             lib.ddot(tmp1.reshape(-1,nocc), t1, -1, t2new[p0+j].reshape(-1,nvir), 1)
-        tmp1 = tmp2 = None
+        tmp1 = tmp2 = tmp = None
 
         fov[p0:p1] += numpy.einsum('kc,iakc->ia', t1, eris_ovov) * 2
         fov[p0:p1] -= numpy.einsum('kc,icka->ia', t1, eris_ovov)
@@ -265,10 +293,8 @@ def update_amps(mycc, t1, t2, eris):
                            tau.reshape(-1,nov)).reshape(-1,nvir,nocc,nvir)
             for i in range(j1-j0):
                 t2new[j0+i] += tmp[i].transpose(1,0,2)
-            #==== mem usage blksize*(nocc*nvir**2*8)
         theta = wOoVv = wOVov = eris_OVov = tmp = tau = None
         time2 = log.timer_debug1('wOVov [%d:%d]'%(p0, p1), *time2)
-        #==== mem usage blksize*(nocc*nvir**2*2)
 
     #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
     #: woooo += numpy.einsum('ijba,klab->ijkl', eris.oOVv, tau)
@@ -281,7 +307,6 @@ def update_amps(mycc, t1, t2, eris):
         eris_oOvV[:] = eris_ovov.transpose(0,2,1,3)
         eris_oVOv = lib.transpose(eris_oOvV.reshape(-1,nov,nvir), axes=(0,2,1), out=buf5)
         eris_oVOv = eris_oVOv.reshape(-1,nvir,nocc,nvir)
-        #==== mem usage blksize*(nocc*nvir**2*3)
 
         for j0, j1 in prange(0, nocc, blksize):
             tau = make_tau(t2[j0:j1], t1[j0:j1], t1, 1, out=buf2)
@@ -295,7 +320,6 @@ def update_amps(mycc, t1, t2, eris):
             lib.ddot(lib.transpose(tau.reshape(-1,nov,nvir), axes=(0,2,1)).reshape(-1,nov),
                      eris_oVOv.reshape(-1,nov).T,
                     1, woVoV[j0:j1].reshape((j1-j0)*nvir,-1), 1)
-            #==== mem usage blksize*(nocc*nvir**2*6)
         time2 = log.timer_debug1('woVoV [%d:%d]'%(p0, p1), *time2)
 
         tau = make_tau(t2[p0:p1], t1[p0:p1], t1, 1, out=buf2)
@@ -303,7 +327,6 @@ def update_amps(mycc, t1, t2, eris):
         lib.ddot(woooo[p0:p1].reshape(-1,nocc*nocc).T, tau.reshape(-1,nvir*nvir),
                  .5, t2new.reshape(nocc*nocc,-1), 1)
         eris_ovov = eris_oVOv = eris_oOvV = wooVV = tau = tmp = None
-        #==== mem usage blksize*(nocc*nvir**2*1)
 
         t2ibja = lib.transpose(t2[p0:p1].reshape(-1,nov,nvir), axes=(0,2,1),
                                out=buf1).reshape(-1,nvir,nocc,nvir)
@@ -316,7 +339,6 @@ def update_amps(mycc, t1, t2, eris):
                 t2new[j0+i] += tmp[i].transpose(1,2,0)
                 t2new[j0+i] += tmp[i].transpose(1,0,2) * .5
         woVoV = t2ibja = tmp = None
-        #==== mem usage blksize*(nocc*nvir**2*3)
         time1 = log.timer_debug1('contract occ [%d:%d]'%(p0, p1), *time1)
     buf1 = buf2 = buf3 = buf4 = buf5 = None
     time1 = log.timer_debug1('contract loop', *time0)
@@ -465,7 +487,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         log.info('******** %s flags ********', self.__class__)
         nocc = self.nocc()
         nvir = self.nmo() - nocc
-        log.info('CAS nocc = %d, nvir = %d', nocc, nvir)
+        log.info('CCSD nocc = %d, nvir = %d', nocc, nvir)
         if self.frozen:
             log.info('frozen orbitals %s', str(self.frozen))
         log.info('max_cycle = %d', self.max_cycle)
@@ -475,9 +497,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         #log.info('diis_file = %s', self.diis_file)
         log.info('diis_start_cycle = %d', self.diis_start_cycle)
         log.info('diis_start_energy_diff = %g', self.diis_start_energy_diff)
-        if self.mo_coeff is None:
-            log.warn('mo_coeff, mo_energy are not given.\n'
-                     'You may need mf.kernel() to generate them.')
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
@@ -504,7 +523,12 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def kernel(self, t1=None, t2=None, mo_coeff=None, eris=None):
         return self.ccsd(t1, t2, mo_coeff, eris)
     def ccsd(self, t1=None, t2=None, mo_coeff=None, eris=None):
-        if eris is None: eris = self.ao2mo(mo_coeff)
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        self.dump_flags()
+
+        if eris is None:
+            eris = self.ao2mo(mo_coeff)
         self._conv, self.ecc, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                        tol=self.conv_tol, tolnormt=self.conv_tol_normt,
@@ -635,11 +659,13 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             dmax = max(x[2] for x in sh_ranges)
             eribuf = numpy.empty((dmax,dmax,nao,nao))
             loadbuf = numpy.empty((dmax,dmax,nao,nao))
+            fint = gto.moleintor.getints2e
 
             for ip, (ish0, ish1, ni) in enumerate(sh_ranges):
                 for jsh0, jsh1, nj in sh_ranges[:ip]:
-                    eri = mol.intor('cint2e_sph', aosym='s2kl', out=eribuf,
-                                    shls_slice=(ish0,ish1,jsh0,jsh1))
+                    eri = fint('cint2e_sph', mol._atm, mol._bas, mol._env,
+                               shls_slice=(ish0,ish1,jsh0,jsh1), aosym='s2kl',
+                               ao_loc=ao_loc, cintopt=ao2mopt._cintopt, out=eribuf)
                     i0, i1 = ao_loc[ish0], ao_loc[ish1]
                     j0, j1 = ao_loc[jsh0], ao_loc[jsh1]
                     tmp = numpy.ndarray((i1-i0,nao,j1-j0,nao), buffer=loadbuf)
@@ -871,7 +897,7 @@ class _ERIS:
 
 # assume nvir > nocc, minimal requirements on memory in loop of update_amps
 def _memory_usage_inloop(nocc, nvir):
-    v = nvir**3*.5+nocc*nvir**2*6
+    v = max(nvir**3*.3+nocc*nvir**2*6, nocc*nvir**2*7)
     return v*8/1e6
 # assume nvir > nocc, minimal requirements on memory
 def _mem_usage(nocc, nvir):
