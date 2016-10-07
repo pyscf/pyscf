@@ -3,6 +3,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import gc
 import time
 import ctypes
 import tempfile
@@ -77,10 +78,15 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
         cpu2[:] = log.timer_debug1('contract %d:%d,%d:%d'%(a0,a1,b0,b1), *cpu2)
         return et
 
+    def tril_prange(start, stop, step):
+        cum_costs = numpy.arange(stop+1)**2
+        tasks = balance_partition(cum_costs, step, start, stop)
+        return tasks
+
     # The rest 20% memory for cache b
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mycc.max_memory - mem_now)
-    bufsize = max(1, (max_memory*1e6/8-nocc**3*100)*.8/(nocc*nmo))
+    bufsize = max(1, (max_memory*1e6/8-nocc**3*100)*.7/(nocc*nmo))
     log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
     et = 0
     handler = None
@@ -88,6 +94,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
         if handler is not None:
             et += handler.get()
             handler = None
+            gc.collect()
         # DO NOT prefetch here to reserve more memory for cache_a
         cache_row_a = numpy.asarray(eris_vvop[a0:a1,:a1])
         cache_col_a = numpy.asarray(eris_vvop[:a0,a0:a1])
@@ -101,6 +108,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
             if handler is not None:
                 et += handler.get()
                 handler = None
+                gc.collect()
             handler = lib.background_thread(contract, a0, a1, b0, b1,
                                             (cache_row_a,cache_col_a,
                                              cache_row_b,cache_col_b))
@@ -185,11 +193,6 @@ def _sort_t2_vooo(mycc, orbsym, t1, t2, ovoo):
         vooo = ovoo.transpose(1,0,2,3).copy()
         mo_energy = mycc.mo_energy
     return mo_energy, t1T, t2T, vooo
-
-def tril_prange(start, stop, step):
-    cum_costs = numpy.arange(stop+1)**2
-    tasks = balance_partition(cum_costs, step, start, stop)
-    return tasks
 
 def _irrep_argsort(orbsym):
     return numpy.hstack([numpy.where(orbsym == i)[0] for i in range(8)])
