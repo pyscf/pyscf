@@ -676,8 +676,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                     contract_rec_(outbuf, tau, tmp, i0, i1, j0, j1)
                     time0 = logger.timer_debug1(self, 'AO-vvvv [%d:%d,%d:%d]' %
                                                 (ish0,ish1,jsh0,jsh1), *time0)
-                eri = mol.intor('cint2e_sph', aosym='s4', out=eribuf,
-                                shls_slice=(ish0,ish1,ish0,ish1))
+                eri = fint('cint2e_sph', mol._atm, mol._bas, mol._env,
+                           shls_slice=(ish0,ish1,ish0,ish1), aosym='s4',
+                           ao_loc=ao_loc, cintopt=ao2mopt._cintopt, out=eribuf)
                 i0, i1 = ao_loc[ish0], ao_loc[ish1]
                 for i in range(i1-i0):
                     p0, p1 = i*(i+1)//2, (i+1)*(i+2)//2

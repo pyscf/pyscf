@@ -317,7 +317,6 @@ def getints2e(intor_name, atm, bas, env, shls_slice=None, comp=1,
         return out
 
     else:
-        from pyscf.scf import _vhf
         if shls_slice is None:
             shls_slice = (0, nbas, 0, nbas, 0, nbas, 0, nbas)
         elif len(shls_slice) == 4:
@@ -346,7 +345,8 @@ def getints2e(intor_name, atm, bas, env, shls_slice=None, comp=1,
         else:
             out = numpy.ndarray((comp,nij,nkl), buffer=out)
 
-        cintopt = _vhf.make_cintopt(atm, bas, env, intor_name)
+        if cintopt is None:
+            cintopt = make_cintopt(atm, bas, env, intor_name)
         prescreen = pyscf.lib.c_null_ptr()
         drv = libcgto.GTOnr2e_fill_drv
         drv(getattr(libcgto, intor_name),
