@@ -981,20 +981,22 @@ class CASSCF(casci.CASCI):
             civec = None
         ncore = self.ncore
         nocc = self.ncore + self.ncas
-        occ, ucas = self._eig(-envs['casdm1'], ncore, nocc)
-        mo = envs['mo'].copy()
-        mo[:,ncore:nocc] = numpy.dot(mo[:,ncore:nocc], ucas)
-        mo_occ = numpy.zeros(mo.shape[1])
+        mo_occ = numpy.zeros(envs['mo'].shape[1])
         mo_occ[:ncore] = 2
-        mo_occ[ncore:nocc] = -occ
+        if self.natorb:
+            occ = self._eig(-envs['casdm1'], ncore, nocc)[0]
+            mo_occ[ncore:nocc] = -occ
+        else:
+            mo_occ[ncore:nocc] = envs['casdm1'].diagonal()
 # Note: mo_energy in active space =/= F_{ii}  (F is general Fock)
         if 'mo_energy' in envs:
             mo_energy = envs['mo_energy']
         else:
             mo_energy = 'None'
         chkfile.dump_mcscf(self, self.chkfile, 'mcscf', envs['e_tot'],
-                           mo, self.ncore, self.ncas, mo_occ, mo_energy,
-                           envs['e_ci'], civec, overwrite_mol=False)
+                           envs['mo'], self.ncore, self.ncas, mo_occ,
+                           mo_energy, envs['e_ci'], civec, envs['casdm1'],
+                           overwrite_mol=False)
         return self
 
     def update(self, chkfile=None):

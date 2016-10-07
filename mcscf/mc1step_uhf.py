@@ -704,23 +704,23 @@ class CASSCF(casci_uhf.CASCI):
         ncore = self.ncore
         nocca = self.ncore[0] + self.ncas
         noccb = self.ncore[1] + self.ncas
-        occa, ucas = self._eig(-envs['casdm1'][0], ncore[0], nocca)
-        moa = envs['mo'][0].copy()
-        moa[:,ncore[0]:nocca] = numpy.dot(moa[:,ncore[0]:nocca], ucas)
-        occb, ucas = self._eig(-envs['casdm1'][1], ncore[1], noccb)
-        mob = envs['mo'][1].copy()
-        mob[:,ncore[1]:noccb] = numpy.dot(mob[:,ncore[1]:noccb], ucas)
-        mo = numpy.array((moa,mob))
-        mo_occ = numpy.zeros((2,moa.shape[1]))
+        mo_occ = numpy.zeros((2,envs['mo'][0].shape[1]))
         mo_occ[0,:ncore[0]] = 1
         mo_occ[1,:ncore[1]] = 1
-        mo_occ[0,ncore[0]:nocca] = -occa
-        mo_occ[1,ncore[1]:noccb] = -occb
+        if self.natorb:
+            occa, ucas = self._eig(-envs['casdm1'][0], ncore[0], nocca)
+            occb, ucas = self._eig(-envs['casdm1'][1], ncore[1], noccb)
+            mo_occ[0,ncore[0]:nocca] = -occa
+            mo_occ[1,ncore[1]:noccb] = -occb
+        else:
+            mo_occ[0,ncore[0]:nocca] = envs['casdm1'][0].diagonal()
+            mo_occ[1,ncore[1]:noccb] = envs['casdm1'][1].diagonal()
         mo_energy = 'None'
 
         chkfile.dump_mcscf(self, self.chkfile, 'mcscf', envs['e_tot'],
-                           mo, self.ncore, self.ncas, mo_occ, mo_energy,
-                           envs['e_ci'], civec, overwrite_mol=False)
+                           envs['mo'], self.ncore, self.ncas, mo_occ,
+                           mo_energy, envs['e_ci'], civec, envs['casdm1'],
+                           overwrite_mol=False)
         return self
 
     def rotate_mo(self, mo, u, log=None):
