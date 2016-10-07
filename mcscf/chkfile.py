@@ -19,7 +19,7 @@ def load_mcscf(chkfile):
 def dump_mcscf(mc, chkfile=None, key='mcscf',
                e_tot=None, mo_coeff=None, ncore=None, ncas=None,
                mo_occ=None, mo_energy=None, e_cas=None, ci_vector=None,
-               overwrite_mol=True):
+               casdm1=None, overwrite_mol=True):
     '''Save CASCI/CASSCF calculation results or intermediates in chkfile.
     '''
     if chkfile is None: chkfile = mc.chkfile
@@ -28,22 +28,7 @@ def dump_mcscf(mc, chkfile=None, key='mcscf',
     if e_tot is None: e_tot = mc.e_tot
     if e_cas is None: e_cas = mc.e_cas
     if mo_coeff is None: mo_coeff = mc.mo_coeff
-    if ci_vector is None: ci_vector = mc.ci
-
-#TODO: Add UCAS interface
-    if mo_occ is None or mo_energy is None:
-        mo_coeff = mo_coeff.copy()
-        nocc = ncore + ncas
-        casdm1 = mc.fcisolver.make_rdm1(mc.ci, ncas, mc.nelecas)
-        fock_ao = mc.get_fock(casdm1=casdm1)
-
-        occ, ucas = mc._eig(-casdm1, ncore, nocc)
-        mo_coeff[:,ncore:nocc] = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
-        # diagonal term of Fock
-        mo_energy = numpy.einsum('ji,ji->i', mo_coeff, fock_ao.dot(mo_coeff))
-        mo_occ = numpy.zeros_like(mo_energy)
-        mo_occ[:ncore] = 2
-        mo_occ[ncore:nocc] = -occ
+    #if ci_vector is None: ci_vector = mc.ci
 
     if h5py.is_hdf5(chkfile):
         fh5 = h5py.File(chkfile)
@@ -70,4 +55,5 @@ def dump_mcscf(mc, chkfile=None, key='mcscf',
     store('ncas', ncas)
     store('mo_occ', mo_occ)
     store('mo_energy', mo_energy)
+    store('casdm1', casdm1)
     fh5.close()
