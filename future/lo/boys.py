@@ -8,14 +8,16 @@
 import sys
 import time
 import numpy
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import iah
 
 
 def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
     if mo_coeff is None:
-        mo_coeff = localizer.mo_coeff
+        mo_coeff = numpy.asarray(localizer.mo_coeff, order='C')
     else:
+        mo_coeff = numpy.asarray(mo_coeff, order='C')
         localizer.mo_coeff = mo_coeff
 
     cput0 = (time.clock(), time.time())
@@ -40,7 +42,7 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
     e_last = 0
     for imacro in range(localizer.max_cycle):
         norm_gorb = numpy.linalg.norm(g_orb)
-        u0 = numpy.dot(u0, u)
+        u0 = lib.dot(u0, u)
         e = localizer.cost_function(u0)
         e_last, de = e, e-e_last
 
@@ -65,7 +67,7 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
     log.info('macro X = %d  f(x)= %g  |g|= %g  %d intor %d Hx %d KF',
              imacro+1, e, norm_gorb,
              (imacro+1)*2, tot_hop, tot_kf+imacro+1)
-    localizer.mo_coeff = numpy.dot(mo_coeff, u0)
+    localizer.mo_coeff = lib.dot(mo_coeff, u0)
     return localizer.mo_coeff
 
 
@@ -74,7 +76,7 @@ def dipole_integral(mol, mo_coeff):
     # Set to charge center for physical significance of <r>
     charge_center = numpy.einsum('z,zx->x', mol.atom_charges(), mol.atom_coords())
     mol.set_common_orig(charge_center)
-    dip = numpy.asarray([reduce(numpy.dot, (mo_coeff.T, x, mo_coeff))
+    dip = numpy.asarray([reduce(lib.dot, (mo_coeff.T, x, mo_coeff))
                          for x in mol.intor_symmetric('cint1e_r_sph', comp=3)])
     return dip
 
@@ -89,10 +91,10 @@ class Boys(iah.IAHOptimizer):
         self.max_stepsize = .05
         self.ah_trust_region = 3
 
-        self.mo_coeff = mo_coeff
+        self.mo_coeff = numpy.asarray(mo_coeff, order='C')
 
     def gen_g_hop(self, u):
-        mo_coeff = numpy.dot(self.mo_coeff, u)
+        mo_coeff = lib.dot(self.mo_coeff, u)
         dip = dipole_integral(self.mol, mo_coeff)
         g0 = numpy.einsum('xii,xip->pi', dip, dip)
         g = -self.pack_uniq_var(g0-g0.T) * 2
@@ -121,6 +123,7 @@ class Boys(iah.IAHOptimizer):
         g0 = g0 + g0.T
         def h_op(x):
             x = self.unpack_uniq_var(x)
+            norb = x.shape[0]
             #:hx = numpy.einsum('qp,xjj,xjq->pj', x, dip, dip)
             #:hx+= numpy.einsum('qp,xqq,xjq->pj', x, dip, dip)
             #:hx+= numpy.einsum('jk,xkk,xkp->pj', x, dip, dip)
@@ -134,23 +137,28 @@ class Boys(iah.IAHOptimizer):
             #:hx-= numpy.einsum('jk,xjj,xkp->pj', x, dip, dip) * 2
             #:hx-= numpy.einsum('jk,xkj,xjp->pj', x, dip, dip) * 2
             #:return -self.pack_uniq_var(hx)
-            hx = numpy.einsum('iq,qp->pi', g0, x)
-            hx+= numpy.einsum('qi,xiq,xip->pi', x, dip, dip) * 2
-            hx-= numpy.einsum('qp,xpp,xiq->pi', x, dip, dip) * 2
-            hx-= numpy.einsum('qp,xip,xpq->pi', x, dip, dip) * 2
+            #:hx = numpy.einsum('iq,qp->pi', g0, x)
+            hx = lib.dot(x.T, g0.T)
+            #:hx+= numpy.einsum('qi,xiq,xip->pi', x, dip, dip) * 2
+            hx+= numpy.einsum('xip,xi->pi', dip, numpy.einsum('qi,xiq->xi', x, dip)) * 2
+            #:hx-= numpy.einsum('qp,xpp,xiq->pi', x, dip, dip) * 2
+            hx-= numpy.einsum('xpp,xip->pi', dip,
+                              lib.dot(dip.reshape(-1,norb), x).reshape(3,norb,norb)) * 2
+            #:hx-= numpy.einsum('qp,xip,xpq->pi', x, dip, dip) * 2
+            hx-= numpy.einsum('xip,xp->pi', dip, numpy.einsum('qp,xpq->xp', x, dip)) * 2
             return -self.pack_uniq_var(hx-hx.T)
 
         return g, h_op, h_diag
 
     def get_grad(self, u):
-        mo_coeff = numpy.dot(self.mo_coeff, u)
+        mo_coeff = lib.dot(self.mo_coeff, u)
         dip = dipole_integral(self.mol, mo_coeff)
         g0 = numpy.einsum('xii,xip->pi', dip, dip)
         g = -self.pack_uniq_var(g0-g0.T) * 2
         return g
 
     def cost_function(self, u):
-        mo_coeff = numpy.dot(self.mo_coeff, u)
+        mo_coeff = lib.dot(self.mo_coeff, u)
         dip = dipole_integral(self.mol, mo_coeff)
         return numpy.einsum('xii,xii->', dip, dip)
 

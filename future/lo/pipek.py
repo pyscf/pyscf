@@ -9,6 +9,7 @@ import time
 import numpy
 import scipy.linalg
 
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.lib import linalg_helper
 from pyscf.scf import iah
@@ -28,7 +29,7 @@ def atomic_pops(mol, mo_coeff, method='meta_lowdin'):
             proj[i] = (csc + csc.T) * .5
 
     elif method.lower() in ('lowdin', 'meta_lowdin'):
-        csc = reduce(numpy.dot, (mo_coeff.T, s, orth.orth_ao(mol, method, s=s)))
+        csc = reduce(lib.dot, (mo_coeff.T, s, orth.orth_ao(mol, method, s=s)))
         for i, (b0, b1, p0, p1) in enumerate(mol.offset_nr_by_atom()):
             proj[i] = numpy.dot(csc[:,p0:p1], csc[:,p0:p1].T)
     else:
@@ -51,10 +52,10 @@ class PipekMezey(iah.IAHOptimizer):
 
         self.pop_method = 'meta_lowdin'
 
-        self.mo_coeff = mo_coeff
+        self.mo_coeff = numpy.asarray(mo_coeff, order='C')
 
     def gen_g_hop(self, u):
-        mo_coeff = numpy.dot(self.mo_coeff, u)
+        mo_coeff = lib.dot(self.mo_coeff, u)
         pop = atomic_pops(self.mol, mo_coeff, self.pop_method)
         g0 = numpy.einsum('xii,xip->pi', pop, pop)
         g = -self.pack_uniq_var(g0-g0.T) * 2
@@ -69,22 +70,24 @@ class PipekMezey(iah.IAHOptimizer):
         g0 = g0 + g0.T
         def h_op(x):
             x = self.unpack_uniq_var(x)
-            hx = numpy.einsum('iq,qp->pi', g0, x)
-            hx+= numpy.einsum('qi,xiq,xip->pi', x, pop, pop) * 2
-            hx-= numpy.einsum('qp,xpp,xiq->pi', x, pop, pop) * 2
-            hx-= numpy.einsum('qp,xip,xpq->pi', x, pop, pop) * 2
+            norb = x.shape[0]
+            hx = lib.dot(x.T, g0.T)
+            hx+= numpy.einsum('xip,xi->pi', pop, numpy.einsum('qi,xiq->xi', x, pop)) * 2
+            hx-= numpy.einsum('xpp,xip->pi', pop,
+                              lib.dot(pop.reshape(-1,norb), x).reshape(-1,norb,norb)) * 2
+            hx-= numpy.einsum('xip,xp->pi', pop, numpy.einsum('qp,xpq->xp', x, pop)) * 2
             return -self.pack_uniq_var(hx-hx.T)
 
         return g, h_op, h_diag
 
     def get_grad(self, u):
-        mo_coeff = numpy.dot(self.mo_coeff, u)
+        mo_coeff = lib.dot(self.mo_coeff, u)
         pop = atomic_pops(self.mol, mo_coeff, self.pop_method)
         g = numpy.einsum('xii,xip->pi', pop, pop) * 2
         return -self.pack_uniq_var(g)
 
     def cost_function(self, u):
-        mo_coeff = numpy.dot(self.mo_coeff, u)
+        mo_coeff = lib.dot(self.mo_coeff, u)
         pop = atomic_pops(self.mol, mo_coeff, self.pop_method)
         return numpy.einsum('xii,xii->', pop, pop)
 
