@@ -226,7 +226,6 @@ class CASCI(pyscf.lib.StreamObject):
                       self.mo_coeff[1][:,:ncore[1]])
             ovlp_ao = self._scf.get_ovlp()
             ss_core = self._scf.spin_square(mocore, ovlp_ao)
-            print ss_core
             if isinstance(self.e_cas, (float, numpy.number)):
                 ss = fci.spin_op.spin_square(self.ci, self.ncas, self.nelecas,
                                              mocas, ovlp_ao)
