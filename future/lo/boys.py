@@ -11,6 +11,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import iah
+from pyscf.lo import orth
 
 
 def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
@@ -20,11 +21,15 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
         mo_coeff = numpy.asarray(mo_coeff, order='C')
         localizer.mo_coeff = mo_coeff
 
+    if localizer.verbose >= logger.WARN:
+        localizer.check_sanity()
+    localizer.dump_flags()
+
     cput0 = (time.clock(), time.time())
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
-        log = logger.Logger(sys.stdout, verbose)
+        log = logger.Logger(localizer.stdout, verbose)
     if localizer.conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(localizer.conv_tol*.1)
         log.info('Set conv_tol_grad to %g', conv_tol_grad)
@@ -80,18 +85,53 @@ def dipole_integral(mol, mo_coeff):
                          for x in mol.intor_symmetric('cint1e_r_sph', comp=3)])
     return dip
 
+def init_guess(mol, mo_coeff):
+    s = mol.intor_symmetric('cint1e_ovlp_sph')
+    c = orth.orth_ao(mol, s=s)
+    mo = reduce(numpy.dot, (c.T, s, mo_coeff))
+    nmo = mo_coeff.shape[1]
+# Find the AOs which have largest overlap to MOs
+    idx = numpy.argsort(numpy.einsum('pi,pi->p', mo, mo))
+    nmo = mo.shape[1]
+    idx = idx[-nmo:]
+    u, w, vh = numpy.linalg.svd(mo[idx])
+    return lib.dot(vh, u.T)
+
 class Boys(iah.IAHOptimizer):
     def __init__(self, mol, mo_coeff=None):
         iah.IAHOptimizer.__init__(self)
         self.mol = mol
-        self.conv_tol = 1e-9
+        self.stdout = mol.stdout
+        self.verbose = mol.verbose
+        self.conv_tol = 1e-4
         self.conv_tol_grad = None
         self.max_cycle = 100
         self.max_iters = 10
         self.max_stepsize = .05
         self.ah_trust_region = 3
+        self.ah_start_tol = 1e9
 
         self.mo_coeff = numpy.asarray(mo_coeff, order='C')
+        self._keys = set(self.__dict__.keys())
+
+    def dump_flags(self):
+        log = logger.Logger(self.stdout, self.verbose)
+        log.info('\n')
+        log.info('******** %s flags ********', self.__class__)
+        log.info('conv_tol = %s'       ,self.conv_tol       )
+        log.info('conv_tol_grad = %s'  ,self.conv_tol_grad  )
+        log.info('max_cycle = %s'      ,self.max_cycle      )
+        log.info('max_stepsize = %s'   ,self.max_stepsize   )
+        log.info('max_iters = %s'      ,self.max_iters      )
+        log.info('kf_interval = %s'    ,self.kf_interval    )
+        log.info('kf_trust_region = %s',self.kf_trust_region)
+        log.info('ah_start_tol = %s'   ,self.ah_start_tol   )
+        log.info('ah_start_cycle = %s' ,self.ah_start_cycle )
+        log.info('ah_level_shift = %s' ,self.ah_level_shift )
+        log.info('ah_conv_tol = %s'    ,self.ah_conv_tol    )
+        log.info('ah_lindep = %s'      ,self.ah_lindep      )
+        log.info('ah_max_cycle = %s'   ,self.ah_max_cycle   )
+        log.info('ah_trust_region = %s',self.ah_trust_region)
 
     def gen_g_hop(self, u):
         mo_coeff = lib.dot(self.mo_coeff, u)
@@ -163,13 +203,7 @@ class Boys(iah.IAHOptimizer):
         return numpy.einsum('xii,xii->', dip, dip)
 
     def init_guess(self):
-        nmo = self.mo_coeff.shape[1]
-        u0 = numpy.eye(nmo)
-        if numpy.linalg.norm(self.get_grad(u0)) < 1e-5:
-            # Add noise to kick initial guess out of saddle point
-            dr = numpy.cos(numpy.arange((nmo-1)*nmo//2)) * 1e-3
-            u0 = self.extract_rotation(dr)
-        return u0
+        return init_guess(self.mol, self.mo_coeff)
 
     kernel = kernel
 

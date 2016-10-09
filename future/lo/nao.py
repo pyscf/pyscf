@@ -14,6 +14,7 @@ from functools import reduce
 import numpy
 import scipy.linalg
 import pyscf.lib.parameters
+from pyscf import lib
 from pyscf.gto import mole
 from pyscf.lo import orth
 from pyscf.lib import logger
@@ -204,26 +205,26 @@ def _nao_sub(mol, pre_occ, pre_nao, s=None):
     cnao = numpy.empty((nbf,nbf))
 
     if core_lst:
-        c = pre_nao[:,core_lst]
-        s1 = reduce(numpy.dot, (c.T, s, c))
-        cnao[:,core_lst] = c1 = numpy.dot(c, orth.lowdin(s1))
-        c = pre_nao[:,val_lst]
-        c -= reduce(numpy.dot, (c1, c1.T, s, c))
+        c = pre_nao[:,core_lst].copy()
+        s1 = reduce(lib.dot, (c.T, s, c))
+        cnao[:,core_lst] = c1 = lib.dot(c, orth.lowdin(s1))
+        c = pre_nao[:,val_lst].copy()
+        c -= reduce(lib.dot, (c1, c1.T, s, c))
     else:
         c = pre_nao[:,val_lst]
 
-    s1 = reduce(numpy.dot, (c.T, s, c))
+    s1 = reduce(lib.dot, (c.T, s, c))
     wt = pre_occ[val_lst]
-    cnao[:,val_lst] = numpy.dot(c, orth.weight_orth(s1, wt))
+    cnao[:,val_lst] = lib.dot(c, orth.weight_orth(s1, wt))
 
     if rydbg_lst:
         cvlst = core_lst + val_lst
-        c1 = cnao[:,cvlst]
-        c = pre_nao[:,rydbg_lst]
-        c -= reduce(numpy.dot, (c1, c1.T, s, c))
-        s1 = reduce(numpy.dot, (c.T, s, c))
-        cnao[:,rydbg_lst] = numpy.dot(c, orth.lowdin(s1))
-    snorm = numpy.linalg.norm(reduce(numpy.dot, (cnao.T, s, cnao)) - numpy.eye(nbf))
+        c1 = cnao[:,cvlst].copy()
+        c = pre_nao[:,rydbg_lst].copy()
+        c -= reduce(lib.dot, (c1, c1.T, s, c))
+        s1 = reduce(lib.dot, (c.T, s, c))
+        cnao[:,rydbg_lst] = lib.dot(c, orth.lowdin(s1))
+    snorm = numpy.linalg.norm(reduce(lib.dot, (cnao.T, s, cnao)) - numpy.eye(nbf))
     if snorm > 1e-9:
         logger.warn(mol, 'Weak orthogonality for localized orbitals %s', snorm)
     return cnao

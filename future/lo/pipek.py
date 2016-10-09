@@ -38,21 +38,15 @@ def atomic_pops(mol, mo_coeff, method='meta_lowdin'):
     return proj
 
 
-class PipekMezey(iah.IAHOptimizer):
+class PipekMezey(boys.Boys):
     def __init__(self, mol, mo_coeff=None):
-        iah.IAHOptimizer.__init__(self)
-        self.mol = mol
-        self.conv_tol = 1e-7
-        self.conv_tol_grad = None
-        self.max_cycle = 100
-        self.max_iters = 10
-        self.max_stepsize = .05
-        self.ah_start_cycle = 3
-        self.ah_trust_region = 3
-
+        boys.Boys.__init__(self, mol, mo_coeff)
         self.pop_method = 'meta_lowdin'
+        self._keys = self._keys.union(['pop_method'])
 
-        self.mo_coeff = numpy.asarray(mo_coeff, order='C')
+    def dump_flags(self):
+        boys.Boys.dump_flags(self)
+        logger.info(self, 'pop_method = %s',self.pop_method)
 
     def gen_g_hop(self, u):
         mo_coeff = lib.dot(self.mo_coeff, u)
@@ -90,17 +84,6 @@ class PipekMezey(iah.IAHOptimizer):
         mo_coeff = lib.dot(self.mo_coeff, u)
         pop = atomic_pops(self.mol, mo_coeff, self.pop_method)
         return numpy.einsum('xii,xii->', pop, pop)
-
-    def init_guess(self):
-        nmo = self.mo_coeff.shape[1]
-        u0 = numpy.eye(nmo)
-        if numpy.linalg.norm(self.get_grad(u0)) < 1e-5:
-            # Add noise to kick initial guess out of saddle point
-            dr = numpy.cos(numpy.arange((nmo-1)*nmo//2)) * 1e-2
-            u0 = self.extract_rotation(dr)
-        return u0
-
-    kernel = boys.kernel
 
 PM = Pipek = PipekMezey
 

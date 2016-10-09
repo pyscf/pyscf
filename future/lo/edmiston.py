@@ -9,23 +9,11 @@ import sys
 import time
 import numpy
 from pyscf.lib import logger
-from pyscf.scf import iah
 from pyscf.scf import hf
 from pyscf.lo import boys
 
 
-class EdmistonRuedenberg(iah.IAHOptimizer):
-    def __init__(self, mol, mo_coeff=None):
-        iah.IAHOptimizer.__init__(self)
-        self.mol = mol
-        self.conv_tol = 1e-8
-        self.conv_tol_grad = None
-        self.max_cycle = 100
-        self.max_iters = 10
-        self.max_stepsize = .05
-        self.ah_trust_region = 3
-
-        self.mo_coeff = mo_coeff
+class EdmistonRuedenberg(boys.Boys):
 
     def get_jk(self, u):
         mo_coeff = numpy.dot(self.mo_coeff, u)
@@ -68,12 +56,6 @@ class EdmistonRuedenberg(iah.IAHOptimizer):
     def cost_function(self, u):
         vj, vk = self.get_jk(u)
         return numpy.einsum('iii->', vj)
-
-    def init_guess(self):
-        nmo = self.mo_coeff.shape[1]
-        return numpy.eye(nmo)
-
-    kernel = boys.kernel
 
 ER = Edmiston = EdmistonRuedenberg
 

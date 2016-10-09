@@ -22,11 +22,11 @@ class IAHOptimizer(lib.StreamObject):
         self.kf_trust_region = 5
         self.ah_start_tol = 5.
         self.ah_start_cycle = 1
-        self.ah_level_shift = 1e-4
+        self.ah_level_shift = 0#1e-4
         self.ah_conv_tol = 1e-12
         self.ah_lindep = 1e-14
         self.ah_max_cycle = 30
-        self.ah_trust_region = 2.5
+        self.ah_trust_region = 3.
 
     def gen_g_hop(self, u):
         pass
@@ -82,8 +82,8 @@ def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
 
     def scale_down_step(dxi, hdxi, norm_gorb):
         dxmax = abs(dxi).max()
-        if dxmax > iah.max_stepsize * max(1,norm_gorb):
-            scale = iah.max_stepsize * max(1,norm_gorb) / dxmax
+        if dxmax > iah.max_stepsize:
+            scale = iah.max_stepsize / dxmax
             log.debug1('Scale rotation by %g', scale)
             dxi *= scale
             hdxi *= scale
@@ -126,7 +126,8 @@ def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
                           stat.imic, ihop, norm_gorb, numpy.linalg.norm(dxi),
                           dxmax, norm_dr, w, seig)
 
-                max_cycle = iah.max_iters-int(numpy.log(norm_gkf+1e-9)*2)
+                max_cycle = max(iah.max_iters,
+                                iah.max_iters-int(numpy.log(norm_gkf+1e-9)*2))
                 log.debug1('Set max_cycle %d', max_cycle)
                 ikf += 1
                 if stat.imic > 3 and norm_gorb > norm_gkf*iah.ah_trust_region:
@@ -134,6 +135,9 @@ def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
                     dr = dr - dxi
                     norm_gorb = numpy.linalg.norm(g_orb)
                     log.debug('|g| >> keyframe, Restore previouse step')
+                    break
+
+                elif (stat.imic >= max_cycle or norm_gorb < conv_tol_grad*.2):
                     break
 
                 elif (ikf > 2 and # avoid frequent keyframe
@@ -149,7 +153,7 @@ def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
                               '|g-correction|= %4.3g', norm_gkf1, norm_dg)
 
                     if (norm_dg < norm_gorb*iah.ah_trust_region  # kf not too diff
-                        or norm_gkf1 < norm_gkf  # grad is decaying
+                        #or norm_gkf1 < norm_gkf  # grad is decaying
                         # close to solution
                         or norm_gkf1 < conv_tol_grad*iah.ah_trust_region):
                         kf_trust_region = min(max(norm_gorb/(norm_dg+1e-9), iah.kf_trust_region), 10)
@@ -162,9 +166,6 @@ def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
                         norm_gorb = numpy.linalg.norm(g_orb)
                         log.debug('Out of trust region. Restore previouse step')
                         break
-
-                elif (stat.imic >= max_cycle or norm_gorb < conv_tol_grad*.2):
-                    break
 
         u = iah.extract_rotation(dr)
         log.debug('    tot inner=%d  |g|= %4.3g  |u-1|= %4.3g',

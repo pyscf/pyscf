@@ -257,7 +257,8 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                           imic, ihop, norm_gorb, norm_dxi,
                           dxmax, norm_dr, w, seig)
 
-                max_cycle = mf.max_cycle_inner-int(numpy.log(norm_gkf+1e-9)*2)
+                max_cycle = max(mf.max_cycle_inner,
+                                mf.max_cycle_inner-int(numpy.log(norm_gkf+1e-9)*2))
                 log.debug1('Set ah_start_tol %g, ah_start_cycle %d, max_cycle %d',
                            ah_start_tol, ah_start_cycle, max_cycle)
                 ikf += 1
