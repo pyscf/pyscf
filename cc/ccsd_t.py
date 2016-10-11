@@ -123,7 +123,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     _tmpfile = None
     et *= 2
     log.timer('CCSD(T)', *cpu0)
-    log.info('CCSD(T) correction = %.15g', et)
+    log.note('CCSD(T) correction = %.15g', et)
     return et
 
 def _sort_eri(mycc, eris, nocc, nvir, vvop, log):

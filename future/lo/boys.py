@@ -51,7 +51,7 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
         e = localizer.cost_function(u0)
         e_last, de = e, e-e_last
 
-        log.info('macro= %d  f(x)= %g  delta_f= %g  |g|= %g  %d Hx %d KF',
+        log.info('macro= %d  f(x)= %.8g  delta_f= %g  |g|= %g  %d Hx %d KF',
                  imacro+1, e, de, norm_gorb, stat.tot_hop, stat.tot_kf+1)
         cput1 = log.timer('cycle= %d'%(imacro+1), *cput1)
 

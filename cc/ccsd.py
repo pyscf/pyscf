@@ -539,9 +539,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         else:
             logger.info(self, 'CCSD not converge')
         if self._scf.e_tot == 0:
-            logger.info(self, 'E_corr = %.16g', self.ecc)
+            logger.note(self, 'E_corr = %.16g', self.ecc)
         else:
-            logger.info(self, 'E(CCSD) = %.16g  E_corr = %.16g',
+            logger.note(self, 'E(CCSD) = %.16g  E_corr = %.16g',
                         self.ecc+self._scf.e_tot, self.ecc)
         return self.ecc, self.t1, self.t2
 

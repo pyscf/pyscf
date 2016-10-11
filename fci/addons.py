@@ -523,13 +523,13 @@ def _unpack(nelec):
     else:
         return nelec
 
-def transform_ci_for_orbital_rotatation(ci, norb, nelec, u):
+def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
     '''Transform CI coefficients to the representation in new one-particle basis.
     Solving CI problem for Hamiltonian h1, h2 defined in old basis,
     CI_old = fci.kernel(h1, h2, ...)
     Given orbital rotation u, the CI problem can be either solved by
     transforming the Hamiltonian, or transforming the coefficients.
-    CI_new = fci.kernel(u^T*h1*u, ...) = transform_ci_for_orbital_rotatation(CI_old, u)
+    CI_new = fci.kernel(u^T*h1*u, ...) = transform_ci_for_orbital_rotation(CI_old, u)
 
     Args:
         u : 2D array
@@ -546,17 +546,17 @@ def transform_ci_for_orbital_rotatation(ci, norb, nelec, u):
     # Unitary transformation array trans_ci is the overlap between two sets of CI basis.
     trans_ci_a = numpy.zeros((na,na))
     for i, stri in enumerate(strsa): # for old basis
-        orbi_mask = (stri & one_particle_strs) > 0
+        orbi_mask = (stri & one_particle_strs) != 0
         for j, strj in enumerate(strsa): # for new basis
-            orbj_mask = (strj & one_particle_strs) > 0
+            orbj_mask = (strj & one_particle_strs) != 0
             minors = u[orbi_mask][:,orbj_mask]
             trans_ci_a[i,j] = numpy.linalg.det(minors)
 
     trans_ci_b = numpy.zeros((nb,nb))
     for i, stri in enumerate(strsb):
-        orbi_mask = (stri & one_particle_strs) > 0
+        orbi_mask = (stri & one_particle_strs) != 0
         for j, strj in enumerate(strsb):
-            orbj_mask = (strj & one_particle_strs) > 0
+            orbj_mask = (strj & one_particle_strs) != 0
             minors = u[orbi_mask][:,orbj_mask]
             trans_ci_b[i,j] = numpy.linalg.det(minors)
 
