@@ -194,6 +194,19 @@ class KnowValues(unittest.TestCase):
         mci = fci.FCI(mol, mf.mo_coeff, True)
         check(mci)
 
+    def test_transform_ci_for_orbital_rotatation(self):
+        numpy.random.seed(12)
+        norb = nelec = 6
+        u = numpy.linalg.svd(numpy.random.random((norb,norb)))[0]
+        mo1 = m.mo_coeff.dot(u)
+        h1e_new = reduce(numpy.dot, (mo1.T, m.get_hcore(), mo1))
+        g2e_new = ao2mo.incore.general(m._eri, (mo1,)*4, compact=False)
+        e1ref, ci1ref = fci.direct_spin1.kernel(h1e_new, g2e_new, norb, nelec, tol=1e-15)
+        ci1 = fci.addons.transform_ci_for_orbital_rotatation(ci0, norb, nelec, u)
+        e1 = fci.direct_spin1.energy(h1e_new, g2e_new, ci1, norb, nelec)
+        self.assertAlmostEqual(e1, e1ref, 9)
+        self.assertAlmostEqual(abs(abs(ci1ref)-abs(ci1)).sum(), 0, 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for fci.addons")

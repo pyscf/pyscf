@@ -2,7 +2,7 @@
 
 import copy
 import numpy
-import pyscf.lib
+from pyscf import lib
 from pyscf.fci import cistring
 from pyscf import symm
 
@@ -432,7 +432,7 @@ def reorder(ci, nelec, orbidxa, orbidxb=None):
     guide_stringsb = cistring.gen_strings4orblist(orbidxb, nelecb)
     old_det_idxa = numpy.argsort(guide_stringsa)
     old_det_idxb = numpy.argsort(guide_stringsb)
-    return pyscf.lib.take_2d(ci, old_det_idxa, old_det_idxb)
+    return lib.take_2d(ci, old_det_idxa, old_det_idxb)
 
 def overlap(string1, string2, norb, s=None):
     '''Determinants overlap on non-orthogonal one-particle basis'''
@@ -451,7 +451,7 @@ def overlap(string1, string2, norb, s=None):
             assert(bin(string2).count('1') == nelec)
         idx1 = [i for i in range(norb) if (1<<i & string1)]
         idx2 = [i for i in range(norb) if (1<<i & string2)]
-        s1 = pyscf.lib.take_2d(s, idx1, idx2)
+        s1 = lib.take_2d(s, idx1, idx2)
         return numpy.linalg.det(s1)
 
 def fix_spin_(fciobj, shift=.2, ss_value=None):
@@ -490,7 +490,7 @@ def fix_spin_(fciobj, shift=.2, ss_value=None):
         ci0 = old_contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
         if ss == 0:
             na = int(numpy.sqrt(fcivec.size))
-            ci0 = pyscf.lib.transpose_sum(ci0.reshape(na,na), inplace=True)
+            ci0 = lib.transpose_sum(ci0.reshape(na,na), inplace=True)
             ci0 *= .5
 
         if ss < sz*(sz+1)+.1:
@@ -522,6 +522,49 @@ def _unpack(nelec):
         return neleca, nelecb
     else:
         return nelec
+
+def transform_ci_for_orbital_rotatation(ci, norb, nelec, u):
+    '''Transform CI coefficients to the representation in new one-particle basis.
+    Solving CI problem for Hamiltonian h1, h2 defined in old basis,
+    CI_old = fci.kernel(h1, h2, ...)
+    Given orbital rotation u, the CI problem can be either solved by
+    transforming the Hamiltonian, or transforming the coefficients.
+    CI_new = fci.kernel(u^T*h1*u, ...) = transform_ci_for_orbital_rotatation(CI_old, u)
+
+    Args:
+        u : 2D array
+            the orbital rotation to transform the old one-particle basis to new
+            one-particle basis
+    '''
+    neleca, nelecb = _unpack(nelec)
+    strsa = cistring.gen_strings4orblist(range(norb), neleca)
+    strsb = cistring.gen_strings4orblist(range(norb), nelecb)
+    one_particle_strs = numpy.asarray([1<<i for i in range(norb)])
+    na = len(strsa)
+    nb = len(strsb)
+
+    # Unitary transformation array trans_ci is the overlap between two sets of CI basis.
+    trans_ci_a = numpy.zeros((na,na))
+    for i, stri in enumerate(strsa): # for old basis
+        orbi_mask = (stri & one_particle_strs) > 0
+        for j, strj in enumerate(strsa): # for new basis
+            orbj_mask = (strj & one_particle_strs) > 0
+            minors = u[orbi_mask][:,orbj_mask]
+            trans_ci_a[i,j] = numpy.linalg.det(minors)
+
+    trans_ci_b = numpy.zeros((nb,nb))
+    for i, stri in enumerate(strsb):
+        orbi_mask = (stri & one_particle_strs) > 0
+        for j, strj in enumerate(strsb):
+            orbj_mask = (strj & one_particle_strs) > 0
+            minors = u[orbi_mask][:,orbj_mask]
+            trans_ci_b[i,j] = numpy.linalg.det(minors)
+
+    # Transform old basis to new basis for all alpha-electron excitations
+    ci = lib.dot(trans_ci_a.T, ci.reshape(na,nb))
+    # Transform old basis to new basis for all beta-electron excitations
+    ci = lib.dot(ci.reshape(na,nb), trans_ci_b)
+    return ci
 
 
 if __name__ == '__main__':

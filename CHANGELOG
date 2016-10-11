@@ -3,6 +3,7 @@ PySCF 1.3 alpha (2016-12-?)
 * Added
   - Quantum chemistry ECP for solid
   - AO-direct CCSD
+  - CI coefficients transformation for one-particle basis rotation
 * Improved
   - Optimized CCSD(T)
 
