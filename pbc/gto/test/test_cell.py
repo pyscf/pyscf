@@ -216,6 +216,19 @@ class KnowValues(unittest.TestCase):
             pseudo = {'Cu': 'gthbp'})
         self.assertTrue(all(cell._ecpbas[:,0] == 1))
 
+        cell = pgto.Cell()
+        cell.h = numpy.eye(3) * 8
+        cell.gs = [5] * 3
+        cell.atom='''Na 0. 0. 0.
+                     H  0.  0.  1.'''
+        cell.basis={'Na':'lanl2dz', 'H':'sto3g'}
+        cell.ecp = {'Na':'lanl2dz'}
+        cell.build()
+        v1 = ecp_int(cell)
+        mol = cell.to_mol()
+        v0 = mol.intor('ECPscalar_sph')
+        self.assertAlmostEqual(abs(v0 - v1).sum(), 0.0289322453376, 10)
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.cell")

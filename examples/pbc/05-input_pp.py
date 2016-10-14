@@ -3,8 +3,9 @@
 '''
 Input pseudo potential using functions pbc.gto.pseudo.parse and pbc.gto.pseudo.load
 
-Support GTH-potential only.  See also pyscf/pbc/gto/pseudo/GTH_POTENTIALS for
-the GTH-potential format
+See also
+pyscf/pbc/gto/pseudo/GTH_POTENTIALS for the GTH-potential format
+pyscf/examples/gto/05-input_ecp.py for quantum chemistry ECP format
 '''
 
 from pyscf.pbc import gto
@@ -27,3 +28,16 @@ Si
      0.50279207    1     2.33241791
 ''')})
 
+
+#
+# Allow mixing quantum chemistry ECP and crystal PP in the same calculation.
+#
+cell = gto.M(
+    h = '''3    0    0
+           0    3    0
+           0    0    3''',
+    gs = [5,5,5],
+    atom = 'Cu 0 0 1; Na 0 1 0',
+    basis = {'na': 'lan2ldz', 'Cu': 'gth-szv'},
+    ecp = 'lanl2dz',
+    pseudo = {'Cu': 'gthbp'})
