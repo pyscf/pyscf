@@ -103,7 +103,7 @@ class Boys(iah.IAHOptimizer):
         self.mol = mol
         self.stdout = mol.stdout
         self.verbose = mol.verbose
-        self.conv_tol = 1e-4
+        self.conv_tol = 1e-6
         self.conv_tol_grad = None
         self.max_cycle = 100
         self.max_iters = 10
