@@ -86,8 +86,8 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
 #        if l > 0:
 #            continue
         if numpy.any(es < drop_eta):
-            es = es[es>=drop_eta]
             cs = cs[es>=drop_eta]
+            es = es[es>=drop_eta]
             np, ndrop = len(es), ndrop+np-len(es)
             pe = auxcell._bas[ib,gto.PTR_EXP]
             auxcell._bas[ib,gto.NPRIM_OF] = np
