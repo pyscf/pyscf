@@ -152,7 +152,10 @@ class Boys(iah.IAHOptimizer):
     def cost_function(self, u):
         mo_coeff = numpy.dot(self.mo_coeff, u)
         dip = dipole_integral(self.mol, mo_coeff)
-        return numpy.einsum('xii,xii->', dip, dip)
+        r2 = self.mol.intor_symmetric('cint1e_r2_sph')
+        r2 = numpy.einsum('pi,pi->', mo_coeff, r2.dot(mo_coeff))
+        val = r2 - numpy.einsum('xii,xii->', dip, dip)
+        return val * 2
 
     def init_guess(self):
         nmo = self.mo_coeff.shape[1]

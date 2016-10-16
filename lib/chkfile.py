@@ -131,12 +131,15 @@ def load_mol(chkfile):
             mol.verbose = 0
             mol.output = '/dev/null'
             moldic = eval(fh5['mol'].value)
+            for key in ('mass', 'grids'):
+                if key in moldic:
+                    del(moldic[key])
             mol.build(False, False, **moldic)
     return mol
 
 def save_mol(mol, chkfile):
     '''Save Mole object in chkfile
-    
+
     Args:
         mol : an instance of :class:`Mole`.
 
