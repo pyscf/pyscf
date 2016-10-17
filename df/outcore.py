@@ -115,7 +115,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo',
     time1 = log.timer('2c2e', *time0)
     try:
         low = scipy.linalg.cholesky(j2c, lower=True)
-    except scipy.linalg.LinAlgError
+    except scipy.linalg.LinAlgError:
         j2c[numpy.diag_indices(j2c.shape[1])] += 1e-14
         low = scipy.linalg.cholesky(j2c, lower=True)
     j2c = None
