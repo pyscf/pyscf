@@ -82,7 +82,11 @@ def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None, verbose=0):
     j2c = fill_2c2e(mol, auxmol, intor='cint2c2e_sph')
     log.debug('size of aux basis %d', j2c.shape[0])
     t1 = log.timer('2c2e', *t0)
-    low = scipy.linalg.cholesky(j2c, lower=True)
+    try:
+        low = scipy.linalg.cholesky(j2c, lower=True)
+    except scipy.linalg.LinAlgError
+        j2c[numpy.diag_indices(j2c.shape[1])] += 1e-14
+        low = scipy.linalg.cholesky(j2c, lower=True)
     j2c = None
     t1 = log.timer('Cholesky 2c2e', *t1)
 

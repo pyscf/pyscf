@@ -36,7 +36,7 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
     else:
         conv_tol_grad = localizer.conv_tol_grad
 
-    u0 = localizer.init_guess()
+    u0 = localizer.get_init_guess(localizer.init_guess)
     rotaiter = iah.rotate_orb_cc(localizer, u0, conv_tol_grad, verbose=log)
     u, g_orb, stat = next(rotaiter)
     cput1 = log.timer('initializing IAH', *cput0)
@@ -51,7 +51,7 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
         e = localizer.cost_function(u0)
         e_last, de = e, e-e_last
 
-        log.info('macro= %d  f(x)= %.8g  delta_f= %g  |g|= %g  %d Hx %d KF',
+        log.info('macro= %d  f(x)= %.14g  delta_f= %g  |g|= %g  %d Hx %d KF',
                  imacro+1, e, de, norm_gorb, stat.tot_hop, stat.tot_kf+1)
         cput1 = log.timer('cycle= %d'%(imacro+1), *cput1)
 
@@ -69,7 +69,7 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
         tot_hop += stat.tot_hop
 
     rotaiter.close()
-    log.info('macro X = %d  f(x)= %g  |g|= %g  %d intor %d Hx %d KF',
+    log.info('macro X = %d  f(x)= %.14g  |g|= %g  %d intor %d Hx %d KF',
              imacro+1, e, norm_gorb,
              (imacro+1)*2, tot_hop, tot_kf+imacro+1)
     localizer.mo_coeff = lib.dot(mo_coeff, u0)
@@ -85,7 +85,7 @@ def dipole_integral(mol, mo_coeff):
                          for x in mol.intor_symmetric('cint1e_r_sph', comp=3)])
     return dip
 
-def init_guess(mol, mo_coeff):
+def atomic_init_guess(mol, mo_coeff):
     s = mol.intor_symmetric('cint1e_ovlp_sph')
     c = orth.orth_ao(mol, s=s)
     mo = reduce(numpy.dot, (c.T, s, mo_coeff))
@@ -103,13 +103,14 @@ class Boys(iah.IAHOptimizer):
         self.mol = mol
         self.stdout = mol.stdout
         self.verbose = mol.verbose
-        self.conv_tol = 1e-6
+        self.conv_tol = 1e-7
         self.conv_tol_grad = None
         self.max_cycle = 100
         self.max_iters = 10
         self.max_stepsize = .05
         self.ah_trust_region = 3
         self.ah_start_tol = 1e9
+        self.init_guess = 'atomic'
 
         self.mo_coeff = numpy.asarray(mo_coeff, order='C')
         self._keys = set(self.__dict__.keys())
@@ -201,12 +202,21 @@ class Boys(iah.IAHOptimizer):
         mo_coeff = lib.dot(self.mo_coeff, u)
         dip = dipole_integral(self.mol, mo_coeff)
         r2 = self.mol.intor_symmetric('cint1e_r2_sph')
-        r2 = numpy.einsum('pi,pi->', mo_coeff, r2.dot(mo_coeff))
+        r2 = numpy.einsum('pi,pi->', mo_coeff, lib.dot(r2, mo_coeff))
         val = r2 - numpy.einsum('xii,xii->', dip, dip)
         return val * 2
 
-    def init_guess(self):
-        return init_guess(self.mol, self.mo_coeff)
+    def get_init_guess(self, key='atomic'):
+        if isinstance(key, str) and key.lower() == 'atomic':
+            return atomic_init_guess(self.mol, self.mo_coeff)
+        else:
+            nmo = self.mo_coeff.shape[1]
+            u0 = numpy.eye(nmo)
+            if numpy.linalg.norm(self.get_grad(u0)) < 1e-5:
+                # Add noise to kick initial guess out of saddle point
+                dr = numpy.cos(numpy.arange((nmo-1)*nmo//2)) * 1e-3
+                u0 = self.extract_rotation(dr)
+            return u0
 
     kernel = kernel
 

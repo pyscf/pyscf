@@ -19,3 +19,6 @@
 
 ------------------------------------------------
 * dryrun mode
+
+* hot deployment
+  http://code.activestate.com/recipes/576515/
