@@ -13,5 +13,5 @@ for i in libao2mo.dylib libcc.dylib libcgto.dylib libcvhf.dylib libdft.dylib \
   libnp_helper.dylib libpbc.dylib libri.dylib libxcfun_itrf.dylib \
   libxc_itrf.dylib
 do
-  install_name_tool -change libcint.2.8.dylib $(dirnow)/pyscf/lib/deps/lib/libcint.2.8.dylib $(dirnow)/pyscf/lib/$i
+  install_name_tool -change libcint.2.8.dylib ${dirnow}/pyscf/lib/deps/lib/libcint.2.8.dylib ${dirnow}/pyscf/lib/$i
 done
