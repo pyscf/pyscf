@@ -12,10 +12,10 @@ import ctypes
 import numpy
 from pyscf import gto
 from pyscf.gto import PTR_ECPBAS_OFFSET, PTR_NECPBAS, PTR_COORD
-from pyscf.pbc.df import incore
 
 
 def ecp_int(cell, kpts=None):
+    from pyscf.pbc.df import incore
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
     else:
