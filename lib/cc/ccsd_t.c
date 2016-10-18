@@ -4,7 +4,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <omp.h>
+#include "config.h"
 #include "np_helper/np_helper.h"
 #include "vhf/fblas.h"
 
