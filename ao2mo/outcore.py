@@ -499,7 +499,7 @@ def _transpose_to_h5g(h5group, key, dat, blksize, chunks=None):
         dset[col0:col1] = lib.transpose(dat[:,col0:col1])
 
 def full_iofree(mol, mo_coeff, intor='cint2e_sph', aosym='s4', comp=1,
-                verbose=logger.WARN, compact=True):
+                max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True):
     r'''Transfer arbitrary spherical AO integrals to MO integrals for given orbitals
     This function is a wrap for :func:`ao2mo.outcore.general`.  It's not really
     IO free.  The returned MO integrals are held in memory.  For backward compatibility,
@@ -586,6 +586,7 @@ def full_iofree(mol, mo_coeff, intor='cint2e_sph', aosym='s4', comp=1,
     with h5py.File(erifile.name, 'w') as feri:
         general(mol, (mo_coeff,)*4, feri, dataname='eri_mo',
                 intor=intor, aosym=aosym, comp=comp,
+                max_memory=max_memory, ioblk_size=ioblk_size,
                 verbose=verbose, compact=compact)
         eri = numpy.asarray(feri['eri_mo'])
         for key in feri.keys():
@@ -593,7 +594,7 @@ def full_iofree(mol, mo_coeff, intor='cint2e_sph', aosym='s4', comp=1,
         return eri
 
 def general_iofree(mol, mo_coeffs, intor='cint2e_sph', aosym='s4', comp=1,
-                   verbose=logger.WARN, compact=True):
+                   max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True):
     r'''For the given four sets of orbitals, transfer arbitrary spherical AO
     integrals to MO integrals on the fly.  This function is a wrap for
     :func:`ao2mo.outcore.general`.  It's not really IO free.  The returned MO
@@ -673,6 +674,7 @@ def general_iofree(mol, mo_coeffs, intor='cint2e_sph', aosym='s4', comp=1,
     with h5py.File(erifile.name, 'w') as feri:
         general(mol, mo_coeffs, feri, dataname='eri_mo',
                 intor=intor, aosym=aosym, comp=comp,
+                max_memory=max_memory, ioblk_size=ioblk_size,
                 verbose=verbose, compact=compact)
         eri = numpy.asarray(feri['eri_mo'])
         for key in feri.keys():

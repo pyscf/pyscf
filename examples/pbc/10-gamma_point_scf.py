@@ -11,21 +11,24 @@ In most scenario, it should be used with pseudo potential.
 from pyscf.pbc import gto, scf, dft
 import numpy
 
-cell = gto.M(
-    h = numpy.eye(3)*3.5668,
-    atom = '''C     0.      0.      0.    
+cell = gto.Cell()
+# .h is a matrix for lattice vectors.  Note each column of .h denotes a direction
+cell.h = '''
+3.5668  0       0
+0       3.5668  0
+0       0       3.5668'''
+cell.atom = '''C     0.      0.      0.    
               C     0.8917  0.8917  0.8917
               C     1.7834  1.7834  0.    
               C     2.6751  2.6751  0.8917
               C     1.7834  0.      1.7834
               C     2.6751  0.8917  2.6751
               C     0.      1.7834  1.7834
-              C     0.8917  2.6751  2.6751''',
-    basis = 'gth-szv',
-    pseudo = 'gth-pade',
-    gs = [10]*3,
-    verbose = 4,
-)
+              C     0.8917  2.6751  2.6751'''
+cell.basis = 'gth-szv'
+cell.pseudo = 'gth-pade'
+cell.gs = [10]*3  # 10 grids on postive x direction, => 21^3 grids in total
+cell.verbose = 4
 
 mf = scf.RHF(cell)
 ehf = mf.kernel()
