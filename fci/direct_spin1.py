@@ -486,7 +486,7 @@ class FCISolver(lib.StreamObject):
         self.max_space = 12
         self.conv_tol = 1e-10
         self.lindep = 1e-14
-        self.max_memory = lib.parameters.MAX_MEMORY
+        self.max_memory = lib.param.MAX_MEMORY
 # level shift in precond
         self.level_shift = 1e-3
         # force the diagonlization use davidson iteration.  When the CI space

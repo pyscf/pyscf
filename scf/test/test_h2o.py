@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #

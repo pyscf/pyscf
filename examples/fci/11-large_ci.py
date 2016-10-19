@@ -3,11 +3,11 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-from pyscf import gto, scf, mcscf, fci
-
 '''
 Largest CI coefficients
 '''
+
+from pyscf import gto, scf, mcscf, fci
 
 mol = gto.Mole()
 mol.build(

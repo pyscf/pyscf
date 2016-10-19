@@ -274,7 +274,7 @@ Without assigning this variable, messages will be printed to
 
   mol.max_memory = 1000 # MB
   
-The default size is set by :attr:`lib.parameters.MEMORY_MAX`.
+The default size can be set in shell with environment variable `PYSCF_MAX_MEMORY`
 
 :attr:`~Mole.verbose`, :attr:`~Mole.output` and :attr:`~Mole.max_memory`
 can be assgined from command line::

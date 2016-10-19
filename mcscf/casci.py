@@ -340,14 +340,14 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     ncore = casci.ncore
     mo_core, mo_cas, mo_vir = extract_orbs(mo_coeff, ncas, nelecas, ncore)
 
+    # 2e
+    eri_cas = casci.get_h2eff(mo_cas)
+    t1 = log.timer('integral transformation to CAS space', *t1)
+
     # 1e
     h1eff, energy_core = casci.get_h1eff(mo_coeff)
     log.debug('core energy = %.15g', energy_core)
     t1 = log.timer('effective h1e in CAS space', *t0)
-
-    # 2e
-    eri_cas = casci.get_h2eff(mo_cas)
-    t1 = log.timer('integral transformation to CAS space', *t1)
 
     # FCI
     max_memory = max(400, casci.max_memory-pyscf.lib.current_memory()[0])
@@ -503,11 +503,12 @@ class CASCI(pyscf.lib.StreamObject):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff[:,self.ncore:self.ncore+self.ncas]
 
-        nao, nmo = mo_coeff.shape
         if self._scf._eri is not None:
-            eri = pyscf.ao2mo.full(self._scf._eri, mo_coeff)
+            eri = ao2mo.full(self._scf._eri, mo_coeff,
+                             max_memory=self.max_memory)
         else:
-            eri = pyscf.ao2mo.full(self.mol, mo_coeff, verbose=self.verbose)
+            eri = ao2mo.full(self.mol, mo_coeff, verbose=self.verbose,
+                             max_memory=self.max_memory)
         return eri
 
     @pyscf.lib.with_doc(h1e_for_cas.__doc__)
