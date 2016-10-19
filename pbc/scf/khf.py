@@ -318,7 +318,7 @@ class KRHF(hf.RHF):
         else:
             nuc = self.with_df.get_nuc(kpts)
         if len(cell._ecpbas) > 0:
-            nuc += ecp.int_ecp(cell, kpts)
+            nuc += ecp.ecp_int(cell, kpts)
         t = cell.pbc_intor('cint1e_kin_sph', 1, 1, kpts)
         return lib.asarray(nuc) + lib.asarray(t)
 
