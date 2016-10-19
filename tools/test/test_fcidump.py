@@ -4,6 +4,7 @@ import unittest
 import tempfile
 from functools import reduce
 import numpy
+from pyscf import lib
 from pyscf import gto, scf, ao2mo
 from pyscf.tools import fcidump
 
@@ -25,11 +26,11 @@ mf.scf()
 
 class KnowValues(unittest.TestCase):
     def test_from_chkfile(self):
-        tmpfcidump = tempfile.NamedTemporaryFile()
+        tmpfcidump = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         fcidump.from_chkfile(tmpfcidump.name, mf.chkfile, tol=1e-15)
 
     def test_from_integral(self):
-        tmpfcidump = tempfile.NamedTemporaryFile()
+        tmpfcidump = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         h1 = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
         h2 = ao2mo.full(mf._eri, mf.mo_coeff)
         fcidump.from_integrals(tmpfcidump.name, h1, h2, h1.shape[0],

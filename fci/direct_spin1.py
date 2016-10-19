@@ -29,15 +29,14 @@ import sys
 import ctypes
 import numpy
 import scipy.linalg
-import pyscf.lib
-import pyscf.gto
-import pyscf.ao2mo
+from pyscf import lib
+from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.fci import cistring
 from pyscf.fci import rdm
 from pyscf.fci import spin_op
 
-libfci = pyscf.lib.load_library('libfci')
+libfci = lib.load_library('libfci')
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     '''Contract the 1-electron Hamiltonian with a FCI vector to get a new FCI
@@ -48,7 +47,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
     assert(fcivec.size == na*nb)
-    f1e_tril = pyscf.lib.pack_tril(f1e)
+    f1e_tril = lib.pack_tril(f1e)
     ci1 = numpy.zeros_like(fcivec)
     libfci.FCIcontract_a_1e(f1e_tril.ctypes.data_as(ctypes.c_void_p),
                             fcivec.ctypes.data_as(ctypes.c_void_p),
@@ -94,7 +93,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     See also :func:`direct_spin1.absorb_h1e`
     '''
     fcivec = numpy.asarray(fcivec, order='C')
-    eri = pyscf.ao2mo.restore(4, eri, norb)
+    eri = ao2mo.restore(4, eri, norb)
     link_indexa, link_indexb = _unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
@@ -120,7 +119,7 @@ def make_hdiag(h1e, eri, norb, nelec):
     else:
         neleca, nelecb = nelec
     h1e = numpy.ascontiguousarray(h1e)
-    eri = pyscf.ao2mo.restore(1, eri, norb)
+    eri = ao2mo.restore(1, eri, norb)
     link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
     link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
     na = link_indexa.shape[0]
@@ -152,13 +151,13 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     if not isinstance(nelec, (int, numpy.number)):
         nelec = sum(nelec)
     eri = eri.copy()
-    h2e = pyscf.ao2mo.restore(1, eri, norb)
+    h2e = ao2mo.restore(1, eri, norb)
     f1e = h1e - numpy.einsum('jiik->jk', h2e) * .5
     f1e = f1e * (1./(nelec+1e-100))
     for k in range(norb):
         h2e[k,k,:,:] += f1e
         h2e[:,:,k,k] += f1e
-    return pyscf.ao2mo.restore(4, h2e, norb) * fac
+    return ao2mo.restore(4, h2e, norb) * fac
 
 def pspace(h1e, eri, norb, nelec, hdiag, np=400):
     '''pspace Hamiltonian to improve Davidson preconditioner. See, CPL, 169, 463
@@ -169,7 +168,7 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
     else:
         neleca, nelecb = nelec
     h1e = numpy.ascontiguousarray(h1e)
-    eri = pyscf.ao2mo.restore(1, eri, norb)
+    eri = ao2mo.restore(1, eri, norb)
     nb = cistring.num_strings(norb, nelecb)
     if hdiag.size < np:
         addr = numpy.arange(hdiag.size)
@@ -194,7 +193,7 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 
     for i in range(np):
         h0[i,i] = hdiag[addr[i]]
-    h0 = pyscf.lib.hermi_triu(h0)
+    h0 = lib.hermi_triu(h0)
     return addr, h0
 
 # be careful with single determinant initial guess. It may diverge the
@@ -435,7 +434,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     if max_space is None: max_space = fci.max_space
     if max_memory is None: max_memory = fci.max_memory
     if verbose is None: verbose = logger.Logger(fci.stdout, fci.verbose)
-    #e, c = pyscf.lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
+    #e, c = lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
     e, c = fci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
                    max_cycle=max_cycle, max_space=max_space, nroots=nroots,
                    max_memory=max_memory, verbose=verbose, **kwargs)
@@ -474,7 +473,7 @@ def make_diag_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
     return precond
 
 
-class FCISolver(pyscf.lib.StreamObject):
+class FCISolver(lib.StreamObject):
     def __init__(self, mol=None):
         if mol is None:
             self.stdout = sys.stdout
@@ -487,7 +486,7 @@ class FCISolver(pyscf.lib.StreamObject):
         self.max_space = 12
         self.conv_tol = 1e-10
         self.lindep = 1e-14
-        self.max_memory = pyscf.lib.parameters.MEMORY_MAX
+        self.max_memory = lib.parameters.MAX_MEMORY
 # level shift in precond
         self.level_shift = 1e-3
         # force the diagonlization use davidson iteration.  When the CI space
@@ -520,23 +519,23 @@ class FCISolver(pyscf.lib.StreamObject):
         return self
 
 
-    @pyscf.lib.with_doc(absorb_h1e.__doc__)
+    @lib.with_doc(absorb_h1e.__doc__)
     def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):
         return absorb_h1e(h1e, eri, norb, nelec, fac)
 
-    @pyscf.lib.with_doc(make_hdiag.__doc__)
+    @lib.with_doc(make_hdiag.__doc__)
     def make_hdiag(self, h1e, eri, norb, nelec):
         return make_hdiag(h1e, eri, norb, nelec)
 
-    @pyscf.lib.with_doc(pspace.__doc__)
+    @lib.with_doc(pspace.__doc__)
     def pspace(self, h1e, eri, norb, nelec, hdiag, np=400):
         return pspace(h1e, eri, norb, nelec, hdiag, np)
 
-    @pyscf.lib.with_doc(contract_1e.__doc__)
+    @lib.with_doc(contract_1e.__doc__)
     def contract_1e(self, f1e, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_1e(f1e, fcivec, norb, nelec, link_index, **kwargs)
 
-    @pyscf.lib.with_doc(contract_2e.__doc__)
+    @lib.with_doc(contract_2e.__doc__)
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
 
@@ -545,7 +544,7 @@ class FCISolver(pyscf.lib.StreamObject):
             lessio = True
         else:
             lessio = False
-        return pyscf.lib.davidson(op, x0, precond, lessio=lessio, **kwargs)
+        return lib.davidson(op, x0, precond, lessio=lessio, **kwargs)
 
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
         if pspaceig is None:
@@ -555,7 +554,7 @@ class FCISolver(pyscf.lib.StreamObject):
             return make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
                                        self.level_shift)
 
-    @pyscf.lib.with_doc(get_init_guess.__doc__)
+    @lib.with_doc(get_init_guess.__doc__)
     def get_init_guess(self, norb, nelec, nroots, hdiag):
         return get_init_guess(norb, nelec, nroots, hdiag)
 
@@ -569,7 +568,7 @@ class FCISolver(pyscf.lib.StreamObject):
                           tol, lindep, max_cycle, max_space, nroots,
                           davidson_only, pspace_size, **kwargs)
 
-    @pyscf.lib.with_doc(energy.__doc__)
+    @lib.with_doc(energy.__doc__)
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):
         h2e = self.absorb_h1e(h1e, eri, norb, nelec, .5)
         ci1 = self.contract_2e(h2e, fcivec, norb, nelec, link_index)
@@ -583,19 +582,19 @@ class FCISolver(pyscf.lib.StreamObject):
             return [x[0] for x in ss], [x[1] for x in ss]
     spin_square.__doc__ = spin_op.spin_square0.__doc__
 
-    @pyscf.lib.with_doc(make_rdm1s.__doc__)
+    @lib.with_doc(make_rdm1s.__doc__)
     def make_rdm1s(self, fcivec, norb, nelec, link_index=None):
         return make_rdm1s(fcivec, norb, nelec, link_index)
 
-    @pyscf.lib.with_doc(make_rdm1.__doc__)
+    @lib.with_doc(make_rdm1.__doc__)
     def make_rdm1(self, fcivec, norb, nelec, link_index=None):
         return make_rdm1(fcivec, norb, nelec, link_index)
 
-    @pyscf.lib.with_doc(make_rdm12s.__doc__)
+    @lib.with_doc(make_rdm12s.__doc__)
     def make_rdm12s(self, fcivec, norb, nelec, link_index=None, reorder=True):
         return make_rdm12s(fcivec, norb, nelec, link_index, reorder)
 
-    @pyscf.lib.with_doc(make_rdm12.__doc__)
+    @lib.with_doc(make_rdm12.__doc__)
     def make_rdm12(self, fcivec, norb, nelec, link_index=None, reorder=True):
         return make_rdm12(fcivec, norb, nelec, link_index, reorder)
 
@@ -607,20 +606,20 @@ class FCISolver(pyscf.lib.StreamObject):
         '''
         return self.make_rdm12(fcivec, norb, nelec, link_index, reorder)[1]
 
-    @pyscf.lib.with_doc(make_rdm1s.__doc__)
+    @lib.with_doc(make_rdm1s.__doc__)
     def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None):
         return trans_rdm1s(cibra, ciket, norb, nelec, link_index)
 
-    @pyscf.lib.with_doc(trans_rdm1.__doc__)
+    @lib.with_doc(trans_rdm1.__doc__)
     def trans_rdm1(self, cibra, ciket, norb, nelec, link_index=None):
         return trans_rdm1(cibra, ciket, norb, nelec, link_index)
 
-    @pyscf.lib.with_doc(trans_rdm12s.__doc__)
+    @lib.with_doc(trans_rdm12s.__doc__)
     def trans_rdm12s(self, cibra, ciket, norb, nelec, link_index=None,
                      reorder=True):
         return trans_rdm12s(cibra, ciket, norb, nelec, link_index, reorder)
 
-    @pyscf.lib.with_doc(trans_rdm12.__doc__)
+    @lib.with_doc(trans_rdm12.__doc__)
     def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None,
                     reorder=True):
         return trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)

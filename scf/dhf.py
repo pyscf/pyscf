@@ -96,7 +96,7 @@ def get_jk(mol, dm, hermi=1, coulomb_allow='SSSS'):
 def get_hcore(mol):
     n2c = mol.nao_2c()
     n4c = n2c * 2
-    c = mol.light_speed
+    c = lib.param.LIGHT_SPEED
 
     t  = mol.intor_symmetric('cint1e_spsp') * .5
     vn = mol.intor_symmetric('cint1e_nuc')
@@ -111,7 +111,7 @@ def get_hcore(mol):
 def get_ovlp(mol):
     n2c = mol.nao_2c()
     n4c = n2c * 2
-    c = mol.light_speed
+    c = lib.param.LIGHT_SPEED
 
     s = mol.intor_symmetric('cint1e_ovlp')
     t = mol.intor_symmetric('cint1e_spsp')
@@ -272,6 +272,7 @@ class UHF(hf.SCF):
         hf.SCF.dump_flags(self)
         logger.info(self, 'with_ssss %s, with_gaunt %s, with_breit %s',
                     self.with_ssss, self.with_gaunt, self.with_breit)
+        logger.info(self, 'light speed = %s', lib.param.LIGHT_SPEED)
         return self
 
     def get_hcore(self, mol=None):
@@ -312,15 +313,16 @@ class UHF(hf.SCF):
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
+        c = lib.param.LIGHT_SPEED
         n4c = len(mo_energy)
         n2c = n4c // 2
         mo_occ = numpy.zeros(n2c * 2)
-        if mo_energy[n2c] > -1.999 * mol.light_speed**2:
+        if mo_energy[n2c] > -1.999 * c**2:
             mo_occ[n2c:n2c+mol.nelectron] = 1
         else:
             n = 0
             for i, e in enumerate(mo_energy):
-                if e > -1.999 * mol.light_speed**2 and n < mol.nelectron:
+                if e > -1.999 * c**2 and n < mol.nelectron:
                     mo_occ[i] = 1
                     n += 1
         if self.verbose >= logger.INFO:
@@ -465,15 +467,16 @@ class RHF(UHF):
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
+        c = lib.param.LIGHT_SPEED
         n4c = len(mo_energy)
         n2c = n4c // 2
         mo_occ = numpy.zeros(n2c * 2)
-        if mo_energy[n2c] > -1.999 * mol.light_speed**2:
+        if mo_energy[n2c] > -1.999 * c**2:
             mo_occ[n2c:n2c+mol.nelectron] = 1
         else:
             n = 0
             for i, e in enumerate(mo_energy):
-                if e > -1.999 * mol.light_speed**2 and n < mol.nelectron:
+                if e > -1.999 * c**2 and n < mol.nelectron:
                     mo_occ[i] = 1
                     n += 1
         if self.verbose >= logger.INFO:
@@ -534,7 +537,7 @@ def _call_veff_ssll(mol, dm, hermi=1, mf_opt=None):
     jks = ('lk->s2ij',) * n_dm \
         + ('ji->s2kl',) * n_dm \
         + ('jk->s1il',) * n_dm
-    c1 = .5/mol.light_speed
+    c1 = .5 / lib.param.LIGHT_SPEED
     vx = _vhf.rdirect_bindm('cint2e_spsp1', 's4', jks, dms, 1,
                             mol._atm, mol._bas, mol._env, mf_opt) * c1**2
     vj = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex)
@@ -548,7 +551,7 @@ def _call_veff_ssll(mol, dm, hermi=1, mf_opt=None):
     return _jk_triu_(vj, vk, hermi)
 
 def _call_veff_ssss(mol, dm, hermi=1, mf_opt=None):
-    c1 = .5/mol.light_speed
+    c1 = .5 / lib.param.LIGHT_SPEED
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         n2c = dm.shape[0] // 2
         dms = dm[n2c:,n2c:].copy()
@@ -613,7 +616,7 @@ def _call_veff_gaunt_breit(mol, dm, hermi=1, mf_opt=None, with_breit=False):
     if n_dm == 1:
         vj = vj.reshape(n2c*2,n2c*2)
         vk = vk.reshape(n2c*2,n2c*2)
-    c1 = .5/mol.light_speed
+    c1 = .5 / lib.param.LIGHT_SPEED
     if with_breit:
         return vj*c1**2, vk*c1**2
     else:

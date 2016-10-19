@@ -7,7 +7,7 @@
 # http://www.cmbi.ru.nl/molden/molden_format.html
 
 import numpy
-import pyscf.lib.parameters as param
+from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
 
@@ -119,7 +119,7 @@ def load(moldenfile):
         if 'ANG' in line.upper():
             unit = 1
         else:
-            unit = param.BOHR
+            unit = lib.param.BOHR
 
         atoms = []
         line = f.readline()
@@ -135,7 +135,7 @@ def load(moldenfile):
 
         def read_one_bas(lsym, nb, fac):
             fac = float(fac)
-            bas = [param.ANGULARMAP[lsym],]
+            bas = [lib.param.ANGULARMAP[lsym],]
             for i in range(int(nb)):
                 dat = _d2e(f.readline()).split()
                 bas.append((float(dat[0]), float(dat[1])*fac))
@@ -244,7 +244,7 @@ def header(mol, fout, ignore_h=False):
             nprim = len(b_coeff)
             nctr = len(b_coeff[0]) - 1
             for ic in range(nctr):
-                fout.write(' %s   %2d 1.00\n' % (param.ANGULAR[l], nprim))
+                fout.write(' %s   %2d 1.00\n' % (lib.param.ANGULAR[l], nprim))
                 for ip in range(nprim):
                     fout.write('    %18.14g  %18.14g\n' %
                                (b_coeff[ip][0], b_coeff[ip][ic+1]))
@@ -354,7 +354,7 @@ if __name__ == '__main__':
     print(order_ao_index(mol))
     orbital_coeff(mol, mol.stdout, m.mo_coeff)
 
-    ftmp = tempfile.NamedTemporaryFile()
+    ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     from_mo(mol, ftmp.name, m.mo_coeff)
 
     print(parse(ftmp.name))

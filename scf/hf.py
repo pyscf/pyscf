@@ -972,7 +972,7 @@ class SCF(lib.StreamObject):
 
 # the chkfile will be removed automatically, to save the chkfile, assign a
 # filename to self.chkfile
-        self._chkfile = tempfile.NamedTemporaryFile()
+        self._chkfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         self.chkfile = self._chkfile.name
         self.conv_tol = 1e-9
         self.conv_tol_grad = None

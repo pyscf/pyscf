@@ -35,7 +35,7 @@ nbas = ctypes.c_int(c_bas.shape[0])
 
 class KnowValues(unittest.TestCase):
     def test_nroutcore_grad(self):
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         erifile = ftmp.name
         eri_ao = numpy.empty((3,nao,nao,nao,nao))
         ip = 0
@@ -69,7 +69,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(eri1, eriref))
 
     def test_nroutcore_eri(self):
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         erifile = ftmp.name
         eri_ao = numpy.empty((nao,nao,nao,nao))
         ip = 0

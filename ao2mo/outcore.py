@@ -257,6 +257,8 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
               float(nij_pair)*nkl_pair*comp, nij_pair*nkl_pair*comp*8/1e6)
 
 # transform e1
+    if tmpdir is None:
+        tmpdir = lib.param.TMPDIR
     swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
     fswap = h5py.File(swapfile.name, 'w')
     half_e1(mol, mo_coeffs, fswap, intor, aosym, comp, max_memory, ioblk_size,
@@ -582,7 +584,7 @@ def full_iofree(mol, mo_coeff, intor='cint2e_sph', aosym='s4', comp=1,
     >>> print(eri1.shape)
     (3, 100, 55)
     '''
-    erifile = tempfile.NamedTemporaryFile()
+    erifile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     with h5py.File(erifile.name, 'w') as feri:
         general(mol, (mo_coeff,)*4, feri, dataname='eri_mo',
                 intor=intor, aosym=aosym, comp=comp,
@@ -669,7 +671,7 @@ def general_iofree(mol, mo_coeffs, intor='cint2e_sph', aosym='s4', comp=1,
     >>> print(eri1.shape)
     (3, 100, 55)
     '''
-    erifile = tempfile.NamedTemporaryFile()
+    erifile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     with h5py.File(erifile.name, 'w') as feri:
         general(mol, mo_coeffs, feri, dataname='eri_mo',
                 intor=intor, aosym=aosym, comp=comp,

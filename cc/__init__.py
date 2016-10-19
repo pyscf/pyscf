@@ -2,8 +2,7 @@ from pyscf.cc import ccsd
 from pyscf.cc import ccsd_lambda
 from pyscf.cc import ccsd_rdm
 
-def CCSD(mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
-    return ccsd.CCSD(mf, frozen, mo_energy, mo_coeff, mo_occ)
+CCSD = ccsd.CCSD
 
 def RCCSD(mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
     from pyscf.cc import rccsd

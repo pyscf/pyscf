@@ -10,14 +10,14 @@ import tempfile
 from functools import reduce
 import numpy
 import h5py
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf import fci
 from pyscf.mcscf import mc_ao2mo
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 
-libmc = pyscf.lib.load_library('libmcscf')
+libmc = lib.load_library('libmcscf')
 
 NUMERICAL_ZERO = 1e-14
 # Ref JCP, 117, 9138
@@ -365,7 +365,7 @@ def Sijrs(mc, eris, verbose=None):
     nvirt = mo_virt.shape[1]
     nocc = ncore + mc.ncas
     if eris is None:
-        erifile = tempfile.NamedTemporaryFile()
+        erifile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         feri = ao2mo.outcore.general(mc.mol, (mo_core,mo_virt,mo_core,mo_virt),
                                      erifile.name, verbose=mc.verbose)
     else:
@@ -554,7 +554,7 @@ def Sir(mc, dms, eris, verbose=None):
     return _norm_to_energy(norm, h, -diff)
 
 
-class NEVPT(pyscf.lib.StreamObject):
+class NEVPT(lib.StreamObject):
     '''Strongly contracted NEVPT2
 
     Attributes:
@@ -813,7 +813,7 @@ def _ERIS(mc, mo, method='incore'):
     ncas = mc.ncas
 
     mem_incore, mem_outcore, mem_basic = mc_ao2mo._mem_usage(ncore, ncas, nmo)
-    mem_now = pyscf.lib.current_memory()[0]
+    mem_now = lib.current_memory()[0]
     if (method == 'incore' and mc._scf._eri is not None and
         (mem_incore+mem_now < mc.max_memory*.9) or
         mc.mol.incore_anyway):
@@ -855,7 +855,7 @@ def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
                      verbose=0):
     time0 = (time.clock(), time.time())
     mol = mc.mol
-    log = pyscf.lib.logger.Logger(mc.stdout, verbose)
+    log = logger.Logger(mc.stdout, verbose)
     ncore = mc.ncore
     ncas = mc.ncas
     nao, nmo = mo.shape
@@ -864,6 +864,8 @@ def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
     nvir = nmo - nocc
     nav = nmo - ncore
 
+    if tmpdir is None:
+        tmpdir = lib.param.TMPDIR
     swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
     pyscf.ao2mo.outcore.half_e1(mol, (mo[:,:nocc],mo[:,ncore:]), swapfile.name,
                                 max_memory=max_memory, ioblk_size=ioblk_size,
@@ -872,8 +874,8 @@ def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
     fswap = h5py.File(swapfile.name, 'r')
     klaoblks = len(fswap['0'])
     def load_buf(r0,r1):
-        if mol.verbose >= pyscf.lib.logger.DEBUG1:
-            time1[:] = pyscf.lib.logger.timer(mol, 'between load_buf',
+        if mol.verbose >= logger.DEBUG1:
+            time1[:] = logger.timer(mol, 'between load_buf',
                                               *tuple(time1))
         buf = numpy.empty(((r1-r0)*nav,nao_pair))
         col0 = 0
@@ -882,17 +884,17 @@ def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
             col1 = col0 + dat.shape[1]
             buf[:,col0:col1] = dat[r0*nav:r1*nav]
             col0 = col1
-        if mol.verbose >= pyscf.lib.logger.DEBUG1:
-            time1[:] = pyscf.lib.logger.timer(mol, 'load_buf', *tuple(time1))
+        if mol.verbose >= logger.DEBUG1:
+            time1[:] = logger.timer(mol, 'load_buf', *tuple(time1))
         return buf
-    time0 = pyscf.lib.logger.timer(mol, 'halfe1', *time0)
+    time0 = logger.timer(mol, 'halfe1', *time0)
     time1 = [time.clock(), time.time()]
     ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
-    cvcvfile = tempfile.NamedTemporaryFile()
+    cvcvfile = tempfile.NamedTemporaryFile(dir=tmpdir)
     with h5py.File(cvcvfile.name) as f5:
         cvcv = f5.create_dataset('eri_mo', (ncore*nvir,ncore*nvir), 'f8')
         ppaa, papa, pacv = _trans(mo, ncore, ncas, load_buf, cvcv, ao_loc)[:3]
-    time0 = pyscf.lib.logger.timer(mol, 'trans_cvcv', *time0)
+    time0 = logger.timer(mol, 'trans_cvcv', *time0)
     fswap.close()
     return ppaa, papa, pacv, cvcvfile
 
@@ -939,7 +941,7 @@ def _trans(mo, ncore, ncas, fload, cvcv=None, ao_loc=None):
         _ao2mo.nr_e2(buf[:ncas], mo, klshape,
                       aosym='s4', mosym='s1', out=app, ao_loc=ao_loc)
         aapp[i] = app
-    ppaa = pyscf.lib.transpose(aapp.reshape(ncas**2,-1))
+    ppaa = lib.transpose(aapp.reshape(ncas**2,-1))
     return (ppaa.reshape(nmo,nmo,ncas,ncas), papa.reshape(nmo,ncas,nmo,ncas),
             pacv.reshape(nmo,ncas,ncore,nvir), cvcv)
 

@@ -112,7 +112,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(eri1, eri0))
 
     def test_outcore(self):
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         cderi0 = df.incore.cholesky_eri(mol)
         df.outcore.cholesky_eri(mol, ftmp.name)
         with h5py.File(ftmp.name) as feri:

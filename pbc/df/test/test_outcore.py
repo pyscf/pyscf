@@ -27,7 +27,7 @@ def finger(a):
 
 class KnowValues(unittest.TestCase):
     def test_aux_e2(self):
-        tmpfile = tempfile.NamedTemporaryFile()
+        tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         numpy.random.seed(1)
         kptij_lst = numpy.random.random((3,2,3))
         kptij_lst[0] = 0

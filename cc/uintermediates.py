@@ -1,7 +1,7 @@
 import tempfile
 import h5py
 import numpy as np
-
+from pyscf import lib
 from pyscf.pbc import lib as pbclib
 from pyscf.cc.ccsd import _cp
 
@@ -59,7 +59,7 @@ def cc_Wvvvv(t1,t2,eris):
     #Wabef += 0.25*einsum('mnab,mnef->abef',tau,eris.oovv)
     if t1.dtype == np.complex: ds_type = 'c16'
     else: ds_type = 'f8'
-    _tmpfile1 = tempfile.NamedTemporaryFile()
+    _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     fimd = h5py.File(_tmpfile1.name)
     nocc, nvir = t1.shape
     Wabef = fimd.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)
@@ -104,7 +104,7 @@ def Wvvvv(t1,t2,eris):
     #Wabef = cc_Wvvvv(t1,t2,eris) + 0.25*einsum('mnab,mnef->abef',tau,eris.oovv)
     if t1.dtype == np.complex: ds_type = 'c16'
     else: ds_type = 'f8'
-    _tmpfile1 = tempfile.NamedTemporaryFile()
+    _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     fimd = h5py.File(_tmpfile1.name)
     nocc, nvir = t1.shape
     Wabef = fimd.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)

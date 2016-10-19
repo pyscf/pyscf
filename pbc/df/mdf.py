@@ -324,7 +324,7 @@ class MDF(pwdf.PWDF):
         self.charge_constraint = False
         self.blockdim = 256
         self._j_only = False
-        self._cderi_file = tempfile.NamedTemporaryFile()
+        self._cderi_file = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         self._cderi = None
         self._keys = set(self.__dict__.keys())
 

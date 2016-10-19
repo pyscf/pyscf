@@ -13,8 +13,9 @@ from functools import reduce
 import numpy
 import scipy.linalg
 import h5py
-from pyscf.lib import logger
-from pyscf.lib import numpy_helper
+from . import parameters
+from . import logger
+from . import numpy_helper
 
 def safe_eigh(h, s, lindep=1e-15):
     '''Solve generalized eigenvalue problem  h v = w s v.
@@ -576,7 +577,7 @@ def cho_solve(a, b):
 
 class _Xlist(list):
     def __init__(self):
-        self._fd = tempfile.NamedTemporaryFile()
+        self._fd = tempfile.NamedTemporaryFile(dir=parameters.TMPDIR)
         self.scr_h5 = h5py.File(self._fd.name, 'w')
         self.index = []
     def __del__(self):

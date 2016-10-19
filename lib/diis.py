@@ -12,7 +12,8 @@ import tempfile
 import numpy
 import scipy.linalg
 import h5py
-from pyscf.lib import logger
+from . import parameters
+from . import logger
 
 
 INCORE_SIZE = 1e7
@@ -98,7 +99,7 @@ class DIIS(object):
         if isinstance(filename, str):
             self._diisfile = h5py.File(filename, 'w')
         else:
-            self._tmpfile = tempfile.NamedTemporaryFile()
+            self._tmpfile = tempfile.NamedTemporaryFile(dir=parameters.TMPDIR)
             self._diisfile = h5py.File(self._tmpfile.name, 'w')
         self._buffer = {}
         self._bookkeep = [] # keep the ordering of input vectors

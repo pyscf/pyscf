@@ -12,7 +12,7 @@ import copy
 import tempfile
 import numpy
 import h5py
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.hessian import rhf
@@ -81,7 +81,7 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
                                   fx, atmlst, max_memory, log)
     t1 = log.timer('solving MO1', *t1)
 
-    tmpf = tempfile.NamedTemporaryFile()
+    tmpf = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     with h5py.File(tmpf.name, 'w') as f:
         for i0, ia in enumerate(atmlst):
             mol.set_rinv_origin(mol.atom_coord(ia))
@@ -120,7 +120,7 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
             vrho = vxc[0]
             aow = numpy.einsum('pi,p->pi', ao[0], weight*vrho)
             for i in range(6):
-                vj1[i] += pyscf.lib.dot(ao[i+4].T, aow)
+                vj1[i] += lib.dot(ao[i+4].T, aow)
             aow = aow1 = None
     elif xctype == 'GGA':
         ao_deriv = 3
@@ -134,19 +134,19 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
             wv[1:] = rho[1:] * (weight * vgamma * 2)
             aow = numpy.einsum('npi,np->pi', ao[:4], wv)
             for i in range(6):
-                vj1[i] += pyscf.lib.dot(ao[i+4].T, aow)
+                vj1[i] += lib.dot(ao[i+4].T, aow)
             aow = numpy.einsum('npi,np->pi', ao[[XXX,XXY,XXZ]], wv[1:4])
-            vj1[0] += pyscf.lib.dot(aow.T, ao[0])
+            vj1[0] += lib.dot(aow.T, ao[0])
             aow = numpy.einsum('npi,np->pi', ao[[XXY,XYY,XYZ]], wv[1:4])
-            vj1[1] += pyscf.lib.dot(aow.T, ao[0])
+            vj1[1] += lib.dot(aow.T, ao[0])
             aow = numpy.einsum('npi,np->pi', ao[[XXZ,XYZ,XZZ]], wv[1:4])
-            vj1[2] += pyscf.lib.dot(aow.T, ao[0])
+            vj1[2] += lib.dot(aow.T, ao[0])
             aow = numpy.einsum('npi,np->pi', ao[[XYY,YYY,YYZ]], wv[1:4])
-            vj1[3] += pyscf.lib.dot(aow.T, ao[0])
+            vj1[3] += lib.dot(aow.T, ao[0])
             aow = numpy.einsum('npi,np->pi', ao[[XYZ,YYZ,YZZ]], wv[1:4])
-            vj1[4] += pyscf.lib.dot(aow.T, ao[0])
+            vj1[4] += lib.dot(aow.T, ao[0])
             aow = numpy.einsum('npi,np->pi', ao[[XZZ,YZZ,ZZZ]], wv[1:4])
-            vj1[5] += pyscf.lib.dot(aow.T, ao[0])
+            vj1[5] += lib.dot(aow.T, ao[0])
             rho = vxc = vrho = vgamma = wv = aow = None
     else:
         raise NotImplementedError('meta-GGA')
@@ -215,28 +215,28 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
                 vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
                 vrho = vxc[0]
                 frr = fxc[0]
-                half = pyscf.lib.dot(ao[0], dm0[:,p0:p1].copy())
+                half = lib.dot(ao[0], dm0[:,p0:p1].copy())
                 rho1 = numpy.einsum('xpi,pi->xp', ao[1:,:,p0:p1], half)
                 aow = numpy.einsum('pi,xp->xpi', ao[0], weight*frr*rho1)
-                veff2[0] += pyscf.lib.dot(ao[1].T, aow[0]) * 2
-                veff2[1] += pyscf.lib.dot(ao[1].T, aow[1]) * 2
-                veff2[2] += pyscf.lib.dot(ao[1].T, aow[2]) * 2
-                veff2[3] += pyscf.lib.dot(ao[2].T, aow[0]) * 2
-                veff2[4] += pyscf.lib.dot(ao[2].T, aow[1]) * 2
-                veff2[5] += pyscf.lib.dot(ao[2].T, aow[2]) * 2
-                veff2[6] += pyscf.lib.dot(ao[3].T, aow[0]) * 2
-                veff2[7] += pyscf.lib.dot(ao[3].T, aow[1]) * 2
-                veff2[8] += pyscf.lib.dot(ao[3].T, aow[2]) * 2
+                veff2[0] += lib.dot(ao[1].T, aow[0]) * 2
+                veff2[1] += lib.dot(ao[1].T, aow[1]) * 2
+                veff2[2] += lib.dot(ao[1].T, aow[2]) * 2
+                veff2[3] += lib.dot(ao[2].T, aow[0]) * 2
+                veff2[4] += lib.dot(ao[2].T, aow[1]) * 2
+                veff2[5] += lib.dot(ao[2].T, aow[2]) * 2
+                veff2[6] += lib.dot(ao[3].T, aow[0]) * 2
+                veff2[7] += lib.dot(ao[3].T, aow[1]) * 2
+                veff2[8] += lib.dot(ao[3].T, aow[2]) * 2
                 aow = numpy.einsum('xpi,p->xpi', ao[1:,:,p0:p1], weight*vrho)
-                vj1[0] += pyscf.lib.dot(aow[0].T, ao[1])
-                vj1[1] += pyscf.lib.dot(aow[0].T, ao[2])
-                vj1[2] += pyscf.lib.dot(aow[0].T, ao[3])
-                vj1[3] += pyscf.lib.dot(aow[1].T, ao[1])
-                vj1[4] += pyscf.lib.dot(aow[1].T, ao[2])
-                vj1[5] += pyscf.lib.dot(aow[1].T, ao[3])
-                vj1[6] += pyscf.lib.dot(aow[2].T, ao[1])
-                vj1[7] += pyscf.lib.dot(aow[2].T, ao[2])
-                vj1[8] += pyscf.lib.dot(aow[2].T, ao[3])
+                vj1[0] += lib.dot(aow[0].T, ao[1])
+                vj1[1] += lib.dot(aow[0].T, ao[2])
+                vj1[2] += lib.dot(aow[0].T, ao[3])
+                vj1[3] += lib.dot(aow[1].T, ao[1])
+                vj1[4] += lib.dot(aow[1].T, ao[2])
+                vj1[5] += lib.dot(aow[1].T, ao[3])
+                vj1[6] += lib.dot(aow[2].T, ao[1])
+                vj1[7] += lib.dot(aow[2].T, ao[2])
+                vj1[8] += lib.dot(aow[2].T, ao[3])
                 half = aow = None
 
             veff2[:,:,p0:p1] += vj1.transpose(0,2,1)
@@ -262,57 +262,57 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
                 vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
                 vrho, vgamma = vxc[:2]
                 # (d_X \nabla_x mu) nu DM_{mu,nu}
-                half = pyscf.lib.dot(ao[0], dm0[:,p0:p1].copy())
+                half = lib.dot(ao[0], dm0[:,p0:p1].copy())
                 rho1X = numpy.einsum('xpi,pi->xp', ao[[1,XX,XY,XZ],:,p0:p1], half)
                 rho1Y = numpy.einsum('xpi,pi->xp', ao[[2,YX,YY,YZ],:,p0:p1], half)
                 rho1Z = numpy.einsum('xpi,pi->xp', ao[[3,ZX,ZY,ZZ],:,p0:p1], half)
                 # (d_X mu) (\nabla_x nu) DM_{mu,nu}
-                half = pyscf.lib.dot(ao[1], dm0[:,p0:p1].copy())
+                half = lib.dot(ao[1], dm0[:,p0:p1].copy())
                 rho1X[1] += numpy.einsum('pi,pi->p', ao[1,:,p0:p1], half)
                 rho1Y[1] += numpy.einsum('pi,pi->p', ao[2,:,p0:p1], half)
                 rho1Z[1] += numpy.einsum('pi,pi->p', ao[3,:,p0:p1], half)
-                half = pyscf.lib.dot(ao[2], dm0[:,p0:p1].copy())
+                half = lib.dot(ao[2], dm0[:,p0:p1].copy())
                 rho1X[2] += numpy.einsum('pi,pi->p', ao[1,:,p0:p1], half)
                 rho1Y[2] += numpy.einsum('pi,pi->p', ao[2,:,p0:p1], half)
                 rho1Z[2] += numpy.einsum('pi,pi->p', ao[3,:,p0:p1], half)
-                half = pyscf.lib.dot(ao[3], dm0[:,p0:p1].copy())
+                half = lib.dot(ao[3], dm0[:,p0:p1].copy())
                 rho1X[3] += numpy.einsum('pi,pi->p', ao[1,:,p0:p1], half)
                 rho1Y[3] += numpy.einsum('pi,pi->p', ao[2,:,p0:p1], half)
                 rho1Z[3] += numpy.einsum('pi,pi->p', ao[3,:,p0:p1], half)
 
                 wv = get_wv(rho, rho1X, weight, vxc, fxc) * 2  # ~ vj1*2
                 aow = numpy.einsum('npi,np->pi', ao[[1,XX,XY,XZ]], wv)  # dX
-                veff2[0] += pyscf.lib.dot(aow.T, ao[0])
+                veff2[0] += lib.dot(aow.T, ao[0])
                 aow = numpy.einsum('npi,np->pi', ao[[2,YX,YY,YZ]], wv)  # dY
-                veff2[3] += pyscf.lib.dot(aow.T, ao[0])
+                veff2[3] += lib.dot(aow.T, ao[0])
                 aow = numpy.einsum('npi,np->pi', ao[[3,ZX,ZY,ZZ]], wv)  # dZ
-                veff2[6] += pyscf.lib.dot(aow.T, ao[0])
+                veff2[6] += lib.dot(aow.T, ao[0])
                 aow = numpy.einsum('npi,np->pi', ao[1:4], wv[1:4])
-                veff2[0] += pyscf.lib.dot(ao[1].T, aow)
-                veff2[3] += pyscf.lib.dot(ao[2].T, aow)
-                veff2[6] += pyscf.lib.dot(ao[3].T, aow)
+                veff2[0] += lib.dot(ao[1].T, aow)
+                veff2[3] += lib.dot(ao[2].T, aow)
+                veff2[6] += lib.dot(ao[3].T, aow)
                 wv = get_wv(rho, rho1Y, weight, vxc, fxc) * 2
                 aow = numpy.einsum('npi,np->pi', ao[[1,XX,XY,XZ]], wv)
-                veff2[1] += pyscf.lib.dot(aow.T, ao[0])
+                veff2[1] += lib.dot(aow.T, ao[0])
                 aow = numpy.einsum('npi,np->pi', ao[[2,YX,YY,YZ]], wv)
-                veff2[4] += pyscf.lib.dot(aow.T, ao[0])
+                veff2[4] += lib.dot(aow.T, ao[0])
                 aow = numpy.einsum('npi,np->pi', ao[[3,ZX,ZY,ZZ]], wv)
-                veff2[7] += pyscf.lib.dot(aow.T, ao[0])
+                veff2[7] += lib.dot(aow.T, ao[0])
                 aow = numpy.einsum('npi,np->pi', ao[1:4], wv[1:4])
-                veff2[1] += pyscf.lib.dot(ao[1].T, aow)
-                veff2[4] += pyscf.lib.dot(ao[2].T, aow)
-                veff2[7] += pyscf.lib.dot(ao[3].T, aow)
+                veff2[1] += lib.dot(ao[1].T, aow)
+                veff2[4] += lib.dot(ao[2].T, aow)
+                veff2[7] += lib.dot(ao[3].T, aow)
                 wv = get_wv(rho, rho1Z, weight, vxc, fxc) * 2
                 aow = numpy.einsum('npi,np->pi', ao[[1,XX,XY,XZ]], wv)
-                veff2[2] += pyscf.lib.dot(aow.T, ao[0])
+                veff2[2] += lib.dot(aow.T, ao[0])
                 aow = numpy.einsum('npi,np->pi', ao[[2,YX,YY,YZ]], wv)
-                veff2[5] += pyscf.lib.dot(aow.T, ao[0])
+                veff2[5] += lib.dot(aow.T, ao[0])
                 aow = numpy.einsum('npi,np->pi', ao[[3,ZX,ZY,ZZ]], wv)
-                veff2[8] += pyscf.lib.dot(aow.T, ao[0])
+                veff2[8] += lib.dot(aow.T, ao[0])
                 aow = numpy.einsum('npi,np->pi', ao[1:4], wv[1:4])
-                veff2[2] += pyscf.lib.dot(ao[1].T, aow)
-                veff2[5] += pyscf.lib.dot(ao[2].T, aow)
-                veff2[8] += pyscf.lib.dot(ao[3].T, aow)
+                veff2[2] += lib.dot(ao[1].T, aow)
+                veff2[5] += lib.dot(ao[2].T, aow)
+                veff2[8] += lib.dot(ao[3].T, aow)
 
                 wv = numpy.empty_like(rho)
                 wv[0]  = weight * vrho * .5
@@ -323,27 +323,27 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
                 ao1 = aowx[:,p0:p1].T.copy()
                 ao2 = aowy[:,p0:p1].T.copy()
                 ao3 = aowz[:,p0:p1].T.copy()
-                vj1[0] += pyscf.lib.dot(ao1, ao[1])
-                vj1[1] += pyscf.lib.dot(ao1, ao[2])
-                vj1[2] += pyscf.lib.dot(ao1, ao[3])
-                vj1[3] += pyscf.lib.dot(ao2, ao[1])
-                vj1[4] += pyscf.lib.dot(ao2, ao[2])
-                vj1[5] += pyscf.lib.dot(ao2, ao[3])
-                vj1[6] += pyscf.lib.dot(ao3, ao[1])
-                vj1[7] += pyscf.lib.dot(ao3, ao[2])
-                vj1[8] += pyscf.lib.dot(ao3, ao[3])
+                vj1[0] += lib.dot(ao1, ao[1])
+                vj1[1] += lib.dot(ao1, ao[2])
+                vj1[2] += lib.dot(ao1, ao[3])
+                vj1[3] += lib.dot(ao2, ao[1])
+                vj1[4] += lib.dot(ao2, ao[2])
+                vj1[5] += lib.dot(ao2, ao[3])
+                vj1[6] += lib.dot(ao3, ao[1])
+                vj1[7] += lib.dot(ao3, ao[2])
+                vj1[8] += lib.dot(ao3, ao[3])
                 ao1 = ao[1,:,p0:p1].T.copy()
                 ao2 = ao[2,:,p0:p1].T.copy()
                 ao3 = ao[3,:,p0:p1].T.copy()
-                vj1[0] += pyscf.lib.dot(ao1, aowx)
-                vj1[1] += pyscf.lib.dot(ao1, aowy)
-                vj1[2] += pyscf.lib.dot(ao1, aowz)
-                vj1[3] += pyscf.lib.dot(ao2, aowx)
-                vj1[4] += pyscf.lib.dot(ao2, aowy)
-                vj1[5] += pyscf.lib.dot(ao2, aowz)
-                vj1[6] += pyscf.lib.dot(ao3, aowx)
-                vj1[7] += pyscf.lib.dot(ao3, aowy)
-                vj1[8] += pyscf.lib.dot(ao3, aowz)
+                vj1[0] += lib.dot(ao1, aowx)
+                vj1[1] += lib.dot(ao1, aowy)
+                vj1[2] += lib.dot(ao1, aowz)
+                vj1[3] += lib.dot(ao2, aowx)
+                vj1[4] += lib.dot(ao2, aowy)
+                vj1[5] += lib.dot(ao2, aowz)
+                vj1[6] += lib.dot(ao3, aowx)
+                vj1[7] += lib.dot(ao3, aowy)
+                vj1[8] += lib.dot(ao3, aowz)
 
             veff2[:,:,p0:p1] += vj1.transpose(0,2,1)
 
@@ -353,8 +353,8 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
         for j0, ja in enumerate(atmlst):
             q0, q1 = offsetdic[ja][2:]
 # *2 for double occupancy, *2 for +c.c.
-            mo1  = pyscf.lib.chkfile.load(hess_mf.chkfile, 'scf_mo1/%d'%ja)
-            h1ao = pyscf.lib.chkfile.load(hess_mf.chkfile, 'scf_h1ao/%d'%ia)
+            mo1  = lib.chkfile.load(hess_mf.chkfile, 'scf_mo1/%d'%ja)
+            h1ao = lib.chkfile.load(hess_mf.chkfile, 'scf_h1ao/%d'%ia)
             dm1 = numpy.einsum('ypi,qi->ypq', mo1, mocc)
             de  = numpy.einsum('xpq,ypq->xy', h1ao, dm1) * 4
             dm1 = numpy.einsum('ypi,qi,i->ypq', mo1, mocc, mo_energy[:nocc])
@@ -432,7 +432,7 @@ def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN
                                       3, mol._atm, mol._bas, mol._env,
                                       shls_slice=shls_slice)
             for i in range(3):
-                pyscf.lib.hermi_triu(vj1[i], 1)
+                lib.hermi_triu(vj1[i], 1)
             veff = vj1 - hyb*.5*vk1
             veff[:,p0:p1] += vj2 - hyb*.5*vk2
         else:
@@ -443,7 +443,7 @@ def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN
                                       3, mol._atm, mol._bas, mol._env,
                                       shls_slice=shls_slice)
             for i in range(3):
-                pyscf.lib.hermi_triu(vj1[i], 1)
+                lib.hermi_triu(vj1[i], 1)
             veff = vj1
             veff[:,p0:p1] += vj2
 
@@ -455,14 +455,14 @@ def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN
                 vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
                 vrho = vxc[0]
                 frr = fxc[0]
-                half = pyscf.lib.dot(ao[0], dm0[:,p0:p1].copy())
+                half = lib.dot(ao[0], dm0[:,p0:p1].copy())
                 rho1 = numpy.einsum('xpi,pi->xp', ao[1:,:,p0:p1], half)
                 aow = numpy.einsum('pi,xp->xpi', ao[0], weight*frr*rho1)
                 aow1 = numpy.einsum('xpi,p->xpi', ao[1:,:,p0:p1], weight*vrho)
                 aow[:,:,p0:p1] += aow1
-                veff[0] += pyscf.lib.dot(-aow[0].T, ao[0])
-                veff[1] += pyscf.lib.dot(-aow[1].T, ao[0])
-                veff[2] += pyscf.lib.dot(-aow[2].T, ao[0])
+                veff[0] += lib.dot(-aow[0].T, ao[0])
+                veff[1] += lib.dot(-aow[1].T, ao[0])
+                veff[2] += lib.dot(-aow[2].T, ao[0])
                 half = aow = aow1 = None
 
         elif xctype == 'GGA':
@@ -485,20 +485,20 @@ def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN
                 vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
                 vrho, vgamma = vxc[:2]
                 # (d_X \nabla_x mu) nu DM_{mu,nu}
-                half = pyscf.lib.dot(ao[0], dm0[:,p0:p1].copy())
+                half = lib.dot(ao[0], dm0[:,p0:p1].copy())
                 rho1X = numpy.einsum('xpi,pi->xp', ao[[1,XX,XY,XZ],:,p0:p1], half)
                 rho1Y = numpy.einsum('xpi,pi->xp', ao[[2,YX,YY,YZ],:,p0:p1], half)
                 rho1Z = numpy.einsum('xpi,pi->xp', ao[[3,ZX,ZY,ZZ],:,p0:p1], half)
                 # (d_X mu) (\nabla_x nu) DM_{mu,nu}
-                half = pyscf.lib.dot(ao[1], dm0[:,p0:p1].copy())
+                half = lib.dot(ao[1], dm0[:,p0:p1].copy())
                 rho1X[1] += numpy.einsum('pi,pi->p', ao[1,:,p0:p1], half)
                 rho1Y[1] += numpy.einsum('pi,pi->p', ao[2,:,p0:p1], half)
                 rho1Z[1] += numpy.einsum('pi,pi->p', ao[3,:,p0:p1], half)
-                half = pyscf.lib.dot(ao[2], dm0[:,p0:p1].copy())
+                half = lib.dot(ao[2], dm0[:,p0:p1].copy())
                 rho1X[2] += numpy.einsum('pi,pi->p', ao[1,:,p0:p1], half)
                 rho1Y[2] += numpy.einsum('pi,pi->p', ao[2,:,p0:p1], half)
                 rho1Z[2] += numpy.einsum('pi,pi->p', ao[3,:,p0:p1], half)
-                half = pyscf.lib.dot(ao[3], dm0[:,p0:p1].copy())
+                half = lib.dot(ao[3], dm0[:,p0:p1].copy())
                 rho1X[3] += numpy.einsum('pi,pi->p', ao[1,:,p0:p1], half)
                 rho1Y[3] += numpy.einsum('pi,pi->p', ao[2,:,p0:p1], half)
                 rho1Z[3] += numpy.einsum('pi,pi->p', ao[3,:,p0:p1], half)
@@ -506,30 +506,30 @@ def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN
                 wv = get_wv(rho, rho1X, weight, vxc, fxc)
                 wv[0] *= .5
                 aow = numpy.einsum('npi,np->pi', ao[:4], wv)
-                veff[0] -= pyscf.lib.transpose_sum(pyscf.lib.dot(aow.T, ao[0]))
+                veff[0] -= lib.transpose_sum(lib.dot(aow.T, ao[0]))
                 wv = get_wv(rho, rho1Y, weight, vxc, fxc)
                 wv[0] *= .5
                 aow = numpy.einsum('npi,np->pi', ao[:4], wv)
-                veff[1] -= pyscf.lib.transpose_sum(pyscf.lib.dot(aow.T, ao[0]))
+                veff[1] -= lib.transpose_sum(lib.dot(aow.T, ao[0]))
                 wv = get_wv(rho, rho1Z, weight, vxc, fxc)
                 wv[0] *= .5
                 aow = numpy.einsum('npi,np->pi', ao[:4], wv)
-                veff[2] -= pyscf.lib.transpose_sum(pyscf.lib.dot(aow.T, ao[0]))
+                veff[2] -= lib.transpose_sum(lib.dot(aow.T, ao[0]))
 
                 wv = numpy.empty_like(rho)
                 wv[0]  = weight * vrho
                 wv[1:] = rho[1:] * (weight * vgamma * 2)
                 aow = numpy.einsum('npi,np->pi', ao[:4], wv)
-                veff[0,p0:p1] -= pyscf.lib.dot(ao[1,:,p0:p1].T.copy(), aow)
-                veff[1,p0:p1] -= pyscf.lib.dot(ao[2,:,p0:p1].T.copy(), aow)
-                veff[2,p0:p1] -= pyscf.lib.dot(ao[3,:,p0:p1].T.copy(), aow)
+                veff[0,p0:p1] -= lib.dot(ao[1,:,p0:p1].T.copy(), aow)
+                veff[1,p0:p1] -= lib.dot(ao[2,:,p0:p1].T.copy(), aow)
+                veff[2,p0:p1] -= lib.dot(ao[3,:,p0:p1].T.copy(), aow)
 
                 aow = numpy.einsum('npi,np->pi', ao[[XX,XY,XZ],:,p0:p1], wv[1:4])
-                veff[0,p0:p1] -= pyscf.lib.dot(aow.T, ao[0])
+                veff[0,p0:p1] -= lib.dot(aow.T, ao[0])
                 aow = numpy.einsum('npi,np->pi', ao[[YX,YY,YZ],:,p0:p1], wv[1:4])
-                veff[1,p0:p1] -= pyscf.lib.dot(aow.T, ao[0])
+                veff[1,p0:p1] -= lib.dot(aow.T, ao[0])
                 aow = numpy.einsum('npi,np->pi', ao[[ZX,ZY,ZZ],:,p0:p1], wv[1:4])
-                veff[2,p0:p1] -= pyscf.lib.dot(aow.T, ao[0])
+                veff[2,p0:p1] -= lib.dot(aow.T, ao[0])
         else:
             raise NotImplementedError('meta-GGA')
 
@@ -539,7 +539,7 @@ def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN
             h1aos.append(h1ao+veff)
         else:
             key = 'scf_h1ao/%d' % ia
-            pyscf.lib.chkfile.save(chkfile, key, h1ao+veff)
+            lib.chkfile.save(chkfile, key, h1ao+veff)
     if chkfile is None:
         return h1aos
     else:

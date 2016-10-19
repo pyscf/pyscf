@@ -6,13 +6,12 @@ import time
 import tempfile
 import numpy
 import h5py
-import pyscf.lib
-import pyscf.lib.numpy_helper
+from pyscf import lib
 from pyscf.lib import logger
-import pyscf.ao2mo
+from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 
-libmcscf = pyscf.lib.load_library('libmcscf')
+libmcscf = lib.load_library('libmcscf')
 
 # least memory requirements:
 #       ncore**2*(nmo-ncore)**2 + ncas**2*nmo**2*2 + nmo**3   words
@@ -29,8 +28,8 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
     nmo = mo[0].shape[1]
     nocc = (ncore[0] + ncas, ncore[1] + ncas)
 
-    erib = pyscf.ao2mo.incore.half_e1(eri_ao, (mo[1][:,:nocc[1]],mo[1]),
-                                      compact=False)
+    erib = ao2mo.incore.half_e1(eri_ao, (mo[1][:,:nocc[1]],mo[1]),
+                                compact=False)
     load_buf = lambda bufid: erib[bufid*nmo:bufid*nmo+nmo].copy()
     AAPP, AApp, APPA, tmp, IAPCV, APcv = \
             _trans_aapp_((mo[1],mo[0]), (ncore[1],ncore[0]), ncas, load_buf)
@@ -38,8 +37,8 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
             _trans_cvcv_((mo[1],mo[0]), (ncore[1],ncore[0]), ncas, load_buf)[:4]
     erib = tmp = None
 
-    eria = pyscf.ao2mo.incore.half_e1(eri_ao, (mo[0][:,:nocc[0]],mo[0]),
-                                      compact=False)
+    eria = ao2mo.incore.half_e1(eri_ao, (mo[0][:,:nocc[0]],mo[0]),
+                                compact=False)
     load_buf = lambda bufid: eria[bufid*nmo:bufid*nmo+nmo].copy()
     aapp, aaPP, appa, apPA, Iapcv, apCV = \
             _trans_aapp_(mo, ncore, ncas, load_buf)
@@ -65,9 +64,11 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
     nao_pair = nao*(nao+1)//2
     nocc = (ncore[0] + ncas, ncore[1] + ncas)
 
+    if tmpdir is None:
+        tmpdir = lib.param.TMPDIR
     swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
-    pyscf.ao2mo.outcore.half_e1(mol, (mo[1][:,:nocc[1]],mo[1]), swapfile.name,
-                                verbose=log, compact=False)
+    ao2mo.outcore.half_e1(mol, (mo[1][:,:nocc[1]],mo[1]), swapfile.name,
+                          verbose=log, compact=False)
 
     fswap = h5py.File(swapfile.name, 'r')
     klaoblks = len(fswap['0'])
@@ -100,9 +101,11 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
 
     ###########################
 
+    if tmpdir is None:
+        tmpdir = lib.param.TMPDIR
     swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
-    pyscf.ao2mo.outcore.half_e1(mol, (mo[0][:,:nocc[0]],mo[0]), swapfile.name,
-                                verbose=log, compact=False)
+    ao2mo.outcore.half_e1(mol, (mo[0][:,:nocc[0]],mo[0]), swapfile.name,
+                          verbose=log, compact=False)
 
     fswap = h5py.File(swapfile.name, 'r')
     klaoblks = len(fswap['0'])
@@ -140,7 +143,6 @@ def _trans_aapp_(mo, ncore, ncas, fload, ao_loc=None):
     nmo = mo[0].shape[1]
     nocc = (ncore[0] + ncas, ncore[1] + ncas)
     c_nmo = ctypes.c_int(nmo)
-    funpack = pyscf.lib.numpy_helper._np_helper.NPdunpack_tril
 
     klshape = (0, nmo, 0, nmo)
 
@@ -154,9 +156,7 @@ def _trans_aapp_(mo, ncore, ncas, fload, ao_loc=None):
     for i in range(ncas):
         buf = _ao2mo.nr_e2(fload(ncore[0]+i), mo[0], klshape,
                             aosym='s4', mosym='s2', ao_loc=ao_loc)
-        for j in range(nmo):
-            funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
-                    ppp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
+        lib.unpack_tril(buf, out=ppp)
         aapp[i] = ppp[ncore[0]:nocc[0]]
         appa[i] = ppp[:,:,ncore[0]:nocc[0]]
         #japcp = avcp * 2 - acpv.transpose(0,2,1,3) - avcp.transpose(0,3,2,1)
@@ -166,9 +166,7 @@ def _trans_aapp_(mo, ncore, ncas, fload, ao_loc=None):
 
         buf = _ao2mo.nr_e2(fload(ncore[0]+i), mo[1], klshape,
                             aosym='s4', mosym='s2', ao_loc=ao_loc)
-        for j in range(nmo):
-            funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
-                    ppp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
+        lib.unpack_tril(buf, out=ppp)
         aaPP[i] = ppp[ncore[0]:nocc[0]]
         apPA[i] = ppp[:,:,ncore[1]:nocc[1]]
         apCV[i] = ppp[:,:ncore[1],ncore[1]:]
@@ -178,7 +176,6 @@ def _trans_aapp_(mo, ncore, ncas, fload, ao_loc=None):
 def _trans_cvcv_(mo, ncore, ncas, fload, ao_loc=None):
     nmo = mo[0].shape[1]
     c_nmo = ctypes.c_int(nmo)
-    funpack = pyscf.lib.numpy_helper._np_helper.NPdunpack_tril
 
     jc_pp = numpy.empty((ncore[0],nmo,nmo))
     jc_PP = numpy.zeros((nmo,nmo))
@@ -207,9 +204,7 @@ def _trans_cvcv_(mo, ncore, ncas, fload, ao_loc=None):
         _ao2mo.nr_e2(buf[:ncore[0]], mo[0], klshape,
                       aosym='s4', mosym='s2', out=buf[:ncore[0]],
                       ao_loc=ao_loc)
-        for j in range(ncore[0]):
-            funpack(c_nmo, buf[j].ctypes.data_as(ctypes.c_void_p),
-                    cpp[j].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(1))
+        lib.unpack_tril(buf[:ncore[0]], out=cpp)
         jc_pp[i] = cpp[i]
         kc_pp[i,:ncore[0]] = cpp[:,i]
 
@@ -231,7 +226,7 @@ class _ERIS(object):
         ncore = self.ncore
         ncas = self.ncas
         mem_incore, mem_outcore, mem_basic = _mem_usage(ncore, ncas, nmo)
-        mem_now = pyscf.lib.current_memory()[0]
+        mem_now = lib.current_memory()[0]
 
         eri = casscf._scf._eri
         if (method == 'incore' and eri is not None and
@@ -331,12 +326,12 @@ if __name__ == '__main__':
     ncore = mc.ncore
     ncas = mc.ncas
     nocc = (ncas + ncore[0], ncas + ncore[1])
-    eriaa = pyscf.ao2mo.incore.full(mc._scf._eri, mo[0])
-    eriab = pyscf.ao2mo.incore.general(mc._scf._eri, (mo[0],mo[0],mo[1],mo[1]))
-    eribb = pyscf.ao2mo.incore.full(mc._scf._eri, mo[1])
-    eriaa = pyscf.ao2mo.restore(1, eriaa, nmo)
-    eriab = pyscf.ao2mo.restore(1, eriab, nmo)
-    eribb = pyscf.ao2mo.restore(1, eribb, nmo)
+    eriaa = ao2mo.incore.full(mc._scf._eri, mo[0])
+    eriab = ao2mo.incore.general(mc._scf._eri, (mo[0],mo[0],mo[1],mo[1]))
+    eribb = ao2mo.incore.full(mc._scf._eri, mo[1])
+    eriaa = ao2mo.restore(1, eriaa, nmo)
+    eriab = ao2mo.restore(1, eriab, nmo)
+    eribb = ao2mo.restore(1, eribb, nmo)
     jkcpp = numpy.einsum('iipq->ipq', eriaa[:ncore[0],:ncore[0],:,:]) \
           - numpy.einsum('ipqi->ipq', eriaa[:ncore[0],:,:,:ncore[0]])
     jkcPP = numpy.einsum('iipq->ipq', eribb[:ncore[1],:ncore[1],:,:]) \

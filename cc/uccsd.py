@@ -5,11 +5,10 @@ import numpy as np
 import h5py
 
 from pyscf import lib
-import pyscf.ao2mo
+from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.pbc import lib as pbclib
-import pyscf.cc
-import pyscf.cc.rccsd
+from pyscf.cc import rccsd
 from pyscf.cc import uintermediates as imd
 
 #einsum = np.einsum
@@ -141,11 +140,11 @@ def energy(cc, t1, t2, eris):
     return e.real
 
 
-class UCCSD(pyscf.cc.rccsd.RCCSD):
+class UCCSD(rccsd.RCCSD):
 
     def __init__(self, mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
         # TODO(TCB): Check that RCCSD init is safe on UHF input
-        pyscf.cc.rccsd.RCCSD.__init__(self, mf, frozen, mo_energy, mo_coeff, mo_occ)
+        rccsd.RCCSD.__init__(self, mf, frozen, mo_energy, mo_coeff, mo_occ)
         # Spin-orbital CCSD needs a stricter tolerance
         self.conv_tol = 1e-8
         self.conv_tol_normt = 1e-6
@@ -470,7 +469,7 @@ class UCCSD(pyscf.cc.rccsd.RCCSD):
 
 class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore', 
-                 ao2mofn=pyscf.ao2mo.outcore.general_iofree):
+                 ao2mofn=ao2mo.outcore.general_iofree):
         cput0 = (time.clock(), time.time())
         if mo_coeff is None:
             self.mo_coeff = mo_coeff = cc.mo_coeff
@@ -480,7 +479,7 @@ class _ERIS:
         nocc = cc.nocc()
         nmo = cc.nmo()
         nvir = nmo - nocc
-        mem_incore, mem_outcore, mem_basic = pyscf.cc.rccsd._mem_usage(nocc, nvir)
+        mem_incore, mem_outcore, mem_basic = rccsd._mem_usage(nocc, nvir)
         mem_now = pyscf.lib.current_memory()[0]
 
         # Convert to spin-orbitals and anti-symmetrize 
@@ -522,7 +521,7 @@ class _ERIS:
             self.ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
             self.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy() 
         else:
-            _tmpfile1 = tempfile.NamedTemporaryFile()
+            _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
             self.feri1 = h5py.File(_tmpfile1.name)
             orbo = so_coeff[:,:nocc]
             orbv = so_coeff[:,nocc:]

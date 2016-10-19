@@ -655,7 +655,7 @@ def expm(a):
     bs = [a.copy()]
     n = 0
     for n in range(1, 14):
-        bs.append(lib.ddot(bs[-1], a))
+        bs.append(ddot(bs[-1], a))
         radius = (2**(n*(n+2))*math.factorial(n+2)*1e-16) **((n+1.)/(n+2))
         #print(n, radius, bs[-1].max(), -bs[-1].min())
         if bs[-1].max() < radius and -bs[-1].min() < radius:
@@ -669,12 +669,13 @@ def expm(a):
         y += b
     buf, bs = bs[0], None
     for i in range(n):
-        lib.ddot(y, y, 1, buf, 0)
+        ddot(y, y, 1, buf, 0)
         y, buf = buf, y
     return y
 
 
 if __name__ == '__main__':
+    import scipy.linalg
     a = numpy.random.random((400,900))
     print(abs(a.T - transpose(a)).sum())
     b = a[:400,:400]

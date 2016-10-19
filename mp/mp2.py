@@ -7,7 +7,7 @@ import tempfile
 from functools import reduce
 import warnings
 import numpy
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
 
@@ -25,7 +25,7 @@ t2[i,j,a,b] = (ia|jb) / D_ij^ab
 def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
     nocc = mp.nocc
     nvir = mp.nmo - nocc
-    eia = pyscf.lib.direct_sum('i-a->ia', mo_energy[:nocc], mo_energy[nocc:])
+    eia = lib.direct_sum('i-a->ia', mo_energy[:nocc], mo_energy[nocc:])
     t2 = numpy.empty((nocc,nocc,nvir,nvir))
     emp2 = 0
 
@@ -33,7 +33,7 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
         for i in range(nocc):
             gi = numpy.asarray(ovov[i*nvir:(i+1)*nvir])
             gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
-            t2[i] = gi/pyscf.lib.direct_sum('jb+a->jba', eia, eia[i])
+            t2[i] = gi/lib.direct_sum('jb+a->jba', eia, eia[i])
             # 2*ijab-ijba
             theta = gi*2 - gi.transpose(0,2,1)
             emp2 += numpy.einsum('jab,jab', t2[i], theta)
@@ -122,7 +122,7 @@ def make_rdm2(mp, t2, verbose=logger.NOTE):
     return dm2
 
 
-class MP2(pyscf.lib.StreamObject):
+class MP2(lib.StreamObject):
     def __init__(self, mf):
         self.mol = mf.mol
         self._scf = mf
@@ -164,7 +164,7 @@ class MP2(pyscf.lib.StreamObject):
         co = mo_coeff[:,:nocc]
         cv = mo_coeff[:,nocc:]
         mem_incore, mem_outcore, mem_basic = _mem_usage(nocc, nvir)
-        mem_now = pyscf.lib.current_memory()[0]
+        mem_now = lib.current_memory()[0]
         if mem_now < mem_basic:
             warnings.warn('%s: Not enough memory. Available mem %s MB, required mem %s MB\n' %
                           (self.ao2mo, mem_now, mem_basic))
@@ -178,7 +178,7 @@ class MP2(pyscf.lib.StreamObject):
             eri = ao2mo.incore.general(eri, (co,cv,co,cv))
         else:
             max_memory = max(2000, self.max_memory*.9-mem_now)
-            erifile = tempfile.NamedTemporaryFile()
+            erifile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
             ao2mo.outcore.general(self.mol, (co,cv,co,cv), erifile.name,
                                   max_memory=max_memory, verbose=self.verbose)
             eri = erifile

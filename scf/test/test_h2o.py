@@ -6,6 +6,7 @@ import unittest
 import numpy
 import scipy.linalg
 import tempfile
+from pyscf import lib
 from pyscf import gto
 from pyscf import scf
 from pyscf.scf import dhf
@@ -163,7 +164,7 @@ class KnowValues(unittest.TestCase):
         dm = scf.hf.init_guess_by_minao(mol)
         s = scf.hf.get_ovlp(mol)
         occ, mo = scipy.linalg.eigh(dm, s, type=2)
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         scf.chkfile.dump_scf(mol, ftmp.name, 0, occ, mo, occ)
         self.assertAlmostEqual(numpy.linalg.norm(dm), 3.0334714065913508, 9)
 
@@ -181,7 +182,7 @@ class KnowValues(unittest.TestCase):
         dm = scf.hf.init_guess_by_atom(mol)
         s = scf.hf.get_ovlp(mol)
         occ, mo = scipy.linalg.eigh(dm, s, type=2)
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         scf.chkfile.dump_scf(mol, ftmp.name, 0, occ, mo, occ)
         self.assertAlmostEqual(numpy.linalg.norm(dm), 3.064429619915702, 8)
 
@@ -199,7 +200,7 @@ class KnowValues(unittest.TestCase):
         dm = scf.hf.init_guess_by_1e(mol)
         s = scf.hf.get_ovlp(mol)
         occ, mo = scipy.linalg.eigh(dm, s, type=2)
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         scf.chkfile.dump_scf(mol, ftmp.name, 0, occ, mo, occ)
         self.assertAlmostEqual(numpy.linalg.norm(dm), 5.3700828975288122, 9)
 
@@ -223,7 +224,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.linalg.norm(dm1), 7.5925205205065422, 9)
 
     def test_init_guess_chkfile(self):
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         def save(HFclass):
             mf0 = HFclass(mol)
             mf0.chkfile = ftmp.name

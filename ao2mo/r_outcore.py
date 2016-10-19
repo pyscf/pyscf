@@ -6,8 +6,8 @@ import time
 import tempfile
 import numpy
 import h5py
-import pyscf.lib
-import pyscf.lib.logger as logger
+from pyscf import lib
+from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo import outcore
 
@@ -83,6 +83,8 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
               float(nij_pair)*nkl_pair*comp, nij_pair*nkl_pair*comp*16/1e6)
 
 # transform e1
+    if tmpdir is None:
+        tmpdir = lib.param.TMPDIR
     swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
     half_e1(mol, mo_coeffs, swapfile.name, intor, aosym, comp,
             max_memory, ioblk_size, log)
@@ -227,14 +229,14 @@ def half_e1(mol, mo_coeffs, swapfile,
                                         (nij_pair,iobuf.shape[1]), 'c16',
                                         chunks=None)
             for col0, col1 in prange(0, nij_pair, e2buflen):
-                dset[col0:col1] = pyscf.lib.transpose(iobuf[icomp,:,col0:col1])
+                dset[col0:col1] = lib.transpose(iobuf[icomp,:,col0:col1])
         ti0 = log.timer('transposing to disk', *ti2)
     fswap.close()
     return swapfile
 
 def full_iofree(mol, mo_coeff, intor='cint2e', aosym='s4', comp=1,
                 verbose=logger.WARN):
-    erifile = tempfile.NamedTemporaryFile()
+    erifile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     general(mol, (mo_coeff,)*4, erifile.name, dataname='eri_mo',
             intor=intor, aosym=aosym, comp=comp,
             verbose=verbose)
@@ -243,7 +245,7 @@ def full_iofree(mol, mo_coeff, intor='cint2e', aosym='s4', comp=1,
 
 def general_iofree(mol, mo_coeffs, intor='cint2e', aosym='s4', comp=1,
                    verbose=logger.WARN):
-    erifile = tempfile.NamedTemporaryFile()
+    erifile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     general(mol, mo_coeffs, erifile.name, dataname='eri_mo',
             intor=intor, aosym=aosym, comp=comp,
             verbose=verbose)

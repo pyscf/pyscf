@@ -11,7 +11,7 @@ import time
 import tempfile
 import numpy
 import h5py
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.scf import cphf
@@ -44,7 +44,7 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
                                   None, atmlst, max_memory, log)
     t1 = log.timer('solving MO1', *t1)
 
-    tmpf = tempfile.NamedTemporaryFile()
+    tmpf = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     with h5py.File(tmpf.name, 'w') as f:
         for i0, ia in enumerate(atmlst):
             mol.set_rinv_origin(mol.atom_coord(ia))
@@ -110,8 +110,8 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
         for j0, ja in enumerate(atmlst):
             q0, q1 = offsetdic[ja][2:]
 # *2 for double occupancy, *2 for +c.c.
-            mo1  = pyscf.lib.chkfile.load(hess_mf.chkfile, 'scf_mo1/%d'%ja)
-            h1ao = pyscf.lib.chkfile.load(hess_mf.chkfile, 'scf_h1ao/%d'%ia)
+            mo1  = lib.chkfile.load(hess_mf.chkfile, 'scf_mo1/%d'%ja)
+            h1ao = lib.chkfile.load(hess_mf.chkfile, 'scf_h1ao/%d'%ia)
             dm1 = numpy.einsum('ypi,qi->ypq', mo1, mocc)
             de  = numpy.einsum('xpq,ypq->xy', h1ao, dm1) * 4
             dm1 = numpy.einsum('ypi,qi,i->ypq', mo1, mocc, mo_energy[:nocc])
@@ -174,7 +174,7 @@ def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN
                                   3, mol._atm, mol._bas, mol._env,
                                   shls_slice=shls_slice)
         for i in range(3):
-            pyscf.lib.hermi_triu(vj1[i], 1)
+            lib.hermi_triu(vj1[i], 1)
         vhf = vj1 - vk1*.5
         vhf[:,p0:p1] += vj2 - vk2*.5
         vhf = vhf + vhf.transpose(0,2,1)
@@ -183,7 +183,7 @@ def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN
             h1aos.append(h1ao+vhf)
         else:
             key = 'scf_h1ao/%d' % ia
-            pyscf.lib.chkfile.save(chkfile, key, h1ao+vhf)
+            lib.chkfile.save(chkfile, key, h1ao+vhf)
     if chkfile is None:
         return h1aos
     else:
@@ -210,7 +210,7 @@ def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
             return numpy.einsum('xpq,pa,qi->xai', v1, mo_coeff, mocc)
 
     offsetdic = mol.offset_nr_by_atom()
-    mem_now = pyscf.lib.current_memory()[0]
+    mem_now = lib.current_memory()[0]
     max_memory = max(4000, max_memory*.9-mem_now)
     blksize = max(2, int(max_memory*1e6/8 / (nmo*nocc*3*6)))
     s1a =-mol.intor('cint1e_ipovlp_sph', comp=3)
@@ -228,7 +228,7 @@ def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
             s1vo.append(numpy.einsum('xpq,pi,qj->xij', s1ao, mo_coeff, mocc))
             if isinstance(h1ao_or_chkfile, str):
                 key = 'scf_h1ao/%d' % ia
-                h1ao = pyscf.lib.chkfile.load(h1ao_or_chkfile, key)
+                h1ao = lib.chkfile.load(h1ao_or_chkfile, key)
             else:
                 h1ao = h1ao_or_chkfile[i0]
             h1vo.append(numpy.einsum('xpq,pi,qj->xij', h1ao, mo_coeff, mocc))
@@ -239,7 +239,7 @@ def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
         if isinstance(h1ao_or_chkfile, str):
             for k in range(ia1-ia0):
                 key = 'scf_mo1/%d' % atmlst[k+ia0]
-                pyscf.lib.chkfile.save(h1ao_or_chkfile, key, mo1[k])
+                lib.chkfile.save(h1ao_or_chkfile, key, mo1[k])
                 mo1s.append(key)
         else:
             mo1s.append(mo1)
@@ -277,7 +277,7 @@ def hess_nuc(mol, atmlst=None):
     return gs
 
 
-class Hessian(pyscf.lib.StreamObject):
+class Hessian(lib.StreamObject):
     '''Non-relativistic restricted Hartree-Fock hessian'''
     def __init__(self, scf_method):
         self.verbose = scf_method.verbose

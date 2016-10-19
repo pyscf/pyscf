@@ -7,11 +7,10 @@
 #
 # It requires following fixing
 
-dirnow=$(pwd)
-for i in libao2mo.dylib libcc.dylib libcgto.dylib libcvhf.dylib libdft.dylib \
-  libfci.dylib libicmpspt.dylib liblocalizer.dylib libmcscf.dylib \
-  libnp_helper.dylib libpbc.dylib libri.dylib libxcfun_itrf.dylib \
-  libxc_itrf.dylib
+dirnow=$(pwd)/$(dirname $0)
+
+cd $dirnow
+for i in *.dylib
 do
-  install_name_tool -change libcint.2.8.dylib ${dirnow}/deps/lib/libcint.2.8.dylib ${dirnow}/$i
+  echo install_name_tool -change libcint.2.8.dylib ${dirnow}/deps/lib/libcint.2.8.dylib ${dirnow}/$i
 done

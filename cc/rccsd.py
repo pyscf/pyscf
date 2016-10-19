@@ -5,11 +5,10 @@ import numpy as np
 import h5py
 
 from pyscf import lib
-import pyscf.ao2mo
+from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.pbc import lib as pbclib
-import pyscf.cc
-import pyscf.cc.ccsd
+from pyscf.cc import ccsd
 from pyscf.cc import rintermediates as imd
 from pyscf.pbc.lib.linalg_helper import eigs
 
@@ -164,16 +163,16 @@ def energy(cc, t1, t2, eris):
     return e.real
 
 
-class RCCSD(pyscf.cc.ccsd.CCSD):
+class RCCSD(ccsd.CCSD):
 
     def __init__(self, mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
-        pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_energy, mo_coeff, mo_occ)
+        ccsd.CCSD.__init__(self, mf, frozen, mo_energy, mo_coeff, mo_occ)
         self.made_ip_imds = False
         self.made_ea_imds = False
         self.made_ee_imds = False
 
     def dump_flags(self):
-        pyscf.cc.ccsd.CCSD.dump_flags(self)
+        ccsd.CCSD.dump_flags(self)
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
@@ -464,7 +463,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
 class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore',
-                 ao2mofn=pyscf.ao2mo.outcore.general_iofree):
+                 ao2mofn=ao2mo.outcore.general_iofree):
         cput0 = (time.clock(), time.time())
         moidx = numpy.ones(cc.mo_energy.size, dtype=numpy.bool)
         if isinstance(cc.frozen, (int, numpy.integer)):
@@ -504,7 +503,7 @@ class _ERIS:
             self.vovv = eri[nocc:,:nocc,nocc:,nocc:].copy()
             self.vvvv = eri[nocc:,nocc:,nocc:,nocc:].copy()
         else:
-            _tmpfile1 = tempfile.NamedTemporaryFile()
+            _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
             self.feri1 = h5py.File(_tmpfile1.name)
             orbo = mo_coeff[:,:nocc]
             orbv = mo_coeff[:,nocc:]

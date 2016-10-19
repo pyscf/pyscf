@@ -8,7 +8,7 @@ import ctypes
 import tempfile
 import numpy
 import h5py
-import pyscf.lib as lib
+from pyscf import lib
 from functools import reduce
 from pyscf.lib import logger
 from pyscf import gto
@@ -30,7 +30,7 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
         d1 = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2)
     doo, dov, dvo, dvv = d1
     if d2 is None:
-        _d2tmpfile = tempfile.NamedTemporaryFile()
+        _d2tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         fd2intermediate = h5py.File(_d2tmpfile.name, 'w')
         ccsd_rdm.gamma2_outcore(mycc, t1, t2, l1, l2, fd2intermediate)
         dovov = fd2intermediate['dovov']
@@ -47,7 +47,7 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
     nocc, nvir = t1.shape
     nov = nocc * nvir
     nvir_pair = nvir * (nvir+1) //2
-    _tmpfile = tempfile.NamedTemporaryFile()
+    _tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     fswap = h5py.File(_tmpfile.name, 'w')
     fswap.create_group('e_vvov')
     fswap.create_group('c_vvov')
@@ -309,7 +309,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     time1 = log.timer('rdm1 intermediates', *time0)
 
     log.debug('Build ccsd rdm2 intermediates')
-    _d2tmpfile = tempfile.NamedTemporaryFile()
+    _d2tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     fd2intermediate = h5py.File(_d2tmpfile.name, 'w')
     d2 = ccsd_rdm.gamma2_outcore(mycc, t1, t2, l1, l2, fd2intermediate)
     time1 = log.timer('rdm2 intermediates', *time1)
@@ -330,7 +330,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     time1 = log.timer('response_rdm1', *time1)
 
     log.debug('symmetrized rdm2 and MO->AO transformation')
-    _dm2file = tempfile.NamedTemporaryFile()
+    _dm2file = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
 # Basically, 4 times of dm2 is computed. *2 in _rdm2_mo2ao, *2 in _load_block_tril
     fdm2 = h5py.File(_dm2file.name, 'w')
     dm1_with_hf = dm1mo.copy()
@@ -425,7 +425,7 @@ def shell_prange(mol, start, stop, blksize):
 def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave=None):
     log = logger.Logger(mycc.stdout, mycc.verbose)
     if fsave is None:
-        _dm2file = tempfile.NamedTemporaryFile()
+        _dm2file = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         fsave = h5py.File(_dm2file.name, 'w')
     else:
         _dm2file = None
@@ -452,7 +452,7 @@ def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave=None):
         return out
 
 # transform dm2_ij to get lower triangular (dm2+dm2.transpose(0,1,3,2))
-    _tmpfile = tempfile.NamedTemporaryFile()
+    _tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     fswap = h5py.File(_tmpfile.name)
     max_memory = mycc.max_memory - lib.current_memory()[0]
     blksize = max(1, int(max_memory*1e6/8/(nmo*nao_pair+nmo**3+nvir**3)))

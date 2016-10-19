@@ -13,8 +13,8 @@ import json
 import numpy
 import scipy.special
 import ctypes
-import pyscf.lib
-import pyscf.lib.parameters as param
+from pyscf import lib
+from pyscf.lib import param
 from pyscf.lib import logger
 from pyscf.gto import cmd_args
 from pyscf.gto import basis
@@ -357,7 +357,7 @@ def expand_etbs(etbs):
     >>> gto.expand_etbs([(0, 2, 1.5, 2.), (1, 2, 1, 2.)])
     [[0, [6.0, 1]], [0, [3.0, 1]], [1, [1., 1]], [1, [2., 1]]]
     '''
-    return pyscf.lib.flatten([expand_etb(*etb) for etb in etbs])
+    return lib.flatten([expand_etb(*etb) for etb in etbs])
 etbs = expand_etbs
 
 # concatenate two mol
@@ -420,7 +420,6 @@ def conc_mol(mol1, mol2):
     mol3.verbose = mol1.verbose
     mol3.output = mol1.output
     mol3.max_memory = mol1.max_memory
-    mol3.light_speed = mol1.light_speed
     mol3.charge = mol1.charge + mol2.charge
     mol3.spin = mol1.spin + mol2.spin
     mol3.symmetry = False
@@ -532,7 +531,7 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         ptr_coeff = ptr_exp + nprim
         ptr = ptr_coeff + nprim * nctr
         _bas.append([atom_id, angl, nprim, nctr, kappa, ptr_exp, ptr_coeff, 0])
-    _env = pyscf.lib.flatten(_env) # flatten nested lists
+    _env = lib.flatten(_env) # flatten nested lists
     return (numpy.array(_bas, numpy.int32).reshape(-1,BAS_SLOTS),
             numpy.array(_env, numpy.double))
 
@@ -694,8 +693,7 @@ def pack(mol):
             'spin'    : mol.spin,
             'symmetry': mol.symmetry,
             'nucmod'  : mol.nucmod,
-            'ecp'     : mol.ecp,
-            'light_speed': mol.light_speed}
+            'ecp'     : mol.ecp}
 def unpack(moldic):
     '''Unpack a dict which is packed by :func:`pack`, to generate the input
     arguments for :class:`Mole` object.
@@ -1310,7 +1308,7 @@ def condense_to_shell(mol, mat, compressor=numpy.max):
 def check_sanity(obj, keysref, stdout=sys.stdout):
     sys.stderr.write('Function pyscg.gto.mole.check_sanity will be removed in PySCF-1.1. '
                      'It is replaced by pyscg.lib.check_sanity\n')
-    return pyscf.lib.check_sanity(obj, keysref, stdout)
+    return lib.check_sanity(obj, keysref, stdout)
 
 
 # for _atm, _bas, _env
@@ -1352,7 +1350,7 @@ NUC_GAUSS = 2
 # on the internal format.  Exceptions are make_env, make_atm_env, make_bas_env,
 # set_common_orig_, set_rinv_orig_ which are used to manipulate the libcint arguments.
 #
-class Mole(pyscf.lib.StreamObject):
+class Mole(lib.StreamObject):
     '''Basic class to hold molecular structure and global options
 
     Attributes:
@@ -1362,8 +1360,6 @@ class Mole(pyscf.lib.StreamObject):
             Output file, default is None which dumps msg to sys.stdout
         max_memory : int, float
             Allowed memory in MB
-        light_speed :
-            Default is set in lib.parameters.LIGHTSPEED
         charge : int
             Charge of molecule. It affects the electron numbers
         spin : int
@@ -1458,9 +1454,8 @@ class Mole(pyscf.lib.StreamObject):
     def __init__(self, **kwargs):
         self.verbose = logger.NOTE
         self.output = None
-        self.max_memory = param.MEMORY_MAX
+        self.max_memory = param.MAX_MEMORY
 
-        self.light_speed = param.LIGHTSPEED
         self.charge = 0
         self.spin = 0 # 2j == nelec_alpha - nelec_beta
         self.symmetry = False
@@ -1532,7 +1527,7 @@ class Mole(pyscf.lib.StreamObject):
         return copy(self)
 
     pack = pack
-    @pyscf.lib.with_doc(unpack.__doc__)
+    @lib.with_doc(unpack.__doc__)
     def unpack(self, moldic):
         return unpack(moldic)
     def unpack_(self, moldic):
@@ -1540,7 +1535,7 @@ class Mole(pyscf.lib.StreamObject):
         return self
 
     dumps = dumps
-    @pyscf.lib.with_doc(loads.__doc__)
+    @lib.with_doc(loads.__doc__)
     def loads(self, molstr):
         return loads(molstr)
     def loads_(self, molstr):
@@ -1550,8 +1545,7 @@ class Mole(pyscf.lib.StreamObject):
     def build(self, dump_input=True, parse_arg=True,
               verbose=None, output=None, max_memory=None,
               atom=None, basis=None, unit=None, nucmod=None, ecp=None,
-              charge=None, spin=None, symmetry=None,
-              symmetry_subgroup=None, light_speed=None):
+              charge=None, spin=None, symmetry=None, symmetry_subgroup=None):
         '''Setup moleclue and initialize some control parameters.  Whenever you
         change the value of the attributes of :class:`Mole`, you need call
         this function to refresh the internal data of Mole.
@@ -1582,8 +1576,6 @@ class Mole(pyscf.lib.StreamObject):
             symmetry : bool or str
                 Whether to use symmetry.  If given a string of point group
                 name, the given point group symmetry will be used.
-            light_speed :
-                If given, overwrite :attr:`Mole.light_speed`
 
         '''
 # release circular referred objs
@@ -1602,7 +1594,6 @@ class Mole(pyscf.lib.StreamObject):
         if spin is not None: self.spin = spin
         if symmetry is not None: self.symmetry = symmetry
         if symmetry_subgroup is not None: self.symmetry_subgroup = symmetry_subgroup
-        if light_speed is not None: self.light_speed = light_speed
 
         if parse_arg:
             _update_from_cmdargs_(self)
@@ -1670,7 +1661,7 @@ class Mole(pyscf.lib.StreamObject):
 # Note the internal _format is in Bohr
             self._atom = self.format_atom(self._atom, orig, axes, 'Bohr')
 
-        self._env[PTR_LIGHT_SPEED] = self.light_speed
+        self._env[PTR_LIGHT_SPEED] = param.LIGHT_SPEED
         self._atm, self._bas, self._env = \
                 self.make_env(self._atom, self._basis, self._env, self.nucmod)
         self._atm, self._ecpbas, self._env = \
@@ -1705,23 +1696,23 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         return self
     kernel = build
 
-    @pyscf.lib.with_doc(format_atom.__doc__)
+    @lib.with_doc(format_atom.__doc__)
     def format_atom(self, atom, origin=0, axes=None, unit='Ang'):
         return format_atom(atom, origin, axes, unit)
 
-    @pyscf.lib.with_doc(format_basis.__doc__)
+    @lib.with_doc(format_basis.__doc__)
     def format_basis(self, basis_tab):
         return format_basis(basis_tab)
 
-    @pyscf.lib.with_doc(format_ecp.__doc__)
+    @lib.with_doc(format_ecp.__doc__)
     def format_ecp(self, ecp_tab):
         return format_ecp(ecp_tab)
 
-    @pyscf.lib.with_doc(expand_etb.__doc__)
+    @lib.with_doc(expand_etb.__doc__)
     def expand_etb(self, l, n, alpha, beta):
         return expand_etb(l, n, alpha, beta)
 
-    @pyscf.lib.with_doc(expand_etbs.__doc__)
+    @lib.with_doc(expand_etbs.__doc__)
     def expand_etbs(self, etbs):
         return expand_etbs(etbs)
     etbs = expand_etbs
@@ -1744,7 +1735,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     tot_electrons = tot_electrons
 
-    @pyscf.lib.with_doc(gto_norm.__doc__)
+    @lib.with_doc(gto_norm.__doc__)
     def gto_norm(self, l, expnt):
         return gto_norm(l, expnt)
 
@@ -1786,7 +1777,6 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
             pass
 
         self.stdout.write('[INPUT] VERBOSE %d\n' % self.verbose)
-        self.stdout.write('[INPUT] light speed = %s\n' % self.light_speed)
         self.stdout.write('[INPUT] num atoms = %d\n' % self.natm)
         self.stdout.write('[INPUT] num electrons = %d\n' % self.nelectron)
         self.stdout.write('[INPUT] charge = %d\n' % self.charge)
@@ -2297,7 +2287,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         return self.intor(intor, comp, 2, aosym='a4')
 
-    @pyscf.lib.with_doc(moleintor.getints_by_shell.__doc__)
+    @lib.with_doc(moleintor.getints_by_shell.__doc__)
     def intor_by_shell(self, intor, shells, comp=1):
         if 'ECP' in intor:
             assert(self._ecp is not None)
@@ -2309,7 +2299,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         return moleintor.getints_by_shell(intor, shells, self._atm, bas,
                                           self._env, comp)
 
-    @pyscf.lib.with_doc(eval_gto.__doc__)
+    @lib.with_doc(eval_gto.__doc__)
     def eval_gto(self, eval_name, coords,
                  comp=1, shls_slice=None, non0tab=None, out=None):
         return eval_gto(eval_name, self._atm, self._bas, self._env,
@@ -2320,11 +2310,11 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def get_enuc(self):
         return self.energy_nuc()
 
-    @pyscf.lib.with_doc(cart_labels.__doc__)
+    @lib.with_doc(cart_labels.__doc__)
     def cart_labels(self, fmt=False):
         return cart_labels(self, fmt)
 
-    @pyscf.lib.with_doc(spheric_labels.__doc__)
+    @lib.with_doc(spheric_labels.__doc__)
     def spheric_labels(self, fmt=False):
         return spheric_labels(self, fmt)
 
@@ -2337,7 +2327,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     offset_nr_by_atom = offset_nr_by_atom
     offset_2c_by_atom = offset_2c_by_atom
 
-    @pyscf.lib.with_doc(spinor_labels.__doc__)
+    @lib.with_doc(spinor_labels.__doc__)
     def spinor_labels(self):
         return spinor_labels(self)
 
@@ -2535,7 +2525,7 @@ def cart2zmat(coord):
 
     return '\n'.join(zstr)
 
-def dyall_nuc_mod(mass, c=param.LIGHTSPEED):
+def dyall_nuc_mod(mass, c=param.LIGHT_SPEED):
     ''' Generate the nuclear charge distribution parameter zeta
     rho(r) = nuc_charge * Norm * exp(-zeta * r^2)
 
@@ -2545,7 +2535,7 @@ def dyall_nuc_mod(mass, c=param.LIGHTSPEED):
     zeta = 1.5 / (r**2);
     return zeta
 
-def filatov_nuc_mod(nuc_charge, c=param.LIGHTSPEED):
+def filatov_nuc_mod(nuc_charge, c=param.LIGHT_SPEED):
     ''' Generate the nuclear charge distribution parameter zeta
     rho(r) = nuc_charge * Norm * exp(-zeta * r^2)
 

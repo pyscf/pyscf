@@ -131,7 +131,7 @@ def load_mol(chkfile):
             mol.verbose = 0
             mol.output = '/dev/null'
             moldic = eval(fh5['mol'].value)
-            for key in ('mass', 'grids'):
+            for key in ('mass', 'grids', 'light_speed'):
                 if key in moldic:
                     del(moldic[key])
             mol.build(False, False, **moldic)

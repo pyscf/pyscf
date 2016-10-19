@@ -9,9 +9,9 @@ import tempfile
 from functools import reduce
 import numpy
 import h5py
-import pyscf.lib as lib
+from pyscf import lib
 from pyscf.lib import logger
-import pyscf.ao2mo
+from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
 
@@ -67,7 +67,7 @@ def make_intermediates(mycc, t1, t2, eris):
 
     class _Saved(object):
         def __init__(self):
-            self._tmpfile = tempfile.NamedTemporaryFile()
+            self._tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
             self.ftmp = h5py.File(self._tmpfile.name)
         def __del__(self):
             if hasattr(self, 'ftmp'):
@@ -88,7 +88,7 @@ def make_intermediates(mycc, t1, t2, eris):
     w3 += reduce(numpy.dot, (t1.T, fov, t1.T))
     w4 = fov.copy()
 
-    _tmpfile = tempfile.NamedTemporaryFile()
+    _tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     fswap = h5py.File(_tmpfile.name)
 
     time1 = time.clock(), time.time()
@@ -565,7 +565,6 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     from pyscf.cc import ccsd
-    from pyscf import ao2mo
 
     mol = gto.M()
     mf = scf.RHF(mol)
@@ -595,7 +594,7 @@ if __name__ == '__main__':
     eris.ovov = eri0[:nocc,nocc:,:nocc,nocc:].copy()
     idx = numpy.tril_indices(nvir)
     eris.ovvv = eri0[:nocc,nocc:,nocc:,nocc:][:,:,idx[0],idx[1]].copy()
-    eris.vvvv = pyscf.ao2mo.restore(4,eri0[nocc:,nocc:,nocc:,nocc:],nvir)
+    eris.vvvv = ao2mo.restore(4,eri0[nocc:,nocc:,nocc:,nocc:],nvir)
     eris.fock = fock0
 
     saved = make_intermediates(mcc, t1, t2, eris)
@@ -643,8 +642,8 @@ if __name__ == '__main__':
     dm1 = ccsd_rdm.make_rdm1(mcc, t1, t2, l1, l2)
     dm2 = ccsd_rdm.make_rdm2(mcc, t1, t2, l1, l2)
     h1 = reduce(numpy.dot, (rhf.mo_coeff.T, rhf.get_hcore(), rhf.mo_coeff))
-    eri = pyscf.ao2mo.full(rhf._eri, rhf.mo_coeff)
-    eri = pyscf.ao2mo.restore(1, eri, nmo).reshape((nmo,)*4)
+    eri = ao2mo.full(rhf._eri, rhf.mo_coeff)
+    eri = ao2mo.restore(1, eri, nmo).reshape((nmo,)*4)
     e1 = numpy.einsum('pq,pq', h1, dm1)
     e2 = numpy.einsum('pqrs,pqrs', eri, dm2) * .5
     print(e1+e2+mol.energy_nuc() - rhf.e_tot - ecc)

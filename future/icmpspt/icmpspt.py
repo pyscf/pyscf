@@ -11,7 +11,7 @@ import tempfile
 from functools import reduce
 import numpy
 import h5py
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf import fci
 from pyscf import mcscf
@@ -24,7 +24,7 @@ from pyscf import tools
 from pyscf import lib
 import sys
 
-libmc = pyscf.lib.load_library('libmcscf')
+libmc = lib.load_library('libmcscf')
 
 float_precision = numpy.dtype('Float64')
 mpiprefix="" 
@@ -561,7 +561,7 @@ def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
                      verbose=0):
     time0 = (time.clock(), time.time())
     mol = mc.mol
-    log = pyscf.lib.logger.Logger(mc.stdout, verbose)
+    log = logger.Logger(mc.stdout, verbose)
     ncore = mc.ncore
     ncas = mc.ncas
     nao, nmo = mo.shape
@@ -570,6 +570,8 @@ def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
     nvir = nmo - nocc
     nav = nmo - ncore
 
+    if tmpdir is None:
+        tmpdir = lib.param.TMPDIR
     swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
     pyscf.ao2mo.outcore.half_e1(mol, (mo[:,:nocc],mo[:,ncore:]), swapfile.name,
                                 max_memory=max_memory, ioblk_size=ioblk_size,
@@ -578,8 +580,8 @@ def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
     fswap = h5py.File(swapfile.name, 'r')
     klaoblks = len(fswap['0'])
     def load_buf(r0,r1):
-        if mol.verbose >= pyscf.lib.logger.DEBUG1:
-            time1[:] = pyscf.lib.logger.timer(mol, 'between load_buf',
+        if mol.verbose >= logger.DEBUG1:
+            time1[:] = logger.timer(mol, 'between load_buf',
                                               *tuple(time1))
         buf = numpy.empty(((r1-r0)*nav,nao_pair))
         col0 = 0
@@ -588,17 +590,17 @@ def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
             col1 = col0 + dat.shape[1]
             buf[:,col0:col1] = dat[r0*nav:r1*nav]
             col0 = col1
-        if mol.verbose >= pyscf.lib.logger.DEBUG1:
-            time1[:] = pyscf.lib.logger.timer(mol, 'load_buf', *tuple(time1))
+        if mol.verbose >= logger.DEBUG1:
+            time1[:] = logger.timer(mol, 'load_buf', *tuple(time1))
         return buf
-    time0 = pyscf.lib.logger.timer(mol, 'halfe1', *time0)
+    time0 = logger.timer(mol, 'halfe1', *time0)
     time1 = [time.clock(), time.time()]
     ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
-    cvcvfile = tempfile.NamedTemporaryFile()
+    cvcvfile = tempfile.NamedTemporaryFile(dir=tmpdir)
     with h5py.File(cvcvfile.name) as f5:
         cvcv = f5.create_dataset('eri_mo', (ncore*nvir,ncore*nvir), 'f8')
         ppaa, papa, pacv = _trans(mo, ncore, ncas, load_buf, cvcv, ao_loc)[:3]
-    time0 = pyscf.lib.logger.timer(mol, 'trans_cvcv', *time0)
+    time0 = logger.timer(mol, 'trans_cvcv', *time0)
     fswap.close()
     return ppaa, papa, pacv, cvcvfile
 
@@ -645,8 +647,8 @@ def _trans(mo, ncore, ncas, fload, cvcv=None, ao_loc=None):
         _ao2mo.nr_e2(buf[:ncas], mo, klshape,
                       aosym='s4', mosym='s1', out=app, ao_loc=ao_loc)
         aapp[i] = app
-    #pyscf.lib.transpose(aapp.reshape(ncas**2, -1), inplace=True)
-    ppaa = pyscf.lib.transpose(aapp.reshape(ncas**2,-1))
+    #lib.transpose(aapp.reshape(ncas**2, -1), inplace=True)
+    ppaa = lib.transpose(aapp.reshape(ncas**2,-1))
     return (ppaa.reshape(nmo,nmo,ncas,ncas), papa.reshape(nmo,ncas,nmo,ncas),
             pacv.reshape(nmo,ncas,ncore,nvir), cvcv)
 

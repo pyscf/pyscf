@@ -82,7 +82,7 @@ class MP2(object):
     def ao2mo(self, mo_coeff, nocc):
         time0 = (time.clock(), time.time())
         log = logger.Logger(self.stdout, self.verbose)
-        cderi_file = tempfile.NamedTemporaryFile()
+        cderi_file = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         df.outcore.general(self.mol, (mo_coeff[:,:nocc], mo_coeff[:,nocc:]),
                            cderi_file.name, auxbasis=self.auxbasis, verbose=log)
         time1 = log.timer('Integral transformation (P|ia)', *time0)

@@ -641,8 +641,8 @@ class _ERIS:
                     ij1 += 1
         else:
             cput1 = time.clock(), time.time()
-            _tmpfile1 = tempfile.NamedTemporaryFile()
-            _tmpfile2 = tempfile.NamedTemporaryFile()
+            _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+            _tmpfile2 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
             self.feri1 = h5py.File(_tmpfile1.name)
             orbo = mo_coeff[:,:nocc]
             orbv = mo_coeff[:,nocc:]
@@ -659,7 +659,7 @@ class _ERIS:
             self.vvvv = self.feri2['eri_mo']
             cput1 = log.timer_debug1('transforming vvvv', *cput1)
 
-            tmpfile3 = tempfile.NamedTemporaryFile()
+            tmpfile3 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
             with h5py.File(tmpfile3.name, 'w') as feri:
                 pyscf.ao2mo.general(cc.mol, (orbo,mo_coeff,mo_coeff,mo_coeff),
                                     feri, verbose=log)

@@ -10,7 +10,7 @@ import ctypes
 from functools import reduce
 import numpy
 import h5py
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf import df
@@ -95,7 +95,7 @@ def density_fit(casscf, auxbasis=None, with_df=None):
                          (ctypes.c_int*4)(0, nmo, 0, nmo),
                          ctypes.c_void_p(0), ctypes.c_int(0))
                     b0 += naux
-                eri = pyscf.lib.dot(buf.T, buf)
+                eri = lib.dot(buf.T, buf)
                 return eri
             else:
                 return casscf_class.get_h2eff(self, mo_coeff)
@@ -135,7 +135,7 @@ def density_fit(casscf, auxbasis=None, with_df=None):
                 for eri1 in self.with_df.loop():
                     bufpa = _ao2mo.nr_e2(eri1, moij, ijshape, 's2', 's1')
                     bufaa = numpy.asarray(buf1[ncore:nocc,:], order='C')
-                    pyscf.lib.dot(bufpa.T, bufaa, 1, paaa, 1)
+                    lib.dot(bufpa.T, bufaa, 1, paaa, 1)
                 return paaa.reshape(nmo,ncas,ncas,ncas)
             else:
                 return casscf_class._exact_paaa(self, mol, u, out)
@@ -254,14 +254,14 @@ class _ERIS(object):
         naoaux = with_df.get_naoaux()
 
         mem_incore, mem_outcore, mem_basic = _mem_usage(ncore, ncas, nmo)
-        mem_now = pyscf.lib.current_memory()[0]
+        mem_now = lib.current_memory()[0]
         max_memory = max(3000, casscf.max_memory*.9-mem_now)
         if max_memory < mem_basic:
             log.warn('Calculation needs %d MB memory, over CASSCF.max_memory (%d MB) limit',
                      (mem_basic+mem_now)/.9, casscf.max_memory)
 
         t1 = t0 = (time.clock(), time.time())
-        self._tmpfile = tempfile.NamedTemporaryFile()
+        self._tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         self.feri = h5py.File(self._tmpfile.name, 'w')
         self.ppaa = self.feri.create_dataset('ppaa', (nmo,nmo,ncas,ncas), 'f8')
         self.papa = self.feri.create_dataset('papa', (nmo,ncas,nmo,ncas), 'f8')
@@ -269,7 +269,7 @@ class _ERIS(object):
         k_cp = numpy.zeros((ncore,nmo))
 
         mo = numpy.asarray(mo, order='F')
-        _tmpfile1 = tempfile.NamedTemporaryFile()
+        _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         fxpp = h5py.File(_tmpfile1.name)
         bufpa = numpy.empty((naoaux,nmo,ncas))
         bufs1 = numpy.empty((with_df.blockdim,nmo,nmo))
@@ -300,10 +300,10 @@ class _ERIS(object):
         bufs1 = bufpp = None
         t1 = log.timer('density fitting ao2mo pass1', *t0)
 
-        mem_now = pyscf.lib.current_memory()[0]
+        mem_now = lib.current_memory()[0]
         nblk = int(max(8, min(nmo, ((max_memory-mem_now)*1e6/8-bufpa.size)/(ncas**2*nmo))))
         bufs1 = numpy.empty((nblk,ncas,nmo,ncas))
-        dgemm = pyscf.lib.numpy_helper._dgemm
+        dgemm = lib.numpy_helper._dgemm
         for p0, p1 in prange(0, nmo, nblk):
             #tmp = numpy.dot(bufpa[:,p0:p1].reshape(naoaux,-1).T,
             #                bufpa.reshape(naoaux,-1))
@@ -316,7 +316,7 @@ class _ERIS(object):
         bufs1 = bufpa = None
         t1 = log.timer('density fitting papa pass2', *t1)
 
-        mem_now = pyscf.lib.current_memory()[0]
+        mem_now = lib.current_memory()[0]
         nblk = int(max(8, min(nmo, (max_memory-mem_now)*1e6/8/(nmo*naoaux+ncas**2*nmo))))
         bufs1 = numpy.empty((nblk,nmo,naoaux))
         bufs2 = numpy.empty((nblk,nmo,ncas,ncas))
@@ -326,7 +326,7 @@ class _ERIS(object):
             tmp = bufs2[:nrow].reshape(-1,ncas**2)
             for key, col0, col1 in fxpp_keys:
                 buf[:nrow,:,col0:col1] = fxpp[key][p0:p1]
-            pyscf.lib.dot(buf.reshape(-1,naoaux), bufaa, 1, tmp)
+            lib.dot(buf.reshape(-1,naoaux), bufaa, 1, tmp)
             self.ppaa[p0:p1] = tmp.reshape(p1-p0,nmo,ncas,ncas)
         bufs1 = bufs2 = buf = None
         t1 = log.timer('density fitting ppaa pass2', *t1)

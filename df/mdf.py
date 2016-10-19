@@ -120,7 +120,7 @@ class MDF(lib.StreamObject):
         self.charge_constraint = True
         self.auxbasis = None
         self.auxmol = None
-        self._cderi_file = tempfile.NamedTemporaryFile()
+        self._cderi_file = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         self._cderi = None
         self.blockdim = 240
         self._keys = set(self.__dict__.keys())

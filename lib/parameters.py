@@ -2,16 +2,20 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import os
 L_MAX      = 8
-MEMORY_MAX = 4000 # MB
+MAX_MEMORY = int(os.environ.get('PYSCF_MAX_MEMORY', 4000)) # MB
+TMPDIR = os.environ.get('TMPDIR', '.')
+TMPDIR = os.environ.get('PYSCF_TMPDIR', TMPDIR)
 
-#LIGHTSPEED = 137.035 999 679 94    #http://physics.nist.gov/cgi-bin/cuu/Value?alph
-LIGHTSPEED = 137.0359895
+LIGHT_SPEED = 137.03599967994  #http://physics.nist.gov/cgi-bin/cuu/Value?alph
+#LIGHT_SPEED = 137.0359895
+LIGHT_SPEED = float(os.environ.get('PYSCF_LIGHT_SPEED', LIGHT_SPEED))
 # BOHR = .529 177 210 92(17) e-10m  #http://physics.nist.gov/cgi-bin/cuu/Value?bohrrada0
 BOHR = 0.52917721092  # Angstroms
 
-OUTPUT_DIGITS = 5
-OUTPUT_COLS = 5
+OUTPUT_DIGITS = int(os.environ.get('PYSCF_OUTPUT_DIGITS', 5))
+OUTPUT_COLS   = int(os.environ.get('PYSCF_OUTPUT_COLS', 5))
 
 ANGULAR = 'spdfghij'
 ANGULARMAP = {'s': 0,

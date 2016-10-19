@@ -34,7 +34,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     nocc, nvir = t1.shape
     nmo = nocc + nvir
 
-    _tmpfile = tempfile.NamedTemporaryFile()
+    _tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     ftmp = h5py.File(_tmpfile.name)
     eris_vvop = ftmp.create_dataset('vvop', (nvir,nvir,nocc,nmo), 'f8')
     orbsym = _sort_eri(mycc, eris, nocc, nvir, eris_vvop, log)

@@ -14,7 +14,6 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.lib import parameters as param
 from pyscf.scf import _vhf
 from pyscf.scf import cphf
 
@@ -190,20 +189,20 @@ class NMR(lib.StreamObject):
         if self.verbose >= logger.WARN:
             self.check_sanity()
 
-        facppm = 1e6/param.LIGHTSPEED**2
+        facppm = 1e6/lib.param.LIGHT_SPEED**2
         msc_para, para_vir, para_occ = [x*facppm for x in self.para(mo10=mo1)]
         msc_dia = self.dia() * facppm
         e11 = msc_para + msc_dia
 
         logger.timer(self, 'NMR shielding', *cput0)
-        if self.verbose > param.VERBOSE_QUIET:
+        if self.verbose > logger.VERBOSE_QUIET:
             for i, atm_id in enumerate(self.shielding_nuc):
                 _write(self.stdout, e11[i], \
                        '\ntotal shielding of atom %d %s' \
                        % (atm_id, self.mol.atom_symbol(atm_id-1)))
                 _write(self.stdout, msc_dia[i], 'dia-magnetism')
                 _write(self.stdout, msc_para[i], 'para-magnetism')
-                if self.verbose >= param.VERBOSE_INFO:
+                if self.verbose >= logger.VERBOSE_INFO:
                     _write(self.stdout, para_occ[i], 'occ part of para-magnetism')
                     _write(self.stdout, para_vir[i], 'vir part of para-magnetism')
         self.stdout.flush()

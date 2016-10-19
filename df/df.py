@@ -29,7 +29,7 @@ class DF(lib.StreamObject):
 
         self.auxbasis = 'weigend+etb'
         self.auxmol = None
-        self._cderi_file = tempfile.NamedTemporaryFile()
+        self._cderi_file = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         self._cderi = None
         self._call_count = 0
         self.blockdim = 240

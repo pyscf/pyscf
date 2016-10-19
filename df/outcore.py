@@ -39,6 +39,8 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir
     if auxmol is None:
         auxmol = incore.format_aux_basis(mol, auxbasis)
 
+    if tmpdir is None:
+        tmpdir = lib.param.TMPDIR
     swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
     cholesky_eri_b(mol, swapfile.name, auxbasis, dataname,
                    int3c, aosym, int2c, comp, ioblk_size, verbose=log)
@@ -185,6 +187,8 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', 
     else:
         log = logger.Logger(mol.stdout, verbose)
 
+    if tmpdir is None:
+        tmpdir = lib.param.TMPDIR
     swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
     cholesky_eri_b(mol, swapfile.name, auxbasis, dataname,
                    int3c, aosym, int2c, comp, ioblk_size, verbose=log)

@@ -7,10 +7,9 @@ import tempfile
 from functools import reduce
 import numpy
 import h5py
-import pyscf.lib
-import pyscf.lib.numpy_helper
+from pyscf import lib
 from pyscf.lib import logger
-import pyscf.ao2mo
+from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo import outcore
 
@@ -24,12 +23,12 @@ from pyscf.ao2mo import outcore
 # 600  120    16    37 GB
 # 750  150    16    85 GB
 
-libmcscf = pyscf.lib.load_library('libmcscf')
+libmcscf = lib.load_library('libmcscf')
 
 def trans_e1_incore(eri_ao, mo, ncore, ncas):
     nmo = mo.shape[1]
     nocc = ncore + ncas
-    eri1 = pyscf.ao2mo.incore.half_e1(eri_ao, (mo,mo[:,:nocc]), compact=False)
+    eri1 = ao2mo.incore.half_e1(eri_ao, (mo,mo[:,:nocc]), compact=False)
     eri1 = eri1.reshape(nmo,nocc,-1)
 
     klppshape = (0, nmo, 0, nmo)
@@ -38,7 +37,7 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
     for i in range(ncas):
         _ao2mo.nr_e2(eri1[ncore+i,ncore:nocc], mo, klppshape,
                       aosym='s4', mosym='s1', out=aapp[i])
-    ppaa = pyscf.lib.transpose(aapp.reshape(ncas*ncas,-1)).reshape(nmo,nmo,ncas,ncas)
+    ppaa = lib.transpose(aapp.reshape(ncas*ncas,-1)).reshape(nmo,nmo,ncas,ncas)
     aapp = None
 
     papa = numpy.empty((nmo,ncas,nmo,ncas))
@@ -76,7 +75,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     nao_pair = nao*(nao+1)//2
     nocc = ncore + ncas
 
-    _tmpfile1 = tempfile.NamedTemporaryFile()
+    _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     faapp_buf = h5py.File(_tmpfile1.name)
     feri = h5py.File(erifile, 'w')
 
@@ -151,10 +150,10 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
                     buf = buf.reshape(di,di,nao,ncore)
                     mo1 = mo_c[i0:i1]
                     tmp = numpy.einsum('uvpc,pc->uvc', buf, mo[:,:ncore])
-                    tmp = pyscf.lib.dot(mo1.T, tmp.reshape(di,-1))
+                    tmp = lib.dot(mo1.T, tmp.reshape(di,-1))
                     j_pc += numpy.einsum('vp,pvc->pc', mo1, tmp.reshape(nmo,di,ncore))
                     tmp = numpy.einsum('uvpc,uc->vcp', buf, mo1[:,:ncore])
-                    tmp = pyscf.lib.dot(tmp.reshape(-1,nmo), mo).reshape(di,ncore,nmo)
+                    tmp = lib.dot(tmp.reshape(-1,nmo), mo).reshape(di,ncore,nmo)
                     k_pc += numpy.einsum('vp,vcp->pc', mo1, tmp)
                 else:
                     dij = di * dj
@@ -162,14 +161,14 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
                     mo1 = mo_c[i0:i1]
                     mo2 = mo_c[j0:j1]
                     tmp = numpy.einsum('uvpc,pc->uvc', buf, mo[:,:ncore])
-                    tmp = pyscf.lib.dot(mo1.T, tmp.reshape(di,-1))
+                    tmp = lib.dot(mo1.T, tmp.reshape(di,-1))
                     j_pc += numpy.einsum('vp,pvc->pc',
                                          mo2, tmp.reshape(nmo,dj,ncore)) * 2
                     tmp = numpy.einsum('uvpc,uc->vcp', buf, mo1[:,:ncore])
-                    tmp = pyscf.lib.dot(tmp.reshape(-1,nmo), mo).reshape(dj,ncore,nmo)
+                    tmp = lib.dot(tmp.reshape(-1,nmo), mo).reshape(dj,ncore,nmo)
                     k_pc += numpy.einsum('vp,vcp->pc', mo2, tmp)
                     tmp = numpy.einsum('uvpc,vc->ucp', buf, mo2[:,:ncore])
-                    tmp = pyscf.lib.dot(tmp.reshape(-1,nmo), mo).reshape(di,ncore,nmo)
+                    tmp = lib.dot(tmp.reshape(-1,nmo), mo).reshape(di,ncore,nmo)
                     k_pc += numpy.einsum('up,ucp->pc', mo1, tmp)
                 p0 += dij
             if log.verbose >= logger.DEBUG1:
@@ -201,9 +200,9 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
                 buf1 = bufpa[p0:p0+dij].reshape(di,dj,-1)
                 mo1 = mo[j0:j1,ncore:nocc].copy()
                 for i in range(di):
-                     pyscf.lib.dot(mo1.T, buf1[i], 1, papa_buf[i0+i], 1)
+                     lib.dot(mo1.T, buf1[i], 1, papa_buf[i0+i], 1)
             mo1 = mo[i0:i1,ncore:nocc].copy()
-            buf1 = pyscf.lib.dot(mo1.T, buf1.reshape(di,-1))
+            buf1 = lib.dot(mo1.T, buf1.reshape(di,-1))
             papa_buf[j0:j1] += buf1.reshape(ncas,dj,-1).transpose(1,0,2)
             p0 += dij
         if log.verbose >= logger.DEBUG1:
@@ -215,13 +214,13 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     time1 = log.timer('mc_ao2mo pass 1', *time0)
 
     log.debug1('Half transformation done. Current memory %d',
-               pyscf.lib.current_memory()[0])
+               lib.current_memory()[0])
 
     nblk = int(max(8, min(nmo, (max_memory*1e6/8-papa_buf.size)/(ncas**2*nmo))))
     log.debug1('nblk for papa = %d', nblk)
     dset = feri.create_dataset('papa', (nmo,ncas,nmo,ncas), 'f8')
     for i0, i1 in prange(0, nmo, nblk):
-        tmp = pyscf.lib.dot(mo[:,i0:i1].T, papa_buf.reshape(nao,-1))
+        tmp = lib.dot(mo[:,i0:i1].T, papa_buf.reshape(nao,-1))
         dset[i0:i1] = tmp.reshape(i1-i0,ncas,nmo,ncas)
     papa_buf = tmp = None
     time1 = log.timer('papa pass 2', *time1)
@@ -258,7 +257,7 @@ class _ERIS(object):
         ncore = casscf.ncore
         ncas = casscf.ncas
         mem_incore, mem_outcore, mem_basic = _mem_usage(ncore, ncas, nmo)
-        mem_now = pyscf.lib.current_memory()[0]
+        mem_now = lib.current_memory()[0]
 
         eri = casscf._scf._eri
         if (method == 'incore' and eri is not None and
@@ -273,7 +272,7 @@ class _ERIS(object):
             import gc
             gc.collect()
             log = logger.Logger(casscf.stdout, casscf.verbose)
-            self._tmpfile = tempfile.NamedTemporaryFile()
+            self._tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
             max_memory = max(3000, casscf.max_memory*.9-mem_now)
             if max_memory < mem_basic:
                 log.warn('Calculation needs %d MB memory, over CASSCF.max_memory (%d MB) limit',

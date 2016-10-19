@@ -8,7 +8,7 @@ import ctypes
 import tempfile
 import numpy
 import h5py
-import pyscf.lib as lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.cc import ccsd
@@ -50,7 +50,7 @@ def gamma1_intermediates(mycc, t1, t2, l1, l2):
 
 # gamma2 intermediates in Chemist's notation
 def gamma2_intermediates(mycc, t1, t2, l1, l2):
-    tmpfile = tempfile.NamedTemporaryFile()
+    tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     with h5py.File(tmpfile.name, 'w') as f:
         gamma2_outcore(mycc, t1, t2, l1, l2, f)
         nocc, nvir = f['dovov'].shape[:2]
@@ -77,7 +77,7 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
     dovvo = h5fobj.create_dataset('dovvo', (nocc,nvir,nvir,nocc), 'f8')
     dooov = h5fobj.create_dataset('dooov', (nocc,nocc,nocc,nvir), 'f8')
 
-    _tmpfile = tempfile.NamedTemporaryFile()
+    _tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     fswap = h5py.File(_tmpfile.name)
     mOvOv = fswap.create_dataset('mOvOv', (nocc,nvir,nocc,nvir), 'f8')
     mOVov = fswap.create_dataset('mOVov', (nocc,nvir,nocc,nvir), 'f8')
