@@ -6,6 +6,7 @@ import numpy
 import unittest
 from pyscf import gto
 from pyscf import scf
+from pyscf import lib
 
 mol = gto.M(
     verbose = 5,
@@ -127,7 +128,7 @@ class KnowValues(unittest.TestCase):
         numpy.random.seed(1)
         dm = numpy.random.random((n4c,n4c))+numpy.random.random((n4c,n4c))*1j
         dm = dm + dm.T.conj()
-        c1 = .5/mol.light_speed
+        c1 = .5 / lib.param.LIGHT_SPEED
         vj0 = -numpy.einsum('ijkl,lk->ij', erig, dm) * c1**2
         vk0 = -numpy.einsum('ijkl,jk->il', erig, dm) * c1**2
 

@@ -7,19 +7,19 @@ import time
 import ctypes
 import numpy
 import scipy.linalg
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
-import pyscf.gto
+from pyscf import gto
 from pyscf.df import incore
 from pyscf.scf import _vhf
 
-libri = pyscf.lib.load_library('libri')
+libri = lib.load_library('libri')
 
 # (ij|L)
 def aux_e2(mol, auxmol, intor='cint3c2e_spinor', aosym='s1', comp=1, hermi=0):
     atm, bas, env = \
-            pyscf.gto.mole.conc_env(mol._atm, mol._bas, mol._env,
-                                    auxmol._atm, auxmol._bas, auxmol._env)
+            gto.conc_env(mol._atm, mol._bas, mol._env,
+                         auxmol._atm, auxmol._bas, auxmol._env)
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
     c_env = numpy.asarray(env, dtype=numpy.double, order='C')
@@ -74,8 +74,7 @@ def cholesky_eri(mol, auxbasis='weigend+etb', aosym='s1', verbose=0):
     cderi_ss = scipy.linalg.solve_triangular(low, j3c_ss.T, lower=True,
                                              overwrite_b=True)
     # solve_triangular return cderi in Fortran order
-    cderi = (pyscf.lib.transpose(cderi_ll.T),
-             pyscf.lib.transpose(cderi_ss.T))
+    cderi = (lib.transpose(cderi_ll.T), lib.transpose(cderi_ss.T))
     log.timer('cholesky_eri', *t0)
     return cderi
 
@@ -83,7 +82,7 @@ def cholesky_eri(mol, auxbasis='weigend+etb', aosym='s1', verbose=0):
 
 if __name__ == '__main__':
     from pyscf import scf
-    mol = pyscf.gto.Mole()
+    mol = gto.Mole()
     mol.build(
         verbose = 0,
         atom = [["O" , (0. , 0.     , 0.)],
@@ -94,7 +93,7 @@ if __name__ == '__main__':
 
     cderi = cholesky_eri(mol, verbose=5)
     n2c = mol.nao_2c()
-    c2 = .5 / mol.light_speed
+    c2 = .5 / lib.param.LIGHT_SPEED
     def fjk(mol, dm, *args, **kwargs):
         # dm is 4C density matrix
         cderi_ll = cderi[0].reshape(-1,n2c,n2c)

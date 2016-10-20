@@ -251,7 +251,6 @@ You can assign more infomations to a molecular object::
   mol.symmetry = 1
   mol.charge = 1
   mol.spin = 1
-  mol.light_speed = 137.035989
   mol.nucmod = {'O1': 1} 
   mol.mass = {'O1': 18, 'H': 2} 
 

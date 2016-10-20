@@ -88,7 +88,7 @@ class X2C(lib.StreamObject):
 
     def get_hcore(self, mol=None):
         xmol, contr_coeff_nr = self.get_xmol(mol)
-        c = xmol.light_speed
+        c = lib.param.LIGHT_SPEED
         assert('1E' in self.approx.upper())
         s = xmol.intor_symmetric('cint1e_ovlp')
         t = xmol.intor_symmetric('cint1e_spsp') * .5
@@ -112,7 +112,7 @@ class X2C(lib.StreamObject):
 class SpinFreeX2C(X2C):
     def get_hcore(self, mol=None):
         xmol, contr_coeff = self.get_xmol(mol)
-        c = xmol.light_speed
+        c = lib.param.LIGHT_SPEED
         assert('1E' in self.approx.upper())
         t = xmol.intor_symmetric('cint1e_kin_sph')
         v = xmol.intor_symmetric('cint1e_nuc_sph')

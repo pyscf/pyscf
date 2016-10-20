@@ -91,7 +91,7 @@ def make_h10giao(mol, dm0, with_gaunt=False, verbose=logger.WARN):
     log.debug('first order Fock matrix / GIAOs')
     n4c = dm0.shape[0]
     n2c = n4c // 2
-    c = mol.light_speed
+    c = lib.param.LIGHT_SPEED
 
     tg = mol.intor('cint1e_spgsp', 3)
     vg = mol.intor('cint1e_gnuc', 3)
@@ -147,7 +147,7 @@ def make_h10rmb(mol, dm0, gauge_orig=None, with_gaunt=False,
     log.debug('first order Fock matrix / RMB')
     n4c = dm0.shape[0]
     n2c = n4c // 2
-    c = mol.light_speed
+    c = lib.param.LIGHT_SPEED
     if gauge_orig is None:
         t1 = mol.intor('cint1e_giao_sa10sp', 3)
         v1 = mol.intor('cint1e_giao_sa10nucsp', 3)
@@ -196,7 +196,7 @@ def make_s10(mol, gauge_orig=None, mb='RMB'):
         mol.set_common_origin(gauge_orig)
     n2c = mol.nao_2c()
     n4c = n2c * 2
-    c = mol.light_speed
+    c = lib.param.LIGHT_SPEED
     s1 = numpy.zeros((3, n4c, n4c), complex)
     if mb.upper() == 'RMB':
         if gauge_orig is None:
@@ -320,7 +320,7 @@ class NMR(rhf_nmr.NMR):
         return rhf_nmr._mat_ao2mo(v_ao, mo_coeff, mo_occ)
 
 def _call_rmb_vhf1(mol, dm, key='giao'):
-    c1 = .5/mol.light_speed
+    c1 = .5 / lib.param.LIGHT_SPEED
     n2c = dm.shape[0] // 2
     dmll = dm[:n2c,:n2c].copy()
     dmls = dm[:n2c,n2c:].copy()
@@ -352,7 +352,7 @@ def _call_rmb_vhf1(mol, dm, key='giao'):
     return vj, vk
 
 def _call_giao_vhf1(mol, dm):
-    c1 = .5/mol.light_speed
+    c1 = .5 / lib.param.LIGHT_SPEED
     n2c = dm.shape[0] // 2
     dmll = dm[:n2c,:n2c].copy()
     dmls = dm[:n2c,n2c:].copy()

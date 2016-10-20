@@ -237,7 +237,7 @@ def r_get_jk(dfobj, dms, hermi=1):
     '''Relativistic density fitting JK'''
     t0 = t1 = (time.clock(), time.time())
     mol = dfobj.mol
-    c1 = .5 / mol.light_speed
+    c1 = .5 / lib.param.LIGHT_SPEED
     tao = mol.tmap()
     ao_loc = mol.ao_loc_2c()
     n2c = ao_loc[-1]

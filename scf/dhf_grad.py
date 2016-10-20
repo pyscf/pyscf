@@ -8,7 +8,7 @@ Relativistic Dirac-Hartree-Fock
 
 import time
 import numpy
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.scf import rhf_grad
@@ -65,7 +65,7 @@ def grad_nuc(mol, atmlst=None):
 def get_hcore(mol):
     n2c = mol.nao_2c()
     n4c = n2c * 2
-    c = mol.light_speed
+    c = lib.param.LIGHT_SPEED
 
     t  = mol.intor('cint1e_ipkin', comp=3)
     vn = mol.intor('cint1e_ipnuc', comp=3)
@@ -80,7 +80,7 @@ def get_hcore(mol):
 def get_ovlp(mol):
     n2c = mol.nao_2c()
     n4c = n2c * 2
-    c = mol.light_speed
+    c = lib.param.LIGHT_SPEED
 
     s  = mol.intor('cint1e_ipovlp', comp=3)
     t  = mol.intor('cint1e_ipkin', comp=3)
@@ -154,7 +154,7 @@ class Gradients(rhf_grad.Gradients):
     def _grad_rinv(self, mol, ia):
         n2c = mol.nao_2c()
         n4c = n2c * 2
-        c = mol.light_speed
+        c = lib.param.LIGHT_SPEED
         v = numpy.zeros((3,n4c,n4c), numpy.complex)
         mol.set_rinv_origin(mol.atom_coord(ia))
         vn = mol.atom_charge(ia) * mol.intor('cint1e_iprinv', comp=3)
@@ -190,7 +190,7 @@ def _call_vhf1_llll(mol, dm):
     return vj, vk
 
 def _call_vhf1(mol, dm):
-    c1 = .5/mol.light_speed
+    c1 = .5 / lib.param.LIGHT_SPEED
     n2c = dm.shape[0] // 2
     dmll = dm[:n2c,:n2c].copy()
     dmls = dm[:n2c,n2c:].copy()
