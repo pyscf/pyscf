@@ -284,7 +284,7 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
                 qs.append(xi/norm)
         return qs
 
-    toloose = numpy.sqrt(tol) * 1e-2
+    toloose = numpy.sqrt(tol)
 
     if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
         x0 = [x0]
@@ -363,10 +363,6 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
                     ax0[k] += v[i,k] * axi
 
         ide = numpy.argmax(abs(de))
-        if abs(de[ide]) < tol:
-            log.debug('converge %d %d  e= %s  max|de|= %4.3g',
-                      icyc, space, e, de[ide])
-            break
 
         dx_norm = []
         xt = []
@@ -375,7 +371,7 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
             xt.append(dxtmp)
             dx_norm.append(numpy_helper.norm(dxtmp))
 
-        if max(dx_norm) < toloose:
+        if abs(de[ide]) < tol and max(dx_norm) < toloose:
             log.debug('converge %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
                       icyc, space, max(dx_norm), e, de[ide])
             break
