@@ -566,7 +566,8 @@ class FCISolver(lib.StreamObject):
             self.check_sanity()
         return kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
                           tol, lindep, max_cycle, max_space, nroots,
-                          davidson_only, pspace_size, **kwargs)
+                          davidson_only, pspace_size, self.max_memory,
+                          self.verbose, **kwargs)
 
     @lib.with_doc(energy.__doc__)
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):

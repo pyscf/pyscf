@@ -282,7 +282,8 @@ class FCISolver(direct_spin1.FCISolver):
         wfnsym0 = self.guess_wfnsym(norb, nelec, ci0, self.wfnsym, **kwargs)
         e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
                                        tol, lindep, max_cycle, max_space, nroots,
-                                       davidson_only, pspace_size, **kwargs)
+                                       davidson_only, pspace_size,
+                                       self.max_memory, self.verbose, **kwargs)
         if self.wfnsym is not None:
             # should I remove the non-symmetric contributions in each
             # call of contract_2e?

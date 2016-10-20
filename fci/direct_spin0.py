@@ -373,7 +373,8 @@ class FCISolver(direct_spin1.FCISolver):
             self.check_sanity()
         e, ci = kernel_ms0(self, h1e, eri, norb, nelec, ci0, None,
                            tol, lindep, max_cycle, max_space, nroots,
-                           davidson_only, pspace_size, **kwargs)
+                           davidson_only, pspace_size, self.max_memory,
+                           self.verbose, **kwargs)
         return e, ci
 
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):

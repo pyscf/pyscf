@@ -252,7 +252,8 @@ class FCISolver(direct_spin0.FCISolver):
         wfnsym0 = self.guess_wfnsym(norb, nelec, ci0, self.wfnsym, **kwargs)
         e, c = direct_spin0.kernel_ms0(self, h1e, eri, norb, nelec, ci0, None,
                                        tol, lindep, max_cycle, max_space, nroots,
-                                       davidson_only, pspace_size, **kwargs)
+                                       davidson_only, pspace_size,
+                                       self.max_memory, self.verbose, **kwargs)
         if self.wfnsym is not None:
             if self.nroots > 1:
                 c = [addons.symmetrize_wfn(ci, norb, nelec, self.orbsym, wfnsym0)
