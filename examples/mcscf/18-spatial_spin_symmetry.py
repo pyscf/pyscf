@@ -2,7 +2,7 @@
 
 from pyscf import scf
 from pyscf import gto
-from pyscf import mcscf, fci
+from pyscf import mcscf
 
 '''
 Force the FCI solver of CASSCF following certain spin state.
@@ -27,7 +27,7 @@ mc.kernel()
 print('Triplet Sigma_u^- %.15g  ref = -149.383495797891' % mc.e_tot)
 
 # Specify CI wfn spatial symmetry and spin symmetry
-fci.addons.fix_spin_(mc.fcisolver, ss_value=6)  # Quintet, ss_value = S*(S+1) = 6
+mc.fix_spin_(ss_value=6)  # Quintet, ss_value = S*(S+1) = 6
 mc.fcisolver.wfnsym = 'A2u'
 mc.kernel()
 print('Quintet Sigma_u^- %.15g  ref = -148.920732172378' % mc.e_tot)
@@ -64,6 +64,6 @@ mo = mc.sort_mo_by_irrep({'A1g': 2, 'A1u': 2,
                           'E1uy': 2, 'E1ux': 2, 'E1gy': 2, 'E1gx': 2})
 mc.kernel(mo)
 
-fci.addons.fix_spin_(mc.fcisolver, shift=.5, ss_value=0)
+mc.fix_spin_(shift=.5, ss_value=0)
 mc.kernel(mo)
 

@@ -652,6 +652,21 @@ class CASCI(pyscf.lib.StreamObject):
         dm1 = dm1 + reduce(numpy.dot, (mocas, casdm1, mocas.T))
         return dm1
 
+    def fix_spin_(self, shift=.2, ss_value=None):
+        r'''Use level shift to control FCI solver spin.
+
+        .. math::
+
+            (H + shift*S^2) |\Psi\rangle = E |\Psi\rangle
+
+        Kwargs:
+            shift : float
+                Level shift for states which have different spin
+            ss_value : number
+                S^2 expection value == s*(s+1)
+        '''
+        fci.addons.fix_spin_(self.fcisolver, shift, ss_value)
+
 
 if __name__ == '__main__':
     from pyscf import gto
