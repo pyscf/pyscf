@@ -285,6 +285,7 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
         return qs
 
     toloose = numpy.sqrt(tol)
+    log.debug1('tol %g  toloose %g', tol, toloose)
 
     if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
         x0 = [x0]
@@ -292,6 +293,8 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
     max_space = max_space + nroots * 2
     # max_space*2 for holding ax and xs, nroots*2 for holding axt and xt
     _incore = max_memory*1e6/x0[0].nbytes > max_space*2+nroots*2
+    log.debug1('max_cycle %d  max_space %d  max_memory %d  incore %s',
+               max_cycle, max_space, max_memory, _incore)
     heff = None
     fresh_start = True
 
