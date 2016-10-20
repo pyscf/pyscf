@@ -342,12 +342,12 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
 
     # 2e
     eri_cas = casci.get_h2eff(mo_cas)
-    t1 = log.timer('integral transformation to CAS space', *t1)
+    t1 = log.timer('integral transformation to CAS space', *t0)
 
     # 1e
     h1eff, energy_core = casci.get_h1eff(mo_coeff)
     log.debug('core energy = %.15g', energy_core)
-    t1 = log.timer('effective h1e in CAS space', *t0)
+    t1 = log.timer('effective h1e in CAS space', *t1)
 
     # FCI
     max_memory = max(400, casci.max_memory-pyscf.lib.current_memory()[0])
