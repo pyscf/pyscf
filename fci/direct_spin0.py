@@ -106,37 +106,7 @@ def make_hdiag(h1e, eri, norb, nelec):
     hdiag = pyscf.lib.transpose_sum(hdiag, inplace=True) * .5
     return hdiag.ravel()
 
-@pyscf.lib.with_doc(direct_spin1.pspace.__doc__)
-def pspace(h1e, eri, norb, nelec, hdiag, np=400):
-    if isinstance(nelec, (int, numpy.number)):
-        neleca = nelec//2
-    else:
-        neleca, nelecb = nelec
-        assert(neleca == nelecb)
-    h1e = numpy.ascontiguousarray(h1e)
-    eri = pyscf.ao2mo.restore(1, eri, norb)
-    na = cistring.num_strings(norb, neleca)
-    addr = numpy.argsort(hdiag)[:np]
-# symmetrize addra/addrb
-    addra = addr // na
-    addrb = addr % na
-    stra = numpy.array([cistring.addr2str(norb,neleca,ia) for ia in addra],
-                       dtype=numpy.long)
-    strb = numpy.array([cistring.addr2str(norb,neleca,ib) for ib in addrb],
-                       dtype=numpy.long)
-    np = len(addr)
-    h0 = numpy.zeros((np,np))
-    libfci.FCIpspace_h0tril(h0.ctypes.data_as(ctypes.c_void_p),
-                            h1e.ctypes.data_as(ctypes.c_void_p),
-                            eri.ctypes.data_as(ctypes.c_void_p),
-                            stra.ctypes.data_as(ctypes.c_void_p),
-                            strb.ctypes.data_as(ctypes.c_void_p),
-                            ctypes.c_int(norb), ctypes.c_int(np))
-
-    for i in range(np):
-        h0[i,i] = hdiag[addr[i]]
-    h0 = pyscf.lib.hermi_triu(h0)
-    return addr, h0
+pspace = direct_spin1.pspace
 
 # be careful with single determinant initial guess. It may lead to the
 # eigvalue of first davidson iter being equal to hdiag
@@ -352,9 +322,6 @@ class FCISolver(direct_spin1.FCISolver):
 
     def make_hdiag(self, h1e, eri, norb, nelec):
         return make_hdiag(h1e, eri, norb, nelec)
-
-    def pspace(self, h1e, eri, norb, nelec, hdiag, np=400):
-        return pspace(h1e, eri, norb, nelec, hdiag, np)
 
     def contract_1e(self, f1e, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_1e(f1e, fcivec, norb, nelec, link_index, **kwargs)

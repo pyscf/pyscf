@@ -286,9 +286,9 @@ def str2addr(norb, nelec, string):
         string = int(string, 2)
     else:
         assert(bin(string).count('1') == nelec)
-    libfci.FCIstr2addr.restype = ctypes.c_int
+    libfci.FCIstr2addr.restype = ctypes.c_void_p
     return libfci.FCIstr2addr(ctypes.c_int(norb), ctypes.c_int(nelec),
-                              ctypes.c_ulong(string))
+                              ctypes.c_ulonglong(string))
 
 if __name__ == '__main__':
     #print(gen_strings4orblist(range(4), 2))

@@ -103,9 +103,9 @@ static int binomial(int n, int m)
         }
 }
 
-int FCIstr2addr(int norb, int nelec, int64_t string)
+size_t FCIstr2addr(int norb, int nelec, int64_t string)
 {
-        int addr = 0;
+        size_t addr = 0;
         int nelec_left = nelec;
         int norb_left;
         for (norb_left = norb - 1; norb_left >= 0; norb_left--) {
