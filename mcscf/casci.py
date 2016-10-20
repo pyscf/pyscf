@@ -6,8 +6,7 @@
 import time
 from functools import reduce
 import numpy
-import pyscf.lib
-import pyscf.gto
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf import scf
 from pyscf import ao2mo
@@ -259,7 +258,9 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         vj, vk = mc._scf.get_jk(mc.mol, dm_core)
         h1eff += reduce(numpy.dot, (mocas.T, vj-vk*.5, mocas))
         aaaa = ao2mo.kernel(mc.mol, mocas)
-    e_cas, fcivec = mc.fcisolver.kernel(h1eff, aaaa, ncas, nelecas, ci0=ci0)
+    max_memory = max(400, mc.max_memory-lib.current_memory()[0])
+    e_cas, fcivec = mc.fcisolver.kernel(h1eff, aaaa, ncas, nelecas, ci0=ci0,
+                                        max_memory=max_memory, verbose=log)
     log.debug('In Natural orbital, CI energy = %.12g', e_cas)
     return mo_coeff1, fcivec, mo_occ
 
@@ -350,7 +351,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     t1 = log.timer('effective h1e in CAS space', *t1)
 
     # FCI
-    max_memory = max(400, casci.max_memory-pyscf.lib.current_memory()[0])
+    max_memory = max(400, casci.max_memory-lib.current_memory()[0])
     e_cas, fcivec = casci.fcisolver.kernel(h1eff, eri_cas, ncas, nelecas,
                                            ci0=ci0, verbose=log,
                                            max_memory=max_memory)
@@ -361,7 +362,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     return e_tot, e_cas, fcivec
 
 
-class CASCI(pyscf.lib.StreamObject):
+class CASCI(lib.StreamObject):
     '''CASCI
 
     Attributes:
@@ -511,7 +512,7 @@ class CASCI(pyscf.lib.StreamObject):
                              max_memory=self.max_memory)
         return eri
 
-    @pyscf.lib.with_doc(h1e_for_cas.__doc__)
+    @lib.with_doc(h1e_for_cas.__doc__)
     def h1e_for_cas(self, mo_coeff=None, ncas=None, ncore=None):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         return h1e_for_cas(self, mo_coeff, ncas, ncore)
@@ -571,11 +572,11 @@ class CASCI(pyscf.lib.StreamObject):
     def _finalize(self):
         pass
 
-    @pyscf.lib.with_doc(cas_natorb.__doc__)
+    @lib.with_doc(cas_natorb.__doc__)
     def cas_natorb(self, mo_coeff=None, ci=None, eris=None, sort=False,
                    casdm1=None, verbose=None):
         return cas_natorb(self, mo_coeff, ci, eris, sort, casdm1, verbose)
-    @pyscf.lib.with_doc(cas_natorb.__doc__)
+    @lib.with_doc(cas_natorb.__doc__)
     def cas_natorb_(self, mo_coeff=None, ci=None, eris=None, sort=False,
                     casdm1=None, verbose=None):
         self.mo_coeff, self.ci, occ = cas_natorb(self, mo_coeff, ci, eris,
@@ -587,7 +588,7 @@ class CASCI(pyscf.lib.StreamObject):
         return get_fock(self, mo_coeff, ci, eris, casdm1, verbose)
 
     canonicalize = canonicalize
-    @pyscf.lib.with_doc(canonicalize.__doc__)
+    @lib.with_doc(canonicalize.__doc__)
     def canonicalize_(self, mo_coeff=None, ci=None, eris=None, sort=False,
                       cas_natorb=False, casdm1=None, verbose=None):
         self.mo_coeff, ci, self.mo_energy = \
@@ -597,7 +598,7 @@ class CASCI(pyscf.lib.StreamObject):
             self.ci = ci
         return self.mo_coeff, ci, self.mo_energy
 
-    @pyscf.lib.with_doc(analyze.__doc__)
+    @lib.with_doc(analyze.__doc__)
     def analyze(self, mo_coeff=None, ci=None, verbose=logger.INFO):
         return analyze(self, mo_coeff, ci, verbose)
 
@@ -607,12 +608,12 @@ class CASCI(pyscf.lib.StreamObject):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         return addons.sort_mo(self, mo_coeff, caslst, base)
 
-    @pyscf.lib.with_doc(addons.state_average.__doc__)
+    @lib.with_doc(addons.state_average.__doc__)
     def state_average_(self, weights=(0.5,0.5)):
         self.fcisolver = addons.state_average(self, weights)
         return self
 
-    @pyscf.lib.with_doc(addons.state_specific.__doc__)
+    @lib.with_doc(addons.state_specific.__doc__)
     def state_specific_(self, state=1):
         self.fcisolver = addons.state_specific(self, state)
         return self

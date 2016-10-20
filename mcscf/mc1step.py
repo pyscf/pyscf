@@ -927,7 +927,9 @@ class CASSCF(casci.CASCI):
         if self.ci_response_space > 7:
             logger.debug(self, 'CI step by full response')
             # full response
-            e, ci1 = self.fcisolver.kernel(h1, h2, ncas, nelecas, ci0=ci0)
+            max_memory = max(400, self.max_memory-lib.current_memory()[0])
+            e, ci1 = self.fcisolver.kernel(h1, h2, ncas, nelecas, ci0=ci0,
+                                           max_memory=max_memory)
         else:
             nd = min(max(self.ci_response_space, 2), ci0.size)
             logger.debug(self, 'CI step by %dD subspace response', nd)
