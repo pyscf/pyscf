@@ -146,8 +146,7 @@ class FCISolver(direct_spin1.FCISolver):
         e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0,
                                        (link_indexa,link_indexb),
                                        tol, lindep, max_cycle, max_space, nroots,
-                                       davidson_only, pspace_size,
-                                       self.max_memory, self.verbose, **kwargs)
+                                       davidson_only, pspace_size, **kwargs)
         return e, c
 
 def _unpack(norb, nelec, link_index):
