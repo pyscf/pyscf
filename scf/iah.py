@@ -203,16 +203,19 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
         ax.append(h_op(x0))
         nx = 1
 
-    heff = numpy.zeros((max_cycle+nx+1,max_cycle+nx+1))
-    ovlp = numpy.eye(max_cycle+nx+1)
+    heff = numpy.zeros((max_cycle+nx+1,max_cycle+nx+1), dtype=x0.dtype)
+    ovlp = numpy.eye(max_cycle+nx+1, dtype=x0.dtype)
     w_t = 0
     for istep in range(max_cycle):
         g = g_op()
         nx = len(xs)
         for i in range(nx):
-            heff[i+1,0] = heff[0,i+1] = numpy.dot(xs[i], g)
-            heff[nx,i+1] = heff[i+1,nx] = numpy.dot(xs[nx-1], ax[i])
-            ovlp[nx,i+1] = ovlp[i+1,nx] = numpy.dot(xs[nx-1], xs[i])
+            heff[i+1,0] = numpy.dot(xs[i].conj(), g)
+            heff[nx,i+1] = numpy.dot(xs[nx-1].conj(), ax[i])
+            ovlp[nx,i+1] = numpy.dot(xs[nx-1].conj(), xs[i])
+        heff[0,:nx+1] = heff[:nx+1,0].conj()
+        heff[:nx,nx] = heff[nx,:nx].conj()
+        ovlp[:nx,nx] = ovlp[nx,:nx].conj()
         nvec = nx + 1
 #        s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
 #        if s0 < lindep:

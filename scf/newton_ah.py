@@ -4,7 +4,7 @@
 #
 
 '''
-Newton Raphson SCF solver with augmented Hessian
+Co-iterative augmented hessian (CIAH) second order SCF solver
 '''
 
 import sys
@@ -24,7 +24,7 @@ from pyscf.scf import addons
 def expmat(a):
     return scipy.linalg.expm(a)
 
-def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None):
+def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     mol = mf.mol
     occidx = numpy.where(mo_occ==2)[0]
     viridx = numpy.where(mo_occ==0)[0]
@@ -32,8 +32,9 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None):
     nvir = len(viridx)
 
     if fock_ao is None:
+        if h1e is None: h1e = mf.get_hcore()
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-        fock_ao = mf.get_hcore() + mf.get_veff(mf.mol, dm0)
+        fock_ao = h1e + mf.get_veff(mol, dm0)
     fock = reduce(numpy.dot, (mo_coeff.T, fock_ao, mo_coeff))
 
     g = fock[viridx[:,None],occidx] * 2
@@ -60,8 +61,8 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None):
 
     def h_op(x):
         x = x.reshape(nvir,nocc)
-        x2 = numpy.einsum('pr,rq->pq', fvv, x) * 2
-        x2-= numpy.einsum('sq,ps->pq', foo, x) * 2
+        x2 = numpy.einsum('sp,sq->pq', fvv, x) * 2
+        x2-= numpy.einsum('sp,rp->rs', foo, x) * 2
 
         d1 = reduce(numpy.dot, (mo_coeff[:,viridx], x, mo_coeff[:,occidx].T))
         dm1 = d1 + d1.T
@@ -81,7 +82,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None):
 
     return g.reshape(-1), h_op, h_diag.reshape(-1)
 
-def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None):
+def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     mo_occa = occidxa = mo_occ > 0
     mo_occb = occidxb = mo_occ ==2
     ug, uh_op, uh_diag = gen_g_hop_uhf(mf, (mo_coeff,)*2, (mo_occa,mo_occb), fock_ao)
@@ -91,7 +92,7 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None):
     uniq_var_a = viridxa.reshape(-1,1) & occidxa
     uniq_var_b = viridxb.reshape(-1,1) & occidxb
     uniq_ab = uniq_var_a | uniq_var_b
-    nmo = mo_coeff.shape[1]
+    nmo = mo_coeff.shape[-1]
     nocca = mo_occa.sum()
     nvira = nmo - nocca
 
@@ -112,7 +113,7 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None):
 
     return g, h_op, h_diag
 
-def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None):
+def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     mol = mf.mol
     occidxa = numpy.where(mo_occ[0]>0)[0]
     occidxb = numpy.where(mo_occ[1]>0)[0]
@@ -124,8 +125,9 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None):
     nvirb = len(viridxb)
 
     if fock_ao is None:
+        if h1e is None: h1e = mf.get_hcore()
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-        fock_ao = mf.get_hcore() + mf.get_veff(mol, dm0)
+        fock_ao = h1e + mf.get_veff(mol, dm0)
     focka = reduce(numpy.dot, (mo_coeff[0].T, fock_ao[0], mo_coeff[0]))
     fockb = reduce(numpy.dot, (mo_coeff[1].T, fock_ao[1], mo_coeff[1]))
 
@@ -202,6 +204,9 @@ def project_mol(mol, projectbasis={}):
             newbasis[symb] = 'sto3g'
     if isinstance(projectbasis, (dict, tuple, list)):
         newbasis.update(projectbasis)
+    elif isinstance(projectbasis, str):
+        for k in newbasis:
+            newbasis[k] = projectbasis
     return df.format_aux_basis(mol, newbasis)
 
 
@@ -222,9 +227,9 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
 
     t2m = (time.clock(), time.time())
     if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
-        nmo = mo_coeff.shape[1]
+        nmo = mo_coeff.shape[-1]
     else:
-        nmo = mo_coeff[0].shape[1]
+        nmo = mo_coeff[0].shape[-1]
     g_orb, h_op, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao)
     g_kf = g_orb
     norm_gkf = norm_gorb = numpy.linalg.norm(g_orb)
@@ -456,14 +461,15 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
 #    return density_fit_(copy.copy(mf), auxbasis)
 
 
-def newton(mf):
-    import pyscf.scf
-    from pyscf.mcscf import mc1step_symm
+def newton_SCF_class(mf):
+    '''Generate the CIAH base class
+    '''
+    from pyscf import scf
     if mf.__class__.__doc__ is None:
         doc = ''
     else:
         doc = mf.__class__.__doc__
-    class RHF(mf.__class__):
+    class CIAH_SCF(mf.__class__):
         __doc__ = doc + \
         '''
         Attributes for Newton solver:
@@ -582,6 +588,32 @@ def newton(mf):
             mo_occ = self._scf.get_occ(mo_energy, mo_coeff)
             return mo_coeff, mo_occ
 
+        gen_g_hop = gen_g_hop_rhf
+
+        def update_rotate_matrix(self, dx, mo_occ, u0=1):
+            dr = scf.hf.unpack_uniq_var(dx, mo_occ)
+            return numpy.dot(u0, expmat(dr))
+
+        def rotate_mo(self, mo_coeff, u, log=None):
+            return numpy.dot(mo_coeff, u)
+    return CIAH_SCF
+
+def newton(mf):
+    '''Co-iterative augmented hessian (CIAH) second order SCF solver
+
+    Examples:
+
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1', basis='cc-pvdz')
+    >>> mf = scf.RHF(mol).run(conv_tol=.5)
+    >>> mf = scf.newton(mf).set(conv_tol=1e-9)
+    >>> mf.kernel()
+    -1.0811707843774987
+    '''
+    from pyscf import scf
+    from pyscf.mcscf import mc1step_symm
+
+    SCF = newton_SCF_class(mf)
+    class RHF(SCF):
         def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
             mol = self._scf.mol
             if mol.symmetry:
@@ -589,10 +621,10 @@ def newton(mf):
 # change mo_coeff ordering after calling self.eig
                 self._orbsym = symm.label_orb_symm(mol, mol.irrep_id,
                         mol.symm_orb, mo_coeff, s=self._scf.get_ovlp())
-            return gen_g_hop_rhf(self, mo_coeff, mo_occ, fock_ao)
+            return gen_g_hop_rhf(self, mo_coeff, mo_occ, fock_ao, h1e)
 
         def update_rotate_matrix(self, dx, mo_occ, u0=1):
-            dr = pyscf.scf.hf.unpack_uniq_var(dx, mo_occ)
+            dr = scf.hf.unpack_uniq_var(dx, mo_occ)
             if self._scf.mol.symmetry:
                 dr = mc1step_symm._symmetrize(dr, self._orbsym, None)
             return numpy.dot(u0, expmat(dr))
@@ -614,9 +646,8 @@ def newton(mf):
                           _effective_svd(lib.take_2d(u,idx,idx), 1e-5))
             return mo
 
-    if isinstance(mf, pyscf.scf.rohf.ROHF):
+    if isinstance(mf, scf.rohf.ROHF):
         class ROHF(RHF):
-            __doc__ = RHF.__doc__
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 mol = self._scf.mol
                 if mol.symmetry:
@@ -624,7 +655,7 @@ def newton(mf):
 # change mo_coeff ordering after calling self.eig
                     self._orbsym = symm.label_orb_symm(mol, mol.irrep_id,
                             mol.symm_orb, mo_coeff, s=self._scf.get_ovlp())
-                return gen_g_hop_rohf(self, mo_coeff, mo_occ, fock_ao)
+                return gen_g_hop_rohf(self, mo_coeff, mo_occ, fock_ao, h1e)
 
             def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
                          diis_start_cycle=None, level_shift_factor=None,
@@ -637,16 +668,15 @@ def newton(mf):
 
             def eig(self, fock, s1e):
                 f = (self._focka_ao, self._fockb_ao)
-                f = pyscf.scf.rohf.get_roothaan_fock(f, self._dm_ao, s1e)
+                f = scf.rohf.get_roothaan_fock(f, self._dm_ao, s1e)
                 return self._scf.eig(f, s1e)
                 #fc = numpy.dot(fock[0], mo_coeff)
                 #mo_energy = numpy.einsum('pk,pk->k', mo_coeff, fc)
                 #return mo_energy
         return ROHF()
 
-    elif isinstance(mf, pyscf.scf.uhf.UHF):
-        class UHF(RHF):
-            __doc__ = RHF.__doc__
+    elif isinstance(mf, scf.uhf.UHF):
+        class UHF(SCF):
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 mol = self._scf.mol
                 if mol.symmetry:
@@ -655,7 +685,7 @@ def newton(mf):
                                             mol.symm_orb, mo_coeff[0], s=ovlp_ao),
                                    symm.label_orb_symm(mol, mol.irrep_id,
                                             mol.symm_orb, mo_coeff[1], s=ovlp_ao))
-                return gen_g_hop_uhf(self, mo_coeff, mo_occ, fock_ao)
+                return gen_g_hop_uhf(self, mo_coeff, mo_occ, fock_ao, h1e)
 
             def update_rotate_matrix(self, dx, mo_occ, u0=1):
                 occidxa = mo_occ[0] > 0
@@ -692,7 +722,7 @@ def newton(mf):
                 return self._scf.spin_square(mo_coeff, s)
         return UHF()
 
-    elif isinstance(mf, pyscf.scf.dhf.UHF):
+    elif isinstance(mf, scf.dhf.UHF):
         raise RuntimeError('Not support Dirac-HF')
 
     else:

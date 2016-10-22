@@ -156,9 +156,9 @@ def _symmetrize_canonicalization_(mol, mo_energy, mo_coeff, s):
             idx = abs(mo_energy) > emin
             es.append(mo_energy[idx])
             cs.append(numpy.dot(mol.symm_orb[i], u[:,idx]))
-        es = numpy.hstack(es).round(9)
+        es = numpy.hstack(es).round(7)
         idx = numpy.argsort(es)
-        assert(numpy.allclose(es[idx], esub))
+        assert(numpy.allclose(es[idx], esub.round(7)))
         mo_coeff[:,degidx] = numpy.hstack(cs)[:,idx]
     return mo_coeff
 

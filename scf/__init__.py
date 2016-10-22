@@ -160,18 +160,7 @@ def X2C(mol, *args):
 def density_fit(mf, auxbasis='weigend+etb', with_df=None):
     return mf.density_fit(auxbasis, with_df)
 
-def newton(mf):
-    '''augmented hessian for Newton Raphson
-
-    Examples:
-
-    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1', basis='cc-pvdz')
-    >>> mf = scf.RHF(mol).run(conv_tol=.5)
-    >>> mf = scf.newton(mf).set(conv_tol=1e-9)
-    >>> mf.kernel()
-    -1.0811707843774987
-    '''
-    return newton_ah.newton(mf)
+newton = newton_ah.newton
 
 def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
                 auxbasis=None, projectbasis=None, **newton_kwargs):

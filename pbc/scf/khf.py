@@ -14,6 +14,7 @@ See Also:
 
 import time
 import numpy as np
+import scipy.linalg
 import h5py
 from pyscf.pbc.scf import hf as pbchf
 from pyscf import lib
@@ -179,6 +180,24 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     e_coul = e_coul.real
     logger.debug(mf, 'E_coul = %.15g', e_coul)
     return e1+e_coul, e_coul
+
+def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
+    if fock is None:
+        dm = mf.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
+        fock = mf.get_hcore() + mf.get_jk(mol, dm)
+    mo_coeff_kpts = mo_coeff_kpts.copy()
+    mo_e = np.empty_like(mo_occ_kpts)
+    for k, mo in enumerate(mo_coeff_kpts):
+        occidx = mo_occ_kpts[k] == 2
+        viridx = ~occidx
+        for idx in (occidx, viridx):
+            if np.count_nonzero(idx) > 0:
+                orb = mo[:,idx]
+                f1 = reduce(np.dot, (orb.T.conj(), fock[k], orb))
+                e, c = scipy.linalg.eigh(f1)
+                mo[:,idx] = np.dot(orb, c)
+                mo_e[k,idx] = e
+    return mo_e, mo_coeff_kpts
 
 
 def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
@@ -428,4 +447,6 @@ class KRHF(hf.RHF):
             with h5py.File(self.chkfile) as fh5:
                 fh5['scf/kpts'] = self.kpts
         return self
+
+    canonicalize = canonicalize
 

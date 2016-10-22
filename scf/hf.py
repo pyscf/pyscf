@@ -823,7 +823,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
             orb = mo_coeff[:,idx]
             f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
             e, c = scipy.linalg.eigh(f1)
-            mo[:,idx] = numpy.dot(mo_coeff[:,idx], c)
+            mo[:,idx] = numpy.dot(orb, c)
             mo_e[idx] = e
     return mo_e, mo
 
