@@ -270,7 +270,7 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
         c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
         dump_mat.dump_rec(mf.stdout, c, label, start=1, **kwargs)
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_meta(mf.mol, dm, s=s, verbose=log)
+    return mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log)
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the Fock matrix within occupied, open,
