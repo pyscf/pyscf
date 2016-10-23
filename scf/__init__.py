@@ -193,6 +193,9 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
     for key in newton_kwargs:
         setattr(mf1, key, newton_kwargs[key])
 
+    if mo_coeff is None or mo_occ is None:
+        mo_coeff, mo_occ = mf.mo_coeff, mf.mo_occ
+
     if dm0 is not None:
         mo_coeff, mo_occ = mf1.from_dm(dm0)
     elif mo_coeff is None or mo_occ is None:
@@ -206,7 +209,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
         else:
             mf0 = density_fit(mf, auxbasis)
         mf0.direct_scf_tol = 1e-7
-        mf0.conv_tol = 1.
+        mf0.conv_tol = 10.
         mf0.conv_tol_grad = 2.
         if mf0.level_shift == 0:
             mf0.level_shift = .2

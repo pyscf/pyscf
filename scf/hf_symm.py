@@ -32,11 +32,14 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     '''
     from pyscf.lo import orth
     from pyscf.tools import dump_mat
+    mol = mf.mol
+    if not mol.symmetry:
+        return hf.analyze(mf, verbose, **kwargs)
+
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
     log = logger.Logger(mf.stdout, verbose)
-    mol = mf.mol
     nirrep = len(mol.irrep_id)
     ovlp_ao = mf.get_ovlp()
     orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, mo_coeff,
@@ -112,6 +115,9 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the Fock matrix in occupied, open,
     virtual subspaces separatedly (without change occupancy).
     '''
+    if not mf.mol.symmetry:
+        return hf.canonicalize(mf, mo_coeff, mo_occ, fock)
+
     if fock is None:
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         fock = mf.get_hcore() + mf.get_jk(mol, dm)
@@ -227,6 +233,28 @@ def check_irrep_nelec(mol, irrep_nelec, nelec):
                     mol.nelectron-fix_ne, ' '.join(float_irname))
     return fix_na, fix_nb, float_irname
 
+#TODO: force E1gx/E1gy ... use the same coefficients
+def eig(mf, h, s):
+    '''Solve generalized eigenvalue problem, for each irrep.  The
+    eigenvalues and eigenvectors are not sorted to ascending order.
+    Instead, they are grouped based on irreps.
+    '''
+    if not mf.mol.symmetry:
+        return hf.eig(h, s)
+
+    nirrep = mf.mol.symm_orb.__len__()
+    h = symm.symmetrize_matrix(h, mf.mol.symm_orb)
+    s = symm.symmetrize_matrix(s, mf.mol.symm_orb)
+    cs = []
+    es = []
+    for ir in range(nirrep):
+        e, c = hf.eig(h[ir], s[ir])
+        cs.append(c)
+        es.append(e)
+    e = numpy.hstack(es)
+    c = so2ao_mo_coeff(mf.mol.symm_orb, cs)
+    return e, c
+
 
 class RHF(hf.RHF):
     __doc__ = hf.SCF.__doc__ + '''
@@ -258,29 +286,16 @@ class RHF(hf.RHF):
 
     def dump_flags(self):
         hf.RHF.dump_flags(self)
-        check_irrep_nelec(self.mol, self.irrep_nelec, self.mol.nelectron)
+        if self.mol.symmetry:
+            check_irrep_nelec(self.mol, self.irrep_nelec, self.mol.nelectron)
 
-#TODO: force E1gx/E1gy ... use the same coefficients
-    def eig(self, h, s):
-        '''Solve generalized eigenvalue problem, for each irrep.  The
-        eigenvalues and eigenvectors are not sorted to ascending order.
-        Instead, they are grouped based on irreps.
-        '''
-        nirrep = self.mol.symm_orb.__len__()
-        h = symm.symmetrize_matrix(h, self.mol.symm_orb)
-        s = symm.symmetrize_matrix(s, self.mol.symm_orb)
-        cs = []
-        es = []
-        for ir in range(nirrep):
-            e, c = hf.SCF.eig(self, h[ir], s[ir])
-            cs.append(c)
-            es.append(e)
-        e = numpy.hstack(es)
-        c = so2ao_mo_coeff(self.mol.symm_orb, cs)
-        return e, c
+    eig = eig
 
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         mol = self.mol
+        if not mol.symmetry:
+            return hf.RHF.get_grad(self, mo_coeff, mo_occ, fock)
+
         if fock is None:
             dm1 = self.make_rdm1(mo_coeff, mo_occ)
             fock = self.get_hcore(mol) + self.get_veff(self.mol, dm1)
@@ -302,6 +317,9 @@ class RHF(hf.RHF):
         '''
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
+        if not mol.symmetry:
+            return hf.RHF.get_occ(self, mo_energy, mo_coeff)
+
         if orbsym is None:
             if mo_coeff is not None:
                 orbsym = symm.label_orb_symm(self, mol.irrep_id, mol.symm_orb,
@@ -452,67 +470,16 @@ class ROHF(rohf.ROHF):
 
     def dump_flags(self):
         rohf.ROHF.dump_flags(self)
-        check_irrep_nelec(self.mol, self.irrep_nelec, self.nelec)
+        if self.mol.symmetry:
+            check_irrep_nelec(self.mol, self.irrep_nelec, self.nelec)
 
-    def eig(self, h, s):
-        nirrep = self.mol.symm_orb.__len__()
-        h = symm.symmetrize_matrix(h, self.mol.symm_orb)
-        s = symm.symmetrize_matrix(s, self.mol.symm_orb)
-        cs = []
-        es = []
-        for ir in range(nirrep):
-            e, c = hf.SCF.eig(self, h[ir], s[ir])
-            cs.append(c)
-            es.append(e)
-        e = numpy.hstack(es)
-        c = so2ao_mo_coeff(self.mol.symm_orb, cs)
-        return e, c
-
-    def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
-                 diis_start_cycle=None, level_shift_factor=None,
-                 damp_factor=None):
-# Roothaan's effective fock
-# http://www-theor.ch.cam.ac.uk/people/ross/thesis/node15.html
-#          |  closed     open    virtual
-#  ----------------------------------------
-#  closed  |    Fc        Fb       Fc
-#  open    |    Fb        Fc       Fa
-#  virtual |    Fc        Fa       Fc
-# Fc = (Fa+Fb)/2
-        if diis_start_cycle is None:
-            diis_start_cycle = self.diis_start_cycle
-        if level_shift_factor is None:
-            level_shift_factor = self.level_shift
-        if damp_factor is None:
-            damp_factor = self.damp
-        if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-            dm = numpy.array((dm*.5, dm*.5))
-        self._focka_ao = h1e + vhf[0]
-        self._fockb_ao = h1e + vhf[1]
-        ncore = (self.mol.nelectron-self.mol.spin) // 2
-        nopen = self.mol.spin
-        nocc = ncore + nopen
-        dmsf = dm[0]+dm[1]
-        mo_space = scipy.linalg.eigh(-dmsf, s1e, type=2)[1]
-        fa = reduce(numpy.dot, (mo_space.T, self._focka_ao, mo_space))
-        fb = reduce(numpy.dot, (mo_space.T, self._fockb_ao, mo_space))
-        feff = (fa + fb) * .5
-        feff[:ncore,ncore:nocc] = fb[:ncore,ncore:nocc]
-        feff[ncore:nocc,:ncore] = fb[ncore:nocc,:ncore]
-        feff[nocc:,ncore:nocc] = fa[nocc:,ncore:nocc]
-        feff[ncore:nocc,nocc:] = fa[ncore:nocc,nocc:]
-        cinv = numpy.dot(mo_space.T, s1e)
-        f = reduce(numpy.dot, (cinv.T, feff, cinv))
-
-        if 0 <= cycle < diis_start_cycle-1:
-            f = hf.damping(s1e, dm[0], f, damp_factor)
-        if adiis and cycle >= diis_start_cycle:
-            f = adiis.update(s1e, dm[0], f)
-        f = hf.level_shift(s1e, dm[0], f, level_shift_factor)
-        return f
+    eig = eig
 
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         mol = self.mol
+        if not self.mol.symmetry:
+            return rohf.ROHF.get_grad(self, mo_coeff, mo_occ, fock)
+
         if fock is None:
             dm1 = self.make_rdm1(mo_coeff, mo_occ)
             fock = self.get_hcore(mol) + self.get_veff(self.mol, dm1)
@@ -538,6 +505,9 @@ class ROHF(rohf.ROHF):
     def get_occ(self, mo_energy=None, mo_coeff=None, orbsym=None):
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
+        if not self.mol.symmetry:
+            return rohf.ROHF.get_occ(self, mo_energy, mo_coeff)
+
         if mo_coeff is None or self._focka_ao is None:
             mo_ea = mo_eb = mo_energy
         else:
@@ -676,9 +646,12 @@ class ROHF(rohf.ROHF):
                              self.mo_coeff, self.mo_occ, overwrite_mol=False)
         return self
 
-    def analyze(self, verbose=logger.DEBUG):
+    def analyze(self, verbose=logger.DEBUG, **kwargs):
         from pyscf.lo import orth
         from pyscf.tools import dump_mat
+        if not self.mol.symmetry:
+            return rohf.ROHF.analyze(self, verbose, **kwargs)
+
         mo_energy = self.mo_energy
         mo_occ = self.mo_occ
         mo_coeff = self.mo_coeff
@@ -746,7 +719,7 @@ class ROHF(rohf.ROHF):
             log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
             orth_coeff = orth.orth_ao(mol, 'meta_lowdin', s=ovlp_ao)
             c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
-            dump_mat.dump_rec(self.stdout, c, label, molabel, start=1)
+            dump_mat.dump_rec(self.stdout, c, label, molabel, start=1, **kwargs)
 
         dm = self.make_rdm1(mo_coeff, mo_occ)
         return self.mulliken_meta(mol, dm, s=ovlp_ao, verbose=verbose)

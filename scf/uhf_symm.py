@@ -19,10 +19,13 @@ from pyscf.scf import chkfile
 def analyze(mf, verbose=logger.DEBUG, **kwargs):
     from pyscf.lo import orth
     from pyscf.tools import dump_mat
+    mol = mf.mol
+    if not mol.symmetry:
+        return uhf.analyze(mf, verbose, **kwargs)
+
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
-    mol = mf.mol
     log = logger.Logger(mf.stdout, verbose)
     nirrep = len(mol.irrep_id)
     ovlp_ao = mf.get_ovlp()
@@ -151,6 +154,9 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the UHF Fock matrix in occupied, virtual
     subspaces separatedly (without change occupancy).
     '''
+    if not mf.mol.symmetry:
+        return uhf.canonicalize(mf, mo_coeff, mo_occ, fock)
+
     mo_occ = numpy.asarray(mo_occ)
     assert(mo_occ.ndim == 2)
     if fock is None:
@@ -218,6 +224,9 @@ class UHF(uhf.UHF):
         return uhf.UHF.build(self, mol)
 
     def eig(self, h, s):
+        if not self.mol.symmetry:
+            return uhf.UHF.eig(self, h, s)
+
         nirrep = self.mol.symm_orb.__len__()
         s = symm.symmetrize_matrix(s, self.mol.symm_orb)
         ha = symm.symmetrize_matrix(h[0], self.mol.symm_orb)
@@ -243,6 +252,9 @@ class UHF(uhf.UHF):
 
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         mol = self.mol
+        if not mol.symmetry:
+            return uhf.UHF.get_grad(self, mo_coeff, mo_occ, fock)
+
         if fock is None:
             dm1 = self.make_rdm1(mo_coeff, mo_occ)
             fock = self.get_hcore(mol) + self.get_veff(self.mol, dm1)
@@ -272,6 +284,9 @@ class UHF(uhf.UHF):
         '''
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
+        if not mol.symmetry:
+            return uhf.UHF.get_occ(self, mo_energy, mo_coeff)
+
         if orbsym is None:
             if mo_coeff is not None:  # due to linear-dep
                 ovlp_ao = self.get_ovlp()

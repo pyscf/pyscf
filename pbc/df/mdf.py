@@ -135,8 +135,8 @@ def make_modchg_basis(auxcell, smooth_eta, l_max=3):
     chgcell._env = numpy.hstack((auxcell._env, chg_env))
     chgcell.nimgs = auxcell.nimgs
     chgcell._built = True
-    logger.debug(auxcell, 'smooth basis, num shells = %d, num cGTO = %d',
-                 chgcell.nbas, chgcell.nao_nr())
+    logger.debug1(auxcell, 'smooth basis, num shells = %d, num cGTO = %d',
+                  chgcell.nbas, chgcell.nao_nr())
     return chgcell
 
 def get_nuc_less_accurate(mydf, kpts=None):
