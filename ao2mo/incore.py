@@ -11,7 +11,7 @@ from pyscf.ao2mo import _ao2mo
 
 BLOCK = 56
 
-def full(eri_ao, mo_coeff, verbose=0, compact=True):
+def full(eri_ao, mo_coeff, verbose=0, compact=True, **kwargs):
     r'''MO integral transformation for the given orbital.
 
     Args:
@@ -51,7 +51,7 @@ def full(eri_ao, mo_coeff, verbose=0, compact=True):
     return general(eri_ao, (mo_coeff,)*4, verbose, compact)
 
 # It consumes two times of the memory needed by MO integrals
-def general(eri_ao, mo_coeffs, verbose=0, compact=True):
+def general(eri_ao, mo_coeffs, verbose=0, compact=True, **kwargs):
     r'''For the given four sets of orbitals, transfer the 8-fold or 4-fold 2e
     AO integrals to MO integrals.
 
