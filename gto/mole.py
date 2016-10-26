@@ -1767,7 +1767,9 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         self.stdout.write('System: %s\n' % str(platform.uname()))
         self.stdout.write('Date: %s\n' % time.ctime())
         try:
+            import pyscf
             pyscfdir = os.path.abspath(os.path.join(__file__, '..', '..'))
+            self.stdout.write('PySCF version %s\n' % pyscf.__version__)
             self.stdout.write('PySCF path  %s\n' % pyscfdir)
             with open(os.path.join(pyscfdir, '.git', 'ORIG_HEAD')) as f:
                 self.stdout.write('GIT ORIG_HEAD %s' % f.read())
