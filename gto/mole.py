@@ -1773,6 +1773,9 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                 head = os.path.join(pyscfdir, '.git', head.split(' ')[1])
                 with open(head, 'r') as f:
                     self.stdout.write('GIT %s branch  %s' % (branch, f.readline()))
+            for key in os.environ:
+                if 'PYSCF' in key:
+                    self.stdout.write('%s %s\n' % (key, os.environ[key]))
             self.stdout.write('\n')
         except IOError:
             pass
