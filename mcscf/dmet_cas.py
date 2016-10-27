@@ -148,7 +148,8 @@ def guess_cas(mf, dm, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
     return ncas, nelecas, mo
 
 def dynamic_cas_space_(mc, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
-                       orth_method='meta_lowdin', s=None, verbose=None):
+                       orth_method='meta_lowdin', s=None, start_cycle=3,
+                       verbose=None):
     '''Dynamically tune CASSCF active space based on DMET-CAS decomposition
     by following steps
     1. DMET-CAS decomposition to get new guess of core/active/external
@@ -162,8 +163,9 @@ def dynamic_cas_space_(mc, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
         log = logger.Logger(mc.stdout, verbose)
     else:
         log = logger.Logger(mc.stdout, mc.verbose)
+
     def casci(mo_coeff, ci0=None, eris=None, verbose=None, envs=None):
-        if 'casdm1' not in envs:
+        if envs.get('imacro', 0) < start_cycle or 'casdm1' not in envs:
             return old_casci(mo_coeff, ci0, eris, verbose, envs)
 
         ncore = mc.ncore
@@ -190,8 +192,8 @@ def dynamic_cas_space_(mc, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
             # hack casdm1_pref so that it has the same dimension as casdm1
             casdm1_last = envs['casdm1_last']
             casdm1_last[:] = 0
-            casdm1_last.resize(ncas**4, refcheck=False)
-            casdm1_last.shape = (ncas,)*4
+            casdm1_last.resize(ncas**2, refcheck=False)
+            casdm1_last.shape = (ncas,)*2
             return old_casci(mo_coeff, None, eris, verbose, envs)
 
     mc.casci = casci
@@ -215,10 +217,11 @@ if __name__ == '__main__':
     mf = scf.RHF(mol)
     mf.scf()
 
-    aolst = [i for i,s in enumerate(mol.spheric_labels(1)) if 'O 2s' in s]
+    aolst = [i for i,s in enumerate(mol.spheric_labels(1)) if 'H 1s' in s]
     dm = mf.make_rdm1()
     ncas, nelecas, mo = guess_cas(mf, dm, aolst, verbose=5)
-    mc = dynamic_cas_space_(mcscf.CASSCF(mf, ncas, nelecas).set(verbose=4), aolst)
+    mc = mcscf.CASSCF(mf, ncas, nelecas).set(verbose=4)
+    mc = dynamic_cas_space_(mc, aolst)
     emc = mc.kernel(mo)[0]
     print(emc,0)
 
