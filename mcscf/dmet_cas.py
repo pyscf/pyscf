@@ -8,6 +8,7 @@ import numpy
 import scipy.linalg
 from pyscf.lib import logger
 from pyscf.tools import dump_mat
+from pyscf import fci
 
 def guess_cas(mf, dm, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
               orth_method='meta_lowdin', s=None, verbose=None):
@@ -73,16 +74,18 @@ def guess_cas(mf, dm, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
     log.info('From DMET guess, ncas = %d  nelecas = %d  ncore = %d',
              ncas, nelecas, ncore)
 
-    if log.verbose >= logger.DEBUG:
-        log.debug('DMET impurity and bath orbitals on orthogonal AOs')
-        log.debug('DMET %d impurity sites/occ', nimp)
+    log.debug('DMET impurity and bath orbitals on orthogonal AOs')
+    log.debug('DMET %d impurity sites/occ', nimp)
+    if log.verbose >= logger.DEBUG1:
         label = mol.spheric_labels(True)
         occ_label = ['#%d/%.5f'%(i+1,x) for i,x in enumerate(occi)]
         #dump_mat.dump_rec(mol.stdout, numpy.dot(corth[:,baslst], ui),
         #                  label=label, label2=occ_label, start=1)
         dump_mat.dump_rec(mol.stdout, ui, label=[label[i] for i in baslst],
                           label2=occ_label, start=1)
-        log.debug('DMET %d entangled baths/occ', nb)
+
+    log.debug('DMET %d entangled baths/occ', nb)
+    if log.verbose >= logger.DEBUG1:
         occ_label = ['#%d/%.5f'%(i+1,occb[i]) for i in range(nb)]
         #dump_mat.dump_rec(mol.stdout, numpy.dot(corth[:,notimp], ub[:,:nb]),
         #                  label=label, label2=occ_label, start=1)
@@ -143,4 +146,79 @@ def guess_cas(mf, dm, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
     mo = numpy.hstack(mo)
 
     return ncas, nelecas, mo
+
+def dynamic_cas_space_(mc, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
+                       orth_method='meta_lowdin', s=None, verbose=None):
+    '''Dynamically tune CASSCF active space based on DMET-CAS decomposition
+    by following steps
+    1. DMET-CAS decomposition to get new guess of core/active/external
+    2. If the active space changes, update mo, eris, ncore, ncas  INPLACE
+    3. Solving FCI problem in the new active space
+    '''
+    old_casci = mc.casci
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    elif verbose is not None:
+        log = logger.Logger(mc.stdout, verbose)
+    else:
+        log = logger.Logger(mc.stdout, mc.verbose)
+    def casci(mo_coeff, ci0=None, eris=None, verbose=None, envs=None):
+        if 'casdm1' not in envs:
+            return old_casci(mo_coeff, ci0, eris, verbose, envs)
+
+        ncore = mc.ncore
+        mocore = mo_coeff[:,:ncore]
+        mocas = mo_coeff[:,ncore:ncore+mc.ncas]
+        dm1 = numpy.dot(mocore, mocore.T) * 2
+        dm1 = dm1 + reduce(numpy.dot, (mocas, envs['casdm1'], mocas.T))
+        ncas, nelecas, mo = guess_cas(mc._scf, dm1, baslst, nelec_tol,
+                                      occ_cutoff, base, orth_method, s, log)
+        nelecb = (nelecas-mol.spin)//2
+        neleca = nelecas - nelecb
+        nelecas = (neleca, nelecb)
+
+        if (mc.ncas == ncas and mc.nelecas == nelecas):
+            return old_casci(mo_coeff, ci0, eris, verbose, envs)
+
+        else:
+            mc.ncas = ncas
+            mc.nelecas = nelecas
+            mc.ncore = (mol.nelectron - sum(nelecas)) // 2
+            mo_coeff[:] = mo
+            eris.__dict__.update(mc.ao2mo(mo).__dict__)
+
+            # hack casdm1_pref so that it has the same dimension as casdm1
+            casdm1_last = envs['casdm1_last']
+            casdm1_last[:] = 0
+            casdm1_last.resize(ncas**4, refcheck=False)
+            casdm1_last.shape = (ncas,)*4
+            return old_casci(mo_coeff, None, eris, verbose, envs)
+
+    mc.casci = casci
+    return mc
+
+if __name__ == '__main__':
+    from pyscf import scf
+    from pyscf import gto
+    from pyscf import mcscf
+
+    mol = gto.M(
+    verbose = 0,
+    atom = '''
+           H    0.000000,  0.500000,  1.5   
+           O    0.000000,  0.000000,  1.
+           O    0.000000,  0.000000, -1.
+           H    0.000000, -0.500000, -1.5''',
+        basis = 'ccpvdz',
+    )
+
+    mf = scf.RHF(mol)
+    mf.scf()
+
+    aolst = [i for i,s in enumerate(mol.spheric_labels(1)) if 'O 2s' in s]
+    dm = mf.make_rdm1()
+    ncas, nelecas, mo = guess_cas(mf, dm, aolst, verbose=5)
+    mc = dynamic_cas_space_(mcscf.CASSCF(mf, ncas, nelecas).set(verbose=4), aolst)
+    emc = mc.kernel(mo)[0]
+    print(emc,0)
 

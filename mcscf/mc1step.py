@@ -354,13 +354,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
 
     mo = mo_coeff
     nmo = mo_coeff.shape[1]
-    ncas = casscf.ncas
-    ncore = casscf.ncore
-    nocc = ncore + ncas
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
     eris = casscf.ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, log, locals())
-    if ncas == nmo:
+    if casscf.ncas == nmo:
         log.debug('CASSCF canonicalization')
         mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
                                                     casscf.natorb, verbose=log)
@@ -377,7 +374,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     r0 = None
 
     t1m = log.timer('Initializing 1-step CASSCF', *cput0)
-    casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
+    casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, casscf.ncas, casscf.nelecas)
     norm_ddm = 1e2
     casdm1_prev = casdm1_last = casdm1
     t3m = t2m = log.timer('CAS DM', *t1m)
@@ -430,14 +427,15 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         totinner += njk
 
         mo = casscf.rotate_mo(mo, u, log)
-        r0 = casscf.pack_uniq_var(u)
-
-        u = g_orb = eris = None
+        # keep u, g_orb in locals() so that they can be accessed by callback
+        u = u.copy()
+        g_orb = g_orb.copy()
+        eris = None
         eris = casscf.ao2mo(mo)
         t2m = log.timer('update eri', *t3m)
 
         e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
-        casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
+        casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, casscf.ncas, casscf.nelecas)
         norm_ddm = numpy.linalg.norm(casdm1 - casdm1_last)
         casdm1_prev = casdm1_last = casdm1
         log.timer('CASCI solver', *t2m)
@@ -453,6 +451,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
 
         if callable(callback):
             callback(locals())
+
+        r0 = casscf.pack_uniq_var(u)
 
     if conv:
         log.info('1-step CASSCF converged in %d macro (%d JK %d micro) steps',
