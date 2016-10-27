@@ -21,10 +21,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     mo = mo_coeff
     nmo = mo[0].shape[1]
     ncore = casscf.ncore
-    ncas = casscf.ncas
     eris = casscf.ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, log, locals())
-    if ncas == nmo:
+    if casscf.ncas == nmo:
         return True, e_tot, e_ci, fcivec, mo
 
     if conv_tol_grad is None:
@@ -44,7 +43,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         njk = 0
         t3m = t2m
         casdm1_old = casdm1
-        casdm1, casdm2 = casscf.fcisolver.make_rdm12s(fcivec, ncas, casscf.nelecas)
+        casdm1, casdm2 = casscf.fcisolver.make_rdm12s(fcivec, casscf.ncas, casscf.nelecas)
         norm_ddm =(numpy.linalg.norm(casdm1[0] - casdm1_old[0])
                  + numpy.linalg.norm(casdm1[1] - casdm1_old[1]))
         t3m = log.timer('update CAS DM', *t3m)
@@ -61,9 +60,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
             t3m = log.timer('orbital rotation', *t3m)
 
             mo = casscf.rotate_mo(mo, u, log)
-            r0 = casscf.pack_uniq_var(u)
-
-            u = g_orb = eris = None
+            u = u.copy()
+            g_orb = g_orb.copy()
+            eris = None
             eris = casscf.ao2mo(mo)
             t3m = log.timer('update eri', *t3m)
 
@@ -76,6 +75,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
             t2m = log.timer('micro iter %d'%imicro, *t2m)
             if norm_t < 1e-4 or norm_gorb < conv_tol_grad*.8:
                 break
+
+            r0 = casscf.pack_uniq_var(u)
 
         totinner += njk
         totmicro += imicro+1

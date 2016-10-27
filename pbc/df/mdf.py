@@ -109,7 +109,7 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
     auxcell.nimgs = cell.nimgs
     auxcell._built = True
     logger.debug(cell, 'Drop %d primitive fitting functions', ndrop)
-    logger.debug(cell, 'aux basis, num shells = %d, num cGTO = %d',
+    logger.debug(cell, 'make aux basis, num shells = %d, num cGTOs = %d',
                  auxcell.nbas, auxcell.nao_nr())
     return auxcell
 
@@ -135,7 +135,7 @@ def make_modchg_basis(auxcell, smooth_eta, l_max=3):
     chgcell._env = numpy.hstack((auxcell._env, chg_env))
     chgcell.nimgs = auxcell.nimgs
     chgcell._built = True
-    logger.debug1(auxcell, 'smooth basis, num shells = %d, num cGTO = %d',
+    logger.debug1(auxcell, 'make smooth basis, num shells = %d, num cGTOs = %d',
                   chgcell.nbas, chgcell.nao_nr())
     return chgcell
 
@@ -214,9 +214,17 @@ def get_nuc(mydf, kpts=None):
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = t0 = (time.clock(), time.time())
     fused_cell, fuse = fuse_auxcell_(mydf, mydf.auxcell)
-    nuccell = make_modchg_basis(cell, mydf.eta, 0)
-    nuccell._bas = numpy.asarray(nuccell._bas[nuccell._bas[:,gto.ANG_OF]==0],
-                                 dtype=numpy.int32, order='C')
+
+    nuccell = copy.copy(cell)
+    half_sph_norm = .5/numpy.sqrt(numpy.pi)
+    norm = half_sph_norm/gto.mole._gaussian_int(2, mydf.eta)
+    chg_env = [mydf.eta, norm]
+    ptr_eta = cell._env.size
+    ptr_norm = ptr_eta + 1
+    chg_bas = [[ia, 0, 1, 1, 0, ptr_eta, ptr_norm, 0] for ia in range(cell.natm)]
+    nuccell._atm = cell._atm
+    nuccell._bas = numpy.asarray(chg_bas, dtype=numpy.int32)
+    nuccell._env = numpy.hstack((cell._env, chg_env))
 
     charge = -cell.atom_charges()
     nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
@@ -347,13 +355,12 @@ class MDF(pwdf.PWDF):
     def build(self, j_only=False, with_j3c=True):
         log = logger.Logger(self.stdout, self.verbose)
         t1 = (time.clock(), time.time())
-        cell = self.cell
         if self.eta is None:
-            self.eta = estimate_eta(cell)
+            self.eta = estimate_eta(self.cell)
             log.debug('Set smooth gaussian eta to %.9g', self.eta)
         self.dump_flags()
 
-        self.auxcell = make_modrho_basis(cell, self.auxbasis, self.eta)
+        self.auxcell = make_modrho_basis(self.cell, self.auxbasis, self.eta)
 
         self._j_only = j_only
         if j_only:
@@ -380,7 +387,7 @@ class MDF(pwdf.PWDF):
                 build_Lpq_1c_approx(self, self.auxcell)
             t1 = log.timer_debug1('Lpq', *t1)
 
-            _make_j3c(self, cell, self.auxcell, kptij_lst)
+            _make_j3c(self, self.cell, self.auxcell, kptij_lst)
             t1 = log.timer_debug1('j3c', *t1)
         return self
 

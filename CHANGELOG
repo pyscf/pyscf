@@ -5,6 +5,7 @@ PySCF 1.3 alpha (2016-12-?)
   - AO-direct CCSD
   - CI coefficients transformation for one-particle basis rotation
   - CIAH second order SCF solver for PBC KRHF and KUHF
+  - Dynamically tune active space using DMET-CAS decomposition
 * Improved
   - Optimized CCSD(T)
   - Change the default kpts mesh (to always include gamma point)
@@ -55,7 +56,7 @@ PySCF 1.2 alpha (2016-8-5)
   - PBC MO integral transformation
   - PBC density fitting
   - IC-MPS-PT2
-  - DMET method to generate CASSCF active space
+  - DMET decomposition to generate CASSCF active space
   - FCI electron-phonon coupling solver
   - meta-GGA for ground state DFT
 
