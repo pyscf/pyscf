@@ -1755,7 +1755,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
             except IOError:
                 logger.warn(self, 'input file does not exist')
 
-        self.stdout.write('System: %s\n' % str(platform.uname()))
+        self.stdout.write('System: %s  Threads %s\n' %
+                          (str(platform.uname()), lib.num_threads()))
         self.stdout.write('Date: %s\n' % time.ctime())
         try:
             pyscfdir = os.path.abspath(os.path.join(__file__, '..', '..'))
