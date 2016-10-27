@@ -62,7 +62,7 @@ def make_modrho_basis(mol, auxbasis=None):
         cs = numpy.einsum('pi,i->pi', cs, half_sph_norm/s)
         auxmol._env[ptr:ptr+np*nc] = cs.T.reshape(-1)
     auxmol._built = True
-    logger.debug(mol, 'aux basis, num shells = %d, num cGTO = %d',
+    logger.debug(mol, 'make aux basis, num shells = %d, num cGTOs = %d',
                  auxmol.nbas, auxmol.nao_nr())
     return auxmol
 
@@ -142,8 +142,7 @@ class MDF(lib.StreamObject):
     def build(self):
         self.dump_flags()
 
-        mol = self.mol
-        auxmol = self.auxmol = make_modrho_basis(self.mol, self.auxbasis)
+        self.auxmol = make_modrho_basis(self.mol, self.auxbasis)
 
         if not isinstance(self._cderi, str):
             if isinstance(self._cderi_file, str):
@@ -151,7 +150,7 @@ class MDF(lib.StreamObject):
             else:
                 self._cderi = self._cderi_file.name
 
-        _make_j3c(self, mol, auxmol)
+        _make_j3c(self, self.mol, self.auxmol)
         return self
 
     def load(self, key):
