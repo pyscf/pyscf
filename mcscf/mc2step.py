@@ -64,10 +64,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
             de = numpy.dot(casscf.pack_uniq_var(u), g_orb)
             t3m = log.timer('orbital rotation', *t3m)
 
-            mo = casscf.rotate_mo(mo, u, log)
+            eris = None
             u = u.copy()
             g_orb = g_orb.copy()
-            eris = None
+            mo = casscf.rotate_mo(mo, u, log)
             eris = casscf.ao2mo(mo)
             t3m = log.timer('update eri', *t3m)
 

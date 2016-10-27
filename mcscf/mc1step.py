@@ -426,11 +426,11 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         totmicro += imicro
         totinner += njk
 
-        mo = casscf.rotate_mo(mo, u, log)
+        eris = None
         # keep u, g_orb in locals() so that they can be accessed by callback
         u = u.copy()
         g_orb = g_orb.copy()
-        eris = None
+        mo = casscf.rotate_mo(mo, u, log)
         eris = casscf.ao2mo(mo)
         t2m = log.timer('update eri', *t3m)
 
