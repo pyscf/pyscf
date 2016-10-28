@@ -97,20 +97,19 @@ class DIIS(object):
 # don't modify the following private variables, they are not input options
         self.filename = filename
         if isinstance(filename, str):
-            self._diisfile = h5py.File(filename, 'w')
+            self._diisfile = _diisfile = h5py.File(filename, 'w')
         else:
             self._tmpfile = tempfile.NamedTemporaryFile(dir=parameters.TMPDIR)
-            self._diisfile = h5py.File(self._tmpfile.name, 'w')
+            self._diisfile = _diisfile = h5py.File(self._tmpfile.name, 'w')
+        def __del__():
+            _diisfile.close()
+        self._diisfile.__del__ = __del__
         self._buffer = {}
         self._bookkeep = [] # keep the ordering of input vectors
         self._head = 0
         self._H = None
         self._xprev = None
         self._err_vec_touched = False
-
-    def __del__(self):
-        self._diisfile.close()
-        self._tmpfile = None
 
     def _store(self, key, value):
         if value.size < INCORE_SIZE:
