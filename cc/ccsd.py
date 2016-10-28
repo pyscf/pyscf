@@ -461,36 +461,54 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.t2 = None
         self.l1 = None
         self.l2 = None
+        self._nocc = None
+        self._nmo = None
 
         self._keys = set(self.__dict__.keys())
 
-    def nocc(self):
-        if isinstance(self.frozen, (int, numpy.integer)):
-            self._nocc = int(self.mo_occ.sum()) // 2 - self.frozen
-        else:
-            mo_occ = self.mo_occ.copy()
-            if len(self.frozen) > 0:
-                mo_occ[numpy.asarray(self.frozen)] = 0
-            self._nocc = int(mo_occ.sum()) // 2
-        return self._nocc
+    @property
+    def e_tot(self):
+        return self.ecc + self._scf.e_tot
 
-    def nmo(self):
-        if isinstance(self.frozen, (int, numpy.integer)):
-            self._nmo = len(self.mo_energy) - self.frozen
+    @property
+    def nocc(self):
+        if self._nocc is not None:
+            return self._nocc
+        elif isinstance(self.frozen, (int, numpy.integer)):
+            return int(self.mo_occ.sum()) // 2 - self.frozen
+        elif self.frozen:
+            occ_idx = self.mo_occ > 0
+            occ_idx[numpy.asarray(self.frozen)] = False
+            return numpy.count_nonzero(occ_idx)
         else:
-            self._nmo = len(self.mo_energy) - len(self.frozen)
-        return self._nmo
+            return int(self.mo_occ.sum()) // 2
+    @nocc.setter
+    def nocc(self, n):
+        self._nocc = n
+
+    @property
+    def nmo(self):
+        if self._nmo is not None:
+            return self._nmo
+        if isinstance(self.frozen, (int, numpy.integer)):
+            return len(self.mo_energy) - self.frozen
+        else:
+            return len(self.mo_energy) - len(self.frozen)
+    @nmo.setter
+    def nmo(self, n):
+        self._nmo = n
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('')
         log.info('******** %s flags ********', self.__class__)
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         log.info('CCSD nocc = %d, nvir = %d', nocc, nvir)
         if self.frozen:
             log.info('frozen orbitals %s', str(self.frozen))
         log.info('max_cycle = %d', self.max_cycle)
+        log.info('direct = %d', self.direct)
         log.info('conv_tol = %g', self.conv_tol)
         log.info('conv_tol_normt = %s', self.conv_tol_normt)
         log.info('diis_space = %d', self.diis_space)
@@ -501,7 +519,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
         mo_e = eris.fock.diagonal()
-        nocc = self.nocc()
+        nocc = self.nocc
         nvir = mo_e.size - nocc
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
         t1 = eris.fock[:nocc,nocc:] / eia
@@ -542,7 +560,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             logger.note(self, 'E_corr = %.16g', self.ecc)
         else:
             logger.note(self, 'E(CCSD) = %.16g  E_corr = %.16g',
-                        self.ecc+self._scf.e_tot, self.ecc)
+                        self.e_tot, self.ecc)
         return self.ecc, self.t1, self.t2
 
     def solve_lambda(self, t1=None, t2=None, l1=None, l2=None, mo_coeff=None,
@@ -579,8 +597,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2)
 
     def ao2mo(self, mo_coeff=None):
-        #nocc = self.nocc()
-        #nmo = self.nmo()
+        #nocc = self.nocc
+        #nmo = self.nmo
         #nvir = nmo - nocc
         #eri1 = ao2mo.incore.full(self._scf._eri, mo_coeff)
         #eri1 = ao2mo.restore(1, eri1, nmo)
@@ -770,8 +788,8 @@ class _ERIS:
             fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
             self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
 
-        nocc = cc.nocc()
-        nmo = cc.nmo()
+        nocc = cc.nocc
+        nmo = cc.nmo
         nvir = nmo - nocc
         mem_incore, mem_outcore, mem_basic = _mem_usage(nocc, nvir)
         mem_now = lib.current_memory()[0]
