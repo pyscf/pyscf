@@ -282,18 +282,15 @@ class _ERIS(object):
                                      self._tmpfile.name,
                                      max_memory=max_memory,
                                      level=level, verbose=log)
-            self.feri = h5py.File(self._tmpfile.name, 'r')
+            self.feri = feri = h5py.File(self._tmpfile.name, 'r')
+            def __del__():
+                feri.close()
+            self.feri.__del__ = __del__
             self.ppaa = self.feri['ppaa']
             self.papa = self.feri['papa']
         dm_core = numpy.dot(mo[:,:ncore], mo[:,:ncore].T)
         vj, vk = casscf._scf.get_jk(mol, dm_core)
         self.vhf_c = reduce(numpy.dot, (mo.T, vj*2-vk, mo))
-
-    def __del__(self):
-        if hasattr(self, 'feri'):
-            self.feri.close()
-            self.feri = None
-            self._tmpfile = None
 
 def _mem_usage(ncore, ncas, nmo):
     nvir = nmo - ncore

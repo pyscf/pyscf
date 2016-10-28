@@ -577,10 +577,11 @@ def cho_solve(a, b):
 class _Xlist(list):
     def __init__(self):
         self._fd = tempfile.NamedTemporaryFile(dir=parameters.TMPDIR)
-        self.scr_h5 = h5py.File(self._fd.name, 'w')
+        self.scr_h5 = scr_h5 = h5py.File(self._fd.name, 'w')
+        def __del__():
+            scr_h5.close()
+        self.scr_h5.__del__ = __del__
         self.index = []
-    def __del__(self):
-        self.scr_h5.close()
 
     def __getitem__(self, n):
         key = self.index[n]

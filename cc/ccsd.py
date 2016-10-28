@@ -824,7 +824,10 @@ class _ERIS:
             cput1 = time.clock(), time.time()
             _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
             _tmpfile2 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-            self.feri1 = h5py.File(_tmpfile1.name)
+            self.feri1 = feri1 = h5py.File(_tmpfile1.name)
+            def __del__feri1(self):
+                feri1.close()
+            self.feri1.__del__ = __del__feri1
             orbo = mo_coeff[:,:nocc]
             orbv = mo_coeff[:,nocc:]
             nvpair = nvir * (nvir+1) // 2
@@ -859,7 +862,10 @@ class _ERIS:
 
             if not cc.direct:
                 max_memory = max(2000,cc.max_memory-lib.current_memory()[0])
-                self.feri2 = h5py.File(_tmpfile2.name, 'w')
+                self.feri2 = feri2 = h5py.File(_tmpfile2.name)
+                def __del__feri2(self):
+                    feri2.close()
+                self.feri2.__del__ = __del__feri2
                 ao2mo.full(cc.mol, orbv, self.feri2, max_memory=max_memory, verbose=log)
                 self.vvvv = self.feri2['eri_mo']
                 cput1 = log.timer_debug1('transforming vvvv', *cput1)
@@ -886,14 +892,6 @@ class _ERIS:
                 for key in feri.keys():
                     del(feri[key])
         log.timer('CCSD integral transformation', *cput0)
-
-    def __del__(self):
-        if hasattr(self, 'feri1'):
-            for key in self.feri1.keys(): del(self.feri1[key])
-            self.feri1.close()
-        if hasattr(self, 'feri2'):
-            for key in self.feri2.keys(): del(self.feri2[key])
-            self.feri2.close()
 
 
 # assume nvir > nocc, minimal requirements on memory in loop of update_amps

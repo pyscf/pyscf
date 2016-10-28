@@ -16,7 +16,6 @@ from pyscf import gto
 from pyscf.cc import ccsd_rdm
 from pyscf.cc import ccsd_grad_incore as ccsd_grad
 from pyscf.cc import _ccsd
-from pyscf.cc import ccsd_t_slow as ccsd_t
 from pyscf.cc import ccsd_t_rdm_slow as ccsd_t_rdm
 import pyscf.grad
 

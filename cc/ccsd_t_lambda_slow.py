@@ -13,7 +13,6 @@ from pyscf.lib import logger
 import pyscf.ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
-from pyscf.cc import ccsd_t_slow as ccsd_t
 from pyscf.cc import ccsd_lambda_incore as ccsd_lambda
 
 # t2,l2 as ijab
@@ -73,10 +72,10 @@ def make_intermediates(mycc, t1, t2, eris):
     w =(numpy.einsum('iabf,kjcf->ijkabc', eris_ovvv, t2)
       - numpy.einsum('iajm,mkbc->ijkabc', eris_ovoo, t2)) / d3
     v = numpy.einsum('iajb,kc->ijkabc', eris.ovov, t1) / d3 * .5
-    w = ccsd_t.p6_(w)
-    v = ccsd_t.p6_(v)
-    rwv = ccsd_t.r6_(w*2+v)
-    jov = numpy.einsum('jbkc,ijkabc->ia', eris.ovov, ccsd_t.r6_(w))
+    w = p6_(w)
+    v = p6_(v)
+    rwv = r6_(w*2+v)
+    jov = numpy.einsum('jbkc,ijkabc->ia', eris.ovov, r6_(w))
     joovv = numpy.einsum('iabf,ijkabc->kjcf', eris_ovvv, rwv)
     joovv-= numpy.einsum('iajm,ijkabc->mkbc', eris.ovoo, rwv)
     joovv = joovv + joovv.transpose(1,0,3,2)
@@ -103,6 +102,15 @@ def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None):
 
 def _cp(a):
     return numpy.array(a, copy=False, order='C')
+
+def p6_(t):
+    t1 = t + t.transpose(0,2,1,3,5,4)
+    return t1 + t1.transpose(1,0,2,4,3,5) + t1.transpose(1,2,0,4,5,3)
+def r6_(w):
+    return (4 * w + w.transpose(0,1,2,4,5,3) + w.transpose(0,1,2,5,3,4)
+            - 2 * w.transpose(0,1,2,5,4,3) - 2 * w.transpose(0,1,2,3,5,4)
+            - 2 * w.transpose(0,1,2,4,3,5))
+
 
 
 if __name__ == '__main__':
