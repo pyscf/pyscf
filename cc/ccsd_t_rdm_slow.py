@@ -13,7 +13,7 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
-from pyscf.cc import ccsd_t_slow as ccsd_t
+from pyscf.cc.ccsd_t_lambe_slow import p6_, r6_
 from pyscf.cc import ccsd_rdm
 
 def gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None):
@@ -31,10 +31,10 @@ def gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None):
     w =(numpy.einsum('iabf,kjcf->ijkabc', eris_ovvv, t2)
       - numpy.einsum('iajm,mkbc->ijkabc', eris_ovoo, t2)) / d3
     v = numpy.einsum('iajb,kc->ijkabc', eris.ovov, t1) / d3 * .5
-    w = ccsd_t.p6_(w)
-    v = ccsd_t.p6_(v)
+    w = p6_(w)
+    v = p6_(v)
     wv = w+v
-    rw = ccsd_t.r6_(w)
+    rw = r6_(w)
     goo =-numpy.einsum('iklabc,jklabc->ij', wv, rw) * .5
     gvv = numpy.einsum('ijkacd,ijkbcd->ab', wv, rw) * .5
 
@@ -59,10 +59,10 @@ def gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None):
     w =(numpy.einsum('iabf,kjcf->ijkabc', eris_ovvv, t2)
       - numpy.einsum('iajm,mkbc->ijkabc', eris_ovoo, t2)) / d3
     v = numpy.einsum('iajb,kc->ijkabc', eris.ovov, t1) / d3 * .5
-    w = ccsd_t.p6_(w)
-    v = ccsd_t.p6_(v)
-    rw = ccsd_t.r6_(w)
-    rwv = ccsd_t.r6_(w*2+v)
+    w = p6_(w)
+    v = p6_(v)
+    rw = r6_(w)
+    rwv = r6_(w*2+v)
     dovov += numpy.einsum('kc,ijkabc->iajb', t1, rw) * .5
     dooov -= numpy.einsum('mkbc,ijkabc->jmia', t2, rwv)
     # Note "dovvv +=" also changes the value of dvvov
