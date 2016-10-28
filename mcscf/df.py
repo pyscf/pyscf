@@ -333,16 +333,16 @@ class _ERIS(object):
 
         fxpp.close()
         self.feri.flush()
+        self.feri.close()
+        self.feri = feri = h5py.File(self._tmpfile.name, 'r')
+        def __del__():
+            feri.close()
+        self.feri.__del__ = __del__
+
         dm_core = numpy.dot(mo[:,:ncore], mo[:,:ncore].T)
         vj, vk = casscf.get_jk(mol, dm_core)
         self.vhf_c = reduce(numpy.dot, (mo.T, vj*2-vk, mo))
         t0 = log.timer('density fitting ao2mo', *t0)
-
-    def __del__(self):
-        if hasattr(self, 'feri'):
-            self.feri.close()
-            self.feri = None
-            self._tmpfile = None
 
 def _mem_usage(ncore, ncas, nmo):
     nvir = nmo - ncore
