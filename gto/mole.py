@@ -2026,7 +2026,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         Examples:
 
         >>> mol.build(atom='H 0 0 0; Cl 0 0 1.1', basis='cc-pvdz')
-        >>> mol.atom_nshells(1)
+        >>> mol.atom_shell_ids(1)
         [3, 4, 5, 6, 7]
         '''
         return numpy.where(self._bas[:,ATOM_OF] == atm_id)[0]
