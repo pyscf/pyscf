@@ -1,6 +1,7 @@
 /*
  *
  */
+#include <stdint.h>
 
 typedef struct {
         unsigned int addr;
@@ -30,3 +31,5 @@ void FCIcompress_link(_LinkT *clink, int *link_index,
                       int norb, int nstr, int nlink);
 void FCIcompress_link_tril(_LinkTrilT *clink, int *link_index,
                            int nstr, int nlink);
+int FCIcre_des_sign(int p, int q, int64_t string0);
+int FCIpopcount_1(int64_t x);

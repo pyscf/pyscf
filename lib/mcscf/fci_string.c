@@ -44,26 +44,18 @@ int FCIpopcount_4(int64_t x)
 }
 
 
-int FCIparity(int64_t string0, int64_t string1)
+int FCIcre_des_sign(int p, int q, int64_t string0)
 {
-        int64_t ss;
-        if (string1 > string0) {
-                ss = string1 - string0;
-                // string1&ss gives the number of 1s between two strings
-                if (FCIpopcount_1(string1&ss) % 2) {
-                        return -1;
-                } else {
-                        return 1;
-                }
-        } else if (string1 == string0) {
-                return 1;
+        int64_t mask;
+        if (p > q) {
+                mask = (1ULL << p) - (1ULL << (q+1));
         } else {
-                ss = string0 - string1;
-                if (FCIpopcount_1(string0&ss) % 2) {
-                        return -1;
-                } else {
-                        return 1;
-                }
+                mask = (1ULL << q) - (1ULL << (p+1));
+        }
+        if (FCIpopcount_1(string0 & mask) % 2) {
+                return -1;
+        } else {
+                return 1;
         }
 }
 
@@ -162,7 +154,7 @@ void FCIlinkstr_index(int *link_index, int norb, int na, int nocc,
                                         }
                                         tab[k*4+0] = ia;
                                         tab[k*4+2] = FCIstr2addr(norb, nocc, str1);
-                                        tab[k*4+3] = FCIparity(str1, str0);
+                                        tab[k*4+3] = FCIcre_des_sign(vir[a], occ[i], str0);
                                 }
                         }
 
@@ -182,7 +174,7 @@ void FCIlinkstr_index(int *link_index, int norb, int na, int nocc,
                                         tab[k*4+0] = vir[a];
                                         tab[k*4+1] = occ[i];
                                         tab[k*4+2] = FCIstr2addr(norb, nocc, str1);
-                                        tab[k*4+3] = FCIparity(str1, str0);
+                                        tab[k*4+3] = FCIcre_des_sign(vir[a], occ[i], str0);
                                 }
                         }
                 }
