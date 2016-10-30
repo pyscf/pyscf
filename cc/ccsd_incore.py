@@ -368,7 +368,7 @@ class CCSD(ccsd.CCSD):
                                           max_cycle=self.max_cycle,
                                           tol=self.conv_tol_normt,
                                           verbose=self.verbose)
-        return conv, self.l1, self.l2
+        return self.l1, self.l2
 
     def make_rdm1(self, t1=None, t2=None, l1=None, l2=None):
         '''1-particle density matrix in MO space'''
@@ -377,7 +377,7 @@ class CCSD(ccsd.CCSD):
         if t2 is None: t2 = self.t2
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
-        if l1 is None: l1, l2 = self.solve_lambda(t1, t2)[1:]
+        if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
         return ccsd_rdm_incore.make_rdm1(self, t1, t2, l1, l2)
 
     def make_rdm2(self, t1=None, t2=None, l1=None, l2=None):
@@ -387,7 +387,7 @@ class CCSD(ccsd.CCSD):
         if t2 is None: t2 = self.t2
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
-        if l1 is None: l1, l2 = self.solve_lambda(t1, t2)[1:]
+        if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
         return ccsd_rdm_incore.make_rdm2(self, t1, t2, l1, l2)
 
     def update_amps(self, t1, t2, eris):

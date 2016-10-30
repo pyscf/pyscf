@@ -69,7 +69,7 @@ def make_intermediates(mycc, t1, t2, eris):
         pass
     saved = _Saved()
     saved._tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-    saved.ftmp = ftmp = h5py.File(self._tmpfile.name)
+    saved.ftmp = ftmp = h5py.File(saved._tmpfile.name)
     def __del__():
         ftmp.close()
     saved.ftmp.__del__ = __del__

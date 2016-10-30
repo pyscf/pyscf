@@ -318,7 +318,7 @@ if __name__ == '__main__':
     mycc.conv_tol = 1e-10
     mycc.conv_tol_normt = 1e-10
     ecc, t1, t2 = mycc.kernel()
-    l1, l2 = mycc.solve_lambda()[1:]
+    l1, l2 = mycc.solve_lambda()
     g1 = kernel(mycc, t1, t2, l1, l2)
     print(g1+grad.rhf.grad_nuc(mol))
 #[[ 0   0                1.00950925e-02]
@@ -339,7 +339,7 @@ if __name__ == '__main__':
     mycc.conv_tol = 1e-10
     mycc.conv_tol_normt = 1e-10
     ecc, t1, t2 = mycc.kernel()
-    l1, l2 = mycc.solve_lambda()[1:]
+    l1, l2 = mycc.solve_lambda()
     g1 = kernel(mycc, t1, t2, l1, l2)
     print(g1+grad.rhf.grad_nuc(mol))
 # [[ 0.          0.         -0.07080036]

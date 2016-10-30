@@ -215,7 +215,7 @@ def update_amps(mycc, t1, t2, eris):
         tmp2 = numpy.ndarray((nocc*nvir,nocc), buffer=buf2)
         for j in range(p1-p0):
             tmp = lib.ddot(t1, eris_oovv[j].reshape(-1,nvir).T, 1, tmp1)
-            lib.transpose(tmp.reshape(nocc,nocc,nvir), axes=(0,2,1), out=tmp2)
+            lib.transpose(_cp(tmp).reshape(nocc,nocc,nvir), axes=(0,2,1), out=tmp2)
             t2new[:,p0+j] -= lib.ddot(tmp2, t1).reshape(nocc,nvir,nvir)
         eris_oovv = None
 
@@ -258,7 +258,7 @@ def update_amps(mycc, t1, t2, eris):
             tmp-= t2[p0+i]
             lib.ddot(eris_ooov[i].reshape(nocc,-1),
                      tmp.reshape(-1,nvir), -1, t1new, 1)
-            lib.transpose(tmp.reshape(-1,nvir), out=theta[i])  # theta[i] = tmp.transpose(2,0,1)
+            lib.transpose(_cp(tmp).reshape(-1,nvir), out=theta[i])  # theta[i] = tmp.transpose(2,0,1)
         t1new += numpy.einsum('jb,jbia->ia', fov[p0:p1], theta)
         eris_ooov = None
 
@@ -302,7 +302,7 @@ def update_amps(mycc, t1, t2, eris):
     #: woVoV += numpy.einsum('jkca,ikbc->ijba', tau, eris.oOVv)
         tmp = numpy.ndarray((p1-p0,nvir,nocc,nvir), buffer=buf1)
         tmp[:] = wooVV.transpose(0,2,1,3)
-        woVoV = lib.transpose(tmp.reshape(-1,nov), out=buf4).reshape(nocc,nvir,p1-p0,nvir)
+        woVoV = lib.transpose(_cp(tmp).reshape(-1,nov), out=buf4).reshape(nocc,nvir,p1-p0,nvir)
         eris_oOvV = numpy.ndarray((p1-p0,nocc,nvir,nvir), buffer=buf3)
         eris_oOvV[:] = eris_ovov.transpose(0,2,1,3)
         eris_oVOv = lib.transpose(eris_oOvV.reshape(-1,nov,nvir), axes=(0,2,1), out=buf5)
@@ -328,7 +328,7 @@ def update_amps(mycc, t1, t2, eris):
                  .5, t2new.reshape(nocc*nocc,-1), 1)
         eris_ovov = eris_oVOv = eris_oOvV = wooVV = tau = tmp = None
 
-        t2ibja = lib.transpose(t2[p0:p1].reshape(-1,nov,nvir), axes=(0,2,1),
+        t2ibja = lib.transpose(_cp(t2[p0:p1]).reshape(-1,nov,nvir), axes=(0,2,1),
                                out=buf1).reshape(-1,nvir,nocc,nvir)
         tmp = numpy.ndarray((blksize,nvir,nocc,nvir), buffer=buf2)
         for j0, j1 in prange(0, nocc, blksize):
@@ -461,54 +461,36 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.t2 = None
         self.l1 = None
         self.l2 = None
-        self._nocc = None
-        self._nmo = None
 
         self._keys = set(self.__dict__.keys())
 
-    @property
-    def e_tot(self):
-        return self.ecc + self._scf.e_tot
-
-    @property
     def nocc(self):
-        if self._nocc is not None:
-            return self._nocc
-        elif isinstance(self.frozen, (int, numpy.integer)):
-            return int(self.mo_occ.sum()) // 2 - self.frozen
-        elif self.frozen:
-            occ_idx = self.mo_occ > 0
-            occ_idx[numpy.asarray(self.frozen)] = False
-            return numpy.count_nonzero(occ_idx)
-        else:
-            return int(self.mo_occ.sum()) // 2
-    @nocc.setter
-    def nocc(self, n):
-        self._nocc = n
-
-    @property
-    def nmo(self):
-        if self._nmo is not None:
-            return self._nmo
         if isinstance(self.frozen, (int, numpy.integer)):
-            return len(self.mo_energy) - self.frozen
+            self._nocc = int(self.mo_occ.sum()) // 2 - self.frozen
         else:
-            return len(self.mo_energy) - len(self.frozen)
-    @nmo.setter
-    def nmo(self, n):
-        self._nmo = n
+            mo_occ = self.mo_occ.copy()
+            if len(self.frozen) > 0:
+                mo_occ[numpy.asarray(self.frozen)] = 0
+            self._nocc = int(mo_occ.sum()) // 2
+        return self._nocc
+
+    def nmo(self):
+        if isinstance(self.frozen, (int, numpy.integer)):
+            self._nmo = len(self.mo_energy) - self.frozen
+        else:
+            self._nmo = len(self.mo_energy) - len(self.frozen)
+        return self._nmo
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('')
         log.info('******** %s flags ********', self.__class__)
-        nocc = self.nocc
-        nvir = self.nmo - nocc
+        nocc = self.nocc()
+        nvir = self.nmo() - nocc
         log.info('CCSD nocc = %d, nvir = %d', nocc, nvir)
         if self.frozen:
             log.info('frozen orbitals %s', str(self.frozen))
         log.info('max_cycle = %d', self.max_cycle)
-        log.info('direct = %d', self.direct)
         log.info('conv_tol = %g', self.conv_tol)
         log.info('conv_tol_normt = %s', self.conv_tol_normt)
         log.info('diis_space = %d', self.diis_space)
@@ -519,7 +501,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
         mo_e = eris.fock.diagonal()
-        nocc = self.nocc
+        nocc = self.nocc()
         nvir = mo_e.size - nocc
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
         t1 = eris.fock[:nocc,nocc:] / eia
@@ -560,7 +542,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             logger.note(self, 'E_corr = %.16g', self.ecc)
         else:
             logger.note(self, 'E(CCSD) = %.16g  E_corr = %.16g',
-                        self.e_tot, self.ecc)
+                        self.ecc+self._scf.e_tot, self.ecc)
         return self.ecc, self.t1, self.t2
 
     def solve_lambda(self, t1=None, t2=None, l1=None, l2=None, mo_coeff=None,
@@ -574,7 +556,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                                    max_cycle=self.max_cycle,
                                    tol=self.conv_tol_normt,
                                    verbose=self.verbose)
-        return conv, self.l1, self.l2
+        return self.l1, self.l2
 
     def make_rdm1(self, t1=None, t2=None, l1=None, l2=None):
         '''1-particle density matrix in MO space'''
@@ -583,7 +565,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if t2 is None: t2 = self.t2
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
-        if l1 is None: l1, l2 = self.solve_lambda(t1, t2)[1:]
+        if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
         return ccsd_rdm.make_rdm1(self, t1, t2, l1, l2)
 
     def make_rdm2(self, t1=None, t2=None, l1=None, l2=None):
@@ -593,12 +575,12 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if t2 is None: t2 = self.t2
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
-        if l1 is None: l1, l2 = self.solve_lambda(t1, t2)[1:]
+        if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
         return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2)
 
     def ao2mo(self, mo_coeff=None):
-        #nocc = self.nocc
-        #nmo = self.nmo
+        #nocc = self.nocc()
+        #nmo = self.nmo()
         #nvir = nmo - nocc
         #eri1 = ao2mo.incore.full(self._scf._eri, mo_coeff)
         #eri1 = ao2mo.restore(1, eri1, nmo)
@@ -788,8 +770,8 @@ class _ERIS:
             fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
             self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
 
-        nocc = cc.nocc
-        nmo = cc.nmo
+        nocc = cc.nocc()
+        nmo = cc.nmo()
         nvir = nmo - nocc
         mem_incore, mem_outcore, mem_basic = _mem_usage(nocc, nvir)
         mem_now = lib.current_memory()[0]

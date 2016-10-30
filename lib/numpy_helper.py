@@ -312,6 +312,7 @@ def transpose(a, axes=None, inplace=False, out=None):
     else:
         raise NotImplementedError
 
+    assert(a.flags.c_contiguous)
     if a.dtype == numpy.double:
         fn = _np_helper.NPdtranspose_021
     else:
@@ -370,6 +371,7 @@ def hermi_sum(a, axes=None, hermi=HERMITIAN, inplace=False, out=None):
     else:
         raise NotImplementedError
 
+    assert(a.flags.c_contiguous)
     if a.dtype == numpy.double:
         fn = _np_helper.NPdsymm_021_sum
     else:
