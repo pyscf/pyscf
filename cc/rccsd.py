@@ -30,8 +30,8 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     if t1 is None and t2 is None:
         t1, t2 = cc.init_amps(eris)[1:]
     elif t1 is None:
-        nocc = cc.nocc()
-        nvir = cc.nmo() - nocc
+        nocc = cc.nocc
+        nvir = cc.nmo - nocc
         t1 = numpy.zeros((nocc,nvir), eris.dtype)
     elif t2 is None:
         t2 = cc.init_amps(eris)[2]
@@ -177,7 +177,7 @@ class RCCSD(ccsd.CCSD):
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
         mo_e = eris.fock.diagonal()
-        nocc = self.nocc()
+        nocc = self.nocc
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
         eijab = lib.direct_sum('ia,jb->ijab',eia,eia)
         eris_oovv = np.array(eris.oovv)
@@ -215,20 +215,20 @@ class RCCSD(ccsd.CCSD):
         return update_amps(self, t1, t2, eris)
 
     def nip(self):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         self._nip = nocc + nocc*nocc*nvir
         return self._nip
 
     def nea(self):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         self._nea = nvir + nocc*nvir*nvir
         return self._nea
 
     def nee(self):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         self._nee = nocc*nvir + nocc*nocc*nvir*nvir
         return self._nee
 
@@ -312,15 +312,15 @@ class RCCSD(ccsd.CCSD):
         return vector
 
     def vector_to_amplitudes_ip(self,vector):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         r1 = vector[:nocc].copy()
         r2 = vector[nocc:].copy().reshape(nocc,nocc,nvir)
         return [r1,r2]
 
     def amplitudes_to_vector_ip(self,r1,r2):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         size = self.nip()
         vector = np.zeros(size, r1.dtype)
         vector[:nocc] = r1.copy()
@@ -369,7 +369,7 @@ class RCCSD(ccsd.CCSD):
         Hr2 +=  -einsum('lbjd,lad->jab',imds.Wovov,r2)
         Hr2 +=  -einsum('lajc,lcb->jab',imds.Wovov,r2)
         Hr2 +=  -einsum('lbcj,lca->jab',imds.Wovvo,r2)
-        nvir = self.nmo()-self.nocc()
+        nvir = self.nmo-self.nocc
         for a in range(nvir):
             Hr2[:,a,:] += einsum('bcd,jcd->jb',imds.Wvvvv[a],r2)
         tmp = (2*einsum('klcd,lcd->k',imds.Woovv,r2)
@@ -411,15 +411,15 @@ class RCCSD(ccsd.CCSD):
         return vector
 
     def vector_to_amplitudes_ea(self,vector):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         r1 = vector[:nvir].copy()
         r2 = vector[nvir:].copy().reshape(nocc,nvir,nvir)
         return [r1,r2]
 
     def amplitudes_to_vector_ea(self,r1,r2):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         size = self.nea()
         vector = np.zeros(size, r1.dtype)
         vector[:nvir] = r1.copy()
@@ -445,15 +445,15 @@ class RCCSD(ccsd.CCSD):
         raise NotImplementedError
 
     def vector_to_amplitudes_ee(self,vector):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         r1 = vector[:nocc*nvir].copy().reshape((nocc,nvir))
         r2 = vector[nocc*nvir:].copy().reshape((nocc,nocc,nvir,nvir))
         return [r1,r2]
 
     def amplitudes_to_vector_ee(self,r1,r2):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         size = self.nee()
         vector = np.zeros(size, r1.dtype)
         vector[:nocc*nvir] = r1.copy().reshape(nocc*nvir)
@@ -479,8 +479,8 @@ class _ERIS:
             fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
             self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
 
-        nocc = cc.nocc()
-        nmo = cc.nmo()
+        nocc = cc.nocc
+        nmo = cc.nmo
         nvir = nmo - nocc
         mem_incore, mem_outcore, mem_basic = _mem_usage(nocc, nvir)
         mem_now = pyscf.lib.current_memory()[0]

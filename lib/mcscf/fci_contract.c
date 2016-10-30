@@ -545,8 +545,6 @@ void FCImake_hdiag(double *hdiag, double *h1e, double *jdiag, double *kdiag,
 }
 
 
-int FCIpopcount_4(uint64_t x);
-int FCIparity(uint64_t string0, uint64_t string1);
 //see http://en.wikipedia.org/wiki/Find_first_set
 static const int TABLE[] = {
         -1, // 0 
@@ -611,8 +609,8 @@ void FCIpspace_h0tril_uhf(double *h0, double *h1e_a, double *h1e_b,
         for (j = 0; j < i; j++) {
                 da = stra[i] ^ stra[j];
                 db = strb[i] ^ strb[j];
-                n1da = FCIpopcount_4(da);
-                n1db = FCIpopcount_4(db);
+                n1da = FCIpopcount_1(da);
+                n1db = FCIpopcount_1(db);
                 switch (n1da) {
                 case 0: switch (n1db) {
                         case 2:
@@ -628,7 +626,7 @@ void FCIpspace_h0tril_uhf(double *h0, double *h1e_a, double *h1e_b,
                                              - g2e_bb[pi*d3+k*d2+k*norb+pj];
                                 }
                         }
-                        if (FCIparity(strb[j], strb[i]) > 0) {
+                        if (FCIcre_des_sign(pi, pj, strb[j]) > 0) {
                                 h0[i*np+j] = tmp;
                         } else {
                                 h0[i*np+j] = -tmp;
@@ -640,8 +638,8 @@ void FCIpspace_h0tril_uhf(double *h0, double *h1e_a, double *h1e_b,
                         pk = first1((db & strb[i]) ^ (1ULL<<pi));
                         pl = first1((db & strb[j]) ^ (1ULL<<pj));
                         str1 = strb[j] ^ (1ULL<<pi) ^ (1ULL<<pj);
-                        if (FCIparity(strb[j], str1)
-                           *FCIparity(str1, strb[i]) > 0) {
+                        if (FCIcre_des_sign(pi, pj, strb[j])
+                           *FCIcre_des_sign(pk, pl, str1) > 0) {
                                 h0[i*np+j] = g2e_bb[pi*d3+pj*d2+pk*norb+pl]
                                            - g2e_bb[pi*d3+pl*d2+pk*norb+pj];
                         } else {
@@ -662,7 +660,7 @@ void FCIpspace_h0tril_uhf(double *h0, double *h1e_a, double *h1e_b,
                                              - g2e_aa[pi*d3+k*d2+k*norb+pj];
                                 }
                         }
-                        if (FCIparity(stra[j], stra[i]) > 0) {
+                        if (FCIcre_des_sign(pi, pj, stra[j]) > 0) {
                                 h0[i*np+j] = tmp;
                         } else {
                                 h0[i*np+j] = -tmp;
@@ -673,8 +671,8 @@ void FCIpspace_h0tril_uhf(double *h0, double *h1e_a, double *h1e_b,
                         pj = first1(da & stra[j]);
                         pk = first1(db & strb[i]);
                         pl = first1(db & strb[j]);
-                        if (FCIparity(stra[j], stra[i])
-                           *FCIparity(strb[j], strb[i]) > 0) {
+                        if (FCIcre_des_sign(pi, pj, stra[j])
+                           *FCIcre_des_sign(pk, pl, strb[j]) > 0) {
                                 h0[i*np+j] = g2e_ab[pi*d3+pj*d2+pk*norb+pl];
                         } else {
                                 h0[i*np+j] =-g2e_ab[pi*d3+pj*d2+pk*norb+pl];
@@ -686,8 +684,8 @@ void FCIpspace_h0tril_uhf(double *h0, double *h1e_a, double *h1e_b,
                         pk = first1((da & stra[i]) ^ (1ULL<<pi));
                         pl = first1((da & stra[j]) ^ (1ULL<<pj));
                         str1 = stra[j] ^ (1ULL<<pi) ^ (1ULL<<pj);
-                        if (FCIparity(stra[j], str1)
-                           *FCIparity(str1, stra[i]) > 0) {
+                        if (FCIcre_des_sign(pi, pj, stra[j])
+                           *FCIcre_des_sign(pk, pl, str1) > 0) {
                                 h0[i*np+j] = g2e_aa[pi*d3+pj*d2+pk*norb+pl]
                                            - g2e_aa[pi*d3+pl*d2+pk*norb+pj];
                         } else {

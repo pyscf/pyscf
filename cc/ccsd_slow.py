@@ -201,17 +201,19 @@ class CCSD(lib.StreamObject):
         self.l1 = None
         self.l2 = None
 
+    @property
     def nocc(self):
         self._nocc = int(self.mo_occ.sum()) // 2
         return self._nocc
 
+    @property
     def nmo(self):
         self._nmo = len(self.mo_energy)
         return self._nmo
 
     def init_amps(self, eris):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         mo_e = eris.fock.diagonal()
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
         t2 = numpy.empty((nocc,nvir,nocc,nvir))
@@ -254,8 +256,8 @@ CC = CCSD
 
 class _ERIS:
     def __init__(self, cc):
-        nocc = cc.nocc()
-        nmo = cc.nmo()
+        nocc = cc.nocc
+        nmo = cc.nmo
         mo_coeff = cc.mo_coeff
         eri1 = ao2mo.incore.full(cc._scf._eri, mo_coeff)
         eri1 = ao2mo.restore(1, eri1, nmo)

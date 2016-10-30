@@ -20,6 +20,7 @@ mol.atom = '''
 mol.basis = 'sto-3g'
 mol.build()
 m = scf.RHF(mol)
+m.conv_tol = 1e-15
 ehf = m.scf()
 norb = m.mo_coeff.shape[1]
 nelec = mol.nelectron

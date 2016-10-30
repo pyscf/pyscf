@@ -28,8 +28,8 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     if t1 is None and t2 is None:
         t1, t2 = cc.init_amps(eris)[1:]
     elif t1 is None:
-        nocc = cc.nocc()
-        nvir = cc.nmo() - nocc
+        nocc = cc.nocc
+        nvir = cc.nmo - nocc
         t1 = numpy.zeros((nocc,nvir), eris.dtype)
     elif t2 is None:
         t2 = cc.init_amps(eris)[2]
@@ -149,10 +149,12 @@ class UCCSD(rccsd.RCCSD):
         self.conv_tol = 1e-8
         self.conv_tol_normt = 1e-6
 
+    @property
     def nocc(self):
         self._nocc = self._scf.mol.nelectron
         return self._nocc
 
+    @property
     def nmo(self):
         self._nmo = self.mo_energy[0].size + self.mo_energy[1].size
         return self._nmo
@@ -160,7 +162,7 @@ class UCCSD(rccsd.RCCSD):
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
         mo_e = eris.fock.diagonal()
-        nocc = self.nocc()
+        nocc = self.nocc
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
         eijab = lib.direct_sum('ia,jb->ijab',eia,eia)
         t1 = eris.fock[:nocc,nocc:] / eia
@@ -197,20 +199,20 @@ class UCCSD(rccsd.RCCSD):
         return update_amps(self, t1, t2, eris)
 
     def nip(self):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         self._nip = nocc + nocc*(nocc-1)/2*nvir
         return self._nip
 
     def nea(self):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         self._nea = nvir + nocc*nvir*(nvir-1)/2
         return self._nea
 
     def nee(self):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         self._nee = nocc*nvir + nocc*(nocc-1)/2*nvir*(nvir-1)/2
         return self._nee
 
@@ -271,8 +273,8 @@ class UCCSD(rccsd.RCCSD):
         return vector
 
     def vector_to_amplitudes_ip(self,vector):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         r1 = vector[:nocc].copy()
         r2 = np.zeros((nocc,nocc,nvir), vector.dtype)
         index = nocc
@@ -285,8 +287,8 @@ class UCCSD(rccsd.RCCSD):
         return [r1,r2]
 
     def amplitudes_to_vector_ip(self,r1,r2):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         size = nocc + nocc*(nocc-1)/2*nvir
         vector = np.zeros(size, r1.dtype)
         vector[:nocc] = r1.copy()
@@ -320,7 +322,7 @@ class UCCSD(rccsd.RCCSD):
         Hr2 += -einsum('lj,lab->jab',imds.Foo,r2)
         tmp2 = einsum('lbdj,lad->jab',imds.Wovvo,r2)
         Hr2 += (tmp2 - tmp2.transpose(0,2,1))
-        nvir = self.nmo()-self.nocc()
+        nvir = self.nmo-self.nocc
         for a in range(nvir):
             Hr2[:,a,:] += 0.5*einsum('bcd,jcd->jb',imds.Wvvvv[a],r2) 
         Hr2 += -0.5*einsum('klcd,lcd,kjab->jab',imds.Woovv,r2,self.t2)
@@ -358,8 +360,8 @@ class UCCSD(rccsd.RCCSD):
         return vector
 
     def vector_to_amplitudes_ea(self,vector):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         r1 = vector[:nvir].copy()
         r2 = np.zeros((nocc,nvir,nvir), vector.dtype)
         index = nvir
@@ -372,8 +374,8 @@ class UCCSD(rccsd.RCCSD):
         return [r1,r2]
 
     def amplitudes_to_vector_ea(self,r1,r2):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         size = nvir + nvir*(nvir-1)/2*nocc
         vector = np.zeros(size, r1.dtype)
         vector[:nvir] = r1.copy()
@@ -435,8 +437,8 @@ class UCCSD(rccsd.RCCSD):
         return vector
 
     def vector_to_amplitudes_ee(self,vector):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         r1 = vector[:nocc*nvir].copy().reshape((nocc,nvir))
         r2 = np.zeros((nocc,nocc,nvir,nvir), vector.dtype)
         index = nocc*nvir
@@ -452,8 +454,8 @@ class UCCSD(rccsd.RCCSD):
         return [r1,r2]
 
     def amplitudes_to_vector_ee(self,r1,r2):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         size = nocc*nvir + nocc*(nocc-1)/2*nvir*(nvir-1)/2
         vector = np.zeros(size, r1.dtype)
         vector[:nocc*nvir] = r1.copy().reshape(nocc*nvir)
@@ -476,8 +478,8 @@ class _ERIS:
             self.fock = numpy.diag(np.append(cc.mo_energy[np.array(cc.mo_occ,dtype=bool)], 
                                              cc.mo_energy[np.logical_not(np.array(cc.mo_occ,dtype=bool))])).astype(mo_coeff.dtype)
 
-        nocc = cc.nocc()
-        nmo = cc.nmo()
+        nocc = cc.nocc
+        nmo = cc.nmo
         nvir = nmo - nocc
         mem_incore, mem_outcore, mem_basic = rccsd._mem_usage(nocc, nvir)
         mem_now = pyscf.lib.current_memory()[0]
