@@ -40,7 +40,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     orbsym = _sort_eri(mycc, eris, nocc, nvir, eris_vvop, log)
 
     ftmp['t2'] = t2  # read back late.  Cache t2T in t2 to reduce memory footprint
-    mo_energy, t1T, t2T, vooo = _sort_t2_vooo(mycc, orbsym, t1, t2, numpy.asarray(eris.ovoo))
+    mo_energy, t1T, t2T, vooo = _sort_t2_vooo(mycc, orbsym, t1, t2, eris)
 
     cpu2 = [time.clock(), time.time()]
     orbsym = numpy.hstack((numpy.sort(orbsym[:nocc]),numpy.sort(orbsym[nocc:])))
@@ -163,14 +163,16 @@ def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
 
     return orbsym
 
-def _sort_t2_vooo(mycc, orbsym, t1, t2, ovoo):
+def _sort_t2_vooo(mycc, orbsym, t1, t2, eris):
+    ovoo = numpy.asarray(eris.ovoo)
     nocc, nvir = t1.shape
     if mycc.mol.symmetry:
         orbsym = numpy.asarray(orbsym, dtype=numpy.int32)
         o_sorted = _irrep_argsort(orbsym[:nocc])
         v_sorted = _irrep_argsort(orbsym[nocc:])
-        mo_energy = numpy.hstack((mycc.mo_energy[:nocc][o_sorted],
-                                  mycc.mo_energy[nocc:][v_sorted]))
+        mo_energy = eris.fock.diagonal()
+        mo_energy = numpy.hstack((mo_energy[:nocc][o_sorted],
+                                  mo_energy[nocc:][v_sorted]))
         t1T = numpy.asarray(t1.T[v_sorted][:,o_sorted], order='C')
 
         t2T = lib.transpose(t2.reshape(nocc**2,-1))
@@ -191,7 +193,7 @@ def _sort_t2_vooo(mycc, orbsym, t1, t2, ovoo):
         t2T = lib.transpose(t2T.reshape(-1,nocc,nocc), axes=(0,2,1), out=t2)
         t2T = t2T.reshape(nvir,nvir,nocc,nocc)
         vooo = ovoo.transpose(1,0,2,3).copy()
-        mo_energy = mycc.mo_energy
+        mo_energy = numpy.asarray(eris.fock.diagonal(), order='C')
     return mo_energy, t1T, t2T, vooo
 
 def _irrep_argsort(orbsym):
@@ -216,6 +218,7 @@ if __name__ == '__main__':
     mf = scf.RHF(mol)
     mcc = cc.CCSD(mf)
     mcc.mo_energy = mcc._scf.mo_energy = numpy.arange(0., nocc+nvir)
+    eris.fock = numpy.diag(mcc.mo_energy)
     print(kernel(mcc, eris, t1, t2) + 8.4953387936460398)
 
     mol = gto.Mole()

@@ -166,8 +166,7 @@ def energy(cc, t1, t2, eris):
 
 
 class CCSD(lib.StreamObject):
-    def __init__(self, mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
-        if mo_energy is None: mo_energy = mf.mo_energy
+    def __init__(self, mf, frozen=[], mo_coeff=None, mo_occ=None):
         if mo_coeff  is None: mo_coeff  = mf.mo_coeff
         if mo_occ    is None: mo_occ    = mf.mo_occ
 
@@ -189,7 +188,6 @@ class CCSD(lib.StreamObject):
 
 ##################################################
 # don't modify the following attributes, they are not input options
-        self.mo_energy = mo_energy
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
         self._conv = False
@@ -208,7 +206,7 @@ class CCSD(lib.StreamObject):
 
     @property
     def nmo(self):
-        self._nmo = len(self.mo_energy)
+        self._nmo = len(self.mo_occ)
         return self._nmo
 
     def init_amps(self, eris):
@@ -268,7 +266,7 @@ class _ERIS:
         self.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
         self.ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
         self.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy()
-        self.fock = numpy.diag(cc.mo_energy)
+        self.fock = numpy.diag(cc._scf.mo_energy)
 
 if __name__ == '__main__':
     from pyscf import gto

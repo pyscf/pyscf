@@ -68,11 +68,23 @@ def update_amps(cc, t1, t2, eris):
     nocc, nvir = t1.shape
     nov = nocc*nvir
     fock = eris.fock
+
     t1new = numpy.zeros_like(t1)
     t2new = numpy.zeros_like(t2)
+    t2new_tril = numpy.zeros((nocc*(nocc+1)//2,nvir,nvir))
+    cc.add_wvvVV_(t1, t2, eris, t2new_tril)
+    time1 = log.timer_debug1('vvvv', *time0)
+    ij = 0
+    for i in range(nocc):
+        for j in range(i+1):
+            t2new[i,j] = t2new_tril[ij]
+            ij += 1
+        t2new[i,i] *= .5
+    t2new_tril = None
 
 #** make_inter_F
     fov = fock[:nocc,nocc:].copy()
+    t1new += fov
 
     foo = fock[:nocc,:nocc].copy()
     foo[range(nocc),range(nocc)] = 0
@@ -269,49 +281,24 @@ def update_amps(cc, t1, t2, eris):
     lib.dot(t2.reshape(-1,nvir), ft_ab.T, 1, t2new.reshape(-1,nvir), 1)
     lib.dot(ft_ij.T, t2.reshape(nocc,-1),-1, t2new.reshape(nocc,-1), 1)
 
+    mo_e = fock.diagonal()
+    eia = mo_e[:nocc,None] - mo_e[None,nocc:]
+    t1new += numpy.einsum('ib,ab->ia', t1, fvv)
+    t1new -= numpy.einsum('ja,ji->ia', t1, foo)
+    t1new /= eia
+
     #: t2new = t2new + t2new.transpose(1,0,3,2)
-    t2new_tril = numpy.empty((nocc*(nocc+1)//2,nvir,nvir))
     ij = 0
     for i in range(nocc):
         for j in range(i+1):
-            t2new_tril[ij]  = t2new[i,j]
-            t2new_tril[ij] += t2new[j,i].T
+            t2new[i,j] += t2new[j,i].T
+            t2new[i,j] /= lib.direct_sum('a,b->ab', eia[i], eia[j])
+            t2new[j,i]  = t2new[i,j].T
             ij += 1
-    t2new = None
-    time1 = log.timer_debug1('t2 tril', *time1)
-    cc.add_wvvVV_(t1, t2, eris, t2new_tril)
-    time1 = log.timer_debug1('vvvv', *time1)
 
-    mo_e = fock.diagonal()
-    eia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])
-    p0 = 0
-    for i in range(nocc):
-        t2new_tril[p0:p0+i+1] /= lib.direct_sum('a+jb->jab', eia[i], eia[:i+1])
-        p0 += i+1
-    time1 = log.timer_debug1('g2/dijab', *time1)
-
-    t2new = numpy.empty((nocc,nocc,nvir,nvir))
-    ij = 0
-    for i in range(nocc):
-        for j in range(i):
-            t2new[i,j] = t2new_tril[ij]
-            t2new[j,i] = t2new_tril[ij].T
-            ij += 1
-        t2new[i,i] = t2new_tril[ij]
-        ij += 1
-    t2new_tril = None
-
-#** update_amp_t1
-    t1new += fock[:nocc,nocc:] \
-           + numpy.einsum('ib,ab->ia', t1, fvv) \
-           - numpy.einsum('ja,ji->ia', t1, foo)
-
-    mo_e = fock.diagonal()
-    eia = mo_e[:nocc,None] - mo_e[None,nocc:]
-    t1new /= eia
-#** end update_amp_t1
     time0 = log.timer_debug1('update t1 t2', *time0)
-
+    #if hasattr(pyscf, 'MKL_NUM_THREADS'):
+    #    pyscf._libmkl_rt.mkl_set_num_threads(ctypes.byref(ctypes.c_int(1)))
     return t1new, t2new
 
 def energy(cc, t1, t2, eris):
@@ -338,23 +325,23 @@ class CCSD(ccsd.CCSD):
         t2[i,j,a,b]
     '''
 
-    def ccsd(self, t1=None, t2=None, mo_coeff=None, eris=None):
+    def ccsd(self, t1=None, t2=None, eris=None):
         log = logger.Logger(self.stdout, self.verbose)
-        if eris is None: eris = self.ao2mo(mo_coeff)
-        self._conv, self.ecc, self.t1, self.t2 = \
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        self.converged, self.e_corr, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                        tol=self.conv_tol,
                        tolnormt=self.conv_tol_normt,
                        verbose=self.verbose)
-        if self._conv:
+        if self.converged:
             logger.info(self, 'CCSD converged')
         else:
             logger.info(self, 'CCSD not converge')
         if self._scf.e_tot == 0:
-            logger.info(self, 'E_corr = %.16g', self.ecc)
+            logger.info(self, 'E_corr = %.16g', self.e_corr)
         else:
             logger.info(self, 'E(CCSD) = %.16g  E_corr = %.16g',
-                        self.ecc+self._scf.e_tot, self.ecc)
+                        self.e_tot, self.e_corr)
         return self.ecc, self.t1, self.t2
 
     def solve_lambda(self, t1=None, t2=None, l1=None, l2=None, mo_coeff=None,
@@ -363,7 +350,7 @@ class CCSD(ccsd.CCSD):
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
         if eris is None: eris = self.ao2mo(mo_coeff)
-        conv, self.l1, self.l2 = \
+        self.converged_lambda, self.l1, self.l2 = \
                 ccsd_lambda_incore.kernel(self, eris, t1, t2, l1, l2,
                                           max_cycle=self.max_cycle,
                                           tol=self.conv_tol_normt,

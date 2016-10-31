@@ -478,15 +478,16 @@ class FCISolver(lib.StreamObject):
         if mol is None:
             self.stdout = sys.stdout
             self.verbose = logger.NOTE
+            self.max_memory = lib.param.MAX_MEMORY
         else:
             self.stdout = mol.stdout
             self.verbose = mol.verbose
+            self.max_memory = mol.max_memory
         self.mol = mol
         self.max_cycle = 50
         self.max_space = 12
         self.conv_tol = 1e-10
         self.lindep = 1e-14
-        self.max_memory = lib.param.MAX_MEMORY
 # level shift in precond
         self.level_shift = 1e-3
         # force the diagonlization use davidson iteration.  When the CI space

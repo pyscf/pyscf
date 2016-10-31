@@ -39,6 +39,6 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(l2), 0.149822823742 , 7)
 
 if __name__ == "__main__":
-    print("Full Tests for H2O")
+    print("Full Tests for 2e CCSD")
     unittest.main()
 
