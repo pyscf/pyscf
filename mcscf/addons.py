@@ -738,7 +738,7 @@ def hot_tuning_(casscf, configfile=None):
                 '# You can modify some variables with inplace updating, eg\n'
                 '# from pyscf import fci\n'
                 '# if imacro > 6:\n'
-                '#     casscf.fcislover = fci.fix_spin_(fci.direct_spin1, ss_value=2)\n'
+                '#     casscf.fcislover = fci.fix_spin_(fci.direct_spin1, ss=2)\n'
                 '#     mo[:,:3] *= -1\n'
                 '# Warning: this runtime modification is unsafe and highly unrecommended.\n')
 

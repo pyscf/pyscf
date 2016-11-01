@@ -50,13 +50,13 @@ mol = gto.M(atom='O 0 0 0; O 0 0 1.2', spin=2, basis='sto3g',
 mf = scf.RHF(mol).run()
 mci = fci.FCI(mol, mf.mo_coeff)
 mci.wfnsym = 'A1g'
-mci = fci.addons.fix_spin_(mci, ss_value=0)
+mci = fci.addons.fix_spin_(mci, ss=0)
 e, civec = mci.kernel(nelec=nelec)
 print('A1g singlet E = %.12f  2S+1 = %.7f' %
       (e, mci.spin_square(civec, mf.mo_coeff.shape[1], nelec)[1]))
 
 mci.wfnsym = 'A2g'
-mci = fci.addons.fix_spin_(mci, ss_value=0)
+mci = fci.addons.fix_spin_(mci, ss=0)
 e, civec = mci.kernel(nelec=nelec)
 print('A2g singlet E = %.12f  2S+1 = %.7f' %
       (e, mci.spin_square(civec, mf.mo_coeff.shape[1], nelec)[1]))
@@ -65,7 +65,7 @@ mol = gto.M(atom='O 0 0 0; O 0 0 1.2', spin=2, basis='sto3g',
             verbose=0)
 mf = scf.RHF(mol).run()
 mci = fci.FCI(mol, mf.mo_coeff)
-mci = fci.addons.fix_spin_(mci, ss_value=0)
+mci = fci.addons.fix_spin_(mci, ss=0)
 e, civec = mci.kernel(nelec=nelec)
 print('Singlet E = %.12f  2S+1 = %.7f' %
       (e, mci.spin_square(civec, mf.mo_coeff.shape[1], nelec)[1]))

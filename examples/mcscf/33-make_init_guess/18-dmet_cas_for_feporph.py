@@ -205,7 +205,7 @@ mo = dmet_cas(mc, mf.make_rdm1(), idx3d+idx4d)
 #    than the target solution (~0.5 mEh).  But it has quite different active
 #    space feature to the initial guess.
 #
-fci.addons.fix_spin_(mc.fcisolver, ss_value=2)  # Triplet, ss_value = S*(S+1)
+fci.addons.fix_spin_(mc.fcisolver, ss=2)  # Triplet, ss = S*(S+1)
 mc.fcisolver.wfnsym = 'B1g'
 mc.frozen = range(mc.ncore+5, mc.ncore+10)  # 6th-10th active orbitals are Fe 4d
 mc.kernel(mo)
@@ -216,7 +216,7 @@ mo = mc.mo_coeff
 # to the correct active space
 #
 mc = mcscf.density_fit(mcscf.CASSCF(mf, 11, 8))
-fci.addons.fix_spin_(mc.fcisolver, ss_value=2)
+fci.addons.fix_spin_(mc.fcisolver, ss=2)
 mc.fcisolver.wfnsym = 'B1g'
 mc.kernel(mo)
 #mc.analzye()

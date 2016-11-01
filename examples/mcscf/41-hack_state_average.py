@@ -34,9 +34,9 @@ ehf = mf.kernel()
 # required by direct_spin0 solver
 #
 weights = np.ones(3)/3
-solver1 = fci.addons.fix_spin(fci.direct_spin1_symm.FCISolver(mol), shift=.2, ss_value=2)
+solver1 = fci.addons.fix_spin(fci.direct_spin1_symm.FCISolver(mol), shift=.2, ss=2)
 solver1.nroots = 1
-solver2 = fci.addons.fix_spin(fci.direct_spin1_symm.FCISolver(mol), ss_value=0)
+solver2 = fci.addons.fix_spin(fci.direct_spin1_symm.FCISolver(mol), ss=0)
 solver2.nroots = 2
 
 mc = mcscf.CASSCF(mf, 8, 8)

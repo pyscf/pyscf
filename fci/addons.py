@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import sys
 import copy
 import numpy
 from pyscf import lib
@@ -454,7 +455,7 @@ def overlap(string1, string2, norb, s=None):
         s1 = lib.take_2d(s, idx1, idx2)
         return numpy.linalg.det(s1)
 
-def fix_spin_(fciobj, shift=.2, ss_value=None):
+def fix_spin_(fciobj, shift=.2, ss=None, **kwargs):
     r'''If FCI solver cannot stick on spin eigenfunction, modify the solver by
     adding a shift on spin square operator
 
@@ -468,7 +469,7 @@ def fix_spin_(fciobj, shift=.2, ss_value=None):
     Kwargs:
         shift : float
             Level shift for states which have different spin
-        ss_value : number
+        ss : number
             S^2 expection value == s*(s+1)
 
     Returns
@@ -476,16 +477,19 @@ def fix_spin_(fciobj, shift=.2, ss_value=None):
     '''
     from pyscf.fci import spin_op
     from pyscf.fci import direct_spin0
+    if 'ss_value' in kwargs:
+        sys.stderr.write('fix_spin_: kwarg "ss_value" will be removed in future release. '
+                         'It was replaced by "ss"\n')
+        ss = kwargs['ss_value']
+
     fciobj.davidson_only = True
     def contract_2e(eri, fcivec, norb, nelec, link_index=None, **kwargs):
         if isinstance(nelec, (int, numpy.number)):
             sz = (nelec % 2) * .5
         else:
             sz = abs(nelec[0]-nelec[1]) * .5
-        if ss_value is None:
+        if ss is None:
             ss = sz*(sz+1)
-        else:
-            ss = ss_value
 
         ci0 = old_contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
         if ss == 0:
@@ -494,11 +498,11 @@ def fix_spin_(fciobj, shift=.2, ss_value=None):
             ci0 *= .5
 
         if ss < sz*(sz+1)+.1:
-# (S^2-ss_value)|Psi> to shift state other than the lowest state
+# (S^2-ss)|Psi> to shift state other than the lowest state
             ci1 = spin_op.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
             ci1 -= ss * fcivec
         else:
-# (S^2-ss_value)^2|Psi> to shift states except the given spin.
+# (S^2-ss)^2|Psi> to shift states except the given spin.
 # It still relies on the quality of initial guess
             tmp = spin_op.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
             tmp -= ss * fcivec
@@ -511,8 +515,8 @@ def fix_spin_(fciobj, shift=.2, ss_value=None):
         return ci1
     fciobj.contract_2e, old_contract_2e = contract_2e, fciobj.contract_2e
     return fciobj
-def fix_spin(fciobj, shift=.1, ss_value=None):
-    return fix_spin_(copy.copy(fciobj), shift, ss_value)
+def fix_spin(fciobj, shift=.1, ss=None):
+    return fix_spin_(copy.copy(fciobj), shift, ss)
 
 
 def _unpack(nelec):

@@ -38,7 +38,7 @@ print('Quintet Sigma_u^- %.15g  ref = -148.920732172378' % mc.e_tot)
 #
 mc = mcscf.CASSCF(mf, 8, 12)#(6,6))
 #mc.fcisolver = fci.direct_spin1_symm.FCISolver(mol)
-#fci.addons.fix_spin_(mc.fcisolver, ss_value=2)
+#fci.addons.fix_spin_(mc.fcisolver, ss=2)
 #mc.fcisolver.wfnsym = 'A2g'
 mc.kernel()
 print('Triplet Sigma_g^- %.15g  ref = -149.688656224059' % mc.e_tot)
