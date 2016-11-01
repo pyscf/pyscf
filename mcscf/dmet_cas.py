@@ -9,6 +9,7 @@ import scipy.linalg
 from pyscf.lib import logger
 from pyscf.tools import dump_mat
 from pyscf import fci
+from pyscf.mcscf.casci_symm import label_symmetry_
 
 def guess_cas(mf, dm, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
               orth_method='meta_lowdin', s=None, verbose=None):
@@ -148,7 +149,7 @@ def guess_cas(mf, dm, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
     return ncas, nelecas, mo
 
 def dynamic_cas_space_(mc, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
-                       orth_method='meta_lowdin', s=None, start_cycle=3,
+                       orth_method='meta_lowdin', s=None, start_cycle=1,
                        verbose=None):
     '''Dynamically tune CASSCF active space based on DMET-CAS decomposition
     by following steps
@@ -168,6 +169,7 @@ def dynamic_cas_space_(mc, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
         if envs.get('imacro', 0) < start_cycle or 'casdm1' not in envs:
             return old_casci(mo_coeff, ci0, eris, verbose, envs)
 
+        mol = mc.mol
         ncore = mc.ncore
         mocore = mo_coeff[:,:ncore]
         mocas = mo_coeff[:,ncore:ncore+mc.ncas]
@@ -183,11 +185,17 @@ def dynamic_cas_space_(mc, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
             return old_casci(mo_coeff, ci0, eris, verbose, envs)
 
         else:
+            logger.note(mc, 'Change active space to CAS (%de+%de, %do)',
+                        nelecas[0], nelecas[1], ncas)
             mc.ncas = ncas
             mc.nelecas = nelecas
             mc.ncore = (mol.nelectron - sum(nelecas)) // 2
             mo_coeff[:] = mo
+            if mc.mol.symmetry:
+                label_symmetry_(mc, mo_coeff)
             eris.__dict__.update(mc.ao2mo(mo).__dict__)
+
+            mc.fcisolver._restart = False
 
             # hack casdm1_pref so that it has the same dimension as casdm1
             casdm1_last = envs['casdm1_last']
