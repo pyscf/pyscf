@@ -194,7 +194,7 @@ def davidson(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
     '''
     e, x = davidson1(lambda xs: [aop(x) for x in xs],
                      x0, precond, tol, max_cycle, max_space, lindep,
-                     max_memory, dot, callback, nroots, lessio, verbose)
+                     max_memory, dot, callback, nroots, lessio, verbose)[1:]
     if nroots == 1:
         return e[0], x[0]
     else:
@@ -248,6 +248,8 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
             second method can be considered.
 
     Returns:
+        conv : bool
+            Converged or not
         e : list of floats
             The lowest :attr:`nroots` eigenvalues.
         c : list of 1D arrays
@@ -297,6 +299,7 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
                max_cycle, max_space, max_memory, _incore)
     heff = None
     fresh_start = True
+    conv = False
 
     for icyc in range(max_cycle):
         if fresh_start:
@@ -377,6 +380,7 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
         if abs(de[ide]) < tol and max(dx_norm) < toloose:
             log.debug('converge %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
                       icyc, space, max(dx_norm), e, de[ide])
+            conv = True
             break
 
         # remove subspace linear dependency
@@ -411,7 +415,7 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
         if callable(callback):
             callback(locals())
 
-    return e, x0
+    return conv, e, x0
 
 def eigh(a, *args, **kwargs):
     if isinstance(a, numpy.ndarray) and a.ndim == 2:

@@ -6,6 +6,7 @@ PySCF 1.3 alpha (2016-12-?)
   - CI coefficients transformation for one-particle basis rotation
   - CIAH second order SCF solver for PBC KRHF and KUHF
   - Dynamically tune active space using DMET-CAS decomposition
+  - CISD and CISD 1-, 2-particle density matrices
 * Improved
   - Optimized CCSD(T)
   - Change the default kpts mesh (to always include gamma point)

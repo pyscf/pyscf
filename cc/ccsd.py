@@ -72,8 +72,20 @@ def update_amps(mycc, t1, t2, eris):
     nov = nocc*nvir
     fock = eris.fock
 
+    t1new = numpy.zeros_like(t1)
+    t2new = numpy.zeros_like(t2)
+    t2new_tril = numpy.zeros((nocc*(nocc+1)//2,nvir,nvir))
+    mycc.add_wvvVV_(t1, t2, eris, t2new_tril)
+    for i in range(nocc):
+        for j in range(i+1):
+            t2new[i,j] = t2new_tril[i*(i+1)//2+j]
+        t2new[i,i] *= .5
+    t2new_tril = None
+    time1 = log.timer_debug1('vvvv', *time0)
+
 #** make_inter_F
     fov = fock[:nocc,nocc:].copy()
+    t1new += fov
 
     foo = fock[:nocc,:nocc].copy()
     foo[range(nocc),range(nocc)] = 0
@@ -92,12 +104,7 @@ def update_amps(mycc, t1, t2, eris):
     woooo += _cp(eris.oooo).reshape(nocc**2,-1)
     woooo = _cp(woooo.reshape(nocc,nocc,nocc,nocc).transpose(0,2,1,3))
     eris_ooov = None
-    time1 = log.timer_debug1('woooo', *time0)
-
-    t1new = numpy.empty_like(t1)
-    t2new = numpy.empty_like(t2)
-    t1new[:] = 0
-    t2new[:] = 0
+    time1 = log.timer_debug1('woooo', *time1)
 
     unit = _memory_usage_inloop(nocc, nvir)
     max_memory = max(2000, mycc.max_memory - lib.current_memory()[0])
@@ -118,11 +125,8 @@ def update_amps(mycc, t1, t2, eris):
         buf[:] = eris.oovv[p0:p1]
 
     buflen = max(nocc*nvir**2, nocc**3)
-    buf1 = numpy.empty((blksize*buflen))
-    buf2 = numpy.empty((blksize*buflen))
-    buf3 = numpy.empty((blksize*buflen))
-    buf4 = numpy.empty((blksize*buflen))
-    buf5 = numpy.empty((blksize*buflen))
+    bufs = numpy.empty((5,blksize*buflen))
+    buf1, buf2, buf3, buf4, buf5 = bufs
     for p0, p1 in prange(0, nocc, blksize):
     #: wOoVv += numpy.einsum('iabc,jc->ijab', eris.ovvv, t1)
     #: wOoVv -= numpy.einsum('jbik,ka->jiba', eris.ovoo, t1)
@@ -340,7 +344,7 @@ def update_amps(mycc, t1, t2, eris):
                 t2new[j0+i] += tmp[i].transpose(1,0,2) * .5
         woVoV = t2ibja = tmp = None
         time1 = log.timer_debug1('contract occ [%d:%d]'%(p0, p1), *time1)
-    buf1 = buf2 = buf3 = buf4 = buf5 = None
+    buf1 = buf2 = buf3 = buf4 = buf5 = bufs = None
     time1 = log.timer_debug1('contract loop', *time0)
 
     woooo = None
@@ -351,49 +355,22 @@ def update_amps(mycc, t1, t2, eris):
     lib.ddot(t2.reshape(-1,nvir), ft_ab.T, 1, t2new.reshape(-1,nvir), 1)
     lib.ddot(ft_ij.T, t2.reshape(nocc,-1),-1, t2new.reshape(nocc,-1), 1)
 
+    mo_e = fock.diagonal()
+    eia = mo_e[:nocc,None] - mo_e[None,nocc:]
+    t1new += numpy.einsum('ib,ab->ia', t1, fvv)
+    t1new -= numpy.einsum('ja,ji->ia', t1, foo)
+    t1new /= eia
+
     #: t2new = t2new + t2new.transpose(1,0,3,2)
-    t2new_tril = numpy.empty((nocc*(nocc+1)//2,nvir,nvir))
     ij = 0
     for i in range(nocc):
         for j in range(i+1):
-            t2new_tril[ij]  = t2new[i,j]
-            t2new_tril[ij] += t2new[j,i].T
+            t2new[i,j] += t2new[j,i].T
+            t2new[i,j] /= lib.direct_sum('a,b->ab', eia[i], eia[j])
+            t2new[j,i]  = t2new[i,j].T
             ij += 1
-    t2new = None
-    time1 = log.timer_debug1('t2 tril', *time1)
-    mycc.add_wvvVV_(t1, t2, eris, t2new_tril)
-    time1 = log.timer_debug1('vvvv', *time1)
 
-    mo_e = fock.diagonal()
-    eia = mo_e[:nocc,None] - mo_e[None,nocc:]
-    p0 = 0
-    for i in range(nocc):
-        t2new_tril[p0:p0+i+1] /= lib.direct_sum('a,jb->jab', eia[i], eia[:i+1])
-        p0 += i+1
-    time1 = log.timer_debug1('g2/dijab', *time1)
-
-    t2new = numpy.empty((nocc,nocc,nvir,nvir))
-    ij = 0
-    for i in range(nocc):
-        for j in range(i):
-            t2new[i,j] = t2new_tril[ij]
-            t2new[j,i] = t2new_tril[ij].T
-            ij += 1
-        t2new[i,i] = t2new_tril[ij]
-        ij += 1
-    t2new_tril = None
-
-#** update_amp_t1
-    t1new += fock[:nocc,nocc:] \
-           + numpy.einsum('ib,ab->ia', t1, fvv) \
-           - numpy.einsum('ja,ji->ia', t1, foo)
-
-    mo_e = fock.diagonal()
-    eia = mo_e[:nocc,None] - mo_e[None,nocc:]
-    t1new /= eia
-#** end update_amp_t1
     time0 = log.timer_debug1('update t1 t2', *time0)
-
     return t1new, t2new
 
 def energy(mycc, t1, t2, eris):
@@ -419,14 +396,13 @@ class CCSD(lib.StreamObject):
         t1[i,a]
         t2[i,j,a,b]
     '''
-    def __init__(self, mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=[], mo_coeff=None, mo_occ=None):
         from pyscf import gto
         if isinstance(mf, gto.Mole):
             raise RuntimeError('''
 You see this error message because of the API updates in pyscf v0.10.
 In the new API, the first argument of CC class is HF objects.  Please see
 http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventions''')
-        if mo_energy is None: mo_energy = mf.mo_energy
         if mo_coeff  is None: mo_coeff  = mf.mo_coeff
         if mo_occ    is None: mo_occ    = mf.mo_occ
 
@@ -450,10 +426,10 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
 ##################################################
 # don't modify the following attributes, they are not input options
-        self.mo_energy = mo_energy
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
-        self._conv = False
+        self.converged = False
+        self.converged_lambda = False
         self.emp2 = None
         self.e_corr = None
         self.t1 = None
@@ -494,9 +470,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if self._nmo is not None:
             return self._nmo
         if isinstance(self.frozen, (int, numpy.integer)):
-            return len(self.mo_energy) - self.frozen
+            return len(self.mo_occ) - self.frozen
         else:
-            return len(self.mo_energy) - len(self.frozen)
+            return len(self.mo_occ) - len(self.frozen)
     @nmo.setter
     def nmo(self, n):
         self._nmo = n
@@ -541,23 +517,23 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         return self.emp2, t1, t2
 
 
-    def kernel(self, t1=None, t2=None, mo_coeff=None, eris=None):
-        return self.ccsd(t1, t2, mo_coeff, eris)
-    def ccsd(self, t1=None, t2=None, mo_coeff=None, eris=None):
+    def kernel(self, t1=None, t2=None, eris=None):
+        return self.ccsd(t1, t2, eris)
+    def ccsd(self, t1=None, t2=None, eris=None):
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self.dump_flags()
 
         if eris is None:
-            eris = self.ao2mo(mo_coeff)
-        self._conv, self.e_corr, self.t1, self.t2 = \
+            eris = self.ao2mo(self.mo_coeff)
+        self.converged, self.e_corr, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                        tol=self.conv_tol, tolnormt=self.conv_tol_normt,
                        verbose=self.verbose)
-        if self._conv:
+        if self.converged:
             logger.info(self, 'CCSD converged')
         else:
-            logger.info(self, 'CCSD not converge')
+            logger.info(self, 'CCSD not converged')
         if self._scf.e_tot == 0:
             logger.note(self, 'E_corr = %.16g', self.e_corr)
         else:
@@ -565,13 +541,13 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                         self.e_tot, self.e_corr)
         return self.e_corr, self.t1, self.t2
 
-    def solve_lambda(self, t1=None, t2=None, l1=None, l2=None, mo_coeff=None,
+    def solve_lambda(self, t1=None, t2=None, l1=None, l2=None,
                      eris=None):
         from pyscf.cc import ccsd_lambda
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
-        if eris is None: eris = self.ao2mo(mo_coeff)
-        conv, self.l1, self.l2 = \
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        self.converged_lambda, self.l1, self.l2 = \
                 ccsd_lambda.kernel(self, eris, t1, t2, l1, l2,
                                    max_cycle=self.max_cycle,
                                    tol=self.conv_tol_normt,
@@ -616,7 +592,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         #    for j in range(nvir):
         #        eris.ovvv[i,j] = lib.pack_tril(ovvv[i,j])
         #eris.vvvv = ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:].copy(), nvir)
-        #eris.fock = numpy.diag(self.mo_energy)
+        #eris.fock = numpy.diag(self._scf.mo_energy)
         #return eris
         return _ERIS(self, mo_coeff)
 
@@ -751,8 +727,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         t2new_tril = numpy.zeros((nocc*(nocc+1)//2,nvir,nvir))
         return self.add_wvvVV_(t1, t2, eris, t2new_tril)
 
-    def update_amps(self, t1, t2, eris):
-        return update_amps(self, t1, t2, eris)
+    update_amps = update_amps
 
     def diis(self, t1, t2, istep, normt, de, adiis):
         return self.diis_(t1, t2, istep, normt, de, adiis)
@@ -776,19 +751,18 @@ CC = CCSD
 class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore'):
         cput0 = (time.clock(), time.time())
-        moidx = numpy.ones(cc.mo_energy.size, dtype=numpy.bool)
+        moidx = numpy.ones(cc.mo_occ.size, dtype=numpy.bool)
         if isinstance(cc.frozen, (int, numpy.integer)):
             moidx[:cc.frozen] = False
         elif len(cc.frozen) > 0:
             moidx[numpy.asarray(cc.frozen)] = False
         if mo_coeff is None:
             self.mo_coeff = mo_coeff = cc.mo_coeff[:,moidx]
-            self.fock = numpy.diag(cc.mo_energy[moidx])
-        else:  # If mo_coeff is not canonical orbital
+        else:
             self.mo_coeff = mo_coeff = mo_coeff[:,moidx]
-            dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
-            fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
-            self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
+        dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
+        fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
+        self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
 
         nocc = cc.nocc
         nmo = cc.nmo
@@ -934,12 +908,12 @@ def residual_as_diis_errvec(mycc):
     def fupdate(t1, t2, istep, normt, de, adiis):
         nocc, nvir = t1.shape
         nov = nocc*nvir
-        moidx = numpy.ones(mycc.mo_energy.size, dtype=numpy.bool)
+        moidx = numpy.ones(mycc.mo_occ.size, dtype=numpy.bool)
         if isinstance(mycc.frozen, (int, numpy.integer)):
             moidx[:mycc.frozen] = False
         else:
             moidx[mycc.frozen] = False
-        mo_e = mycc.mo_energy[moidx]
+        mo_e = mycc._scf.mo_energy[moidx]
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
         if (istep > mycc.diis_start_cycle and
             abs(de) < mycc.diis_start_energy_diff):
@@ -1020,6 +994,9 @@ if __name__ == '__main__':
     mf.mo_energy = numpy.arange(0., nmo)
     mf.mo_occ = numpy.zeros(nmo)
     mf.mo_occ[:nocc] = 2
+    vhf = mf.get_veff(mol, mf.make_rdm1())
+    cinv = numpy.linalg.inv(mf.mo_coeff)
+    mf.get_hcore = lambda *args: (reduce(numpy.dot, (cinv.T*mf.mo_energy, cinv)) - vhf)
     mycc = CCSD(mf)
     eris = mycc.ao2mo()
     a = numpy.random.random((nmo,nmo)) * .1

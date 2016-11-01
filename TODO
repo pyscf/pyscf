@@ -12,6 +12,8 @@
 
 * Geometry optimizer
 
+* Add .conv attributes for SCF, MCSCF, CI, CC methods
+
 ------------------------------------------------
 * FCI
   - Fix fci.direct_uhf.make_rdm12s if there is no beta electron
