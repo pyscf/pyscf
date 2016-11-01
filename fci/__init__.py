@@ -34,7 +34,7 @@ from pyscf.fci.direct_spin1 import make_pspace_precond, make_diag_precond
 from pyscf.fci import direct_nosym
 
 def solver(mol, singlet=True, symm=None):
-    if symm is None:
+    if mol and symm is None:
         symm = mol.symmetry
     if symm:
         if singlet:

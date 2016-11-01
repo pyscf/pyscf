@@ -49,7 +49,8 @@ def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
     h1eff = reduce(numpy.dot, (mo_cas.T, hcore+corevhf, mo_cas))
     return h1eff, energy_core
 
-def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO, **kwargs):
+def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
+            large_ci_tol=.1, **kwargs):
     from pyscf.lo import orth
     from pyscf.tools import dump_mat
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
@@ -111,11 +112,13 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO, **kwargs):
             if ci[0].ndim == 2:
                 for i, state in enumerate(ci):
                     log.info(' string alpha, string beta, state %d CI coefficients', i)
-                    for c,ia,ib in fci.addons.large_ci(state, casscf.ncas, casscf.nelecas):
+                    for c,ia,ib in fci.addons.large_ci(state, casscf.ncas,
+                                                       casscf.nelecas, large_ci_tol):
                         log.info('  %9s    %9s    %.12f', ia, ib, c)
             else:
                 log.info(' string alpha, string beta, CI coefficients')
-                for c,ia,ib in fci.addons.large_ci(ci, casscf.ncas, casscf.nelecas):
+                for c,ia,ib in fci.addons.large_ci(ci, casscf.ncas,
+                                                   casscf.nelecas, large_ci_tol):
                     log.info('  %9s    %9s    %.12f', ia, ib, c)
 
         casscf._scf.mulliken_meta(casscf.mol, dm1, s=ovlp_ao, verbose=log)
