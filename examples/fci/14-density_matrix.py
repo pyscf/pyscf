@@ -111,27 +111,39 @@ assert(numpy.allclose(dm2aa+dm2ab+dm2ba+dm2bb, dm2))
 #
 # Spin-traced 3-particle density matrix
 # 1,2,3-pdm can be computed together.
+# Note make_dm123 computes  dm3[p,q,r,s,t,u] = <p^+ q r^+ s t^+ u>  which is
+# NOT the 3-particle density matrices.  Funciton reorder_dm123 transforms it
+# to the true 3-particle DM  dm3[p,q,r,s,t,u] = <p^+ r^+ t^+ u s q> (as well
+# as the 2-particle DM)
 #
 dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_sf', fcivec0, fcivec0, norb,
                                    (nelec_a,nelec_b))
+dm1, dm2, dm3 = fci.rdm.reorder_dm123(dm1, dm2, dm3)
 
 #
 # Spin-traced 3-particle transition density matrix
 #
 dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_sf', fcivec0, fcivec1, norb,
                                    (nelec_a,nelec_b))
+dm1, dm2, dm3 = fci.rdm.reorder_dm123(dm1, dm2, dm3)
 
 #
 # NOTE computing 4-pdm is very slow
 #
 #
 # Spin-traced 4-particle density matrix
+# Note make_dm1234 computes  dm4[p,q,r,s,t,u,v,w] = <p^+ q r^+ s t^+ u v^+ w>  which is
+# NOT the 4-particle density matrices.  Funciton reorder_dm1234 transforms it
+# to the true 4-particle DM  dm4[p,q,r,s,t,u,v,w] = <p^+ r^+ t^+ v^+ w u s q>
+# (as well as the 2-particle and 3-particle DMs)
 #
-dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf', fcivec0, fcivec0, norb,
-                          (nelec_a,nelec_b))[3]
+dm1, dm2, dm3, dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf', fcivec0, fcivec0, norb,
+                                         (nelec_a,nelec_b))
+dm1, dm2, dm3, dm4 = fci.rdm.reorder_dm1234(dm1, dm2, dm3, dm4)
 
 #
 # Spin-traced 4-particle transition density matrix
 #
-dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf', fcivec0, fcivec1, norb,
-                          (nelec_a,nelec_b))[3]
+dm1, dm2, dm3, dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf', fcivec0, fcivec1, norb,
+                                         (nelec_a,nelec_b))
+dm1, dm2, dm3, dm4 = fci.rdm.reorder_dm1234(dm1, dm2, dm3, dm4)
