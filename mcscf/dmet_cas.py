@@ -191,8 +191,11 @@ def dynamic_cas_space_(mc, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
             mc.nelecas = nelecas
             mc.ncore = (mol.nelectron - sum(nelecas)) // 2
             mo_coeff[:] = mo
-            label_symmetry_(mc, mo_coeff)
+            if mc.mol.symmetry:
+                label_symmetry_(mc, mo_coeff)
             eris.__dict__.update(mc.ao2mo(mo).__dict__)
+
+            mc.fcisolver._restart = False
 
             # hack casdm1_pref so that it has the same dimension as casdm1
             casdm1_last = envs['casdm1_last']
