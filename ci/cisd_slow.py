@@ -129,7 +129,7 @@ def contract(myci, civec, eris):
 
 def dot(v1, v2, nocc, nvir):
     p0 = nocc*nvir+1
-    p1 = p0+nocc*nvir*nocc*nvir
+    p1 = p0+(nocc*nvir)**2
     hijab = v2[p0:p1].reshape(nocc,nocc,nvir,nvir)
     cijab = v1[p0:p1].reshape(nocc,nocc,nvir,nvir)
     hIJAB = hijab - hijab.transpose(1,0,2,3)
@@ -241,6 +241,7 @@ def make_rdm2(ci, nmo, nocc):
     c1 = ci[1:nocc*nvir+1].reshape(nocc,nvir)
     c2 = ci[nocc*nvir+1:].reshape(nocc,nocc,nvir,nvir)
     C2 = c2 - c2.transpose(1,0,2,3)
+    theta = C2 + c2
     doovv = c0*c2
     dvvvo = numpy.einsum('ia,ikcd->cdak', c1, c2)
     dovoo =-numpy.einsum('ia,klac->ickl', c1, c2)
@@ -414,7 +415,7 @@ if __name__ == '__main__':
     mol.build()
     mf = scf.RHF(mol).run()
     ecisd = CISD(mf).kernel()[0]
-    print(ecisd - -0.024789295518751961)
+    print(ecisd - -0.024780739973407784)
     h2e = ao2mo.kernel(mf._eri, mf.mo_coeff)
     h1e = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
     eci = fci.direct_spin0.kernel(h1e, h2e, mf.mo_coeff.shape[1], mol.nelectron)[0]
@@ -433,7 +434,7 @@ if __name__ == '__main__':
     mf = scf.RHF(mol).run()
     myci = CISD(mf)
     ecisd , civec = myci.kernel()
-    print(ecisd - -0.048912208609919683)
+    print(ecisd - -0.048878084082066106)
 
     nmo = mf.mo_coeff.shape[1]
     nocc = mol.nelectron//2

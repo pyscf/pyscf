@@ -68,7 +68,7 @@ class KnowValues(unittest.TestCase):
         mol.build()
         mf = scf.RHF(mol).run()
         ecisd = ci.CISD(mf).kernel()[0]
-        self.assertAlmostEqual(ecisd, -0.024789295518751961, 12)
+        self.assertAlmostEqual(ecisd, -0.024780739973407784, 12)
 
     def test_rdm(self):
         mol = gto.Mole()
@@ -84,14 +84,14 @@ class KnowValues(unittest.TestCase):
         mf = scf.RHF(mol).run()
         myci = ci.CISD(mf)
         ecisd, civec = myci.kernel()
-        self.assertAlmostEqual(ecisd, -0.048912208609919683, 12)
+        self.assertAlmostEqual(ecisd, -0.048878084082066106, 12)
 
         nmo = mf.mo_coeff.shape[1]
         nocc = mol.nelectron//2
         rdm1 = myci.make_rdm1(civec)
         rdm2 = myci.make_rdm2(civec)
-        self.assertAlmostEqual(finger(rdm1), 2.2678704316210072, 9)
-        self.assertAlmostEqual(finger(rdm2), 6.9405731192174613, 9)
+        self.assertAlmostEqual(finger(rdm1), 2.2685199485281689, 9)
+        self.assertAlmostEqual(finger(rdm2), 6.9406226727865876, 9)
         self.assertAlmostEqual(abs(rdm2-rdm2.transpose(2,3,0,1)).sum(), 0, 9)
         self.assertAlmostEqual(abs(rdm2-rdm2.transpose(1,0,3,2)).sum(), 0, 9)
         h1e = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))

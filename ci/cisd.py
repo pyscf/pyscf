@@ -27,6 +27,7 @@ def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8, verbose=logger.INFO):
     mol = myci.mol
     nmo = myci.nmo
     nocc = myci.nocc
+    nvir = nmo - nocc
     mo_energy = eris.fock.diagonal()
     diag = make_diagonal(mol, mo_energy, eris, nocc)
     ehf = diag[0]
@@ -34,7 +35,6 @@ def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8, verbose=logger.INFO):
 
     if ci0 is None:
 # MP2 initial guess
-        nvir = nmo - nocc
         e_i = mo_energy[:nocc]
         e_a = mo_energy[nocc:]
         ci0 = numpy.zeros(1+nocc*nvir+(nocc*nvir)**2)
@@ -475,7 +475,7 @@ class CISD(lib.StreamObject):
         return _ERIS(self, mo_coeff)
 
     def add_wvvVV(self, t2, eris):
-        nocc, nvir = t1.shape
+        nocc, nvir = t2.shape[1:3]
         t2new_tril = numpy.zeros((nocc*(nocc+1)//2,nvir,nvir))
         return self.add_wvvVV_(t2, eris, t2new_tril)
     def add_wvvVV_(self, t2, eris, t2new_tril):
@@ -815,7 +815,7 @@ if __name__ == '__main__':
     mol.build()
     mf = scf.RHF(mol).run()
     ecisd = CISD(mf).kernel()[0]
-    print(ecisd - -0.024789295518751961)
+    print(ecisd - -0.024780739973407784)
     h2e = ao2mo.kernel(mf._eri, mf.mo_coeff)
     h1e = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
     eci = fci.direct_spin0.kernel(h1e, h2e, mf.mo_coeff.shape[1], mol.nelectron)[0]
@@ -834,7 +834,7 @@ if __name__ == '__main__':
     mf = scf.RHF(mol).run()
     myci = CISD(mf)
     ecisd , civec = myci.kernel()
-    print(ecisd - -0.048912208609919683)
+    print(ecisd - -0.048878084082066106)
 
     nmo = mf.mo_coeff.shape[1]
     nocc = mol.nelectron//2
