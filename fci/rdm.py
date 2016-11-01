@@ -224,7 +224,7 @@ def make_dm1234(fname, cibra, ciket, norb, nelec):
         3pdm = :math:`\langle p^\dagger q^\dagger r^\dagger u t s\rangle`,
         stored as [p,s,q,t,r,u];
         4pdm = :math:`\langle p^\dagger q^\dagger r^\dagger s^dagger w v u t\rangle`,
-        stored as [p,w,q,v,r,u,s,t].
+        stored as [p,t,q,u,r,v,s,w].
     '''
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
