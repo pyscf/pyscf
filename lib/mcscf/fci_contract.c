@@ -344,7 +344,7 @@ void FCIcontract_2e_spin0(double *eri, double *ci0, double *ci1,
         for (ib = 0; ib < na; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, na-ib);
                 memset(ci1buf, 0, sizeof(double) * na*blen);
-#pragma omp for schedule(guided, 1)
+#pragma omp for schedule(static, 112)
 /* strk starts from MAX(strk0, ib), because [0:ib,0:ib] have been evaluated */
                 for (strk = ib; strk < na; strk++) {
                         ctr_rhf2e_kern(eri, ci0, ci1, ci1buf, t1buf,
@@ -816,7 +816,7 @@ void FCIcontract_2e_spin0_symm(double *eri, double *ci0, double *ci1,
         for (ib = 0; ib < na; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, na-ib);
                 memset(ci1buf, 0, sizeof(double) * na*blen);
-#pragma omp for schedule(guided, 1)
+#pragma omp for schedule(static, 112)
                 for (strk = 0; strk < na; strk++) {
                         ctr_rhf2esym_kern(eri, ci0, ci1, ci1buf, t1buf,
                                           MIN(STRB_BLKSIZE, strk-ib), blen,
