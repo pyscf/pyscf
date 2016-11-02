@@ -480,7 +480,9 @@ def fix_spin_(fciobj, shift=.2, ss=None, **kwargs):
     if 'ss_value' in kwargs:
         sys.stderr.write('fix_spin_: kwarg "ss_value" will be removed in future release. '
                          'It was replaced by "ss"\n')
-        ss = kwargs['ss_value']
+        ss_value = kwargs['ss_value']
+    else:
+        ss_value = ss
 
     fciobj.davidson_only = True
     def contract_2e(eri, fcivec, norb, nelec, link_index=None, **kwargs):
@@ -488,8 +490,10 @@ def fix_spin_(fciobj, shift=.2, ss=None, **kwargs):
             sz = (nelec % 2) * .5
         else:
             sz = abs(nelec[0]-nelec[1]) * .5
-        if ss is None:
+        if ss_value is None:
             ss = sz*(sz+1)
+        else:
+            ss = ss_value
 
         ci0 = old_contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
         if ss == 0:
