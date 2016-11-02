@@ -12,7 +12,8 @@ from pyscf import fci
 from pyscf.mcscf.casci_symm import label_symmetry_
 
 def guess_cas(mf, dm, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
-              orth_method='meta_lowdin', s=None, verbose=None):
+              orth_method='meta_lowdin', s=None, canonicalize=True,
+              verbose=None):
     '''Using DMET to produce CASSCF initial guess.  Return the active space
     size, num active electrons and the orbital initial guess.
     '''
@@ -129,28 +130,32 @@ def guess_cas(mf, dm, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
                 assert(numpy.allclose(es[idx], esub))
                 c[:,degidx] = numpy.hstack(cs)[:,idx]
         return c
-    if mf.mo_energy is None or mf.mo_coeff is None:
-        fock = mf.get_hcore()
-    else:
-        if isinstance(mf.mo_coeff, numpy.ndarray) and mf.mo_coeff.ndim == 2:
-            sc = numpy.dot(s, mf.mo_coeff)
-            fock = numpy.dot(sc*mf.mo_energy, sc.T)
+
+    if canonicalize:
+        if mf.mo_energy is None or mf.mo_coeff is None:
+            fock = mf.get_hcore()
         else:
-            sc = numpy.dot(s, mf.mo_coeff[0])
-            fock = numpy.dot(sc*mf.mo_energy[0], sc.T)
-    mo = []
-    for c in (mocore, mocas, movir):
-        f1 = reduce(numpy.dot, (c.T, fock, c))
-        e, u = scipy.linalg.eigh(f1)
-        log.debug1('Fock eig %s', e)
-        mo.append(symmetrize(e, numpy.dot(c, u)))
-    mo = numpy.hstack(mo)
+            if isinstance(mf.mo_coeff, numpy.ndarray) and mf.mo_coeff.ndim == 2:
+                sc = numpy.dot(s, mf.mo_coeff)
+                fock = numpy.dot(sc*mf.mo_energy, sc.T)
+            else:
+                sc = numpy.dot(s, mf.mo_coeff[0])
+                fock = numpy.dot(sc*mf.mo_energy[0], sc.T)
+        mo = []
+        for c in (mocore, mocas, movir):
+            f1 = reduce(numpy.dot, (c.T, fock, c))
+            e, u = scipy.linalg.eigh(f1)
+            log.debug1('Fock eig %s', e)
+            mo.append(symmetrize(e, numpy.dot(c, u)))
+        mo = numpy.hstack(mo)
+    else:
+        mo = numpy.hstack((mocore, mocas, movir))
 
     return ncas, nelecas, mo
 
 def dynamic_cas_space_(mc, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
-                       orth_method='meta_lowdin', s=None, start_cycle=1,
-                       verbose=None):
+                       orth_method='meta_lowdin', s=None, canonicalize=True,
+                       start_cycle=1, verbose=None):
     '''Dynamically tune CASSCF active space based on DMET-CAS decomposition
     by following steps
     1. DMET-CAS decomposition to get new guess of core/active/external
@@ -176,7 +181,8 @@ def dynamic_cas_space_(mc, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
         dm1 = numpy.dot(mocore, mocore.T) * 2
         dm1 = dm1 + reduce(numpy.dot, (mocas, envs['casdm1'], mocas.T))
         ncas, nelecas, mo = guess_cas(mc._scf, dm1, baslst, nelec_tol,
-                                      occ_cutoff, base, orth_method, s, log)
+                                      occ_cutoff, base, orth_method, s,
+                                      canonicalize, log)
         nelecb = (nelecas-mol.spin)//2
         neleca = nelecas - nelecb
         nelecas = (neleca, nelecb)
