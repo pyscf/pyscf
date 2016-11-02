@@ -215,7 +215,7 @@ void FCIrdm12_drv(void (*dm12kernel)(),
 {
         pdm1 = calloc(nnorb, sizeof(double));
         pdm2 = calloc(nnorb*nnorb, sizeof(double));
-#pragma omp for schedule(guided, 2) nowait
+#pragma omp for schedule(dynamic, 40)
         for (strk = 0; strk < na; strk++) {
                 for (ib = 0; ib < nb; ib += bufbase) {
                         blen = MIN(bufbase, nb-ib);

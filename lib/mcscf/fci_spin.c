@@ -148,7 +148,7 @@ void FCIspindm12_drv(void (*dm12kernel)(),
         pdm2 = (double *)malloc(sizeof(double) * nnorb*nnorb);
         memset(pdm1, 0, sizeof(double) * nnorb);
         memset(pdm2, 0, sizeof(double) * nnorb*nnorb);
-#pragma omp for schedule(dynamic, 2)
+#pragma omp for schedule(static, 40)
         for (strk = 0; strk < na; strk++) {
                 (*dm12kernel)(pdm1, pdm2, bra, ket,
                               strk, norb, na, nb, neleca, nelecb,

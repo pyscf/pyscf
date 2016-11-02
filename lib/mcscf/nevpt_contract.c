@@ -57,7 +57,7 @@ void NEVPTkern_dfec_dfae(double *gt2, double *eri, double *t2ket,
         private(cp0, cp1, t2t, m, n, i, k)
 {
         t2t = malloc(sizeof(double) * n4);
-#pragma omp for schedule(dynamic, 1)
+#pragma omp for schedule(dynamic, 4)
         for (k = 0; k < bcount; k++) {
                 for (i = 0; i < nnorb; i++) {
                         cp0 = t2ket + k * n4 + i * nnorb;
@@ -97,7 +97,7 @@ void NEVPTkern_aedf_ecdf(double *gt2, double *eri, double *t2ket,
         private(cp0, cp1, t2t, m, n, i, k)
 {
         t2t = malloc(sizeof(double) * n4);
-#pragma omp for schedule(dynamic, 1)
+#pragma omp for schedule(dynamic, 4)
         for (k = 0; k < bcount; k++) {
                 for (m = 0; m < norb; m++) {
                         for (n = 0; n < norb; n++) {
@@ -158,7 +158,7 @@ void NEVPTkern_dfea_dfec(double *gt2, double *eri, double *t2ket,
 #pragma omp parallel default(none) \
         shared(gt2, eri, t2ket, bcount, norb, na, nb) \
         private(k)
-#pragma omp for schedule(dynamic, 1)
+#pragma omp for schedule(dynamic, 4)
         for (k = 0; k < bcount; k++) {
                 dgemm_(&TRANS_N, &TRANS_T, &norb, &norb, &n3,
                        &D1, t2ket+n4*k, &norb, eri, &norb,
@@ -197,7 +197,7 @@ void NEVPTkern_sf(void (*contract_kernel)(),
         private(ij, i, j, k, l, n, tbra, pbra, pt2)
 {
         tbra = malloc(sizeof(double) * nnorb * bcount);
-#pragma omp for schedule(dynamic, 1) nowait
+#pragma omp for schedule(dynamic, 4)
         for (ij = 0; ij < nnorb; ij++) { // loop ij for (<ket| E^j_i E^l_k)
                 i = ij / norb;
                 j = ij - i * norb;
