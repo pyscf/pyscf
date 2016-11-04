@@ -79,6 +79,7 @@ XC_CODES = {
 'B3LYP5'        : '.2*HF + .08*SLATER + .72*BECKE + .81*LYP + .19*VWN5',
 'B3LYPG'        : None, # B3LYP-VWN3 used by Gaussian and libxc
 'O3LYP'         : '.1161*HF + .1129*SLATER + .8133*OPTX + .81*LYP + .19*VWN5',  # Mol. Phys. 99 607
+'M062X'         : 'M06X2X, M062XC',
 'CAMB3LYP'      : None,
 }
 
@@ -87,7 +88,7 @@ GGA_IDS = set([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 17, 19, 20])
 MGGA_IDS = set([22, 23, 24, 25, 26, 27, 29, 30, 31, 32, 33, 34, 35, 36, 37])
 MLGGA_IDS = set([28])
 HYB_XC = set(('PBE0'    , 'PBE1PBE' , 'B3PW91'  , 'B3P86'   , 'B3LYP'   ,
-              'B3LYPG'  , 'O3LYP'   , 'CAMB3LYP',))
+              'B3LYPG'  , 'O3LYP'   , 'M062X'   , 'CAMB3LYP',))
 
 def is_lda(xc_code):
     if isinstance(xc_code, str):
