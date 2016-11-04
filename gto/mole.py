@@ -1917,8 +1917,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def update_from_chk(self, chkfile):
         import h5py
         with h5py.File(chkfile, 'r') as fh5:
-            moldic = eval(fh5['mol'].value)
-            self.build(False, False, **moldic)
+            mol = loads(fh5['mol'].value)
+            self.__dict__.update(mol.__dict__)
         return self
 
 

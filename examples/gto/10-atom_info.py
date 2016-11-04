@@ -3,14 +3,14 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-from pyscf import gto
-
 '''
 Access molecule geometry.
 
 Mole.natm is the total number of atoms.  It is initialized in Mole.build()
 function.
 '''
+
+from pyscf import gto
 
 mol = gto.M(
     atom = '''
@@ -25,3 +25,6 @@ for i in range(mol.natm):
                                         mol.atom_pure_symbol(i),
                                         mol.atom_charge(i),
                                         mol.atom_coord(i)))
+
+print("Atoms' charges in a vector\n%s" % mol.atom_charges())
+print("Atoms' coordinates in an array\n%s" % mol.atom_coords())

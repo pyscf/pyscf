@@ -84,11 +84,15 @@ Known problems
   Reason: unsafe use of relative rpath libcint.2.8.dylib in xxx/pyscf/lib/libao2mo.dylib with restricted binary
 ```
 
-  It is observed on OSX 10.11.  One solution is to manually modify the relative path to absolute path
-  $ install_name_tool -change libcint.2.8.dylib xxx/pyscf/lib/deps/lib/libcint.2.8.dylib xxx/pyscf/lib/libcgto.dylib
-  $ install_name_tool -change libcint.2.8.dylib xxx/pyscf/lib/deps/lib/libcint.2.8.dylib xxx/pyscf/lib/libcvhf.dylib
-  $ install_name_tool -change libcint.2.8.dylib xxx/pyscf/lib/deps/lib/libcint.2.8.dylib xxx/pyscf/lib/libao2mo.dylib
-  ...
+  It is only observed on OSX 10.11.  One solution is to manually modify the relative path to absolute path
+
+        $ install_name_tool -change libcint.2.8.dylib xxx/pyscf/lib/deps/lib/libcint.2.8.dylib xxx/pyscf/lib/libcgto.dylib
+        $ install_name_tool -change libcint.2.8.dylib xxx/pyscf/lib/deps/lib/libcint.2.8.dylib xxx/pyscf/lib/libcvhf.dylib
+        $ install_name_tool -change libcint.2.8.dylib xxx/pyscf/lib/deps/lib/libcint.2.8.dylib xxx/pyscf/lib/libao2mo.dylib
+        ...
+
+  Running script pyscf/lib/_runme_to_fix_dylib_osx10.11.sh  can patch
+  all required dylib files.
 
 
 * Fails at runtime with error message
@@ -101,7 +105,7 @@ Known problems
   You need either change to other MKL version (10.*, 11.0, 11.2) or
   disable mkl_avx:
 
-        BLA_VENDOR=Intel10_64lp_seq cmake .. -DDISABLE_AVX=1
+        cmake -DBLA_VENDOR=Intel10_64lp_seq .. -DDISABLE_AVX=1
 
 
 * Runtime error message

@@ -1,37 +1,25 @@
-# import gto to setup molecule
-from pyscf import gto
-# import scf to run RHF,UHF etc
-from pyscf import scf
+#!/usr/bin/env python
 
 '''
-PySCF doesn't have its own input parser.  The input file is a Python script.
+PySCF doesn't have its own input parser.  The input file is a Python program.
+
 Before going throught the rest part, be sure the PySCF path is added in PYTHONPATH.
 '''
 
+from pyscf import gto
+from pyscf import scf
+
+# mol is an object to hold molecule information.
 mol = gto.M(
-# gto.Mole is a class to hold molecule informations.
-# verbose       print level, (1..5), big num prints more details.
-#               It can be overwritten by command line options "-v" or "-q".
-# output        name of output file.
-#               the default value is None, which prints all things to sys.stdout
-#               It can be overwritten by command line options "-o <filename>"
-# charge        = 0 by default.
-# spin          2 * S_z, n_alpha - n_beta. Default is 0.
-# symmetry      True/False or specified symmetry symbol (Dooh, Coov, D2h, ...)
-# MUST 'build' the molecule before doing anything else.
-    verbose = 5,
+    verbose = 4,
     output = 'out_h2o',
-# Coordinates are in Angstrom
     atom = '''
-      O     0    0       0
+      o     0    0       0
       h     0    -.757   .587
-     1      0    .757    .587''',
-# basis = {atom_type/nuc_charge: 'name of basis sets'}
-# or one name for all atoms such as   basis = 'cc-pvdz'
-# case insensitive
+      h     0    .757    .587''',
     basis = '6-31g',
 )
-# For more details, see pyscf/gto/mole.py
+# For more details, see pyscf/gto/mole.py and pyscf/examples/gto
 
 #
 # The package follow the convention that each method has its class to hold
@@ -46,7 +34,7 @@ print('E=%.15g' % mf.kernel())
 #
 # The above code can be simplified using stream operations.
 # There are three stream functions ".set", ".run", ".apply" to pipe computing
-# streams.  Stream operations allows us to write computing script in one line.
+# streams.  Stream operations allows writing computing script in one line.
 #
 mf = gto.M(
     atom = '''
@@ -56,3 +44,4 @@ mf = gto.M(
     basis = '6-31g'
 ).apply(scf.RHF).run()
 print('E=%.15g' % mf.e_tot)
+
