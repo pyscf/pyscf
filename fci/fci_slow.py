@@ -4,11 +4,11 @@
 #
 
 import numpy
-import pyscf.lib
+from pyscf import lib
 from pyscf.fci import cistring
 
 def contract_1e(f1e, fcivec, norb, nelec):
-    if isinstance(nelec, (int, numpy.number)):
+    if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:
@@ -30,7 +30,7 @@ def contract_1e(f1e, fcivec, norb, nelec):
 
 
 def contract_2e(eri, fcivec, norb, nelec, opt=None):
-    if isinstance(nelec, (int, numpy.number)):
+    if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:
@@ -109,10 +109,11 @@ def contract_2e_hubbard(u, fcivec, norb, nelec, opt=None):
                     fcinew[:,addr] += t1b[i,:,addr] * u_bb
     return fcinew
 
+
 def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     '''Modify 2e Hamiltonian to include 1e Hamiltonian contribution.
     '''
-    if not isinstance(nelec, (int, numpy.number)):
+    if not isinstance(nelec, (int, numpy.integer)):
         nelec = sum(nelec)
     eri = eri.copy()
     h2e = pyscf.ao2mo.restore(1, eri, norb)
@@ -125,15 +126,15 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
 
 
 def make_hdiag(h1e, g2e, norb, nelec, opt=None):
-    if isinstance(nelec, (int, numpy.number)):
+    if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
-    link_indexa = cistring.gen_linkstr_index_o0(range(norb), neleca)
-    link_indexb = cistring.gen_linkstr_index_o0(range(norb), nelecb)
-    occslista = [tab[:neleca,0] for tab in link_indexa]
-    occslistb = [tab[:nelecb,0] for tab in link_indexb]
+    occslista = [[i for i in range(nocc) if str0 & (1<<i)]
+                 for str0 in cistring.gen_strings4orblist(range(norb), neleca)]
+    occslistb = [[i for i in range(nocc) if str0 & (1<<i)]
+                 for str0 in cistring.gen_strings4orblist(range(norb), nelecb)]
     g2e = ao2mo.restore(1, g2e, norb)
     diagj = numpy.einsum('iijj->ij',g2e)
     diagk = numpy.einsum('ijji->ij',g2e)
@@ -160,7 +161,7 @@ def kernel(h1e, g2e, norb, nelec):
         return hc.reshape(-1)
     hdiag = make_hdiag(h1e, g2e, norb, nelec)
     precond = lambda x, e, *args: x/(hdiag-e+1e-4)
-    e, c = pyscf.lib.davidson(hop, ci0.reshape(-1), precond)
+    e, c = lib.davidson(hop, ci0.reshape(-1), precond)
     return e
 
 

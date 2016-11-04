@@ -77,7 +77,7 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True, tol=1e-9):
                 logger.debug(mol, 'norm = %s', largest_norm[orbidx])
     return orbsym
 
-def symmetrize_orb(mol, mo, orbsym=None, s=None):
+def symmetrize_orb(mol, mo, orbsym=None, s=None, check=False):
     '''Symmetrize the given orbitals.
 
     This function is different to the :func:`symmetrize_space`:  In this
@@ -119,7 +119,7 @@ def symmetrize_orb(mol, mo, orbsym=None, s=None):
         s = mol.intor_symmetric('cint1e_ovlp_sph')
     if orbsym is None:
         orbsym = label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                mo, s=s, check=False)
+                                mo, s=s, check=check)
     orbsym = numpy.asarray(orbsym)
     mo_s = numpy.dot(mo.T, s)
     mo1 = numpy.empty_like(mo)
@@ -137,7 +137,7 @@ def symmetrize_orb(mol, mo, orbsym=None, s=None):
         mo1[:,idx] = numpy.dot(csym, sc)
     return mo1
 
-def symmetrize_space(mol, mo, s=None):
+def symmetrize_space(mol, mo, s=None, check=True):
     '''Symmetrize the given orbital space.
 
     This function is different to the :func:`symmetrize_orb`:  In this function,
@@ -171,7 +171,8 @@ def symmetrize_space(mol, mo, s=None):
         s = mol.intor_symmetric('cint1e_ovlp_sph')
     nmo = mo.shape[1]
     mo_s = numpy.dot(mo.T, s)
-    assert(numpy.allclose(numpy.dot(mo_s, mo), numpy.eye(nmo)))
+    if check:
+        assert(numpy.allclose(numpy.dot(mo_s, mo), numpy.eye(nmo)))
     mo1 = []
     for i, csym in enumerate(mol.symm_orb):
         moso = numpy.dot(mo_s, csym)
@@ -198,7 +199,7 @@ def symmetrize_space(mol, mo, s=None):
                          'probably because the input mol and orbitals are of '
                          'different orientation.')
     snorm = numpy.linalg.norm(reduce(numpy.dot, (mo1.T, s, mo1)) - numpy.eye(nmo))
-    if snorm > 1e-6:
+    if check and snorm > 1e-6:
         raise ValueError('Orbitals are not orthogonalized')
     idx = mo_mapping.mo_1to1map(reduce(numpy.dot, (mo.T, s, mo1)))
     return mo1[:,idx]

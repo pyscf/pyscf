@@ -87,9 +87,9 @@ def label_symmetry_(mc, mo_coeff):
         logger.warn(mc, 'mc1step_symm symmetrizes input orbitals')
         ncore = mc.ncore
         nocc = mc.ncore + mc.ncas
-        mo_cor = symm.symmetrize_space(mc.mol, mo_coeff[:,    :ncore], s=s)
-        mo_act = symm.symmetrize_space(mc.mol, mo_coeff[:,ncore:nocc], s=s)
-        mo_vir = symm.symmetrize_space(mc.mol, mo_coeff[:,nocc:     ], s=s)
+        mo_cor = symm.symmetrize_space(mc.mol, mo_coeff[:,    :ncore], s=s, check=False)
+        mo_act = symm.symmetrize_space(mc.mol, mo_coeff[:,ncore:nocc], s=s, check=False)
+        mo_vir = symm.symmetrize_space(mc.mol, mo_coeff[:,nocc:     ], s=s, check=False)
         mo_coeff = numpy.hstack((mo_cor,mo_act,mo_vir))
         mc.orbsym = symm.label_orb_symm(mc.mol, irrep_name,
                                         mc.mol.symm_orb, mo_coeff, s=s)

@@ -179,8 +179,8 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
         ci0.append(x.ravel())
 
     # Add noise
-    ci0[0][0 ] += 1e-5
-    ci0[0][-1] -= 1e-5
+    #ci0[0][0 ] += 1e-5
+    #ci0[0][-1] -= 1e-5
     if len(ci0) == 0:
         raise RuntimeError('No determinant matches the target symmetry %s' %
                            wfnsym)

@@ -545,26 +545,28 @@ def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
             one-particle basis
     '''
     neleca, nelecb = _unpack(nelec)
-    strsa = cistring.gen_strings4orblist(range(norb), neleca)
-    strsb = cistring.gen_strings4orblist(range(norb), nelecb)
+    strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
+    strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
     one_particle_strs = numpy.asarray([1<<i for i in range(norb)])
     na = len(strsa)
     nb = len(strsb)
 
     # Unitary transformation array trans_ci is the overlap between two sets of CI basis.
+    occ_masks = (strsa[:,None] & one_particle_strs) != 0
     trans_ci_a = numpy.zeros((na,na))
     for i, stri in enumerate(strsa): # for old basis
-        orbi_mask = (stri & one_particle_strs) != 0
+        orbi_mask = occ_masks[i]
         for j, strj in enumerate(strsa): # for new basis
-            orbj_mask = (strj & one_particle_strs) != 0
+            orbj_mask = occ_masks[j]
             minors = u[orbi_mask][:,orbj_mask]
             trans_ci_a[i,j] = numpy.linalg.det(minors)
 
+    occ_masks = (strsb[:,None] & one_particle_strs) != 0
     trans_ci_b = numpy.zeros((nb,nb))
     for i, stri in enumerate(strsb):
-        orbi_mask = (stri & one_particle_strs) != 0
+        orbi_mask = occ_masks[i]
         for j, strj in enumerate(strsb):
-            orbj_mask = (strj & one_particle_strs) != 0
+            orbj_mask = occ_masks[j]
             minors = u[orbi_mask][:,orbj_mask]
             trans_ci_b[i,j] = numpy.linalg.det(minors)
 

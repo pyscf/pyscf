@@ -120,13 +120,13 @@ def make_hdiag(h1e, eri, norb, nelec):
         neleca, nelecb = nelec
     h1e = numpy.ascontiguousarray(h1e)
     eri = ao2mo.restore(1, eri, norb)
-    link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
-    link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
+    link_indexa = cistring.gen_des_str_index(range(norb), neleca)
+    link_indexb = cistring.gen_des_str_index(range(norb), nelecb)
     na = link_indexa.shape[0]
     nb = link_indexb.shape[0]
 
-    occslista = numpy.asarray(link_indexa[:,:neleca,0], order='C')
-    occslistb = numpy.asarray(link_indexb[:,:nelecb,0], order='C')
+    occslista = numpy.asarray(link_indexa[:,:,1], order='C')
+    occslistb = numpy.asarray(link_indexb[:,:,1], order='C')
     hdiag = numpy.empty(na*nb)
     jdiag = numpy.asarray(numpy.einsum('iijj->ij',eri), order='C')
     kdiag = numpy.asarray(numpy.einsum('ijji->ij',eri), order='C')

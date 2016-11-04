@@ -61,7 +61,7 @@ def gen_linkstr_index_o0(orb_list, nelec, strs=None):
     if strs is None:
         strs = gen_strings4orblist(orb_list, nelec)
     strdic = dict(zip(strs,range(strs.__len__())))
-    def pump1e(str0):
+    def propgate1e(str0):
         occ = []
         vir = []
         for i in orb_list:
@@ -69,17 +69,17 @@ def gen_linkstr_index_o0(orb_list, nelec, strs=None):
                 occ.append(i)
             else:
                 vir.append(i)
-        pumpmap = []
+        linktab = []
         for i in occ:
-            pumpmap.append((i, i, strdic[str0], 1))
+            linktab.append((i, i, strdic[str0], 1))
         for i in occ:
             for a in vir:
                 str1 = str0 ^ (1<<i) | (1<<a)
                 # [cre, des, target_address, parity]
-                pumpmap.append((a, i, strdic[str1], cre_des_sign(a, i, str0)))
-        return pumpmap
+                linktab.append((a, i, strdic[str1], cre_des_sign(a, i, str0)))
+        return linktab
 
-    t = [pump1e(s) for s in strs]
+    t = [propgate1e(s) for s in strs]
     return numpy.array(t, dtype=numpy.int32)
 
 # return [cre, des, target_address, parity]
@@ -145,15 +145,15 @@ def gen_linkstr_index_trilidx(orb_list, nocc, strs=None):
 def gen_cre_str_index_o0(orb_list, nelec):
     cre_strs = gen_strings4orblist(orb_list, nelec+1)
     credic = dict(zip(cre_strs,range(cre_strs.__len__())))
-    def pump1e(str0):
-        pumpmap = []
+    def progate1e(str0):
+        linktab = []
         for i in orb_list:
             if not str0 & (1<<i):
                 str1 = str0 | (1<<i)
-                pumpmap.append((i, 0, credic[str1], cre_sign(i, str0)))
-        return pumpmap
+                linktab.append((i, 0, credic[str1], cre_sign(i, str0)))
+        return linktab
 
-    t = [pump1e(s) for s in gen_strings4orblist(orb_list, nelec)]
+    t = [progate1e(s) for s in gen_strings4orblist(orb_list, nelec)]
     return numpy.array(t, dtype=numpy.int32)
 def gen_cre_str_index_o1(orb_list, nelec):
     norb = len(orb_list)
@@ -181,15 +181,15 @@ def gen_cre_str_index(orb_list, nelec):
 def gen_des_str_index_o0(orb_list, nelec):
     des_strs = gen_strings4orblist(orb_list, nelec-1)
     desdic = dict(zip(des_strs,range(des_strs.__len__())))
-    def pump1e(str0):
-        pumpmap = []
+    def progate1e(str0):
+        linktab = []
         for i in orb_list:
             if str0 & (1<<i):
                 str1 = str0 ^ (1<<i)
-                pumpmap.append((0, i, desdic[str1], des_sign(i, str0)))
-        return pumpmap
+                linktab.append((0, i, desdic[str1], des_sign(i, str0)))
+        return linktab
 
-    t = [pump1e(s) for s in gen_strings4orblist(orb_list, nelec)]
+    t = [progate1e(s) for s in gen_strings4orblist(orb_list, nelec)]
     return numpy.array(t, dtype=numpy.int32)
 def gen_des_str_index_o1(orb_list, nelec):
     assert(nelec > 0)

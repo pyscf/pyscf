@@ -89,9 +89,9 @@ def make_hdiag(h1e, eri, norb, nelec):
         assert(neleca == nelecb)
     h1e = numpy.ascontiguousarray(h1e)
     eri = pyscf.ao2mo.restore(1, eri, norb)
-    link_index = cistring.gen_linkstr_index(range(norb), neleca)
+    link_index = cistring.gen_des_str_index(range(norb), neleca)
     na = link_index.shape[0]
-    occslist = numpy.asarray(link_index[:,:neleca,0], order='C')
+    occslist = numpy.asarray(link_index[:,:,1], order='C')
     hdiag = numpy.empty((na,na))
     jdiag = numpy.asarray(numpy.einsum('iijj->ij',eri), order='C')
     kdiag = numpy.asarray(numpy.einsum('ijji->ij',eri), order='C')

@@ -24,7 +24,6 @@ mf = scf.RHF(mol)
 mf.get_hcore = lambda *args: h1
 mf.get_ovlp = lambda *args: numpy.eye(n)
 mf._eri = ao2mo.restore(8, eri, n)
-mf.init_guess = '1e'
 mf.kernel()
 
 mycc = cc.ccsd.CC(mf)
