@@ -30,11 +30,12 @@ print('total number of shells %d, total number of AO functions %d' %
 # Filter AO functions using AO labels, in tuple
 for label in mol.spheric_labels():
     if label[2] == '2p' and label[3] == 'z':
-        print label
+        print(label)
 
+# Filter AO functions using formated AO labels
 for label in mol.spheric_labels(1):
     if '2pz' in label:
-        print label
+        print(label)
 
 for i in range(mol.nbas):
     print('shell %d on atom %d l = %s has %d contracted GTOs' %

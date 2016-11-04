@@ -207,7 +207,7 @@ def make_rdm12(fcivec, norb, nelec, opt=None):
 def reorder_rdm(rdm1, rdm2):
     '''reorder from rdm2(pq,rs) = <E^p_q E^r_s> to rdm2(pq,rs) = <e^{pr}_{qs}>.
     Although the "reoredered rdm2" is still in Mulliken order (rdm2[e1,e1,e2,e2]),
-    it is the right 2e DM (dotting it with int2e gives the energy of 2e parts)
+    it is the true 2e DM (dotting it with int2e gives the energy of 2e parts)
     '''
     nmo = rdm1.shape[0]
     if inplace:
@@ -244,7 +244,7 @@ if __name__ == '__main__':
     norb = m.mo_coeff.shape[1]
     nelec = mol.nelectron - 2
     h1e = reduce(numpy.dot, (m.mo_coeff.T, m.get_hcore(), m.mo_coeff))
-    eri = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False)
+    eri = ao2mo.kernel(m._eri, m.mo_coeff, compact=False)
     eri = eri.reshape(norb,norb,norb,norb)
 
     e1 = kernel(h1e, eri, norb, nelec)

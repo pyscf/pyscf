@@ -26,6 +26,11 @@ mol = gto.M(
     basis = 'ccpvdz',
 )
 
+# In Python pickled format
 ar = pickle.dumps(format(mol.pack()))
 mol1 = gto.unpack(eval(pickle.loads(ar)))
+
+# In JSON format
+ar = mol.dumps()
+mol1 = gto.loads(ar)
 
