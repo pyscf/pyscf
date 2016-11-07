@@ -49,7 +49,7 @@ def gen_strings4orblist(orb_list, nelec):
         return res
     strings = gen_str_iter(orb_list[::-1], nelec)
     assert(strings.__len__() == num_strings(len(orb_list),nelec))
-    return strings
+    return numpy.asarray(strings, dtype=numpy.int64)
 
 def num_strings(n, m):
     if m < 0 or m > n:
@@ -83,7 +83,7 @@ def gen_linkstr_index_o0(orb_list, nelec, strs=None):
     return numpy.array(t, dtype=numpy.int32)
 
 # return [cre, des, target_address, parity]
-def gen_linkstr_index(orb_list, nocc, strs=None):
+def gen_linkstr_index(orb_list, nocc, strs=None, tril=False):
     '''Look up table, for the strings relationship in terms of a
     creation-annihilating operator pair.
 
@@ -98,27 +98,34 @@ def gen_linkstr_index(orb_list, nocc, strs=None):
     strs = numpy.array(strs, dtype=numpy.int64)
     norb = len(orb_list)
     nvir = norb - nocc
-    na = num_strings(norb, nocc)
+    na = strs.shape[0]
     link_index = numpy.empty((na,nocc*nvir+nocc,4), dtype=numpy.int32)
     libfci.FCIlinkstr_index(link_index.ctypes.data_as(ctypes.c_void_p),
                             ctypes.c_int(norb), ctypes.c_int(na),
                             ctypes.c_int(nocc),
                             strs.ctypes.data_as(ctypes.c_void_p),
-                            ctypes.c_int(0))
+                            ctypes.c_int(tril))
     return link_index
 
 def reform_linkstr_index(link_index):
     '''Compress the (a, i) pair index in linkstr_index to a lower triangular
     index, to match the 4-fold symmetry of integrals.
     '''
-    link_new = numpy.empty_like(link_index)
-    for k, tab in enumerate(link_index):
-        for j, (a, i, str1, sign) in enumerate(tab):
-            if a > i:
-                ai = a*(a+1)//2+i
-            else:
-                ai = i*(i+1)//2+a
-            link_new[k,j] = (ai,0,str1,sign)
+    #for k, tab in enumerate(link_index):
+    #    for j, (a, i, str1, sign) in enumerate(tab):
+    #        if a > i:
+    #            ai = a*(a+1)//2+i
+    #        else:
+    #            ai = i*(i+1)//2+a
+    #        link_new[k,j] = (ai,0,str1,sign)
+    link_new = link_index.copy()
+    a = link_index[:,:,0]
+    i = link_index[:,:,1]
+    ai = a*(a+1)//2 + i
+    ia = i*(i+1)//2 + a
+    link_new[:,:,0][a>i ] = ai[a>i ]
+    link_new[:,:,0][a<=i] = ia[a<=i]
+    link_new[:,:,1] = 0
     return link_new
 
 def gen_linkstr_index_trilidx(orb_list, nocc, strs=None):
@@ -127,19 +134,7 @@ def gen_linkstr_index_trilidx(orb_list, nocc, strs=None):
     So the resultant link_index has the structure ``[pq, *, str1, sign]``.
     It is identical to a call to ``reform_linkstr_index(gen_linkstr_index(...))``.
     '''
-    if strs is None:
-        strs = gen_strings4orblist(orb_list, nocc)
-    strs = numpy.array(strs, dtype=numpy.int64)
-    norb = len(orb_list)
-    nvir = norb - nocc
-    na = strs.shape[0]
-    link_index = numpy.empty((na,nocc*nvir+nocc,4), dtype=numpy.int32)
-    libfci.FCIlinkstr_index(link_index.ctypes.data_as(ctypes.c_void_p),
-                            ctypes.c_int(norb), ctypes.c_int(na),
-                            ctypes.c_int(nocc),
-                            strs.ctypes.data_as(ctypes.c_void_p),
-                            ctypes.c_int(1))
-    return link_index
+    return gen_linkstr_index(orb_list, nocc, strs, True)
 
 # return [cre, des, target_address, parity]
 def gen_cre_str_index_o0(orb_list, nelec):
@@ -314,7 +309,7 @@ def str2addr(norb, nelec, string):
         string = int(string, 2)
     else:
         assert(bin(string).count('1') == nelec)
-    libfci.FCIstr2addr.restype = ctypes.c_void_p
+    libfci.FCIstr2addr.restype = ctypes.c_int
     return libfci.FCIstr2addr(ctypes.c_int(norb), ctypes.c_int(nelec),
                               ctypes.c_ulonglong(string))
 

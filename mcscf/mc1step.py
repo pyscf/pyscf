@@ -393,23 +393,29 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
                 norm_gorb0 = norm_gorb
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             t3m = log.timer('orbital rotation', *t3m)
-            if imicro == max_cycle_micro:
-                log.debug('micro %d  |u-1|=%5.3g  |g[o]|=%5.3g  ',
+            if norm_gci is None:
+                accepted_gorb = norm_gorb < norm_ddm*2
+            else:
+                accepted_gorb = norm_gorb < norm_gci*1.5
+            if (imicro >= max_cycle_micro and
+                (accepted_gorb or imicro > max_cycle_micro*2)):
+                log.debug('micro %d  |u-1|=%5.3g  |g[o]|=%5.3g',
                           imicro, norm_t, norm_gorb)
                 break
 
             casdm1, casdm2, gci, fcivec = casscf.update_casdm(mo, u, fcivec, e_ci, eris)
-            if isinstance(gci, numpy.ndarray):
-                norm_gci = '%4.3g' % numpy.linalg.norm(gci)
-            else:
-                norm_gci = None
             norm_ddm = numpy.linalg.norm(casdm1 - casdm1_last)
             norm_ddm_micro = numpy.linalg.norm(casdm1 - casdm1_prev)
             casdm1_prev = casdm1
             t3m = log.timer('update CAS DM', *t3m)
-            log.debug('micro %d  |u-1|=%5.3g  |g[o]|=%5.3g  '
-                      '|g[c]|= %s  |ddm|=%5.3g',
-                      imicro, norm_t, norm_gorb, norm_gci, norm_ddm)
+            if isinstance(gci, numpy.ndarray):
+                norm_gci = numpy.linalg.norm(gci)
+                log.debug('micro %d  |u-1|=%5.3g  |g[o]|=%5.3g  |g[c]|=%5.3g  |ddm|=%5.3g',
+                          imicro, norm_t, norm_gorb, norm_gci, norm_ddm)
+            else:
+                norm_gci = None
+                log.debug('micro %d  |u-1|=%5.3g  |g[o]|=%5.3g  |g[c]|=%s  |ddm|=%5.3g',
+                          imicro, norm_t, norm_gorb, norm_gci, norm_ddm)
 
             if callable(callback):
                 callback(locals())
@@ -917,7 +923,8 @@ class CASSCF(casci.CASCI):
         ncore = self.ncore
         nocc = ncore + ncas
         if hasattr(self.fcisolver, 'approx_kernel'):
-            ci1 = self.fcisolver.approx_kernel(h1, h2, ncas, nelecas, ci0=ci0)[1]
+            ci1 = self.fcisolver.approx_kernel(h1, h2, ncas, nelecas, ci0=ci0,
+                                               max_memory=self.max_memory)[1]
             return ci1, None
 
         h2eff = self.fcisolver.absorb_h1e(h1, h2, ncas, nelecas, .5)

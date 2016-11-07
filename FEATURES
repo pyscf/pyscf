@@ -44,6 +44,11 @@
   - canonical density matrices
   - canonical gradients
 
+* CI
+  - CISD 1, 2-particle density matrices
+  - Selected-CI
+  - Selected-CI 1, 2-particle density matrices
+
 * Full CI
   - Direct-CI solver for spin degenerated Hamiltonian
   - Direct-CI solver for spin non-degenerated Hamiltonian

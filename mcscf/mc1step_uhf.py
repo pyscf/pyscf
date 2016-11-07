@@ -254,22 +254,28 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
             if imicro == 1:
                 norm_gorb0 = norm_gorb
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
-            if imicro == max_cycle_micro:
+            if norm_gci is None:
+                accepted_gorb = norm_gorb < norm_ddm*2
+            else:
+                accepted_gorb = norm_gorb < norm_gci*1.5
+            if (imicro >= max_cycle_micro and
+                (accepted_gorb or imicro > max_cycle_micro*2)):
                 log.debug('micro %d  |u-1|=%5.3g  |g[o]|=%5.3g  ',
                           imicro, norm_t, norm_gorb)
                 break
 
             casdm1, casdm2, gci, fcivec = casscf.update_casdm(mo, u, fcivec, e_ci, eris)
-            if isinstance(gci, numpy.ndarray):
-                norm_gci = numpy.linalg.norm(gci)
-            else:
-                norm_gci = -1
             norm_ddm =(numpy.linalg.norm(casdm1[0] - casdm1_last[0])
                      + numpy.linalg.norm(casdm1[1] - casdm1_last[1]))
             t3m = log.timer('update CAS DM', *t3m)
-            log.debug('micro %d  |u-1|=%5.3g  |g[o]|=%5.3g  ' \
-                      '|g[c]|=%5.3g  |ddm|=%5.3g',
-                      imicro, norm_t, norm_gorb, norm_gci, norm_ddm)
+            if isinstance(gci, numpy.ndarray):
+                norm_gci = numpy.linalg.norm(gci)
+                log.debug('micro %d  |u-1|=%5.3g  |g[o]|=%5.3g  |g[c]|=%5.3g  |ddm|=%5.3g',
+                          imicro, norm_t, norm_gorb, norm_gci, norm_ddm)
+            else:
+                norm_gci = None
+                log.debug('micro %d  |u-1|=%5.3g  |g[o]|=%5.3g  |g[c]|=%s  |ddm|=%5.3g',
+                          imicro, norm_t, norm_gorb, norm_gci, norm_ddm)
 
             if callable(callback):
                 callback(locals())
@@ -286,8 +292,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         totinner += njk
 
         eris = None
-        u = u.copy()
-        g_orb = g_orb.copy()
+        u = copy.copy(u)
+        g_orb = copy.copy(g_orb)
         mo = casscf.rotate_mo(mo, u, log)
         eris = casscf.ao2mo(mo)
         t2m = log.timer('update eri', *t3m)

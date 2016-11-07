@@ -118,32 +118,27 @@ def make_hdiag(h1e, eri, norb, nelec):
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
-    h1e = numpy.ascontiguousarray(h1e)
+    h1e = numpy.asarray(h1e, order='C')
     eri = ao2mo.restore(1, eri, norb)
-    link_indexa = cistring.gen_des_str_index(range(norb), neleca)
-    link_indexb = cistring.gen_des_str_index(range(norb), nelecb)
-    na = link_indexa.shape[0]
-    nb = link_indexb.shape[0]
+    strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
+    strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
+    na = len(strsa)
+    nb = len(strsb)
 
-    occslista = numpy.asarray(link_indexa[:,:,1], order='C')
-    occslistb = numpy.asarray(link_indexb[:,:,1], order='C')
     hdiag = numpy.empty(na*nb)
     jdiag = numpy.asarray(numpy.einsum('iijj->ij',eri), order='C')
     kdiag = numpy.asarray(numpy.einsum('ijji->ij',eri), order='C')
+    c_h1e = h1e.ctypes.data_as(ctypes.c_void_p)
+    c_jdiag = jdiag.ctypes.data_as(ctypes.c_void_p)
+    c_kdiag = kdiag.ctypes.data_as(ctypes.c_void_p)
     libfci.FCImake_hdiag_uhf(hdiag.ctypes.data_as(ctypes.c_void_p),
-                             h1e.ctypes.data_as(ctypes.c_void_p),
-                             h1e.ctypes.data_as(ctypes.c_void_p),
-                             jdiag.ctypes.data_as(ctypes.c_void_p),
-                             jdiag.ctypes.data_as(ctypes.c_void_p),
-                             jdiag.ctypes.data_as(ctypes.c_void_p),
-                             kdiag.ctypes.data_as(ctypes.c_void_p),
-                             kdiag.ctypes.data_as(ctypes.c_void_p),
+                             c_h1e, c_h1e, c_jdiag, c_jdiag, c_jdiag, c_kdiag, c_kdiag,
                              ctypes.c_int(norb),
                              ctypes.c_int(na), ctypes.c_int(nb),
                              ctypes.c_int(neleca), ctypes.c_int(nelecb),
-                             occslista.ctypes.data_as(ctypes.c_void_p),
-                             occslistb.ctypes.data_as(ctypes.c_void_p))
-    return numpy.asarray(hdiag)
+                             strsa.ctypes.data_as(ctypes.c_void_p),
+                             strsb.ctypes.data_as(ctypes.c_void_p))
+    return hdiag
 
 def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     '''Modify 2e Hamiltonian to include 1e Hamiltonian contribution.
@@ -576,7 +571,7 @@ class FCISolver(lib.StreamObject):
         return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
 
     def spin_square(self, fcivec, norb, nelec):
-        if self.nroots == 1:
+        if isinstance(fcivec, numpy.ndarray):
             return spin_op.spin_square0(fcivec, norb, nelec)
         else:
             ss = [spin_op.spin_square0(c, norb, nelec) for c in fcivec]
@@ -607,7 +602,7 @@ class FCISolver(lib.StreamObject):
         '''
         return self.make_rdm12(fcivec, norb, nelec, link_index, reorder)[1]
 
-    @lib.with_doc(make_rdm1s.__doc__)
+    @lib.with_doc(trans_rdm1s.__doc__)
     def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None):
         return trans_rdm1s(cibra, ciket, norb, nelec, link_index)
 
@@ -624,6 +619,13 @@ class FCISolver(lib.StreamObject):
     def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None,
                     reorder=True):
         return trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)
+
+    def large_ci(self, ci, norb, nelec, tol=.1):
+        from pyscf.fci import addons
+        if isinstance(ci, numpy.ndarray):
+            return addons.large_ci(ci, norb, nelec, tol)
+        else:
+            return [addons.large_ci(x, norb, nelec, tol) for x in ci]
 
 
 def _unpack(norb, nelec, link_index):

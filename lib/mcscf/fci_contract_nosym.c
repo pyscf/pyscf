@@ -9,7 +9,7 @@
 //#include <omp.h>
 #include "config.h"
 #include "vhf/fblas.h"
-#include "fci_string.h"
+#include "fci.h"
 #define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define CSUMTHR         1e-28
 #define STRB_BLKSIZE    112

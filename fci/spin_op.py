@@ -3,11 +3,11 @@
 import ctypes
 from functools import reduce
 import numpy
-import pyscf.lib
+from pyscf import lib
 from pyscf.fci import cistring
 from pyscf.fci import rdm
 
-librdm = pyscf.lib.load_library('libfci')
+librdm = lib.load_library('libfci')
 
 ######################################################
 # Spin squared operator
@@ -61,7 +61,6 @@ def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
     UHF-FCI wavefunction
     '''
     from pyscf.fci import direct_spin1
-    neleca, nelecb = _unpack(nelec)
 
     if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
         mo_coeff = (mo_coeff, mo_coeff)
@@ -256,23 +255,25 @@ def contract_ss(fcivec, norb, nelec):
             signb = bindex[:,i,1]
             maska = numpy.where(signa!=0)[0]
             maskb = numpy.where(signb!=0)[0]
-            ida = aindex[maska,i,0]
-            idb = bindex[maskb,i,0]
-            citmp = pyscf.lib.take_2d(fcivec, maska, maskb)
-            citmp = numpy.einsum('i,j,ij->ij', signa[maska], signb[maskb], citmp)
-            #: t1[ida.reshape(-1,1),idb] += citmp
-            pyscf.lib.takebak_2d(t1, citmp, ida, idb)
+            addra = aindex[maska,i,0]
+            addrb = bindex[maskb,i,0]
+            citmp = lib.take_2d(fcivec, maska, maskb)
+            citmp *= signa[maska].reshape(-1,1)
+            citmp *= signb[maskb]
+            #: t1[addra.reshape(-1,1),addrb] += citmp
+            lib.takebak_2d(t1, citmp, addra, addrb)
         for i in range(norb):
             signa = aindex[:,i,1]
             signb = bindex[:,i,1]
             maska = numpy.where(signa!=0)[0]
             maskb = numpy.where(signb!=0)[0]
-            ida = aindex[maska,i,0]
-            idb = bindex[maskb,i,0]
-            citmp = pyscf.lib.take_2d(t1, ida, idb)
-            citmp = numpy.einsum('i,j,ij->ij', signa[maska], signb[maskb], citmp)
+            addra = aindex[maska,i,0]
+            addrb = bindex[maskb,i,0]
+            citmp = lib.take_2d(t1, addra, addrb)
+            citmp *= signa[maska].reshape(-1,1)
+            citmp *= signb[maskb]
             #: ci1[maska.reshape(-1,1), maskb] += citmp
-            pyscf.lib.takebak_2d(ci1, citmp, maska, maskb)
+            lib.takebak_2d(ci1, citmp, maska, maskb)
 
     ci1 = numpy.zeros((na,nb))
     trans(ci1, ades, bcre, neleca-1, nelecb+1) # S+*S-

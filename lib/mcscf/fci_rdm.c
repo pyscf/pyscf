@@ -7,7 +7,7 @@
 //#include <omp.h>
 #include "config.h"
 #include "vhf/fblas.h"
-#include "fci_string.h"
+#include "fci.h"
 #define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define CSUMTHR         1e-28
 #define BUFBASE         96
@@ -42,7 +42,9 @@ double FCIrdm2_a_t1ci(double *ci0, double *t1,
                 sign = EXTRACT_SIGN(tab[j]);
                 pci = ci0 + str1*nstrb;
                 pt1 = t1 + i*norb+a;
-                if (sign > 0) {
+                if (sign == 0) {
+                        break;
+                } else if (sign > 0) {
                         for (k = 0; k < bcount; k++) {
                                 pt1[k*nnorb] += pci[k];
                                 csum += pci[k] * pci[k];
@@ -73,8 +75,12 @@ double FCIrdm2_b_t1ci(double *ci0, double *t1,
                         i    = EXTRACT_DES (tab[j]);
                         str1 = EXTRACT_ADDR(tab[j]);
                         sign = EXTRACT_SIGN(tab[j]);
-                        t1[i*norb+a] += sign * pci[str1];
-                        csum += pci[str1] * pci[str1];
+                        if (sign == 0) {
+                                break;
+                        } else {
+                                t1[i*norb+a] += sign * pci[str1];
+                                csum += pci[str1] * pci[str1];
+                        }
                 }
                 t1 += nnorb;
                 tab += nlinkb;
@@ -197,7 +203,6 @@ void FCIrdm12_drv(void (*dm12kernel)(),
                   int *link_indexa, int *link_indexb, int symm)
 {
         const int nnorb = norb * norb;
-        const int bufbase = MIN(BUFBASE, nb);
         int strk, i, j, k, l, ib, blen;
         double *pdm1, *pdm2;
         memset(rdm1, 0, sizeof(double) * nnorb);
@@ -217,8 +222,8 @@ void FCIrdm12_drv(void (*dm12kernel)(),
         pdm2 = calloc(nnorb*nnorb, sizeof(double));
 #pragma omp for schedule(dynamic, 40)
         for (strk = 0; strk < na; strk++) {
-                for (ib = 0; ib < nb; ib += bufbase) {
-                        blen = MIN(bufbase, nb-ib);
+                for (ib = 0; ib < nb; ib += BUFBASE) {
+                        blen = MIN(BUFBASE, nb-ib);
                         (*dm12kernel)(pdm1, pdm2, bra, ket, blen, strk, ib,
                                       norb, na, nb, nlinka, nlinkb,
                                       clinka, clinkb, symm);
@@ -619,8 +624,16 @@ void FCItrans_rdm1a(double *rdm1, double *bra, double *ket,
                         str1 = EXTRACT_ADDR(tab[j]);
                         sign = EXTRACT_SIGN(tab[j]);
                         pbra = bra + str1 * nb;
-                        for (k = 0; k < nb; k++) {
-                                rdm1[a*norb+i] += sign*pbra[k]*pket[k];
+                        if (sign == 0) {
+                                break;
+                        } else if (sign > 0) {
+                                for (k = 0; k < nb; k++) {
+                                        rdm1[a*norb+i] += pbra[k]*pket[k];
+                                }
+                        } else {
+                                for (k = 0; k < nb; k++) {
+                                        rdm1[a*norb+i] -= pbra[k]*pket[k];
+                                }
                         }
                 }
         }
@@ -651,7 +664,11 @@ void FCItrans_rdm1b(double *rdm1, double *bra, double *ket,
                                 i    = EXTRACT_DES (tab[j]);
                                 str1 = EXTRACT_ADDR(tab[j]);
                                 sign = EXTRACT_SIGN(tab[j]);
-                                rdm1[a*norb+i] += sign*pbra[str1]*tmp;
+                                if (sign == 0) {
+                                        break;
+                                } else {
+                                        rdm1[a*norb+i] += sign*pbra[str1]*tmp;
+                                }
                         }
                 }
         }
@@ -684,7 +701,9 @@ void FCImake_rdm1a(double *rdm1, double *cibra, double *ciket,
                         sign = EXTRACT_SIGN(tab[j]);
                         pci1 = ci0 + str1 * nb;
                         if (a >= i) {
-                                if (sign > 0) {
+                                if (sign == 0) {
+                                        break;
+                                } else if (sign > 0) {
                                         for (k = 0; k < nb; k++) {
                                                 rdm1[a*norb+i] += pci0[k]*pci1[k];
                                         }
@@ -729,7 +748,9 @@ void FCImake_rdm1b(double *rdm1, double *cibra, double *ciket,
                                 str1 = EXTRACT_ADDR(tab[j]);
                                 sign = EXTRACT_SIGN(tab[j]);
                                 if (a >= i) {
-                                        if (sign > 0) {
+                                        if (sign == 0) {
+                                                break;
+                                        } else if (sign > 0) {
                                                 rdm1[a*norb+i] += pci0[str1]*tmp;
                                         } else {
                                                 rdm1[a*norb+i] -= pci0[str1]*tmp;

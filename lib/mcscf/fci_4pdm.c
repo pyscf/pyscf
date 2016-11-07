@@ -8,7 +8,7 @@
 //#include <omp.h>
 #include "config.h"
 #include "vhf/fblas.h"
-#include "fci_string.h"
+#include "fci.h"
 #define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define BLK     48
 #define BUFBASE 96
@@ -78,16 +78,15 @@ static void rdm4_a_t2(double *ci0, double *t2,
         const int nnorb = norb * norb;
         const int n4 = nnorb * nnorb;
         int i, j, k, l, a, sign, str1;
-        double *t1;
         double *pt1, *pt2;
         _LinkT *tab = clink_indexa + stra_id * nlinka;
 
 #pragma omp parallel default(none) \
         shared(ci0, t2, bcount, strb_id, norb, na, nb, nlinka, nlinkb, \
                clink_indexa, clink_indexb, tab), \
-        private(i, j, k, l, a, str1, sign, t1, pt1, pt2)
+        private(i, j, k, l, a, str1, sign, pt1, pt2)
 {
-        t1 = malloc(sizeof(double) * bcount * nnorb);
+        double *t1 = malloc(sizeof(double) * bcount * nnorb);
 #pragma omp for schedule(static, 40)
         for (j = 0; j < nlinka; j++) {
                 a    = EXTRACT_CRE (tab[j]);

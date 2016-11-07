@@ -135,13 +135,11 @@ def make_hdiag(h1e, eri, norb, nelec):
     g2e_ab = pyscf.ao2mo.restore(1, eri[1], norb)
     g2e_bb = pyscf.ao2mo.restore(1, eri[2], norb)
 
-    link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
-    link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
-    na = link_indexa.shape[0]
-    nb = link_indexb.shape[0]
+    strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
+    strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
+    na = len(strsa)
+    nb = len(strsb)
 
-    occslista = numpy.asarray(link_indexa[:,:neleca,0], order='C')
-    occslistb = numpy.asarray(link_indexb[:,:nelecb,0], order='C')
     hdiag = numpy.empty(na*nb)
     jdiag_aa = numpy.asarray(numpy.einsum('iijj->ij',g2e_aa), order='C')
     jdiag_ab = numpy.asarray(numpy.einsum('iijj->ij',g2e_ab), order='C')
@@ -159,8 +157,8 @@ def make_hdiag(h1e, eri, norb, nelec):
                              ctypes.c_int(norb),
                              ctypes.c_int(na), ctypes.c_int(nb),
                              ctypes.c_int(neleca), ctypes.c_int(nelecb),
-                             occslista.ctypes.data_as(ctypes.c_void_p),
-                             occslistb.ctypes.data_as(ctypes.c_void_p))
+                             strsa.ctypes.data_as(ctypes.c_void_p),
+                             strsb.ctypes.data_as(ctypes.c_void_p))
     return numpy.asarray(hdiag)
 
 def absorb_h1e(h1e, eri, norb, nelec, fac=1):

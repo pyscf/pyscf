@@ -135,19 +135,16 @@ void FCIspindm12_drv(void (*dm12kernel)(),
 {
         const int nnorb = norb * norb;
         int strk, i, j;
-        double *pdm1, *pdm2;
         memset(rdm1, 0, sizeof(double) * nnorb);
         memset(rdm2, 0, sizeof(double) * nnorb*nnorb);
 
 #pragma omp parallel default(none) \
         shared(dm12kernel, bra, ket, norb, na, nb, neleca, nelecb, \
                link_indexa, link_indexb, rdm1, rdm2), \
-        private(strk, i, pdm1, pdm2)
+        private(strk, i)
 {
-        pdm1 = (double *)malloc(sizeof(double) * nnorb);
-        pdm2 = (double *)malloc(sizeof(double) * nnorb*nnorb);
-        memset(pdm1, 0, sizeof(double) * nnorb);
-        memset(pdm2, 0, sizeof(double) * nnorb*nnorb);
+        double *pdm1 = calloc(nnorb, sizeof(double));
+        double *pdm2 = calloc(nnorb*nnorb, sizeof(double));
 #pragma omp for schedule(static, 40)
         for (strk = 0; strk < na; strk++) {
                 (*dm12kernel)(pdm1, pdm2, bra, ket,
@@ -196,9 +193,8 @@ void FCIdm2_abba_kern(double *rdm1, double *rdm2, double *bra, double *ket,
         const int nnorb = norb * norb;
         const int instrb = nb * (norb-nelecb) / (nelecb+1);
         double csum;
-        double *buf = malloc(sizeof(double) * nnorb * instrb);
+        double *buf = calloc(nnorb * instrb, sizeof(double));
 
-        memset(buf, 0, sizeof(double)*nnorb*instrb);
         csum = acre_bdes_t1(ket, buf, instrb, stra_id, norb, nb,
                             neleca, nelecb, acre_index, bdes_index);
         if (csum > CSUMTHR) {
@@ -221,9 +217,8 @@ void FCIdm2_baab_kern(double *rdm1, double *rdm2, double *bra, double *ket,
         const int nnorb = norb * norb;
         const int instrb = nb * nelecb / (norb-nelecb+1);
         double csum;
-        double *buf = malloc(sizeof(double) * nnorb * instrb);
+        double *buf = calloc(nnorb * instrb, sizeof(double));
 
-        memset(buf, 0, sizeof(double)*nnorb*instrb);
         csum = ades_bcre_t1(ket, buf, instrb, stra_id, norb, nb,
                             neleca, nelecb, ades_index, bcre_index);
         if (csum > CSUMTHR) {

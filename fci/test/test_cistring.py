@@ -28,6 +28,12 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.all(idx1[:,:,2:] == idx2[:,:,2:]))
         self.assertTrue(numpy.all(idx23 == idx2[3]))
 
+        idx1 = cistring.gen_linkstr_index(range(7), 3)
+        idx2 = cistring.reform_linkstr_index(idx1)
+        idx3 = cistring.gen_linkstr_index_trilidx(range(7), 3)
+        idx3[:,:,1] = 0
+        self.assertTrue(numpy.all(idx2 == idx3))
+
     def test_addr2str(self):
         self.assertEqual(bin(cistring.addr2str(6, 3, 7)), '0b11001')
         self.assertEqual(bin(cistring.addr2str(6, 3, 8)), '0b11010')

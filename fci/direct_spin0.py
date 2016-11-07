@@ -89,9 +89,8 @@ def make_hdiag(h1e, eri, norb, nelec):
         assert(neleca == nelecb)
     h1e = numpy.ascontiguousarray(h1e)
     eri = pyscf.ao2mo.restore(1, eri, norb)
-    link_index = cistring.gen_des_str_index(range(norb), neleca)
-    na = link_index.shape[0]
-    occslist = numpy.asarray(link_index[:,:,1], order='C')
+    strs = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
+    na = len(strs)
     hdiag = numpy.empty((na,na))
     jdiag = numpy.asarray(numpy.einsum('iijj->ij',eri), order='C')
     kdiag = numpy.asarray(numpy.einsum('ijji->ij',eri), order='C')
@@ -101,7 +100,7 @@ def make_hdiag(h1e, eri, norb, nelec):
                          kdiag.ctypes.data_as(ctypes.c_void_p),
                          ctypes.c_int(norb), ctypes.c_int(na),
                          ctypes.c_int(neleca),
-                         occslist.ctypes.data_as(ctypes.c_void_p))
+                         strs.ctypes.data_as(ctypes.c_void_p))
 # symmetrize hdiag to reduce numerical error
     hdiag = pyscf.lib.transpose_sum(hdiag, inplace=True) * .5
     return hdiag.ravel()
