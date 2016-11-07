@@ -102,6 +102,10 @@ The Following attributes are used for CASSCF
         space.  Depending on systems, increasing this value migh reduce the
         total number of macro iterations.  The value between 2 - 8 is preferred.
         Default is 4.
+    frozen : int or list
+        If integer is given, the inner-most orbitals are excluded from optimization.
+        Given the orbital indices (0-based) in a list, any doubly occupied core
+        orbitals, active orbitals and external orbitals can be frozen.
     ah_level_shift : float, for AH solver.
         Level shift for the Davidson diagonalization in AH solver.  Default is 0.
     ah_conv_tol : float, for AH solver.
