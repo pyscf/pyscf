@@ -817,7 +817,7 @@ void FCIcontract_2e_spin0_symm(double *eri, double *ci0, double *ci1,
                 blen = MIN(STRB_BLKSIZE, na-ib);
                 memset(ci1buf, 0, sizeof(double) * na*blen);
 #pragma omp for schedule(static, 112)
-                for (strk = 0; strk < na; strk++) {
+                for (strk = ib; strk < na; strk++) {
                         ctr_rhf2esym_kern(eri, ci0, ci1, ci1buf, t1buf,
                                           MIN(STRB_BLKSIZE, strk-ib), blen,
                                           MIN(STRB_BLKSIZE, strk+1-ib),
