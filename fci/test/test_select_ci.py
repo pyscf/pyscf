@@ -153,6 +153,8 @@ class KnowValues(unittest.TestCase):
         eri = eri.reshape(norb,norb,norb,norb)
 
         myci = select_ci.SelectCI()
+        myci.select_cutoff = 1e-3
+        myci.ci_coeff_cutoff = 1e-3
         e1, c1 = myci.kernel(h1e, eri, norb, nelec)
         ci_strs = c1[1]
         self.assertAlmostEqual(e1, -11.894559902235624, 9)

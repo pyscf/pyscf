@@ -341,11 +341,9 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
 
     ncas = casci.ncas
     nelecas = casci.nelecas
-    ncore = casci.ncore
-    mo_core, mo_cas, mo_vir = extract_orbs(mo_coeff, ncas, nelecas, ncore)
 
     # 2e
-    eri_cas = casci.get_h2eff(mo_cas)
+    eri_cas = casci.get_h2eff(mo_coeff)
     t1 = log.timer('integral transformation to CAS space', *t0)
 
     # 1e
@@ -506,8 +504,9 @@ class CASCI(lib.StreamObject):
     def ao2mo(self, mo_coeff=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff[:,self.ncore:self.ncore+self.ncas]
+        elif mo_coeff.shape[1] != self.ncas:
+            mo_coeff = mo_coeff[:,self.ncore:self.ncore+self.ncas]
 
-        nao, nmo = mo_coeff.shape
         if self._scf._eri is not None:
             eri = ao2mo.full(self._scf._eri, mo_coeff,
                              max_memory=self.max_memory)
