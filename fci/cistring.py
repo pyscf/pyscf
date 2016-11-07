@@ -118,7 +118,7 @@ def reform_linkstr_index(link_index):
                 ai = a*(a+1)//2+i
             else:
                 ai = i*(i+1)//2+a
-            link_new[k,j] = (ai,str1,sign,0)
+            link_new[k,j] = (ai,0,str1,sign)
     return link_new
 
 def gen_linkstr_index_trilidx(orb_list, nocc, strs=None):

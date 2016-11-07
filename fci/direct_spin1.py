@@ -386,11 +386,11 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     nb = link_indexb.shape[0]
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
 
+    addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, max(pspace_size,nroots))
     if pspace_size > 0:
-        addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, pspace_size)
         pw, pv = scipy.linalg.eigh(h0)
     else:
-        pw = pv = addr = None
+        pw = pv = None
 
     if pspace_size >= na*nb and ci0 is None and not davidson_only:
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
