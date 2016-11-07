@@ -297,8 +297,8 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                            ah_start_tol, ah_start_cycle, max_cycle)
                 ikf += 1
                 if imic > 3 and norm_gorb > norm_gkf*mf.ah_grad_trust_region:
-                    g_orb = g_orb - hdxi
-                    dr = dr - dxi
+                    g_orb = g_orb - hdxi*.5
+                    dr = dr - dxi*.5
                     norm_gorb = numpy.linalg.norm(g_orb)
                     log.debug('|g| >> keyframe, Restore previouse step')
                     break
@@ -333,8 +333,8 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                         g_orb = g_kf = g_kf1
                         norm_gorb = norm_gkf = norm_gkf1
                     else:
-                        g_orb = g_orb - hdxi
-                        dr = dr - dxi
+                        g_orb = g_orb - hdxi*.5
+                        dr = dr - dxi*.5
                         norm_gorb = numpy.linalg.norm(g_orb)
                         log.debug('Out of trust region. Restore previouse step')
                         break

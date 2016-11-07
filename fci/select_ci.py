@@ -3,6 +3,19 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+Selected CI
+
+Simple usage::
+
+    >>> from pyscf import gto, scf, ao2mo, fci
+    >>> mol = gto.M(atom='C 0 0 0; C 0 0 1')
+    >>> mf = scf.RHF(mol).run()
+    >>> h1 = mf.mo_coeff.T.dot(mf.get_hcore()).dot(mf.mo_coeff)
+    >>> h2 = ao2mo.kernel(mol, mf.mo_coeff)
+    >>> e = fci.select_ci.kernel(h1, h2, mf.mo_coeff.shape[1], mol.nelectron)[0]
+'''
+
 import ctypes
 import numpy
 from pyscf import lib
@@ -387,7 +400,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None, link_index=None,
         de, e_last = e-e_last, e
         log.info('cycle %d  E = %.15g  dE = %.8g', icycle, e, de)
 
-        if ci0.shape == (namax,nbmax) or abs(de) < tol*10:
+        if ci0.shape == (namax,nbmax) or abs(de) < tol*1e2:
             conv = True
             break
 
