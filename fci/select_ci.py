@@ -366,16 +366,15 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     def hop(c):
         hc = myci.contract_2e(h2e, (c, ci_strs), norb, nelec, link_index)
         return hc.ravel()
-    precond = lambda x, e, *args: x/(hdiag-e+1e-4)
+    precond = lambda x, e, *args: x/(hdiag-e+myci.level_shift)
 
     namax = cistring.num_strings(norb, nelec[0])
     nbmax = cistring.num_strings(norb, nelec[1])
     e_last = 0
-    float_tol = 1e-3
-    tol_decay_rate = (myci.float_tol/float_tol) ** (2./(norb-.5))
+    float_tol = 4e-4
     conv = False
     for icycle in range(norb):
-        float_tol = max(float_tol*tol_decay_rate, myci.float_tol)
+        float_tol = max(float_tol*.25, tol)
         log.debug('cycle %d  ci.shape %s  float_tol %g',
                   icycle, (len(ci_strs[0]), len(ci_strs[1])), float_tol)
 
@@ -388,13 +387,16 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None, link_index=None,
         de, e_last = e-e_last, e
         log.info('cycle %d  E = %.15g  dE = %.8g', icycle, e, de)
 
-        if ci0.shape == (namax,nbmax) or abs(de) < myci.float_tol*10:
+        if ci0.shape == (namax,nbmax) or abs(de) < tol*10:
             conv = True
             break
 
-        last_ci0_size = len(ci_strs[0]) * len(ci_strs[1])
+        last_ci0_size = float(len(ci_strs[0])), float(len(ci_strs[1]))
         ci0, ci_strs = enlarge_space(myci, (ci0, ci_strs), h2e, norb, nelec)
-        if len(ci_strs[0])*len(ci_strs[1]) < last_ci0_size*1.02:
+        na = len(ci_strs[0])
+        nb = len(ci_strs[1])
+        if ((.99 < na/last_ci0_size[0] < 1.01) and
+            (.99 < nb/last_ci0_size[1] < 1.01)):
             conv = True
             break
 
@@ -406,8 +408,6 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                     max_memory=max_memory, verbose=log, **kwargs)
     log.info('Select CI  E = %.15g', e)
 
-    na = len(ci_strs[0])
-    nb = len(ci_strs[1])
     if nroots > 1:
         return e, [(ci.reshape(na,nb),ci_strs) for ci in c]
     else:
@@ -619,9 +619,8 @@ def contract_ss(civec_strs, norb, nelec):
 class SelectCI(direct_spin1.FCISolver):
     def __init__(self, mol=None):
         direct_spin1.FCISolver.__init__(self, mol)
-        self.ci_coeff_cutoff = 5e-4
-        self.select_cutoff = 5e-4
-        self.float_tol = 1e-6
+        self.ci_coeff_cutoff = .5e-3
+        self.select_cutoff = .5e-3
         self.conv_tol = 1e-9
 
 ##################################################
@@ -635,7 +634,6 @@ class SelectCI(direct_spin1.FCISolver):
         direct_spin1.FCISolver.dump_flags(self, verbose)
         logger.info(self, 'ci_coeff_cutoff %g', self.ci_coeff_cutoff)
         logger.info(self, 'select_cutoff   %g', self.select_cutoff)
-        logger.info(self, 'float_tol       %g', self.float_tol)
 
     def contract_2e(self, eri, civec_strs, norb, nelec, link_index=None):
 # The argument civec_strs is a CI vector in function FCISolver.contract_2e.
