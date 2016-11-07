@@ -774,11 +774,13 @@ class SelectCI(direct_spin1.FCISolver):
         if not isinstance(civec_strs[1], (tuple,list)):
             assert(civec_strs.size == len(self._strs[0])*len(self._strs[1]))
             civec_strs = (civec_strs, self._strs)
-        if not isinstance(nelec, (int, numpy.integer)):
-            nelec = sum(nelec)
+        if isinstance(nelec, (int, numpy.integer)):
+            nelec_tot = nelec
+        else:
+            nelec_tot = sum(nelec)
         dm2 = make_rdm2(civec_strs, norb, nelec, link_index)
-        if nelec > 1:
-            dm1 = numpy.einsum('iikl->kl', dm2) / (nelec-1)
+        if nelec_tot > 1:
+            dm1 = numpy.einsum('iikl->kl', dm2) / (nelec_tot-1)
         else:
             dm1 = make_rdm1(civec_strs, norb, nelec, link_index)
         return dm1, dm2
