@@ -11,6 +11,7 @@ from pyscf import lib
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 from pyscf.fci import select_ci
+from pyscf.fci import spin_op
 
 norb = 6
 nelec = 6
@@ -79,11 +80,7 @@ class KnowValues(unittest.TestCase):
 
     def test_contract(self):
         myci = select_ci.SelectCI()
-        addrsa = [cistring.str2addr(norb, nelec//2, x) for x in ci_strs[0]]
-        addrsb = [cistring.str2addr(norb, nelec//2, x) for x in ci_strs[1]]
-        na = cistring.num_strings(norb, nelec//2)
-        ci0 = numpy.zeros((na,na))
-        lib.takebak_2d(ci0, ci_coeff, addrsa, addrsb)
+        ci0 = select_ci.to_fci(ci_coeff, ci_strs, norb, nelec)
         e1 = numpy.dot(ci_coeff.ravel(), select_ci.contract_2e(eri, (ci_coeff, ci_strs), norb, nelec).ravel())
         e2 = numpy.dot(ci0.ravel(), direct_spin1.contract_2e(eri, ci0, norb, nelec).ravel())
         self.assertAlmostEqual(e1, e2, 9)
@@ -216,6 +213,57 @@ class KnowValues(unittest.TestCase):
         c_index1 = select_ci.gen_cre_linkstr(strs, norb, nelec)
         c_index1[:,:,1] = 0
         self.assertTrue(numpy.all(c_index0 == c_index1))
+
+    def test_from_to_fci(self):
+        ci0 = select_ci.to_fci(ci_coeff, ci_strs, norb, nelec)
+        ci1 = select_ci.from_fci(ci0, ci_strs, norb, nelec)
+        self.assertAlmostEqual(abs(ci1-ci_coeff).sum(), 0, 12)
+
+    def test_rdm(self):
+        norb, nelec = 10, 4
+        strs = cistring.gen_strings4orblist(range(norb), nelec)
+        numpy.random.seed(11)
+        mask = numpy.random.random(len(strs)) > .6
+        strsa = strs[mask]
+        mask = numpy.random.random(len(strs)) > .7
+        strsb = strs[mask]
+        ci_strs = (strsa, strsb)
+        ci_coeff = numpy.random.random((len(strsa),len(strsb)))
+        ci0 = select_ci.to_fci(ci_coeff, ci_strs, norb, (nelec,nelec))
+        dm1ref, dm2ref = direct_spin1.make_rdm12s(ci0, norb, (nelec,nelec))
+        dm1 = select_ci.make_rdm1s((ci_coeff, ci_strs), norb, (nelec,nelec))
+        self.assertAlmostEqual(abs(dm1[0]-dm1ref[0]).sum(), 0, 9)
+        self.assertAlmostEqual(abs(dm1[1]-dm1ref[1]).sum(), 0, 9)
+        dm2 = select_ci.make_rdm2s((ci_coeff, ci_strs), norb, (nelec,nelec))
+        self.assertAlmostEqual(abs(dm2[0]-dm2ref[0]).sum(), 0, 9)
+        self.assertAlmostEqual(abs(dm2[1]-dm2ref[1]).sum(), 0, 9)
+        self.assertAlmostEqual(abs(dm2[2]-dm2ref[2]).sum(), 0, 9)
+
+        ci1_coeff = numpy.random.random((len(strsa),len(strsb)))
+        ci1 = select_ci.to_fci(ci1_coeff, ci_strs, norb, (nelec,nelec))
+        dm1ref, dm2ref = direct_spin1.trans_rdm12s(ci1, ci0, norb, (nelec,nelec))
+        dm1 = select_ci.trans_rdm1s((ci1_coeff, ci_strs), (ci_coeff, ci_strs), norb, (nelec,nelec))
+        self.assertAlmostEqual(abs(dm1[0]-dm1ref[0]).sum(), 0, 9)
+        self.assertAlmostEqual(abs(dm1[1]-dm1ref[1]).sum(), 0, 9)
+        #dm2 = select_ci.trans_rdm1s((ci1_coeff, ci_strs), (ci_coeff, ci_strs)norb, (nelec,nelec))
+        #self.assertAlmostEqual(abs(dm2[0]-dm2ref[0]).sum(), 0, 9)
+        #self.assertAlmostEqual(abs(dm2[1]-dm2ref[1]).sum(), 0, 9)
+        #self.assertAlmostEqual(abs(dm2[2]-dm2ref[2]).sum(), 0, 9)
+
+    def test_spin_square(self):
+        norb, nelec = 10, 4
+        strs = cistring.gen_strings4orblist(range(norb), nelec)
+        numpy.random.seed(11)
+        mask = numpy.random.random(len(strs)) > .6
+        strsa = strs[mask]
+        mask = numpy.random.random(len(strs)) > .7
+        strsb = strs[mask]
+        ci_strs = (strsa, strsb)
+        ci_coeff = numpy.random.random((len(strsa),len(strsb)))
+        ci0 = select_ci.to_fci(ci_coeff, ci_strs, norb, (nelec,nelec))
+        ss0 = select_ci.spin_square((ci_coeff, ci_strs), norb, (nelec,nelec))
+        ss1 = spin_op.spin_square0(ci0, norb, (nelec,nelec))
+        self.assertAlmostEqual(ss0[0], ss1[0], 9)
 
 
 def gen_des_linkstr(strs, norb, nelec):

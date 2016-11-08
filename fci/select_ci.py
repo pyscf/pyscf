@@ -290,6 +290,8 @@ def kernel_fixed_space(myci, h1e, eri, norb, nelec, ci_strs, ci0=None, link_inde
                        max_memory=None, verbose=None, **kwargs):
     if verbose is None:
         log = logger.Logger(myci.stdout, myci.verbose)
+    elif isinstance(verbose, logger.Logger):
+        log = verbose
     else:
         log = logger.Logger(myci.stdout, verbose)
     if tol is None: tol = myci.conv_tol
@@ -340,6 +342,8 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                        max_memory=None, verbose=None, **kwargs):
     if verbose is None:
         log = logger.Logger(myci.stdout, myci.verbose)
+    elif isinstance(verbose, logger.Logger):
+        log = verbose
     else:
         log = logger.Logger(myci.stdout, verbose)
     if tol is None: tol = myci.conv_tol
@@ -563,9 +567,13 @@ def contract_ss(civec_strs, norb, nelec):
         amap = numpy.zeros((a_index.shape[0],norb,2), dtype=numpy.int32)
         if des:
             for k, tab in enumerate(a_index):
+                sign = tab[:,3]
+                tab = tab[sign!=0]
                 amap[k,tab[:,1]] = tab[:,2:]
         else:
             for k, tab in enumerate(a_index):
+                sign = tab[:,3]
+                tab = tab[sign!=0]
                 amap[k,tab[:,0]] = tab[:,2:]
         return amap
 
@@ -627,6 +635,25 @@ def contract_ss(civec_strs, norb, nelec):
     ci1 *= .5
     ci1 += (neleca-nelecb)**2*.25*ci_coeff
     return ci1
+
+def to_fci(civec, ci_strs, norb, nelec):
+    ci_coeff, ci_strs, nelec = _unpack((civec, ci_strs), nelec)
+    addrsa = [cistring.str2addr(norb, nelec[0], x) for x in ci_strs[0]]
+    addrsb = [cistring.str2addr(norb, nelec[1], x) for x in ci_strs[1]]
+    na = cistring.num_strings(norb, nelec[0])
+    nb = cistring.num_strings(norb, nelec[1])
+    ci0 = numpy.zeros((na,nb))
+    lib.takebak_2d(ci0, ci_coeff, addrsa, addrsb)
+    return ci0
+
+def from_fci(fcivec, ci_strs, norb, nelec):
+    fcivec, ci_strs, nelec = _unpack((fcivec, ci_strs), nelec)
+    addrsa = [cistring.str2addr(norb, nelec[0], x) for x in ci_strs[0]]
+    addrsb = [cistring.str2addr(norb, nelec[1], x) for x in ci_strs[1]]
+    na = cistring.num_strings(norb, nelec[0])
+    nb = cistring.num_strings(norb, nelec[1])
+    fcivec = fcivec.reshape(na,nb)
+    return lib.take_2d(fcivec, addrsa, addrsb)
 
 
 class SelectCI(direct_spin1.FCISolver):
@@ -864,3 +891,6 @@ if __name__ == '__main__':
 
     print(myci.large_ci(c1, norb, nelec))
     print(myci.spin_square(c1, norb, nelec))
+    ci0 = to_fci(c1[0], c1[1], norb, nelec)
+    print(spin_op.spin_square0(ci0, norb, nelec))
+
