@@ -16,7 +16,7 @@ import pyscf.lib
 
 _itrf = pyscf.lib.load_library('libxcfun_itrf')
 
-XC_CODES = {
+XC = XC_CODES = {
 'SLATERX'       :  0,  # Slater LDA exchange
 'VWN5C'         :  1,  # VWN5 LDA Correlation functional
 'BECKEX'        :  2,  # Becke 88 exchange

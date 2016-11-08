@@ -78,7 +78,7 @@ mol.verbose = 4
 # -----------------
 mol.max_memory = 1000 # in MB
 # or use evnrionment  PYSCF_MAX_MEMORY  to control the memory usage
-# (New in pyscf-1.3) eg
+# (New in PySCF-1.3) eg
 #    export PYSCF_MAX_MEMORY=10000 # 10 GB
 #    python 00-input_mole.py
 

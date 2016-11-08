@@ -38,6 +38,7 @@
   - canonical CCSD lambda solver
   - CCSD 1-particle and 2-particle density matrices
   - CCSD gradients
+  - IP/EA/EE-EOM-CCSD
 
 * CCSD(T)
   - canonical CCSD(T)

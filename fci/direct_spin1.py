@@ -506,7 +506,7 @@ class FCISolver(lib.StreamObject):
         log.info('max. cycles = %d', self.max_cycle)
         log.info('conv_tol = %g', self.conv_tol)
         log.info('linear dependence = %g', self.lindep)
-        log.info('level shift = %d', self.level_shift)
+        log.info('level shift = %g', self.level_shift)
         log.info('max iter space = %d', self.max_space)
         log.info('max_memory %d MB', self.max_memory)
         log.info('davidson only = %s', self.davidson_only)

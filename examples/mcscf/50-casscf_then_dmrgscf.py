@@ -3,14 +3,14 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+Use CASSCF orbitals for initial guess of DMRG-SCF
+'''
+
 from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
 from pyscf import dmrgscf
-
-'''
-Use CASSCF orbitals for initial guess of DMRG-SCF
-'''
 
 b = 1.2
 mol = gto.Mole()

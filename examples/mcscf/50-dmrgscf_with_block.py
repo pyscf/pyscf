@@ -3,6 +3,13 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+Use BLOCK program as the DMRG solver and parallel DMRGSCF on different nodes.
+
+BLOCK is invoked through system call.  Different settings.MPIPREFIX needs to
+be specified for PBS and SLURM systems.
+'''
+
 from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
@@ -16,13 +23,6 @@ elif 'PBS_NODEFILE' in os.environ:   # PBS system
     settings.MPIPREFIX = 'mpirun'
 else:  # MPI on single node
     settings.MPIPREFIX = 'mpirun -np 4'
-
-'''
-Use BLOCK program as the DMRG solver and parallel DMRGSCF on different nodes.
-
-BLOCK is invoked through system call.  Different settings.MPIPREFIX needs to
-be specified for PBS and SLURM systems.
-'''
 
 b = 1.2
 mol = gto.M(

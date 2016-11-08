@@ -464,11 +464,11 @@ class CASSCF(casci_uhf.CASCI):
                 if 'norm_gci' in envs:
                     log.info('               |grad[o]|=%5.3g  '
                              '|grad[c]|= %s  |ddm|=%5.3g',
-                             envs['norm_gorb'],
+                             envs['norm_gorb0'],
                              envs['norm_gci'], envs['norm_ddm'])
                 else:
                     log.info('               |grad[o]|=%5.3g  |ddm|=%5.3g',
-                             envs['norm_gorb'], envs['norm_ddm'])
+                             envs['norm_gorb0'], envs['norm_ddm'])
             else:  # Initialization step
                 log.info('CASCI E = %.15g', e_tot)
         return e_tot, e_ci, fcivec

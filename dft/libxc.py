@@ -18,7 +18,7 @@ import pyscf.lib
 _itrf = pyscf.lib.load_library('libxc_itrf')
 
 # xc_code from libxc
-XC_CODES = {
+XC = XC_CODES = {
 'XC_LDA_X'                :   1,  # Exchange
 'XC_LDA_C_WIGNER'         :   2,  # Wigner parametrization
 'XC_LDA_C_RPA'            :   3,  # Random Phase Approximation
