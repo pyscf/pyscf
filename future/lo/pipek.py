@@ -74,13 +74,15 @@ class PipekMezey(boys.Boys):
 
         return g, h_op, h_diag
 
-    def get_grad(self, u):
+    def get_grad(self, u=None):
+        if u is None: u = numpy.eye(self.mo_coeff.shape[1])
         mo_coeff = lib.dot(self.mo_coeff, u)
         pop = atomic_pops(self.mol, mo_coeff, self.pop_method)
         g = numpy.einsum('xii,xip->pi', pop, pop) * 2
         return -self.pack_uniq_var(g)
 
-    def cost_function(self, u):
+    def cost_function(self, u=None):
+        if u is None: u = numpy.eye(self.mo_coeff.shape[1])
         mo_coeff = lib.dot(self.mo_coeff, u)
         pop = atomic_pops(self.mol, mo_coeff, self.pop_method)
         return numpy.einsum('xii,xii->', pop, pop)

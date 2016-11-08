@@ -485,6 +485,7 @@ def fix_spin_(fciobj, shift=.2, ss=None, **kwargs):
         ss_value = ss
 
     fciobj.davidson_only = True
+    old_contract_2e = fciobj.contract_2e
     def contract_2e(eri, fcivec, norb, nelec, link_index=None, **kwargs):
         if isinstance(nelec, (int, numpy.number)):
             sz = (nelec % 2) * .5
@@ -503,21 +504,21 @@ def fix_spin_(fciobj, shift=.2, ss=None, **kwargs):
 
         if ss < sz*(sz+1)+.1:
 # (S^2-ss)|Psi> to shift state other than the lowest state
-            ci1 = spin_op.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
+            ci1 = fciobj.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
             ci1 -= ss * fcivec
         else:
 # (S^2-ss)^2|Psi> to shift states except the given spin.
 # It still relies on the quality of initial guess
-            tmp = spin_op.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
+            tmp = fciobj.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
             tmp -= ss * fcivec
             ci1 = -ss * tmp
-            ci1 += spin_op.contract_ss(tmp, norb, nelec).reshape(fcivec.shape)
+            ci1 += fciobj.contract_ss(tmp, norb, nelec).reshape(fcivec.shape)
             tmp = None
 
         ci1 *= shift
         ci1 += ci0.reshape(fcivec.shape)
         return ci1
-    fciobj.contract_2e, old_contract_2e = contract_2e, fciobj.contract_2e
+    fciobj.contract_2e = contract_2e
     return fciobj
 def fix_spin(fciobj, shift=.1, ss=None):
     return fix_spin_(copy.copy(fciobj), shift, ss)

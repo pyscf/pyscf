@@ -191,14 +191,16 @@ class Boys(ciah.CIAHOptimizer):
 
         return g, h_op, h_diag
 
-    def get_grad(self, u):
+    def get_grad(self, u=None):
+        if u is None: u = numpy.eye(self.mo_coeff.shape[1])
         mo_coeff = lib.dot(self.mo_coeff, u)
         dip = dipole_integral(self.mol, mo_coeff)
         g0 = numpy.einsum('xii,xip->pi', dip, dip)
         g = -self.pack_uniq_var(g0-g0.T) * 2
         return g
 
-    def cost_function(self, u):
+    def cost_function(self, u=None):
+        if u is None: u = numpy.eye(self.mo_coeff.shape[1])
         mo_coeff = lib.dot(self.mo_coeff, u)
         dip = dipole_integral(self.mol, mo_coeff)
         r2 = self.mol.intor_symmetric('cint1e_r2_sph')
