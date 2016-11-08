@@ -13,7 +13,7 @@ from pyscf.lib import logger
 def expmat(a):
     return scipy.linalg.expm(a)
 
-class IAHOptimizer(lib.StreamObject):
+class CIAHOptimizer(lib.StreamObject):
     def __init__(self):
         self.conv_tol_grad = 1e-4
         self.max_stepsize = .05
@@ -255,9 +255,9 @@ def _regular_step(heff, ovlp, xs, lindep, log):
         log.debug3('H eigs %s', scipy.linalg.eigh(heff[1:,1:])[0])
         numpy.set_printoptions(8, linewidth=75)
 
-    #idx = numpy.where(abs(v[0]) > 0.1)[0]
-    #sel = idx[0]
-    sel = 0
+    idx = numpy.where(abs(v[0]) > 0.1)[0]
+    sel = idx[0]
+    #sel = 0
 
     if w[sel] < -1e-5:
         log.debug1('AH might follow negative hessians %s', w[:sel])

@@ -216,7 +216,7 @@ def project_mol(mol, projectbasis={}):
 # Seems the high order terms do not help optimization?
 def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                   conv_tol_grad=None, verbose=None):
-    from pyscf.scf import iah
+    from pyscf.scf import ciah
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -264,9 +264,9 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
         vhf0 = fock_ao - h1e
 
         for ah_end, ihop, w, dxi, hdxi, residual, seig \
-                in iah.davidson_cc(h_op, g_op, precond, x0_guess,
-                                   tol=ah_conv_tol, max_cycle=mf.ah_max_cycle,
-                                   lindep=mf.ah_lindep, verbose=log):
+                in ciah.davidson_cc(h_op, g_op, precond, x0_guess,
+                                    tol=ah_conv_tol, max_cycle=mf.ah_max_cycle,
+                                    lindep=mf.ah_lindep, verbose=log):
             norm_residual = numpy.linalg.norm(residual)
             if (ah_end or ihop == mf.ah_max_cycle or # make sure to use the last step
                 ((norm_residual < ah_start_tol) and (ihop >= ah_start_cycle)) or
@@ -297,8 +297,8 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                            ah_start_tol, ah_start_cycle, max_cycle)
                 ikf += 1
                 if imic > 3 and norm_gorb > norm_gkf*mf.ah_grad_trust_region:
-                    g_orb = g_orb - hdxi*.5
-                    dr = dr - dxi*.5
+                    g_orb = g_orb - hdxi
+                    dr = dr - dxi
                     norm_gorb = numpy.linalg.norm(g_orb)
                     log.debug('|g| >> keyframe, Restore previouse step')
                     break
@@ -333,8 +333,8 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                         g_orb = g_kf = g_kf1
                         norm_gorb = norm_gkf = norm_gkf1
                     else:
-                        g_orb = g_orb - hdxi*.5
-                        dr = dr - dxi*.5
+                        g_orb = g_orb - hdxi
+                        dr = dr - dxi
                         norm_gorb = numpy.linalg.norm(g_orb)
                         log.debug('Out of trust region. Restore previouse step')
                         break

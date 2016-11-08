@@ -12,7 +12,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.lib import linalg_helper
-from pyscf.scf import iah
+from pyscf.scf import ciah
 from pyscf.lo import orth
 from pyscf.lo import boys
 

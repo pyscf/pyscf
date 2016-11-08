@@ -17,7 +17,7 @@ from pyscf.mcscf import mc_ao2mo
 from pyscf.mcscf import chkfile
 from pyscf import ao2mo
 from pyscf import scf
-from pyscf.scf import iah
+from pyscf.scf import ciah
 
 # ref. JCP, 82, 5053;  JCP, 73, 2342
 
@@ -259,9 +259,9 @@ def rotate_orb_cc(casscf, mo, fcasdm1, fcasdm2, eris, x0_guess=None,
         g_op = lambda: g_orb
 
         for ah_end, ihop, w, dxi, hdxi, residual, seig \
-                in iah.davidson_cc(h_op, g_op, precond, x0_guess,
-                                   tol=ah_conv_tol, max_cycle=casscf.ah_max_cycle,
-                                   lindep=casscf.ah_lindep, verbose=log):
+                in ciah.davidson_cc(h_op, g_op, precond, x0_guess,
+                                    tol=ah_conv_tol, max_cycle=casscf.ah_max_cycle,
+                                    lindep=casscf.ah_lindep, verbose=log):
             # residual = v[0] * (g+(h-e)x) ~ v[0] * grad
             norm_residual = numpy.linalg.norm(residual)
             if (ah_end or ihop == casscf.ah_max_cycle or # make sure to use the last step

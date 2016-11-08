@@ -10,7 +10,7 @@ import time
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import iah
+from pyscf.scf import ciah
 from pyscf.lo import orth
 
 
@@ -37,9 +37,9 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
         conv_tol_grad = localizer.conv_tol_grad
 
     u0 = localizer.get_init_guess(localizer.init_guess)
-    rotaiter = iah.rotate_orb_cc(localizer, u0, conv_tol_grad, verbose=log)
+    rotaiter = ciah.rotate_orb_cc(localizer, u0, conv_tol_grad, verbose=log)
     u, g_orb, stat = next(rotaiter)
-    cput1 = log.timer('initializing IAH', *cput0)
+    cput1 = log.timer('initializing CIAH', *cput0)
 
     tot_kf = stat.tot_kf
     tot_hop = stat.tot_hop
@@ -97,9 +97,9 @@ def atomic_init_guess(mol, mo_coeff):
     u, w, vh = numpy.linalg.svd(mo[idx])
     return lib.dot(vh, u.T)
 
-class Boys(iah.IAHOptimizer):
+class Boys(ciah.CIAHOptimizer):
     def __init__(self, mol, mo_coeff=None):
-        iah.IAHOptimizer.__init__(self)
+        ciah.CIAHOptimizer.__init__(self)
         self.mol = mol
         self.stdout = mol.stdout
         self.verbose = mol.verbose
