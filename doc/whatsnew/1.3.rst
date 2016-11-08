@@ -1,0 +1,48 @@
+***************************
+  What's New in PySCF 1.3
+***************************
+
+This article explains new features in PySCF 1.3 alpha, compared to PySCF 1.2.
+PySCF 1.2 was released on Nov 7, 2016.
+
+
+Relase highlights
+=================
+
+New features:
+
+* Quantum chemistry ECP for solid
+* AO-direct CCSD
+* CI coefficients transformation for one-particle basis rotation
+* CIAH second order SCF solver for PBC KRHF and KUHF
+* Dynamically tune active space using DMET-CAS decomposition
+* CISD and CISD 1, 2-particle density matrices
+* Selected-CI and Selected-CI 1, 2-particle density matrices
+
+Improvements:
+
+* Optimized CCSD(T)
+* Change the default kpts mesh (to always include gamma point)
+
+
+API changes
+===========
+
+* In PySCF 1.2, :func:`Cell.make_kpts` generated k-points uniformly along each
+  direction.  Gamma point might be excluded in the so-generated k-points when
+  the number of k-points is even.  In PySCF 1.3, a shift is applied to the
+  k-points so that gamma point are always included.
+
+
+
+Features
+========
+
+
+Dynamic DMET-CAS decomposition
+------------------------------
+
+Selected-CI
+-----------
+
+

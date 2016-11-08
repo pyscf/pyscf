@@ -38,11 +38,17 @@
   - canonical CCSD lambda solver
   - CCSD 1-particle and 2-particle density matrices
   - CCSD gradients
+  - IP/EA/EE-EOM-CCSD
 
 * CCSD(T)
   - canonical CCSD(T)
   - canonical density matrices
   - canonical gradients
+
+* CI
+  - CISD 1, 2-particle density matrices
+  - Selected-CI
+  - Selected-CI 1, 2-particle density matrices
 
 * Full CI
   - Direct-CI solver for spin degenerated Hamiltonian

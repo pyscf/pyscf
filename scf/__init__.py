@@ -2,14 +2,15 @@
 # -*- coding: utf-8
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 
-'''Non-relativistic and relativistic Hartree-Fock
+'''
+Non-relativistic and relativistic Hartree-Fock
+==============================================
 
 Simple usage::
 
     >>> from pyscf import gto, scf
     >>> mol = gto.M(atom='H 0 0 0; H 0 0 1')
-    >>> mf = scf.RHF(mol)
-    >>> mf.scf()
+    >>> mf = scf.RHF(mol).run()
 
 :func:`scf.RHF` returns an instance of SCF class.  There are some parameters
 to control the SCF method.

@@ -2,8 +2,8 @@
   What's New in PySCF 1.2
 ***************************
 
-This article explains new features in PySCF 1.2 beta (feature freeze), compared
-to PySCF 1.1.  PySCF 1.1 was released on Jun 4, 2016.
+This article explains new features in PySCF 1.2, compared to PySCF 1.1.
+PySCF 1.1 was released on Jun 4, 2016.
 
 
 Relase highlights
@@ -22,7 +22,7 @@ New features:
 * State average CASSCF helper function for mixed spin/spatial-symmetry FCI solvers
 * U-CCSD (based on spin-orbital formulation)
 * Function to dump CASSCF canonical orbitals in molden format
-* General iterative augmented hessian (IAH) optimizer
+* Co-iterative augmented hessian (CIAH) optimizer
 * Optimized einsum function using numpy.tensordot function
 * Burkatzi-Filippi-Dolg pseudo potential
 * FCI solver to support integrals which do not have 8-fold symmetry
@@ -39,7 +39,7 @@ Improvements:
 * Orbitals space symmetrization
 * CASSCF subspace (core, active, external) symmetrization
 * Created X2C object to hold X2C functions and parameters
-* Boys, Edmiston, Pipek-Mezey Localization with general IAH optimizer
+* Boys, Edmiston, Pipek-Mezey Localization with general CIAH optimizer
 * Asynchronized IO to overlap integration and IO for ao2mo integral transformation
 * Fixing orbital ordering for degenerated SCF orbitals
 
@@ -161,15 +161,15 @@ by overiding the :attr:`with_df` attributes::
     pbc_mf = pbc_mdf.update(pbc_mf)
 
 
-IAH orbital optimizer
----------------------
-Iterative augmented hessian (IAH) orbital optimizer is a Newton optimization
+CIAH orbital optimizer
+----------------------
+Co-iterative augmented hessian (CIAH) orbital optimizer is a Newton optimization
 implementation.  By reusing and approximating the orbital Hessian, it limited
 the calls to the expensive operation H*x (Hessian times trial vector).  It can
 speed up the SCF and orbital localization convergence.  IAH-SCF optimization
 has its own function wrapper defined in :mod:`scf` module, see
 :func:`scf.newton` and :func:`scf.fast_scf`.  The orbital localization methods
-Foster-Boys, Edmiston-Ruedenberg, Pipek-Mezey are deployed with IAH orbital
+Foster-Boys, Edmiston-Ruedenberg, Pipek-Mezey are deployed with CIAH orbital
 optimizer.
 
 

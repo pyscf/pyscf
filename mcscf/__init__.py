@@ -6,8 +6,7 @@ Simple usage::
 
     >>> from pyscf import gto, scf, mcscf
     >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
-    >>> mf = scf.RHF(mol)
-    >>> mf.scf()
+    >>> mf = scf.RHF(mol).run()
     >>> mc = mcscf.CASCI(mf, 6, 6)
     >>> mc.kernel()[0]
     -108.980200816243354

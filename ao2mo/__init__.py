@@ -2,6 +2,18 @@
 # -*- coding: utf-8
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 
+'''
+General Integral transformation module
+======================================
+
+Simple usage::
+
+    >>> from pyscf import gto, scf, ao2mo
+    >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
+    >>> mf = scf.RHF(mol).run()
+    >>> mo_ints = ao2mo.kernel(mol, mf.mo_coeff)
+'''
+
 import tempfile
 import numpy
 import h5py
@@ -295,7 +307,7 @@ def general(eri_or_mol, mo_coeffs, *args, **kwargs):
 
 def kernel(eri_or_mol, mo_coeffs, *args, **kwargs):
     r'''Transfer arbitrary spherical AO integrals to MO integrals, for given
-    orbitals or four sets of orbitals.  See also :func:`full` and :func:`kernel`.
+    orbitals or four sets of orbitals.  See also :func:`ao2mo.full` and :func:`ao2mo.general`.
     '''
     if isinstance(mo_coeffs, numpy.ndarray) and mo_coeffs.ndim == 2:
         return full(eri_or_mol, mo_coeffs, *args, **kwargs)
