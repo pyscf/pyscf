@@ -3,34 +3,19 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-'''
-Selected CI
-
-Simple usage::
-
-    >>> from pyscf import gto, scf, ao2mo, fci
-    >>> mol = gto.M(atom='C 0 0 0; C 0 0 1')
-    >>> mf = scf.RHF(mol).run()
-    >>> h1 = mf.mo_coeff.T.dot(mf.get_hcore()).dot(mf.mo_coeff)
-    >>> h2 = ao2mo.kernel(mol, mf.mo_coeff)
-    >>> e = fci.select_ci.kernel(h1, h2, mf.mo_coeff.shape[1], mol.nelectron)[0]
-'''
-
 import ctypes
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
-from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 from pyscf.fci import direct_spin1_symm
-from pyscf.fci import rdm
 from pyscf.fci import select_ci
 from pyscf.fci import addons
 
 libfci = lib.load_library('libfci')
 
-def reorder4irrep(eri, norb, link_index, orbsym):
+def reorder4irrep_minors(eri, norb, link_index, orbsym):
     if orbsym is None:
         return eri, link_index, numpy.array(norb, dtype=numpy.int32)
     orbsym = numpy.asarray(orbsym) % 10
@@ -58,8 +43,8 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None, orbsym=None):
     idx,idy = numpy.tril_indices(norb, -1)
     idx = idx * norb + idy
     eri1 = lib.take_2d(eri1.reshape(norb**2,-1), idx, idx) * 2
-    eri1, dd_indexa, dimirrep = reorder4irrep(eri1, norb, dd_indexa, orbsym)
-    dd_indexb = reorder4irrep(eri1, norb, dd_indexb, orbsym)[1]
+    eri1, dd_indexa, dimirrep = reorder4irrep_minors(eri1, norb, dd_indexa, orbsym)
+    dd_indexb = reorder4irrep_minors(eri1, norb, dd_indexb, orbsym)[1]
     fcivec = ci_coeff.reshape(na,nb)
     # (bb|bb)
     if nelec[1] > 1:
@@ -110,23 +95,6 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None, orbsym=None):
                                     ctypes.c_int(len(dimirrep)))
 
     return select_ci._as_SCIvector(ci1.reshape(ci_coeff.shape), ci_strs)
-
-def select_strs(myci, eri, eri_pq_max, civec_max, strs, norb, nelec):
-    strs = numpy.asarray(strs, dtype=numpy.int64)
-    nstrs = len(strs)
-    nvir = norb - nelec
-    strs_add = numpy.empty((nstrs*(nelec*nvir)**2//4), dtype=numpy.int64)
-    libfci.SCIselect_strs.restype = ctypes.c_int
-    nadd = libfci.SCIselect_strs(strs_add.ctypes.data_as(ctypes.c_void_p),
-                                 strs.ctypes.data_as(ctypes.c_void_p),
-                                 eri.ctypes.data_as(ctypes.c_void_p),
-                                 eri_pq_max.ctypes.data_as(ctypes.c_void_p),
-                                 civec_max.ctypes.data_as(ctypes.c_void_p),
-                                 ctypes.c_double(myci.select_cutoff),
-                                 ctypes.c_int(norb), ctypes.c_int(nelec),
-                                 ctypes.c_int(nstrs))
-    strs_add = sorted(set(strs_add[:nadd]) - set(strs))
-    return numpy.asarray(strs_add, dtype=numpy.int64)
 
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
            lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
@@ -213,6 +181,7 @@ if __name__ == '__main__':
     from pyscf import scf
     from pyscf import ao2mo
     from pyscf import symm
+    from pyscf.fci import cistring
 
     norb, nelec = 7, (4,4)
     strs = cistring.gen_strings4orblist(range(norb), nelec[0])

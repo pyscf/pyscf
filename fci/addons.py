@@ -501,12 +501,6 @@ def fix_spin_(fciobj, shift=.2, ss=None, **kwargs):
         else:
             ss = ss_value
 
-        ci0 = old_contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
-        if ss == 0:
-            na = int(numpy.sqrt(fcivec.size))
-            ci0 = lib.transpose_sum(ci0.reshape(na,na), inplace=True)
-            ci0 *= .5
-
         if ss < sz*(sz+1)+.1:
 # (S^2-ss)|Psi> to shift state other than the lowest state
             ci1 = fciobj.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
@@ -519,8 +513,9 @@ def fix_spin_(fciobj, shift=.2, ss=None, **kwargs):
             ci1 = -ss * tmp
             ci1 += fciobj.contract_ss(tmp, norb, nelec).reshape(fcivec.shape)
             tmp = None
-
         ci1 *= shift
+
+        ci0 = old_contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
         ci1 += ci0.reshape(fcivec.shape)
         return ci1
     fciobj.contract_2e = contract_2e

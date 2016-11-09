@@ -313,7 +313,7 @@ def kernel_fixed_space(myci, h1e, eri, norb, nelec, ci_strs, ci0=None,
     h2e = ao2mo.restore(1, h2e, norb)
 
     link_index = _all_linkstr_index(ci_strs, norb, nelec)
-    hdiag = make_hdiag(h1e, eri, ci_strs, norb, nelec)
+    hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
 
     if isinstance(ci0, _SCIvector):
         if ci0.size == na*nb:
@@ -374,9 +374,9 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
         ci_strs = (numpy.asarray([int('1'*nelec[0], 2)]),
                    numpy.asarray([int('1'*nelec[1], 2)]))
         ci0 = _as_SCIvector(numpy.ones((1,1)), ci_strs)
-        ci0 = enlarge_space(myci, ci0, h2e, norb, nelec)
+        ci0 = myci.enlarge_space(ci0, h2e, norb, nelec)
         ci_strs = ci0._strs
-        hdiag = make_hdiag(h1e, eri, ci_strs, norb, nelec)
+        hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
         ci0 = myci.get_init_guess(ci_strs, norb, nelec, nroots, hdiag)
 
     def hop(c):
@@ -396,7 +396,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
                   icycle, (len(ci_strs[0]), len(ci_strs[1])), float_tol)
 
         link_index = _all_linkstr_index(ci_strs, norb, nelec)
-        hdiag = make_hdiag(h1e, eri, ci_strs, norb, nelec)
+        hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
         #e, ci0 = lib.davidson(hop, ci0.reshape(-1), precond, tol=float_tol)
         e, ci0 = myci.eig(hop, ci0, precond, tol=float_tol, lindep=lindep,
                           max_cycle=max_cycle, max_space=max_space, nroots=nroots,
@@ -410,23 +410,24 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
             de, e_last = e-e_last, e
             log.info('cycle %d  E = %.15g  dE = %.8g', icycle, e, de)
 
-        if ci0[0].shape == (namax,nbmax) or abs(de) < tol*1e2:
+        if ci0[0].shape == (namax,nbmax):
             conv = True
             break
 
         last_ci0_size = float(len(ci_strs[0])), float(len(ci_strs[1]))
-        ci0 = enlarge_space(myci, ci0, h2e, norb, nelec)
+        ci0 = myci.enlarge_space(ci0, h2e, norb, nelec)
         na = len(ci0[0]._strs[0])
         nb = len(ci0[0]._strs[1])
         if ((.99 < na/last_ci0_size[0] < 1.01) and
-            (.99 < nb/last_ci0_size[1] < 1.01)):
+            (.99 < nb/last_ci0_size[1] < 1.01) and
+            abs(de) < tol*1e3):
             conv = True
             break
 
     ci_strs = ci0[0]._strs
     log.debug('Extra CI in selected space %s', (len(ci_strs[0]), len(ci_strs[1])))
     link_index = _all_linkstr_index(ci_strs, norb, nelec)
-    hdiag = make_hdiag(h1e, eri, ci_strs, norb, nelec)
+    hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
     e, c = myci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
                     max_cycle=max_cycle, max_space=max_space, nroots=nroots,
                     max_memory=max_memory, verbose=log, **kwargs)
@@ -702,6 +703,10 @@ class SelectCI(direct_spin1.FCISolver):
         ci0 = direct_spin1._get_init_guess(na, nb, nroots, hdiag)
         return [_as_SCIvector(x, ci_strs) for x in ci0]
 
+    def make_hdiag(self, h1e, eri, ci_strs, norb, nelec):
+        return make_hdiag(h1e, eri, ci_strs, norb, nelec)
+
+    enlarge_space = enlarge_space
     kernel = kernel_float_space
     kernel_fixed_space = kernel_fixed_space
 
