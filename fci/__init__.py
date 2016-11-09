@@ -33,6 +33,7 @@ from pyscf.fci.spin_op import spin_square
 from pyscf.fci.direct_spin1 import make_pspace_precond, make_diag_precond
 from pyscf.fci import direct_nosym
 from pyscf.fci import select_ci
+from pyscf.fci import select_ci_symm
 from pyscf.fci.select_ci import SelectCI, SCI
 
 def solver(mol, singlet=True, symm=None):

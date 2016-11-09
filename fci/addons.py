@@ -171,6 +171,19 @@ def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
     return ci1
 
 
+def _symmetrize_wfn(ci, strsa, strsb, orbsym, wfnsym=0):
+    neleca, nelecb = _unpack(nelec)
+    ci = ci.reshape(strsa.size,strsb.size)
+    airreps = numpy.zeros(strsa.size, dtype=numpy.int32)
+    birreps = numpy.zeros(strsb.size, dtype=numpy.int32)
+    for i, ir in enumerate(orbsym):
+        airreps[numpy.bitwise_and(strsa, 1<<i) > 0] ^= ir
+        birreps[numpy.bitwise_and(strsb, 1<<i) > 0] ^= ir
+    mask = (numpy.bitwise_xor(airreps.reshape(-1,1), birreps) == wfnsym)
+    ci1 = numpy.zeros_like(ci)
+    ci1[mask] = ci[mask]
+    ci1 *= 1/numpy.linalg.norm(ci1)
+    return ci1
 def symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym=0):
     '''Symmetrize the CI wavefunction by zeroing out the determinants which
     do not have the right symmetry.
@@ -195,18 +208,7 @@ def symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym=0):
     neleca, nelecb = _unpack(nelec)
     strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
     strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
-    ci = ci.reshape(strsa.size,strsb.size)
-    airreps = numpy.zeros(strsa.size, dtype=numpy.int32)
-    birreps = numpy.zeros(strsb.size, dtype=numpy.int32)
-    for i in range(norb):
-        airreps[numpy.bitwise_and(strsa, 1<<i) > 0] ^= orbsym[i]
-        birreps[numpy.bitwise_and(strsb, 1<<i) > 0] ^= orbsym[i]
-    #print(airreps)
-    #print(birreps)
-    mask = (numpy.bitwise_xor(airreps.reshape(-1,1), birreps) == wfnsym)
-    ci1 = numpy.zeros_like(ci)
-    ci1[mask] = ci[mask]
-    return ci1 * (1/numpy.linalg.norm(ci1))
+    return _symmetrize_wfn(ci, strsa, strsb, orbsym, wfnsym)
 
 def guess_wfnsym(ci, norb, nelec, orbsym):
     '''Guess the wavefunction symmetry based on the non-zero elements in the

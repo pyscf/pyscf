@@ -21,16 +21,15 @@ direct_nosym        No            No             No**               Yes
 import sys
 import ctypes
 import numpy
-import pyscf.lib
-import pyscf.gto
-import pyscf.ao2mo
+from pyscf import ao2mo
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf import symm
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 from pyscf.fci import addons
 
-libfci = pyscf.lib.load_library('libfci')
+libfci = lib.load_library('libfci')
 
 def reorder4irrep(eri, norb, link_index, orbsym):
     if orbsym is None:
@@ -50,7 +49,7 @@ def reorder4irrep(eri, norb, link_index, orbsym):
 # of the sorted pair
     order = numpy.argsort(trilirrep)
     rank = order.argsort()
-    eri = eri.take(order,axis=0).take(order,axis=1)
+    eri = lib.take_2d(eri, order, order)
     link_index_irrep = link_index.copy()
     link_index_irrep[:,:,0] = rank[link_index[:,:,0]]
     return numpy.asarray(eri, order='C'), link_index_irrep, dimirrep
@@ -71,7 +70,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None):
     if orbsym is None:
         return direct_spin1.contract_2e(eri, fcivec, norb, nelec, link_index)
 
-    eri = pyscf.ao2mo.restore(4, eri, norb)
+    eri = ao2mo.restore(4, eri, norb)
     link_indexa, link_indexb = direct_spin1._unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
@@ -179,19 +178,12 @@ def _id_wfnsym(cis, norb, nelec, wfnsym):
         wfnsym = symm.irrep_name2id(cis.mol.groupname, wfnsym) % 10
     return wfnsym
 
-def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
-    if isinstance(nelec, (int, numpy.number)):
-        nelecb = nelec//2
-        neleca = nelec - nelecb
-    else:
-        neleca, nelecb = nelec
-    strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
-    strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
+def _get_init_guess(strsa, strsb, nroots, hdiag, orbsym, wfnsym=0):
     airreps = numpy.zeros(strsa.size, dtype=numpy.int32)
     birreps = numpy.zeros(strsb.size, dtype=numpy.int32)
-    for i in range(norb):
-        airreps[numpy.bitwise_and(strsa, 1<<i) > 0] ^= orbsym[i]
-        birreps[numpy.bitwise_and(strsb, 1<<i) > 0] ^= orbsym[i]
+    for i, ir in enumerate(orbsym):
+        airreps[numpy.bitwise_and(strsa, 1<<i) > 0] ^= ir
+        birreps[numpy.bitwise_and(strsb, 1<<i) > 0] ^= ir
     na = len(strsa)
     nb = len(strsb)
 
@@ -207,10 +199,22 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
             iroot += 1
             if iroot >= nroots:
                 break
-    # Add noise
-    ci0[0][0 ] += 1e-5
-    ci0[0][-1] -= 1e-5
+    try:
+        # Add noise
+        ci0[0][0 ] += 1e-5
+        ci0[0][-1] -= 1e-5
+    except IndexError:
+        raise IndexError('Configuration of required symmetry (wfnsym=%d) not found' % wfnsym)
     return ci0
+def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
+    if isinstance(nelec, (int, numpy.number)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
+    strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
+    strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
+    return _get_init_guess(strsa, strsb, nroots, hdiag, orbsym, wfnsym)
 
 
 class FCISolver(direct_spin1.FCISolver):
@@ -222,7 +226,7 @@ class FCISolver(direct_spin1.FCISolver):
     def dump_flags(self, verbose=None):
         if verbose is None: verbose = self.verbose
         direct_spin1.FCISolver.dump_flags(self, verbose)
-        log = pyscf.lib.logger.Logger(self.stdout, verbose)
+        log = logger.Logger(self.stdout, verbose)
         if isinstance(self.wfnsym, str):
             log.info('specified CI wfn symmetry = %s', self.wfnsym)
         elif isinstance(self.wfnsym, (int, numpy.number)):
@@ -302,7 +306,6 @@ if __name__ == '__main__':
     from functools import reduce
     from pyscf import gto
     from pyscf import scf
-    from pyscf import ao2mo
 
     mol = gto.Mole()
     mol.verbose = 0

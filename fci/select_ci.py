@@ -287,7 +287,7 @@ def make_hdiag(h1e, eri, ci_strs, norb, nelec):
                              ci_strs[1].ctypes.data_as(ctypes.c_void_p))
     return hdiag
 
-def kernel_fixed_space(myci, h1e, eri, norb, nelec, ci_strs, ci0=None, link_index=None,
+def kernel_fixed_space(myci, h1e, eri, norb, nelec, ci_strs, ci0=None,
                        tol=None, lindep=None, max_cycle=None, max_space=None,
                        nroots=None, davidson_only=None,
                        max_memory=None, verbose=None, **kwargs):
@@ -312,8 +312,7 @@ def kernel_fixed_space(myci, h1e, eri, norb, nelec, ci_strs, ci0=None, link_inde
     h2e = direct_spin1.absorb_h1e(h1e, eri, norb, nelec, .5)
     h2e = ao2mo.restore(1, h2e, norb)
 
-    if link_index is None:
-        link_index = _all_linkstr_index(ci_strs, norb, nelec)
+    link_index = _all_linkstr_index(ci_strs, norb, nelec)
     hdiag = make_hdiag(h1e, eri, ci_strs, norb, nelec)
 
     if isinstance(ci0, _SCIvector):
@@ -339,7 +338,7 @@ def kernel_fixed_space(myci, h1e, eri, norb, nelec, ci_strs, ci0=None, link_inde
         return e, _as_SCIvector(c.reshape(na,nb), ci_strs)
 
 
-def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None, link_index=None,
+def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
                        tol=None, lindep=None, max_cycle=None, max_space=None,
                        nroots=None, davidson_only=None,
                        max_memory=None, verbose=None, **kwargs):
@@ -684,7 +683,7 @@ class SelectCI(direct_spin1.FCISolver):
         logger.info(self, 'ci_coeff_cutoff %g', self.ci_coeff_cutoff)
         logger.info(self, 'select_cutoff   %g', self.select_cutoff)
 
-    def contract_2e(self, eri, civec_strs, norb, nelec, link_index=None):
+    def contract_2e(self, eri, civec_strs, norb, nelec, link_index=None, **kwargs):
 # The argument civec_strs is a CI vector in function FCISolver.contract_2e.
 # Save and patch self._strs to make this contract_2e function compatible to
 # FCISolver.contract_2e.
@@ -700,21 +699,8 @@ class SelectCI(direct_spin1.FCISolver):
         '''
         na = len(ci_strs[0])
         nb = len(ci_strs[1])
-        # The "nroots" lowest determinats based on energy expectation value.
-        ci0 = []
-        try:
-            addrs = numpy.argpartition(hdiag, nroots-1)[:nroots]
-        except AttributeError:
-            addrs = numpy.argsort(hdiag)[:nroots]
-        for addr in addrs:
-            x = numpy.zeros((na*nb))
-            x[addr] = 1
-            ci0.append(_as_SCIvector(x.ravel(), ci_strs))
-
-        # Add noise
-        ci0[0][0 ] += 1e-5
-        ci0[0][-1] -= 1e-5
-        return ci0
+        ci0 = direct_spin1._get_init_guess(na, nb, nroots, hdiag)
+        return [_as_SCIvector(x, ci_strs) for x in ci0]
 
     kernel = kernel_float_space
     kernel_fixed_space = kernel_fixed_space
@@ -896,12 +882,11 @@ if __name__ == '__main__':
     print(e - -11.894559902235565)
 
     print(myci.large_ci(c1, norb, nelec))
-    print(myci.spin_square(c1, norb, nelec))
-    ci0 = to_fci(c1, norb, nelec)
-    print(spin_op.spin_square0(ci0, norb, nelec))
+    print(myci.spin_square(c1, norb, nelec)[0] -
+          spin_op.spin_square0(to_fci(c1, norb, nelec), norb, nelec)[0])
 
     myci = SelectCI()
     myci = addons.fix_spin_(myci)
     e1, c1 = myci.kernel(h1e, eri, norb, nelec)
-    print(e1, e1 - -11.894559902235565)
+    print(e1, e1 - -11.89467612053687)
     print(myci.spin_square(c1, norb, nelec))

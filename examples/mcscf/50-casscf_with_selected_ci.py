@@ -23,12 +23,3 @@ mc = mcscf.CASSCF(mf, 8, 6).run()
 mc = mcscf.CASSCF(mf, 8, 6)
 mc.fcisolver = fci.SCI(mol)
 mc.kernel()
-
-#
-# SCI-CASSCF is not invariant wrt the unitary transformation of the active
-# space.  internal_rotation  is able to lower the total CASSCF energy.
-#
-mc = mcscf.CASSCF(mf, 8, 6)
-mc.fcisolver = fci.SCI(mol)
-mc.internal_rotation = True
-mc.kernel()

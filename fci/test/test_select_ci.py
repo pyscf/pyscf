@@ -6,11 +6,14 @@ import numpy
 from pyscf import gto
 from pyscf import scf
 from pyscf import ao2mo
+from pyscf import symm
 from pyscf import fci
 from pyscf import lib
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
+from pyscf.fci import direct_spin1_symm
 from pyscf.fci import select_ci
+from pyscf.fci import select_ci_symm
 from pyscf.fci import spin_op
 
 norb = 6
@@ -265,6 +268,52 @@ class KnowValues(unittest.TestCase):
         ss0 = select_ci.spin_square(ci_coeff, norb, (nelec,nelec))
         ss1 = spin_op.spin_square0(ci0, norb, (nelec,nelec))
         self.assertAlmostEqual(ss0[0], ss1[0], 9)
+
+    def test_contract_2e_symm(self):
+        norb, nelec = 7, (4,4)
+        strs = cistring.gen_strings4orblist(range(norb), nelec[0])
+        numpy.random.seed(11)
+        mask = numpy.random.random(len(strs)) > .3
+        strsa = strs[mask]
+        mask = numpy.random.random(len(strs)) > .2
+        strsb = strs[mask]
+        ci_strs = (strsa, strsb)
+        civec_strs = select_ci._as_SCIvector(numpy.random.random((len(strsa),len(strsb))), ci_strs)
+        orbsym = (numpy.random.random(norb) * 4).astype(int)
+        nn = norb*(norb+1)//2
+        eri = (numpy.random.random(nn*(nn+1)//2)-.2)**3
+        ci0 = select_ci.to_fci(civec_strs, norb, nelec)
+        e1 = numpy.dot(civec_strs.ravel(), select_ci_symm.contract_2e(eri, civec_strs, norb, nelec, orbsym=orbsym).ravel())
+        e2 = numpy.dot(ci0.ravel(), direct_spin1_symm.contract_2e(eri, ci0, norb, nelec, orbsym=orbsym).ravel())
+        self.assertAlmostEqual(e1, e2, 9)
+
+    def test_kernel_symm(self):
+        mol = gto.Mole()
+        mol.verbose = 0
+        mol.output = None
+        mol.atom = [
+            ['O', ( 0., 0.    , 0.   )],
+            ['H', ( 0., -0.757, 0.587)],
+            ['H', ( 0., 0.757 , 0.587)],]
+        mol.basis = 'sto-3g'
+        mol.symmetry = 1
+        mol.build()
+        m = scf.RHF(mol).run()
+
+        norb = m.mo_coeff.shape[1]
+        nelec = mol.nelectron - 2
+        h1e = reduce(numpy.dot, (m.mo_coeff.T, scf.hf.get_hcore(mol), m.mo_coeff))
+        eri = ao2mo.incore.full(m._eri, m.mo_coeff)
+        orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, m.mo_coeff)
+
+        myci = select_ci_symm.SelectCI().set(orbsym=orbsym, select_cutoff=.5e-3)
+        e1, c1 = myci.kernel(h1e, eri, norb, nelec)
+        myci = direct_spin1_symm.FCISolver().set(orbsym=orbsym)
+        e2, c2 = myci.kernel(h1e, eri, norb, nelec)
+
+        self.assertAlmostEqual(e1, e2, 6)
+        c2 = select_ci.from_fci(c2, c1._strs, norb, nelec)
+        self.assertAlmostEqual(abs(numpy.dot(c1.ravel(), c2.ravel())), 1, 6)
 
 
 def gen_des_linkstr(strs, norb, nelec):

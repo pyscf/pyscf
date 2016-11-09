@@ -21,9 +21,8 @@ direct_nosym        No            No             No**               Yes
 import sys
 import ctypes
 import numpy
-import pyscf.lib
-import pyscf.gto
-import pyscf.ao2mo
+from pyscf import lib
+from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf import symm
 from pyscf.fci import cistring
@@ -32,7 +31,7 @@ from pyscf.fci import direct_spin1
 from pyscf.fci import direct_spin1_symm
 from pyscf.fci import addons
 
-libfci = pyscf.lib.load_library('libfci')
+libfci = lib.load_library('libfci')
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=None):
     return direct_spin0.contract_1e(f1e, fcivec, norb, nelec, link_index)
@@ -51,7 +50,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None):
     if orbsym is None:
         return direct_spin0.contract_2e(eri, fcivec, norb, nelec, link_index)
 
-    eri = pyscf.ao2mo.restore(4, eri, norb)
+    eri = ao2mo.restore(4, eri, norb)
     link_index = direct_spin0._unpack(norb, nelec, link_index)
     na, nlink = link_index.shape[:2]
     assert(fcivec.size == na**2)
@@ -69,7 +68,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None):
                                      link_index.ctypes.data_as(ctypes.c_void_p),
                                      dimirrep.ctypes.data_as(ctypes.c_void_p),
                                      ctypes.c_int(len(dimirrep)))
-    return pyscf.lib.transpose_sum(ci1, inplace=True).reshape(fcivec.shape)
+    return lib.transpose_sum(ci1, inplace=True).reshape(fcivec.shape)
 
 
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,

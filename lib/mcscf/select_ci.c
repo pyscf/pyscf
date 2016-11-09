@@ -6,8 +6,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
-#include <omp.h>
-//#include "config.h"
+#include "config.h"
 #include <assert.h>
 #include "vhf/fblas.h"
 #include "np_helper/np_helper.h"
@@ -520,3 +519,132 @@ void SCIrdm2_aaaa(void (*dm2kernel)(), double *rdm2, double *bra, double *ket,
         free(pdm2);
 }
 
+
+/***********************************************************************
+ *
+ * With symmetry
+ *
+ ***********************************************************************/
+static void ctr_bbaa_symm(double *eri, double *ci0, double *ci1,
+                          double *ci1buf, double *t1buf,
+                          int bcount, int stra_id, int strb_id,
+                          int norb, int na, int nb, int nlinka, int nlinkb,
+                          _LinkTrilT *clink_indexa, _LinkTrilT *clink_indexb,
+                          int *dimirrep, int totirrep)
+{
+        const char TRANS_N = 'N';
+        const double D0 = 0;
+        const double D1 = 1;
+        const int nnorb = norb * (norb+1) / 2;
+        int ir, p0;
+        double *t1  = t1buf;
+        double *vt1 = t1buf + nnorb*bcount;
+
+        memset(t1, 0, sizeof(double)*nnorb*bcount);
+        FCIprog_a_t1(ci0, t1, bcount, stra_id, strb_id,
+                     norb, nb, nlinka, clink_indexa);
+        for (ir = 0, p0 = 0; ir < totirrep; ir++) {
+                dgemm_(&TRANS_N, &TRANS_N, &bcount, dimirrep+ir, dimirrep+ir,
+                       &D1,  t1+p0*bcount, &bcount, eri+p0*nnorb+p0, &nnorb,
+                       &D0, vt1+p0*bcount, &bcount);
+                p0 += dimirrep[ir];
+        }
+        FCIspread_b_t1(ci1, vt1, bcount, stra_id, strb_id,
+                       norb, nb, nlinkb, clink_indexb);
+}
+
+void SCIcontract_2e_bbaa_symm(double *eri, double *ci0, double *ci1,
+                              int norb, int na, int nb, int nlinka, int nlinkb,
+                              int *link_indexa, int *link_indexb,
+                              int *dimirrep, int totirrep)
+{
+        _LinkTrilT *clinka = malloc(sizeof(_LinkTrilT) * nlinka * na);
+        _LinkTrilT *clinkb = malloc(sizeof(_LinkTrilT) * nlinkb * nb);
+        FCIcompress_link_tril(clinka, link_indexa, na, nlinka);
+        FCIcompress_link_tril(clinkb, link_indexb, nb, nlinkb);
+
+#pragma omp parallel default(none) \
+        shared(eri, ci0, ci1, norb, na, nb, nlinka, nlinkb, \
+               clinka, clinkb, dimirrep, totirrep)
+{
+        int strk, ib, blen;
+        double *t1buf = malloc(sizeof(double) * STRB_BLKSIZE*norb*(norb+1));
+        double *ci1buf;
+        for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
+                blen = MIN(STRB_BLKSIZE, nb-ib);
+#pragma omp for schedule(static)
+                for (strk = 0; strk < na; strk++) {
+                        ctr_bbaa_symm(eri, ci0, ci1, ci1buf, t1buf,
+                                      blen, strk, ib, norb, na, nb,
+                                      nlinka, nlinkb, clinka, clinkb,
+                                      dimirrep, totirrep);
+                }
+        }
+        free(t1buf);
+}
+        free(clinka);
+        free(clinkb);
+}
+
+static void ctr_aaaa_symm(double *eri, double *ci0, double *ci1,
+                          double *ci1buf, double *t1buf,
+                          int bcount, int stra_id, int strb_id,
+                          int norb, int na, int nb, int nlinka, int nlinkb,
+                          _LinkTrilT *clink_indexa, _LinkTrilT *clink_indexb,
+                          int *dimirrep, int totirrep)
+{
+        const char TRANS_N = 'N';
+        const double D0 = 0;
+        const double D1 = 1;
+        const int nnorb = norb * (norb-1) / 2;
+        int ir, p0;
+        double *t1  = t1buf;
+        double *vt1 = t1buf + nnorb*bcount;
+
+        memset(t1, 0, sizeof(double)*nnorb*bcount);
+        FCIprog_a_t1(ci0, t1, bcount, stra_id, strb_id,
+                     norb, nb, nlinka, clink_indexa);
+        for (ir = 0, p0 = 0; ir < totirrep; ir++) {
+                dgemm_(&TRANS_N, &TRANS_N, &bcount, dimirrep+ir, dimirrep+ir,
+                       &D1,  t1+p0*bcount, &bcount, eri+p0*nnorb+p0, &nnorb,
+                       &D0, vt1+p0*bcount, &bcount);
+                p0 += dimirrep[ir];
+        }
+        FCIspread_a_t1(ci1buf, vt1, bcount, stra_id, 0,
+                       norb, bcount, nlinka, clink_indexa);
+}
+
+void SCIcontract_2e_aaaa_symm(double *eri, double *ci0, double *ci1,
+                              int norb, int na, int nb,
+                              int inter_na, int nlinka, int *link_indexa,
+                              int *dimirrep, int totirrep)
+{
+        _LinkTrilT *clinka = malloc(sizeof(_LinkTrilT) * nlinka * inter_na);
+        FCIcompress_link_tril(clinka, link_indexa, inter_na, nlinka);
+        _LinkTrilT *clinkb;
+
+#pragma omp parallel default(none) \
+        shared(eri, ci0, ci1, norb, na, nb, inter_na, nlinka, clinka, clinkb, \
+               dimirrep, totirrep)
+{
+        int strk, ib, blen;
+        double *t1buf = malloc(sizeof(double) * STRB_BLKSIZE*norb*norb);
+        double *ci1buf = malloc(sizeof(double) * na*STRB_BLKSIZE);
+        for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
+                blen = MIN(STRB_BLKSIZE, nb-ib);
+                memset(ci1buf, 0, sizeof(double) * na*blen);
+#pragma omp for schedule(static)
+                for (strk = 0; strk < inter_na; strk++) {
+                        ctr_aaaa_symm(eri, ci0, ci1, ci1buf, t1buf,
+                                      blen, strk, ib, norb, na, nb,
+                                      nlinka, 0, clinka, clinkb,
+                                      dimirrep, totirrep);
+                }
+#pragma omp critical
+                FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
+        }
+        free(ci1buf);
+        free(t1buf);
+}
+        free(clinka);
+}
