@@ -172,7 +172,6 @@ def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
 
 
 def _symmetrize_wfn(ci, strsa, strsb, orbsym, wfnsym=0):
-    neleca, nelecb = _unpack(nelec)
     ci = ci.reshape(strsa.size,strsb.size)
     airreps = numpy.zeros(strsa.size, dtype=numpy.int32)
     birreps = numpy.zeros(strsb.size, dtype=numpy.int32)
@@ -210,6 +209,26 @@ def symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym=0):
     strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
     return _symmetrize_wfn(ci, strsa, strsb, orbsym, wfnsym)
 
+def _guess_wfnsym(ci, strsa, strsb, orbsym):
+    na = len(strsa)
+    nb = len(strsb)
+    if isinstance(ci, numpy.ndarray) and ci.ndim <= 2:
+        assert(ci.size == na*nb)
+        idx = numpy.argmax(ci)
+    else:
+        assert(ci[0].size == na*nb)
+        idx = ci[0].argmax()
+    stra = strsa[idx // nb]
+    strb = strsa[idx % nb ]
+
+    airrep = 0
+    birrep = 0
+    for i, ir in enumerate(orbsym):
+        if (stra & (1<<i)):
+            airrep ^= ir
+        if (strb & (1<<i)):
+            birrep ^= ir
+    return airrep ^ birrep
 def guess_wfnsym(ci, norb, nelec, orbsym):
     '''Guess the wavefunction symmetry based on the non-zero elements in the
     given CI coefficients.
@@ -228,25 +247,9 @@ def guess_wfnsym(ci, norb, nelec, orbsym):
         Irrep ID
     '''
     neleca, nelecb = _unpack(nelec)
-    na = cistring.num_strings(norb, neleca)
-    nb = cistring.num_strings(norb, nelecb)
-    if isinstance(ci, numpy.ndarray) and ci.ndim <= 2:
-        assert(ci.size == na*nb)
-        idx = numpy.argmax(ci)
-    else:
-        assert(ci[0].size == na*nb)
-        idx = ci[0].argmax()
-    stra = cistring.addr2str(norb, neleca, idx // nb)
-    strb = cistring.addr2str(norb, nelecb, idx % nb )
-
-    airrep = 0
-    birrep = 0
-    for i in range(norb):
-        if (stra & (1<<i)):
-            airrep ^= orbsym[i]
-        if (strb & (1<<i)):
-            birrep ^= orbsym[i]
-    return airrep ^ birrep
+    strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
+    strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
+    return _guess_wfnsym(ci, strsa, strsb, orbsym)
 
 
 def des_a(ci0, norb, neleca_nelecb, ap_id):

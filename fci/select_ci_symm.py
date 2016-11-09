@@ -163,7 +163,8 @@ class SelectCI(select_ci.SelectCI):
         if fcivec is None:
             wfnsym = direct_spin1_symm._id_wfnsym(self, norb, nelec, wfnsym)
         else:
-            wfnsym = addons.guess_wfnsym(fcivec, norb, nelec, self.orbsym)
+            strsa, strsb = getattr(fcivec, '_strs', self._strs)
+            wfnsym = addons._guess_wfnsym(fcivec, strsa, strsb, self.orbsym)
         if 'verbose' in kwargs:
             if isinstance(kwargs['verbose'], logger.Logger):
                 log = kwargs['verbose']
