@@ -21,13 +21,12 @@ direct_nosym        No            No             No**               Yes
 import sys
 import ctypes
 import numpy
-import pyscf.lib
-import pyscf.gto
-import pyscf.ao2mo
+from pyscf import lib
+from pyscf import ao2mo
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 
-libfci = pyscf.lib.load_library('libfci')
+libfci = lib.load_library('libfci')
 
 # When the spin-orbitals do not have the degeneracy on spacial part,
 # there is only one version of FCI which is close to _spin1 solver.
@@ -41,7 +40,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     nb, nlinkb = link_indexb.shape[:2]
     assert(fcivec.size == na*nb)
     ci1 = numpy.zeros_like(fcivec)
-    f1e_tril = pyscf.lib.pack_tril(f1e[0])
+    f1e_tril = lib.pack_tril(f1e[0])
     libfci.FCIcontract_a_1e(f1e_tril.ctypes.data_as(ctypes.c_void_p),
                             fcivec.ctypes.data_as(ctypes.c_void_p),
                             ci1.ctypes.data_as(ctypes.c_void_p),
@@ -50,7 +49,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
                             ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
                             link_indexa.ctypes.data_as(ctypes.c_void_p),
                             link_indexb.ctypes.data_as(ctypes.c_void_p))
-    f1e_tril = pyscf.lib.pack_tril(f1e[1])
+    f1e_tril = lib.pack_tril(f1e[1])
     libfci.FCIcontract_b_1e(f1e_tril.ctypes.data_as(ctypes.c_void_p),
                             fcivec.ctypes.data_as(ctypes.c_void_p),
                             ci1.ctypes.data_as(ctypes.c_void_p),
@@ -71,9 +70,9 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
 # Please refer to the treatment in direct_spin1.absorb_h1e
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     fcivec = numpy.asarray(fcivec, order='C')
-    g2e_aa = pyscf.ao2mo.restore(4, eri[0], norb)
-    g2e_ab = pyscf.ao2mo.restore(4, eri[1], norb)
-    g2e_bb = pyscf.ao2mo.restore(4, eri[2], norb)
+    g2e_aa = ao2mo.restore(4, eri[0], norb)
+    g2e_ab = ao2mo.restore(4, eri[1], norb)
+    g2e_bb = ao2mo.restore(4, eri[2], norb)
 
     link_indexa, link_indexb = direct_spin1._unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
@@ -131,9 +130,9 @@ def make_hdiag(h1e, eri, norb, nelec):
         neleca, nelecb = nelec
     h1e_a = numpy.ascontiguousarray(h1e[0])
     h1e_b = numpy.ascontiguousarray(h1e[1])
-    g2e_aa = pyscf.ao2mo.restore(1, eri[0], norb)
-    g2e_ab = pyscf.ao2mo.restore(1, eri[1], norb)
-    g2e_bb = pyscf.ao2mo.restore(1, eri[2], norb)
+    g2e_aa = ao2mo.restore(1, eri[0], norb)
+    g2e_ab = ao2mo.restore(1, eri[1], norb)
+    g2e_bb = ao2mo.restore(1, eri[2], norb)
 
     strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
     strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
@@ -165,9 +164,9 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     if not isinstance(nelec, (int, numpy.number)):
         nelec = sum(nelec)
     h1e_a, h1e_b = h1e
-    h2e_aa = pyscf.ao2mo.restore(1, eri[0], norb).copy()
-    h2e_ab = pyscf.ao2mo.restore(1, eri[1], norb).copy()
-    h2e_bb = pyscf.ao2mo.restore(1, eri[2], norb).copy()
+    h2e_aa = ao2mo.restore(1, eri[0], norb).copy()
+    h2e_ab = ao2mo.restore(1, eri[1], norb).copy()
+    h2e_bb = ao2mo.restore(1, eri[2], norb).copy()
     f1e_a = h1e_a - numpy.einsum('jiik->jk', h2e_aa) * .5
     f1e_b = h1e_b - numpy.einsum('jiik->jk', h2e_bb) * .5
     f1e_a *= 1./(nelec+1e-100)
@@ -179,9 +178,9 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
         h2e_ab[k,k,:,:] += f1e_b
         h2e_bb[:,:,k,k] += f1e_b
         h2e_bb[k,k,:,:] += f1e_b
-    return (pyscf.ao2mo.restore(4, h2e_aa, norb) * fac,
-            pyscf.ao2mo.restore(4, h2e_ab, norb) * fac,
-            pyscf.ao2mo.restore(4, h2e_bb, norb) * fac)
+    return (ao2mo.restore(4, h2e_aa, norb) * fac,
+            ao2mo.restore(4, h2e_ab, norb) * fac,
+            ao2mo.restore(4, h2e_bb, norb) * fac)
 
 def pspace(h1e, eri, norb, nelec, hdiag, np=400):
     if isinstance(nelec, (int, numpy.number)):
@@ -191,9 +190,9 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
         neleca, nelecb = nelec
     h1e_a = numpy.ascontiguousarray(h1e[0])
     h1e_b = numpy.ascontiguousarray(h1e[1])
-    g2e_aa = pyscf.ao2mo.restore(1, eri[0], norb)
-    g2e_ab = pyscf.ao2mo.restore(1, eri[1], norb)
-    g2e_bb = pyscf.ao2mo.restore(1, eri[2], norb)
+    g2e_aa = ao2mo.restore(1, eri[0], norb)
+    g2e_ab = ao2mo.restore(1, eri[1], norb)
+    g2e_bb = ao2mo.restore(1, eri[2], norb)
     link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
     link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
     nb = link_indexb.shape[0]
@@ -218,7 +217,7 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 
     for i in range(np):
         h0[i,i] = hdiag[addr[i]]
-    h0 = pyscf.lib.hermi_triu(h0)
+    h0 = lib.hermi_triu(h0)
     return addr, h0
 
 

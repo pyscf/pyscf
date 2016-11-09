@@ -22,13 +22,11 @@ import sys
 import ctypes
 import numpy
 import scipy.linalg
-import pyscf.lib
-import pyscf.gto
-import pyscf.ao2mo
+from pyscf import lib
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 
-libfci = pyscf.lib.load_library('libfci')
+libfci = lib.load_library('libfci')
 
 def contract_1e(h1e, fcivec, norb, nelec, link_index=None):
     h1e = numpy.asarray(h1e, order='C')
