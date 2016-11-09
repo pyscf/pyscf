@@ -64,6 +64,8 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     fcivec = numpy.asarray(fcivec, order='C')
     eri = pyscf.ao2mo.restore(4, eri, norb)
+    lib.transpose_sum(eri, inplace=True)
+    eri *= .5
     link_index = _unpack(norb, nelec, link_index)
     na, nlink = link_index.shape[:2]
     assert(fcivec.size == na**2)

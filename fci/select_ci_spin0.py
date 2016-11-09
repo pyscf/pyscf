@@ -25,6 +25,8 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
     idx,idy = numpy.tril_indices(norb, -1)
     idx = idx * norb + idy
     eri1 = lib.take_2d(eri1.reshape(norb**2,-1), idx, idx) * 2
+    lib.transpose_sum(eri1, inplace=True)
+    eri1 *= .5
     fcivec = ci_coeff.reshape(na,nb)
     # (aa|aa)
     ci1 = numpy.zeros_like(fcivec)
@@ -43,6 +45,8 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
         eri1[k,k,:,:] += h_ps
         eri1[:,:,k,k] += h_ps
     eri1 = ao2mo.restore(4, eri1, norb)
+    lib.transpose_sum(eri1, inplace=True)
+    eri1 *= .5
     # (bb|aa)
     libfci.SCIcontract_2e_bbaa(eri1.ctypes.data_as(ctypes.c_void_p),
                                fcivec.ctypes.data_as(ctypes.c_void_p),
