@@ -1746,10 +1746,10 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
             try:
                 filename = os.path.abspath(__main__.__file__)
                 finput = open(filename, 'r')
-                self.stdout.write('\n')
-                self.stdout.write('INFO: **** input file is %s ****\n' % filename)
+                self.stdout.write('#INFO: **** input file is %s ****\n' % filename)
                 self.stdout.write(finput.read())
-                self.stdout.write('INFO: ******************** input file end ********************\n')
+                self.stdout.write('#INFO: ******************** input file end ********************\n')
+                self.stdout.write('\n')
                 self.stdout.write('\n')
                 finput.close()
             except IOError:

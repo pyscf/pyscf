@@ -10,10 +10,10 @@
 
 import ctypes
 import numpy
-import pyscf.lib
+from pyscf import lib
 from pyscf.fci import cistring
 
-librdm = pyscf.lib.load_library('libfci')
+librdm = lib.load_library('libfci')
 
 def reorder_rdm(rdm1, rdm2, inplace=False):
     nmo = rdm1.shape[0]
@@ -22,7 +22,7 @@ def reorder_rdm(rdm1, rdm2, inplace=False):
     for k in range(nmo):
         rdm2[:,k,k,:] -= rdm1
     #return rdm1, rdm2
-    rdm2 = pyscf.lib.transpose_sum(rdm2.reshape(nmo*nmo,-1), inplace=True) * .5
+    rdm2 = lib.transpose_sum(rdm2.reshape(nmo*nmo,-1), inplace=True) * .5
     return rdm1, rdm2.reshape(nmo,nmo,nmo,nmo)
 
 # dm_pq = <|p^+ q|>

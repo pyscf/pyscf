@@ -403,7 +403,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
                           imicro, norm_t, norm_gorb)
                 break
 
-            casdm1, casdm2, gci, fcivec = casscf.update_casdm(mo, u, fcivec, e_ci, eris)
+            casdm1, casdm2, gci, fcivec = casscf.update_casdm(mo, u, fcivec, e_ci, eris, locals())
             norm_ddm = numpy.linalg.norm(casdm1 - casdm1_last)
             norm_ddm_micro = numpy.linalg.norm(casdm1 - casdm1_prev)
             casdm1_prev = casdm1
@@ -847,7 +847,7 @@ class CASSCF(casci.CASCI):
 
 # hessian_co exactly expands up to first order of H
 # update_casdm exand to approx 2nd order of H
-    def update_casdm(self, mo, u, fcivec, e_ci, eris):
+    def update_casdm(self, mo, u, fcivec, e_ci, eris, envs={}):
         nmo = mo.shape[1]
         rmat = u - numpy.eye(nmo)
 
@@ -902,7 +902,7 @@ class CASSCF(casci.CASCI):
               + numpy.einsum('pq,pq->', eris.vhf_c, ddm))
         ### hessian_co part end ###
 
-        ci1, g = self.solve_approx_ci(h1, h2, fcivec, ecore, e_ci)
+        ci1, g = self.solve_approx_ci(h1, h2, fcivec, ecore, e_ci, envs)
         if g is not None:  # So state average CI, DMRG etc will not be applied
             ovlp = numpy.dot(fcivec.ravel(), ci1.ravel())
             norm_g = numpy.linalg.norm(g)
@@ -915,16 +915,20 @@ class CASSCF(casci.CASCI):
 
         return casdm1, casdm2, g, ci1
 
-    def solve_approx_ci(self, h1, h2, ci0, ecore, e_ci):
+    def solve_approx_ci(self, h1, h2, ci0, ecore, e_ci, envs):
         ''' Solve CI eigenvalue/response problem approximately
         '''
         ncas = self.ncas
         nelecas = self.nelecas
         ncore = self.ncore
         nocc = ncore + ncas
+        if 'norm_gorb' in envs:
+            tol = max(self.conv_tol, envs['norm_gorb']**2)
+        else:
+            tol = None
         if hasattr(self.fcisolver, 'approx_kernel'):
             ci1 = self.fcisolver.approx_kernel(h1, h2, ncas, nelecas, ci0=ci0,
-                                               max_memory=self.max_memory)[1]
+                                               tol=tol, max_memory=self.max_memory)[1]
             return ci1, None
 
         h2eff = self.fcisolver.absorb_h1e(h1, h2, ncas, nelecas, .5)
@@ -936,7 +940,7 @@ class CASSCF(casci.CASCI):
             # full response
             max_memory = max(400, self.max_memory-lib.current_memory()[0])
             e, ci1 = self.fcisolver.kernel(h1, h2, ncas, nelecas, ci0=ci0,
-                                           max_memory=max_memory)
+                                           tol=tol, max_memory=max_memory)
         else:
             nd = min(max(self.ci_response_space, 2), ci0.size)
             logger.debug(self, 'CI step by %dD subspace response', nd)

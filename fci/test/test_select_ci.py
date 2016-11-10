@@ -98,11 +98,11 @@ class KnowValues(unittest.TestCase):
 
     def test_contract1(self):
         myci = select_ci.SelectCI()
-        strsa = cistring.gen_strings4orblist(range(norb), nelec//2)
-        strsb = cistring.gen_strings4orblist(range(norb), nelec//2)
-        ci0 = select_ci._as_SCIvector(numpy.zeros((len(strsa),len(strsb))), (strsa,strsb))
+        nelec = (4,3)
+        strsa = cistring.gen_strings4orblist(range(norb), nelec[0])
+        strsb = cistring.gen_strings4orblist(range(norb), nelec[1])
+        ci0 = select_ci._as_SCIvector(numpy.random.random((len(strsa),len(strsb))), (strsa,strsb))
         h2 = ao2mo.restore(1, eri, norb)
-        ci0[0,0] = 1
         c1 = myci.contract_2e(h2, ci0, norb, nelec)
         c2 = direct_spin1.contract_2e(h2, ci0, norb, nelec)
         self.assertAlmostEqual(abs(c1-c2).sum(), 0, 9)

@@ -77,8 +77,8 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None, orbsym=None):
     h_ps = numpy.einsum('pqqs->ps', eri)
     eri1 = eri * 2
     for k in range(norb):
-        eri1[k,k,:,:] += h_ps/nelec[0]
-        eri1[:,:,k,k] += h_ps/nelec[1]
+        eri1[:,:,k,k] += h_ps/nelec[0]
+        eri1[k,k,:,:] += h_ps/nelec[1]
     eri1 = ao2mo.restore(4, eri1, norb)
     eri1, cd_indexa, dimirrep = direct_spin1_symm.reorder4irrep(eri1, norb, cd_indexa, orbsym)
     cd_indexb = direct_spin1_symm.reorder4irrep(eri1, norb, cd_indexb, orbsym)[1]

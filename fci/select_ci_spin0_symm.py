@@ -48,8 +48,8 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None, orbsym=None):
     h_ps = numpy.einsum('pqqs->ps', eri) * (.5/nelec[0])
     eri1 = eri.copy()
     for k in range(norb):
-        eri1[k,k,:,:] += h_ps
         eri1[:,:,k,k] += h_ps
+        eri1[k,k,:,:] += h_ps
     eri1 = ao2mo.restore(4, eri1, norb)
     lib.transpose_sum(eri1, inplace=True)
     eri1 *= .5

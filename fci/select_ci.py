@@ -70,8 +70,8 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
     h_ps = numpy.einsum('pqqs->ps', eri)
     eri1 = eri * 2
     for k in range(norb):
-        eri1[k,k,:,:] += h_ps/nelec[0]
-        eri1[:,:,k,k] += h_ps/nelec[1]
+        eri1[:,:,k,k] += h_ps/nelec[0]
+        eri1[k,k,:,:] += h_ps/nelec[1]
     eri1 = ao2mo.restore(4, eri1, norb)
     # (bb|aa)
     libfci.SCIcontract_2e_bbaa(eri1.ctypes.data_as(ctypes.c_void_p),
@@ -410,7 +410,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
             de, e_last = e-e_last, e
             log.info('cycle %d  E = %.15g  dE = %.8g', icycle, e, de)
 
-        if ci0[0].shape == (namax,nbmax):
+        if ci0[0].shape == (namax,nbmax) or abs(de) < tol*1e3:
             conv = True
             break
 
@@ -419,8 +419,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
         na = len(ci0[0]._strs[0])
         nb = len(ci0[0]._strs[1])
         if ((.99 < na/last_ci0_size[0] < 1.01) and
-            (.99 < nb/last_ci0_size[1] < 1.01) and
-            abs(de) < tol*1e3):
+            (.99 < nb/last_ci0_size[1] < 1.01)):
             conv = True
             break
 

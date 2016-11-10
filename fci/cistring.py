@@ -7,9 +7,9 @@ import sys
 import ctypes
 import math
 import numpy
-import pyscf.lib
+from pyscf import lib
 
-libfci = pyscf.lib.load_library('libfci')
+libfci = lib.load_library('libfci')
 
 def gen_strings4orblist(orb_list, nelec):
     '''Generate string from the given orbital list.

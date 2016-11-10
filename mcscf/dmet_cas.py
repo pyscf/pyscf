@@ -155,7 +155,7 @@ def guess_cas(mf, dm, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
 
 def dynamic_cas_space_(mc, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
                        orth_method='meta_lowdin', s=None, canonicalize=True,
-                       start_cycle=1, verbose=None):
+                       start_cycle=1, freeze_imp=False, verbose=None):
     '''Dynamically tune CASSCF active space based on DMET-CAS decomposition
     by following steps
     1. DMET-CAS decomposition to get new guess of core/active/external
@@ -202,6 +202,9 @@ def dynamic_cas_space_(mc, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
             eris.__dict__.update(mc.ao2mo(mo).__dict__)
 
             mc.fcisolver._restart = False
+            if freeze_imp:
+                mc.frozen = range(mc.ncore, mc.ncore+len(baslst))
+                logger.info(mc, 'Freeze impurity %s', mc.frozen)
 
             # hack casdm1_pref so that it has the same dimension as casdm1
             casdm1_last = envs['casdm1_last']
@@ -209,6 +212,10 @@ def dynamic_cas_space_(mc, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
             casdm1_last.resize(ncas**2, refcheck=False)
             casdm1_last.shape = (ncas,)*2
             return old_casci(mo_coeff, None, eris, verbose, envs)
+
+    if freeze_imp:
+        mc.frozen = range(mc.ncore, mc.ncore+len(baslst))
+        logger.info(mc, 'Freeze impurity %s', mc.frozen)
 
     mc.casci = casci
     return mc

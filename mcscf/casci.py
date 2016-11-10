@@ -110,15 +110,14 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
         if hasattr(casscf.fcisolver, 'large_ci'):
             log.info('** Largest CI components **')
             res = casscf.fcisolver.large_ci(ci, casscf.ncas, casscf.nelecas)
-            if isinstance(res[0][0], numpy.number):
-                log.info(' string alpha, string beta, CI coefficients')
-                for c,ia,ib in res:
-                    log.info('  %9s    %9s    %.12f', ia, ib, c)
-            else:
+            try:
                 for i, val in enumerate(res):
                     log.info(' string alpha, string beta, state %d CI coefficients', i)
                     for c,ia,ib in val:
                         log.info('  %9s    %9s    %.12f', ia, ib, c)
+            except TypeError:
+                for c,ia,ib in res:
+                    log.info('  %9s    %9s    %.12f', ia, ib, c)
 
         casscf._scf.mulliken_meta(casscf.mol, dm1, s=ovlp_ao, verbose=log)
     return dm1a, dm1b
