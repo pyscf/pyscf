@@ -8,12 +8,11 @@ import numpy
 import scipy.linalg
 from pyscf.lib import logger
 from pyscf.tools import dump_mat
-from pyscf import fci
 from pyscf.mcscf.casci_symm import label_symmetry_
 
 def guess_cas(mf, dm, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
               orth_method='meta_lowdin', s=None, canonicalize=True,
-              verbose=None):
+              freeze_imp=False, verbose=None):
     '''Using DMET to produce CASSCF initial guess.  Return the active space
     size, num active electrons and the orbital initial guess.
     '''
@@ -131,7 +130,7 @@ def guess_cas(mf, dm, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
                 c[:,degidx] = numpy.hstack(cs)[:,idx]
         return c
 
-    if canonicalize:
+    if canonicalize or freeze_imp:
         if mf.mo_energy is None or mf.mo_coeff is None:
             fock = mf.get_hcore()
         else:
@@ -141,13 +140,22 @@ def guess_cas(mf, dm, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
             else:
                 sc = numpy.dot(s, mf.mo_coeff[0])
                 fock = numpy.dot(sc*mf.mo_energy[0], sc.T)
-        mo = []
-        for c in (mocore, mocas, movir):
-            f1 = reduce(numpy.dot, (c.T, fock, c))
-            e, u = scipy.linalg.eigh(f1)
-            log.debug1('Fock eig %s', e)
-            mo.append(symmetrize(e, numpy.dot(c, u)))
-        mo = numpy.hstack(mo)
+
+        def trans(c):
+            if c.shape[1] == 0:
+                return c
+            else:
+                f1 = reduce(numpy.dot, (c.T, fock, c))
+                e, u = scipy.linalg.eigh(f1)
+                log.debug1('Fock eig %s', e)
+                return symmetrize(e, numpy.dot(c, u))
+
+        if freeze_imp:
+            log.debug('Semi-canonicalization for freeze_imp=True')
+            mo = numpy.hstack([trans(mocore), trans(mocas[:,:nimp]),
+                               trans(mocas[:,nimp:]), trans(movir)])
+        else:
+            mo = numpy.hstack([trans(mocore), trans(mocas), trans(movir)])
     else:
         mo = numpy.hstack((mocore, mocas, movir))
 
@@ -161,6 +169,8 @@ def dynamic_cas_space_(mc, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
     1. DMET-CAS decomposition to get new guess of core/active/external
     2. If the active space changes, update mo, eris, ncore, ncas  INPLACE
     3. Solving FCI problem in the new active space
+
+    Note this method is in test.  It might give incorrect CASSCF answer.
     '''
     old_casci = mc.casci
     if isinstance(verbose, logger.Logger):
@@ -179,10 +189,10 @@ def dynamic_cas_space_(mc, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
         mocore = mo_coeff[:,:ncore]
         mocas = mo_coeff[:,ncore:ncore+mc.ncas]
         dm1 = numpy.dot(mocore, mocore.T) * 2
-        dm1 = dm1 + reduce(numpy.dot, (mocas, envs['casdm1'], mocas.T))
+        dm1+= reduce(numpy.dot, (mocas, envs['casdm1'], mocas.T))
         ncas, nelecas, mo = guess_cas(mc._scf, dm1, baslst, nelec_tol,
                                       occ_cutoff, base, orth_method, s,
-                                      canonicalize, log)
+                                      freeze_imp, log)
         nelecb = (nelecas-mol.spin)//2
         neleca = nelecas - nelecb
         nelecas = (neleca, nelecb)
@@ -199,6 +209,7 @@ def dynamic_cas_space_(mc, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
             mo_coeff[:] = mo
             if mc.mol.symmetry:
                 label_symmetry_(mc, mo_coeff)
+                mc.fcisolver.orbsym = mc.orbsym[mc.ncore:mc.ncore+ncas]
             eris.__dict__.update(mc.ao2mo(mo).__dict__)
 
             mc.fcisolver._restart = False
@@ -240,7 +251,7 @@ if __name__ == '__main__':
 
     aolst = [i for i,s in enumerate(mol.spheric_labels(1)) if 'H 1s' in s]
     dm = mf.make_rdm1()
-    ncas, nelecas, mo = guess_cas(mf, dm, aolst, verbose=5)
+    ncas, nelecas, mo = guess_cas(mf, dm, aolst, verbose=4)
     mc = mcscf.CASSCF(mf, ncas, nelecas).set(verbose=4)
     mc = dynamic_cas_space_(mc, aolst)
     emc = mc.kernel(mo)[0]

@@ -387,11 +387,11 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     namax = cistring.num_strings(norb, nelec[0])
     nbmax = cistring.num_strings(norb, nelec[1])
     e_last = 0
-    float_tol = 4e-4
+    float_tol = 3e-4
     conv = False
     for icycle in range(norb):
         ci_strs = ci0[0]._strs
-        float_tol = max(float_tol*.25, tol)
+        float_tol = max(float_tol*.3, tol*1e2)
         log.debug('cycle %d  ci.shape %s  float_tol %g',
                   icycle, (len(ci_strs[0]), len(ci_strs[1])), float_tol)
 
@@ -432,6 +432,8 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
                     max_memory=max_memory, verbose=log, **kwargs)
     log.info('Select CI  E = %.15g', e)
 
+    na = len(ci_strs[0])
+    nb = len(ci_strs[1])
     if nroots > 1:
         return e, [_as_SCIvector(ci.reshape(na,nb),ci_strs) for ci in c]
     else:

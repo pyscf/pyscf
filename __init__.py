@@ -129,7 +129,7 @@ Eg
 
 '''
 
-__version__ = '1.2'
+__version__ = '1.3a'
 
 import os
 from distutils.version import LooseVersion

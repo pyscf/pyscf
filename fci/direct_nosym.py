@@ -147,6 +147,8 @@ class FCISolver(direct_spin1.FCISolver):
                                        davidson_only, pspace_size, **kwargs)
         return e, c
 
+FCI = FCISolver
+
 def _unpack(norb, nelec, link_index):
     if link_index is None:
         if isinstance(nelec, (int, numpy.number)):

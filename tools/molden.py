@@ -100,6 +100,11 @@ def from_chkfile(filename, chkfile, key='scf/mo_coeff', ignore_h=False):
                 ene = None
             occ = dat['mo_occ']
             mo = dat['mo_coeff']
+
+        if ene == 'None':
+            ene = None
+        if occ == 'None':
+            occ = None
         if occ.ndim == 2:
             orbital_coeff(mol, f, mo[0], spin='Alpha', ene=ene[0], occ=occ[0],
                          ignore_h=ignore_h)

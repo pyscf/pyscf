@@ -557,19 +557,20 @@ def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
     trans_ci_a = numpy.zeros((na,na))
     for i, stri in enumerate(strsa): # for old basis
         orbi_mask = occ_masks[i]
-        for j, strj in enumerate(strsa): # for new basis
-            orbj_mask = occ_masks[j]
-            minors = u[orbi_mask][:,orbj_mask]
-            trans_ci_a[i,j] = numpy.linalg.det(minors)
+        ui = u[orbi_mask]
+        minors = [ui[:,occ_masks[j]] for j in range(len(strsa))]  # for new basis
+        trans_ci_a[i,:] = numpy.linalg.det(minors)
 
-    occ_masks = (strsb[:,None] & one_particle_strs) != 0
-    trans_ci_b = numpy.zeros((nb,nb))
-    for i, stri in enumerate(strsb):
-        orbi_mask = occ_masks[i]
-        for j, strj in enumerate(strsb):
-            orbj_mask = occ_masks[j]
-            minors = u[orbi_mask][:,orbj_mask]
-            trans_ci_b[i,j] = numpy.linalg.det(minors)
+    if neleca == nelecb:
+        trans_ci_b = trans_ci_a
+    else:
+        occ_masks = (strsb[:,None] & one_particle_strs) != 0
+        trans_ci_b = numpy.zeros((nb,nb))
+        for i, stri in enumerate(strsb):
+            orbi_mask = occ_masks[i]
+            ui = u[orbi_mask]
+            minors = [ui[:,occ_masks[j]] for j in range(len(strsb))]
+            trans_ci_b[i,:] = numpy.linalg.det(minors)
 
     # Transform old basis to new basis for all alpha-electron excitations
     ci = lib.dot(trans_ci_a.T, ci.reshape(na,nb))

@@ -923,7 +923,7 @@ class CASSCF(casci.CASCI):
         ncore = self.ncore
         nocc = ncore + ncas
         if 'norm_gorb' in envs:
-            tol = max(self.conv_tol, envs['norm_gorb']**2)
+            tol = max(self.conv_tol, envs['norm_gorb']**2*.1)
         else:
             tol = None
         if hasattr(self.fcisolver, 'approx_kernel'):

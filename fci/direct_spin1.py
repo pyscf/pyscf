@@ -635,6 +635,8 @@ class FCISolver(lib.StreamObject):
         from pyscf.fci import spin_op
         return spin_op.contract_ss(fcivec, norb, nelec)
 
+FCI = FCISolver
+
 
 def _unpack(norb, nelec, link_index):
     if link_index is None:

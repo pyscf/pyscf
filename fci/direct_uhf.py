@@ -283,6 +283,8 @@ class FCISolver(direct_spin1.FCISolver):
         from pyscf.fci import spin_op
         return spin_op.spin_square(fcivec, norb, nelec)
 
+FCI = FCISolver
+
 if __name__ == '__main__':
     from functools import reduce
     from pyscf import gto

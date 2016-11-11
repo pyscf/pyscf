@@ -301,6 +301,8 @@ class FCISolver(direct_spin1.FCISolver):
             self.wfnsym = wfnsym_bak
         return e, c
 
+FCI = FCISolver
+
 
 if __name__ == '__main__':
     from functools import reduce

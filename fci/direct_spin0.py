@@ -369,6 +369,8 @@ class FCISolver(direct_spin1.FCISolver):
                     reorder=True):
         return trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)
 
+FCI = FCISolver
+
 
 def _unpack(norb, nelec, link_index):
     if link_index is None:
