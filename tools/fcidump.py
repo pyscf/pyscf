@@ -59,6 +59,9 @@ def write_hcore(fout, h, nmo, tol=1e-15, float_format=DEFAULT_FLOAT_FORMAT):
 
 
 def from_chkfile(output, chkfile, tol=1e-15, float_format=DEFAULT_FLOAT_FORMAT):
+    '''Read SCF results from PySCF chkfile and transform 1-electron,
+    2-electron integrals using the SCF orbitals.  The transformed integrals is
+    written to FCIDUMP'''
     from pyscf import scf, ao2mo, symm
     with open(output, 'w') as fout:
         mol, scf_rec = scf.chkfile.load_scf(chkfile)
@@ -83,12 +86,72 @@ def from_chkfile(output, chkfile, tol=1e-15, float_format=DEFAULT_FLOAT_FORMAT):
 
 def from_integrals(output, h1e, h2e, nmo, nelec, nuc=0, ms=0, orbsym=[],
                    tol=1e-15, float_format=DEFAULT_FLOAT_FORMAT):
+    '''Convert the given 1-electron and 2-electron integrals to FCIDUMP format'''
     with open(output, 'w') as fout:
         write_head(fout, nmo, nelec, ms, orbsym)
         write_eri(fout, h2e, nmo, tol=tol, float_format=float_format)
         write_hcore(fout, h1e, nmo, tol=tol, float_format=float_format)
         output_format = float_format + '  0  0  0  0\n'
         fout.write(output_format % nuc)
+
+def read(filename):
+    '''Parse FCIDUMP.  Return a dictionary to hold the integrals and
+    parameters with keys:  H1, H2, ECORE, NORB, NELEC, MS, ORBSYM, ISYM
+    '''
+    import re
+    dic = {}
+    print('Parsing %s' % filename)
+    finp = open(filename, 'r')
+    dat = re.split('[=,]', finp.readline())
+    while not 'FCI' in dat[0].upper():
+        dat = re.split('[=,]', finp.readline())
+    dic['NORB'] = int(dat[1])
+    dic['NELEC'] = int(dat[3])
+    dic['MS2'] = int(dat[5])
+    norb = dic['NORB']
+
+    sym = []
+    dat = finp.readline().strip()
+    while not 'END' in dat:
+        sym.append(dat)
+        dat = finp.readline().strip()
+
+    isym = [x.split('=')[1] for x in sym if 'ISYM' in x]
+    if len(isym) > 0:
+        dic['ISYM'] = int(isym[0].replace(',','').strip())
+    symorb = ','.join([x for x in sym if 'ISYM' not in x]).split('=')[1]
+    dic['ORBSYM'] = [int(x.strip()) for x in symorb.replace(',', ' ').split()]
+
+    norb_pair = norb * (norb+1) // 2
+    h1e = numpy.zeros((norb,norb))
+    h2e = numpy.zeros(norb_pair*(norb_pair+1)//2)
+    dat = finp.readline().split()
+    while dat:
+        i, j, k, l = [int(x) for x in dat[1:5]]
+        if k != 0:
+            if i >= j:
+                ij = i * (i-1) // 2 + j-1
+            else:
+                ij = j * (j-1) // 2 + i-1
+            if k >= l:
+                kl = k * (k-1) // 2 + l-1
+            else:
+                kl = l * (l-1) // 2 + k-1
+            if ij >= kl:
+                h2e[ij*(ij+1)//2+kl] = float(dat[0])
+            else:
+                h2e[kl*(kl+1)//2+ij] = float(dat[0])
+        elif k == 0:
+            if j != 0:
+                h1e[i-1,j-1] = float(dat[0])
+            else:
+                dic['ECORE'] = float(dat[0])
+        dat = finp.readline().split()
+
+    dic['H1'] = h1e
+    dic['H2'] = h2e
+    finp.close()
+    return dic
 
 if __name__ == '__main__':
     import sys
