@@ -189,8 +189,8 @@ class RCCSD(ccsd.CCSD):
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
 
-    def ccsd(self, t1=None, t2=None, mo_coeff=None, eris=None):
-        if eris is None: eris = self.ao2mo(mo_coeff)
+    def ccsd(self, t1=None, t2=None, eris=None):
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
         self.eris = eris
         self.dump_flags()
         self._conv, self.ecc, self.t1, self.t2 = \
@@ -233,6 +233,7 @@ class RCCSD(ccsd.CCSD):
         return self._nee
 
     def ipccsd(self, nroots=1):
+        '''IP-EOM-CCSD'''
         cput0 = (time.clock(), time.time())
         log = logger.Logger(self.stdout, self.verbose)
         size = self.nip()
@@ -328,6 +329,7 @@ class RCCSD(ccsd.CCSD):
         return vector
 
     def eaccsd(self, nroots=1):
+        '''EA-EOM-CCSD'''
         cput0 = (time.clock(), time.time())
         log = logger.Logger(self.stdout, self.verbose)
         size = self.nea()

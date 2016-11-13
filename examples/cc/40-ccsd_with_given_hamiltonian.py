@@ -6,8 +6,9 @@ from pyscf import scf
 from pyscf import ao2mo
 from pyscf import cc
 
+#
 # 1D anti-PBC Hubbard model at half filling
-
+#
 mol = gto.M(verbose=4)
 mol.nelectron = 6
 n = 12
@@ -26,5 +27,10 @@ mf.get_ovlp = lambda *args: numpy.eye(n)
 mf._eri = ao2mo.restore(8, eri, n)
 mf.kernel()
 
-mycc = cc.ccsd.CC(mf)
+#
+# In PySCF, the faked Hamiltonians just need to be created once in mf object,
+# and can be used with mf object everywhere.  Here, the Hubbard model is
+# passed to CCSD object with the mf object.
+#
+mycc = cc.CCSD(mf)
 mycc.kernel()

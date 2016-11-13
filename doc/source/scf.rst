@@ -1,5 +1,8 @@
-scf
-***
+:mod:`scf` --- Mean-field methods
+*********************************
+
+.. module:: scf
+   :synopsis: restricted and unrestricted, closed shell and open shell Hartree-Fock methods
 
 .. automodule:: pyscf.scf
  

@@ -374,6 +374,7 @@ def update_amps(mycc, t1, t2, eris):
     return t1new, t2new
 
 def energy(mycc, t1, t2, eris):
+    '''CCSD correlation energy'''
     nocc, nvir = t1.shape
     fock = eris.fock
     e = numpy.einsum('ia,ia', fock[:nocc,nocc:], t1) * 2
@@ -388,13 +389,49 @@ def energy(mycc, t1, t2, eris):
 
 
 class CCSD(lib.StreamObject):
-    '''CCSD
+    '''restricted CCSD
 
-    Args
+    Attributes:
+        verbose : int
+            Print level.  Default value equals to :class:`Mole.verbose`
+        max_memory : float or int
+            Allowed memory in MB.  Default value equals to :class:`Mole.max_memory`
+        conv_tol : float
+            converge threshold.  Default is 1e-7.
+        conv_tol_normt : float
+            converge threshold for norm(t1,t2).  Default is 1e-5.
+        max_cycle : int
+            max number of iterations.  Default is 50.
+        diis_space : int
+            DIIS space size.  Default is 6.
+        diis_start_cycle : int
+            The step to start DIIS.  Default is 0.
+        direct : bool
+            AO-direct CCSD. Default is False.
+        frozen : int or list
+            If integer is given, the inner-most orbitals are frozen from CC
+            amplitudes.  Given the orbital indices (0-based) in a list, both
+            occupied and virtual orbitals can be frozen in CC calculation.
 
-    Returns
-        t1[i,a]
-        t2[i,j,a,b]
+            >>> mol = gto.M(atom = 'H 0 0 0; F 0 0 1.1', basis = 'ccpvdz')
+            >>> mf = scf.RHF(mol).run()
+            >>> # freeze 2 core orbitals
+            >>> mycc = cc.CCSD(mf).set(frozen = 2).run()
+            >>> # freeze 2 core orbitals and 3 high lying unoccupied orbitals
+            >>> mycc.set(frozen = [0,1,16,17,18]).run()
+
+    Saved results
+
+        converged : bool
+            CCSD converged or not
+        e_corr : float
+            CCSD correlation correction
+        e_tot : float
+            Total CCSD energy (HF + correlation)
+        t1, t2 : 
+            T amplitudes t1[i,a], t2[i,j,a,b]  (i,j in occ, a,b in virt)
+        l1, l2 : 
+            Lambda amplitudes l1[i,a], l2[i,j,a,b]  (i,j in occ, a,b in virt)
     '''
     def __init__(self, mf, frozen=[], mo_coeff=None, mo_occ=None):
         from pyscf import gto
@@ -565,7 +602,11 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         return ccsd_rdm.make_rdm1(self, t1, t2, l1, l2)
 
     def make_rdm2(self, t1=None, t2=None, l1=None, l2=None):
-        '''2-particle density matrix in MO space'''
+        '''2-particle density matrix in MO space.  The density matrix is
+        stored in physicist notation
+
+        dm2[p,q,r,s] = <p^+ q^+ s r>
+        '''
         from pyscf.cc import ccsd_rdm
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2

@@ -357,7 +357,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
     eris = casscf.ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, log, locals())
-    if casscf.ncas == nmo:
+    if casscf.ncas == nmo and not casscf.internal_rotation:
         log.debug('CASSCF canonicalization')
         mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
                                                     casscf.natorb, verbose=log)

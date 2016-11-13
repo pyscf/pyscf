@@ -21,3 +21,7 @@ mycc = cc.CCSD(mf).run()
 dm1 = mycc.make_rdm1()
 dm2 = mycc.make_rdm2()
 
+#
+# Relaxed CCSD density matrix in MO basis
+#
+dm1 += response_dm1(mycc, mycc.t1, mycc.t2, mycc.l1, mycc.l2)

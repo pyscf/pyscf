@@ -173,8 +173,8 @@ class UCCSD(rccsd.RCCSD):
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
 
-    def ccsd(self, t1=None, t2=None, mo_coeff=None, eris=None):
-        if eris is None: eris = self.ao2mo(mo_coeff)
+    def ccsd(self, t1=None, t2=None, eris=None):
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
         self.eris = eris
         self.dump_flags()
         self._conv, self.ecc, self.t1, self.t2 = \

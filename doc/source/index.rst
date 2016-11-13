@@ -38,6 +38,7 @@ Contents
    symm.rst
    df.rst
    dft.rst
+   cc.rst
    tools.rst
 
    benchmark.rst
