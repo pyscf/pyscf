@@ -226,10 +226,10 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
            lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
            davidson_only=False, pspace_size=400, orbsym=None, wfnsym=None,
-           **kwargs):
+           ecore=0, **kwargs):
     return direct_spin1._kfactory(FCISolver, h1e, eri, norb, nelec, ci0, level_shift,
                                   tol, lindep, max_cycle, max_space, nroots,
-                                  davidson_only, pspace_size, **kwargs)
+                                  davidson_only, pspace_size, ecore=ecore, **kwargs)
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
     h2e = absorb_h1e(h1e, eri, norb, nelec, .5)

@@ -37,7 +37,7 @@ print('Quintet Sigma_u^- %.15g  ref = -148.920732172378' % mc.e_tot)
 # Similarly, you can get ground state wfn of triplet Sz=0
 #
 mc = mcscf.CASSCF(mf, 8, 12)#(6,6))
-#mc.fcisolver = fci.direct_spin1_symm.FCISolver(mol)
+#mc.fcisolver = fci.direct_spin1_symm.FCI(mol)
 #fci.addons.fix_spin_(mc.fcisolver, ss=2)
 #mc.fcisolver.wfnsym = 'A2g'
 mc.kernel()

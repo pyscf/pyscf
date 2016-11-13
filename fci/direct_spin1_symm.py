@@ -97,7 +97,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None):
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
            lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
            davidson_only=False, pspace_size=400, orbsym=None, wfnsym=None,
-           **kwargs):
+           ecore=0, **kwargs):
     assert(len(orbsym) == norb)
     cis = FCISolver(None)
     cis.level_shift = level_shift
@@ -124,7 +124,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
     if cis.wfnsym is not None and ci0 is None:
         ci0 = addons.symm_initguess(norb, nelec, orbsym, wfnsym)
 
-    e, c = cis.kernel(h1e, eri, norb, nelec, ci0, **unknown)
+    e, c = cis.kernel(h1e, eri, norb, nelec, ci0, ecore=ecore, **unknown)
     if cis.wfnsym is not None:
         if cis.nroots > 1:
             c = [addons.symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym)
@@ -274,7 +274,7 @@ class FCISolver(direct_spin1.FCISolver):
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
                nroots=None, davidson_only=None, pspace_size=None,
-               orbsym=None, wfnsym=None, **kwargs):
+               orbsym=None, wfnsym=None, ecore=0, **kwargs):
         if nroots is None: nroots = self.nroots
         if orbsym is not None:
             self.orbsym, orbsym_bak = orbsym, self.orbsym
@@ -286,7 +286,8 @@ class FCISolver(direct_spin1.FCISolver):
         wfnsym0 = self.guess_wfnsym(norb, nelec, ci0, self.wfnsym, **kwargs)
         e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
                                        tol, lindep, max_cycle, max_space, nroots,
-                                       davidson_only, pspace_size, **kwargs)
+                                       davidson_only, pspace_size, ecore=ecore,
+                                       **kwargs)
         if self.wfnsym is not None:
             # should I remove the non-symmetric contributions in each
             # call of contract_2e?

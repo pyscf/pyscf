@@ -22,8 +22,7 @@ for r in numpy.arange(2.4, 5.1, .2):
         basis = '6-31g',
         verbose = 0,
     )
-    myhf = scf.RHF(mol)
-    myhf.kernel()
+    myhf = scf.RHF(mol).run()
     c = myhf.mo_coeff
 
     h1e = reduce(numpy.dot, (c.T, myhf.get_hcore(), c))

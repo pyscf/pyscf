@@ -632,7 +632,6 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
     '''State-average CASSCF over multiple FCI solvers.
     '''
     fcibase_class = casscf.fcisolver.__class__
-    ci_response_space = casscf.ci_response_space
     nroots = sum(solver.nroots for solver in fcisolvers)
     assert(nroots == len(weights))
 
@@ -659,13 +658,12 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
                                          orbsym=self.orbsym, verbose=log, **kwargs)
                            for solver in fcisolvers)
             for i, ei in enumerate(e):
-                ss = fci.spin_op.spin_square0(c[i], ncas, nelecas)
+                ss = fcisolvers[0].spin_square(c[i], ncas, nelecas)
                 log.info('state %d  E = %.15g S^2 = %.7f', i, ei, ss[0])
             return numpy.einsum('i,i', numpy.array(e), weights), c
 
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
-            e, c = collect(solver.kernel(h1, h2, norb, nelec, ci0, orbsym=self.orbsym,
-                                         max_cycle=ci_response_space, **kwargs)
+            e, c = collect(solver.kernel(h1, h2, norb, nelec, ci0, orbsym=self.orbsym, **kwargs)
                            for solver in fcisolvers)
             return numpy.einsum('i,i->', e, weights), c
         def make_rdm1(self, ci0, norb, nelec):
@@ -682,7 +680,7 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
                 rdm2 += wi * dm2
             return rdm1, rdm2
         def spin_square(self, ci0, norb, nelec):
-            ss = [fci.spin_op.spin_square0(x, norb, nelec)[0] for x in ci0]
+            ss = fcisolvers[0].spin_square(ci0, ncas, nelecas)
             ss = numpy.einsum('i,i->', weights, ss)
             multip = numpy.sqrt(ss+.25)*2
             return ss, multip
@@ -838,7 +836,7 @@ if __name__ == '__main__':
     mc.verbose = 4
     mc.fcisolver = fci.solver(mol, False) # to mix the singlet and triplet
     mc = state_average_(mc, (.64,.36))
-    emc, e_ci, fcivec, mo, mo_energy = mc.mc1step()[:4]
+    emc, e_ci, fcivec, mo, mo_energy = mc.mc1step()[:5]
     mc = mcscf.CASCI(m, 4, 4)
     emc = mc.casci(mo)[0]
     print(ehf, emc, emc-ehf)
@@ -847,7 +845,7 @@ if __name__ == '__main__':
     mc = mcscf.CASSCF(m, 4, 4)
     mc.verbose = 4
     mc = state_average_(mc, (.64,.36))
-    emc, e_ci, fcivec, mo, mo_energy = mc.mc1step()[:4]
+    emc, e_ci, fcivec, mo, mo_energy = mc.mc1step()[:5]
     mc = mcscf.CASCI(m, 4, 4)
     emc = mc.casci(mo)[0]
     print(ehf, emc, emc-ehf)

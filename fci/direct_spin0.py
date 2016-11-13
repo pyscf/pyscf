@@ -113,10 +113,10 @@ pspace = direct_spin1.pspace
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
            lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
            davidson_only=False, pspace_size=400, orbsym=None, wfnsym=None,
-           **kwargs):
+           ecore=0, **kwargs):
     e, c = direct_spin1._kfactory(FCISolver, h1e, eri, norb, nelec, ci0, level_shift,
                                   tol, lindep, max_cycle, max_space, nroots,
-                                  davidson_only, pspace_size, **kwargs)
+                                  davidson_only, pspace_size, ecore=ecore, **kwargs)
     return e, c
 
 # dm_pq = <|p^+ q|>
@@ -222,7 +222,7 @@ def get_init_guess(norb, nelec, nroots, hdiag):
 def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
                nroots=None, davidson_only=None, pspace_size=None,
-               max_memory=None, verbose=None, **kwargs):
+               max_memory=None, verbose=None, ecore=0, **kwargs):
     if nroots is None: nroots = fci.nroots
     if davidson_only is None: davidson_only = fci.davidson_only
     if pspace_size is None: pspace_size = fci.pspace_size
@@ -305,9 +305,9 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                    max_cycle=max_cycle, max_space=max_space, nroots=nroots,
                    max_memory=max_memory, verbose=verbose, **kwargs)
     if nroots > 1:
-        return e, [_check_(ci.reshape(na,na)) for ci in c]
+        return e+ecore, [_check_(ci.reshape(na,na)) for ci in c]
     else:
-        return e, _check_(c.reshape(na,na))
+        return e+ecore, _check_(c.reshape(na,na))
 
 def _check_(c):
     c = lib.transpose_sum(c, inplace=True)
@@ -335,12 +335,12 @@ class FCISolver(direct_spin1.FCISolver):
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
                nroots=None, davidson_only=None, pspace_size=None,
-               orbsym=None, wfnsym=None, **kwargs):
+               orbsym=None, wfnsym=None, ecore=0, **kwargs):
         if self.verbose >= logger.WARN:
             self.check_sanity()
         e, ci = kernel_ms0(self, h1e, eri, norb, nelec, ci0, None,
                            tol, lindep, max_cycle, max_space, nroots,
-                           davidson_only, pspace_size, **kwargs)
+                           davidson_only, pspace_size, ecore=ecore, **kwargs)
         return e, ci
 
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):

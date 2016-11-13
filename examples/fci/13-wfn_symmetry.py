@@ -11,10 +11,9 @@ import numpy
 from pyscf import gto, scf, fci
 
 mol = gto.M(atom='H 0 0 0; F 0 0 1.1', basis='631g', symmetry=True)
-m = scf.RHF(mol)
-m.kernel()
-norb = m.mo_energy.size
-nelec = mol.nelectron
+m = scf.RHF(mol).run()
+norb = m.mo_coeff.shape[1]
+nelec = mol.nelec
 
 fs = fci.FCI(mol, m.mo_coeff)
 fs.wfnsym = 'E1gx'

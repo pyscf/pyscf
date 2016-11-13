@@ -23,12 +23,15 @@ h1+= mol.intor('cint1e_kin_sph')
 h1 = reduce(numpy.dot, (orb.T, h1, orb))
 h2 = ao2mo.kernel(mol, orb)
 
-e, ci = fci.direct_spin0.kernel(h1, h2, 10, 10, max_cycle=500, max_space=100, verbose=5)
-print(e + mol.energy_nuc())
+e, ci = fci.direct_spin0.kernel(h1, h2, 10, 10, ecore=mol.energy_nuc(),
+                                max_cycle=500, max_space=100, verbose=5)
+print(e)
 
-e, ci = fci.direct_spin0.kernel(h1, h2, 10, 10, ci0=ci, max_cycle=500, max_space=100, verbose=5)
-print(e + mol.energy_nuc())
+e, ci = fci.direct_spin0.kernel(h1, h2, 10, 10, ecore=mol.energy_nuc(), ci0=ci,
+                                max_cycle=500, max_space=100, verbose=5)
+print(e)
 
-e, ci = fci.direct_spin0.kernel(h1, h2, 10, 10, ci0=ci, max_cycle=500, max_space=100, verbose=5)
-print(e + mol.energy_nuc())
+e, ci = fci.direct_spin0.kernel(h1, h2, 10, 10, ecore=mol.energy_nuc(), ci0=ci,
+                                max_cycle=500, max_space=100, verbose=5)
+print(e)
 

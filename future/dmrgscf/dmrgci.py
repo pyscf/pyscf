@@ -410,7 +410,7 @@ class DMRGCI(pyscf.lib.StreamObject):
 
         return a16
 
-    def kernel(self, h1e, eri, norb, nelec, fciRestart=None, **kwargs):
+    def kernel(self, h1e, eri, norb, nelec, fciRestart=None, ecore=0, **kwargs):
         if self.nroots == 1:
             roots = 0
         else:
@@ -418,7 +418,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         if fciRestart is None:
             fciRestart = self.restart or self._restart
 
-        writeIntegralFile(self, h1e, eri, norb, nelec)
+        writeIntegralFile(self, h1e, eri, norb, nelec, ecore)
         writeDMRGConfFile(self, nelec, fciRestart)
         if self.verbose >= logger.DEBUG1:
             inFile = os.path.join(self.runtimeDir, self.configFile)
@@ -443,10 +443,10 @@ class DMRGCI(pyscf.lib.StreamObject):
 
         return calc_e, roots
 
-    def approx_kernel(self, h1e, eri, norb, nelec, fciRestart=None, **kwargs):
+    def approx_kernel(self, h1e, eri, norb, nelec, fciRestart=None, ecore=0, **kwargs):
         fciRestart = True
 
-        writeIntegralFile(self, h1e, eri, norb, nelec)
+        writeIntegralFile(self, h1e, eri, norb, nelec, ecore)
         writeDMRGConfFile(self, nelec, fciRestart, self.approx_maxIter)
         if self.verbose >= logger.DEBUG1:
             inFile = os.path.join(self.runtimeDir, self.configFile)
@@ -479,9 +479,12 @@ class DMRGCI(pyscf.lib.StreamObject):
             neleca = nelec - nelecb
         else :
             neleca, nelecb = nelec
-        s = neleca - nelecb
-        ss = s/2. * (s/2.+1)
-        return ss, s+1
+        s = (neleca - nelecb) * .5
+        ss = s * (s+1)
+        if isinstance(civec, int):
+            return ss, s*2+1
+        else:
+            return [ss]*len(civec), [s*2+1]*len(civec)
 
 
 def make_schedule(sweeps, Ms, tols, noises, twodot_to_onedot):
@@ -584,7 +587,7 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
     #no reorder
     #f.write('noreorder\n')
 
-def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec):
+def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelec//2 + nelec%2
         nelecb = nelec - neleca
@@ -600,7 +603,7 @@ def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec):
 
     eri_cas = pyscf.ao2mo.restore(8, eri_cas, ncas)
     pyscf.tools.fcidump.from_integrals(integralFile, h1eff, eri_cas, ncas,
-                                       neleca+nelecb, ms=abs(neleca-nelecb),
+                                       neleca+nelecb, ecore, ms=abs(neleca-nelecb),
                                        orbsym=orbsym)
 
 
