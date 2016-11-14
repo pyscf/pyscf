@@ -243,13 +243,13 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
         if na*na == 1:
-            return pw[0], pv[:,0].reshape(1,1)
+            return pw[0]+ecore, pv[:,0].reshape(1,1)
         elif nroots > 1:
             civec = numpy.empty((nroots,na*na))
             civec[:,addr] = pv[:,:nroots].T
             civec = civec.reshape(nroots,na,na)
             try:
-                return pw[:nroots], [_check_(ci) for ci in civec]
+                return pw[:nroots]+ecore, [_check_(ci) for ci in civec]
             except ValueError:
                 pass
         elif abs(pw[0]-pw[1]) > 1e-12:
@@ -262,7 +262,7 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
 ## spin problems.  The 'ground state' of psapce vector may have different spin
 ## state to the true ground state.
             try:
-                return pw[0], _check_(civec.reshape(na,na))
+                return pw[0]+ecore, _check_(civec.reshape(na,na))
             except ValueError:
                 pass
 

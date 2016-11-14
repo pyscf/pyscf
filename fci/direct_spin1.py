@@ -395,15 +395,15 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
         if na*nb == 1:
-            return pw[0], pv[:,0].reshape(1,1)
+            return pw[0]+ecore, pv[:,0].reshape(1,1)
         elif nroots > 1:
             civec = numpy.empty((nroots,na*nb))
             civec[:,addr] = pv[:,:nroots].T
-            return pw[:nroots], civec.reshape(nroots,na,nb)
+            return pw[:nroots]+ecore, civec.reshape(nroots,na,nb)
         elif abs(pw[0]-pw[1]) > 1e-12:
             civec = numpy.empty((na*nb))
             civec[addr] = pv[:,0]
-            return pw[0], civec.reshape(na,nb)
+            return pw[0]+ecore, civec.reshape(na,nb)
 
     precond = fci.make_precond(hdiag, pw, pv, addr)
 
