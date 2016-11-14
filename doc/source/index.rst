@@ -38,21 +38,25 @@ Contents
    symm.rst
    df.rst
    dft.rst
+   tddft.rst
    cc.rst
+   ci.rst
+   dmrgscf.rst
+   fciqmcscf.rst
    tools.rst
+   grad.rst
+   hessian.rst
+   pbc.rst
+   lo.rst
+   qmmm.rst
 
    benchmark.rst
    code-rule.rst
    version.rst
 
-..   dmrgscf.rst
-..   fciqmcscf.rst
-..   cc.rst
-..   lo.rst
-
 
 You can also download the `PDF version
-<http://www.sunqm.net/pyscf/files/pdf/PySCF-1.1.pdf>`_ of this manual.
+<http://www.sunqm.net/pyscf/files/pdf/PySCF-1.3.pdf>`_ of this manual.
 
 
 .. Indices and tables

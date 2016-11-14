@@ -34,12 +34,6 @@ Non-relativistic Hartree-Fock
 .. automodule:: pyscf.scf.uhf_symm
    :members:
 
-Density fit
------------
-
-.. automodule:: pyscf.scf.dfhf
-   :members:
-
 
 Relativistic Hartree-Fock
 =========================

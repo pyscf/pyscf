@@ -1,8 +1,7 @@
 .. _code_stand:
 
-
-General
-*******
+Code standard
+*************
 
 * New features first being placed in pyscf/future.
 

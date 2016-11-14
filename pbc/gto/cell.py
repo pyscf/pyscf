@@ -38,9 +38,9 @@ def M(**kwargs):
 
 
 def format_pseudo(pseudo_tab):
-    '''Convert the input :attr:`Cell.pseudo` (dict) to the internal data format.
+    r'''Convert the input :attr:`Cell.pseudo` (dict) to the internal data format::
 
-    ``{ atom: ( (nelec_s, nele_p, nelec_d, ...),
+       { atom: ( (nelec_s, nele_p, nelec_d, ...),
                 rloc, nexp, (cexp_1, cexp_2, ..., cexp_nexp),
                 nproj_types,
                 (r1, nproj1, ( (hproj1[1,1], hproj1[1,2], ..., hproj1[1,nproj1]),
@@ -50,7 +50,7 @@ def format_pseudo(pseudo_tab):
                 (r2, nproj2, ( (hproj2[1,1], hproj2[1,2], ..., hproj2[1,nproj1]),
                 ... ) )
                 )
-        ... }``
+        ... }
 
     Args:
         pseudo_tab : dict
@@ -89,9 +89,9 @@ def make_pseudo_env(cell, _atm, _pseudo, pre_env=[]):
     return _atm, _pseudobas, pre_env
 
 def format_basis(basis_tab):
-    '''Convert the input :attr:`Cell.basis` to the internal data format.
+    '''Convert the input :attr:`Cell.basis` to the internal data format::
 
-    ``{ atom: (l, kappa, ((-exp, c_1, c_2, ..), nprim, nctr, ptr-exps, ptr-contraction-coeff)), ... }``
+      { atom: (l, kappa, ((-exp, c_1, c_2, ..), nprim, nctr, ptr-exps, ptr-contraction-coeff)), ... }
 
     Args:
         basis_tab : dict
@@ -210,8 +210,9 @@ def loads(cellstr):
     cell = Cell()
     cell.__dict__.update(celldic)
     cell.atom = eval(cell.atom)
-    cell.basis= eval(cell.basis)
-    cell.pseudo  = eval(cell.pseudo)
+    cell.basis = eval(cell.basis)
+    cell.pseudo = eval(cell.pseudo)
+    cell.pseudo = eval(cell.ecp)
     cell._atm = np.array(cell._atm, dtype=np.int32)
     cell._bas = np.array(cell._bas, dtype=np.int32)
     cell._env = np.array(cell._env, dtype=np.double)
@@ -344,9 +345,12 @@ def get_ewald_params(cell, precision=1e-8, gs=None):
 
     The relative error in the G-space sum is given by (keeping only
     exponential factors)
+
         precision ~ e^{(-Gmax^2)/(4 \eta^2)}
+
     which determines eta. Then, real-space cutoff is determined by (exp.
     factors only)
+
         precision ~ erfc(eta*rcut) / rcut ~ e^{(-eta**2 rcut*2)}
 
     Returns:
@@ -526,9 +530,11 @@ def make_kpts(cell, nks):
         nks : (3,) ndarray
 
     Returns:
-        kpts in absolute value (unit 1/Bohr)
+        kpts in absolute value (unit 1/Bohr).  Gamma point is placed at the
+        first place in the k-points list
 
     Examples:
+
     >>> cell.make_kpts((4,4,4))
     '''
     ks_each_axis = [np.arange(n,dtype=float)/n for n in nks]

@@ -28,3 +28,8 @@ numpy helper
    :members:
 
 
+chkfile
+=======
+
+.. automodule:: pyscf.lib.chkfile
+   :members:

@@ -12,8 +12,9 @@ and `h5py <http://www.h5py.org/>`_ installed.  If not, you can use
   $ pip install --target=/path/to/python/libs scipy
   $ pip install --target=/path/to/python/libs h5py
 
+or install the integrated science platform `anaconda <https://www.continuum.io/downloads#linux>`_.
 You can download the latest release version
-`1.1 <https://github.com/sunqm/pyscf/releases/tag/v1.1>`_ or the
+`1.2 <https://github.com/sunqm/pyscf/releases/tag/v1.2>`_ or the
 develment branch from github
 
   $ git clone https://github.com/sunqm/pyscf
@@ -27,9 +28,9 @@ Build the C extensions in :file:`pyscf/lib`::
   $ make
 
 It will automatically download the analytical GTO integral library
-``libcint`` https://github.com/sunqm/libcint.git and the DFT exchange
-correlation functional library `libxc <http://www.tddft.org/programs/Libxc>_`
-and `xcfun <https://github.com/dftlibs/xcfun.git>_`.  Finally, to make Python
+`libcint <https://github.com/sunqm/libcint.git>`_ and the DFT exchange
+correlation functional library `libxc <http://www.tddft.org/programs/Libxc>`_
+and `xcfun <https://github.com/dftlibs/xcfun.git>`_.  Finally, to make Python
 be able to find pyscf package, add the **parent directory** of pyscf to
 :code:`PYTHONPATH`, e.g. assuming pyscf is put in ``/home/abc``::
 
@@ -86,6 +87,30 @@ you can assign the libraries to the variable ``BLAS_LIBRARIES`` in
 Using optimized integral library
 ================================
 
+The default integral library used by PySCF is
+libcint (https://github.com/sunqm/libcint).  To ensure the
+compatibility on various high performance computer systems, PySCF does
+not use the fast integral library by default.  For X86-64 platforms,
+libcint library has an efficient implementation Qcint
+https://github.com/sunqm/qcint.git
+which is heavily optimized against SSE3 instructions.
+To replace the default libcint library with qcint library, edit the URL
+of the integral library in lib/CMakeLists.txt file::
+
+  ExternalProject_Add(libcint
+     GIT_REPOSITORY
+     https://github.com/sunqm/qcint.git
+     ...
+
+
+Offline installation
+====================
+
+During the compilation of PySCF, cmake system automatically downloads
+`libcint <https://github.com/sunqm/libcint.git>`_,
+`libxc <http://www.tddft.org/programs/Libxc>`_
+and `xcfun <https://github.com/dftlibs/xcfun.git>`_.   If the downloads
+fails for certain reasons
 The default integral library used by PySCF is
 libcint (https://github.com/sunqm/libcint).  To ensure the
 compatibility on various high performance computer systems, PySCF does

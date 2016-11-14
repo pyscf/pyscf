@@ -1,6 +1,7 @@
+.. _cc:
+
 :mod:`cc` --- Coupled Cluster
 *****************************
- 
 
 .. module:: cc
    :synopsis: Computing Coulpled Cluster energy and properties
@@ -118,14 +119,14 @@ A general solver for given Hamiltonian
 The CC module is not limited to molecule system.  The program is implemented as
 a general solver for arbitrary Hamiltonians.  It allows users overwriting the
 default molecule Hamiltonian with their own effective Hamiltonians.  In this
-example, we'll create a Hubbard model, and feed its Hamiltonian to CCSD method.
+example, we'll create a Hubbard model, and feed its Hamiltonian to CCSD program.
 
 .. literalinclude:: ../../examples/cc/40-ccsd_with_given_hamiltonian.py
 
 
 Using CCSD as CASCI active space solver
 ---------------------------------------
-CCSD solver can be wrapped as a Full CI solver, which can be feed to the
+CCSD program can be wrapped as a Full CI solver, which can be combined with the
 CASCI solver to approximate the multi-configuration calculation.
 
 .. literalinclude:: ../../examples/cc/42-as_casci_fcisolver.py

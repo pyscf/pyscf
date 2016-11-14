@@ -8,12 +8,12 @@
 There are two DMRG program interfaces available:
 
     * `Block <https://github.com/sanshar/Block>`_ interface provided the
-    features including the DMRG-CASCI, the 1-step and 2-step DMRG-CASSCF, second
-    order pertubation for dynamic correlation.  1-, 2- and 3-particle density
-    matrices.
+      features including the DMRG-CASCI, the 1-step and 2-step DMRG-CASSCF, second
+      order pertubation for dynamic correlation.  1-, 2- and 3-particle density
+      matrices.
 
     * `CheMPS2 <https://github.com/SebWouters/CheMPS2>`_ interface provided the
-    DMRG-CASCI and 2-step DMRG-CASSCF.
+      DMRG-CASCI and 2-step DMRG-CASSCF.
 
 Simple usage::
 
@@ -46,13 +46,13 @@ In DMRGCI object, you can set the following attributes to control Block program:
     outputlevel : int
         Noise level for Block program output.
     maxIter : int
-
+        Max DMRG sweeps
     approx_maxIter : int
         To control the DMRG-CASSCF approximate DMRG solver accuracy.
     twodot_to_onedot : int
         When to switch from two-dot algroithm to one-dot algroithm.
     nroots : int
-        
+        Number of states in the same irreducible representation to compute.
     weights : list of floats
         Use this attribute with "nroots" attribute to set state-average calculation.
     restart : bool
