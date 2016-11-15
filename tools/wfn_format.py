@@ -90,11 +90,6 @@ def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
         nd = nc*(2*l+1)
         mosub = mo_coeff[p0:p0+nd].reshape(-1,nc,nmo)
         c2s = gto.cart2sph(l)
-# the normalization factor of s and p is hard coded in libcint
-        if l == 0:
-            c2s *= 0.282094791773878143
-        elif l == 1:
-            c2s *= 0.488602511902919921
         mosub = numpy.einsum('yki,cy,pk->pci', mosub, c2s, c)
         mo_cart.append(mosub.transpose(1,0,2).reshape(-1,nmo))
 
