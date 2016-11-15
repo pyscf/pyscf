@@ -31,3 +31,7 @@ addons
 .. automodule:: pyscf.symm.addons
    :members:
 
+
+Common issues
+=============
+

@@ -296,8 +296,9 @@ def uncontract_basis(_basis):
 uncontract = uncontract_basis
 
 def format_ecp(ecp_tab):
-    '''
-    ``{ atom: (nelec,  # core electrons
+    r'''Convert the input :attr:`ecp` (dict) to the internal data format::
+
+      { atom: (nelec,  # core electrons
                ((l,  # l=-1 for UL, l>=0 for Ul to indicate |l><l|
                  (((exp_1, c_1),  # for r^0
                    (exp_2, c_2),
@@ -306,7 +307,8 @@ def format_ecp(ecp_tab):
                    (exp_2, c_2),
                    ...),
                   ((exp_1, c_1),  # for r^2
-                   ...))))), ...}
+                   ...))))),
+       ...}
     '''
     fmt_ecp = {}
     for atom in ecp_tab.keys():

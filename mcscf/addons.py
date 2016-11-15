@@ -5,6 +5,7 @@
 
 import os
 import sys
+import copy
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -502,14 +503,14 @@ def spin_square(casscf, mo_coeff=None, ci=None, ovlp=None):
     S^2 = 3.9831589, 2S+1 = 4.1149284
     '''
     if ci is None: ci = casscf.ci
-    if mo_coeff is None: mo_coeff = casscf.mo_coeff
-    if ovlp is None: ovlp = casscf._scf.get_ovlp()
     ncore    = casscf.ncore
     ncas     = casscf.ncas
     nelecas  = casscf.nelecas
     if isinstance(ncore, (int, numpy.integer)):
         return fci.spin_op.spin_square0(ci, ncas, nelecas)
     else:
+        if mo_coeff is None: mo_coeff = casscf.mo_coeff
+        if ovlp is None: ovlp = casscf._scf.get_ovlp()
         nocc = (ncore[0] + ncas, ncore[1] + ncas)
         mocas = (mo_coeff[0][:,ncore[0]:nocc[0]], mo_coeff[1][:,ncore[1]:nocc[1]])
         sscas = fci.spin_op.spin_square(ci, ncas, nelecas, mocas, ovlp)
@@ -521,7 +522,7 @@ def spin_square(casscf, mo_coeff=None, ci=None, ovlp=None):
         return ss, s*2+1
 
 
-def state_average(casscf, weights=(0.5,0.5)):
+def state_average_(casscf, weights=(0.5,0.5)):
     ''' State average over the energy.  The energy funcitonal is
     E = w1<psi1|H|psi1> + w2<psi2|H|psi2> + ...
 
@@ -531,12 +532,10 @@ def state_average(casscf, weights=(0.5,0.5)):
 
     before calling state_average_(mc), to mix the singlet and triplet states
     '''
-    assert(abs(sum(weights)-1) < 1e-10)
-    fcibase = casscf.fcisolver
+    assert(abs(sum(weights)-1) < 1e-3)
     fcibase_class = casscf.fcisolver.__class__
     class FakeCISolver(fcibase_class):
         def __init__(self):
-            self.__dict__.update(fcibase.__dict__)
             self.nroots = len(weights)
         def kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
 # pass self to fcibase_class.kernel function because orbsym argument is stored in self 
@@ -576,25 +575,25 @@ def state_average(casscf, weights=(0.5,0.5)):
                 multip = numpy.sqrt(ss+.25)*2
                 return ss, multip
 
-    return FakeCISolver()
-
-def state_average_(casscf, weights=(0.5,0.5)):
-    casscf.fcisolver = state_average(casscf, weights)
+    fcisolver = FakeCISolver()
+    fcisolver.__dict__.update(casscf.fcisolver.__dict__)
+    casscf.fcisolver = fcisolver
     return casscf
 
+def state_average(casscf, weights=(0.5,0.5)):
+    return state_average_(copy.copy(casscf), weights)
 
-def state_specific(casscf, state=1):
+
+def state_specific_(casscf, state=1):
     '''For excited state
 
     Kwargs:
         state : int
         0 for ground state; 1 for first excited state.
     '''
-    fcibase = casscf.fcisolver
     fcibase_class = casscf.fcisolver.__class__
     class FakeCISolver(fcibase_class):
         def __init__(self):
-            self.__dict__.update(fcibase.__dict__)
             self.nroots = state+1
             self._civec = None
         def kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
@@ -622,13 +621,15 @@ def state_specific(casscf, state=1):
             def spin_square(self, fcivec, norb, nelec):
                 return fci.spin_op.spin_square0(fcivec, norb, nelec)
 
-    return FakeCISolver()
-
-def state_specific_(casscf, state=1):
-    casscf.fcisolver = state_specific(casscf, state)
+    fcisolver = FakeCISolver()
+    fcisolver.__dict__.update(casscf.fcisolver.__dict__)
+    casscf.fcisolver = fcisolvers
     return casscf
 
-def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
+def state_specific(casscf, state=1):
+    return state_specific_(copy.copy(casscf), state)
+
+def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
     '''State-average CASSCF over multiple FCI solvers.
     '''
     fcibase_class = casscf.fcisolver.__class__
@@ -689,11 +690,11 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
 
     fcisolver = FakeCISolver()
     fcisolver.__dict__.update(casscf.fcisolver.__dict__)
-    return fcisolver
-
-def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
-    casscf.fcisolver = state_average_mix(casscf, fcisolvers, weights)
+    casscf.fcisolver = fcisolver
     return casscf
+
+def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
+    return state_average_mix_(copy.copy(casscf), fcisolvers, weights)
 
 def hot_tuning_(casscf, configfile=None):
     '''Allow you to tune CASSCF parameters on the runtime

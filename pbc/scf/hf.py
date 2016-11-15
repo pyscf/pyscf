@@ -237,6 +237,16 @@ class RHF(pyscf.scf.hf.RHF):
     Attributes:
         kpt : (3,) ndarray
             The AO k-point in Cartesian coordinates, in units of 1/Bohr.
+
+        exxdiv : str
+            Exchange divergence treatment, can be one of
+
+            | None : ignore G=0 contribution in exchange integral
+            | 'ewald' : Ewald summation for G=0 in exchange integral
+
+        with_df : density fitting object
+            Default is the FFT based DF model. For all-electron calculation,
+            MDF model is favored for better accuracy.  See also :mod:`pyscf.pbc.df`.
     '''
     def __init__(self, cell, kpt=np.zeros(3), exxdiv='ewald'):
         from pyscf.pbc import df

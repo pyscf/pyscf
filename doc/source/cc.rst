@@ -181,7 +181,10 @@ support user to feed MO integrals.
 
 Interfering CCSD-DIIS
 ---------------------
-TODO
+
+
+Restart CCSD
+------------
 
 
 APIs

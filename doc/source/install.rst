@@ -48,6 +48,18 @@ It's very possible that you put ``/home/abc/pyscf`` in the :code:`PYTHONPATH`.
 You need to remove the ``/pyscf`` in that string and try import
 ``pyscf`` in the python shell again.
 
+For Mac OsX user, you may get an import error if your OsX version is
+10.11 or later::
+
+    OSError: dlopen(xxx/pyscf/lib/libcgto.dylib, 6): Library not loaded: libcint.2.8.dylib
+    Referenced from: xxx/pyscf/lib/libcgto.dylib
+    Reason: unsafe use of relative rpath libcint.2.8.dylib in xxx/pyscf/lib/libao2mo.dylib with restricted binary
+
+It can be fixed by running the script ``pyscf/lib/_runme_to_fix_dylib_osx10.11.sh`` in ``pyscf/lib``::
+ 
+    cd pyscf/lib
+    sh _runme_to_fix_dylib_osx10.11.sh
+
 
 .. _installing_blas:
 
@@ -106,25 +118,42 @@ of the integral library in lib/CMakeLists.txt file::
 Offline installation
 ====================
 
-During the compilation of PySCF, cmake system automatically downloads
+Compiling PySCF will automatically download and compile
 `libcint <https://github.com/sunqm/libcint.git>`_,
 `libxc <http://www.tddft.org/programs/Libxc>`_
-and `xcfun <https://github.com/dftlibs/xcfun.git>`_.   If the downloads
-fails for certain reasons
-The default integral library used by PySCF is
-libcint (https://github.com/sunqm/libcint).  To ensure the
-compatibility on various high performance computer systems, PySCF does
-not use the fast integral library by default.  For X86-64 platforms,
-libcint library has an efficient implementation Qcint
-https://github.com/sunqm/qcint.git
-which is heavily optimized against SSE3 instructions.
-To replace the default libcint library with qcint library, edit the URL
-of the integral library in lib/CMakeLists.txt file::
+and `xcfun <https://github.com/dftlibs/xcfun.git>`_.   If the
+compilation breaks due to the failure of download or compilation of
+these packages, you can manually download and install them then install
+PySCF offline.  ``pyscf/lib/deps`` is the directory where PySCF places
+the external libraries.  PySCF will bypass the compilation of the
+external libraries if they were existed in that directory.  In the PySCF
+offline compilcation mode, you need install these external libraries to
+this directory.  Followings are the relevant compiling flags for these
+libraries.
 
-  ExternalProject_Add(libcint
-     GIT_REPOSITORY
-     https://github.com/sunqm/qcint.git
-     ...
+Libcint::
+
+    cd /path/to/libcint
+    mkdir build
+    cd build
+    cmake -DWITH_RANGE_COULOMB=1 -DCMAKE_INSTALL_PREFIX:PATH=/path/to/pyscf/lib/deps -DCMAKE_INSTALL_LIBDIR:PATH=lib ..
+    make && make install
+
+XcFun::
+
+    cd /path/to/xcfun
+    mkdir build
+    cd build
+    cmake -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1 -DXC_MAX_ORDER=3 -DXCFUN_ENABLE_TESTS=0 -DCMAKE_INSTALL_PREFIX:PATH=/path/to/pyscf/lib/deps -DCMAKE_INSTALL_LIBDIR:PATH=lib ..
+    make && make install
+
+LibXC::
+
+    cd /path/to/libxc
+    mkdir build
+    cd build
+    ../configure --prefix=/path/to/pyscf/lib/deps --libdir=/path/to/pyscf/lib/deps/lib --enable-shared --disable-fortran LIBS=-lm
+    make && make install
 
 
 .. _installing_plugin:
@@ -140,7 +169,7 @@ CheMPS2 (http://sebwouters.github.io/CheMPS2/index.html)
 are efficient DMRG solvers for ab initio quantum chemistry problem.
 `Installing Block <http://sanshar.github.io/Block/build.html>`_ requires
 C++11 compiler.  If C++11 is not supported by your compiler, you can
-register and download precompiled Block binary from
+register and download the precompiled Block binary from
 http://chemists.princeton.edu/chan/software/block-code-for-dmrg.
 Before using the Block or CheMPS2, you need create a config file
 future/dmrgscf/settings.py  (as shown by settings.py.example) to store
@@ -156,14 +185,14 @@ future/fciqmc/settings.py to store the path where NECI was installed.
 Libxc
 -----
 By default, building PySCF will automatically download and install
-`Libxc 2.2.2 <http://www.tddft.org/programs/octopus/wiki/index.php/Libxc:download>`_
-``pyscf.dft.libxc`` module provided a general interface to access Libxc functionals.
+`Libxc 2.2.2 <http://www.tddft.org/programs/octopus/wiki/index.php/Libxc:download>`_.
+:mod:`pyscf.dft.libxc` module provided a general interface to access Libxc functionals.
 
 Xcfun
 -----
 By default, building PySCF will automatically download and install
 latest xcfun code from https://github.com/dftlibs/xcfun.
-``pyscf.dft.xcfun`` module provided a general interface to access Libxc
+:mod:`pyscf.dft.xcfun` module provided a general interface to access Libxc
 functionals.
 
 XianCI

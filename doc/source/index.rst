@@ -49,6 +49,7 @@ Contents
    pbc.rst
    lo.rst
    qmmm.rst
+   mrpt.rst
 
    benchmark.rst
    code-rule.rst

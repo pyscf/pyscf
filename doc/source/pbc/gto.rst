@@ -140,7 +140,7 @@ energy_nuc
 pbc_intor
   PBC analytic integral driver.  It allows user to compute the PBC integral
   array in bulk, for given integral descriptor ``intor`` (see also
-  :meth:`Mole.intor` function :ref:`mole_intor`).  In the :class:`Cell` object,
+  :meth:`Mole.intor` function :ref:`gto_moleintor`).  In the :class:`Cell` object,
   we didn't overload the :meth:`intor` method.  So one can access both the
   periodic integrals and free-boundary integrals within the :class:`Cell`
   object.  It allows you to input the cell object into the molecule program to
@@ -224,12 +224,14 @@ and PBC basis in the same calculation.
 
 Pseudo potential
 ================
-Quantum chemistry community developed many kinds of pseudo potential (which are
-called ECP, effective core potential) for heavy elements.  The ECP offers a wide
-range of options to satisfy different requirements on accuracy, efficiency in
-different simulation scenario.  ECP works quite successful in finite system.
+Quantum chemistry community developed a wide range of pseudo potentials (which
+are called ECP, effective core potential) for heavy elements.  ECP works quite
+successful in finite system.  It has high flexibility to choose different core
+size and relevant basis sets to satisfy different requirements on accuracy,
+efficiency in different simulation scenario.  Extending ECP to PBC code enriches
+the pseudo potential database.  PySCF PBC program supports both the PBC
+conventional pseudo potential and ECP and the mix of the two kinds of potentials
+in the same calculation.
 
-
-Examples
-========
+.. literalinclude:: ../../../examples/pbc/05-input_pp.py
 

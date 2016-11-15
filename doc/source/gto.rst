@@ -35,10 +35,6 @@ manipulate the libcint arguments.
 .. autoclass:: Mole
    :members:
 
-.. class:: Noodle
-
-   Noodle's docstring.
-
 
 .. _gto_moleintor:
 
@@ -56,4 +52,7 @@ Basis sets
 
 .. automodule:: pyscf.gto.basis
    :members:
+
+Optimized contraction
+---------------------
 

@@ -18,6 +18,20 @@ Molden
    :members:
 
 
+GAMESS WFN
+==========
+
+.. automodule:: pyscf.tools.wfn_format
+   :members:
+
+
+Cubegen
+=======
+
+.. automodule:: pyscf.tools.cubegen
+   :members:
+
+
 Print Matrix
 ============
 

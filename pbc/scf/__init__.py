@@ -2,9 +2,7 @@
 # -*- coding: utf-8
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 
-'''Non-relativistic and relativistic Hartree-Fock
-   for periodic systems at a *single* k-point.
-
+'''Hartree-Fock for periodic systems
 '''
 
 from pyscf.pbc.scf import hf

@@ -110,6 +110,7 @@
   - PBC AO integrals
   - PBC MO integral transformation
   - PBC density fitting
+  - Smearing for mean-field calculation
 
 
 * Solvation effects

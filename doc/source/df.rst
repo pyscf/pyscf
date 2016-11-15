@@ -1,3 +1,5 @@
+.. _mol_df:
+
 df --- density fitting
 **********************
  

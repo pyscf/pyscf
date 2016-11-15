@@ -32,6 +32,9 @@ The list of modules described in this chapter is:
 
    pbc/gto.rst
    pbc/scf.rst
+   pbc/dft.rst
    pbc/df.rst
    pbc/cc.rst
+   pbc/tools.rst
    pbc/mix_mol.rst
+

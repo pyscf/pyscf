@@ -553,7 +553,9 @@ class Cell(mole.Mole):
             Convert from relative or "scaled" coordinates `s` to "absolute"
             cartesian coordinates `r` via `r = np.dot(_h, s)`.
             Reciprocal lattice vectors are given by [b1|b2|b3] = 2 pi inv(_h.T).
-        gs : (3,) ndarray of ints
+        a : (3,3) ndarray
+            Lattice primitive vectors. Each row represents a lattice vector
+        gs : (3,) list of ints
             The number of *positive* G-vectors along each direction.
         pseudo : dict or str
             To define pseudopotential.

@@ -1,9 +1,5 @@
 qmmm --- QM/MM interface
 ************************
 
-.. automodule:: pyscf.qmmm
- 
-
-
-
-
+.. automodule:: pyscf.qmmm.itrf
+   :members:

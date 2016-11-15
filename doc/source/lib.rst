@@ -33,3 +33,25 @@ chkfile
 
 .. automodule:: pyscf.lib.chkfile
    :members:
+
+
+Fast load
+---------
+
+The results of SCF and MCSCF methods are saved as a Python dictionary in
+the chkfile.  One can fast load the results and update the SCF and MCSCF
+objects using the python built in methods ``.__dict__.update``, eg::
+
+    from pyscf import gto, scf, mcscf, lib
+    mol = gto.M(atom='N 0 0 0; N 1 1 1', basis='ccpvdz')
+    mf = mol.apply(scf.RHF).set(chkfile='n2.chk).run()
+    mc = mcscf.CASSCF(mf, 6, 6).set(chkfile='n2.chk').run()
+
+    # load SCF results
+    mf = scf.RHF(mol)
+    mf.__dict__.update(lib.chkfile.load('n2.chk', 'scf'))
+
+    # load MCSCF results
+    mc = mcscf.CASCI(mf, 6, 6)
+    mc.__dict__.update(lib.chkfile.load('n2.chk', 'mcscf'))
+    mc.kernel()
