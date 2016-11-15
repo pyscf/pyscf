@@ -79,7 +79,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
             x2[k] = numpy.einsum('sp,sq->pq', fvv[k], x1[k].conj()) * 2
             x2[k]-= numpy.einsum('sp,rp->rs', foo[k], x1[k].conj()) * 2
 
-            x2[k] += reduce(numpy.dot, (mo_coeff[k][:,occidx[k]].T.conj(), v1[k].T,
+            x2[k] += reduce(numpy.dot, (mo_coeff[k][:,occidx[k]].T.conj(), v1[k],
                                         mo_coeff[k][:,viridx[k]])).T * 4
         return numpy.hstack([x.ravel() for x in x2])
 

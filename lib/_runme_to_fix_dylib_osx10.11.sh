@@ -13,4 +13,5 @@ cd $dirnow
 for i in *.dylib
 do
   echo install_name_tool -change libcint.2.8.dylib ${dirnow}/deps/lib/libcint.2.8.dylib ${dirnow}/$i
+  install_name_tool -change libcint.2.8.dylib ${dirnow}/deps/lib/libcint.2.8.dylib ${dirnow}/$i
 done

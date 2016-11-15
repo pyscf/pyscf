@@ -242,7 +242,7 @@ def make_hdiag(t, u, g, hpp, nsite, nelec, nphonon):
     return hdiag.ravel()
 
 def kernel(t, u, g, hpp, nsite, nelec, nphonon,
-           tol=1e-9, max_cycle=100, verbose=0, **kwargs):
+           tol=1e-9, max_cycle=100, verbose=0, ecore=0, **kwargs):
     cishape = make_shape(nsite, nelec, nphonon)
     ci0 = numpy.zeros(cishape)
     ci0.__setitem__((0,0) + (0,)*nsite, 1)
@@ -255,9 +255,10 @@ def kernel(t, u, g, hpp, nsite, nelec, nphonon,
         return hc.reshape(-1)
     hdiag = make_hdiag(t, u, g, hpp, nsite, nelec, nphonon)
     precond = lambda x, e, *args: x/(hdiag-e+1e-4)
-    return lib.davidson(hop, ci0.reshape(-1), precond,
+    e, c = lib.davidson(hop, ci0.reshape(-1), precond,
                         tol=tol, max_cycle=max_cycle, verbose=verbose,
                         **kwargs)
+    return e+ecore, c
 
 
 # dm_pq = <|p^+ q|> for electron part

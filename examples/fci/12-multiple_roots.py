@@ -13,10 +13,9 @@ import numpy
 from pyscf import gto, scf, fci
 
 mol = gto.M(atom='Ne 0 0 0', basis='631g')
-m = scf.RHF(mol)
-m.kernel()
-norb = m.mo_energy.size
-nelec = mol.nelectron
+m = scf.RHF(mol).run()
+norb = m.mo_coeff.shape[1]
+nelec = mol.nelec
 
 fs = fci.addons.fix_spin_(fci.FCI(mol, m.mo_coeff), .5)
 fs.nroots = 3

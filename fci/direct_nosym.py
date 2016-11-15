@@ -133,7 +133,7 @@ class FCISolver(direct_spin1.FCISolver):
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
                nroots=None, davidson_only=None, pspace_size=None,
-               orbsym=None, wfnsym=None, **kwargs):
+               orbsym=None, wfnsym=None, ecore=0, **kwargs):
         if isinstance(nelec, (int, numpy.number)):
             nelecb = nelec//2
             neleca = nelec - nelecb
@@ -144,7 +144,8 @@ class FCISolver(direct_spin1.FCISolver):
         e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0,
                                        (link_indexa,link_indexb),
                                        tol, lindep, max_cycle, max_space, nroots,
-                                       davidson_only, pspace_size, **kwargs)
+                                       davidson_only, pspace_size, ecore=ecore,
+                                       **kwargs)
         return e, c
 
 FCI = FCISolver

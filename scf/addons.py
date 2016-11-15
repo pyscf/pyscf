@@ -40,7 +40,16 @@ def frac_occ_(mf, tol=1e-3):
         else:
             mo_occ = old_get_occ(mo_energy, mo_coeff)
         return mo_occ
+
+    def get_grad(mo_coeff, mo_occ, fock_ao):
+        fock = reduce(numpy.dot, (mo_coeff.T.conj(), fock_ao, mo_coeff))
+        fock *= mo_occ.reshape(-1,1)
+        nocc = mol.nelectron // 2
+        g = fock[:nocc,nocc:].T
+        return g.ravel()
+
     mf.get_occ = get_occ
+    mf.get_grad = get_grad
     return mf
 def frac_occ(mf, tol=1e-3):
     return frac_occ_(copy.copy(mf), tol)

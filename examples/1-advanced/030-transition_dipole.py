@@ -32,8 +32,8 @@ mf.kernel()
 # 1. State-average CASSCF to get optimal orbitals
 #
 mc = mcscf.CASSCF(mf, 6, 6)
-solver_ag = fci.direct_spin0_symm.FCISolver(mol)
-solver_b2u = fci.direct_spin0_symm.FCISolver(mol)
+solver_ag = fci.direct_spin0_symm.FCI(mol)
+solver_b2u = fci.direct_spin0_symm.FCI(mol)
 solver_b2u.wfnsym = 'B2u'
 mc.fcisolver = mcscf.state_average_mix(mc, [solver_ag,solver_b2u], [.5,.5])
 cas_list = [17,20,21,22,23,30]  # 2pz orbitals

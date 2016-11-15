@@ -61,6 +61,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
             njk += njk1
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             norm_gorb = numpy.linalg.norm(g_orb)
+            if imicro == 0:
+                norm_gorb0 = norm_gorb
             de = numpy.dot(casscf.pack_uniq_var(u), g_orb)
             t3m = log.timer('orbital rotation', *t3m)
 

@@ -38,7 +38,7 @@ from pyscf.fci import select_ci_symm
 from pyscf.fci import select_ci_spin0_symm
 from pyscf.fci.select_ci import SelectCI, SCI
 
-def solver(mol, singlet=True, symm=None):
+def solver(mol=None, singlet=True, symm=None):
     if mol and symm is None:
         symm = mol.symmetry
     if symm:
@@ -62,10 +62,7 @@ def FCI(mol, mo, singlet=True):
     from pyscf import scf
     from pyscf import symm
     from pyscf import ao2mo
-    if mol.spin > 0:
-        cis = solver(mol, False)
-    else:
-        cis = solver(mol, singlet)
+    cis = solver(mol, singlet=(mol.spin==0))
     class CISolver(cis.__class__):
         def __init__(self):
             self.__dict__.update(cis.__dict__)
@@ -78,16 +75,16 @@ def FCI(mol, mo, singlet=True):
                                                   mol.symm_orb, mo)
             self._keys = set(self.__dict__.keys())
 
-        def kernel(self, h1e=None, eri=None, norb=None, nelec=None, ci0=None, **kwargs):
+        def kernel(self, h1e=None, eri=None, norb=None, nelec=None, ci0=None,
+                   ecore=None, **kwargs):
             if h1e is None: h1e = self.h1e
             if eri is None: eri = self.eri
             if norb is None: norb = mo.shape[1]
-            if nelec is None:
-                nelec_a = (mol.nelectron + mol.spin) // 2
-                nelec_b = mol.nelectron - nelec_a
-                nelec = (nelec_a, nelec_b)
+            if nelec is None: nelec = mol.nelec
+            if ecore is None: ecore = mol.energy_nuc()
             self.eci, self.ci = \
-                    cis.__class__.kernel(self, h1e, eri, norb, nelec, ci0, **kwargs)
+                    cis.__class__.kernel(self, h1e, eri, norb, nelec, ci0,
+                                         ecore=ecore, **kwargs)
             return self.eci, self.ci
     return CISolver()
 

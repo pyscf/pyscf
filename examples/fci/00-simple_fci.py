@@ -24,5 +24,5 @@ myhf.kernel()
 # num. electrons and spin of the given mol object
 #
 cisolver = fci.FCI(mol, myhf.mo_coeff)
-print('E(FCI) = %.12f' % (cisolver.kernel()[0] + mol.energy_nuc()))
+print('E(FCI) = %.12f' % cisolver.kernel()[0])
 

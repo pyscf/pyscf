@@ -136,7 +136,7 @@ class FCIQMCCI(object):
     def make_rdm1(self, fcivec, norb, nelec, link_index=None, **kwargs):
         return self.make_rdm12(fcivec, norb, nelec, link_index, **kwargs)[0]
 
-    def kernel(self, h1e, eri, norb, nelec, fci_restart=None, **kwargs):
+    def kernel(self, h1e, eri, norb, nelec, fci_restart=None, ecore=0, **kwargs):
         if fci_restart is None:
             fci_restart = self.restart
         if isinstance(nelec, (int, numpy.integer)):
@@ -145,7 +145,7 @@ class FCIQMCCI(object):
         else:
             neleca, nelecb = nelec
 
-        write_integrals_file(h1e, eri, norb, neleca, nelecb, self)
+        write_integrals_file(h1e, eri, norb, neleca, nelecb, self, ecore)
         if self.generate_neci_input:
             write_fciqmc_config_file(self, neleca, nelecb, fci_restart)
         if self.verbose >= logger.DEBUG1:
@@ -175,7 +175,7 @@ def calc_energy_from_rdms(mol, mo_coeff, one_rdm, two_rdm):
     '''
 
     nmo = mo_coeff.shape[1]
-    eri = pyscf.ao2mo.outcore.full_iofree(mol, mo_coeff, aosym='s1', verbose=0)
+    eri = pyscf.ao2mo.outcore.full(mol, mo_coeff, aosym='s1', verbose=0)
     eri = eri.reshape(nmo,nmo,nmo,nmo)
     t = mol.intor_symmetric('cint1e_kin_sph')
     v = mol.intor_symmetric('cint1e_nuc_sph')
@@ -204,7 +204,7 @@ def run_standalone(fciqmcci, mo_coeff, restart=None):
         rdm_energy : float
             Final RDM energy obtained from the NECI output file.
     '''
-    
+
     tol = 1e-9
     nmo = mo_coeff.shape[1]
     nelec = fciqmcci.mol.nelectron
@@ -222,7 +222,7 @@ def run_standalone(fciqmcci, mo_coeff, restart=None):
                 # We need the AO basis overlap matrix to calculate the
                 # symmetries.
                 s = fciqmcci.mol.intor_symmetric('cint1e_ovlp_sph')
-                fciqmcci.orbsym = pyscf.symm.label_orb_symm(fciqmcci.mol, 
+                fciqmcci.orbsym = pyscf.symm.label_orb_symm(fciqmcci.mol,
                         fciqmcci.mol.irrep_name, fciqmcci.mol.symm_orb,
                         mo_coeff, s=s)
                 orbsym = [param.IRREP_ID_TABLE[fciqmcci.groupname][i]+1 for
@@ -232,7 +232,7 @@ def run_standalone(fciqmcci, mo_coeff, restart=None):
         else:
             pyscf.tools.fcidump.write_head(fout, nmo, nelec, fciqmcci.mol.spin)
 
-        eri = pyscf.ao2mo.outcore.full_iofree(fciqmcci.mol, mo_coeff, verbose=0)
+        eri = pyscf.ao2mo.outcore.full(fciqmcci.mol, mo_coeff, verbose=0)
         pyscf.tools.fcidump.write_eri(fout, pyscf.ao2mo.restore(8,eri,nmo),
                                       nmo, tol=tol)
 
@@ -340,7 +340,7 @@ def write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart):
     f.write('proje-changeref 1.5\n')
     f.write('stepsshift 10\n')
     f.write('maxwalkerbloom 3\n')
-# Dynamic load-balancing is incompatible with semi-stochastic. 
+# Dynamic load-balancing is incompatible with semi-stochastic.
 # Ok if restarting from a semi-stochastic popsfile,
 # (where it will do one redistribution) but not otherwise.
     f.write('load-balance-blocks off\n')
@@ -363,7 +363,7 @@ def write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart):
     f.write('popsfiletimer 60.0\n')
     f.write('binarypops\n')
     f.write('calcrdmonfly 3 500 500\n')
-    f.write('write-spin-free-rdm\n') 
+    f.write('write-spin-free-rdm\n')
     f.write('printonerdm\n')
     if fciqmcci.logging_options:
         f.write(fciqmcci.logging_options + '\n')
@@ -373,7 +373,7 @@ def write_fciqmc_config_file(fciqmcci, neleca, nelecb, restart):
     f.close()
 
 
-def write_integrals_file(h1e, eri, norb, neleca, nelecb, fciqmcci):
+def write_integrals_file(h1e, eri, norb, neleca, nelecb, fciqmcci, ecore=0):
     '''Write an integral dump file, based on the integrals provided.
 
     Args:
@@ -400,7 +400,7 @@ def write_integrals_file(h1e, eri, norb, neleca, nelecb, fciqmcci):
     else:
         orbsym = []
     pyscf.tools.fcidump.from_integrals(integralFile, h1e, eri, norb,
-                                       neleca+nelecb, ms=abs(neleca-nelecb),
+                                       neleca+nelecb, ecore, ms=abs(neleca-nelecb),
                                        orbsym=orbsym, tol=1e-10)
 
 
@@ -474,7 +474,7 @@ def read_neci_one_pdm(fciqmcci, filename, norb, nelec, directory='.'):
 
     two_pdm = read_neci_two_pdm(fciqmcci, filename, norb, directory)
     one_pdm = one_from_two_pdm(two_pdm, nelec)
-    return one_pdm 
+    return one_pdm
 
 
 def read_neci_two_pdm(fciqmcci, filename, norb, directory='.'):
@@ -492,7 +492,7 @@ def read_neci_two_pdm(fciqmcci, filename, norb, directory='.'):
         filename : str
             Name of the file to read the 2-rdm from.
         norb : int
-            The number of orbitals inc. frozen in neci, and therefore the 
+            The number of orbitals inc. frozen in neci, and therefore the
             number of values each 2-rdm index can take.
         directory : str
             The directory in which to search for the 2-rdm file.
@@ -614,7 +614,7 @@ def add_inactive_space_to_rdm(mol, mo_coeff, one_pdm, two_pdm):
     one_pdm_[ninact:ninact+nsizerdm,ninact:ninact+nsizerdm] = one_pdm[:,:]
 
     two_pdm_ = numpy.zeros( (norb, norb, norb, norb) )
-    
+
     # Add on frozen core contribution, assuming that the inactive orbitals are
     # doubly occupied.
     for i in range(ninact):
@@ -704,7 +704,7 @@ if __name__ == '__main__':
         output = None, #'out-fciqmc',
         atom = [['H', (0.,0.,i)] for i in range(8)],
         basis = {'H': 'sto-3g'},
-        symmetry = True, 
+        symmetry = True,
         # fciqmc cannot handle Dooh currently, so reduce the point group if
         # full group is infinite.
         symmetry_subgroup = 'D2h',
@@ -715,7 +715,7 @@ if __name__ == '__main__':
     mc = mcscf.CASSCF(m, 4, 4)
     mc.fcisolver = FCIQMCCI(mol)
     mc.fcisolver.tau = 0.01
-    mc.fcisolver.RDMSamples = 1000 
+    mc.fcisolver.RDMSamples = 1000
     mc.max_cycle_macro = 10
     # Return natural orbitals from mc2step in casscf_mo.
     mc.natorb = True
@@ -745,7 +745,7 @@ if __name__ == '__main__':
         output = None,
         atom = [['H', (0.,0.,i)] for i in range(8)],
         basis = {'H': 'sto-3g'},
-        symmetry = True, 
+        symmetry = True,
         symmetry_subgroup = 'D2h',
     )
     m = scf.RHF(mol)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Contact "Bingbing Sun" <bsuo@nwu.edu.cn> to download and install Xian-CI
+# Contact "Bingbing Suo" <bsuo@nwu.edu.cn> to download and install Xian-CI
 # program.
 #
 

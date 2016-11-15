@@ -196,13 +196,13 @@ def pspace(h1e, eri, norb, nelec, hdiag, np=400):
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
            lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
            davidson_only=False, pspace_size=400, orbsym=None, wfnsym=None,
-           **kwargs):
+           ecore=0, **kwargs):
     return _kfactory(FCISolver, h1e, eri, norb, nelec, ci0, level_shift,
                      tol, lindep, max_cycle, max_space, nroots,
-                     davidson_only, pspace_size, **kwargs)
+                     davidson_only, pspace_size, ecore=ecore, **kwargs)
 def _kfactory(Solver, h1e, eri, norb, nelec, ci0=None, level_shift=1e-3,
               tol=1e-10, lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
-              davidson_only=False, pspace_size=400, **kwargs):
+              davidson_only=False, pspace_size=400, ecore=0, **kwargs):
     cis = Solver(None)
     cis.level_shift = level_shift
     cis.conv_tol = tol
@@ -221,7 +221,7 @@ def _kfactory(Solver, h1e, eri, norb, nelec, ci0=None, level_shift=1e-3,
     if unknown:
         sys.stderr.write('Unknown keys %s for FCI kernel %s\n' %
                          (str(unknown.keys()), __name__))
-    e, c = cis.kernel(h1e, eri, norb, nelec, ci0, **unknown)
+    e, c = cis.kernel(h1e, eri, norb, nelec, ci0, ecore=ecore, **unknown)
     return e, c
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
@@ -375,7 +375,7 @@ def get_init_guess(norb, nelec, nroots, hdiag):
 def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
                nroots=None, davidson_only=None, pspace_size=None,
-               max_memory=None, verbose=None, **kwargs):
+               max_memory=None, verbose=None, ecore=0, **kwargs):
     if nroots is None: nroots = fci.nroots
     if davidson_only is None: davidson_only = fci.davidson_only
     if pspace_size is None: pspace_size = fci.pspace_size
@@ -395,15 +395,15 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
         if na*nb == 1:
-            return pw[0], pv[:,0].reshape(1,1)
+            return pw[0]+ecore, pv[:,0].reshape(1,1)
         elif nroots > 1:
             civec = numpy.empty((nroots,na*nb))
             civec[:,addr] = pv[:,:nroots].T
-            return pw[:nroots], civec.reshape(nroots,na,nb)
+            return pw[:nroots]+ecore, civec.reshape(nroots,na,nb)
         elif abs(pw[0]-pw[1]) > 1e-12:
             civec = numpy.empty((na*nb))
             civec[addr] = pv[:,0]
-            return pw[0], civec.reshape(na,nb)
+            return pw[0]+ecore, civec.reshape(na,nb)
 
     precond = fci.make_precond(hdiag, pw, pv, addr)
 
@@ -438,9 +438,9 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                    max_cycle=max_cycle, max_space=max_space, nroots=nroots,
                    max_memory=max_memory, verbose=verbose, **kwargs)
     if nroots > 1:
-        return e, [ci.reshape(na,nb) for ci in c]
+        return e+ecore, [ci.reshape(na,nb) for ci in c]
     else:
-        return e, c.reshape(na,nb)
+        return e+ecore, c.reshape(na,nb)
 
 def make_pspace_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
     # precondition with pspace Hamiltonian, CPL, 169, 463
@@ -561,12 +561,12 @@ class FCISolver(lib.StreamObject):
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
                nroots=None, davidson_only=None, pspace_size=None,
-               orbsym=None, wfnsym=None, **kwargs):
+               orbsym=None, wfnsym=None, ecore=0, **kwargs):
         if self.verbose >= logger.WARN:
             self.check_sanity()
         return kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
                           tol, lindep, max_cycle, max_space, nroots,
-                          davidson_only, pspace_size, **kwargs)
+                          davidson_only, pspace_size, ecore=ecore, **kwargs)
 
     @lib.with_doc(energy.__doc__)
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):

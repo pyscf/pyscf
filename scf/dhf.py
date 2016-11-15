@@ -233,7 +233,7 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     nvir = len(viridx)
 
     fock = reduce(numpy.dot, (mo_coeff.T.conj(), fock_ao, mo_coeff))
-    g = fock[viridx[:,None],occidx]
+    g = fock[occidx[:,None],viridx].T
     return g.reshape(-1)
 
 

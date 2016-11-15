@@ -85,13 +85,13 @@ def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
         ia = mol.bas_atom(ib)
         l = mol.bas_angular(ib)
         es = mol.bas_exp(ib)
-        c = mol.bas_ctr_coeff(ib)
+        c = mol._libcint_ctr_coeff(ib)
         np, nc = c.shape
         nd = nc*(2*l+1)
         mosub = mo_coeff[p0:p0+nd].reshape(-1,nc,nmo)
         c2s = gto.cart2sph(l)
         mosub = numpy.einsum('yki,cy,pk->pci', mosub, c2s, c)
-        mo_cart.append(mosub.reshape(-1,nmo))
+        mo_cart.append(mosub.transpose(1,0,2).reshape(-1,nmo))
 
         for t in TYPE_MAP[l]:
             types.append([t]*np)
@@ -105,31 +105,36 @@ def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
     exps = numpy.hstack(exps)
     nprim, nmo = mo_cart.shape
 
-    fout.write('title line\n')
+    fout.write('From PySCF\n')
     fout.write('GAUSSIAN            %3d MOL ORBITALS    %3d PRIMITIVES      %3d NUCLEI\n'
                % (mo_cart.shape[1], mo_cart.shape[0], mol.natm))
     for ia in range(mol.natm):
         x, y, z = mol.atom_coord(ia)
-        fout.write('%-4s %-4d (CENTRE%3d) %12.8f %12.8f %12.8f  CHARGE = %.1f\n'
-                   % (mol.atom_pure_symbol(ia), ia, ia, x, y, z,
+        fout.write('  %-4s %-4d (CENTRE%3d)  %11.8f %11.8f %11.8f  CHARGE = %.1f\n'
+                   % (mol.atom_pure_symbol(ia), ia+1, ia+1, x, y, z,
                       mol.atom_charge(ia)))
     for i0, i1 in lib.prange(0, nprim, 20):
         fout.write('CENTRE ASSIGNMENTS  %s\n' % ''.join('%3d'%x for x in centers[i0:i1]))
     for i0, i1 in lib.prange(0, nprim, 20):
         fout.write('TYPE ASSIGNMENTS    %s\n' % ''.join('%3d'%x for x in types[i0:i1]))
     for i0, i1 in lib.prange(0, nprim, 5):
-        fout.write('EXPONENTS %s\n' % ' '.join('%14.7E'%x for x in exps[i0:i1]))
+        fout.write('EXPONENTS  %s\n' % ' '.join('%13.7E'%x for x in exps[i0:i1]))
 
     for k in range(nmo):
         mo = mo_cart[:,k]
         if mo_energy is None or mo_occ is None:
             fout.write('CANMO %d\n'
-                       (k, mo_occ[k], mo_energy[k]))
+                       (k+1, mo_occ[k], mo_energy[k]))
         else:
             fout.write('MO  %-4d                  OCC NO = %12.8f ORB. ENERGY = %12.8f\n' %
-                       (k, mo_occ[k], mo_energy[k]))
+                       (k+1, mo_occ[k], mo_energy[k]))
         for i0, i1 in lib.prange(0, nprim, 5):
-            fout.write('%s\n' % ' '.join('%15.8E'%x for x in mo[i0:i1]))
+            fout.write(' %s\n' % ' '.join('%15.8E'%x for x in mo[i0:i1]))
+    fout.write('END DATA\n')
+    if mo_energy is None or mo_occ is None:
+        fout.write('ALDET    ENERGY =        0.0000000000   VIRIAL(-V/T)  =   0.00000000')
+    else :
+        fout.write('RHF      ENERGY =        0.0000000000   VIRIAL(-V/T)  =   0.00000000')
 
 def write_ci(fout, fcivec, norb, nelec, ncore=0):
     from pyscf import fci
@@ -157,12 +162,16 @@ def write_ci(fout, fcivec, norb, nelec, ncore=0):
         fout.write('%18.10E %s %s\n' % (fcivec[addra,addrb], ' '.join(idxa), ' '.join(idxb)))
 
 
-#if __name__ == '__main__':
-#    import sys
-#    from pyscf import gto, scf
-#    mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='ccpvdz')
-#    mf = scf.RHF(mol).run()
-#    write_mo(sys.stdout, mol, mf.mo_coeff, mf.mo_energy, mf.mo_occ)
+if __name__ == '__main__':
+    import sys
+    from pyscf import gto, scf
+    from pyscf.tools import molden
+    mol = gto.M(atom='N 0 0 0; N 0 0 1.88972599', unit='B', basis='ccpvdz')
+    mf = scf.RHF(mol).run()
+    coeff = mf.mo_coeff[:,mf.mo_occ>0]
+    energy = mf.mo_energy[mf.mo_occ>0]
+    occ = mf.mo_occ[mf.mo_occ>0]
+    write_mo(sys.stdout, mol, coeff, energy, occ)
 #
 #    norb = nelec = 6
 #    ci = numpy.random.random((20,20))

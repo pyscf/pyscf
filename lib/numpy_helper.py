@@ -762,4 +762,4 @@ if __name__ == '__main__':
 
     a = numpy.random.random((300,300)) * .1
     a = a - a.T
-    print abs(scipy.linalg.expm(a) - expm(a)).max()
+    print(abs(scipy.linalg.expm(a) - expm(a)).max())

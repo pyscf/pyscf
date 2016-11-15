@@ -38,14 +38,14 @@ def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
     mo_cas = mo_coeff[:,ncore:ncore+ncas]
 
     hcore = casci.get_hcore()
+    energy_core = casci._scf.energy_nuc()
     if mo_core.size == 0:
         corevhf = 0
-        energy_core = 0
     else:
         core_dm = numpy.dot(mo_core, mo_core.T) * 2
         corevhf = casci.get_veff(casci.mol, core_dm)
-        energy_core = numpy.einsum('ij,ji', core_dm, hcore) \
-                    + numpy.einsum('ij,ji', core_dm, corevhf) * .5
+        energy_core += numpy.einsum('ij,ji', core_dm, hcore)
+        energy_core += numpy.einsum('ij,ji', core_dm, corevhf) * .5
     h1eff = reduce(numpy.dot, (mo_cas.T, hcore+corevhf, mo_cas))
     return h1eff, energy_core
 
@@ -351,13 +351,13 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
 
     # FCI
     max_memory = max(400, casci.max_memory-lib.current_memory()[0])
-    e_cas, fcivec = casci.fcisolver.kernel(h1eff, eri_cas, ncas, nelecas,
+    e_tot, fcivec = casci.fcisolver.kernel(h1eff, eri_cas, ncas, nelecas,
                                            ci0=ci0, verbose=log,
-                                           max_memory=max_memory)
+                                           max_memory=max_memory,
+                                           ecore=energy_core)
 
     t1 = log.timer('FCI solver', *t1)
-    e_tot = e_cas + energy_core + casci._scf.energy_nuc()
-    log.timer('CASCI', *t0)
+    e_cas = e_tot - energy_core
     return e_tot, e_cas, fcivec
 
 

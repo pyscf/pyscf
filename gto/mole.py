@@ -78,8 +78,10 @@ def cart2sph(l):
     '''Cartesian to real spheric transformation matrix'''
     nf = (l+1)*(l+2)//2
     cmat = numpy.eye(nf)
-    if l in (0, 1):
-        return cmat
+    if l == 0:
+        return cmat * 0.282094791773878143
+    elif l == 1:
+        return cmat * 0.488602511902919921
     else:
         nd = l * 2 + 1
         c2sph = numpy.zeros((nf,nd), order='F')
