@@ -16,7 +16,7 @@ class KnowValues(unittest.TestCase):
     def test_aux_e2(self):
         cell = pgto.Cell()
         cell.unit = 'B'
-        cell.h = numpy.eye(3) * 3.
+        cell.a = numpy.eye(3) * 3.
         cell.gs = numpy.array([20,20,20])
         cell.atom = 'He 0 1 1; He 1 1 0'
         cell.basis = { 'He': [[0, (0.8, 1.0)],
@@ -45,7 +45,7 @@ class KnowValues(unittest.TestCase):
     def test_fill_2c2e(self):
         cell = pgto.Cell()
         cell.unit = 'B'
-        cell.h = numpy.eye(3) * 3.
+        cell.a = numpy.eye(3) * 3.
         cell.gs = numpy.array([20,20,20])
         cell.atom = 'He 0 1 1; He 1 1 0'
         cell.basis = { 'He': [[0, (0.8, 1.0)],

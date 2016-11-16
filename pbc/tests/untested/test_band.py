@@ -11,7 +11,7 @@ def test_band():
     L = 1
     cell = pbcgto.Cell()
     cell.unit = 'B'
-    cell.h = np.diag([L,L,L])
+    cell.a = np.diag([L,L,L])
     cell.gs = np.array([10,10,10])
 
     cell.atom.extend([['He', (L/2.,L/2.,L/2.)]])
@@ -34,7 +34,7 @@ def test_band_kscf():
     L = 1
     cell = pbcgto.Cell()
     cell.unit = 'B'
-    cell.h = np.diag([L,L,L])
+    cell.a = np.diag([L,L,L])
     cell.gs = np.array([10,10,10])
 
     cell.atom.extend([['He', (L/2.,L/2.,L/2.)]])
@@ -49,7 +49,7 @@ def test_band_kscf():
     auxcell.gs = np.array([1,1,1])
     auxcell.build()
 
-    invhT = scipy.linalg.inv(np.asarray(cell._h).T)
+    invhT = scipy.linalg.inv(cell.lattice_vectors())
 
     ncells = 2
     kGvs = []

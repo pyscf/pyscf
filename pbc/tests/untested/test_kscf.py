@@ -14,7 +14,7 @@ def test_kscf_gamma(atom, ncells):
     Lunit = 2
     Ly = Lz = 2
     Lx = ncells*Lunit
-    cell.h = np.diag([Lx,Ly,Lz])
+    cell.a = np.diag([Lx,Ly,Lz])
     # place atom in middle of big box
     for i in range(ncells):
         cell.atom.extend([[atom, ((.5+i)*Lunit, 0.5*Ly, 0.5*Lz)]])
@@ -41,7 +41,7 @@ def test_kscf_kpoints(atom, ncells):
     Lunit = 2
     Ly = Lz = 2
     Lx = Lunit
-    cell.h = np.diag([Lx,Ly,Lz])
+    cell.a = np.diag([Lx,Ly,Lz])
     # place atom in middle of big box
     cell.atom.extend([[atom, (0.5*Lunit, 0.5*Ly, 0.5*Lz)]])
     cell.basis = { atom: [[0, (1.0, 1.0)]] }
@@ -53,7 +53,7 @@ def test_kscf_kpoints(atom, ncells):
     cell.build()
 
     # make Monkhorst-Pack (equally spaced k points along x direction)
-    invhT = scipy.linalg.inv(np.asarray(cell._h).T)
+    invhT = scipy.linalg.inv(cell.lattice_vectors())
     kGvs = []
     for i in range(ncells):
         kGvs.append(i*1./ncells*2*np.pi*np.dot(invhT,(1,0,0)))

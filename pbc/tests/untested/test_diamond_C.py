@@ -20,7 +20,7 @@ def test_cubic_diamond_C():
 
     cell = pbcgto.Cell()
     cell.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
-    cell.h = ase_atom.cell
+    cell.a = ase_atom.cell
     cell.basis = "gth-szv"
     cell.pseudo = "gth-pade"
 
@@ -53,7 +53,7 @@ def test_diamond_C():
 
     cell = pbcgto.Cell()
     cell.atom = pyscf_ase.ase_atoms_to_pyscf(C)
-    cell.h = C.cell
+    cell.a = C.cell
 
     # cell.basis = 'gth-tzvp'
     cell.basis = 'gth-szv'

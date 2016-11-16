@@ -22,7 +22,7 @@ def test_moints():
     # The periodic calculation
     cell = pbcgto.Cell()
     cell.unit = 'B'
-    cell.h = np.diag([L,L,L])
+    cell.a = np.diag([L,L,L])
     cell.gs = np.array([40,40,40])
     cell.nimgs = [1,1,1]
 

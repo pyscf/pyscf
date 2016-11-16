@@ -42,7 +42,7 @@ def make_grids(n):
     cell.verbose = 0
     cell.output = '/dev/null'
     cell.unit = 'B'
-    cell.h = ((L,0,0),(0,L,0),(0,0,L))
+    cell.a = ((L,0,0),(0,L,0),(0,0,L))
     cell.gs = [n,n,n]
     cell.nimgs = [0,0,0]
 
@@ -62,7 +62,7 @@ class KnowValues(unittest.TestCase):
         cell = pbcgto.Cell()
         cell.verbose = 5
         cell.output = '/dev/null'
-        cell.h = np.eye(3) * 2.5
+        cell.a = np.eye(3) * 2.5
         cell.gs = [10]*3
         cell.atom = [['C', (1., .8, 1.9)],
                      ['C', (.1, .2,  .3)],]
@@ -99,7 +99,7 @@ class KnowValues(unittest.TestCase):
         cell = pbcgto.Cell()
         cell.verbose = 5
         cell.output = '/dev/null'
-        cell.h = np.eye(3) * 2.5
+        cell.a = np.eye(3) * 2.5
         cell.gs = [10]*3
         cell.atom = [['He', (1., .8, 1.9)],
                      ['He', (.1, .2,  .3)],]
@@ -121,7 +121,7 @@ class KnowValues(unittest.TestCase):
         cell = pbcgto.Cell()
         cell.verbose = 5
         cell.output = '/dev/null'
-        cell.h = np.eye(3) * 2.5
+        cell.a = np.eye(3) * 2.5
         cell.gs = [10]*3
         cell.atom = [['He', (1., .8, 1.9)],
                      ['He', (.1, .2,  .3)],]
@@ -142,7 +142,7 @@ class KnowValues(unittest.TestCase):
         cell = pbcgto.Cell()
         cell.verbose = 5
         cell.output = '/dev/null'
-        cell.h = np.eye(3) * 2.5
+        cell.a = np.eye(3) * 2.5
         cell.gs = [10]*3
         cell.atom = [['He', (1., .8, 1.9)],
                      ['He', (.1, .2,  .3)],]

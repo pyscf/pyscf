@@ -34,7 +34,7 @@ def test_ks(pseudo=None):
     # The periodic calculation
     cell = pbcgto.Cell()
     cell.unit = 'B'
-    cell.h = np.diag([L,L,L])
+    cell.a = np.diag([L,L,L])
     cell.gs = np.array([80,80,80])
     cell.nimgs = [1,1,1]
 

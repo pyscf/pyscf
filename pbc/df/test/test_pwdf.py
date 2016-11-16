@@ -296,7 +296,7 @@ cell.atom = 'He 1. .5 .5; C .1 1.3 2.1'
 cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))],
               'C' :'gth-szv',}
 cell.pseudo = {'C':'gth-pade'}
-cell.h = np.eye(3) * 2.5
+cell.a = np.eye(3) * 2.5
 cell.gs = [10] * 3
 cell.build()
 np.random.seed(1)
@@ -307,7 +307,7 @@ kpt0 = np.zeros(3)
 cell1 = pgto.Cell()
 cell1.atom = 'He 1. .5 .5; He .1 1.3 2.1'
 cell1.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
-cell1.h = np.eye(3) * 2.5
+cell1.a = np.eye(3) * 2.5
 cell1.gs = [10] * 3
 cell1.build()
 kdf0 = mdf.MDF(cell1)

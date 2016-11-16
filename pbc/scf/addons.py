@@ -90,9 +90,9 @@ def smearing_(mf, sigma=None, method='fermi'):
             if mf.verbose >= logger.DEBUG:
                 numpy.set_printoptions(threshold=len(mo_energy))
                 logger.debug(mf, '     k-point                  mo_energy')
-                for k,kpt in enumerate(mf.kpts):
-                    kstr = '(%6.3f %6.3f %6.3f)' % tuple(mf.cell.get_scaled_kpts(kpt))
-                    logger.debug(mf, '  %2d %s   %s', k, kstr, mo_energy_kpts[k])
+                for k,kpt in enumerate(mf.cell.get_scaled_kpts(mf.kpts)):
+                    logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s',
+                                 k, kpt[0], kpt[1], kpt[2], mo_energy_kpts[k])
                     logger.debug(mf, '     mo_occ %s', mo_occ_kpts[k])
                 numpy.set_printoptions()
 
@@ -139,7 +139,7 @@ if __name__ == '__main__':
     He 1 0 1
     '''
     cell.basis = 'ccpvdz'
-    cell.h = numpy.eye(3) * 4
+    cell.a = numpy.eye(3) * 4
     cell.gs = [8] * 3
     cell.verbose = 4
     cell.build()

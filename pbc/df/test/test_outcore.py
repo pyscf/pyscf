@@ -12,7 +12,7 @@ import pyscf.pbc
 
 cell = pgto.Cell()
 cell.unit = 'B'
-cell.h = numpy.eye(3) * 4.
+cell.a = numpy.eye(3) * 4.
 cell.gs = [5,5,5]
 cell.atom = 'He 0 1 1; He 1 1 0'
 cell.basis = { 'He': [[0, (0.8, 1.0)],

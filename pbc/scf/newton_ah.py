@@ -276,7 +276,7 @@ if __name__ == '__main__':
     He 1 0 1
     '''
     cell.basis = 'ccpvdz'
-    cell.h = numpy.eye(3) * 4
+    cell.a = numpy.eye(3) * 4
     cell.gs = [8] * 3
     cell.verbose = 4
     cell.build()

@@ -17,7 +17,7 @@ class KnowValues(unittest.TestCase):
         cell = pbcgto.Cell()
         cell.unit = 'B'
         L = 10
-        cell.h = np.diag([L]*3)
+        cell.a = np.diag([L]*3)
         cell.gs = np.array([20]*3)
         cell.atom = [['He', (L/2.,L/2.,L/2.)], ]
 # these are some exponents which are not hard to integrate
@@ -53,7 +53,7 @@ class KnowValues(unittest.TestCase):
         cell.pseudo = 'gth-pade'
 
         Lx = Ly = Lz = 5.430697500
-        cell.h = np.diag([Lx,Ly,Lz])
+        cell.a = np.diag([Lx,Ly,Lz])
         cell.gs = np.array([10,10,10])
 
         cell.verbose = 5
@@ -67,7 +67,7 @@ class KnowValues(unittest.TestCase):
 
     def test_chkfile_k_point(self):
         cell = pbcgto.Cell()
-        cell.h = np.eye(3) * 6
+        cell.a = np.eye(3) * 6
         cell.gs = [10,10,10]
         cell.unit = 'B'
         cell.atom = '''He     2.    2.       3.
@@ -80,7 +80,7 @@ class KnowValues(unittest.TestCase):
         mf1.kernel()
 
         cell = pbcgto.Cell()
-        cell.h = np.eye(3) * 6
+        cell.a = np.eye(3) * 6
         cell.gs = [20,20,20]
         cell.unit = 'B'
         cell.atom = '''He     2.    2.       3.

@@ -53,8 +53,10 @@ def estimate_eta(cell, cutoff=1e-12):
     '''The exponent of the smooth gaussian model density, requiring that at
     boundary, density ~ 4pi rmax^2 exp(-eta*rmax^2) ~ 1e-12
     '''
-    rmax = max(lib.norm(cell.lattice_vectors(), axis=0))
-    eta = max(-numpy.log(cutoff/(4*numpy.pi*rmax**2))/rmax**2, .1)
+    b = np.linalg.inv(cell.lattice_vectors()).T
+    heights = 1 / lib.norm(b, axis=1)
+    rmin = min(heights)
+    eta = max(-numpy.log(cutoff/(4*numpy.pi*rmin**2))/rmin**2, .1)
     return eta
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
@@ -718,7 +720,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
     gxyz = lib.cartesian_prod((numpy.append(range(gs[0]+1), range(-gs[0],0)),
                                numpy.append(range(gs[1]+1), range(-gs[1],0)),
                                numpy.append(range(gs[2]+1), range(-gs[2],0))))
-    invh = numpy.linalg.inv(cell._h)
+    invh = numpy.linalg.inv(cell.lattice_vectors()).T
     Gv = 2*numpy.pi * numpy.dot(gxyz, invh)
     ngs = gxyz.shape[0]
 

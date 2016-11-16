@@ -83,7 +83,7 @@ if __name__ == '__main__':
     cell = pgto.Cell()
     cell.atom = 'He 1. .5 .5; He .1 1.3 2.1'
     cell.basis = 'ccpvdz'
-    cell.h = np.eye(3) * 4.
+    cell.a = np.eye(3) * 4.
     cell.gs = [5,5,5]
     cell.build()
     print(get_ao_eri(cell).shape)

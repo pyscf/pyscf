@@ -234,7 +234,7 @@ if __name__ == '__main__':
     cell = pbcgto.Cell()
     cell.verbose = 0
     cell.atom = 'C 0 0 0; C 1 1 1; C 0 2 2; C 2 0 2'
-    cell.h = numpy.diag([4, 4, 4])
+    cell.a = numpy.diag([4, 4, 4])
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
     cell.gs = [10, 10, 10]

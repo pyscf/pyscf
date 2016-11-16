@@ -3,6 +3,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import string
 import ctypes
 import numpy
 import math
@@ -499,17 +500,16 @@ def asarray(a, dtype=None, order=None):
 def norm(x, ord=None, axis=None):
     '''numpy.linalg.norm for numpy 1.6.*
     '''
-    if axis is None:
+    if axis is None or ord is not None:
         return numpy.linalg.norm(x, ord)
-    elif axis == 0:
-        xx = numpy.einsum('ij,ij->j', x, x)
-        return numpy.sqrt(xx)
-    elif axis == 1:
-        xx = numpy.einsum('ij,ij->i', x, x)
-        return numpy.sqrt(xx)
     else:
-        return numpy.linalg.norm(x, ord, axis)
-        #raise RuntimeError('Not support for axis = %d' % axis)
+        axes = string.ascii_lowercase[:x.ndim]
+        target = axes.replace(axes[axis], '')
+        descr = '%s,%s->%s' % (axes, axes, target)
+        xx = numpy.einsum(descr, x.real, x.real)
+        if numpy.iscomplexobj(x):
+            xx += numpy.einsum(descr, x.imag, x.imag)
+        return numpy.sqrt(xx)
 
 def cond(x, p=None):
     '''Compute the condition number'''

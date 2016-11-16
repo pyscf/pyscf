@@ -27,7 +27,8 @@ def gen_uniform_grids(cell, gs=None):
     ngs = 2*np.asarray(gs)+1
     qv = cartesian_prod([np.arange(x) for x in ngs])
     invN = np.diag(1./ngs)
-    coords = np.dot(qv, np.dot(cell._h, invN).T)
+    a_frac = np.einsum('i,ij->ij', 1./ngs, cell.lattice_vectors())
+    coords = np.dot(qv, a_frac)
     return coords
 
 
@@ -80,8 +81,8 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
 # grids for the super cell because out of certain region the weights obtained
 # from Becke partitioning are no longer important.  The region is controlled
 # by r_cutoff
-    #r_cutoff = pyscf.lib.norm(pyscf.lib.norm(cell._h, axis=1))
-    r_cutoff = max(pyscf.lib.norm(cell._h, axis=1)) * 1.25
+    #r_cutoff = pyscf.lib.norm(pyscf.lib.norm(cell.lattice_vectors(), axis=0))
+    r_cutoff = max(pyscf.lib.norm(cell.lattice_vectors(), axis=0)) * 1.25
 # Filter important atoms. Atoms close to the unicell if they are close to any
 # of the atoms in the unit cell
     mask = np.zeros(scell.natm, dtype=bool)
@@ -98,9 +99,8 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
     coords, weights = dft.gen_grid.gen_partition(scell, atom_grids_tab)
 
     # search for grids in unit cell
-    #b1,b2,b3 = np.linalg.inv(h)  # reciprocal lattice
-    #np.einsum('kj,ij->ki', coords, (b1,b2,b3))
-    c = np.dot(coords, np.linalg.inv(cell._h.T))
+    b = np.linalg.inv(cell.lattice_vectors()).T
+    c = np.dot(coords, b.T)
     mask = ((c[:,0]>=0) & (c[:,1]>=0) & (c[:,2]>=0) &
             (c[:,0]< 1) & (c[:,1]< 1) & (c[:,2]< 1))
     return coords[mask], weights[mask]
@@ -129,7 +129,7 @@ if __name__ == '__main__':
 
     n = 3
     cell = pgto.Cell()
-    cell.h = '''
+    cell.a = '''
     4   0   0
     0   4   0
     0   0   4

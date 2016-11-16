@@ -10,7 +10,7 @@ def test_ewald():
     Lx = 6.
     Ly = 9.
     Lz = 30.
-    cell.h = np.array([[Lx,0.5,0.5],
+    cell.a = np.array([[Lx,0.5,0.5],
                        [0.5,Ly,0.5],
                        [0.5,0.5,Lz]])
     cell.gs = np.array([20,20,20])

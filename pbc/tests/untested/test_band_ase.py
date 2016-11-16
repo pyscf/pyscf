@@ -26,7 +26,7 @@ def test_band_ase():
 
     cell = pbcgto.Cell()
     cell.atom=pyscf_ase.ase_atoms_to_pyscf(c)
-    cell.h=c.cell
+    cell.a=c.cell
 
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
@@ -81,7 +81,7 @@ def test_band_ase_kpts():
 
     cell = pbcgto.Cell()
     cell.atom=pyscf_ase.ase_atoms_to_pyscf(c)
-    cell.h=c.cell
+    cell.a=c.cell
 
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'

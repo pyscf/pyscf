@@ -27,7 +27,7 @@ def make_cell(L, ngs):
     cell.unit = 'B'
     cell.atom.extend([['Be', (L/2.,  L/2., L/2.)]])
     #cell.atom.extend([['Be', (0.0,0.0,0.0)]])
-    cell.h = L * np.identity(3)
+    cell.a = L * np.identity(3)
 
     #cell.basis = 'gth-szv'
     cell.basis = 'sto-3g'
@@ -43,8 +43,8 @@ def test_cell_n0( L = 5.0, ngs = 4):
     cell = pbcgto.Cell()
     cell.unit = 'B'
     cell.atom.extend([['Be', (L/2.,  L/2., L/2.)]])
-    cell.h = L * np.identity(3)
-    cell.h[0][1] = 5.0
+    cell.a = L * np.identity(3)
+    cell.a[1,0] = 5.0
 
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
@@ -57,7 +57,7 @@ def test_cell_n1( L = 5.0, ngs = 4):
     cell = pbcgto.Cell()
     cell.unit = 'B'
     cell.atom.extend([['Be', (L/2.,  L/2., L/2.)]])
-    cell.h = L * np.identity(3)
+    cell.a = L * np.identity(3)
 
     cell.basis = 'sto-3g'
     cell.pseudo = 'gth-pade'
@@ -73,7 +73,7 @@ def test_cell_n2( L = 5.0, ngs = 4):
                       ['H', (L/2.-0.689440, L/2.+0.578509, L/2.)],
                       ['H', (L/2.+0.689440, L/2.-0.578509, L/2.)],
         ])
-    cell.h = L * np.identity(3)
+    cell.a = L * np.identity(3)
 
     cell.basis = 'sto-3g'
     cell.pseudo = 'gth-pade'
@@ -96,7 +96,7 @@ def test_cell_n3( ngs ):
     cell = pbcgto.Cell()
     cell.unit = 'A'
     cell.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
-    cell.h = ase_atom.cell
+    cell.a = ase_atom.cell
     #cell.basis = "gth-dzvp"
     cell.basis = "gth-szv"
     cell.pseudo = "gth-pade"

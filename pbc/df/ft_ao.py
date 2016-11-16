@@ -142,7 +142,7 @@ if __name__ == '__main__':
     L = 5.
     n = 10
     cell = pgto.Cell()
-    cell.h = numpy.diag([L,L,L])
+    cell.a = numpy.diag([L,L,L])
     cell.gs = numpy.array([n,n,n])
 
     cell.atom = '''C    1.3    .2       .3

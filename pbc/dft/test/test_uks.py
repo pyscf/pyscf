@@ -26,7 +26,7 @@ class KnowValues(unittest.TestCase):
         cell.pseudo = 'gth-pade'
 
         Lx = Ly = Lz = 5.430697500
-        cell.h = np.diag([Lx,Ly,Lz])
+        cell.a = np.diag([Lx,Ly,Lz])
         cell.gs = np.array([8]*3)
 
         cell.verbose = 5

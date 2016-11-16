@@ -26,8 +26,8 @@ class KnowValues(unittest.TestCase):
         L = 4.
         n = 30
         cell = pgto.Cell()
-        cell.h = numpy.eye(3)*L
-        cell.h[0,1] = cell.h[1,2] = L / 2
+        cell.a = numpy.eye(3)*L
+        cell.a[1,0] = cell.a[2,1] = L / 2
         cell.gs = numpy.array([n,n,n])
 
         cell.atom =[['He' , ( L/2+0., L/2+0. ,   L/2+1.)],

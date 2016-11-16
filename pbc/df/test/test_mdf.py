@@ -12,7 +12,7 @@ pyscf.pbc.DEBUG = False
 L = 5.
 n = 5
 cell = pgto.Cell()
-cell.h = numpy.diag([L,L,L])
+cell.a = numpy.diag([L,L,L])
 cell.gs = numpy.array([n,n,n])
 
 cell.atom = '''C    3.    2.       3.

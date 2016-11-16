@@ -22,7 +22,7 @@ LATTICE_CONST = 3.5668
 def build_cell(ase_atom, ngs):
     cell = pbcgto.Cell()
     cell.unit = 'A'
-    cell.h = ase_atom.cell
+    cell.a = ase_atom.cell
     cell.gs = np.array([ngs,ngs,ngs])
 
     cell.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)

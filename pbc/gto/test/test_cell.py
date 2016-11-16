@@ -16,14 +16,14 @@ L = 1.5
 n = 20
 cl = pgto.Cell()
 cl.build(
-    h = [[L,0,0], [0,L,0], [0,0,L]],
+    a = [[L,0,0], [0,L,0], [0,0,L]],
     gs = [n,n,n],
     atom = 'He %f %f %f' % ((L/2.,)*3),
     basis = 'ccpvdz')
 
 numpy.random.seed(1)
 cl1 = pgto.Cell()
-cl1.build(h = numpy.random.random((3,3)),
+cl1.build(a = numpy.random.random((3,3)).T,
           gs = [n,n,n],
           atom ='''He .1 .0 .0
                    He .5 .1 .0
@@ -130,9 +130,9 @@ def finger(a):
 
 class KnowValues(unittest.TestCase):
     def test_nimgs(self):
-        self.assertTrue(numpy.all(cl.get_nimgs(9e-1)==[3,3,3]))
-        self.assertTrue(numpy.all(cl.get_nimgs(1e-2)==[4,4,4]))
-        self.assertTrue(numpy.all(cl.get_nimgs(1e-4)==[4,4,4]))
+        self.assertTrue(numpy.all(cl.get_nimgs(9e-1)==[1,1,1]))
+        self.assertTrue(numpy.all(cl.get_nimgs(1e-2)==[2,2,2]))
+        self.assertTrue(numpy.all(cl.get_nimgs(1e-4)==[3,3,3]))
         self.assertTrue(numpy.all(cl.get_nimgs(1e-6)==[4,4,4]))
         self.assertTrue(numpy.all(cl.get_nimgs(1e-9)==[5,5,5]))
 
@@ -145,12 +145,12 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(a), (16.506917823339265+1.6393578329869585j), 10)
 
     def test_bounding_sphere(self):
-        self.assertTrue(numpy.all(cl1.get_bounding_sphere(4.5)==[12,8,7]))
+        self.assertEqual(list(cl1.get_bounding_sphere(4.5)), [5, 13, 7])
 
     def test_mixed_basis(self):
         cl = pgto.Cell()
         cl.build(
-            h = [[L,0,0], [0,L,0], [0,0,L]],
+            a = [[L,0,0], [0,L,0], [0,0,L]],
             gs = [n,n,n],
             atom = 'C1 %f %f %f; C2 %f %f %f' % ((L/2.,)*6),
             basis = {'C1':'ccpvdz', 'C2':'gthdzv'})
@@ -170,7 +170,7 @@ class KnowValues(unittest.TestCase):
         cell = pgto.Cell()
         cell.unit = 'B'
         Lx = Ly = Lz = 5.
-        cell.h = numpy.diag([Lx,Ly,Lz])
+        cell.a = numpy.diag([Lx,Ly,Lz])
         cell.gs = numpy.array([20,20,20])
         cell.atom = [['He', (2, 0.5*Ly, 0.5*Lz)],
                      ['He', (3, 0.5*Ly, 0.5*Lz)]]
@@ -198,18 +198,19 @@ class KnowValues(unittest.TestCase):
         numpy.random.seed(12)
         kpts = numpy.random.random((4,3))
         kpts[0] = 0
+        self.assertEqual(list(cl1.nimgs), [28,19,17])
         s0 = cl1.pbc_intor('cint1e_ovlp_sph', hermi=0, kpts=kpts)
-        self.assertAlmostEqual(finger(s0[0]), 408.48676779104392, 10)
-        self.assertAlmostEqual(finger(s0[1]), 26.276205561297139-22.838328810200206j, 10)
-        self.assertAlmostEqual(finger(s0[2]), -30.646416383443931-30.660149830545681j, 10)
-        self.assertAlmostEqual(finger(s0[3]), 155.87522454574429+111.34811270637672j, 10)
+        self.assertAlmostEqual(finger(s0[0]), 492.30568525398246, 10)
+        self.assertAlmostEqual(finger(s0[1]), 37.813129409293396-28.972802782091684j, 10)
+        self.assertAlmostEqual(finger(s0[2]), -26.113232472857426-34.44851462520721j, 10)
+        self.assertAlmostEqual(finger(s0[3]), 186.58903480939688+123.90128138653525j, 10)
 
         s1 = cl1.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpts[0])
-        self.assertAlmostEqual(finger(s1), 408.48676779104392, 10)
+        self.assertAlmostEqual(finger(s1), 492.30568525398246, 10)
 
     def test_ecp_pseudo(self):
         cell = pgto.M(
-            h = np.eye(3)*5,
+            a = np.eye(3)*5,
             gs = [4]*3,
             atom = 'Cu 0 0 1; Na 0 1 0',
             ecp = 'lanl2dz',
@@ -217,7 +218,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(all(cell._ecpbas[:,0] == 1))
 
         cell = pgto.Cell()
-        cell.h = numpy.eye(3) * 8
+        cell.a = numpy.eye(3) * 8
         cell.gs = [5] * 3
         cell.atom='''Na 0. 0. 0.
                      H  0.  0.  1.'''

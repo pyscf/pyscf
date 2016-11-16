@@ -13,7 +13,7 @@ pyscf.pbc.DEBUG = False
 L = 5.
 n = 5
 cell = pgto.Cell()
-cell.h = numpy.diag([L,L,L])
+cell.a = numpy.diag([L,L,L])
 cell.gs = numpy.array([n,n,n])
 
 cell.atom = '''C    3.    2.       3.
@@ -174,7 +174,7 @@ class KnowValues(unittest.TestCase):
         cell = pgto.Cell()
         cell.atom = 'He 1. .5 .5; He .1 1.3 2.1'
         cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
-        cell.h = numpy.eye(3) * 2.5
+        cell.a = numpy.eye(3) * 2.5
         cell.gs = [5] * 3
         cell.build()
         kpts = cell.make_kpts((2,2,2))

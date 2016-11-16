@@ -135,12 +135,12 @@ def build_cell(ase_atom, unit='B', ke=20.0, gsmax=None, basis='gth-szv',
     cell = pbcgto.Cell()
     cell.unit = unit
     cell.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
-    cell.h = ase_atom.cell.T
+    cell.a = ase_atom.cell
 
     cell.basis = basis
     cell.pseudo = pseudo
     cell.dimension = dimension
-    
+
     cell.incore_anyway = incore_anyway
 
     if gsmax is not None:

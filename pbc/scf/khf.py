@@ -139,9 +139,9 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     if mf.verbose >= logger.DEBUG:
         np.set_printoptions(threshold=len(mo_energy))
         logger.debug(mf, '     k-point                  mo_energy')
-        for k,kpt in enumerate(mf.kpts):
-            kstr = '(%6.3f %6.3f %6.3f)' % tuple(mf.cell.get_scaled_kpts(kpt))
-            logger.debug(mf, '  %2d %s   %s %s', k, kstr,
+        for k,kpt in enumerate(mf.cell.get_scaled_kpts(mf.kpts)):
+            logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s %s',
+                         k, kpt[0], kpt[1], kpt[2],
                          mo_energy_kpts[k,mo_occ_kpts[k]> 0],
                          mo_energy_kpts[k,mo_occ_kpts[k]==0])
         np.set_printoptions()

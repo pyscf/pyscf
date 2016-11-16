@@ -13,7 +13,7 @@ He1   1.3    .2       .3
 He2    .1    .1      1.1 '''
 cell.basis = {'He1': 'sto3g', 'He2': 'ccpvdz'}
 cell.gs = (15,)*3
-cell.h = numpy.diag([2.2, 1.9, 2.])
+cell.a = numpy.diag([2.2, 1.9, 2.])
 cell.build()
 
 def finger(a):

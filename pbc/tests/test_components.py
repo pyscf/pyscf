@@ -23,11 +23,11 @@ def test_components(pseudo=None):
     m.xc = 'LDA,VWN_RPA'
     print(m.scf()) # -2.90705411168
     dm = m.make_rdm1()
-    
+
     # The periodic calculation
     cell = pbcgto.Cell()
     cell.unit = 'B'
-    cell.h = np.diag([L,L,L])
+    cell.a = np.diag([L,L,L])
     cell.gs = np.array([80,80,80])
     cell.nimgs = [0,0,0]
 

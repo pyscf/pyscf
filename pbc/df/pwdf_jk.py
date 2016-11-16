@@ -277,7 +277,7 @@ if __name__ == '__main__':
     L = 5.
     n = 5
     cell = pgto.Cell()
-    cell.h = numpy.diag([L,L,L])
+    cell.a = numpy.diag([L,L,L])
     cell.gs = numpy.array([n,n,n])
 
     cell.atom = '''He    3.    2.       3.

@@ -154,7 +154,7 @@ class PWDF(lib.StreamObject):
         gxyz = lib.cartesian_prod((numpy.append(range(gs[0]+1), range(-gs[0],0)),
                                    numpy.append(range(gs[1]+1), range(-gs[1],0)),
                                    numpy.append(range(gs[2]+1), range(-gs[2],0))))
-        invh = numpy.linalg.inv(cell._h)
+        invh = numpy.linalg.inv(cell.lattice_vectors()).T
         Gv = 2*numpy.pi * numpy.dot(gxyz, invh)
         ngs = gxyz.shape[0]
 
@@ -204,7 +204,7 @@ class PWDF(lib.StreamObject):
         gxyz = lib.cartesian_prod((numpy.append(range(gs[0]+1), range(-gs[0],0)),
                                    numpy.append(range(gs[1]+1), range(-gs[1],0)),
                                    numpy.append(range(gs[2]+1), range(-gs[2],0))))
-        invh = numpy.linalg.inv(cell._h)
+        invh = numpy.linalg.inv(cell.lattice_vectors()).T
         Gv = 2*numpy.pi * numpy.dot(gxyz, invh)
         ngs = gxyz.shape[0]
 
@@ -280,7 +280,7 @@ if __name__ == '__main__':
     cell = pbcgto.Cell()
     cell.verbose = 0
     cell.atom = 'C 0 0 0; C 1 1 1; C 0 2 2; C 2 0 2'
-    cell.h = numpy.diag([4, 4, 4])
+    cell.a = numpy.diag([4, 4, 4])
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
     cell.gs = [10, 10, 10]

@@ -114,7 +114,8 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None):
     # Here we 'wrap around' the high frequency k+G vectors into their lower
     # frequency counterparts.  Important if you want the gamma point and k-point
     # answers to agree
-    box_edge = np.linalg.solve(cell._h.T, 2.*np.pi*np.diag(np.asarray(gs)+0.5)).T
+    b = cell.reciprocal_vectors()
+    box_edge = np.einsum('i,ij->ij', np.asarray(gs)+0.5, b)
     reduced_coords = np.linalg.solve(box_edge.T, kG.T).T
     equal2boundary = np.where( abs(abs(reduced_coords) - 1.) < 1e-14 )[0]
     factor = np.trunc(reduced_coords)
@@ -160,7 +161,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None):
         if np.linalg.norm(k) < 1e-8:
             coulG[0] = np.pi / exx_alpha**2
         # Index k+Gv into the precomputed vq and add on
-        gxyz = np.round(np.dot(kG, exx_kcell.h)/(2*np.pi)).astype(int)
+        gxyz = np.round(np.dot(kG, exx_kcell.lattice_vectors().T)/(2*np.pi)).astype(int)
         ngs = 2*np.asarray(exx_kcell.gs)+1
         gxyz = (gxyz + ngs)%(ngs)
         qidx = (gxyz[:,0]*ngs[1] + gxyz[:,1])*ngs[2] + gxyz[:,2]
@@ -187,8 +188,8 @@ def precompute_exx(cell, kpts):
     kcell.spin = 1
     kcell.unit = 'B'
     kcell.verbose = 0
-    kcell.h = kcell._h = cell._h * Nk
-    Lc = 1.0/lib.norm(np.linalg.inv(kcell.h.T), axis=0)
+    kcell.a = cell.lattice_vectors() * Nk
+    Lc = 1.0/lib.norm(np.linalg.inv(kcell.a), axis=0)
     log.debug("# Lc = %s", Lc)
     Rin = Lc.min() / 2.0
     log.debug("# Rin = %s", Rin)
@@ -198,13 +199,13 @@ def precompute_exx(cell, kpts):
     kcell.gs = np.array([2*int(L*alpha*3.0) for L in Lc])  # ~ [60,60,60]
     # QE:
     #alpha = 3./Rin * np.sqrt(0.5)
-    #kcell.gs = (4*alpha*np.linalg.norm(kcell.h,axis=0)).astype(int)
+    #kcell.gs = (4*alpha*np.linalg.norm(kcell.a,axis=1)).astype(int)
     log.debug("# kcell.gs FFT = %s", kcell.gs)
     kcell.build(False,False)
     rs = gen_grid.gen_uniform_grids(kcell)
     kngs = len(rs)
     log.debug("# kcell kngs = %d", kngs)
-    corners = np.dot(np.indices((2,2,2)).reshape((3,8)).T, kcell.h.T)
+    corners = np.dot(np.indices((2,2,2)).reshape((3,8)).T, kcell.a)
     #vR = np.empty(kngs)
     #for i, rv in enumerate(rs):
     #    # Minimum image convention to corners of kcell parallelepiped
@@ -236,7 +237,7 @@ def madelung(cell, kpts):
     ecell.gs = cell.gs
     ecell.precision = 1e-16
     ecell.unit = 'B'
-    ecell.h = cell._h * Nk
+    ecell.a = cell.lattice_vectors() * Nk
     ecell.build(False,False)
     return -2*ewald(ecell, ecell.ew_eta, ecell.ew_cut)
 
@@ -257,7 +258,7 @@ def get_lattice_Ls(cell, nimgs=None):
                              np.arange(-nimgs[2],nimgs[2]+1)))
     #Ts = Ts[np.einsum('ix,ix->i',Ts,Ts) <= 1./3*np.dot(nimgs,nimgs)]
     Ts = Ts[np.einsum('ix,ix->i',Ts,Ts) <= max(nimgs)*max(nimgs)]
-    Ls = np.dot(Ts, cell._h.astype(np.double).T)
+    Ls = np.dot(Ts, cell.lattice_vectors())
     return Ls
 
 
@@ -275,15 +276,16 @@ def super_cell(cell, ncopy):
     '''
     supcell = cell.copy()
     supcell.atom = []
+    a = cell.lattice_vectors()
     for Lx in range(ncopy[0]):
         for Ly in range(ncopy[1]):
             for Lz in range(ncopy[2]):
                 # Using cell._atom guarantees coord is in Bohr
                 for atom, coord in cell._atom:
-                    L = np.dot(cell._h, [Lx, Ly, Lz])
+                    L = np.dot([Lx, Ly, Lz], a)
                     supcell.atom.append([atom, coord + L])
     supcell.unit = 'B'
-    supcell.h = np.dot(cell._h, np.diag(ncopy))
+    supcell.a = np.einsum('i,ij->ij', ncopy, cell.lattice_vectors())
     supcell.gs = np.array([ncopy[0]*cell.gs[0] + (ncopy[0]-1)//2,
                            ncopy[1]*cell.gs[1] + (ncopy[1]-1)//2,
                            ncopy[2]*cell.gs[2] + (ncopy[2]-1)//2])
@@ -313,7 +315,7 @@ def cell_plus_imgs(cell, nimgs):
             atom1.append([cell._atom[ia][0], cell._atom[ia][1]+L])
         supcell.atom.extend(atom1)
     supcell.unit = 'B'
-    supcell.h = np.dot(cell._h, np.diag(nimgs))
+    supcell.a = np.einsum('i,ij->ij', nimgs, cell.lattice_vectors())
     supcell.build(False, False, verbose=0)
     supcell.verbose = cell.verbose
     return supcell
@@ -333,7 +335,7 @@ def get_kconserv(cell, kpts):
     '''
     nkpts = kpts.shape[0]
     KLMN = np.zeros([nkpts,nkpts,nkpts], np.int)
-    kvecs = 2*np.pi*scipy.linalg.inv(cell._h)
+    kvecs = cell.reciprocal_vectors()
 
     for K, kvK in enumerate(kpts):
         for L, kvL in enumerate(kpts):
@@ -361,15 +363,16 @@ def get_kconserv(cell, kpts):
     return KLMN
 
 
-def cutoff_to_gs(h, cutoff):
+def cutoff_to_gs(a, cutoff):
     '''
-    Convert KE cutoff to #grid points (gs variable)
+    Convert KE cutoff to #grid points (gs variable) for FFT-mesh
 
         uses KE = k^2 / 2, where k_max ~ \pi / grid_spacing
 
     Args:
-        h : (3,3) ndarray
-            The unit cell lattice vectors, a "three-column" array [a1|a2|a3], in Bohr
+        a : (3,3) ndarray
+            The real-space unit cell lattice vectors. Each row represents a
+            lattice vector.
         cutoff : float
             KE energy cutoff in a.u.
 
@@ -378,17 +381,7 @@ def cutoff_to_gs(h, cutoff):
     '''
     grid_spacing = np.pi / np.sqrt(2 * cutoff)
 
-    #print grid_spacing
-    #print h
-
-    h0 = np.linalg.norm(h[:,0])
-    h1 = np.linalg.norm(h[:,1])
-    h2 = np.linalg.norm(h[:,2])
-
-    #print h0, h1, h2
     # number of grid points is 2gs+1 (~ 2 gs) along each direction
-    gs = np.ceil([h0 / (2*grid_spacing),
-                  h1 / (2*grid_spacing),
-                  h2 / (2*grid_spacing)])
-    return gs.astype(int)
+    gs = np.ceil(lib.norm(a, axis=1) / (2*grid_spacing)).astype(int)
+    return gs
 

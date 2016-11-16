@@ -18,7 +18,7 @@ def make_cell1(L, n, nimgs=None):
     cell = pbcgto.Cell()
     cell.verbose = 0
     cell.unit = 'B'
-    cell.h = ((L,0,0),(0,L,0),(0,0,L))
+    cell.a = ((L,0,0),(0,L,0),(0,0,L))
     cell.gs = [n,n,n]
 
     cell.atom = [['He', (L/2.,L/2.,L/2.)], ]
@@ -35,7 +35,7 @@ def make_cell2(L, n, nimgs=None):
     cell.build(False, False,
                unit = 'B',
                verbose = 0,
-               h = ((L,0,0),(0,L,0),(0,0,L)),
+               a = ((L,0,0),(0,L,0),(0,0,L)),
                gs = [n,n,n],
                atom = [['He', (L/2.-.5,L/2.,L/2.-.5)],
                        ['He', (L/2.   ,L/2.,L/2.+.5)]],

@@ -10,7 +10,7 @@ from pyscf.pbc.df import pwdf, pwdf_jk
 cell = pgto.Cell()
 cell.atom = 'He 1. .5 .5; He .1 1.3 2.1'
 cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
-cell.h = np.eye(3) * 2.5
+cell.a = np.eye(3) * 2.5
 cell.gs = [10] * 3
 cell.build()
 
