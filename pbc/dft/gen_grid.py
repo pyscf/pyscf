@@ -81,7 +81,7 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
 # from Becke partitioning are no longer important.  The region is controlled
 # by r_cutoff
     #r_cutoff = pyscf.lib.norm(pyscf.lib.norm(cell._h, axis=1))
-    r_cutoff = max(pyscf.lib.norm(cell._h, axis=1)) * 1.25
+    r_cutoff = max(pyscf.lib.norm(cell._h, axis=0)) * 1.25
 # Filter important atoms. Atoms close to the unicell if they are close to any
 # of the atoms in the unit cell
     mask = np.zeros(scell.natm, dtype=bool)

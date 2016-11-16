@@ -17,12 +17,13 @@ libpbc = pyscf.lib.load_library('libpbc')
 
 try:
 ## Moderate speedup by caching eval_ao
+    from pyscf import pbc
     from joblib import Memory
     memory = Memory(cachedir='./tmp/', mmap_mode='r', verbose=0)
     def memory_cache(f):
         g = memory.cache(f)
         def maybe_cache(*args, **kwargs):
-            if pyscf.pbc.DEBUG:
+            if pbc.DEBUG:
                 return g(*args, **kwargs)
             else:
                 return f(*args, **kwargs)

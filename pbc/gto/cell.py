@@ -330,7 +330,7 @@ def get_nimgs(cell, precision=None):
 
     guess = np.sqrt((5-np.log(precision))/min_exp)
     rcut = scipy.optimize.fsolve(fn, guess, xtol=1e-4)[0]
-    rlengths = lib.norm(cell.lattice_vectors(), axis=1) + 1e-200
+    rlengths = lib.norm(cell.lattice_vectors(), axis=0) + 1e-200
     nimgs = np.ceil(np.reshape(rcut/rlengths, rlengths.shape[0])).astype(int)
 
     return nimgs+1 # additional lattice vector to take into account
@@ -357,7 +357,7 @@ def get_ewald_params(cell, precision=1e-8, gs=None):
 
     #  See Martin, p. 85 
     _h = cell.lattice_vectors()
-    Gmax = min([ 2.*np.pi*gs[i]/lib.norm(_h[i,:]) for i in range(3) ])
+    Gmax = min([ 2.*np.pi*gs[i]/lib.norm(_h[:,i]) for i in range(3) ])
 
     log_precision = np.log(precision)
     ew_eta = float(np.sqrt(-Gmax**2/(4*log_precision)))
