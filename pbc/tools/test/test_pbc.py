@@ -28,7 +28,7 @@ class KnowValues(unittest.TestCase):
         mf = khf.KRHF(cell, exxdiv='vcut_ws')
         mf.kpts = cell.make_kpts([2,2,2])
         coulG = tools.get_coulG(cell, mf.kpts[2], True, mf)
-        self.assertAlmostEqual(finger(coulG), 166.15891996685517, 9)
+        self.assertAlmostEqual(finger(coulG), 152.17015235388303, 9)
 
     def test_coulG(self):
         numpy.random.seed(19)

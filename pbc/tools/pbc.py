@@ -160,7 +160,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None):
         if np.linalg.norm(k) < 1e-8:
             coulG[0] = np.pi / exx_alpha**2
         # Index k+Gv into the precomputed vq and add on
-        gxyz = np.round(np.dot(kG, exx_kcell.h)/(2*np.pi)).astype(int)
+        gxyz = np.round(np.dot(kG, exx_kcell.h)/(2*np.pi), 6).astype(int)
         ngs = 2*np.asarray(exx_kcell.gs)+1
         gxyz = (gxyz + ngs)%(ngs)
         qidx = (gxyz[:,0]*ngs[1] + gxyz[:,1])*ngs[2] + gxyz[:,2]
