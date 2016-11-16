@@ -18,7 +18,7 @@ class KnowValues(unittest.TestCase):
         ase_atom = Diamond(symbol='C', latticeconstant=LATTICE_CONST)
         cell = pbcgto.Cell()
         cell.unit = 'A'
-        cell.h = ase_atom.cell
+        cell.h = ase_atom.cell.T
         cell.gs = np.array([8]*3)
         cell.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
         cell.basis = 'gth-szv'

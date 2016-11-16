@@ -21,7 +21,7 @@ def make_primitive_cell(ngs):
     cell = pbcgto.Cell()
     cell.unit = 'A'
     cell.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
-    cell.h = ase_atom.cell
+    cell.h = ase_atom.cell.T
 
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'

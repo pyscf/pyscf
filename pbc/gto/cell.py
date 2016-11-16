@@ -330,8 +330,10 @@ def get_nimgs(cell, precision=None):
 
     guess = np.sqrt((5-np.log(precision))/min_exp)
     rcut = scipy.optimize.fsolve(fn, guess, xtol=1e-4)[0]
-    rlengths = lib.norm(cell.lattice_vectors(), axis=0) + 1e-200
-    nimgs = np.ceil(np.reshape(rcut/rlengths, rlengths.shape[0])).astype(int)
+    # rcut is the incircle radius
+    # nimgs determines the supercell size
+    heights = lib.norm(np.linalg.inv(cell.lattice_vectors()), axis=1)
+    nimgs = np.ceil(rcut*heights).astype(int)
 
     return nimgs+1 # additional lattice vector to take into account
                    # case where there are functions on the edges of the box.
@@ -357,7 +359,8 @@ def get_ewald_params(cell, precision=1e-8, gs=None):
 
     #  See Martin, p. 85 
     _h = cell.lattice_vectors()
-    Gmax = min([ 2.*np.pi*gs[i]/lib.norm(_h[:,i]) for i in range(3) ])
+    invh = np.linalg.inv(_h)
+    Gmax = min([ 2.*np.pi*gs[i]*lib.norm(invh[i]) for i in range(3) ])
 
     log_precision = np.log(precision)
     ew_eta = float(np.sqrt(-Gmax**2/(4*log_precision)))
@@ -787,7 +790,7 @@ class Cell(mole.Mole):
         >>> cell.from_ase(bulk('C', 'diamond', a=LATTICE_CONST))
         '''
         from pyscf.pbc.tools import pyscf_ase
-        self.h = ase_atom.cell
+        self.h = ase_atom.cell.T
         self.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
         return self
 

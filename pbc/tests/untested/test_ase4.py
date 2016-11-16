@@ -21,7 +21,7 @@ def test():
 
     cell = pbcgto.Cell()
     cell.atom=pyscf_ase.ase_atoms_to_pyscf(ase_atom)
-    cell.h=ase_atom.cell
+    cell.h=ase_atom.cell.T
     cell.verbose = 7
 
     # gth-szv for C

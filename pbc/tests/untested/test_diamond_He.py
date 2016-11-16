@@ -22,7 +22,7 @@ def test_cubic_diamond_He():
 
     cell = pbcgto.Cell()
     cell.atom=pyscf_ase.ase_atoms_to_pyscf(ase_atom)
-    cell.h=ase_atom.cell
+    cell.h=ase_atom.cell.T
     cell.basis = {"He" : [[0, (1.0, 1.0)], [0, (0.8, 1.0)]] }
 
     cell.gs = np.array([15,15,15])
@@ -59,7 +59,7 @@ def test_diamond_He():
 
     cell = pbcgto.Cell()
     cell.atom=pyscf_ase.ase_atoms_to_pyscf(He)
-    cell.h=He.cell
+    cell.h=He.cell.T
 
     cell.basis = {"He" : [[0, (1.0, 1.0)], [0, (0.8, 1.0)]] }
 

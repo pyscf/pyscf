@@ -199,13 +199,13 @@ class KnowValues(unittest.TestCase):
         kpts = numpy.random.random((4,3))
         kpts[0] = 0
         s0 = cl1.pbc_intor('cint1e_ovlp_sph', hermi=0, kpts=kpts)
-        self.assertAlmostEqual(finger(s0[0]), 408.48676779104392, 10)
-        self.assertAlmostEqual(finger(s0[1]), 26.276205561297139-22.838328810200206j, 10)
-        self.assertAlmostEqual(finger(s0[2]), -30.646416383443931-30.660149830545681j, 10)
-        self.assertAlmostEqual(finger(s0[3]), 155.87522454574429+111.34811270637672j, 10)
+        self.assertAlmostEqual(finger(s0[0]), 492.28169269619838, 10)
+        self.assertAlmostEqual(finger(s0[1]), 37.814902167003254-28.972661123811193j, 10)
+        self.assertAlmostEqual(finger(s0[2]), -26.113652771749571-34.448650717254417j, 10)
+        self.assertAlmostEqual(finger(s0[3]), 186.58447442096966+123.89977363497668j, 10)
 
         s1 = cl1.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpts[0])
-        self.assertAlmostEqual(finger(s1), 408.48676779104392, 10)
+        self.assertAlmostEqual(finger(s1), 492.28169269619838, 10)
 
 
 if __name__ == '__main__':
