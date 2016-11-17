@@ -36,7 +36,6 @@ def test_ks(pseudo=None):
     cell.unit = 'B'
     cell.a = np.diag([L,L,L])
     cell.gs = np.array([80,80,80])
-    cell.nimgs = [1,1,1]
 
     cell.atom = mol.atom
     cell.basis = mol.basis

@@ -14,7 +14,6 @@ def test_ewald():
                        [0.5,Ly,0.5],
                        [0.5,0.5,Lz]])
     cell.gs = np.array([20,20,20])
-    cell.nimgs = [1,1,1]
 
     cell.atom.extend([['He', (1, 0.5*Ly, 0.5*Lz)],
                       ['He', (2, 0.5*Ly, 0.5*Lz)]])

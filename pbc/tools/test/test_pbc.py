@@ -5,7 +5,7 @@ from pyscf.pbc import tools
 from pyscf.pbc.scf import khf
 import pyscf.pbc.tools.pyscf_ase as pyscf_ase
 
-from ase.lattice import bulk
+from ase.build import bulk
 
 def finger(a):
     w = numpy.cos(numpy.arange(a.size))
@@ -28,7 +28,7 @@ class KnowValues(unittest.TestCase):
         mf = khf.KRHF(cell, exxdiv='vcut_ws')
         mf.kpts = cell.make_kpts([2,2,2])
         coulG = tools.get_coulG(cell, mf.kpts[2], True, mf)
-        self.assertAlmostEqual(finger(coulG), 166.15891996685517, 9)
+        self.assertAlmostEqual(finger(coulG), 1.3245117871351604, 9)
 
     def test_coulG(self):
         numpy.random.seed(19)
@@ -47,6 +47,32 @@ class KnowValues(unittest.TestCase):
         coulG = tools.get_coulG(cell, kpt)
         self.assertAlmostEqual(finger(coulG), 62.75448804333378, 9)
 
+    def test_get_lattice_Ls(self):
+        numpy.random.seed(2)
+        cl1 = pbcgto.M(a = numpy.random.random((3,3))*3,
+                       gs = [1]*3,
+                       atom ='''He .1 .0 .0''',
+                       basis = 'ccpvdz')
+        Ls = tools.get_lattice_Ls(cl1)
+        self.assertEqual(Ls.shape, (767,3))
+
+    def test_super_cell(self):
+        numpy.random.seed(2)
+        cl1 = pbcgto.M(a = numpy.random.random((3,3))*3,
+                       gs = [1]*3,
+                       atom ='''He .1 .0 .0''',
+                       basis = 'ccpvdz')
+        cl2 = tools.super_cell(cl1, [2,3,4])
+        self.assertAlmostEqual(finger(cl2.atom_coords()), -18.946080642714836, 9)
+
+    def test_cell_plus_imgs(self):
+        numpy.random.seed(2)
+        cl1 = pbcgto.M(a = numpy.random.random((3,3))*3,
+                       gs = [1]*3,
+                       atom ='''He .1 .0 .0''',
+                       basis = 'ccpvdz')
+        cl2 = tools.cell_plus_imgs(cl1, cl1.nimgs)
+        self.assertAlmostEqual(finger(cl2.atom_coords()), 105.02255167975048, 9)
 
 
 if __name__ == '__main__':

@@ -12,6 +12,7 @@ PySCF 1.3 alpha (2016-12-?)
 * Improved
   - Optimized CCSD(T)
   - Change the default kpts mesh (to always include gamma point)
+  - PBC repeated images used by lattice summation
 
 
 PySCF 1.2 (2016-11-07)

@@ -75,7 +75,7 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
             The real-space grid point coordinates.
         weights : (ngx*ngy*ngz) ndarray
     '''
-    scell = tools.pbc.cell_plus_imgs(cell, [min(x,2) for x in cell.nimgs])
+    scell = tools.pbc.cell_plus_imgs(cell, cell.nimgs)
     coords = scell.atom_coords()
 # Generating grids for the entire super cell is slow.  We don't need generate
 # grids for the super cell because out of certain region the weights obtained

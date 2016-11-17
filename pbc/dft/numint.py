@@ -99,7 +99,7 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
     out_ptrs = (ctypes.c_void_p*nkpts)(
             *[x.ctypes.data_as(ctypes.c_void_p) for x in ao_kpts])
     coords = numpy.asarray(coords, order='C')
-    Ls = numpy.asarray(cell.get_lattice_Ls(cell.nimgs), order='C')
+    Ls = cell.get_lattice_Ls()
     expLk = numpy.exp(1j * numpy.asarray(numpy.dot(Ls, kpts.T), order='C'))
 
     drv = getattr(libpbc, 'PBCval_sph_deriv%d' % deriv)

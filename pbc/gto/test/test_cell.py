@@ -24,6 +24,7 @@ cl.build(
 numpy.random.seed(1)
 cl1 = pgto.Cell()
 cl1.build(a = numpy.random.random((3,3)).T,
+          precision = 1e-9,
           gs = [n,n,n],
           atom ='''He .1 .0 .0
                    He .5 .1 .0
@@ -79,8 +80,8 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
     c_nbas = ctypes.c_int(nbas)
     c_env = env.ctypes.data_as(ctypes.c_void_p)
 
-    nimgs = np.max((cell1.nimgs, cell2.nimgs), axis=0)
-    Ls = cell1.get_lattice_Ls(nimgs)
+    rcut = max(cell1.rcut, cell2.rcut)
+    Ls = cell1.get_lattice_Ls(rcut=rcut)
     expkL = np.exp(1j*np.dot(Ls, kpts_lst.T))
 
     xyz = cell2.atom_coords()
@@ -130,11 +131,11 @@ def finger(a):
 
 class KnowValues(unittest.TestCase):
     def test_nimgs(self):
-        self.assertTrue(numpy.all(cl.get_nimgs(9e-1)==[1,1,1]))
-        self.assertTrue(numpy.all(cl.get_nimgs(1e-2)==[2,2,2]))
-        self.assertTrue(numpy.all(cl.get_nimgs(1e-4)==[3,3,3]))
-        self.assertTrue(numpy.all(cl.get_nimgs(1e-6)==[4,4,4]))
-        self.assertTrue(numpy.all(cl.get_nimgs(1e-9)==[5,5,5]))
+        self.assertTrue(list(cl.get_nimgs(9e-1)), [1,1,1])
+        self.assertTrue(list(cl.get_nimgs(1e-2)), [2,2,2])
+        self.assertTrue(list(cl.get_nimgs(1e-4)), [3,3,3])
+        self.assertTrue(list(cl.get_nimgs(1e-6)), [4,4,4])
+        self.assertTrue(list(cl.get_nimgs(1e-9)), [5,5,5])
 
     def test_Gv(self):
         a = cl1.get_Gv()
@@ -159,12 +160,28 @@ class KnowValues(unittest.TestCase):
         cl1.loads(cl1.dumps())
 
     def test_get_lattice_Ls(self):
-        self.assertEqual((1  , 3), cl1.get_lattice_Ls([0,0,0]).shape)
-        self.assertEqual((7  , 3), cl1.get_lattice_Ls([1,1,1]).shape)
-        self.assertEqual((33 , 3), cl1.get_lattice_Ls([2,2,2]).shape)
-        self.assertEqual((123, 3), cl1.get_lattice_Ls([3,3,3]).shape)
-        self.assertEqual((257, 3), cl1.get_lattice_Ls([4,4,4]).shape)
-        self.assertEqual((515, 3), cl1.get_lattice_Ls([5,5,5]).shape)
+        self.assertEqual(cl1.get_lattice_Ls([0,0,0]).shape, (1  , 3))
+        self.assertEqual(cl1.get_lattice_Ls([1,1,1]).shape, (13 , 3))
+        self.assertEqual(cl1.get_lattice_Ls([2,2,2]).shape, (57 , 3))
+        self.assertEqual(cl1.get_lattice_Ls([3,3,3]).shape, (137, 3))
+        self.assertEqual(cl1.get_lattice_Ls([4,4,4]).shape, (281, 3))
+        self.assertEqual(cl1.get_lattice_Ls([5,5,5]).shape, (493, 3))
+
+        cell = pgto.M(atom = '''
+        C 0.000000000000  0.000000000000  0.000000000000
+        C 1.685068664391  1.685068664391  1.685068664391''',
+        unit='B',
+        basis = 'gth-dzvp',
+        pseudo = 'gth-pade',
+        a = '''
+        0.000000000  3.370137329  3.370137329
+        3.370137329  0.000000000  3.370137329
+        3.370137329  3.370137329  0.000000000''',
+        gs = [7,7,7])
+        rcut = max([cell.bas_rcut(ib, 1e-8) for ib in range(cell.nbas)])
+        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (675, 3))
+        rcut = max([cell.bas_rcut(ib, 1e-9) for ib in range(cell.nbas)])
+        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (767, 3))
 
     def test_ewald(self):
         cell = pgto.Cell()
@@ -198,17 +215,18 @@ class KnowValues(unittest.TestCase):
         numpy.random.seed(12)
         kpts = numpy.random.random((4,3))
         kpts[0] = 0
-        self.assertEqual(list(cl1.nimgs), [28,19,17])
+        self.assertEqual(list(cl1.nimgs), [30,20,18])
         s0 = cl1.pbc_intor('cint1e_ovlp_sph', hermi=0, kpts=kpts)
-        self.assertAlmostEqual(finger(s0[0]), 492.30568525398246, 10)
-        self.assertAlmostEqual(finger(s0[1]), 37.813129409293396-28.972802782091684j, 10)
-        self.assertAlmostEqual(finger(s0[2]), -26.113232472857426-34.44851462520721j, 10)
-        self.assertAlmostEqual(finger(s0[3]), 186.58903480939688+123.90128138653525j, 10)
+        self.assertAlmostEqual(finger(s0[0]), 492.30658304804126, 5)
+        self.assertAlmostEqual(finger(s0[1]), 37.812956255000756-28.972806230140314j, 5)
+        self.assertAlmostEqual(finger(s0[2]),-26.113285893260819-34.448501789693566j, 5)
+        self.assertAlmostEqual(finger(s0[3]), 186.58921213429491+123.90133823378201j, 5)
 
         s1 = cl1.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpts[0])
-        self.assertAlmostEqual(finger(s1), 492.30568525398246, 10)
+        self.assertAlmostEqual(finger(s1), 492.30658304804126, 5)
 
     def test_ecp_pseudo(self):
+        from pyscf.pbc.gto import ecp
         cell = pgto.M(
             a = np.eye(3)*5,
             gs = [4]*3,
@@ -225,7 +243,7 @@ class KnowValues(unittest.TestCase):
         cell.basis={'Na':'lanl2dz', 'H':'sto3g'}
         cell.ecp = {'Na':'lanl2dz'}
         cell.build()
-        v1 = ecp_int(cell)
+        v1 = ecp.ecp_int(cell)
         mol = cell.to_mol()
         v0 = mol.intor('ECPscalar_sph')
         self.assertAlmostEqual(abs(v0 - v1).sum(), 0.0289322453376, 10)

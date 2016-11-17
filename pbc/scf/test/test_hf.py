@@ -13,7 +13,6 @@ L = 4
 n = 10
 cell = pbcgto.Cell()
 cell.build(unit = 'B',
-           precision = 1e-10,
            verbose = 5,
            output = '/dev/null',
            a = ((L,0,0),(0,L,0),(0,0,L)),

@@ -22,7 +22,7 @@ def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shl_slice=N
             non0tab=None, out=None, verbose=None):
     gamma_point = kpt is None or abs(kpt).sum() < 1e-9
     aoR = 0
-    for L in cell.get_lattice_Ls(cell.nimgs):
+    for L in cell.get_lattice_Ls():
         if gamma_point:
             aoR += pyscf.dft.numint.eval_ao(cell, coords-L, deriv, relativity,
                                             shl_slice, non0tab, out, verbose)
@@ -44,7 +44,6 @@ def make_grids(n):
     cell.unit = 'B'
     cell.a = ((L,0,0),(0,L,0),(0,0,L))
     cell.gs = [n,n,n]
-    cell.nimgs = [0,0,0]
 
     cell.atom = [['He', (L/2.,L/2.,L/2.)], ]
     cell.basis = {'He': [[0, (0.8, 1.0)],

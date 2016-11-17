@@ -149,7 +149,6 @@ def fake_cell_vloc(cell, cn=0):
     fakecell._atm = numpy.asarray(fake_atm, dtype=numpy.int32)
     fakecell._bas = numpy.asarray(fake_bas, dtype=numpy.int32)
     fakecell._env = numpy.asarray(numpy.hstack(fake_env), dtype=numpy.double)
-    #fakecell.nimgs = [2]*3
     return fakecell
 
 # sqrt(Gamma(l+1.5)/Gamma(l+2i+1.5))
@@ -204,7 +203,6 @@ def fake_cell_vnl(cell):
     fakecell._atm = numpy.asarray(fake_atm, dtype=numpy.int32)
     fakecell._bas = numpy.asarray(fake_bas, dtype=numpy.int32)
     fakecell._env = numpy.asarray(numpy.hstack(fake_env), dtype=numpy.double)
-    #fakecell.nimgs = [2]*3
     return fakecell, hl_blocks
 
 
@@ -212,8 +210,8 @@ def _int_vloc_part2(cell, fakecell, kpts, intor='cint3c1e_sph'):
     '''Vnuc - Vloc'''
     from pyscf.pbc.df import incore
     # sum over largest number of images in either cell or auxcell
-    nimgs = numpy.max((cell.nimgs, fakecell.nimgs), axis=0)
-    Ls = numpy.asarray(cell.get_lattice_Ls(nimgs), order='C')
+    rcut = max(cell.rcut, fakecell.rcut)
+    Ls = cell.get_lattice_Ls(rcut=rcut)
     expLk = numpy.asarray(numpy.exp(1j*numpy.dot(Ls, kpts.T)), order='C')
     nkpts = len(kpts)
 
@@ -247,8 +245,8 @@ def _int_vloc_part2(cell, fakecell, kpts, intor='cint3c1e_sph'):
 
 def _int_vnl(cell, fakecell, hl_blocks, kpts):
     '''Vnuc - Vloc'''
-    nimgs = numpy.max((cell.nimgs, fakecell.nimgs), axis=0)
-    Ls = numpy.asarray(cell.get_lattice_Ls(nimgs), order='C')
+    rcut = max(cell.rcut, fakecell.rcut)
+    Ls = cell.get_lattice_Ls(rcut=rcut)
     expLk = numpy.asarray(numpy.exp(1j*numpy.dot(Ls, kpts.T)), order='C')
     nkpts = len(kpts)
 

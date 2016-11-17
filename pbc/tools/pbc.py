@@ -161,7 +161,8 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None):
         if np.linalg.norm(k) < 1e-8:
             coulG[0] = np.pi / exx_alpha**2
         # Index k+Gv into the precomputed vq and add on
-        gxyz = np.round(np.dot(kG, exx_kcell.lattice_vectors().T)/(2*np.pi)).astype(int)
+        gxyz = np.dot(kG, exx_kcell.lattice_vectors().T)/(2*np.pi)
+        gxyz = gxyz.round(decimals=6).astype(int)
         ngs = 2*np.asarray(exx_kcell.gs)+1
         gxyz = (gxyz + ngs)%(ngs)
         qidx = (gxyz[:,0]*ngs[1] + gxyz[:,1])*ngs[2] + gxyz[:,2]
@@ -248,18 +249,28 @@ def get_monkhorst_pack_size(cell, kpts):
     return Nk
 
 
-def get_lattice_Ls(cell, nimgs=None):
+def get_lattice_Ls(cell, nimgs=None, rcut=None):
     '''Get the (Cartesian, unitful) lattice translation vectors for nearby images.
     The translation vectors can be used for the lattice summation.'''
+    b = np.linalg.inv(cell.lattice_vectors()).T
+    heights_inv = lib.norm(b, axis=1)
+
     if nimgs is None:
-        nimgs = cell.nimgs
+        if rcut is None:
+            rcut = cell.rcut
+# plus 1 image in rcut to handle the case atoms within the adjacent cells are
+# close to each other
+        rcut = rcut + max(1./heights_inv)
+        nimgs = np.ceil(rcut*heights_inv)
+    else:
+        rcut = max((np.asarray(nimgs)+1)/heights_inv) # ~ the incircle radius
+
     Ts = lib.cartesian_prod((np.arange(-nimgs[0],nimgs[0]+1),
                              np.arange(-nimgs[1],nimgs[1]+1),
                              np.arange(-nimgs[2],nimgs[2]+1)))
-    #Ts = Ts[np.einsum('ix,ix->i',Ts,Ts) <= 1./3*np.dot(nimgs,nimgs)]
-    Ts = Ts[np.einsum('ix,ix->i',Ts,Ts) <= max(nimgs)*max(nimgs)]
     Ls = np.dot(Ts, cell.lattice_vectors())
-    return Ls
+    Ls = Ls[lib.norm(Ls, axis=1)<rcut]
+    return np.asarray(Ls, order='C')
 
 
 def super_cell(cell, ncopy):

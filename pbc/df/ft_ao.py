@@ -104,7 +104,7 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
     xyz = numpy.asarray(cell.atom_coords(), order='C')
     ptr_coord = numpy.asarray(atm[cell.natm:,gto.PTR_COORD],
                               dtype=numpy.int32, order='C')
-    Ls = numpy.asarray(cell.get_lattice_Ls(cell.nimgs), order='C')
+    Ls = cell.get_lattice_Ls()
     exp_Lk = numpy.einsum('ik,jk->ij', Ls, kptjs)
     exp_Lk = numpy.exp(1j * numpy.asarray(exp_Lk, order='C'))
     drv(intor, eval_gz, fill, out_ptrs, xyz.ctypes.data_as(ctypes.c_void_p),

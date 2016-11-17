@@ -108,7 +108,6 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
             steep_shls.append(ib)
 
     auxcell._bas = numpy.asarray(auxcell._bas[steep_shls], order='C')
-    auxcell.nimgs = cell.nimgs
     auxcell._built = True
     logger.debug(cell, 'Drop %d primitive fitting functions', ndrop)
     logger.debug(cell, 'make aux basis, num shells = %d, num cGTOs = %d',
@@ -135,7 +134,6 @@ def make_modchg_basis(auxcell, smooth_eta, l_max=3):
     chgcell._atm = auxcell._atm
     chgcell._bas = numpy.asarray(chg_bas, dtype=numpy.int32).reshape(-1,gto.BAS_SLOTS)
     chgcell._env = numpy.hstack((auxcell._env, chg_env))
-    chgcell.nimgs = auxcell.nimgs
     chgcell._built = True
     logger.debug1(auxcell, 'make smooth basis, num shells = %d, num cGTOs = %d',
                   chgcell.nbas, chgcell.nao_nr())
@@ -635,8 +633,8 @@ def fuse_auxcell_(mydf, auxcell):
 
 def _int_nuc_vloc(cell, nuccell, kpts):
     '''Vnuc - Vloc'''
-    nimgs = numpy.max((cell.nimgs, nuccell.nimgs), axis=0)
-    Ls = numpy.asarray(cell.get_lattice_Ls(nimgs), order='C')
+    rcut = max(cell.rcut, nuccell.rcut)
+    Ls = cell.get_lattice_Ls(rcut=rcut)
     expLk = numpy.asarray(numpy.exp(1j*numpy.dot(Ls, kpts.T)), order='C')
     nkpts = len(kpts)
 
@@ -699,7 +697,7 @@ def _fake_nuc(cell):
         ptr += 2
     fakenuc._bas = numpy.asarray(_bas, dtype=numpy.int32)
     fakenuc._env = numpy.asarray(numpy.hstack(_env), dtype=numpy.double)
-    fakenuc.nimgs = cell.nimgs
+    fakenuc.rcut = cell.rcut
     return fakenuc
 
 

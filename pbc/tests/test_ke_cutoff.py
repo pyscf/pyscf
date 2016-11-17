@@ -20,7 +20,6 @@ def test_ke_cutoff(pseudo=None):
         cell.unit = 'B'
         cell.a = np.diag([L,L,L])
         cell.gs = np.array([20,20,20])
-        cell.nimgs = [0,0,0]
 
         cell.atom = [['He', (L/2.,L/2.,L/2.)]]
         cell.basis = { 'He': [[0, (0.8, 1.0)],

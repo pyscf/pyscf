@@ -33,7 +33,8 @@ def format_aux_basis(cell, auxbasis='weigend+etb'):
     See df.incore.format_aux_basis
     '''
     auxcell = pyscf.df.incore.format_aux_basis(cell, auxbasis)
-    auxcell.nimgs = auxcell.get_nimgs(auxcell.precision)
+    auxcell.rcut = max([auxcell.bas_rcut(ib, cell.precision)
+                        for ib in range(auxcell.nbas)])
     return auxcell
 
 @memory_cache
@@ -47,9 +48,9 @@ def aux_e2(cell, auxcell, intor='cint3c2e_sph', aosym='s1', comp=1,
     '''
     assert(comp == 1)
     # sum over largest number of images in either cell or auxcell
-    nimgs = numpy.max((cell.nimgs, auxcell.nimgs), axis=0)
-    Ls = cell.get_lattice_Ls(nimgs)
-    logger.debug1(cell, "Images %s", nimgs)
+    rcut = max(cell.rcut, auxcell.rcut)
+    Ls = cell.get_lattice_Ls(rcut=rcut)
+    logger.debug1(cell, "rcut %s", rcut)
     logger.debug3(cell, "Ls = %s", Ls)
 
     kpti, kptj = kpti_kptj

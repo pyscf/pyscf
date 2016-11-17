@@ -24,7 +24,6 @@ def test_moints():
     cell.unit = 'B'
     cell.a = np.diag([L,L,L])
     cell.gs = np.array([40,40,40])
-    cell.nimgs = [1,1,1]
 
     cell.atom = mol.atom
     cell.basis = mol.basis

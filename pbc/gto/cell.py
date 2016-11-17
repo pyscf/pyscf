@@ -136,7 +136,7 @@ def pack(cell):
     cldic['precision'] = cell.precision
     cldic['pseudo'] = cell.pseudo
     cldic['ke_cutoff'] = cell.ke_cutoff
-    cldic['nimgs'] = cell.nimgs
+    cldic['rcut'] = cell.rcut
     cldic['ew_eta'] = cell.ew_eta
     cldic['ew_cut'] = cell.ew_cut
     cldic['dimension'] = cell.dimension
@@ -265,8 +265,7 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
     fintor = getattr(moleintor.libcgto, intor)
     intopt = lib.c_null_ptr()
 
-    nimgs = np.max((cell1.nimgs, cell2.nimgs), axis=0)
-    Ls = np.asarray(cell1.get_lattice_Ls(nimgs), order='C')
+    Ls = cell1.get_lattice_Ls(rcut=max(cell1.rcut, cell2.rcut))
     expLk = np.asarray(np.exp(1j*np.dot(Ls, kpts_lst.T)), order='C')
     xyz = np.asarray(cell2.atom_coords(), order='C')
     ptr_coords = np.asarray(atm[cell1.natm:,mole.PTR_COORD],
@@ -326,34 +325,29 @@ def get_nimgs(cell, precision=None):
     if precision is None:
         precision = cell.precision
 
-    min_exp = [1e9] * 8
-    min_c = [0] * 8
-    for ib in range(cell.nbas):
-        l = cell.bas_angular(ib)
-        es = cell.bas_exp(ib)
-        idx = es.argmin()
-        if es[idx] < min_exp[l]:
-            min_exp[l] = es[idx]
-            cs = cell._libcint_ctr_coeff(ib)
-            min_c[l] = max(abs(cs[idx]))
-
-    # rcut is the incircle radius
-    rcut = 1.
-    for l, c in enumerate(min_c):
-        if c == 0:
-            break
-        def fn(r):
-            return (np.log((r**2/(2*min_exp[l]))**(1+l) * min_c[l]**2)
-                    -.5*min_exp[l]*r**2 - np.log(precision))
-        val = scipy.optimize.fsolve(fn, 9., xtol=1e-4)[0]
-        rcut = max(rcut, val)
-        #print(l, min_exp[l], min_c[l], val)
+    rcut = max([cell.bas_rcut(ib, precision) for ib in range(cell.nbas)])
 
     # nimgs determines the supercell size
     b = np.linalg.inv(cell.lattice_vectors()).T
-    heights = lib.norm(b, axis=1)
-    nimgs = np.ceil(rcut*heights).astype(int)
+    heights_inv = lib.norm(b, axis=1)
+    nimgs = np.ceil(rcut*heights_inv).astype(int)
     return nimgs
+
+def _estimate_rcut(alpha, l, cc, r0, precision=1e-8):
+    return np.sqrt(abs(2*np.log(cc*(r0**2*alpha)**l/precision)) / alpha)
+def bas_rcut(cell, bas_id, precision=1e-8):
+    r'''Estimate the largest distance between the function and its image to
+    reach the precision in overlap
+
+    precision ~ \int g(r-0) g(r-R)
+    '''
+    l = cell.bas_angular(bas_id)
+    es = cell.bas_exp(bas_id)
+    cs = cell.bas_ctr_coeff(bas_id)
+    cs = np.max(cs**2,axis=1)
+    rcut = _estimate_rcut(es, l, cs, 20, precision)
+    #rcut = _estimate_rcut(es, l, cs, rcut, precision)
+    return rcut.max()
 
 def get_ewald_params(cell, precision=1e-8, gs=None):
     r'''Choose a reasonable value of Ewald 'eta' and 'cut' parameters.
@@ -404,8 +398,8 @@ def get_bounding_sphere(cell, rcut):
     #n3 = np.ceil(lib.norm(Gmat[2,:])*rcut)
     #cut = np.array([n1, n2, n3]).astype(int)
     b = np.linalg.inv(cell.lattice_vectors()).T
-    heights = lib.norm(b, axis=0)
-    cut = np.ceil(rcut*heights).astype(int)
+    heights_inv = lib.norm(b, axis=0)
+    cut = np.ceil(rcut*heights_inv).astype(int)
     return cut
 
 def get_Gv(cell, gs=None):
@@ -578,9 +572,6 @@ class Cell(mole.Mole):
 
         ** Following attributes (for experts) are automatically generated. **
 
-        nimgs : (3,) ndarray of ints
-            Number of basis function images in lattice sums, It affects the
-            accuracy of integrals.  See :func:`get_nimgs`.
         ew_eta, ew_cut : float
             The Ewald 'eta' and 'cut' parameters.  See :func:`get_ewald_params`
 
@@ -593,8 +584,6 @@ class Cell(mole.Mole):
     >>> cl.build(a='3 0 0; 0 3 0; 0 0 3', gs=[8,8,8], atom='C 1 1 1', basis='sto3g')
     >>> print(cl.atom_symbol(0))
     C
-    >>> print(cl.get_nimgs(1e-9))
-    [3,3,3]
     '''
     def __init__(self, **kwargs):
         mole.Mole.__init__(self, **kwargs)
@@ -608,9 +597,9 @@ class Cell(mole.Mole):
 
 ##################################################
 # These attributes are initialized by build function if not given
-        self.nimgs = None
         self.ew_eta = None
         self.ew_cut = None
+        self.rcut = None
 
 ##################################################
 # don't modify the following variables, they are not input arguments
@@ -673,8 +662,9 @@ class Cell(mole.Mole):
         _built = self._built
         mole.Mole.build(self, False, parse_arg, *args, **kwargs)
 
-        if self.nimgs is None:
-            self.nimgs = self.get_nimgs(self.precision)
+        if self.rcut is None:
+            self.rcut = max([self.bas_rcut(ib, self.precision)
+                             for ib in range(self.nbas)])
 
         _a = self.lattice_vectors()
         if self.gs is None:
@@ -690,8 +680,7 @@ class Cell(mole.Mole):
             logger.info(self, '                 a2 [%.9f, %.9f, %.9f]', *_a[1])
             logger.info(self, '                 a3 [%.9f, %.9f, %.9f]', *_a[2])
             logger.info(self, 'Cell volume = %g', self.vol)
-            logger.info(self, 'nimgs = %s  lattice sum = %d cells',
-                        self.nimgs, len(self.get_lattice_Ls(self.nimgs)))
+            logger.info(self, 'lattice sum = %d cells', len(self.get_lattice_Ls()))
             logger.info(self, 'precision = %g', self.precision)
             logger.info(self, 'gs (FFT-mesh) = %s', self.gs)
             logger.info(self, 'pseudo = %s', self.pseudo)
@@ -733,6 +722,17 @@ class Cell(mole.Mole):
     @lib.with_doc(format_basis.__doc__)
     def format_basis(self, basis_tab):
         return format_basis(basis_tab)
+
+    @property
+    def nimgs(self):
+        b = np.linalg.inv(self.lattice_vectors()).T
+        heights_inv = lib.norm(b, axis=1)
+        return np.ceil(self.rcut*heights_inv).astype(int)
+    @nimgs.setter
+    def nimgs(self, x):
+        b = np.linalg.inv(self.lattice_vectors()).T
+        heights_inv = lib.norm(b, axis=1)
+        self.rcut = max((np.asarray(x)+1) / heights_inv)
 
     def make_ecp_env(self, _atm, _ecp, pre_env=[]):
         if _ecp and self._pseudo:
@@ -821,6 +821,8 @@ class Cell(mole.Mole):
     def loads_(self, molstr):
         self.__dict__.update(loads(molstr).__dict__)
         return self
+
+    bas_rcut = bas_rcut
 
     get_lattice_Ls = pbctools.get_lattice_Ls
 

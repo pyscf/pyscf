@@ -21,7 +21,7 @@ def ecp_int(cell, kpts=None):
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
     nkpts = len(kpts_lst)
-    Ls = numpy.asarray(cell.get_lattice_Ls(cell.nimgs), order='C')
+    Ls = cell.get_lattice_Ls()
     expLk = numpy.asarray(numpy.exp(1j*numpy.dot(Ls, kpts_lst.T)), order='C')
 
     ecpcell = gto.Mole()
