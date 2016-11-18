@@ -601,12 +601,15 @@ def state_specific_(casscf, state=1):
                 ci0 = self._civec
             e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
                                         nroots=self.nroots, **kwargs)
+            if state == 0:
+                e = [e]
+                c = [c]
             self._civec = c
             if (casscf.verbose >= logger.DEBUG and
                 hasattr(fcibase_class, 'spin_square')):
                 ss = fcibase_class.spin_square(self, c[state], norb, nelec)
                 logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
-                             state+1, e[state], ss[0])
+                             state, e[state], ss[0])
             return e[state], c[state]
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             if self._civec is not None:
@@ -614,8 +617,12 @@ def state_specific_(casscf, state=1):
             e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
                                         max_cycle=casscf.ci_response_space,
                                         nroots=self.nroots, **kwargs)
-            self._civec = c
-            return e[state], c[state]
+            if state == 0:
+                self._civec = [c]
+                return e, c
+            else:
+                self._civec = c
+                return e[state], c[state]
 
         if hasattr(fcibase_class, 'spin_square'):
             def spin_square(self, fcivec, norb, nelec):
