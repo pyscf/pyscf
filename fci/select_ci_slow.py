@@ -237,7 +237,7 @@ def make_hdiag(h1e, g2e, ci_strs, norb, nelec):
             hdiag.append(e1 + e2*.5)
     return numpy.array(hdiag)
 
-def kernel(h1e, eri, norb, nelec, verbose=logger.NOTE):
+def kernel(h1e, eri, norb, nelec, ecore=0, verbose=logger.NOTE):
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -295,7 +295,7 @@ def kernel(h1e, eri, norb, nelec, verbose=logger.NOTE):
 
     na = len(ci_strs[0])
     nb = len(ci_strs[1])
-    return e, (ci0.reshape(na,nb), ci_strs)
+    return e+ecore, (ci0.reshape(na,nb), ci_strs)
 
 # dm_pq = <|p^+ q|>
 def make_rdm1(civec_strs, norb, nelec):

@@ -99,12 +99,13 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None, orbsym=None):
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
            lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
            davidson_only=False, pspace_size=400, orbsym=None, wfnsym=None,
-           select_cutoff=1e-3, ci_coeff_cutoff=1e-3, **kwargs):
+           select_cutoff=1e-3, ci_coeff_cutoff=1e-3, ecore=0, **kwargs):
     return direct_spin1._kfactory(SelectCI, h1e, eri, norb, nelec, ci0,
                                   level_shift, tol, lindep, max_cycle,
                                   max_space, nroots, davidson_only,
                                   pspace_size, select_cutoff=select_cutoff,
-                                  ci_coeff_cutoff=ci_coeff_cutoff, **kwargs)
+                                  ci_coeff_cutoff=ci_coeff_cutoff, ecore=ecore,
+                                  **kwargs)
 
 
 class SelectCI(select_ci.SelectCI):
@@ -146,7 +147,7 @@ class SelectCI(select_ci.SelectCI):
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
                nroots=None, davidson_only=None, pspace_size=None,
-               orbsym=None, wfnsym=None, **kwargs):
+               orbsym=None, wfnsym=None, ecore=0, **kwargs):
         if nroots is None: nroots = self.nroots
         if orbsym is not None:
             self.orbsym, orbsym_bak = orbsym, self.orbsym
@@ -158,7 +159,8 @@ class SelectCI(select_ci.SelectCI):
         wfnsym0 = self.guess_wfnsym(norb, nelec, ci0, self.wfnsym, **kwargs)
         e, c = select_ci.kernel_float_space(self, h1e, eri, norb, nelec, ci0,
                                             tol, lindep, max_cycle, max_space,
-                                            nroots, davidson_only, **kwargs)
+                                            nroots, davidson_only, ecore=ecore,
+                                            **kwargs)
         if self.wfnsym is not None:
             strsa, strsb = c._strs
             if nroots > 1:

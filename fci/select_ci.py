@@ -290,7 +290,7 @@ def make_hdiag(h1e, eri, ci_strs, norb, nelec):
 def kernel_fixed_space(myci, h1e, eri, norb, nelec, ci_strs, ci0=None,
                        tol=None, lindep=None, max_cycle=None, max_space=None,
                        nroots=None, davidson_only=None,
-                       max_memory=None, verbose=None, **kwargs):
+                       max_memory=None, verbose=None, ecore=0, **kwargs):
     if verbose is None:
         log = logger.Logger(myci.stdout, myci.verbose)
     elif isinstance(verbose, logger.Logger):
@@ -333,15 +333,15 @@ def kernel_fixed_space(myci, h1e, eri, norb, nelec, ci_strs, ci0=None,
                     max_cycle=max_cycle, max_space=max_space, nroots=nroots,
                     max_memory=max_memory, verbose=log, **kwargs)
     if nroots > 1:
-        return e, [_as_SCIvector(ci.reshape(na,nb),ci_strs) for ci in c]
+        return e+ecore, [_as_SCIvector(ci.reshape(na,nb),ci_strs) for ci in c]
     else:
-        return e, _as_SCIvector(c.reshape(na,nb), ci_strs)
+        return e+ecore, _as_SCIvector(c.reshape(na,nb), ci_strs)
 
 
 def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
                        tol=None, lindep=None, max_cycle=None, max_space=None,
                        nroots=None, davidson_only=None,
-                       max_memory=None, verbose=None, **kwargs):
+                       max_memory=None, verbose=None, ecore=0, **kwargs):
     if verbose is None:
         log = logger.Logger(myci.stdout, myci.verbose)
     elif isinstance(verbose, logger.Logger):
@@ -404,11 +404,11 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
         if nroots > 1:
             ci0 = [_as_SCIvector(c, ci_strs) for c in ci0]
             de, e_last = min(e)-e_last, min(e)
-            log.info('cycle %d  E = %s  dE = %.8g', icycle, e, de)
+            log.info('cycle %d  E = %s  dE = %.8g', icycle, e+ecore, de)
         else:
             ci0 = [_as_SCIvector(ci0, ci_strs)]
             de, e_last = e-e_last, e
-            log.info('cycle %d  E = %.15g  dE = %.8g', icycle, e, de)
+            log.info('cycle %d  E = %.15g  dE = %.8g', icycle, e+ecore, de)
 
         if ci0[0].shape == (namax,nbmax) or abs(de) < tol*1e3:
             conv = True
@@ -430,24 +430,25 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     e, c = myci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
                     max_cycle=max_cycle, max_space=max_space, nroots=nroots,
                     max_memory=max_memory, verbose=log, **kwargs)
-    log.info('Select CI  E = %.15g', e)
+    log.info('Select CI  E = %.15g', e+ecore)
 
     na = len(ci_strs[0])
     nb = len(ci_strs[1])
     if nroots > 1:
-        return e, [_as_SCIvector(ci.reshape(na,nb),ci_strs) for ci in c]
+        return e+ecore, [_as_SCIvector(ci.reshape(na,nb),ci_strs) for ci in c]
     else:
-        return e, _as_SCIvector(c.reshape(na,nb), ci_strs)
+        return e+ecore, _as_SCIvector(c.reshape(na,nb), ci_strs)
 
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
            lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
            davidson_only=False, pspace_size=400, orbsym=None, wfnsym=None,
-           select_cutoff=1e-3, ci_coeff_cutoff=1e-3, **kwargs):
+           select_cutoff=1e-3, ci_coeff_cutoff=1e-3, ecore=0, **kwargs):
     return direct_spin1._kfactory(SelectCI, h1e, eri, norb, nelec, ci0,
                                   level_shift, tol, lindep, max_cycle,
                                   max_space, nroots, davidson_only,
                                   pspace_size, select_cutoff=select_cutoff,
-                                  ci_coeff_cutoff=ci_coeff_cutoff, **kwargs)
+                                  ci_coeff_cutoff=ci_coeff_cutoff, ecore=ecore,
+                                  **kwargs)
 
 # dm_pq = <|p^+ q|>
 def make_rdm1s(civec_strs, norb, nelec, link_index=None):

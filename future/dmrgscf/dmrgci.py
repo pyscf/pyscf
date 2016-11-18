@@ -653,6 +653,14 @@ def DMRGSCF(mf, norb, nelec, maxM=1000, tol=1.e-8, *args, **kwargs):
     return mc
 
 
+def dryrun(mc, mo_coeff=None):
+    '''Generate FCIDUMP and dmrg config file'''
+    if mo_coeff is None:
+        mo_coeff = mc.mo_coeff
+    mc.fcisolver.onlywriteIntegral, bak = True, mc.fcisolver.onlywriteIntegral
+    mc.casci(mo_coeff)
+    mc.fcisolver.onlywriteIntegral = bak
+
 
 if __name__ == '__main__':
     from pyscf import gto

@@ -398,7 +398,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
             else:
                 accepted_gorb = norm_gorb < norm_gci*1.5
             if (imicro >= max_cycle_micro and
-                (accepted_gorb or imicro > max_cycle_micro*2)):
+                (accepted_gorb or imicro > max_cycle_micro*2 or
+                 norm_gorb > norm_gorb0*casscf.ah_grad_trust_region)):
                 log.debug('micro %d  |u-1|=%5.3g  |g[o]|=%5.3g',
                           imicro, norm_t, norm_gorb)
                 break

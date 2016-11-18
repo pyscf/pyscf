@@ -7,8 +7,7 @@ import tempfile
 import time
 from functools import reduce
 import numpy
-import pyscf.lib
-import pyscf.gto
+from pyscf import lib
 from pyscf.lib import logger
 import pyscf.ao2mo
 from pyscf import scf
@@ -81,6 +80,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     t1 = log.timer('integral transformation to CAS space', *t1)
 
     # FCI
+    max_memory = max(400, casci.max_memory-lib.current_memory()[0])
     e_tot, fcivec = casci.fcisolver.kernel(h1eff, eri_cas, ncas, nelecas,
                                            ci0=ci0, verbose=log,
                                            max_memory=max_memory,
@@ -91,7 +91,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     return e_tot, e_cas, fcivec
 
 
-class CASCI(pyscf.lib.StreamObject):
+class CASCI(lib.StreamObject):
     # nelecas is tuple of (nelecas_alpha, nelecas_beta)
     def __init__(self, mf, ncas, nelecas, ncore=None):
         #assert('UHF' == mf.__class__.__name__)
@@ -131,7 +131,7 @@ class CASCI(pyscf.lib.StreamObject):
         self._keys = set(self.__dict__.keys())
 
     def dump_flags(self):
-        log = pyscf.lib.logger.Logger(self.stdout, self.verbose)
+        log = lib.logger.Logger(self.stdout, self.verbose)
         log.info('')
         log.info('******** UHF-CASCI flags ********')
         nmo = self.mo_coeff[0].shape[1]

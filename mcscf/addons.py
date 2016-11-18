@@ -43,7 +43,7 @@ def sort_mo(casscf, mo_coeff, caslst, base=1):
     >>> mf.scf()
     >>> mc = mcscf.CASSCF(mf, 4, 4)
     >>> cas_list = [5,6,8,9] # pi orbitals
-    >>> mo = mcscf.sort_mo(mc, mf.mo_coeff, cas_list)
+    >>> mo = mc.sort_mo(cas_list)
     >>> mc.kernel(mo)[0]
     -109.007378939813691
     '''
@@ -256,7 +256,7 @@ def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
     >>> mf = scf.RHF(mol)
     >>> mf.kernel()
     >>> mc = mcscf.CASSCF(mf, 12, 4)
-    >>> mo = mcscf.sort_mo_by_irrep(mc, mf.mo_coeff, {'E1gx':4, 'E1gy':4, 'E1ux':2, 'E1uy':2})
+    >>> mo = mc.sort_mo_by_irrep({'E1gx':4, 'E1gy':4, 'E1ux':2, 'E1uy':2})
     >>> # Same to mo = sort_mo_by_irrep(mc, mf.mo_coeff, {2: 4, 3: 4, 6: 2, 7: 2})
     >>> # Same to mo = sort_mo_by_irrep(mc, mf.mo_coeff, [0, 0, 4, 4, 0, 0, 2, 2])
     >>> mc.kernel(mo)[0]
