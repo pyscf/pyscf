@@ -532,7 +532,7 @@ class FCISolver(lib.StreamObject):
         return self._spin
     @spin.setter
     def spin(self, x):
-        logger.warn('Set spin attribute of %s.  The solver will ignore the '
+        logger.warn(self, 'Set spin attribute of %s.  The solver will ignore the '
                     'input (neleca,nelecb) and force spin=%s', self.__class__, x)
         self._spin = x
 

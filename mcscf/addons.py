@@ -655,6 +655,7 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
                 yield solver, ci0[p0:p0+solver.nroots]
             p0 += solver.nroots
     def loop_civecs(solvers, ci0):
+        p0 = 0
         for solver in solvers:
             for i in range(p0, p0+solver.nroots):
                 yield solver, ci0[i]
@@ -667,19 +668,35 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
                 log = verbose
             else:
                 log = logger.Logger(sys.stdout, verbose)
-            e, c = collect(solver.kernel(h1, h2, norb, nelec, c0,
-                                         orbsym=self.orbsym, verbose=log, **kwargs)
-                           for solver, c0 in loop_solver(fcisolvers, ci0))
+            es = []
+            cs = []
+            for solver, c0 in loop_solver(fcisolvers, ci0):
+                e, c = solver.kernel(h1, h2, norb, nelec, c0,
+                                     orbsym=self.orbsym, verbose=log, **kwargs)
+                if solver.nroots == 1:
+                    es.append(e)
+                    cs.append(c)
+                else:
+                    es.extend(e)
+                    cs.extend(c)
             ss, multip = collect(solver.spin_square(c0, norb, nelec)
-                                 for solver, c0 in loop_civecs(fcisolvers, c))
-            for i, ei in enumerate(e):
-                log.info('state %d  E = %.15g S^2 = %.7f', i, ei, ss[i])
-            return numpy.einsum('i,i', numpy.array(e), weights), c
+                                 for solver, c0 in loop_civecs(fcisolvers, cs))
+            for i, ei in enumerate(es):
+                 log.info('state %d  E = %.15g S^2 = %.7f', i, ei, ss[i])
+            return numpy.einsum('i,i', numpy.array(es), weights), cs
 
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
-            e, c = collect(solver.kernel(h1, h2, norb, nelec, c0, orbsym=self.orbsym, **kwargs)
-                           for solver, c0 in loop_solver(fcisolvers, ci0))
-            return numpy.einsum('i,i->', e, weights), c
+            es = []
+            cs = []
+            for solver, c0 in loop_solver(fcisolvers, ci0):
+                e, c = solver.kernel(h1, h2, norb, nelec, c0, orbsym=self.orbsym, **kwargs)
+                if solver.nroots == 1:
+                    es.append(e)
+                    cs.append(c)
+                else:
+                    es.extend(e)
+                    cs.extend(c)
+            return numpy.einsum('i,i->', es, weights), cs
         def make_rdm1(self, ci0, norb, nelec):
             dm1 = 0
             for i, (solver, c) in enumerate(loop_civecs(fcisolvers, ci0)):

@@ -154,7 +154,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         return self._spin
     @spin.setter
     def spin(self, x):
-        logger.warn('Set spin attribute of %s.  The solver will ignore the '
+        logger.warn(self, 'Set spin attribute of %s.  The solver will ignore the '
                     'input (neleca,nelecb) and force spin=%s', self.__class__, x)
         self._spin = x
 
@@ -663,6 +663,8 @@ def DMRGSCF(mf, norb, nelec, maxM=1000, tol=1.e-8, *args, **kwargs):
     if mc.chkfile == mc._scf._chkfile.name:
         # Do not delete chkfile after mcscf
         mc.chkfile = tempfile.mktemp(dir=settings.BLOCKSCRATCHDIR)
+        if not os.path.exists(settings.BLOCKSCRATCHDIR):
+            os.makedirs(settings.BLOCKSCRATCHDIR)
     return mc
 
 
