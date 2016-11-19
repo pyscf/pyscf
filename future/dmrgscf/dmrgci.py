@@ -419,6 +419,8 @@ class DMRGCI(pyscf.lib.StreamObject):
         if fciRestart is None:
             fciRestart = self.restart or self._restart
 
+        if 'orbsym' in kwargs:
+            self.orbsym = kwargs['orbsym']
         writeIntegralFile(self, h1e, eri, norb, nelec, ecore)
         writeDMRGConfFile(self, nelec, fciRestart)
         if self.verbose >= logger.DEBUG1:
@@ -447,6 +449,8 @@ class DMRGCI(pyscf.lib.StreamObject):
     def approx_kernel(self, h1e, eri, norb, nelec, fciRestart=None, ecore=0, **kwargs):
         fciRestart = True
 
+        if 'orbsym' in kwargs:
+            self.orbsym = kwargs['orbsym']
         writeIntegralFile(self, h1e, eri, norb, nelec, ecore)
         writeDMRGConfFile(self, nelec, fciRestart, self.approx_maxIter)
         if self.verbose >= logger.DEBUG1:

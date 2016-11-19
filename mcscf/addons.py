@@ -661,8 +661,9 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
                 yield solver, ci0[i]
             p0 += solver.nroots
     def get_nelec(solver, nelec):
-        if solver.nspin != 0:
-            nelec = (numpy.sum(nelec)+spin)//2, (numpy.sum(nelec)-spin)//2
+        if solver.spin != 0:
+            nelec = numpy.sum(nelec)
+            nelec = (nelec+solver.spin)//2, (nelec-solver.spin)//2
         return nelec
 
     class FakeCISolver(fcibase_class):
