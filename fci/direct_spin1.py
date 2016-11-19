@@ -380,6 +380,12 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     if davidson_only is None: davidson_only = fci.davidson_only
     if pspace_size is None: pspace_size = fci.pspace_size
 
+    if fci.spin is not None:
+        if isinstance(nelec, (int, numpy.number)):
+            nelec = (nelec+fci.spin)//2, (nelec-fci.spin)//2
+        else:
+            nelec = (sum(nelec)+fci.spin)//2, (sum(nelec)-fci.spin)//2
+
     link_indexa, link_indexb = _unpack(norb, nelec, link_index)
     na = link_indexa.shape[0]
     nb = link_indexb.shape[0]
@@ -500,6 +506,7 @@ class FCISolver(lib.StreamObject):
 # solver.  They are not used by direct_spin1 solver.
         self.orbsym = None
         self.wfnsym = None
+        self._spin = None
 
         self._keys = set(self.__dict__.keys())
 
@@ -509,14 +516,25 @@ class FCISolver(lib.StreamObject):
         log.info('******** %s flags ********', self.__class__)
         log.info('max. cycles = %d', self.max_cycle)
         log.info('conv_tol = %g', self.conv_tol)
+        log.info('davidson only = %s', self.davidson_only)
         log.info('linear dependence = %g', self.lindep)
         log.info('level shift = %g', self.level_shift)
         log.info('max iter space = %d', self.max_space)
         log.info('max_memory %d MB', self.max_memory)
-        log.info('davidson only = %s', self.davidson_only)
         log.info('nroots = %d', self.nroots)
         log.info('pspace_size = %d', self.pspace_size)
+        if self.spin is not None:
+            log.info('spin = %d', self.spin)
         return self
+
+    @property
+    def spin(self):
+        return self._spin
+    @spin.setter
+    def spin(self, x):
+        logger.warn('Set spin attribute of %s.  The solver will ignore the '
+                    'input (neleca,nelecb) and force spin=%s', self.__class__, x)
+        self._spin = x
 
 
     @lib.with_doc(absorb_h1e.__doc__)

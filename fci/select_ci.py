@@ -306,6 +306,12 @@ def kernel_fixed_space(myci, h1e, eri, norb, nelec, ci_strs, ci0=None,
     if myci.verbose >= logger.WARN:
         myci.check_sanity()
 
+    if myci.spin is not None:
+        if isinstance(nelec, (int, numpy.number)):
+            nelec = (nelec+myci.spin)//2, (nelec-myci.spin)//2
+        else:
+            nelec = (sum(nelec)+myci.spin)//2, (sum(nelec)-myci.spin)//2
+
     ci0, nelec, ci_strs = _unpack(ci0, nelec, ci_strs)
     na = len(ci_strs[0])
     nb = len(ci_strs[1])
@@ -356,6 +362,12 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     if nroots is None: nroots = myci.nroots
     if myci.verbose >= logger.WARN:
         myci.check_sanity()
+
+    if myci.spin is not None:
+        if isinstance(nelec, (int, numpy.number)):
+            nelec = (nelec+myci.spin)//2, (nelec-myci.spin)//2
+        else:
+            nelec = (sum(nelec)+myci.spin)//2, (sum(nelec)-myci.spin)//2
 
     h2e = direct_spin1.absorb_h1e(h1e, eri, norb, nelec, .5)
     h2e = ao2mo.restore(1, h2e, norb)
