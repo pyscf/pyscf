@@ -5,7 +5,6 @@
 
 import os
 import sys
-import copy
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -579,9 +578,7 @@ def state_average_(casscf, weights=(0.5,0.5)):
     fcisolver.__dict__.update(casscf.fcisolver.__dict__)
     casscf.fcisolver = fcisolver
     return casscf
-
-def state_average(casscf, weights=(0.5,0.5)):
-    return state_average_(copy.copy(casscf), weights)
+state_average = state_average_
 
 
 def state_specific_(casscf, state=1):
@@ -632,9 +629,7 @@ def state_specific_(casscf, state=1):
     fcisolver.__dict__.update(casscf.fcisolver.__dict__)
     casscf.fcisolver = fcisolvers
     return casscf
-
-def state_specific(casscf, state=1):
-    return state_specific_(copy.copy(casscf), state)
+state_specific = state_specific_
 
 def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
     '''State-average CASSCF over multiple FCI solvers.
@@ -643,36 +638,47 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
     nroots = sum(solver.nroots for solver in fcisolvers)
     assert(nroots == len(weights))
 
-    def collect(ec_lst):
-        e = []
-        c = []
-        for e1, c1 in ec_lst:
-            if isinstance(c1, (tuple, list)):
-                e.extend(e1)
-                c.extend(c1)
+    def collect(items):
+        cols = []
+        for k, item in enumerate(items):
+            for i, c in enumerate(item):
+                if len(cols) <= i:
+                    cols.append([])
+                if fcisolvers[k].nroots == 1:
+                    cols[i].append(c)
+                else:
+                    cols[i].extend(c)
+        return cols
+    def loop_solver(solvers, ci0):
+        p0 = 0
+        for solver in solvers:
+            if ci0 is None:
+                yield solver, None
+            elif solver.nroots == 1:
+                yield solver, ci0[p0]
             else:
-                e.append(e1)
-                c.append(c1)
-        return e, c
+                yield solver, ci0[p0:p0+solver.nroots]
+            p0 += solver.nroots
 
     class FakeCISolver(fcibase_class):
-        def kernel(self, h1, h2, ncas, nelecas, ci0=None, verbose=0, **kwargs):
+        def kernel(self, h1, h2, norb, nelec, ci0=None, verbose=0, **kwargs):
 # Note self.orbsym is initialized lazily in mc1step_symm.kernel function
             if isinstance(verbose, logger.Logger):
                 log = verbose
             else:
                 log = logger.Logger(sys.stdout, verbose)
-            e, c = collect(solver.kernel(h1, h2, ncas, nelecas, ci0,
+            e, c = collect(solver.kernel(h1, h2, norb, nelec, c0,
                                          orbsym=self.orbsym, verbose=log, **kwargs)
-                           for solver in fcisolvers)
+                           for solver, c0 in loop_solver(fcisolvers, ci0))
+            ss, multip = collect(solver.spin_square(c0, norb, nelec)
+                                 for solver, c0 in loop_solver(fcisolvers, c))
             for i, ei in enumerate(e):
-                ss = fcisolvers[0].spin_square(c[i], ncas, nelecas)
-                log.info('state %d  E = %.15g S^2 = %.7f', i, ei, ss[0])
+                log.info('state %d  E = %.15g S^2 = %.7f', i, ei, ss[i])
             return numpy.einsum('i,i', numpy.array(e), weights), c
 
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
-            e, c = collect(solver.kernel(h1, h2, norb, nelec, ci0, orbsym=self.orbsym, **kwargs)
-                           for solver in fcisolvers)
+            e, c = collect(solver.kernel(h1, h2, norb, nelec, c0, orbsym=self.orbsym, **kwargs)
+                           for solver, c0 in loop_solver(fcisolvers, ci0))
             return numpy.einsum('i,i->', e, weights), c
         def make_rdm1(self, ci0, norb, nelec):
             dm1 = 0
@@ -688,7 +694,8 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
                 rdm2 += wi * dm2
             return rdm1, rdm2
         def spin_square(self, ci0, norb, nelec):
-            ss = fcisolvers[0].spin_square(ci0, ncas, nelecas)
+            ss, multip = collect(solver.spin_square(c0, norb, nelec)
+                                 for solver, c0 in loop_solver(fcisolvers, ci0))
             ss = numpy.einsum('i,i->', weights, ss)
             multip = numpy.sqrt(ss+.25)*2
             return ss, multip
@@ -697,9 +704,7 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
     fcisolver.__dict__.update(casscf.fcisolver.__dict__)
     casscf.fcisolver = fcisolver
     return casscf
-
-def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
-    return state_average_mix_(copy.copy(casscf), fcisolvers, weights)
+state_average_mix = state_average_mix_
 
 def hot_tuning_(casscf, configfile=None):
     '''Allow you to tune CASSCF parameters on the runtime

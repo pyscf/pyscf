@@ -51,8 +51,7 @@ def frac_occ_(mf, tol=1e-3):
     mf.get_occ = get_occ
     mf.get_grad = get_grad
     return mf
-def frac_occ(mf, tol=1e-3):
-    return frac_occ_(copy.copy(mf), tol)
+frac_occ = frac_occ_
 
 def dynamic_occ_(mf, tol=1e-3):
     assert(isinstance(mf, hf.RHF))
@@ -76,8 +75,7 @@ def dynamic_occ_(mf, tol=1e-3):
         return mo_occ
     mf.get_occ = get_occ
     return mf
-def dynamic_occ(mf, tol=1e-3):
-    return dynamic_occ_(copy.copy(mf), tol)
+dynamic_occ = dynamic_occ_
 
 def float_occ_(mf):
     '''for UHF, do not fix the nelec_alpha. determine occupation based on energy spectrum'''
@@ -96,8 +94,7 @@ def float_occ_(mf):
         return uhf.UHF.get_occ(mf, mo_energy, mo_coeff)
     mf.get_occ = get_occ
     return mf
-def float_occ(mf):
-    return float_occ_(copy.copy(mf))
+float_occ = float_occ_
 
 def symm_allow_occ_(mf, tol=1e-3):
     '''search the unoccupied orbitals, choose the lowest sets which do not
@@ -131,8 +128,7 @@ break symmetry as the occupied orbitals'''
         return mo_occ
     mf.get_occ = get_occ
     return mf
-def symm_allow_occ(mf, tol=1e-3):
-    return symm_allow_occ_(copy.copy(mf), tol)
+symm_allow_occ = symm_allow_occ_
 
 def follow_state_(mf, occorb=None):
     occstat = [occorb]
@@ -153,8 +149,7 @@ def follow_state_(mf, occorb=None):
         return mo_occ
     mf.get_occ = get_occ
     return mf
-def follow_state(mf, occorb=None):
-    return follow_state_(copy.copy(mf), occorb)
+follow_state = follow_state_
 
 def mom_occ_(mf, occorb, setocc):
     '''Use maximum overlap method to determine occupation number for each orbital in every
@@ -207,8 +202,7 @@ def mom_occ_(mf, occorb, setocc):
         return mo_occ
     mf.get_occ = get_occ
     return mf
-def mom_occ(mf, occorb=None, setocc=None):
-    return mom_occ_(copy.copy(mf), occorb, setocc)
+mom_occ = mom_occ_
 
 def project_mo_nr2nr(mol1, mo1, mol2):
     r''' Project orbital coefficients
@@ -248,7 +242,7 @@ def project_mo_r2r(mol1, mo1, mol2):
                          numpy.dot(ps, mo1[n2c:])))
 
 
-def remove_linear_dep(mf, threshold=1e-8):
+def remove_linear_dep_(mf, threshold=1e-8):
     mol = mf.mol
     def eig_nosym(h, s):
         d, t = numpy.linalg.eigh(s)
@@ -296,10 +290,9 @@ def remove_linear_dep(mf, threshold=1e-8):
             raise NotImplementedError
         else:
             eig = eig_nosym
-    return eig
-def remove_linear_dep_(mf, threshold=1e-8):
-    mf.eig = remove_linear_dep(mf, threshold=1e-8)
+    mf.eig = eig
     return mf
+remove_linear_dep = remove_linear_dep_
 
 def convert_to_uhf(mf, out=None):
     '''Convert the given mean-field object to the corresponding unrestricted

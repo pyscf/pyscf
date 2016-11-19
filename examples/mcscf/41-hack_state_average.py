@@ -40,7 +40,7 @@ solver2 = fci.addons.fix_spin(fci.direct_spin1_symm.FCI(mol), ss=0)
 solver2.nroots = 2
 
 mc = mcscf.CASSCF(mf, 8, 8)
-mc.fcisolver = mcscf.state_average_mix(mc, [solver1, solver2], weights)
+mcscf.state_average_mix_(mc, [solver1, solver2], weights)
 
 # Mute warning msgs
 mc.check_sanity = lambda *args: None
