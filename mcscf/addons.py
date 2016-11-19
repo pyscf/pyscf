@@ -534,7 +534,7 @@ def state_average_(casscf, weights=(0.5,0.5)):
     assert(abs(sum(weights)-1) < 1e-3)
     fcibase_class = casscf.fcisolver.__class__
     class FakeCISolver(fcibase_class):
-        def __init__(self):
+        def __init__(self, mol=None):
             self.nroots = len(weights)
         def kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
 # pass self to fcibase_class.kernel function because orbsym argument is stored in self 
@@ -574,8 +574,9 @@ def state_average_(casscf, weights=(0.5,0.5)):
                 multip = numpy.sqrt(ss+.25)*2
                 return ss, multip
 
-    fcisolver = FakeCISolver()
+    fcisolver = FakeCISolver(casscf.mol)
     fcisolver.__dict__.update(casscf.fcisolver.__dict__)
+    fcisolver.nroots = len(weights)
     casscf.fcisolver = fcisolver
     return casscf
 state_average = state_average_
@@ -627,7 +628,8 @@ def state_specific_(casscf, state=1):
 
     fcisolver = FakeCISolver()
     fcisolver.__dict__.update(casscf.fcisolver.__dict__)
-    casscf.fcisolver = fcisolvers
+    fcisolver.nroots = state+1
+    casscf.fcisolver = fcisolver
     return casscf
 state_specific = state_specific_
 
@@ -639,15 +641,8 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
     assert(nroots == len(weights))
 
     def collect(items):
-        cols = []
-        for k, item in enumerate(items):
-            for i, c in enumerate(item):
-                if len(cols) <= i:
-                    cols.append([])
-                if fcisolvers[k].nroots == 1:
-                    cols[i].append(c)
-                else:
-                    cols[i].extend(c)
+        items = list(items)
+        cols = [[item[i] for item in items] for i in range(len(items[0]))]
         return cols
     def loop_solver(solvers, ci0):
         p0 = 0
@@ -658,6 +653,11 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
                 yield solver, ci0[p0]
             else:
                 yield solver, ci0[p0:p0+solver.nroots]
+            p0 += solver.nroots
+    def loop_civecs(solvers, ci0):
+        for solver in solvers:
+            for i in range(p0, p0+solver.nroots):
+                yield solver, ci0[i]
             p0 += solver.nroots
 
     class FakeCISolver(fcibase_class):
@@ -671,7 +671,7 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
                                          orbsym=self.orbsym, verbose=log, **kwargs)
                            for solver, c0 in loop_solver(fcisolvers, ci0))
             ss, multip = collect(solver.spin_square(c0, norb, nelec)
-                                 for solver, c0 in loop_solver(fcisolvers, c))
+                                 for solver, c0 in loop_civecs(fcisolvers, c))
             for i, ei in enumerate(e):
                 log.info('state %d  E = %.15g S^2 = %.7f', i, ei, ss[i])
             return numpy.einsum('i,i', numpy.array(e), weights), c
@@ -682,25 +682,25 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
             return numpy.einsum('i,i->', e, weights), c
         def make_rdm1(self, ci0, norb, nelec):
             dm1 = 0
-            for i, wi in enumerate(weights):
-                dm1 += wi*fcibase_class.make_rdm1(self, ci0[i], norb, nelec)
+            for i, (solver, c) in enumerate(loop_civecs(fcisolvers, ci0)):
+                dm1 += weights[i]*solver.make_rdm1(c, norb, nelec)
             return dm1
         def make_rdm12(self, ci0, norb, nelec):
             rdm1 = 0
             rdm2 = 0
-            for i, wi in enumerate(weights):
-                dm1, dm2 = fcibase_class.make_rdm12(self, ci0[i], norb, nelec)
-                rdm1 += wi * dm1
-                rdm2 += wi * dm2
+            for i, (solver, c) in enumerate(loop_civecs(fcisolvers, ci0)):
+                dm1, dm2 = solver.make_rdm12(c, norb, nelec)
+                rdm1 += weights[i] * dm1
+                rdm2 += weights[i] * dm2
             return rdm1, rdm2
         def spin_square(self, ci0, norb, nelec):
             ss, multip = collect(solver.spin_square(c0, norb, nelec)
-                                 for solver, c0 in loop_solver(fcisolvers, ci0))
+                                 for solver, c0 in loop_civecs(fcisolvers, ci0))
             ss = numpy.einsum('i,i->', weights, ss)
             multip = numpy.sqrt(ss+.25)*2
             return ss, multip
 
-    fcisolver = FakeCISolver()
+    fcisolver = FakeCISolver(casscf.mol)
     fcisolver.__dict__.update(casscf.fcisolver.__dict__)
     casscf.fcisolver = fcisolver
     return casscf
