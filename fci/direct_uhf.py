@@ -93,11 +93,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     return ci1
 
 def contract_2e_hubbard(u, fcivec, norb, nelec, opt=None):
-    if isinstance(nelec, (int, numpy.number)):
-        nelecb = nelec//2
-        neleca = nelec - nelecb
-    else:
-        neleca, nelecb = nelec
+    neleca, nelecb = direct_spin1._unpack_nelec(nelec)
     u_aa, u_ab, u_bb = u
 
     strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
@@ -123,11 +119,7 @@ def contract_2e_hubbard(u, fcivec, norb, nelec, opt=None):
     return fcinew
 
 def make_hdiag(h1e, eri, norb, nelec):
-    if isinstance(nelec, (int, numpy.number)):
-        nelecb = nelec//2
-        neleca = nelec - nelecb
-    else:
-        neleca, nelecb = nelec
+    neleca, nelecb = direct_spin1._unpack_nelec(nelec)
     h1e_a = numpy.ascontiguousarray(h1e[0])
     h1e_b = numpy.ascontiguousarray(h1e[1])
     g2e_aa = ao2mo.restore(1, eri[0], norb)
@@ -183,11 +175,7 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
             ao2mo.restore(4, h2e_bb, norb) * fac)
 
 def pspace(h1e, eri, norb, nelec, hdiag, np=400):
-    if isinstance(nelec, (int, numpy.number)):
-        nelecb = nelec//2
-        neleca = nelec - nelecb
-    else:
-        neleca, nelecb = nelec
+    neleca, nelecb = direct_spin1._unpack_nelec(nelec)
     h1e_a = numpy.ascontiguousarray(h1e[0])
     h1e_b = numpy.ascontiguousarray(h1e[1])
     g2e_aa = ao2mo.restore(1, eri[0], norb)

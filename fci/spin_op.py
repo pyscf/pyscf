@@ -147,7 +147,7 @@ def local_spin(fcivec, norb, nelec, mo_coeff=None, ovlp=1, aolst=[]):
 # size of intermediate determinants (norb,neleca+1;norb,nelecb-1)
 def _make_rdm2_baab(fcivec, norb, nelec):
     fcivec = numpy.asarray(fcivec, order='C')
-    neleca, nelecb = _unpack(nelec)
+    neleca, nelecb = _unpack_nelec(nelec)
     if neleca == norb or nelecb == 0: # no intermediate determinants
         return numpy.zeros((norb,norb,norb,norb))
     ades_index = cistring.gen_des_str_index(range(norb), neleca+1)
@@ -178,7 +178,7 @@ def make_rdm2_baab(fcivec, norb, nelec):
 # size of intermediate determinants (norb,neleca-1;norb,nelecb+1)
 def _make_rdm2_abba(fcivec, norb, nelec):
     fcivec = numpy.asarray(fcivec, order='C')
-    neleca, nelecb = _unpack(nelec)
+    neleca, nelecb = _unpack_nelec(nelec)
     if nelecb == norb or neleca == 0: # no intermediate determinants
         return numpy.zeros((norb,norb,norb,norb))
     acre_index = cistring.gen_cre_str_index(range(norb), neleca-1)
@@ -208,7 +208,7 @@ def make_rdm2_abba(fcivec, norb, nelec):
 def contract_ss(fcivec, norb, nelec):
     '''Contract spin square operator with FCI wavefunction :math:`S^2 |CI>`
     '''
-    neleca, nelecb = _unpack(nelec)
+    neleca, nelecb = _unpack_nelec(nelec)
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     fcivec = fcivec.reshape(na,nb)
@@ -282,14 +282,12 @@ def contract_ss(fcivec, norb, nelec):
     ci1 += (neleca-nelecb)**2*.25*fcivec
     return ci1
 
-
-def _unpack(nelec):
+def _unpack_nelec(nelec, spin=0):
     if isinstance(nelec, (int, numpy.number)):
-        nelecb = nelec//2
+        nelecb = (nelec-spin)//2
         neleca = nelec - nelecb
-        return neleca, nelecb
-    else:
-        return nelec
+        nelec = neleca, nelecb
+    return nelec
 
 
 if __name__ == '__main__':

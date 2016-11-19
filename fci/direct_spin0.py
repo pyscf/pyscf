@@ -30,6 +30,7 @@ from pyscf.lib import logger
 from pyscf.fci import cistring
 from pyscf.fci import rdm
 from pyscf.fci import direct_spin1
+from pyscf.fci.spin_op import contract_ss
 
 libfci = lib.load_library('libfci')
 

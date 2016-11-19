@@ -44,7 +44,7 @@ class KnowValues(unittest.TestCase):
 
     def test__init__file(self):
         c1 = fci.FCI(mol, m.mo_coeff)
-        self.assertAlmostEqual(c1.kernel()[0], -8.9347029192929313, 9)
+        self.assertAlmostEqual(c1.kernel()[0], -2.8227809167209683, 9)
 
     def test_init_triplet(self):
         ci1 = fci.addons.initguess_triplet(norb, nelec, '0b1011')

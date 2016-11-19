@@ -30,11 +30,8 @@ def make_rdm1_ms0(fname, cibra, ciket, norb, nelec, link_index=None):
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
     if link_index is None:
-        if isinstance(nelec, (int, numpy.number)):
-            neleca = nelec//2
-        else:
-            neleca, nelecb = nelec
-            assert(neleca == nelecb)
+        neleca, nelecb = _unpack_nelec(nelec)
+        assert(neleca == nelecb)
         link_index = cistring.gen_linkstr_index(range(norb), neleca)
     na, nlink = link_index.shape[:2]
     rdm1 = numpy.empty((norb,norb))
@@ -55,11 +52,8 @@ def make_rdm1_ms0(fname, cibra, ciket, norb, nelec, link_index=None):
 # symm = 2: particle permutation symmetry
 def make_rdm12_ms0(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
     if link_index is None:
-        if isinstance(nelec, (int, numpy.number)):
-            neleca = nelec//2
-        else:
-            neleca, nelecb = nelec
-            assert(neleca == nelecb)
+        neleca, nelecb = _unpack_nelec(nelec)
+        assert(neleca == nelecb)
         link_index = cistring.gen_linkstr_index(range(norb), neleca)
     link_index = (link_index, link_index)
     return make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index, symm)
@@ -78,11 +72,7 @@ def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
     if link_index is None:
-        if isinstance(nelec, (int, numpy.number)):
-            nelecb = nelec//2
-            neleca = nelec - nelecb
-        else:
-            neleca, nelecb = nelec
+        neleca, nelecb = _unpack_nelec(nelec)
         link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
         link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
     else:
@@ -109,11 +99,7 @@ def make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
     if link_index is None:
-        if isinstance(nelec, (int, numpy.number)):
-            nelecb = nelec//2
-            neleca = nelec - nelecb
-        else:
-            neleca, nelecb = nelec
+        neleca, nelecb = _unpack_nelec(nelec)
         link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
         link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
     else:
@@ -157,10 +143,7 @@ def make_dm123(fname, cibra, ciket, norb, nelec):
     '''
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
-    if isinstance(nelec, (int, numpy.number)):
-        neleca = nelecb = nelec//2
-    else:
-        neleca, nelecb = nelec
+    neleca, nelecb = _unpack_nelec(nelec)
     link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
     link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
     na,nlinka = link_indexa.shape[:2]
@@ -228,10 +211,7 @@ def make_dm1234(fname, cibra, ciket, norb, nelec):
     '''
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
-    if isinstance(nelec, (int, numpy.number)):
-        neleca = nelecb = nelec//2
-    else:
-        neleca, nelecb = nelec
+    neleca, nelecb = _unpack_nelec(nelec)
     link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
     link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
     na,nlinka = link_indexa.shape[:2]
@@ -347,4 +327,11 @@ def reorder_dm1234(rdm1, rdm2, rdm3, rdm4, inplace=True):
             for u in range(norb):
                 rdm4[:,q,q,s,s,u,u,:] -= rdm1
     return rdm1, rdm2, rdm3, rdm4
+
+def _unpack_nelec(nelec, spin=0):
+    if isinstance(nelec, (int, numpy.number)):
+        nelecb = (nelec-spin)//2
+        neleca = nelec - nelecb
+        nelec = neleca, nelecb
+    return nelec
 

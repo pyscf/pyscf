@@ -660,6 +660,10 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
             for i in range(p0, p0+solver.nroots):
                 yield solver, ci0[i]
             p0 += solver.nroots
+    def get_nelec(solver, nelec):
+        if solver.nspin != 0:
+            nelec = (numpy.sum(nelec)+spin)//2, (numpy.sum(nelec)-spin)//2
+        return nelec
 
     class FakeCISolver(fcibase_class):
         def kernel(self, h1, h2, norb, nelec, ci0=None, verbose=0, **kwargs):
@@ -671,7 +675,7 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
             es = []
             cs = []
             for solver, c0 in loop_solver(fcisolvers, ci0):
-                e, c = solver.kernel(h1, h2, norb, nelec, c0,
+                e, c = solver.kernel(h1, h2, norb, get_nelec(solver, nelec), c0,
                                      orbsym=self.orbsym, verbose=log, **kwargs)
                 if solver.nroots == 1:
                     es.append(e)
@@ -679,7 +683,7 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
                 else:
                     es.extend(e)
                     cs.extend(c)
-            ss, multip = collect(solver.spin_square(c0, norb, nelec)
+            ss, multip = collect(solver.spin_square(c0, norb, get_nelec(solver, nelec))
                                  for solver, c0 in loop_civecs(fcisolvers, cs))
             for i, ei in enumerate(es):
                  log.info('state %d  E = %.15g S^2 = %.7f', i, ei, ss[i])
@@ -689,7 +693,8 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
             es = []
             cs = []
             for solver, c0 in loop_solver(fcisolvers, ci0):
-                e, c = solver.kernel(h1, h2, norb, nelec, c0, orbsym=self.orbsym, **kwargs)
+                e, c = solver.kernel(h1, h2, norb, get_nelec(solver, nelec), c0,
+                                     orbsym=self.orbsym, **kwargs)
                 if solver.nroots == 1:
                     es.append(e)
                     cs.append(c)
@@ -700,18 +705,18 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
         def make_rdm1(self, ci0, norb, nelec):
             dm1 = 0
             for i, (solver, c) in enumerate(loop_civecs(fcisolvers, ci0)):
-                dm1 += weights[i]*solver.make_rdm1(c, norb, nelec)
+                dm1 += weights[i]*solver.make_rdm1(c, norb, get_nelec(solver, nelec))
             return dm1
         def make_rdm12(self, ci0, norb, nelec):
             rdm1 = 0
             rdm2 = 0
             for i, (solver, c) in enumerate(loop_civecs(fcisolvers, ci0)):
-                dm1, dm2 = solver.make_rdm12(c, norb, nelec)
+                dm1, dm2 = solver.make_rdm12(c, norb, get_nelec(solver, nelec))
                 rdm1 += weights[i] * dm1
                 rdm2 += weights[i] * dm2
             return rdm1, rdm2
         def spin_square(self, ci0, norb, nelec):
-            ss, multip = collect(solver.spin_square(c0, norb, nelec)
+            ss, multip = collect(solver.spin_square(c0, norb, get_nelec(solver, nelec))
                                  for solver, c0 in loop_civecs(fcisolvers, ci0))
             ss = numpy.einsum('i,i->', weights, ss)
             multip = numpy.sqrt(ss+.25)*2

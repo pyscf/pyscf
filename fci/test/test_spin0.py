@@ -106,6 +106,7 @@ class KnowValues(unittest.TestCase):
             basis = '6-311g')
         mf = scf.RHF(mol)
         mf.scf()
+        mf._scf = mf
         h1e = mcscf.casci.h1e_for_cas(mf, mf.mo_coeff, ncas=2, ncore=2)[0]
         eri = ao2mo.incore.full(mf._eri, mf.mo_coeff[:,2:4])
         cis = fci.direct_spin0.FCISolver(mol)

@@ -523,15 +523,6 @@ def fix_spin_(fciobj, shift=.2, ss=None, **kwargs):
 def fix_spin(fciobj, shift=.1, ss=None):
     return fix_spin_(copy.copy(fciobj), shift, ss)
 
-
-def _unpack(nelec):
-    if isinstance(nelec, (int, numpy.number)):
-        nelecb = nelec//2
-        neleca = nelec - nelecb
-        return neleca, nelecb
-    else:
-        return nelec
-
 def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
     '''Transform CI coefficients to the representation in new one-particle basis.
     Solving CI problem for Hamiltonian h1, h2 defined in old basis,
@@ -577,6 +568,14 @@ def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
     # Transform old basis to new basis for all beta-electron excitations
     ci = lib.dot(ci.reshape(na,nb), trans_ci_b)
     return ci
+
+
+def _unpack(nelec, spin=0):
+    if isinstance(nelec, (int, numpy.number)):
+        nelecb = (nelec-spin)//2
+        neleca = nelec - nelecb
+        nelec = neleca, nelecb
+    return nelec
 
 
 if __name__ == '__main__':

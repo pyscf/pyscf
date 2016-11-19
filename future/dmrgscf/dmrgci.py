@@ -126,6 +126,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         self.scheduleTols   = []
         self.scheduleNoises = []
         self.onlywriteIntegral = False
+        self.spin = 0
 
         self.orbsym = []
         if mol.symmetry:
@@ -145,18 +146,8 @@ class DMRGCI(pyscf.lib.StreamObject):
 # Block restart calculation.
         self._restart = False
         self.generate_schedule()
-        self._spin = None
 
         self._keys = set(self.__dict__.keys())
-
-    @property
-    def spin(self):
-        return self._spin
-    @spin.setter
-    def spin(self, x):
-        logger.warn(self, 'Set spin attribute of %s.  The solver will ignore the '
-                    'input (neleca,nelecb) and force spin=%s', self.__class__, x)
-        self._spin = x
 
 
     def generate_schedule(self):
@@ -520,15 +511,12 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
         f.write('memory, %i, g\n'%(DMRGCI.memory))
 
     if isinstance(nelec, (int, numpy.integer)):
-        neleca = nelec//2 + nelec%2
-        nelecb = nelec - neleca
+        nelecb = (nelec-DMRGCI.spin) // 2
+        neleca = nelec - nelecb
     else :
         neleca, nelecb = nelec
     f.write('nelec %i\n'%(neleca+nelecb))
-    if DMRGCI.spin is None:
-        f.write('spin %i\n' %(neleca-nelecb))
-    else:
-        f.write('spin %i\n' % DMRGCI.spin)
+    f.write('spin %i\n' %(neleca-nelecb))
     if DMRGCI.groupname is not None:
         if isinstance(DMRGCI.wfnsym, str):
             wfnsym = dmrg_sym.irrep_name2id(DMRGCI.groupname, DMRGCI.wfnsym)

@@ -306,12 +306,7 @@ def kernel_fixed_space(myci, h1e, eri, norb, nelec, ci_strs, ci0=None,
     if myci.verbose >= logger.WARN:
         myci.check_sanity()
 
-    if myci.spin is not None:
-        if isinstance(nelec, (int, numpy.number)):
-            nelec = (nelec+myci.spin)//2, (nelec-myci.spin)//2
-        else:
-            nelec = (sum(nelec)+myci.spin)//2, (sum(nelec)-myci.spin)//2
-
+    nelec = direct_spin1._unpack_nelec(nelec, myci.spin)
     ci0, nelec, ci_strs = _unpack(ci0, nelec, ci_strs)
     na = len(ci_strs[0])
     nb = len(ci_strs[1])
@@ -363,12 +358,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     if myci.verbose >= logger.WARN:
         myci.check_sanity()
 
-    if myci.spin is not None:
-        if isinstance(nelec, (int, numpy.number)):
-            nelec = (nelec+myci.spin)//2, (nelec-myci.spin)//2
-        else:
-            nelec = (sum(nelec)+myci.spin)//2, (sum(nelec)-myci.spin)//2
-
+    nelec = direct_spin1._unpack_nelec(nelec, myci.spin)
     h2e = direct_spin1.absorb_h1e(h1e, eri, norb, nelec, .5)
     h2e = ao2mo.restore(1, h2e, norb)
 
@@ -734,6 +724,7 @@ class SelectCI(direct_spin1.FCISolver):
 
     @lib.with_doc(spin_square.__doc__)
     def spin_square(self, civec_strs, norb, nelec):
+        nelec = direct_spin1._unpack_nelec(nelec, self.spin)
         if isinstance(civec_strs, numpy.ndarray):
             return spin_square(_as_SCIvector_if_not(civec_strs, self._strs), norb, nelec)
         else:
@@ -742,6 +733,7 @@ class SelectCI(direct_spin1.FCISolver):
             return [x[0] for x in ss], [x[1] for x in ss]
 
     def large_ci(self, civec_strs, norb, nelec, tol=.1):
+        nelec = direct_spin1._unpack_nelec(nelec, self.spin)
         def check(x):
             ci, _, (strsa, strsb) = _unpack(x, nelec, self._strs)
             return [(ci[i,j], bin(strsa[i]), bin(strsa[j]))
@@ -756,31 +748,31 @@ class SelectCI(direct_spin1.FCISolver):
 
     @lib.with_doc(make_rdm1s.__doc__)
     def make_rdm1s(self, civec_strs, norb, nelec, link_index=None):
+        nelec = direct_spin1._unpack_nelec(nelec, self.spin)
         civec_strs = _as_SCIvector_if_not(civec_strs, self._strs)
         return make_rdm1s(civec_strs, norb, nelec, link_index)
 
     @lib.with_doc(make_rdm1.__doc__)
     def make_rdm1(self, civec_strs, norb, nelec, link_index=None):
+        nelec = direct_spin1._unpack_nelec(nelec, self.spin)
         rdm1a, rdm1b = self.make_rdm1s(civec_strs, norb, nelec, link_index)
         return rdm1a + rdm1b
 
     @lib.with_doc(make_rdm2s.__doc__)
     def make_rdm2s(self, civec_strs, norb, nelec, link_index=None, **kwargs):
+        nelec = direct_spin1._unpack_nelec(nelec, self.spin)
         civec_strs = _as_SCIvector_if_not(civec_strs, self._strs)
         return make_rdm2s(civec_strs, norb, nelec, link_index)
 
     @lib.with_doc(make_rdm2.__doc__)
     def make_rdm2(self, civec_strs, norb, nelec, link_index=None, **kwargs):
+        nelec = direct_spin1._unpack_nelec(nelec, self.spin)
         civec_strs = _as_SCIvector_if_not(civec_strs, self._strs)
         return make_rdm2(civec_strs, norb, nelec, link_index)
 
     def make_rdm12s(self, civec_strs, norb, nelec, link_index=None, **kwargs):
+        neleca, nelecb = nelec = direct_spin1._unpack_nelec(nelec, self.spin)
         civec_strs = _as_SCIvector_if_not(civec_strs, self._strs)
-        if isinstance(nelec, (int, numpy.integer)):
-            nelecb = nelec//2
-            neleca = nelec - nelecb
-        else:
-            neleca, nelecb = nelec
         dm2aa, dm2ab, dm2bb = make_rdm2s(civec_strs, norb, nelec, link_index)
         if neleca > 1 and nelecb > 1:
             dm1a = numpy.einsum('iikl->kl', dm2aa) / (neleca-1)
@@ -790,11 +782,9 @@ class SelectCI(direct_spin1.FCISolver):
         return (dm1a, dm1b), (dm2aa, dm2ab, dm2bb)
 
     def make_rdm12(self, civec_strs, norb, nelec, link_index=None, **kwargs):
+        nelec = direct_spin1._unpack_nelec(nelec, self.spin)
+        nelec_tot = sum(nelec)
         civec_strs = _as_SCIvector_if_not(civec_strs, self._strs)
-        if isinstance(nelec, (int, numpy.integer)):
-            nelec_tot = nelec
-        else:
-            nelec_tot = sum(nelec)
         dm2 = make_rdm2(civec_strs, norb, nelec, link_index)
         if nelec_tot > 1:
             dm1 = numpy.einsum('iikl->kl', dm2) / (nelec_tot-1)
@@ -804,12 +794,14 @@ class SelectCI(direct_spin1.FCISolver):
 
     @lib.with_doc(trans_rdm1s.__doc__)
     def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None):
+        nelec = direct_spin1._unpack_nelec(nelec, self.spin)
         cibra = _as_SCIvector_if_not(cibra, self._strs)
         ciket = _as_SCIvector_if_not(ciket, self._strs)
         return trans_rdm1s(cibra, ciket, norb, nelec, link_index)
 
     @lib.with_doc(trans_rdm1.__doc__)
     def trans_rdm1(self, cibra, ciket, norb, nelec, link_index=None):
+        nelec = direct_spin1._unpack_nelec(nelec, self.spin)
         cibra = _as_SCIvector_if_not(cibra, self._strs)
         ciket = _as_SCIvector_if_not(ciket, self._strs)
         return trans_rdm1(cibra, ciket, norb, nelec, link_index)
@@ -817,12 +809,8 @@ class SelectCI(direct_spin1.FCISolver):
 SCI = SelectCI
 
 
-def _unpack(civec_strs, nelec, ci_strs=None):
-    if isinstance(nelec, (int, numpy.integer)):
-        nelecb = nelec//2
-        neleca = nelec - nelecb
-    else:
-        neleca, nelecb = nelec
+def _unpack(civec_strs, nelec, ci_strs=None, spin=0):
+    neleca, nelecb = direct_spin1._unpack_nelec(nelec, spin)
     ci_strs = getattr(civec_strs, '_strs', ci_strs)
     if ci_strs is not None:
         strsa, strsb = ci_strs

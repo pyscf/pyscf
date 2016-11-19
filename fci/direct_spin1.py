@@ -35,6 +35,7 @@ from pyscf.lib import logger
 from pyscf.fci import cistring
 from pyscf.fci import rdm
 from pyscf.fci import spin_op
+from pyscf.fci.spin_op import contract_ss
 
 libfci = lib.load_library('libfci')
 
@@ -113,11 +114,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
 def make_hdiag(h1e, eri, norb, nelec):
     '''Diagonal Hamiltonian for Davidson preconditioner
     '''
-    if isinstance(nelec, (int, numpy.number)):
-        nelecb = nelec//2
-        neleca = nelec - nelecb
-    else:
-        neleca, nelecb = nelec
+    neleca, nelecb = _unpack_nelec(nelec)
     h1e = numpy.asarray(h1e, order='C')
     eri = ao2mo.restore(1, eri, norb)
     strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
@@ -157,11 +154,7 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
 def pspace(h1e, eri, norb, nelec, hdiag, np=400):
     '''pspace Hamiltonian to improve Davidson preconditioner. See, CPL, 169, 463
     '''
-    if isinstance(nelec, (int, numpy.number)):
-        nelecb = nelec//2
-        neleca = nelec - nelecb
-    else:
-        neleca, nelecb = nelec
+    neleca, nelecb = _unpack_nelec(nelec)
     h1e = numpy.ascontiguousarray(h1e)
     eri = ao2mo.restore(1, eri, norb)
     nb = cistring.num_strings(norb, nelecb)
@@ -236,11 +229,7 @@ def make_rdm1s(fcivec, norb, nelec, link_index=None):
     '''Spin searated 1-particle density matrices, (alpha,beta)
     '''
     if link_index is None:
-        if isinstance(nelec, (int, numpy.number)):
-            nelecb = nelec//2
-            neleca = nelec - nelecb
-        else:
-            neleca, nelecb = nelec
+        neleca, nelecb = _unpack_nelec(nelec)
         link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
         link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
         link_index = (link_indexa, link_indexb)
@@ -358,11 +347,7 @@ def _get_init_guess(na, nb, nroots, hdiag):
 def get_init_guess(norb, nelec, nroots, hdiag):
     '''Initial guess is the single Slater determinant
     '''
-    if isinstance(nelec, (int, numpy.number)):
-        nelecb = nelec//2
-        neleca = nelec - nelecb
-    else:
-        neleca, nelecb = nelec
+    neleca, nelecb = _unpack_nelec(nelec)
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     return _get_init_guess(na, nb, nroots, hdiag)
@@ -380,12 +365,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     if davidson_only is None: davidson_only = fci.davidson_only
     if pspace_size is None: pspace_size = fci.pspace_size
 
-    if fci.spin is not None:
-        if isinstance(nelec, (int, numpy.number)):
-            nelec = (nelec+fci.spin)//2, (nelec-fci.spin)//2
-        else:
-            nelec = (sum(nelec)+fci.spin)//2, (sum(nelec)-fci.spin)//2
-
+    nelec = _unpack_nelec(nelec, fci.spin)
     link_indexa, link_indexb = _unpack(norb, nelec, link_index)
     na = link_indexa.shape[0]
     nb = link_indexb.shape[0]
@@ -506,7 +486,7 @@ class FCISolver(lib.StreamObject):
 # solver.  They are not used by direct_spin1 solver.
         self.orbsym = None
         self.wfnsym = None
-        self._spin = None
+        self.spin = 0
 
         self._keys = set(self.__dict__.keys())
 
@@ -523,19 +503,8 @@ class FCISolver(lib.StreamObject):
         log.info('max_memory %d MB', self.max_memory)
         log.info('nroots = %d', self.nroots)
         log.info('pspace_size = %d', self.pspace_size)
-        if self.spin is not None:
-            log.info('spin = %d', self.spin)
+        log.info('spin = %d', self.spin)
         return self
-
-    @property
-    def spin(self):
-        return self._spin
-    @spin.setter
-    def spin(self, x):
-        logger.warn(self, 'Set spin attribute of %s.  The solver will ignore the '
-                    'input (neleca,nelecb) and force spin=%s', self.__class__, x)
-        self._spin = x
-
 
     @lib.with_doc(absorb_h1e.__doc__)
     def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):
@@ -593,6 +562,7 @@ class FCISolver(lib.StreamObject):
         return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
 
     def spin_square(self, fcivec, norb, nelec):
+        nelec = _unpack_nelec(nelec, self.spin)
         if isinstance(fcivec, numpy.ndarray):
             return spin_op.spin_square0(fcivec, norb, nelec)
         else:
@@ -602,6 +572,7 @@ class FCISolver(lib.StreamObject):
 
     @lib.with_doc(make_rdm1s.__doc__)
     def make_rdm1s(self, fcivec, norb, nelec, link_index=None):
+        nelec = _unpack_nelec(nelec, self.spin)
         return make_rdm1s(fcivec, norb, nelec, link_index)
 
     @lib.with_doc(make_rdm1.__doc__)
@@ -610,10 +581,12 @@ class FCISolver(lib.StreamObject):
 
     @lib.with_doc(make_rdm12s.__doc__)
     def make_rdm12s(self, fcivec, norb, nelec, link_index=None, reorder=True):
+        nelec = _unpack_nelec(nelec, self.spin)
         return make_rdm12s(fcivec, norb, nelec, link_index, reorder)
 
     @lib.with_doc(make_rdm12.__doc__)
     def make_rdm12(self, fcivec, norb, nelec, link_index=None, reorder=True):
+        nelec = _unpack_nelec(nelec, self.spin)
         return make_rdm12(fcivec, norb, nelec, link_index, reorder)
 
     def make_rdm2(self, fcivec, norb, nelec, link_index=None, reorder=True):
@@ -622,28 +595,34 @@ class FCISolver(lib.StreamObject):
         NOTE the 2pdm is :math:`\langle p^\dagger q^\dagger s r\rangle` but
         stored as [p,r,q,s]
         '''
+        nelec = _unpack_nelec(nelec, self.spin)
         return self.make_rdm12(fcivec, norb, nelec, link_index, reorder)[1]
 
     @lib.with_doc(trans_rdm1s.__doc__)
     def trans_rdm1s(self, cibra, ciket, norb, nelec, link_index=None):
+        nelec = _unpack_nelec(nelec, self.spin)
         return trans_rdm1s(cibra, ciket, norb, nelec, link_index)
 
     @lib.with_doc(trans_rdm1.__doc__)
     def trans_rdm1(self, cibra, ciket, norb, nelec, link_index=None):
+        nelec = _unpack_nelec(nelec, self.spin)
         return trans_rdm1(cibra, ciket, norb, nelec, link_index)
 
     @lib.with_doc(trans_rdm12s.__doc__)
     def trans_rdm12s(self, cibra, ciket, norb, nelec, link_index=None,
                      reorder=True):
+        nelec = _unpack_nelec(nelec, self.spin)
         return trans_rdm12s(cibra, ciket, norb, nelec, link_index, reorder)
 
     @lib.with_doc(trans_rdm12.__doc__)
     def trans_rdm12(self, cibra, ciket, norb, nelec, link_index=None,
                     reorder=True):
+        nelec = _unpack_nelec(nelec, self.spin)
         return trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)
 
     def large_ci(self, ci, norb, nelec, tol=.1):
         from pyscf.fci import addons
+        nelec = _unpack_nelec(nelec, self.spin)
         if isinstance(ci, numpy.ndarray):
             return addons.large_ci(ci, norb, nelec, tol)
         else:
@@ -656,13 +635,16 @@ class FCISolver(lib.StreamObject):
 FCI = FCISolver
 
 
-def _unpack(norb, nelec, link_index):
+def _unpack_nelec(nelec, spin=0):
+    if isinstance(nelec, (int, numpy.number)):
+        nelecb = (nelec-spin)//2
+        neleca = nelec - nelecb
+        nelec = neleca, nelecb
+    return nelec
+
+def _unpack(norb, nelec, link_index, spin=0):
     if link_index is None:
-        if isinstance(nelec, (int, numpy.number)):
-            nelecb = nelec//2
-            neleca = nelec - nelecb
-        else:
-            neleca, nelecb = nelec
+        neleca, nelecb = _unpack_nelec(nelec, spin)
         link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
         link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
         return link_indexa, link_indexb

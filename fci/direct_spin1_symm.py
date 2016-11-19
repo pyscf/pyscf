@@ -28,6 +28,7 @@ from pyscf import symm
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 from pyscf.fci import addons
+from pyscf.fci.spin_op import contract_ss
 
 libfci = lib.load_library('libfci')
 
@@ -166,11 +167,7 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None, orbsym=None):
 
 def _id_wfnsym(cis, norb, nelec, wfnsym):
     if wfnsym is None:
-        if isinstance(nelec, (int, numpy.number)):
-            nelecb = nelec//2
-            neleca = nelec - nelecb
-        else:
-            neleca, nelecb = nelec
+        neleca, nelecb = direct_spin1._unpack_nelec(nelec)
         wfnsym = 0  # Ag, A1 or A
         for i in cis.orbsym[nelecb:neleca]:
             wfnsym ^= i
@@ -207,11 +204,7 @@ def _get_init_guess(strsa, strsb, nroots, hdiag, orbsym, wfnsym=0):
         raise IndexError('Configuration of required symmetry (wfnsym=%d) not found' % wfnsym)
     return ci0
 def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
-    if isinstance(nelec, (int, numpy.number)):
-        nelecb = nelec//2
-        neleca = nelec - nelecb
-    else:
-        neleca, nelecb = nelec
+    neleca, nelecb = direct_spin1._unpack_nelec(nelec)
     strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
     strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
     return _get_init_guess(strsa, strsb, nroots, hdiag, orbsym, wfnsym)
@@ -283,6 +276,7 @@ class FCISolver(direct_spin1.FCISolver):
         if self.verbose >= logger.WARN:
             self.check_sanity()
 
+        nelec = direct_spin1._unpack_nelec(nelec, self.spin)
         wfnsym0 = self.guess_wfnsym(norb, nelec, ci0, self.wfnsym, **kwargs)
         e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
                                        tol, lindep, max_cycle, max_space, nroots,
