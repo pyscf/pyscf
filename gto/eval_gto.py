@@ -31,10 +31,10 @@ def eval_gto(eval_name, atm, bas, env, coords,
             ==========================  =========  =======================
             Function                    type       Expression
             ==========================  =========  =======================
-            "GTOval_sph"                spheric    |AO>
-            "GTOval_ip_sph"             spheric    nabla |AO>
-            "GTOval_ig_sph"             spheric    (#C(0 1) g) |AO>
-            "GTOval_ipig_sph"           spheric    (#C(0 1) nabla g) |AO>
+            "GTOval_sph"                spherical  |AO>
+            "GTOval_ip_sph"             spherical  nabla |AO>
+            "GTOval_ig_sph"             spherical  (#C(0 1) g) |AO>
+            "GTOval_ipig_sph"           spherical  (#C(0 1) nabla g) |AO>
             "GTOval_cart"               cart       |AO>
             "GTOval_ip_cart"            cart       nabla |AO>
             "GTOval_ig_cart"            cart       (#C(0 1) g)|AO>

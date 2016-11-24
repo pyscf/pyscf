@@ -44,7 +44,7 @@ def make_modrho_basis(mol, auxbasis=None):
     auxmol._atm, auxmol._bas, auxmol._env = \
             auxmol.make_env(mol._atom, auxmol._basis, mol._env[:gto.PTR_ENV_START])
 
-# Note libcint library will multiply the norm of the integration over spheric
+# Note libcint library will multiply the norm of the integration over spherical
 # part sqrt(4pi) to the basis.
     half_sph_norm = numpy.sqrt(.25/numpy.pi)
     for ib in range(len(auxmol._bas)):

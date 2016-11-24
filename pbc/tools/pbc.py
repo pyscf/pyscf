@@ -249,10 +249,11 @@ def get_monkhorst_pack_size(cell, kpts):
     return Nk
 
 
-def get_lattice_Ls(cell, nimgs=None, rcut=None):
+def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None):
     '''Get the (Cartesian, unitful) lattice translation vectors for nearby images.
     The translation vectors can be used for the lattice summation.'''
-    b = np.linalg.inv(cell.lattice_vectors()).T
+    a = cell.lattice_vectors()
+    b = np.linalg.inv(a).T
     heights_inv = lib.norm(b, axis=1)
 
     if nimgs is None:
@@ -265,10 +266,16 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None):
     else:
         rcut = max((np.asarray(nimgs)+1)/heights_inv) # ~ the incircle radius
 
+    if dimension is None: dimension = cell.dimension
+    if dimension == 1:
+        nimgs = [nimgs[0], 1, 1]
+    elif dimension == 2:
+        nimgs = [nimgs[0], nimgs[1], 1]
+
     Ts = lib.cartesian_prod((np.arange(-nimgs[0],nimgs[0]+1),
                              np.arange(-nimgs[1],nimgs[1]+1),
                              np.arange(-nimgs[2],nimgs[2]+1)))
-    Ls = np.dot(Ts, cell.lattice_vectors())
+    Ls = np.dot(Ts, a)
     Ls = Ls[lib.norm(Ls, axis=1)<rcut]
     return np.asarray(Ls, order='C')
 

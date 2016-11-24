@@ -286,7 +286,7 @@ def order_ao_index(mol, cart=False):
                 else:
                     idx.extend(range(off,off+(l+1)*(l+2)//2))
                 off += (l+1)*(l+2)//2
-    else:  # spheric orbitals
+    else:  # spherical orbitals
         for ib in range(mol.nbas):
             l = mol.bas_angular(ib)
             for n in range(mol.bas_nctr(ib)):

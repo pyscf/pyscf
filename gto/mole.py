@@ -75,7 +75,7 @@ def gto_norm(l, expnt):
         raise ValueError('l should be > 0')
 
 def cart2sph(l):
-    '''Cartesian to real spheric transformation matrix'''
+    '''Cartesian to real spherical transformation matrix'''
     nf = (l+1)*(l+2)//2
     cmat = numpy.eye(nf)
     if l == 0:
@@ -985,7 +985,7 @@ def energy_nuc(mol):
     return e
 
 def spheric_labels(mol, fmt=True):
-    '''Labels for spheric GTO functions
+    '''Labels for spherical GTO functions
 
     Kwargs:
         fmt : str or bool
@@ -994,7 +994,7 @@ def spheric_labels(mol, fmt=True):
         be used as the print format.
 
     Returns:
-        List of [(atom-id, symbol-str, nl-str, str-of-real-spheric-notation]
+        List of [(atom-id, symbol-str, nl-str, str-of-real-spherical-notation]
         or formatted strings based on the argument "fmt"
 
     Examples:
@@ -1039,7 +1039,7 @@ def cart_labels(mol, fmt=True):
         be used as the print format.
 
     Returns:
-        List of [(atom-id, symbol-str, nl-str, str-of-real-spheric-notation)]
+        List of [(atom-id, symbol-str, nl-str, str-of-real-spherical-notation)]
         or formatted strings based on the argument "fmt"
     '''
     count = numpy.zeros((mol.natm, 9), dtype=int)
@@ -2327,6 +2327,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     @lib.with_doc(spheric_labels.__doc__)
     def spheric_labels(self, fmt=False):
         return spheric_labels(self, fmt)
+    spherical_labels = spheric_labels
 
     def search_shell_id(self, atm_id, l):
         return search_shell_id(self, atm_id, l)

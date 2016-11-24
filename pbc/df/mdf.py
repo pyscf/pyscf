@@ -53,7 +53,7 @@ def estimate_eta(cell, cutoff=1e-12):
     '''The exponent of the smooth gaussian model density, requiring that at
     boundary, density ~ 4pi rmax^2 exp(-eta*rmax^2) ~ 1e-12
     '''
-    b = np.linalg.inv(cell.lattice_vectors()).T
+    b = numpy.linalg.inv(cell.lattice_vectors()).T
     heights = 1 / lib.norm(b, axis=1)
     rmin = min(heights)
     eta = max(-numpy.log(cutoff/(4*numpy.pi*rmin**2))/rmin**2, .1)
