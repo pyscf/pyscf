@@ -328,7 +328,7 @@ def get_nimgs(cell, precision=None):
     rcut = max([cell.bas_rcut(ib, precision) for ib in range(cell.nbas)])
 
     # nimgs determines the supercell size
-    b = np.linalg.inv(cell.lattice_vectors()).T
+    b = cell.reciprocal_vectors(norm_to=1)
     heights_inv = lib.norm(b, axis=1)
     nimgs = np.ceil(rcut*heights_inv).astype(int)
     return nimgs
@@ -392,12 +392,12 @@ def get_bounding_sphere(cell, rcut):
     Returns:
         cut : ndarray of 3 ints defining N_x
     '''
-    #Gmat = scipy.linalg.inv(cell.lattice_vectors()).T
+    #Gmat = cell.reciprocal_vectors(norm_to=1)
     #n1 = np.ceil(lib.norm(Gmat[0,:])*rcut)
     #n2 = np.ceil(lib.norm(Gmat[1,:])*rcut)
     #n3 = np.ceil(lib.norm(Gmat[2,:])*rcut)
     #cut = np.array([n1, n2, n3]).astype(int)
-    b = np.linalg.inv(cell.lattice_vectors()).T
+    b = cell.reciprocal_vectors(norm_to=1)
     heights_inv = lib.norm(b, axis=0)
     cut = np.ceil(rcut*heights_inv).astype(int)
     return cut
@@ -422,7 +422,7 @@ def get_Gv(cell, gs=None):
     gzrange = np.append(range(gs[2]+1), range(-gs[2],0))
     gxyz = lib.cartesian_prod((gxrange, gyrange, gzrange))
 
-    b = cell.reciprocal_vectors(cell.lattice_vectors())
+    b = cell.reciprocal_vectors()
     Gv = np.dot(gxyz, b)
     return Gv
 
@@ -727,12 +727,12 @@ class Cell(mole.Mole):
 
     @property
     def nimgs(self):
-        b = np.linalg.inv(self.lattice_vectors()).T
+        b = self.reciprocal_vectors(norm_to=1)
         heights_inv = lib.norm(b, axis=1)
         return np.ceil(self.rcut*heights_inv).astype(int)
     @nimgs.setter
     def nimgs(self, x):
-        b = np.linalg.inv(self.lattice_vectors()).T
+        b = self.reciprocal_vectors(norm_to=1)
         heights_inv = lib.norm(b, axis=1)
         self.rcut = max((np.asarray(x)+1) / heights_inv)
 
@@ -766,7 +766,7 @@ class Cell(mole.Mole):
         else:
             return a/self.unit
 
-    def reciprocal_vectors(self, a=None):
+    def reciprocal_vectors(self, norm_to=2*np.pi):
         r'''
         .. math::
 
@@ -777,8 +777,16 @@ class Cell(mole.Mole):
             \end{align}
 
         '''
-        if a is None: a = self.lattice_vectors()
-        return 2*np.pi * np.linalg.inv(a).T
+        a = self.lattice_vectors()
+        if self.dimension == 1:
+            assert(abs(np.dot(a[0], a[1])) < 1e-9 and
+                   abs(np.dot(a[0], a[2])) < 1e-9 and
+                   abs(np.dot(a[1], a[2])) < 1e-9)
+        elif self.dimension == 2:
+            assert(abs(np.dot(a[0], a[2])) < 1e-9 and
+                   abs(np.dot(a[1], a[2])) < 1e-9)
+        b = np.linalg.inv(a.T)
+        return norm_to * b
 
     def get_abs_kpts(self, scaled_kpts):
         '''Get absolute k-points (in 1/Bohr), given "scaled" k-points in

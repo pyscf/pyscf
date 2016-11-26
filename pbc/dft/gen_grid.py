@@ -99,7 +99,7 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
     coords, weights = dft.gen_grid.gen_partition(scell, atom_grids_tab)
 
     # search for grids in unit cell
-    b = np.linalg.inv(cell.lattice_vectors()).T
+    b = cell.reciprocal_vectors(norm_to=1)
     c = np.dot(coords, b.T)
     mask = ((c[:,0]>=0) & (c[:,1]>=0) & (c[:,2]>=0) &
             (c[:,0]< 1) & (c[:,1]< 1) & (c[:,2]< 1))

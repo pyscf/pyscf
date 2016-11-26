@@ -40,7 +40,7 @@ def get_nuc(mydf, kpts=None):
     vneR = tools.ifft(vneG, mydf.gs).real
 
     vne = [lib.dot(aoR.T.conj()*vneR, aoR)
-           for k, aoR in mydf.aoR_loop(cell, gs, kpts_lst)]
+           for k, aoR in mydf.aoR_loop(gs, kpts_lst)]
 
     if kpts is None or numpy.shape(kpts) == (3,):
         vne = vne[0]
@@ -67,7 +67,7 @@ def get_pp(mydf, kpts=None):
     # vpploc evaluated in real-space
     vpplocR = tools.ifft(vpplocG, cell.gs).real
     vpp = [lib.dot(aoR.T.conj()*vpplocR, aoR)
-           for k, aoR in mydf.aoR_loop(cell, gs, kpts_lst)]
+           for k, aoR in mydf.aoR_loop(gs, kpts_lst)]
 
     # vppnonloc evaluated in reciprocal space
     fakemol = gto.Mole()
@@ -147,7 +147,8 @@ class DF(lib.StreamObject):
         logger.info(self, 'len(kpts) = %d', len(self.kpts))
         logger.debug1(self, '    kpts = %s', self.kpts)
 
-    def aoR_loop(self, cell, gs=None, kpts=None, kpt_band=None):
+    def aoR_loop(self, gs=None, kpts=None, kpt_band=None):
+        cell = self.cell
         if kpts is None: kpts = self.kpts
         kpts = numpy.asarray(kpts)
 

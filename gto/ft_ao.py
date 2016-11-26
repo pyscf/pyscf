@@ -19,8 +19,7 @@ from pyscf.gto.moleintor import libcgto
 #
 # \int mu*nu*exp(-ik*r) dr
 #
-# Note for nonuniform_orth grids, b is reloaded as the base grids for x,y,z axes
-#
+# gxyz is the index for Gvbase
 def ft_aopair(mol, Gv, shls_slice=None, aosym='s1', b=numpy.eye(3), Gvbase=None,
               gxyz=None, gs=None, buf=None, verbose=None):
     ''' FT transform AO pair
@@ -77,6 +76,7 @@ def ft_aopair(mol, Gv, shls_slice=None, aosym='s1', b=numpy.eye(3), Gvbase=None,
     return mat
 
 
+# gxyz is the index for Gvbase
 def ft_ao(mol, Gv, shls_slice=None, b=numpy.eye(3), Gvbase=None,
           gxyz=None, gs=None, verbose=None):
     ''' FT transform AO

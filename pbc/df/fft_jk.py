@@ -44,7 +44,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpt_band=None):
     ngs = len(coulG)
 
     vR = rhoR = np.zeros((nset,ngs))
-    for k, aoR in mydf.aoR_loop(cell, gs, kpts):
+    for k, aoR in mydf.aoR_loop(gs, kpts):
         for i in range(nset):
             rhoR[i] += numint.eval_rho(cell, aoR, dms[i,k])
     for i in range(nset):
@@ -54,7 +54,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpt_band=None):
         vR[i] = tools.ifft(vG, gs).real
 
     if kpt_band is not None:
-        for k, aoR_kband in mydf.aoR_loop(cell, gs, kpts, kpt_band):
+        for k, aoR_kband in mydf.aoR_loop(gs, kpts, kpt_band):
             pass
         vj_kpts = [cell.vol/ngs * lib.dot(aoR_kband.T.conj()*vR[i], aoR_kband)
                    for i in range(nset)]
@@ -64,7 +64,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpt_band=None):
     else:
         vj_kpts = []
         weight = cell.vol / ngs
-        for k, aoR in mydf.aoR_loop(cell, gs, kpts):
+        for k, aoR in mydf.aoR_loop(gs, kpts):
             for i in range(nset):
                 vj_kpts.append(weight * lib.dot(aoR.T.conj()*vR[i], aoR))
         vj_kpts = lib.asarray(vj_kpts).reshape(nkpts,nset,nao,nao)
@@ -101,10 +101,10 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpt_band=None,
     weight = 1./nkpts * (cell.vol/ngs)
 
     if kpt_band is not None:
-        for k, aoR_kband in mydf.aoR_loop(cell, gs, kpts, kpt_band):
+        for k, aoR_kband in mydf.aoR_loop(gs, kpts, kpt_band):
             pass
         vk_kpts = [0] * nset
-        for k2, ao_k2 in mydf.aoR_loop(cell, gs, kpts):
+        for k2, ao_k2 in mydf.aoR_loop(gs, kpts):
             kpt2 = kpts[k2]
             vkR_k1k2 = get_vkR(mydf, cell, aoR_kband, ao_k2, kpt_band, kpt2,
                                coords, gs, exxdiv)
@@ -123,10 +123,10 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpt_band=None,
             vk_kpts = np.zeros((nset,nkpts,nao,nao), dtype=dms.dtype)
         else:
             vk_kpts = np.zeros((nset,nkpts,nao,nao), dtype=np.complex128)
-        for k2, ao_k2 in mydf.aoR_loop(cell, gs, kpts):
+        for k2, ao_k2 in mydf.aoR_loop(gs, kpts):
             kpt2 = kpts[k2]
             aoR_dms = [lib.dot(ao_k2, dms[i,k2]) for i in range(nset)]
-            for k1, ao_k1 in mydf.aoR_loop(cell, gs, kpts):
+            for k1, ao_k1 in mydf.aoR_loop(gs, kpts):
                 kpt1 = kpts[k1]
                 vkR_k1k2 = get_vkR(mydf, cell, ao_k1, ao_k2, kpt1, kpt2,
                                    coords, gs, exxdiv)

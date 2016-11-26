@@ -53,10 +53,7 @@ def estimate_eta(cell, cutoff=1e-12):
     '''The exponent of the smooth gaussian model density, requiring that at
     boundary, density ~ 4pi rmax^2 exp(-eta*rmax^2) ~ 1e-12
     '''
-    b = numpy.linalg.inv(cell.lattice_vectors()).T
-    heights = 1 / lib.norm(b, axis=1)
-    rmin = min(heights)
-    eta = max(-numpy.log(cutoff/(4*numpy.pi*rmin**2))/rmin**2, .1)
+    eta = max(numpy.log(4*numpy.pi*cell.rcut**4/cutoff)/cell.rcut**2, .1)
     return eta
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
@@ -157,13 +154,13 @@ def get_nuc_less_accurate(mydf, kpts=None):
     j2c = pgto.intor_cross('cint2c2e_sph', fused_cell, _fake_nuc(cell))
     jaux = j2c.dot(charge)
     jaux -= charge.sum() * mydf.auxbar(fused_cell)
-    Gv = cell.get_Gv(mydf.gs)
-    SI = cell.get_SI(Gv)
+    Gv, Gvbase, kws = mydf.gen_kgrids_weights(mydf.gs)
 # The normal nuclues have been considered in function get_gth_vlocG_part1
 # The result vG is the potential in G-space for erf part of the pp nuclues and
 # "numpy.dot(charge, SI) * coulG" for normal nuclues.
-    vpplocG = pgto.pseudo.pp_int.get_gth_vlocG_part1(cell, Gv)
-    vG = -1./cell.vol * numpy.einsum('ij,ij->j', SI, vpplocG)
+    vG = pseudo.pp_int.get_gth_vlocG_part1(cell, Gv)
+    vG = -numpy.einsum('ij,ij->j', cell.get_SI(Gv), vG)
+    vG *= kws
     kpt_allow = numpy.zeros(3)
 
     if is_zero(kpts_lst):
@@ -172,7 +169,7 @@ def get_nuc_less_accurate(mydf, kpts=None):
         vj = numpy.zeros((nkpts,nao**2), dtype=numpy.complex128)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     for k, pqkR, pqkI, p0, p1 \
-            in mydf.ft_loop(cell, mydf.gs, kpt_allow, kpts_lst, max_memory=max_memory):
+            in mydf.ft_loop(mydf.gs, kpt_allow, kpts_lst, max_memory=max_memory):
         if not gamma_point(kpts_lst[k]):
             vj[k] += numpy.einsum('k,xk->x', vG.real, pqkI) * 1j
             vj[k] += numpy.einsum('k,xk->x', vG.imag, pqkR) *-1j
@@ -236,15 +233,16 @@ def get_nuc(mydf, kpts=None):
     jaux = j2c.dot(charge)
 
     kpt_allow = numpy.zeros(3)
-    coulG = tools.get_coulG(cell, kpt_allow, gs=mydf.gs) / cell.vol
-    Gv = cell.get_Gv(mydf.gs)
+    Gv, Gvbase, kws = mydf.gen_kgrids_weights(mydf.gs)
+    coulG = tools.get_coulG(cell, kpt_allow, gs=mydf.gs)
+    coulG *= kws
     aoaux = ft_ao.ft_ao(nuccell, Gv)
     vGR = numpy.einsum('i,xi->x', charge, aoaux.real) * coulG
     vGI = numpy.einsum('i,xi->x', charge, aoaux.imag) * coulG
 
     max_memory = mydf.max_memory - lib.current_memory()[0]
     for k, pqkR, pqkI, p0, p1 \
-            in mydf.ft_loop(cell, mydf.gs, kpt_allow, kpts_lst, max_memory=max_memory):
+            in mydf.ft_loop(mydf.gs, kpt_allow, kpts_lst, max_memory=max_memory):
 # rho_ij(G) nuc(-G) / G^2
 # = [Re(rho_ij(G)) + Im(rho_ij(G))*1j] [Re(nuc(G)) - Im(nuc(G))*1j] / G^2
         if not gamma_point(kpts_lst[k]):
@@ -536,7 +534,9 @@ def unique(kpts):
 
 def build_Lpq_pbc(mydf, auxcell, kptij_lst):
     '''Fitting coefficients for auxiliary functions'''
-    kpts_ji = kptij_lst[:,1] - kptij_lst[:,0]
+    kptis = kptij_lst[:,0]
+    kptjs = kptij_lst[:,1]
+    kpts_ji = kptjs - kptis
     uniq_kpts, uniq_index, uniq_inverse = unique(kpts_ji)
     max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]))
     if mydf.metric.upper() == 'S':
@@ -544,11 +544,52 @@ def build_Lpq_pbc(mydf, auxcell, kptij_lst):
                        kptij_lst=kptij_lst, dataname='Lpq',
                        max_memory=max_memory)
         s_aux = auxcell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=uniq_kpts)
-    else:  # mydf.metric.upper() == 'T'
+    elif mydf.metric.upper() == 'T':
         outcore.aux_e2(mydf.cell, auxcell, mydf._cderi, 'cint3c1e_p2_sph',
                        kptij_lst=kptij_lst, dataname='Lpq',
                        max_memory=max_memory)
         s_aux = [x*2 for x in auxcell.pbc_intor('cint1e_kin_sph', hermi=1, kpts=uniq_kpts)]
+    elif mydf.metric.upper() == 'J':
+        fused_cell, fuse = fuse_auxcell_(mydf, auxcell)
+        outcore.aux_e2(mydf.cell, fused_cell, mydf._cderi, 'cint3c2e_sph',
+                       kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
+        vbar = fuse(mydf.auxbar(fused_cell))
+        with h5py.File(mydf._cderi) as f:
+            f['Lpq-kptij'] = kptij_lst
+            for k_uniq, kpt_uniq in enumerate(uniq_kpts):
+                adapted_ji_idx = numpy.where(uniq_inverse == k_uniq)[0]
+                adapted_kptjs = kptjs[adapted_ji_idx]
+                if is_zero(kpt_uniq):
+                    ovlp = mydf.cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=adapted_kptjs)
+                    for k, ji in enumerate(adapted_ji_idx):
+                        ovlp[k] = lib.pack_tril(ovlp[k])
+                for k, idx in enumerate(adapted_ji_idx):
+                    v = fuse(numpy.asarray(f['j3c/%d'%idx]))
+                    if is_zero(kpt_uniq):
+                        for i, c in enumerate(vbar):
+                            if c != 0:
+                                v[i] -= c * ovlp[k]
+                    f['Lpq/%d'%idx] = v
+        v = ovlp = vbar = None
+
+        j2c = fused_cell.pbc_intor('cint2c2e_sph', hermi=1, kpts=uniq_kpts)
+        for k, kpt in enumerate(uniq_kpts):
+            j2c[k] = fuse(fuse(j2c[k]).T).T.copy()
+        s_aux = j2c
+
+#    else: # T+S
+#        outcore.aux_e2(mydf.cell, auxcell, mydf._cderi, 'cint3c1e_sph',
+#                       kptij_lst=kptij_lst, dataname='Lpq_s',
+#                       max_memory=max_memory)
+#        outcore.aux_e2(mydf.cell, auxcell, mydf._cderi, 'cint3c1e_p2_sph',
+#                       kptij_lst=kptij_lst, dataname='Lpq',
+#                       max_memory=max_memory)
+#        with h5py.File(mydf._cderi) as f:
+#            for k in range(len(kptij_lst)):
+#                f['Lpq/%d'%k][:] = f['Lpq/%d'%k].value + f['Lpq_s/%d'%k].value
+#                del(f['Lpq_s/%d'%k])
+#        s_aux = auxcell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=uniq_kpts)
+#        s_aux = [x+y*2 for x,y in zip(s_aux, auxcell.pbc_intor('cint1e_kin_sph', hermi=1, kpts=uniq_kpts))]
 
     s_aux = [scipy.linalg.cho_factor(x) for x in s_aux]
 
@@ -708,8 +749,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     fused_cell, fuse = fuse_auxcell_(mydf, mydf.auxcell)
-    outcore.aux_e2(cell, fused_cell, mydf._cderi, 'cint3c2e_sph',
-                   kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
+    if mydf.metric.upper() != 'J':
+        outcore.aux_e2(cell, fused_cell, mydf._cderi, 'cint3c2e_sph',
+                       kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
     t1 = log.timer_debug1('3c2e', *t1)
 
     nao = cell.nao_nr()
@@ -718,8 +760,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
     gxyz = lib.cartesian_prod((numpy.append(range(gs[0]+1), range(-gs[0],0)),
                                numpy.append(range(gs[1]+1), range(-gs[1],0)),
                                numpy.append(range(gs[2]+1), range(-gs[2],0))))
-    invh = numpy.linalg.inv(cell.lattice_vectors()).T
-    Gv = 2*numpy.pi * numpy.dot(gxyz, invh)
+    b = cell.reciprocal_vectors()
+    Gv = numpy.dot(gxyz, b)
     ngs = gxyz.shape[0]
 
     kptis = kptij_lst[:,0]
@@ -731,9 +773,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
     kLRs = []
     kLIs = []
     for k, kpt in enumerate(uniq_kpts):
-        aoaux = ft_ao.ft_ao(fused_cell, Gv, None, invh, gxyz, gs, kpt).T
+        aoaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, gs, kpt).T
         aoaux = fuse(aoaux)
-        coulG = numpy.sqrt(tools.get_coulG(cell, kpt, gs=gs) / cell.vol)
+        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, gs))
         kLR = (aoaux.real * coulG).T
         kLI = (aoaux.imag * coulG).T
         if not kLR.flags.c_contiguous: kLR = lib.transpose(kLR.T)
@@ -835,7 +877,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
             if aosym == 's2':
                 shls_slice = (bstart, bend, 0, bend)
                 for p0, p1 in lib.prange(0, ngs, Gblksize):
-                    ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym, invh,
+                    ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym, b,
                                           gxyz[p0:p1], gs, kpt, adapted_kptjs, out=buf)
                     nG = p1 - p0
                     for k, ji in enumerate(adapted_ji_idx):
@@ -855,7 +897,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
                 shls_slice = (bstart, bend, 0, cell.nbas)
                 ni = ncol // nao
                 for p0, p1 in lib.prange(0, ngs, Gblksize):
-                    ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym, invh,
+                    ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym, b,
                                           gxyz[p0:p1], gs, kpt, adapted_kptjs, out=buf)
                     nG = p1 - p0
                     for k, ji in enumerate(adapted_ji_idx):

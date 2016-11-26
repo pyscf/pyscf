@@ -29,7 +29,8 @@ def get_gth_vlocG_part1(cell, Gv):
     G2 = numpy.einsum('ix,ix->i', Gv, Gv)
     with numpy.errstate(divide='ignore'):
         coulG = 4*numpy.pi / G2
-        coulG[0] = 0
+        if G2[0] < 1e-16:
+            coulG[0] = 0
 
     vlocG = numpy.zeros((cell.natm, len(G2)))
     for ia in range(cell.natm):

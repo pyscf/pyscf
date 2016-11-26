@@ -22,44 +22,7 @@ KPT_DIFF_TOL = 1e-6
 
 
 def get_nuc(mydf, kpts=None):
-    log = logger.Logger(mydf.stdout, mydf.verbose)
-    t1 = t0 = (time.clock(), time.time())
-    cell = mydf.cell
-    if kpts is None:
-        kpts_lst = numpy.zeros((1,3))
-    else:
-        kpts_lst = numpy.reshape(kpts, (-1,3))
-    nkpts = len(kpts_lst)
-
-    nao = cell.nao_nr()
-    charge = -cell.atom_charges()
-    Gv = cell.get_Gv(mydf.gs)
-    SI = cell.get_SI(Gv)
-    rhoG = numpy.dot(charge, SI)
-    kpt_allow = numpy.zeros(3)
-    real = gamma_point(kpts_lst)
-    coulG = tools.get_coulG(cell, kpt_allow, gs=mydf.gs, Gv=Gv) / cell.vol
-    vneG = rhoG * coulG
-
-    if real:
-        vne = numpy.zeros((nkpts,nao**2))
-    else:
-        vne = numpy.zeros((nkpts,nao**2), dtype=numpy.complex128)
-    max_memory = mydf.max_memory - lib.current_memory()[0]
-    for k, pqkR, pqkI, p0, p1 \
-            in mydf.ft_loop(cell, mydf.gs, kpt_allow, kpts_lst,
-                            max_memory=max_memory):
-# rho_ij(G) nuc(-G) / G^2
-# = [Re(rho_ij(G)) + Im(rho_ij(G))*1j] [Re(nuc(G)) - Im(nuc(G))*1j] / G^2
-        vG = vneG[p0:p1]
-        if not real:
-            vne[k] += numpy.einsum('k,xk->x', vG.real, pqkI) * 1j
-            vne[k] += numpy.einsum('k,xk->x', vG.imag, pqkR) *-1j
-        vne[k] += numpy.einsum('k,xk->x', vG.real, pqkR)
-        vne[k] += numpy.einsum('k,xk->x', vG.imag, pqkI)
-    vne = vne.reshape(-1,nao,nao)
-    t1 = log.timer_debug1('contracting Vnuc', *t1)
-
+    vne = get_pp_loc_part1(mydf, mydf.cell, kpts)
     if kpts is None or numpy.shape(kpts) == (3,):
         vne = vne[0]
     return vne
@@ -89,12 +52,11 @@ def get_pp_loc_part1(mydf, cell, kpts):
     t1 = t0 = (time.clock(), time.time())
     nkpts = len(kpts)
 
-    gs = mydf.gs
     nao = cell.nao_nr()
-    Gv = cell.get_Gv(gs)
-    SI = cell.get_SI(Gv)
+    Gv, Gvbase, kws = mydf.gen_kgrids_weights(mydf.gs)
     vpplocG = pseudo.pp_int.get_gth_vlocG_part1(cell, Gv)
-    vpplocG = -1./cell.vol * numpy.einsum('ij,ij->j', SI, vpplocG)
+    vpplocG = -numpy.einsum('ij,ij->j', cell.get_SI(Gv), vpplocG)
+    vpplocG *= kws
     kpt_allow = numpy.zeros(3)
     real = gamma_point(kpts)
 
@@ -104,7 +66,7 @@ def get_pp_loc_part1(mydf, cell, kpts):
         vloc = numpy.zeros((nkpts,nao**2), dtype=numpy.complex128)
     max_memory = mydf.max_memory - lib.current_memory()[0]
     for k, pqkR, pqkI, p0, p1 \
-            in mydf.ft_loop(cell, mydf.gs, kpt_allow, kpts, max_memory=max_memory):
+            in mydf.ft_loop(mydf.gs, kpt_allow, kpts, max_memory=max_memory):
         vG = vpplocG[p0:p1]
         if not real:
             vloc[k] += numpy.einsum('k,xk->x', vG.real, pqkI) * 1j
@@ -140,9 +102,10 @@ class PWDF(lib.StreamObject):
         logger.info(self, 'len(kpts) = %d', len(self.kpts))
         logger.debug1(self, '    kpts = %s', self.kpts)
 
-    def pw_loop(self, cell, gs=None, kpti_kptj=None, shls_slice=None,
+    def pw_loop(self, gs=None, kpti_kptj=None, shls_slice=None,
                 max_memory=2000):
         '''Plane wave part'''
+        cell = self.cell
         if gs is None:
             gs = self.gs
         if kpti_kptj is None:
@@ -151,11 +114,24 @@ class PWDF(lib.StreamObject):
             kpti, kptj = kpti_kptj
 
         nao = cell.nao_nr()
-        gxyz = lib.cartesian_prod((numpy.append(range(gs[0]+1), range(-gs[0],0)),
-                                   numpy.append(range(gs[1]+1), range(-gs[1],0)),
-                                   numpy.append(range(gs[2]+1), range(-gs[2],0))))
-        invh = numpy.linalg.inv(cell.lattice_vectors()).T
-        Gv = 2*numpy.pi * numpy.dot(gxyz, invh)
+        Gv, Gvbase, kws = self.gen_kgrids_weights(gs)
+        b = cell.reciprocal_vectors()
+        if cell.dimension == 0:
+            gxyz = lib.cartesian_prod((numpy.arange(0, gs[0]*2),
+                                       numpy.arange(0, gs[1]*2),
+                                       numpy.arange(0, gs[2]*2)))
+        elif cell.dimension == 1:
+            gxyz = lib.cartesian_prod((numpy.arange(0, gs[0]*2+1),
+                                       numpy.arange(0, gs[1]*2),
+                                       numpy.arange(0, gs[2]*2)))
+        elif cell.dimension == 2:
+            gxyz = lib.cartesian_prod((numpy.arange(0, gs[0]*2+1),
+                                       numpy.arange(0, gs[1]*2+1),
+                                       numpy.arange(0, gs[2]*2)))
+        else:
+            gxyz = lib.cartesian_prod((numpy.arange(0, gs[0]*2+1),
+                                       numpy.arange(0, gs[1]*2+1),
+                                       numpy.arange(0, gs[2]*2+1)))
         ngs = gxyz.shape[0]
 
 # Theoretically, hermitian symmetry can be also found for kpti == kptj:
@@ -173,27 +149,28 @@ class PWDF(lib.StreamObject):
         pqkIbuf = numpy.empty(nao*nao*sublk)
 
         for p0, p1 in self.prange(0, ngs, blksize):
-            #aoao = ft_ao.ft_aopair(cell, Gv[p0:p1], shls_slice, aosym, invh,
-            #                       gxyz[p0:p1], gs, (kpti, kptj))
+            #aoao = ft_ao.ft_aopair(cell, Gv[p0:p1], shls_slice, aosym,
+            #                       b, Gvbase, gxyz[p0:p1], gs, (kpti, kptj))
             aoao = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                         invh, gxyz[p0:p1], gs,
-                                         kptj-kpti, kptj.reshape(1,3), out=buf)[0]
+                                         b, Gvbase, gxyz[p0:p1], gs, kptj-kpti,
+                                         kptj.reshape(1,3), out=buf)[0]
             for i0, i1 in lib.prange(0, p1-p0, sublk):
                 nG = i1 - i0
                 pqkR = numpy.ndarray((nao,nao,nG), buffer=pqkRbuf)
                 pqkI = numpy.ndarray((nao,nao,nG), buffer=pqkIbuf)
                 pqkR[:] = aoao[i0:i1].real.transpose(1,2,0)
                 pqkI[:] = aoao[i0:i1].imag.transpose(1,2,0)
-                yield (pqkR.reshape(-1,nG),
-                       pqkI.reshape(-1,nG), p0+i0, p0+i1)
+                yield (pqkR.reshape(-1,nG), pqkI.reshape(-1,nG), p0+i0, p0+i1)
             aoao[:] = 0
 
-    def ft_loop(self, cell, gs=None, kpt=numpy.zeros(3),
-                kpts=None, shls_slice=None, max_memory=4000):
+    def ft_loop(self, gs=None, kpt=numpy.zeros(3), kpts=None, shls_slice=None,
+                max_memory=4000):
         '''
         Fourier transform iterator for all kpti which satisfy  kpt = kpts - kpti
         '''
-        if gs is None: gs = self.gs
+        cell = self.cell
+        if gs is None:
+            gs = self.gs
         if kpts is None:
             assert(gamma_point(kpt))
             kpts = self.kpts
@@ -201,11 +178,24 @@ class PWDF(lib.StreamObject):
         nkpts = len(kpts)
 
         nao = cell.nao_nr()
-        gxyz = lib.cartesian_prod((numpy.append(range(gs[0]+1), range(-gs[0],0)),
-                                   numpy.append(range(gs[1]+1), range(-gs[1],0)),
-                                   numpy.append(range(gs[2]+1), range(-gs[2],0))))
-        invh = numpy.linalg.inv(cell.lattice_vectors()).T
-        Gv = 2*numpy.pi * numpy.dot(gxyz, invh)
+        b = cell.reciprocal_vectors()
+        Gv, Gvbase, kws = self.gen_kgrids_weights(gs)
+        if cell.dimension == 0:
+            gxyz = lib.cartesian_prod((numpy.arange(0, gs[0]*2),
+                                       numpy.arange(0, gs[1]*2),
+                                       numpy.arange(0, gs[2]*2)))
+        elif cell.dimension == 1:
+            gxyz = lib.cartesian_prod((numpy.arange(0, gs[0]*2+1),
+                                       numpy.arange(0, gs[1]*2),
+                                       numpy.arange(0, gs[2]*2)))
+        elif cell.dimension == 2:
+            gxyz = lib.cartesian_prod((numpy.arange(0, gs[0]*2+1),
+                                       numpy.arange(0, gs[1]*2+1),
+                                       numpy.arange(0, gs[2]*2)))
+        else:
+            gxyz = lib.cartesian_prod((numpy.arange(0, gs[0]*2+1),
+                                       numpy.arange(0, gs[1]*2+1),
+                                       numpy.arange(0, gs[2]*2+1)))
         ngs = gxyz.shape[0]
 
 # Theoretically, hermitian symmetry can be also found for kpti == kptj:
@@ -223,8 +213,8 @@ class PWDF(lib.StreamObject):
         pqkIbuf = numpy.empty(nao*nao*blksize)
 
         for p0, p1 in self.prange(0, ngs, blksize):
-            ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym, invh,
-                                  gxyz[p0:p1], gs, kpt, kpts, out=buf)
+            ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                  b, Gvbase, gxyz[p0:p1], gs, kpt, kpts, out=buf)
             nG = p1 - p0
             for k in range(nkpts):
                 aoao = numpy.ndarray((nG,nao,nao), dtype=numpy.complex128,
@@ -238,6 +228,64 @@ class PWDF(lib.StreamObject):
 
     def prange(self, start, stop, step):
         return lib.prange(start, stop, step)
+
+    def weighted_coulG(self, kpt=numpy.zeros(3), exx=False, gs=None):
+        cell = self.cell
+        if gs is None:
+            gs = self.gs
+        Gv, Gvbase, kws = self.gen_kgrids_weights(gs)
+        coulG = tools.get_coulG(cell, kpt, exx, self, mydf.gs, Gv)
+        coulG *= kws
+        return coulG
+
+    def gen_kgrids_weights(self, gs=None):
+        cell = self.cell
+        if gs is None:
+            gs = self.gs
+        def plus_minus(n):
+            #rs, ws = gen_grid.radi.delley(n)
+            #rs, ws = gen_grid.radi.treutler_ahlrichs(n)
+            #rs, ws = gen_grid.radi.mura_knowles(n)
+            rs, ws = gen_grid.radi.gauss_chebyshev(n)
+            return numpy.hstack((rs,-rs[::-1])), numpy.hstack((ws,ws[::-1]))
+
+        ngs = [i*2+1 for i in gs]
+        b = cell.lattice_vectors()
+        if cell.dimension == 0:
+            rx, wx = plus_minus(gs[0])
+            ry, wy = plus_minus(gs[1])
+            rz, wz = plus_minus(gs[2])
+            rx /= numpy.linalg.norm(b[0])
+            ry /= numpy.linalg.norm(b[1])
+            rz /= numpy.linalg.norm(b[2])
+            weights = numpy.einsum('i,j,k->ijk', wx, wy, wz).reshape(-1)
+        elif cell.dimension == 1:
+            rx = numpy.append(numpy.arange(gs[0]+1.), numpy.arange(-gs[0],0.))
+            wx = numpy.repeat(numpy.linalg.norm(b[0]), ngs[0])
+            ry, wy = plus_minus(gs[1])
+            rz, wz = plus_minus(gs[2])
+            ry /= numpy.linalg.norm(b[1])
+            rz /= numpy.linalg.norm(b[2])
+            weights = numpy.einsum('i,j,k->ijk', wx, wy, wz).reshape(-1)
+        elif cell.dimension == 2:
+            rx = numpy.append(numpy.arange(gs[0]+1.), numpy.arange(-gs[0],0.))
+            ry = numpy.append(numpy.arange(gs[1]+1.), numpy.arange(-gs[1],0.))
+            area = numpy.linalg.norm(numpy.cross(b[0], b[1]))
+            wxy = numpy.repeat(area, ngs[0]*ngs[1])
+            rz, wz = plus_minus(gs[2])
+            rz /= numpy.linalg.norm(b[2])
+            weights = numpy.einsum('i,k->ik', wxy, wz).reshape(-1)
+        else:
+            rx = numpy.append(numpy.arange(gs[0]+1.), numpy.arange(-gs[0],0.))
+            ry = numpy.append(numpy.arange(gs[1]+1.), numpy.arange(-gs[1],0.))
+            rz = numpy.append(numpy.arange(gs[2]+1.), numpy.arange(-gs[2],0.))
+            # 1/cell.vol == det(b)/(2pi)^3
+            w = numpy.linalg.det(b)
+            weights = numpy.repeat(w, ngs[0]*ngs[1]*ngs[2])
+        Gvbase = (rx, ry, rz)
+        Gv = numpy.dot(lib.cartesian_prod(Gvbase), b)
+        weights *= 1/(2*numpy.pi)**3
+        return Gv, Gvbase, weights
 
     get_pp = get_pp
     get_nuc = get_nuc

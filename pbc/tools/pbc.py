@@ -135,18 +135,18 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None):
     if not exx or mf.exxdiv is None:
         with np.errstate(divide='ignore'):
             coulG = 4*np.pi/absG2
-        if np.linalg.norm(k) < 1e-8:
+        if absG2[0] < 1e-16:
             coulG[0] = 0.
     elif mf.exxdiv == 'vcut_sph':  # PRB 77 193110
         Rc = (3*Nk*cell.vol/(4*np.pi))**(1./3)
         with np.errstate(divide='ignore',invalid='ignore'):
             coulG = 4*np.pi/absG2*(1.0 - np.cos(np.sqrt(absG2)*Rc))
-        if np.linalg.norm(k) < 1e-8:
+        if absG2[0] < 1e-16:
             coulG[0] = 4*np.pi*0.5*Rc**2
     elif mf.exxdiv == 'ewald':
         with np.errstate(divide='ignore'):
             coulG = 4*np.pi/absG2
-        if np.linalg.norm(k) < 1e-8:
+        if absG2[0] < 1e-16:
             coulG[0] = Nk*cell.vol*madelung(cell, kpts)
     elif mf.exxdiv == 'vcut_ws':
         if not hasattr(mf, '_ws_exx'):
@@ -158,7 +158,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None):
 
         with np.errstate(divide='ignore',invalid='ignore'):
             coulG = 4*np.pi/absG2*(1.0 - np.exp(-absG2/(4*exx_alpha**2)))
-        if np.linalg.norm(k) < 1e-8:
+        if absG2[0] < 1e-16:
             coulG[0] = np.pi / exx_alpha**2
         # Index k+Gv into the precomputed vq and add on
         gxyz = np.dot(kG, exx_kcell.lattice_vectors().T)/(2*np.pi)
@@ -252,8 +252,7 @@ def get_monkhorst_pack_size(cell, kpts):
 def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None):
     '''Get the (Cartesian, unitful) lattice translation vectors for nearby images.
     The translation vectors can be used for the lattice summation.'''
-    a = cell.lattice_vectors()
-    b = np.linalg.inv(a).T
+    b = cell.reciprocal_vectors(norm_to=1)
     heights_inv = lib.norm(b, axis=1)
 
     if nimgs is None:
@@ -266,8 +265,11 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None):
     else:
         rcut = max((np.asarray(nimgs)+1)/heights_inv) # ~ the incircle radius
 
-    if dimension is None: dimension = cell.dimension
-    if dimension == 1:
+    if dimension is None:
+        dimension = cell.dimension
+    if dimension == 0:
+        nimgs = [1, 1, 1]
+    elif dimension == 1:
         nimgs = [nimgs[0], 1, 1]
     elif dimension == 2:
         nimgs = [nimgs[0], nimgs[1], 1]
@@ -275,7 +277,7 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None):
     Ts = lib.cartesian_prod((np.arange(-nimgs[0],nimgs[0]+1),
                              np.arange(-nimgs[1],nimgs[1]+1),
                              np.arange(-nimgs[2],nimgs[2]+1)))
-    Ls = np.dot(Ts, a)
+    Ls = np.dot(Ts, cell.lattice_vectors())
     Ls = Ls[lib.norm(Ls, axis=1)<rcut]
     return np.asarray(Ls, order='C')
 
