@@ -75,7 +75,7 @@ def density_fit(mf, auxbasis=None, gs=(10,10,10), with_df=None):
             else:
                 return mf_class.get_k(self, mol, dm, hermi)
 
-    return XDFHF()
+    return MDFHF()
 
 
 def get_jk(mydf, mol, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):

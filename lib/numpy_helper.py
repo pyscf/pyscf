@@ -553,7 +553,7 @@ def cartesian_prod(arrays, out=None):
 
     '''
     arrays = [numpy.asarray(x) for x in arrays]
-    dtype = arrays[0].dtype
+    dtype = numpy.result_type(*arrays)
     nd = len(arrays)
     dims = [nd] + [len(x) for x in arrays]
 

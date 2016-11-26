@@ -74,7 +74,7 @@ def non_uniform_kgrids(gs):
         #rs, ws = gen_grid.radi.treutler_ahlrichs(n)
         #rs, ws = gen_grid.radi.mura_knowles(n)
         rs, ws = gen_grid.radi.gauss_chebyshev(n)
-        return numpy.hstack((rs,-rs)), numpy.hstack((ws,ws))
+        return numpy.hstack((rs,-rs[::-1])), numpy.hstack((ws,ws[::-1]))
     rx, wx = plus_minus(gs[0])
     ry, wy = plus_minus(gs[1])
     rz, wz = plus_minus(gs[2])
@@ -162,16 +162,16 @@ class MDF(lib.StreamObject):
             gs = [gs]*3
         naux = auxmol.nao_nr()
         Gv, Gvbase, kws = non_uniform_kgrids(gs)
-        nxyz = [i*2 for i in gs]
-        gxyz = lib.cartesian_prod([range(i) for i in nxyz])
+        gxyz = lib.cartesian_prod([numpy.arange(0,i*2) for i in gs])
+        gs2 = numpy.asarray(gs) * 2
         kk = numpy.einsum('ki,ki->k', Gv, Gv)
-        idx = numpy.argsort(kk)[::-1]
+#        idx = numpy.argsort(kk)[::-1]
 #        idx = idx[(kk[idx] < 300.) & (kk[idx] > 1e-4)]  # ~ Cut high energy plain waves
 #        log.debug('Cut grids %d to %d', Gv.shape[0], len(idx))
-        kk = kk[idx]
-        Gv = Gv[idx]
-        kws = kws[idx]
-        gxyz = gxyz[idx]
+#        kk = kk[idx]
+#        Gv = Gv[idx]
+#        kws = kws[idx]
+#        gxyz = gxyz[idx]
         coulG = .5/numpy.pi**2 * kws / kk
 
         if shls_slice is None:
@@ -190,8 +190,9 @@ class MDF(lib.StreamObject):
 
         for p0, p1 in lib.prange(0, coulG.size, blksize):
             aoao = ft_ao.ft_aopair(mol, Gv[p0:p1], shls_slice, 's1',
-                                   Gvbase, gxyz[p0:p1], nxyz)
-            aoaux = ft_ao.ft_ao(auxmol, Gv[p0:p1], None, Gvbase, gxyz[p0:p1], nxyz)
+                                   numpy.eye(3), Gvbase, gxyz[p0:p1], gs2)
+            aoaux = ft_ao.ft_ao(auxmol, Gv[p0:p1], None,
+                                numpy.eye(3), Gvbase, gxyz[p0:p1], gs2)
 
             for i0, i1 in lib.prange(0, p1-p0, sublk):
                 nG = i1 - i0
@@ -376,17 +377,17 @@ def _make_j3c(mydf, mol, auxmol):
         feri[label][:,col0:col1] = dat
 
     Gv, Gvbase, kws = non_uniform_kgrids(mydf.gs)
-    nxyz = [i*2 for i in mydf.gs]
-    gxyz = lib.cartesian_prod([range(i) for i in nxyz])
+    gxyz = lib.cartesian_prod([numpy.arange(0,i*2) for i in mydf.gs])
+    gs2 = numpy.asarray(mydf.gs) * 2
     kk = numpy.einsum('ki,ki->k', Gv, Gv)
-    idx = numpy.argsort(kk)[::-1]
-    kk = kk[idx]
-    Gv = Gv[idx]
-    kws = kws[idx]
-    gxyz = gxyz[idx]
+#    idx = numpy.argsort(kk)[::-1]
+#    kk = kk[idx]
+#    Gv = Gv[idx]
+#    kws = kws[idx]
+#    gxyz = gxyz[idx]
     coulG = .5/numpy.pi**2 * kws / kk
 
-    aoaux = ft_ao.ft_ao(auxmol, Gv, None, Gvbase, gxyz, nxyz)
+    aoaux = ft_ao.ft_ao(auxmol, Gv, None, numpy.eye(3), Gvbase, gxyz, gs2)
     kLR = numpy.asarray(aoaux.real, order='C')
     kLI = numpy.asarray(aoaux.imag, order='C')
     j2c = auxmol.intor('cint2c2e_sph', hermi=1).T  # .T to C-ordr
@@ -426,7 +427,7 @@ def _make_j3c(mydf, mol, auxmol):
 
         for p0, p1 in lib.prange(0, Gv.shape[0], blksize):
             aoao = ft_ao.ft_aopair(mol, Gv[p0:p1], shls_slice[:4], 's2',
-                                   Gvbase, gxyz[p0:p1], nxyz, buf=bufs2)
+                                   numpy.eye(3), Gvbase, gxyz[p0:p1], gs2, buf=bufs2)
             nG = p1 - p0
             pqkR = numpy.ndarray((ncol,nG), buffer=pqkbuf)
             pqkR[:] = aoao.real.T
