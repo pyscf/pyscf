@@ -1826,19 +1826,20 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                         self.stdout.write(' %4.12g' % c)
                     self.stdout.write('\n')
 
-        logger.info(self, 'nuclear repulsion = %.15g', self.energy_nuc())
-        if self.symmetry:
-            if self.topgroup == self.groupname:
-                logger.info(self, 'point group symmetry = %s', self.topgroup)
-            else:
-                logger.info(self, 'point group symmetry = %s, use subgroup %s',
-                            self.topgroup, self.groupname)
-            for ir in range(self.symm_orb.__len__()):
-                logger.info(self, 'num. orbitals of irrep %s = %d',
-                            self.irrep_name[ir], self.symm_orb[ir].shape[1])
-        logger.info(self, 'number of shells = %d', self.nbas)
-        logger.info(self, 'number of NR pGTOs = %d', self.npgto_nr())
-        logger.info(self, 'number of NR cGTOs = %d', self.nao_nr())
+        if self.verbose >= logger.INFO:
+            logger.info(self, 'nuclear repulsion = %.15g', self.energy_nuc())
+            if self.symmetry:
+                if self.topgroup == self.groupname:
+                    logger.info(self, 'point group symmetry = %s', self.topgroup)
+                else:
+                    logger.info(self, 'point group symmetry = %s, use subgroup %s',
+                                self.topgroup, self.groupname)
+                for ir in range(self.symm_orb.__len__()):
+                    logger.info(self, 'num. orbitals of irrep %s = %d',
+                                self.irrep_name[ir], self.symm_orb[ir].shape[1])
+            logger.info(self, 'number of shells = %d', self.nbas)
+            logger.info(self, 'number of NR pGTOs = %d', self.npgto_nr())
+            logger.info(self, 'number of NR cGTOs = %d', self.nao_nr())
         if self.verbose >= logger.DEBUG1:
             for i in range(len(self._bas)):
                 exps = self.bas_exp(i)

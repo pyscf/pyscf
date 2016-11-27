@@ -197,10 +197,10 @@ class KnowValues(unittest.TestCase):
         cell.build()
 
         ew_cut = (20,20,20)
-        self.assertAlmostEqual(cell.ewald(.05, ew_cut), -0.468640671931, 9)
-        self.assertAlmostEqual(cell.ewald(0.1, ew_cut), -0.468640671931, 9)
-        self.assertAlmostEqual(cell.ewald(0.2, ew_cut), -0.468640671931, 9)
-        self.assertAlmostEqual(cell.ewald(1  , ew_cut), -0.468640671931, 9)
+        self.assertAlmostEqual(cell.ewald(.05, 100), -0.468640671931, 9)
+        self.assertAlmostEqual(cell.ewald(0.1, 100), -0.468640671931, 9)
+        self.assertAlmostEqual(cell.ewald(0.2, 100), -0.468640671931, 9)
+        self.assertAlmostEqual(cell.ewald(1  , 100), -0.468640671931, 9)
 
         def check(precision, eta_ref, ewald_ref):
             ew_eta0, ew_cut0 = cell.get_ewald_params(precision)
@@ -210,6 +210,57 @@ class KnowValues(unittest.TestCase):
         check(1e-05, 3.70353981157, -0.468642153932)
         check(1e-07, 3.1300624293 , -0.468640678042)
         check(1e-09, 2.76045559201, -0.468640671959)
+
+        cell = pgto.Cell()
+        numpy.random.seed(10)
+        cell.a = numpy.random.random((3,3))*2 + numpy.eye(3) * 2
+        cell.gs = [20]*3
+        cell.atom = [['He', (1, 1, 2)],
+                     ['He', (3, 2, 1)]]
+        cell.basis = {'He': [[0, (1.0, 1.0)]]}
+        cell.verbose = 5
+        cell.output = '/dev/null'
+        cell.build()
+
+        self.assertAlmostEqual(cell.ewald(1, 20), -2.3711356723457615, 9)
+        self.assertAlmostEqual(cell.ewald(2, 10), -2.3711356723457615, 9)
+        self.assertAlmostEqual(cell.ewald(2,  5), -2.3711356723457615, 9)
+
+    def test_ewald_2d(self):
+        cell = pgto.Cell()
+        cell.a = numpy.eye(3)
+        cell.a[2] = numpy.array((0, 0, 30))
+        cell.atom = 'He 0 0 0; He 0 1 1'
+        cell.unit = 'B'
+        cell.gs = [4,4,30]
+        cell.verbose = 0
+        cell.dimension = 2
+        cell.build()
+        self.assertAlmostEqual(cell.ewald(), 108562.40304068067, 9)
+
+    def test_ewald_1d(self):
+        cell = pgto.Cell()
+        cell.a = numpy.eye(3) * 30
+        cell.a[0] = [2, 0, 0]
+        cell.atom = 'He 0 0 0; He 0 1 1'
+        cell.unit = 'B'
+        cell.gs = [4,30,30]
+        cell.verbose = 0
+        cell.dimension = 1
+        cell.build()
+        self.assertAlmostEqual(cell.ewald(), 76.38864532277384, 2)
+
+    def test_ewald_0d(self):
+        cell = pgto.Cell()
+        cell.a = numpy.eye(3) * 30
+        cell.atom = 'He 0 0 0; He 0 1 1'
+        cell.unit = 'B'
+        cell.gs = [30] * 3
+        cell.verbose = 0
+        cell.dimension = 0
+        cell.build()
+        eref = cell.to_mol().energy_nuc()
+        self.assertAlmostEqual(cell.ewald(), eref, 2)
 
     def test_pbc_intor(self):
         numpy.random.seed(12)

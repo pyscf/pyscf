@@ -154,7 +154,7 @@ def get_nuc_less_accurate(mydf, kpts=None):
     j2c = pgto.intor_cross('cint2c2e_sph', fused_cell, _fake_nuc(cell))
     jaux = j2c.dot(charge)
     jaux -= charge.sum() * mydf.auxbar(fused_cell)
-    Gv, Gvbase, kws = mydf.gen_kgrids_weights(mydf.gs)
+    Gv, Gvbase, kws = cell.get_Gv_weights(mydf.gs)
 # The normal nuclues have been considered in function get_gth_vlocG_part1
 # The result vG is the potential in G-space for erf part of the pp nuclues and
 # "numpy.dot(charge, SI) * coulG" for normal nuclues.
@@ -233,7 +233,7 @@ def get_nuc(mydf, kpts=None):
     jaux = j2c.dot(charge)
 
     kpt_allow = numpy.zeros(3)
-    Gv, Gvbase, kws = mydf.gen_kgrids_weights(mydf.gs)
+    Gv, Gvbase, kws = cell.get_Gv_weights(mydf.gs)
     coulG = tools.get_coulG(cell, kpt_allow, gs=mydf.gs)
     coulG *= kws
     aoaux = ft_ao.ft_ao(nuccell, Gv)

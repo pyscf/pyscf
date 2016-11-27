@@ -13,6 +13,7 @@ import scipy.linalg
 import scipy.optimize
 import pyscf.lib.parameters as param
 from pyscf import lib
+from pyscf import dft
 from pyscf.lib import logger
 from pyscf.gto import mole
 from pyscf.gto import moleintor
@@ -328,9 +329,7 @@ def get_nimgs(cell, precision=None):
     rcut = max([cell.bas_rcut(ib, precision) for ib in range(cell.nbas)])
 
     # nimgs determines the supercell size
-    b = cell.reciprocal_vectors(norm_to=1)
-    heights_inv = lib.norm(b, axis=1)
-    nimgs = np.ceil(rcut*heights_inv).astype(int)
+    nimgs = cell.get_bounding_sphere(rcut)
     return nimgs
 
 def _estimate_rcut(alpha, l, cc, r0, precision=1e-8):
@@ -375,8 +374,7 @@ def get_ewald_params(cell, precision=1e-8, gs=None):
     log_precision = np.log(precision)
     ew_eta = float(np.sqrt(-Gmax**2/(4*log_precision)))
 
-    rcut = np.sqrt(-log_precision)/ew_eta
-    ew_cut = cell.get_bounding_sphere(rcut)
+    ew_cut = np.sqrt(-log_precision)/ew_eta
     return ew_eta, ew_cut
 
 def get_bounding_sphere(cell, rcut):
@@ -398,9 +396,8 @@ def get_bounding_sphere(cell, rcut):
     #n3 = np.ceil(lib.norm(Gmat[2,:])*rcut)
     #cut = np.array([n1, n2, n3]).astype(int)
     b = cell.reciprocal_vectors(norm_to=1)
-    heights_inv = lib.norm(b, axis=0)
-    cut = np.ceil(rcut*heights_inv).astype(int)
-    return cut
+    heights_inv = lib.norm(b, axis=1)
+    return np.ceil(rcut*heights_inv).astype(int)
 
 def get_Gv(cell, gs=None):
     '''Calculate three-dimensional G-vectors for the cell; see MH (3.8).
@@ -425,6 +422,57 @@ def get_Gv(cell, gs=None):
     b = cell.reciprocal_vectors()
     Gv = np.dot(gxyz, b)
     return Gv
+
+def get_Gv_weights(cell, gs=None):
+    '''Calculate G-vectors and weights.
+
+    Returns:
+        Gv : (ngs, 3) ndarray of floats
+            The array of G-vectors.
+    '''
+    if gs is None:
+        gs = cell.gs
+    def plus_minus(n):
+        #rs, ws = dft.delley(n)
+        #rs, ws = dft.treutler_ahlrichs(n)
+        #rs, ws = dft.mura_knowles(n)
+        rs, ws = dft.gauss_chebyshev(n)
+        return np.hstack((rs,-rs[::-1])), np.hstack((ws,ws[::-1]))
+
+    # Default, the 3D uniform grids
+    b = cell.reciprocal_vectors()
+    rx = np.append(np.arange(gs[0]+1.), np.arange(-gs[0],0.))
+    ry = np.append(np.arange(gs[1]+1.), np.arange(-gs[1],0.))
+    rz = np.append(np.arange(gs[2]+1.), np.arange(-gs[2],0.))
+    weights = np.linalg.det(b)
+
+    ngs = [i*2+1 for i in gs]
+    if cell.dimension == 0:
+        rx, wx = plus_minus(gs[0])
+        ry, wy = plus_minus(gs[1])
+        rz, wz = plus_minus(gs[2])
+        rx /= np.linalg.norm(b[0])
+        ry /= np.linalg.norm(b[1])
+        rz /= np.linalg.norm(b[2])
+        weights = np.einsum('i,j,k->ijk', wx, wy, wz).reshape(-1)
+    elif cell.dimension == 1:
+        wx = np.repeat(np.linalg.norm(b[0]), ngs[0])
+        ry, wy = plus_minus(gs[1])
+        rz, wz = plus_minus(gs[2])
+        ry /= np.linalg.norm(b[1])
+        rz /= np.linalg.norm(b[2])
+        weights = np.einsum('i,j,k->ijk', wx, wy, wz).reshape(-1)
+    elif cell.dimension == 2:
+        area = np.linalg.norm(np.cross(b[0], b[1]))
+        wxy = np.repeat(area, ngs[0]*ngs[1])
+        rz, wz = plus_minus(gs[2])
+        rz /= np.linalg.norm(b[2])
+        weights = np.einsum('i,k->ik', wxy, wz).reshape(-1)
+    Gvbase = (rx, ry, rz)
+    Gv = np.dot(lib.cartesian_prod(Gvbase), b)
+    # 1/cell.vol == det(b)/(2pi)^3
+    weights *= 1/(2*np.pi)**3
+    return Gv, Gvbase, weights
 
 def get_SI(cell, Gv=None):
     '''Calculate the structure factor for all atoms; see MH (3.34).
@@ -462,52 +510,26 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     chargs = cell.atom_charges()
     coords = cell.atom_coords()
 
+    Lall = cell.get_lattice_Ls(rcut=ew_cut)
     ewovrl = 0.
-
-    # set up real-space lattice indices [-ewcut ... ewcut]
-    ewxrange = np.arange(-ew_cut[0],ew_cut[0]+1)
-    ewyrange = np.arange(-ew_cut[1],ew_cut[1]+1)
-    ewzrange = np.arange(-ew_cut[2],ew_cut[2]+1)
-    ewxyz = lib.cartesian_prod((ewxrange,ewyrange,ewzrange))
-
-    nx = len(ewxrange)
-    ny = len(ewyrange)
-    nz = len(ewzrange)
-    a = cell.lattice_vectors()
-    Lall = np.dot(ewxyz, a).reshape(nx,ny,nz,3)
-    #exclude the point where Lall == 0
-    Lall[ew_cut[0],ew_cut[1],ew_cut[2]] = 1e200
-    Lall = Lall.reshape(nx*ny*nz,3)
-
-    for ia in range(cell.natm):
-        qi = chargs[ia]
-        ri = coords[ia]
-        for ja in range(ia):
-            qj = chargs[ja]
-            rj = coords[ja]
-            r = np.linalg.norm(ri-rj)
-            ewovrl += 2 * qi * qj / r * scipy.special.erfc(ew_eta * r)
-
-    for ia in range(cell.natm):
-        qi = chargs[ia]
-        ri = coords[ia]
-        for ja in range(cell.natm):
-            qj = chargs[ja]
-            rj = coords[ja]
+    for i, qi in enumerate(chargs):
+        ri = coords[i]
+        for j in range(i):
+            qj = chargs[j]
+            rj = coords[j]
             r1 = ri-rj + Lall
             r = np.sqrt(np.einsum('ji,ji->j', r1, r1))
             ewovrl += (qi * qj / r * scipy.special.erfc(ew_eta * r)).sum()
-
-    ewovrl *= 0.5
+    # exclude the point where Lall == 0
+    r = lib.norm(Lall, axis=1)
+    r[r<1e-16] = 1e200
+    ewovrl += .5 * (chargs**2).sum() * (1./r * scipy.special.erfc(ew_eta * r)).sum()
 
     # last line of Eq. (F.5) in Martin
-    ewself  = -1./2. * np.dot(chargs,chargs) * 2 * ew_eta / np.sqrt(np.pi)
-    ewself += -1./2. * np.sum(chargs)**2 * np.pi/(ew_eta**2 * cell.vol)
+    ewself  = -.5 * np.dot(chargs,chargs) * 2 * ew_eta / np.sqrt(np.pi)
+    ewself += -.5 * np.sum(chargs)**2 * np.pi/(ew_eta**2 * cell.vol)
 
     # g-space sum (using g grid) (Eq. (F.6) in Martin, but note errors as below)
-    SI = cell.get_SI()
-    ZSI = np.einsum("i,ij->j", chargs, SI)
-
     # Eq. (F.6) in Martin is off by a factor of 2, the
     # exponent is wrong (8->4) and the square is in the wrong place
     #
@@ -518,17 +540,19 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     # See also Eq. (32) of ewald.pdf at
     #   http://www.fisica.uniud.it/~giannozz/public/ewald.pdf
 
-    coulG = pbctools.get_coulG(cell)
-    absG2 = np.einsum('gi,gi->g', cell.Gv, cell.Gv)
+    gs = cell.gs
+    Gv, Gvbase, weights = cell.get_Gv_weights(gs)
+    absG2 = np.einsum('gi,gi->g', Gv, Gv)
+    absG2[absG2<1e-8] = 1e200
+    coulG = 4*np.pi / absG2
+    coulG *= weights
+    JexpG2 = np.exp(-absG2/(4*ew_eta**2)) * coulG
 
+    ZSI = np.einsum("i,ij->j", chargs, cell.get_SI(Gv))
     ZSIG2 = np.abs(ZSI)**2
-    expG2 = np.exp(-absG2/(4*ew_eta**2))
-    JexpG2 = coulG*expG2
-    ewgI = np.dot(ZSIG2,JexpG2)
-    ewg = .5*np.sum(ewgI)
-    ewg /= cell.vol
+    ewg = .5 * np.dot(ZSIG2, JexpG2)
 
-    #log.debug('Ewald components = %.15g, %.15g, %.15g', ewovrl, ewself, ewg)
+    logger.debug(cell, 'Ewald components = %.15g, %.15g, %.15g', ewovrl, ewself, ewg)
     return ewovrl + ewself + ewg
 
 energy_nuc = ewald
@@ -569,6 +593,8 @@ class Cell(mole.Mole):
             To control Ewald sums and lattice sums accuracy
         ke_cutoff : float
             If set, defines a spherical cutoff of fourier components, with .5 * G**2 < ke_cutoff
+        dimension : int
+            Default is 3
 
         ** Following attributes (for experts) are automatically generated. **
 
@@ -593,7 +619,7 @@ class Cell(mole.Mole):
                               # of fourier components, with .5 * G**2 < ke_cutoff
         self.precision = 1.e-8
         self.pseudo = None
-        self.dimension = None
+        self.dimension = 3
 
 ##################################################
 # These attributes are initialized by build function if not given
@@ -681,14 +707,15 @@ class Cell(mole.Mole):
             logger.info(self, '                 a3 [%.9f, %.9f, %.9f]', *_a[2])
             logger.info(self, 'dimension = %s', self.dimension)
             logger.info(self, 'Cell volume = %g', self.vol)
-            logger.info(self, 'rcut = %s', self.rcut)
+            logger.info(self, 'rcut = %s (nimgs = %s)', self.rcut, self.nimgs)
             logger.info(self, 'lattice sum = %d cells', len(self.get_lattice_Ls()))
             logger.info(self, 'precision = %g', self.precision)
             logger.info(self, 'gs (FFT-mesh) = %s', self.gs)
             logger.info(self, 'pseudo = %s', self.pseudo)
             logger.info(self, 'ke_cutoff = %s', self.ke_cutoff)
             logger.info(self, 'ew_eta = %g', self.ew_eta)
-            logger.info(self, 'ew_cut = %s', self.ew_cut)
+            logger.info(self, 'ew_cut = %s (nimgs = %s)', self.ew_cut,
+                        self.get_bounding_sphere(self.ew_cut))
         return self
     kernel = build
 
@@ -727,9 +754,7 @@ class Cell(mole.Mole):
 
     @property
     def nimgs(self):
-        b = self.reciprocal_vectors(norm_to=1)
-        heights_inv = lib.norm(b, axis=1)
-        return np.ceil(self.rcut*heights_inv).astype(int)
+        return self.get_bounding_sphere(self.rcut)
     @nimgs.setter
     def nimgs(self, x):
         b = self.reciprocal_vectors(norm_to=1)
@@ -843,6 +868,7 @@ class Cell(mole.Mole):
     get_bounding_sphere = get_bounding_sphere
 
     get_Gv = get_Gv
+    get_Gv_weights = get_Gv_weights
 
     get_SI = get_SI
 

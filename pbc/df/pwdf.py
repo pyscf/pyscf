@@ -10,7 +10,6 @@ import numpy
 import copy
 from pyscf import lib
 from pyscf import gto
-from pyscf import dft
 from pyscf.lib import logger
 from pyscf.pbc import tools
 from pyscf.pbc.gto import pseudo
@@ -53,7 +52,7 @@ def get_pp_loc_part1(mydf, cell, kpts):
     nkpts = len(kpts)
 
     nao = cell.nao_nr()
-    Gv, Gvbase, kws = mydf.gen_kgrids_weights(mydf.gs)
+    Gv, Gvbase, kws = cell.get_Gv_weights(mydf.gs)
     vpplocG = pseudo.pp_int.get_gth_vlocG_part1(cell, Gv)
     vpplocG = -numpy.einsum('ij,ij->j', cell.get_SI(Gv), vpplocG)
     vpplocG *= kws
@@ -114,7 +113,7 @@ class PWDF(lib.StreamObject):
             kpti, kptj = kpti_kptj
 
         nao = cell.nao_nr()
-        Gv, Gvbase, kws = self.gen_kgrids_weights(gs)
+        Gv, Gvbase, kws = cell.get_Gv_weights(gs)
         b = cell.reciprocal_vectors()
         if cell.dimension == 0:
             gxyz = lib.cartesian_prod((numpy.arange(0, gs[0]*2),
@@ -179,7 +178,7 @@ class PWDF(lib.StreamObject):
 
         nao = cell.nao_nr()
         b = cell.reciprocal_vectors()
-        Gv, Gvbase, kws = self.gen_kgrids_weights(gs)
+        Gv, Gvbase, kws = cell.get_Gv_weights(gs)
         if cell.dimension == 0:
             gxyz = lib.cartesian_prod((numpy.arange(0, gs[0]*2),
                                        numpy.arange(0, gs[1]*2),
@@ -233,59 +232,10 @@ class PWDF(lib.StreamObject):
         cell = self.cell
         if gs is None:
             gs = self.gs
-        Gv, Gvbase, kws = self.gen_kgrids_weights(gs)
+        Gv, Gvbase, kws = cell.get_Gv_weights(gs)
         coulG = tools.get_coulG(cell, kpt, exx, self, mydf.gs, Gv)
         coulG *= kws
         return coulG
-
-    def gen_kgrids_weights(self, gs=None):
-        cell = self.cell
-        if gs is None:
-            gs = self.gs
-        def plus_minus(n):
-            #rs, ws = gen_grid.radi.delley(n)
-            #rs, ws = gen_grid.radi.treutler_ahlrichs(n)
-            #rs, ws = gen_grid.radi.mura_knowles(n)
-            rs, ws = gen_grid.radi.gauss_chebyshev(n)
-            return numpy.hstack((rs,-rs[::-1])), numpy.hstack((ws,ws[::-1]))
-
-        ngs = [i*2+1 for i in gs]
-        b = cell.lattice_vectors()
-        if cell.dimension == 0:
-            rx, wx = plus_minus(gs[0])
-            ry, wy = plus_minus(gs[1])
-            rz, wz = plus_minus(gs[2])
-            rx /= numpy.linalg.norm(b[0])
-            ry /= numpy.linalg.norm(b[1])
-            rz /= numpy.linalg.norm(b[2])
-            weights = numpy.einsum('i,j,k->ijk', wx, wy, wz).reshape(-1)
-        elif cell.dimension == 1:
-            rx = numpy.append(numpy.arange(gs[0]+1.), numpy.arange(-gs[0],0.))
-            wx = numpy.repeat(numpy.linalg.norm(b[0]), ngs[0])
-            ry, wy = plus_minus(gs[1])
-            rz, wz = plus_minus(gs[2])
-            ry /= numpy.linalg.norm(b[1])
-            rz /= numpy.linalg.norm(b[2])
-            weights = numpy.einsum('i,j,k->ijk', wx, wy, wz).reshape(-1)
-        elif cell.dimension == 2:
-            rx = numpy.append(numpy.arange(gs[0]+1.), numpy.arange(-gs[0],0.))
-            ry = numpy.append(numpy.arange(gs[1]+1.), numpy.arange(-gs[1],0.))
-            area = numpy.linalg.norm(numpy.cross(b[0], b[1]))
-            wxy = numpy.repeat(area, ngs[0]*ngs[1])
-            rz, wz = plus_minus(gs[2])
-            rz /= numpy.linalg.norm(b[2])
-            weights = numpy.einsum('i,k->ik', wxy, wz).reshape(-1)
-        else:
-            rx = numpy.append(numpy.arange(gs[0]+1.), numpy.arange(-gs[0],0.))
-            ry = numpy.append(numpy.arange(gs[1]+1.), numpy.arange(-gs[1],0.))
-            rz = numpy.append(numpy.arange(gs[2]+1.), numpy.arange(-gs[2],0.))
-            # 1/cell.vol == det(b)/(2pi)^3
-            w = numpy.linalg.det(b)
-            weights = numpy.repeat(w, ngs[0]*ngs[1]*ngs[2])
-        Gvbase = (rx, ry, rz)
-        Gv = numpy.dot(lib.cartesian_prod(Gvbase), b)
-        weights *= 1/(2*numpy.pi)**3
-        return Gv, Gvbase, weights
 
     get_pp = get_pp
     get_nuc = get_nuc

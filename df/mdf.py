@@ -68,12 +68,12 @@ def make_modrho_basis(mol, auxbasis=None):
 
 
 def non_uniform_kgrids(gs):
-    from pyscf.dft import gen_grid
+    from pyscf import dft
     def plus_minus(n):
-        #rs, ws = gen_grid.radi.delley(n)
-        #rs, ws = gen_grid.radi.treutler_ahlrichs(n)
-        #rs, ws = gen_grid.radi.mura_knowles(n)
-        rs, ws = gen_grid.radi.gauss_chebyshev(n)
+        #rs, ws = dft.delley(n)
+        #rs, ws = dft.treutler_ahlrichs(n)
+        #rs, ws = dft.mura_knowles(n)
+        rs, ws = dft.gauss_chebyshev(n)
         return numpy.hstack((rs,-rs[::-1])), numpy.hstack((ws,ws[::-1]))
     rx, wx = plus_minus(gs[0])
     ry, wy = plus_minus(gs[1])

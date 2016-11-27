@@ -503,7 +503,7 @@ def norm(x, ord=None, axis=None):
     if axis is None or ord is not None:
         return numpy.linalg.norm(x, ord)
     else:
-        x = asarray(x)
+        x = numpy.asarray(x)
         axes = string.ascii_lowercase[:x.ndim]
         target = axes.replace(axes[axis], '')
         descr = '%s,%s->%s' % (axes, axes, target)

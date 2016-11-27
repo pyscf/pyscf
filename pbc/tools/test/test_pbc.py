@@ -4,6 +4,7 @@ from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import tools
 from pyscf.pbc.scf import khf
 import pyscf.pbc.tools.pyscf_ase as pyscf_ase
+from pyscf import lib
 
 from ase.build import bulk
 
@@ -46,6 +47,31 @@ class KnowValues(unittest.TestCase):
         cell.build()
         coulG = tools.get_coulG(cell, kpt)
         self.assertAlmostEqual(finger(coulG), 62.75448804333378, 9)
+
+        cell.a = numpy.eye(3)
+        cell.unit = 'B'
+        coulG = tools.get_coulG(cell, numpy.array([0, numpy.pi, 0]))
+        self.assertAlmostEqual(finger(coulG), 4.6737453679713905, 9)
+        coulG = tools.get_coulG(cell, numpy.array([0, numpy.pi, 0]),
+                                wrap_around=False)
+        self.assertAlmostEqual(finger(coulG), 4.5757877990664744, 9)
+        coulG = tools.get_coulG(cell, exx='ewald')
+        self.assertAlmostEqual(finger(coulG), 4.888843468914021, 9)
+
+    #def test_coulG_2d(self):
+    #    cell = pbcgto.Cell()
+    #    cell.a = numpy.eye(3)
+    #    cell.a[2] = numpy.array((0, 0, 20))
+    #    cell.atom = 'He 0 0 0'
+    #    cell.unit = 'B'
+    #    cell.gs = [4,4,20]
+    #    cell.verbose = 5
+    #    cell.dimension = 2
+    #    cell.output = '/dev/null'
+    #    cell.build()
+    #    coulG = tools.get_coulG(cell)
+    #    self.assertAlmostEqual(finger(coulG), -4.7118365257800496, 9)
+
 
     def test_get_lattice_Ls(self):
         numpy.random.seed(2)

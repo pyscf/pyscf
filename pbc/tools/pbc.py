@@ -1,6 +1,5 @@
 import sys
-from multiprocessing import sharedctypes, Process
-import threading
+import copy
 import numpy as np
 import scipy.linalg
 from pyscf import lib
@@ -90,13 +89,14 @@ def ifftk(g, gs, expikr):
     return ifft(g, gs) * expikr
 
 
-def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None):
+def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None,
+              wrap_around=True):
     '''Calculate the Coulomb kernel for all G-vectors, handling G=0 and exchange.
 
     Args:
         k : (3,) ndarray
             k-point
-        exx : bool
+        exx : bool or str
             Whether this is an exchange matrix element.
         mf : instance of :class:`SCF`
 
@@ -105,24 +105,44 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None):
             The Coulomb kernel.
 
     '''
+    exxdiv = exx
+    if isinstance(exx, str):
+        exxdiv = exx
+    elif exx and mf is not None:
+# sys.stderr.write('pass exxdiv directly')
+        exxdiv = mf.exxdiv
+
     if gs is None:
         gs = cell.gs
     if Gv is None:
         Gv = cell.get_Gv(gs)
 
     kG = k + Gv
-    # Here we 'wrap around' the high frequency k+G vectors into their lower
-    # frequency counterparts.  Important if you want the gamma point and k-point
-    # answers to agree
-    b = cell.reciprocal_vectors()
-    box_edge = np.einsum('i,ij->ij', np.asarray(gs)+0.5, b)
-    reduced_coords = np.linalg.solve(box_edge.T, kG.T).T
-    equal2boundary = np.where( abs(abs(reduced_coords) - 1.) < 1e-14 )[0]
-    factor = np.trunc(reduced_coords)
-    kG -= 2.*np.dot(np.sign(factor), box_edge)
-    #kG[equal2boundary] = [0.0, 0.0, 0.0]
-    # coulG[equal2boundary] is zero'd at end.
-    # Done wrapping.
+    equal2boundary = np.zeros(Gv.shape[0], dtype=bool)
+    if wrap_around and abs(k).sum() > 1e-9:
+        # Here we 'wrap around' the high frequency k+G vectors into their lower
+        # frequency counterparts.  Important if you want the gamma point and k-point
+        # answers to agree
+        b = cell.reciprocal_vectors()
+        box_edge = np.einsum('i,ij->ij', np.asarray(gs)+0.5, b)
+        assert(all(np.linalg.solve(box_edge.T, k).round(9).astype(int)==0))
+        reduced_coords = np.linalg.solve(box_edge.T, kG.T).T.round(9)
+        on_edge = reduced_coords.astype(int)
+        if cell.dimension >= 1:
+            equal2boundary |= reduced_coords[:,0] == 1
+            equal2boundary |= reduced_coords[:,0] ==-1
+            kG[on_edge[:,0]== 1] -= 2 * box_edge[0]
+            kG[on_edge[:,0]==-1] += 2 * box_edge[0]
+        if cell.dimension >= 2:
+            equal2boundary |= reduced_coords[:,1] == 1
+            equal2boundary |= reduced_coords[:,1] ==-1
+            kG[on_edge[:,1]== 1] -= 2 * box_edge[1]
+            kG[on_edge[:,1]==-1] += 2 * box_edge[1]
+        if cell.dimension == 3:
+            equal2boundary |= reduced_coords[:,2] == 1
+            equal2boundary |= reduced_coords[:,2] ==-1
+            kG[on_edge[:,2]== 1] -= 2 * box_edge[2]
+            kG[on_edge[:,2]==-1] += 2 * box_edge[2]
 
     absG2 = np.einsum('gi,gi->g', kG, kG)
 
@@ -132,23 +152,23 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None):
         kpts = k.reshape(1,3)
     Nk = len(kpts)
 
-    if not exx or mf.exxdiv is None:
+    if not exxdiv:
         with np.errstate(divide='ignore'):
             coulG = 4*np.pi/absG2
-        if absG2[0] < 1e-16:
-            coulG[0] = 0.
-    elif mf.exxdiv == 'vcut_sph':  # PRB 77 193110
+        coulG[absG2<1e-8] = 0
+    elif exxdiv == 'vcut_sph':  # PRB 77 193110
         Rc = (3*Nk*cell.vol/(4*np.pi))**(1./3)
         with np.errstate(divide='ignore',invalid='ignore'):
             coulG = 4*np.pi/absG2*(1.0 - np.cos(np.sqrt(absG2)*Rc))
-        if absG2[0] < 1e-16:
-            coulG[0] = 4*np.pi*0.5*Rc**2
-    elif mf.exxdiv == 'ewald':
+        coulG[absG2<1e-8] = 4*np.pi*0.5*Rc**2
+    elif exxdiv == 'ewald':
         with np.errstate(divide='ignore'):
             coulG = 4*np.pi/absG2
-        if absG2[0] < 1e-16:
-            coulG[0] = Nk*cell.vol*madelung(cell, kpts)
-    elif mf.exxdiv == 'vcut_ws':
+        G0_idx = np.where(absG2 < 1e-8)[0]
+        if len(G0_idx) > 0:
+            coulG[G0_idx] = Nk*cell.vol*madelung(cell, kpts)
+    elif exxdiv == 'vcut_ws':
+        assert(cell.dimension == 3)
         if not hasattr(mf, '_ws_exx'):
             mf._ws_exx = precompute_exx(cell, kpts)
         exx_alpha = mf._ws_exx['alpha']
@@ -158,8 +178,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None):
 
         with np.errstate(divide='ignore',invalid='ignore'):
             coulG = 4*np.pi/absG2*(1.0 - np.exp(-absG2/(4*exx_alpha**2)))
-        if absG2[0] < 1e-16:
-            coulG[0] = np.pi / exx_alpha**2
+        coulG[absG2<1e-8] = np.pi / exx_alpha**2
         # Index k+Gv into the precomputed vq and add on
         gxyz = np.dot(kG, exx_kcell.lattice_vectors().T)/(2*np.pi)
         gxyz = gxyz.round(decimals=6).astype(int)
@@ -171,8 +190,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None):
         is_lt_maxqv = (abs(kG) <= maxqv).all(axis=1)
         coulG[is_lt_maxqv] += exx_vq[qidx[is_lt_maxqv]]
 
-    #coulG[ coulG == np.inf ] = 0.0
-    coulG[equal2boundary] = 0.0
+    coulG[equal2boundary] = 0
 
     return coulG
 
@@ -228,19 +246,15 @@ def precompute_exx(cell, kpts):
 
 
 def madelung(cell, kpts):
-    from pyscf.pbc import gto as pbcgto
-    from pyscf.pbc.scf.hf import ewald
-
     Nk = get_monkhorst_pack_size(cell, kpts)
-    ecell = pbcgto.Cell()
-    ecell.atom = 'H 0. 0. 0.'
-    ecell.spin = 1
-    ecell.gs = cell.gs
-    ecell.precision = 1e-16
+    ecell = copy.copy(cell)
+    ecell._atm = np.array([[1, 0, 0, 0, 0, 0]])
+    ecell._env = np.array([0., 0., 0.])
     ecell.unit = 'B'
+    ecell.verbose = 0
     ecell.a = cell.lattice_vectors() * Nk
-    ecell.build(False,False)
-    return -2*ewald(ecell, ecell.ew_eta, ecell.ew_cut)
+    ew_eta, ew_cut = cell.get_ewald_params(cell.precision, cell.gs)
+    return -2*ecell.ewald(ew_eta, ew_cut)
 
 
 def get_monkhorst_pack_size(cell, kpts):
