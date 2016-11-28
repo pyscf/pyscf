@@ -234,7 +234,7 @@ def get_nuc(mydf, kpts=None):
 
     kpt_allow = numpy.zeros(3)
     Gv, Gvbase, kws = cell.get_Gv_weights(mydf.gs)
-    coulG = tools.get_coulG(cell, kpt_allow, gs=mydf.gs)
+    coulG = tools.get_coulG(cell, kpt_allow, gs=mydf.gs, Gv=Gv)
     coulG *= kws
     aoaux = ft_ao.ft_ao(nuccell, Gv)
     vGR = numpy.einsum('i,xi->x', charge, aoaux.real) * coulG
@@ -757,11 +757,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
     nao = cell.nao_nr()
     naux = auxcell.nao_nr()
     gs = mydf.gs
-    gxyz = lib.cartesian_prod((numpy.append(range(gs[0]+1), range(-gs[0],0)),
-                               numpy.append(range(gs[1]+1), range(-gs[1],0)),
-                               numpy.append(range(gs[2]+1), range(-gs[2],0))))
+    Gv, Gvbase, kws = cell.get_Gv_weights(gs)
     b = cell.reciprocal_vectors()
-    Gv = numpy.dot(gxyz, b)
+    gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
     ngs = gxyz.shape[0]
 
     kptis = kptij_lst[:,0]
@@ -773,7 +771,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
     kLRs = []
     kLIs = []
     for k, kpt in enumerate(uniq_kpts):
-        aoaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, gs, kpt).T
+        aoaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
         aoaux = fuse(aoaux)
         coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, gs))
         kLR = (aoaux.real * coulG).T
@@ -838,7 +836,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
             Gblksize = max(16, int(max_memory*.2*1e6/16/buflen/(nkptj+1)))
         else:
             Gblksize = max(16, int(max_memory*.4*1e6/16/buflen/(nkptj+1)))
-        Gblksize = min(Gblksize, ngs)
+        Gblksize = min(Gblksize, ngs, 16384)
         pqkRbuf = numpy.empty(buflen*Gblksize)
         pqkIbuf = numpy.empty(buflen*Gblksize)
         # buf for ft_aopair
@@ -877,8 +875,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
             if aosym == 's2':
                 shls_slice = (bstart, bend, 0, bend)
                 for p0, p1 in lib.prange(0, ngs, Gblksize):
-                    ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym, b,
-                                          gxyz[p0:p1], gs, kpt, adapted_kptjs, out=buf)
+                    ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                          b, gxyz[p0:p1], Gvbase, kpt,
+                                          adapted_kptjs, out=buf)
                     nG = p1 - p0
                     for k, ji in enumerate(adapted_ji_idx):
                         aoao = numpy.ndarray((nG,ncol), dtype=numpy.complex128,
@@ -897,8 +896,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
                 shls_slice = (bstart, bend, 0, cell.nbas)
                 ni = ncol // nao
                 for p0, p1 in lib.prange(0, ngs, Gblksize):
-                    ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym, b,
-                                          gxyz[p0:p1], gs, kpt, adapted_kptjs, out=buf)
+                    ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                          b, gxyz[p0:p1], Gvbase, kpt,
+                                          adapted_kptjs, out=buf)
                     nG = p1 - p0
                     for k, ji in enumerate(adapted_ji_idx):
                         aoao = numpy.ndarray((nG,ni,nao), dtype=numpy.complex128,

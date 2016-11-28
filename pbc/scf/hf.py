@@ -16,8 +16,7 @@ import sys
 import time
 import numpy as np
 import h5py
-import pyscf.gto
-import pyscf.scf.hf
+from pyscf.scf import hf
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf.hf import make_rdm1
@@ -227,11 +226,11 @@ def dot_eri_dm(eri, dm, hermi=0):
             vj = lib.asarray([v[0] for v in vjk]).reshape(dm.shape)
             vk = lib.asarray([v[1] for v in vjk]).reshape(dm.shape)
     else:
-        vj, vk = pyscf.scf.hf.dot_eri_dm(eri, dm, hermi)
+        vj, vk = hf.dot_eri_dm(eri, dm, hermi)
     return vj, vk
 
 
-class RHF(pyscf.scf.hf.RHF):
+class RHF(hf.RHF):
     '''RHF class adapted for PBCs.
 
     Attributes:
@@ -254,7 +253,7 @@ class RHF(pyscf.scf.hf.RHF):
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()
         self.cell = cell
-        pyscf.scf.hf.RHF.__init__(self, cell)
+        hf.RHF.__init__(self, cell)
 
         self.with_df = df.DF(cell)
         self.exxdiv = exxdiv
@@ -271,7 +270,7 @@ class RHF(pyscf.scf.hf.RHF):
         self.with_df.kpts = np.reshape(x, (-1,3))
 
     def dump_flags(self):
-        pyscf.scf.hf.RHF.dump_flags(self)
+        hf.RHF.dump_flags(self)
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'kpt = %s', self.kpt)
         logger.info(self, 'DF object = %s', self.with_df)
@@ -388,7 +387,7 @@ class RHF(pyscf.scf.hf.RHF):
         return self.init_guess_by_chkfile(chk, project, kpt)
 
     def dump_chk(self, envs):
-        pyscf.scf.hf.RHF.dump_chk(self, envs)
+        hf.RHF.dump_chk(self, envs)
         if self.chkfile:
             with h5py.File(self.chkfile) as fh5:
                 fh5['scf/kpt'] = self.kpt

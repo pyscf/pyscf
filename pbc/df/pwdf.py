@@ -115,22 +115,7 @@ class PWDF(lib.StreamObject):
         nao = cell.nao_nr()
         Gv, Gvbase, kws = cell.get_Gv_weights(gs)
         b = cell.reciprocal_vectors()
-        if cell.dimension == 0:
-            gxyz = lib.cartesian_prod((numpy.arange(0, gs[0]*2),
-                                       numpy.arange(0, gs[1]*2),
-                                       numpy.arange(0, gs[2]*2)))
-        elif cell.dimension == 1:
-            gxyz = lib.cartesian_prod((numpy.arange(0, gs[0]*2+1),
-                                       numpy.arange(0, gs[1]*2),
-                                       numpy.arange(0, gs[2]*2)))
-        elif cell.dimension == 2:
-            gxyz = lib.cartesian_prod((numpy.arange(0, gs[0]*2+1),
-                                       numpy.arange(0, gs[1]*2+1),
-                                       numpy.arange(0, gs[2]*2)))
-        else:
-            gxyz = lib.cartesian_prod((numpy.arange(0, gs[0]*2+1),
-                                       numpy.arange(0, gs[1]*2+1),
-                                       numpy.arange(0, gs[2]*2+1)))
+        gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
         ngs = gxyz.shape[0]
 
 # Theoretically, hermitian symmetry can be also found for kpti == kptj:
@@ -151,7 +136,7 @@ class PWDF(lib.StreamObject):
             #aoao = ft_ao.ft_aopair(cell, Gv[p0:p1], shls_slice, aosym,
             #                       b, Gvbase, gxyz[p0:p1], gs, (kpti, kptj))
             aoao = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                         b, Gvbase, gxyz[p0:p1], gs, kptj-kpti,
+                                         b, gxyz[p0:p1], Gvbase, kptj-kpti,
                                          kptj.reshape(1,3), out=buf)[0]
             for i0, i1 in lib.prange(0, p1-p0, sublk):
                 nG = i1 - i0
@@ -179,22 +164,7 @@ class PWDF(lib.StreamObject):
         nao = cell.nao_nr()
         b = cell.reciprocal_vectors()
         Gv, Gvbase, kws = cell.get_Gv_weights(gs)
-        if cell.dimension == 0:
-            gxyz = lib.cartesian_prod((numpy.arange(0, gs[0]*2),
-                                       numpy.arange(0, gs[1]*2),
-                                       numpy.arange(0, gs[2]*2)))
-        elif cell.dimension == 1:
-            gxyz = lib.cartesian_prod((numpy.arange(0, gs[0]*2+1),
-                                       numpy.arange(0, gs[1]*2),
-                                       numpy.arange(0, gs[2]*2)))
-        elif cell.dimension == 2:
-            gxyz = lib.cartesian_prod((numpy.arange(0, gs[0]*2+1),
-                                       numpy.arange(0, gs[1]*2+1),
-                                       numpy.arange(0, gs[2]*2)))
-        else:
-            gxyz = lib.cartesian_prod((numpy.arange(0, gs[0]*2+1),
-                                       numpy.arange(0, gs[1]*2+1),
-                                       numpy.arange(0, gs[2]*2+1)))
+        gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
         ngs = gxyz.shape[0]
 
 # Theoretically, hermitian symmetry can be also found for kpti == kptj:
@@ -205,7 +175,8 @@ class PWDF(lib.StreamObject):
         else:
             aosym = 's1'
 
-        blksize = min(max(16, int(max_memory*.9e6/(nao**2*(nkpts+1)*16))), 16384)
+        blksize = max(16, int(max_memory*.9e6/(nao**2*(nkpts+1)*16)))
+        blksize = min(blksize, ngs, 16384)
         buf = [numpy.zeros(nao*nao*blksize, dtype=numpy.complex128)
                for k in range(nkpts)]
         pqkRbuf = numpy.empty(nao*nao*blksize)
@@ -213,7 +184,7 @@ class PWDF(lib.StreamObject):
 
         for p0, p1 in self.prange(0, ngs, blksize):
             ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                  b, Gvbase, gxyz[p0:p1], gs, kpt, kpts, out=buf)
+                                  b, gxyz[p0:p1], Gvbase, kpt, kpts, out=buf)
             nG = p1 - p0
             for k in range(nkpts):
                 aoao = numpy.ndarray((nG,nao,nao), dtype=numpy.complex128,
@@ -233,7 +204,7 @@ class PWDF(lib.StreamObject):
         if gs is None:
             gs = self.gs
         Gv, Gvbase, kws = cell.get_Gv_weights(gs)
-        coulG = tools.get_coulG(cell, kpt, exx, self, mydf.gs, Gv)
+        coulG = tools.get_coulG(cell, kpt, exx, self, gs, Gv)
         coulG *= kws
         return coulG
 

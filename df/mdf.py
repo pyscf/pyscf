@@ -162,8 +162,7 @@ class MDF(lib.StreamObject):
             gs = [gs]*3
         naux = auxmol.nao_nr()
         Gv, Gvbase, kws = non_uniform_kgrids(gs)
-        gxyz = lib.cartesian_prod([numpy.arange(0,i*2) for i in gs])
-        gs2 = numpy.asarray(gs) * 2
+        gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
         kk = numpy.einsum('ki,ki->k', Gv, Gv)
 #        idx = numpy.argsort(kk)[::-1]
 #        idx = idx[(kk[idx] < 300.) & (kk[idx] > 1e-4)]  # ~ Cut high energy plain waves
@@ -181,7 +180,7 @@ class MDF(lib.StreamObject):
             ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
             nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
         nij = ni * nj
-        blksize = min(max(16, int(max_memory*1e6*.7/16/nij)), 16384)
+        blksize = min(max(16, int(max_memory*1e6*.7/16/nij)), coulG.size, 16384)
         sublk = max(16,int(blksize//4))
         pqkRbuf = numpy.empty(nij*sublk)
         pqkIbuf = numpy.empty(nij*sublk)
@@ -190,9 +189,9 @@ class MDF(lib.StreamObject):
 
         for p0, p1 in lib.prange(0, coulG.size, blksize):
             aoao = ft_ao.ft_aopair(mol, Gv[p0:p1], shls_slice, 's1',
-                                   numpy.eye(3), Gvbase, gxyz[p0:p1], gs2)
+                                   numpy.eye(3), gxyz[p0:p1], Gvbase)
             aoaux = ft_ao.ft_ao(auxmol, Gv[p0:p1], None,
-                                numpy.eye(3), Gvbase, gxyz[p0:p1], gs2)
+                                numpy.eye(3), gxyz[p0:p1], Gvbase)
 
             for i0, i1 in lib.prange(0, p1-p0, sublk):
                 nG = i1 - i0
@@ -377,8 +376,7 @@ def _make_j3c(mydf, mol, auxmol):
         feri[label][:,col0:col1] = dat
 
     Gv, Gvbase, kws = non_uniform_kgrids(mydf.gs)
-    gxyz = lib.cartesian_prod([numpy.arange(0,i*2) for i in mydf.gs])
-    gs2 = numpy.asarray(mydf.gs) * 2
+    gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
     kk = numpy.einsum('ki,ki->k', Gv, Gv)
 #    idx = numpy.argsort(kk)[::-1]
 #    kk = kk[idx]
@@ -387,7 +385,7 @@ def _make_j3c(mydf, mol, auxmol):
 #    gxyz = gxyz[idx]
     coulG = .5/numpy.pi**2 * kws / kk
 
-    aoaux = ft_ao.ft_ao(auxmol, Gv, None, numpy.eye(3), Gvbase, gxyz, gs2)
+    aoaux = ft_ao.ft_ao(auxmol, Gv, None, numpy.eye(3), gxyz, Gvbase)
     kLR = numpy.asarray(aoaux.real, order='C')
     kLI = numpy.asarray(aoaux.imag, order='C')
     j2c = auxmol.intor('cint2c2e_sph', hermi=1).T  # .T to C-ordr
@@ -403,6 +401,7 @@ def _make_j3c(mydf, mol, auxmol):
     shranges = outcore._guess_shell_ranges(mol, buflen, 's2ij')
     buflen = max([x[2] for x in shranges])
     blksize = max(16, int(max_memory*.15*1e6/16/buflen))
+    blksize = min(blksize, Gv.shape[0], 16384)
     pqkbuf = numpy.empty(buflen*blksize)
     bufs1 = numpy.empty((buflen*naux))
     # bufs2 holds either Lpq and ft_aopair
@@ -427,7 +426,7 @@ def _make_j3c(mydf, mol, auxmol):
 
         for p0, p1 in lib.prange(0, Gv.shape[0], blksize):
             aoao = ft_ao.ft_aopair(mol, Gv[p0:p1], shls_slice[:4], 's2',
-                                   numpy.eye(3), Gvbase, gxyz[p0:p1], gs2, buf=bufs2)
+                                   numpy.eye(3), gxyz[p0:p1], Gvbase, buf=bufs2)
             nG = p1 - p0
             pqkR = numpy.ndarray((ncol,nG), buffer=pqkbuf)
             pqkR[:] = aoao.real.T

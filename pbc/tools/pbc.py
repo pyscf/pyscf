@@ -155,16 +155,16 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None,
     if not exxdiv:
         with np.errstate(divide='ignore'):
             coulG = 4*np.pi/absG2
-        coulG[absG2<1e-8] = 0
+        coulG[absG2==0] = 0
     elif exxdiv == 'vcut_sph':  # PRB 77 193110
         Rc = (3*Nk*cell.vol/(4*np.pi))**(1./3)
         with np.errstate(divide='ignore',invalid='ignore'):
             coulG = 4*np.pi/absG2*(1.0 - np.cos(np.sqrt(absG2)*Rc))
-        coulG[absG2<1e-8] = 4*np.pi*0.5*Rc**2
+        coulG[absG2==0] = 4*np.pi*0.5*Rc**2
     elif exxdiv == 'ewald':
         with np.errstate(divide='ignore'):
             coulG = 4*np.pi/absG2
-        G0_idx = np.where(absG2 < 1e-8)[0]
+        G0_idx = np.where(absG2==0)[0]
         if len(G0_idx) > 0:
             coulG[G0_idx] = Nk*cell.vol*madelung(cell, kpts)
     elif exxdiv == 'vcut_ws':
@@ -178,7 +178,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None,
 
         with np.errstate(divide='ignore',invalid='ignore'):
             coulG = 4*np.pi/absG2*(1.0 - np.exp(-absG2/(4*exx_alpha**2)))
-        coulG[absG2<1e-8] = np.pi / exx_alpha**2
+        coulG[absG2==0] = np.pi / exx_alpha**2
         # Index k+Gv into the precomputed vq and add on
         gxyz = np.dot(kG, exx_kcell.lattice_vectors().T)/(2*np.pi)
         gxyz = gxyz.round(decimals=6).astype(int)
@@ -282,11 +282,11 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None):
     if dimension is None:
         dimension = cell.dimension
     if dimension == 0:
-        nimgs = [1, 1, 1]
+        nimgs = [0, 0, 0]
     elif dimension == 1:
-        nimgs = [nimgs[0], 1, 1]
+        nimgs = [nimgs[0], 0, 0]
     elif dimension == 2:
-        nimgs = [nimgs[0], nimgs[1], 1]
+        nimgs = [nimgs[0], nimgs[1], 0]
 
     Ts = lib.cartesian_prod((np.arange(-nimgs[0],nimgs[0]+1),
                              np.arange(-nimgs[1],nimgs[1]+1),

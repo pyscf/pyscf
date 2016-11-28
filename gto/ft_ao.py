@@ -20,15 +20,15 @@ from pyscf.gto.moleintor import libcgto
 # \int mu*nu*exp(-ik*r) dr
 #
 # gxyz is the index for Gvbase
-def ft_aopair(mol, Gv, shls_slice=None, aosym='s1', b=numpy.eye(3), Gvbase=None,
-              gxyz=None, gs=None, buf=None, verbose=None):
+def ft_aopair(mol, Gv, shls_slice=None, aosym='s1', b=numpy.eye(3),
+              gxyz=None, Gvbase=None, buf=None, verbose=None):
     ''' FT transform AO pair
     \int i(r) j(r) exp(-ikr) dr^3
     '''
     if shls_slice is None:
         shls_slice = (0, mol.nbas, 0, mol.nbas)
     nGv = Gv.shape[0]
-    if Gvbase is None or gxyz is None or gs is None:
+    if Gvbase is None or gxyz is None:
         GvT = numpy.asarray(Gv.T, order='C')
         p_gxyzT = lib.c_null_ptr()
         p_gs = (ctypes.c_int*3)(0,0,0)
@@ -40,7 +40,7 @@ def ft_aopair(mol, Gv, shls_slice=None, aosym='s1', b=numpy.eye(3), Gvbase=None,
         p_gxyzT = gxyzT.ctypes.data_as(ctypes.c_void_p)
         b = numpy.hstack((b.ravel(), numpy.zeros(3)) + Gvbase)
         p_b = b.ctypes.data_as(ctypes.c_void_p)
-        p_gs = (ctypes.c_int*3)(*gs)
+        p_gs = (ctypes.c_int*3)(*[len(x) for x in Gvbase])
         eval_gz = 'GTO_Gv_cubic'
 
     fn = libcgto.GTO_ft_ovlp_mat
@@ -77,14 +77,14 @@ def ft_aopair(mol, Gv, shls_slice=None, aosym='s1', b=numpy.eye(3), Gvbase=None,
 
 
 # gxyz is the index for Gvbase
-def ft_ao(mol, Gv, shls_slice=None, b=numpy.eye(3), Gvbase=None,
-          gxyz=None, gs=None, verbose=None):
+def ft_ao(mol, Gv, shls_slice=None, b=numpy.eye(3),
+          gxyz=None, Gvbase=None, verbose=None):
     ''' FT transform AO
     '''
     if shls_slice is None:
         shls_slice = (0, mol.nbas)
     nGv = Gv.shape[0]
-    if gxyz is None or b is None or gs is None:
+    if gxyz is None or b is None or Gvbase is None:
         GvT = numpy.asarray(Gv.T, order='C')
         p_gxyzT = lib.c_null_ptr()
         p_gs = (ctypes.c_int*3)(0,0,0)
@@ -98,7 +98,7 @@ def ft_ao(mol, Gv, shls_slice=None, b=numpy.eye(3), Gvbase=None,
         eval_gz = 'GTO_Gv_cubic'
         b = numpy.hstack((b.ravel(), numpy.zeros(3)) + Gvbase)
         p_b = b.ctypes.data_as(ctypes.c_void_p)
-        p_gs = (ctypes.c_int*3)(*gs)
+        p_gs = (ctypes.c_int*3)(*[len(x) for x in Gvbase])
 
     fn = libcgto.GTO_ft_ovlp_mat
     intor = getattr(libcgto, 'GTO_ft_ovlp_sph')

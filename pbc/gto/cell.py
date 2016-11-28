@@ -348,35 +348,6 @@ def bas_rcut(cell, bas_id, precision=1e-8):
     #rcut = _estimate_rcut(es, l, cs, rcut, precision)
     return rcut.max()
 
-def get_ewald_params(cell, precision=1e-8, gs=None):
-    r'''Choose a reasonable value of Ewald 'eta' and 'cut' parameters.
-
-    Choice is based on largest G vector and desired relative precision.
-
-    The relative error in the G-space sum is given by (keeping only
-    exponential factors)
-
-        precision ~ e^{(-Gmax^2)/(4 \eta^2)}
-
-    which determines eta. Then, real-space cutoff is determined by (exp.
-    factors only)
-
-        precision ~ erfc(eta*rcut) / rcut ~ e^{(-eta**2 rcut*2)}
-
-    Returns:
-        ew_eta, ew_cut : float
-            The Ewald 'eta' and 'cut' parameters.
-    '''
-    if gs is None:
-        gs = cell.gs
-
-    Gmax = min(np.asarray(cell.gs) * lib.norm(cell.reciprocal_vectors(), axis=1))
-    log_precision = np.log(precision)
-    ew_eta = float(np.sqrt(-Gmax**2/(4*log_precision)))
-
-    ew_cut = np.sqrt(-log_precision)/ew_eta
-    return ew_eta, ew_cut
-
 def get_bounding_sphere(cell, rcut):
     '''Finds all the lattice points within a sphere of radius rcut.  
 
@@ -493,6 +464,35 @@ def get_SI(cell, Gv=None):
     SI = np.exp(-1j*np.dot(coords, Gv.T))
     return SI
 
+def get_ewald_params(cell, precision=1e-8, gs=None):
+    r'''Choose a reasonable value of Ewald 'eta' and 'cut' parameters.
+
+    Choice is based on largest G vector and desired relative precision.
+
+    The relative error in the G-space sum is given by (keeping only
+    exponential factors)
+
+        precision ~ e^{(-Gmax^2)/(4 \eta^2)}
+
+    which determines eta. Then, real-space cutoff is determined by (exp.
+    factors only)
+
+        precision ~ erfc(eta*rcut) / rcut ~ e^{(-eta**2 rcut*2)}
+
+    Returns:
+        ew_eta, ew_cut : float
+            The Ewald 'eta' and 'cut' parameters.
+    '''
+    if gs is None:
+        gs = cell.gs
+
+    Gmax = min(np.asarray(cell.gs) * lib.norm(cell.reciprocal_vectors(), axis=1))
+    log_precision = np.log(precision)
+    ew_eta = float(np.sqrt(-Gmax**2/(4*log_precision)))
+
+    ew_cut = np.sqrt(-log_precision)/ew_eta
+    return ew_eta, ew_cut
+
 def ewald(cell, ew_eta=None, ew_cut=None):
     '''Perform real (R) and reciprocal (G) space Ewald sum for the energy.
 
@@ -527,7 +527,8 @@ def ewald(cell, ew_eta=None, ew_cut=None):
 
     # last line of Eq. (F.5) in Martin
     ewself  = -.5 * np.dot(chargs,chargs) * 2 * ew_eta / np.sqrt(np.pi)
-    ewself += -.5 * np.sum(chargs)**2 * np.pi/(ew_eta**2 * cell.vol)
+    if cell.dimension == 3:
+        ewself += -.5 * np.sum(chargs)**2 * np.pi/(ew_eta**2 * cell.vol)
 
     # g-space sum (using g grid) (Eq. (F.6) in Martin, but note errors as below)
     # Eq. (F.6) in Martin is off by a factor of 2, the
@@ -543,7 +544,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     gs = cell.gs
     Gv, Gvbase, weights = cell.get_Gv_weights(gs)
     absG2 = np.einsum('gi,gi->g', Gv, Gv)
-    absG2[absG2<1e-8] = 1e200
+    absG2[absG2==0] = 1e200
     coulG = 4*np.pi / absG2
     coulG *= weights
     JexpG2 = np.exp(-absG2/(4*ew_eta**2)) * coulG

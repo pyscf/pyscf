@@ -32,7 +32,7 @@ def get_eri(mydf, kpts=None, compact=True):
 ####################
 # gamma point, the integral is real and with s4 symmetry
     if abs(kptijkl).sum() < 1e-9:
-        coulG = tools.get_coulG(cell, kptj-kpti, gs=mydf.gs) / cell.vol
+        coulG = mydf.weighted_coulG(kptj-kpti, False, mydf.gs)
         eriR = numpy.zeros((nao_pair,nao_pair))
         max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
         trilidx = numpy.tril_indices(nao)
@@ -56,7 +56,7 @@ def get_eri(mydf, kpts=None, compact=True):
 #
 # complex integrals, N^4 elements
     elif (abs(kpti-kptl).sum() < 1e-9) and (abs(kptj-kptk).sum() < 1e-9):
-        coulG = tools.get_coulG(cell, kptj-kpti, gs=mydf.gs) / cell.vol
+        coulG = mydf.weighted_coulG(kptj-kpti, False, mydf.gs)
         eriR = numpy.zeros((nao**2,nao**2))
         eriI = numpy.zeros((nao**2,nao**2))
         max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
@@ -81,7 +81,7 @@ def get_eri(mydf, kpts=None, compact=True):
 # So  kptl/b - kptk/b  must be -1 < k/b < 1.  =>  kptl == kptk
 #
     else:
-        coulG = tools.get_coulG(cell, kptj-kpti, gs=mydf.gs) / cell.vol
+        coulG = mydf.weighted_coulG(kptj-kpti, False, mydf.gs)
         eriR = numpy.zeros((nao**2,nao**2))
         eriI = numpy.zeros((nao**2,nao**2))
         max_memory = (mydf.max_memory - lib.current_memory()[0]) * .4

@@ -20,21 +20,21 @@ libpbc = lib.load_library('libpbc')
 # \int mu*nu*exp(-ik*r) dr
 #
 def ft_aopair(cell, Gv, shls_slice=None, aosym='s1',
-              b=None, Gvbase=None, gxyz=None, gs=None,
+              b=None, gxyz=None, Gvbase=None,
               kpti_kptj=numpy.zeros((2,3)), verbose=None):
     ''' FT transform AO pair
     \int i(r) j(r) exp(-ikr) dr^3
     for given  kpt = kptj - kpti.
     '''
     kpti, kptj = kpti_kptj
-    val = _ft_aopair_kpts(cell, Gv, shls_slice, aosym, b, Gvbase, gxyz, gs,
+    val = _ft_aopair_kpts(cell, Gv, shls_slice, aosym, b, gxyz, Gvbase,
                           kptj-kpti, kptj.reshape(1,3))
     return val[0]
 
 # NOTE buffer out must be initialized to 0
 # gxyz is the index for Gvbase
 def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
-                    b=None, Gvbase=None, gxyz=None, gs=None,
+                    b=None, gxyz=None, Gvbase=None,
                     kpt=numpy.zeros(3), kptjs=numpy.zeros((2,3)), out=None):
     ''' FT transform AO pair
     \int i(r) j(r) exp(-ikr) dr^3
@@ -47,7 +47,7 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
     GvT = numpy.asarray(Gv.T, order='C')
     GvT += kpt.reshape(-1,1)
 
-    if (gxyz is None or b is None or Gvbase is None or gs is None or
+    if (gxyz is None or b is None or Gvbase is None or
         (abs(kpt).sum() > 1e-9)):
         p_gxyzT = lib.c_null_ptr()
         p_gs = (ctypes.c_int*3)(0,0,0)
@@ -58,7 +58,7 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
         p_gxyzT = gxyzT.ctypes.data_as(ctypes.c_void_p)
         b = numpy.hstack((b.ravel(), kpt) + Gvbase)
         p_b = b.ctypes.data_as(ctypes.c_void_p)
-        p_gs = (ctypes.c_int*3)(*gs)
+        p_gs = (ctypes.c_int*3)(*[len(x) for x in Gvbase])
         eval_gz = 'GTO_Gv_cubic'
 
     drv = libpbc.PBC_ft_latsum_kpts
@@ -123,13 +123,13 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
     return out
 
 
-def ft_ao(mol, Gv, shls_slice=None, b=None, Gvbase=None,
-          gxyz=None, gs=None, kpt=numpy.zeros(3), verbose=None):
+def ft_ao(mol, Gv, shls_slice=None, b=None,
+          gxyz=None, Gvbase=None, kpt=numpy.zeros(3), verbose=None):
     if abs(kpt).sum() < 1e-9:
-        return mol_ft_ao(mol, Gv, shls_slice, b, Gvbase, gxyz, gs, verbose)
+        return mol_ft_ao(mol, Gv, shls_slice, b, gxyz, Gvbase, verbose)
     else:
         kG = Gv + kpt
-        return mol_ft_ao(mol, kG, shls_slice, None, None, None, None, verbose)
+        return mol_ft_ao(mol, kG, shls_slice, None, None, None, verbose)
 
 if __name__ == '__main__':
     import pyscf.pbc.gto as pgto
