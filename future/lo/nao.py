@@ -13,7 +13,6 @@ import sys
 from functools import reduce
 import numpy
 import scipy.linalg
-import pyscf.lib.parameters
 from pyscf.gto import mole
 from pyscf.lo import orth
 from pyscf.lib import logger
@@ -212,9 +211,10 @@ def _nao_sub(mol, pre_occ, pre_nao, s=None):
     else:
         c = pre_nao[:,val_lst]
 
-    s1 = reduce(numpy.dot, (c.T, s, c))
-    wt = pre_occ[val_lst]
-    cnao[:,val_lst] = numpy.dot(c, orth.weight_orth(s1, wt))
+    if val_lst:
+        s1 = reduce(numpy.dot, (c.T, s, c))
+        wt = pre_occ[val_lst]
+        cnao[:,val_lst] = numpy.dot(c, orth.weight_orth(s1, wt))
 
     if rydbg_lst:
         cvlst = core_lst + val_lst
@@ -237,7 +237,7 @@ def _core_val_ryd_list(mol):
     k = 0
     for ib in range(mol.nbas):
         ia = mol.bas_atom(ib)
-        nuc = mol.atom_charge(ia)
+        nuc = mole._charge(mol.atom_symbol(ia))
         l = mol.bas_angular(ib)
         nc = mol.bas_nctr(ib)
         symb = mol.atom_symbol(ia)
