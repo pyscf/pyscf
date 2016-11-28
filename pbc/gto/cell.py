@@ -408,6 +408,7 @@ def get_Gv_weights(cell, gs=None):
         #rs, ws = dft.treutler_ahlrichs(n)
         #rs, ws = dft.mura_knowles(n)
         rs, ws = dft.gauss_chebyshev(n)
+        #return np.hstack((0,rs,-rs[::-1])), np.hstack((0,ws,ws[::-1]))
         return np.hstack((rs,-rs[::-1])), np.hstack((ws,ws[::-1]))
 
     # Default, the 3D uniform grids

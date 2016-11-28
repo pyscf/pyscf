@@ -404,19 +404,24 @@ class RHF(hf.RHF):
 
 def _ewald_exxdiv_for_G0(mf, dm, kpt, vk):
     cell = mf.cell
-    gs = (0,0,0)
-    Gv = np.zeros((1,3))
     ovlp = mf.get_ovlp(cell, kpt)
-    coulGk = tools.get_coulG(cell, kpt-kpt, True, mf, gs, Gv)[0]
+    #gs = (0,0,0)
+    #Gv = np.zeros((1,3))
+    #coulGk = tools.get_coulG(cell, kpt-kpt, True, mf, gs, Gv)[0]
+    #logger.debug(mf, 'Total energy shift = -1/2 * Nelec*madelung/cell.vol = %.12g',
+    #             coulGk/cell.vol*cell.nelectron * -.5)
+    madelung = tools.pbc.madelung(cell, np.zeros(3))
     logger.debug(mf, 'Total energy shift = -1/2 * Nelec*madelung/cell.vol = %.12g',
-                 coulGk/cell.vol*cell.nelectron * -.5)
+                 madelung*cell.nelectron * -.5)
     if isinstance(dm, np.ndarray) and dm.ndim == 2:
-        vk += coulGk/cell.vol * reduce(np.dot, (ovlp, dm, ovlp))
+        #vk += coulGk/cell.vol * reduce(np.dot, (ovlp, dm, ovlp))
+        vk += madelung * reduce(np.dot, (ovlp, dm, ovlp))
         nelec = np.einsum('ij,ij', ovlp, dm)
     else:
         nelec = 0
         for k, dmi in enumerate(dm):
-            vk[k] += coulGk/cell.vol * reduce(np.dot, (ovlp, dmi, ovlp))
+            #vk[k] += coulGk/cell.vol * reduce(np.dot, (ovlp, dmi, ovlp))
+            vk[k] += madelung * reduce(np.dot, (ovlp, dmi, ovlp))
             nelec += np.einsum('ij,ij', ovlp, dmi)
     #if abs(nelec - cell.nelectron) > .1 and abs(nelec) > .1:
     #    logger.debug(mf, 'Tr(dm,S) = %g', nelec)
