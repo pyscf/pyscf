@@ -274,10 +274,10 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None):
             rcut = cell.rcut
 # plus 1 image in rcut to handle the case atoms within the adjacent cells are
 # close to each other
-        rcut = rcut + max(1./heights_inv)
+        rcut = rcut + min(1./heights_inv)
         nimgs = np.ceil(rcut*heights_inv)
     else:
-        rcut = max((np.asarray(nimgs)+1)/heights_inv) # ~ the incircle radius
+        rcut = max((np.asarray(nimgs))/heights_inv) + min(1./heights_inv) # ~ the incircle radius
 
     if dimension is None:
         dimension = cell.dimension
