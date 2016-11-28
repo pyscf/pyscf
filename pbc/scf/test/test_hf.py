@@ -8,6 +8,7 @@ import numpy
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.scf import hf as pbchf
 import pyscf.pbc.scf as pscf
+from pyscf.pbc import df as pdf
 
 L = 4
 n = 10
@@ -117,11 +118,10 @@ class KnowValues(unittest.TestCase):
     def test_rhf_0d(self):
         from pyscf.df import mdf_jk
         from pyscf.scf import hf
-        from pyscf.pbc import df as pdf
         L = 4
         cell = pbcgto.Cell()
         cell.build(unit = 'B',
-                   a = numpy.eye(3)*L*9,
+                   a = numpy.eye(3)*L*5,
                    gs = [10]*3,
                    atom = '''He 2 2 2; He 2 2 3''',
                    dimension = 0,
@@ -139,11 +139,46 @@ class KnowValues(unittest.TestCase):
 
         mf = pbchf.RHF(cell)
         mf.with_df = pdf.PWDF(cell)
-        mf.exxdiv = None
         mf.get_hcore = lambda *args: hf.get_hcore(mol)
         mf.energy_nuc = lambda *args: mol.energy_nuc()
         e1 = mf.kernel()
         self.assertAlmostEqual(e1, eref, 8)
+
+    def test_rhf_1d(self):
+        L = 4
+        cell = pbcgto.Cell()
+        cell.build(unit = 'B',
+                   a = [[L,0,0],[0,L*5,0],[0,0,L*5]],
+                   gs = [5,10,10],
+                   atom = '''He 2 0 0; He 3 0 0''',
+                   dimension = 1,
+                   verbose = 0,
+                   basis = { 'He': [[0, (0.8, 1.0)],
+                                    #[0, (1.0, 1.0)],
+                                    [0, (1.2, 1.0)]
+                                   ]})
+        mf = pbchf.RHF(cell)
+        mf.with_df = pdf.PWDF(cell)
+        e1 = mf.kernel()
+        self.assertAlmostEqual(e1, -3.24122236427, 5)
+
+    def test_rhf_2d(self):
+        L = 4
+        cell = pbcgto.Cell()
+        cell.build(unit = 'B',
+                   a = [[L,0,0],[0,L,0],[0,0,L*5]],
+                   gs = [5,5,10],
+                   atom = '''He 2 0 0; He 3 0 0''',
+                   dimension = 2,
+                   verbose = 0,
+                   basis = { 'He': [[0, (0.8, 1.0)],
+                                    #[0, (1.0, 1.0)],
+                                    [0, (1.2, 1.0)]
+                                   ]})
+        mf = pbchf.RHF(cell)
+        mf.with_df = pdf.PWDF(cell)
+        e1 = mf.kernel()
+        self.assertAlmostEqual(e1, -3.26794462786, 5)
 
 
 if __name__ == '__main__':
