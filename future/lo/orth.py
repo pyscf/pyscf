@@ -5,7 +5,7 @@
 from functools import reduce
 import numpy
 import scipy.linalg
-import pyscf.lib.parameters as param
+from pyscf.lib import param
 from pyscf import gto
 
 def lowdin(s):
@@ -52,7 +52,8 @@ def pre_orth_ao(mol, method='ANO'):
 def project_to_atomic_orbitals(mol, basname):
     '''projected AO = |bas><bas|ANO>
     '''
-    import pyscf.scf
+    from pyscf.scf.addons import project_mo_nr2nr
+    from pyscf.gto.ecp import core_configuration
     def search_atm_l(atm, l):
         idx = []
         p0 = 0
@@ -66,8 +67,7 @@ def project_to_atomic_orbitals(mol, basname):
 
     aos = {}
     for symb in mol._basis.keys():
-        rawsymb = gto.mole._rm_digit(symb)
-        stdsymb = param.ELEMENTS[gto.mole._ELEMENTDIC[rawsymb.upper()]][0]
+        stdsymb = gto.mole._std_symbol(symb)
         atm = gto.Mole()
         atm._atm, atm._bas, atm._env = \
                 atm.make_env([[stdsymb,(0,0,0)]], {stdsymb:mol._basis[symb]}, [])
@@ -82,8 +82,15 @@ def project_to_atomic_orbitals(mol, basname):
         atmp = gto.Mole()
         atmp._atm, atmp._bas, atmp._env = \
                 atmp.make_env([[stdsymb,(0,0,0)]], {stdsymb:basis_add}, [])
-        ano = pyscf.scf.addons.project_mo_nr2nr(atmp, 1, atm)
+        ano = project_mo_nr2nr(atmp, 1, atm)
         rm_ano = numpy.eye(ano.shape[0]) - reduce(numpy.dot, (ano, ano.T, s0))
+        if symb in mol._ecp:
+            nelec_ecp = mol._ecp[symb][0]
+        elif stdsymb in mol._ecp:
+            nelec_ecp = mol._ecp[stdsymb][0]
+        else:
+            nelec_ecp = 0
+        ecpcore = core_configuration(nelec_ecp)
         c = rm_ano.copy()
         for l in range(param.L_MAX):
             idx  = numpy.asarray(search_atm_l(atm, l))
@@ -91,6 +98,8 @@ def project_to_atomic_orbitals(mol, basname):
                 break
 
             idxp = numpy.asarray(search_atm_l(atmp, l))
+            if l < 4:
+                idxp = idxp[ecpcore[l]:]
             if len(idx) > len(idxp) > 0:
 # For angular l, first place the projected ANO, then the rest AOs.
                 sdiag = reduce(numpy.dot, (rm_ano[:,idx].T, s0, rm_ano[:,idx])).diagonal()

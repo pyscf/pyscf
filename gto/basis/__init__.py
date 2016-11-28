@@ -174,6 +174,8 @@ def load(filename_or_basisname, symb):
                 return parse_nwchem.parse(fin.read())
 
     name = filename_or_basisname.lower().replace(' ', '').replace('-', '').replace('_', '')
+    if name not in ALIAS:
+        return parse(filename_or_basisname)
     basmod = ALIAS[name]
     symb = ''.join([i for i in symb if i.isalpha()])
     if 'dat' in basmod:
@@ -199,6 +201,8 @@ def load_ecp(filename_or_basisname, symb):
                 return parse_nwchem.parse_ecp(fin.read())
 
     name = filename_or_basisname.lower().replace(' ', '').replace('-', '').replace('_', '')
+    if name not in ALIAS:
+        return parse_ecp(filename_or_basisname)
     basmod = ALIAS[name]
     symb = ''.join([i for i in symb if i.isalpha()])
     return parse_nwchem.load_ecp(os.path.join(os.path.dirname(__file__), basmod), symb)

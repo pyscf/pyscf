@@ -13,7 +13,6 @@ import sys
 from functools import reduce
 import numpy
 import scipy.linalg
-import pyscf.lib.parameters
 from pyscf import lib
 from pyscf.gto import mole
 from pyscf.lo import orth
@@ -213,9 +212,10 @@ def _nao_sub(mol, pre_occ, pre_nao, s=None):
     else:
         c = pre_nao[:,val_lst]
 
-    s1 = reduce(lib.dot, (c.T, s, c))
-    wt = pre_occ[val_lst]
-    cnao[:,val_lst] = lib.dot(c, orth.weight_orth(s1, wt))
+    if val_lst:
+        s1 = reduce(lib.dot, (c.T, s, c))
+        wt = pre_occ[val_lst]
+        cnao[:,val_lst] = lib.dot(c, orth.weight_orth(s1, wt))
 
     if rydbg_lst:
         cvlst = core_lst + val_lst
@@ -230,7 +230,7 @@ def _nao_sub(mol, pre_occ, pre_nao, s=None):
     return cnao
 
 def _core_val_ryd_list(mol):
-    import pyscf.gto.ecp
+    from pyscf.gto.ecp import core_configuration
     count = numpy.zeros((mol.natm, 9), dtype=int)
     core_lst = []
     val_lst = []
@@ -238,12 +238,12 @@ def _core_val_ryd_list(mol):
     k = 0
     for ib in range(mol.nbas):
         ia = mol.bas_atom(ib)
-        nuc = mol.atom_charge(ia)
+        nuc = mole._charge(mol.atom_symbol(ia))
         l = mol.bas_angular(ib)
         nc = mol.bas_nctr(ib)
         symb = mol.atom_symbol(ia)
         nelec_ecp = mol.atom_nelec_core(ia)
-        ecpcore = pyscf.gto.ecp.core_configuration(nelec_ecp)
+        ecpcore = core_configuration(nelec_ecp)
         coreshell = [int(x) for x in AOSHELL[nuc][0][::2]]
         cvshell = [int(x) for x in AOSHELL[nuc][1][::2]]
         for n in range(nc):
