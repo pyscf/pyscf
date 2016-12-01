@@ -55,9 +55,7 @@ void NPdgemm(const char trans_a, const char trans_b,
         shared(a, b, c, stride, stride_b, nthread, nblk) \
         private(i, ij, j, di, cpriv)
 {
-#if defined _OPENMP
                 nthread = omp_get_num_threads();
-#endif
                 nblk = (k+nthread-1) / nthread;
                 nthread = (k+nblk-1) / nblk;
                 cpriv = malloc(sizeof(double) * m * n);
@@ -94,9 +92,7 @@ void NPdgemm(const char trans_a, const char trans_b,
         shared(a, b, c, stride, nthread, nblk) \
         private(i, di)
 {
-#if defined _OPENMP
                 nthread = omp_get_num_threads();
-#endif
                 nblk = (m+nthread-1) / nthread;
                 nthread = (m+nblk-1) / nblk;
 #pragma omp for
@@ -122,9 +118,7 @@ void NPdgemm(const char trans_a, const char trans_b,
         shared(a, b, c, stride, nthread, nblk) \
         private(i, di)
 {
-#if defined _OPENMP
                 nthread = omp_get_num_threads();
-#endif
                 nblk = (n+nthread-1) / nthread;
                 nthread = (n+nblk-1) / nblk;
 #pragma omp for

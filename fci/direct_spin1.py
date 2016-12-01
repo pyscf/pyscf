@@ -385,7 +385,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
         elif nroots > 1:
             civec = numpy.empty((nroots,na*nb))
             civec[:,addr] = pv[:,:nroots].T
-            return pw[:nroots]+ecore, civec.reshape(nroots,na,nb)
+            return pw[:nroots]+ecore, [c.reshape(na,nb) for c in civec]
         elif abs(pw[0]-pw[1]) > 1e-12:
             civec = numpy.empty((na*nb))
             civec[addr] = pv[:,0]
@@ -563,7 +563,7 @@ class FCISolver(lib.StreamObject):
 
     def spin_square(self, fcivec, norb, nelec):
         nelec = _unpack_nelec(nelec, self.spin)
-        if isinstance(fcivec, numpy.ndarray):
+        if isinstance(fcivec, numpy.ndarray) and fcivec.ndim < 2:
             return spin_op.spin_square0(fcivec, norb, nelec)
         else:
             ss = [spin_op.spin_square0(c, norb, nelec) for c in fcivec]
@@ -623,7 +623,7 @@ class FCISolver(lib.StreamObject):
     def large_ci(self, ci, norb, nelec, tol=.1):
         from pyscf.fci import addons
         nelec = _unpack_nelec(nelec, self.spin)
-        if isinstance(ci, numpy.ndarray):
+        if isinstance(ci, numpy.ndarray) and fcivec.ndim < 2:
             return addons.large_ci(ci, norb, nelec, tol)
         else:
             return [addons.large_ci(x, norb, nelec, tol) for x in ci]

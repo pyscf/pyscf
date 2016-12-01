@@ -15,7 +15,6 @@
 #define STRB_BLKSIZE    224
 
 
-
 int SCIstr2addr(uint64_t str, uint64_t *strsbook, int nstrs)
 {
         int head = 0;
@@ -387,7 +386,6 @@ static void ctr_aaaa_kern(double *eri, double *ci0, double *ci1,
                        norb, bcount, nlinka, clink_indexa);
 }
 
-void FCIaxpy2d(double *out, double *in, int count, int no, int ni);
 void SCIcontract_2e_aaaa(double *eri, double *ci0, double *ci1,
                          int norb, int na, int nb,
                          int inter_na, int nlinka, int *link_indexa)
@@ -396,12 +394,15 @@ void SCIcontract_2e_aaaa(double *eri, double *ci0, double *ci1,
         FCIcompress_link_tril(clinka, link_indexa, inter_na, nlinka);
         _LinkTrilT *clinkb;
 
+        double *ci1bufs[MAX_THREADS];
 #pragma omp parallel default(none) \
-        shared(eri, ci0, ci1, norb, na, nb, inter_na, nlinka, clinka, clinkb)
+        shared(eri, ci0, ci1, norb, na, nb, inter_na, nlinka, clinka, clinkb, \
+               ci1bufs)
 {
         int strk, ib, blen;
         double *t1buf = malloc(sizeof(double) * STRB_BLKSIZE*norb*norb);
         double *ci1buf = malloc(sizeof(double) * na*STRB_BLKSIZE);
+        ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
                 memset(ci1buf, 0, sizeof(double) * na*blen);
@@ -411,7 +412,8 @@ void SCIcontract_2e_aaaa(double *eri, double *ci0, double *ci1,
                                       blen, strk, ib, norb, na, nb,
                                       nlinka, 0, clinka, clinkb);
                 }
-#pragma omp critical
+                FCIomp_reduce_inplace(ci1bufs, blen*na);
+#pragma omp master
                 FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
         }
         free(ci1buf);
@@ -623,13 +625,15 @@ void SCIcontract_2e_aaaa_symm(double *eri, double *ci0, double *ci1,
         FCIcompress_link_tril(clinka, link_indexa, inter_na, nlinka);
         _LinkTrilT *clinkb;
 
+        double *ci1bufs[MAX_THREADS];
 #pragma omp parallel default(none) \
         shared(eri, ci0, ci1, norb, na, nb, inter_na, nlinka, clinka, clinkb, \
-               dimirrep, totirrep)
+               dimirrep, totirrep, ci1bufs)
 {
         int strk, ib, blen;
         double *t1buf = malloc(sizeof(double) * STRB_BLKSIZE*norb*norb);
         double *ci1buf = malloc(sizeof(double) * na*STRB_BLKSIZE);
+        ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
                 memset(ci1buf, 0, sizeof(double) * na*blen);
@@ -640,7 +644,8 @@ void SCIcontract_2e_aaaa_symm(double *eri, double *ci0, double *ci1,
                                       nlinka, 0, clinka, clinkb,
                                       dimirrep, totirrep);
                 }
-#pragma omp critical
+                FCIomp_reduce_inplace(ci1bufs, blen*na);
+#pragma omp master
                 FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
         }
         free(ci1buf);

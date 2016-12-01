@@ -2,6 +2,7 @@
  *
  */
 #include <stdint.h>
+#define MAX_THREADS     256
 
 typedef struct {
         unsigned int addr;
@@ -55,3 +56,6 @@ double FCIrdm2_a_t1ci(double *ci0, double *t1,
 double FCIrdm2_b_t1ci(double *ci0, double *t1,
                       int bcount, int stra_id, int strb_id,
                       int norb, int nstrb, int nlinka, _LinkT *clink_indexa);
+
+void FCIaxpy2d(double *out, double *in, size_t count, size_t no, size_t ni);
+void FCIomp_reduce_inplace(double **vec, size_t count);
