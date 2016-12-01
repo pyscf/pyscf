@@ -28,7 +28,9 @@ def ft_aopair(mol, Gv, shls_slice=None, aosym='s1', b=numpy.eye(3),
     if shls_slice is None:
         shls_slice = (0, mol.nbas, 0, mol.nbas)
     nGv = Gv.shape[0]
-    if Gvbase is None or gxyz is None:
+    if (gxyz is None or b is None or Gvbase is None
+# backward compatibility for pyscf-1.2, in which the argument Gvbase is gs
+        or (Gvbase is not None and isinstance(Gvbase[0], (int, numpy.integer)))):
         GvT = numpy.asarray(Gv.T, order='C')
         p_gxyzT = lib.c_null_ptr()
         p_gs = (ctypes.c_int*3)(0,0,0)
@@ -84,7 +86,9 @@ def ft_ao(mol, Gv, shls_slice=None, b=numpy.eye(3),
     if shls_slice is None:
         shls_slice = (0, mol.nbas)
     nGv = Gv.shape[0]
-    if gxyz is None or b is None or Gvbase is None:
+    if (gxyz is None or b is None or Gvbase is None
+# backward compatibility for pyscf-1.2, in which the argument Gvbase is gs
+        or (Gvbase is not None and isinstance(Gvbase[0], (int, numpy.integer)))):
         GvT = numpy.asarray(Gv.T, order='C')
         p_gxyzT = lib.c_null_ptr()
         p_gs = (ctypes.c_int*3)(0,0,0)
@@ -92,7 +96,6 @@ def ft_ao(mol, Gv, shls_slice=None, b=numpy.eye(3),
         eval_gz = 'GTO_Gv_general'
     else:
         GvT = numpy.asarray(Gv.T, order='C')
-# Guess what type of eval_gz to use
         gxyzT = numpy.asarray(gxyz.T, order='C', dtype=numpy.int32)
         p_gxyzT = gxyzT.ctypes.data_as(ctypes.c_void_p)
         eval_gz = 'GTO_Gv_cubic'

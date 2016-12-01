@@ -8,7 +8,6 @@ import numpy
 from pyscf import lib
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
-from pyscf.lib import logger
 from pyscf.pbc import tools
 from pyscf.pbc.df.mdf_jk import zdotNN, zdotCN, zdotNC
 
