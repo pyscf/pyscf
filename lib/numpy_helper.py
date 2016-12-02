@@ -234,7 +234,7 @@ def take_2d(a, idx, idy, out=None):
     return out
 
 def takebak_2d(out, a, idx, idy):
-    '''Reverse operation of take_2d.  out(idx,idy) = a
+    '''Reverse operation of take_2d.  out(idx,idy) += a
 
     Examples:
 
