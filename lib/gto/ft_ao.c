@@ -766,10 +766,8 @@ static void prim_to_ctr(double complex *gc, const int nf, const double complex *
         if (empty) {
                 for (n = 0; n < nctr; n++) {
                         c = coeff[nprim*n];
-                        if (c != 0) {
-                                for (i = 0; i < nf; i++) {
-                                        pgc[i] = gp[i] * c;
-                                }
+                        for (i = 0; i < nf; i++) {
+                                pgc[i] = gp[i] * c;
                         }
                         pgc += nf;
                 }
