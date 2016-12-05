@@ -953,33 +953,31 @@ def time_reversal_map(mol):
                     i += dj
     return numpy.asarray(tao, dtype=numpy.int32)
 
-def energy_nuc(mol):
-    '''Nuclear repulsion energy, (AU)
+def energy_nuc(mol, charges=None, coords=None):
+    '''Compute nuclear repulsion energy (AU) or static Coulomb energy
 
     Returns
         float
     '''
-    if mol.natm == 0:
+    if charges is None: charges = mol.atom_charges()
+    if coords is None: coords = mol.atom_coords()
+    if len(charges) == 0:
         return 0
     #e = 0
-    #chargs = [mol.atom_charge(i) for i in range(len(mol._atm))]
-    #coords = [mol.atom_coord(i) for i in range(len(mol._atm))]
     #for j in range(len(mol._atm)):
-    #    q2 = chargs[j]
+    #    q2 = charges[j]
     #    r2 = coords[j]
     #    for i in range(j):
-    #        q1 = chargs[i]
+    #        q1 = charges[i]
     #        r1 = coords[i]
     #        r = numpy.linalg.norm(r1-r2)
     #        e += q1 * q2 / r
-    chargs = mol.atom_charges()
-    coords = mol.atom_coords()
     rr = numpy.dot(coords, coords.T)
     rd = rr.diagonal()
     rr = rd[:,None] + rd - rr*2
     rr[numpy.diag_indices_from(rr)] = 1e-60
     r = numpy.sqrt(rr)
-    qq = chargs[:,None] * chargs[None,:]
+    qq = charges[:,None] * charges[None,:]
     qq[numpy.diag_indices_from(qq)] = 0
     e = (qq/r).sum() * .5
     return e
@@ -2318,8 +2316,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         return eval_gto(eval_name, self._atm, self._bas, self._env,
                         coords, comp, shls_slice, non0tab, out)
 
-    def energy_nuc(self):
-        return energy_nuc(self)
+    energy_nuc = energy_nuc
     def get_enuc(self):
         return self.energy_nuc()
 
