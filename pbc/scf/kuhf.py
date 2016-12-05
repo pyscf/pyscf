@@ -227,7 +227,7 @@ class KUHF(uhf.UHF, khf.KRHF):
         self.cell = cell
         uhf.UHF.__init__(self, cell)
 
-        self.with_df = df.DF(cell)
+        self.with_df = df.FFTDF(cell)
         self.exxdiv = exxdiv
         self.kpts = kpts
         self.direct_scf = False

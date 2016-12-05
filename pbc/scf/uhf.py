@@ -73,7 +73,7 @@ class UHF(pyscf.scf.uhf.UHF, pbchf.RHF):
         self.cell = cell
         pyscf.scf.uhf.UHF.__init__(self, cell)
 
-        self.with_df = df.DF(cell)
+        self.with_df = df.FFTDF(cell)
         self.exxdiv = exxdiv
         self.kpt = kpt
         self.direct_scf = False

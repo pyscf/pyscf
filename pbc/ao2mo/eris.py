@@ -14,7 +14,7 @@ def general(cell, mo_coeffs, kpts=None, compact=False):
     '''pyscf-style wrapper to get MO 2-el integrals.'''
     if kpts is not None:
         assert len(kpts) == 4
-    return df.DF(cell).ao2mo(mo_coeffs, kpts, compact)
+    return df.FFTDF(cell).ao2mo(mo_coeffs, kpts, compact)
 
 def get_mo_eri(cell, mo_coeffs, kpts=None):
     '''Convenience function to return MO 2-el integrals.'''
@@ -34,7 +34,7 @@ def get_mo_pairs_G(cell, mo_coeffs, kpts=None):
         mo_pairs_G : (ngs, nmoi*nmoj) ndarray
             The FFT of the real-space MO pairs.
     '''
-    return df.DF(cell).get_mo_pairs(mo_coeffs, kpts)
+    return df.FFTDF(cell).get_mo_pairs(mo_coeffs, kpts)
 
 def get_mo_pairs_invG(cell, mo_coeffs, kpts=None):
     '''Calculate "inverse" (ij|G) FFT of all MO pairs.
@@ -51,8 +51,8 @@ def get_mo_pairs_invG(cell, mo_coeffs, kpts=None):
             The inverse FFTs of the real-space MO pairs.
     '''
     if kpts is None: kpts = numpy.zeros((2,3))
-    mo_pairs_G = df.DF(cell).get_mo_pairs((mo_coeffs[1],mo_coeffs[0]),
-                                          (kpts[1],kpts[0]))
+    mo_pairs_G = df.FFTDF(cell).get_mo_pairs((mo_coeffs[1],mo_coeffs[0]),
+                                             (kpts[1],kpts[0]))
     nmo0 = mo_coeffs[0].shape[1]
     nmo1 = mo_coeffs[1].shape[1]
     mo_pairs_invG = mo_pairs_G.T.reshape(nmo1,nmo0,-1).transpose(1,0,2).conj()
@@ -70,13 +70,13 @@ def get_ao_pairs_G(cell, kpts=None):
             The FFTs of the real-space AO pairs.
 
     '''
-    return df.DF(cell).get_ao_pairs(kpts)
+    return df.FFTDF(cell).get_ao_pairs(kpts)
 
 def get_ao_eri(cell, kpts=None):
     '''Convenience function to return AO 2-el integrals.'''
     if kpts is not None:
         assert len(kpts) == 4
-    return df.DF(cell).get_eri(kpts)
+    return df.FFTDF(cell).get_eri(kpts)
 
 if __name__ == '__main__':
     from pyscf.pbc import gto as pgto

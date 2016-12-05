@@ -24,34 +24,16 @@ def get_eri(mydf, kpts=None, compact=True):
         mydf.build()
 
     kpti, kptj, kptk, kptl = kptijkl
-    auxcell = mydf.auxcell
     nao = cell.nao_nr()
-    naux = auxcell.nao_nr()
     nao_pair = nao * (nao+1) // 2
-    max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0] - nao**4*8/1e6) * .8)
+    max_memory = max(2000, mydf.max_memory-lib.current_memory()[0]-nao**4*8/1e6)
 
 ####################
 # gamma point, the integral is real and with s4 symmetry
     if abs(kptijkl).sum() < 1e-9:
         eriR = numpy.zeros((nao_pair,nao_pair))
-        for LpqR, LpqI, j3cR, j3cI in mydf.sr_loop(kptijkl[:2], max_memory, True):
-            lib.ddot(j3cR.T, LpqR, 1, eriR, 1)
-            LpqR = LpqI = j3cR = j3cI = None
-        eriR = lib.transpose_sum(eriR, inplace=True)
-
-        coulG = mydf.weighted_coulG(kptj-kpti, False, mydf.gs)
-        max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
-        trilidx = numpy.tril_indices(nao)
-        for pqkR, pqkI, p0, p1 \
-                in mydf.pw_loop(mydf.gs, kptijkl[:2], max_memory=max_memory):
-            pqkR = numpy.asarray(pqkR.reshape(nao,nao,-1)[trilidx], order='C')
-            pqkI = numpy.asarray(pqkI.reshape(nao,nao,-1)[trilidx], order='C')
-            vG = numpy.sqrt(coulG[p0:p1])
-            pqkR *= vG
-            pqkI *= vG
-            lib.dot(pqkR, pqkR.T, 1, eriR, 1)
-            lib.dot(pqkI, pqkI.T, 1, eriR, 1)
-            pqkR = pqkI = None
+        for LpqR, LpqI in mydf.sr_loop(kptijkl[:2], max_memory, True):
+            lib.ddot(LpqR.T, LpqR, 1, eriR, 1)
         if not compact:
             eriR = ao2mo.restore(1, eriR, nao).reshape(nao**2,-1)
         return eriR
@@ -66,24 +48,11 @@ def get_eri(mydf, kpts=None, compact=True):
     elif (abs(kpti-kptl).sum() < 1e-9) and (abs(kptj-kptk).sum() < 1e-9):
         eriR = numpy.zeros((nao*nao,nao*nao))
         eriI = numpy.zeros((nao*nao,nao*nao))
-        for LpqR, LpqI, j3cR, j3cI in mydf.sr_loop(kptijkl[:2], max_memory, False):
-            zdotNC(j3cR.T, j3cI.T, LpqR, LpqI, 1, eriR, eriI, 1)
-            zdotNC(LpqR.T, LpqI.T, j3cR, j3cI, 1, eriR, eriI, 1)
-            LpqR = LpqI = j3cR = j3cI = None
-
-        coulG = mydf.weighted_coulG(kptj-kpti, False, mydf.gs)
-        for pqkR, pqkI, p0, p1 \
-                in mydf.pw_loop(mydf.gs, kptijkl[:2], max_memory=max_memory):
-            vG = numpy.sqrt(coulG[p0:p1])
-            pqkR *= vG
-            pqkI *= vG
-# rho_pq(G+k_pq) * conj(rho_rs(G-k_rs))
-            zdotNC(pqkR, pqkI, pqkR.T, pqkI.T, 1, eriR, eriI, 1)
-            pqkR = pqkI = None
+        for LpqR, LpqI in mydf.sr_loop(kptijkl[:2], max_memory, False):
+            zdotNC(LpqR.T, LpqI.T, LpqR, LpqI, 1, eriR, eriI, 1)
 # transpose(0,1,3,2) because
 # j == k && i == l  =>
 # (L|ij).transpose(0,2,1).conj() = (L^*|ji) = (L^*|kl)  =>  (M|kl)
-# rho_rs(-G+k_rs) = conj(transpose(rho_sr(G+k_sr), (0,2,1)))
         return (eriR.reshape((nao,)*4).transpose(0,1,3,2) +
                 eriI.reshape((nao,)*4).transpose(0,1,3,2)*1j).reshape(nao**2,-1)
 
@@ -98,27 +67,10 @@ def get_eri(mydf, kpts=None, compact=True):
     else:
         eriR = numpy.zeros((nao*nao,nao*nao))
         eriI = numpy.zeros((nao*nao,nao*nao))
-        for (LpqR, LpqI, jpqR, jpqI), (LrsR, LrsI, jrsR, jrsI) in \
+        for (LpqR, LpqI), (LrsR, LrsI) in \
                 lib.izip(mydf.sr_loop(kptijkl[:2], max_memory, False),
                          mydf.sr_loop(kptijkl[2:], max_memory, False)):
-            zdotNN(jpqR.T, jpqI.T, LrsR, LrsI, 1, eriR, eriI, 1)
-            zdotNN(LpqR.T, LpqI.T, jrsR, jrsI, 1, eriR, eriI, 1)
-            LpqR = LpqI = jpqR = jpqI = LrsR = LrsI = jrsR = jrsI = None
-
-        coulG = mydf.weighted_coulG(kptj-kpti, False, mydf.gs)
-        max_memory = (mydf.max_memory - lib.current_memory()[0]) * .4
-
-        for (pqkR, pqkI, p0, p1), (rskR, rskI, q0, q1) in \
-                lib.izip(mydf.pw_loop(mydf.gs, kptijkl[:2], max_memory=max_memory),
-                         mydf.pw_loop(mydf.gs,-kptijkl[2:], max_memory=max_memory)):
-            pqkR *= coulG[p0:p1]
-            pqkI *= coulG[p0:p1]
-# rho'_rs(G-k_rs) = conj(rho_rs(-G+k_rs))
-#                 = conj(rho_rs(-G+k_rs) - d_{k_rs:Q,rs} * Q(-G+k_rs))
-#                 = rho_rs(G-k_rs) - conj(d_{k_rs:Q,rs}) * Q(G-k_rs)
-# rho_pq(G+k_pq) * conj(rho'_rs(G-k_rs))
-            zdotNC(pqkR, pqkI, rskR.T, rskI.T, 1, eriR, eriI, 1)
-            pqkR = pqkI = rskR = rskI = None
+            zdotNN(LpqR.T, LpqI.T, LrsR, LrsI, 1, eriR, eriI, 1)
         return eriR + eriI*1j
 
 

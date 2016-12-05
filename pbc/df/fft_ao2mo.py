@@ -283,7 +283,7 @@ if __name__ == '__main__':
     numpy.random.seed(1)
     kpts = numpy.random.random((4,3))
     kpts[3] = -numpy.einsum('ij->j', kpts[:3])
-    with_df = df.DF(cell)
+    with_df = df.FFTDF(cell)
     with_df.kpts = kpts
     mo =(numpy.random.random((nao,nao)) +
          numpy.random.random((nao,nao))*1j)

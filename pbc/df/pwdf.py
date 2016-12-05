@@ -112,7 +112,7 @@ class PWDF(lib.StreamObject):
         else:
             kpti, kptj = kpti_kptj
 
-        nao = cell.nao_nr()
+        ao_loc = cell.ao_loc_nr()
         Gv, Gvbase, kws = cell.get_Gv_weights(gs)
         b = cell.reciprocal_vectors()
         gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])

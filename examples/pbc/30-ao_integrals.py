@@ -36,7 +36,7 @@ kinetic = cell.pbc_intor('cint1e_kin_sph')
 # density fitting module.  Without kpts argument, the DF gives gamma point AO
 # 2e-integrals.  Permutation symmetry is not considered
 #
-mydf = df.DF(cell)
+mydf = df.FFTDF(cell)
 mydf.gs = [7] * 3
 eri = mydf.get_eri()
 print('ERI shape (%d,%d)' % eri.shape)

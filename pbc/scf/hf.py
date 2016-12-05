@@ -60,7 +60,7 @@ def get_nuc(cell, kpt=np.zeros(3)):
     See Martin (12.16)-(12.21).
     '''
     from pyscf.pbc import df
-    return df.DF(cell).get_nuc(kpt)
+    return df.FFTDF(cell).get_nuc(kpt)
 
 
 def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
@@ -90,7 +90,7 @@ def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
         density matrix (both order and shape).
     '''
     from pyscf.pbc import df
-    return df.DF(cell).get_jk(dm, hermi, kpt, kpt_band, with_k=False)[0]
+    return df.FFTDF(cell).get_jk(dm, hermi, kpt, kpt_band, with_k=False)[0]
 
 
 def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
@@ -120,8 +120,8 @@ def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
         density matrix (both order and shape).
     '''
     from pyscf.pbc import df
-    return df.DF(cell).get_jk(dm, hermi, kpt, kpt_band, with_j=False,
-                              exxdiv=mf.exxdiv)[1]
+    return df.FFTDF(cell).get_jk(dm, hermi, kpt, kpt_band, with_j=False,
+                                 exxdiv=mf.exxdiv)[1]
 
 
 def get_bands(mf, kpt_band, cell=None, dm=None, kpt=None):
@@ -255,7 +255,7 @@ class RHF(hf.RHF):
         self.cell = cell
         hf.RHF.__init__(self, cell)
 
-        self.with_df = df.DF(cell)
+        self.with_df = df.FFTDF(cell)
         self.exxdiv = exxdiv
         self.kpt = kpt
         self.direct_scf = False
