@@ -19,21 +19,20 @@ from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
 import pyscf.df
-from pyscf.pbc import gto as pgto
+from pyscf.df.mdf import _uncontract_basis
 from pyscf.pbc.df import incore
 from pyscf.pbc.df import outcore
 from pyscf.pbc import tools
 from pyscf.pbc.df import ft_ao
-from pyscf.df.mdf import _uncontract_basis
-from pyscf.pbc.df.mdf_jk import zdotNN, zdotCN, zdotNC
 from pyscf.pbc.df import df_jk
 from pyscf.pbc.df import df_ao2mo
 from pyscf.pbc.df import pwdf
+from pyscf.pbc.df.df_jk import zdotCN
 
 KPT_DIFF_TOL = 1e-6
 
 #
-# Split the Coulomb potential to two parts.  Computing short range part in
+# Divide the Coulomb potential to two parts.  Computing short range part in
 # real space, long range part in reciprocal space.
 #
 
@@ -135,7 +134,6 @@ def make_modchg_basis(auxcell, smooth_eta, l_max=3):
                   chgcell.nbas, chgcell.nao_nr())
     return chgcell
 
-
 def get_nuc(mydf, kpts=None):
     cell = mydf.cell
     if kpts is None:
@@ -201,26 +199,6 @@ def get_nuc(mydf, kpts=None):
     if kpts is None or numpy.shape(kpts) == (3,):
         vj = vj[0]
     return vj
-
-
-def get_pp(mydf, kpts=None):
-    cell = mydf.cell
-    if kpts is None:
-        kpts_lst = numpy.zeros((1,3))
-    else:
-        kpts_lst = numpy.reshape(kpts, (-1,3))
-    nkpts = len(kpts_lst)
-
-    #vloc1 = get_pp_loc_part1_less_accurate(mydf, kpts_lst)
-    vloc1 = get_pp_loc_part1(mydf, kpts_lst)
-    vloc2 = pgto.pseudo.pp_int.get_pp_loc_part2(cell, kpts_lst)
-    vpp = pgto.pseudo.pp_int.get_pp_nl(cell, kpts_lst)
-    for k in range(nkpts):
-        vpp[k] += vloc1[k] + vloc2[k]
-
-    if kpts is None or numpy.shape(kpts) == (3,):
-        vpp = vpp[0]
-    return vpp
 get_pp_loc_part1 = get_nuc
 
 
@@ -297,7 +275,7 @@ class DF(pwdf.PWDF):
         vs = vs - (\int V)/vol * S
         '''
         if fused_cell is None:
-            fused_cell, fuse = fuse_auxcell_(self, self.auxcell)
+            fused_cell, fuse = fuse_auxcell(self, self.auxcell)
         aux_loc = fused_cell.ao_loc_nr()
         half_sph_norm = .5/numpy.sqrt(numpy.pi)
         vbar = numpy.zeros(aux_loc[-1])
@@ -365,7 +343,6 @@ class DF(pwdf.PWDF):
                 yield LpqR, LpqI
 
     get_nuc = get_nuc
-    get_pp = get_pp
 
     def get_jk(self, dm, hermi=1, kpts=None, kpt_band=None,
                with_j=True, with_k=True, exxdiv='ewald'):
@@ -418,8 +395,7 @@ def unique(kpts):
             n += 1
     return numpy.asarray(uniq_kpts), numpy.asarray(uniq_index), uniq_inverse
 
-
-def fuse_auxcell_(mydf, auxcell):
+def fuse_auxcell(mydf, auxcell):
     chgcell = make_modchg_basis(auxcell, mydf.eta)
     fused_cell = copy.copy(auxcell)
     fused_cell._atm, fused_cell._bas, fused_cell._env = \
@@ -524,7 +500,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
     t1 = (time.clock(), time.time())
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
-    fused_cell, fuse = fuse_auxcell_(mydf, auxcell)
+    fused_cell, fuse = fuse_auxcell(mydf, auxcell)
     outcore.aux_e2(cell, fused_cell, mydf._cderi, 'cint3c2e_sph',
                    kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
     t1 = log.timer_debug1('3c2e', *t1)

@@ -314,6 +314,8 @@ class RHF(hf.RHF):
             if self.exxdiv == 'ewald':
                 # G=0 is not inculded in the ._eri integrals
                 vk = _ewald_exxdiv_for_G0(self, dm, kpt, vk)
+            elif self.exxdiv is not None:
+                vk = _other_exxdiv_for_G0(self, dm, kpt, vk)
         else:
             vj, vk = self.with_df.get_jk(dm, hermi, kpt, kpt_band,
                                          exxdiv=self.exxdiv)
@@ -404,7 +406,7 @@ class RHF(hf.RHF):
 
 def _ewald_exxdiv_for_G0(mf, dm, kpt, vk):
     cell = mf.cell
-    ovlp = mf.get_ovlp(cell, kpt)
+    ovlp = cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpt)
     #:gs = (0,0,0)
     #:Gv = np.zeros((1,3))
     #:coulGk = tools.get_coulG(cell, np.zeros(3), True, mf, gs, Gv)[0]
@@ -419,9 +421,9 @@ def _ewald_exxdiv_for_G0(mf, dm, kpt, vk):
     #    nelec = np.einsum('ij,ij', ovlp, dm)
     else:
     #    nelec = 0
-        for k, dmi in enumerate(dm):
-            #:vk[k] += coulGk/cell.vol * reduce(np.dot, (ovlp, dmi, ovlp))
-            vk[k] += madelung * reduce(np.dot, (ovlp, dmi, ovlp))
+        for i, dmi in enumerate(dm):
+            #:vk[i] += coulGk/cell.vol * reduce(np.dot, (ovlp, dmi, ovlp))
+            vk[i] += madelung * reduce(np.dot, (ovlp, dmi, ovlp))
     #        nelec += np.einsum('ij,ij', ovlp, dmi)
     #if abs(nelec - cell.nelectron) > .1 and abs(nelec) > .1:
     #    logger.debug(mf, 'Tr(dm,S) = %g', nelec)
@@ -431,3 +433,14 @@ def _ewald_exxdiv_for_G0(mf, dm, kpt, vk):
     #                     'to switch off the Ewald term.\n')
     return vk
 
+def _other_exxdiv_for_G0(mf, dm, kpt, vk):
+    cell = mf.cell
+    ovlp = cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpt)
+    fac_G0 = tools.pbc.get_coulG(cell, kpt, exx=True, mf=mf, gs=[0]*3,
+                                 Gv=numpy.zeros((1,3))) / cell.vol
+    if isinstance(dm, np.ndarray) and dm.ndim == 2:
+        vk += fac_G0 * reduce(np.dot, (ovlp, dm, ovlp))
+    else:
+        for i, dmi in enumerate(dm):
+            vk[i] += fac_G0 * reduce(numpy.dot, (ovlp, dmi, ovlp))
+    return vk

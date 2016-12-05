@@ -189,4 +189,4 @@ if __name__ == '__main__':
     eri0 = numpy.einsum('ijpl,pk->ijkl', eri0, mo.conj())
     eri0 = numpy.einsum('ijkp,pl->ijkl', eri0, mo       )
     eri1 = with_df.ao2mo(mo, kpts)
-    print abs(eri1-eri0).sum()
+    print(abs(eri1.reshape([mo.shape[1]]*4)-eri0).sum())

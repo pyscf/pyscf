@@ -14,9 +14,10 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import tools
+from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC, _format_dms
 
 #
-# Split the Coulomb potential to two parts.  Computing short range part in
+# Divide the Coulomb potential to two parts.  Computing short range part in
 # real space, long range part in reciprocal space.
 #
 
@@ -577,40 +578,9 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     t1 = log.timer('sr jk', *t1)
     return vj, vk
 
-
-def _format_dms(dm_kpts, kpts):
-    nkpts = len(kpts)
-    nao = dm_kpts.shape[-1]
-    dms = dm_kpts.reshape(-1,nkpts,nao,nao)
-    return dms
-
 def is_zero(kpt):
     return kpt is None or abs(kpt).sum() < 1e-9
 gamma_point = is_zero
-
-def zdotNN(aR, aI, bR, bI, alpha=1, cR=None, cI=None, beta=0):
-    '''c = a*b'''
-    cR = lib.ddot(aR, bR, alpha, cR, beta)
-    cR = lib.ddot(aI, bI,-alpha, cR, 1   )
-    cI = lib.ddot(aR, bI, alpha, cI, beta)
-    cI = lib.ddot(aI, bR, alpha, cI, 1   )
-    return cR, cI
-
-def zdotCN(aR, aI, bR, bI, alpha=1, cR=None, cI=None, beta=0):
-    '''c = a.conj()*b'''
-    cR = lib.ddot(aR, bR, alpha, cR, beta)
-    cR = lib.ddot(aI, bI, alpha, cR, 1   )
-    cI = lib.ddot(aR, bI, alpha, cI, beta)
-    cI = lib.ddot(aI, bR,-alpha, cI, 1   )
-    return cR, cI
-
-def zdotNC(aR, aI, bR, bI, alpha=1, cR=None, cI=None, beta=0):
-    '''c = a*b.conj()'''
-    cR = lib.ddot(aR, bR, alpha, cR, beta)
-    cR = lib.ddot(aI, bI, alpha, cR, 1   )
-    cI = lib.ddot(aR, bI,-alpha, cI, beta)
-    cI = lib.ddot(aI, bR, alpha, cI, 1   )
-    return cR, cI
 
 
 if __name__ == '__main__':

@@ -21,32 +21,7 @@ KPT_DIFF_TOL = 1e-6
 
 
 def get_nuc(mydf, kpts=None):
-    vne = get_pp_loc_part1(mydf, mydf.cell, kpts)
-    if kpts is None or numpy.shape(kpts) == (3,):
-        vne = vne[0]
-    return vne
-
-def get_pp(mydf, kpts=None):
-    '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
-    '''
     cell = mydf.cell
-    if kpts is None:
-        kpts_lst = numpy.zeros((1,3))
-    else:
-        kpts_lst = numpy.reshape(kpts, (-1,3))
-    nkpts = len(kpts_lst)
-
-    vloc1 = get_pp_loc_part1(mydf, cell, kpts_lst)
-    vloc2 = pseudo.pp_int.get_pp_loc_part2(cell, kpts_lst)
-    vpp = pseudo.pp_int.get_pp_nl(cell, kpts_lst)
-    for k in range(nkpts):
-        vpp[k] += vloc1[k] + vloc2[k]
-
-    if kpts is None or numpy.shape(kpts) == (3,):
-        vpp = vpp[0]
-    return vpp
-
-def get_pp_loc_part1(mydf, cell, kpts):
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = t0 = (time.clock(), time.time())
     nkpts = len(kpts)
@@ -60,21 +35,46 @@ def get_pp_loc_part1(mydf, cell, kpts):
     real = gamma_point(kpts)
 
     if real:
-        vloc = numpy.zeros((nkpts,nao**2))
+        vne = numpy.zeros((nkpts,nao**2))
     else:
-        vloc = numpy.zeros((nkpts,nao**2), dtype=numpy.complex128)
+        vne = numpy.zeros((nkpts,nao**2), dtype=numpy.complex128)
     max_memory = mydf.max_memory - lib.current_memory()[0]
     for k, pqkR, pqkI, p0, p1 \
             in mydf.ft_loop(mydf.gs, kpt_allow, kpts, max_memory=max_memory):
         vG = vpplocG[p0:p1]
         if not real:
-            vloc[k] += numpy.einsum('k,xk->x', vG.real, pqkI) * 1j
-            vloc[k] += numpy.einsum('k,xk->x', vG.imag, pqkR) *-1j
-        vloc[k] += numpy.einsum('k,xk->x', vG.real, pqkR)
-        vloc[k] += numpy.einsum('k,xk->x', vG.imag, pqkI)
+            vne[k] += numpy.einsum('k,xk->x', vG.real, pqkI) * 1j
+            vne[k] += numpy.einsum('k,xk->x', vG.imag, pqkR) *-1j
+        vne[k] += numpy.einsum('k,xk->x', vG.real, pqkR)
+        vne[k] += numpy.einsum('k,xk->x', vG.imag, pqkI)
         pqkR = pqkI = None
-    t1 = log.timer_debug1('contracting vloc part1', *t1)
-    return vloc.reshape(-1,nao,nao)
+    t1 = log.timer_debug1('contracting Vnuc', *t1)
+
+    if kpts is None or numpy.shape(kpts) == (3,):
+        vne = vne[0]
+    return vne
+get_pp_loc_part1 = get_nuc
+
+
+def get_pp(mydf, kpts=None):
+    '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
+    '''
+    cell = mydf.cell
+    if kpts is None:
+        kpts_lst = numpy.zeros((1,3))
+    else:
+        kpts_lst = numpy.reshape(kpts, (-1,3))
+    nkpts = len(kpts_lst)
+
+    vloc1 = mydf.get_nuc(kpts_lst)
+    vloc2 = pseudo.pp_int.get_pp_loc_part2(cell, kpts_lst)
+    vpp = pseudo.pp_int.get_pp_nl(cell, kpts_lst)
+    for k in range(nkpts):
+        vpp[k] += vloc1[k] + vloc2[k]
+
+    if kpts is None or numpy.shape(kpts) == (3,):
+        vpp = vpp[0]
+    return vpp
 
 
 class PWDF(lib.StreamObject):

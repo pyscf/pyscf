@@ -122,7 +122,7 @@ def get_pp(mydf, kpts=None):
     return vpp
 
 
-class DF(lib.StreamObject):
+class FFTDF(lib.StreamObject):
     '''Density expansion on plane waves
     '''
     def __init__(self, cell, kpts=numpy.zeros((1,3))):

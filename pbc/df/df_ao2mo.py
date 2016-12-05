@@ -110,7 +110,7 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
 
 if __name__ == '__main__':
     import pyscf.pbc.gto as pgto
-    from pyscf.pbc.df import mdf
+    from pyscf.pbc.df import DF
 
     L = 5.
     n = 5
@@ -131,8 +131,7 @@ if __name__ == '__main__':
     numpy.random.seed(1)
     kpts = numpy.random.random((4,3))
     kpts[3] = -numpy.einsum('ij->j', kpts[:3])
-    with_df = mdf.MDF(cell)
-    with_df.kpts = kpts
+    with_df = DF(cell, kpts)
     mo =(numpy.random.random((nao,nao)) +
          numpy.random.random((nao,nao))*1j)
     eri = with_df.get_eri(kpts).reshape((nao,)*4)
@@ -141,4 +140,4 @@ if __name__ == '__main__':
     eri0 = numpy.einsum('ijpl,pk->ijkl', eri0, mo.conj())
     eri0 = numpy.einsum('ijkp,pl->ijkl', eri0, mo       )
     eri1 = with_df.ao2mo(mo, kpts)
-    print abs(eri1-eri0).sum()
+    print(abs(eri1.reshape([mo.shape[1]]*4)-eri0).sum())

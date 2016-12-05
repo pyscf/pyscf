@@ -4,7 +4,7 @@
 #
 
 '''
-Exact density fitting with Gaussian and planewaves
+Density fitting with Gaussian basis
 Ref:
 '''
 
@@ -14,11 +14,6 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import tools
-
-#
-# Split the Coulomb potential to two parts.  Computing short range part in
-# real space, long range part in reciprocal space.
-#
 
 def density_fit(mf, auxbasis=None, gs=None, with_df=None):
     '''Generte density-fitting SCF object
@@ -162,16 +157,6 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
         kptj = kpts[kj]
 
         for LpqR, LpqI in mydf.sr_loop((kpti,kptj), max_memory, False):
-#            lpq = (LpqR+LpqI*1j).reshape(-1,nao,nao)
-#            pqrs = numpy.einsum('lpq,lrs->pqrs', lpq.transpose(0,2,1).conj(),lpq)
-#            v = numpy.einsum('pqrs,qr->ps', pqrs,dms[0,ki])
-#            vkR[0,kj] += v.real
-#            vkI[0,kj] += v.imag
-#            if swap_2e:
-#                v = numpy.einsum('pqrs,sp->rq', pqrs,dms[0,kj])
-#                vkR[0,ki] += v.real
-#                vkI[0,ki] += v.imag
-#            break
             nrow = LpqR.shape[0]
             pLqR = numpy.ndarray((nao,nrow,nao), buffer=bufR)
             pLqI = numpy.ndarray((nao,nrow,nao), buffer=bufI)
@@ -213,12 +198,14 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
     else:
         vk_kpts = vkR + vkI * 1j
 
-    if exxdiv.lower() == 'ewald':
+    if exxdiv is not None:
         ovlp = cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpts_band)
-        madelung = tools.pbc.madelung(cell, kpts_band)
+        mydf.exxdiv = exxdiv
+        fac_G0 = tools.pbc.get_coulG(cell, exx=True, mf=mydf, gs=[0]*3,
+                                     Gv=numpy.zeros((1,3))) / cell.vol
         for k in range(nband):
             for i in range(nset):
-                vk_kpts[i,k] += madelung * reduce(numpy.dot, (ovlp[k], dms[i,k], ovlp[k]))
+                vk_kpts[i,k] += fac_G0 * reduce(numpy.dot, (ovlp[k], dms[i,k], ovlp[k]))
 
     vk_kpts *= 1./nkpts
 
@@ -335,11 +322,13 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
             vk = vkR
         else:
             vk = vkR + vkI * 1j
-        if exxdiv.lower() == 'ewald':
+        if exxdiv is not None:
             ovlp = cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpt)
-            madelung = tools.pbc.madelung(cell, numpy.zeros((1,3)))
+            mydf.exxdiv = exxdiv
+            fac_G0 = tools.pbc.get_coulG(cell, kpt, exx=True, mf=mydf, gs=[0]*3,
+                                         Gv=numpy.zeros((1,3))) / cell.vol
             for i, dm in enumerate(dms):
-                vk[i] += madelung * reduce(numpy.dot, (ovlp, dm, ovlp))
+                vk[i] += fac_G0 * reduce(numpy.dot, (ovlp, dm, ovlp))
         vk = vk.reshape(dm.shape)
 
     t1 = log.timer('sr jk', *t1)
@@ -401,8 +390,6 @@ if __name__ == '__main__':
     cell.verbose = 0
     cell.build(0,0)
     cell.verbose = 5
-    #print cell.nimgs
-    #cell.nimgs = [4,4,4]
 
     mf = pscf.RHF(cell)
     dm = mf.get_init_guess()
@@ -420,26 +407,18 @@ if __name__ == '__main__':
     print(numpy.einsum('ij,ji->', vj, dm), 'ref=46.698942480902062')
     print(numpy.einsum('ij,ji->', vk, dm), 'ref=37.348163681114187')
 
-#    kpts = cell.make_kpts([2]*3)[:2]
-#    from pyscf.pbc.df import df, fft, mdf
-#    with_df = df.DF(cell, kpts)
-#    with_df.auxbasis = 'weigend'
-#    with_df.gs = (10,) * 3
-#    dms = numpy.array([dm]*len(kpts))
-#    vj, vk = with_df.get_jk(dms, exxdiv=mf.exxdiv, kpts=kpts)
-#    print(numpy.einsum('ij,ji->', vj[0], dms[0]), - 46.69801575509578)
-#    print(numpy.einsum('ij,ji->', vj[1], dms[1]), - 46.69832599053373)
-#    print(numpy.einsum('ij,ji->', vj[2], dms[2]), - 46.69543513869943)
-#    print(numpy.einsum('ij,ji->', vj[3], dms[3]), - 46.69588235470858)
-#    print(numpy.einsum('ij,ji->', vj[4], dms[4]), - 46.69832599053366)
-#    print(numpy.einsum('ij,ji->', vj[5], dms[5]), - 46.69860687642400)
-#    print(numpy.einsum('ij,ji->', vj[6], dms[6]), - 46.69588235470854)
-#    print(numpy.einsum('ij,ji->', vj[7], dms[7]), - 46.69625412727036)
-#    print(numpy.einsum('ij,ji->', vk[0], dms[0]), - 34.79565846177087)
-#    print(numpy.einsum('ij,ji->', vk[1], dms[1]), - 34.79608737095757)
-#    print(numpy.einsum('ij,ji->', vk[2], dms[2]), - 34.79598745031922)
-#    print(numpy.einsum('ij,ji->', vk[3], dms[3]), - 34.79635257842969)
-#    print(numpy.einsum('ij,ji->', vk[4], dms[4]), - 34.79608737095759)
-#    print(numpy.einsum('ij,ji->', vk[5], dms[5]), - 34.79569086979802)
-#    print(numpy.einsum('ij,ji->', vk[6], dms[6]), - 34.79635257842970)
-#    print(numpy.einsum('ij,ji->', vk[7], dms[7]), - 34.79590864252606)
+    kpts = cell.make_kpts([2]*3)[:4]
+    from pyscf.pbc.df import DF
+    with_df = DF(cell, kpts)
+    with_df.auxbasis = 'weigend'
+    with_df.gs = [5] * 3
+    dms = numpy.array([dm]*len(kpts))
+    vj, vk = with_df.get_jk(dms, exxdiv=mf.exxdiv, kpts=kpts)
+    print(numpy.einsum('ij,ji->', vj[0], dms[0]) - 46.69784067248350)
+    print(numpy.einsum('ij,ji->', vj[1], dms[1]) - 46.69814992718212)
+    print(numpy.einsum('ij,ji->', vj[2], dms[2]) - 46.69526120279135)
+    print(numpy.einsum('ij,ji->', vj[3], dms[3]) - 46.69570739526301)
+    print(numpy.einsum('ij,ji->', vk[0], dms[0]) - 37.27020025046015)
+    print(numpy.einsum('ij,ji->', vk[1], dms[1]) - 37.27047172558580)
+    print(numpy.einsum('ij,ji->', vk[2], dms[2]) - 37.27046412080765)
+    print(numpy.einsum('ij,ji->', vk[3], dms[3]) - 37.27056060718295)
