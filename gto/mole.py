@@ -1791,6 +1791,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         self.stdout.write('[INPUT] num electrons = %d\n' % self.nelectron)
         self.stdout.write('[INPUT] charge = %d\n' % self.charge)
         self.stdout.write('[INPUT] spin (= nelec alpha-beta = 2S) = %d\n' % self.spin)
+        self.stdout.write('[INPUT] symmetry %s subgroup %s\n' %
+                          (self.symmetry, self.symmetry_subgroup))
 
         for ia,atom in enumerate(self._atom):
             coorda = tuple([x * param.BOHR for x in atom[1]])
@@ -1840,7 +1842,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
             logger.info(self, 'number of shells = %d', self.nbas)
             logger.info(self, 'number of NR pGTOs = %d', self.npgto_nr())
             logger.info(self, 'number of NR cGTOs = %d', self.nao_nr())
-        if self.verbose >= logger.DEBUG1:
+        if self.verbose >= logger.DEBUG2:
             for i in range(len(self._bas)):
                 exps = self.bas_exp(i)
                 logger.debug1(self, 'bas %d, expnt(s) = %s', i, str(exps))

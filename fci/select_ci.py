@@ -111,9 +111,8 @@ def enlarge_space(myci, civec_strs, eri, norb, nelec):
     na = len(strsa)
     nb = len(strsb)
     ci0 = ci_coeff.reshape(-1,na,nb)
-    abs_ci = abs(ci0).max(axis=0)
-    civec_a_max = abs_ci.max(axis=1)
-    civec_b_max = abs_ci.max(axis=0)
+    civec_a_max = lib.norm(ci0, axis=2).max(axis=0)
+    civec_b_max = lib.norm(ci0, axis=1).max(axis=0)
     ci_aidx = numpy.where(civec_a_max > myci.ci_coeff_cutoff)[0]
     ci_bidx = numpy.where(civec_b_max > myci.ci_coeff_cutoff)[0]
     civec_a_max = civec_a_max[ci_aidx]

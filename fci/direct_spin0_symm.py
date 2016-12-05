@@ -30,7 +30,6 @@ from pyscf.fci import direct_spin0
 from pyscf.fci import direct_spin1
 from pyscf.fci import direct_spin1_symm
 from pyscf.fci import addons
-from pyscf.fci.spin_op import contract_ss
 
 libfci = lib.load_library('libfci')
 
