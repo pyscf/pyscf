@@ -102,7 +102,7 @@ class PWDF(lib.StreamObject):
         logger.debug1(self, '    kpts = %s', self.kpts)
 
     def pw_loop(self, gs=None, kpti_kptj=None, shls_slice=None,
-                max_memory=2000):
+                max_memory=2000, aosym='s1'):
         '''Plane wave part'''
         cell = self.cell
         if gs is None:
@@ -118,37 +118,54 @@ class PWDF(lib.StreamObject):
         gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
         ngs = gxyz.shape[0]
 
-# Theoretically, hermitian symmetry can be also found for kpti == kptj:
-#       f_ji(G) = \int f_ji exp(-iGr) = \int f_ij^* exp(-iGr) = [f_ij(-G)]^*
-# The hermi operation needs reordering the axis-0.  It is inefficient
-        if gamma_point(kpti) and gamma_point(kptj):
-            aosym = 's1hermi'
+        if shls_slice is None:
+            shls_slice = (0, cell.nbas, 0, cell.nbas)
+        if aosym == 's2':
+            assert(shls_slice[2] == 0)
+            i0 = ao_loc[shls_slice[0]]
+            i1 = ao_loc[shls_slice[1]]
+            nij = i1*(i1+1)//2 - i0*(i0+1)//2
         else:
-            aosym = 's1'
-
-        blksize = min(max(16, int(max_memory*1e6*.75/16/nao**2)), 16384)
+            ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
+            nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
+            nij = ni*nj
+        blksize = min(max(16, int(max_memory*1e6*.75/16/nij)), 16384)
         sublk = max(16, int(blksize//4))
-        buf = [numpy.zeros(nao*nao*blksize, dtype=numpy.complex128)]
-        pqkRbuf = numpy.empty(nao*nao*sublk)
-        pqkIbuf = numpy.empty(nao*nao*sublk)
+        buf = [numpy.zeros(nij*blksize, dtype=numpy.complex128)]
+        pqkRbuf = numpy.empty(nij*sublk)
+        pqkIbuf = numpy.empty(nij*sublk)
 
-        for p0, p1 in self.prange(0, ngs, blksize):
-            #aoao = ft_ao.ft_aopair(cell, Gv[p0:p1], shls_slice, aosym,
-            #                       b, Gvbase, gxyz[p0:p1], gs, (kpti, kptj))
-            aoao = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                         b, gxyz[p0:p1], Gvbase, kptj-kpti,
-                                         kptj.reshape(1,3), out=buf)[0]
-            for i0, i1 in lib.prange(0, p1-p0, sublk):
-                nG = i1 - i0
-                pqkR = numpy.ndarray((nao,nao,nG), buffer=pqkRbuf)
-                pqkI = numpy.ndarray((nao,nao,nG), buffer=pqkIbuf)
-                pqkR[:] = aoao[i0:i1].real.transpose(1,2,0)
-                pqkI[:] = aoao[i0:i1].imag.transpose(1,2,0)
-                yield (pqkR.reshape(-1,nG), pqkI.reshape(-1,nG), p0+i0, p0+i1)
-            aoao[:] = 0
+        if aosym == 's2':
+            for p0, p1 in self.prange(0, ngs, blksize):
+                aoao = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                             b, gxyz[p0:p1], Gvbase, kptj-kpti,
+                                             kptj.reshape(1,3), out=buf)[0]
+                for i0, i1 in lib.prange(0, p1-p0, sublk):
+                    nG = i1 - i0
+                    pqkR = numpy.ndarray((nij,nG), buffer=pqkRbuf)
+                    pqkI = numpy.ndarray((nij,nG), buffer=pqkIbuf)
+                    pqkR[:] = aoao[i0:i1].T
+                    pqkI[:] = aoao[i0:i1].T
+                    yield (pqkR, pqkI, p0+i0, p0+i1)
+                aoao[:] = 0
+        else:
+            for p0, p1 in self.prange(0, ngs, blksize):
+                #aoao = ft_ao.ft_aopair(cell, Gv[p0:p1], shls_slice, aosym,
+                #                       b, Gvbase, gxyz[p0:p1], gs, (kpti, kptj))
+                aoao = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                             b, gxyz[p0:p1], Gvbase, kptj-kpti,
+                                             kptj.reshape(1,3), out=buf)[0]
+                for i0, i1 in lib.prange(0, p1-p0, sublk):
+                    nG = i1 - i0
+                    pqkR = numpy.ndarray((ni,nj,nG), buffer=pqkRbuf)
+                    pqkI = numpy.ndarray((ni,nj,nG), buffer=pqkIbuf)
+                    pqkR[:] = aoao[i0:i1].real.transpose(1,2,0)
+                    pqkI[:] = aoao[i0:i1].imag.transpose(1,2,0)
+                    yield (pqkR.reshape(-1,nG), pqkI.reshape(-1,nG), p0+i0, p0+i1)
+                aoao[:] = 0
 
     def ft_loop(self, gs=None, kpt=numpy.zeros(3), kpts=None, shls_slice=None,
-                max_memory=4000):
+                max_memory=4000, aosym='s1'):
         '''
         Fourier transform iterator for all kpti which satisfy  kpt = kpts - kpti
         '''
@@ -161,40 +178,57 @@ class PWDF(lib.StreamObject):
         kpts = numpy.asarray(kpts)
         nkpts = len(kpts)
 
-        nao = cell.nao_nr()
+        ao_loc = cell.ao_loc_nr()
         b = cell.reciprocal_vectors()
         Gv, Gvbase, kws = cell.get_Gv_weights(gs)
         gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
         ngs = gxyz.shape[0]
 
-# Theoretically, hermitian symmetry can be also found for kpti == kptj:
-#       f_ji(G) = \int f_ji exp(-iGr) = \int f_ij^* exp(-iGr) = [f_ij(-G)]^*
-# The hermi operation needs reordering the axis-0.  It is inefficient
-        if gamma_point(kpt) and gamma_point(kpts):
-            aosym = 's1hermi'
+        if shls_slice is None:
+            shls_slice = (0, cell.nbas, 0, cell.nbas)
+        if aosym == 's2':
+            assert(shls_slice[2] == 0)
+            i0 = ao_loc[shls_slice[0]]
+            i1 = ao_loc[shls_slice[1]]
+            nij = i1*(i1+1)//2 - i0*(i0+1)//2
         else:
-            aosym = 's1'
-
-        blksize = max(16, int(max_memory*.9e6/(nao**2*(nkpts+1)*16)))
+            ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
+            nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
+            nij = ni*nj
+        blksize = max(16, int(max_memory*.9e6/(nij*(nkpts+1)*16)))
         blksize = min(blksize, ngs, 16384)
-        buf = [numpy.zeros(nao*nao*blksize, dtype=numpy.complex128)
-               for k in range(nkpts)]
-        pqkRbuf = numpy.empty(nao*nao*blksize)
-        pqkIbuf = numpy.empty(nao*nao*blksize)
+        buf = [numpy.zeros(nij*blksize, dtype='D') for k in range(nkpts)]
+        pqkRbuf = numpy.empty(nij*blksize)
+        pqkIbuf = numpy.empty(nij*blksize)
 
-        for p0, p1 in self.prange(0, ngs, blksize):
-            ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                  b, gxyz[p0:p1], Gvbase, kpt, kpts, out=buf)
-            nG = p1 - p0
-            for k in range(nkpts):
-                aoao = numpy.ndarray((nG,nao,nao), dtype=numpy.complex128,
-                                     order='F', buffer=buf[k])
-                pqkR = numpy.ndarray((nao,nao,nG), buffer=pqkRbuf)
-                pqkI = numpy.ndarray((nao,nao,nG), buffer=pqkIbuf)
-                pqkR[:] = aoao.real.transpose(1,2,0)
-                pqkI[:] = aoao.imag.transpose(1,2,0)
-                yield (k, pqkR.reshape(-1,nG), pqkI.reshape(-1,nG), p0, p1)
-                aoao[:] = 0  # == buf[k][:] = 0
+        if aosym == 's2':
+            for p0, p1 in self.prange(0, ngs, blksize):
+                ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                      b, gxyz[p0:p1], Gvbase, kpt, kpts, out=buf)
+                nG = p1 - p0
+                for k in range(nkpts):
+                    aoao = numpy.ndarray((nG,nij), dtype=numpy.complex128,
+                                         order='F', buffer=buf[k])
+                    pqkR = numpy.ndarray((nij,nG), buffer=pqkRbuf)
+                    pqkI = numpy.ndarray((nij,nG), buffer=pqkIbuf)
+                    pqkR[:] = aoao.real.T
+                    pqkI[:] = aoao.imag.T
+                    yield (k, pqkR, pqkI, p0, p1)
+                    aoao[:] = 0  # == buf[k][:] = 0
+        else:
+            for p0, p1 in self.prange(0, ngs, blksize):
+                ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                      b, gxyz[p0:p1], Gvbase, kpt, kpts, out=buf)
+                nG = p1 - p0
+                for k in range(nkpts):
+                    aoao = numpy.ndarray((nG,ni,nj), dtype=numpy.complex128,
+                                         order='F', buffer=buf[k])
+                    pqkR = numpy.ndarray((ni,nj,nG), buffer=pqkRbuf)
+                    pqkI = numpy.ndarray((ni,nj,nG), buffer=pqkIbuf)
+                    pqkR[:] = aoao.real.transpose(1,2,0)
+                    pqkI[:] = aoao.imag.transpose(1,2,0)
+                    yield (k, pqkR.reshape(-1,nG), pqkI.reshape(-1,nG), p0, p1)
+                    aoao[:] = 0  # == buf[k][:] = 0
 
     def prange(self, start, stop, step):
         return lib.prange(start, stop, step)

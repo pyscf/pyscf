@@ -82,6 +82,9 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
     nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
     shape = (nGv, ni, nj)
     fill = getattr(libpbc, 'PBC_ft_fill_'+aosym)
+# Theoretically, hermitian symmetry can be also found for kpti == kptj:
+#       f_ji(G) = \int f_ji exp(-iGr) = \int f_ij^* exp(-iGr) = [f_ij(-G)]^*
+# The hermi operation needs reordering the axis-0.  It is inefficient.
     if aosym == 's1hermi': # Symmetry for Gamma point
         assert(abs(kpt).sum() < 1e-9 and abs(kptjs).sum() < 1e-9)
     elif aosym == 's2':
