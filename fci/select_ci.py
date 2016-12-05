@@ -142,11 +142,7 @@ def enlarge_space(myci, civec_strs, eri, norb, nelec):
         lib.takebak_2d(ci1, tmp, aidx, bidx)
         cs.append(_as_SCIvector(ci1, ci_strs))
 
-    if ci_coeff[0].ndim == 0 or ci_coeff[0].shape[-1] != nb:
-        cs = [c.ravel() for c in cs]
-
-    if (isinstance(ci_coeff, numpy.ndarray) and
-        ci_coeff.shape[0] == na or ci_coeff.shape[0] == na*nb):
+    if not isinstance(civec_strs, (tuple, list)) and civec_strs.ndim < 3:
         cs = cs[0]
     return cs
 
@@ -396,6 +392,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
         log.debug('cycle %d  ci.shape %s  float_tol %g',
                   icycle, (len(ci_strs[0]), len(ci_strs[1])), float_tol)
 
+        ci0 = [c.ravel() for c in ci0]
         link_index = _all_linkstr_index(ci_strs, norb, nelec)
         hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
         #e, ci0 = lib.davidson(hop, ci0.reshape(-1), precond, tol=float_tol)
@@ -426,6 +423,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
 
     ci_strs = ci0[0]._strs
     log.debug('Extra CI in selected space %s', (len(ci_strs[0]), len(ci_strs[1])))
+    ci0 = [c.ravel() for c in ci0]
     link_index = _all_linkstr_index(ci_strs, norb, nelec)
     hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
     e, c = myci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
@@ -724,7 +722,7 @@ class SelectCI(direct_spin1.FCISolver):
     @lib.with_doc(spin_square.__doc__)
     def spin_square(self, civec_strs, norb, nelec):
         nelec = direct_spin1._unpack_nelec(nelec, self.spin)
-        if isinstance(civec_strs, numpy.ndarray):
+        if civec_strs[0].size != len(self._strs[0])*len(self._strs[1]):
             return spin_square(_as_SCIvector_if_not(civec_strs, self._strs), norb, nelec)
         else:
             ss = [spin_square(_as_SCIvector_if_not(c, self._strs), norb, nelec)
@@ -735,9 +733,9 @@ class SelectCI(direct_spin1.FCISolver):
         nelec = direct_spin1._unpack_nelec(nelec, self.spin)
         def check(x):
             ci, _, (strsa, strsb) = _unpack(x, nelec, self._strs)
-            return [(ci[i,j], bin(strsa[i]), bin(strsa[j]))
+            return [(ci[i,j], bin(strsa[i]), bin(strsb[j]))
                     for i,j in numpy.argwhere(abs(ci) > tol)]
-        if isinstance(civec_strs, numpy.ndarray):
+        if civec_strs[0].size != len(self._strs[0])*len(self._strs[1]):
             return check(civec_strs)
         else:
             return [check(x) for x in civec_strs]

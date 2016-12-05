@@ -563,7 +563,9 @@ class FCISolver(lib.StreamObject):
 
     def spin_square(self, fcivec, norb, nelec):
         nelec = _unpack_nelec(nelec, self.spin)
-        if isinstance(fcivec, numpy.ndarray) and fcivec.ndim < 2:
+        na = cistring.num_strings(norb, nelec[0])
+        nb = cistring.num_strings(norb, nelec[1])
+        if fcivec[0].size != na*nb:
             return spin_op.spin_square0(fcivec, norb, nelec)
         else:
             ss = [spin_op.spin_square0(c, norb, nelec) for c in fcivec]
@@ -620,13 +622,15 @@ class FCISolver(lib.StreamObject):
         nelec = _unpack_nelec(nelec, self.spin)
         return trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)
 
-    def large_ci(self, ci, norb, nelec, tol=.1):
+    def large_ci(self, fcivec, norb, nelec, tol=.1):
         from pyscf.fci import addons
         nelec = _unpack_nelec(nelec, self.spin)
-        if isinstance(ci, numpy.ndarray) and fcivec.ndim < 2:
-            return addons.large_ci(ci, norb, nelec, tol)
+        na = cistring.num_strings(norb, nelec[0])
+        nb = cistring.num_strings(norb, nelec[1])
+        if fcivec[0].size != na*nb:
+            return addons.large_ci(fcivec, norb, nelec, tol)
         else:
-            return [addons.large_ci(x, norb, nelec, tol) for x in ci]
+            return [addons.large_ci(x, norb, nelec, tol) for x in fcivec]
 
     def contract_ss(self, fcivec, norb, nelec):
         from pyscf.fci import spin_op
