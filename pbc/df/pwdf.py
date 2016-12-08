@@ -50,6 +50,7 @@ def get_nuc(mydf, kpts=None):
         pqkR = pqkI = None
     t1 = log.timer_debug1('contracting Vnuc', *t1)
 
+    vne = vne.reshape(nkpts,nao,nao)
     if kpts is None or numpy.shape(kpts) == (3,):
         vne = vne[0]
     return vne

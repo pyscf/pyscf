@@ -67,8 +67,8 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
     nband = len(kpts_band)
     j_real = gamma_point(kpts_band)
 
-    dmsR = dms.real.reshape(nset,nkpts,nao**2)
-    dmsI = dms.imag.reshape(nset,nkpts,nao**2)
+    dmsR = dms.real.transpose(0,1,3,2).reshape(nset,nkpts,nao**2)
+    dmsI = dms.imag.transpose(0,1,3,2).reshape(nset,nkpts,nao**2)
     rhoR = numpy.zeros((nset,naux))
     rhoI = numpy.zeros((nset,naux))
     max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]))
@@ -77,8 +77,9 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
         p1 = 0
         for LpqR, LpqI in mydf.sr_loop(kptii, max_memory, False):
             p0, p1 = p1, p1+LpqR.shape[0]
-            #:Lpq = (LpqR + LpqI*1j).transpose(1,0,2)
-            #:rho [:,p0:p1] += numpy.einsum('Lpq,xpq->xL', Lpq, dms[:,k])
+            #:Lpq = (LpqR + LpqI*1j).reshape(-1,nao,nao)
+            #:rhoR[:,p0:p1] += numpy.einsum('Lpq,xqp->xL', Lpq, dms[:,k]).real
+            #:rhoI[:,p0:p1] += numpy.einsum('Lpq,xqp->xL', Lpq, dms[:,k]).imag
             rhoR[:,p0:p1] += numpy.einsum('Lp,xp->xL', LpqR, dmsR[:,k])
             rhoI[:,p0:p1] += numpy.einsum('Lp,xp->xL', LpqR, dmsI[:,k])
             if LpqI is not None:
@@ -90,6 +91,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
     weight = 1./nkpts
     rhoR *= weight
     rhoI *= weight
+    rho = rhoR+rhoI*1j
     vjR = numpy.zeros((nset,nband,nao_pair))
     vjI = numpy.zeros((nset,nband,nao_pair))
     for k, kpt in enumerate(kpts_band):
@@ -97,8 +99,9 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
         p1 = 0
         for LpqR, LpqI in mydf.sr_loop(kptii, max_memory, True):
             p0, p1 = p1, p1+LpqR.shape[0]
-            #:v = numpy.dot(jaux, Lpq) + numpy.dot(rho, j3c)
-            #:vj_kpts[:,k] += lib.unpack_tril(v)
+            #:Lpq = (LpqR + LpqI*1j)#.reshape(-1,nao,nao)
+            #:vjR[:,k] += numpy.dot(rho[:,p0:p1], Lpq).real
+            #:vjI[:,k] += numpy.dot(rho[:,p0:p1], Lpq).imag
             vjR[:,k] += numpy.dot(rhoR[:,p0:p1], LpqR)
             if not j_real:
                 vjI[:,k] += numpy.dot(rhoI[:,p0:p1], LpqR)
@@ -199,13 +202,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
         vk_kpts = vkR + vkI * 1j
 
     if exxdiv is not None:
-        ovlp = cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpts_band)
-        mydf.exxdiv = exxdiv
-        fac_G0 = tools.pbc.get_coulG(cell, exx=True, mf=mydf, gs=[0]*3,
-                                     Gv=numpy.zeros((1,3))) / cell.vol
-        for k in range(nband):
-            for i in range(nset):
-                vk_kpts[i,k] += fac_G0 * reduce(numpy.dot, (ovlp[k], dms[i,k], ovlp[k]))
+        assert(exxdiv.lower() == 'ewald')
+        _ewald_exxdiv_for_G0(cell, kpts_band, dms, vk_kpts)
 
     vk_kpts *= 1./nkpts
 
@@ -323,12 +321,8 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
         else:
             vk = vkR + vkI * 1j
         if exxdiv is not None:
-            ovlp = cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpt)
-            mydf.exxdiv = exxdiv
-            fac_G0 = tools.pbc.get_coulG(cell, kpt, exx=True, mf=mydf, gs=[0]*3,
-                                         Gv=numpy.zeros((1,3))) / cell.vol
-            for i, dm in enumerate(dms):
-                vk[i] += fac_G0 * reduce(numpy.dot, (ovlp, dm, ovlp))
+            assert(exxdiv.lower() == 'ewald')
+            _ewald_exxdiv_for_G0(cell, kpt, dms, vk)
         vk = vk.reshape(dm.shape)
 
     t1 = log.timer('sr jk', *t1)
@@ -368,6 +362,19 @@ def zdotNC(aR, aI, bR, bI, alpha=1, cR=None, cI=None, beta=0):
     cI = lib.ddot(aR, bI,-alpha, cI, beta)
     cI = lib.ddot(aI, bR, alpha, cI, 1   )
     return cR, cI
+
+def _ewald_exxdiv_for_G0(cell, kpts, dms, vk):
+    if kpts is None or numpy.shape(kpts) == (3,):
+        ovlp = cell.pbc_intor('cint1e_ovlp_sph', hermi=1)
+        madelung = tools.pbc.madelung(cell, numpy.zeros(3))
+        for i,dm in enumerate(dms):
+            vk[i] += madelung * reduce(numpy.dot, (ovlp, dm, ovlp))
+    else:
+        ovlp = cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpts)
+        madelung = len(kpts) * tools.pbc.madelung(cell, kpts)
+        for k, s in enumerate(ovlp):
+            for i,dm in enumerate(dms):
+                vk[i,k] += madelung * reduce(numpy.dot, (s, dm[k], s))
 
 
 if __name__ == '__main__':

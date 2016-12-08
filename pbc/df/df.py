@@ -80,8 +80,6 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
         ptr = auxcell._bas[ib,gto.PTR_COEFF]
         cs = auxcell._env[ptr:ptr+np*nc].reshape(nc,np).T
 
-#        if l > 0:
-#            continue
         if numpy.any(es < drop_eta):
             cs = cs[es>=drop_eta]
             es = es[es>=drop_eta]
@@ -713,3 +711,4 @@ class _load_and_unpack(object):
         v = numpy.asarray(self.dat[p0:p1])
         v = lib.transpose(v.reshape(-1,nao,nao), axes=(0,2,1)).conj()
         return v.reshape(-1,nao**2)
+

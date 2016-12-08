@@ -314,8 +314,6 @@ class RHF(hf.RHF):
             if self.exxdiv == 'ewald':
                 # G=0 is not inculded in the ._eri integrals
                 vk = _ewald_exxdiv_for_G0(self, dm, kpt, vk)
-            elif self.exxdiv is not None:
-                vk = _other_exxdiv_for_G0(self, dm, kpt, vk)
         else:
             vj, vk = self.with_df.get_jk(dm, hermi, kpt, kpt_band,
                                          exxdiv=self.exxdiv)
@@ -431,16 +429,4 @@ def _ewald_exxdiv_for_G0(mf, dm, kpt, vk):
     #                     'The Ewald treatment on G=0 term for K matrix '
     #                     'might not be well defined.  Set mf.exxdiv=None '
     #                     'to switch off the Ewald term.\n')
-    return vk
-
-def _other_exxdiv_for_G0(mf, dm, kpt, vk):
-    cell = mf.cell
-    ovlp = cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpt)
-    fac_G0 = tools.pbc.get_coulG(cell, kpt, exx=True, mf=mf, gs=[0]*3,
-                                 Gv=numpy.zeros((1,3))) / cell.vol
-    if isinstance(dm, np.ndarray) and dm.ndim == 2:
-        vk += fac_G0 * reduce(np.dot, (ovlp, dm, ovlp))
-    else:
-        for i, dmi in enumerate(dm):
-            vk[i] += fac_G0 * reduce(numpy.dot, (ovlp, dmi, ovlp))
     return vk

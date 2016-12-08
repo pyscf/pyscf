@@ -23,11 +23,10 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
 
-    kpt_allow = numpy.zeros(3)
-    coulG = mydf.weighted_coulG(kpt_allow, False, mydf.gs)
-
     dmsR = dms.real.reshape(nset,nkpts,nao**2)
     dmsI = dms.imag.reshape(nset,nkpts,nao**2)
+    kpt_allow = numpy.zeros(3)
+    coulG = mydf.weighted_coulG(kpt_allow, False, mydf.gs)
     ngs = len(coulG)
     vR = numpy.zeros((nset,ngs))
     vI = numpy.zeros((nset,ngs))
@@ -36,9 +35,9 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
             in mydf.ft_loop(mydf.gs, kpt_allow, kpts, max_memory=max_memory):
         for i in range(nset):
             rhoR = numpy.dot(dmsR[i,k], pqkR)
-            rhoR-= numpy.dot(dmsI[i,k], pqkI)
+            rhoR+= numpy.dot(dmsI[i,k], pqkI)
             rhoI = numpy.dot(dmsR[i,k], pqkI)
-            rhoI+= numpy.dot(dmsI[i,k], pqkR)
+            rhoI-= numpy.dot(dmsI[i,k], pqkR)
             vR[i,p0:p1] += rhoR * coulG[p0:p1]
             vI[i,p0:p1] += rhoI * coulG[p0:p1]
     pqkR = pqkI = coulG = None
@@ -73,7 +72,6 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
         vj_kpts = vjR
     else:
         vj_kpts = vjR + vjI*1j
-    vj_kpts = vj_kpts.reshape(-1,nband,nao,nao)
     t1 = log.timer_debug1('get_j pass 2', *t1)
 
     if kpt_band is not None and numpy.shape(kpt_band) == (3,):
@@ -86,6 +84,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
 
 def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
                exxdiv=None):
+    from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = (time.clock(), time.time())
@@ -162,6 +161,10 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
             if kk_todo[ki,kj]:
                 make_kpt(kptj-kpti)
 
+    if cell.dimension != 3 and exxdiv is not None:
+        assert(exxdiv.lower() == 'ewald')
+        _ewald_exxdiv_for_G0(cell, kpts_band, dms, vk_kpts)
+
     vk_kpts *= 1./nkpts
     if abs(kpts).sum() < 1e-9 and abs(kpts_band).sum() < 1e-9:
         vk_kpts = vk_kpts.real
@@ -184,6 +187,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
 def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
            kpt_band=None, with_j=True, with_k=True, exxdiv=None):
     '''JK for given k-point'''
+    from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0
     vj = vk = None
     if kpt_band is not None and abs(kpt-kpt_band).sum() > 1e-9:
         kpt = numpy.reshape(kpt, (1,3))
@@ -259,6 +263,9 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     if with_k:
         if gamma_point:
             vk = vk.real
+        if cell.dimension != 3 and exxdiv is not None:
+            assert(exxdiv.lower() == 'ewald')
+            _ewald_exxdiv_for_G0(cell, kpt, dms, vk)
         vk = vk.reshape(dm.shape)
     return vj, vk
 

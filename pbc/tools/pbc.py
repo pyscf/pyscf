@@ -167,7 +167,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None,
         G0_idx = np.where(absG2==0)[0]
         if len(G0_idx) > 0:
             coulG[G0_idx] = Nk*cell.vol*madelung(cell, kpts)
-    elif exxdiv == 'vcut_ws':
+    elif exxdiv == 'vcut_ws':  # PRB 87, 165122
         assert(cell.dimension == 3)
         if not hasattr(mf, '_ws_exx'):
             mf._ws_exx = precompute_exx(cell, kpts)
@@ -277,7 +277,7 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None):
         rcut = rcut + min(1./heights_inv)
         nimgs = np.ceil(rcut*heights_inv)
     else:
-        rcut = max((np.asarray(nimgs))/heights_inv) + min(1./heights_inv) # ~ the incircle radius
+        rcut = max((np.asarray(nimgs))/heights_inv) + min(1./heights_inv) # ~ the inradius
 
     if dimension is None:
         dimension = cell.dimension
