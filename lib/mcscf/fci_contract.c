@@ -264,7 +264,9 @@ static void spread_bufa_t1(double *ci1, double *t1, int nrow_t1,
                 sign = EXTRACT_SIGN(tab[j]);
                 cp0 = t1 + ia*nrow_t1;
                 cp1 = ci1 + str1*nstrb;
-                if (sign > 0) {
+                if (sign == 0) {
+                        break;
+                } else if (sign > 0) {
                         for (k = 0; k < bcount; k++) {
                                 cp1[k] += cp0[k];
                         }
@@ -754,120 +756,122 @@ void FCIpspace_h0tril(double *h0, double *h1e, double *g2e,
  * dimirrep stores the number of occurence for each irrep
  *
  ***********************************************************************/
-static void ctr_rhf2esym_kern(double *eri, double *ci0, double *ci1,
-                              double *ci1buf, double *t1buf,
-                              int bcount_for_spread_a, int ncol_ci1buf,
+static void pick_link_by_irrep(_LinkTrilT *clink, int *link_index,
+                               int nstr, int nlink, int eri_irrep)
+{
+        int i, j, k;
+        for (i = 0; i < nstr; i++) {
+                for (k = 0, j = 0; k < nlink; k++) {
+                        if (link_index[k*4+1] == eri_irrep) {
+                                clink[j].ia   = link_index[k*4+0];
+                                clink[j].addr = link_index[k*4+2];
+                                clink[j].sign = link_index[k*4+3];
+                                j++;
+                        }
+                }
+                if (j < nlink) {
+                        clink[j].sign = 0;
+                }
+                clink += nlink;
+                link_index += nlink * 4;
+        }
+}
+
+static void ctr_rhf2esym_kern1(double *eri, double *ci0, double *ci1ab,
+                              double *ci1buf, double *t1buf, int ncol_ci1buf,
                               int bcount, int stra_id, int strb_id,
-                              int norb, int na, int nb, int nlinka, int nlinkb,
-                              _LinkTrilT *clink_indexa, _LinkTrilT *clink_indexb,
-                              int *dimirrep, int totirrep)
+                              int nnorb, int nb_intermediate,
+                              int na, int nb, int nlinka, int nlinkb,
+                              _LinkTrilT *clink_indexa, _LinkTrilT *clink_indexb)
 {
         const char TRANS_N = 'N';
         const double D0 = 0;
         const double D1 = 1;
-        const int nnorb = norb * (norb+1)/2;
-        int ir, p0;
         double *t1 = t1buf;
         double *vt1 = t1buf + nnorb*bcount;
 
         memset(t1, 0, sizeof(double)*nnorb*bcount);
         FCIprog_a_t1(ci0, t1, bcount, stra_id, strb_id,
-                     norb, nb, nlinka, clink_indexa);
-        FCIprog_b_t1(ci0, t1, bcount, stra_id, strb_id,
-                     norb, nb, nlinkb, clink_indexb);
-
-        for (ir = 0, p0 = 0; ir < totirrep; ir++) {
-                dgemm_(&TRANS_N, &TRANS_N, &bcount, dimirrep+ir, dimirrep+ir,
-                       &D1,  t1+p0*bcount, &bcount, eri+p0*nnorb+p0, &nnorb,
-                       &D0, vt1+p0*bcount, &bcount);
-                p0 += dimirrep[ir];
-        }
-        FCIspread_b_t1(ci1, vt1, bcount, stra_id, strb_id,
-                       norb, nb, nlinkb, clink_indexb);
-        //FCIspread_a_t1(ci1buf, vt1, bcount_for_spread_a, stra_id, 0,
-        //               norb, ncol_ci1buf, nlinka, clink_indexa);
-        spread_bufa_t1(ci1buf, vt1, bcount, bcount_for_spread_a, stra_id, 0,
-                       norb, ncol_ci1buf, nlinka, clink_indexa);
+                     0, nb, nlinka, clink_indexa);
+        dgemm_(&TRANS_N, &TRANS_N, &bcount, &nnorb, &nnorb,
+               &D1, t1, &bcount, eri, &nnorb, &D0, vt1, &bcount);
+        FCIspread_b_t1(ci1ab, vt1, bcount, stra_id, strb_id,
+                       0, nb_intermediate, nlinkb, clink_indexb);
+        spread_bufa_t1(ci1buf, vt1, bcount, bcount, stra_id, 0,
+                       0, ncol_ci1buf, nlinka, clink_indexa);
 }
 
-void FCIcontract_2e_spin1_symm(double *eri, double *ci0, double *ci1,
-                               int norb, int na, int nb, int nlinka, int nlinkb,
-                               int *link_indexa, int *link_indexb,
-                               int *dimirrep, int totirrep)
+static void loop_c2e_symm1(double *eri, double *ci0, double *ci1aa, double *ci1ab,
+                           int nnorb, int na_intermediate, int nb_intermediate,
+                           int na, int nb, int nlinka, int nlinkb,
+                           _LinkTrilT *clinka, _LinkTrilT *clinkb)
 {
-        _LinkTrilT *clinka = malloc(sizeof(_LinkTrilT) * nlinka * na);
-        _LinkTrilT *clinkb = malloc(sizeof(_LinkTrilT) * nlinkb * nb);
-        FCIcompress_link_tril(clinka, link_indexa, na, nlinka);
-        FCIcompress_link_tril(clinkb, link_indexb, nb, nlinkb);
-
-        memset(ci1, 0, sizeof(double)*na*nb);
         double *ci1bufs[MAX_THREADS];
 #pragma omp parallel default(none) \
-                shared(eri, ci0, ci1, norb, na, nb, nlinka, nlinkb, \
-                       clinka, clinkb, dimirrep, totirrep, ci1bufs)
+                shared(eri, ci0, ci1aa, ci1ab, nnorb, na, nb, nlinka, nlinkb, \
+                       na_intermediate, nb_intermediate, clinka, clinkb, ci1bufs)
 {
         int strk, ib;
         size_t blen;
-        double *t1buf = malloc(sizeof(double) * STRB_BLKSIZE*norb*(norb+1));
+        double *t1buf = malloc(sizeof(double) * STRB_BLKSIZE*nnorb*2);
         double *ci1buf = malloc(sizeof(double) * na*STRB_BLKSIZE);
         ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
                 memset(ci1buf, 0, sizeof(double) * na*blen);
 #pragma omp for schedule(static)
-                for (strk = 0; strk < na; strk++) {
-                        ctr_rhf2esym_kern(eri, ci0, ci1, ci1buf, t1buf,
-                                          blen, blen, blen, strk, ib,
-                                          norb, na, nb, nlinka, nlinkb,
-                                          clinka, clinkb, dimirrep, totirrep);
+                for (strk = 0; strk < na_intermediate; strk++) {
+                        ctr_rhf2esym_kern1(eri, ci0, ci1ab, ci1buf, t1buf,
+                                           blen, blen, strk, ib,
+                                           nnorb, nb_intermediate, na, nb,
+                                           nlinka, nlinkb, clinka, clinkb);
                 }
                 FCIomp_reduce_inplace(ci1bufs, blen*na);
 #pragma omp master
-                FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
+                FCIaxpy2d(ci1aa+ib, ci1buf, na, nb, blen);
         }
         free(ci1buf);
         free(t1buf);
 }
+}
+
+void FCIcontract_2e_symm1(double **eris, double **ci0, double **ci1,
+                          int norb, int *nas, int *nbs, int nlinka, int nlinkb,
+                          int **linka, int **linkb, int *dimirrep, int totirrep,
+                          int wfnsym)
+{
+        int i;
+        int na = 0;
+        int nb = 0;
+        for (i = 0; i < totirrep; i++) {
+                na = MAX(nas[i], na);
+                nb = MAX(nbs[i], nb);
+        }
+        _LinkTrilT *clinka = malloc(sizeof(_LinkTrilT) * nlinka * na);
+        _LinkTrilT *clinkb = malloc(sizeof(_LinkTrilT) * nlinkb * nb);
+        int ai_ir, stra_ir, strb_ir, intera_ir, interb_ir, ma, mb;
+        for (stra_ir = 0; stra_ir < totirrep; stra_ir++) {
+        for (ai_ir = 0; ai_ir < totirrep; ai_ir++) {
+                strb_ir = wfnsym^stra_ir;
+                ma = nas[stra_ir];
+                mb = nbs[strb_ir];
+                if (ma > 0 && mb > 0 && dimirrep[ai_ir] > 0) {
+                        intera_ir = ai_ir^stra_ir;
+                        interb_ir = ai_ir^strb_ir;
+                        // clinka for inter_ir*ai_ir -> stra_ir
+                        pick_link_by_irrep(clinka, linka[intera_ir],
+                                           nas[intera_ir], nlinka, ai_ir);
+                        // clinka for strb_ir*ai_ir -> inter_ir
+                        pick_link_by_irrep(clinkb, linkb[strb_ir],
+                                           nbs[strb_ir], nlinkb, ai_ir);
+                        loop_c2e_symm1(eris[ai_ir], ci0[stra_ir],
+                                       ci1[stra_ir], ci1[intera_ir],
+                                       dimirrep[ai_ir], nas[intera_ir],
+                                       nbs[interb_ir], ma, mb,
+                                       nlinka, nlinkb, clinka, clinkb);
+                }
+        } }
         free(clinka);
         free(clinkb);
-}
-
-void FCIcontract_2e_spin0_symm(double *eri, double *ci0, double *ci1,
-                               int norb, int na, int nlink, int *link_index,
-                               int *dimirrep, int totirrep)
-{
-        _LinkTrilT *clink = malloc(sizeof(_LinkTrilT) * nlink * na);
-        FCIcompress_link_tril(clink, link_index, na, nlink);
-
-        memset(ci1, 0, sizeof(double)*na*na);
-        double *ci1bufs[MAX_THREADS];
-#pragma omp parallel default(none) \
-        shared(eri, ci0, ci1, norb, na, nlink, clink, \
-               dimirrep, totirrep, ci1bufs)
-{
-        int strk, ib;
-        size_t blen;
-        double *t1buf = malloc(sizeof(double) * STRB_BLKSIZE*norb*(norb+1));
-        double *ci1buf = malloc(sizeof(double) * na*STRB_BLKSIZE);
-        ci1bufs[omp_get_thread_num()] = ci1buf;
-        for (ib = 0; ib < na; ib += STRB_BLKSIZE) {
-                blen = MIN(STRB_BLKSIZE, na-ib);
-                memset(ci1buf, 0, sizeof(double) * na*blen);
-#pragma omp for schedule(static, 112)
-                for (strk = ib; strk < na; strk++) {
-                        ctr_rhf2esym_kern(eri, ci0, ci1, ci1buf, t1buf,
-                                          MIN(STRB_BLKSIZE, strk-ib), blen,
-                                          MIN(STRB_BLKSIZE, strk+1-ib),
-                                          strk, ib, norb, na, na, nlink, nlink,
-                                          clink, clink, dimirrep, totirrep);
-                }
-                FCIomp_reduce_inplace(ci1bufs, blen*na);
-#pragma omp master
-                FCIaxpy2d(ci1+ib, ci1buf, na, na, blen);
-        }
-        free(ci1buf);
-        free(t1buf);
-}
-        free(clink);
 }
 

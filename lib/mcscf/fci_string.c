@@ -263,17 +263,13 @@ void FCIdes_str_index(int *link_index, int norb, int na, int nocc,
 void FCIcompress_link(_LinkT *clink, int *link_index,
                       int norb, int nstr, int nlink)
 {
-        int i, j, k, a, str1, sign;
+        int j, k;
         for (k = 0; k < nstr; k++) {
                 for (j = 0; j < nlink; j++) {
-                        a    = link_index[j*4+0];
-                        i    = link_index[j*4+1];
-                        str1 = link_index[j*4+2];
-                        sign = link_index[j*4+3];
-                        clink[j].a = a;
-                        clink[j].i = i;
-                        clink[j].sign = sign;
-                        clink[j].addr = str1;
+                        clink[j].a    = link_index[j*4+0];
+                        clink[j].i    = link_index[j*4+1];
+                        clink[j].addr = link_index[j*4+2];
+                        clink[j].sign = link_index[j*4+3];
                 }
                 clink += nlink;
                 link_index += nlink * 4;
@@ -283,15 +279,12 @@ void FCIcompress_link(_LinkT *clink, int *link_index,
 void FCIcompress_link_tril(_LinkTrilT *clink, int *link_index,
                            int nstr, int nlink)
 {
-        int i, j, ia, str1, sign;
+        int i, j;
         for (i = 0; i < nstr; i++) {
                 for (j = 0; j < nlink; j++) {
-                        ia   = link_index[j*4+0];
-                        str1 = link_index[j*4+2];
-                        sign = link_index[j*4+3];
-                        clink[j].ia = ia;
-                        clink[j].sign = sign;
-                        clink[j].addr = str1;
+                        clink[j].ia   = link_index[j*4+0];
+                        clink[j].addr = link_index[j*4+2];
+                        clink[j].sign = link_index[j*4+3];
                 }
                 clink += nlink;
                 link_index += nlink * 4;

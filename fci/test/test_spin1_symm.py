@@ -33,13 +33,21 @@ cis.orbsym = orbsym
 numpy.random.seed(15)
 na = fci.cistring.num_strings(norb, nelec//2)
 ci0 = numpy.random.random((na,na))
-ci0 = ci0
-ci0 /= numpy.linalg.norm(ci0)
 
 class KnowValues(unittest.TestCase):
     def test_contract(self):
-        ci1 = cis.contract_2e(g2e, ci0, norb, nelec)
-        self.assertAlmostEqual(numpy.linalg.norm(ci1), 82.311122627448768, 9)
+        ci1 = fci.addons.symmetrize_wfn(ci0, norb, nelec, orbsym, wfnsym=0)
+        ci1 = cis.contract_2e(g2e, ci1, norb, nelec, wfnsym=0)
+        self.assertAlmostEqual(numpy.linalg.norm(ci1), 83.016780379400785, 9)
+        ci1 = fci.addons.symmetrize_wfn(ci0, norb, nelec, orbsym, wfnsym=1)
+        ci1 = cis.contract_2e(g2e, ci1, norb, nelec, wfnsym=1)
+        self.assertAlmostEqual(numpy.linalg.norm(ci1), 82.295069645213317, 9)
+        ci1 = fci.addons.symmetrize_wfn(ci0, norb, nelec, orbsym, wfnsym=2)
+        ci1 = cis.contract_2e(g2e, ci1, norb, nelec, wfnsym=2)
+        self.assertAlmostEqual(numpy.linalg.norm(ci1), 82.256692620435118, 9)
+        ci1 = fci.addons.symmetrize_wfn(ci0, norb, nelec, orbsym, wfnsym=3)
+        ci1 = cis.contract_2e(g2e, ci1, norb, nelec, wfnsym=3)
+        self.assertAlmostEqual(numpy.linalg.norm(ci1), 81.343382883053323, 9)
 
     def test_kernel(self):
         e, c = fci.direct_spin1_symm.kernel(h1e, g2e, norb, nelec, orbsym=orbsym)
