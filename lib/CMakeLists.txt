@@ -39,6 +39,7 @@ message("BLAS libraries: ${BLAS_LIBRARIES}")
 
 # set(BLAS_LIBRARIES "-Wl,-rpath=${MKLROOT}/lib/intel64/ ${BLAS_LIBRARIES}")
 
+check_function_exists(ffsll HAVE_FFS)
 
 find_package(OpenMP)
 if(OPENMP_FOUND)

@@ -599,41 +599,20 @@ void FCImake_hdiag(double *hdiag, double *h1e, double *jdiag, double *kdiag,
                           norb, na, na, nocc, nocc, strs, strs);
 }
 
-
-//see http://en.wikipedia.org/wiki/Find_first_set
-static const int TABLE[] = {
-        -1, // 0 
-        0 , // 1 
-        1 , // 2 
-        1 , // 3 
-        2 , // 4 
-        2 , // 5 
-        2 , // 6 
-        2 , // 7 
-        3 , // 8 
-        3 , // 9 
-        3 , // 10
-        3 , // 11
-        3 , // 12
-        3 , // 13
-        3 , // 14
-        3 , // 15
-};
-// be carefull with (r >> 64), which is not defined in C99 standard
 static int first1(uint64_t r)
 {
-        assert(r > 0);
-
-        uint64_t n = 0;
-        while (r != 0) {
-                if (r & 0xf) {
-                        return n + TABLE[r & 0xf];
-                } else {
-                        r >>= 4;
-                        n += 4;
-                }
-        }
-        return -1;
+#ifdef HAVE_FFS
+        return ffsll(r);
+#else
+        int n = 0;
+        if (r >> (n + 32)) n += 32;
+        if (r >> (n + 16)) n += 16;
+        if (r >> (n +  8)) n +=  8;
+        if (r >> (n +  4)) n +=  4;
+        if (r >> (n +  2)) n +=  2;
+        if (r >> (n +  1)) n +=  1;
+        return n;
+#endif
 }
 
 

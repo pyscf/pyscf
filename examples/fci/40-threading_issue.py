@@ -4,8 +4,7 @@
 #
 
 '''
-Using multithreading (OMP_NUM_THREADS=8 eg) causes numerical instability for
-FCI solver.
+Different number of OpenMP threads may lead to slightly different answers
 '''
 
 import numpy

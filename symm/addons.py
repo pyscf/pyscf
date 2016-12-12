@@ -59,8 +59,8 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True, tol=1e-9):
             norm[i] = numpy.einsum('ik,ki->i', moso, lib.cho_solve(ovlpso, moso.T))
     norm /= numpy.sum(norm, axis=0)  # for orbitals which are not normalized
     iridx = numpy.argmax(norm, axis=0)
-    orbsym = [irrep_name[i] for i in iridx]
-    logger.debug(mol, 'irreps of each MO %s', str(orbsym))
+    orbsym = numpy.asarray([irrep_name[i] for i in iridx])
+    logger.debug(mol, 'irreps of each MO %s', orbsym)
     if check:
         largest_norm = norm[iridx,numpy.arange(nmo)]
         orbidx = numpy.where(largest_norm < 1-tol)[0]

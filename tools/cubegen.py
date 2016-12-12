@@ -4,6 +4,7 @@
 #
 
 import numpy
+from pyscf import lib
 from pyscf.dft import numint, gen_grid
 
 '''
@@ -11,13 +12,13 @@ Gaussian cube file format
 '''
 
 def density(mol, outfile, dm, nx=80, ny=80, nz=80):
-    coord = [mol.atom_coord(ia) for ia in range(mol.natm)]
+    coord = mol.atom_coords()
     box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + 4
     boxorig = numpy.min(coord,axis=0) - 2
     xs = numpy.arange(nx) * (box[0]/nx)
     ys = numpy.arange(ny) * (box[1]/ny)
     zs = numpy.arange(nz) * (box[2]/nz)
-    coords = numpy.vstack(numpy.meshgrid(xs,ys,zs)).reshape(3,-1).T
+    coords = lib.cartesian_prod([xs,ys,zs])
     coords = numpy.asarray(coords, order='C') - (-boxorig)
 
     nao = mol.nao_nr()
@@ -40,7 +41,7 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80):
         for ia in range(mol.natm):
             chg = mol.atom_charge(ia)
             f.write('%5d %f' % (chg, chg))
-            f.write(' %14.8f %14.8f %14.8f\n' % tuple(mol.atom_coord(ia).tolist()))
+            f.write(' %14.8f %14.8f %14.8f\n' % tuple(coord[ia]))
         fmt = ' %14.8e' * nz + '\n'
         for ix in range(nx):
             for iy in range(ny):
