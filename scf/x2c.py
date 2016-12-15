@@ -8,6 +8,7 @@ import copy
 import numpy
 import scipy.linalg
 from pyscf import lib
+from pyscf import gto
 from pyscf.gto import mole
 from pyscf.lib import logger
 from pyscf.scf import hf
@@ -79,7 +80,6 @@ class X2C(lib.StreamObject):
             xmol = copy.copy(mol)
             xmol.build(False, False, basis=self.basis)
             return xmol, None
-
         elif self.xuncontract:
             xmol, contr_coeff = _uncontract_mol(mol, self.xuncontract)
             return xmol, contr_coeff
@@ -87,6 +87,7 @@ class X2C(lib.StreamObject):
             return mol, None
 
     def get_hcore(self, mol=None):
+        if mol is None: mol = self.mol
         xmol, contr_coeff_nr = self.get_xmol(mol)
         c = lib.param.LIGHT_SPEED
         assert('1E' in self.approx.upper())
@@ -100,7 +101,12 @@ class X2C(lib.StreamObject):
         else:
             h1 = _x2c1e_for_hcore(t, v, w, s, c)
 
-        if self.xuncontract:
+        if self.basis is not None:
+            s22 = xmol.intor_symmetric('cint1e_ovlp')
+            s21 = gto.mole.intor_cross('cint1e_ovlp', xmol, mol)
+            c = lib.cho_solve(s22, s21)
+            h1 = reduce(numpy.dot, (c.T.conj(), h1, c))
+        elif self.xuncontract:
             np, nc = contr_coeff_nr.shape
             contr_coeff = numpy.zeros((np*2,nc*2))
             contr_coeff[0::2,0::2] = contr_coeff_nr
@@ -111,6 +117,7 @@ class X2C(lib.StreamObject):
 
 class SpinFreeX2C(X2C):
     def get_hcore(self, mol=None):
+        if mol is None: mol = self.mol
         xmol, contr_coeff = self.get_xmol(mol)
         c = lib.param.LIGHT_SPEED
         assert('1E' in self.approx.upper())
@@ -124,7 +131,12 @@ class SpinFreeX2C(X2C):
         else:
             h1 = _x2c1e_for_hcore(t, v, w, s, c)
 
-        if self.xuncontract:
+        if self.basis is not None:
+            s22 = xmol.intor_symmetric('cint1e_ovlp_sph')
+            s21 = gto.mole.intor_cross('cint1e_ovlp_sph', xmol, mol)
+            c = lib.cho_solve(s22, s21)
+            h1 = reduce(numpy.dot, (c.T, h1, c))
+        if self.xuncontract and contr_coeff is not None:
             h1 = reduce(numpy.dot, (contr_coeff.T, h1, contr_coeff))
         return h1
 
@@ -476,7 +488,7 @@ if __name__ == '__main__':
         atom = [["O" , (0. , 0.     , 0.)],
                 [1   , (0. , -0.757 , 0.587)],
                 [1   , (0. , 0.757  , 0.587)] ],
-        basis = 'ccpvdz',
+        basis = 'ccpvdz-dk',
     )
 
     method = pyscf.scf.RHF(mol)
@@ -486,9 +498,13 @@ if __name__ == '__main__':
     method = sfx2c1e(pyscf.scf.RHF(mol))
     esfx2c = method.kernel()
     print('E(SFX2C1E) = %.12g' % esfx2c)
+    method.with_x2c.basis = 'unc-ccpvqz-dk'
+    print('E(SFX2C1E) = %.12g' % method.kernel())
 
     method = UHF(mol)
     ex2c = method.kernel()
     print('E(X2C1E) = %.12g' % ex2c)
+    method.with_x2c.basis = {'O': 'unc-ccpvqz', 'H':'unc-ccpvdz'}
+    print('E(X2C1E) = %.12g' % method.kernel())
 
 

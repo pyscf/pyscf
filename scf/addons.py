@@ -9,7 +9,7 @@ import sys
 import copy
 from functools import reduce
 import numpy
-import pyscf.lib
+from pyscf import lib
 from pyscf.gto import mole
 from pyscf.gto import moleintor
 from pyscf.lib import logger
@@ -217,7 +217,7 @@ def project_mo_nr2nr(mol1, mo1, mol2):
     '''
     s22 = mol2.intor_symmetric('cint1e_ovlp_sph')
     s21 = mole.intor_cross('cint1e_ovlp_sph', mol2, mol1)
-    return pyscf.lib.cho_solve(s22, numpy.dot(s21, mo1))
+    return lib.cho_solve(s22, numpy.dot(s21, mo1))
 
 def project_mo_nr2r(mol1, mo1, mol2):
     s22 = mol2.intor_symmetric('cint1e_ovlp')
@@ -228,7 +228,7 @@ def project_mo_nr2r(mol1, mo1, mol2):
     # mo2: alpha, beta have been summed in Eq. (*)
     # so DM = mo2[:,:nocc] * 1 * mo2[:,:nocc].H
     mo2 = numpy.dot(s21, mo1)
-    return pyscf.lib.cho_solve(s22, mo2)
+    return lib.cho_solve(s22, mo2)
 
 def project_mo_r2r(mol1, mo1, mol2):
     s22 = mol2.intor_symmetric('cint1e_ovlp')
@@ -236,8 +236,8 @@ def project_mo_r2r(mol1, mo1, mol2):
     s21 = mole.intor_cross('cint1e_ovlp', mol2, mol1)
     t21 = mole.intor_cross('cint1e_spsp', mol2, mol1)
     n2c = s21.shape[1]
-    pl = pyscf.lib.cho_solve(s22, s21)
-    ps = pyscf.lib.cho_solve(t22, t21)
+    pl = lib.cho_solve(s22, s21)
+    ps = lib.cho_solve(t22, t21)
     return numpy.vstack((numpy.dot(pl, mo1[:n2c]),
                          numpy.dot(ps, mo1[n2c:])))
 
@@ -358,7 +358,7 @@ def convert_to_uhf(mf, out=None):
                     break
             if mronew is None:
                 raise RuntimeError('%s object is not SCF object')
-            out = update_mo_(mf, pyscf.lib.overwrite_mro(mf, mronew))
+            out = update_mo_(mf, lib.overwrite_mro(mf, mronew))
 
         return out
 
@@ -421,7 +421,7 @@ def convert_to_rhf(mf, out=None):
                     break
             if mronew is None:
                 raise RuntimeError('%s object is not SCF object')
-            out = update_mo_(mf, pyscf.lib.overwrite_mro(mf, mronew))
+            out = update_mo_(mf, lib.overwrite_mro(mf, mronew))
 
         return out
 
