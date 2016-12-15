@@ -161,76 +161,6 @@ def guess_cas(mf, dm, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
 
     return ncas, nelecas, mo
 
-def dynamic_cas_space_(mc, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
-                       orth_method='meta_lowdin', s=None, canonicalize=True,
-                       start_cycle=1, freeze_imp=False, verbose=None):
-    '''Dynamically tune CASSCF active space based on DMET-CAS decomposition
-    by following steps
-    1. DMET-CAS decomposition to get new guess of core/active/external
-    2. If the active space changes, update mo, eris, ncore, ncas  INPLACE
-    3. Solving FCI problem in the new active space
-
-    Note this method is in test.  It might give incorrect CASSCF answer.
-    '''
-    old_casci = mc.casci
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    elif verbose is not None:
-        log = logger.Logger(mc.stdout, verbose)
-    else:
-        log = logger.Logger(mc.stdout, mc.verbose)
-
-    def casci(mo_coeff, ci0=None, eris=None, verbose=None, envs=None):
-        if envs.get('imacro', 0) < start_cycle or 'casdm1' not in envs:
-            return old_casci(mo_coeff, ci0, eris, verbose, envs)
-
-        mol = mc.mol
-        ncore = mc.ncore
-        mocore = mo_coeff[:,:ncore]
-        mocas = mo_coeff[:,ncore:ncore+mc.ncas]
-        dm1 = numpy.dot(mocore, mocore.T) * 2
-        dm1+= reduce(numpy.dot, (mocas, envs['casdm1'], mocas.T))
-        ncas, nelecas, mo = guess_cas(mc._scf, dm1, baslst, nelec_tol,
-                                      occ_cutoff, base, orth_method, s,
-                                      freeze_imp, log)
-        nelecb = (nelecas-mol.spin)//2
-        neleca = nelecas - nelecb
-        nelecas = (neleca, nelecb)
-
-        if (mc.ncas == ncas and mc.nelecas == nelecas):
-            return old_casci(mo_coeff, ci0, eris, verbose, envs)
-
-        else:
-            logger.note(mc, 'Change active space to CAS (%de+%de, %do)',
-                        nelecas[0], nelecas[1], ncas)
-            mc.ncas = ncas
-            mc.nelecas = nelecas
-            mc.ncore = (mol.nelectron - sum(nelecas)) // 2
-            mo_coeff[:] = mo
-            if mc.mol.symmetry:
-                label_symmetry_(mc, mo_coeff)
-                mc.fcisolver.orbsym = mc.orbsym[mc.ncore:mc.ncore+ncas]
-            eris.__dict__.update(mc.ao2mo(mo).__dict__)
-
-            mc.fcisolver._restart = False
-            if freeze_imp:
-                mc.frozen = range(mc.ncore, mc.ncore+len(baslst))
-                logger.info(mc, 'Freeze impurity %s', mc.frozen)
-
-            # hack casdm1_pref so that it has the same dimension as casdm1
-            casdm1_last = envs['casdm1_last']
-            casdm1_last[:] = 0
-            casdm1_last.resize(ncas**2, refcheck=False)
-            casdm1_last.shape = (ncas,)*2
-            return old_casci(mo_coeff, None, eris, verbose, envs)
-
-    if freeze_imp:
-        mc.frozen = range(mc.ncore, mc.ncore+len(baslst))
-        logger.info(mc, 'Freeze impurity %s', mc.frozen)
-
-    mc.casci = casci
-    return mc
-
 if __name__ == '__main__':
     from pyscf import scf
     from pyscf import gto
@@ -253,7 +183,6 @@ if __name__ == '__main__':
     dm = mf.make_rdm1()
     ncas, nelecas, mo = guess_cas(mf, dm, aolst, verbose=4)
     mc = mcscf.CASSCF(mf, ncas, nelecas).set(verbose=4)
-    mc = dynamic_cas_space_(mc, aolst)
     emc = mc.kernel(mo)[0]
     print(emc,0)
 
