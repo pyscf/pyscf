@@ -604,7 +604,7 @@ void FCImake_hdiag(double *hdiag, double *h1e, double *jdiag, double *kdiag,
 static int first1(uint64_t r)
 {
 #ifdef HAVE_FFS
-        return ffsll(r);
+        return ffsll(r) - 1;
 #else
         int n = 0;
         if (r >> (n + 32)) n += 32;
