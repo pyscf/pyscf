@@ -287,6 +287,29 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
                 qs.append(xi/norm)
         return qs
 
+    def gen_ax0(e, v, space):
+        x0 = []
+        ax0 = []
+        if lessio and not _incore:
+            for k, ek in enumerate(e):
+                x0.append(xs[space-1] * v[space-1,k])
+            for i in reversed(range(space-1)):
+                xsi = xs[i]
+                for k, ek in enumerate(e):
+                    x0[k] += v[i,k] * xsi
+            ax0 = aop(x0)
+        else:
+            for k, ek in enumerate(e):
+                x0 .append(xs[space-1] * v[space-1,k])
+                ax0.append(ax[space-1] * v[space-1,k])
+            for i in reversed(range(space-1)):
+                xsi = xs[i]
+                axi = ax[i]
+                for k, ek in enumerate(e):
+                    x0 [k] += v[i,k] * xsi
+                    ax0[k] += v[i,k] * axi
+        return x0, ax0
+
     toloose = numpy.sqrt(tol)
     log.debug1('tol %g  toloose %g', tol, toloose)
 
@@ -313,8 +336,10 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
             space = 0
 # Orthogonalize xt space because the basis of subspace xs must be orthogonal
 # but the eigenvectors x0 might not be strictly orthogonal
+            xt = None
             xt, x0 = qr(x0), None
             e = numpy.zeros(nroots)
+            max_dx_last = 1e9
             fresh_start = False
         elif len(xt) > 1:
             xt = qr(xt)
@@ -348,27 +373,8 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
             de = w[:nroots] - e
         e = w[:nroots]
 
-        x0 = []
-        ax0 = []
-        if lessio and not _incore:
-            for k, ek in enumerate(e):
-                x0.append(xs[space-1] * v[space-1,k])
-            for i in reversed(range(space-1)):
-                xsi = xs[i]
-                for k, ek in enumerate(e):
-                    x0[k] += v[i,k] * xsi
-            ax0 = aop(x0)
-        else:
-            for k, ek in enumerate(e):
-                x0 .append(xs[space-1] * v[space-1,k])
-                ax0.append(ax[space-1] * v[space-1,k])
-            for i in reversed(range(space-1)):
-                xsi = xs[i]
-                axi = ax[i]
-                for k, ek in enumerate(e):
-                    x0 [k] += v[i,k] * xsi
-                    ax0[k] += v[i,k] * axi
-
+        x0, ax0 = None, None
+        x0, ax0 = gen_ax0(e, v)
         ide = numpy.argmax(abs(de))
 
         dx_norm = []
@@ -377,12 +383,23 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
             dxtmp = ax0[k] - ek * x0[k]
             xt.append(dxtmp)
             dx_norm.append(numpy.sqrt(dot(dxtmp.conj(), dxtmp)))
+            dxtmp = None
+        max_dx_norm = max(dx_norm)
 
-        if abs(de[ide]) < tol and max(dx_norm) < toloose:
+        if abs(de[ide]) < tol and max_dx_norm < toloose:
             log.debug('converge %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
-                      icyc, space, max(dx_norm), e, de[ide])
+                      icyc, space, max_dx_norm, e, de[ide])
             conv = True
             break
+        elif max_dx_norm/max_dx_last > 10:
+            log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
+                      icyc, space, max_dx_norm, e, de[ide], norm_min)
+            log.debug('Large |r| detected, restore to previous x0')
+            w, v = scipy.linalg.eigh(heff[:head,:head])
+            x0, ax0 = None, None
+            x0, ax0 = gen_ax0(w[:nroots], v)
+            fresh_start = True
+            continue
 
         # remove subspace linear dependency
         for k, ek in enumerate(e):
@@ -405,12 +422,14 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
             else:
                 xt[i] = None
         xt = [xi for xi in xt if xi is not None]
+        xi = None
         if len(xt) == 0:
             log.debug('Linear dependency in trial subspace')
             break
         log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
-                  icyc, space, max(dx_norm), e, de[ide], norm_min)
+                  icyc, space, max_dx_norm, e, de[ide], norm_min)
 
+        max_dx_last = max_dx_norm
         fresh_start = fresh_start or space+nroots > max_space
 
         if callable(callback):
