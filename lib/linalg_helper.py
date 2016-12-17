@@ -374,7 +374,7 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
         e = w[:nroots]
 
         x0, ax0 = None, None
-        x0, ax0 = gen_ax0(e, v)
+        x0, ax0 = gen_ax0(e, v, space)
         ide = numpy.argmax(abs(de))
 
         dx_norm = []
@@ -391,13 +391,13 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
                       icyc, space, max_dx_norm, e, de[ide])
             conv = True
             break
-        elif max_dx_norm/max_dx_last > 10:
+        elif max_dx_norm/max_dx_last > 2:
             log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
                       icyc, space, max_dx_norm, e, de[ide], norm_min)
             log.debug('Large |r| detected, restore to previous x0')
             w, v = scipy.linalg.eigh(heff[:head,:head])
             x0, ax0 = None, None
-            x0, ax0 = gen_ax0(w[:nroots], v)
+            x0, ax0 = gen_ax0(w[:nroots], v, head)
             fresh_start = True
             continue
 
