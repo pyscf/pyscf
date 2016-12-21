@@ -20,7 +20,7 @@ cell = gto.M(
 )
 
 nk = [2,2,2]
-kpts = pyscf_ase.make_kpts(cell, nk)
+kpts = cell.make_kpts(nk)
 
 #
 # Running HF

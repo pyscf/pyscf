@@ -1,14 +1,17 @@
 #!/usr/bin/env python
 
 '''
-Mean field with k-points sampling
+MPI parallelization with mpi4pyscf
 
-The 2-electron integrals are computed using Poisson solver with FFT by default.
-In most scenario, it should be used with pseudo potential.
+https://github.com/sunqm/mpi4pyscf
+
+mpi4pyscf allows you switching to MPI mode seamlessly by replacing certain
+object, eg the density fitting object in the PBC calculations.
 '''
 
-from pyscf.pbc import gto, scf, dft
 import numpy
+from pyscf.pbc import gto, scf, dft
+from mpi4pyscf.pbc import df as mpidf
 
 cell = gto.M(
     h = numpy.eye(3)*3.5668,
@@ -30,11 +33,13 @@ nk = [4,4,4]  # 4 k-poins for each axis, 4^3=64 kpts in total
 kpts = cell.make_kpts(nk)
 
 kmf = scf.KRHF(cell, kpts)
+kmf.with_df = mpidf.FFTDF(cell, kpts)
 kmf.kernel()
 
 kmf = dft.KRKS(cell, kpts)
 # Turn to the atomic grids if you like
 kmf.grids = dft.gen_grid.BeckeGrids(cell)
 kmf.xc = 'm06'
+kmf.with_df = mpidf.FFTDF(cell, kpts)
 kmf.kernel()
 

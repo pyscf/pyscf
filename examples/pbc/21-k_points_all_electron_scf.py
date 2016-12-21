@@ -25,7 +25,7 @@ cell = gto.M(
 )
 
 nk = [4,4,4]  # 4 k-poins for each axis, 4^3=64 kpts in total
-kpts = pyscf_ase.make_kpts(cell, nk)
+kpts = cell.make_kpts(nk)
 
 mydf = df.MDF(cell, kpts)
 mydf.auxbasis = 'weigend'
