@@ -157,7 +157,7 @@ def get_nuc(mydf, kpts=None):
     nuccell._bas = numpy.asarray(chg_bas, dtype=numpy.int32)
     nuccell._env = numpy.hstack((cell._env, chg_env))
 
-    vj = [v.ravel() for v in _int_nuc_vloc(cell, nuccell, kpts_lst)]
+    vj = _int_nuc_vloc(cell, nuccell, kpts_lst)
     t1 = log.timer_debug1('vnuc pass1: analytic int', *t1)
 
     charge = -cell.atom_charges()
@@ -171,7 +171,7 @@ def get_nuc(mydf, kpts=None):
 
     vjR = numpy.zeros((nkpts,nao_pair))
     vjI = numpy.zeros((nkpts,nao_pair))
-    max_memory = mydf.max_memory - lib.current_memory()[0]
+    max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     for k, pqkR, pqkI, p0, p1 \
             in mydf.ft_loop(mydf.gs, kpt_allow, kpts_lst,
                             max_memory=max_memory, aosym='s2'):
@@ -184,11 +184,14 @@ def get_nuc(mydf, kpts=None):
         vjR[k] += numpy.einsum('k,xk->x', vGI[p0:p1], pqkI)
     t1 = log.timer_debug1('contracting Vnuc', *t1)
 
-    nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
-    nucbar *= numpy.pi/cell.vol
-    ovlp = cell.pbc_intor('cint1e_ovlp_sph', 1, lib.HERMITIAN, kpts_lst)
+    if cell.dimension == 3:
+        nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
+        nucbar *= numpy.pi/cell.vol
+        ovlp = cell.pbc_intor('cint1e_ovlp_sph', 1, lib.HERMITIAN, kpts_lst)
+        for k in range(nkpts):
+            vj[k] -= nucbar * ovlp[k]
+
     for k, kpt in enumerate(kpts_lst):
-        vj[k] = vj[k].reshape(nao,nao) - nucbar * ovlp[k]
         if gamma_point(kpt):
             vj[k] += lib.unpack_tril(vjR[k])
         else:
