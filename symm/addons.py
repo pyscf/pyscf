@@ -73,7 +73,7 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True, tol=1e-9):
                 logger.warn(mol, 'orbitals %s not strictly symmetrized.',
                             numpy.unique(orbidx))
                 logger.warn(mol, 'They can be symmetrized with '
-                            'pyscf.symm.symmetrize_orb function.')
+                            'pyscf.symm.symmetrize_space function.')
                 logger.debug(mol, 'norm = %s', largest_norm[orbidx])
     return orbsym
 

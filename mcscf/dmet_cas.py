@@ -8,7 +8,7 @@ import numpy
 import scipy.linalg
 from pyscf.lib import logger
 from pyscf.tools import dump_mat
-from pyscf.mcscf.casci_symm import label_symmetry_
+from pyscf import scf
 
 def guess_cas(mf, dm, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
               orth_method='meta_lowdin', s=None, canonicalize=True,
@@ -17,19 +17,22 @@ def guess_cas(mf, dm, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
     size, num active electrons and the orbital initial guess.
     '''
     from pyscf import lo
-    mol = mf.mol
     if isinstance(verbose, logger.Logger):
         log = verbose
     elif verbose is not None:
-        log = logger.Logger(mol.stdout, verbose)
+        log = logger.Logger(mf.stdout, verbose)
     else:
-        log = logger.Logger(mol.stdout, mol.verbose)
+        log = logger.Logger(mf.stdout, mf.verbose)
     if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2): # ROHF/UHF DM
         dm = sum(dm)
     if base != 0:
         baslst = [i-base for i in baslst]
     if s is None:
         s = mf.get_ovlp()
+
+    mol = mf.mol
+    if (not isinstance(mf, scf.hf.SCF)) and hasattr(mf, '_scf'):
+        mf = mf._scf
 
     nao = dm.shape[0]
     nimp = len(baslst)
@@ -102,7 +105,7 @@ def guess_cas(mf, dm, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
     movir = mo_env[:,ncore:]
 
     def search_for_degeneracy(e):
-        idx = numpy.where(abs(e[1:] - e[:-1]) < 1e-6)[0]
+        idx = numpy.where(abs(e[1:] - e[:-1]) < 1e-3)[0]
         return numpy.unique(numpy.hstack((idx, idx+1)))
     def symmetrize(e, c):
         if mol.symmetry:

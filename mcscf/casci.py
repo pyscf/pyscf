@@ -439,7 +439,7 @@ class CASCI(lib.StreamObject):
         else:
             assert(isinstance(ncore, (int, numpy.integer)))
             self.ncore = ncore
-        #self.fcisolver = fci.direct_spin0.FCISolver(mol)
+        #self.fcisolver = fci.direct_spin1.FCISolver(mol)
         self.fcisolver = fci.solver(mol, self.nelecas[0]==self.nelecas[1], False)
 # CI solver parameters are set in fcisolver object
         self.fcisolver.lindep = 1e-10
