@@ -207,10 +207,10 @@ def _kfactory(Solver, h1e, eri, norb, nelec, ci0=None, level_shift=1e-3,
     cis.pspace_size = pspace_size
 
     unknown = {}
-    for k, v in kwargs.items():
-        setattr(cis, k, v)
+    for k in kwargs:
+        setattr(cis, k, kwargs[k])
         if not hasattr(cis, k):
-            unknown[k] = v
+            unknown[k] = kwargs[k]
     if unknown:
         sys.stderr.write('Unknown keys %s for FCI kernel %s\n' %
                          (str(unknown.keys()), __name__))
@@ -565,7 +565,8 @@ class FCISolver(lib.StreamObject):
         nelec = _unpack_nelec(nelec, self.spin)
         na = cistring.num_strings(norb, nelec[0])
         nb = cistring.num_strings(norb, nelec[1])
-        if fcivec[0].size != na*nb:
+        if (fcivec[0].size != na*nb or
+            isinstance(fcivec, numpy.ndarray) and fcivec.shape[0] == 1):
             return spin_op.spin_square0(fcivec, norb, nelec)
         else:
             ss = [spin_op.spin_square0(c, norb, nelec) for c in fcivec]
@@ -627,7 +628,8 @@ class FCISolver(lib.StreamObject):
         nelec = _unpack_nelec(nelec, self.spin)
         na = cistring.num_strings(norb, nelec[0])
         nb = cistring.num_strings(norb, nelec[1])
-        if fcivec[0].size != na*nb:
+        if (fcivec[0].size != na*nb or
+            isinstance(fcivec, numpy.ndarray) and fcivec.shape[0] == 1):
             return addons.large_ci(fcivec, norb, nelec, tol)
         else:
             return [addons.large_ci(x, norb, nelec, tol) for x in fcivec]
