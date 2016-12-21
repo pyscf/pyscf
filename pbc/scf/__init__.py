@@ -12,6 +12,7 @@ from pyscf.pbc.scf import khf
 from pyscf.pbc.scf import khf as krhf
 from pyscf.pbc.scf import kuhf
 from pyscf.pbc.scf import newton_ah
+from pyscf.pbc.scf import addons
 
 RHF = rhf.RHF
 UHF = uhf.UHF

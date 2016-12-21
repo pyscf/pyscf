@@ -3,7 +3,11 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 
 import os
-import imp
+import sys
+if sys.version_info < (2,7):
+    import imp
+else:
+    import importlib
 from pyscf.gto.basis import parse_nwchem
 
 ALIAS = {
@@ -181,11 +185,14 @@ def load(filename_or_basisname, symb):
     if 'dat' in basmod:
         b = parse_nwchem.load(os.path.join(os.path.dirname(__file__), basmod), symb)
     else:
-        fp, pathname, description = imp.find_module(basmod, __path__)
-        mod = imp.load_module(name, fp, pathname, description)
-        #mod = __import__(basmod, globals={'__path__': __path__, '__name__': __name__})
-        b = mod.__getattribute__(symb)
-        fp.close()
+        if sys.version_info < (2,7):
+            fp, pathname, description = imp.find_module(basmod, __path__)
+            mod = imp.load_module(name, fp, pathname, description)
+            b = mod.__getattribute__(symb)
+            fp.close()
+        else:
+            mod = importlib.import_module('.'+basmod, __package__)
+            b = mod.__getattribute__(symb)
     return b
 
 def load_ecp(filename_or_basisname, symb):
