@@ -543,10 +543,10 @@ def state_average_(casscf, weights=(0.5,0.5)):
                                         nroots=self.nroots, **kwargs)
             if (casscf.verbose >= logger.DEBUG and
                 hasattr(fcibase_class, 'spin_square')):
-                ss = fcibase_class.spin_square(self, c, norb, nelec)
                 for i, ei in enumerate(e):
+                    ss = fcibase_class.spin_square(self, c[i], norb, nelec)
                     logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
-                                 i, ei, ss[0][i])
+                                 i, ei, ss[0])
             return numpy.einsum('i,i->', e, weights), c
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
@@ -569,10 +569,17 @@ def state_average_(casscf, weights=(0.5,0.5)):
 
         if hasattr(fcibase_class, 'spin_square'):
             def spin_square(self, ci0, norb, nelec):
-                ss = fcibase_class.spin_square(self, ci0, norb, nelec)[0]
-                ss = numpy.einsum('i,i->', weights, ss)
-                multip = numpy.sqrt(ss+.25)*2
+                ss = 0
+                multip = 0
+                for i, wi in enumerate(weights):
+                    res = fcibase_class.spin_square(self, ci0[i], norb, nelec)
+                    ss += wi * res[0]
+                    multip += wi * res[1]
                 return ss, multip
+
+        if hasattr(fcibase_class, 'large_ci'):
+            def large_ci(self, ci0, norb, nelec):
+                return [fcibase_class.large_ci(self, x, norb, nelec) for x in ci0]
 
     fcisolver = FakeCISolver(casscf.mol)
     fcisolver.__dict__.update(casscf.fcisolver.__dict__)
@@ -621,10 +628,6 @@ def state_specific_(casscf, state=1):
             else:
                 self._civec = c
                 return e[state], c[state]
-
-        if hasattr(fcibase_class, 'spin_square'):
-            def spin_square(self, fcivec, norb, nelec):
-                return fci.spin_op.spin_square0(fcivec, norb, nelec)
 
     fcisolver = FakeCISolver()
     fcisolver.__dict__.update(casscf.fcisolver.__dict__)
@@ -716,12 +719,21 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
                 rdm1 += weights[i] * dm1
                 rdm2 += weights[i] * dm2
             return rdm1, rdm2
-        def spin_square(self, ci0, norb, nelec):
-            ss, multip = collect(solver.spin_square(c0, norb, get_nelec(solver, nelec))
-                                 for solver, c0 in loop_civecs(fcisolvers, ci0))
-            ss = numpy.einsum('i,i->', weights, ss)
-            multip = numpy.sqrt(ss+.25)*2
-            return ss, multip
+
+        if hasattr(fcibase_class, 'spin_square'):
+            def spin_square(self, ci0, norb, nelec):
+                ss = 0
+                multip = 0
+                for i, (solver, c) in enumerate(loop_civecs(fcisolvers, ci0)):
+                    res = solver.spin_square(c, norb, nelec)
+                    ss += weights[i] * res[0]
+                    multip += weights[i] * res[1]
+                return ss, multip
+
+        if hasattr(fcibase_class, 'large_ci'):
+            def large_ci(self, ci0, norb, nelec):
+                return [solver.large_ci(c, norb, nelec)
+                        for solver, c in loop_civecs(fcisolvers, ci0)]
 
     fcisolver = FakeCISolver(casscf.mol)
     fcisolver.__dict__.update(casscf.fcisolver.__dict__)

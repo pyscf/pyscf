@@ -722,23 +722,13 @@ class SelectCI(direct_spin1.FCISolver):
     @lib.with_doc(spin_square.__doc__)
     def spin_square(self, civec_strs, norb, nelec):
         nelec = direct_spin1._unpack_nelec(nelec, self.spin)
-        if civec_strs[0].size != len(self._strs[0])*len(self._strs[1]):
-            return spin_square(_as_SCIvector_if_not(civec_strs, self._strs), norb, nelec)
-        else:
-            ss = [spin_square(_as_SCIvector_if_not(c, self._strs), norb, nelec)
-                  for c in civec_strs]
-            return [x[0] for x in ss], [x[1] for x in ss]
+        return spin_square(_as_SCIvector_if_not(civec_strs, self._strs), norb, nelec)
 
     def large_ci(self, civec_strs, norb, nelec, tol=.1):
         nelec = direct_spin1._unpack_nelec(nelec, self.spin)
-        def check(x):
-            ci, _, (strsa, strsb) = _unpack(x, nelec, self._strs)
-            return [(ci[i,j], bin(strsa[i]), bin(strsb[j]))
-                    for i,j in numpy.argwhere(abs(ci) > tol)]
-        if civec_strs[0].size != len(self._strs[0])*len(self._strs[1]):
-            return check(civec_strs)
-        else:
-            return [check(x) for x in civec_strs]
+        ci, _, (strsa, strsb) = _unpack(civec_strs, nelec, self._strs)
+        return [(ci[i,j], bin(strsa[i]), bin(strsb[j]))
+                for i,j in numpy.argwhere(abs(ci) > tol)]
 
     def contract_ss(self, fcivec, norb, nelec):
         return contract_ss(fcivec, norb, nelec)

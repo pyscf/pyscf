@@ -420,7 +420,7 @@ class Grids(pyscf.lib.StreamObject):
         logger.info(self, 'becke partition: %s', self.becke_scheme.__doc__)
         logger.info(self, 'pruning grids: %s', self.prune)
         logger.info(self, 'grids dens level: %d', self.level)
-        logger.info(self, 'symmetrized grids: %d', self.symmetry)
+        logger.info(self, 'symmetrized grids: %s', self.symmetry)
         if self.radii_adjust is not None:
             logger.info(self, 'atomic radii adjust function: %s',
                         self.radii_adjust)

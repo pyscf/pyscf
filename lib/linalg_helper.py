@@ -391,7 +391,7 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
                       icyc, space, max_dx_norm, e, de[ide])
             conv = True
             break
-        elif max_dx_norm/max_dx_last > 2:
+        elif max_dx_norm/max_dx_last > 2 and space > nroots*2:
             log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
                       icyc, space, max_dx_norm, e, de[ide], norm_min)
             log.debug('Large |r| detected, restore to previous x0')
