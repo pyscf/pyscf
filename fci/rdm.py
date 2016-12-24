@@ -328,7 +328,9 @@ def reorder_dm1234(rdm1, rdm2, rdm3, rdm4, inplace=True):
                 rdm4[:,q,q,s,s,u,u,:] -= rdm1
     return rdm1, rdm2, rdm3, rdm4
 
-def _unpack_nelec(nelec, spin=0):
+def _unpack_nelec(nelec, spin=None):
+    if spin is not None:
+        nelec = int(numpy.sum(nelec))
     if isinstance(nelec, (int, numpy.number)):
         nelecb = (nelec-spin)//2
         neleca = nelec - nelecb

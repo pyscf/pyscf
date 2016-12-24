@@ -65,8 +65,13 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
     nocc = ncore + ncas
     label = casscf.mol.spheric_labels(True)
 
+    if isinstance(ci, (tuple, list)):
+        ci0 = ci[0]
+        log.info('** Natural natural orbitals are based on the first root **')
+    else:
+        ci0 = ci
     if hasattr(casscf.fcisolver, 'make_rdm1s'):
-        casdm1a, casdm1b = casscf.fcisolver.make_rdm1s(ci, ncas, nelecas)
+        casdm1a, casdm1b = casscf.fcisolver.make_rdm1s(ci0, ncas, nelecas)
         casdm1 = casdm1a + casdm1b
         mocore = mo_coeff[:,:ncore]
         mocas = mo_coeff[:,ncore:nocc]
@@ -80,7 +85,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
             log.info('beta density matrix (on AO)')
             dump_mat.dump_tri(log.stdout, dm1b, label, **kwargs)
     else:
-        casdm1 = casscf.fcisolver.make_rdm1(ci, ncas, nelecas)
+        casdm1 = casscf.fcisolver.make_rdm1(ci0, ncas, nelecas)
         mocore = mo_coeff[:,:ncore]
         mocas = mo_coeff[:,ncore:nocc]
         dm1a =(numpy.dot(mocore, mocore.T) * 2

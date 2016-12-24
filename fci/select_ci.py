@@ -806,7 +806,7 @@ class SelectCI(direct_spin1.FCISolver):
 SCI = SelectCI
 
 
-def _unpack(civec_strs, nelec, ci_strs=None, spin=0):
+def _unpack(civec_strs, nelec, ci_strs=None, spin=None):
     neleca, nelecb = direct_spin1._unpack_nelec(nelec, spin)
     ci_strs = getattr(civec_strs, '_strs', ci_strs)
     if ci_strs is not None:

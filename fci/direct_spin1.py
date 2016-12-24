@@ -486,7 +486,7 @@ class FCISolver(lib.StreamObject):
 # solver.  They are not used by direct_spin1 solver.
         self.orbsym = None
         self.wfnsym = None
-        self.spin = 0
+        self.spin = None
 
         self._keys = set(self.__dict__.keys())
 
@@ -503,7 +503,7 @@ class FCISolver(lib.StreamObject):
         log.info('max_memory %d MB', self.max_memory)
         log.info('nroots = %d', self.nroots)
         log.info('pspace_size = %d', self.pspace_size)
-        log.info('spin = %d', self.spin)
+        log.info('spin = %s', self.spin)
         return self
 
     @lib.with_doc(absorb_h1e.__doc__)
@@ -641,14 +641,16 @@ class FCISolver(lib.StreamObject):
 FCI = FCISolver
 
 
-def _unpack_nelec(nelec, spin=0):
+def _unpack_nelec(nelec, spin=None):
+    if spin is not None:
+        nelec = int(numpy.sum(nelec))
     if isinstance(nelec, (int, numpy.number)):
         nelecb = (nelec-spin)//2
         neleca = nelec - nelecb
         nelec = neleca, nelecb
     return nelec
 
-def _unpack(norb, nelec, link_index, spin=0):
+def _unpack(norb, nelec, link_index, spin=None):
     if link_index is None:
         neleca, nelecb = _unpack_nelec(nelec, spin)
         link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)

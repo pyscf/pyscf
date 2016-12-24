@@ -282,7 +282,9 @@ def contract_ss(fcivec, norb, nelec):
     ci1 += (neleca-nelecb)**2*.25*fcivec
     return ci1
 
-def _unpack_nelec(nelec, spin=0):
+def _unpack_nelec(nelec, spin=None):
+    if spin is not None:
+        nelec = int(numpy.sum(nelec))
     if isinstance(nelec, (int, numpy.number)):
         nelecb = (nelec-spin)//2
         neleca = nelec - nelecb

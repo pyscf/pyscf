@@ -272,7 +272,7 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
 
     h2e = fci.absorb_h1e(h1e, eri, norb, nelec, .5)
     def hop(c):
-        hc = fci.contract_2e(h2e, c, norb, nelec, link_index)
+        hc = fci.contract_2e(h2e, c.reshape(na,na), norb, nelec, link_index)
         return hc.ravel()
 
 #TODO: check spin of initial guess

@@ -570,7 +570,9 @@ def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
     return ci
 
 
-def _unpack(nelec, spin=0):
+def _unpack(nelec, spin=None):
+    if spin is not None:
+        nelec = int(numpy.sum(nelec))
     if isinstance(nelec, (int, numpy.number)):
         nelecb = (nelec-spin)//2
         neleca = nelec - nelecb
