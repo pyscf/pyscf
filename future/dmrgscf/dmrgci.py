@@ -213,7 +213,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         return self
 
     def make_rdm1(self, state, norb, nelec, link_index=None, **kwargs):
-        return self.make_rdm12(state, norb, nelec, link_index, **kwargs)[0]
+        return DMRGCI.make_rdm12(self, state, norb, nelec, link_index, **kwargs)[0]
 
     def make_rdm12(self, state, norb, nelec, link_index=None, **kwargs):
         nelectrons = 0

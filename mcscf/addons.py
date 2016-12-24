@@ -703,16 +703,16 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
                     es.extend(e)
                     cs.extend(c)
             return numpy.einsum('i,i->', es, weights), cs
-        def make_rdm1(self, ci0, norb, nelec):
+        def make_rdm1(self, ci0, norb, nelec, **kwargs):
             dm1 = 0
             for i, (solver, c) in enumerate(loop_civecs(fcisolvers, ci0)):
-                dm1 += weights[i]*solver.make_rdm1(c, norb, get_nelec(solver, nelec))
+                dm1 += weights[i]*solver.make_rdm1(c, norb, get_nelec(solver, nelec), **kwargs)
             return dm1
-        def make_rdm12(self, ci0, norb, nelec):
+        def make_rdm12(self, ci0, norb, nelec, **kwargs):
             rdm1 = 0
             rdm2 = 0
             for i, (solver, c) in enumerate(loop_civecs(fcisolvers, ci0)):
-                dm1, dm2 = solver.make_rdm12(c, norb, get_nelec(solver, nelec))
+                dm1, dm2 = solver.make_rdm12(c, norb, get_nelec(solver, nelec), **kwargs)
                 rdm1 += weights[i] * dm1
                 rdm2 += weights[i] * dm2
             return rdm1, rdm2
