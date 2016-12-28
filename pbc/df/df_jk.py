@@ -91,7 +91,6 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
     weight = 1./nkpts
     rhoR *= weight
     rhoI *= weight
-    rho = rhoR+rhoI*1j
     vjR = numpy.zeros((nset,nband,nao_pair))
     vjI = numpy.zeros((nset,nband,nao_pair))
     for k, kpt in enumerate(kpts_band):
@@ -248,23 +247,20 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     j_real = gamma_point(kpt)
     k_real = gamma_point(kpt) and not numpy.iscomplexobj(dms)
     kptii = numpy.asarray((kpt,kpt))
-
-    if with_j:
-        vjR = numpy.zeros((nset,nao**2))
-        vjI = numpy.zeros((nset,nao**2))
-    if with_k:
-        vkR = numpy.zeros((nset,nao,nao))
-        vkI = numpy.zeros((nset,nao,nao))
     dmsR = dms.real.reshape(nset,nao,nao)
     dmsI = dms.imag.reshape(nset,nao,nao)
 
-    bufR = numpy.empty((mydf.blockdim*nao**2))
-    bufI = numpy.empty((mydf.blockdim*nao**2))
     max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]))
     if with_j:
-        vjR = vjR.reshape(nset,nao,nao)
-        vjI = vjI.reshape(nset,nao,nao)
-    for LpqR, LpqI in mydf.sr_loop(kptii, max_memory*.5, False):
+        vjR = numpy.zeros((nset,nao,nao))
+        vjI = numpy.zeros((nset,nao,nao))
+    if with_k:
+        vkR = numpy.zeros((nset,nao,nao))
+        vkI = numpy.zeros((nset,nao,nao))
+        bufR = numpy.empty((mydf.blockdim*nao**2))
+        bufI = numpy.empty((mydf.blockdim*nao**2))
+        max_memory *= .5
+    for LpqR, LpqI in mydf.sr_loop(kptii, max_memory, False):
         LpqR = LpqR.reshape(-1,nao,nao)
         if with_j:
             #:rho_coeff = numpy.einsum('Lpq,xqp->xL', Lpq, dms)
@@ -282,10 +278,9 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
                 vjI += numpy.einsum('xL,Lpq->xpq', rhoI, LpqR)
 
         if with_k:
-            #:Lpq = LpqR + LpqI*1j
-            #:for i in range(nset):
-            #:    tmp = numpy.dot(dms[i], Lpq.reshape(nao,-1))
-            #:    vk1+= numpy.dot(Lpq.reshape(-1,nao).conj().T, tmp.reshape(-1,nao))
+            #:pLq = (LpqR + LpqI.reshape(-1,nao,nao)*1j).transpose(1,0,2)
+            #:tmp = numpy.dot(dm, pLq.reshape(nao,-1))
+            #:vk += numpy.dot(pLq.reshape(-1,nao).conj().T, tmp.reshape(-1,nao))
             nrow = LpqR.shape[0]
             pLqR = numpy.ndarray((nao,nrow,nao), buffer=bufR)
             tmpR = numpy.ndarray((nao,nrow*nao), buffer=LpqR)
@@ -293,7 +288,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
             if k_real:
                 for i in range(nset):
                     lib.ddot(dmsR[i], pLqR.reshape(nao,-1), 1, tmpR)
-                    lib.ddot(pLqR.reshape(-1,nao).T, tmpR.reshape(-1,nao), 1, vkR[i])
+                    lib.ddot(pLqR.reshape(-1,nao).T, tmpR.reshape(-1,nao), 1, vkR[i], 1)
             else:
                 pLqI = numpy.ndarray((nao,nrow,nao), buffer=bufI)
                 tmpI = numpy.ndarray((nao,nrow*nao), buffer=LpqI)
@@ -306,7 +301,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
                            pLqI.reshape(nao,-1), 1, tmpR, tmpI, 0)
                     zdotCN(pLqR.reshape(-1,nao).T, pLqI.reshape(-1,nao).T,
                            tmpR.reshape(-1,nao), tmpI.reshape(-1,nao),
-                           1, vkR[i], vkI[i], 0)
+                           1, vkR[i], vkI[i], 1)
         LpqR = LpqI = pLqR = pLqI = tmpR = tmpI = None
 
     if with_j:

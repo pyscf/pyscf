@@ -309,7 +309,7 @@ class DF(pwdf.PWDF):
         else:
             blksize = max_memory*1e6/16/(nao**2*2)
         blksize = max(16, min(int(blksize), self.blockdim))
-        logger.debug2(self, 'max_memory %d MB, blksize %d', max_memory, blksize)
+        logger.debug3(self, 'max_memory %d MB, blksize %d', max_memory, blksize)
 
         if unpack:
             buf = numpy.empty((blksize,nao*(nao+1)//2))
@@ -598,6 +598,10 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
             j3cI = []
             for k, idx in enumerate(adapted_ji_idx):
                 v = numpy.asarray(feri['j3c/%d'%idx][:,col0:col1])
+                if is_zero(kpt):
+                    for i, c in enumerate(vbar):
+                        if c != 0:
+                            v[i] -= c * ovlp[k][col0:col1]
                 j3cR.append(numpy.asarray(v.real, order='C'))
                 if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
                     j3cI.append(None)
@@ -650,10 +654,6 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
                     v = fuse(j3cR[k])
                 else:
                     v = fuse(j3cR[k] + j3cI[k] * 1j)
-                if is_zero(kpt):
-                    for i, c in enumerate(vbar):
-                        if c != 0:
-                            v[i] -= c * ovlp[k][col0:col1]
 
                 v = scipy.linalg.solve_triangular(j2c[uniq_kptji_id], v,
                                                   lower=True, overwrite_b=True)
