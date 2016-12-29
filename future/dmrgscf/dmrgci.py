@@ -599,7 +599,7 @@ def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
     else :
         neleca, nelecb = nelec
     integralFile = os.path.join(DMRGCI.runtimeDir, DMRGCI.integralFile)
-    if DMRGCI.groupname is not None and DMRGCI.orbsym:
+    if DMRGCI.groupname is not None and DMRGCI.orbsym is not []:
         orbsym = dmrg_sym.convert_orbsym(DMRGCI.groupname, DMRGCI.orbsym)
     else:
         orbsym = []

@@ -845,8 +845,8 @@ def trans_e1_incore(mc, mo):
     nmo = mo.shape[1]
     nocc = ncore + ncas
     nav = nmo - ncore
-    eri1 = pyscf.ao2mo.incore.half_e1(eri_ao, (mo[:,:nocc],mo[:,ncore:]),
-                                      compact=False)
+    eri1 = ao2mo.incore.half_e1(eri_ao, (mo[:,:nocc],mo[:,ncore:]),
+                                compact=False)
     load_buf = lambda r0,r1: eri1[r0*nav:r1*nav]
     ppaa, papa, pacv, cvcv = _trans(mo, ncore, ncas, load_buf)
     return ppaa, papa, pacv, cvcv

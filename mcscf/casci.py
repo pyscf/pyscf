@@ -558,14 +558,15 @@ class CASCI(lib.StreamObject):
                                    cas_natorb=self.natorb, verbose=log)
 
         if log.verbose >= logger.NOTE and hasattr(self.fcisolver, 'spin_square'):
-            ss = self.fcisolver.spin_square(self.ci, self.ncas, self.nelecas)
             if isinstance(self.e_cas, (float, numpy.number)):
+                ss = self.fcisolver.spin_square(self.ci, self.ncas, self.nelecas)
                 log.note('CASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',
                          self.e_tot, self.e_cas, ss[0])
             else:
                 for i, e in enumerate(self.e_cas):
+                    ss = self.fcisolver.spin_square(self.ci[i], self.ncas, self.nelecas)
                     log.note('CASCI root %d  E = %.15g  E(CI) = %.15g  S^2 = %.7f',
-                             i, self.e_tot[i], e, ss[0][i])
+                             i, self.e_tot[i], e, ss[0])
         else:
             if isinstance(self.e_cas, (float, numpy.number)):
                 log.note('CASCI E = %.15g  E(CI) = %.15g', self.e_tot, self.e_cas)
