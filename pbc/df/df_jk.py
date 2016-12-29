@@ -249,19 +249,46 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     kptii = numpy.asarray((kpt,kpt))
     dmsR = dms.real.reshape(nset,nao,nao)
     dmsI = dms.imag.reshape(nset,nao,nao)
-
-    max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]))
+    mem_now = lib.current_memory()[0]
+    max_memory = max(2000, (mydf.max_memory - mem_now))
     if with_j:
         vjR = numpy.zeros((nset,nao,nao))
         vjI = numpy.zeros((nset,nao,nao))
     if with_k:
         vkR = numpy.zeros((nset,nao,nao))
         vkI = numpy.zeros((nset,nao,nao))
-        bufR = numpy.empty((mydf.blockdim*nao**2))
-        bufI = numpy.empty((mydf.blockdim*nao**2))
+        buf1R = numpy.empty((mydf.blockdim*nao**2))
+        buf2R = numpy.empty((mydf.blockdim*nao**2))
+        buf1I = numpy.zeros((mydf.blockdim*nao**2))
+        buf2I = numpy.empty((mydf.blockdim*nao**2))
         max_memory *= .5
+    log.debug1('max_memory = %d MB (%d in use)', max_memory, mem_now)
+    def contract_k(pLqR, pLqI):
+        # K ~ 'iLj,lLk*,li->kj' + 'lLk*,iLj,li->kj'
+        #:pLq = (LpqR + LpqI.reshape(-1,nao,nao)*1j).transpose(1,0,2)
+        #:tmp = numpy.dot(dm, pLq.reshape(nao,-1))
+        #:vk += numpy.dot(pLq.reshape(-1,nao).conj().T, tmp.reshape(-1,nao))
+        nrow = pLqR.shape[1]
+        tmpR = numpy.ndarray((nao,nrow*nao), buffer=buf2R)
+        if k_real:
+            for i in range(nset):
+                lib.ddot(dmsR[i], pLqR.reshape(nao,-1), 1, tmpR)
+                lib.ddot(pLqR.reshape(-1,nao).T, tmpR.reshape(-1,nao), 1, vkR[i], 1)
+        else:
+            tmpI = numpy.ndarray((nao,nrow*nao), buffer=buf2I)
+            for i in range(nset):
+                zdotNN(dmsR[i], dmsI[i], pLqR.reshape(nao,-1),
+                       pLqI.reshape(nao,-1), 1, tmpR, tmpI, 0)
+                zdotCN(pLqR.reshape(-1,nao).T, pLqI.reshape(-1,nao).T,
+                       tmpR.reshape(-1,nao), tmpI.reshape(-1,nao),
+                       1, vkR[i], vkI[i], 1)
+    pLqI = None
+    thread_k = None
     for LpqR, LpqI in mydf.sr_loop(kptii, max_memory, False):
         LpqR = LpqR.reshape(-1,nao,nao)
+        t1 = log.debug2('        load', *t1)
+        if thread_k is not None:
+            thread_k.join()
         if with_j:
             #:rho_coeff = numpy.einsum('Lpq,xqp->xL', Lpq, dms)
             #:vj += numpy.dot(rho_coeff, Lpq.reshape(-1,nao**2))
@@ -277,32 +304,22 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
                 vjI += numpy.einsum('xL,Lpq->xpq', rhoR, LpqI)
                 vjI += numpy.einsum('xL,Lpq->xpq', rhoI, LpqR)
 
+        t1 = log.timer_debug1('        with_j', *t1)
         if with_k:
-            #:pLq = (LpqR + LpqI.reshape(-1,nao,nao)*1j).transpose(1,0,2)
-            #:tmp = numpy.dot(dm, pLq.reshape(nao,-1))
-            #:vk += numpy.dot(pLq.reshape(-1,nao).conj().T, tmp.reshape(-1,nao))
             nrow = LpqR.shape[0]
-            pLqR = numpy.ndarray((nao,nrow,nao), buffer=bufR)
-            tmpR = numpy.ndarray((nao,nrow*nao), buffer=LpqR)
+            pLqR = numpy.ndarray((nao,nrow,nao), buffer=buf1R)
             pLqR[:] = LpqR.transpose(1,0,2)
-            if k_real:
-                for i in range(nset):
-                    lib.ddot(dmsR[i], pLqR.reshape(nao,-1), 1, tmpR)
-                    lib.ddot(pLqR.reshape(-1,nao).T, tmpR.reshape(-1,nao), 1, vkR[i], 1)
-            else:
-                pLqI = numpy.ndarray((nao,nrow,nao), buffer=bufI)
-                tmpI = numpy.ndarray((nao,nrow*nao), buffer=LpqI)
-                if LpqI is None:
-                    pLqI[:] = 0
-                else:
+            if not k_real:
+                pLqI = numpy.ndarray((nao,nrow,nao), buffer=buf1I)
+                if LpqI is not None:
                     pLqI[:] = LpqI.reshape(-1,nao,nao).transpose(1,0,2)
-                for i in range(nset):
-                    zdotNN(dmsR[i], dmsI[i], pLqR.reshape(nao,-1),
-                           pLqI.reshape(nao,-1), 1, tmpR, tmpI, 0)
-                    zdotCN(pLqR.reshape(-1,nao).T, pLqI.reshape(-1,nao).T,
-                           tmpR.reshape(-1,nao), tmpI.reshape(-1,nao),
-                           1, vkR[i], vkI[i], 1)
+
+            thread_k = lib.background_thread(contract_k, pLqR, pLqI)
+            t1 = log.timer_debug1('        with_k', *t1)
         LpqR = LpqI = pLqR = pLqI = tmpR = tmpI = None
+    if thread_k is not None:
+        thread_k.join()
+    thread_k = None
 
     if with_j:
         if j_real:
