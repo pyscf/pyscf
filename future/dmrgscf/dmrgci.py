@@ -194,6 +194,9 @@ class DMRGCI(pyscf.lib.StreamObject):
             verbose = self.verbose
         log = logger.Logger(self.stdout, verbose)
         log.info('******** Block flags ********')
+        log.info('executable = %s', self.executable)
+        log.info('BLOCKEXE_COMPRESS_NEVPT = %s', settings.BLOCKEXE_COMPRESS_NEVPT)
+        log.info('mpiprefix = %s', self.mpiprefix)
         log.info('scratchDirectory = %s', self.scratchDirectory)
         log.info('integralFile = %s', os.path.join(self.runtimeDir, self.integralFile))
         log.info('configFile = %s', os.path.join(self.runtimeDir, self.configFile))
@@ -210,6 +213,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         log.info('dmrg switch tol =%s', self.dmrg_switch_tol)
         log.info('wfnsym = %s', self.wfnsym)
         log.info('num_thrds = %d', self.num_thrds)
+        log.info('memory = %s', self.memory)
         return self
 
     def make_rdm1(self, state, norb, nelec, link_index=None, **kwargs):
