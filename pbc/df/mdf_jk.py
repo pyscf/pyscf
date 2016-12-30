@@ -9,7 +9,6 @@ Ref:
 '''
 
 import time
-import copy
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -215,8 +214,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
         kpti_idx, kptj_idx = numpy.where(kk_todo & kk_match)
         nkptj = len(kptj_idx)
         log.debug1('kpt = %s', kpt)
-        log.debug1('kpti_idx = %s', kpti_idx)
-        log.debug1('kptj_idx = %s', kptj_idx)
+        log.debug2('kpti_idx = %s', kpti_idx)
+        log.debug2('kptj_idx = %s', kptj_idx)
         kk_todo[kpti_idx,kptj_idx] = False
         if swap_2e and not is_zero(kpt):
             kk_todo[kptj_idx,kpti_idx] = False
@@ -265,8 +264,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
                     zdotCN(pLqR.reshape(-1,nao).T, pLqI.reshape(-1,nao).T,
                            iLkR.reshape(-1,nao), iLkI.reshape(-1,nao),
                            1, vkR[i,kj], vkI[i,kj], 1)
-            pqkR = pqkI = pLqR = pLqI = iLkR = iLkI = None
-        pqkR = pqkI = iLkR = iLkI = coulG = None
+            pqkR = pqkI = coulG = pLqR = pLqI = iLkR = iLkI = None
 
         # Note: kj-ki for electorn 1 and ki-kj for electron 2
         # j2c ~ ({kj-ki}|{ks-kr}) ~ ({kj-ki}|-{kj-ki}) ~ ({kj-ki}|{ki-kj})
@@ -371,6 +369,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
         _ewald_exxdiv_for_G0(cell, kpts_band, dms, vk_kpts)
 
     vk_kpts *= 1./nkpts
+    t1 = log.timer_debug1('get_k', *t1)
 
     if kpt_band is not None and numpy.shape(kpt_band) == (3,):
         if nset == 1:  # One set of dm_kpts for KRHF
@@ -429,16 +428,18 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
         vkI = numpy.zeros((nset,nao,nao))
     dmsR = dms.real.reshape(nset,nao,nao)
     dmsI = dms.imag.reshape(nset,nao,nao)
-    max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]))
-    max_memory *= .8  # *.8 for the temporary data in vk
+    mem_now = lib.current_memory()[0]
+    max_memory = max(2000, (mydf.max_memory - mem_now)) * .8
+    log.debug1('max_memory = %d MB (%d in use)', max_memory, mem_now)
+    t2 = t1
 
     # rho_rs(-G+k_rs) is computed as conj(rho_{rs^*}(G-k_rs))
     #               == conj(transpose(rho_sr(G+k_sr), (0,2,1)))
     blksize = max(int(max_memory*.25e6/16/nao**2), 16)
     bufR = numpy.empty(blksize*nao**2)
     bufI = numpy.empty(blksize*nao**2)
-    for pqkR, pqkI, p0, p1 \
-            in mydf.pw_loop(mydf.gs, kptii, max_memory=max_memory):
+    for pqkR, pqkI, p0, p1 in mydf.pw_loop(mydf.gs, kptii, max_memory=max_memory):
+        t2 = log.timer_debug1('%d:%d ft_aopair'%(p0,p1), *t2)
         if with_j:
             for i in range(nset):
                 if j_real:
@@ -459,6 +460,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
                     vjR[i] -= numpy.dot(pqkI, rhoI)
                     vjI[i] += numpy.dot(pqkR, rhoI)
                     vjI[i] += numpy.dot(pqkI, rhoR)
+        #t2 = log.timer_debug1('        with_j', *t2)
 
         if with_k:
             coulG = numpy.sqrt(vkcoulG[p0:p1])
@@ -481,20 +483,78 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
                     zdotNC(iLkR.reshape(nao,-1), iLkI.reshape(nao,-1),
                            pLqR.reshape(nao,-1).T, pLqI.reshape(nao,-1).T,
                            1, vkR[i], vkI[i])
+            #t2 = log.timer_debug1('        with_k', *t2)
         pqkR = pqkI = coulG = pLqR = pLqI = iLkR = iLkI = None
+        #t2 = log.timer_debug1('%d:%d'%(p0,p1), *t2)
+    bufR = bufI = None
+    t1 = log.timer_debug1('get_jk pass 1', *t1)
 
-    bufR = numpy.empty((mydf.blockdim*nao**2))
-    bufI = numpy.empty((mydf.blockdim*nao**2))
-# .75 is estimation for the memory usage ratio  sr_loop / (sr_loop+bufR+bufI)
-    max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0])) * .75
+# .45 is estimation for the memory usage ratio  sr_loop / (sr_loop+bufR+bufI)
+    max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0])) * .45
     if with_j:
         vjR = vjR.reshape(nset,nao,nao)
         vjI = vjI.reshape(nset,nao,nao)
+    if with_k:
+        buf1R = numpy.empty((mydf.blockdim*nao**2))
+        buf2R = numpy.empty((mydf.blockdim*nao**2))
+        buf3R = numpy.empty((mydf.blockdim*nao**2))
+        if not k_real:
+            buf1I = numpy.empty((mydf.blockdim*nao**2))
+            buf2I = numpy.empty((mydf.blockdim*nao**2))
+            buf3I = numpy.empty((mydf.blockdim*nao**2))
+    def contract_k(pLqR, pLqI, pjqR, pjqI):
+        # K ~ 'iLj,lLk*,li->kj' + 'lLk*,iLj,li->kj'
+        #:Lpq = LpqR + LpqI*1j
+        #:j3c = j3cR + j3cI*1j
+        #:for i in range(nset):
+        #:    tmp = numpy.dot(dms[i], j3c.reshape(nao,-1))
+        #:    vk1 = numpy.dot(Lpq.reshape(-1,nao).conj().T, tmp.reshape(-1,nao))
+        #:    tmp = numpy.dot(dms[i], Lpq.reshape(nao,-1))
+        #:    vk1+= numpy.dot(j3c.reshape(-1,nao).conj().T, tmp.reshape(-1,nao))
+        #:    vkR[i] += vk1.real
+        #:    vkI[i] += vk1.imag
+        nrow = pLqR.shape[1]
+        tmpR = numpy.ndarray((nao,nrow*nao), buffer=buf3R)
+        if k_real:
+            for i in range(nset):
+                tmpR = lib.ddot(dmsR[i], pjqR.reshape(nao,-1), 1, tmpR)
+                vk1R = lib.ddot(pLqR.reshape(-1,nao).T, tmpR.reshape(-1,nao))
+                vkR[i] += vk1R
+                if hermi:
+                    vkR[i] += vk1R.T
+                else:
+                    tmpR = lib.ddot(dmsR[i], pLqR.reshape(nao,-1), 1, tmpR)
+                    lib.ddot(pjqR.reshape(-1,nao).T, tmpR.reshape(-1,nao),
+                             1, vkR[i], 1)
+        else:
+            tmpI = numpy.ndarray((nao,nrow*nao), buffer=buf3I)
+            for i in range(nset):
+                tmpR, tmpI = zdotNN(dmsR[i], dmsI[i], pjqR.reshape(nao,-1),
+                                    pjqI.reshape(nao,-1), 1, tmpR, tmpI, 0)
+                vk1R, vk1I = zdotCN(pLqR.reshape(-1,nao).T, pLqI.reshape(-1,nao).T,
+                                    tmpR.reshape(-1,nao), tmpI.reshape(-1,nao))
+                vkR[i] += vk1R
+                vkI[i] += vk1I
+                if hermi:
+                    vkR[i] += vk1R.T
+                    vkI[i] -= vk1I.T
+                else:
+                    tmpR, tmpI = zdotNN(dmsR[i], dmsI[i], pLqR.reshape(nao,-1),
+                                        pLqI.reshape(nao,-1), 1, tmpR, tmpI, 0)
+                    zdotCN(pjqR.reshape(-1,nao).T, pjqI.reshape(-1,nao).T,
+                           tmpR.reshape(-1,nao), tmpI.reshape(-1,nao),
+                           1, vkR[i], vkI[i], 1)
+
+    pLqI = pjqI = None
+    thread_k = None
     for LpqR, LpqI, j3cR, j3cI in mydf.sr_loop(kptii, max_memory, False):
         LpqR = LpqR.reshape(-1,nao,nao)
         LpqI = LpqI.reshape(-1,nao,nao)
         j3cR = j3cR.reshape(-1,nao,nao)
         j3cI = j3cI.reshape(-1,nao,nao)
+        t2 = log.timer_debug1('        load', *t2)
+        if thread_k is not None:
+            thread_k.join()
         if with_j:
             #:rho_coeff = numpy.einsum('Lpq,xqp->xL', Lpq, dms)
             #:jaux = numpy.einsum('Lpq,xqp->xL', j3c, dms)
@@ -518,59 +578,26 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
                 vjI += numpy.einsum('xL,Lpq->xpq', jauxI, LpqR)
                 vjI += numpy.einsum('xL,Lpq->xpq', rhoR, j3cI)
                 vjI += numpy.einsum('xL,Lpq->xpq', rhoI, j3cR)
-
+        t2 = log.timer_debug1('        with_j', *t2)
         if with_k:
-            #:Lpq = LpqR + LpqI*1j
-            #:j3c = j3cR + j3cI*1j
-            #:for i in range(nset):
-            #:    tmp = numpy.dot(dms[i], j3c.reshape(nao,-1))
-            #:    vk1 = numpy.dot(Lpq.reshape(-1,nao).conj().T, tmp.reshape(-1,nao))
-            #:    tmp = numpy.dot(dms[i], Lpq.reshape(nao,-1))
-            #:    vk1+= numpy.dot(j3c.reshape(-1,nao).conj().T, tmp.reshape(-1,nao))
-            #:    vkR[i] += vk1.real
-            #:    vkI[i] += vk1.imag
             nrow = LpqR.shape[0]
-            pLqR = numpy.ndarray((nao,nrow,nao), buffer=bufR)
-            pjqR = numpy.ndarray((nao,nrow,nao), buffer=LpqR)
-            tmpR = numpy.ndarray((nao,nrow*nao), buffer=j3cR)
+            pLqR = numpy.ndarray((nao,nrow,nao), buffer=buf1R)
+            pjqR = numpy.ndarray((nao,nrow,nao), buffer=buf2R)
             pLqR[:] = LpqR.transpose(1,0,2)
             pjqR[:] = j3cR.transpose(1,0,2)
-            # K ~ 'iLj,lLk*,li->kj' + 'lLk*,iLj,li->kj'
-            if k_real:
-                for i in range(nset):
-                    tmpR = lib.ddot(dmsR[i], pjqR.reshape(nao,-1), 1, tmpR)
-                    vk1R = lib.ddot(pLqR.reshape(-1,nao).T, tmpR.reshape(-1,nao))
-                    vkR[i] += vk1R
-                    if hermi:
-                        vkR[i] += vk1R.T
-                    else:
-                        tmpR = lib.ddot(dmsR[i], pLqR.reshape(nao,-1), 1, tmpR)
-                        lib.ddot(pjqR.reshape(-1,nao).T, tmpR.reshape(-1,nao),
-                                 1, vkR[i], 1)
-            else:
-                pLqI = numpy.ndarray((nao,nrow,nao), buffer=bufI)
-                pjqI = numpy.ndarray((nao,nrow,nao), buffer=LpqI)
-                tmpI = numpy.ndarray((nao,nrow*nao), buffer=j3cI)
-                pLqI[:] = LpqI.reshape(-1,nao,nao).transpose(1,0,2)
-                pjqI[:] = j3cI.reshape(-1,nao,nao).transpose(1,0,2)
-                for i in range(nset):
-                    tmpR, tmpI = zdotNN(dmsR[i], dmsI[i], pjqR.reshape(nao,-1),
-                                        pjqI.reshape(nao,-1), 1, tmpR, tmpI, 0)
-                    vk1R, vk1I = zdotCN(pLqR.reshape(-1,nao).T, pLqI.reshape(-1,nao).T,
-                                        tmpR.reshape(-1,nao), tmpI.reshape(-1,nao))
-                    vkR[i] += vk1R
-                    vkI[i] += vk1I
-                    if hermi:
-                        vkR[i] += vk1R.T
-                        vkI[i] -= vk1I.T
-                    else:
-                        tmpR, tmpI = zdotNN(dmsR[i], dmsI[i], pLqR.reshape(nao,-1),
-                                            pLqI.reshape(nao,-1), 1, tmpR, tmpI, 0)
-                        zdotCN(pjqR.reshape(-1,nao).T, pjqI.reshape(-1,nao).T,
-                               tmpR.reshape(-1,nao), tmpI.reshape(-1,nao),
-                               1, vkR[i], vkI[i], 1)
-        LpqR = LpqI = j3cR = j3cI = vk1R = vk1I = None
-        pLqR = pLqI = pjqR = pjqI = tmpR = tmpI = None
+            if not k_real:
+                pLqI = numpy.ndarray((nao,nrow,nao), buffer=buf1I)
+                pjqI = numpy.ndarray((nao,nrow,nao), buffer=buf2I)
+                pLqI[:] = LpqI.transpose(1,0,2)
+                pjqI[:] = j3cI.transpose(1,0,2)
+
+            thread_k = lib.background_thread(contract_k, pLqR, pLqI, pjqR, pjqI)
+            t2 = log.timer_debug1('        with_k', *t2)
+        LpqR = LpqI = j3cR = j3cI = None
+    if thread_k is not None:
+        thread_k.join()
+    thread_k = None
+    t1 = log.timer_debug1('get_jk pass 2', *t1)
 
     if with_j:
         if j_real:
