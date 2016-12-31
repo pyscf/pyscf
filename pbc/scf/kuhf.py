@@ -71,7 +71,6 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     nkpts = len(mo_energy_kpts[0])
     nocc = mf.cell.nelectron * nkpts
 
-    # TODO: implement Fermi smearing and print mo_energy kpt by kpt
     mo_energy = np.sort(mo_energy_kpts.ravel())
     fermi = mo_energy[nocc-1]
     mo_occ_kpts[mo_energy_kpts <= fermi] = 1
@@ -295,8 +294,7 @@ class KUHF(uhf.UHF, khf.KRHF):
             fock = self.get_hcore(self.cell, self.kpts) + self.get_veff(self.cell, dm1)
 
         nkpts = len(self.kpts)
-        grad_kpts = [uhf.get_grad(mo_coeff_kpts[:,k],
-                                            mo_occ_kpts[:,k], fock[:,k])
+        grad_kpts = [uhf.get_grad(mo_coeff_kpts[:,k], mo_occ_kpts[:,k], fock[:,k])
                      for k in range(nkpts)]
         return np.hstack(grad_kpts)
 
