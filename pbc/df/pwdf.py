@@ -145,8 +145,8 @@ class PWDF(lib.StreamObject):
                     nG = i1 - i0
                     pqkR = numpy.ndarray((nij,nG), buffer=pqkRbuf)
                     pqkI = numpy.ndarray((nij,nG), buffer=pqkIbuf)
-                    pqkR[:] = aoao[i0:i1].T
-                    pqkI[:] = aoao[i0:i1].T
+                    pqkR[:] = aoao[i0:i1].real.T
+                    pqkI[:] = aoao[i0:i1].imag.T
                     yield (pqkR, pqkI, p0+i0, p0+i1)
                 aoao[:] = 0
         else:

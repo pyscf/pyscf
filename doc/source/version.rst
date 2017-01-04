@@ -6,7 +6,9 @@ Version history
 
 ===============  ==========
 ---------------  ----------
-1.3 alpha        2016-12-?
+1.3 beta         2017-4-? (feature freeze)
+1.3 alpha 2      2017-1-4
+1.3 alpha 1      2016-12-4
 1.2_             2016-11-7
 1.2 beta         2016-9-13 (feature freeze)
 1.2 alpha        2016-8-5

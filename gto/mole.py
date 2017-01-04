@@ -697,7 +697,8 @@ def pack(mol):
             'spin'    : mol.spin,
             'symmetry': mol.symmetry,
             'nucmod'  : mol.nucmod,
-            'ecp'     : mol.ecp}
+            'ecp'     : mol.ecp,
+            'verbose' : mol.verbose}
 def unpack(moldic):
     '''Unpack a dict which is packed by :func:`pack`, to generate the input
     arguments for :class:`Mole` object.

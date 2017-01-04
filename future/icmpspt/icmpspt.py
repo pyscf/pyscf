@@ -3,6 +3,13 @@
 # Author: Sandeep Sharma <sanshar@gmail.com>
 #         Qiming Sun <osirpt.sun@gmail.com>
 #
+# Descritpion:
+#       Internal-contracted MPS perturbation method.  You can contact Sandeep
+#       Sharma for the "icpt" program required by this module.  If this method
+#       is used in your work, please cite
+#       S. Sharma and G. Chan,  J. Chem. Phys., 136 (2012), 124121
+#       S. Sharma, G. Jeanmairet, and A. Alavi,  J. Chem. Phys., 144 (2016), 034103
+#
 
 import os
 import ctypes

@@ -217,7 +217,7 @@ def iden_coeffs(mo1, mo2):
             (mo1.shape==mo2.shape and numpy.linalg.norm(mo1-mo2) < 1e-13))
 
 
-def _conc_mos(moi, moj, compact):
+def _conc_mos(moi, moj, compact=False):
     nmoi = moi.shape[1]
     nmoj = moj.shape[1]
     if compact and iden_coeffs(moi, moj):

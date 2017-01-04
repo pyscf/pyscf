@@ -126,17 +126,21 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
     if isinstance(mo_coeffs, numpy.ndarray) and mo_coeffs.ndim == 2:
         mo_coeffs = (mo_coeffs,) * 4
 
-    eri = mydf.get_eri(kpts)
+    eri = mydf.get_eri(kpts, compact)
+    all_real = not any(numpy.iscomplexobj(mo) for mo in mo_coeffs)
+    print abs(eri).sum()
 
 ####################
 # gamma point, the integral is real and with s4 symmetry
-    if eri.dtype == numpy.float64:
+    if eri.dtype == numpy.float64 and all_real:
         return ao2mo.general(eri, mo_coeffs, compact=compact)
     else:
         mokl, klslice = ao2mo.incore._conc_mos(mo_coeffs[2], mo_coeffs[3],
                                                False)[2:]
         if mokl.dtype == numpy.float64:
             mokl = mokl + 0j
+        if eri.dtype  == numpy.float64:
+            eri = eri + 0j
         nao = mo_coeffs[0].shape[0]
         nmoi = mo_coeffs[0].shape[1]
         nmoj = mo_coeffs[1].shape[1]
@@ -144,7 +148,7 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
         nmol = mo_coeffs[3].shape[1]
         moi = numpy.asarray(mo_coeffs[0], order='F')
         moj = numpy.asarray(mo_coeffs[1], order='F')
-        tao = [0]
+        tao = []
         ao_loc = None
         pqkl = _ao2mo.r_e2(eri.reshape(-1,nao**2), mokl, klslice, tao, ao_loc, aosym='s1')
         pqkl = pqkl.reshape(nao,nao,nmok*nmol)

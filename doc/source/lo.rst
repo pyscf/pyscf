@@ -3,8 +3,8 @@ lo --- Orbital localization
 
 .. automodule:: pyscf.lo
 
-Foster-Boys, Edmiston-Ruedenberg, Pipek-Mezey localiation
-=========================================================
+Foster-Boys, Edmiston-Ruedenberg, Pipek-Mezey localization
+==========================================================
 
 .. automodule:: pyscf.lo.boys
    :members:

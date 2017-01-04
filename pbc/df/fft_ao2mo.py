@@ -23,6 +23,7 @@ import time
 import numpy
 from pyscf import lib
 from pyscf import ao2mo
+from pyscf.ao2mo.incore import iden_coeffs
 from pyscf.ao2mo import _ao2mo
 from pyscf.lib import logger
 from pyscf.pbc import dft as pdft
@@ -93,14 +94,14 @@ def general(mydf, mo_coeffs, kpts=None, compact=False):
         mo_coeffs = (mo_coeffs,) * 4
     coulG = tools.get_coulG(cell, kptj-kpti, gs=mydf.gs)
     ngs = len(coulG)
+    allreal = not any(numpy.iscomplexobj(mo) for mo in mo_coeffs)
 
 ####################
 # gamma point, the integral is real and with s4 symmetry
-    if (abs(kptijkl).sum() < 1e-9 and
-        not any((numpy.iscomplexobj(mo) for mo in mo_coeffs))):
+    if abs(kptijkl).sum() < 1e-9 and allreal:
         mo_pairs_G = get_mo_pairs_G(mydf, mo_coeffs[:2], kptijkl[:2], compact)
-        if ((ao2mo.incore.iden_coeffs(mo_coeffs[0],mo_coeffs[2]) and
-             ao2mo.incore.iden_coeffs(mo_coeffs[1],mo_coeffs[3]))):
+        if ((iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
+             iden_coeffs(mo_coeffs[1], mo_coeffs[3]))):
             mo_pairs_G *= numpy.sqrt(coulG).reshape(-1,1)
             moijR = moklR = mo_pairs_G.real.copy()
             moijI = moklI = mo_pairs_G.imag.copy()
@@ -125,8 +126,8 @@ def general(mydf, mo_coeffs, kpts=None, compact=False):
 #
 # complex integrals, N^4 elements
     elif ((abs(kpti-kptl).sum() < 1e-9) and (abs(kptj-kptk).sum() < 1e-9) and
-          ao2mo.incore.iden_coeffs(mo_coeffs[0],mo_coeffs[3]) and
-          ao2mo.incore.iden_coeffs(mo_coeffs[1],mo_coeffs[2])):
+          iden_coeffs(mo_coeffs[0], mo_coeffs[3]) and
+          iden_coeffs(mo_coeffs[1], mo_coeffs[2])):
         nmoi = mo_coeffs[0].shape[1]
         nmoj = mo_coeffs[1].shape[1]
         mo_ij_G = get_mo_pairs_G(mydf, mo_coeffs[:2], kptijkl[:2])
@@ -222,7 +223,7 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), compact=False):
     ngs = len(coords)
 
     def trans(aoiR, aojR, fac=1):
-        if id(aoiR) == id(aojR) and ao2mo.incore.iden_coeffs(mo_coeffs[0], mo_coeffs[1]):
+        if id(aoiR) == id(aojR) and iden_coeffs(mo_coeffs[0], mo_coeffs[1]):
             moiR = mojR = numpy.asarray(lib.dot(mo_coeffs[0].T,aoiR.T), order='C')
         else:
             moiR = numpy.asarray(lib.dot(mo_coeffs[0].T, aoiR.T), order='C')
@@ -235,7 +236,7 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), compact=False):
 
     if abs(kpts).sum() < 1e-9:  # gamma point, real
         aoR = mydf._numint.eval_ao(cell, coords, kpts[:1])[0]
-        if compact and ao2mo.incore.iden_coeffs(mo_coeffs[0], mo_coeffs[1]):
+        if compact and iden_coeffs(mo_coeffs[0], mo_coeffs[1]):
             moR = numpy.asarray(lib.dot(mo_coeffs[0].T, aoR.T), order='C')
             npair = nmoi*(nmoi+1)//2
             mo_pairs_G = numpy.empty((npair,ngs), dtype=numpy.complex128)
