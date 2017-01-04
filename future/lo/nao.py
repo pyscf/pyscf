@@ -238,6 +238,7 @@ def _core_val_ryd_list(mol):
     k = 0
     for ib in range(mol.nbas):
         ia = mol.bas_atom(ib)
+# Avoid calling mol.atom_charge because we should include ECP core electrons here
         nuc = mole._charge(mol.atom_symbol(ia))
         l = mol.bas_angular(ib)
         nc = mol.bas_nctr(ib)

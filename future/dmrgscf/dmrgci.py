@@ -217,6 +217,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         return self
 
     def make_rdm1(self, state, norb, nelec, link_index=None, **kwargs):
+# Avoid calling self.make_rdm12 because it may be overloaded
         return DMRGCI.make_rdm12(self, state, norb, nelec, link_index, **kwargs)[0]
 
     def make_rdm12(self, state, norb, nelec, link_index=None, **kwargs):
