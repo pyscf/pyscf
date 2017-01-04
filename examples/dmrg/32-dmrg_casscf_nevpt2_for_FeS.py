@@ -505,7 +505,6 @@ mrpt.NEVPT(mc).kernel()
 # There is also a fast DMRG-NEVPT2 implementation.  See also the example
 # pyscf/examples/dmrg/02-dmrg_nevpt2.py
 #
-from pyscf.dmrgscf import compress_perturb
 mrpt.NEVPT(mc).compress_approx().kernel()
 
 ##################################################
