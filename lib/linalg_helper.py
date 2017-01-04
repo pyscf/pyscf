@@ -316,9 +316,9 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
     if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
         x0 = [x0]
     max_cycle = min(max_cycle, x0[0].size)
-    max_space = max_space + nroots * 2
+    max_space = max_space + nroots * 3
     # max_space*2 for holding ax and xs, nroots*2 for holding axt and xt
-    _incore = max_memory*1e6/x0[0].nbytes > max_space*2+nroots*2
+    _incore = max_memory*1e6/x0[0].nbytes > max_space*2+nroots*3
     log.debug1('max_cycle %d  max_space %d  max_memory %d  incore %s',
                max_cycle, max_space, max_memory, _incore)
     heff = None
@@ -391,7 +391,7 @@ def davidson1(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
                       icyc, space, max_dx_norm, e, de[ide])
             conv = True
             break
-        elif max_dx_norm/max_dx_last > 2 and space > nroots*2:
+        elif max_dx_norm > 1 and max_dx_norm/max_dx_last > 3 and space > nroots*3:
             log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
                       icyc, space, max_dx_norm, e, de[ide], norm_min)
             log.debug('Large |r| detected, restore to previous x0')

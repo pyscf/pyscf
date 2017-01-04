@@ -128,7 +128,6 @@ def load_mol(chkfile):
         from numpy import array
         with h5py.File(chkfile, 'r') as fh5:
             mol = pyscf.gto.Mole()
-            mol.verbose = 0
             mol.output = '/dev/null'
             moldic = eval(fh5['mol'].value)
             for key in ('mass', 'grids', 'light_speed'):
