@@ -867,9 +867,9 @@ def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
     if tmpdir is None:
         tmpdir = lib.param.TMPDIR
     swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
-    pyscf.ao2mo.outcore.half_e1(mol, (mo[:,:nocc],mo[:,ncore:]), swapfile.name,
-                                max_memory=max_memory, ioblk_size=ioblk_size,
-                                verbose=log, compact=False)
+    ao2mo.outcore.half_e1(mol, (mo[:,:nocc],mo[:,ncore:]), swapfile.name,
+                          max_memory=max_memory, ioblk_size=ioblk_size,
+                          verbose=log, compact=False)
 
     fswap = h5py.File(swapfile.name, 'r')
     klaoblks = len(fswap['0'])
