@@ -488,8 +488,8 @@ def get_ewald_params(cell, precision=1e-8, gs=None):
         gs = cell.gs
 
     Gmax = min(np.asarray(cell.gs) * lib.norm(cell.reciprocal_vectors(), axis=1))
-    log_precision = np.log(precision)
-    ew_eta = float(np.sqrt(-Gmax**2/(4*log_precision)))
+    log_precision = np.log(precision*.1)
+    ew_eta = max(np.sqrt(-Gmax**2/(4*log_precision)), .1)
 
     ew_cut = np.sqrt(-log_precision)/ew_eta
     return ew_eta, ew_cut

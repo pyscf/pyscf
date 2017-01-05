@@ -161,6 +161,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
             if kk_todo[ki,kj]:
                 make_kpt(kptj-kpti)
 
+    # G=0 was not included in the non-uniform grids
     if cell.dimension != 3 and exxdiv is not None:
         assert(exxdiv.lower() == 'ewald')
         _ewald_exxdiv_for_G0(cell, kpts_band, dms, vk_kpts)

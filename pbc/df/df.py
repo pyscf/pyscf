@@ -4,7 +4,11 @@
 #
 
 '''
-Gaussian and planewaves mixed density fitting
+Density fitting
+
+Divide the 3-center Coulomb integrals to two parts.  Compute the local
+part in real space, long range part in reciprocal space.
+
 Ref:
 '''
 
@@ -18,41 +22,17 @@ import scipy.linalg
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
-import pyscf.df
+from pyscf.df.outcore import _guess_shell_ranges
 from pyscf.df.mdf import _uncontract_basis
-from pyscf.pbc.df import incore
 from pyscf.pbc.df import outcore
-from pyscf.pbc import tools
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import df_jk
 from pyscf.pbc.df import df_ao2mo
 from pyscf.pbc.df import pwdf
 from pyscf.pbc.df.df_jk import zdotCN
+from pyscf.pbc.df.pwdf import estimate_eta, get_nuc
 
 KPT_DIFF_TOL = 1e-6
-
-#
-# Divide the Coulomb potential to two parts.  Computing short range part in
-# real space, long range part in reciprocal space.
-#
-
-#
-# Be very careful with the smooth function exponents.
-# The smooth function can be considered as an effective nuclear (distribution)
-# potential.  This potential leads to attraction effects somewhere in the
-# space.  The attraction potential can interact with diffuse AO basis, which
-# may artificially produce a dipole
-#
-# A relatively steep function is local in space thus maybe have smaller region
-# of attraction potential.  An atom-specific eta based on atomic radius might
-# be needed
-#
-def estimate_eta(cell, cutoff=1e-12):
-    '''The exponent of the smooth gaussian model density, requiring that at
-    boundary, density ~ 4pi rmax^2 exp(-eta*rmax^2) ~ 1e-12
-    '''
-    eta = max(numpy.log(4*numpy.pi*cell.rcut**4/cutoff)/cell.rcut**2, .1)
-    return eta
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
     auxcell = copy.copy(cell)
@@ -131,76 +111,6 @@ def make_modchg_basis(auxcell, smooth_eta, l_max=3):
     logger.debug1(auxcell, 'make smooth basis, num shells = %d, num cGTOs = %d',
                   chgcell.nbas, chgcell.nao_nr())
     return chgcell
-
-def get_nuc(mydf, kpts=None):
-    cell = mydf.cell
-    if kpts is None:
-        kpts_lst = numpy.zeros((1,3))
-    else:
-        kpts_lst = numpy.reshape(kpts, (-1,3))
-
-    log = logger.Logger(mydf.stdout, mydf.verbose)
-    t1 = t0 = (time.clock(), time.time())
-
-    nkpts = len(kpts_lst)
-    nao = cell.nao_nr()
-    nao_pair = nao * (nao+1) // 2
-
-    nuccell = copy.copy(cell)
-    half_sph_norm = .5/numpy.sqrt(numpy.pi)
-    norm = half_sph_norm/gto.mole._gaussian_int(2, mydf.eta)
-    chg_env = [mydf.eta, norm]
-    ptr_eta = cell._env.size
-    ptr_norm = ptr_eta + 1
-    chg_bas = [[ia, 0, 1, 1, 0, ptr_eta, ptr_norm, 0] for ia in range(cell.natm)]
-    nuccell._atm = cell._atm
-    nuccell._bas = numpy.asarray(chg_bas, dtype=numpy.int32)
-    nuccell._env = numpy.hstack((cell._env, chg_env))
-
-    vj = _int_nuc_vloc(cell, nuccell, kpts_lst)
-    t1 = log.timer_debug1('vnuc pass1: analytic int', *t1)
-
-    charge = -cell.atom_charges()
-    kpt_allow = numpy.zeros(3)
-    Gv, Gvbase, kws = cell.get_Gv_weights(mydf.gs)
-    coulG = tools.get_coulG(cell, kpt_allow, gs=mydf.gs, Gv=Gv)
-    coulG *= kws
-    aoaux = ft_ao.ft_ao(nuccell, Gv)
-    vGR = numpy.einsum('i,xi->x', charge, aoaux.real) * coulG
-    vGI = numpy.einsum('i,xi->x', charge, aoaux.imag) * coulG
-
-    vjR = numpy.zeros((nkpts,nao_pair))
-    vjI = numpy.zeros((nkpts,nao_pair))
-    max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
-    for k, pqkR, pqkI, p0, p1 \
-            in mydf.ft_loop(mydf.gs, kpt_allow, kpts_lst,
-                            max_memory=max_memory, aosym='s2'):
-# rho_ij(G) nuc(-G) / G^2
-# = [Re(rho_ij(G)) + Im(rho_ij(G))*1j] [Re(nuc(G)) - Im(nuc(G))*1j] / G^2
-        if not gamma_point(kpts_lst[k]):
-            vjI[k] += numpy.einsum('k,xk->x', vGR[p0:p1], pqkI)
-            vjI[k] -= numpy.einsum('k,xk->x', vGI[p0:p1], pqkR)
-        vjR[k] += numpy.einsum('k,xk->x', vGR[p0:p1], pqkR)
-        vjR[k] += numpy.einsum('k,xk->x', vGI[p0:p1], pqkI)
-    t1 = log.timer_debug1('contracting Vnuc', *t1)
-
-    if cell.dimension == 3:
-        nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
-        nucbar *= numpy.pi/cell.vol
-        ovlp = cell.pbc_intor('cint1e_ovlp_sph', 1, lib.HERMITIAN, kpts_lst)
-        for k in range(nkpts):
-            vj[k] -= nucbar * ovlp[k]
-
-    for k, kpt in enumerate(kpts_lst):
-        if gamma_point(kpt):
-            vj[k] += lib.unpack_tril(vjR[k])
-        else:
-            vj[k] += lib.unpack_tril(vjR[k]+vjI[k]*1j)
-
-    if kpts is None or numpy.shape(kpts) == (3,):
-        vj = vj[0]
-    return vj
-get_pp_loc_part1 = get_nuc
 
 
 class DF(pwdf.PWDF):
@@ -346,8 +256,6 @@ class DF(pwdf.PWDF):
                 LpqR, LpqI = load(j3c, b0, b1, LpqR, LpqI)
                 yield LpqR, LpqI
 
-    get_nuc = get_nuc
-
     def get_jk(self, dm, hermi=1, kpts=None, kpt_band=None,
                with_j=True, with_k=True, exxdiv='ewald'):
         if kpts is None:
@@ -427,75 +335,6 @@ def fuse_auxcell(mydf, auxcell):
                     Lpq[i0:i1] -= chgLpq[p0:p0+nd]
         return Lpq
     return fused_cell, fuse
-
-def _int_nuc_vloc(cell, nuccell, kpts):
-    '''Vnuc - Vloc'''
-    rcut = max(cell.rcut, nuccell.rcut)
-    Ls = cell.get_lattice_Ls(rcut=rcut)
-    expLk = numpy.asarray(numpy.exp(1j*numpy.dot(Ls, kpts.T)), order='C')
-    nkpts = len(kpts)
-
-# Use the 3c2e code with steep s gaussians to mimic nuclear density
-    fakenuc = _fake_nuc(cell)
-    fakenuc._atm, fakenuc._bas, fakenuc._env = \
-            gto.conc_env(nuccell._atm, nuccell._bas, nuccell._env,
-                         fakenuc._atm, fakenuc._bas, fakenuc._env)
-
-    nao = cell.nao_nr()
-    buf = [numpy.zeros((nao,nao,fakenuc.natm), order='F', dtype=numpy.complex128)
-           for k in range(nkpts)]
-    ints = incore._wrap_int3c(cell, fakenuc, 'cint3c2e_sph', 1, Ls, buf)
-    atm, bas, env = ints._envs[:3]
-    c_shls_slice = (ctypes.c_int*6)(0, cell.nbas, cell.nbas, cell.nbas*2,
-                                    cell.nbas*2, cell.nbas*2+fakenuc.natm)
-
-    xyz = numpy.asarray(cell.atom_coords(), order='C')
-    ptr_coordL = atm[:cell.natm,gto.PTR_COORD]
-    ptr_coordL = numpy.vstack((ptr_coordL,ptr_coordL+1,ptr_coordL+2)).T.copy('C')
-    for l, L1 in enumerate(Ls):
-        env[ptr_coordL] = xyz + L1
-        exp_Lk = numpy.einsum('k,ik->ik', expLk[l].conj(), expLk[:l+1])
-        exp_Lk = numpy.asarray(exp_Lk, order='C')
-        exp_Lk[l] = .5
-        ints(exp_Lk, c_shls_slice)
-
-    charge = cell.atom_charges()
-    charge = numpy.append(charge, -charge)  # (charge-of-nuccell, charge-of-fakenuc)
-    for k, kpt in enumerate(kpts):
-        v = numpy.einsum('ijz,z->ij', buf[k], charge)
-        if gamma_point(kpt):
-            buf[k] = v.real + v.real.T
-        else:
-            buf[k] = v + v.T.conj()
-    return buf
-
-# Since the real-space lattice-sum for nuclear attraction is not implemented,
-# use the 3c2e code with steep gaussians to mimic nuclear density
-def _fake_nuc(cell):
-    fakenuc = gto.Mole()
-    fakenuc._atm = cell._atm.copy()
-    fakenuc._atm[:,gto.PTR_COORD] = numpy.arange(gto.PTR_ENV_START,
-                                                 gto.PTR_ENV_START+cell.natm*3,3)
-    _bas = []
-    _env = [0]*gto.PTR_ENV_START + [cell.atom_coords().ravel()]
-    ptr = gto.PTR_ENV_START + cell.natm * 3
-    half_sph_norm = .5/numpy.sqrt(numpy.pi)
-    for ia in range(cell.natm):
-        symb = cell.atom_symbol(ia)
-        if symb in cell._pseudo:
-            pp = cell._pseudo[symb]
-            rloc, nexp, cexp = pp[1:3+1]
-            eta = .5 / rloc**2
-        else:
-            eta = 1e16
-        norm = half_sph_norm/gto.mole._gaussian_int(2, eta)
-        _env.extend([eta, norm])
-        _bas.append([ia, 0, 1, 1, 0, ptr, ptr+1, 0])
-        ptr += 2
-    fakenuc._bas = numpy.asarray(_bas, dtype=numpy.int32)
-    fakenuc._env = numpy.asarray(numpy.hstack(_env), dtype=numpy.double)
-    fakenuc.rcut = cell.rcut
-    return fakenuc
 
 
 # kpti == kptj: s2 symmetry
@@ -578,7 +417,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
         max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
         # nkptj for 3c-coulomb arrays plus 1 Lpq array
         buflen = min(max(int(max_memory*.6*1e6/16/naux/(nkptj+1)), 1), nao_pair)
-        shranges = pyscf.df.outcore._guess_shell_ranges(cell, buflen, aosym)
+        shranges = _guess_shell_ranges(cell, buflen, aosym)
         buflen = max([x[2] for x in shranges])
         # +1 for a pqkbuf
         if aosym == 's2':
