@@ -553,16 +553,23 @@ def newton_SCF_class(mf):
         def kernel(self, mo_coeff=None, mo_occ=None):
             if mo_coeff is None:
                 mo_coeff = self.mo_coeff
-            else:  # save initial guess because some methods may access them
-                self.mo_coeff = mo_coeff
             if mo_occ is None:
                 mo_occ = self.mo_occ
-            else:
-                self.mo_occ = mo_occ
             cput0 = (time.clock(), time.time())
 
             self.build(self.mol)
             self.dump_flags()
+
+            if mo_coeff is None or mo_occ is None:
+                logger.debug(self, 'Initial guess orbitals not given. '
+                             'Generating initial guess from %s density matrix',
+                             self.init_guess)
+                dm = mf.get_init_guess(self.mol, self.init_guess)
+                mo_coeff, mo_occ = self.from_dm(dm)
+            # save initial guess because some methods may access them
+            self.mo_coeff = mo_coeff
+            self.mo_occ = mo_occ
+
             self.converged, self.e_tot, \
                     self.mo_energy, self.mo_coeff, self.mo_occ = \
                     kernel(self, mo_coeff, mo_occ, conv_tol=self.conv_tol,
@@ -753,13 +760,8 @@ if __name__ == '__main__':
     mol.build()
 
     nmo = mol.nao_nr()
-    m = scf.RHF(mol)
-    m.scf()
-    kernel(newton(m), m.mo_coeff, m.mo_occ, verbose=5)
-
-    m.max_cycle = 1
-    m.scf()
-    e0 = kernel(newton(m), m.mo_coeff, m.mo_occ, verbose=5)[1]
+    m = newton(scf.RHF(mol))
+    e0 = m.kernel()
 
 #####################################
     mol.basis = '6-31g'
