@@ -11,7 +11,6 @@ import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import tools
-from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 
 
@@ -90,7 +89,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpt_band=None,
     '''
     cell = mydf.cell
     gs = mydf.gs
-    coords = gen_grid.gen_uniform_grids(cell, gs)
+    coords = cell.gen_uniform_grids(gs)
     ngs = coords.shape[0]
 
     kpts = np.asarray(kpts)

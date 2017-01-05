@@ -128,7 +128,6 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
 
     eri = mydf.get_eri(kpts, compact)
     all_real = not any(numpy.iscomplexobj(mo) for mo in mo_coeffs)
-    print abs(eri).sum()
 
 ####################
 # gamma point, the integral is real and with s4 symmetry

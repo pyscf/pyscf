@@ -26,19 +26,12 @@ from pyscf import ao2mo
 from pyscf.ao2mo.incore import iden_coeffs
 from pyscf.ao2mo import _ao2mo
 from pyscf.lib import logger
-from pyscf.pbc import dft as pdft
 from pyscf.pbc import tools
 
 
 def get_eri(mydf, kpts=None, compact=False):
     cell = mydf.cell
-    if kpts is None:
-        kptijkl = numpy.zeros((4,3))
-    elif numpy.shape(kpts) == (3,):
-        kptijkl = numpy.vstack([kpts]*4)
-    else:
-        kptijkl = numpy.reshape(kpts, (4,3))
-
+    kptijkl = _format_kpts(kpts)
     kpti, kptj, kptk, kptl = kptijkl
     nao = cell.nao_nr()
     nao_pair = nao * (nao+1) // 2
@@ -82,13 +75,7 @@ def get_eri(mydf, kpts=None, compact=False):
 
 def general(mydf, mo_coeffs, kpts=None, compact=False):
     cell = mydf.cell
-    if kpts is None:
-        kptijkl = numpy.zeros((4,3))
-    elif numpy.shape(kpts) == (3,):
-        kptijkl = numpy.vstack([kpts]*4)
-    else:
-        kptijkl = numpy.reshape(kpts, (4,3))
-
+    kptijkl = _format_kpts(kpts)
     kpti, kptj, kptk, kptl = kptijkl
     if isinstance(mo_coeffs, numpy.ndarray) and mo_coeffs.ndim == 2:
         mo_coeffs = (mo_coeffs,) * 4
@@ -160,10 +147,10 @@ def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), compact=False):
             For gamma point, the shape is (ngs, nao*(nao+1)/2); otherwise the
             shape is (ngs, nao*nao)
     '''
-    if kpts is None: kpts = mydf.kpts
+    if kpts is None: kpts = numpy.zeros((2,3))
     cell = mydf.cell
     kpts = numpy.asarray(kpts)
-    coords = pdft.gen_grid.gen_uniform_grids(cell, mydf.gs)
+    coords = cell.gen_uniform_grids(mydf.gs)
     nao = cell.nao_nr()
     ngs = len(coords)
 
@@ -214,10 +201,10 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), compact=False):
         mo_pairs_G : (ngs, nmoi*nmoj) ndarray
             The FFT of the real-space MO pairs.
     '''
-    if kpts is None: kpts = mydf.kpts
+    if kpts is None: kpts = numpy.zeros((2,3))
     cell = mydf.cell
     kpts = numpy.asarray(kpts)
-    coords = pdft.gen_grid.gen_uniform_grids(cell, mydf.gs)
+    coords = cell.gen_uniform_grids(mydf.gs)
     nmoi = mo_coeffs[0].shape[1]
     nmoj = mo_coeffs[1].shape[1]
     ngs = len(coords)
@@ -259,6 +246,17 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), compact=False):
         mo_pairs_G = trans(aoiR, aojR, fac)
 
     return mo_pairs_G
+
+def _format_kpts(kpts):
+    if kpts is None:
+        kptijkl = numpy.zeros((4,3))
+    else:
+        kpts = numpy.asarray(kpts)
+        if kpts.size == 3:
+            kptijkl = numpy.vstack([kpts]*4).reshape(4,3)
+        else:
+            kptijkl = kpts.reshape(4,3)
+    return kptijkl
 
 
 if __name__ == '__main__':

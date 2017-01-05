@@ -15,7 +15,6 @@ from pyscf import dft
 from pyscf.lib import logger
 from pyscf.pbc import tools
 from pyscf.pbc.gto import pseudo
-from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import fft_jk
@@ -166,7 +165,7 @@ class FFTDF(lib.StreamObject):
             (gs is not None and numpy.any(gs != self.gs))):
 
             nkpts = len(kpts)
-            coords = gen_grid.gen_uniform_grids(cell, gs)
+            coords = cell.gen_uniform_grids(gs)
             nao = cell.nao_nr()
             blksize = int(self.max_memory*1e6/(nkpts*nao*16*numint.BLKSIZE))*numint.BLKSIZE
             blksize = min(max(blksize, numint.BLKSIZE), ngrids)
@@ -186,7 +185,7 @@ class FFTDF(lib.StreamObject):
                 where = numpy.argmin(lib.norm(kpts-kpt_band,axis=1))
                 if abs(kpts[where]-kpt_band).sum() > 1e-9:
                     where = None
-                    coords = gen_grid.gen_uniform_grids(cell, gs)
+                    coords = cell.gen_uniform_grids(gs)
                     yield 0, numint.eval_ao(cell, coords, kpt_band, deriv=0)
                 else:
                     yield where, f['ao/%d'%where].value
