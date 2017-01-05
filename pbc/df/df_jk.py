@@ -286,7 +286,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     thread_k = None
     for LpqR, LpqI in mydf.sr_loop(kptii, max_memory, False):
         LpqR = LpqR.reshape(-1,nao,nao)
-        t1 = log.debug2('        load', *t1)
+        t1 = log.timer_debug1('        load', *t1)
         if thread_k is not None:
             thread_k.join()
         if with_j:
