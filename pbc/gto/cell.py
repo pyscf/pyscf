@@ -579,6 +579,24 @@ def make_kpts(cell, nks):
     kpts = cell.get_abs_kpts(scaled_kpts)
     return kpts
 
+def gen_uniform_grids(cell, gs=None):
+    '''Generate a uniform real-space grid consistent w/ samp thm; see MH (3.19).
+
+    Args:
+        cell : instance of :class:`Cell`
+
+    Returns:
+        coords : (ngx*ngy*ngz, 3) ndarray
+            The real-space grid point coordinates.
+
+    '''
+    if gs is None: gs = cell.gs
+    ngs = 2*np.asarray(gs)+1
+    qv = lib.cartesian_prod([np.arange(x) for x in ngs])
+    a_frac = np.einsum('i,ij->ij', 1./ngs, cell.lattice_vectors())
+    coords = np.dot(qv, a_frac)
+    return coords
+
 
 class Cell(mole.Mole):
     '''A Cell object holds the basic information of a crystal.
@@ -877,6 +895,8 @@ class Cell(mole.Mole):
     ewald = ewald
     energy_nuc = ewald
 
+    gen_uniform_grids = gen_uniform_grids
+
     def pbc_intor(self, intor, comp=1, hermi=0, kpts=None, kpt=None):
         '''One-electron integrals with PBC. See also Mole.intor'''
         return intor_cross(intor, self, self, comp, hermi, kpts, kpt)
@@ -902,4 +922,3 @@ class Cell(mole.Mole):
         cell_dic = [(key, getattr(self, key)) for key in mol.__dict__.keys()]
         mol.__dict__.update(cell_dic)
         return mol
-

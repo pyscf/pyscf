@@ -6,30 +6,9 @@
 import numpy as np
 import pyscf.lib
 from pyscf.lib import logger
-from pyscf.lib.numpy_helper import cartesian_prod
 from pyscf import dft
 from pyscf.pbc import tools
-
-
-def gen_uniform_grids(cell, gs=None):
-    '''Generate a uniform real-space grid consistent w/ samp thm; see MH (3.19).
-
-    Args:
-        cell : instance of :class:`Cell`
-
-    Returns:
-        coords : (ngx*ngy*ngz, 3) ndarray
-            The real-space grid point coordinates.
-
-    '''
-    if gs is None:
-        gs = cell.gs
-    ngs = 2*np.asarray(gs)+1
-    qv = cartesian_prod([np.arange(x) for x in ngs])
-    invN = np.diag(1./ngs)
-    a_frac = np.einsum('i,ij->ij', 1./ngs, cell.lattice_vectors())
-    coords = np.dot(qv, a_frac)
-    return coords
+from pyscf.pbc.gto.cell import gen_uniform_grids
 
 
 class UniformGrids(object):
