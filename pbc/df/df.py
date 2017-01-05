@@ -278,8 +278,11 @@ class DF(pwdf.PWDF):
         if fused_cell is None:
             fused_cell, fuse = fuse_auxcell(self, self.auxcell)
         aux_loc = fused_cell.ao_loc_nr()
-        half_sph_norm = .5/numpy.sqrt(numpy.pi)
         vbar = numpy.zeros(aux_loc[-1])
+        if fused_cell.dimension != 3:
+            return vbar
+
+        half_sph_norm = .5/numpy.sqrt(numpy.pi)
         for i in range(fused_cell.nbas):
             l = fused_cell.bas_angular(i)
             if l == 0:
