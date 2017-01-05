@@ -120,8 +120,7 @@ def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
         density matrix (both order and shape).
     '''
     from pyscf.pbc import df
-    return df.FFTDF(cell).get_jk(dm, hermi, kpt, kpt_band, with_j=False,
-                                 exxdiv=mf.exxdiv)[1]
+    return df.FFTDF(cell).get_jk(dm, hermi, kpt, kpt_band, exxdiv=mf.exxdiv)
 
 
 def get_bands(mf, kpt_band, cell=None, dm=None, kpt=None):

@@ -183,11 +183,11 @@ class FFTDF(lib.StreamObject):
                     yield k, aoR
             else:
                 kpt_band = numpy.reshape(kpt_band, 3)
-                where = numpy.argmin(pyscf.lib.norm(kpts-kpt_band,axis=1))
+                where = numpy.argmin(lib.norm(kpts-kpt_band,axis=1))
                 if abs(kpts[where]-kpt_band).sum() > 1e-9:
                     where = None
                     coords = gen_grid.gen_uniform_grids(cell, gs)
-                    yield 0, numint.eval_ao(cell, coords, kpt_band, deriv=deriv)
+                    yield 0, numint.eval_ao(cell, coords, kpt_band, deriv=0)
                 else:
                     yield where, f['ao/%d'%where].value
 

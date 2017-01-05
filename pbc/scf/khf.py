@@ -91,8 +91,7 @@ def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
         or list of vj and vk if the input dm_kpts is a list of DMs
     '''
     from pyscf.pbc import df
-    return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpt_band, with_j=False,
-                                 exxdiv=mf.exxdiv)[0]
+    return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpt_band, exxdiv=mf.exxdiv)
 
 def get_fock(mf, h1e_kpts, s_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
