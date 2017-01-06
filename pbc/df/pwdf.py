@@ -25,6 +25,7 @@ def estimate_eta(cell, cutoff=1e-12):
     '''The exponent of the smooth gaussian model density, requiring that at
     boundary, density ~ 4pi rmax^2 exp(-eta*rmax^2) ~ 1e-12
     '''
+    # r^4 to guarantee at least up to d shell converging at boundary
     eta = max(numpy.log(4*numpy.pi*cell.rcut**4/cutoff)/cell.rcut**2, .1)
     return eta
 

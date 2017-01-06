@@ -487,11 +487,17 @@ def get_ewald_params(cell, precision=1e-8, gs=None):
     if gs is None:
         gs = cell.gs
 
-    Gmax = min(np.asarray(cell.gs) * lib.norm(cell.reciprocal_vectors(), axis=1))
-    log_precision = np.log(precision*.1)
-    ew_eta = max(np.sqrt(-Gmax**2/(4*log_precision)), .1)
-
-    ew_cut = np.sqrt(-log_precision)/ew_eta
+    if cell.dimension == 3:
+        Gmax = min(np.asarray(cell.gs) * lib.norm(cell.reciprocal_vectors(), axis=1))
+        log_precision = np.log(precision*.1)
+        ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
+        ew_cut = np.sqrt(-log_precision)/ew_eta
+    else:
+# Non-uniform PW grids are used for low-dimensional ewald summation.  The cutoff
+# estimation for long range part based on exp(G^2/(4*eta^2)) does not work for
+# non-uniform grids.  Smooth model density is preferred.
+        ew_cut = cell.rcut
+        ew_eta = np.sqrt(max(np.log(ew_cut**2/precision)/ew_cut**2, .1))
     return ew_eta, ew_cut
 
 def ewald(cell, ew_eta=None, ew_cut=None):
