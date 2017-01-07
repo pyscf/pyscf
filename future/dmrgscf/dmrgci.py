@@ -216,6 +216,19 @@ class DMRGCI(pyscf.lib.StreamObject):
         log.info('memory = %s', self.memory)
         return self
 
+    def make_rdm1s(self, state, norb, nelec, link_index=None, **kwargs):
+# Ref: IJQC, 109, 3552 Eq (3)
+        if isinstance(nelec, (int, numpy.integer)):
+            nelecb = (nelec-self.spin) // 2
+            neleca = nelec - nelecb
+        else :
+            neleca, nelecb = nelec
+        dm1, dm2 = DMRGCI.make_rdm12(self, state, norb, nelec, link_index, **kwargs)
+        dm1n = (2-(neleca+nelecb)/2.) * dm1 - numpy.einsum('pkkq->pq', dm2)
+        dm1n *= 1./(neleca-nelecb+1)
+        dm1a, dm1b = (dm1+dm1n)*.5, (dm1-dm1n)*.5
+        return dm1a, dm1b
+
     def make_rdm1(self, state, norb, nelec, link_index=None, **kwargs):
 # Avoid calling self.make_rdm12 because it may be overloaded
         return DMRGCI.make_rdm12(self, state, norb, nelec, link_index, **kwargs)[0]
@@ -242,8 +255,21 @@ class DMRGCI(pyscf.lib.StreamObject):
         onepdm /= (nelectrons-1)
         return onepdm, twopdm
 
+    def trans_rdm1s(self, statebra, stateket, norb, nelec, link_index=None, **kwargs):
+# Ref: IJQC, 109, 3552 Eq (3)
+        if isinstance(nelec, (int, numpy.integer)):
+            nelecb = (nelec-self.spin) // 2
+            neleca = nelec - nelecb
+        else :
+            neleca, nelecb = nelec
+        dm1, dm2 = DMRGCI.trans_rdm12(self, statebra, stateket, norb, nelec, link_index, **kwargs)
+        dm1n = (2-(neleca+nelecb)/2.) * dm1 - numpy.einsum('pkkq->pq', dm2)
+        dm1n *= 1./(neleca-nelecb+1)
+        dm1a, dm1b = (dm1+dm1n)*.5, (dm1-dm1n)*.5
+        return dm1a, dm1b
+
     def trans_rdm1(self, statebra, stateket, norb, nelec, link_index=None, **kwargs):
-        return self.trans_rdm12(statebra, stateket, norb, nelec, link_index, **kwargs)[0]
+        return DMRGCI.trans_rdm12(self, statebra, stateket, norb, nelec, link_index, **kwargs)[0]
 
     def trans_rdm12(self, statebra, stateket, norb, nelec, link_index=None, **kwargs):
         nelectrons = 0
