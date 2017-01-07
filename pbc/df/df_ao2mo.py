@@ -10,7 +10,7 @@ from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo.incore import iden_coeffs, _conc_mos
 from pyscf.pbc import tools
-from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
+from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC, KPT_DIFF_TOL
 from pyscf.pbc.df.fft_ao2mo import _format_kpts
 
 
@@ -27,7 +27,7 @@ def get_eri(mydf, kpts=None, compact=True):
 
 ####################
 # gamma point, the integral is real and with s4 symmetry
-    if abs(kptijkl).sum() < 1e-9:
+    if abs(kptijkl).sum() < KPT_DIFF_TOL:
         eriR = numpy.zeros((nao_pair,nao_pair))
         for LpqR, LpqI in mydf.sr_loop(kptijkl[:2], max_memory, True):
             lib.ddot(LpqR.T, LpqR, 1, eriR, 1)
@@ -36,7 +36,7 @@ def get_eri(mydf, kpts=None, compact=True):
             eriR = ao2mo.restore(1, eriR, nao).reshape(nao**2,-1)
         return eriR
 
-    elif (abs(kpti-kptk).sum() < 1e-9) and (abs(kptj-kptl).sum() < 1e-9):
+    elif (abs(kpti-kptk).sum() < KPT_DIFF_TOL) and (abs(kptj-kptl).sum() < KPT_DIFF_TOL):
         eriR = numpy.zeros((nao*nao,nao*nao))
         eriI = numpy.zeros((nao*nao,nao*nao))
         for LpqR, LpqI in mydf.sr_loop(kptijkl[:2], max_memory, False):
@@ -51,7 +51,7 @@ def get_eri(mydf, kpts=None, compact=True):
 # both vbar and ovlp are zero. It corresponds to the exchange integral.
 #
 # complex integrals, N^4 elements
-    elif (abs(kpti-kptl).sum() < 1e-9) and (abs(kptj-kptk).sum() < 1e-9):
+    elif (abs(kpti-kptl).sum() < KPT_DIFF_TOL) and (abs(kptj-kptk).sum() < KPT_DIFF_TOL):
         eriR = numpy.zeros((nao*nao,nao*nao))
         eriI = numpy.zeros((nao*nao,nao*nao))
         for LpqR, LpqI in mydf.sr_loop(kptijkl[:2], max_memory, False):
@@ -96,7 +96,7 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
 
 ####################
 # gamma point, the integral is real and with s4 symmetry
-    if abs(kptijkl).sum() < 1e-9 and all_real:
+    if abs(kptijkl).sum() < KPT_DIFF_TOL and all_real:
         ijmosym, nij_pair, moij, ijslice = _conc_mos(mo_coeffs[0], mo_coeffs[1], compact)
         klmosym, nkl_pair, mokl, klslice = _conc_mos(mo_coeffs[2], mo_coeffs[3], compact)
         eri_mo = numpy.zeros((nij_pair,nkl_pair))
@@ -110,7 +110,7 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
             LpqR = LpqI = None
         return eri_mo
 
-    elif (abs(kpti-kptk).sum() < 1e-9) and (abs(kptj-kptl).sum() < 1e-9):
+    elif (abs(kpti-kptk).sum() < KPT_DIFF_TOL) and (abs(kptj-kptl).sum() < KPT_DIFF_TOL):
         mo_coeffs = _mo_as_complex(mo_coeffs)
         nij_pair, moij, ijslice = _conc_mos(mo_coeffs[0], mo_coeffs[1])[1:]
         nkl_pair, mokl, klslice = _conc_mos(mo_coeffs[2], mo_coeffs[3])[1:]
@@ -131,7 +131,7 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
 # (kpt) i == j == k == l != 0
 # (kpt) i == l && j == k && i != j && j != k  =>
 #
-    elif (abs(kpti-kptl).sum() < 1e-9) and (abs(kptj-kptk).sum() < 1e-9):
+    elif (abs(kpti-kptl).sum() < KPT_DIFF_TOL) and (abs(kptj-kptk).sum() < KPT_DIFF_TOL):
         mo_coeffs = _mo_as_complex(mo_coeffs)
         nij_pair, moij, ijslice = _conc_mos(mo_coeffs[0], mo_coeffs[1])[1:]
         nlk_pair, molk, lkslice = _conc_mos(mo_coeffs[3], mo_coeffs[2])[1:]
@@ -203,80 +203,3 @@ def _ztrans(Lpq, zij, moij, ijslice, Lrs, zkl, mokl, klslice, sym):
         zkl = _ao2mo.r_e2(Lrs, mokl, klslice, tao, ao_loc, out=zkl)
     return zij, zkl
 
-
-if __name__ == '__main__':
-    import pyscf.pbc.gto as pgto
-    from pyscf.pbc import df
-
-    L = 5.
-    n = 5
-    cell = pgto.Cell()
-    cell.a = numpy.diag([L,L,L])
-    cell.gs = numpy.array([n,n,n])
-
-    cell.atom = '''He    3.    2.       3.
-                   He    1.    1.       1.'''
-    #cell.basis = {'He': [[0, (1.0, 1.0)]]}
-    #cell.basis = '631g'
-    #cell.basis = {'He': [[0, (2.4, 1)], [1, (1.1, 1)]]}
-    cell.basis = 'ccpvdz'
-    cell.verbose = 0
-    cell.build(0,0)
-
-    nao = cell.nao_nr()
-    numpy.random.seed(1)
-    kpts = numpy.random.random((4,3))*.5
-    kpts[3] = -numpy.einsum('ij->j', kpts[:3])
-    with_df = df.DF(cell)
-    with_df.kpts = kpts
-    mo =(numpy.random.random((nao,nao)) +
-         numpy.random.random((nao,nao))*1j)
-    eri = with_df.get_eri(kpts).reshape((nao,)*4)
-    eri0 = numpy.einsum('pjkl,pi->ijkl', eri , mo.conj())
-    eri0 = numpy.einsum('ipkl,pj->ijkl', eri0, mo       )
-    eri0 = numpy.einsum('ijpl,pk->ijkl', eri0, mo.conj())
-    eri0 = numpy.einsum('ijkp,pl->ijkl', eri0, mo       ).reshape(nao**2,-1)
-    eri1 = with_df.ao2mo(mo, kpts)
-    print abs(eri1-eri0).sum()
-
-    kpts[2] = kpts[0]
-    kpts[3] = kpts[1]
-    with_df = df.DF(cell)
-    with_df.kpts = kpts
-    eri = with_df.get_eri(kpts).reshape((nao,)*4)
-    eri0 = numpy.einsum('pjkl,pi->ijkl', eri , mo.conj())
-    eri0 = numpy.einsum('ipkl,pj->ijkl', eri0, mo       )
-    eri0 = numpy.einsum('ijpl,pk->ijkl', eri0, mo.conj())
-    eri0 = numpy.einsum('ijkp,pl->ijkl', eri0, mo       ).reshape(nao**2,-1)
-    eri1 = with_df.ao2mo(mo, kpts)
-    print abs(eri1-eri0).sum()
-
-    kpts[3] = kpts[0]
-    kpts[2] = kpts[1]
-    with_df = df.DF(cell)
-    with_df.kpts = kpts
-    eri = with_df.get_eri(kpts).reshape((nao,)*4)
-    eri0 = numpy.einsum('pjkl,pi->ijkl', eri , mo.conj())
-    eri0 = numpy.einsum('ipkl,pj->ijkl', eri0, mo       )
-    eri0 = numpy.einsum('ijpl,pk->ijkl', eri0, mo.conj())
-    eri0 = numpy.einsum('ijkp,pl->ijkl', eri0, mo       ).reshape(nao**2,-1)
-    eri1 = with_df.ao2mo(mo, kpts)
-    print abs(eri1-eri0).sum()
-
-    with_df = df.DF(cell)
-    eri = ao2mo.restore(1, with_df.get_eri(with_df.kpts), nao)
-    eri0 = numpy.einsum('pjkl,pi->ijkl', eri , mo.conj())
-    eri0 = numpy.einsum('ipkl,pj->ijkl', eri0, mo       )
-    eri0 = numpy.einsum('ijpl,pk->ijkl', eri0, mo.conj())
-    eri0 = numpy.einsum('ijkp,pl->ijkl', eri0, mo       )
-    eri1 = with_df.ao2mo(mo, with_df.kpts, compact=False)
-    print abs(eri1.reshape(eri0.shape)-eri0).sum()
-
-    with_df = df.DF(cell)
-    mo = mo.real
-    eri0 = numpy.einsum('pjkl,pi->ijkl', eri , mo.conj())
-    eri0 = numpy.einsum('ipkl,pj->ijkl', eri0, mo       )
-    eri0 = numpy.einsum('ijpl,pk->ijkl', eri0, mo.conj())
-    eri0 = numpy.einsum('ijkp,pl->ijkl', eri0, mo       )
-    eri1 = with_df.ao2mo(mo, with_df.kpts, compact=False)
-    print abs(eri1.reshape(eri0.shape)-eri0).sum()

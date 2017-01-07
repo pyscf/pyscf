@@ -23,14 +23,12 @@ import pyscf.df.mdf
 from pyscf.pbc.df import incore
 from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
-from pyscf.pbc.df import mdf_jk
 from pyscf.pbc.df import df
+from pyscf.pbc.df import mdf_jk
+from pyscf.pbc.df import mdf_ao2mo
 from pyscf.pbc.df.df import estimate_eta, make_modrho_basis, fuse_auxcell, \
         unique, _load3c
-from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
-from pyscf.pbc.df import mdf_ao2mo
-
-KPT_DIFF_TOL = 1e-6
+from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC, is_zero, gamma_point
 
 
 class MDF(df.DF):
@@ -351,6 +349,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
         aoaux = kLR = kLI = j2cR = j2cI = coulG = None
 
     feri = h5py.File(mydf._cderi)
+    log.debug2('memory = %s', lib.current_memory()[0])
 
     # Expand approx Lpq for aosym='s1'.  The approx Lpq are all in aosym='s2' mode
     if mydf.approx_sr_level > 0 and len(kptij_lst) > 1:
@@ -382,7 +381,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
             aosym = 's1'
             nao_pair = nao**2
 
-        max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
+        mem_now = lib.current_memory()[0]
+        log.debug2('memory = %s', mem_now)
+        max_memory = max(2000, mydf.max_memory-mem_now)
         # nkptj for 3c-coulomb arrays plus 1 Lpq array
         buflen = min(max(int(max_memory*.6*1e6/16/naux/(nkptj+1)), 1), nao_pair)
         shranges = pyscf.df.outcore._guess_shell_ranges(cell, buflen, aosym)
@@ -427,6 +428,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
                 else:
                     j3cI.append(numpy.asarray(v.imag, order='C'))
             v = Lpq = None
+            log.debug3('  istep, k = %d %d  memory = %s',
+                       istep, k, lib.current_memory()[0])
 
             if aosym == 's2':
                 shls_slice = (bstart, bend, 0, bend)
@@ -448,6 +451,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
                         if not (is_zero(kpt) and gamma_point(adapted_kptjs[k])):
                             lib.dot(kLR[p0:p1].T, pqkI.T, -1, j3cI[k], 1)
                             lib.dot(kLI[p0:p1].T, pqkR.T,  1, j3cI[k], 1)
+                    log.debug3('  p0:p1 = %d:%d  memory = %s',
+                               p0, p1, lib.current_memory()[0])
             else:
                 shls_slice = (bstart, bend, 0, cell.nbas)
                 ni = ncol // nao
@@ -468,6 +473,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
                         pqkI = pqkI.reshape(-1,nG)
                         zdotCN(kLR[p0:p1].T, kLI[p0:p1].T, pqkR.T, pqkI.T,
                                -1, j3cR[k], j3cI[k], 1)
+                    log.debug3('  p0:p1 = %d:%d  memory = %s',
+                               p0, p1, lib.current_memory()[0])
 
             for k, ji in enumerate(adapted_ji_idx):
                 if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
@@ -480,10 +487,6 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
         make_kpt(k)
 
     feri.close()
-
-def is_zero(kpt):
-    return abs(numpy.asarray(kpt)).sum() < KPT_DIFF_TOL
-gamma_point = is_zero
 
 def _fake_Lpq_kpts(mydf, feri, naux, nao):
     chunks = (min(mydf.blockdim,naux), min(mydf.blockdim,nao**2)) # 512K

@@ -9,6 +9,9 @@ Density fitting
 Divide the 3-center Coulomb integrals to two parts.  Compute the local
 part in real space, long range part in reciprocal space.
 
+Note when diffuse functions are used in fitting basis, it is easy to cause
+linear dependence (non-positive definite) issue under PBC.
+
 Ref:
 '''
 
@@ -26,13 +29,11 @@ from pyscf.df.outcore import _guess_shell_ranges
 from pyscf.df.mdf import _uncontract_basis
 from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
+from pyscf.pbc.df import pwdf
 from pyscf.pbc.df import df_jk
 from pyscf.pbc.df import df_ao2mo
-from pyscf.pbc.df import pwdf
-from pyscf.pbc.df.df_jk import zdotCN
+from pyscf.pbc.df.df_jk import zdotCN, is_zero, gamma_point
 from pyscf.pbc.df.pwdf import estimate_eta, get_nuc
-
-KPT_DIFF_TOL = 1e-6
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
     auxcell = copy.copy(cell)
@@ -518,9 +519,6 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
 
     feri.close()
 
-def is_zero(kpt):
-    return abs(numpy.asarray(kpt)).sum() < KPT_DIFF_TOL
-gamma_point = is_zero
 
 class _load3c(object):
     def __init__(self, cderi, label, kpti_kptj):

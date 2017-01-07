@@ -1,25 +1,53 @@
 import unittest
 import numpy
-import numpy as np
-
-from pyscf.pbc import gto as pgto
-import pyscf.pbc.dft as pdft
+from pyscf.pbc import gto
+from pyscf.pbc import scf
 from pyscf.pbc.df import pwdf, pwdf_jk
 
 
-cell = pgto.Cell()
+cell = gto.Cell()
 cell.atom = 'He 1. .5 .5; He .1 1.3 2.1'
 cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
-cell.a = np.eye(3) * 2.5
+cell.a = numpy.eye(3) * 2.5
 cell.gs = [10] * 3
 cell.build()
 
 
 def finger(a):
-    w = np.cos(np.arange(a.size))
-    return np.dot(w, a.ravel())
+    w = numpy.cos(numpy.arange(a.size))
+    return numpy.dot(w, a.ravel())
 
 class KnowValues(unittest.TestCase):
+    def test_jk(self):
+        mf0 = scf.RHF(cell)
+        dm = mf0.get_init_guess()
+
+        mydf = pwdf.PWDF(cell)
+        mydf.gs = [5]*3
+        vj, vk = mydf.get_jk(dm)
+        ej1 = numpy.einsum('ij,ji->', vj, dm)
+        ek1 = numpy.einsum('ij,ji->', vk, dm)
+        self.assertAlmostEqual(ej1, 3.0455881073561235, 9)
+        self.assertAlmostEqual(ek1, 7.7905480251964629, 9)
+
+        numpy.random.seed(12)
+        nao = cell.nao_nr()
+        dm = numpy.random.random((nao,nao))
+        dm = dm + dm.T
+        vj1, vk1 = mydf.get_jk(dm, hermi=0)
+        ej1 = numpy.einsum('ij,ji->', vj1, dm)
+        ek1 = numpy.einsum('ij,ji->', vk1, dm)
+        self.assertAlmostEqual(ej1, 12.234106555081793, 9)
+        self.assertAlmostEqual(ek1, 43.988705494650802, 9)
+
+        numpy.random.seed(1)
+        kpt = numpy.random.random(3)
+        vj, vk = mydf.get_jk(dm, 1, kpt)
+        ej1 = numpy.einsum('ij,ji->', vj, dm)
+        ek1 = numpy.einsum('ij,ji->', vk, dm)
+        self.assertAlmostEqual(ej1, 12.233546641482697, 9)
+        self.assertAlmostEqual(ek1, 43.946958026023722, 9)
+
     def test_pwdf_j(self):
         numpy.random.seed(1)
         nao = cell.nao_nr()
@@ -36,8 +64,14 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(vj[3]), (1.1397493412770023+0.010731970529096637j)   /4, 9)
 
     def test_pwdf_k(self):
-        kpts = cell.make_kpts((2,2,2))
-
+        kpts = cell.get_abs_kpts([[-.25,-.25,-.25],
+                                  [-.25,-.25, .25],
+                                  [-.25, .25,-.25],
+                                  [-.25, .25, .25],
+                                  [ .25,-.25,-.25],
+                                  [ .25,-.25, .25],
+                                  [ .25, .25,-.25],
+                                  [ .25, .25, .25]])
         numpy.random.seed(1)
         nao = cell.nao_nr()
         dm = numpy.random.random((8,nao,nao))
@@ -54,6 +88,21 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(vk[6]), (3.6342630872923456-0.054892635365850449j)/8, 9)
         self.assertAlmostEqual(finger(vk[7]), (3.3483735224533548+0.040877095049528467j)/8, 9)
 
+    def test_pwdf_k1(self):
+        kpts = cell.get_abs_kpts([[-.25,-.25,-.25],
+                                  [-.25,-.25, .25],
+                                  [-.25, .25,-.25],
+                                  [-.25, .25, .25],
+                                  [ .25,-.25,-.25],
+                                  [ .25,-.25, .25],
+                                  [ .25, .25,-.25],
+                                  [ .25, .25, .25]])
+        numpy.random.seed(1)
+        nao = cell.nao_nr()
+        dm = numpy.random.random((8,nao,nao))
+        mydf = pwdf.PWDF(cell)
+        mydf.kpts = kpts
+        mydf.auxbasis = 'weigend'
         numpy.random.seed(1)
         dm = numpy.random.random((8,nao,nao))
         dm = dm + dm.transpose(0,2,1)

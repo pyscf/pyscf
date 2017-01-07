@@ -320,26 +320,24 @@ def finger(a):
 
 class KnowValues(unittest.TestCase):
     def test_pwdf_get_nuc(self):
-        v0 = fft.DF(cell).get_nuc(kpts[0])
         df = pwdf.PWDF(cell)
         v1 = df.get_nuc(kpts[0])
-        self.assertTrue(np.allclose(v0, v1, atol=1e-4, rtol=1e-4))
-        self.assertAlmostEqual(finger(v1), (-5.7646030917912663+0.19126291999423831j), 8)
+        self.assertAlmostEqual(finger(v1), (-6.0893491060887159+0.19823828749533859j), 8)
 
     def test_pwdf_get_pp(self):
         v0 = pgto.pseudo.get_pp(cell, kpts[0])
         v1 = pwdf.PWDF(cell).get_pp(kpts)
-        self.assertTrue(np.allclose(v0, v1[0], atol=1e-6, rtol=1e-6))
-        self.assertAlmostEqual(finger(v1[0]), (-5.6240249381230019+0.22094834207065794j), 8)
+        self.assertTrue(np.allclose(v0, v1[0], atol=1e-5, rtol=1e-5))
+        self.assertAlmostEqual(finger(v1[0]), (-5.6240305085898807+0.22094834207603817j), 8)
 
         v0 = pgto.pseudo.get_pp(cell, kpts[1])
-        self.assertTrue(np.allclose(v0, v1[1], atol=1e-6, rtol=1e-6))
-        self.assertAlmostEqual(finger(v1[1]), (-5.53877028746+1.04393337137j) , 8)
-        self.assertAlmostEqual(finger(v1[2]), (-6.05309001635+0.281728966125j), 8)
-        self.assertAlmostEqual(finger(v1[3]), (-5.60115438406+0.275973062578j), 8)
+        self.assertTrue(np.allclose(v0, v1[1], atol=1e-5, rtol=1e-5))
+        self.assertAlmostEqual(finger(v1[1]), (-5.53877585793+1.043933371359j) ,8)
+        self.assertAlmostEqual(finger(v1[2]), (-6.05309558678+0.281728966073j), 8)
+        self.assertAlmostEqual(finger(v1[3]), (-5.60115995450+0.275973062529j), 8)
 
     def test_pwdf_get_ao_eri(self):
-        df0 = fft.DF(cell)
+        df0 = fft.FFTDF(cell)
         df = pwdf.PWDF(cell)
         eri0 = df0.get_ao_eri(compact=True)
         eri1 = df.get_ao_eri(compact=True)
@@ -381,7 +379,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(np.allclose(eri0011, ref, atol=1e-3, rtol=1e-3))
         self.assertAlmostEqual(finger(eri0011), (1.2410162858084512+0.00074485383749912936j), 9)
 
-        ref = fft.DF(cell1).get_mo_eri([numpy.eye(cell1.nao_nr())]*4, (kpts[0],kpts[0],kpts[1],kpts[1]))
+        ref = fft.FFTDF(cell1).get_mo_eri([numpy.eye(cell1.nao_nr())]*4, (kpts[0],kpts[0],kpts[1],kpts[1]))
         eri0011 = odf.get_eri((kpts[0],kpts[0],kpts[1],kpts[1]))
         self.assertTrue(np.allclose(eri0011, ref, atol=1e-9, rtol=1e-9))
         self.assertAlmostEqual(finger(eri0011), (1.2410162860852818+0.00074485383748954838j), 9)
@@ -395,7 +393,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(np.allclose(eri0110, ref, atol=1e-6, rtol=1e-6))
         self.assertAlmostEqual(finger(eri0110), (1.2928399254827956-0.011820590601969154j), 9)
 
-        ref = fft.DF(cell1).get_mo_eri([numpy.eye(cell1.nao_nr())]*4, (kpts[0],kpts[1],kpts[1],kpts[0]))
+        ref = fft.FFTDF(cell1).get_mo_eri([numpy.eye(cell1.nao_nr())]*4, (kpts[0],kpts[1],kpts[1],kpts[0]))
         eri0110 = odf.get_eri((kpts[0],kpts[1],kpts[1],kpts[0]))
         self.assertTrue(np.allclose(eri0110, ref, atol=1e-9, rtol=1e-9))
         self.assertAlmostEqual(finger(eri0110), (1.2928399254827956-0.011820590601969154j), 9)
@@ -410,11 +408,11 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(np.allclose(eri1111, ref, atol=1e-8, rtol=1e-8))
         self.assertAlmostEqual(finger(eri1111), (1.2917759427391706-0.013340252488069412j), 9)
 
-        ref = fft.DF(cell1).get_mo_eri([numpy.eye(cell1.nao_nr())]*4, kpts)
+        ref = fft.FFTDF(cell1).get_mo_eri([numpy.eye(cell1.nao_nr())]*4, kpts)
         self.assertTrue(np.allclose(eri1111, ref, atol=1e-8, rtol=1e-8))
 
     def test_get_mo_eri(self):
-        df0 = fft.DF(cell)
+        df0 = fft.FFTDF(cell)
         odf = pwdf.PWDF(cell)
         nao = cell.nao_nr()
         numpy.random.seed(5)

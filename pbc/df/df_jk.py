@@ -15,6 +15,11 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import tools
 
+KPT_DIFF_TOL = 1e-6
+def is_zero(kpt):
+    return abs(numpy.asarray(kpt)).sum() < KPT_DIFF_TOL
+gamma_point = is_zero
+
 def density_fit(mf, auxbasis=None, gs=None, with_df=None):
     '''Generte density-fitting SCF object
 
@@ -199,12 +204,11 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
         vk_kpts = vkR
     else:
         vk_kpts = vkR + vkI * 1j
+    vk_kpts *= 1./nkpts
 
     if exxdiv is not None:
         assert(exxdiv.lower() == 'ewald')
         _ewald_exxdiv_for_G0(cell, kpts_band, dms, vk_kpts)
-
-    vk_kpts *= 1./nkpts
 
     if kpt_band is not None and numpy.shape(kpt_band) == (3,):
         if nset == 1:  # One set of dm_kpts for KRHF
@@ -347,10 +351,6 @@ def _format_dms(dm_kpts, kpts):
     dms = dm_kpts.reshape(-1,nkpts,nao,nao)
     return dms
 
-def is_zero(kpt):
-    return kpt is None or abs(kpt).sum() < 1e-9
-gamma_point = is_zero
-
 def zdotNN(aR, aI, bR, bI, alpha=1, cR=None, cI=None, beta=0):
     '''c = a*b'''
     cR = lib.ddot(aR, bR, alpha, cR, beta)
@@ -383,7 +383,8 @@ def _ewald_exxdiv_for_G0(cell, kpts, dms, vk):
             vk[i] += madelung * reduce(numpy.dot, (ovlp, dm, ovlp))
     else:
         ovlp = cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpts)
-        madelung = len(kpts) * tools.pbc.madelung(cell, kpts)
+        weight = 1./dms.shape[1]
+        madelung = weight*len(kpts) * tools.pbc.madelung(cell, kpts)
         for k, s in enumerate(ovlp):
             for i,dm in enumerate(dms):
                 vk[i,k] += madelung * reduce(numpy.dot, (s, dm[k], s))

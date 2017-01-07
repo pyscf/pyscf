@@ -46,14 +46,14 @@ class KnowValues(unittest.TestCase):
         cell = pgto.Cell()
         cell.unit = 'B'
         cell.a = numpy.eye(3) * 3.
-        cell.gs = numpy.array([20,20,20])
+        cell.gs = [20]*3
         cell.atom = 'He 0 1 1; He 1 1 0'
         cell.basis = { 'He': [[0, (0.8, 1.0)],
                               [0, (1.2, 1.0)]] }
         cell.verbose = 0
         cell.build(0, 0)
         auxcell = incore.format_aux_basis(cell)
-        cell.nimgs = auxcell.nimgs = [2,2,2]
+        cell.rcut = 3.5
         a1 = incore.fill_2c2e(cell, cell)
         self.assertAlmostEqual(finger(a1), 33.981935245408039, 9)
 

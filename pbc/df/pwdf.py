@@ -18,8 +18,8 @@ from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import incore
 from pyscf.pbc.df import pwdf_jk
 from pyscf.pbc.df import pwdf_ao2mo
+from pyscf.pbc.df.df_jk import KPT_DIFF_TOL, is_zero, gamma_point
 
-KPT_DIFF_TOL = 1e-6
 
 def estimate_eta(cell, cutoff=1e-12):
     '''The exponent of the smooth gaussian model density, requiring that at
@@ -372,9 +372,6 @@ class PWDF(lib.StreamObject):
         mf = copy.copy(mf)
         mf.with_df = self
         return mf
-
-def gamma_point(kpt):
-    return abs(kpt).sum() < KPT_DIFF_TOL
 
 # Since the real-space lattice-sum for nuclear attraction is not implemented,
 # use the 3c2e code with steep gaussians to mimic nuclear density
