@@ -1,9 +1,14 @@
 #!/usr/bin/env python
 
 '''
-User defined XC functional
+Input a XC functional which is not defined in the Libxc or XcFun library.
 
-See also `pyscf.dft.libxc.parse_xc` function
+See also
+* dft.libxc for API of function eval_xc;
+* dft.numint._NumInt class for its methods eval_xc, hybrid_coeff and _xc_type.
+  These methods controls the XC functional evaluation;
+* Example 24-custom_xc_functional.py to customize XC functionals using the
+  functionals provided by Libxc or XcFun library.
 '''
 
 from pyscf import gto
@@ -16,50 +21,29 @@ mol = gto.M(
     H  0.   0.757    0.587 ''',
     basis = 'ccpvdz')
 
-#
-# Function define_xc can parse the user defined XC functional, following the
-# rules:
-# * The given functional description must be a one-line string.
-# * The functional description is case-insensitive.
-# * The functional description string has two parts, separated by ",".  The
-#   first part describes the exchange functional, the second is the correlation
-#   functional.
-#   - If "," not appeared in string, the entire string is considered as
-#     X functional.
-#   - To neglect X functional (just apply C functional), leave blank in the
-#     first part, eg description=',vwn' for pure VWN functional
-# * The functional name can be placed in arbitrary order.  Two name needs to
-#   be separated by operators + or -.  Blank spaces are ignored.
-#   NOTE the parser only reads operators + - *.  / is not in support.
-# * A functional name is associated with one factor.  If the factor is not
-#   given, it is assumed equaling 1.
-# * String "HF" stands for exact exchange (HF K matrix).  It is allowed to
-#   put in C functional part.
-# * Be careful with the libxc convention on GGA functional, in which the LDA
-#   contribution is included.
-#
+# half-half exact exchange and GGA functional
+def hybrid_coeff(xc_code, spin=1):
+    return 0.5
+def _xc_type(xc_code):
+    return 'GGA'
+def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
+    # A fictitious XC functional to demonstrate the usage
+    rho0, dx, dy, dz = rho[1:4]
+    gamma = (dx**2 + dy**2 + dz**2)
+    exc = .1 * rho0**2 + .02 * (gamma+.001)**.5
+    vrho = .1 * 2 * rho0
+    vgamma = .02 * .5 * (gamma+.001)**(-.5)
+    vlapl = None
+    vtau = None
+    vxc = (vrho, vgamma, vlapl, vtau)
+    fxc = None  # 2nd order functional derivative
+    kxc = None  # 3rd order functional derivative
+    return exc, vxc, fxc, kxc
 
 mf = dft.RKS(mol)
-mf.xc = 'HF*0.2 + .08*LDA + .72*B88, .81*LYP + .19*VWN'
-e1 = mf.kernel()
-print('E = %.15g  ref = -76.3832244350081' % e1)
-
-#
-# No correlation functional
-#
-mf.xc = '.2*HF + .08*LDA + .72*B88'
-e1 = mf.kernel()
-print('E = %.15g  ref = -75.9807850596666' % e1)
-
-#
-# If not given, the factor for each functional equals 1 by default.
-#
-mf = dft.RKS(mol)
-mf.xc = 'b88,lyp'
-e1 = mf.kernel()
-
-mf = dft.RKS(mol)
-mf.xc = 'b88*1,lyp*1'
-eref = mf.kernel()
-print('%.15g == %.15g' % (e1, eref))
-
+mf._numint.hybrid_coeff = hybrid_coeff
+mf._numint.eval_xc = eval_xc
+mf._numint._xc_type = _xc_type
+mf.xc = 'My XC'  # optional, only affect the output message
+mf.verbose = 4
+mf.kernel()

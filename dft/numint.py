@@ -1273,6 +1273,7 @@ class _NumInt(object):
         return make_rho, ndms, nao
 
 ####################
+# Overwrite following functions to use custom XC functional
 
     def hybrid_coeff(self, xc_code, spin=1):
         return self.libxc.hybrid_coeff(xc_code, spin)
