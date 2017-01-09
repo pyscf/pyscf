@@ -311,8 +311,9 @@ class RHF(hf.RHF):
             vj, vk = dot_eri_dm(self._eri, dm, hermi)
 
             if self.exxdiv == 'ewald':
+                from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0
                 # G=0 is not inculded in the ._eri integrals
-                vk = _ewald_exxdiv_for_G0(self, dm, kpt, vk)
+                _ewald_exxdiv_for_G0(self.cell, kpt, [dm], [vk])
         else:
             vj, vk = self.with_df.get_jk(dm, hermi, kpt, kpt_band,
                                          exxdiv=self.exxdiv)
@@ -400,32 +401,3 @@ class RHF(hf.RHF):
             mem_need = nao**4*16/1e6
         return mem_need + lib.current_memory()[0] < self.max_memory*.95
 
-
-def _ewald_exxdiv_for_G0(mf, dm, kpt, vk):
-    cell = mf.cell
-    ovlp = cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpt)
-    #:gs = (0,0,0)
-    #:Gv = np.zeros((1,3))
-    #:coulGk = tools.get_coulG(cell, np.zeros(3), True, mf, gs, Gv)[0]
-    #:logger.debug(mf, 'Total energy shift = -1/2 * Nelec*madelung/cell.vol = %.12g',
-    #:             coulGk/cell.vol*cell.nelectron * -.5)
-    madelung = tools.pbc.madelung(cell, np.zeros(3))
-    logger.debug(mf, 'Total energy shift = -1/2 * Nelec*madelung/cell.vol = %.12g',
-                 madelung*cell.nelectron * -.5)
-    if isinstance(dm, np.ndarray) and dm.ndim == 2:
-        #:vk += coulGk/cell.vol * reduce(np.dot, (ovlp, dm, ovlp))
-        vk += madelung * reduce(np.dot, (ovlp, dm, ovlp))
-    #    nelec = np.einsum('ij,ij', ovlp, dm)
-    else:
-    #    nelec = 0
-        for i, dmi in enumerate(dm):
-            #:vk[i] += coulGk/cell.vol * reduce(np.dot, (ovlp, dmi, ovlp))
-            vk[i] += madelung * reduce(np.dot, (ovlp, dmi, ovlp))
-    #        nelec += np.einsum('ij,ij', ovlp, dmi)
-    #if abs(nelec - cell.nelectron) > .1 and abs(nelec) > .1:
-    #    logger.debug(mf, 'Tr(dm,S) = %g', nelec)
-    #    sys.stderr.write('Warning: The input dm is not SCF density matrix. '
-    #                     'The Ewald treatment on G=0 term for K matrix '
-    #                     'might not be well defined.  Set mf.exxdiv=None '
-    #                     'to switch off the Ewald term.\n')
-    return vk

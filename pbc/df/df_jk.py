@@ -388,6 +388,8 @@ def _ewald_exxdiv_for_G0(cell, kpts, dms, vk):
         for k, s in enumerate(ovlp):
             for i,dm in enumerate(dms):
                 vk[i,k] += madelung * reduce(numpy.dot, (s, dm[k], s))
+    logger.debug2(cell, 'Total energy shift = -1/2 * Nelec*madelung/cell.vol = %.12g',
+                  madelung*cell.nelectron * -.5)
 
 
 if __name__ == '__main__':
