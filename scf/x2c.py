@@ -95,6 +95,7 @@ class X2C(lib.StreamObject):
         v = xmol.intor_symmetric('cint1e_nuc')
         w = xmol.intor_symmetric('cint1e_spnucsp')
         if 'ATOM' in self.approx.upper():
+            raise NotImplementedError
             atom_slices = [x[2:] for x in xmol.offset_2c_by_atom()]
             h1 = _x2c1e_for_hcore(t, v, w, s, c, atom_slices)
         else:
