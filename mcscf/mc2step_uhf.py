@@ -5,6 +5,7 @@
 
 import time
 import numpy
+import copy
 import scipy.linalg
 import pyscf.lib.logger as logger
 from pyscf.mcscf import mc1step
@@ -27,7 +28,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         return True, e_tot, e_ci, fcivec, mo
 
     if conv_tol_grad is None:
-        conv_tol_grad = numpy.sqrt(tol*.1)
+        conv_tol_grad = numpy.sqrt(tol)
         logger.info(casscf, 'Set conv_tol_grad to %g', conv_tol_grad)
     conv_tol_ddm = conv_tol_grad * 3
     conv = False
@@ -51,7 +52,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         max_stepsize = casscf.max_stepsize_scheduler(locals())
         for imicro in range(max_cycle_micro):
             rota = casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
-                                        eris, r0, conv_tol_grad, max_stepsize, log)
+                                        eris, r0, conv_tol_grad*.3, max_stepsize, log)
             u, g_orb, njk1 = next(rota)
             rota.close()
             njk += njk1
@@ -62,8 +63,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
             t3m = log.timer('orbital rotation', *t3m)
 
             eris = None
-            u = u.copy()
-            g_orb = g_orb.copy()
+            u = copy.copy(u)
+            g_orb = copy.copy(g_orb)
             mo = casscf.rotate_mo(mo, u, log)
             eris = casscf.ao2mo(mo)
             t3m = log.timer('update eri', *t3m)
@@ -75,7 +76,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
                 callback(locals())
 
             t2m = log.timer('micro iter %d'%imicro, *t2m)
-            if norm_t < 1e-4 or norm_gorb < conv_tol_grad*.8:
+            if norm_t < 1e-4 or norm_gorb < conv_tol_grad*.5:
                 break
 
             r0 = casscf.pack_uniq_var(u)

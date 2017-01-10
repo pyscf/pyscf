@@ -32,7 +32,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         return True, e_tot, e_ci, fcivec, mo
 
     if conv_tol_grad is None:
-        conv_tol_grad = numpy.sqrt(tol*.1)
+        conv_tol_grad = numpy.sqrt(tol)
         logger.info(casscf, 'Set conv_tol_grad to %g', conv_tol_grad)
     conv_tol_ddm = conv_tol_grad * 3
     conv = False
@@ -55,7 +55,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         max_stepsize = casscf.max_stepsize_scheduler(locals())
         for imicro in range(max_cycle_micro):
             rota = casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
-                                        eris, r0, conv_tol_grad, max_stepsize, log)
+                                        eris, r0, conv_tol_grad*.3, max_stepsize, log)
             u, g_orb, njk1 = next(rota)
             rota.close()
             njk += njk1

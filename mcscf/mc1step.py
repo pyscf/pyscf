@@ -364,7 +364,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         return True, e_tot, e_ci, fcivec, mo, mo_energy
 
     if conv_tol_grad is None:
-        conv_tol_grad = numpy.sqrt(tol*.1)
+        conv_tol_grad = numpy.sqrt(tol)
         logger.info(casscf, 'Set conv_tol_grad to %g', conv_tol_grad)
     conv_tol_ddm = conv_tol_grad * 3
     conv = False
@@ -385,7 +385,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         max_stepsize = casscf.max_stepsize_scheduler(locals())
         imicro = 0
         rota = casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
-                                    eris, r0, conv_tol_grad, max_stepsize, log)
+                                    eris, r0, conv_tol_grad*.3, max_stepsize, log)
         for u, g_orb, njk in rota:
             imicro += 1
             norm_gorb = numpy.linalg.norm(g_orb)
@@ -423,7 +423,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
 
             t3m = log.timer('micro iter %d'%imicro, *t3m)
             if (norm_t < conv_tol_grad or
-                (norm_gorb < conv_tol_grad*.4 and
+                (norm_gorb < conv_tol_grad*.5 and
                  (norm_ddm < conv_tol_ddm*.4 or norm_ddm_micro < conv_tol_ddm*.4))):
                 break
 

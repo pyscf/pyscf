@@ -247,7 +247,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         max_stepsize = casscf.max_stepsize_scheduler(locals())
         imicro = 0
         rota = casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
-                                    eris, r0, conv_tol_grad, max_stepsize, log)
+                                    eris, r0, conv_tol_grad*.3, max_stepsize, log)
         for u, g_orb, njk in rota:
             imicro += 1
             norm_gorb = numpy.linalg.norm(g_orb)
@@ -283,7 +283,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
 
             t3m = log.timer('micro iter %d'%imicro, *t3m)
             if (norm_t < 1e-4 or
-                (norm_gorb < conv_tol_grad*.8 and norm_ddm < conv_tol_ddm*.4)):
+                (norm_gorb < conv_tol_grad*.5 and norm_ddm < conv_tol_ddm*.4)):
                 break
 
         rota.close()
