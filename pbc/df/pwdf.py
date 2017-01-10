@@ -111,7 +111,7 @@ def get_nuc(mydf, kpts=None):
         vj = vj[0]
     return vj
 
-def _int_nuc_vloc(mydf, nuccell, kpts):
+def _int_nuc_vloc(mydf, nuccell, kpts, intor='cint3c2e_sph'):
     '''Vnuc - Vloc'''
     cell = mydf.cell
     rcut = max(cell.rcut, nuccell.rcut)
@@ -128,7 +128,7 @@ def _int_nuc_vloc(mydf, nuccell, kpts):
     nao = cell.nao_nr()
     buf = [numpy.zeros((nao,nao,fakenuc.natm), order='F', dtype=numpy.complex128)
            for k in range(nkpts)]
-    ints = incore._wrap_int3c(cell, fakenuc, 'cint3c2e_sph', 1, Ls, buf)
+    ints = incore._wrap_int3c(cell, fakenuc, intor, 1, Ls, buf)
     atm, bas, env = ints._envs[:3]
     c_shls_slice = (ctypes.c_int*6)(0, cell.nbas, cell.nbas, cell.nbas*2,
                                     cell.nbas*2, cell.nbas*2+fakenuc.natm)

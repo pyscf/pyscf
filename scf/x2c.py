@@ -2,13 +2,11 @@
 
 
 import time
-import ctypes
 from functools import reduce
 import copy
 import numpy
 import scipy.linalg
 from pyscf import lib
-from pyscf import gto
 from pyscf.gto import mole
 from pyscf.lib import logger
 from pyscf.scf import hf
@@ -96,14 +94,24 @@ class X2C(lib.StreamObject):
         v = xmol.intor_symmetric('cint1e_nuc')
         w = xmol.intor_symmetric('cint1e_spnucsp')
         if 'ATOM' in self.approx.upper():
-            atom_slices = [x[2:] for x in xmol.offset_2c_by_atom()]
-            h1 = _x2c1e_for_hcore(t, v, w, s, c, atom_slices)
+            atom_slices = xmol.offset_2c_by_atom()
+            n2c = xmol.nao_2c()
+            x = numpy.zeros((n2c,n2c), dtype=numpy.complex)
+            for ia in range(xmol.natm):
+                ish0, ish1, p0, p1 = atom_slices[ia]
+                shls_slice = (ish0, ish1, ish0, ish1)
+                s1 = xmol.intor('cint1e_ovlp', shls_slice=shls_slice)
+                t1 = xmol.intor('cint1e_spsp', shls_slice=shls_slice) * .5
+                v1 = xmol.intor('cint1e_nuc', shls_slice=shls_slice)
+                w1 = xmol.intor('cint1e_spnucsp', shls_slice=shls_slice)
+                x[p0:p1,p0:p1] = _x2c1e_xmatrix(t1, v1, w1, s1, c)
+            h1 = _get_hcore_fw(t, v, w, s, x, c)
         else:
-            h1 = _x2c1e_for_hcore(t, v, w, s, c)
+            h1 = _x2c1e_get_hcore(t, v, w, s, c)
 
         if self.basis is not None:
             s22 = xmol.intor_symmetric('cint1e_ovlp')
-            s21 = gto.mole.intor_cross('cint1e_ovlp', xmol, mol)
+            s21 = mole.intor_cross('cint1e_ovlp', xmol, mol)
             c = lib.cho_solve(s22, s21)
             h1 = reduce(numpy.dot, (c.T.conj(), h1, c))
         elif self.xuncontract:
@@ -126,14 +134,24 @@ class SpinFreeX2C(X2C):
         s = xmol.intor_symmetric('cint1e_ovlp_sph')
         w = xmol.intor_symmetric('cint1e_pnucp_sph')
         if 'ATOM' in self.approx.upper():
-            atom_slices = [x[2:] for x in xmol.offset_nr_by_atom()]
-            h1 = _x2c1e_for_hcore(t, v, w, s, c, atom_slices)
+            atom_slices = xmol.offset_nr_by_atom()
+            nao = xmol.nao_nr()
+            x = numpy.zeros((nao,nao))
+            for ia in range(xmol.natm):
+                ish0, ish1, p0, p1 = atom_slices[ia]
+                shls_slice = (ish0, ish1, ish0, ish1)
+                t1 = xmol.intor('cint1e_kin_sph', shls_slice=shls_slice)
+                v1 = xmol.intor('cint1e_nuc_sph', shls_slice=shls_slice)
+                s1 = xmol.intor('cint1e_ovlp_sph', shls_slice=shls_slice)
+                w1 = xmol.intor('cint1e_pnucp_sph', shls_slice=shls_slice)
+                x[p0:p1,p0:p1] = _x2c1e_xmatrix(t1, v1, w1, s1, c)
+            h1 = _get_hcore_fw(t, v, w, s, x, c)
         else:
-            h1 = _x2c1e_for_hcore(t, v, w, s, c)
+            h1 = _x2c1e_get_hcore(t, v, w, s, c)
 
         if self.basis is not None:
             s22 = xmol.intor_symmetric('cint1e_ovlp_sph')
-            s21 = gto.mole.intor_cross('cint1e_ovlp_sph', xmol, mol)
+            s21 = mole.intor_cross('cint1e_ovlp_sph', xmol, mol)
             c = lib.cho_solve(s22, s21)
             h1 = reduce(numpy.dot, (c.T, h1, c))
         if self.xuncontract and contr_coeff is not None:
@@ -402,7 +420,7 @@ def _get_hcore_fw(t, v, w, s, x, c):
     h1 = reduce(numpy.dot, (r.T.conj(), h1, r))
     return h1
 
-def _x2c1e_for_hcore(t, v, w, s, c, atom_slices=None):
+def _x2c1e_xmatrix(t, v, w, s, c):
     nao = s.shape[0]
     n2 = nao * 2
     h = numpy.zeros((n2,n2), dtype=v.dtype)
@@ -414,10 +432,27 @@ def _x2c1e_for_hcore(t, v, w, s, c, atom_slices=None):
     m[:nao,:nao] = s
     m[nao:,nao:] = t * (.5/c**2)
 
-    if atom_slices is None:
-        e, a = scipy.linalg.eigh(h, m)
-        cl = a[:nao,nao:]
-        cs = a[nao:,nao:]
+    e, a = scipy.linalg.eigh(h, m)
+    cl = a[:nao,nao:]
+    cs = a[nao:,nao:]
+    x = numpy.linalg.solve(cl.T, cs.T).T  # B = XA
+    return x
+
+def _x2c1e_get_hcore(t, v, w, s, c):
+    nao = s.shape[0]
+    n2 = nao * 2
+    h = numpy.zeros((n2,n2), dtype=v.dtype)
+    m = numpy.zeros((n2,n2), dtype=v.dtype)
+    h[:nao,:nao] = v
+    h[:nao,nao:] = t
+    h[nao:,:nao] = t
+    h[nao:,nao:] = w * (.25/c**2) - t
+    m[:nao,:nao] = s
+    m[nao:,nao:] = t * (.5/c**2)
+
+    e, a = scipy.linalg.eigh(h, m)
+    cl = a[:nao,nao:]
+    cs = a[nao:,nao:]
 # The so obtaied X seems not numerically stable.  We changed to the
 # transformed matrix
 # [1 1] [ V T ] [1 0]
@@ -440,33 +475,12 @@ def _x2c1e_for_hcore(t, v, w, s, c, atom_slices=None):
 #   h1 = (A^+)^{-1} R^+ (A^+ h1 A) R A^{-1}
 #      = \tilde{S} A R^+ A^+ h1 A R A^+ \tilde{S}   (1)
 #      = S A R^{-1}^+ A^+ h1 A R^{-1} A^+ S         (2)
-        w, u = numpy.linalg.eigh(reduce(numpy.dot, (cl.T.conj(), s, cl)))
-        idx = w > 1e-14
+    w, u = numpy.linalg.eigh(reduce(numpy.dot, (cl.T.conj(), s, cl)))
+    idx = w > 1e-14
 # Adopt (2) here becuase X is not appeared in Eq (2).
-        r = reduce(numpy.dot, (u[:,idx]/numpy.sqrt(w[idx]), u[:,idx].T.conj(),
-                               cl.T.conj(), s))
-        h1 = reduce(numpy.dot, (r.T.conj()*e[nao:], r))
-
-    else:
-        x = numpy.zeros((nao,nao))
-        for p0, p1 in atom_slices:
-            np = p1 - p0
-            h1 = numpy.empty((np*2,np*2), dtype=h.dtype)
-            s1 = numpy.empty((np*2,np*2), dtype=h.dtype)
-            h1[:np,:np] = h[    p0:    p1,    p0:    p1]
-            h1[:np,np:] = h[    p0:    p1,nao+p0:nao+p1]
-            h1[np:,:np] = h[nao+p0:nao+p1,    p0:    p1]
-            h1[np:,np:] = h[nao+p0:nao+p1,nao+p0:nao+p1]
-            s1[:np,:np] = m[    p0:    p1,    p0:    p1]
-            s1[:np,np:] = m[    p0:    p1,nao+p0:nao+p1]
-            s1[np:,:np] = m[nao+p0:nao+p1,    p0:    p1]
-            s1[np:,np:] = m[nao+p0:nao+p1,nao+p0:nao+p1]
-            e, a = scipy.linalg.eigh(h1, s1)
-            cl = a[:np,np:]
-            cs = a[np:,np:]
-            x[p0:p1,p0:p1] = numpy.linalg.solve(cl.T, cs.T).T  # B = XA
-        h1 = _get_hcore_fw(t, v, w, s, x, c)
-
+    r = reduce(numpy.dot, (u[:,idx]/numpy.sqrt(w[idx]), u[:,idx].T.conj(),
+                           cl.T.conj(), s))
+    h1 = reduce(numpy.dot, (r.T.conj()*e[nao:], r))
     return h1
 
 
@@ -480,9 +494,7 @@ def _proj_dmll(mol_nr, dm_nr, mol):
 
 
 if __name__ == '__main__':
-    import pyscf.gto
-    import pyscf.scf
-    mol = pyscf.gto.Mole()
+    mol = gto.Mole()
     mol.build(
         verbose = 0,
         atom = [["O" , (0. , 0.     , 0.)],
@@ -491,7 +503,7 @@ if __name__ == '__main__':
         basis = 'ccpvdz-dk',
     )
 
-    method = pyscf.scf.RHF(mol)
+    method = hf.RHF(mol)
     enr = method.kernel()
     print('E(NR) = %.12g' % enr)
 
@@ -500,11 +512,15 @@ if __name__ == '__main__':
     print('E(SFX2C1E) = %.12g' % esfx2c)
     method.with_x2c.basis = 'unc-ccpvqz-dk'
     print('E(SFX2C1E) = %.12g' % method.kernel())
+    method.with_x2c.approx = 'atom1e'
+    print('E(SFX2C1E) = %.12g' % method.kernel())
 
     method = UHF(mol)
     ex2c = method.kernel()
     print('E(X2C1E) = %.12g' % ex2c)
     method.with_x2c.basis = {'O': 'unc-ccpvqz', 'H':'unc-ccpvdz'}
+    print('E(X2C1E) = %.12g' % method.kernel())
+    method.with_x2c.approx = 'atom1e'
     print('E(X2C1E) = %.12g' % method.kernel())
 
 
