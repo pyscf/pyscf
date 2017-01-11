@@ -96,6 +96,7 @@ class SpinFreeX2C(X2C):
             atom_slices = xcell.offset_nr_by_atom()
             nao = xcell.nao_nr()
             x = numpy.zeros((nao,nao))
+            vloc = numpy.zeros((nao,nao))
             for ia in range(xcell.natm):
                 ish0, ish1, p0, p1 = atom_slices[ia]
                 shls_slice = (ish0, ish1, ish0, ish1)
@@ -103,6 +104,7 @@ class SpinFreeX2C(X2C):
                 v1 = xcell.intor('cint1e_nuc_sph', shls_slice=shls_slice)
                 s1 = xcell.intor('cint1e_ovlp_sph', shls_slice=shls_slice)
                 w1 = xcell.intor('cint1e_pnucp_sph', shls_slice=shls_slice)
+                vloc[p0:p1,p0:p1] = v1
                 x[p0:p1,p0:p1] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
         else:
             raise NotImplementedError
@@ -117,7 +119,7 @@ class SpinFreeX2C(X2C):
 
         h1_kpts = []
         for k in range(len(kpts_lst)):
-            h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], x, c)
+            h1 = x2c._get_hcore_fw(t[k], vloc, w[k], s[k], x, c) - vloc + v[k]
             if self.basis is not None:
                 c = lib.cho_solve(s22[k], s21[k])
                 h1 = reduce(numpy.dot, (c.T, h1, c))
@@ -130,6 +132,12 @@ class SpinFreeX2C(X2C):
         return lib.asarray(h1_kpts)
 
 
+# We still use Ewald-like technique to compute spVsp.
+# Theoratically, spVsp is not divergent because the numeriator spsp and the
+# denorminator in Coulomb kernel 4pi/G^2 are cancelled.  A real space lattice
+# sum can converge to a finite value.  However, it's difficult to accurately
+# converge this value, large number of images in lattice summation is still
+# required.
 def get_pnucp(mydf, kpts=None):
     cell = mydf.cell
     if kpts is None:
