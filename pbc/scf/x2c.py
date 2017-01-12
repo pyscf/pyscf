@@ -97,6 +97,7 @@ class SpinFreeX2C(X2C):
             nao = xcell.nao_nr()
             x = numpy.zeros((nao,nao))
             vloc = numpy.zeros((nao,nao))
+            wloc = numpy.zeros((nao,nao))
             for ia in range(xcell.natm):
                 ish0, ish1, p0, p1 = atom_slices[ia]
                 shls_slice = (ish0, ish1, ish0, ish1)
@@ -105,6 +106,7 @@ class SpinFreeX2C(X2C):
                 s1 = xcell.intor('cint1e_ovlp_sph', shls_slice=shls_slice)
                 w1 = xcell.intor('cint1e_pnucp_sph', shls_slice=shls_slice)
                 vloc[p0:p1,p0:p1] = v1
+                wloc[p0:p1,p0:p1] = w1
                 x[p0:p1,p0:p1] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
         else:
             raise NotImplementedError
@@ -112,14 +114,16 @@ class SpinFreeX2C(X2C):
         t = xcell.pbc_intor('cint1e_kin_sph', 1, lib.HERMITIAN, kpts_lst)
         s = xcell.pbc_intor('cint1e_ovlp_sph', 1, lib.HERMITIAN, kpts_lst)
         v = with_df.get_nuc(kpts_lst)
-        w = get_pnucp(with_df, kpts_lst)
+        #w = get_pnucp(with_df, kpts_lst)
         if self.basis is not None:
             s22 = s
             s21 = pbcgto.intor_cross('cint1e_ovlp_sph', xcell, cell, kpts=kpts_lst)
 
         h1_kpts = []
         for k in range(len(kpts_lst)):
-            h1 = x2c._get_hcore_fw(t[k], vloc, w[k], s[k], x, c) - vloc + v[k]
+            #h1 = x2c._get_hcore_fw(t[k], vloc, wloc, s[k], x, c) - vloc + v[k]
+            #h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], x, c)
+            h1 = x2c._get_hcore_fw(t[k], v[k], wloc, s[k], x, c)
             if self.basis is not None:
                 c = lib.cho_solve(s22[k], s21[k])
                 h1 = reduce(numpy.dot, (c.T, h1, c))
@@ -154,27 +158,36 @@ def get_pnucp(mydf, kpts=None):
 
     Gv, Gvbase, kws = cell.get_Gv_weights(mydf.gs)
     kpt_allow = numpy.zeros(3)
-    nuccell = copy.copy(cell)
-    half_sph_norm = .5/numpy.sqrt(numpy.pi)
-    norm = half_sph_norm/mole._gaussian_int(2, mydf.eta)
-    chg_env = [mydf.eta, norm]
-    ptr_eta = cell._env.size
-    ptr_norm = ptr_eta + 1
-    chg_bas = [[ia, 0, 1, 1, 0, ptr_eta, ptr_norm, 0] for ia in range(cell.natm)]
-    nuccell._atm = cell._atm
-    nuccell._bas = numpy.asarray(chg_bas, dtype=numpy.int32)
-    nuccell._env = numpy.hstack((cell._env, chg_env))
+    if mydf.eta == 0:
+        charge = -cell.atom_charges()
+        #coulG=4*numpy.pi/G^2 is cancelled with (sigma dot p i, sigma dot p j)
+        SI = cell.get_SI(Gv)
+        vGR = numpy.einsum('i,ix->x', 4*numpy.pi*charge, SI.real) * kws
+        vGI = numpy.einsum('i,ix->x', 4*numpy.pi*charge, SI.imag) * kws
+        wjR = numpy.zeros((nkpts,nao_pair))
+        wjI = numpy.zeros((nkpts,nao_pair))
+    else:
+        nuccell = copy.copy(cell)
+        half_sph_norm = .5/numpy.sqrt(numpy.pi)
+        norm = half_sph_norm/mole._gaussian_int(2, mydf.eta)
+        chg_env = [mydf.eta, norm]
+        ptr_eta = cell._env.size
+        ptr_norm = ptr_eta + 1
+        chg_bas = [[ia, 0, 1, 1, 0, ptr_eta, ptr_norm, 0] for ia in range(cell.natm)]
+        nuccell._atm = cell._atm
+        nuccell._bas = numpy.asarray(chg_bas, dtype=numpy.int32)
+        nuccell._env = numpy.hstack((cell._env, chg_env))
 
-    wj = lib.asarray(mydf._int_nuc_vloc(nuccell, kpts_lst, 'cint3c2e_pvp1_sph'))
-    wjR = wj.real
-    wjI = wj.imag
-    t1 = log.timer_debug1('pnucp pass1: analytic int', *t1)
+        wj = lib.asarray(mydf._int_nuc_vloc(nuccell, kpts_lst, 'cint3c2e_pvp1_sph'))
+        wjR = wj.real
+        wjI = wj.imag
+        t1 = log.timer_debug1('pnucp pass1: analytic int', *t1)
 
-    charge = -cell.atom_charges()
-    #coulG=4*numpy.pi/G^2 is cancelled with (sigma dot p i, sigma dot p j)
-    aoaux = ft_ao.ft_ao(nuccell, Gv)
-    vGR = numpy.einsum('i,xi->x', 4*numpy.pi*charge, aoaux.real) * kws
-    vGI = numpy.einsum('i,xi->x', 4*numpy.pi*charge, aoaux.imag) * kws
+        charge = -cell.atom_charges()
+        #coulG=4*numpy.pi/G^2 is cancelled with (sigma dot p i, sigma dot p j)
+        aoaux = ft_ao.ft_ao(nuccell, Gv)
+        vGR = numpy.einsum('i,xi->x', 4*numpy.pi*charge, aoaux.real) * kws
+        vGI = numpy.einsum('i,xi->x', 4*numpy.pi*charge, aoaux.imag) * kws
 
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     for k, pqkR, pqkI, p0, p1 \

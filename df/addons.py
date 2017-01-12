@@ -41,9 +41,12 @@ def aug_etb_for_dfbasis(mol, dfbasis='weigend', beta=2.3, start_at='Rb'):
                     continue
 
                 if isinstance(b[1], int):
-                    es = numpy.array(b[2:])[:,0]
+                    e_c = numpy.array(b[2:])
                 else:
-                    es = numpy.array(b[1:])[:,0]
+                    e_c = numpy.array(b[1:])
+                es = e_c[:,0]
+                cs = e_c[:,1:]
+                es = es[abs(cs).max(axis=1) > 1e-3]
                 emax_by_l[l] = max(es.max(), emax_by_l[l])
                 emin_by_l[l] = min(es.min(), emin_by_l[l])
 

@@ -198,8 +198,7 @@ def build_Lpq_pbc(mydf, auxcell, kptij_lst):
         s_aux = auxcell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=uniq_kpts)
     elif mydf.metric.upper() == 'T':
         outcore.aux_e2(mydf.cell, auxcell, mydf._cderi, 'cint3c1e_p2_sph',
-                       kptij_lst=kptij_lst, dataname='Lpq',
-                       max_memory=max_memory)
+                       kptij_lst=kptij_lst, dataname='Lpq', max_memory=max_memory)
         s_aux = [x*2 for x in auxcell.pbc_intor('cint1e_kin_sph', hermi=1, kpts=uniq_kpts)]
     elif mydf.metric.upper() == 'J':
         fused_cell, fuse = fuse_auxcell(mydf, auxcell)
@@ -243,7 +242,21 @@ def build_Lpq_pbc(mydf, auxcell, kptij_lst):
 #        s_aux = auxcell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=uniq_kpts)
 #        s_aux = [x+y*2 for x,y in zip(s_aux, auxcell.pbc_intor('cint1e_kin_sph', hermi=1, kpts=uniq_kpts))]
 
-    s_aux = [scipy.linalg.cho_factor(x) for x in s_aux]
+    try:
+        s_aux = [scipy.linalg.cho_factor(x) for x in s_aux]
+    except scipy.linalg.LinAlgError:
+        eigs = [scipy.linalg.eigh(x)[0] for x in s_aux]
+        conds = [x[-1]/max(1e-16, x[0]) for x in eigs]
+        n = eigs[0].size
+        shift = [0] * len(s_aux)
+        for i, x in enumerate(s_aux):
+            if conds[i] > 1e15:
+                shift[i] = max(abs(eigs[i][0])*2, eigs[i][-1]*1e-18)
+                x += numpy.eye(n) * shift[i]
+        logger.warn(mydf, 'Ill condition number %s found in metric %s.\n'
+                    'Level shift %s is applied.',
+                    conds, mydf.metric, shift)
+        s_aux = [scipy.linalg.cho_factor(x) for x in s_aux]
 
     max_memory = mydf.max_memory - lib.current_memory()[0]
     naux = auxcell.nao_nr()

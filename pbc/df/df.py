@@ -383,11 +383,12 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
         try:
             j2c[k] = scipy.linalg.cholesky(fuse(fuse(j2c[k]).T).T, lower=True)
         except scipy.linalg.LinAlgError as e:
-            log.error('===================================')
-            log.error('J-metric not positive definite.')
-            log.error('It is likely that gs is not enough.')
-            log.error('===================================')
-            raise e
+            msg =('===================================\n'
+                  'J-metric not positive definite.\n'
+                  'It is likely that gs is not enough.\n'
+                  '===================================')
+            log.error(msg)
+            raise scipy.linalg.LinAlgError('\n'.join([e.message, msg]))
         kLR = LkR[naux:].T
         kLI = LkI[naux:].T
         if not kLR.flags.c_contiguous: kLR = lib.transpose(LkR[naux:])
