@@ -577,10 +577,6 @@ def state_average_(casscf, weights=(0.5,0.5)):
                     multip += wi * res[1]
                 return ss, multip
 
-        if hasattr(fcibase_class, 'large_ci'):
-            def large_ci(self, ci0, norb, nelec):
-                return [fcibase_class.large_ci(self, x, norb, nelec) for x in ci0]
-
     fcisolver = FakeCISolver(casscf.mol)
     fcisolver.__dict__.update(casscf.fcisolver.__dict__)
     fcisolver.nroots = len(weights)
@@ -729,11 +725,6 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
                     ss += weights[i] * res[0]
                     multip += weights[i] * res[1]
                 return ss, multip
-
-        if hasattr(fcibase_class, 'large_ci'):
-            def large_ci(self, ci0, norb, nelec):
-                return [solver.large_ci(c, norb, nelec)
-                        for solver, c in loop_civecs(fcisolvers, ci0)]
 
     fcisolver = FakeCISolver(casscf.mol)
     fcisolver.__dict__.update(casscf.fcisolver.__dict__)

@@ -66,9 +66,10 @@ def project_to_atomic_orbitals(mol, basname):
         return idx
 
     aos = {}
+    atm = gto.Mole()
+    atmp = gto.Mole()
     for symb in mol._basis.keys():
         stdsymb = gto.mole._std_symbol(symb)
-        atm = gto.Mole()
         atm._atm, atm._bas, atm._env = \
                 atm.make_env([[stdsymb,(0,0,0)]], {stdsymb:mol._basis[symb]}, [])
 
@@ -79,7 +80,6 @@ def project_to_atomic_orbitals(mol, basname):
         s0 = atm.intor_symmetric('cint1e_ovlp_sph')
 
         basis_add = gto.basis.load(basname, stdsymb)
-        atmp = gto.Mole()
         atmp._atm, atmp._bas, atmp._env = \
                 atmp.make_env([[stdsymb,(0,0,0)]], {stdsymb:basis_add}, [])
         ano = project_mo_nr2nr(atmp, 1, atm)

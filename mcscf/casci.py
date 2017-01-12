@@ -114,14 +114,15 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
 
         if hasattr(casscf.fcisolver, 'large_ci'):
             log.info('** Largest CI components **')
-            res = casscf.fcisolver.large_ci(ci, casscf.ncas, casscf.nelecas)
             if isinstance(ci, (tuple, list)):
-                for i, val in enumerate(res):
+                for i, civec in enumerate(ci):
+                    res = casscf.fcisolver.large_ci(civec, casscf.ncas, casscf.nelecas)
                     log.info(' string alpha, string beta, state %d CI coefficient', i)
-                    for c,ia,ib in val:
+                    for c,ia,ib in res:
                         log.info('  %9s    %9s    %.12f', ia, ib, c)
             else:
                 log.info(' string alpha, string beta, CI coefficient')
+                res = casscf.fcisolver.large_ci(ci, casscf.ncas, casscf.nelecas)
                 for c,ia,ib in res:
                     log.info('  %9s    %9s    %.12f', ia, ib, c)
 
