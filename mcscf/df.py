@@ -77,26 +77,11 @@ def density_fit(casscf, auxbasis=None, with_df=None):
 
         def get_h2eff(self, mo_coeff=None):  # For CASCI
             if self.with_df:
-                mo = numpy.asarray(mo_coeff, order='F')
-                nao, nmo = mo.shape
-                naoaux = self.with_df.get_naoaux()
-                buf = numpy.empty((naoaux,nmo*(nmo+1)//2))
-                fmmm = _ao2mo.libao2mo.AO2MOmmm_nr_s2_s2
-                fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
-                ftrans = _ao2mo.libao2mo.AO2MOtranse2_nr_s2
-                b0 = 0
-                for eri1 in self.with_df.loop():
-                    naux = eri1.shape[0]
-                    fdrv(ftrans, fmmm,
-                         buf[b0:b0+naux].ctypes.data_as(ctypes.c_void_p),
-                         eri1.ctypes.data_as(ctypes.c_void_p),
-                         mo.ctypes.data_as(ctypes.c_void_p),
-                         ctypes.c_int(naux), ctypes.c_int(nao),
-                         (ctypes.c_int*4)(0, nmo, 0, nmo),
-                         ctypes.c_void_p(0), ctypes.c_int(0))
-                    b0 += naux
-                eri = lib.dot(buf.T, buf)
-                return eri
+                if mo_coeff is None:
+                    mo_coeff = self.mo_coeff[:,self.ncore:self.ncore+self.ncas]
+                elif mo_coeff.shape[1] != self.ncas:
+                    mo_coeff = mo_coeff[:,self.ncore:self.ncore+self.ncas]
+                return self.with_df.ao2mo(mo_coeff)
             else:
                 return casscf_class.get_h2eff(self, mo_coeff)
 
@@ -128,14 +113,7 @@ def density_fit(casscf, auxbasis=None, with_df=None):
                 nocc = ncore + ncas
                 mo1 = numpy.dot(mo, u)
                 mo1_cas = mo1[:,ncore:nocc]
-
-                paaa = numpy.zeros((nmo*ncas,ncas*ncas))
-                moij = numpy.asarray(numpy.hstack((mo1, mo1_cas)), order='F')
-                ijshape = (0, nmo, nmo, nmo+ncas)
-                for eri1 in self.with_df.loop():
-                    bufpa = _ao2mo.nr_e2(eri1, moij, ijshape, 's2', 's1')
-                    bufaa = numpy.asarray(buf1[ncore:nocc,:], order='C')
-                    lib.dot(bufpa.T, bufaa, 1, paaa, 1)
+                paaa = self.with_df.ao2mo([mo1, mo1_cas, mo1_cas, mo1_cas], compact=False)
                 return paaa.reshape(nmo,ncas,ncas,ncas)
             else:
                 return casscf_class._exact_paaa(self, mol, u, out)
@@ -145,7 +123,7 @@ def density_fit(casscf, auxbasis=None, with_df=None):
 
 def approx_hessian(casscf, auxbasis=None, with_df=None):
     '''Approximate the orbital hessian with density fitting integrals
-    
+
     Note this function has no effects if the input casscf object is DF-CASSCF.
     It only modifies the orbital hessian of normal CASSCF object.
 
@@ -262,9 +240,9 @@ class _ERIS(object):
 
         t1 = t0 = (time.clock(), time.time())
         self._tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-        self.feri = h5py.File(self._tmpfile.name, 'w')
-        self.ppaa = self.feri.create_dataset('ppaa', (nmo,nmo,ncas,ncas), 'f8')
-        self.papa = self.feri.create_dataset('papa', (nmo,ncas,nmo,ncas), 'f8')
+        self.feri = feri = h5py.File(self._tmpfile.name, 'w')
+        self.ppaa = feri.create_dataset('ppaa', (nmo,nmo,ncas,ncas), 'f8')
+        self.papa = feri.create_dataset('papa', (nmo,ncas,nmo,ncas), 'f8')
         self.j_pc = numpy.zeros((nmo,ncore))
         k_cp = numpy.zeros((ncore,nmo))
 
@@ -333,8 +311,6 @@ class _ERIS(object):
 
         fxpp.close()
         self.feri.flush()
-        self.feri.close()
-        self.feri = feri = h5py.File(self._tmpfile.name, 'r')
         def __del__():
             feri.close()
         self.feri.__del__ = __del__
@@ -394,6 +370,10 @@ if __name__ == '__main__':
     mc = mcscf.DFCASSCF(mf, 6, 4)
     mc.verbose = 4
     mo = addons.sort_mo(mc, mc.mo_coeff, (3,4,6,7,8,9), 1)
+    emc = mc.kernel(mo)[0]
+    print(emc, 'ref = -76.0917567904955', emc - -76.0917567904955)
+    mc.with_dep4 = True
+    mc.max_cycle_micro = 10
     emc = mc.kernel(mo)[0]
     print(emc, 'ref = -76.0917567904955', emc - -76.0917567904955)
 

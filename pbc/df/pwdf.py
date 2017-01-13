@@ -188,6 +188,8 @@ class PWDF(lib.StreamObject):
         self.kpts = kpts
         self.gs = cell.gs
 
+        self.blockdim = 240 # to mimic molecular DF object
+
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
         self._keys = set(self.__dict__.keys())
@@ -201,7 +203,7 @@ class PWDF(lib.StreamObject):
         logger.debug1(self, '    kpts = %s', self.kpts)
 
     def pw_loop(self, gs=None, kpti_kptj=None, shls_slice=None,
-                max_memory=2000, aosym='s1'):
+                max_memory=2000, aosym='s1', blksize=None):
         '''Plane wave part'''
         cell = self.cell
         if gs is None:
@@ -228,8 +230,12 @@ class PWDF(lib.StreamObject):
             ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
             nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
             nij = ni*nj
-        blksize = min(max(16, int(max_memory*1e6*.75/16/nij)), 16384)
-        sublk = max(16, int(blksize//4))
+
+        if blksize is None:
+            blksize = min(max(16, int(max_memory*1e6*.75/16/nij)), 16384)
+            sublk = max(16, int(blksize//4))
+        else:
+            subblk = blksize
         buf = [numpy.zeros(nij*blksize, dtype=numpy.complex128)]
         pqkRbuf = numpy.empty(nij*sublk)
         pqkIbuf = numpy.empty(nij*sublk)
@@ -372,6 +378,27 @@ class PWDF(lib.StreamObject):
         mf = copy.copy(mf)
         mf.with_df = self
         return mf
+
+################################################################################
+# With this function to mimic the molecular DF.loop function, the pbc gamma
+# point DF object can be used in the molecular code
+    def loop(self):
+        Lpq = None
+        coulG = self.weighted_coulG()
+        for pqkR, pqkI, p0, p1 in self.pw_loop(aosym='s2', blksize=self.blockdim):
+            vG = numpy.sqrt(coulG[p0:p1])
+            pqkR *= vG
+            pqkI *= vG
+            Lpq = lib.transpose(pqkR, out=Lpq)
+            yield Lpq
+            Lpq = lib.transpose(pqkI, out=Lpq)
+            yield Lpq
+
+    def get_naoaux(self):
+        gs = numpy.asarray(mydf.gs)
+        ngs = numpy.prod(gs*2+1)
+        return ngs * 2
+
 
 # Since the real-space lattice-sum for nuclear attraction is not implemented,
 # use the 3c2e code with steep gaussians to mimic nuclear density

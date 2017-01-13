@@ -168,7 +168,14 @@ class MP2(lib.StreamObject):
         if mem_now < mem_basic:
             warnings.warn('%s: Not enough memory. Available mem %s MB, required mem %s MB\n' %
                           (self.ao2mo, mem_now, mem_basic))
-        if (self._scf._eri is not None and
+        if hasattr(self._scf, 'with_df') and self._scf.with_df:
+            # To handle the PBC or custom 2-electron with 3-index tensor.
+            # Call dfmp2.MP2 for efficient DF-MP2 implementation.
+            log.warn('MP2 detected DF being bound to the HF object. '
+                     '(ia|jb) is computed based on the DF 3-tensor integrals.\n'
+                     'You can switch to dfmp2.MP2 for the DF-MP2 implementation')
+            eri = self._scf.with_df.ao2mo((co,cv,co,cv))
+        elif (self._scf._eri is not None and
             mem_incore+mem_now < self.max_memory or
             self.mol.incore_anyway):
             if self._scf._eri is None:
@@ -240,9 +247,11 @@ if __name__ == '__main__':
     print(numpy.allclose(reduce(numpy.dot, (mf.mo_coeff, pt.make_rdm1(),
                                             mf.mo_coeff.T)), rdm1))
 
-    h1e = reduce(numpy.dot, (mf.mo_coeff, mf.get_hcore(), mf.mo_coeff))
     eri = ao2mo.restore(1, ao2mo.kernel(mf._eri, mf.mo_coeff), nmo)
     rdm2 = pt.make_rdm2()
-    print(numpy.dot(rdm1.flatten(), h1e.flatten()))      # FIXME
-    print(.5 * numpy.dot(eri.flatten(), rdm2.flatten())) # -0.204019976381
+    e1 = numpy.einsum('ij,ij', mf.make_rdm1(), mf.get_hcore())
+    e2 = .5 * numpy.dot(eri.flatten(), rdm2.flatten())
+    print(e1+e2+mf.energy_nuc()-mf.e_tot - -0.204019976381)
 
+    pt = MP2(scf.density_fit(mf))
+    print(pt.kernel()[0] - -0.204254500454)

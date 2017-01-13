@@ -182,6 +182,10 @@ In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
 Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
 of API conventions''')
 
+    if hasattr(mf, 'with_df') and 'pbc' in str(mf.__module__):
+        mf = _convert_to_rhf(mf, False)
+        return DFCASSCF(mf, ncas, nelecas, **kwargs)
+
     mf = _convert_to_rhf(mf)
     if mf.mol.symmetry:
         mc = mc1step_symm.CASSCF(mf, ncas, nelecas, **kwargs)
@@ -201,6 +205,10 @@ In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
         mc = mcscf.CASCI(mf, norb, nelec)
 Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
 of API conventions''')
+
+    if hasattr(mf, 'with_df') and 'pbc' in str(mf.__module__):
+        mf = _convert_to_rhf(mf, False)
+        return DFCASCI(mf, ncas, nelecas, **kwargs)
 
     mf = _convert_to_rhf(mf)
     if mf.mol.symmetry:

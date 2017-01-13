@@ -812,7 +812,58 @@ class _ERIS:
         mem_now = lib.current_memory()[0]
 
         log = logger.Logger(cc.stdout, cc.verbose)
-        if (method == 'incore' and cc._scf._eri is not None and
+        if hasattr(cc._scf, 'with_df') and cc._scf.with_df:
+            #log.warn('CCSD detected DF being bound to the HF object. '
+            #         'MO integrals are computed based on the DF 3-tensor integrals.\n'
+            #         'You can switch to dfccsd.CCSD for the DF-CCSD implementation')
+            nvir_pair = nvir * (nvir+1) // 2
+            oooo = numpy.zeros((nocc*nocc,nocc*nocc))
+            ooov = numpy.zeros((nocc*nocc,nocc*nvir))
+            ovoo = numpy.zeros((nocc*nvir,nocc*nocc))
+            oovv = numpy.zeros((nocc*nocc,nvir*nvir))
+            ovov = numpy.zeros((nocc*nvir,nocc*nvir))
+            ovvv = numpy.zeros((nocc*nvir,nvir_pair))
+            vvvv = numpy.zeros((nvir_pair,nvir_pair))
+
+            mo = numpy.asarray(mo_coeff, order='F')
+            nmo = mo.shape[1]
+            ijslice = (0, nmo, 0, nmo)
+            Lpq = None
+            for eri1 in cc._scf.with_df.loop():
+                Lpq = _ao2mo.nr_e2(eri1, mo, ijslice, aosym='s2', out=Lpq).reshape(-1,nmo,nmo)
+                Loo = Lpq[:,:nocc,:nocc].reshape(-1,nocc**2)
+                Lov = Lpq[:,:nocc,nocc:].reshape(-1,nocc*nvir)
+                Lvv = Lpq[:,nocc:,nocc:].reshape(-1,nvir**2)
+                lib.ddot(Loo.T, Loo, 1, oooo, 1)
+                lib.ddot(Loo.T, Lov, 1, ooov, 1)
+                lib.ddot(Lov.T, Loo, 1, ovoo, 1)
+                lib.ddot(Loo.T, Lvv, 1, oovv, 1)
+                lib.ddot(Lov.T, Lov, 1, ovov, 1)
+                Lvv = lib.pack_tril(Lvv.reshape(-1,nvir,nvir))
+                lib.ddot(Lov.T, Lvv, 1, ovvv, 1)
+                lib.ddot(Lvv.T, Lvv, 1, vvvv, 1)
+
+            _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+            self.feri1 = feri1 = h5py.File(_tmpfile1.name)
+            def __del__feri1(self):
+                feri1.close()
+            self.feri1.__del__ = __del__feri1
+            self.feri1['oooo'] = oooo.reshape(nocc,nocc,nocc,nocc)
+            self.feri1['ooov'] = ooov.reshape(nocc,nocc,nocc,nvir)
+            self.feri1['ovoo'] = ovoo.reshape(nocc,nvir,nocc,nocc)
+            self.feri1['oovv'] = oovv.reshape(nocc,nocc,nvir,nvir)
+            self.feri1['ovov'] = ovov.reshape(nocc,nvir,nocc,nvir)
+            self.feri1['ovvv'] = ovvv.reshape(nocc,nvir,nvir_pair)
+            self.feri1['vvvv'] = vvvv.reshape(nvir_pair,nvir_pair)
+            self.oooo = self.feri1['oooo']
+            self.ooov = self.feri1['ooov']
+            self.ovoo = self.feri1['ovoo']
+            self.oovv = self.feri1['oovv']
+            self.ovov = self.feri1['ovov']
+            self.ovvv = self.feri1['ovvv']
+            self.vvvv = self.feri1['vvvv']
+
+        elif (method == 'incore' and cc._scf._eri is not None and
             (mem_incore+mem_now < cc.max_memory) or cc.mol.incore_anyway):
             eri1 = ao2mo.incore.full(cc._scf._eri, mo_coeff)
             #:eri1 = ao2mo.restore(1, eri1, nmo)
@@ -1063,6 +1114,15 @@ if __name__ == '__main__':
     mol.build()
     rhf = scf.RHF(mol)
     rhf.scf() # -76.0267656731
+
+    mcc = CCSD(rhf.density_fit())
+    eris = mcc.ao2mo()
+    emp2, t1, t2 = mcc.init_amps(eris)
+    print(abs(t2).sum() - 4.9318753386921648)
+    print(emp2 - -0.2040173789981149)
+    t1, t2 = update_amps(mcc, t1, t2, eris)
+    print(abs(t1).sum()-0.0469613256475975)
+    print(abs(t2).sum()-5.3782605785516173)
 
     mcc = CCSD(rhf)
     eris = mcc.ao2mo()

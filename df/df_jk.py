@@ -135,8 +135,10 @@ def get_jk(dfobj, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
     elif isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         nset = 1
         dms = [dms]
+        is_single_dm = True
     else:
         nset = len(dms)
+        is_single_dm = False
     nao = dms[0].shape[0]
 
     fmmm = _ao2mo.libao2mo.AO2MOmmm_bra_nr_s2
@@ -226,7 +228,7 @@ def get_jk(dfobj, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
                                      buf2.reshape(-1,nao))
             t1 = log.timer_debug1('jk', *t1)
 
-    if len(dms) == 1:
+    if is_single_dm:
         vj = vj[0]
         vk = vk[0]
     logger.timer(dfobj, 'vj and vk', *t0)

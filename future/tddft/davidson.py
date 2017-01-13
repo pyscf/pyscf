@@ -94,6 +94,7 @@ def dgeev(abop, x0, precond, type=1, tol=1e-14, max_cycle=50, max_space=12,
     heff = numpy.empty((max_space,max_space), dtype=x0[0].dtype)
     seff = numpy.empty((max_space,max_space), dtype=x0[0].dtype)
     fresh_start = True
+    conv = False
 
     for icyc in range(max_cycle):
         if fresh_start:
@@ -192,6 +193,7 @@ def dgeev(abop, x0, precond, type=1, tol=1e-14, max_cycle=50, max_space=12,
         if abs(de[ide]) < tol:
             log.debug('converge %d %d  e= %s  max|de|= %4.3g',
                       icyc, space, e, de[ide])
+            conv = True
             break
 
         dx_norm = []
@@ -207,6 +209,7 @@ def dgeev(abop, x0, precond, type=1, tol=1e-14, max_cycle=50, max_space=12,
         if max(dx_norm) < toloose:
             log.debug('converge %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
                       icyc, space, max(dx_norm), e, de[ide])
+            conv = True
             break
 
         # remove subspace linear dependency
@@ -246,9 +249,9 @@ def dgeev(abop, x0, precond, type=1, tol=1e-14, max_cycle=50, max_space=12,
             x0[k] = abop(x0[k])[1]
 
     if nroots == 1:
-        return e[0], x0[0]
+        return conv, e[0], x0[0]
     else:
-        return e, x0
+        return conv, e, x0
 
 def pickeig(w, v, nroots):
     realidx = numpy.where((w.imag == 0))[0]
@@ -290,6 +293,7 @@ def eig(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
     _incore = max_memory*1e6/x0[0].nbytes > max_space*2+nroots*2
     heff = numpy.empty((max_space,max_space), dtype=x0[0].dtype)
     fresh_start = True
+    conv = False
 
     for icyc in range(max_cycle):
         if fresh_start:
@@ -361,6 +365,7 @@ def eig(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
         if abs(de[ide]) < tol:
             log.debug('converge %d %d  e= %s  max|de|= %4.3g',
                       icyc, space, e, de[ide])
+            conv = True
             break
 
         dx_norm = []
@@ -373,6 +378,7 @@ def eig(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
         if max(dx_norm) < toloose:
             log.debug('converge %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
                       icyc, space, max(dx_norm), e, de[ide])
+            conv = True
             break
 
         # remove subspace linear dependency
@@ -408,9 +414,9 @@ def eig(aop, x0, precond, tol=1e-14, max_cycle=50, max_space=12,
             callback(locals())
 
     if nroots == 1:
-        return e[0], x0[0]
+        return conv, e[0], x0[0]
     else:
-        return e, x0
+        return conv, e, x0
 
 
 if __name__ == '__main__':
@@ -433,7 +439,7 @@ if __name__ == '__main__':
     x0 = [a[0]/numpy.linalg.norm(a[0]),
           a[1]/numpy.linalg.norm(a[1]),]
     e0,x0 = dgeev(abop, x0, precond, type=1, max_cycle=100, max_space=18,
-                  verbose=5, nroots=4)
+                  verbose=5, nroots=4)[1:]
     print(e0[0] - e[0])
     print(e0[1] - e[1])
     print(e0[2] - e[2])
@@ -444,7 +450,7 @@ if __name__ == '__main__':
     x0 = [a[0]/numpy.linalg.norm(a[0]),
           a[1]/numpy.linalg.norm(a[1]),]
     e0,x0 = dgeev(abop, x0, precond, type=2, max_cycle=100, max_space=18,
-                  verbose=5, nroots=4)
+                  verbose=5, nroots=4)[1:]
     print(e0[0] - e[0])
     print(e0[1] - e[1])
     print(e0[2] - e[2])
@@ -461,7 +467,7 @@ if __name__ == '__main__':
     def precond(r, e0, x0):
         return r / (abdiag-e0)
     e0, x0 = eig(abop, x0, precond, max_cycle=100, max_space=30, verbose=5,
-                 nroots=4, pick=pickeig)
+                 nroots=4, pick=pickeig)[1:]
     print(e0[0] - e[0])
     print(e0[1] - e[1])
     print(e0[2] - e[2])

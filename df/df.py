@@ -19,6 +19,8 @@ from pyscf.df import incore
 from pyscf.df import outcore
 from pyscf.df import r_incore
 from pyscf.df import addons
+from pyscf.ao2mo import _ao2mo
+from pyscf.ao2mo.incore import _conc_mos, iden_coeffs
 
 class DF(lib.StreamObject):
     def __init__(self, mol):
@@ -44,7 +46,7 @@ class DF(lib.StreamObject):
         nao_pair = nao*(nao+1)//2
 
         max_memory = (self.max_memory - lib.current_memory()[0]) * .8
-        if nao_pair*nao*3*8/1e6 < max_memory:
+        if nao_pair*naux*3*8/1e6 < max_memory:
             self._cderi = incore.cholesky_eri(mol, auxmol=auxmol, verbose=log)
         else:
             if not isinstance(self._cderi, str):
@@ -91,19 +93,33 @@ class DF(lib.StreamObject):
         from pyscf.df import df_jk
         return df_jk.get_jk(self, dm, hermi, vhfopt, with_j, with_k)
 
-    def ao2mo(self, mo_coeffs):
-        from pyscf.ao2mo import _ao2mo
-        nmoi, nmoj, nmok, nmol = [x.shape[1] for x in mo_coeffs]
-        mo_eri = numpy.zeros((nmoi*nmoj,nmok*nmol))
-        moij = numpy.asarray(numpy.hstack((mo_coeffs[0],mo_coeffs[1])), order='F')
-        ijshape = (0, nmoi, nmoi, nmoi+nmoj)
-        mokl = numpy.asarray(numpy.hstack((mo_coeffs[2],mo_coeffs[3])), order='F')
-        klshape = (0, nmok, nmok, nmok+nmol)
+    def get_eri(self):
+        nao = self.mol.nao_nr()
+        nao_pair = nao * (nao+1) // 2
+        ao_eri = numpy.zeros((nao_pair,nao_pair))
         for eri1 in self.loop():
-            buf1 = _ao2mo.nr_e2(eri1, moij, ijshape, 's2', 's1')
-            buf2 = _ao2mo.nr_e2(eri1, mokl, klshape, 's2', 's1')
-            lib.dot(buf1.T, buf2, 1, mo_eri, 1)
+            lib.dot(eri1.T, eri1, 1, ao_eri, 1)
+        return ao2mo.restore(8, ao_eri, nao)
+    get_ao_eri = get_eri
+
+    def ao2mo(self, mo_coeffs, compact=True):
+        if isinstance(mo_coeffs, numpy.ndarray) and mo_coeffs.ndim == 2:
+            mo_coeffs = (mo_coeffs,) * 4
+        ijmosym, nij_pair, moij, ijslice = _conc_mos(mo_coeffs[0], mo_coeffs[1], compact)
+        klmosym, nkl_pair, mokl, klslice = _conc_mos(mo_coeffs[2], mo_coeffs[3], compact)
+        mo_eri = numpy.zeros((nij_pair,nkl_pair))
+        sym = (iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
+               iden_coeffs(mo_coeffs[1], mo_coeffs[3]))
+        Lij = Lkl = None
+        for eri1 in self.loop():
+            Lij = _ao2mo.nr_e2(eri1, moij, ijslice, aosym='s2', mosym=ijmosym, out=Lij)
+            if sym:
+                Lkl = Lij
+            else:
+                Lkl = _ao2mo.nr_e2(eri1, mokl, klslice, aosym='s2', mosym=klmosym, out=Lkl)
+            lib.dot(Lij.T, Lkl, 1, mo_eri, 1)
         return mo_eri
+    get_mo_eri = ao2mo
 
     def update_mf(self, mf):
         from pyscf.df import df_jk

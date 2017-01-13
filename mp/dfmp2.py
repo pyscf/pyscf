@@ -7,11 +7,11 @@ density fitting MP2,  3-center integrals incore.
 '''
 
 import time
-import tempfile
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf import df
+from pyscf.ao2mo import _ao2mo
+#from pyscf.mp.mp2 import make_rdm1, make_rdm2, make_rdm1_ao
 
 
 # the MO integral for MP2 is (ov|ov). The most efficient integral
@@ -22,44 +22,38 @@ from pyscf import df
 def kernel(mp, mo_energy, mo_coeff, nocc, ioblk=256, verbose=None):
     nmo = mo_coeff.shape[1]
     nvir = nmo - nocc
-    auxmol = df.incore.format_aux_basis(mp.mol, mp.auxbasis)
-    naoaux = auxmol.nao_nr()
-
-    iolen = max(int(ioblk*1e6/8/(nvir*nocc)), 160)
 
     eia = lib.direct_sum('i-a->ia', mo_energy[:nocc], mo_energy[nocc:])
     t2 = None
     emp2 = 0
-    with mp.ao2mo(mo_coeff, nocc) as fov:
-        for p0, p1 in prange(0, naoaux, iolen):
-            logger.debug(mp, 'Load cderi block %d:%d', p0, p1)
-            qov = numpy.array(fov[p0:p1], copy=False)
-            for i in range(nocc):
-                buf = numpy.dot(qov[:,i*nvir:(i+1)*nvir].T,
-                                qov).reshape(nvir,nocc,nvir)
-                gi = numpy.array(buf, copy=False)
-                gi = gi.reshape(nvir,nocc,nvir).transpose(1,2,0)
-                t2i = gi/lib.direct_sum('jb+a->jba', eia, eia[i])
-                # 2*ijab-ijba
-                theta = gi*2 - gi.transpose(0,2,1)
-                emp2 += numpy.einsum('jab,jab', t2i, theta)
+    for istep, qov in enumerate(mp.loop_ao2mo(mo_coeff, nocc)):
+        logger.debug(mp, 'Load cderi step %d', istep)
+        for i in range(nocc):
+            buf = numpy.dot(qov[:,i*nvir:(i+1)*nvir].T,
+                            qov).reshape(nvir,nocc,nvir)
+            gi = numpy.array(buf, copy=False)
+            gi = gi.reshape(nvir,nocc,nvir).transpose(1,2,0)
+            t2i = gi/lib.direct_sum('jb+a->jba', eia, eia[i])
+            # 2*ijab-ijba
+            theta = gi*2 - gi.transpose(0,2,1)
+            emp2 += numpy.einsum('jab,jab', t2i, theta)
 
     return emp2, t2
 
 
-class MP2(object):
+class MP2(lib.StreamObject):
     def __init__(self, mf):
         self.mol = mf.mol
-        self._scf = mf
         self.verbose = self.mol.verbose
         self.stdout = self.mol.stdout
         self.max_memory = mf.max_memory
-        if hasattr(mf, 'auxbasis'):
-            self.auxbasis = mf.auxbasis
+        if hasattr(mf, 'with_df') and mf.with_df:
+            self._scf = mf
         else:
-            self.auxbasis = 'weigend+etb'
-        self._cderi = None
-        self.ioblk = 256
+            self._scf = scf.density_fit(mf)
+            logger.warn(self, 'The input "mf" object is not DF object. '
+                        'DF-MP2 converts it to DF object with  %s  basis',
+                        self._scf.auxbasis)
 
         self.emp2 = None
         self.t2 = None
@@ -73,24 +67,27 @@ class MP2(object):
             nocc = self.mol.nelectron // 2
 
         self.emp2, self.t2 = \
-                kernel(self, mo_energy, mo_coeff, nocc, self.ioblk,
-                       verbose=self.verbose)
+                kernel(self, mo_energy, mo_coeff, nocc, verbose=self.verbose)
         logger.log(self, 'RMP2 energy = %.15g', self.emp2)
         return self.emp2, self.t2
 
-    # MO integral transformation for cderi[auxstart:auxcount,:nao,:nao]
-    def ao2mo(self, mo_coeff, nocc):
-        time0 = (time.clock(), time.time())
-        log = logger.Logger(self.stdout, self.verbose)
-        cderi_file = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-        df.outcore.general(self.mol, (mo_coeff[:,:nocc], mo_coeff[:,nocc:]),
-                           cderi_file.name, auxbasis=self.auxbasis, verbose=log)
-        time1 = log.timer('Integral transformation (P|ia)', *time0)
-        return df.load(cderi_file)
+    def loop_ao2mo(self, mo_coeff, nocc):
+        mo = numpy.asarray(mo_coeff, order='F')
+        nmo = mo.shape[1]
+        ijslice = (0, nocc, nocc, nmo)
+        Lov = None
+        for eri1 in self._scf.with_df.loop():
+            Lov = _ao2mo.nr_e2(eri1, mo, ijslice, aosym='s2', out=Lov)
+            yield Lov
 
-def prange(start, end, step):
-    for i in range(start, end, step):
-        yield i, min(i+step, end)
+#    def make_rdm1(self, t2=None):
+#        if t2 is None: t2 = self.t2
+#        return make_rdm1(self, t2, self.verbose)
+#
+#    def make_rdm2(self, t2=None):
+#        if t2 is None: t2 = self.t2
+#        return make_rdm2(self, t2, self.verbose)
+
 
 if __name__ == '__main__':
     from pyscf import scf

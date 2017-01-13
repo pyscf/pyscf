@@ -209,21 +209,22 @@ class DF(pwdf.PWDF):
         return vbar
 
     def sr_loop(self, kpti_kptj=numpy.zeros((2,3)), max_memory=2000,
-                compact=True):
+                compact=True, blksize=None):
         '''Short range part'''
         kpti, kptj = kpti_kptj
         unpack = is_zero(kpti-kptj) and not compact
         is_real = is_zero(kpti_kptj)
         nao = self.cell.nao_nr()
-        if is_real:
-            if unpack:
-                blksize = max_memory*1e6/8/(nao*(nao+1)//2+nao**2)
+        if blksize is None:
+            if is_real:
+                if unpack:
+                    blksize = max_memory*1e6/8/(nao*(nao+1)//2+nao**2)
+                else:
+                    blksize = max_memory*1e6/8/(nao*(nao+1))
             else:
-                blksize = max_memory*1e6/8/(nao*(nao+1))
-        else:
-            blksize = max_memory*1e6/16/(nao**2*2)
-        blksize = max(16, min(int(blksize), self.blockdim))
-        logger.debug3(self, 'max_memory %d MB, blksize %d', max_memory, blksize)
+                blksize = max_memory*1e6/16/(nao**2*2)
+            blksize = max(16, min(int(blksize), self.blockdim))
+            logger.debug3(self, 'max_memory %d MB, blksize %d', max_memory, blksize)
 
         if unpack:
             buf = numpy.empty((blksize,nao*(nao+1)//2))
@@ -289,6 +290,20 @@ class DF(pwdf.PWDF):
 
     def update(self):
         pass
+
+################################################################################
+# With this function to mimic the molecular DF.loop function, the pbc gamma
+# point DF object can be used in the molecular code
+    def loop(self):
+        if self._cderi is None:
+            self.build()
+        return self.sr_loop(compact=True, blksize=self.blockdim)
+
+    def get_naoaux(self):
+        if self._cderi is None:
+            self.build()
+        return self.auxcell.nao_nr()
+
 
 def unique(kpts):
     kpts = numpy.asarray(kpts)

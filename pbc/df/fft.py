@@ -133,6 +133,8 @@ class FFTDF(lib.StreamObject):
         self.kpts = kpts
         self.gs = cell.gs
 
+        self.blockdim = 240 # to mimic molecular DF object
+
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
         self._numint = numint._KNumInt()
@@ -226,6 +228,27 @@ class FFTDF(lib.StreamObject):
         mf = copy.copy(mf)
         mf.with_df = self
         return mf
+
+################################################################################
+# With this function to mimic the molecular DF.loop function, the pbc gamma
+# point DF object can be used in the molecular code
+    def loop(self):
+        coulG = tools.get_coulG(self.cell, numpy.zeros(3), gs=mydf.gs)
+        ngs = len(coulG)
+        ao_pairs_G = get_ao_pairs_G(mydf, kptijkl[:2], compact=True)
+        ao_pairs_G *= numpy.sqrt(coulG*(cell.vol/ngs**2)).reshape(-1,1)
+
+        Lpq = numpy.empty((self.blockdim, ao_pairs_G.shape[1]))
+        for p0, p1 in lib.prange(0, ngs, self.blockdim):
+            Lpq[:p1-p0] = ao_pairs_G[p0:p1].real
+            yield Lpq[:p1-p0]
+            Lpq[:p1-p0] = ao_pairs_G[p0:p1].imag
+            yield Lpq[:p1-p0]
+
+    def get_naoaux(self):
+        gs = numpy.asarray(mydf.gs)
+        ngs = numpy.prod(gs*2+1)
+        return ngs * 2
 
 
 if __name__ == '__main__':

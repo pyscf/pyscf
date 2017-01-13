@@ -280,7 +280,7 @@ class TDDFTNoHybrid(TDA):
                                      tol=self.conv_tol,
                                      nroots=self.nstates, lindep=self.lindep,
                                      max_space=self.max_space,
-                                     verbose=self.verbose)
+                                     verbose=self.verbose)[1:]
         self.e = numpy.sqrt(w2)
         eai = numpy.sqrt(eai)
         def norm_xy(w, z):

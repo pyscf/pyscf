@@ -123,7 +123,7 @@ class TDA(pyscf.lib.StreamObject):
                                          tol=self.conv_tol,
                                          nroots=self.nstates, lindep=self.lindep,
                                          max_space=self.max_space,
-                                         verbose=self.verbose)
+                                         verbose=self.verbose)[1:]
 # 1/sqrt(2) because self.x is for alpha excitation amplitude and 2(X^+*X) = 1
         self.xy = [(xi.reshape(eai.shape)*numpy.sqrt(.5),0) for xi in x1]
         return self.e, self.xy
@@ -210,7 +210,7 @@ class TDHF(TDA):
                              tol=self.conv_tol,
                              nroots=self.nstates, lindep=self.lindep,
                              max_space=self.max_space, pick=pickeig,
-                             verbose=self.verbose)
+                             verbose=self.verbose)[1:]
         self.e = w
         def norm_xy(z):
             x, y = z.reshape(2,nvir,nocc)
