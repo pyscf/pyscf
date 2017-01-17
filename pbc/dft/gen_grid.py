@@ -121,5 +121,5 @@ if __name__ == '__main__':
     cell.build()
     g = BeckeGrids(cell)
     g.build()
-    print g.weights.sum()
-    print cell.vol
+    print(g.weights.sum())
+    print(cell.vol)

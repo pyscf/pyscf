@@ -167,10 +167,10 @@ if __name__ == '__main__':
     for i in range(nao):
         for j in range(nao):
             ao2ref = tools.fft(aoR2[:,i,j], cell.gs) * cell.vol/ngs
-            print i, j, numpy.linalg.norm(ao2ref - ao2[:,i,j])
+            print(i, j, numpy.linalg.norm(ao2ref - ao2[:,i,j]))
 
     aoG = ft_ao(cell, cell.Gv)
     for i in range(nao):
         aoref = tools.fft(aoR[:,i], cell.gs) * cell.vol/ngs
-        print i, numpy.linalg.norm(aoref - aoG[:,i])
+        print(i, numpy.linalg.norm(aoref - aoG[:,i]))
 

@@ -1,1 +1,1 @@
-from pbc import *
+from pyscf.pbc.tools.pbc import *

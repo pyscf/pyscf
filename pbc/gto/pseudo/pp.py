@@ -173,7 +173,7 @@ def _qli(x,l,i):
         #return 32/3.*sqrt(2/15015.)*(63-36*x**2+4*x**4) # MH (wrong I think)
         return 32/3.*sqrt(2/15015.)*(63-18*x**2+x**4) # TCB
     else:
-        print "*** WARNING *** l =", l, ", i =", i, "not yet implemented for NL PP!"
+        print("*** WARNING *** l =", l, ", i =", i, "not yet implemented for NL PP!")
         return 0.
 
 def Ylm_real(l,m,theta,phi):

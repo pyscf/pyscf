@@ -391,8 +391,8 @@ def get_kconserv(cell, kpts):
                         break
 
                 if found == 0:
-                    print "** ERROR: Problem in get_kconserv. Quitting."
-                    print kvMLK
+                    print("** ERROR: Problem in get_kconserv. Quitting.")
+                    print(kvMLK)
                     sys.exit()
     return KLMN
 

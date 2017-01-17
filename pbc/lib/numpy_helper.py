@@ -56,10 +56,10 @@ def einsum(idx_str, *tensors):
     idxA, idxB, idxC = [list(x) for x in [idxA,idxB,idxC]]
 
     if DEBUG:
-        print "*** Einsum for", idx_str
-        print " idxA =", idxA
-        print " idxB =", idxB
-        print " idxC =", idxC
+        print("*** Einsum for", idx_str)
+        print(" idxA =", idxA)
+        print(" idxB =", idxB)
+        print(" idxC =", idxC)
 
     # Get the range for each index and put it in a dictionary
     rangeA = dict()
@@ -73,8 +73,8 @@ def einsum(idx_str, *tensors):
     #    rangeC[idx] = rnge
 
     if DEBUG:
-        print "rangeA =", rangeA
-        print "rangeB =", rangeB
+        print("rangeA =", rangeA)
+        print("rangeB =", rangeB)
 
     # Find the shared indices being summed over
     shared_idxAB = list(set(idxA).intersection(idxB))
@@ -86,8 +86,8 @@ def einsum(idx_str, *tensors):
     insert_B_loc = 0
     for n in shared_idxAB:
         if rangeA[n] != rangeB[n]:
-            print "ERROR: In index string", idx_str, ", the range of index", n, "is different in A (%d) and B (%d)"%(
-                    rangeA[n], rangeB[n])
+            print("ERROR: In index string", idx_str, ", the range of index", n, "is different in A (%d) and B (%d)"%(
+                    rangeA[n], rangeB[n]))
             raise SystemExit
 
         # Bring idx all the way to the right for A
@@ -102,8 +102,8 @@ def einsum(idx_str, *tensors):
         inner_shape *= rangeA[n]
 
     if DEBUG:
-        print "shared_idxAB =", shared_idxAB
-        print "inner_shape =", inner_shape
+        print("shared_idxAB =", shared_idxAB)
+        print("inner_shape =", inner_shape)
 
     # Transpose the tensors into the proper order and reshape into matrices
     new_orderA = list()
@@ -114,10 +114,10 @@ def einsum(idx_str, *tensors):
         new_orderB.append(idxB.index(idx))
 
     if DEBUG:
-        print "Transposing A as", new_orderA
-        print "Transposing B as", new_orderB
-        print "Reshaping A as (-1,", inner_shape, ")"
-        print "Reshaping B as (", inner_shape, ",-1)"
+        print("Transposing A as", new_orderA)
+        print("Transposing B as", new_orderB)
+        print("Reshaping A as (-1,", inner_shape, ")")
+        print("Reshaping B as (", inner_shape, ",-1)")
 
     A = _cp(A)
     B = _cp(B)
@@ -153,10 +153,10 @@ if __name__ == '__main__':
     B = np.random.random((3,4,5))
     C = np.random.random((3,4,5))
     Z = einsum('ijk,ijl->kl',A,B)
-    print np.allclose(Z, np.einsum('ijk,ijl->kl',A,B))
+    print(np.allclose(Z, np.einsum('ijk,ijl->kl',A,B)))
     Z = einsum('ijk,ijl,imn->klmn',A,B,C)
-    print np.allclose(Z, np.einsum('ijk,ijl,imn->klmn',A,B,C))
+    print(np.allclose(Z, np.einsum('ijk,ijl,imn->klmn',A,B,C)))
     Z = einsum('ijk,ijk->ijk',A,B)
-    print np.allclose(Z, np.einsum('ijk,ijk->ijk',A,B))
+    print(np.allclose(Z, np.einsum('ijk,ijk->ijk',A,B)))
     Z = einsum('ijk, ijk  ->  ijk',A,B)
-    print np.allclose(Z, np.einsum('ijk, ijk  ->  ijk',A,B))
+    print(np.allclose(Z, np.einsum('ijk, ijk  ->  ijk',A,B)))
