@@ -17,7 +17,7 @@ from pyscf.pbc import gto
 cell = gto.M(atom='''
 Si1 0 0 0
 Si2 1 1 1''',
-             h = '''3    0    0
+             a = '''3    0    0
                     0    3    0
                     0    0    3''',
              gs = [5,5,5],
@@ -37,14 +37,15 @@ Si
 
 
 #
-# Allow mixing quantum chemistry ECP and crystal PP in the same calculation.
+# Allow mixing quantum chemistry ECP (or BFD PP) and crystal PP in the same calculation.
 #
 cell = gto.M(
-    h = '''3    0    0
-           0    3    0
-           0    0    3''',
+    a = '''4    0    0
+           0    4    0
+           0    0    4''',
     gs = [5,5,5],
-    atom = 'Cu 0 0 1; Na 0 1 0',
-    basis = {'na': 'lan2ldz', 'Cu': 'gth-szv'},
-    ecp = 'lanl2dz',
-    pseudo = {'Cu': 'gthbp'})
+    atom = 'Cl 0 0 1; Na 0 1 0',
+    basis = {'na': 'gth-szv', 'Cl': 'bfd-vdz'},
+    ecp = {'Cl': 'bfd-pp'},
+    pseudo = {'Na': 'gthbp'})
+

@@ -23,7 +23,7 @@ cell.pseudo = 'gth-pade'
 # Note two extra attributes ".h", ".gs" for in the "cell" initialization.
 # .h is a matrix for lattice vectors.  Note each column of .h denotes a direction
 #
-cell.h = numpy.eye(3)*3.5668
+cell.a = numpy.eye(3)*3.5668
 cell.gs = [10]*3  # 10 grids on postive x direction, => 21^3 grids in total
 cell.build()
 
@@ -42,6 +42,6 @@ cell = gto.M(
               C     0.8917  2.6751  2.6751''',
     basis = 'gth-szv',
     pseudo = 'gth-pade',
-    h = numpy.eye(3)*3.5668,
+    a = numpy.eye(3)*3.5668,
     gs = [10]*3)
 

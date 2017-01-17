@@ -1841,6 +1841,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
             logger.info(self, 'number of shells = %d', self.nbas)
             logger.info(self, 'number of NR pGTOs = %d', self.npgto_nr())
             logger.info(self, 'number of NR cGTOs = %d', self.nao_nr())
+            logger.info(self, 'basis = %s', self.basis)
+            logger.info(self, 'ecp = %s', self.ecp)
         if self.verbose >= logger.DEBUG2:
             for i in range(len(self._bas)):
                 exps = self.bas_exp(i)
