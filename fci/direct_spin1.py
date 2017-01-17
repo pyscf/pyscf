@@ -422,7 +422,8 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     #e, c = lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
     e, c = fci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
                    max_cycle=max_cycle, max_space=max_space, nroots=nroots,
-                   max_memory=max_memory, verbose=verbose, **kwargs)
+                   max_memory=max_memory, verbose=verbose, follow_state=True,
+                   **kwargs)
     if nroots > 1:
         return e+ecore, [ci.reshape(na,nb) for ci in c]
     else:

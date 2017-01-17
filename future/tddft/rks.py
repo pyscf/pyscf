@@ -11,8 +11,7 @@ import time
 import copy
 from functools import reduce
 import numpy
-import pyscf.lib
-from pyscf.lib import logger
+from pyscf import lib
 from pyscf.dft import numint
 from pyscf import dft
 from pyscf.tddft import rhf
@@ -139,7 +138,7 @@ class TDA(rhf.TDA):
         for i, z in enumerate(zs):
             dmvo[i] = reduce(numpy.dot, (orbv, z.reshape(nvir,nocc), orbo.T))
 
-        mem_now = pyscf.lib.current_memory()[0]
+        mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.9-mem_now)
         v1ao = _contract_xc_kernel(self, self._scf.xc, dmvo,
                                    singlet=self.singlet, max_memory=max_memory)
@@ -157,7 +156,7 @@ class TDA(rhf.TDA):
                 v1ao += vj * 2
 
         v1vo = _ao2mo.nr_e2(v1ao, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir*nocc)
-        eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
+        eai = lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
         eai = eai.ravel()
         for i, z in enumerate(zs):
             v1vo[i] += eai * z
@@ -202,7 +201,7 @@ class TDDFT(rhf.TDHF):
             else:
                 veff = numpy.zeros((nz*2,nao,nao))
 
-        mem_now = pyscf.lib.current_memory()[0]
+        mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.9-mem_now)
         v1xc = _contract_xc_kernel(self, self._scf.xc, dms[:nz],
                                    singlet=self.singlet, max_memory=max_memory)
@@ -210,7 +209,7 @@ class TDDFT(rhf.TDHF):
         veff[nz:] += v1xc
 
         veff = _ao2mo.nr_e2(veff, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir*nocc)
-        eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
+        eai = lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
         eai = eai.ravel()
         for i, z in enumerate(xys):
             x, y = z.reshape(2,-1)
@@ -232,7 +231,7 @@ class TDDFTNoHybrid(TDA):
         nvir = nmo - nocc
         orbv = mo_coeff[:,nocc:]
         orbo = mo_coeff[:,:nocc]
-        eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
+        eai = lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
         dai = numpy.sqrt(eai).ravel()
 
         nz = len(zs)
@@ -241,7 +240,7 @@ class TDDFTNoHybrid(TDA):
             dm = reduce(numpy.dot, (orbv, (dai*z).reshape(nvir,nocc), orbo.T))
             dmvo[i] = dm + dm.T # +cc for A+B and K_{ai,jb} in A == K_{ai,bj} in B
 
-        mem_now = pyscf.lib.current_memory()[0]
+        mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.9-mem_now)
         v1ao = _contract_xc_kernel(self, self._scf.xc, dmvo,
                                    singlet=self.singlet, max_memory=max_memory)
@@ -269,18 +268,18 @@ class TDDFTNoHybrid(TDA):
 
         mo_energy = self._scf.mo_energy
         nocc = (self._scf.mo_occ>0).sum()
-        eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
+        eai = lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
 
         if x0 is None:
             x0 = self.init_guess(eai, self.nstates)
 
         precond = self.get_precond(eai.ravel()**2)
 
-        w2, x1 = pyscf.lib.davidson1(self.get_vind, x0, precond,
-                                     tol=self.conv_tol,
-                                     nroots=self.nstates, lindep=self.lindep,
-                                     max_space=self.max_space,
-                                     verbose=self.verbose)[1:]
+        w2, x1 = lib.davidson1(self.get_vind, x0, precond,
+                               tol=self.conv_tol,
+                               nroots=self.nstates, lindep=self.lindep,
+                               max_space=self.max_space,
+                               verbose=self.verbose)[1:]
         self.e = numpy.sqrt(w2)
         eai = numpy.sqrt(eai)
         def norm_xy(w, z):
@@ -288,7 +287,7 @@ class TDDFTNoHybrid(TDA):
             zm = w/eai * z.reshape(eai.shape)
             x = (zp + zm) * .5
             y = (zp - zm) * .5
-            norm = 2*(pyscf.lib.norm(x)**2 - pyscf.lib.norm(y)**2)
+            norm = 2*(lib.norm(x)**2 - lib.norm(y)**2)
             norm = 1/numpy.sqrt(norm)
             return x*norm,y*norm
 

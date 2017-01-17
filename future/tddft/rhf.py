@@ -9,12 +9,12 @@
 
 from functools import reduce
 import numpy
-import pyscf.lib
-from pyscf.tddft import davidson
+from pyscf import lib
+from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 
 
-class TDA(pyscf.lib.StreamObject):
+class TDA(lib.StreamObject):
     def __init__(self, mf):
         self.verbose = mf.verbose
         self.stdout = mf.stdout
@@ -27,7 +27,7 @@ class TDA(pyscf.lib.StreamObject):
         self.singlet = True
         self.lindep = 1e-12
         self.level_shift = 0
-        self.max_space = 40
+        self.max_space = 50
         self.max_cycle = 100
         self.max_memory = mf.max_memory
         self.chkfile = mf.chkfile
@@ -55,7 +55,7 @@ class TDA(pyscf.lib.StreamObject):
         log.info('eigh max_cycle = %d', self.max_cycle)
         log.info('chkfile = %s', self.chkfile)
         log.info('max_memory %d MB (current use %d MB)',
-                 self.max_memory, pyscf.lib.current_memory()[0])
+                 self.max_memory, lib.current_memory()[0])
         if not self._scf.converged:
             log.warn('Ground state SCF is not converged')
         log.info('\n')
@@ -82,7 +82,7 @@ class TDA(pyscf.lib.StreamObject):
 
         #v1vo = numpy.asarray([reduce(numpy.dot, (orbv.T, v, orbo)) for v in vhf])
         v1vo = _ao2mo.nr_e2(vhf, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir*nocc)
-        eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
+        eai = lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
         eai = eai.ravel()
         for i, z in enumerate(zs):
             v1vo[i] += eai * z
@@ -112,18 +112,18 @@ class TDA(pyscf.lib.StreamObject):
 
         mo_energy = self._scf.mo_energy
         nocc = (self._scf.mo_occ>0).sum()
-        eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
+        eai = lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
 
         if x0 is None:
             x0 = self.init_guess(eai, self.nstates)
 
         precond = self.get_precond(eai.ravel())
 
-        self.e, x1 = pyscf.lib.davidson1(self.get_vind, x0, precond,
-                                         tol=self.conv_tol,
-                                         nroots=self.nstates, lindep=self.lindep,
-                                         max_space=self.max_space,
-                                         verbose=self.verbose)[1:]
+        self.e, x1 = lib.davidson1(self.get_vind, x0, precond,
+                                   tol=self.conv_tol,
+                                   nroots=self.nstates, lindep=self.lindep,
+                                   max_space=self.max_space,
+                                   verbose=self.verbose)[1:]
 # 1/sqrt(2) because self.x is for alpha excitation amplitude and 2(X^+*X) = 1
         self.xy = [(xi.reshape(eai.shape)*numpy.sqrt(.5),0) for xi in x1]
         return self.e, self.xy
@@ -159,7 +159,7 @@ class TDHF(TDA):
             vhf = -vk
         #vhf = numpy.asarray([reduce(numpy.dot, (orbv.T, v, orbo)) for v in vhf])
         vhf = _ao2mo.nr_e2(vhf, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir*nocc)
-        eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
+        eai = lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
         eai = eai.ravel()
         for i, z in enumerate(xys):
             x, y = z.reshape(2,-1)
@@ -193,7 +193,7 @@ class TDHF(TDA):
 
         mo_energy = self._scf.mo_energy
         nocc = (self._scf.mo_occ>0).sum()
-        eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
+        eai = lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
         nvir = eai.shape[0]
 
         if x0 is None:
@@ -203,18 +203,19 @@ class TDHF(TDA):
 
         # We only need positive eigenvalues
         def pickeig(w, v, nroots):
-            realidx = numpy.where((w.imag == 0) & (w.real > 0))[0]
-            return realidx[w[realidx].real.argsort()[:nroots]]
+            realidx = numpy.where((abs(w.imag) < 1e-6) & (w.real > 0))[0]
+            idx = realidx[w[realidx].real.argsort()]
+            return w[idx].real, v[:,idx].real, idx
 
-        w, x1 = davidson.eig(self.get_vind, x0, precond,
-                             tol=self.conv_tol,
-                             nroots=self.nstates, lindep=self.lindep,
-                             max_space=self.max_space, pick=pickeig,
-                             verbose=self.verbose)[1:]
+        w, x1 = lib.davidson_nosym1(self.get_vind, x0, precond,
+                                    tol=self.conv_tol,
+                                    nroots=self.nstates, lindep=self.lindep,
+                                    max_space=self.max_space, pick=pickeig,
+                                    verbose=self.verbose)[1:]
         self.e = w
         def norm_xy(z):
             x, y = z.reshape(2,nvir,nocc)
-            norm = 2*(pyscf.lib.norm(x)**2 - pyscf.lib.norm(y)**2)
+            norm = 2*(lib.norm(x)**2 - lib.norm(y)**2)
             norm = 1/numpy.sqrt(norm)
             return x*norm, y*norm
         self.xy = [norm_xy(z) for z in x1]
