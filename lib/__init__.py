@@ -3,6 +3,7 @@
 #
 
 from pyscf.lib import parameters
+param = parameters
 from pyscf.lib import numpy_helper
 from pyscf.lib import linalg_helper
 from pyscf.lib import logger
