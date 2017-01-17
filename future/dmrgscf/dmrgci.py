@@ -15,7 +15,7 @@ import sys
 import struct
 import time
 import tempfile
-from subprocess import check_call, CalledProcessError
+from subprocess import check_call, check_output, STDOUT, CalledProcessError
 import numpy
 import pyscf.tools
 import pyscf.lib
@@ -195,6 +195,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         log = logger.Logger(self.stdout, verbose)
         log.info('******** Block flags ********')
         log.info('executable = %s', self.executable)
+        log.info('version = %s', block_version(self.executable))
         log.info('BLOCKEXE_COMPRESS_NEVPT = %s', settings.BLOCKEXE_COMPRESS_NEVPT)
         log.info('mpiprefix = %s', self.mpiprefix)
         log.info('scratchDirectory = %s', self.scratchDirectory)
@@ -538,11 +539,12 @@ def make_schedule(sweeps, Ms, tols, noises, twodot_to_onedot):
 
 def writeDMRGConfFile(DMRGCI, nelec, Restart,
                       maxIter=None, with_2pdm=True, extraline=[]):
+    version = block_version(DMRGCI.executable)
     confFile = os.path.join(DMRGCI.runtimeDir, DMRGCI.configFile)
 
     f = open(confFile, 'w')
 
-    if (DMRGCI.memory is not None):
+    if 'Block 1.1' not in version and DMRGCI.memory is not None:
         f.write('memory, %i, g\n'%(DMRGCI.memory))
 
     if isinstance(nelec, (int, numpy.integer)):
@@ -611,14 +613,20 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
             f.write('%f '%weight)
         f.write('\n')
 
-    if DMRGCI.num_thrds > 1: # Add condition for backward compatiblity
+    if 'Block 1.1' not in version:
         f.write('num_thrds %d\n'%DMRGCI.num_thrds)
     for line in DMRGCI.extraline:
-        f.write('%s\n'%line)
+        if not ('Block 1.1' in version and
+                ('num_thrds' in line or 'memory' in line)):
+            f.write('%s\n'%line)
     for line in DMRGCI.block_extra_keyword:
-        f.write('%s\n'%line)
+        if not ('Block 1.1' in version and
+                ('num_thrds' in line or 'memory' in line)):
+            f.write('%s\n'%line)
     for line in extraline:
-        f.write('%s\n'%line)
+        if not ('Block 1.1' in version and
+                ('num_thrds' in line or 'memory' in line)):
+            f.write('%s\n'%line)
     f.close()
     #no reorder
     #f.write('noreorder\n')
@@ -698,6 +706,27 @@ def dryrun(mc, mo_coeff=None):
     mc.fcisolver.onlywriteIntegral, bak = True, mc.fcisolver.onlywriteIntegral
     mc.casci(mo_coeff)
     mc.fcisolver.onlywriteIntegral = bak
+
+def block_version(blockexe):
+    try:
+        msg = check_output([blockexe, '-v'])
+        version = msg.split('\n')[1]
+        return version
+    except CalledProcessError:
+        f1 = tempfile.NamedTemporaryFile()
+        f1.write('memory 1 m\n')
+        f1.flush()
+        try:
+            msg = check_output([blockexe, f1.name], stderr=STDOUT)
+        except CalledProcessError as err:
+            if 'Unrecognized option :: memory' in err.output:
+                version = 'Block 1.1.1'
+            elif 'need to specify hf_occ' in err.output:
+                version = 'Block 1.5'
+            else:
+                raise err
+        f1.close()
+        return version
 
 
 if __name__ == '__main__':
