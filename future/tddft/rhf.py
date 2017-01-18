@@ -202,7 +202,7 @@ class TDHF(TDA):
         precond = self.get_precond(eai.ravel())
 
         # We only need positive eigenvalues
-        def pickeig(w, v, nroots):
+        def pickeig(w, v, nroots, x0):
             realidx = numpy.where((abs(w.imag) < 1e-6) & (w.real > 0))[0]
             idx = realidx[w[realidx].real.argsort()]
             return w[idx].real, v[:,idx].real, idx
