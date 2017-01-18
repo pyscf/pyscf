@@ -22,6 +22,7 @@ from pyscf.gto.mole import conc_env
 from pyscf.pbc.gto import basis
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.tools import pbc as pbctools
+from pyscf.gto.basis import ALIAS as MOLE_ALIAS
 
 libpbc = lib.load_library('libpbc')
 
@@ -69,7 +70,7 @@ def format_pseudo(pseudo_tab):
         0.2, 2, [-9.1120234, 1.69836797], 0]}
     '''
     fmt_pseudo = {}
-    for atom in pseudo_tab.keys():
+    for atom in pseudo_tab:
         symb = _symbol(atom)
         rawsymb = _rm_digit(symb)
         stdsymb = _std_symbol(rawsymb)
@@ -603,6 +604,53 @@ def gen_uniform_grids(cell, gs=None):
     coords = np.dot(qv, a_frac)
     return coords
 
+# Check whether ecp keywords are presented in pp and whether pp keywords are
+# presented in ecp.  The return (ecp, pp) should have only the ecp keywords and
+# pp keywords in each dict.
+# The "misplaced" ecp/pp keywords have lowest priority, ie if the atom is
+# defined in ecp, the misplaced ecp atom found in pp does NOT replace the
+# definition in ecp, and versa vise.
+def classify_ecp_pseudo(cell, ecp, pp):
+    def convert(name):
+        return name.lower().replace(' ', '').replace('-', '').replace('_', '')
+    def classify(ecp, pp_alias):
+        if isinstance(ecp, str):
+            if convert(ecp) in pp_alias:
+                return {}, ecp
+        elif isinstance(ecp, dict):
+            ecp_as_pp = {}
+            for atom in ecp:
+                key = ecp[atom]
+                if isinstance(key, str) and convert(key) in pp_alias:
+                    ecp_as_pp[atom] = key
+            if ecp_as_pp:
+                ecp_left = dict(ecp)
+                for atom in ecp_as_pp:
+                    ecp_left.pop(atom)
+                return ecp_left, ecp_as_pp
+        return ecp, {}
+    ecp_left, ecp_as_pp = classify(ecp, pseudo.ALIAS)
+    pp_left , pp_as_ecp = classify(pp, MOLE_ALIAS)
+
+    # ecp = ecp_left + pp_as_ecp
+    # pp = pp_left + ecp_as_pp
+    ecp = ecp_left
+    if pp_as_ecp and not isinstance(ecp_left, str):
+        # If ecp is a str, all atoms have ecp definition.  The misplaced ecp has no effects.
+        logger.info(cell, 'PBC pseudo-potentials keywords for %s found in .ecp',
+                    pp_as_ecp.keys())
+        if ecp_left:
+            pp_as_ecp.update(ecp_left)
+        ecp = pp_as_ecp
+    pp = pp_left
+    if ecp_as_pp and not isinstance(pp_left, str):
+        logger.info(cell, 'ECP keywords for %s found in PBC .pseudo',
+                    ecp_as_pp.keys())
+        if pp_left:
+            ecp_as_pp.update(pp_left)
+        pp = ecp_as_pp
+    return ecp, pp
+
 
 class Cell(mole.Mole):
     '''A Cell object holds the basic information of a crystal.
@@ -662,7 +710,7 @@ class Cell(mole.Mole):
     def build(self, dump_input=True, parse_arg=True,
               a=None, gs=None, ke_cutoff=None, precision=None, nimgs=None,
               ew_eta=None, ew_cut=None, pseudo=None, basis=None, h=None,
-              dimension=None,
+              dimension=None, ecp=None,
               *args, **kwargs):
         '''Setup Mole molecule and Cell and initialize some control parameters.
         Whenever you change the value of the attributes of :class:`Cell`,
@@ -687,6 +735,7 @@ class Cell(mole.Mole):
         if basis is not None: self.basis = basis
         if dimension is not None: self.dimension = dimension
         if precision is not None: self.precision = precision
+        if ecp is not None: self.ecp = ecp
 
         assert(self.a is not None)
         assert(self.gs is not None or self.ke_cutoff is not None)
@@ -700,6 +749,8 @@ class Cell(mole.Mole):
         # Set-up pseudopotential if it exists
         # This must happen before build() because it affects
         # tot_electrons() via atom_charge()
+
+        self.ecp, self.pseudo = classify_ecp_pseudo(self, self.ecp, self.pseudo)
         if self.pseudo is not None:
             if isinstance(self.pseudo, str):
                 # specify global pseudo for whole molecule

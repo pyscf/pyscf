@@ -35,12 +35,15 @@ Installation
 
         export PYTHONPATH=/opt:$PYTHONPATH
 
+  Note the path in `PYTHONPATH` is the directory where pyscf is installed
+  (one upper level wrt pyscf directory). DO NOT put `pyscf` in the path.
+
 * Use Intel MKL as BLAS library.  cmake with options
   `-DBLA_VENDOR=Intel10_64lp_seq`
 
         cmake -DBLA_VENDOR=Intel10_64lp_seq ..
 
-  If cmake is still not able to find MKL, just define BLAS_LIBRARIES in CMakeLists.txt
+  If cmake does not find MKL, you can define BLAS_LIBRARIES in CMakeLists.txt
 
         set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_intel_lp64.so")
         set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_sequential.so")
@@ -116,11 +119,15 @@ Known problems
   This is MKL 11.* bug for "dlopen" function.  Preloading the two libraries
   works fine with most system:
 
+```
   export LD_PRELOAD=$MKLROOT/lib/intel64/libmkl_def.so:$MKLROOT/lib/intel64/libmkl_core.so
+```
 
   or 
 
+```
   export LD_PRELOAD=$MKLROOT/lib/intel64/libmkl_avx.so:$MKLROOT/lib/intel64/libmkl_core.so:$MKLROOT/lib/intel64/libmkl_sequential.so
+```
 
 
 * h5py installation.

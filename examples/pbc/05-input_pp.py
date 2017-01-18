@@ -49,3 +49,15 @@ cell = gto.M(
     ecp = {'Cl': 'bfd-pp'},
     pseudo = {'Na': 'gthbp'})
 
+#
+# ECP can be specified in the attribute .pseudo
+#
+cell = gto.M(
+    a = '''4    0    0
+           0    4    0
+           0    0    4''',
+    gs = [5,5,5],
+    atom = 'Cl 0 0 1; Na 0 1 0',
+    basis = {'na': 'gth-szv', 'Cl': 'bfd-vdz'},
+    pseudo = {'Na': 'gthbp', 'Cl': 'bfd-pp'})
+

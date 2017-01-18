@@ -299,6 +299,42 @@ class KnowValues(unittest.TestCase):
         v0 = mol.intor('ECPscalar_sph')
         self.assertAlmostEqual(abs(v0 - v1).sum(), 0.0289322453376, 10)
 
+    def test_ecp_keyword_in_pseudo(self):
+        cell = pgto.M(
+            a = np.eye(3)*5,
+            gs = [4]*3,
+            atom = 'S 0 0 1',
+            ecp = 'lanl2dz',
+            pseudo = {'O': 'gthbp', 'Cu': 'stuttgartrsc'})
+        self.assertEqual(cell.ecp, 'lanl2dz')
+        self.assertEqual(cell.pseudo, {'O': 'gthbp'})
+
+        cell = pgto.M(
+            a = np.eye(3)*5,
+            gs = [4]*3,
+            atom = 'S 0 0 1',
+            ecp = {'na': 'lanl2dz'},
+            pseudo = {'O': 'gthbp', 'Cu': 'stuttgartrsc'})
+        self.assertEqual(cell.ecp, {'na': 'lanl2dz', 'Cu': 'stuttgartrsc'})
+        self.assertEqual(cell.pseudo, {'O': 'gthbp'})
+
+        cell = pgto.M(
+            a = np.eye(3)*5,
+            gs = [4]*3,
+            atom = 'S 0 0 1',
+            pseudo = {'O': 'gthbp', 'Cu': 'stuttgartrsc'})
+        self.assertEqual(cell.ecp, {'Cu': 'stuttgartrsc'})
+        self.assertEqual(cell.pseudo, {'O': 'gthbp'})
+
+        cell = pgto.M(
+            a = np.eye(3)*5,
+            gs = [4]*3,
+            atom = 'S 0 0 1',
+            ecp = {'S': 'gthbp', 'na': 'lanl2dz'},
+            pseudo = {'O': 'gthbp', 'Cu': 'stuttgartrsc'})
+        self.assertEqual(cell.ecp, {'na': 'lanl2dz', 'Cu': 'stuttgartrsc'})
+        self.assertEqual(cell.pseudo, {'S': 'gthbp', 'O': 'gthbp'})
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.cell")
