@@ -70,7 +70,15 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
         log.info('** Natural natural orbitals are based on the first root **')
     else:
         ci0 = ci
-    if hasattr(casscf.fcisolver, 'make_rdm1s'):
+    if ci0 is None and hasattr(casscf, 'casdm1'):
+        casdm1 = casscf.casdm1
+        mocore = mo_coeff[:,:ncore]
+        mocas = mo_coeff[:,ncore:nocc]
+        dm1a =(numpy.dot(mocore, mocore.T) * 2
+             + reduce(numpy.dot, (mocas, casdm1, mocas.T)))
+        dm1b = None
+        dm1 = dm1a
+    elif hasattr(casscf.fcisolver, 'make_rdm1s'):
         casdm1a, casdm1b = casscf.fcisolver.make_rdm1s(ci0, ncas, nelecas)
         casdm1 = casdm1a + casdm1b
         mocore = mo_coeff[:,:ncore]
@@ -112,7 +120,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
             for i,j in idx:
                 log.info('<mo-mcscf|mo-hf> %d  %d  %12.8f', i+1, j+1, s[i,j])
 
-        if hasattr(casscf.fcisolver, 'large_ci'):
+        if hasattr(casscf.fcisolver, 'large_ci') and ci is not None:
             log.info('** Largest CI components **')
             if isinstance(ci, (tuple, list)):
                 for i, civec in enumerate(ci):
