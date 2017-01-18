@@ -445,7 +445,7 @@ def eigh(a, *args, **kwargs):
 dsyev = eigh
 
 
-def pick_real_eigs(w, v, nroots):
+def pick_real_eigs(w, v, nroots, x0):
     realidx = numpy.where((w.imag < 1e-9))[0]
     idx = realidx[w[realidx].real.argsort()]
     return w[idx].real, v[:,idx].real, idx
@@ -621,7 +621,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                 heff[i,head+k] = dot(xi.conj(), axt[k])
 
         w, v = scipy.linalg.eig(heff[:space,:space])
-        e, v, idx = pick(w, v, nroots)
+        e, v, idx = pick(w, v, nroots, x0)
         e, v = _sort_by_similarity(e, v, nroots, conv, vlast, emin,
                                    heff[:space,:space])
         if e.size != elast.size:
@@ -701,7 +701,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 
     if left:
         w, vl, v = scipy.linalg.eig(heff[:space,:space], left=True)
-        e, v, idx = pick(w, v, nroots)
+        e, v, idx = pick(w, v, nroots, x0)
         vl = vl[:,idx].astype(v.dtype)
         xl = _gen_x0(vl[:nroots], xs)
         return all(conv), e, xl, x0
