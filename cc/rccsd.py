@@ -289,8 +289,6 @@ class RCCSD(ccsd.CCSD):
                     g[i] = 1.0
                     guess.append(g)
 
-        #def aop(xs):
-        #    return [self.ipccsd_matvec(x) for x in xs]
         def precond(r, e0, x0):
             return r/(e0-adiag+1e-12)
 
@@ -298,17 +296,22 @@ class RCCSD(ccsd.CCSD):
             def pickeig(w, v, nr, x0):
                 idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
                 return w[idx].real, v[:,idx].real, idx
-            evals, evecs = eig(self.ipccsd_matvec, guess, precond, pick=pickeig, nroots=nroots, verbose=7)
+            eip, evecs = eig(self.ipccsd_matvec, guess, precond, pick=pickeig, nroots=nroots, verbose=7)
         else:
-            evals, evecs = eig(self.ipccsd_matvec, guess, precond, nroots=nroots, verbose=7) 
+            eip, evecs = eig(self.ipccsd_matvec, guess, precond, nroots=nroots, verbose=7) 
 
-        self.eip = evals.real
+        self.eip = eip.real
 
-        for n, en, vn in zip(range(nroots), self.eip, evecs):
+        if nroots == 1:
+            eip, evecs = [self.eip], [evecs]
+        for n, en, vn in zip(range(nroots), eip, evecs):
             logger.info(self, 'IP root %d E = %.16g  qpwt = %0.6g', 
                         n, en, np.linalg.norm(vn[:self.nocc])**2)
         log.timer('IP-CCSD', *cput0)
-        return self.eip, evecs
+        if nroots == 1:
+            return eip[0], evecs[0]
+        else:
+            return eip, evecs
 
     def ipccsd_matvec(self, vector):
         # Ref: Nooijen and Snijders, J. Chem. Phys. 102, 1681 (1995) Eqs.(8)-(9)
@@ -450,8 +453,6 @@ class RCCSD(ccsd.CCSD):
                     g[i] = 1.0
                     guess.append(g)
 
-        #def aop(xs):
-        #    return [self.eaccsd_matvec(x) for x in xs]
         def precond(r, e0, x0):
             return r/(e0-adiag+1e-12)
 
@@ -459,18 +460,23 @@ class RCCSD(ccsd.CCSD):
             def pickeig(w, v, nr, x0):
                 idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
                 return w[idx].real, v[:,idx].real, idx
-            evals, evecs = eig(self.eaccsd_matvec, guess, precond, pick=pickeig, nroots=nroots, verbose=7)
+            eea, evecs = eig(self.eaccsd_matvec, guess, precond, pick=pickeig, nroots=nroots, verbose=7)
         else:
-            evals, evecs = eig(self.eaccsd_matvec, guess, precond, nroots=nroots, verbose=7)
+            eea, evecs = eig(self.eaccsd_matvec, guess, precond, nroots=nroots, verbose=7)
 
-        self.eea = evals.real
+        self.eea = eea.real
 
+        if nroots == 1:
+            eea, evecs = [self.eea], [evecs]
         nvir = self.nmo - self.nocc
-        for n, en, vn in zip(range(nroots), self.eea, evecs):
+        for n, en, vn in zip(range(nroots), eea, evecs):
             logger.info(self, 'EA root %d E = %.16g  qpwt = %0.6g', 
                         n, en, np.linalg.norm(vn[:nvir])**2)
         log.timer('EA-CCSD', *cput0)
-        return self.eea, evecs
+        if nroots == 1:
+            return eea[0], evecs[0]
+        else:
+            return eea, evecs
 
     def eaccsd_matvec(self,vector):
         # Ref: Nooijen and Bartlett, J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)
