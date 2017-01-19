@@ -7,12 +7,11 @@ import h5py
 from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
-from pyscf.pbc import lib as pbclib
 from pyscf.cc import rccsd
 from pyscf.cc import uintermediates as imd
 
 #einsum = np.einsum
-einsum = pbclib.einsum
+einsum = lib.einsum
 
 # This is unrestricted (U)CCSD, i.e. spin-orbital form.
 
@@ -90,17 +89,16 @@ def update_amps(cc, t1, t2, eris):
     Foo -= foo
 
     # T1 equation
-    # TODO: Does this need a conj()? Usually zero w/ canonical HF.
-    t1new = fov.copy()
+    t1new = np.array(fov).conj()
     t1new +=  einsum('ie,ae->ia',t1,Fvv)
     t1new += -einsum('ma,mi->ia',t1,Foo) 
     t1new +=  einsum('imae,me->ia',t2,Fov)
     t1new += -einsum('nf,naif->ia',t1,eris.ovov)
     t1new += -0.5*einsum('imef,maef->ia',t2,eris.ovvv)
     t1new += -0.5*einsum('mnae,mnie->ia',t2,eris.ooov)
+
     # T2 equation
-    # For conj(), see Hirata and Bartlett, Eq. (36) 
-    t2new = np.array(eris.oovv, copy=True).conj()
+    t2new = np.array(eris.oovv).conj()
     Ftmp = Fvv - 0.5*einsum('mb,me->be',t1,Fov)
     tmp = einsum('ijae,be->ijab',t2,Ftmp)
     t2new += (tmp - tmp.transpose(0,1,3,2))
@@ -131,32 +129,41 @@ def energy(cc, t1, t2, eris):
     nocc, nvir = t1.shape
     fock = eris.fock
     e = einsum('ia,ia', fock[:nocc,nocc:], t1)
-    t1t1 = einsum('ia,jb->ijab',t1,t1)
-    tau = t2 + 2*t1t1
-    eris_oovv = np.array(eris.oovv)
-    e += 0.25 * np.dot(tau.flatten(), eris_oovv.flatten())
-    #e += (0.25*np.einsum('ijab,ijab',t2,eris_oovv)
-    #      + 0.5*np.einsum('ia,jb,ijab',t1,t1,eris_oovv))
+    #t1t1 = einsum('ia,jb->ijab',t1,t1)
+    #tau = t2 + 2*t1t1
+    #e += 0.25 * np.dot(tau.flatten(), eris.oovv.flatten())
+    e += (0.25*np.einsum('ijab,ijab',t2,eris.oovv)
+          + 0.5*np.einsum('ia,jb,ijab',t1,t1,eris.oovv))
     return e.real
 
 
 class UCCSD(rccsd.RCCSD):
 
-    def __init__(self, mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
-        # TODO(TCB): Check that RCCSD init is safe on UHF input
-        rccsd.RCCSD.__init__(self, mf, frozen, mo_energy, mo_coeff, mo_occ)
-        # Spin-orbital CCSD needs a stricter tolerance
-        self.conv_tol = 1e-8
+    def __init__(self, mf, frozen=[[],[]], mo_energy=None, mo_coeff=None, mo_occ=None):
+        rccsd.RCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
+        # Spin-orbital CCSD needs a stricter tolerance than spatial-orbital
         self.conv_tol_normt = 1e-6
 
     @property
     def nocc(self):
         self._nocc = self._scf.mol.nelectron
+        if isinstance(self.frozen, (int, numpy.integer)):
+            self._nocc = int(self.mo_occ[0].sum() + self.mo_occ[1].sum()) - self.frozen
+        else:
+            mo_occ = self.mo_occ.copy()
+            for a in range(2):
+                if len(self.frozen[a]) > 0:
+                    mo_occ[a][numpy.asarray(self.frozen[a])] = 0
+            self._nocc = int(mo_occ.sum())
         return self._nocc
 
     @property
     def nmo(self):
-        self._nmo = self.mo_energy[0].size + self.mo_energy[1].size
+        if isinstance(self.frozen, (int, numpy.integer)):
+            self._nmo = len(self.mo_occ[0]) + len(self.mo_energy[1]) - self.frozen
+        else:
+            self._nmo = (len(self.mo_occ[0]) - len(self.frozen[0])
+                        + len(self.mo_occ[1]) - len(self.frozen[1]))
         return self._nmo
 
     def init_amps(self, eris):
@@ -173,24 +180,29 @@ class UCCSD(rccsd.RCCSD):
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
 
-    def ccsd(self, t1=None, t2=None, eris=None):
+    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         self.eris = eris
         self.dump_flags()
-        self._conv, self.ecc, self.t1, self.t2 = \
-                kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
-                       tol=self.conv_tol, tolnormt=self.conv_tol_normt,
-                       verbose=self.verbose)
-        if self._conv:
-            logger.info(self, 'CCSD converged')
+        if mbpt2:
+            cctyp = 'MBPT2'
+            self.e_corr, self.t1, self.t2 = self.init_amps(eris)
         else:
-            logger.info(self, 'CCSD not converge')
+            cctyp = 'CCSD'
+            self.converged, self.e_corr, self.t1, self.t2 = \
+                    kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
+                           tol=self.conv_tol, tolnormt=self.conv_tol_normt,
+                           verbose=self.verbose)
+            if self.converged:
+                logger.info(self, 'CCSD converged')
+            else:
+                logger.info(self, 'CCSD not converged')
         if self._scf.e_tot == 0:
-            logger.info(self, 'E_corr = %.16g', self.ecc)
+            logger.note(self, 'E_corr = %.16g', self.e_corr)
         else:
-            logger.info(self, 'E(CCSD) = %.16g  E_corr = %.16g',
-                        self.ecc+self._scf.e_tot, self.ecc)
-        return self.ecc, self.t1, self.t2
+            logger.note(self, 'E(%s) = %.16g  E_corr = %.16g',
+                        cctyp, self.e_tot, self.e_corr)
+        return self.e_corr, self.t1, self.t2
 
     def ao2mo(self, mo_coeff=None):
         return _ERIS(self, mo_coeff)
@@ -473,38 +485,79 @@ class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore', 
                  ao2mofn=ao2mo.outcore.general_iofree):
         cput0 = (time.clock(), time.time())
+        moidx = numpy.ones(cc.mo_occ.shape, dtype=numpy.bool)
+        if isinstance(cc.frozen, (int, numpy.integer)):
+            #TODO: Handle this better; maybe assume `frozen' lowest in energy
+            print("Error: integer number of frozen orbitals is ambiguous")
+            raise NotImplementedError
+        else:
+            for a in range(2):
+                if len(cc.frozen[a]) > 0:
+                    moidx[a][numpy.asarray(cc.frozen[a])] = False
         if mo_coeff is None:
-            self.mo_coeff = mo_coeff = cc.mo_coeff
-            self.fock = numpy.diag(np.append(cc.mo_energy[np.array(cc.mo_occ,dtype=bool)], 
-                                             cc.mo_energy[np.logical_not(np.array(cc.mo_occ,dtype=bool))])).astype(mo_coeff.dtype)
+            # Note: mo_coeff will now reflect frozen orbs
+            self.mo_coeff = mo_coeff = [cc.mo_coeff[0][:,moidx[0]], 
+                                        cc.mo_coeff[1][:,moidx[1]]]
+        else:
+            self.mo_coeff = mo_coeff = [mo_coeff[0][:,moidx[0]], 
+                                        mo_coeff[1][:,moidx[1]]]
+        dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
+        fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
+        fockab = list()
+        for a in range(2):
+            fockab.append( reduce(numpy.dot, (mo_coeff[a].T, fockao[a], mo_coeff[a])) )
 
         nocc = cc.nocc
+        nao = cc.mo_coeff[0].shape[0]
         nmo = cc.nmo
         nvir = nmo - nocc
         mem_incore, mem_outcore, mem_basic = rccsd._mem_usage(nocc, nvir)
-        mem_now = pyscf.lib.current_memory()[0]
+        mem_now = lib.current_memory()[0]
 
-        # Convert to spin-orbitals and anti-symmetrize 
-        so_coeff = np.zeros((nmo/2,nmo), dtype=mo_coeff.dtype)
-        nocc_a = int(sum(cc.mo_occ[0]))
-        nocc_b = int(sum(cc.mo_occ[1]))
-        nvir_a = nmo/2 - nocc_a
-        #nvir_b = nmo/2 - nocc_b
+        # Convert to spin-orbitals
+        so_coeff = np.zeros((nao, nmo), dtype=mo_coeff[0].dtype)
+        nocc_a = int(sum(cc.mo_occ[0]*moidx[0]))
+        nocc_b = int(sum(cc.mo_occ[1]*moidx[1]))
+        nmo_a = len(cc.mo_occ[0]) - len(cc.frozen[0])
+        nmo_b = len(cc.mo_occ[1]) - len(cc.frozen[1])
+        nvir_a = nmo_a - nocc_a
+        nvir_b = nmo_b - nocc_b
+        oa = range(0,nocc_a)
+        ob = range(nocc_a,nocc)
+        va = range(nocc,nocc+nvir_a)
+        vb = range(nocc+nvir_a,nmo)
         spin = np.zeros(nmo, dtype=int)
-        spin[:nocc_a] = 0
-        spin[nocc_a:nocc] = 1
-        spin[nocc:nocc+nvir_a] = 0
-        spin[nocc+nvir_a:nmo] = 1
-        so_coeff[:,:nocc_a] = mo_coeff[0][:,:nocc_a]
-        so_coeff[:,nocc_a:nocc] = mo_coeff[1][:,:nocc_b]
-        so_coeff[:,nocc:nocc+nvir_a] = mo_coeff[0][:,nocc_a:nmo/2]
-        so_coeff[:,nocc+nvir_a:nmo] = mo_coeff[1][:,nocc_b:nmo/2]
+        spin[oa] = 0
+        spin[ob] = 1
+        spin[va] = 0
+        spin[vb] = 1
+        so_coeff[:,oa] = mo_coeff[0][:,:nocc_a]
+        so_coeff[:,ob] = mo_coeff[1][:,:nocc_b]
+        so_coeff[:,va] = mo_coeff[0][:,nocc_a:nmo_a]
+        so_coeff[:,vb] = mo_coeff[1][:,nocc_b:nmo_b]
+
+        fock = np.zeros((nmo, nmo))
+        fock[np.ix_(oa,oa)] = fockab[0][:nocc_a,:nocc_a]
+        fock[np.ix_(oa,va)] = fockab[0][:nocc_a,nocc_a:]
+        fock[np.ix_(va,oa)] = fockab[0][nocc_a:,:nocc_a]
+        fock[np.ix_(va,va)] = fockab[0][nocc_a:,nocc_a:]
+        fock[np.ix_(ob,ob)] = fockab[1][:nocc_b,:nocc_b]
+        fock[np.ix_(ob,vb)] = fockab[1][:nocc_b,nocc_b:]
+        fock[np.ix_(vb,ob)] = fockab[1][nocc_b:,:nocc_b]
+        fock[np.ix_(vb,vb)] = fockab[1][nocc_b:,nocc_b:]
+
+        idxo = np.diagonal(fock[:nocc,:nocc]).argsort()
+        idxv = nocc + np.diagonal(fock[nocc:,nocc:]).argsort()
+        idx = np.concatenate((idxo,idxv))
+        spin = spin[idx]
+        so_coeff = so_coeff[:,idx]
+        self.fock = fock[:, idx][idx]
 
         log = logger.Logger(cc.stdout, cc.verbose)
         if (method == 'incore' and (mem_incore+mem_now < cc.max_memory) 
             or cc.mol.incore_anyway):
             eri = ao2mofn(cc._scf.mol, (so_coeff,so_coeff,so_coeff,so_coeff), compact=0)
-            if mo_coeff.dtype == np.float: eri = eri.real
+            if mo_coeff[0].dtype == np.float: eri = eri.real
             eri = eri.reshape((nmo,)*4)
             for i in range(nmo):
                 for j in range(i):
@@ -527,7 +580,7 @@ class _ERIS:
             self.feri1 = h5py.File(_tmpfile1.name)
             orbo = so_coeff[:,:nocc]
             orbv = so_coeff[:,nocc:]
-            if mo_coeff.dtype == np.complex: ds_type = 'c16'
+            if mo_coeff[0].dtype == np.complex: ds_type = 'c16'
             else: ds_type = 'f8'
             self.oooo = self.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), ds_type)
             self.ooov = self.feri1.create_dataset('ooov', (nocc,nocc,nocc,nvir), ds_type)
@@ -540,7 +593,7 @@ class _ERIS:
             cput1 = time.clock(), time.time()
             # <ij||pq> = <ij|pq> - <ij|qp> = (ip|jq) - (iq|jp)
             buf = ao2mofn(cc._scf.mol, (orbo,so_coeff,orbo,so_coeff), compact=0)
-            if mo_coeff.dtype == np.float: buf = buf.real
+            if mo_coeff[0].dtype == np.float: buf = buf.real
             buf = buf.reshape((nocc,nmo,nocc,nmo))
             for i in range(nocc):
                 for p in range(nmo):
@@ -558,7 +611,7 @@ class _ERIS:
             cput1 = time.clock(), time.time()
             # <ia||pq> = <ia|pq> - <ia|qp> = (ip|aq) - (iq|ap)
             buf = ao2mofn(cc._scf.mol, (orbo,so_coeff,orbv,so_coeff), compact=0)
-            if mo_coeff.dtype == np.float: buf = buf.real
+            if mo_coeff[0].dtype == np.float: buf = buf.real
             buf = buf.reshape((nocc,nmo,nvir,nmo))
             for p in range(nmo):
                 for i in range(nocc):
@@ -577,7 +630,7 @@ class _ERIS:
             for a in range(nvir):
                 orbva = orbv[:,a].reshape(-1,1)
                 buf = ao2mofn(cc._scf.mol, (orbva,orbv,orbv,orbv), compact=0)
-                if mo_coeff.dtype == np.float: buf = buf.real
+                if mo_coeff[0].dtype == np.float: buf = buf.real
                 buf = buf.reshape((1,nvir,nvir,nvir))
                 for b in range(nvir):
                     if spin[nocc+a] != spin[nocc+b]:
@@ -647,8 +700,8 @@ class _IMDS:
 
         # 3 or 4 virtuals
         self.Wvovv = imd.Wvovv(t1,t2,eris)
-        self.Wvvvo = imd.Wvvvo(t1,t2,eris)
         self.Wvvvv = imd.Wvvvv(t1,t2,eris)
+        self.Wvvvo = imd.Wvvvo(t1,t2,eris,self.Wvvvv)
 
         log.timer('EOM-CCSD EA intermediates', *cput0)
 

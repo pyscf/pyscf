@@ -2,11 +2,9 @@ import tempfile
 import h5py
 import numpy as np
 from pyscf import lib
-from pyscf.pbc import lib as pbclib
-from pyscf.cc.ccsd import _cp
 
 #einsum = np.einsum
-einsum = pbclib.einsum
+einsum = lib.einsum
 
 # Ref: Gauss and Stanton, J. Chem. Phys. 103, 3561 (1995) Table III
 
@@ -22,7 +20,7 @@ def cc_Fvv(t1,t2,eris):
     nocc, nvir = t1.shape
     fov = eris.fock[:nocc,nocc:]
     fvv = eris.fock[nocc:,nocc:]
-    eris_vovv = _cp(eris.ovvv).transpose(1,0,3,2)
+    eris_vovv = np.array(eris.ovvv).transpose(1,0,3,2)
     tau_tilde = make_tau(t2,t1,t1,fac=0.5)
     Fae = ( fvv - 0.5*einsum('me,ma->ae',fov,t1)
             + einsum('mf,amef->ae',t1,eris_vovv)
@@ -53,7 +51,7 @@ def cc_Woooo(t1,t2,eris):
 
 def cc_Wvvvv(t1,t2,eris):
     tau = make_tau(t2,t1,t1)
-    #eris_vovv = _cp(eris.ovvv).transpose(1,0,3,2)
+    #eris_vovv = np.array(eris.ovvv).transpose(1,0,3,2)
     #tmp = einsum('mb,amef->abef',t1,eris_vovv)
     #Wabef = eris.vvvv - tmp + tmp.transpose(1,0,2,3)
     #Wabef += 0.25*einsum('mnab,mnef->abef',tau,eris.oovv)
@@ -63,14 +61,16 @@ def cc_Wvvvv(t1,t2,eris):
     fimd = h5py.File(_tmpfile1.name)
     nocc, nvir = t1.shape
     Wabef = fimd.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)
-    tmp = einsum('mb,mafe->abef',t1,eris.ovvv)
-    Wabef[:] = eris.vvvv[:] - tmp[:] + tmp.transpose(1,0,2,3)[:]
-    Wabef[:] += 0.25*einsum('mnab,mnef->abef',tau,eris.oovv)
+    for a in range(nvir):
+        Wabef[a] = eris.vvvv[a] 
+        Wabef[a] -= einsum('mb,mfe->bef',t1,eris.ovvv[:,a,:,:]) 
+        Wabef[a] += einsum('m,mbfe->bef',t1[:,a],eris.ovvv) 
+        Wabef[a] += 0.25*einsum('mnb,mnef->bef',tau[:,:,a,:],eris.oovv)
     return Wabef
 
 def cc_Wovvo(t1,t2,eris):
-    eris_ovvo = - _cp(eris.ovov).transpose(0,1,3,2)
-    eris_oovo = - _cp(eris.ooov).transpose(0,1,3,2)
+    eris_ovvo = -np.array(eris.ovov).transpose(0,1,3,2)
+    eris_oovo = -np.array(eris.ooov).transpose(0,1,3,2)
     Wmbej = eris_ovvo.copy()
     Wmbej +=  einsum('jf,mbef->mbej',t1,eris.ovvv)
     Wmbej += -einsum('nb,mnej->mbej',t1,eris_oovo)
@@ -108,28 +108,33 @@ def Wvvvv(t1,t2,eris):
     fimd = h5py.File(_tmpfile1.name)
     nocc, nvir = t1.shape
     Wabef = fimd.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)
-    #TODO: Wasteful to create cc_Wvvvv twice
-    Wabef[:] = cc_Wvvvv(t1,t2,eris)[:]
-    Wabef[:] += 0.25*einsum('mnab,mnef->abef',tau,eris.oovv) 
+    #_cc_Wvvvv = cc_Wvvvv(t1,t2,eris)
+    for a in range(nvir):
+        #Wabef[a] = _cc_Wvvvv[a]
+        Wabef[a] = eris.vvvv[a] 
+        Wabef[a] -= einsum('mb,mfe->bef',t1,eris.ovvv[:,a,:,:]) 
+        Wabef[a] += einsum('m,mbfe->bef',t1[:,a],eris.ovvv) 
+        #Wabef[a] += 0.25*einsum('mnb,mnef->bef',tau[:,:,a,:],eris.oovv)
+
+        #Wabef[a] += 0.25*einsum('mnb,mnef->bef',tau[:,:,a,:],eris.oovv) 
+        Wabef[a] += 0.5*einsum('mnb,mnef->bef',tau[:,:,a,:],eris.oovv) 
     return Wabef
 
 def Wovvo(t1,t2,eris):
     Wmbej = cc_Wovvo(t1,t2,eris) - 0.5*einsum('jnfb,mnef->mbej',t2,eris.oovv)
     return Wmbej
 
-# Indices in the following can be safely permuted.
-
 def Wooov(t1,t2,eris):
     Wmnie = eris.ooov + einsum('if,mnfe->mnie',t1,eris.oovv)
     return Wmnie
 
 def Wvovv(t1,t2,eris):
-    eris_vovv = - _cp(eris.ovvv).transpose(1,0,2,3)
+    eris_vovv = -np.array(eris.ovvv).transpose(1,0,2,3)
     Wamef = eris_vovv - einsum('na,nmef->amef',t1,eris.oovv)
     return Wamef
 
 def Wovoo(t1,t2,eris):
-    eris_ovvo = - _cp(eris.ovov).transpose(0,1,3,2)
+    eris_ovvo = -np.array(eris.ovov).transpose(0,1,3,2)
     tmp1 = einsum('mnie,jnbe->mbij',eris.ooov,t2)
     tmp2 = ( einsum('ie,mbej->mbij',t1,eris_ovvo)
             - einsum('ie,njbf,mnef->mbij',t1,t2,eris.oovv) )
@@ -143,10 +148,10 @@ def Wovoo(t1,t2,eris):
               + tmp2 - tmp2.transpose(0,1,3,2) )
     return Wmbij
 
-def Wvvvo(t1,t2,eris):
-    eris_ovvo = - _cp(eris.ovov).transpose(0,1,3,2)
-    eris_vvvo = - _cp(eris.ovvv).transpose(2,3,1,0).conj()
-    eris_oovo = - _cp(eris.ooov).transpose(0,1,3,2)
+def Wvvvo(t1,t2,eris,_Wvvvv=None):
+    eris_ovvo = -np.array(eris.ovov).transpose(0,1,3,2)
+    eris_vvvo = -np.array(eris.ovvv).transpose(2,3,1,0).conj()
+    eris_oovo = -np.array(eris.ooov).transpose(0,1,3,2)
     tmp1 = einsum('mbef,miaf->abei',eris.ovvv,t2)
     tmp2 = ( einsum('ma,mbei->abei',t1,eris_ovvo)
             - einsum('ma,nibf,mnef->abei',t1,t2,eris.oovv) )
@@ -158,21 +163,20 @@ def Wvvvo(t1,t2,eris):
     Wabei += -tmp1 + tmp1.transpose(1,0,2,3)
     Wabei += -tmp2 + tmp2.transpose(1,0,2,3) 
     nocc,nvir = t1.shape
-    #TODO: Wasteful to create Wvvvv twice (now cc_Wvvvv three times!)
-    _Wvvvv = Wvvvv(t1,t2,eris)
+    if _Wvvvv is None:
+        _Wvvvv = Wvvvv(t1,t2,eris)
     for a in range(nvir):
         Wabei[a] += einsum('if,bef->bei',t1,_Wvvvv[a])
     return Wabei
 
 def Wvvvo_incore(t1,t2,eris):
-    eris_ovvo = - _cp(eris.ovov).transpose(0,1,3,2)
-    eris_vvvo = - _cp(eris.ovvv).transpose(2,3,1,0).conj()
-    eris_oovo = - _cp(eris.ooov).transpose(0,1,3,2)
+    eris_ovvo = -np.array(eris.ovov).transpose(0,1,3,2)
+    eris_vvvo = -np.array(eris.ovvv).transpose(2,3,1,0).conj()
+    eris_oovo = -np.array(eris.ooov).transpose(0,1,3,2)
     tmp1 = einsum('mbef,miaf->abei',eris.ovvv,t2)
     tmp2 = ( einsum('ma,mbei->abei',t1,eris_ovvo)
             - einsum('ma,nibf,mnef->abei',t1,t2,eris.oovv) )
     FFov = Fov(t1,t2,eris)
-    #TODO: Wasteful to create Wvvvv twice (now cc_Wvvvv three times!)
     WWvvvv = Wvvvv(t1,t2,eris)
     tau = make_tau(t2,t1,t1)
     Wabei = ( eris_vvvo - einsum('me,miab->abei',FFov,t2)
