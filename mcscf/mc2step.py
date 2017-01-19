@@ -119,7 +119,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
                 casscf.canonicalize(mo, fcivec, eris, False, casscf.natorb, casdm1, log)
         if casscf.natorb: # dump_chk may save casdm1
             occ, ucas = casscf._eig(-casdm1, ncore, nocc)[0]
-            if sort: occ = numpy.sort(occ)
             casdm1 = -occ
 
     if dump_chk:
