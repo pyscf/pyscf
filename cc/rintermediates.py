@@ -2,10 +2,9 @@ import tempfile
 import numpy as np
 import h5py
 from pyscf import lib
-from pyscf.pbc import lib as pbclib
 
 #einsum = np.einsum
-einsum = pbclib.einsum
+einsum = lib.einsum
 
 # This is restricted (R)CCSD
 # Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004)
@@ -82,9 +81,13 @@ def cc_Wvvvv(t1,t2,eris):
     fimd = h5py.File(_tmpfile1.name)
     nocc,nvir = t1.shape
     Wabcd = fimd.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)
-    Wabcd[:] = eris.vvvv[:]
-    Wabcd[:] += -einsum('akcd,kb->abcd',eris.vovv,t1)
-    Wabcd[:] += -einsum('bkdc,ka->abcd',eris.vovv,t1)
+    # avoid transpose inside loop
+    ovvv = np.array(eris.vovv).transpose(1,0,3,2)
+    for a in range(nvir):
+        Wabcd[a] = eris.vvvv[a]
+        Wabcd[a] += -einsum('kcd,kb->bcd',eris.vovv[a],t1)
+        #Wabcd[a] += -einsum('bkdc,k->bcd',eris.vovv,t1[:,a])
+        Wabcd[a] += -einsum('k,kbcd->bcd',t1[:,a],ovvv)
     return Wabcd
 
 def cc_Wvoov(t1,t2,eris):
@@ -165,20 +168,24 @@ def Wvvvv(t1,t2,eris):
     fimd = h5py.File(_tmpfile1.name)
     nocc,nvir = t1.shape
     Wabcd = fimd.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)
-    Wabcd[:] = eris.vvvv[:]
-    Wabcd[:] += einsum('klcd,klab->abcd',eris.oovv,t2)
-    Wabcd[:] += einsum('klcd,ka,lb->abcd',eris.oovv,t1,t1)
-    Wabcd[:] += -einsum('alcd,lb->abcd',eris.vovv,t1)
-    Wabcd[:] += -einsum('bkdc,ka->abcd',eris.vovv,t1)
+    for a in range(nvir):
+        Wabcd[a] = eris.vvvv[a]
+        Wabcd[a] += -einsum('lcd,lb->bcd',eris.vovv[a],t1)
+        Wabcd[a] += -einsum('bkdc,k->bcd',eris.vovv,t1[:,a])
+        Wabcd[a] += einsum('klcd,klb->bcd',eris.oovv,t2[:,:,a,:])
+        Wabcd[a] += einsum('klcd,k,lb->bcd',eris.oovv,t1[:,a],t1)
     return Wabcd
 
 def Wvvvo(t1,t2,eris,_Wvvvv=None):
     nocc,nvir = t1.shape
     Wabcj = np.array(eris.vovv).transpose(2,3,0,1).conj()
-    if _Wvvvv is None:
-        _Wvvvv = Wvvvv(t1,t2,eris)
-    for a in range(nvir):
-        Wabcj[a] += einsum('bcd,jd->bcj',_Wvvvv[a],t1)
+    # Check if t1=0 (HF+MBPT(2))
+    # einsum will check, but don't make vvvv if you can avoid it!
+    if np.any(t1):
+        if _Wvvvv is None:
+            _Wvvvv = Wvvvv(t1,t2,eris)
+        for a in range(nvir):
+            Wabcj[a] += einsum('bcd,jd->bcj',_Wvvvv[a],t1)
     Wabcj +=  -einsum('alcj,lb->abcj',W1ovov(t1,t2,eris).transpose(1,0,3,2),t1)
     Wabcj +=  -einsum('kbcj,ka->abcj',W1ovvo(t1,t2,eris),t1)
     Wabcj += 2*einsum('alcd,ljdb->abcj',eris.vovv,t2)

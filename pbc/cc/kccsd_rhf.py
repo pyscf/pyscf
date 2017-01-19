@@ -13,14 +13,13 @@ import pyscf.pbc.tools.pbc as tools
 from pyscf import lib
 import pyscf.ao2mo
 from pyscf.lib import logger
-from pyscf.pbc import lib as pbclib
 import pyscf.cc
 import pyscf.cc.ccsd
 from pyscf.pbc.cc import kintermediates_rhf as imdk
 from pyscf.pbc.lib.linalg_helper import eigs
 
 #einsum = np.einsum
-einsum = pbclib.einsum
+einsum = lib.einsum
 
 # This is restricted (R)CCSD
 # following Hirata, ..., Barlett, J. Chem. Phys. 120, 2581 (2004)
@@ -243,7 +242,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
             kb = kconserv[ki,ka,kj]
             eia = np.diagonal(foo[ki]).reshape(-1,1) - np.diagonal(fvv[ka])
             ejb = np.diagonal(foo[kj]).reshape(-1,1) - np.diagonal(fvv[kb])
-            eijab = pyscf.lib.direct_sum('ia,jb->ijab',eia,ejb)
+            eijab = lib.direct_sum('ia,jb->ijab',eia,ejb)
             t2new[ki,kj,ka] /= eijab
 
     time0 = log.timer_debug1('update t1 t2', *time0)
@@ -315,7 +314,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 kb = kconserv[ki,ka,kj]
                 eia = np.diagonal(foo[ki]).reshape(-1,1) - np.diagonal(fvv[ka])
                 ejb = np.diagonal(foo[kj]).reshape(-1,1) - np.diagonal(fvv[kb])
-                eijab = pyscf.lib.direct_sum('ia,jb->ijab',eia,ejb)
+                eijab = lib.direct_sum('ia,jb->ijab',eia,ejb)
                 woovv[ki,kj,ka] = (2*eris_oovv[ki,kj,ka] - eris_oovv[ki,kj,kb].transpose(0,1,3,2))
                 t2[ki,kj,ka] = eris_oovv[ki,kj,ka] / eijab
 
@@ -717,7 +716,7 @@ class _ERIS:
         nmo = cc.nmo()
         nvir = nmo - nocc
         mem_incore, mem_outcore, mem_basic = pyscf.cc.ccsd._mem_usage(nocc, nvir)
-        mem_now = pyscf.lib.current_memory()[0]
+        mem_now = lib.current_memory()[0]
 
         log = logger.Logger(cc.stdout, cc.verbose)
         if (method == 'incore' and (mem_incore+mem_now < cc.max_memory)
