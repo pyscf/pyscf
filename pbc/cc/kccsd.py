@@ -4,22 +4,19 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import numpy
-import pyscf.pbc.scf
-import pyscf.pbc.tools.pbc as tools
-
-import pyscf.cc
-import pyscf.cc.ccsd
-
 import time
+import numpy
 from functools import reduce
 
-import pyscf.lib
+import pyscf.pbc.tools.pbc as tools
+from pyscf import lib
 from pyscf.lib import logger
-
+import pyscf.cc
+import pyscf.cc.ccsd
 from pyscf.pbc.cc import kintermediates as imdk
-from pyscf.pbc import lib as pbclib
-einsum = pbclib.einsum
+
+#einsum = np.einsum
+einsum = lib.einsum
 
 def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
            max_memory=2000, verbose=logger.INFO):
@@ -46,7 +43,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     eccsd = 0
 
     if cc.diis:
-        adiis = pyscf.lib.diis.DIIS(cc, cc.diis_file)
+        adiis = lib.diis.DIIS(cc, cc.diis_file)
         adiis.space = cc.diis_space
     else:
         adiis = lambda t1,t2,*args: (t1,t2)
@@ -415,7 +412,7 @@ class _ERIS:
         nmo = cc.nmo()
         nvir = nmo - nocc
         mem_incore, mem_outcore, mem_basic = pyscf.cc.ccsd._mem_usage(nocc, nvir)
-        mem_now = pyscf.lib.current_memory()[0]
+        mem_now = lib.current_memory()[0]
 
         # Convert to spin-orbitals and anti-symmetrize
         so_coeff = numpy.zeros((nkpts,nmo/2,nmo),dtype=numpy.complex128)

@@ -5,12 +5,12 @@
 #
 
 #import numpy as np
-from pyscf.pbc import lib as pbclib
+from pyscf import lib
 import pyscf.pbc.tools.pbc as tools
 import numpy
 
 #einsum = np.einsum
-einsum = pbclib.einsum
+einsum = lib.einsum
 
 #################################################
 # FOLLOWING:                                    #
