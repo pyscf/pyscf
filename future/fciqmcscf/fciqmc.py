@@ -395,7 +395,7 @@ def write_integrals_file(h1e, eri, norb, neleca, nelecb, fciqmcci, ecore=0):
     integralFile = os.path.join(fciqmcci.scratchDirectory,fciqmcci.integralFile)
     # Ensure 4-fold symmetry.
     eri = pyscf.ao2mo.restore(4, eri, norb)
-    if fciqmcci.mol.symmetry and fciqmcci.orbsym:
+    if fciqmcci.mol.symmetry and fciqmcci.orbsym is not []:
         orbsym = [IRREP_MAP[fciqmcci.groupname][i] for i in fciqmcci.orbsym]
     else:
         orbsym = []
