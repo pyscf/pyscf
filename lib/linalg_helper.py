@@ -421,7 +421,9 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
                   icyc, space, max_dx_norm, e, de[ide], norm_min)
         if len(xt) == 0:
-            log.debug('Linear dependency in trial subspace')
+            log.debug('Linear dependency in trial subspace. |r| for each state %s',
+                     dx_norm)
+            conv = [conv[k] or (norm < toloose) for k,norm in enumerate(dx_norm)]
             break
 
         max_dx_last = max_dx_norm
@@ -693,7 +695,9 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
                   icyc, space, max_dx_norm, e, de[ide], norm_min)
         if len(xt) == 0:
-            log.debug('Linear dependency in trial subspace')
+            log.debug('Linear dependency in trial subspace. |r| for each state %s',
+                     dx_norm)
+            conv = [conv[k] or (norm < toloose) for k,norm in enumerate(dx_norm)]
             break
 
         max_dx_last = max_dx_norm
@@ -969,7 +973,9 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
         log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
                   icyc, space, max(dx_norm), e, de[ide], norm)
         if len(xt) == 0:
-            log.debug('Linear dependency in trial subspace')
+            log.debug('Linear dependency in trial subspace. |r| for each state %s',
+                     dx_norm)
+            conv = all(norm < toloose for norm in dx_norm)
             break
 
         fresh_start = fresh_start or (space+len(xt) > max_space)
