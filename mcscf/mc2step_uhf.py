@@ -24,7 +24,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     ncore = casscf.ncore
     eris = casscf.ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, log, locals())
-    if casscf.ncas == nmo:
+    if casscf.ncas == nmo and not casscf.internal_rotation:
         return True, e_tot, e_ci, fcivec, mo
 
     if conv_tol_grad is None:

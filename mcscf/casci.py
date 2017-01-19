@@ -206,12 +206,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         idx = numpy.argsort(occ)
         occ = occ[idx]
         ucas = ucas[:,idx]
-
-    occ = -occ
-    mo_occ = numpy.zeros(mo_coeff.shape[1])
-    mo_occ[:ncore] = 2
-    mo_occ[ncore:nocc] = occ
-
+# restore phase
 # where_natorb gives the location of the natural orbital for the input cas
 # orbitals.  gen_strings4orblist map thes sorted strings (on CAS orbital) to
 # the unsorted determinant strings (on natural orbital). e.g.  (3o,2e) system
@@ -225,24 +220,39 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
 #       [2(=0B011), 0(=0B101), 1(=0B110)]
 # to indicate which CASorb-strings address to be loaded in each natorb-strings slot
     where_natorb = mo_1to1map(ucas)
-    #guide_stringsa = fci.cistring.gen_strings4orblist(where_natorb, nelecas[0])
-    #guide_stringsb = fci.cistring.gen_strings4orblist(where_natorb, nelecas[1])
-    #old_det_idxa = numpy.argsort(guide_stringsa)
-    #old_det_idxb = numpy.argsort(guide_stringsb)
-    #ci0 = ci[old_det_idxa[:,None],old_det_idxb]
-    if isinstance(ci, numpy.ndarray):
-        ci0 = fci.addons.reorder(ci, nelecas, where_natorb)
-    elif isinstance(ci, (tuple, list)) and isinstance(ci[0], numpy.ndarray):
-        # for state-average eigenfunctions
-        ci0 = [fci.addons.reorder(x, nelecas, where_natorb) for x in ci]
-    else:
-        log.info('FCI vector not available, so not using old wavefunction as initial guess')
-        ci0 = None
-
-# restore phase, to ensure the reordered ci vector is the correct initial guess
     for i, k in enumerate(where_natorb):
         if ucas[i,k] < 0:
             ucas[:,k] *= -1
+
+    occ = -occ
+    mo_occ = numpy.zeros(mo_coeff.shape[1])
+    mo_occ[:ncore] = 2
+    mo_occ[ncore:nocc] = occ
+
+    if isinstance(ci, numpy.ndarray):
+        fcivec = fci.addons.transform_ci_for_orbital_rotation(ci, ncas, nelecas, ucas)
+    elif isinstance(ci, (tuple, list)) and isinstance(ci[0], numpy.ndarray):
+        # for state-average eigenfunctions
+        fcivec = [fci.addons.transform_ci_for_orbital_rotation(x, ncas, nelecas, ucas)
+                  for x in ci]
+    else:
+        log.info('FCI vector not available, call CASCI for wavefunction')
+        mocas = mo_coeff1[:,ncore:nocc]
+        h1eff = reduce(numpy.dot, (mocas.T, mc.get_hcore(), mocas))
+        if eris is not None and hasattr(eris, 'ppaa'):
+            h1eff += reduce(numpy.dot, (ucas.T, eris.vhf_c[ncore:nocc,ncore:nocc], ucas))
+            aaaa = ao2mo.restore(4, eris.ppaa[ncore:nocc,ncore:nocc,:,:], ncas)
+            aaaa = ao2mo.incore.full(aaaa, ucas)
+        else:
+            dm_core = numpy.dot(mo_coeff[:,:ncore]*2, mo_coeff[:,:ncore].T)
+            vj, vk = mc._scf.get_jk(mc.mol, dm_core)
+            h1eff += reduce(numpy.dot, (mocas.T, vj-vk*.5, mocas))
+            aaaa = ao2mo.kernel(mc.mol, mocas)
+        max_memory = max(400, mc.max_memory-lib.current_memory()[0])
+        e_cas, fcivec = mc.fcisolver.kernel(h1eff, aaaa, ncas, nelecas,
+                                            max_memory=max_memory, verbose=log)
+        log.debug('In Natural orbital, CI energy = %.12g', e_cas)
+
     mo_coeff1 = mo_coeff.copy()
     mo_coeff1[:,ncore:nocc] = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
     if log.verbose >= logger.INFO:
@@ -262,22 +272,6 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             for i,j in idx:
                 log.info('<CAS-nat-orb|mo-hf>  %d  %d  %12.8f',
                          ncore+i+1, j+1, s[i,j])
-
-    mocas = mo_coeff1[:,ncore:nocc]
-    h1eff = reduce(numpy.dot, (mocas.T, mc.get_hcore(), mocas))
-    if eris is not None and hasattr(eris, 'ppaa'):
-        h1eff += reduce(numpy.dot, (ucas.T, eris.vhf_c[ncore:nocc,ncore:nocc], ucas))
-        aaaa = ao2mo.restore(4, eris.ppaa[ncore:nocc,ncore:nocc,:,:], ncas)
-        aaaa = ao2mo.incore.full(aaaa, ucas)
-    else:
-        dm_core = numpy.dot(mo_coeff[:,:ncore]*2, mo_coeff[:,:ncore].T)
-        vj, vk = mc._scf.get_jk(mc.mol, dm_core)
-        h1eff += reduce(numpy.dot, (mocas.T, vj-vk*.5, mocas))
-        aaaa = ao2mo.kernel(mc.mol, mocas)
-    max_memory = max(400, mc.max_memory-lib.current_memory()[0])
-    e_cas, fcivec = mc.fcisolver.kernel(h1eff, aaaa, ncas, nelecas, ci0=ci0,
-                                        max_memory=max_memory, verbose=log)
-    log.debug('In Natural orbital, CI energy = %.12g', e_cas)
     return mo_coeff1, fcivec, mo_occ
 
 def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
@@ -689,6 +683,7 @@ class CASCI(lib.StreamObject):
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
+    from pyscf import mcscf
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None#"out_h2o"
@@ -703,51 +698,52 @@ if __name__ == '__main__':
 
     m = scf.RHF(mol)
     ehf = m.scf()
-    mc = CASCI(m, 4, 4)
+    mc = mcscf.CASSCF(m, 4, 4)
     mc.fcisolver = fci.solver(mol)
-    emc = mc.casci()[0]
+    mc.natorb = 1
+    emc = mc.kernel()[0]
     print(ehf, emc, emc-ehf)
     #-75.9577817425 -75.9624554777 -0.00467373522233
     print(emc+75.9624554777)
 
-    mc = CASCI(m, 4, (3,1))
-    #mc.fcisolver = fci.direct_spin1
-    mc.fcisolver = fci.solver(mol, False)
-    emc = mc.casci()[0]
-    print(emc - -75.439016172976)
-
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = "out_casci"
-    mol.atom = [
-        ["C", (-0.65830719,  0.61123287, -0.00800148)],
-        ["C", ( 0.73685281,  0.61123287, -0.00800148)],
-        ["C", ( 1.43439081,  1.81898387, -0.00800148)],
-        ["C", ( 0.73673681,  3.02749287, -0.00920048)],
-        ["C", (-0.65808819,  3.02741487, -0.00967948)],
-        ["C", (-1.35568919,  1.81920887, -0.00868348)],
-        ["H", (-1.20806619, -0.34108413, -0.00755148)],
-        ["H", ( 1.28636081, -0.34128013, -0.00668648)],
-        ["H", ( 2.53407081,  1.81906387, -0.00736748)],
-        ["H", ( 1.28693681,  3.97963587, -0.00925948)],
-        ["H", (-1.20821019,  3.97969587, -0.01063248)],
-        ["H", (-2.45529319,  1.81939187, -0.00886348)],]
-
-    mol.basis = {'H': 'sto-3g',
-                 'C': 'sto-3g',}
-    mol.build()
-
-    m = scf.RHF(mol)
-    ehf = m.scf()
-    mc = CASCI(m, 9, 8)
-    mc.fcisolver = fci.solver(mol)
-    emc = mc.casci()[0]
-    print(ehf, emc, emc-ehf)
-    print(emc - -227.948912536)
-
-    mc = CASCI(m, 9, (5,3))
-    #mc.fcisolver = fci.direct_spin1
-    mc.fcisolver = fci.solver(mol, False)
-    mc.fcisolver.nroots = 3
-    emc = mc.casci()[0]
-    print(emc[0] - -227.7674519720)
+#    mc = CASCI(m, 4, (3,1))
+#    #mc.fcisolver = fci.direct_spin1
+#    mc.fcisolver = fci.solver(mol, False)
+#    emc = mc.casci()[0]
+#    print(emc - -75.439016172976)
+#
+#    mol = gto.Mole()
+#    mol.verbose = 0
+#    mol.output = "out_casci"
+#    mol.atom = [
+#        ["C", (-0.65830719,  0.61123287, -0.00800148)],
+#        ["C", ( 0.73685281,  0.61123287, -0.00800148)],
+#        ["C", ( 1.43439081,  1.81898387, -0.00800148)],
+#        ["C", ( 0.73673681,  3.02749287, -0.00920048)],
+#        ["C", (-0.65808819,  3.02741487, -0.00967948)],
+#        ["C", (-1.35568919,  1.81920887, -0.00868348)],
+#        ["H", (-1.20806619, -0.34108413, -0.00755148)],
+#        ["H", ( 1.28636081, -0.34128013, -0.00668648)],
+#        ["H", ( 2.53407081,  1.81906387, -0.00736748)],
+#        ["H", ( 1.28693681,  3.97963587, -0.00925948)],
+#        ["H", (-1.20821019,  3.97969587, -0.01063248)],
+#        ["H", (-2.45529319,  1.81939187, -0.00886348)],]
+#
+#    mol.basis = {'H': 'sto-3g',
+#                 'C': 'sto-3g',}
+#    mol.build()
+#
+#    m = scf.RHF(mol)
+#    ehf = m.scf()
+#    mc = CASCI(m, 9, 8)
+#    mc.fcisolver = fci.solver(mol)
+#    emc = mc.casci()[0]
+#    print(ehf, emc, emc-ehf)
+#    print(emc - -227.948912536)
+#
+#    mc = CASCI(m, 9, (5,3))
+#    #mc.fcisolver = fci.direct_spin1
+#    mc.fcisolver = fci.solver(mol, False)
+#    mc.fcisolver.nroots = 3
+#    emc = mc.casci()[0]
+#    print(emc[0] - -227.7674519720)
