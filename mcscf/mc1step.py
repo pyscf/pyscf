@@ -360,11 +360,12 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
     eris = casscf.ao2mo(mo)
     e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, log, locals())
-    if ncas == nmo:
-        log.debug('CASSCF canonicalization')
-        mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
-                                                    casscf.natorb, verbose=log)
-        return True, e_tot, e_ci, fcivec, mo, mo_energy
+    if casscf.ncas == nmo and not casscf.internal_rotation:
+        if casscf.canonicalization:
+            log.debug('CASSCF canonicalization')
+            mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
+                                                        casscf.natorb, verbose=log)
+            return True, e_tot, e_ci, fcivec, mo, mo_energy
 
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(tol*.1)
@@ -465,6 +466,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         log.info('CASSCF canonicalization')
         mo, fcivec, mo_energy = \
                 casscf.canonicalize(mo, fcivec, eris, False, casscf.natorb, casdm1, log)
+        if casscf.natorb: # dump_chk may save casdm1
+            occ, ucas = casscf._eig(-casdm1, ncore, nocc)[0]
+            casdm1 = -occ
 
     if dump_chk:
         casscf.dump_chk(locals())
