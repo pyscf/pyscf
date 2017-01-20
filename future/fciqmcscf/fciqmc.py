@@ -175,8 +175,8 @@ def calc_energy_from_rdms(mol, mo_coeff, one_rdm, two_rdm):
     '''
 
     nmo = mo_coeff.shape[1]
-    eri = pyscf.ao2mo.outcore.full(mol, mo_coeff, aosym='s1', verbose=0)
-    eri = eri.reshape(nmo,nmo,nmo,nmo)
+    eri = pyscf.ao2mo.full(mol, mo_coeff, verbose=0)
+    eri = pyscf.ao2mo.restore(1, eri, nmo)
     t = mol.intor_symmetric('cint1e_kin_sph')
     v = mol.intor_symmetric('cint1e_nuc_sph')
     h = reduce(numpy.dot, (mo_coeff.T, t+v, mo_coeff))
