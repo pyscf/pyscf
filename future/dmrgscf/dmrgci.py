@@ -661,6 +661,7 @@ def executeBLOCK(DMRGCI):
         check_call(cmd, shell=True)
     except CalledProcessError as err:
         logger.error(DMRGCI, cmd)
+        logger.error(DMRGCI, check_output(['tail', '-100', outFile]))
         raise err
 
 def readEnergy(DMRGCI):
