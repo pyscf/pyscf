@@ -697,8 +697,8 @@ class NEVPT(lib.StreamObject):
             e_Sr     =   fh5['Vr/energy'].value
             norm_Sr  =   fh5['Vr/norm'].value
             fh5.close()
-            logger.note(self, "Sr    (-1)'  E = %.14f",  e_Sr  )
-            logger.note(self, "Si    (+1)'  E = %.14f",  e_Si  )
+            logger.note(self, "Sr    (-1)',   E = %.14f",  e_Sr  )
+            logger.note(self, "Si    (+1)',   E = %.14f",  e_Si  )
 
         else:
             norm_Sr   , e_Sr    = Sr(self, self.load_ci(), dms, eris)

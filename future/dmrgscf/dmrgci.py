@@ -383,15 +383,15 @@ class DMRGCI(pyscf.lib.StreamObject):
             nelectrons = nelec[0]+nelec[1]
 
         if (filetype == "binary") :
-            fname = os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_threepdm.%d.%d.bin" %(state, state))
-            fnameout = os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_threepdm.%d.%d.bin.unpack" %(state, state))
+            fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin" %(state, state))
+            fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin.unpack" %(state, state))
             libE3unpack.unpackE3(ctypes.c_char_p(fname), ctypes.c_char_p(fnameout), ctypes.c_int(norb))
 
             E3 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
             E3 = numpy.reshape(E3, (norb, norb, norb, norb, norb, norb), order='F')
             
         else :
-            fname = os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_threepdm.%d.%d.txt" %(state, state))
+            fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.txt" %(state, state))
             f = open(fname, 'r')
             lines = f.readlines()
             E3 = numpy.zeros(shape=(norb, norb, norb, norb, norb, norb), dtype=dt)
@@ -539,13 +539,9 @@ def make_schedule(sweeps, Ms, tols, noises, twodot_to_onedot):
 
 def writeDMRGConfFile(DMRGCI, nelec, Restart,
                       maxIter=None, with_2pdm=True, extraline=[]):
-    version = block_version(DMRGCI.executable)
     confFile = os.path.join(DMRGCI.runtimeDir, DMRGCI.configFile)
 
     f = open(confFile, 'w')
-
-    if version.startswith('1.1') and DMRGCI.memory is not None:
-        f.write('memory, %i, g\n'%(DMRGCI.memory))
 
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = (nelec-DMRGCI.spin) // 2
@@ -613,19 +609,17 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
             f.write('%f '%weight)
         f.write('\n')
 
-    if version.startswith('1.1'):
-        f.write('num_thrds %d\n'%DMRGCI.num_thrds)
-    for line in DMRGCI.extraline:
-        if not (version.startswith('1.1') and
-                ('num_thrds' in line or 'memory' in line)):
-            f.write('%s\n'%line)
-    for line in DMRGCI.block_extra_keyword:
-        if not (version.startswith('1.1') and
-                ('num_thrds' in line or 'memory' in line)):
-            f.write('%s\n'%line)
-    for line in extraline:
-        if not (version.startswith('1.1') and
-                ('num_thrds' in line or 'memory' in line)):
+    block_extra_keyword = DMRGCI.extraline + DMRGCI.block_extra_keyword + extraline
+    if block_version(DMRGCI.executable).startswith('1.1'):
+        for line in block_extra_keyword:
+            if not ('num_thrds' in line or 'memory' in line):
+                f.write('%s\n'%line)
+    else:
+        if DMRGCI.memory is not None:
+            f.write('memory, %i, g\n'%(DMRGCI.memory))
+        if DMRGCI.num_thrds > 1:
+            f.write('num_thrds %d\n'%DMRGCI.num_thrds)
+        for line in block_extra_keyword:
             f.write('%s\n'%line)
     f.close()
     #no reorder
@@ -661,7 +655,7 @@ def executeBLOCK(DMRGCI):
         check_call(cmd, shell=True)
     except CalledProcessError as err:
         logger.error(DMRGCI, cmd)
-        logger.error(DMRGCI, check_output(['tail', '-100', outFile]))
+        DMRGCI.stdout.write(check_output(['tail', '-100', outFile]))
         raise err
 
 def readEnergy(DMRGCI):
@@ -711,7 +705,11 @@ def dryrun(mc, mo_coeff=None):
 def block_version(blockexe):
     try:
         msg = check_output([blockexe, '-v'])
-        version = msg.split()[1]
+        version = '1.1.0'
+        for line in msg.split('\n'):
+            if line.startswith('Block '):
+                version = line.split()[1]
+                break
         return version
     except CalledProcessError:
         f1 = tempfile.NamedTemporaryFile()

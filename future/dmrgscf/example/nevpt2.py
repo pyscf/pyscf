@@ -54,6 +54,8 @@ mc.kernel()
 ci_nevpt_e1 = mrpt.NEVPT(mc, root=0).kernel()
 ci_nevpt_e2 = mrpt.NEVPT(mc, root=1).kernel()
 
+print('CI NEVPT = %.15g %.15g' % (ci_nevpt_e1, ci_nevpt_e2))
+
 #
 # By default, the orbitals are canonicalized after calling CASCI solver.  Save
 # the canonical MC orbitals for later use.  Althoug it's not necessary for this
@@ -68,7 +70,7 @@ mc_orb = mc.mo_coeff
 #
 # DMRG-NEVPT2 slow version
 # 4-particle density matrix is explicitly computed.
-# Ref: S Guo, JCTC, ASAP
+# Ref: S Guo, JCTC, 12 (2016), 1583
 #
 ##################################################
 
@@ -93,9 +95,12 @@ mc.kernel(mc_orb)
 
 #
 # The default DMRG-SC-NEVPT2 implementation is based on the 4-particle density matrix.
+# (Not available since Block-1.5)
 #
-dmrg_nevpt_e1 = mrpt.NEVPT(mc,root=0).kernel()
-dmrg_nevpt_e2 = mrpt.NEVPT(mc,root=1).kernel()
+#dmrg_nevpt_e1 = mrpt.NEVPT(mc,root=0).kernel()
+#dmrg_nevpt_e2 = mrpt.NEVPT(mc,root=1).kernel()
+#
+#print('DMRG NEVPT = %.15g %.15g' % (dmrg_nevpt_e1, dmrg_nevpt_e2))
 
 
 
@@ -118,8 +123,5 @@ mps_nevpt_e1 = mrpt.NEVPT(mc,root=0).compress_approx(maxM=100).kernel()
 #
 mps_nevpt_e2 = mrpt.NEVPT(mc,root=1).compress_approx(maxM=100).kernel()
 
-
-print('CI NEVPT = %.15g %.15g  DMRG NEVPT = %.15g %.15g  MPS NEVPT = %.15g %.15g'
-      % (ci_nevpt_e1, ci_nevpt_e2,
-         dmrg_nevpt_e1, dmrg_nevpt_e2, mps_nevpt_e1, mps_nevpt_e2,))
+print('MPS NEVPT = %.15g %.15g' % (mps_nevpt_e1, mps_nevpt_e2,))
 

@@ -87,8 +87,9 @@ def write_chk(mc,root,chkfile):
     h1e_Si =  reduce(numpy.dot, (mo_cas.T, mc.get_hcore()+core_vhf , mo_core))
     fh5['h1e_Si']     =       h1e_Si
     fh5['h1e_Sr']     =       h1e_Sr
-    h1e = mc.h1e_for_cas()
-    fh5['h1e']        =       h1e[0]
+    h1e, e_core = mc.h1e_for_cas()
+    fh5['h1e']        =       h1e
+    fh5['e_core']     =       e_core
 
     if mc._scf._eri is None:
         h2e_t = ao2mo.general(mc.mol, (mc.mo_coeff,mo_cas,mo_cas,mo_cas), compact=False)
@@ -226,6 +227,7 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
         h1e_Si    =     fh5['h1e_Si'].value
         h1e_Sr    =     fh5['h1e_Sr'].value
         h1e       =     fh5['h1e'].value
+        e_core    =     fh5['e_core'].value
         h2e       =     fh5['h2e'].value
         h2e_Si    =     fh5['h2e_Si'].value
         h2e_Sr    =     fh5['h2e_Sr'].value
@@ -244,6 +246,7 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
         h1e_Si    =  None
         h1e_Sr    =  None
         h1e       =  None
+        e_core    =  None
         h2e       =  None
         h2e_Si    =  None
         h2e_Sr    =  None
@@ -265,6 +268,7 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     h2e_Si = comm.bcast(h2e_Si,root=0)
     h2e_Sr = comm.bcast(h2e_Sr,root=0)
     headnode = comm.bcast(headnode,root=0)
+    e_core = comm.bcast(e_core,root=0)
 
 
 
@@ -411,7 +415,7 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     orbe = orbe[num_of_orb_begin:num_of_orb_end]
     for i in range(len(orbe)):
         f.write('% .16f  %4d  %4d  %4d  %4d\n'%(orbe[i],i+1+ncas,i+1+ncas,0,0))
-    f.write('% 4d  %4d  %4d  %4d  %4d\n'%(0,0,0,0,0))
+    f.write('%.16fd  %4d  %4d  %4d  %4d\n'%(e_core,0,0,0,0))
     if (len(h2e_Sr)):
         writeh2e(h2e_Sr,f,tol, shift0 = ncas + partial_core+1)
     f.write('% 4d  %4d  %4d  %4d  %4d\n'%(0,0,0,0,0))
