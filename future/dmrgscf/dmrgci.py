@@ -195,7 +195,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         log = logger.Logger(self.stdout, verbose)
         log.info('******** Block flags ********')
         log.info('executable = %s', self.executable)
-        log.info('version = %s', block_version(self.executable))
+        log.info('Block version %s', block_version(self.executable))
         log.info('BLOCKEXE_COMPRESS_NEVPT = %s', settings.BLOCKEXE_COMPRESS_NEVPT)
         log.info('mpiprefix = %s', self.mpiprefix)
         log.info('scratchDirectory = %s', self.scratchDirectory)
@@ -544,7 +544,7 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
 
     f = open(confFile, 'w')
 
-    if 'Block 1.1' not in version and DMRGCI.memory is not None:
+    if version.startswith('1.1') and DMRGCI.memory is not None:
         f.write('memory, %i, g\n'%(DMRGCI.memory))
 
     if isinstance(nelec, (int, numpy.integer)):
@@ -613,18 +613,18 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
             f.write('%f '%weight)
         f.write('\n')
 
-    if 'Block 1.1' not in version:
+    if version.startswith('1.1'):
         f.write('num_thrds %d\n'%DMRGCI.num_thrds)
     for line in DMRGCI.extraline:
-        if not ('Block 1.1' in version and
+        if not (version.startswith('1.1') and
                 ('num_thrds' in line or 'memory' in line)):
             f.write('%s\n'%line)
     for line in DMRGCI.block_extra_keyword:
-        if not ('Block 1.1' in version and
+        if not (version.startswith('1.1') and
                 ('num_thrds' in line or 'memory' in line)):
             f.write('%s\n'%line)
     for line in extraline:
-        if not ('Block 1.1' in version and
+        if not (version.startswith('1.1') and
                 ('num_thrds' in line or 'memory' in line)):
             f.write('%s\n'%line)
     f.close()
@@ -710,7 +710,7 @@ def dryrun(mc, mo_coeff=None):
 def block_version(blockexe):
     try:
         msg = check_output([blockexe, '-v'])
-        version = msg.split('\n')[1]
+        version = msg.split()[1]
         return version
     except CalledProcessError:
         f1 = tempfile.NamedTemporaryFile()
@@ -720,9 +720,9 @@ def block_version(blockexe):
             msg = check_output([blockexe, f1.name], stderr=STDOUT)
         except CalledProcessError as err:
             if 'Unrecognized option :: memory' in err.output:
-                version = 'Block 1.1.1'
+                version = '1.1.1'
             elif 'need to specify hf_occ' in err.output:
-                version = 'Block 1.5'
+                version = '1.5'
             else:
                 raise err
         f1.close()
