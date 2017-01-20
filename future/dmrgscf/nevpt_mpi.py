@@ -415,7 +415,7 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     orbe = orbe[num_of_orb_begin:num_of_orb_end]
     for i in range(len(orbe)):
         f.write('% .16f  %4d  %4d  %4d  %4d\n'%(orbe[i],i+1+ncas,i+1+ncas,0,0))
-    f.write('%.16fd  %4d  %4d  %4d  %4d\n'%(e_core,0,0,0,0))
+    f.write('%.16f  %4d  %4d  %4d  %4d\n'%(e_core,0,0,0,0))
     if (len(h2e_Sr)):
         writeh2e(h2e_Sr,f,tol, shift0 = ncas + partial_core+1)
     f.write('% 4d  %4d  %4d  %4d  %4d\n'%(0,0,0,0,0))
