@@ -2,6 +2,12 @@ PySCF 1.3 beta (2017-02-?)
 --------------------------
 * Added
   - sf-X2C for PBC Hamiltonian
+  - Overlap of two CI wavefunctions over different orbital bases
+  - EOM-CCSD for user guess, Koopmans' excitations, etc
+  - approximate EOM-CCSD (MBPT2 ground state and partitioned EOM Hbar)
+* Improved
+  - better memory management for EOM-CCSD
+  - memory usage of the non-symmetric Davidson solver in EOM-CCSD
 
 
 PySCF 1.3 alpha-2 (2017-01-04)

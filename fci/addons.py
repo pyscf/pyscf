@@ -440,7 +440,7 @@ def reorder(ci, nelec, orbidxa, orbidxb=None):
     old_det_idxb = numpy.argsort(guide_stringsb)
     return lib.take_2d(ci, old_det_idxa, old_det_idxb)
 
-def overlap(string1, string2, norb, s=None):
+def det_overlap(string1, string2, norb, s=None):
     '''Determinants overlap on non-orthogonal one-particle basis'''
     if s is None:  # orthogonal basis with s_ij = delta_ij
         return string1 == string2
@@ -459,6 +459,19 @@ def overlap(string1, string2, norb, s=None):
         idx2 = [i for i in range(norb) if (1<<i & string2)]
         s1 = lib.take_2d(s, idx1, idx2)
         return numpy.linalg.det(s1)
+
+def overlap(bra, ket, norb, nelec, s=None):
+    '''Overlap between two CI wavefunctions
+
+    Args:
+        u : 2D array or a list of 2D array
+            The overlap matrix of non-orthogonal one-particle basis
+    '''
+    if s is None:
+        return numpy.dot(bra.ravel(), ket.ravel())
+
+    bra = transform_ci_for_orbital_rotation(bra, norb, nelec, s)
+    return numpy.dot(bra.ravel(), ket.ravel())
 
 def fix_spin_(fciobj, shift=.2, ss=None, **kwargs):
     r'''If FCI solver cannot stick on spin eigenfunction, modify the solver by
@@ -532,7 +545,7 @@ def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
     CI_new = fci.kernel(u^T*h1*u, ...) = transform_ci_for_orbital_rotation(CI_old, u)
 
     Args:
-        u : 2D array
+        u : 2D array or a list of 2D array
             the orbital rotation to transform the old one-particle basis to new
             one-particle basis
     '''
@@ -542,6 +555,11 @@ def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
     one_particle_strs = numpy.asarray([1<<i for i in range(norb)])
     na = len(strsa)
     nb = len(strsb)
+
+    if isinstance(u, numpy.ndarray) and u.ndim == 2:
+        ua = ub = u
+    else:
+        ua, ub = u
 
     # Unitary transformation array trans_ci is the overlap between two sets of CI basis.
     occ_masks = (strsa[:,None] & one_particle_strs) != 0
@@ -556,7 +574,7 @@ def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
         minors = numpy.take(ui, occ_idx_all_strs, axis=0).reshape(na,neleca,neleca)
         trans_ci_a[i,:] = numpy.linalg.det(minors)
 
-    if neleca == nelecb:
+    if neleca == nelecb and numpy.allclose(ua, ub):
         trans_ci_b = trans_ci_a
     else:
         occ_masks = (strsb[:,None] & one_particle_strs) != 0
@@ -645,4 +663,13 @@ if __name__ == '__main__':
     s1 = numpy.random.seed(1)
     s1 = numpy.random.random((6,6))
     s1 = s1 + s1.T
-    print(overlap(int('0b10011',2), int('0b011010',2), 6, s1) - -0.273996425116)
+    print(det_overlap(int('0b10011',2), int('0b011010',2), 6, s1) - -0.273996425116)
+    numpy.random.seed(12)
+    s = numpy.random.random((6,6))
+    s = s.dot(s.T) / 3
+    bra = numpy.random.random((15,15))
+    ket = numpy.random.random((15,15))
+    bra /= numpy.linalg.norm(bra)
+    ket /= numpy.linalg.norm(ket)
+    print(overlap(bra, ket, 6, 4), overlap(bra, ket, 6, 4, (s,s)))
+
