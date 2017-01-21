@@ -570,7 +570,7 @@ def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
     #        trans_ci_a[i,j] = numpy.linalg.det(uij)
     occ_idx_all_strs = numpy.where(occ_masks)[1]
     for i in range(na):
-        ui = u[occ_masks[i]].T.copy()
+        ui = ua[occ_masks[i]].T.copy()
         minors = numpy.take(ui, occ_idx_all_strs, axis=0).reshape(na,neleca,neleca)
         trans_ci_a[i,:] = numpy.linalg.det(minors)
 
@@ -585,7 +585,7 @@ def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
         #        trans_ci_b[i,j] = numpy.linalg.det(uij)
         occ_idx_all_strs = numpy.where(occ_masks)[1]
         for i in range(nb):
-            ui = u[occ_masks[i]].T.copy()
+            ui = ub[occ_masks[i]].T.copy()
             minors = numpy.take(ui, occ_idx_all_strs, axis=0).reshape(nb,nelecb,nelecb)
             trans_ci_b[i,:] = numpy.linalg.det(minors)
 
@@ -671,5 +671,5 @@ if __name__ == '__main__':
     ket = numpy.random.random((15,15))
     bra /= numpy.linalg.norm(bra)
     ket /= numpy.linalg.norm(ket)
-    print(overlap(bra, ket, 6, 4), overlap(bra, ket, 6, 4, (s,s)))
+    print(overlap(bra, ket, 6, 4), overlap(bra, ket, 6, 4, (s,s)),0.025906419720918766)
 
