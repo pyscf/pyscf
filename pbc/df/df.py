@@ -380,6 +380,45 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
     j2c = fused_cell.pbc_intor('cint2c2e_sph', hermi=1, kpts=uniq_kpts)
     kLRs = []
     kLIs = []
+#    chgcell = make_modchg_basis(auxcell, mydf.eta)
+#    for k, kpt in enumerate(uniq_kpts):
+#        aoaux = ft_ao.ft_ao(chgcell, Gv, None, b, gxyz, Gvbase, kpt).T
+#        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, gs))
+#        LkR = aoaux.real * coulG
+#        LkI = aoaux.imag * coulG
+#        j2caux = numpy.zeros_like(j2c[k])
+#        j2caux[naux:,naux:] = j2c[naux:,naux:]
+#        if is_zero(kpt):  # kpti == kptj
+#            j2caux[naux:,naux:] -= lib.ddot(LkR, LkR.T)
+#            j2caux[naux:,naux:] -= lib.ddot(LkI, LkI.T)
+#            j2c[k] = j2c[k][:naux,:naux] - fuse(fuse(j2caux.T).T)
+#            vbar = fuse(mydf.auxbar(fused_cell))
+#            s = (vbar != 0).astype(numpy.double)
+#            j2c[k] -= numpy.einsum('i,j->ij', vbar, s)
+#            j2c[k] -= numpy.einsum('i,j->ij', s, vbar)
+#        else:
+#            j2cR, j2cI = zdotCN(LkR, LkI, LkR.T, LkI.T)
+#            j2caux[naux:,naux:] -= j2cR + j2cI * 1j
+#            j2c[k] = j2c[k][:naux,:naux] - fuse(fuse(j2caux.T).T)
+#        #j2c[k] = fuse(fuse(j2c[k]).T).T.copy()
+#        try:
+#            j2c[k] = scipy.linalg.cholesky(fuse(fuse(j2c[k]).T).T, lower=True)
+#        except scipy.linalg.LinAlgError as e:
+#            msg =('===================================\n'
+#                  'J-metric not positive definite.\n'
+#                  'It is likely that gs is not enough.\n'
+#                  '===================================')
+#            log.error(msg)
+#            raise scipy.linalg.LinAlgError('\n'.join([e.message, msg]))
+#        kLR = LkR.T
+#        kLI = LkI.T
+#        if not kLR.flags.c_contiguous: kLR = lib.transpose(LkR)
+#        if not kLI.flags.c_contiguous: kLI = lib.transpose(LkI)
+#        kLR *= coulG.reshape(-1,1)
+#        kLI *= coulG.reshape(-1,1)
+#        kLRs.append(kLR)
+#        kLIs.append(kLI)
+#        aoaux = LkR = LkI = kLR = kLI = coulG = None
     for k, kpt in enumerate(uniq_kpts):
         aoaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
         coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, gs))

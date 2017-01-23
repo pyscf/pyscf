@@ -710,7 +710,7 @@ class Cell(mole.Mole):
     def build(self, dump_input=True, parse_arg=True,
               a=None, gs=None, ke_cutoff=None, precision=None, nimgs=None,
               ew_eta=None, ew_cut=None, pseudo=None, basis=None, h=None,
-              dimension=None, ecp=None,
+              dimension=None, rcut=None, ecp=None,
               *args, **kwargs):
         '''Setup Mole molecule and Cell and initialize some control parameters.
         Whenever you change the value of the attributes of :class:`Cell`,
@@ -735,6 +735,7 @@ class Cell(mole.Mole):
         if basis is not None: self.basis = basis
         if dimension is not None: self.dimension = dimension
         if precision is not None: self.precision = precision
+        if rcut is not None: self.rcut = rcut
         if ecp is not None: self.ecp = ecp
 
         assert(self.a is not None)

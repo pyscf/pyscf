@@ -72,6 +72,7 @@
   - Direct-CI solver for spin non-degenerated Hamiltonian
   - 1, and 2-particle transition density matrices
   - 1, 2, 3, and 4-particle density matrices
+  - CI wavefunction overlap
 
 
 * Gradients
