@@ -464,13 +464,11 @@ def overlap(bra, ket, norb, nelec, s=None):
     '''Overlap between two CI wavefunctions
 
     Args:
-        u : 2D array or a list of 2D array
+        s : 2D array or a list of 2D array
             The overlap matrix of non-orthogonal one-particle basis
     '''
-    if s is None:
-        return numpy.dot(bra.ravel(), ket.ravel())
-
-    bra = transform_ci_for_orbital_rotation(bra, norb, nelec, s)
+    if s is not None:
+        bra = transform_ci_for_orbital_rotation(bra, norb, nelec, s)
     return numpy.dot(bra.ravel(), ket.ravel())
 
 def fix_spin_(fciobj, shift=.2, ss=None, **kwargs):
