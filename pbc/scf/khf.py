@@ -330,13 +330,13 @@ class KRHF(hf.RHF):
         if cell is None: cell = self.cell
         if kpts is None: kpts = self.kpts
         if cell.pseudo:
-            nuc = self.with_df.get_pp(kpts)
+            nuc = lib.asarray(self.with_df.get_pp(kpts))
         else:
-            nuc = self.with_df.get_nuc(kpts)
+            nuc = lib.asarray(self.with_df.get_nuc(kpts))
         if len(cell._ecpbas) > 0:
-            nuc += ecp.ecp_int(cell, kpts)
-        t = cell.pbc_intor('cint1e_kin_sph', 1, 1, kpts)
-        return lib.asarray(nuc) + lib.asarray(t)
+            nuc += lib.asarray(ecp.ecp_int(cell, kpts))
+        t = lib.asarray(cell.pbc_intor('cint1e_kin_sph', 1, 1, kpts))
+        return nuc + t
 
     get_ovlp = get_ovlp
     get_fock = get_fock

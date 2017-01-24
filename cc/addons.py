@@ -11,8 +11,8 @@ def spatial2spinorb(t1_or_t2):
         nocc2 = nocc * 2
         nvir2 = nvir * 2
         t1s = numpy.zeros((nocc2,nvir2))
-        t2s[ ::2, ::2] = t1
-        t2s[1::2,1::2] = t1
+        t1s[ ::2, ::2] = t1
+        t1s[1::2,1::2] = t1
     else:
         t2 = t1_or_t2
         nocc, nvir = t2.shape[::2]

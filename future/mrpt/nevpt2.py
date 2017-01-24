@@ -630,7 +630,7 @@ class NEVPT(lib.StreamObject):
         #TODO
         #Some preprocess for compressed perturber
         if hasattr(self.fcisolver, 'nevpt_intermediate'):
-            logger.info(self, 'Use compressed mps perturber as an aaproximation')
+            logger.info(self, 'Use compressed mps perturber as an approximation')
         else:
             logger.error(self, 'Compressed mps perturber can be only used for DMRG wave function')
             exit()
