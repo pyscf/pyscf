@@ -41,6 +41,24 @@ PySCF 1.3 alpha-1 (2016-12-04)
   - PBC repeated images used by lattice summation
 
 
+
+PySCF 1.2.1 (2017-01-26)
+------------------------
+* Added
+  - transition metal BFD basis
+  - script to fix dylib library dependence for Mac
+* Bugfix
+  - active space 1pdm in mc chkfile if natural orbitals are required
+  - dmrg example
+  - state-average dmrgci interface
+  - analytic GTO-PW integral
+  - for population analysis when ecp is presented.
+  - for mcscf state-specific function to support ground state as the target state
+  - get_coulG round-off bug
+  - unit cell size estimation for non-orth crystals
+  - lib.norm function for complex vector
+
+
 PySCF 1.2 (2016-11-07)
 ----------------------
 
