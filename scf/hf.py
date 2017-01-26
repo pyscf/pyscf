@@ -18,7 +18,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import diis
 from pyscf.scf import _vhf
-import pyscf.scf.chkfile
+from pyscf.scf import chkfile
 
 
 def kernel(mf, conv_tol=1e-10, conv_tol_grad=None,
@@ -120,7 +120,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     if dump_chk:
         # Explicit overwrite the mol object in chkfile
         # Note in pbc.scf, mf.mol == mf.cell, cell is saved under key "mol"
-        pyscf.scf.chkfile.save_mol(mol, mf.chkfile)
+        chkfile.save_mol(mol, mf.chkfile)
 
     scf_conv = False
     cycle = 0
@@ -358,7 +358,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=True):
         Density matrix, 2D ndarray
     '''
     from pyscf.scf import addons
-    chk_mol, scf_rec = pyscf.scf.chkfile.load_scf(chkfile_name)
+    chk_mol, scf_rec = chkfile.load_scf(chkfile_name)
 
     def fproj(mo):
         if project:
@@ -1058,10 +1058,10 @@ class SCF(lib.StreamObject):
 
     def dump_chk(self, envs):
         if self.chkfile:
-            pyscf.scf.chkfile.dump_scf(self.mol, self.chkfile,
-                                       envs['e_tot'], envs['mo_energy'],
-                                       envs['mo_coeff'], envs['mo_occ'],
-                                       overwrite_mol=False)
+            chkfile.dump_scf(self.mol, self.chkfile,
+                             envs['e_tot'], envs['mo_energy'],
+                             envs['mo_coeff'], envs['mo_occ'],
+                             overwrite_mol=False)
         return self
 
     @lib.with_doc(init_guess_by_minao.__doc__)
@@ -1096,14 +1096,6 @@ class SCF(lib.StreamObject):
     def from_chk(self, chkfile=None, project=True):
         return self.init_guess_by_chkfile(chkfile, project)
     from_chk.__doc__ = init_guess_by_chkfile.__doc__
-
-    def update_from_chk(self, chkfile=None):
-        '''Read attributes from the chkfile then replace the attributes of
-        current object.
-        '''
-        if chkfile is None: chkfile = self.chkfile
-        self.__dict__.update(pyscf.scf.chkfile.load(chkfile, 'scf'))
-        return self
 
     def get_init_guess(self, mol=None, key='minao'):
         if mol is None:
@@ -1278,10 +1270,14 @@ class SCF(lib.StreamObject):
         return pyscf.scf.x2c.sfx2c1e(self)
 
     def update(self, chkfile=None):
+        '''Read attributes from the chkfile then replace the attributes of
+        current object.  See also mf.update_from_chk
+        '''
         return self.update_from_chk(chkfile)
     def update_from_chk(self, chkfile=None):
+        from pyscf.scf import chkfile as chkmod
         if chkfile is None: chkfile = self.chkfile
-        self.__dict__.update(pyscf.scf.chkfile.load(chkfile, 'scf'))
+        self.__dict__.update(chkmod.load(chkfile, 'scf'))
         return self
 
     @property

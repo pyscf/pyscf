@@ -9,7 +9,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import _vhf
-import pyscf.scf.chkfile
+from pyscf.scf import chkfile
 
 
 def init_guess_by_minao(mol):
@@ -32,7 +32,7 @@ def init_guess_by_atom(mol):
 
 def init_guess_by_chkfile(mol, chkfile_name, project=True):
     from pyscf.scf import addons
-    chk_mol, scf_rec = pyscf.scf.chkfile.load_scf(chkfile_name)
+    chk_mol, scf_rec = chkfile.load_scf(chkfile_name)
 
     def fproj(mo):
         if project:

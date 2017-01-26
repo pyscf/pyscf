@@ -305,10 +305,9 @@ def convert_to_uhf(mf, out=None):
         mf1.__dict__.update(mf.__dict__)
         mf1._keys = _keys
         if mf.mo_energy is not None:
-            mf1.mo_energy = (mf.mo_energy, mf.mo_energy)
-            mf1.mo_coeff = (mf.mo_coeff, mf.mo_coeff)
-            mf1.mo_occ = (numpy.asarray(mf.mo_occ>0, dtype=numpy.double),
-                          numpy.asarray(mf.mo_occ==2, dtype=numpy.double))
+            mf1.mo_energy = numpy.array((mf.mo_energy, mf.mo_energy))
+            mf1.mo_coeff = numpy.array((mf.mo_coeff, mf.mo_coeff))
+            mf1.mo_occ = numpy.array((mf.mo_occ>0, mf.mo_occ==2), dtype=numpy.double)
         return mf1
 
     if out is not None:
