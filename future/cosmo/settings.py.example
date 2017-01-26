@@ -1,9 +1,0 @@
-#
-# This file is an example to set the environment for COSMO program.
-#
-
-import os
-
-COSMOEXE = '/path/to/cosmo_exe'
-COSMOSCRATCHDIR = os.environ['TMPDIR']
-#COSMOSCRATCHDIR = './scratch'
