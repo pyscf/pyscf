@@ -167,6 +167,7 @@ class RCCSD(ccsd.CCSD):
         self.made_ip_imds = False
         self.made_ea_imds = False
         self.made_ee_imds = False
+        self.max_space = 20
 
     def dump_flags(self):
         ccsd.CCSD.dump_flags(self)
@@ -586,13 +587,20 @@ class RCCSD(ccsd.CCSD):
         vector[nvir:] = r2.copy().reshape(nocc*nvir*nvir)
         return vector
 
-    def eeccsd(self, nroots=1):
+    def eeccsd(self, nroots=1, guess=None):
         cput0 = (time.clock(), time.time())
         log = logger.Logger(self.stdout, self.verbose)
         size = self.nee()
         nroots = min(nroots,size)
-        self._eeconv, self.eee, evecs = eig(self.eeccsd_matvec, size=size, nroots=nroots, 
-                                            verbose=log)
+        guess = numpy.zeros(size)
+        guess[0] = 1
+        def precond(r, e0, x0):
+            return r#/(e0-adiag+1e-12)
+        op = lambda xs: [self.eeccsd_matvec(x) for x in xs]
+        self._eeconv, self.eee, evecs = \
+                lib.davidson_nosym1(op, guess, precond, nroots=nroots,
+                                    max_cycle=self.max_cycle,
+                                    max_space=self.max_space, verbose=log)
         if self._eeconv:
             logger.info(self, 'EE-CCSD converged')
         else:

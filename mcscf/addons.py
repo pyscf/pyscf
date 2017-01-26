@@ -533,6 +533,15 @@ def state_average_(casscf, weights=(0.5,0.5)):
     '''
     assert(abs(sum(weights)-1) < 1e-3)
     fcibase_class = casscf.fcisolver.__class__
+    if fcibase_class.__name__ == 'FakeCISolver':
+        sys.stderr.write('state_average function cannot work with decorated '
+                         'fcisolver %s.\nYou can restore the base fcisolver '
+                         'then call state_average function, eg\n'
+                         '    mc.fcisolver = %s.%s(mc.mol)\n'
+                         '    mc.state_average_()\n' %
+                         (casscf.fcisolver, fcibase_class.__base__.__module__,
+                          fcibase_class.__base__.__name__))
+        raise TypeError('mc.fcisolver is not base FCI solver')
     class FakeCISolver(fcibase_class):
         def __init__(self, mol=None):
             self.nroots = len(weights)
@@ -593,6 +602,15 @@ def state_specific_(casscf, state=1):
         0 for ground state; 1 for first excited state.
     '''
     fcibase_class = casscf.fcisolver.__class__
+    if fcibase_class.__name__ == 'FakeCISolver':
+        sys.stderr.write('state_specific function cannot work with decorated '
+                         'fcisolver %s.\nYou can restore the base fcisolver '
+                         'then call state_specific function, eg\n'
+                         '    mc.fcisolver = %s.%s(mc.mol)\n'
+                         '    mc.state_specific_()\n' %
+                         (casscf.fcisolver, fcibase_class.__base__.__module__,
+                          fcibase_class.__base__.__name__))
+        raise TypeError('mc.fcisolver is not base FCI solver')
     class FakeCISolver(fcibase_class):
         def __init__(self):
             self.nroots = state+1
@@ -635,7 +653,12 @@ state_specific = state_specific_
 def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
     '''State-average CASSCF over multiple FCI solvers.
     '''
-    fcibase_class = casscf.fcisolver.__class__
+    fcibase_class = fcisolvers[0].__class__
+#    if fcibase_class.__name__ == 'FakeCISolver':
+#        logger.warn(casscf, 'casscf.fcisolver %s is a decorated FCI solver. '
+#                    'state_average_mix_ function rolls back to the base solver %s',
+#                    fcibase_class, fcibase_class.__base__)
+#        fcibase_class = fcibase_class.__base__
     nroots = sum(solver.nroots for solver in fcisolvers)
     assert(nroots == len(weights))
 

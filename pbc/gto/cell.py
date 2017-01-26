@@ -334,7 +334,14 @@ def get_nimgs(cell, precision=None):
     return nimgs
 
 def _estimate_rcut(alpha, l, cc, r0, precision=1e-8):
-    return np.sqrt(abs(2*np.log(cc*(r0**2*alpha)**l/precision)) / alpha)
+    rcut = []
+    for a, c in zip(alpha, cc):
+        if np.isclose(c, 0.0):
+            rcut.append(0)
+        else:
+            rcut.append(np.sqrt(abs(2*np.log(c*(r0**2*a)**l/precision)) / a))
+    return np.array(rcut)
+
 def bas_rcut(cell, bas_id, precision=1e-8):
     r'''Estimate the largest distance between the function and its image to
     reach the precision in overlap
@@ -710,7 +717,7 @@ class Cell(mole.Mole):
     def build(self, dump_input=True, parse_arg=True,
               a=None, gs=None, ke_cutoff=None, precision=None, nimgs=None,
               ew_eta=None, ew_cut=None, pseudo=None, basis=None, h=None,
-              dimension=None, rcut=None, ecp=None,
+              dimension=None, ecp=None,
               *args, **kwargs):
         '''Setup Mole molecule and Cell and initialize some control parameters.
         Whenever you change the value of the attributes of :class:`Cell`,
@@ -735,7 +742,6 @@ class Cell(mole.Mole):
         if basis is not None: self.basis = basis
         if dimension is not None: self.dimension = dimension
         if precision is not None: self.precision = precision
-        if rcut is not None: self.rcut = rcut
         if ecp is not None: self.ecp = ecp
 
         assert(self.a is not None)
