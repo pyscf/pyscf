@@ -11,18 +11,18 @@ def spatial2spinorb(t1_or_t2):
         nocc2 = nocc * 2
         nvir2 = nvir * 2
         t1s = numpy.zeros((nocc2,nvir2))
-        t2s[ ::2, ::2] = t1
-        t2s[1::2,1::2] = t1
+        t1s[:nocc,:nvir] = t1
+        t1s[nocc:,nvir:] = t1
     else:
         t2 = t1_or_t2
         nocc, nvir = t2.shape[::2]
         nocc2 = nocc * 2
         nvir2 = nvir * 2
         t2s = numpy.zeros((nocc2,nocc2,nvir2,nvir2))
-        t2s[ ::2,1::2, ::2,1::2] = t2
-        t2s[1::2, ::2,1::2, ::2] = t2
-        t2s[ ::2,1::2,1::2, ::2] =-t2.transpose(0,1,3,2)
-        t2s[1::2, ::2, ::2,1::2] =-t2.transpose(0,1,3,2)
-        t2s[ ::2, ::2, ::2, ::2] = t2 - t2.transpose(0,1,3,2)
-        t2s[1::2,1::2,1::2,1::2] = t2 - t2.transpose(0,1,3,2)
+        t2s[:nocc,nocc:,:nvir,nvir:] = t2
+        t2s[nocc:,:nocc,nvir:,:nvir] = t2
+        t2s[:nocc,nocc:,nvir:,:nvir] =-t2.transpose(0,1,3,2)
+        t2s[nocc:,:nocc,:nvir,nvir:] =-t2.transpose(0,1,3,2)
+        t2s[:nocc,:nocc,:nvir,:nvir] = t2 - t2.transpose(0,1,3,2)
+        t2s[nocc:,nocc:,nvir:,nvir:] = t2 - t2.transpose(0,1,3,2)
     return t2s
