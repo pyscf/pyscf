@@ -299,9 +299,13 @@ class RCCSD(ccsd.CCSD):
             def pickeig(w, v, nr, x0):
                 idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
                 return w[idx].real, v[:,idx].real, idx
-            eip, evecs = eig(self.ipccsd_matvec, guess, precond, pick=pickeig, nroots=nroots, verbose=7)
+            eip, evecs = eig(self.ipccsd_matvec, guess, precond, pick=pickeig,
+                             tol=self.conv_tol, max_cycle=self.max_cycle,
+                             max_space=self.max_space, nroots=nroots, verbose=7)
         else:
-            eip, evecs = eig(self.ipccsd_matvec, guess, precond, nroots=nroots, verbose=7) 
+            eip, evecs = eig(self.ipccsd_matvec, guess, precond,
+                             tol=self.conv_tol, max_cycle=self.max_cycle,
+                             max_space=self.max_space, nroots=nroots, verbose=7)
 
         self.eip = eip.real
 
@@ -463,9 +467,13 @@ class RCCSD(ccsd.CCSD):
             def pickeig(w, v, nr, x0):
                 idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
                 return w[idx].real, v[:,idx].real, idx
-            eea, evecs = eig(self.eaccsd_matvec, guess, precond, pick=pickeig, nroots=nroots, verbose=7)
+            eea, evecs = eig(self.eaccsd_matvec, guess, precond, pick=pickeig,
+                             tol=self.conv_tol, max_cycle=self.max_cycle,
+                             max_space=self.max_space, nroots=nroots, verbose=7)
         else:
-            eea, evecs = eig(self.eaccsd_matvec, guess, precond, nroots=nroots, verbose=7)
+            eea, evecs = eig(self.eaccsd_matvec, guess, precond,
+                             tol=self.conv_tol, max_cycle=self.max_cycle,
+                             max_space=self.max_space, nroots=nroots, verbose=7)
 
         self.eea = eea.real
 
@@ -648,9 +656,13 @@ class RCCSD(ccsd.CCSD):
             def pickeig(w, v, nr, x0):
                 idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
                 return w[idx].real, v[:,idx].real, idx
-            eee, evecs = eig(self.eeccsd_matvec, guess, precond, pick=pickeig, nroots=nroots, verbose=7)
+            eee, evecs = eig(self.eeccsd_matvec, guess, precond, pick=pickeig,
+                             tol=self.conv_tol, max_cycle=self.max_cycle,
+                             max_space=self.max_space, nroots=nroots, verbose=7)
         else:
-            eee, evecs = eig(self.eeccsd_matvec, guess, precond, nroots=nroots, verbose=7) 
+            eee, evecs = eig(self.eeccsd_matvec, guess, precond,
+                             tol=self.conv_tol, max_cycle=self.max_cycle,
+                             max_space=self.max_space, nroots=nroots, verbose=7)
 
         self.eee = eee.real
 
