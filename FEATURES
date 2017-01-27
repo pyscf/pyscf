@@ -114,11 +114,6 @@
   - Smearing for mean-field calculation
 
 
-* Solvation effects
-
-  - COSMO model for Hartree-Fock, DFT, CASCI, CASSCF and DMRG-CASCI, DMRG-CASSCF
-
-
 * AO integrals
 
   - Interface to call Libcint library
