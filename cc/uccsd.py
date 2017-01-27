@@ -428,31 +428,24 @@ class UCCSD(rccsd.RCCSD):
             self.made_ee_imds = True
         imds = self.imds
 
-        #TODO: Check and clean-up intermediates for UCCSD
-
         r1,r2 = self.vector_to_amplitudes_ee(vector)
-
-        # Additional intermediates
-        Wvoov =  imds.Wovvo.transpose(1,0,3,2)
-        Wovvv = -imds.Wvovv.transpose(1,0,2,3)
-        Woovo = -imds.Wooov.transpose(0,1,3,2)
 
         # Eq. (9)
         Hr1 = einsum('ae,ie->ia',imds.Fvv,r1) 
         Hr1 += -einsum('mi,ma->ia',imds.Foo,r1) 
         Hr1 += einsum('me,imae->ia',imds.Fov,r2) 
-        Hr1 += einsum('amie,me->ia',Wvoov,r1) 
+        Hr1 += einsum('maei,me->ia',imds.Wovvo,r1) 
         Hr1 += -0.5*einsum('mnie,mnae->ia',imds.Wooov,r2) 
         Hr1 += 0.5*einsum('amef,imef->ia',imds.Wvovv,r2)
         # Eq. (10)
         tmpab = einsum('be,ijae->ijab',imds.Fvv,r2)
         tmpab += -0.5*einsum('mnef,ijae,mnbf->ijab',imds.Woovv,self.t2,r2)
         tmpab += -einsum('mbij,ma->ijab',imds.Wovoo,r1)
-        tmpab += einsum('maef,ijfb,me->ijab',Wovvv,self.t2,r1)
+        tmpab += -einsum('amef,ijfb,me->ijab',imds.Wvovv,self.t2,r1)
         tmpij = -einsum('mj,imab->ijab',imds.Foo,r2)
         tmpij += -0.5*einsum('mnef,imab,jnef->ijab',imds.Woovv,self.t2,r2)
         tmpij += einsum('abej,ie->ijab',imds.Wvvvo,r1)
-        tmpij += -einsum('mnei,njab,me->ijab',Woovo,self.t2,r1)
+        tmpij += einsum('mnie,njab,me->ijab',imds.Wooov,self.t2,r1)
 
         tmpabij = einsum('mbej,imae->ijab',imds.Wovvo,r2)
 
@@ -462,6 +455,47 @@ class UCCSD(rccsd.RCCSD):
                + 0.5*einsum('abef,ijef->ijab',imds.Wvvvv,r2)
                + tmpabij - tmpabij.transpose(0,1,3,2)
                - tmpabij.transpose(1,0,2,3) + tmpabij.transpose(1,0,3,2) )
+
+        vector = self.amplitudes_to_vector_ee(Hr1,Hr2)
+        return vector
+
+    def eeccsd_diag(self):
+        if not self.made_ee_imds:
+            if not hasattr(self,'imds'):
+                self.imds = _IMDS(self)
+            self.imds.make_ee()
+            self.made_ee_imds = True
+        imds = self.imds
+
+        t1, t2 = self.t1, self.t2
+        nocc, nvir = t1.shape
+
+        Hr1 = np.zeros((nocc,nvir), dtype=t1.dtype)
+        Hr2 = np.zeros((nocc,nocc,nvir,nvir), dtype=t1.dtype)
+        for i in range(nocc):
+            for a in range(nvir):
+                Hr1[i,a] = imds.Fvv[a,a] - imds.Foo[i,i] + imds.Wovvo[i,a,a,i]
+        for a in range(nvir):
+            tmp = 0.5*(np.einsum('ijeb,ijbe->ijb', imds.Woovv, t2)
+                      -np.einsum('jieb,ijbe->ijb', imds.Woovv, t2))
+            Hr2[:,:,:,a] += imds.Fvv[a,a] + tmp 
+            Hr2[:,:,a,:] += imds.Fvv[a,a] + tmp 
+            _Wvvvva = np.array(imds.Wvvvv[a])
+            for b in range(a):
+                Hr2[:,:,a,b] += 0.5*(_Wvvvva[b,a,b]-_Wvvvva[b,b,a])
+            for i in range(nocc):
+                tmp = imds.Wovvo[i,a,a,i]
+                Hr2[:,i,:,a] += tmp 
+                Hr2[i,:,:,a] += tmp
+                Hr2[:,i,a,:] += tmp
+                Hr2[i,:,a,:] += tmp
+        for i in range(nocc):
+            tmp = 0.5*(np.einsum('kjab,jkab->jab', imds.Woovv, t2)
+                      -np.einsum('kjba,jkab->jab', imds.Woovv, t2))
+            Hr2[:,i,:,:] += -imds.Foo[i,i] + tmp 
+            Hr2[i,:,:,:] += -imds.Foo[i,i] + tmp
+            for j in range(i):
+                Hr2[i,j,:,:] += 0.5*(imds.Woooo[i,j,i,j]-imds.Woooo[j,i,i,j])
 
         vector = self.amplitudes_to_vector_ee(Hr1,Hr2)
         return vector
@@ -760,28 +794,27 @@ class _IMDS:
         log.timer('EOM-CCSD EA intermediates', *cput0)
 
     def make_ee(self):
+        if self._made_shared is False:
+            self._make_shared()
+            self._made_shared = True
+
+        cput0 = (time.clock(), time.time())
+        log = logger.Logger(self.cc.stdout, self.cc.verbose)
+
         t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
 
-        #TODO(TCB): Clean up for spin-orbital CCSD
+        if self.cc.made_ip_imds is False:
+            # 0 or 1 virtuals
+            self.Woooo = imd.Woooo(t1,t2,eris)
+            self.Wooov = imd.Wooov(t1,t2,eris)
+            self.Wovoo = imd.Wovoo(t1,t2,eris)
+        if self.cc.made_ea_imds is False:
+            # 3 or 4 virtuals
+            self.Wvovv = imd.Wvovv(t1,t2,eris)
+            self.Wvvvv = imd.Wvvvv(t1,t2,eris)
+            self.Wvvvo = imd.Wvvvo(t1,t2,eris,self.Wvvvv)
 
-        self.Fvv = imd.Fvv(t1,t2,eris)
-        self.Foo = imd.Foo(t1,t2,eris)
-        self.Fov = imd.Fov(t1,t2,eris)
-
-        self.Woooo = imd.Woooo(t1,t2,eris)
-        self.Wvvvv = imd.Wvvvv(t1,t2,eris)
-        self.Wovvo = imd.Wovvo(t1,t2,eris)
-        self.Wooov = imd.Wooov(t1,t2,eris)
-        self.Wvovv = imd.Wvovv(t1,t2,eris)
-        self.Wovoo = imd.Wovoo(t1,t2,eris)
-        self.Wvvvo = imd.Wvvvo(t1,t2,eris)
-
-        # Additional intermediates
-        self.Wvoov =  self.Wovvo.transpose(1,0,3,2)
-        self.Wovvv = -self.Wvovv.transpose(1,0,2,3)
-        self.Woovo = -self.Wooov.transpose(0,1,3,2)
-        self.Woovv = eris.oovv
-
+        log.timer('EOM-CCSD EE intermediates', *cput0)
 
 if __name__ == '__main__':
     from pyscf import scf
@@ -803,3 +836,22 @@ if __name__ == '__main__':
     ucc = UCCSD(mf, frozen=frozen)
     ecc, t1, t2 = ucc.kernel()
     print(ecc - -0.3486987472235819)
+
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+    mol.basis = 'cc-pvdz' 
+    mol.spin = 0
+    mol.build()
+    mf = scf.UHF(mol)
+    print(mf.scf())
+
+    ucc = UCCSD(mf)
+    ecc, t1, t2 = ucc.kernel()
+    print(ecc - -0.2133432430989155)
+    e,v = ucc.eeccsd(nroots=4)
+    print(e[0] - 0.2757159395886167)
+    print(e[3] - 0.3005716731825082)
