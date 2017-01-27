@@ -49,6 +49,7 @@ Saved results
 from pyscf.cc import ccsd
 from pyscf.cc import ccsd_lambda
 from pyscf.cc import ccsd_rdm
+from pyscf.cc import addons
 
 CCSD = ccsd.CCSD
 

@@ -188,6 +188,8 @@ class RCCSD(ccsd.CCSD):
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
 
+    def kernel(self, t1=None, t2=None, eris=None, mbpt2=False):
+        return self.ccsd(t1, t2, eris, mbpt2)
     def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
         '''Ground-state CCSD.
 
@@ -253,7 +255,7 @@ class RCCSD(ccsd.CCSD):
                 Can be None, 'mp' (Moller-Plesset, i.e. orbital energies on the diagonal),
                 or 'full' (full diagonal elements).
             koopmans : bool
-                Calculate Koopmans'-like (quasiparticle) excitations only, targeting via 
+                Calculate Koopmans'-like (quasiparticle) excitations only, targeting via
                 overlap.
             guess : list of ndarray
                 List of guess vectors to use for targeting via overlap.
@@ -265,7 +267,7 @@ class RCCSD(ccsd.CCSD):
         if partition:
             partition = partition.lower()
             assert partition in ['mp','full']
-        self.ip_partition = partition 
+        self.ip_partition = partition
         if partition == 'full':
             self._ipccsd_diag_matrix2 = self.vector_to_amplitudes_ip(self.ipccsd_diag())[1]
 
@@ -353,7 +355,7 @@ class RCCSD(ccsd.CCSD):
             Hr2 +=  einsum('klij,klb->ijb',imds.Woooo,r2)
             Hr2 += 2*einsum('lbdj,ild->ijb',imds.Wovvo,r2)
             Hr2 +=  -einsum('kbdj,kid->ijb',imds.Wovvo,r2)
-            Hr2 +=  -einsum('lbjd,ild->ijb',imds.Wovov,r2) #typo in Nooijen's paper
+            Hr2 +=  -einsum('lbjd,ild->ijb',imds.Wovov,r2) #typo in Ref 
             Hr2 +=  -einsum('kbid,kjd->ijb',imds.Wovov,r2)
             tmp = 2*einsum('lkdc,kld->c',imds.Woovv,r2)
             tmp += -einsum('kldc,kld->c',imds.Woovv,r2)
@@ -587,28 +589,81 @@ class RCCSD(ccsd.CCSD):
         vector[nvir:] = r2.copy().reshape(nocc*nvir*nvir)
         return vector
 
-    def eeccsd(self, nroots=1, guess=None):
+    def eeccsd(self, nroots=1, koopmans=False, guess=None, partition=None):
+        '''Calculate N-electron neutral excitations via EE-EOM-CCSD.
+
+        Kwargs:
+            nroots : int
+                Number of roots (eigenvalues) requested
+            partition : bool or str
+                Use a matrix-partitioning for the doubles-doubles block.
+                Can be None, 'mp' (Moller-Plesset, i.e. orbital energies on the diagonal),
+                or 'full' (full diagonal elements).
+            koopmans : bool
+                Calculate Koopmans'-like (1p1h) excitations only, targeting via
+                overlap.
+            guess : list of ndarray
+                List of guess vectors to use for targeting via overlap.
+        '''
         cput0 = (time.clock(), time.time())
         log = logger.Logger(self.stdout, self.verbose)
         size = self.nee()
         nroots = min(nroots,size)
-        guess = numpy.zeros(size)
-        guess[0] = 1
-        def precond(r, e0, x0):
-            return r#/(e0-adiag+1e-12)
-        op = lambda xs: [self.eeccsd_matvec(x) for x in xs]
-        self._eeconv, self.eee, evecs = \
-                lib.davidson_nosym1(op, guess, precond, nroots=nroots,
-                                    max_cycle=self.max_cycle,
-                                    max_space=self.max_space, verbose=log)
-        if self._eeconv:
-            logger.info(self, 'EE-CCSD converged')
+        if partition:
+            partition = partition.lower()
+            assert partition in ['mp','full']
+        self.ee_partition = partition
+        if partition == 'full':
+            self._eeccsd_diag_matrix2 = self.vector_to_amplitudes_ee(self.eeccsd_diag())[1]
+
+        nvir = self.nmo - self.nocc
+        adiag = self.eeccsd_diag()
+        user_guess = False
+        if guess:
+            user_guess = True
+            assert len(guess) == nroots
+            for g in guess:
+                assert g.size == size
         else:
-            logger.info(self, 'EE-CCSD not converge')
-        for n in range(nroots):
-            logger.info(self, 'root %d E(EE-CCSD) = %.16g', n, self.eee.real[n])
+            guess = []
+            idx = adiag.argsort()
+            n = 0
+            for i in idx:
+                g = np.zeros(size)
+                g[i] = 1.0
+                if koopmans:
+                    if np.linalg.norm(g[:self.nocc*nvir])**2 > 0.8:
+                        guess.append(g)
+                        n += 1
+                else:
+                    guess.append(g)
+                    n += 1
+                if n == nroots:
+                    break
+
+        def precond(r, e0, x0):
+            return r/(e0-adiag+1e-12)
+
+        if user_guess or koopmans:
+            def pickeig(w, v, nr, x0):
+                idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
+                return w[idx].real, v[:,idx].real, idx
+            eee, evecs = eig(self.eeccsd_matvec, guess, precond, pick=pickeig, nroots=nroots, verbose=7)
+        else:
+            eee, evecs = eig(self.eeccsd_matvec, guess, precond, nroots=nroots, verbose=7) 
+
+        self.eee = eee.real
+
+        if nroots == 1:
+            eee, evecs = [self.eee], [evecs]
+        for n, en, vn in zip(range(nroots), eee, evecs):
+            logger.info(self, 'EE root %d E = %.16g  qpwt = %0.6g', 
+                        n, en, np.linalg.norm(vn[:self.nocc*nvir])**2)
         log.timer('EE-CCSD', *cput0)
-        return self.eee.real[:nroots], evecs
+        if nroots == 1:
+            return eee[0], evecs[0]
+        else:
+            return eee, evecs
 
     def eeccsd_matvec(self,vector):
         raise NotImplementedError
