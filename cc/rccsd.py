@@ -187,6 +187,8 @@ class RCCSD(ccsd.CCSD):
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
 
+    def kernel(self, t1=None, t2=None, eris=None, mbpt2=False):
+        return self.ccsd(t1, t2, eris, mbpt2)
     def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
         '''Ground-state CCSD.
 

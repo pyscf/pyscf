@@ -137,34 +137,44 @@ def energy(cc, t1, t2, eris):
     return e.real
 
 
+def nocc(cc):
+    cc._nocc = cc._scf.mol.nelectron
+    if isinstance(cc.frozen, (int, numpy.integer)):
+        cc._nocc = int(cc.mo_occ[0].sum() + cc.mo_occ[1].sum()) - cc.frozen
+    else:
+        mo_occ = cc.mo_occ.copy()
+        for a in range(2):
+            if len(cc.frozen[a]) > 0:
+                mo_occ[a][numpy.asarray(cc.frozen[a])] = 0
+        cc._nocc = int(mo_occ.sum())
+    return cc._nocc
+
+
+def nmo(cc):
+    if cc._nmo is not None:
+        return cc._nmo
+    if isinstance(cc.frozen, (int, numpy.integer)):
+        cc._nmo = len(cc.mo_occ[0]) + len(cc.mo_occ[1]) - cc.frozen
+    else:
+        cc._nmo = (len(cc.mo_occ[0]) - len(cc.frozen[0])
+                    + len(cc.mo_occ[1]) - len(cc.frozen[1]))
+    return cc._nmo
+
+
 class UCCSD(rccsd.RCCSD):
 
-    def __init__(self, mf, frozen=[[],[]], mo_energy=None, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=[[],[]], mo_coeff=None, mo_occ=None):
         rccsd.RCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         # Spin-orbital CCSD needs a stricter tolerance than spatial-orbital
         self.conv_tol_normt = 1e-6
 
     @property
     def nocc(self):
-        self._nocc = self._scf.mol.nelectron
-        if isinstance(self.frozen, (int, numpy.integer)):
-            self._nocc = int(self.mo_occ[0].sum() + self.mo_occ[1].sum()) - self.frozen
-        else:
-            mo_occ = self.mo_occ.copy()
-            for a in range(2):
-                if len(self.frozen[a]) > 0:
-                    mo_occ[a][numpy.asarray(self.frozen[a])] = 0
-            self._nocc = int(mo_occ.sum())
-        return self._nocc
+        return nocc(self) 
 
     @property
     def nmo(self):
-        if isinstance(self.frozen, (int, numpy.integer)):
-            self._nmo = len(self.mo_occ[0]) + len(self.mo_energy[1]) - self.frozen
-        else:
-            self._nmo = (len(self.mo_occ[0]) - len(self.frozen[0])
-                        + len(self.mo_occ[1]) - len(self.frozen[1]))
-        return self._nmo
+        return nmo(self)
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
@@ -180,7 +190,15 @@ class UCCSD(rccsd.RCCSD):
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
 
+    def kernel(self, t1=None, t2=None, eris=None, mbpt2=False):
+        return self.ccsd(t1, t2, eris, mbpt2)
     def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
+        '''Ground-state unrestricted (U)CCSD.
+
+        Kwargs:
+            mbpt2 : bool
+                Use one-shot MBPT2 approximation to CCSD.
+        '''
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         self.eris = eris
         self.dump_flags()
@@ -485,73 +503,21 @@ class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore', 
                  ao2mofn=ao2mo.outcore.general_iofree):
         cput0 = (time.clock(), time.time())
-        moidx = numpy.ones(cc.mo_occ.shape, dtype=numpy.bool)
-        if isinstance(cc.frozen, (int, numpy.integer)):
-            #TODO: Handle this better; maybe assume `frozen' lowest in energy
-            print("Error: integer number of frozen orbitals is ambiguous")
-            raise NotImplementedError
-        else:
-            for a in range(2):
-                if len(cc.frozen[a]) > 0:
-                    moidx[a][numpy.asarray(cc.frozen[a])] = False
+        moidx = get_umoidx(cc) 
         if mo_coeff is None:
-            # Note: mo_coeff will now reflect frozen orbs
             self.mo_coeff = mo_coeff = [cc.mo_coeff[0][:,moidx[0]], 
                                         cc.mo_coeff[1][:,moidx[1]]]
         else:
             self.mo_coeff = mo_coeff = [mo_coeff[0][:,moidx[0]], 
                                         mo_coeff[1][:,moidx[1]]]
-        dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
-        fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
-        fockab = list()
-        for a in range(2):
-            fockab.append( reduce(numpy.dot, (mo_coeff[a].T, fockao[a], mo_coeff[a])) )
 
         nocc = cc.nocc
-        nao = cc.mo_coeff[0].shape[0]
         nmo = cc.nmo
         nvir = nmo - nocc
         mem_incore, mem_outcore, mem_basic = rccsd._mem_usage(nocc, nvir)
         mem_now = lib.current_memory()[0]
 
-        # Convert to spin-orbitals
-        so_coeff = np.zeros((nao, nmo), dtype=mo_coeff[0].dtype)
-        nocc_a = int(sum(cc.mo_occ[0]*moidx[0]))
-        nocc_b = int(sum(cc.mo_occ[1]*moidx[1]))
-        nmo_a = len(cc.mo_occ[0]) - len(cc.frozen[0])
-        nmo_b = len(cc.mo_occ[1]) - len(cc.frozen[1])
-        nvir_a = nmo_a - nocc_a
-        nvir_b = nmo_b - nocc_b
-        oa = range(0,nocc_a)
-        ob = range(nocc_a,nocc)
-        va = range(nocc,nocc+nvir_a)
-        vb = range(nocc+nvir_a,nmo)
-        spin = np.zeros(nmo, dtype=int)
-        spin[oa] = 0
-        spin[ob] = 1
-        spin[va] = 0
-        spin[vb] = 1
-        so_coeff[:,oa] = mo_coeff[0][:,:nocc_a]
-        so_coeff[:,ob] = mo_coeff[1][:,:nocc_b]
-        so_coeff[:,va] = mo_coeff[0][:,nocc_a:nmo_a]
-        so_coeff[:,vb] = mo_coeff[1][:,nocc_b:nmo_b]
-
-        fock = np.zeros((nmo, nmo))
-        fock[np.ix_(oa,oa)] = fockab[0][:nocc_a,:nocc_a]
-        fock[np.ix_(oa,va)] = fockab[0][:nocc_a,nocc_a:]
-        fock[np.ix_(va,oa)] = fockab[0][nocc_a:,:nocc_a]
-        fock[np.ix_(va,va)] = fockab[0][nocc_a:,nocc_a:]
-        fock[np.ix_(ob,ob)] = fockab[1][:nocc_b,:nocc_b]
-        fock[np.ix_(ob,vb)] = fockab[1][:nocc_b,nocc_b:]
-        fock[np.ix_(vb,ob)] = fockab[1][nocc_b:,:nocc_b]
-        fock[np.ix_(vb,vb)] = fockab[1][nocc_b:,nocc_b:]
-
-        idxo = np.diagonal(fock[:nocc,:nocc]).argsort()
-        idxv = nocc + np.diagonal(fock[nocc:,nocc:]).argsort()
-        idx = np.concatenate((idxo,idxv))
-        spin = spin[idx]
-        so_coeff = so_coeff[:,idx]
-        self.fock = fock[:, idx][idx]
+        self.fock, so_coeff, spin = uspatial2spin(cc, moidx, mo_coeff)
 
         log = logger.Logger(cc.stdout, cc.verbose)
         if (method == 'incore' and (mem_incore+mem_now < cc.max_memory) 
@@ -647,6 +613,94 @@ class _ERIS:
         log.timer('CCSD integral transformation', *cput0)
 
 
+def get_umoidx(cc):
+    '''Get MO boolean indices for unrestricted reference, accounting for frozen orbs.'''
+    moidx = numpy.ones(cc.mo_occ.shape, dtype=numpy.bool)
+    if isinstance(cc.frozen, (int, numpy.integer)):
+        dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
+        fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
+        eab = list()
+        for a in range(2):
+            eab.append( np.diag(reduce(numpy.dot, (cc.mo_coeff[a].T, fockao[a], cc.mo_coeff[a]))) )
+        eab = np.array(eab)
+        idxs = np.column_stack(np.unravel_index(np.argsort(eab.ravel()), (2, eab.shape[1])))
+        frozen = [[],[]]
+        for n, idx in zip(range(cc.frozen), idxs):
+            frozen[idx[0]].append(idx[1])
+    else:
+        frozen = cc.frozen
+    for a in range(2):
+        if len(frozen[a]) > 0:
+            moidx[a][numpy.asarray(frozen[a])] = False
+
+    return moidx
+
+
+def uspatial2spin(cc, moidx, mo_coeff):
+    '''Convert the results of an unrestricted mean-field calculation to spin-orbital form.
+
+    Spin-orbital ordering is determined by orbital energy without regard for spin.
+
+    Returns:
+        fock : (nso,nso) ndarray
+            The Fock matrix in the basis of spin-orbitals
+        so_coeff : (nao, nso) ndarray
+            The matrix of spin-orbital coefficients in the AO basis
+        spin : (nso,) ndarary
+            The spin (0 or 1) of each spin-orbital
+    '''
+
+    dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
+    fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
+    fockab = list()
+    for a in range(2):
+        fockab.append( reduce(numpy.dot, (mo_coeff[a].T, fockao[a], mo_coeff[a])) )
+
+    nocc = cc.nocc
+    nao = cc.mo_coeff[0].shape[0]
+    nmo = cc.nmo
+    nvir = nmo - nocc
+    so_coeff = np.zeros((nao, nmo), dtype=mo_coeff[0].dtype)
+    nocc_a = int(sum(cc.mo_occ[0]*moidx[0]))
+    nocc_b = int(sum(cc.mo_occ[1]*moidx[1]))
+    nmo_a = fockab[0].shape[0]
+    nmo_b = fockab[1].shape[0]
+    nvir_a = nmo_a - nocc_a
+    nvir_b = nmo_b - nocc_b
+    oa = range(0,nocc_a)
+    ob = range(nocc_a,nocc)
+    va = range(nocc,nocc+nvir_a)
+    vb = range(nocc+nvir_a,nmo)
+    spin = np.zeros(nmo, dtype=int)
+    spin[oa] = 0
+    spin[ob] = 1
+    spin[va] = 0
+    spin[vb] = 1
+    so_coeff[:,oa] = mo_coeff[0][:,:nocc_a]
+    so_coeff[:,ob] = mo_coeff[1][:,:nocc_b]
+    so_coeff[:,va] = mo_coeff[0][:,nocc_a:nmo_a]
+    so_coeff[:,vb] = mo_coeff[1][:,nocc_b:nmo_b]
+
+    fock = np.zeros((nmo, nmo))
+    fock[np.ix_(oa,oa)] = fockab[0][:nocc_a,:nocc_a]
+    fock[np.ix_(oa,va)] = fockab[0][:nocc_a,nocc_a:]
+    fock[np.ix_(va,oa)] = fockab[0][nocc_a:,:nocc_a]
+    fock[np.ix_(va,va)] = fockab[0][nocc_a:,nocc_a:]
+    fock[np.ix_(ob,ob)] = fockab[1][:nocc_b,:nocc_b]
+    fock[np.ix_(ob,vb)] = fockab[1][:nocc_b,nocc_b:]
+    fock[np.ix_(vb,ob)] = fockab[1][nocc_b:,:nocc_b]
+    fock[np.ix_(vb,vb)] = fockab[1][nocc_b:,nocc_b:]
+
+    idxo = np.diagonal(fock[:nocc,:nocc]).argsort()
+    idxv = nocc + np.diagonal(fock[nocc:,nocc:]).argsort()
+    idx = np.concatenate((idxo,idxv))
+    spin = spin[idx]
+    so_coeff = so_coeff[:,idx]
+    fock = fock[:, idx][idx]
+
+    return fock, so_coeff, spin
+
+
 class _IMDS:
     # Exactly the same as RCCSD IMDS except
     # -- rintermediates --> uintermediates
@@ -728,3 +782,24 @@ class _IMDS:
         self.Woovo = -self.Wooov.transpose(0,1,3,2)
         self.Woovv = eris.oovv
 
+
+if __name__ == '__main__':
+    from pyscf import scf
+    from pyscf import gto
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.atom = [['O', (0.,   0., 0.)],
+                ['O', (1.21, 0., 0.)]]
+    mol.basis = 'cc-pvdz' 
+    mol.spin = 2
+    mol.build()
+    mf = scf.UHF(mol)
+    print(mf.scf())
+
+    # Freeze 1s electrons
+    frozen = [[0,1], [0,1]]
+    # also acceptable
+    #frozen = 4
+    ucc = UCCSD(mf, frozen=frozen)
+    ecc, t1, t2 = ucc.kernel()
+    print(ecc - -0.3486987472235819)
