@@ -1119,8 +1119,12 @@ class SCF(lib.StreamObject):
         else:
             dm = self.init_guess_by_minao(mol)
         if self.verbose >= logger.DEBUG1:
-            logger.debug1(self, 'Nelec from initial guess = %g',
-                          (dm*self.get_ovlp()).sum().real)
+            s = self.get_ovlp()
+            if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+                nelec = (dm.T*s).sum()
+            else:  # UHF
+                nelec = (dm[0].T*s).sum() + (dm[1].T*s).sum()
+            logger.debug1(self, 'Nelec from initial guess = %g', nelec.real)
         return dm
 
     # full density matrix for RHF

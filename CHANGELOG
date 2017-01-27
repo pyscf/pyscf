@@ -141,7 +141,7 @@ Version 1.1 beta (2016-4-11):
   - Orbital occupancy for ROHF with symmetry
   - CASSCF initializing from x2c-UHF
   - ECP accuracy
-  - COSMO and QMMM interface
+  - QMMM interface
 
 
 Version 1.1 alpha-2 (2016-3-8):
@@ -170,7 +170,6 @@ Version 1.1 alpha-1 (2016-2-8):
   - DFT gradients
   - TDDFT and TDDFT gradients
   - DFT NMR
-  - COSMO interface
   - QM/MM interface
   - Pipek-Mezey localization
   - DF-CASSCF
