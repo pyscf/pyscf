@@ -23,10 +23,9 @@ def parse(string):
     '''
     bastxt = []
     for dat in string.splitlines():
-        x = dat.strip()
-        if (x and not x.startswith('#') and not x.startswith('END') and
-            not x.startswith('BASIS')):
-            bastxt.append(dat)
+        x = dat.split('#')[0].strip()  # Use # to start comments
+        if (x and not x.startswith('END') and not x.startswith('BASIS')):
+            bastxt.append(x)
     return _parse(bastxt)
 
 def load(basisfile, symb):
@@ -35,10 +34,9 @@ def load(basisfile, symb):
 def parse_ecp(string):
     ecptxt = []
     for dat in string.splitlines():
-        x = dat.strip()
-        if (x and not x.startswith('#') and not x.startswith('END') and
-            not x.startswith('ECP')):
-            ecptxt.append(dat)
+        x = dat.split('#')[0].strip()
+        if (x and not x.startswith('END') and not x.startswith('ECP')):
+            ecptxt.append(x)
     return _parse_ecp(ecptxt)
 
 def load_ecp(basisfile, symb):
@@ -142,7 +140,8 @@ def convert_ecp_to_nwchem(symb, ecp):
 
 def _parse(raw_basis):
     basis_add = []
-    for dat in raw_basis:
+    for line in raw_basis:
+        dat = line.lstrip()
         if dat.startswith('#'):
             continue
         elif dat[0].isalpha():
@@ -166,7 +165,8 @@ def _parse(raw_basis):
 
 def _parse_ecp(raw_ecp):
     ecp_add = []
-    for dat in raw_ecp:
+    for line in raw_ecp:
+        dat = line.lstrip()
         if dat.startswith('#'): # comment line
             continue
         elif dat[0].isalpha():

@@ -13,11 +13,10 @@ def parse(string):
     Lines started with # are ignored.
     '''
     bastxt = []
-    for dat in string.split('\n'):
-        x = dat.strip()
-        if (x and not x.startswith('#') and not x.startswith('END') and
-            not x.startswith('BASIS')):
-            bastxt.append(dat)
+    for dat in string.splitlines():
+        x = dat.split('#')[0].strip()
+        if (x and not x.startswith('END') and not x.startswith('BASIS')):
+            bastxt.append(x)
     return _parse(bastxt)
 
 def load(basisfile, symb):
@@ -52,7 +51,7 @@ def search_seg(basisfile, symb):
     for dat in fdata[1:]:
         if symb+' ' in dat:
             # remove blank lines
-            return [x.strip() for x in dat.split('\n')[1:]
+            return [x.strip() for x in dat.splitlines()[1:]
                     if x.strip() and 'END' not in x]
     raise RuntimeError('Basis not found for  %s  in  %s' % (symb, basisfile))
 
