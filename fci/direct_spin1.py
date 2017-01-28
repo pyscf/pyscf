@@ -151,13 +151,15 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
         h2e[:,:,k,k] += f1e
     return ao2mo.restore(4, h2e, norb) * fac
 
-def pspace(h1e, eri, norb, nelec, hdiag, np=400):
+def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
     '''pspace Hamiltonian to improve Davidson preconditioner. See, CPL, 169, 463
     '''
     neleca, nelecb = _unpack_nelec(nelec)
     h1e = numpy.ascontiguousarray(h1e)
     eri = ao2mo.restore(1, eri, norb)
     nb = cistring.num_strings(norb, nelecb)
+    if hdiag is None:
+        hdiag = make_hdiag(h1e, eri, norb, nelec)
     if hdiag.size < np:
         addr = numpy.arange(hdiag.size)
     else:
