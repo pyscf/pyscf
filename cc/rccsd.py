@@ -9,7 +9,7 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.cc import ccsd
 from pyscf.cc import rintermediates as imd
-from pyscf.lib.linalg_helper import eig
+from pyscf.lib import linalg_helper
 
 #einsum = np.einsum
 einsum = lib.einsum
@@ -295,8 +295,10 @@ class RCCSD(ccsd.CCSD):
         def precond(r, e0, x0):
             return r/(e0-adiag+1e-12)
 
+        eig = linalg_helper.eig
         if user_guess or koopmans:
-            def pickeig(w, v, nr, x0):
+            def pickeig(w, v, nr, envs):
+                x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
                 idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
                 return w[idx].real, v[:,idx].real, idx
             eip, evecs = eig(self.ipccsd_matvec, guess, precond, pick=pickeig,
@@ -463,8 +465,10 @@ class RCCSD(ccsd.CCSD):
         def precond(r, e0, x0):
             return r/(e0-adiag+1e-12)
 
+        eig = linalg_helper.eig
         if user_guess or koopmans:
-            def pickeig(w, v, nr, x0):
+            def pickeig(w, v, nr, envs):
+                x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
                 idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
                 return w[idx].real, v[:,idx].real, idx
             eea, evecs = eig(self.eaccsd_matvec, guess, precond, pick=pickeig,
@@ -652,8 +656,10 @@ class RCCSD(ccsd.CCSD):
         def precond(r, e0, x0):
             return r/(e0-adiag+1e-12)
 
+        eig = linalg_helper.eig
         if user_guess or koopmans:
-            def pickeig(w, v, nr, x0):
+            def pickeig(w, v, nr, envs):
+                x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
                 idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
                 return w[idx].real, v[:,idx].real, idx
             eee, evecs = eig(self.eeccsd_matvec, guess, precond, pick=pickeig,
