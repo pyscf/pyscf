@@ -33,10 +33,7 @@ Installation
 * To make python be able to find pyscf, edit environment variable
   `PYTHONPATH`, e.g.  if pyscf is installed in /opt/pyscf
 
-        export PYTHONPATH=/opt:$PYTHONPATH
-
-  Note the path in `PYTHONPATH` is the directory where pyscf is installed
-  (one upper level wrt pyscf directory). DO NOT put `pyscf` in the path.
+        export PYTHONPATH=/opt/pyscf:$PYTHONPATH
 
 * Use Intel MKL as BLAS library.  cmake with options
   `-DBLA_VENDOR=Intel10_64lp_seq`

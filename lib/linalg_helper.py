@@ -624,9 +624,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                 heff[i,head+k] = dot(xi.conj(), axt[k])
 
         w, v = scipy.linalg.eig(heff[:space,:space])
-        #TODO: Shouldn't gen_x0 twice (see line 635)
-        x0 = _gen_x0(v, xs)
-        e, v, idx = pick(w, v, nroots, x0)
+        e, v, idx = pick(w, v, nroots, locals())
         e, v = _sort_by_similarity(e, v, nroots, conv, vlast, emin,
                                    heff[:space,:space])
         if e.size != elast.size:
