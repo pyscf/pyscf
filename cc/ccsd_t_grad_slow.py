@@ -8,7 +8,7 @@ import ctypes
 import tempfile
 import numpy
 import h5py
-import pyscf.lib as lib
+from pyscf import lib
 from pyscf.lib import logger
 import pyscf.ao2mo
 import pyscf.cc.ccsd_incore as ccsd
@@ -37,7 +37,7 @@ def IX_intermediates(mycc, t1, t2, l1, l2, d1=None, d2=None, eris=None):
         dvvov = dovvv.transpose(2,3,0,1)
 
     nocc, nvir = t1.shape
-    eris_ovvv = _ccsd.unpack_tril(_cp(eris.ovvv).reshape(nocc*nvir,-1))
+    eris_ovvv = lib.unpack_tril(_cp(eris.ovvv).reshape(nocc*nvir,-1))
     eris_ovvv = eris_ovvv.reshape(nocc,nvir,nvir,nvir)
     eris_vvvv = pyscf.ao2mo.restore(1, _cp(eris.vvvv), nvir)
     dvvvv = pyscf.ao2mo.restore(1, _cp(dvvvv), nvir)
@@ -212,7 +212,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         de[k] -= numpy.einsum('xijk,ijk->x', eri1, dm2buf) * 2
 
         for i in range(3):
-            #:tmp = _ccsd.unpack_tril(eri1[i].reshape(-1,nao_pair))
+            #:tmp = lib.unpack_tril(eri1[i].reshape(-1,nao_pair))
             #:vj = numpy.einsum('ijkl,kl->ij', tmp, hf_dm1)
             #:vk = numpy.einsum('ijkl,jk->il', tmp, hf_dm1)
             vj, vk = ccsd_grad.hf_get_jk_incore(eri1[i], hf_dm1)

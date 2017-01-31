@@ -72,8 +72,9 @@ def update_amps(mycc, t1, t2, eris):
     nov = nocc*nvir
     fock = eris.fock
 
-    t1new = numpy.zeros_like(t1)
-    t2new = numpy.zeros_like(t2)
+    t1t2new = numpy.zeros((nov+nov**2))
+    t1new = t1t2new[:nov].reshape(t1.shape)
+    t2new = t1t2new[nov:].reshape(t2.shape)
     t2new_tril = numpy.zeros((nocc*(nocc+1)//2,nvir,nvir))
     mycc.add_wvvVV_(t1, t2, eris, t2new_tril)
     for i in range(nocc):
@@ -775,15 +776,20 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def diis_(self, t1, t2, istep, normt, de, adiis):
         if (istep > self.diis_start_cycle and
             abs(de) < self.diis_start_energy_diff):
-            t1t2 = numpy.hstack((t1.ravel(),t2.ravel()))
+            nocc, nvir = t1.shape
+            nov = nocc * nvir
+            if t1.base is not None and t1.base is t2.base:
+                t1t2 = t1.base
+            else:
 #NOTE: here overwriting .data to reduce memory usage, the contents of
 # t1, t2 are CHANGED!  If the pass-in t1/t2 are used elsewhere, be very
 # careful to call this function
-            t1.data = t1t2.data
-            t2.data = t1t2.data
+                t1t2 = numpy.hstack((t1.ravel(),t2.ravel()))
+                t1.data = t1t2.data
+                t2.data = t1t2.data
             t1t2 = adiis.update(t1t2)
-            t1 = t1t2[:t1.size].reshape(t1.shape)
-            t2 = t1t2[t1.size:].reshape(t2.shape)
+            t1 = t1t2[:nov].reshape(nocc,nvir)
+            t2 = t1t2[nov:].reshape(nocc,nocc,nvir,nvir)
             logger.debug(self, 'DIIS for step %d', istep)
         return t1, t2
 
@@ -843,8 +849,8 @@ class _ERIS:
                 lib.ddot(Lov.T, Lvv, 1, ovvv, 1)
                 lib.ddot(Lvv.T, Lvv, 1, vvvv, 1)
 
-            _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-            self.feri1 = feri1 = h5py.File(_tmpfile1.name)
+            tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+            self.feri1 = feri1 = h5py.File(tmpfile1.name)
             def __del__feri1(self):
                 feri1.close()
             self.feri1.__del__ = __del__feri1
@@ -908,9 +914,9 @@ class _ERIS:
                 ij += i + 1
         else:
             cput1 = time.clock(), time.time()
-            _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-            _tmpfile2 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-            self.feri1 = feri1 = h5py.File(_tmpfile1.name)
+            tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+            tmpfile2 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+            self.feri1 = feri1 = h5py.File(tmpfile1.name)
             def __del__feri1(self):
                 feri1.close()
             self.feri1.__del__ = __del__feri1
@@ -948,7 +954,7 @@ class _ERIS:
 
             if not cc.direct:
                 max_memory = max(2000,cc.max_memory-lib.current_memory()[0])
-                self.feri2 = feri2 = h5py.File(_tmpfile2.name)
+                self.feri2 = feri2 = h5py.File(tmpfile2.name)
                 def __del__feri2(self):
                     feri2.close()
                 self.feri2.__del__ = __del__feri2
@@ -957,7 +963,7 @@ class _ERIS:
                 cput1 = log.timer_debug1('transforming vvvv', *cput1)
 
             tmpfile3 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-            with h5py.File(tmpfile3.name, 'w') as feri:
+            with h5py.File(tmpfile3.name) as feri:
                 max_memory = max(2000, cc.max_memory-lib.current_memory()[0])
                 mo = numpy.hstack((orbv, orbo))
                 ao2mo.general(cc.mol, (orbo,mo,mo,mo),

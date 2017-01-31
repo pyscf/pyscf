@@ -8,9 +8,8 @@ import ctypes
 import tempfile
 import numpy
 import h5py
-import pyscf.lib as lib
+from pyscf import lib
 from pyscf.lib import logger
-import pyscf.ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
 from pyscf.cc import ccsd_lambda_incore as ccsd_lambda
@@ -63,7 +62,7 @@ def make_intermediates(mycc, t1, t2, eris):
 
     nocc, nvir = t1.shape
     eris_ovvv = _cp(eris.ovvv)
-    eris_ovvv = _ccsd.unpack_tril(eris_ovvv.reshape(nocc*nvir,-1))
+    eris_ovvv = lib.unpack_tril(eris_ovvv.reshape(nocc*nvir,-1))
     eris_ovvv = eris_ovvv.reshape(nocc,nvir,nvir,nvir)
     mo_e = mycc._scf.mo_energy
     eia = lib.direct_sum('i-a->ia',mo_e[:nocc], mo_e[nocc:])

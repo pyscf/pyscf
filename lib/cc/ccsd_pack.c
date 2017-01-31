@@ -10,16 +10,6 @@
 #include "np_helper/np_helper.h"
 #include "vhf/fblas.h"
 
-void CCunpack_tril(double *tril, double *mat, int count, int n)
-{
-        NPdunpack_tril_2d(count, n, tril, mat, HERMITIAN);
-}
-
-void CCpack_tril(double *tril, double *mat, int count, int n)
-{
-        NPdpack_tril_2d(count, n, tril, mat);
-}
-
 /*
  * a * v1 + b * v2.transpose(0,2,1,3)
  */
@@ -155,7 +145,7 @@ void CCload_eri(double *out, double *eri, int *orbs_slice, int nao)
         for (ij = 0; ij < ni*nj; ij++) {
                 i = ij / nj;
                 j = ij % nj;
-                NPdunpack_tril(nao, eri+ij*nao_pair, buf, 1);
+                NPdunpack_tril(nao, 0, eri+ij*nao_pair, buf, 1);
                 pout = out + (i*nn+j)*nao;
                 for (k = 0; k < nao; k++) {
                 for (l = 0; l < nao; l++) {

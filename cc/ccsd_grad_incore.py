@@ -8,7 +8,7 @@ import ctypes
 import tempfile
 import numpy
 import h5py
-import pyscf.lib as lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf import ao2mo
@@ -385,7 +385,7 @@ def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff):
 
     pool = pool.ravel()[:blksize*nvir**3].reshape((blksize*nvir,nvir,nvir))
     for p0, p1 in prange(0, nvir_pair, blksize*nvir):
-        buf1 = _ccsd.unpack_tril(_cp(dvvvv[p0:p1]), out=pool[:p1-p0])
+        buf1 = lib.unpack_tril(_cp(dvvvv[p0:p1]), out=pool[:p1-p0])
         _trans(buf1, (nocc,nmo,nocc,nmo), bufvv[p0:p1])
     pool = buf1 = None
 
@@ -403,7 +403,7 @@ def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff):
         tmp  = tmpbuf2[:i1-i0]
         for j0, j1 in prange(0, nvir_pair, BLKSIZE):
             tmp[:,j0:j1] = bufvv[j0:j1,i0:i1].T
-        buf1[:,nocc:,nocc:] = _ccsd.unpack_tril(tmp, out=tmpbuf3[:i1-i0])
+        buf1[:,nocc:,nocc:] = lib.unpack_tril(tmp, out=tmpbuf3[:i1-i0])
         _trans(buf1, (0,nmo,0,nmo), bufaa[i0:i1])
 # dm2 + dm2.transpose(2,3,0,1)
         for j0, j1, in prange(0, i0, BLKSIZE):

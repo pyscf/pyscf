@@ -42,11 +42,11 @@ void NPzhermi_triu(int n, double complex *mat, int hermi)
 }
 
 
-void NPdunpack_tril(int n, double *tril, double *mat, int hermi)
+void NPdunpack_tril(int n, int k, double *tril, double *mat, int hermi)
 {
-        size_t i, j, ij;
+        int i, j, ij;
         for (ij = 0, i = 0; i < n; i++) {
-                for (j = 0; j <= i; j++, ij++) {
+                for (j = 0; j < MIN(n, i+k+1); j++, ij++) {
                         mat[i*n+j] = tril[ij];
                 }
         }
@@ -67,12 +67,12 @@ void NPdunpack_row(int ndim, int row_id, double *tril, double *row)
         }
 }
 
-void NPzunpack_tril(int n, double complex *tril, double complex *mat,
+void NPzunpack_tril(int n, int k, double complex *tril, double complex *mat,
                     int hermi)
 {
-        size_t i, j, ij;
+        int i, j, ij;
         for (ij = 0, i = 0; i < n; i++) {
-                for (j = 0; j <= i; j++, ij++) {
+                for (j = 0; j < MIN(n, i+k+1); j++, ij++) {
                         mat[i*n+j] = tril[ij];
                 }
         }
@@ -81,21 +81,25 @@ void NPzunpack_tril(int n, double complex *tril, double complex *mat,
         }
 }
 
-void NPdpack_tril(int n, double *tril, double *mat)
+/*
+ * Diagonal above which to zero elements.  `k = 0` (the default) is the
+ * main diagonal, `k < 0` is below it and `k > 0` is above.
+ */
+void NPdpack_tril(int n, int k, double *tril, double *mat)
 {
-        size_t i, j, ij;
+        int i, j, ij;
         for (ij = 0, i = 0; i < n; i++) {
-                for (j = 0; j <= i; j++, ij++) {
+                for (j = 0; j < MIN(n, i+k+1); j++, ij++) {
                         tril[ij] = mat[i*n+j];
                 }
         }
 }
 
-void NPzpack_tril(int n, double complex *tril, double complex *mat)
+void NPzpack_tril(int n, int k, double complex *tril, double complex *mat)
 {
-        size_t i, j, ij;
+        int i, j, ij;
         for (ij = 0, i = 0; i < n; i++) {
-                for (j = 0; j <= i; j++, ij++) {
+                for (j = 0; j < MIN(n, i+k+1); j++, ij++) {
                         tril[ij] = mat[i*n+j];
                 }
         }
@@ -131,63 +135,85 @@ void NPdtakebak_2d(double *out, double *in, int *idx, int *idy,
         }
 }
 
-void NPdunpack_tril_2d(int count, int n, double *tril, double *mat, int hermi)
+void NPdunpack_tril_2d(int count, int n, int k,
+                       double *tril, double *mat, int hermi)
 {
 #pragma omp parallel default(none) \
-        shared(count, n, tril, mat, hermi)
+        shared(count, n, k, tril, mat, hermi)
 {
         int ic;
         size_t nn = n * n;
-        size_t n2 = n*(n+1)/2;
+        size_t n2;
+        if (k > 0) {
+                n2 = nn - (n-k)*(n-k+1)/2;
+        } else {
+                n2 = (n+k)*(n+k+1)/2;
+        }
 #pragma omp for schedule (static)
         for (ic = 0; ic < count; ic++) {
-                NPdunpack_tril(n, tril+n2*ic, mat+nn*ic, hermi);
+                NPdunpack_tril(n, k, tril+n2*ic, mat+nn*ic, hermi);
         }
 }
 }
 
-void NPzunpack_tril_2d(int count, int n,
+void NPzunpack_tril_2d(int count, int n, int k,
                        double complex *tril, double complex *mat, int hermi)
 {
 #pragma omp parallel default(none) \
-        shared(count, n, tril, mat, hermi)
+        shared(count, n, k, tril, mat, hermi)
 {
         int ic;
         size_t nn = n * n;
-        size_t n2 = n*(n+1)/2;
+        size_t n2;
+        if (k > 0) {
+                n2 = nn - (n-k)*(n-k+1)/2;
+        } else {
+                n2 = (n+k)*(n+k+1)/2;
+        }
 #pragma omp for schedule (static)
         for (ic = 0; ic < count; ic++) {
-                NPzunpack_tril(n, tril+n2*ic, mat+nn*ic, hermi);
+                NPzunpack_tril(n, k, tril+n2*ic, mat+nn*ic, hermi);
         }
 }
 }
 
-void NPdpack_tril_2d(int count, int n, double *tril, double *mat)
+void NPdpack_tril_2d(int count, int n, int k, double *tril, double *mat)
 {
 #pragma omp parallel default(none) \
-        shared(count, n, tril, mat)
+        shared(count, n, k, tril, mat)
 {
         int ic;
         size_t nn = n * n;
-        size_t n2 = n*(n+1)/2;
+        size_t n2;
+        if (k > 0) {
+                n2 = nn - (n-k)*(n-k+1)/2;
+        } else {
+                n2 = (n+k)*(n+k+1)/2;
+        }
 #pragma omp for schedule (static)
         for (ic = 0; ic < count; ic++) {
-                NPdpack_tril(n, tril+n2*ic, mat+nn*ic);
+                NPdpack_tril(n, k, tril+n2*ic, mat+nn*ic);
         }
 }
 }
 
-void NPzpack_tril_2d(int count, int n, double complex *tril, double complex *mat)
+void NPzpack_tril_2d(int count, int n, int k,
+                     double complex *tril, double complex *mat)
 {
 #pragma omp parallel default(none) \
-        shared(count, n, tril, mat)
+        shared(count, n, k, tril, mat)
 {
         int ic;
         size_t nn = n * n;
-        size_t n2 = n*(n+1)/2;
+        size_t n2;
+        if (k > 0) {
+                n2 = nn - (n-k)*(n-k+1)/2;
+        } else {
+                n2 = (n+k)*(n+k+1)/2;
+        }
 #pragma omp for schedule (static)
         for (ic = 0; ic < count; ic++) {
-                NPzpack_tril(n, tril+n2*ic, mat+nn*ic);
+                NPzpack_tril(n, k, tril+n2*ic, mat+nn*ic);
         }
 }
 }

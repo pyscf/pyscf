@@ -370,7 +370,7 @@ void RItranse2_r_s2(int (*fmmm)(),
         size_t ij_pair = (*fmmm)(NULL, NULL, envs, 1);
         size_t nao2 = nao*(nao+1)/2;
         double complex *buf = malloc(sizeof(double complex) * nao*nao);
-        NPzunpack_tril(nao, vin+nao2*row_id, buf, 0);
+        NPzunpack_tril(nao, 0, vin+nao2*row_id, buf, 0);
         (*fmmm)(vout+ij_pair*row_id, buf, envs, 0);
         free(buf);
 }

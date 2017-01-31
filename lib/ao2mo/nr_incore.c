@@ -24,7 +24,7 @@ void AO2MOtranse1_incore_s4(int (*fmmm)(), int row_id,
         size_t ij_pair = (*fmmm)(NULL, NULL, buf, envs, OUTPUTIJ);
         double *peri = eri_ao + npair * (row_id+envs->klsh_start);
 
-        NPdunpack_tril(nao, peri, buf, 0);
+        NPdunpack_tril(nao, 0, peri, buf, 0);
         (*fmmm)(vout+ij_pair*row_id, buf, buf+nao*nao, envs, 0);
 }
 
@@ -39,7 +39,7 @@ void AO2MOtranse1_incore_s8(int (*fmmm)(), int row_id,
 
 // Note AO2MOnr_e1incore_drv stores ij_start in envs.klsh_start
         NPdunpack_row(npair, row_id+envs->klsh_start, eri_ao, buf0);
-        NPdunpack_tril(nao, buf0, buf, 0);
+        NPdunpack_tril(nao, 0, buf0, buf, 0);
         (*fmmm)(vout+ij_pair*row_id, buf, buf+nao*nao, envs, 0);
         free(buf0);
 }

@@ -8,7 +8,7 @@ import ctypes
 import tempfile
 import numpy
 import h5py
-import pyscf.lib as lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.cc import ccsd
@@ -22,7 +22,7 @@ def gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None):
     if eris is None: eris = ccsd._ERIS(mycc)
     nocc, nvir = t1.shape
     eris_ovvv = _cp(eris.ovvv)
-    eris_ovvv = _ccsd.unpack_tril(eris_ovvv.reshape(nocc*nvir,-1))
+    eris_ovvv = lib.unpack_tril(eris_ovvv.reshape(nocc*nvir,-1))
     eris_ovvv = eris_ovvv.reshape(nocc,nvir,nvir,nvir)
     mo_e = mycc._scf.mo_energy
     eia = lib.direct_sum('i-a->ia',mo_e[:nocc], mo_e[nocc:])
@@ -50,7 +50,7 @@ def gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None):
 
     nocc, nvir = t1.shape
     eris_ovvv = _cp(eris.ovvv)
-    eris_ovvv = _ccsd.unpack_tril(eris_ovvv.reshape(nocc*nvir,-1))
+    eris_ovvv = lib.unpack_tril(eris_ovvv.reshape(nocc*nvir,-1))
     eris_ovvv = eris_ovvv.reshape(nocc,nvir,nvir,nvir)
     mo_e = mycc._scf.mo_energy
     eia = lib.direct_sum('i-a->ia',mo_e[:nocc], mo_e[nocc:])
@@ -204,7 +204,7 @@ if __name__ == '__main__':
 
     nocc, nvir = t1.shape
     eris_ovvv = _cp(eris.ovvv)
-    eris_ovvv = _ccsd.unpack_tril(eris_ovvv.reshape(nocc*nvir,-1))
+    eris_ovvv = lib.unpack_tril(eris_ovvv.reshape(nocc*nvir,-1))
     eris_ovvv = eris_ovvv.reshape(nocc,nvir,nvir,nvir)
     mo_e = mcc._scf.mo_energy
     eia = lib.direct_sum('i-a->ia',mo_e[:nocc], mo_e[nocc:])

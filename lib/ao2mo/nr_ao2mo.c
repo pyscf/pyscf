@@ -955,7 +955,7 @@ void AO2MOtranse1_nr_s2ij(int (*fmmm)(), int row_id,
         int nao = envs->nao;
         size_t ij_pair = (*fmmm)(NULL, NULL, buf, envs, OUTPUTIJ);
         size_t nao2 = nao*(nao+1)/2;
-        NPdunpack_tril(nao, vin+nao2*row_id, buf, 0);
+        NPdunpack_tril(nao, 0, vin+nao2*row_id, buf, 0);
         (*fmmm)(vout+ij_pair*row_id, buf, buf+nao*nao, envs, 0);
 }
 void AO2MOtranse1_nr_s2(int (*fmmm)(), int row_id,
@@ -1007,7 +1007,7 @@ void AO2MOtranse2_nr_s2kl(int (*fmmm)(), int row_id,
         int nao = envs->nao;
         size_t ij_pair = (*fmmm)(NULL, NULL, buf, envs, OUTPUTIJ);
         size_t nao2 = (*fmmm)(NULL, NULL, buf, envs, INPUT_IJ);
-        NPdunpack_tril(nao, vin+nao2*row_id, buf, 0);
+        NPdunpack_tril(nao, 0, vin+nao2*row_id, buf, 0);
         (*fmmm)(vout+ij_pair*row_id, buf, buf+nao*nao, envs, 0);
 }
 void AO2MOtranse2_nr_s2(int (*fmmm)(), int row_id,
