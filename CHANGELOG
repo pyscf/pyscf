@@ -41,6 +41,11 @@ PySCF 1.3 alpha-1 (2016-12-04)
   - PBC repeated images used by lattice summation
 
 
+PySCF 1.2.2
+------------------------
+* Bugfix
+  - GTO normalization in molden file
+
 
 PySCF 1.2.1 (2017-01-26)
 ------------------------

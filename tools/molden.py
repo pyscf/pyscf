@@ -7,6 +7,7 @@
 # http://www.cmbi.ru.nl/molden/molden_format.html
 
 import numpy
+import pyscf
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
@@ -229,8 +230,9 @@ def _d2e(token):
 def header(mol, fout, ignore_h=False):
     if ignore_h:
         mol = remove_high_l(mol)[0]
-    fout.write('''[Molden Format]
-[Atoms] (AU)\n''')
+    fout.write('[Molden Format]\n')
+    fout.write('made by pyscf v[%s]\n' % pyscf.__version__)
+    fout.write('[Atoms] (AU)\n')
     for ia in range(mol.natm):
         symb = mol.atom_pure_symbol(ia)
         chg = mol.atom_charge(ia)
