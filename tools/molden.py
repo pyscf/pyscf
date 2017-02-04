@@ -233,21 +233,18 @@ def header(mol, fout, ignore_h=False):
         coord = mol.atom_coord(ia)
         fout.write('%18.14f   %18.14f   %18.14f\n' % tuple(coord))
     fout.write('[GTO]\n')
-    for ia in range(mol.natm):
+    for ia, (sh0, sh1, p0, p1) in enumerate(mol.offset_nr_by_atom()):
         fout.write('%d 0\n' %(ia+1))
-        for b in mol._basis[mol.atom_symbol(ia)]:
-            l = b[0]
-            if isinstance(b[1], int):
-                b_coeff = b[2:]
-            else:
-                b_coeff = b[1:]
-            nprim = len(b_coeff)
-            nctr = len(b_coeff[0]) - 1
+        for ib in range(sh0, sh1):
+            l = mol.bas_angular(ib)
+            nprim = mol.bas_nprim(ib)
+            nctr = mol.bas_nctr(ib)
+            es = mol.bas_exp(ib)
+            cs = mol.bas_ctr_coeff(ib)
             for ic in range(nctr):
                 fout.write(' %s   %2d 1.00\n' % (param.ANGULAR[l], nprim))
                 for ip in range(nprim):
-                    fout.write('    %18.14g  %18.14g\n' %
-                               (b_coeff[ip][0], b_coeff[ip][ic+1]))
+                    fout.write('    %18.14g  %18.14g\n' % (es[ip], cs[ip,ic]))
         fout.write('\n')
     fout.write('[5d]\n[9g]\n\n')
 
@@ -281,7 +278,7 @@ def order_ao_index(mol, cart=False):
                 else:
                     idx.extend(range(off,off+(l+1)*(l+2)//2))
                 off += (l+1)*(l+2)//2
-    else:  # spheric orbitals
+    else:  # spherical orbitals
         for ib in range(mol.nbas):
             l = mol.bas_angular(ib)
             for n in range(mol.bas_nctr(ib)):
