@@ -574,11 +574,15 @@ def ewald(cell, ew_eta=None, ew_cut=None):
 energy_nuc = ewald
 
 
-def make_kpts(cell, nks):
+def make_kpts(cell, nks, wrap_around=False):
     '''Given number of kpoints along x,y,z , generate kpoints
 
     Args:
         nks : (3,) ndarray
+
+    Kwargs:
+        wrap_around : bool
+            To ensure all kpts are in first Brillouin zone.
 
     Returns:
         kpts in absolute value (unit 1/Bohr).  Gamma point is placed at the
@@ -588,7 +592,12 @@ def make_kpts(cell, nks):
 
     >>> cell.make_kpts((4,4,4))
     '''
-    ks_each_axis = [np.arange(n,dtype=float)/n for n in nks]
+    ks_each_axis = []
+    for n in nks:
+        ks = np.arange(n, dtype=float) / n
+        if wrap_around:
+            ks[ks>=.5] -= 1
+        ks_each_axis.append(ks)
     scaled_kpts = lib.cartesian_prod(ks_each_axis)
     kpts = cell.get_abs_kpts(scaled_kpts)
     return kpts
@@ -717,7 +726,7 @@ class Cell(mole.Mole):
     def build(self, dump_input=True, parse_arg=True,
               a=None, gs=None, ke_cutoff=None, precision=None, nimgs=None,
               ew_eta=None, ew_cut=None, pseudo=None, basis=None, h=None,
-              dimension=None, ecp=None,
+              dimension=None, rcut= None, ecp=None,
               *args, **kwargs):
         '''Setup Mole molecule and Cell and initialize some control parameters.
         Whenever you change the value of the attributes of :class:`Cell`,
@@ -742,6 +751,7 @@ class Cell(mole.Mole):
         if basis is not None: self.basis = basis
         if dimension is not None: self.dimension = dimension
         if precision is not None: self.precision = precision
+        if rcut is not None: self.rcut = rcut
         if ecp is not None: self.ecp = ecp
 
         assert(self.a is not None)
