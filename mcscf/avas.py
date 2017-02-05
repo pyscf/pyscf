@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#         Elvira R. Sayfutyarova <elviras@princeton.edu>
+#
 
 '''
 Automated construction of molecular active spaces from atomic valence orbitals.
@@ -16,7 +20,44 @@ from pyscf.lib import logger
 
 def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
            openshelloption=2, canonicalize=True, verbose=None):
-    '''
+    '''AVAS method to construct mcscf active space.
+    Ref. arXiv:1701.07862 [physics.chem-ph]
+
+    Args:
+        mf : an :class:`SCF` object
+
+        aolabels : string or a list of strings
+            AO labels for AO active space
+
+    Kwargs:
+        threshold : float
+            Tructing threshold of the AO-projector above which AOs are kept in
+            the active space.
+        minao : str
+            A reference AOs for AVAS.
+        with_iao : bool
+            Whether to use IAO localization to construct the reference active AOs.
+        openshelloption : int
+            How to handle singly-occupied orbitals in the active space. The
+            singly-occupied orbitals are projected as part of alpha orbitals
+            if openshelloption=2, or completely kept in active space if
+            openshelloption=3.  See Section III.E option 2 or 3 of the
+            reference paper for more details.
+        canonicalize : bool
+            Orbitals defined in AVAS method are local orbitals.  Symmetrizing
+            the core, active and virtual space.
+
+    Returns:
+        active-space-size, #-active-electrons, orbital-initial-guess-for-CASCI/CASSCF
+
+    Examples:
+
+    >>> from pyscf import gto, scf, mcscf
+    >>> from pyscf.mcscf import avas
+    >>> mol = gto.M(atom='Cr 0 0 0; Cr 0 0 1.6', basis='ccpvtz')
+    >>> mf = scf.RHF(mol).run()
+    >>> ncas, nelecas, mo = avas.avas(mf, ['Cr 3d', 'Cr 4s'])
+    >>> mc = mcscf.CASSCF(mf, ncas, nelecas).run(mo)
     '''
     if isinstance(verbose, logger.Logger):
         log = verbose

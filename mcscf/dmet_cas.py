@@ -13,8 +13,45 @@ from pyscf import scf
 def kernel(mf, dm, aolabels_or_baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
            orth_method='meta_lowdin', s=None, canonicalize=True,
            freeze_imp=False, verbose=None):
-    '''Using DMET to produce CASSCF initial guess.  Return the active space
-    size, num active electrons and the orbital initial guess.
+    '''DMET method to generate CASSCF initial guess.
+    Ref. arXiv:1701.07862 [physics.chem-ph]
+
+    Args:
+        mf : an :class:`SCF` object
+
+        dm : 2D np.array or a list of 2D array
+            Density matrix
+        aolabels_or_baslst : string or a list of strings or a list of index
+            AO labels or indices
+
+    Kwargs:
+        nelec_tol : float
+            Entanglement threshold of DMET bath.  If the occupancy of an
+            orbital is less than nelec_tol, the orbital is considered as bath
+            orbtial.  If occ is greater than (1-nelec_tol), the orbitals are
+            taken for core determinant.
+        base : int
+            0-based (C-style) or 1-based (Fortran-style) for baslst if baslst
+            is index list
+        orth_method : str
+            It can be one of 'lowdin' and 'meta_lowdin'
+        s : 2D array
+            AO overlap matrix.  This option is mainly used for custom Hamilatonian.
+        canonicalize : bool
+            Orbitals defined in AVAS method are local orbitals.  Symmetrizing
+            the core, active and virtual space.
+
+    Returns:
+        active-space-size, #-active-electrons, orbital-initial-guess-for-CASCI/CASSCF
+
+    Examples:
+
+    >>> from pyscf import gto, scf, mcscf
+    >>> from pyscf.mcscf import dmet_cas
+    >>> mol = gto.M(atom='Cr 0 0 0; Cr 0 0 1.6', basis='ccpvtz')
+    >>> mf = scf.RHF(mol).run()
+    >>> ncas, nelecas, mo = dmet_cas.dmet_cas(mf, ['Cr 3d', 'Cr 4s'])
+    >>> mc = mcscf.CASSCF(mf, ncas, nelecas).run(mo)
     '''
     from pyscf import lo
     if isinstance(verbose, logger.Logger):
@@ -143,7 +180,7 @@ def kernel(mf, dm, aolabels_or_baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
         mo = numpy.hstack((mocore, mocas, movir))
 
     return ncas, nelecas, mo
-guess_cas = kernel
+dmet_cas = guess_cas = kernel
 
 
 def search_for_degeneracy(e):
