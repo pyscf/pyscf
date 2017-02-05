@@ -164,9 +164,6 @@ class RCCSD(ccsd.CCSD):
 
     def __init__(self, mf, frozen=[], mo_coeff=None, mo_occ=None):
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
-        self.made_ip_imds = False
-        self.made_ea_imds = False
-        self.made_ee_imds = False
         self.max_space = 20
 
     def dump_flags(self):
@@ -324,11 +321,10 @@ class RCCSD(ccsd.CCSD):
 
     def ipccsd_matvec(self, vector):
         # Ref: Nooijen and Snijders, J. Chem. Phys. 102, 1681 (1995) Eqs.(8)-(9)
-        if not self.made_ip_imds:
-            if not hasattr(self,'imds'):
-                self.imds = _IMDS(self)
-            self.imds.make_ip()
-            self.made_ip_imds = True
+        if not hasattr(self,'imds'):
+            self.imds = _IMDS(self)
+        if not self.imds.made_ip_imds:
+            self.imds.make_ip(self.ip_partition)
         imds = self.imds
 
         r1,r2 = self.vector_to_amplitudes_ip(vector)
@@ -371,11 +367,10 @@ class RCCSD(ccsd.CCSD):
         return vector
 
     def ipccsd_diag(self):
-        if not self.made_ip_imds:
-            if not hasattr(self,'imds'):
-                self.imds = _IMDS(self)
-            self.imds.make_ip()
-            self.made_ip_imds = True
+        if not hasattr(self,'imds'):
+            self.imds = _IMDS(self)
+        if not self.imds.made_ip_imds:
+            self.imds.make_ip(self.ip_partition)
         imds = self.imds
 
         t1, t2 = self.t1, self.t2
@@ -495,11 +490,10 @@ class RCCSD(ccsd.CCSD):
 
     def eaccsd_matvec(self,vector):
         # Ref: Nooijen and Bartlett, J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)
-        if not self.made_ea_imds:
-            if not hasattr(self,'imds'):
-                self.imds = _IMDS(self)
-            self.imds.make_ea()
-            self.made_ea_imds = True
+        if not hasattr(self,'imds'):
+            self.imds = _IMDS(self)
+        if not self.imds.made_ea_imds:
+            self.imds.make_ea(self.ea_partition)
         imds = self.imds
 
         r1,r2 = self.vector_to_amplitudes_ea(vector)
@@ -545,11 +539,10 @@ class RCCSD(ccsd.CCSD):
         return vector
 
     def eaccsd_diag(self):
-        if not self.made_ea_imds:
-            if not hasattr(self,'imds'):
-                self.imds = _IMDS(self)
-            self.imds.make_ea()
-            self.made_ea_imds = True
+        if not hasattr(self,'imds'):
+            self.imds = _IMDS(self)
+        if not self.imds.made_ea_imds:
+            self.imds.make_ea(self.ea_partition)
         imds = self.imds
 
         t1, t2 = self.t1, self.t2
@@ -794,14 +787,20 @@ class _ERIS:
 
 class _IMDS:
     def __init__(self, cc):
-        self.cc = cc
+        self.verbose = cc.verbose
+        self.stdout = cc.stdout
+        self.t1 = cc.t1
+        self.t2 = cc.t2
+        self.eris = cc.eris
+        self.made_ip_imds = False
+        self.made_ea_imds = False
         self._made_shared_2e = False
 
     def _make_shared_1e(self):
         cput0 = (time.clock(), time.time())
-        log = logger.Logger(self.cc.stdout, self.cc.verbose)
+        log = logger.Logger(self.stdout, self.verbose)
 
-        t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
+        t1,t2,eris = self.t1, self.t2, self.eris
         self.Loo = imd.Loo(t1,t2,eris)
         self.Lvv = imd.Lvv(t1,t2,eris)
         self.Fov = imd.cc_Fov(t1,t2,eris)
@@ -810,9 +809,9 @@ class _IMDS:
 
     def _make_shared_2e(self):
         cput0 = (time.clock(), time.time())
-        log = logger.Logger(self.cc.stdout, self.cc.verbose)
+        log = logger.Logger(self.stdout, self.verbose)
 
-        t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
+        t1,t2,eris = self.t1, self.t2, self.eris
         # 2 virtuals
         self.Wovov = imd.Wovov(t1,t2,eris)
         self.Wovvo = imd.Wovvo(t1,t2,eris)
@@ -820,44 +819,44 @@ class _IMDS:
 
         log.timer('EOM-CCSD shared two-electron intermediates', *cput0)
 
-    def make_ip(self):
+    def make_ip(self, ip_partition=None):
         self._make_shared_1e()
-        if self._made_shared_2e is False and self.cc.ip_partition != 'mp':
+        if self._made_shared_2e is False and ip_partition != 'mp':
             self._make_shared_2e()
             self._made_shared_2e = True
 
         cput0 = (time.clock(), time.time())
-        log = logger.Logger(self.cc.stdout, self.cc.verbose)
+        log = logger.Logger(self.stdout, self.verbose)
 
-        t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
+        t1,t2,eris = self.t1, self.t2, self.eris
 
         # 0 or 1 virtuals
-        if self.cc.ip_partition != 'mp':
+        if ip_partition != 'mp':
             self.Woooo = imd.Woooo(t1,t2,eris)
         self.Wooov = imd.Wooov(t1,t2,eris)
         self.Wovoo = imd.Wovoo(t1,t2,eris)
-
+        self.made_ip_imds = True
         log.timer('EOM-CCSD IP intermediates', *cput0)
 
-    def make_ea(self):
+    def make_ea(self, ea_partition=None):
         self._make_shared_1e()
-        if self._made_shared_2e is False and self.cc.ea_partition != 'mp':
+        if self._made_shared_2e is False and ea_partition != 'mp':
             self._make_shared_2e()
             self._made_shared_2e = True
 
         cput0 = (time.clock(), time.time())
-        log = logger.Logger(self.cc.stdout, self.cc.verbose)
+        log = logger.Logger(self.stdout, self.verbose)
 
-        t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
-        
+        t1,t2,eris = self.t1, self.t2, self.eris
+
         # 3 or 4 virtuals
         self.Wvovv = imd.Wvovv(t1,t2,eris)
-        if self.cc.ea_partition == 'mp' and not np.any(t1):
+        if ea_partition == 'mp' and not np.any(t1):
             self.Wvvvo = imd.Wvvvo(t1,t2,eris)
         else:
             self.Wvvvv = imd.Wvvvv(t1,t2,eris)
             self.Wvvvo = imd.Wvvvo(t1,t2,eris,self.Wvvvv)
-
+        self.made_ea_imds = True
         log.timer('EOM-CCSD EA intermediates', *cput0)
 
     def make_ee(self):
