@@ -10,9 +10,9 @@ from pyscf.lib import logger
 from pyscf.tools import dump_mat
 from pyscf import scf
 
-def guess_cas(mf, dm, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
-              orth_method='meta_lowdin', s=None, canonicalize=True,
-              freeze_imp=False, verbose=None):
+def kernel(mf, dm, aolabels_or_baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
+           orth_method='meta_lowdin', s=None, canonicalize=True,
+           freeze_imp=False, verbose=None):
     '''Using DMET to produce CASSCF initial guess.  Return the active space
     size, num active electrons and the orbital initial guess.
     '''
@@ -25,12 +25,21 @@ def guess_cas(mf, dm, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
         log = logger.Logger(mf.stdout, mf.verbose)
     if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2): # ROHF/UHF DM
         dm = sum(dm)
+    mol = mf.mol
+    if isinstance(aolabels_or_baslst, str):
+        baslst = [i for i,t in enumerate(mol.spherical_labels(1))
+                  if aolabels_or_baslst in t]
+    elif isinstance(aolabels_or_baslst[0], str):
+        baslst = [i for i,t in enumerate(mol.spherical_labels(1))
+                  if any(x in t for x in aolabels_or_baslst)]
+    else:
+        baslst = aolabels_or_baslst
+    baslst = numpy.asarray(baslst)
     if base != 0:
         baslst = [i-base for i in baslst]
     if s is None:
         s = mf.get_ovlp()
 
-    mol = mf.mol
     if (not isinstance(mf, scf.hf.SCF)) and hasattr(mf, '_scf'):
         mf = mf._scf
 
@@ -81,7 +90,7 @@ def guess_cas(mf, dm, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
     log.debug('DMET impurity and bath orbitals on orthogonal AOs')
     log.debug('DMET %d impurity sites/occ', nimp)
     if log.verbose >= logger.DEBUG1:
-        label = mol.spheric_labels(True)
+        label = mol.spherical_labels(True)
         occ_label = ['#%d/%.5f'%(i+1,x) for i,x in enumerate(occi)]
         #dump_mat.dump_rec(mol.stdout, numpy.dot(corth[:,baslst], ui),
         #                  label=label, label2=occ_label, start=1)
@@ -104,35 +113,6 @@ def guess_cas(mf, dm, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
     mocas = numpy.hstack((numpy.dot(corth[:,baslst],ui), mob))
     movir = mo_env[:,ncore:]
 
-    def search_for_degeneracy(e):
-        idx = numpy.where(abs(e[1:] - e[:-1]) < 1e-3)[0]
-        return numpy.unique(numpy.hstack((idx, idx+1)))
-    def symmetrize(e, c):
-        if mol.symmetry:
-            degidx = search_for_degeneracy(e)
-            log.debug1('degidx %s', degidx)
-            if degidx.size > 0:
-                esub = e[degidx]
-                csub = c[:,degidx]
-                scsub = numpy.dot(s, csub)
-                emin = abs(esub).min() * .5
-                es = []
-                cs = []
-                for i,ir in enumerate(mol.irrep_id):
-                    so = mol.symm_orb[i]
-                    sosc = numpy.dot(so.T, scsub)
-                    s_ir = reduce(numpy.dot, (so.T, s, so))
-                    fock_ir = numpy.dot(sosc*esub, sosc.T)
-                    e, u = scipy.linalg.eigh(fock_ir, s_ir)
-                    idx = abs(e) > emin
-                    es.append(e[idx])
-                    cs.append(numpy.dot(mol.symm_orb[i], u[:,idx]))
-                es = numpy.hstack(es)
-                idx = numpy.argsort(es)
-                assert(numpy.allclose(es[idx], esub))
-                c[:,degidx] = numpy.hstack(cs)[:,idx]
-        return c
-
     if canonicalize or freeze_imp:
         if mf.mo_energy is None or mf.mo_coeff is None:
             fock = mf.get_hcore()
@@ -151,7 +131,7 @@ def guess_cas(mf, dm, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
                 f1 = reduce(numpy.dot, (c.T, fock, c))
                 e, u = scipy.linalg.eigh(f1)
                 log.debug1('Fock eig %s', e)
-                return symmetrize(e, numpy.dot(c, u))
+                return symmetrize(mol, e, numpy.dot(c, u), s, log)
 
         if freeze_imp:
             log.debug('Semi-canonicalization for freeze_imp=True')
@@ -163,6 +143,39 @@ def guess_cas(mf, dm, baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
         mo = numpy.hstack((mocore, mocas, movir))
 
     return ncas, nelecas, mo
+guess_cas = kernel
+
+
+def search_for_degeneracy(e):
+    idx = numpy.where(abs(e[1:] - e[:-1]) < 1e-3)[0]
+    return numpy.unique(numpy.hstack((idx, idx+1)))
+
+def symmetrize(mol, e, c, s, log):
+    if mol.symmetry:
+        degidx = search_for_degeneracy(e)
+        log.debug1('degidx %s', degidx)
+        if degidx.size > 0:
+            esub = e[degidx]
+            csub = c[:,degidx]
+            scsub = numpy.dot(s, csub)
+            emin = abs(esub).min() * .5
+            es = []
+            cs = []
+            for i,ir in enumerate(mol.irrep_id):
+                so = mol.symm_orb[i]
+                sosc = numpy.dot(so.T, scsub)
+                s_ir = reduce(numpy.dot, (so.T, s, so))
+                fock_ir = numpy.dot(sosc*esub, sosc.T)
+                e, u = scipy.linalg.eigh(fock_ir, s_ir)
+                idx = abs(e) > emin
+                es.append(e[idx])
+                cs.append(numpy.dot(mol.symm_orb[i], u[:,idx]))
+            es = numpy.hstack(es)
+            idx = numpy.argsort(es)
+            assert(numpy.allclose(es[idx], esub, rtol=1e-3, atol=1e-4))
+            c[:,degidx] = numpy.hstack(cs)[:,idx]
+    return c
+
 
 if __name__ == '__main__':
     from pyscf import scf
@@ -182,7 +195,7 @@ if __name__ == '__main__':
     mf = scf.RHF(mol)
     mf.scf()
 
-    aolst = [i for i,s in enumerate(mol.spheric_labels(1)) if 'H 1s' in s]
+    aolst = [i for i,s in enumerate(mol.spherical_labels(1)) if 'H 1s' in s]
     dm = mf.make_rdm1()
     ncas, nelecas, mo = guess_cas(mf, dm, aolst, verbose=4)
     mc = mcscf.CASSCF(mf, ncas, nelecas).set(verbose=4)

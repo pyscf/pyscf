@@ -723,6 +723,7 @@ def block_version(blockexe):
             elif 'need to specify hf_occ' in err.output:
                 version = '1.5'
             else:
+                sys.stderr.write(err.output)
                 raise err
         f1.close()
         return version
