@@ -620,7 +620,7 @@ def direct_sum(subscripts, *operands):
 
         symbs = subscript[1:].replace('-', '+').split('+')
         s = ''.join(symbs)
-        assert(len(set(s)) == len(s))  # make sure no duplicated symbols
+        #assert(len(set(s)) == len(s))  # make sure no duplicated symbols
         return sign, symbs
 
     if '->' in subscripts:
@@ -635,6 +635,11 @@ def direct_sum(subscripts, *operands):
     for i, symb in enumerate(src):
         op = numpy.asarray(operands[i])
         assert(len(symb) == op.ndim)
+        unisymb = set(symb)
+        if len(unisymb) != len(symb):
+            unisymb = ''.join(unisymb)
+            op = numpy.einsum('->'.join((symb, unisymb)), op)
+            src[i] = unisymb
         if i == 0:
             if sign[i] is '+':
                 out = op
