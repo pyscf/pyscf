@@ -24,14 +24,9 @@ SYMMETRIC = 3
 
 
 # 2d -> 1d or 3d -> 2d
-def pack_tril(mat, axis=-1, k=0, out=None):
+def pack_tril(mat, axis=-1, out=None):
     '''flatten the lower triangular part of a matrix.
     Given mat, it returns mat[...,numpy.tril_indices(mat.shape[0])]
-
-    Kwargs:
-        k : int, optional
-            Diagonal above which to zero elements.  `k = 0` (the default) is the
-            main diagonal, `k < 0` is below it and `k > 0` is above.
 
     Examples:
 
@@ -40,14 +35,10 @@ def pack_tril(mat, axis=-1, k=0, out=None):
     '''
     if mat.ndim == 2:
         count, nd = 1, mat.shape[0]
+        shape = nd*(nd+1)//2
     else:
         count, nd = mat.shape[:2]
-    ndk = nd - abs(k)
-    if k > 0:
-        shape = (count, nd**2 - ndk*(ndk-1)//2)
-    else:
-        shape = (count, ndk*(ndk+1)//2)
-    assert(nd > abs(k))
+        shape = (count, nd*(nd+1)//2)
 
     if mat.ndim == 2 or axis == -1:
         mat = numpy.asarray(mat, order='C')
@@ -56,19 +47,19 @@ def pack_tril(mat, axis=-1, k=0, out=None):
             fn = _np_helper.NPdpack_tril_2d
         else:
             fn = _np_helper.NPzpack_tril_2d
-        fn(ctypes.c_int(count), ctypes.c_int(nd), ctypes.c_int(k),
+        fn(ctypes.c_int(count), ctypes.c_int(nd),
            out.ctypes.data_as(ctypes.c_void_p),
            mat.ctypes.data_as(ctypes.c_void_p))
-        if mat.ndim == 2:
-            out = out[0]
+        return out
+
     else:  # pack the leading two dimension
         assert(axis == 0)
-        out = mat[numpy.tril_indices(nd, k)]
-    return out
+        out = mat[numpy.tril_indices(nd)]
+        return out
 
 # 1d -> 2d or 2d -> 3d, write hermitian lower triangle to upper triangle
-def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, k=0, out=None):
-    '''Inversed operation of pack_tril.
+def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
+    '''Reverse operation of pack_tril.
 
     Kwargs:
         filltriu : int
@@ -78,10 +69,6 @@ def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, k=0, out=None):
             | 1 (default) Transpose the lower triangular part to fill the upper triangular part
             | 2           Similar to filltriu=1, negative of the lower triangular part is assign
                           to the upper triangular part to make the matrix anti-hermitian
-
-        k : int, optional
-            Diagonal above which to zero elements.  `k = 0` (the default) is the
-            main diagonal, `k < 0` is below it and `k > 0` is above.
 
     Examples:
 
@@ -101,36 +88,30 @@ def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, k=0, out=None):
     tril = numpy.asarray(tril, order='C')
     if tril.ndim == 1:
         count, nd = 1, tril.size
+        nd = int(numpy.sqrt(nd*2))
+        shape = (nd,nd)
     else:
         nd = tril.shape[axis]
         count = int(tril.size // nd)
-    if k > 0:
-        nd = int(numpy.sqrt(2*(nd+k**2+k)+.251) - k - .5)
-    else:
-        nd = int(numpy.sqrt(nd*2)) - k
-    shape = (count,nd,nd)
+        nd = int(numpy.sqrt(nd*2))
+        shape = (count,nd,nd)
 
     if tril.ndim == 1 or axis == -1 or axis == tril.ndim-1:
-        if out is None:
-            out = numpy.zeros(shape, dtype=tril.dtype)
-        else:
-            out = numpy.ndarray(shape, tril.dtype, buffer=out)
+        out = numpy.ndarray(shape, tril.dtype, buffer=out)
         if tril.dtype == numpy.double:
             fn = _np_helper.NPdunpack_tril_2d
         else:
             fn = _np_helper.NPzunpack_tril_2d
-        fn(ctypes.c_int(count), ctypes.c_int(nd), ctypes.c_int(k),
+        fn(ctypes.c_int(count), ctypes.c_int(nd),
            tril.ctypes.data_as(ctypes.c_void_p),
            out.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(filltriu))
-        if tril.ndim == 1:
-            out = out[0]
         return out
 
     else:  # unpack the leading dimension
         assert(axis == 0)
         shape = (nd,nd) + tril.shape[1:]
         out = numpy.ndarray(shape, tril.dtype, buffer=out)
-        idx = numpy.tril_indices(nd, k)
+        idx = numpy.tril_indices(nd)
         if filltriu == HERMITIAN:
             for ij,(i,j) in enumerate(zip(*idx)):
                 out[i,j] = tril[ij]
@@ -889,12 +870,6 @@ if __name__ == '__main__':
     print(abs(x-x.T.conj()).sum())
     xs = numpy.asarray((x,x,x))
     print(abs(xs - unpack_tril(pack_tril(xs))).sum())
-    print(abs(pack_tril(a, k=-3) - a[numpy.tril_indices(400, k=-3)]).sum())
-    print(abs(pack_tril(a, k= 3) - a[numpy.tril_indices(400, k= 3)]).sum())
-    x = pack_tril(a, k= 3)
-    a = numpy.zeros_like(a)
-    a[numpy.tril_indices(400, k=3)] = x
-    print(abs(unpack_tril(x, 0, k= 3) - a).sum())
 
     a = numpy.random.random((400,400))
     b = numpy.random.random((400,400))

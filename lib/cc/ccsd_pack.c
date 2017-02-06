@@ -145,7 +145,7 @@ void CCload_eri(double *out, double *eri, int *orbs_slice, int nao)
         for (ij = 0; ij < ni*nj; ij++) {
                 i = ij / nj;
                 j = ij % nj;
-                NPdunpack_tril(nao, 0, eri+ij*nao_pair, buf, 1);
+                NPdunpack_tril(nao, eri+ij*nao_pair, buf, 1);
                 pout = out + (i*nn+j)*nao;
                 for (k = 0; k < nao; k++) {
                 for (l = 0; l < nao; l++) {
