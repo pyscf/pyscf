@@ -19,7 +19,7 @@ void AO2MOrestore_nr8to1(double *eri8, double *eri1, int norb)
         for (ij = 0, i = 0; i < norb; i++) {
         for (j = 0; j < i+1; j++, ij++) {
                 NPdunpack_row(npair, ij, eri8, buf);
-                NPdunpack_tril(norb, 0, buf, eri1+i*d3+j*d2, HERMITIAN);
+                NPdunpack_tril(norb, buf, eri1+i*d3+j*d2, HERMITIAN);
                 if (i > j) {
                         memcpy(eri1+j*d3+i*d2, eri1+i*d3+j*d2,
                                sizeof(double)*norb*norb);
@@ -37,7 +37,7 @@ void AO2MOrestore_nr4to1(double *eri4, double *eri1, int norb)
 
         for (ij = 0, i = 0; i < norb; i++) {
         for (j = 0; j <= i; j++, ij++) {
-                NPdunpack_tril(norb, 0, eri4+ij*npair, eri1+i*d3+j*d2, HERMITIAN);
+                NPdunpack_tril(norb, eri4+ij*npair, eri1+i*d3+j*d2, HERMITIAN);
                 if (i > j) {
                         memcpy(eri1+j*d3+i*d2, eri1+i*d3+j*d2,
                                sizeof(double)*norb*norb);
