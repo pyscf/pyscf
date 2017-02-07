@@ -4,7 +4,7 @@
 #
 
 '''
-Solve FCI problem with given 1-electron and 2-electron Hamiltonian
+Use selected CI solver for given 1-electron and 2-electron Hamiltonian
 '''
 
 import numpy
@@ -21,15 +21,14 @@ h2 = h2 + h2.transpose(0,1,3,2)
 h2 = h2 + h2.transpose(2,3,0,1)
 
 #
-# Generally, direct_spin1.kernel can handle all systems.
+# select_ci.kernel can handle all systems
 #
-e, fcivec = fci.direct_spin1.kernel(h1, h2, norb, 8, verbose=5)
+e, fcivec = fci.select_ci.kernel(h1, h2, norb, 8, verbose=5)
 
 #
-# A better way is to create a FCI (=FCISolver) object because FCI object offers
-# more options to control the calculation.
+# SCI object offers more options to control the calculation.
 #
-cisolver = fci.direct_spin1.FCI()
+cisolver = fci.SCI()
 cisolver.max_cycle = 100
 cisolver.conv_tol = 1e-8
 e, fcivec = cisolver.kernel(h1, h2, norb, 8)
@@ -40,7 +39,7 @@ e, fcivec = cisolver.kernel(h1, h2, norb, (3,1))  # 3 alpha, 1 beta electrons
 # If you are sure the system ground state is singlet, you can use spin0 solver.
 # Spin symmetry is considered in spin0 solver to reduce cimputation cost.
 #
-cisolver = fci.direct_spin0.FCI()
+cisolver = fci.select_ci_spin0.SCI()
 cisolver.verbose = 5
 e, fcivec = cisolver.kernel(h1, h2, norb, 8)
 
