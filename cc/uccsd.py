@@ -85,8 +85,8 @@ def update_amps(cc, t1, t2, eris):
     Wovvo = imd.cc_Wovvo(t1,t2,eris)
 
     # Move energy terms to the other side
-    Fvv -= fvv
-    Foo -= foo
+    Fvv -= np.diag(np.diag(fvv))
+    Foo -= np.diag(np.diag(foo))
 
     # T1 equation
     t1new = np.array(fov).conj()
@@ -838,7 +838,6 @@ if __name__ == '__main__':
     from pyscf import scf
     from pyscf import gto
     mol = gto.Mole()
-    mol.verbose = 5
     mol.atom = [['O', (0.,   0., 0.)],
                 ['O', (1.21, 0., 0.)]]
     mol.basis = 'cc-pvdz' 
@@ -856,7 +855,6 @@ if __name__ == '__main__':
     print(ecc - -0.3486987472235819)
 
     mol = gto.Mole()
-    mol.verbose = 5
     mol.atom = [
         [8 , (0. , 0.     , 0.)],
         [1 , (0. , -0.757 , 0.587)],
