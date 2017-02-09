@@ -216,22 +216,21 @@ def take_2d(a, idx, idy, out=None):
     '''
     a = numpy.asarray(a, order='C')
     if out is None:
-        out = numpy.zeros((len(idx),len(idy)), dtype=a.dtype)
+        out = numpy.empty((len(idx),len(idy)), dtype=a.dtype)
     else:
         out = numpy.ndarray((len(idx),len(idy)), dtype=a.dtype, buffer=out)
     if a.dtype == numpy.double:
-        idx = numpy.asarray(idx, dtype=numpy.int32)
-        idy = numpy.asarray(idy, dtype=numpy.int32)
-        _np_helper.NPdtake_2d(out.ctypes.data_as(ctypes.c_void_p),
-                              a.ctypes.data_as(ctypes.c_void_p),
-                              idx.ctypes.data_as(ctypes.c_void_p),
-                              idy.ctypes.data_as(ctypes.c_void_p),
-                              ctypes.c_int(out.shape[1]),
-                              ctypes.c_int(a.shape[1]),
-                              ctypes.c_int(idx.size),
-                              ctypes.c_int(idy.size))
+        fn = _np_helper.NPdtake_2d
     else:
-        out += a.take(idx, axis=0).take(idy, axis=1)
+        fn = _np_helper.NPztake_2d
+    idx = numpy.asarray(idx, dtype=numpy.int32)
+    idy = numpy.asarray(idy, dtype=numpy.int32)
+    fn(out.ctypes.data_as(ctypes.c_void_p),
+       a.ctypes.data_as(ctypes.c_void_p),
+       idx.ctypes.data_as(ctypes.c_void_p),
+       idy.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_int(out.shape[1]), ctypes.c_int(a.shape[1]),
+       ctypes.c_int(idx.size), ctypes.c_int(idy.size))
     return out
 
 def takebak_2d(out, a, idx, idy):
@@ -248,18 +247,17 @@ def takebak_2d(out, a, idx, idy):
     assert(out.flags.c_contiguous)
     a = numpy.asarray(a, order='C')
     if a.dtype == numpy.double:
-        idx = numpy.asarray(idx, dtype=numpy.int32)
-        idy = numpy.asarray(idy, dtype=numpy.int32)
-        _np_helper.NPdtakebak_2d(out.ctypes.data_as(ctypes.c_void_p),
-                                 a.ctypes.data_as(ctypes.c_void_p),
-                                 idx.ctypes.data_as(ctypes.c_void_p),
-                                 idy.ctypes.data_as(ctypes.c_void_p),
-                                 ctypes.c_int(out.shape[1]),
-                                 ctypes.c_int(a.shape[1]),
-                                 ctypes.c_int(idx.size),
-                                 ctypes.c_int(idy.size))
+        fn = _np_helper.NPdtakebak_2d
     else:
-        out[idx[:,None],idy] += a
+        fn = _np_helper.NPztakebak_2d
+    idx = numpy.asarray(idx, dtype=numpy.int32)
+    idy = numpy.asarray(idy, dtype=numpy.int32)
+    fn(out.ctypes.data_as(ctypes.c_void_p),
+       a.ctypes.data_as(ctypes.c_void_p),
+       idx.ctypes.data_as(ctypes.c_void_p),
+       idy.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_int(out.shape[1]), ctypes.c_int(a.shape[1]),
+       ctypes.c_int(idx.size), ctypes.c_int(idy.size))
     return out
 
 def transpose(a, axes=None, inplace=False, out=None):

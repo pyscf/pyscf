@@ -105,30 +105,74 @@ void NPzpack_tril(int n, double complex *tril, double complex *mat)
 void NPdtake_2d(double *out, double *in, int *idx, int *idy,
                 int odim, int idim, int nx, int ny)
 {
+#pragma omp parallel default(none) \
+        shared(out, in, idx,idy, odim, idim, nx, ny)
+{
         size_t i, j;
         double *pin;
+#pragma omp for schedule (static)
         for (i = 0; i < nx; i++) {
                 pin = in + (size_t)idim * idx[i];
                 for (j = 0; j < ny; j++) {
-                        out[j] += pin[idy[j]];
+                        out[i*odim+j] = pin[idy[j]];
                 }
-                out += odim;
         }
+}
+}
+
+void NPztake_2d(double complex *out, double complex *in, int *idx, int *idy,
+                int odim, int idim, int nx, int ny)
+{
+#pragma omp parallel default(none) \
+        shared(out, in, idx,idy, odim, idim, nx, ny)
+{
+        size_t i, j;
+        double complex *pin;
+#pragma omp for schedule (static)
+        for (i = 0; i < nx; i++) {
+                pin = in + (size_t)idim * idx[i];
+                for (j = 0; j < ny; j++) {
+                        out[i*odim+j] = pin[idy[j]];
+                }
+        }
+}
 }
 
 /* out[idx[:,None],idy] += in */
 void NPdtakebak_2d(double *out, double *in, int *idx, int *idy,
                    int odim, int idim, int nx, int ny)
 {
+#pragma omp parallel default(none) \
+        shared(out, in, idx,idy, odim, idim, nx, ny)
+{
         size_t i, j;
         double *pout;
+#pragma omp for schedule (static)
         for (i = 0; i < nx; i++) {
                 pout = out + (size_t)odim * idx[i];
                 for (j = 0; j < ny; j++) {
-                        pout[idy[j]] += in[j];
+                        pout[idy[j]] += in[i*idim+j];
                 }
-                in += idim;
         }
+}
+}
+
+void NPztakebak_2d(double complex *out, double complex *in, int *idx, int *idy,
+                   int odim, int idim, int nx, int ny)
+{
+#pragma omp parallel default(none) \
+        shared(out, in, idx,idy, odim, idim, nx, ny)
+{
+        size_t i, j;
+        double complex *pout;
+#pragma omp for schedule (static)
+        for (i = 0; i < nx; i++) {
+                pout = out + (size_t)odim * idx[i];
+                for (j = 0; j < ny; j++) {
+                        pout[idy[j]] += in[i*idim+j];
+                }
+        }
+}
 }
 
 void NPdunpack_tril_2d(int count, int n, double *tril, double *mat, int hermi)
