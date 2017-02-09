@@ -90,10 +90,10 @@ def update_amps(cc, t1, t2, eris):
     Wvovo = imd.cc_Wvovo(t1,t2,eris)
 
     # Move energy terms to the other side
-    Foo -= foo
-    Fvv -= fvv
-    Loo -= foo
-    Lvv -= fvv
+    Foo -= np.diag(np.diag(foo))
+    Fvv -= np.diag(np.diag(fvv))
+    Loo -= np.diag(np.diag(foo))
+    Lvv -= np.diag(np.diag(fvv))
 
     # T1 equation
     t1new = np.array(fov).conj()
@@ -871,3 +871,26 @@ def _mem_usage(nocc, nvir):
     # TODO: Improve incore estimate and add outcore estimate
     outcore = basic = incore
     return incore, outcore, basic
+
+
+if __name__ == '__main__':
+    from pyscf import scf
+    from pyscf import gto
+    mol = gto.Mole()
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+    mol.basis = 'cc-pvdz'
+    mol.spin = 0
+    mol.build()
+    mf = scf.RHF(mol)
+    print(mf.scf())
+
+    mycc = RCCSD(mf)
+    ecc, t1, t2 = mycc.kernel()
+    print(ecc - -0.2133432712431435)
+    e,v = mycc.ipccsd(nroots=3)
+    print(e[0] - 0.4335604332073799)
+    print(e[1] - 0.5187659896045407)
+    print(e[2] - 0.6782876002229172)

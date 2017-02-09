@@ -52,10 +52,8 @@ def solver(mol=None, singlet=True, symm=None):
         else:
             return direct_spin1.FCISolver(mol)
 
-def FCI(mol, mo, singlet=True):
+def FCI(mol, mo=None, singlet=True):
     '''FCI solver
-
-    Pass nelec to kernel
     '''
     from functools import reduce
     import numpy
@@ -63,6 +61,9 @@ def FCI(mol, mo, singlet=True):
     from pyscf import symm
     from pyscf import ao2mo
     cis = solver(mol, singlet=(mol.spin==0))
+    if mo is None:
+        return cis
+
     class CISolver(cis.__class__):
         def __init__(self):
             self.__dict__.update(cis.__dict__)

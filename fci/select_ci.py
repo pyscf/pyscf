@@ -34,8 +34,6 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
     cd_indexa, dd_indexa, cd_indexb, dd_indexb = link_index
     na, nlinka = cd_indexa.shape[:2]
     nb, nlinkb = cd_indexb.shape[:2]
-    ma, mlinka = dd_indexa.shape[:2]
-    mb, mlinkb = dd_indexb.shape[:2]
 
     eri = ao2mo.restore(1, eri, norb)
     eri1 = eri.transpose(0,2,1,3) - eri.transpose(0,2,3,1)
@@ -45,6 +43,7 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
     fcivec = ci_coeff.reshape(na,nb)
     # (bb|bb)
     if nelec[1] > 1:
+        mb, mlinkb = dd_indexb.shape[:2]
         fcivecT = lib.transpose(fcivec)
         ci1T = numpy.zeros((nb,na))
         libfci.SCIcontract_2e_aaaa(eri1.ctypes.data_as(ctypes.c_void_p),
@@ -59,6 +58,7 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
         ci1 = numpy.zeros_like(fcivec)
     # (aa|aa)
     if nelec[0] > 1:
+        ma, mlinka = dd_indexa.shape[:2]
         libfci.SCIcontract_2e_aaaa(eri1.ctypes.data_as(ctypes.c_void_p),
                                    fcivec.ctypes.data_as(ctypes.c_void_p),
                                    ci1.ctypes.data_as(ctypes.c_void_p),
@@ -429,7 +429,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     e, c = myci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
                     max_cycle=max_cycle, max_space=max_space, nroots=nroots,
                     max_memory=max_memory, verbose=log, **kwargs)
-    log.info('Select CI  E = %.15g', e+ecore)
+    log.info('Selected CI  E = %.15g', e+ecore)
 
     na = len(ci_strs[0])
     nb = len(ci_strs[1])
