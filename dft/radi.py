@@ -123,9 +123,9 @@ def gauss_chebyshev(n, **kwargs):
         x1 += xinc
         xi = (n-2*i-1) * step \
                 + 1/numpy.pi * (1+2./3*numpy.sin(x1)**2) * numpy.sin(2*x1)
-        r[i] = 1 - numpy.log(1+xi) * ln2
+        r[i] = 1 - numpy.log(1-xi) * ln2
         wi = fac * numpy.sin(x1)**4
-        dr[i] = wi * ln2/(1+xi)
+        dr[i] = wi * ln2/(1-xi)
     return r, dr
 
 
