@@ -39,14 +39,6 @@ class AO2MOpt(object):
                       c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
                       c_env.ctypes.data_as(ctypes.c_void_p))
 
-        def to_del():
-            self._cintopt = None
-            libao2mo.CVHFdel_optimizer(ctypes.byref(self._this))
-        self.__to_del = to_del
-
-    def __del__(self):
-        self.__to_del()
-
 
 # if out is not None, transform AO to MO in-place
 def nr_e1fill(intor, sh_range, atm, bas, env,

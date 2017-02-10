@@ -282,10 +282,7 @@ class _ERIS(object):
                                      self._tmpfile.name,
                                      max_memory=max_memory,
                                      level=level, verbose=log)
-            self.feri = feri = h5py.File(self._tmpfile.name, 'r')
-            def __del__():
-                feri.close()
-            self.feri.__del__ = __del__
+            self.feri = lib.H5TmpFile(self._tmpfile.name, 'r')
             self.ppaa = self.feri['ppaa']
             self.papa = self.feri['papa']
         dm_core = numpy.dot(mo[:,:ncore], mo[:,:ncore].T)

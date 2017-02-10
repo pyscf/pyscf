@@ -165,6 +165,7 @@ class RCCSD(ccsd.CCSD):
     def __init__(self, mf, frozen=[], mo_coeff=None, mo_occ=None):
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.max_space = 20
+        self._keys = self._keys.union(['max_space'])
 
     def dump_flags(self):
         ccsd.CCSD.dump_flags(self)

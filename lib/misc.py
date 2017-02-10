@@ -15,6 +15,8 @@ import itertools
 import math
 import ctypes
 import numpy
+import h5py
+from pyscf.lib import param
 
 c_double_p = ctypes.POINTER(ctypes.c_double)
 c_int_p = ctypes.POINTER(ctypes.c_int)
@@ -424,6 +426,16 @@ def background_process(func, *args, **kwargs):
 
 bg = background = bg_thread = background_thread
 bp = bg_process = background_process
+
+
+class H5TmpFile(h5py.File):
+    def __init__(self, filename=None, *args, **kwargs):
+        if filename is None:
+            tmpfile = tempfile.NamedTemporaryFile(dir=param.TMPDIR)
+            filename = tmpfile.name
+        h5py.File.__init__(self, filename, *args, **kwargs)
+    def __del__(self):
+        self.close()
 
 
 if __name__ == '__main__':

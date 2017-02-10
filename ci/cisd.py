@@ -669,12 +669,7 @@ class _ERIS:
                 ij1 += dij
         else:
             cput1 = time.clock(), time.time()
-            _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-            _tmpfile2 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-            self.feri1 = feri1 = h5py.File(_tmpfile1.name)
-            def __del__feri1(self):
-                feri1.close()
-            self.feri1.__del__ = __del__feri1
+            self.feri1 = lib.H5TmpFile()
             orbo = mo_coeff[:,:nocc]
             orbv = mo_coeff[:,nocc:]
             nvpair = nvir * (nvir+1) // 2
@@ -710,10 +705,7 @@ class _ERIS:
 
             if not myci.direct:
                 max_memory = max(2000,myci.max_memory-lib.current_memory()[0])
-                self.feri2 = feri2 = h5py.File(_tmpfile2.name)
-                def __del__feri2(self):
-                    feri2.close()
-                self.feri2.__del__ = __del__feri2
+                self.feri2 = lib.H5TmpFile()
                 ao2mo.full(myci.mol, orbv, self.feri2, max_memory=max_memory, verbose=log)
                 self.vvvv = self.feri2['eri_mo']
                 cput1 = log.timer_debug1('transforming vvvv', *cput1)

@@ -593,7 +593,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         return self.l1, self.l2
 
     def make_rdm1(self, t1=None, t2=None, l1=None, l2=None):
-        '''1-particle density matrix in MO space'''
+        '''Un-relaxed 1-particle density matrix in MO space'''
         from pyscf.cc import ccsd_rdm
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
@@ -793,6 +793,37 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             logger.debug(self, 'DIIS for step %d', istep)
         return t1, t2
 
+    def amplitudes_to_vector(self, t1, t2, out=None):
+        nocc, nvir = t1.shape
+        nov = nocc * nvir
+        size = nov + nocc*(nocc-1)//2*nvir*(nvir-1)//2
+        vector = numpy.ndarray(size, t1.dtype, buffer=out)
+        vector[:nov] = t1.ravel()
+        otril = numpy.tril_indices(nocc, k=-1)
+        vtril = numpy.tril_indices(nvir, k=-1)
+        otril = otril[0]*nocc + otril[1]
+        vtril = vtril[0]*nvir + vtril[1]
+        lib.take_2d(t2.reshape(nocc**2,-1), otril, vtril, out=vector[nov:])
+        return vector
+
+    def vector_to_amplitudes(self, vector, nocc=None, nvir=None):
+        if nocc is None:
+            nocc = self.nocc
+        if nvir is None:
+            nvir = self.nmo - nocc
+        nov = nocc * nvir
+        t1 = vector[:nov].copy().reshape((nocc,nvir))
+        t2 = numpy.zeros((nocc**2,nvir**2), vector.dtype)
+        t2tril = vector[nov:].reshape(nocc*(nocc-1)//2, -1)
+        otril = numpy.tril_indices(nocc, k=-1)
+        vtril = numpy.tril_indices(nvir, k=-1)
+        lib.takebak_2d(t2, t2tril, otril[0]*nocc+otril[1], vtril[0]*nvir+vtril[1])
+        lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[1]*nvir+vtril[0])
+        t2tril = -t2tril
+        lib.takebak_2d(t2, t2tril, otril[0]*nocc+otril[1], vtril[1]*nvir+vtril[0])
+        lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[0]*nvir+vtril[1])
+        return t1, t2.reshape(nocc,nocc,nvir,nvir)
+
 CC = CCSD
 
 class _ERIS:
@@ -849,11 +880,7 @@ class _ERIS:
                 lib.ddot(Lov.T, Lvv, 1, ovvv, 1)
                 lib.ddot(Lvv.T, Lvv, 1, vvvv, 1)
 
-            tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-            self.feri1 = feri1 = h5py.File(tmpfile1.name)
-            def __del__feri1(self):
-                feri1.close()
-            self.feri1.__del__ = __del__feri1
+            self.feri1 = lib.h5tmpfile()
             self.feri1['oooo'] = oooo.reshape(nocc,nocc,nocc,nocc)
             self.feri1['ooov'] = ooov.reshape(nocc,nocc,nocc,nvir)
             self.feri1['ovoo'] = ovoo.reshape(nocc,nvir,nocc,nocc)
@@ -914,12 +941,7 @@ class _ERIS:
                 ij += i + 1
         else:
             cput1 = time.clock(), time.time()
-            tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-            tmpfile2 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-            self.feri1 = feri1 = h5py.File(tmpfile1.name)
-            def __del__feri1(self):
-                feri1.close()
-            self.feri1.__del__ = __del__feri1
+            self.feri1 = lib.h5tmpfile()
             orbo = mo_coeff[:,:nocc]
             orbv = mo_coeff[:,nocc:]
             nvpair = nvir * (nvir+1) // 2
@@ -954,16 +976,13 @@ class _ERIS:
 
             if not cc.direct:
                 max_memory = max(2000,cc.max_memory-lib.current_memory()[0])
-                self.feri2 = feri2 = h5py.File(tmpfile2.name)
-                def __del__feri2(self):
-                    feri2.close()
-                self.feri2.__del__ = __del__feri2
+                self.feri2 = lib.h5tmpfile()
                 ao2mo.full(cc.mol, orbv, self.feri2, max_memory=max_memory, verbose=log)
                 self.vvvv = self.feri2['eri_mo']
                 cput1 = log.timer_debug1('transforming vvvv', *cput1)
 
             tmpfile3 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-            with h5py.File(tmpfile3.name) as feri:
+            with h5py.File(tmpfile3.name, 'w') as feri:
                 max_memory = max(2000, cc.max_memory-lib.current_memory()[0])
                 mo = numpy.hstack((orbv, orbo))
                 ao2mo.general(cc.mol, (orbo,mo,mo,mo),

@@ -733,7 +733,7 @@ def uspatial2spin(cc, moidx, mo_coeff):
     so_coeff[:,va] = mo_coeff[0][:,nocc_a:nmo_a]
     so_coeff[:,vb] = mo_coeff[1][:,nocc_b:nmo_b]
 
-    fock = np.zeros((nmo, nmo))
+    fock = np.zeros((nmo, nmo), dtype=fockab[0].dtype)
     fock[np.ix_(oa,oa)] = fockab[0][:nocc_a,:nocc_a]
     fock[np.ix_(oa,va)] = fockab[0][:nocc_a,nocc_a:]
     fock[np.ix_(va,oa)] = fockab[0][nocc_a:,:nocc_a]

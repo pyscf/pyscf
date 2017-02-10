@@ -14,6 +14,7 @@ import scipy.linalg
 import h5py
 from . import parameters
 from . import logger
+from . import misc
 
 
 INCORE_SIZE = 1e7
@@ -96,14 +97,7 @@ class DIIS(object):
 ##################################################
 # don't modify the following private variables, they are not input options
         self.filename = filename
-        if isinstance(filename, str):
-            self._diisfile = _diisfile = h5py.File(filename, 'w')
-        else:
-            self._tmpfile = tempfile.NamedTemporaryFile(dir=parameters.TMPDIR)
-            self._diisfile = _diisfile = h5py.File(self._tmpfile.name, 'w')
-        def __del__():
-            _diisfile.close()
-        self._diisfile.__del__ = __del__
+        self._diisfile = misc.H5TmpFile(filename, 'w')
         self._buffer = {}
         self._bookkeep = [] # keep the ordering of input vectors
         self._head = 0

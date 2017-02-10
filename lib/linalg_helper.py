@@ -1190,13 +1190,8 @@ def _sort_by_similarity(w, v, nroots, conv, vlast, emin=None, heff=None):
 
 class _Xlist(list):
     def __init__(self):
-        self._fd = tempfile.NamedTemporaryFile(dir=parameters.TMPDIR)
-        self.scr_h5 = scr_h5 = h5py.File(self._fd.name, 'w')
+        self.scr_h5 = lib.H5TmpFile()
         self.index = []
-
-    def __del__(self):
-        self.scr_h5.close()
-        self._fd = None
 
     def __getitem__(self, n):
         key = self.index[n]

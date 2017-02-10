@@ -239,8 +239,7 @@ class _ERIS(object):
                      (mem_basic+mem_now)/.9, casscf.max_memory)
 
         t1 = t0 = (time.clock(), time.time())
-        self._tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-        self.feri = feri = h5py.File(self._tmpfile.name, 'w')
+        self.feri = lib.H5TmpFile()
         self.ppaa = feri.create_dataset('ppaa', (nmo,nmo,ncas,ncas), 'f8')
         self.papa = feri.create_dataset('papa', (nmo,ncas,nmo,ncas), 'f8')
         self.j_pc = numpy.zeros((nmo,ncore))
@@ -311,9 +310,6 @@ class _ERIS(object):
 
         fxpp.close()
         self.feri.flush()
-        def __del__():
-            feri.close()
-        self.feri.__del__ = __del__
 
         dm_core = numpy.dot(mo[:,:ncore], mo[:,:ncore].T)
         vj, vk = casscf.get_jk(mol, dm_core)

@@ -68,11 +68,7 @@ def make_intermediates(mycc, t1, t2, eris):
     class _Saved:
         pass
     saved = _Saved()
-    saved._tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-    saved.ftmp = ftmp = h5py.File(saved._tmpfile.name)
-    def __del__():
-        ftmp.close()
-    saved.ftmp.__del__ = __del__
+    saved.ftmp = lib.H5TmpFile()
     saved.woooo = saved.ftmp.create_dataset('woooo', (nocc,nocc,nocc,nocc), 'f8')
     saved.wooov = saved.ftmp.create_dataset('wooov', (nocc,nocc,nocc,nvir), 'f8')
     saved.wOVov = saved.ftmp.create_dataset('wOVov', (nocc,nvir,nocc,nvir), 'f8')
