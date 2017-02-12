@@ -2,6 +2,26 @@
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
+#
+# The symmetry detection method implemented here is not strictly follow the
+# point group detection flowchart.  The detection is based on the degeneracy
+# of cartesian basis of multipole momentum, eg
+# http://symmetry.jacobs-university.de/cgi-bin/group.cgi?group=604&option=4
+# see the column of "linear functions, quadratic functions and cubic functions".
+#
+# Different point groups have different combinations of degeneracy for each
+# type of cartesian functions.  Based on the degeneracy of cartesian function
+# basis, one can quickly filter out a few candidates of point groups for the
+# given molecule.  Regular operations (rotation, mirror etc) can be applied
+# next to identify the symmetry.  Current implementation only checks the
+# rotation functions and it's roughly enough for D2h and subgroups.
+# 
+# There are special cases this detection method may break down, eg two H8 cube
+# molecules sitting on the same center but with random orientation.  The
+# system is in C1 while this detection method gives O group because the
+# 3 rotation bases are degenerated.  In this case, the code use the regular
+# method (point group detection flowchart) to detect the point group.
+#
 
 import sys
 import re
