@@ -429,13 +429,15 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     e, c = myci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
                     max_cycle=max_cycle, max_space=max_space, nroots=nroots,
                     max_memory=max_memory, verbose=log, **kwargs)
-    log.info('Selected CI  E = %.15g', e+ecore)
 
     na = len(ci_strs[0])
     nb = len(ci_strs[1])
     if nroots > 1:
+        for i, ei in enumerate(e+ecore):
+            log.info('Selected CI state %d  E = %.15g', i, ei)
         return e+ecore, [_as_SCIvector(ci.reshape(na,nb),ci_strs) for ci in c]
     else:
+        log.info('Selected CI  E = %.15g', e+ecore)
         return e+ecore, _as_SCIvector(c.reshape(na,nb), ci_strs)
 
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
