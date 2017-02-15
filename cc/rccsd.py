@@ -1789,7 +1789,7 @@ def make_tau(t2, t1, r1, fac=1, out=None):
 def _add_vvvv_(cc, t2, eris, Ht2):
     nocc = t2.shape[0]
     nvir = t2.shape[2]
-    t2tril = cc.add_wvvVV(np.zeros((nocc,nvir)), t2, eris)
+    t2tril = cc.add_wvvVV(np.zeros((nocc,nvir)), t2, eris, with_ovvv=False)
     idxo = np.arange(nocc)
     t2tril[idxo*(idxo+1)//2+idxo] *= .5
     idxo = np.tril_indices(nocc)
