@@ -98,24 +98,25 @@ def update_amps(cc, t1, t2, eris):
     # T1 equation
     t1new = np.array(fov).conj()
     t1new += -2*einsum('kc,ka,ic->ia',fov,t1,t1)
+    eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,-1)).reshape(nocc,nvir,nvir,nvir)
     t1new +=   einsum('ac,ic->ia',Fvv,t1)
     t1new +=  -einsum('ki,ka->ia',Foo,t1)
     t1new += 2*einsum('kc,kica->ia',Fov,t2)
     t1new +=  -einsum('kc,ikca->ia',Fov,t2)
     t1new +=   einsum('kc,ic,ka->ia',Fov,t1,t1)
-    t1new += 2*einsum('akic,kc->ia',eris.voov,t1)
-    t1new +=  -einsum('kaic,kc->ia',eris.ovov,t1)
-    t1new += 2*einsum('akcd,ikcd->ia',eris.vovv,t2)
-    t1new +=  -einsum('akdc,ikcd->ia',eris.vovv,t2)
-    t1new += 2*einsum('akcd,ic,kd->ia',eris.vovv,t1,t1)
-    t1new +=  -einsum('akdc,ic,kd->ia',eris.vovv,t1,t1)
-    t1new += -2*einsum('klic,klac->ia',eris.ooov,t2)
-    t1new +=  einsum('lkic,klac->ia',eris.ooov,t2)
-    t1new += -2*einsum('klic,ka,lc->ia',eris.ooov,t1,t1)
-    t1new +=  einsum('lkic,ka,lc->ia',eris.ooov,t1,t1)
+    t1new += 2*einsum('iack,kc->ia',eris.ovvo,t1)
+    t1new +=  -einsum('kiac,kc->ia',eris.oovv,t1)
+    t1new += 2*einsum('kdac,ikcd->ia',eris_ovvv,t2)
+    t1new +=  -einsum('kcad,ikcd->ia',eris_ovvv,t2)
+    t1new += 2*einsum('kdac,ic,kd->ia',eris_ovvv,t1,t1)
+    t1new +=  -einsum('kcad,ic,kd->ia',eris_ovvv,t1,t1)
+    t1new += -2*einsum('kilc,klac->ia',eris.ooov,t2)
+    t1new +=  einsum('likc,klac->ia',eris.ooov,t2)
+    t1new += -2*einsum('kilc,ka,lc->ia',eris.ooov,t1,t1)
+    t1new +=  einsum('likc,ka,lc->ia',eris.ooov,t1,t1)
 
     # T2 equation
-    t2new = np.array(eris.oovv).conj()
+    t2new = np.array(eris.ovov).transpose(0,2,1,3).conj().copy()
     t2new += einsum('klij,klab->ijab',Woooo,t2)
     t2new += einsum('klij,ka,lb->ijab',Woooo,t1,t1)
     for a in range(nvir):
@@ -126,12 +127,12 @@ def update_amps(cc, t1, t2, eris):
     t2new += (tmp + tmp.transpose(1,0,3,2))
     tmp = einsum('ki,kjab->ijab',Loo,t2)
     t2new -= (tmp + tmp.transpose(1,0,3,2))
-    tmp2 = np.array(eris.vovv).transpose(3,2,1,0).conj() \
-            - einsum('kbic,ka->abic',eris.ovov,t1)
+    tmp2 = np.array(eris_ovvv).transpose(1,3,0,2).conj() \
+            - einsum('kibc,ka->abic',eris.oovv,t1)
     tmp = einsum('abic,jc->ijab',tmp2,t1)
     t2new += (tmp + tmp.transpose(1,0,3,2))
-    tmp2 = np.array(eris.ooov).transpose(3,2,1,0).conj() \
-            + einsum('akic,jc->akij',eris.voov,t1)
+    tmp2 = np.array(eris.ooov).transpose(3,1,2,0).conj() \
+            + einsum('iack,jc->akij',eris.ovvo,t1)
     tmp = einsum('akij,kb->ijab',tmp2,t1)
     t2new -= (tmp + tmp.transpose(1,0,3,2))
     tmp = 2*einsum('akic,kjcb->ijab',Wvoov,t2) - einsum('akci,kjcb->ijab',Wvovo,t2)
@@ -155,8 +156,8 @@ def energy(cc, t1, t2, eris):
     e = 2*einsum('ia,ia', fock[:nocc,nocc:], t1)
     t1t1 = einsum('ia,jb->ijab',t1,t1)
     tau = t2 + t1t1
-    e += einsum('ijab,ijab', 2*tau, eris.oovv)
-    e += einsum('ijab,ijba',  -tau, eris.oovv)
+    e += einsum('ijab,iajb', 2*tau, eris.ovov)
+    e += einsum('ijab,ibja',  -tau, eris.ovov)
     return e.real
 
 
@@ -176,7 +177,7 @@ class RCCSD(ccsd.CCSD):
         nocc = self.nocc
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
         eijab = lib.direct_sum('ia,jb->ijab',eia,eia)
-        eris_oovv = np.array(eris.oovv)
+        eris_oovv = np.array(eris.ovov).transpose(0,2,1,3)
         t1 = eris.fock[:nocc,nocc:] / eia
         t2 = eris_oovv/eijab
         wvvoo = (2*eris_oovv 
@@ -221,8 +222,8 @@ class RCCSD(ccsd.CCSD):
     def ao2mo(self, mo_coeff=None):
         return _ERIS(self, mo_coeff)
 
-    def update_amps(self, t1, t2, eris):
-        return update_amps(self, t1, t2, eris)
+#    def update_amps(self, t1, t2, eris):
+#        return update_amps(self, t1, t2, eris)
 
     def nip(self):
         nocc = self.nocc
@@ -301,18 +302,20 @@ class RCCSD(ccsd.CCSD):
                 return w[idx].real, v[:,idx].real, idx
             eip, evecs = eig(self.ipccsd_matvec, guess, precond, pick=pickeig,
                              tol=self.conv_tol, max_cycle=self.max_cycle,
-                             max_space=self.max_space, nroots=nroots, verbose=7)
+                             max_space=self.max_space, nroots=nroots,
+                             verbose=self.verbose)
         else:
             eip, evecs = eig(self.ipccsd_matvec, guess, precond,
                              tol=self.conv_tol, max_cycle=self.max_cycle,
-                             max_space=self.max_space, nroots=nroots, verbose=7)
+                             max_space=self.max_space, nroots=nroots,
+                             verbose=self.verbose)
 
         self.eip = eip.real
 
         if nroots == 1:
             eip, evecs = [self.eip], [evecs]
         for n, en, vn in zip(range(nroots), eip, evecs):
-            logger.info(self, 'IP root %d E = %.16g  qpwt = %0.6g', 
+            logger.info(self, 'IP root %d E = %.16g  qpwt = %.6g',
                         n, en, np.linalg.norm(vn[:self.nocc])**2)
         log.timer('IP-CCSD', *cput0)
         if nroots == 1:
@@ -469,11 +472,13 @@ class RCCSD(ccsd.CCSD):
                 return w[idx].real, v[:,idx].real, idx
             eea, evecs = eig(self.eaccsd_matvec, guess, precond, pick=pickeig,
                              tol=self.conv_tol, max_cycle=self.max_cycle,
-                             max_space=self.max_space, nroots=nroots, verbose=7)
+                             max_space=self.max_space, nroots=nroots,
+                             verbose=self.verbose)
         else:
             eea, evecs = eig(self.eaccsd_matvec, guess, precond,
                              tol=self.conv_tol, max_cycle=self.max_cycle,
-                             max_space=self.max_space, nroots=nroots, verbose=7)
+                             max_space=self.max_space, nroots=nroots,
+                             verbose=self.verbose)
 
         self.eea = eea.real
 
@@ -481,7 +486,7 @@ class RCCSD(ccsd.CCSD):
             eea, evecs = [self.eea], [evecs]
         nvir = self.nmo - self.nocc
         for n, en, vn in zip(range(nroots), eea, evecs):
-            logger.info(self, 'EA root %d E = %.16g  qpwt = %0.6g', 
+            logger.info(self, 'EA root %d E = %.16g  qpwt = %.6g',
                         n, en, np.linalg.norm(vn[:nvir])**2)
         log.timer('EA-CCSD', *cput0)
         if nroots == 1:
@@ -595,60 +600,114 @@ class RCCSD(ccsd.CCSD):
         vector[nvir:] = r2.copy().reshape(nocc*nvir*nvir)
         return vector
 
-    def eeccsd(self, nroots=1, koopmans=False, guess=None, partition=None):
+    def eeccsd(self, nroots=1, koopmans=False, guess=None):
         '''Calculate N-electron neutral excitations via EE-EOM-CCSD.
 
         Kwargs:
             nroots : int
                 Number of roots (eigenvalues) requested
-            partition : bool or str
-                Use a matrix-partitioning for the doubles-doubles block.
-                Can be None, 'mp' (Moller-Plesset, i.e. orbital energies on the diagonal),
-                or 'full' (full diagonal elements).
             koopmans : bool
                 Calculate Koopmans'-like (1p1h) excitations only, targeting via
                 overlap.
             guess : list of ndarray
                 List of guess vectors to use for targeting via overlap.
         '''
-        cput0 = (time.clock(), time.time())
-        log = logger.Logger(self.stdout, self.verbose)
-        size = self.nee()
-        nroots = min(nroots,size)
-        if partition:
-            partition = partition.lower()
-            assert partition in ['mp','full']
-        self.ee_partition = partition
-        if partition == 'full':
-            self._eeccsd_diag_matrix2 = self.vector_to_amplitudes_ee(self.eeccsd_diag())[1]
 
-        nvir = self.nmo - self.nocc
-        adiag = self.eeccsd_diag()
+        spinvec_size = self.nee()
+        nroots = min(nroots, spinvec_size)
+
+        diag_eeS, diag_eeT, diag_sf = self.eeccsd_diag()
+        guess_eeS = []
+        guess_eeT = []
+        guess_sf = []
+        if guess and guess[0].size == spinvec_size:
+            raise NotImplementedError
+        elif guess:
+            for g in guess:
+                if g.size == diag_eeS.size:
+                    guess_eeS.append(g)
+                elif g.size == diag_eeT.size:
+                    guess_eeT.append(g)
+                else:
+                    guess_sf.append(g)
+            nroots_eeS = len(guess_eeS)
+            nroots_eeT = len(guess_eeT)
+            nroots_sf = len(guess_sf)
+        else:
+            deeS = np.sort(diag_eeS)[:nroots]
+            deeT = np.sort(diag_eeT)[:nroots]
+            dsf = np.sort(diag_sf)[:nroots]
+            dmax = np.sort(np.hstack([deeS,deeT,dsf,dsf]))[nroots-1]
+            nroots_eeS = np.count_nonzero(deeS <= dmax)
+            nroots_eeT = np.count_nonzero(deeT <= dmax)
+            nroots_sf = np.count_nonzero(dsf <= dmax)
+            guess_eeS = guess_eeT = guess_sf = None
+
+        e0 = e1 = e2 = []
+        v0 = v1 = v2 = []
+        if nroots_eeS > 0:
+            e0, v0 = self.eomee_ccsd_singlet(nroots_eeS, koopmans, guess_eeS, diag_eeS)
+            if nroots_eeS == 1:
+                e0, v0 = [e0], [v0]
+        if nroots_eeT > 0:
+            e2, v2 = self.eomee_ccsd_triplet(nroots_eeT, koopmans, guess_eeT, diag_eeT)
+            if nroots_eeT == 1:
+                e2, v2 = [e2], [v2]
+        if nroots_sf > 0:
+            e1, v1 = self.eomsf_ccsd(nroots_sf, koopmans, guess_sf, diag_sf)
+            if nroots_sf == 1:
+                e1, v1 = [e1], [v1]
+            # The associated solution
+            nocc = self.nocc
+            nvir = self.nmo - nocc
+            e1 = e1 + e1
+            for i in range(nroots_sf):
+                r1, r2 = self.vector_to_amplitudes_eomsf(v1[i], nocc, nvir)
+                v1.append(self.amplitudes_to_vector_eomsf(-r1, (-r2[0], r2[1])))
+        e = np.hstack([e0,e2,e1])
+        v = v0 + v2 + v1
+        if nroots == 1:
+            return e[0], v[0]
+        else:
+            idx = e.argsort()
+            return e[idx], [v[x] for x in idx]
+
+
+    def eomee_ccsd_singlet(self, nroots=1, koopmans=False, guess=None, diag=None):
+        cput0 = (time.clock(), time.time())
+        if diag is None:
+            diag = self.eeccsd_diag()[0]
+        nocc = self.nocc
+        nvir = self.nmo - nocc
+
         user_guess = False
         if guess:
             user_guess = True
             assert len(guess) == nroots
             for g in guess:
-                assert g.size == size
+                assert g.size == diag.size
         else:
+            idx = diag.argsort()
             guess = []
-            idx = adiag.argsort()
-            n = 0
-            for i in idx:
-                g = np.zeros(size)
-                g[i] = 1.0
-                if koopmans:
-                    if np.linalg.norm(g[:self.nocc*nvir])**2 > 0.8:
+            if koopmans:
+                n = 0
+                for i in idx:
+                    g = np.zeros_like(diag)
+                    g[i] = 1.0
+                    t1, t2 = self.vector_to_amplitudes(g, nocc, nvir)
+                    if np.linalg.norm(t1) > .9:
                         guess.append(g)
                         n += 1
-                else:
+                        if n == nroots:
+                            break
+            else:
+                for i in idx[:nroots]:
+                    g = np.zeros_like(diag)
+                    g[i] = 1.0
                     guess.append(g)
-                    n += 1
-                if n == nroots:
-                    break
 
         def precond(r, e0, x0):
-            return r/(e0-adiag+1e-12)
+            return r/(e0-diag+1e-12)
 
         eig = linalg_helper.eig
         if user_guess or koopmans:
@@ -656,50 +715,746 @@ class RCCSD(ccsd.CCSD):
                 x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
                 idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
                 return w[idx].real, v[:,idx].real, idx
-            eee, evecs = eig(self.eeccsd_matvec, guess, precond, pick=pickeig,
+            eee, evecs = eig(self.eomee_ccsd_matvec_singlet, guess, precond, pick=pickeig,
                              tol=self.conv_tol, max_cycle=self.max_cycle,
-                             max_space=self.max_space, nroots=nroots, verbose=7)
+                             max_space=self.max_space, nroots=nroots,
+                             verbose=self.verbose)
         else:
-            eee, evecs = eig(self.eeccsd_matvec, guess, precond,
+            eee, evecs = eig(self.eomee_ccsd_matvec_singlet, guess, precond,
                              tol=self.conv_tol, max_cycle=self.max_cycle,
-                             max_space=self.max_space, nroots=nroots, verbose=7)
+                             max_space=self.max_space, nroots=nroots,
+                             verbose=self.verbose)
 
         self.eee = eee.real
 
         if nroots == 1:
             eee, evecs = [self.eee], [evecs]
         for n, en, vn in zip(range(nroots), eee, evecs):
-            logger.info(self, 'EE root %d E = %.16g  qpwt = %0.6g', 
-                        n, en, np.linalg.norm(vn[:self.nocc*nvir])**2)
-        log.timer('EE-CCSD', *cput0)
+            t1, t2 = self.vector_to_amplitudes(vn, nocc, nvir)
+            logger.info(self, 'EOM-EE singlet root %d E = %.16g  qpwt = %.6g',
+                        n, en, np.linalg.norm(t1)**2)
+        logger.timer(self, 'EOM-EE-CCSD singlet', *cput0)
         if nroots == 1:
             return eee[0], evecs[0]
         else:
             return eee, evecs
 
-    def eeccsd_matvec(self,vector):
-        raise NotImplementedError
-
-    def vector_to_amplitudes_ee(self,vector):
+    def eomee_ccsd_triplet(self, nroots=1, koopmans=False, guess=None, diag=None):
+        cput0 = (time.clock(), time.time())
+        if diag is None:
+            diag = self.eeccsd_diag()[1]
         nocc = self.nocc
         nvir = self.nmo - nocc
-        r1 = vector[:nocc*nvir].copy().reshape((nocc,nvir))
-        r2 = vector[nocc*nvir:].copy().reshape((nocc,nocc,nvir,nvir))
-        return [r1,r2]
+
+        user_guess = False
+        if guess:
+            user_guess = True
+            assert len(guess) == nroots
+            for g in guess:
+                assert g.size == diag.size
+        else:
+            idx = diag.argsort()
+            guess = []
+            if koopmans:
+                n = 0
+                for i in idx:
+                    g = np.zeros_like(diag)
+                    g[i] = 1.0
+                    t1, t2 = self.vector_to_amplitudes_triplet(g, nocc, nvir)
+                    if np.linalg.norm(t1) > .9:
+                        guess.append(g)
+                        n += 1
+                        if n == nroots:
+                            break
+            else:
+                for i in idx[:nroots]:
+                    g = np.zeros_like(diag)
+                    g[i] = 1.0
+                    guess.append(g)
+
+        def precond(r, e0, x0):
+            return r/(e0-diag+1e-12)
+
+        eig = linalg_helper.eig
+        if user_guess or koopmans:
+            def pickeig(w, v, nr, envs):
+                x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
+                idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
+                return w[idx].real, v[:,idx].real, idx
+            eee, evecs = eig(self.eomee_ccsd_matvec_triplet, guess, precond, pick=pickeig,
+                             tol=self.conv_tol, max_cycle=self.max_cycle,
+                             max_space=self.max_space, nroots=nroots,
+                             verbose=self.verbose)
+        else:
+            eee, evecs = eig(self.eomee_ccsd_matvec_triplet, guess, precond,
+                             tol=self.conv_tol, max_cycle=self.max_cycle,
+                             max_space=self.max_space, nroots=nroots,
+                             verbose=self.verbose)
+
+        self.eee = eee.real
+
+        if nroots == 1:
+            eee, evecs = [self.eee], [evecs]
+        for n, en, vn in zip(range(nroots), eee, evecs):
+            t1, t2 = self.vector_to_amplitudes_triplet(vn, nocc, nvir)
+            logger.info(self, 'EOM-EE triplet root %d E = %.16g  qpwt = %.6g',
+                        n, en, np.linalg.norm(t1)**2)
+        logger.timer(self, 'EOM-EE-CCSD triplet', *cput0)
+        if nroots == 1:
+            return eee[0], evecs[0]
+        else:
+            return eee, evecs
+
+    def eomsf_ccsd(self, nroots=1, koopmans=False, guess=None, diag=None):
+        cput0 = (time.clock(), time.time())
+        if diag is None:
+            diag = self.eeccsd_diag()[2]
+        nocc = self.nocc
+        nvir = self.nmo - nocc
+
+        user_guess = False
+        if guess:
+            user_guess = True
+            assert len(guess) == nroots
+            for g in guess:
+                assert g.size == diag.size
+        else:
+            idx = diag.argsort()
+            guess = []
+            if koopmans:
+                n = 0
+                for i in idx:
+                    g = np.zeros_like(diag)
+                    g[i] = 1.0
+                    t1, t2 = self.vector_to_amplitudes_eomsf(g, nocc, nvir)
+                    if np.linalg.norm(t1) > .9:
+                        guess.append(g)
+                        n += 1
+                        if n == nroots:
+                            break
+            else:
+                for i in idx[:nroots]:
+                    g = np.zeros_like(diag)
+                    g[i] = 1.0
+                    guess.append(g)
+
+        def precond(r, e0, x0):
+            return r/(e0-diag+1e-12)
+
+        eig = linalg_helper.eig
+        if user_guess or koopmans:
+            def pickeig(w, v, nr, envs):
+                x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
+                idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
+                return w[idx].real, v[:,idx].real, idx
+            eee, evecs = eig(self.eomsf_ccsd_matvec, guess, precond, pick=pickeig,
+                             tol=self.conv_tol, max_cycle=self.max_cycle,
+                             max_space=self.max_space, nroots=nroots,
+                             verbose=self.verbose)
+        else:
+            eee, evecs = eig(self.eomsf_ccsd_matvec, guess, precond,
+                             tol=self.conv_tol, max_cycle=self.max_cycle,
+                             max_space=self.max_space, nroots=nroots,
+                             verbose=self.verbose)
+
+        self.eee = eee.real
+
+# EOM-SF solutions are degenerated.  Here the solution (r1ab, r2baaa, r2aaba)
+# is computed.  The associated solution is
+# (r1ba, r2abbb, r2bbab) = (-r1ab,-r2baaa, r2aaba)
+        if nroots == 1:
+            eee, evecs = [self.eee], [evecs]
+        for n, en, vn in zip(range(nroots), eee, evecs):
+            t1, t2 = self.vector_to_amplitudes_eomsf(vn, nocc, nvir)
+            qpwt = np.linalg.norm(t1)**2
+            logger.info(self, 'EOM-SF root %d E = %.16g  qpwt = %.6g', n, en, qpwt)
+        logger.timer(self, 'EOM-SF-CCSD', *cput0)
+        if nroots == 1:
+            return eee[0], evecs[0]
+        else:
+            return eee, evecs
+
+    def eomee_ccsd_matvec_singlet(self, vector):
+        if not hasattr(self,'imds'):
+            self.imds = _IMDS(self)
+        if not self.imds.made_ee_imds:
+            self.imds.make_ee()
+        imds = self.imds
+
+        r1, r2 = self.vector_to_amplitudes(vector)
+        t1, t2, eris = self.t1, self.t2, self.eris
+        nocc, nvir = t1.shape
+
+        rho = r2*2 - r2.transpose(0,1,3,2)
+        Hr1  = lib.einsum('ae,ie->ia', imds.Fvv, r1)
+        Hr1 -= lib.einsum('mi,ma->ia', imds.Foo, r1)
+        Hr1 += np.einsum('me,imae->ia',imds.Fov, rho)
+
+        Hr2 = lib.einsum('mnij,mnab->ijab', imds.woOoO, r2) * .5
+        Hr2+= lib.einsum('be,ijae->ijab', imds.Fvv   , r2)
+        Hr2-= lib.einsum('mj,imab->ijab', imds.Foo   , r2)
+
+        tau2 = make_tau(r2, r1, t1, fac=2)
+        #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,-1)).reshape(nocc,nvir,nvir,nvir)
+        #:Hr1 += lib.einsum('mfae,imef->ia', eris_ovvv, rho)
+        #:tmp = lib.einsum('meaf,ijef->maij', eris_ovvv, tau2)
+        #:Hr2 -= lib.einsum('ma,mbij->ijab', t1, tmp)
+        #:tmp  = lib.einsum('meaf,me->af', eris_ovvv, r1) * 2
+        #:tmp -= lib.einsum('mfae,me->af', eris_ovvv, r1)
+        mem_now = lib.current_memory()[0]
+        max_memory = lib.param.MAX_MEMORY - mem_now
+        blksize = max(int(max_memory*1e6/8/(nvir**3*3)), 2)
+        for p0,p1 in lib.prange(0, nocc, blksize):
+            ovvv = np.asarray(eris.ovvv[p0:p1]).reshape((p1-p0)*nvir,-1)
+            ovvv = lib.unpack_tril(ovvv).reshape(-1,nvir,nvir,nvir)
+            Hr1 += lib.einsum('mfae,imef->ia', ovvv, rho[:,p0:p1])
+            tmp = lib.einsum('meaf,ijef->maij', ovvv, tau2)
+            Hr2 -= lib.einsum('ma,mbij->ijab', t1[p0:p1], tmp)
+            tmp  = lib.einsum('meaf,me->af', ovvv, r1[p0:p1]) * 2
+            tmp -= lib.einsum('mfae,me->af', ovvv, r1[p0:p1])
+            Hr2 += lib.einsum('af,ijfb->ijab', tmp, t2)
+            ovvv = tmp = None
+        Hr2 -= lib.einsum('mbij,ma->ijab', imds.woVoO, r1)
+
+        Hr1-= lib.einsum('mnie,mnae->ia', imds.woOoV, rho)
+        tmp = lib.einsum('nmie,me->ni', imds.woOoV, r1) * 2
+        tmp-= lib.einsum('mnie,me->ni', imds.woOoV, r1)
+        Hr2 -= lib.einsum('ni,njab->ijab', tmp, t2)
+        tmp = None
+        for p0, p1 in lib.prange(0, nvir, nocc):
+            Hr2 += lib.einsum('ejab,ie->ijab', np.asarray(imds.wvOvV[p0:p1]), r1[:,p0:p1])
+
+        oVVo = np.asarray(imds.woVVo)
+        tmp = lib.einsum('mbej,imea->jiab', oVVo, r2)
+        Hr2 += tmp
+        Hr2 += tmp.transpose(0,1,3,2) * .5
+        oVvO = np.asarray(imds.woVvO) + oVVo * .5
+        oVVo = tmp = None
+        Hr1 += np.einsum('maei,me->ia', oVvO, r1) * 2
+        Hr2 += lib.einsum('mbej,imae->ijab', oVvO, rho)
+        oVvO = None
+
+        eris_ovov = np.asarray(eris.ovov)
+        tau2 = make_tau(r2, r1, t1, fac=2)
+        tmp = lib.einsum('menf,ijef->mnij', eris_ovov, tau2)
+        tau2 = None
+        tau = make_tau(t2, t1, t1)
+        Hr2 += lib.einsum('mnij,mnab->ijab', tmp, tau) * .5
+        tau = tmp = None
+
+        tmp = lib.einsum('nemf,imef->ni', eris_ovov, rho)
+        Hr1 -= lib.einsum('na,ni->ia', t1, tmp)
+        Hr2 -= lib.einsum('mj,miab->ijba', tmp, t2)
+        tmp = None
+
+        tmp  = np.einsum('mfne,mf->en', eris_ovov, r1) * 2
+        tmp -= np.einsum('menf,mf->en', eris_ovov, r1)
+        tmp  = np.einsum('en,nb->eb', tmp, t1)
+        tmp += lib.einsum('menf,mnbf->eb', eris_ovov, rho)
+        Hr2 -= lib.einsum('eb,ijea->jiab', tmp, t2)
+        tmp = eris_ovov = rho = None
+
+        #:eris_vvvv = ao2mo.restore(1,np.asarray(eris.vvvv),t1.shape[1])
+        #:Hr2 += lib.einsum('ijef,aebf->ijab', tau2, eris_vvvv) * .5
+        tau2 = make_tau(r2, r1, t1, fac=2)
+        _add_vvvv_(self, tau2, eris, Hr2)
+        tau2 = None
+
+        Hr2 = Hr2 + Hr2.transpose(1,0,3,2)
+        vector = self.amplitudes_to_vector(Hr1, Hr2)
+        return vector
+
+    def eomee_ccsd_matvec_triplet(self, vector):
+        if not hasattr(self,'imds'):
+            self.imds = _IMDS(self)
+        if not self.imds.made_ee_imds:
+            self.imds.make_ee()
+        imds = self.imds
+
+        r1, r2 = self.vector_to_amplitudes_triplet(vector)
+        r2aa, r2ab = r2
+        t1, t2, eris = self.t1, self.t2, self.eris
+        nocc, nvir = t1.shape
+
+        theta = r2aa + r2ab
+
+        Hr1  = lib.einsum('ae,ie->ia', imds.Fvv, r1)
+        Hr1 -= lib.einsum('mi,ma->ia', imds.Foo, r1)
+        Hr1 += np.einsum('me,imae->ia',imds.Fov, r2aa)
+        Hr1 += np.einsum('ME,iMaE->ia',imds.Fov, r2ab)
+
+        Hr2aa = lib.einsum('mnij,mnab->ijab', imds.woOoO, r2aa) * .25
+        Hr2ab = lib.einsum('mNiJ,mNaB->iJaB', imds.woOoO, r2ab) * .5
+        Hr2aa+= lib.einsum('be,ijae->ijab', imds.Fvv*.5, r2aa)
+        Hr2aa-= lib.einsum('mj,imab->ijab', imds.Foo*.5, r2aa)
+        Hr2ab+= lib.einsum('BE,iJaE->iJaB', imds.Fvv, r2ab)
+        Hr2ab-= lib.einsum('MJ,iMaB->iJaB', imds.Foo, r2ab)
+
+        tau2ab = np.einsum('ia,jb->ijab', r1, t1)
+        tau2ab-= np.einsum('ia,jb->ijab', t1, r1)
+        tau2ab+= r2ab
+        tau2aa = np.einsum('ia,jb->ijab', r1, t1)
+        tau2aa-= np.einsum('ia,jb->jiab', r1, t1)
+        tau2aa = tau2aa - tau2aa.transpose(0,1,3,2)
+        tau2aa+= r2aa
+        #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,-1)).reshape(nocc,nvir,nvir,nvir)
+        #:Hr1 += lib.einsum('mfae,imef->ia', eris_ovvv, theta)
+        #:tmpaa = lib.einsum('meaf,ijef->maij', eris_ovvv, tau2aa)
+        #:tmpab = lib.einsum('meAF,iJeF->mAiJ', eris_ovvv, tau2ab)
+        #:tmp1 = lib.einsum('mfae,me->af', eris_ovvv, r1)
+        #:Hr2aa+= lib.einsum('mb,maij->ijab', t1*.5, tmpaa)
+        #:Hr2ab-= lib.einsum('mb,mAiJ->iJbA', t1, tmpab)
+        mem_now = lib.current_memory()[0]
+        max_memory = lib.param.MAX_MEMORY - mem_now
+        blksize = max(int(max_memory*1e6/8/(nvir**3*3)), 2)
+        tmp1 = np.zeros((nvir,nvir), dtype=r1.dtype)
+        for p0,p1 in lib.prange(0, nocc, blksize):
+            ovvv = np.asarray(eris.ovvv[p0:p1]).reshape((p1-p0)*nvir,-1)
+            ovvv = lib.unpack_tril(ovvv).reshape(-1,nvir,nvir,nvir)
+            Hr1 += lib.einsum('mfae,imef->ia', ovvv, theta[:,p0:p1])
+            tmpaa = lib.einsum('meaf,ijef->maij', ovvv, tau2aa)
+            tmpab = lib.einsum('meAF,iJeF->mAiJ', ovvv, tau2ab)
+            tmp1 += lib.einsum('mfae,me->af', ovvv, r1[p0:p1])
+            Hr2aa+= lib.einsum('mb,maij->ijab', t1[p0:p1]*.5, tmpaa)
+            Hr2ab-= lib.einsum('mb,mAiJ->iJbA', t1[p0:p1], tmpab)
+            ovvv = tmpaa = tmpab = None
+        tmpa = lib.einsum('mnie,me->ni', imds.woOoV, r1)
+        tmp  = lib.einsum('ni,njab->ijab', tmpa, t2)
+        tmp -= lib.einsum('af,ijfb->ijab', tmp1, t2)
+        tmp -= lib.einsum('mbij,ma->ijab', imds.woVoO, r1)
+        for p0,p1 in lib.prange(0, nvir, nocc):
+            tmp += lib.einsum('ejab,ie->ijab', np.asarray(imds.wvOvV[p0:p1]), r1[:,p0:p1])
+
+        oVVo = np.asarray(imds.woVVo)
+        Hr1 += np.einsum('maei,me->ia',imds.woVVo,r1)
+        Hr2aa+= lib.einsum('mbej,imae->ijba', oVVo, r2ab)
+        Hr2ab+= lib.einsum('MBEJ,iMEa->iJaB', oVVo, r2aa)
+        Hr2ab+= lib.einsum('MbeJ,iMeA->iJbA', oVVo, r2ab)
+        oVVo += np.asarray(imds.woVvO)
+        tmp += lib.einsum('mbej,imae->ijab', oVVo, theta)
+        oVVo = None
+        Hr1-= lib.einsum('mnie,mnae->ia', imds.woOoV, theta)
+        Hr2aa+= tmp
+        Hr2ab+= tmp
+        tmp = None
+
+        eris_ovov = np.asarray(eris.ovov)
+        tau = make_tau(t2, t1, t1)
+        tmpaa = lib.einsum('menf,ijef->mnij', eris_ovov, tau2aa)
+        tmpab = lib.einsum('meNF,iJeF->mNiJ', eris_ovov, tau2ab)
+        Hr2aa += lib.einsum('mnij,mnab->ijab', tmpaa, tau) * 0.25
+        Hr2ab += lib.einsum('mNiJ,mNaB->iJaB', tmpab, tau) * .5
+        tmpaa = tmpab = tau = None
+
+        tmpa = -lib.einsum('menf,imfe->ni', eris_ovov, theta)
+        Hr1 += lib.einsum('na,ni->ia', t1, tmpa)
+        tmp  = lib.einsum('mj,imab->ijab', tmpa, t2)
+        tmp1 = np.einsum('menf,mf->en', eris_ovov, r1)
+        tmpa = np.einsum('en,nb->eb', tmp1, t1)
+        tmpa-= lib.einsum('menf,mnbf->eb', eris_ovov, theta)
+        tmp += lib.einsum('eb,ijae->ijab', tmpa, t2)
+        Hr2aa+= tmp
+        Hr2ab-= tmp
+        tmp = theta = eris_ovov = None
+
+        #:eris_vvvv = ao2mo.restore(1,np.asarray(eris.vvvv),t1.shape[1])
+        #:Hr2aa += lib.einsum('ijef,aebf->ijab', tau2aa, eris_vvvv) * .25
+        #:Hr2ab += lib.einsum('ijef,aebf->ijab', tau2ab, eris_vvvv) * .5
+        tau2aa *= .5
+        _add_vvvv_(self, tau2aa, eris, Hr2aa)
+        _add_vvvv_(self, tau2ab, eris, Hr2ab)
+        tau2aa = tau2ab = None
+
+        Hr2aa = Hr2aa - Hr2aa.transpose(0,1,3,2)
+        Hr2aa = Hr2aa - Hr2aa.transpose(1,0,2,3)
+        Hr2ab = Hr2ab - Hr2ab.transpose(1,0,3,2)
+        vector = self.amplitudes_to_vector_triplet(Hr1, (Hr2aa,Hr2ab))
+        return vector
+
+    def eomsf_ccsd_matvec(self, vector):
+        '''Spin flip EOM-CCSD'''
+        if not hasattr(self,'imds'):
+            self.imds = _IMDS(self)
+        if not self.imds.made_ee_imds:
+            self.imds.make_ee()
+        imds = self.imds
+
+        t1, t2, eris = self.t1, self.t2, self.eris
+        r1, r2 = self.vector_to_amplitudes_eomsf(vector)
+        r2baaa, r2aaba = r2
+        nocc, nvir = t1.shape
+
+        Hr1  = np.einsum('ae,ie->ia', imds.Fvv, r1)
+        Hr1 -= np.einsum('mi,ma->ia', imds.Foo, r1)
+        Hr1 += np.einsum('me,imae->ia', imds.Fov, r2baaa)
+        Hr1 += np.einsum('me,imae->ia', imds.Fov, r2aaba)
+        Hr2baaa = .5*lib.einsum('mnij,mnab->ijab', imds.woOoO, r2baaa)
+        Hr2aaba = .5*lib.einsum('mnij,mnab->ijab', imds.woOoO, r2aaba)
+        Hr2baaa -= lib.einsum('mj,imab->ijab', imds.Foo*.5, r2baaa)
+        Hr2aaba -= lib.einsum('mj,imab->ijab', imds.Foo*.5, r2aaba)
+        Hr2baaa -= lib.einsum('mj,miab->jiab', imds.Foo*.5, r2baaa)
+        Hr2aaba -= lib.einsum('mj,miab->jiab', imds.Foo*.5, r2aaba)
+        Hr2baaa += lib.einsum('be,ijae->ijab', imds.Fvv*.5, r2baaa)
+        Hr2aaba += lib.einsum('be,ijae->ijab', imds.Fvv*.5, r2aaba)
+        Hr2baaa += lib.einsum('be,ijea->ijba', imds.Fvv*.5, r2baaa)
+        Hr2aaba += lib.einsum('be,ijea->ijba', imds.Fvv*.5, r2aaba)
+
+        tau2baaa = np.einsum('ia,jb->ijab', r1, t1)
+        tau2baaa += r2baaa * .5
+        tau2baaa = tau2baaa - tau2baaa.transpose(0,1,3,2)
+        tau2aaba = np.einsum('ia,jb->ijab', r1, t1)
+        tau2aaba += r2aaba * .5
+        tau2aaba = tau2aaba - tau2aaba.transpose(1,0,2,3)
+
+        #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,-1)).reshape(nocc,nvir,nvir,nvir)
+        #:Hr1 += einsum('mfae,imef->ia', eris_ovvv, r2baaa)
+        #:Hr1 += einsum('mfae,imef->ia', eris_ovvv, r2aaba)
+        #:tmp1aaba = lib.einsum('meaf,ijef->maij', eris_ovvv, tau2baaa)
+        #:tmp1baaa = lib.einsum('meaf,ijef->maij', eris_ovvv, tau2aaba)
+        #:tmp1abaa = lib.einsum('meaf,ijfe->maij', eris_ovvv, tau2aaba)
+        #:tmp2aaba = lib.einsum('meaf,ijfe->maij', eris_ovvv, tau2baaa)
+        #:Hr2baaa -= lib.einsum('mb,maij->ijab', t1*.5, tmp2aaba)
+        #:Hr2aaba -= lib.einsum('mb,maij->ijab', t1*.5, tmp1abaa)
+        #:Hr2baaa -= lib.einsum('mb,maij->ijba', t1*.5, tmp1aaba)
+        #:Hr2aaba -= lib.einsum('mb,maij->ijba', t1*.5, tmp1baaa)
+        #:tmp = lib.einsum('mfae,me->af', eris_ovvv, r1)
+        #:tmp = lib.einsum('af,jibf->ijab', tmp, t2)
+        #:Hr2baaa -= tmp
+        #:Hr2aaba -= tmp
+        tmp1 = np.zeros((nvir,nvir), dtype=r1.dtype)
+        mem_now = lib.current_memory()[0]
+        max_memory = lib.param.MAX_MEMORY - mem_now
+        blksize = max(int(max_memory*1e6/8/(nvir**3*3)), 2)
+        for p0,p1 in lib.prange(0, nocc, blksize):
+            ovvv = np.asarray(eris.ovvv[p0:p1]).reshape((p1-p0)*nvir,-1)
+            ovvv = lib.unpack_tril(ovvv).reshape(-1,nvir,nvir,nvir)
+            Hr1 += einsum('mfae,imef->ia', ovvv, r2baaa[:,p0:p1])
+            Hr1 += einsum('mfae,imef->ia', ovvv, r2aaba[:,p0:p1])
+            tmp1aaba = lib.einsum('meaf,ijef->maij', ovvv, tau2baaa)
+            tmp1baaa = lib.einsum('meaf,ijef->maij', ovvv, tau2aaba)
+            tmp1abaa = lib.einsum('meaf,ijfe->maij', ovvv, tau2aaba)
+            tmp2aaba = lib.einsum('meaf,ijfe->maij', ovvv, tau2baaa)
+            Hr2baaa -= lib.einsum('mb,maij->ijab', t1[p0:p1]*.5, tmp2aaba)
+            Hr2aaba -= lib.einsum('mb,maij->ijab', t1[p0:p1]*.5, tmp1abaa)
+            Hr2baaa -= lib.einsum('mb,maij->ijba', t1[p0:p1]*.5, tmp1aaba)
+            Hr2aaba -= lib.einsum('mb,maij->ijba', t1[p0:p1]*.5, tmp1baaa)
+            tmp = lib.einsum('mfae,me->af', ovvv, r1[p0:p1])
+            tmp = lib.einsum('af,jibf->ijab', tmp, t2)
+            Hr2baaa -= tmp
+            Hr2aaba -= tmp
+            tmp1aaba = tmp1baaa = tmp1abaa = tmp2aaba = ovvv = None
+        tmp = lib.einsum('mbij,ma->ijab', imds.woVoO, r1)
+        Hr2baaa -= tmp
+        Hr2aaba -= tmp
+        tmp = None
+
+        Hr1 -= lib.einsum('mnie,mnae->ia', imds.woOoV, r2aaba)
+        Hr1 -= lib.einsum('mnie,mnae->ia', imds.woOoV, r2baaa)
+        tmp = lib.einsum('mnie,me->ni', imds.woOoV, r1)
+        tmp = lib.einsum('ni,njab->ijab', tmp, t2)
+        Hr2baaa += tmp
+        Hr2aaba += tmp
+        for p0,p1 in lib.prange(0, nvir, nocc):
+            tmp = lib.einsum('ejab,ie->ijab', np.asarray(imds.wvOvV[p0:p1]), r1[:,p0:p1])
+            Hr2baaa += tmp
+            Hr2aaba += tmp
+        tmp = None
+
+        oVVo = np.asarray(imds.woVVo)
+        Hr1 += np.einsum('maei,me->ia', oVVo, r1)
+        Hr2baaa += lib.einsum('mbej,miea->jiba', oVVo, r2baaa)
+        Hr2aaba += lib.einsum('mbej,miea->jiba', oVVo, r2aaba)
+        oVvO = np.asarray(imds.woVvO)
+        Hr2baaa += lib.einsum('mbej,imae->ijab', oVvO, r2aaba)
+        Hr2aaba += lib.einsum('mbej,imae->ijab', oVvO, r2baaa)
+        oVvO += oVVo
+        Hr2baaa += lib.einsum('mbej,imae->ijab', oVvO, r2baaa)
+        Hr2aaba += lib.einsum('mbej,imae->ijab', oVvO, r2aaba)
+        oVvO = oVVo = None
+
+        eris_ovov = np.asarray(eris.ovov)
+        tau = make_tau(t2, t1, t1)
+        tmp1baaa = lib.einsum('menf,ijef->mnij', eris_ovov, tau2aaba)
+        tmp1aaba = lib.einsum('menf,ijef->mnij', eris_ovov, tau2baaa)
+        Hr2baaa += .5*lib.einsum('mnij,mnab->ijab', tmp1aaba, tau)
+        Hr2aaba += .5*lib.einsum('mnij,mnab->ijab', tmp1baaa, tau)
+        tau2 = tmp1baaa = tmp1aaba = None
+
+        rhoaaba = r2aaba + r2baaa
+        tmp = lib.einsum('nfme,imfe->ni', eris_ovov, rhoaaba)
+        Hr1 -= np.einsum('na,ni->ia', t1, tmp)
+        Hr2baaa -= lib.einsum('mj,imba->jiab', tmp, t2)
+        Hr2aaba -= lib.einsum('mj,imba->jiab', tmp, t2)
+
+        tmp = np.einsum('menf,mf->en', eris_ovov, r1)
+        tmp = np.einsum('en,nb->eb', tmp, t1)
+        tmp-= lib.einsum('menf,mnbf->eb', eris_ovov, rhoaaba)
+        Hr2baaa += lib.einsum('ea,ijbe->jiab', tmp, t2)
+        Hr2aaba += lib.einsum('ea,ijbe->jiab', tmp, t2)
+        eris_ovov = rhoaaba = tmp = None
+
+        #:eris_vvvv = ao2mo.restore(1,np.asarray(eris.vvvv),t1.shape[1])
+        #:Hr2baaa += .5*lib.einsum('ijef,aebf->ijab', tau2baaa, eris_vvvv)
+        #:Hr2aaba += .5*lib.einsum('ijef,aebf->ijab', tau2aaba, eris_vvvv)
+        _add_vvvv_(self, tau2aaba, eris, Hr2aaba)
+        tau2baaa *= .5
+        _add_vvvv1_(self, tau2baaa, eris, Hr2baaa)
+        tau2aaba = tau2baaa = None
+
+        Hr2baaa = Hr2baaa - Hr2baaa.transpose(0,1,3,2)
+        Hr2aaba = Hr2aaba - Hr2aaba.transpose(1,0,2,3)
+        vector = self.amplitudes_to_vector_eomsf(Hr1, (Hr2baaa,Hr2aaba))
+        return vector
+
+    def eeccsd_diag(self):
+        if not hasattr(self,'imds'):
+            self.imds = _IMDS(self)
+        if not self.imds.made_ee_imds:
+            self.imds.make_ee()
+        imds = self.imds
+
+        eris = self.eris
+        t1, t2 = self.t1, self.t2
+        tau = make_tau(t2, t1, t1)
+        nocc, nvir = t1.shape
+
+        Fo = imds.Foo.diagonal()
+        Fv = imds.Fvv.diagonal()
+        Wovab = np.einsum('iaai->ia', imds.woVVo)
+        Wovaa = Wovab + np.einsum('iaai->ia', imds.woVvO)
+
+        eia = lib.direct_sum('-i+a->ia', Fo, Fv)
+        Hr1aa = eia + Wovaa
+        Hr1ab = eia + Wovab
+
+        eris_ovov = np.asarray(eris.ovov)
+        Wvvab = np.einsum('mnab,manb->ab', tau, eris_ovov)
+        Wvvaa = .5*Wvvab - .5*np.einsum('mnba,manb->ab', tau, eris_ovov)
+        ijb = np.einsum('iejb,ijeb->ijb', eris_ovov, t2)
+        Hr2ab = lib.direct_sum('iJB+a->iJaB',-ijb, Fv)
+        jab = np.einsum('kajb,kjab->jab', eris_ovov, t2)
+        Hr2ab+= lib.direct_sum('-i-jab->ijab', Fo, jab)
+
+        jib = np.einsum('iejb,ijbe->jib', eris_ovov, t2)
+        jib = jib + jib.transpose(1,0,2)
+        jib-= ijb + ijb.transpose(1,0,2)
+        jba = np.einsum('kajb,jkab->jba', eris_ovov, t2)
+        jba = jba + jba.transpose(0,2,1)
+        jba-= jab + jab.transpose(0,2,1)
+        Hr2aa = lib.direct_sum('jib+a->jiba', jib, Fv)
+        Hr2aa+= lib.direct_sum('-i+jba->ijba', Fo, jba)
+        eris_ovov = None
+
+        Hr2baaa = lib.direct_sum('ijb+a->ijba',-ijb, Fv)
+        Hr2baaa += Wovaa.reshape(1,nocc,1,nvir)
+        Hr2baaa += Wovab.reshape(nocc,1,1,nvir)
+        Hr2baaa = Hr2baaa + Hr2baaa.transpose(0,1,3,2)
+        Hr2baaa+= lib.direct_sum('-i+jab->ijab', Fo, jba)
+        Hr2baaa-= Fo.reshape(1,-1,1,1)
+        Hr2aaba = lib.direct_sum('-i-jab->ijab', Fo, jab)
+        Hr2aaba += Wovaa.reshape(1,nocc,1,nvir)
+        Hr2aaba += Wovab.reshape(1,nocc,nvir,1)
+        Hr2aaba = Hr2aaba + Hr2aaba.transpose(1,0,2,3)
+        Hr2aaba+= lib.direct_sum('ijb+a->ijab', jib, Fv)
+        Hr2aaba+= Fv.reshape(1,1,1,-1)
+        Hr2ab += Wovaa.reshape(1,nocc,1,nvir)
+        Hr2ab += Wovab.reshape(nocc,1,1,nvir)
+        Hr2ab = Hr2ab + Hr2ab.transpose(1,0,3,2)
+        Hr2aa += Wovaa.reshape(1,nocc,1,nvir) * 2
+        Hr2aa = Hr2aa + Hr2aa.transpose(0,1,3,2)
+        Hr2aa = Hr2aa + Hr2aa.transpose(1,0,2,3)
+        Hr2aa *= .5
+
+        Wooab = np.einsum('ijij->ij', imds.woOoO)
+        Wooaa = Wooab - np.einsum('ijji->ij', imds.woOoO)
+        Hr2aa += Wooaa.reshape(nocc,nocc,1,1)
+        Hr2ab += Wooab.reshape(nocc,nocc,1,1)
+        Hr2baaa += Wooab.reshape(nocc,nocc,1,1)
+        Hr2aaba += Wooaa.reshape(nocc,nocc,1,1)
+
+        #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,-1)).reshape(nocc,nvir,nvir,nvir)
+        #:tmp = np.einsum('mb,mbaa->ab', t1, eris_ovvv)
+        #:Wvvaa += np.einsum('mb,maab->ab', t1, eris_ovvv)
+        mem_now = lib.current_memory()[0]
+        max_memory = lib.param.MAX_MEMORY - mem_now
+        blksize = max(int(max_memory*1e6/8/(nvir**3*3)), 2)
+        tmp = np.zeros((nvir,nvir), dtype=t1.dtype)
+        for p0,p1 in lib.prange(0, nocc, blksize):
+            ovvv = np.asarray(eris.ovvv[p0:p1]).reshape((p1-p0)*nvir,-1)
+            ovvv = lib.unpack_tril(ovvv).reshape(-1,nvir,nvir,nvir)
+            tmp += np.einsum('mb,mbaa->ab', t1[p0:p1], ovvv)
+            Wvvaa += np.einsum('mb,maab->ab', t1[p0:p1], ovvv)
+            ovvv = None
+        Wvvaa -= tmp
+        Wvvab -= tmp
+        Wvvab -= tmp.T
+        Wvvaa = Wvvaa + Wvvaa.T
+        #:eris_vvvv = ao2mo.restore(1,np.asarray(eris.vvvv),t1.shape[1])
+        #:tmp = np.einsum('aabb->ab', eris_vvvv)
+        #:Wvvaa += tmp
+        #:Wvvaa -= np.einsum('abba->ab', eris_vvvv)
+        #:Wvvab += tmp
+        for i in range(nvir):
+            i0 = i*(i+1)//2
+            vvv = lib.unpack_tril(np.asarray(eris.vvvv[i0:i0+i+1]))
+            tmp = np.einsum('bb->b', vvv[i])
+            Wvvaa[i] += tmp
+            Wvvab[i] += tmp
+            tmp = np.einsum('bb->b', vvv[:,:i+1,i])
+            Wvvaa[i,:i+1] -= tmp
+            Wvvaa[:i  ,i] -= tmp[:i]
+            vvv = None
+        Hr2aa += Wvvaa.reshape(1,1,nvir,nvir)
+        Hr2ab += Wvvab.reshape(1,1,nvir,nvir)
+        Hr2baaa += Wvvaa.reshape(1,1,nvir,nvir)
+        Hr2aaba += Wvvab.reshape(1,1,nvir,nvir)
+
+        vec_eeS = self.amplitudes_to_vector(Hr1aa, Hr2ab)
+        vec_eeT = self.amplitudes_to_vector_triplet(Hr1aa, (Hr2aa,Hr2ab))
+        vec_sf = self.amplitudes_to_vector_eomsf(Hr1ab, (Hr2baaa,Hr2aaba))
+        return vec_eeS, vec_eeT, vec_sf
+
+    def amplitudes_to_vector(self, t1, t2, out=None):
+        nocc, nvir = t1.shape
+        nov = nocc * nvir
+        size = nov + nocc**2*nvir*(nvir+1)//2
+        vector = np.ndarray(size, t1.dtype, buffer=out)
+        vector[:nov] = t1.ravel()
+        lib.pack_tril(t2.reshape(-1,nvir,nvir), out=vector[nov:])
+        return vector
+
+    def vector_to_amplitudes(self, vector, nocc=None, nvir=None):
+        if nocc is None:
+            nocc = self.nocc
+        if nvir is None:
+            nvir = self.nmo - nocc
+        nov = nocc * nvir
+        size = nov + nocc**2*nvir*(nvir+1)//2
+        t1 = vector[:nov].copy().reshape((nocc,nvir))
+        t2 = np.zeros((nocc,nocc,nvir,nvir), dtype=vector.dtype)
+        t2tril = vector[nov:size].reshape(nocc**2, -1)
+        oidx = np.arange(nocc**2).reshape(nocc,nocc).T.ravel()
+        vtril = np.tril_indices(nvir)
+        lib.takebak_2d(t2.reshape(nocc**2,-1), t2tril, oidx, vtril[1]*nvir+vtril[0])
+        lib.unpack_tril(t2tril, filltriu=0, out=t2)
+        return t1, t2
+
+    def vector_to_amplitudes_ee(self, vector):
+        return self.vector_to_amplitudes(vector)
 
     def amplitudes_to_vector_ee(self,r1,r2):
-        nocc = self.nocc
-        nvir = self.nmo - nocc
-        size = self.nee()
-        vector = np.zeros(size, r1.dtype)
-        vector[:nocc*nvir] = r1.copy().reshape(nocc*nvir)
-        vector[nocc*nvir:] = r2.copy().reshape(nocc*nocc*nvir*nvir)
+        return self.amplitudes_to_vector(r1, r2)
+
+    def amplitudes_to_vector_eomsf(self, t1, t2, out=None):
+        nocc, nvir = t1.shape
+        t2baaa, t2aaba = t2
+
+        nbaaa = nocc*nocc*nvir*(nvir-1)//2
+        naaba = nocc*(nocc-1)//2*nvir*nvir
+        size = t1.size + nbaaa + naaba
+        vector = np.ndarray(size, t2baaa.dtype, buffer=out)
+        vector[:t1.size] = t1.ravel()
+        pvec = vector[t1.size:]
+
+        t2baaa = t2baaa.reshape(nocc*nocc,nvir*nvir)
+        t2aaba = t2aaba.reshape(nocc*nocc,nvir*nvir)
+        otril = np.tril_indices(nocc, k=-1)
+        vtril = np.tril_indices(nvir, k=-1)
+        oidxab = np.arange(nocc**2, dtype=np.int32)
+        vidxab = np.arange(nvir**2, dtype=np.int32)
+        lib.take_2d(t2baaa, oidxab, vtril[0]*nvir+vtril[1], out=pvec)
+        lib.take_2d(t2aaba, otril[0]*nocc+otril[1], vidxab, out=pvec[nbaaa:])
         return vector
+
+    def vector_to_amplitudes_eomsf(self, vector, nocc=None, nvir=None):
+        if nocc is None:
+            nocc = self.nocc
+        if nvir is None:
+            nmo = self.nmo
+            nvir = nmo - nocc
+
+        t1 = vector[:nocc*nvir].reshape(nocc,nvir).copy()
+        pvec = vector[t1.size:]
+
+        nbaaa = nocc*nocc*nvir*(nvir-1)//2
+        naaba = nocc*(nocc-1)//2*nvir*nvir
+        t2baaa = np.zeros((nocc*nocc,nvir*nvir), dtype=vector.dtype)
+        t2aaba = np.zeros((nocc*nocc,nvir*nvir), dtype=vector.dtype)
+        otril = np.tril_indices(nocc, k=-1)
+        vtril = np.tril_indices(nvir, k=-1)
+        oidxab = np.arange(nocc**2, dtype=np.int32)
+        vidxab = np.arange(nvir**2, dtype=np.int32)
+
+        v = pvec[:nbaaa].reshape(nocc*nocc,-1)
+        lib.takebak_2d(t2baaa, v, oidxab, vtril[0]*nvir+vtril[1])
+        lib.takebak_2d(t2baaa,-v, oidxab, vtril[1]*nvir+vtril[0])
+        v = pvec[nbaaa:nbaaa+naaba].reshape(-1,nvir*nvir)
+        lib.takebak_2d(t2aaba, v, otril[0]*nocc+otril[1], vidxab)
+        lib.takebak_2d(t2aaba,-v, otril[1]*nocc+otril[0], vidxab)
+        t2baaa = t2baaa.reshape(nocc,nocc,nvir,nvir)
+        t2aaba = t2aaba.reshape(nocc,nocc,nvir,nvir)
+        return t1, (t2baaa, t2aaba)
+
+    def amplitudes_to_vector_s4(self, t1, t2, out=None):
+        nocc, nvir = t1.shape
+        nov = nocc * nvir
+        size = nov + nocc*(nocc-1)//2*nvir*(nvir-1)//2
+        vector = np.ndarray(size, t1.dtype, buffer=out)
+        vector[:nov] = t1.ravel()
+        otril = np.tril_indices(nocc, k=-1)
+        vtril = np.tril_indices(nvir, k=-1)
+        otril = otril[0]*nocc + otril[1]
+        vtril = vtril[0]*nvir + vtril[1]
+        lib.take_2d(t2.reshape(nocc**2,-1), otril, vtril, out=vector[nov:])
+        return vector
+
+    def vector_to_amplitudes_s4(self, vector, nocc=None, nvir=None):
+        if nocc is None:
+            nocc = self.nocc
+        if nvir is None:
+            nvir = self.nmo - nocc
+        nov = nocc * nvir
+        size = nov + nocc*(nocc-1)//2*nvir*(nvir-1)//2
+        t1 = vector[:nov].copy().reshape((nocc,nvir))
+        t2 = np.zeros((nocc**2,nvir**2), dtype=vector.dtype)
+        t2tril = vector[nov:size].reshape(nocc*(nocc-1)//2, -1)
+        otril = np.tril_indices(nocc, k=-1)
+        vtril = np.tril_indices(nvir, k=-1)
+        lib.takebak_2d(t2, t2tril, otril[0]*nocc+otril[1], vtril[0]*nvir+vtril[1])
+        lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[1]*nvir+vtril[0])
+        t2tril = -t2tril
+        lib.takebak_2d(t2, t2tril, otril[0]*nocc+otril[1], vtril[1]*nvir+vtril[0])
+        lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[0]*nvir+vtril[1])
+        return t1, t2.reshape(nocc,nocc,nvir,nvir)
+
+    def amplitudes_to_vector_triplet(self, t1, t2, out=None):
+        nocc, nvir = t1.shape
+        nov = nocc * nvir
+        size1 = nov + nocc*(nocc-1)//2*nvir*(nvir-1)//2
+        size = size1 + nov*(nov+1)//2
+        vector = np.ndarray(size, t1.dtype, buffer=out)
+        self.amplitudes_to_vector_s4(t1, t2[0], out=vector)
+        t2ab = t2[1].transpose(0,2,1,3).reshape(nov,-1)
+        lib.pack_tril(t2ab, out=vector[size1:])
+        return vector
+
+    def vector_to_amplitudes_triplet(self, vector, nocc=None, nvir=None):
+        if nocc is None:
+            nocc = self.nocc
+        if nvir is None:
+            nvir = self.nmo - nocc
+        nov = nocc * nvir
+        size1 = nov + nocc*(nocc-1)//2*nvir*(nvir-1)//2
+        size = size1 + nov*(nov+1)//2
+        t1, t2aa = self.vector_to_amplitudes_s4(vector[:size1], nocc, nvir)
+        t2ab = lib.unpack_tril(vector[size1:size], filltriu=2)
+        t2ab = t2ab.reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3).copy()
+        return t1, (t2aa, t2ab)
 
 
 class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore',
-                 ao2mofn=ao2mo.outcore.general_iofree):
+                 ao2mofn=ao2mo.full):
         cput0 = (time.clock(), time.time())
         moidx = numpy.ones(cc.mo_occ.size, dtype=numpy.bool)
         if isinstance(cc.frozen, (int, numpy.integer)):
@@ -721,69 +1476,71 @@ class _ERIS:
         mem_now = lib.current_memory()[0]
 
         log = logger.Logger(cc.stdout, cc.verbose)
-        if (method == 'incore' and (mem_incore+mem_now < cc.max_memory)
+        if 0 and hasattr(cc._scf, 'with_df') and cc._scf.with_df:
+            pass
+        elif (method == 'incore' and (mem_incore+mem_now < cc.max_memory)
             or cc.mol.incore_anyway):
-            eri = ao2mofn(cc._scf.mol, (mo_coeff,mo_coeff,mo_coeff,mo_coeff), compact=0)
-            if mo_coeff.dtype == np.float: eri = eri.real
-            eri = eri.reshape((nmo,)*4)
-            # <ij|kl> = (ik|jl)
-            eri = eri.transpose(0,2,1,3)
-
-            self.dtype = eri.dtype
+            if ao2mofn == ao2mo.full:
+                eri = ao2mo.restore(1, ao2mofn(cc._scf._eri, mo_coeff), nmo)
+            else:
+                eri = ao2mofn(cc._scf.mol, (mo_coeff,mo_coeff,mo_coeff,mo_coeff), compact=0)
+                if mo_coeff.dtype == np.float: eri = eri.real
+                eri = eri.reshape((nmo,)*4)
             self.oooo = eri[:nocc,:nocc,:nocc,:nocc].copy()
             self.ooov = eri[:nocc,:nocc,:nocc,nocc:].copy()
-            self.oovv = eri[:nocc,:nocc,nocc:,nocc:].copy()
+            self.ovoo = eri[:nocc,nocc:,:nocc,:nocc].copy()
+            self.oovo = eri[:nocc,:nocc,nocc:,:nocc].copy()
             self.ovov = eri[:nocc,nocc:,:nocc,nocc:].copy()
-            self.voov = eri[nocc:,:nocc,:nocc,nocc:].copy()
-            self.vovv = eri[nocc:,:nocc,nocc:,nocc:].copy()
-            self.vvvv = eri[nocc:,nocc:,nocc:,nocc:].copy()
+            self.oovv = eri[:nocc,:nocc,nocc:,nocc:].copy()
+            self.ovvo = eri[:nocc,nocc:,nocc:,:nocc].copy()
+            ovvv = eri[:nocc,nocc:,nocc:,nocc:].reshape(-1,nvir,nvir)
+            self.ovvv = lib.pack_tril(ovvv).reshape(nocc,nvir,-1)
+            self.vvvv = ao2mo.restore(4, eri[nocc:,nocc:,nocc:,nocc:].copy(), nvir)
         else:
-            _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-            self.feri1 = h5py.File(_tmpfile1.name)
             orbo = mo_coeff[:,:nocc]
             orbv = mo_coeff[:,nocc:]
-            if mo_coeff.dtype == np.complex: ds_type = 'c16'
-            else: ds_type = 'f8'
-            self.oooo = self.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), ds_type)
-            self.ooov = self.feri1.create_dataset('ooov', (nocc,nocc,nocc,nvir), ds_type)
-            self.oovv = self.feri1.create_dataset('oovv', (nocc,nocc,nvir,nvir), ds_type)
-            self.ovov = self.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), ds_type)
-            self.voov = self.feri1.create_dataset('voov', (nvir,nocc,nocc,nvir), ds_type)
-            self.vovv = self.feri1.create_dataset('vovv', (nvir,nocc,nvir,nvir), ds_type)
-            self.vvvv = self.feri1.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)
+            self.dtype = mo_coeff.dtype
+            ds_type = mo_coeff.dtype.char
+            self.feri = lib.H5TmpFile()
+            nvv = nvir*(nvir+1)//2
+            self.oooo = self.feri.create_dataset('oooo', (nocc,nocc,nocc,nocc), ds_type)
+            self.ooov = self.feri.create_dataset('ooov', (nocc,nocc,nocc,nvir), ds_type)
+            self.ovoo = self.feri.create_dataset('ovoo', (nocc,nvir,nocc,nocc), ds_type)
+            self.oovo = self.feri.create_dataset('oovo', (nocc,nocc,nvir,nocc), ds_type)
+            self.ovov = self.feri.create_dataset('ovov', (nocc,nvir,nocc,nvir), ds_type)
+            self.oovv = self.feri.create_dataset('oovv', (nocc,nocc,nvir,nvir), ds_type)
+            self.ovvo = self.feri.create_dataset('ovvo', (nocc,nvir,nvir,nocc), ds_type)
+            self.ovvv = self.feri.create_dataset('ovvv', (nocc,nvir,nvv), ds_type)
+            #self.vvvv = self.feri.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)
 
             cput1 = time.clock(), time.time()
-            # <ij|pq>  = (ip|jq)
-            buf = ao2mofn(cc._scf.mol, (orbo,mo_coeff,orbo,mo_coeff), compact=0)
-            if mo_coeff.dtype == np.float: buf = buf.real
-            buf = buf.reshape((nocc,nmo,nocc,nmo)).transpose(0,2,1,3)
-            cput1 = log.timer_debug1('transforming oopq', *cput1)
-            self.dtype = buf.dtype
-            self.oooo[:,:,:,:] = buf[:,:,:nocc,:nocc]
-            self.ooov[:,:,:,:] = buf[:,:,:nocc,nocc:]
-            self.oovv[:,:,:,:] = buf[:,:,nocc:,nocc:]
+            # <ij||pq> = <ij|pq> - <ij|qp> = (ip|jq) - (iq|jp)
+            tmpfile2 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+            ao2mo.general(cc.mol, (orbo,mo_coeff,mo_coeff,mo_coeff), tmpfile2.name, 'aa')
+            with h5py.File(tmpfile2.name) as f:
+                buf = numpy.empty((nmo,nmo,nmo))
+                for i in range(nocc):
+                    lib.unpack_tril(f['aa'][i*nmo:(i+1)*nmo], out=buf)
+                    self.oooo[i] = buf[:nocc,:nocc,:nocc]
+                    self.ooov[i] = buf[:nocc,:nocc,nocc:]
+                    self.ovoo[i] = buf[nocc:,:nocc,:nocc]
+                    self.ovov[i] = buf[nocc:,:nocc,nocc:]
+                    self.oovo[i] = buf[:nocc,nocc:,:nocc]
+                    self.oovv[i] = buf[:nocc,nocc:,nocc:]
+                    self.ovvo[i] = buf[nocc:,nocc:,:nocc]
+                    self.ovvv[i] = lib.pack_tril(buf[nocc:,nocc:,nocc:])
+                del(f['aa'])
+                buf = None
 
-            cput1 = time.clock(), time.time()
-            # <ia|pq> = (ip|aq)
-            buf = ao2mofn(cc._scf.mol, (orbo,mo_coeff,orbv,mo_coeff), compact=0)
-            if mo_coeff.dtype == np.float: buf = buf.real
-            buf = buf.reshape((nocc,nmo,nvir,nmo)).transpose(0,2,1,3)
-            cput1 = log.timer_debug1('transforming ovpq', *cput1)
-            self.ovov[:,:,:,:] = buf[:,:,:nocc,nocc:]
-            self.vovv[:,:,:,:] = buf[:,:,nocc:,nocc:].transpose(1,0,3,2)
-            self.voov[:,:,:,:] = buf[:,:,nocc:,:nocc].transpose(1,0,3,2)
+            cput1 = log.timer_debug1('transforming oopq, ovpq', *cput1)
 
-            _tmpfile2 = tempfile.NamedTemporaryFile()
-            self.feri2 = h5py.File(_tmpfile2.name, 'w')
-            ao2mo.full(cc.mol, orbv, self.feri2, max_memory=cc.max_memory, 
-                             verbose=log, compact=False)
-            vvvv_buf = self.feri2['eri_mo']
-            for a in range(nvir):
-                abrange = a*nvir + np.arange(nvir)
-                self.vvvv[a,:,:,:] = np.array(vvvv_buf[abrange,:]).reshape((nvir,nvir,nvir)).transpose(1,0,2)
+#            ao2mo.full(cc.mol, orbv, tmpfile2.name, dataname='vvvv')
+#            with h5py.File(tmpfile2.name) as f:
+#                self.feri['vvvv'] = ao2mo.restore(1, f['vvvv'], nvir)
+            ao2mo.full(cc.mol, orbv, self.feri, dataname='vvvv')
+            self.vvvv = self.feri['vvvv']
 
             cput1 = log.timer_debug1('transforming vvvv', *cput1)
-
         log.timer('CCSD integral transformation', *cput0)
 
 class _IMDS:
@@ -795,6 +1552,7 @@ class _IMDS:
         self.eris = cc.eris
         self.made_ip_imds = False
         self.made_ea_imds = False
+        self.made_ee_imds = False
         self._made_shared_2e = False
 
     def _make_shared_1e(self):
@@ -816,7 +1574,7 @@ class _IMDS:
         # 2 virtuals
         self.Wovov = imd.Wovov(t1,t2,eris)
         self.Wovvo = imd.Wovvo(t1,t2,eris)
-        self.Woovv = eris.oovv
+        self.Woovv = np.asarray(eris.ovov).transpose(0,2,1,3)
 
         log.timer('EOM-CCSD shared two-electron intermediates', *cput0)
 
@@ -860,9 +1618,194 @@ class _IMDS:
         self.made_ea_imds = True
         log.timer('EOM-CCSD EA intermediates', *cput0)
 
-    def make_ee(self):
-        raise NotImplementedError
 
+    def make_ee(self):
+        cput0 = (time.clock(), time.time())
+        log = logger.Logger(self.stdout, self.verbose)
+
+        t1, t2, eris = self.t1, self.t2, self.eris
+        nocc, nvir = t1.shape
+
+        self.saved = lib.H5TmpFile()
+        self.wvOvV = self.saved.create_dataset('vOvV', (nvir,nocc,nvir,nvir), t1.dtype.char)
+
+        foo = eris.fock[:nocc,:nocc]
+        fov = eris.fock[:nocc,nocc:]
+        fvv = eris.fock[nocc:,nocc:]
+
+        #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,-1)).reshape(nocc,nvir,nvir,nvir)
+        #:self.Fvv  = np.einsum('mf,mfae->ae', t1, eris_ovvv) * 2
+        #:self.Fvv -= np.einsum('mf,meaf->ae', t1, eris_ovvv)
+        #:self.woVvO = lib.einsum('jf,mebf->mbej', t1, eris_ovvv)
+        #:self.woVVo = lib.einsum('jf,mfbe->mbej',-t1, eris_ovvv)
+        #:tau = make_tau(t2, t1, t1)
+        #:self.woVoO  = 0.5 * lib.einsum('mebf,ijef->mbij', eris_ovvv, tau)
+        #:self.woVoO += 0.5 * lib.einsum('mfbe,ijfe->mbij', eris_ovvv, tau)
+        self.Fvv = np.zeros((nvir,nvir), dtype=t1.dtype)
+        self.woVoO = np.empty((nocc,nvir,nocc,nocc), dtype=t1.dtype)
+        woVvO = np.empty((nocc,nvir,nvir,nocc), dtype=t1.dtype)
+        woVVo = np.empty((nocc,nvir,nvir,nocc), dtype=t1.dtype)
+        tau = make_tau(t2, t1, t1)
+        mem_now = lib.current_memory()[0]
+        max_memory = lib.param.MAX_MEMORY - mem_now
+        blksize = max(int(max_memory*1e6/8/(nvir**3*3)), 2)
+        for p0,p1 in lib.prange(0, nocc, blksize):
+            ovvv = np.asarray(eris.ovvv[p0:p1]).reshape((p1-p0)*nvir,-1)
+            ovvv = lib.unpack_tril(ovvv).reshape(-1,nvir,nvir,nvir)
+            self.Fvv += np.einsum('mf,mfae->ae', t1[p0:p1], ovvv) * 2
+            self.Fvv -= np.einsum('mf,meaf->ae', t1[p0:p1], ovvv)
+            self.woVoO[p0:p1] = 0.5 * lib.einsum('mebf,ijef->mbij', ovvv, tau)
+            self.woVoO[p0:p1]+= 0.5 * lib.einsum('mfbe,ijfe->mbij', ovvv, tau)
+            woVvO[p0:p1] = lib.einsum('jf,mebf->mbej', t1, ovvv)
+            woVVo[p0:p1] = lib.einsum('jf,mfbe->mbej',-t1, ovvv)
+            ovvv = None
+
+        eris_ovov = np.asarray(eris.ovov)
+        tmp = lib.einsum('njbf,mfne->mbej', t2, eris_ovov)
+        woVvO -= tmp * .5
+        woVVo += tmp
+
+        eris_ooov = np.asarray(eris.ooov)
+        ooov = eris_ooov + np.einsum('jf,nfme->njme', t1, eris_ovov)
+        woVvO -= lib.einsum('nb,njme->mbej', t1, ooov)
+        woVVo += lib.einsum('nb,mjne->mbej', t1, ooov)
+
+        ovov = eris_ovov*2 - eris_ovov.transpose(0,3,2,1)
+        eris_ovov = tmp = None
+        self.Fov = np.einsum('nf,menf->me', t1, ovov)
+        tilab = make_tau(t2, t1, t1, fac=.5)
+        self.Foo  = lib.einsum('inef,menf->mi', tilab, ovov)
+        self.Fvv -= lib.einsum('mnaf,menf->ae', tilab, ovov)
+        theta = t2*2 - t2.transpose(1,0,2,3)
+        woVvO += einsum('njfb,menf->mbej', theta, ovov) * .5
+        ovov = tilab = None
+
+        self.Foo += foo + 0.5*einsum('me,ie->mi', self.Fov+fov, t1)
+        self.Fvv += fvv - 0.5*einsum('me,ma->ae', self.Fov+fov, t1)
+
+        # 0 or 1 virtuals
+        self.woOoO = lib.einsum('je,mine->mnij', t1, eris_ooov)
+        self.woOoO = self.woOoO + self.woOoO.transpose(1,0,3,2)
+        self.woOoO += np.asarray(eris.oooo).transpose(0,2,1,3)
+        tmp = lib.einsum('nime,jneb->mbji', eris_ooov, t2)
+        self.woVoO -= tmp.transpose(0,1,3,2) * .5
+        self.woVoO -= tmp
+        tmp = None
+        ooov = eris_ooov*2 - eris_ooov.transpose(2,0,1,3)
+        self.woVoO += lib.einsum('mine,njeb->mbij', ooov, theta) * .5
+        self.woOoV = eris_ooov.transpose(0,2,1,3).copy()
+        self.Foo += np.einsum('ne,mine->mi', t1, ooov)
+        ooov = None
+
+        eris_ovov = np.asarray(eris.ovov)
+        tau = make_tau(t2, t1, t1)
+        self.woOoO += lib.einsum('ijef,menf->mnij', tau, eris_ovov)
+        self.woOoV += lib.einsum('if,mfne->mnie', t1, eris_ovov)
+        tau = None
+
+        ovov = eris_ovov*2 - eris_ovov.transpose(0,3,2,1)
+        tmp1abba = lib.einsum('njbf,nemf->mbej', t2, eris_ovov)
+        eris_ovov = None
+        tmp1ab = lib.einsum('nifb,menf->mbei', theta, ovov) * -.5
+        tmp1ab+= tmp1abba * .5
+        tmpab = einsum('ie,mbej->mbij', t1, tmp1ab)
+        tmpab+= einsum('ie,mbej->mbji', t1, tmp1abba)
+        self.woVoO -= tmpab
+        eris_oovo = numpy.asarray(eris.oovo)
+        self.woVoO += eris_oovo.transpose(0,2,1,3)
+        eris_oovo = tmpab = None
+
+        eris_ovvo = np.asarray(eris.ovvo)
+        eris_oovv = np.asarray(eris.oovv)
+        woVvO += eris_ovvo.transpose(0,2,1,3)
+        woVVo -= eris_oovv.transpose(0,2,3,1)
+        self.saved['woVvO'] = woVvO
+        self.saved['woVVo'] = woVVo
+        self.woVvO = self.saved['woVvO']
+        self.woVVo = self.saved['woVVo']
+
+        self.woVoO += lib.einsum('ie,mebj->mbij', t1, eris_ovvo)
+        self.woVoO += lib.einsum('ie,mjbe->mbji', t1, eris_oovv)
+        self.woVoO += lib.einsum('me,ijeb->mbij', self.Fov, t2)
+        self.woVoO -= lib.einsum('nb,mnij->mbij', t1, self.woOoO)
+
+        # 3 or 4 virtuals
+        #:eris_oovv = np.asarray(eris.oovv)
+        #:eris_ovvo = np.asarray(eris.ovvo)
+        #:self.wvOvV = einsum('nime,mnab->eiab', eris_ooov, tau)
+        #:self.wvOvV -= lib.einsum('me,miab->eiab', self.Fov, t2)
+        #:tmpab = lib.einsum('ma,mbei->eiab', t1, tmp1ab)
+        #:tmpab+= lib.einsum('ma,mbei->eiba', t1, tmp1abba)
+        #:tmpab-= einsum('ma,mibe->eiba', t1, eris_oovv)
+        #:tmpab-= einsum('ma,mebi->eiab', t1, eris_ovvo)
+        #:self.wvOvV += tmpab
+
+        #:theta = t2*2 - t2.transpose(0,1,3,2)
+        #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,-1)).reshape(nocc,nvir,nvir,nvir)
+        #:ovvv = eris_ovvv*2 - eris_ovvv.transpose(0,3,2,1)
+        #:tmpab = lib.einsum('mebf,miaf->eiab', eris_ovvv, t2)
+        #:tmpab = tmpab + tmpab.transpose(0,1,3,2) * .5
+        #:tmpab-= lib.einsum('mfbe,mifa->eiba', ovvv, theta) * .5
+        #:self.wvOvV += eris_ovvv.transpose(2,0,3,1).conj()
+        #:self.wvOvV -= tmpab
+        tmp1ab -= eris_ovvo.transpose(0,2,1,3)
+        tmp1abba -= eris_oovv.transpose(0,2,3,1)
+        eris_ovvo = eris_oovv = None
+        tau = make_tau(t2, t1, t1)
+        mem_now = lib.current_memory()[0]
+        max_memory = lib.param.MAX_MEMORY - mem_now
+        blksize = max(int(max_memory*1e6/8/(nvir**3*6)), 2)
+        for i0,i1 in lib.prange(0, nocc, blksize):
+            wvOvV = einsum('nime,mnab->eiab', eris_ooov[:,i0:i1], tau)
+
+            wvOvV -= lib.einsum('me,miab->eiab', self.Fov, t2[:,i0:i1])
+            tmpab = lib.einsum('ma,mbei->eiab', t1, tmp1ab[:,:,:,i0:i1])
+            tmpab+= lib.einsum('ma,mbei->eiba', t1, tmp1abba[:,:,:,i0:i1])
+            wvOvV += tmpab
+
+            for p0,p1 in lib.prange(0, nocc, blksize):
+                ovvv = np.asarray(eris.ovvv[p0:p1]).reshape((p1-p0)*nvir,-1)
+                ovvv = lib.unpack_tril(ovvv).reshape(-1,nvir,nvir,nvir)
+                if p0 == i0:
+                    wvOvV += ovvv.transpose(2,0,3,1).conj()
+                tmpab = lib.einsum('mebf,miaf->eiab', ovvv, t2[p0:p1,i0:i1])
+                tmpab = tmpab + tmpab.transpose(0,1,3,2) * .5
+                ovvv = ovvv*2 - ovvv.transpose(0,3,2,1)
+                tmpab-= lib.einsum('mfbe,mifa->eiba', ovvv, theta[p0:p1,i0:i1]) * .5
+                wvOvV -= tmpab
+                self.wvOvV[:,i0:i1] = wvOvV
+                ovvv = tmpab = None
+
+        self.made_ee_imds = True
+        log.timer('EOM-CCSD EE intermediates', *cput0)
+
+def make_tau(t2, t1, r1, fac=1, out=None):
+    tau = np.einsum('ia,jb->ijab', t1, r1)
+    tau = tau + tau.transpose(1,0,3,2)
+    tau *= fac * .5
+    tau += t2
+    return tau
+
+def _add_vvvv_(cc, t2, eris, Ht2):
+    nocc = t2.shape[0]
+    nvir = t2.shape[2]
+    t2tril = cc.add_wvvVV(np.zeros((nocc,nvir)), t2, eris)
+    idxo = np.arange(nocc)
+    t2tril[idxo*(idxo+1)//2+idxo] *= .5
+    idxo = np.tril_indices(nocc)
+    lib.takebak_2d(Ht2.reshape(nocc**2,-1), t2tril.reshape(-1,nvir**2),
+                   idxo[0]*nocc+idxo[1], np.arange(nvir**2))
+    return Ht2
+
+def _add_vvvv1_(cc, t2, eris, Ht2):
+    nvir = t2.shape[2]
+    for i in range(nvir):
+        i0 = i*(i+1)//2
+        vvv = lib.unpack_tril(np.asarray(eris.vvvv[i0:i0+i+1]))
+        Ht2[:,:, i] += lib.einsum('ijef,ebf->ijb', t2[:,:,:i+1], vvv)
+        Ht2[:,:,:i] += lib.einsum('ijf,abf->ijab', t2[:,:,i], vvv[:i])
+        vvv = None
+    return Ht2
 
 def _mem_usage(nocc, nvir):
     incore = (nocc+nvir)**4
@@ -871,12 +1814,13 @@ def _mem_usage(nocc, nvir):
     incore *= 4
     # TODO: Improve incore estimate and add outcore estimate
     outcore = basic = incore
-    return incore, outcore, basic
+    return incore*8/1e9, outcore*8/1e9, basic*8/1e9
 
 
 if __name__ == '__main__':
     from pyscf import scf
     from pyscf import gto
+
     mol = gto.Mole()
     mol.atom = [
         [8 , (0. , 0.     , 0.)],
@@ -895,3 +1839,15 @@ if __name__ == '__main__':
     print(e[0] - 0.4335604332073799)
     print(e[1] - 0.5187659896045407)
     print(e[2] - 0.6782876002229172)
+
+    e,v = mycc.eaccsd(nroots=3)
+    print(e[0] - 0.16737886338859731)
+    print(e[1] - 0.24027613852009164)
+    print(e[2] - 0.51006797826488071)
+
+    e,v = mycc.eeccsd(nroots=4)
+    print(e[0] - 0.2757159395886167)
+    print(e[1] - 0.2757159395886167)
+    print(e[2] - 0.2757159395886167)
+    print(e[3] - 0.3005716731825082)
+

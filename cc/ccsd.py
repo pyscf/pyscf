@@ -77,10 +77,11 @@ def update_amps(mycc, t1, t2, eris):
     t2new = t1t2new[nov:].reshape(t2.shape)
     t2new_tril = numpy.zeros((nocc*(nocc+1)//2,nvir,nvir))
     mycc.add_wvvVV_(t1, t2, eris, t2new_tril)
-    for i in range(nocc):
-        for j in range(i+1):
-            t2new[i,j] = t2new_tril[i*(i+1)//2+j]
-        t2new[i,i] *= .5
+    idxo = numpy.tril_indices(nocc)
+    lib.takebak_2d(t2new.reshape(nocc**2,-1), t2new_tril.reshape(-1,nvir**2),
+                   idxo[0]*nocc+idxo[1], numpy.arange(nvir**2))
+    idxo = numpy.arange(nocc)
+    t2new[idxo,idxo] *= .5
     t2new_tril = None
     time1 = log.timer_debug1('vvvv', *time0)
 
@@ -790,39 +791,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             t1t2 = adiis.update(t1t2)
             t1 = t1t2[:nov].reshape(nocc,nvir)
             t2 = t1t2[nov:].reshape(nocc,nocc,nvir,nvir)
-            logger.debug(self, 'DIIS for step %d', istep)
+            logger.debug1(self, 'DIIS for step %d', istep)
         return t1, t2
-
-    def amplitudes_to_vector(self, t1, t2, out=None):
-        nocc, nvir = t1.shape
-        nov = nocc * nvir
-        size = nov + nocc*(nocc-1)//2*nvir*(nvir-1)//2
-        vector = numpy.ndarray(size, t1.dtype, buffer=out)
-        vector[:nov] = t1.ravel()
-        otril = numpy.tril_indices(nocc, k=-1)
-        vtril = numpy.tril_indices(nvir, k=-1)
-        otril = otril[0]*nocc + otril[1]
-        vtril = vtril[0]*nvir + vtril[1]
-        lib.take_2d(t2.reshape(nocc**2,-1), otril, vtril, out=vector[nov:])
-        return vector
-
-    def vector_to_amplitudes(self, vector, nocc=None, nvir=None):
-        if nocc is None:
-            nocc = self.nocc
-        if nvir is None:
-            nvir = self.nmo - nocc
-        nov = nocc * nvir
-        t1 = vector[:nov].copy().reshape((nocc,nvir))
-        t2 = numpy.zeros((nocc**2,nvir**2), vector.dtype)
-        t2tril = vector[nov:].reshape(nocc*(nocc-1)//2, -1)
-        otril = numpy.tril_indices(nocc, k=-1)
-        vtril = numpy.tril_indices(nvir, k=-1)
-        lib.takebak_2d(t2, t2tril, otril[0]*nocc+otril[1], vtril[0]*nvir+vtril[1])
-        lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[1]*nvir+vtril[0])
-        t2tril = -t2tril
-        lib.takebak_2d(t2, t2tril, otril[0]*nocc+otril[1], vtril[1]*nvir+vtril[0])
-        lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[0]*nvir+vtril[1])
-        return t1, t2.reshape(nocc,nocc,nvir,nvir)
 
 CC = CCSD
 
@@ -880,7 +850,7 @@ class _ERIS:
                 lib.ddot(Lov.T, Lvv, 1, ovvv, 1)
                 lib.ddot(Lvv.T, Lvv, 1, vvvv, 1)
 
-            self.feri1 = lib.h5tmpfile()
+            self.feri1 = lib.H5TmpFile()
             self.feri1['oooo'] = oooo.reshape(nocc,nocc,nocc,nocc)
             self.feri1['ooov'] = ooov.reshape(nocc,nocc,nocc,nvir)
             self.feri1['ovoo'] = ovoo.reshape(nocc,nvir,nocc,nocc)
@@ -941,7 +911,7 @@ class _ERIS:
                 ij += i + 1
         else:
             cput1 = time.clock(), time.time()
-            self.feri1 = lib.h5tmpfile()
+            self.feri1 = lib.H5TmpFile()
             orbo = mo_coeff[:,:nocc]
             orbv = mo_coeff[:,nocc:]
             nvpair = nvir * (nvir+1) // 2
@@ -976,7 +946,7 @@ class _ERIS:
 
             if not cc.direct:
                 max_memory = max(2000,cc.max_memory-lib.current_memory()[0])
-                self.feri2 = lib.h5tmpfile()
+                self.feri2 = lib.H5TmpFile()
                 ao2mo.full(cc.mol, orbv, self.feri2, max_memory=max_memory, verbose=log)
                 self.vvvv = self.feri2['eri_mo']
                 cput1 = log.timer_debug1('transforming vvvv', *cput1)
