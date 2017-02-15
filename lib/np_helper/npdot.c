@@ -57,7 +57,6 @@ void NPdgemm(const char trans_a, const char trans_b,
 {
                 nthread = omp_get_num_threads();
                 nblk = (k+nthread-1) / nthread;
-                nthread = (k+nblk-1) / nblk;
                 cpriv = malloc(sizeof(double) * m * n);
 #pragma omp for
                 for (i = 0; i < nthread; i++) {
