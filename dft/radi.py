@@ -112,20 +112,14 @@ def mura_knowles(n, charge=None, **kwargs):
 # Ref  Matthias Krack and Andreas M. Koster,  J. Chem. Phys. 108 (1998), 3226
 def gauss_chebyshev(n, **kwargs):
     '''Gauss-Chebyshev (JCP, 108, 3226) radial grids'''
-    r = numpy.empty(n)
-    dr = numpy.empty(n)
-    step = 1. / (n+1)
     ln2 = 1 / numpy.log(2)
-    fac = 16*step / 3
-    xinc = numpy.pi * step
-    x1 = 0
-    for i in range(n):
-        x1 += xinc
-        xi = (n-2*i-1) * step \
-                + 1/numpy.pi * (1+2./3*numpy.sin(x1)**2) * numpy.sin(2*x1)
-        r[i] = 1 - numpy.log(1+xi) * ln2
-        wi = fac * numpy.sin(x1)**4
-        dr[i] = wi * ln2/(1+xi)
+    fac = 16./3 / (n+1)
+    x1 = numpy.arange(1,n+1) * numpy.pi / (n+1)
+    xi = ((n-1-numpy.arange(n)*2) / (n+1.) +
+          (1+2./3*numpy.sin(x1)**2) * numpy.sin(2*x1) / numpy.pi)
+    xi = (xi - xi[::-1])/2
+    r = 1 - numpy.log(1+xi) * ln2
+    dr = fac * numpy.sin(x1)**4 * ln2/(1+xi)
     return r, dr
 
 
@@ -197,5 +191,4 @@ def _inter_distance(mol):
     rr = rd[:,None] + rd - rr*2
     rr[numpy.diag_indices_from(rr)] = 0
     return numpy.sqrt(rr)
-
 

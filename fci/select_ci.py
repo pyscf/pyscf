@@ -372,6 +372,19 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
                    numpy.asarray([int('1'*nelec[1], 2)]))
         ci0 = _as_SCIvector(numpy.ones((1,1)), ci_strs)
         ci0 = myci.enlarge_space(ci0, h2e, norb, nelec)
+        if ci0.size < nroots:
+            log.warn('''
+  Selected-CI space generated from HF ground state (by double exciting) is not enough for excited states.
+  HOMO->LUMO excitations are included in the initial guess.
+  NOTE: This may introduce excited states of different symmetry.\n''')
+            corea = '1' * (nelec[0]-1)
+            coreb = '1' * (nelec[1]-1)
+            ci_strs = (numpy.asarray([int('1'+corea, 2), int('10'+corea, 2)]),
+                       numpy.asarray([int('1'+coreb, 2), int('10'+coreb, 2)]))
+            ci0 = _as_SCIvector(numpy.ones((2,2)), ci_strs)
+            ci0 = myci.enlarge_space(ci0, h2e, norb, nelec)
+        if ci0.size < nroots:
+            raise RuntimeError('Not enough selected-CI space for %d states' % nroots)
         ci_strs = ci0._strs
         hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
         ci0 = myci.get_init_guess(ci_strs, norb, nelec, nroots, hdiag)
@@ -429,13 +442,15 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     e, c = myci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
                     max_cycle=max_cycle, max_space=max_space, nroots=nroots,
                     max_memory=max_memory, verbose=log, **kwargs)
-    log.info('Selected CI  E = %.15g', e+ecore)
 
     na = len(ci_strs[0])
     nb = len(ci_strs[1])
     if nroots > 1:
+        for i, ei in enumerate(e+ecore):
+            log.info('Selected CI state %d  E = %.15g', i, ei)
         return e+ecore, [_as_SCIvector(ci.reshape(na,nb),ci_strs) for ci in c]
     else:
+        log.info('Selected CI  E = %.15g', e+ecore)
         return e+ecore, _as_SCIvector(c.reshape(na,nb), ci_strs)
 
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
