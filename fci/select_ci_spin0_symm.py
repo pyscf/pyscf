@@ -30,7 +30,7 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None, orbsym=None):
     eri1 = lib.take_2d(eri1.reshape(norb**2,-1), idx, idx) * 2
     lib.transpose_sum(eri1, inplace=True)
     eri1 *= .5
-    eri1, dd_indexa, dimirrep = select_ci_symm.reorder4irrep_minors(eri1, norb, dd_indexa, orbsym)
+    eri1, dd_indexa, dimirrep = select_ci_symm.reorder4irrep(eri1, norb, dd_indexa, orbsym, -1)
     fcivec = ci_coeff.reshape(na,nb)
     ci1 = numpy.zeros_like(fcivec)
     # (aa|aa)
@@ -73,7 +73,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
            lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
            davidson_only=False, pspace_size=400, orbsym=None, wfnsym=None,
            select_cutoff=1e-3, ci_coeff_cutoff=1e-3, ecore=0, **kwargs):
-    return direct_spin1._kfactory(SelectCI, h1e, eri, norb, nelec, ci0,
+    return direct_spin1._kfactory(SelectedCI, h1e, eri, norb, nelec, ci0,
                                   level_shift, tol, lindep, max_cycle,
                                   max_space, nroots, davidson_only,
                                   pspace_size, select_cutoff=select_cutoff,
@@ -81,7 +81,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
                                   **kwargs)
 
 
-class SelectCI(select_ci_symm.SelectCI):
+class SelectedCI(select_ci_symm.SelectedCI):
     def contract_2e(self, eri, civec_strs, norb, nelec, link_index=None,
                     orbsym=None, **kwargs):
         if orbsym is None:
@@ -98,7 +98,7 @@ class SelectCI(select_ci_symm.SelectCI):
 
     enlarge_space = select_ci_spin0.enlarge_space
 
-SCI = SelectCI
+SCI = SelectedCI
 
 
 if __name__ == '__main__':
@@ -126,7 +126,7 @@ if __name__ == '__main__':
     eri = ao2mo.incore.full(m._eri, m.mo_coeff)
     orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, m.mo_coeff)
 
-    myci = SelectCI().set(orbsym=orbsym)
+    myci = SelectedCI().set(orbsym=orbsym)
     e1, c1 = myci.kernel(h1e, eri, norb, nelec)
     myci = direct_spin1_symm.FCISolver().set(orbsym=orbsym)
     e2, c2 = myci.kernel(h1e, eri, norb, nelec)

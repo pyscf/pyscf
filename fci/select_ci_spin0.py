@@ -115,7 +115,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
            lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
            davidson_only=False, pspace_size=400, orbsym=None, wfnsym=None,
            select_cutoff=1e-3, ci_coeff_cutoff=1e-3, ecore=0, **kwargs):
-    return direct_spin1._kfactory(SelectCI, h1e, eri, norb, nelec, ci0,
+    return direct_spin1._kfactory(SelectedCI, h1e, eri, norb, nelec, ci0,
                                   level_shift, tol, lindep, max_cycle,
                                   max_space, nroots, davidson_only,
                                   pspace_size, select_cutoff=select_cutoff,
@@ -123,7 +123,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
                                   **kwargs)
 
 
-class SelectCI(select_ci.SelectCI):
+class SelectedCI(select_ci.SelectedCI):
     def contract_2e(self, eri, civec_strs, norb, nelec, link_index=None, **kwargs):
 # The argument civec_strs is a CI vector in function FCISolver.contract_2e.
 # Save and patch self._strs to make this contract_2e function compatible to
@@ -140,7 +140,7 @@ class SelectCI(select_ci.SelectCI):
 
     enlarge_space = enlarge_space
 
-SCI = SelectCI
+SCI = SelectedCI
 
 
 if __name__ == '__main__':
