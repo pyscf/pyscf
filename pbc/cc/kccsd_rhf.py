@@ -331,7 +331,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         # TODO: Possibly change this to make it work with k-points with frozen
         #       As of right now it works, but just not sure how the frozen list will work
         #       with it
-        self._nocc = self.mo_occ[0].sum() // 2
+        self._nocc = int(self.mo_occ[0].sum()) // 2
         #self._nocc = (self._nocc // self.nkpts)
         return self._nocc
 

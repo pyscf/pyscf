@@ -268,6 +268,7 @@ class CCSD(pyscf.cc.ccsd.CCSD):
         if mo_energy is None:
             mo_energy = numpy.zeros(shape=(nkpts,nso))
             mo_energy[:,0::2] = mo_energy[:,1::2] = mf.mo_energy
+	self.mo_energy = mo_energy
         if mo_coeff is None:
             # TODO: Careful for real/complex here, in the future
             so_coeffT = numpy.zeros((nkpts,nso,nso), dtype=numpy.complex128)
@@ -289,7 +290,7 @@ class CCSD(pyscf.cc.ccsd.CCSD):
             for k in range(nkpts):
                 mo_occ[k,0:mf.cell.nelectron] = 1
 
-        pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_energy, mo_coeff, mo_occ)
+        pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
 
     def nocc(self):
@@ -297,8 +298,7 @@ class CCSD(pyscf.cc.ccsd.CCSD):
         # TODO: Possibly change this to make it work with k-points with frozen
         #       As of right now it works, but just not sure how the frozen list will work
         #       with it
-        self._nocc = 2*pyscf.cc.ccsd.CCSD.nocc(self)
-        self._nocc = (self._nocc // self.nkpts)
+        self._nocc = int(self.mo_occ[0].sum())
         return self._nocc
 
     def nmo(self):
@@ -355,21 +355,21 @@ class CCSD(pyscf.cc.ccsd.CCSD):
 
     def ccsd(self, t1=None, t2=None, mo_coeff=None, eris=None):
         if eris is None: eris = self.ao2mo(mo_coeff)
-        self._conv, self.ecc, self.t1, self.t2 = \
+        self.converged, self.e_corr, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                        tol=self.conv_tol,
                        tolnormt=self.conv_tol_normt,
                        max_memory=self.max_memory, verbose=self.verbose)
-        if self._conv:
+        if self.converged:
             logger.info(self, 'CCSD converged')
         else:
             logger.info(self, 'CCSD not converge')
         if self._scf.e_tot == 0:
-            logger.info(self, 'E_corr = %.16g', self.ecc)
+            logger.info(self, 'E_corr = %.16g', self.e_corr)
         else:
             logger.info(self, 'E(CCSD) = %.16g  E_corr = %.16g',
-                        self.ecc+self._scf.e_tot, self.ecc)
-        return self.ecc, self.t1, self.t2
+                        self.e_corr+self._scf.e_tot, self.e_corr)
+        return self.e_corr, self.t1, self.t2
 
     def ao2mo(self, mo_coeff=None):
         return _ERIS(self, mo_coeff)

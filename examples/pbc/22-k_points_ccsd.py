@@ -13,8 +13,8 @@ ase_atom = bulk('C', 'diamond', a=3.5668)
 cell = gto.M(
     h = ase_atom.cell,
     atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom),
-    basis = 'gth-szv'
-    pseudo = 'gth-pade'
+    basis = 'gth-szv',
+    pseudo = 'gth-pade',
     gs = [10]*3,
     verbose = 4,
 )
@@ -31,7 +31,7 @@ ehf = kmf.kernel()
 #
 # Running CCSD
 #
-kcc = cc.kccsd.CCSD(kmf, kpts)
+kcc = cc.KCCSD(kmf)
 ecc, t1, t2 = kcc.kernel()
 print("cc energy (per unit cell) = %.17g" % ecc)
 
