@@ -20,8 +20,7 @@ from pyscf.pbc.dft.gen_grid import gen_uniform_grids
 from pyscf.pbc.dft.numint import eval_ao
 from pyscf.pbc import tools
 
-#einsum = np.einsum
-einsum = pbclib.einsum
+einsum = np.einsum
 
 """
     (ij|kl) = \int dr1 dr2 i*(r1) j(r1) v(r12) k*(r2) l(r2)

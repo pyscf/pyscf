@@ -152,7 +152,7 @@ class KnowValues(unittest.TestCase):
         n = 10
         cell = pbcgto.Cell()
         cell.atom = 'He  1.  .1  .3; He  .0  .8  1.1'
-        cell.h = np.eye(3) * L
+        cell.a = np.eye(3) * L
         cell.gs = [n] * 3
         cell.basis = { 'He': [[0, (0.8, 1.0)],
                               [1, (1.2, 1.0)]
@@ -195,7 +195,7 @@ He
         cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))],
                       'C' :'gth-szv',}
         cell.pseudo = {'C':'gth-pade'}
-        cell.h = np.eye(3) * 2.5
+        cell.a = np.eye(3) * 2.5
         cell.gs = [15] * 3
         cell.build()
         np.random.seed(1)
@@ -213,7 +213,7 @@ He
         cell = pbcgto.Cell()
         cell.verbose = 0
         cell.atom = 'C 0 0 0; C 1 1 1; C 0 2 2; C 2 0 2'
-        cell.h = np.diag([4, 4, 4])
+        cell.a = np.diag([4, 4, 4])
         cell.basis = 'gth-szv'
         cell.pseudo = 'gth-pade'
         cell.gs = [10, 10, 10]

@@ -835,23 +835,23 @@ static void loop_c2e_symm1(double *eri, double *ci0, double *ci1aa, double *ci1a
 }
 }
 
+#define TOTIRREPS       8
 void FCIcontract_2e_symm1(double **eris, double **ci0, double **ci1,
                           int norb, int *nas, int *nbs, int nlinka, int nlinkb,
-                          int **linka, int **linkb, int *dimirrep, int totirrep,
-                          int wfnsym)
+                          int **linka, int **linkb, int *dimirrep, int wfnsym)
 {
         int i;
         int na = 0;
         int nb = 0;
-        for (i = 0; i < totirrep; i++) {
+        for (i = 0; i < TOTIRREPS; i++) {
                 na = MAX(nas[i], na);
                 nb = MAX(nbs[i], nb);
         }
         _LinkTrilT *clinka = malloc(sizeof(_LinkTrilT) * nlinka * na);
         _LinkTrilT *clinkb = malloc(sizeof(_LinkTrilT) * nlinkb * nb);
         int ai_ir, stra_ir, strb_ir, intera_ir, interb_ir, ma, mb;
-        for (stra_ir = 0; stra_ir < totirrep; stra_ir++) {
-        for (ai_ir = 0; ai_ir < totirrep; ai_ir++) {
+        for (stra_ir = 0; stra_ir < TOTIRREPS; stra_ir++) {
+        for (ai_ir = 0; ai_ir < TOTIRREPS; ai_ir++) {
                 strb_ir = wfnsym^stra_ir;
                 ma = nas[stra_ir];
                 mb = nbs[strb_ir];

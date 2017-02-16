@@ -22,6 +22,7 @@ mol.atom = '''
   '''
 mol.basis = '6-31g'
 mol.symmetry = 0
+mol.verbose = 0
 mol.build()
 mf = scf.RHF(mol).run()
 
@@ -59,5 +60,5 @@ class KnowValues(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    print("Full Tests for addons")
+    print("Full Tests for localizer")
     unittest.main()

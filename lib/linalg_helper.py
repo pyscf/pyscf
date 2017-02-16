@@ -16,6 +16,7 @@ import h5py
 from pyscf.lib import parameters
 from pyscf.lib import logger
 from pyscf.lib import numpy_helper
+from pyscf.lib import misc
 
 def safe_eigh(h, s, lindep=1e-15):
     '''Solve generalized eigenvalue problem  h v = w s v.
@@ -1190,7 +1191,7 @@ def _sort_by_similarity(w, v, nroots, conv, vlast, emin=None, heff=None):
 
 class _Xlist(list):
     def __init__(self):
-        self.scr_h5 = lib.H5TmpFile()
+        self.scr_h5 = misc.H5TmpFile()
         self.index = []
 
     def __getitem__(self, n):

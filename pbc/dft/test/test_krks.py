@@ -59,7 +59,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(e1, -45.425834895129569, 8)
 
     def test_klda8_primitive_gamma(self):
-        ase_atom = bulk('C', 'diamond', a=LATTICE_CONST)
+        ase_atom = ase.build.bulk('C', 'diamond', a=LATTICE_CONST)
         cell = build_cell(ase_atom, 8)
         mf = pbcdft.RKS(cell)
         mf.xc = 'lda,vwn'
@@ -70,7 +70,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(e1, -10.221426938778345, 8)
 
     def test_klda8_primitive_kpt_222(self):
-        ase_atom = bulk('C', 'diamond', a=LATTICE_CONST)
+        ase_atom = ase.build.bulk('C', 'diamond', a=LATTICE_CONST)
         scaled_kpts = ase.dft.kpoints.monkhorst_pack((2,2,2))
         cell = build_cell(ase_atom, 8)
         abs_kpts = cell.get_abs_kpts(scaled_kpts)

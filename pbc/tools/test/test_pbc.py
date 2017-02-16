@@ -80,7 +80,7 @@ class KnowValues(unittest.TestCase):
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
         Ls = tools.get_lattice_Ls(cl1)
-        self.assertEqual(Ls.shape, (767,3))
+        self.assertEqual(Ls.shape, (609,3))
 
     def test_super_cell(self):
         numpy.random.seed(2)
@@ -98,7 +98,7 @@ class KnowValues(unittest.TestCase):
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
         cl2 = tools.cell_plus_imgs(cl1, cl1.nimgs)
-        self.assertAlmostEqual(finger(cl2.atom_coords()), 105.02255167975048, 9)
+        self.assertAlmostEqual(finger(cl2.atom_coords()), -75.354530112453105, 9)
 
 
 if __name__ == '__main__':

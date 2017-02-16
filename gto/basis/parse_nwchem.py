@@ -88,7 +88,7 @@ def search_ecp(basisfile, symb):
             if dat: # remove blank lines
                 seg.append(dat)
             dat = fin.readline().splitlines()[0].strip()
-    raise RuntimeError('Basis not found for  %s  in  %s' % (symb, basisfile))
+    raise RuntimeError('ECP not found for  %s  in  %s' % (symb, basisfile))
 
 def convert_basis_to_nwchem(symb, basis):
     '''Convert the internal basis format to NWChem format string'''

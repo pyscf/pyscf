@@ -475,7 +475,7 @@ class KnowValues(unittest.TestCase):
                                 mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
                                 mol._env.ctypes.data_as(ctypes.c_void_p))
             if not numpy.allclose(mat0, mat1, atol=1e-8):
-                print(i, j, numpy.linalg.norm(mat0-mat1))
+                print(i, j, 'error = ', numpy.linalg.norm(mat0-mat1))
             self.assertTrue(numpy.allclose(mat0, mat1, atol=1e-6))
         for i in range(mol.nbas):
             for j in range(mol.nbas):

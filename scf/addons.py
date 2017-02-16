@@ -42,6 +42,7 @@ def frac_occ_(mf, tol=1e-3):
         return mo_occ
 
     def get_grad(mo_coeff, mo_occ, fock_ao):
+        mol = mf.mol
         fock = reduce(numpy.dot, (mo_coeff.T.conj(), fock_ao, mo_coeff))
         fock *= mo_occ.reshape(-1,1)
         nocc = mol.nelectron // 2
@@ -155,20 +156,21 @@ def mom_occ_(mf, occorb, setocc):
     '''Use maximum overlap method to determine occupation number for each orbital in every
     iteration. It can be applied to unrestricted HF/KS and restricted open-shell
     HF/KS.'''
-    if isinstance(mf, pyscf.scf.uhf.UHF):
-        coef_occ_a = occorb[0][:, setocc[0]>0] 
+    from pyscf.scf import uhf, rohf
+    if isinstance(mf, uhf.UHF):
+        coef_occ_a = occorb[0][:, setocc[0]>0]
         coef_occ_b = occorb[1][:, setocc[1]>0]
-    elif isinstance(mf, pyscf.scf.rohf.ROHF):
+    elif isinstance(mf, rohf.ROHF):
         if mf.mol.spin != int(numpy.sum(setocc[0]) - numpy.sum(setocc[1])) :
             raise ValueError('Wrong occupation setting for restricted open-shell calculation.') 
         coef_occ_a = occorb[:, setocc[0]>0]
         coef_occ_b = occorb[:, setocc[1]>0]
     else:
         raise AssertionError('Can not support this class of instance.')
-    def get_occ(mo_energy=None, mo_coeff=None): 
+    def get_occ(mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = mf.mo_energy
         if mo_coeff is None: mo_coeff = mf.mo_coeff
-        if isinstance(mf, pyscf.scf.rohf.ROHF): mo_coeff = numpy.array([mo_coeff, mo_coeff])
+        if isinstance(mf, rohf.ROHF): mo_coeff = numpy.array([mo_coeff, mo_coeff])
         mo_occ = numpy.zeros_like(setocc)
         nocc_a = int(numpy.sum(setocc[0]))
         nocc_b = int(numpy.sum(setocc[1]))
@@ -198,7 +200,7 @@ def mom_occ_(mf, occorb, setocc):
                       nocc_b, int(numpy.sum(mo_occ[1])))
 
         #output 1-dimension occupation number for restricted open-shell
-        if isinstance(mf, pyscf.scf.rohf.ROHF): mo_occ = mo_occ[0, :] + mo_occ[1, :]
+        if isinstance(mf, rohf.ROHF): mo_occ = mo_occ[0, :] + mo_occ[1, :]
         return mo_occ
     mf.get_occ = get_occ
     return mf
@@ -269,24 +271,24 @@ def remove_linear_dep_(mf, threshold=1e-8):
         c = numpy.hstack(cs)
         return e, c
 
-    import pyscf.scf
+    from pyscf.scf import uhf, rohf
     if mol.symmetry:
-        if isinstance(mf, pyscf.scf.uhf.UHF):
+        if isinstance(mf, uhf.UHF):
             def eig(h, s):
                 e_a, c_a = eig_symm(h[0], s)
                 e_b, c_b = eig_symm(h[1], s)
                 return numpy.array((e_a,e_b)), (c_a,c_b)
-        elif isinstance(mf, pyscf.scf.rohf.ROHF):
+        elif isinstance(mf, rohf.ROHF):
             raise NotImplementedError
         else:
             eig = eig_symm
     else:
-        if isinstance(mf, pyscf.scf.uhf.UHF):
+        if isinstance(mf, uhf.UHF):
             def eig(h, s):
                 e_a, c_a = eig_nosym(h[0], s)
                 e_b, c_b = eig_nosym(h[1], s)
                 return numpy.array((e_a,e_b)), (c_a,c_b)
-        elif isinstance(mf, pyscf.scf.rohf.ROHF):
+        elif isinstance(mf, rohf.ROHF):
             raise NotImplementedError
         else:
             eig = eig_nosym
