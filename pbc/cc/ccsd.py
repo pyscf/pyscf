@@ -4,11 +4,11 @@ import pyscf.cc
 import pyscf.cc.ccsd
 import pyscf.pbc.ao2mo
 
-from pyscf.cc.ccsd_eom import CCSD as molCCSD
-from pyscf.cc.ccsd_eom import _ERIS
+from pyscf.cc.uccsd import UCCSD as molCCSD
+from pyscf.cc.uccsd import _ERIS
 
-from pyscf.cc.rccsd_eom import RCCSD as molRCCSD
-from pyscf.cc.rccsd_eom import _ERIS as _RERIS
+from pyscf.cc.rccsd import RCCSD as molRCCSD
+from pyscf.cc.rccsd import _ERIS as _RERIS
 
 #einsum = np.einsum
 einsum = pbclib.einsum

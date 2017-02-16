@@ -37,6 +37,7 @@ class KnowValues(unittest.TestCase):
         mf = scf.RHF(mol)
         mycc = cc.CCSD(mf)
         mycc.mo_energy = mycc._scf.mo_energy = numpy.arange(0., nocc+nvir)
+        eris.fock = numpy.diag(mycc.mo_energy)
         e = ccsd_t.kernel(mycc, eris, t1, t2)
         self.assertAlmostEqual(e, -8.4953387936460398, 9)
 
@@ -47,6 +48,7 @@ class KnowValues(unittest.TestCase):
         mcc.mol.symmetry = False
         e3a = ccsd_t.kernel(mcc, mcc.ao2mo())
         self.assertAlmostEqual(e3a, -0.003060022611584471, 9)
+        mcc.mol.symmetry = True
 
     def test_sort_eri(self):
         eris = mcc.ao2mo()
@@ -78,8 +80,7 @@ class KnowValues(unittest.TestCase):
         orbsym = symm.addons.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
                                             mcc.mo_coeff)
         orbsym = numpy.asarray(orbsym, dtype=numpy.int32)
-        ovoo = numpy.asarray(eris.ovoo)
-        mo_energy, t1T, t2T, vooo = ccsd_t._sort_t2_vooo(mcc, orbsym, t1, t2.copy(), ovoo)
+        mo_energy, t1T, t2T, vooo = ccsd_t._sort_t2_vooo_(mcc, orbsym, t1, t2.copy(), eris)
 
         o_sorted = numpy.hstack([numpy.where(orbsym[:nocc] == i)[0] for i in range(8)])
         v_sorted = numpy.hstack([numpy.where(orbsym[nocc:] == i)[0] for i in range(8)])
@@ -90,7 +91,7 @@ class KnowValues(unittest.TestCase):
         ref_t2T = t2.transpose(2,3,1,0)
         ref_t2T = ref_t2T[v_sorted][:,v_sorted][:,:,o_sorted][:,:,:,o_sorted]
         ref_t2T = ref_t2T.reshape(nvir,nvir,-1)[:,:,oo_sorted].reshape(nvir,nvir,nocc,nocc)
-        ref_vooo = ovoo.transpose(1,0,2,3)
+        ref_vooo = eris.ovoo.transpose(1,0,2,3)
         ref_vooo = ref_vooo[v_sorted][:,o_sorted][:,:,o_sorted][:,:,:,o_sorted]
         ref_vooo = ref_vooo.reshape(nvir,-1,nocc)[:,oo_sorted].reshape(nvir,nocc,nocc,nocc)
 

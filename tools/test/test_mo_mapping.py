@@ -35,6 +35,7 @@ class KnowValues(unittest.TestCase):
         c = mo_mapping.mo_comps(idx4d, mol, mo, cart=False)
         self.assertAlmostEqual(abs(c).sum(), 0, 12)
 
+        # FIXME:
         mo = numpy.random.random((mol.nao_cart(), 15)) * .2
         c = mo_mapping.mo_comps(lambda x: '3d' in x, mol, mo, cart=True)
         self.assertAlmostEqual(abs(c).sum(), 1.0643140119943388, 9)

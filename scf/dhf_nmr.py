@@ -243,14 +243,14 @@ class NMR(rhf_nmr.NMR):
         e11 = msc_para + msc_dia
 
         logger.timer(self, 'NMR shielding', *cput0)
-        if self.verbose > logger.VERBOSE_QUIET:
+        if self.verbose > logger.QUIET:
             for i, atm_id in enumerate(self.shielding_nuc):
                 rhf_nmr._write(self.stdout, e11[i],
                                '\ntotal shielding of atom %d %s'
                                % (atm_id, self.mol.atom_symbol(atm_id-1)))
                 rhf_nmr._write(self.stdout, msc_dia[i], 'dia-magnetism')
                 rhf_nmr._write(self.stdout, msc_para[i], 'para-magnetism')
-                if self.verbose >= logger.VERBOSE_INFO:
+                if self.verbose >= logger.INFO:
                     rhf_nmr._write(self.stdout, para_occ[i], 'occ part of para-magnetism')
                     rhf_nmr._write(self.stdout, para_pos[i], 'vir-pos part of para-magnetism')
                     rhf_nmr._write(self.stdout, para_neg[i], 'vir-neg part of para-magnetism')

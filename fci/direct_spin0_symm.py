@@ -30,8 +30,11 @@ from pyscf.fci import direct_spin0
 from pyscf.fci import direct_spin1
 from pyscf.fci import direct_spin1_symm
 from pyscf.fci import addons
+from pyscf.fci.spin_op import contract_ss
 
 libfci = lib.load_library('libfci')
+
+TOTIRREPS = 8
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=None):
     return direct_spin0.contract_1e(f1e, fcivec, norb, nelec, link_index)
@@ -55,24 +58,23 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
     link_indexa = direct_spin0._unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
     eri_irs, rank_eri, irrep_eri = direct_spin1_symm.reorder_eri(eri, norb, orbsym)
-    totirrep = len(eri_irs)
 
     strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
     aidx, link_indexa = direct_spin1_symm.gen_str_irrep(strsa, orbsym, link_indexa,
-                                                        rank_eri, irrep_eri, totirrep)
+                                                        rank_eri, irrep_eri)
 
-    Tirrep = ctypes.c_void_p*totirrep
+    Tirrep = ctypes.c_void_p*TOTIRREPS
     linka_ptr = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in link_indexa])
     eri_ptrs = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in eri_irs])
-    dimirrep = (ctypes.c_int*totirrep)(*[x.shape[0] for x in eri_irs])
+    dimirrep = (ctypes.c_int*TOTIRREPS)(*[x.shape[0] for x in eri_irs])
     fcivec_shape = fcivec.shape
     fcivec = fcivec.reshape((na,na), order='C')
     ci1new = numpy.zeros_like(fcivec)
-    nas = (ctypes.c_int*8)(*[x.size for x in aidx])
+    nas = (ctypes.c_int*TOTIRREPS)(*[x.size for x in aidx])
 
     ci0 = []
     ci1 = []
-    for ir in range(totirrep):
+    for ir in range(TOTIRREPS):
         ma, mb = aidx[ir].size, aidx[wfnsym^ir].size
         ci0.append(numpy.zeros((ma,mb)))
         ci1.append(numpy.zeros((ma,mb)))
@@ -84,8 +86,8 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
                                 ctypes.c_int(norb), nas, nas,
                                 ctypes.c_int(nlinka), ctypes.c_int(nlinka),
                                 linka_ptr, linka_ptr, dimirrep,
-                                ctypes.c_int(totirrep), ctypes.c_int(wfnsym))
-    for ir in range(totirrep):
+                                ctypes.c_int(wfnsym))
+    for ir in range(TOTIRREPS):
         if ci0[ir].size > 0:
             lib.takebak_2d(ci1new, ci1[ir], aidx[ir], aidx[wfnsym^ir])
     return lib.transpose_sum(ci1new, inplace=True).reshape(fcivec_shape)

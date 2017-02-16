@@ -20,7 +20,7 @@ import ase.dft.kpoints
 
 def make_primitive_cell(ngs):
     from ase.lattice import bulk
-    ase_atom = bulk('C', 'diamond', a=3.5668)
+    ase_atom = ase.build.bulk('C', 'diamond', a=3.5668)
 
     cell = pbcgto.Cell()
     cell.unit = 'A'

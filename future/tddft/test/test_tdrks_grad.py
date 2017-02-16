@@ -61,7 +61,7 @@ class KnowValues(unittest.TestCase):
         td = tddft.TDDFT(mf).run(nstates=3)
         tdg = rks_grad.Gradients(td)
         g1 = tdg.kernel(state=2)
-        self.assertAlmostEqual(g1[0,2], -1.55778110e-01, 8)
+        self.assertAlmostEqual(g1[0,2], -1.55778110e-01, 7)
 
 
 if __name__ == "__main__":

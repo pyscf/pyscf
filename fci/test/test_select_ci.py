@@ -33,7 +33,7 @@ def finger(a):
 
 class KnowValues(unittest.TestCase):
     def test_select_strs(self):
-        myci = select_ci.SelectCI()
+        myci = select_ci.SCI()
         myci.select_cutoff = 1e-3
         norb, nelec = 10, 4
         strs = cistring.gen_strings4orblist(range(norb), nelec)
@@ -52,7 +52,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.all(strs_add0 == strs_add1))
 
     def test_select_strs1(self):
-        myci = select_ci.SelectCI()
+        myci = select_ci.SCI()
         myci.select_cutoff = .1
         myci.ci_coeff_cutoff = .01
 
@@ -73,7 +73,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.all(strs_add0 == strs_add1))
 
     def test_enlarge_space(self):
-        myci = select_ci.SelectCI()
+        myci = select_ci.SCI()
         myci.select_cutoff = .1
         myci.ci_coeff_cutoff = .01
         cic = select_ci.enlarge_space(myci, civec_strs, eri, norb, nelec)
@@ -84,7 +84,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(abs(cic[[0,1,5]][:,[0,1,2]] - ci_coeff).sum(), 0, 12)
 
     def test_contract(self):
-        myci = select_ci.SelectCI()
+        myci = select_ci.SCI()
         ci0 = select_ci.to_fci(civec_strs, norb, nelec)
         e1 = numpy.dot(civec_strs.ravel(), select_ci.contract_2e(eri, civec_strs, norb, nelec).ravel())
         e2 = numpy.dot(ci0.ravel(), direct_spin1.contract_2e(eri, ci0, norb, nelec).ravel())
@@ -97,7 +97,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(dm2), -3.8397469683353962, 9)
 
     def test_contract1(self):
-        myci = select_ci.SelectCI()
+        myci = select_ci.SCI()
         nelec = (4,3)
         strsa = cistring.gen_strings4orblist(range(norb), nelec[0])
         strsb = cistring.gen_strings4orblist(range(norb), nelec[1])
@@ -114,7 +114,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(abs(dm2_1 - dm2_2).sum(), 0, 9)
 
     def test_kernel(self):
-        myci = select_ci.SelectCI()
+        myci = select_ci.SCI()
         e1, c1 = select_ci.kernel(h1, eri, norb, nelec)
         e2, c2 = direct_spin1.kernel(h1, eri, norb, nelec)
         self.assertAlmostEqual(e1, e2, 9)
@@ -154,14 +154,14 @@ class KnowValues(unittest.TestCase):
         eri = ao2mo.kernel(m._eri, m.mo_coeff, compact=False)
         eri = eri.reshape(norb,norb,norb,norb)
 
-        myci = select_ci.SelectCI()
+        myci = select_ci.SCI()
         myci.select_cutoff = 1e-3
         myci.ci_coeff_cutoff = 1e-3
         e1, c1 = myci.kernel(h1e, eri, norb, nelec)
-        self.assertAlmostEqual(e1, -11.894559902235624, 9)
+        self.assertAlmostEqual(e1, -11.894613845925514, 9)
 
         e, c = myci.kernel_fixed_space(h1e, eri, norb, nelec, c1._strs)
-        self.assertAlmostEqual(e, -11.894559902235624, 9)
+        self.assertAlmostEqual(e, -11.894613845925514, 9)
 
         res = myci.large_ci(c1, norb, nelec, .25)
         self.assertEqual([x[1] for x in res], ['0b1111', '0b1111', '0b10111', '0b10111'])
@@ -281,8 +281,13 @@ class KnowValues(unittest.TestCase):
         civec_strs = select_ci._as_SCIvector(numpy.random.random((len(strsa),len(strsb))), ci_strs)
         orbsym = (numpy.random.random(norb) * 4).astype(int)
         nn = norb*(norb+1)//2
-        eri = (numpy.random.random(nn*(nn+1)//2)-.2)**3
-        ci0 = select_ci.to_fci(civec_strs, norb, nelec)
+        eri = ao2mo.restore(1, (numpy.random.random(nn*(nn+1)//2)-.2)**3, norb)
+        oosym = orbsym[:,None] ^ orbsym
+        oosym = oosym.reshape(-1,1) ^ oosym.ravel()
+        eri[oosym.reshape([norb]*4)!=0] = 0
+        ci0 = fci.select_ci.to_fci(civec_strs, norb, nelec)
+        ci0 = fci.addons.symmetrize_wfn(ci0, norb, nelec, orbsym)
+        civec_strs = fci.select_ci.from_fci(ci0, civec_strs._strs, norb, nelec)
         e1 = numpy.dot(civec_strs.ravel(), select_ci_symm.contract_2e(eri, civec_strs, norb, nelec, orbsym=orbsym).ravel())
         e2 = numpy.dot(ci0.ravel(), direct_spin1_symm.contract_2e(eri, ci0, norb, nelec, orbsym=orbsym).ravel())
         self.assertAlmostEqual(e1, e2, 9)
@@ -306,7 +311,7 @@ class KnowValues(unittest.TestCase):
         eri = ao2mo.incore.full(m._eri, m.mo_coeff)
         orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, m.mo_coeff)
 
-        myci = select_ci_symm.SelectCI().set(orbsym=orbsym, select_cutoff=.5e-3)
+        myci = select_ci_symm.SCI().set(orbsym=orbsym, select_cutoff=.5e-3)
         e1, c1 = myci.kernel(h1e, eri, norb, nelec)
         myci = direct_spin1_symm.FCISolver().set(orbsym=orbsym)
         e2, c2 = myci.kernel(h1e, eri, norb, nelec)

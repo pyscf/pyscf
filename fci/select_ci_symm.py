@@ -15,14 +15,24 @@ from pyscf.fci import addons
 
 libfci = lib.load_library('libfci')
 
-def reorder4irrep_minors(eri, norb, link_index, orbsym):
+def reorder4irrep(eri, norb, link_index, orbsym, offdiag=0):
     if orbsym is None:
         return eri, link_index, numpy.array(norb, dtype=numpy.int32)
-    orbsym = numpy.asarray(orbsym) % 10
-    trilirrep = (orbsym[:,None]^orbsym)[numpy.tril_indices(norb,-1)]
+    orbsym = numpy.asarray(orbsym)
+# map irrep IDs of Dooh or Coov to D2h, C2v
+# see symm.basis.linearmole_symm_descent
+    orbsym = orbsym % 10
+# irrep of (ij| pair
+    trilirrep = (orbsym[:,None]^orbsym)[numpy.tril_indices(norb, offdiag)]
+# and the number of occurence for each irrep
     dimirrep = numpy.array(numpy.bincount(trilirrep), dtype=numpy.int32)
-    order = numpy.argsort(trilirrep)
-    rank = order.argsort()
+# we sort the irreps of (ij| pair, to group the pairs which have same irreps
+# "order" is irrep-id-sorted index. The (ij| paired is ordered that the
+# pair-id given by order[0] comes first in the sorted pair
+# "rank" is a sorted "order". Given nth (ij| pair, it returns the place(rank)
+# of the sorted pair
+    order = numpy.asarray(trilirrep.argsort(), dtype=numpy.int32)
+    rank = numpy.asarray(order.argsort(), dtype=numpy.int32)
     eri = lib.take_2d(eri, order, order)
     link_index_irrep = link_index.copy()
     link_index_irrep[:,:,0] = rank[link_index[:,:,0]]
@@ -43,8 +53,8 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None, orbsym=None):
     idx,idy = numpy.tril_indices(norb, -1)
     idx = idx * norb + idy
     eri1 = lib.take_2d(eri1.reshape(norb**2,-1), idx, idx) * 2
-    eri1, dd_indexa, dimirrep = reorder4irrep_minors(eri1, norb, dd_indexa, orbsym)
-    dd_indexb = reorder4irrep_minors(eri1, norb, dd_indexb, orbsym)[1]
+    eri1, dd_indexa, dimirrep = reorder4irrep(eri1, norb, dd_indexa, orbsym, -1)
+    dd_indexb = reorder4irrep(eri1, norb, dd_indexb, orbsym, -1)[1]
     fcivec = ci_coeff.reshape(na,nb)
     # (bb|bb)
     if nelec[1] > 1:
@@ -80,8 +90,8 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None, orbsym=None):
         eri1[:,:,k,k] += h_ps/nelec[0]
         eri1[k,k,:,:] += h_ps/nelec[1]
     eri1 = ao2mo.restore(4, eri1, norb)
-    eri1, cd_indexa, dimirrep = direct_spin1_symm.reorder4irrep(eri1, norb, cd_indexa, orbsym)
-    cd_indexb = direct_spin1_symm.reorder4irrep(eri1, norb, cd_indexb, orbsym)[1]
+    eri1, cd_indexa, dimirrep = reorder4irrep(eri1, norb, cd_indexa, orbsym)
+    cd_indexb = reorder4irrep(eri1, norb, cd_indexb, orbsym)[1]
     # (bb|aa)
     libfci.SCIcontract_2e_bbaa_symm(eri1.ctypes.data_as(ctypes.c_void_p),
                                     fcivec.ctypes.data_as(ctypes.c_void_p),
@@ -100,7 +110,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
            lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
            davidson_only=False, pspace_size=400, orbsym=None, wfnsym=None,
            select_cutoff=1e-3, ci_coeff_cutoff=1e-3, ecore=0, **kwargs):
-    return direct_spin1._kfactory(SelectCI, h1e, eri, norb, nelec, ci0,
+    return direct_spin1._kfactory(SelectedCI, h1e, eri, norb, nelec, ci0,
                                   level_shift, tol, lindep, max_cycle,
                                   max_space, nroots, davidson_only,
                                   pspace_size, select_cutoff=select_cutoff,
@@ -108,7 +118,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
                                   **kwargs)
 
 
-class SelectCI(select_ci.SelectCI):
+class SelectedCI(select_ci.SelectedCI):
     def contract_2e(self, eri, civec_strs, norb, nelec, link_index=None,
                     orbsym=None, **kwargs):
         if orbsym is None:
@@ -174,7 +184,7 @@ class SelectCI(select_ci.SelectCI):
             self.wfnsym = wfnsym_bak
         return e, c
 
-SCI = SelectCI
+SCI = SelectedCI
 
 
 if __name__ == '__main__':
@@ -199,6 +209,8 @@ if __name__ == '__main__':
     eri = (numpy.random.random(nn*(nn+1)//2)-.2)**3
 
     ci0 = select_ci.to_fci(civec_strs, norb, nelec)
+    ci0 = addons.symmetrize_wfn(ci0, norb, nelec, orbsym)
+    civec_strs = select_ci.from_fci(ci0, civec_strs._strs, norb, nelec)
     e1 = numpy.dot(civec_strs.ravel(), contract_2e(eri, civec_strs, norb, nelec, orbsym=orbsym).ravel())
     e2 = numpy.dot(ci0.ravel(), direct_spin1_symm.contract_2e(eri, ci0, norb, nelec, orbsym=orbsym).ravel())
     print(e1-e2)
@@ -221,7 +233,7 @@ if __name__ == '__main__':
     eri = ao2mo.incore.full(m._eri, m.mo_coeff)
     orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, m.mo_coeff)
 
-    myci = SelectCI().set(orbsym=orbsym)
+    myci = SelectedCI().set(orbsym=orbsym)
     e1, c1 = myci.kernel(h1e, eri, norb, nelec)
     myci = direct_spin1_symm.FCISolver().set(orbsym=orbsym)
     e2, c2 = myci.kernel(h1e, eri, norb, nelec)

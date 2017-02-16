@@ -9,12 +9,12 @@ class KnowValues(unittest.TestCase):
     def test_strings4orblist(self):
         ref = ['0b1010', '0b100010', '0b101000', '0b10000010', '0b10001000',
                '0b10100000']
-        self.assertEqual(cistring.gen_strings4orblist([1,3,5,7], 2),
-                         [int(x,2) for x in ref])
+        for i, x in enumerate(cistring.gen_strings4orblist([1,3,5,7], 2)):
+            self.assertEqual(bin(x), ref[i])
         ref = ['0b11', '0b101', '0b110', '0b1001', '0b1010', '0b1100',
                '0b10001', '0b10010', '0b10100', '0b11000']
-        self.assertEqual(cistring.gen_strings4orblist(range(5), 2),
-                         [int(x,2) for x in ref])
+        for i, x in enumerate(cistring.gen_strings4orblist(range(5), 2)):
+            self.assertEqual(bin(x), ref[i])
 
     def test_linkstr_index(self):
         idx1 = cistring.gen_linkstr_index_o0(range(4), 2)

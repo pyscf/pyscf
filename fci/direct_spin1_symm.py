@@ -28,8 +28,11 @@ from pyscf import symm
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 from pyscf.fci import addons
+from pyscf.fci.spin_op import contract_ss
 
 libfci = lib.load_library('libfci')
+
+TOTIRREPS = 8
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=None):
     return direct_spin1.contract_1e(f1e, fcivec, norb, nelec, link_index)
@@ -52,28 +55,27 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
     eri_irs, rank_eri, irrep_eri = reorder_eri(eri, norb, orbsym)
-    totirrep = len(eri_irs)
 
     strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
     strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
-    aidx, link_indexa = gen_str_irrep(strsa, orbsym, link_indexa, rank_eri, irrep_eri, totirrep)
-    bidx, link_indexb = gen_str_irrep(strsb, orbsym, link_indexb, rank_eri, irrep_eri, totirrep)
+    aidx, link_indexa = gen_str_irrep(strsa, orbsym, link_indexa, rank_eri, irrep_eri)
+    bidx, link_indexb = gen_str_irrep(strsb, orbsym, link_indexb, rank_eri, irrep_eri)
 
-    Tirrep = ctypes.c_void_p*totirrep
+    Tirrep = ctypes.c_void_p*TOTIRREPS
     linka_ptr = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in link_indexa])
     linkb_ptr = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in link_indexb])
     eri_ptrs = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in eri_irs])
-    dimirrep = (ctypes.c_int*totirrep)(*[x.shape[0] for x in eri_irs])
+    dimirrep = (ctypes.c_int*TOTIRREPS)(*[x.shape[0] for x in eri_irs])
     fcivec_shape = fcivec.shape
     fcivec = fcivec.reshape((na,nb), order='C')
     ci1new = numpy.zeros_like(fcivec)
-    nas = (ctypes.c_int*8)(*[x.size for x in aidx])
-    nbs = (ctypes.c_int*8)(*[x.size for x in bidx])
+    nas = (ctypes.c_int*TOTIRREPS)(*[x.size for x in aidx])
+    nbs = (ctypes.c_int*TOTIRREPS)(*[x.size for x in bidx])
 
 # aa, ab
     ci0 = []
     ci1 = []
-    for ir in range(totirrep):
+    for ir in range(TOTIRREPS):
         ma, mb = aidx[ir].size, bidx[wfnsym^ir].size
         ci0.append(numpy.zeros((ma,mb)))
         ci1.append(numpy.zeros((ma,mb)))
@@ -85,14 +87,14 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
                                 ctypes.c_int(norb), nas, nbs,
                                 ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
                                 linka_ptr, linkb_ptr, dimirrep,
-                                ctypes.c_int(totirrep), ctypes.c_int(wfnsym))
-    for ir in range(totirrep):
+                                ctypes.c_int(wfnsym))
+    for ir in range(TOTIRREPS):
         if ci0[ir].size > 0:
             lib.takebak_2d(ci1new, ci1[ir], aidx[ir], bidx[wfnsym^ir])
 
 # bb, ba
     ci0T = []
-    for ir in range(totirrep):
+    for ir in range(TOTIRREPS):
         mb, ma = bidx[ir].size, aidx[wfnsym^ir].size
         ci0T.append(numpy.zeros((mb,ma)))
         if ma > 0 and mb > 0:
@@ -105,8 +107,8 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
                                 ctypes.c_int(norb), nbs, nas,
                                 ctypes.c_int(nlinkb), ctypes.c_int(nlinka),
                                 linkb_ptr, linka_ptr, dimirrep,
-                                ctypes.c_int(totirrep), ctypes.c_int(wfnsym))
-    for ir in range(totirrep):
+                                ctypes.c_int(wfnsym))
+    for ir in range(TOTIRREPS):
         if ci0[ir].size > 0:
             lib.takebak_2d(ci1new, lib.transpose(ci1[ir]), aidx[wfnsym^ir], bidx[ir])
     return ci1new.reshape(fcivec_shape)
@@ -239,23 +241,22 @@ def reorder_eri(eri, norb, orbsym):
     rank_in_irrep = numpy.empty_like(order)
     old_eri_irrep = numpy.empty_like(order)
     p0 = 0
-    eri_irs = []
+    eri_irs = [numpy.zeros((0,0))] * TOTIRREPS
     for ir, nnorb in enumerate(dimirrep):
         old_eri_irrep[order[p0:p0+nnorb]] = ir
         rank_in_irrep[order[p0:p0+nnorb]] = numpy.arange(nnorb)
-        eri_irs.append(lib.take_2d(eri, order[p0:p0+nnorb], order[p0:p0+nnorb]))
+        eri_irs[ir] = lib.take_2d(eri, order[p0:p0+nnorb], order[p0:p0+nnorb])
         p0 += nnorb
     return eri_irs, rank_in_irrep, old_eri_irrep
 
-def gen_str_irrep(strs, orbsym, link_index, rank_eri, irrep_eri, totirrep):
+def gen_str_irrep(strs, orbsym, link_index, rank_eri, irrep_eri):
     na = len(strs)
     airreps = numpy.zeros(na, dtype=numpy.int32)
     for i, ir in enumerate(orbsym):
         airreps[strs&(1<<i) > 0] ^= ir
     rank = numpy.zeros(na, dtype=numpy.int32)
-    totirrep = irrep_eri.max() + 1
-    aidx = [numpy.zeros(0,dtype=numpy.int32)] * 8
-    for ir in range(totirrep):
+    aidx = [numpy.zeros(0,dtype=numpy.int32)] * TOTIRREPS
+    for ir in range(TOTIRREPS):
         aidx[ir] = numpy.where(airreps == ir)[0]
         ma = len(aidx[ir])
         if ma > 0:
@@ -265,7 +266,7 @@ def gen_str_irrep(strs, orbsym, link_index, rank_eri, irrep_eri, totirrep):
     link_index[:,:,0] = rank_eri[link_index[:,:,0]]
     link_index[:,:,2] = rank[link_index[:,:,2]]
     link_index = [link_index.take(aidx[ir], axis=0)
-                  for ir in range(totirrep)]
+                  for ir in range(TOTIRREPS)]
     return aidx, link_index
 
 
