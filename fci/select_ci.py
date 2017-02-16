@@ -457,7 +457,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
            lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
            davidson_only=False, pspace_size=400, orbsym=None, wfnsym=None,
            select_cutoff=1e-3, ci_coeff_cutoff=1e-3, ecore=0, **kwargs):
-    return direct_spin1._kfactory(SelectCI, h1e, eri, norb, nelec, ci0,
+    return direct_spin1._kfactory(SelectedCI, h1e, eri, norb, nelec, ci0,
                                   level_shift, tol, lindep, max_cycle,
                                   max_space, nroots, davidson_only,
                                   pspace_size, select_cutoff=select_cutoff,
@@ -681,7 +681,7 @@ def from_fci(fcivec, ci_strs, norb, nelec):
     return _as_SCIvector(civec, ci_strs)
 
 
-class SelectCI(direct_spin1.FCISolver):
+class SelectedCI(direct_spin1.FCISolver):
     def __init__(self, mol=None):
         direct_spin1.FCISolver.__init__(self, mol)
         self.ci_coeff_cutoff = .5e-3
@@ -808,7 +808,7 @@ class SelectCI(direct_spin1.FCISolver):
         ciket = _as_SCIvector_if_not(ciket, self._strs)
         return trans_rdm1(cibra, ciket, norb, nelec, link_index)
 
-SCI = SelectCI
+SCI = SelectedCI
 
 
 def _unpack(civec_strs, nelec, ci_strs=None, spin=None):
@@ -886,7 +886,7 @@ if __name__ == '__main__':
     dm2_2 = direct_spin1.make_rdm12(c2, norb, nelec)[1]
     print(abs(dm2_1 - dm2_2).sum())
 
-    myci = SelectCI()
+    myci = SelectedCI()
     e, c = kernel_fixed_space(myci, h1e, eri, norb, nelec, c1._strs)
     print(e - -11.894559902235565)
 
@@ -894,7 +894,7 @@ if __name__ == '__main__':
     print(myci.spin_square(c1, norb, nelec)[0] -
           spin_op.spin_square0(to_fci(c1, norb, nelec), norb, nelec)[0])
 
-    myci = SelectCI()
+    myci = SelectedCI()
     myci = addons.fix_spin_(myci)
     e1, c1 = myci.kernel(h1e, eri, norb, nelec)
     print(e1, e1 - -11.89467612053687)

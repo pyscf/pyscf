@@ -68,16 +68,14 @@ class KnowValues(unittest.TestCase):
         mc = mcscf.casci_symm.CASCI(m, 4, (2, 0))
         mc.fcisolver.nroots = 2
         mc.kernel()[0]
-        ss = mc.fcisolver.spin_square(mc.ci, mc.ncas, mc.nelecas)
-        self.assertEqual(len(ss[0]), 2)
-        self.assertAlmostEqual(ss[0][0], 2, 9)
+        ss = mc.fcisolver.spin_square(mc.ci[0], mc.ncas, mc.nelecas)
+        self.assertAlmostEqual(ss[0], 2, 9)
 
         mc = mcscf.casci.CASCI(m, 4, (2, 0))
         mc.fcisolver.nroots = 2
         mc.kernel()[0]
-        ss = mc.fcisolver.spin_square(mc.ci, mc.ncas, mc.nelecas)
-        self.assertEqual(len(ss[0]), 2)
-        self.assertAlmostEqual(ss[0][1], 2, 9)
+        ss = mc.fcisolver.spin_square(mc.ci[1], mc.ncas, mc.nelecas)
+        self.assertAlmostEqual(ss[0], 2, 9)
 
 
 if __name__ == "__main__":

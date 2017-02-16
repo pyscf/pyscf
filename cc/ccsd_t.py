@@ -40,7 +40,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     orbsym = _sort_eri(mycc, eris, nocc, nvir, eris_vvop, log)
 
     ftmp['t2'] = t2  # read back late.  Cache t2T in t2 to reduce memory footprint
-    mo_energy, t1T, t2T, vooo = _sort_t2_vooo(mycc, orbsym, t1, t2, eris)
+    mo_energy, t1T, t2T, vooo = _sort_t2_vooo_(mycc, orbsym, t1, t2, eris)
 
     cpu2 = [time.clock(), time.time()]
     orbsym = numpy.hstack((numpy.sort(orbsym[:nocc]),numpy.sort(orbsym[nocc:])))
@@ -163,7 +163,7 @@ def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
 
     return orbsym
 
-def _sort_t2_vooo(mycc, orbsym, t1, t2, eris):
+def _sort_t2_vooo_(mycc, orbsym, t1, t2, eris):
     ovoo = numpy.asarray(eris.ovoo)
     nocc, nvir = t1.shape
     if mycc.mol.symmetry:
@@ -175,25 +175,34 @@ def _sort_t2_vooo(mycc, orbsym, t1, t2, eris):
                                   mo_energy[nocc:][v_sorted]))
         t1T = numpy.asarray(t1.T[v_sorted][:,o_sorted], order='C')
 
+        o_sym = orbsym[o_sorted]
+        oo_sym = (o_sym[:,None] ^ o_sym).ravel()
+        oo_sorted = _irrep_argsort(oo_sym)
+        #:vooo = eris.ovoo.transpose(1,0,2,3)
+        #:vooo = vooo[v_sorted][:,o_sorted][:,:,o_sorted][:,:,:,o_sorted]
+        #:vooo = vooo.reshape(nvir,-1,nocc)[:,oo_sorted]
+        oo_idx = numpy.arange(nocc**2).reshape(nocc,nocc)[o_sorted][:,o_sorted]
+        oo_idx = oo_idx.ravel()[oo_sorted]
+        oo_idx = (oo_idx[:,None]*nocc+o_sorted).ravel()
+        vooo = lib.take_2d(ovoo.transpose(1,0,2,3).reshape(nvir,-1), v_sorted, oo_idx)
+
+        #:t2T = t2.transpose(2,3,1,0)
+        #:t2T = ref_t2T[v_sorted][:,v_sorted][:,:,o_sorted][:,:,:,o_sorted]
+        #:t2T = ref_t2T.reshape(nvir,nvir,-1)[:,:,oo_sorted]
         t2T = lib.transpose(t2.reshape(nocc**2,-1))
-        _ccsd.libcc.CCsd_t_sort_t2(t2.ctypes.data_as(ctypes.c_void_p),
-                                   t2T.ctypes.data_as(ctypes.c_void_p),
-                                   orbsym.ctypes.data_as(ctypes.c_void_p),
-                                   ctypes.c_int(nocc), ctypes.c_int(nvir))
-        t2T = t2.reshape(nvir,nvir,nocc,nocc)
-        vooo = numpy.empty((nvir,nocc,nocc,nocc))
-        _ccsd.libcc.CCsd_t_sort_vooo(vooo.ctypes.data_as(ctypes.c_void_p),
-                                     ovoo.ctypes.data_as(ctypes.c_void_p),
-                                     orbsym.ctypes.data_as(ctypes.c_void_p),
-                                     ctypes.c_int(nocc), ctypes.c_int(nvir))
-        ovoo = None
+        oo_idx = numpy.arange(nocc**2).reshape(nocc,nocc).T[o_sorted][:,o_sorted]
+        oo_idx = oo_idx.ravel()[oo_sorted]
+        vv_idx = (v_sorted[:,None]*nvir+v_sorted).ravel()
+        t2T = lib.take_2d(t2T.reshape(nvir**2,-1), vv_idx, oo_idx, out=t2)
+        t2T = t2T.reshape(nvir,nvir,nocc,nocc)
     else:
         t1T = t1.T.copy()
         t2T = lib.transpose(t2.reshape(nocc**2,-1))
         t2T = lib.transpose(t2T.reshape(-1,nocc,nocc), axes=(0,2,1), out=t2)
-        t2T = t2T.reshape(nvir,nvir,nocc,nocc)
         vooo = ovoo.transpose(1,0,2,3).copy()
         mo_energy = numpy.asarray(eris.fock.diagonal(), order='C')
+    vooo = vooo.reshape(nvir,nocc,nocc,nocc)
+    t2T = t2T.reshape(nvir,nvir,nocc,nocc)
     return mo_energy, t1T, t2T, vooo
 
 def _irrep_argsort(orbsym):

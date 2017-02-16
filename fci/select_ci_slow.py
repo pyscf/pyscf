@@ -247,7 +247,7 @@ def kernel(h1e, eri, norb, nelec, ecore=0, verbose=logger.NOTE):
     namax = cistring.num_strings(norb, neleca)
     nbmax = cistring.num_strings(norb, nelecb)
 
-    myci = SelectCI()
+    myci = SelectedCI()
 
     strsa = [int('1'*neleca, 2)]
     strsb = [int('1'*nelecb, 2)]
@@ -386,7 +386,7 @@ def make_rdm2(civec_strs, norb, nelec):
     return rdm2
 
 
-class SelectCI:
+class SelectedCI:
     def __init__(self):
         self.ci_coeff_cutoff = 1e-3
         self.select_cutoff = 1e-3

@@ -36,7 +36,7 @@ from pyscf.fci import select_ci
 from pyscf.fci import select_ci_spin0
 from pyscf.fci import select_ci_symm
 from pyscf.fci import select_ci_spin0_symm
-from pyscf.fci.select_ci import SelectCI, SCI
+from pyscf.fci.select_ci import SelectedCI, SCI
 
 def solver(mol=None, singlet=True, symm=None):
     if mol and symm is None:

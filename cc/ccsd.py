@@ -639,7 +639,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         #return eris
         return _ERIS(self, mo_coeff)
 
-    def add_wvvVV_(self, t1, t2, eris, t2new_tril):
+    def add_wvvVV_(self, t1, t2, eris, t2new_tril, with_ovvv=True):
         time0 = time.clock(), time.time()
         nocc, nvir = t1.shape
 
@@ -731,17 +731,18 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             tmp = _ao2mo.nr_e2(outbuf, mo, (nocc,nmo,nocc,nmo), 's1', 's1', out=tau)
             t2new_tril += tmp.reshape(-1,nvir,nvir)
 
-            #: tmp = numpy.einsum('ijcd,ka,kdcb->ijba', tau, t1, eris.ovvv)
-            #: t2new -= tmp + tmp.transpose(1,0,3,2)
-            tmp = _ao2mo.nr_e2(outbuf, mo, (nocc,nmo,0,nocc), 's1', 's1', out=tau)
-            t2new_tril -= lib.ddot(tmp.reshape(-1,nocc), t1).reshape(-1,nvir,nvir)
-            tmp = _ao2mo.nr_e2(outbuf, mo, (0,nocc,nocc,nmo), 's1', 's1', out=tau)
-            #: t2new_tril -= numpy.einsum('xkb,ka->xab', tmp.reshape(-1,nocc,nvir), t1)
-            tmp = lib.transpose(tmp.reshape(-1,nocc,nvir), axes=(0,2,1), out=outbuf)
-            tmp = lib.ddot(tmp.reshape(-1,nocc), t1, 1,
-                           numpy.ndarray(t2new_tril.shape, buffer=tau), 0)
-            tmp = lib.transpose(tmp.reshape(-1,nvir,nvir), axes=(0,2,1), out=outbuf)
-            t2new_tril -= tmp.reshape(-1,nvir,nvir)
+            if with_ovvv:
+                #: tmp = numpy.einsum('ijcd,ka,kdcb->ijba', tau, t1, eris.ovvv)
+                #: t2new -= tmp + tmp.transpose(1,0,3,2)
+                tmp = _ao2mo.nr_e2(outbuf, mo, (nocc,nmo,0,nocc), 's1', 's1', out=tau)
+                t2new_tril -= lib.ddot(tmp.reshape(-1,nocc), t1).reshape(-1,nvir,nvir)
+                tmp = _ao2mo.nr_e2(outbuf, mo, (0,nocc,nocc,nmo), 's1', 's1', out=tau)
+                #: t2new_tril -= numpy.einsum('xkb,ka->xab', tmp.reshape(-1,nocc,nvir), t1)
+                tmp = lib.transpose(tmp.reshape(-1,nocc,nvir), axes=(0,2,1), out=outbuf)
+                tmp = lib.ddot(tmp.reshape(-1,nocc), t1, 1,
+                               numpy.ndarray(t2new_tril.shape, buffer=tau), 0)
+                tmp = lib.transpose(tmp.reshape(-1,nvir,nvir), axes=(0,2,1), out=outbuf)
+                t2new_tril -= tmp.reshape(-1,nvir,nvir)
 
         else:
             #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
@@ -765,10 +766,10 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                 time0 = logger.timer_debug1(self, 'vvvv %d'%a, *time0)
             handler.join()
         return t2new_tril
-    def add_wvvVV(self, t1, t2, eris):
+    def add_wvvVV(self, t1, t2, eris, with_ovvv=True):
         nocc, nvir = t1.shape
         t2new_tril = numpy.zeros((nocc*(nocc+1)//2,nvir,nvir))
-        return self.add_wvvVV_(t1, t2, eris, t2new_tril)
+        return self.add_wvvVV_(t1, t2, eris, t2new_tril, with_ovvv)
 
     update_amps = update_amps
 
