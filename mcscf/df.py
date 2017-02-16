@@ -240,8 +240,8 @@ class _ERIS(object):
 
         t1 = t0 = (time.clock(), time.time())
         self.feri = lib.H5TmpFile()
-        self.ppaa = feri.create_dataset('ppaa', (nmo,nmo,ncas,ncas), 'f8')
-        self.papa = feri.create_dataset('papa', (nmo,ncas,nmo,ncas), 'f8')
+        self.ppaa = self.feri.create_dataset('ppaa', (nmo,nmo,ncas,ncas), 'f8')
+        self.papa = self.feri.create_dataset('papa', (nmo,ncas,nmo,ncas), 'f8')
         self.j_pc = numpy.zeros((nmo,ncore))
         k_cp = numpy.zeros((ncore,nmo))
 

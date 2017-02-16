@@ -52,7 +52,7 @@ class KnowValues(unittest.TestCase):
         eri0 = numpy.einsum('ijpl,pk->ijkl', eri0, mo.conj())
         eri0 = numpy.einsum('ijkp,pl->ijkl', eri0, mo       )
         eri1 = with_df.ao2mo(mo, kpts)
-        self.assertAlmostEqual(abs(eri1.reshape(eri0.shape)-eri0).sum(), 0, 9)
+        self.assertAlmostEqual(abs(eri1.reshape(eri0.shape)-eri0).sum(), 0, 8)
 
     def test_eri0000(self):
         with_df = mdf.MDF(cell)

@@ -188,6 +188,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None,
         #qidx = [np.linalg.norm(exx_q-kGi,axis=1).argmin() for kGi in kG]
         maxqv = abs(exx_q).max(axis=0)
         is_lt_maxqv = (abs(kG) <= maxqv).all(axis=1)
+        coulG = coulG.astype(np.complex128)
         coulG[is_lt_maxqv] += exx_vq[qidx[is_lt_maxqv]]
 
     coulG[equal2boundary] = 0

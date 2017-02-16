@@ -23,7 +23,7 @@ class KnowValues(unittest.TestCase):
         myfci.max_memory = .001
         myfci.max_cycle = 100
         e = myfci.kernel()[0]
-        self.assertAlmostEqual(e, -11.579978414933732, 9)
+        self.assertAlmostEqual(e, -11.579978414933732+mol.energy_nuc(), 9)
 
 if __name__ == "__main__":
     print("Full Tests for linalg_helper")

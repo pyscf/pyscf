@@ -64,7 +64,7 @@ C    SP
                38, -37, 36, -35, -42, 41, -40, 39, -48, 47, -46, 45, -44, 43, -52, 51,
                -50, 49, -58, 57, -56, 55, -54, 53, -60, 59, -62, 61, 64, -63, 68, -67,
                66, -65]
-        self.assertEqual(mol0.time_reversal_map(), tao)
+        self.assertEqual(list(mol0.time_reversal_map()), tao)
 
     def test_check_sanity(self):
         mol1 = mol0.copy()

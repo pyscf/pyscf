@@ -320,7 +320,7 @@ def format_ecp(ecp_tab):
             try:
                 fmt_ecp[symb] = basis.load_ecp(ecp_tab[atom], stdsymb)
             except RuntimeError as e:
-                sys.stderr.write(str(e))
+                sys.stderr.write('%s\n' % e.message)
         else:
             fmt_ecp[symb] = ecp_tab[atom]
     return fmt_ecp

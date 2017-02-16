@@ -2,6 +2,7 @@
 
 import os
 import ctypes
+import _ctypes
 import unittest
 import numpy
 from pyscf import lib
@@ -40,7 +41,7 @@ ao_loc = numpy.asarray(mol.ao_loc_nr(), dtype=numpy.int32)
 def runjk(dm1, ncomp, intorname, filldot, *namejk):
     fdrv = getattr(libcvhf2, 'CVHFnr_direct_drv')
     intor = getattr(libcvhf2, intorname)
-    fdot = getattr(libcvhf2._handle, filldot)
+    fdot = getattr(libcvhf2, filldot)
 
     njk = len(namejk)
     if dm1.ndim == 2:
@@ -54,7 +55,7 @@ def runjk(dm1, ncomp, intorname, filldot, *namejk):
     dmsptr = (ctypes.c_void_p*(njk*n_dm))()
     vjkptr = (ctypes.c_void_p*(njk*n_dm))()
     for i, symb in enumerate(namejk):
-        f1 = getattr(libcvhf2._handle, symb)
+        f1 = ctypes.c_void_p(_ctypes.dlsym(libcvhf2._handle, symb))
         for j in range(n_dm):
             dmsptr[i*n_dm+j] = dm1[j].ctypes.data_as(ctypes.c_void_p)
             vjkptr[i*n_dm+j] = vjk[i,j*ncomp].ctypes.data_as(ctypes.c_void_p)
