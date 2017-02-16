@@ -278,8 +278,9 @@ def energy(cc, t1, t2, eris):
 class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def __init__(self, mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
-        pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_energy, mo_coeff, mo_occ)
+        pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kpts = mf.kpts
+        self.mo_energy = mf.mo_energy
         self.nkpts = len(self.kpts)
         self.kconserv = tools.get_kconserv(mf.cell, mf.kpts)
         self.khelper = kpoint_helper.unique_pqr_list(mf.cell, mf.kpts)
@@ -330,19 +331,19 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         # TODO: Possibly change this to make it work with k-points with frozen
         #       As of right now it works, but just not sure how the frozen list will work
         #       with it
-        self._nocc = pyscf.cc.ccsd.CCSD.nocc(self)
-        self._nocc = (self._nocc // self.nkpts)
+        self._nocc = self.mo_occ[0].sum() // 2
+        #self._nocc = (self._nocc // self.nkpts)
         return self._nocc
 
     def nmo(self):
         # TODO: Change this for frozen at k-points, seems like it should work
         if isinstance(self.frozen, (int, numpy.integer)):
-            self._nmo = len(self.mo_energy[0]) - self.frozen
+            self._nmo = len(self.mo_occ[0]) - self.frozen
         else:
             if len(self.frozen) > 0:
-                self._nmo = len(self.mo_energy[0]) - len(self.frozen[0])
+                self._nmo = len(self.mo_occ[0]) - len(self.frozen[0])
             else:
-                self._nmo = len(self.mo_energy[0])
+                self._nmo = len(self.mo_occ[0])
         return self._nmo
 
     def ccsd(self, t1=None, t2=None, mo_coeff=None, eris=None):
@@ -690,7 +691,7 @@ class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore',
                  ao2mofn=pyscf.ao2mo.outcore.general_iofree):
         cput0 = (time.clock(), time.time())
-        moidx = numpy.ones(cc.mo_energy.shape, dtype=numpy.bool)
+        moidx = numpy.ones(cc.mo_occ.shape, dtype=numpy.bool)
         nkpts = cc.nkpts
         nmo = cc.nmo()
         #TODO check that this and kccsd work for frozen...
