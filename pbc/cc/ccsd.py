@@ -1,5 +1,5 @@
 from pyscf.lib import logger
-from pyscf.pbc import lib as pbclib
+from pyscf import lib
 import pyscf.cc
 import pyscf.cc.ccsd
 import pyscf.pbc.ao2mo
@@ -11,7 +11,7 @@ from pyscf.cc.rccsd import RCCSD as molRCCSD
 from pyscf.cc.rccsd import _ERIS as _RERIS
 
 #einsum = np.einsum
-einsum = pbclib.einsum
+einsum = lib.einsum
 
 class CCSD(molCCSD):
 
