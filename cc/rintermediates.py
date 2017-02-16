@@ -85,10 +85,17 @@ def cc_Wvvvv(t1,t2,eris):
     eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,-1)).reshape(nocc,nvir,nvir,nvir)
     ovvv = np.array(eris_ovvv).transpose(0,2,1,3)
     for a in range(nvir):
-        Wabcd[a] = eris.vvvv[a].transpose(1,0,2)
-        Wabcd[a] += -einsum('kdc,kb->bcd',eris_ovvv[:,:,a,:],t1)
-        #Wabcd[a] += -einsum('kcbd,k->bcd',eris_ovvv,t1[:,a])
-        Wabcd[a] += -einsum('k,kbcd->bcd',t1[:,a],ovvv)
+#        Wabcd[a] = eris.vvvv[a].transpose(1,0,2)
+#        Wabcd[a] += -einsum('kdc,kb->bcd',eris_ovvv[:,:,a,:],t1)
+#        #Wabcd[a] += -einsum('kcbd,k->bcd',eris_ovvv,t1[:,a])
+#        Wabcd[a] += -einsum('k,kbcd->bcd',t1[:,a],ovvv)
+        w_vvv  = einsum('kdc,kb->bcd',eris_ovvv[:,:,a,:],-t1)
+        w_vvv -= einsum('k,kbcd->bcd',t1[:,a],ovvv)
+        a0 = a*(a+1)//2
+        w_vvv[:,:a+1] += lib.unpack_tril(eris.vvvv[a0:a0+a+1]).transpose(1,0,2)
+        for i in range(a+1,nvir):
+            w_vvv[:,i] += lib.unpack_tril(eris.vvvv[i*(i+1)//2+a])
+        Wabcd[a] = w_vvv
     return Wabcd
 
 def cc_Wvoov(t1,t2,eris):
@@ -181,11 +188,20 @@ def Wvvvv(t1,t2,eris):
     Wabcd = fimd.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)
     eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,-1)).reshape(nocc,nvir,nvir,nvir)
     for a in range(nvir):
-        Wabcd[a] = eris.vvvv[a].transpose(1,0,2)
-        Wabcd[a] += -einsum('ldc,lb->bcd',eris_ovvv[:,:,a,:],t1)
-        Wabcd[a] += -einsum('kcbd,k->bcd',eris_ovvv,t1[:,a])
-        Wabcd[a] += einsum('kcld,klb->bcd',eris.ovov,t2[:,:,a,:])
-        Wabcd[a] += einsum('kcld,k,lb->bcd',eris.ovov,t1[:,a],t1)
+        #Wabcd[a] = eris.vvvv[a].transpose(1,0,2)
+        #Wabcd[a] += -einsum('ldc,lb->bcd',eris_ovvv[:,:,a,:],t1)
+        #Wabcd[a] += -einsum('kcbd,k->bcd',eris_ovvv,t1[:,a])
+        #Wabcd[a] += einsum('kcld,klb->bcd',eris.ovov,t2[:,:,a,:])
+        #Wabcd[a] += einsum('kcld,k,lb->bcd',eris.ovov,t1[:,a],t1)
+        w_vvv  = einsum('ldc,lb->bcd',eris_ovvv[:,:,a,:],-t1)
+        w_vvv += einsum('kcbd,k->bcd',eris_ovvv,-t1[:,a])
+        w_vvv += einsum('kcld,klb->bcd',eris.ovov,t2[:,:,a,:])
+        w_vvv += einsum('kcld,k,lb->bcd',eris.ovov,t1[:,a],t1)
+        a0 = a*(a+1)//2
+        w_vvv[:,:a+1] += lib.unpack_tril(eris.vvvv[a0:a0+a+1]).transpose(1,0,2)
+        for i in range(a+1,nvir):
+            w_vvv[:,i] += lib.unpack_tril(eris.vvvv[i*(i+1)//2+a])
+        Wabcd[a] = w_vvv
     return Wabcd
 
 def Wvvvo(t1,t2,eris,_Wvvvv=None):
