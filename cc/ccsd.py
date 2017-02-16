@@ -778,8 +778,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def diis_(self, t1, t2, istep, normt, de, adiis):
         if (istep > self.diis_start_cycle and
             abs(de) < self.diis_start_energy_diff):
-            nocc, nvir = t1.shape
-            nov = nocc * nvir
+            t1_shape_in = t1.shape
+            t2_shape_in = t2.shape
+	    nov = numpy.prod(t1_shape_in)
             if t1.base is not None and t1.base is t2.base:
                 t1t2 = t1.base
             else:
@@ -790,8 +791,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                 t1.data = t1t2.data
                 t2.data = t1t2.data
             t1t2 = adiis.update(t1t2)
-            t1 = t1t2[:nov].reshape(nocc,nvir)
-            t2 = t1t2[nov:].reshape(nocc,nocc,nvir,nvir)
+            t1 = t1t2[:nov].reshape(t1_shape_in)
+            t2 = t1t2[nov:].reshape(t2_shape_in)
             logger.debug1(self, 'DIIS for step %d', istep)
         return t1, t2
 
