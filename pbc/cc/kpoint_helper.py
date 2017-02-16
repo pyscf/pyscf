@@ -26,7 +26,7 @@ class unique_pqr_list:
         self.operations = numpy.zeros((nkpts,nkpts,nkpts),dtype=int)
         self.equivalentList = numpy.zeros((nkpts,nkpts,nkpts,3),dtype=int)
         self.nUnique = 0
-        self.uniqueList = numpy.array([])
+        self.uniqueList = numpy.array([],dtype=int)
 
         ivec = 0
         not_done = True
