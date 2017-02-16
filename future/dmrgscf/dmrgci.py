@@ -704,7 +704,7 @@ def dryrun(mc, mo_coeff=None):
 
 def block_version(blockexe):
     try:
-        msg = check_output([blockexe, '-v'])
+        msg = check_output([blockexe, '-v'], stderr=STDOUT)
         version = '1.1.0'
         for line in msg.split('\n'):
             if line.startswith('Block '):

@@ -179,7 +179,10 @@ def load(filename_or_basisname, symb):
 
     name = filename_or_basisname.lower().replace(' ', '').replace('-', '').replace('_', '')
     if name not in ALIAS:
-        return parse(filename_or_basisname)
+        try:
+            return parse(filename_or_basisname)
+        except IndexError:
+            raise RuntimeError('basis %s not found' % filename_or_basisname)
     basmod = ALIAS[name]
     symb = ''.join([i for i in symb if i.isalpha()])
     if 'dat' in basmod:

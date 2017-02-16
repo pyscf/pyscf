@@ -4,7 +4,7 @@ An overview of PySCF
 PySCF is an ab initio computational chemistry program implemented in
 Python program language.  The package aims to provide a simple,
 light-weight and efficient platform for electronic structure theory
-developing and simulation.   The package provides a wide range of
+development and simulations.   The package provides a wide range of
 functions to support the electronic structure mean-field and
 post-mean-field calculations of finite size systems and extended systems
 with periodic boundary condition.  Users can run simulations with input
