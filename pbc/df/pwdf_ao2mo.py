@@ -33,8 +33,9 @@ def get_eri(mydf, kpts=None, compact=True):
     if abs(kptijkl).sum() < KPT_DIFF_TOL:
         coulG = mydf.weighted_coulG(kptj-kpti, False, mydf.gs)
         eriR = numpy.zeros((nao_pair,nao_pair))
+        q = numpy.zeros(3)
         for pqkR, pqkI, p0, p1 \
-                in mydf.pw_loop(mydf.gs, kptijkl[:2], max_memory=max_memory,
+                in mydf.pw_loop(mydf.gs, kptijkl[:2], q, max_memory=max_memory,
                                 aosym='s2'):
             vG = numpy.sqrt(coulG[p0:p1])
             pqkR *= vG
@@ -55,8 +56,9 @@ def get_eri(mydf, kpts=None, compact=True):
         coulG = mydf.weighted_coulG(kptj-kpti, False, mydf.gs)
         eriR = numpy.zeros((nao**2,nao**2))
         eriI = numpy.zeros((nao**2,nao**2))
+        q = numpy.zeros(3)
         for pqkR, pqkI, p0, p1 \
-                in mydf.pw_loop(mydf.gs, kptijkl[:2], max_memory=max_memory):
+                in mydf.pw_loop(mydf.gs, kptijkl[:2], q, max_memory=max_memory):
             vG = numpy.sqrt(coulG[p0:p1])
             pqkR *= vG
             pqkI *= vG
@@ -82,15 +84,14 @@ def get_eri(mydf, kpts=None, compact=True):
         coulG = mydf.weighted_coulG(kptj-kpti, False, mydf.gs)
         eriR = numpy.zeros((nao**2,nao**2))
         eriI = numpy.zeros((nao**2,nao**2))
+        q = kptj - kpti
+# rho_rs(-G-k) = rho_rs(conj(G+k)) = conj(rho_sr(G+k))
         for (pqkR, pqkI, p0, p1), (rskR, rskI, q0, q1) in \
-                lib.izip(mydf.pw_loop(mydf.gs, kptijkl[:2], max_memory=max_memory*.5),
-                         mydf.pw_loop(mydf.gs,-kptijkl[2:], max_memory=max_memory*.5)):
+                lib.izip(mydf.pw_loop(mydf.gs, kptijkl[:2], q, max_memory=max_memory*.5),
+                         mydf.pw_loop(mydf.gs,-kptijkl[2:], q, max_memory=max_memory*.5)):
             pqkR *= coulG[p0:p1]
             pqkI *= coulG[p0:p1]
-# rho'_rs(G-k_rs) = conj(rho_rs(-G+k_rs))
-#                 = conj(rho_rs(-G+k_rs) - d_{k_rs:Q,rs} * Q(-G+k_rs))
-#                 = rho_rs(G-k_rs) - conj(d_{k_rs:Q,rs}) * Q(G-k_rs)
-# rho_pq(G+k_pq) * conj(rho'_rs(G-k_rs))
+# rho_pq(G+k_pq) * conj(rho_sr(G+k_pq))
             zdotNC(pqkR, pqkI, rskR.T, rskI.T, 1, eriR, eriI, 1)
             pqkR = pqkI = rskR = rskI = None
         return (eriR+eriI*1j)
@@ -116,8 +117,9 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
 
         coulG = mydf.weighted_coulG(kptj-kpti, False, mydf.gs)
         ijR = ijI = klR = klI = buf = None
+        q = numpy.zeros(3)
         for pqkR, pqkI, p0, p1 \
-                in mydf.pw_loop(mydf.gs, kptijkl[:2], max_memory=max_memory,
+                in mydf.pw_loop(mydf.gs, kptijkl[:2], q, max_memory=max_memory,
                                 aosym='s2'):
             vG = numpy.sqrt(coulG[p0:p1])
             pqkR *= vG
@@ -147,8 +149,9 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
 
         coulG = mydf.weighted_coulG(kptj-kpti, False, mydf.gs)
         zij = zlk = buf = None
+        q = numpy.zeros(3)
         for pqkR, pqkI, p0, p1 \
-                in mydf.pw_loop(mydf.gs, kptijkl[:2], max_memory=max_memory):
+                in mydf.pw_loop(mydf.gs, kptijkl[:2], q, max_memory=max_memory):
             buf = lib.transpose(pqkR+pqkI*1j, out=buf)
             buf *= numpy.sqrt(coulG[p0:p1]).reshape(-1,1)
             zij, zlk = _ztrans(buf, zij, moij, ijslice,
@@ -177,9 +180,10 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
         ao_loc = None
         coulG = mydf.weighted_coulG(kptj-kpti, False, mydf.gs)
         zij = zkl = buf = None
+        q = kptj - kpti
         for (pqkR, pqkI, p0, p1), (rskR, rskI, q0, q1) in \
-                lib.izip(mydf.pw_loop(mydf.gs, kptijkl[:2], max_memory=max_memory*.5),
-                         mydf.pw_loop(mydf.gs,-kptijkl[2:], max_memory=max_memory*.5)):
+                lib.izip(mydf.pw_loop(mydf.gs, kptijkl[:2], q, max_memory=max_memory*.5),
+                         mydf.pw_loop(mydf.gs,-kptijkl[2:], q, max_memory=max_memory*.5)):
             buf = lib.transpose(pqkR+pqkI*1j, out=buf)
             zij = _ao2mo.r_e2(buf, moij, ijslice, tao, ao_loc, out=zij)
             buf = lib.transpose(rskR-rskI*1j, out=buf)

@@ -202,7 +202,7 @@ class PWDF(lib.StreamObject):
         logger.info(self, 'len(kpts) = %d', len(self.kpts))
         logger.debug1(self, '    kpts = %s', self.kpts)
 
-    def pw_loop(self, gs=None, kpti_kptj=None, shls_slice=None,
+    def pw_loop(self, gs=None, kpti_kptj=None, q=None, shls_slice=None,
                 max_memory=2000, aosym='s1', blksize=None):
         '''Plane wave part'''
         cell = self.cell
@@ -212,6 +212,8 @@ class PWDF(lib.StreamObject):
             kpti = kptj = numpy.zeros(3)
         else:
             kpti, kptj = kpti_kptj
+        if q is None:
+            q = kptj - kpti
 
         ao_loc = cell.ao_loc_nr()
         Gv, Gvbase, kws = cell.get_Gv_weights(gs)
@@ -243,7 +245,7 @@ class PWDF(lib.StreamObject):
         if aosym == 's2':
             for p0, p1 in self.prange(0, ngs, blksize):
                 aoao = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                             b, gxyz[p0:p1], Gvbase, kptj-kpti,
+                                             b, gxyz[p0:p1], Gvbase, q,
                                              kptj.reshape(1,3), out=buf)[0]
                 for i0, i1 in lib.prange(0, p1-p0, sublk):
                     nG = i1 - i0
@@ -256,9 +258,9 @@ class PWDF(lib.StreamObject):
         else:
             for p0, p1 in self.prange(0, ngs, blksize):
                 #aoao = ft_ao.ft_aopair(cell, Gv[p0:p1], shls_slice, aosym,
-                #                       b, Gvbase, gxyz[p0:p1], gs, (kpti, kptj))
+                #                       b, Gvbase, gxyz[p0:p1], gs, (kpti, kptj), q)
                 aoao = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                             b, gxyz[p0:p1], Gvbase, kptj-kpti,
+                                             b, gxyz[p0:p1], Gvbase, q,
                                              kptj.reshape(1,3), out=buf)[0]
                 for i0, i1 in lib.prange(0, p1-p0, sublk):
                     nG = i1 - i0
@@ -269,16 +271,17 @@ class PWDF(lib.StreamObject):
                     yield (pqkR.reshape(-1,nG), pqkI.reshape(-1,nG), p0+i0, p0+i1)
                 aoao[:] = 0
 
-    def ft_loop(self, gs=None, kpt=numpy.zeros(3), kpts=None, shls_slice=None,
+    def ft_loop(self, gs=None, q=numpy.zeros(3), kpts=None, shls_slice=None,
                 max_memory=4000, aosym='s1'):
         '''
-        Fourier transform iterator for all kpti which satisfy  kpt = kpts - kpti
+        Fourier transform iterator for all kpti which satisfy  2pi*N = (kpts - kpti - q)*a
+        N = -1, 0, 1
         '''
         cell = self.cell
         if gs is None:
             gs = self.gs
         if kpts is None:
-            assert(gamma_point(kpt))
+            assert(is_zero(q))
             kpts = self.kpts
         kpts = numpy.asarray(kpts)
         nkpts = len(kpts)
@@ -309,7 +312,7 @@ class PWDF(lib.StreamObject):
         if aosym == 's2':
             for p0, p1 in self.prange(0, ngs, blksize):
                 ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                      b, gxyz[p0:p1], Gvbase, kpt, kpts, out=buf)
+                                      b, gxyz[p0:p1], Gvbase, q, kpts, out=buf)
                 nG = p1 - p0
                 for k in range(nkpts):
                     aoao = numpy.ndarray((nG,nij), dtype=numpy.complex128,
@@ -323,7 +326,7 @@ class PWDF(lib.StreamObject):
         else:
             for p0, p1 in self.prange(0, ngs, blksize):
                 ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                      b, gxyz[p0:p1], Gvbase, kpt, kpts, out=buf)
+                                      b, gxyz[p0:p1], Gvbase, q, kpts, out=buf)
                 nG = p1 - p0
                 for k in range(nkpts):
                     aoao = numpy.ndarray((nG,ni,nj), dtype=numpy.complex128,

@@ -21,33 +21,35 @@ libpbc = lib.load_library('libpbc')
 #
 def ft_aopair(cell, Gv, shls_slice=None, aosym='s1',
               b=None, gxyz=None, Gvbase=None,
-              kpti_kptj=numpy.zeros((2,3)), verbose=None):
+              kpti_kptj=numpy.zeros((2,1,3)), q=None, verbose=None):
     ''' FT transform AO pair
-    \int i(r) j(r) exp(-ikr) dr^3
-    for given  kpt = kptj - kpti.
+    \int exp(-i(G+q)r) i(r) j(r) exp(-ikr) dr^3
     '''
     kpti, kptj = kpti_kptj
+    if q is None:
+        q = kptj - kpti
     val = _ft_aopair_kpts(cell, Gv, shls_slice, aosym, b, gxyz, Gvbase,
-                          kptj-kpti, kptj.reshape(1,3))
+                          q, kptj.reshape(1,3))
     return val[0]
 
 # NOTE buffer out must be initialized to 0
 # gxyz is the index for Gvbase
 def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
                     b=None, gxyz=None, Gvbase=None,
-                    kpt=numpy.zeros(3), kptjs=numpy.zeros((2,3)), out=None):
+                    q=numpy.zeros(3), kptjs=numpy.zeros((1,3)),
+                    out=None):
     ''' FT transform AO pair
-    \int i(r) j(r) exp(-ikr) dr^3
-    for all  kpt = kptj - kpti.  The return list holds the AO pair array
+    \int exp(-i(G+q)r) i(r) j(r) exp(-ikr) dr^3
+    The return list holds the AO pair array
     corresponding to the kpoints given by kptjs
     '''
-    kpt = numpy.reshape(kpt, 3)  # kptis = kptjs - kpt
+    q = numpy.reshape(q, 3)
     kptjs = numpy.asarray(kptjs, order='C').reshape(-1,3)
     nGv = Gv.shape[0]
     GvT = numpy.asarray(Gv.T, order='C')
-    GvT += kpt.reshape(-1,1)
+    GvT += q.reshape(-1,1)
 
-    if (gxyz is None or b is None or Gvbase is None or (abs(kpt).sum() > 1e-9)
+    if (gxyz is None or b is None or Gvbase is None or (abs(q).sum() > 1e-9)
 # backward compatibility for pyscf-1.2, in which the argument Gvbase is gs
         or (Gvbase is not None and isinstance(Gvbase[0], (int, numpy.integer)))):
         p_gxyzT = lib.c_null_ptr()
@@ -57,7 +59,7 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
     else:
         gxyzT = numpy.asarray(gxyz.T, order='C', dtype=numpy.int32)
         p_gxyzT = gxyzT.ctypes.data_as(ctypes.c_void_p)
-        b = numpy.hstack((b.ravel(), kpt) + Gvbase)
+        b = numpy.hstack((b.ravel(), q) + Gvbase)
         p_b = b.ctypes.data_as(ctypes.c_void_p)
         p_gs = (ctypes.c_int*3)(*[len(x) for x in Gvbase])
         eval_gz = 'GTO_Gv_cubic'
@@ -86,7 +88,7 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
 #       f_ji(G) = \int f_ji exp(-iGr) = \int f_ij^* exp(-iGr) = [f_ij(-G)]^*
 # The hermi operation needs reordering the axis-0.  It is inefficient.
     if aosym == 's1hermi': # Symmetry for Gamma point
-        assert(abs(kpt).sum() < 1e-9 and abs(kptjs).sum() < 1e-9)
+        assert(abs(q).sum() < 1e-9 and abs(kptjs).sum() < 1e-9)
     elif aosym == 's2':
         i0 = ao_loc[shls_slice[0]]
         i1 = ao_loc[shls_slice[1]]
