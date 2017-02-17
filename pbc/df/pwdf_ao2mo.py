@@ -85,9 +85,10 @@ def get_eri(mydf, kpts=None, compact=True):
         eriR = numpy.zeros((nao**2,nao**2))
         eriI = numpy.zeros((nao**2,nao**2))
         max_memory = (mydf.max_memory - lib.current_memory()[0]) * .4
+        q = kptj - kpti
         for (pqkR, pqkI, p0, p1), (rskR, rskI, q0, q1) in \
-                lib.izip(mydf.pw_loop(cell, mydf.gs, kptijkl[:2], max_memory=max_memory),
-                         mydf.pw_loop(cell, mydf.gs,-kptijkl[2:], max_memory=max_memory)):
+                lib.izip(mydf.pw_loop(cell, mydf.gs, kptijkl[:2], q, max_memory=max_memory),
+                         mydf.pw_loop(cell, mydf.gs,-kptijkl[2:], q, max_memory=max_memory)):
             pqkR *= coulG[p0:p1]
             pqkI *= coulG[p0:p1]
 # rho_pq(G+k_pq) * conj(rho_rs(G-k_rs))

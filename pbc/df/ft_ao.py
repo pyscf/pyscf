@@ -21,10 +21,12 @@ libpbc = lib.load_library('libpbc')
 #
 def ft_aopair(cell, Gv, shls_slice=None, aosym='s1',
               invh=None, gxyz=None, gs=None,
-              kpti_kptj=numpy.zeros((2,3)), verbose=None):
+              kpti_kptj=numpy.zeros((2,3)), q=None, verbose=None):
     kpti, kptj = kpti_kptj
+    if q is None:
+        q = kptj - kpti
     val = _ft_aopair_kpts(cell, Gv, shls_slice, aosym, invh, gxyz, gs,
-                          kptj-kpti, kptj.reshape(1,3))
+                          q, kptj.reshape(1,3))
     return val[0]
 
 # NOTE buffer out must be initialized to 0
@@ -32,8 +34,8 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
                     invh=None, gxyz=None, gs=None,
                     kpt=numpy.zeros(3), kptjs=numpy.zeros((2,3)), out=None):
     ''' FT transform AO pair
-    \int i(r) j(r) exp(-ikr) dr^3
-    for all  kpt = kptj - kpti.  The return list holds the AO pair array
+    \int exp(-i(G+q)r) i(r) j(r) exp(-ikr) dr^3
+    The return list holds the AO pair array
     corresponding to the kpoints given by kptjs
     '''
     kpt = numpy.reshape(kpt, 3)

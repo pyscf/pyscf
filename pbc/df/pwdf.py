@@ -140,7 +140,7 @@ class PWDF(lib.StreamObject):
         logger.info(self, 'len(kpts) = %d', len(self.kpts))
         logger.debug1(self, '    kpts = %s', self.kpts)
 
-    def pw_loop(self, cell, gs=None, kpti_kptj=None, shls_slice=None,
+    def pw_loop(self, cell, gs=None, kpti_kptj=None, q=None, shls_slice=None,
                 max_memory=2000):
         '''Plane wave part'''
         if gs is None:
@@ -149,6 +149,8 @@ class PWDF(lib.StreamObject):
             kpti = kptj = numpy.zeros(3)
         else:
             kpti, kptj = kpti_kptj
+        if q is None:
+            q = kptj - kpti
 
         nao = cell.nao_nr()
         gxyz = lib.cartesian_prod((numpy.append(range(gs[0]+1), range(-gs[0],0)),
@@ -177,7 +179,7 @@ class PWDF(lib.StreamObject):
             #                       gxyz[p0:p1], gs, (kpti, kptj))
             aoao = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                          invh, gxyz[p0:p1], gs,
-                                         kptj-kpti, kptj.reshape(1,3), out=buf)[0]
+                                         q, kptj.reshape(1,3), out=buf)[0]
             for i0, i1 in lib.prange(0, p1-p0, sublk):
                 nG = i1 - i0
                 pqkR = numpy.ndarray((nao,nao,nG), buffer=pqkRbuf)
@@ -188,14 +190,15 @@ class PWDF(lib.StreamObject):
                        pqkI.reshape(-1,nG), p0+i0, p0+i1)
             aoao[:] = 0
 
-    def ft_loop(self, cell, gs=None, kpt=numpy.zeros(3),
+    def ft_loop(self, cell, gs=None, q=numpy.zeros(3),
                 kpts=None, shls_slice=None, max_memory=4000):
         '''
-        Fourier transform iterator for all kpti which satisfy  kpt = kpts - kpti
+        Fourier transform iterator for all kpti which satisfy  2pi*N = (kpts - kpti - q)*a
+        N = -1, 0, 1
         '''
         if gs is None: gs = self.gs
         if kpts is None:
-            assert(gamma_point(kpt))
+            assert(gamma_point(q))
             kpts = self.kpts
         kpts = numpy.asarray(kpts)
         nkpts = len(kpts)
@@ -211,7 +214,7 @@ class PWDF(lib.StreamObject):
 # Theoretically, hermitian symmetry can be also found for kpti == kptj:
 #       f_ji(G) = \int f_ji exp(-iGr) = \int f_ij^* exp(-iGr) = [f_ij(-G)]^*
 # The hermi operation needs reordering the axis-0.  It is inefficient
-        if gamma_point(kpt) and gamma_point(kpts):
+        if gamma_point(q) and gamma_point(kpts):
             aosym = 's1hermi'
         else:
             aosym = 's1'
@@ -224,7 +227,7 @@ class PWDF(lib.StreamObject):
 
         for p0, p1 in self.prange(0, ngs, blksize):
             ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym, invh,
-                                  gxyz[p0:p1], gs, kpt, kpts, out=buf)
+                                  gxyz[p0:p1], gs, q, kpts, out=buf)
             nG = p1 - p0
             for k in range(nkpts):
                 aoao = numpy.ndarray((nG,nao,nao), dtype=numpy.complex128,

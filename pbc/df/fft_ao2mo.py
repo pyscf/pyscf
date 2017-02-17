@@ -47,7 +47,8 @@ def get_eri(mydf, kpts=None, compact=False):
 ####################
 # gamma point, the integral is real and with s4 symmetry
     if abs(kptijkl).sum() < 1e-9:
-        ao_pairs_G = get_ao_pairs_G(mydf, kptijkl[:2], compact)
+        q = numpy.zeros(3)
+        ao_pairs_G = get_ao_pairs_G(mydf, kptijkl[:2], q, compact)
         ao_pairs_G *= numpy.sqrt(coulG).reshape(-1,1)
         aoijR = ao_pairs_G.real.copy()
         aoijI = ao_pairs_G.imag.copy()
@@ -62,7 +63,8 @@ def get_eri(mydf, kpts=None, compact=False):
 #
 # complex integrals, N^4 elements
     elif (abs(kpti-kptl).sum() < 1e-9) and (abs(kptj-kptk).sum() < 1e-9):
-        ao_pairs_G = get_ao_pairs_G(mydf, kptijkl[:2], False)
+        q = numpy.zeros(3)
+        ao_pairs_G = get_ao_pairs_G(mydf, kptijkl[:2], q, False)
         ao_pairs_G *= numpy.sqrt(coulG).reshape(-1,1)
         ao_pairs_invG = ao_pairs_G.T.reshape(nao,nao,-1).transpose(1,0,2).conj()
         ao_pairs_invG = ao_pairs_invG.reshape(-1,ngs)
@@ -72,9 +74,10 @@ def get_eri(mydf, kpts=None, compact=False):
 # aosym = s1, complex integrals
 #
     else:
-        ao_pairs_G = get_ao_pairs_G(mydf, kptijkl[:2], False)
+        q = kptj - kpti
+        ao_pairs_G = get_ao_pairs_G(mydf, kptijkl[:2], q, False)
 # ao_pairs_invG = rho_rs(-G+k_rs) = conj(rho_sr(G+k_sr)).swap(r,s)
-        ao_pairs_invG = get_ao_pairs_G(mydf, -kptijkl[2:], False).conj()
+        ao_pairs_invG = get_ao_pairs_G(mydf, -kptijkl[2:], q, False).conj()
         ao_pairs_G *= coulG.reshape(-1,1)
         return lib.dot(ao_pairs_G.T, ao_pairs_invG, cell.vol/ngs**2)
 
@@ -139,19 +142,20 @@ def general(mydf, mo_coeffs, kpts=None, compact=False):
 # aosym = s1, complex integrals
 #
     else:
+        q = kptj - kpti
         nmok = mo_coeffs[2].shape[1]
         nmol = mo_coeffs[3].shape[1]
-        mo_ij_G = get_mo_pairs_G(mydf, mo_coeffs[:2], kptijkl[:2])
+        mo_ij_G = get_mo_pairs_G(mydf, mo_coeffs[:2], kptijkl[:2], q)
         mo_ij_G *= coulG.reshape(-1,1)
 # mo_pairs_invG = rho_rs(-G+k_rs) = conj(rho_sr(G+k_sr)).swap(r,s)
         mo_kl_G = get_mo_pairs_G(mydf, (mo_coeffs[3],mo_coeffs[2]),
-                                 (kptl,kptk))
+                                 (kptl,kptk), q)
         mo_kl_G = mo_kl_G.T.reshape(nmol,nmok,-1).transpose(1,0,2).conj()
         mo_kl_G = mo_kl_G.reshape(-1,ngs)
         return lib.dot(mo_ij_G.T, mo_kl_G.T, cell.vol/ngs**2)
 
 
-def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), compact=False):
+def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), q=None, compact=False):
     '''Calculate forward (G|ij) FFT of all AO pairs.
 
     Returns:
@@ -194,14 +198,15 @@ def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), compact=False):
         ao_pairs_G = trans(aoR, aoR)
 
     else:
+        if q is None:
+            q = kpts[1] - kpts[0]
         aoiR, aojR = mydf._numint.eval_ao(cell, coords, kpts[:2])
-        q = kpts[1] - kpts[0]
         fac = numpy.exp(-1j * numpy.dot(coords, q))
         ao_pairs_G = trans(aoiR, aojR, fac)
 
     return ao_pairs_G
 
-def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), compact=False):
+def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None, compact=False):
     '''Calculate forward (G|ij) FFT of all MO pairs.
 
     Args:
@@ -252,8 +257,9 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), compact=False):
         mo_pairs_G = trans(aoR, aoR)
 
     else:
+        if q is None:
+            q = kpts[1] - kpts[0]
         aoiR, aojR = mydf._numint.eval_ao(cell, coords, kpts)
-        q = kpts[1] - kpts[0]
         fac = numpy.exp(-1j * numpy.dot(coords, q))
         mo_pairs_G = trans(aoiR, aojR, fac)
 
