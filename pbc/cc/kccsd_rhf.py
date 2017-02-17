@@ -331,7 +331,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         # TODO: Possibly change this to make it work with k-points with frozen
         #       As of right now it works, but just not sure how the frozen list will work
         #       with it
-        self._nocc = self.mo_occ[0].sum() // 2
+        self._nocc = int(self.mo_occ[0].sum()) // 2
         #self._nocc = (self._nocc // self.nkpts)
         return self._nocc
 
@@ -349,21 +349,21 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def ccsd(self, t1=None, t2=None, mo_coeff=None, eris=None):
         if eris is None: eris = self.ao2mo(mo_coeff)
         self.eris = eris
-        self._conv, self.ecc, self.t1, self.t2 = \
+        self.converged, self.e_corr, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                        tol=self.conv_tol,
                        tolnormt=self.conv_tol_normt,
                        max_memory=self.max_memory, verbose=self.verbose)
-        if self._conv:
+        if self.converged:
             logger.info(self, 'CCSD converged')
         else:
             logger.info(self, 'CCSD not converge')
         if self._scf.e_tot == 0:
-            logger.info(self, 'E_corr = %.16g', self.ecc)
+            logger.info(self, 'E_corr = %.16g', self.e_corr)
         else:
             logger.info(self, 'E(CCSD) = %.16g  E_corr = %.16g',
-                        self.ecc+self._scf.e_tot, self.ecc)
-        return self.ecc, self.t1, self.t2
+                        self.e_corr+self._scf.e_tot, self.e_corr)
+        return self.e_corr, self.t1, self.t2
 
     def ao2mo(self, mo_coeff=None):
         return _ERIS(self, mo_coeff)

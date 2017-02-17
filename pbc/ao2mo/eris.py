@@ -9,13 +9,13 @@ pyscf.pbc.df module to get 2e MO integrals
 '''
 import numpy as np
 from pyscf.pbc import df
-from pyscf.pbc import lib as pbclib
+from pyscf import lib
 from pyscf.pbc.dft.gen_grid import gen_uniform_grids
 from pyscf.pbc.dft.numint import eval_ao
 from pyscf.pbc import tools
 from pyscf.lib import logger
 
-einsum = pbclib.einsum
+einsum = lib.einsum
 
 def general(cell, mo_coeffs, kpts=None, compact=False):
     '''pyscf-style wrapper to get MO 2-el integrals.'''
