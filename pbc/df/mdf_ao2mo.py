@@ -25,6 +25,7 @@ def get_eri(mydf, kpts=None, compact=True):
         mydf.build()
 
     kpti, kptj, kptk, kptl = kptijkl
+    q = kptj - kpti
     auxcell = mydf.auxcell
     nao = cell.nao_nr()
     naux = auxcell.nao_nr()
@@ -40,7 +41,7 @@ def get_eri(mydf, kpts=None, compact=True):
             LpqR = LpqI = j3cR = j3cI = None
         eriR = lib.transpose_sum(eriR, inplace=True)
 
-        coulG = tools.get_coulG(cell, kptj-kpti, gs=mydf.gs) / cell.vol
+        coulG = tools.get_coulG(cell, q, gs=mydf.gs) / cell.vol
         max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
         trilidx = numpy.tril_indices(nao)
         for pqkR, pqkI, p0, p1 \
@@ -72,7 +73,7 @@ def get_eri(mydf, kpts=None, compact=True):
             zdotNC(LpqR.T, LpqI.T, j3cR, j3cI, 1, eriR, eriI, 1)
             LpqR = LpqI = j3cR = j3cI = None
 
-        coulG = tools.get_coulG(cell, kptj-kpti, gs=mydf.gs) / cell.vol
+        coulG = tools.get_coulG(cell, q, gs=mydf.gs) / cell.vol
         for pqkR, pqkI, p0, p1 \
                 in mydf.pw_loop(cell, mydf.gs, kptijkl[:2], max_memory=max_memory):
             vG = numpy.sqrt(coulG[p0:p1])
@@ -106,10 +107,9 @@ def get_eri(mydf, kpts=None, compact=True):
             zdotNN(LpqR.T, LpqI.T, jrsR, jrsI, 1, eriR, eriI, 1)
             LpqR = LpqI = jpqR = jpqI = LrsR = LrsI = jrsR = jrsI = None
 
-        coulG = tools.get_coulG(cell, kptj-kpti, gs=mydf.gs) / cell.vol
+        coulG = tools.get_coulG(cell, q, gs=mydf.gs) / cell.vol
         max_memory = (mydf.max_memory - lib.current_memory()[0]) * .4
 
-        q = kptj - kpti
         for (pqkR, pqkI, p0, p1), (rskR, rskI, q0, q1) in \
                 lib.izip(mydf.pw_loop(cell, mydf.gs, kptijkl[:2], q, max_memory=max_memory),
                          mydf.pw_loop(cell, mydf.gs,-kptijkl[2:], q, max_memory=max_memory)):

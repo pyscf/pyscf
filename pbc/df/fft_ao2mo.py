@@ -39,9 +39,10 @@ def get_eri(mydf, kpts=None, compact=False):
         kptijkl = numpy.reshape(kpts, (4,3))
 
     kpti, kptj, kptk, kptl = kptijkl
+    q = kptj - kpti
     nao = cell.nao_nr()
     nao_pair = nao * (nao+1) // 2
-    coulG = tools.get_coulG(cell, kptj-kpti, gs=mydf.gs)
+    coulG = tools.get_coulG(cell, q, gs=mydf.gs)
     ngs = len(coulG)
 
 ####################
@@ -74,7 +75,6 @@ def get_eri(mydf, kpts=None, compact=False):
 # aosym = s1, complex integrals
 #
     else:
-        q = kptj - kpti
         ao_pairs_G = get_ao_pairs_G(mydf, kptijkl[:2], q, False)
 # ao_pairs_invG = rho_rs(-G+k_rs) = conj(rho_sr(G+k_sr)).swap(r,s)
         ao_pairs_invG = get_ao_pairs_G(mydf, -kptijkl[2:], q, False).conj()
@@ -94,7 +94,8 @@ def general(mydf, mo_coeffs, kpts=None, compact=False):
     kpti, kptj, kptk, kptl = kptijkl
     if isinstance(mo_coeffs, numpy.ndarray) and mo_coeffs.ndim == 2:
         mo_coeffs = (mo_coeffs,) * 4
-    coulG = tools.get_coulG(cell, kptj-kpti, gs=mydf.gs)
+    q = kptj - kpti
+    coulG = tools.get_coulG(cell, q, gs=mydf.gs)
     ngs = len(coulG)
 
 ####################
@@ -142,7 +143,6 @@ def general(mydf, mo_coeffs, kpts=None, compact=False):
 # aosym = s1, complex integrals
 #
     else:
-        q = kptj - kpti
         nmok = mo_coeffs[2].shape[1]
         nmol = mo_coeffs[3].shape[1]
         mo_ij_G = get_mo_pairs_G(mydf, mo_coeffs[:2], kptijkl[:2], q)
