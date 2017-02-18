@@ -139,6 +139,7 @@ class KnowValues(unittest.TestCase):
 
         mf = pbchf.RHF(cell)
         mf.with_df = pdf.PWDF(cell)
+        mf.exxdiv = None
         mf.get_hcore = lambda *args: hf.get_hcore(mol)
         mf.energy_nuc = lambda *args: mol.energy_nuc()
         e1 = mf.kernel()
@@ -160,7 +161,7 @@ class KnowValues(unittest.TestCase):
         mf = pbchf.RHF(cell)
         mf.with_df = pdf.PWDF(cell)
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.24122236427, 5)
+        self.assertAlmostEqual(e1, -3.2452496710146335, 5)
 
     def test_rhf_2d(self):
         L = 4
@@ -178,7 +179,7 @@ class KnowValues(unittest.TestCase):
         mf = pbchf.RHF(cell)
         mf.with_df = pdf.PWDF(cell)
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.26794462786, 5)
+        self.assertAlmostEqual(e1, -3.2683014249123516, 5)
 
 
 if __name__ == '__main__':

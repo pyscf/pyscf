@@ -27,7 +27,7 @@ class KnowValues(unittest.TestCase):
         cell.output = '/dev/null'
         cell.build()
 
-        kpts = cell.make_kpts((2,2,2))
+        kpts = cell.make_kpts((2,2,2), with_gamma_point=False)
         mf = pbcdft.KUKS(cell, kpts)
         mf.xc = 'lda,vwn'
         e1 = mf.scf()

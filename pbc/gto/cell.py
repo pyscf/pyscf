@@ -574,7 +574,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
 energy_nuc = ewald
 
 
-def make_kpts(cell, nks, wrap_around=False):
+def make_kpts(cell, nks, wrap_around=False, with_gamma_point=True):
     '''Given number of kpoints along x,y,z , generate kpoints
 
     Args:
@@ -583,6 +583,8 @@ def make_kpts(cell, nks, wrap_around=False):
     Kwargs:
         wrap_around : bool
             To ensure all kpts are in first Brillouin zone.
+        with_gamma_point : bool
+            Whether to shift Monkhorst-pack grid to include gamma-point.
 
     Returns:
         kpts in absolute value (unit 1/Bohr).  Gamma point is placed at the
@@ -594,7 +596,10 @@ def make_kpts(cell, nks, wrap_around=False):
     '''
     ks_each_axis = []
     for n in nks:
-        ks = np.arange(n, dtype=float) / n
+        if with_gamma_point:
+            ks = np.arange(n, dtype=float) / n
+        else:
+            ks = (np.arange(n)+.5)/n-.5
         if wrap_around:
             ks[ks>=.5] -= 1
         ks_each_axis.append(ks)
