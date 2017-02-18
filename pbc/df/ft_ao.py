@@ -64,7 +64,7 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
         gxyzT = numpy.asarray(gxyz.T, order='C', dtype=numpy.int32)
         p_gxyzT = gxyzT.ctypes.data_as(ctypes.c_void_p)
         Gvx = lib.cartesian_prod(Gvbase)
-        b = numpy.hstack((b.copy().ravel(), q) + Gvbase)
+        b = numpy.hstack((b.ravel(), q) + Gvbase)
         p_b = b.ctypes.data_as(ctypes.c_void_p)
         p_gs = (ctypes.c_int*3)(*[len(x) for x in Gvbase])
 
@@ -131,7 +131,6 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
             for i in range(1,ni):
                 mat[:,:i,i] = mat[:,i,:i]
     return out
-
 
 def ft_ao(mol, Gv, shls_slice=None, b=None,
           gxyz=None, Gvbase=None, kpt=numpy.zeros(3), verbose=None):

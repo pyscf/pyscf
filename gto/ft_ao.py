@@ -37,13 +37,16 @@ def ft_aopair(mol, Gv, shls_slice=None, aosym='s1', b=numpy.eye(3),
         p_b = (ctypes.c_double*1)(0)
         eval_gz = 'GTO_Gv_general'
     else:
+        if abs(b-numpy.diag(b.diagonal())).sum() < 1e-8:
+            eval_gz = 'GTO_Gv_orth'
+        else:
+            eval_gz = 'GTO_Gv_nonorth'
         GvT = numpy.asarray(Gv.T, order='C')
         gxyzT = numpy.asarray(gxyz.T, order='C', dtype=numpy.int32)
         p_gxyzT = gxyzT.ctypes.data_as(ctypes.c_void_p)
         b = numpy.hstack((b.ravel(), numpy.zeros(3)) + Gvbase)
         p_b = b.ctypes.data_as(ctypes.c_void_p)
         p_gs = (ctypes.c_int*3)(*[len(x) for x in Gvbase])
-        eval_gz = 'GTO_Gv_cubic'
 
     fn = libcgto.GTO_ft_ovlp_mat
     intor = getattr(libcgto, 'GTO_ft_ovlp_sph')
@@ -95,10 +98,13 @@ def ft_ao(mol, Gv, shls_slice=None, b=numpy.eye(3),
         p_b = (ctypes.c_double*1)(0)
         eval_gz = 'GTO_Gv_general'
     else:
+        if abs(b-numpy.diag(b.diagonal())).sum() < 1e-8:
+            eval_gz = 'GTO_Gv_orth'
+        else:
+            eval_gz = 'GTO_Gv_nonorth'
         GvT = numpy.asarray(Gv.T, order='C')
         gxyzT = numpy.asarray(gxyz.T, order='C', dtype=numpy.int32)
         p_gxyzT = gxyzT.ctypes.data_as(ctypes.c_void_p)
-        eval_gz = 'GTO_Gv_cubic'
         b = numpy.hstack((b.ravel(), numpy.zeros(3)) + Gvbase)
         p_b = b.ctypes.data_as(ctypes.c_void_p)
         p_gs = (ctypes.c_int*3)(*[len(x) for x in Gvbase])

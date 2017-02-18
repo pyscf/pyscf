@@ -1041,8 +1041,8 @@ void GTO_Gv_orth(double complex *out, double aij, double *rij,
         const int nz = gs[2];
         double br[3];  // dot(rij, b)
         br[0]  = rij[0] * b[0];
-        br[1]  = rij[0] * b[3];
-        br[2]  = rij[0] * b[6];
+        br[1]  = rij[1] * b[4];
+        br[2]  = rij[2] * b[8];
         double *kpt = b + 9;
         double kr[3];
         kr[0] = rij[0] * kpt[0];
