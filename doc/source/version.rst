@@ -6,7 +6,8 @@ Version history
 
 ===============  ==========
 ---------------  ----------
-1.3 beta         2017-4-? (feature freeze)
+1.3              2017-4-?
+1.3 beta         2017-2-15 (feature freeze)
 1.3 alpha 2      2017-1-4
 1.3 alpha 1      2016-12-4
 1.2_             2016-11-7
@@ -23,6 +24,6 @@ Version history
 1.0 alpha 1      2015-4-7
 ===============  ==========
 
-.. _1.2: https://github.com/sunqm/pyscf/releases/tag/v1.2
+.. _1.2: https://github.com/sunqm/pyscf/releases/tag/v1.2.2
 .. _1.1: https://github.com/sunqm/pyscf/releases/tag/v1.1.1
 .. _1.0: https://github.com/sunqm/pyscf/releases/tag/v1.0

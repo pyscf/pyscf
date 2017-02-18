@@ -600,6 +600,7 @@ class RCCSD(ccsd.CCSD):
         vector[nvir:] = r2.copy().reshape(nocc*nvir*nvir)
         return vector
 
+    #TODO: double spin-flip EOM-EE
     def eeccsd(self, nroots=1, koopmans=False, guess=None):
         '''Calculate N-electron neutral excitations via EE-EOM-CCSD.
 

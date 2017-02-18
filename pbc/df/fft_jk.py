@@ -101,7 +101,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpt_band=None,
 
     if kpt_band is not None:
         for k, aoR_kband in mydf.aoR_loop(gs, kpts, kpt_band):
-            pass
+            if k == 1:
+                raise RuntimeError
         vk_kpts = [0] * nset
         for k2, ao_k2 in mydf.aoR_loop(gs, kpts):
             kpt2 = kpts[k2]

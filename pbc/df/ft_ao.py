@@ -21,7 +21,7 @@ libpbc = lib.load_library('libpbc')
 #
 def ft_aopair(cell, Gv, shls_slice=None, aosym='s1',
               b=None, gxyz=None, Gvbase=None,
-              kpti_kptj=numpy.zeros((2,1,3)), q=None, verbose=None):
+              kpti_kptj=numpy.zeros((2,3)), q=None, verbose=None):
     ''' FT transform AO pair
     \int exp(-i(G+q)r) i(r) j(r) exp(-ikr) dr^3
     '''

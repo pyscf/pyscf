@@ -47,6 +47,7 @@ PySCF 1.2.2
 ------------------------
 * Bugfix
   - GTO normalization in molden file
+  - multi-threading dgemm
 
 
 PySCF 1.2.1 (2017-01-26)
