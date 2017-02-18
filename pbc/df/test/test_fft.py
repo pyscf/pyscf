@@ -15,7 +15,7 @@ from pyscf.pbc.dft import numint
 from pyscf.pbc import tools
 
 #einsum = np.einsum
-einsum = pbclib.einsum
+einsum = lib.einsum
 
 """
     (ij|kl) = \int dr1 dr2 i*(r1) j(r1) v(r12) k*(r2) l(r2)
@@ -551,6 +551,20 @@ cell1.a = np.eye(3) * 2.5
 cell1.gs = [10] * 3
 cell1.build()
 
+cell2 = pgto.Cell()
+cell2.atom = '''
+He   1.3    .2       .3
+He    .1    .1      1.1 '''
+cell2.basis = {'He': [[0, [0.8, 1]],
+                      [1, [0.6, 1]]]}
+cell2.gs = [8]*3
+cell2.a = numpy.array(([2.0,  .9, 0. ],
+                       [0.1, 1.9, 0.4],
+                       [0.8, 0  , 2.1]))
+cell2.build()
+kpts1 = np.random.random((4,3))
+kpts1[3] = kpts1[0]-kpts1[1]+kpts1[2] + cell2.reciprocal_vectors().T.dot(np.ones(3))
+
 mf0 = pbcscf.RHF(cell)
 mf0.exxdiv = None
 
@@ -743,6 +757,16 @@ class KnowValues(unittest.TestCase):
 
         eri_mo0 = get_mo_eri(cell, (mo1,mo,mo1,mo), (kpts[0],kpts[1],kpts[1],kpts[0],))
         eri_mo1 = df.get_mo_eri((mo1,mo,mo1,mo), (kpts[0],kpts[1],kpts[1],kpts[0],))
+        self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-9, rtol=1e-9))
+
+    def test_get_mo_eri1(self):
+        df = fft.FFTDF(cell2)
+        nao = cell2.nao_nr()
+        numpy.random.seed(5)
+        mos =(numpy.random.random((4,nao,nao)) +
+              numpy.random.random((4,nao,nao))*1j)
+        eri_mo0 = get_mo_eri(cell2, mos, kpts1)
+        eri_mo1 = df.get_mo_eri(mos, kpts1)
         self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-9, rtol=1e-9))
 
 
