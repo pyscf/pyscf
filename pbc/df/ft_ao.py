@@ -57,12 +57,16 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
         p_b = (ctypes.c_double*1)(0)
         eval_gz = 'GTO_Gv_general'
     else:
+        if abs(b-numpy.diag(b.diagonal())).sum() < 1e-8:
+            eval_gz = 'GTO_Gv_orth'
+        else:
+            eval_gz = 'GTO_Gv_nonorth'
         gxyzT = numpy.asarray(gxyz.T, order='C', dtype=numpy.int32)
         p_gxyzT = gxyzT.ctypes.data_as(ctypes.c_void_p)
-        b = numpy.hstack((b.ravel(), q) + Gvbase)
+        Gvx = lib.cartesian_prod(Gvbase)
+        b = numpy.hstack((b.copy().ravel(), q) + Gvbase)
         p_b = b.ctypes.data_as(ctypes.c_void_p)
         p_gs = (ctypes.c_int*3)(*[len(x) for x in Gvbase])
-        eval_gz = 'GTO_Gv_cubic'
 
     drv = libpbc.PBC_ft_latsum_kpts
     intor = getattr(libpbc, 'GTO_ft_ovlp_sph')

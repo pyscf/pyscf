@@ -80,10 +80,10 @@ def general(mydf, mo_coeffs, kpts=None, compact=False):
     kpti, kptj, kptk, kptl = kptijkl
     if isinstance(mo_coeffs, numpy.ndarray) and mo_coeffs.ndim == 2:
         mo_coeffs = (mo_coeffs,) * 4
-    q = kptj - kpti
-    coulG = tools.get_coulG(cell, q, gs=mydf.gs)
     ngs = len(coulG)
     allreal = not any(numpy.iscomplexobj(mo) for mo in mo_coeffs)
+    q = kptj - kpti
+    coulG = tools.get_coulG(cell, q, gs=mydf.gs)
 
 ####################
 # gamma point, the integral is real and with s4 symmetry
