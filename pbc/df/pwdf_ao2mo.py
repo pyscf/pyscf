@@ -24,6 +24,8 @@ def get_eri(mydf, kpts=None, compact=True):
     cell = mydf.cell
     kptijkl = _format_kpts(kpts)
     kpti, kptj, kptk, kptl = kptijkl
+    q = kptj - kpti
+    coulG = mydf.weighted_coulG(q, False, mydf.gs)
     nao = cell.nao_nr()
     nao_pair = nao * (nao+1) // 2
     max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]) * .8)
@@ -31,8 +33,6 @@ def get_eri(mydf, kpts=None, compact=True):
 ####################
 # gamma point, the integral is real and with s4 symmetry
     if abs(kptijkl).sum() < KPT_DIFF_TOL:
-        q = numpy.zeros(3)
-        coulG = mydf.weighted_coulG(q, False, mydf.gs)
         eriR = numpy.zeros((nao_pair,nao_pair))
         for pqkR, pqkI, p0, p1 \
                 in mydf.pw_loop(mydf.gs, kptijkl[:2], q, max_memory=max_memory,
@@ -53,8 +53,6 @@ def get_eri(mydf, kpts=None, compact=True):
 #
 # complex integrals, N^4 elements
     elif (abs(kpti-kptl).sum() < KPT_DIFF_TOL) and (abs(kptj-kptk).sum() < KPT_DIFF_TOL):
-        q = kptj - kpti
-        coulG = mydf.weighted_coulG(q, False, mydf.gs)
         eriR = numpy.zeros((nao**2,nao**2))
         eriI = numpy.zeros((nao**2,nao**2))
         for pqkR, pqkI, p0, p1 \
@@ -81,8 +79,6 @@ def get_eri(mydf, kpts=None, compact=True):
 # So  kptl/b - kptk/b  must be -1 < k/b < 1.  =>  kptl == kptk
 #
     else:
-        q = kptj - kpti
-        coulG = mydf.weighted_coulG(q, False, mydf.gs)
         eriR = numpy.zeros((nao**2,nao**2))
         eriI = numpy.zeros((nao**2,nao**2))
 # rho_rs(-G-k) = rho_rs(conj(G+k)) = conj(rho_sr(G+k))
@@ -103,6 +99,8 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
     kpti, kptj, kptk, kptl = kptijkl
     if isinstance(mo_coeffs, numpy.ndarray) and mo_coeffs.ndim == 2:
         mo_coeffs = (mo_coeffs,) * 4
+    q = kptj - kpti
+    coulG = mydf.weighted_coulG(q, False, mydf.gs)
     all_real = not any(numpy.iscomplexobj(mo) for mo in mo_coeffs)
     max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]) * .5)
 
@@ -115,8 +113,6 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
         sym = (iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
                iden_coeffs(mo_coeffs[1], mo_coeffs[3]))
 
-        q = numpy.zeros(3)
-        coulG = mydf.weighted_coulG(q, False, mydf.gs)
         ijR = ijI = klR = klI = buf = None
         for pqkR, pqkI, p0, p1 \
                 in mydf.pw_loop(mydf.gs, kptijkl[:2], q, max_memory=max_memory,
@@ -147,8 +143,6 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
         sym = (iden_coeffs(mo_coeffs[0], mo_coeffs[3]) and
                iden_coeffs(mo_coeffs[1], mo_coeffs[2]))
 
-        q = kptj - kpti
-        coulG = mydf.weighted_coulG(q, False, mydf.gs)
         zij = zlk = buf = None
         for pqkR, pqkI, p0, p1 \
                 in mydf.pw_loop(mydf.gs, kptijkl[:2], q, max_memory=max_memory):
@@ -178,8 +172,6 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
 
         tao = []
         ao_loc = None
-        q = kptj - kpti
-        coulG = mydf.weighted_coulG(q, False, mydf.gs)
         zij = zkl = buf = None
         for (pqkR, pqkI, p0, p1), (rskR, rskI, q0, q1) in \
                 lib.izip(mydf.pw_loop(mydf.gs, kptijkl[:2], q, max_memory=max_memory*.5),

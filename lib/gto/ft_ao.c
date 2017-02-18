@@ -1029,27 +1029,20 @@ void GTO_Gv_general(double complex *out, double aij, double *rij,
  * kr = dot(rij, Gv) = dot(rij,b.T, gxyz) + dot(rij,kpt) = dot(br, gxyz) + dot(rij,kpt)
  * out = fac * exp(-.25 * kk / aij) * (cos(kr) - sin(kr) * _Complex_I);
  *
- * Non-orthorhombic non-uniform grids
- * b: the first 9 elements are 2\pi*inv(a^T), followed by 3*nGv floats for
- * Gbase
+ * b: the first 9 elements are 2\pi*inv(a^T), then 3 elements for k_{ij},
+ * followed by 3*nGv floats for Gbase
  */
-void GTO_Gv_cubic(double complex *out, double aij, double *rij,
-                  double complex fac, double *Gv, double *b,
-                  int *gxyz, int *gs, int nGv)
+void GTO_Gv_orth(double complex *out, double aij, double *rij,
+                 double complex fac, double *Gv, double *b,
+                 int *gxyz, int *gs, int nGv)
 {
         const int nx = gs[0];
         const int ny = gs[1];
         const int nz = gs[2];
         double br[3];  // dot(rij, b)
         br[0]  = rij[0] * b[0];
-        br[0] += rij[1] * b[1];
-        br[0] += rij[2] * b[2];
         br[1]  = rij[0] * b[3];
-        br[1] += rij[1] * b[4];
-        br[1] += rij[2] * b[5];
         br[2]  = rij[0] * b[6];
-        br[2] += rij[1] * b[7];
-        br[2] += rij[2] * b[8];
         double *kpt = b + 9;
         double kr[3];
         kr[0] = rij[0] * kpt[0];
@@ -1101,6 +1094,82 @@ void GTO_Gv_cubic(double complex *out, double aij, double *rij,
                 }
                 if (kkx[ix] + kky[iy] + kkz[iz] < cutoff) {
                         out[n] = csx[ix] * csy[iy] * csz[iz];
+                } else {
+                        out[n] = 0;
+                }
+        }
+}
+
+void GTO_Gv_nonorth(double complex *out, double aij, double *rij,
+                    double complex fac, double *Gv, double *b,
+                    int *gxyz, int *gs, int nGv)
+{
+        const int nx = gs[0];
+        const int ny = gs[1];
+        const int nz = gs[2];
+        double br[3];  // dot(rij, b)
+        br[0]  = rij[0] * b[0];
+        br[0] += rij[1] * b[1];
+        br[0] += rij[2] * b[2];
+        br[1]  = rij[0] * b[3];
+        br[1] += rij[1] * b[4];
+        br[1] += rij[2] * b[5];
+        br[2]  = rij[0] * b[6];
+        br[2] += rij[1] * b[7];
+        br[2] += rij[2] * b[8];
+        double *kpt = b + 9;
+        double kr[3];
+        kr[0] = rij[0] * kpt[0];
+        kr[1] = rij[1] * kpt[1];
+        kr[2] = rij[2] * kpt[2];
+        double *Gxbase = b + 12;
+        double *Gybase = Gxbase + nx;
+        double *Gzbase = Gybase + ny;
+
+        double *kx = Gv;
+        double *ky = kx + nGv;
+        double *kz = ky + nGv;
+        double complex zbuf[nx+ny+nz];
+        double complex *csx = zbuf;
+        double complex *csy = csx + nx;
+        double complex *csz = csy + ny;
+        char empty[nx+ny+nz];
+        char *xempty = empty;
+        char *yempty = xempty + nx;
+        char *zempty = yempty + ny;
+        memset(empty, 1, sizeof(char)*(nx+ny+nz));
+        int *gx = gxyz;
+        int *gy = gx + nGv;
+        int *gz = gy + nGv;
+
+        const double cutoff = EXPCUTOFF * aij * 4;
+        int n, ix, iy, iz;
+        double Gr, kk;
+        for (n = 0; n < nGv; n++) {
+                ix = gx[n];
+                iy = gy[n];
+                iz = gz[n];
+                kk = kx[n] * kx[n] + ky[n] * ky[n] + kz[n] * kz[n];
+                if (kk < cutoff) {
+                        ix = gx[n];
+                        iy = gy[n];
+                        iz = gz[n];
+                        if (xempty[ix]) {
+                                Gr = Gxbase[ix] * br[0] + kr[0];
+                                csx[ix] = cos(Gr)-sin(Gr)*_Complex_I;
+                                xempty[ix] = 0;
+                        }
+                        if (yempty[iy]) {
+                                Gr = Gybase[iy] * br[1] + kr[1];
+                                csy[iy] = cos(Gr)-sin(Gr)*_Complex_I;
+                                yempty[iy] = 0;
+                        }
+                        if (zempty[iz]) {
+                                Gr = Gzbase[iz] * br[2] + kr[2];
+                                csz[iz] = fac * (cos(Gr)-sin(Gr)*_Complex_I);
+                                zempty[iz] = 0;
+                        }
+                        out[n] = exp(-.25*kk/aij) * csx[ix]*csy[iy]*csz[iz];
                 } else {
                         out[n] = 0;
                 }
