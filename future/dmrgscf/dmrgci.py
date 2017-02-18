@@ -638,6 +638,8 @@ def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
         orbsym = []
     if not os.path.exists(DMRGCI.scratchDirectory):
         os.makedirs(DMRGCI.scratchDirectory)
+    if not os.path.exists(DMRGCI.runtimeDir):
+        os.makedirs(DMRGCI.runtimeDir)
 
     eri_cas = pyscf.ao2mo.restore(8, eri_cas, ncas)
     pyscf.tools.fcidump.from_integrals(integralFile, h1eff, eri_cas, ncas,
