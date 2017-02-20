@@ -424,7 +424,6 @@ def get_Gv_weights(cell, gs=None):
     rx = np.append(np.arange(gs[0]+1.), np.arange(-gs[0],0.))
     ry = np.append(np.arange(gs[1]+1.), np.arange(-gs[1],0.))
     rz = np.append(np.arange(gs[2]+1.), np.arange(-gs[2],0.))
-    weights = np.linalg.det(b)
 
     ngs = [i*2+1 for i in gs]
     if cell.dimension == 0:
@@ -448,6 +447,8 @@ def get_Gv_weights(cell, gs=None):
         rz, wz = plus_minus(gs[2])
         rz /= np.linalg.norm(b[2])
         weights = np.einsum('i,k->ik', wxy, wz).reshape(-1)
+    else:
+        weights = abs(np.linalg.det(b))
     Gvbase = (rx, ry, rz)
     Gv = np.dot(lib.cartesian_prod(Gvbase), b)
     # 1/cell.vol == det(b)/(2pi)^3
@@ -792,6 +793,10 @@ class Cell(mole.Mole):
                              for ib in range(self.nbas)])
 
         _a = self.lattice_vectors()
+        if np.linalg.det(_a) < 0 and self.dimension == 3:
+            sys.stderr.write('''WARNING!
+  x,y,z axes are not in right-handed coordinate system. This can cause wrong value for some integrals.
+  It's recommended to resort the lattice vectors to\n%s\n\n''' % _a[[0,2,1]])
         if self.gs is None:
             assert(self.ke_cutoff is not None)
             self.gs = pbctools.cutoff_to_gs(_a, self.ke_cutoff)
@@ -837,7 +842,7 @@ class Cell(mole.Mole):
 
     @property
     def vol(self):
-        return np.linalg.det(self.lattice_vectors())
+        return abs(np.linalg.det(self.lattice_vectors()))
 
     @property
     def Gv(self):
