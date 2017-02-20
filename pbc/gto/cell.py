@@ -656,6 +656,8 @@ class Cell(mole.Mole):
 
         self._h = self.lattice_vectors()
         self.vol = float(scipy.linalg.det(self._h))
+        if self.vol < 0:
+            raise RuntimeError('lattice vec are not in right-handed coordinate system.')
 
         if self.nimgs is None:
             self.nimgs = self.get_nimgs(self.precision)
