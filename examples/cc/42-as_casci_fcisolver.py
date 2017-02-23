@@ -30,7 +30,7 @@ class AsFCISolver(object):
         e_corr, t1, t2 = self.mycc.kernel(eris=self.eris)
         l1, l2 = self.mycc.solve_lambda(t1, t2, eris=self.eris)
         e = fake_hf.e_tot + e_corr
-        return e, [t1,t2,l1,l2]
+        return e+ecore, [t1,t2,l1,l2]
 
     def make_rdm1(self, fake_ci, norb, nelec):
         mo = self.mycc.mo_coeff
