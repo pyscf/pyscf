@@ -795,8 +795,8 @@ class Cell(mole.Mole):
         _a = self.lattice_vectors()
         if np.linalg.det(_a) < 0 and self.dimension == 3:
             sys.stderr.write('''WARNING!
-  x,y,z axes are not in right-handed coordinate system. This can cause wrong value for some integrals.
-  It's recommended to resort the lattice vectors to\n%s\n\n''' % _a[[0,2,1]])
+  Lattice are not in right-handed coordinate system. This can cause wrong value for some integrals.
+  It's recommended to resort the lattice vectors to\na = %s\n\n''' % _a[[0,2,1]])
         if self.gs is None:
             assert(self.ke_cutoff is not None)
             self.gs = pbctools.cutoff_to_gs(_a, self.ke_cutoff)

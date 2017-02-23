@@ -364,10 +364,6 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
         else:
             ci0 = [x.ravel() for x in ci0]
     else:
-        if isinstance(nelec, (int, numpy.integer)):
-            nelecb = nelec//2
-            neleca = nelec - nelecb
-            nelec = neleca, nelecb
         ci_strs = (numpy.asarray([int('1'*nelec[0], 2)]),
                    numpy.asarray([int('1'*nelec[1], 2)]))
         ci0 = _as_SCIvector(numpy.ones((1,1)), ci_strs)

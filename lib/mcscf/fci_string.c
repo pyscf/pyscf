@@ -44,6 +44,9 @@ int FCIpopcount_4(uint64_t x)
 }
 
 
+/*
+ * sign of  a^+ a |string>
+ */
 int FCIcre_des_sign(int p, int q, uint64_t string0)
 {
         uint64_t mask;
