@@ -87,6 +87,7 @@ add_subdirectory(cc)
 add_subdirectory(icmpspt)
 add_subdirectory(ri)
 add_subdirectory(localizer)
+add_subdirectory(hci)
 
 add_subdirectory(pbc)
 
