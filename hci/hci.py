@@ -136,10 +136,17 @@ def contract_2e_ctypes(h1, eri, civec, norb, nelec, hdiag=None, **kwargs):
     hdiag = numpy.asarray(hdiag, order='C')
     ci1 = numpy.asarray(ci1, order='C')
 
+    for ip in range(ndet):
+        for jp in range(ip):
+            stria, strib = strs[ip].reshape(2,-1)
+            strja, strjb = strs[jp].reshape(2,-1)
+            print stria, strib, strja, strjb
+        if (ip == 8):
+            break
+ 
     libhci.contract_h_c(h1.ctypes.data_as(ctypes.c_void_p), 
                         eri.ctypes.data_as(ctypes.c_void_p), 
                         ctypes.c_int(norb), 
-                        ctypes.c_int(nelec), 
                         strs.ctypes.data_as(ctypes.c_void_p), 
                         civec.ctypes.data_as(ctypes.c_void_p), 
                         hdiag.ctypes.data_as(ctypes.c_void_p), 
