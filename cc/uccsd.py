@@ -769,6 +769,11 @@ class UCCSD(rccsd.RCCSD):
         spinvec_size = self.nee()
         nroots = min(nroots, spinvec_size)
 
+        if hasattr(self,'imds') and (self.imds.made_ip_imds or self.imds.made_ea_imds):
+            self.orbspin = orbspin_of_sorted_mo_energy(self._scf.mo_energy, self.mo_occ)
+            self.eris = self.ao2mo(self.mo_coeff)
+            self.imds = _IMDS(self)
+
         diag_ee, diag_sf = self.eeccsd_diag()
         guess_ee = []
         guess_sf = []
@@ -965,8 +970,6 @@ class UCCSD(rccsd.RCCSD):
         if not self.imds.made_ee_imds:
             self.imds.make_ee()
         imds = self.imds
-        if imds.made_ip_imds or imds.made_ea_imds:
-            raise RuntimeError('Integrals of eomee and eomip/eomea are not consistent in this version')
 
         r1, r2 = self.vector_to_amplitudes(vector)
         r1a, r1b = r1
@@ -3090,7 +3093,6 @@ if __name__ == '__main__':
     from pyscf import gto
 
     mol = gto.Mole()
-    #mol.verbose = 5
     mol.atom = [['O', (0.,   0., 0.)],
                 ['O', (1.21, 0., 0.)]]
     mol.basis = 'cc-pvdz'
@@ -3107,7 +3109,6 @@ if __name__ == '__main__':
     print(ecc - -0.3486987472235819)
 
     mol = gto.Mole()
-    #mol.verbose = 5
     mol.atom = [
         [8 , (0. , 0.     , 0.)],
         [1 , (0. , -0.757 , 0.587)],
@@ -3118,10 +3119,21 @@ if __name__ == '__main__':
     mf = scf.UHF(mol)
     print(mf.scf())
 
-    ucc = UCCSD(mf)
-    ecc, t1, t2 = ucc.kernel()
-    print(ecc - -0.2133432430989155)
-    e,v = ucc.eeccsd(nroots=4)
+    mycc = UCCSD(mf)
+    ecc, t1, t2 = mycc.kernel()
+    print(ecc - -0.2133432712431435)
+
+    e,v = mycc.ipccsd(nroots=8)
+    print(e[0] - 0.4335604332073799)
+    print(e[2] - 0.5187659896045407)
+    print(e[4] - 0.6782876002229172)
+
+    e,v = mycc.eaccsd(nroots=8)
+    print(e[0] - 0.16737886338859731)
+    print(e[2] - 0.24027613852009164)
+    print(e[4] - 0.51006797826488071)
+
+    e,v = mycc.eeccsd(nroots=4)
     print(e[0] - 0.2757159395886167)
     print(e[1] - 0.2757159395886167)
     print(e[2] - 0.2757159395886167)
