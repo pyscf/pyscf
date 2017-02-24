@@ -13,6 +13,8 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import tools
+from pyscf.pbc.df import df
+from pyscf.pbc.df import df_jk
 from pyscf.pbc.df import pwdf_jk
 from pyscf.pbc.df.pwdf_jk import is_zero, gamma_point
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC, _format_dms
@@ -54,6 +56,17 @@ def density_fit(mf, auxbasis=None, gs=None, with_df=None):
 
 
 def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
+    if mydf.metric is None:
+        mydf.__class__, cls_bak = df.DF, mydf.__class__
+        vk_kpts1 = df_jk.get_k_kpts(mydf, dm_kpts, hermi, kpts, kpt_band)
+        mydf.__class__ = cls_bak
+    else:
+        vj_kpts1 = get_j_kpts_sr(mydf, dm_kpts, hermi, kpts, kpt_band)
+    vj_kpts = pwdf_jk.get_j_kpts(mydf, dm_kpts, hermi, kpts, kpt_band)
+    vj_kpts += vj_kpts1
+    return vj_kpts
+
+def get_j_kpts_sr(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = (time.clock(), time.time())
@@ -129,16 +142,27 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
             LpqR = LpqI = j3cR = j3cI = None
     t1 = log.timer_debug1('get_j pass 2', *t1)
 
-    vj_kpts = pwdf_jk.get_j_kpts(mydf, dm_kpts, hermi, kpts, kpt_band)
     if j_real:
-        vj_kpts += vjR.reshape(vj_kpts.shape)
+        vj_kpts = vjR.reshape(vj_kpts.shape)
     else:
-        vj_kpts += (vjR+vjI*1j).reshape(vj_kpts.shape)
+        vj_kpts = (vjR+vjI*1j).reshape(vj_kpts.shape)
     return vj_kpts
 
 
 def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
                exxdiv=None):
+    if mydf.metric is None:
+        mydf.__class__, cls_bak = df.DF, mydf.__class__
+        vk_kpts1 = df_jk.get_k_kpts(mydf, dm_kpts, hermi, kpts, kpt_band, None)
+        mydf.__class__ = cls_bak
+    else:
+        vk_kpts1 = get_k_kpts_sr(mydf, dm_kpts, hermi, kpts, kpt_band, None)
+    vk_kpts = pwdf_jk.get_k_kpts(mydf, dm_kpts, hermi, kpts, kpt_band, exxdiv)
+    vk_kpts += vk_kpts1
+    return vk_kpts
+
+def get_k_kpts_sr(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
+                  exxdiv=None):
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = (time.clock(), time.time())
@@ -271,13 +295,11 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
     vkR *= 1./nkpts
     vkI *= 1./nkpts
 
-    vk_kpts = pwdf_jk.get_k_kpts(mydf, dm_kpts, hermi, kpts, kpt_band, exxdiv)
-
     if (gamma_point(kpts) and gamma_point(kpts_band) and
         not numpy.iscomplexobj(dm_kpts)):
-        vk_kpts += vkR.reshape(vk_kpts.shape)
+        vk_kpts = vkR.reshape(vk_kpts.shape)
     else:
-        vk_kpts += (vkR+vkI*1j).reshape(vk_kpts.shape)
+        vk_kpts = (vkR+vkI*1j).reshape(vk_kpts.shape)
     return vk_kpts
 
 
@@ -299,6 +321,19 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
             vj = get_j_kpts(mydf, [dm], hermi, kpt, kpt_band)
         return vj, vk
 
+    if mydf.metric is None:
+        mydf.__class__, cls_bak = df.DF, mydf.__class__
+        vj1, vk1 = df_jk.get_jk(mydf, dm, hermi, kpt, kpt_band, with_j, with_k, None)
+        mydf.__class__ = cls_bak
+    else:
+        vj1, vk1 = get_jk_sr(mydf, dm, hermi, kpt, kpt_band, with_j, with_k, None)
+    vj, vk = pwdf_jk.get_jk(mydf, dm, hermi, kpt, kpt_band, with_j, with_k, exxdiv)
+    if with_j: vj += vj1
+    if with_k: vk += vk1
+    return vj, vk
+
+def get_jk_sr(mydf, dm, hermi=1, kpt=numpy.zeros(3),
+              kpt_band=None, with_j=True, with_k=True, exxdiv=None):
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t2 = t1 = (time.clock(), time.time())
     if mydf._cderi is None:
@@ -428,18 +463,16 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     thread_k = None
     t1 = log.timer_debug1('mdf_jk.get_jk pass 1', *t1)
 
-    vj, vk = pwdf_jk.get_jk(mydf, dm, hermi, kpt, kpt_band, with_j, with_k, exxdiv)
     if with_j:
         if j_real:
-            vj += vjR.reshape(dm.shape)
+            vj = vjR.reshape(dm.shape)
         else:
-            vj += (vjR+vjI*1j).reshape(dm.shape)
-        vj = vj
+            vj = (vjR+vjI*1j).reshape(dm.shape)
     if with_k:
         if k_real:
-            vk += vkR.reshape(dm.shape)
+            vk = vkR.reshape(dm.shape)
         else:
-            vk += (vkR+vkI*1j).reshape(dm.shape)
+            vk = (vkR+vkI*1j).reshape(dm.shape)
     return vj, vk
 
 

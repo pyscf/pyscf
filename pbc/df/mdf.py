@@ -31,11 +31,13 @@ from pyscf.pbc.df.df import estimate_eta, make_modrho_basis, fuse_auxcell, \
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC, is_zero, gamma_point
 
 
+LINEAR_DEP_THR = 1e-9
+
 class MDF(df.DF):
     '''Gaussian and planewaves mixed density fitting
     '''
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
-        self.metric = 'T'  # or 'S'
+        self.metric = None  # 'T', 'S', 'J' for split fitting
         # approximate short range fitting level
         # 0: no approximation;  1: (FIXME) gamma point for k-points;
         # 2: non-pbc approximation;  3: atomic approximation
@@ -70,15 +72,16 @@ class MDF(df.DF):
                 self._cderi = self._cderi_file.name
 
         if with_j3c:
-            if self.approx_sr_level == 0:
-                build_Lpq_pbc(self, self.auxcell, kptij_lst)
-            elif self.approx_sr_level == 1:
-                build_Lpq_pbc(self, self.auxcell, numpy.zeros((1,2,3)))
-            elif self.approx_sr_level == 2:
-                build_Lpq_nonpbc(self, self.auxcell)
-            elif self.approx_sr_level == 3:
-                build_Lpq_1c_approx(self, self.auxcell)
-            t1 = log.timer_debug1('Lpq', *t1)
+            if self.metric is not None:
+                if self.approx_sr_level == 0:
+                    build_Lpq_pbc(self, self.auxcell, kptij_lst)
+                elif self.approx_sr_level == 1:
+                    build_Lpq_pbc(self, self.auxcell, numpy.zeros((1,2,3)))
+                elif self.approx_sr_level == 2:
+                    build_Lpq_nonpbc(self, self.auxcell)
+                elif self.approx_sr_level == 3:
+                    build_Lpq_1c_approx(self, self.auxcell)
+                t1 = log.timer_debug1('Lpq', *t1)
 
             _make_j3c(self, self.cell, self.auxcell, kptij_lst)
             t1 = log.timer_debug1('j3c', *t1)
@@ -323,7 +326,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     fused_cell, fuse = fuse_auxcell(mydf, mydf.auxcell)
-    if mydf.metric.upper() != 'J':
+    if mydf.metric is None or mydf.metric.upper() != 'J':
         outcore.aux_e2(cell, fused_cell, mydf._cderi, 'cint3c2e_sph',
                        kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
     t1 = log.timer_debug1('3c2e', *t1)
@@ -362,6 +365,18 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
             j2cR, j2cI = zdotCN(kLR.T, kLI.T, kLR, kLI)
             j2c[k] -= j2cR + j2cI * 1j
 
+        if mydf.metric is None:  # single Coulomb-metric
+            try:
+                j2c[k] = ('CD', scipy.linalg.cholesky(j2c[k], lower=True))
+            except scipy.linalg.LinAlgError:
+                w, v = scipy.linalg.eigh(j2c[k])
+                log.debug2('metric linear dependency for kpt %s', k)
+                log.debug2('cond = %.4g, drop %d bfns',
+                           w[0]/w[-1], numpy.count_nonzero(w<LINEAR_DEP_THR))
+                v = v[:,w>LINEAR_DEP_THR].T.conj()
+                v /= numpy.sqrt(w[w>LINEAR_DEP_THR]).reshape(-1,1)
+                j2c[k] = ('eig', v)
+
         kLR *= coulG.reshape(-1,1)
         kLI *= coulG.reshape(-1,1)
         kLRs.append(kLR)
@@ -372,7 +387,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
     log.debug2('memory = %s', lib.current_memory()[0])
 
     # Expand approx Lpq for aosym='s1'.  The approx Lpq are all in aosym='s2' mode
-    if mydf.approx_sr_level > 0 and len(kptij_lst) > 1:
+    if mydf.metric is not None and mydf.approx_sr_level > 0 and len(kptij_lst) > 1:
         Lpq_fake = _fake_Lpq_kpts(mydf, feri, naux, nao)
 
     def save(label, dat, col0, col1):
@@ -430,13 +445,15 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
             for k, idx in enumerate(adapted_ji_idx):
                 v = fuse(numpy.asarray(feri['j3c/%d'%idx][:,col0:col1]))
 
-                if mydf.approx_sr_level == 0:
-                    Lpq = numpy.asarray(feri['Lpq/%d'%idx][:,col0:col1])
-                elif aosym == 's2':
-                    Lpq = numpy.asarray(feri['Lpq/0'][:,col0:col1])
-                else:
-                    Lpq = numpy.asarray(Lpq_fake[:,col0:col1])
-                lib.dot(j2c[uniq_kptji_id], Lpq, -.5, v, 1)
+                if mydf.metric is not None: # split fitting
+                    if mydf.approx_sr_level == 0:
+                        Lpq = numpy.asarray(feri['Lpq/%d'%idx][:,col0:col1])
+                    elif aosym == 's2':
+                        Lpq = numpy.asarray(feri['Lpq/0'][:,col0:col1])
+                    else:
+                        Lpq = numpy.asarray(Lpq_fake[:,col0:col1])
+                    lib.dot(j2c[uniq_kptji_id], Lpq, -.5, v, 1)
+
                 if is_zero(kpt):
                     for i, c in enumerate(vbar):
                         if c != 0:
@@ -497,11 +514,31 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
                                p0, p1, lib.current_memory()[0])
 
             for k, ji in enumerate(adapted_ji_idx):
-                if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
-                    save('j3c/%d'%ji, j3cR[k], col0, col1)
-                else:
-                    save('j3c/%d'%ji, j3cR[k]+j3cI[k]*1j, col0, col1)
+                if mydf.metric is None:
+                    if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
+                        v = j3cR[k]
+                    else:
+                        v = j3cR[k] + j3cI[k] * 1j
+                    if j2c[uniq_kptji_id][0] == 'CD':
+                        v = scipy.linalg.solve_triangular(j2c[uniq_kptji_id][1], v,
+                                                          lower=True, overwrite_b=True)
+                    else:
+                        v = lib.dot(j2c[uniq_kptji_id][1], v)
+                    save('j3c/%d'%ji, v, col0, col1)
+                else: # split fitting
+                    if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
+                        save('j3c/%d'%ji, j3cR[k], col0, col1)
+                    else:
+                        save('j3c/%d'%ji, j3cR[k]+j3cI[k]*1j, col0, col1)
 
+            if mydf.metric is None:
+                nrow = j2c[uniq_kptji_id][1].shape[0]
+            else:
+                nrow = naux
+            for k, ji in enumerate(adapted_ji_idx):
+                v = feri['j3c/%d'%ji][:nrow]
+                del(feri['j3c/%d'%ji])
+                feri['j3c/%d'%k] = v
 
     for k, kpt in enumerate(uniq_kpts):
         make_kpt(k)
