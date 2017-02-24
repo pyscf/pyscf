@@ -56,6 +56,8 @@ def density_fit(mf, auxbasis=None, gs=None, with_df=None):
 
 
 def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
+    if mydf._cderi is None:
+        mydf.build()
     if mydf.metric is None:
         mydf.__class__, cls_bak = df.DF, mydf.__class__
         vk_kpts1 = df_jk.get_k_kpts(mydf, dm_kpts, hermi, kpts, kpt_band)
@@ -151,6 +153,8 @@ def get_j_kpts_sr(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None
 
 def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
                exxdiv=None):
+    if mydf._cderi is None:
+        mydf.build()
     if mydf.metric is None:
         mydf.__class__, cls_bak = df.DF, mydf.__class__
         vk_kpts1 = df_jk.get_k_kpts(mydf, dm_kpts, hermi, kpts, kpt_band, None)
@@ -321,6 +325,8 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
             vj = get_j_kpts(mydf, [dm], hermi, kpt, kpt_band)
         return vj, vk
 
+    if mydf._cderi is None:
+        mydf.build()
     if mydf.metric is None:
         mydf.__class__, cls_bak = df.DF, mydf.__class__
         vj1, vk1 = df_jk.get_jk(mydf, dm, hermi, kpt, kpt_band, with_j, with_k, None)
