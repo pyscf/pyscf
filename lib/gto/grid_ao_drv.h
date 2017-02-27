@@ -11,7 +11,7 @@
 //  72s24p14d10f8g6h5i4j 
 #define NCTR_SPH        72
 #define NPRIMAX         64
-#define BLKSIZE         96
+#define BLKSIZE         64
 #define EXPCUTOFF       50  // 1e-22
 #define NOTZERO(e)      ((e)>1e-18 || (e)<-1e-18)
 
@@ -23,14 +23,12 @@ int GTOprim_exp(double *eprim, double *coord, double *alpha, double *coeff,
                 int l, int nprim, int nctr, int blksize, double fac);
 
 void GTOeval_sph_drv(void (*feval)(),  int (*fexp)(),
-                     int param[], int nao, int ngrids,
-                     int blksize, int bastart, int bascount,
+                     int param[], int *shls_slice, int *ao_loc, int ngrids,
                      double *ao, double *coord, char *non0table,
                      int *atm, int natm, int *bas, int nbas, double *env);
 
 void GTOeval_cart_drv(void (*feval)(),  int (*fexp)(),
-                      int param[], int nao, int ngrids,
-                      int blksize, int bastart, int bascount,
+                      int param[], int *shls_slice, int *ao_loc, int ngrids,
                       double *ao, double *coord, char *non0table,
                       int *atm, int natm, int *bas, int nbas, double *env);
 

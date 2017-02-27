@@ -634,46 +634,41 @@ void GTOshell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
         }
 }
 
-void GTOval_cart(int nao, int ngrids,
-                 int blksize, int bastart, int bascount,
+void GTOval_cart(int *shls_slice, int *ao_loc, int ngrids,
                  double *ao, double *coord, char *non0table,
                  int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 1};
         GTOeval_cart_drv(GTOshell_eval_grid_cart, GTOcontract_exp0,
-                         param, nao, ngrids, blksize, bastart, bascount,
+                         param, shls_slice, ao_loc, ngrids,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
-void GTOval_sph(int nao, int ngrids,
-                int blksize, int bastart, int bascount,
+void GTOval_sph(int *shls_slice, int *ao_loc, int ngrids,
                 double *ao, double *coord, char *non0table,
                 int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 1};
         GTOeval_sph_drv(GTOshell_eval_grid_cart, GTOcontract_exp0,
-                        param, nao, ngrids, blksize, bastart, bascount,
+                        param, shls_slice, ao_loc, ngrids,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
-void GTOval_ip_cart(int nao, int ngrids,
-                    int blksize, int bastart, int bascount,
+void GTOval_ip_cart(int *shls_slice, int *ao_loc, int ngrids,
                     double *ao, double *coord, char *non0table,
                     int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 3};
         GTOeval_cart_drv(GTOshell_eval_grid_ip_cart, GTOcontract_exp1,
-                         param, nao, ngrids, blksize, bastart, bascount,
+                         param, shls_slice, ao_loc, ngrids,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
-void GTOval_ip_sph(int nao, int ngrids,
-                   int blksize, int bastart, int bascount,
+void GTOval_ip_sph(int *shls_slice, int *ao_loc, int ngrids,
                    double *ao, double *coord, char *non0table,
                    int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 3};
         GTOeval_sph_drv(GTOshell_eval_grid_ip_cart, GTOcontract_exp1,
-                        param, nao, ngrids, blksize, bastart, bascount,
+                        param, shls_slice, ao_loc, ngrids,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
-
 

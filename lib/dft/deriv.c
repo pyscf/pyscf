@@ -120,24 +120,22 @@ void GTOshell_eval_grid_cart_deriv2(double *cgto, double *ri, double *exps,
                        &D0, cgto+nc*mblksize*k, &mblksize);
         }
 }
-void GTOval_cart_deriv2(int nao, int ngrids,
-                int blksize, int bastart, int bascount,
+void GTOval_cart_deriv2(int *shls_slice, int *ao_loc, int ngrids,
                 double *ao, double *coord, char *non0table,
                 int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 10};
         GTOeval_cart_drv(GTOshell_eval_grid_cart_deriv2, GTOprim_exp,
-                         param, nao, ngrids, blksize, bastart, bascount,
+                         param, shls_slice, ao_loc, ngrids,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
-void GTOval_sph_deriv2(int nao, int ngrids,
-                       int blksize, int bastart, int bascount,
+void GTOval_sph_deriv2(int *shls_slice, int *ao_loc, int ngrids,
                        double *ao, double *coord, char *non0table,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 10};
         GTOeval_sph_drv(GTOshell_eval_grid_cart_deriv2, GTOprim_exp,
-                        param, nao, ngrids, blksize, bastart, bascount,
+                        param, shls_slice, ao_loc, ngrids,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
@@ -282,24 +280,22 @@ void GTOshell_eval_grid_cart_deriv3(double *cgto, double *ri, double *exps,
                        &D0, cgto+nc*mblksize*k, &mblksize);
         }
 }
-void GTOval_cart_deriv3(int nao, int ngrids,
-                int blksize, int bastart, int bascount,
+void GTOval_cart_deriv3(int *shls_slice, int *ao_loc, int ngrids,
                 double *ao, double *coord, char *non0table,
                 int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 20};
         GTOeval_cart_drv(GTOshell_eval_grid_cart_deriv3, GTOprim_exp,
-                         param, nao, ngrids, blksize, bastart, bascount,
+                         param, shls_slice, ao_loc, ngrids,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
-void GTOval_sph_deriv3(int nao, int ngrids,
-                       int blksize, int bastart, int bascount,
+void GTOval_sph_deriv3(int *shls_slice, int *ao_loc, int ngrids,
                        double *ao, double *coord, char *non0table,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 20};
         GTOeval_sph_drv(GTOshell_eval_grid_cart_deriv3, GTOprim_exp,
-                        param, nao, ngrids, blksize, bastart, bascount,
+                        param, shls_slice, ao_loc, ngrids,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
@@ -507,24 +503,22 @@ void GTOshell_eval_grid_cart_deriv4(double *cgto, double *ri, double *exps,
                        &D0, cgto+nc*mblksize*k, &mblksize);
         }
 }
-void GTOval_cart_deriv4(int nao, int ngrids,
-                int blksize, int bastart, int bascount,
+void GTOval_cart_deriv4(int *shls_slice, int *ao_loc, int ngrids,
                 double *ao, double *coord, char *non0table,
                 int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 35};
         GTOeval_cart_drv(GTOshell_eval_grid_cart_deriv4, GTOprim_exp,
-                         param, nao, ngrids, blksize, bastart, bascount,
+                         param, shls_slice, ao_loc, ngrids,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
-void GTOval_sph_deriv4(int nao, int ngrids,
-                       int blksize, int bastart, int bascount,
+void GTOval_sph_deriv4(int *shls_slice, int *ao_loc, int ngrids,
                        double *ao, double *coord, char *non0table,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 35};
         GTOeval_sph_drv(GTOshell_eval_grid_cart_deriv4, GTOprim_exp,
-                        param, nao, ngrids, blksize, bastart, bascount,
+                        param, shls_slice, ao_loc, ngrids,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
@@ -1114,70 +1108,62 @@ int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
                      int l, int nprim, int nctr, int blksize, double fac);
 
 /*
-void GTOval_cart_deriv0(int nao, int ngrids,
-                        int blksize, int bastart, int bascount,
+void GTOval_cart_deriv0(int *shls_slice, int *ao_loc, int ngrids,
                         double *ao, double *coord, char *non0table,
                         int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 1};
         GTOeval_cart_drv(grid_cart_gto0, contract_exp0,
-                         param, nao, ngrids, blksize, bastart, bascount,
+                         param, shls_slice, ao_loc, ngrids,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
-void GTOval_sph_deriv0(int nao, int ngrids,
-                       int blksize, int bastart, int bascount,
+void GTOval_sph_deriv0(int *shls_slice, int *ao_loc, int ngrids,
                        double *ao, double *coord, char *non0table,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 1};
         GTOeval_sph_drv(grid_cart_gto0, contract_exp0,
-                        param, nao, ngrids, blksize, bastart, bascount,
+                        param, shls_slice, ao_loc, ngrids,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 */
-void GTOval_cart(int nao, int ngrids,
-                 int blksize, int bastart, int bascount,
+void GTOval_cart(int *shls_slice, int *ao_loc, int ngrids,
                  double *ao, double *coord, char *non0table,
                  int *atm, int natm, int *bas, int nbas, double *env);
-void GTOval_sph(int nao, int ngrids,
-                int blksize, int bastart, int bascount,
+void GTOval_sph(int *shls_slice, int *ao_loc, int ngrids,
                 double *ao, double *coord, char *non0table,
                 int *atm, int natm, int *bas, int nbas, double *env);
-void GTOval_cart_deriv0(int nao, int ngrids,
-                        int blksize, int bastart, int bascount,
+void GTOval_cart_deriv0(int *shls_slice, int *ao_loc, int ngrids,
                         double *ao, double *coord, char *non0table,
                         int *atm, int natm, int *bas, int nbas, double *env)
 {
-        GTOval_cart(nao, ngrids, blksize, bastart, bascount,
+        GTOval_cart(shls_slice, ao_loc, ngrids,
                     ao, coord, non0table, atm, natm, bas, nbas, env);
 }
-void GTOval_sph_deriv0(int nao, int ngrids,
-                       int blksize, int bastart, int bascount,
+void GTOval_sph_deriv0(int *shls_slice, int *ao_loc, int ngrids,
                        double *ao, double *coord, char *non0table,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
-        GTOval_sph(nao, ngrids, blksize, bastart, bascount,
+        GTOval_sph(shls_slice, ao_loc, ngrids,
                    ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
-void GTOval_cart_deriv1(int nao, int ngrids,
-                        int blksize, int bastart, int bascount,
+void GTOval_cart_deriv1(int *shls_slice, int *ao_loc, int ngrids,
                         double *ao, double *coord, char *non0table,
                         int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 4};
         GTOeval_cart_drv(GTOshell_eval_grid_cart_deriv1, GTOcontract_exp1,
-                         param, nao, ngrids, blksize, bastart, bascount,
+                         param, shls_slice, ao_loc, ngrids,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
-void GTOval_sph_deriv1(int nao, int ngrids,
-                       int blksize, int bastart, int bascount,
+void GTOval_sph_deriv1(int *shls_slice, int *ao_loc, int ngrids,
                        double *ao, double *coord, char *non0table,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 4};
         GTOeval_sph_drv(GTOshell_eval_grid_cart_deriv1, GTOcontract_exp1,
-                        param, nao, ngrids, blksize, bastart, bascount,
+                        param, shls_slice, ao_loc, ngrids,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 

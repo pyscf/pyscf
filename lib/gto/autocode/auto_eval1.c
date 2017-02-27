@@ -77,13 +77,13 @@ int l, int nprim, int nctr, int blksize, double fac)
 {
 return GTOprim_exp(eprim, coord, alpha, coeff, l, nprim, nctr, blksize, fac*0.5);
 }
-void GTOval_ig_sph(int nao, int ngrids,int blksize, int bastart, int bascount,
+void GTOval_ig_sph(int nao, int ngrids, int blksize, int *shls_slice, int *ao_loc,
 double *ao, double *coord, char *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {1, 3};
 GTOeval_sph_drv(shell_eval_GTOval_ig_sph, fexp_GTOval_ig_sph,
-param, nao, ngrids,blksize, bastart, bascount,ao, coord, non0table,
+param, shls_slice, ao_loc, ngrids, ao, coord, non0table,
 atm, natm, bas, nbas, env);
 }
 /*  #C(0 1) NABLA G |GTO> */
@@ -197,13 +197,13 @@ int l, int nprim, int nctr, int blksize, double fac)
 {
 return GTOprim_exp(eprim, coord, alpha, coeff, l, nprim, nctr, blksize, fac*0.5);
 }
-void GTOval_ipig_sph(int nao, int ngrids,int blksize, int bastart, int bascount,
+void GTOval_ipig_sph(int nao, int ngrids, int blksize, int *shls_slice, int *ao_loc,
 double *ao, double *coord, char *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {1, 9};
 GTOeval_sph_drv(shell_eval_GTOval_ipig_sph, fexp_GTOval_ipig_sph,
-param, nao, ngrids,blksize, bastart, bascount,ao, coord, non0table,
+param, shls_slice, ao_loc, ngrids, ao, coord, non0table,
 atm, natm, bas, nbas, env);
 }
 /*  #C(0 1) G |GTO> */
@@ -279,12 +279,12 @@ int l, int nprim, int nctr, int blksize, double fac)
 {
 return GTOprim_exp(eprim, coord, alpha, coeff, l, nprim, nctr, blksize, fac*0.5);
 }
-void GTOval_ig_cart(int nao, int ngrids,int blksize, int bastart, int bascount,
+void GTOval_ig_cart(int nao, int ngrids, int blksize, int *shls_slice, int *ao_loc,
 double *ao, double *coord, char *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {1, 3};
 GTOeval_cart_drv(shell_eval_GTOval_ig_cart, fexp_GTOval_ig_cart,
-param, nao, ngrids,blksize, bastart, bascount,ao, coord, non0table,
+param, shls_slice, ao_loc, ngrids, ao, coord, non0table,
 atm, natm, bas, nbas, env);
 }

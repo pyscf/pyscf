@@ -245,24 +245,24 @@ int l, int nprim, int nctr, int blksize, double fac)
 {
 return GTOprim_exp(eprim, coord, alpha, coeff, l, nprim, nctr, blksize, fac*~a);
 }~%" intname (factor-of expr))
-    (format fout "void ~a(int nao, int ngrids,int blksize, int bastart, int bascount,
+    (format fout "void ~a(int *shls_slice, int *ao_loc, int ngrids,
 double *ao, double *coord, char *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {~%" intname)
     (format fout "int param[] = {~d, ~d};~%" e1comps tensors)
     (cond ((eql sp 'spinor)
            (format fout "GTOeval_spinor_drv(shell_eval_~a, fexp_~a, GTOc2s_~a~a,
-param, nao, ngrids,blksize, bastart, bascount,ao, coord, non0table,
+param, shls_slice, ao_loc, ngrids, ao, coord, non0table,
 atm, natm, bas, nbas, env);~%}~%" intname intname
                    (if (eql sf1 'sf) "sf" "si")
                    (if (eql ts1 'ts) "" "_i")))
           ((eql sp 'spheric)
            (format fout "GTOeval_sph_drv(shell_eval_~a, fexp_~a,
-param, nao, ngrids,blksize, bastart, bascount,ao, coord, non0table,
+param, shls_slice, ao_loc, ngrids, ao, coord, non0table,
 atm, natm, bas, nbas, env);~%}~%" intname intname))
           ((eql sp 'cart)
            (format fout "GTOeval_cart_drv(shell_eval_~a, fexp_~a,
-param, nao, ngrids,blksize, bastart, bascount,ao, coord, non0table,
+param, shls_slice, ao_loc, ngrids, ao, coord, non0table,
 atm, natm, bas, nbas, env);~%}~%" intname intname)))))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
