@@ -6,9 +6,11 @@
 #define POS_E1   0
 #define TENSOR   1
 
-// 128s42p21d12f8g6h4i3j 
-#define NCTR_CART      128
-//  72s24p14d10f8g6h5i4j 
+#define LMAX            7
+#define SIMDD           8
+// 128s42p21d12f8g6h4i3j
+#define NCTR_CART       128
+//  72s24p14d10f8g6h5i4j
 #define NCTR_SPH        72
 #define NPRIMAX         64
 #define BLKSIZE         64
