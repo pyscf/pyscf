@@ -227,6 +227,7 @@ class GW(object):
     def __init__(self, mf, ao2mofn=pyscf.ao2mo.outcore.general_iofree,
                  screening='TDH', eta=1e-2):
         assert screening in ('TDH', 'TDHF', 'TDDFT')
+        from functools import reduce
         self.mol = mf.mol
         self._scf = mf
         self.verbose = self.mol.verbose
