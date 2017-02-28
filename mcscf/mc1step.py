@@ -394,13 +394,14 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
                 norm_gorb0 = norm_gorb
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             t3m = log.timer('orbital rotation', *t3m)
-            if norm_gci is None:
-                accepted_gorb = norm_gorb < norm_ddm*2
-            else:
-                accepted_gorb = norm_gorb < norm_gci*1.5
-            if (imicro >= max_cycle_micro and
-                (accepted_gorb or imicro > max_cycle_micro*2 or
-                 norm_gorb > norm_gorb0)):
+            #if norm_gci is None:
+            #    accepted_gorb = norm_gorb < norm_ddm*2
+            #else:
+            #    accepted_gorb = norm_gorb < norm_gci*1.5
+            #if (imicro >= max_cycle_micro and
+            #    (accepted_gorb or imicro > max_cycle_micro*2 or
+            #     norm_gorb > norm_gorb0)):
+            if imicro >= max_cycle_micro:
                 log.debug('micro %d  |u-1|=%5.3g  |g[o]|=%5.3g',
                           imicro, norm_t, norm_gorb)
                 break
