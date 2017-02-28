@@ -32,11 +32,11 @@ def kernel(gw, so_energy, so_coeff, verbose=logger.NOTE):
         egw : (nso/2,) ndarray
             The GW-corrected spatial orbital energies.
     '''
-    print("# --- Performing RPA calculation ...",
-    e_rpa, t_rpa = rpa(gw, method=gw.screening))
+    print("# --- Performing RPA calculation ...")
+    e_rpa, t_rpa = rpa(gw, method=gw.screening)
     print("done.")
-    print("# --- Calculating GW QP corrections ...",
-    egw = np.zeros(gw.nso/2))
+    print("# --- Calculating GW QP corrections ...")
+    egw = np.zeros(gw.nso/2)
     for p in range(0,gw.nso,2): 
         def quasiparticle(omega):
             sigma_c_ppw, sigma_x_ppw = sigma(gw, p, p, omega, e_rpa, t_rpa)
