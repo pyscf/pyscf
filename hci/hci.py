@@ -138,31 +138,12 @@ def contract_2e_ctypes(h1, eri, civec, norb, nelec, hdiag=None, **kwargs):
 
     for ip in range(ndet):
         for jp in range(ip):
-            stria, strib = strs[ip].reshape(2,-1)
-            strja, strjb = strs[jp].reshape(2,-1)
-            print stria, strib, strja, strjb
-        if (ip == 8):
-            break
- 
-    libhci.contract_h_c(h1.ctypes.data_as(ctypes.c_void_p), 
-                        eri.ctypes.data_as(ctypes.c_void_p), 
-                        ctypes.c_int(norb), 
-                        strs.ctypes.data_as(ctypes.c_void_p), 
-                        civec.ctypes.data_as(ctypes.c_void_p), 
-                        hdiag.ctypes.data_as(ctypes.c_void_p), 
-                        ctypes.c_int(ndet), 
-                        ci1.ctypes.data_as(ctypes.c_void_p))
-
-    # Old Python code below
-    exit()
-
-    for ip in range(ndet):
-        for jp in range(ip):
             if abs(ts[ip] - ts[jp]).sum() > 2:
                 continue
 
             stria, strib = strs[ip].reshape(2,-1)
             strja, strjb = strs[jp].reshape(2,-1)
+            print stria, strib, strja, strjb
 
             desa, crea = str_diff(stria, strja)
             if len(desa) > 2:
@@ -184,6 +165,7 @@ def contract_2e_ctypes(h1, eri, civec, norb, nelec, hdiag=None, **kwargs):
                     sign = cre_des_sign(a, i, stria)
                     ci1[jp] += sign * fai * civec[ip]
                     ci1[ip] += sign * fai * civec[jp]
+                    print ci1[ip], ci1[jp]
 # beta ->beta
                 elif len(desa) == 0:
                     i,a = desb[0], creb[0]
@@ -197,6 +179,7 @@ def contract_2e_ctypes(h1, eri, civec, norb, nelec, hdiag=None, **kwargs):
                     sign = cre_des_sign(a, i, strib)
                     ci1[jp] += sign * fai * civec[ip]
                     ci1[ip] += sign * fai * civec[jp]
+                    print ci1[ip], ci1[jp]
 
             else:
 # alpha,alpha->alpha,alpha
@@ -241,6 +224,23 @@ def contract_2e_ctypes(h1, eri, civec, norb, nelec, hdiag=None, **kwargs):
                     ci1[jp] += sign * v * civec[ip]
                     ci1[ip] += sign * v * civec[jp]
         ci1[ip] += hdiag[ip] * civec[ip]
+        if (ip == 8):
+            break
+
+    libhci.contract_h_c(h1.ctypes.data_as(ctypes.c_void_p), 
+                        eri.ctypes.data_as(ctypes.c_void_p), 
+                        ctypes.c_int(norb), 
+                        ctypes.c_int(nelec[0]), 
+                        ctypes.c_int(nelec[1]), 
+                        strs.ctypes.data_as(ctypes.c_void_p), 
+                        civec.ctypes.data_as(ctypes.c_void_p), 
+                        hdiag.ctypes.data_as(ctypes.c_void_p), 
+                        ctypes.c_int(ndet), 
+                        ci1.ctypes.data_as(ctypes.c_void_p))
+
+    # Old Python code below
+    exit()
+
 
     return ci1
 
