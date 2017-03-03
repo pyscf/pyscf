@@ -11,6 +11,7 @@ import pyscf.tools
 import pyscf.lib.logger as logger
 import pyscf.ao2mo
 import pyscf.symm
+import pyscf.fci
 import pyscf.symm.param as param
 from subprocess import call
 
@@ -508,9 +509,26 @@ def read_neci_1dms(fciqmcci, norb, nelec, filename='OneRDM.1', directory='.'):
     return dm1a, dm1b
 
 def read_neci_2dms(fciqmcci, norb, nelec, filename_aa='TwoRDM_aaaa.1', 
-    filename_abba='TwoRDM_abba.1', filename_abab='TwoRDM_abab.1', directory='.', reorder=True):
+    filename_abba='TwoRDM_abba.1', filename_abab='TwoRDM_abab.1', directory='.', reorder=True,
+    dm1a=None,dm1b=None):
     ''' Find spinned RDMs (assuming a/b symmetry). Return in pyscf form that
-    you would get from the e.g. direct_spin1.make_rdm12s routine, with Reorder=True.'''
+    you would get from the e.g. direct_spin1.make_rdm12s routine, with Reorder=True.
+    
+    This means (assuming reorder = True):
+    dm2ab[i,j,k,l] = < i_a* k_b* l_b j_a >
+    dm2aa[i,j,k,l] = < i_a* k_a* l_a j_a > 
+
+    to get the dm2abba matrix (see spin_op.make_rdm2_abba) from this (assuming rhf), then you need
+    dm2abba = -dm2ab.transpose(2,1,0,3)
+    
+    if reorder = False:
+
+        dm2aa[:,k,k,:] += dm1a
+        dm2bb[:,k,k,:] += dm1b
+        dm2ab unchanged
+
+    Note that the spin-free RDMs are just dm2aa + dm2bb + 2*dm2ab if reorder = True
+    '''
 
     f = open(os.path.join(directory, filename_aa),'r')
     dm2aa = numpy.zeros((norb,norb,norb,norb))
@@ -544,11 +562,16 @@ def read_neci_2dms(fciqmcci, norb, nelec, filename_aa='TwoRDM_aaaa.1',
         i,j,k,l = (int(linesp[0])-1, int(linesp[1])-1, int(linesp[2])-1, int(linesp[3])-1)
         val = float(linesp[4])
         assert(all(x<norb for x in (i,j,k,l)))
+        assert(numpy.allclose(dm2ab[i,j,k,l],-val) or dm2ab[i,j,k,l] == 0.0)
         dm2ab[i,j,k,l] = -val 
         # Hermitian conjugate
+        assert(numpy.allclose(dm2ab[l,k,j,i],-val) or dm2ab[l,k,j,i] == 0.0)
         dm2ab[l,k,j,i] = -val
         # Time reversal sym
+#        print i,j,k,l,val,dm2ab[j,i,l,k], numpy.allclose(dm2ab[j,i,l,k],-val), dm2ab[j,i,l,k] == 0.0
+        assert(numpy.allclose(dm2ab[j,i,l,k],-val) or dm2ab[j,i,l,k] == 0.0)
         dm2ab[j,i,l,k] = -val
+        assert(numpy.allclose(dm2ab[k,l,i,j],-val) or dm2ab[k,l,i,j] == 0.0)
         dm2ab[k,l,i,j] = -val
 
     for line in f_abab.readlines():
@@ -556,11 +579,15 @@ def read_neci_2dms(fciqmcci, norb, nelec, filename_aa='TwoRDM_aaaa.1',
         i,j,k,l = (int(linesp[0])-1, int(linesp[1])-1, int(linesp[2])-1, int(linesp[3])-1)
         val = float(linesp[4])
         assert(all(x<norb for x in (i,j,k,l)))
+        assert(numpy.allclose(dm2ab[i,j,l,k],val) or dm2ab[i,j,l,k] == 0.0)
         dm2ab[i,j,l,k] = val
         # Hermitian conjugate
+        assert(numpy.allclose(dm2ab[k,l,j,i],val) or dm2ab[k,l,j,i] == 0.0)
         dm2ab[k,l,j,i] = val
         # Time reversal symmetry
+        assert(numpy.allclose(dm2ab[j,i,k,l],val) or dm2ab[j,i,k,l] == 0.0)
         dm2ab[j,i,k,l] = val
+        assert(numpy.allclose(dm2ab[l,k,i,j],val) or dm2ab[l,k,i,j] == 0.0)
         dm2ab[l,k,i,j] = val
 
     f_abab.close()
@@ -571,16 +598,77 @@ def read_neci_2dms(fciqmcci, norb, nelec, filename_aa='TwoRDM_aaaa.1',
     dm2bb = dm2bb.transpose(0,3,1,2)
     dm2ab = dm2ab.transpose(0,3,1,2)
 
-    if reorder is False:
+    if not reorder:
         # We need to undo the reordering routine in rdm.py
-        pdmfile = filename_aa.split('.')
-        pdmfile = 'OneRDM.'+pdmfile[1]
-        dm1a, dm1b = read_neci_1dms(fciqmcci, norb, nelec, filename=pdmfile, directory=directory)
+        if dm1a is None:
+            pdmfile = filename_aa.split('.')
+            pdmfile = 'OneRDM.'+pdmfile[1]
+            dm1a, dm1b = read_neci_1dms(fciqmcci, norb, nelec, filename=pdmfile, directory=directory)
         for k in range(norb):
             dm2aa[:,k,k,:] += dm1a
             dm2bb[:,k,k,:] += dm1b
     
     return dm2aa, dm2ab, dm2bb
+
+def add_spinned_core_rdms(mf, ncore, dm1a_act, dm1b_act, dm2aa_act, dm2ab_act, dm2bb_act, reorder=True):
+    ''' Add an RHF core to the rdms in the MO basis to the 1 and 2 RDMs'''
+
+    norb = ncore + dm1a_act.shape[0]
+    dm1a = numpy.zeros((norb,norb))
+    dm1b = numpy.zeros((norb,norb))
+    dm2aa = numpy.zeros((norb,norb,norb,norb))
+    dm2ab = numpy.zeros((norb,norb,norb,norb))
+    dm2bb = numpy.zeros((norb,norb,norb,norb))
+
+    if not reorder:
+        # Assume that the ordering of the active rdms is 'False'.
+        # Switch before including (back to 'true')
+        dm1a_act_, dm2aa_act_ = pyscf.fci.rdm.reorder_rdm(dm1a_act, dm2aa_act, inplace=False)
+        dm1b_act_, dm2bb_act_ = pyscf.fci.rdm.reorder_rdm(dm1b_act, dm2bb_act, inplace=False)
+    else:
+        dm1a_act_ = dm1a_act
+        dm1b_act_ = dm1b_act
+        dm2aa_act_ = dm2aa_act
+        dm2bb_act_ = dm2bb_act
+    
+    # Always add the core to the 'reorder=True' ordering of the rdms
+    dm1a[ncore:,ncore:] = dm1a_act_
+    dm1b[ncore:,ncore:] = dm1b_act_
+    for i in range(ncore):
+        dm1a[i,i] = 1.0
+        dm1b[i,i] = 1.0
+
+    dm2aa[ncore:,ncore:,ncore:,ncore:] = dm2aa_act_
+    dm2bb[ncore:,ncore:,ncore:,ncore:] = dm2bb_act_
+    dm2ab[ncore:,ncore:,ncore:,ncore:] = dm2ab_act
+
+    for i in range(ncore):
+        for j in range(ncore): 
+            dm2aa[i,i,j,j] += 1.0
+            dm2aa[j,i,i,j] += -1.0
+            dm2bb[i,i,j,j] += 1.0
+            dm2bb[j,i,i,j] += -1.0
+            dm2ab[i,i,j,j] += 1.0
+        for p in range(ncore,norb):
+            for q in range(ncore,norb):
+                dm2aa[p,q,i,i] +=  dm1a[p,q]
+                dm2aa[i,i,p,q] +=  dm1a[p,q]
+                dm2aa[i,q,p,i] += -dm1a[p,q]
+                dm2aa[p,i,i,q] += -dm1a[p,q]
+                dm2bb[p,q,i,i] +=  dm1b[p,q]
+                dm2bb[i,i,p,q] +=  dm1b[p,q]
+                dm2bb[i,q,p,i] += -dm1b[p,q]
+                dm2bb[p,i,i,q] += -dm1b[p,q]
+                dm2ab[p,q,i,i] +=  dm1a[p,q]
+                dm2ab[i,i,p,q] +=  dm1b[p,q]
+
+    if not reorder:
+        # Change back to the 'non-reordered' ordering!
+        for k in range(norb):
+            dm2aa[:,k,k,:] += dm1a
+            dm2bb[:,k,k,:] += dm1b
+
+    return dm1a, dm1b, dm2aa, dm2ab, dm2bb
 
 def read_neci_two_pdm(fciqmcci, filename, norb, directory='.'):
     '''Read a spin-free 2-rdm output from a NECI calculation, and return it in
