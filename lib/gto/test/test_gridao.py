@@ -12,7 +12,7 @@ mol = gto.M(atom='''
             H  1.  1.2 0.
             H  0.  0.  1.3
             ''',
-           basis='ccpvqz')
+            basis='ccpvqz')
 
 def eval_gto(mol, eval_name, coords,
              comp=1, shls_slice=None, non0tab=None, ao_loc=None, out=None):
@@ -30,8 +30,10 @@ def eval_gto(mol, eval_name, coords,
         shls_slice = (0, nbas)
     sh0, sh1 = shls_slice
     nao = ao_loc[sh1] - ao_loc[sh0];
-
-    ao = numpy.ndarray((comp,nao,ngrids), buffer=out)
+    if 'spinor' in eval_name:
+        ao = numpy.ndarray((2,comp,nao,ngrids), dtype=numpy.complex128, buffer=out)
+    else:
+        ao = numpy.ndarray((comp,nao,ngrids), buffer=out)
 
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,nbas),
@@ -46,10 +48,14 @@ def eval_gto(mol, eval_name, coords,
         atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
         bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
         env.ctypes.data_as(ctypes.c_void_p))
+
+    ao = numpy.swapaxes(ao, -1, -2)
     if comp == 1:
-        return ao[0].T
-    else:
-        return ao.transpose(0,2,1)
+        if 'spinor' in eval_name:
+            ao = ao[:,0]
+        else:
+            ao = ao[0]
+    return ao
 
 numpy.random.seed(1)
 ngrids = 2000
@@ -94,9 +100,29 @@ class KnowValues(unittest.TestCase):
         ao = eval_gto(mol, 'GTOval_ip_cart', coords, comp=3, shls_slice=(7, 19))
         self.assertAlmostEqual(abs(ao-ao1).sum(), 0, 9)
 
-#    def test_ig_sph(self):
-#        ao = eval_gto(mol, 'GTOval_ig_sph', coords, comp=3)
-#        self.assertAlmostEqual(finger(ao), -28.472933833003012, 9)
+    def test_ig_sph(self):
+        ao = eval_gto(mol, 'GTOval_ig_sph', coords, comp=3)
+        self.assertAlmostEqual(finger(ao), 8.6601301646129052, 9)
+
+    def test_ipig_sph(self):
+        ao = eval_gto(mol, 'GTOval_ipig_sph', coords, comp=9)
+        self.assertAlmostEqual(finger(ao), -53.56608497643537, 9)
+
+    def test_spinor(self):
+        ao = eval_gto(mol, 'GTOval_spinor', coords)
+        self.assertAlmostEqual(finger(ao), -4.5941099464020079+5.9444339000526707j, 9)
+
+    def test_ip_spinor(self):
+        ao = eval_gto(mol, 'GTOval_ip_spinor', coords, comp=3)
+        self.assertAlmostEqual(finger(ao), -52.516545034166775+24.765350351395604j, 9)
+
+    def test_sp_spinor(self):
+        ao = eval_gto(mol, 'GTOval_sp_spinor', coords)
+        self.assertAlmostEqual(finger(ao), 14.570414046478941-64.303103699665527j, 9)
+
+    def test_ipsp_spinor(self):
+        ao = eval_gto(mol, 'GTOval_ipsp_spinor', coords, comp=3)
+        self.assertAlmostEqual(finger(ao), -129.67878568476067+393.58768218886212j, 9)
 
 
 if __name__ == '__main__':

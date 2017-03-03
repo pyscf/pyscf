@@ -13,10 +13,6 @@
 double exp_cephes(double x);
 double CINTcommon_fac_sp(int l);
 
-static int _len_cart[] = {
-        1, 3, 6, 10, 15, 21, 28, 36
-};
-
 int GTOcontract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
                      int l, int nprim, int nctr, int ngrids, double fac)
 {
@@ -275,7 +271,7 @@ void GTOshell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
                                 int l, int np, int nc,
                                 int nao, int ngrids, int blksize)
 {
-        const int degen = _len_cart[l];
+        const int degen = (l+1)*(l+2)/2;
         const int gtosize = nao * ngrids;
         int lx, ly, lz, i, k, n, is0;
         double ax, ay, az, tmp;
@@ -553,6 +549,16 @@ void GTOval_sph(int *shls_slice, int *ao_loc, int ngrids,
                         param, shls_slice, ao_loc, ngrids,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
+void GTOval_spinor(int *shls_slice, int *ao_loc, int ngrids,
+                   double complex *ao, double *coord, char *non0table,
+                   int *atm, int natm, int *bas, int nbas, double *env)
+{
+        int param[] = {1, 1};
+        GTOeval_spinor_drv(GTOshell_eval_grid_cart, GTOcontract_exp0,
+                           CINTc2s_ket_spinor_sf1,
+                           param, shls_slice, ao_loc, ngrids,
+                           ao, coord, non0table, atm, natm, bas, nbas, env);
+}
 
 void GTOval_ip_cart(int *shls_slice, int *ao_loc, int ngrids,
                     double *ao, double *coord, char *non0table,
@@ -571,5 +577,15 @@ void GTOval_ip_sph(int *shls_slice, int *ao_loc, int ngrids,
         GTOeval_sph_drv(GTOshell_eval_grid_ip_cart, GTOcontract_exp1,
                         param, shls_slice, ao_loc, ngrids,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
+}
+void GTOval_ip_spinor(int *shls_slice, int *ao_loc, int ngrids,
+                      double complex *ao, double *coord, char *non0table,
+                      int *atm, int natm, int *bas, int nbas, double *env)
+{
+        int param[] = {1, 3};
+        GTOeval_spinor_drv(GTOshell_eval_grid_ip_cart, GTOcontract_exp1,
+                           CINTc2s_ket_spinor_sf1,
+                           param, shls_slice, ao_loc, ngrids,
+                           ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
