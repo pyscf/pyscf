@@ -57,6 +57,112 @@ def eval_gto(mol, eval_name, coords,
             ao = ao[0]
     return ao
 
+PTR_ENV_START = 20
+CHARGE_OF  = 0
+PTR_COORD  = 1
+NUC_MOD_OF = 2
+PTR_ZETA   = 3
+RAD_GRIDS  = 4
+ANG_GRIDS  = 5
+ATM_SLOTS  = 6
+ATOM_OF   = 0
+ANG_OF    = 1
+NPRIM_OF  = 2
+NCTR_OF   = 3
+KAPPA_OF  = 4
+PTR_EXP   = 5
+PTR_COEFF = 6
+BAS_SLOTS = 8
+natm = 4
+nbas = 0
+atm = numpy.zeros((natm,ATM_SLOTS), dtype=numpy.int32)
+bas = numpy.zeros((1000,BAS_SLOTS), dtype=numpy.int32)
+env = numpy.zeros(10000)
+off = PTR_ENV_START
+for i in range(natm):
+    atm[i, CHARGE_OF] = (i+1)*2
+    atm[i, PTR_COORD] = off
+    env[off+0] = .2 * (i+1)
+    env[off+1] = .3 + (i+1) * .5
+    env[off+2] = .1 - (i+1) * .5
+    off += 3
+off0 = off
+# basis with kappa > 0
+nh = 0
+bas[nh,ATOM_OF ]  = 0
+bas[nh,ANG_OF  ]  = 1
+bas[nh,KAPPA_OF]  = 1
+bas[nh,NPRIM_OF]  = 1
+bas[nh,NCTR_OF ]  = 1
+bas[nh,PTR_EXP]   = off
+env[off+0] = 1
+bas[nh,PTR_COEFF] = off + 1
+env[off+1] = 1
+off += 2
+nh += 1
+bas[nh,ATOM_OF ]  = 1
+bas[nh,ANG_OF  ]  = 2
+bas[nh,KAPPA_OF]  = 2
+bas[nh,NPRIM_OF]  = 2
+bas[nh,NCTR_OF ]  = 2
+bas[nh,PTR_EXP]   = off
+env[off+0] = 5
+env[off+1] = 3
+bas[nh,PTR_COEFF] = off + 2
+env[off+2] = 1
+env[off+3] = 2
+env[off+4] = 4
+env[off+5] = 1
+off += 6
+nh += 1
+bas[nh,ATOM_OF ]  = 2
+bas[nh,ANG_OF  ]  = 3
+bas[nh,KAPPA_OF]  = 3
+bas[nh,NPRIM_OF]  = 1
+bas[nh,NCTR_OF ]  = 1
+bas[nh,PTR_EXP ]  = off
+env[off+0] = 1
+bas[nh,PTR_COEFF] = off + 1
+env[off+1] = 1
+off += 2
+nh += 1
+bas[nh,ATOM_OF ]  = 3
+bas[nh,ANG_OF  ]  = 4
+bas[nh,KAPPA_OF]  = 4
+bas[nh,NPRIM_OF]  = 1
+bas[nh,NCTR_OF ]  = 1
+bas[nh,PTR_EXP ]  = off
+env[off+0] = .5
+bas[nh,PTR_COEFF] = off + 1
+env[off+1] = 1.
+off = off + 2
+nh += 1
+
+nbas = nh
+# basis with kappa < 0
+n = off - off0
+for i in range(n):
+    env[off+i] = env[off0+i]
+for i in range(nh):
+        bas[i+nh,ATOM_OF ] = bas[i,ATOM_OF ]
+        bas[i+nh,ANG_OF  ] = bas[i,ANG_OF  ] - 1
+        bas[i+nh,KAPPA_OF] =-bas[i,KAPPA_OF]
+        bas[i+nh,NPRIM_OF] = bas[i,NPRIM_OF]
+        bas[i+nh,NCTR_OF ] = bas[i,NCTR_OF ]
+        bas[i+nh,PTR_EXP ] = bas[i,PTR_EXP ]  + n
+        bas[i+nh,PTR_COEFF]= bas[i,PTR_COEFF] + n
+        env[bas[i+nh,PTR_COEFF]] /= 2 * env[bas[i,PTR_EXP]]
+env[bas[5,PTR_COEFF]+0] = env[bas[1,PTR_COEFF]+0] / (2 * env[bas[1,PTR_EXP]+0])
+env[bas[5,PTR_COEFF]+1] = env[bas[1,PTR_COEFF]+1] / (2 * env[bas[1,PTR_EXP]+1])
+env[bas[5,PTR_COEFF]+2] = env[bas[1,PTR_COEFF]+2] / (2 * env[bas[1,PTR_EXP]+0])
+env[bas[5,PTR_COEFF]+3] = env[bas[1,PTR_COEFF]+3] / (2 * env[bas[1,PTR_EXP]+1])
+
+mol1 = gto.Mole()
+mol1._atm = atm
+mol1._bas = bas[:nh*2]
+mol1._env = env
+
+
 numpy.random.seed(1)
 ngrids = 2000
 coords = numpy.random.random((ngrids,3))
@@ -112,17 +218,53 @@ class KnowValues(unittest.TestCase):
         ao = eval_gto(mol, 'GTOval_spinor', coords)
         self.assertAlmostEqual(finger(ao), -4.5941099464020079+5.9444339000526707j, 9)
 
+    def test_sp_spinor(self):
+        ao = eval_gto(mol, 'GTOval_sp_spinor', coords)
+        self.assertAlmostEqual(finger(ao), 26.212937567473656-68.970076521029782j, 9)
+
+        numpy.random.seed(1)
+        rs = numpy.random.random((213,3))
+        rs = (rs-.5)**2 * 30
+        ao1 = eval_gto(mol1, 'GTOval_spinor', rs, shls_slice=(0,mol1.nbas//2))
+        ao2 = eval_gto(mol1, 'GTOval_sp_spinor', rs, shls_slice=(mol1.nbas//2,mol1.nbas))
+        self.assertAlmostEqual(abs(ao1-ao2*1j).sum(), 0, 9)
+#
+#        t = gto.cart2j_kappa(0, 2)
+#        aonr = eval_gto(mol1, 'GTOval_cart', rs, shls_slice=(1,2))
+#        aa = numpy.zeros((2,12))
+#        aa[:1,:6] = aonr[:,:6]
+#        aa[1:,6:] = aonr[:,:6]
+#        print aa.dot(t[:,:4])
+#
+#        t = gto.cart2j_kappa(0, 1)/0.488602511902919921
+#        aonr = eval_gto(mol1, 'GTOval_ip_cart', rs, comp=3, shls_slice=(mol1.nbas//2+1,mol1.nbas//2+2))
+#        print 'x', aonr[0,0,:3]
+#        print 'y', aonr[1,0,:3]
+#        print 'z', aonr[2,0,:3]
+#        aa = numpy.zeros((3,2,6),dtype=numpy.complex)
+#        aa[0,:1,3:] = aonr[0,0,:3]
+#        aa[0,1:,:3] = aonr[0,0,:3]
+#        aa[1,:1,3:] =-aonr[1,0,:3]*1j
+#        aa[1,1:,:3] = aonr[1,0,:3]*1j
+#        aa[2,:1,:3] = aonr[2,0,:3]
+#        aa[2,1:,3:] =-aonr[2,0,:3]
+#        aa = (aa[0]*-1j + aa[1]*-1j + aa[2]*-1j)
+#        print 'p',aa.dot(t[:,2:])*1j
+
     def test_ip_spinor(self):
         ao = eval_gto(mol, 'GTOval_ip_spinor', coords, comp=3)
         self.assertAlmostEqual(finger(ao), -52.516545034166775+24.765350351395604j, 9)
 
-    def test_sp_spinor(self):
-        ao = eval_gto(mol, 'GTOval_sp_spinor', coords)
-        self.assertAlmostEqual(finger(ao), 14.570414046478941-64.303103699665527j, 9)
-
     def test_ipsp_spinor(self):
         ao = eval_gto(mol, 'GTOval_ipsp_spinor', coords, comp=3)
-        self.assertAlmostEqual(finger(ao), -129.67878568476067+393.58768218886212j, 9)
+        self.assertAlmostEqual(finger(ao), -159.94403505490939+400.80148912086418j, 9)
+
+        numpy.random.seed(1)
+        rs = numpy.random.random((213,3))
+        rs = (rs-.5)**2 * 30
+        ao1 = eval_gto(mol1, 'GTOval_ip_spinor', rs, comp=3, shls_slice=(0,mol1.nbas//2))
+        ao2 = eval_gto(mol1, 'GTOval_ipsp_spinor', rs, comp=3, shls_slice=(mol1.nbas//2,mol1.nbas))
+        self.assertAlmostEqual(abs(ao1-ao2*1j).sum(), 0, 9)
 
 
 if __name__ == '__main__':

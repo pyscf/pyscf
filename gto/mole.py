@@ -90,32 +90,35 @@ def cart2sph(l):
            cmat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l))
         return c2sph
 
-def cart2j_kappa(kappa):
+def cart2j_kappa(kappa, l=None):
     '''Cartesian to spinor, indexed by kappa'''
-    assert(kappa != 0)
     if kappa < 0:
         l = -kappa - 1
         nd = l * 2 + 2
-    else:
+    elif kappa > 0:
         l = kappa
         nd = l * 2
+    else:
+        assert(l is not None)
+        nd = l * 4 + 2
     nf = (l+1)*(l+2)//2
-    c2sph = numpy.zeros((nf,nd), order='F', dtype=numpy.complex)
+    c2smat = numpy.zeros((nf*2,nd), order='F', dtype=numpy.complex)
     cmat = numpy.eye(nf)
-    fn(c2sph.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nf),
-       cmat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l),
-       ctypes.c_int(kappa))
-    return c2spinor
+    fn = moleintor.libcgto.CINTc2s_ket_spinor_sf1
+    fn(c2smat.ctypes.data_as(ctypes.c_void_p),
+       c2smat[nf:].ctypes.data_as(ctypes.c_void_p),
+       cmat.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_int(nf*2), ctypes.c_int(nf),
+       ctypes.c_int(1), ctypes.c_int(l), ctypes.c_int(kappa))
+    if l == 0:
+        c2smat *= 0.282094791773878143
+    elif l == 1:
+        c2smat *= 0.488602511902919921
+    return c2smat
 
 def cart2j_l(l):
     '''Cartesian to spinor, indexed by l'''
-    nf = (l+1)*(l+2)//2
-    nd = l * 4 + 2
-    c2sph = numpy.zeros((nf,nd), order='F', dtype=numpy.complex)
-    cmat = numpy.eye(nf)
-    fn(c2sph.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nf),
-       cmat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l), ctypes.c_int(0))
-    return c2spinor
+    return cart2j_kappa(0, l)
 
 def atom_types(atoms, basis=None):
     '''symmetry inequivalent atoms'''
@@ -2340,6 +2343,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     offset_nr_by_atom = offset_nr_by_atom
     offset_2c_by_atom = offset_2c_by_atom
+    aoslice_2c_by_atom = offset_nr_by_atom
+    aoslice_nr_by_atom = offset_2c_by_atom
 
     @lib.with_doc(spinor_labels.__doc__)
     def spinor_labels(self):

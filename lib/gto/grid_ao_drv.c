@@ -275,15 +275,11 @@ void GTOeval_spinor_iter(void (*feval)(), int (*fexp)(), void (*c2s)(),
                         ri = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
                         (*feval)(cart_gto, ri, eprim, pcoord, p_exp, pcoeff,
                                  l, np, nc, nc*dcart, bgrids, bgrids);
-                        pcart = cart_gto;
                         for (i = 0; i < ncomp; i++) {
+                                pcart = cart_gto + i * nc*dcart*bgrids*ncomp_e1;
                                 off = (i*nao+ao_id)*ngrids;
-                                for (k = 0; k < nc; k++) {
-                                        (*c2s)(aoa+off, aob+off, pcart,
-                                               ngrids, bgrids, l, kappa);
-                                        off += deg * ngrids;
-                                        pcart += dcart * ncomp_e1 * bgrids;
-                                }
+                                (*c2s)(aoa+off, aob+off, pcart,
+                                       ngrids, bgrids, nc, l, kappa);
                         }
                 } else {
                         for (i = 0; i < ncomp; i++) {
