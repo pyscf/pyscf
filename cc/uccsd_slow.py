@@ -7,7 +7,7 @@ import h5py
 from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
-from pyscf.cc import rccsd
+from pyscf.cc import rccsd_slow as rccsd
 from pyscf.cc import uintermediates_slow as imd
 
 #einsum = np.einsum
@@ -248,11 +248,10 @@ class UCCSD(rccsd.RCCSD):
 
     def ipccsd_matvec(self, vector):
         # Ref: Tu, Wang, and Li, J. Chem. Phys. 136, 174102 (2012) Eqs.(8)-(9)
-        if not self.made_ip_imds:
-            if not hasattr(self,'imds'):
-                self.imds = _IMDS(self)
+        if not hasattr(self,'imds'):
+            self.imds = _IMDS(self)
+        if not self.imds.made_ip_imds:
             self.imds.make_ip()
-            self.made_ip_imds = True
         imds = self.imds
 
         r1,r2 = self.vector_to_amplitudes_ip(vector)
@@ -275,11 +274,10 @@ class UCCSD(rccsd.RCCSD):
         return vector
 
     def ipccsd_diag(self):
-        if not self.made_ip_imds:
-            if not hasattr(self,'imds'):
-                self.imds = _IMDS(self)
+        if not hasattr(self,'imds'):
+            self.imds = _IMDS(self)
+        if not self.imds.made_ip_imds:
             self.imds.make_ip()
-            self.made_ip_imds = True
         imds = self.imds
 
         t1, t2 = self.t1, self.t2
@@ -332,11 +330,10 @@ class UCCSD(rccsd.RCCSD):
 
     def eaccsd_matvec(self,vector):
         # Ref: Nooijen and Bartlett, J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)
-        if not self.made_ea_imds:
-            if not hasattr(self,'imds'):
-                self.imds = _IMDS(self)
+        if not hasattr(self,'imds'):
+            self.imds = _IMDS(self)
+        if not self.imds.made_ea_imds:
             self.imds.make_ea()
-            self.made_ea_imds = True
         imds = self.imds
 
         r1,r2 = self.vector_to_amplitudes_ea(vector)
@@ -361,11 +358,10 @@ class UCCSD(rccsd.RCCSD):
         return vector
 
     def eaccsd_diag(self):
-        if not self.made_ea_imds:
-            if not hasattr(self,'imds'):
-                self.imds = _IMDS(self)
+        if not hasattr(self,'imds'):
+            self.imds = _IMDS(self)
+        if not self.imds.made_ea_imds:
             self.imds.make_ea()
-            self.made_ea_imds = True
         imds = self.imds
 
         t1, t2 = self.t1, self.t2
@@ -421,11 +417,10 @@ class UCCSD(rccsd.RCCSD):
         # Ref: Wang, Tu, and Wang, J. Chem. Theory Comput. 10, 5567 (2014) Eqs.(9)-(10)
         # Note: Last line in Eq. (10) is superfluous.
         # See, e.g. Gwaltney, Nooijen, and Barlett, Chem. Phys. Lett. 248, 189 (1996)
-        if not self.made_ee_imds:
-            if not hasattr(self,'imds'):
-                self.imds = _IMDS(self)
+        if not hasattr(self,'imds'):
+            self.imds = _IMDS(self)
+        if not self.imds.made_ee_imds:
             self.imds.make_ee()
-            self.made_ee_imds = True
         imds = self.imds
 
         r1,r2 = self.vector_to_amplitudes_ee(vector)
@@ -460,11 +455,10 @@ class UCCSD(rccsd.RCCSD):
         return vector
 
     def eeccsd_diag(self):
-        if not self.made_ee_imds:
-            if not hasattr(self,'imds'):
-                self.imds = _IMDS(self)
+        if not hasattr(self,'imds'):
+            self.imds = _IMDS(self)
+        if not self.imds.made_ee_imds:
             self.imds.make_ee()
-            self.made_ee_imds = True
         imds = self.imds
 
         t1, t2 = self.t1, self.t2
@@ -761,6 +755,9 @@ class _IMDS:
     def __init__(self, cc):
         self.cc = cc
         self._made_shared = False
+        self.made_ip_imds = False
+        self.made_ea_imds = False
+        self.made_ee_imds = False
 
     def _make_shared(self):
         cput0 = (time.clock(), time.time())
@@ -792,6 +789,7 @@ class _IMDS:
         self.Wooov = imd.Wooov(t1,t2,eris)
         self.Wovoo = imd.Wovoo(t1,t2,eris)
 
+        self.made_ip_imds = True
         log.timer('EOM-CCSD IP intermediates', *cput0)
 
     def make_ea(self):
@@ -809,6 +807,7 @@ class _IMDS:
         self.Wvvvv = imd.Wvvvv(t1,t2,eris)
         self.Wvvvo = imd.Wvvvo(t1,t2,eris,self.Wvvvv)
 
+        self.made_ea_imds = True
         log.timer('EOM-CCSD EA intermediates', *cput0)
 
     def make_ee(self):
@@ -821,17 +820,18 @@ class _IMDS:
 
         t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
 
-        if self.cc.made_ip_imds is False:
+        if self.made_ip_imds is False:
             # 0 or 1 virtuals
             self.Woooo = imd.Woooo(t1,t2,eris)
             self.Wooov = imd.Wooov(t1,t2,eris)
             self.Wovoo = imd.Wovoo(t1,t2,eris)
-        if self.cc.made_ea_imds is False:
+        if self.made_ea_imds is False:
             # 3 or 4 virtuals
             self.Wvovv = imd.Wvovv(t1,t2,eris)
             self.Wvvvv = imd.Wvvvv(t1,t2,eris)
             self.Wvvvo = imd.Wvvvo(t1,t2,eris,self.Wvvvv)
 
+        self.made_ee_imds = True
         log.timer('EOM-CCSD EE intermediates', *cput0)
 
 if __name__ == '__main__':
@@ -865,9 +865,23 @@ if __name__ == '__main__':
     mf = scf.UHF(mol)
     print(mf.scf())
 
-    ucc = UCCSD(mf)
-    ecc, t1, t2 = ucc.kernel()
-    print(ecc - -0.2133432430989155)
-    e,v = ucc.eeccsd(nroots=4)
+    mycc = UCCSD(mf)
+    ecc, t1, t2 = mycc.kernel()
+    print(ecc - -0.2133432712431435)
+    e,v = mycc.ipccsd(nroots=8)
+    print(e[0] - 0.4335604332073799)
+    print(e[2] - 0.5187659896045407)
+    print(e[4] - 0.6782876002229172)
+
+    mycc.verbose = 5
+    e,v = mycc.eaccsd(nroots=8)
+    print(e[0] - 0.16737886338859731)
+    print(e[2] - 0.24027613852009164)
+    print(e[4] - 0.51006797826488071)
+    print "e=", e
+
+    e,v = mycc.eeccsd(nroots=4)
     print(e[0] - 0.2757159395886167)
+    print(e[1] - 0.2757159395886167)
+    print(e[2] - 0.2757159395886167)
     print(e[3] - 0.3005716731825082)

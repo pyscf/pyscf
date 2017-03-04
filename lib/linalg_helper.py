@@ -1167,25 +1167,17 @@ def _sort_by_similarity(w, v, nroots, conv, vlast, emin=None, heff=None):
 
     conv = numpy.asarray(conv)
     head = vlast.shape[0]
-    space = v.shape[0]
-    e = numpy.zeros(nroots, dtype=w.dtype)
-    c = numpy.zeros((space,nroots), dtype=v.dtype)
+    ovlp = vlast[:,conv].T.conj().dot(v[:head])
+    ovlp = numpy.einsum('ij,ij->j', ovlp, ovlp)
+    nconv = numpy.count_nonzero(conv)
+    nleft = nroots - nconv
+    idx = ovlp.argsort()
+    sorted_idx = numpy.zeros(nroots, dtype=int)
+    sorted_idx[conv] = numpy.sort(idx[-nconv:])
+    sorted_idx[~conv] = numpy.sort(idx[:-nconv])[:nleft]
 
-    idx_to_conv = numpy.ones(w.size, dtype=bool)
-    for k in range(nroots):
-        if conv[k]:
-            s = numpy.dot(vlast[:,k].conj(), v[:head])
-            map_to_last = numpy.argmax(abs(s))
-            e[k] = w[map_to_last]
-            c[:,k] = v[:,map_to_last]
-            idx_to_conv[map_to_last] = False
-    if emin is not None:
-        drop = w < emin-abs(emin)*.01
-        idx_to_conv = idx_to_conv & (~drop)
-    idx_to_conv = numpy.where(idx_to_conv)[0]
-    nroots_left = nroots - numpy.count_nonzero(conv)
-    e[~conv] = w[idx_to_conv[:nroots_left]]
-    c[:,~conv] = v[:,idx_to_conv[:nroots_left]]
+    e = w[sorted_idx]
+    c = v[:,sorted_idx]
     return e, c
 
 

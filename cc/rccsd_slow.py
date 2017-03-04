@@ -301,11 +301,11 @@ class RCCSD(ccsd.CCSD):
                 return w[idx].real, v[:,idx].real, idx
             eip, evecs = eig(self.ipccsd_matvec, guess, precond, pick=pickeig,
                              tol=self.conv_tol, max_cycle=self.max_cycle,
-                             max_space=self.max_space, nroots=nroots, verbose=7)
+                             max_space=self.max_space, nroots=nroots, verbose=self.verbose)
         else:
             eip, evecs = eig(self.ipccsd_matvec, guess, precond,
                              tol=self.conv_tol, max_cycle=self.max_cycle,
-                             max_space=self.max_space, nroots=nroots, verbose=7)
+                             max_space=self.max_space, nroots=nroots, verbose=self.verbose)
 
         self.eip = eip.real
 
@@ -469,11 +469,11 @@ class RCCSD(ccsd.CCSD):
                 return w[idx].real, v[:,idx].real, idx
             eea, evecs = eig(self.eaccsd_matvec, guess, precond, pick=pickeig,
                              tol=self.conv_tol, max_cycle=self.max_cycle,
-                             max_space=self.max_space, nroots=nroots, verbose=7)
+                             max_space=self.max_space, nroots=nroots, verbose=self.verbose)
         else:
             eea, evecs = eig(self.eaccsd_matvec, guess, precond,
                              tol=self.conv_tol, max_cycle=self.max_cycle,
-                             max_space=self.max_space, nroots=nroots, verbose=7)
+                             max_space=self.max_space, nroots=nroots, verbose=self.verbose)
 
         self.eea = eea.real
 
@@ -658,11 +658,11 @@ class RCCSD(ccsd.CCSD):
                 return w[idx].real, v[:,idx].real, idx
             eee, evecs = eig(self.eeccsd_matvec, guess, precond, pick=pickeig,
                              tol=self.conv_tol, max_cycle=self.max_cycle,
-                             max_space=self.max_space, nroots=nroots, verbose=7)
+                             max_space=self.max_space, nroots=nroots, verbose=self.verbose)
         else:
             eee, evecs = eig(self.eeccsd_matvec, guess, precond,
                              tol=self.conv_tol, max_cycle=self.max_cycle,
-                             max_space=self.max_space, nroots=nroots, verbose=7)
+                             max_space=self.max_space, nroots=nroots, verbose=self.verbose)
 
         self.eee = eee.real
 
@@ -678,6 +678,9 @@ class RCCSD(ccsd.CCSD):
             return eee, evecs
 
     def eeccsd_matvec(self,vector):
+        raise NotImplementedError
+
+    def eeccsd_diag(self):
         raise NotImplementedError
 
     def vector_to_amplitudes_ee(self,vector):
@@ -891,7 +894,17 @@ if __name__ == '__main__':
     mycc = RCCSD(mf)
     ecc, t1, t2 = mycc.kernel()
     print(ecc - -0.2133432712431435)
+
     e,v = mycc.ipccsd(nroots=3)
     print(e[0] - 0.4335604332073799)
     print(e[1] - 0.5187659896045407)
     print(e[2] - 0.6782876002229172)
+
+    e,v = mycc.eaccsd(nroots=3)
+    print(e[0] - 0.16737886338859731)
+    print(e[1] - 0.24027613852009164)
+    print(e[2] - 0.51006797826488071)
+
+    # Note: Not implemented
+    #e,v = mycc.eeccsd(nroots=4)
+
