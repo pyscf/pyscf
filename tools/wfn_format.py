@@ -146,24 +146,24 @@ def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
 
 def write_ci(fout, fcivec, norb, nelec, ncore=0):
     from pyscf import fci
-    fout.write('NELACTIVE, NDETS, NORBCORE, NORBACTIVE\n')
-    fout.write(' %5d %5d %5d %5d\n' % (nelec, fcivec.size, ncore, norb))
-    fout.write('COEFFICIENT/ OCCUPIED ACTIVE SPIN ORBITALS\n')
-
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
+    fout.write('NELACTIVE, NDETS, NORBCORE, NORBACTIVE\n')
+    fout.write(' %5d %5d %5d %5d\n' % (neleca+nelecb, fcivec.size, ncore, norb))
+    fout.write('COEFFICIENT/ OCCUPIED ACTIVE SPIN ORBITALS\n')
+
     nb = fci.cistring.num_strings(norb, nelecb)
     stringsa = fci.cistring.gen_strings4orblist(range(norb), neleca)
     stringsb = fci.cistring.gen_strings4orblist(range(norb), nelecb)
     def str2orbidx(string, ncore):
         bstring = bin(string)
-        return [i+1+ncore for i,s in enumerate(bstring) if s == '1']
+        return [i+1+ncore for i,s in enumerate(bstring[::-1]) if s == '1']
 
-    addrs = numpy.argsort(fcivec.ravel())
-    for iaddr in addrs:
+    addrs = numpy.argsort(abs(fcivec.ravel()))
+    for iaddr in reversed(addrs):
         addra, addrb = divmod(iaddr, nb)
         idxa = ['%3d' % x for x in str2orbidx(stringsa[addra], ncore)]
         idxb = ['%3d' % (-x) for x in str2orbidx(stringsb[addrb], ncore)]
@@ -213,8 +213,7 @@ if __name__ == '__main__':
     natorb = numpy.dot(mc.mo_coeff[:,:nmo], natorb)
     natocc = -natocc
     with open('n2_cas.det', 'w') as f3:
-        write_ci(f3, mc.ci, mc.ncas, nelecas)
-        #write_ci(f3, mc.ci, mc.ncas, nelecas, ncore=-mc.ncore)
+        write_ci(f3, mc.ci, mc.ncas, mc.nelecas, mc.ncore)
     with open('n2_ref_nat.mol', 'w') as f2:
         molden.header(mol, f2)
         molden.orbital_coeff(mol, f2, natorb, occ=natocc)
@@ -224,7 +223,6 @@ if __name__ == '__main__':
     with open('n2_cas.wfn', 'w') as f2:
         write_mo(f2, mol, natorb, mo_occ=natocc)
         write_mo(f2, mol, mc.mo_coeff[:,:nmo])
-        #write_ci(f2, mc.ci, mc.ncas, nelecas, ncore=-mc.ncore)
     with open('rdm_wfn.wfn', 'w') as f2:
         write_mo(f2, mol, mc.mo_coeff[:,:nmo], mo_occ=mf.mo_occ[:nmo])
 
