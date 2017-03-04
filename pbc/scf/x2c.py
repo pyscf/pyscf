@@ -11,8 +11,8 @@ from pyscf.gto import mole
 from pyscf.lib import logger
 from pyscf.scf import x2c
 from pyscf.pbc import gto as pbcgto
-from pyscf.pbc.df import pwdf
-from pyscf.pbc.df import pwdf_jk
+from pyscf.pbc.df import aft
+from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import ft_ao
 
 
@@ -89,7 +89,7 @@ class SpinFreeX2C(X2C):
             kpts_lst = numpy.reshape(kpts, (-1,3))
 
         xcell, contr_coeff = self.get_xmol(cell)
-        with_df = pwdf.PWDF(xcell)
+        with_df = aft.AFTDF(xcell)
         c = lib.param.LIGHT_SPEED
         assert('1E' in self.approx.upper())
         if 'ATOM' in self.approx.upper():
@@ -195,7 +195,7 @@ def get_pnucp(mydf, kpts=None):
                             max_memory=max_memory, aosym='s2'):
 # rho_ij(G) nuc(-G) / G^2
 # = [Re(rho_ij(G)) + Im(rho_ij(G))*1j] [Re(nuc(G)) - Im(nuc(G))*1j] / G^2
-        if not pwdf_jk.gamma_point(kpts_lst[k]):
+        if not aft_jk.gamma_point(kpts_lst[k]):
             wjI[k] += numpy.einsum('k,xk->x', vGR[p0:p1], pqkI)
             wjI[k] -= numpy.einsum('k,xk->x', vGI[p0:p1], pqkR)
         wjR[k] += numpy.einsum('k,xk->x', vGR[p0:p1], pqkR)
@@ -213,7 +213,7 @@ def get_pnucp(mydf, kpts=None):
 
     wj = []
     for k, kpt in enumerate(kpts_lst):
-        if pwdf_jk.gamma_point(kpt):
+        if aft_jk.gamma_point(kpt):
             wj.append(lib.unpack_tril(wjR[k]))
         else:
             wj.append(lib.unpack_tril(wjR[k]+wjI[k]*1j))
@@ -234,7 +234,7 @@ if __name__ == '__main__':
                basis='sto3g')
     lib.param.LIGHT_SPEED = 2
     mf = scf.RHF(cell)
-    mf.with_df = pwdf.PWDF(cell)
+    mf.with_df = aft.AFTDF(cell)
     enr = mf.kernel()
     print('E(NR) = %.12g' % enr)
 
@@ -243,7 +243,7 @@ if __name__ == '__main__':
     print('E(SFX2C1E) = %.12g' % esfx2c)
 
     mf = scf.KRHF(cell)
-    mf.with_df = pwdf.PWDF(cell)
+    mf.with_df = aft.AFTDF(cell)
     mf.kpts = cell.make_kpts([2,2,1])
     enr = mf.kernel()
     print('E(k-NR) = %.12g' % enr)

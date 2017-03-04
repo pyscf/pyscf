@@ -4,7 +4,7 @@ import numpy as np
 
 from pyscf.pbc import gto as pgto
 import pyscf.pbc.dft as pdft
-from pyscf.pbc.df import fft, pwdf, mdf
+from pyscf.pbc.df import fft, aft, mdf
 
 
 
@@ -318,14 +318,14 @@ def finger(a):
     return np.dot(w, a.ravel())
 
 class KnowValues(unittest.TestCase):
-    def test_pwdf_get_nuc(self):
-        df = pwdf.PWDF(cell)
+    def test_aft_get_nuc(self):
+        df = aft.AFTDF(cell)
         v1 = df.get_nuc(kpts[0])
         self.assertAlmostEqual(finger(v1), (-6.0893491060887159+0.19823828749533859j), 8)
 
-    def test_pwdf_get_pp(self):
+    def test_aft_get_pp(self):
         v0 = pgto.pseudo.get_pp(cell, kpts[0])
-        v1 = pwdf.PWDF(cell).get_pp(kpts)
+        v1 = aft.AFTDF(cell).get_pp(kpts)
         self.assertTrue(np.allclose(v0, v1[0], atol=1e-5, rtol=1e-5))
         self.assertAlmostEqual(finger(v1[0]), (-5.6240305085898807+0.22094834207603817j), 8)
 
@@ -335,9 +335,9 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(v1[2]), (-6.05309558678+0.281728966073j), 8)
         self.assertAlmostEqual(finger(v1[3]), (-5.60115995450+0.275973062529j), 8)
 
-    def test_pwdf_get_ao_eri(self):
+    def test_aft_get_ao_eri(self):
         df0 = fft.FFTDF(cell)
-        df = pwdf.PWDF(cell)
+        df = aft.AFTDF(cell)
         eri0 = df0.get_ao_eri(compact=True)
         eri1 = df.get_ao_eri(compact=True)
         self.assertTrue(np.allclose(eri0, eri1, atol=1e-5, rtol=1e-5))
@@ -355,7 +355,7 @@ class KnowValues(unittest.TestCase):
 
     def test_get_eri_gamma(self):
         odf0 = mdf.MDF(cell1)
-        odf = pwdf.PWDF(cell1)
+        odf = aft.AFTDF(cell1)
         ref = odf0.get_eri()
         eri0000 = odf.get_eri(compact=True)
         self.assertTrue(eri0000.dtype == numpy.double)
@@ -372,7 +372,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(eri1111), (1.2410388899583582-5.2370501878355006e-06j), 9)
 
     def test_get_eri_0011(self):
-        odf = pwdf.PWDF(cell1)
+        odf = aft.AFTDF(cell1)
         ref = kdf0.get_eri((kpts[0],kpts[0],kpts[1],kpts[1]))
         eri0011 = odf.get_eri((kpts[0],kpts[0],kpts[1],kpts[1]))
         self.assertTrue(np.allclose(eri0011, ref, atol=1e-3, rtol=1e-3))
@@ -384,7 +384,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(eri0011), (1.2410162860852818+0.00074485383748954838j), 9)
 
     def test_get_eri_0110(self):
-        odf = pwdf.PWDF(cell1)
+        odf = aft.AFTDF(cell1)
         ref = kdf0.get_eri((kpts[0],kpts[1],kpts[1],kpts[0]))
         eri0110 = odf.get_eri((kpts[0],kpts[1],kpts[1],kpts[0]))
         self.assertTrue(np.allclose(eri0110, ref, atol=1e-6, rtol=1e-6))
@@ -401,7 +401,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(eri0110), (1.2928399254827956-0.011820590601969154j), 9)
 
     def test_get_eri_0123(self):
-        odf = pwdf.PWDF(cell1)
+        odf = aft.AFTDF(cell1)
         ref = kdf0.get_eri(kpts)
         eri1111 = odf.get_eri(kpts)
         self.assertTrue(np.allclose(eri1111, ref, atol=1e-8, rtol=1e-8))
@@ -412,7 +412,7 @@ class KnowValues(unittest.TestCase):
 
     def test_get_mo_eri(self):
         df0 = fft.FFTDF(cell)
-        odf = pwdf.PWDF(cell)
+        odf = aft.AFTDF(cell)
         nao = cell.nao_nr()
         numpy.random.seed(5)
         mo =(numpy.random.random((nao,nao)) +
@@ -453,6 +453,6 @@ class KnowValues(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    print("Full Tests for pwdf")
+    print("Full Tests for aft")
     unittest.main()
 

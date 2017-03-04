@@ -15,8 +15,8 @@ from pyscf.lib import logger
 from pyscf.pbc import tools
 from pyscf.pbc.df import df
 from pyscf.pbc.df import df_jk
-from pyscf.pbc.df import pwdf_jk
-from pyscf.pbc.df.pwdf_jk import is_zero, gamma_point
+from pyscf.pbc.df import aft_jk
+from pyscf.pbc.df.aft_jk import is_zero, gamma_point
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC, _format_dms
 
 #
@@ -64,7 +64,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
         mydf.__class__ = cls_bak
     else:
         vj_kpts1 = get_j_kpts_sr(mydf, dm_kpts, hermi, kpts, kpt_band)
-    vj_kpts = pwdf_jk.get_j_kpts(mydf, dm_kpts, hermi, kpts, kpt_band)
+    vj_kpts = aft_jk.get_j_kpts(mydf, dm_kpts, hermi, kpts, kpt_band)
     vj_kpts += vj_kpts1
     return vj_kpts
 
@@ -161,7 +161,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
         mydf.__class__ = cls_bak
     else:
         vk_kpts1 = get_k_kpts_sr(mydf, dm_kpts, hermi, kpts, kpt_band, None)
-    vk_kpts = pwdf_jk.get_k_kpts(mydf, dm_kpts, hermi, kpts, kpt_band, exxdiv)
+    vk_kpts = aft_jk.get_k_kpts(mydf, dm_kpts, hermi, kpts, kpt_band, exxdiv)
     vk_kpts += vk_kpts1
     return vk_kpts
 
@@ -333,7 +333,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
         mydf.__class__ = cls_bak
     else:
         vj1, vk1 = get_jk_sr(mydf, dm, hermi, kpt, kpt_band, with_j, with_k, None)
-    vj, vk = pwdf_jk.get_jk(mydf, dm, hermi, kpt, kpt_band, with_j, with_k, exxdiv)
+    vj, vk = aft_jk.get_jk(mydf, dm, hermi, kpt, kpt_band, with_j, with_k, exxdiv)
     if with_j: vj += vj1
     if with_k: vk += vk1
     return vj, vk

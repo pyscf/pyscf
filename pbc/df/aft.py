@@ -16,8 +16,8 @@ from pyscf.pbc import tools
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import incore
-from pyscf.pbc.df import pwdf_jk
-from pyscf.pbc.df import pwdf_ao2mo
+from pyscf.pbc.df import aft_jk
+from pyscf.pbc.df import aft_ao2mo
 from pyscf.pbc.df.df_jk import KPT_DIFF_TOL, is_zero, gamma_point
 
 
@@ -173,7 +173,7 @@ def get_pp(mydf, kpts=None):
     return vpp
 
 
-class PWDF(lib.StreamObject):
+class AFTDF(lib.StreamObject):
     '''Density expansion on plane waves
     '''
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
@@ -364,18 +364,18 @@ class PWDF(lib.StreamObject):
                 kpts = self.kpts
 
         if kpts.shape == (3,):
-            return pwdf_jk.get_jk(self, dm, hermi, kpts, kpt_band, with_j,
+            return aft_jk.get_jk(self, dm, hermi, kpts, kpt_band, with_j,
                                   with_k, exxdiv)
 
         vj = vk = None
         if with_k:
-            vk = pwdf_jk.get_k_kpts(self, dm, hermi, kpts, kpt_band, exxdiv)
+            vk = aft_jk.get_k_kpts(self, dm, hermi, kpts, kpt_band, exxdiv)
         if with_j:
-            vj = pwdf_jk.get_j_kpts(self, dm, hermi, kpts, kpt_band)
+            vj = aft_jk.get_j_kpts(self, dm, hermi, kpts, kpt_band)
         return vj, vk
 
-    get_eri = get_ao_eri = pwdf_ao2mo.get_eri
-    ao2mo = get_mo_eri = pwdf_ao2mo.general
+    get_eri = get_ao_eri = aft_ao2mo.get_eri
+    ao2mo = get_mo_eri = aft_ao2mo.general
 
     def update_mf(self, mf):
         mf = copy.copy(mf)
@@ -445,5 +445,5 @@ if __name__ == '__main__':
     cell.gs = [10, 10, 10]
     cell.build()
     k = numpy.ones(3)*.25
-    v1 = PWDF(cell).get_pp(k)
+    v1 = AFTDF(cell).get_pp(k)
     print(abs(v1).sum(), 21.7504294462)

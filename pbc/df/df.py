@@ -29,11 +29,11 @@ from pyscf.df.outcore import _guess_shell_ranges
 from pyscf.df.mdf import _uncontract_basis
 from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
-from pyscf.pbc.df import pwdf
+from pyscf.pbc.df import aft
 from pyscf.pbc.df import df_jk
 from pyscf.pbc.df import df_ao2mo
 from pyscf.pbc.df.df_jk import zdotCN, is_zero, gamma_point
-from pyscf.pbc.df.pwdf import estimate_eta, get_nuc
+from pyscf.pbc.df.aft import estimate_eta, get_nuc
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
     auxcell = copy.copy(cell)
@@ -114,7 +114,7 @@ def make_modchg_basis(auxcell, smooth_eta, l_max=3):
     return chgcell
 
 
-class DF(pwdf.PWDF):
+class DF(aft.AFTDF):
     '''Gaussian and planewaves mixed density fitting
     '''
     def __init__(self, cell, kpts=numpy.zeros((1,3))):

@@ -292,7 +292,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
         pqkR = pqkI = coulG = pLqR = pLqI = iLkR = iLkI = None
         #t2 = log.timer_debug1('%d:%d'%(p0,p1), *t2)
     bufR = bufI = None
-    t1 = log.timer_debug1('pwdf_jk.get_jk', *t1)
+    t1 = log.timer_debug1('aft_jk.get_jk', *t1)
 
     if with_j:
         if j_real:
@@ -315,7 +315,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
 if __name__ == '__main__':
     from pyscf.pbc import gto as pgto
     from pyscf.pbc import scf as pscf
-    from pyscf.pbc.df import pwdf
+    from pyscf.pbc.df import aft
 
     L = 5.
     n = 5
@@ -333,7 +333,7 @@ if __name__ == '__main__':
     cell.build(0,0)
     cell.verbose = 5
 
-    df = pwdf.PWDF(cell)
+    df = aft.AFTDF(cell)
     df.gs = (15,)*3
     dm = pscf.RHF(cell).get_init_guess()
     vj, vk = df.get_jk(cell, dm)

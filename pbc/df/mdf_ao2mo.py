@@ -15,7 +15,7 @@ from pyscf.pbc.df.fft_ao2mo import _format_kpts
 from pyscf.pbc.df.df_ao2mo import _mo_as_complex, _dtrans, _ztrans
 from pyscf.pbc.df import df
 from pyscf.pbc.df import df_ao2mo
-from pyscf.pbc.df import pwdf_ao2mo
+from pyscf.pbc.df import aft_ao2mo
 
 
 def get_eri(mydf, kpts=None, compact=True):
@@ -25,7 +25,7 @@ def get_eri(mydf, kpts=None, compact=True):
     cell = mydf.cell
     kptijkl = _format_kpts(kpts)
     kpti, kptj, kptk, kptl = kptijkl
-    eri = pwdf_ao2mo.get_eri(mydf, kptijkl, compact=True)
+    eri = aft_ao2mo.get_eri(mydf, kptijkl, compact=True)
     if mydf.metric is None:
         mydf.__class__, cls_bak = df.DF, mydf.__class__
         eri += df_ao2mo.get_eri(mydf, kptijkl, compact)
@@ -105,7 +105,7 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
     kpti, kptj, kptk, kptl = kptijkl
     if isinstance(mo_coeffs, numpy.ndarray) and mo_coeffs.ndim == 2:
         mo_coeffs = (mo_coeffs,) * 4
-    eri_mo = pwdf_ao2mo.general(mydf, mo_coeffs, kptijkl, compact)
+    eri_mo = aft_ao2mo.general(mydf, mo_coeffs, kptijkl, compact)
     if mydf.metric is None:
         mydf.__class__, cls_bak = df.DF, mydf.__class__
         eri_mo += df_ao2mo.general(mydf, mo_coeffs, kptijkl, compact)
