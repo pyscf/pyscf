@@ -33,12 +33,12 @@ void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uin
             uint64_t *strjb = strs + jp * 2 * nset + nset;
             int n_excit_a = n_excitations(stria, strja, nset);
             int n_excit_b = n_excitations(strib, strjb, nset);
-            printf("%d %d %d %d %d %d\n", stria[0], strib[0], strja[0], strjb[0], n_excit_a, n_excit_b);
-            printf("%s %s %s %s\n", int2bin(stria[0]), int2bin(strib[0]), int2bin(strja[0]), int2bin(strjb[0]));
+//            printf("%d %d %d %d %d %d\n", stria[0], strib[0], strja[0], strjb[0], n_excit_a, n_excit_b);
+//            printf("%s %s %s %s\n", int2bin(stria[0]), int2bin(strib[0]), int2bin(strja[0]), int2bin(strjb[0]));
             // Single excitation
             if ((n_excit_a + n_excit_b) == 1) {
                 int *ia;
-                // Alpha->Alpha
+                // alpha->alpha
                 if (n_excit_b == 0) {
                     ia = get_single_excitation(stria, strja, nset);
                     int i = ia[0];
@@ -47,11 +47,11 @@ void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uin
                     int *occsa = compute_occ_list(stria, nset, norb, neleca);
                     int *occsb = compute_occ_list(strib, nset, norb, nelecb);
  
-                    // Test
-                    printf("i: %d -> a: %d (%f)\n", ia[0], ia[1], sign);
-                    for (p = 0; p < neleca; ++p) printf("%d ", occsa[p]);
-                    printf("\n");
-                    // Test
+ //                   // Test
+ //                   printf("i: %d -> a: %d (%f)\n", ia[0], ia[1], sign);
+ //                   for (p = 0; p < neleca; ++p) printf("%d ", occsa[p]);
+ //                   printf("\n");
+ //                   // Test
 
                     double fai = h1[a * norb + i];
                     for (p = 0; p < neleca; ++p) {
@@ -68,10 +68,8 @@ void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uin
 
                     ci1[jp] += sign * fai * civec[ip];
                     ci1[ip] += sign * fai * civec[jp];
-
-                    printf("%20.10f %20.10f\n", ci1[ip], ci1[jp]);
                 }
-                // Beta->Beta
+                // beta->beta
                 else if (n_excit_a == 0) {
                     ia = get_single_excitation(strib, strjb, nset);
                     int i = ia[0];
@@ -80,11 +78,11 @@ void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uin
                     int *occsa = compute_occ_list(stria, nset, norb, neleca);
                     int *occsb = compute_occ_list(strib, nset, norb, nelecb);
 
-                    // Test
-                    printf("i: %d -> a: %d (%f)\n", ia[0], ia[1], sign);
-                    for (p = 0; p < nelecb; ++p) printf("%d ", occsb[p]);
-                    printf("\n");
-                    // Test
+ //                   // Test
+ //                   printf("i: %d -> a: %d (%f)\n", ia[0], ia[1], sign);
+ //                   for (p = 0; p < nelecb; ++p) printf("%d ", occsb[p]);
+ //                   printf("\n");
+ //                   // Test
                     
                     double fai = h1[a * norb + i];
                     for (p = 0; p < nelecb; ++p) {
@@ -101,15 +99,77 @@ void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uin
 
                     ci1[jp] += sign * fai * civec[ip];
                     ci1[ip] += sign * fai * civec[jp];
-
-                    printf("%20.10f %20.10f\n", ci1[ip], ci1[jp]);
                 }
             }
             // Double excitation
             else if ((n_excit_a + n_excit_b) == 2) {
+                int i, j, a, b;
+                // alpha,alpha->alpha,alpha
+                if (n_excit_b == 0) {
+	            int *ijab = get_double_excitation(stria, strja, nset);
+                    i = ijab[0]; j = ijab[1]; a = ijab[2]; b = ijab[3];
+//                    printf("(Case 1) i: %d j: %d -> a: %d b: %d\n", i, j, a, b);
+
+                    double v, sign;
+                    int ajbi = a * norb * norb * norb + j * norb * norb + b * norb + i;
+                    int aibj = a * norb * norb * norb + i * norb * norb + b * norb + j;
+                    if (a > j || i > b) {
+                        v = eri[ajbi] - eri[aibj];
+                        sign = compute_cre_des_sign(b, i, stria, nset);
+                        sign *= compute_cre_des_sign(a, j, stria, nset);
+                    } 
+                    else {
+                        v = eri[aibj] - eri[ajbi];
+                        sign = compute_cre_des_sign(b, j, stria, nset);
+                        sign *= compute_cre_des_sign(a, i, stria, nset);
+                    }
+
+                    ci1[jp] += sign * v * civec[ip];
+                    ci1[ip] += sign * v * civec[jp];
+//                    printf("(Case 1) v: %f\n", v);
+                }
+                // beta,beta->beta,beta
+                else if (n_excit_a == 0) {
+	            int *ijab = get_double_excitation(strib, strjb, nset);
+                    i = ijab[0]; j = ijab[1]; a = ijab[2]; b = ijab[3];
+//                    printf("(Case 2) i: %d j: %d -> a: %d b: %d\n", i, j, a, b);
+
+                    double v, sign;
+                    int ajbi = a * norb * norb * norb + j * norb * norb + b * norb + i;
+                    int aibj = a * norb * norb * norb + i * norb * norb + b * norb + j;
+                    if (a > j || i > b) {
+                        v = eri[ajbi] - eri[aibj];
+                        sign = compute_cre_des_sign(b, i, strib, nset);
+                        sign *= compute_cre_des_sign(a, j, strib, nset);
+                    } 
+                    else {
+                        v = eri[aibj] - eri[ajbi];
+                        sign = compute_cre_des_sign(b, j, strib, nset);
+                        sign *= compute_cre_des_sign(a, i, strib, nset);
+                    }
+
+                    ci1[jp] += sign * v * civec[ip];
+                    ci1[ip] += sign * v * civec[jp];
+                }
+                // alpha,beta->alpha,beta
+                else {
+                    int *ia = get_single_excitation(stria, strja, nset);
+                    int *jb = get_single_excitation(strib, strjb, nset);
+                    i = ia[0]; a = ia[1]; j = jb[0]; b = jb[1];
+
+                    double v = eri[a * norb * norb * norb + i * norb * norb + b * norb + j];
+                    double sign = compute_cre_des_sign(a, i, stria, nset);
+                    sign *= compute_cre_des_sign(b, j, strib, nset);
+
+                    ci1[jp] += sign * v * civec[ip];
+                    ci1[ip] += sign * v * civec[jp];
+//                    printf("(Case 3) i: %d j: %d -> a: %d b: %d\n", i, j, a, b);
+                }
             }
-        }
-        if (ip == 8) exit(1);
+//            printf("%20.10f %20.10f\n", ci1[ip], ci1[jp]);
+        } // end loop over jp
+        // Add diagonal elements
+        ci1[ip] += hdiag[ip] * civec[ip];
     }
 
 }
@@ -168,11 +228,53 @@ int *get_single_excitation(uint64_t *str1, uint64_t *str2, int nset) {
         if (popcount(str_hole) == 1) {
             ia[0] = trailz(str_hole) + 64 * p;
         }
-
     }
 
     return ia;
 
+}
+
+
+int *get_double_excitation(uint64_t *str1, uint64_t *str2, int nset) {
+
+    size_t p;
+    int *ijab = malloc(sizeof(int) * 4);
+    int particle_ind = 2;
+    int hole_ind = 0;
+
+    for (p = 0; p < nset; ++p) {
+        uint64_t str_tmp = str1[p] ^ str2[p];
+        uint64_t str_particle = str_tmp & str2[p];
+        uint64_t str_hole = str_tmp & str1[p];
+        int n_particle = popcount(str_particle);
+        int n_hole = popcount(str_hole);
+
+        if (n_particle == 1) {
+            ijab[particle_ind] = trailz(str_particle) + 64 * p;
+            particle_ind++;
+        }
+        else if (n_particle == 2) {
+            int a = trailz(str_particle);
+            ijab[2] = a + 64 * p;
+            str_particle &= ~(1 << a);
+            int b = trailz(str_particle);
+            ijab[3] = b + 64 * p;
+        }
+       
+        if (n_hole == 1) {
+            ijab[hole_ind] = trailz(str_hole) + 64 * p;
+            hole_ind++;
+        }
+        else if (n_hole == 2) {
+            int i = trailz(str_hole);
+            ijab[0] = i + 64 * p;
+            str_hole &= ~(1 << i);
+            int j = trailz(str_hole);
+            ijab[1] = j + 64 * p;
+        }
+    }
+
+    return ijab;
 }
 
 
