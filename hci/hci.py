@@ -121,7 +121,6 @@ def contract_2e(h1, eri, civec, norb, nelec, hdiag=None, **kwargs):
 
 def contract_2e_ctypes(h1, eri, civec, norb, nelec, hdiag=None, **kwargs):
     strs = civec._strs
-    ts = civec._ts
     ndet = len(strs)
     if hdiag is None:
         hdiag = make_hdiag(h1, eri, strs, norb, nelec)
@@ -242,8 +241,6 @@ def contract_2e_ctypes(h1, eri, civec, norb, nelec, hdiag=None, **kwargs):
                         hdiag.ctypes.data_as(ctypes.c_void_p), 
                         ctypes.c_int(ndet), 
                         ci1.ctypes.data_as(ctypes.c_void_p))
-
-#    exit()
 
     return ci1
 
