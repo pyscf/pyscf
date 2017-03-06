@@ -85,7 +85,9 @@ def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
 
     mol = mf.mol
     pmol = mol.copy()
-    pmol.atm = mol._atm
+    pmol.atom = mol._atm
+    pmol.unit = 'B'
+    pmol.symmetry = False
     pmol.basis = minao
     pmol.build(False, False)
 
