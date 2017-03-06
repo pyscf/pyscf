@@ -136,96 +136,101 @@ def contract_2e_ctypes(h1, eri, civec, norb, nelec, hdiag=None, **kwargs):
     hdiag = numpy.asarray(hdiag, order='C')
     ci1 = numpy.asarray(ci1, order='C')
 
-    for ip in range(ndet):
-        for jp in range(ip):
-            if abs(ts[ip] - ts[jp]).sum() > 2:
-                continue
-
-            stria, strib = strs[ip].reshape(2,-1)
-            strja, strjb = strs[jp].reshape(2,-1)
-            print stria, strib, strja, strjb
-
-            desa, crea = str_diff(stria, strja)
-            if len(desa) > 2:
-                continue
-            desb, creb = str_diff(strib, strjb)
-            if len(desb) + len(desa) > 2:
-                continue
-            if len(desa) + len(desb) == 1:
-# alpha->alpha
-                if len(desb) == 0:
-                    i,a = desa[0], crea[0]
-                    occsa = str2orblst(stria, norb)[0]
-                    occsb = str2orblst(strib, norb)[0]
-                    fai = h1[a,i]
-                    for k in occsa:
-                        fai += eri[k,k,a,i] - eri[k,i,a,k]
-                    for k in occsb:
-                        fai += eri[k,k,a,i]
-                    sign = cre_des_sign(a, i, stria)
-                    ci1[jp] += sign * fai * civec[ip]
-                    ci1[ip] += sign * fai * civec[jp]
-                    print ci1[ip], ci1[jp]
-# beta ->beta
-                elif len(desa) == 0:
-                    i,a = desb[0], creb[0]
-                    occsa = str2orblst(stria, norb)[0]
-                    occsb = str2orblst(strib, norb)[0]
-                    fai = h1[a,i]
-                    for k in occsb:
-                        fai += eri[k,k,a,i] - eri[k,i,a,k]
-                    for k in occsa:
-                        fai += eri[k,k,a,i]
-                    sign = cre_des_sign(a, i, strib)
-                    ci1[jp] += sign * fai * civec[ip]
-                    ci1[ip] += sign * fai * civec[jp]
-                    print ci1[ip], ci1[jp]
-
-            else:
-# alpha,alpha->alpha,alpha
-                if len(desb) == 0:
-                    i,j = desa
-                    a,b = crea
-# 6 conditions for i,j,a,b
-# --++, ++--, -+-+, +-+-, -++-, +--+ 
-                    if a > j or i > b:
-# condition --++, ++--
-                        v = eri[a,j,b,i]-eri[a,i,b,j]
-                        sign = cre_des_sign(b, i, stria)
-                        sign*= cre_des_sign(a, j, stria)
-                    else:
-# condition -+-+, +-+-, -++-, +--+ 
-                        v = eri[a,i,b,j]-eri[a,j,b,i]
-                        sign = cre_des_sign(b, j, stria)
-                        sign*= cre_des_sign(a, i, stria)
-                    ci1[jp] += sign * v * civec[ip]
-                    ci1[ip] += sign * v * civec[jp]
-# beta ,beta ->beta ,beta
-                elif len(desa) == 0:
-                    i,j = desb
-                    a,b = creb
-                    if a > j or i > b:
-                        v = eri[a,j,b,i]-eri[a,i,b,j]
-                        sign = cre_des_sign(b, i, strib)
-                        sign*= cre_des_sign(a, j, strib)
-                    else:
-                        v = eri[a,i,b,j]-eri[a,j,b,i]
-                        sign = cre_des_sign(b, j, strib)
-                        sign*= cre_des_sign(a, i, strib)
-                    ci1[jp] += sign * v * civec[ip]
-                    ci1[ip] += sign * v * civec[jp]
-# alpha,beta ->alpha,beta
-                else:
-                    i,a = desa[0], crea[0]
-                    j,b = desb[0], creb[0]
-                    v = eri[a,i,b,j]
-                    sign = cre_des_sign(a, i, stria)
-                    sign*= cre_des_sign(b, j, strib)
-                    ci1[jp] += sign * v * civec[ip]
-                    ci1[ip] += sign * v * civec[jp]
-        ci1[ip] += hdiag[ip] * civec[ip]
-        if (ip == 8):
-            break
+#    for ip in range(ndet):
+#        for jp in range(ip):
+#            if abs(ts[ip] - ts[jp]).sum() > 2:
+#                continue
+#
+#            stria, strib = strs[ip].reshape(2,-1)
+#            strja, strjb = strs[jp].reshape(2,-1)
+#            print stria, strib, strja, strjb
+#
+#            desa, crea = str_diff(stria, strja)
+#            if len(desa) > 2:
+#                continue
+#            desb, creb = str_diff(strib, strjb)
+#            if len(desb) + len(desa) > 2:
+#                continue
+#            if len(desa) + len(desb) == 1:
+## alpha->alpha
+#                if len(desb) == 0:
+#                    i,a = desa[0], crea[0]
+#                    occsa = str2orblst(stria, norb)[0]
+#                    occsb = str2orblst(strib, norb)[0]
+#                    fai = h1[a,i]
+#                    for k in occsa:
+#                        fai += eri[k,k,a,i] - eri[k,i,a,k]
+#                    for k in occsb:
+#                        fai += eri[k,k,a,i]
+#                    sign = cre_des_sign(a, i, stria)
+#                    ci1[jp] += sign * fai * civec[ip]
+#                    ci1[ip] += sign * fai * civec[jp]
+## beta ->beta
+#                elif len(desa) == 0:
+#                    i,a = desb[0], creb[0]
+#                    occsa = str2orblst(stria, norb)[0]
+#                    occsb = str2orblst(strib, norb)[0]
+#                    fai = h1[a,i]
+#                    for k in occsb:
+#                        fai += eri[k,k,a,i] - eri[k,i,a,k]
+#                    for k in occsa:
+#                        fai += eri[k,k,a,i]
+#                    sign = cre_des_sign(a, i, strib)
+#                    ci1[jp] += sign * fai * civec[ip]
+#                    ci1[ip] += sign * fai * civec[jp]
+#
+#            else:
+## alpha,alpha->alpha,alpha
+#                if len(desb) == 0:
+#                    i,j = desa
+#                    a,b = crea
+#                    print i, j, a, b
+## 6 conditions for i,j,a,b
+## --++, ++--, -+-+, +-+-, -++-, +--+ 
+#                    if a > j or i > b:
+## condition --++, ++--
+#                        v = eri[a,j,b,i]-eri[a,i,b,j]
+#                        sign = cre_des_sign(b, i, stria)
+#                        sign*= cre_des_sign(a, j, stria)
+#                    else:
+## condition -+-+, +-+-, -++-, +--+ 
+#                        v = eri[a,i,b,j]-eri[a,j,b,i]
+#                        sign = cre_des_sign(b, j, stria)
+#                        sign*= cre_des_sign(a, i, stria)
+#                    ci1[jp] += sign * v * civec[ip]
+#                    ci1[ip] += sign * v * civec[jp]
+#                    print "v: ", v
+## beta ,beta ->beta ,beta
+#                elif len(desa) == 0:
+#                    i,j = desb
+#                    a,b = creb
+#                    print i, j, a, b
+#                    if a > j or i > b:
+#                        v = eri[a,j,b,i]-eri[a,i,b,j]
+#                        sign = cre_des_sign(b, i, strib)
+#                        sign*= cre_des_sign(a, j, strib)
+#                    else:
+#                        v = eri[a,i,b,j]-eri[a,j,b,i]
+#                        sign = cre_des_sign(b, j, strib)
+#                        sign*= cre_des_sign(a, i, strib)
+#                    ci1[jp] += sign * v * civec[ip]
+#                    ci1[ip] += sign * v * civec[jp]
+## alpha,beta ->alpha,beta
+#                else:
+#                    i,a = desa[0], crea[0]
+#                    j,b = desb[0], creb[0]
+#                    print i, j, a, b
+#                    v = eri[a,i,b,j]
+#                    sign = cre_des_sign(a, i, stria)
+#                    sign*= cre_des_sign(b, j, strib)
+#                    ci1[jp] += sign * v * civec[ip]
+#                    ci1[ip] += sign * v * civec[jp]
+#            print ci1[ip], ci1[jp]
+#        ci1[ip] += hdiag[ip] * civec[ip]
+#        if (ip == 8):
+#            break
+#
+#    ci1 = numpy.zeros_like(ci1)
 
     libhci.contract_h_c(h1.ctypes.data_as(ctypes.c_void_p), 
                         eri.ctypes.data_as(ctypes.c_void_p), 
@@ -238,9 +243,7 @@ def contract_2e_ctypes(h1, eri, civec, norb, nelec, hdiag=None, **kwargs):
                         ctypes.c_int(ndet), 
                         ci1.ctypes.data_as(ctypes.c_void_p))
 
-    # Old Python code below
-    exit()
-
+#    exit()
 
     return ci1
 
@@ -579,7 +582,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     ci0 = myci.enlarge_space(ci0, h1e, eri, norb, nelec)
 
     def hop(c):
-        #hc = myci.contract_2e(h1e, eri, as_SCIvector(c, ci_strs, ci_ts), norb, nelec, hdiag)
+#        hc = myci.contract_2e(h1e, eri, as_SCIvector(c, ci_strs, ci_ts), norb, nelec, hdiag)
         hc = myci.contract_2e_ctypes(h1e, eri, as_SCIvector(c, ci_strs, ci_ts), norb, nelec, hdiag)
         return hc.ravel()
     precond = lambda x, e, *args: x/(hdiag-e+myci.level_shift)
