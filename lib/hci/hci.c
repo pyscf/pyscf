@@ -18,11 +18,11 @@ void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uin
     size_t ip, jp, p;
     int nset = norb / 64 + 1;
 
-    printf("Number of orbitals:         %d\n", norb);
-    printf("Number of determinants:     %d\n", ndet);
-    printf("Number of string sets:      %d\n", nset);
-    printf("Number of alpha electrons:  %d\n", neleca);
-    printf("Number of beta electrons:   %d\n", nelecb);
+//    printf("Number of orbitals:         %d\n", norb);
+//    printf("Number of determinants:     %d\n", ndet);
+//    printf("Number of string sets:      %d\n", nset);
+//    printf("Number of alpha electrons:  %d\n", neleca);
+//    printf("Number of beta electrons:   %d\n", nelecb);
 
     // Loop over pairs of determinants
     for (ip = 0; ip < ndet; ++ip) {
