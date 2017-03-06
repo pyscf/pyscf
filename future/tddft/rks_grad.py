@@ -220,6 +220,8 @@ def _contract_xc_kernel(td_grad, xc_code, xai, oovv=None, with_vxc=True,
     nocc = (mo_occ>0).sum()
     orbv = mo_coeff[:,nocc:]
     orbo = mo_coeff[:,:nocc]
+    shls_slice = (0, mol.nbas)
+    ao_loc = mol.ao_loc_nr()
 
     # dmvo ~ reduce(numpy.dot, (orbv, Xai, orbo.T))
     dmvo = (xai + xai.T) * .5 # because K_{ai,bj} == K_{ai,bj}
@@ -252,20 +254,20 @@ def _contract_xc_kernel(td_grad, xc_code, xai, oovv=None, with_vxc=True,
                 rho1 = ni.eval_rho(mol, ao[0], dmvo, mask, 'LDA')
                 aow = numpy.einsum('pi,p->pi', ao[0], wfxc*rho1)
                 for k in range(4):
-                    f1vo[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, weight.size, mask)
+                    f1vo[k] += numint._dot_ao_ao(mol, ao[k], aow, mask, shls_slice, ao_loc)
                 if oovv is not None:
                     rho2 = ni.eval_rho(mol, ao[0], oovv, mask, 'LDA')
                     aow = numpy.einsum('pi,p->pi', ao[0], wfxc*rho2)
                     for k in range(4):
-                        f1oo[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, weight.size, mask)
+                        f1oo[k] += numint._dot_ao_ao(mol, ao[k], aow, mask, shls_slice, ao_loc)
                 if with_vxc:
                     aow = numpy.einsum('pi,p->pi', ao[0], vxc[0]*weight)
                     for k in range(4):
-                        v1ao[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, weight.size, mask)
+                        v1ao[k] += numint._dot_ao_ao(mol, ao[k], aow, mask, shls_slice, ao_loc)
                 if with_kxc:
                     aow = numpy.einsum('pi,p->pi', ao[0], kxc[0]*weight*rho1**2)
                     for k in range(4):
-                        k1ao[k] += numint._dot_ao_ao(mol, ao[k], aow, nao, weight.size, mask)
+                        k1ao[k] += numint._dot_ao_ao(mol, ao[k], aow, mask, shls_slice, ao_loc)
                 vxc = fxc = kxc = aow = rho = rho1 = rho2 = None
             if with_kxc:  # for (rho1*2)^2, *2 for alpha+beta in singlet
                 k1ao *= 4
@@ -278,7 +280,7 @@ def _contract_xc_kernel(td_grad, xc_code, xai, oovv=None, with_vxc=True,
             def gga_sum_(vmat, ao, wv, mask):
                 aow  = numpy.einsum('pi,p->pi', ao[0], wv[0]*.5)
                 aow += numpy.einsum('npi,np->pi', ao[1:4], wv[1:])
-                tmp = numint._dot_ao_ao(mol, ao[0], aow, nao, weight.size, mask)
+                tmp = numint._dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
                 vmat[0] += tmp + tmp.T
                 vmat[1:] += rks_grad._gga_grad_sum(mol, ao, wv, mask)
 

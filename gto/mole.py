@@ -2316,11 +2316,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         return moleintor.getints_by_shell(intor, shells, self._atm, bas,
                                           self._env, comp)
 
-    @lib.with_doc(eval_gto.__doc__)
-    def eval_gto(self, eval_name, coords,
-                 comp=1, shls_slice=None, non0tab=None, out=None):
-        return eval_gto(eval_name, self._atm, self._bas, self._env,
-                        coords, comp, shls_slice, non0tab, out)
+    eval_gto = eval_gto
 
     energy_nuc = energy_nuc
     def get_enuc(self):

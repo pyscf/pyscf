@@ -300,10 +300,10 @@ static int _shloc_by_atom(int *shloc, int *shls_slice, int *ao_loc,
         int ish, nshblk, lastatm;
         shloc[0] = sh0;
         nshblk = 1;
-        lastatm = bas[ATM_SLOTS*sh0+ATOM_OF];
+        lastatm = bas[BAS_SLOTS*sh0+ATOM_OF];
         for (ish = sh0; ish < sh1; ish++) {
-                if (lastatm != bas[ATM_SLOTS*ish+ATOM_OF]) {
-                        lastatm = bas[ATM_SLOTS*ish+ATOM_OF];
+                if (lastatm != bas[BAS_SLOTS*ish+ATOM_OF]) {
+                        lastatm = bas[BAS_SLOTS*ish+ATOM_OF];
                         shloc[nshblk] = ish;
                         nshblk++;
                 }

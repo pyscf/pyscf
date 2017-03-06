@@ -31,6 +31,8 @@ def get_vxc_giao(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
     ngrids = len(grids.weights)
     BLKSIZE = numint.BLKSIZE
     blksize = min(int(max_memory/12*1e6/8/nao/BLKSIZE)*BLKSIZE, ngrids)
+    shls_slice = (0, mol.nbas)
+    ao_loc = mol.ao_loc_nr()
 
     vmat = numpy.zeros((3,nao,nao))
     if xctype == 'LDA':
@@ -45,9 +47,9 @@ def get_vxc_giao(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
             aow = numpy.einsum('pi,p->pi', ao, weight*vrho)
             giao = mol.eval_gto('GTOval_ig_sph', coords, comp=3,
                                 non0tab=mask, out=buf[1:])
-            vmat[0] += numint._dot_ao_ao(mol, aow, giao[0], nao, weight.size, mask)
-            vmat[1] += numint._dot_ao_ao(mol, aow, giao[1], nao, weight.size, mask)
-            vmat[2] += numint._dot_ao_ao(mol, aow, giao[2], nao, weight.size, mask)
+            vmat[0] += numint._dot_ao_ao(mol, aow, giao[0], mask, shls_slice, ao_loc)
+            vmat[1] += numint._dot_ao_ao(mol, aow, giao[1], mask, shls_slice, ao_loc)
+            vmat[2] += numint._dot_ao_ao(mol, aow, giao[2], mask, shls_slice, ao_loc)
             rho = vxc = vrho = aow = None
     elif xctype == 'GGA':
         buf = numpy.empty((10,blksize,nao))
@@ -68,24 +70,24 @@ def get_vxc_giao(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
             aow = numpy.einsum('npi,np->pi', ao[:4], wv)
             giao = mol.eval_gto('GTOval_ig_sph', coords, 3,
                                 non0tab=mask, out=buf[4:])
-            vmat[0] += numint._dot_ao_ao(mol, aow, giao[0], nao, weight.size, mask)
-            vmat[1] += numint._dot_ao_ao(mol, aow, giao[1], nao, weight.size, mask)
-            vmat[2] += numint._dot_ao_ao(mol, aow, giao[2], nao, weight.size, mask)
+            vmat[0] += numint._dot_ao_ao(mol, aow, giao[0], mask, shls_slice, ao_loc)
+            vmat[1] += numint._dot_ao_ao(mol, aow, giao[1], mask, shls_slice, ao_loc)
+            vmat[2] += numint._dot_ao_ao(mol, aow, giao[2], mask, shls_slice, ao_loc)
 
             giao = mol.eval_gto('GTOval_ipig_sph', coords, 9,
                                 non0tab=mask, out=buf[1:])
             aow = numpy.einsum('pi,p->pi', giao[XX], wv[1])
             aow+= numpy.einsum('pi,p->pi', giao[YX], wv[2])
             aow+= numpy.einsum('pi,p->pi', giao[ZX], wv[3])
-            vmat[0] += numint._dot_ao_ao(mol, ao[0], aow, nao, weight.size, mask)
+            vmat[0] += numint._dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
             aow = numpy.einsum('pi,p->pi', giao[XY], wv[1])
             aow+= numpy.einsum('pi,p->pi', giao[YY], wv[2])
             aow+= numpy.einsum('pi,p->pi', giao[ZY], wv[3])
-            vmat[1] += numint._dot_ao_ao(mol, ao[0], aow, nao, weight.size, mask)
+            vmat[1] += numint._dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
             aow = numpy.einsum('pi,p->pi', giao[XZ], wv[1])
             aow+= numpy.einsum('pi,p->pi', giao[YZ], wv[2])
             aow+= numpy.einsum('pi,p->pi', giao[ZZ], wv[3])
-            vmat[2] += numint._dot_ao_ao(mol, ao[0], aow, nao, weight.size, mask)
+            vmat[2] += numint._dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
             rho = vxc = vrho = vsigma = wv = aow = None
     else:
         raise NotImplementedError('meta-GGA')

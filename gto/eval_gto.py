@@ -6,8 +6,9 @@
 import numpy
 import ctypes
 from pyscf import lib
+from pyscf.gto.moleintor import make_loc
 
-BLKSIZE = 96 # needs to be the same to lib/gto/grid_ao_drv.c
+BLKSIZE = 64 # needs to be the same to lib/gto/grid_ao_drv.c
 ANG_OF     = 1
 NPRIM_OF   = 2
 NCTR_OF    = 3
@@ -21,8 +22,8 @@ try:
 except ImportError:
     libcgto = lib.load_library('libcgto')
 
-def eval_gto(eval_name, atm, bas, env, coords,
-             comp=1, shls_slice=None, non0tab=None, out=None):
+def eval_gto(mol, eval_name, coords,
+             comp=1, shls_slice=None, non0tab=None, ao_loc=None, out=None):
     '''Evaluate AO function value on the given grids,
 
     Args:
@@ -68,63 +69,59 @@ def eval_gto(eval_name, atm, bas, env, coords,
 
     >>> mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz')
     >>> coords = numpy.random.random((100,3))  # 100 random points
-    >>> ao_value = eval_gto("GTOval_sph", mol._atm, mol._bas, mol._env, coords)
+    >>> ao_value = mol.eval_gto("GTOval_sph", coords)
     >>> print(ao_value.shape)
     (100, 24)
-    >>> ao_value = eval_gto("GTOval_ig_sph", mol._atm, mol._bas, mol._env, coords, comp=3)
+    >>> ao_value = mol.eval_gto("GTOval_ig_sph", coords, comp=3)
     >>> print(ao_value.shape)
     (3, 100, 24)
     '''
-    atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
-    bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
-    env = numpy.asarray(env, dtype=numpy.double, order='C')
-    coords = numpy.asarray(coords, dtype=numpy.double, order='C')
+    atm = numpy.asarray(mol._atm, dtype=numpy.int32, order='C')
+    bas = numpy.asarray(mol._bas, dtype=numpy.int32, order='C')
+    env = numpy.asarray(mol._env, dtype=numpy.double, order='C')
+    coords = numpy.asarray(coords, dtype=numpy.double, order='F')
     natm = atm.shape[0]
     nbas = bas.shape[0]
     ngrids = coords.shape[0]
 
+    if ao_loc is None:
+        ao_loc = make_loc(bas, eval_name)
+
     if shls_slice is None:
         shls_slice = (0, nbas)
-    bastart, basend = shls_slice
-    bascount = basend - bastart
-
-    if '_cart' in eval_name:
-        dtype = numpy.double
-        l = bas[bastart:basend,ANG_OF]
-        nao = ((l+1)*(l+2)//2 * bas[bastart:basend,NCTR_OF]).sum()
-    elif '_sph' in eval_name:
-        dtype = numpy.double
-        l = bas[bastart:basend,ANG_OF]
-        nao = ((l*2+1) * bas[bastart:basend,NCTR_OF]).sum()
+    sh0, sh1 = shls_slice
+    nao = ao_loc[sh1] - ao_loc[sh0];
+    if 'spinor' in eval_name:
+        ao = numpy.ndarray((2,comp,nao,ngrids), dtype=numpy.complex128, buffer=out)
     else:
-        raise NotImplementedError(eval_name)
-
-    if out is None:
-        ao = numpy.empty((comp,ngrids,nao))
-    else:
-        ao = numpy.ndarray((comp,ngrids,nao), buffer=out)
+        ao = numpy.ndarray((comp,nao,ngrids), buffer=out)
 
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,nbas),
                              dtype=numpy.int8)
 
     drv = getattr(libcgto, eval_name)
-    drv(ctypes.c_int(nao), ctypes.c_int(ngrids),
-        ctypes.c_int(BLKSIZE), ctypes.c_int(bastart), ctypes.c_int(bascount),
+    drv((ctypes.c_int*2)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(ngrids),
         ao.ctypes.data_as(ctypes.c_void_p),
         coords.ctypes.data_as(ctypes.c_void_p),
         non0tab.ctypes.data_as(ctypes.c_void_p),
         atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
         bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
         env.ctypes.data_as(ctypes.c_void_p))
+
+    ao = numpy.swapaxes(ao, -1, -2)
     if comp == 1:
-        return ao.reshape(ngrids,nao)
-    else:
-        return ao
+        if 'spinor' in eval_name:
+            ao = ao[:,0]
+        else:
+            ao = ao[0]
+    return ao
+
 
 if __name__ == '__main__':
     from pyscf import gto
     mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz')
     coords = numpy.random.random((100,3))
-    ao_value = eval_gto("GTOval_sph", mol._atm, mol._bas, mol._env, coords)
+    ao_value = eval_gto(mol, "GTOval_sph", coords)
     print(ao_value.shape)

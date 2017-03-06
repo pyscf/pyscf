@@ -161,6 +161,8 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', verbose=None):
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
                              dtype=numpy.int8)
+    shls_slice = (0, mol.nbas)
+    ao_loc = mol.ao_loc_nr()
 
     # complex orbitals or density matrix
     if numpy.iscomplexobj(ao) or numpy.iscomplexobj(dm):
@@ -171,10 +173,10 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', verbose=None):
         dm_re, dm_im = re_im(dm)
         def dot_dm_ket(ket_re, ket_im):
             # DM * ket: e.g. ir denotes dm_im | ao_re >
-            c0_rr = _dot_ao_dm(cell, ket_re, dm_re, nao, ngrids, non0tab)
-            c0_ri = _dot_ao_dm(cell, ket_im, dm_re, nao, ngrids, non0tab)
-            c0_ir = _dot_ao_dm(cell, ket_re, dm_im, nao, ngrids, non0tab)
-            c0_ii = _dot_ao_dm(cell, ket_im, dm_im, nao, ngrids, non0tab)
+            c0_rr = _dot_ao_dm(cell, ket_re, dm_re, non0tab, shls_slice, ao_loc)
+            c0_ri = _dot_ao_dm(cell, ket_im, dm_re, non0tab, shls_slice, ao_loc)
+            c0_ir = _dot_ao_dm(cell, ket_re, dm_im, non0tab, shls_slice, ao_loc)
+            c0_ii = _dot_ao_dm(cell, ket_im, dm_im, non0tab, shls_slice, ao_loc)
             return c0_ri, c0_rr, c0_ir, c0_ii
         def dot_bra(bra_re, bra_im, c0):
             # bra * DM
@@ -269,6 +271,8 @@ def eval_mat(cell, ao, weight, rho, vxc,
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
                              dtype=numpy.int8)
+    shls_slice = (0, mol.nbas)
+    ao_loc = mol.ao_loc_nr()
 
     if numpy.iscomplexobj(ao):
         def dot(ao1, ao2):
@@ -277,10 +281,10 @@ def eval_mat(cell, ao, weight, rho, vxc,
             ao2_re = numpy.asarray(ao2.real, order='C')
             ao2_im = numpy.asarray(ao2.imag, order='C')
 
-            mat_re  = _dot_ao_ao(cell, ao1_re, ao2_re, nao, ngrids, non0tab)
-            mat_re += _dot_ao_ao(cell, ao1_im, ao2_im, nao, ngrids, non0tab)
-            mat_im  = _dot_ao_ao(cell, ao1_re, ao2_im, nao, ngrids, non0tab)
-            mat_im -= _dot_ao_ao(cell, ao1_im, ao2_re, nao, ngrids, non0tab)
+            mat_re  = _dot_ao_ao(cell, ao1_re, ao2_re, non0tab, shl_slice, ao_loc)
+            mat_re += _dot_ao_ao(cell, ao1_im, ao2_im, non0tab, shl_slice, ao_loc)
+            mat_im  = _dot_ao_ao(cell, ao1_re, ao2_im, non0tab, shl_slice, ao_loc)
+            mat_im -= _dot_ao_ao(cell, ao1_im, ao2_re, non0tab, shl_slice, ao_loc)
             return mat_re + 1j*mat_im
 
         if xctype == 'LDA':
