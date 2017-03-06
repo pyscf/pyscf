@@ -384,7 +384,7 @@ def make_rdm2(ci, nmo, nocc):
         rdm2[:,i,i,:] -= rdm1
         rdm2[i,:,:,i] -= rdm1
 
-    return rdm2
+    return rdm2.transpose(0,2,1,3)
 
 
 class CISD(lib.StreamObject):
