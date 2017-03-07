@@ -110,17 +110,12 @@ gto1[j1*ngrids+i+n] += buf[1*SIMDD+n] * coeff[j*np+k];
 gto2[j1*ngrids+i+n] += buf[2*SIMDD+n] * coeff[j*np+k];
 } } } } } } }
 }
-static int fexp_GTOval_ig_sph(double *eprim, double *coord, double *alpha, double *coeff,
-int l, int nprim, int nctr, int bgrids, double fac)
-{
-return GTOprim_exp(eprim, coord, alpha, coeff, l, nprim, nctr, bgrids, fac*0.5);
-}
 void GTOval_ig_sph(int ngrids, int *shls_slice, int *ao_loc,
 double *ao, double *coord, char *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {1, 3};
-GTOeval_sph_drv(shell_eval_GTOval_ig_sph, fexp_GTOval_ig_sph,
+GTOeval_sph_drv(shell_eval_GTOval_ig_sph, GTOprim_exp, 0.5,
 ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);
 }
@@ -283,17 +278,12 @@ gto7[j1*ngrids+i+n] += buf[7*SIMDD+n] * coeff[j*np+k];
 gto8[j1*ngrids+i+n] += buf[8*SIMDD+n] * coeff[j*np+k];
 } } } } } } }
 }
-static int fexp_GTOval_ipig_sph(double *eprim, double *coord, double *alpha, double *coeff,
-int l, int nprim, int nctr, int bgrids, double fac)
-{
-return GTOprim_exp(eprim, coord, alpha, coeff, l, nprim, nctr, bgrids, fac*0.5);
-}
 void GTOval_ipig_sph(int ngrids, int *shls_slice, int *ao_loc,
 double *ao, double *coord, char *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {1, 9};
-GTOeval_sph_drv(shell_eval_GTOval_ipig_sph, fexp_GTOval_ipig_sph,
+GTOeval_sph_drv(shell_eval_GTOval_ipig_sph, GTOprim_exp, 0.5,
 ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);
 }
@@ -404,17 +394,12 @@ gto1[j1*ngrids+i+n] += buf[1*SIMDD+n] * coeff[j*np+k];
 gto2[j1*ngrids+i+n] += buf[2*SIMDD+n] * coeff[j*np+k];
 } } } } } } }
 }
-static int fexp_GTOval_ig_cart(double *eprim, double *coord, double *alpha, double *coeff,
-int l, int nprim, int nctr, int bgrids, double fac)
-{
-return GTOprim_exp(eprim, coord, alpha, coeff, l, nprim, nctr, bgrids, fac*0.5);
-}
 void GTOval_ig_cart(int ngrids, int *shls_slice, int *ao_loc,
 double *ao, double *coord, char *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {1, 3};
-GTOeval_cart_drv(shell_eval_GTOval_ig_cart, fexp_GTOval_ig_cart,
+GTOeval_cart_drv(shell_eval_GTOval_ig_cart, GTOprim_exp, 0.5,
 ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);
 }
@@ -577,17 +562,12 @@ gto7[j1*ngrids+i+n] += buf[7*SIMDD+n] * coeff[j*np+k];
 gto8[j1*ngrids+i+n] += buf[8*SIMDD+n] * coeff[j*np+k];
 } } } } } } }
 }
-static int fexp_GTOval_ipig_cart(double *eprim, double *coord, double *alpha, double *coeff,
-int l, int nprim, int nctr, int bgrids, double fac)
-{
-return GTOprim_exp(eprim, coord, alpha, coeff, l, nprim, nctr, bgrids, fac*0.5);
-}
 void GTOval_ipig_cart(int ngrids, int *shls_slice, int *ao_loc,
 double *ao, double *coord, char *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {1, 9};
-GTOeval_cart_drv(shell_eval_GTOval_ipig_cart, fexp_GTOval_ipig_cart,
+GTOeval_cart_drv(shell_eval_GTOval_ipig_cart, GTOprim_exp, 0.5,
 ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);
 }
@@ -699,17 +679,12 @@ gto2[j1*ngrids+i+n] += buf[2*SIMDD+n] * coeff[j*np+k];
 gto3[j1*ngrids+i+n] += buf[3*SIMDD+n] * coeff[j*np+k];
 } } } } } } }
 }
-static int fexp_GTOval_sp_spinor(double *eprim, double *coord, double *alpha, double *coeff,
-int l, int nprim, int nctr, int bgrids, double fac)
-{
-return GTOprim_exp(eprim, coord, alpha, coeff, l, nprim, nctr, bgrids, fac*1.0);
-}
 void GTOval_sp_spinor(int ngrids, int *shls_slice, int *ao_loc,
 double complex *ao, double *coord, char *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {4, 1};
-GTOeval_spinor_drv(shell_eval_GTOval_sp_spinor, fexp_GTOval_sp_spinor, CINTc2s_ket_spinor_si1,
+GTOeval_spinor_drv(shell_eval_GTOval_sp_spinor, GTOprim_exp, CINTc2s_ket_spinor_si1, 1.0,
 ngrids, param, shls_slice, ao_loc, ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 /*  NABLA SIGMA DOT P |GTO> */
@@ -882,16 +857,11 @@ gto10[j1*ngrids+i+n] += buf[10*SIMDD+n] * coeff[j*np+k];
 gto11[j1*ngrids+i+n] += buf[11*SIMDD+n] * coeff[j*np+k];
 } } } } } } }
 }
-static int fexp_GTOval_ipsp_spinor(double *eprim, double *coord, double *alpha, double *coeff,
-int l, int nprim, int nctr, int bgrids, double fac)
-{
-return GTOprim_exp(eprim, coord, alpha, coeff, l, nprim, nctr, bgrids, fac*1.0);
-}
 void GTOval_ipsp_spinor(int ngrids, int *shls_slice, int *ao_loc,
 double complex *ao, double *coord, char *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {4, 3};
-GTOeval_spinor_drv(shell_eval_GTOval_ipsp_spinor, fexp_GTOval_ipsp_spinor, CINTc2s_ket_spinor_si1,
+GTOeval_spinor_drv(shell_eval_GTOval_ipsp_spinor, GTOprim_exp, CINTc2s_ket_spinor_si1, 1.0,
 ngrids, param, shls_slice, ao_loc, ao, coord, non0table, atm, natm, bas, nbas, env);
 }

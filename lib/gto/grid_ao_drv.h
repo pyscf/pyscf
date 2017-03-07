@@ -44,17 +44,17 @@ int GTOcontract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
 int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
                      int l, int nprim, int nctr, int ngrids, double fac);
 
-void GTOeval_sph_drv(void (*feval)(), int (*fexp)(),
+void GTOeval_sph_drv(void (*feval)(), int (*fexp)(), double fac,
                      int ngrids, int param[], int *shls_slice, int *ao_loc,
                      double *ao, double *coord, char *non0table,
                      int *atm, int natm, int *bas, int nbas, double *env);
 
-void GTOeval_cart_drv(void (*feval)(), int (*fexp)(),
+void GTOeval_cart_drv(void (*feval)(), int (*fexp)(), double fac,
                       int ngrids, int param[], int *shls_slice, int *ao_loc,
                       double *ao, double *coord, char *non0table,
                       int *atm, int natm, int *bas, int nbas, double *env);
 
-void GTOeval_spinor_drv(void (*feval)(), int (*fexp)(), void (*c2s)(),
+void GTOeval_spinor_drv(void (*feval)(), int (*fexp)(), void (*c2s)(), double fac,
                         int ngrids, int param[], int *shls_slice, int *ao_loc,
                         double complex *ao, double *coord, char *non0table,
                         int *atm, int natm, int *bas, int nbas, double *env);

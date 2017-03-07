@@ -536,7 +536,7 @@ void GTOval_cart(int ngrids, int *shls_slice, int *ao_loc,
                  int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 1};
-        GTOeval_cart_drv(GTOshell_eval_grid_cart, GTOcontract_exp0,
+        GTOeval_cart_drv(GTOshell_eval_grid_cart, GTOcontract_exp0, 1,
                          ngrids, param, shls_slice, ao_loc,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
@@ -545,7 +545,7 @@ void GTOval_sph(int ngrids, int *shls_slice, int *ao_loc,
                 int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 1};
-        GTOeval_sph_drv(GTOshell_eval_grid_cart, GTOcontract_exp0,
+        GTOeval_sph_drv(GTOshell_eval_grid_cart, GTOcontract_exp0, 1,
                         ngrids, param, shls_slice, ao_loc,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
@@ -555,7 +555,7 @@ void GTOval_spinor(int ngrids, int *shls_slice, int *ao_loc,
 {
         int param[] = {1, 1};
         GTOeval_spinor_drv(GTOshell_eval_grid_cart, GTOcontract_exp0,
-                           CINTc2s_ket_spinor_sf1,
+                           CINTc2s_ket_spinor_sf1, 1,
                            ngrids, param, shls_slice, ao_loc,
                            ao, coord, non0table, atm, natm, bas, nbas, env);
 }
@@ -565,7 +565,7 @@ void GTOval_ip_cart(int ngrids, int *shls_slice, int *ao_loc,
                     int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 3};
-        GTOeval_cart_drv(GTOshell_eval_grid_ip_cart, GTOcontract_exp1,
+        GTOeval_cart_drv(GTOshell_eval_grid_ip_cart, GTOcontract_exp1, 1,
                          ngrids, param, shls_slice, ao_loc,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
@@ -574,7 +574,7 @@ void GTOval_ip_sph(int ngrids, int *shls_slice, int *ao_loc,
                    int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 3};
-        GTOeval_sph_drv(GTOshell_eval_grid_ip_cart, GTOcontract_exp1,
+        GTOeval_sph_drv(GTOshell_eval_grid_ip_cart, GTOcontract_exp1, 1,
                         ngrids, param, shls_slice, ao_loc,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
@@ -584,7 +584,7 @@ void GTOval_ip_spinor(int ngrids, int *shls_slice, int *ao_loc,
 {
         int param[] = {1, 3};
         GTOeval_spinor_drv(GTOshell_eval_grid_ip_cart, GTOcontract_exp1,
-                           CINTc2s_ket_spinor_sf1,
+                           CINTc2s_ket_spinor_sf1, 1,
                            ngrids, param, shls_slice, ao_loc,
                            ao, coord, non0table, atm, natm, bas, nbas, env);
 }

@@ -40,8 +40,8 @@ def eval_gto(mol, eval_name, coords,
                              dtype=numpy.int8)
 
     drv = getattr(libcgto, eval_name)
-    drv((ctypes.c_int*2)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p),
-        ctypes.c_int(ngrids),
+    drv(ctypes.c_int(ngrids),
+        (ctypes.c_int*2)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p),
         ao.ctypes.data_as(ctypes.c_void_p),
         coords.ctypes.data_as(ctypes.c_void_p),
         non0tab.ctypes.data_as(ctypes.c_void_p),
