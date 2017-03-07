@@ -283,28 +283,28 @@ int l, int nprim, int nctr, int bgrids, double fac)
 return GTOprim_exp(eprim, coord, alpha, coeff, l, nprim, nctr, bgrids, fac*~a);
 }~%" intname (factor-of expr))
     (if (eql sp 'spinor)
-      (format fout "void ~a(int *shls_slice, int *ao_loc, int ngrids,
+      (format fout "void ~a(int ngrids, int *shls_slice, int *ao_loc,
 double complex *ao, double *coord, char *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {~%" intname)
-      (format fout "void ~a(int *shls_slice, int *ao_loc, int ngrids,
+      (format fout "void ~a(int ngrids, int *shls_slice, int *ao_loc,
 double *ao, double *coord, char *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {~%" intname))
     (format fout "int param[] = {~d, ~d};~%" e1comps tensors)
     (cond ((eql sp 'spinor)
            (format fout "GTOeval_spinor_drv(shell_eval_~a, fexp_~a, CINTc2s_~aket_spinor_~a,
-param, shls_slice, ao_loc, ngrids, ao, coord, non0table, atm, natm, bas, nbas, env);~%}~%"
+ngrids, param, shls_slice, ao_loc, ao, coord, non0table, atm, natm, bas, nbas, env);~%}~%"
                    intname intname
                    (if (eql ts1 'ts) "" "i")
                    (if (eql sf1 'sf) "sf1" "si1")))
           ((eql sp 'spheric)
            (format fout "GTOeval_sph_drv(shell_eval_~a, fexp_~a,
-param, shls_slice, ao_loc, ngrids, ao, coord, non0table,
+ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);~%}~%" intname intname))
           ((eql sp 'cart)
            (format fout "GTOeval_cart_drv(shell_eval_~a, fexp_~a,
-param, shls_slice, ao_loc, ngrids, ao, coord, non0table,
+ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);~%}~%" intname intname)))))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

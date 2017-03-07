@@ -98,16 +98,15 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
                for k in range(nkpts)]
     out_ptrs = (ctypes.c_void_p*nkpts)(
             *[x.ctypes.data_as(ctypes.c_void_p) for x in ao_kpts])
-    coords = numpy.asarray(coords, order='C')
+    coords = numpy.asarray(coords, order='F')
     Ls = cell.get_lattice_Ls()
     expLk = numpy.exp(1j * numpy.asarray(numpy.dot(Ls, kpts.T), order='C'))
 
     drv = getattr(libpbc, 'PBCval_sph_deriv%d' % deriv)
-    drv(ctypes.c_int(ngrids), ctypes.c_int(BLKSIZE),
+    drv(ctypes.c_int(ngrids),
+        (ctypes.c_int*2)(0, cell.nbas), ao_loc.ctypes.data_as(ctypes.c_void_p),
         Ls.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(Ls)),
         expLk.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nkpts),
-        (ctypes.c_int*2)(0, cell.nbas),
-        ao_loc.ctypes.data_as(ctypes.c_void_p),
         out_ptrs, coords.ctypes.data_as(ctypes.c_void_p),
         non0tab.ctypes.data_as(ctypes.c_void_p),
         cell._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
@@ -115,18 +114,12 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
         cell._env.ctypes.data_as(ctypes.c_void_p))
 
     for k, kpt in enumerate(kpts):
-        mat = ao_kpts[k].transpose(2,0,1)
-        if comp == 1:
-            aos = lib.transpose(mat[0].T)
-        else:
-            aos = numpy.empty((comp,ngrids,nao), dtype=numpy.complex128)
-            for i in range(comp):
-                lib.transpose(mat[i].T, out=aos[i])
-
         if abs(kpt).sum() < 1e-9:  # gamma point
-            aos = aos.real.copy()
+            ao_kpts[k] = ao_kpts[k].real.copy(order='F')
 
-        ao_kpts[k] = aos
+        ao_kpts[k] = ao_kpts[k].transpose(2,0,1)
+        if comp == 1:
+            ao_kpts[k] = ao_kpts[k][0]
     return ao_kpts
 
 
@@ -152,7 +145,6 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', verbose=None):
 
     '''
 
-    assert(ao.flags.c_contiguous)
     if xctype == 'LDA':
         ngrids, nao = ao.shape
     else:
@@ -161,8 +153,8 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', verbose=None):
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
                              dtype=numpy.int8)
-    shls_slice = (0, mol.nbas)
-    ao_loc = mol.ao_loc_nr()
+    shls_slice = (0, cell.nbas)
+    ao_loc = cell.ao_loc_nr()
 
     # complex orbitals or density matrix
     if numpy.iscomplexobj(ao) or numpy.iscomplexobj(dm):
@@ -271,8 +263,8 @@ def eval_mat(cell, ao, weight, rho, vxc,
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
                              dtype=numpy.int8)
-    shls_slice = (0, mol.nbas)
-    ao_loc = mol.ao_loc_nr()
+    shls_slice = (0, cell.nbas)
+    ao_loc = cell.ao_loc_nr()
 
     if numpy.iscomplexobj(ao):
         def dot(ao1, ao2):
@@ -281,10 +273,10 @@ def eval_mat(cell, ao, weight, rho, vxc,
             ao2_re = numpy.asarray(ao2.real, order='C')
             ao2_im = numpy.asarray(ao2.imag, order='C')
 
-            mat_re  = _dot_ao_ao(cell, ao1_re, ao2_re, non0tab, shl_slice, ao_loc)
-            mat_re += _dot_ao_ao(cell, ao1_im, ao2_im, non0tab, shl_slice, ao_loc)
-            mat_im  = _dot_ao_ao(cell, ao1_re, ao2_im, non0tab, shl_slice, ao_loc)
-            mat_im -= _dot_ao_ao(cell, ao1_im, ao2_re, non0tab, shl_slice, ao_loc)
+            mat_re  = _dot_ao_ao(cell, ao1_re, ao2_re, non0tab, shls_slice, ao_loc)
+            mat_re += _dot_ao_ao(cell, ao1_im, ao2_im, non0tab, shls_slice, ao_loc)
+            mat_im  = _dot_ao_ao(cell, ao1_re, ao2_im, non0tab, shls_slice, ao_loc)
+            mat_im -= _dot_ao_ao(cell, ao1_im, ao2_re, non0tab, shls_slice, ao_loc)
             return mat_re + 1j*mat_im
 
         if xctype == 'LDA':

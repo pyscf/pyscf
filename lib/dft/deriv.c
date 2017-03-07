@@ -161,32 +161,32 @@ void GTOshell_eval_grid_cart_deriv2(double *cgto, double *ri, double *exps,
                 }
         }
 }
-void GTOval_cart_deriv2(int *shls_slice, int *ao_loc, int ngrids,
+void GTOval_cart_deriv2(int ngrids, int *shls_slice, int *ao_loc,
                         double *ao, double *coord, char *non0table,
                         int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 10};
         GTOeval_cart_drv(GTOshell_eval_grid_cart_deriv2, GTOprim_exp,
-                         param, shls_slice, ao_loc, ngrids,
+                         ngrids, param, shls_slice, ao_loc,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
-void GTOval_sph_deriv2(int *shls_slice, int *ao_loc, int ngrids,
+void GTOval_sph_deriv2(int ngrids, int *shls_slice, int *ao_loc,
                        double *ao, double *coord, char *non0table,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 10};
         GTOeval_sph_drv(GTOshell_eval_grid_cart_deriv2, GTOprim_exp,
-                        param, shls_slice, ao_loc, ngrids,
+                        ngrids, param, shls_slice, ao_loc,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
-void GTOval_spinor_deriv2(int *shls_slice, int *ao_loc, int ngrids,
+void GTOval_spinor_deriv2(int ngrids, int *shls_slice, int *ao_loc,
                           double complex *ao, double *coord, char *non0table,
                           int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 10};
         GTOeval_spinor_drv(GTOshell_eval_grid_cart_deriv2, GTOprim_exp,
                            CINTc2s_ket_spinor_sf1,
-                           param, shls_slice, ao_loc, ngrids,
+                           ngrids, param, shls_slice, ao_loc,
                            ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
@@ -386,32 +386,32 @@ void GTOshell_eval_grid_cart_deriv3(double *cgto, double *ri, double *exps,
                 }
         }
 }
-void GTOval_cart_deriv3(int *shls_slice, int *ao_loc, int ngrids,
+void GTOval_cart_deriv3(int ngrids, int *shls_slice, int *ao_loc,
                         double *ao, double *coord, char *non0table,
                         int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 20};
         GTOeval_cart_drv(GTOshell_eval_grid_cart_deriv3, GTOprim_exp,
-                         param, shls_slice, ao_loc, ngrids,
+                         ngrids, param, shls_slice, ao_loc,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
-void GTOval_sph_deriv3(int *shls_slice, int *ao_loc, int ngrids,
+void GTOval_sph_deriv3(int ngrids, int *shls_slice, int *ao_loc,
                        double *ao, double *coord, char *non0table,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 20};
         GTOeval_sph_drv(GTOshell_eval_grid_cart_deriv3, GTOprim_exp,
-                        param, shls_slice, ao_loc, ngrids,
+                        ngrids, param, shls_slice, ao_loc,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
-void GTOval_spinor_deriv3(int *shls_slice, int *ao_loc, int ngrids,
+void GTOval_spinor_deriv3(int ngrids, int *shls_slice, int *ao_loc,
                           double complex *ao, double *coord, char *non0table,
                           int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 20};
         GTOeval_spinor_drv(GTOshell_eval_grid_cart_deriv3, GTOprim_exp,
                            CINTc2s_ket_spinor_sf1,
-                           param, shls_slice, ao_loc, ngrids,
+                           ngrids, param, shls_slice, ao_loc,
                            ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
@@ -691,32 +691,32 @@ void GTOshell_eval_grid_cart_deriv4(double *cgto, double *ri, double *exps,
                 }
         }
 }
-void GTOval_cart_deriv4(int *shls_slice, int *ao_loc, int ngrids,
+void GTOval_cart_deriv4(int ngrids, int *shls_slice, int *ao_loc,
                         double *ao, double *coord, char *non0table,
                         int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 35};
         GTOeval_cart_drv(GTOshell_eval_grid_cart_deriv4, GTOprim_exp,
-                         param, shls_slice, ao_loc, ngrids,
+                         ngrids, param, shls_slice, ao_loc,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
-void GTOval_sph_deriv4(int *shls_slice, int *ao_loc, int ngrids,
+void GTOval_sph_deriv4(int ngrids, int *shls_slice, int *ao_loc,
                        double *ao, double *coord, char *non0table,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 35};
         GTOeval_sph_drv(GTOshell_eval_grid_cart_deriv4, GTOprim_exp,
-                        param, shls_slice, ao_loc, ngrids,
+                        ngrids, param, shls_slice, ao_loc,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
-void GTOval_spinor_deriv4(int *shls_slice, int *ao_loc, int ngrids,
+void GTOval_spinor_deriv4(int ngrids, int *shls_slice, int *ao_loc,
                           double complex *ao, double *coord, char *non0table,
                           int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 35};
         GTOeval_spinor_drv(GTOshell_eval_grid_cart_deriv4, GTOprim_exp,
                            CINTc2s_ket_spinor_sf1,
-                           param, shls_slice, ao_loc, ngrids,
+                           ngrids, param, shls_slice, ao_loc,
                            ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
@@ -1018,60 +1018,60 @@ void GTOshell_eval_grid_cart_deriv1(double *gto, double *ri, double *exps,
 
 int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
                      int l, int nprim, int nctr, int ngrids, double fac);
-void GTOval_cart(int *shls_slice, int *ao_loc, int ngrids,
+void GTOval_cart(int ngrids, int *shls_slice, int *ao_loc,
                  double *ao, double *coord, char *non0table,
                  int *atm, int natm, int *bas, int nbas, double *env);
-void GTOval_sph(int *shls_slice, int *ao_loc, int ngrids,
+void GTOval_sph(int ngrids, int *shls_slice, int *ao_loc,
                 double *ao, double *coord, char *non0table,
                 int *atm, int natm, int *bas, int nbas, double *env);
-void GTOval_cart_deriv0(int *shls_slice, int *ao_loc, int ngrids,
+void GTOval_cart_deriv0(int ngrids, int *shls_slice, int *ao_loc,
                         double *ao, double *coord, char *non0table,
                         int *atm, int natm, int *bas, int nbas, double *env)
 {
-        GTOval_cart(shls_slice, ao_loc, ngrids,
+        GTOval_cart(ngrids, shls_slice, ao_loc,
                     ao, coord, non0table, atm, natm, bas, nbas, env);
 }
-void GTOval_sph_deriv0(int *shls_slice, int *ao_loc, int ngrids,
+void GTOval_sph_deriv0(int ngrids, int *shls_slice, int *ao_loc,
                        double *ao, double *coord, char *non0table,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
-        GTOval_sph(shls_slice, ao_loc, ngrids,
+        GTOval_sph(ngrids, shls_slice, ao_loc,
                    ao, coord, non0table, atm, natm, bas, nbas, env);
 }
-void GTOval_spinor_deriv0(int *shls_slice, int *ao_loc, int ngrids,
+void GTOval_spinor_deriv0(int ngrids, int *shls_slice, int *ao_loc,
                           double complex *ao, double *coord, char *non0table,
                           int *atm, int natm, int *bas, int nbas, double *env)
 {
-        GTOval_spinor(shls_slice, ao_loc, ngrids,
+        GTOval_spinor(ngrids, shls_slice, ao_loc,
                       ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
-void GTOval_cart_deriv1(int *shls_slice, int *ao_loc, int ngrids,
+void GTOval_cart_deriv1(int ngrids, int *shls_slice, int *ao_loc,
                         double *ao, double *coord, char *non0table,
                         int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 4};
         GTOeval_cart_drv(GTOshell_eval_grid_cart_deriv1, GTOcontract_exp1,
-                         param, shls_slice, ao_loc, ngrids,
+                         ngrids, param, shls_slice, ao_loc,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
-void GTOval_sph_deriv1(int *shls_slice, int *ao_loc, int ngrids,
+void GTOval_sph_deriv1(int ngrids, int *shls_slice, int *ao_loc,
                        double *ao, double *coord, char *non0table,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 4};
         GTOeval_sph_drv(GTOshell_eval_grid_cart_deriv1, GTOcontract_exp1,
-                        param, shls_slice, ao_loc, ngrids,
+                        ngrids, param, shls_slice, ao_loc,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
-void GTOval_spinor_deriv1(int *shls_slice, int *ao_loc, int ngrids,
+void GTOval_spinor_deriv1(int ngrids, int *shls_slice, int *ao_loc,
                           double complex *ao, double *coord, char *non0table,
                           int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 4};
         GTOeval_spinor_drv(GTOshell_eval_grid_cart_deriv1, GTOcontract_exp1,
                            CINTc2s_ket_spinor_sf1,
-                           param, shls_slice, ao_loc, ngrids,
+                           ngrids, param, shls_slice, ao_loc,
                            ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 

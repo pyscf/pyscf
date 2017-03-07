@@ -106,7 +106,7 @@ def make_mask(mol, coords, relativity=0, shls_slice=None, verbose=None):
         2D bool array of shape (N,nbas), where N is the number of grids, nbas
         is the number of shells
     '''
-    coords = numpy.asarray(coords, order='C')
+    coords = numpy.asarray(coords, order='F')
     natm = ctypes.c_int(mol._atm.shape[0])
     nbas = ctypes.c_int(mol.nbas)
     ngrids = len(coords)
@@ -118,7 +118,7 @@ def make_mask(mol, coords, relativity=0, shls_slice=None, verbose=None):
                           dtype=numpy.int8)
     libdft.VXCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
                            coords.ctypes.data_as(ctypes.c_void_p),
-                           ctypes.c_int(ngrids), ctypes.c_int(BLKSIZE),
+                           ctypes.c_int(ngrids),
                            mol._atm.ctypes.data_as(ctypes.c_void_p), natm,
                            mol._bas.ctypes.data_as(ctypes.c_void_p), nbas,
                            mol._env.ctypes.data_as(ctypes.c_void_p))

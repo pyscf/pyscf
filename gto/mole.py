@@ -2004,7 +2004,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def atom_coords(self):
         '''np.asarray([mol.atom_coords(i) for i in range(mol.natm)])'''
         ptr = self._atm[:,PTR_COORD]
-        return self._env[numpy.vstack((ptr,ptr+1,ptr+2))].T
+        return self._env[numpy.vstack((ptr,ptr+1,ptr+2)).T]
 
     def atom_nshells(self, atm_id):
         r'''Number of basis/shells of the given atom
