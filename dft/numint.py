@@ -81,13 +81,13 @@ Argument "isgga" is replaced by argument "deriv", to support high order AO deriv
     return mol.eval_gto(feval, coords, comp, shls_slice, non0tab, out=out)
 
 def make_mask(mol, coords, relativity=0, shls_slice=None, verbose=None):
-    '''Mask to indicate whether a shell is zero on particular grid
+    '''Mask to indicate whether a shell is zero on grid
 
     Args:
         mol : an instance of :class:`Mole`
 
         coords : 2D array, shape (N,3)
-            The coordinates of the grids.
+            The coordinates of grids.
 
     Kwargs:
         relativity : bool
@@ -96,15 +96,12 @@ def make_mask(mol, coords, relativity=0, shls_slice=None, verbose=None):
             (shl_start, shl_end).
             If given, only part of AOs (shl_start <= shell_id < shl_end) are
             evaluated.  By default, all shells defined in mol will be evaluated.
-        non0tab : 2D bool array
-            mask array to indicate whether the AO values are zero.  The mask
-            array can be obtained by calling :func:`make_mask`
         verbose : int or object of :class:`Logger`
             No effects.
 
     Returns:
-        2D bool array of shape (N,nbas), where N is the number of grids, nbas
-        is the number of shells
+        2D mask array of shape (N,nbas), where N is the number of grids, nbas
+        is the number of shells.
     '''
     coords = numpy.asarray(coords, order='F')
     natm = ctypes.c_int(mol._atm.shape[0])
@@ -115,7 +112,7 @@ def make_mask(mol, coords, relativity=0, shls_slice=None, verbose=None):
     assert(shls_slice == (0, mol.nbas))
 
     non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, mol.nbas),
-                          dtype=numpy.int8)
+                          dtype=numpy.uint8)
     libdft.VXCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
                            coords.ctypes.data_as(ctypes.c_void_p),
                            ctypes.c_int(ngrids),
@@ -172,7 +169,7 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
 
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                             dtype=numpy.int8)
+                             dtype=numpy.uint8)
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
     if xctype == 'LDA':
@@ -247,7 +244,7 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
 
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                             dtype=numpy.int8)
+                             dtype=numpy.uint8)
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
     pos = mo_occ > OCCDROP
@@ -371,7 +368,7 @@ def eval_mat(mol, ao, weight, rho, vxc,
 
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                             dtype=numpy.int8)
+                             dtype=numpy.uint8)
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
     if xctype == 'LDA':
@@ -533,7 +530,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     ngrids = len(grids.weights)
     if ni.non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                             dtype=numpy.int8)
+                             dtype=numpy.uint8)
     else:
         non0tab = ni.non0tab
     shls_slice = (0, mol.nbas)
@@ -654,7 +651,7 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     ngrids = len(grids.weights)
     if ni.non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                             dtype=numpy.int8)
+                             dtype=numpy.uint8)
     else:
         non0tab = ni.non0tab
     shls_slice = (0, mol.nbas)
@@ -827,7 +824,7 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=1,
     ngrids = len(grids.weights)
     if ni.non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                             dtype=numpy.int8)
+                             dtype=numpy.uint8)
     else:
         non0tab = ni.non0tab
     shls_slice = (0, mol.nbas)
@@ -958,7 +955,7 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=1,
     ngrids = len(grids.weights)
     if ni.non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                             dtype=numpy.int8)
+                             dtype=numpy.uint8)
     else:
         non0tab = ni.non0tab
     shls_slice = (0, mol.nbas)
@@ -1242,7 +1239,7 @@ class _NumInt(object):
             blksize = max(blksize, BLKSIZE)
         if non0tab is None:
             non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                                 dtype=numpy.int8)
+                                 dtype=numpy.uint8)
         if buf is None:
             buf = numpy.empty((comp,blksize,nao))
         for ip0 in range(0, ngrids, blksize):

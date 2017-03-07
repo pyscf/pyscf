@@ -88,8 +88,9 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
     ngrids = len(coords)
 
     if non0tab is None:
-        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas),
-                             dtype=numpy.int8)
+        non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas),
+                              dtype=numpy.uint8)
+        non0tab[:] = 0xff
 
     ao_loc = cell.ao_loc_nr()
     nao = ao_loc[-1]
@@ -100,6 +101,7 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
             *[x.ctypes.data_as(ctypes.c_void_p) for x in ao_kpts])
     coords = numpy.asarray(coords, order='F')
     Ls = cell.get_lattice_Ls()
+    Ls = Ls[numpy.argsort(lib.norm(Ls, axis=1))]
     expLk = numpy.exp(1j * numpy.asarray(numpy.dot(Ls, kpts.T), order='C'))
 
     drv = getattr(libpbc, 'PBCval_sph_deriv%d' % deriv)
@@ -121,6 +123,36 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
         if comp == 1:
             ao_kpts[k] = ao_kpts[k][0]
     return ao_kpts
+
+def make_mask(cell, coords, relativity=0, shls_slice=None, verbose=None):
+    '''Mask to indicate whether a shell is zero on grid.
+    The resultant mask array is an extension to the mask array used in
+    molecular code (see also pyscf.dft.numint.make_mask function).
+    For given shell ID and block ID, the value of the extended mask array
+    means the number of images in Ls that does not vanish.
+    '''
+    coords = numpy.asarray(coords, order='F')
+    natm = ctypes.c_int(cell._atm.shape[0])
+    nbas = ctypes.c_int(cell.nbas)
+    ngrids = len(coords)
+    if shls_slice is None:
+        shls_slice = (0, cell.nbas)
+    assert(shls_slice == (0, cell.nbas))
+
+    Ls = cell.get_lattice_Ls()
+    Ls = Ls[numpy.argsort(lib.norm(Ls, axis=1))]
+
+    non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas),
+                          dtype=numpy.uint8)
+    libpbc.PBCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
+                           coords.ctypes.data_as(ctypes.c_void_p),
+                           ctypes.c_int(ngrids),
+                           Ls.ctypes.data_as(ctypes.c_void_p),
+                           ctypes.c_int(len(Ls)),
+                           cell._atm.ctypes.data_as(ctypes.c_void_p), natm,
+                           cell._bas.ctypes.data_as(ctypes.c_void_p), nbas,
+                           cell._env.ctypes.data_as(ctypes.c_void_p))
+    return non0tab
 
 
 def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', verbose=None):
@@ -151,8 +183,9 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', verbose=None):
         ngrids, nao = ao[0].shape
 
     if non0tab is None:
-        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
-                             dtype=numpy.int8)
+        non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas),
+                              dtype=numpy.uint8)
+        non0tab[:] = 0xff
     shls_slice = (0, cell.nbas)
     ao_loc = cell.ao_loc_nr()
 
@@ -160,8 +193,8 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', verbose=None):
     if numpy.iscomplexobj(ao) or numpy.iscomplexobj(dm):
 
         def re_im(a):
-            return (numpy.asarray(a.real, order='C'),
-                    numpy.asarray(a.imag, order='C'))
+            return (numpy.asarray(a.real, order='F'),
+                    numpy.asarray(a.imag, order='F'))
         dm_re, dm_im = re_im(dm)
         def dot_dm_ket(ket_re, ket_im):
             # DM * ket: e.g. ir denotes dm_im | ao_re >
@@ -261,17 +294,18 @@ def eval_mat(cell, ao, weight, rho, vxc,
         ngrids, nao = ao[0].shape
 
     if non0tab is None:
-        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
-                             dtype=numpy.int8)
+        non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas),
+                              dtype=numpy.uint8)
+        non0tab[:] = 0xff
     shls_slice = (0, cell.nbas)
     ao_loc = cell.ao_loc_nr()
 
     if numpy.iscomplexobj(ao):
         def dot(ao1, ao2):
-            ao1_re = numpy.asarray(ao1.real, order='C')
-            ao1_im = numpy.asarray(ao1.imag, order='C')
-            ao2_re = numpy.asarray(ao2.real, order='C')
-            ao2_im = numpy.asarray(ao2.imag, order='C')
+            ao1_re = numpy.asarray(ao1.real, order='F')
+            ao1_im = numpy.asarray(ao1.imag, order='F')
+            ao2_re = numpy.asarray(ao2.real, order='F')
+            ao2_im = numpy.asarray(ao2.imag, order='F')
 
             mat_re  = _dot_ao_ao(cell, ao1_re, ao2_re, non0tab, shls_slice, ao_loc)
             mat_re += _dot_ao_ao(cell, ao1_im, ao2_im, non0tab, shls_slice, ao_loc)
@@ -605,6 +639,11 @@ class _NumInt(dft.numint._NumInt):
         return eval_ao(cell, coords, kpt, deriv, relativity, shl_slice,
                        non0tab, out, verbose)
 
+    @lib.with_doc(make_mask.__doc__)
+    def make_mask(self, cell, coords, relativity=0, shls_slice=None,
+                  verbose=None):
+        return make_mask(cell, coords, relativity, shls_slice, verbose)
+
     def eval_rho(self, cell, ao, dm, non0tab=None, xctype='LDA', verbose=None):
         return eval_rho(cell, ao, dm, non0tab, xctype, verbose)
 
@@ -640,8 +679,7 @@ class _NumInt(dft.numint._NumInt):
     def eval_mat(self, cell, ao, weight, rho, vxc,
                  non0tab=None, xctype='LDA', spin=0, verbose=None):
         # use local function for complex eval_mat
-        return eval_mat(cell, ao, weight, rho, vxc,
-                        non0tab, xctype, spin, verbose)
+        return eval_mat(cell, ao, weight, rho, vxc, non0tab, xctype, spin, verbose)
 
     def block_loop(self, cell, grids, nao, deriv=0, kpt=numpy.zeros(3),
                    kpt_band=None, max_memory=2000, non0tab=None, blksize=None):
@@ -654,8 +692,9 @@ class _NumInt(dft.numint._NumInt):
             blksize = min(int(max_memory*1e6/(comp*2*nao*16*BLKSIZE))*BLKSIZE, ngrids)
             blksize = max(blksize, BLKSIZE)
         if non0tab is None:
-            non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
-                                 dtype=numpy.int8)
+            if self.non0tab is None:
+                self.non0tab = self.make_mask(cell, grids.coords)
+            non0tab = self.non0tab
         kpt = numpy.reshape(kpt, 3)
         if kpt_band is None:
             kpt1 = kpt2 = kpt
@@ -663,54 +702,18 @@ class _NumInt(dft.numint._NumInt):
             kpt1 = kpt_band
             kpt2 = kpt
 
-        if (self.cell is None or id(cell) != id(self.cell) or
-            self._deriv < deriv or
-            abs(self._kpt - kpt).sum() > 1e-9 or
-            self._coords.shape != grids.coords.shape or
-            abs(self._coords[::64] - grids.coords[::64]).sum() > 1e-7):
-            self.cache_ao(cell, kpt, deriv, grids.coords, nao, blksize)
-
-        with h5py.File(self._ao.name, 'r') as f:
-            for p0, p1 in prange(0, ngrids, blksize):
-                coords = grids.coords[p0:p1]
-                weight = grids.weights[p0:p1]
-                non0 = non0tab[p0//BLKSIZE:]
-                #:ao_k2 = self.eval_ao(cell, coords, kpt2, deriv=deriv)
-                if comp == 1:
-                    if self._deriv == 0:
-                        ao_k2 = f['ao'][p0:p1]
-                    else:
-                        ao_k2 = f['ao'][0,p0:p1]
-                else:
-                    ao_k2 = f['ao'][:comp,p0:p1]
-                if kpt_band is None or abs(kpt1-kpt2).sum() < 1e-9:
-                    ao_k1 = ao_k2
-                else:
-                    ao_k1 = self.eval_ao(cell, coords, kpt1, deriv=deriv)
-                yield ao_k1, ao_k2, non0, weight, coords
-                ao_k1 = ao_k2 = None
-
-    def cache_ao(self, cell, kpt, deriv, coords, nao, blksize=BLKSIZE):
-        self.cell = cell
-        self._kpt = kpt
-        self._deriv = deriv
-        self._coords = coords
-        comp = (deriv+1)*(deriv+2)*(deriv+3)//6
-        ngrids = coords.shape[0]
-        if comp == 1:
-            shape = (ngrids, nao)
-        else:
-            shape = (comp, ngrids, nao)
-        with h5py.File(self._ao.name, 'w') as f:
-            if abs(kpt).sum() < 1e-9:  # gamma point
-                f.create_dataset('ao', shape, 'f8')
+        for ip0 in range(0, ngrids, blksize):
+            ip1 = min(ngrids, ip0+blksize)
+            coords = grids.coords[ip0:ip1]
+            weight = grids.weights[ip0:ip1]
+            non0 = non0tab[ip0//BLKSIZE:]
+            ao_k2 = self.eval_ao(cell, coords, kpt, deriv=deriv, non0tab=non0)
+            if kpt_band is None or abs(kpt1-kpt2).sum() < 1e-9:
+                ao_k1 = ao_k2
             else:
-                f.create_dataset('ao', shape, 'c16')
-            for p0, p1 in prange(0, ngrids, blksize):
-                if comp == 1:
-                    f['ao'][p0:p1] = self.eval_ao(cell, coords[p0:p1], kpt, deriv=deriv)
-                else:
-                    f['ao'][:,p0:p1] = self.eval_ao(cell, coords[p0:p1], kpt, deriv=deriv)
+                ao_k1 = self.eval_ao(cell, coords, kpt1, deriv=deriv)
+            yield ao_k1, ao_k2, non0, weight, coords
+            ao_k1 = ao_k2 = None
 
     def _gen_rho_evaluator(self, cell, dms, hermi=0):
         return dft.numint._NumInt._gen_rho_evaluator(self, cell, dms, 0)
@@ -736,6 +739,11 @@ class _KNumInt(dft.numint._NumInt):
         return eval_ao_kpts(cell, coords, kpts, deriv,
                             relativity, shl_slice, non0tab, out, verbose)
 
+    @lib.with_doc(make_mask.__doc__)
+    def make_mask(self, cell, coords, relativity=0, shls_slice=None,
+                  verbose=None):
+        return make_mask(cell, coords, relativity, shls_slice, verbose)
+
     def eval_rho(self, cell, ao_kpts, dm_kpts, non0tab=None, xctype='LDA',
                  verbose=None):
         '''
@@ -749,6 +757,8 @@ class _KNumInt(dft.numint._NumInt):
         Returns:
            rhoR : (ngs,) ndarray
         '''
+        if non0tab is None:
+            non0tab = self.non0tab
         nkpts = len(ao_kpts)
         ngs = ao_kpts[0].shape[-2]
         rhoR = 0
@@ -804,6 +814,8 @@ class _KNumInt(dft.numint._NumInt):
 
     def eval_mat(self, cell, ao_kpts, weight, rho, vxc,
                  non0tab=None, xctype='LDA', spin=0, verbose=None):
+        if non0tab is None:
+            non0tab = self.non0tab
         nkpts = len(ao_kpts)
         mat = [eval_mat(cell, ao_kpts[k], weight, rho, vxc,
                         non0tab, xctype, spin, verbose)
@@ -822,8 +834,9 @@ class _KNumInt(dft.numint._NumInt):
             blksize = min(int(max_memory*1e6/(comp*2*nkpts*nao*16*BLKSIZE))*BLKSIZE, ngrids)
             blksize = max(blksize, BLKSIZE)
         if non0tab is None:
-            non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
-                                 dtype=numpy.int8)
+            if self.non0tab is None:
+                self.non0tab = self.make_mask(cell, grids.coords)
+            non0tab = self.non0tab
         if kpt_band is None:
             kpt1 = kpt2 = kpts
         else:
@@ -833,64 +846,21 @@ class _KNumInt(dft.numint._NumInt):
             if abs(kpts[where]-kpt1).sum() > 1e-9:
                 where = None
 
-        if (self.cell is None or id(cell) != id(self.cell) or
-            self._deriv < deriv or
-            self._kpts.shape != kpts.shape or
-            abs(self._kpts - kpts).sum() > 1e-9 or
-            self._coords.shape != grids.coords.shape or
-            abs(self._coords[::64] - grids.coords[::64]).sum() > 1e-7):
-            self.cache_ao(cell, kpts, deriv, grids.coords, nao, blksize)
-
-        with h5py.File(self._ao.name, 'r') as f:
-            for p0, p1 in prange(0, ngrids, blksize):
-                coords = grids.coords[p0:p1]
-                weight = grids.weights[p0:p1]
-                non0 = non0tab[p0//BLKSIZE:]
-                #:ao_k2 = self.eval_ao(cell, coords, kpts, deriv=deriv)
-                if comp == 1:
-                    if self._deriv == 0:
-                        ao_k2 = [f['ao/%d'%k][p0:p1] for k in range(nkpts)]
-                    else:
-                        ao_k2 = [f['ao/%d'%k][0,p0:p1] for k in range(nkpts)]
-                else:
-                    ao_k2 = [f['ao/%d'%k][:comp,p0:p1] for k in range(nkpts)]
-                if kpt_band is None:
-                    ao_k1 = ao_k2
-                else:
-                    if where is None:
-                        ao_k1 = self.eval_ao(cell, coords, kpt1, deriv=deriv)
-                    else:
-                        ao_k1 = [ao_k2[where]]
-                yield ao_k1, ao_k2, non0, weight, coords
-                ao_k1 = ao_k2 = None
-
-    def cache_ao(self, cell, kpts, deriv, coords, nao, blksize=BLKSIZE):
-        with h5py.File(self._ao.name, 'w') as f:
-            self.cell = cell
-            self._kpts = kpts
-            self._deriv = deriv
-            self._coords = coords
-            nkpts = len(kpts)
-            comp = (deriv+1)*(deriv+2)*(deriv+3)//6
-            ngrids = coords.shape[0]
-            if comp == 1:
-                shape = (ngrids, nao)
+        for ip0 in range(0, ngrids, blksize):
+            ip1 = min(ngrids, ip0+blksize)
+            coords = grids.coords[ip0:ip1]
+            weight = grids.weights[ip0:ip1]
+            non0 = non0tab[ip0//BLKSIZE:]
+            ao_k2 = self.eval_ao(cell, coords, kpt2, deriv=deriv, non0tab=non0)
+            if kpt_band is None:
+                ao_k1 = ao_k2
             else:
-                shape = (comp, ngrids, nao)
-
-            for k, kpt in enumerate(kpts):
-                if abs(kpt).sum() < 1e-9:  # gamma point
-                    f.create_dataset('ao/%d'%k, shape, 'f8')
+                if where is None:
+                    ao_k1 = self.eval_ao(cell, coords, kpt1, deriv=deriv, non0tab=non0)
                 else:
-                    f.create_dataset('ao/%d'%k, shape, 'c16')
-            for p0, p1 in prange(0, ngrids, blksize):
-                ao_kpts = self.eval_ao(cell, coords[p0:p1], kpts, deriv=deriv)
-                for k in range(nkpts):
-                    if comp == 1:
-                        f['ao/%d'%k][p0:p1] = ao_kpts[k]
-                    else:
-                        f['ao/%d'%k][:,p0:p1] = ao_kpts[k]
-                ao_kpts = None
+                    ao_k1 = [ao_k2[where]]
+            yield ao_k1, ao_k2, non0, weight, coords
+            ao_k1 = ao_k2 = None
 
     def _gen_rho_evaluator(self, cell, dms, hermi=1):
         if isinstance(dms, numpy.ndarray) and dms.ndim == 3:

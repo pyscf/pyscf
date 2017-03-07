@@ -13,7 +13,7 @@
 
 #define BOXSIZE         40
 
-static int empty_blocks(char *empty, char *non0table, int *shls_slice,
+static int empty_blocks(char *empty, unsigned char *non0table, int *shls_slice,
                         int *ao_loc)
 {
         const int sh0 = shls_slice[0];
@@ -41,7 +41,7 @@ static int empty_blocks(char *empty, char *non0table, int *shls_slice,
 
 static void dot_ao_dm(double *vm, double *ao, double *dm,
                       int nao, int nocc, int ngrids, int bgrids,
-                      char *non0table, int *shls_slice, int *ao_loc)
+                      unsigned char *non0table, int *shls_slice, int *ao_loc)
 {
         char empty[nao/BOXSIZE+1];
         int nbox = empty_blocks(empty, non0table, shls_slice, ao_loc);
@@ -75,7 +75,7 @@ static void dot_ao_dm(double *vm, double *ao, double *dm,
 /* vm[nocc,ngrids] = ao[i,ngrids] * dm[i,nocc] */
 void VXCdot_ao_dm(double *vm, double *ao, double *dm,
                   int nao, int nocc, int ngrids, int nbas,
-                  char *non0table, int *shls_slice, int *ao_loc)
+                  unsigned char *non0table, int *shls_slice, int *ao_loc)
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
 
@@ -99,7 +99,7 @@ void VXCdot_ao_dm(double *vm, double *ao, double *dm,
 /* vv[n,m] = ao1[n,ngrids] * ao2[m,ngrids] */
 static void dot_ao_ao(double *vv, double *ao1, double *ao2,
                       int nao, int ngrids, int bgrids, int hermi,
-                      char *non0table, int *shls_slice, int *ao_loc)
+                      unsigned char *non0table, int *shls_slice, int *ao_loc)
 {
         char empty[nao/BOXSIZE+1];
         int nbox = empty_blocks(empty, non0table, shls_slice, ao_loc);
@@ -136,7 +136,7 @@ static void dot_ao_ao(double *vv, double *ao1, double *ao2,
 /* vv[nao,nao] = ao1[i,nao] * ao2[i,nao] */
 void VXCdot_ao_ao(double *vv, double *ao1, double *ao2,
                   int nao, int ngrids, int nbas, int hermi,
-                  char *non0table, int *shls_slice, int *ao_loc)
+                  unsigned char *non0table, int *shls_slice, int *ao_loc)
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
         memset(vv, 0, sizeof(double) * nao * nao);

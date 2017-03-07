@@ -76,10 +76,19 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(ao0, ao1, atol=1e-9, rtol=1e-9))
         self.assertAlmostEqual(finger(ao1), -0.54069672246407219, 8)
 
-        ao0 = eval_ao(cell, grids.coords, deriv=1)
-        ao1 = ni.eval_ao(cell, grids.coords, deriv=1)
+        ao10 = eval_ao(cell, grids.coords, deriv=1)
+        ao11 = ni.eval_ao(cell, grids.coords, deriv=1)
+        self.assertTrue(numpy.allclose(ao10, ao11, atol=1e-9, rtol=1e-9))
+        self.assertAlmostEqual(finger(ao11), 8.8004405892746433, 8)
+
+        ni.non0tab = ni.make_mask(cell, grids.coords)
+        ao1 = ni.eval_ao(cell, grids.coords)
         self.assertTrue(numpy.allclose(ao0, ao1, atol=1e-9, rtol=1e-9))
-        self.assertAlmostEqual(finger(ao1), 8.8004405892746433, 8)
+        self.assertAlmostEqual(finger(ao1), -0.54069672246407219, 8)
+
+        ao11 = ni.eval_ao(cell, grids.coords, deriv=1)
+        self.assertTrue(numpy.allclose(ao10, ao11, atol=1e-9, rtol=1e-9))
+        self.assertAlmostEqual(finger(ao11), 8.8004405892746433, 8)
 
 
     def test_eval_mat(self):

@@ -12,7 +12,7 @@
 #define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define MAX(X,Y)        ((X)>(Y)?(X):(Y))
 
-void VXCnr_ao_screen(signed char *non0table, double *coords, int ngrids,
+void VXCnr_ao_screen(unsigned char *non0table, double *coords, int ngrids,
                      int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
@@ -23,7 +23,7 @@ void VXCnr_ao_screen(signed char *non0table, double *coords, int ngrids,
         double dr[3];
         double *p_exp, *pcoeff, *ratm;
 
-        memset(non0table, 0, sizeof(signed char) * nblk*nbas);
+        memset(non0table, 0, sizeof(unsigned char) * nblk*nbas);
 
         for (bas_id = 0; bas_id < nbas; bas_id++) {
                 np = bas[NPRIM_OF];
