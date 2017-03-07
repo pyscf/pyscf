@@ -25,7 +25,15 @@ def get_eri(mydf, kpts=None, compact=True):
     cell = mydf.cell
     kptijkl = _format_kpts(kpts)
     kpti, kptj, kptk, kptl = kptijkl
-    eri = aft_ao2mo.get_eri(mydf, kptijkl, compact=True)
+    if mydf.fft:
+        from pyscf.pbc.df import fft, fft_ao2mo
+        from pyscf.pbc.dft import numint
+        mydf.__class__, cls_bak = fft.FFTDF, mydf.__class__
+        mydf._numint = numint._KNumInt()
+        eri = fft_ao2mo.get_eri(mydf, kptijkl, compact)
+        mydf.__class__ = cls_bak
+    else:
+        eri = aft_ao2mo.get_eri(mydf, kptijkl, compact=compact)
     if mydf.metric is None:
         mydf.__class__, cls_bak = df.DF, mydf.__class__
         eri += df_ao2mo.get_eri(mydf, kptijkl, compact)

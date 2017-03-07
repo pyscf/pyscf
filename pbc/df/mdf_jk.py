@@ -333,7 +333,15 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
         mydf.__class__ = cls_bak
     else:
         vj1, vk1 = get_jk_sr(mydf, dm, hermi, kpt, kpt_band, with_j, with_k, None)
-    vj, vk = aft_jk.get_jk(mydf, dm, hermi, kpt, kpt_band, with_j, with_k, exxdiv)
+    if mydf.fft:
+        from pyscf.pbc.df import fft, fft_jk
+        from pyscf.pbc.dft import numint
+        mydf.__class__, cls_bak = fft.FFTDF, mydf.__class__
+        mydf._numint = numint._KNumInt()
+        vj, vk = fft_jk.get_jk(mydf, dm, hermi, kpt, kpt_band, with_j, with_k, exxdiv)
+        mydf.__class__ = cls_bak
+    else:
+        vj, vk = aft_jk.get_jk(mydf, dm, hermi, kpt, kpt_band, with_j, with_k, exxdiv)
     if with_j: vj += vj1
     if with_k: vk += vk1
     return vj, vk

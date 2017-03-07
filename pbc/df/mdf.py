@@ -43,6 +43,7 @@ class MDF(df.DF):
         # 2: non-pbc approximation;  3: atomic approximation
         self.approx_sr_level = 0
         self.charge_constraint = False  # To adpat to pyscf.df.mdf module
+        self.fft = False
         df.DF.__init__(self, cell, kpts)
 
     def dump_flags(self):

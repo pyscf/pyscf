@@ -42,7 +42,7 @@ def get_eri(mydf, kpts=None, compact=False):
 ####################
 # gamma point, the integral is real and with s4 symmetry
     if abs(kptijkl).sum() < 1e-9:
-        ao_pairs_G = get_ao_pairs_G(mydf, kptijkl[:2], q, compact)
+        ao_pairs_G = get_ao_pairs_G(mydf, kptijkl[:2], q, compact=compact)
         ao_pairs_G *= numpy.sqrt(coulG).reshape(-1,1)
         aoijR = ao_pairs_G.real.copy()
         aoijI = ao_pairs_G.imag.copy()
@@ -57,7 +57,7 @@ def get_eri(mydf, kpts=None, compact=False):
 #
 # complex integrals, N^4 elements
     elif (abs(kpti-kptl).sum() < 1e-9) and (abs(kptj-kptk).sum() < 1e-9):
-        ao_pairs_G = get_ao_pairs_G(mydf, kptijkl[:2], q, False)
+        ao_pairs_G = get_ao_pairs_G(mydf, kptijkl[:2], q, compact=False)
         ao_pairs_G *= numpy.sqrt(coulG).reshape(-1,1)
         ao_pairs_invG = ao_pairs_G.T.reshape(nao,nao,-1).transpose(1,0,2).conj()
         ao_pairs_invG = ao_pairs_invG.reshape(-1,ngs)
@@ -67,9 +67,9 @@ def get_eri(mydf, kpts=None, compact=False):
 # aosym = s1, complex integrals
 #
     else:
-        ao_pairs_G = get_ao_pairs_G(mydf, kptijkl[:2], q, False)
+        ao_pairs_G = get_ao_pairs_G(mydf, kptijkl[:2], q, compact=False)
 # ao_pairs_invG = rho_rs(-G+k_rs) = conj(rho_sr(G+k_sr)).swap(r,s)
-        ao_pairs_invG = get_ao_pairs_G(mydf, -kptijkl[2:], q, False).conj()
+        ao_pairs_invG = get_ao_pairs_G(mydf, -kptijkl[2:], q, compact=False).conj()
         ao_pairs_G *= coulG.reshape(-1,1)
         return lib.dot(ao_pairs_G.T, ao_pairs_invG, cell.vol/ngs**2)
 
@@ -141,7 +141,8 @@ def general(mydf, mo_coeffs, kpts=None, compact=False):
         return lib.dot(mo_ij_G.T, mo_kl_G.T, cell.vol/ngs**2)
 
 
-def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), q=None, compact=False):
+def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), q=None, shls_slice=None,
+                   compact=False):
     '''Calculate forward (G|ij) FFT of all AO pairs.
 
     Returns:
@@ -156,14 +157,26 @@ def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), q=None, compact=False):
     nao = cell.nao_nr()
     ngs = len(coords)
 
+    if shls_slice is None:
+        i0, i1 = j0, j1 = (0, cell.nao_nr())
+    else:
+        ish0, ish1, jsh0, jsh1 = shls_slice
+        ao_loc = cell.ao_loc_nr()
+        i0 = ao_loc[ish0]
+        i1 = ao_loc[ish1]
+        j0 = ao_loc[jsh0]
+        j1 = ao_loc[jsh1]
+
     def trans(aoiR, aojR, fac=1):
         if id(aoiR) == id(aojR):
             aoiR = aojR = numpy.asarray(aoiR.T, order='C')
         else:
             aoiR = numpy.asarray(aoiR.T, order='C')
             aojR = numpy.asarray(aojR.T, order='C')
-        ao_pairs_G = numpy.empty((nao,nao,ngs), dtype=numpy.complex128)
-        for i in range(nao):
+        ni = aoiR.shape[0]
+        nj = aojR.shape[0]
+        ao_pairs_G = numpy.empty((ni,nj,ngs), dtype=numpy.complex128)
+        for i in range(ni):
             ao_pairs_G[i] = tools.fft(fac * aoiR[i].conj() * aojR, mydf.gs)
         ao_pairs_G = ao_pairs_G.reshape(-1,ngs).T
         return ao_pairs_G
@@ -171,24 +184,24 @@ def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), q=None, compact=False):
     if compact and abs(kpts).sum() < 1e-9:  # gamma point
         aoR = mydf._numint.eval_ao(cell, coords, kpts[:1])[0]
         aoR = numpy.asarray(aoR.T, order='C')
-        npair = nao*(nao+1)//2
+        npair = i1*(i1+1)//2 - i0*(i0+1)//2
         ao_pairs_G = numpy.empty((npair,ngs), dtype=numpy.complex128)
         ij = 0
-        for i in range(nao):
+        for i in range(i0, i1):
             ao_pairs_G[ij:ij+i+1] = tools.fft(aoR[i] * aoR[:i+1], mydf.gs)
             ij += i + 1
         ao_pairs_G = ao_pairs_G.T
 
     elif abs(kpts[0]-kpts[1]).sum() < 1e-9:
         aoR = mydf._numint.eval_ao(cell, coords, kpts[:1])[0]
-        ao_pairs_G = trans(aoR, aoR)
+        ao_pairs_G = trans(aoR[:,i0:i1], aoR[:,j0:j1])
 
     else:
         if q is None:
             q = kpts[1] - kpts[0]
         aoiR, aojR = mydf._numint.eval_ao(cell, coords, kpts[:2])
         fac = numpy.exp(-1j * numpy.dot(coords, q))
-        ao_pairs_G = trans(aoiR, aojR, fac)
+        ao_pairs_G = trans(aoiR[:,i0:i1], aojR[:,j0:j1], fac)
 
     return ao_pairs_G
 
