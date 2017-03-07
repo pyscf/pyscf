@@ -5,9 +5,11 @@
 #
 
 from pyscf.gto import mole
+from pyscf.gto import mole_pure
 from pyscf.gto import basis
 from pyscf.gto.basis import parse, load, parse_ecp, load_ecp
 from pyscf.gto.mole import *
+from pyscf.gto.mole_pure import *
 from pyscf.gto.moleintor import getints, getints_by_shell
 from pyscf.gto.eval_gto import eval_gto
 from pyscf.gto import ecp

@@ -1,26 +1,44 @@
 #!/usr/bin/env python
 #
-# Author: Qiming Sun <osirpt.sun@gmail.com>
+# Author: koval.peter@gmail.com
 #
 
 '''
-A simple example to run HF calculation.
-
-.kernel() function is the simple way to call HF driver.
-.analyze() function calls the Mulliken population analysis etc.
+Loop over atom pairs
 '''
 
 from pyscf import gto, scf
+import sys
+import numpy as np
 
-mol = gto.Mole()
+mol = gto.Mole_pure()
 mol.build(
-    atom = 'H 0 0 0; F 0 0 1.1',  # in Angstrom
-    basis = 'ccpvdz',
-    symmetry = True,
-)
+    atom = 'O 0.0000 0.0000 0.1132; H 0.0000 0.7512 -0.4528; H 0.0000 -0.7512 -0.4528',  # in Angstrom
+    basis = 'ccpvtz')
 
-myhf = scf.RHF(mol)
-myhf.kernel()
+natoms = len(mol._atom)
+nprod  = 0
+nprod_dir = 0
+for ia in range(natoms):
+  for ja in range(ia+1):
+    #print(ia+1, ja+1, mol._atom[ia], mol._atom[ja])
+    m2 = gto.Mole_pure()
+    m2.build(atom=[mol._atom[ia], mol._atom[ja]], basis=mol.basis)
+    eri = m2.intor('cint2e_sph')
+    print(ia+1,ja+1, m2._atom, eri.shape)
+    eigval = np.linalg.eigvalsh(eri)
+    nprd_pp = np.sum(eigval > 1e-14)
+    nprod = nprod + nprd_pp
+    nprod_dir = nprod_dir + eigval.shape[0]
+    print(eigval.shape[0], nprd_pp)
 
-# Orbital energies, Mulliken population etc.
-myhf.analyze()
+print nprod_dir, nprod, 1.0*nprod_dir/nprod
+
+#m1 = gto.Mole()
+#m1.build()
+#m1.dump_input()
+
+
+
+
+
