@@ -1,5 +1,6 @@
 /*
  * Slater-Condon rule implementation for Heat-Bath CI
+ * Author: Alexander Sokolov <alexander.y.sokolov@gmail.com>
  */
 
 #include <stdlib.h>
@@ -12,7 +13,7 @@
 //#include <omp.h>
 #include <limits.h>
 
-
+// Compute H * C using Slater-Condon rules
 void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uint64_t *strs, double *civec, double *hdiag, int ndet, double *ci1) {
 
     size_t ip, jp, p;
@@ -27,10 +28,6 @@ void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uin
             uint64_t *strjb = strs + jp * 2 * nset + nset;
             int n_excit_a = n_excitations(stria, strja, nset);
             int n_excit_b = n_excitations(strib, strjb, nset);
-//            printf("%ld %ld %ld %ld\n", stria[0], strib[0], strja[0], strjb[0]);
-//            printf("%ld %ld %ld %ld\n", stria[1], strib[1], strja[1], strjb[1]);
-//            printf("%s %s %s %s\n", int2bin(stria[0]), int2bin(strib[0]), int2bin(strja[0]), int2bin(strjb[0]));
-//            printf("%s %s %s %s\n", int2bin(stria[1]), int2bin(strib[1]), int2bin(strja[1]), int2bin(strjb[1]));
             // Single excitation
             if ((n_excit_a + n_excit_b) == 1) {
                 int *ia;
@@ -42,13 +39,6 @@ void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uin
                     double sign = compute_cre_des_sign(a, i, stria, nset);
                     int *occsa = compute_occ_list(stria, nset, norb, neleca);
                     int *occsb = compute_occ_list(strib, nset, norb, nelecb);
- 
-//                    // Test
-//                    printf("i: %d -> a: %d (%f)\n", ia[0], ia[1], sign);
-//                    for (p = 0; p < neleca; ++p) printf("%d ", occsa[p]);
-//                    printf("\n");
-//                    // Test
-
                     double fai = h1[a * norb + i];
                     for (p = 0; p < neleca; ++p) {
                         int k = occsa[p];
@@ -61,7 +51,6 @@ void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uin
                         int kkai = k * norb * norb * norb + k * norb * norb + a * norb + i;
                         fai += eri[kkai];
                     }
-
                     ci1[jp] += sign * fai * civec[ip];
                     ci1[ip] += sign * fai * civec[jp];
                 }
@@ -73,13 +62,6 @@ void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uin
                     double sign = compute_cre_des_sign(a, i, strib, nset);
                     int *occsa = compute_occ_list(stria, nset, norb, neleca);
                     int *occsb = compute_occ_list(strib, nset, norb, nelecb);
-
-//                    // Test
-//                    printf("i: %d -> a: %d (%f)\n", ia[0], ia[1], sign);
-//                    for (p = 0; p < nelecb; ++p) printf("%d ", occsb[p]);
-//                    printf("\n");
-//                    // Test
-                    
                     double fai = h1[a * norb + i];
                     for (p = 0; p < nelecb; ++p) {
                         int k = occsb[p];
@@ -92,7 +74,6 @@ void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uin
                         int kkai = k * norb * norb * norb + k * norb * norb + a * norb + i;
                         fai += eri[kkai];
                     }
-
                     ci1[jp] += sign * fai * civec[ip];
                     ci1[ip] += sign * fai * civec[jp];
                 }
@@ -104,8 +85,6 @@ void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uin
                 if (n_excit_b == 0) {
 	            int *ijab = get_double_excitation(stria, strja, nset);
                     i = ijab[0]; j = ijab[1]; a = ijab[2]; b = ijab[3];
-//                    printf("(Case 1) i: %d j: %d -> a: %d b: %d\n", i, j, a, b);
-
                     double v, sign;
                     int ajbi = a * norb * norb * norb + j * norb * norb + b * norb + i;
                     int aibj = a * norb * norb * norb + i * norb * norb + b * norb + j;
@@ -119,17 +98,13 @@ void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uin
                         sign = compute_cre_des_sign(b, j, stria, nset);
                         sign *= compute_cre_des_sign(a, i, stria, nset);
                     }
-
                     ci1[jp] += sign * v * civec[ip];
                     ci1[ip] += sign * v * civec[jp];
-//                    printf("(Case 1) v: %f\n", v);
                 }
                 // beta,beta->beta,beta
                 else if (n_excit_a == 0) {
 	            int *ijab = get_double_excitation(strib, strjb, nset);
                     i = ijab[0]; j = ijab[1]; a = ijab[2]; b = ijab[3];
-//                    printf("(Case 2) i: %d j: %d -> a: %d b: %d\n", i, j, a, b);
-
                     double v, sign;
                     int ajbi = a * norb * norb * norb + j * norb * norb + b * norb + i;
                     int aibj = a * norb * norb * norb + i * norb * norb + b * norb + j;
@@ -143,7 +118,6 @@ void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uin
                         sign = compute_cre_des_sign(b, j, strib, nset);
                         sign *= compute_cre_des_sign(a, i, strib, nset);
                     }
-
                     ci1[jp] += sign * v * civec[ip];
                     ci1[ip] += sign * v * civec[jp];
                 }
@@ -152,31 +126,21 @@ void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uin
                     int *ia = get_single_excitation(stria, strja, nset);
                     int *jb = get_single_excitation(strib, strjb, nset);
                     i = ia[0]; a = ia[1]; j = jb[0]; b = jb[1];
-
                     double v = eri[a * norb * norb * norb + i * norb * norb + b * norb + j];
                     double sign = compute_cre_des_sign(a, i, stria, nset);
                     sign *= compute_cre_des_sign(b, j, strib, nset);
-
                     ci1[jp] += sign * v * civec[ip];
                     ci1[ip] += sign * v * civec[jp];
-//                    printf("%ld %ld %ld %ld\n", stria[0], strib[0], strja[0], strjb[0]);
-//                    printf("%ld %ld %ld %ld\n", stria[1], strib[1], strja[1], strjb[1]);
-//                    printf("%s %s %s %s\n", int2bin(stria[0]), int2bin(strib[0]), int2bin(strja[0]), int2bin(strjb[0]));
-//                    printf("%s %s %s %s\n", int2bin(stria[1]), int2bin(strib[1]), int2bin(strja[1]), int2bin(strjb[1]));
-//                    printf("(Case 3) i: %d j: %d -> a: %d b: %d\n", i, j, a, b);
                }
             }
-//            if (ip < 12) printf("%d %d %20.10f %20.10f\n", ip, jp, ci1[ip], ci1[jp]);
-//            else exit(1);
         } // end loop over jp
-//        if (ip == 4) exit(1);
         // Add diagonal elements
         ci1[ip] += hdiag[ip] * civec[ip];
     }
 
 }
 
-
+// Compare two strings and compute excitation level
 int n_excitations(uint64_t *str1, uint64_t *str2, int nset) {
 
     size_t p;
@@ -190,7 +154,7 @@ int n_excitations(uint64_t *str1, uint64_t *str2, int nset) {
 
 }
 
-
+// Compute number of set bits in a string
 int popcount(uint64_t x) {
 
     const uint64_t m1  = 0x5555555555555555; //binary: 0101...
@@ -199,8 +163,6 @@ int popcount(uint64_t x) {
     const uint64_t m8  = 0x00ff00ff00ff00ff; //binary:  8 zeros,  8 ones ...
     const uint64_t m16 = 0x0000ffff0000ffff; //binary: 16 zeros, 16 ones ...
     const uint64_t m32 = 0x00000000ffffffff; //binary: 32 zeros, 32 ones
-//    const uint64_t hff = 0xffffffffffffffff; //binary: all ones
-//    const uint64_t h01 = 0x0101010101010101; //the sum of 256 to the power of 0,1,2,3...
     x = (x & m1 ) + ((x >>  1) & m1 ); //put count of each  2 bits into those  2 bits 
     x = (x & m2 ) + ((x >>  2) & m2 ); //put count of each  4 bits into those  4 bits 
     x = (x & m4 ) + ((x >>  4) & m4 ); //put count of each  8 bits into those  8 bits 
@@ -212,7 +174,7 @@ int popcount(uint64_t x) {
 
 }
 
-
+// Compute orbital indices for a single excitation 
 int *get_single_excitation(uint64_t *str1, uint64_t *str2, int nset) {
 
     size_t p;
@@ -237,7 +199,7 @@ int *get_single_excitation(uint64_t *str1, uint64_t *str2, int nset) {
 
 }
 
-
+// Compute orbital indices for a double excitation 
 int *get_double_excitation(uint64_t *str1, uint64_t *str2, int nset) {
 
     size_t p;
@@ -279,13 +241,15 @@ int *get_double_excitation(uint64_t *str1, uint64_t *str2, int nset) {
     }
 
     return ijab;
+
 }
 
-
+// Compute number of trailing zeros in a bit string
 int trailz(uint64_t v) {
 
     int c = 64;
 
+    // Trick to unset all bits but the first one
     v &= -(int64_t) v;
     if (v) c--;
     if (v & 0x00000000ffffffff) c -= 32;
@@ -296,11 +260,12 @@ int trailz(uint64_t v) {
     if (v & 0x5555555555555555) c -= 1;
 
     return c;
-}
 
+}
 
 // Function to print int as a char for debug purposes
 char *int2bin(uint64_t i) {
+
     size_t bits = sizeof(uint64_t) * CHAR_BIT;
 
     char * str = malloc(bits + 1);
@@ -313,9 +278,10 @@ char *int2bin(uint64_t i) {
         str[bits] = u & 1 ? '1' : '0';
 
     return str;
+
 }
 
-
+// Compute sign for a pair of creation and desctruction operators
 double compute_cre_des_sign(int p, int q, uint64_t *str, int nset) {
 
     double sign;
@@ -357,7 +323,7 @@ double compute_cre_des_sign(int p, int q, uint64_t *str, int nset) {
 
 }
 
-
+// Compute a list of occupied orbitals for a given string
 int *compute_occ_list(uint64_t *string, int nset, int norb, int nelec) {
 
     size_t k, i;
