@@ -44,6 +44,7 @@ for i in range(n):
 
 mf.get_hcore = lambda *args: h1
 mf.get_ovlp = lambda *args: numpy.eye(n)
+# ao2mo.restore(8, eri, n) to get 8-fold symmetry of the integrals
 mf._eri = ao2mo.restore(8, eri, n)
 
 mf.scf()

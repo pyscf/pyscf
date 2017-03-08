@@ -20,7 +20,8 @@ from pyscf.lib import logger
 
 # Note the valence space for Li, Be may need include 2p, Al..Cl may need 3d ...
 AOSHELL = [
-    # core       core+valence
+# This is No. of shells, not the atomic configuations
+#     core       core+valence
 # core+valence = lambda nuc, l: \
 #            int(numpy.ceil(pyscf.lib.parameters.ELEMENTS[nuc][2][l]/(4*l+2.)))
     ['0s0p0d0f', '0s0p0d0f'],     #  0  GHOST

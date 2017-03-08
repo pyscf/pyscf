@@ -394,13 +394,14 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
                 norm_gorb0 = norm_gorb
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
             t3m = log.timer('orbital rotation', *t3m)
-            if norm_gci is None:
-                accepted_gorb = norm_gorb < norm_ddm*2
-            else:
-                accepted_gorb = norm_gorb < norm_gci*1.5
-            if (imicro >= max_cycle_micro and
-                (accepted_gorb or imicro > max_cycle_micro*2 or
-                 norm_gorb > norm_gorb0)):
+            #if norm_gci is None:
+            #    accepted_gorb = norm_gorb < norm_ddm*2
+            #else:
+            #    accepted_gorb = norm_gorb < norm_gci*1.5
+            #if (imicro >= max_cycle_micro and
+            #    (accepted_gorb or imicro > max_cycle_micro*2 or
+            #     norm_gorb > norm_gorb0)):
+            if imicro >= max_cycle_micro:
                 log.debug('micro %d  |u-1|=%5.3g  |g[o]|=%5.3g',
                           imicro, norm_t, norm_gorb)
                 break
@@ -931,9 +932,17 @@ class CASSCF(casci.CASCI):
             tol = max(self.conv_tol, envs['norm_gorb']**2*.1)
         else:
             tol = None
-        if hasattr(self.fcisolver, 'approx_kernel'):
-            ci1 = self.fcisolver.approx_kernel(h1, h2, ncas, nelecas, ci0=ci0,
-                                               tol=tol, max_memory=self.max_memory)[1]
+        if not (hasattr(self.fcisolver, 'contract_2e') and
+                hasattr(self.fcisolver, 'absorb_h1e')):
+            if hasattr(self.fcisolver, 'approx_kernel'):
+                fn = self.fcisolver.approx_kernel
+                ci1 = fn(h1, h2, ncas, nelecas, ci0=ci0,
+                         tol=tol, max_memory=self.max_memory)[1]
+            else:
+                fn = self.fcisolver.kernel
+                ci1 = fn(h1, h2, ncas, nelecas, ci0=ci0,
+                         tol=tol, max_memory=self.max_memory,
+                         max_cycle=self.ci_response_space)[1]
             return ci1, None
 
         h2eff = self.fcisolver.absorb_h1e(h1, h2, ncas, nelecas, .5)

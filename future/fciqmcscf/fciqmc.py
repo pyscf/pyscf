@@ -11,6 +11,7 @@ import pyscf.tools
 import pyscf.lib.logger as logger
 import pyscf.ao2mo
 import pyscf.symm
+import pyscf.fci
 import pyscf.symm.param as param
 from subprocess import call
 
@@ -186,10 +187,10 @@ def calc_energy_from_rdms(mol, mo_coeff, one_rdm, two_rdm):
 
     return two_e + one_e + mol.energy_nuc()
 
-def run_standalone(fciqmcci, mo_coeff, restart=None):
+def run_standalone(fciqmcci, scf_obj, orbs=None, restart=None):
     '''Run a standalone NECI calculation for the molecule listed in the
     FCIQMCCI object. The basis to run this calculation in is given by the
-    mo_coeff array.
+    orbs array.
 
     Args:
         fciqmcci : an instance of :class:`FCIQMCCI`
@@ -205,44 +206,50 @@ def run_standalone(fciqmcci, mo_coeff, restart=None):
             Final RDM energy obtained from the NECI output file.
     '''
 
+    if orbs is None:
+        orbs = scf_obj.mo_coeff
     tol = 1e-9
-    nmo = mo_coeff.shape[1]
+    nmo = orbs.shape[1]
     nelec = fciqmcci.mol.nelectron
     fciqmcci.dump_flags(verbose=5)
 
-    with open(fciqmcci.integralFile, 'w') as fout:
-        if fciqmcci.mol.symmetry:
-            if fciqmcci.groupname == 'Dooh':
-                logger.info(fciqmcci, 'Lower symmetry from Dooh to D2h')
-                raise RuntimeError('''Lower symmetry from Dooh to D2h''')
-            elif fciqmcci.groupname == 'Coov':
-                logger.info(fciqmcci, 'Lower symmetry from Coov to C2v')
-                raise RuntimeError('''Lower symmetry from Coov to C2v''')
-            else:
-                # We need the AO basis overlap matrix to calculate the
-                # symmetries.
-                s = fciqmcci.mol.intor_symmetric('cint1e_ovlp_sph')
-                fciqmcci.orbsym = pyscf.symm.label_orb_symm(fciqmcci.mol,
-                        fciqmcci.mol.irrep_name, fciqmcci.mol.symm_orb,
-                        mo_coeff, s=s)
-                orbsym = [param.IRREP_ID_TABLE[fciqmcci.groupname][i]+1 for
-                          i in fciqmcci.orbsym]
-                pyscf.tools.fcidump.write_head(fout, nmo, nelec,
-                                               fciqmcci.mol.spin, orbsym)
+    if fciqmcci.mol.symmetry:
+        if fciqmcci.groupname == 'Dooh':
+            logger.info(fciqmcci, 'Lower symmetry from Dooh to D2h')
+            raise RuntimeError('''Lower symmetry from Dooh to D2h''')
+        elif fciqmcci.groupname == 'Coov':
+            logger.info(fciqmcci, 'Lower symmetry from Coov to C2v')
+            raise RuntimeError('''Lower symmetry from Coov to C2v''')
         else:
-            pyscf.tools.fcidump.write_head(fout, nmo, nelec, fciqmcci.mol.spin)
+            # We need the AO basis overlap matrix to calculate the
+            # symmetries.
+            s = fciqmcci.mol.intor_symmetric('cint1e_ovlp_sph')
+            fciqmcci.orbsym = pyscf.symm.label_orb_symm(fciqmcci.mol,
+                    fciqmcci.mol.irrep_name, fciqmcci.mol.symm_orb,
+                    orbs, s=s)
+            orbsym = [param.IRREP_ID_TABLE[fciqmcci.groupname][i]+1 for
+                      i in fciqmcci.orbsym]
+#            pyscf.tools.fcidump.write_head(fout, nmo, nelec,
+#                                           fciqmcci.mol.spin, orbsym)
+    else:
+        orbsym = []
 
-        eri = pyscf.ao2mo.outcore.full(fciqmcci.mol, mo_coeff, verbose=0)
-        pyscf.tools.fcidump.write_eri(fout, pyscf.ao2mo.restore(8,eri,nmo),
-                                      nmo, tol=tol)
+#    eri = pyscf.ao2mo.outcore.full(fciqmcci.mol, orbs, verbose=0)
+    # Lookup and return the relevant 1-electron integrals, and print out
+    # the FCIDUMP file.
+    eri = pyscf.ao2mo.incore.general(scf_obj._eri, (orbs,)*4, compact=False)
+    t = fciqmcci.mol.intor_symmetric('cint1e_kin_sph')
+    v = fciqmcci.mol.intor_symmetric('cint1e_nuc_sph')
+    h = reduce(numpy.dot, (orbs.T, t+v, orbs))
 
-        # Lookup and return the relevant 1-electron integrals, and print out
-        # the FCIDUMP file.
-        t = fciqmcci.mol.intor_symmetric('cint1e_kin_sph')
-        v = fciqmcci.mol.intor_symmetric('cint1e_nuc_sph')
-        h = reduce(numpy.dot, (mo_coeff.T, t+v, mo_coeff))
-        pyscf.tools.fcidump.write_hcore(fout, h, nmo, tol=tol)
-        fout.write(' %.16g  0  0  0  0\n' % fciqmcci.mol.energy_nuc())
+    pyscf.tools.fcidump.from_integrals(fciqmcci.integralFile, h, 
+            pyscf.ao2mo.restore(8,eri,nmo), nmo, nelec, fciqmcci.mol.energy_nuc(),
+            fciqmcci.mol.spin, orbsym, tol=tol)
+
+#    pyscf.tools.fcidump.write_eri(fout, pyscf.ao2mo.restore(8,eri,nmo),
+#                                  nmo, tol=tol)
+#    pyscf.tools.fcidump.write_hcore(fout, h, nmo, tol=tol)
+#    fout.write(' %.16g  0  0  0  0\n' % fciqmcci.mol.energy_nuc())
 
     # The number of alpha and beta electrons.
     if isinstance(nelec, (int, numpy.integer)):
@@ -476,6 +483,192 @@ def read_neci_one_pdm(fciqmcci, filename, norb, nelec, directory='.'):
     one_pdm = one_from_two_pdm(two_pdm, nelec)
     return one_pdm
 
+def read_neci_1dms(fciqmcci, norb, nelec, filename='OneRDM.1', directory='.'):
+    ''' Read spinned rdms, as they are in the neci output '''
+
+    f = open(os.path.join(directory, filename),'r')
+
+    dm1a = numpy.zeros((norb,norb))
+    dm1b = numpy.zeros((norb,norb))
+    for line in f.readlines():
+        linesp = line.split()
+        i, j = int(linesp[0]), int(linesp[1])
+        assert((i % 2) == (j % 2))
+        if i % 2 == 1:
+            # alpha
+            assert(all(x<norb for x in (i/2,j/2)))
+            dm1a[i/2,j/2] = float(linesp[2])
+            dm1a[j/2,i/2] = float(linesp[2])
+        else:
+            assert(all(x<norb for x in (i/2 - 1,j/2 - 1)))
+            dm1b[i/2 - 1,j/2 - 1] = float(linesp[2])
+            dm1b[j/2 - 1,i/2 - 1] = float(linesp[2])
+
+    f.close()
+    assert(numpy.allclose(dm1a.trace()+dm1b.trace(),sum(nelec)))
+    return dm1a, dm1b
+
+def read_neci_2dms(fciqmcci, norb, nelec, filename_aa='TwoRDM_aaaa.1', 
+    filename_abba='TwoRDM_abba.1', filename_abab='TwoRDM_abab.1', directory='.', reorder=True,
+    dm1a=None,dm1b=None):
+    ''' Find spinned RDMs (assuming a/b symmetry). Return in pyscf form that
+    you would get from the e.g. direct_spin1.make_rdm12s routine, with Reorder=True.
+    
+    This means (assuming reorder = True):
+    dm2ab[i,j,k,l] = < i_a* k_b* l_b j_a >
+    dm2aa[i,j,k,l] = < i_a* k_a* l_a j_a > 
+
+    to get the dm2abba matrix (see spin_op.make_rdm2_abba) from this (assuming rhf), then you need
+    dm2abba = -dm2ab.transpose(2,1,0,3)
+    
+    if reorder = False:
+
+        dm2aa[:,k,k,:] += dm1a
+        dm2bb[:,k,k,:] += dm1b
+        dm2ab unchanged
+
+    Note that the spin-free RDMs are just dm2aa + dm2bb + 2*dm2ab if reorder = True
+    '''
+
+    f = open(os.path.join(directory, filename_aa),'r')
+    dm2aa = numpy.zeros((norb,norb,norb,norb))
+    for line in f.readlines():
+        linesp = line.split()
+        i,j,k,l = (int(linesp[0])-1, int(linesp[1])-1, int(linesp[3])-1, int(linesp[2])-1)
+        val = float(linesp[4])
+        assert(all(x<norb for x in (i,j,k,l)))
+        # Stored as 1* 2* 4 3
+        dm2aa[i,j,k,l] = val 
+        # Other permutations
+        dm2aa[j,i,k,l] = -val
+        dm2aa[i,j,l,k] = -val
+        dm2aa[j,i,l,k] = val
+        # Hermitian conjugate symmetry, assuming real orbitals
+        dm2aa[l,k,j,i] = val 
+        # Other permutations
+        dm2aa[l,k,i,j] = -val
+        dm2aa[k,l,j,i] = -val
+        dm2aa[k,l,i,j] = val 
+
+    f.close()
+    dm2bb = dm2aa.copy()    #spin symmetry
+    
+    # dm2ab initially (before reordering) stores [a,b,b,a]
+    dm2ab = numpy.zeros((norb,norb,norb,norb))
+    f_abba = open(os.path.join(directory, filename_abba),'r')
+    f_abab = open(os.path.join(directory, filename_abab),'r')
+    for line in f_abba.readlines():
+        linesp = line.split()
+        i,j,k,l = (int(linesp[0])-1, int(linesp[1])-1, int(linesp[2])-1, int(linesp[3])-1)
+        val = float(linesp[4])
+        assert(all(x<norb for x in (i,j,k,l)))
+        assert(numpy.allclose(dm2ab[i,j,k,l],-val) or dm2ab[i,j,k,l] == 0.0)
+        dm2ab[i,j,k,l] = -val 
+        # Hermitian conjugate
+        assert(numpy.allclose(dm2ab[l,k,j,i],-val) or dm2ab[l,k,j,i] == 0.0)
+        dm2ab[l,k,j,i] = -val
+        # Time reversal sym
+#        print i,j,k,l,val,dm2ab[j,i,l,k], numpy.allclose(dm2ab[j,i,l,k],-val), dm2ab[j,i,l,k] == 0.0
+        assert(numpy.allclose(dm2ab[j,i,l,k],-val) or dm2ab[j,i,l,k] == 0.0)
+        dm2ab[j,i,l,k] = -val
+        assert(numpy.allclose(dm2ab[k,l,i,j],-val) or dm2ab[k,l,i,j] == 0.0)
+        dm2ab[k,l,i,j] = -val
+
+    for line in f_abab.readlines():
+        linesp = line.split()
+        i,j,k,l = (int(linesp[0])-1, int(linesp[1])-1, int(linesp[2])-1, int(linesp[3])-1)
+        val = float(linesp[4])
+        assert(all(x<norb for x in (i,j,k,l)))
+        assert(numpy.allclose(dm2ab[i,j,l,k],val) or dm2ab[i,j,l,k] == 0.0)
+        dm2ab[i,j,l,k] = val
+        # Hermitian conjugate
+        assert(numpy.allclose(dm2ab[k,l,j,i],val) or dm2ab[k,l,j,i] == 0.0)
+        dm2ab[k,l,j,i] = val
+        # Time reversal symmetry
+        assert(numpy.allclose(dm2ab[j,i,k,l],val) or dm2ab[j,i,k,l] == 0.0)
+        dm2ab[j,i,k,l] = val
+        assert(numpy.allclose(dm2ab[l,k,i,j],val) or dm2ab[l,k,i,j] == 0.0)
+        dm2ab[l,k,i,j] = val
+
+    f_abab.close()
+    f_abba.close()
+
+    # i.e. I want the last index to go second 
+    dm2aa = dm2aa.transpose(0,3,1,2)
+    dm2bb = dm2bb.transpose(0,3,1,2)
+    dm2ab = dm2ab.transpose(0,3,1,2)
+
+    if not reorder:
+        # We need to undo the reordering routine in rdm.py
+        if dm1a is None:
+            pdmfile = filename_aa.split('.')
+            pdmfile = 'OneRDM.'+pdmfile[1]
+            dm1a, dm1b = read_neci_1dms(fciqmcci, norb, nelec, filename=pdmfile, directory=directory)
+        for k in range(norb):
+            dm2aa[:,k,k,:] += dm1a
+            dm2bb[:,k,k,:] += dm1b
+    
+    return dm2aa, dm2ab, dm2bb
+
+def add_spinned_core_rdms(mf, ncore, dm1a_act, dm1b_act, dm2aa_act, dm2ab_act, dm2bb_act, reorder=True):
+    ''' Add an RHF core to the rdms in the MO basis to the 1 and 2 RDMs'''
+
+    norb = ncore + dm1a_act.shape[0]
+    dm1a = numpy.zeros((norb,norb))
+    dm1b = numpy.zeros((norb,norb))
+    dm2aa = numpy.zeros((norb,norb,norb,norb))
+    dm2ab = numpy.zeros((norb,norb,norb,norb))
+    dm2bb = numpy.zeros((norb,norb,norb,norb))
+
+    if not reorder:
+        # Assume that the ordering of the active rdms is 'False'.
+        # Switch before including (back to 'true')
+        dm1a_act_, dm2aa_act_ = pyscf.fci.rdm.reorder_rdm(dm1a_act, dm2aa_act, inplace=False)
+        dm1b_act_, dm2bb_act_ = pyscf.fci.rdm.reorder_rdm(dm1b_act, dm2bb_act, inplace=False)
+    else:
+        dm1a_act_ = dm1a_act
+        dm1b_act_ = dm1b_act
+        dm2aa_act_ = dm2aa_act
+        dm2bb_act_ = dm2bb_act
+    
+    # Always add the core to the 'reorder=True' ordering of the rdms
+    dm1a[ncore:,ncore:] = dm1a_act_
+    dm1b[ncore:,ncore:] = dm1b_act_
+    for i in range(ncore):
+        dm1a[i,i] = 1.0
+        dm1b[i,i] = 1.0
+
+    dm2aa[ncore:,ncore:,ncore:,ncore:] = dm2aa_act_
+    dm2bb[ncore:,ncore:,ncore:,ncore:] = dm2bb_act_
+    dm2ab[ncore:,ncore:,ncore:,ncore:] = dm2ab_act
+
+    for i in range(ncore):
+        for j in range(ncore): 
+            dm2aa[i,i,j,j] += 1.0
+            dm2aa[j,i,i,j] += -1.0
+            dm2bb[i,i,j,j] += 1.0
+            dm2bb[j,i,i,j] += -1.0
+            dm2ab[i,i,j,j] += 1.0
+        for p in range(ncore,norb):
+            for q in range(ncore,norb):
+                dm2aa[p,q,i,i] +=  dm1a[p,q]
+                dm2aa[i,i,p,q] +=  dm1a[p,q]
+                dm2aa[i,q,p,i] += -dm1a[p,q]
+                dm2aa[p,i,i,q] += -dm1a[p,q]
+                dm2bb[p,q,i,i] +=  dm1b[p,q]
+                dm2bb[i,i,p,q] +=  dm1b[p,q]
+                dm2bb[i,q,p,i] += -dm1b[p,q]
+                dm2bb[p,i,i,q] += -dm1b[p,q]
+                dm2ab[p,q,i,i] +=  dm1a[p,q]
+                dm2ab[i,i,p,q] +=  dm1b[p,q]
+
+    if not reorder:
+        # Change back to the 'non-reordered' ordering!
+        for k in range(norb):
+            dm2aa[:,k,k,:] += dm1a
+            dm2bb[:,k,k,:] += dm1b
+
+    return dm1a, dm1b, dm2aa, dm2ab, dm2bb
 
 def read_neci_two_pdm(fciqmcci, filename, norb, directory='.'):
     '''Read a spin-free 2-rdm output from a NECI calculation, and return it in

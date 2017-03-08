@@ -585,8 +585,7 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
 
     if DMRGCI.groupname is not None:
         f.write('sym %s\n' % dmrg_sym.d2h_subgroup(DMRGCI.groupname).lower())
-    f.write('orbitals %s\n' % os.path.join(DMRGCI.runtimeDir,
-                                           DMRGCI.integralFile))
+    f.write('orbitals %s\n' % DMRGCI.integralFile)
     if maxIter is None:
         maxIter = DMRGCI.maxIter
     f.write('maxiter %i\n'%maxIter)
@@ -649,12 +648,12 @@ def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
 
 def executeBLOCK(DMRGCI):
 
-    inFile  = os.path.join(DMRGCI.runtimeDir, DMRGCI.configFile)
-    outFile = os.path.join(DMRGCI.runtimeDir, DMRGCI.outputFile)
+    inFile  = DMRGCI.configFile
+    outFile = DMRGCI.outputFile
     try:
         cmd = ' '.join((DMRGCI.mpiprefix, DMRGCI.executable, inFile))
         cmd = "%s > %s 2>&1" % (cmd, outFile)
-        check_call(cmd, shell=True)
+        check_call(cmd, cwd=DMRGCI.runtimeDir, shell=True)
     except CalledProcessError as err:
         logger.error(DMRGCI, cmd)
         DMRGCI.stdout.write(check_output(['tail', '-100', outFile]))

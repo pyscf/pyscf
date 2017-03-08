@@ -621,7 +621,7 @@ def make_loc(bas, key):
         k = bas[:,KAPPA_OF]
         dims = (l*4+2) * bas[:,NCTR_OF]
         dims[k<0] = (l[k<0] * 2 + 2) * bas[k<0,NCTR_OF]
-        dims[k>0] = (l[k>0] * 2    ) * bas[k<0,NCTR_OF]
+        dims[k>0] = (l[k>0] * 2    ) * bas[k>0,NCTR_OF]
 
     ao_loc = numpy.empty(len(dims)+1, dtype=numpy.int32)
     ao_loc[0] = 0

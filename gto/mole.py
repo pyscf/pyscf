@@ -556,10 +556,7 @@ def make_env(atoms, basis, pre_env=[], nucmod={}):
         atm0, env0 = make_atm_env(atom, ptr_env)
         ptr_env = ptr_env + len(env0)
         if nucmod:
-            if isinstance(nucmod, int):
-                assert(nucmod in (NUC_POINT, NUC_GAUSS))
-                atm0[NUC_MOD_OF] = nucmod
-            elif isinstance(nucmod, str):
+            if isinstance(nucmod, (int, str)):
                 atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod)
             elif ia+1 in nucmod:
                 atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod[ia+1])
@@ -1803,8 +1800,12 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                               '%16.12f %16.12f %16.12f Bohr\n' \
                               % ((ia+1, _symbol(atom[0])) + coorda + coordb))
         if self.nucmod:
+            if isinstance(self.nucmod, (bool, int, str)):
+                nucatms = [_symbol(atom[0]) for atom in self._atom]
+            else:
+                nucatms = self.nucmod.keys()
             self.stdout.write('[INPUT] Gaussian nuclear model for atoms %s\n' %
-                              self.nucmod.keys())
+                              nucatms)
 
         self.stdout.write('[INPUT] ---------------- BASIS SET ---------------- \n')
         self.stdout.write('[INPUT] l, kappa, [nprim/nctr], ' \
@@ -2391,12 +2392,12 @@ def _atom_symbol(symb_or_chg):
     return symb
 
 def _parse_nuc_mod(str_or_int):
-    if isinstance(str_or_int, int):
-        return str_or_int
+    nucmod = NUC_POINT
+    if isinstance(str_or_int, int) and str_or_int != 0:
+        nucmod = NUC_GAUSS
     elif 'G' in str_or_int.upper(): # 'gauss_nuc'
-        return NUC_GAUSS
-    else:
-        return NUC_POINT
+        nucmod = NUC_GAUSS
+    return nucmod
 
 def _update_from_cmdargs_(mol):
     # Ipython shell conflicts with optparse
