@@ -18,12 +18,6 @@ void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uin
     size_t ip, jp, p;
     int nset = norb / 64 + 1;
 
-//    printf("Number of orbitals:         %d\n", norb);
-//    printf("Number of determinants:     %d\n", ndet);
-//    printf("Number of string sets:      %d\n", nset);
-//    printf("Number of alpha electrons:  %d\n", neleca);
-//    printf("Number of beta electrons:   %d\n", nelecb);
-
     // Loop over pairs of determinants
     for (ip = 0; ip < ndet; ++ip) {
         uint64_t *stria = strs + ip * 2 * nset;
@@ -33,8 +27,10 @@ void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uin
             uint64_t *strjb = strs + jp * 2 * nset + nset;
             int n_excit_a = n_excitations(stria, strja, nset);
             int n_excit_b = n_excitations(strib, strjb, nset);
-//            printf("%d %d %d %d %d %d\n", stria[0], strib[0], strja[0], strjb[0], n_excit_a, n_excit_b);
+//            printf("%ld %ld %ld %ld\n", stria[0], strib[0], strja[0], strjb[0]);
+//            printf("%ld %ld %ld %ld\n", stria[1], strib[1], strja[1], strjb[1]);
 //            printf("%s %s %s %s\n", int2bin(stria[0]), int2bin(strib[0]), int2bin(strja[0]), int2bin(strjb[0]));
+//            printf("%s %s %s %s\n", int2bin(stria[1]), int2bin(strib[1]), int2bin(strja[1]), int2bin(strjb[1]));
             // Single excitation
             if ((n_excit_a + n_excit_b) == 1) {
                 int *ia;
@@ -47,11 +43,11 @@ void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uin
                     int *occsa = compute_occ_list(stria, nset, norb, neleca);
                     int *occsb = compute_occ_list(strib, nset, norb, nelecb);
  
- //                   // Test
- //                   printf("i: %d -> a: %d (%f)\n", ia[0], ia[1], sign);
- //                   for (p = 0; p < neleca; ++p) printf("%d ", occsa[p]);
- //                   printf("\n");
- //                   // Test
+//                    // Test
+//                    printf("i: %d -> a: %d (%f)\n", ia[0], ia[1], sign);
+//                    for (p = 0; p < neleca; ++p) printf("%d ", occsa[p]);
+//                    printf("\n");
+//                    // Test
 
                     double fai = h1[a * norb + i];
                     for (p = 0; p < neleca; ++p) {
@@ -78,11 +74,11 @@ void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uin
                     int *occsa = compute_occ_list(stria, nset, norb, neleca);
                     int *occsb = compute_occ_list(strib, nset, norb, nelecb);
 
- //                   // Test
- //                   printf("i: %d -> a: %d (%f)\n", ia[0], ia[1], sign);
- //                   for (p = 0; p < nelecb; ++p) printf("%d ", occsb[p]);
- //                   printf("\n");
- //                   // Test
+//                    // Test
+//                    printf("i: %d -> a: %d (%f)\n", ia[0], ia[1], sign);
+//                    for (p = 0; p < nelecb; ++p) printf("%d ", occsb[p]);
+//                    printf("\n");
+//                    // Test
                     
                     double fai = h1[a * norb + i];
                     for (p = 0; p < nelecb; ++p) {
@@ -163,11 +159,17 @@ void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uin
 
                     ci1[jp] += sign * v * civec[ip];
                     ci1[ip] += sign * v * civec[jp];
+//                    printf("%ld %ld %ld %ld\n", stria[0], strib[0], strja[0], strjb[0]);
+//                    printf("%ld %ld %ld %ld\n", stria[1], strib[1], strja[1], strjb[1]);
+//                    printf("%s %s %s %s\n", int2bin(stria[0]), int2bin(strib[0]), int2bin(strja[0]), int2bin(strjb[0]));
+//                    printf("%s %s %s %s\n", int2bin(stria[1]), int2bin(strib[1]), int2bin(strja[1]), int2bin(strjb[1]));
 //                    printf("(Case 3) i: %d j: %d -> a: %d b: %d\n", i, j, a, b);
-                }
+               }
             }
-//            printf("%20.10f %20.10f\n", ci1[ip], ci1[jp]);
+//            if (ip < 12) printf("%d %d %20.10f %20.10f\n", ip, jp, ci1[ip], ci1[jp]);
+//            else exit(1);
         } // end loop over jp
+//        if (ip == 4) exit(1);
         // Add diagonal elements
         ci1[ip] += hdiag[ip] * civec[ip];
     }
@@ -217,9 +219,10 @@ int *get_single_excitation(uint64_t *str1, uint64_t *str2, int nset) {
     int *ia = malloc(sizeof(int) * 2);
 
     for (p = 0; p < nset; ++p) {
-        uint64_t str_tmp = str1[p] ^ str2[p];
-        uint64_t str_particle = str_tmp & str2[p];
-        uint64_t str_hole = str_tmp & str1[p];
+        size_t pp = nset - p - 1;
+        uint64_t str_tmp = str1[pp] ^ str2[pp];
+        uint64_t str_particle = str_tmp & str2[pp];
+        uint64_t str_hole = str_tmp & str1[pp];
 
         if (popcount(str_particle) == 1) {
             ia[1] = trailz(str_particle) + 64 * p;
@@ -243,9 +246,10 @@ int *get_double_excitation(uint64_t *str1, uint64_t *str2, int nset) {
     int hole_ind = 0;
 
     for (p = 0; p < nset; ++p) {
-        uint64_t str_tmp = str1[p] ^ str2[p];
-        uint64_t str_particle = str_tmp & str2[p];
-        uint64_t str_hole = str_tmp & str1[p];
+        size_t pp = nset - p - 1;
+        uint64_t str_tmp = str1[pp] ^ str2[pp];
+        uint64_t str_particle = str_tmp & str2[pp];
+        uint64_t str_hole = str_tmp & str1[pp];
         int n_particle = popcount(str_particle);
         int n_hole = popcount(str_hole);
 
@@ -256,7 +260,7 @@ int *get_double_excitation(uint64_t *str1, uint64_t *str2, int nset) {
         else if (n_particle == 2) {
             int a = trailz(str_particle);
             ijab[2] = a + 64 * p;
-            str_particle &= ~(1 << a);
+            str_particle &= ~(1ULL << a);
             int b = trailz(str_particle);
             ijab[3] = b + 64 * p;
         }
@@ -268,7 +272,7 @@ int *get_double_excitation(uint64_t *str1, uint64_t *str2, int nset) {
         else if (n_hole == 2) {
             int i = trailz(str_hole);
             ijab[0] = i + 64 * p;
-            str_hole &= ~(1 << i);
+            str_hole &= ~(1ULL << i);
             int j = trailz(str_hole);
             ijab[1] = j + 64 * p;
         }
@@ -282,7 +286,7 @@ int trailz(uint64_t v) {
 
     int c = 64;
 
-    v &= -(signed) v;
+    v &= -(int64_t) v;
     if (v) c--;
     if (v & 0x00000000ffffffff) c -= 32;
     if (v & 0x0000ffff0000ffff) c -= 16;
@@ -296,15 +300,15 @@ int trailz(uint64_t v) {
 
 
 // Function to print int as a char for debug purposes
-char *int2bin(int i) {
-    size_t bits = sizeof(int) * CHAR_BIT;
+char *int2bin(uint64_t i) {
+    size_t bits = sizeof(uint64_t) * CHAR_BIT;
 
     char * str = malloc(bits + 1);
     if(!str) return NULL;
     str[bits] = 0;
 
     // type punning because signed shift is implementation-defined
-    unsigned u = *(unsigned *)&i;
+    uint64_t u = *(uint64_t *)&i;
     for(; bits--; u >>= 1)
         str[bits] = u & 1 ? '1' : '0';
 
@@ -328,21 +332,21 @@ double compute_cre_des_sign(int p, int q, uint64_t *str, int nset) {
         for (i = nset-pg; i < nset-qg-1; ++i) {
             nperm += popcount(str[i]);
         }
-        nperm += popcount(str[-1 - pg] & ((1 << pb) - 1));
-        nperm += str[-1 - qg] >> (qb + 1);
+        nperm += popcount(str[nset -1 - pg] & ((1ULL << pb) - 1));
+        nperm += str[nset -1 - qg] >> (qb + 1);
     }
     else if (pg < qg) {
         nperm = 0;
         for (i = nset-qg; i < nset-pg-1; ++i) {
             nperm += popcount(str[i]);
         }
-        nperm += popcount(str[-1 - qg] & ((1 << qb) - 1));
-        nperm += str[-1 - pg] >> (pb + 1);
+        nperm += popcount(str[nset -1 - qg] & ((1ULL << qb) - 1));
+        nperm += str[nset -1 - pg] >> (pb + 1);
     }
     else {
         uint64_t mask;
-        if (p > q) mask = (1 << pb) - (1 << (qb + 1));
-        else       mask = (1 << qb) - (1 << (pb + 1));
+        if (p > q) mask = (1ULL << pb) - (1ULL << (qb + 1));
+        else       mask = (1ULL << qb) - (1ULL << (pb + 1));
         nperm = popcount(str[pg] & mask);
     }
 

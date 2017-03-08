@@ -121,6 +121,7 @@ def contract_2e(h1, eri, civec, norb, nelec, hdiag=None, **kwargs):
 
 def contract_2e_ctypes(h1, eri, civec, norb, nelec, hdiag=None, **kwargs):
     strs = civec._strs
+    ts = civec._ts
     ndet = len(strs)
     if hdiag is None:
         hdiag = make_hdiag(h1, eri, strs, norb, nelec)
@@ -135,6 +136,7 @@ def contract_2e_ctypes(h1, eri, civec, norb, nelec, hdiag=None, **kwargs):
     hdiag = numpy.asarray(hdiag, order='C')
     ci1 = numpy.asarray(ci1, order='C')
 
+# Test
 #    for ip in range(ndet):
 #        for jp in range(ip):
 #            if abs(ts[ip] - ts[jp]).sum() > 2:
@@ -142,7 +144,10 @@ def contract_2e_ctypes(h1, eri, civec, norb, nelec, hdiag=None, **kwargs):
 #
 #            stria, strib = strs[ip].reshape(2,-1)
 #            strja, strjb = strs[jp].reshape(2,-1)
-#            print stria, strib, strja, strjb
+#            print stria[0], strib[0], strja[0], strjb[0]
+#            print stria[1], strib[1], strja[1], strjb[1]
+#            print bin(stria[0]), bin(strib[0]), bin(strja[0]), bin(strjb[0])
+#            print bin(stria[1]), bin(strib[1]), bin(strja[1]), bin(strjb[1])
 #
 #            desa, crea = str_diff(stria, strja)
 #            if len(desa) > 2:
@@ -183,7 +188,7 @@ def contract_2e_ctypes(h1, eri, civec, norb, nelec, hdiag=None, **kwargs):
 #                if len(desb) == 0:
 #                    i,j = desa
 #                    a,b = crea
-#                    print i, j, a, b
+#                    print "Case 1", i, j, a, b
 ## 6 conditions for i,j,a,b
 ## --++, ++--, -+-+, +-+-, -++-, +--+ 
 #                    if a > j or i > b:
@@ -198,12 +203,11 @@ def contract_2e_ctypes(h1, eri, civec, norb, nelec, hdiag=None, **kwargs):
 #                        sign*= cre_des_sign(a, i, stria)
 #                    ci1[jp] += sign * v * civec[ip]
 #                    ci1[ip] += sign * v * civec[jp]
-#                    print "v: ", v
 ## beta ,beta ->beta ,beta
 #                elif len(desa) == 0:
 #                    i,j = desb
 #                    a,b = creb
-#                    print i, j, a, b
+#                    print "Case 2", i, j, a, b
 #                    if a > j or i > b:
 #                        v = eri[a,j,b,i]-eri[a,i,b,j]
 #                        sign = cre_des_sign(b, i, strib)
@@ -218,18 +222,18 @@ def contract_2e_ctypes(h1, eri, civec, norb, nelec, hdiag=None, **kwargs):
 #                else:
 #                    i,a = desa[0], crea[0]
 #                    j,b = desb[0], creb[0]
-#                    print i, j, a, b
+#                    print "Case 3", i, j, a, b
 #                    v = eri[a,i,b,j]
 #                    sign = cre_des_sign(a, i, stria)
 #                    sign*= cre_des_sign(b, j, strib)
 #                    ci1[jp] += sign * v * civec[ip]
 #                    ci1[ip] += sign * v * civec[jp]
-#            print ci1[ip], ci1[jp]
+#            print ip, jp, ci1[ip], ci1[jp]
 #        ci1[ip] += hdiag[ip] * civec[ip]
-#        if (ip == 8):
-#            break
 #
 #    ci1 = numpy.zeros_like(ci1)
+#    ci1 = numpy.asarray(ci1, order='C')
+# Test
 
     libhci.contract_h_c(h1.ctypes.data_as(ctypes.c_void_p), 
                         eri.ctypes.data_as(ctypes.c_void_p), 
@@ -270,20 +274,20 @@ def cre_des_sign(p, q, string):
         n1 = 0
         for i in range(nset-pg, nset-qg-1):
             n1 += bin(string[i]).count('1')
-        n1 += bin(string[-1-pg] & ((1<<pb) - 1)).count('1')
-        n1 += string[-1-qg] >> (qb+1)
+        n1 += bin(string[-1-pg] & numpy.uint64((1<<pb) - 1)).count('1')
+        n1 += string[-1-qg] >> numpy.uint64(qb+1)
     elif pg < qg:
         n1 = 0
         for i in range(nset-qg, nset-pg-1):
             n1 += bin(string[i]).count('1')
-        n1 += bin(string[-1-qg] & ((1<<qb) - 1)).count('1')
-        n1 += string[-1-pg] >> (pb+1)
+        n1 += bin(string[-1-qg] & numpy.uint64((1<<qb) - 1)).count('1')
+        n1 += string[-1-pg] >> numpy.uint64(pb+1)
     else:
         if p > q:
-            mask = (1 << pb) - (1 << (qb+1))
+            mask = numpy.uint64((1 << pb) - (1 << (qb+1)))
         else:
-            mask = (1 << qb) - (1 << (pb+1))
-        n1 = bin(string&mask).count('1')
+            mask = numpy.uint64((1 << qb) - (1 << (pb+1)))
+        n1 = bin(string[pg]&mask).count('1')
 
     if n1 % 2:
         return -1
@@ -335,8 +339,8 @@ def str_diff(string0, string1):
     off = 0
     for i in reversed(range(nset)):
         df = string0[i] ^ string1[i]
-        des_string0.extend([x+off for x in find1(df & string0)])
-        cre_string0.extend([x+off for x in find1(df & string1)])
+        des_string0.extend([x+off for x in find1(df & string0[i])])
+        cre_string0.extend([x+off for x in find1(df & string1[i])])
         off += 64
     return des_string0, cre_string0
 
@@ -359,7 +363,7 @@ def find1(s):
 def toggle_bit(s, place):
     nset = len(s)
     g, b = place//64, place%64
-    s[-1-g] ^= (1<<b)
+    s[-1-g] ^= numpy.uint64(1<<b)
     return s
 
 def select_strs(myci, civec, h1, eri, norb, nelec):
@@ -535,15 +539,15 @@ def str2orblst(string, norb):
     for k in reversed(range(nset)):
         s = string[k]
         occ.extend([x+off for x in find1(s)])
-        for i in range(0, min(64, norb-off)):
-            if not (s & (1<<i)):
+        for i in range(0, min(64, norb-off)): 
+            if not (s & numpy.uint64(1<<i)):
                 vir.append(i+off)
         off += 64
     return occ, vir
 
 def orblst2str(lst, norb):
     nset = (norb+63) // 64
-    string = numpy.zeros(nset, dtype=numpy.int64)
+    string = numpy.zeros(nset, dtype=numpy.uint64)
     for i in lst:
         toggle_bit(string, i)
     return string
@@ -579,7 +583,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     ci0 = myci.enlarge_space(ci0, h1e, eri, norb, nelec)
 
     def hop(c):
-#        hc = myci.contract_2e(h1e, eri, as_SCIvector(c, ci_strs, ci_ts), norb, nelec, hdiag)
+        #hc = myci.contract_2e(h1e, eri, as_SCIvector(c, ci_strs, ci_ts), norb, nelec, hdiag)
         hc = myci.contract_2e_ctypes(h1e, eri, as_SCIvector(c, ci_strs, ci_ts), norb, nelec, hdiag)
         return hc.ravel()
     precond = lambda x, e, *args: x/(hdiag-e+myci.level_shift)
@@ -735,7 +739,7 @@ if __name__ == '__main__':
     strs = (numpy.random.random((14,3)) * 4).astype(numpy.uint64)
     print strs
     print argunique(strs)
-    ts = numpy.ones((len(strs),2), dtype=int)
+    ts = numpy.ones((len(strs),2), dtype=int64)
     ts[10:,1] = 2
     print argunique_with_t(strs, ts)
 

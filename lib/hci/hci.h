@@ -10,6 +10,6 @@ int popcount(uint64_t bb);
 int *get_single_excitation(uint64_t *str1, uint64_t *str2, int nset);
 int *get_double_excitation(uint64_t *str1, uint64_t *str2, int nset);
 int trailz(uint64_t v);
-char *int2bin(int i);
+char *int2bin(uint64_t i);
 double compute_cre_des_sign(int a, int i, uint64_t *stria, int nset);
 int *compute_occ_list(uint64_t *string, int nset, int norb, int nelec);
