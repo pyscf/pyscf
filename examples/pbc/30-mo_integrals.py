@@ -6,7 +6,7 @@ MO integrals in PBC code
 
 
 import numpy
-from pyscf.pbc import gto, df, tools
+from pyscf.pbc import gto, scf, tools
 
 cell = gto.M(
     h = numpy.eye(3)*3.5668,
