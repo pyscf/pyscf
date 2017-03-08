@@ -10,7 +10,7 @@ Non-relativistic Unrestricted Kohn-Sham
 import time
 import numpy
 from pyscf.lib import logger
-import pyscf.scf
+from pyscf.scf import uhf
 from pyscf.dft import gen_grid
 from pyscf.dft import numint
 from pyscf.dft import rks
@@ -67,7 +67,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vk += ks._vk_last
             ks._dm_last = dm
             ks._vj_last, ks._vk_last = vj, vk
-        vhf = pyscf.scf.uhf._makevhf(vj, vk*hyb)
+        vhf = uhf._makevhf(vj, vk*hyb)
 
         if ground_state:
             ks._exc -=(numpy.einsum('ij,ji', dm[0], vk[0]) +
@@ -95,15 +95,15 @@ def energy_elec(ks, dm, h1e=None, vhf=None):
     return tot_e, ks._ecoul+ks._exc
 
 
-class UKS(pyscf.scf.uhf.UHF):
+class UKS(uhf.UHF):
     '''Unrestricted Kohn-Sham
     See pyscf/dft/rks.py RKS class for the usage of the attributes'''
     def __init__(self, mol):
-        pyscf.scf.uhf.UHF.__init__(self, mol)
+        uhf.UHF.__init__(self, mol)
         rks._dft_common_init_(self)
 
     def dump_flags(self):
-        pyscf.scf.uhf.UHF.dump_flags(self)
+        uhf.UHF.dump_flags(self)
         logger.info(self, 'XC functionals = %s', self.xc)
         logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
         self.grids.dump_flags()

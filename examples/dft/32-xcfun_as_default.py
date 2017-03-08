@@ -13,10 +13,19 @@ mol = gto.M(
     basis = 'ccpvdz')
 
 #
-# Modifying _NumInt.libxc changes the default XC library globally.  All DFT
-# calculations will call the xcfun to evaluate XC values.
+# Scheme 1: Change ._numint of MF object for a single calculation.
 #
-dft.numint._NumInt.libxc = dft.xcfun
+mf = dft.RKS(mol)
+mf._numint.libxc = dft.xcfun
+mf.xc = 'b88,lyp'
+mf.kernel()
+grad.RKS(mf).run()
+
+#
+# Scheme 2: Change the default XC library globally.  All DFT calculations will
+# call xcfun for XC functional values.
+#
+dft.numint.libxc = dft.xcfun
 mf = dft.RKS(mol)
 mf.xc = 'b88,lyp'
 mf.kernel()

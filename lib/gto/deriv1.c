@@ -16,15 +16,13 @@ double CINTcommon_fac_sp(int l);
 int GTOcontract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
                      int l, int nprim, int nctr, int ngrids, double fac)
 {
-        int i, j;
-        double arr, maxc;
-        double eprim[nprim*BLKSIZE];
+        int i, j, k;
+        double arr, maxc, eprim;
         double logcoeff[nprim];
         double rr[ngrids];
         double *gridx = coord;
         double *gridy = coord+BLKSIZE;
         double *gridz = coord+BLKSIZE*2;
-        double *peprim = eprim;
         int not0 = 0;
 
         // the maximum value of the coefficients for each pGTO
@@ -40,30 +38,18 @@ int GTOcontract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
                 rr[i] = gridx[i]*gridx[i] + gridy[i]*gridy[i] + gridz[i]*gridz[i];
         }
 
+        memset(ectr, 0, sizeof(double)*nctr*BLKSIZE);
+        for (j = 0; j < nprim; j++) {
         for (i = 0; i < ngrids; i++) {
-                for (j = 0; j < nprim; j++) {
-                        arr = alpha[j] * rr[i];
-                        if (arr-logcoeff[j] < EXPCUTOFF) {
-                                peprim[j] = exp_cephes(-arr) * fac;
-                                not0 = 1;
-                        } else {
-                                peprim[j] = 0;
+                arr = alpha[j] * rr[i];
+                if (arr-logcoeff[j] < EXPCUTOFF) {
+                        not0 = 1;
+                        eprim = exp_cephes(-arr) * fac;
+                        for (k = 0; k < nctr; k++) {
+                                ectr[k*BLKSIZE+i] += eprim * coeff[k*nprim+j];
                         }
                 }
-                peprim += nprim;
-        }
-
-        if (not0) {
-                const char TRANS_T = 'T';
-                const char TRANS_N = 'N';
-                const double D0 = 0;
-                const double D1 = 1;
-                const int ldc = BLKSIZE;
-                dgemm_(&TRANS_T, &TRANS_N, &ngrids, &nctr, &nprim,
-                       &D1, eprim, &nprim, coeff, &nprim, &D0, ectr, &ldc);
-        } else {
-                memset(ectr, 0, sizeof(double)*nctr*BLKSIZE);
-        }
+        } }
 
         return not0;
 }
@@ -200,15 +186,15 @@ void GTOshell_eval_grid_cart(double *gto, double *ri, double *exps,
 int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
                      int l, int nprim, int nctr, int ngrids, double fac)
 {
-        int i, j;
-        double arr, maxc;
-        double eprim[nprim*BLKSIZE];
+        int i, j, k;
+        double arr, maxc, eprim;
         double logcoeff[nprim];
         double rr[ngrids];
         double *gridx = coord;
         double *gridy = coord+BLKSIZE;
         double *gridz = coord+BLKSIZE*2;
-        double *peprim = eprim;
+        double *ectr_2a = ectr + NPRIMAX*BLKSIZE;
+        double coeff2a[nprim*nctr];
         int not0 = 0;
 
         // the maximum value of the coefficients for each pGTO
@@ -224,44 +210,26 @@ int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
                 rr[i] = gridx[i]*gridx[i] + gridy[i]*gridy[i] + gridz[i]*gridz[i];
         }
 
+        memset(ectr   , 0, sizeof(double)*nctr*BLKSIZE);
+        memset(ectr_2a, 0, sizeof(double)*nctr*BLKSIZE);
+        // -2 alpha_i C_ij exp(-alpha_i r_k^2)
+        for (i = 0; i < nctr; i++) {
+        for (j = 0; j < nprim; j++) {
+                coeff2a[i*nprim+j] = -2.*alpha[j] * coeff[i*nprim+j];
+        } }
+
+        for (j = 0; j < nprim; j++) {
         for (i = 0; i < ngrids; i++) {
-                for (j = 0; j < nprim; j++) {
-                        arr = alpha[j] * rr[i];
-                        if (arr-logcoeff[j] < EXPCUTOFF) {
-                                peprim[j] = exp_cephes(-arr) * fac;
-                                not0 = 1;
-                        } else {
-                                peprim[j] = 0;
+                arr = alpha[j] * rr[i];
+                if (arr-logcoeff[j] < EXPCUTOFF) {
+                        not0 = 1;
+                        eprim = exp_cephes(-arr) * fac;
+                        for (k = 0; k < nctr; k++) {
+                                ectr   [k*BLKSIZE+i] += eprim * coeff  [k*nprim+j];
+                                ectr_2a[k*BLKSIZE+i] += eprim * coeff2a[k*nprim+j];
                         }
                 }
-                peprim += nprim;
-        }
-
-        if (not0) {
-                const char TRANS_T = 'T';
-                const char TRANS_N = 'N';
-                const double D0 = 0;
-                const double D1 = 1;
-                const int ldc = BLKSIZE;
-                double d2 = -2;
-                double *ectr_2a = ectr;
-                double coeff_a[nprim*nctr];
-                dgemm_(&TRANS_T, &TRANS_N, &ngrids, &nctr, &nprim,
-                       &D1, eprim, &nprim, coeff, &nprim, &D0, ectr, &ldc);
-
-                // -2 alpha_i C_ij exp(-alpha_i r_k^2)
-                for (i = 0; i < nctr; i++) {
-                for (j = 0; j < nprim; j++) {
-                        coeff_a[i*nprim+j] = coeff[i*nprim+j]*alpha[j];
-                } }
-
-                ectr_2a += NPRIMAX*BLKSIZE;
-                dgemm_(&TRANS_T, &TRANS_N, &ngrids, &nctr, &nprim,
-                       &d2, eprim, &nprim, coeff_a, &nprim,
-                       &D0, ectr_2a, &ldc);
-        } else {
-                memset(ectr, 0, sizeof(double)*nctr*BLKSIZE*2);
-        }
+        } }
 
         return not0;
 }

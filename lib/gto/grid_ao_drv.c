@@ -140,9 +140,9 @@ void GTOeval_sph_iter(void (*feval)(),  int (*fexp)(), double fac,
         int i, k, l, np, nc, atm_id, bas_id, deg, dcart, ao_id;
         double fac1;
         double *p_exp, *pcoeff, *pcoord, *pcart, *ri, *pao;
-        double *eprim = buf;
-        double *cart_gto = buf + NPRIMAX*BLKSIZE*2;
-        double grid2atm[atmcount*3*BLKSIZE]; // [atm_id,xyz,grid]
+        double *grid2atm = buf; // [atm_id,xyz,grid]
+        double *eprim = grid2atm + atmcount*3*BLKSIZE;
+        double *cart_gto = eprim + NPRIMAX*BLKSIZE*2;
 
         _fill_grid2atm(grid2atm, coord, bgrids, ngrids,
                        atm+atmstart*ATM_SLOTS, atmcount, bas, nbas, env);
@@ -202,8 +202,8 @@ void GTOeval_cart_iter(void (*feval)(),  int (*fexp)(), double fac,
         int i, k, l, np, nc, atm_id, bas_id, deg, ao_id;
         double fac1;
         double *p_exp, *pcoeff, *pcoord, *pcart, *ri, *pao;
-        double *eprim = buf;
-        double grid2atm[atmcount*3*BLKSIZE]; // [atm_id,xyz,grid]
+        double *grid2atm = buf; // [atm_id,xyz,grid]
+        double *eprim = grid2atm + atmcount*3*BLKSIZE;
 
         _fill_grid2atm(grid2atm, coord, bgrids, ngrids,
                        atm+atmstart*ATM_SLOTS, atmcount, bas, nbas, env);
@@ -251,9 +251,9 @@ void GTOeval_spinor_iter(void (*feval)(), int (*fexp)(), void (*c2s)(), double f
         double *p_exp, *pcoeff, *pcoord, *pcart, *ri;
         double complex *aoa = ao;
         double complex *aob = ao + ncomp*nao*ngrids;
-        double *eprim = buf;
-        double *cart_gto = buf + NPRIMAX*BLKSIZE*2;
-        double grid2atm[atmcount*3*BLKSIZE]; // [atm_id,xyz,grid]
+        double *grid2atm = buf; // [atm_id,xyz,grid]
+        double *eprim = grid2atm + atmcount*3*BLKSIZE;
+        double *cart_gto = eprim + NPRIMAX*BLKSIZE*2;
 
         _fill_grid2atm(grid2atm, coord, bgrids, ngrids,
                        atm+atmstart*ATM_SLOTS, atmcount, bas, nbas, env);

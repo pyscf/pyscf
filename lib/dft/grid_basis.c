@@ -23,8 +23,6 @@ void VXCnr_ao_screen(unsigned char *non0table, double *coords, int ngrids,
         double dr[3];
         double *p_exp, *pcoeff, *ratm;
 
-        memset(non0table, 0, sizeof(unsigned char) * nblk*nbas);
-
         for (bas_id = 0; bas_id < nbas; bas_id++) {
                 np = bas[NPRIM_OF];
                 nc = bas[NCTR_OF ];
@@ -55,6 +53,7 @@ void VXCnr_ao_screen(unsigned char *non0table, double *coords, int ngrids,
                                         }
                                 }
                         }
+                        non0table[ib*nbas+bas_id] = 0;
 next_blk:;
                 }
                 bas += BAS_SLOTS;

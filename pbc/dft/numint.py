@@ -594,15 +594,6 @@ class _NumInt(dft.numint._NumInt):
     '''Generalization of pyscf's _NumInt class for a single k-point shift and
     periodic images.
     '''
-    def __init__(self):
-        dft.numint._NumInt.__init__(self)
-        self.cell = None
-# cache AO values in ._ao
-        self._ao = tempfile.NamedTemporaryFile(prefix='numint', dir=lib.param.TMPDIR)
-        self._coords = None
-        self._deriv = None
-        self._kpt = None
-
     def eval_ao(self, cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0,
                 shl_slice=None, non0tab=None, out=None, verbose=None):
         return eval_ao(cell, coords, kpt, deriv, relativity, shl_slice,
@@ -697,11 +688,6 @@ class _KNumInt(dft.numint._NumInt):
     def __init__(self, kpts=numpy.zeros((1,3))):
         dft.numint._NumInt.__init__(self)
         self.kpts = numpy.reshape(kpts, (-1,3))
-        self.cell = None
-        self._ao = tempfile.NamedTemporaryFile(prefix='numint', dir=lib.param.TMPDIR)
-        self._coords = None
-        self._deriv = None
-        self._kpts = None
 
     def eval_ao(self, cell, coords, kpts=numpy.zeros((1,3)), deriv=0, relativity=0,
                 shl_slice=None, non0tab=None, out=None, verbose=None, **kwargs):

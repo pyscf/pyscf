@@ -41,7 +41,6 @@ void PBCnr_ao_screen(unsigned char *non0table, double *coords, int ngrids,
                      int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
-        memset(non0table, 0, sizeof(unsigned char) * nblk*nbas);
 
 #pragma omp parallel default(none) \
         shared(Ls, nimgs, coords, ngrids, non0table, atm, natm, bas, nbas, env)
@@ -89,6 +88,7 @@ void PBCnr_ao_screen(unsigned char *non0table, double *coords, int ngrids,
                                 }
                         }
                 }
+                non0table[ib*nbas+bas_id] = 0;
 next_blk:;
                 }
         }
@@ -163,10 +163,10 @@ void PBCeval_sph_iter(void (*feval)(),  int (*fexp)(),
         size_t off;
         double fac;
         double *p_exp, *pcoeff, *pcoord, *pcart, *ri, *pao;
-        double *eprim = buf;
-        double *cart_gto = buf + NPRIMAX*BLKSIZE*2;
+        double *grid2atm = buf; // [atm_id,xyz,grid]
+        double *eprim = grid2atm + atmcount*3*BLKSIZE;
+        double *cart_gto = eprim + NPRIMAX*BLKSIZE*2;
         double *aobuf = cart_gto + BLKSIZE*NCTR_CART*ncomp*param[POS_E1];
-        double grid2atm[atmcount*3*BLKSIZE]; // [atm_id,xyz,grid]
 
         for (i = 0; i < ncomp; i++) {
                 off = (i*nao+ao_loc[sh0])*ngrids + offao;

@@ -11,11 +11,13 @@ from pyscf.lib import logger
 try:
     from pyscf.dft import libxc
 except (ImportError, OSError):
-    from pyscf.dft import xcfun as libxc
+    from pyscf.dft import xcfun
+    libxc = xcfun
 
 libdft = lib.load_library('libdft')
 OCCDROP = 1e-12
-BLKSIZE = 64  # needs to be the same to lib/gto/grid_ao_drv.c
+BLKSIZE = 128  # needs to be the same to lib/gto/grid_ao_drv.c
+SWITCH_SIZE = 800
 
 def eval_ao(mol, coords, deriv=0, relativity=0, shls_slice=None,
             non0tab=None, out=None, verbose=None):
@@ -423,6 +425,9 @@ def eval_mat(mol, ao, weight, rho, vxc,
 def _dot_ao_ao(mol, ao1, ao2, non0tab, shls_slice, ao_loc, hermi=0):
     '''return numpy.dot(ao1.T, ao2)'''
     ngrids, nao = ao1.shape
+    if nao < SWITCH_SIZE:
+        return lib.dot(ao1.T.conj(), ao2)
+
     if not ao1.flags.f_contiguous:
         ao1 = lib.transpose(ao1)
     if not ao2.flags.f_contiguous:
@@ -447,6 +452,9 @@ def _dot_ao_ao(mol, ao1, ao2, non0tab, shls_slice, ao_loc, hermi=0):
 def _dot_ao_dm(mol, ao, dm, non0tab, shls_slice, ao_loc, out=None):
     '''return numpy.dot(ao, dm)'''
     ngrids, nao = ao.shape
+    if nao < SWITCH_SIZE:
+        return lib.dot(ao, dm)
+
     if not ao.flags.f_contiguous:
         ao = lib.transpose(ao)
     if ao.dtype == numpy.double:
@@ -1173,13 +1181,8 @@ def large_rho_indices(ni, mol, dm, grids, cutoff=1e-10, max_memory=2000):
 
 
 class _NumInt(object):
-    '''libxc is the default xc functional evaluator.  Change the default one
-    by setting
-    _NumInt.libxc = dft.xcfun
-    '''
-    libxc = libxc
-
     def __init__(self):
+        self.libxc = libxc
         self.non0tab = None
 
     def nr_vxc(self, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=1,

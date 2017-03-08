@@ -6,6 +6,8 @@ from pyscf import gto
 from pyscf import dft
 from pyscf import lib
 
+dft.numint.SWITCH_SIZE = 0
+
 mol = gto.Mole()
 mol.verbose = 0
 mol.output = None
@@ -25,11 +27,11 @@ def finger(a):
 class KnowValues(unittest.TestCase):
     def test_make_mask(self):
         non0 = dft.numint.make_mask(mol, mf.grids.coords)
-        self.assertEqual(non0.sum(), 19622)
+        self.assertEqual(non0.sum(), 10244)
         self.assertAlmostEqual(finger(non0),
-                               1.3143191152489875, 9)
+                               -2.6880474684794895, 9)
         self.assertAlmostEqual(finger(numpy.cos(non0)),
-                               -0.55017664009781386, 9)
+                               2.5961863522983433, 9)
 
     def test_dot_ao_dm(self):
         non0tab = dft.numint.make_mask(mol, mf.grids.coords)

@@ -10,7 +10,7 @@ Non-relativistic restricted Kohn-Sham
 import time
 import numpy
 from pyscf.lib import logger
-import pyscf.scf
+from pyscf.scf import hf
 from pyscf.dft import gen_grid
 from pyscf.dft import numint
 
@@ -135,8 +135,8 @@ def energy_elec(ks, dm, h1e=None, vhf=None):
     return tot_e, ks._ecoul+ks._exc
 
 
-class RKS(pyscf.scf.hf.RHF):
-    __doc__ = '''Restricted Kohn-Sham\n''' + pyscf.scf.hf.SCF.__doc__ + '''
+class RKS(hf.RHF):
+    __doc__ = '''Restricted Kohn-Sham\n''' + hf.SCF.__doc__ + '''
     Attributes for RKS:
         xc : str
             'X_name,C_name' for the XC functional.  Default is 'lda,vwn'
@@ -188,11 +188,11 @@ class RKS(pyscf.scf.hf.RHF):
     -76.415443079840458
     '''
     def __init__(self, mol):
-        pyscf.scf.hf.RHF.__init__(self, mol)
+        hf.RHF.__init__(self, mol)
         _dft_common_init_(self)
 
     def dump_flags(self):
-        pyscf.scf.hf.RHF.dump_flags(self)
+        hf.RHF.dump_flags(self)
         logger.info(self, 'XC functionals = %s', self.xc)
         logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
         self.grids.dump_flags()

@@ -8,7 +8,7 @@ import ctypes
 from pyscf import lib
 from pyscf.gto.moleintor import make_loc
 
-BLKSIZE = 64 # needs to be the same to lib/gto/grid_ao_drv.c
+BLKSIZE = 128 # needs to be the same to lib/gto/grid_ao_drv.c
 ANG_OF     = 1
 NPRIM_OF   = 2
 NCTR_OF    = 3
