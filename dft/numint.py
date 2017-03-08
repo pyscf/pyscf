@@ -420,39 +420,50 @@ def eval_mat(mol, ao, weight, rho, vxc,
     return mat + mat.T
 
 
-def _dot_ao_ao(mol, ao1, ao2, non0tab, shls_slice, ao_loc, hermi=False):
+def _dot_ao_ao(mol, ao1, ao2, non0tab, shls_slice, ao_loc, hermi=0):
     '''return numpy.dot(ao1.T, ao2)'''
     ngrids, nao = ao1.shape
     if not ao1.flags.f_contiguous:
         ao1 = lib.transpose(ao1)
     if not ao2.flags.f_contiguous:
         ao2 = lib.transpose(ao2)
-    vv = numpy.empty((nao,nao))
-    libdft.VXCdot_ao_ao(vv.ctypes.data_as(ctypes.c_void_p),
-                        ao1.ctypes.data_as(ctypes.c_void_p),
-                        ao2.ctypes.data_as(ctypes.c_void_p),
-                        ctypes.c_int(nao), ctypes.c_int(ngrids),
-                        ctypes.c_int(mol.nbas), ctypes.c_int(hermi),
-                        non0tab.ctypes.data_as(ctypes.c_void_p),
-                        (ctypes.c_int*2)(*shls_slice),
-                        ao_loc.ctypes.data_as(ctypes.c_void_p))
+    if ao1.dtype == numpy.double:
+        fn = libdft.VXCdot_ao_ao
+        assert(ao2.dtype == numpy.double)
+    else:
+        fn = libdft.VXCzdot_ao_ao
+        assert(ao1.dtype == ao2.dtype == numpy.complex128)
+    vv = numpy.empty((nao,nao), dtype=ao1.dtype)
+    fn(vv.ctypes.data_as(ctypes.c_void_p),
+       ao1.ctypes.data_as(ctypes.c_void_p),
+       ao2.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_int(nao), ctypes.c_int(ngrids),
+       ctypes.c_int(mol.nbas), ctypes.c_int(hermi),
+       non0tab.ctypes.data_as(ctypes.c_void_p),
+       (ctypes.c_int*2)(*shls_slice),
+       ao_loc.ctypes.data_as(ctypes.c_void_p))
     return vv
 
 def _dot_ao_dm(mol, ao, dm, non0tab, shls_slice, ao_loc, out=None):
     '''return numpy.dot(ao, dm)'''
     ngrids, nao = ao.shape
-    vm = numpy.ndarray((ngrids,dm.shape[1]), order='F', buffer=out)
     if not ao.flags.f_contiguous:
         ao = lib.transpose(ao)
+    if ao.dtype == numpy.double:
+        fn = libdft.VXCdot_ao_dm
+        assert(dm.dtype == numpy.double)
+    else:
+        fn = libdft.VXCzdot_ao_dm
+        assert(dm.dtype == ao.dtype == numpy.complex128)
+    vm = numpy.ndarray((ngrids,dm.shape[1]), dtype=ao.dtype, order='F', buffer=out)
     dm = numpy.asarray(dm, order='C')
-    libdft.VXCdot_ao_dm(vm.ctypes.data_as(ctypes.c_void_p),
-                        ao.ctypes.data_as(ctypes.c_void_p),
-                        dm.ctypes.data_as(ctypes.c_void_p),
-                        ctypes.c_int(nao), ctypes.c_int(dm.shape[1]),
-                        ctypes.c_int(ngrids), ctypes.c_int(mol.nbas),
-                        non0tab.ctypes.data_as(ctypes.c_void_p),
-                        (ctypes.c_int*2)(*shls_slice),
-                        ao_loc.ctypes.data_as(ctypes.c_void_p))
+    fn(vm.ctypes.data_as(ctypes.c_void_p),
+       ao.ctypes.data_as(ctypes.c_void_p),
+       dm.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_int(nao), ctypes.c_int(dm.shape[1]),
+       ctypes.c_int(ngrids), ctypes.c_int(mol.nbas),
+       non0tab.ctypes.data_as(ctypes.c_void_p),
+       (ctypes.c_int*2)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p))
     return vm
 
 def nr_vxc(mol, grids, xc_code, dm, spin=0, relativity=0, hermi=1,

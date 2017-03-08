@@ -186,64 +186,45 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', verbose=None):
         non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas),
                               dtype=numpy.uint8)
         non0tab[:] = 0xff
-    shls_slice = (0, cell.nbas)
-    ao_loc = cell.ao_loc_nr()
 
     # complex orbitals or density matrix
     if numpy.iscomplexobj(ao) or numpy.iscomplexobj(dm):
+        shls_slice = (0, cell.nbas)
+        ao_loc = cell.ao_loc_nr()
+        dm = dm.astype(numpy.complex128)
 
-        def re_im(a):
-            return (numpy.asarray(a.real, order='F'),
-                    numpy.asarray(a.imag, order='F'))
-        dm_re, dm_im = re_im(dm)
-        def dot_dm_ket(ket_re, ket_im):
-            # DM * ket: e.g. ir denotes dm_im | ao_re >
-            c0_rr = _dot_ao_dm(cell, ket_re, dm_re, non0tab, shls_slice, ao_loc)
-            c0_ri = _dot_ao_dm(cell, ket_im, dm_re, non0tab, shls_slice, ao_loc)
-            c0_ir = _dot_ao_dm(cell, ket_re, dm_im, non0tab, shls_slice, ao_loc)
-            c0_ii = _dot_ao_dm(cell, ket_im, dm_im, non0tab, shls_slice, ao_loc)
-            return c0_ri, c0_rr, c0_ir, c0_ii
-        def dot_bra(bra_re, bra_im, c0):
+        def dot_bra(bra, aodm):
             # bra * DM
-            c0_ri, c0_rr, c0_ir, c0_ii = c0
-            rho = (numpy.einsum('pi,pi->p', bra_im, c0_ri) +
-                   numpy.einsum('pi,pi->p', bra_re, c0_rr) +
-                   numpy.einsum('pi,pi->p', bra_im, c0_ir) -
-                   numpy.einsum('pi,pi->p', bra_re, c0_ii))
+            rho  = numpy.einsum('pi,pi->p', bra.real, aodm.real)
+            rho += numpy.einsum('pi,pi->p', bra.imag, aodm.imag)
             return rho
 
         if xctype == 'LDA':
-            ao_re, ao_im = re_im(ao)
-            c0 = dot_dm_ket(ao_re, ao_im)
-            rho = dot_bra(ao_re, ao_im, c0)
+            c0 = _dot_ao_dm(cell, ao, dm, non0tab, shls_slice, ao_loc)
+            rho = dot_bra(ao, c0)
 
         elif xctype == 'GGA':
             rho = numpy.empty((4,ngrids))
-            ao0_re, ao0_im = re_im(ao[0])
-            c0 = dot_dm_ket(ao0_re, ao0_im)
-            rho[0] = dot_bra(ao0_re, ao0_im, c0)
+            c0 = _dot_ao_dm(cell, ao[0], dm, non0tab, shls_slice, ao_loc)
+            rho[0] = dot_bra(ao[0], c0)
 
             for i in range(1, 4):
-                ao_re, ao_im = re_im(ao[i])
-                rho[i] = dot_bra(ao_re, ao_im, c0) * 2
+                rho[i] = dot_bra(ao[i], c0) * 2
 
         else:
             # rho[4] = \nabla^2 rho, rho[5] = 1/2 |nabla f|^2
             rho = numpy.empty((6,ngrids))
-            ao0_re, ao0_im = re_im(ao[0])
-            c0 = dot_dm_ket(ao0_re, ao0_im)
-            rho[0] = dot_bra(ao0_re, ao0_im, c0)
+            c0 = _dot_ao_dm(cell, ao[0], dm, non0tab, shls_slice, ao_loc)
+            rho[0] = dot_bra(ao[0], c0)
 
             rho[5] = 0
             for i in range(1, 4):
-                ao_re, ao_im = re_im(ao[i])
-                rho[i] = dot_bra(ao_re, ao_im, c0) * 2 # *2 for +c.c.
-                c1 = dot_dm_ket(ao_re, ao_im)
-                rho[5] += dot_bra(ao_re, ao_im, c1)
+                rho[i] = dot_bra(ao[i], c0) * 2  # *2 for +c.c.
+                c1 = _dot_ao_dm(cell, ao[i], dm, non0tab, shls_slice, ao_loc)
+                rho[5] += dot_bra(ao[i], c1)
             XX, YY, ZZ = 4, 7, 9
             ao2 = ao[XX] + ao[YY] + ao[ZZ]
-            ao_re, ao_im = re_im(ao2)
-            rho[4] = dot_bra(ao_re, ao_im, c0)
+            rho[4] = dot_bra(ao2, c0)
             rho[4] += rho[5]
             rho[4] *= 2 # *2 for +c.c.
             rho[5] *= .5
@@ -297,21 +278,9 @@ def eval_mat(cell, ao, weight, rho, vxc,
         non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas),
                               dtype=numpy.uint8)
         non0tab[:] = 0xff
-    shls_slice = (0, cell.nbas)
-    ao_loc = cell.ao_loc_nr()
-
     if numpy.iscomplexobj(ao):
-        def dot(ao1, ao2):
-            ao1_re = numpy.asarray(ao1.real, order='F')
-            ao1_im = numpy.asarray(ao1.imag, order='F')
-            ao2_re = numpy.asarray(ao2.real, order='F')
-            ao2_im = numpy.asarray(ao2.imag, order='F')
-
-            mat_re  = _dot_ao_ao(cell, ao1_re, ao2_re, non0tab, shls_slice, ao_loc)
-            mat_re += _dot_ao_ao(cell, ao1_im, ao2_im, non0tab, shls_slice, ao_loc)
-            mat_im  = _dot_ao_ao(cell, ao1_re, ao2_im, non0tab, shls_slice, ao_loc)
-            mat_im -= _dot_ao_ao(cell, ao1_im, ao2_re, non0tab, shls_slice, ao_loc)
-            return mat_re + 1j*mat_im
+        shls_slice = (0, cell.nbas)
+        ao_loc = cell.ao_loc_nr()
 
         if xctype == 'LDA':
             if not isinstance(vxc, numpy.ndarray) or vxc.ndim == 2:
@@ -320,7 +289,7 @@ def eval_mat(cell, ao, weight, rho, vxc,
                 vrho = vxc
             # *.5 because return mat + mat.T
             aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho)
-            mat = dot(ao, aow)
+            mat = _dot_ao_ao(cell, ao, aow, non0tab, shls_slice, ao_loc)
 
         else:
             vrho, vsigma = vxc[:2]
@@ -339,21 +308,21 @@ def eval_mat(cell, ao, weight, rho, vxc,
                 wv[1:4] = rho_a[1:4] * (weight * vsigma[0] * 2)  # sigma_uu
                 wv[1:4]+= rho_b[1:4] * (weight * vsigma[1])      # sigma_ud
             aow = numpy.einsum('npi,np->pi', ao[:4], wv)
-            mat = dot(ao[0], aow)
+            mat = _dot_ao_ao(cell, ao[0], aow, non0tab, shls_slice, ao_loc)
 
         if xctype == 'MGGA':
             vlapl, vtau = vxc[2:]
             if vlapl is None:
                 vlpal = 0
             aow = numpy.einsum('npi,p->npi', ao[1:4], weight * (.25*vtau+vlapl))
-            mat += dot(ao[1], aow[0])
-            mat += dot(ao[2], aow[1])
-            mat += dot(ao[3], aow[2])
+            mat += _dot_ao_ao(cell, ao[1], aow[0], non0tab, shls_slice, ao_loc)
+            mat += _dot_ao_ao(cell, ao[2], aow[1], non0tab, shls_slice, ao_loc)
+            mat += _dot_ao_ao(cell, ao[3], aow[2], non0tab, shls_slice, ao_loc)
 
             XX, YY, ZZ = 4, 7, 9
             ao2 = ao[XX] + ao[YY] + ao[ZZ]
             aow = numpy.einsum('pi,p->pi', ao2, .5 * weight * vlapl)
-            vmat += dot(ao[0], aow)
+            mat += _dot_ao_ao(cell, ao[0], aow, non0tab, shls_slice, ao_loc)
 
         return (mat + mat.T.conj())
 
@@ -757,8 +726,6 @@ class _KNumInt(dft.numint._NumInt):
         Returns:
            rhoR : (ngs,) ndarray
         '''
-        if non0tab is None:
-            non0tab = self.non0tab
         nkpts = len(ao_kpts)
         ngs = ao_kpts[0].shape[-2]
         rhoR = 0
@@ -814,8 +781,6 @@ class _KNumInt(dft.numint._NumInt):
 
     def eval_mat(self, cell, ao_kpts, weight, rho, vxc,
                  non0tab=None, xctype='LDA', spin=0, verbose=None):
-        if non0tab is None:
-            non0tab = self.non0tab
         nkpts = len(ao_kpts)
         mat = [eval_mat(cell, ao_kpts[k], weight, rho, vxc,
                         non0tab, xctype, spin, verbose)
