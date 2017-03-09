@@ -209,7 +209,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
             for k, ji in enumerate(adapted_ji_idx):
                 v = feri['j3c/%d'%ji][:naux0]
                 del(feri['j3c/%d'%ji])
-                feri['j3c/%d'%k] = v
+                feri['j3c/%d'%ji] = v
 
     for k, kpt in enumerate(uniq_kpts):
         make_kpt(k)
