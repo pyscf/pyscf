@@ -35,6 +35,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
     max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
     for k, pqkR, pqkI, p0, p1 \
             in mydf.ft_loop(mydf.gs, kpt_allow, kpts, max_memory=max_memory):
+        #:rho = numpy.einsum('lkL,lk->L', pqk.conj(), dm)
         for i in range(nset):
             rhoR = numpy.dot(dmsR[i,k], pqkR)
             rhoR+= numpy.dot(dmsI[i,k], pqkI)
@@ -244,7 +245,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     t2 = t1
 
     # rho_rs(-G+k_rs) is computed as conj(rho_{rs^*}(G-k_rs))
-    #               == conj(transpose(rho_sr(G+k_sr), (0,2,1)))
+    #                 == conj(transpose(rho_sr(G+k_sr), (0,2,1)))
     blksize = max(int(max_memory*.25e6/16/nao**2), 16)
     bufR = numpy.empty(blksize*nao**2)
     bufI = numpy.empty(blksize*nao**2)
@@ -253,6 +254,8 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
         pqkR = pqkR.reshape(nao,nao,-1)
         pqkI = pqkI.reshape(nao,nao,-1)
         if with_j:
+            #:v4 = numpy.einsum('ijL,lkL->ijkl', pqk, pqk.conj())
+            #:vj += numpy.einsum('ijkl,lk->ij', v4, dm)
             for i in range(nset):
                 rhoR = numpy.einsum('pq,pqk->k', dmsR[i], pqkR)
                 rhoR+= numpy.einsum('pq,pqk->k', dmsI[i], pqkI)
@@ -292,7 +295,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
         pqkR = pqkI = coulG = pLqR = pLqI = iLkR = iLkI = None
         #t2 = log.timer_debug1('%d:%d'%(p0,p1), *t2)
     bufR = bufI = None
-    t1 = log.timer_debug1('pwdf_jk.get_jk', *t1)
+    t1 = log.timer_debug1('aft_jk.get_jk', *t1)
 
     if with_j:
         if j_real:
@@ -315,7 +318,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
 if __name__ == '__main__':
     from pyscf.pbc import gto as pgto
     from pyscf.pbc import scf as pscf
-    from pyscf.pbc.df import pwdf
+    from pyscf.pbc.df import aft
 
     L = 5.
     n = 5
@@ -333,7 +336,7 @@ if __name__ == '__main__':
     cell.build(0,0)
     cell.verbose = 5
 
-    df = pwdf.PWDF(cell)
+    df = aft.AFTDF(cell)
     df.gs = (15,)*3
     dm = pscf.RHF(cell).get_init_guess()
     vj, vk = df.get_jk(cell, dm)

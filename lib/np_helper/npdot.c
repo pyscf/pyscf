@@ -5,6 +5,7 @@
 #include "vhf/fblas.h"
 
 #define MIN(X,Y)        ((X) < (Y) ? (X) : (Y))
+#define MAX(X,Y)        ((X) > (Y) ? (X) : (Y))
 
 /*
  * numpy.dot may call unoptimized blas
@@ -56,7 +57,7 @@ void NPdgemm(const char trans_a, const char trans_b,
         private(i, ij, j, di, cpriv)
 {
                 nthread = omp_get_num_threads();
-                nblk = (k+nthread-1) / nthread;
+                nblk = MAX((k+nthread-1) / nthread, 1);
                 cpriv = malloc(sizeof(double) * m * n);
 #pragma omp for
                 for (i = 0; i < nthread; i++) {
@@ -92,7 +93,7 @@ void NPdgemm(const char trans_a, const char trans_b,
         private(i, di)
 {
                 nthread = omp_get_num_threads();
-                nblk = (m+nthread-1) / nthread;
+                nblk = MAX((m+nthread-1) / nthread, 1);
                 nthread = (m+nblk-1) / nblk;
 #pragma omp for
                 for (i = 0; i < nthread; i++) {
@@ -118,7 +119,7 @@ void NPdgemm(const char trans_a, const char trans_b,
         private(i, di)
 {
                 nthread = omp_get_num_threads();
-                nblk = (n+nthread-1) / nthread;
+                nblk = MAX((n+nthread-1) / nthread, 1);
                 nthread = (n+nblk-1) / nblk;
 #pragma omp for
                 for (i = 0; i < nthread; i++) {

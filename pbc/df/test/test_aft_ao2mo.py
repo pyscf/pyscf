@@ -1,6 +1,6 @@
 import unittest
 import numpy
-from pyscf.pbc.df import pwdf
+from pyscf.pbc.df import aft
 import pyscf.pbc.gto as pgto
 from pyscf import ao2mo
 
@@ -26,7 +26,7 @@ class KnowValues(unittest.TestCase):
     def test_eri1111(self):
         kpts = numpy.random.random((4,3)) * .25
         kpts[3] = -numpy.einsum('ij->j', kpts[:3])
-        with_df = pwdf.PWDF(cell)
+        with_df = aft.AFTDF(cell)
         with_df.kpts = kpts
         mo =(numpy.random.random((nao,nao)) +
              numpy.random.random((nao,nao))*1j)
@@ -42,7 +42,7 @@ class KnowValues(unittest.TestCase):
         kpts = numpy.random.random((4,3)) * .25
         kpts[3] = kpts[0]
         kpts[2] = kpts[1]
-        with_df = pwdf.PWDF(cell)
+        with_df = aft.AFTDF(cell)
         with_df.kpts = kpts
         mo =(numpy.random.random((nao,nao)) +
              numpy.random.random((nao,nao))*1j)
@@ -55,7 +55,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(abs(eri1.reshape(eri0.shape)-eri0).sum(), 0, 9)
 
     def test_eri0000(self):
-        with_df = pwdf.PWDF(cell)
+        with_df = aft.AFTDF(cell)
         with_df.kpts = numpy.zeros((4,3))
         mo =(numpy.random.random((nao,nao)) +
              numpy.random.random((nao,nao))*1j)
@@ -76,6 +76,6 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(abs(eri1.reshape(eri0.shape)-eri0).sum(), 0, 9)
 
 if __name__ == '__main__':
-    print("Full Tests for pwdf ao2mo")
+    print("Full Tests for aft ao2mo")
     unittest.main()
 
