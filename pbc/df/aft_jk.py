@@ -35,6 +35,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
     max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
     for k, pqkR, pqkI, p0, p1 \
             in mydf.ft_loop(mydf.gs, kpt_allow, kpts, max_memory=max_memory):
+        #:rho = numpy.einsum('lkL,lk->L', pqk.conj(), dm)
         for i in range(nset):
             rhoR = numpy.dot(dmsR[i,k], pqkR)
             rhoR+= numpy.dot(dmsI[i,k], pqkI)
@@ -244,7 +245,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     t2 = t1
 
     # rho_rs(-G+k_rs) is computed as conj(rho_{rs^*}(G-k_rs))
-    #               == conj(transpose(rho_sr(G+k_sr), (0,2,1)))
+    #                 == conj(transpose(rho_sr(G+k_sr), (0,2,1)))
     blksize = max(int(max_memory*.25e6/16/nao**2), 16)
     bufR = numpy.empty(blksize*nao**2)
     bufI = numpy.empty(blksize*nao**2)
@@ -253,6 +254,8 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
         pqkR = pqkR.reshape(nao,nao,-1)
         pqkI = pqkI.reshape(nao,nao,-1)
         if with_j:
+            #:v4 = numpy.einsum('ijL,lkL->ijkl', pqk, pqk.conj())
+            #:vj += numpy.einsum('ijkl,lk->ij', v4, dm)
             for i in range(nset):
                 rhoR = numpy.einsum('pq,pqk->k', dmsR[i], pqkR)
                 rhoR+= numpy.einsum('pq,pqk->k', dmsI[i], pqkI)

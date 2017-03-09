@@ -113,6 +113,233 @@ def make_modchg_basis(auxcell, smooth_eta, l_max=3):
                   chgcell.nbas, chgcell.nao_nr())
     return chgcell
 
+# kpti == kptj: s2 symmetry
+# kpti == kptj == 0 (gamma point): real
+def _make_j3c(mydf, cell, auxcell, kptij_lst):
+    t1 = (time.clock(), time.time())
+    log = logger.Logger(mydf.stdout, mydf.verbose)
+    max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
+    fused_cell, fuse = fuse_auxcell(mydf, auxcell)
+    outcore.aux_e2(cell, fused_cell, mydf._cderi, 'cint3c2e_sph',
+                   kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
+    t1 = log.timer_debug1('3c2e', *t1)
+
+    nao = cell.nao_nr()
+    naux = auxcell.nao_nr()
+    gs = mydf.gs
+    Gv, Gvbase, kws = cell.get_Gv_weights(gs)
+    b = cell.reciprocal_vectors()
+    gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
+    ngs = gxyz.shape[0]
+
+    kptis = kptij_lst[:,0]
+    kptjs = kptij_lst[:,1]
+    kpt_ji = kptjs - kptis
+    uniq_kpts, uniq_index, uniq_inverse = unique(kpt_ji)
+    # j2c ~ (-kpt_ji | kpt_ji)
+    j2c = fused_cell.pbc_intor('cint2c2e_sph', hermi=1, kpts=uniq_kpts)
+    kLRs = []
+    kLIs = []
+
+# An alternative method to evalute j2c
+#    chgcell = make_modchg_basis(auxcell, mydf.eta)
+#    for k, kpt in enumerate(uniq_kpts):
+#        aoaux = ft_ao.ft_ao(chgcell, Gv, None, b, gxyz, Gvbase, kpt).T
+#        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, gs))
+#        LkR = aoaux.real * coulG
+#        LkI = aoaux.imag * coulG
+#        j2caux = numpy.zeros_like(j2c[k])
+#        j2caux[naux:,naux:] = j2c[naux:,naux:]
+#        if is_zero(kpt):  # kpti == kptj
+#            j2caux[naux:,naux:] -= lib.ddot(LkR, LkR.T)
+#            j2caux[naux:,naux:] -= lib.ddot(LkI, LkI.T)
+#            j2c[k] = j2c[k][:naux,:naux] - fuse(fuse(j2caux.T).T)
+#            vbar = fuse(mydf.auxbar(fused_cell))
+#            s = (vbar != 0).astype(numpy.double)
+#            j2c[k] -= numpy.einsum('i,j->ij', vbar, s)
+#            j2c[k] -= numpy.einsum('i,j->ij', s, vbar)
+#        else:
+#            j2cR, j2cI = zdotCN(LkR, LkI, LkR.T, LkI.T)
+#            j2caux[naux:,naux:] -= j2cR + j2cI * 1j
+#            j2c[k] = j2c[k][:naux,:naux] - fuse(fuse(j2caux.T).T)
+#        #j2c[k] = fuse(fuse(j2c[k]).T).T.copy()
+#        try:
+#            j2c[k] = scipy.linalg.cholesky(fuse(fuse(j2c[k]).T).T, lower=True)
+#        except scipy.linalg.LinAlgError as e:
+#            msg =('===================================\n'
+#                  'J-metric not positive definite.\n'
+#                  'It is likely that gs is not enough.\n'
+#                  '===================================')
+#            log.error(msg)
+#            raise scipy.linalg.LinAlgError('\n'.join([e.message, msg]))
+#        kLR = LkR.T
+#        kLI = LkI.T
+#        if not kLR.flags.c_contiguous: kLR = lib.transpose(LkR)
+#        if not kLI.flags.c_contiguous: kLI = lib.transpose(LkI)
+#        kLR *= coulG.reshape(-1,1)
+#        kLI *= coulG.reshape(-1,1)
+#        kLRs.append(kLR)
+#        kLIs.append(kLI)
+#        aoaux = LkR = LkI = kLR = kLI = coulG = None
+
+    for k, kpt in enumerate(uniq_kpts):
+        aoaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
+        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, gs))
+        LkR = aoaux.real * coulG
+        LkI = aoaux.imag * coulG
+
+        if is_zero(kpt):  # kpti == kptj
+            j2c[k][naux:] -= lib.ddot(LkR[naux:], LkR.T)
+            j2c[k][naux:] -= lib.ddot(LkI[naux:], LkI.T)
+            j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T
+        else:
+            j2cR, j2cI = zdotCN(LkR[naux:], LkI[naux:], LkR.T, LkI.T)
+            j2c[k][naux:] -= j2cR + j2cI * 1j
+            j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T.conj()
+
+        try:
+            j2c[k] = scipy.linalg.cholesky(fuse(fuse(j2c[k]).T).T, lower=True)
+        except scipy.linalg.LinAlgError as e:
+            msg =('===================================\n'
+                  'J-metric not positive definite.\n'
+                  'It is likely that gs is not enough.\n'
+                  '===================================')
+            log.error(msg)
+            raise scipy.linalg.LinAlgError('\n'.join([e.message, msg]))
+        kLR = LkR[naux:].T
+        kLI = LkI[naux:].T
+        if not kLR.flags.c_contiguous: kLR = lib.transpose(LkR[naux:])
+        if not kLI.flags.c_contiguous: kLI = lib.transpose(LkI[naux:])
+        kLR *= coulG.reshape(-1,1)
+        kLI *= coulG.reshape(-1,1)
+        kLRs.append(kLR)
+        kLIs.append(kLI)
+        aoaux = LkR = LkI = kLR = kLI = coulG = None
+
+    feri = h5py.File(mydf._cderi)
+
+    def make_kpt(uniq_kptji_id):  # kpt = kptj - kpti
+        kpt = uniq_kpts[uniq_kptji_id]
+        log.debug1('kpt = %s', kpt)
+        adapted_ji_idx = numpy.where(uniq_inverse == uniq_kptji_id)[0]
+        adapted_kptjs = kptjs[adapted_ji_idx]
+        nkptj = len(adapted_kptjs)
+        log.debug1('adapted_ji_idx = %s', adapted_ji_idx)
+        kLR = kLRs[uniq_kptji_id]
+        kLI = kLIs[uniq_kptji_id]
+
+        if is_zero(kpt):  # kpti == kptj
+            aosym = 's2'
+            nao_pair = nao*(nao+1)//2
+
+            vbar = fuse(mydf.auxbar(fused_cell))
+            ovlp = cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=adapted_kptjs)
+            for k, ji in enumerate(adapted_ji_idx):
+                ovlp[k] = lib.pack_tril(ovlp[k])
+        else:
+            aosym = 's1'
+            nao_pair = nao**2
+
+        mem_now = lib.current_memory()[0]
+        log.debug2('memory = %s', mem_now)
+        max_memory = max(2000, mydf.max_memory-mem_now)
+        # nkptj for 3c-coulomb arrays plus 1 Lpq array
+        buflen = min(max(int(max_memory*.6*1e6/16/naux/(nkptj+1)), 1), nao_pair)
+        shranges = _guess_shell_ranges(cell, buflen, aosym)
+        buflen = max([x[2] for x in shranges])
+        # +1 for a pqkbuf
+        if aosym == 's2':
+            Gblksize = max(16, int(max_memory*.2*1e6/16/buflen/(nkptj+1)))
+        else:
+            Gblksize = max(16, int(max_memory*.4*1e6/16/buflen/(nkptj+1)))
+        Gblksize = min(Gblksize, ngs, 16384)
+        pqkRbuf = numpy.empty(buflen*Gblksize)
+        pqkIbuf = numpy.empty(buflen*Gblksize)
+        # buf for ft_aopair
+        buf = numpy.zeros((nkptj,buflen*Gblksize), dtype=numpy.complex128)
+
+        col1 = 0
+        for istep, sh_range in enumerate(shranges):
+            log.debug1('int3c2e [%d/%d], AO [%d:%d], ncol = %d', \
+                       istep+1, len(shranges), *sh_range)
+            bstart, bend, ncol = sh_range
+            col0, col1 = col1, col1+ncol
+            j3cR = []
+            j3cI = []
+            for k, idx in enumerate(adapted_ji_idx):
+                v = numpy.asarray(feri['j3c/%d'%idx][:,col0:col1])
+                if is_zero(kpt):
+                    for i, c in enumerate(vbar):
+                        if c != 0:
+                            v[i] -= c * ovlp[k][col0:col1]
+                j3cR.append(numpy.asarray(v.real, order='C'))
+                if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
+                    j3cI.append(None)
+                else:
+                    j3cI.append(numpy.asarray(v.imag, order='C'))
+            v = None
+
+            if aosym == 's2':
+                shls_slice = (bstart, bend, 0, bend)
+                for p0, p1 in lib.prange(0, ngs, Gblksize):
+                    ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                          b, gxyz[p0:p1], Gvbase, kpt,
+                                          adapted_kptjs, out=buf)
+                    nG = p1 - p0
+                    for k, ji in enumerate(adapted_ji_idx):
+                        aoao = numpy.ndarray((nG,ncol), dtype=numpy.complex128,
+                                             order='F', buffer=buf[k])
+                        pqkR = numpy.ndarray((ncol,nG), buffer=pqkRbuf)
+                        pqkI = numpy.ndarray((ncol,nG), buffer=pqkIbuf)
+                        pqkR[:] = aoao.real.T
+                        pqkI[:] = aoao.imag.T
+                        aoao[:] = 0
+                        lib.dot(kLR[p0:p1].T, pqkR.T, -1, j3cR[k][naux:], 1)
+                        lib.dot(kLI[p0:p1].T, pqkI.T, -1, j3cR[k][naux:], 1)
+                        if not (is_zero(kpt) and gamma_point(adapted_kptjs[k])):
+                            lib.dot(kLR[p0:p1].T, pqkI.T, -1, j3cI[k][naux:], 1)
+                            lib.dot(kLI[p0:p1].T, pqkR.T,  1, j3cI[k][naux:], 1)
+            else:
+                shls_slice = (bstart, bend, 0, cell.nbas)
+                ni = ncol // nao
+                for p0, p1 in lib.prange(0, ngs, Gblksize):
+                    ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                          b, gxyz[p0:p1], Gvbase, kpt,
+                                          adapted_kptjs, out=buf)
+                    nG = p1 - p0
+                    for k, ji in enumerate(adapted_ji_idx):
+                        aoao = numpy.ndarray((nG,ni,nao), dtype=numpy.complex128,
+                                             order='F', buffer=buf[k])
+                        pqkR = numpy.ndarray((ni,nao,nG), buffer=pqkRbuf)
+                        pqkI = numpy.ndarray((ni,nao,nG), buffer=pqkIbuf)
+                        pqkR[:] = aoao.real.transpose(1,2,0)
+                        pqkI[:] = aoao.imag.transpose(1,2,0)
+                        aoao[:] = 0
+                        pqkR = pqkR.reshape(-1,nG)
+                        pqkI = pqkI.reshape(-1,nG)
+                        zdotCN(kLR[p0:p1].T, kLI[p0:p1].T, pqkR.T, pqkI.T,
+                               -1, j3cR[k][naux:], j3cI[k][naux:], 1)
+
+            for k, ji in enumerate(adapted_ji_idx):
+                if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
+                    v = fuse(j3cR[k])
+                else:
+                    v = fuse(j3cR[k] + j3cI[k] * 1j)
+
+                v = scipy.linalg.solve_triangular(j2c[uniq_kptji_id], v,
+                                                  lower=True, overwrite_b=True)
+                feri['j3c/%d'%ji][:naux,col0:col1] = v
+
+    for k, kpt in enumerate(uniq_kpts):
+        make_kpt(k)
+
+    for k, kptij in enumerate(kptij_lst):
+        v = feri['j3c/%d'%k][:naux]
+        del(feri['j3c/%d'%k])
+        feri['j3c/%d'%k] = v
+
+    feri.close()
+
 
 class DF(aft.AFTDF):
     '''Gaussian and planewaves mixed density fitting
@@ -173,9 +400,11 @@ class DF(aft.AFTDF):
                 self._cderi = self._cderi_file.name
 
         if with_j3c:
-            _make_j3c(self, self.cell, self.auxcell, kptij_lst)
+            self._make_j3c(self.cell, self.auxcell, kptij_lst)
             t1 = log.timer_debug1('j3c', *t1)
         return self
+
+    _make_j3c = _make_j3c
 
     def auxbar(self, fused_cell=None):
         '''
@@ -351,228 +580,6 @@ def fuse_auxcell(mydf, auxcell):
                     Lpq[i0:i1] -= chgLpq[p0:p0+nd]
         return Lpq
     return fused_cell, fuse
-
-
-# kpti == kptj: s2 symmetry
-# kpti == kptj == 0 (gamma point): real
-def _make_j3c(mydf, cell, auxcell, kptij_lst):
-    t1 = (time.clock(), time.time())
-    log = logger.Logger(mydf.stdout, mydf.verbose)
-    max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
-    fused_cell, fuse = fuse_auxcell(mydf, auxcell)
-    outcore.aux_e2(cell, fused_cell, mydf._cderi, 'cint3c2e_sph',
-                   kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
-    t1 = log.timer_debug1('3c2e', *t1)
-
-    nao = cell.nao_nr()
-    naux = auxcell.nao_nr()
-    gs = mydf.gs
-    Gv, Gvbase, kws = cell.get_Gv_weights(gs)
-    b = cell.reciprocal_vectors()
-    gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
-    ngs = gxyz.shape[0]
-
-    kptis = kptij_lst[:,0]
-    kptjs = kptij_lst[:,1]
-    kpt_ji = kptjs - kptis
-    uniq_kpts, uniq_index, uniq_inverse = unique(kpt_ji)
-    # j2c ~ (-kpt_ji | kpt_ji)
-    j2c = fused_cell.pbc_intor('cint2c2e_sph', hermi=1, kpts=uniq_kpts)
-    kLRs = []
-    kLIs = []
-#    chgcell = make_modchg_basis(auxcell, mydf.eta)
-#    for k, kpt in enumerate(uniq_kpts):
-#        aoaux = ft_ao.ft_ao(chgcell, Gv, None, b, gxyz, Gvbase, kpt).T
-#        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, gs))
-#        LkR = aoaux.real * coulG
-#        LkI = aoaux.imag * coulG
-#        j2caux = numpy.zeros_like(j2c[k])
-#        j2caux[naux:,naux:] = j2c[naux:,naux:]
-#        if is_zero(kpt):  # kpti == kptj
-#            j2caux[naux:,naux:] -= lib.ddot(LkR, LkR.T)
-#            j2caux[naux:,naux:] -= lib.ddot(LkI, LkI.T)
-#            j2c[k] = j2c[k][:naux,:naux] - fuse(fuse(j2caux.T).T)
-#            vbar = fuse(mydf.auxbar(fused_cell))
-#            s = (vbar != 0).astype(numpy.double)
-#            j2c[k] -= numpy.einsum('i,j->ij', vbar, s)
-#            j2c[k] -= numpy.einsum('i,j->ij', s, vbar)
-#        else:
-#            j2cR, j2cI = zdotCN(LkR, LkI, LkR.T, LkI.T)
-#            j2caux[naux:,naux:] -= j2cR + j2cI * 1j
-#            j2c[k] = j2c[k][:naux,:naux] - fuse(fuse(j2caux.T).T)
-#        #j2c[k] = fuse(fuse(j2c[k]).T).T.copy()
-#        try:
-#            j2c[k] = scipy.linalg.cholesky(fuse(fuse(j2c[k]).T).T, lower=True)
-#        except scipy.linalg.LinAlgError as e:
-#            msg =('===================================\n'
-#                  'J-metric not positive definite.\n'
-#                  'It is likely that gs is not enough.\n'
-#                  '===================================')
-#            log.error(msg)
-#            raise scipy.linalg.LinAlgError('\n'.join([e.message, msg]))
-#        kLR = LkR.T
-#        kLI = LkI.T
-#        if not kLR.flags.c_contiguous: kLR = lib.transpose(LkR)
-#        if not kLI.flags.c_contiguous: kLI = lib.transpose(LkI)
-#        kLR *= coulG.reshape(-1,1)
-#        kLI *= coulG.reshape(-1,1)
-#        kLRs.append(kLR)
-#        kLIs.append(kLI)
-#        aoaux = LkR = LkI = kLR = kLI = coulG = None
-    for k, kpt in enumerate(uniq_kpts):
-        aoaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
-        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, gs))
-        LkR = aoaux.real * coulG
-        LkI = aoaux.imag * coulG
-
-        if is_zero(kpt):  # kpti == kptj
-            j2c[k][naux:] -= lib.ddot(LkR[naux:], LkR.T)
-            j2c[k][naux:] -= lib.ddot(LkI[naux:], LkI.T)
-            j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T
-        else:
-            j2cR, j2cI = zdotCN(LkR[naux:], LkI[naux:], LkR.T, LkI.T)
-            j2c[k][naux:] -= j2cR + j2cI * 1j
-            j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T.conj()
-        #j2c[k] = fuse(fuse(j2c[k]).T).T.copy()
-        try:
-            j2c[k] = scipy.linalg.cholesky(fuse(fuse(j2c[k]).T).T, lower=True)
-        except scipy.linalg.LinAlgError as e:
-            msg =('===================================\n'
-                  'J-metric not positive definite.\n'
-                  'It is likely that gs is not enough.\n'
-                  '===================================')
-            log.error(msg)
-            raise scipy.linalg.LinAlgError('\n'.join([e.message, msg]))
-        kLR = LkR[naux:].T
-        kLI = LkI[naux:].T
-        if not kLR.flags.c_contiguous: kLR = lib.transpose(LkR[naux:])
-        if not kLI.flags.c_contiguous: kLI = lib.transpose(LkI[naux:])
-        kLR *= coulG.reshape(-1,1)
-        kLI *= coulG.reshape(-1,1)
-        kLRs.append(kLR)
-        kLIs.append(kLI)
-        aoaux = LkR = LkI = kLR = kLI = coulG = None
-
-    feri = h5py.File(mydf._cderi)
-
-    def make_kpt(uniq_kptji_id):  # kpt = kptj - kpti
-        kpt = uniq_kpts[uniq_kptji_id]
-        log.debug1('kpt = %s', kpt)
-        adapted_ji_idx = numpy.where(uniq_inverse == uniq_kptji_id)[0]
-        adapted_kptjs = kptjs[adapted_ji_idx]
-        nkptj = len(adapted_kptjs)
-        log.debug1('adapted_ji_idx = %s', adapted_ji_idx)
-        kLR = kLRs[uniq_kptji_id]
-        kLI = kLIs[uniq_kptji_id]
-
-        if is_zero(kpt):  # kpti == kptj
-            aosym = 's2'
-            nao_pair = nao*(nao+1)//2
-
-            vbar = fuse(mydf.auxbar(fused_cell))
-            ovlp = cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=adapted_kptjs)
-            for k, ji in enumerate(adapted_ji_idx):
-                ovlp[k] = lib.pack_tril(ovlp[k])
-        else:
-            aosym = 's1'
-            nao_pair = nao**2
-
-        max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
-        # nkptj for 3c-coulomb arrays plus 1 Lpq array
-        buflen = min(max(int(max_memory*.6*1e6/16/naux/(nkptj+1)), 1), nao_pair)
-        shranges = _guess_shell_ranges(cell, buflen, aosym)
-        buflen = max([x[2] for x in shranges])
-        # +1 for a pqkbuf
-        if aosym == 's2':
-            Gblksize = max(16, int(max_memory*.2*1e6/16/buflen/(nkptj+1)))
-        else:
-            Gblksize = max(16, int(max_memory*.4*1e6/16/buflen/(nkptj+1)))
-        Gblksize = min(Gblksize, ngs, 16384)
-        pqkRbuf = numpy.empty(buflen*Gblksize)
-        pqkIbuf = numpy.empty(buflen*Gblksize)
-        # buf for ft_aopair
-        buf = numpy.zeros((nkptj,buflen*Gblksize), dtype=numpy.complex128)
-
-        col1 = 0
-        for istep, sh_range in enumerate(shranges):
-            log.debug1('int3c2e [%d/%d], AO [%d:%d], ncol = %d', \
-                       istep+1, len(shranges), *sh_range)
-            bstart, bend, ncol = sh_range
-            col0, col1 = col1, col1+ncol
-            j3cR = []
-            j3cI = []
-            for k, idx in enumerate(adapted_ji_idx):
-                v = numpy.asarray(feri['j3c/%d'%idx][:,col0:col1])
-                if is_zero(kpt):
-                    for i, c in enumerate(vbar):
-                        if c != 0:
-                            v[i] -= c * ovlp[k][col0:col1]
-                j3cR.append(numpy.asarray(v.real, order='C'))
-                if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
-                    j3cI.append(None)
-                else:
-                    j3cI.append(numpy.asarray(v.imag, order='C'))
-
-            if aosym == 's2':
-                shls_slice = (bstart, bend, 0, bend)
-                for p0, p1 in lib.prange(0, ngs, Gblksize):
-                    ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                          b, gxyz[p0:p1], Gvbase, kpt,
-                                          adapted_kptjs, out=buf)
-                    nG = p1 - p0
-                    for k, ji in enumerate(adapted_ji_idx):
-                        aoao = numpy.ndarray((nG,ncol), dtype=numpy.complex128,
-                                             order='F', buffer=buf[k])
-                        pqkR = numpy.ndarray((ncol,nG), buffer=pqkRbuf)
-                        pqkI = numpy.ndarray((ncol,nG), buffer=pqkIbuf)
-                        pqkR[:] = aoao.real.T
-                        pqkI[:] = aoao.imag.T
-                        aoao[:] = 0
-                        lib.dot(kLR[p0:p1].T, pqkR.T, -1, j3cR[k][naux:], 1)
-                        lib.dot(kLI[p0:p1].T, pqkI.T, -1, j3cR[k][naux:], 1)
-                        if not (is_zero(kpt) and gamma_point(adapted_kptjs[k])):
-                            lib.dot(kLR[p0:p1].T, pqkI.T, -1, j3cI[k][naux:], 1)
-                            lib.dot(kLI[p0:p1].T, pqkR.T,  1, j3cI[k][naux:], 1)
-            else:
-                shls_slice = (bstart, bend, 0, cell.nbas)
-                ni = ncol // nao
-                for p0, p1 in lib.prange(0, ngs, Gblksize):
-                    ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                          b, gxyz[p0:p1], Gvbase, kpt,
-                                          adapted_kptjs, out=buf)
-                    nG = p1 - p0
-                    for k, ji in enumerate(adapted_ji_idx):
-                        aoao = numpy.ndarray((nG,ni,nao), dtype=numpy.complex128,
-                                             order='F', buffer=buf[k])
-                        pqkR = numpy.ndarray((ni,nao,nG), buffer=pqkRbuf)
-                        pqkI = numpy.ndarray((ni,nao,nG), buffer=pqkIbuf)
-                        pqkR[:] = aoao.real.transpose(1,2,0)
-                        pqkI[:] = aoao.imag.transpose(1,2,0)
-                        aoao[:] = 0
-                        pqkR = pqkR.reshape(-1,nG)
-                        pqkI = pqkI.reshape(-1,nG)
-                        zdotCN(kLR[p0:p1].T, kLI[p0:p1].T, pqkR.T, pqkI.T,
-                               -1, j3cR[k][naux:], j3cI[k][naux:], 1)
-
-            for k, ji in enumerate(adapted_ji_idx):
-                if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
-                    v = fuse(j3cR[k])
-                else:
-                    v = fuse(j3cR[k] + j3cI[k] * 1j)
-
-                v = scipy.linalg.solve_triangular(j2c[uniq_kptji_id], v,
-                                                  lower=True, overwrite_b=True)
-                feri['j3c/%d'%ji][:naux,col0:col1] = v
-
-    for k, kpt in enumerate(uniq_kpts):
-        make_kpt(k)
-
-    for k, kptij in enumerate(kptij_lst):
-        v = feri['j3c/%d'%k][:naux]
-        del(feri['j3c/%d'%k])
-        feri['j3c/%d'%k] = v
-
-    feri.close()
 
 
 class _load3c(object):

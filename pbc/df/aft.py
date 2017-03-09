@@ -16,9 +16,9 @@ from pyscf.pbc import tools
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import incore
+from pyscf.pbc.df.df_jk import KPT_DIFF_TOL, is_zero, gamma_point
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import aft_ao2mo
-from pyscf.pbc.df.df_jk import KPT_DIFF_TOL, is_zero, gamma_point
 
 
 def estimate_eta(cell, cutoff=1e-12):
