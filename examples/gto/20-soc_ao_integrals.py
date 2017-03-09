@@ -19,8 +19,8 @@ mol = gto.M(
 # J Chem Phys, 122, 034107, Eq (2)
 mat = 0
 for atm_id in range(mol.natm):
-    mol.set_rinv_orig(mol.coord_of_atm(atm_id))
-    chg = mol.charge_of_atm(atm_id)
+    mol.set_rinv_orig(mol.atom_coord(atm_id))
+    chg = mol.atom_charge(atm_id)
     mat += chg * mol.intor('cint1e_prinvxp_sph', 3)
 
 # J Chem Phys, 122, 034107, Eq (3)
