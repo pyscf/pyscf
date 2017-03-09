@@ -151,7 +151,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
                     j3cI.append(None)
                 else:
                     j3cI.append(numpy.asarray(v.imag, order='C'))
-            v = None
+                v = None
 
             if aosym == 's2':
                 shls_slice = (bstart, bend, 0, bend)
