@@ -54,7 +54,7 @@ def aux_e2(cell, auxcell, erifile, intor='cint3c2e_sph', aosym='s2ij', comp=1,
             dtype = 'f8'
         else:
             dtype = 'c16'
-        aosym_s2[k] = aosym.startswidth('s2') and abs(kptij[0]-kptij[1]).sum() < 1e-9
+        aosym_s2[k] = aosym.startswith('s2') and abs(kptij[0]-kptij[1]).sum() < 1e-9
         if aosym_s2[k]:
             nao_pair = nao * (nao+1) // 2
         else:

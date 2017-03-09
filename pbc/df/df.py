@@ -37,7 +37,7 @@ from pyscf.pbc.df.aft import estimate_eta, get_nuc
 def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
     auxcell = copy.copy(cell)
     if auxbasis is None:
-        auxbasis = 'weight+etb'
+        auxbasis = 'weigend+etb'
     if isinstance(auxbasis, str):
         uniq_atoms = set([a[0] for a in cell._atom])
         _basis = auxcell.format_basis(dict([(a, auxbasis) for a in uniq_atoms]))
