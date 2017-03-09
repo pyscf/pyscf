@@ -44,6 +44,8 @@ def _contract_xc_kernel(td, xc_code, dmvo, singlet=True, max_memory=2000):
     mo_occ = mf.mo_occ
     nao, nmo = mo_coeff.shape
     ndm = len(dmvo)
+    shls_slice = (0, mol.nbas)
+    ao_loc = mol.ao_loc_nr()
 
     dmvo = numpy.asarray(dmvo)
     dmvo = (dmvo + dmvo.transpose(0,2,1)) * .5
@@ -64,7 +66,7 @@ def _contract_xc_kernel(td, xc_code, dmvo, singlet=True, max_memory=2000):
             for i, dm in enumerate(dmvo):
                 rho1 = ni.eval_rho(mol, ao, dm, mask, xctype)
                 aow = numpy.einsum('pi,p->pi', ao, weight*frho*rho1)
-                v1ao[i] += numint._dot_ao_ao(mol, aow, ao, nao, weight.size, mask)
+                v1ao[i] += numint._dot_ao_ao(mol, aow, ao, mask, shls_slice, ao_loc)
                 rho1 = aow = None
 
         for i in range(ndm):
@@ -111,7 +113,7 @@ def _contract_xc_kernel(td, xc_code, dmvo, singlet=True, max_memory=2000):
                 wv[1:] *= 2  # because +h.c for (\nabla\mu) \nu, which are symmetrized at the end
                 wv *= weight
                 aow = numpy.einsum('nip,ni->ip', ao, wv)
-                v1ao[i] += numint._dot_ao_ao(mol, ao[0], aow, nao, ngrid, mask)
+                v1ao[i] += numint._dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
 
         for i in range(ndm):
             v1ao[i] = (v1ao[i] + v1ao[i].T) * .5

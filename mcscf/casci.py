@@ -237,7 +237,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
                   for x in ci]
     else:
         log.info('FCI vector not available, call CASCI for wavefunction')
-        mocas = mo_coeff1[:,ncore:nocc]
+        mocas = mo_coeff[:,ncore:nocc]
         h1eff = reduce(numpy.dot, (mocas.T, mc.get_hcore(), mocas))
         if eris is not None and hasattr(eris, 'ppaa'):
             h1eff += reduce(numpy.dot, (ucas.T, eris.vhf_c[ncore:nocc,ncore:nocc], ucas))

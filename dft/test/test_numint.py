@@ -5,7 +5,8 @@ import numpy
 from pyscf import gto
 from pyscf import dft
 from pyscf import lib
-dft.numint.BLKSIZE = 12
+
+dft.numint.SWITCH_SIZE = 0
 
 mol = gto.Mole()
 mol.verbose = 0
@@ -18,17 +19,19 @@ mf.grids.atom_grid = {"H": (50, 110)}
 mf.prune = None
 mf.grids.build()
 nao = mol.nao_nr()
+ao_loc = mol.ao_loc_nr()
+
+def finger(a):
+    return numpy.dot(numpy.cos(numpy.arange(a.size)), a.ravel())
 
 class KnowValues(unittest.TestCase):
     def test_make_mask(self):
         non0 = dft.numint.make_mask(mol, mf.grids.coords)
-        self.assertEqual(non0.sum(), 94352)
-        self.assertAlmostEqual(numpy.dot(non0.ravel(),
-                                         numpy.cos(numpy.arange(non0.size))),
-                               13.078714266478269, 9)
-        self.assertAlmostEqual(numpy.dot(numpy.cos(non0).ravel(),
-                                         numpy.cos(numpy.arange(non0.size))),
-                               -4.7363075913557724, 9)
+        self.assertEqual(non0.sum(), 10244)
+        self.assertAlmostEqual(finger(non0),
+                               -2.6880474684794895, 9)
+        self.assertAlmostEqual(finger(numpy.cos(non0)),
+                               2.5961863522983433, 9)
 
     def test_dot_ao_dm(self):
         non0tab = dft.numint.make_mask(mol, mf.grids.coords)
@@ -37,16 +40,16 @@ class KnowValues(unittest.TestCase):
         dm = numpy.random.random((nao,nao))
         dm = dm + dm.T
         res0 = lib.dot(ao, dm)
-        res1 = dft.numint._dot_ao_dm(mol, ao, dm, nao,
-                                     mf.grids.weights.size, non0tab)
+        res1 = dft.numint._dot_ao_dm(mol, ao, dm, non0tab,
+                                     shls_slice=(0,mol.nbas), ao_loc=ao_loc)
         self.assertTrue(numpy.allclose(res0, res1))
 
     def test_dot_ao_ao(self):
         non0tab = dft.numint.make_mask(mol, mf.grids.coords)
         ao = dft.numint.eval_ao(mol, mf.grids.coords, deriv=1)
         res0 = lib.dot(ao[0].T, ao[1])
-        res1 = dft.numint._dot_ao_ao(mol, ao[0], ao[1], nao,
-                                     mf.grids.weights.size, non0tab)
+        res1 = dft.numint._dot_ao_ao(mol, ao[0], ao[1], non0tab,
+                                     shls_slice=(0,mol.nbas), ao_loc=ao_loc)
         self.assertTrue(numpy.allclose(res0, res1))
 
     def test_eval_rho(self):

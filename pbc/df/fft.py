@@ -159,38 +159,17 @@ class FFTDF(lib.StreamObject):
             self.gs = gs
         ngrids = numpy.prod(numpy.asarray(gs)*2+1)
 
-        if (self._numint.cell is None or id(cell) != id(self._numint.cell) or
-            self._numint._deriv != 0 or
-            self._numint._kpts.shape != kpts.shape or
-            abs(self._numint._kpts - kpts).sum() > 1e-9 or
-            self._numint._coords.shape[0] != ngrids or
-            (gs is not None and numpy.any(gs != self.gs))):
-
-            nkpts = len(kpts)
-            coords = cell.gen_uniform_grids(gs)
-            nao = cell.nao_nr()
-            blksize = int(self.max_memory*1e6/(nkpts*nao*16*numint.BLKSIZE))*numint.BLKSIZE
-            blksize = min(max(blksize, numint.BLKSIZE), ngrids)
-            try:
-                self._numint.cache_ao(cell, kpts, 0, coords, nao, blksize)
-            except IOError as e:
-                sys.stderr.write('HDF5 file cannot be opened twice in different mode.\n')
-                raise e
-
-        with h5py.File(self._numint._ao.name, 'r') as f:
-            if kpt_band is None:
-                for k in range(len(kpts)):
-                    aoR = f['ao/%d'%k].value
-                    yield k, aoR
-            else:
-                kpt_band = numpy.reshape(kpt_band, 3)
-                where = numpy.argmin(lib.norm(kpts-kpt_band,axis=1))
-                if abs(kpts[where]-kpt_band).sum() > 1e-9:
-                    where = None
-                    coords = cell.gen_uniform_grids(gs)
-                    yield 0, numint.eval_ao(cell, coords, kpt_band, deriv=0)
-                else:
-                    yield where, f['ao/%d'%where].value
+        ni = self._numint
+        coords = cell.gen_uniform_grids(gs)
+        if ni.non0tab is None:
+            ni.non0tab = ni.make_mask(cell, coords)
+        if kpt_band is None:
+            aoR = ni.eval_ao(cell, coords, kpts, non0tab=ni.non0tab)
+            for k in range(len(kpts)):
+                yield k, aoR[k]
+        else:
+            kpt_band = numpy.reshape(kpt_band, 3)
+            yield 0, ni.eval_ao(cell, coords, kpt_band, non0tab=ni.non0tab)
 
     get_pp = get_pp
     get_nuc = get_nuc

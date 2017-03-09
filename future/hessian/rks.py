@@ -565,6 +565,8 @@ def _contract_xc_kernel(mf, xc_code, dms, max_memory=2000):
     mo_occ = mf.mo_occ
     nao, nmo = mo_coeff.shape
     ndm = len(dms)
+    shls_slice = (0, mol.nbas)
+    ao_loc = mol.ao_loc_nr()
 
     dms = numpy.asarray(dms)
     dms = (dms + dms.transpose(0,2,1)) * .5
@@ -580,7 +582,7 @@ def _contract_xc_kernel(mf, xc_code, dms, max_memory=2000):
             for i, dm in enumerate(dms):
                 rho1 = ni.eval_rho(mol, ao, dm, mask, xctype)
                 aow = numpy.einsum('pi,p->pi', ao, weight*frho*rho1)
-                v1ao[i] += numint._dot_ao_ao(mol, aow, ao, nao, weight.size, mask)
+                v1ao[i] += numint._dot_ao_ao(mol, aow, ao, mask, shls_slice, ao_loc)
                 rho1 = aow = None
 
     elif xctype == 'GGA':
@@ -603,7 +605,7 @@ def _contract_xc_kernel(mf, xc_code, dms, max_memory=2000):
                 wv[1:] *= 2  # for (\nabla\mu) \nu + \mu (\nabla\nu)
                 wv *= weight
                 aow = numpy.einsum('npi,np->pi', ao, wv)
-                v1ao[i] += numint._dot_ao_ao(mol, aow, ao[0], nao, ngrid, mask)
+                v1ao[i] += numint._dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
     else:
         raise NotImplementedError('meta-GGA')
 

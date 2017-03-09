@@ -90,32 +90,35 @@ def cart2sph(l):
            cmat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l))
         return c2sph
 
-def cart2j_kappa(kappa):
+def cart2j_kappa(kappa, l=None):
     '''Cartesian to spinor, indexed by kappa'''
-    assert(kappa != 0)
     if kappa < 0:
         l = -kappa - 1
         nd = l * 2 + 2
-    else:
+    elif kappa > 0:
         l = kappa
         nd = l * 2
+    else:
+        assert(l is not None)
+        nd = l * 4 + 2
     nf = (l+1)*(l+2)//2
-    c2sph = numpy.zeros((nf,nd), order='F', dtype=numpy.complex)
+    c2smat = numpy.zeros((nf*2,nd), order='F', dtype=numpy.complex)
     cmat = numpy.eye(nf)
-    fn(c2sph.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nf),
-       cmat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l),
-       ctypes.c_int(kappa))
-    return c2spinor
+    fn = moleintor.libcgto.CINTc2s_ket_spinor_sf1
+    fn(c2smat.ctypes.data_as(ctypes.c_void_p),
+       c2smat[nf:].ctypes.data_as(ctypes.c_void_p),
+       cmat.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_int(nf*2), ctypes.c_int(nf),
+       ctypes.c_int(1), ctypes.c_int(l), ctypes.c_int(kappa))
+    if l == 0:
+        c2smat *= 0.282094791773878143
+    elif l == 1:
+        c2smat *= 0.488602511902919921
+    return c2smat
 
 def cart2j_l(l):
     '''Cartesian to spinor, indexed by l'''
-    nf = (l+1)*(l+2)//2
-    nd = l * 4 + 2
-    c2sph = numpy.zeros((nf,nd), order='F', dtype=numpy.complex)
-    cmat = numpy.eye(nf)
-    fn(c2sph.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nf),
-       cmat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l), ctypes.c_int(0))
-    return c2spinor
+    return cart2j_kappa(0, l)
 
 def atom_types(atoms, basis=None):
     '''symmetry inequivalent atoms'''
@@ -553,10 +556,7 @@ def make_env(atoms, basis, pre_env=[], nucmod={}):
         atm0, env0 = make_atm_env(atom, ptr_env)
         ptr_env = ptr_env + len(env0)
         if nucmod:
-            if isinstance(nucmod, int):
-                assert(nucmod in (NUC_POINT, NUC_GAUSS))
-                atm0[NUC_MOD_OF] = nucmod
-            elif isinstance(nucmod, str):
+            if isinstance(nucmod, (int, str)):
                 atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod)
             elif ia+1 in nucmod:
                 atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod[ia+1])
@@ -1800,8 +1800,12 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                               '%16.12f %16.12f %16.12f Bohr\n' \
                               % ((ia+1, _symbol(atom[0])) + coorda + coordb))
         if self.nucmod:
+            if isinstance(self.nucmod, (bool, int, str)):
+                nucatms = [_symbol(atom[0]) for atom in self._atom]
+            else:
+                nucatms = self.nucmod.keys()
             self.stdout.write('[INPUT] Gaussian nuclear model for atoms %s\n' %
-                              self.nucmod.keys())
+                              nucatms)
 
         self.stdout.write('[INPUT] ---------------- BASIS SET ---------------- \n')
         self.stdout.write('[INPUT] l, kappa, [nprim/nctr], ' \
@@ -2001,7 +2005,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def atom_coords(self):
         '''np.asarray([mol.atom_coords(i) for i in range(mol.natm)])'''
         ptr = self._atm[:,PTR_COORD]
-        return self._env[numpy.vstack((ptr,ptr+1,ptr+2))].T
+        return self._env[numpy.vstack((ptr,ptr+1,ptr+2)).T]
 
     def atom_nshells(self, atm_id):
         r'''Number of basis/shells of the given atom
@@ -2313,11 +2317,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         return moleintor.getints_by_shell(intor, shells, self._atm, bas,
                                           self._env, comp)
 
-    @lib.with_doc(eval_gto.__doc__)
-    def eval_gto(self, eval_name, coords,
-                 comp=1, shls_slice=None, non0tab=None, out=None):
-        return eval_gto(eval_name, self._atm, self._bas, self._env,
-                        coords, comp, shls_slice, non0tab, out)
+    eval_gto = eval_gto
 
     energy_nuc = energy_nuc
     def get_enuc(self):
@@ -2340,6 +2340,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     offset_nr_by_atom = offset_nr_by_atom
     offset_2c_by_atom = offset_2c_by_atom
+    aoslice_2c_by_atom = offset_nr_by_atom
+    aoslice_nr_by_atom = offset_2c_by_atom
 
     @lib.with_doc(spinor_labels.__doc__)
     def spinor_labels(self):
@@ -2390,12 +2392,12 @@ def _atom_symbol(symb_or_chg):
     return symb
 
 def _parse_nuc_mod(str_or_int):
-    if isinstance(str_or_int, int):
-        return str_or_int
+    nucmod = NUC_POINT
+    if isinstance(str_or_int, int) and str_or_int != 0:
+        nucmod = NUC_GAUSS
     elif 'G' in str_or_int.upper(): # 'gauss_nuc'
-        return NUC_GAUSS
-    else:
-        return NUC_POINT
+        nucmod = NUC_GAUSS
+    return nucmod
 
 def _update_from_cmdargs_(mol):
     # Ipython shell conflicts with optparse

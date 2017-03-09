@@ -76,10 +76,19 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(ao0, ao1, atol=1e-9, rtol=1e-9))
         self.assertAlmostEqual(finger(ao1), -0.54069672246407219, 8)
 
-        ao0 = eval_ao(cell, grids.coords, deriv=1)
-        ao1 = ni.eval_ao(cell, grids.coords, deriv=1)
+        ao10 = eval_ao(cell, grids.coords, deriv=1)
+        ao11 = ni.eval_ao(cell, grids.coords, deriv=1)
+        self.assertTrue(numpy.allclose(ao10, ao11, atol=1e-9, rtol=1e-9))
+        self.assertAlmostEqual(finger(ao11), 8.8004405892746433, 8)
+
+        ni.non0tab = ni.make_mask(cell, grids.coords)
+        ao1 = ni.eval_ao(cell, grids.coords)
         self.assertTrue(numpy.allclose(ao0, ao1, atol=1e-9, rtol=1e-9))
-        self.assertAlmostEqual(finger(ao1), 8.8004405892746433, 8)
+        self.assertAlmostEqual(finger(ao1), -0.54069672246407219, 8)
+
+        ao11 = ni.eval_ao(cell, grids.coords, deriv=1)
+        self.assertTrue(numpy.allclose(ao10, ao11, atol=1e-9, rtol=1e-9))
+        self.assertAlmostEqual(finger(ao11), 8.8004405892746433, 8)
 
 
     def test_eval_mat(self):
@@ -183,6 +192,7 @@ class KnowValues(unittest.TestCase):
         dm = dm + dm.T
         ao =(numpy.random.random((10,ngrids,nao)) +
              numpy.random.random((10,ngrids,nao))*1j)
+        ao = numpy.asarray(ao, order='F')
 
         rho0 = numpy.zeros((6,ngrids), dtype=numpy.complex128)
         rho0[0] = numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[0].conj())
@@ -200,6 +210,12 @@ class KnowValues(unittest.TestCase):
 
         rho1 = numint.eval_rho(cell, ao, dm, xctype='MGGA')
         self.assertTrue(numpy.allclose(rho0, rho1))
+
+        rho1 = numint.eval_rho(cell, ao, dm, xctype='GGA')
+        self.assertAlmostEqual(finger(rho1), -255.45150185669198, 7)
+
+        rho1 = numint.eval_rho(cell, ao[0], dm, xctype='LDA')
+        self.assertAlmostEqual(finger(rho1), -17.198879910245601, 7)
 
     def test_eval_mat(self):
         cell, grids = make_grids(30)
@@ -224,6 +240,12 @@ class KnowValues(unittest.TestCase):
         mat0 += numpy.einsum('pi,p,pj->ij', ao[0].conj(), rho[3]*wv, ao[3]) + numpy.einsum('pi,p,pj->ij', ao[3].conj(), rho[3]*wv, ao[0])
         mat1 = numint.eval_mat(cell, ao, weight, rho, vxc, xctype='GGA')
         self.assertTrue(numpy.allclose(mat0, mat1))
+
+        mat1 = numint.eval_mat(cell, ao, weight, rho, vxc, xctype='MGGA')
+        self.assertAlmostEqual(finger(mat1), -106.84965223363503+50.089526939523154j, 7)
+
+        mat1 = numint.eval_mat(cell, ao[0], weight, rho, vxc, xctype='LDA')
+        self.assertAlmostEqual(finger(mat1), 10.483493302918024+3.5590312220458227j, 7)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.numint")

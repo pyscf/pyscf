@@ -11,7 +11,7 @@ from ase.lattice import bulk
 ase_atom = bulk('C', 'diamond', a=3.5668)
 
 cell = gto.M(
-    h = ase_atom.cell,
+    a = ase_atom.cell,
     atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom),
     basis = 'gth-szv',
     pseudo = 'gth-pade',

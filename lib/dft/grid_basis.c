@@ -7,30 +7,21 @@
 #include <math.h>
 #include "cint.h"
 #include "config.h"
+#include "gto/grid_ao_drv.h"
 
-// 128s42p21d12f8g6h4i3j 
-#define NCTR_CART      128
-//  72s24p14d10f8g6h5i4j 
-#define NCTR_SPH        72
-#define NPRIMAX         64
-#define BLKSIZE         96
-#define EXPCUTOFF       50  // 1e-22
 #define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define MAX(X,Y)        ((X)>(Y)?(X):(Y))
 
-void VXCnr_ao_screen(signed char *non0table, double *coord,
-                     int ngrids, int blksize,
+void VXCnr_ao_screen(unsigned char *non0table, double *coords, int ngrids,
                      int *atm, int natm, int *bas, int nbas, double *env)
 {
-        const int nblk = (ngrids+blksize-1) / blksize;
+        const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
         int ib, i, j;
         int np, nc, atm_id, bas_id;
         double rr, arr, maxc;
         double logcoeff[NPRIMAX];
         double dr[3];
-        double *p_exp, *pcoeff, *pcoord, *ratm;
-
-        memset(non0table, 0, sizeof(signed char) * nblk*nbas);
+        double *p_exp, *pcoeff, *ratm;
 
         for (bas_id = 0; bas_id < nbas; bas_id++) {
                 np = bas[NPRIM_OF];
@@ -48,12 +39,11 @@ void VXCnr_ao_screen(signed char *non0table, double *coord,
                         logcoeff[j] = log(maxc);
                 }
 
-                pcoord = coord;
                 for (ib = 0; ib < nblk; ib++) {
-                        for (i = 0; i < MIN(ngrids-ib*blksize, blksize); i++) {
-                                dr[0] = pcoord[i*3+0] - ratm[0];
-                                dr[1] = pcoord[i*3+1] - ratm[1];
-                                dr[2] = pcoord[i*3+2] - ratm[2];
+                        for (i = ib*BLKSIZE; i < MIN(ngrids, (ib+1)*BLKSIZE); i++) {
+                                dr[0] = coords[0*ngrids+i] - ratm[0];
+                                dr[1] = coords[1*ngrids+i] - ratm[1];
+                                dr[2] = coords[2*ngrids+i] - ratm[2];
                                 rr = dr[0]*dr[0] + dr[1]*dr[1] + dr[2]*dr[2];
                                 for (j = 0; j < np; j++) {
                                         arr = p_exp[j] * rr;
@@ -63,8 +53,8 @@ void VXCnr_ao_screen(signed char *non0table, double *coord,
                                         }
                                 }
                         }
-next_blk:
-                        pcoord += blksize*3;
+                        non0table[ib*nbas+bas_id] = 0;
+next_blk:;
                 }
                 bas += BAS_SLOTS;
         }
@@ -78,9 +68,9 @@ void VXCgen_grid(double *out, double *coords, double *atm_coords,
         double *grid_dist = malloc(sizeof(double) * natm*ngrids);
         for (i = 0; i < natm; i++) {
                 for (n = 0; n < ngrids; n++) {
-                        dx = coords[n*3+0] - atm_coords[i*3+0];
-                        dy = coords[n*3+1] - atm_coords[i*3+1];
-                        dz = coords[n*3+2] - atm_coords[i*3+2];
+                        dx = coords[0*ngrids+n] - atm_coords[i*3+0];
+                        dy = coords[1*ngrids+n] - atm_coords[i*3+1];
+                        dz = coords[2*ngrids+n] - atm_coords[i*3+2];
                         grid_dist[i*ngrids+n] = sqrt(dx*dx + dy*dy + dz*dz);
                 }
         }

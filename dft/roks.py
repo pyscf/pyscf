@@ -8,22 +8,22 @@ Non-relativistic restricted open-shell Kohn-Sham
 '''
 
 from pyscf.lib import logger
-import pyscf.scf
+from pyscf.scf import rohf
 from pyscf.dft import gen_grid
 from pyscf.dft import numint
 from pyscf.dft.uks import get_veff, energy_elec
 from pyscf.dft import rks
 
 
-class ROKS(pyscf.scf.rohf.ROHF):
+class ROKS(rohf.ROHF):
     '''Restricted open-shell Kohn-Sham
     See pyscf/dft/rks.py RKS class for the usage of the attributes'''
     def __init__(self, mol):
-        pyscf.scf.rohf.ROHF.__init__(self, mol)
+        rohf.ROHF.__init__(self, mol)
         rks._dft_common_init_(self)
 
     def dump_flags(self):
-        pyscf.scf.rohf.ROHF.dump_flags(self)
+        rohf.ROHF.dump_flags(self)
         logger.info(self, 'XC functionals = %s', self.xc)
         self.grids.dump_flags()
 

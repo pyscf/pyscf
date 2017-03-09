@@ -292,7 +292,7 @@ def gen_partition(mol, atom_grids_tab,
             p_radii_table = f_radii_table.ctypes.data_as(ctypes.c_void_p)
         atm_coords = numpy.asarray(atm_coords, order='C')
         def gen_grid_partition(coords):
-            coords = numpy.asarray(coords, order='C')
+            coords = numpy.asarray(coords, order='F')
             ngrids = coords.shape[0]
             pbecke = numpy.empty((mol.natm,ngrids))
             libdft.VXCgen_grid(pbecke.ctypes.data_as(ctypes.c_void_p),

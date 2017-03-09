@@ -32,7 +32,7 @@ class KnowValues(unittest.TestCase):
         fciqmcci.RDMSamples = 2000
 
         norb = m.mo_coeff.shape[1]
-        energy = run_standalone(fciqmcci, m.mo_coeff)
+        energy = run_standalone(fciqmcci, m, m.mo_coeff)
         two_pdm = read_neci_two_pdm(fciqmcci, 'spinfree_TwoRDM.1', norb)
         one_pdm = one_from_two_pdm(two_pdm, mol.nelectron)
         dips, elec, nuc = calc_dipole(mol, m.mo_coeff, one_pdm)
@@ -58,7 +58,7 @@ class KnowValues(unittest.TestCase):
         fciqmcci.RDMSamples = 2000
         norb = mc.mo_coeff.shape[1]
         # Run from CASSCF natural orbitals
-        energy = run_standalone(fciqmcci, casscf_mo)
+        energy = run_standalone(fciqmcci, m, casscf_mo)
         two_pdm = read_neci_two_pdm(fciqmcci, 'spinfree_TwoRDM.1', norb)
         one_pdm = one_from_two_pdm(two_pdm, mol.nelectron)
         dips, elec, nuc = calc_dipole(mol, mc.mo_coeff, one_pdm)
