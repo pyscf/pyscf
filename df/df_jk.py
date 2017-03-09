@@ -13,7 +13,6 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf.df import _ri
-from pyscf import df
 
 
 OCCDROP = 1e-12
@@ -48,7 +47,7 @@ def density_fit(mf, auxbasis='weigend+etb', with_df=None):
     >>> mf.scf()
     -100.005306000435510
     '''
-
+    from pyscf import df
     from pyscf.scf import dhf
     mf_class = mf.__class__
     if mf_class.__doc__ is None:

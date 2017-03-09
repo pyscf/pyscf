@@ -40,6 +40,7 @@ def fft(f, gs):
 
     '''
     f3d = f.reshape([-1] + [2*x+1 for x in gs])
+    assert(f3d.shape[0] == 1 or f[0].size == f3d[0].size)
     g3d = fftn_wrapper(f3d, axes=(1,2,3), threads=nproc)
     if f.ndim == 1:
         return g3d.ravel()
@@ -66,6 +67,7 @@ def ifft(g, gs):
 
     '''
     g3d = g.reshape([-1] + [2*x+1 for x in gs])
+    assert(g3d.shape[0] == 1 or g[0].size == g3d[0].size)
     f3d = ifftn_wrapper(g3d, axes=(1,2,3), threads=nproc)
     if g.ndim == 1:
         return f3d.ravel()

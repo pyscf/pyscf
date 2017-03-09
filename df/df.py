@@ -19,6 +19,7 @@ from pyscf.df import incore
 from pyscf.df import outcore
 from pyscf.df import r_incore
 from pyscf.df import addons
+from pyscf.df import df_jk
 from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo.incore import _conc_mos, iden_coeffs
 
@@ -35,6 +36,18 @@ class DF(lib.StreamObject):
         self._cderi = None
         self._call_count = 0
         self.blockdim = 240
+        self._keys = set(self.__dict__.keys())
+
+    def dump_flags(self):
+        log = logger.Logger(self.stdout, self.verbose)
+        logger.info(self, '\n')
+        logger.info(self, '******** %s flags ********', self.__class__)
+        logger.info(self, 'auxbasis = %s', self.auxbasis)
+        logger.info(self, 'max_memory = %s', self.max_memory)
+        if isinstance(self._cderi, str):
+            logger.info(self, '_cderi = %s', self._cderi)
+        else:
+            logger.info(self, '_cderi = %s', self._cderi_file.name)
 
     def build(self):
         t0 = (time.clock(), time.time())
@@ -54,9 +67,10 @@ class DF(lib.StreamObject):
                     self._cderi = self._cderi_file
                 else:
                     self._cderi = self._cderi_file.name
-            outcore.cholesky_eri(mol, self._cderi, auxmol=auxmol, verbose=log)
+            outcore.cholesky_eri(mol, self._cderi, dataname='j3c',
+                                 auxmol=auxmol, verbose=log)
             if nao_pair*nao*8/1e6 < max_memory:
-                with addons.load(self._cderi) as feri:
+                with addons.load(self._cderi, 'j3c') as feri:
                     cderi = numpy.asarray(feri)
                 self._cderi = cderi
             log.timer_debug1('Generate density fitting integrals', *t0)
@@ -66,7 +80,7 @@ class DF(lib.StreamObject):
     def loop(self):
         if self._cderi is None:
             self.build()
-        with addons.load(self._cderi) as feri:
+        with addons.load(self._cderi, 'j3c') as feri:
             naoaux = feri.shape[0]
             for b0, b1 in self.prange(0, naoaux, self.blockdim):
                 eri1 = numpy.asarray(feri[b0:b1], order='C')
@@ -86,11 +100,10 @@ class DF(lib.StreamObject):
 # object when self._cderi is provided.
         if self._cderi is None:
             self.build()
-        with addons.load(self._cderi) as feri:
+        with addons.load(self._cderi, 'j3c') as feri:
             return feri.shape[0]
 
     def get_jk(self, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
-        from pyscf.df import df_jk
         return df_jk.get_jk(self, dm, hermi, vhfopt, with_j, with_k)
 
     def get_eri(self):
@@ -122,7 +135,6 @@ class DF(lib.StreamObject):
     get_mo_eri = ao2mo
 
     def update_mf(self, mf):
-        from pyscf.df import df_jk
         return df_jk.density_fit(mf, self.auxbasis, self)
 
     def update_mc(self, mc):
@@ -162,16 +174,15 @@ class DF4C(DF):
     def loop(self):
         if self._cderi is None:
             self.build()
-        with addons.load(self._cderi[0]) as ferill:
+        with addons.load(self._cderi[0], 'j3c') as ferill:
             naoaux = ferill.shape[0]
-            with addons.load(self._cderi[1]) as feriss: # python2.6 not support multiple with
+            with addons.load(self._cderi[1], 'j3c') as feriss: # python2.6 not support multiple with
                 for b0, b1 in self.prange(0, naoaux, self.blockdim):
                     erill = numpy.asarray(ferill[b0:b1], order='C')
                     eriss = numpy.asarray(feriss[b0:b1], order='C')
                     yield erill, eriss
 
     def get_jk(self, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
-        from pyscf.df import df_jk
         return df_jk.r_get_jk(self, dm, hermi)
 
     def ao2mo(self, mo_coeffs):

@@ -137,7 +137,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpt_band=None,
         return vk_kpts.reshape(dm_kpts.shape)
 
 
-def get_jk(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None):
+def get_jk(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None,
+           with_j=True, with_k=True, exxdiv=None):
     '''Get the Coulomb (J) and exchange (K) AO matrices for the given density matrix.
 
     Args:
@@ -161,8 +162,11 @@ def get_jk(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None):
         density matrix (both order and shape).
     '''
     dm = np.asarray(dm, order='C')
-    vj = get_j(mydf, dm, hermi, kpt, kpt_band)
-    vk = get_k(mydf, dm, hermi, kpt, kpt_band)
+    vj = vk = None
+    if with_j:
+        vj = get_j(mydf, dm, hermi, kpt, kpt_band)
+    if with_k:
+        vk = get_k(mydf, dm, hermi, kpt, kpt_band, exxdiv)
     return vj, vk
 
 def get_j(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None):
