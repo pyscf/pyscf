@@ -429,6 +429,7 @@ class UHF(hf.SCF):
         x2chf = pyscf.scf.x2c.UHF(self.mol)
         x2chf.__dict__.update(self.__dict__)
         return x2chf
+DHF = UHF
 
 
 class HF1e(UHF):
