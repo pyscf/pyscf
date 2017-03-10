@@ -23,10 +23,11 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80):
 
     nao = mol.nao_nr()
     ngrids = nx * ny * nz
-    blksize = min(200, ngrids)
+    blksize = min(8000, ngrids)
     rho = numpy.empty(ngrids)
+    ao = None
     for ip0, ip1 in gen_grid.prange(0, ngrids, blksize):
-        ao = numint.eval_ao(mol, coords[ip0:ip1])
+        ao = numint.eval_ao(mol, coords[ip0:ip1], out=ao)
         rho[ip0:ip1] = numint.eval_rho(mol, ao, dm)
     rho = rho.reshape(nx,ny,nz)
 

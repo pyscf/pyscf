@@ -31,6 +31,7 @@ inline static int _nonzero_in(double *exps, int count) {
 #endif
 
 #include <stdlib.h>
+#include <complex.h>
 #include "cint.h"
 
 void GTOnabla1(double *fx1, double *fy1, double *fz1,

@@ -412,7 +412,7 @@ void SCIcontract_2e_aaaa(double *eri, double *ci0, double *ci1,
                                       blen, strk, ib, norb, na, nb,
                                       nlinka, 0, clinka, clinkb);
                 }
-                FCIomp_reduce_inplace(ci1bufs, blen*na);
+                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
 #pragma omp master
                 FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
         }
@@ -644,7 +644,7 @@ void SCIcontract_2e_aaaa_symm(double *eri, double *ci0, double *ci1,
                                       nlinka, 0, clinka, clinkb,
                                       dimirrep, totirrep);
                 }
-                FCIomp_reduce_inplace(ci1bufs, blen*na);
+                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
 #pragma omp master
                 FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
         }

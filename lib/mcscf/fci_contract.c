@@ -10,6 +10,7 @@
 //#include <omp.h>
 #include "config.h"
 #include "vhf/fblas.h"
+#include "np_helper/np_helper.h"
 #include "fci.h"
 #define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define MAX(X,Y)        ((X)>(Y)?(X):(Y))
@@ -321,30 +322,6 @@ void FCIaxpy2d(double *out, double *in, size_t count, size_t no, size_t ni)
         }
 }
 
-void FCIomp_reduce_inplace(double **vec, size_t count)
-{
-        unsigned int nthreads = omp_get_num_threads();
-        unsigned int thread_id = omp_get_thread_num();
-        unsigned int bit, thread_src;
-        unsigned int mask = 0;
-        double *dst = vec[thread_id];
-        double *src;
-        size_t i;
-        for (bit = 0; (1<<bit) < nthreads; bit++) {
-                mask |= 1 << bit;
-                if (!(thread_id & mask)) {
-                        thread_src = thread_id | (1<<bit);
-                        if (thread_src < nthreads) {
-                                src = vec[thread_src];
-                                for (i = 0; i < count; i++) {
-                                        dst[i] += src[i];
-                                }
-                        }
-                }
-#pragma omp barrier
-        }
-}
-
 /*
  * nlink = nocc*nvir, num. all possible strings that a string can link to
  * link_index[str0] == linking map between str0 and other strings
@@ -382,7 +359,7 @@ void FCIcontract_2e_spin0(double *eri, double *ci0, double *ci1,
                                        strk, ib, norb, na, na, nlink, nlink,
                                        clink, clink);
                 }
-                FCIomp_reduce_inplace(ci1bufs, blen*na);
+                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
 #pragma omp master
                 FCIaxpy2d(ci1+ib, ci1buf, na, na, blen);
         }
@@ -423,7 +400,7 @@ void FCIcontract_2e_spin1(double *eri, double *ci0, double *ci1,
                                        norb, na, nb, nlinka, nlinkb,
                                        clinka, clinkb);
                 }
-                FCIomp_reduce_inplace(ci1bufs, blen*na);
+                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
 #pragma omp master
                 FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
         }
@@ -505,7 +482,7 @@ void FCIcontract_uhf2e(double *eri_aa, double *eri_ab, double *eri_bb,
                                        norb, na, nb, nlinka, nlinkb,
                                        clinka, clinkb);
                 }
-                FCIomp_reduce_inplace(ci1bufs, blen*na);
+                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
 #pragma omp master
                 FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
         }
@@ -826,7 +803,7 @@ static void loop_c2e_symm1(double *eri, double *ci0, double *ci1aa, double *ci1a
                                            nnorb, nb_intermediate, na, nb,
                                            nlinka, nlinkb, clinka, clinkb);
                 }
-                FCIomp_reduce_inplace(ci1bufs, blen*na);
+                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
 #pragma omp master
                 FCIaxpy2d(ci1aa+ib, ci1buf, na, nb, blen);
         }

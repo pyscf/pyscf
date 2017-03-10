@@ -9,6 +9,8 @@
 #include "config.h"
 #include "gto/grid_ao_drv.h"
 
+#define MAX_THREADS     256
+
 #define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define MAX(X,Y)        ((X)>(Y)?(X):(Y))
 
@@ -75,15 +77,17 @@ void VXCgen_grid(double *out, double *coords, double *atm_coords,
                 }
         }
 
-        for (n = 0; n < natm*ngrids; n++) {
-                out[n] = 1;
-        }
-
+        double *bufs[MAX_THREADS];
 #pragma omp parallel default(none) \
-        shared(out, grid_dist, atm_coords, radii_table, natm, ngrids) \
+        shared(out, grid_dist, atm_coords, radii_table, natm, ngrids, bufs) \
         private(i, j, n, dx, dy, dz)
 {
-        double *buf = malloc(sizeof(double) * natm*ngrids);
+        int thread_id = omp_get_thread_num();
+        double *buf = out;
+        if (thread_id != 0) {
+                buf = malloc(sizeof(double) * natm*ngrids);
+        }
+        bufs[thread_id] = buf;
         for (i = 0; i < natm*ngrids; i++) {
                 buf[i] = 1;
         }
@@ -128,11 +132,10 @@ void VXCgen_grid(double *out, double *coords, double *atm_coords,
                         buf[j*ngrids+n] *= .5 + g[n];
                 }
         }
-#pragma omp critical
-        for (i = 0; i < natm*ngrids; i++) {
-                out[i] *= buf[i];
+        NPomp_dprod_reduce_inplace(bufs, natm*ngrids);
+        if (thread_id != 0) {
+                free(buf);
         }
-        free(buf);
 }
         free(grid_dist);
 }
