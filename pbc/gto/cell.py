@@ -334,13 +334,8 @@ def get_nimgs(cell, precision=None):
     return nimgs
 
 def _estimate_rcut(alpha, l, cc, r0, precision=1e-8):
-    rcut = []
-    for a, c in zip(alpha, cc):
-        if np.isclose(c, 0.0):
-            rcut.append(0)
-        else:
-            rcut.append(np.sqrt(abs(2*np.log(c*(r0**2*a)**l/precision)) / a))
-    return np.array(rcut)
+    rcut = np.sqrt(abs(2*np.log((cc+1e-200)*(r0**2*alpha)**l/precision))/alpha)
+    return rcut
 
 def bas_rcut(cell, bas_id, precision=1e-8):
     r'''Estimate the largest distance between the function and its image to

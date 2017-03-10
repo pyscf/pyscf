@@ -23,10 +23,10 @@ from pyscf.pbc.df import aft_ao2mo
 
 def estimate_eta(cell, cutoff=1e-12):
     '''The exponent of the smooth gaussian model density, requiring that at
-    boundary, density ~ 4pi rmax^2 exp(-eta*rmax^2) ~ 1e-12
+    boundary, density ~ 4pi rmax^2 exp(-eta/2*rmax^2) ~ 1e-12
     '''
-    # r^4 to guarantee at least up to d shell converging at boundary
-    eta = max(numpy.log(4*numpy.pi*cell.rcut**4/cutoff)/cell.rcut**2, .1)
+    # r^5 to guarantee at least up to f shell converging at boundary
+    eta = max(numpy.log(4*numpy.pi*cell.rcut**5/cutoff)/cell.rcut**2*2, .3)
     return eta
 
 def get_nuc(mydf, kpts=None):
@@ -182,7 +182,7 @@ class AFTDF(lib.StreamObject):
         self.max_memory = cell.max_memory
 # For nuclear attraction integrals using Ewald-like technique.
 # Set to 0 to use the regular reciprocal space Poisson-equation method.
-        self.eta = estimate_eta(cell)
+        self.eta = estimate_eta(cell, cell.precision)
 
         self.kpts = kpts
         self.gs = cell.gs

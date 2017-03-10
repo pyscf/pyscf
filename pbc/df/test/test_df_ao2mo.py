@@ -97,6 +97,7 @@ class KnowValues(unittest.TestCase):
         kpts[3] = -numpy.einsum('ij->j', kpts[:3])
         with_df = df.DF(cell)
         with_df.kpts = kpts
+        with_df.gs = [5]*3
         mo =(numpy.random.random((nao,nao)) +
              numpy.random.random((nao,nao))*1j)
         eri = with_df.get_eri(kpts).reshape((nao,)*4)

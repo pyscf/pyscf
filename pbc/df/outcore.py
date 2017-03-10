@@ -38,10 +38,7 @@ def aux_e2(cell, auxcell, erifile, intor='cint3c2e_sph', aosym='s2ij', comp=1,
     feri[dataname+'-kptij'] = kptij_lst
     nkptij = len(kptij_lst)
 
-    # sum over largest number of images in either cell or auxcell
-    rcut = max(cell.rcut, auxcell.rcut)
-    Ls = cell.get_lattice_Ls(rcut=rcut)
-    logger.debug1(cell, "pbc.df.outcore.rcut %s", rcut)
+    Ls = cell.get_lattice_Ls()
     logger.debug3(cell, "Ls = %s", Ls)
 
     nao = cell.nao_nr()
