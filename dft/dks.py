@@ -157,5 +157,5 @@ if __name__ == '__main__':
     mol.build()
 
     m = DKS(mol)
-    print(m.scf())  # -2.8978518405
+    print(m.scf())
 

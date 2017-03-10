@@ -55,8 +55,8 @@ def _dm2c_to_rho2x2(mol, ao, dm, non0tab, shls_slice, ao_loc, out=None):
     out = _dot_ao_dm(mol, aob, dm, non0tab, shls_slice, ao_loc, out=out)
     rhoab = numpy.einsum('pi,pi->p', aoa.real, out.real)
     rhoab+= numpy.einsum('pi,pi->p', aoa.imag, out.imag)
-    rhobb = numpy.einsum('pi,pi->p', aoa.real, out.real)
-    rhobb+= numpy.einsum('pi,pi->p', aoa.imag, out.imag)
+    rhobb = numpy.einsum('pi,pi->p', aob.real, out.real)
+    rhobb+= numpy.einsum('pi,pi->p', aob.imag, out.imag)
     return rhoaa, rhoab, rhoba, rhobb
 
 def _rho2x2_to_rho_m(rho2x2):
