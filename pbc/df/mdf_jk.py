@@ -52,7 +52,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
     if mydf._cderi is None:
         mydf.build()
     vj_kpts = aft_jk.get_j_kpts(mydf, dm_kpts, hermi, kpts, kpt_band)
-    vk_kpts += df_jk.get_k_kpts(mydf, dm_kpts, hermi, kpts, kpt_band)
+    vj_kpts += df_jk.get_j_kpts(mydf, dm_kpts, hermi, kpts, kpt_band)
     return vj_kpts
 
 
@@ -119,10 +119,25 @@ if __name__ == '__main__':
     auxbasis = 'weigend'
     mf = density_fit(mf, auxbasis)
     mf.with_df.gs = (5,) * 3
-    mf.with_df.approx_sr_level = 3
     dm = mf.get_init_guess()
     vj = get_jk(mf.with_df, dm, exxdiv=mf.exxdiv, with_k=False)[0]
     print(numpy.einsum('ij,ji->', vj, dm), 'ref=46.698951141791')
     vj, vk = get_jk(mf.with_df, dm, exxdiv=mf.exxdiv)
     print(numpy.einsum('ij,ji->', vj, dm), 'ref=46.698951141791')
     print(numpy.einsum('ij,ji->', vk, dm), 'ref=37.348980782463')
+
+    kpts = cell.make_kpts([2]*3)[:4]
+    from pyscf.pbc.df import MDF
+    with_df = MDF(cell, kpts)
+    with_df.auxbasis = 'weigend'
+    with_df.gs = [5] * 3
+    dms = numpy.array([dm]*len(kpts))
+    vj, vk = with_df.get_jk(dms, exxdiv=mf.exxdiv, kpts=kpts)
+    print(numpy.einsum('ij,ji->', vj[0], dms[0]), - 46.69784775484954)
+    print(numpy.einsum('ij,ji->', vj[1], dms[1]), - 46.69815612398015)
+    print(numpy.einsum('ij,ji->', vj[2], dms[2]), - 46.69526857884275)
+    print(numpy.einsum('ij,ji->', vj[3], dms[3]), - 46.69571387135913)
+    print(numpy.einsum('ij,ji->', vk[0], dms[0]), - 37.27054185436858)
+    print(numpy.einsum('ij,ji->', vk[1], dms[1]), - 37.27081050772277)
+    print(numpy.einsum('ij,ji->', vk[2], dms[2]), - 37.27081024429790)
+    print(numpy.einsum('ij,ji->', vk[3], dms[3]), - 37.27090527533867)

@@ -91,15 +91,6 @@ def get_nuc(mydf, kpts=None):
         vjR[k] += numpy.einsum('k,xk->x', vGI[p0:p1], pqkI)
     t1 = log.timer_debug1('contracting Vnuc', *t1)
 
-    if mydf.eta != 0 and cell.dimension == 3:
-        nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
-        nucbar *= numpy.pi/cell.vol
-        ovlp = cell.pbc_intor('cint1e_ovlp_sph', 1, lib.HERMITIAN, kpts_lst)
-        for k in range(nkpts):
-            s = lib.pack_tril(ovlp[k])
-            vjR[k] -= nucbar * s.real
-            vjI[k] -= nucbar * s.imag
-
     vj = []
     for k, kpt in enumerate(kpts_lst):
         if gamma_point(kpt):
@@ -145,9 +136,17 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='cint3c2e_sph'):
 
     charge = cell.atom_charges()
     charge = numpy.append(charge, -charge)  # (charge-of-nuccell, charge-of-fakenuc)
-    for k, kpt in enumerate(kpts):
+    for k in range(nkpts):
         v = numpy.einsum('ijz,z->ij', buf[k], charge)
         buf[k] = lib.pack_tril(v + v.T.conj())
+
+    if cell.dimension == 3:
+        nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(cell.atom_charges())])
+        nucbar *= numpy.pi/cell.vol
+        ovlp = cell.pbc_intor('cint1e_ovlp_sph', 1, lib.HERMITIAN, kpts)
+        for k in range(nkpts):
+            s = lib.pack_tril(ovlp[k])
+            buf[k] += nucbar * s
     return buf
 
 get_pp_loc_part1 = get_nuc

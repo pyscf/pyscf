@@ -26,7 +26,6 @@ from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
 from pyscf.df.outcore import _guess_shell_ranges
-from pyscf.df.mdf import _uncontract_basis
 from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import aft
@@ -38,8 +37,8 @@ from pyscf.pbc.df.aft import estimate_eta, get_nuc
 def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
     auxcell = copy.copy(cell)
     if auxbasis is None:
-        _basis = _uncontract_basis(cell, auxbasis)
-    elif isinstance(auxbasis, str):
+        auxbasis = 'weigend+etb'
+    if isinstance(auxbasis, str):
         uniq_atoms = set([a[0] for a in cell._atom])
         _basis = auxcell.format_basis(dict([(a, auxbasis) for a in uniq_atoms]))
     else:
@@ -379,8 +378,6 @@ class DF(aft.AFTDF):
         logger.debug1(self, '    kpts = %s', self.kpts)
 
     def build(self, j_only=False, with_j3c=True):
-        log = logger.Logger(self.stdout, self.verbose)
-        t1 = (time.clock(), time.time())
         self.dump_flags()
 
         self.auxcell = make_modrho_basis(self.cell, self.auxbasis, self.eta)
@@ -400,8 +397,9 @@ class DF(aft.AFTDF):
                 self._cderi = self._cderi_file.name
 
         if with_j3c:
+            t1 = (time.clock(), time.time())
             self._make_j3c(self.cell, self.auxcell, kptij_lst)
-            t1 = log.timer_debug1('j3c', *t1)
+            t1 = logger.timer_debug1(self, 'j3c', *t1)
         return self
 
     _make_j3c = _make_j3c
