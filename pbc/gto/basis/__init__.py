@@ -63,7 +63,11 @@ def load(file_or_basis_name, symb):
     >>> cell.basis = {'C': load('gth-dzvp', 'C')}
     '''
     if os.path.isfile(file_or_basis_name):
-        return parse_cp2k.load(file_or_basis_name, symb)
+        try:
+            return parse_cp2k.load(file_or_basis_name, symb)
+        except RuntimeError:
+            with open(file_or_basis_name, 'r') as fin:
+                return parse_cp2k.parse(fin.read())
 
     name = file_or_basis_name.lower().replace(' ', '').replace('-', '').replace('_', '')
     if name not in ALIAS:
