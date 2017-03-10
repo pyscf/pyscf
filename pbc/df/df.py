@@ -26,6 +26,7 @@ from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
 from pyscf.df.outcore import _guess_shell_ranges
+from pyscf.pbc.gto.cell import _estimate_rcut
 from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import aft
@@ -33,6 +34,8 @@ from pyscf.pbc.df import df_jk
 from pyscf.pbc.df import df_ao2mo
 from pyscf.pbc.df.df_jk import zdotCN, is_zero, gamma_point
 from pyscf.pbc.df.aft import estimate_eta, get_nuc
+
+LINEAR_DEP_THR = 1e-9
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
     auxcell = copy.copy(cell)
@@ -52,6 +55,7 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
     half_sph_norm = numpy.sqrt(.25/numpy.pi)
     steep_shls = []
     ndrop = 0
+    rcut = []
     for ib in range(len(auxcell._bas)):
         l = auxcell.bas_angular(ib)
         np = auxcell.bas_nprim(ib)
@@ -80,11 +84,16 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
             auxcell._env[ptr:ptr+np*nc] = cs.T.reshape(-1)
             steep_shls.append(ib)
 
+            rcut.append(_estimate_rcut(es.min(), l, 1., 20, cell.precision))
+
+    auxcell.rcut = max(rcut)
+
     auxcell._bas = numpy.asarray(auxcell._bas[steep_shls], order='C')
     auxcell._built = True
     logger.debug(cell, 'Drop %d primitive fitting functions', ndrop)
     logger.debug(cell, 'make aux basis, num shells = %d, num cGTOs = %d',
                  auxcell.nbas, auxcell.nao_nr())
+    logger.debug(cell, 'auxcell.rcut %s', auxcell.rcut)
     return auxcell
 
 def make_modchg_basis(auxcell, smooth_eta, l_max=3):
@@ -96,20 +105,23 @@ def make_modchg_basis(auxcell, smooth_eta, l_max=3):
     chg_env = [smooth_eta]
     ptr_eta = auxcell._env.size
     ptr = ptr_eta + 1
+    norms = [half_sph_norm/gto.mole._gaussian_int(l*2+2, smooth_eta)
+             for l in range(l_max+1)]
     for ia in range(auxcell.natm):
         for l in set(auxcell._bas[auxcell._bas[:,gto.ATOM_OF]==ia, gto.ANG_OF]):
             if l <= l_max:
-                norm = half_sph_norm/gto.mole._gaussian_int(l*2+2, smooth_eta)
                 chg_bas.append([ia, l, 1, 1, 0, ptr_eta, ptr, 0])
-                chg_env.append(norm)
+                chg_env.append(norms[l])
                 ptr += 1
 
     chgcell._atm = auxcell._atm
     chgcell._bas = numpy.asarray(chg_bas, dtype=numpy.int32).reshape(-1,gto.BAS_SLOTS)
     chgcell._env = numpy.hstack((auxcell._env, chg_env))
+    chgcell.rcut = _estimate_rcut(smooth_eta, l_max, 1., 20, auxcell.precision)
     chgcell._built = True
     logger.debug1(auxcell, 'make smooth basis, num shells = %d, num cGTOs = %d',
                   chgcell.nbas, chgcell.nao_nr())
+    logger.debug1(auxcell, 'chgcell.rcut %s', chgcell.rcut)
     return chgcell
 
 # kpti == kptj: s2 symmetry
@@ -140,7 +152,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
     kLRs = []
     kLIs = []
 
-# An alternative method to evalute j2c
+# An alternative method to evalute j2c. This method might have larger numerical error?
 #    chgcell = make_modchg_basis(auxcell, mydf.eta)
 #    for k, kpt in enumerate(uniq_kpts):
 #        aoaux = ft_ao.ft_ao(chgcell, Gv, None, b, gxyz, Gvbase, kpt).T
@@ -148,7 +160,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
 #        LkR = aoaux.real * coulG
 #        LkI = aoaux.imag * coulG
 #        j2caux = numpy.zeros_like(j2c[k])
-#        j2caux[naux:,naux:] = j2c[naux:,naux:]
+#        j2caux[naux:,naux:] = j2c[k][naux:,naux:]
 #        if is_zero(kpt):  # kpti == kptj
 #            j2caux[naux:,naux:] -= lib.ddot(LkR, LkR.T)
 #            j2caux[naux:,naux:] -= lib.ddot(LkI, LkI.T)
@@ -161,9 +173,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
 #            j2cR, j2cI = zdotCN(LkR, LkI, LkR.T, LkI.T)
 #            j2caux[naux:,naux:] -= j2cR + j2cI * 1j
 #            j2c[k] = j2c[k][:naux,:naux] - fuse(fuse(j2caux.T).T)
-#        #j2c[k] = fuse(fuse(j2c[k]).T).T.copy()
+#
 #        try:
-#            j2c[k] = scipy.linalg.cholesky(fuse(fuse(j2c[k]).T).T, lower=True)
+#            j2c[k] = scipy.linalg.cholesky(j2c[k], lower=True)
 #        except scipy.linalg.LinAlgError as e:
 #            msg =('===================================\n'
 #                  'J-metric not positive definite.\n'
@@ -196,15 +208,23 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
             j2c[k][naux:] -= j2cR + j2cI * 1j
             j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T.conj()
 
+        j2c[k] = fuse(fuse(j2c[k]).T).T
         try:
-            j2c[k] = scipy.linalg.cholesky(fuse(fuse(j2c[k]).T).T, lower=True)
+            j2c[k] = ('CD', scipy.linalg.cholesky(j2c[k], lower=True))
         except scipy.linalg.LinAlgError as e:
-            msg =('===================================\n'
-                  'J-metric not positive definite.\n'
-                  'It is likely that gs is not enough.\n'
-                  '===================================')
-            log.error(msg)
-            raise scipy.linalg.LinAlgError('\n'.join([e.message, msg]))
+            #msg =('===================================\n'
+            #      'J-metric not positive definite.\n'
+            #      'It is likely that gs is not enough.\n'
+            #      '===================================')
+            #log.error(msg)
+            #raise scipy.linalg.LinAlgError('\n'.join([e.message, msg]))
+            w, v = scipy.linalg.eigh(j2c[k])
+            log.debug2('metric linear dependency for kpt %s', k)
+            log.debug2('cond = %.4g, drop %d bfns',
+                       w[0]/w[-1], numpy.count_nonzero(w<LINEAR_DEP_THR))
+            v = v[:,w>LINEAR_DEP_THR].T.conj()
+            v /= numpy.sqrt(w[w>LINEAR_DEP_THR]).reshape(-1,1)
+            j2c[k] = ('eig', v)
         kLR = LkR[naux:].T
         kLI = LkI[naux:].T
         if not kLR.flags.c_contiguous: kLR = lib.transpose(LkR[naux:])
@@ -215,6 +235,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
         kLIs.append(kLI)
         aoaux = LkR = LkI = kLR = kLI = coulG = None
 
+    nauxs = [v[1].shape[0] for v in j2c]
     feri = h5py.File(mydf._cderi)
 
     def make_kpt(uniq_kptji_id):  # kpt = kptj - kpti
@@ -319,23 +340,27 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
                         zdotCN(kLR[p0:p1].T, kLI[p0:p1].T, pqkR.T, pqkI.T,
                                -1, j3cR[k][naux:], j3cI[k][naux:], 1)
 
+            naux0 = nauxs[uniq_kptji_id]
             for k, ji in enumerate(adapted_ji_idx):
                 if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
                     v = fuse(j3cR[k])
                 else:
                     v = fuse(j3cR[k] + j3cI[k] * 1j)
+                if j2c[uniq_kptji_id][0] == 'CD':
+                    v = scipy.linalg.solve_triangular(j2c[uniq_kptji_id][1], v,
+                                                      lower=True, overwrite_b=True)
+                else:
+                    v = lib.dot(j2c[uniq_kptji_id][1], v)
+                feri['j3c/%d'%ji][:naux0,col0:col1] = v
 
-                v = scipy.linalg.solve_triangular(j2c[uniq_kptji_id], v,
-                                                  lower=True, overwrite_b=True)
-                feri['j3c/%d'%ji][:naux,col0:col1] = v
+        naux0 = nauxs[uniq_kptji_id]
+        for k, ji in enumerate(adapted_ji_idx):
+            v = feri['j3c/%d'%ji][:naux0]
+            del(feri['j3c/%d'%ji])
+            feri['j3c/%d'%ji] = v
 
     for k, kpt in enumerate(uniq_kpts):
         make_kpt(k)
-
-    for k, kptij in enumerate(kptij_lst):
-        v = feri['j3c/%d'%k][:naux]
-        del(feri['j3c/%d'%k])
-        feri['j3c/%d'%k] = v
 
     feri.close()
 
@@ -352,7 +377,7 @@ class DF(aft.AFTDF):
         self.kpts = kpts  # default is gamma point
         self.gs = cell.gs
         self.auxbasis = None
-        self.eta = estimate_eta(cell)
+        self.eta = estimate_eta(cell, cell.precision)
 
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
@@ -556,6 +581,7 @@ def fuse_auxcell(mydf, auxcell):
     fused_cell._atm, fused_cell._bas, fused_cell._env = \
             gto.conc_env(auxcell._atm, auxcell._bas, auxcell._env,
                          chgcell._atm, chgcell._bas, chgcell._env)
+    fused_cell.rcut = max(auxcell.rcut, chgcell.rcut)
 
     aux_loc = auxcell.ao_loc_nr()
     naux = aux_loc[-1]

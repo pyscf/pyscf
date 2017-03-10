@@ -24,8 +24,6 @@ from pyscf.pbc.df import mdf_jk
 from pyscf.pbc.df import mdf_ao2mo
 
 
-LINEAR_DEP_THR = 1e-9
-
 # kpti == kptj: s2 symmetry
 # kpti == kptj == 0 (gamma point): real
 def _make_j3c(mydf, cell, auxcell, kptij_lst):
@@ -33,9 +31,6 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     fused_cell, fuse = fuse_auxcell(mydf, mydf.auxcell)
-    outcore.aux_e2(cell, fused_cell, mydf._cderi, 'cint3c2e_sph',
-                   kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
-    t1 = log.timer_debug1('3c2e', *t1)
 
     nao = cell.nao_nr()
     naux = auxcell.nao_nr()
@@ -77,9 +72,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
             w, v = scipy.linalg.eigh(j2c[k])
             log.debug2('metric linear dependency for kpt %s', k)
             log.debug2('cond = %.4g, drop %d bfns',
-                       w[0]/w[-1], numpy.count_nonzero(w<LINEAR_DEP_THR))
-            v = v[:,w>LINEAR_DEP_THR].T.conj()
-            v /= numpy.sqrt(w[w>LINEAR_DEP_THR]).reshape(-1,1)
+                       w[0]/w[-1], numpy.count_nonzero(w<df.LINEAR_DEP_THR))
+            v = v[:,w>df.LINEAR_DEP_THR].T.conj()
+            v /= numpy.sqrt(w[w>df.LINEAR_DEP_THR]).reshape(-1,1)
             j2c[k] = ('eig', v)
 
         kLR *= coulG.reshape(-1,1)
@@ -88,8 +83,11 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
         kLIs.append(kLI)
         aoaux = kLR = kLI = j2cR = j2cI = coulG = None
 
+    outcore.aux_e2(cell, fused_cell, mydf._cderi, 'cint3c2e_sph',
+                   kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
+    t1 = log.timer_debug1('3c2e', *t1)
+    nauxs = [v[1].shape[0] for v in j2c]
     feri = h5py.File(mydf._cderi)
-    log.debug2('memory = %s', lib.current_memory()[0])
 
     def make_kpt(uniq_kptji_id):  # kpt = kptj - kpti
         kpt = uniq_kpts[uniq_kptji_id]
@@ -130,7 +128,6 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
         pqkIbuf = numpy.empty(buflen*Gblksize)
         # buf for ft_aopair
         buf = numpy.zeros((nkptj,buflen*Gblksize), dtype=numpy.complex128)
-        naux0 = j2c[uniq_kptji_id][1].shape[0]
 
         col1 = 0
         for istep, sh_range in enumerate(shranges):
@@ -194,6 +191,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
                         zdotCN(kLR[p0:p1].T, kLI[p0:p1].T, pqkR.T, pqkI.T,
                                -1, j3cR[k], j3cI[k], 1)
 
+            naux0 = nauxs[uniq_kptji_id]
             for k, ji in enumerate(adapted_ji_idx):
                 if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
                     v = j3cR[k]
@@ -206,10 +204,11 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
                     v = lib.dot(j2c[uniq_kptji_id][1], v)
                 feri['j3c/%d'%ji][:naux0,col0:col1] = v
 
-            for k, ji in enumerate(adapted_ji_idx):
-                v = feri['j3c/%d'%ji][:naux0]
-                del(feri['j3c/%d'%ji])
-                feri['j3c/%d'%ji] = v
+        naux0 = nauxs[uniq_kptji_id]
+        for k, ji in enumerate(adapted_ji_idx):
+            v = feri['j3c/%d'%ji][:naux0]
+            del(feri['j3c/%d'%ji])
+            feri['j3c/%d'%ji] = v
 
     for k, kpt in enumerate(uniq_kpts):
         make_kpt(k)
