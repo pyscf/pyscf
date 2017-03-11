@@ -79,6 +79,8 @@ def get_pp(mydf, kpts=None):
     fakemol._bas[0,gto.PTR_EXP  ] = ptr+3
     fakemol._bas[0,gto.PTR_COEFF] = ptr+4
 
+    # buf for SPG_lmi upto l=0..3 and nl=3
+    buf = numpy.empty((48,ngs), dtype=numpy.complex128)
     def vppnl_by_k(kpt):
         Gk = Gv + kpt
         G_rad = lib.norm(Gk, axis=1)
@@ -89,22 +91,36 @@ def get_pp(mydf, kpts=None):
             if symb not in cell._pseudo:
                 continue
             pp = cell._pseudo[symb]
+            p1 = 0
             for l, proj in enumerate(pp[5:]):
                 rl, nl, hl = proj
                 if nl > 0:
-                    hl = numpy.asarray(hl)
                     fakemol._bas[0,gto.ANG_OF] = l
                     fakemol._env[ptr+3] = .5*rl**2
                     fakemol._env[ptr+4] = rl**(l+1.5)*numpy.pi**1.25
                     pYlm_part = dft.numint.eval_ao(fakemol, Gk, deriv=0)
 
-                    pYlm = numpy.empty((nl,l*2+1,ngs))
+                    p0, p1 = p1, p1+nl*(l*2+1)
+                    # pYlm is real, SI[ia] is complex
+                    pYlm = numpy.ndarray((nl,l*2+1,ngs), dtype=numpy.complex128, buffer=buf[p0:p1])
                     for k in range(nl):
                         qkl = pseudo.pp._qli(G_rad*rl, l, k)
                         pYlm[k] = pYlm_part.T * qkl
-                    # pYlm is real
-                    SPG_lmi = numpy.einsum('g,nmg->nmg', SI[ia].conj(), pYlm)
-                    SPG_lm_aoG = numpy.einsum('nmg,gp->nmp', SPG_lmi, aokG)
+                    #:SPG_lmi = numpy.einsum('g,nmg->nmg', SI[ia].conj(), pYlm)
+                    #:SPG_lm_aoG = numpy.einsum('nmg,gp->nmp', SPG_lmi, aokG)
+                    #:tmp = numpy.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
+                    #:vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
+            print ia
+            SPG_lmi = buf[:p1]
+            SPG_lmi *= SI[ia].conj()
+            SPG_lm_aoGs = numpy.dot(SPG_lmi, aokG)
+            p1 = 0
+            for l, proj in enumerate(pp[5:]):
+                rl, nl, hl = proj
+                if nl > 0:
+                    p0, p1 = p1, p1+nl*(l*2+1)
+                    hl = numpy.asarray(hl)
+                    SPG_lm_aoG = SPG_lm_aoGs[p0:p1].reshape(nl,l*2+1,-1)
                     tmp = numpy.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
                     vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
         return vppnl * (1./ngs**2)
