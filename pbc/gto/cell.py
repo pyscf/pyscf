@@ -8,6 +8,7 @@
 import sys
 import json
 import ctypes
+import warnings
 import numpy as np
 import scipy.linalg
 import scipy.optimize
@@ -172,7 +173,6 @@ def dumps(cell):
     try:
         return json.dumps(celldic)
     except TypeError:
-        import warnings
         def skip_value(dic):
             dic1 = {}
             for k,v in dic.items():
@@ -858,7 +858,19 @@ class Cell(mole.Mole):
     def nimgs(self, x):
         b = self.reciprocal_vectors(norm_to=1)
         heights_inv = lib.norm(b, axis=1)
-        self.rcut = max((np.asarray(x)+1) / heights_inv)
+        self.rcut = max(np.asarray(x) / heights_inv)
+
+        if self.nbas == 0:
+            rcut_guess = _estimate_rcut(.05, 0, 1, 20, 1e-8)
+        else:
+            rcut_guess = max([self.bas_rcut(ib, self.precision)
+                              for ib in range(self.nbas)])
+        if self.rcut > rcut_guess*1.5:
+            msg = ('.nimgs is a deprecated attribute.  It is replaced by .rcut '
+                   'attribute for lattic sum cutoff radius.  The given nimgs '
+                   '%s is far over the estimated cutoff radius %s. ' %
+                   (x, rcut_guess))
+            warnings.warn(msg)
 
     def make_ecp_env(self, _atm, _ecp, pre_env=[]):
         if _ecp and self._pseudo:
