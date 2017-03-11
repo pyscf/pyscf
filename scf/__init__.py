@@ -186,7 +186,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
         from pyscf.dft import gen_grid
         approx_grids = gen_grid.Grids(mf.mol)
         approx_grids.verbose = 0
-        approx_grids.level = 0
+        approx_grids.level = max(0, mf.grids.level-2)
         mf1.grids = approx_grids
 
         approx_numint = copy.copy(mf._numint)
@@ -222,7 +222,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
 # mf1 grids and _numint.  If inital guess dm0 or mo_coeff/mo_occ were given,
 # dft.get_veff are not executed so that more grid points may be found in
 # approx_grids.
-            mf0.small_rho_cutoff = 1e-5
+            mf0.small_rho_cutoff = mf.small_rho_cutoff * 10
         mf0.kernel()
         mo_coeff, mo_occ = mf0.mo_coeff, mf0.mo_occ
 

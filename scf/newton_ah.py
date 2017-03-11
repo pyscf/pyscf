@@ -258,7 +258,9 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
         g_orb0 = g_orb
         imic = 0
         dr = 0
+        ukf = None
         jkcount = 0
+        kfcount = 0
         ikf = 0
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
         vhf0 = fock_ao - h1e
@@ -298,7 +300,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                 ikf += 1
                 if imic > 3 and norm_gorb > norm_gkf*mf.ah_grad_trust_region:
                     g_orb = g_orb - hdxi
-                    dr = dr - dxi
+                    dr -= dxi
                     norm_gorb = numpy.linalg.norm(g_orb)
                     log.debug('|g| >> keyframe, Restore previouse step')
                     break
@@ -313,10 +315,15 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                        norm_gorb < norm_gkf/kf_trust_region)):
                     ikf = 0
                     u = mf.update_rotate_matrix(dr, mo_occ)
+                    if ukf is not None:
+                        u = mf.rotate_mo(ukf, u)
+                    ukf = u
+                    dr[:] = 0
                     mo1 = mf.rotate_mo(mo_coeff, u)
                     dm = mf.make_rdm1(mo1, mo_occ)
 # use mf._scf.get_veff to avoid density-fit mf polluting get_veff
                     vhf0 = mf._scf.get_veff(mf._scf.mol, dm, dm_last=dm0, vhf_last=vhf0)
+                    kfcount += 1
                     dm0 = dm
                     g_kf1 = mf.get_grad(mo1, mo_occ, h1e+vhf0)
                     norm_gkf1 = numpy.linalg.norm(g_kf1)
@@ -334,20 +341,22 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                         norm_gorb = norm_gkf = norm_gkf1
                     else:
                         g_orb = g_orb - hdxi
-                        dr = dr - dxi
+                        dr -= dxi
                         norm_gorb = numpy.linalg.norm(g_orb)
                         log.debug('Out of trust region. Restore previouse step')
                         break
 
 
         u = mf.update_rotate_matrix(dr, mo_occ)
+        if ukf is not None:
+            u = mf.rotate_mo(ukf, u)
         jkcount += ihop + 1
         log.debug('    tot inner=%d  %d JK  |g|= %4.3g  |u-1|= %4.3g',
                   imic, jkcount, norm_gorb,
                   numpy.linalg.norm(u-numpy.eye(nmo)))
         h_op = h_diag = None
         t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
-        mo_coeff, mo_occ, fock_ao = (yield u, g_kf, jkcount)
+        mo_coeff, mo_occ, fock_ao = (yield u, g_kf, kfcount, jkcount)
 
         g_kf, h_op, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao)
         norm_gkf = numpy.linalg.norm(g_kf)
@@ -391,7 +400,8 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         chkfile.save_mol(mol, mf.chkfile)
 
     rotaiter = rotate_orb_cc(mf, mo_coeff, mo_occ, fock, h1e, conv_tol_grad, log)
-    u, g_orb, jkcount = next(rotaiter)
+    u, g_orb, kfcount, jkcount = next(rotaiter)
+    kftot = kfcount + 1
     jktot = jkcount
     cput1 = log.timer('initializing second order scf', *cput0)
 
@@ -410,9 +420,9 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
 # call mf._scf.energy_tot for dft, because the (dft).get_veff step saved _exc in mf._scf
         e_tot = mf._scf.energy_tot(dm, h1e, vhf)
 
-        log.info('macro= %d  E= %.15g  delta_E= %g  |g|= %g  %d JK',
+        log.info('macro= %d  E= %.15g  delta_E= %g  |g|= %g  %d KF %d JK',
                  imacro, e_tot, e_tot-last_hf_e, norm_gorb,
-                 jkcount)
+                 kfcount+1, jkcount)
         cput1 = log.timer('cycle= %d'%(imacro+1), *cput1)
 
         if (abs((e_tot-last_hf_e)/e_tot)*1e2 < conv_tol and
@@ -428,7 +438,8 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         if scf_conv:
             break
 
-        u, g_orb, jkcount = rotaiter.send((mo_coeff, mo_occ, fock))
+        u, g_orb, kfcount, jkcount = rotaiter.send((mo_coeff, mo_occ, fock))
+        kftot += kfcount + 1
         jktot += jkcount
 
     rotaiter.close()
@@ -438,8 +449,8 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         mo_occ = mf._scf.get_occ(mo_energy, mo_coeff)
     else:
         mo_energy = mf._scf.canonicalize(mo_coeff, mo_occ, fock)[0]
-    log.info('macro X = %d  E=%.15g  |g|= %g  total %d JK',
-             imacro+1, e_tot, norm_gorb, jktot)
+    log.info('macro X = %d  E=%.15g  |g|= %g  total %d KF %d JK',
+             imacro+1, e_tot, norm_gorb, kftot, jktot)
     return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
 
 # Note which function that "density_fit" decorated.  density-fit have been
@@ -483,7 +494,7 @@ def newton_SCF_class(mf):
         '''
         def __init__(self):
             self._scf = mf
-            self.max_cycle_inner = 10
+            self.max_cycle_inner = 20
             self.max_stepsize = .05
             self.canonicalization = True
 
@@ -492,7 +503,7 @@ def newton_SCF_class(mf):
             self.ah_level_shift = 0
             self.ah_conv_tol = 1e-12
             self.ah_lindep = 1e-14
-            self.ah_max_cycle = 30
+            self.ah_max_cycle = 40
             self.ah_grad_trust_region = 2.5
 # * Classic AH can be simulated by setting
 #               max_cycle_micro_inner = 1

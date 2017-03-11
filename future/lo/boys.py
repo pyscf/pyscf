@@ -51,7 +51,7 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
         e = localizer.cost_function(u0)
         e_last, de = e, e-e_last
 
-        log.info('macro= %d  f(x)= %.14g  delta_f= %g  |g|= %g  %d Hx %d KF',
+        log.info('macro= %d  f(x)= %.14g  delta_f= %g  |g|= %g  %d KF %d Hx',
                  imacro+1, e, de, norm_gorb, stat.tot_hop, stat.tot_kf+1)
         cput1 = log.timer('cycle= %d'%(imacro+1), *cput1)
 
@@ -106,10 +106,11 @@ class Boys(ciah.CIAHOptimizer):
         self.conv_tol = 1e-7
         self.conv_tol_grad = None
         self.max_cycle = 100
-        self.max_iters = 10
+        self.max_iters = 20
         self.max_stepsize = .05
         self.ah_trust_region = 3
         self.ah_start_tol = 1e9
+        self.ah_max_cycle = 40
         self.init_guess = 'atomic'
 
         self.mo_coeff = numpy.asarray(mo_coeff, order='C')

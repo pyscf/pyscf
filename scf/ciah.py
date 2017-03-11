@@ -103,6 +103,7 @@ def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
         stat = Statistic()
         dr = 0
         ikf = 0
+        ukf = 1
 
         for ah_conv, ihop, w, dxi, hdxi, residual, seig \
                 in davidson_cc(h_op, g_op, precond, x0_guess,
@@ -132,7 +133,7 @@ def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
                 ikf += 1
                 if stat.imic > 3 and norm_gorb > norm_gkf*iah.ah_trust_region:
                     g_orb = g_orb - hdxi
-                    dr = dr - dxi
+                    dr -= dxi
                     norm_gorb = numpy.linalg.norm(g_orb)
                     log.debug('|g| >> keyframe, Restore previouse step')
                     break
@@ -145,7 +146,9 @@ def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
 # Insert keyframe if the keyframe and the esitimated g_orb are too different
                        norm_gorb < norm_gkf/kf_trust_region)):
                     ikf = 0
-                    g_kf1 = iah.get_grad(iah.extract_rotation(dr, u0))
+                    ukf = iah.extract_rotation(dr, ukf)
+                    dr[:] = 0
+                    g_kf1 = iah.get_grad(u0.dot(ukf))
                     stat.tot_kf += 1
                     norm_gkf1 = numpy.linalg.norm(g_kf1)
                     norm_dg = numpy.linalg.norm(g_kf1-g_orb)
@@ -162,12 +165,12 @@ def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
                         norm_gorb = norm_gkf = norm_gkf1
                     else:
                         g_orb = g_orb - hdxi
-                        dr = dr - dxi
+                        dr -= dxi
                         norm_gorb = numpy.linalg.norm(g_orb)
                         log.debug('Out of trust region. Restore previouse step')
                         break
 
-        u = iah.extract_rotation(dr)
+        u = iah.extract_rotation(dr, ukf)
         log.debug('    tot inner=%d  |g|= %4.3g  |u-1|= %4.3g',
                   stat.imic, norm_gorb, numpy.linalg.norm(numpy.tril(u,-1)))
         h_op = h_diag = None
