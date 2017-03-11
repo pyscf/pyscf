@@ -110,7 +110,6 @@ def get_pp(mydf, kpts=None):
                     #:SPG_lm_aoG = numpy.einsum('nmg,gp->nmp', SPG_lmi, aokG)
                     #:tmp = numpy.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
                     #:vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
-            print ia
             SPG_lmi = buf[:p1]
             SPG_lmi *= SI[ia].conj()
             SPG_lm_aoGs = numpy.dot(SPG_lmi, aokG)
