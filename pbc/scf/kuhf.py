@@ -324,8 +324,9 @@ class KUHF(uhf.UHF, khf.KRHF):
         fock = self.get_hcore(cell, kpt_band)
         fock = fock + self.get_veff(cell, dm_kpts, kpts=kpts, kpt_band=kpt_band)
         s1e = self.get_ovlp(cell, kpt_band)
-        mo_energy, mo_coeff = uhf.eig(fock, s1e)
-        return mo_energy, mo_coeff
+        e_a, c_a = self._eigh(fock[0], s1e[0])
+        e_b, c_b = self._eigh(fock[0], s1e[0])
+        return lib.asarray((e_a,e_b)), lib.asarray((c_a,c_b))
 
     def init_guess_by_chkfile(self, chk=None, project=True, kpts=None):
         if chk is None: chk = self.chkfile

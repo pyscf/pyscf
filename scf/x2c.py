@@ -236,7 +236,7 @@ class UHF(hf.SCF):
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
-    def eig(self, h, s):
+    def _eigh(self, h, s):
         e, c = scipy.linalg.eigh(h, s)
         idx = numpy.argmax(abs(c.real), axis=0)
         c[:,c[idx,range(len(e))].real<0] *= -1

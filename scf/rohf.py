@@ -322,7 +322,7 @@ class ROHF(hf.RHF):
         logger.info(self, 'Initial guess from hcore.')
         h1e = self.get_hcore(mol)
         s1e = self.get_ovlp(mol)
-        mo_energy, mo_coeff = hf.RHF.eig(self, h1e, s1e)
+        mo_energy, mo_coeff = self.eig(h1e, s1e)
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         return self.make_rdm1(mo_coeff, mo_occ)
 

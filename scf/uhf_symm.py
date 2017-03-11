@@ -174,7 +174,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
             e, c = scipy.linalg.eigh(f1)
             es[idx] = e
             c = numpy.dot(mo_coeff[:,idx], c)
-            cs[:,idx] = hf_symm._symmetrize_canonicalization_(mf.mol, e, c, s)
+            cs[:,idx] = hf_symm._symmetrize_canonicalization_(mf, e, c, s)
     mo = numpy.empty_like(mo_coeff)
     mo_e = numpy.empty(mo_occ.shape)
     eig_(fock[0], mo_coeff[0], occidxa, mo_e[0], mo[0])
@@ -225,7 +225,7 @@ class UHF(uhf.UHF):
 
     def eig(self, h, s):
         if not self.mol.symmetry:
-            return uhf.UHF.eig(self, h, s)
+            return self._eigh(h, s)
 
         nirrep = self.mol.symm_orb.__len__()
         s = symm.symmetrize_matrix(s, self.mol.symm_orb)
@@ -233,7 +233,7 @@ class UHF(uhf.UHF):
         cs = []
         es = []
         for ir in range(nirrep):
-            e, c = hf.SCF.eig(self, ha[ir], s[ir])
+            e, c = self._eigh(ha[ir], s[ir])
             cs.append(c)
             es.append(e)
         ea = numpy.hstack(es)
@@ -243,7 +243,7 @@ class UHF(uhf.UHF):
         cs = []
         es = []
         for ir in range(nirrep):
-            e, c = scipy.linalg.eigh(hb[ir], s[ir])
+            e, c = self._eigh(hb[ir], s[ir])
             cs.append(c)
             es.append(e)
         eb = numpy.hstack(es)

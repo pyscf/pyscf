@@ -246,53 +246,14 @@ def project_mo_r2r(mol1, mo1, mol2):
 
 def remove_linear_dep_(mf, threshold=1e-8):
     mol = mf.mol
-    def eig_nosym(h, s):
+    def eigh(h, s):
         d, t = numpy.linalg.eigh(s)
         x = t[:,d>threshold] / numpy.sqrt(d[d>threshold])
         xhx = reduce(numpy.dot, (x.T, h, x))
         e, c = numpy.linalg.eigh(xhx)
         c = numpy.dot(x, c)
         return e, c
-
-    def eig_symm(h, s):
-        nirrep = mol.symm_orb.__len__()
-        h = symm.symmetrize_matrix(h, mol.symm_orb)
-        s = symm.symmetrize_matrix(s, mol.symm_orb)
-        cs = []
-        es = []
-        for ir in range(nirrep):
-            d, t = numpy.linalg.eigh(s[ir])
-            x = t[:,d>threshold] / numpy.sqrt(d[d>threshold])
-            xhx = reduce(numpy.dot, (x.T, h[ir], x))
-            e, c = numpy.linalg.eigh(xhx)
-            cs.append(reduce(numpy.dot, (mol.symm_orb[ir], x, c)))
-            es.append(e)
-        e = numpy.hstack(es)
-        c = numpy.hstack(cs)
-        return e, c
-
-    from pyscf.scf import uhf, rohf
-    if mol.symmetry:
-        if isinstance(mf, uhf.UHF):
-            def eig(h, s):
-                e_a, c_a = eig_symm(h[0], s)
-                e_b, c_b = eig_symm(h[1], s)
-                return numpy.array((e_a,e_b)), (c_a,c_b)
-        elif isinstance(mf, rohf.ROHF):
-            raise NotImplementedError
-        else:
-            eig = eig_symm
-    else:
-        if isinstance(mf, uhf.UHF):
-            def eig(h, s):
-                e_a, c_a = eig_nosym(h[0], s)
-                e_b, c_b = eig_nosym(h[1], s)
-                return numpy.array((e_a,e_b)), (c_a,c_b)
-        elif isinstance(mf, rohf.ROHF):
-            raise NotImplementedError
-        else:
-            eig = eig_nosym
-    mf.eig = eig
+    mf._eigh = eigh
     return mf
 remove_linear_dep = remove_linear_dep_
 

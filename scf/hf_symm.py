@@ -133,19 +133,20 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
             f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
             e, c = scipy.linalg.eigh(f1)
             c = numpy.dot(mo_coeff[:,idx], c)
-            mo[:,idx] = _symmetrize_canonicalization_(mf.mol, e, c, s)
+            mo[:,idx] = _symmetrize_canonicalization_(mf, e, c, s)
             mo_e[idx] = e
     return mo_e, mo
 
-def _symmetrize_canonicalization_(mol, mo_energy, mo_coeff, s):
+def _symmetrize_canonicalization_(mf, mo_energy, mo_coeff, s):
     '''Restore symmetry for canonicalized orbitals
     '''
     def search_for_degeneracy(mo_energy):
         idx = numpy.where(abs(mo_energy[1:] - mo_energy[:-1]) < 1e-6)[0]
         return numpy.unique(numpy.hstack((idx, idx+1)))
 
+    mol = mf.mol
     degidx = search_for_degeneracy(mo_energy)
-    logger.debug1(mol, 'degidx %s', degidx)
+    logger.debug1(mf, 'degidx %s', degidx)
     if degidx.size > 0:
         esub = mo_energy[degidx]
         csub = mo_coeff[:,degidx]
@@ -158,7 +159,7 @@ def _symmetrize_canonicalization_(mol, mo_energy, mo_coeff, s):
             sosc = numpy.dot(so.T, scsub)
             s_ir = reduce(numpy.dot, (so.T, s, so))
             fock_ir = numpy.dot(sosc*esub, sosc.T)
-            mo_energy, u = scipy.linalg.eigh(fock_ir, s_ir)
+            mo_energy, u = mf._eigh(fock_ir, s_ir)
             idx = abs(mo_energy) > emin
             es.append(mo_energy[idx])
             cs.append(numpy.dot(mol.symm_orb[i], u[:,idx]))
@@ -240,7 +241,7 @@ def eig(mf, h, s):
     Instead, they are grouped based on irreps.
     '''
     if not mf.mol.symmetry:
-        return hf.eig(h, s)
+        return mf._eigh(h, s)
 
     nirrep = mf.mol.symm_orb.__len__()
     h = symm.symmetrize_matrix(h, mf.mol.symm_orb)
@@ -248,7 +249,7 @@ def eig(mf, h, s):
     cs = []
     es = []
     for ir in range(nirrep):
-        e, c = hf.eig(h[ir], s[ir])
+        e, c = mf._eigh(h[ir], s[ir])
         cs.append(c)
         es.append(e)
     e = numpy.hstack(es)
@@ -410,26 +411,17 @@ class RHF(hf.RHF):
     canonicalize = canonicalize
 
 
-class HF1e(hf.SCF):
+class HF1e(RHF):
     def scf(self, *args):
         logger.info(self, '\n')
         logger.info(self, '******** 1 electron system ********')
         self.converged = True
         h1e = self.get_hcore(self.mol)
         s1e = self.get_ovlp(self.mol)
-        nirrep = self.mol.symm_orb.__len__()
-        h1e = symm.symmetrize_matrix(h1e, self.mol.symm_orb)
-        s1e = symm.symmetrize_matrix(s1e, self.mol.symm_orb)
-        cs = []
-        es = []
-        for ir in range(nirrep):
-            e, c = hf.SCF.eig(self, h1e[ir], s1e[ir])
-            cs.append(c)
-            es.append(e)
-        e = numpy.hstack(es).round(9)
-        idx = numpy.argsort(e)
+        e, c = self.eig(h1e, s1e)
+        idx = numpy.argsort(e.round(9))
         self.mo_energy = e[idx]
-        self.mo_coeff = so2ao_mo_coeff(self.mol.symm_orb, cs)[:,idx]
+        self.mo_coeff = c[:,idx]
         self.mo_occ = numpy.zeros_like(self.mo_energy)
         self.mo_occ[0] = 1
         self.e_tot = self.mo_energy[0] + self.mol.energy_nuc()
@@ -784,6 +776,7 @@ if __name__ == '__main__':
     )
 
     method = RHF(mol)
+    method.verbose = 5
     method.irrep_nelec['A1u'] = 2
     energy = method.scf()
     print(energy)

@@ -395,7 +395,7 @@ class KRHF(hf.RHF):
         mo_coeff_kpts = []
 
         for k in range(nkpts):
-            e, c = hf.RHF.eig(self, h_kpts[k], s_kpts[k])
+            e, c = self._eigh(h_kpts[k], s_kpts[k])
             eig_kpts.append(e)
             mo_coeff_kpts.append(c)
         return lib.asarray(eig_kpts), lib.asarray(mo_coeff_kpts)
@@ -428,7 +428,7 @@ class KRHF(hf.RHF):
         fock = self.get_hcore(cell, kpt_band)
         fock = fock + self.get_veff(cell, dm_kpts, kpts=kpts, kpt_band=kpt_band)
         s1e = self.get_ovlp(cell, kpt_band)
-        mo_energy, mo_coeff = hf.eig(fock, s1e)
+        mo_energy, mo_coeff = self._eigh(fock, s1e)
         return mo_energy, mo_coeff
 
     def init_guess_by_chkfile(self, chk=None, project=True, kpts=None):
