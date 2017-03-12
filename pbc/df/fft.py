@@ -112,7 +112,7 @@ def get_pp(mydf, kpts=None):
                     #:vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
             SPG_lmi = buf[:p1]
             SPG_lmi *= SI[ia].conj()
-            SPG_lm_aoGs = numpy.dot(SPG_lmi, aokG)
+            SPG_lm_aoGs = lib.zdot(SPG_lmi, aokG)
             p1 = 0
             for l, proj in enumerate(pp[5:]):
                 rl, nl, hl = proj
