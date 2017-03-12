@@ -2340,8 +2340,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     offset_nr_by_atom = offset_nr_by_atom
     offset_2c_by_atom = offset_2c_by_atom
-    aoslice_2c_by_atom = offset_nr_by_atom
-    aoslice_nr_by_atom = offset_2c_by_atom
+    aoslice_nr_by_atom = offset_nr_by_atom
+    aoslice_2c_by_atom = offset_2c_by_atom
 
     @lib.with_doc(spinor_labels.__doc__)
     def spinor_labels(self):

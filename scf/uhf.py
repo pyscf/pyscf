@@ -12,7 +12,7 @@ from pyscf.scf import _vhf
 from pyscf.scf import chkfile
 
 
-def init_guess_by_minao(mol):
+def init_guess_by_minao(mol, breaksym=True):
     '''Generate initial guess density matrix based on ANO basis, then project
     the density matrix to the basis set defined by ``mol``
 
@@ -20,15 +20,32 @@ def init_guess_by_minao(mol):
         Density matrices, a list of 2D ndarrays for alpha and beta spins
     '''
     dm = hf.init_guess_by_minao(mol)
-    return numpy.array((dm*.5,dm*.5))
+    dma = dmb = dm*.5
+    if breaksym:
+        #remove off-diagonal part of beta DM
+        dmb = numpy.zeros_like(dma)
+        for b0, b1, p0, p1 in mol.offset_nr_by_atom():
+            dmb[p0:p1,p0:p1] = dma[p0:p1,p0:p1]
+    return numpy.array((dma,dmb))
 
-def init_guess_by_1e(mol):
+def init_guess_by_1e(mol, breaksym=True):
     dm = hf.init_guess_by_1e(mol)
-    return numpy.array((dm*.5,dm*.5))
+    dma = dmb = dm*.5
+    if breaksym:
+        #remove off-diagonal part of beta DM
+        dmb = numpy.zeros_like(dma)
+        for b0, b1, p0, p1 in mol.offset_nr_by_atom():
+            dmb[p0:p1,p0:p1] = dma[p0:p1,p0:p1]
+    return numpy.array((dma,dmb))
 
-def init_guess_by_atom(mol):
+def init_guess_by_atom(mol, breaksym=True):
     dm = hf.init_guess_by_atom(mol)
-    return numpy.array((dm*.5,dm*.5))
+    if breaksym:
+        #Add off-diagonal part of alpha DM
+        dma = mol.intor('cint1e_ovlp_sph') * 1e-2
+        for b0, b1, p0, p1 in mol.offset_nr_by_atom():
+            dma[p0:p1,p0:p1] = dmb[p0:p1,p0:p1]
+    return numpy.array((dma,dmb))
 
 def init_guess_by_chkfile(mol, chkfile_name, project=True):
     from pyscf.scf import addons
@@ -638,23 +655,27 @@ class UHF(hf.SCF):
 
     energy_elec = energy_elec
 
-    def init_guess_by_minao(self, mol=None):
+    def init_guess_by_minao(self, mol=None, breaksym=True):
         '''Initial guess in terms of the overlap to minimal basis.'''
-        dm = hf.SCF.init_guess_by_minao(self, mol)
-        return numpy.array([dm*.5]*2)
+        return init_guess_by_minao(mol, breaksym)
 
-    def init_guess_by_atom(self, mol=None):
-        dm = hf.SCF.init_guess_by_atom(self, mol)
-        return numpy.array([dm*.5]*2)
+    def init_guess_by_atom(self, mol=None, breaksym=True):
+        return init_guess_by_atom(mol, breaksym)
 
-    def init_guess_by_1e(self, mol=None):
+    def init_guess_by_1e(self, mol=None, breaksym=True):
         if mol is None: mol = self.mol
         logger.info(self, 'Initial guess from hcore.')
         h1e = self.get_hcore(mol)
         s1e = self.get_ovlp(mol)
         mo_energy, mo_coeff = self.eig((h1e,h1e), s1e)
         mo_occ = self.get_occ(mo_energy, mo_coeff)
-        return self.make_rdm1(mo_coeff, mo_occ)
+        dma, dmb = self.make_rdm1(mo_coeff, mo_occ)
+        if breaksym:
+            #remove off-diagonal part of beta DM
+            dmb = numpy.zeros_like(dma)
+            for b0, b1, p0, p1 in mol.offset_nr_by_atom():
+                dmb[p0:p1,p0:p1] = dma[p0:p1,p0:p1]
+        return numpy.array((dma,dmb))
 
     def init_guess_by_chkfile(self, chkfile=None, project=True):
         if chkfile is None: chkfile = self.chkfile

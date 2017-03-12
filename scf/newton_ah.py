@@ -442,6 +442,9 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         kftot += kfcount + 1
         jktot += jkcount
 
+    if callable(callback):
+        callback(locals())
+
     rotaiter.close()
     if mf.canonicalization:
         log.info('Canonicalize SCF orbitals')

@@ -68,7 +68,7 @@ class DF(lib.StreamObject):
                 else:
                     self._cderi = self._cderi_file.name
             outcore.cholesky_eri(mol, self._cderi, dataname='j3c',
-                                 auxmol=auxmol, verbose=log)
+                                 auxmol=auxmol, max_memory=max_memory, verbose=log)
             if nao_pair*nao*8/1e6 < max_memory:
                 with addons.load(self._cderi, 'j3c') as feri:
                     cderi = numpy.asarray(feri)

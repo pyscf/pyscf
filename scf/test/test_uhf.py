@@ -34,8 +34,10 @@ n2mf = scf.RHF(n2sym).set(conv_tol=1e-10).run()
 
 class KnowValues(unittest.TestCase):
     def test_init_guess_minao(self):
-        dm = scf.uhf.get_init_guess(mol, key='minao')
+        dm = mf.init_guess_by_minao(mol, breaksym=False)
         self.assertAlmostEqual(abs(dm).sum(), 13.649710173723337, 9)
+        dm = scf.uhf.get_init_guess(mol, key='minao')
+        self.assertAlmostEqual(abs(dm).sum(), 12.913908927027279, 9)
 
     def test_energy_tot(self):
         numpy.random.seed(1)

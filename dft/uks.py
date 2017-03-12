@@ -89,6 +89,8 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
 def energy_elec(ks, dm, h1e=None, vhf=None):
     if h1e is None:
         h1e = ks.get_hcore()
+    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+        dm = numpy.array((dm*.5, dm*.5))
     e1 = numpy.einsum('ij,ji', h1e, dm[0]) + numpy.einsum('ij,ji', h1e, dm[1])
     tot_e = e1.real + ks._ecoul + ks._exc
     logger.debug(ks, 'Ecoul = %s  Exc = %s', ks._ecoul, ks._exc)
