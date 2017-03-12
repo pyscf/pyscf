@@ -265,7 +265,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     time_1pass = log.timer('AO->MO transformation for %s 1 pass'%intor,
                            *time_0pass)
 
-    ioblk_size = max(max_memory*.2, ioblk_size)
+    ioblk_size = max(max_memory*.1, ioblk_size)
     iobuflen = guess_e2bufsize(ioblk_size, nij_pair, max(nao_pair,nkl_pair))[0]
     reading_frame = [numpy.empty((iobuflen,nao_pair)),
                      numpy.empty((iobuflen,nao_pair))]

@@ -69,7 +69,7 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir
                                       chunks=chunks)
     aopairblks = len(fswap[dataname+'/0'])
 
-    iolen = min(int(ioblk_size*1e6/8/nao_pair), naoaux)
+    iolen = min(max(int(ioblk_size*1e6/8/nao_pair), 28), naoaux)
     totstep = (naoaux+iolen-1)//iolen * comp
     buf = numpy.empty((iolen, nao_pair))
     ti0 = time1
@@ -100,7 +100,7 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir
 # store cderi in blocks
 def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo',
                    int3c='cint3c2e_sph', aosym='s2ij', int2c='cint2c2e_sph',
-                   comp=1, ioblk_size=256, verbose=logger.NOTE):
+                   comp=1, ioblk_size=256, auxmol=None, verbose=logger.NOTE):
     '''3-center 2-electron AO integrals
     '''
     assert(aosym in ('s1', 's2ij'))
@@ -109,7 +109,8 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo',
         log = verbose
     else:
         log = logger.Logger(mol.stdout, verbose)
-    auxmol = incore.format_aux_basis(mol, auxbasis)
+    if auxmol is None:
+        auxmol = incore.format_aux_basis(mol, auxbasis)
     j2c = incore.fill_2c2e(mol, auxmol, intor=int2c)
     log.debug('size of aux basis %d', j2c.shape[0])
     time1 = log.timer('2c2e', *time0)
