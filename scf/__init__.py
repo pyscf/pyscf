@@ -113,7 +113,7 @@ def RHF(mol, *args):
         if mol.symmetry:
             return rhf_symm.HF1e(mol)
         else:
-            return rhf.HF1e(mol)
+            return rohf.HF1e(mol)
     elif not mol.symmetry or mol.groupname is 'C1':
         if mol.spin > 0:
             return rohf.ROHF(mol, *args)
@@ -128,12 +128,7 @@ def RHF(mol, *args):
 def ROHF(mol, *args):
     '''This is a wrap function to decide which ROHF class to use.
     '''
-    if mol.nelectron == 1:
-        if mol.symmetry:
-            return rhf_symm.HF1e(mol)
-        else:
-            return rhf.HF1e(mol)
-    elif not mol.symmetry or mol.groupname is 'C1':
+    if not mol.symmetry or mol.groupname is 'C1':
         return rohf.ROHF(mol, *args)
     else:
         return hf_symm.ROHF(mol, *args)

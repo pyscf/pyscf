@@ -411,23 +411,6 @@ class RHF(hf.RHF):
     canonicalize = canonicalize
 
 
-class HF1e(RHF):
-    def scf(self, *args):
-        logger.info(self, '\n')
-        logger.info(self, '******** 1 electron system ********')
-        self.converged = True
-        h1e = self.get_hcore(self.mol)
-        s1e = self.get_ovlp(self.mol)
-        e, c = self.eig(h1e, s1e)
-        idx = numpy.argsort(e.round(9))
-        self.mo_energy = e[idx]
-        self.mo_coeff = c[:,idx]
-        self.mo_occ = numpy.zeros_like(self.mo_energy)
-        self.mo_occ[0] = 1
-        self.e_tot = self.mo_energy[0] + self.mol.energy_nuc()
-        return self.e_tot
-
-
 class ROHF(rohf.ROHF):
     __doc__ = hf.SCF.__doc__ + '''
     Attributes for symmetry allowed ROHF:
@@ -761,6 +744,23 @@ def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym, title='',
                 log.warn('!! %s%s LUMO %.15g < system HOMO %.15g',
                          title, irname, e_ir[nocc], ehomo)
         log.debug('   mo_energy = %s', e_ir)
+
+
+class HF1e(ROHF):
+    def scf(self, *args):
+        logger.info(self, '\n')
+        logger.info(self, '******** 1 electron system ********')
+        self.converged = True
+        h1e = self.get_hcore(self.mol)
+        s1e = self.get_ovlp(self.mol)
+        e, c = self.eig(h1e, s1e)
+        idx = numpy.argsort(e.round(9))
+        self.mo_energy = e[idx]
+        self.mo_coeff = c[:,idx]
+        self.mo_occ = numpy.zeros_like(self.mo_energy)
+        self.mo_occ[0] = 1
+        self.e_tot = self.mo_energy[0] + self.mol.energy_nuc()
+        return self.e_tot
 
 
 if __name__ == '__main__':
