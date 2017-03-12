@@ -15,21 +15,21 @@ from pyscf.pbc import tools
 
 libpbc = lib.load_library('libpbc')
 
-try:
-## Moderate speedup by caching eval_ao
-    from pyscf import pbc
-    from joblib import Memory
-    memory = Memory(cachedir='./tmp/', mmap_mode='r', verbose=0)
-    def memory_cache(f):
-        g = memory.cache(f)
-        def maybe_cache(*args, **kwargs):
-            if pbc.DEBUG:
-                return g(*args, **kwargs)
-            else:
-                return f(*args, **kwargs)
-        return maybe_cache
-except:
-    memory_cache = lambda f: f
+#try:
+### Moderate speedup by caching eval_ao
+#    from pyscf import pbc
+#    from joblib import Memory
+#    memory = Memory(cachedir='./tmp/', mmap_mode='r', verbose=0)
+#    def memory_cache(f):
+#        g = memory.cache(f)
+#        def maybe_cache(*args, **kwargs):
+#            if pbc.DEBUG:
+#                return g(*args, **kwargs)
+#            else:
+#                return f(*args, **kwargs)
+#        return maybe_cache
+#except:
+#    memory_cache = lambda f: f
 
 def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shl_slice=None,
             non0tab=None, out=None, verbose=None):
@@ -68,7 +68,7 @@ def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shl_slice=N
     return ao_kpts[0]
 
 
-@memory_cache
+#@memory_cache
 def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
                  shl_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
     '''

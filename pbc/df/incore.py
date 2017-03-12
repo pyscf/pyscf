@@ -13,20 +13,20 @@ from pyscf.scf import _vhf
 
 libpbc = pyscf.lib.load_library('libpbc')
 
-try:
-## Moderate speedup by caching eval_ao
-    from joblib import Memory
-    memory = Memory(cachedir='./tmp/', mmap_mode='r', verbose=0)
-    def memory_cache(f):
-        g = memory.cache(f)
-        def maybe_cache(*args, **kwargs):
-            if pyscf.pbc.DEBUG:
-                return g(*args, **kwargs)
-            else:
-                return f(*args, **kwargs)
-        return maybe_cache
-except:
-    memory_cache = lambda f: f
+#try:
+### Moderate speedup by caching eval_ao
+#    from joblib import Memory
+#    memory = Memory(cachedir='./tmp/', mmap_mode='r', verbose=0)
+#    def memory_cache(f):
+#        g = memory.cache(f)
+#        def maybe_cache(*args, **kwargs):
+#            if pyscf.pbc.DEBUG:
+#                return g(*args, **kwargs)
+#            else:
+#                return f(*args, **kwargs)
+#        return maybe_cache
+#except:
+#    memory_cache = lambda f: f
 
 def format_aux_basis(cell, auxbasis='weigend+etb'):
     '''
@@ -37,7 +37,7 @@ def format_aux_basis(cell, auxbasis='weigend+etb'):
                         for ib in range(auxcell.nbas)])
     return auxcell
 
-@memory_cache
+#@memory_cache
 def aux_e2(cell, auxcell, intor='cint3c2e_sph', aosym='s1', comp=1,
            kpti_kptj=numpy.zeros((2,3))):
     '''3-center AO integrals (ij|L) with double lattice sum:
