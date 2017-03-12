@@ -36,7 +36,7 @@ def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
               make_dm(mo_coeff_kpts[1], mo_occ_kpts[1]))
     return lib.asarray(dm_kpts).reshape(2,nkpts,nao,nao)
 
-def get_fock(mf, h1e_kpts, s_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
+def get_fock(mf, h1e_kpts, s_kpts, vhf_kpts, dm_kpts, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
     if diis_start_cycle is None:
         diis_start_cycle = mf.diis_start_cycle
@@ -51,8 +51,8 @@ def get_fock(mf, h1e_kpts, s_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
         shifta = shiftb = level_shift_factor
 
     f_kpts = h1e_kpts + vhf_kpts
-    if adiis and cycle >= diis_start_cycle:
-        f_kpts = adiis.update(s_kpts, dm_kpts, f_kpts)
+    if diis and cycle >= diis_start_cycle:
+        f_kpts = diis.update(s_kpts, dm_kpts, f_kpts, mf, h1e_kpts, vhf_kpts)
     if abs(level_shift_factor) > 1e-4:
         f_kpts =([hf.level_shift(s, dm_kpts[0,k], f_kpts[0,k], shifta)
                   for k, s in enumerate(s_kpts)] +

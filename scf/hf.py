@@ -106,13 +106,6 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         logger.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g). '
                     'SCF may be inaccurate and hard to converge.', numpy.max(cond))
 
-    if mf.diis and mf.DIIS:
-        adiis = mf.DIIS(mf, mf.diis_file)
-        adiis.space = mf.diis_space
-        adiis.rollback = mf.diis_space_rollback
-    else:
-        adiis = None
-
     vhf = mf.get_veff(mol, dm)
     e_tot = mf.energy_tot(dm, h1e, vhf)
     logger.info(mf, 'init E= %.15g', e_tot)
@@ -129,7 +122,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         dm_last = dm
         last_hf_e = e_tot
 
-        fock = mf.get_fock(h1e, s1e, vhf, dm, cycle, adiis)
+        fock = mf.get_fock(h1e, s1e, vhf, dm, cycle, mf.diis)
         mo_energy, mo_coeff = mf.eig(fock, s1e)
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
@@ -584,7 +577,7 @@ def get_veff(mol, dm, dm_last=None, vhf_last=None, hermi=1, vhfopt=None):
         vj, vk = get_jk(mol, ddm, hermi, vhfopt)
         return vj - vk * .5 + numpy.asarray(vhf_last)
 
-def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
     '''F = h^{core} + V^{HF}
 
@@ -601,8 +594,8 @@ def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
     Kwargs:
         cycle : int
             Then present SCF iteration step, for DIIS
-        adiis : an instance of :attr:`SCF.DIIS` class
-            the object to hold intermediate Fock and error vectors
+        diis : an object of :attr:`SCF.DIIS` class
+            DIIS object to hold intermediate Fock and error vectors
         diis_start_cycle : int
             The step to start DIIS.  Default is 0.
         level_shift_factor : float or int
@@ -618,8 +611,8 @@ def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
     f = h1e + vhf
     if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4:
         f = damping(s1e, dm*.5, f, damp_factor)
-    if adiis and cycle >= diis_start_cycle:
-        f = adiis.update(s1e, dm, f)
+    if diis and cycle >= diis_start_cycle:
+        f = diis.update(s1e, dm, f, mf, h1e, vhf)
     if abs(level_shift_factor) > 1e-4:
         f = level_shift(s1e, dm*.5, f, level_shift_factor)
     return f
@@ -917,10 +910,8 @@ class SCF(lib.StreamObject):
         init_guess : str
             initial guess method.  It can be one of 'minao', 'atom', '1e', 'chkfile'.
             Default is 'minao'
-        DIIS : class listed in :mod:`scf.diis`
+        DIIS : object of DIIS class listed in :mod:`scf.diis`
             Default is :class:`diis.SCF_DIIS`. Set it to None to turn off DIIS.
-        diis : bool
-            whether to do DIIS.  Default is True.
         diis_space : int
             DIIS space size.  By default, 8 Fock matrices and errors vector are stored.
         diis_start_cycle : int
@@ -978,13 +969,8 @@ class SCF(lib.StreamObject):
         self.conv_tol_grad = None
         self.max_cycle = 50
         self.init_guess = 'minao'
-        self.DIIS = diis.SCF_DIIS
-        self.diis = True
-        self.diis_space = 8
+        self.diis = diis.SCF_DIIS(self)
         self.diis_start_cycle = 1 # need > 0 if initial DM is numpy.zeros array
-        self.diis_file = None
-# Give diis_space_rollback=True a trial if other efforts not converge
-        self.diis_space_rollback = False
         self.damp = 0
         self.level_shift = 0
         self.direct_scf = True
@@ -1018,9 +1004,10 @@ class SCF(lib.StreamObject):
         logger.info(self, 'initial guess = %s', self.init_guess)
         logger.info(self, 'damping factor = %g', self.damp)
         logger.info(self, 'level shift factor = %s', self.level_shift)
-        logger.info(self, 'Do DIIS = %s', self.diis)
-        logger.info(self, 'DIIS start cycle = %d', self.diis_start_cycle)
-        logger.info(self, 'DIIS space = %d', self.diis_space)
+        if self.diis:
+            logger.info(self, 'DIIS = %s', self.diis)
+            logger.info(self, 'DIIS start cycle = %d', self.diis_start_cycle)
+            logger.info(self, 'DIIS space = %d', self.diis.space)
         logger.info(self, 'SCF tol = %g', self.conv_tol)
         logger.info(self, 'SCF gradient tol = %s', self.conv_tol_grad)
         logger.info(self, 'max. SCF cycles = %d', self.max_cycle)
@@ -1323,6 +1310,21 @@ class SCF(lib.StreamObject):
         sys.stderr.write('WARN: Attribute .damp_factor will be removed in PySCF v1.1. '
                          'It is replaced by attribute .damp\n')
         self.damp = x
+
+    @property
+    def diis_space(self):
+        return self.diis.space
+    @diis_space.setter
+    def diis_space(self, x):
+        self.diis.space = x
+
+    @property
+    def diis_file(self):
+        return seif.diis.filename
+    def diis_file(self, x):
+        seif.diis.filename = x
+
+    #self.diis_start_cycle = 1 # need > 0 if initial DM is numpy.zeros array
 
 
 ############

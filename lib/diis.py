@@ -97,7 +97,7 @@ class DIIS(object):
 ##################################################
 # don't modify the following private variables, they are not input options
         self.filename = filename
-        self._diisfile = misc.H5TmpFile(filename, 'w')
+        self._diisfile = None
         self._buffer = {}
         self._bookkeep = [] # keep the ordering of input vectors
         self._head = 0
@@ -112,6 +112,8 @@ class DIIS(object):
         # save the error vector if filename is given, this file can be used to
         # restore the DIIS state
         if value.size >= INCORE_SIZE or isinstance(self.filename, str):
+            if self._diisfile is None:
+                self._diisfile = misc.H5TmpFile(self.filename)
             if key in self._diisfile:
                 self._diisfile[key][:] = value
             else:
@@ -128,9 +130,6 @@ class DIIS(object):
 
     def push_vec(self, x):
         x = x.ravel()
-        if self._H is None:
-            self._H = numpy.zeros((self.space+1,self.space+1), x.dtype)
-            self._H[0,1:] = self._H[1:,0] = 1
 
         if len(self._bookkeep) >= self.space:
             self._bookkeep.pop(0)
@@ -199,6 +198,9 @@ class DIIS(object):
             return x
 
         dt = numpy.array(self.get_err_vec(self._head-1), copy=False)
+        if self._H is None:
+            self._H = numpy.zeros((self.space+1,self.space+1), dt.dtype)
+            self._H[0,1:] = self._H[1:,0] = 1
         for i in range(nd):
             tmp = 0
             dti = self.get_err_vec(i)
@@ -232,10 +234,6 @@ class DIIS(object):
             for p0,p1 in prange(0, x.size, BLOCK_SIZE):
                 xnew[p0:p1] += xi[p0:p1] * ci
         return xnew.reshape(x.shape)
-
-#class CDIIS
-#class EDIIS
-#class GDIIS
 
 def prange(start, end, step):
     for i in range(start, end, step):

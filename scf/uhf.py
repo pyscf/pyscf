@@ -135,7 +135,7 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     vhf += numpy.asarray(vhf_last)
     return vhf
 
-def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
     if diis_start_cycle is None:
         diis_start_cycle = mf.diis_start_cycle
@@ -161,8 +161,8 @@ def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
     if 0 <= cycle < diis_start_cycle-1 and abs(dampa)+abs(dampb) > 1e-4:
         f = (hf.damping(s1e, dm[0], f[0], dampa),
              hf.damping(s1e, dm[1], f[1], dampb))
-    if adiis and cycle >= diis_start_cycle:
-        f = adiis.update(s1e, dm, f)
+    if diis and cycle >= diis_start_cycle:
+        f = diis.update(s1e, dm, f, mf, h1e, vhf)
     if abs(shifta)+abs(shiftb) > 1e-4:
         f = (hf.level_shift(s1e, dm[0], f[0], shifta),
              hf.level_shift(s1e, dm[1], f[1], shiftb))
@@ -362,9 +362,6 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
         log = verbose
     else:
         log = logger.Logger(mf.stdout, verbose)
-    ss, s = mf.spin_square((mo_coeff[0][:,mo_occ[0]>0],
-                            mo_coeff[1][:,mo_occ[1]>0]), mf.get_ovlp())
-    log.note('multiplicity <S^2> = %.8g  2S+1 = %.8g', ss, s)
 
     log.note('**** MO energy ****')
     log.note('                             alpha | beta                alpha | beta')
@@ -743,6 +740,20 @@ class UHF(hf.SCF):
         if dm is None: dm =self.make_rdm1()
         if unit_symbol is None: unit_symbol='Debye'
         return dip_moment(mol, dm, unit_symbol, verbose=verbose)
+
+    def _finalize(self):
+        ss, s = self.spin_square((self.mo_coeff[0][:,self.mo_occ[0]>0],
+                                  self.mo_coeff[1][:,self.mo_occ[1]>0]),
+                                 self.get_ovlp())
+        if self.converged:
+            logger.note(self, 'converged SCF energy = %.15g  '
+                        '<S^2> = %.8g  2S+1 = %.8g', self.e_tot, ss, s)
+        else:
+            logger.note(self, 'SCF not converged.')
+            logger.note(self, 'SCF energy = %.15g after %d cycles  '
+                        '<S^2> = %.8g  2S+1 = %.8g',
+                        self.e_tot, self.max_cycle, ss, s)
+        return self
 
 def _makevhf(vj, vk):
     vj = vj[0] + vj[1]

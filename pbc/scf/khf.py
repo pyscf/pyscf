@@ -93,7 +93,7 @@ def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
     from pyscf.pbc import df
     return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpt_band, exxdiv=mf.exxdiv)
 
-def get_fock(mf, h1e_kpts, s_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
+def get_fock(mf, h1e_kpts, s_kpts, vhf_kpts, dm_kpts, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
     if diis_start_cycle is None:
         diis_start_cycle = mf.diis_start_cycle
@@ -103,8 +103,8 @@ def get_fock(mf, h1e_kpts, s_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
         damp_factor = mf.damp
 
     f_kpts = h1e_kpts + vhf_kpts
-    if adiis and cycle >= diis_start_cycle:
-        f_kpts = adiis.update(s_kpts, dm_kpts, f_kpts)
+    if diis and cycle >= diis_start_cycle:
+        f_kpts = diis.update(s_kpts, dm_kpts, f_kpts, mf, h1e_kpts, vhf_kpts)
     if abs(level_shift_factor) > 1e-4:
         f_kpts = [hf.level_shift(s, dm_kpts[k], f_kpts[k], level_shift_factor)
                   for k, s in enumerate(s_kpts)]

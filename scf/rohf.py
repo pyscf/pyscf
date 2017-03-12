@@ -50,7 +50,7 @@ The first argument is chkfile file name.''')
         dm = uhf.make_rdm1((fproj(mo[0]),fproj(mo[1])), mo_occ)
     return dm
 
-def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
+def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None,
              damp_factor=None):
     '''Build fock matrix based on Roothaan's effective fock.
@@ -73,9 +73,9 @@ def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, adiis=None,
 
     if 0 <= cycle < diis_start_cycle-1:
         f = hf.damping(s1e, dm[0], f, damp_factor)
-    if adiis and cycle >= diis_start_cycle:
-        #f = adiis.update(s1e, dmsf*.5, f)
-        f = adiis.update(s1e, dm[0], f)
+    if diis and cycle >= diis_start_cycle:
+        #f = diis.update(s1e, dmsf*.5, f, mf, h1e, vhf)
+        f = diis.update(s1e, dm[0], f, mf, h1e, vhf)
     #f = level_shift(s1e, dmsf*.5, f, level_shift_factor)
     f = hf.level_shift(s1e, dm[0], f, level_shift_factor)
     return f
