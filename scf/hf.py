@@ -1320,19 +1320,6 @@ class SCF(lib.StreamObject):
 
 ############
 
-class HF1e(SCF):
-    def scf(self, *args):
-        logger.info(self, '\n')
-        logger.info(self, '******** 1 electron system ********')
-        self.converged = True
-        h1e = self.get_hcore(self.mol)
-        s1e = self.get_ovlp(self.mol)
-        self.mo_energy, self.mo_coeff = self.eig(h1e, s1e)
-        self.mo_occ = numpy.zeros_like(self.mo_energy)
-        self.mo_occ[0] = 1
-        self.e_tot = self.mo_energy[0] + self.mol.energy_nuc()
-        return self.e_tot
-
 
 class RHF(SCF):
     __doc__ = SCF.__doc__
