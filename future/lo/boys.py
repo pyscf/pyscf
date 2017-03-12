@@ -52,7 +52,7 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
         e_last, de = e, e-e_last
 
         log.info('macro= %d  f(x)= %.14g  delta_f= %g  |g|= %g  %d KF %d Hx',
-                 imacro+1, e, de, norm_gorb, stat.tot_hop, stat.tot_kf+1)
+                 imacro+1, e, de, norm_gorb, stat.tot_kf+1, stat.tot_hop)
         cput1 = log.timer('cycle= %d'%(imacro+1), *cput1)
 
         if (norm_gorb < conv_tol_grad and abs(de) < localizer.conv_tol):
@@ -69,9 +69,9 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
         tot_hop += stat.tot_hop
 
     rotaiter.close()
-    log.info('macro X = %d  f(x)= %.14g  |g|= %g  %d intor %d Hx %d KF',
+    log.info('macro X = %d  f(x)= %.14g  |g|= %g  %d intor %d KF %d Hx',
              imacro+1, e, norm_gorb,
-             (imacro+1)*2, tot_hop, tot_kf+imacro+1)
+             (imacro+1)*2, tot_kf+imacro+1, tot_hop)
     localizer.mo_coeff = lib.dot(mo_coeff, u0)
     return localizer.mo_coeff
 
