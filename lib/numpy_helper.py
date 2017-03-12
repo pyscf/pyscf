@@ -409,6 +409,8 @@ def ddot(a, b, alpha=1, c=None, beta=0):
     if c is None:
         c = numpy.empty((m,n))
         beta = 0
+    else:
+        assert(c.shape == (m,n))
 
     return _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha, beta)
 
@@ -416,6 +418,35 @@ def zdot(a, b, alpha=1, c=None, beta=0):
     '''Matrix-matrix multiplication for double complex arrays using Gauss's
     complex multiplication algorithm
     '''
+    m = a.shape[0]
+    k = a.shape[1]
+    n = b.shape[1]
+    if a.flags.c_contiguous:
+        trans_a = 'N'
+    elif a.flags.f_contiguous:
+        trans_a = 'T'
+        a = a.T
+    else:
+        raise ValueError('a.flags: %s' % str(a.flags))
+
+    assert(k == b.shape[0])
+    if b.flags.c_contiguous:
+        trans_b = 'N'
+    elif b.flags.f_contiguous:
+        trans_b = 'T'
+        b = b.T
+    else:
+        raise ValueError('b.flags: %s' % str(b.flags))
+
+    if c is None:
+        beta = 0
+        c = numpy.empty((m,n), dtype=numpy.complex128)
+    else:
+        assert(c.shape == (m,n))
+
+    return _zgemm(trans_a, trans_b, m, n, k, a, b, c, alpha, beta)
+
+def dot(a, b, alpha=1, c=None, beta=0):
     atype = a.dtype
     btype = b.dtype
 
@@ -442,10 +473,11 @@ def zdot(a, b, alpha=1, c=None, beta=0):
         ab = cr + ci*1j
 
     elif atype == numpy.complex128 and btype == numpy.complex128:
-        k1 = ddot(a.real+a.imag, b.real.copy(), alpha)
-        k2 = ddot(a.real.copy(), b.imag-b.real, alpha)
-        k3 = ddot(a.imag.copy(), b.real+b.imag, alpha)
-        ab = k1-k3 + (k1+k2)*1j
+        #k1 = ddot(a.real+a.imag, b.real.copy(), alpha)
+        #k2 = ddot(a.real.copy(), b.imag-b.real, alpha)
+        #k3 = ddot(a.imag.copy(), b.real+b.imag, alpha)
+        #ab = k1-k3 + (k1+k2)*1j
+        return zdot(a, b, alpha, c, beta)
 
     else:
         ab = numpy.dot(a, b) * alpha
@@ -459,7 +491,6 @@ def zdot(a, b, alpha=1, c=None, beta=0):
             c *= beta
         c += ab
     return c
-dot = zdot
 
 # a, b, c in C-order
 def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
@@ -479,6 +510,28 @@ def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
                        a.ctypes.data_as(ctypes.c_void_p),
                        c.ctypes.data_as(ctypes.c_void_p),
                        ctypes.c_double(alpha), ctypes.c_double(beta))
+    return c
+def _zgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
+           offseta=0, offsetb=0, offsetc=0):
+    assert(a.flags.c_contiguous)
+    assert(b.flags.c_contiguous)
+    assert(c.flags.c_contiguous)
+    assert(a.dtype == numpy.complex128)
+    assert(b.dtype == numpy.complex128)
+    assert(c.dtype == numpy.complex128)
+
+    _np_helper.NPzgemm(ctypes.c_char(trans_b.encode('ascii')),
+                       ctypes.c_char(trans_a.encode('ascii')),
+                       ctypes.c_int(n), ctypes.c_int(m), ctypes.c_int(k),
+                       ctypes.c_int(b.shape[1]), ctypes.c_int(a.shape[1]),
+                       ctypes.c_int(c.shape[1]),
+                       ctypes.c_int(offsetb), ctypes.c_int(offseta),
+                       ctypes.c_int(offsetc),
+                       b.ctypes.data_as(ctypes.c_void_p),
+                       a.ctypes.data_as(ctypes.c_void_p),
+                       c.ctypes.data_as(ctypes.c_void_p),
+                       (ctypes.c_double*2)(alpha.real, alpha.imag),
+                       (ctypes.c_double*2)(beta.real, beta.imag))
     return c
 
 def prange(start, end, step):
