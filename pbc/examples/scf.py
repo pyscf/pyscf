@@ -22,7 +22,7 @@ def run_dft(cell):
     print mf.scf()
     return mf
 
-def run_khf(cell, nmp=[1,1,1], gamma=False, kshift=np.zeros(3), exxdiv=None):
+def run_khf(cell, nmp=[1,1,1], gamma=False, kshift=np.zeros(3), exxdiv=None, conv_tol=None):
     """Run a k-point-sampling Hartree-Fock calculation."""
     scaled_kpts = ase.dft.kpoints.monkhorst_pack(nmp)
     if gamma:
@@ -42,6 +42,8 @@ def run_khf(cell, nmp=[1,1,1], gamma=False, kshift=np.zeros(3), exxdiv=None):
     abs_kpts = cell.get_abs_kpts(scaled_kpts)
     kmf = pbchf.KRHF(cell, abs_kpts, exxdiv=exxdiv)
     kmf.verbose = 7
+    if conv_tol is not None:
+        kmf.conv_tol = conv_tol
     print kmf.scf()
     return kmf
 
