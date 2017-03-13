@@ -416,9 +416,12 @@ def cutoff_to_gs(a, cutoff):
     Returns:
         gs : (3,) array
     '''
-    grid_spacing = np.pi / np.sqrt(2 * cutoff)
+#    grid_spacing = np.pi / np.sqrt(2 * cutoff)
+#
+#    # number of grid points is 2gs+1 (~ 2 gs) along each direction
+#    gs = np.ceil(lib.norm(a, axis=1) / (2*grid_spacing)).astype(int)
 
-    # number of grid points is 2gs+1 (~ 2 gs) along each direction
-    gs = np.ceil(lib.norm(a, axis=1) / (2*grid_spacing)).astype(int)
+    b = 2 * np.pi * np.linalg.inv(a.T)
+    gs = np.ceil(np.sqrt(2*cutoff)/lib.norm(b, axis=1)).astype(int)
     return gs
 

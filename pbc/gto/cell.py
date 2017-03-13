@@ -809,9 +809,15 @@ class Cell(mole.Mole):
             logger.info(self, 'rcut = %s (nimgs = %s)', self.rcut, self.nimgs)
             logger.info(self, 'lattice sum = %d cells', len(self.get_lattice_Ls()))
             logger.info(self, 'precision = %g', self.precision)
-            logger.info(self, 'gs (FFT-mesh) = %s', self.gs)
             logger.info(self, 'pseudo = %s', self.pseudo)
-            logger.info(self, 'ke_cutoff = %s', self.ke_cutoff)
+            if self.ke_cutoff is not None:
+                logger.info(self, 'ke_cutoff = %s', self.ke_cutoff)
+                logger.info(self, '    = gs (FFT-mesh) %s', self.gs)
+            else:
+                logger.info(self, 'gs (FFT-mesh) = %s', self.gs)
+                b = self.reciprocal_vectors()
+                kmax = lib.norm(b, axis=1) * np.asarray(self.gs)
+                logger.info(self, '    = ke_cutoff %s', kmax**2/2)
             logger.info(self, 'ew_eta = %g', self.ew_eta)
             logger.info(self, 'ew_cut = %s (nimgs = %s)', self.ew_cut,
                         self.get_bounding_sphere(self.ew_cut))
