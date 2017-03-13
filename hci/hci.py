@@ -129,113 +129,12 @@ def contract_2e_ctypes(h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
         hdiag = make_hdiag(h1, eri, strs, norb, nelec)
     ci1 = numpy.zeros_like(civec)
 
-    eri = eri.reshape([norb]*4)
-
     h1 = numpy.asarray(h1, order='C')
     eri = numpy.asarray(eri, order='C')
     strs = numpy.asarray(strs, order='C')
     civec = numpy.asarray(civec, order='C')
     hdiag = numpy.asarray(hdiag, order='C')
     ci1 = numpy.asarray(ci1, order='C')
-
-# Test
-#    for ip in range(ndet):
-#        for jp in range(ip):
-#            if abs(ts[ip] - ts[jp]).sum() > 2:
-#                continue
-#
-#            stria, strib = strs[ip].reshape(2,-1)
-#            strja, strjb = strs[jp].reshape(2,-1)
-#            print stria[0], strib[0], strja[0], strjb[0]
-#            print stria[1], strib[1], strja[1], strjb[1]
-#            print bin(stria[0]), bin(strib[0]), bin(strja[0]), bin(strjb[0])
-#            print bin(stria[1]), bin(strib[1]), bin(strja[1]), bin(strjb[1])
-#
-#            desa, crea = str_diff(stria, strja)
-#            if len(desa) > 2:
-#                continue
-#            desb, creb = str_diff(strib, strjb)
-#            if len(desb) + len(desa) > 2:
-#                continue
-#            if len(desa) + len(desb) == 1:
-## alpha->alpha
-#                if len(desb) == 0:
-#                    i,a = desa[0], crea[0]
-#                    occsa = str2orblst(stria, norb)[0]
-#                    occsb = str2orblst(strib, norb)[0]
-#                    fai = h1[a,i]
-#                    for k in occsa:
-#                        fai += eri[k,k,a,i] - eri[k,i,a,k]
-#                    for k in occsb:
-#                        fai += eri[k,k,a,i]
-#                    sign = cre_des_sign(a, i, stria)
-#                    ci1[jp] += sign * fai * civec[ip]
-#                    ci1[ip] += sign * fai * civec[jp]
-## beta ->beta
-#                elif len(desa) == 0:
-#                    i,a = desb[0], creb[0]
-#                    occsa = str2orblst(stria, norb)[0]
-#                    occsb = str2orblst(strib, norb)[0]
-#                    fai = h1[a,i]
-#                    for k in occsb:
-#                        fai += eri[k,k,a,i] - eri[k,i,a,k]
-#                    for k in occsa:
-#                        fai += eri[k,k,a,i]
-#                    sign = cre_des_sign(a, i, strib)
-#                    ci1[jp] += sign * fai * civec[ip]
-#                    ci1[ip] += sign * fai * civec[jp]
-#
-#            else:
-## alpha,alpha->alpha,alpha
-#                if len(desb) == 0:
-#                    i,j = desa
-#                    a,b = crea
-#                    print "Case 1", i, j, a, b
-## 6 conditions for i,j,a,b
-## --++, ++--, -+-+, +-+-, -++-, +--+ 
-#                    if a > j or i > b:
-## condition --++, ++--
-#                        v = eri[a,j,b,i]-eri[a,i,b,j]
-#                        sign = cre_des_sign(b, i, stria)
-#                        sign*= cre_des_sign(a, j, stria)
-#                    else:
-## condition -+-+, +-+-, -++-, +--+ 
-#                        v = eri[a,i,b,j]-eri[a,j,b,i]
-#                        sign = cre_des_sign(b, j, stria)
-#                        sign*= cre_des_sign(a, i, stria)
-#                    ci1[jp] += sign * v * civec[ip]
-#                    ci1[ip] += sign * v * civec[jp]
-## beta ,beta ->beta ,beta
-#                elif len(desa) == 0:
-#                    i,j = desb
-#                    a,b = creb
-#                    print "Case 2", i, j, a, b
-#                    if a > j or i > b:
-#                        v = eri[a,j,b,i]-eri[a,i,b,j]
-#                        sign = cre_des_sign(b, i, strib)
-#                        sign*= cre_des_sign(a, j, strib)
-#                    else:
-#                        v = eri[a,i,b,j]-eri[a,j,b,i]
-#                        sign = cre_des_sign(b, j, strib)
-#                        sign*= cre_des_sign(a, i, strib)
-#                    ci1[jp] += sign * v * civec[ip]
-#                    ci1[ip] += sign * v * civec[jp]
-## alpha,beta ->alpha,beta
-#                else:
-#                    i,a = desa[0], crea[0]
-#                    j,b = desb[0], creb[0]
-#                    print "Case 3", i, j, a, b
-#                    v = eri[a,i,b,j]
-#                    sign = cre_des_sign(a, i, stria)
-#                    sign*= cre_des_sign(b, j, strib)
-#                    ci1[jp] += sign * v * civec[ip]
-#                    ci1[ip] += sign * v * civec[jp]
-#            print ip, jp, ci1[ip], ci1[jp]
-#        ci1[ip] += hdiag[ip] * civec[ip]
-#
-#    ci1 = numpy.zeros_like(ci1)
-#    ci1 = numpy.asarray(ci1, order='C')
-# Test
 
     libhci.contract_h_c(h1.ctypes.data_as(ctypes.c_void_p), 
                         eri.ctypes.data_as(ctypes.c_void_p), 
@@ -392,29 +291,37 @@ def select_strs(myci, civec, h1, eri, norb, nelec):
         occsb, virsb = str2orblst(strb, norb)
         tol = myci.select_cutoff / abs(civec[idet])
 
+        holes_a = [i for i in virsa if i < neleca]
+        particles_a = [i for i in occsa if i >= neleca]
+        holes_b = [i for i in virsb if i < nelecb]
+        particles_b = [i for i in occsb if i >= nelecb]
 # alpha->alpha
-        holes = [i for i in virsa if i < neleca]
-        particles = [i for i in occsa if i >= neleca]
         for i in occsa:
             for a in virsa:
                 fai = focka[a,i]
-                for k in particles:
+                for k in particles_a:
                     fai += jk[k,k,a,i]
-                for k in holes:
+                for k in holes_a:
                     fai -= jk[k,k,a,i]
+                for k in particles_b:
+                    fai += eri[k * norb * norb * norb + k * norb * norb + a * norb + i]
+                for k in holes_b:
+                    fai -= eri[k * norb * norb * norb + k * norb * norb + a * norb + i]
                 if abs(fai) > tol:
                     newa = toggle_bit(toggle_bit(stra.copy(), a), i)
                     str_add.append(numpy.hstack((newa,strb)))
 # beta ->beta
-        holes = [i for i in virsb if i < nelecb]
-        particles = [i for i in occsb if i >= nelecb]
         for i in occsb:
             for a in virsb:
                 fai = fockb[a,i]
-                for k in particles:
+                for k in particles_b:
                     fai += jk[k,k,a,i]
-                for k in holes:
+                for k in holes_b:
                     fai -= jk[k,k,a,i]
+                for k in particles_a:
+                    fai += eri[k * norb * norb * norb + k * norb * norb + a * norb + i]
+                for k in holes_a:
+                    fai -= eri[k * norb * norb * norb + k * norb * norb + a * norb + i]
                 if abs(fai) > tol:
                     newb = toggle_bit(toggle_bit(strb.copy(), a), i)
                     str_add.append(numpy.hstack((stra,newb)))
@@ -459,12 +366,171 @@ def select_strs(myci, civec, h1, eri, norb, nelec):
         return (numpy.zeros([0,2,nset//2], dtype=civec._strs.dtype),
                 numpy.zeros([0,2], dtype=civec._ts.dtype))
 
+####def select_strs(myci, civec, h1, eri, norb, nelec):
+####    eri = eri.reshape([norb]*4)
+####    neleca, nelecb = nelec
+####    vja = numpy.einsum('iipq->pq', eri[:neleca,:neleca])
+####    vjb = numpy.einsum('iipq->pq', eri[:nelecb,:nelecb])
+####    vka = numpy.einsum('piiq->pq', eri[:,:neleca,:neleca])
+####    vkb = numpy.einsum('piiq->pq', eri[:,:nelecb,:nelecb])
+####    focka = h1 + vja+vjb - vka
+####    fockb = h1 + vja+vjb - vkb
+####
+####    eri = eri.ravel()
+####    eri_sorted = abs(eri).argsort()[::-1]
+####    jk = eri.reshape([norb]*4)
+####    jk = jk - jk.transpose(2,1,0,3)
+####    jkf = jk.ravel()
+####    jk_sorted = abs(jkf).argsort()[::-1]
+####
+####    ndet, nset = civec._strs.shape
+####    str_add = []
+####    for idet, (stra, strb) in enumerate(civec._strs.reshape(ndet,2,nset//2)):
+####        occsa, virsa = str2orblst(stra, norb)
+####        occsb, virsb = str2orblst(strb, norb)
+####        tol = myci.select_cutoff / abs(civec[idet])
+####
+####        holes_a = [i for i in virsa if i < neleca]
+####        particles_a = [i for i in occsa if i >= neleca]
+####        holes_b = [i for i in virsb if i < nelecb]
+####        particles_b = [i for i in occsb if i >= nelecb]
+##### alpha->alpha
+####        for i in occsa:
+####            for a in virsa:
+####                fai = focka[a,i]
+####                for k in particles_a:
+####                    fai += jk[k,k,a,i]
+####                for k in holes_a:
+####                    fai -= jk[k,k,a,i]
+####                for k in particles_b:
+####                    fai += eri[k,k,a,i]
+####                for k in holes_b:
+####                    fai -= eri[k,k,a,i]
+####                if abs(fai) > tol:
+####                    newa = toggle_bit(toggle_bit(stra.copy(), a), i)
+####                    str_add.append(numpy.hstack((newa,strb)))
+##### beta ->beta
+####        for i in occsb:
+####            for a in virsb:
+####                fai = fockb[a,i]
+####                for k in particles_b:
+####                    fai += jk[k,k,a,i]
+####                for k in holes_b:
+####                    fai -= jk[k,k,a,i]
+####                for k in particles_a:
+####                    fai += eri[k,k,a,i]
+####                for k in holes_a:
+####                    fai -= eri[k,k,a,i]
+####                if abs(fai) > tol:
+####                    newb = toggle_bit(toggle_bit(strb.copy(), a), i)
+####                    str_add.append(numpy.hstack((stra,newb)))
+####
+####        for ih in jk_sorted:
+####            if abs(jkf[ih]) < tol:
+####                break
+####            ij, lp = ih//norb, ih%norb
+####            ij, kp = ij//norb, ij%norb
+####            ip, jp = ij//norb, ij%norb
+##### alpha,alpha->alpha,alpha
+####            if jp in occsa and ip in virsa and lp in occsa and kp in virsa:
+####                newa = toggle_bit(toggle_bit(toggle_bit(toggle_bit(stra.copy(), jp), ip), lp), kp)
+####                str_add.append(numpy.hstack((newa,strb)))
+##### beta ,beta ->beta ,beta
+####            if jp in occsb and ip in virsb and lp in occsb and kp in virsb:
+####                newb = toggle_bit(toggle_bit(toggle_bit(toggle_bit(strb.copy(), jp), ip), lp), kp)
+####                str_add.append(numpy.hstack((stra,newb)))
+####
+####        for ih in eri_sorted:
+####            if abs(eri[ih]) < tol:
+####                break
+####            ij, lp = ih//norb, ih%norb
+####            ij, kp = ij//norb, ij%norb
+####            ip, jp = ij//norb, ij%norb
+##### alpha,beta ->alpha,beta
+####            if jp in occsa and ip in virsa and lp in occsb and kp in virsb:
+####                newa = toggle_bit(toggle_bit(stra.copy(), jp), ip)
+####                newb = toggle_bit(toggle_bit(strb.copy(), lp), kp)
+####                str_add.append(numpy.hstack((newa,newb)))
+####
+####    print len(str_add)
+####    if len(str_add) > 0:
+####        str_add = numpy.asarray(str_add)
+####        strsa = str_add.reshape(-1,2,nset//2)[:,0]
+####        strsb = str_add.reshape(-1,2,nset//2)[:,1]
+####        ta = [excitation_level(s, neleca) for s in strsa]
+####        tb = [excitation_level(s, nelecb) for s in strsb]
+####        ts = numpy.vstack((ta, tb)).T.copy('C')
+####        idx = argunique_with_t(str_add, ts)
+####        return str_add[idx], ts[idx]
+####    else:
+####        return (numpy.zeros([0,2,nset//2], dtype=civec._strs.dtype),
+####                numpy.zeros([0,2], dtype=civec._ts.dtype))
+
+
+def select_strs_ctypes(myci, civec, h1, eri, norb, nelec):
+    strs = civec._strs
+    ndet = strs.shape[0]
+    ndet, nset = strs.shape
+    nset = nset // 2
+    neleca, nelecb = nelec
+
+    eri = eri.ravel()
+    eri_sorted = abs(eri).argsort()[::-1]
+    jk = eri.reshape([norb]*4)
+    jk = jk - jk.transpose(2,1,0,3)
+    jkf = jk.ravel()
+    jk_sorted = abs(jkf).argsort()[::-1]
+   
+    str_add = numpy.empty((4*ndet*neleca*nelecb*(norb-neleca)*(norb-nelecb), strs.shape[1]), dtype=numpy.uint64)
+    n_str_add = numpy.array([str_add.shape[0]])
+
+    h1 = numpy.asarray(h1, order='C')  
+    eri = numpy.asarray(eri, order='C')
+    jkf = numpy.asarray(jkf, order='C')
+    civec = numpy.asarray(civec, order='C')
+    strs = numpy.asarray(strs, order='C')
+    str_add = numpy.asarray(str_add, order='C')
+    eri_sorted = numpy.asarray(eri_sorted, order='C')
+    jk_sorted = numpy.asarray(jk_sorted, order='C')
+
+    libhci.select_strs(h1.ctypes.data_as(ctypes.c_void_p), 
+                       eri.ctypes.data_as(ctypes.c_void_p), 
+                       jkf.ctypes.data_as(ctypes.c_void_p), 
+                       eri_sorted.ctypes.data_as(ctypes.c_void_p), 
+                       jk_sorted.ctypes.data_as(ctypes.c_void_p), 
+                       ctypes.c_int(norb), 
+                       ctypes.c_int(neleca), 
+                       ctypes.c_int(nelecb), 
+                       strs.ctypes.data_as(ctypes.c_void_p), 
+                       civec.ctypes.data_as(ctypes.c_void_p), 
+                       ctypes.c_int(ndet), 
+                       ctypes.c_double(myci.select_cutoff),
+                       str_add.ctypes.data_as(ctypes.c_void_p),
+                       n_str_add.ctypes.data_as(ctypes.c_void_p))
+
+    n_str_add = n_str_add[0]
+    str_add = str_add[:n_str_add]
+
+    if len(str_add) > 0:
+        str_add = numpy.asarray(str_add)
+        strsa = str_add.reshape(-1,2,nset)[:,0]
+        strsb = str_add.reshape(-1,2,nset)[:,1]
+        ta = [excitation_level(s, neleca) for s in strsa]
+        tb = [excitation_level(s, nelecb) for s in strsb]
+        ts = numpy.vstack((ta, tb)).T.copy('C')
+        idx = argunique_with_t(str_add, ts)
+        return str_add[idx], ts[idx]
+    else:
+        return (numpy.zeros([0,2,nset], dtype=civec._strs.dtype),
+                numpy.zeros([0,2], dtype=civec._ts.dtype))
+
 def enlarge_space(myci, civec, h1, eri, norb, nelec):
     cidx = abs(civec) > myci.ci_coeff_cutoff
     strs = civec._strs[cidx]
     ts = civec._ts[cidx]
     ci_coeff = as_SCIvector(civec[cidx], strs, ts)
-    str_add, t_add = select_strs(myci, ci_coeff, h1, eri, norb, nelec)
+    #str_add, t_add = select_strs(myci, ci_coeff, h1, eri, norb, nelec)
+    str_add, t_add = select_strs_ctypes(myci, ci_coeff, h1, eri, norb, nelec)
 
     def order(x, y):
         for i in range(y.size):

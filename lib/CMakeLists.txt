@@ -2,6 +2,7 @@ cmake_minimum_required (VERSION 2.8)
 project (pyscf)
 
 set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
+#set(CMAKE_BUILD_TYPE DEBUG)
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffast-math")
