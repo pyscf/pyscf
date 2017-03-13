@@ -1,3 +1,19 @@
+PySCF 1.4 alpha (2017-07-?)
+--------------------------
+* Added
+  - Spinor-GTO evaluator
+  - Dirac-Kohn-Sham (LDA functional)
+  - EDIIS and ADIIS
+* Improved
+  - Performance of PBC-Gaussian function evaluator
+
+
+PySCF 1.3 (2017-04)
+--------------------------
+* Improved
+  - Treatment of auxiliary basis linear dependence in PBC DF/MDF module
+
+
 PySCF 1.3 beta (2017-02-15)
 --------------------------
 * Added
@@ -43,7 +59,16 @@ PySCF 1.3 alpha-1 (2016-12-04)
   - PBC repeated images used by lattice summation
 
 
-PySCF 1.2.2
+PySCF 1.2.3 (2017-03-?)
+------------------------
+* Bugfix
+  - PBC 2e integrals for wrap-around k-points
+  - CI coefficients in GAMESS WFN format
+  - Input parser for Gaussian nuclear model
+  - Density fitting outcore module for assigned auxliary basis
+
+
+PySCF 1.2.2 (2017-02-15)
 ------------------------
 * Bugfix
   - GTO normalization in molden file
