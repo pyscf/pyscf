@@ -1208,124 +1208,399 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def update_amps(self, t1, t2, eris, max_memory=2000):
         return update_amps(self, t1, t2, eris, max_memory)
 
-    def ipccsd(self, nroots=2*4, kptlist=None):
-        time0 = time.clock(), time.time()
-        log = logger.Logger(self.stdout, self.verbose)
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
-        nkpts = self.nkpts
-        size =  nocc + nkpts*nkpts*nocc*nocc*nvir
-        if kptlist is None:
-            kptlist = range(nkpts)
-        evals = np.zeros((len(kptlist),nroots),np.complex)
-        evecs = np.zeros((len(kptlist),size,nroots),np.complex)
-        for k,kshift in enumerate(kptlist):
-            self.kshift = kshift
-            diag = self.ipccsd_diag()
-            evals[k], evecs[k] = eigs(self.ipccsd_matvec, size, nroots, diag)
-        time0 = log.timer_debug1('converge ip-ccsd', *time0)
-        return evals.real, evecs
+#    def ipccsd_diag(self):
+#        t1,t2 = self.t1, self.t2
+#        nkpts, nocc, nvir = t1.shape
+#        kshift = self.kshift
+#        kconserv = self.kconserv
+#
+#        if not self.made_ip_imds:
+#            if not hasattr(self,'imds'):
+#                self.imds = _IMDS(self)
+#            self.imds.make_ip(self)
+#            self.made_ip_imds = True
+#
+#        imds = self.imds
+#
+#        Hr1 = -numpy.diag(imds.Loo[kshift])
+#
+#        Hr2 = numpy.zeros((nkpts,nkpts,nocc,nocc,nvir),dtype=t1.dtype)
+#        mem = 0.5e9
+#        pre = 1.*nocc*nvir*nvir*nvir*nkpts*16
+#        nkpts_blksize  = min(max(int(numpy.floor(mem/pre)),1),nkpts)
+#        nkpts_blksize2 = min(max(int(numpy.floor(mem/(nkpts_blksize*pre))),1),nkpts)
+#        loader = mpi_load_balancer.load_balancer(BLKSIZE=(nkpts_blksize2,nkpts_blksize,))
+#        loader.set_ranges((range(nkpts),range(nkpts),))
+#
+#        good2go = True
+#        while(good2go):
+#            good2go, data = loader.slave_set()
+#            if good2go is False:
+#                break
+#            ranges0, ranges1 = loader.get_blocks_from_data(data)
+#
+#            s0,s1 = [slice(min(x),max(x)+1) for x in ranges0,ranges1]
+#
+#            for iterki,ki in enumerate(ranges0):
+#                for iterkj,kj in enumerate(ranges1):
+#                    kb = kconserv[ki,kshift,kj]
+#
+#                    Woooo_iji = _cp(imds.Woooo[ki,kj,ki])
+#                    Wvoov_bjj = _cp(imds.Wvoov[kb,kj,kj])
+#                    Wovov_jbj = _cp(imds.Wovov[kj,kb,kj])
+#                    Wovov_ibi = _cp(imds.Wovov[ki,kb,ki])
+#
+#                    for b in range(nvir):
+#                        Hr2[ki,kj,:,:,b] = imds.Lvv[kb,b,b]
+#                    for i in range(nocc):
+#                        Hr2[ki,kj,i,:,:] -= imds.Loo[ki,i,i]
+#                    for j in range(nocc):
+#                        Hr2[ki,kj,:,j,:] -= imds.Loo[kj,j,j]
+#                    for i in range(nocc):
+#                        for j in range(nocc):
+#                            Hr2[ki,kj,i,j,:] += Woooo_iji[i,j,i,j]
+#                    for j in range(nocc):
+#                        for b in range(nvir):
+#                            Hr2[ki,kj,:,j,b] += 2.*Wvoov_bjj[b,j,j,b]
+#                            Hr2[ki,kj,j,j,b] += -Wvoov_bjj[b,j,j,b]
+#                            Hr2[ki,kj,:,j,b] += -Wovov_jbj[j,b,j,b]
+#
+#                            Hr2[ki,kj,j,:,b] += -Wovov_ibi[j,b,j,b]
+#
+#                            for i in range(nocc):
+#                                kd = kconserv[kj,kshift,ki]
+#                                Hr2[ki,kj,i,j,b] += -numpy.dot(unpack_tril(t2,nkpts,ki,kj,kshift,kconserv[ki,kshift,kj])[i,j,:,b],
+#                                                               -2.*imds.Woovv[kj,ki,kd,j,i,b,:] + imds.Woovv[ki,kj,kd,i,j,b,:])
+#
+#            loader.slave_finished()
+#        comm.Allreduce(MPI.IN_PLACE, Hr2, op=MPI.SUM)
+#
+#        vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
+#        return vector
+#
+#    def ipccsd(self, nroots=2*4, kptlist=None):
+#        time0 = time.clock(), time.time()
+#        log = logger.Logger(self.stdout, self.verbose)
+#        nocc = self.nocc()
+#        nvir = self.nmo() - nocc
+#        nkpts = self.nkpts
+#        size =  nocc + nkpts*nkpts*nocc*nocc*nvir
+#        if kptlist is None:
+#            kptlist = range(nkpts)
+#        evals = np.zeros((len(kptlist),nroots),np.complex)
+#        evecs = np.zeros((len(kptlist),size,nroots),np.complex)
+#        for k,kshift in enumerate(kptlist):
+#            self.kshift = kshift
+#            diag = self.ipccsd_diag()
+#            precond = lambda dx, e, x0: dx/(diag-e)
+#            # Initial guess from file
+#            amplitude_filename = "__ripccsd" + str(kshift) + "__.hdf5"
+#            rsuccess, x0 = read_eom_amplitudes((size,nroots),amplitude_filename)
+#            if not rsuccess:
+#                x0 = np.zeros_like(diag)
+#                x0[np.argmin(diag)] = 1.0
+#            if nroots == 1:
+#            	evals[k], evecs[k,:,0] = eig(self.ipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+#            	#conv, evals[k], evecs[k,:] = eigs(self.ipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
+#            else:
+#            	evals[k], evecs[k] = eig(self.ipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+#            write_eom_amplitudes(evecs[k],amplitude_filename)
+#        time0 = log.timer_debug1('converge ip-ccsd', *time0)
+#        comm.Barrier()
+#        return evals.real, evecs
+#
+#    def ipccsd_matvec(self, vector):
+#    ########################################################
+#    # FOLLOWING:                                           #
+#    # Z. Tu, F. Wang, and X. Li                            #
+#    # J. Chem. Phys. 136, 174102 (2012) Eqs.(8)-(9)        #
+#    ########################################################
+#        r1,r2 = self.vector_to_amplitudes_ip(vector)
+#        r1 = comm.bcast(r1, root=0)
+#        r2 = comm.bcast(r2, root=0)
+#
+#        nproc = comm.Get_size()
+#        t1,t2 = self.t1, self.t2
+#        nkpts,nocc,nvir = self.t1.shape
+#        nkpts = self.nkpts
+#        kshift = self.kshift
+#        kconserv = self.kconserv
+#
+#        if not self.made_ip_imds:
+#            if not hasattr(self,'imds'):
+#                self.imds = _IMDS(self)
+#            self.imds.make_ip(self)
+#            self.made_ip_imds = True
+#
+#        imds = self.imds
+#
+#        cput2 = time.clock(), time.time()
+#        Hr1 = numpy.zeros(r1.shape,dtype=t1.dtype)
+#        loader = mpi_load_balancer.load_balancer(BLKSIZE=(nkpts,))
+#        loader.set_ranges((range(nkpts),))
+#
+#        good2go = True
+#        while(good2go):
+#            good2go, data = loader.slave_set()
+#            if good2go is False:
+#                break
+#            ranges0 = loader.get_blocks_from_data(data)
+#
+#            s0 = slice(min(ranges0),max(ranges0)+1)
+#
+#            Wooov_Xls = _cp(imds.Wooov[:,s0,kshift])
+#            Wooov_lXs = _cp(imds.Wooov[s0,:,kshift])
+#
+#            for iterkl,kl in enumerate(ranges0):
+#                Hr1 += einsum('ld,ild->i',imds.Fov[kl],2.*r2[kshift,kl]-r2[kl,kshift].transpose(1,0,2))
+#                Hr1 += einsum('xklid,xkld->i',-2.*Wooov_Xls[:,iterkl]+Wooov_lXs[iterkl,:].transpose(0,2,1,3,4),r2[:,kl])
+#            loader.slave_finished()
+#        comm.Allreduce(MPI.IN_PLACE, Hr1, op=MPI.SUM)
+#        Hr1 -= einsum('ki,k->i',imds.Loo[kshift],r1)
+#
+#        Hr2 = numpy.zeros(r2.shape,dtype=t1.dtype)
+#        loader = mpi_load_balancer.load_balancer(BLKSIZE=(nkpts,1,))
+#        loader.set_ranges((range(nkpts),range(nkpts),))
+#
+#        good2go = True
+#        while(good2go):
+#            good2go, data = loader.slave_set()
+#            if good2go is False:
+#                break
+#            ranges0, ranges1 = loader.get_blocks_from_data(data)
+#
+#            s0,s1 = [slice(min(x),max(x)+1) for x in ranges0,ranges1]
+#            Wovoo_sXi  = _cp(imds.Wovoo[kshift,:,s0])
+#            WooooS_Xij = _cp(imds.WooooS[:,s0,s1])
+#
+#            tmp = numpy.zeros(nvir,dtype=t2.dtype)
+#            for kl in range(nkpts):
+#                kk_list = range(nkpts)
+#                kd_list = kconserv[kl,kshift,kk_list]
+#                tmp += einsum('lc,l->c',(2.*imds.Woovv[kl,kk_list,kd_list].transpose(1,0,2,3,4) \
+#                                           -imds.Woovv[kk_list,kl,kd_list].transpose(2,0,1,3,4)).reshape(-1,nvir),
+#                                         r2[kk_list,kl].transpose(2,0,1,3).reshape(-1))
+#            for iterki, ki in enumerate(ranges0):
+#                for iterkj, kj in enumerate(ranges1):
+#                    Hr2[ki,kj] += -einsum('c,ijcb->ijb',tmp,unpack_tril(t2,nkpts,ki,kj,kshift,kconserv[ki,kshift,kj]))
+#
+#            for iterki, ki in enumerate(ranges0):
+#                for iterkj, kj in enumerate(ranges1):
+#                    kb = kconserv[ki,kshift,kj]
+#                    Hr2[ki,kj] += einsum('bd,ijd->ijb',imds.Lvv[kb],r2[ki,kj])
+#                    Hr2[ki,kj] -= einsum('li,ljb->ijb',imds.Loo[ki],r2[ki,kj])
+#                    Hr2[ki,kj] -= einsum('lj,ilb->ijb',imds.Loo[kj],r2[ki,kj])
+#                    Hr2[ki,kj] -= einsum('kbij,k->ijb',Wovoo_sXi[kb,iterki],r1)
+#
+#                    kl_list = range(nkpts)
+#                    kk_list = kconserv[ki,kl_list,kj]
+#                    Hr2[ki,kj] += einsum('klij,klb->ijb',WooooS_Xij[kl_list,iterki,iterkj].transpose(1,0,2,3,4).reshape(nocc,nocc*nkpts,nocc,nocc),
+#                                                         r2[kk_list,kl_list].transpose(1,0,2,3).reshape(nocc,nocc*nkpts,nvir))
+#
+#            Wovov_Xbi = _cp(imds.Wovov[:,s1,s0])
+#
+#            for iterki,ki in enumerate(ranges0):
+#                for iterkb,kb in enumerate(ranges1):
+#                    kj = kconserv[kshift,ki,kb]
+#                    Hr2[ki,kj] += -einsum('lbid,ljd->ijb',Wovov_Xbi[:,iterkb,iterki].reshape(nocc*nkpts,nvir,nocc,nvir),
+#                                                          r2[:,kj].reshape(nocc*nkpts,nocc,nvir))
+#            Wvoov_bXj = _cp(imds.Wvoov[s1,:,s0])
+#            Wovov_Xbj = _cp(imds.Wovov[:,s1,s0])
+#
+#            for iterkj,kj in enumerate(ranges0):
+#                for iterkb,kb in enumerate(ranges1):
+#                    ki = kconserv[kshift,kj,kb]
+#                    Hr2[ki,kj] += einsum('bljd,ild->ijb',Wvoov_bXj[iterkb,:,iterkj].transpose(1,0,2,3,4).reshape(nvir,nocc*nkpts,nocc,nvir),
+#                                                         (2.*r2[ki,:].transpose(1,0,2,3)-r2[:,ki].transpose(2,0,1,3)).reshape(nocc,nocc*nkpts,nvir))
+#                    Hr2[ki,kj] += -einsum('lbjd,ild->ijb',Wovov_Xbj[:,iterkb,iterkj].reshape(nocc*nkpts,nvir,nocc,nvir),
+#                                                          r2[ki,:].transpose(1,0,2,3).reshape(nocc,nocc*nkpts,nvir)) #typo in nooijen's paper
+#            loader.slave_finished()
+#        comm.Allreduce(MPI.IN_PLACE, Hr2, op=MPI.SUM)
+#
+#        vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
+#        return vector
+#
+#    def lipccsd(self, nroots=2*4, kptlist=None):
+#        time0 = time.clock(), time.time()
+#        log = logger.Logger(self.stdout, self.verbose)
+#        nocc = self.nocc()
+#        nvir = self.nmo() - nocc
+#        nkpts = self.nkpts
+#        size =  nocc + nkpts*nkpts*nocc*nocc*nvir
+#        if kptlist is None:
+#            kptlist = range(nkpts)
+#        evals = np.zeros((len(kptlist),nroots),np.complex)
+#        evecs = np.zeros((len(kptlist),size,nroots),np.complex)
+#        for k,kshift in enumerate(kptlist):
+#            self.kshift = kshift
+#            diag = self.ipccsd_diag()
+#            precond = lambda dx, e, x0: dx/(diag-e)
+#            # Initial guess from file
+#            amplitude_filename = "__lipccsd" + str(kshift) + "__.hdf5"
+#            rsuccess, x0 = read_eom_amplitudes((size,nroots),amplitude_filename)
+#            if not rsuccess:
+#                x0 = np.zeros_like(diag)
+#                x0[np.argmin(diag)] = 1.0
+#            if nroots == 1:
+#            	evals[k], evecs[k,:,0] = eig(self.lipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+#            	#conv, evals[k], evecs[k,:] = eigs(self.lipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
+#            else:
+#            	evals[k], evecs[k] = eig(self.lipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+#            write_eom_amplitudes(evecs[k],amplitude_filename)
+#        time0 = log.timer_debug1('converge ip-ccsd', *time0)
+#        comm.Barrier()
+#        return evals.real, evecs
+#
+#    def lipccsd_matvec(self, vector):
+#    ########################################################
+#    # FOLLOWING:                                           #
+#    # Z. Tu, F. Wang, and X. Li                            #
+#    # J. Chem. Phys. 136, 174102 (2012) Eqs.(8)-(9)        #
+#    ########################################################
+#        r1,r2 = self.vector_to_amplitudes_ip(vector)
+#        r1 = comm.bcast(r1, root=0)
+#        r2 = comm.bcast(r2, root=0)
+#
+#        nproc = comm.Get_size()
+#        t1,t2 = self.t1, self.t2
+#        nkpts,nocc,nvir = self.t1.shape
+#        nkpts = self.nkpts
+#        kshift = self.kshift
+#        kconserv = self.kconserv
+#
+#        if not self.made_ip_imds:
+#            if not hasattr(self,'imds'):
+#                self.imds = _IMDS(self)
+#            self.imds.make_ip(self)
+#            self.made_ip_imds = True
+#
+#        imds = self.imds
+#
+#        cput2 = time.clock(), time.time()
+#        Hr1 = numpy.zeros(r1.shape,dtype=t1.dtype)
+#        Hr2 = numpy.zeros(r2.shape,dtype=t1.dtype)
+#
+#        def mem_usage_ovoo(nocc, nvir, nkpts):
+#            return nocc**3 * nvir**1 * 16
+#        array_size = [nkpts,nkpts]
+#        #chunk_size = get_max_blocksize_from_mem(0.3e9, mem_usage_ovoo(nocc,nvir,nkpts),
+#        #                                        array_size, priority_list=[1,1])
+#        #task_list = generate_task_list(chunk_size,array_size)
+#        task_list = generate_max_task_list(array_size,blk_mem_size=mem_usage_ovoo(nocc,nvir,nkpts),priority_list=[1,1])
+#
+#        for kbrange, kirange in mpi.work_stealing_partition(task_list):
+#            Wovoo_sbi = _cp(imds.Wovoo[kshift,slice(*kbrange),slice(*kirange)])
+#
+#            for iterkb, kb in enumerate(range(*kbrange)):
+#                for iterki, ki in enumerate(range(*kirange)):
+#                    kj = kconserv[kshift,ki,kb]
+#                    Hr1 -= einsum('kbij,ijb->k',Wovoo_sbi[iterkb,iterki],r2[ki,kj])
+#
+#        comm.Allreduce(MPI.IN_PLACE, Hr1, op=MPI.SUM)
+#        Hr1 -= einsum('ki,i->k',imds.Loo[kshift],r1)
+#        #Hr1 = ( - einsum('ki,i->k',Loo,r1)
+#        #        - einsum('kbij,ijb->k',Wovoo,r2)
+#        #        )
+#
+#        # Using same task_list as before
+#        for klrange, kkrange in mpi.work_stealing_partition(task_list):
+#            Wooov_kls = _cp(imds.Wooov[slice(*kkrange),slice(*klrange),kshift])
+#            Wooov_lks = _cp(imds.Wooov[slice(*klrange),slice(*kkrange),kshift])
+#
+#            for iterkk, kk in enumerate(range(*kkrange)):
+#                for iterkl, kl in enumerate(range(*klrange)):
+#                    kd = kconserv[kk,kshift,kl]
+#                    Hr2[kk,kl] -= 2.*einsum('klid,i->kld',Wooov_kls[iterkk,iterkl],r1)
+#                    Hr2[kk,kl] += einsum('lkid,i->kld',Wooov_lks[iterkl,iterkk],r1)
+#                    Hr2[kk,kl] -= einsum('ki,ild->kld',imds.Loo[kk],r2[kk,kl])
+#                    Hr2[kk,kl] -= einsum('lj,kjd->kld',imds.Loo[kl],r2[kk,kl])
+#                    Hr2[kk,kl] += einsum('bd,klb->kld',imds.Lvv[kd],r2[kk,kl])
+#                    Hr2[kk,kshift] -= (kk==kd)*einsum('kd,l->kld',imds.Fov[kk],r1)
+#                    Hr2[kshift,kl] += (kl==kd)*2.*einsum('ld,k->kld',imds.Fov[kl],r1)
+#
+#        def mem_usage_ovvok(nocc, nvir, nkpts):
+#            return nocc**2 * nvir**2 * nkpts *  16
+#        array_size = [nkpts,nkpts]
+#        #chunk_size = get_max_blocksize_from_mem(0.3e9, 2.*mem_usage_ovvok(nocc,nvir,nkpts),
+#        #                                        array_size, priority_list=[1,1])
+#        #task_list = generate_task_list(chunk_size,array_size)
+#        task_list = generate_max_task_list(array_size,blk_mem_size=mem_usage_ovvok(nocc,nvir,nkpts),priority_list=[1,1])
+#
+#        for kbrange, klrange in mpi.work_stealing_partition(task_list):
+#
+#            Wvoov_blX = _cp(imds.Wvoov[slice(*kbrange),slice(*klrange),:])
+#            Wovov_lbX = _cp(imds.Wovov[slice(*klrange),slice(*kbrange),:])
+#
+#            for iterkb, kb in enumerate(range(*kbrange)):
+#                for iterkl, kl in enumerate(range(*klrange)):
+#                    for iterkj, kj in enumerate(range(nkpts)):
+#                        kd = kconserv[kb,kj,kl]
+#                        kk = kconserv[kshift,kl,kd]
+#                        tmp = einsum('bljd,kjb->kld',Wvoov_blX[iterkb,iterkl,kj],r2[kk,kj])
+#                        Hr2[kk,kl] += 2.*tmp
+#                        Hr2[kk,kl] -= einsum('lbjd,kjb->kld',Wovov_lbX[iterkl,iterkb,kj],r2[kk,kj]) # typo in nooijen's paper
+#
+#                        # Notice we switch around the variable kk and kl
+#                        kd = kconserv[kl,kj,kb]
+#                        kk = kconserv[kshift,kl,kd]
+#                        Hr2[kl,kk] -= einsum('kbjd,jlb->kld',Wovov_lbX[iterkl,iterkb,kj],r2[kj,kk])
+#                        Hr2[kl,kk] -= einsum('bkjd,ljb->kld',Wvoov_blX[iterkb,iterkl,kj],r2[kk,kj])
+#
+#        def mem_usage_ovvok(nocc, nvir, nkpts):
+#            return nocc**2 * nvir**2 * nkpts *  16
+#        array_size = [nkpts,nkpts]
+#        #chunk_size = get_max_blocksize_from_mem(0.3e9, 3.*mem_usage_ovvok(nocc,nvir,nkpts),
+#        #                                        array_size, priority_list=[1,1])
+#        #task_list = generate_task_list(chunk_size,array_size)
+#        task_list = generate_max_task_list(array_size,blk_mem_size=mem_usage_ovvok(nocc,nvir,nkpts),priority_list=[1,1])
+#
+#        # TODO tmp2 only needs to create tmp2[kshift], but should wait for the fix in the mpi.stealing
+#        # as defined for the analogous quantity in the ipccsd_matvec
+#        tmp2 = numpy.zeros((nkpts,nvir),dtype=t1.dtype)
+#        for kirange, kjrange in mpi.work_stealing_partition(task_list):
+#            for iterki, ki in enumerate(range(*kirange)):
+#                for iterkj, kj in enumerate(range(*kjrange)):
+#                    for iterkc, kc in enumerate(range(nkpts)):
+#                        t2_tmp = unpack_tril(t2,nkpts,ki,kj,kc,kconserv[ki,kc,kj])
+#                        tmp2[kc] += einsum('ijcb,ijb->c',t2_tmp,r2[ki,kj])
+#        comm.Allreduce(MPI.IN_PLACE, tmp2, op=MPI.SUM)
+#
+#        for kkrange, klrange in mpi.work_stealing_partition(task_list):
+#
+#            Woooo_klX = _cp(imds.Woooo[slice(*kkrange),slice(*klrange),:])
+#            Woovv_klX = _cp(imds.Woovv[slice(*kkrange),slice(*klrange),:])
+#
+#            for iterkk, kk in enumerate(range(*kkrange)):
+#                for iterkl, kl in enumerate(range(*klrange)):
+#                    for iterki, ki in enumerate(range(nkpts)):
+#                        kj = kconserv[kk,ki,kl]
+#                        Hr2[kk,kl] += einsum('klij,ijd->kld',Woooo_klX[iterkk,iterkl,ki],r2[ki,kj])
+#                    kd = kconserv[kk,kshift,kl]
+#                    tmp3 = einsum('kldc,c->kld',Woovv_klX[iterkk,iterkl,kd],tmp2[kshift])
+#                    Hr2[kk,kl] +=    tmp3
+#                    Hr2[kl,kk] -= 2.*tmp3.transpose(1,0,2) # Notice change of kl,kk in Hr2
+#
+#        #tmp = einsum('ijcb,ijb->c',t2,r2)
+#        #Hr2 = ( - einsum('kd,l->kld',Fov,r1)
+#        #        + 2.*einsum('ld,k->kld',Fov,r1)
+#        #        - 2.*einsum('klid,i->kld',Wooov,r1)
+#        #        + einsum('lkid,i->kld',Wooov,r1)
+#        #        - einsum('ki,ild->kld',Loo,r2)
+#        #        - einsum('lj,kjd->kld',Loo,r2)
+#        #        + einsum('bd,klb->kld',Lvv,r2)
+#        #        + 2.*einsum('lbdj,kjb->kld',Wovvo,r2)
+#        #        - einsum('kbdj,ljb->kld',Wovvo,r2)
+#        #        - einsum('lbjd,kjb->kld',Wovov,r2) #typo in nooijen's paper
+#        #        + einsum('klij,ijd->kld',Woooo,r2)
+#        #        - einsum('kbid,ilb->kld',Wovov,r2)
+#        #        + einsum('kldc,c->kld',Woovv,tmp)
+#        #        - 2.*einsum('lkdc,c->kld',Woovv,tmp)
+#        #        )
+#        comm.Allreduce(MPI.IN_PLACE, Hr2, op=MPI.SUM)
+#
+#        vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
+#        return vector
 
-    def ipccsd_matvec(self, vector):
-    ########################################################
-    # FOLLOWING:                                           #
-    # Z. Tu, F. Wang, and X. Li                            #
-    # J. Chem. Phys. 136, 174102 (2012) Eqs.(8)-(9)        #
-    ########################################################
-        r1,r2 = self.vector_to_amplitudes_ip(vector)
-
-        t1,t2 = self.t1, self.t2
-        nkpts = self.nkpts
-        kshift = self.kshift
-        kconserv = self.kconserv
-
-        if not self.made_ip_imds:
-            if not hasattr(self,'imds'):
-                self.imds = _IMDS()
-            self.imds.make_ip(self)
-            self.made_ip_imds = True
-
-        imds = self.imds
-
-        Hr1 = -einsum('ki,k->i',imds.Loo[kshift],r1)
-        for kl in range(nkpts):
-            Hr1 += 2.*einsum('ld,ild->i',imds.Fov[kl],r2[kshift,kl])
-            Hr1 +=   -einsum('ld,lid->i',imds.Fov[kl],r2[kl,kshift])
-            for kk in range(nkpts):
-                kd = kconserv[kk,kshift,kl]
-                Hr1 += -2.*einsum('klid,kld->i',imds.Wooov[kk,kl,kshift],r2[kk,kl])
-                Hr1 +=     einsum('lkid,kld->i',imds.Wooov[kl,kk,kshift],r2[kk,kl])
-
-        Hr2 = np.zeros(r2.shape,dtype=t1.dtype)
-        for ki in range(nkpts):
-            for kj in range(nkpts):
-                kb = kconserv[ki,kshift,kj]
-                Hr2[ki,kj] += einsum('bd,ijd->ijb',imds.Lvv[kb],r2[ki,kj])
-                Hr2[ki,kj] -= einsum('li,ljb->ijb',imds.Loo[ki],r2[ki,kj])
-                Hr2[ki,kj] -= einsum('lj,ilb->ijb',imds.Loo[kj],r2[ki,kj])
-                Hr2[ki,kj] -= einsum('kbij,k->ijb',imds.Wovoo[kshift,kb,ki],r1)
-                for kl in range(nkpts):
-                    kk = kconserv[ki,kl,kj]
-                    Hr2[ki,kj] += einsum('klij,klb->ijb',imds.Woooo[kk,kl,ki],r2[kk,kl])
-                    kd = kconserv[kl,kj,kb]
-                    Hr2[ki,kj] += 2.*einsum('lbdj,ild->ijb',imds.Wovvo[kl,kb,kd],r2[ki,kl])
-                    Hr2[ki,kj] += -einsum('lbdj,lid->ijb',imds.Wovvo[kl,kb,kd],r2[kl,ki])
-                    Hr2[ki,kj] += -einsum('lbjd,ild->ijb',imds.Wovov[kl,kb,kj],r2[ki,kl]) #typo in nooijen's paper
-                    kd = kconserv[kl,ki,kb]
-                    Hr2[ki,kj] += -einsum('lbid,ljd->ijb',imds.Wovov[kl,kb,ki],r2[kl,kj])
-                    for kk in range(nkpts):
-                        kc = kshift
-                        kd = kconserv[kl,kc,kk]
-                        tmp = ( 2.*einsum('lkdc,kld->c',imds.Woovv[kl,kk,kd],r2[kk,kl])
-                                  -einsum('kldc,kld->c',imds.Woovv[kk,kl,kd],r2[kk,kl]) )
-                        Hr2[ki,kj] += -einsum('c,ijcb->ijb',tmp,t2[ki,kj,kshift])
-
-        vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
-        return vector
-
-    def ipccsd_diag(self):
-        t1,t2 = self.t1, self.t2
-        nkpts, nocc, nvir = t1.shape
-        kshift = self.kshift
-        kconserv = self.kconserv
-
-        if not self.made_ip_imds:
-            if not hasattr(self,'imds'):
-                self.imds = _IMDS()
-            self.imds.make_ip(self)
-            self.made_ip_imds = True
-
-        imds = self.imds
-
-        Hr1 = -np.diag(imds.Loo[kshift])
-
-        Hr2 = np.zeros((nkpts,nkpts,nocc,nocc,nvir),dtype=t1.dtype)
-        for ki in range(nkpts):
-            for kj in range(nkpts):
-                kb = kconserv[ki,kshift,kj]
-                for i in range(nocc):
-                    for j in range(nocc):
-                        for b in range(nvir):
-                            Hr2[ki,kj,i,j,b] = imds.Lvv[kb,b,b]
-                            Hr2[ki,kj,i,j,b] -= imds.Loo[ki,i,i]
-                            Hr2[ki,kj,i,j,b] -= imds.Loo[kj,j,j]
-                            for kl in range(nkpts):
-                                kk = kconserv[ki,kl,kj]
-                                Hr2[ki,kj,i,j,b] += imds.Woooo[kk,kl,ki,i,j,i,j]*(kk==ki)*(kl==kj)
-                                kd = kconserv[kl,kj,kb]
-                                Hr2[ki,kj,i,j,b] += 2.*imds.Wovvo[kl,kb,kd,j,b,b,j]*(kl==kj)
-                                Hr2[ki,kj,i,j,b] += -imds.Wovvo[kl,kb,kd,i,b,b,j]*(i==j)*(kl==ki)*(ki==kj)
-                                Hr2[ki,kj,i,j,b] += -imds.Wovov[kl,kb,kj,j,b,j,b]*(kl==kj)
-                                kd = kconserv[kl,ki,kb]
-                                Hr2[ki,kj,i,j,b] += -imds.Wovov[kl,kb,ki,i,b,i,b]*(kl==ki)
-                                for kk in range(nkpts):
-                                    kc = kshift
-                                    kd = kconserv[kl,kc,kk]
-                                    Hr2[ki,kj,i,j,b] += -2.*np.dot(t2[ki,kj,kshift,i,j,:,b],imds.Woovv[kl,kk,kd,j,i,b,:])*(kk==ki)*(kl==kj)
-                                    Hr2[ki,kj,i,j,b] += np.dot(t2[ki,kj,kshift,i,j,:,b],imds.Woovv[kk,kl,kd,i,j,b,:])*(kk==ki)*(kl==kj)
-
-        vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
-        return vector
 
     def vector_to_amplitudes_ip(self,vector):
         nocc = self.nocc()
