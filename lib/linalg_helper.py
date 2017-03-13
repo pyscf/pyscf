@@ -450,7 +450,9 @@ dsyev = eigh
 
 
 def pick_real_eigs(w, v, nroots, x0):
-    realidx = numpy.where((w.imag < 1e-9))[0]
+    abs_imag = abs(w.imag)
+    max_imag_tol = max(1e-9,min(abs_imag))
+    realidx = numpy.where((abs_imag < max_imag_tol))[0]
     idx = realidx[w[realidx].real.argsort()]
     return w[idx].real, v[:,idx].real, idx
 
