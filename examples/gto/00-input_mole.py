@@ -55,7 +55,10 @@ mol = gto.M(
 mol.charge = 0
 mol.spin = 0 # 2j == nelec_alpha - nelec_beta
 mol.symmetry = 1  # Allow the program to apply point group symmetry if possible
-# can be 'bohr', 'ang' to indicate the coordinates unit of the input mol.atom
+# .unit can be 'bohr', 'ang' to indicate the coordinates unit of the input mol.atom
+# If a number is assigned to unit, this number will be used as the length of
+# 1 Bohr (in Angstrom).  Eg you can double the bond length of a system by
+# setting mol.unit = 0.529*.5.
 mol.unit = 'Ang'    # (New in version 1.1)
 
 # Output
