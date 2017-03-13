@@ -347,3 +347,316 @@ int *compute_occ_list(uint64_t *string, int nset, int norb, int nelec) {
     return occ;
     
 }
+
+
+// Compute a list of occupied orbitals for a given string
+int *compute_vir_list(uint64_t *string, int nset, int norb, int nelec) {
+
+    size_t k, i;
+
+    int *vir = malloc(sizeof(int) * (norb-nelec));
+    int off = 0;
+    int vir_ind = 0;
+
+    for (k = nset; k > 0; --k) {
+        int i_max = ((norb - off) < 64 ? (norb - off) : 64);
+        for (i = 0; i < i_max; ++i) {
+            int i_occ = (string[k-1] >> i) & 1;
+            if (!i_occ) {
+                vir[vir_ind] = i + off;
+                vir_ind++;
+            }
+        }
+        off += 64;
+    }
+
+    return vir;
+    
+}
+
+
+void select_strs(double *h1, double *eri, double *jk, uint64_t *eri_sorted, uint64_t *jk_sorted, int norb, int neleca, int nelecb, uint64_t *strs, double *civec, int ndet, double select_cutoff, uint64_t *strs_add, int* strs_add_size) {
+
+    size_t p, q, r, i, k, a, ip, jp, kp, lp, ij, iset, idet;
+
+    int max_strs_add = strs_add_size[0];
+    int nset = norb / 64 + 1;
+
+    // Compute Fock intermediates
+    double *focka = malloc(sizeof(double) * norb * norb);
+    double *fockb = malloc(sizeof(double) * norb * norb);
+    for (p = 0; p < norb; ++p) {
+        for (q = 0; q < norb; ++q) {
+            double vja = 0.0;
+            double vka = 0.0;
+            for (i = 0; i < neleca; ++i) {
+                size_t iipq = i * norb * norb * norb + i * norb * norb + p * norb + q;
+                size_t piiq = p * norb * norb * norb + i * norb * norb + i * norb + q;
+                vja += eri[iipq];
+                vka += eri[piiq];
+            }
+            double vjb = 0.0;
+            double vkb = 0.0;
+            for (i = 0; i < nelecb; ++i) {
+                size_t iipq = i * norb * norb * norb + i * norb * norb + p * norb + q;
+                size_t piiq = p * norb * norb * norb + i * norb * norb + i * norb + q;
+                vjb += eri[iipq];
+                vkb += eri[piiq];
+            }
+            focka[p * norb + q] = h1[p * norb + q] + vja + vjb - vka;
+            fockb[p * norb + q] = h1[p * norb + q] + vja + vjb - vkb;
+        }
+    }
+
+    int *holes_a = malloc(sizeof(int) * norb);
+    int *holes_b = malloc(sizeof(int) * norb);
+    int *particles_a = malloc(sizeof(int) * norb);
+    int *particles_b = malloc(sizeof(int) * norb);
+    int strs_added = 0;
+
+    // Loop over determinants
+    for (idet = 0; idet < ndet; ++idet) {
+        uint64_t *stra = strs + idet * 2 * nset;
+        uint64_t *strb = strs + idet * 2 * nset + nset;
+        int *occsa = compute_occ_list(stra, nset, norb, neleca);
+        int *occsb = compute_occ_list(strb, nset, norb, nelecb);
+        int *virsa = compute_vir_list(stra, nset, norb, neleca);
+        int *virsb = compute_vir_list(strb, nset, norb, nelecb);
+        double tol = select_cutoff / fabs(civec[idet]);
+
+        // Single excitations
+        int n_holes_a = 0;
+        int n_holes_b = 0;
+	int n_particles_a = 0;
+	int n_particles_b = 0;
+        for (p = 0; p < (norb - neleca); ++p) {
+            i = virsa[p];
+            if (i < neleca) {
+                holes_a[n_holes_a] = i;
+                n_holes_a++;
+            }
+        }
+        for (p = 0; p < neleca; ++p) {
+            i = occsa[p];
+            if (i >= neleca) {
+                particles_a[n_particles_a] = i;
+                n_particles_a++;
+            }
+        }
+        for (p = 0; p < (norb - nelecb); ++p) {
+            i = virsb[p];
+            if (i < nelecb) {
+                holes_b[n_holes_b] = i;
+                n_holes_b++;
+            }
+        }
+        for (p = 0; p < nelecb; ++p) {
+            i = occsb[p];
+            if (i >= nelecb) {
+                particles_b[n_particles_b] = i;
+                n_particles_b++;
+            }
+        }
+
+        // TODO: recompute Fock for each |Phi_I> and make sure it matches Fock in the code below
+        // alpha->alpha
+        for (p = 0; p < neleca; ++p) {
+            i = occsa[p];
+            for (q = 0; q < (norb - neleca); ++q) {
+                a = virsa[q];
+                double fai = focka[a * norb + i];
+                for (r = 0; r < n_particles_a; ++r) {
+                    k = particles_a[r];
+                    fai += jk[k * norb * norb * norb + k * norb * norb + a * norb + i];
+                }
+                for (r = 0; r < n_holes_a; ++r) {
+                    k = holes_a[r];
+                    fai -= jk[k * norb * norb * norb + k * norb * norb + a * norb + i];
+                }
+                for (r = 0; r < n_particles_b; ++r) {
+                    k = particles_b[r];
+                    fai += eri[k * norb * norb * norb + k * norb * norb + a * norb + i];
+                }
+                for (r = 0; r < n_holes_b; ++r) {
+                    k = holes_b[r];
+                    fai -= eri[k * norb * norb * norb + k * norb * norb + a * norb + i];
+                }
+                if (fabs(fai) > tol) {
+                    uint64_t *tmp = toggle_bit(stra, nset, a);
+                    uint64_t *new_str = toggle_bit(tmp, nset, i);
+                    for (iset = 0; iset < nset; ++iset) {
+                        // new alpha string
+                        strs_add[strs_added * 2 * nset + iset] = new_str[iset];
+                        // old beta string
+                        strs_add[strs_added * 2 * nset + nset + iset] = strb[iset];
+                    }
+                    strs_added++;
+                }
+            }
+        }
+
+        // beta->beta
+        for (p = 0; p < nelecb; ++p) {
+            i = occsb[p];
+            for (q = 0; q < (norb - nelecb); ++q) {
+                a = virsb[q];
+                double fai = fockb[a * norb + i];
+                for (r = 0; r < n_particles_b; ++r) {
+                    k = particles_b[r];
+                    fai += jk[k * norb * norb * norb + k * norb * norb + a * norb + i];
+                }
+                for (r = 0; r < n_holes_b; ++r) {
+                    k = holes_b[r];
+                    fai -= jk[k * norb * norb * norb + k * norb * norb + a * norb + i];
+                }
+                for (r = 0; r < n_particles_a; ++r) {
+                    k = particles_a[r];
+                    fai += eri[k * norb * norb * norb + k * norb * norb + a * norb + i];
+                }
+                for (r = 0; r < n_holes_a; ++r) {
+                    k = holes_a[r];
+                    fai -= eri[k * norb * norb * norb + k * norb * norb + a * norb + i];
+                }
+                if (fabs(fai) > tol) {
+                    uint64_t *tmp = toggle_bit(strb, nset, a);
+                    uint64_t *new_str = toggle_bit(tmp, nset, i);
+                    for (iset = 0; iset < nset; ++iset) {
+                        // old alpha string
+                        strs_add[strs_added * 2 * nset + iset] = stra[iset];
+                        // new beta string
+                        strs_add[strs_added * 2 * nset + nset + iset] = new_str[iset];
+                    }
+                    strs_added++;
+                }
+            }
+        }
+
+        size_t ip_occ, jp_occ, kp_occ, lp_occ, ih;
+        // Double excitations
+        for (p = 0; p < norb * norb * norb * norb; ++p) {
+            ih = jk_sorted[p];
+            int aaaa_bbbb_done = (fabs(jk[ih]) < tol);
+            if (!aaaa_bbbb_done) {
+                lp = ih % norb;
+                ij = ih / norb;
+                kp = ij % norb;
+                ij = ij / norb;
+                jp = ij % norb;
+                ip = ij / norb;
+                // alpha,alpha->alpha,alpha
+                ip_occ = 0;
+                jp_occ = 0;
+                kp_occ = 0;
+                lp_occ = 0;
+                for (r = 0; r < neleca; ++r) {
+                    int occ_index = occsa[r];
+                    if (ip == occ_index) ip_occ = 1;
+                    if (jp == occ_index) jp_occ = 1;
+                    if (kp == occ_index) kp_occ = 1;
+                    if (lp == occ_index) lp_occ = 1;
+                }
+                if (jp_occ && lp_occ && !ip_occ && !kp_occ) {
+                    uint64_t *tmp = toggle_bit(stra, nset, jp);
+                    uint64_t *new_str = toggle_bit(tmp, nset, ip);
+                    tmp = toggle_bit(new_str, nset, lp);
+                    new_str = toggle_bit(tmp, nset, kp);
+                    for (iset = 0; iset < nset; ++iset) {
+                        strs_add[strs_added * 2 * nset + iset] = new_str[iset];
+                        strs_add[strs_added * 2 * nset + nset + iset] = strb[iset];
+                    }
+                    strs_added++;
+                }
+                // beta,beta->beta,beta
+                ip_occ = 0;
+                jp_occ = 0;
+                kp_occ = 0;
+                lp_occ = 0;
+                for (r = 0; r < nelecb; ++r) {
+                    int occ_index = occsb[r];
+                    if (ip == occ_index) ip_occ = 1;
+                    if (jp == occ_index) jp_occ = 1;
+                    if (kp == occ_index) kp_occ = 1;
+                    if (lp == occ_index) lp_occ = 1;
+                }
+                if (jp_occ && lp_occ && !ip_occ && !kp_occ) {
+                    uint64_t *tmp = toggle_bit(strb, nset, jp);
+                    uint64_t *new_str = toggle_bit(tmp, nset, ip);
+                    tmp = toggle_bit(new_str, nset, lp);
+                    new_str = toggle_bit(tmp, nset, kp);
+                    for (iset = 0; iset < nset; ++iset) {
+                        strs_add[strs_added * 2 * nset + iset] = stra[iset];
+                        strs_add[strs_added * 2 * nset + nset + iset] = new_str[iset];
+                    }
+                    strs_added++;
+                }
+            }
+            // alpha,beta->alpha,beta
+            ih = eri_sorted[p];
+            int aabb_done = (fabs(eri[ih]) < tol);
+            if (!aabb_done) {
+                lp = ih % norb;
+                ij = ih / norb;
+                kp = ij % norb;
+                ij = ij / norb;
+                jp = ij % norb;
+                ip = ij / norb;
+                ip_occ = 0;
+                jp_occ = 0;
+                kp_occ = 0;
+                lp_occ = 0;
+                for (r = 0; r < neleca; ++r) {
+                    int occ_index = occsa[r];
+                    if (ip == occ_index) ip_occ = 1;
+                    if (jp == occ_index) jp_occ = 1;
+                }
+                for (r = 0; r < nelecb; ++r) {
+                    int occ_index = occsb[r];
+                    if (kp == occ_index) kp_occ = 1;
+                    if (lp == occ_index) lp_occ = 1;
+                }
+                if (jp_occ && lp_occ && !ip_occ && !kp_occ) {
+                    uint64_t *tmp = toggle_bit(stra, nset, jp);
+                    uint64_t *new_str_a = toggle_bit(tmp, nset, ip);
+                    tmp = toggle_bit(strb, nset, lp);
+                    uint64_t *new_str_b = toggle_bit(tmp, nset, kp);
+                    for (iset = 0; iset < nset; ++iset) {
+                        strs_add[strs_added * 2 * nset + iset] = new_str_a[iset];
+                        strs_add[strs_added * 2 * nset + nset + iset] = new_str_b[iset];
+                    }
+                    strs_added++;
+                }
+            }
+            // Break statement
+            if (aaaa_bbbb_done && aabb_done) {
+                break;
+            }
+        } // end loop over determinants
+        if (strs_added > max_strs_add) {
+            printf("\nError: Number of selected strings is greater than the size of the buffer array.\n");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    strs_add_size[0] = strs_added;
+
+}
+
+
+uint64_t *toggle_bit(uint64_t *str, int nset, int p) {
+
+    size_t i;
+
+    uint64_t *new_str = malloc(sizeof(uint64_t) * nset);
+
+    for (i = 0; i < nset; ++i) {
+        new_str[i] = str[i];
+    }
+    
+    int p_set = p / 64;
+    int p_rel = p % 64;
+
+    new_str[nset - p_set - 1] ^= 1ULL << p_rel; 
+
+    return new_str;    
+
+}
