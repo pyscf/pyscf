@@ -14,5 +14,5 @@ char *int2bin(uint64_t i);
 double compute_cre_des_sign(int a, int i, uint64_t *stria, int nset);
 int *compute_occ_list(uint64_t *string, int nset, int norb, int nelec);
 int *compute_vir_list(uint64_t *string, int nset, int norb, int nelec);
-void select_strs(double *h1, double *eri, double *jk, uint64_t *eri_sorted, uint64_t *jk_sorted, int norb, int neleca, int nelecb, uint64_t *strs, double *civec, int ndet, double select_cutoff, uint64_t *strs_add, int *strs_add_size);
+void select_strs(double *h1, double *eri, double *jk, uint64_t *eri_sorted, uint64_t *jk_sorted, int norb, int neleca, int nelecb, uint64_t *strs, double *civec, uint64_t ndet, double select_cutoff, uint64_t *strs_add, uint64_t* strs_add_size);
 uint64_t *toggle_bit(uint64_t *str, int nset, int p);

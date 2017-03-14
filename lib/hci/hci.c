@@ -374,12 +374,12 @@ int *compute_vir_list(uint64_t *string, int nset, int norb, int nelec) {
     
 }
 
-
-void select_strs(double *h1, double *eri, double *jk, uint64_t *eri_sorted, uint64_t *jk_sorted, int norb, int neleca, int nelecb, uint64_t *strs, double *civec, int ndet, double select_cutoff, uint64_t *strs_add, int* strs_add_size) {
+// Select determinants to include in the CI space
+void select_strs(double *h1, double *eri, double *jk, uint64_t *eri_sorted, uint64_t *jk_sorted, int norb, int neleca, int nelecb, uint64_t *strs, double *civec, uint64_t ndet, double select_cutoff, uint64_t *strs_add, uint64_t* strs_add_size) {
 
     size_t p, q, r, i, k, a, ip, jp, kp, lp, ij, iset, idet;
 
-    int max_strs_add = strs_add_size[0];
+    uint64_t max_strs_add = strs_add_size[0];
     int nset = norb / 64 + 1;
 
     // Compute Fock intermediates
@@ -412,7 +412,7 @@ void select_strs(double *h1, double *eri, double *jk, uint64_t *eri_sorted, uint
     int *holes_b = malloc(sizeof(int) * norb);
     int *particles_a = malloc(sizeof(int) * norb);
     int *particles_b = malloc(sizeof(int) * norb);
-    int strs_added = 0;
+    uint64_t strs_added = 0;
 
     // Loop over determinants
     for (idet = 0; idet < ndet; ++idet) {
@@ -641,7 +641,7 @@ void select_strs(double *h1, double *eri, double *jk, uint64_t *eri_sorted, uint
 
 }
 
-
+// Toggle bit at a specified position
 uint64_t *toggle_bit(uint64_t *str, int nset, int p) {
 
     size_t i;

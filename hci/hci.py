@@ -373,13 +373,6 @@ def select_strs_ctypes(myci, civec, h1, eri, jk, eri_sorted, jk_sorted, norb, ne
     nset = nset // 2
     neleca, nelecb = nelec
 
-#    eri = eri.ravel()
-#    eri_sorted = abs(eri).argsort()[::-1]
-#    jk = eri.reshape([norb]*4)
-#    jk = jk - jk.transpose(2,1,0,3)
-#    jkf = jk.ravel()
-#    jk_sorted = abs(jkf).argsort()[::-1]
-   
     str_add = numpy.empty((4*ndet*neleca*nelecb*(norb-neleca)*(norb-nelecb), strs.shape[1]), dtype=numpy.uint64)
     n_str_add = numpy.array([str_add.shape[0]])
 
@@ -569,8 +562,8 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     for icycle in range(norb):
         ci_strs, ci_ts = ci0._strs, ci0._ts
         float_tol = max(float_tol*.3, tol*1e2)
-        log.debug('cycle %d  ci.shape %s  float_tol %g',
-                  icycle, len(ci_strs), float_tol)
+        log.info('\nMacroiteration %d', icycle)
+        log.info('Number of CI configurations: %d', ci_strs.shape[0])
 
         hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
         #e, ci0 = lib.davidson(hop, ci0.reshape(-1), precond, tol=float_tol)
@@ -579,10 +572,10 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
                           max_cycle=max_cycle, max_space=max_space, nroots=nroots,
                           max_memory=max_memory, verbose=log, **kwargs)
         t_current = time.time() - t_start
-        print "Timing for eig:", t_current
+        log.debug('Timing for solving the eigenvalue problem: %10.3f', t_current)
         ci0 = as_SCIvector(ci0, ci_strs, ci_ts)
         de, e_last = e-e_last, e
-        log.info('cycle %d  E = %.15g  dE = %.8g', icycle, e+ecore, de)
+        log.info('Cycle %d  E = %.15g  dE = %.8g', icycle, e+ecore, de)
 
         if abs(de) < tol*1e3:
             conv = True
@@ -592,19 +585,20 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
         t_start = time.time()
         ci0 = myci.enlarge_space(ci0, h1e, eri, jk, eri_sorted, jk_sorted, norb, nelec)
         t_current = time.time() - t_start
-        print "Timing for enlarge_space:", t_current
+        log.debug('Timing for selecting configurations: %10.3f', t_current)
         if ((.99 < len(ci0._strs)/last_ci0_size < 1.01)):
             conv = True
             break
 
     ci_strs, ci_ts = ci0._strs, ci0._ts
-    log.debug('Extra CI in selected space %s', len(ci_strs))
+    log.info('\nExtra CI in the final selected space')
+    log.info('Number of CI configurations: %d', ci_strs.shape[0])
     hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
     e, c = myci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
                     max_cycle=max_cycle, max_space=max_space, nroots=nroots,
                     max_memory=max_memory, verbose=log, **kwargs)
 
-    log.info('Selected CI  E = %.15g', e+ecore)
+    log.info('\nSelected CI  E = %.15g', e+ecore)
     return e+ecore, as_SCIvector(c, ci_strs, ci_ts)
 
 
