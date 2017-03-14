@@ -366,127 +366,26 @@ def select_strs(myci, civec, h1, eri, norb, nelec):
         return (numpy.zeros([0,2,nset//2], dtype=civec._strs.dtype),
                 numpy.zeros([0,2], dtype=civec._ts.dtype))
 
-####def select_strs(myci, civec, h1, eri, norb, nelec):
-####    eri = eri.reshape([norb]*4)
-####    neleca, nelecb = nelec
-####    vja = numpy.einsum('iipq->pq', eri[:neleca,:neleca])
-####    vjb = numpy.einsum('iipq->pq', eri[:nelecb,:nelecb])
-####    vka = numpy.einsum('piiq->pq', eri[:,:neleca,:neleca])
-####    vkb = numpy.einsum('piiq->pq', eri[:,:nelecb,:nelecb])
-####    focka = h1 + vja+vjb - vka
-####    fockb = h1 + vja+vjb - vkb
-####
-####    eri = eri.ravel()
-####    eri_sorted = abs(eri).argsort()[::-1]
-####    jk = eri.reshape([norb]*4)
-####    jk = jk - jk.transpose(2,1,0,3)
-####    jkf = jk.ravel()
-####    jk_sorted = abs(jkf).argsort()[::-1]
-####
-####    ndet, nset = civec._strs.shape
-####    str_add = []
-####    for idet, (stra, strb) in enumerate(civec._strs.reshape(ndet,2,nset//2)):
-####        occsa, virsa = str2orblst(stra, norb)
-####        occsb, virsb = str2orblst(strb, norb)
-####        tol = myci.select_cutoff / abs(civec[idet])
-####
-####        holes_a = [i for i in virsa if i < neleca]
-####        particles_a = [i for i in occsa if i >= neleca]
-####        holes_b = [i for i in virsb if i < nelecb]
-####        particles_b = [i for i in occsb if i >= nelecb]
-##### alpha->alpha
-####        for i in occsa:
-####            for a in virsa:
-####                fai = focka[a,i]
-####                for k in particles_a:
-####                    fai += jk[k,k,a,i]
-####                for k in holes_a:
-####                    fai -= jk[k,k,a,i]
-####                for k in particles_b:
-####                    fai += eri[k,k,a,i]
-####                for k in holes_b:
-####                    fai -= eri[k,k,a,i]
-####                if abs(fai) > tol:
-####                    newa = toggle_bit(toggle_bit(stra.copy(), a), i)
-####                    str_add.append(numpy.hstack((newa,strb)))
-##### beta ->beta
-####        for i in occsb:
-####            for a in virsb:
-####                fai = fockb[a,i]
-####                for k in particles_b:
-####                    fai += jk[k,k,a,i]
-####                for k in holes_b:
-####                    fai -= jk[k,k,a,i]
-####                for k in particles_a:
-####                    fai += eri[k,k,a,i]
-####                for k in holes_a:
-####                    fai -= eri[k,k,a,i]
-####                if abs(fai) > tol:
-####                    newb = toggle_bit(toggle_bit(strb.copy(), a), i)
-####                    str_add.append(numpy.hstack((stra,newb)))
-####
-####        for ih in jk_sorted:
-####            if abs(jkf[ih]) < tol:
-####                break
-####            ij, lp = ih//norb, ih%norb
-####            ij, kp = ij//norb, ij%norb
-####            ip, jp = ij//norb, ij%norb
-##### alpha,alpha->alpha,alpha
-####            if jp in occsa and ip in virsa and lp in occsa and kp in virsa:
-####                newa = toggle_bit(toggle_bit(toggle_bit(toggle_bit(stra.copy(), jp), ip), lp), kp)
-####                str_add.append(numpy.hstack((newa,strb)))
-##### beta ,beta ->beta ,beta
-####            if jp in occsb and ip in virsb and lp in occsb and kp in virsb:
-####                newb = toggle_bit(toggle_bit(toggle_bit(toggle_bit(strb.copy(), jp), ip), lp), kp)
-####                str_add.append(numpy.hstack((stra,newb)))
-####
-####        for ih in eri_sorted:
-####            if abs(eri[ih]) < tol:
-####                break
-####            ij, lp = ih//norb, ih%norb
-####            ij, kp = ij//norb, ij%norb
-####            ip, jp = ij//norb, ij%norb
-##### alpha,beta ->alpha,beta
-####            if jp in occsa and ip in virsa and lp in occsb and kp in virsb:
-####                newa = toggle_bit(toggle_bit(stra.copy(), jp), ip)
-####                newb = toggle_bit(toggle_bit(strb.copy(), lp), kp)
-####                str_add.append(numpy.hstack((newa,newb)))
-####
-####    print len(str_add)
-####    if len(str_add) > 0:
-####        str_add = numpy.asarray(str_add)
-####        strsa = str_add.reshape(-1,2,nset//2)[:,0]
-####        strsb = str_add.reshape(-1,2,nset//2)[:,1]
-####        ta = [excitation_level(s, neleca) for s in strsa]
-####        tb = [excitation_level(s, nelecb) for s in strsb]
-####        ts = numpy.vstack((ta, tb)).T.copy('C')
-####        idx = argunique_with_t(str_add, ts)
-####        return str_add[idx], ts[idx]
-####    else:
-####        return (numpy.zeros([0,2,nset//2], dtype=civec._strs.dtype),
-####                numpy.zeros([0,2], dtype=civec._ts.dtype))
-
-
-def select_strs_ctypes(myci, civec, h1, eri, norb, nelec):
+def select_strs_ctypes(myci, civec, h1, eri, jk, eri_sorted, jk_sorted, norb, nelec):
     strs = civec._strs
     ndet = strs.shape[0]
     ndet, nset = strs.shape
     nset = nset // 2
     neleca, nelecb = nelec
 
-    eri = eri.ravel()
-    eri_sorted = abs(eri).argsort()[::-1]
-    jk = eri.reshape([norb]*4)
-    jk = jk - jk.transpose(2,1,0,3)
-    jkf = jk.ravel()
-    jk_sorted = abs(jkf).argsort()[::-1]
+#    eri = eri.ravel()
+#    eri_sorted = abs(eri).argsort()[::-1]
+#    jk = eri.reshape([norb]*4)
+#    jk = jk - jk.transpose(2,1,0,3)
+#    jkf = jk.ravel()
+#    jk_sorted = abs(jkf).argsort()[::-1]
    
     str_add = numpy.empty((4*ndet*neleca*nelecb*(norb-neleca)*(norb-nelecb), strs.shape[1]), dtype=numpy.uint64)
     n_str_add = numpy.array([str_add.shape[0]])
 
     h1 = numpy.asarray(h1, order='C')  
     eri = numpy.asarray(eri, order='C')
-    jkf = numpy.asarray(jkf, order='C')
+    jk = numpy.asarray(jk, order='C')
     civec = numpy.asarray(civec, order='C')
     strs = numpy.asarray(strs, order='C')
     str_add = numpy.asarray(str_add, order='C')
@@ -495,7 +394,7 @@ def select_strs_ctypes(myci, civec, h1, eri, norb, nelec):
 
     libhci.select_strs(h1.ctypes.data_as(ctypes.c_void_p), 
                        eri.ctypes.data_as(ctypes.c_void_p), 
-                       jkf.ctypes.data_as(ctypes.c_void_p), 
+                       jk.ctypes.data_as(ctypes.c_void_p), 
                        eri_sorted.ctypes.data_as(ctypes.c_void_p), 
                        jk_sorted.ctypes.data_as(ctypes.c_void_p), 
                        ctypes.c_int(norb), 
@@ -524,13 +423,13 @@ def select_strs_ctypes(myci, civec, h1, eri, norb, nelec):
         return (numpy.zeros([0,2,nset], dtype=civec._strs.dtype),
                 numpy.zeros([0,2], dtype=civec._ts.dtype))
 
-def enlarge_space(myci, civec, h1, eri, norb, nelec):
+def enlarge_space(myci, civec, h1, eri, jk, eri_sorted, jk_sorted, norb, nelec):
     cidx = abs(civec) > myci.ci_coeff_cutoff
     strs = civec._strs[cidx]
     ts = civec._ts[cidx]
     ci_coeff = as_SCIvector(civec[cidx], strs, ts)
     #str_add, t_add = select_strs(myci, ci_coeff, h1, eri, norb, nelec)
-    str_add, t_add = select_strs_ctypes(myci, ci_coeff, h1, eri, norb, nelec)
+    str_add, t_add = select_strs_ctypes(myci, ci_coeff, h1, eri, jk, eri_sorted, jk_sorted, norb, nelec)
 
     def order(x, y):
         for i in range(y.size):
@@ -648,7 +547,15 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
                            orblst2str(range(nelec[1]), norb)]).reshape(1,-1)
     ci0 = as_SCIvector(numpy.ones(1), hf_str, numpy.array([[0,0]]))
 
-    ci0 = myci.enlarge_space(ci0, h1e, eri, norb, nelec)
+    # Avoid resorting the integrals by storing them in memory
+    eri = eri.ravel()
+    eri_sorted = abs(eri).argsort()[::-1]
+    jk = eri.reshape([norb]*4)
+    jk = jk - jk.transpose(2,1,0,3)
+    jk = jk.ravel()
+    jk_sorted = abs(jk).argsort()[::-1]
+
+    ci0 = myci.enlarge_space(ci0, h1e, eri, jk, eri_sorted, jk_sorted, norb, nelec)
 
     def hop(c):
         #hc = myci.contract_2e((h1e, eri), as_SCIvector(c, ci_strs, ci_ts), norb, nelec, hdiag)
@@ -683,7 +590,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
 
         last_ci0_size = float(len(ci_strs))
         t_start = time.time()
-        ci0 = myci.enlarge_space(ci0, h1e, eri, norb, nelec)
+        ci0 = myci.enlarge_space(ci0, h1e, eri, jk, eri_sorted, jk_sorted, norb, nelec)
         t_current = time.time() - t_start
         print "Timing for enlarge_space:", t_current
         if ((.99 < len(ci0._strs)/last_ci0_size < 1.01)):
@@ -785,6 +692,17 @@ class SelectedCI(direct_spin1.FCISolver):
 
     def make_hdiag(self, h1e, eri, strs, norb, nelec):
         return make_hdiag(h1e, eri, strs, norb, nelec)
+ 
+    def to_fci(self, civec, norb, nelec):
+
+        if hasattr(civec, '_strs'):
+            self._strs = civec._strs
+            self._ts = civec._ts
+        else:
+            assert(civec.size == len(self._strs))
+            civec = as_SCIvector(civec, self._strs, self._ts)
+
+        return to_fci(civec, norb, nelec)
 
     enlarge_space = enlarge_space
     kernel = kernel_float_space
