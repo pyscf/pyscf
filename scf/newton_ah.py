@@ -69,8 +69,12 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
         if hyb is None:
             v1 = mf.get_veff(mol, dm1)
         else:
+# *.7 this magic number can stablize DFT convergence.  Without scaling down
+# the XC hessian, large oscillation is observed in Newton iterations.  It may
+# be due to the numerical integration error.  Scaling down XC hessian can
+# reduce to some extent the integration error.
             v1 = mf._numint.nr_rks_fxc(mol, mf.grids, mf.xc, dm0, dm1,
-                                       0, 1, rho0, vxc, fxc)
+                                       0, 1, rho0, vxc, fxc) * .7
             if abs(hyb) < 1e-10:
                 v1 += mf.get_j(mol, dm1)
             else:
@@ -170,8 +174,12 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
         if hyb is None:
             v1 = mf.get_veff(mol, dm1)
         else:
+# *.7 this magic number can stablize DFT convergence.  Without scaling down
+# the XC hessian, large oscillation is observed in Newton iterations.  It may
+# be due to the numerical integration error.  Scaling down XC hessian can
+# reduce to some extent the integration error.
             v1 = mf._numint.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dm1,
-                                       0, 1, rho0, vxc, fxc)
+                                       0, 1, rho0, vxc, fxc) * .7
             if abs(hyb) < 1e-10:
                 vj = mf.get_j(mol, dm1)
                 v1 += vj[0] + vj[1]
@@ -513,7 +521,6 @@ def newton_SCF_class(mf):
 #               ah_start_tol = 1e-7
 #               max_stepsize = 1.5
 #               ah_grad_trust_region = 1e6
-            self.ah_decay_rate = .8
             self.kf_interval = 5
             self.kf_trust_region = 5
             self_keys = set(self.__dict__.keys())
@@ -547,7 +554,6 @@ def newton_SCF_class(mf):
             log.info('ah_grad_trust_region = %g', self.ah_grad_trust_region)
             log.info('kf_interval = %d', self.kf_interval)
             log.info('kf_trust_region = %d', self.kf_trust_region)
-            log.info('augmented hessian decay rate = %g', self.ah_decay_rate)
             log.info('max_memory %d MB (current use %d MB)',
                      self.max_memory, lib.current_memory()[0])
 

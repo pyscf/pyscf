@@ -48,20 +48,20 @@ def density_fit(mf, auxbasis=None, gs=None, with_df=None):
     return mf
 
 
-def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
-    if mydf._cderi is None:
-        mydf.build()
-    vj_kpts = aft_jk.get_j_kpts(mydf, dm_kpts, hermi, kpts, kpt_band)
-    vj_kpts += df_jk.get_j_kpts(mydf, dm_kpts, hermi, kpts, kpt_band)
+def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
+    if mydf._cderi is None or not mydf.has_kpts(kpts_band):
+        mydf.build(kpts_band=kpts_band)
+    vj_kpts = aft_jk.get_j_kpts(mydf, dm_kpts, hermi, kpts, kpts_band)
+    vj_kpts += df_jk.get_j_kpts(mydf, dm_kpts, hermi, kpts, kpts_band)
     return vj_kpts
 
 
-def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
+def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                exxdiv=None):
-    if mydf._cderi is None:
-        mydf.build()
-    vk_kpts = aft_jk.get_k_kpts(mydf, dm_kpts, hermi, kpts, kpt_band, exxdiv)
-    vk_kpts += df_jk.get_k_kpts(mydf, dm_kpts, hermi, kpts, kpt_band, None)
+    if mydf._cderi is None or not mydf.has_kpts(kpts_band):
+        mydf.build(kpts_band=kpts_band)
+    vk_kpts = aft_jk.get_k_kpts(mydf, dm_kpts, hermi, kpts, kpts_band, exxdiv)
+    vk_kpts += df_jk.get_k_kpts(mydf, dm_kpts, hermi, kpts, kpts_band, None)
     return vk_kpts
 
 
@@ -83,8 +83,8 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
             vj = get_j_kpts(mydf, [dm], hermi, kpt, kpt_band)
         return vj, vk
 
-    if mydf._cderi is None:
-        mydf.build()
+    if mydf._cderi is None or not mydf.has_kpts(kpt_band):
+        mydf.build(kpts_band=kpt_band)
     vj1, vk1 = df_jk.get_jk(mydf, dm, hermi, kpt, kpt_band, with_j, with_k, None)
     vj, vk = aft_jk.get_jk(mydf, dm, hermi, kpt, kpt_band, with_j, with_k, exxdiv)
     if with_j: vj += vj1

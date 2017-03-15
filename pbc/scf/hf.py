@@ -83,7 +83,7 @@ def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
             The "inner" dummy k-point at which the DM was evaluated (or
             sampled).
         kpt_band : (3,) ndarray
-            The "outer" primary k-point at which J and K are evaluated.
+            An arbitrary "band" k-point at which J is evaluated.
 
     Returns:
         The function returns one J matrix, corresponding to the input
@@ -113,7 +113,7 @@ def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
             The "inner" dummy k-point at which the DM was evaluated (or
             sampled).
         kpt_band : (3,) ndarray
-            The "outer" primary k-point at which J and K are evaluated.
+            An arbitrary "band" k-point at which J and K are evaluated.
 
     Returns:
         The function returns one J and one K matrix, corresponding to the input
@@ -302,7 +302,7 @@ class RHF(hf.RHF):
 
         cpu0 = (time.clock(), time.time())
 
-        if (kpt_band is None and
+        if (kpt_band is None and  # 4 indices of ._eri should have same kpt
             (self.exxdiv == 'ewald' or self.exxdiv is None) and
             (self._eri is not None or cell.incore_anyway or self._is_mem_enough())):
             if self._eri is None:

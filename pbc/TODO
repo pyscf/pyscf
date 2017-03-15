@@ -30,9 +30,9 @@ Ease of calc:
 - ASE DFT calculator interface
 
 SCF convergence:
-- Near linear dependencies in ovlp should be projected out
+X Near linear dependencies in ovlp should be projected out
   (canonical orthogonalization) in HF routine.                 [Q] 
-- Finite temperature smearing
+X Finite temperature smearing
 
 Other Functionality:
 - q->0 term for (ia|jb) integral, by finite difference q calc [J]
@@ -45,7 +45,7 @@ X Band structure for K pt calc [T]
     - compensating dipole (Gaussian)
   X Molecular XC grids  [Done]
 - UHF code and UHF initial guess (specify mag. moment for AFM)
-- 1D and 2D Coulomb and Ewald
+X 1D and 2D Coulomb and Ewald
 X Exchange part of Fock matrix with k-points [T]
   X Ewald probe-charge
   X Spherical and Wigner-Seitz truncation
@@ -53,12 +53,14 @@ X Exchange part of Fock matrix with k-points [T]
 X Exact HF exchange [T]
 - Gamma pt MP2
   - check q->0, compare against VASP / CP2K 
-- Gamma pt CCSD
+X Gamma pt CCSD
 - IP/EA/EE-EOM-CCSD 
-  - Gamma pt
+  X Gamma pt
   - General spin-orb -> spin-orb -> restricted
-  - Kpt
-- Ewald cutoff esp. for non-cubic cells
+  X Kpt
+X Ewald cutoff esp. for non-cubic cells
+
+- addon routines to compute finite size corrections to the energies
 
 Efficiency:
 - DFT KNumInt uses inefficient nr_vxc
@@ -97,4 +99,3 @@ x Streamline cell construction
     fft/ifft
     get_coulG
 
-- Store coords/aoR?

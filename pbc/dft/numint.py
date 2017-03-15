@@ -332,7 +332,7 @@ def eval_mat(cell, ao, weight, rho, vxc,
 
 
 def nr_rks(ni, cell, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
-           kpt_or_kpts=None, kpt_band=None, max_memory=2000, verbose=None):
+           kpts=None, kpts_band=None, max_memory=2000, verbose=None):
     '''Calculate RKS XC functional and potential matrix for given meshgrids and density matrix
 
     Note: This is a replica of pyscf.dft.numint.nr_rks_vxc with kpts added.
@@ -363,10 +363,10 @@ def nr_rks(ni, cell, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
             The maximum size of cache to use (in MB).
         verbose : int or object of :class:`Logger`
             No effects.
-        kpt_or_kpts : (3,) ndarray or (nkpts,3) ndarray
+        kpts : (3,) ndarray or (nkpts,3) ndarray
             Single or multiple k-points sampled for the DM.  Default is gamma point.
-        kpt_band : (3,) ndarray
-            An arbitrary "band" k-point at which to evaluate the XC matrix.
+        kpts_band : (3,) ndarray or (*,3) ndarray
+            A list of arbitrary "band" k-points at which to evaluate the XC matrix.
 
     Returns:
         nelec, excsum, vmat.
@@ -374,8 +374,8 @@ def nr_rks(ni, cell, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
         excsum is the XC functional value.  vmat is the XC potential matrix in
         2D array of shape (nao,nao) where nao is the number of AO functions.
     '''
-    if kpt_or_kpts is None:
-        kpt_or_kpts = numpy.zeros(3)
+    if kpts is None:
+        kpts = numpy.zeros((1,3))
     xctype = ni._xc_type(xc_code)
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dm)
 
@@ -385,8 +385,8 @@ def nr_rks(ni, cell, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
     if xctype == 'LDA':
         ao_deriv = 0
         for ao_k1, ao_k2, mask, weight, coords \
-                in ni.block_loop(cell, grids, nao, ao_deriv, kpt_or_kpts,
-                                 kpt_band, max_memory):
+                in ni.block_loop(cell, grids, nao, ao_deriv, kpts, kpts_band,
+                                 max_memory):
             for i in range(nset):
                 rho = make_rho(i, ao_k2, mask, xctype)
                 exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1)[:2]
@@ -399,8 +399,8 @@ def nr_rks(ni, cell, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
     elif xctype == 'GGA':
         ao_deriv = 1
         for ao_k1, ao_k2, mask, weight, coords \
-                in ni.block_loop(cell, grids, nao, ao_deriv, kpt_or_kpts,
-                                 kpt_band, max_memory):
+                in ni.block_loop(cell, grids, nao, ao_deriv, kpts, kpts_band,
+                                 max_memory):
             for i in range(nset):
                 rho = make_rho(i, ao_k2, mask, xctype)
                 exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1)[:2]
@@ -413,8 +413,8 @@ def nr_rks(ni, cell, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
         assert(all(x not in xc_code.upper() for x in ('CC06', 'CS', 'BR89', 'MK00')))
         ao_deriv = 2
         for ao_k1, ao_k2, mask, weight, coords \
-                in ni.block_loop(cell, grids, nao, ao_deriv, kpt_or_kpts,
-                                 kpt_band, max_memory):
+                in ni.block_loop(cell, grids, nao, ao_deriv, kpts, kpts_band,
+                                 max_memory):
             for i in range(nset):
                 rho = make_rho(i, ao_k2, mask, xctype)
                 exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1)[:2]
@@ -424,7 +424,7 @@ def nr_rks(ni, cell, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
                 vmat[i] += ni.eval_mat(cell, ao_k1, weight, rho, vxc,
                                        mask, xctype, 0, verbose)
 
-    if kpt_band is not None:
+    if kpts_band is not None:
         vmat = [v.reshape(nao,nao) for v in vmat]
 
     if nset == 1:
@@ -434,7 +434,7 @@ def nr_rks(ni, cell, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
     return nelec, excsum, vmat
 
 def nr_uks(ni, cell, grids, xc_code, dm, spin=1, relativity=0, hermi=1,
-           kpt_or_kpts=None, kpt_band=None, max_memory=2000, verbose=None):
+           kpts=None, kpts_band=None, max_memory=2000, verbose=None):
     '''Calculate UKS XC functional and potential matrix for given meshgrids and density matrix
 
     Note: This is a replica of pyscf.dft.numint.nr_rks_vxc with kpts added.
@@ -465,10 +465,10 @@ def nr_uks(ni, cell, grids, xc_code, dm, spin=1, relativity=0, hermi=1,
             The maximum size of cache to use (in MB).
         verbose : int or object of :class:`Logger`
             No effects.
-        kpt_or_kpts : (3,) ndarray or (nkpts,3) ndarray
+        kpts : (3,) ndarray or (nkpts,3) ndarray
             Single or multiple k-points sampled for the DM.  Default is gamma point.
-        kpt_band : (3,) ndarray
-            An arbitrary "band" k-point at which to evaluate the XC matrix.
+            kpts_band : (3,) ndarray or (*,3) ndarray
+            A list of arbitrary "band" k-points at which to evaluate the XC matrix.
 
     Returns:
         nelec, excsum, vmat.
@@ -476,8 +476,8 @@ def nr_uks(ni, cell, grids, xc_code, dm, spin=1, relativity=0, hermi=1,
         excsum is the XC functional value.  vmat is the XC potential matrix in
         2D array of shape (nao,nao) where nao is the number of AO functions.
     '''
-    if kpt_or_kpts is None:
-        kpt_or_kpts = numpy.zeros(3)
+    if kpts is None:
+        kpts = numpy.zeros((1,3))
     xctype = ni._xc_type(xc_code)
     dm = numpy.asarray(dm)
     nao = dm.shape[-1]
@@ -491,8 +491,8 @@ def nr_uks(ni, cell, grids, xc_code, dm, spin=1, relativity=0, hermi=1,
     if xctype == 'LDA':
         ao_deriv = 0
         for ao_k1, ao_k2, mask, weight, coords \
-                in ni.block_loop(cell, grids, nao, ao_deriv, kpt_or_kpts,
-                                 kpt_band, max_memory):
+                in ni.block_loop(cell, grids, nao, ao_deriv, kpts, kpts_band,
+                                 max_memory):
             for i in range(nset):
                 rho_a = make_rhoa(i, ao_k2, mask, xctype)
                 rho_b = make_rhob(i, ao_k2, mask, xctype)
@@ -513,8 +513,8 @@ def nr_uks(ni, cell, grids, xc_code, dm, spin=1, relativity=0, hermi=1,
     elif xctype == 'GGA':
         ao_deriv = 1
         for ao_k1, ao_k2, mask, weight, coords \
-                in ni.block_loop(cell, grids, nao, ao_deriv, kpt_or_kpts,
-                                 kpt_band, max_memory):
+                in ni.block_loop(cell, grids, nao, ao_deriv, kpts,
+                                 kpts_band, max_memory):
             for i in range(nset):
                 rho_a = make_rhoa(i, ao_k2, mask, xctype)
                 rho_b = make_rhob(i, ao_k2, mask, xctype)
@@ -538,8 +538,8 @@ def nr_uks(ni, cell, grids, xc_code, dm, spin=1, relativity=0, hermi=1,
         assert(all(x not in xc_code.upper() for x in ('CC06', 'CS', 'BR89', 'MK00')))
         ao_deriv = 2
         for ao_k1, ao_k2, mask, weight, coords \
-                in ni.block_loop(cell, grids, nao, ao_deriv, kpt_or_kpts,
-                                 kpt_band, max_memory):
+                in ni.block_loop(cell, grids, nao, ao_deriv, kpts, kpts_band,
+                                 max_memory):
             for i in range(nset):
                 rho_a = make_rhoa(i, ao_k2, mask, xctype)
                 rho_b = make_rhob(i, ao_k2, mask, xctype)
@@ -561,7 +561,7 @@ def nr_uks(ni, cell, grids, xc_code, dm, spin=1, relativity=0, hermi=1,
                                         mask, xctype, 1, verbose)
                 v = None
 
-    if kpt_band is not None:
+    if kpts_band is not None:
         vmata = [v.reshape(nao,nao) for v in vmata]
         vmatb = [v.reshape(nao,nao) for v in vmatb]
 
@@ -667,8 +667,8 @@ class _NumInt(dft.numint._NumInt):
             coords = grids.coords[ip0:ip1]
             weight = grids.weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
-            ao_k2 = self.eval_ao(cell, coords, kpt, deriv=deriv, non0tab=non0)
-            if kpt_band is None or abs(kpt1-kpt2).sum() < 1e-9:
+            ao_k2 = self.eval_ao(cell, coords, kpt2, deriv=deriv, non0tab=non0)
+            if abs(kpt1-kpt2).sum() < 1e-9:
                 ao_k1 = ao_k2
             else:
                 ao_k1 = self.eval_ao(cell, coords, kpt1, deriv=deriv)
@@ -724,19 +724,19 @@ class _KNumInt(dft.numint._NumInt):
         raise NotImplementedError
 
     def nr_vxc(self, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
-               kpts=None, kpt_band=None, max_memory=2000, verbose=None):
+               kpts=None, kpts_band=None, max_memory=2000, verbose=None):
         '''Evaluate RKS/UKS XC functional and potential matrix.
         See :func:`nr_rks` and :func:`nr_uks` for more details.
         '''
         if spin == 0:
             return self.nr_rks(cell, grids, xc_code, dms, hermi,
-                               kpts, kpt_band, max_memory, verbose)
+                               kpts, kpts_band, max_memory, verbose)
         else:
             return self.nr_uks(cell, grids, xc_code, dms, hermi,
-                               kpts, kpt_band, max_memory, verbose)
+                               kpts, kpts_band, max_memory, verbose)
 
     @lib.with_doc(nr_rks.__doc__)
-    def nr_rks(self, cell, grids, xc_code, dms, hermi=1, kpts=None, kpt_band=None,
+    def nr_rks(self, cell, grids, xc_code, dms, hermi=1, kpts=None, kpts_band=None,
                max_memory=2000, verbose=None, **kwargs):
         if kpts is None:
             if 'kpt' in kwargs:
@@ -748,10 +748,10 @@ class _KNumInt(dft.numint._NumInt):
         kpts = kpts.reshape(-1,3)
 
         return nr_rks(self, cell, grids, xc_code, dms, 0, 0,
-                      hermi, kpts, kpt_band, max_memory, verbose)
+                      hermi, kpts, kpts_band, max_memory, verbose)
 
     @lib.with_doc(nr_uks.__doc__)
-    def nr_uks(self, cell, grids, xc_code, dms, hermi=1, kpts=None, kpt_band=None,
+    def nr_uks(self, cell, grids, xc_code, dms, hermi=1, kpts=None, kpts_band=None,
                max_memory=2000, verbose=None, **kwargs):
         if kpts is None:
             if 'kpt' in kwargs:
@@ -763,7 +763,7 @@ class _KNumInt(dft.numint._NumInt):
         kpts = kpts.reshape(-1,3)
 
         return nr_uks(self, cell, grids, xc_code, dms, 1, 0,
-                      hermi, kpts, kpt_band, max_memory, verbose)
+                      hermi, kpts, kpts_band, max_memory, verbose)
 
     def eval_mat(self, cell, ao_kpts, weight, rho, vxc,
                  non0tab=None, xctype='LDA', spin=0, verbose=None):
@@ -774,7 +774,7 @@ class _KNumInt(dft.numint._NumInt):
         return lib.asarray(mat)
 
     def block_loop(self, cell, grids, nao, deriv=0, kpts=numpy.zeros((1,3)),
-                   kpt_band=None, max_memory=2000, non0tab=None, blksize=None):
+                   kpts_band=None, max_memory=2000, non0tab=None, blksize=None):
         '''Define this macro to loop over grids by blocks.
         '''
         ngrids = grids.weights.size
@@ -788,13 +788,11 @@ class _KNumInt(dft.numint._NumInt):
             if self.non0tab is None:
                 self.non0tab = self.make_mask(cell, grids.coords)
             non0tab = self.non0tab
-        if kpt_band is None:
-            kpt1 = kpt2 = kpts
-        else:
-            kpt1 = kpt_band
-            kpt2 = kpts
-            where = numpy.argmin(lib.norm(kpts-kpt1,axis=1))
-            if abs(kpts[where]-kpt1).sum() > 1e-9:
+        if kpts_band is not None:
+            kpts_band = numpy.reshape(kpts_band, (-1,3))
+            where = numpy.hstack([member(k, kpts) for k in kpts_band])
+            if len(where) != len(kpts_band):
+                # not all kpt of kpts_band found in kpts
                 where = None
 
         for ip0 in range(0, ngrids, blksize):
@@ -802,14 +800,14 @@ class _KNumInt(dft.numint._NumInt):
             coords = grids.coords[ip0:ip1]
             weight = grids.weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
-            ao_k2 = self.eval_ao(cell, coords, kpt2, deriv=deriv, non0tab=non0)
-            if kpt_band is None:
+            ao_k2 = self.eval_ao(cell, coords, kpts, deriv=deriv, non0tab=non0)
+            if kpts_band is None:
                 ao_k1 = ao_k2
             else:
                 if where is None:
-                    ao_k1 = self.eval_ao(cell, coords, kpt1, deriv=deriv, non0tab=non0)
+                    ao_k1 = self.eval_ao(cell, coords, kpts_band, deriv=deriv, non0tab=non0)
                 else:
-                    ao_k1 = [ao_k2[where]]
+                    ao_k1 = ao_k2[where]
             yield ao_k1, ao_k2, non0, weight, coords
             ao_k1 = ao_k2 = None
 
