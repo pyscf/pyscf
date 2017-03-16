@@ -396,12 +396,15 @@ def _ewald_exxdiv_for_G0(cell, kpts, dms, vk, kpts_band=None):
                 vk[i] += madelung * reduce(numpy.dot, (s, dm, s))
     else:  # kpts.shape == (*,3)
         if kpts_band is None:
-            ks = range(len(kpts))
+            for k in range(len(kpts)):
+                for i,dm in enumerate(dms):
+                    vk[i,k] += madelung * reduce(numpy.dot, (s[k], dm[k], s[k]))
         else:
-            ks = numpy.hstack([member(kpt, kpts) for kpt in kpts_band.reshape(-1,3)])
-        for i,dm in enumerate(dms):
-            for k in ks:
-                vk[i,k] += madelung * reduce(numpy.dot, (s[k], dm[k], s[k]))
+            kpts_band = kpts_band.reshape(-1,3)
+            for k, kpt in enumerate(kpts):
+                for kp in member(kpt, kpts_band):
+                    for i,dm in enumerate(dms):
+                        vk[i,kp] += madelung * reduce(numpy.dot, (s[k], dm[k], s[k]))
     logger.debug2(cell, 'Total energy shift = -1/2 * Nelec*madelung/cell.vol = %.12g',
                   madelung*cell.nelectron * -.5)
 
