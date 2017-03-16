@@ -143,7 +143,7 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
                          k, kpt[0], kpt[1], kpt[2],
                          mo_energy_kpts[k,mo_occ_kpts[k]> 0],
                          mo_energy_kpts[k,mo_occ_kpts[k]==0])
-        np.set_printoptions()
+        np.set_printoptions(threshold=1000)
 
     return mo_occ_kpts
 
