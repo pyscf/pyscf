@@ -426,8 +426,8 @@ def nr_rks(ni, cell, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
                 vmat[i] += ni.eval_mat(cell, ao_k1, weight, rho, vxc,
                                        mask, xctype, 0, verbose)
 
-    if kpts_band is not None:
-        vmat = [v.reshape(nao,nao) for v in vmat]
+    #if kpts_band is not None:
+    #    vmat = [v.reshape(nao,nao) for v in vmat]
 
     if nset == 1:
         nelec = nelec[0]
