@@ -53,7 +53,7 @@ def get_hcore(mf, cell=None, kpts=None):
     return lib.asarray([pbchf.get_hcore(cell, k) for k in kpts])
 
 
-def get_j(mf, cell, dm_kpts, kpts, kpt_band=None):
+def get_j(mf, cell, dm_kpts, kpts, kpts_band=None):
     '''Get the Coulomb (J) AO matrix at sampled k-points.
 
     Args:
@@ -63,18 +63,18 @@ def get_j(mf, cell, dm_kpts, kpts, kpt_band=None):
             separately.
 
     Kwargs:
-        kpt_band : (3,) ndarray
-            An arbitrary "band" k-point at which to evalute the matrix.
+        kpts_band : (k,3) ndarray
+            A list of arbitrary "band" k-points at which to evalute the matrix.
 
     Returns:
         vj : (nkpts, nao, nao) ndarray
         or list of vj if the input dm_kpts is a list of DMs
     '''
     from pyscf.pbc import df
-    return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpt_band, with_k=False)[0]
+    return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpts_band, with_k=False)[0]
 
 
-def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
+def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None):
     '''Get the Coulomb (J) and exchange (K) AO matrices at sampled k-points.
 
     Args:
@@ -82,8 +82,8 @@ def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
             Density matrix at each k-point
 
     Kwargs:
-        kpt_band : (3,) ndarray
-            An arbitrary "band" k-point at which to evalute the matrix.
+        kpts_band : (3,) ndarray
+            A list of arbitrary "band" k-point at which to evalute the matrix.
 
     Returns:
         vj : (nkpts, nao, nao) ndarray
@@ -91,7 +91,7 @@ def get_jk(mf, cell, dm_kpts, kpts, kpt_band=None):
         or list of vj and vk if the input dm_kpts is a list of DMs
     '''
     from pyscf.pbc import df
-    return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpt_band, exxdiv=mf.exxdiv)
+    return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpts_band, exxdiv=mf.exxdiv)
 
 def get_fock(mf, h1e_kpts, s_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
@@ -343,35 +343,34 @@ class KRHF(hf.RHF):
     get_occ = get_occ
     energy_elec = energy_elec
 
-    def get_j(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpt_band=None):
+    def get_j(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None):
         if cell is None: cell = self.cell
         if kpts is None: kpts = self.kpts
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
-        vj = self.with_df.get_jk(dm_kpts, hermi, kpts, kpt_band,
-                                 with_k=False)[0]
+        vj = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band, with_k=False)[0]
         logger.timer(self, 'vj', *cpu0)
         return vj
 
-    def get_k(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpt_band=None):
-        return self.get_jk(cell, dm_kpts, hermi, kpts, kpt_band)[1]
+    def get_k(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None):
+        return self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)[1]
 
-    def get_jk(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpt_band=None):
+    def get_jk(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None):
         if cell is None: cell = self.cell
         if kpts is None: kpts = self.kpts
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
-        vj, vk = self.with_df.get_jk(dm_kpts, hermi, kpts, kpt_band,
+        vj, vk = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band,
                                      exxdiv=self.exxdiv)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
     def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
-                 kpts=None, kpt_band=None):
+                 kpts=None, kpts_band=None):
         '''Hartree-Fock potential matrix for the given density matrix.
         See :func:`scf.hf.get_veff` and :func:`scf.hf.RHF.get_veff`
         '''
-        vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpt_band)
+        vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
         return vj - vk * .5
 
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):
@@ -412,7 +411,7 @@ class KRHF(hf.RHF):
 
         return make_rdm1(mo_coeff_kpts, mo_occ_kpts)
 
-    def get_bands(self, kpt_band, cell=None, dm_kpts=None, kpts=None):
+    def get_bands(self, kpts_band, cell=None, dm_kpts=None, kpts=None):
         '''Get energy bands at a given (arbitrary) 'band' k-point.
 
         Returns:
@@ -425,10 +424,17 @@ class KRHF(hf.RHF):
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         if kpts is None: kpts = self.kpts
 
-        fock = self.get_hcore(cell, kpt_band)
-        fock = fock + self.get_veff(cell, dm_kpts, kpts=kpts, kpt_band=kpt_band)
-        s1e = self.get_ovlp(cell, kpt_band)
-        mo_energy, mo_coeff = hf.eig(fock, s1e)
+        kpts_band = np.asarray(kpts_band)
+        single_kpt_band = (kpts_band.ndim == 1)
+        kpts_band = kpts_band.reshape(-1,3)
+
+        fock = self.get_hcore(cell, kpts_band)
+        fock = fock + self.get_veff(cell, dm_kpts, kpts=kpts, kpts_band=kpts_band)
+        s1e = self.get_ovlp(cell, kpts_band)
+        mo_energy, mo_coeff = self.eig(fock, s1e)
+        if single_kpt_band:
+            mo_energy = mo_energy[0]
+            mo_coeff = mo_coeff[0]
         return mo_energy, mo_coeff
 
     def init_guess_by_chkfile(self, chk=None, project=True, kpts=None):

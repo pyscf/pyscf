@@ -12,11 +12,12 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import tools
-from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC, _format_dms, \
-        KPT_DIFF_TOL, is_zero, gamma_point, _ewald_exxdiv_for_G0
+from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
+from pyscf.pbc.df.df_jk import is_zero, gamma_point, _ewald_exxdiv_for_G0
+from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
 
 
-def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
+def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = (time.clock(), time.time())
@@ -50,10 +51,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
 
     t1 = log.timer_debug1('get_j pass 1 to compute J(G)', *t1)
 
-    if kpt_band is None:
-        kpts_band = kpts
-    else:
-        kpts_band = numpy.reshape(kpt_band, (-1,3))
+    kpts_band, single_kpt_band = _format_kpts_band(kpts_band, kpts)
     gamma_point = abs(kpts_band).sum() < 1e-9
     nband = len(kpts_band)
 
@@ -75,17 +73,12 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
         vj_kpts = vjR
     else:
         vj_kpts = vjR + vjI*1j
+    vj_kpts = vj_kpts.reshape(nset,nband,nao,nao)
     t1 = log.timer_debug1('get_j pass 2', *t1)
 
-    if kpt_band is not None and numpy.shape(kpt_band) == (3,):
-        if dm_kpts.ndim == 3:  # One set of dm_kpts for KRHF
-            return vj_kpts[0,0]
-        else:
-            return vj_kpts[:,0]
-    else:
-        return vj_kpts.reshape(dm_kpts.shape)
+    return _format_jks(vj_kpts, dm_kpts, kpts_band, kpts, single_kpt_band)
 
-def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
+def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                exxdiv=None):
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
@@ -95,11 +88,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
 
-    if kpt_band is None:
-        kpts_band = kpts
-        swap_2e = True
-    else:
-        kpts_band = numpy.reshape(kpt_band, (-1,3))
+    swap_2e = (kpts_band is None)
+    kpts_band, single_kpt_band = _format_kpts_band(kpts_band, kpts)
     nband = len(kpts_band)
     kk_table = kpts_band.reshape(-1,1,3) - kpts.reshape(1,-1,3)
     kk_todo = numpy.ones(kk_table.shape[:2], dtype=bool)
@@ -184,15 +174,9 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
     # G=0 was not included in the non-uniform grids
     if cell.dimension != 3 and exxdiv is not None:
         assert(exxdiv.lower() == 'ewald')
-        _ewald_exxdiv_for_G0(cell, kpts_band, dms, vk_kpts)
+        _ewald_exxdiv_for_G0(cell, kpts_band, dms, vk_kpts, kpts_band)
 
-    if kpt_band is not None and numpy.shape(kpt_band) == (3,):
-        if dm_kpts.ndim == 3:  # One set of dm_kpts for KRHF
-            return vk_kpts[0,0]
-        else:
-            return vk_kpts[:,0]
-    else:
-        return vk_kpts.reshape(dm_kpts.shape)
+    return _format_jks(vk_kpts, dm_kpts, kpts_band, kpts, single_kpt_band)
 
 
 ##################################################
@@ -209,9 +193,9 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     if kpt_band is not None and abs(kpt-kpt_band).sum() > 1e-9:
         kpt = numpy.reshape(kpt, (1,3))
         if with_k:
-            vk = get_k_kpts(mydf, [dm], hermi, kpt, kpt_band, exxdiv)
+            vk = get_k_kpts(mydf, dm, hermi, kpt, kpt_band, exxdiv)
         if with_j:
-            vj = get_j_kpts(mydf, [dm], hermi, kpt, kpt_band)
+            vj = get_j_kpts(mydf, dm, hermi, kpt, kpt_band)
         return vj, vk
 
     cell = mydf.cell
@@ -339,10 +323,8 @@ if __name__ == '__main__':
     df = aft.AFTDF(cell)
     df.gs = (15,)*3
     dm = pscf.RHF(cell).get_init_guess()
-    vj, vk = df.get_jk(cell, dm)
-    print(numpy.einsum('ij,ji->', df.get_nuc(cell), dm), 'ref=-10.384051732669329')
-    df.analytic_ft = True
-    #print(numpy.einsum('ij,ji->', vj, dm), 'ref=5.3766911667862516')
-    #print(numpy.einsum('ij,ji->', vk, dm), 'ref=8.2255177602309022')
-    print(numpy.einsum('ij,ji->', df.get_nuc(cell), dm), 'ref=-10.447018516011319')
+    vj, vk = df.get_jk(dm)
+    print(numpy.einsum('ij,ji->', df.get_nuc(), dm), 'ref=-10.577490961074622')
+    print(numpy.einsum('ij,ji->', vj, dm), 'ref=5.3766911667862516')
+    print(numpy.einsum('ij,ji->', vk, dm), 'ref=8.2255177602309022')
 

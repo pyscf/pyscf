@@ -17,7 +17,6 @@ from pyscf.pbc import tools
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.dft import numint
 from pyscf.pbc.df import ft_ao
-from pyscf.pbc.df import fft_jk
 from pyscf.pbc.df import fft_ao2mo
 
 
@@ -148,7 +147,7 @@ class FFTDF(lib.StreamObject):
         logger.info(self, 'len(kpts) = %d', len(self.kpts))
         logger.debug1(self, '    kpts = %s', self.kpts)
 
-    def aoR_loop(self, gs=None, kpts=None, kpt_band=None):
+    def aoR_loop(self, gs=None, kpts=None, kpts_band=None):
         cell = self.cell
         if kpts is None: kpts = self.kpts
         kpts = numpy.asarray(kpts)
@@ -159,44 +158,28 @@ class FFTDF(lib.StreamObject):
             self.gs = gs
         ngrids = numpy.prod(numpy.asarray(gs)*2+1)
 
-        if (self._numint.cell is None or id(cell) != id(self._numint.cell) or
-            self._numint._deriv != 0 or
-            self._numint._kpts.shape != kpts.shape or
-            abs(self._numint._kpts - kpts).sum() > 1e-9 or
-            self._numint._coords.shape[0] != ngrids or
-            (gs is not None and numpy.any(gs != self.gs))):
-
-            nkpts = len(kpts)
-            coords = cell.gen_uniform_grids(gs)
-            nao = cell.nao_nr()
-            blksize = int(self.max_memory*1e6/(nkpts*nao*16*numint.BLKSIZE))*numint.BLKSIZE
-            blksize = min(max(blksize, numint.BLKSIZE), ngrids)
-            try:
-                self._numint.cache_ao(cell, kpts, 0, coords, nao, blksize)
-            except IOError as e:
-                sys.stderr.write('HDF5 file cannot be opened twice in different mode.\n')
-                raise e
-
-        with h5py.File(self._numint._ao.name, 'r') as f:
-            if kpt_band is None:
-                for k in range(len(kpts)):
-                    aoR = f['ao/%d'%k].value
-                    yield k, aoR
+        ni = self._numint
+        coords = cell.gen_uniform_grids(gs)
+        if ni.non0tab is None:
+            ni.non0tab = ni.make_mask(cell, coords)
+        if kpts_band is None:
+            aoR = ni.eval_ao(cell, coords, kpts, non0tab=ni.non0tab)
+            for k in range(len(kpts)):
+                yield k, aoR[k]
+        else:
+            aoR = ni.eval_ao(cell, coords, kpts_band, non0tab=ni.non0tab)
+            if kpts_band.ndim == 1:
+                yield 0, aoR
             else:
-                kpt_band = numpy.reshape(kpt_band, 3)
-                where = numpy.argmin(lib.norm(kpts-kpt_band,axis=1))
-                if abs(kpts[where]-kpt_band).sum() > 1e-9:
-                    where = None
-                    coords = cell.gen_uniform_grids(gs)
-                    yield 0, numint.eval_ao(cell, coords, kpt_band, deriv=0)
-                else:
-                    yield where, f['ao/%d'%where].value
+                for k in range(len(kpts_band)):
+                    yield k, aoR[k]
 
     get_pp = get_pp
     get_nuc = get_nuc
 
-    def get_jk(self, dm, hermi=1, kpts=None, kpt_band=None,
+    def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
                with_j=True, with_k=True, exxdiv='ewald'):
+        from pyscf.pbc.df import fft_jk
         if kpts is None:
             if numpy.all(self.kpts == 0):
                 # Gamma-point calculation by default
@@ -208,15 +191,13 @@ class FFTDF(lib.StreamObject):
 
         vj = vk = None
         if kpts.shape == (3,):
-            if with_k:
-                vk = fft_jk.get_k(self, dm, hermi, kpts, kpt_band, exxdiv)
-            if with_j:
-                vj = fft_jk.get_j(self, dm, hermi, kpts, kpt_band)
+            vj, vk = fft_jk.get_jk(self, dm, hermi, kpts, kpts_band,
+                                   with_j, with_k, exxdiv)
         else:
             if with_k:
-                vk = fft_jk.get_k_kpts(self, dm, hermi, kpts, kpt_band, exxdiv)
+                vk = fft_jk.get_k_kpts(self, dm, hermi, kpts, kpts_band, exxdiv)
             if with_j:
-                vj = fft_jk.get_j_kpts(self, dm, hermi, kpts, kpt_band)
+                vj = fft_jk.get_j_kpts(self, dm, hermi, kpts, kpts_band)
         return vj, vk
 
     get_eri = get_ao_eri = fft_ao2mo.get_eri

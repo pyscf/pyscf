@@ -17,9 +17,6 @@ from pyscf.lib import logger
 from pyscf.pbc import tools
 
 KPT_DIFF_TOL = 1e-6
-def is_zero(kpt):
-    return abs(numpy.asarray(kpt)).sum() < KPT_DIFF_TOL
-gamma_point = is_zero
 
 def density_fit(mf, auxbasis=None, gs=None, with_df=None):
     '''Generte density-fitting SCF object
@@ -52,12 +49,12 @@ def density_fit(mf, auxbasis=None, gs=None, with_df=None):
     return mf
 
 
-def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
+def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = (time.clock(), time.time())
-    if mydf._cderi is None:
-        mydf.build()
+    if mydf._cderi is None or not mydf.has_kpts(kpts_band):
+        mydf.build(kpts_band=kpts_band)
         t1 = log.timer_debug1('Init get_j_kpts', *t1)
 
     dm_kpts = lib.asarray(dm_kpts, order='C')
@@ -66,10 +63,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
     naux = mydf.auxcell.nao_nr()
     nao_pair = nao * (nao+1) // 2
 
-    if kpt_band is None:
-        kpts_band = kpts
-    else:
-        kpts_band = numpy.reshape(kpt_band, (-1,3))
+    kpts_band, single_kpt_band = _format_kpts_band(kpts_band, kpts)
     nband = len(kpts_band)
     j_real = gamma_point(kpts_band)
 
@@ -78,7 +72,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
     rhoR = numpy.zeros((nset,naux))
     rhoI = numpy.zeros((nset,naux))
     max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]))
-    for k, kpt in enumerate(kpts_band):
+    for k, kpt in enumerate(kpts):
         kptii = numpy.asarray((kpt,kpt))
         p1 = 0
         for LpqR, LpqI in mydf.sr_loop(kptii, max_memory, False):
@@ -121,23 +115,18 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None):
     else:
         vj_kpts = vjR + vjI*1j
     vj_kpts = lib.unpack_tril(vj_kpts.reshape(-1,nao_pair))
+    vj_kpts = vj_kpts.reshape(nset,nband,nao,nao)
 
-    if kpt_band is not None and numpy.shape(kpt_band) == (3,):
-        if nset == 1:  # One set of dm_kpts for KRHF
-            return vj_kpts[0]
-        else:
-            return vj_kpts
-    else:
-        return vj_kpts.reshape(dm_kpts.shape)
+    return _format_jks(vj_kpts, dm_kpts, kpts_band, kpts, single_kpt_band)
 
 
-def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
+def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                exxdiv=None):
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = (time.clock(), time.time())
-    if mydf._cderi is None:
-        mydf.build()
+    if mydf._cderi is None or not mydf.has_kpts(kpts_band):
+        mydf.build(kpts_band=kpts_band)
         t1 = log.timer_debug1('Init get_k_kpts', *t1)
 
     dm_kpts = lib.asarray(dm_kpts, order='C')
@@ -145,11 +134,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
     nset, nkpts, nao = dms.shape[:3]
     nao_pair = nao * (nao+1) // 2
 
-    if kpt_band is None:
-        kpts_band = kpts
-    else:
-        kpts_band = numpy.reshape(kpt_band, (-1,3))
-
+    kpts_band, single_kpt_band = _format_kpts_band(kpts_band, kpts)
     nband = len(kpts_band)
     vkR = numpy.zeros((nset,nband,nao,nao))
     vkI = numpy.zeros((nset,nband,nao,nao))
@@ -161,8 +146,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
     bufI = numpy.empty((mydf.blockdim*nao**2))
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     def make_kpt(ki, kj, swap_2e):
-        kpti = kpts_band[ki]
-        kptj = kpts[kj]
+        kpti = kpts[ki]
+        kptj = kpts_band[kj]
 
         for LpqR, LpqI in mydf.sr_loop((kpti,kptj), max_memory, False):
             nrow = LpqR.shape[0]
@@ -190,14 +175,14 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
                            pLqR.reshape(nao,-1).T, pLqI.reshape(nao,-1).T,
                            1, vkR[i,ki], vkI[i,ki], 1)
 
-    if kpt_band is None:  # normal k-points HF/DFT
+    if kpts_band is None:  # normal k-points HF/DFT
         for ki in range(nkpts):
             for kj in range(ki):
                 make_kpt(ki, kj, True)
             make_kpt(ki, ki, False)
     else:
-        for ki in range(nband):
-            for kj in range(nkpts):
+        for ki in range(nkpts):
+            for kj in range(nband):
                 make_kpt(ki, kj, False)
 
     if (gamma_point(kpts) and gamma_point(kpts_band) and
@@ -209,15 +194,9 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpt_band=None,
 
     if exxdiv is not None:
         assert(exxdiv.lower() == 'ewald')
-        _ewald_exxdiv_for_G0(cell, kpts_band, dms, vk_kpts)
+        _ewald_exxdiv_for_G0(cell, kpts, dms, vk_kpts, kpts_band)
 
-    if kpt_band is not None and numpy.shape(kpt_band) == (3,):
-        if nset == 1:  # One set of dm_kpts for KRHF
-            return vk_kpts[0,0]
-        else:
-            return vk_kpts[:,0]
-    else:
-        return vk_kpts.reshape(dm_kpts.shape)
+    return _format_jks(vk_kpts, dm_kpts, kpts_band, kpts, single_kpt_band)
 
 
 ##################################################
@@ -233,16 +212,16 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     if kpt_band is not None and abs(kpt-kpt_band).sum() > 1e-9:
         kpt = numpy.reshape(kpt, (1,3))
         if with_k:
-            vk = get_k_kpts(mydf, [dm], hermi, kpt, kpt_band, exxdiv)
+            vk = get_k_kpts(mydf, dm, hermi, kpt, kpt_band, exxdiv)
         if with_j:
-            vj = get_j_kpts(mydf, [dm], hermi, kpt, kpt_band)
+            vj = get_j_kpts(mydf, dm, hermi, kpt, kpt_band)
         return vj, vk
 
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = (time.clock(), time.time())
-    if mydf._cderi is None:
-        mydf.build()
+    if mydf._cderi is None or not mydf.has_kpts(kpt_band):
+        mydf.build(kpts_band=kpt_band)
         t1 = log.timer_debug1('Init get_jk', *t1)
 
     dm = numpy.asarray(dm, order='C')
@@ -346,11 +325,40 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     return vj, vk
 
 
+def is_zero(kpt):
+    return abs(numpy.asarray(kpt)).sum() < KPT_DIFF_TOL
+gamma_point = is_zero
+
+def member(kpt, kpts):
+    kpts = numpy.reshape(kpts, (len(kpts),kpt.size))
+    dk = numpy.einsum('ki->k', abs(kpts-kpt.ravel()))
+    return numpy.where(dk < KPT_DIFF_TOL)[0]
+
 def _format_dms(dm_kpts, kpts):
     nkpts = len(kpts)
     nao = dm_kpts.shape[-1]
     dms = dm_kpts.reshape(-1,nkpts,nao,nao)
     return dms
+
+def _format_kpts_band(kpts_band, kpts):
+    if kpts_band is None:
+        single_kpt_band = False
+        kpts_band = kpts
+    else:
+        single_kpt_band = (kpts_band.ndim == 1)
+        kpts_band = numpy.reshape(kpts_band, (-1,3))
+    return kpts_band, single_kpt_band
+
+def _format_jks(v_kpts, dm_kpts, kpts_band, kpts, single_kpt_band):
+    if kpts_band is kpts:
+        return v_kpts.reshape(dm_kpts.shape)
+    else:
+        if single_kpt_band:
+            v_kpts = v_kpts[:,0]
+        if dm_kpts.ndim <= 3:  # nset=1
+            return v_kpts[0]
+        else:
+            return v_kpts
 
 def zdotNN(aR, aI, bR, bI, alpha=1, cR=None, cI=None, beta=0):
     '''c = a*b'''
@@ -376,19 +384,24 @@ def zdotNC(aR, aI, bR, bI, alpha=1, cR=None, cI=None, beta=0):
     cI = lib.ddot(aI, bR, alpha, cI, 1   )
     return cR, cI
 
-def _ewald_exxdiv_for_G0(cell, kpts, dms, vk):
-    if kpts is None or numpy.shape(kpts) == (3,):
-        ovlp = cell.pbc_intor('cint1e_ovlp_sph', hermi=1)
-        madelung = tools.pbc.madelung(cell, numpy.zeros(3))
+def _ewald_exxdiv_for_G0(cell, kpts, dms, vk, kpts_band=None):
+    s = cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpts)
+    madelung = tools.pbc.madelung(cell, kpts)
+    if kpts is None:
         for i,dm in enumerate(dms):
-            vk[i] += madelung * reduce(numpy.dot, (ovlp, dm, ovlp))
-    else:
-        ovlp = cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpts)
-        weight = 1./dms.shape[1]
-        madelung = weight*len(kpts) * tools.pbc.madelung(cell, kpts)
-        for k, s in enumerate(ovlp):
+            vk[i] += madelung * reduce(numpy.dot, (s, dm, s))
+    elif numpy.shape(kpts) == (3,):
+        if kpts_band is None or is_zero(kpts_band-kpts):
             for i,dm in enumerate(dms):
-                vk[i,k] += madelung * reduce(numpy.dot, (s, dm[k], s))
+                vk[i] += madelung * reduce(numpy.dot, (s, dm, s))
+    else:  # kpts.shape == (*,3)
+        if kpts_band is None:
+            ks = range(len(kpts))
+        else:
+            ks = numpy.hstack([member(kpt, kpts) for kpt in kpts_band.reshape(-1,3)])
+        for i,dm in enumerate(dms):
+            for k in ks:
+                vk[i,k] += madelung * reduce(numpy.dot, (s[k], dm[k], s[k]))
     logger.debug2(cell, 'Total energy shift = -1/2 * Nelec*madelung/cell.vol = %.12g',
                   madelung*cell.nelectron * -.5)
 
