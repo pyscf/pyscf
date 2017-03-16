@@ -12,6 +12,7 @@ from pyscf.dft.numint import _dot_ao_ao, _dot_ao_dm, BLKSIZE
 from pyscf import lib
 from pyscf import dft
 from pyscf.pbc import tools
+from pyscf.pbc.df.df_jk import is_zero, gamma_point, member
 
 libpbc = lib.load_library('libpbc')
 
@@ -425,8 +426,8 @@ def nr_rks(ni, cell, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
                 vmat[i] += ni.eval_mat(cell, ao_k1, weight, rho, vxc,
                                        mask, xctype, 0, verbose)
 
-    if kpts_band is not None:
-        vmat = [v.reshape(nao,nao) for v in vmat]
+    #if kpts_band is not None:
+    #    vmat = [v.reshape(nao,nao) for v in vmat]
 
     if nset == 1:
         nelec = nelec[0]
@@ -780,10 +781,8 @@ class _KNumInt(dft.numint._NumInt):
                                  dtype=numpy.int8)
         if kpts_band is not None:
             kpts_band = numpy.reshape(kpts_band, (-1,3))
-            where = numpy.hstack([member(k, kpts) for k in kpts_band])
-            if len(where) != len(kpts_band):
-                # not all kpt of kpts_band found in kpts
-                where = None
+            where = [member(k, kpts) for k in kpts_band]
+            where = [k_id[0] if len(k_id)>0 else None for k_id in where]
 
         for ip0 in range(0, ngrids, blksize):
             ip1 = min(ngrids, ip0+blksize)
@@ -794,10 +793,12 @@ class _KNumInt(dft.numint._NumInt):
             if kpts_band is None:
                 ao_k1 = ao_k2
             else:
-                if where is None:
-                    ao_k1 = self.eval_ao(cell, coords, kpts_band, deriv=deriv, non0tab=non0)
-                else:
-                    ao_k1 = ao_k2[where]
+                new_kpts = [k for k,w in zip(kpts_band, where) if w is None]
+                new_ao = iter(self.eval_ao(cell, coords, new_kpts, deriv=deriv, non0tab=non0))
+                old_ao = (ao_k2[w] for w in where if not w is None)
+                ao_k1 = []
+                for w in where:
+                    ao_k1.append(next(new_ao) if w is None else next(old_ao))
             yield ao_k1, ao_k2, non0, weight, coords
             ao_k1 = ao_k2 = None
 
