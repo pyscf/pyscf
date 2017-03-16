@@ -426,12 +426,12 @@ def _dot_ao_ao(mol, ao1, ao2, non0tab, shls_slice, ao_loc, hermi=0):
         ao1 = lib.transpose(ao1)
     if not ao2.flags.f_contiguous:
         ao2 = lib.transpose(ao2)
-    if ao1.dtype == numpy.double:
+    if ao1.dtype == ao2.dtype == numpy.double:
         fn = libdft.VXCdot_ao_ao
-        assert(ao2.dtype == numpy.double)
     else:
         fn = libdft.VXCzdot_ao_ao
-        assert(ao1.dtype == ao2.dtype == numpy.complex128)
+        ao1 = numpy.asarray(ao1, numpy.complex128)
+        ao2 = numpy.asarray(ao2, numpy.complex128)
     vv = numpy.empty((nao,nao), dtype=ao1.dtype)
     fn(vv.ctypes.data_as(ctypes.c_void_p),
        ao1.ctypes.data_as(ctypes.c_void_p),
@@ -451,12 +451,12 @@ def _dot_ao_dm(mol, ao, dm, non0tab, shls_slice, ao_loc, out=None):
 
     if not ao.flags.f_contiguous:
         ao = lib.transpose(ao)
-    if ao.dtype == numpy.double:
+    if ao.dtype == dm.dtype == numpy.double:
         fn = libdft.VXCdot_ao_dm
-        assert(dm.dtype == numpy.double)
     else:
         fn = libdft.VXCzdot_ao_dm
-        assert(dm.dtype == ao.dtype == numpy.complex128)
+        ao = numpy.asarray(ao, numpy.complex128)
+        dm = numpy.asarray(dm, numpy.complex128)
     vm = numpy.ndarray((ngrids,dm.shape[1]), dtype=ao.dtype, order='F', buffer=out)
     dm = numpy.asarray(dm, order='C')
     fn(vm.ctypes.data_as(ctypes.c_void_p),

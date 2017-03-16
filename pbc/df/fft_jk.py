@@ -56,7 +56,6 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
 
     kpts_band, single_kpt_band = _format_kpts_band(kpts_band, kpts)
     nband = len(kpts_band)
-    vj_kpts = []
     weight = cell.vol / ngs
     if gamma_point(kpts_band):
         vj_kpts = np.empty((nset,nband,nao,nao))

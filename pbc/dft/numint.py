@@ -116,10 +116,9 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
         cell._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.nbas),
         cell._env.ctypes.data_as(ctypes.c_void_p))
 
+    if gamma_point(kpts):
+        ao_kpts = [ao.real.copy(order='F') for ao in ao_kpts]
     for k, kpt in enumerate(kpts):
-        if abs(kpt).sum() < 1e-9:  # gamma point
-            ao_kpts[k] = ao_kpts[k].real.copy(order='F')
-
         ao_kpts[k] = ao_kpts[k].transpose(2,0,1)
         if comp == 1:
             ao_kpts[k] = ao_kpts[k][0]
