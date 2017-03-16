@@ -220,6 +220,16 @@ def argunique(strs):
             return qsort_idx(group_lt) + [ref] + qsort_idx(group_gt)
     return qsort_idx(range(len(strs)))
 
+def argunique_ctypes(strs):
+    nstrs, nset = strs.shape
+    sort_idx = numpy.empty(nstrs, dtype=numpy.uint64)
+    strs = numpy.asarray(strs, order='C')
+    libhci.argunique(strs.ctypes.data_as(ctypes.c_void_p), 
+                     sort_idx.ctypes.data_as(ctypes.c_void_p), 
+                     ctypes.c_int(nstrs), 
+                     ctypes.c_int(nset))
+    return sort_idx
+
 def argunique_with_t(strs, ts):
     if len(strs) == 0:
         return []
@@ -231,6 +241,9 @@ def argunique_with_t(strs, ts):
         for ti in numpy.unique(t_ab):
             idx = numpy.where(t_ab == ti)[0]
             idxs.append(idx[argunique(strs[idx])])
+            print argunique(strs[idx])
+            print argunique_ctypes(strs[idx])
+            exit()
         return numpy.hstack(idxs)
 
 def str_diff(string0, string1):
