@@ -12,6 +12,7 @@ from pyscf.dft.numint import _dot_ao_ao, _dot_ao_dm, BLKSIZE
 from pyscf import lib
 from pyscf import dft
 from pyscf.pbc import tools
+from pyscf.pbc.df.df_jk import is_zero, gamma_point, member
 
 libpbc = lib.load_library('libpbc')
 
