@@ -552,6 +552,10 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     if myci.verbose >= logger.WARN:
         myci.check_sanity()
 
+    log.info('Starting heat-bath CI algorithm...')
+    log.info('Selection threshold:   %8.5f', myci.select_cutoff)
+    log.info('CI coefficient cutoff: %8.5f', myci.ci_coeff_cutoff)
+
     nelec = direct_spin1._unpack_nelec(nelec, myci.spin)
     eri = ao2mo.restore(1, eri, norb)
 
