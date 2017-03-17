@@ -9,15 +9,15 @@ import numpy
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import dft as pbcdft
 
-class BN(unittest.TestCase):
+class Monolayer_hBN(unittest.TestCase):
     """
     Monolayer hexagonal boron nitride simple LDA model compared against
     `OpenMX <http://www.openmx-square.org/>`_ v 3.8. Following is the
     corresponding input file:
     
     .. code-block:: none
-        System.CurrrentDirectory ./
-        System.Name _gr
+        System.CurrentDirectory ./
+        System.Name _hBN
         data.path /export/scratch/openmx_tests/DFT_DATA13
         level.of.stdout 1
         level.of.fileout 1
