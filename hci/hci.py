@@ -222,8 +222,6 @@ def argunique(strs):
 
 def argunique_ctypes(strs):
     nstrs, nset = strs.shape
-    print len(strs)
-    print strs.shape
 
     sort_idx = numpy.empty(nstrs, dtype=numpy.uint64)
 
