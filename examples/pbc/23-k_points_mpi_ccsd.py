@@ -13,7 +13,8 @@ from ase.lattice import bulk
 A2B = 1.889725989
 ase_atom = bulk('C', 'diamond', a=3.53034833533)
 
-rank = MPI.COMM_WORLD.Get_rank()
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
 
 cell = gto.M(
     h = ase_atom.cell,
@@ -35,6 +36,19 @@ print cell.gs
 #kmf = scf.KRHF(cell, kpts, exxdiv=None)
 #ehf = kmf.kernel()
 kmf = run_khf(cell, nk, gamma=True, exxdiv=None, conv_tol=1e-12)
+if rank == 0:
+    kmf.scf()
+
+comm.Barrier()
+mo_coeff  = comm.bcast(kmf.mo_coeff,root=0)
+mo_energy = comm.bcast(kmf.mo_energy,root=0)
+mo_occ    = comm.bcast(kmf.mo_occ,root=0)
+kpts      = comm.bcast(kmf.kpts,root=0)
+kmf.mo_coeff = mo_coeff
+kmf.mo_energy = mo_energy
+kmf.mo_occ = mo_occ
+kmf.kpts   = kpts
+comm.Barrier()
 
 #
 # Running CCSD
@@ -43,5 +57,13 @@ kcc = mpicc.KRCCSD(kmf)
 ecc, t1, t2 = kcc.kernel()
 if rank == 0:
     print("cc energy (per unit cell) = %.17g" % ecc)
-kcc.eaccsd(nroots=1,kptlist=[0])
-kcc.leaccsd(nroots=1,kptlist=[0])
+#lew, lev = kcc.leaccsd(nroots=1, kptlist=[0])
+#ew, ev   = kcc.eaccsd(nroots=1,  kptlist=[0])
+#kcc.eaccsd_pt2(ew, ev, lev)
+#kcc.eaccsd(nroots=1,kptlist=[0])
+#kcc.leaccsd(nroots=1,kptlist=[0])
+#kcc.ipccsd(nroots=1,kptlist=[0])
+#kcc.lipccsd(nroots=1,kptlist=[0])
+lew, lev = kcc.lipccsd(nroots=1, kptlist=[0])
+ew, ev   = kcc.ipccsd(nroots=1,  kptlist=[0])
+kcc.ipccsd_pt2(ew, ev, lev)
