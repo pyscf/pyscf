@@ -881,14 +881,8 @@ void qsort_idx(uint64_t *strs, uint64_t *idx, uint64_t *nstrs_, int nset, uint64
         }
         uint64_t *new_idx_lt = malloc(sizeof(uint64_t) * group_lt_nstrs);
         uint64_t *new_idx_gt = malloc(sizeof(uint64_t) * group_gt_nstrs);
-        uint64_t *group_lt_nstrs_ = malloc(sizeof(uint64_t));
-        uint64_t *group_gt_nstrs_ = malloc(sizeof(uint64_t));
-        group_lt_nstrs_[0] = group_lt_nstrs;
-        group_gt_nstrs_[0] = group_gt_nstrs;
-        qsort_idx(strs, group_lt, group_lt_nstrs_, nset, new_idx_lt);
-        qsort_idx(strs, group_gt, group_gt_nstrs_, nset, new_idx_gt);
-        group_lt_nstrs = group_lt_nstrs_[0];
-        group_gt_nstrs = group_gt_nstrs_[0];
+        qsort_idx(strs, group_lt, &group_lt_nstrs, nset, new_idx_lt);
+        qsort_idx(strs, group_gt, &group_gt_nstrs, nset, new_idx_gt);
         nstrs = group_lt_nstrs + group_gt_nstrs + 1;
         nstrs_[0] = nstrs;
         for (p = 0; p < nstrs; ++p) {
@@ -896,8 +890,6 @@ void qsort_idx(uint64_t *strs, uint64_t *idx, uint64_t *nstrs_, int nset, uint64
             else if (p == group_lt_nstrs) new_idx[p] = ref;
             else                          new_idx[p] = new_idx_gt[p - group_lt_nstrs - 1];
         }
-        free(group_lt_nstrs_);
-        free(group_gt_nstrs_);
         free(new_idx_lt); 
         free(new_idx_gt);
         free(group_lt);
@@ -911,10 +903,9 @@ void argunique(uint64_t *strs, uint64_t *sort_idx, uint64_t *nstrs_, int nset) {
 
     size_t p;
 
-    uint64_t nstrs = nstrs_[0];
-    uint64_t *init_idx = malloc(sizeof(uint64_t) * nstrs);
+    uint64_t *init_idx = malloc(sizeof(uint64_t) * nstrs_[0]);
 
-    for (p = 0; p < nstrs; ++p) init_idx[p] = p;
+    for (p = 0; p < nstrs_[0]; ++p) init_idx[p] = p;
 
     qsort_idx(strs, init_idx, nstrs_, nset, sort_idx);
 
