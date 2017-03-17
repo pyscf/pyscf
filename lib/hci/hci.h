@@ -17,5 +17,5 @@ int *compute_vir_list(uint64_t *string, int nset, int norb, int nelec);
 void select_strs(double *h1, double *eri, double *jk, uint64_t *eri_sorted, uint64_t *jk_sorted, int norb, int neleca, int nelecb, uint64_t *strs, double *civec, uint64_t ndet, double select_cutoff, uint64_t *strs_add, uint64_t* strs_add_size);
 uint64_t *toggle_bit(uint64_t *str, int nset, int p);
 int order(uint64_t *strs_i, uint64_t *strs_j, int nset);
-uint64_t *qsort_idx(uint64_t *strs, uint64_t *idx, uint64_t nstrs, int nset);
-void argunique(uint64_t *strs, uint64_t *sort_idx, uint64_t nstrs, int nset);
+void qsort_idx(uint64_t *strs, uint64_t *idx, uint64_t *nstrs, int nset, uint64_t *new_idx);
+void argunique(uint64_t *strs, uint64_t *sort_idx, uint64_t *nstrs, int nset);
