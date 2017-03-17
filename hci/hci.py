@@ -222,13 +222,24 @@ def argunique(strs):
 
 def argunique_ctypes(strs):
     nstrs, nset = strs.shape
+    print len(strs)
+    print strs.shape
+
     sort_idx = numpy.empty(nstrs, dtype=numpy.uint64)
+
     strs = numpy.asarray(strs, order='C')
+    sort_idx = numpy.asarray(sort_idx, order='C')
+
+    nstrs_ = numpy.array([nstrs])
+
     libhci.argunique(strs.ctypes.data_as(ctypes.c_void_p), 
                      sort_idx.ctypes.data_as(ctypes.c_void_p), 
-                     ctypes.c_int(nstrs), 
+                     nstrs_.ctypes.data_as(ctypes.c_void_p), 
                      ctypes.c_int(nset))
-    return sort_idx
+
+    sort_idx = sort_idx[:nstrs_[0]]
+
+    return sort_idx.tolist()
 
 def argunique_with_t(strs, ts):
     if len(strs) == 0:
@@ -240,10 +251,8 @@ def argunique_with_t(strs, ts):
         idxs = []
         for ti in numpy.unique(t_ab):
             idx = numpy.where(t_ab == ti)[0]
-            idxs.append(idx[argunique(strs[idx])])
-            print argunique(strs[idx])
-            print argunique_ctypes(strs[idx])
-            exit()
+#            idxs.append(idx[argunique(strs[idx])])
+            idxs.append(idx[argunique_ctypes(strs[idx])])
         return numpy.hstack(idxs)
 
 def str_diff(string0, string1):

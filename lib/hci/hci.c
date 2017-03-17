@@ -850,18 +850,16 @@ int order(uint64_t *strs_i, uint64_t *strs_j, int nset) {
 }
 
 // Recursive quick sort of string array indices
-uint64_t *qsort_idx(uint64_t *strs, uint64_t *idx, uint64_t nstrs, int nset) {
+void qsort_idx(uint64_t *strs, uint64_t *idx, uint64_t *nstrs_, int nset, uint64_t *new_idx) {
 
     size_t p;
 
+    uint64_t nstrs = nstrs_[0];
+
     if (nstrs <= 1) {
-        printf("%d \n", nstrs);
-        uint64_t *new_idx = malloc(sizeof(uint64_t) * nstrs);
         for (p = 0; p < nstrs; ++p) new_idx[p] = idx[p];
-        return new_idx;
     } 
     else {
-        printf("%d \n", nstrs);
         uint64_t ref = idx[nstrs - 1];
         uint64_t *group_lt = malloc(sizeof(uint64_t) * nstrs);
         uint64_t *group_gt = malloc(sizeof(uint64_t) * nstrs);
@@ -881,33 +879,44 @@ uint64_t *qsort_idx(uint64_t *strs, uint64_t *idx, uint64_t nstrs, int nset) {
                 group_gt_nstrs++;
             }
         }
-        uint64_t *new_idx_lt = qsort_idx(strs, group_lt, group_lt_nstrs, nset);
-        uint64_t *new_idx_gt = qsort_idx(strs, group_gt, group_gt_nstrs, nset);
-        uint64_t *new_idx = malloc(sizeof(uint64_t) * nstrs);
+        uint64_t *new_idx_lt = malloc(sizeof(uint64_t) * group_lt_nstrs);
+        uint64_t *new_idx_gt = malloc(sizeof(uint64_t) * group_gt_nstrs);
+        uint64_t *group_lt_nstrs_ = malloc(sizeof(uint64_t));
+        uint64_t *group_gt_nstrs_ = malloc(sizeof(uint64_t));
+        group_lt_nstrs_[0] = group_lt_nstrs;
+        group_gt_nstrs_[0] = group_gt_nstrs;
+        qsort_idx(strs, group_lt, group_lt_nstrs_, nset, new_idx_lt);
+        qsort_idx(strs, group_gt, group_gt_nstrs_, nset, new_idx_gt);
+        group_lt_nstrs = group_lt_nstrs_[0];
+        group_gt_nstrs = group_gt_nstrs_[0];
+        nstrs = group_lt_nstrs + group_gt_nstrs + 1;
+        nstrs_[0] = nstrs;
         for (p = 0; p < nstrs; ++p) {
             if (p < group_lt_nstrs)       new_idx[p] = new_idx_lt[p];
             else if (p == group_lt_nstrs) new_idx[p] = ref;
             else                          new_idx[p] = new_idx_gt[p - group_lt_nstrs - 1];
         }
+        free(group_lt_nstrs_);
+        free(group_gt_nstrs_);
         free(new_idx_lt); 
         free(new_idx_gt);
         free(group_lt);
         free(group_gt);
-        return new_idx;
     }
 
 }
 
 // Helper function to perform recursive sort (nset is a total number of strings)
-void argunique(uint64_t *strs, uint64_t *sort_idx, uint64_t nstrs, int nset) {
+void argunique(uint64_t *strs, uint64_t *sort_idx, uint64_t *nstrs_, int nset) {
 
     size_t p;
 
+    uint64_t nstrs = nstrs_[0];
     uint64_t *init_idx = malloc(sizeof(uint64_t) * nstrs);
 
     for (p = 0; p < nstrs; ++p) init_idx[p] = p;
 
-    sort_idx = qsort_idx(strs, init_idx, nstrs, nset);
+    qsort_idx(strs, init_idx, nstrs_, nset, sort_idx);
 
     free(init_idx);
 
