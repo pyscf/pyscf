@@ -33,9 +33,8 @@ from pyscf.pbc.df import aft
 from pyscf.pbc.df import df_jk
 from pyscf.pbc.df import df_ao2mo
 from pyscf.pbc.df.aft import estimate_eta, get_nuc
-from pyscf.pbc.df.df_jk import is_zero, gamma_point, member
-from pyscf.pbc.df.df_jk import zdotCN, zdotNN, zdotNC
-from pyscf.pbc.df.df_jk import KPT_DIFF_TOL
+from pyscf.pbc.df.df_jk import (is_zero, gamma_point, member,
+                                zdotCN, zdotNN, zdotNC, KPT_DIFF_TOL)
 
 LINEAR_DEP_THR = 1e-9
 
@@ -410,9 +409,9 @@ class DF(aft.AFTDF):
 
     def build(self, j_only=False, with_j3c=True, kpts_band=None):
         if self.kpts_band is not None:
-            self.kpts_band = self.kpts_band.reshape(-1,3)
+            self.kpts_band = numpy.reshape(self.kpts_band, (-1,3))
         if kpts_band is not None:
-            kpts_band = kpts_band.reshape(-1,3)
+            kpts_band = numpy.reshape(kpts_band, (-1,3))
             if self.kpts_band is None:
                 self.kpts_band = kpts_band
             else:
