@@ -1,7 +1,6 @@
 
 
 def siesta_eig(fname='siesta.EIG'):
-  import re
   f = open(fname, 'r')
   f.seek(0)
   Fermi_energy_eV = float(f.readline())
