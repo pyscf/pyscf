@@ -10,7 +10,7 @@ OBJS = \
   m_color.o
 
 all: $(OBJS)
-	gfortran -fPIC --shared $(OBJS) -o m_siesta_hsx.so
+	gfortran -fPIC --shared $(OBJS) -lblas -o m_siesta_hsx.so
 
 clean:
 	rm $(OBJS)

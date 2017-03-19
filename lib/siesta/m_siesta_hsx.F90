@@ -1,7 +1,7 @@
 module m_siesta_hsx
 #include "m_define_macro.F90"
   
-  use iso_c_binding, only: c_char, c_double, c_int64_t
+  use iso_c_binding, only: c_char, c_double, c_float, c_int64_t, c_int
   use m_die, only : die
   
   implicit none
@@ -48,17 +48,16 @@ subroutine siesta_hsx_size(fname_in, force_basis_type, isize) & !, force_basis_t
   use m_io, only : get_free_handle
   !! external
   character(kind=c_char), intent(in) :: fname_in(*)
-  integer(8) :: force_basis_type
-  integer(8), intent(inout) :: isize 
+  integer(c_int64_t), intent(in) :: force_basis_type
+  integer(c_int64_t), intent(inout) :: isize 
   !! internal
   type(hsx_t) :: hsx
   character(1000) :: fname
   
   call null2char(fname_in, fname)
 
-  write(6,*) trim(fname), force_basis_type, " ", __FILE__, __LINE__
+!  write(6,*) trim(fname), force_basis_type, " - ", __FILE__, __LINE__
 
-  force_basis_type = -1
   call read_siesta_hsx(fname, force_basis_type, hsx)
 
   isize = 1 ! norbs
@@ -68,33 +67,59 @@ subroutine siesta_hsx_size(fname_in, force_basis_type, isize) & !, force_basis_t
   isize = isize + 1 ! is_gamma
   isize = isize + 1 ! Ne
   isize = isize + 1 ! Te
-  isize = isize + size(hsx%orb_sc2orb_uc)
+  _assert(hsx%H4)
+  _assert(hsx%S4)
+  _assert(hsx%X4)
+  _assert(hsx%row_ptr)
+  _assert(hsx%col_ind)
+
   isize = isize + size(hsx%row_ptr)
   isize = isize + size(hsx%col_ind)
   isize = isize + size(hsx%H4)
   isize = isize + size(hsx%S4)
   isize = isize + size(hsx%X4)
+
+  if(allocated(hsx%orb_sc2orb_uc))isize = isize + size(hsx%orb_sc2orb_uc)
   
 end subroutine ! siesta_hsx_size
 
 !!
 !!
 !!
-subroutine siesta_hsx_read(fname_in, force_basis_type, hsx) bind(c, name='siesta_hsx_read')
+subroutine siesta_hsx_read(fname_in, force_basis_type, dat) bind(c, name='siesta_hsx_read')
   use m_precision, only : siesta_int
   use m_io, only : get_free_handle
   character(kind=c_char), intent(in) :: fname_in(*)
-  integer(8), intent(in)    :: force_basis_type
-  real(8), intent(inout) :: hsx(*)
+  integer(c_int64_t), intent(in)    :: force_basis_type
+  real(c_float), intent(inout) :: dat(*)
 
+  integer :: i
   character(1000) :: fname
-  type(hsx_t) :: hsx_intern
+  type(hsx_t) :: hsx
 
   call null2char(fname_in, fname)  
-  write(6,*) trim(fname), " ", __FILE__, __LINE__
+!  write(6,*) trim(fname), " ", __FILE__, __LINE__
   
-  call read_siesta_hsx(fname, force_basis_type, hsx_intern)
-  _die('not yet')  
+  call read_siesta_hsx(fname, force_basis_type, hsx)
+
+  i = 1;
+  dat(i) = hsx%norbs; i=i+1;
+  dat(i) = hsx%norbs_sc; i=i+1;
+  dat(i) = hsx%nspin; i=i+1;
+  dat(i) = hsx%nnz; i=i+1;
+  dat(i) = l2s(hsx%is_gamma); i=i+1;
+  dat(i) = hsx%Ne; i=i+1;
+  dat(i) = hsx%Te; i=i+1;
+  call scopy(size(hsx%H4), hsx%H4,1, dat(i),1); i=i+size(hsx%H4)
+  call scopy(size(hsx%S4), hsx%S4,1, dat(i),1); i=i+size(hsx%S4)
+  call scopy(size(hsx%X4), hsx%X4,1, dat(i),1); i=i+size(hsx%X4)
+  dat(i:i+size(hsx%row_ptr)-1) = hsx%row_ptr; i=i+size(hsx%row_ptr);
+  dat(i:i+size(hsx%col_ind)-1) = hsx%col_ind; i=i+size(hsx%col_ind);
+  if(allocated(hsx%orb_sc2orb_uc)) then
+    dat(i:i+size(hsx%orb_sc2orb_uc)-1) = hsx%orb_sc2orb_uc; i=i+size(hsx%orb_sc2orb_uc);
+  endif 
+  
+!  write(6,*) dat(1), __FILE__, __LINE__ 
 
 end subroutine ! siesta_hsx_read
 
@@ -118,6 +143,15 @@ subroutine null2char(c_null, c_fstring)
   enddo
 
 end subroutine ! 
+
+!
+!
+!
+real(c_float) function l2s(l)
+  implicit none
+  logical, intent(in) :: l
+  if(l) then; l2s=1; else; l2s=0; endif
+end function !l2s   
 
 !
 !

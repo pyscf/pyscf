@@ -14,6 +14,7 @@
 #define _TM(m)
 #endif
 
+#define _assert(a) if(.not. allocated(a)) call die('a '//__FILE__, __LINE__)
 #define _add_size_alloc(n,a)if(allocated(a))n=n+size(a)
 #define _size_alloc(a,n)n=0;if(allocated(a))n=size(a)
 #define _add_size_array(n,a) n = n + size(a)
