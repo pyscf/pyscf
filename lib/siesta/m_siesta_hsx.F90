@@ -41,20 +41,24 @@ module m_siesta_hsx
 !!
 !!
 !!
-subroutine siesta_hsx_size(fname_in, force_basis_type, isize) bind(c, name='siesta_hsx_size')
+subroutine siesta_hsx_size(fname_in, force_basis_type, isize) & !, force_basis_type, isize) 
+  bind(c, name='siesta_hsx_size')
+  
   use m_precision, only : siesta_int
   use m_io, only : get_free_handle
   !! external
   character(kind=c_char), intent(in) :: fname_in(*)
-  integer, intent(in)    :: force_basis_type
+  integer(8) :: force_basis_type
   integer(8), intent(inout) :: isize 
   !! internal
-  
   type(hsx_t) :: hsx
   character(1000) :: fname
-  write(6,*) trim(fname), " ", __FILE__, __LINE__
   
   call null2char(fname_in, fname)
+
+  write(6,*) trim(fname), force_basis_type, " ", __FILE__, __LINE__
+
+  force_basis_type = -1
   call read_siesta_hsx(fname, force_basis_type, hsx)
 
   isize = 1 ! norbs
@@ -80,7 +84,7 @@ subroutine siesta_hsx_read(fname_in, force_basis_type, hsx) bind(c, name='siesta
   use m_precision, only : siesta_int
   use m_io, only : get_free_handle
   character(kind=c_char), intent(in) :: fname_in(*)
-  integer, intent(in)    :: force_basis_type
+  integer(8), intent(in)    :: force_basis_type
   real(8), intent(inout) :: hsx(*)
 
   character(1000) :: fname
@@ -149,7 +153,7 @@ subroutine read_siesta_hsx(fname, force_basis_type, hsx)
   use m_io, only : get_free_handle
   implicit none
   character(len=*), intent(in) :: fname
-  integer, intent(in)          :: force_basis_type
+  integer(8), intent(in)          :: force_basis_type
   type(hsx_t), intent(inout)   :: hsx
 
   !! internal
