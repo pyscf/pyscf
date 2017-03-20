@@ -117,7 +117,7 @@ subroutine siesta_hsx_read(fname_in, force_basis_type, dat) bind(c, name='siesta
   dat(i:i+size(hsx%col_ind)-1) = hsx%col_ind; i=i+size(hsx%col_ind);
   if(allocated(hsx%orb_sc2orb_uc)) then
     dat(i:i+size(hsx%orb_sc2orb_uc)-1) = hsx%orb_sc2orb_uc; i=i+size(hsx%orb_sc2orb_uc);
-  endif 
+  endif
   
 !  write(6,*) dat(1), __FILE__, __LINE__ 
 
