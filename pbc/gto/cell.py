@@ -371,7 +371,11 @@ def get_bounding_sphere(cell, rcut):
     #cut = np.array([n1, n2, n3]).astype(int)
     b = cell.reciprocal_vectors(norm_to=1)
     heights_inv = lib.norm(b, axis=1)
-    return np.ceil(rcut*heights_inv).astype(int)
+    nimgs = np.ceil(rcut*heights_inv).astype(int)
+
+    for i in range(cell.dimension, 3):
+        nimgs[i] = 1
+    return nimgs
 
 def get_Gv(cell, gs=None):
     '''Calculate three-dimensional G-vectors for the cell; see MH (3.8).

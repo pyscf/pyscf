@@ -57,14 +57,19 @@ def smearing_(mf, sigma=None, method='fermi'):
 
         if method.lower() == 'fermi':  # Fermi-Dirac smearing
             # Optimize mu to give correct electron number
+            def fermi_occ(m):
+                occ = numpy.zeros_like(mo_energy_kpts)
+                de = (mo_energy_kpts - m) / mf.sigma
+                occ[de<40] = 1./(numpy.exp(de[de<40])+1.)
+                return occ
             def nelec_cost_fn(m):
-                mo_occ_kpts = 2./(numpy.exp((mo_energy_kpts-m)/mf.sigma)+1.)
-                if is_uhf:
-                    mo_occ_kpts *= .5
+                mo_occ_kpts = fermi_occ(m)
+                if not is_uhf:
+                    mo_occ_kpts *= 2
                 return ( mo_occ_kpts.sum()/nkpts - mf.cell.nelectron )**2
             res = scipy.optimize.minimize(nelec_cost_fn, fermi, method='Powell')
             mu = res.x
-            mo_occ_kpts = f = 1./(numpy.exp((mo_energy_kpts-mu)/mf.sigma)+1.)
+            mo_occ_kpts = f = fermi_occ(mu)
             f = f[(f>0) & (f<1)]
             mf.entropy = -(f*numpy.log(f) + (1-f)*numpy.log(1-f)).sum()
             if not is_uhf:

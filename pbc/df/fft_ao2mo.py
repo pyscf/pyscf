@@ -88,7 +88,8 @@ def general(mydf, mo_coeffs, kpts=None, compact=False):
 ####################
 # gamma point, the integral is real and with s4 symmetry
     if abs(kptijkl).sum() < 1e-9 and allreal:
-        mo_pairs_G = get_mo_pairs_G(mydf, mo_coeffs[:2], kptijkl[:2], compact)
+        mo_pairs_G = get_mo_pairs_G(mydf, mo_coeffs[:2], kptijkl[:2], q,
+                                    compact=compact)
         if ((iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
              iden_coeffs(mo_coeffs[1], mo_coeffs[3]))):
             mo_pairs_G *= numpy.sqrt(coulG).reshape(-1,1)
@@ -100,8 +101,8 @@ def general(mydf, mo_coeffs, kpts=None, compact=False):
             moijR = mo_pairs_G.real.copy()
             moijI = mo_pairs_G.imag.copy()
             mo_pairs_G = None
-            mo_pairs_G = get_mo_pairs_G(mydf, mo_coeffs[2:], kptijkl[2:],
-                                        compact)
+            mo_pairs_G = get_mo_pairs_G(mydf, mo_coeffs[2:], kptijkl[2:], q,
+                                        compact=compact)
             moklR = mo_pairs_G.real.copy()
             moklI = mo_pairs_G.imag.copy()
             mo_pairs_G = None
