@@ -230,9 +230,9 @@ class FFTDF(lib.StreamObject):
 # With this function to mimic the molecular DF.loop function, the pbc gamma
 # point DF object can be used in the molecular code
     def loop(self):
-        coulG = tools.get_coulG(self.cell, numpy.zeros(3), gs=mydf.gs)
+        coulG = tools.get_coulG(self.cell, numpy.zeros(3), gs=self.gs)
         ngs = len(coulG)
-        ao_pairs_G = get_ao_pairs_G(mydf, kptijkl[:2], compact=True)
+        ao_pairs_G = get_ao_pairs_G(self, kptijkl[:2], compact=True)
         ao_pairs_G *= numpy.sqrt(coulG*(cell.vol/ngs**2)).reshape(-1,1)
 
         Lpq = numpy.empty((self.blockdim, ao_pairs_G.shape[1]))
@@ -243,7 +243,7 @@ class FFTDF(lib.StreamObject):
             yield Lpq[:p1-p0]
 
     def get_naoaux(self):
-        gs = numpy.asarray(mydf.gs)
+        gs = numpy.asarray(self.gs)
         ngs = numpy.prod(gs*2+1)
         return ngs * 2
 
