@@ -535,9 +535,11 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     jk_sorted = abs(jk).argsort()[::-1]
 
 # TODO: initial guess from CISD
-    hf_str = numpy.hstack([orblst2str(range(nelec[0]), norb),
-                           orblst2str(range(nelec[1]), norb)]).reshape(1,-1)
-    ci0 = [as_SCIvector(numpy.ones(1), hf_str, numpy.array([[0,0]]))]
+    if ci0 is None:
+        hf_str = numpy.hstack([orblst2str(range(nelec[0]), norb), orblst2str(range(nelec[1]), norb)]).reshape(1,-1)
+        ci0 = [as_SCIvector(numpy.ones(1), hf_str, numpy.array([[0,0]]))]
+    else:
+        assert(nroots == len(ci0))
 
     ci0 = myci.enlarge_space(ci0, h1e, eri, jk, eri_sorted, jk_sorted, norb, nelec)
 
