@@ -45,9 +45,11 @@ def get_gth_vlocG_part1(cell, Gv):
             vlocG[ia,0] = -2*numpy.pi*Zia*rloc**2
     return vlocG
 
+# part2 Vnuc - Vloc
 def get_pp_loc_part2(cell, kpts=None):
     '''PRB, 58, 3641 Eq (1), integrals associated to C1, C2, C3, C4
     '''
+    from pyscf.pbc.df import incore
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
     else:
@@ -56,14 +58,22 @@ def get_pp_loc_part2(cell, kpts=None):
 
     intors = ('cint3c2e_sph', 'cint3c1e_sph', 'cint3c1e_pbc_r2_origk_sph',
               'cint3c1e_pbc_r4_origk_sph', 'cint3c1e_pbc_r6_origk_sph')
-    vpploc = [0] * nkpts
+    kptij_lst = numpy.hstack((kpts_lst,kpts_lst)).reshape(-1,2,3)
+    buf = 0
     for cn in range(1, 5):
         fakecell = fake_cell_vloc(cell, cn)
         if fakecell.nbas > 0:
-            buf = _int_vloc_part2(cell, fakecell, kpts_lst, intors[cn])
-            for k in range(nkpts):
-                vpploc[k] += buf[k]
+            v = incore.aux_e2(cell, fakecell, intors[cn], aosym='s2',
+                              kptij_lst=kptij_lst)
+            buf += numpy.einsum('...i->...', v)
 
+    buf = buf.reshape(nkpts,-1)
+    vpploc = []
+    for k, kpt in enumerate(kpts_lst):
+        v = lib.unpack_tril(buf[k])
+        if abs(kpt).sum() < 1e-9:  # gamma_point:
+            v = v.real
+        vpploc.append(v)
     if kpts is None or numpy.shape(kpts) == (3,):
         vpploc = vpploc[0]
     return vpploc
@@ -206,53 +216,15 @@ def fake_cell_vnl(cell):
     fakecell._env = numpy.asarray(numpy.hstack(fake_env), dtype=numpy.double)
     return fakecell, hl_blocks
 
-
-def _int_vloc_part2(cell, fakecell, kpts, intor='cint3c1e_sph'):
-    '''Vnuc - Vloc'''
-    from pyscf.pbc.df import incore
-    # sum over largest number of images in either cell or auxcell
-    rcut = max(cell.rcut, fakecell.rcut)
-    Ls = cell.get_lattice_Ls(rcut=rcut)
-    expLk = numpy.asarray(numpy.exp(1j*numpy.dot(Ls, kpts.T)), order='C')
-    nkpts = len(kpts)
-
-    nao = cell.nao_nr()
-    naux = fakecell.nao_nr()
-    buf = [numpy.zeros((nao,nao,naux), order='F', dtype=numpy.complex128)
-           for k in range(nkpts)]
-    ints = incore._wrap_int3c(cell, fakecell, intor, 1, Ls, buf)
-    atm, bas, env = ints._envs[:3]
-    c_shls_slice = (ctypes.c_int*6)(0, cell.nbas, cell.nbas, cell.nbas*2,
-                                    cell.nbas*2, len(bas))
-
-    xyz = cell.atom_coords().copy('C')
-    ptr_coordL = atm[:cell.natm,gto.PTR_COORD]
-    ptr_coordL = numpy.vstack((ptr_coordL,ptr_coordL+1,ptr_coordL+2)).T.copy('C')
-    for l, L1 in enumerate(Ls):
-        env[ptr_coordL] = xyz + L1
-        exp_Lk = numpy.einsum('k,ik->ik', expLk[l].conj(), expLk[:l+1])
-        exp_Lk = numpy.asarray(exp_Lk, order='C')
-        exp_Lk[l] = .5
-        ints(exp_Lk, c_shls_slice)
-
-    for k, kpt in enumerate(kpts):
-        v = numpy.einsum('ijk->ij', buf[k])
-        if abs(kpt).sum() < 1e-9:  # gamma_point:
-            v = v.real + v.real.T
-        else:
-            v = v + v.T.conj()
-        buf[k] = v
-    return buf
-
 def _int_vnl(cell, fakecell, hl_blocks, kpts):
     '''Vnuc - Vloc'''
     rcut = max(cell.rcut, fakecell.rcut)
     Ls = cell.get_lattice_Ls(rcut=rcut)
-    expLk = numpy.asarray(numpy.exp(1j*numpy.dot(Ls, kpts.T)), order='C')
+    nimgs = len(Ls)
+    expkL = numpy.asarray(numpy.exp(1j*numpy.dot(kpts, Ls.T)), order='C')
     nkpts = len(kpts)
 
-    xyz = numpy.asarray(cell.atom_coords(), order='C')
-    fill = getattr(libpbc, 'PBCnr2c_fill_s1')
+    fill = getattr(libpbc, 'PBCnr2c_fill_ks1')
     intopt = lib.c_null_ptr()
 
     def int_ket(_bas, intor):
@@ -269,22 +241,17 @@ def _int_vnl(cell, fakecell, hl_blocks, kpts):
         ao_loc = gto.moleintor.make_loc(bas, intor)
         ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
         nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
-        out = [numpy.zeros((ni,nj), order='F', dtype=numpy.complex128)
-               for k in range(nkpts)]
-        out_ptrs = (ctypes.c_void_p*nkpts)(
-                *[x.ctypes.data_as(ctypes.c_void_p) for x in out])
+        out = numpy.empty((nkpts,ni,nj), dtype=numpy.complex128)
         comp = 1
 
         fintor = getattr(gto.moleintor.libcgto, intor)
 
-        ptr_coords = numpy.asarray(atm[:cell.natm,gto.PTR_COORD],
-                                   dtype=numpy.int32, order='C')
         drv = libpbc.PBCnr2c_drv
-        drv(fintor, fill, out_ptrs, xyz.ctypes.data_as(ctypes.c_void_p),
-            ptr_coords.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
-            Ls.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(Ls)),
-            expLk.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nkpts),
-            ctypes.c_int(comp), (ctypes.c_int*4)(*(shls_slice[:4])),
+        drv(fintor, fill, out.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nkpts), ctypes.c_int(comp), ctypes.c_int(nimgs),
+            Ls.ctypes.data_as(ctypes.c_void_p),
+            expkL.ctypes.data_as(ctypes.c_void_p),
+            (ctypes.c_int*4)(*(shls_slice[:4])),
             ao_loc.ctypes.data_as(ctypes.c_void_p), intopt,
             atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
             bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),

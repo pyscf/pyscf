@@ -1996,21 +1996,22 @@ void type1_rad_ang(double *rad_ang, int lmax, double *r, double *rad_all)
         } } }
 }
 
-static void search_ecpatms(int *ecpatmlst, int natm, int *ecpbas, int necpbas)
+static void search_ecpatms(int *ecpatmlst, int *ecpbas, int necpbas)
 {
-        int mask[natm];
-        int i, k;
-        memset(mask, 0, sizeof(int)*natm);
+        int i, j, atm_id;
+        int necpatm = 0;
         for (i = 0; i < necpbas; i++) {
-                mask[ecpbas[ATOM_OF+i*BAS_SLOTS]] = 1;
-        }
-        for (k = 0, i = 0; i < natm; i++) {
-                if (mask[i]) {
-                        ecpatmlst[k] = i;
-                        k++;
+                atm_id = ecpbas[ATOM_OF+i*BAS_SLOTS];
+                for (j = 0; j < necpatm; j++) {
+                        if (atm_id == ecpatmlst[j]) {
+                                goto next_expbas;
+                        }
                 }
+                ecpatmlst[necpatm] = atm_id;
+                necpatm += 1;
+next_expbas:;
         }
-        ecpatmlst[k] = -1;
+        ecpatmlst[necpatm] = -1;
 }
 
 static void search_ecpshls(int *ecpshls, int atm_id, int lc,
@@ -2091,7 +2092,7 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
 
         int nrs = 1 << LEVEL_MAX;
         int ecpatmlst[natm+1];
-        search_ecpatms(ecpatmlst, natm, ecpbas, necpbas);
+        search_ecpatms(ecpatmlst, ecpbas, necpbas);
 
         const double D0 = 0;
         const double D1 = 1;
@@ -2320,7 +2321,7 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
 
         int nrs = 1 << LEVEL_MAX;
         int ecpatmlst[natm+1];
-        search_ecpatms(ecpatmlst, natm, ecpbas, necpbas);
+        search_ecpatms(ecpatmlst, ecpbas, necpbas);
 
         const int lilj1 = li + lj + 1;
         const int d1 = lilj1;

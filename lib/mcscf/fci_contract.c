@@ -12,8 +12,6 @@
 #include "vhf/fblas.h"
 #include "np_helper/np_helper.h"
 #include "fci.h"
-#define MIN(X,Y)        ((X)<(Y)?(X):(Y))
-#define MAX(X,Y)        ((X)>(Y)?(X):(Y))
 // for (16e,16o) ~ 11 MB buffer = 120 * 12870 * 8
 #define STRB_BLKSIZE    112
 

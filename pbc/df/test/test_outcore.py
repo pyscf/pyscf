@@ -19,7 +19,6 @@ cell.basis = { 'He': [[0, (0.8, 1.0)],
                       [0, (1.2, 1.0)]] }
 cell.verbose = 0
 cell.build(0, 0)
-cell.nimgs = [3,3,3]
 
 def finger(a):
     w = numpy.cos(numpy.arange(a.size))
@@ -31,16 +30,16 @@ class KnowValues(unittest.TestCase):
         numpy.random.seed(1)
         kptij_lst = numpy.random.random((3,2,3))
         kptij_lst[0] = 0
-        kptij_lst[1,0] = kptij_lst[1,1]
-        outcore.aux_e2(cell, cell, tmpfile.name, aosym='s2ij', comp=1,
+        outcore.aux_e2(cell, cell, tmpfile.name, aosym='s2', comp=1,
                        kptij_lst=kptij_lst, verbose=0)
-        refk0 = incore.aux_e2(cell, cell, aosym='s2ij', kpti_kptj=kptij_lst[0])
-        refk1 = incore.aux_e2(cell, cell, aosym='s2ij', kpti_kptj=kptij_lst[1])
-        refk2 = incore.aux_e2(cell, cell, aosym='s2ij', kpti_kptj=kptij_lst[2])
+        refk = incore.aux_e2(cell, cell, aosym='s2', kptij_lst=kptij_lst)
         with h5py.File(tmpfile.name, 'r') as f:
-            self.assertTrue(numpy.allclose(refk0, f['eri_mo/0'].value.T))
-            self.assertTrue(numpy.allclose(refk1, f['eri_mo/1'].value.T))
-            self.assertTrue(numpy.allclose(refk2, f['eri_mo/2'].value.T))
+            nao = cell.nao_nr()
+            idx = numpy.tril_indices(nao)
+            idx = idx[0] * nao + idx[1]
+            self.assertTrue(numpy.allclose(refk[0,idx], f['eri_mo/0'].value.T))
+            self.assertTrue(numpy.allclose(refk[1], f['eri_mo/1'].value.T))
+            self.assertTrue(numpy.allclose(refk[2], f['eri_mo/2'].value.T))
 
 if __name__ == '__main__':
     print("Full Tests for pbc.df.outcore")

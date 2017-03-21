@@ -18,8 +18,9 @@ from pyscf.df.outcore import _guess_shell_ranges
 from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import df
-from pyscf.pbc.df.df import make_modrho_basis, fuse_auxcell, unique
-from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC, is_zero, gamma_point
+from pyscf.pbc.df.df import make_modrho_basis, fuse_auxcell
+from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
+from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, unique
 from pyscf.pbc.df import mdf_jk
 from pyscf.pbc.df import mdf_ao2mo
 
@@ -66,6 +67,10 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
             j2cR, j2cI = zdotCN(kLR.T, kLI.T, kLR, kLI)
             j2c[k] -= j2cR + j2cI * 1j
 
+# Note large difference may be found in results between the CD/eig treatments.
+# In some systems, small integral errors can lead to different treatments of
+# linear dependency which can be observed in the total energy/orbital energy
+# around 4th decimal place.
         try:
             j2c[k] = ('CD', scipy.linalg.cholesky(j2c[k], lower=True))
         except scipy.linalg.LinAlgError:
@@ -83,7 +88,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
         kLIs.append(kLI)
         aoaux = kLR = kLI = j2cR = j2cI = coulG = None
 
-    outcore.aux_e2(cell, fused_cell, mydf._cderi, 'cint3c2e_sph',
+    outcore.aux_e2(cell, fused_cell, mydf._cderi, 'cint3c2e_sph', aosym='s2',
                    kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
     t1 = log.timer_debug1('3c2e', *t1)
     nauxs = [v[1].shape[0] for v in j2c]

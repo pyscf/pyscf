@@ -18,6 +18,7 @@ from pyscf.pbc.gto import pseudo
 from pyscf.pbc.dft import numint
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import fft_ao2mo
+from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
 
 
 def get_nuc(mydf, kpts=None):
@@ -125,7 +126,7 @@ def get_pp(mydf, kpts=None):
 
     for k, kpt in enumerate(kpts_lst):
         vppnl = vppnl_by_k(kpt)
-        if abs(kpt).sum() < 1e-9:  # gamma_point
+        if gamma_point(kpt):
             vpp[k] = vpp[k].real + vppnl.real
         else:
             vpp[k] += vppnl
