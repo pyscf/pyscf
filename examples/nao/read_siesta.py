@@ -7,7 +7,7 @@ print(siesta_eig(label)*27.2116, 'eV')
 hsx = siesta_hsx_c(label, force_type=-1)
 
 wfsx = siesta_wfsx_c(label)
-print(wfsx.X[0,22,21,0,0])
+print(wfsx.X[0,:,0,0,0])
 
 
 #print(hsx.H4.shape)
