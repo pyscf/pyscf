@@ -104,8 +104,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND ENABLE_LIBXC)
     CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
           --enable-shared --disable-fortran LIBS=-lm
   )
-endif()
-if(NOT DISABLE_DFT)
+endif() # ENABLE_LIBXC
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xcfun.h" AND ENABLE_XCFUN)
   ExternalProject_Add(libxcfun
     GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
@@ -117,7 +116,6 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xcfun.h" AND ENABLE_XCFUN)
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
             -DCMAKE_INSTALL_LIBDIR:PATH=lib
   )
-endif()
-endif()
+endif() # ENABLE_XCFUN
 add_subdirectory(dft)
-endif()
+endif() # DISABLE_DFT

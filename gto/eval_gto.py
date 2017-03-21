@@ -17,10 +17,7 @@ PTR_EXP    = 5
 PTR_COEFF  = 6
 BAS_SLOTS  = 8
 
-try:
-    libcgto = lib.load_library('libdft')
-except ImportError:
-    libcgto = lib.load_library('libcgto')
+libcgto = lib.load_library('libcgto')
 
 def eval_gto(mol, eval_name, coords,
              comp=1, shls_slice=None, non0tab=None, ao_loc=None, out=None):
