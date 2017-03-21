@@ -151,8 +151,8 @@ def aux_e2(cell, auxcell, erifile, intor='cint3c2e_sph', aosym='s2ij', comp=1,
                 v = lib.transpose(v, out=buf1)
                 if gamma_point(kptij):
                     v = v.real
-                if aosym_ks2[k] and v.shape[1] == nao**2:
-                    v = lib.pack_tril(v.reshape(-1,nao,nao))
+                if aosym_ks2[k] and v.shape[1] == ni**2:
+                    v = lib.pack_tril(v.reshape(-1,ni,ni))
                 if comp == 1:
                     h5dat[naux0:naux0+nrow] = v
                 else:
