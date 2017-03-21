@@ -437,12 +437,36 @@ def select_strs_ctypes(myci, civec, h1, eri, jk, eri_sorted, jk_sorted, norb, ne
                 numpy.zeros([0,2], dtype=civec._ts.dtype))
 
 def enlarge_space(myci, civec, h1, eri, jk, eri_sorted, jk_sorted, norb, nelec):
-    cidx = abs(civec) > myci.ci_coeff_cutoff
-    strs = civec._strs[cidx]
-    ts = civec._ts[cidx]
-    ci_coeff = as_SCIvector(civec[cidx], strs, ts)
-    #str_add, t_add = select_strs(myci, ci_coeff, h1, eri, norb, nelec)
-    str_add, t_add = select_strs_ctypes(myci, ci_coeff, h1, eri, jk, eri_sorted, jk_sorted, norb, nelec)
+    if not isinstance(civec, (tuple, list)):
+        civec = [civec]
+
+    strs = civec[0]._strs
+    ts = civec[0]._ts
+
+    nroots = len(civec)
+
+    cidx = abs(civec[0]) > myci.ci_coeff_cutoff
+    for p in range(1,nroots):
+        cidx += abs(civec[p]) > myci.ci_coeff_cutoff
+
+    strs = strs[cidx]
+    ts = ts[cidx]
+
+    ci_coeff = [as_SCIvector(c[cidx], strs, ts) for c in civec]
+    str_add, t_add = select_strs_ctypes(myci, ci_coeff[0], h1, eri, jk, eri_sorted, jk_sorted, norb, nelec)
+ 
+    for p in range(1,nroots):
+        str_add_add, t_add_add = select_strs_ctypes(myci, ci_coeff[p], h1, eri, jk, eri_sorted, jk_sorted, norb, nelec)
+        str_add = numpy.vstack((str_add, str_add_add))
+        t_add = numpy.vstack((t_add, t_add_add))
+
+    # Make sure there are no dublicate strings (possible if multiple roots is requested)
+    tmp = numpy.ascontiguousarray(str_add).view(numpy.dtype((numpy.void, str_add.dtype.itemsize * str_add.shape[1])))
+    _, tmpidx = numpy.unique(tmp, return_index=True)
+    print "tmp: ", tmp.shape
+    print "tmp: ", tmpidx.shape
+    str_add = str_add[tmpidx]
+    t_add = t_add[tmpidx]
 
     def order(x, y):
         for i in range(y.size):
@@ -488,7 +512,7 @@ def enlarge_space(myci, civec, h1, eri, jk, eri_sorted, jk_sorted, norb, nelec):
     t_ab = numpy.hstack((ts1, ts2))
     uniq_t = numpy.unique(t_ab)
     new_strs = []
-    new_ci = []
+    new_ci = [[]] * nroots 
     new_ts = []
     for ti in uniq_t:
         idx1 = numpy.where(ts1 == ti)[0]
@@ -497,19 +521,22 @@ def enlarge_space(myci, civec, h1, eri, jk, eri_sorted, jk_sorted, norb, nelec):
             strs2 = str_add[ts2 == ti]
             s, cidx = argmerge(strs1, strs2)
             new_strs.append(s)
-            c = numpy.zeros(len(s))
-            c[cidx] = ci_coeff[idx1]
+            c = [numpy.zeros(len(s))] * nroots
+            for p in range(nroots):
+                c[p][cidx] = ci_coeff[p][idx1]
         else:
             strs2 = str_add[ts2 == ti]
             new_strs.append(strs2)
-            c = numpy.zeros(len(strs2))
-        new_ci.append(c)
-        new_ts.append(numpy.repeat(ti, len(c)))
+            c = [numpy.zeros(len(strs2))] * nroots
+        for p in range(nroots):
+            new_ci[p].append(c[p])
+        new_ts.append(numpy.repeat(ti, len(c[0])))
 
     new_strs = numpy.vstack(new_strs)
-    new_ci = numpy.hstack(new_ci)
+    for p in range(nroots):
+        new_ci[p] = numpy.hstack(new_ci[p])
     new_ts = numpy.hstack(new_ts).view(numpy.int32).reshape(-1,2)
-    return as_SCIvector(new_ci, new_strs, new_ts)
+    return [as_SCIvector(ci, new_strs, new_ts) for ci in new_ci]
 
 def str2orblst(string, norb):
     occ = []
@@ -548,21 +575,16 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     if max_space is None: max_space = myci.max_space
     if max_memory is None: max_memory = myci.max_memory
     if nroots is None: nroots = myci.nroots
-    assert(nroots == 1)
     if myci.verbose >= logger.WARN:
         myci.check_sanity()
 
     log.info('Starting heat-bath CI algorithm...')
     log.info('Selection threshold:   %8.5f', myci.select_cutoff)
     log.info('CI coefficient cutoff: %8.5f', myci.ci_coeff_cutoff)
+    log.info('Number of roots:       %2d',   nroots)
 
     nelec = direct_spin1._unpack_nelec(nelec, myci.spin)
     eri = ao2mo.restore(1, eri, norb)
-
-# TODO: initial guess from CISD
-    hf_str = numpy.hstack([orblst2str(range(nelec[0]), norb),
-                           orblst2str(range(nelec[1]), norb)]).reshape(1,-1)
-    ci0 = as_SCIvector(numpy.ones(1), hf_str, numpy.array([[0,0]]))
 
     # Avoid resorting the integrals by storing them in memory
     eri = eri.ravel()
@@ -571,6 +593,11 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     jk = jk - jk.transpose(2,1,0,3)
     jk = jk.ravel()
     jk_sorted = abs(jk).argsort()[::-1]
+
+# TODO: initial guess from CISD
+    hf_str = numpy.hstack([orblst2str(range(nelec[0]), norb),
+                           orblst2str(range(nelec[1]), norb)]).reshape(1,-1)
+    ci0 = [as_SCIvector(numpy.ones(1), hf_str, numpy.array([[0,0]]))]
 
     ci0 = myci.enlarge_space(ci0, h1e, eri, jk, eri_sorted, jk_sorted, norb, nelec)
 
@@ -584,22 +611,22 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     float_tol = 3e-4
     conv = False
     for icycle in range(norb):
-        ci_strs, ci_ts = ci0._strs, ci0._ts
+        ci_strs, ci_ts = ci0[0]._strs, ci0[0]._ts
         float_tol = max(float_tol*.3, tol*1e2)
         log.info('\nMacroiteration %d', icycle)
         log.info('Number of CI configurations: %d', ci_strs.shape[0])
-
         hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
         #e, ci0 = lib.davidson(hop, ci0.reshape(-1), precond, tol=float_tol)
         t_start = time.time()
+        print hdiag.shape, ci_strs.shape
         e, ci0 = myci.eig(hop, ci0, precond, tol=float_tol, lindep=lindep,
                           max_cycle=max_cycle, max_space=max_space, nroots=nroots,
                           max_memory=max_memory, verbose=log, **kwargs)
         t_current = time.time() - t_start
         log.debug('Timing for solving the eigenvalue problem: %10.3f', t_current)
-        ci0 = as_SCIvector(ci0, ci_strs, ci_ts)
-        de, e_last = e-e_last, e
-        log.info('Cycle %d  E = %.15g  dE = %.8g', icycle, e+ecore, de)
+        ci0 = [as_SCIvector(c, ci_strs, ci_ts) for c in ci0]
+        de, e_last = min(e)-e_last, min(e)
+        log.info('Cycle %d  E = %s  dE = %.8g', icycle, e+ecore, de)
 
         if abs(de) < tol*1e3:
             conv = True
@@ -607,14 +634,20 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
 
         last_ci0_size = float(len(ci_strs))
         t_start = time.time()
+        if len(ci0) > 1:
+            print len(ci0), ci0[0]._strs.shape, ci0[1]._strs.shape, ci0[2]._strs.shape, ci0[0]._ts.shape, ci0[1]._ts.shape, ci0[2]._ts.shape
+            print ci0[0].shape, ci0[1].shape, ci0[2].shape
         ci0 = myci.enlarge_space(ci0, h1e, eri, jk, eri_sorted, jk_sorted, norb, nelec)
+        if len(ci0) > 1:
+            print len(ci0), ci0[0]._strs.shape, ci0[1]._strs.shape, ci0[2]._strs.shape, ci0[0]._ts.shape, ci0[1]._ts.shape, ci0[2]._ts.shape
+            print ci0[0].shape, ci0[1].shape, ci0[2].shape
         t_current = time.time() - t_start
         log.debug('Timing for selecting configurations: %10.3f', t_current)
-        if ((.99 < len(ci0._strs)/last_ci0_size < 1.01)):
+        if ((.99 < len(ci0[0]._strs)/last_ci0_size < 1.01)):
             conv = True
             break
 
-    ci_strs, ci_ts = ci0._strs, ci0._ts
+    ci_strs, ci_ts = ci0[0]._strs, ci0[0]._ts
     log.info('\nExtra CI in the final selected space')
     log.info('Number of CI configurations: %d', ci_strs.shape[0])
     hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
@@ -623,7 +656,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
                     max_memory=max_memory, verbose=log, **kwargs)
 
     log.info('\nSelected CI  E = %.15g', e+ecore)
-    return e+ecore, as_SCIvector(c, ci_strs, ci_ts)
+    return e+ecore, [as_SCIvector(ci, ci_strs, ci_ts) for ci in c]
 
 
 def to_fci(civec, norb, nelec):
@@ -665,13 +698,13 @@ def from_fci(fcivec, ci_strs, norb, nelec):
         ts[idet,1] = tb[kb]
     return as_SCIvector(civec, ci_strs, ts)
 
-
 class SelectedCI(direct_spin1.FCISolver):
     def __init__(self, mol=None):
         direct_spin1.FCISolver.__init__(self, mol)
         self.ci_coeff_cutoff = .5e-3
         self.select_cutoff = .5e-3
         self.conv_tol = 1e-9
+        self.nroots = 1
 
 ##################################################
 # don't modify the following attributes, they are not input options
