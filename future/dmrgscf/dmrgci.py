@@ -52,7 +52,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         twodot_to_onedot : int
             When to switch from two-dot algroithm to one-dot algroithm.
         nroots : int
-            
+
         weights : list of floats
             Use this attribute with "nroots" attribute to set state-average calculation.
         restart : bool
@@ -135,11 +135,12 @@ class DMRGCI(pyscf.lib.StreamObject):
             self.groupname = None
 
 ##################################################
-# don't modify the following attributes, if you do not finish part of calculation, which can be reused. 
+# don't modify the following attributes, if you do not finish part of calculation, which can be reused.
 
         #DO NOT CHANGE these parameters, unless you know the code in details
         self.twopdm = True #By default, 2rdm is calculated after the calculations of wave function.
         self.block_extra_keyword = [] #For Block advanced user only.
+        self.has_fourpdm = False
         self.has_threepdm = False
         self.has_nevpt = False
 # This flag _restart is set by the program internally, to control when to make
@@ -389,12 +390,12 @@ class DMRGCI(pyscf.lib.StreamObject):
 
             E3 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
             E3 = numpy.reshape(E3, (norb, norb, norb, norb, norb, norb), order='F')
-            
+
         else :
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.txt" %(state, state))
             f = open(fname, 'r')
             lines = f.readlines()
-            E3 = numpy.zeros(shape=(norb, norb, norb, norb, norb, norb), dtype=dt)
+            E3 = numpy.zeros(shape=(norb, norb, norb, norb, norb, norb), dtype=dt, order='F')
             for line in lines[1:]:
                 linesp = line.split()
                 if (len(linesp) != 7) :
@@ -406,8 +407,76 @@ class DMRGCI(pyscf.lib.StreamObject):
                 E3[b,c,a, e,d,f] = integral
                 E3[c,a,b, d,f,e] = integral
                 E3[c,b,a, d,e,f] = integral
-                
+
         return E3
+
+    def make_rdm4(self, state, norb, nelec, dt=numpy.dtype('Float64'), filetype = "binary", link_index=None, **kwargs):
+        import os
+
+        if self.has_fourpdm == False:
+            self.twopdm = False
+            self.threepdm = False
+            self.extraline.append('threepdm\n')
+            self.extraline.append('fourpdm\n')
+
+            writeDMRGConfFile(self, nelec, False)
+            if self.verbose >= logger.DEBUG1:
+                inFile = self.configFile
+                #inFile = os.path.join(self.scratchDirectory,self.configFile)
+                logger.debug1(self, 'Block Input conf')
+                logger.debug1(self, open(inFile, 'r').read())
+            executeBLOCK(self)
+            if self.verbose >= logger.DEBUG1:
+                outFile = self.outputFile
+                #outFile = os.path.join(self.scratchDirectory,self.outputFile)
+                logger.debug1(self, open(outFile).read())
+            self.has_fourpdm = True
+            self.has_threepdm = True
+            self.extraline.pop()
+
+        nelectrons = 0
+        if isinstance(nelec, (int, numpy.integer)):
+            nelectrons = nelec
+        else:
+            nelectrons = nelec[0]+nelec[1]
+
+        if (filetype == "binary") :
+            fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin" %(state, state))
+            fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin.unpack" %(state, state))
+            libE4unpack.unpackE4(ctypes.c_char_p(fname), ctypes.c_char_p(fnameout), ctypes.c_int(norb))
+
+            E4 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
+            E4 = numpy.reshape(E4, (norb, norb, norb, norb, norb, norb, norb, norb), order='F')
+
+        else :
+            fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.txt" %(state, state))
+            f = open(fname, 'r')
+            lines = f.readlines()
+            E4 = numpy.zeros(shape=(norb, norb, norb, norb, norb, norb, norb, norb), dtype=dt, order='F')
+            for line in lines[1:]:
+              linesp = line.split()
+              if (len(linesp) != 9) :
+                  continue
+              a, b, c, d, e, f, g, h, integral = int(linesp[0]), int(linesp[1]), int(linesp[2]), int(linesp[3]), int(linesp[4]), int(linesp[5]), int(linesp[6]), int(linesp[7]), float(linesp[8])
+              up_indexes=[a,b,c,d]
+              dn_indexes=[h,g,f,e]
+              for i in range(4):
+                for j in range(4):
+                  if (i==j):
+                    continue
+                  for k in range(4):
+                    if ((i==k)or(j==k)):
+                      continue
+                    for l in range(4):
+                      if ((i==l)or(j==l)or(k==l)):
+                        continue
+                      #print up_indexes[i],up_indexes[j],up_indexes[k],up_indexes[l],\
+                      #      dn_indexes[i],dn_indexes[j],dn_indexes[k],dn_indexes[l]
+                      E4[up_indexes[i],up_indexes[j],up_indexes[k],up_indexes[l],\
+                         dn_indexes[i],dn_indexes[j],dn_indexes[k],dn_indexes[l]] = integral
+              #print ''
+
+        return E4
 
     def clearSchedule(self):
         self.scheduleSweeps = []
