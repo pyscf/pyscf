@@ -38,6 +38,7 @@ def load_library(libname):
         return ctypes.CDLL(os.path.join(os.path.dirname(__file__), libname_so))
     else:
         _loaderpath = os.path.dirname(__file__)
+        print(libname)
         return numpy.ctypeslib.load_library(libname, _loaderpath)
 
 #Fixme, the standard resouce module gives wrong number when objects are released

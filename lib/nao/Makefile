@@ -2,22 +2,30 @@
 include arch.inc
 sinclude libs.inc
 
+TARGET=../libnao.so
+
 OBJS = \
   m_io.o \
+  m_null2char.o \
+  m_color.o \
+  m_die.o \
   m_log.o \
   m_warn.o \
+  m_precision.o \
   m_siesta_wfsx.o \
   m_siesta_hsx.o \
-  m_precision.o \
-  m_die.o \
-  m_color.o
+  cputime.o
 
 all: $(OBJS)
-	$(LINK) $(LFLAGS) --shared $(OBJS) $(USER_LIBS) -o libnao.so
+	$(LINK) $(LFLAGS) --shared $(OBJS) $(USER_LIBS) -o $(TARGET)
 
 clean:
-	rm $(OBJS) *.so
+	rm -f $(OBJS) $(TARGET) *.mod
+
 
 %.o:%.F90 arch.inc
 	$(TIME) $(FORTRAN) $(FLAGS) $(INCDIR) -c $<
+
+%.o:../%.c arch.inc
+	$(TIME) $(CC) $(CFLAGS) $(INCDIR) -c $<
 

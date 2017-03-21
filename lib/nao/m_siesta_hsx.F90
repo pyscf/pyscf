@@ -46,6 +46,7 @@ subroutine siesta_hsx_size(fname_in, force_basis_type, isize) & !, force_basis_t
   
   use m_precision, only : siesta_int
   use m_io, only : get_free_handle
+  use m_null2char, only : null2char
   !! external
   character(kind=c_char), intent(in) :: fname_in(*)
   integer(c_int64_t), intent(in) :: force_basis_type
@@ -53,11 +54,8 @@ subroutine siesta_hsx_size(fname_in, force_basis_type, isize) & !, force_basis_t
   !! internal
   type(hsx_t) :: hsx
   character(1000) :: fname
-  
+ 
   call null2char(fname_in, fname)
-
-!  write(6,*) trim(fname), force_basis_type, " - ", __FILE__, __LINE__
-
   call read_siesta_hsx(fname, force_basis_type, hsx)
 
   isize = 1 ! norbs
@@ -89,6 +87,8 @@ end subroutine ! siesta_hsx_size
 subroutine siesta_hsx_read(fname_in, force_basis_type, dat) bind(c, name='siesta_hsx_read')
   use m_precision, only : siesta_int
   use m_io, only : get_free_handle
+  use m_null2char, only : null2char
+  !! external
   character(kind=c_char), intent(in) :: fname_in(*)
   integer(c_int64_t), intent(in)    :: force_basis_type
   real(c_float), intent(inout) :: dat(*)
@@ -97,9 +97,7 @@ subroutine siesta_hsx_read(fname_in, force_basis_type, dat) bind(c, name='siesta
   character(1000) :: fname
   type(hsx_t) :: hsx
 
-  call null2char(fname_in, fname)  
-!  write(6,*) trim(fname), " ", __FILE__, __LINE__
-  
+  call null2char(fname_in, fname)
   call read_siesta_hsx(fname, force_basis_type, hsx)
 
   i = 1;
@@ -118,31 +116,8 @@ subroutine siesta_hsx_read(fname_in, force_basis_type, dat) bind(c, name='siesta
   if(allocated(hsx%orb_sc2orb_uc)) then
     dat(i:i+size(hsx%orb_sc2orb_uc)-1) = hsx%orb_sc2orb_uc; i=i+size(hsx%orb_sc2orb_uc);
   endif
-  
-!  write(6,*) dat(1), __FILE__, __LINE__ 
 
 end subroutine ! siesta_hsx_read
-
-
-!
-!
-!
-subroutine null2char(c_null, c_fstring)
-  implicit none
-  !! external 
-  character(kind=c_char), intent(in) :: c_null(*)
-  character(*), intent(inout) :: c_fstring
-  !! internal
-  integer :: i, c
-  
-  c_fstring = ""
-  do i=1,len(c_fstring)
-    c = ichar(c_null(i))
-    if(c==0) exit
-    c_fstring(i:i) = char(c)
-  enddo
-
-end subroutine ! 
 
 !
 !

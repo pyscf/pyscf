@@ -9,10 +9,11 @@
 # were installed. 
 #
 
-CC=gcc
-FORTRAN=gfortran -DBLAS_INT=4 -DTIMING -DnoREADSIGMA -DLIBXC -DDEBUG -DUSE_MEMORY_NOTE -ffree-line-length-0
+CC=gcc 
+FORTRAN=gfortran -DBLAS_INT=4 -DTIMING -DnoREADSIGMA -DLIBXC -DDEBUG -DUSE_MEMORY_NOTE
 
 FLAGS=-fPIC -ffree-line-length-0 -I$(LIBXCROOT)/include -Ofast -g #-CB
+CFLAGS=-fPIC 
 
 OMP_FLAGS = -fopenmp
 
