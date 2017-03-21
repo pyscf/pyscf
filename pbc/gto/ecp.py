@@ -10,8 +10,9 @@ Short range part of ECP under PBC
 import copy
 import ctypes
 import numpy
+from pyscf import lib
 from pyscf import gto
-from pyscf.gto import PTR_ECPBAS_OFFSET, PTR_NECPBAS, PTR_COORD
+from pyscf.gto import PTR_ECPBAS_OFFSET, PTR_NECPBAS
 
 
 def ecp_int(cell, kpts=None):
@@ -20,44 +21,34 @@ def ecp_int(cell, kpts=None):
         kpts_lst = numpy.zeros((1,3))
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
-    nkpts = len(kpts_lst)
-    Ls = cell.get_lattice_Ls()
-    expLk = numpy.asarray(numpy.exp(1j*numpy.dot(Ls, kpts_lst.T)), order='C')
 
     ecpcell = gto.Mole()
     ecpcell._atm = cell._atm
-    # append a single s function for auxiliary index.
-    # So the pbc fill_3c driver can handle the 2D integrals in (1,n,n) array
-    ecpbas = numpy.vstack([[0, 0, 1, 1, 0, 0, 0, 0], cell._ecpbas]).astype(numpy.int32)
+    # append a fictitious s function to mimic the auxiliary index in pbc.incore.
+    # ptr2last_env_idx to force PBCnr3c_fill_* function to copy the entire "env"
+    ptr2last_env_idx = len(cell._env) - 1
+    ecpbas = numpy.vstack([[0, 0, 1, 1, 0, ptr2last_env_idx, 0, 0],
+                           cell._ecpbas]).astype(numpy.int32)
     ecpcell._bas = ecpbas
     ecpcell._env = cell._env
+    # In pbc.incore _ecpbas is appended to two sets of cell._bas and the
+    # fictitious s function.
+    cell._env[PTR_ECPBAS_OFFSET] = cell.nbas * 2 + 1
+    cell._env[PTR_NECPBAS] = len(cell._ecpbas)
+    # shls_slice of auxiliary index (0,1) corresponds to the fictitious s function
+    shls_slice = (0, cell.nbas, 0, cell.nbas, 0, 1)
 
-    nao = cell.nao_nr()
-    buf = [numpy.zeros((nao,nao), order='F', dtype=numpy.complex128)
-           for k in range(nkpts)]
-    ints = incore._wrap_int3c(cell, ecpcell, 'ECPscalar_sph', 1, Ls, buf)
-    atm, bas, env = ints._envs[:3]
-    env[PTR_ECPBAS_OFFSET] = cell.nbas * 2 + 1
-    env[PTR_NECPBAS] = len(cell._ecpbas)
-    c_shls_slice = (ctypes.c_int*6)(0, cell.nbas, cell.nbas, cell.nbas*2,
-                                    cell.nbas*2, cell.nbas*2+1)
-
-    xyz = numpy.asarray(cell.atom_coords(), order='C')
-    ptr_coordL = atm[:cell.natm,PTR_COORD]
-    ptr_coordL = numpy.vstack((ptr_coordL,ptr_coordL+1,ptr_coordL+2)).T.copy('C')
-    for l, L1 in enumerate(Ls):
-        env[ptr_coordL] = xyz + L1
-        exp_Lk = numpy.einsum('k,ik->ik', expLk[l].conj(), expLk[:l+1])
-        exp_Lk = numpy.asarray(exp_Lk, order='C')
-        exp_Lk[l] = .5
-        ints(exp_Lk, c_shls_slice)
-
+    kptij_lst = numpy.hstack((kpts_lst,kpts_lst)).reshape(-1,2,3)
+    buf = incore.aux_e2(cell, ecpcell, 'ECPscalar_sph', aosym='s2',
+                        kptij_lst=kptij_lst, shls_slice=shls_slice)
+    buf = buf.reshape(len(kpts_lst),-1)
+    mat = []
     for k, kpt in enumerate(kpts_lst):
-        if abs(kpt).sum() < 1e-6:
-            buf[k] = buf[k].real + buf[k].real.T
-        else:
-            buf[k] = buf[k] + buf[k].T.conj()
+        v = lib.unpack_tril(buf[k])
+        if abs(kpt).sum() < 1e-9:  # gamma_point:
+            v = v.real
+        mat.append(v)
     if kpts is None or numpy.shape(kpts) == (3,):
-        buf = buf[0]
-    return buf
+        mat = mat[0]
+    return mat
 

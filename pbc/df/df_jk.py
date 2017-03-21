@@ -15,8 +15,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import tools
-
-KPT_DIFF_TOL = 1e-6
+from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, member
 
 def density_fit(mf, auxbasis=None, gs=None, with_df=None):
     '''Generte density-fitting SCF object
@@ -324,15 +323,6 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     t1 = log.timer('sr jk', *t1)
     return vj, vk
 
-
-def is_zero(kpt):
-    return abs(numpy.asarray(kpt)).sum() < KPT_DIFF_TOL
-gamma_point = is_zero
-
-def member(kpt, kpts):
-    kpts = numpy.reshape(kpts, (len(kpts),kpt.size))
-    dk = numpy.einsum('ki->k', abs(kpts-kpt.ravel()))
-    return numpy.where(dk < KPT_DIFF_TOL)[0]
 
 def _format_dms(dm_kpts, kpts):
     nkpts = len(kpts)

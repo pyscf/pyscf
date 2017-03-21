@@ -33,8 +33,8 @@ from pyscf.pbc.df import aft
 from pyscf.pbc.df import df_jk
 from pyscf.pbc.df import df_ao2mo
 from pyscf.pbc.df.aft import estimate_eta, get_nuc
-from pyscf.pbc.df.df_jk import (is_zero, gamma_point, member,
-                                zdotCN, zdotNN, zdotNC, KPT_DIFF_TOL)
+from pyscf.pbc.df.df_jk import zdotCN, zdotNN, zdotNC
+from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, member, unique
 
 LINEAR_DEP_THR = 1e-9
 
@@ -132,7 +132,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     fused_cell, fuse = fuse_auxcell(mydf, auxcell)
-    outcore.aux_e2(cell, fused_cell, mydf._cderi, 'cint3c2e_sph',
+    outcore.aux_e2(cell, fused_cell, mydf._cderi, 'cint3c2e_sph', aosym='s2',
                    kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
     t1 = log.timer_debug1('3c2e', *t1)
 
@@ -584,24 +584,6 @@ class DF(aft.AFTDF):
             self.build()
         return self.auxcell.nao_nr()
 
-
-def unique(kpts):
-    kpts = numpy.asarray(kpts)
-    nkpts = len(kpts)
-    uniq_kpts = []
-    uniq_index = []
-    uniq_inverse = numpy.zeros(nkpts, dtype=int)
-    seen = numpy.zeros(nkpts, dtype=bool)
-    n = 0
-    for i, kpt in enumerate(kpts):
-        if not seen[i]:
-            uniq_kpts.append(kpt)
-            uniq_index.append(i)
-            idx = abs(kpt-kpts).sum(axis=1) < KPT_DIFF_TOL
-            uniq_inverse[idx] = n
-            seen[idx] = True
-            n += 1
-    return numpy.asarray(uniq_kpts), numpy.asarray(uniq_index), uniq_inverse
 
 def fuse_auxcell(mydf, auxcell):
     chgcell = make_modchg_basis(auxcell, mydf.eta)

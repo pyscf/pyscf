@@ -24,22 +24,22 @@ class KnowValues(unittest.TestCase):
         cell.verbose = 0
         cell.build(0, 0)
         auxcell = incore.format_aux_basis(cell)
-        cell.nimgs = auxcell.nimgs = [3,3,3]
         a1 = incore.aux_e2(cell, auxcell, 'cint3c1e_sph')
         self.assertAlmostEqual(finger(a1), 0.1208944790152819, 9)
         a2 = incore.aux_e2(cell, auxcell, 'cint3c1e_sph', aosym='s2ij')
         self.assertTrue(numpy.allclose(a1, lib.unpack_tril(a2, axis=0).reshape(a1.shape)))
 
         numpy.random.seed(3)
-        kpti_kptj = [numpy.random.random(3)]*2
-        a1 = incore.aux_e2(cell, auxcell, 'cint3c1e_sph', kpti_kptj=kpti_kptj)
+        kpt = numpy.random.random(3)
+        kptij_lst = numpy.array([[kpt,kpt]])
+        a1 = incore.aux_e2(cell, auxcell, 'cint3c1e_sph', kptij_lst=kptij_lst)
         self.assertAlmostEqual(finger(a1), -0.073719031689332651-0.054002639392614758j, 9)
-        a2 = incore.aux_e2(cell, auxcell, 'cint3c1e_sph', aosym='s2ij', kpti_kptj=kpti_kptj)
+        a2 = incore.aux_e2(cell, auxcell, 'cint3c1e_sph', aosym='s2', kptij_lst=kptij_lst)
         self.assertTrue(numpy.allclose(a1, lib.unpack_tril(a2, 1, axis=0).reshape(a1.shape)))
 
         numpy.random.seed(1)
-        kpti_kptj = numpy.random.random((2,3))
-        a1 = incore.aux_e2(cell, auxcell, 'cint3c1e_sph', kpti_kptj=kpti_kptj)
+        kptij_lst = numpy.random.random((1,2,3))
+        a1 = incore.aux_e2(cell, auxcell, 'cint3c1e_sph', kptij_lst=kptij_lst)
         self.assertAlmostEqual(finger(a1), 0.039329191948685879-0.039836453846241987j, 9)
 
     def test_fill_2c2e(self):

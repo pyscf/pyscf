@@ -13,6 +13,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf import gto
 from pyscf.gto.ft_ao import ft_ao as mol_ft_ao
+from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
 
 libpbc = lib.load_library('libpbc')
 
@@ -134,7 +135,7 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
 
 def ft_ao(mol, Gv, shls_slice=None, b=None,
           gxyz=None, Gvbase=None, kpt=numpy.zeros(3), verbose=None):
-    if abs(kpt).sum() < 1e-9:
+    if gamma_point(kpt):
         return mol_ft_ao(mol, Gv, shls_slice, b, gxyz, Gvbase, verbose)
     else:
         kG = Gv + kpt
