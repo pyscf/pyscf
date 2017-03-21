@@ -232,7 +232,7 @@ class FFTDF(lib.StreamObject):
     def loop(self):
         coulG = tools.get_coulG(self.cell, numpy.zeros(3), gs=self.gs)
         ngs = len(coulG)
-        ao_pairs_G = get_ao_pairs_G(self, kptijkl[:2], compact=True)
+        ao_pairs_G = self.get_ao_pairs_G(kptijkl[:2], compact=True)
         ao_pairs_G *= numpy.sqrt(coulG*(cell.vol/ngs**2)).reshape(-1,1)
 
         Lpq = numpy.empty((self.blockdim, ao_pairs_G.shape[1]))
