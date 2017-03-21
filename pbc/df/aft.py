@@ -16,7 +16,7 @@ from pyscf.pbc import tools
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import incore
-from pyscf.pbc.df.df_jk import KPT_DIFF_TOL, is_zero, gamma_point
+from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import aft_ao2mo
 
@@ -105,9 +105,6 @@ def get_nuc(mydf, kpts=None):
 def _int_nuc_vloc(mydf, nuccell, kpts, intor='cint3c2e_sph'):
     '''Vnuc - Vloc'''
     cell = mydf.cell
-    rcut = max(cell.rcut, nuccell.rcut)
-    Ls = cell.get_lattice_Ls(rcut=rcut)
-    expLk = numpy.asarray(numpy.exp(1j*numpy.dot(Ls, kpts.T)), order='C')
     nkpts = len(kpts)
 
 # Use the 3c2e code with steep s gaussians to mimic nuclear density
@@ -116,29 +113,16 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='cint3c2e_sph'):
             gto.conc_env(nuccell._atm, nuccell._bas, nuccell._env,
                          fakenuc._atm, fakenuc._bas, fakenuc._env)
 
-    nao = cell.nao_nr()
-    buf = [numpy.zeros((nao,nao,fakenuc.natm), order='F', dtype=numpy.complex128)
-           for k in range(nkpts)]
-    ints = incore._wrap_int3c(cell, fakenuc, intor, 1, Ls, buf)
-    atm, bas, env = ints._envs[:3]
-    c_shls_slice = (ctypes.c_int*6)(0, cell.nbas, cell.nbas, cell.nbas*2,
-                                    cell.nbas*2, cell.nbas*2+fakenuc.natm)
-
-    xyz = numpy.asarray(cell.atom_coords(), order='C')
-    ptr_coordL = atm[:cell.natm,gto.PTR_COORD]
-    ptr_coordL = numpy.vstack((ptr_coordL,ptr_coordL+1,ptr_coordL+2)).T.copy('C')
-    for l, L1 in enumerate(Ls):
-        env[ptr_coordL] = xyz + L1
-        exp_Lk = numpy.einsum('k,ik->ik', expLk[l].conj(), expLk[:l+1])
-        exp_Lk = numpy.asarray(exp_Lk, order='C')
-        exp_Lk[l] = .5
-        ints(exp_Lk, c_shls_slice)
+    kptij_lst = numpy.hstack((kpts,kpts)).reshape(-1,2,3)
+    buf = incore.aux_e2(cell, fakenuc, intor, aosym='s2', kptij_lst=kptij_lst)
 
     charge = cell.atom_charges()
     charge = numpy.append(charge, -charge)  # (charge-of-nuccell, charge-of-fakenuc)
-    for k in range(nkpts):
-        v = numpy.einsum('ijz,z->ij', buf[k], charge)
-        buf[k] = lib.pack_tril(v + v.T.conj())
+    nao = cell.nao_nr()
+    nchg = len(charge)
+    nao_pair = nao*(nao+1)//2
+    buf = buf.reshape(nkpts,nao_pair,nchg)
+    mat = numpy.einsum('kxz,z->kx', buf, charge)
 
     if cell.dimension == 3:
         nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(cell.atom_charges())])
@@ -146,8 +130,8 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='cint3c2e_sph'):
         ovlp = cell.pbc_intor('cint1e_ovlp_sph', 1, lib.HERMITIAN, kpts)
         for k in range(nkpts):
             s = lib.pack_tril(ovlp[k])
-            buf[k] += nucbar * s
-    return buf
+            mat[k] += nucbar * s
+    return mat
 
 get_pp_loc_part1 = get_nuc
 

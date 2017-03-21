@@ -62,7 +62,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(ek1, 279.64647733018984+0j, 8)
         vj, vk = mydf.get_jk(dm, 1, kpt, with_j=False, exxdiv='ewald')
         ek1 = numpy.einsum('ij,ji->', vk, dm)
-        self.assertAlmostEqual(ek1, 691.98171156880562+0j, 8)
+        self.assertAlmostEqual(ek1, 691.64622995291529+0j, 8)
 
     def test_jk_hermi0(self):
         numpy.random.seed(12)

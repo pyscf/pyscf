@@ -12,9 +12,9 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import tools
-from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
-from pyscf.pbc.df.df_jk import is_zero, gamma_point, _ewald_exxdiv_for_G0
+from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC, _ewald_exxdiv_for_G0
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
+from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
 
 
 def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):

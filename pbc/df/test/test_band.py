@@ -33,7 +33,7 @@ class KnowValues(unittest.TestCase):
         mf.with_df = df.MDF(cell)
         mf.with_df.kpts_band = kband[0]
         mf.kernel()
-        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), -0.093705179440648712, 9)
+        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), -0.09370365951217785, 6)
 
     def test_fft_bands(self):
         mf = scf.KRHF(cell)
@@ -65,8 +65,8 @@ class KnowValues(unittest.TestCase):
         mf.with_df.kpts_band = kband
         mf.kpts = cell.make_kpts([2]*3)
         mf.kernel()
-        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), -0.32205954835271078, 9)
-        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), -0.64209375063268592, 9)
+        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), -0.32205722535389097, 6)
+        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), -0.64209385854790524, 6)
 
 
 if __name__ == '__main__':

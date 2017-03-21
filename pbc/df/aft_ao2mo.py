@@ -15,9 +15,10 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo.incore import iden_coeffs, _conc_mos
 from pyscf.lib import logger
 from pyscf.pbc import tools
-from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC, KPT_DIFF_TOL
+from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
 from pyscf.pbc.df.fft_ao2mo import _format_kpts
 from pyscf.pbc.df.df_ao2mo import _mo_as_complex, _dtrans, _ztrans
+from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
 
 
 def get_eri(mydf, kpts=None, compact=True):
@@ -32,7 +33,7 @@ def get_eri(mydf, kpts=None, compact=True):
 
 ####################
 # gamma point, the integral is real and with s4 symmetry
-    if abs(kptijkl).sum() < KPT_DIFF_TOL:
+    if gamma_point(kptijkl):
         eriR = numpy.zeros((nao_pair,nao_pair))
         for pqkR, pqkI, p0, p1 \
                 in mydf.pw_loop(mydf.gs, kptijkl[:2], q, max_memory=max_memory,
@@ -52,7 +53,7 @@ def get_eri(mydf, kpts=None, compact=True):
 # (kpt) i == l && j == k && i != j && j != k  =>
 #
 # complex integrals, N^4 elements
-    elif (abs(kpti-kptl).sum() < KPT_DIFF_TOL) and (abs(kptj-kptk).sum() < KPT_DIFF_TOL):
+    elif is_zero(kpti-kptl) and is_zero(kptj-kptk):
         eriR = numpy.zeros((nao**2,nao**2))
         eriI = numpy.zeros((nao**2,nao**2))
         for pqkR, pqkI, p0, p1 \
@@ -106,7 +107,7 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
 
 ####################
 # gamma point, the integral is real and with s4 symmetry
-    if abs(kptijkl).sum() < KPT_DIFF_TOL and all_real:
+    if gamma_point(kptijkl) and all_real:
         ijmosym, nij_pair, moij, ijslice = _conc_mos(mo_coeffs[0], mo_coeffs[1], compact)
         klmosym, nkl_pair, mokl, klslice = _conc_mos(mo_coeffs[2], mo_coeffs[3], compact)
         eri_mo = numpy.zeros((nij_pair,nkl_pair))
@@ -135,7 +136,7 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
 # (kpt) i == j == k == l != 0
 # (kpt) i == l && j == k && i != j && j != k  =>
 #
-    elif (abs(kpti-kptl).sum() < KPT_DIFF_TOL) and (abs(kptj-kptk).sum() < KPT_DIFF_TOL):
+    elif is_zero(kpti-kptl) and is_zero(kptj-kptk):
         mo_coeffs = _mo_as_complex(mo_coeffs)
         nij_pair, moij, ijslice = _conc_mos(mo_coeffs[0], mo_coeffs[1])[1:]
         nlk_pair, molk, lkslice = _conc_mos(mo_coeffs[3], mo_coeffs[2])[1:]

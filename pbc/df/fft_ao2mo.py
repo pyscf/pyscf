@@ -27,6 +27,7 @@ from pyscf.ao2mo.incore import iden_coeffs
 from pyscf.ao2mo import _ao2mo
 from pyscf.lib import logger
 from pyscf.pbc import tools
+from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
 
 
 def get_eri(mydf, kpts=None, compact=False):
@@ -41,7 +42,7 @@ def get_eri(mydf, kpts=None, compact=False):
 
 ####################
 # gamma point, the integral is real and with s4 symmetry
-    if abs(kptijkl).sum() < 1e-9:
+    if gamma_point(kptijkl):
         ao_pairs_G = get_ao_pairs_G(mydf, kptijkl[:2], q, compact=compact)
         ao_pairs_G *= numpy.sqrt(coulG).reshape(-1,1)
         aoijR = ao_pairs_G.real.copy()
@@ -56,7 +57,7 @@ def get_eri(mydf, kpts=None, compact=False):
 # (kpt) i == l && j == k && i != j && j != k  =>
 #
 # complex integrals, N^4 elements
-    elif (abs(kpti-kptl).sum() < 1e-9) and (abs(kptj-kptk).sum() < 1e-9):
+    elif is_zero(kpti-kptl) and is_zero(kptj-kptk):
         ao_pairs_G = get_ao_pairs_G(mydf, kptijkl[:2], q, compact=False)
         ao_pairs_G *= numpy.sqrt(coulG).reshape(-1,1)
         ao_pairs_invG = ao_pairs_G.T.reshape(nao,nao,-1).transpose(1,0,2).conj()
@@ -80,6 +81,7 @@ def general(mydf, mo_coeffs, kpts=None, compact=False):
     kpti, kptj, kptk, kptl = kptijkl
     if isinstance(mo_coeffs, numpy.ndarray) and mo_coeffs.ndim == 2:
         mo_coeffs = (mo_coeffs,) * 4
+    mo_coeffs = [numpy.asarray(mo, order='F') for mo in mo_coeffs]
     allreal = not any(numpy.iscomplexobj(mo) for mo in mo_coeffs)
     q = kptj - kpti
     coulG = tools.get_coulG(cell, q, gs=mydf.gs)
@@ -87,7 +89,7 @@ def general(mydf, mo_coeffs, kpts=None, compact=False):
 
 ####################
 # gamma point, the integral is real and with s4 symmetry
-    if abs(kptijkl).sum() < 1e-9 and allreal:
+    if gamma_point(kptijkl) and allreal:
         mo_pairs_G = get_mo_pairs_G(mydf, mo_coeffs[:2], kptijkl[:2], q,
                                     compact=compact)
         if ((iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
@@ -115,7 +117,7 @@ def general(mydf, mo_coeffs, kpts=None, compact=False):
 # (kpt) i == l && j == k && i != j && j != k  =>
 #
 # complex integrals, N^4 elements
-    elif ((abs(kpti-kptl).sum() < 1e-9) and (abs(kptj-kptk).sum() < 1e-9) and
+    elif (is_zero(kpti-kptl) and is_zero(kptj-kptk) and
           iden_coeffs(mo_coeffs[0], mo_coeffs[3]) and
           iden_coeffs(mo_coeffs[1], mo_coeffs[2])):
         nmoi = mo_coeffs[0].shape[1]
@@ -182,7 +184,7 @@ def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), q=None, shls_slice=None,
         ao_pairs_G = ao_pairs_G.reshape(-1,ngs).T
         return ao_pairs_G
 
-    if compact and abs(kpts).sum() < 1e-9:  # gamma point
+    if compact and gamma_point(kpts):  # gamma point
         aoR = mydf._numint.eval_ao(cell, coords, kpts[:1])[0]
         aoR = numpy.asarray(aoR.T, order='C')
         npair = i1*(i1+1)//2 - i0*(i0+1)//2
@@ -193,7 +195,7 @@ def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), q=None, shls_slice=None,
             ij += i + 1
         ao_pairs_G = ao_pairs_G.T
 
-    elif abs(kpts[0]-kpts[1]).sum() < 1e-9:
+    elif is_zero(kpts[0]-kpts[1]):
         aoR = mydf._numint.eval_ao(cell, coords, kpts[:1])[0]
         ao_pairs_G = trans(aoR[:,i0:i1], aoR[:,j0:j1])
 
@@ -238,7 +240,7 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None, compact=Fal
         mo_pairs_G = mo_pairs_G.reshape(-1,ngs).T
         return mo_pairs_G
 
-    if abs(kpts).sum() < 1e-9:  # gamma point, real
+    if gamma_point(kpts):  # gamma point, real
         aoR = mydf._numint.eval_ao(cell, coords, kpts[:1])[0]
         if compact and iden_coeffs(mo_coeffs[0], mo_coeffs[1]):
             moR = numpy.asarray(lib.dot(mo_coeffs[0].T, aoR.T), order='C')
@@ -252,7 +254,7 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None, compact=Fal
         else:
             mo_pairs_G = trans(aoR, aoR)
 
-    elif abs(kpts[0]-kpts[1]).sum() < 1e-9:
+    elif is_zero(kpts[0]-kpts[1]):
         aoR = mydf._numint.eval_ao(cell, coords, kpts[:1])[0]
         mo_pairs_G = trans(aoR, aoR)
 

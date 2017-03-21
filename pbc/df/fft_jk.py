@@ -12,8 +12,8 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import tools
 from pyscf.pbc.dft import numint
-from pyscf.pbc.df.df_jk import is_zero, gamma_point
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
+from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
 
 
 def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):

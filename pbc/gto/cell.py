@@ -249,68 +249,49 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
     ao_loc = moleintor.make_loc(bas, intor)
     ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
     nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
-    out = [np.zeros((ni,nj,comp), order='F', dtype=np.complex128)
-           for k in range(nkpts)]
-    out_ptrs = (ctypes.c_void_p*nkpts)(
-            *[x.ctypes.data_as(ctypes.c_void_p) for x in out])
+    out = np.empty((nkpts,comp,ni,nj), dtype=np.complex128)
 
     if hermi == 0:
         aosym = 's1'
     else:
         aosym = 's2'
     if '2c2e' in intor:
-        fill = getattr(libpbc, 'PBCnr2c2e_fill_'+aosym)
+        fill = getattr(libpbc, 'PBCnr2c2e_fill_k'+aosym)
     else:
         assert('2e' not in intor)
-        fill = getattr(libpbc, 'PBCnr2c_fill_'+aosym)
+        fill = getattr(libpbc, 'PBCnr2c_fill_k'+aosym)
 
     fintor = getattr(moleintor.libcgto, intor)
     intopt = lib.c_null_ptr()
 
     Ls = cell1.get_lattice_Ls(rcut=max(cell1.rcut, cell2.rcut))
-    expLk = np.asarray(np.exp(1j*np.dot(Ls, kpts_lst.T)), order='C')
-    xyz = np.asarray(cell2.atom_coords(), order='C')
-    ptr_coords = np.asarray(atm[cell1.natm:,mole.PTR_COORD],
-                            dtype=np.int32, order='C')
+    expkL = np.asarray(np.exp(1j*np.dot(kpts_lst, Ls.T)), order='C')
     drv = libpbc.PBCnr2c_drv
-    drv(fintor, fill, out_ptrs, xyz.ctypes.data_as(ctypes.c_void_p),
-        ptr_coords.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell2.natm),
-        Ls.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(Ls)),
-        expLk.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nkpts),
-        ctypes.c_int(comp), (ctypes.c_int*4)(*(shls_slice[:4])),
+    drv(fintor, fill, out.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nkpts), ctypes.c_int(comp), ctypes.c_int(len(Ls)),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        expkL.ctypes.data_as(ctypes.c_void_p),
+        (ctypes.c_int*4)(*(shls_slice[:4])),
         ao_loc.ctypes.data_as(ctypes.c_void_p), intopt,
         atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
         bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
         env.ctypes.data_as(ctypes.c_void_p))
 
-    def trans(out):
-        out = out.transpose(2,0,1)
-        if hermi == lib.HERMITIAN:
-            # GTOint2c fills the upper triangular of the F-order array.
-            idx = np.triu_indices(ni)
-            for i in range(comp):
-                out[i,idx[1],idx[0]] = out[i,idx[0],idx[1]].conj()
-        elif hermi == lib.ANTIHERMI:
-            idx = np.triu_indices(ni)
-            for i in range(comp):
-                out[i,idx[1],idx[0]] = -out[i,idx[0],idx[1]].conj()
-        elif hermi == lib.SYMMETRIC:
-            idx = np.triu_indices(ni)
-            for i in range(comp):
-                out[i,idx[1],idx[0]] = out[i,idx[0],idx[1]]
-        if comp == 1:
-            out = out.reshape(ni,nj)
-        return out
-
+    mat = []
     for k, kpt in enumerate(kpts_lst):
+        v = out[k]
+        if hermi != 0:
+            for ic in range(comp):
+                lib.hermi_triu(v[ic], hermi=hermi, inplace=True)
+        if comp == 1:
+            v = v[0]
         if abs(kpt).sum() < 1e-9:  # gamma_point
-            out[k] = np.asarray(trans(out[k].real), order='C')
-        else:
-            out[k] = np.asarray(trans(out[k]), order='C')
-    if kpts is None or np.shape(kpts) == (3,):
-# A single k-point
-        out = out[0]
-    return out
+            v = v.real
+        mat.append(v)
+
+    if kpts is None or np.shape(kpts) == (3,):  # A single k-point
+        mat = mat[0]
+    return mat
 
 
 def get_nimgs(cell, precision=None):

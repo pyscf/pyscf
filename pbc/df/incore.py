@@ -5,13 +5,14 @@
 
 import ctypes
 import numpy
-import pyscf.lib
-import pyscf.gto
+from pyscf import lib
+from pyscf import gto
 import pyscf.df
 from pyscf.lib import logger
 from pyscf.scf import _vhf
+from pyscf.pbc.lib.kpt_misc import is_zero, unique, KPT_DIFF_TOL
 
-libpbc = pyscf.lib.load_library('libpbc')
+libpbc = lib.load_library('libpbc')
 
 #try:
 ### Moderate speedup by caching eval_ao
@@ -39,70 +40,96 @@ def format_aux_basis(cell, auxbasis='weigend+etb'):
 
 #@memory_cache
 def aux_e2(cell, auxcell, intor='cint3c2e_sph', aosym='s1', comp=1,
-           kpti_kptj=numpy.zeros((2,3))):
+           kptij_lst=numpy.zeros((1,2,3)), shls_slice=None):
     '''3-center AO integrals (ij|L) with double lattice sum:
     \sum_{lm} (i[l]j[m]|L[0]), where L is the auxiliary basis.
 
     Returns:
         (nao_pair, naux) array
     '''
-    assert(comp == 1)
-    # sum over largest number of images in either cell or auxcell
-    rcut = max(cell.rcut, auxcell.rcut)
-    Ls = cell.get_lattice_Ls(rcut=rcut)
-    logger.debug1(cell, "rcut %s", rcut)
-    logger.debug3(cell, "Ls = %s", Ls)
+    kpti = kptij_lst[:,0]
+    kptj = kptij_lst[:,1]
+    j_only = is_zero(kpti-kptj)
+    gamma_point = abs(kptij_lst).sum() < KPT_DIFF_TOL
 
-    kpti, kptj = kpti_kptj
-    expkL = numpy.exp(1j*numpy.asarray(numpy.dot(Ls, numpy.reshape(kpti, (1,3)).T), order='C'))
-    expkR = numpy.exp(1j*numpy.asarray(numpy.dot(Ls, numpy.reshape(kptj, (1,3)).T), order='C'))
-    gamma_point = abs(kpti).sum() < 1e-9 and abs(kptj).sum() < 1e-9
+    nbas = cell.nbas
+    if shls_slice is None:
+        shls_slice = (0, nbas, 0, nbas, 0, auxcell.nbas)
 
-    nao = cell.nao_nr()
-    #naux = auxcell.nao_nr('ssc' in intor)
-    naux = auxcell.nao_nr()
+    atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
+                                 cell._atm, cell._bas, cell._env)
+    ao_loc = gto.moleintor.make_loc(bas, intor)
+    aux_loc = auxcell.ao_loc_nr('ssc' in intor)[:shls_slice[5]+1]
+    ao_loc = numpy.asarray(numpy.hstack([ao_loc[:-1], ao_loc[-1]+aux_loc]),
+                           dtype=numpy.int32)
+    atm, bas, env = gto.conc_env(atm, bas, env,
+                                 auxcell._atm, auxcell._bas, auxcell._env)
+    ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
+    nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
+    naux = aux_loc[shls_slice[5]] - aux_loc[shls_slice[4]]
+
+    if aosym[:2] == 's2':
+        nao_pair = ni * (ni+1) // 2
+    else:
+        nao_pair = ni * nj
+
+    Ls = cell.get_lattice_Ls()
+    nimgs = len(Ls)
+    if gamma_point:
+        kk_type = 'g'
+        dtype = numpy.double
+        nkpts = nkptij = 1
+        kptij_idx = numpy.array([0], dtype=numpy.int32)
+        expkL = numpy.ones(1)
+    elif j_only:
+        kk_type = 'k'
+        dtype = numpy.complex128
+        kpts = kptij_idx = kpti
+        expkL = numpy.exp(1j*numpy.dot(kpts, Ls.T))
+        nkpts = nkptij = len(kpts)
+    else:
+        kk_type = 'kk'
+        dtype = numpy.complex128
+        kpts = unique(numpy.vstack([kpti,kptj]))[0]
+        expkL = numpy.exp(1j*numpy.dot(kpts, Ls.T))
+        wherei = numpy.where(abs(kpti.reshape(-1,1,3)-kpts).sum(axis=2) < KPT_DIFF_TOL)[1]
+        wherej = numpy.where(abs(kptj.reshape(-1,1,3)-kpts).sum(axis=2) < KPT_DIFF_TOL)[1]
+        nkpts = len(kpts)
+        kptij_idx = numpy.asarray(wherei*nkpts+wherej, dtype=numpy.int32)
+        nkptij = len(kptij_idx)
+        nao_pair = ni * nj
+
     if naux == 0:
-        if aosym == 's1' or abs(kpti-kptj).sum() > 1e-9:
-            nao_pair = nao * (nao+1) // 2
+        if comp == 1:
+            mat = numpy.zeros((nao_pair,naux))
         else:
-            nao_pair = nao * nao
-        mat = numpy.zeros((comp,nao_pair,naux))
+            mat = numpy.zeros((comp,nao_pair,naux))
         return mat
 
-    buf = [numpy.zeros((nao,nao,naux,comp), order='F', dtype=numpy.complex128)]
-    ints = _wrap_int3c(cell, auxcell, intor, comp, Ls, buf)
-    atm, bas, env = ints._envs[:3]
-    shls_slice = (0, cell.nbas, cell.nbas, cell.nbas*2,
-                  cell.nbas*2, cell.nbas*2+auxcell.nbas)
-    c_shls_slice = (ctypes.c_int*6)(*(shls_slice[:6]))
+    shls_slice = (shls_slice[0], shls_slice[1],
+                  nbas+shls_slice[2], nbas+shls_slice[3],
+                  nbas*2+shls_slice[4], nbas*2+shls_slice[5])
+    fill = 'PBCnr3c_fill_%s%s' % (kk_type, aosym[:2])
+    out = numpy.empty((nkptij,comp,nao_pair,naux), dtype=dtype)
+    cintopt = _vhf.make_cintopt(atm, bas, env, intor)
 
-    xyz = cell.atom_coords().copy('C')
-    ptr_coordL = atm[:cell.natm,pyscf.gto.PTR_COORD]
-    ptr_coordL = numpy.vstack((ptr_coordL,ptr_coordL+1,ptr_coordL+2)).T.copy('C')
-
-    if aosym == 's1' or abs(kpti-kptj).sum() > 1e-9:
-        for l, L1 in enumerate(Ls):
-            env[ptr_coordL] = xyz + L1
-            exp_Lk = expkL[l].conj() * expkR
-            ints(exp_Lk, c_shls_slice)
-        mat, buf = buf[0], None
-    else:
-        for l, L1 in enumerate(Ls):
-            env[ptr_coordL] = xyz + L1
-            exp_Lk = expkL[l].conj() * expkR[:l+1]
-            exp_Lk[l] = .5
-            ints(exp_Lk, c_shls_slice)
-        mat, buf = buf[0], None
-        if gamma_point:
-            mat = mat.real + mat.real.swapaxes(0,1)
-        else:
-            mat = mat + mat.swapaxes(0,1).conj()
-        mat = mat[numpy.tril_indices(nao)]
+    libpbc.PBCnr3c_drv(getattr(libpbc, intor), getattr(libpbc, fill),
+                       out.ctypes.data_as(ctypes.c_void_p),
+                       ctypes.c_int(nkptij), ctypes.c_int(nkpts),
+                       ctypes.c_int(comp), ctypes.c_int(nimgs),
+                       Ls.ctypes.data_as(ctypes.c_void_p),
+                       expkL.ctypes.data_as(ctypes.c_void_p),
+                       kptij_idx.ctypes.data_as(ctypes.c_void_p),
+                       (ctypes.c_int*6)(*shls_slice),
+                       ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
+                       atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
+                       bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.nbas),
+                       env.ctypes.data_as(ctypes.c_void_p))
     if comp == 1:
-        mat = mat.reshape(-1,naux)
-    else:
-        mat = numpy.rollaxis(mat, -1, 0).reshape(comp,-1,naux)
-    return mat
+        out = out[:,0]
+    if nkptij == 1:
+        out = out[0]
+    return out
 
 
 def fill_2c2e(cell, auxcell, intor='cint2c2e_sph', hermi=0, kpt=numpy.zeros(3)):
@@ -112,53 +139,3 @@ def fill_2c2e(cell, auxcell, intor='cint2c2e_sph', hermi=0, kpt=numpy.zeros(3)):
         hermi = pyscf.lib.HERMITIAN
     return auxcell.pbc_intor(intor, 1, hermi, kpt)
 
-
-def _wrap_int3c(cell, auxcell, intor, comp, Ls, out_lst):
-    atm, bas, env = pyscf.gto.conc_env(cell._atm, cell._bas, cell._env,
-                                       cell._atm, cell._bas, cell._env)
-    atm, bas, env = pyscf.gto.conc_env(atm, bas, env,
-                                       auxcell._atm, auxcell._bas, auxcell._env)
-    atm = numpy.asarray(atm, dtype=numpy.int32)
-    bas = numpy.asarray(bas, dtype=numpy.int32)
-    env = numpy.asarray(env, dtype=numpy.double)
-    natm = len(atm)
-    nbas = len(bas)
-    if 'ssc' in intor:
-        ao_loc = cell.ao_loc_nr()
-        ao_loc = numpy.hstack((ao_loc[:-1], ao_loc[-1]+ao_loc))
-        ao_loc = numpy.hstack((ao_loc[:-1], ao_loc[-1]+auxcell.ao_loc_nr(cart=True)))
-        ao_loc = numpy.asarray(ao_loc, dtype=numpy.int32)
-    else:
-        ao_loc = pyscf.gto.moleintor.make_loc(bas, intor)
-
-    cintopt = _vhf.make_cintopt(atm, bas, env, intor)
-    fintor = getattr(pyscf.gto.moleintor.libcgto, intor)
-    fill = getattr(libpbc, 'PBCnr3c_fill_s1')
-    drv = libpbc.PBCnr3c_drv
-    outs = (ctypes.c_void_p*len(out_lst))(
-            *[out.ctypes.data_as(ctypes.c_void_p) for out in out_lst])
-    xyz = numpy.asarray(cell.atom_coords(), order='C')
-    ptr_coords = numpy.asarray(atm[cell.natm:cell.natm*2,pyscf.gto.PTR_COORD],
-                               dtype=numpy.int32, order='C')
-    c_ptr_coords = ptr_coords.ctypes.data_as(ctypes.c_void_p)
-    c_xyz = xyz.ctypes.data_as(ctypes.c_void_p)
-    c_nxyz = ctypes.c_int(len(xyz))
-    Ls = numpy.asarray(Ls, order='C')
-    c_Ls = Ls.ctypes.data_as(ctypes.c_void_p)
-    c_comp = ctypes.c_int(comp)
-    c_ao_loc = ao_loc.ctypes.data_as(ctypes.c_void_p)
-    c_atm = atm.ctypes.data_as(ctypes.c_void_p)
-    c_bas = bas.ctypes.data_as(ctypes.c_void_p)
-    c_env = env.ctypes.data_as(ctypes.c_void_p)
-    c_natm = ctypes.c_int(natm)
-    c_nbas = ctypes.c_int(nbas)
-    def ints(facs, c_shls_slice):
-        nimgs, nkpts = facs.shape
-        drv(fintor, fill, outs, c_xyz, c_ptr_coords, c_nxyz,
-            c_Ls, ctypes.c_int(nimgs),
-            facs.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nkpts), c_comp,
-            c_shls_slice, c_ao_loc, cintopt, c_atm, c_natm, c_bas, c_nbas, c_env)
-    # Save the numpy arrays in envs because ctypes does not increase their
-    # reference counting.
-    ints._envs = (atm, bas, env, ao_loc, xyz, ptr_coords, Ls)
-    return ints
