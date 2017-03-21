@@ -26,7 +26,6 @@ libhci = lib.load_library('libhci')
 def contract_2e_ctypes(h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
     h1, eri = h1_h2
     strs = civec._strs
-    ts = civec._ts
     ndet = len(strs)
     if hdiag is None:
         hdiag = make_hdiag(h1, eri, strs, norb, nelec)
@@ -51,103 +50,6 @@ def contract_2e_ctypes(h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
                         ci1.ctypes.data_as(ctypes.c_void_p))
 
     return ci1
-
-#def contract_2e(h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
-#    h1, eri = h1_h2
-#    strs = civec._strs
-#    ts = civec._ts
-#    ndet = len(strs)
-#    if hdiag is None:
-#        hdiag = make_hdiag(h1, eri, strs, norb, nelec)
-#    ci1 = numpy.zeros_like(civec)
-#
-#    eri = eri.reshape([norb]*4)
-#
-#    for ip in range(ndet):
-#        for jp in range(ip):
-#            if abs(ts[ip] - ts[jp]).sum() > 2:
-#                continue
-#            stria, strib = strs[ip].reshape(2,-1)
-#            strja, strjb = strs[jp].reshape(2,-1)
-#            desa, crea = str_diff(stria, strja)
-#            if len(desa) > 2:
-#                continue
-#            desb, creb = str_diff(strib, strjb)
-#            if len(desb) + len(desa) > 2:
-#                continue
-#            if len(desa) + len(desb) == 1:
-## alpha->alpha
-#                if len(desb) == 0:
-#                    i,a = desa[0], crea[0]
-#                    occsa = str2orblst(stria, norb)[0]
-#                    occsb = str2orblst(strib, norb)[0]
-#                    fai = h1[a,i]
-#                    for k in occsa:
-#                        fai += eri[k,k,a,i] - eri[k,i,a,k]
-#                    for k in occsb:
-#                        fai += eri[k,k,a,i]
-#                    sign = cre_des_sign(a, i, stria)
-#                    ci1[jp] += sign * fai * civec[ip]
-#                    ci1[ip] += sign * fai * civec[jp]
-## beta ->beta
-#                elif len(desa) == 0:
-#                    i,a = desb[0], creb[0]
-#                    occsa = str2orblst(stria, norb)[0]
-#                    occsb = str2orblst(strib, norb)[0]
-#                    fai = h1[a,i]
-#                    for k in occsb:
-#                        fai += eri[k,k,a,i] - eri[k,i,a,k]
-#                    for k in occsa:
-#                        fai += eri[k,k,a,i]
-#                    sign = cre_des_sign(a, i, strib)
-#                    ci1[jp] += sign * fai * civec[ip]
-#                    ci1[ip] += sign * fai * civec[jp]
-#
-#            else:
-## alpha,alpha->alpha,alpha
-#                if len(desb) == 0:
-#                    i,j = desa
-#                    a,b = crea
-## 6 conditions for i,j,a,b
-## --++, ++--, -+-+, +-+-, -++-, +--+ 
-#                    if a > j or i > b:
-## condition --++, ++--
-#                        v = eri[a,j,b,i]-eri[a,i,b,j]
-#                        sign = cre_des_sign(b, i, stria)
-#                        sign*= cre_des_sign(a, j, stria)
-#                    else:
-## condition -+-+, +-+-, -++-, +--+ 
-#                        v = eri[a,i,b,j]-eri[a,j,b,i]
-#                        sign = cre_des_sign(b, j, stria)
-#                        sign*= cre_des_sign(a, i, stria)
-#                    ci1[jp] += sign * v * civec[ip]
-#                    ci1[ip] += sign * v * civec[jp]
-## beta ,beta ->beta ,beta
-#                elif len(desa) == 0:
-#                    i,j = desb
-#                    a,b = creb
-#                    if a > j or i > b:
-#                        v = eri[a,j,b,i]-eri[a,i,b,j]
-#                        sign = cre_des_sign(b, i, strib)
-#                        sign*= cre_des_sign(a, j, strib)
-#                    else:
-#                        v = eri[a,i,b,j]-eri[a,j,b,i]
-#                        sign = cre_des_sign(b, j, strib)
-#                        sign*= cre_des_sign(a, i, strib)
-#                    ci1[jp] += sign * v * civec[ip]
-#                    ci1[ip] += sign * v * civec[jp]
-## alpha,beta ->alpha,beta
-#                else:
-#                    i,a = desa[0], crea[0]
-#                    j,b = desb[0], creb[0]
-#                    v = eri[a,i,b,j]
-#                    sign = cre_des_sign(a, i, stria)
-#                    sign*= cre_des_sign(b, j, strib)
-#                    ci1[jp] += sign * v * civec[ip]
-#                    ci1[ip] += sign * v * civec[jp]
-#        ci1[ip] += hdiag[ip] * civec[ip]
-#
-#    return ci1
 
 def make_hdiag(h1e, eri, strs, norb, nelec):
     eri = ao2mo.restore(1, eri, norb)
@@ -239,20 +141,6 @@ def argunique_ctypes(strs):
 
     return sort_idx.tolist()
 
-def argunique_with_t(strs, ts):
-    if len(strs) == 0:
-        return []
-    else:
-        strs = numpy.asarray(strs)
-        ts = numpy.asarray(ts, dtype=numpy.int32)
-        t_ab = ts.view(numpy.int64).ravel()
-        idxs = []
-        for ti in numpy.unique(t_ab):
-            idx = numpy.where(t_ab == ti)[0]
-#            idxs.append(idx[argunique(strs[idx])])
-            idxs.append(idx[argunique_ctypes(strs[idx])])
-        return numpy.hstack(idxs)
-
 def str_diff(string0, string1):
     des_string0 = []
     cre_string0 = []
@@ -326,123 +214,15 @@ def select_strs_ctypes(myci, civec, h1, eri, jk, eri_sorted, jk_sorted, norb, ne
 
     if len(str_add) > 0:
         str_add = numpy.asarray(str_add)
-        strsa = str_add.reshape(-1,2,nset)[:,0]
-        strsb = str_add.reshape(-1,2,nset)[:,1]
-        ta = [excitation_level(s, neleca) for s in strsa]
-        tb = [excitation_level(s, nelecb) for s in strsb]
-        ts = numpy.vstack((ta, tb)).T.copy('C')
-#        idx = argunique_with_t(str_add, ts)
-#        return str_add[idx], ts[idx]
-        return str_add, ts
+        return str_add
     else:
-        return (numpy.zeros([0,2,nset], dtype=civec._strs.dtype),
-                numpy.zeros([0,2], dtype=civec._ts.dtype))
-
-#def select_strs(myci, civec, h1, eri, norb, nelec):
-#    eri = eri.reshape([norb]*4)
-#    neleca, nelecb = nelec
-#    vja = numpy.einsum('iipq->pq', eri[:neleca,:neleca])
-#    vjb = numpy.einsum('iipq->pq', eri[:nelecb,:nelecb])
-#    vka = numpy.einsum('piiq->pq', eri[:,:neleca,:neleca])
-#    vkb = numpy.einsum('piiq->pq', eri[:,:nelecb,:nelecb])
-#    focka = h1 + vja+vjb - vka
-#    fockb = h1 + vja+vjb - vkb
-#
-#    eri = eri.ravel()
-#    eri_sorted = abs(eri).argsort()[::-1]
-#    jk = eri.reshape([norb]*4)
-#    jk = jk - jk.transpose(2,1,0,3)
-#    jkf = jk.ravel()
-#    jk_sorted = abs(jkf).argsort()[::-1]
-#
-#    ndet, nset = civec._strs.shape
-#    str_add = []
-#    for idet, (stra, strb) in enumerate(civec._strs.reshape(ndet,2,nset//2)):
-#        occsa, virsa = str2orblst(stra, norb)
-#        occsb, virsb = str2orblst(strb, norb)
-#        tol = myci.select_cutoff / abs(civec[idet])
-#
-#        holes_a = [i for i in virsa if i < neleca]
-#        particles_a = [i for i in occsa if i >= neleca]
-#        holes_b = [i for i in virsb if i < nelecb]
-#        particles_b = [i for i in occsb if i >= nelecb]
-## alpha->alpha
-#        for i in occsa:
-#            for a in virsa:
-#                fai = focka[a,i]
-#                for k in particles_a:
-#                    fai += jk[k,k,a,i]
-#                for k in holes_a:
-#                    fai -= jk[k,k,a,i]
-#                for k in particles_b:
-#                    fai += eri[k * norb * norb * norb + k * norb * norb + a * norb + i]
-#                for k in holes_b:
-#                    fai -= eri[k * norb * norb * norb + k * norb * norb + a * norb + i]
-#                if abs(fai) > tol:
-#                    newa = toggle_bit(toggle_bit(stra.copy(), a), i)
-#                    str_add.append(numpy.hstack((newa,strb)))
-## beta ->beta
-#        for i in occsb:
-#            for a in virsb:
-#                fai = fockb[a,i]
-#                for k in particles_b:
-#                    fai += jk[k,k,a,i]
-#                for k in holes_b:
-#                    fai -= jk[k,k,a,i]
-#                for k in particles_a:
-#                    fai += eri[k * norb * norb * norb + k * norb * norb + a * norb + i]
-#                for k in holes_a:
-#                    fai -= eri[k * norb * norb * norb + k * norb * norb + a * norb + i]
-#                if abs(fai) > tol:
-#                    newb = toggle_bit(toggle_bit(strb.copy(), a), i)
-#                    str_add.append(numpy.hstack((stra,newb)))
-#
-#        for ih in jk_sorted:
-#            if abs(jkf[ih]) < tol:
-#                break
-#            ij, lp = ih//norb, ih%norb
-#            ij, kp = ij//norb, ij%norb
-#            ip, jp = ij//norb, ij%norb
-## alpha,alpha->alpha,alpha
-#            if jp in occsa and ip in virsa and lp in occsa and kp in virsa:
-#                newa = toggle_bit(toggle_bit(toggle_bit(toggle_bit(stra.copy(), jp), ip), lp), kp)
-#                str_add.append(numpy.hstack((newa,strb)))
-## beta ,beta ->beta ,beta
-#            if jp in occsb and ip in virsb and lp in occsb and kp in virsb:
-#                newb = toggle_bit(toggle_bit(toggle_bit(toggle_bit(strb.copy(), jp), ip), lp), kp)
-#                str_add.append(numpy.hstack((stra,newb)))
-#
-#        for ih in eri_sorted:
-#            if abs(eri[ih]) < tol:
-#                break
-#            ij, lp = ih//norb, ih%norb
-#            ij, kp = ij//norb, ij%norb
-#            ip, jp = ij//norb, ij%norb
-## alpha,beta ->alpha,beta
-#            if jp in occsa and ip in virsa and lp in occsb and kp in virsb:
-#                newa = toggle_bit(toggle_bit(stra.copy(), jp), ip)
-#                newb = toggle_bit(toggle_bit(strb.copy(), lp), kp)
-#                str_add.append(numpy.hstack((newa,newb)))
-#
-#    if len(str_add) > 0:
-#        str_add = numpy.asarray(str_add)
-#        strsa = str_add.reshape(-1,2,nset//2)[:,0]
-#        strsb = str_add.reshape(-1,2,nset//2)[:,1]
-#        ta = [excitation_level(s, neleca) for s in strsa]
-#        tb = [excitation_level(s, nelecb) for s in strsb]
-#        ts = numpy.vstack((ta, tb)).T.copy('C')
-#        idx = argunique_with_t(str_add, ts)
-#        return str_add[idx], ts[idx]
-#    else:
-#        return (numpy.zeros([0,2,nset//2], dtype=civec._strs.dtype),
-#                numpy.zeros([0,2], dtype=civec._ts.dtype))
+        return numpy.zeros([0,2,nset], dtype=civec._strs.dtype)
 
 def enlarge_space(myci, civec, h1, eri, jk, eri_sorted, jk_sorted, norb, nelec):
     if not isinstance(civec, (tuple, list)):
         civec = [civec]
 
     strs = civec[0]._strs
-    ts = civec[0]._ts
 
     nroots = len(civec)
 
@@ -451,17 +231,14 @@ def enlarge_space(myci, civec, h1, eri, jk, eri_sorted, jk_sorted, norb, nelec):
         cidx += abs(civec[p]) > myci.ci_coeff_cutoff
 
     strs = strs[cidx]
-    ts = ts[cidx]
 
-    ci_coeff = [as_SCIvector(c[cidx], strs, ts) for c in civec]
+    ci_coeff = [as_SCIvector(c[cidx], strs) for c in civec]
  
     strs_new = strs.copy()
-    ts_new = ts.copy()
 
     for p in range(nroots):
-        str_add, ts_add = select_strs_ctypes(myci, ci_coeff[p], h1, eri, jk, eri_sorted, jk_sorted, norb, nelec)
+        str_add = select_strs_ctypes(myci, ci_coeff[p], h1, eri, jk, eri_sorted, jk_sorted, norb, nelec)
         strs_new = numpy.vstack((strs, str_add))
-        ts_new = numpy.vstack((ts_new, ts_add))
 
     # Add strings together and remove duplicate strings
     tmp = numpy.ascontiguousarray(strs_new).view(numpy.dtype((numpy.void, strs_new.dtype.itemsize * strs_new.shape[1])))
@@ -474,9 +251,8 @@ def enlarge_space(myci, civec, h1, eri, jk, eri_sorted, jk_sorted, norb, nelec):
         new_ci.append(c[tmpidx])
 
     strs_new = strs_new[tmpidx]
-    ts_new = ts_new[tmpidx]
 
-    return [as_SCIvector(ci, strs_new, ts_new) for ci in new_ci]
+    return [as_SCIvector(ci, strs_new) for ci in new_ci]
 
 def str2orblst(string, norb):
     occ = []
@@ -537,15 +313,15 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
 # TODO: initial guess from CISD
     if ci0 is None:
         hf_str = numpy.hstack([orblst2str(range(nelec[0]), norb), orblst2str(range(nelec[1]), norb)]).reshape(1,-1)
-        ci0 = [as_SCIvector(numpy.ones(1), hf_str, numpy.array([[0,0]]))]
+        ci0 = [as_SCIvector(numpy.ones(1), hf_str)]
     else:
         assert(nroots == len(ci0))
 
     ci0 = myci.enlarge_space(ci0, h1e, eri, jk, eri_sorted, jk_sorted, norb, nelec)
 
     def hop(c):
-        #hc = myci.contract_2e((h1e, eri), as_SCIvector(c, ci_strs, ci_ts), norb, nelec, hdiag)
-        hc = myci.contract_2e_ctypes((h1e, eri), as_SCIvector(c, ci_strs, ci_ts), norb, nelec, hdiag)
+        #hc = myci.contract_2e((h1e, eri), as_SCIvector(c, ci_strs), norb, nelec, hdiag)
+        hc = myci.contract_2e_ctypes((h1e, eri), as_SCIvector(c, ci_strs), norb, nelec, hdiag)
         return hc.ravel()
     precond = lambda x, e, *args: x/(hdiag-e+myci.level_shift)
 
@@ -553,7 +329,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     float_tol = 3e-4
     conv = False
     for icycle in range(norb):
-        ci_strs, ci_ts = ci0[0]._strs, ci0[0]._ts
+        ci_strs = ci0[0]._strs
         float_tol = max(float_tol*.3, tol*1e2)
         log.info('\nMacroiteration %d', icycle)
         log.info('Number of CI configurations: %d', ci_strs.shape[0])
@@ -568,7 +344,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
             e = [e]
         t_current = time.time() - t_start
         log.debug('Timing for solving the eigenvalue problem: %10.3f', t_current)
-        ci0 = [as_SCIvector(c, ci_strs, ci_ts) for c in ci0]
+        ci0 = [as_SCIvector(c, ci_strs) for c in ci0]
         de, e_last = min(e)-e_last, min(e)
         log.info('Cycle %d  E = %s  dE = %.8g', icycle, numpy.array(e)+ecore, de)
 
@@ -585,7 +361,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
             conv = True
             break
 
-    ci_strs, ci_ts = ci0[0]._strs, ci0[0]._ts
+    ci_strs = ci0[0]._strs
     log.info('\nExtra CI in the final selected space')
     log.info('Number of CI configurations: %d', ci_strs.shape[0])
     hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
@@ -597,7 +373,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
         e = [e]
     log.info('\nSelected CI  E = %s', numpy.array(e)+ecore)
 
-    return (numpy.array(e)+ecore), [as_SCIvector(ci, ci_strs, ci_ts) for ci in c]
+    return (numpy.array(e)+ecore), [as_SCIvector(ci, ci_strs) for ci in c]
 
 
 def to_fci(civec, norb, nelec):
@@ -630,14 +406,11 @@ def from_fci(fcivec, ci_strs, norb, nelec):
     tb = [excitation_level(s, nelecb) for s in strsb.reshape(-1,1)]
     ndet = len(ci_strs)
     civec = numpy.zeros(ndet)
-    ts = numpy.zeros((ndet,2), dtype=numpy.int32)
     for idet, (stra, strb) in enumerate(ci_strs.reshape(ndet,2,-1)):
         ka = stradic[stra[0]]
         kb = strbdic[strb[0]]
         civec[idet] = fcivec[ka,kb]
-        ts[idet,0] = ta[ka]
-        ts[idet,1] = tb[kb]
-    return as_SCIvector(civec, ci_strs, ts)
+    return as_SCIvector(civec, ci_strs)
 
 class SelectedCI(direct_spin1.FCISolver):
     def __init__(self, mol=None):
@@ -667,19 +440,17 @@ class SelectedCI(direct_spin1.FCISolver):
 
         if hasattr(civec, '_strs'):
             self._strs = civec._strs
-            self._ts = civec._ts
         else:
             assert(civec.size == len(self._strs))
-            civec = as_SCIvector(civec, self._strs, self._ts)
+            civec = as_SCIvector(civec, self._strs)
         return contract_2e(h1_h2, civec, norb, nelec, hdiag, **kwargs)
 
     def contract_2e_ctypes(self, h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
         if hasattr(civec, '_strs'):
             self._strs = civec._strs
-            self._ts = civec._ts
         else:
             assert(civec.size == len(self._strs))
-            civec = as_SCIvector(civec, self._strs, self._ts)
+            civec = as_SCIvector(civec, self._strs)
         return contract_2e_ctypes(h1_h2, civec, norb, nelec, hdiag, **kwargs)
 
     def make_hdiag(self, h1e, eri, strs, norb, nelec):
@@ -689,10 +460,9 @@ class SelectedCI(direct_spin1.FCISolver):
 
         if hasattr(civec, '_strs'):
             self._strs = civec._strs
-            self._ts = civec._ts
         else:
             assert(civec.size == len(self._strs))
-            civec = as_SCIvector(civec, self._strs, self._ts)
+            civec = as_SCIvector(civec, self._strs)
 
         return to_fci(civec, norb, nelec)
 
@@ -702,18 +472,16 @@ class SelectedCI(direct_spin1.FCISolver):
 
 class _SCIvector(numpy.ndarray):
     def __array_finalize__(self, obj):
-        self._ts = getattr(obj, '_ts', None)
         self._strs = getattr(obj, '_strs', None)
 
-def as_SCIvector(civec, ci_strs, ci_ts):
+def as_SCIvector(civec, ci_strs):
     civec = civec.view(_SCIvector)
     civec._strs = ci_strs
-    civec._ts = ci_ts
     return civec
 
-def as_SCIvector_if_not(civec, ci_strs, ci_ts):
+def as_SCIvector_if_not(civec, ci_strs):
     if not hasattr(civec, '_strs'):
-        civec = as_SCIvector(civec, ci_strs, ci_ts)
+        civec = as_SCIvector(civec, ci_strs)
     return civec
 
 
@@ -722,9 +490,6 @@ if __name__ == '__main__':
     strs = (numpy.random.random((14,3)) * 4).astype(numpy.uint64)
     print strs
     print argunique(strs)
-    ts = numpy.ones((len(strs),2), dtype=numpy.int64)
-    ts[10:,1] = 2
-    print argunique_with_t(strs, ts)
 
     norb = 6
     nelec = 3,3
@@ -742,8 +507,7 @@ if __name__ == '__main__':
     jk = jk - jk.transpose(2,1,0,3)
     jk = jk.ravel()
     jk_sorted = abs(jk).argsort()[::-1]
-    ts = numpy.zeros((1,2), dtype=numpy.int32)
-    ci1 = as_SCIvector(numpy.ones(1), hf_str, ts)
+    ci1 = as_SCIvector(numpy.ones(1), hf_str)
 
     myci = SelectedCI()
     myci.select_cutoff = .001
@@ -752,7 +516,6 @@ if __name__ == '__main__':
     ci2 = enlarge_space(myci, ci1, h1, eri, jk, eri_sorted, jk_sorted, norb, nelec)
     ci2 = ci2[0]
     print len(ci2)
-    print numpy.unique(ci2._ts.view(numpy.int64)).view(numpy.int32).reshape(-1,2)
 
     ci2 = enlarge_space(myci, ci1, h1, eri, jk, eri_sorted, jk_sorted, norb, nelec)
     ci2 = ci2[0]
@@ -762,7 +525,6 @@ if __name__ == '__main__':
     ci2 = enlarge_space(myci, ci2, h1, eri, jk, eri_sorted, jk_sorted, norb, nelec)
     ci2 = ci2[0]
     print len(ci2)
-    print numpy.unique(ci2._ts.view(numpy.int64)).view(numpy.int32).reshape(-1,2)
 
     efci = direct_spin1.kernel(h1, eri, norb, nelec, verbose=5)[0]
 
