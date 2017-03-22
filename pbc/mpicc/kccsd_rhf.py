@@ -82,18 +82,18 @@ def write_amplitudes(t1, t2, filename="t_amplitudes.hdf5"):
         feri.close()
     return
 
-def read_eom_amplitudes(vec_shape, vec=None, filename="reom_amplitudes.hdf5"):
+def read_eom_amplitudes(vec_shape, filename="reom_amplitudes.hdf5", vec=None):
     task_list = generate_max_task_list(vec_shape)
     read_success = False
+    print "attempting to read in eom amplitudes from file ", filename
     if os.path.isfile(filename):
-        if vec is None:
-            vec = np.empty(vec_shape)
         print "reading eom amplitudes from file..."
         feri = h5py.File(filename, 'r', driver='mpio', comm=MPI.COMM_WORLD)
         saved_v = feri['v']
-	assert(saved_v.shape == vec_shape)
-
-	task_list = generate_max_task_list(vec.shape)
+        if vec is None:
+            vec = np.empty(vec_shape,dtype=saved_v.dtype)
+        assert(saved_v.shape == vec_shape)
+        task_list = generate_max_task_list(vec.shape)
         for block in task_list:
             which_slice = [slice(*x) for x in block]
             vec[tuple(which_slice)] = saved_v[tuple(which_slice)]
@@ -1295,7 +1295,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             precond = lambda dx, e, x0: dx/(diag-e)
             # Initial guess from file
             amplitude_filename = "__ripccsd" + str(kshift) + "__.hdf5"
-            rsuccess, x0 = read_eom_amplitudes((size,nroots),amplitude_filename)
+            rsuccess, x0 = read_eom_amplitudes((size,nroots),filename=amplitude_filename)
             if not rsuccess:
                 x0 = np.zeros_like(diag)
                 x0[np.argmin(diag)] = 1.0
@@ -1304,7 +1304,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             	#conv, evals[k], evecs[k,:] = eigs(self.ipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
             else:
             	evals[k], evecs[k] = eig(self.ipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-            write_eom_amplitudes(evecs[k],amplitude_filename)
+            write_eom_amplitudes(evecs[k],filename=amplitude_filename)
         time0 = log.timer_debug1('converge ip-ccsd', *time0)
         comm.Barrier()
         return evals.real, evecs
@@ -1639,7 +1639,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         #                    index += 1
         return vector
 
-    def ipccsd_pt2(self, ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
+    def ipccsd_star(self, ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
         nproc = comm.Get_size()
         nocc = self.nocc()
         nvir = self.nmo() - nocc
@@ -1654,8 +1654,27 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         for _eval, _evec, _levec in zip(ipccsd_evals, ipccsd_evecs.T, lipccsd_evecs.T):
             l1,l2 = self.vector_to_amplitudes_ip(_levec)
             r1,r2 = self.vector_to_amplitudes_ip(_evec)
+
+            ##########################################
+            #                                        #
+            # Transposing the l2 operator            #
+            #                                        #
+            ##########################################
+
+            print "Transposing the l2 operators..."
+            l2_t = numpy.zeros_like(l2)
+            for ki in range(nkpts):
+                for kj in range(nkpts):
+                    ka = kconserv[ki,kshift,kj]
+                    l2_t[ki,kj] = l2[kj,ki].transpose(1,0,2)
+            print "Transpose completed."
+
+            # Normalization constant for left-hand eigenvector
             ldotr = numpy.dot(l1.ravel(),r1.ravel()) + numpy.dot(l2.ravel(),r2.ravel())
             print "ldotr = ", ldotr
+            l2 = (l2 + 2.*l2_t)/3.
+            l2_t = None
+
             l1 /= ldotr
             l2 /= ldotr
             l1 = l1.reshape(-1)
@@ -1663,14 +1682,13 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
             lijkab_tmp = numpy.zeros((nocc,nocc,nocc,nvir,nvir),dtype=t2.dtype)
             rijkab_tmp = numpy.zeros((nocc,nocc,nocc,nvir,nvir),dtype=t2.dtype)
-            def mem_usage_oookk(nocc, nvir, nkpts):
-                return nocc**3 * nkpts * 16
+            def mem_usage_ovvvkk(nocc, nvir, nkpts):
+                return nocc * nvir**3 * nkpts * 16
             array_size = [nkpts,nkpts]
             # TODO: figure out a good chunk size
-            task_list = generate_max_task_list(array_size)
+            task_list = generate_max_task_list(array_size,priority_list=[1,1])
 
-            pt2_energy = numpy.array(0.0 + 1j*0.0)
-
+            star_energy = numpy.array(0.0 + 1j*0.0)
             for kirange, kjrange in mpi.work_stealing_partition(task_list):
                 oovv_ijX = _cp(eris.oovv[slice(*kirange),slice(*kjrange),range(nkpts)])
                 oovv_jiX = _cp(eris.oovv[slice(*kjrange),slice(*kirange),range(nkpts)])
@@ -1735,168 +1753,86 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                                 # Beginning of ovvv terms
 
                                 ke = kconserv[ka,ki,kb]
-                                tmp = 1./3*einsum('ieab,jke->ijkab',eris.ovvv[ki,ke,ka],l2[kj,kk] + 2.*l2[kk,kj].transpose(1,0,2))
-                                lijkab_tmp += 4.*tmp
+                                tmp = einsum('ieab,jke->ijkab',eris.ovvv[ki,ke,ka],2.*l2[kj,kk]-l2[kk,kj].transpose(1,0,2))
+                                lijkab_tmp += 2.*tmp
 
                                 ke = kconserv[ka,kj,kb]
-                                tmp = 1./3*einsum('jeba,ike->ijkab',eris.ovvv[kj,ke,kb],l2[ki,kk] + 2.*l2[kk,ki].transpose(1,0,2))
-                                lijkab_tmp += 4.*tmp
+                                tmp = einsum('jeba,ike->ijkab',eris.ovvv[kj,ke,kb],2.*l2[ki,kk]-l2[kk,ki].transpose(1,0,2))
+                                lijkab_tmp += 2.*tmp
 
                                 # (j,i,k) -> (i,j,k)
                                 ke = kconserv[ka,kj,kb]
-                                tmp = 1./3*einsum('jeab,ike->ijkab',eris.ovvv[kj,ke,ka],l2[ki,kk] + 2.*l2[kk,ki].transpose(1,0,2))
-                                lijkab_tmp -= 2.*tmp
+                                tmp = einsum('jeab,ike->ijkab',eris.ovvv[kj,ke,ka],2.*l2[ki,kk]-l2[kk,ki].transpose(1,0,2))
+                                lijkab_tmp -= 1.*tmp
 
                                 ke = kconserv[ka,ki,kb]
-                                tmp = 1./3*einsum('ieba,jke->ijkab',eris.ovvv[ki,ke,kb],l2[kj,kk] + 2.*l2[kk,kj].transpose(1,0,2))
-                                lijkab_tmp -= 2.*tmp
+                                tmp = einsum('ieba,jke->ijkab',eris.ovvv[ki,ke,kb],2.*l2[kj,kk]-l2[kk,kj].transpose(1,0,2))
+                                lijkab_tmp -= 1.*tmp
 
                                 # (k,j,i) -> (i,j,k)
                                 ke = kconserv[ki,kshift,kj]
-                                tmp = 1./3*einsum('keab,jie->ijkab',eris.ovvv[kk,ke,ka],l2[kj,ki] + 2.*l2[ki,kj].transpose(1,0,2))
-                                lijkab_tmp -= 2.*tmp
-
-                                ke = kconserv[ka,kj,kb]
-                                tmp = 1./3*einsum('jeba,kie->ijkab',eris.ovvv[kj,ke,kb],l2[kk,ki] + 2.*l2[ki,kk].transpose(1,0,2))
-                                lijkab_tmp -= 2.*tmp
-
-                                # (i,k,j) -> (i,j,k)
-                                ke = kconserv[ka,ki,kb]
-                                tmp = 1./3*einsum('ieab,kje->ijkab',eris.ovvv[ki,ke,ka],l2[kk,kj] + 2.*l2[kj,kk].transpose(1,0,2))
-                                lijkab_tmp -= 2.*tmp
+                                tmp = einsum('keab,jie->ijkab',eris.ovvv[kk,ke,ka],2.*l2[kj,ki]-l2[ki,kj].transpose(1,0,2))
+                                lijkab_tmp -= 1.*tmp
 
                                 ke = kconserv[ki,kshift,kj]
-                                tmp = 1./3*einsum('keba,ije->ijkab',eris.ovvv[kk,ke,kb],l2[ki,kj] + 2.*l2[kj,ki].transpose(1,0,2))
-                                lijkab_tmp -= 2.*tmp
+                                tmp = einsum('keba,ije->ijkab',eris.ovvv[kk,ke,kb],2.*l2[ki,kj]-l2[kj,ki].transpose(1,0,2))
+                                lijkab_tmp -= 1.*tmp
 
-                                # (j,k,i) -> (i,j,k)
-                                ke = kconserv[ki,kshift,kj]
-                                tmp = 1./3*einsum('keab,ije->ijkab',eris.ovvv[kk,ke,ka],l2[ki,kj] + 2.*l2[kj,ki].transpose(1,0,2))
-                                lijkab_tmp += 1.*tmp
-
-                                ke = kconserv[ka,ki,kb]
-                                tmp = 1./3*einsum('ieba,kje->ijkab',eris.ovvv[ki,ke,kb],l2[kk,kj] + 2.*l2[kj,kk].transpose(1,0,2))
-                                lijkab_tmp += 1.*tmp
-
-                                # (k,i,j) -> (i,j,k)
-                                ke = kconserv[ka,kj,kb]
-                                tmp = 1./3*einsum('jeab,kie->ijkab',eris.ovvv[kj,ke,ka],l2[kk,ki] + 2.*l2[ki,kk].transpose(1,0,2))
-                                lijkab_tmp += 1.*tmp
-
-                                ke = kconserv[kj,kshift,ki]
-                                tmp = 1./3*einsum('keba,jie->ijkab',eris.ovvv[kk,ke,kb],l2[kj,ki] + 2.*l2[ki,kj].transpose(1,0,2))
-                                lijkab_tmp += 1.*tmp
-
-
-
-                                # Beginning of ooov terms
+                                # ooov part 1
 
                                 km = kconserv[kshift,ki,ka]
-                                tmp = -1./3*einsum('kjmb,ima->ijkab',eris.ooov[kk,kj,km],l2[ki,km] + 2.*l2[km,ki].transpose(1,0,2))
-                                lijkab_tmp += 4.*tmp
+                                tmp = -einsum('kjmb,ima->ijkab',eris.ooov[kk,kj,km],2.*l2[ki,km]-l2[km,ki].transpose(1,0,2))
+                                lijkab_tmp += 2.*tmp
 
                                 km = kconserv[kshift,kj,kb]
-                                tmp = -1./3*einsum('kima,jmb->ijkab',eris.ooov[kk,ki,km],l2[kj,km] + 2.*l2[km,kj].transpose(1,0,2))
-                                lijkab_tmp += 4.*tmp
+                                tmp = -einsum('kima,jmb->ijkab',eris.ooov[kk,ki,km],2.*l2[kj,km]-l2[km,kj].transpose(1,0,2))
+                                lijkab_tmp += 2.*tmp
 
                                 # (j,i,k) -> (i,j,k)
                                 km = kconserv[kshift,kj,ka]
-                                tmp = -1./3*einsum('kimb,jma->ijkab',eris.ooov[kk,ki,km],l2[kj,km] + 2.*l2[km,kj].transpose(1,0,2))
-                                lijkab_tmp -= 2.*tmp
+                                tmp = -einsum('kimb,jma->ijkab',eris.ooov[kk,ki,km],2.*l2[kj,km]-l2[km,kj].transpose(1,0,2))
+                                lijkab_tmp -= 1.*tmp
 
                                 km = kconserv[kshift,ki,kb]
-                                tmp = -1./3*einsum('kjma,imb->ijkab',eris.ooov[kk,kj,km],l2[ki,km] + 2.*l2[km,ki].transpose(1,0,2))
-                                lijkab_tmp -= 2.*tmp
+                                tmp = -einsum('kjma,imb->ijkab',eris.ooov[kk,kj,km],2.*l2[ki,km]-l2[km,ki].transpose(1,0,2))
+                                lijkab_tmp -= 1.*tmp
 
                                 # (k,j,i) -> (i,j,k)
-                                km = kconserv[ki,kb,kj]
-                                tmp = -1./3*einsum('ijmb,kma->ijkab',eris.ooov[ki,kj,km],l2[kk,km] + 2.*l2[km,kk].transpose(1,0,2))
-                                lijkab_tmp -= 2.*tmp
-
                                 km = kconserv[kshift,kj,kb]
-                                tmp = -1./3*einsum('ikma,jmb->ijkab',eris.ooov[ki,kk,km],l2[kj,km] + 2.*l2[km,kj].transpose(1,0,2))
-                                lijkab_tmp -= 2.*tmp
+                                tmp = -einsum('ikma,jmb->ijkab',eris.ooov[ki,kk,km],2.*l2[kj,km]-l2[km,kj].transpose(1,0,2))
+                                lijkab_tmp -= 1.*tmp
 
-                                # (i,k,j) -> (i,j,k)
                                 km = kconserv[kshift,ki,ka]
-                                tmp = -1./3*einsum('jkmb,ima->ijkab',eris.ooov[kj,kk,km],l2[ki,km] + 2.*l2[km,ki].transpose(1,0,2))
-                                lijkab_tmp -= 2.*tmp
+                                tmp = -einsum('jkmb,ima->ijkab',eris.ooov[kj,kk,km],2.*l2[ki,km]-l2[km,ki].transpose(1,0,2))
+                                lijkab_tmp -= 1.*tmp
 
-                                km = kconserv[ki,ka,kj]
-                                tmp = -1./3*einsum('jima,kmb->ijkab',eris.ooov[kj,ki,km],l2[kk,km] + 2.*l2[km,kk].transpose(1,0,2))
-                                lijkab_tmp -= 2.*tmp
-
-                                # (j,k,i) -> (i,j,k)
-                                km = kconserv[kj,kb,ki]
-                                tmp = -1./3*einsum('jimb,kma->ijkab',eris.ooov[kj,ki,km],l2[kk,km] + 2.*l2[km,kk].transpose(1,0,2))
-                                lijkab_tmp += 1.*tmp
-
-                                km = kconserv[kshift,ki,kb]
-                                tmp = -1./3*einsum('jkma,imb->ijkab',eris.ooov[kj,kk,km],l2[ki,km] + 2.*l2[km,ki].transpose(1,0,2))
-                                lijkab_tmp += 1.*tmp
-
-                                # (k,i,j) -> (i,j,k)
-                                km = kconserv[kshift,kj,ka]
-                                tmp = -1./3*einsum('ikmb,jma->ijkab',eris.ooov[ki,kk,km],l2[kj,km] + 2.*l2[km,kj].transpose(1,0,2))
-                                lijkab_tmp += 1.*tmp
-
-                                km = kconserv[ki,ka,kj]
-                                tmp = -1./3*einsum('ijma,kmb->ijkab',eris.ooov[ki,kj,km],l2[kk,km] + 2.*l2[km,kk].transpose(1,0,2))
-                                lijkab_tmp += 1.*tmp
+                                # ooov part 2
 
                                 km = kconserv[ki,kb,kj]
-                                tmp = -1./3*einsum('ijmb,mka->ijkab',eris.ooov[ki,kj,km],l2[km,kk] + 2.*l2[kk,km].transpose(1,0,2))
-                                lijkab_tmp += 4.*tmp
+                                tmp = -einsum('ijmb,mka->ijkab',eris.ooov[ki,kj,km],2.*l2[km,kk]-l2[kk,km].transpose(1,0,2))
+                                lijkab_tmp += 2.*tmp
 
                                 km = kconserv[kj,ka,ki]
-                                tmp = -1./3*einsum('jima,mkb->ijkab',eris.ooov[kj,ki,km],l2[km,kk] + 2.*l2[kk,km].transpose(1,0,2))
-                                lijkab_tmp += 4.*tmp
+                                tmp = -einsum('jima,mkb->ijkab',eris.ooov[kj,ki,km],2.*l2[km,kk]-l2[kk,km].transpose(1,0,2))
+                                lijkab_tmp += 2.*tmp
 
                                 # (j,i,k) -> (i,j,k)
                                 km = kconserv[ki,kb,kj]
-                                tmp = -1./3*einsum('jimb,mka->ijkab',eris.ooov[kj,ki,km],l2[km,kk] + 2.*l2[kk,km].transpose(1,0,2))
-                                lijkab_tmp -= 2.*tmp
+                                tmp = -einsum('jimb,mka->ijkab',eris.ooov[kj,ki,km],2.*l2[km,kk]-l2[kk,km].transpose(1,0,2))
+                                lijkab_tmp -= 1.*tmp
 
                                 km = kconserv[kj,ka,ki]
-                                tmp = -1./3*einsum('ijma,mkb->ijkab',eris.ooov[ki,kj,km],l2[km,kk] + 2.*l2[kk,km].transpose(1,0,2))
-                                lijkab_tmp -= 2.*tmp
+                                tmp = -einsum('ijma,mkb->ijkab',eris.ooov[ki,kj,km],2.*l2[km,kk]-l2[kk,km].transpose(1,0,2))
+                                lijkab_tmp -= 1.*tmp
 
                                 # (k,j,i) -> (i,j,k)
-                                km = kconserv[kshift,ki,ka]
-                                tmp = -1./3*einsum('kjmb,mia->ijkab',eris.ooov[kk,kj,km],l2[km,ki] + 2.*l2[ki,km].transpose(1,0,2))
-                                lijkab_tmp -= 2.*tmp
-
                                 km = kconserv[kshift,ki,kb]
-                                tmp = -1./3*einsum('jkma,mib->ijkab',eris.ooov[kj,kk,km],l2[km,ki] + 2.*l2[ki,km].transpose(1,0,2))
-                                lijkab_tmp -= 2.*tmp
+                                tmp = -einsum('jkma,mib->ijkab',eris.ooov[kj,kk,km],2.*l2[km,ki]-l2[ki,km].transpose(1,0,2))
+                                lijkab_tmp -= 1.*tmp
 
-                                # (i,k,j) -> (i,j,k)
                                 km = kconserv[kshift,kj,ka]
-                                tmp = -1./3*einsum('ikmb,mja->ijkab',eris.ooov[ki,kk,km],l2[km,kj] + 2.*l2[kj,km].transpose(1,0,2))
-                                lijkab_tmp -= 2.*tmp
-
-                                km = kconserv[kshift,kj,kb]
-                                tmp = -1./3*einsum('kima,mjb->ijkab',eris.ooov[kk,ki,km],l2[km,kj] + 2.*l2[kj,km].transpose(1,0,2))
-                                lijkab_tmp -= 2.*tmp
-
-                                # (j,k,i) -> (i,j,k)
-                                km = kconserv[kshift,kj,ka]
-                                tmp = -1./3*einsum('kimb,mja->ijkab',eris.ooov[kk,ki,km],l2[km,kj] + 2.*l2[kj,km].transpose(1,0,2))
-                                lijkab_tmp += 1.*tmp
-
-                                km = kconserv[kshift,kj,kb]
-                                tmp = -1./3*einsum('ikma,mjb->ijkab',eris.ooov[ki,kk,km],l2[km,kj] + 2.*l2[kj,km].transpose(1,0,2))
-                                lijkab_tmp += 1.*tmp
-
-                                # (k,i,j) -> (i,j,k)
-                                km = kconserv[kshift,ki,ka]
-                                tmp = -1./3*einsum('jkmb,mia->ijkab',eris.ooov[kj,kk,km],l2[km,ki] + 2.*l2[ki,km].transpose(1,0,2))
-                                lijkab_tmp += 1.*tmp
-
-                                km = kconserv[kshift,ki,kb]
-                                tmp = -1./3*einsum('kjma,mib->ijkab',eris.ooov[kk,kj,km],l2[km,ki] + 2.*l2[ki,km].transpose(1,0,2))
-                                lijkab_tmp += 1.*tmp
-
+                                tmp = -einsum('ikmb,mja->ijkab',eris.ooov[ki,kk,km],2.*l2[km,kj]-l2[kj,km].transpose(1,0,2))
+                                lijkab_tmp -= 1.*tmp
 
                             ##########################################
                             #                                        #
@@ -1987,11 +1923,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                                 eijkab = pyscf.lib.direct_sum('ijab,k->ijkab',eijab,numpy.diagonal(foo[kk]))
                                 eijkab = 1./eijkab
 
-                                pt2_energy += fac*0.5*einsum('ijkab,ijkab,ijkab',lijkab_tmp,rijkab_tmp,eijkab)
+                                star_energy += fac*0.5*einsum('ijkab,ijkab,ijkab',lijkab_tmp,rijkab_tmp,eijkab)
 
 
-            comm.Allreduce(MPI.IN_PLACE, pt2_energy, op=MPI.SUM)
-            print "pt2_energy = ", pt2_energy
+            comm.Allreduce(MPI.IN_PLACE, star_energy, op=MPI.SUM)
+            print "EOM-IPCCSD* delta energy = ", star_energy
 
             return
 
@@ -2261,9 +2197,9 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def leaccsd_matvec(self, vector):
     ########################################################
-    # FOLLOWING:                                           #
-    # M. Nooijen and R. J. Bartlett,                       #
-    # J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)        #
+    # See relevant equations in cc/rccsd_slow.py           #
+    # Does not follow the equations in Nooijen's paper     #
+    # for eaccsd, uses a different left basis.             #
     ########################################################
         r1,r2 = self.vector_to_amplitudes_ea(vector)
         r1 = comm.bcast(r1, root=0)
@@ -2283,49 +2219,51 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
         imds = self.imds
 
+        ###################################
+        #                                 #
+        # Beginning HR1 multiplication    #
+        #                                 #
+        ###################################
         Hr1 = numpy.zeros(r1.shape,dtype=t2.dtype)
-        ## Eq. (30)
-        #Hr1 = ( einsum('ac,a->c',Lvv,r1)
-        #       + 2.0*einsum('abcj,jab->c',Wvvvo,r2)
-        #       +    -einsum('bacj,jab->c',Wvvvo,r2)
-        #       )
         def mem_usage_vvvo(nocc, nvir, nkpts):
             return nocc**1 * nvir**3 * 16.
         array_size = [nkpts,nkpts]
         task_list = generate_max_task_list(array_size,blk_mem_size=mem_usage_vvvo(nocc,nvir,nkpts),priority_list=[1,1])
-
         for karange, kbrange in mpi.work_stealing_partition(task_list):
             WvvvoR1_sab = _cp(imds.WvvvoR1[kshift,slice(*karange),slice(*kbrange)])
-
             for iterka, ka in enumerate(range(*karange)):
                 for iterkb, kb in enumerate(range(*kbrange)):
                     kj = kconserv[ka,kshift,kb]
-                    Hr1 += einsum('abcj,jab->c',WvvvoR1_sab[iterka,iterkb],2.*r2[kj,ka] - r2[kj,kb].transpose(0,2,1))
+                    Hr1 += einsum('abcj,jab->c',WvvvoR1_sab[iterka,iterkb],r2[kj,ka])
         comm.Allreduce(MPI.IN_PLACE, Hr1, op=MPI.SUM)
         Hr1 += einsum('ac,a->c',imds.Lvv[kshift],r1)
 
+        ###################################
+        #                                 #
+        # Beginning HR2 multiplication    #
+        #                                 #
+        ###################################
         Hr2 = numpy.zeros(r2.shape,dtype=t2.dtype)
-        task_list = generate_max_task_list(array_size,blk_mem_size=mem_usage_vvvo(nocc,nvir,nkpts),priority_list=[1,1])
-
-        # using same task list as before
-        #
+        # use same task list as before
         for klrange, kcrange in mpi.work_stealing_partition(task_list):
             Wvovv_slc = _cp(imds.Wvovv[kshift,slice(*klrange),slice(*kcrange)])
-
             for iterkl, kl in enumerate(range(*klrange)):
                 for iterkc, kc in enumerate(range(*kcrange)):
                     kd = kconserv[kl,kc,kshift]
-                    Hr2[kl,kc] += einsum('lad,ac->lcd',r2[kl,kc],imds.Lvv[kc])
-                    Hr2[kl,kc] += einsum('lcb,bd->lcd',r2[kl,kc],imds.Lvv[kd])
-                    Hr2[kl,kc] += einsum('a,alcd->lcd',r1,Wvovv_slc[iterkl,iterkc])
-                    Hr2[kl,kc] -= einsum('jcd,lj->lcd',r2[kl,kc],imds.Loo[kl])
-                    Hr2[kl,kshift] += (kl==kd)*einsum('c,ld->lcd',r1,imds.Fov[kl])
+                    Hr2[kl,kc] +=  einsum('lad,ac->lcd',r2[kl,kc],imds.Lvv[kc])
+                    Hr2[kl,kc] +=  einsum('lcb,bd->lcd',r2[kl,kc],imds.Lvv[kd])
+                    Hr2[kl,kc] += -einsum('jcd,lj->lcd',r2[kl,kc],imds.Loo[kl])
+                    tmp = einsum('a,alcd->lcd',r1,Wvovv_slc[iterkl,iterkc])
+                    Hr2[kl,kc] += 2.*tmp
+                    Hr2[kl,kd] +=   -tmp.transpose(0,2,1)
+                    tmp = einsum('c,ld->lcd',r1,imds.Fov[kl])
+                    Hr2[kl,kshift] += 2.*tmp*(kl==kd)
+                    Hr2[kl,kd]     +=   -tmp.transpose(0,2,1)*(kl==kd)
 
         def mem_usage_voovk(nocc, nvir, nkpts):
             return nocc**2 * nvir**2 * nkpts * 16.
         array_size = [nkpts,nkpts]
         task_list = generate_max_task_list(array_size, mem_usage_voovk(nocc,nvir,nkpts), priority_list=[1,1])
-
         for kjrange, kbrange in mpi.work_stealing_partition(task_list):
             WvoovR1_jbX  = _cp(imds.WvoovR1[slice(*kjrange),slice(*kbrange),:])
             WovovRev_jbX = _cp(imds.WovovRev[slice(*kjrange),slice(*kbrange),:])
@@ -2336,15 +2274,15 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                         kc = kconserv[kj,kb,kshift]
                         Hr2[kl,kc] += 2.*einsum('jcb,bljd->lcd',r2[kj,kc],WvoovR1_jbX[iterkj,iterkb,kl])
                         Hr2[kl,kc] -=    einsum('jcb,lbjd->lcd',r2[kj,kc],WovovRev_jbX[iterkj,iterkb,kl])
-                        Hr2[kl,kc] -=    einsum('jac,aljd->lcd',r2[kj,kb],WvoovR1_jbX[iterkj,iterkb,kl])
                         kc = kconserv[kl,kj,kb]
-                        Hr2[kl,kc] -=    einsum('jad,lajc->lcd',r2[kj,kb],WovovRev_jbX[iterkj,iterkb,kl])
+                        kd = kconserv[kshift,kc,kl]
+                        Hr2[kl,kc] -=    einsum('jdb,bljc->lcd',r2[kj,kd],WvoovR1_jbX[iterkj,iterkb,kl])
+                        Hr2[kl,kc] -=    einsum('jbd,lbjc->lcd',r2[kj,kb],WovovRev_jbX[iterkj,iterkb,kl])
 
         def mem_usage_vvvvk(nocc, nvir, nkpts):
             return nocc**0 * nvir**4 * nkpts * 16.
         array_size = [nkpts,nkpts]
         task_list = generate_max_task_list(array_size, mem_usage_vvvvk(nocc,nvir,nkpts),priority_list=[1,1])
-
         for karange, kbrange in mpi.work_stealing_partition(task_list):
             Wvvvv_abX = _cp(imds.Wvvvv[slice(*karange),slice(*kbrange),:])
 
@@ -2358,40 +2296,26 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             return nocc**2 * nvir**2 * nkpts * 16.
         array_size = [nkpts,nkpts]
         task_list = generate_max_task_list(array_size, mem_usage_oovvk(nocc,nvir,nkpts),priority_list=[1,1])
-
         # TODO mpi.work_stealing_partition returns [[0,1]] for one dimension
         # and this doesn't work with the kjrange
-        tmp = numpy.zeros(nocc,dtype=t1.dtype)
-        for kjrange, karange in mpi.work_stealing_partition(task_list):
-            for iterkj, kj in enumerate(range(*kjrange)):
-                for iterka, ka in enumerate(range(*karange)):
-                    t2_1 = unpack_tril(t2,nkpts,kshift,kj,ka,kconserv[kshift,ka,kj])
-                    t2_2 = unpack_tril(t2,nkpts,kj,kshift,ka,kconserv[kj,ka,kshift])
-                    tmp += (2.*einsum('jab,kjab->k',r2[kj,ka],t2_1)
-                              -einsum('jab,jkab->k',r2[kj,ka],t2_2))
-        comm.Allreduce(MPI.IN_PLACE, tmp, op=MPI.SUM)
-
-        for klrange, kcrange in mpi.work_stealing_partition(task_list):
-            Woovv_slX = _cp(imds.Woovv[kshift,slice(*klrange),slice(*kcrange)])
-
-            for iterkl, kl in enumerate(range(*klrange)):
+        # Making term for Woovv contraction
+        tmp_occ = numpy.zeros(nocc,dtype=t1.dtype)
+        for kirange, kcrange in mpi.work_stealing_partition(task_list):
+            for iterki, ki in enumerate(range(*kirange)):
                 for iterkc, kc in enumerate(range(*kcrange)):
-                    Hr2[kl,kc] -= einsum('k,klcd->lcd',tmp,Woovv_slX[iterkl,iterkc])
+                    kb = kconserv[ki,kc,kshift]
+                    tmp2 = unpack_tril(t2,nkpts,ki,kshift,kc,kconserv[ki,kc,kshift])
+                    tmp_occ += einsum('ijcb,ibc->j',tmp2,r2[ki,kb])
+        comm.Allreduce(MPI.IN_PLACE, tmp_occ, op=MPI.SUM)
 
-        ### Eq. (31)
-        #Hr2 = einsum('c,ld->lcd',r1,Fov)
-        #Hr2 += einsum('a,alcd->lcd',r1,Wvovv)
-        #Hr2 += einsum('lad,ac->lcd',r2,Lvv)
-        #Hr2 += einsum('lcb,bd->lcd',r2,Lvv)
-        #Hr2 += -einsum('jcd,lj->lcd',r2,Loo)
-        #Hr2 += 2.*einsum('jcb,bljd->lcd',r2,Wvoov)
-        #Hr2 +=   -einsum('jcb,bldj->lcd',r2,Wvovo)
-        #Hr2 += -einsum('jac,aljd->lcd',r2,Wvoov)
-        #Hr2 += -einsum('jad,alcj->lcd',r2,Wvovo)
-        #Hr2 += einsum('lab,abcd->lcd',r2,Wvvvv)
-        #tmp = (2.*einsum('jab,kjab->k',r2,t2)
-        #         -einsum('jab,jkab->k',r2,t2))
-        #Hr2 += -einsum('k,klcd->lcd',tmp,Woovv)
+        for kkrange, kfrange in mpi.work_stealing_partition(task_list):
+            Woovv_kf = _cp(imds.Woovv[slice(*kkrange),kshift,slice(*kfrange)])
+            for iterkk, kk in enumerate(range(*kkrange)):
+                for iterkf, kf in enumerate(range(*kfrange)):
+                    ke = kconserv[kshift,kf,kk]
+                    tmp = einsum('kjfe,j->kef',Woovv_kf[iterkk,iterkf],tmp_occ)
+                    Hr2[kk,ke] += -2.*tmp
+                    Hr2[kk,kf] += tmp.transpose(0,2,1)
 
         comm.Allreduce(MPI.IN_PLACE, Hr2, op=MPI.SUM)
 
@@ -2435,7 +2359,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         #                    index += 1
         return vector
 
-    def eaccsd_pt2(self, eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
+    def eaccsd_star(self, eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
         nocc = self.nocc()
         nproc = comm.Get_size()
         nvir = self.nmo() - nocc
@@ -2453,14 +2377,14 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
             ##########################################
             #                                        #
-            # Transposing the l2, r2 operators       #
-            #                                        #
+            # Transposing the l2 operator            #
+            # (equations were worked out for the     #
+            #       transpose of these operators!)   #
             ##########################################
 
-            print "Transposing the l2, r2 operators..."
+            print "Transposing the l2 operators..."
             l2_t = numpy.zeros_like(l2)
             r2_t = numpy.zeros_like(r2)
-
             for kj in range(nkpts):
                 for ka in range(nkpts):
                     kb = kconserv[kshift,ka,kj]
@@ -2468,25 +2392,18 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                     r2_t[kj,kb] = r2[kj,ka].transpose(0,2,1)
             print "Transpose completed."
 
-            # We still need the transposed operators in memory for the norm calculation
-            #
-            l1 = l1.reshape(-1)
-            r1 = r1.reshape(-1)
-            print "r1 ", r1
-            print "l1 ", l1
-            #ldotr = numpy.dot(l1.conj(),r1) + numpy.dot((2.*l2_t-l2).ravel().conj(),r2_t.ravel())
-            ldotr = numpy.dot(l1,r1) + numpy.dot((2.*l2_t-l2).ravel(),r2_t.ravel())
-            print "ldotr ", ldotr
-
-            # The transposed l2, r2 are the only 2ph operators needed for the rest of
-            # the calculation
-            l2 = l2_t.copy()
+            # Normalization for the left eigenvector
+            ldotr = numpy.dot(l1.ravel(),r1.ravel()) + numpy.dot(l2.ravel(),r2.ravel())
+            print "ldotr = ", ldotr
+            l2 = (l2 + 2.*l2_t)/3.
             r2 = r2_t.copy()
             r2_t = None
             l2_t = None
 
             l1 /= ldotr
             l2 /= ldotr
+            l1 = l1.reshape(-1)
+            r1 = r1.reshape(-1)
 
             lijabc_tmp  = numpy.zeros((nocc,nocc,nvir,nvir,nvir),dtype=t2.dtype)
             rijabc_tmp  = numpy.zeros((nocc,nocc,nvir,nvir,nvir),dtype=t2.dtype)
@@ -2502,9 +2419,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             #    chunk_size = max_chunk_size
             #task_list = generate_task_list(chunk_size,array_size)
 
-            pt2_energy = numpy.array(0.0 + 1j*0.0)
-
-
+            star_energy = numpy.array(0.0 + 1j*0.0)
             for kirange, kjrange in mpi.work_stealing_partition(task_list):
                 eris_oovv_jiX = _cp(eris.oovv[slice(*kjrange),slice(*kirange),range(nkpts)])
                 eris_oovv_ijX = _cp(eris.oovv[slice(*kirange),slice(*kjrange),range(nkpts)])
@@ -2607,30 +2522,30 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
                                 #(c,b,a) -> (a,b,c)
                                 ke = kconserv[kshift,ka,ki]
-                                tmp = -einsum('jebc,iea->ijabc',eris.ovvv[kj,ke,kb],l2[ki,ke]-2.*l2[ki,ka].transpose(0,2,1))
-                                lijabc_tmp += -2.* tmp
+                                tmp = -einsum('jebc,iae->ijabc',eris.ovvv[kj,ke,kb],2.*l2[ki,ka]-l2[ki,ke].transpose(0,2,1))
+                                lijabc_tmp += 2.* tmp
 
                                 ke = kconserv[kshift,kb,kj]
-                                tmp = -einsum('ieac,jeb->ijabc',eris.ovvv[ki,ke,ka],l2[kj,ke]-2.*l2[kj,kb].transpose(0,2,1))
-                                lijabc_tmp += -2.* tmp
+                                tmp = -einsum('ieac,jbe->ijabc',eris.ovvv[ki,ke,ka],2.*l2[kj,kb]-l2[kj,ke].transpose(0,2,1))
+                                lijabc_tmp += 2.* tmp
 
                                 #(b,c,a) -> (a,b,c)
                                 ke = kconserv[kshift,kb,kj]
-                                tmp = -einsum('ieca,jeb->ijabc',eris.ovvv[ki,ke,kc],l2[kj,ke]-2.*l2[kj,kb].transpose(0,2,1))
-                                lijabc_tmp += 1.* tmp
+                                tmp = -einsum('ieca,jbe->ijabc',eris.ovvv[ki,ke,kc],2.*l2[kj,kb]-l2[kj,ke].transpose(0,2,1))
+                                lijabc_tmp += -1.* tmp
 
                                 ke = kconserv[kshift,kb,ki]
-                                tmp = -einsum('jeac,ieb->ijabc',eris.ovvv[kj,ke,ka],l2[ki,ke]-2.*l2[ki,kb].transpose(0,2,1))
-                                lijabc_tmp += 1.* tmp
+                                tmp = -einsum('jeac,ibe->ijabc',eris.ovvv[kj,ke,ka],2.*l2[ki,kb]-l2[ki,ke].transpose(0,2,1))
+                                lijabc_tmp += -1.* tmp
 
                                 #(c,a,b) -> (a,b,c)
                                 ke = kconserv[kshift,ka,kj]
-                                tmp = -einsum('iebc,jea->ijabc',eris.ovvv[ki,ke,kb],l2[kj,ke]-2.*l2[kj,ka].transpose(0,2,1))
-                                lijabc_tmp += 1.* tmp
+                                tmp = -einsum('iebc,jae->ijabc',eris.ovvv[ki,ke,kb],2.*l2[kj,ka]-l2[kj,ke].transpose(0,2,1))
+                                lijabc_tmp += -1.* tmp
 
                                 ke = kconserv[kshift,ka,ki]
-                                tmp = -einsum('jecb,iea->ijabc',eris.ovvv[kj,ke,kc],l2[ki,ke]-2.*l2[ki,ka].transpose(0,2,1))
-                                lijabc_tmp += 1.* tmp
+                                tmp = -einsum('jecb,iae->ijabc',eris.ovvv[kj,ke,kc],2.*l2[ki,ka]-l2[ki,ke].transpose(0,2,1))
+                                lijabc_tmp += -1.* tmp
 
                                 # ovvv term 2
 
@@ -2640,29 +2555,30 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
                                 #(c,b,a) -> (a,b,c)
                                 ke = kconserv[kshift,kc,ki]
-                                tmp = -einsum('jeba,ice->ijabc',eris.ovvv[kj,ke,kb],l2[ki,kc]-2.*l2[ki,ke].transpose(0,2,1))
-                                lijabc_tmp += -2.* tmp
+                                tmp = -einsum('jeba,iec->ijabc',eris.ovvv[kj,ke,kb],2.*l2[ki,ke]-l2[ki,kc].transpose(0,2,1))
+                                lijabc_tmp += 2.* tmp
 
                                 ke = kconserv[kshift,kc,kj]
-                                tmp = -einsum('ieab,jce->ijabc',eris.ovvv[ki,ke,ka],l2[kj,kc]-2.*l2[kj,ke].transpose(0,2,1))
-                                lijabc_tmp += -2.* tmp
+                                tmp = -einsum('ieab,jec->ijabc',eris.ovvv[ki,ke,ka],2.*l2[kj,ke]-l2[kj,kc].transpose(0,2,1))
+                                lijabc_tmp += 2.* tmp
 
                                 #(b,c,a) -> (a,b,c)
                                 ke = kconserv[kshift,kc,ki]
-                                tmp = -einsum('jeab,ice->ijabc',eris.ovvv[kj,ke,ka],l2[ki,kc]-2.*l2[ki,ke].transpose(0,2,1))
-                                lijabc_tmp += 1.* tmp
+                                tmp = -einsum('jeab,iec->ijabc',eris.ovvv[kj,ke,ka],2.*l2[ki,ke]-l2[ki,kc].transpose(0,2,1))
+                                lijabc_tmp += -1.* tmp
 
                                 ke = kconserv[kshift,ka,kj]
-                                tmp = -einsum('iecb,jae->ijabc',eris.ovvv[ki,ke,kc],l2[kj,ka]-2.*l2[kj,ke].transpose(0,2,1))
-                                lijabc_tmp += 1.* tmp
+                                tmp = -einsum('iecb,jea->ijabc',eris.ovvv[ki,ke,kc],2.*l2[kj,ke]-l2[kj,ka].transpose(0,2,1))
+                                lijabc_tmp += -1.* tmp
 
                                 #(c,a,b) -> (a,b,c)
                                 ke = kconserv[kshift,kb,ki]
-                                tmp = -einsum('jeca,ibe->ijabc',eris.ovvv[kj,ke,kc],l2[ki,kb]-2.*l2[ki,ke].transpose(0,2,1))
-                                lijabc_tmp += 1.* tmp
+                                tmp = -einsum('jeca,ieb->ijabc',eris.ovvv[kj,ke,kc],2.*l2[ki,ke]-l2[ki,kb].transpose(0,2,1))
+                                lijabc_tmp += -1.* tmp
+
                                 ke = kconserv[kshift,kc,kj]
-                                tmp = -einsum('ieba,jce->ijabc',eris.ovvv[ki,ke,kb],l2[kj,kc]-2.*l2[kj,ke].transpose(0,2,1))
-                                lijabc_tmp += 1.* tmp
+                                tmp = -einsum('ieba,jec->ijabc',eris.ovvv[ki,ke,kb],2.*l2[kj,ke]-l2[kj,kc].transpose(0,2,1))
+                                lijabc_tmp += -1.* tmp
 
 
                                 ##########################################
@@ -2761,12 +2677,12 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                                 eijabc = pyscf.lib.direct_sum('ijab,c->ijabc',eijab,-numpy.diagonal(fvv[kc]))
                                 eijabc = 1./eijabc
 
-                                pt2_energy += fac*0.5*einsum('ijabc,ijabc,ijabc',lijabc_tmp,rijabc_tmp,eijabc)
+                                star_energy += fac*0.5*einsum('ijabc,ijabc,ijabc',lijabc_tmp,rijabc_tmp,eijabc)
 
-            comm.Allreduce(MPI.IN_PLACE, pt2_energy, op=MPI.SUM)
-            print "pt2_energy = ", pt2_energy
+            comm.Allreduce(MPI.IN_PLACE, star_energy, op=MPI.SUM)
+            print "EOM-EACCSD* delta energy = ", star_energy
 
-            return pt2_energy
+            return star_energy
 
 
 #class _ERIS:

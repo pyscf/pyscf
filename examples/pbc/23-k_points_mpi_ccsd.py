@@ -33,11 +33,7 @@ print cell.gs
 #
 # Running HF
 #
-#kmf = scf.KRHF(cell, kpts, exxdiv=None)
-#ehf = kmf.kernel()
 kmf = run_khf(cell, nk, gamma=True, exxdiv=None, conv_tol=1e-12)
-if rank == 0:
-    kmf.scf()
 
 comm.Barrier()
 mo_coeff  = comm.bcast(kmf.mo_coeff,root=0)
@@ -57,13 +53,12 @@ kcc = mpicc.KRCCSD(kmf)
 ecc, t1, t2 = kcc.kernel()
 if rank == 0:
     print("cc energy (per unit cell) = %.17g" % ecc)
-#lew, lev = kcc.leaccsd(nroots=1, kptlist=[0])
-#ew, ev   = kcc.eaccsd(nroots=1,  kptlist=[0])
-#kcc.eaccsd_pt2(ew, ev, lev)
-#kcc.eaccsd(nroots=1,kptlist=[0])
-#kcc.leaccsd(nroots=1,kptlist=[0])
-#kcc.ipccsd(nroots=1,kptlist=[0])
-#kcc.lipccsd(nroots=1,kptlist=[0])
+# Running EACCSD and EACCSD*
+lew, lev = kcc.leaccsd(nroots=1, kptlist=[0])
+ew, ev   = kcc.eaccsd(nroots=1,  kptlist=[0])
+kcc.eaccsd_star(ew, ev, lev)
+
+# Running IPCCSD and IPCCSD*
 lew, lev = kcc.lipccsd(nroots=1, kptlist=[0])
 ew, ev   = kcc.ipccsd(nroots=1,  kptlist=[0])
-kcc.ipccsd_pt2(ew, ev, lev)
+kcc.ipccsd_star(ew, ev, lev)
