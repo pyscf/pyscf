@@ -10,7 +10,6 @@
 #include "cint.h"
 #include "vhf/fblas.h"
 
-#define NCTRMAX         72
 #define INTBUFMAX       6000
 #define IMGBLK          80
 #define OF_CMPLX        2
@@ -383,7 +382,7 @@ static void _nr3c_fill_k(int (*intor)(), void (*fsort)(),
         const int di = ao_loc[ish+1] - ao_loc[ish];
         const int dj = ao_loc[jsh+1] - ao_loc[jsh];
         const int dij = di * dj;
-        int dkmax = INTBUFMAX * MAX(1, nkpts*MIN(IMGBLK,nimgs)/nimgs) / dij;
+        int dkmax = INTBUFMAX / dij * 4;
         int kshloc[ksh1-ksh0+1];
         int nkshloc = shloc_partition(kshloc, ao_loc, ksh0, ksh1, dkmax);
 
@@ -644,7 +643,7 @@ static void _nr3c_fill_g(int (*intor)(), void (*fsort)(), double *out, int nkpts
         const int di = ao_loc[ish+1] - ao_loc[ish];
         const int dj = ao_loc[jsh+1] - ao_loc[jsh];
         const int dij = di * dj;
-        int dkmax = INTBUFMAX*MIN(IMGBLK,nimgs) / dij;
+        int dkmax = INTBUFMAX / dij * MIN(IMGBLK,nimgs);
         int kshloc[ksh1-ksh0+1];
         int nkshloc = shloc_partition(kshloc, ao_loc, ksh0, ksh1, dkmax);
 
@@ -652,7 +651,7 @@ static void _nr3c_fill_g(int (*intor)(), void (*fsort)(), double *out, int nkpts
         int ksh, dk, iL, jL, dijkc;
         int shls[3];
 
-        double *bufL = buf + INTBUFMAX * comp;
+        double *bufL = buf + dij*dkmax * comp;
         double *pbuf;
 
         shls[0] = ish;
@@ -845,10 +844,18 @@ void PBCnr3c_drv(int (*intor)(), void (*fill)(), double complex *eri,
                 expkL_i[i] = cimag(expkL[i]);
         }
 
+        size_t count;
+        if (fill == &PBCnr3c_fill_kks1 || fill == &PBCnr3c_fill_kks2) {
+                count = nkpts*nkpts * OF_CMPLX +
+                        nkpts*MIN(nimgs,IMGBLK) * OF_CMPLX + nimgs;
+        } else {
+                count = (nkpts * OF_CMPLX + nimgs)*4;
+        }
+
 #pragma omp parallel default(none) \
         shared(intor, fill, eri, nkpts_ij, nkpts, comp, nimgs, \
                Ls, expkL_r, expkL_i, kptij_idx, shls_slice, ao_loc, cintopt, \
-               atm, natm, bas, nbas, env)
+               atm, natm, bas, nbas, env, count)
 {
         int ish, jsh, ij;
         int nenv = sizeof_env(shls_slice, atm, natm, bas, nbas, env);
@@ -856,8 +863,6 @@ void PBCnr3c_drv(int (*intor)(), void (*fill)(), double complex *eri,
         nenv = MAX(nenv, sizeof_env(shls_slice+4, atm, natm, bas, nbas, env));
         double *env_loc = malloc(sizeof(double)*nenv);
         memcpy(env_loc, env, sizeof(double)*nenv);
-        size_t count = (nkpts*nkpts * OF_CMPLX +
-                        nkpts*MIN(nimgs,IMGBLK) * OF_CMPLX + nimgs);
         double *buf = malloc(sizeof(double)*count*INTBUFMAX*comp);
 #pragma omp for schedule(dynamic, 2)
         for (ij = 0; ij < nish*njsh; ij++) {
@@ -935,7 +940,7 @@ static void _nr2c_fill(int (*intor)(), double complex *out,
         jsh += jsh0;
         int jptrxyz = atm[PTR_COORD+bas[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS];
         const int dj = ao_loc[jsh+1] - ao_loc[jsh];
-        int dimax = INTBUFMAX*4 / dj;
+        int dimax = INTBUFMAX / dj * 4;
         int ishloc[ish1-ish0+1];
         int nishloc = shloc_partition(ishloc, ao_loc, ish0, ish1, dimax);
 
@@ -994,7 +999,7 @@ static void _nr2c2e_fill(int (*intor)(), double complex *out,
         jsh += jsh0;
         int jptrxyz = atm[PTR_COORD+bas[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS];
         const int dj = ao_loc[jsh+1] - ao_loc[jsh];
-        int dimax = INTBUFMAX*4 / dj;
+        int dimax = INTBUFMAX / dj * 4;
         int ishloc[ish1-ish0+1];
         int nishloc = shloc_partition(ishloc, ao_loc, ish0, ish1, dimax);
 
@@ -1112,7 +1117,7 @@ void PBCnr2c_drv(int (*intor)(), void (*fill)(), double complex *out,
         nenv = MAX(nenv, sizeof_env(shls_slice+2, atm, natm, bas, nbas, env));
         double *env_loc = malloc(sizeof(double)*nenv);
         memcpy(env_loc, env, sizeof(double)*nenv);
-        size_t count = (nkpts * OF_CMPLX + nimgs);
+        size_t count = nkpts * OF_CMPLX + nimgs;
         double *buf = malloc(sizeof(double)*count*INTBUFMAX*4*comp);
 #pragma omp for schedule(dynamic)
         for (jsh = 0; jsh < njsh; jsh++) {
