@@ -128,9 +128,9 @@ def aux_e2(cell, auxcell, erifile, intor='cint3c2e_sph', aosym='s2ij', comp=1,
         sh0, sh1, nrow = auxrange
         sh0, sh1 = sh0+shls_slice[4], sh1+shls_slice[4]
         nrow = aux_loc[sh1] - aux_loc[sh0]
-        shslice = (shls_slice[0], shls_slice[1],
-                   nbas+shls_slice[2], nbas+shls_slice[3],
-                   nbas*2+sh0, nbas*2+sh1)
+        sub_slice = (shls_slice[0], shls_slice[1],
+                     nbas+shls_slice[2], nbas+shls_slice[3],
+                     nbas*2+sh0, nbas*2+sh1)
         mat = numpy.ndarray((nkptij,comp,nao_pair,naux), dtype=dtype, buffer=buf)
         libpbc.PBCnr3c_drv(getattr(libpbc, intor), getattr(libpbc, fill),
                            mat.ctypes.data_as(ctypes.c_void_p),
@@ -139,7 +139,7 @@ def aux_e2(cell, auxcell, erifile, intor='cint3c2e_sph', aosym='s2ij', comp=1,
                            Ls.ctypes.data_as(ctypes.c_void_p),
                            expkL.ctypes.data_as(ctypes.c_void_p),
                            kptij_idx.ctypes.data_as(ctypes.c_void_p),
-                           (ctypes.c_int*6)(*shls_slice),
+                           (ctypes.c_int*6)(*sub_slice),
                            ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
                            atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
                            bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.nbas),
