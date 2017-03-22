@@ -46,7 +46,7 @@ def contract_2e_ctypes(h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
                         strs.ctypes.data_as(ctypes.c_void_p), 
                         civec.ctypes.data_as(ctypes.c_void_p), 
                         hdiag.ctypes.data_as(ctypes.c_void_p), 
-                        ctypes.c_int(ndet), 
+                        ctypes.c_ulonglong(ndet), 
                         ci1.ctypes.data_as(ctypes.c_void_p))
 
     return ci1
@@ -182,35 +182,48 @@ def select_strs_ctypes(myci, civec, h1, eri, jk, eri_sorted, jk_sorted, norb, ne
     nset = nset // 2
     neleca, nelecb = nelec
 
-    str_add = numpy.empty((4*ndet*neleca*nelecb*(norb-neleca)*(norb-nelecb), strs.shape[1]), dtype=numpy.uint64)
-    n_str_add = numpy.array([str_add.shape[0]])
-
     h1 = numpy.asarray(h1, order='C')  
     eri = numpy.asarray(eri, order='C')
     jk = numpy.asarray(jk, order='C')
     civec = numpy.asarray(civec, order='C')
     strs = numpy.asarray(strs, order='C')
-    str_add = numpy.asarray(str_add, order='C')
     eri_sorted = numpy.asarray(eri_sorted, order='C')
     jk_sorted = numpy.asarray(jk_sorted, order='C')
 
-    libhci.select_strs(h1.ctypes.data_as(ctypes.c_void_p), 
-                       eri.ctypes.data_as(ctypes.c_void_p), 
-                       jk.ctypes.data_as(ctypes.c_void_p), 
-                       eri_sorted.ctypes.data_as(ctypes.c_void_p), 
-                       jk_sorted.ctypes.data_as(ctypes.c_void_p), 
-                       ctypes.c_int(norb), 
-                       ctypes.c_int(neleca), 
-                       ctypes.c_int(nelecb), 
-                       strs.ctypes.data_as(ctypes.c_void_p), 
-                       civec.ctypes.data_as(ctypes.c_void_p), 
-                       ctypes.c_int(ndet), 
-                       ctypes.c_double(myci.select_cutoff),
-                       str_add.ctypes.data_as(ctypes.c_void_p),
-                       n_str_add.ctypes.data_as(ctypes.c_void_p))
+    str_add = numpy.empty((0,strs.shape[1]), dtype=numpy.uint64)
 
-    n_str_add = n_str_add[0]
-    str_add = str_add[:n_str_add]
+    ndet_batch = int(myci.max_memory * 1024**2) // (8 * 4 * neleca * nelecb * (norb-neleca) * (norb-nelecb))
+    nbatches = ndet // ndet_batch + 1
+
+    for i in range(nbatches):
+        ndet_start = ndet_batch * i
+        ndet_finish = min(ndet_batch * (i + 1), ndet)
+        ndet_select_max = 4 * neleca * nelecb * (norb-neleca) * (norb-nelecb) * ndet_batch
+
+        str_add_batch = numpy.empty((ndet_select_max, strs.shape[1]), dtype=numpy.uint64)
+        n_str_add_batch = numpy.array([str_add_batch.shape[0]])
+
+        str_add_batch = numpy.asarray(str_add_batch, order='C')
+
+        libhci.select_strs(h1.ctypes.data_as(ctypes.c_void_p), 
+                           eri.ctypes.data_as(ctypes.c_void_p), 
+                           jk.ctypes.data_as(ctypes.c_void_p), 
+                           eri_sorted.ctypes.data_as(ctypes.c_void_p), 
+                           jk_sorted.ctypes.data_as(ctypes.c_void_p), 
+                           ctypes.c_int(norb), 
+                           ctypes.c_int(neleca), 
+                           ctypes.c_int(nelecb), 
+                           strs.ctypes.data_as(ctypes.c_void_p), 
+                           civec.ctypes.data_as(ctypes.c_void_p), 
+                           ctypes.c_ulonglong(ndet_start), 
+                           ctypes.c_ulonglong(ndet_finish), 
+                           ctypes.c_double(myci.select_cutoff),
+                           str_add_batch.ctypes.data_as(ctypes.c_void_p),
+                           n_str_add_batch.ctypes.data_as(ctypes.c_void_p))
+
+        n_str_add_batch = n_str_add_batch[0]
+        str_add_batch = str_add_batch[:n_str_add_batch]
+        str_add = numpy.vstack((str_add, str_add_batch))
 
     if len(str_add) > 0:
         str_add = numpy.asarray(str_add)
@@ -295,8 +308,8 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
         myci.check_sanity()
 
     log.info('Starting heat-bath CI algorithm...')
-    log.info('Selection threshold:   %8.5f', myci.select_cutoff)
-    log.info('CI coefficient cutoff: %8.5f', myci.ci_coeff_cutoff)
+    log.info('Selection threshold:   %8.5e', myci.select_cutoff)
+    log.info('CI coefficient cutoff: %8.5e', myci.ci_coeff_cutoff)
     log.info('Number of roots:       %2d',   nroots)
 
     nelec = direct_spin1._unpack_nelec(nelec, myci.spin)
@@ -419,6 +432,8 @@ class SelectedCI(direct_spin1.FCISolver):
         self.select_cutoff = .5e-3
         self.conv_tol = 1e-9
         self.nroots = 1
+        # Maximum memory in MB for storing lists of selected strings
+        self.max_memory = 50000
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -534,21 +549,6 @@ if __name__ == '__main__':
     h2e = direct_spin1.absorb_h1e(h1, eri, norb, nelec, .5)
     fci3 = direct_spin1.contract_2e(h2e, fci2, norb, nelec)
     fci3 = from_fci(fci3, ci2._strs, norb, nelec)
-    #H = direct_spin1.pspace(h1, eri, norb, nelec)[1]
-    #neleca, nelecb = nelec
-    #strsa = cistring.gen_strings4orblist(range(norb), neleca)
-    #stradic = dict(zip(strsa,range(strsa.__len__())))
-    #strsb = cistring.gen_strings4orblist(range(norb), nelecb)
-    #strbdic = dict(zip(strsb,range(strsb.__len__())))
-    #nb = len(strbdic)
-    #ndet = len(ci2)
-    #idx = []
-    #for idet, (stra, strb) in enumerate(ci2._strs.reshape(ndet,2,-1)):
-    #    ka = stradic[stra[0]]
-    #    kb = strbdic[strb[0]]
-    #    idx.append(ka*nb+kb)
-    #H = H[idx][:,idx]
-    #print H
     print abs(ci3-fci3).sum()
 
     e = myci.kernel(h1, eri, norb, nelec, verbose=5)[0]

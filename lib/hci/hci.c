@@ -13,148 +13,7 @@
 //#include <omp.h>
 #include <limits.h>
 
-// Compute H * C using Slater-Condon rules
-//////void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uint64_t *strs, double *civec, double *hdiag, int ndet, double *ci1) {
-//////
-//////    #pragma omp parallel default(none) shared(h1, eri, norb, neleca, nelecb, strs, civec, hdiag, ndet, ci1)
-//////    {
-//////    size_t ip, jp, p;
-//////    int nset = norb / 64 + 1;
-//////
-//////    // Loop over pairs of determinants
-//////    #pragma omp for schedule(static)
-//////    for (ip = 0; ip < ndet; ++ip) {
-//////        for (jp = 0; jp < ip; ++jp) {
-//////            uint64_t *stria = strs + ip * 2 * nset;
-//////            uint64_t *strib = strs + ip * 2 * nset + nset;
-//////            uint64_t *strja = strs + jp * 2 * nset;
-//////            uint64_t *strjb = strs + jp * 2 * nset + nset;
-//////            int n_excit_a = n_excitations(stria, strja, nset);
-//////            int n_excit_b = n_excitations(strib, strjb, nset);
-//////            // Single excitation
-//////            if ((n_excit_a + n_excit_b) == 1) {
-//////                int *ia;
-//////                // alpha->alpha
-//////                if (n_excit_b == 0) {
-//////                    ia = get_single_excitation(stria, strja, nset);
-//////                    int i = ia[0];
-//////                    int a = ia[1];
-//////                    double sign = compute_cre_des_sign(a, i, stria, nset);
-//////                    int *occsa = compute_occ_list(stria, nset, norb, neleca);
-//////                    int *occsb = compute_occ_list(strib, nset, norb, nelecb);
-//////                    double fai = h1[a * norb + i];
-//////                    for (p = 0; p < neleca; ++p) {
-//////                        int k = occsa[p];
-//////                        int kkai = k * norb * norb * norb + k * norb * norb + a * norb + i;
-//////                        int kiak = k * norb * norb * norb + i * norb * norb + a * norb + k;
-//////                        fai += eri[kkai] - eri[kiak];
-//////                    }
-//////                    for (p = 0; p < nelecb; ++p) {
-//////                        int k = occsb[p];
-//////                        int kkai = k * norb * norb * norb + k * norb * norb + a * norb + i;
-//////                        fai += eri[kkai];
-//////                    }
-//////                    ci1[jp] += sign * fai * civec[ip];
-//////                    ci1[ip] += sign * fai * civec[jp];
-//////                    free(occsa);
-//////                    free(occsb);
-//////                }
-//////                // beta->beta
-//////                else if (n_excit_a == 0) {
-//////                    ia = get_single_excitation(strib, strjb, nset);
-//////                    int i = ia[0];
-//////                    int a = ia[1];
-//////                    double sign = compute_cre_des_sign(a, i, strib, nset);
-//////                    int *occsa = compute_occ_list(stria, nset, norb, neleca);
-//////                    int *occsb = compute_occ_list(strib, nset, norb, nelecb);
-//////                    double fai = h1[a * norb + i];
-//////                    for (p = 0; p < nelecb; ++p) {
-//////                        int k = occsb[p];
-//////                        int kkai = k * norb * norb * norb + k * norb * norb + a * norb + i;
-//////                        int kiak = k * norb * norb * norb + i * norb * norb + a * norb + k;
-//////                        fai += eri[kkai] - eri[kiak];
-//////                    }
-//////                    for (p = 0; p < neleca; ++p) {
-//////                        int k = occsa[p];
-//////                        int kkai = k * norb * norb * norb + k * norb * norb + a * norb + i;
-//////                        fai += eri[kkai];
-//////                    }
-//////                    ci1[jp] += sign * fai * civec[ip];
-//////                    ci1[ip] += sign * fai * civec[jp];
-//////                    free(occsa);
-//////                    free(occsb);
-//////                }
-//////                free(ia);
-//////            }
-//////            // Double excitation
-//////            else if ((n_excit_a + n_excit_b) == 2) {
-//////                int i, j, a, b;
-//////                // alpha,alpha->alpha,alpha
-//////                if (n_excit_b == 0) {
-//////	            int *ijab = get_double_excitation(stria, strja, nset);
-//////                    i = ijab[0]; j = ijab[1]; a = ijab[2]; b = ijab[3];
-//////                    double v, sign;
-//////                    int ajbi = a * norb * norb * norb + j * norb * norb + b * norb + i;
-//////                    int aibj = a * norb * norb * norb + i * norb * norb + b * norb + j;
-//////                    if (a > j || i > b) {
-//////                        v = eri[ajbi] - eri[aibj];
-//////                        sign = compute_cre_des_sign(b, i, stria, nset);
-//////                        sign *= compute_cre_des_sign(a, j, stria, nset);
-//////                    } 
-//////                    else {
-//////                        v = eri[aibj] - eri[ajbi];
-//////                        sign = compute_cre_des_sign(b, j, stria, nset);
-//////                        sign *= compute_cre_des_sign(a, i, stria, nset);
-//////                    }
-//////                    ci1[jp] += sign * v * civec[ip];
-//////                    ci1[ip] += sign * v * civec[jp];
-//////                    free(ijab);
-//////                }
-//////                // beta,beta->beta,beta
-//////                else if (n_excit_a == 0) {
-//////	            int *ijab = get_double_excitation(strib, strjb, nset);
-//////                    i = ijab[0]; j = ijab[1]; a = ijab[2]; b = ijab[3];
-//////                    double v, sign;
-//////                    int ajbi = a * norb * norb * norb + j * norb * norb + b * norb + i;
-//////                    int aibj = a * norb * norb * norb + i * norb * norb + b * norb + j;
-//////                    if (a > j || i > b) {
-//////                        v = eri[ajbi] - eri[aibj];
-//////                        sign = compute_cre_des_sign(b, i, strib, nset);
-//////                        sign *= compute_cre_des_sign(a, j, strib, nset);
-//////                    } 
-//////                    else {
-//////                        v = eri[aibj] - eri[ajbi];
-//////                        sign = compute_cre_des_sign(b, j, strib, nset);
-//////                        sign *= compute_cre_des_sign(a, i, strib, nset);
-//////                    }
-//////                    ci1[jp] += sign * v * civec[ip];
-//////                    ci1[ip] += sign * v * civec[jp];
-//////                    free(ijab);
-//////                }
-//////                // alpha,beta->alpha,beta
-//////                else {
-//////                    int *ia = get_single_excitation(stria, strja, nset);
-//////                    int *jb = get_single_excitation(strib, strjb, nset);
-//////                    i = ia[0]; a = ia[1]; j = jb[0]; b = jb[1];
-//////                    double v = eri[a * norb * norb * norb + i * norb * norb + b * norb + j];
-//////                    double sign = compute_cre_des_sign(a, i, stria, nset);
-//////                    sign *= compute_cre_des_sign(b, j, strib, nset);
-//////                    ci1[jp] += sign * v * civec[ip];
-//////                    ci1[ip] += sign * v * civec[jp];
-//////                    free(ia);
-//////                    free(jb);
-//////               }
-//////            }
-//////        } // end loop over jp
-//////        // Add diagonal elements
-//////        ci1[ip] += hdiag[ip] * civec[ip];
-//////    }
-//////
-//////    }
-//////
-//////}
-
-void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uint64_t *strs, double *civec, double *hdiag, int ndet, double *ci1) {
+void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uint64_t *strs, double *civec, double *hdiag, uint64_t ndet, double *ci1) {
 
     #pragma omp parallel default(none) shared(h1, eri, norb, neleca, nelecb, strs, civec, hdiag, ndet, ci1)
     {
@@ -527,7 +386,7 @@ int *compute_vir_list(uint64_t *string, int nset, int norb, int nelec) {
 }
 
 // Select determinants to include in the CI space
-void select_strs(double *h1, double *eri, double *jk, uint64_t *eri_sorted, uint64_t *jk_sorted, int norb, int neleca, int nelecb, uint64_t *strs, double *civec, uint64_t ndet, double select_cutoff, uint64_t *strs_add, uint64_t* strs_add_size) {
+void select_strs(double *h1, double *eri, double *jk, uint64_t *eri_sorted, uint64_t *jk_sorted, int norb, int neleca, int nelecb, uint64_t *strs, double *civec, uint64_t ndet_start, uint64_t ndet_finish, double select_cutoff, uint64_t *strs_add, uint64_t* strs_add_size) {
 
     size_t p, q, r, i, k, a, ip, jp, kp, lp, ij, iset, idet;
 
@@ -567,7 +426,7 @@ void select_strs(double *h1, double *eri, double *jk, uint64_t *eri_sorted, uint
     uint64_t strs_added = 0;
 
     // Loop over determinants
-    for (idet = 0; idet < ndet; ++idet) {
+    for (idet = ndet_start; idet < ndet_finish; ++idet) {
         uint64_t *stra = strs + idet * 2 * nset;
         uint64_t *strb = strs + idet * 2 * nset + nset;
         int *occsa = compute_occ_list(stra, nset, norb, neleca);
@@ -799,7 +658,7 @@ void select_strs(double *h1, double *eri, double *jk, uint64_t *eri_sorted, uint
         free(virsa);
         free(virsb);
         if (strs_added > max_strs_add) {
-            printf("\nError: Number of selected strings is greater than the size of the buffer array.\n");
+            printf("\nError: Number of selected strings is greater than the size of the buffer array (%ld vs %ld).\n", strs_added, max_strs_add);
             exit(EXIT_FAILURE);
         }
     } // end loop over determinants
