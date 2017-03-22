@@ -87,7 +87,7 @@ def read_eom_amplitudes(vec_shape, filename="reom_amplitudes.hdf5", vec=None):
     read_success = False
     print "attempting to read in eom amplitudes from file ", filename
     if os.path.isfile(filename):
-        print "reading eom amplitudes from file..."
+        print "reading eom amplitudes from file... shape=", vec_shape
         feri = h5py.File(filename, 'r', driver='mpio', comm=MPI.COMM_WORLD)
         saved_v = feri['v']
         if vec is None:
@@ -99,6 +99,8 @@ def read_eom_amplitudes(vec_shape, filename="reom_amplitudes.hdf5", vec=None):
             vec[tuple(which_slice)] = saved_v[tuple(which_slice)]
         feri.close()
         read_success = True
+    if vec is not None and vec_shape[-1] == 1:
+        vec = vec.reshape(vec_shape[:-1])
     return read_success, vec
 
 def write_eom_amplitudes(vec, filename="reom_amplitudes.hdf5"):
