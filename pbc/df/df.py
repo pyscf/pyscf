@@ -422,14 +422,19 @@ class DF(aft.AFTDF):
         self.auxcell = make_modrho_basis(self.cell, self.auxbasis, self.eta)
 
         if self.kpts_band is None:
-            kpts = unique(self.kpts)[0]
+            kpts = self.kpts
+            kband_uniq = numpy.zeros((0,3))
         else:
-            kpts = unique(numpy.vstack((self.kpts,self.kpts_band)))[0]
+            kpts = self.kpts
+            kband_uniq = [k for k in self.kpts_band if len(member(k, kpts))==0]
         self._j_only = j_only
         if j_only:
-            kptij_lst = numpy.hstack((kpts,kpts)).reshape(-1,2,3)
+            kall = numpy.vstack([kpts,kband_uniq])
+            kptij_lst = numpy.hstack((kall,kall)).reshape(-1,2,3)
         else:
             kptij_lst = [(ki, kpts[j]) for i, ki in enumerate(kpts) for j in range(i+1)]
+            kptij_lst.extend([(ki, kj) for ki in kband_uniq for kj in kpts])
+            kptij_lst.extend([(ki, ki) for ki in kband_uniq])
             kptij_lst = numpy.asarray(kptij_lst)
 
         if not isinstance(self._cderi, str):
