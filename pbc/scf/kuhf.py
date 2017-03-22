@@ -98,7 +98,7 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
                          k, kpt[0], kpt[1], kpt[2],
                          mo_energy_kpts[1,k,mo_occ_kpts[1,k]> 0],
                          mo_energy_kpts[1,k,mo_occ_kpts[1,k]==0])
-        np.set_printoptions()
+        np.set_printoptions(threshold=1000)
 
     return mo_occ_kpts
 
@@ -283,8 +283,8 @@ class KUHF(uhf.UHF, khf.KRHF):
     energy_elec = energy_elec
 
     def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
-                 kpts=None, kpt_band=None):
-        vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpt_band)
+                 kpts=None, kpts_band=None):
+        vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
         vhf = uhf._makevhf(vj, vk)
         return vhf
 
@@ -308,7 +308,7 @@ class KUHF(uhf.UHF, khf.KRHF):
         if mo_occ_kpts is None: mo_occ_kpts = self.mo_occ
         return make_rdm1(mo_coeff_kpts, mo_occ_kpts)
 
-    def get_bands(self, kpt_band, cell=None, dm_kpts=None, kpts=None):
+    def get_bands(self, kpts_band, cell=None, dm_kpts=None, kpts=None):
         '''Get energy bands at a given (arbitrary) 'band' k-point.
 
         Returns:
@@ -321,11 +321,21 @@ class KUHF(uhf.UHF, khf.KRHF):
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         if kpts is None: kpts = self.kpts
 
-        fock = self.get_hcore(cell, kpt_band)
-        fock = fock + self.get_veff(cell, dm_kpts, kpts=kpts, kpt_band=kpt_band)
-        s1e = self.get_ovlp(cell, kpt_band)
-        mo_energy, mo_coeff = uhf.eig(fock, s1e)
-        return mo_energy, mo_coeff
+        kpts_band = np.asarray(kpts_band)
+        single_kpt_band = (kpts_band.ndim == 1)
+        kpts_band = kpts_band.reshape(-1,3)
+
+        fock = self.get_hcore(cell, kpts_band)
+        fock = fock + self.get_veff(cell, dm_kpts, kpts=kpts, kpts_band=kpts_band)
+        s1e = self.get_ovlp(cell, kpts_band)
+        e_a, c_a = self.eig(fock[0], s1e[0])
+        e_b, c_b = self.eig(fock[0], s1e[0])
+        if single_kpt_band:
+            e_a = e_a[0]
+            e_b = e_b[0]
+            c_a = c_a[0]
+            c_b = c_b[0]
+        return lib.asarray((e_a,e_b)), lib.asarray((c_a,c_b))
 
     def init_guess_by_chkfile(self, chk=None, project=True, kpts=None):
         if chk is None: chk = self.chkfile

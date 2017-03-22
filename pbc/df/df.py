@@ -32,8 +32,9 @@ from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import aft
 from pyscf.pbc.df import df_jk
 from pyscf.pbc.df import df_ao2mo
-from pyscf.pbc.df.df_jk import zdotCN, is_zero, gamma_point
 from pyscf.pbc.df.aft import estimate_eta, get_nuc
+from pyscf.pbc.df.df_jk import (is_zero, gamma_point, member,
+                                zdotCN, zdotNN, zdotNC, KPT_DIFF_TOL)
 
 LINEAR_DEP_THR = 1e-9
 
@@ -375,6 +376,7 @@ class DF(aft.AFTDF):
         self.max_memory = cell.max_memory
 
         self.kpts = kpts  # default is gamma point
+        self.kpts_band = None
         self.gs = cell.gs
         self.auxbasis = None
         self.eta = estimate_eta(cell, cell.precision)
@@ -401,18 +403,33 @@ class DF(aft.AFTDF):
             logger.info(self, '_cderi = %s', self._cderi_file.name)
         logger.info(self, 'len(kpts) = %d', len(self.kpts))
         logger.debug1(self, '    kpts = %s', self.kpts)
+        if self.kpts_band is not None:
+            logger.info(self, 'len(kpts_band) = %d', len(self.kpts_band))
+            logger.debug1(self, '    kpts_band = %s', self.kpts_band)
 
-    def build(self, j_only=False, with_j3c=True):
+    def build(self, j_only=False, with_j3c=True, kpts_band=None):
+        if self.kpts_band is not None:
+            self.kpts_band = numpy.reshape(self.kpts_band, (-1,3))
+        if kpts_band is not None:
+            kpts_band = numpy.reshape(kpts_band, (-1,3))
+            if self.kpts_band is None:
+                self.kpts_band = kpts_band
+            else:
+                self.kpts_band = unique(numpy.vstack((self.kpts_band,kpts_band)))[0]
+
         self.dump_flags()
 
         self.auxcell = make_modrho_basis(self.cell, self.auxbasis, self.eta)
 
+        if self.kpts_band is None:
+            kpts = unique(self.kpts)[0]
+        else:
+            kpts = unique(numpy.vstack((self.kpts,self.kpts_band)))[0]
         self._j_only = j_only
         if j_only:
-            kptij_lst = numpy.hstack((self.kpts,self.kpts)).reshape(-1,2,3)
+            kptij_lst = numpy.hstack((kpts,kpts)).reshape(-1,2,3)
         else:
-            kptij_lst = [(ki, self.kpts[j])
-                         for i, ki in enumerate(self.kpts) for j in range(i+1)]
+            kptij_lst = [(ki, kpts[j]) for i, ki in enumerate(kpts) for j in range(i+1)]
             kptij_lst = numpy.asarray(kptij_lst)
 
         if not isinstance(self._cderi, str):
@@ -428,6 +445,17 @@ class DF(aft.AFTDF):
         return self
 
     _make_j3c = _make_j3c
+
+    def has_kpts(self, kpts):
+        if kpts is None:
+            return True
+        else:
+            kpts = numpy.asarray(kpts).reshape(-1,3)
+            if self.kpts_band is None:
+                return all((len(member(kpt, self.kpts))>0) for kpt in kpts)
+            else:
+                return all((len(member(kpt, self.kpts))>0 or
+                            len(member(kpt, self.kpts_band))>0) for kpt in kpts)
 
     def auxbar(self, fused_cell=None):
         '''
@@ -510,7 +538,7 @@ class DF(aft.AFTDF):
                 LpqR, LpqI = load(j3c, b0, b1, LpqR, LpqI)
                 yield LpqR, LpqI
 
-    def get_jk(self, dm, hermi=1, kpts=None, kpt_band=None,
+    def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
                with_j=True, with_k=True, exxdiv='ewald'):
         if kpts is None:
             if numpy.all(self.kpts == 0):
@@ -521,14 +549,14 @@ class DF(aft.AFTDF):
         kpts = numpy.asarray(kpts)
 
         if kpts.shape == (3,):
-            return df_jk.get_jk(self, dm, hermi, kpts, kpt_band, with_j,
+            return df_jk.get_jk(self, dm, hermi, kpts, kpts_band, with_j,
                                 with_k, exxdiv)
 
         vj = vk = None
         if with_k:
-            vk = df_jk.get_k_kpts(self, dm, hermi, kpts, kpt_band, exxdiv)
+            vk = df_jk.get_k_kpts(self, dm, hermi, kpts, kpts_band, exxdiv)
         if with_j:
-            vj = df_jk.get_j_kpts(self, dm, hermi, kpts, kpt_band)
+            vj = df_jk.get_j_kpts(self, dm, hermi, kpts, kpts_band)
         return vj, vk
 
     get_eri = get_ao_eri = df_ao2mo.get_eri
@@ -569,7 +597,7 @@ def unique(kpts):
         if not seen[i]:
             uniq_kpts.append(kpt)
             uniq_index.append(i)
-            idx = abs(kpt-kpts).sum(axis=1) < 1e-6
+            idx = abs(kpt-kpts).sum(axis=1) < KPT_DIFF_TOL
             uniq_inverse[idx] = n
             seen[idx] = True
             n += 1
@@ -617,15 +645,13 @@ class _load3c(object):
         self.feri = h5py.File(self.cderi, 'r')
         kpti_kptj = numpy.asarray(self.kpti_kptj)
         kptij_lst = self.feri['%s-kptij'%self.label].value
-        dk = numpy.einsum('kij->k', abs(kptij_lst-kpti_kptj))
-        k_id = numpy.where(dk < 1e-6)[0]
+        k_id = member(kpti_kptj, kptij_lst)
         if len(k_id) > 0:
             dat = self.feri['%s/%d' % (self.label,k_id[0])]
         else:
             # swap ki,kj due to the hermiticity
             kptji = kpti_kptj[[1,0]]
-            dk = numpy.einsum('kij->k', abs(kptij_lst-kptji))
-            k_id = numpy.where(dk < 1e-6)[0]
+            k_id = member(kptji, kptij_lst)
             if len(k_id) == 0:
                 raise RuntimeError('%s for kpts %s is not initialized.\n'
                                    'Reset attribute .kpts then call '
