@@ -132,7 +132,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
         pqkRbuf = numpy.empty(buflen*Gblksize)
         pqkIbuf = numpy.empty(buflen*Gblksize)
         # buf for ft_aopair
-        buf = numpy.zeros((nkptj,buflen*Gblksize), dtype=numpy.complex128)
+        buf = numpy.empty((nkptj,buflen*Gblksize), dtype=numpy.complex128)
 
         col1 = 0
         for istep, sh_range in enumerate(shranges):
@@ -163,8 +163,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
                                                 adapted_kptjs, out=buf)
                     nG = p1 - p0
                     for k, ji in enumerate(adapted_ji_idx):
-                        aoao = numpy.ndarray((nG,ncol), dtype=numpy.complex128,
-                                             order='F', buffer=dat[k])
+                        aoao = dat[k]
                         pqkR = numpy.ndarray((ncol,nG), buffer=pqkRbuf)
                         pqkI = numpy.ndarray((ncol,nG), buffer=pqkIbuf)
                         pqkR[:] = aoao.real.T
@@ -184,8 +183,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
                                                 adapted_kptjs, out=buf)
                     nG = p1 - p0
                     for k, ji in enumerate(adapted_ji_idx):
-                        aoao = numpy.ndarray((nG,ni,nao), dtype=numpy.complex128,
-                                             order='F', buffer=dat[k])
+                        aoao = dat[k]
                         pqkR = numpy.ndarray((ni,nao,nG), buffer=pqkRbuf)
                         pqkI = numpy.ndarray((ni,nao,nG), buffer=pqkIbuf)
                         pqkR[:] = aoao.real.transpose(1,2,0)

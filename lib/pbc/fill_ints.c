@@ -1130,7 +1130,7 @@ void PBCnr2c_drv(int (*intor)(), void (*fill)(), double complex *out,
         memcpy(env_loc, env, sizeof(double)*nenv);
         size_t count = nkpts * OF_CMPLX + nimgs;
         double *buf = malloc(sizeof(double)*count*INTBUFMAX*4*comp);
-#pragma omp for schedule(dynamic)
+#pragma omp for schedule(dynamic, 2)
         for (jsh = 0; jsh < njsh; jsh++) {
                 (*fill)(intor, out, nkpts, comp, nimgs, jsh,
                         buf, env_loc, Ls, expkL_r, expkL_i,

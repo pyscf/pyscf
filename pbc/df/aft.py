@@ -221,7 +221,7 @@ class AFTDF(lib.StreamObject):
             sublk = max(16, int(blksize//4))
         else:
             subblk = blksize
-        buf = [numpy.zeros(nij*blksize, dtype=numpy.complex128)]
+        buf = numpy.empty(nij*blksize, dtype=numpy.complex128)
         pqkRbuf = numpy.empty(nij*sublk)
         pqkIbuf = numpy.empty(nij*sublk)
 
@@ -288,7 +288,7 @@ class AFTDF(lib.StreamObject):
             nij = ni*nj
         blksize = max(16, int(max_memory*.9e6/(nij*(nkpts+1)*16)))
         blksize = min(blksize, ngs, 16384)
-        buf = numpy.empty(nkpts*nij*blksize, dtype='D')
+        buf = numpy.empty(nkpts*nij*blksize, dtype=numpy.complex128)
         pqkRbuf = numpy.empty(nij*blksize)
         pqkIbuf = numpy.empty(nij*blksize)
 
@@ -298,8 +298,7 @@ class AFTDF(lib.StreamObject):
                                             b, gxyz[p0:p1], Gvbase, q, kpts, out=buf)
                 nG = p1 - p0
                 for k in range(nkpts):
-                    aoao = numpy.ndarray((nG,nij), dtype=numpy.complex128,
-                                         order='F', buffer=dat[k])
+                    aoao = dat[k]
                     pqkR = numpy.ndarray((nij,nG), buffer=pqkRbuf)
                     pqkI = numpy.ndarray((nij,nG), buffer=pqkIbuf)
                     pqkR[:] = aoao.real.T
@@ -311,8 +310,7 @@ class AFTDF(lib.StreamObject):
                                             b, gxyz[p0:p1], Gvbase, q, kpts, out=buf)
                 nG = p1 - p0
                 for k in range(nkpts):
-                    aoao = numpy.ndarray((nG,ni,nj), dtype=numpy.complex128,
-                                         order='F', buffer=dat[k])
+                    aoao = dat[k]
                     pqkR = numpy.ndarray((ni,nj,nG), buffer=pqkRbuf)
                     pqkI = numpy.ndarray((ni,nj,nG), buffer=pqkIbuf)
                     pqkR[:] = aoao.real.transpose(1,2,0)
