@@ -426,7 +426,7 @@ void PBC_ft_latsum_drv(int (*intor)(), void (*eval_gz)(), void (*fill)(),
         memcpy(env_loc, env, sizeof(double)*nenv);
         size_t count = nkpts + IMGBLK;
         double complex *buf = malloc(sizeof(double complex)*count*INTBUFMAX*comp);
-#pragma omp for schedule(dynamic, 2)
+#pragma omp for schedule(dynamic)
         for (ij = 0; ij < nish*njsh; ij++) {
                 i = ij / njsh;
                 j = ij % njsh;
