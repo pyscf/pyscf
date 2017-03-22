@@ -559,8 +559,7 @@ class RCCSD(ccsd.CCSD):
         # 1p-2p1h block
         Hr1 += einsum('ld,lad->a',2.*imds.Fov,r2)
         Hr1 += einsum('ld,lda->a',  -imds.Fov,r2)
-        Hr1 += 2*einsum('alcd,lcd->a',imds.Wvovv,r2)
-        Hr1 +=  -einsum('aldc,lcd->a',imds.Wvovv,r2)
+        Hr1 += einsum('alcd,lcd->a',2.*imds.Wvovv-imds.Wvovv.transpose(0,1,3,2),r2)
         # Eq. (31)
         # 2p1h-1p block
         Hr2 = einsum('abcj,c->jab',imds.Wvvvo,r1)
@@ -579,15 +578,13 @@ class RCCSD(ccsd.CCSD):
             Hr2 +=  einsum('ac,jcb->jab',imds.Lvv,r2)
             Hr2 +=  einsum('bd,jad->jab',imds.Lvv,r2)
             Hr2 += -einsum('lj,lab->jab',imds.Loo,r2)
-            Hr2 += 2*einsum('lbdj,lad->jab',imds.Wovvo,r2)
-            Hr2 +=  -einsum('lbjd,lad->jab',imds.Wovov,r2)
-            Hr2 +=  -einsum('lajc,lcb->jab',imds.Wovov,r2)
-            Hr2 +=  -einsum('lbcj,lca->jab',imds.Wovvo,r2)
+            Hr2 += einsum('lbdj,lad->jab',2.*imds.Wovvo-imds.Wovov.transpose(0,1,3,2),r2)
+            Hr2 += -einsum('lajc,lcb->jab',imds.Wovov,r2)
+            Hr2 += -einsum('lbcj,lca->jab',imds.Wovvo,r2)
             nvir = self.nmo-self.nocc
             for a in range(nvir):
                 Hr2[:,a,:] += einsum('bcd,jcd->jb',imds.Wvvvv[a],r2)
-            tmp = (2*einsum('klcd,lcd->k',imds.Woovv,r2)
-                    -einsum('kldc,lcd->k',imds.Woovv,r2))
+            tmp = einsum('klcd,lcd->k',2.*imds.Woovv-imds.Woovv.transpose(0,1,3,2),r2)
             Hr2 += -einsum('k,kjab->jab',tmp,self.t2)
 
         vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
