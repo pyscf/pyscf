@@ -158,13 +158,13 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
             if aosym == 's2':
                 shls_slice = (bstart, bend, 0, bend)
                 for p0, p1 in lib.prange(0, ngs, Gblksize):
-                    ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                          b, gxyz[p0:p1], Gvbase, kpt,
-                                          adapted_kptjs, out=buf)
+                    dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                                b, gxyz[p0:p1], Gvbase, kpt,
+                                                adapted_kptjs, out=buf)
                     nG = p1 - p0
                     for k, ji in enumerate(adapted_ji_idx):
                         aoao = numpy.ndarray((nG,ncol), dtype=numpy.complex128,
-                                             order='F', buffer=buf[k])
+                                             order='F', buffer=dat[k])
                         pqkR = numpy.ndarray((ncol,nG), buffer=pqkRbuf)
                         pqkI = numpy.ndarray((ncol,nG), buffer=pqkIbuf)
                         pqkR[:] = aoao.real.T
@@ -179,13 +179,13 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
                 shls_slice = (bstart, bend, 0, cell.nbas)
                 ni = ncol // nao
                 for p0, p1 in lib.prange(0, ngs, Gblksize):
-                    ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                          b, gxyz[p0:p1], Gvbase, kpt,
-                                          adapted_kptjs, out=buf)
+                    dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                                b, gxyz[p0:p1], Gvbase, kpt,
+                                                adapted_kptjs, out=buf)
                     nG = p1 - p0
                     for k, ji in enumerate(adapted_ji_idx):
                         aoao = numpy.ndarray((nG,ni,nao), dtype=numpy.complex128,
-                                             order='F', buffer=buf[k])
+                                             order='F', buffer=dat[k])
                         pqkR = numpy.ndarray((ni,nao,nG), buffer=pqkRbuf)
                         pqkI = numpy.ndarray((ni,nao,nG), buffer=pqkIbuf)
                         pqkR[:] = aoao.real.transpose(1,2,0)
