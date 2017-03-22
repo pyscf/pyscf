@@ -146,10 +146,10 @@ static void _nr3c_fill_kk(int (*intor)(), void (*fsort)(),
                 dijm = dij * dkmax * comp;
                 dijmk = dijm * nkpts;
                 bufkk_r = buf;
-                bufkk_i = bufkk_r + nkpts * dijmk;
-                bufkL_r = bufkk_i + nkpts * dijmk;
-                bufkL_i = bufkL_r + MIN(nimgs,IMGBLK) * dijmk;
-                bufL    = bufkL_i + MIN(nimgs,IMGBLK) * dijmk;
+                bufkk_i = bufkk_r + (size_t)nkpts * dijmk;
+                bufkL_r = bufkk_i + (size_t)nkpts * dijmk;
+                bufkL_i = bufkL_r + (size_t)MIN(nimgs,IMGBLK) * dijmk;
+                bufL    = bufkL_i + (size_t)MIN(nimgs,IMGBLK) * dijmk;
                 memset(bufkk_r, 0, sizeof(double)*nkpts*dijmk * OF_CMPLX);
 
                 for (iL0 = 0; iL0 < nimgs; iL0+=IMGBLK) {
@@ -171,10 +171,10 @@ static void _nr3c_fill_kk(int (*intor)(), void (*fsort)(),
         }
         dgemm_(&TRANS_N, &TRANS_N, &dijm, &nkpts, &nimgs,
                &D1, bufL, &dijm, expkL_r, &nimgs,
-               &D0, bufkL_r+(iL-iL0)*dijmk, &dijm);
+               &D0, bufkL_r+(iL-iL0)*(size_t)dijmk, &dijm);
         dgemm_(&TRANS_N, &TRANS_N, &dijm, &nkpts, &nimgs,
                &D1, bufL, &dijm, expkL_i, &nimgs,
-               &D0, bufkL_i+(iL-iL0)*dijmk, &dijm);
+               &D0, bufkL_i+(iL-iL0)*(size_t)dijmk, &dijm);
 
                         } // iL in range(0, nimgs)
                         // conj(exp(1j*dot(h,k)))
@@ -205,7 +205,7 @@ void PBCnr3c_fill_kks1(int (*intor)(), double complex *out, int nkpts_ij,
                        int *shls_slice, int *ao_loc, CINTOpt *cintopt,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
-        _nr3c_fill_kk(intor, sort3c_kks1, out,
+        _nr3c_fill_kk(intor, &sort3c_kks1, out,
                       nkpts_ij, nkpts, comp, nimgs, ish, jsh,
                       buf, env_loc, Ls, expkL_r, expkL_i, kptij_idx,
                       shls_slice, ao_loc, cintopt, atm, natm, bas, nbas, env);
@@ -290,13 +290,15 @@ void PBCnr3c_fill_kks2(int (*intor)(), double complex *out, int nkpts_ij,
                        int *shls_slice, int *ao_loc, CINTOpt *cintopt,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
-        if (ish > jsh) {
-                _nr3c_fill_kk(intor, sort3c_kks2_igtj, out,
+        int ip = ish + shls_slice[0];
+        int jp = jsh + shls_slice[2] - nbas;
+        if (ip > jp) {
+                _nr3c_fill_kk(intor, &sort3c_kks2_igtj, out,
                               nkpts_ij, nkpts, comp, nimgs, ish, jsh,
                               buf, env_loc, Ls, expkL_r, expkL_i, kptij_idx,
                               shls_slice, ao_loc, cintopt, atm, natm, bas, nbas, env);
-        } else if (ish == jsh) {
-                _nr3c_fill_kk(intor, sort3c_kks1, out,
+        } else if (ip == jp) {
+                _nr3c_fill_kk(intor, &sort3c_kks1, out,
                               nkpts_ij, nkpts, comp, nimgs, ish, jsh,
                               buf, env_loc, Ls, expkL_r, expkL_i, kptij_idx,
                               shls_slice, ao_loc, cintopt, atm, natm, bas, nbas, env);
@@ -386,7 +388,8 @@ static void _nr3c_fill_k(int (*intor)(), void (*fsort)(),
         int kshloc[ksh1-ksh0+1];
         int nkshloc = shloc_partition(kshloc, ao_loc, ksh0, ksh1, dkmax);
 
-        int i, j, m, msh0, msh1, dijm, dijmk;
+        int i, j, m, msh0, msh1, dijm;
+        size_t dijmk;
         int ksh, dk, iL0, iL1, iL, jL, iLcount, empty;
         int shls[3];
         double *bufexp_r = buf;
@@ -473,7 +476,8 @@ static void sort3c_ks2_igtj(double complex *out, double *bufr, double *bufi,
         const int dij = di * dj;
         const int dkmax = ao_loc[msh1] - ao_loc[msh0];
         const size_t dijmc = dij * dkmax * comp;
-        out += (ao_loc[ish]*(ao_loc[ish]+1)/2-off0 + ao_loc[jsh]-ao_loc[jsh0]) * naok;
+        const int jp = ao_loc[jsh] - ao_loc[jsh0];
+        out += (ao_loc[ish]*(ao_loc[ish]+1)/2-off0 + jp) * naok;
 
         int i, j, k, ij, kk, ik, jk, ksh, ic, dk, dijk;
         size_t off;
@@ -524,7 +528,8 @@ static void sort3c_ks2_ieqj(double complex *out, double *bufr, double *bufi,
         const int dij = di * dj;
         const int dkmax = ao_loc[msh1] - ao_loc[msh0];
         const size_t dijmc = dij * dkmax * comp;
-        out += (ao_loc[ish]*(ao_loc[ish]+1)/2-off0 + ao_loc[jsh]-ao_loc[jsh0]) * naok;
+        const int jp = ao_loc[jsh] - ao_loc[jsh0];
+        out += (ao_loc[ish]*(ao_loc[ish]+1)/2-off0 + jp) * naok;
 
         int i, j, k, ij, kk, ik, jk, ksh, ic, dk, dijk;
         size_t off;
@@ -564,13 +569,15 @@ void PBCnr3c_fill_ks2(int (*intor)(), double complex *out, int nkpts_ij,
                       int *shls_slice, int *ao_loc, CINTOpt *cintopt,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
-        if (ish > jsh) {
-                _nr3c_fill_k(intor, sort3c_ks2_igtj, out,
+        int ip = ish + shls_slice[0];
+        int jp = jsh + shls_slice[2] - nbas;
+        if (ip > jp) {
+                _nr3c_fill_k(intor, &sort3c_ks2_igtj, out,
                              nkpts_ij, nkpts, comp, nimgs, ish, jsh,
                              buf, env_loc, Ls, expkL_r, expkL_i, kptij_idx,
                              shls_slice, ao_loc, cintopt, atm, natm, bas, nbas, env);
-        } else if (ish == jsh) {
-                _nr3c_fill_k(intor, sort3c_ks2_ieqj, out,
+        } else if (ip == jp) {
+                _nr3c_fill_k(intor, &sort3c_ks2_ieqj, out,
                              nkpts_ij, nkpts, comp, nimgs, ish, jsh,
                              buf, env_loc, Ls, expkL_r, expkL_i, kptij_idx,
                              shls_slice, ao_loc, cintopt, atm, natm, bas, nbas, env);
@@ -643,7 +650,7 @@ static void _nr3c_fill_g(int (*intor)(), void (*fsort)(), double *out, int nkpts
         const int di = ao_loc[ish+1] - ao_loc[ish];
         const int dj = ao_loc[jsh+1] - ao_loc[jsh];
         const int dij = di * dj;
-        int dkmax = INTBUFMAX / dij * MIN(IMGBLK,nimgs);
+        int dkmax = INTBUFMAX / dij / 2 * MIN(IMGBLK,nimgs);
         int kshloc[ksh1-ksh0+1];
         int nkshloc = shloc_partition(kshloc, ao_loc, ksh0, ksh1, dkmax);
 
@@ -693,7 +700,7 @@ void PBCnr3c_fill_gs1(int (*intor)(), double *out, int nkpts_ij,
                       int *shls_slice, int *ao_loc, CINTOpt *cintopt,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
-     _nr3c_fill_g(intor, sort3c_gs1, out, nkpts_ij, nkpts, comp, nimgs, ish, jsh,
+     _nr3c_fill_g(intor, &sort3c_gs1, out, nkpts_ij, nkpts, comp, nimgs, ish, jsh,
                   buf, env_loc, Ls, expkL_r, expkL_i, kptij_idx,
                   shls_slice, ao_loc, cintopt, atm, natm, bas, nbas, env);
 }
@@ -716,7 +723,8 @@ static void sort3c_gs2_igtj(double *out, double *in, int *shls_slice, int *ao_lo
         const int di = ao_loc[ish+1] - ao_loc[ish];
         const int dj = ao_loc[jsh+1] - ao_loc[jsh];
         const int dij = di * dj;
-        out += (ao_loc[ish]*(ao_loc[ish]+1)/2-off0 + ao_loc[jsh]-ao_loc[jsh0]) * naok;
+        const int jp = ao_loc[jsh] - ao_loc[jsh0];
+        out += (ao_loc[ish]*(ao_loc[ish]+1)/2-off0 + jp) * naok;
 
         int i, j, k, ij, ksh, ic, dk, dijk;
         double *pin, *pout;
@@ -757,7 +765,8 @@ static void sort3c_gs2_ieqj(double *out, double *in, int *shls_slice, int *ao_lo
 
         const int di = ao_loc[ish+1] - ao_loc[ish];
         const int dij = di * di;
-        out += (ao_loc[ish]*(ao_loc[ish]+1)/2-off0 + ao_loc[jsh]-ao_loc[jsh0]) * naok;
+        const int jp = ao_loc[jsh] - ao_loc[jsh0];
+        out += (ao_loc[ish]*(ao_loc[ish]+1)/2-off0 + jp) * naok;
 
         int i, j, k, ij, ksh, ic, dk, dijk;
         double *pin, *pout;
@@ -790,21 +799,23 @@ void PBCnr3c_fill_gs2(int (*intor)(), double *out, int nkpts_ij,
                       int *shls_slice, int *ao_loc, CINTOpt *cintopt,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
-        if (ish > jsh) {
-             _nr3c_fill_g(intor, sort3c_gs2_igtj, out,
+        int ip = ish + shls_slice[0];
+        int jp = jsh + shls_slice[2] - nbas;
+        if (ip > jp) {
+             _nr3c_fill_g(intor, &sort3c_gs2_igtj, out,
                           nkpts_ij, nkpts, comp, nimgs, ish, jsh,
                           buf, env_loc, Ls, expkL_r, expkL_i, kptij_idx,
                           shls_slice, ao_loc, cintopt, atm, natm, bas, nbas, env);
-        } else if (ish == jsh) {
-             _nr3c_fill_g(intor, sort3c_gs2_ieqj, out,
+        } else if (ip == jp) {
+             _nr3c_fill_g(intor, &sort3c_gs2_ieqj, out,
                           nkpts_ij, nkpts, comp, nimgs, ish, jsh,
                           buf, env_loc, Ls, expkL_r, expkL_i, kptij_idx,
                           shls_slice, ao_loc, cintopt, atm, natm, bas, nbas, env);
         }
 }
 
-static int sizeof_env(int *shls_slice,
-                      int *atm, int natm, int *bas, int nbas, double *env)
+int PBCsizeof_env(int *shls_slice,
+                  int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
@@ -858,9 +869,9 @@ void PBCnr3c_drv(int (*intor)(), void (*fill)(), double complex *eri,
                atm, natm, bas, nbas, env, count)
 {
         int ish, jsh, ij;
-        int nenv = sizeof_env(shls_slice, atm, natm, bas, nbas, env);
-        nenv = MAX(nenv, sizeof_env(shls_slice+2, atm, natm, bas, nbas, env));
-        nenv = MAX(nenv, sizeof_env(shls_slice+4, atm, natm, bas, nbas, env));
+        int nenv = PBCsizeof_env(shls_slice, atm, natm, bas, nbas, env);
+        nenv = MAX(nenv, PBCsizeof_env(shls_slice+2, atm, natm, bas, nbas, env));
+        nenv = MAX(nenv, PBCsizeof_env(shls_slice+4, atm, natm, bas, nbas, env));
         double *env_loc = malloc(sizeof(double)*nenv);
         memcpy(env_loc, env, sizeof(double)*nenv);
         double *buf = malloc(sizeof(double)*count*INTBUFMAX*comp);
@@ -1113,8 +1124,8 @@ void PBCnr2c_drv(int (*intor)(), void (*fill)(), double complex *out,
                atm, natm, bas, nbas, env)
 {
         int jsh;
-        int nenv = sizeof_env(shls_slice, atm, natm, bas, nbas, env);
-        nenv = MAX(nenv, sizeof_env(shls_slice+2, atm, natm, bas, nbas, env));
+        int nenv = PBCsizeof_env(shls_slice, atm, natm, bas, nbas, env);
+        nenv = MAX(nenv, PBCsizeof_env(shls_slice+2, atm, natm, bas, nbas, env));
         double *env_loc = malloc(sizeof(double)*nenv);
         memcpy(env_loc, env, sizeof(double)*nenv);
         size_t count = nkpts * OF_CMPLX + nimgs;

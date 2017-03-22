@@ -85,13 +85,13 @@ def aux_e2(cell, auxcell, intor='cint3c2e_sph', aosym='s1', comp=1,
         kk_type = 'k'
         dtype = numpy.complex128
         kpts = kptij_idx = kpti
-        expkL = numpy.exp(1j*numpy.dot(kpts, Ls.T))
+        expkL = numpy.exp(1j * numpy.dot(kpts, Ls.T))
         nkpts = nkptij = len(kpts)
     else:
         kk_type = 'kk'
         dtype = numpy.complex128
         kpts = unique(numpy.vstack([kpti,kptj]))[0]
-        expkL = numpy.exp(1j*numpy.dot(kpts, Ls.T))
+        expkL = numpy.exp(1j * numpy.dot(kpts, Ls.T))
         wherei = numpy.where(abs(kpti.reshape(-1,1,3)-kpts).sum(axis=2) < KPT_DIFF_TOL)[1]
         wherej = numpy.where(abs(kptj.reshape(-1,1,3)-kpts).sum(axis=2) < KPT_DIFF_TOL)[1]
         nkpts = len(kpts)

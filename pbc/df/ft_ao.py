@@ -69,17 +69,17 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
         p_b = b.ctypes.data_as(ctypes.c_void_p)
         p_gs = (ctypes.c_int*3)(*[len(x) for x in Gvbase])
 
-    drv = libpbc.PBC_ft_latsum_kpts
+    drv = libpbc.PBC_ft_latsum_drv
     intor = getattr(libpbc, 'GTO_ft_ovlp_sph')
     eval_gz = getattr(libpbc, eval_gz)
 
-    # make copy of atm,bas,env because they are modified in the lattice sum
+    Ls = cell.get_lattice_Ls()
+    expkL = numpy.exp(1j * numpy.dot(kptjs, Ls.T))
+
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                  cell._atm, cell._bas, cell._env)
-    ao_loc = cell.ao_loc_nr()
+    ao_loc = gto.moleintor.make_loc(bas, 'GTO_ft_ovlp_sph')
     nao = ao_loc[cell.nbas]
-    ao_loc = numpy.asarray(numpy.hstack((ao_loc[:-1], ao_loc+nao)),
-                           dtype=numpy.int32)
     if shls_slice is None:
         shls_slice = (0, cell.nbas, cell.nbas, cell.nbas*2)
     else:
@@ -87,50 +87,43 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
                       cell.nbas+shls_slice[2], cell.nbas+shls_slice[3])
     ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
     nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
-    shape = (nGv, ni, nj)
-    fill = getattr(libpbc, 'PBC_ft_fill_'+aosym)
+    nkpts = len(kptjs)
+    comp = 1
+    nimgs = len(Ls)
+    shape = (nkpts, comp, ni, nj, nGv)
+
 # Theoretically, hermitian symmetry can be also found for kpti == kptj:
 #       f_ji(G) = \int f_ji exp(-iGr) = \int f_ij^* exp(-iGr) = [f_ij(-G)]^*
-# The hermi operation needs reordering the axis-0.  It is inefficient.
+# hermi operation needs reordering the axis-0.  It is inefficient.
     if aosym == 's1hermi': # Symmetry for Gamma point
-        assert(abs(q).sum() < 1e-9 and abs(kptjs).sum() < 1e-9)
+        assert(is_zero(q) and is_zero(kptjs) and ni == nj)
     elif aosym == 's2':
         i0 = ao_loc[shls_slice[0]]
         i1 = ao_loc[shls_slice[1]]
         nij = i1*(i1+1)//2 - i0*(i0+1)//2
-        shape = (nGv, nij)
+        shape = (nkpts, comp, nij, nGv)
 
-    if out is None:
-        out = [numpy.zeros(shape, order='F', dtype=numpy.complex128)
-               for k in range(len(kptjs))]
+    if nkpts == 1:
+        fill = getattr(libpbc, 'PBC_ft_fill_nk1'+aosym)
     else:
-        out = [numpy.ndarray(shape, order='F', dtype=numpy.complex128,
-                             buffer=out[k]) for k in range(len(kptjs))]
-    out_ptrs = (ctypes.c_void_p*len(out))(
-            *[x.ctypes.data_as(ctypes.c_void_p) for x in out])
+        fill = getattr(libpbc, 'PBC_ft_fill_k'+aosym)
+    out = numpy.ndarray(shape, dtype=numpy.complex128, buffer=out)
 
-    xyz = numpy.asarray(cell.atom_coords(), order='C')
-    ptr_coord = numpy.asarray(atm[cell.natm:,gto.PTR_COORD],
-                              dtype=numpy.int32, order='C')
-    Ls = cell.get_lattice_Ls()
-    exp_Lk = numpy.einsum('ik,jk->ij', Ls, kptjs)
-    exp_Lk = numpy.exp(1j * numpy.asarray(exp_Lk, order='C'))
-    drv(intor, eval_gz, fill, out_ptrs, xyz.ctypes.data_as(ctypes.c_void_p),
-        ptr_coord.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(xyz)),
-        Ls.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(Ls)),
-        exp_Lk.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(kptjs)),
-        (ctypes.c_int*4)(*shls_slice),
-        ao_loc.ctypes.data_as(ctypes.c_void_p),
-        GvT.ctypes.data_as(ctypes.c_void_p),
-        p_b, p_gxyzT, p_gs, ctypes.c_int(nGv),
-        atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm*2),
-        bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.nbas*2),
+    drv(intor, eval_gz, fill, out.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nkpts), ctypes.c_int(comp), ctypes.c_int(nimgs),
+        Ls.ctypes.data_as(ctypes.c_void_p), expkL.ctypes.data_as(ctypes.c_void_p),
+        (ctypes.c_int*4)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p),
+        GvT.ctypes.data_as(ctypes.c_void_p), p_b, p_gxyzT, p_gs, ctypes.c_int(nGv),
+        atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
+        bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.nbas),
         env.ctypes.data_as(ctypes.c_void_p))
 
     if aosym == 's1hermi':
-        for mat in out:
-            for i in range(1,ni):
-                mat[:,:i,i] = mat[:,i,:i]
+        for i in range(1,ni):
+            out[:,:,:i,i] = out[:,:,i,:i]
+    out = numpy.rollaxis(out, -1, 2)
+    if comp == 1:
+        out = out[:,0]
     return out
 
 def ft_ao(mol, Gv, shls_slice=None, b=None,
