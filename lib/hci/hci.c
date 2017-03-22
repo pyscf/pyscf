@@ -154,7 +154,7 @@
 //////
 //////}
 
-void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uint64_t *strs, double *civec, double *hdiag, int ndet, double *ci1) {
+void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uint64_t *strs, double *civec, double *hdiag, uint64_t ndet, double *ci1) {
 
     #pragma omp parallel default(none) shared(h1, eri, norb, neleca, nelecb, strs, civec, hdiag, ndet, ci1)
     {
@@ -527,7 +527,7 @@ int *compute_vir_list(uint64_t *string, int nset, int norb, int nelec) {
 }
 
 // Select determinants to include in the CI space
-void select_strs(double *h1, double *eri, double *jk, uint64_t *eri_sorted, uint64_t *jk_sorted, int norb, int neleca, int nelecb, uint64_t *strs, double *civec, uint64_t ndet, double select_cutoff, uint64_t *strs_add, uint64_t* strs_add_size) {
+void select_strs(double *h1, double *eri, double *jk, uint64_t *eri_sorted, uint64_t *jk_sorted, int norb, int neleca, int nelecb, uint64_t *strs, double *civec, uint64_t ndet_start, uint64_t ndet_finish, double select_cutoff, uint64_t *strs_add, uint64_t* strs_add_size) {
 
     size_t p, q, r, i, k, a, ip, jp, kp, lp, ij, iset, idet;
 
@@ -567,7 +567,7 @@ void select_strs(double *h1, double *eri, double *jk, uint64_t *eri_sorted, uint
     uint64_t strs_added = 0;
 
     // Loop over determinants
-    for (idet = 0; idet < ndet; ++idet) {
+    for (idet = ndet_start; idet < ndet_finish; ++idet) {
         uint64_t *stra = strs + idet * 2 * nset;
         uint64_t *strb = strs + idet * 2 * nset + nset;
         int *occsa = compute_occ_list(stra, nset, norb, neleca);
@@ -799,7 +799,7 @@ void select_strs(double *h1, double *eri, double *jk, uint64_t *eri_sorted, uint
         free(virsa);
         free(virsb);
         if (strs_added > max_strs_add) {
-            printf("\nError: Number of selected strings is greater than the size of the buffer array.\n");
+            printf("\nError: Number of selected strings is greater than the size of the buffer array (%ld vs %ld).\n", strs_added, max_strs_add);
             exit(EXIT_FAILURE);
         }
     } // end loop over determinants
