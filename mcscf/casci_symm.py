@@ -94,7 +94,7 @@ def label_symmetry_(mc, mo_coeff):
         mc.orbsym = symm.label_orb_symm(mc.mol, irrep_name,
                                         mc.mol.symm_orb, mo_coeff, s=s)
 
-    if not hasattr(mc.fcisolver, 'orbsym') or not mc.fcisolver.orbsym:
+    if not hasattr(mc.fcisolver, 'orbsym') or mc.fcisolver.orbsym is None:
         ncore = mc.ncore
         nocc = mc.ncore + mc.ncas
         mc.fcisolver.orbsym = mc.orbsym[ncore:nocc]
