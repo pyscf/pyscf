@@ -1,9 +1,13 @@
 import numpy
+from mpi4py import MPI
+
+comm = MPI.COMM_WORLD
+nproc = comm.Get_size()
 
 ##########################################################################
 # TODO: currently if the mem_per_blocksize is too
 #       small then it will make everything just be one gigantic block...
-#       which may be bad computationally in that if each processor is 
+#       which may be bad computationally in that if each processor is
 #       responsible for work on a block, only one processor will be used
 #       for work.
 ##########################################################################
@@ -13,7 +17,7 @@ def get_max_blocksize_from_mem(array_size, mem_per_block, mem, priority_list=Non
 	Args:
 		priority_list : list of importance of indices for the blocksizes,
 				i.e. an index with priority 1 will be made to be the
-				maximum it can be (according to array_size and mem), 
+				maximum it can be (according to array_size and mem),
 				afterwhich an index with priority 2 will be made the maximum size
 				it can be.  If two priorities are the same, the block size
 				for those indices will be forced to be equal.

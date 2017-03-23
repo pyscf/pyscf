@@ -1691,7 +1691,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 return nocc * nvir**3 * nkpts * 16
             array_size = [nkpts,nkpts]
             # TODO: figure out a good chunk size
-            task_list = generate_max_task_list(array_size,priority_list=[1,1])
+            #task_list = generate_max_task_list(array_size,priority_list=[1,1])
+            task_list = generate_max_task_list(array_size,blk_mem_size=100000*2.*mem_usage_oovvk(nocc,nvir,nkpts),priority_list=[1,1])
 
             star_energy = numpy.array(0.0 + 1j*0.0)
             for kirange, kjrange in mpi.work_stealing_partition(task_list):
@@ -2368,7 +2369,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def eaccsd_star(self, eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
         nocc = self.nocc()
-        nproc = comm.Get_size()
         nvir = self.nmo() - nocc
         nkpts = self.nkpts
         kconserv = self.kconserv
@@ -2418,8 +2418,9 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             def mem_usage_oovvk(nocc, nvir, nkpts):
                 return nocc**2 * nvir**2 * nkpts * 16
             array_size = [nkpts,nkpts]
-            # TODO: find a good blocksize for this...
-            task_list = generate_max_task_list(array_size,blk_mem_size=2.*mem_usage_oovvk(nocc,nvir,nkpts),priority_list=[1,1])
+            # FIXME: find a good blocksize for this... right now just makes the smallest blocksize possible
+            task_list = generate_max_task_list(array_size,blk_mem_size=100000*2.*mem_usage_oovvk(nocc,nvir,nkpts),priority_list=[1,1])
+            #nproc = comm.Get_size()
             #chunk_size = get_max_blocksize_from_mem(0.3e9, 2.*mem_usage_oovvk(nocc,nvir,nkpts),
             #                                        array_size, priority_list=[1,1])
             #max_chunk_size = tuple(nkpts//numpy.array([nproc,nproc]))

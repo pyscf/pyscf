@@ -144,7 +144,7 @@ if __name__ == '__main__':
         end_band =   int(args[6])
 
     ase_atom = get_ase_atom(formula)
-    cell = build_cell(ase_atom, ke=40.0, basis=bas, incore_anyway=True, verbose=6)
+    cell = build_cell(ase_atom, ke=40.0, basis=bas, incore_anyway=True)
 
     kpts_red, kpts_cart, kpath, sp_points = get_bandpath_fcc(ase_atom,npoints=30)
 
