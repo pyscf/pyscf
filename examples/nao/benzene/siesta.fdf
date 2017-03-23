@@ -1,0 +1,7 @@
+SystemName                 Benzene molecule
+
+WriteIonPlotFiles .true.
+
+%include basis.fdf
+%include geometry.fdf
+
