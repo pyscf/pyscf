@@ -11,13 +11,14 @@ from mpi4py import MPI
 
 from ase.lattice import bulk
 A2B = 1.889725989
-ase_atom = bulk('C', 'diamond', a=3.53034833533)
+ase_atom = bulk('C', 'diamond', a=3.5668*A2B)
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 
 cell = gto.M(
     h = ase_atom.cell,
+    unit='B',
     atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom),
     basis = 'gth-szv',
     pseudo = 'gth-pade',
@@ -25,7 +26,7 @@ cell = gto.M(
     verbose = 6,
 )
 
-nk = [1,1,3]
+nk = [2,2,2]
 kpts = cell.make_kpts(nk)
 print "Grid size",
 print cell.gs
@@ -58,7 +59,7 @@ lew, lev = kcc.leaccsd(nroots=1, kptlist=[0])
 ew, ev   = kcc.eaccsd(nroots=1,  kptlist=[0])
 kcc.eaccsd_star(ew, ev, lev)
 
-# Running IPCCSD and IPCCSD*
-lew, lev = kcc.lipccsd(nroots=1, kptlist=[0])
-ew, ev   = kcc.ipccsd(nroots=1,  kptlist=[0])
-kcc.ipccsd_star(ew, ev, lev)
+## Running IPCCSD and IPCCSD*
+#lew, lev = kcc.lipccsd(nroots=1, kptlist=[0])
+#ew, ev   = kcc.ipccsd(nroots=1,  kptlist=[0])
+#kcc.ipccsd_star(ew, ev, lev)

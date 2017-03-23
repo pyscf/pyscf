@@ -17,7 +17,7 @@ def generate_max_task_list(array_size,blk_mem_size=16.,memory=MEM_SIZE,priority_
     length = len(shape)
     if priority_list is None:
         priority_list = numpy.arange(length)[::-1]
-    chunk_size = get_max_blocksize_from_mem(shape,memory,blk_mem_size,priority_list)
+    chunk_size = get_max_blocksize_from_mem(shape,blk_mem_size,memory,priority_list)
     return generate_task_list(chunk_size,shape)
 
 def safeNormDiff(in_array1, in_array2):

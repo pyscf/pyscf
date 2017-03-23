@@ -16,6 +16,11 @@ from pyscf.pbc.df.df_jk import is_zero, gamma_point, member
 
 libpbc = lib.load_library('libpbc')
 
+from joblib import Memory
+from mpi4py import MPI
+rank = MPI.COMM_WORLD.Get_rank()
+mem = Memory(cachedir='./tmp' + str(rank) + '/', mmap_mode='r', verbose=0)
+
 try:
 ## Moderate speedup by caching eval_ao
     from pyscf import pbc
@@ -69,7 +74,8 @@ def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shl_slice=N
     return ao_kpts[0]
 
 
-@memory_cache
+#@memory_cache
+@mem.cache
 def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
                  shl_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
     '''

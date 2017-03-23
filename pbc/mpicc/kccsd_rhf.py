@@ -1302,10 +1302,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 x0 = np.zeros_like(diag)
                 x0[np.argmin(diag)] = 1.0
             if nroots == 1:
-            	evals[k], evecs[k,:,0] = eig(self.ipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-            	#conv, evals[k], evecs[k,:] = eigs(self.ipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
+            	#evals[k], evecs[k,:,0] = eig(self.ipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+            	conv, evals[k], evecs[k,:] = eigs(self.ipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
             else:
-            	evals[k], evecs[k] = eig(self.ipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+            	#evals[k], evecs[k] = eig(self.ipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+            	conv, evals[k], evecs[k,:] = eigs(self.ipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
             write_eom_amplitudes(evecs[k],filename=amplitude_filename)
         time0 = log.timer_debug1('converge ip-ccsd', *time0)
         comm.Barrier()
@@ -1444,10 +1445,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 x0 = np.zeros_like(diag)
                 x0[np.argmin(diag)] = 1.0
             if nroots == 1:
-            	evals[k], evecs[k,:,0] = eig(self.lipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-            	#conv, evals[k], evecs[k,:] = eigs(self.lipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
+            	#evals[k], evecs[k,:,0] = eig(self.lipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+            	conv, evals[k], evecs[k,:] = eigs(self.lipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
             else:
-            	evals[k], evecs[k] = eig(self.lipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+            	#evals[k], evecs[k] = eig(self.lipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+            	conv, evals[k], evecs[k,:] = eigs(self.lipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
             write_eom_amplitudes(evecs[k],amplitude_filename)
         time0 = log.timer_debug1('converge ip-ccsd', *time0)
         comm.Barrier()
@@ -1653,6 +1655,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         foo = eris.fock[:,:nocc,:nocc]
         fvv = eris.fock[:,nocc:,nocc:]
 
+        e = []
         for _eval, _evec, _levec in zip(ipccsd_evals, ipccsd_evecs.T, lipccsd_evecs.T):
             l1,l2 = self.vector_to_amplitudes_ip(_levec)
             r1,r2 = self.vector_to_amplitudes_ip(_evec)
@@ -1927,11 +1930,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
                                 star_energy += fac*0.5*einsum('ijkab,ijkab,ijkab',lijkab_tmp,rijkab_tmp,eijkab)
 
-
             comm.Allreduce(MPI.IN_PLACE, star_energy, op=MPI.SUM)
             print "EOM-IPCCSD* delta energy = ", star_energy
+            e.append(star_energy+_eval)
 
-            return
+        return np.array(e)
 
     def eaccsd_diag(self):
         t1,t2 = self.t1, self.t2
@@ -2025,10 +2028,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 x0 = np.zeros_like(diag)
                 x0[np.argmin(diag)] = 1.0
             if nroots == 1:
-            	evals[k], evecs[k,:,0] = eig(self.eaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-            	#conv, evals[k], evecs[k,:] = eigs(self.eaccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
+            	#evals[k], evecs[k,:,0] = eig(self.eaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+            	conv, evals[k], evecs[k,:] = eigs(self.eaccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
             else:
-            	evals[k], evecs[k] = eig(self.eaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+            	#evals[k], evecs[k] = eig(self.eaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+            	conv, evals[k], evecs[k,:] = eigs(self.eaccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
             write_eom_amplitudes(evecs[k],amplitude_filename)
         time0 = log.timer_debug1('converge ea-ccsd', *time0)
         comm.Barrier()
@@ -2188,10 +2192,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 x0 = np.zeros_like(diag)
                 x0[np.argmin(diag)] = 1.0
             if nroots == 1:
-            	evals[k], evecs[k,:,0] = eig(self.leaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-            	#conv, evals[k], evecs[k,:] = eigs(self.leaccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
+            	#evals[k], evecs[k,:,0] = eig(self.leaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+            	conv, evals[k], evecs[k,:] = eigs(self.leaccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
             else:
-            	evals[k], evecs[k] = eig(self.leaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+            	#evals[k], evecs[k] = eig(self.leaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+            	conv, evals[k], evecs[k,:] = eigs(self.leaccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
             write_eom_amplitudes(evecs[k],amplitude_filename)
         time0 = log.timer_debug1('converge lea-ccsd', *time0)
         comm.Barrier()
@@ -2373,6 +2378,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         foo = eris.fock[:,:nocc,:nocc]
         fvv = eris.fock[:,nocc:,nocc:]
 
+        e = []
         for _eval, _evec, _levec in zip(eaccsd_evals, eaccsd_evecs.T, leaccsd_evecs.T):
             l1,l2 = self.vector_to_amplitudes_ea(_levec)
             r1,r2 = self.vector_to_amplitudes_ea(_evec)
@@ -2683,8 +2689,9 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
             comm.Allreduce(MPI.IN_PLACE, star_energy, op=MPI.SUM)
             print "EOM-EACCSD* delta energy = ", star_energy
+            e.append(star_energy+_eval)
 
-            return star_energy
+        return np.array(e)
 
 
 #class _ERIS:
