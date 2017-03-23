@@ -22,7 +22,7 @@ static int shloc_partition(int *kshloc, int *ao_loc, int ksh0, int ksh1, int dkm
 {
         int ksh;
         int nloc = 0;
-        int loclast = 0;
+        int loclast = ao_loc[ksh0];
         kshloc[0] = ksh0;
         for (ksh = ksh0; ksh < ksh1; ksh++) {
                 assert(ao_loc[ksh+1] - ao_loc[ksh] < dkmax);
