@@ -468,6 +468,73 @@ class RCCSD(ccsd.CCSD):
         vector[nocc:] = r2.copy().reshape(nocc*nocc*nvir)
         return vector
 
+    def ipccsd_star(self, ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
+        assert(self.ip_partition == None)
+        t1,t2,eris = self.t1, self.t2, self.eris
+        fock = eris.fock
+        nocc = self.nocc
+        nvir = self.nmo - nocc
+
+        fov = fock[:nocc,nocc:]
+        foo = fock[:nocc,:nocc]
+        fvv = fock[nocc:,nocc:]
+
+        oovv = _cp(eris.oovv)
+        vovv = _cp(eris.vovv)
+        ovov = _cp(eris.ovov)
+        voov = _cp(eris.voov)
+        ooov = _cp(eris.ooov)
+        vooo = ooov.conj().transpose(3,2,1,0)
+        vvvo = _cp(eris.vovv).conj().transpose(2,3,0,1)
+        oooo = _cp(eris.oooo)
+
+        eijkab = np.zeros((nocc,nocc,nocc,nvir,nvir))
+        for i,j,k in lib.cartesian_prod([range(nocc),range(nocc),range(nocc)]):
+            for a,b in lib.cartesian_prod([range(nvir),range(nvir)]):
+                eijkab[i,j,k,a,b] = foo[i,i] + foo[j,j] + foo[k,k] - fvv[a,a] - fvv[b,b]
+
+        ipccsd_evecs  = np.array(ipccsd_evecs)
+        lipccsd_evecs = np.array(lipccsd_evecs)
+        for _eval, _evec, _levec in zip(ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
+            l1,l2 = self.vector_to_amplitudes_ip(_levec)
+            r1,r2 = self.vector_to_amplitudes_ip(_evec)
+            ldotr = np.dot(l1.conj(),r1) + np.dot(l2.ravel(),r2.ravel())
+            l1 /= ldotr
+            l2 /= ldotr
+            print "ldotr = ", ldotr
+            print "normalized l1 ", l1
+            print "normalized r1 ", r1
+            l2 = 1./3*(l2 + 2.*l2.transpose(1,0,2))
+
+            _eijkab = eijkab + _eval
+            _eijkab = 1./_eijkab
+
+            lijkab = 0.5*einsum('ijab,k->ijkab',oovv,l1)
+            lijkab += einsum('eiba,jke->ijkab',vovv,l2)
+            lijkab += -einsum('kjmb,ima->ijkab',ooov,l2)
+            lijkab += -einsum('ijmb,mka->ijkab',ooov,l2)
+            lijkab = lijkab + lijkab.transpose(1,0,2,4,3)
+
+            rijkab = -einsum('mbke,ijae,m->ijkab',ovov,t2,r1)
+            rijkab += -einsum('bmje,ikae,m->ijkab',voov,t2,r1)
+            rijkab += einsum('mnjk,imab,n->ijkab',oooo,t2,r1)
+            rijkab += einsum('baei,kje->ijkab',vvvo,r2)
+            rijkab += -einsum('bmjk,mia->ijkab',vooo,r2)
+            rijkab += -einsum('bmji,kma->ijkab',vooo,r2)
+            rijkab = rijkab + rijkab.transpose(1,0,2,4,3)
+
+            lijkab = 4.*lijkab \
+                   - 2.*lijkab.transpose(1,0,2,3,4) \
+                   - 2.*lijkab.transpose(2,1,0,3,4) \
+                   - 2.*lijkab.transpose(0,2,1,3,4) \
+                   + 1.*lijkab.transpose(1,2,0,3,4) \
+                   + 1.*lijkab.transpose(2,0,1,3,4)
+
+            deltaE = 0.5*einsum('ijkab,ijkab,ijkab',lijkab,rijkab,_eijkab)
+            deltaE = deltaE.real
+            print "Exc. energy, delta energy = %16.12f, %16.12f" % (_eval+deltaE,deltaE)
+        return deltaE
+
     def eaccsd(self, nroots=1, left=False, koopmans=False, guess=None, partition=None):
         '''Calculate (N+1)-electron charged excitations via EA-EOM-CCSD.
 
@@ -695,6 +762,74 @@ class RCCSD(ccsd.CCSD):
         vector[:nvir] = r1.copy()
         vector[nvir:] = r2.copy().reshape(nocc*nvir*nvir)
         return vector
+
+    def eaccsd_star(self, eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
+        assert(self.ea_partition == None)
+        t1,t2,eris = self.t1, self.t2, self.eris
+        fock = eris.fock
+        nocc = self.nocc
+        nvir = self.nmo - nocc
+
+        fov = fock[:nocc,nocc:]
+        foo = fock[:nocc,:nocc]
+        fvv = fock[nocc:,nocc:]
+
+        oovv = _cp(eris.oovv)
+        vovv = _cp(eris.vovv)
+        vvov = vovv.conj().transpose(3,2,1,0)
+        ooov = _cp(eris.ooov)
+        vooo = ooov.conj().transpose(3,2,1,0)
+        ovov = _cp(eris.ovov)
+        oooo = _cp(eris.oooo)
+        vvvv = _cp(eris.vvvv)
+        voov = _cp(eris.voov)
+
+        eijabc = np.zeros((nocc,nocc,nvir,nvir,nvir))
+        for i,j in lib.cartesian_prod([range(nocc),range(nocc)]):
+            for a,b,c in lib.cartesian_prod([range(nvir),range(nvir),range(nvir)]):
+                eijabc[i,j,a,b,c] = foo[i,i] + foo[j,j] - fvv[a,a] - fvv[b,b] - fvv[c,c]
+
+        eaccsd_evecs  = np.array(eaccsd_evecs)
+        leaccsd_evecs = np.array(leaccsd_evecs)
+        for _eval, _evec, _levec in zip(eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
+            l1,l2 = self.vector_to_amplitudes_ea(_levec)
+            r1,r2 = self.vector_to_amplitudes_ea(_evec)
+            ldotr = np.dot(l1.conj(),r1) + np.dot(l2.ravel(),r2.ravel())
+            l1 /= ldotr
+            l2 /= ldotr
+            print "ldotr = ", ldotr
+            print "normalized l1 ", l1
+            print "normalized r1 ", r1
+            l2 = 1./3*(1.*l2 + 2.*l2.transpose(0,2,1))
+            r2 = r2.transpose(0,2,1)
+
+            _eijabc = eijabc + _eval
+            _eijabc = 1./_eijabc
+
+            lijabc = -0.5*einsum('c,ijab->ijabc',l1,oovv)
+            lijabc += einsum('jima,mbc->ijabc',ooov,l2)
+            lijabc -= einsum('eiba,jec->ijabc',vovv,l2)
+            lijabc -= einsum('ejcb,iae->ijabc',vovv,l2)
+            lijabc = lijabc + lijabc.transpose(1,0,3,2,4)
+
+            rijabc = -einsum('bcef,ijae,f->ijabc',vvvv,t2,r1)
+            rijabc = einsum('mcje,imab,e->ijabc',ovov,t2,r1)
+            rijabc = einsum('bmje,imac,e->ijabc',voov,t2,r1)
+            rijabc = einsum('amij,mbc->ijabc',vooo,r2)
+            rijabc = -einsum('bcje,iae->ijabc',vvov,r2)
+            rijabc = -einsum('abie,jec->ijabc',vvov,r2)
+            rijabc = rijabc + rijabc.transpose(1,0,3,2,4)
+
+            lijabc =  4.*lijabc \
+                    - 2.*lijabc.transpose(0,1,3,2,4) \
+                    - 2.*lijabc.transpose(0,1,4,3,2) \
+                    - 2.*lijabc.transpose(0,1,2,4,3) \
+                    + 1.*lijabc.transpose(0,1,3,4,2) \
+                    + 1.*lijabc.transpose(0,1,4,2,3)
+            deltaE = 0.5*einsum('ijabc,ijabc,ijabc',lijabc,rijabc,_eijabc)
+            deltaE = deltaE.real
+            print "Exc. energy, delta energy = %16.12f, %16.12f" % (_eval+deltaE,deltaE)
+        return deltaE
 
     #TODO: double spin-flip EOM-EE
     def eeccsd(self, nroots=1, koopmans=False, guess=None):
