@@ -254,9 +254,11 @@ def madelung(cell, kpts):
     ecell._atm = np.array([[1, 0, 0, 0, 0, 0]])
     ecell._env = np.array([0., 0., 0.])
     ecell.unit = 'B'
-    ecell.verbose = 0
+    #ecell.verbose = 0
     ecell.a = cell.lattice_vectors() * Nk
-    ew_eta, ew_cut = cell.get_ewald_params(cell.precision, cell.gs)
+    ew_eta, ew_cut = ecell.get_ewald_params(cell.precision, ecell.gs)
+    lib.logger.debug1(cell, 'Monkhorst pack size %s ew_eta %s ew_cut %s',
+                      Nk, ew_eta, ew_cut)
     return -2*ecell.ewald(ew_eta, ew_cut)
 
 
