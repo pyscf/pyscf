@@ -131,7 +131,7 @@ def aux_e2(cell, auxcell, erifile, intor='cint3c2e_sph', aosym='s2ij', comp=1,
         sub_slice = (shls_slice[0], shls_slice[1],
                      nbas+shls_slice[2], nbas+shls_slice[3],
                      nbas*2+sh0, nbas*2+sh1)
-        mat = numpy.ndarray((nkptij,comp,nao_pair,naux), dtype=dtype, buffer=buf)
+        mat = numpy.ndarray((nkptij,comp,nao_pair,nrow), dtype=dtype, buffer=buf)
         libpbc.PBCnr3c_drv(getattr(libpbc, intor), getattr(libpbc, fill),
                            mat.ctypes.data_as(ctypes.c_void_p),
                            ctypes.c_int(nkptij), ctypes.c_int(nkpts),
