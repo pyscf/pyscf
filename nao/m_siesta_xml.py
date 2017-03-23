@@ -37,6 +37,13 @@ def siesta_xml(label="siesta"):
   
   eigvals=fin.find(pref+"propertyList[@title='Eigenvalues']")
 
+  lat=fin.find(pref+"lattice[@dictRef='siesta:ucell']")
+  ucell = numpy.empty((3,3), dtype='double', order='F')
+  for i in range(len(lat)): ucell[i,0:3] = map(float, filter(None, re.split(r'\s+|=', lat[i].text)))
+  ucell = ucell * siesta_ang2bohr
+  #print(len(lat), lat.attrib)
+  #print(ucell)
+  
   fermi_energy=float(eigvals.find(pref+"property[@dictRef='siesta:E_Fermi']")[0].text)*siesta_ev2ha
   
   nkp=int(eigvals.find(pref+"property[@dictRef='siesta:nkpoints']")[0].text)
@@ -55,5 +62,11 @@ def siesta_xml(label="siesta"):
       k2xyzw[k,0:3] = map(float, filter(None, re.split(r'\s+|=', kpnt[k].attrib['coords'])))
       k2xyzw[k,3] = float(kpnt[k].attrib['weight'])
 
-  d = dict({'fermi_energy':fermi_energy, 'atom2coord':atom2coord, 'atom2sp':atom2sp, 'sp2elem':sp2elem, 'k2xyzw':k2xyzw, 'ksn2e':ksn2e})
+  d = dict({'fermi_energy':fermi_energy, 
+            'atom2coord':atom2coord, 
+            'atom2sp':atom2sp, 
+            'sp2elem':sp2elem, 
+            'k2xyzw':k2xyzw, 
+            'ksn2e':ksn2e, 
+            'ucell':ucell})
   return d

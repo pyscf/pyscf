@@ -6,7 +6,7 @@ SpinPolarized .True.
 
 %block ChemicalSpeciesLabel
  1  8  O     
- 2  1  H
+ 2  1  H_lda
 %endblock ChemicalSpeciesLabel
 
 AtomicCoordinatesFormat  Ang
