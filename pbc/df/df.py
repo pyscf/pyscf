@@ -152,8 +152,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
     log.debug2('uniq_kpts %s', uniq_kpts)
     # j2c ~ (-kpt_ji | kpt_ji)
     j2c = fused_cell.pbc_intor('cint2c2e_sph', hermi=1, kpts=uniq_kpts)
-    kLRs = []
-    kLIs = []
+    feri = h5py.File(mydf._cderi)
 
 # An alternative method to evalute j2c. This method might have larger numerical error?
 #    chgcell = make_modchg_basis(auxcell, mydf.eta)
@@ -176,24 +175,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
 #            j2cR, j2cI = zdotCN(LkR, LkI, LkR.T, LkI.T)
 #            j2caux[naux:,naux:] -= j2cR + j2cI * 1j
 #            j2c[k] = j2c[k][:naux,:naux] - fuse(fuse(j2caux.T).T)
-#
-#        try:
-#            j2c[k] = scipy.linalg.cholesky(j2c[k], lower=True)
-#        except scipy.linalg.LinAlgError as e:
-#            msg =('===================================\n'
-#                  'J-metric not positive definite.\n'
-#                  'It is likely that gs is not enough.\n'
-#                  '===================================')
-#            log.error(msg)
-#            raise scipy.linalg.LinAlgError('\n'.join([e.message, msg]))
-#        kLR = LkR.T
-#        kLI = LkI.T
-#        if not kLR.flags.c_contiguous: kLR = lib.transpose(LkR)
-#        if not kLI.flags.c_contiguous: kLI = lib.transpose(LkI)
-#        kLR *= coulG.reshape(-1,1)
-#        kLI *= coulG.reshape(-1,1)
-#        kLRs.append(kLR)
-#        kLIs.append(kLI)
+#        feri['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
 #        aoaux = LkR = LkI = kLR = kLI = coulG = None
 
     for k, kpt in enumerate(uniq_kpts):
@@ -210,36 +192,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
             j2cR, j2cI = zdotCN(LkR[naux:], LkI[naux:], LkR.T, LkI.T)
             j2c[k][naux:] -= j2cR + j2cI * 1j
             j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T.conj()
-
-        j2c[k] = fuse(fuse(j2c[k]).T).T
-        try:
-            j2c[k] = ('CD', scipy.linalg.cholesky(j2c[k], lower=True))
-        except scipy.linalg.LinAlgError as e:
-            #msg =('===================================\n'
-            #      'J-metric not positive definite.\n'
-            #      'It is likely that gs is not enough.\n'
-            #      '===================================')
-            #log.error(msg)
-            #raise scipy.linalg.LinAlgError('\n'.join([e.message, msg]))
-            w, v = scipy.linalg.eigh(j2c[k])
-            log.debug2('metric linear dependency for kpt %s', k)
-            log.debug2('cond = %.4g, drop %d bfns',
-                       w[0]/w[-1], numpy.count_nonzero(w<LINEAR_DEP_THR))
-            v = v[:,w>LINEAR_DEP_THR].T.conj()
-            v /= numpy.sqrt(w[w>LINEAR_DEP_THR]).reshape(-1,1)
-            j2c[k] = ('eig', v)
-        kLR = LkR[naux:].T
-        kLI = LkI[naux:].T
-        if not kLR.flags.c_contiguous: kLR = lib.transpose(LkR[naux:])
-        if not kLI.flags.c_contiguous: kLI = lib.transpose(LkI[naux:])
-        kLR *= coulG.reshape(-1,1)
-        kLI *= coulG.reshape(-1,1)
-        kLRs.append(kLR)
-        kLIs.append(kLI)
+        feri['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
         aoaux = LkR = LkI = kLR = kLI = coulG = None
-
-    nauxs = [v[1].shape[0] for v in j2c]
-    feri = h5py.File(mydf._cderi)
+    j2c = None
 
     def make_kpt(uniq_kptji_id):  # kpt = kptj - kpti
         kpt = uniq_kpts[uniq_kptji_id]
@@ -248,8 +203,33 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
         adapted_kptjs = kptjs[adapted_ji_idx]
         nkptj = len(adapted_kptjs)
         log.debug1('adapted_ji_idx = %s', adapted_ji_idx)
-        kLR = kLRs[uniq_kptji_id]
-        kLI = kLIs[uniq_kptji_id]
+
+        shls_slice = (auxcell.nbas, fused_cell.nbas)
+        Gaux = ft_ao.ft_ao(fused_cell, Gv, shls_slice, b, gxyz, Gvbase, kpt)
+        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, gs))
+        Gaux *= coulG.reshape(-1,1)
+        kLR = Gaux.real.copy('C')
+        kLI = Gaux.imag.copy('C')
+        j2c = numpy.asarray(feri['j2c/%d'%uniq_kptji_id])
+        try:
+            j2c = scipy.linalg.cholesky(j2c, lower=True)
+            j2ctag = 'CD'
+        except scipy.linalg.LinAlgError as e:
+            #msg =('===================================\n'
+            #      'J-metric not positive definite.\n'
+            #      'It is likely that gs is not enough.\n'
+            #      '===================================')
+            #log.error(msg)
+            #raise scipy.linalg.LinAlgError('\n'.join([e.message, msg]))
+            w, v = scipy.linalg.eigh(j2c)
+            log.debug2('metric linear dependency for kpt %s', uniq_kptji_id)
+            log.debug2('cond = %.4g, drop %d bfns',
+                       w[0]/w[-1], numpy.count_nonzero(w<LINEAR_DEP_THR))
+            v = v[:,w>LINEAR_DEP_THR].T.conj()
+            v /= numpy.sqrt(w[w>LINEAR_DEP_THR]).reshape(-1,1)
+            j2c = v
+            j2ctag = 'eig'
+        naux0 = j2c.shape[0]
 
         if is_zero(kpt):  # kpti == kptj
             aosym = 's2'
@@ -341,20 +321,18 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
                         zdotCN(kLR[p0:p1].T, kLI[p0:p1].T, pqkR.T, pqkI.T,
                                -1, j3cR[k][naux:], j3cI[k][naux:], 1)
 
-            naux0 = nauxs[uniq_kptji_id]
             for k, ji in enumerate(adapted_ji_idx):
                 if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
                     v = fuse(j3cR[k])
                 else:
                     v = fuse(j3cR[k] + j3cI[k] * 1j)
-                if j2c[uniq_kptji_id][0] == 'CD':
-                    v = scipy.linalg.solve_triangular(j2c[uniq_kptji_id][1], v,
-                                                      lower=True, overwrite_b=True)
+                if j2ctag == 'CD':
+                    v = scipy.linalg.solve_triangular(j2c, v, lower=True, overwrite_b=True)
                 else:
-                    v = lib.dot(j2c[uniq_kptji_id][1], v)
+                    v = lib.dot(j2c, v)
                 feri['j3c/%d'%ji][:naux0,col0:col1] = v
 
-        naux0 = nauxs[uniq_kptji_id]
+        del(feri['j2c/%d'%uniq_kptji_id])
         for k, ji in enumerate(adapted_ji_idx):
             v = feri['j3c/%d'%ji][:naux0]
             del(feri['j3c/%d'%ji])
