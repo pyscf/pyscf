@@ -225,11 +225,8 @@ def select_strs_ctypes(myci, civec, h1, eri, jk, eri_sorted, jk_sorted, norb, ne
         str_add_batch = str_add_batch[:n_str_add_batch]
         str_add = numpy.vstack((str_add, str_add_batch))
 
-    if len(str_add) > 0:
-        str_add = numpy.asarray(str_add)
-        return str_add
-    else:
-        return numpy.zeros([0,2,nset], dtype=civec._strs.dtype)
+    str_add = numpy.asarray(str_add)
+    return str_add
 
 def enlarge_space(myci, civec, h1, eri, jk, eri_sorted, jk_sorted, norb, nelec):
     if not isinstance(civec, (tuple, list)):
@@ -308,9 +305,13 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
         myci.check_sanity()
 
     log.info('Starting heat-bath CI algorithm...')
-    log.info('Selection threshold:   %8.5e', myci.select_cutoff)
-    log.info('CI coefficient cutoff: %8.5e', myci.ci_coeff_cutoff)
-    log.info('Number of roots:       %2d',   nroots)
+    log.info('Selection threshold:              %8.5e', myci.select_cutoff)
+    log.info('CI coefficient cutoff:            %8.5e', myci.ci_coeff_cutoff)
+    log.info('Energy convergence tolerance:     %8.5e', tol)
+    log.info('Number of determinants tolerance: %8.5e', myci.conv_ndet_tol)
+    log.info('Number of electrons:             %3d',   norb)
+    log.info('Number of orbitals:              %3d',   norb)
+    log.info('Number of roots:                 %2d',   nroots)
 
     nelec = direct_spin1._unpack_nelec(nelec, myci.spin)
     eri = ao2mo.restore(1, eri, norb)
@@ -370,7 +371,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
         ci0 = myci.enlarge_space(ci0, h1e, eri, jk, eri_sorted, jk_sorted, norb, nelec)
         t_current = time.time() - t_start
         log.debug('Timing for selecting configurations: %10.3f', t_current)
-        if ((.99 < len(ci0[0]._strs)/last_ci0_size < 1.01)):
+        if (((1 - myci.conv_ndet_tol) < len(ci0[0]._strs)/last_ci0_size < (1 + myci.conv_ndet_tol))):
             conv = True
             break
 
@@ -431,6 +432,8 @@ class SelectedCI(direct_spin1.FCISolver):
         self.ci_coeff_cutoff = .5e-3
         self.select_cutoff = .5e-3
         self.conv_tol = 1e-9
+        # Maximum change in the number of selected determinants allowed to stop iterations (0.01 = 1%)
+        self.conv_ndet_tol = 0.01
         self.nroots = 1
         # Maximum memory in MB for storing lists of selected strings
         self.max_memory = 50000
