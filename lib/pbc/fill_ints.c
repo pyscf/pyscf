@@ -10,7 +10,8 @@
 #include "cint.h"
 #include "vhf/fblas.h"
 
-#define INTBUFMAX       6000
+#define INTBUFMAX       1000
+#define INTBUFMAX10     8000
 #define IMGBLK          80
 #define OF_CMPLX        2
 
@@ -24,7 +25,7 @@ static int shloc_partition(int *kshloc, int *ao_loc, int ksh0, int ksh1, int dkm
         int nloc = 0;
         int loclast = ao_loc[ksh0];
         kshloc[0] = ksh0;
-        for (ksh = ksh0; ksh < ksh1; ksh++) {
+        for (ksh = ksh0+1; ksh < ksh1; ksh++) {
                 assert(ao_loc[ksh+1] - ao_loc[ksh] < dkmax);
                 if (ao_loc[ksh+1] - loclast > dkmax) {
                         nloc += 1;
@@ -384,7 +385,7 @@ static void _nr3c_fill_k(int (*intor)(), void (*fsort)(),
         const int di = ao_loc[ish+1] - ao_loc[ish];
         const int dj = ao_loc[jsh+1] - ao_loc[jsh];
         const int dij = di * dj;
-        int dkmax = INTBUFMAX / dij * 4;
+        int dkmax = INTBUFMAX10 / dij;
         int kshloc[ksh1-ksh0+1];
         int nkshloc = shloc_partition(kshloc, ao_loc, ksh0, ksh1, dkmax);
 
@@ -650,7 +651,7 @@ static void _nr3c_fill_g(int (*intor)(), void (*fsort)(), double *out, int nkpts
         const int di = ao_loc[ish+1] - ao_loc[ish];
         const int dj = ao_loc[jsh+1] - ao_loc[jsh];
         const int dij = di * dj;
-        int dkmax = INTBUFMAX / dij / 2 * MIN(IMGBLK,nimgs);
+        int dkmax = INTBUFMAX10 / dij / 2 * MIN(IMGBLK,nimgs);
         int kshloc[ksh1-ksh0+1];
         int nkshloc = shloc_partition(kshloc, ao_loc, ksh0, ksh1, dkmax);
 
@@ -832,6 +833,16 @@ int PBCsizeof_env(int *shls_slice,
         return nenv;
 }
 
+static int max_cgto(int sh0, int sh1, int *ao_loc)
+{
+        int i;
+        int dimax = 0;
+        for (i = sh0; i < sh1; i++) {
+                dimax = MAX(dimax, ao_loc[i+1]-ao_loc[i]);
+        }
+        return dimax;
+}
+
 void PBCnr3c_drv(int (*intor)(), void (*fill)(), double complex *eri,
                  int nkpts_ij, int nkpts, int comp, int nimgs,
                  double *Ls, double complex *expkL, int *kptij_idx,
@@ -857,10 +868,15 @@ void PBCnr3c_drv(int (*intor)(), void (*fill)(), double complex *eri,
 
         size_t count;
         if (fill == &PBCnr3c_fill_kks1 || fill == &PBCnr3c_fill_kks2) {
+                int dijk =(max_cgto(shls_slice[0], shls_slice[1], ao_loc) *
+                           max_cgto(shls_slice[2], shls_slice[3], ao_loc) *
+                           max_cgto(shls_slice[4], shls_slice[5], ao_loc));
                 count = nkpts*nkpts * OF_CMPLX +
                         nkpts*MIN(nimgs,IMGBLK) * OF_CMPLX + nimgs;
+// MAX(INTBUFMAX, dijk) to ensure buffer is enough for at least one (i,j,k) shell
+                count *= MAX(INTBUFMAX, dijk) * comp;
         } else {
-                count = (nkpts * OF_CMPLX + nimgs)*4;
+                count = (nkpts * OF_CMPLX + nimgs) * INTBUFMAX10 * comp;
         }
 
 #pragma omp parallel default(none) \
@@ -874,7 +890,7 @@ void PBCnr3c_drv(int (*intor)(), void (*fill)(), double complex *eri,
         nenv = MAX(nenv, PBCsizeof_env(shls_slice+4, atm, natm, bas, nbas, env));
         double *env_loc = malloc(sizeof(double)*nenv);
         memcpy(env_loc, env, sizeof(double)*nenv);
-        double *buf = malloc(sizeof(double)*count*INTBUFMAX*comp);
+        double *buf = malloc(sizeof(double)*count);
 #pragma omp for schedule(dynamic)
         for (ij = 0; ij < nish*njsh; ij++) {
                 ish = ij / njsh;
@@ -951,7 +967,7 @@ static void _nr2c_fill(int (*intor)(), double complex *out,
         jsh += jsh0;
         int jptrxyz = atm[PTR_COORD+bas[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS];
         const int dj = ao_loc[jsh+1] - ao_loc[jsh];
-        int dimax = INTBUFMAX / dj * 4;
+        int dimax = INTBUFMAX10 / dj;
         int ishloc[ish1-ish0+1];
         int nishloc = shloc_partition(ishloc, ao_loc, ish0, ish1, dimax);
 
@@ -1010,7 +1026,7 @@ static void _nr2c2e_fill(int (*intor)(), double complex *out,
         jsh += jsh0;
         int jptrxyz = atm[PTR_COORD+bas[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS];
         const int dj = ao_loc[jsh+1] - ao_loc[jsh];
-        int dimax = INTBUFMAX / dj * 4;
+        int dimax = INTBUFMAX10 / dj;
         int ishloc[ish1-ish0+1];
         int nishloc = shloc_partition(ishloc, ao_loc, ish0, ish1, dimax);
 
@@ -1129,7 +1145,7 @@ void PBCnr2c_drv(int (*intor)(), void (*fill)(), double complex *out,
         double *env_loc = malloc(sizeof(double)*nenv);
         memcpy(env_loc, env, sizeof(double)*nenv);
         size_t count = nkpts * OF_CMPLX + nimgs;
-        double *buf = malloc(sizeof(double)*count*INTBUFMAX*4*comp);
+        double *buf = malloc(sizeof(double)*count*INTBUFMAX10*comp);
 #pragma omp for schedule(dynamic)
         for (jsh = 0; jsh < njsh; jsh++) {
                 (*fill)(intor, out, nkpts, comp, nimgs, jsh,

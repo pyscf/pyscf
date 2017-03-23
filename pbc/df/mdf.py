@@ -85,7 +85,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
 
         Gaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
         Gaux = fuse(Gaux)
-        Gaux *= numpy.sqrt(mydf.weighted_coulG(kpt, False, gs))
+        Gaux *= mydf.weighted_coulG(kpt, False, gs)
         kLR = Gaux.T.real.copy('C')
         kLI = Gaux.T.imag.copy('C')
         j2c = numpy.asarray(feri['j2c/%d'%uniq_kptji_id])
