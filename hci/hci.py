@@ -433,10 +433,10 @@ class SelectedCI(direct_spin1.FCISolver):
         self.select_cutoff = .5e-3
         self.conv_tol = 1e-9
         # Maximum change in the number of selected determinants allowed to stop iterations (0.01 = 1%)
-        self.conv_ndet_tol = 0.01
+        self.conv_ndet_tol = 0.001
         self.nroots = 1
         # Maximum memory in MB for storing lists of selected strings
-        self.max_memory = 50000
+        self.max_memory = 10000
 
 ##################################################
 # don't modify the following attributes, they are not input options
