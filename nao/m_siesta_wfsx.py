@@ -65,19 +65,24 @@ class siesta_wfsx_c():
     else: self.nreim = 2;
     
 
-    self.splen    = idat[i]; i=i+1
+    splen    = idat[i]; i=i+1
     self.orb2strspecie = []
     for j in range(self.norbs):
       splabel = ''
-      for k in range(self.splen):
+      for k in range(splen):
         splabel = splabel + chr(idat[i]); i=i+1
       self.orb2strspecie.append(splabel.strip())
 
-    self.symlen   = idat[i]; i=i+1
+    self.sp2strspecie = []
+    for strsp in self.orb2strspecie:
+      if strsp not in self.sp2strspecie:
+        self.sp2strspecie.append(strsp)
+
+    symlen   = idat[i]; i=i+1
     self.orb2strsym = []
     for j in range(self.norbs):
       symlabel = ''
-      for k in range(self.symlen):
+      for k in range(symlen):
         symlabel = symlabel + chr(idat[i]); i=i+1
       self.orb2strsym.append(symlabel.strip())
 
@@ -99,5 +104,3 @@ class siesta_wfsx_c():
     ### Read single precision data
     self.X = numpy.empty((self.nreim,self.norbs,self.norbs,self.nspin,self.nkpoints), dtype='float32', order='F')
     siesta_wfsx_sread(self, self.X)
-    
-          

@@ -6,6 +6,8 @@ label = 'siesta'
 #siesta_xml_print(label)
 
 sv = system_vars_c(label)
+
+print(sv.xml_dict.keys())
 print(sv.xml_dict['fermi_energy'])
 print(sv.xml_dict['ksn2e'].shape)
 print(sv.xml_dict['k2xyzw'].shape)
