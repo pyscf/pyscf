@@ -10,6 +10,7 @@ AtomicCoordinatesFormat     Fractional
 LatticeConstant             7.82 Ang
 NumberOfAtoms               36
 NumberOfSpecies             2
+SpinPolarized               .true.
 %block LatticeVectors
   0.866025403784439  -0.500000000000000   0.000000000000000 
   0.000000000000000   1.000000000000000   0.000000000000000 

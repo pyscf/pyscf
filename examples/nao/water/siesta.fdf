@@ -2,13 +2,15 @@ SystemName          Water
 
 PAO.EnergyShift 100 meV
 
+SpinPolarized .True. 
+
 %block ChemicalSpeciesLabel
  1  8  O     
  2  1  H
 %endblock ChemicalSpeciesLabel
 
 AtomicCoordinatesFormat  Ang
-AtomCoorFormatOut Ang
+AtomCoorFormatOut Bohr
 
 NumberOfAtoms       3
 NumberOfSpecies     2

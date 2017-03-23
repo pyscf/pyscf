@@ -1,5 +1,6 @@
 from pyscf.nao.m_color import bcolors as bc
 from pyscf.nao.m_siesta_ev2ha import siesta_ev2ha
+from pyscf.nao.m_siesta_ang2bohr import siesta_ang2bohr
 import xml.etree.ElementTree as ET
 import re
 import numpy
@@ -27,27 +28,32 @@ def siesta_xml(label="siesta"):
   sp2elem = [None]*nspecies
   for a in range(len(atom2elem)): sp2elem[atom2sp[a]] = atom2elem[a]
 
-  atom2xyz = [[atom.attrib["x3"],atom.attrib["y3"],atom.attrib["z3"]] for atom in atoms]
-  atom2coord = numpy.array(atom2xyz, dtype='double', order='F')
-
+  x3 = map(float, [atom.attrib["x3"] for atom in atoms])
+  y3 = map(float, [atom.attrib["y3"] for atom in atoms])
+  z3 = map(float, [atom.attrib["z3"] for atom in atoms])
+  atom2coord = numpy.empty((natoms,3), dtype='double', order='F')
+  for a in range(natoms): atom2coord[a,0:3] = [x3[a],y3[a],z3[a]]
+  atom2coord = atom2coord*siesta_ang2bohr
+  
   eigvals=fin.find(pref+"propertyList[@title='Eigenvalues']")
-  print(bc.RED+"eigvals"+bc.ENDC)
-  for child in eigvals:
-    print(len(child), child.tag, child.attrib)
-  print(bc.RED+"END of eigvals]"+bc.ENDC)
 
-  Fermi_Energy=float(eigvals.find(pref+"property[@dictRef='siesta:E_Fermi']")[0].text)*siesta_ev2ha
-  print(' Fermi_Energy ', Fermi_Energy)
+  fermi_energy=float(eigvals.find(pref+"property[@dictRef='siesta:E_Fermi']")[0].text)*siesta_ev2ha
   
   nkp=int(eigvals.find(pref+"property[@dictRef='siesta:nkpoints']")[0].text)
-  print(' nkp          ', nkp)
-  kp2coow = numpy.empty((4,nkp), dtype='double', order='F')
-  
-  kpt_band=eigvals.find(pref+"propertyList[@dictRef='siesta:kpt_band']")
-  print(' kpt_band ', len(kpt_band))
-  for c in kpt_band:
-    print(len(c), c.attrib, c.tag)
+  k2xyzw = numpy.empty((nkp,4), dtype='double', order='F')
+    
+  kpt_band=eigvals.findall(pref+"propertyList[@dictRef='siesta:kpt_band']")
+  nspin=len(kpt_band)
+  norbs = int(kpt_band[0].find(pref+"property[@dictRef='siesta:eigenenergies']")[0].attrib['size'])
+  ksn2e = numpy.empty((nkp,nspin,norbs), dtype='double', order='F')
 
-  kpoints = kpt_band.find(pref+'kpoint') 
-  print(kpoints.attrib)  
-  return atom2coord, atom2sp, sp2elem
+  for s in range(nspin):
+    eigv = kpt_band[s].findall(pref+"property[@dictRef='siesta:eigenenergies']")
+    kpnt = kpt_band[s].findall(pref+"kpoint")
+    for k in range(nkp):
+      ksn2e[k,s,0:norbs] = map(lambda x : siesta_ev2ha*float(x), filter(None, re.split(r'\s+|=', eigv[k][0].text)))
+      k2xyzw[k,0:3] = map(float, filter(None, re.split(r'\s+|=', kpnt[k].attrib['coords'])))
+      k2xyzw[k,3] = float(kpnt[k].attrib['weight'])
+
+  d = dict({'fermi_energy':fermi_energy, 'atom2coord':atom2coord, 'atom2sp':atom2sp, 'sp2elem':sp2elem, 'k2xyzw':k2xyzw, 'ksn2e':ksn2e})
+  return d
