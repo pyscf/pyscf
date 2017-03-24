@@ -82,7 +82,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 class KUKS(kuhf.KUHF):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
-    def __init__(self, cell, kpts):
+    def __init__(self, cell, kpts=np.zeros((1,3))):
         kuhf.KUHF.__init__(self, cell, kpts)
         self.xc = 'LDA,VWN'
         self.grids = gen_grid.UniformGrids(cell)
