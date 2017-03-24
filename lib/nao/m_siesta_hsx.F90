@@ -108,6 +108,7 @@ subroutine siesta_hsx_read(fname_in, force_basis_type, dat) bind(c, name='siesta
   dat(i) = l2s(hsx%is_gamma); i=i+1;
   dat(i) = hsx%Ne; i=i+1;
   dat(i) = hsx%Te; i=i+1;
+  hsx%H4 = hsx%H4 / 2.0e0 ! Rydberg --> Hartree
   call scopy(size(hsx%H4), hsx%H4,1, dat(i),1); i=i+size(hsx%H4)
   call scopy(size(hsx%S4), hsx%S4,1, dat(i),1); i=i+size(hsx%S4)
   call scopy(size(hsx%X4), hsx%X4,1, dat(i),1); i=i+size(hsx%X4)

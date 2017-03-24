@@ -14,10 +14,16 @@ def _siesta2blanko_csr(orb2m, mat, orb_sc2orb_uc=None):
   if(n!=len(mat.indptr)-1): raise SystemError('!mat')
   for row in range(n):
     m1  = orb2m[row]
+    col_data = mat.data[mat.indptr[row]:mat.indptr[row+1]]
+    col_data = col_data * (-1)**m1
+    
+    col_phase = numpy.empty((len(col_data)), dtype='int8')
     for ind in range(mat.indptr[row],mat.indptr[row+1]):
-      col = mat.indices[ind]
-      if(col>=n): col=orb_sc2orb_uc[col]
-      m2 = orb2m[col]
-      v  = mat.data[ind]*(-1.0)**m1 * (-1.0)**m2
-      mat.data[ind] = v
+      icol = mat.indices[ind]
+      if(icol>=n): icol=orb_sc2orb_uc[icol]
+      m2 = orb2m[icol]
+      col_phase[ind-mat.indptr[row]] = (-1)**m2
+    
+    col_data = col_data*col_phase
+    mat.data[mat.indptr[row]:mat.indptr[row+1]] = col_data
   return(0)

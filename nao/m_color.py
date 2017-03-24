@@ -1,4 +1,4 @@
-class bcolors:
+class color:
     import os
     T = os.getenv('TERM')
     if ( T=='cygwin' or T=='mingw' ) :

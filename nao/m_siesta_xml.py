@@ -1,4 +1,4 @@
-from pyscf.nao.m_color import bcolors as bc
+from pyscf.nao.m_color import color as bc
 from pyscf.nao.m_siesta_ev2ha import siesta_ev2ha
 from pyscf.nao.m_siesta_ang2bohr import siesta_ang2bohr
 import xml.etree.ElementTree as ET

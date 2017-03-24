@@ -28,6 +28,9 @@ def siesta_hsx_read(label='siesta', force_type=-1):
   dll.siesta_hsx_read(fname, ft, dat.ctypes.data_as(POINTER(c_float)))
   return dat
 
+#
+#
+#
 class siesta_hsx_c():
   def __init__(self, label, force_type):
     dat = siesta_hsx_read(label, force_type)
@@ -37,8 +40,8 @@ class siesta_hsx_c():
     self.nspin    =  int(dat[i]); i=i+1;
     self.nnz      =  int(dat[i]); i=i+1;     
     self.is_gamma = (dat[i]>0); i=i+1;
-    self.ne       =  dat[i]; i=i+1;
-    self.te       =  dat[i]; i=i+1;
+    self.nelec    =  dat[i]; i=i+1;
+    self.telec    =  dat[i]; i=i+1;
     self.h4 = numpy.reshape(dat[i:i+self.nnz*self.nspin], (self.nnz,self.nspin), order='F'); i=i+self.nnz*self.nspin;
     self.s4 = dat[i:i+self.nnz]; i = i + self.nnz;
     self.x4 = numpy.reshape(dat[i:i+self.nnz*3], (3,self.nnz), order='F'); i = i + self.nnz*3;

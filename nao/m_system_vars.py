@@ -1,12 +1,14 @@
 import numpy
 import sys
 import re
+from pyscf.nao.m_color import color as bc
 from pyscf.nao.m_siesta_xml import siesta_xml
 from pyscf.nao.m_siesta_wfsx import siesta_wfsx_c
 from pyscf.nao.m_siesta_ion_xml import siesta_ion_xml
 from pyscf.nao.m_siesta_hsx import siesta_hsx_c
 from pyscf.nao.m_siesta2blanko_csr import _siesta2blanko_csr
 from pyscf.nao.m_siesta2blanko_denvec import _siesta2blanko_denvec
+from pyscf.nao.m_sv_diag import sv_diag 
 
 #
 #
@@ -27,18 +29,24 @@ def get_orb2m(sv):
 #
 #
 #
-def get_denmat(sv, mattype='hamiltonian', prec='float64', kvec=[0.0,0.0,0.0], spin=0):
-  mat = numpy.empty((sv.norbs,sv.norbs), dtype=prec)
-  mtl = mattype.lower()  
-  if(mtl=='hamiltonian'):
-    mat = sv.hsx.spin2h4_csr[spin].todense()
-  elif(mtl=='overlap'):
-    mat = sv.hsx.s4_csr.todense()
-  else: 
-    raise SystemError('!mattype')
-    
-  return mat
-  
+def diag_check(self):
+  nspin = self.nspin
+  nkpnt = self.nkpoints
+  ksn2e = self.xml_dict['ksn2e']
+  ac = True
+  for k in range(nkpnt):
+    kvec = self.xml_dict["k2xyzw"][k,0:3]
+    for spin in range(nspin):
+      e,x = sv_diag(self, kvec=kvec, spin=spin)
+      eref = ksn2e[k,spin,:]
+      acks = numpy.allclose(eref,e,atol=1e-5,rtol=1e-4)
+      ac = ac and acks
+      if(not acks):
+        aerr = sum(abs(eref-e))/len(e)
+        print("diag_check: "+bc.RED+str(k)+' '+str(spin)+' '+str(aerr)+bc.ENDC)
+  return(ac)
+
+
 #
 #
 #
@@ -79,20 +87,14 @@ class system_vars_c():
     orb2m = get_orb2m(self)
     _siesta2blanko_csr(orb2m, self.hsx.s4_csr, self.hsx.orb_sc2orb_uc)
 
-    print('done_s')
-
     for s in range(self.nspin):
       _siesta2blanko_csr(orb2m, self.hsx.spin2h4_csr[s], self.hsx.orb_sc2orb_uc)
     
-    print('done_h')
-
     for k in range(self.nkpoints):
       for s in range(self.nspin):
         for n in range(self.norbs):
           _siesta2blanko_denvec(orb2m, self.wfsx.X[:,:,n,s,k])
-    
-    print('done_wf')
-    
+
     #print(get_denmat(self).shape)    
     #print(self.sp2nmult, type(self.sp2nmult))
     #print(self.sp_mu2j, type(self.sp_mu2j))
