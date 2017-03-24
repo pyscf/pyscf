@@ -408,7 +408,7 @@ static void _nr3c_fill_k(int (*intor)(), void (*fsort)(),
                 dijmk = dijm * nkpts;
                 bufk_i = bufk_r + dijmk;
                 bufL   = bufk_i + dijmk;
-                memset(bufk_r, 0, sizeof(double)*dijmk * OF_CMPLX);
+                memset(bufk_r, 0, sizeof(double) * dijmk * OF_CMPLX);
 
                 for (iL = 0; iL < nimgs; iL++) {
                         shift_bas(env_loc, env, Ls, iptrxyz, iL);
@@ -874,9 +874,10 @@ void PBCnr3c_drv(int (*intor)(), void (*fill)(), double complex *eri,
                 count = nkpts*nkpts * OF_CMPLX +
                         nkpts*MIN(nimgs,IMGBLK) * OF_CMPLX + nimgs;
 // MAX(INTBUFMAX, dijk) to ensure buffer is enough for at least one (i,j,k) shell
-                count *= MAX(INTBUFMAX, dijk) * comp;
+                count*= MAX(INTBUFMAX, dijk) * comp;
         } else {
                 count = (nkpts * OF_CMPLX + nimgs) * INTBUFMAX10 * comp;
+                count+= nimgs * nkpts * OF_CMPLX;
         }
 
 #pragma omp parallel default(none) \
