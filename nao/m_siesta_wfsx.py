@@ -89,17 +89,17 @@ class siesta_wfsx_c():
     ### Read double precision data
     ddata = siesta_wfsx_dread(self)
 
-    self.E = numpy.empty((self.norbs,self.nspin,self.nkpoints), dtype='float64', order='F')
-    self.kpoints = numpy.empty((3,self.nkpoints), dtype='float64', order='F')
+    self.ksn2e = numpy.empty((self.nkpoints,self.nspin,self.norbs), dtype='float64', order='F')
+    self.k2xyz = numpy.empty((self.nkpoints,3), dtype='float64', order='F')
     i = 0
     for k in range(self.nkpoints):
       for s in range(self.nspin):
-        for j in range(self.norbs):
-          self.E[j,s,k] = ddata[i]; i=i+1
+        for n in range(self.norbs):
+          self.ksn2e[k,s,n] = ddata[i]; i=i+1
 
     for k in range(self.nkpoints):
       for j in range(3):
-          self.kpoints[j,k] = ddata[i]; i=i+1
+          self.k2xyz[k,j] = ddata[i]; i=i+1
 
     ### Read single precision data
     self.X = numpy.empty((self.nreim,self.norbs,self.norbs,self.nspin,self.nkpoints), dtype='float32', order='F')
