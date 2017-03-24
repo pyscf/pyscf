@@ -158,44 +158,24 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
                     j3cI.append(numpy.asarray(v.imag, order='C'))
                 v = None
 
-            if aosym == 's2':
-                shls_slice = (bstart, bend, 0, bend)
-                for p0, p1 in lib.prange(0, ngs, Gblksize):
-                    dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                                b, gxyz[p0:p1], Gvbase, kpt,
-                                                adapted_kptjs, out=buf)
-                    nG = p1 - p0
-                    for k, ji in enumerate(adapted_ji_idx):
-                        aoao = dat[k]
-                        pqkR = numpy.ndarray((ncol,nG), buffer=pqkRbuf)
-                        pqkI = numpy.ndarray((ncol,nG), buffer=pqkIbuf)
-                        pqkR[:] = aoao.real.T
-                        pqkI[:] = aoao.imag.T
-                        aoao[:] = 0
-                        lib.dot(kLR[p0:p1].T, pqkR.T, -1, j3cR[k], 1)
-                        lib.dot(kLI[p0:p1].T, pqkI.T, -1, j3cR[k], 1)
-                        if not (is_zero(kpt) and gamma_point(adapted_kptjs[k])):
-                            lib.dot(kLR[p0:p1].T, pqkI.T, -1, j3cI[k], 1)
-                            lib.dot(kLI[p0:p1].T, pqkR.T,  1, j3cI[k], 1)
-            else:
-                shls_slice = (bstart, bend, 0, cell.nbas)
-                ni = ncol // nao
-                for p0, p1 in lib.prange(0, ngs, Gblksize):
-                    dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                                b, gxyz[p0:p1], Gvbase, kpt,
-                                                adapted_kptjs, out=buf)
-                    nG = p1 - p0
-                    for k, ji in enumerate(adapted_ji_idx):
-                        aoao = dat[k]
-                        pqkR = numpy.ndarray((ni,nao,nG), buffer=pqkRbuf)
-                        pqkI = numpy.ndarray((ni,nao,nG), buffer=pqkIbuf)
-                        pqkR[:] = aoao.real.transpose(1,2,0)
-                        pqkI[:] = aoao.imag.transpose(1,2,0)
-                        aoao[:] = 0
-                        pqkR = pqkR.reshape(-1,nG)
-                        pqkI = pqkI.reshape(-1,nG)
-                        zdotCN(kLR[p0:p1].T, kLI[p0:p1].T, pqkR.T, pqkI.T,
-                               -1, j3cR[k], j3cI[k], 1)
+            shls_slice = (bstart, bend, 0, bend)
+            for p0, p1 in lib.prange(0, ngs, Gblksize):
+                dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                            b, gxyz[p0:p1], Gvbase, kpt,
+                                            adapted_kptjs, out=buf)
+                nG = p1 - p0
+                for k, ji in enumerate(adapted_ji_idx):
+                    aoao = dat[k].reshape(nG,ncol)
+                    pqkR = numpy.ndarray((ncol,nG), buffer=pqkRbuf)
+                    pqkI = numpy.ndarray((ncol,nG), buffer=pqkIbuf)
+                    pqkR[:] = aoao.real.T
+                    pqkI[:] = aoao.imag.T
+
+                    lib.dot(kLR[p0:p1].T, pqkR.T, -1, j3cR[k], 1)
+                    lib.dot(kLI[p0:p1].T, pqkI.T, -1, j3cR[k], 1)
+                    if not (is_zero(kpt) and gamma_point(adapted_kptjs[k])):
+                        lib.dot(kLR[p0:p1].T, pqkI.T, -1, j3cI[k], 1)
+                        lib.dot(kLI[p0:p1].T, pqkR.T,  1, j3cI[k], 1)
 
             for k, ji in enumerate(adapted_ji_idx):
                 if is_zero(kpt) and gamma_point(adapted_kptjs[k]):

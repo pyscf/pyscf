@@ -215,10 +215,7 @@ def take_2d(a, idx, idy, out=None):
      [ 6.  8.]]
     '''
     a = numpy.asarray(a, order='C')
-    if out is None:
-        out = numpy.empty((len(idx),len(idy)), dtype=a.dtype)
-    else:
-        out = numpy.ndarray((len(idx),len(idy)), dtype=a.dtype, buffer=out)
+    out = numpy.ndarray((len(idx),len(idy)), dtype=a.dtype, buffer=out)
     if a.dtype == numpy.double:
         fn = _np_helper.NPdtake_2d
     else:
