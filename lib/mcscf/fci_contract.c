@@ -105,10 +105,8 @@ void FCIprog_b_t1(double *ci0, double *t1,
                         sign = EXTRACT_SIGN(tab[j]);
                         if (sign == 0) {
                                 break;
-                        } else if (sign > 0) {
-                                t1[ia*bcount+str0] += pci[str1];
                         } else {
-                                t1[ia*bcount+str0] -= pci[str1];
+                                t1[ia*bcount+str0] += sign * pci[str1];
                         }
                 }
                 tab += nlinkb;
@@ -164,10 +162,8 @@ void FCIspread_b_t1(double *ci1, double *t1,
                         sign = EXTRACT_SIGN(tab[j]);
                         if (sign == 0) {
                                 break;
-                        } else if (sign > 0) {
-                                pci[str1] += t1[ia*bcount+str0];
-                        } else if (sign < 0) {
-                                pci[str1] -= t1[ia*bcount+str0];
+                        } else {
+                                pci[str1] += sign * t1[ia*bcount+str0];
                         }
                 }
                 tab += nlinkb;
