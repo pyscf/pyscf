@@ -288,7 +288,8 @@ def orblst2str(lst, norb):
 def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
                        tol=None, lindep=None, max_cycle=None, max_space=None,
                        nroots=None, davidson_only=None,
-                       max_memory=None, verbose=None, ecore=0, **kwargs):
+                       max_memory=None, verbose=None, ecore=0, return_integrals=False, 
+                       eri_sorted=None, jk=None, jk_sorted=None, **kwargs):
     if verbose is None:
         log = logger.Logger(myci.stdout, myci.verbose)
     elif isinstance(verbose, logger.Logger):
@@ -304,27 +305,33 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     if myci.verbose >= logger.WARN:
         myci.check_sanity()
 
-    log.info('Starting heat-bath CI algorithm...')
-    log.info('Selection threshold:              %8.5e', myci.select_cutoff)
-    log.info('CI coefficient cutoff:            %8.5e', myci.ci_coeff_cutoff)
-    log.info('Energy convergence tolerance:     %8.5e', tol)
-    log.info('Number of determinants tolerance: %8.5e', myci.conv_ndet_tol)
-    log.info('Number of electrons:             %3d',   norb)
-    log.info('Number of orbitals:              %3d',   norb)
-    log.info('Number of roots:                 %2d',   nroots)
+    log.info('\nStarting heat-bath CI algorithm...\n')
+    log.info('Selection threshold:                  %8.5e', myci.select_cutoff)
+    log.info('CI coefficient cutoff:                %8.5e', myci.ci_coeff_cutoff)
+    log.info('Energy convergence tolerance:         %8.5e', tol)
+    log.info('Number of determinants tolerance:     %8.5e', myci.conv_ndet_tol)
+    log.info('Number of electrons:                  %s',     nelec)
+    log.info('Number of orbitals:                   %3d',    norb)
+    log.info('Number of roots:                      %3d\n',    nroots)
 
     nelec = direct_spin1._unpack_nelec(nelec, myci.spin)
     eri = ao2mo.restore(1, eri, norb)
 
     # Avoid resorting the integrals by storing them in memory
     eri = eri.ravel()
-    eri_sorted = abs(eri).argsort()[::-1]
-    jk = eri.reshape([norb]*4)
-    jk = jk - jk.transpose(2,1,0,3)
-    jk = jk.ravel()
-    jk_sorted = abs(jk).argsort()[::-1]
 
-# TODO: initial guess from CISD
+    if eri_sorted is None and jk is None and jk_sorted is None:
+        log.debug("Sorting two-electron integrals...")
+        t_start = time.time()
+        eri_sorted = abs(eri).argsort()[::-1]
+        jk = eri.reshape([norb]*4)
+        jk = jk - jk.transpose(2,1,0,3)
+        jk = jk.ravel()
+        jk_sorted = abs(jk).argsort()[::-1]
+        t_current = time.time() - t_start
+        log.debug('Timing for sorting the integrals: %10.3f', t_current)
+
+    # Initial guess
     if ci0 is None:
         hf_str = numpy.hstack([orblst2str(range(nelec[0]), norb), orblst2str(range(nelec[1]), norb)]).reshape(1,-1)
         ci0 = [as_SCIvector(numpy.ones(1), hf_str)]
@@ -387,7 +394,10 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
         e = [e]
     log.info('\nSelected CI  E = %s', numpy.array(e)+ecore)
 
-    return (numpy.array(e)+ecore), [as_SCIvector(ci, ci_strs) for ci in c]
+    if (return_integrals):
+        return (numpy.array(e)+ecore), [as_SCIvector(ci, ci_strs) for ci in c], eri_sorted, jk, jk_sorted
+    else:
+        return (numpy.array(e)+ecore), [as_SCIvector(ci, ci_strs) for ci in c]
 
 
 def to_fci(civec, norb, nelec):
