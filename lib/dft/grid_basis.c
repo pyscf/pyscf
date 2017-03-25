@@ -8,6 +8,7 @@
 #include "cint.h"
 #include "config.h"
 #include "gto/grid_ao_drv.h"
+#include "np_helper/np_helper.h"
 
 #define MAX_THREADS     256
 

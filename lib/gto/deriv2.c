@@ -1024,6 +1024,9 @@ void GTOval_cart(int ngrids, int *shls_slice, int *ao_loc,
 void GTOval_sph(int ngrids, int *shls_slice, int *ao_loc,
                 double *ao, double *coord, char *non0table,
                 int *atm, int natm, int *bas, int nbas, double *env);
+void GTOval_spinor(int ngrids, int *shls_slice, int *ao_loc,
+                   double complex *ao, double *coord, char *non0table,
+                   int *atm, int natm, int *bas, int nbas, double *env);
 void GTOval_cart_deriv0(int ngrids, int *shls_slice, int *ao_loc,
                         double *ao, double *coord, char *non0table,
                         int *atm, int natm, int *bas, int nbas, double *env)
