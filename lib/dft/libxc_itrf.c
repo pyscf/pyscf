@@ -317,7 +317,7 @@ int LIBXC_xc_type(int fn_id)
         return type;
 }
 
-static int xc_output_length(nvar, deriv)
+static int xc_output_length(int nvar, int deriv)
 {
         int i;
         int len = 1.;
