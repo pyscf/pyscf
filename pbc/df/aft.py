@@ -231,7 +231,7 @@ class AFTDF(lib.StreamObject):
             aoao = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                          b, gxyz[p0:p1], Gvbase, q,
                                          kptj.reshape(1,3), out=buf)[0]
-            aoao = aoao.reshape(nG,nij)
+            aoao = aoao.reshape(p1-p0,nij)
             for i0, i1 in lib.prange(0, p1-p0, sublk):
                 nG = i1 - i0
                 pqkR = numpy.ndarray((nij,nG), buffer=pqkRbuf)
