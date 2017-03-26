@@ -23,7 +23,7 @@ def siesta_hsx_read(label='siesta', force_type=-1):
   ft = c_int64(force_type)
   bufsize = c_int64()
   dll.siesta_hsx_size(fname, ft, bufsize)
-    
+  
   dat = empty(bufsize.value, dtype="float32")
   dll.siesta_hsx_read(fname, ft, dat.ctypes.data_as(POINTER(c_float)))
   return dat

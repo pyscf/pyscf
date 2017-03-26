@@ -9,7 +9,8 @@ from pyscf.nao.m_siesta_hsx import siesta_hsx_c
 from pyscf.nao.m_siesta2blanko_csr import _siesta2blanko_csr
 from pyscf.nao.m_siesta2blanko_denvec import _siesta2blanko_denvec
 from pyscf.nao.m_sv_diag import sv_diag 
-
+from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
+from pyscf.nao.m_ao_log import ao_log_c
 #
 #
 #
@@ -46,7 +47,6 @@ def diag_check(self):
         print("diag_check: "+bc.RED+str(k)+' '+str(spin)+' '+str(aerr)+bc.ENDC)
   return(ac)
 
-
 #
 #
 #
@@ -59,17 +59,9 @@ class system_vars_c():
     ##### The parameters as fields     
     self.sp2ion = []
     for strspecie in self.wfsx.sp2strspecie: self.sp2ion.append(siesta_ion_xml(strspecie+'.ion.xml'))
-    nsp = len(self.sp2ion)
-    self.sp2nmult = numpy.empty((nsp), dtype='int64', order='F') 
-    self.sp2nmult[:] = list(len(self.sp2ion[sp]["orbital"]) for sp in range(nsp))
-    nmultmx = max(self.sp2nmult)
-    self.sp_mu2j = numpy.empty((nsp,nmultmx), dtype='int64', order='F') 
-    self.sp_mu2j.fill(-999)
-    for sp in range(nsp):
-      nmu = self.sp2nmult[sp]
-      for mu in range(nmu):
-        self.sp_mu2j[sp,mu] = self.sp2ion[sp]["orbital"][mu]["l"]
-    
+    _siesta_ion_add_sp2(self, self.sp2ion)
+    self.sp2ao_log = ao_log_c(self.sp2ion)
+  
     self.natoms = len(self.xml_dict['atom2sp'])
     self.norbs  = (self.xml_dict['ksn2e'].shape[2])
     self.nspin  = (self.xml_dict['ksn2e'].shape[1])

@@ -8,4 +8,3 @@ label = 'siesta'
 
 sv  = system_vars_c(label)
 print(diag_check(sv))
-
