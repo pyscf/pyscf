@@ -211,7 +211,7 @@ def dot_eri_dm(eri, dm, hermi=0):
         input density matrices.
     '''
     dm = np.asarray(dm)
-    if np.iscomplexobj(dm) or np.iscomplexobj(eri):
+    if eri.dtype == np.complex128:
         nao = dm.shape[-1]
         eri = eri.reshape((nao,)*4)
         def contract(dm):
@@ -224,6 +224,11 @@ def dot_eri_dm(eri, dm, hermi=0):
             vjk = [contract(dmi) for dmi in dm]
             vj = lib.asarray([v[0] for v in vjk]).reshape(dm.shape)
             vk = lib.asarray([v[1] for v in vjk]).reshape(dm.shape)
+    elif dm.dtype == np.complex128:
+        vjR, vkR = hf.dot_eri_dm(eri, dm.real, hermi)
+        vjI, vkI = hf.dot_eri_dm(eri, dm.imag, hermi)
+        vj = vjR + vjI*1j
+        vk = vkR + vkI*1j
     else:
         vj, vk = hf.dot_eri_dm(eri, dm, hermi)
     return vj, vk
