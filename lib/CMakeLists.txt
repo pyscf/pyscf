@@ -13,7 +13,7 @@ endif()
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-enable_language(Fortran)
+#enable_language(Fortran)
 find_package(BLAS REQUIRED)
 if(BLA_VENDOR MATCHES "Intel*")
   if (${DISABLE_AVX})
@@ -28,32 +28,16 @@ if(BLA_VENDOR MATCHES "Intel*")
     set(BLAS_LIBRARIES ${BLAS_LIBRARIES};${BLAS_mkl_avx_LIBRARY})
   endif()
 endif()
-
 message("BLAS libraries: ${BLAS_LIBRARIES}")
-
 # if unable to find mkl library, just create BLAS_LIBRARIES here, e.g.
-#set(BLAS_LIBRARIES "-L${MKLROOT}/lib/intel64 -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lmkl_avx -lm")
+# set(BLAS_LIBRARIES "-L/path/to/mkl/lib -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lmkl_avx -lm")
 # or
-<<<<<<< HEAD
-set(BLAS_LIBRARIES "/opt/intel/compilers_and_libraries_2017.0.098/linux/mkl/lib/intel64/libmkl_intel_lp64.so")
-set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/opt/intel/compilers_and_libraries_2017.0.098/linux/mkl/lib/intel64/libmkl_sequential.so")
-set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/opt/intel/compilers_and_libraries_2017.0.098/linux/mkl/lib/intel64/libmkl_core.so")
-set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/opt/intel/compilers_and_libraries_2017.0.098/linux/mkl/lib/intel64/libmkl_avx.so")
-set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/opt/intel/compilers_and_libraries_2017.0.098/linux/mkl/lib/intel64/libmkl_def.so")
-=======
-#/opt/intel/composer_xe_2015.3.187/mkl/lib/intel64/
-set(BLAS_LIBRARIES "/opt/intel/composer_xe_2015.3.187/mkl/lib/intel64/libmkl_intel_lp64.so")
-set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/opt/intel/composer_xe_2015.3.187/mkl/lib/intel64/libmkl_sequential.so")
-set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/opt/intel/composer_xe_2015.3.187/mkl/lib/intel64/libmkl_core.so")
-set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/opt/intel/composer_xe_2015.3.187/mkl/lib/intel64/libmkl_avx.so")
-set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/opt/intel/composer_xe_2015.3.187/mkl/lib/intel64/libmkl_def.so")
+# set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_intel_lp64.so")
+# set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_sequential.so")
+# set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_core.so")
+# set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_avx.so")
+# set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_def.so")
 
-message("BLAS libraries: ${BLAS_LIBRARIES}")
-
->>>>>>> 69190ec02785cf5051740fe59e1390824d65be75
-
-message("BLAS libraries: ${BLAS_LIBRARIES}")
-#
 # set(BLAS_LIBRARIES "-Wl,-rpath=${MKLROOT}/lib/intel64/ ${BLAS_LIBRARIES}")
 
 check_function_exists(ffsll HAVE_FFS)
