@@ -1,5 +1,5 @@
 add_library(dft SHARED 
-  CxLebedevGrid.c grid_basis.c nr_numint.c deriv.c)
+  CxLebedevGrid.c grid_basis.c nr_numint.c)
 
 set_target_properties(dft PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}

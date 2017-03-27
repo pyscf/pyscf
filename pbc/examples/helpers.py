@@ -100,7 +100,7 @@ def get_ase_alkali_halide(A='Li', B='Cl'):
 
 def get_ase_diamond_primitive(atom='C'):
     """Get the ASE atoms for primitive (2-atom) diamond unit cell."""
-    from ase.lattice import bulk
+    from ase.build import bulk
     if atom == 'C':
         ase_atom = bulk('C', 'diamond', a=3.5668*A2B)
     else:

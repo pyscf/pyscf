@@ -12,7 +12,7 @@ from pyscf.pbc.df import incore
 from pyscf.gto import PTR_COORD
 from pyscf.ao2mo.outcore import balance_segs
 
-def aux_e2(cell, auxcell, erifile, intor='cint3c2e_sph', aosym='s1', comp=1,
+def aux_e2(cell, auxcell, erifile, intor='cint3c2e_sph', aosym='s2ij', comp=1,
            kptij_lst=None, dataname='eri_mo', max_memory=2000, verbose=0):
     '''3-center AO integrals (ij|L) with double lattice sum:
     \sum_{lm} (i[l]j[m]|L[0]), where L is the auxiliary basis.
@@ -38,10 +38,7 @@ def aux_e2(cell, auxcell, erifile, intor='cint3c2e_sph', aosym='s1', comp=1,
     feri[dataname+'-kptij'] = kptij_lst
     nkptij = len(kptij_lst)
 
-    # sum over largest number of images in either cell or auxcell
-    rcut = max(cell.rcut, auxcell.rcut)
-    Ls = cell.get_lattice_Ls(rcut=rcut)
-    logger.debug1(cell, "pbc.df.outcore.rcut %s", rcut)
+    Ls = cell.get_lattice_Ls()
     logger.debug3(cell, "Ls = %s", Ls)
 
     nao = cell.nao_nr()
@@ -54,7 +51,7 @@ def aux_e2(cell, auxcell, erifile, intor='cint3c2e_sph', aosym='s1', comp=1,
             dtype = 'f8'
         else:
             dtype = 'c16'
-        aosym_s2[k] = abs(kptij[0]-kptij[1]).sum() < 1e-9
+        aosym_s2[k] = aosym.startswith('s2') and abs(kptij[0]-kptij[1]).sum() < 1e-9
         if aosym_s2[k]:
             nao_pair = nao * (nao+1) // 2
         else:

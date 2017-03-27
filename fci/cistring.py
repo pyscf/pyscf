@@ -95,7 +95,8 @@ def gen_linkstr_index(orb_list, nocc, strs=None, tril=False):
     '''
     if strs is None:
         strs = gen_strings4orblist(orb_list, nocc)
-    strs = numpy.array(strs, dtype=numpy.int64)
+    strs = numpy.array(strs, dtype=numpy.uint64)
+    assert(all(strs[:-1] < strs[1:]))
     norb = len(orb_list)
     nvir = norb - nocc
     na = strs.shape[0]

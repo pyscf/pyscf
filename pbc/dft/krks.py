@@ -21,7 +21,7 @@ from pyscf.pbc.dft import numint
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
-             kpts=None, kpt_band=None):
+             kpts=None, kpts_band=None):
     '''Coulomb + XC functional
 
     .. note::
@@ -54,22 +54,22 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 
     dm = np.asarray(dm)
     nao = dm.shape[-1]
-    ground_state = (dm.ndim == 3 and kpt_band is None)
+    ground_state = (dm.ndim == 3 and kpts_band is None)
     nkpts = len(kpts)
 
     if hermi == 2:  # because rho = 0
         n, ks._exc, vx = 0, 0, 0
     else:
         n, ks._exc, vx = ks._numint.nr_rks(cell, ks.grids, ks.xc, dm, 1,
-                                           kpts, kpt_band)
+                                           kpts, kpts_band)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
     hyb = ks._numint.hybrid_coeff(ks.xc, spin=(cell.spin>0)+1)
     if abs(hyb) < 1e-10:
-        vhf = vj = ks.get_j(cell, dm, hermi, kpts, kpt_band)
+        vhf = vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
     else:
-        vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpt_band)
+        vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
         vhf = vj - vk * (hyb * .5)
 
         if ground_state:
@@ -93,7 +93,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 class KRKS(khf.KRHF):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
-    def __init__(self, cell, kpts):
+    def __init__(self, cell, kpts=np.zeros((1,3))):
         khf.KRHF.__init__(self, cell, kpts)
         self.xc = 'LDA,VWN'
         self.grids = gen_grid.UniformGrids(cell)

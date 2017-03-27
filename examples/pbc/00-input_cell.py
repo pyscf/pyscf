@@ -20,8 +20,8 @@ cell.atom = '''C     0.      0.      0.
 cell.basis = 'gth-szv'
 cell.pseudo = 'gth-pade'
 #
-# Note two extra attributes ".h", ".gs" for in the "cell" initialization.
-# .h is a matrix for lattice vectors.  Note each column of .h denotes a direction
+# Note two extra attributes ".a", ".gs" for in the "cell" initialization.
+# .a is a matrix for lattice vectors.  Each row of .a is a primitive vector.
 #
 cell.a = numpy.eye(3)*3.5668
 cell.gs = [10]*3  # 10 grids on postive x direction, => 21^3 grids in total

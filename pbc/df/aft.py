@@ -16,17 +16,17 @@ from pyscf.pbc import tools
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import incore
-from pyscf.pbc.df import pwdf_jk
-from pyscf.pbc.df import pwdf_ao2mo
 from pyscf.pbc.df.df_jk import KPT_DIFF_TOL, is_zero, gamma_point
+from pyscf.pbc.df import aft_jk
+from pyscf.pbc.df import aft_ao2mo
 
 
 def estimate_eta(cell, cutoff=1e-12):
     '''The exponent of the smooth gaussian model density, requiring that at
-    boundary, density ~ 4pi rmax^2 exp(-eta*rmax^2) ~ 1e-12
+    boundary, density ~ 4pi rmax^2 exp(-eta/2*rmax^2) ~ 1e-12
     '''
-    # r^4 to guarantee at least up to d shell converging at boundary
-    eta = max(numpy.log(4*numpy.pi*cell.rcut**4/cutoff)/cell.rcut**2, .1)
+    # r^5 to guarantee at least up to f shell converging at boundary
+    eta = max(numpy.log(4*numpy.pi*cell.rcut**5/cutoff)/cell.rcut**2*2, .3)
     return eta
 
 def get_nuc(mydf, kpts=None):
@@ -91,15 +91,6 @@ def get_nuc(mydf, kpts=None):
         vjR[k] += numpy.einsum('k,xk->x', vGI[p0:p1], pqkI)
     t1 = log.timer_debug1('contracting Vnuc', *t1)
 
-    if mydf.eta != 0 and cell.dimension == 3:
-        nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
-        nucbar *= numpy.pi/cell.vol
-        ovlp = cell.pbc_intor('cint1e_ovlp_sph', 1, lib.HERMITIAN, kpts_lst)
-        for k in range(nkpts):
-            s = lib.pack_tril(ovlp[k])
-            vjR[k] -= nucbar * s.real
-            vjI[k] -= nucbar * s.imag
-
     vj = []
     for k, kpt in enumerate(kpts_lst):
         if gamma_point(kpt):
@@ -145,9 +136,17 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='cint3c2e_sph'):
 
     charge = cell.atom_charges()
     charge = numpy.append(charge, -charge)  # (charge-of-nuccell, charge-of-fakenuc)
-    for k, kpt in enumerate(kpts):
+    for k in range(nkpts):
         v = numpy.einsum('ijz,z->ij', buf[k], charge)
         buf[k] = lib.pack_tril(v + v.T.conj())
+
+    if cell.dimension == 3:
+        nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(cell.atom_charges())])
+        nucbar *= numpy.pi/cell.vol
+        ovlp = cell.pbc_intor('cint1e_ovlp_sph', 1, lib.HERMITIAN, kpts)
+        for k in range(nkpts):
+            s = lib.pack_tril(ovlp[k])
+            buf[k] += nucbar * s
     return buf
 
 get_pp_loc_part1 = get_nuc
@@ -173,7 +172,7 @@ def get_pp(mydf, kpts=None):
     return vpp
 
 
-class PWDF(lib.StreamObject):
+class AFTDF(lib.StreamObject):
     '''Density expansion on plane waves
     '''
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
@@ -183,7 +182,7 @@ class PWDF(lib.StreamObject):
         self.max_memory = cell.max_memory
 # For nuclear attraction integrals using Ewald-like technique.
 # Set to 0 to use the regular reciprocal space Poisson-equation method.
-        self.eta = estimate_eta(cell)
+        self.eta = estimate_eta(cell, cell.precision)
 
         self.kpts = kpts
         self.gs = cell.gs
@@ -237,7 +236,7 @@ class PWDF(lib.StreamObject):
             blksize = min(max(16, int(max_memory*1e6*.75/16/nij)), 16384)
             sublk = max(16, int(blksize//4))
         else:
-            subblk = blksize
+            sublk = blksize
         buf = [numpy.zeros(nij*blksize, dtype=numpy.complex128)]
         pqkRbuf = numpy.empty(nij*sublk)
         pqkIbuf = numpy.empty(nij*sublk)
@@ -354,7 +353,7 @@ class PWDF(lib.StreamObject):
     get_nuc = get_nuc
     get_pp = get_pp
 
-    def get_jk(self, dm, hermi=1, kpts=None, kpt_band=None,
+    def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
                with_j=True, with_k=True, exxdiv='ewald'):
         if kpts is None:
             if numpy.all(self.kpts == 0):
@@ -364,18 +363,18 @@ class PWDF(lib.StreamObject):
                 kpts = self.kpts
 
         if kpts.shape == (3,):
-            return pwdf_jk.get_jk(self, dm, hermi, kpts, kpt_band, with_j,
+            return aft_jk.get_jk(self, dm, hermi, kpts, kpts_band, with_j,
                                   with_k, exxdiv)
 
         vj = vk = None
         if with_k:
-            vk = pwdf_jk.get_k_kpts(self, dm, hermi, kpts, kpt_band, exxdiv)
+            vk = aft_jk.get_k_kpts(self, dm, hermi, kpts, kpts_band, exxdiv)
         if with_j:
-            vj = pwdf_jk.get_j_kpts(self, dm, hermi, kpts, kpt_band)
+            vj = aft_jk.get_j_kpts(self, dm, hermi, kpts, kpts_band)
         return vj, vk
 
-    get_eri = get_ao_eri = pwdf_ao2mo.get_eri
-    ao2mo = get_mo_eri = pwdf_ao2mo.general
+    get_eri = get_ao_eri = aft_ao2mo.get_eri
+    ao2mo = get_mo_eri = aft_ao2mo.general
 
     def update_mf(self, mf):
         mf = copy.copy(mf)
@@ -445,5 +444,5 @@ if __name__ == '__main__':
     cell.gs = [10, 10, 10]
     cell.build()
     k = numpy.ones(3)*.25
-    v1 = PWDF(cell).get_pp(k)
+    v1 = AFTDF(cell).get_pp(k)
     print(abs(v1).sum(), 21.7504294462)

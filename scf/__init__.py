@@ -96,6 +96,7 @@ from pyscf.scf import uhf_symm
 from pyscf.scf import dhf
 from pyscf.scf import chkfile
 from pyscf.scf import addons
+from pyscf.scf import diis
 from pyscf.scf.uhf import spin_square
 from pyscf.scf.hf import get_init_guess
 from pyscf.scf.addons import *
@@ -112,7 +113,7 @@ def RHF(mol, *args):
         if mol.symmetry:
             return rhf_symm.HF1e(mol)
         else:
-            return rhf.HF1e(mol)
+            return rohf.HF1e(mol)
     elif not mol.symmetry or mol.groupname is 'C1':
         if mol.spin > 0:
             return rohf.ROHF(mol, *args)
@@ -127,12 +128,7 @@ def RHF(mol, *args):
 def ROHF(mol, *args):
     '''This is a wrap function to decide which ROHF class to use.
     '''
-    if mol.nelectron == 1:
-        if mol.symmetry:
-            return rhf_symm.HF1e(mol)
-        else:
-            return rhf.HF1e(mol)
-    elif not mol.symmetry or mol.groupname is 'C1':
+    if not mol.symmetry or mol.groupname is 'C1':
         return rohf.ROHF(mol, *args)
     else:
         return hf_symm.ROHF(mol, *args)
@@ -186,7 +182,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
         from pyscf.dft import gen_grid
         approx_grids = gen_grid.Grids(mf.mol)
         approx_grids.verbose = 0
-        approx_grids.level = 0
+        approx_grids.level = max(0, mf.grids.level-2)
         mf1.grids = approx_grids
 
         approx_numint = copy.copy(mf._numint)
@@ -222,7 +218,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
 # mf1 grids and _numint.  If inital guess dm0 or mo_coeff/mo_occ were given,
 # dft.get_veff are not executed so that more grid points may be found in
 # approx_grids.
-            mf0.small_rho_cutoff = 1e-5
+            mf0.small_rho_cutoff = mf.small_rho_cutoff * 10
         mf0.kernel()
         mo_coeff, mo_occ = mf0.mo_coeff, mf0.mo_occ
 

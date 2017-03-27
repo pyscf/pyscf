@@ -40,6 +40,7 @@ def fft(f, gs):
 
     '''
     f3d = f.reshape([-1] + [2*x+1 for x in gs])
+    assert(f3d.shape[0] == 1 or f[0].size == f3d[0].size)
     g3d = fftn_wrapper(f3d, axes=(1,2,3), threads=nproc)
     if f.ndim == 1:
         return g3d.ravel()
@@ -66,6 +67,7 @@ def ifft(g, gs):
 
     '''
     g3d = g.reshape([-1] + [2*x+1 for x in gs])
+    assert(g3d.shape[0] == 1 or g[0].size == g3d[0].size)
     f3d = ifftn_wrapper(g3d, axes=(1,2,3), threads=nproc)
     if g.ndim == 1:
         return f3d.ravel()
@@ -252,9 +254,11 @@ def madelung(cell, kpts):
     ecell._atm = np.array([[1, 0, 0, 0, 0, 0]])
     ecell._env = np.array([0., 0., 0.])
     ecell.unit = 'B'
-    ecell.verbose = 0
+    #ecell.verbose = 0
     ecell.a = cell.lattice_vectors() * Nk
-    ew_eta, ew_cut = cell.get_ewald_params(cell.precision, cell.gs)
+    ew_eta, ew_cut = ecell.get_ewald_params(cell.precision, ecell.gs)
+    lib.logger.debug1(cell, 'Monkhorst pack size %s ew_eta %s ew_cut %s',
+                      Nk, ew_eta, ew_cut)
     return -2*ecell.ewald(ew_eta, ew_cut)
 
 
@@ -275,7 +279,7 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None):
             rcut = cell.rcut
 # plus 1 image in rcut to handle the case atoms within the adjacent cells are
 # close to each other
-        rcut = rcut + min(1./heights_inv)
+        rcut = rcut + max(1./(heights_inv+1e-8))
         nimgs = np.ceil(rcut*heights_inv)
     else:
         rcut = max((np.asarray(nimgs))/heights_inv) + min(1./heights_inv) # ~ the inradius

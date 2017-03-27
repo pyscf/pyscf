@@ -8,6 +8,7 @@
 import sys
 import json
 import ctypes
+import warnings
 import numpy as np
 import scipy.linalg
 import scipy.optimize
@@ -172,7 +173,6 @@ def dumps(cell):
     try:
         return json.dumps(celldic)
     except TypeError:
-        import warnings
         def skip_value(dic):
             dic1 = {}
             for k,v in dic.items():
@@ -334,13 +334,8 @@ def get_nimgs(cell, precision=None):
     return nimgs
 
 def _estimate_rcut(alpha, l, cc, r0, precision=1e-8):
-    rcut = []
-    for a, c in zip(alpha, cc):
-        if np.isclose(c, 0.0):
-            rcut.append(0)
-        else:
-            rcut.append(np.sqrt(abs(2*np.log(c*(r0**2*a)**l/precision)) / a))
-    return np.array(rcut)
+    rcut = np.sqrt(abs(2*np.log((cc+1e-200)*(r0**2*alpha)**l/precision))/alpha)
+    return rcut
 
 def bas_rcut(cell, bas_id, precision=1e-8):
     r'''Estimate the largest distance between the function and its image to
@@ -376,7 +371,11 @@ def get_bounding_sphere(cell, rcut):
     #cut = np.array([n1, n2, n3]).astype(int)
     b = cell.reciprocal_vectors(norm_to=1)
     heights_inv = lib.norm(b, axis=1)
-    return np.ceil(rcut*heights_inv).astype(int)
+    nimgs = np.ceil(rcut*heights_inv).astype(int)
+
+    for i in range(cell.dimension, 3):
+        nimgs[i] = 1
+    return nimgs
 
 def get_Gv(cell, gs=None):
     '''Calculate three-dimensional G-vectors for the cell; see MH (3.8).
@@ -863,7 +862,19 @@ class Cell(mole.Mole):
     def nimgs(self, x):
         b = self.reciprocal_vectors(norm_to=1)
         heights_inv = lib.norm(b, axis=1)
-        self.rcut = max((np.asarray(x)+1) / heights_inv)
+        self.rcut = max(np.asarray(x) / heights_inv)
+
+        if self.nbas == 0:
+            rcut_guess = _estimate_rcut(.05, 0, 1, 20, 1e-8)
+        else:
+            rcut_guess = max([self.bas_rcut(ib, self.precision)
+                              for ib in range(self.nbas)])
+        if self.rcut > rcut_guess*1.5:
+            msg = ('.nimgs is a deprecated attribute.  It is replaced by .rcut '
+                   'attribute for lattic sum cutoff radius.  The given nimgs '
+                   '%s is far over the estimated cutoff radius %s. ' %
+                   (x, rcut_guess))
+            warnings.warn(msg)
 
     def make_ecp_env(self, _atm, _ecp, pre_env=[]):
         if _ecp and self._pseudo:

@@ -529,7 +529,7 @@ def get_nuc(cell, kpt=np.zeros(3)):
 
 from pyscf.pbc import gto as pgto
 import pyscf.pbc.dft as pdft
-from pyscf.pbc.df import fft, pwdf
+from pyscf.pbc.df import fft, aft
 
 cell = pgto.Cell()
 cell.atom = 'He 1. .5 .5; C .1 1.3 2.1'
@@ -658,7 +658,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(eri4), (0.33709288394542991-0.94185725001175313j), 8)
 
     def test_get_eri_gamma(self):
-        odf = pwdf.PWDF(cell1)
+        odf = aft.AFTDF(cell1)
         ref = odf.get_eri(compact=True)
         df = fft.FFTDF(cell1)
         eri0000 = df.get_eri(compact=True)
@@ -676,7 +676,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(eri1111), (1.2410388899583582-5.2370501878355006e-06j), 9)
 
     def test_get_eri_0011(self):
-        odf = pwdf.PWDF(cell1)
+        odf = aft.AFTDF(cell1)
         df = fft.FFTDF(cell1)
         ref = odf.get_eri((kpts[0],kpts[0],kpts[1],kpts[1]))
         eri0011 = df.get_eri((kpts[0],kpts[0],kpts[1],kpts[1]))
@@ -689,7 +689,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(eri0011), (1.2410162860852818+0.00074485383748954838j), 9)
 
     def test_get_eri_0110(self):
-        odf = pwdf.PWDF(cell1)
+        odf = aft.AFTDF(cell1)
         df = fft.FFTDF(cell1)
         ref = odf.get_eri((kpts[0],kpts[1],kpts[1],kpts[0]))
         eri0110 = df.get_eri((kpts[0],kpts[1],kpts[1],kpts[0]))
@@ -707,7 +707,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(eri0110), (1.2928399254827956-0.011820590601969154j), 9)
 
     def test_get_eri_0123(self):
-        odf = pwdf.PWDF(cell1)
+        odf = aft.AFTDF(cell1)
         df = fft.FFTDF(cell1)
         ref = odf.get_eri(kpts)
         eri1111 = df.get_eri(kpts)

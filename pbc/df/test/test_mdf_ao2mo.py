@@ -14,6 +14,7 @@ cell.atom = '''He    3.    2.       3.
                He    1.    1.       1.'''
 cell.basis = 'ccpvdz'
 cell.verbose = 0
+cell.rcut = 17
 cell.build(0,0)
 nao = cell.nao_nr()
 

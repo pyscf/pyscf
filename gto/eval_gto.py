@@ -16,10 +16,7 @@ PTR_EXP    = 5
 PTR_COEFF  = 6
 BAS_SLOTS  = 8
 
-try:
-    libcgto = pyscf.lib.load_library('libdft')
-except ImportError:
-    libcgto = pyscf.lib.load_library('libcgto')
+libcgto = pyscf.lib.load_library('libcgto')
 
 def eval_gto(eval_name, atm, bas, env, coords,
              comp=1, shls_slice=None, non0tab=None, out=None):

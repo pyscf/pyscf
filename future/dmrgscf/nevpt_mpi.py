@@ -180,7 +180,7 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7):
                     '%s/nevpt_mpi.py' % os.path.dirname(os.path.realpath(__file__)),
                     mc_chk,
                     nevptsolver.executable,
-                    nevptsolver.configFile,
+                    os.path.join(nevptsolver.runtimeDir, nevptsolver.configFile),
                     nevptsolver.outputFile,
                     nevptsolver.scratchDirectory))
     logger.debug(nevptsolver, 'DMRG_COMPRESS_NEVPT cmd %s', cmd)
@@ -347,9 +347,10 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     if not os.path.exists('%s'%newscratch):
         os.makedirs('%s'%newscratch)
         os.makedirs('%s/node0'%newscratch)
-    subprocess.check_call('cp %s %s/%s'%(dmrginp,newscratch,dmrginp),shell=True)
+    nevptinp = os.path.join(newscratch, os.path.basename(dmrginp))
+    subprocess.check_call('cp %s %s'%(dmrginp,nevptinp),shell=True)
 
-    f = open('%s/%s'%(newscratch,dmrginp), 'a')
+    f = open(nevptinp, 'a')
     f.write('restart_mps_nevpt %d %d %d \n'%(ncas,partial_core, partial_virt))
     f.close()
 
@@ -443,7 +444,7 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
         envnew[k] = os.environ[k]
 
 
-    p = subprocess.Popen(['%s %s > %s'%(blockfile,dmrginp,dmrgout)], env=envnew, shell=True)
+    p = subprocess.Popen(['%s %s > %s'%(blockfile,nevptinp,dmrgout)], env=envnew, shell=True)
     p.wait()
     f = open('node0/Va_%d'%root,'r')
     Vr_energy = float(f.readline())
