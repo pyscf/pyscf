@@ -2371,6 +2371,8 @@ def _symbol(symb_or_chg):
         return param.ELEMENTS[symb_or_chg][0]
 
 def _std_symbol(symb_or_chg):
+    if isinstance(symb_or_chg, unicode):
+        symb_or_chg = str(symb_or_chg)
     if isinstance(symb_or_chg, str):
         rawsymb = _rm_digit(symb_or_chg)
         return param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
