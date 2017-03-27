@@ -400,7 +400,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
         return (numpy.array(e)+ecore), [as_SCIvector(ci, ci_strs) for ci in c]
 
 
-def to_fci(civec, norb, nelec):
+def to_fci(civec, norb, nelec, root=0):
     assert(norb <= 64)
     neleca, nelecb = nelec
     strsa = cistring.gen_strings4orblist(range(norb), neleca)
@@ -409,12 +409,12 @@ def to_fci(civec, norb, nelec):
     strbdic = dict(zip(strsb,range(strsb.__len__())))
     na = len(stradic)
     nb = len(strbdic)
-    ndet = len(civec)
+    ndet = len(civec[root])
     fcivec = numpy.zeros((na,nb))
-    for idet, (stra, strb) in enumerate(civec._strs.reshape(ndet,2,-1)):
+    for idet, (stra, strb) in enumerate(civec[root]._strs.reshape(ndet,2,-1)):
         ka = stradic[stra[0]]
         kb = strbdic[strb[0]]
-        fcivec[ka,kb] = civec[idet]
+        fcivec[ka,kb] = civec[root][idet]
     return fcivec
 
 def from_fci(fcivec, ci_strs, norb, nelec):
@@ -535,34 +535,31 @@ if __name__ == '__main__':
     jk = jk - jk.transpose(2,1,0,3)
     jk = jk.ravel()
     jk_sorted = abs(jk).argsort()[::-1]
-    ci1 = as_SCIvector(numpy.ones(1), hf_str)
+    ci1 = [as_SCIvector(numpy.ones(1), hf_str)]
 
     myci = SelectedCI()
     myci.select_cutoff = .001
     myci.ci_coeff_cutoff = .001
 
     ci2 = enlarge_space(myci, ci1, h1, eri, jk, eri_sorted, jk_sorted, norb, nelec)
-    ci2 = ci2[0]
-    print len(ci2)
+    print len(ci2[0])
 
     ci2 = enlarge_space(myci, ci1, h1, eri, jk, eri_sorted, jk_sorted, norb, nelec)
-    ci2 = ci2[0]
     numpy.random.seed(1)
-    ci2[:] = numpy.random.random(ci2.size)
-    ci2 *= 1./numpy.linalg.norm(ci2)
-    ci2 = enlarge_space(myci, ci2, h1, eri, jk, eri_sorted, jk_sorted, norb, nelec)
-    ci2 = ci2[0]
-    print len(ci2)
+    ci3 = numpy.random.random(ci2[0].size)
+    ci3 *= 1./numpy.linalg.norm(ci3)
+    ci3 = [ci3]
+    ci3 = enlarge_space(myci, ci2, h1, eri, jk, eri_sorted, jk_sorted, norb, nelec)
 
     efci = direct_spin1.kernel(h1, eri, norb, nelec, verbose=5)[0]
 
-    ci3 = contract_2e_ctypes((h1, eri), ci2, norb, nelec)
+    ci4 = contract_2e_ctypes((h1, eri), ci3[0], norb, nelec)
 
-    fci2 = to_fci(ci2, norb, nelec)
+    fci3 = to_fci(ci3, norb, nelec)
     h2e = direct_spin1.absorb_h1e(h1, eri, norb, nelec, .5)
-    fci3 = direct_spin1.contract_2e(h2e, fci2, norb, nelec)
-    fci3 = from_fci(fci3, ci2._strs, norb, nelec)
-    print abs(ci3-fci3).sum()
+    fci4 = direct_spin1.contract_2e(h2e, fci3, norb, nelec)
+    fci4 = from_fci(fci4, ci3[0]._strs, norb, nelec)
+    print abs(ci4-fci4).sum()
 
     e = myci.kernel(h1, eri, norb, nelec, verbose=5)[0]
     print e, efci
