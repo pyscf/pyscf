@@ -16,6 +16,10 @@ OBJS = \
   m_siesta_hsx.o \
   cputime.o
 
+ifndef LINK
+$(error "LINK is not set: define in arch.inc file ?")
+endif
+
 all: $(OBJS)
 	$(LINK) $(LFLAGS) --shared $(OBJS) $(USER_LIBS) -o $(TARGET)
 

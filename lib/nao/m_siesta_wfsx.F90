@@ -86,7 +86,7 @@ subroutine siesta_wfsx_book_read(clabel_in, dat) bind(c)
   dat(i) = wfsx%nkpoints; i=i+1;!  integer(siesta_int)              :: nkpoints=-999
   dat(i) = wfsx%nspin; i=i+1;   !  integer(siesta_int)              :: nspin = -999
   dat(i) = wfsx%norbs; i=i+1;   !  integer(siesta_int)              :: norbs = -999
-  dat(i) = l2i(wfsx%gamma); i=i+1; !  logical(siesta_int)              :: gamma = .false.
+  dat(i) = l2i(logical(wfsx%gamma)); i=i+1; !  logical(siesta_int)              :: gamma = .false.
   
   dat(i:i+n-1) = wfsx%orb2atm(1:n); i=i+n;   !  integer(siesta_int), allocatable :: orb2atm(:)
   dat(i:i+n-1) = wfsx%orb2ao(1:n); i=i+n;   !  integer(siesta_int), allocatable :: orb2atm(:)
