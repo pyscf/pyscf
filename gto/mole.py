@@ -22,6 +22,10 @@ from pyscf.gto import moleintor
 from pyscf.gto.eval_gto import eval_gto
 import pyscf.gto.ecp
 
+# For code compatiblity in python-2 and python-3
+if sys.version_info >= (3,):
+    unicode = str
+
 
 def M(**kwargs):
     r'''This is a shortcut to build up Mole object.
@@ -183,8 +187,8 @@ def format_atom(atoms, origin=0, axes=None, unit='Ang'):
         dat = line.split()
         return [_atom_symbol(dat[0]), [float(x) for x in dat[1:4]]]
 
-    if isinstance(atoms, str):
-        atoms = atoms.replace(';','\n').replace(',',' ').replace('\t',' ')
+    if isinstance(atoms, (str, unicode)):
+        atoms = str(atoms.replace(';','\n').replace(',',' ').replace('\t',' '))
         fmt_atoms = []
         for dat in atoms.split('\n'):
             dat = dat.strip()
@@ -198,7 +202,7 @@ def format_atom(atoms, origin=0, axes=None, unit='Ang'):
     else:
         fmt_atoms = []
         for atom in atoms:
-            if isinstance(atom, str):
+            if isinstance(atom, (str, unicode)):
                 if atom.lstrip()[0] != '#':
                     fmt_atoms.append(str2atm(atom.replace(',',' ')))
             else:
@@ -213,7 +217,7 @@ def format_atom(atoms, origin=0, axes=None, unit='Ang'):
     if axes is None:
         axes = numpy.eye(3)
 
-    if isinstance(unit, str):
+    if isinstance(unit, (str, unicode)):
         if unit.startswith(('B','b','au','AU')):
             convert = 1.
         else: #if unit.startswith(('A','a')):
@@ -270,7 +274,8 @@ def format_basis(basis_tab):
         symb = _atom_symbol(atom)
         stdsymb = _std_symbol(symb)
         atom_basis = basis_tab[atom]
-        if isinstance(atom_basis, str):
+        if isinstance(atom_basis, (str, unicode)):
+            atom_basis = str(atom_basis)
             if atom_basis.lower().startswith('unc'):
                 fmt_basis[symb] = uncontract(basis.load(atom_basis[3:], stdsymb))
             else:
@@ -319,9 +324,9 @@ def format_ecp(ecp_tab):
     for atom in ecp_tab.keys():
         symb = _atom_symbol(atom)
         stdsymb = _std_symbol(symb)
-        if isinstance(ecp_tab[atom], str):
+        if isinstance(ecp_tab[atom], (str, unicode)):
             try:
-                fmt_ecp[symb] = basis.load_ecp(ecp_tab[atom], stdsymb)
+                fmt_ecp[symb] = basis.load_ecp(str(ecp_tab[atom]), stdsymb)
             except RuntimeError as e:
                 sys.stderr.write('%s\n' % e.message)
         else:
@@ -556,7 +561,7 @@ def make_env(atoms, basis, pre_env=[], nucmod={}):
         atm0, env0 = make_atm_env(atom, ptr_env)
         ptr_env = ptr_env + len(env0)
         if nucmod:
-            if isinstance(nucmod, (int, str)):
+            if isinstance(nucmod, (int, str, unicode)):
                 atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod)
             elif ia+1 in nucmod:
                 atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod[ia+1])
@@ -740,7 +745,7 @@ def dumps(mol):
             dic1 = {}
             for k,v in dic.items():
                 if (v is None or
-                    isinstance(v, (str, bool, int, float))):
+                    isinstance(v, (str, unicode, bool, int, float))):
                     dic1[k] = v
                 elif isinstance(v, (list, tuple)):
                     dic1[k] = v   # Should I recursively skip_vaule?
@@ -1021,7 +1026,7 @@ def spheric_labels(mol, fmt=True):
                 label.append((ia, symb, '%d%s' % (n, strl), \
                               '%s' % param.REAL_SPHERIC[l][l+m]))
         count[ia,l] += nc
-    if isinstance(fmt, str):
+    if isinstance(fmt, (str, unicode)):
         return [(fmt % x) for x in label]
     elif fmt:
         return ['%d %s %s%-4s' % x for x in label]
@@ -1062,7 +1067,7 @@ def cart_labels(mol, fmt=True):
                     label.append((ia, symb, '%d%s' % (n, strl),
                                   ''.join(('x'*lx, 'y'*ly, 'z'*lz))))
         count[ia,l] += nc
-    if isinstance(fmt, str):
+    if isinstance(fmt, (str, unicode)):
         return [(fmt % x) for x in label]
     elif fmt:
         return ['%d%3s %s%-4s' % x for x in label]
@@ -1612,9 +1617,9 @@ class Mole(lib.StreamObject):
         self._atom = self.format_atom(self.atom, unit=self.unit)
         uniq_atoms = set([a[0] for a in self._atom])
 
-        if isinstance(self.basis, str):
+        if isinstance(self.basis, (str, unicode)):
             # specify global basis for whole molecule
-            _basis = dict(((a, self.basis) for a in uniq_atoms))
+            _basis = dict(((a, str(self.basis)) for a in uniq_atoms))
         elif 'default' in self.basis:
             _basis = dict(((a, self.basis['default']) for a in uniq_atoms))
             _basis.update(self.basis)
@@ -1625,16 +1630,16 @@ class Mole(lib.StreamObject):
 
 # TODO: Consider ECP info into symmetry
         if self.ecp:
-            if isinstance(self.ecp, str):
-                self._ecp = self.format_ecp(dict([(a, self.ecp)
+            if isinstance(self.ecp, (str, unicode)):
+                self._ecp = self.format_ecp(dict([(a, str(self.ecp))
                                                   for a in uniq_atoms]))
             else:
                 self._ecp = self.format_ecp(self.ecp)
 
         if self.symmetry:
             import pyscf.symm
-            if isinstance(self.symmetry, str):
-                self.symmetry = pyscf.symm.std_symb(self.symmetry)
+            if isinstance(self.symmetry, (str, unicode)):
+                self.symmetry = str(pyscf.symm.std_symb(self.symmetry))
                 self.topgroup = self.symmetry
                 orig = 0
                 axes = numpy.eye(3)
@@ -1653,9 +1658,9 @@ class Mole(lib.StreamObject):
                 self.topgroup, orig, axes = \
                         pyscf.symm.detect_symm(self._atom, self._basis)
                 self.groupname, axes = pyscf.symm.subgroup(self.topgroup, axes)
-                if isinstance(self.symmetry_subgroup, str):
+                if isinstance(self.symmetry_subgroup, (str, unicode)):
                     self.symmetry_subgroup = \
-                            pyscf.symm.std_symb(self.symmetry_subgroup)
+                            str(pyscf.symm.std_symb(self.symmetry_subgroup))
                     assert(self.symmetry_subgroup in
                            pyscf.symm.param.SUBGROUP[self.groupname])
                     if (self.symmetry_subgroup == 'Cs' and self.groupname == 'C2v'):
@@ -1800,7 +1805,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                               '%16.12f %16.12f %16.12f Bohr\n' \
                               % ((ia+1, _symbol(atom[0])) + coorda + coordb))
         if self.nucmod:
-            if isinstance(self.nucmod, (bool, int, str)):
+            if isinstance(self.nucmod, (bool, int, str, unicode)):
                 nucatms = [_symbol(atom[0]) for atom in self._atom]
             else:
                 nucatms = self.nucmod.keys()
@@ -2360,20 +2365,20 @@ def _rm_digit(symb):
         return ''.join([i for i in symb if i.isalpha()])
 
 def _charge(symb_or_chg):
-    if isinstance(symb_or_chg, str):
-        return param.ELEMENTS_PROTON[_rm_digit(symb_or_chg)]
+    if isinstance(symb_or_chg, (str, unicode)):
+        return param.ELEMENTS_PROTON[str(_rm_digit(symb_or_chg))]
     else:
         return symb_or_chg
 
 def _symbol(symb_or_chg):
-    if isinstance(symb_or_chg, str):
-        return symb_or_chg
+    if isinstance(symb_or_chg, (str, unicode)):
+        return str(symb_or_chg)
     else:
         return param.ELEMENTS[symb_or_chg][0]
 
 def _std_symbol(symb_or_chg):
-    if isinstance(symb_or_chg, str):
-        rawsymb = _rm_digit(symb_or_chg)
+    if isinstance(symb_or_chg, (str, unicode)):
+        rawsymb = str(_rm_digit(symb_or_chg))
         return param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
     else:
         return param.ELEMENTS[symb_or_chg][0]
@@ -2558,7 +2563,7 @@ def filatov_nuc_mod(nuc_charge, c=param.LIGHT_SPEED):
     Ref. M. Filatov and D. Cremer, Theor. Chem. Acc. 108, 168 (2002)
          M. Filatov and D. Cremer, Chem. Phys. Lett. 351, 259 (2002)
     '''
-    if isinstance(nuc_charge, str):
+    if isinstance(nuc_charge, (str, unicode)):
         nuc_charge = _charge(nuc_charge)
     r = (-0.263188*nuc_charge + 106.016974 + 138.985999/nuc_charge) / c**2
     zeta = 1 / (r**2)
