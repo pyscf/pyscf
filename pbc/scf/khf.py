@@ -110,6 +110,15 @@ def get_fock(mf, h1e_kpts, s_kpts, vhf_kpts, dm_kpts, cycle=-1, diis=None,
                   for k, s in enumerate(s_kpts)]
     return lib.asarray(f_kpts)
 
+def get_fermi(mf, mo_energy_kpts=None, mo_occ_kpts=None):
+    '''Fermi level
+    '''
+    if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
+    if mo_occ_kpts is None: mo_occ_kpts = mf.mo_occ
+    nocc = np.count_nonzero(mo_occ_kpts != 0)
+    fermi = np.sort(mo_energy_kpts.ravel())[nocc-1]
+    return fermi
+
 def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     '''Label the occupancies for each orbital for sampled k-points.
 
@@ -342,6 +351,7 @@ class KRHF(hf.RHF):
     get_fock = get_fock
     get_occ = get_occ
     energy_elec = energy_elec
+    get_fermi = get_fermi
 
     def get_j(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None):
         if cell is None: cell = self.cell
