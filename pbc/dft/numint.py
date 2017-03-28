@@ -71,14 +71,14 @@ def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shl_slice=N
 
 @memory_cache
 def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
-                 shl_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
+                 shl_slice=None, non0tab=None, out=None, verbose=None, kpt=None):
     '''
     Returns:
         ao_kpts: (nkpts, ngs, nao) ndarray
             AO values at each k-point
     '''
     if kpts is None:
-        if 'kpt' in kwargs:
+        if not kpt is None:
             sys.stderr.write('WARN: _KNumInt.eval_ao function finds keyword '
                              'argument "kpt" and converts it to "kpts"\n')
             kpts = kpt
