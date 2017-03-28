@@ -129,7 +129,7 @@ class FFTDF(lib.StreamObject):
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
 
-        self.kpts = kpts
+        self.kpts = numpy.array(kpts)
         self.gs = cell.gs
 
         self.blockdim = 240 # to mimic molecular DF object
@@ -138,6 +138,20 @@ class FFTDF(lib.StreamObject):
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
         self._numint = numint._KNumInt()
         self._keys = set(self.__dict__.keys())
+        self._update_ao()
+        
+    def _update_ao(self):
+        """
+        Updates atomic orbitals.
+        """
+        coords = self.cell.gen_uniform_grids(self.gs)
+        self._numint.non0tab = self._numint.make_mask(self.cell, coords)
+        self._ao = self._numint.eval_ao(
+            self.cell,
+            coords,
+            self.kpts,
+            non0tab = self._numint.non0tab,
+        )
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -148,26 +162,39 @@ class FFTDF(lib.StreamObject):
         logger.debug1(self, '    kpts = %s', self.kpts)
 
     def aoR_loop(self, gs=None, kpts=None, kpts_band=None):
+        
         cell = self.cell
-        if kpts is None: kpts = self.kpts
-        kpts = numpy.asarray(kpts)
-
+        needs_update = False
+        
         if gs is None:
             gs = self.gs
-        else:
+        elif not tuple(gs) == tuple(self.gs):
             self.gs = gs
-        ngrids = numpy.prod(numpy.asarray(gs)*2+1)
-
-        ni = self._numint
-        coords = cell.gen_uniform_grids(gs)
-        if ni.non0tab is None:
-            ni.non0tab = ni.make_mask(cell, coords)
+            needs_update = True
+            
+        if kpts is None:
+            kpts = self.kpts
+        elif not numpy.array_equal(kpts, self.kpts):
+            self.kpts = numpy.array(kpts)
+            needs_update = True
+            
+        if needs_update:
+            self._update_ao()
+            
         if kpts_band is None:
-            aoR = ni.eval_ao(cell, coords, kpts, non0tab=ni.non0tab)
             for k in range(len(kpts)):
-                yield k, aoR[k]
+                yield k, self._ao[k]
         else:
-            aoR = ni.eval_ao(cell, coords, kpts_band, non0tab=ni.non0tab)
+            
+            ngrids = numpy.prod(numpy.asarray(gs)*2+1)
+            coords = cell.gen_uniform_grids(gs)
+            aoR = self._numint.eval_ao(
+                cell,
+                coords,
+                kpts_band,
+                non0tab=self._numint.non0tab
+            )
+            
             if kpts_band.ndim == 1:
                 yield 0, aoR
             else:
