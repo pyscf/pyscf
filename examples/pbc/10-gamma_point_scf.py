@@ -12,8 +12,8 @@ from pyscf.pbc import gto, scf, dft
 import numpy
 
 cell = gto.Cell()
-# .h is a matrix for lattice vectors.  Note each column of .h denotes a direction
-cell.h = '''
+# .a is a matrix for lattice vectors.
+cell.a = '''
 3.5668  0       0
 0       3.5668  0
 0       0       3.5668'''
