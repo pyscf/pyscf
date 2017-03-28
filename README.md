@@ -1,7 +1,9 @@
-PySCF
-=====
+<div align="left">
+  <img src="https://github.com/sunqm/pyscf/blob/master/doc/logo/pyscf-logo.png" height="80px"/>
+</div>
 
-Python module for quantum chemistry
+Python-based Simulations of Chemistry Framework
+===============================================
 
 2017-02-15
 
