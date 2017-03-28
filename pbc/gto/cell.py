@@ -74,8 +74,8 @@ def format_pseudo(pseudo_tab):
         stdsymb = _std_symbol(rawsymb)
         symb = symb.replace(rawsymb, stdsymb)
 
-        if isinstance(pseudo_tab[atom], str):
-            fmt_pseudo[symb] = pseudo.load(pseudo_tab[atom], stdsymb)
+        if isinstance(pseudo_tab[atom], (str, unicode)):
+            fmt_pseudo[symb] = pseudo.load(str(pseudo_tab[atom]), stdsymb)
         else:
             fmt_pseudo[symb] = pseudo_tab[atom]
     return fmt_pseudo
@@ -112,8 +112,8 @@ def format_basis(basis_tab):
     fmt_basis = {}
     for atom in basis_tab.keys():
         atom_basis = basis_tab[atom]
-        if isinstance(atom_basis, str) and 'gth' in atom_basis:
-            fmt_basis[atom] = basis.load(atom_basis, _std_symbol(atom))
+        if isinstance(atom_basis, (str, unicode)) and 'gth' in atom_basis:
+            fmt_basis[atom] = basis.load(str(atom_basis), _std_symbol(atom))
         else:
             fmt_basis[atom] = atom_basis
     return mole.format_basis(fmt_basis)
@@ -174,7 +174,7 @@ def dumps(cell):
             dic1 = {}
             for k,v in dic.items():
                 if (v is None or
-                    isinstance(v, (basestring, bool, int, long, float))):
+                    isinstance(v, (str, unicode, bool, int, long, float))):
                     dic1[k] = v
                 elif isinstance(v, (list, tuple)):
                     dic1[k] = v   # Should I recursively skip_vaule?
@@ -641,11 +641,11 @@ class Cell(mole.Mole):
         # This must happen before build() because it affects
         # tot_electrons() via atom_charge()
         if self.pseudo is not None:
-            if isinstance(self.pseudo, str):
+            if isinstance(self.pseudo, (str, unicode)):
                 # specify global pseudo for whole molecule
                 _atom = self.format_atom(self.atom, unit=self.unit)
                 uniq_atoms = set([a[0] for a in _atom])
-                self._pseudo = self.format_pseudo(dict([(a, self.pseudo)
+                self._pseudo = self.format_pseudo(dict([(a, str(self.pseudo))
                                                       for a in uniq_atoms]))
             else:
                 self._pseudo = self.format_pseudo(self.pseudo)
@@ -707,7 +707,7 @@ class Cell(mole.Mole):
         return _atm, _ecpbas, _env
 
     def lattice_vectors(self):
-        if isinstance(self.h, str):
+        if isinstance(self.h, (str, unicode)):
             h = self.h.replace(';',' ').replace(',',' ').replace('\n',' ')
             h = np.asarray([float(x) for x in h.split()]).reshape(3,3)
         else:
