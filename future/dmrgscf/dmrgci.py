@@ -753,7 +753,10 @@ def DMRGSCF(mf, norb, nelec, maxM=1000, tol=1.e-8, *args, **kwargs):
     >>> mc.kernel()
     -74.414908818611522
     '''
-    mc = mcscf.CASSCF(mf, norb, nelec, *args, **kwargs)
+    if (hasattr(mf,'with_df')):
+      mc = mcscf.DFCASSCF(mf, norb, nelec, *args, **kwargs)
+    else:
+      mc = mcscf.CASSCF(mf, norb, nelec, *args, **kwargs)
     mc.fcisolver = DMRGCI(mf.mol, maxM, tol=tol)
     mc.callback = mc.fcisolver.restart_scheduler_()
     if mc.chkfile == mc._scf._chkfile.name:
