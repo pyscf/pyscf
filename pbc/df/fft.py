@@ -164,21 +164,21 @@ class FFTDF(lib.StreamObject):
     def aoR_loop(self, gs=None, kpts=None, kpts_band=None):
         
         cell = self.cell
-        needs_update = False
+        needs_ao_update = False
         
         if gs is None:
             gs = self.gs
         elif not tuple(gs) == tuple(self.gs):
             self.gs = gs
-            needs_update = True
+            needs_ao_update = True
             
         if kpts is None:
             kpts = self.kpts
         elif not numpy.array_equal(kpts, self.kpts):
             self.kpts = numpy.array(kpts)
-            needs_update = True
+            needs_ao_update = True
             
-        if needs_update:
+        if needs_ao_update:
             self._update_ao()
             
         if kpts_band is None:
