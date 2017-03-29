@@ -22,7 +22,8 @@ cell1.atom = '''
 He   1.3    .2       .3
 He    .1    .1      1.1 '''
 cell1.basis = {'He': [[0, [0.8, 1]],
-                      [1, [0.6, 1]]]}
+                      [1, [0.6, 1]]
+                     ]}
 cell1.gs = [8]*3
 cell1.a = numpy.array(([2.0,  .9, 0. ],
                        [0.1, 1.9, 0.4],
@@ -99,16 +100,23 @@ class KnowValues(unittest.TestCase):
         #self.assertAlmostEqual(abs(dat-ref).sum(), 0, 9)
 
         coords = pdft.gen_grid.gen_uniform_grids(cell1)
+        Gv, Gvbase, kws = cell1.get_Gv_weights(cell1.gs)
+        b = cell1.reciprocal_vectors()
+        gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
+        dat = ft_ao.ft_aopair(cell1, cell1.Gv, aosym='s1', b=b,
+                              gxyz=gxyz, Gvbase=Gvbase)
+        self.assertAlmostEqual(finger(dat), 1.5666516306798806+1.953555017583245j, 9)
+        dat = ft_ao.ft_aopair(cell1, cell1.Gv, aosym='s2', b=b,
+                              gxyz=gxyz, Gvbase=Gvbase)
+        self.assertAlmostEqual(finger(dat), -0.85276967757297917+1.0378751267506394j, 9)
+        dat = ft_ao.ft_aopair(cell1, cell1.Gv, aosym='s1hermi', b=b,
+                              gxyz=gxyz, Gvbase=Gvbase)
+        self.assertAlmostEqual(finger(dat), 1.5666516306798806+1.953555017583245j, 9)
         aoR = pdft.numint.eval_ao(cell1, coords)
         ngs, nao = aoR.shape
         ref = numpy.asarray([tools.fft(aoR[:,i].conj()*aoR[:,j], cell1.gs)
                              for i in range(nao) for j in range(nao)])
         ref = ref.reshape(nao,nao,-1).transpose(2,0,1) * (cell1.vol/ngs)
-        Gv, Gvbase, kws = cell1.get_Gv_weights(cell1.gs)
-        b = cell1.reciprocal_vectors()
-        gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
-        dat = ft_ao.ft_aopair(cell1, cell1.Gv, aosym='s1hermi', b=b,
-                              gxyz=gxyz, Gvbase=Gvbase)
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,0,0]-dat[:,0,0])    , 0, 7)
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,1,1]-dat[:,1,1])    , 0, 7)
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,2:,2:]-dat[:,2:,2:]), 0, 7)
@@ -122,6 +130,8 @@ class KnowValues(unittest.TestCase):
     def test_ft_aoao_with_kpts(self):
         numpy.random.seed(1)
         kpti, kptj = numpy.random.random((2,3))
+        dat = ft_ao.ft_aopair(cell, cell.Gv, kpti_kptj=(kpti,kptj))
+        self.assertAlmostEqual(finger(dat), -0.80184732435570638+2.4078835207597176j, 9)
         coords = pdft.gen_grid.gen_uniform_grids(cell)
         aoi = pdft.numint.eval_ao(cell, coords, kpt=kpti)
         aoj = pdft.numint.eval_ao(cell, coords, kpt=kptj)
@@ -131,7 +141,6 @@ class KnowValues(unittest.TestCase):
         ref = numpy.asarray([tools.fftk(aoi[:,i].conj()*aoj[:,j], cell.gs, expmikr)
                              for i in range(nao) for j in range(nao)])
         ref = ref.reshape(nao,nao,-1).transpose(2,0,1) * (cell.vol/ngs)
-        dat = ft_ao.ft_aopair(cell, cell.Gv, kpti_kptj=(kpti,kptj))
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,0,0]-dat[:,0,0])    , 0, 5)
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,1,1]-dat[:,1,1])    , 0.023225471785938184  , 4)
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,2:,2:]-dat[:,2:,2:]), 0, 9)
@@ -143,11 +152,12 @@ class KnowValues(unittest.TestCase):
         aoj = pdft.numint.eval_ao(cell1, coords, kpt=kptj)
         ngs, nao = aoj.shape
         q = kptj - kpti
+        dat = ft_ao.ft_aopair(cell1, cell1.Gv, kpti_kptj=(kpti,kptj), q=q)
+        self.assertAlmostEqual(finger(dat), 0.72664436503332241+3.2542145296611373j, 9)
         expmikr = numpy.exp(-1j*numpy.dot(coords,q))
         ref = numpy.asarray([tools.fftk(aoi[:,i].conj()*aoj[:,j], cell1.gs, expmikr)
                              for i in range(nao) for j in range(nao)])
         ref = ref.reshape(nao,nao,-1).transpose(2,0,1) * (cell1.vol/ngs)
-        dat = ft_ao.ft_aopair(cell1, cell1.Gv, kpti_kptj=(kpti,kptj), q=q)
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,0,0]-dat[:,0,0])    , 0, 7)
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,1,1]-dat[:,1,1])    , 0, 7)
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,2:,2:]-dat[:,2:,2:]), 0, 7)

@@ -8,6 +8,7 @@ import numpy
 
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import dft as pbcdft
+from pyscf.pbc import df
 
 class BN(unittest.TestCase):
     """
@@ -125,6 +126,33 @@ class BN(unittest.TestCase):
         dev_max = numpy.abs(delta).max()
         print "Maximum deviation:", dev_max, " Hartree"
         assert dev_max < 1e-4
-    
+
+#    def setUp(self):
+#        self.cell = pbcgto.M(
+#            unit = 'Angstrom',
+#            atom = list(zip(['B','N'],self.atomic_coordinates_cartesian_angstrom)),
+#            a = self.unit_cell_angstrom,
+#            dimension = 2,
+#            basis = 'ccpvdz',
+#            gs = [5,5,25],
+#            verbose = 4,
+#        )
+#
+#    def test_bands(self):
+#        model = pbcdft.KRKS(self.cell, self.cell.make_kpts([3,3,1]))
+#        model.with_df = df.MDF(self.cell)
+#        model.with_df.auxbasis = None
+#        model.with_df.kpts = self.cell.make_kpts([3,3,1])
+#        model.with_df.kpts_band = self.k_points_cartesian_bohr
+#        model.xc = 'lda'
+#        model.grids = pbcdft.BeckeGrids(self.cell)
+#        model.kernel()
+#        e,w = model.get_bands(self.k_points_cartesian_bohr)
+#        #avg = numpy.mean(e-self.bands_hartree)
+#        #delta = e-self.bands_hartree-avg
+#        #dev_max = numpy.abs(delta).max()
+#        #print "Maximum deviation:", dev_max, " Hartree"
+#        #assert dev_max < 1e-4
+
 if __name__ == '__main__':
     unittest.main()

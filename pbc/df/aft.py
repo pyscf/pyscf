@@ -220,39 +220,25 @@ class AFTDF(lib.StreamObject):
             blksize = min(max(16, int(max_memory*1e6*.75/16/nij)), 16384)
             sublk = max(16, int(blksize//4))
         else:
-            subblk = blksize
-        buf = [numpy.zeros(nij*blksize, dtype=numpy.complex128)]
+            sublk = blksize
+        buf = numpy.empty(nij*blksize, dtype=numpy.complex128)
         pqkRbuf = numpy.empty(nij*sublk)
         pqkIbuf = numpy.empty(nij*sublk)
 
-        if aosym == 's2':
-            for p0, p1 in self.prange(0, ngs, blksize):
-                aoao = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                             b, gxyz[p0:p1], Gvbase, q,
-                                             kptj.reshape(1,3), out=buf)[0]
-                for i0, i1 in lib.prange(0, p1-p0, sublk):
-                    nG = i1 - i0
-                    pqkR = numpy.ndarray((nij,nG), buffer=pqkRbuf)
-                    pqkI = numpy.ndarray((nij,nG), buffer=pqkIbuf)
-                    pqkR[:] = aoao[i0:i1].real.T
-                    pqkI[:] = aoao[i0:i1].imag.T
-                    yield (pqkR, pqkI, p0+i0, p0+i1)
-                aoao[:] = 0
-        else:
-            for p0, p1 in self.prange(0, ngs, blksize):
-                #aoao = ft_ao.ft_aopair(cell, Gv[p0:p1], shls_slice, aosym,
-                #                       b, Gvbase, gxyz[p0:p1], gs, (kpti, kptj), q)
-                aoao = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                             b, gxyz[p0:p1], Gvbase, q,
-                                             kptj.reshape(1,3), out=buf)[0]
-                for i0, i1 in lib.prange(0, p1-p0, sublk):
-                    nG = i1 - i0
-                    pqkR = numpy.ndarray((ni,nj,nG), buffer=pqkRbuf)
-                    pqkI = numpy.ndarray((ni,nj,nG), buffer=pqkIbuf)
-                    pqkR[:] = aoao[i0:i1].real.transpose(1,2,0)
-                    pqkI[:] = aoao[i0:i1].imag.transpose(1,2,0)
-                    yield (pqkR.reshape(-1,nG), pqkI.reshape(-1,nG), p0+i0, p0+i1)
-                aoao[:] = 0
+        for p0, p1 in self.prange(0, ngs, blksize):
+            #aoao = ft_ao.ft_aopair(cell, Gv[p0:p1], shls_slice, aosym,
+            #                       b, Gvbase, gxyz[p0:p1], gs, (kpti, kptj), q)
+            aoao = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                         b, gxyz[p0:p1], Gvbase, q,
+                                         kptj.reshape(1,3), out=buf)[0]
+            aoao = aoao.reshape(p1-p0,nij)
+            for i0, i1 in lib.prange(0, p1-p0, sublk):
+                nG = i1 - i0
+                pqkR = numpy.ndarray((nij,nG), buffer=pqkRbuf)
+                pqkI = numpy.ndarray((nij,nG), buffer=pqkIbuf)
+                pqkR[:] = aoao[i0:i1].real.T
+                pqkI[:] = aoao[i0:i1].imag.T
+                yield (pqkR, pqkI, p0+i0, p0+i1)
 
     def ft_loop(self, gs=None, q=numpy.zeros(3), kpts=None, shls_slice=None,
                 max_memory=4000, aosym='s1'):
@@ -288,38 +274,21 @@ class AFTDF(lib.StreamObject):
             nij = ni*nj
         blksize = max(16, int(max_memory*.9e6/(nij*(nkpts+1)*16)))
         blksize = min(blksize, ngs, 16384)
-        buf = [numpy.zeros(nij*blksize, dtype='D') for k in range(nkpts)]
+        buf = numpy.empty(nkpts*nij*blksize, dtype=numpy.complex128)
         pqkRbuf = numpy.empty(nij*blksize)
         pqkIbuf = numpy.empty(nij*blksize)
 
-        if aosym == 's2':
-            for p0, p1 in self.prange(0, ngs, blksize):
-                ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                      b, gxyz[p0:p1], Gvbase, q, kpts, out=buf)
-                nG = p1 - p0
-                for k in range(nkpts):
-                    aoao = numpy.ndarray((nG,nij), dtype=numpy.complex128,
-                                         order='F', buffer=buf[k])
-                    pqkR = numpy.ndarray((nij,nG), buffer=pqkRbuf)
-                    pqkI = numpy.ndarray((nij,nG), buffer=pqkIbuf)
-                    pqkR[:] = aoao.real.T
-                    pqkI[:] = aoao.imag.T
-                    yield (k, pqkR, pqkI, p0, p1)
-                    aoao[:] = 0  # == buf[k][:] = 0
-        else:
-            for p0, p1 in self.prange(0, ngs, blksize):
-                ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                      b, gxyz[p0:p1], Gvbase, q, kpts, out=buf)
-                nG = p1 - p0
-                for k in range(nkpts):
-                    aoao = numpy.ndarray((nG,ni,nj), dtype=numpy.complex128,
-                                         order='F', buffer=buf[k])
-                    pqkR = numpy.ndarray((ni,nj,nG), buffer=pqkRbuf)
-                    pqkI = numpy.ndarray((ni,nj,nG), buffer=pqkIbuf)
-                    pqkR[:] = aoao.real.transpose(1,2,0)
-                    pqkI[:] = aoao.imag.transpose(1,2,0)
-                    yield (k, pqkR.reshape(-1,nG), pqkI.reshape(-1,nG), p0, p1)
-                    aoao[:] = 0  # == buf[k][:] = 0
+        for p0, p1 in self.prange(0, ngs, blksize):
+            dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                        b, gxyz[p0:p1], Gvbase, q, kpts, out=buf)
+            nG = p1 - p0
+            for k in range(nkpts):
+                aoao = dat[k].reshape(nG,nij)
+                pqkR = numpy.ndarray((nij,nG), buffer=pqkRbuf)
+                pqkI = numpy.ndarray((nij,nG), buffer=pqkIbuf)
+                pqkR[:] = aoao.real.T
+                pqkI[:] = aoao.imag.T
+                yield (k, pqkR, pqkI, p0, p1)
 
     def prange(self, start, stop, step):
         return lib.prange(start, stop, step)

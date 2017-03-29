@@ -58,3 +58,46 @@ def convert_orbsym(gpname, orbsym):
         gpname = pyscf.symm.std_symb(gpname)
         orbsym = [IRREP_MAP[gpname][i] for i in orbsym]
     return orbsym
+
+UNDEF = 0
+LZSYM_MAP = (
+ 1    ,  # 0  A1g
+ UNDEF,  # 1  A2g
+ 5    ,  # 2  E1gx
+-5    ,  # 3  E1gy
+ UNDEF,  # 4  A2u
+ 2    ,  # 5  A1u
+-6    ,  # 6  E1uy
+ 6    ,  # 7  E1ux
+ UNDEF,  # 8
+ UNDEF,  # 9
+ 7    ,  # 10 E2gx
+-7    ,  # 11 E2gy
+ 9    ,  # 12 E3gx
+-9    ,  # 13 E3gy
+-8    ,  # 14 E2uy
+ 8    ,  # 15 E2ux
+-10   ,  # 16 E3uy
+ 10   ,  # 17 E3ux
+ UNDEF,  # 18
+ UNDEF,  # 19
+ 11   ,  # 20 E4gx
+-11   ,  # 21 E4gy
+ 13   ,  # 22 E5gx
+-13   ,  # 23 E5gy
+-12   ,  # 24 E4uy
+ 12   ,  # 25 E4ux
+-14   ,  # 26 E5uy
+ 14   ,  # 27 E5ux
+)
+def convert_lzsym(gpname, orbsym):
+    '''Convert orbital symmetry irrep_id to Block internal irrep_id
+    '''
+    if gpname.lower() == 'dooh':
+        orbsym = [SYMLZ_MAP[i] for i in orbsym]
+    elif gpname.lower() == 'coov':
+        raise NotImplementedError
+    else:
+        gpname = pyscf.symm.std_symb(gpname)
+        orbsym = [IRREP_MAP[gpname][i] for i in orbsym]
+    return orbsym

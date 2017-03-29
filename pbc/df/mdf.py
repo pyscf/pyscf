@@ -31,7 +31,10 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
     t1 = (time.clock(), time.time())
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
-    fused_cell, fuse = fuse_auxcell(mydf, mydf.auxcell)
+    fused_cell, fuse = fuse_auxcell(mydf, auxcell)
+    outcore.aux_e2(cell, fused_cell, mydf._cderi, 'cint3c2e_sph', aosym='s2',
+                   kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
+    t1 = log.timer_debug1('3c2e', *t1)
 
     nao = cell.nao_nr()
     naux = auxcell.nao_nr()
@@ -45,10 +48,12 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
     kptjs = kptij_lst[:,1]
     kpt_ji = kptjs - kptis
     uniq_kpts, uniq_index, uniq_inverse = unique(kpt_ji)
+    log.debug('Num uniq kpts %d', len(uniq_kpts))
+    log.debug2('uniq_kpts %s', uniq_kpts)
     # j2c ~ (-kpt_ji | kpt_ji)
     j2c = fused_cell.pbc_intor('cint2c2e_sph', hermi=1, kpts=uniq_kpts)
-    kLRs = []
-    kLIs = []
+    feri = h5py.File(mydf._cderi)
+
     for k, kpt in enumerate(uniq_kpts):
         aoaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
         aoaux = fuse(aoaux)
@@ -58,41 +63,17 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
         if not kLR.flags.c_contiguous: kLR = lib.transpose(kLR.T)
         if not kLI.flags.c_contiguous: kLI = lib.transpose(kLI.T)
 
-        j2c[k] = fuse(fuse(j2c[k]).T).T.copy()
+        j2c_k = fuse(fuse(j2c[k]).T).T.copy()
         if is_zero(kpt):  # kpti == kptj
-            j2c[k] -= lib.dot(kLR.T, kLR)
-            j2c[k] -= lib.dot(kLI.T, kLI)
+            j2c_k -= lib.dot(kLR.T, kLR)
+            j2c_k -= lib.dot(kLI.T, kLI)
         else:
              # aoaux ~ kpt_ij, aoaux.conj() ~ kpt_kl
             j2cR, j2cI = zdotCN(kLR.T, kLI.T, kLR, kLI)
-            j2c[k] -= j2cR + j2cI * 1j
-
-# Note large difference may be found in results between the CD/eig treatments.
-# In some systems, small integral errors can lead to different treatments of
-# linear dependency which can be observed in the total energy/orbital energy
-# around 4th decimal place.
-        try:
-            j2c[k] = ('CD', scipy.linalg.cholesky(j2c[k], lower=True))
-        except scipy.linalg.LinAlgError:
-            w, v = scipy.linalg.eigh(j2c[k])
-            log.debug2('metric linear dependency for kpt %s', k)
-            log.debug2('cond = %.4g, drop %d bfns',
-                       w[0]/w[-1], numpy.count_nonzero(w<df.LINEAR_DEP_THR))
-            v = v[:,w>df.LINEAR_DEP_THR].T.conj()
-            v /= numpy.sqrt(w[w>df.LINEAR_DEP_THR]).reshape(-1,1)
-            j2c[k] = ('eig', v)
-
-        kLR *= coulG.reshape(-1,1)
-        kLI *= coulG.reshape(-1,1)
-        kLRs.append(kLR)
-        kLIs.append(kLI)
+            j2c_k -= j2cR + j2cI * 1j
+        feri['j2c/%d'%k] = j2c_k
         aoaux = kLR = kLI = j2cR = j2cI = coulG = None
-
-    outcore.aux_e2(cell, fused_cell, mydf._cderi, 'cint3c2e_sph', aosym='s2',
-                   kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
-    t1 = log.timer_debug1('3c2e', *t1)
-    nauxs = [v[1].shape[0] for v in j2c]
-    feri = h5py.File(mydf._cderi)
+    j2c = None
 
     def make_kpt(uniq_kptji_id):  # kpt = kptj - kpti
         kpt = uniq_kpts[uniq_kptji_id]
@@ -101,8 +82,30 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
         adapted_kptjs = kptjs[adapted_ji_idx]
         nkptj = len(adapted_kptjs)
         log.debug1('adapted_ji_idx = %s', adapted_ji_idx)
-        kLR = kLRs[uniq_kptji_id]
-        kLI = kLIs[uniq_kptji_id]
+
+        Gaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
+        Gaux = fuse(Gaux)
+        Gaux *= mydf.weighted_coulG(kpt, False, gs)
+        kLR = Gaux.T.real.copy('C')
+        kLI = Gaux.T.imag.copy('C')
+        j2c = numpy.asarray(feri['j2c/%d'%uniq_kptji_id])
+# Note large difference may be found in results between the CD/eig treatments.
+# In some systems, small integral errors can lead to different treatments of
+# linear dependency which can be observed in the total energy/orbital energy
+# around 4th decimal place.
+        try:
+            j2c = scipy.linalg.cholesky(j2c, lower=True)
+            j2ctag = 'CD'
+        except scipy.linalg.LinAlgError as e:
+            w, v = scipy.linalg.eigh(j2c)
+            log.debug2('metric linear dependency for kpt %s', uniq_kptji_id)
+            log.debug2('cond = %.4g, drop %d bfns',
+                       w[0]/w[-1], numpy.count_nonzero(w<df.LINEAR_DEP_THR))
+            v = v[:,w>df.LINEAR_DEP_THR].T.conj()
+            v /= numpy.sqrt(w[w>df.LINEAR_DEP_THR]).reshape(-1,1)
+            j2c = v
+            j2ctag = 'eig'
+        naux0 = j2c.shape[0]
 
         if is_zero(kpt):  # kpti == kptj
             aosym = 's2'
@@ -132,7 +135,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
         pqkRbuf = numpy.empty(buflen*Gblksize)
         pqkIbuf = numpy.empty(buflen*Gblksize)
         # buf for ft_aopair
-        buf = numpy.zeros((nkptj,buflen*Gblksize), dtype=numpy.complex128)
+        buf = numpy.empty((nkptj,buflen*Gblksize), dtype=numpy.complex128)
 
         col1 = 0
         for istep, sh_range in enumerate(shranges):
@@ -155,61 +158,37 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
                     j3cI.append(numpy.asarray(v.imag, order='C'))
                 v = None
 
-            if aosym == 's2':
-                shls_slice = (bstart, bend, 0, bend)
-                for p0, p1 in lib.prange(0, ngs, Gblksize):
-                    ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                          b, gxyz[p0:p1], Gvbase, kpt,
-                                          adapted_kptjs, out=buf)
-                    nG = p1 - p0
-                    for k, ji in enumerate(adapted_ji_idx):
-                        aoao = numpy.ndarray((nG,ncol), dtype=numpy.complex128,
-                                             order='F', buffer=buf[k])
-                        pqkR = numpy.ndarray((ncol,nG), buffer=pqkRbuf)
-                        pqkI = numpy.ndarray((ncol,nG), buffer=pqkIbuf)
-                        pqkR[:] = aoao.real.T
-                        pqkI[:] = aoao.imag.T
-                        aoao[:] = 0
-                        lib.dot(kLR[p0:p1].T, pqkR.T, -1, j3cR[k], 1)
-                        lib.dot(kLI[p0:p1].T, pqkI.T, -1, j3cR[k], 1)
-                        if not (is_zero(kpt) and gamma_point(adapted_kptjs[k])):
-                            lib.dot(kLR[p0:p1].T, pqkI.T, -1, j3cI[k], 1)
-                            lib.dot(kLI[p0:p1].T, pqkR.T,  1, j3cI[k], 1)
-            else:
-                shls_slice = (bstart, bend, 0, cell.nbas)
-                ni = ncol // nao
-                for p0, p1 in lib.prange(0, ngs, Gblksize):
-                    ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                          b, gxyz[p0:p1], Gvbase, kpt,
-                                          adapted_kptjs, out=buf)
-                    nG = p1 - p0
-                    for k, ji in enumerate(adapted_ji_idx):
-                        aoao = numpy.ndarray((nG,ni,nao), dtype=numpy.complex128,
-                                             order='F', buffer=buf[k])
-                        pqkR = numpy.ndarray((ni,nao,nG), buffer=pqkRbuf)
-                        pqkI = numpy.ndarray((ni,nao,nG), buffer=pqkIbuf)
-                        pqkR[:] = aoao.real.transpose(1,2,0)
-                        pqkI[:] = aoao.imag.transpose(1,2,0)
-                        aoao[:] = 0
-                        pqkR = pqkR.reshape(-1,nG)
-                        pqkI = pqkI.reshape(-1,nG)
-                        zdotCN(kLR[p0:p1].T, kLI[p0:p1].T, pqkR.T, pqkI.T,
-                               -1, j3cR[k], j3cI[k], 1)
+            shls_slice = (bstart, bend, 0, bend)
+            for p0, p1 in lib.prange(0, ngs, Gblksize):
+                dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                            b, gxyz[p0:p1], Gvbase, kpt,
+                                            adapted_kptjs, out=buf)
+                nG = p1 - p0
+                for k, ji in enumerate(adapted_ji_idx):
+                    aoao = dat[k].reshape(nG,ncol)
+                    pqkR = numpy.ndarray((ncol,nG), buffer=pqkRbuf)
+                    pqkI = numpy.ndarray((ncol,nG), buffer=pqkIbuf)
+                    pqkR[:] = aoao.real.T
+                    pqkI[:] = aoao.imag.T
 
-            naux0 = nauxs[uniq_kptji_id]
+                    lib.dot(kLR[p0:p1].T, pqkR.T, -1, j3cR[k], 1)
+                    lib.dot(kLI[p0:p1].T, pqkI.T, -1, j3cR[k], 1)
+                    if not (is_zero(kpt) and gamma_point(adapted_kptjs[k])):
+                        lib.dot(kLR[p0:p1].T, pqkI.T, -1, j3cI[k], 1)
+                        lib.dot(kLI[p0:p1].T, pqkR.T,  1, j3cI[k], 1)
+
             for k, ji in enumerate(adapted_ji_idx):
                 if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
                     v = j3cR[k]
                 else:
                     v = j3cR[k] + j3cI[k] * 1j
-                if j2c[uniq_kptji_id][0] == 'CD':
-                    v = scipy.linalg.solve_triangular(j2c[uniq_kptji_id][1], v,
-                                                      lower=True, overwrite_b=True)
+                if j2ctag == 'CD':
+                    v = scipy.linalg.solve_triangular(j2c, v, lower=True, overwrite_b=True)
                 else:
-                    v = lib.dot(j2c[uniq_kptji_id][1], v)
+                    v = lib.dot(j2c, v)
                 feri['j3c/%d'%ji][:naux0,col0:col1] = v
 
-        naux0 = nauxs[uniq_kptji_id]
+        del(feri['j2c/%d'%uniq_kptji_id])
         for k, ji in enumerate(adapted_ji_idx):
             v = feri['j3c/%d'%ji][:naux0]
             del(feri['j3c/%d'%ji])

@@ -215,12 +215,13 @@ class UHF(uhf.UHF):
 
     def dump_flags(self):
         uhf.UHF.dump_flags(self)
-        hf_symm.check_irrep_nelec(self.mol, self.irrep_nelec, self.nelec)
+        if self.irrep_nelec:
+            logger.info('irrep_nelec %s', self.irrep_nelec)
 
     def build(self, mol=None):
-        for irname in self.irrep_nelec:
-            if irname not in self.mol.irrep_name:
-                logger.warn(self, '!! No irrep %s', irname)
+        if mol is None: mol = self.mol
+        if mol.symmetry:
+            hf_symm.check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
         return uhf.UHF.build(self, mol)
 
     def eig(self, h, s):

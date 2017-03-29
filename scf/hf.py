@@ -996,6 +996,13 @@ class SCF(lib.StreamObject):
             not self._is_mem_enough()):
 # Should I lazy initialize direct SCF?
             self.opt = self.init_direct_scf(mol)
+        if isinstance(self.diis, bool) and self.diis:
+            logger.warn(self, 'WARN: Attribute .diis needs to be initialized as '
+                        'a DIIS object by calling\n'
+                        '    scf.DIIS(mol), scf.ADIIS(mol) or scf.EDIIS(mol)\n'
+                        'instead of a True/False boolean value.  It is now '
+                        'initialized as scf.DIIS object')
+            self.diis = diis.DIIS(self)
 
     def dump_flags(self):
         logger.info(self, '\n')
@@ -1154,8 +1161,8 @@ class SCF(lib.StreamObject):
         '''
         cput0 = (time.clock(), time.time())
 
-        self.build(self.mol)
         self.dump_flags()
+        self.build(self.mol)
         self.converged, self.e_tot, \
                 self.mo_energy, self.mo_coeff, self.mo_occ = \
                 kernel(self, self.conv_tol, self.conv_tol_grad,

@@ -717,26 +717,35 @@ def guess_shell_ranges(mol, aosym, max_iobuf, max_aobuf=None, ao_loc=None,
     if ao_loc is None:
         ao_loc = mol.ao_loc_nr()
 
-    lstdij = []
+    dims = ao_loc[1:] - ao_loc[:-1]
+    dijs = (dims.reshape(-1,1) * dims)
+    nbas = dijs.shape[0]
 
     if aosym:
-        for i in range(mol.nbas):
-            di = ao_loc[i+1] - ao_loc[i]
-            if compress_diag:
-                for j in range(i):
-                    dj = ao_loc[j+1] - ao_loc[j]
-                    lstdij.append(di*dj)
-                lstdij.append(di*(di+1)//2)
-            else:
-                for j in range(i+1):
-                    dj = ao_loc[j+1] - ao_loc[j]
-                    lstdij.append(di*dj)
+        if compress_diag:
+            #:for i in range(mol.nbas):
+            #:    di = ao_loc[i+1] - ao_loc[i]
+            #:    for j in range(i):
+            #:        dj = ao_loc[j+1] - ao_loc[j]
+            #:        lstdij.append(di*dj)
+            #:    lstdij.append(di*(di+1)//2)
+            idx = numpy.arange(nbas)
+            dijs[idx,idx] = dims*(dims+1)//2
+            lstdij = dijs[numpy.tril_indices(nbas)]
+        else:
+            #:for i in range(mol.nbas):
+            #:    di = ao_loc[i+1] - ao_loc[i]
+            #:    for j in range(i+1):
+            #:        dj = ao_loc[j+1] - ao_loc[j]
+            #:        lstdij.append(di*dj)
+            lstdij = dijs[numpy.tril_indices(nbas)]
     else:
-        for i in range(mol.nbas):
-            di = ao_loc[i+1] - ao_loc[i]
-            for j in range(mol.nbas):
-                dj = ao_loc[j+1] - ao_loc[j]
-                lstdij.append(di*dj)
+        #:for i in range(mol.nbas):
+        #:    di = ao_loc[i+1] - ao_loc[i]
+        #:    for j in range(mol.nbas):
+        #:        dj = ao_loc[j+1] - ao_loc[j]
+        #:        lstdij.append(di*dj)
+        lstdij = dijs.ravel()
 
     dij_loc = numpy.append(0, numpy.cumsum(lstdij))
     ijsh_range = balance_partition(dij_loc, max_iobuf)

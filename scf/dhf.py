@@ -309,6 +309,13 @@ class UHF(hf.SCF):
             self.check_sanity()
         if self.direct_scf:
             self.opt = self.init_direct_scf(self.mol)
+        if isinstance(self.diis, bool) and self.diis:
+            logger.warn(self, 'WARN: Attribute .diis needs to be initialized as '
+                        'a DIIS object by calling\n'
+                        '    scf.DIIS(mol), scf.ADIIS(mol) or scf.EDIIS(mol)\n'
+                        'instead of a True/False boolean value.  It is now '
+                        'initialized as scf.DIIS object')
+            self.diis = hf.diis.DIIS(self)
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy

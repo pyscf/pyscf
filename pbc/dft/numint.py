@@ -16,21 +16,21 @@ from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, member
 
 libpbc = lib.load_library('libpbc')
 
-#try:
-### Moderate speedup by caching eval_ao
-#    from pyscf import pbc
-#    from joblib import Memory
-#    memory = Memory(cachedir='./tmp/', mmap_mode='r', verbose=0)
-#    def memory_cache(f):
-#        g = memory.cache(f)
-#        def maybe_cache(*args, **kwargs):
-#            if pbc.DEBUG:
-#                return g(*args, **kwargs)
-#            else:
-#                return f(*args, **kwargs)
-#        return maybe_cache
-#except:
-#    memory_cache = lambda f: f
+try:
+## Moderate speedup by caching eval_ao
+    from pyscf import pbc
+    from joblib import Memory
+    memory = Memory(cachedir='./tmp/', mmap_mode='r', verbose=0)
+    def memory_cache(f):
+        g = memory.cache(f)
+        def maybe_cache(*args, **kwargs):
+            if pbc.DEBUG:
+                return g(*args, **kwargs)
+            else:
+                return f(*args, **kwargs)
+        return maybe_cache
+except:
+    memory_cache = lambda f: f
 
 def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shl_slice=None,
             non0tab=None, out=None, verbose=None):

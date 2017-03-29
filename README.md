@@ -1,7 +1,9 @@
-PySCF
-=====
+<div align="left">
+  <img src="https://github.com/sunqm/pyscf/blob/master/doc/logo/pyscf-logo.png" height="80px"/>
+</div>
 
-Python module for quantum chemistry
+Python-based Simulations of Chemistry Framework
+===============================================
 
 2017-02-15
 
@@ -133,6 +135,16 @@ Known problems
   https://www.hdfgroup.org/ftp/HDF5/releases/hdf5-1.8.12/
   https://github.com/h5py/h5py/archive/2.3.1.tar.gz
 
+
+Citing PySCF
+------------
+
+The following paper should be cited in publications utilizing the PySCF program package:
+
+* The Python-based Simulations of Chemistry Framework (PySCF),
+  Q. Sun, T. C. Berkelbach, N. S. Blunt, G. H. Booth, S.  Guo, Z. Li, J. Liu,
+  J. McClain, E. R. Sayfutyarova, S. Sharma, S. Wouters, G. K.-L. Chan,
+  arXiv:1701.08223v2 [physics.chem-ph]
 
 
 Bug report
