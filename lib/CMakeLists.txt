@@ -13,7 +13,11 @@ endif()
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-#enable_language(Fortran)
+enable_language(Fortran)
+include(FortranCInterface)
+FortranCInterface_HEADER(FC.h MACRO_NAMESPACE “FC_”)
+#This creates a “FC.h” header that defines mangling macros
+
 find_package(BLAS REQUIRED)
 if(BLA_VENDOR MATCHES "Intel*")
   if (${DISABLE_AVX})
@@ -89,6 +93,7 @@ add_subdirectory(icmpspt)
 add_subdirectory(ri)
 add_subdirectory(localizer)
 add_subdirectory(hci)
+add_subdirectory(nao)
 
 add_subdirectory(pbc)
 
