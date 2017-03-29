@@ -290,6 +290,12 @@ class RHF(hf.RHF):
         if self.mol.symmetry:
             check_irrep_nelec(self.mol, self.irrep_nelec, self.mol.nelectron)
 
+    def build(self, mol=None):
+        for irname in self.irrep_nelec:
+            if irname not in self.mol.irrep_name:
+                logger.warn(self, '!! No irrep %s', irname)
+        return hf.RHF.build(self, mol)
+
     eig = eig
 
     def get_grad(self, mo_coeff, mo_occ, fock=None):
@@ -445,8 +451,18 @@ class ROHF(rohf.ROHF):
 
     def dump_flags(self):
         rohf.ROHF.dump_flags(self)
-        if self.mol.symmetry:
-            check_irrep_nelec(self.mol, self.irrep_nelec, self.nelec)
+        if self.irrep_nelec:
+            logger.info('irrep_nelec %s', self.irrep_nelec)
+        #if self._irrep_doccs:
+        #    logger.info('irrep_doccs %s', self.irrep_doccs)
+        #if self._irrep_soccs:
+        #    logger.info('irrep_soccs %s', self.irrep_soccs)
+
+    def build(self, mol=None):
+        if mol is None: mol = self.mol
+        if mol.symmetry:
+            check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
+        return hf.RHF.build(self, mol)
 
     eig = eig
 
