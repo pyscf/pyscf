@@ -41,9 +41,21 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         Veff : (nkpts, nao, nao) or (*, nkpts, nao, nao) ndarray
         Veff = J + Vxc.
     '''
-    if cell is None: cell = ks.cell
+    needs_ao_update = False
+    
+    if cell is None:
+        cell = ks.cell
+    elif not cell == ks.cell:
+        ks.cell = cell
+        needs_ao_update = True
+    
+    if kpts is None:
+        kpts = ks.kpts
+    elif not numpy.array_equal(kpts, ks.kpts):
+        ks.kpts = numpy.array(kpts)
+        needs_ao_update = True
+        
     if dm is None: dm = ks.make_rdm1()
-    if kpts is None: kpts = ks.kpts
     t0 = (time.clock(), time.time())
     if ks.grids.coords is None:
         ks.grids.build()
@@ -51,6 +63,28 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         t0 = logger.timer(ks, 'setting up grids', *t0)
     else:
         small_rho_cutoff = 0
+    
+    ao_derivatives_required = {
+        "LDA":0,
+        "GGA":1,
+        "MGGA":2,
+    }[ks._numint._xc_type(ks.xc)]
+    
+    # If needs an update
+    if ks._ao is None or needs_ao_update:
+        ks._update_ao(ao_derivatives_required)
+        
+    # If number of derivatives is not sufficiently large: update as well
+    shape = ks._ao[0].shape
+    # Retrieve primary dimension
+    if len(shape) == 2:
+        prim = 1
+    else:
+        prim = shape[0]
+    
+    n = (ao_derivatives_required+1)*(ao_derivatives_required+2)*(ao_derivatives_required+3)//6
+    if n > prim:
+        ks._update_ao(ao_derivatives_required)
 
     dm = np.asarray(dm)
     nao = dm.shape[-1]
@@ -61,7 +95,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         n, ks._exc, vx = 0, 0, 0
     else:
         n, ks._exc, vx = ks._numint.nr_rks(cell, ks.grids, ks.xc, dm, 1,
-                                           kpts, kpts_band)
+                                           kpts, kpts_band, precomputed_ao = ks._ao)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
@@ -80,8 +114,10 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 
     if small_rho_cutoff > 1e-20 and ground_state:
         # Filter grids the first time setup grids
+        _ao = ks._ao if len(ks._ao[0].shape) == 2 else list(i[0] for i in ks._ao)
         idx = ks._numint.large_rho_indices(cell, dm, ks.grids,
-                                           small_rho_cutoff, kpts)
+                                           small_rho_cutoff, kpts,
+                                           precomputed_ao = _ao)
         logger.debug(ks, 'Drop grids %d',
                      ks.grids.weights.size - np.count_nonzero(idx))
         ks.grids.coords  = np.asarray(ks.grids.coords [idx], order='C')
@@ -105,6 +141,18 @@ class KRKS(khf.KRHF):
         # Note Do not refer to .with_df._numint because gs/coords may be different
         self._numint = numint._KNumInt(kpts)
         self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
+        self._ao = None
+        
+    def _update_ao(self,deriv):
+        """
+        Updates atomic orbitals.
+        """
+        self._ao = self._numint.eval_ao(
+            self.cell,
+            self.grids.coords,
+            self.kpts,
+            deriv = deriv,
+        )
 
     def dump_flags(self):
         khf.KRHF.dump_flags(self)
