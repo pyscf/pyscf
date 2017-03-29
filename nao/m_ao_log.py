@@ -8,12 +8,25 @@ from pyscf.nao.m_siesta_ion_interp import siesta_ion_interp
 #
 #
 class ao_log_c():
-  '''holder of radial orbitals on logarithmic grid.
+  '''
+  holder of radial orbitals on logarithmic grid.
   Args:
-    ions : list of ion structures
+    ions : list of ion structures (read from ion files from siesta)
 
   Returns:
-    ao_log
+    ao_log:
+      sp2ion (ion structure from m_siesta_ion or m_siesta_ion_xml):
+        List of structure composed of several field read from the ions file.
+      nr (int): number of radial point
+      rmin (float)
+      kmax (float)
+      rmax (float)
+      rr
+      pp
+      psi_log
+      psi_log_rl
+      sp2rcut (array, float): array containing the rcutoff of each specie
+      sp_mu2rcut (array, float)
 
   Examples:
 
@@ -25,20 +38,50 @@ class ao_log_c():
     
     self.sp2ion = sp2ion
     _siesta_ion_add_sp2(self, sp2ion)
+    
     npts = max(max(sp2ion[sp]["npts"]) for sp in range(self.nspecies))
     self.nr = next235( max(2.0*npts, 1024.0) ) if nr==None else nr
     assert(self.nr>2)
-    dmin = min(min(sp2ion[sp]["delta"]) for sp in range(self.nspecies))
-    self.rmin = dmin if rmin==None else rmin
+
+    min_delta = []
+
+    # dmin = min(min(sp2ion[sp]["delta"]) for sp in range(self.nspecies))
+    # Get the minimum delta while avoiding 0.0 that would give Nan
+    for ion in sp2ion:
+      print('sp2ion[sp]["delta"] = ', ion["delta"])
+      if any(ion["delta"] == 0.0):
+        delta = []
+        for dlt in ion["delta"]:
+          if dlt != 0.0:
+            delta.append(dlt)
+        if len(delta) > 0:
+          min_delta.append(min(delta))
+      else:
+        min_delta.append(min(ion['delta']))
+
+    dmin = min(min_delta)
+    if dmin == 0.0:
+      raise ValueError('Error in ion file, dmin = 0.0!!!')
+    
+    self.rmin = dmin if rmin is None else rmin
     self.kmax = 1.0/dmin/numpy.pi if kmax==None else kmax
+    
     dmax = 2.3*max(max(sp2ion[sp]["cutoff"]) for sp in range(self.nspecies))
-    self.rmax = dmax if rmax==None else rmax
+    if dmax == 0.0:
+      raise ValueError('Error in ion file, dmax = 0.0!!!')
+    
+    self.rmax = dmax if rmax is None else rmax
+    
     self.rr, self.pp = log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
+    
     self.psi_log = siesta_ion_interp(self.rr, sp2ion, 1)
     self.psi_log_rl = siesta_ion_interp(self.rr, sp2ion, 0)
+    
     self.sp2rcut = numpy.array([max(sp2ion[sp]["cutoff"]) for sp in range(self.nspecies)], dtype='float64')
+    
     self.sp_mu2rcut = numpy.empty((self.nspecies,self.psi_log.shape[1]), dtype='float64', order='F')
     self.sp_mu2rcut.fill(-999.0)
+    
     for sp in range(self.nspecies):
       self.sp_mu2rcut[sp,0:self.sp2nmult[sp]] = sp2ion[sp]["cutoff"][0:self.sp2nmult[sp]]
 
