@@ -91,7 +91,18 @@ def siesta_ion_xml(fname):
     name = doc.getElementsByTagName("basis_specs")
     ion["basis_specs"] = getNodeText(name[0])
 
-    extract_pao_elements(ion, doc)
+    #for node in doc.getElementsByTagName('paos'):  # visit every node <bar />
+    #  #print node.toxml()
+    #  for delt in node.getElementsByTagName('delta'):
+    #    print getNodeText(delt)
+    #node = doc.getElementsByTagName("pao")
+    #print('pao: ', node)
+
+    field = {'paos': 'orbital', 'kbs': 'projector', 'vna': None, 'chlocal': None, 'reduced_vlocal': None, 'core': None}
+    for k, v in field.items():
+      ion[k] = {}
+      if (len(doc.getElementsByTagName(k))>0):
+        extract_field_elements(ion[k], doc.getElementsByTagName(k)[0], field=v)
     return ion
 
 def getNodeText(node):
@@ -127,12 +138,13 @@ def get_data_elements(name, dtype):
     else:
         raise ValueError('not implemented')
 
-def extract_pao_elements(ion, doc):
+def extract_field_elements(pao, doc, field=None):
     """
     extract the different pao element of the xml file
     Input Parameters:
     -----------------
-        ion (dict)
+        pao (dict): dict containing the pao element
+        field: field name of the node
         doc (minidom.parse)
     Output Parameters:
     ------------------
@@ -142,41 +154,40 @@ def extract_pao_elements(ion, doc):
             cutoff
             data
             orbital
-            projector
     """
 
-    name_npts = doc.getElementsByTagName("npts")
-    name_delta = doc.getElementsByTagName("delta")
-    name_cutoff = doc.getElementsByTagName("cutoff")
-    name_data = doc.getElementsByTagName("data")
+    pao['delta'] = np.zeros((len(doc.getElementsByTagName('delta'))), dtype=float)
+    pao['cutoff'] = np.zeros((len(doc.getElementsByTagName('delta'))), dtype=float)
+    pao['npts'] = np.zeros((len(doc.getElementsByTagName('npts'))), dtype=int)
 
-    name_orbital = doc.getElementsByTagName("orbital")
-    name_projector = doc.getElementsByTagName("projector")
+    pao['data'] = []
+    for i, delt in enumerate(doc.getElementsByTagName('delta')):
+      pao['delta'][i] = get_data_elements(delt, float)
+    for i, delt in enumerate(doc.getElementsByTagName('cutoff')):
+      pao['cutoff'][i] = get_data_elements(delt, float)
+    for i, delt in enumerate(doc.getElementsByTagName('npts')):
+      pao['npts'][i] = get_data_elements(delt, int)
 
-    ion["orbital"] = []
-    ion["projector"] = []
-    for i in range(len(name_orbital)):
-        ion["orbital"].append(extract_orbital(name_orbital[i]))
-    for i in range(len(name_projector)):
-        ion["projector"].append(extract_projector(name_projector[i]))
+    for i, dat in enumerate(doc.getElementsByTagName('data')):
+      pao['data'].append(get_data_elements(dat, float).reshape(pao["npts"][i], 2))
 
-    if len(name_data) != len(name_npts):
-        raise ValueError("len(name_data) != len(name_npts): {0} != {1}".format(len(name_data), len(name_npts)))
-    if len(name_data) != len(name_cutoff):
-        raise ValueError("len(name_data) != len(name_cutoff): {0} != {1}".format(len(name_data), len(name_cutoff)))
-    if len(name_data) != len(name_delta):
-        raise ValueError("len(name_data) != len(name_delta): {0} != {1}".format(len(name_data), len(name_delta)))
 
-    ion["npts"] = np.zeros((len(name_npts)), dtype=int)
-    ion["delta"] = np.zeros((len(name_delta)), dtype=float)
-    ion["cutoff"] = np.zeros((len(name_cutoff)), dtype=float)
-    ion["data"] = []
 
-    for i in range(len(name_data)):
-        ion["npts"][i] = get_data_elements(name_npts[i], int)
-        ion["cutoff"][i] = get_data_elements(name_cutoff[i], float)
-        ion["delta"][i] = get_data_elements(name_delta[i], float)
-        ion["data"].append(get_data_elements(name_data[i], float).reshape(ion["npts"][i], 2))
+    if field is not None:
+      name_orbital = doc.getElementsByTagName(field)
+      pao[field] = []
+
+      if field == 'orbital':
+        for i in range(len(name_orbital)):
+          pao[field].append(extract_orbital(name_orbital[i]))
+      elif field == 'projector':
+        for i in range(len(name_orbital)):
+          pao[field].append(extract_projector(name_orbital[i]))
+      else:
+        raise ValueError(field + ' not implemented, onlt orbital or projector!!')
+
+    #for k, val in pao.items():
+    #  print(k + ': ', val)
 
 def extract_orbital(orb_xml):
     """
