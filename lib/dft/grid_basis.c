@@ -12,9 +12,6 @@
 
 #define MAX_THREADS     256
 
-#define MIN(X,Y)        ((X)<(Y)?(X):(Y))
-#define MAX(X,Y)        ((X)>(Y)?(X):(Y))
-
 void VXCnr_ao_screen(unsigned char *non0table, double *coords, int ngrids,
                      int *atm, int natm, int *bas, int nbas, double *env)
 {

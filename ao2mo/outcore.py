@@ -775,13 +775,11 @@ def balance_partition(ao_loc, blksize, start_id=0, stop_id=None):
         stop_id = len(ao_loc) - 1
     else:
         stop_id = min(stop_id, len(ao_loc)-1)
+    displs = lib.misc._blocksize_partition(ao_loc[start_id:stop_id+1], blksize)
+    displs = [i+start_id for i in displs]
     tasks = []
-    for i in range(start_id+1, stop_id):
-        if ao_loc[i+1]-ao_loc[start_id] > blksize:
-            tasks.append((start_id, i, ao_loc[i]-ao_loc[start_id]))
-            start_id = i
-    if start_id != ao_loc[stop_id]:
-        tasks.append((start_id, stop_id, ao_loc[stop_id]-ao_loc[start_id]))
+    for i0, i1 in zip(displs[:-1],displs[1:]):
+        tasks.append((i0, i1, ao_loc[i1]-ao_loc[i0]))
     return tasks
 
 
