@@ -144,6 +144,7 @@ def _blocksize_partition(cum, blocksize):
         if cum[i+1]-cum[p0] > blocksize:
             displs.append(i)
             p0 = i
+    displs.append(n)
     return displs
 
 def flatten(lst):
