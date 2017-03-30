@@ -43,23 +43,22 @@ class ao_log_c():
     self.nr = next235( max(2.0*npts, 1024.0) ) if nr==None else nr
     assert(self.nr>2)
 
-    #min_delta = []
-
     dmin = min(min(sp2ion[sp]["paos"]["delta"]) for sp in range(self.nspecies))
-
-    if dmin == 0.0:
-      raise ValueError('Error in ion file, dmin = 0.0!!!')
+    assert(dmin>0.0)
     
     self.rmin = dmin if rmin is None else rmin
+    assert(self.rmin>0.0)
+
     self.kmax = 1.0/dmin/numpy.pi if kmax==None else kmax
+    assert(self.kmax>0.0)
     
     dmax = 2.3*max(max(sp2ion[sp]["paos"]["cutoff"]) for sp in range(self.nspecies))
-    if dmax == 0.0:
-      raise ValueError('Error in ion file, dmax = 0.0!!!')
+    assert(dmax>0.0)
     
     self.rmax = dmax if rmax is None else rmax
+    assert(self.rmax>0.0)
     
-    self.rr, self.pp = log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
+    self.rr,self.pp = log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
     
     self.psi_log = siesta_ion_interp(self.rr, sp2ion, 1)
     self.psi_log_rl = siesta_ion_interp(self.rr, sp2ion, 0)

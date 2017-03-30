@@ -41,11 +41,9 @@ subroutine spline(delt,y,n,yp1,ypn,y2)
   enddo
 
   if (ypn.eq.huge(1D0)) then
-    qn=0
-    un=0
+    qn=0; un=0
   else
-    qn=0.5D0
-    un=(3/delt)*(ypn-(y(n)-y(n-1))/delt)
+    qn=0.5D0; un=(3/delt)*(ypn-(y(n)-y(n-1))/delt)
   endif
 
   y2(n)=(un-qn*u(n-1))/(qn*y2(n-1)+1)
@@ -67,10 +65,12 @@ end subroutine !spline
     p = 0.5*yout[i-1]+2.0
     yout[i] = -0.5 / p
     u[i]=(3*( yin[i+1]+yin[i-1]-2*yin[i] )/h2-0.5*u[i-1])/p
-  
-  qn,un = (0.0,0.0) if yp1>=1e300 else 0.5,(3.0/h)*( ypn-(yin[n-1]-yin[n-2])/h)
+
+  qn,un = 0.0,0.0
+  if ypn<1e300 : qn,un = 0.5,(3.0/h)*( ypn-(yin[n-1]-yin[n-2])/h)
 
   yout[n-1]=(un-qn*u[n-2])/(qn*yout[n-2]+1)
+
   for k in range(n-2,-1,-1): yout[k]=yout[k]*yout[k+1]+u[k]
   
-  return yout
+  return(yout)

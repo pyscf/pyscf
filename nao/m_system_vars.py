@@ -31,13 +31,11 @@ def get_orb2m(sv):
 #
 #
 def diag_check(self):
-  nspin = self.nspin
-  nkpnt = self.nkpoints
   ksn2e = self.xml_dict['ksn2e']
   ac = True
-  for k in range(nkpnt):
+  for k in range(self.nkpoints):
     kvec = self.xml_dict["k2xyzw"][k,0:3]
-    for spin in range(nspin):
+    for spin in range(self.nspin):
       e,x = sv_diag(self, kvec=kvec, spin=spin)
       eref = ksn2e[k,spin,:]
       acks = numpy.allclose(eref,e,atol=1e-5,rtol=1e-4)
@@ -60,7 +58,7 @@ class system_vars_c():
     self.sp2ion = []
     for strspecie in self.wfsx.sp2strspecie: self.sp2ion.append(siesta_ion_xml(strspecie+'.ion.xml'))
     _siesta_ion_add_sp2(self, self.sp2ion)
-    self.sp2ao_log = ao_log_c(self.sp2ion)
+    self.ao_log = ao_log_c(self.sp2ion)
   
     self.natoms = len(self.xml_dict['atom2sp'])
     self.norbs  = (self.xml_dict['ksn2e'].shape[2])

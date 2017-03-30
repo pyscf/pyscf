@@ -14,7 +14,6 @@ dll.siesta_wfsx_book_size.argtypes = (c_char_p, POINTER(c_int64))
 dll.siesta_wfsx_book_read.argtypes = (c_char_p, POINTER(c_int))
 dll.siesta_wfsx_dread.argtypes = (c_char_p, POINTER(c_double))
 dll.siesta_wfsx_sread.argtypes = (c_char_p, POINTER(c_float))
-
 # END of interfacing with fortran subroutines 
 
 #
