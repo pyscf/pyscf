@@ -51,11 +51,30 @@ def diag_check(self):
 #
 #
 class system_vars_c():
-  def __init__(self, Atoms, label='siesta', forcetype=-1):
-    self.xml_dict = siesta_xml(label)
-    self.wfsx = siesta_wfsx_c(label)
-    self.hsx = siesta_hsx_c(label, forcetype)
-    
+  def __init__(self, Atoms=None, label='siesta', forcetype=-1):
+
+    self.label = label
+    self.xml_dict = siesta_xml(self.label)
+    self.wfsx = siesta_wfsx_c(self.label)
+    self.hsx = siesta_hsx_c(self.label, forcetype)
+  
+    if Atoms is None:
+      self.init_pure_siesta()
+    else:
+      self.init_ase_atoms(Atoms)
+
+  def init_ase_atoms(self, Atoms):
+    """
+      Initialise system vars using siesta file and Atom object from ASE.
+    """
+
+    try:
+      import ase
+    except:
+      self.init_pure_siesta()
+
+    self.Atoms = Atoms
+   
     ##### The parameters as fields     
     self.sp2ion = []
     for sp in Atoms.get_chemical_symbols(): 
@@ -87,7 +106,42 @@ class system_vars_c():
         for n in range(self.norbs):
           _siesta2blanko_denvec(orb2m, self.wfsx.X[:,:,n,s,k])
 
-    #print(get_denmat(self).shape)    
-    #print(self.sp2nmult, type(self.sp2nmult))
-    #print(self.sp_mu2j, type(self.sp_mu2j))
-    #print(self.sp2ion[0].keys())
+ 
+  def init_pure_siesta(self):
+    """
+    Initialise system var using only the siesta files.
+    """
+    self.Atoms = None
+    
+    ##### The parameters as fields     
+    self.sp2ion = []
+    for sp in self.wfsx.sp2strspecie:
+      self.sp2ion.append(siesta_ion_xml(sp+self.wfsx.ion_suffix[sp]+'.ion.xml'))
+    
+    _siesta_ion_add_sp2(self, self.sp2ion)
+    self.sp2ao_log = ao_log_c(self.sp2ion)
+  
+    self.natoms = len(self.xml_dict['atom2sp'])
+    self.norbs  = self.wfsx.norbs 
+    self.nspin  = self.wfsx.nspin
+    self.nkpoints  = self.wfsx.nkpoints
+
+    strspecie2sp = {}
+    for sp in range(len(self.wfsx.sp2strspecie)): strspecie2sp[self.wfsx.sp2strspecie[sp]] = sp
+    
+    self.atom2sp = numpy.empty((self.natoms), dtype='int64')
+    for o in range(self.wfsx.norbs):
+      atom = self.wfsx.orb2atm[o]
+      strspecie = self.wfsx.orb2strspecie[o]
+      self.atom2sp[atom-1] = strspecie2sp[strspecie]
+
+    orb2m = get_orb2m(self)
+    _siesta2blanko_csr(orb2m, self.hsx.s4_csr, self.hsx.orb_sc2orb_uc)
+
+    for s in range(self.nspin):
+      _siesta2blanko_csr(orb2m, self.hsx.spin2h4_csr[s], self.hsx.orb_sc2orb_uc)
+    
+    for k in range(self.nkpoints):
+      for s in range(self.nspin):
+        for n in range(self.norbs):
+          _siesta2blanko_denvec(orb2m, self.wfsx.X[:,:,n,s,k])

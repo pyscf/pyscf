@@ -30,7 +30,8 @@ calc = Siesta(
 )
 
 H2O.set_calculator(calc)
+#run siesta
 print(H2O.get_potential_energy())
-#print(H2O.get_chemical_symbols())
-sv = system_vars_c(H2O, label=label)
+
+sv = system_vars_c(Atoms = H2O, label=label)
 print('atom2sp: ', sv.atom2sp)
