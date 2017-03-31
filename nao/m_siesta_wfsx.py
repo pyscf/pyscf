@@ -45,6 +45,7 @@ def siesta_wfsx_sread(w, sdata):
   bufsize = w.nkpoints*w.nspin*w.norbs**2*w.nreim
   dll.siesta_wfsx_sread(name, sdata.ctypes.data_as(POINTER(c_float)))
 
+
   
 class siesta_wfsx_c():
   def __init__(self, label):
@@ -60,6 +61,7 @@ class siesta_wfsx_c():
     self.orb2atm  = idat[i:i+self.norbs]; i=i+self.norbs
     self.orb2ao   = idat[i:i+self.norbs]; i=i+self.norbs
     self.orb2n    = idat[i:i+self.norbs]; i=i+self.norbs
+    self.ion_suffix = {}
     if(self.gamma) : self.nreim = 1;
     else: self.nreim = 2;
     
@@ -70,7 +72,13 @@ class siesta_wfsx_c():
       splabel = ''
       for k in range(splen):
         splabel = splabel + chr(idat[i]); i=i+1
-      self.orb2strspecie.append(splabel.strip())
+      ch = splabel.strip()[0]
+      self.orb2strspecie.append(ch)
+      if ch not in self.ion_suffix.keys():
+        self.ion_suffix[ch] = ""
+        if len(splabel.strip()) > 1:
+          for isplab in range(1, len(splabel.strip())):
+            self.ion_suffix[ch] += splabel.strip()[isplab]
 
     self.sp2strspecie = []
     for strsp in self.orb2strspecie:
