@@ -7,6 +7,6 @@ import matplotlib.pyplot as plt
 
 label = 'siesta'
 sv  = system_vars_c(label)
-print(diag_check(sv), type(sv.ao_log.rr), type(sv.ao_log.pp))
+print(diag_check(sv), dir(sv))
 sbt = sbt_c(sv.ao_log.rr, sv.ao_log.pp)
 print(dir(sbt))

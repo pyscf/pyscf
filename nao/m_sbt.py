@@ -1,4 +1,4 @@
-import numpy
+import numpy as np
 
 #
 #
@@ -20,92 +20,65 @@ class sbt_c():
   Examples:
     
   '''
-  def __init__(self, rr=None, kk=None, lmax=12, with_sqrt_pi_2=0, fft_flags=None):
-    assert(type(rr)==numpy.ndarray)
+  def __init__(self, rr=None, kk=None, lmax=12, with_sqrt_pi_2=True, fft_flags=None):
+    assert(type(rr)==np.ndarray)
     assert(rr[0]>0.0)
-    assert(type(kk)==numpy.ndarray)
+    assert(type(kk)==np.ndarray)
     assert(kk[0]>0.0)
     self.nr = len(rr)
+    n = self.nr
     assert(self.nr>1)
     self.lmax = lmax
     assert(self.lmax>-1)
-    self.rr = rr
-    self.kk = kk
-    self.with_sqrt_pi_2 =with_sqrt_pi_2
+    self.rr,self.kk = rr,kk
+    self.with_sqrt_pi_2 = with_sqrt_pi_2
     self.fft_flags = fft_flags
-    self.nr2 = self.nr*2
-    self.rr3 = rr**3
-    self.kk3 = kk**3
-    self.premult = numpy.zeros((self.nr2), dtype='float64')
-    self.smallr  = numpy.zeros((self.nr), dtype='float64')
-    self.postdiv = numpy.zeros((self.nr), dtype='float64')
-    self.mult_table1 = numpy.zeros((self.lmax, self.nr), dtype='float64')
-    self.mult_table2 = numpy.zeros((self.lmax, self.nr+1), dtype='float64')
-    self.rmin = rr[0]
-    self.kmin = kk[0]
-    self.rhomin = numpy.log(self.rmin)
-    self.kapmin = numpy.log(self.kmin)
-    dr = numpy.log(rr[2]/rr[1])  
-    dt = 2.0*numpy.pi/(self.nr2*dr) 
+    self.nr2, self.rr3, self.kk3 = self.nr*2, rr**3, kk**3
+    self.rmin,self.kmin = rr[0],kk[0]
+    self.rhomin,self.kapmin= np.log(self.rmin),np.log(self.kmin)
+
+    dr = np.log(rr[2]/rr[1])
+    dt = 2.0*np.pi/(self.nr2*dr)
     
-    self.temp1 = numpy.zeros((self.nr2), dtype='complex128')
-    self.temp2 = numpy.zeros((self.nr2), dtype='complex128')
+    self.smallr = self.rmin*np.array([np.exp(-dr*(n-i)) for i in range(n)], dtype='float64')
+    self.premult = np.array([np.exp(1.5*dr*(i-n)) for i in range(2*n)], dtype='float64')
+
+    coeff = 1.0/np.sqrt(np.pi/2.0) if with_sqrt_pi_2  else 1.0
+    self.postdiv = np.array([coeff*np.exp(-1.5*dr*i) for i in range(n)], dtype='float64')
+  
+    self.temp1 = np.zeros((self.nr2), dtype='complex128')
+    self.temp2 = np.zeros((self.nr2), dtype='complex128')
     self.temp1[0] = 1.0
-    self.temp2 = numpy.fft.fft(self.temp1)
-    xx = sum(numpy.real(self.temp2))
+    self.temp2 = np.fft.fft(self.temp1)
+    xx = sum(np.real(self.temp2))
     if abs(self.nr2-xx)>1e-10 : raise SystemError('err: sbt_plan: problem with fftw sum(temp2):')
+ 
+    self.mult_table1 = np.zeros((self.lmax+1, self.nr), dtype='complex128')
+    for it in range(n):
+      tt = it*dt                           # Define a t value
+      phi3 = (self.kapmin+self.rhomin)*tt  # See Eq. (33)
+      rad,phi = np.sqrt(10.5**2+tt**2),np.arctan((2.0*tt)/21.0)
+      phi1 = -10.0*phi-np.log(rad)*tt+tt+np.sin(phi)/(12.0*rad) \
+        -np.sin(3.0*phi)/(360.0*rad**3)+np.sin(5.0*phi)/(1260.0*rad**5) \
+        -np.sin(7.0*phi)/(1680.0*rad**7)
+        
+      for ix in range(1,11): phi1=phi1+np.arctan((2.0*tt)/(2.0*ix-1))  # see Eqs. (27) and (28)
 
-    factor = numpy.exp(dr)
-    self.smallr[self.nr-1] = self.rr[0]/factor
-    for i in range(self.nr-2,-1,-1): self.smallr[i] = self.smallr[i+1]/factor
+      phi2 = -np.arctan(1.0) if tt>200.0 else -np.arctan(np.sinh(np.pi*tt/2)/np.cosh(np.pi*tt/2))  # see Eq. (20)
+      phi = phi1+phi2+phi3
+     
+      self.mult_table1[0,it] = np.sqrt(np.pi/2)*np.exp(1j*phi)/n  # Eq. (18)
+      if it==0 : self.mult_table1[0,it] = 0.5*self.mult_table1[0,it]
+      phi = -phi2 - np.arctan(2.0*tt)
+      if self.lmax>0 : self.mult_table1[1,it] = np.exp(2.0*1j*phi)*self.mult_table1[0,it] # See Eq. (21)
 
-    factor = numpy.exp(1.5*dr)
-    self.premult[self.nr] = 1.0  
-    for i in range(1,self.nr): self.premult[self.nr+i] = factor*self.premult[self.nr+i-1]
-
-  #p%premult(nr) = 1.0D0/factor
-  #do i = 2,nr  
-     #p%premult(nr-i+1) = p%premult(nr-i+2)/factor
-  #enddo
-
-  #!   Obtain the values 1/k_i^1/5 in the array postdivide
-  #p%postdiv(1) = 1.0D0
-  #if(with_sqrt_pi_2) p%postdiv(1) = 1.0D0/sqrt(pi/2)
-
-  #do i = 2,nr
-     #p%postdiv(i) = p%postdiv(i-1)/factor 
-  #enddo
-
-  #!   construct the array of M_l(t) times the phase
-  #do it = 1,nr
-     #tt = (it-1)*dt               ! Define a t value
-     #phi3 = (kappamin+rhomin)*tt  ! See Eq. (33)
-     #rad = sqrt(10.5D0**2+tt**2)
-     #phi = atan((2D0*tt)/21D0)
-     #phi1 = -10D0*phi-log(rad)*tt+tt+sin(phi)/(12D0*rad)&
-          #-sin(3D0*phi)/(360D0*rad**3)+sin(5D0*phi)/(1260D0*rad**5)&
-          #-sin(7D0*phi)/(1680D0*rad**7)
-     #do ix = 1,10
-        #phi = 2*tt/(2D0*ix-1)
-        #phi1 = phi1+atan((2D0*tt)/(2D0*ix-1))  ! see Eqs. (27) and (28)
-     #enddo
-
-     #if(tt>200d0) then
-       #phi2 = -atan(1d0)
-     #else  
-       #phi2 = -atan(sinh(pi*tt/2)/cosh(pi*tt/2))  ! see Eq. (20)
-     #endif  
-     #phi = phi1+phi2+phi3
-     #p%mult_table1(it,0) = sqrt(pi/2)*exp(ci*phi)/nr  ! Eq. (18)
-     #if (it.eq.1) p%mult_table1(it,0) = 0.5D0*p%mult_table1(it,0)
-     #phi = -phi2-atan(2D0*tt)
-     #if(p%lmax>0)p%mult_table1(it,1) = exp(2.0D0*ci*phi)*p%mult_table1(it,0) ! See Eq. (21)
-      #!    Apply Eq. (24)
-     #do lk = 1,p%lmax-1
-        #phi = -atan(2*tt/(2*lk+1))
-        #p%mult_table1(it,lk+1) = exp(2.0D0*ci*phi)*p%mult_table1(it,lk-1)
-     #enddo
-  #enddo
+      #    Apply Eq. (24)
+      for lk in range(1,self.lmax-1):
+        phi = -np.arctan(2*tt/(2*lk+1))
+        self.mult_table1[lk+1,it] = np.exp(2.0*1j*phi)*self.mult_table1[lk-1,it]
+    # END of it in range(n):
+        
+    self.mult_table2 = np.zeros((self.lmax, self.nr+1), dtype='complex128')
 
   #!   make the initialization for the calculation at small k values
   #!   for 2N mesh values

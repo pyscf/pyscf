@@ -49,7 +49,7 @@ def diag_check(self):
 #
 #
 class system_vars_c():
-  def __init__(self, Atoms=None, label='siesta', forcetype=-1):
+  def __init__(self, label='siesta', Atoms=None, forcetype=-1):
 
     self.label = label
     self.xml_dict = siesta_xml(self.label)
@@ -57,7 +57,7 @@ class system_vars_c():
     self.hsx = siesta_hsx_c(self.label, forcetype)
   
     if Atoms is None:
-      self.init_pure_siesta()
+      self.init_siesta_xml()
     else:
       self.init_ase_atoms(Atoms)
 
@@ -105,7 +105,7 @@ class system_vars_c():
           _siesta2blanko_denvec(orb2m, self.wfsx.X[:,:,n,s,k])
 
  
-  def init_pure_siesta(self):
+  def init_siesta_xml(self):
     """
     Initialise system var using only the siesta files.
     """
