@@ -51,30 +51,30 @@ def diag_check(self):
 #
 #
 class system_vars_c():
-  def __init__(self, label='siesta', forcetype=-1):
+  def __init__(self, Atoms, label='siesta', forcetype=-1):
     self.xml_dict = siesta_xml(label)
     self.wfsx = siesta_wfsx_c(label)
     self.hsx = siesta_hsx_c(label, forcetype)
     
     ##### The parameters as fields     
     self.sp2ion = []
-    for strspecie in self.wfsx.sp2strspecie: self.sp2ion.append(siesta_ion_xml(strspecie+'.ion.xml'))
+    for sp in Atoms.get_chemical_symbols(): 
+      self.sp2ion.append(siesta_ion_xml(sp+self.wfsx.ion_suffix[sp]+'.ion.xml'))
+    
     _siesta_ion_add_sp2(self, self.sp2ion)
     self.sp2ao_log = ao_log_c(self.sp2ion)
   
-    self.natoms = len(self.xml_dict['atom2sp'])
-    self.norbs  = (self.xml_dict['ksn2e'].shape[2])
-    self.nspin  = (self.xml_dict['ksn2e'].shape[1])
-    self.nkpoints  = (self.xml_dict['ksn2e'].shape[0])
+    self.natoms = Atoms.get_positions().shape[0]
+    self.norbs  = self.wfsx.norbs 
+    self.nspin  = self.wfsx.nspin
+    self.nkpoints  = self.wfsx.nkpoints
 
     strspecie2sp = {}
     for sp in range(len(self.wfsx.sp2strspecie)): strspecie2sp[self.wfsx.sp2strspecie[sp]] = sp
     
     self.atom2sp = numpy.empty((self.natoms), dtype='int64')
-    for o in range(self.wfsx.norbs):
-      atom = self.wfsx.orb2atm[o]
-      strspecie = self.wfsx.orb2strspecie[o]
-      self.atom2sp[atom-1] = strspecie2sp[strspecie]
+    for i, sp in enumerate(Atoms.get_chemical_symbols()):
+      self.atom2sp[i] = strspecie2sp[sp]
     
     orb2m = get_orb2m(self)
     _siesta2blanko_csr(orb2m, self.hsx.s4_csr, self.hsx.orb_sc2orb_uc)
