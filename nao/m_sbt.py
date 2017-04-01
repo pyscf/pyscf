@@ -1,4 +1,5 @@
 import numpy as np
+from pyscf.nao.m_xjl import xjl
 
 #
 #
@@ -18,7 +19,6 @@ class sbt_c():
     a class preinitialized to perform the spherical Bessel Transform
   
   Examples:
-    
   '''
   def __init__(self, rr=None, kk=None, lmax=12, with_sqrt_pi_2=True, fft_flags=None):
     assert(type(rr)==np.ndarray)
@@ -77,32 +77,16 @@ class sbt_c():
         phi = -np.arctan(2*tt/(2*lk+1))
         self.mult_table1[lk+1,it] = np.exp(2.0*1j*phi)*self.mult_table1[lk-1,it]
     # END of it in range(n):
-        
-    self.mult_table2 = np.zeros((self.lmax, self.nr+1), dtype='complex128')
 
   #!   make the initialization for the calculation at small k values
   #!   for 2N mesh values
+    self.mult_table2 = np.zeros((self.lmax+1, self.nr+1), dtype='complex128')
+    j_ltable = np.zeros((self.lmax+1,self.nr2), dtype='float64')
 
-  #allocate (j_ltable(nr2,0:p%lmax))
-  #allocate(xj(0:p%lmax))
+    for i in range(self.nr2):
+      xx = np.exp(self.rhomin+self.kapmin+(i-1)*dr)
+      j_ltable[0:self.lmax+1,i] = xjl(xx,self.lmax)
 
-  #!   construct a table of j_l values
-
-  #do i = 1,nr2
-     #xx = exp(rhomin+kappamin+(i-1)*dr)  
-     #call XJL(xx,p%lmax,xj)
-     #do ll = 0,p%lmax
-        #j_ltable(i,ll) = xj(ll)
-     #enddo
-  #enddo
-
-  #do ll = 0,p%lmax
-     #temp1(1:nr2) = j_ltable(1:nr2,ll)
-     #call dfftw_execute(plan12)
-     #p%mult_table2(1:nr+1,ll) = conjg(temp2(1:nr+1))/nr2
-  #enddo
-  #if(with_sqrt_pi_2) p%mult_table2 = p%mult_table2/sqrt(pi/2)
-
-  #deallocate(j_ltable)
-  #deallocate(xj)
-#end subroutine !INITIALIZE
+    for ll in range(self.lmax+1):
+      self.mult_table2[ll,:] = np.fft.rfft(j_ltable[ll,:])
+    if with_sqrt_pi_2 : self.mult_table2 = self.mult_table2/np.sqrt(np.pi/2)
