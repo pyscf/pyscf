@@ -51,8 +51,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     
     if kpts is None:
         kpts = ks.kpts
-    elif not numpy.array_equal(kpts, ks.kpts):
-        ks.kpts = numpy.array(kpts)
+    elif not np.array_equal(kpts, ks.kpts):
+        ks.kpts = np.array(kpts)
         needs_ao_update = True
         
     if dm is None: dm = ks.make_rdm1()
