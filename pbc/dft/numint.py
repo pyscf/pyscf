@@ -701,7 +701,7 @@ class _NumInt(dft.numint._NumInt):
                         non0tab, xctype, spin, verbose)
 
     def block_loop(self, cell, grids, nao, deriv=0, kpt=numpy.zeros(3),
-                   kpt_band=None, max_memory=2000, non0tab=None, blksize=None):
+                   kpt_band=None, max_memory=2000, non0tab=None, blksize=None, precomputed_ao = None):
         '''Define this macro to loop over grids by blocks.
         '''
         ngrids = grids.weights.size
@@ -725,7 +725,10 @@ class _NumInt(dft.numint._NumInt):
             coords = grids.coords[ip0:ip1]
             weight = grids.weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
-            ao_k2 = self.eval_ao(cell, coords, kpt2, deriv=deriv, non0tab=non0)
+            if precomputed_ao is None:
+                ao_k2 = self.eval_ao(cell, coords, kpt2, deriv=deriv, non0tab=non0)
+            else:
+                ao_k2 = list(i[...,ip0:ip1,:] for i in precomputed_ao)
             if abs(kpt1-kpt2).sum() < 1e-9:
                 ao_k1 = ao_k2
             else:
