@@ -2,6 +2,7 @@ from ase.units import Ry, eV
 from ase.calculators.siesta.siesta import Siesta
 from ase import Atoms
 from pyscf.nao.m_system_vars import system_vars_c
+from pyscf.nao.m_prod_basis import prod_basis_c
 import numpy as np
 
 label = 'h2o'
@@ -26,12 +27,15 @@ calc = Siesta(
     'DM.MixingWeight': 0.01,
     'MaxSCFIterations': 100,
     'DM.NumberPulay': 4,
-    'XML.Write': True}
+    'xml.Write': True}
 )
 
 H2O.set_calculator(calc)
 #run siesta
 print(H2O.get_potential_energy())
+pb_params = {'cross_check_global_vertex': True}
 
 sv = system_vars_c(Atoms = H2O, label=label)
+pb = prod_basis_c(sv, input_params_pb = pb_params)
 print('atom2sp: ', sv.atom2sp)
+print(pb.pb_params)

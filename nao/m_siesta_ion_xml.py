@@ -156,9 +156,13 @@ def extract_field_elements(pao, doc, field=None):
             orbital
     """
 
-    pao['delta'] = np.zeros((len(doc.getElementsByTagName('delta'))), dtype=float)
-    pao['cutoff'] = np.zeros((len(doc.getElementsByTagName('delta'))), dtype=float)
-    pao['npts'] = np.zeros((len(doc.getElementsByTagName('npts'))), dtype=int)
+    pao['npaos'] = len(doc.getElementsByTagName('delta'))
+    if pao['npaos'] != len(doc.getElementsByTagName('cutoff')) or\
+      pao['npaos'] != len(doc.getElementsByTagName('npts')):
+      raise ValueError('Error reqding ion file! npaos is not constant??')
+    pao['delta'] = np.zeros((pao['npaos']), dtype=float)
+    pao['cutoff'] = np.zeros((pao['npaos']), dtype=float)
+    pao['npts'] = np.zeros((pao['npaos']), dtype=int)
 
     pao['data'] = []
     for i, delt in enumerate(doc.getElementsByTagName('delta')):
@@ -170,6 +174,9 @@ def extract_field_elements(pao, doc, field=None):
 
     for i, dat in enumerate(doc.getElementsByTagName('data')):
       pao['data'].append(get_data_elements(dat, float).reshape(pao["npts"][i], 2))
+
+    if len(pao['data']) != pao['npaos']:
+      raise ValueError('Error reading ion file, len(data) != npaos')
 
 
 
@@ -185,6 +192,9 @@ def extract_field_elements(pao, doc, field=None):
           pao[field].append(extract_projector(name_orbital[i]))
       else:
         raise ValueError(field + ' not implemented, onlt orbital or projector!!')
+      
+      if len(pao[field]) != pao['npaos']:
+        raise ValueError('Error reading ion file, len(' + field +') != npaos')
 
     #for k, val in pao.items():
     #  print(k + ': ', val)
