@@ -78,15 +78,95 @@ class sbt_c():
         self.mult_table1[lk+1,it] = np.exp(2.0*1j*phi)*self.mult_table1[lk-1,it]
     # END of it in range(n):
 
-  #!   make the initialization for the calculation at small k values
-  #!   for 2N mesh values
+    #! make the initialization for the calculation at small k values
+    #! for 2N mesh values
     self.mult_table2 = np.zeros((self.lmax+1, self.nr+1), dtype='complex128')
     j_ltable = np.zeros((self.lmax+1,self.nr2), dtype='float64')
 
-    for i in range(self.nr2):
-      xx = np.exp(self.rhomin+self.kapmin+(i-1)*dr)
-      j_ltable[0:self.lmax+1,i] = xjl(xx,self.lmax)
+    for i in range(self.nr2): j_ltable[0:self.lmax+1,i]=xjl(np.exp(self.rhomin+self.kapmin+i*dr),self.lmax)
 
     for ll in range(self.lmax+1):
       self.mult_table2[ll,:] = np.fft.rfft(j_ltable[ll,:])
     if with_sqrt_pi_2 : self.mult_table2 = self.mult_table2/np.sqrt(np.pi/2)
+
+    #print(self.mult_table2[0,0:3]/self.nr2)
+    #print(self.mult_table2[0,self.nr-2:self.nr+2]/self.nr2)
+
+    #print(self.mult_table2[1,0:3]/self.nr2)
+    #print(self.mult_table2[1,self.nr-2:self.nr+2]/self.nr2)
+
+    #print(self.mult_table2[2,0:3]/self.nr2)
+    #print(self.mult_table2[2,self.nr-2:self.nr+2]/self.nr2)
+    
+  # 
+  # The calculation of the Sperical Bessel Transform for a given data...
+  #
+  def exe(ff,gg,am,direction,np_in)
+  """
+  """
+  #real(8), intent(in) :: ff(:)
+  #real(8), intent(out) :: gg(:)
+  #integer, intent(in) :: li,direction
+  #integer, intent(in), optional :: np_in
+
+  #!! Internal
+  #integer :: i,kdiv, np
+  #real(8) :: factor,C,dr,rmin,kmin
+  #real(8), pointer :: ptr_rr3(:)
+
+  #if(li>p%lmax) then
+    #write(6,*) __FILE__, __LINE__, li, p%lmax
+    #stop 'sbt_execute: li>lmax'
+  #endif  
+  #if(li<0) stop 'sbt_execute: li<0'
+  
+  #if(present(np_in)) then; np = np_in; else; np = 0; endif
+  
+
+  #if (direction==1) then
+    #rmin     = p%sbt_rmin
+    #kmin     = p%sbt_kmin
+    #dr = log(p%sbt_rr(2)/p%sbt_rr(1))
+    #C = ff(1)/p%sbt_rr(1)**(np+li)
+    #ptr_rr3 => p%sbt_rr3
+  #else if (direction==-1) then
+    #rmin     = p%sbt_kmin
+    #kmin     = p%sbt_rmin
+    #dr = log(p%sbt_kk(2)/p%sbt_kk(1))
+    #C = ff(1)/p%sbt_kk(1)**(np+li)
+    #ptr_rr3 => p%sbt_kk3
+  #else
+    #write(6,*)"err: sbt_execute: direction=", direction
+    #stop
+  #endif
+
+  #! Make the calculation for LARGE k values extend the input 
+  #! to the doubled mesh, extrapolating the input as C r**(np+li)
+
+  #r2c_in(1:nr) = C*p%premult(1:nr)*p%smallr(1:nr)**(np+li)
+  #r2c_in(nr+1:nr2) = p%premult(nr+1:nr2)*ff(1:nr)
+  #call dfftw_execute(plan_r2c)
+
+  #! obtain the large k results in the array gg
+  #temp1(1:nr) = conjg(r2c_out(1:nr))*p%mult_table1(1:nr,li)
+  #temp1(nr+1:nr2) = 0.0D0
+  #call dfftw_execute(plan12)
+  #factor = (rmin/kmin)**1.5D0
+  #gg(1:nr) = factor*real(temp2(nr+1:nr2))*p%postdiv(1:nr)
+
+
+  #! obtain the SMALL k results in the array c2r_out
+  #r2c_in(1:nr) = ptr_rr3 * ff(1:nr)
+  #r2c_in(nr+1:nr2) = 0.0D0
+  #call dfftw_execute(plan_r2c)
+
+  #do i=1, nr+1; c2r_in(i) = conjg(r2c_out(i))* p%mult_table2(i,li); enddo;
+  #call dfftw_execute(plan_c2r)
+  #c2r_out(1:nr) = c2r_out(1:nr)*dr
+
+  #do i=1, nr; r2c_in(i)=abs(gg(i)-c2r_out(i)); enddo;
+  #kdiv = minloc(r2c_in(1:nr),1)
+  #gg(1:kdiv) = c2r_out(1:kdiv)
+
+#end subroutine !gsbt
+    
