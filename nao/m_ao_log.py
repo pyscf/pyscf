@@ -1,6 +1,6 @@
 from __future__ import division
 import numpy
-from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
+from pyscf.nao.m_siesta_ion_add_sp2 import _add_mu_sp2 
 from pyscf.nao.m_next235 import next235
 from pyscf.nao.m_log_mesh import log_mesh
 from pyscf.nao.m_siesta_ion_interp import siesta_ion_interp
@@ -37,7 +37,7 @@ class ao_log_c():
   def __init__(self, sp2ion, nr=None, rmin=None, rmax=None, kmax=None):
     
     self.sp2ion = sp2ion
-    _siesta_ion_add_sp2(self, sp2ion)
+    _add_mu_sp2(self, sp2ion)
     
     npts = max(max(sp2ion[sp]["paos"]["npts"]) for sp in range(self.nspecies))
     self.nr = next235( max(2.0*npts, 1024.0) ) if nr==None else nr
