@@ -62,19 +62,15 @@ class system_vars_c():
       self.init_siesta_xml()
     else:
       self.init_ase_atoms(Atoms)
-
+      
     self.sp2ion_to_j_rcut()
-    print('self.mu_sp2j = ', self.mu_sp2j)
-    print('self.mu_sp2rcut = ', self.mu_sp2rcut)
 
   def init_ase_atoms(self, Atoms):
-    """
-      Initialise system vars using siesta file and Atom object from ASE.
-    """
-
+    """ Initialise system vars using siesta file and Atom object from ASE."""
     try:
       import ase
     except:
+      warn('no ASE installed: try via siesta.xml')
       self.init_pure_siesta()
 
     self.Atoms = Atoms
@@ -154,13 +150,9 @@ class system_vars_c():
           _siesta2blanko_denvec(orb2m, self.wfsx.X[:,:,n,s,k])
 
   def sp2ion_to_j_rcut(self):
-    """
-      Extract mu_sp2j and self.mu_sp2rcut for each specie
-    """
+    """ Extract mu_sp2j and self.mu_sp2rcut for each specie """
     nspecies = len(self.sp2ion)
     if nspecies <1: return
-    
-    print('nspecies = ', nspecies)
 
     nmu_mx = max(self.sp2ion[sp]["paos"]["npaos"] for sp in range(nspecies))
     self.mu_sp2j = np.zeros((nmu_mx, nspecies), dtype='int64')

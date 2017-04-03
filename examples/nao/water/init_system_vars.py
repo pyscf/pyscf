@@ -10,5 +10,6 @@ label = 'siesta'
 sv  = system_vars_c(label)
 print(diag_check(sv), dir(sv))
 sbt = sbt_c(sv.ao_log.rr, sv.ao_log.pp)
-print(dir(sbt))
+
+print( sbt.exe(sv.ao_log.psi_log[0,0,:], 0) )
 
