@@ -324,7 +324,7 @@ def eval_mat(cell, ao, weight, rho, vxc,
             XX, YY, ZZ = 4, 7, 9
             ao2 = ao[XX] + ao[YY] + ao[ZZ]
             aow = numpy.einsum('pi,p->pi', ao2, .5 * weight * vlapl)
-            vmat += dot(ao[0], aow)
+            mat += dot(ao[0], aow)
 
         return (mat + mat.T.conj())
 
