@@ -5,12 +5,12 @@ import numpy
 
 DEFAULT_FLOAT_FORMAT = ' %.16g'
 
-def write_head(fout, nmo, nelec, ms=0, orbsym=[]):
+def write_head(fout, nmo, nelec, ms=0, orbsym=None):
     if not isinstance(nelec, (int, numpy.number)):
         ms = abs(nelec[0] - nelec[1])
         nelec = nelec[0] + nelec[1]
     fout.write(' &FCI NORB=%4d,NELEC=%2d,MS2=%d,\n' % (nmo, nelec, ms))
-    if len(orbsym) > 0:
+    if orbsym is not None and len(orbsym) > 0:
         fout.write('  ORBSYM=%s\n' % ','.join([str(x) for x in orbsym]))
     else:
         fout.write('  ORBSYM=%s\n' % ('1,' * nmo))
