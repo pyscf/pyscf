@@ -1,6 +1,8 @@
-import numpy
+from __future__ import division
+import numpy as np
 import sys
 import re
+
 from pyscf.nao.m_color import color as bc
 from pyscf.nao.m_siesta_xml import siesta_xml
 from pyscf.nao.m_siesta_wfsx import siesta_wfsx_c
@@ -15,7 +17,7 @@ from pyscf.nao.m_ao_log import ao_log_c
 #
 #
 def get_orb2m(sv):
-  orb2m = numpy.empty(sv.norbs, dtype='int64')
+  orb2m = np.empty(sv.norbs, dtype='int64')
   orb = 0
   for atom in range(sv.natoms):
     sp = sv.atom2sp[atom]
@@ -38,7 +40,7 @@ def diag_check(self):
     for spin in range(self.nspin):
       e,x = sv_diag(self, kvec=kvec, spin=spin)
       eref = ksn2e[k,spin,:]
-      acks = numpy.allclose(eref,e,atol=1e-5,rtol=1e-4)
+      acks = np.allclose(eref,e,atol=1e-5,rtol=1e-4)
       ac = ac and acks
       if(not acks):
         aerr = sum(abs(eref-e))/len(e)
@@ -61,6 +63,10 @@ class system_vars_c():
     else:
       self.init_ase_atoms(Atoms)
 
+    self.sp2ion_to_j_rcut()
+    print('self.mu_sp2j = ', self.mu_sp2j)
+    print('self.mu_sp2rcut = ', self.mu_sp2rcut)
+
   def init_ase_atoms(self, Atoms):
     """
       Initialise system vars using siesta file and Atom object from ASE.
@@ -75,8 +81,11 @@ class system_vars_c():
    
     ##### The parameters as fields     
     self.sp2ion = []
-    for sp in Atoms.get_chemical_symbols(): 
-      self.sp2ion.append(siesta_ion_xml(sp+self.wfsx.ion_suffix[sp]+'.ion.xml'))
+    species = []
+    for sp in Atoms.get_chemical_symbols():
+      if sp not in species:
+        species.append(sp)
+        self.sp2ion.append(siesta_ion_xml(sp+self.wfsx.ion_suffix[sp]+'.ion.xml'))
     
     _siesta_ion_add_sp2(self, self.sp2ion)
     self.sp2ao_log = ao_log_c(self.sp2ion)
@@ -89,7 +98,7 @@ class system_vars_c():
     strspecie2sp = {}
     for sp in range(len(self.wfsx.sp2strspecie)): strspecie2sp[self.wfsx.sp2strspecie[sp]] = sp
     
-    self.atom2sp = numpy.empty((self.natoms), dtype='int64')
+    self.atom2sp = np.empty((self.natoms), dtype='int64')
     for i, sp in enumerate(Atoms.get_chemical_symbols()):
       self.atom2sp[i] = strspecie2sp[sp]
     
@@ -127,7 +136,7 @@ class system_vars_c():
     strspecie2sp = {}
     for sp in range(len(self.wfsx.sp2strspecie)): strspecie2sp[self.wfsx.sp2strspecie[sp]] = sp
     
-    self.atom2sp = numpy.empty((self.natoms), dtype='int64')
+    self.atom2sp = np.empty((self.natoms), dtype='int64')
     for o in range(self.wfsx.norbs):
       atom = self.wfsx.orb2atm[o]
       strspecie = self.wfsx.orb2strspecie[o]
@@ -143,3 +152,22 @@ class system_vars_c():
       for s in range(self.nspin):
         for n in range(self.norbs):
           _siesta2blanko_denvec(orb2m, self.wfsx.X[:,:,n,s,k])
+
+  def sp2ion_to_j_rcut(self):
+    """
+      Extract mu_sp2j and self.mu_sp2rcut for each specie
+    """
+    nspecies = len(self.sp2ion)
+    if nspecies <1: return
+    
+    print('nspecies = ', nspecies)
+
+    nmu_mx = max(self.sp2ion[sp]["paos"]["npaos"] for sp in range(nspecies))
+    self.mu_sp2j = np.zeros((nmu_mx, nspecies), dtype='int64')
+    self.mu_sp2rcut = np.zeros((nmu_mx, nspecies), dtype='float64')
+
+    for sp, ion in enumerate(self.sp2ion):
+      npaos = ion["paos"]["npaos"]
+      self.mu_sp2rcut[0:npaos, sp] = ion["paos"]["cutoff"]
+      for pao, orb in enumerate(ion["paos"]["orbital"]):
+        self.mu_sp2j[pao, sp] = orb["l"]
