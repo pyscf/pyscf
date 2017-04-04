@@ -345,16 +345,17 @@ def cell_plus_imgs(cell, nimgs):
     Returns:
         supcell : instance of :class:`Cell`
     '''
-    Ls = get_lattice_Ls(cell, nimgs)
     supcell = cell.copy()
-    supcell.atom = []
-    for L in Ls:
-        atom1 = []
-        for ia in range(cell.natm):
-            atom1.append([cell._atom[ia][0], cell._atom[ia][1]+L])
-        supcell.atom.extend(atom1)
+    a = cell.lattice_vectors()
+    Ts = lib.cartesian_prod((np.arange(-nimgs[0],nimgs[0]+1),
+                             np.arange(-nimgs[1],nimgs[1]+1),
+                             np.arange(-nimgs[2],nimgs[2]+1)))
+    Ls = np.dot(Ts, a)
+    symbs = [atom[0] for atom in cell._atom] * len(Ls)
+    coords = Ls.reshape(-1,1,3) + cell.atom_coords()
+    supcell.atom = list(zip(symbs, coords.reshape(-1,3)))
     supcell.unit = 'B'
-    supcell.a = np.einsum('i,ij->ij', nimgs, cell.lattice_vectors())
+    supcell.a = np.einsum('i,ij->ij', nimgs, a)
     supcell.build(False, False, verbose=0)
     supcell.verbose = cell.verbose
     return supcell
