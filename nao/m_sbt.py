@@ -78,15 +78,74 @@ class sbt_c():
         self.mult_table1[lk+1,it] = np.exp(2.0*1j*phi)*self.mult_table1[lk-1,it]
     # END of it in range(n):
 
-  #!   make the initialization for the calculation at small k values
-  #!   for 2N mesh values
+    # make the initialization for the calculation at small k values for 2N mesh values
     self.mult_table2 = np.zeros((self.lmax+1, self.nr+1), dtype='complex128')
     j_ltable = np.zeros((self.lmax+1,self.nr2), dtype='float64')
 
-    for i in range(self.nr2):
-      xx = np.exp(self.rhomin+self.kapmin+(i-1)*dr)
-      j_ltable[0:self.lmax+1,i] = xjl(xx,self.lmax)
+    for i in range(self.nr2): j_ltable[0:self.lmax+1,i]=xjl(np.exp(self.rhomin+self.kapmin+i*dr),self.lmax)
 
     for ll in range(self.lmax+1):
       self.mult_table2[ll,:] = np.fft.rfft(j_ltable[ll,:])
     if with_sqrt_pi_2 : self.mult_table2 = self.mult_table2/np.sqrt(np.pi/2)
+    
+  # 
+  # The calculation of the Sperical Bessel Transform for a given data...
+  #
+  def exe(self, ff, am, direction=1, npow=0) :
+    """
+  Args:
+    ff : numpy array containing radial orbital (values of radial orbital on logarithmic grid) to be transformed. The data must be on self.rr grid or self.kk grid provided during initialization.
+    am : angular momentum of the radial orbital ff[:]
+    direction : 1 -- real-space --> momentum space transform; -1 -- momentum space --> real-space transform.
+    npow : additional power for the shape of the orbital
+      f(xyz) = rr[i]**npow * ff[i] * Y_lm( xyz )
+  Result:
+    gg : numpy array containing the result of the Spherical Bessel Transform
+    gg(k) = int_0^infty  ff(r) j_{am}(k*r) r**2  dr  ( direction ==  1 )
+    gg(r) = int_0^infty  ff(k) j_{am}(k*r) k**2  dk  ( direction == -1 )
+    """
+    assert(type(ff)==np.ndarray)
+    assert(len(ff)==self.nr)
+    assert(am > -1)
+    assert(am <= self.lmax)
+  
+    if direction==1 :
+      rmin, kmin, ptr_rr3 = self.rmin, self.kmin, self.rr3
+      dr = np.log(self.rr[1]/self.rr[0])
+      C = ff[0]/self.rr[0]**(npow+am)
+    elif direction==-1 :
+      rmin, kmin, ptr_rr3 = self.kmin, self.rmin, self.kk3
+      dr = np.log(self.kk[1]/self.kk[0])
+      C = ff[0]/self.kk[0]**(npow+am)
+    else:
+      raise SystemError('!direction=+/-1')
+
+    gg = np.zeros((self.nr), dtype='float64')     # Allocate the result
+
+    # Make the calculation for LARGE k values extend the input 
+    # to the doubled mesh, extrapolating the input as C r**(np+li)
+    r2c_in = np.zeros((self.nr2), dtype='float64')
+    r2c_in[0:self.nr] = C*self.premult[0:self.nr]*self.smallr[0:self.nr]**(npow+am)
+    r2c_in[self.nr:self.nr2] = self.premult[self.nr:self.nr2]*ff[0:self.nr]
+    r2c_out = np.fft.rfft(r2c_in)
+
+    temp1 = np.zeros(self.nr2, dtype='float64')
+    temp1[0:self.nr] = np.conj(r2c_out[0:self.nr])*self.mult_table1[am,0:self.nr]
+    temp2 = np.fft.fft(temp1)
+  
+    gg[0:self.nr] = (rmin/kmin)**1.5 * (temp2[self.nr:self.nr2]).real * self.postdiv[0:self.nr]
+
+    # obtain the SMALL k results in the array c2r_out
+    r2c_in[0:self.nr] = ptr_rr3[0:self.nr] * ff[0:self.nr]
+    r2c_in[self.nr:self.nr2] = 0.0
+    r2c_out = np.fft.rfft(r2c_in)
+
+    c2r_in = np.zeros((self.nr+1), dtype='complex128')
+    c2r_in[0:self.nr+1] = np.conj(r2c_out[0:self.nr+1]) * self.mult_table2[am,0:self.nr+1]
+    c2r_out = np.fft.irfft(c2r_in)*dr
+
+    r2c_in[0:self.nr] = abs(gg[0:self.nr]-c2r_out[0:self.nr])
+    kdiv = np.argmin(r2c_in[0:self.nr])
+    gg[0:kdiv] = c2r_out[0:kdiv]
+
+    return(gg)

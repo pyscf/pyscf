@@ -66,14 +66,13 @@ class system_vars_c():
     print('self.mu_sp2j = ', self.sp_mu2j)
     print('self.mu_sp2rcut = ', self.sp_mu2rcut)
 
-  def init_ase_atoms(self, Atoms):
-    """
-      Initialise system vars using siesta file and Atom object from ASE.
-    """
 
+  def init_ase_atoms(self, Atoms):
+    """ Initialise system vars using siesta file and Atom object from ASE."""
     try:
       import ase
     except:
+      warn('no ASE installed: try via siesta.xml')
       self.init_pure_siesta()
 
     self.Atoms = Atoms
