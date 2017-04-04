@@ -71,7 +71,9 @@ endif()
 endif(ENABLE_LIBCINT)
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/deps/include)
+include_directories(${CMAKE_INSTALL_PREFIX}/include)
 link_directories(${PROJECT_SOURCE_DIR}/deps/lib ${PROJECT_SOURCE_DIR}/deps/lib64)
+link_directories(${CMAKE_INSTALL_PREFIX}/lib ${CMAKE_INSTALL_PREFIX}/lib64)
 
 configure_file(
   "${PROJECT_SOURCE_DIR}/config.h.in"
@@ -94,9 +96,12 @@ add_subdirectory(pbc)
 
 option(ENABLE_LIBXC "Using libxc for XC functional library" ON)
 option(ENABLE_XCFUN "Using xcfun for XC functional library" ON)
+option(BUILD_LIBXC "Download and build libxc library" ON)
+option(BUILD_XCFUN "Download and build xcfun library" ON)
 
 if(NOT DISABLE_DFT)
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND ENABLE_LIBXC)
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND
+    ENABLE_LIBXC AND BUILD_LIBXC)
   ExternalProject_Add(libxc
     URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.2.2.tar.gz
     #URL https://launchpad.net/libxc/2.2/2.2.0/+download/libxc-2.2.0.tar.gz
@@ -107,7 +112,9 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND ENABLE_LIBXC)
           --enable-shared --disable-fortran LIBS=-lm
   )
 endif() # ENABLE_LIBXC
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xcfun.h" AND ENABLE_XCFUN)
+
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xcfun.h" AND
+    ENABLE_XCFUN AND BUILD_XCFUN)
   ExternalProject_Add(libxcfun
     GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
     GIT_TAG origin/stable-1.x
