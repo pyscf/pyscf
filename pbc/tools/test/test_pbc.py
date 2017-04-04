@@ -98,7 +98,7 @@ class KnowValues(unittest.TestCase):
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
         cl2 = tools.cell_plus_imgs(cl1, cl1.nimgs)
-        self.assertAlmostEqual(finger(cl2.atom_coords()), -75.354530112453105, 9)
+        self.assertAlmostEqual(finger(cl2.atom_coords()), 22.233540464902909, 9)
 
 
 if __name__ == '__main__':

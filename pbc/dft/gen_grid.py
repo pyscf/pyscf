@@ -3,6 +3,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import ctypes
 import numpy as np
 import pyscf.lib
 from pyscf.lib import logger
@@ -54,35 +55,59 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
             The real-space grid point coordinates.
         weights : (ngx*ngy*ngz) ndarray
     '''
-    scell = tools.pbc.cell_plus_imgs(cell, cell.nimgs)
-    coords = scell.atom_coords()
-# Generating grids for the entire super cell is slow.  We don't need generate
-# grids for the super cell because out of certain region the weights obtained
-# from Becke partitioning are no longer important.  The region is controlled
-# by r_cutoff
-    #r_cutoff = pyscf.lib.norm(pyscf.lib.norm(cell.lattice_vectors(), axis=0))
-    r_cutoff = max(pyscf.lib.norm(cell.lattice_vectors(), axis=0)) * 1.25
-# Filter important atoms. Atoms close to the unicell if they are close to any
-# of the atoms in the unit cell
-    mask = np.zeros(scell.natm, dtype=bool)
-    for ia in range(cell.natm):
-        c0 = cell.atom_coord(ia)
-        dr = coords - c0
-        rr = np.einsum('ix,ix->i', dr, dr)
-        mask |= rr < r_cutoff**2
-    scell._atm = scell._atm[mask]
-    logger.debug(cell, 'r_cutoff %.9g  natm = %d', r_cutoff, scell.natm)
-
-    atom_grids_tab = dft.gen_grid.gen_atomic_grids(scell, atom_grid, radi_method,
+# modified from pyscf.dft.gen_grid.gen_partition
+    Ls = cell.get_lattice_Ls()
+    atm_coords = Ls.reshape(-1,1,3) + cell.atom_coords()
+    atom_grids_tab = dft.gen_grid.gen_atomic_grids(cell, atom_grid, radi_method,
                                                    level, prune)
-    coords, weights = dft.gen_grid.gen_partition(scell, atom_grids_tab)
-
-    # search for grids in unit cell
+    coords_all = []
+    weights_all = []
     b = cell.reciprocal_vectors(norm_to=1)
-    c = np.dot(coords, b.T)
-    mask = ((c[:,0]>=0) & (c[:,1]>=0) & (c[:,2]>=0) &
-            (c[:,0]< 1) & (c[:,1]< 1) & (c[:,2]< 1))
-    return coords[mask], weights[mask]
+    supatm_idx = []
+    k = 0
+    for iL, L in enumerate(Ls):
+        for ia in range(cell.natm):
+            coords, vol = atom_grids_tab[cell.atom_symbol(ia)]
+            coords = coords + atm_coords[iL,ia]
+            # search for grids in unit cell
+            c = b.dot(coords.T)
+            mask = ((c[0]>=0) & (c[1]>=0) & (c[2]>=0) &
+                    (c[0]<=1) & (c[1]<=1) & (c[2]<=1))
+            vol = vol[mask]
+            if vol.size > 8:
+                c = c[:,mask]
+                vol[c[0]==0] *= .5
+                vol[c[1]==0] *= .5
+                vol[c[2]==0] *= .5
+                vol[c[0]==1] *= .5
+                vol[c[1]==1] *= .5
+                vol[c[2]==1] *= .5
+                coords = coords[mask]
+                coords_all.append(coords)
+                weights_all.append(vol)
+                supatm_idx.append(k)
+            k += 1
+    offs = np.append(0, np.cumsum([w.size for w in weights_all]))
+    coords_all = np.vstack(coords_all)
+    weights_all = np.hstack(weights_all)
+
+    atm_coords = np.asarray(atm_coords.reshape(-1,3)[supatm_idx], order='C')
+    sup_natm = len(atm_coords)
+    ngrids = len(coords_all)
+    pbecke = np.empty((sup_natm,ngrids))
+    coords = np.asarray(coords_all, order='F')
+    p_radii_table = pyscf.lib.c_null_ptr()
+    fn = dft.gen_grid.libdft.VXCgen_grid
+    fn(pbecke.ctypes.data_as(ctypes.c_void_p),
+       coords.ctypes.data_as(ctypes.c_void_p),
+       atm_coords.ctypes.data_as(ctypes.c_void_p),
+       p_radii_table, ctypes.c_int(sup_natm), ctypes.c_int(ngrids))
+
+    weights_all /= pbecke.sum(axis=0)
+    for ia in range(sup_natm):
+        p0, p1 = offs[ia], offs[ia+1]
+        weights_all[p0:p1] *= pbecke[ia,p0:p1]
+    return coords_all, weights_all
 
 
 class BeckeGrids(dft.gen_grid.Grids):
