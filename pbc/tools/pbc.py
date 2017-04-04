@@ -314,17 +314,24 @@ def super_cell(cell, ncopy):
         supcell : instance of :class:`Cell`
     '''
     supcell = cell.copy()
-    supcell.atom = []
     a = cell.lattice_vectors()
-    for Lx in range(ncopy[0]):
-        for Ly in range(ncopy[1]):
-            for Lz in range(ncopy[2]):
-                # Using cell._atom guarantees coord is in Bohr
-                for atom, coord in cell._atom:
-                    L = np.dot([Lx, Ly, Lz], a)
-                    supcell.atom.append([atom, coord + L])
+    #:supcell.atom = []
+    #:for Lx in range(ncopy[0]):
+    #:    for Ly in range(ncopy[1]):
+    #:        for Lz in range(ncopy[2]):
+    #:            # Using cell._atom guarantees coord is in Bohr
+    #:            for atom, coord in cell._atom:
+    #:                L = np.dot([Lx, Ly, Lz], a)
+    #:                supcell.atom.append([atom, coord + L])
+    Ts = lib.cartesian_prod((np.arange(ncopy[0]),
+                             np.arange(ncopy[1]),
+                             np.arange(ncopy[2])))
+    Ls = np.dot(Ts, a)
+    symbs = [atom[0] for atom in cell._atom] * len(Ls)
+    coords = Ls.reshape(-1,1,3) + cell.atom_coords()
+    supcell.atom = list(zip(symbs, coords.reshape(-1,3)))
     supcell.unit = 'B'
-    supcell.a = np.einsum('i,ij->ij', ncopy, cell.lattice_vectors())
+    supcell.a = np.einsum('i,ij->ij', ncopy, a)
     supcell.gs = np.array([ncopy[0]*cell.gs[0] + (ncopy[0]-1)//2,
                            ncopy[1]*cell.gs[1] + (ncopy[1]-1)//2,
                            ncopy[2]*cell.gs[2] + (ncopy[2]-1)//2])
@@ -345,16 +352,17 @@ def cell_plus_imgs(cell, nimgs):
     Returns:
         supcell : instance of :class:`Cell`
     '''
-    Ls = get_lattice_Ls(cell, nimgs)
     supcell = cell.copy()
-    supcell.atom = []
-    for L in Ls:
-        atom1 = []
-        for ia in range(cell.natm):
-            atom1.append([cell._atom[ia][0], cell._atom[ia][1]+L])
-        supcell.atom.extend(atom1)
+    a = cell.lattice_vectors()
+    Ts = lib.cartesian_prod((np.arange(-nimgs[0],nimgs[0]+1),
+                             np.arange(-nimgs[1],nimgs[1]+1),
+                             np.arange(-nimgs[2],nimgs[2]+1)))
+    Ls = np.dot(Ts, a)
+    symbs = [atom[0] for atom in cell._atom] * len(Ls)
+    coords = Ls.reshape(-1,1,3) + cell.atom_coords()
+    supcell.atom = list(zip(symbs, coords.reshape(-1,3)))
     supcell.unit = 'B'
-    supcell.a = np.einsum('i,ij->ij', nimgs, cell.lattice_vectors())
+    supcell.a = np.einsum('i,ij->ij', nimgs, a)
     supcell.build(False, False, verbose=0)
     supcell.verbose = cell.verbose
     return supcell
