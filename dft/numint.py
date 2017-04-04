@@ -573,7 +573,8 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 vmat[idm] += _dot_ao_ao(mol, ao[0], aow, nao, ngrid, mask)
                 rho = exc = vxc = vrho = vsigma = wv = aow = None
     else:
-        assert(all(x not in xc_code.upper() for x in ('CC06', 'CS', 'BR89', 'MK00')))
+        if (any(x in xc_code.upper() for x in ('CC06', 'CS', 'BR89', 'MK00'))):
+            raise NotImplementedError('laplacian in meta-GGA method')
         ao_deriv = 2
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
@@ -719,7 +720,8 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 vmat[1,idm] += _dot_ao_ao(mol, ao[0], aow, nao, ngrid, mask)
                 rho_a = rho_b = exc = vxc = vrho = vsigma = wv = aow = None
     else:
-        assert(all(x not in xc_code.upper() for x in ('CC06', 'CS', 'BR89', 'MK00')))
+        if (any(x in xc_code.upper() for x in ('CC06', 'CS', 'BR89', 'MK00'))):
+            raise NotImplementedError('laplacian in meta-GGA method')
         ao_deriv = 2
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
