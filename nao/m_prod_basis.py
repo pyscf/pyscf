@@ -60,7 +60,7 @@ class prod_basis_c():
     
     if sv.wfsx.gamma: check_basis_bloch = True
     else: check_basis_bloch = False
-    jmx = np.max(sv.mu_sp2j)
+    jmx = np.max(sv.sp_mu2j)
 
     # setup the default value for the inputs
     self.pb_params = {'prod_basis_type': "DOMIPROD",
@@ -86,7 +86,7 @@ class prod_basis_c():
                      'gl_ord_bilocal': 96,
                      'gl_pcs_bilocal': 1,
                       
-                     'ac_rcut': np.max(sv.mu_sp2rcut),
+                     'ac_rcut': np.max(sv.sp_mu2rcut),
                      'ac_method': "SPHERE",
                      'cc_method': "DSYEV",
                      'cc_omp_para': "AUTO",

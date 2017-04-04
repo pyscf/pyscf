@@ -11,7 +11,7 @@ from pyscf.nao.m_siesta_hsx import siesta_hsx_c
 from pyscf.nao.m_siesta2blanko_csr import _siesta2blanko_csr
 from pyscf.nao.m_siesta2blanko_denvec import _siesta2blanko_denvec
 from pyscf.nao.m_sv_diag import sv_diag 
-from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
+from pyscf.nao.m_siesta_ion_add_sp2 import _add_mu_sp2
 from pyscf.nao.m_ao_log import ao_log_c
 #
 #
@@ -62,8 +62,10 @@ class system_vars_c():
       self.init_siesta_xml()
     else:
       self.init_ase_atoms(Atoms)
-      
-    self.sp2ion_to_j_rcut()
+
+    print('self.mu_sp2j = ', self.sp_mu2j)
+    print('self.mu_sp2rcut = ', self.sp_mu2rcut)
+
 
   def init_ase_atoms(self, Atoms):
     """ Initialise system vars using siesta file and Atom object from ASE."""
@@ -83,7 +85,7 @@ class system_vars_c():
         species.append(sp)
         self.sp2ion.append(siesta_ion_xml(sp+self.wfsx.ion_suffix[sp]+'.ion.xml'))
     
-    _siesta_ion_add_sp2(self, self.sp2ion)
+    _add_mu_sp2(self, self.sp2ion)
     self.sp2ao_log = ao_log_c(self.sp2ion)
   
     self.natoms = Atoms.get_positions().shape[0]
@@ -121,7 +123,7 @@ class system_vars_c():
     for sp in self.wfsx.sp2strspecie:
       self.sp2ion.append(siesta_ion_xml(sp+self.wfsx.ion_suffix[sp]+'.ion.xml'))
     
-    _siesta_ion_add_sp2(self, self.sp2ion)
+    _add_mu_sp2(self, self.sp2ion)
     self.ao_log = ao_log_c(self.sp2ion)
   
     self.natoms = len(self.xml_dict['atom2sp'])
@@ -148,18 +150,3 @@ class system_vars_c():
       for s in range(self.nspin):
         for n in range(self.norbs):
           _siesta2blanko_denvec(orb2m, self.wfsx.X[:,:,n,s,k])
-
-  def sp2ion_to_j_rcut(self):
-    """ Extract mu_sp2j and self.mu_sp2rcut for each specie """
-    nspecies = len(self.sp2ion)
-    if nspecies <1: return
-
-    nmu_mx = max(self.sp2ion[sp]["paos"]["npaos"] for sp in range(nspecies))
-    self.mu_sp2j = np.zeros((nmu_mx, nspecies), dtype='int64')
-    self.mu_sp2rcut = np.zeros((nmu_mx, nspecies), dtype='float64')
-
-    for sp, ion in enumerate(self.sp2ion):
-      npaos = ion["paos"]["npaos"]
-      self.mu_sp2rcut[0:npaos, sp] = ion["paos"]["cutoff"]
-      for pao, orb in enumerate(ion["paos"]["orbital"]):
-        self.mu_sp2j[pao, sp] = orb["l"]
