@@ -277,7 +277,7 @@ def gen_partition(mol, atom_grids_tab,
         f_radii_adjust = radii_adjust(mol, atomic_radii)
     else:
         f_radii_adjust = None
-    atm_coords = numpy.array([mol.atom_coord(i) for i in range(mol.natm)])
+    atm_coords = numpy.asarray(mol.atom_coords() , order='C')
     atm_dist = radi._inter_distance(mol)
     if (becke_scheme == original_becke and
         (f_radii_adjust is None or
@@ -290,7 +290,6 @@ def gen_partition(mol, atom_grids_tab,
                                            for i in range(mol.natm)
                                            for j in range(mol.natm)])
             p_radii_table = f_radii_table.ctypes.data_as(ctypes.c_void_p)
-        atm_coords = numpy.asarray(atm_coords, order='C')
         def gen_grid_partition(coords):
             coords = numpy.asarray(coords, order='F')
             ngrids = coords.shape[0]

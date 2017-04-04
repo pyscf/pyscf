@@ -94,7 +94,7 @@ def convert_lzsym(gpname, orbsym):
     '''Convert orbital symmetry irrep_id to Block internal irrep_id
     '''
     if gpname.lower() == 'dooh':
-        orbsym = [SYMLZ_MAP[i] for i in orbsym]
+        orbsym = [LZSYM_MAP[i] for i in orbsym]
     elif gpname.lower() == 'coov':
         raise NotImplementedError
     else:
