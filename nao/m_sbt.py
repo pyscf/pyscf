@@ -121,15 +121,14 @@ class sbt_c():
       raise SystemError('!direction=+/-1')
 
     gg = np.zeros((self.nr), dtype='float64')     # Allocate the result
-
-    # Make the calculation for LARGE k values extend the input 
-    # to the doubled mesh, extrapolating the input as C r**(np+li)
+    
+    # make the calculation for LARGE k values extend the input to the doubled mesh, extrapolating the input as C r**(np+li)
     r2c_in = np.zeros((self.nr2), dtype='float64')
     r2c_in[0:self.nr] = C*self.premult[0:self.nr]*self.smallr[0:self.nr]**(npow+am)
     r2c_in[self.nr:self.nr2] = self.premult[self.nr:self.nr2]*ff[0:self.nr]
     r2c_out = np.fft.rfft(r2c_in)
 
-    temp1 = np.zeros(self.nr2, dtype='float64')
+    temp1 = np.zeros(self.nr2, dtype='complex128')
     temp1[0:self.nr] = np.conj(r2c_out[0:self.nr])*self.mult_table1[am,0:self.nr]
     temp2 = np.fft.fft(temp1)
   

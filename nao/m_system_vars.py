@@ -125,7 +125,7 @@ class system_vars_c():
     
     _add_mu_sp2(self, self.sp2ion)
     self.ao_log = ao_log_c(self.sp2ion)
-  
+    
     self.natoms = len(self.xml_dict['atom2sp'])
     self.norbs  = self.wfsx.norbs 
     self.nspin  = self.wfsx.nspin

@@ -37,7 +37,7 @@ end subroutine ! splint
   nlo=max(int(x/h),0)
   if nlo>n-1: return(0.0)
   nhi=min(nlo+1,n-1)
-  a=nhi-x/h-1.0
+  a=nhi-x/h # This is checked... different to Fortran version due to 0-based arrays
   b=1.0-a
   y=a*yy[nlo]+b*yy[nhi]+((a**3-a)*yy_diff2[nlo]+(b**3-b)*yy_diff2[nhi])*(h**2)/6.0
   return(y)
