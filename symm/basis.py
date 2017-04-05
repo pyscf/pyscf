@@ -134,24 +134,24 @@ def _num_contract(basis):
 # A2u   4      Au    4    |   E1y   3      B2    3
 # E1gx  2      B2g   2    |   E2x   10     A1    0
 # E1gy  3      B3g   3    |   E2y   11     A2    1
-# E1uy  6      B2u   6    |   E3x   12     B1    2
-# E1ux  7      B3u   7    |   E3y   13     B2    3
+# E1ux  7      B3u   7    |   E3x   12     B1    2
+# E1uy  6      B2u   6    |   E3y   13     B2    3
 # E2gx  10     Ag    0    |   E4x   20     A1    0
 # E2gy  11     B1g   1    |   E4y   21     A2    1
 # E2ux  15     B1u   5    |   E5x   22     B1    2
 # E2uy  14     Au    4    |   E5y   23     B2    3
 # E3gx  12     B2g   2    |
 # E3gy  13     B3g   3    |
-# E3uy  16     B2u   6    |
 # E3ux  17     B3u   7    |
+# E3uy  16     B2u   6    |
 # E4gx  20     Ag    0    |
 # E4gy  21     B1g   1    |
 # E4ux  25     B1u   5    |
 # E4uy  24     Au    4    |
 # E5gx  22     B2g   2    |
 # E5gy  23     B3g   3    |
-# E5uy  26     B2u   6    |
 # E5ux  27     B3u   7    |
+# E5uy  26     B2u   6    |
 
 DOOH_IRREP_ID_TABLE = {
     'A1g' : 0,
@@ -160,16 +160,16 @@ DOOH_IRREP_ID_TABLE = {
     'A2u' : 4,
     'E1gx': 2,
     'E1gy': 3,
-    'E1uy': 6,
     'E1ux': 7,
+    'E1uy': 6,
     '_evengx': 0,
     '_evengy': 1,
     '_evenux': 5,
     '_evenuy': 4,
     '_oddgx': 2,
     '_oddgy': 3,
-    '_odduy': 6,
     '_oddux': 7,
+    '_odduy': 6,
 }
 COOV_IRREP_ID_TABLE = {
     'A1' : 0,

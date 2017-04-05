@@ -1,37 +1,46 @@
 #!/usr/bin/env python
 
 '''
-CCSD with K-point sampling
+CCSD with k-point sampling
 '''
 
 from pyscf.pbc import gto, scf, cc
-from pyscf.pbc.tools import pyscf_ase
 
-from ase.lattice import bulk
-ase_atom = bulk('C', 'diamond', a=3.5668)
-
-cell = gto.M(
-    a = ase_atom.cell,
-    atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom),
-    basis = 'gth-szv',
-    pseudo = 'gth-pade',
-    gs = [10]*3,
-    verbose = 4,
-)
-
-nk = [2,2,2]
-kpts = cell.make_kpts(nk)
+cell = gto.Cell()
+cell.atom='''
+C 0.000000000000   0.000000000000   0.000000000000
+C 1.685068664391   1.685068664391   1.685068664391
+'''
+cell.basis = 'gth-szv'
+cell.pseudo = 'gth-pade'
+cell.a = '''
+0.000000000, 3.370137329, 3.370137329
+3.370137329, 0.000000000, 3.370137329
+3.370137329, 3.370137329, 0.000000000'''
+cell.gs = [7]*3
+cell.build()
 
 #
-# Running HF
+# Running HF and CCSD for single k-point
 #
-kmf = scf.KRHF(cell, kpts, exxdiv=None)
+kpts = cell.get_abs_kpts([0.25, 0.25, 0.25])
+kmf = scf.KRHF(cell, exxdiv=None)
+kmf.kpts = kpts
 ehf = kmf.kernel()
 
+mycc = cc.KRCCSD(kmf)
+mycc.kernel()
+print("KRCCSD energy (per unit cell) =", mycc.e_tot)
+
 #
-# Running CCSD
+# Running HF and CCSD with 2x2x2 k-points
 #
-kcc = cc.KCCSD(kmf)
-ecc, t1, t2 = kcc.kernel()
-print("cc energy (per unit cell) = %.17g" % ecc)
+kpts = cell.make_kpts([2,2,2])
+kmf = scf.KRHF(cell, exxdiv=None)
+kmf.kpts = kpts
+ehf = kmf.kernel()
+
+mycc = cc.KCCSD(kmf)
+mycc.kernel()
+print("KRCCSD energy (per unit cell) =", mycc.e_tot)
 
