@@ -700,7 +700,8 @@ class _ERIS:
         elif len(cc.frozen) > 0:
             moidx[:,numpy.asarray(cc.frozen)] = False
         if mo_coeff is None:
-            self.mo_coeff = numpy.zeros((nkpts,nmo,nmo),dtype=cc.mo_coeff.dtype)
+            nao = cc.mo_coeff[0].shape[0]
+            self.mo_coeff = numpy.zeros((nkpts,nao,nmo),dtype=cc.mo_coeff.dtype)
             for kp in range(nkpts):
                 self.mo_coeff[kp] = cc.mo_coeff[kp][:,moidx[kp]]
             mo_coeff = self.mo_coeff
@@ -734,12 +735,12 @@ class _ERIS:
             # Looping over unique list of k-vectors
             #
             #
+            fao2mo = cc._scf.with_df.ao2mo
             for pqr in range(nUnique_klist):
                 kp, kq, kr = unique_klist[pqr]
                 ks = kconserv[kp,kq,kr]
-                eri_kpt = pyscf.pbc.ao2mo.general(cc._scf.cell,
-                            (mo_coeff[kp,:,:],mo_coeff[kq,:,:],mo_coeff[kr,:,:],mo_coeff[ks,:,:]),
-                            (cc.kpts[kp],cc.kpts[kq],cc.kpts[kr],cc.kpts[ks]))
+                eri_kpt = fao2mo((mo_coeff[kp],mo_coeff[kq],mo_coeff[kr],mo_coeff[ks]),
+                                 (cc.kpts[kp],cc.kpts[kq],cc.kpts[kr],cc.kpts[ks]), compact=False)
                 eri_kpt = eri_kpt.reshape(nmo,nmo,nmo,nmo)
                 eri[kp,kq,kr] = eri_kpt.copy()
 
