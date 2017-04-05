@@ -14,9 +14,10 @@ except (ImportError, OSError):
     from pyscf.dft import xcfun
     libxc = xcfun
 
+from pyscf.dft.gen_grid import make_mask, BLKSIZE
+
 libdft = lib.load_library('libdft')
 OCCDROP = 1e-12
-BLKSIZE = 128  # needs to be the same to lib/gto/grid_ao_drv.c
 SWITCH_SIZE = 800
 
 def eval_ao(mol, coords, deriv=0, shls_slice=None,
@@ -76,47 +77,6 @@ def eval_ao(mol, coords, deriv=0, shls_slice=None,
     comp = (deriv+1)*(deriv+2)*(deriv+3)//6
     feval = 'GTOval_sph_deriv%d' % deriv
     return mol.eval_gto(feval, coords, comp, shls_slice, non0tab, out=out)
-
-def make_mask(mol, coords, relativity=0, shls_slice=None, verbose=None):
-    '''Mask to indicate whether a shell is zero on grid
-
-    Args:
-        mol : an instance of :class:`Mole`
-
-        coords : 2D array, shape (N,3)
-            The coordinates of grids.
-
-    Kwargs:
-        relativity : bool
-            No effects.
-        shls_slice : 2-element list
-            (shl_start, shl_end).
-            If given, only part of AOs (shl_start <= shell_id < shl_end) are
-            evaluated.  By default, all shells defined in mol will be evaluated.
-        verbose : int or object of :class:`Logger`
-            No effects.
-
-    Returns:
-        2D mask array of shape (N,nbas), where N is the number of grids, nbas
-        is the number of shells.
-    '''
-    coords = numpy.asarray(coords, order='F')
-    natm = ctypes.c_int(mol._atm.shape[0])
-    nbas = ctypes.c_int(mol.nbas)
-    ngrids = len(coords)
-    if shls_slice is None:
-        shls_slice = (0, mol.nbas)
-    assert(shls_slice == (0, mol.nbas))
-
-    non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, mol.nbas),
-                          dtype=numpy.uint8)
-    libdft.VXCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
-                           coords.ctypes.data_as(ctypes.c_void_p),
-                           ctypes.c_int(ngrids),
-                           mol._atm.ctypes.data_as(ctypes.c_void_p), natm,
-                           mol._bas.ctypes.data_as(ctypes.c_void_p), nbas,
-                           mol._env.ctypes.data_as(ctypes.c_void_p))
-    return non0tab
 
 #TODO: \nabla^2 rho and tau = 1/2 (\nabla f)^2
 def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
@@ -480,7 +440,6 @@ def nr_vxc(mol, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
             warnings.warn('API updates: the 4th argument c_id is depercated '
                           'and will be removed in future release.\n')
     ni = _NumInt()
-    ni.non0tab = ni.make_mask(mol, grids.coords)
     if spin == 0:
         return nr_rks(ni, mol, grids, xc_code, dm, relativity,
                       hermi, max_memory, verbose)
@@ -540,12 +499,6 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     xctype = ni._xc_type(xc_code)
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi)
 
-    ngrids = len(grids.weights)
-    if ni.non0tab is None:
-        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                             dtype=numpy.uint8)
-    else:
-        non0tab = ni.non0tab
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
 
@@ -556,7 +509,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     if xctype == 'LDA':
         ao_deriv = 0
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             aow = numpy.ndarray(ao.shape, order='F', buffer=aow)
             for idm in range(nset):
                 rho = make_rho(idm, ao, mask, 'LDA')
@@ -572,7 +525,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     elif xctype == 'GGA':
         ao_deriv = 1
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             ngrid = weight.size
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             for idm in range(nset):
@@ -594,7 +547,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             raise NotImplementedError('laplacian in meta-GGA method')
         ao_deriv = 2
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             ngrid = weight.size
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             for idm in range(nset):
@@ -666,12 +619,6 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                           'and will be removed in future release.\n')
 
     xctype = ni._xc_type(xc_code)
-    ngrids = len(grids.weights)
-    if ni.non0tab is None:
-        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                             dtype=numpy.uint8)
-    else:
-        non0tab = ni.non0tab
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
 
@@ -691,7 +638,7 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     if xctype == 'LDA':
         ao_deriv = 0
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             aow = numpy.ndarray(ao.shape, order='F', buffer=aow)
             for idm in range(nset):
                 rho_a = make_rhoa(idm, ao, mask, xctype)
@@ -714,7 +661,7 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     elif xctype == 'GGA':
         ao_deriv = 1
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             ngrid = weight.size
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             for idm in range(nset):
@@ -747,7 +694,7 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             raise NotImplementedError('laplacian in meta-GGA method')
         ao_deriv = 2
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             ngrid = weight.size
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             for idm in range(nset):
@@ -844,12 +791,6 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=1,
         (xctype == 'GGA' and rho0 is None)):
         make_rho0 = ni._gen_rho_evaluator(mol, dm0, 1)[0]
 
-    ngrids = len(grids.weights)
-    if ni.non0tab is None:
-        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                             dtype=numpy.uint8)
-    else:
-        non0tab = ni.non0tab
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
 
@@ -859,7 +800,7 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=1,
         ao_deriv = 0
         ip = 0
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             ngrid = weight.size
             aow = numpy.ndarray(ao.shape, order='F', buffer=aow)
             if fxc is None:
@@ -880,7 +821,7 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=1,
         ao_deriv = 1
         ip = 0
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             ngrid = weight.size
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             if rho0 is None:
@@ -978,12 +919,6 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=1,
             make_rho0a = ni._gen_rho_evaluator(mol, dm0[0], 1)[0]
             make_rho0b = ni._gen_rho_evaluator(mol, dm0[1], 1)[0]
 
-    ngrids = len(grids.weights)
-    if ni.non0tab is None:
-        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                             dtype=numpy.uint8)
-    else:
-        non0tab = ni.non0tab
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
 
@@ -993,7 +928,7 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=1,
         ao_deriv = 0
         ip = 0
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             ngrid = weight.size
             aow = numpy.ndarray(ao.shape, order='F', buffer=aow)
             if fxc is None:
@@ -1022,7 +957,7 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=1,
         ao_deriv = 1
         ip = 0
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, non0tab):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             ngrid = weight.size
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             if rho0 is None:
@@ -1130,7 +1065,6 @@ def nr_fxc(mol, grids, xc_code, dm0, dms, spin0, relativity=0, hermi=1,
 
     '''
     ni = _NumInt()
-    ni.non0tab = ni.make_mask(mol, grids.coords)
     if spin == 0:
         return nr_rks_fxc(ni, mol, grids, xc_code, dm, dms, relativity,
                           hermi, rho0, vxc, fxc, max_memory, verbose)
@@ -1144,9 +1078,6 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
     '''Compute the 0th order density, Vxc and fxc.  They can be used in TDDFT,
     DFT hessian module etc.
     '''
-    if ni.non0tab is None:
-        ni.non0tab = ni.make_mask(mol, grids.coords)
-
     xctype = ni._xc_type(xc_code)
     if xctype == 'LDA':
         ao_deriv = 0
@@ -1159,7 +1090,7 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
         nao = mo_coeff.shape[0]
         rho = []
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             rho.append(ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, xctype))
         rho = numpy.hstack(rho)
     else:
@@ -1167,7 +1098,7 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
         rhoa = []
         rhob = []
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             rhoa.append(ni.eval_rho2(mol, ao, mo_coeff[0], mo_occ[0], mask, xctype))
             rhob.append(ni.eval_rho2(mol, ao, mo_coeff[1], mo_occ[1], mask, xctype))
         rho = (numpy.hstack(rhoa), numpy.hstack(rhob))
@@ -1182,7 +1113,7 @@ def large_rho_indices(ni, mol, dm, grids, cutoff=1e-10, max_memory=2000):
     idx = []
     cutoff = cutoff / grids.weights.size
     for ao, mask, weight, coords \
-            in ni.block_loop(mol, grids, nao, 0, max_memory, ni.non0tab):
+            in ni.block_loop(mol, grids, nao, 0, max_memory):
         rho = make_rho(0, ao, mask, 'LDA')
         idx.append(abs(rho*weight) > cutoff)
     return numpy.hstack(idx)
@@ -1191,7 +1122,6 @@ def large_rho_indices(ni, mol, dm, grids, cutoff=1e-10, max_memory=2000):
 class _NumInt(object):
     def __init__(self):
         self.libxc = libxc
-        self.non0tab = None
 
     def nr_vxc(self, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
                max_memory=2000, verbose=None):
@@ -1206,22 +1136,8 @@ class _NumInt(object):
             return self.nr_uks(mol, grids, xc_code, dms, relativity, hermi,
                                max_memory, verbose)
 
-    @lib.with_doc(nr_rks.__doc__)
-    def nr_rks(self, mol, grids, xc_code, dms, relativity=0, hermi=1,
-               max_memory=2000, verbose=None):
-        if self.non0tab is None:
-            self.non0tab = self.make_mask(mol, grids.coords)
-        return nr_rks(self, mol, grids, xc_code, dms, relativity, hermi,
-                      max_memory, verbose)
-
-    @lib.with_doc(nr_uks.__doc__)
-    def nr_uks(self, mol, grids, xc_code, dms, relativity=0, hermi=1,
-               max_memory=2000, verbose=None):
-        if self.non0tab is None:
-            self.non0tab = self.make_mask(mol, grids.coords)
-        return nr_uks(self, mol, grids, xc_code, dms, relativity, hermi,
-                      max_memory, verbose)
-
+    nr_rks = nr_rks
+    nr_uks = nr_uks
     nr_rks_fxc = nr_rks_fxc
     nr_uks_fxc = nr_uks_fxc
     nr_fxc = nr_fxc
@@ -1254,10 +1170,12 @@ class _NumInt(object):
         '''
         ngrids = grids.weights.size
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
-# NOTE to index ni.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
+# NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:
             blksize = min(int(max_memory*1e6/(comp*2*nao*8*BLKSIZE))*BLKSIZE, ngrids)
             blksize = max(blksize, BLKSIZE)
+        if non0tab is None:
+            non0tab = grids.non0tab
         if non0tab is None:
             non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
                                  dtype=numpy.uint8)

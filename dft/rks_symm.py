@@ -9,8 +9,6 @@ Non-relativistic Restricted Kohn-Sham
 
 from pyscf.lib import logger
 import pyscf.scf
-from pyscf.dft import gen_grid
-from pyscf.dft import numint
 from pyscf.dft import rks
 from pyscf.dft import uks
 

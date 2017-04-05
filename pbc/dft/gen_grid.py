@@ -5,12 +5,45 @@
 
 import ctypes
 import numpy as np
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf import dft
 from pyscf.pbc import tools
 from pyscf.pbc.gto.cell import gen_uniform_grids
+from pyscf.dft.gen_grid import (sg1_prune, nwchem_prune, treutler_prune,
+                                stratmann, original_becke, gen_atomic_grids,
+                                BLKSIZE)
 
+
+def make_mask(cell, coords, relativity=0, shls_slice=None, verbose=None):
+    '''Mask to indicate whether a shell is zero on grid.
+    The resultant mask array is an extension to the mask array used in
+    molecular code (see also pyscf.dft.numint.make_mask function).
+    For given shell ID and block ID, the value of the extended mask array
+    means the number of images in Ls that does not vanish.
+    '''
+    coords = numpy.asarray(coords, order='F')
+    natm = ctypes.c_int(cell._atm.shape[0])
+    nbas = ctypes.c_int(cell.nbas)
+    ngrids = len(coords)
+    if shls_slice is None:
+        shls_slice = (0, cell.nbas)
+    assert(shls_slice == (0, cell.nbas))
+
+    Ls = cell.get_lattice_Ls()
+    Ls = Ls[numpy.argsort(lib.norm(Ls, axis=1))]
+
+    non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas),
+                          dtype=numpy.uint8)
+    libpbc.PBCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
+                           coords.ctypes.data_as(ctypes.c_void_p),
+                           ctypes.c_int(ngrids),
+                           Ls.ctypes.data_as(ctypes.c_void_p),
+                           ctypes.c_int(len(Ls)),
+                           cell._atm.ctypes.data_as(ctypes.c_void_p), natm,
+                           cell._bas.ctypes.data_as(ctypes.c_void_p), nbas,
+                           cell._env.ctypes.data_as(ctypes.c_void_p))
+    return non0tab
 
 class UniformGrids(object):
     '''Uniform Grid class.'''
@@ -23,13 +56,15 @@ class UniformGrids(object):
         self.stdout = cell.stdout
         self.verbose = cell.verbose
 
-    def build(self, cell=None):
+    def build(self, cell=None, with_non0tab=False):
         if cell == None: cell = self.cell
 
         self.coords = gen_uniform_grids(self.cell, self.gs)
         self.weights = np.empty(self.coords.shape[0])
         self.weights[:] = cell.vol/self.weights.shape[0]
 
+        if with_non0tab:
+            self.non0tab = self.make_mask(cell, self.coords)
         return self.coords, self.weights
 
     def dump_flags(self):
@@ -42,9 +77,16 @@ class UniformGrids(object):
         self.dump_flags()
         return self.build(cell)
 
+    @lib.with_doc(make_mask.__doc__)
+    def make_mask(self, cell=None, coords=None, relativity=0, shls_slice=None,
+                  verbose=None):
+        if cell is None: cell = self.cell
+        if coords is None: coords = self.coords
+        return make_mask(cell, coords, relativity, shls_slice, verbose)
+
 
 def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
-                    level=3, prune=dft.gen_grid.nwchem_prune):
+                    level=3, prune=nwchem_prune):
     '''real-space grids using Becke scheme
 
     Args:
@@ -58,8 +100,7 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
 # modified from pyscf.dft.gen_grid.gen_partition
     Ls = cell.get_lattice_Ls()
     atm_coords = Ls.reshape(-1,1,3) + cell.atom_coords()
-    atom_grids_tab = dft.gen_grid.gen_atomic_grids(cell, atom_grid, radi_method,
-                                                   level, prune)
+    atom_grids_tab = gen_atomic_grids(cell, atom_grid, radi_method, level, prune)
     coords_all = []
     weights_all = []
     b = cell.reciprocal_vectors(norm_to=1)
@@ -96,7 +137,7 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
     ngrids = len(coords_all)
     pbecke = np.empty((sup_natm,ngrids))
     coords = np.asarray(coords_all, order='F')
-    p_radii_table = pyscf.lib.c_null_ptr()
+    p_radii_table = lib.c_null_ptr()
     fn = dft.gen_grid.libdft.VXCgen_grid
     fn(pbecke.ctypes.data_as(ctypes.c_void_p),
        coords.ctypes.data_as(ctypes.c_void_p),
@@ -114,18 +155,27 @@ class BeckeGrids(dft.gen_grid.Grids):
     '''Becke, JCP, 88, 2547 (1988)'''
     def __init__(self, cell):
         self.cell = cell
-        pyscf.dft.gen_grid.Grids.__init__(self, cell)
+        dft.gen_grid.Grids.__init__(self, cell)
 
-    def build(self, cell=None):
+    def build(self, cell=None, with_non0tab=False):
         if cell is None: cell = self.cell
         self.coords, self.weights = gen_becke_grids(self.cell, self.atom_grid,
                                                     radi_method=self.radi_method,
                                                     level=self.level,
                                                     prune=self.prune)
+        if with_non0tab:
+            self.non0tab = self.make_mask(cell, self.coords)
         logger.info(self, 'tot grids = %d', len(self.weights))
         logger.info(self, 'cell vol = %.9g  sum(weights) = %.9g',
                     cell.vol, self.weights.sum())
         return self.coords, self.weights
+
+    @lib.with_doc(make_mask.__doc__)
+    def make_mask(self, cell=None, coords=None, relativity=0, shls_slice=None,
+                  verbose=None):
+        if cell is None: cell = self.cell
+        if coords is None: coords = self.coords
+        return make_mask(cell, coords, relativity, shls_slice, verbose)
 
 
 if __name__ == '__main__':

@@ -24,7 +24,7 @@ def get_veff(ks_grad, mol=None, dm=None):
 
     mf = ks_grad._scf
     if mf.grids.coords is None:
-        mf.grids.build()
+        mf.grids.build(with_non0tab=True)
     grids = mf.grids
     if mf._numint.non0tab is None:
         mf._numint.non0tab = mf._numint.make_mask(mol, mf.grids.coords)
