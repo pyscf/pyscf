@@ -14,12 +14,13 @@ Reference for Lebedev-Laikov grid:
 
 import ctypes
 import numpy
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf.dft import radi
 
-libdft = pyscf.lib.load_library('libdft')
+libdft = lib.load_library('libdft')
+BLKSIZE = 128  # needs to be the same to lib/gto/grid_ao_drv.c
 
 # ~= (L+1)**2/3
 LEBEDEV_ORDER = {
@@ -243,8 +244,8 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
                 angs = prune(chg, rad, n_ang)
             else:
                 angs = [n_ang] * n_rad
-            pyscf.lib.logger.debug(mol, 'atom %s rad-grids = %d, ang-grids = %s',
-                                   symb, n_rad, angs)
+            logger.debug(mol, 'atom %s rad-grids = %d, ang-grids = %s',
+                         symb, n_rad, angs)
 
             angs = numpy.array(angs)
             coords = []
@@ -284,7 +285,7 @@ def gen_partition(mol, atom_grids_tab,
          radii_adjust in (radi.treutler_atomic_radii_adjust,
                           radi.becke_atomic_radii_adjust))):
         if f_radii_adjust is None:
-            p_radii_table = pyscf.lib.c_null_ptr()
+            p_radii_table = lib.c_null_ptr()
         else:
             f_radii_table = numpy.asarray([f_radii_adjust(i, j, 0)
                                            for i in range(mol.natm)
@@ -329,9 +330,50 @@ def gen_partition(mol, atom_grids_tab,
         weights_all.append(weights)
     return numpy.vstack(coords_all), numpy.hstack(weights_all)
 
+def make_mask(mol, coords, relativity=0, shls_slice=None, verbose=None):
+    '''Mask to indicate whether a shell is zero on grid
+
+    Args:
+        mol : an instance of :class:`Mole`
+
+        coords : 2D array, shape (N,3)
+            The coordinates of grids.
+
+    Kwargs:
+        relativity : bool
+            No effects.
+        shls_slice : 2-element list
+            (shl_start, shl_end).
+            If given, only part of AOs (shl_start <= shell_id < shl_end) are
+            evaluated.  By default, all shells defined in mol will be evaluated.
+        verbose : int or object of :class:`Logger`
+            No effects.
+
+    Returns:
+        2D mask array of shape (N,nbas), where N is the number of grids, nbas
+        is the number of shells.
+    '''
+    coords = numpy.asarray(coords, order='F')
+    natm = ctypes.c_int(mol._atm.shape[0])
+    nbas = ctypes.c_int(mol.nbas)
+    ngrids = len(coords)
+    if shls_slice is None:
+        shls_slice = (0, mol.nbas)
+    assert(shls_slice == (0, mol.nbas))
+
+    non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, mol.nbas),
+                          dtype=numpy.uint8)
+    libdft.VXCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
+                           coords.ctypes.data_as(ctypes.c_void_p),
+                           ctypes.c_int(ngrids),
+                           mol._atm.ctypes.data_as(ctypes.c_void_p), natm,
+                           mol._bas.ctypes.data_as(ctypes.c_void_p), nbas,
+                           mol._env.ctypes.data_as(ctypes.c_void_p))
+    return non0tab
 
 
-class Grids(pyscf.lib.StreamObject):
+
+class Grids(lib.StreamObject):
     '''DFT mesh grids
 
     Attributes for Grids:
@@ -407,6 +449,7 @@ class Grids(pyscf.lib.StreamObject):
         self.prune = nwchem_prune
         self.symmetry = mol.symmetry
         self.atom_grid = {}
+        self.non0tab = None
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -428,7 +471,7 @@ class Grids(pyscf.lib.StreamObject):
             logger.info(self, 'User specified grid scheme %s', str(self.atom_grid))
         return self
 
-    def build(self, mol=None):
+    def build(self, mol=None, with_non0tab=False):
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
             self.check_sanity()
@@ -439,7 +482,9 @@ class Grids(pyscf.lib.StreamObject):
                 self.gen_partition(mol, atom_grids_tab,
                                    self.radii_adjust, self.atomic_radii,
                                    self.becke_scheme)
-        pyscf.lib.logger.info(self, 'tot grids = %d', len(self.weights))
+        if with_non0tab:
+            self.non0tab = self.make_mask(mol, self.coords)
+        logger.info(self, 'tot grids = %d', len(self.weights))
         return self.coords, self.weights
     def setup_grids(self, mol=None):
         import warnings
@@ -453,7 +498,7 @@ class Grids(pyscf.lib.StreamObject):
         self.dump_flags()
         return self.build(mol)
 
-    @pyscf.lib.with_doc(gen_atomic_grids.__doc__)
+    @lib.with_doc(gen_atomic_grids.__doc__)
     def gen_atomic_grids(self, mol, atom_grid=None, radi_method=None,
                          level=None, prune=None):
         ''' See gen_grid.gen_atomic_grids function'''
@@ -463,7 +508,7 @@ class Grids(pyscf.lib.StreamObject):
         if prune is None: prune = self.prune
         return gen_atomic_grids(mol, atom_grid, self.radi_method, level, prune)
 
-    @pyscf.lib.with_doc(gen_partition.__doc__)
+    @lib.with_doc(gen_partition.__doc__)
     def gen_partition(self, mol, atom_grids_tab,
                       radii_adjust=None, atomic_radii=radi.BRAGG_RADII,
                       becke_scheme=original_becke):
@@ -477,6 +522,13 @@ class Grids(pyscf.lib.StreamObject):
         sys.stderr.write('WARN: Attribute .prune_scheme will be removed in PySCF v1.1. '
                          'Please use .prune instead\n')
         return self.prune
+
+    @lib.with_doc(make_mask.__doc__)
+    def make_mask(self, mol=None, coords=None, relativity=0, shls_slice=None,
+                  verbose=None):
+        if mol is None: mol = self.mol
+        if coords is None: coords = self.coords
+        return make_mask(mol, coords, relativity, shls_slice, verbose)
 
 
 

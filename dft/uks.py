@@ -11,8 +11,6 @@ import time
 import numpy
 from pyscf.lib import logger
 from pyscf.scf import uhf
-from pyscf.dft import gen_grid
-from pyscf.dft import numint
 from pyscf.dft import rks
 
 
@@ -24,7 +22,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     if dm is None: dm = ks.make_rdm1()
     t0 = (time.clock(), time.time())
     if ks.grids.coords is None:
-        ks.grids.build()
+        ks.grids.build(with_non0tab=True)
         small_rho_cutoff = ks.small_rho_cutoff
         t0 = logger.timer(ks, 'setting up grids', *t0)
     else:
@@ -82,7 +80,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
                      ks.grids.weights.size - numpy.count_nonzero(idx))
         ks.grids.coords  = numpy.asarray(ks.grids.coords [idx], order='C')
         ks.grids.weights = numpy.asarray(ks.grids.weights[idx], order='C')
-        ks._numint.non0tab = None
+        ks.grids.non0tab = ks.grids.make_mask(mol, ks.grids.coords)
     return vhf + vx
 
 

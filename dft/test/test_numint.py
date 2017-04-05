@@ -17,7 +17,7 @@ mol.build()
 mf = dft.RKS(mol)
 mf.grids.atom_grid = {"H": (50, 110)}
 mf.prune = None
-mf.grids.build()
+mf.grids.build(with_non0tab=False)
 nao = mol.nao_nr()
 ao_loc = mol.ao_loc_nr()
 

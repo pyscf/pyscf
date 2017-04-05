@@ -15,7 +15,7 @@ dm = scf.RHF(mol).run().make_rdm1()
 mf = dft.RKS(mol)
 mf.grids.atom_grid = {"H": (50, 110)}
 mf.prune = None
-mf.grids.build()
+mf.grids.build(with_non0tab=False)
 nao = mol.nao_nr()
 ao = dft.numint.eval_ao(mol, mf.grids.coords, deriv=1)
 rho = dft.numint.eval_rho(mol, ao, dm, xctype='GGA')
