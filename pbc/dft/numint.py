@@ -8,9 +8,10 @@ import tempfile
 import ctypes
 import numpy
 import h5py
-from pyscf.dft.numint import _dot_ao_ao, _dot_ao_dm, BLKSIZE
+from pyscf.dft.numint import _dot_ao_ao, _dot_ao_dm
 from pyscf import lib
 from pyscf import dft
+from pyscf.pbc.dft.gen_grid import make_mask, BLKSIZE
 from pyscf.pbc import tools
 from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, member
 
@@ -123,36 +124,6 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
         if comp == 1:
             ao_kpts[k] = ao_kpts[k][0]
     return ao_kpts
-
-def make_mask(cell, coords, relativity=0, shls_slice=None, verbose=None):
-    '''Mask to indicate whether a shell is zero on grid.
-    The resultant mask array is an extension to the mask array used in
-    molecular code (see also pyscf.dft.numint.make_mask function).
-    For given shell ID and block ID, the value of the extended mask array
-    means the number of images in Ls that does not vanish.
-    '''
-    coords = numpy.asarray(coords, order='F')
-    natm = ctypes.c_int(cell._atm.shape[0])
-    nbas = ctypes.c_int(cell.nbas)
-    ngrids = len(coords)
-    if shls_slice is None:
-        shls_slice = (0, cell.nbas)
-    assert(shls_slice == (0, cell.nbas))
-
-    Ls = cell.get_lattice_Ls()
-    Ls = Ls[numpy.argsort(lib.norm(Ls, axis=1))]
-
-    non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas),
-                          dtype=numpy.uint8)
-    libpbc.PBCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
-                           coords.ctypes.data_as(ctypes.c_void_p),
-                           ctypes.c_int(ngrids),
-                           Ls.ctypes.data_as(ctypes.c_void_p),
-                           ctypes.c_int(len(Ls)),
-                           cell._atm.ctypes.data_as(ctypes.c_void_p), natm,
-                           cell._bas.ctypes.data_as(ctypes.c_void_p), nbas,
-                           cell._env.ctypes.data_as(ctypes.c_void_p))
-    return non0tab
 
 
 def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', verbose=None):
@@ -647,14 +618,15 @@ class _NumInt(dft.numint._NumInt):
         '''
         ngrids = grids.weights.size
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
-# NOTE to index ni.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
+# NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:
             blksize = min(int(max_memory*1e6/(comp*2*nao*16*BLKSIZE))*BLKSIZE, ngrids)
             blksize = max(blksize, BLKSIZE)
         if non0tab is None:
-            if self.non0tab is None:
-                self.non0tab = self.make_mask(cell, grids.coords)
-            non0tab = self.non0tab
+            non0tab = grids.non0tab
+        if non0tab is None:
+            non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
+                                 dtype=numpy.uint8)
         kpt = numpy.reshape(kpt, 3)
         if kpt_band is None:
             kpt1 = kpt2 = kpt
@@ -780,14 +752,15 @@ class _KNumInt(dft.numint._NumInt):
         ngrids = grids.weights.size
         nkpts = len(kpts)
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
-# NOTE to index ni.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
+# NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:
             blksize = min(int(max_memory*1e6/(comp*2*nkpts*nao*16*BLKSIZE))*BLKSIZE, ngrids)
             blksize = max(blksize, BLKSIZE)
         if non0tab is None:
-            if self.non0tab is None:
-                self.non0tab = self.make_mask(cell, grids.coords)
-            non0tab = self.non0tab
+            non0tab = grids.non0tab
+        if non0tab is None:
+            non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
+                                 dtype=numpy.uint8)
         if kpts_band is not None:
             kpts_band = numpy.reshape(kpts_band, (-1,3))
             where = [member(k, kpts) for k in kpts_band]
