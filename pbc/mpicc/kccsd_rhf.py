@@ -2419,7 +2419,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 return nocc**2 * nvir**2 * nkpts * 16
             array_size = [nkpts,nkpts]
             # FIXME: find a good blocksize for this... right now just makes the smallest blocksize possible
-            task_list = generate_max_task_list(array_size,blk_mem_size=100000*2.*mem_usage_oovvk(nocc,nvir,nkpts),priority_list=[1,1])
+            task_list = generate_max_task_list(array_size,blk_mem_size=1e12,priority_list=[1,1])
             #nproc = comm.Get_size()
             #chunk_size = get_max_blocksize_from_mem(0.3e9, 2.*mem_usage_oovvk(nocc,nvir,nkpts),
             #                                        array_size, priority_list=[1,1])
