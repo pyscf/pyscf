@@ -55,10 +55,9 @@ find_package(PythonInterp REQUIRED)
 #  OUTPUT_VARIABLE NUMPY_INCLUDE)
 #include_directories(${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE})
 
-option(ENABLE_LIBCINT "Using libcint for analytical gaussian integral" ON)
-if(ENABLE_LIBCINT)
 include(ExternalProject)
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
+option(BUILD_LIBCINT "Using libcint for analytical gaussian integral" ON)
+#if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h" and BUILD_LIBCINT)
   ExternalProject_Add(libcint
     GIT_REPOSITORY https://github.com/sunqm/libcint.git
     GIT_TAG master
@@ -67,8 +66,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
     CMAKE_ARGS -DWITH_RANGE_COULOMB=1 -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
             -DCMAKE_INSTALL_LIBDIR:PATH=lib -DBLA_VENDOR=${BLA_VENDOR}
   )
-endif()
-endif(ENABLE_LIBCINT)
+#endif()
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/deps/include)
 include_directories(${CMAKE_INSTALL_PREFIX}/include)
