@@ -342,6 +342,7 @@ XC = XC_CODES = {
 #
 'LDA'           : 1 ,
 'SLATER'        : 1 ,
+'VWN3'          : 'VWNRPA' ,
 'VWN5'          : 'VWN' ,
 'BLYP'          : 'B88,LYP',
 'BP86'          : 'B88,P86',

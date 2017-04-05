@@ -25,6 +25,10 @@ from pyscf.pbc.gto import pseudo
 from pyscf.pbc.tools import pbc as pbctools
 from pyscf.gto.basis import ALIAS as MOLE_ALIAS
 
+# For code compatiblity in python-2 and python-3
+if sys.version_info >= (3,):
+    unicode = str
+
 libpbc = lib.load_library('libpbc')
 
 def M(**kwargs):
@@ -77,8 +81,8 @@ def format_pseudo(pseudo_tab):
         stdsymb = _std_symbol(rawsymb)
         symb = symb.replace(rawsymb, stdsymb)
 
-        if isinstance(pseudo_tab[atom], str):
-            fmt_pseudo[symb] = pseudo.load(pseudo_tab[atom], stdsymb)
+        if isinstance(pseudo_tab[atom], (str, unicode)):
+            fmt_pseudo[symb] = pseudo.load(str(pseudo_tab[atom]), stdsymb)
         else:
             fmt_pseudo[symb] = pseudo_tab[atom]
     return fmt_pseudo
@@ -115,8 +119,8 @@ def format_basis(basis_tab):
     fmt_basis = {}
     for atom in basis_tab.keys():
         atom_basis = basis_tab[atom]
-        if isinstance(atom_basis, str) and 'gth' in atom_basis:
-            fmt_basis[atom] = basis.load(atom_basis, _std_symbol(atom))
+        if isinstance(atom_basis, (str, unicode)) and 'gth' in atom_basis:
+            fmt_basis[atom] = basis.load(str(atom_basis), _std_symbol(atom))
         else:
             fmt_basis[atom] = atom_basis
     return mole.format_basis(fmt_basis)
@@ -177,7 +181,7 @@ def dumps(cell):
             dic1 = {}
             for k,v in dic.items():
                 if (v is None or
-                    isinstance(v, (basestring, bool, int, long, float))):
+                    isinstance(v, (str, unicode, bool, int, long, float))):
                     dic1[k] = v
                 elif isinstance(v, (list, tuple)):
                     dic1[k] = v   # Should I recursively skip_vaule?
@@ -633,17 +637,17 @@ def gen_uniform_grids(cell, gs=None):
 # definition in ecp, and versa vise.
 def classify_ecp_pseudo(cell, ecp, pp):
     def convert(name):
-        return name.lower().replace(' ', '').replace('-', '').replace('_', '')
+        return str(name.lower().replace(' ', '').replace('-', '').replace('_', ''))
     def classify(ecp, pp_alias):
-        if isinstance(ecp, str):
+        if isinstance(ecp, (str, unicode)):
             if convert(ecp) in pp_alias:
-                return {}, ecp
+                return {}, str(ecp)
         elif isinstance(ecp, dict):
             ecp_as_pp = {}
             for atom in ecp:
                 key = ecp[atom]
-                if isinstance(key, str) and convert(key) in pp_alias:
-                    ecp_as_pp[atom] = key
+                if isinstance(key, (str, unicode)) and convert(key) in pp_alias:
+                    ecp_as_pp[atom] = str(key)
             if ecp_as_pp:
                 ecp_left = dict(ecp)
                 for atom in ecp_as_pp:
@@ -656,7 +660,7 @@ def classify_ecp_pseudo(cell, ecp, pp):
     # ecp = ecp_left + pp_as_ecp
     # pp = pp_left + ecp_as_pp
     ecp = ecp_left
-    if pp_as_ecp and not isinstance(ecp_left, str):
+    if pp_as_ecp and not isinstance(ecp_left, (str, unicode)):
         # If ecp is a str, all atoms have ecp definition.  The misplaced ecp has no effects.
         logger.info(cell, 'PBC pseudo-potentials keywords for %s found in .ecp',
                     pp_as_ecp.keys())
@@ -664,7 +668,7 @@ def classify_ecp_pseudo(cell, ecp, pp):
             pp_as_ecp.update(ecp_left)
         ecp = pp_as_ecp
     pp = pp_left
-    if ecp_as_pp and not isinstance(pp_left, str):
+    if ecp_as_pp and not isinstance(pp_left, (str, unicode)):
         logger.info(cell, 'ECP keywords for %s found in PBC .pseudo',
                     ecp_as_pp.keys())
         if pp_left:
@@ -774,11 +778,11 @@ class Cell(mole.Mole):
 
         self.ecp, self.pseudo = classify_ecp_pseudo(self, self.ecp, self.pseudo)
         if self.pseudo is not None:
-            if isinstance(self.pseudo, str):
+            if isinstance(self.pseudo, (str, unicode)):
                 # specify global pseudo for whole molecule
                 _atom = self.format_atom(self.atom, unit=self.unit)
                 uniq_atoms = set([a[0] for a in _atom])
-                self._pseudo = self.format_pseudo(dict([(a, self.pseudo)
+                self._pseudo = self.format_pseudo(dict([(a, str(self.pseudo))
                                                       for a in uniq_atoms]))
             else:
                 self._pseudo = self.format_pseudo(self.pseudo)
@@ -829,7 +833,7 @@ class Cell(mole.Mole):
     def h(self, x):
         sys.stderr.write('cell.h is deprecated.  It is replaced by the '
                          '(row-based) lattice vectors cell.a:  cell.a = cell.h.T\n')
-        if isinstance(x, str):
+        if isinstance(x, (str, unicode)):
             x = x.replace(';',' ').replace(',',' ').replace('\n',' ')
             self.a = np.asarray([float(z) for z in x.split()]).reshape(3,3).T
         else:
@@ -893,12 +897,12 @@ class Cell(mole.Mole):
         return _atm, _ecpbas, _env
 
     def lattice_vectors(self):
-        if isinstance(self.a, str):
+        if isinstance(self.a, (str, unicode)):
             a = self.a.replace(';',' ').replace(',',' ').replace('\n',' ')
             a = np.asarray([float(x) for x in a.split()]).reshape(3,3)
         else:
             a = np.asarray(self.a, dtype=np.double)
-        if isinstance(self.unit, str):
+        if isinstance(self.unit, (str, unicode)):
             if self.unit.startswith(('B','b','au','AU')):
                 return a
             else:
