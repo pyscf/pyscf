@@ -63,10 +63,6 @@ class system_vars_c():
     else:
       self.init_ase_atoms(Atoms)
 
-    print('self.mu_sp2j = ', self.sp_mu2j)
-    print('self.mu_sp2rcut = ', self.sp_mu2rcut)
-
-
   def init_ase_atoms(self, Atoms):
     """ Initialise system vars using siesta file and Atom object from ASE."""
     try:
@@ -111,7 +107,9 @@ class system_vars_c():
         for n in range(self.norbs):
           _siesta2blanko_denvec(orb2m, self.wfsx.X[:,:,n,s,k])
 
- 
+  #
+  #
+  #
   def init_siesta_xml(self):
     """
     Initialise system var using only the siesta files.
