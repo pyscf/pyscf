@@ -172,7 +172,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
     vk_kpts *= 1./nkpts
 
     # G=0 was not included in the non-uniform grids
-    if cell.dimension != 3 and exxdiv is not None:
+    if cell.dimension != 3 and exxdiv:
         assert(exxdiv.lower() == 'ewald')
         _ewald_exxdiv_for_G0(cell, kpts_band, dms, vk_kpts, kpts_band)
 
@@ -292,7 +292,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
             vk = vkR
         else:
             vk = vkR + vkI * 1j
-        if cell.dimension != 3 and exxdiv is not None:
+        if cell.dimension != 3 and exxdiv:
             assert(exxdiv.lower() == 'ewald')
             _ewald_exxdiv_for_G0(cell, kpt, dms, vk)
         vk = vk.reshape(dm.shape)
