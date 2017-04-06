@@ -308,7 +308,7 @@ class RHF(hf.RHF):
         cpu0 = (time.clock(), time.time())
 
         if (kpt_band is None and  # 4 indices of ._eri should have same kpt
-            (self.exxdiv == 'ewald' or self.exxdiv is None) and
+            (self.exxdiv == 'ewald' or not self.exxdiv) and
             (self._eri is not None or cell.incore_anyway or self._is_mem_enough())):
             if self._eri is None:
                 logger.debug(self, 'Building PBC AO integrals incore')
