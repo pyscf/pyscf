@@ -434,7 +434,7 @@ class _ERIS:
                 for kq in range(nkpts):
                     for kr in range(nkpts):
                         ks = kconserv[kp,kq,kr]
-                        eri_kpt = fao2mo((mo_coeff[kp],mo_coeff[kq],mo_coeff[kr],mo_coeff[ks]),
+                        eri_kpt = fao2mo((so_coeff[kp],so_coeff[kq],so_coeff[kr],so_coeff[ks]),
                                          (cc.kpts[kp],cc.kpts[kq],cc.kpts[kr],cc.kpts[ks]), compact=False)
                         eri_kpt = eri_kpt.reshape(nmo,nmo,nmo,nmo)
                         eri[kp,kq,kr] = eri_kpt.copy()
