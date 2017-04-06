@@ -271,6 +271,7 @@ def get_monkhorst_pack_size(cell, kpts):
 def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None):
     '''Get the (Cartesian, unitful) lattice translation vectors for nearby images.
     The translation vectors can be used for the lattice summation.'''
+    a = cell.lattice_vectors()
     b = cell.reciprocal_vectors(norm_to=1)
     heights_inv = lib.norm(b, axis=1)
 
@@ -279,10 +280,9 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None):
             rcut = cell.rcut
 # plus 1 image in rcut to handle the case atoms within the adjacent cells are
 # close to each other
-        rcut = rcut + max(1./(heights_inv+1e-8))
-        nimgs = np.ceil(rcut*heights_inv)
+        nimgs = np.ceil(rcut*heights_inv + 1.1).astype(int)
     else:
-        rcut = max((np.asarray(nimgs))/heights_inv) + min(1./heights_inv) # ~ the inradius
+        rcut = max((np.asarray(nimgs))/heights_inv)
 
     if dimension is None:
         dimension = cell.dimension
@@ -296,8 +296,13 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None):
     Ts = lib.cartesian_prod((np.arange(-nimgs[0],nimgs[0]+1),
                              np.arange(-nimgs[1],nimgs[1]+1),
                              np.arange(-nimgs[2],nimgs[2]+1)))
-    Ls = np.dot(Ts, cell.lattice_vectors())
-    Ls = Ls[lib.norm(Ls, axis=1)<rcut]
+    Ls = np.dot(Ts, a)
+    idx = np.zeros(len(Ls), dtype=bool)
+    for ax in (-a[0], 0, a[0]):
+        for ay in (-a[1], 0, a[1]):
+            for az in (-a[2], 0, a[2]):
+                idx |= lib.norm(Ls+(ax+ay+az), axis=1) < rcut
+    Ls = Ls[idx]
     return np.asarray(Ls, order='C')
 
 

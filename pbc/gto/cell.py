@@ -319,7 +319,8 @@ def get_nimgs(cell, precision=None):
     return nimgs
 
 def _estimate_rcut(alpha, l, cc, r0, precision=1e-8):
-    rcut = np.sqrt(abs(2*np.log((cc+1e-200)*(r0**2*alpha)**l/precision))/alpha)
+    tmp = 2*np.log((cc+1e-200)*(r0**2*alpha)**l/precision)
+    rcut = np.sqrt(max(0, tmp.max())/alpha)
     return rcut
 
 def bas_rcut(cell, bas_id, precision=1e-8):
