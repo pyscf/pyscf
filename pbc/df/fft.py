@@ -149,6 +149,7 @@ class FFTDF(lib.StreamObject):
         self.gs = cell.gs
 
         self.blockdim = 240 # to mimic molecular DF object
+        self.non0tab = None
 
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
@@ -169,21 +170,24 @@ class FFTDF(lib.StreamObject):
         kpts = numpy.asarray(kpts)
 
         if gs is None:
-            gs = self.gs
+            gs = numpy.asarray(self.gs)
         else:
+            gs = numpy.asarray(gs)
+            if any(gs != self.gs):
+                self.non0tab = None
             self.gs = gs
-        ngrids = numpy.prod(numpy.asarray(gs)*2+1)
+        ngrids = numpy.prod(gs*2+1)
 
         ni = self._numint
         coords = cell.gen_uniform_grids(gs)
-        if ni.non0tab is None:
-            ni.non0tab = ni.make_mask(cell, coords)
+        if self.non0tab is None:
+            self.non0tab = ni.make_mask(cell, coords)
         if kpts_band is None:
-            aoR = ni.eval_ao(cell, coords, kpts, non0tab=ni.non0tab)
+            aoR = ni.eval_ao(cell, coords, kpts, non0tab=self.non0tab)
             for k in range(len(kpts)):
                 yield k, aoR[k]
         else:
-            aoR = ni.eval_ao(cell, coords, kpts_band, non0tab=ni.non0tab)
+            aoR = ni.eval_ao(cell, coords, kpts_band, non0tab=self.non0tab)
             if kpts_band.ndim == 1:
                 yield 0, aoR
             else:

@@ -14,6 +14,7 @@ from pyscf.dft.gen_grid import (sg1_prune, nwchem_prune, treutler_prune,
                                 stratmann, original_becke, gen_atomic_grids,
                                 BLKSIZE)
 
+libpbc = lib.load_library('libpbc')
 
 def make_mask(cell, coords, relativity=0, shls_slice=None, verbose=None):
     '''Mask to indicate whether a shell is zero on grid.
@@ -22,7 +23,7 @@ def make_mask(cell, coords, relativity=0, shls_slice=None, verbose=None):
     For given shell ID and block ID, the value of the extended mask array
     means the number of images in Ls that does not vanish.
     '''
-    coords = numpy.asarray(coords, order='F')
+    coords = np.asarray(coords, order='F')
     natm = ctypes.c_int(cell._atm.shape[0])
     nbas = ctypes.c_int(cell.nbas)
     ngrids = len(coords)
@@ -31,10 +32,10 @@ def make_mask(cell, coords, relativity=0, shls_slice=None, verbose=None):
     assert(shls_slice == (0, cell.nbas))
 
     Ls = cell.get_lattice_Ls()
-    Ls = Ls[numpy.argsort(lib.norm(Ls, axis=1))]
+    Ls = Ls[np.argsort(lib.norm(Ls, axis=1))]
 
-    non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas),
-                          dtype=numpy.uint8)
+    non0tab = np.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas),
+                          dtype=np.uint8)
     libpbc.PBCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
                            coords.ctypes.data_as(ctypes.c_void_p),
                            ctypes.c_int(ngrids),

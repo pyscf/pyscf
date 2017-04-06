@@ -11,11 +11,9 @@ import h5py
 from pyscf.dft.numint import _dot_ao_ao, _dot_ao_dm
 from pyscf import lib
 from pyscf import dft
-from pyscf.pbc.dft.gen_grid import make_mask, BLKSIZE
+from pyscf.pbc.dft.gen_grid import libpbc, make_mask, BLKSIZE
 from pyscf.pbc import tools
 from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, member
-
-libpbc = lib.load_library('libpbc')
 
 try:
 ## Moderate speedup by caching eval_ao
