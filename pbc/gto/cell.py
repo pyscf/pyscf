@@ -332,7 +332,7 @@ def bas_rcut(cell, bas_id, precision=1e-8):
     es = cell.bas_exp(bas_id)
     cs = cell.bas_ctr_coeff(bas_id)
     cs = np.max(cs**2,axis=1)
-    rcut = _estimate_rcut(es, l, cs, 20, precision*1e-2)
+    rcut = _estimate_rcut(es, l, cs, 20, precision)
     #rcut = _estimate_rcut(es, l, cs, rcut, precision)
     return rcut.max()
 

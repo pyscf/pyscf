@@ -90,6 +90,8 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
     if non0tab is None:
         non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas),
                               dtype=numpy.uint8)
+# non0tab stores the number of images to be summed in real space.
+# Initializing it to 255 means all images are summed
         non0tab[:] = 0xff
 
     ao_loc = cell.ao_loc_nr()
