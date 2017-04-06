@@ -59,7 +59,7 @@ def aux_e1(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, out=None):
 
 
 def fill_2c2e(mol, auxmol, intor='cint2c2e_sph', comp=1, hermi=1, out=None):
-    '''2-center 2-electron AO integrals (L|ij), where L is the auxiliary basis.
+    '''2-center 2-electron AO integrals for auxiliary basis (auxmol)
     '''
     return auxmol.intor(intor, comp=comp, hermi=hermi, out=out)
 
