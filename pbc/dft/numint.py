@@ -623,8 +623,9 @@ class _NumInt(dft.numint._NumInt):
         if non0tab is None:
             non0tab = grids.non0tab
         if non0tab is None:
-            non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
-                                 dtype=numpy.uint8)
+            non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
+                                  dtype=numpy.uint8)
+            non0tab[:] = 0xff
         kpt = numpy.reshape(kpt, 3)
         if kpt_band is None:
             kpt1 = kpt2 = kpt
@@ -757,8 +758,9 @@ class _KNumInt(dft.numint._NumInt):
         if non0tab is None:
             non0tab = grids.non0tab
         if non0tab is None:
-            non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
-                                 dtype=numpy.uint8)
+            non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
+                                  dtype=numpy.uint8)
+            non0tab[:] = 0xff
         if kpts_band is not None:
             kpts_band = numpy.reshape(kpts_band, (-1,3))
             where = [member(k, kpts) for k in kpts_band]
