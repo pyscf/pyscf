@@ -86,7 +86,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                      ks.grids.weights.size - np.count_nonzero(idx))
         ks.grids.coords  = np.asarray(ks.grids.coords [idx], order='C')
         ks.grids.weights = np.asarray(ks.grids.weights[idx], order='C')
-        ks.grids.non0tab = ks.grids.make_mask(mol, ks.grids.coords)
+        ks.grids.non0tab = ks.grids.make_mask(cell, ks.grids.coords)
     return vhf + vx
 
 
