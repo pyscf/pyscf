@@ -161,7 +161,8 @@ class FFTDF(lib.StreamObject):
         ni = self._numint
         coords = cell.gen_uniform_grids(gs)
         if ni.non0tab is None:
-            ni.non0tab = ni.make_mask(cell, coords)
+            nblks = (len(coords)+numint.BLKSIZE-1)//numint.BLKSIZE
+            ni.non0tab = numpy.ones((nblks, cell.nbas), dtype=numpy.uint8)
         if kpts_band is None:
             aoR = ni.eval_ao(cell, coords, kpts, non0tab=ni.non0tab)
             for k in range(len(kpts)):
