@@ -38,7 +38,7 @@ def xjl(xx,lc):
      if lc > 0 : xj[lc-1] = qq
      if lc > 1 :
         for l in range(lc-1,0,-1):
-		  xj[l-1] = (2*l+1)*xj[l]/xx-xj[l+1]
+          xj[l-1] = (2*l+1)*xj[l]/xx-xj[l+1]
 
      cc = sin_xx_div_xx/xj[0]
      for l in range(lc+1): xj[l] = cc*xj[l]

@@ -34,12 +34,12 @@ class sbt_c():
     assert(self.nr>1)
     assert(lmax>-1)
     self.rr,self.kk = rr,kk
-    self.nr2, self.rr3, self.kk3 = self.nr*2, rr**3, kk**3
+    nr2, self.rr3, self.kk3 = self.nr*2, rr**3, kk**3
     self.rmin,self.kmin = rr[0],kk[0]
     self.rhomin,self.kapmin= np.log(self.rmin),np.log(self.kmin)
 
     dr = np.log(rr[2]/rr[1])
-    dt = 2.0*np.pi/(self.nr2*dr)
+    dt = 2.0*np.pi/(nr2*dr)
     
     self._smallr = self.rmin*np.array([np.exp(-dr*(n-i)) for i in range(n)], dtype='float64')
     self._premult = np.array([np.exp(1.5*dr*(i-n)) for i in range(2*n)], dtype='float64')
@@ -47,12 +47,12 @@ class sbt_c():
     coeff = 1.0/np.sqrt(np.pi/2.0) if with_sqrt_pi_2  else 1.0
     self._postdiv = np.array([coeff*np.exp(-1.5*dr*i) for i in range(n)], dtype='float64')
   
-    temp1 = np.zeros((self.nr2), dtype='complex128')
-    temp2 = np.zeros((self.nr2), dtype='complex128')
+    temp1 = np.zeros((nr2), dtype='complex128')
+    temp2 = np.zeros((nr2), dtype='complex128')
     temp1[0] = 1.0
     temp2 = np.fft.fft(temp1)
     xx = sum(np.real(temp2))
-    if abs(self.nr2-xx)>1e-10 : raise SystemError('err: sbt_plan: problem with fftw sum(temp2):')
+    if abs(nr2-xx)>1e-10 : raise SystemError('err: sbt_plan: problem with fftw sum(temp2):')
  
     self._mult_table1 = np.zeros((lmax+1, self.nr), dtype='complex128')
     for it in range(n):
@@ -81,9 +81,9 @@ class sbt_c():
 
     # make the initialization for the calculation at small k values for 2N mesh values
     self._mult_table2 = np.zeros((lmax+1, self.nr+1), dtype='complex128')
-    j_ltable = np.zeros((lmax+1,self.nr2), dtype='float64')
+    j_ltable = np.zeros((lmax+1,nr2), dtype='float64')
 
-    for i in range(self.nr2): j_ltable[0:lmax+1,i] = xjl( np.exp(self.rhomin+self.kapmin+i*dr), lmax )
+    for i in range(nr2): j_ltable[0:lmax+1,i] = xjl( np.exp(self.rhomin+self.kapmin+i*dr), lmax )
 
     for ll in range(lmax+1):
       self._mult_table2[ll,:] = np.fft.rfft(j_ltable[ll,:])
@@ -124,20 +124,21 @@ class sbt_c():
     gg = np.zeros((self.nr), dtype='float64')     # Allocate the result
     
     # make the calculation for LARGE k values extend the input to the doubled mesh, extrapolating the input as C r**(np+li)
-    r2c_in = np.zeros((self.nr2), dtype='float64')
+    nr2 = self.nr*2
+    r2c_in = np.zeros((nr2), dtype='float64')
     r2c_in[0:self.nr] = C*self._premult[0:self.nr]*self._smallr[0:self.nr]**(npow+am)
-    r2c_in[self.nr:self.nr2] = self._premult[self.nr:self.nr2]*ff[0:self.nr]
+    r2c_in[self.nr:nr2] = self._premult[self.nr:nr2]*ff[0:self.nr]
     r2c_out = np.fft.rfft(r2c_in)
 
-    temp1 = np.zeros(self.nr2, dtype='complex128')
+    temp1 = np.zeros(nr2, dtype='complex128')
     temp1[0:self.nr] = np.conj(r2c_out[0:self.nr])*self._mult_table1[am,0:self.nr]
     temp2 = np.fft.fft(temp1)
   
-    gg[0:self.nr] = (rmin/kmin)**1.5 * (temp2[self.nr:self.nr2]).real * self._postdiv[0:self.nr]
+    gg[0:self.nr] = (rmin/kmin)**1.5 * (temp2[self.nr:nr2]).real * self._postdiv[0:self.nr]
 
     # obtain the SMALL k results in the array c2r_out
     r2c_in[0:self.nr] = ptr_rr3[0:self.nr] * ff[0:self.nr]
-    r2c_in[self.nr:self.nr2] = 0.0
+    r2c_in[self.nr:nr2] = 0.0
     r2c_out = np.fft.rfft(r2c_in)
 
     c2r_in = np.zeros((self.nr+1), dtype='complex128')

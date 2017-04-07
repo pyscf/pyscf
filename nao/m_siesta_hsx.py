@@ -19,7 +19,7 @@ from numpy import empty
 #
 def siesta_hsx_read(label='siesta', force_type=-1): 
 
-  fname = create_string_buffer(label+'.HSX')
+  fname = create_string_buffer((label+'.HSX').encode())
   ft = c_int64(force_type)
   bufsize = c_int64()
   dll.siesta_hsx_size(fname, ft, bufsize)

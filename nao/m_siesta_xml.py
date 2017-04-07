@@ -28,9 +28,9 @@ def siesta_xml(label="siesta"):
   sp2elem = [None]*nspecies
   for a in range(len(atom2elem)): sp2elem[atom2sp[a]] = atom2elem[a]
 
-  x3 = map(float, [atom.attrib["x3"] for atom in atoms])
-  y3 = map(float, [atom.attrib["y3"] for atom in atoms])
-  z3 = map(float, [atom.attrib["z3"] for atom in atoms])
+  x3 = list(map(float, [atom.attrib["x3"] for atom in atoms]))
+  y3 = list(map(float, [atom.attrib["y3"] for atom in atoms]))
+  z3 = list(map(float, [atom.attrib["z3"] for atom in atoms]))
   atom2coord = numpy.empty((natoms,3), dtype='double', order='F')
   for a in range(natoms): atom2coord[a,0:3] = [x3[a],y3[a],z3[a]]
   atom2coord = atom2coord*siesta_ang2bohr
@@ -39,7 +39,7 @@ def siesta_xml(label="siesta"):
 
   lat=fin.find(pref+"lattice[@dictRef='siesta:ucell']")
   ucell = numpy.empty((3,3), dtype='double', order='F')
-  for i in range(len(lat)): ucell[i,0:3] = map(float, filter(None, re.split(r'\s+|=', lat[i].text)))
+  for i in range(len(lat)): ucell[i,0:3] = list(map(float, filter(None, re.split(r'\s+|=', lat[i].text))))
   ucell = ucell * siesta_ang2bohr
   #print(len(lat), lat.attrib)
   #print(ucell)
@@ -58,8 +58,8 @@ def siesta_xml(label="siesta"):
     eigv = kpt_band[s].findall(pref+"property[@dictRef='siesta:eigenenergies']")
     kpnt = kpt_band[s].findall(pref+"kpoint")
     for k in range(nkp):
-      ksn2e[k,s,0:norbs] = map(lambda x : siesta_ev2ha*float(x), filter(None, re.split(r'\s+|=', eigv[k][0].text)))
-      k2xyzw[k,0:3] = map(float, filter(None, re.split(r'\s+|=', kpnt[k].attrib['coords'])))
+      ksn2e[k,s,0:norbs] = list(map(lambda x : siesta_ev2ha*float(x), filter(None, re.split(r'\s+|=', eigv[k][0].text))))
+      k2xyzw[k,0:3] = list(map(float, filter(None, re.split(r'\s+|=', kpnt[k].attrib['coords']))))
       k2xyzw[k,3] = float(kpnt[k].attrib['weight'])
 
   d = dict({'fermi_energy':fermi_energy, 

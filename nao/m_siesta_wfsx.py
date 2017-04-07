@@ -21,7 +21,7 @@ dll.siesta_wfsx_sread.argtypes = (c_char_p, POINTER(c_float))
 #
 def siesta_wfsx_book_read_py(label='siesta'): 
 
-  name = create_string_buffer(label)
+  name = create_string_buffer(label.encode())
   bufsize = c_int64()
   dll.siesta_wfsx_book_size(name, bufsize)
     
@@ -34,21 +34,21 @@ def siesta_wfsx_book_read_py(label='siesta'):
 #
 def siesta_wfsx_dread(w):
   ddata = numpy.empty(w.nkpoints*w.nspin*w.norbs + + w.nkpoints*3, 'float64')
-  dll.siesta_wfsx_dread(create_string_buffer(w.label), ddata.ctypes.data_as(POINTER(c_double)))
+  dll.siesta_wfsx_dread(create_string_buffer(w.label.encode()), ddata.ctypes.data_as(POINTER(c_double)))
   return ddata
 
 #
 #
 #
 def siesta_wfsx_sread(w, sdata):
-  name = create_string_buffer(w.label)
+  name = create_string_buffer(w.label.encode())
   bufsize = w.nkpoints*w.nspin*w.norbs**2*w.nreim
   dll.siesta_wfsx_sread(name, sdata.ctypes.data_as(POINTER(c_float)))
 
 
   
 class siesta_wfsx_c():
-  def __init__(self, label):
+  def __init__(self, label='siesta'):
 
     self.label    = label
     ### Read integer data
