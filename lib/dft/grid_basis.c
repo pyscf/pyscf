@@ -78,9 +78,9 @@ void VXCgen_grid(double *out, double *coords, double *atm_coords,
         double *grid_dist = malloc(sizeof(double) * natm*ngrids);
         for (i = 0; i < natm; i++) {
                 for (n = 0; n < ngrids; n++) {
-                        dx = coords[n*3+0] - atm_coords[i*3+0];
-                        dy = coords[n*3+1] - atm_coords[i*3+1];
-                        dz = coords[n*3+2] - atm_coords[i*3+2];
+                        dx = coords[0*ngrids+n] - atm_coords[i*3+0];
+                        dy = coords[1*ngrids+n] - atm_coords[i*3+1];
+                        dz = coords[2*ngrids+n] - atm_coords[i*3+2];
                         grid_dist[i*ngrids+n] = sqrt(dx*dx + dy*dy + dz*dz);
                 }
         }
