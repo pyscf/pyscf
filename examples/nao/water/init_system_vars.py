@@ -20,7 +20,7 @@ print(oo[0,0])
 print(oo)
 
 
-plt.plot(pp, gg)
+#plt.plot(pp, gg)
 #plt.xlim([0.0,10.0])
 #plt.show()
 
