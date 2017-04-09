@@ -78,10 +78,8 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
 
     if(dist<1.0e-5):
 
-      for mu1,l1 in zip(self.sp2mults[sp1], self.sp_mu2j[sp1,:]):
-        s1,f1=self.sp_mu2s[sp1,mu1],self.sp_mu2s[sp1,mu1+1]
-        for mu2,l2 in zip(self.sp2mults[sp2], self.sp_mu2j[sp2,:]):
-          s2,f2=self.sp_mu2s[sp2,mu2],self.sp_mu2s[sp2,mu2+1]
+      for mu1,l1,s1,f1 in self.sp2info[sp1]:
+        for mu2,l2,s2,f2 in self.sp2info[sp2]:
           cS.fill(0.0); rS.fill(0.0);
           if l1==l2 : 
             sum1 = sum(self.psi_log[sp1,mu1,:]*self.psi_log[sp2,mu2,:] * self.rr3_dr)
@@ -94,11 +92,9 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
 
       f1f2_mom = np.zeros((self.nr), dtype='float64')
       l2S = np.zeros((2*self.jmx+1), dtype='float64')
-      for mu1,l1 in zip(self.sp2mults[sp1], self.sp_mu2j[sp1,:]):
-        s1,f1=self.sp_mu2s[sp1,mu1],self.sp_mu2s[sp1,mu1+1]
-        for mu2,l2 in zip(self.sp2mults[sp2], self.sp_mu2j[sp2,:]):
+      for mu1,l1,s1,f1 in self.sp2info[sp1]:
+        for mu2,l2,s2,f2 in self.sp2info[sp2]:
           if self.sp_mu2rcut[sp1,mu1]+self.sp_mu2rcut[sp2,mu2]<dist: continue
-          s2,f2=self.sp_mu2s[sp2,mu2],self.sp_mu2s[sp2,mu2+1]
           rS.fill(0.0); cS.fill(0.0);
           f1f2_mom = self.psi_log_mom[sp2,mu2,:] * self.psi_log_mom[sp1,mu1,:]
           l2S.fill(0.0)
@@ -106,8 +102,6 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
             f1f2_rea = self.sbt(f1f2_mom, l,-1)
             l2S[l] = log_interp(f1f2_rea, dist, self.rhomin, self.dr_jt)*self.const*self.four_pi
           
-          cS.fill(0.0)
-          rS.fill(0.0)
           for m1 in range(-l1,l1+1):
             for m2 in range(-l2,l2+1):
               gc = self.gaunt(l1,-m1,l2,m2)
