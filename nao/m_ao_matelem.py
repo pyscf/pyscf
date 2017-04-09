@@ -1,25 +1,31 @@
 from __future__ import division
 import numpy as np
-
+import sys
 from pyscf.nao.m_ao_log import ao_log_c
 from pyscf.nao.m_sbt import sbt_c
 from pyscf.nao.m_c2r import c2r_c
+from pyscf.nao.m_gaunt import gaunt_c
 from pyscf.nao.m_csphar import csphar
-
+from pyscf.nao.m_log_interp import log_interp
 #
 #
 #
-class ao_matelem_c(sbt_c, c2r_c):
+class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
   '''
   Evaluator of matrix elements
   '''
   def __init__(self, ao_log):
 
+    self.jmx  = np.amax(ao_log.sp_mu2j)
+
+    c2r_c.__init__(self, self.jmx)
+    sbt_c.__init__(self, ao_log.rr, ao_log.pp)
+    gaunt_c.__init__(self, self.jmx)
+    
     self.psi_log = ao_log.psi_log
     self.sp_mu2j = ao_log.sp_mu2j
     self.sp_mu2rcut = ao_log.sp_mu2rcut
     
-    self.jmx  = np.amax(self.sp_mu2j)
     self.species  = range(len(ao_log.sp2nmult))
     self.sp2mults = [ range(ao_log.sp2nmult[sp]) for sp in self.species ]
 
@@ -30,18 +36,27 @@ class ao_matelem_c(sbt_c, c2r_c):
       for mu in self.sp2mults[sp]:
         self.sp_mu2s[sp,mu+1] = sum(2*self.sp_mu2j[sp,0:mu+1]+1)
 
-    sbt_c.__init__(self, ao_log.rr, ao_log.pp)
+    self.sp2info = []
+    for sp in self.species:
+      self.sp2info.append([
+        [mu, self.sp_mu2j[sp][mu], self.sp_mu2s[sp][mu], self.sp_mu2s[sp,mu+1]] for mu in self.sp2mults[sp] ])
+
+#    for sp in self.species:
+#      for mu in self.sp2info[sp]:
+#        print(sp, mu)
+
     self.psi_log_mom = np.zeros(self.psi_log.shape)
 
     for sp in self.species:
       for mu,am in zip(self.sp2mults[sp], self.sp_mu2j[sp]):
-        self.psi_log_mom[sp,mu,:] = self.exe( self.psi_log[sp,mu,:], am, 1)
+        self.psi_log_mom[sp,mu,:] = self.sbt( self.psi_log[sp,mu,:], am, 1)
     
-    dr = np.log(ao_log.rr[2]/ao_log.rr[1])
+    dr = np.log(ao_log.rr[1]/ao_log.rr[0])
     self.rr3_dr = ao_log.rr**3 * dr
+    self.four_pi = 4*np.pi
+    self.const = np.sqrt(np.pi/2.0)
+
     #print(self.psi_log_mom)
-    
-    c2r_c.__init__(self, self.jmx)
 
   #
   #
@@ -88,9 +103,21 @@ class ao_matelem_c(sbt_c, c2r_c):
           f1f2_mom = self.psi_log_mom[sp2,mu2,:] * self.psi_log_mom[sp1,mu1,:]
           l2S.fill(0.0)
           for l in range( abs(l1-l2), l1+l2+1):
-            f1f2_rea = self.exe(f1f2_mom, l,-1)
-            l2S[l] = get_fval(f1f2_rea, dist, self.rho_min, self.dr)
-            l2S[l] = l2S[l]*self.constanta*self.four_pi;
+            f1f2_rea = self.sbt(f1f2_mom, l,-1)
+            l2S[l] = log_interp(f1f2_rea, dist, self.rhomin, self.dr_jt)*self.const*self.four_pi
+          
+          cS.fill(0.0)
+          rS.fill(0.0)
+          for m1 in range(-l1,l1+1):
+            for m2 in range(-l2,l2+1):
+              gc = self.gaunt(l1,-m1,l2,m2)
+              m3 = m2-m1
+              for l3ind,l3 in enumerate(range(abs(l1-l2),l1+l2+1)):
+                if abs(m3) > l3 : continue
+                cS[m1+self.jmx,m2+self.jmx] = cS[m1+self.jmx,m2+self.jmx] + l2S[l3]*ylm[ l3*(l3+1)+m3] * \
+                  gc[l3ind] * (-1.0)**((3*l1+l2+l)/2+m2)
+          
+          self.c2r_( l1,l2, self.jmx,cS,rS,cmat)
+          overlaps[s1:f1,s2:f2] = rS[-l1+self.jmx:l1+1+self.jmx,-l2+self.jmx:l2+1+self.jmx]
 
     return overlaps
-    

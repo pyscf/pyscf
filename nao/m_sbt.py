@@ -38,7 +38,8 @@ class sbt_c():
     self.rmin,self.kmin = rr[0],kk[0]
     self.rhomin,self.kapmin= np.log(self.rmin),np.log(self.kmin)
 
-    dr = np.log(rr[2]/rr[1])
+    self.dr_jt = np.log(rr[1]/rr[0])
+    dr = self.dr_jt
     dt = 2.0*np.pi/(nr2*dr)
     
     self._smallr = self.rmin*np.array([np.exp(-dr*(n-i)) for i in range(n)], dtype='float64')
@@ -92,7 +93,7 @@ class sbt_c():
   # 
   # The calculation of the Sperical Bessel Transform for a given data...
   #
-  def exe(self, ff, am, direction=1, npow=0) :
+  def sbt(self, ff, am, direction=1, npow=0) :
     """
   Args:
     ff : numpy array containing radial orbital (values of radial orbital on logarithmic grid) to be transformed. The data must be on self.rr grid or self.kk grid provided during initialization.
