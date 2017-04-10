@@ -410,7 +410,7 @@ class RCCSD(ccsd.CCSD):
             Hr2 += -einsum('lbjd,kjb->kld',imds.Wovov,r2)
             Hr2 += einsum('klij,ijd->kld',imds.Woooo,r2)
             Hr2 += -einsum('kbid,ilb->kld',imds.Wovov,r2)
-            tmp = einsum('ijcb,ijb->c',t2,r2)
+            tmp = einsum('ijcb,ijb->c',self.t2,r2)
             Hr2 += einsum('kldc,c->kld',imds.Woovv,tmp)
             Hr2 += -2.*einsum('lkdc,c->kld',imds.Woovv,tmp)
 
@@ -497,10 +497,11 @@ class RCCSD(ccsd.CCSD):
 
         ipccsd_evecs  = np.array(ipccsd_evecs)
         lipccsd_evecs = np.array(lipccsd_evecs)
+        e = []
         for _eval, _evec, _levec in zip(ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
             l1,l2 = self.vector_to_amplitudes_ip(_levec)
             r1,r2 = self.vector_to_amplitudes_ip(_evec)
-            ldotr = np.dot(l1.conj(),r1) + np.dot(l2.ravel(),r2.ravel())
+            ldotr = np.dot(l1,r1) + np.dot(l2.ravel(),r2.ravel())
             l1 /= ldotr
             l2 /= ldotr
             print "ldotr = ", ldotr
@@ -535,7 +536,8 @@ class RCCSD(ccsd.CCSD):
             deltaE = 0.5*einsum('ijkab,ijkab,ijkab',lijkab,rijkab,_eijkab)
             deltaE = deltaE.real
             print "Exc. energy, delta energy = %16.12f, %16.12f" % (_eval+deltaE,deltaE)
-        return deltaE
+            e.append(_eval+deltaE)
+        return e
 
     def eaccsd(self, nroots=1, left=False, koopmans=False, guess=None, partition=None):
         '''Calculate (N+1)-electron charged excitations via EA-EOM-CCSD.
@@ -706,7 +708,7 @@ class RCCSD(ccsd.CCSD):
             nvir = self.nmo-self.nocc
             for a in range(nvir):
                 Hr2 += einsum('lb,bcd->lcd',r2[:,a,:],imds.Wvvvv[a])
-            tmp = einsum('ijcb,ibc->j',t2,r2)
+            tmp = einsum('ijcb,ibc->j',self.t2,r2)
             Hr2 +=     einsum('kjef,j->kef',imds.Woovv,tmp)
             Hr2 += -2.*einsum('kjfe,j->kef',imds.Woovv,tmp)
 
@@ -797,6 +799,7 @@ class RCCSD(ccsd.CCSD):
 
         eaccsd_evecs  = np.array(eaccsd_evecs)
         leaccsd_evecs = np.array(leaccsd_evecs)
+        e = []
         for _eval, _evec, _levec in zip(eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
             l1,l2 = self.vector_to_amplitudes_ea(_levec)
             r1,r2 = self.vector_to_amplitudes_ea(_evec)
@@ -819,11 +822,11 @@ class RCCSD(ccsd.CCSD):
             lijabc = lijabc + lijabc.transpose(1,0,3,2,4)
 
             rijabc = -einsum('bcef,ijae,f->ijabc',vvvv,t2,r1)
-            rijabc = einsum('mcje,imab,e->ijabc',ovov,t2,r1)
-            rijabc = einsum('bmje,imac,e->ijabc',voov,t2,r1)
-            rijabc = einsum('amij,mbc->ijabc',vooo,r2)
-            rijabc = -einsum('bcje,iae->ijabc',vvov,r2)
-            rijabc = -einsum('abie,jec->ijabc',vvov,r2)
+            rijabc += einsum('mcje,imab,e->ijabc',ovov,t2,r1)
+            rijabc += einsum('bmje,imac,e->ijabc',voov,t2,r1)
+            rijabc += einsum('amij,mbc->ijabc',vooo,r2)
+            rijabc += -einsum('bcje,iae->ijabc',vvov,r2)
+            rijabc += -einsum('abie,jec->ijabc',vvov,r2)
             rijabc = rijabc + rijabc.transpose(1,0,3,2,4)
 
             lijabc =  4.*lijabc \
@@ -835,7 +838,8 @@ class RCCSD(ccsd.CCSD):
             deltaE = 0.5*einsum('ijabc,ijabc,ijabc',lijabc,rijabc,_eijabc)
             deltaE = deltaE.real
             print "Exc. energy, delta energy = %16.12f, %16.12f" % (_eval+deltaE,deltaE)
-        return deltaE
+            e.append(_eval+deltaE)
+        return e
 
 
     def eeccsd(self, nroots=1, koopmans=False, guess=None, partition=None):
@@ -967,7 +971,7 @@ class _ERIS:
         mem_now = lib.current_memory()[0]
 
         log = logger.Logger(cc.stdout, cc.verbose)
-        if (method == 'incore' and (mem_incore+mem_now < cc.max_memory)
+        if True or (method == 'incore' and (mem_incore+mem_now < cc.max_memory)
             or cc.mol.incore_anyway):
             eri = ao2mofn(cc._scf.mol, (mo_coeff,mo_coeff,mo_coeff,mo_coeff), compact=0)
             if mo_coeff.dtype == np.float: eri = eri.real
@@ -1122,7 +1126,6 @@ def _mem_usage(nocc, nvir):
 def _cp(a):
     return numpy.array(a, copy=False, order='C')
 
-
 if __name__ == '__main__':
     from pyscf import scf
     from pyscf import gto
@@ -1131,8 +1134,7 @@ if __name__ == '__main__':
         [8 , (0. , 0.     , 0.)],
         [1 , (0. , -0.757 , 0.587)],
         [1 , (0. , 0.757  , 0.587)]]
-    #mol.basis = 'cc-pvdz'
-    mol.basis = '3-21G'
+    mol.basis = 'cc-pvdz'
     mol.spin = 0
     mol.build()
     mf = scf.RHF(mol)
@@ -1140,19 +1142,18 @@ if __name__ == '__main__':
 
     mycc = RCCSD(mf)
     ecc, t1, t2 = mycc.kernel()
+    print ecc
     print(ecc - -0.2133432712431435)
 
     part = None
     print "IP energies... (right eigenvector)"
     e,v = mycc.ipccsd(nroots=3)
-    print e
     print(e[0] - 0.4335604332073799)
     print(e[1] - 0.5187659896045407)
     print(e[2] - 0.6782876002229172)
 
     print "IP energies... (left eigenvector)"
     le,lv = mycc.ipccsd(nroots=3,left=True)
-    print le
     print(le[0] - 0.4335604332073799)
     print(le[1] - 0.5187659896045407)
     print(le[2] - 0.6782876002229172)
@@ -1161,14 +1162,12 @@ if __name__ == '__main__':
 
     print "EA energies... (right eigenvector)"
     e,v = mycc.eaccsd(nroots=3)
-    print e
     print(e[0] - 0.16737886338859731)
     print(e[1] - 0.24027613852009164)
     print(e[2] - 0.51006797826488071)
 
     print "EA energies... (left eigenvector)"
     e,lv = mycc.eaccsd(nroots=3,left=True)
-    print e
     print(e[0] - 0.16737886338859731)
     print(e[1] - 0.24027613852009164)
     print(e[2] - 0.51006797826488071)
