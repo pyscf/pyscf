@@ -115,10 +115,7 @@ def main():
 
     kpts_red, kpts_cart, kpath, sp_points = get_bandpath_fcc(ase_atom,npoints=30)
 
-    e_kn, qp_kn, bandgap = read_eom_krccsd_bands(cell, nmp, kpts_red[start_band:end_band,:])
-    if rank == 0:
-        filename = "%s_%s_%d%d%d-bands.dat"%(formula.lower(), bas[4:],
-                                             nmp[0], nmp[1], nmp[2])
+    def write_file(ofile):
         f = open(filename,'w')
         f.write("# Bandgap = %0.6f au = %0.6f eV\n"%(bandgap, bandgap*27.2114))
         f.write("# Special points:\n")
@@ -131,21 +128,17 @@ def main():
             f.write("\n")
         f.close()
 
+    e_kn, qp_kn, bandgap = read_eom_krccsd_bands(cell, nmp, kpts_red[start_band:end_band,:])
+    if rank == 0:
+        filename = "%s_%s_%d%d%d-bands.dat"%(formula.lower(), bas[4:],
+                                             nmp[0], nmp[1], nmp[2])
+        write_file(filename)
+
     e_kn, qp_kn, bandgap = read_eom_krccsd_bands(cell, nmp, kpts_red[start_band:end_band,:],suffix="-STAR-band.dat")
     if rank == 0:
         filename = "%s_%s_%d%d%d-STAR-bands.dat"%(formula.lower(), bas[4:],
                                              nmp[0], nmp[1], nmp[2])
-        f = open(filename,'w')
-        f.write("# Bandgap = %0.6f au = %0.6f eV\n"%(bandgap, bandgap*27.2114))
-        f.write("# Special points:\n")
-        for point, label in zip(sp_points,['L', 'G', 'X', 'W', 'K', 'G']):
-            f.write("# %0.6f %s\n"%(point,label))
-        for kk, ek, qpk in zip(kpath, e_kn, qp_kn):
-            f.write("%0.6f "%(kk))
-            for ekn, qpkn in zip(ek,qpk):
-                f.write("%0.6f %0.6f "%(ekn, qpkn))
-            f.write("\n")
-        f.close()
+        write_file(filename)
 
 if __name__ == '__main__':
     main()
