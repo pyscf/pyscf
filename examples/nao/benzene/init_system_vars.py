@@ -11,7 +11,7 @@ sv  = system_vars_c(label)
 print(diag_check(sv), dir(sv))
 
 sbt = sbt_c(sv.ao_log.rr, sv.ao_log.pp)
-print(sbt.exe(sv.ao_log.psi_log[0,0,:], 0))
+print(sbt.sbt(sv.ao_log.psi_log[0,0,:], 0))
 
 me = ao_matelem_c(sv.ao_log)
 print(dir(me))
