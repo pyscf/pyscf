@@ -51,6 +51,100 @@ def contract_2e_ctypes(h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
 
     return ci1
 
+def contract_2e(h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
+    h1, eri = h1_h2
+    strs = civec._strs
+    ndet = len(strs)
+    if hdiag is None:
+        hdiag = make_hdiag(h1, eri, strs, norb, nelec)
+    ci1 = numpy.zeros_like(civec)
+
+    eri = eri.reshape([norb]*4)
+
+    for ip in range(ndet):
+        for jp in range(ip):
+            stria, strib = strs[ip].reshape(2,-1)
+            strja, strjb = strs[jp].reshape(2,-1)
+            desa, crea = str_diff(stria, strja)
+            if len(desa) > 2:
+                continue
+            desb, creb = str_diff(strib, strjb)
+            if len(desb) + len(desa) > 2:
+                continue
+            if len(desa) + len(desb) == 1:
+# alpha->alpha
+                if len(desb) == 0:
+                    i,a = desa[0], crea[0]
+                    occsa = str2orblst(stria, norb)[0]
+                    occsb = str2orblst(strib, norb)[0]
+                    fai = h1[a,i]
+                    for k in occsa:
+                        fai += eri[k,k,a,i] - eri[k,i,a,k]
+                    for k in occsb:
+                        fai += eri[k,k,a,i]
+                    sign = cre_des_sign(a, i, stria)
+                    ci1[jp] += sign * fai * civec[ip]
+                    ci1[ip] += sign * fai * civec[jp]
+# beta ->beta
+                elif len(desa) == 0:
+                    i,a = desb[0], creb[0]
+                    occsa = str2orblst(stria, norb)[0]
+                    occsb = str2orblst(strib, norb)[0]
+                    fai = h1[a,i]
+                    for k in occsb:
+                        fai += eri[k,k,a,i] - eri[k,i,a,k]
+                    for k in occsa:
+                        fai += eri[k,k,a,i]
+                    sign = cre_des_sign(a, i, strib)
+                    ci1[jp] += sign * fai * civec[ip]
+                    ci1[ip] += sign * fai * civec[jp]
+
+            else:
+# alpha,alpha->alpha,alpha
+                if len(desb) == 0:
+                    i,j = desa
+                    a,b = crea
+# 6 conditions for i,j,a,b
+# --++, ++--, -+-+, +-+-, -++-, +--+ 
+                    if a > j or i > b:
+# condition --++, ++--
+                        v = eri[a,j,b,i]-eri[a,i,b,j]
+                        sign = cre_des_sign(b, i, stria)
+                        sign*= cre_des_sign(a, j, stria)
+                    else:
+# condition -+-+, +-+-, -++-, +--+ 
+                        v = eri[a,i,b,j]-eri[a,j,b,i]
+                        sign = cre_des_sign(b, j, stria)
+                        sign*= cre_des_sign(a, i, stria)
+                    ci1[jp] += sign * v * civec[ip]
+                    ci1[ip] += sign * v * civec[jp]
+# beta ,beta ->beta ,beta
+                elif len(desa) == 0:
+                    i,j = desb
+                    a,b = creb
+                    if a > j or i > b:
+                        v = eri[a,j,b,i]-eri[a,i,b,j]
+                        sign = cre_des_sign(b, i, strib)
+                        sign*= cre_des_sign(a, j, strib)
+                    else:
+                        v = eri[a,i,b,j]-eri[a,j,b,i]
+                        sign = cre_des_sign(b, j, strib)
+                        sign*= cre_des_sign(a, i, strib)
+                    ci1[jp] += sign * v * civec[ip]
+                    ci1[ip] += sign * v * civec[jp]
+# alpha,beta ->alpha,beta
+                else:
+                    i,a = desa[0], crea[0]
+                    j,b = desb[0], creb[0]
+                    v = eri[a,i,b,j]
+                    sign = cre_des_sign(a, i, stria)
+                    sign*= cre_des_sign(b, j, strib)
+                    ci1[jp] += sign * v * civec[ip]
+                    ci1[ip] += sign * v * civec[jp]
+        ci1[ip] += hdiag[ip] * civec[ip]
+
+    return ci1
+
 def make_hdiag(h1e, eri, strs, norb, nelec):
     eri = ao2mo.restore(1, eri, norb)
     diagj = numpy.einsum('iijj->ij',eri)
@@ -306,12 +400,12 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
         myci.check_sanity()
 
     log.info('\nStarting heat-bath CI algorithm...\n')
-    log.info('Selection threshold:                  %8.5e', myci.select_cutoff)
-    log.info('CI coefficient cutoff:                %8.5e', myci.ci_coeff_cutoff)
-    log.info('Energy convergence tolerance:         %8.5e', tol)
-    log.info('Number of determinants tolerance:     %8.5e', myci.conv_ndet_tol)
-    log.info('Number of electrons:                  %s',     nelec)
-    log.info('Number of orbitals:                   %3d',    norb)
+    log.info('Selection threshold:                  %8.5e',    myci.select_cutoff)
+    log.info('CI coefficient cutoff:                %8.5e',    myci.ci_coeff_cutoff)
+    log.info('Energy convergence tolerance:         %8.5e',    tol)
+    log.info('Number of determinants tolerance:     %8.5e',    myci.conv_ndet_tol)
+    log.info('Number of electrons:                  %s',       nelec)
+    log.info('Number of orbitals:                   %3d',      norb)
     log.info('Number of roots:                      %3d\n',    nroots)
 
     nelec = direct_spin1._unpack_nelec(nelec, myci.spin)
@@ -446,7 +540,7 @@ class SelectedCI(direct_spin1.FCISolver):
         self.conv_ndet_tol = 0.001
         self.nroots = 1
         # Maximum memory in MB for storing lists of selected strings
-        self.max_memory = 10000
+        self.max_memory = 1000
 
 ##################################################
 # don't modify the following attributes, they are not input options
