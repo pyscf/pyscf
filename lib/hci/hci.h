@@ -20,3 +20,4 @@ int order(uint64_t *strs_i, uint64_t *strs_j, int nset);
 void qsort_idx(uint64_t *strs, uint64_t *idx, uint64_t *nstrs, int nset, uint64_t *new_idx);
 void argunique(uint64_t *strs, uint64_t *sort_idx, uint64_t *nstrs, int nset);
 void contract_ss_c(int norb, int neleca, int nelecb, uint64_t *strs, double *civec, uint64_t ndet, double *ci1);
+void contract_h_c_ss_c(double *h1, double *eri, int norb, int neleca, int nelecb, uint64_t *strs, double *civec, double *hdiag, uint64_t ndet, double *ci1, double *ci2);

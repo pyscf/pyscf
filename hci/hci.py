@@ -544,8 +544,6 @@ def fix_spin(myci, shift=.2, ss=None, **kwargs):
     else:
         ss_value = ss
 
-    old_contract_2e = myci.contract_2e
-
     def contract_2e(h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
         if isinstance(nelec, (int, numpy.number)):
             sz = (nelec % 2) * .5
@@ -556,23 +554,50 @@ def fix_spin(myci, shift=.2, ss=None, **kwargs):
         else:
             ss = ss_value
 
+        h1, eri = h1_h2
+        strs = civec._strs
+        ndet = len(strs)
+        if hdiag is None:
+            hdiag = make_hdiag(h1, eri, strs, norb, nelec)
+        ci1 = numpy.zeros_like(civec)
+        ci2 = numpy.zeros_like(civec)
+
+        h1 = numpy.asarray(h1, order='C')
+        eri = numpy.asarray(eri, order='C')
+        strs = numpy.asarray(strs, order='C')
+        civec = numpy.asarray(civec, order='C')
+        hdiag = numpy.asarray(hdiag, order='C')
+        ci1 = numpy.asarray(ci1, order='C')
+        ci2 = numpy.asarray(ci2, order='C')
+
+        libhci.contract_h_c_ss_c(h1.ctypes.data_as(ctypes.c_void_p), 
+                                 eri.ctypes.data_as(ctypes.c_void_p), 
+                                 ctypes.c_int(norb), 
+                                 ctypes.c_int(nelec[0]), 
+                                 ctypes.c_int(nelec[1]), 
+                                 strs.ctypes.data_as(ctypes.c_void_p), 
+                                 civec.ctypes.data_as(ctypes.c_void_p), 
+                                 hdiag.ctypes.data_as(ctypes.c_void_p), 
+                                 ctypes.c_ulonglong(ndet), 
+                                 ci1.ctypes.data_as(ctypes.c_void_p),
+                                 ci2.ctypes.data_as(ctypes.c_void_p))
+
         if ss < sz*(sz+1)+.1:
 # (S^2-ss)|Psi> to shift state other than the lowest state
-            ci1 = myci.contract_ss(civec, norb, nelec).reshape(civec.shape)
-            ci1 -= ss * civec
+            ci2 -= ss * civec
         else:
 # (S^2-ss)^2|Psi> to shift states except the given spin.
 # It still relies on the quality of initial guess
-            tmp = myci.contract_ss(civec, norb, nelec).reshape(civec.shape)
+            tmp = ci2.copy()
             tmp -= ss * civec
-            ci1 = -ss * tmp
-            ci1 += myci.contract_ss(tmp, norb, nelec).reshape(civec.shape)
+            ci2 = -ss * tmp
+            ci2 += myci.contract_ss(tmp, norb, nelec)
             tmp = None
-        ci1 *= shift
+        ci2 *= shift
+        ci1 += ci2
 
-        ci0 = old_contract_2e(h1_h2, civec, norb, nelec, hdiag, **kwargs)
-        ci1 += ci0.reshape(civec.shape)
         return ci1
+
     myci.contract_2e = contract_2e
     return myci
 
