@@ -406,7 +406,7 @@ def orblst2str(lst, norb):
 
 def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
                        tol=None, lindep=None, max_cycle=None, max_space=None,
-                       nroots=None, davidson_only=None,
+                       nroots=None, davidson_only=None, max_iter=None,
                        max_memory=None, verbose=None, ecore=0, return_integrals=False, 
                        eri_sorted=None, jk=None, jk_sorted=None, **kwargs):
     if verbose is None:
@@ -421,6 +421,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     if max_space is None: max_space = myci.max_space
     if max_memory is None: max_memory = myci.max_memory
     if nroots is None: nroots = myci.nroots
+    if max_iter is None: max_iter = myci.max_iter
     if myci.verbose >= logger.WARN:
         myci.check_sanity()
 
@@ -468,7 +469,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     e_last = 0
     float_tol = 3e-4
     conv = False
-    for icycle in range(norb):
+    for icycle in range(max_iter):
         ci_strs = ci0[0]._strs
         float_tol = max(float_tol*.3, tol*1e2)
         log.info('\nMacroiteration %d', icycle)
@@ -563,6 +564,7 @@ class SelectedCI(direct_spin1.FCISolver):
         self.conv_tol = 1e-9
         self.conv_ndet_tol = 0.001
         self.nroots = 1
+        self.max_iter = 20
         # Maximum memory in MB for storing lists of selected strings
         self.max_memory = 1000
 
