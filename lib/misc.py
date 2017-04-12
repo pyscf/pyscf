@@ -116,18 +116,36 @@ def arg_first_match(test, lst):
             return i
     raise ValueError('No element of the given list matches the test condition.')
 
-# for give n, generate [(m1,m2),...] that
-#       m2*(m2+1)/2 - m1*(m1+1)/2 <= base*(base+1)/2
 def tril_equal_pace(n, base=0, npace=0, minimal=1):
+    idx = numpy.arange(n+1)
+    cum = idx * (idx+1) // 2
     if base == 0:
         assert(npace > 0)
-        base = int(math.sqrt(n*(n+1)/npace)) + 1
-    m1 = 0
-    while m1 < n:
-        # m1*m1 + base*base < m1*(m1+1) + base*(base+1) - m2
-        m2 = int(max(math.sqrt(m1**2+base**2), m1+minimal))
-        yield m1, min(m2,n)
-        m1 = m2
+        segsize = float(cum[-1]) / (npace-.5)
+        displs = _blocksize_partition(cum, segsize)
+        if len(displs) != npace+1:
+            displs = _balanced_partition(cum, npace)
+    else:
+        displs = _blocksize_partition(cum, base)
+    for p0, p1 in zip(displs[:-1], displs[1:]):
+        yield p0, p1
+
+def _balanced_partition(cum, ntasks):
+    segsize = float(cum[-1]) / ntasks
+    bounds = numpy.arange(ntasks+1) * segsize
+    displs = abs(bounds[:,None] - cum).argmin(axis=1)
+    return displs
+
+def _blocksize_partition(cum, blocksize):
+    n = len(cum) - 1
+    displs = [0]
+    p0 = 0
+    for i in range(1, n):
+        if cum[i+1]-cum[p0] > blocksize:
+            displs.append(i)
+            p0 = i
+    displs.append(n)
+    return displs
 
 def flatten(lst):
     '''flatten nested lists

@@ -343,7 +343,7 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
             partial_core = num_of_orb_end -num_of_orb_begin
             partial_virt = 0
 
-    newscratch = os.path.join(scratch, str(rank))
+    newscratch = os.path.join(os.path.abspath(scratch), str(rank))
     if not os.path.exists('%s'%newscratch):
         os.makedirs('%s'%newscratch)
         os.makedirs('%s/node0'%newscratch)

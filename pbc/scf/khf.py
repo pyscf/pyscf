@@ -12,6 +12,7 @@ See Also:
     hf.py : Hartree-Fock for periodic systems at a single k-point
 '''
 
+import sys
 import time
 import numpy as np
 import scipy.linalg

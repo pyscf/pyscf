@@ -262,26 +262,27 @@ class CCSD(pyscf.cc.ccsd.CCSD):
         self.nkpts = len(self.kpts)
         nkpts = self.nkpts
 
-        nmo = mf.cell.nao_nr()
+        nao = mf.cell.nao_nr()
+        nmo = mf.mo_energy.shape[1]
         nso = 2*nmo
         # calculating spin orbitals...
         if mo_energy is None:
             mo_energy = numpy.zeros(shape=(nkpts,nso))
             mo_energy[:,0::2] = mo_energy[:,1::2] = mf.mo_energy
-	self.mo_energy = mo_energy
+        self.mo_energy = mo_energy
         if mo_coeff is None:
             # TODO: Careful for real/complex here, in the future
-            so_coeffT = numpy.zeros((nkpts,nso,nso), dtype=numpy.complex128)
-            mo_coeffT = numpy.zeros((nkpts,nmo,nmo), dtype=numpy.complex128)
-            mo_coeff = numpy.zeros((nkpts,nso,nso), dtype=numpy.complex128)
+            so_coeffT = numpy.zeros((nkpts,nso,nao*2), dtype=numpy.complex128)
+            mo_coeffT = numpy.zeros((nkpts,nmo,nao), dtype=numpy.complex128)
+            mo_coeff = numpy.zeros((nkpts,nao*2,nso), dtype=numpy.complex128)
             for k in range(nkpts):
                 mo_coeffT[k] = numpy.conj(mf.mo_coeff[k]).T
             for k in range(nkpts):
                 for i in range(nso):
                     if i%2 == 0:
-                        so_coeffT[k][i][:nso/2] = mo_coeffT[k][i//2]
+                        so_coeffT[k,i,:nao] = mo_coeffT[k][i//2]
                     else:
-                        so_coeffT[k][i][nso/2:] = mo_coeffT[k][i//2]
+                        so_coeffT[k,i,nao:] = mo_coeffT[k][i//2]
             # Each col is an eigenvector, first n/2 rows are alpha, then n/2 beta
             for k in range(nkpts):
                 mo_coeff[k] = numpy.conj(so_coeffT[k]).T
@@ -392,9 +393,11 @@ class _ERIS:
         elif len(cc.frozen) > 0:
             for k in range(nkpts):
                 moidx[k,numpy.asarray(cc.frozen)] = False
+        assert(numpy.count_nonzero(moidx) % 2 == 0) # works for restricted CCSD only
         if mo_coeff is None:
             # TODO make this work for frozen maybe... seems like it should work
-            self.mo_coeff = numpy.zeros((nkpts,nmo,nmo),dtype=numpy.complex128)
+            nao = cc._scf.cell.nao_nr()
+            self.mo_coeff = numpy.zeros((nkpts,nao*2,nmo),dtype=numpy.complex128)
             for k in range(nkpts):
                 self.mo_coeff[k] = cc.mo_coeff[k][:,moidx[k]]
             mo_coeff = self.mo_coeff
@@ -415,8 +418,9 @@ class _ERIS:
         mem_now = lib.current_memory()[0]
 
         # Convert to spin-orbitals and anti-symmetrize
-        so_coeff = numpy.zeros((nkpts,nmo/2,nmo),dtype=numpy.complex128)
-        so_coeff[:,:,::2] = so_coeff[:,:,1::2] = mo_coeff[:,:nmo/2,::2]
+        nao = cc._scf.cell.nao_nr()
+        so_coeff = numpy.zeros((nkpts,nao,nmo),dtype=numpy.complex128)
+        so_coeff[:,:,::2] = so_coeff[:,:,1::2] = mo_coeff[:,:nao,::2]
 
         log = logger.Logger(cc.stdout, cc.verbose)
         if (method == 'incore' and cc._scf._eri is None and
@@ -425,13 +429,13 @@ class _ERIS:
             kconserv = tools.get_kconserv(cc._scf.cell,cc.kpts)
 
             eri = numpy.zeros((nkpts,nkpts,nkpts,nmo,nmo,nmo,nmo), dtype=numpy.complex128)
+            fao2mo = cc._scf.with_df.ao2mo
             for kp in range(nkpts):
                 for kq in range(nkpts):
                     for kr in range(nkpts):
                         ks = kconserv[kp,kq,kr]
-                        eri_kpt = pyscf.pbc.ao2mo.general(cc._scf.cell,
-                                    (so_coeff[kp,:,:],so_coeff[kq,:,:],so_coeff[kr,:,:],so_coeff[ks,:,:]),
-                                    (cc.kpts[kp],cc.kpts[kq],cc.kpts[kr],cc.kpts[ks]))
+                        eri_kpt = fao2mo((so_coeff[kp],so_coeff[kq],so_coeff[kr],so_coeff[ks]),
+                                         (cc.kpts[kp],cc.kpts[kq],cc.kpts[kr],cc.kpts[ks]), compact=False)
                         eri_kpt = eri_kpt.reshape(nmo,nmo,nmo,nmo)
                         eri[kp,kq,kr] = eri_kpt.copy()
 
