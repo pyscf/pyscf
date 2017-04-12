@@ -209,7 +209,7 @@ def cre_des_sign(p, q, string):
             mask = numpy.uint64((1 << pb) - (1 << (qb+1)))
         else:
             mask = numpy.uint64((1 << qb) - (1 << (pb+1)))
-        n1 = bin(string[pg]&mask).count('1')
+        n1 = bin(string[-1-pg]&mask).count('1')
 
     if n1 % 2:
         return -1

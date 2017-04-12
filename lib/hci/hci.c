@@ -342,7 +342,7 @@ double compute_cre_des_sign(int p, int q, uint64_t *str, int nset) {
         uint64_t mask;
         if (p > q) mask = (1ULL << pb) - (1ULL << (qb + 1));
         else       mask = (1ULL << qb) - (1ULL << (pb + 1));
-        nperm = popcount(str[pg] & mask);
+        nperm = popcount(str[nset -1 - pg] & mask);
     }
 
     if (nperm % 2) sign = -1.0;
@@ -856,7 +856,7 @@ void contract_ss_c(int norb, int neleca, int nelecb, uint64_t *strs, double *civ
                         }
                         free(ia);
                         free(jb);
-                   }
+                    }
                 }
             } // end if over ts
         } // end loop over jp
