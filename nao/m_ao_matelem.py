@@ -19,7 +19,7 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     self.jmx  = np.amax(ao_log.sp_mu2j)
 
     c2r_c.__init__(self, self.jmx)
-    sbt_c.__init__(self, ao_log.rr, ao_log.pp)
+    sbt_c.__init__(self, ao_log.rr, ao_log.pp, lmax=2*self.jmx+1)
     gaunt_c.__init__(self, self.jmx)
     
     self.psi_log = ao_log.psi_log
@@ -47,9 +47,24 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
 
     self.psi_log_mom = np.zeros(self.psi_log.shape)
 
+    #print(sum(self._premult), sum(abs(self._premult)))
+    #print(sum(self._postdiv), sum(abs(self._postdiv)))
+    #print(sum(sum(self.j_ltable)), sum(sum(abs(self.j_ltable))))
+
+    #print(sum(sum(self._mult_table2)), sum(sum(abs(self._mult_table2))))
+    #print(self._mult_table2[5, 100])
+
+    #print(self.j_ltable[5, 100])
+
+    #print(self._mult_table2.shape)
+
+        
     for sp in self.species:
       for mu,am in zip(self.sp2mults[sp], self.sp_mu2j[sp]):
         self.psi_log_mom[sp,mu,:] = self.sbt( self.psi_log[sp,mu,:], am, 1)
+        print(sp, mu, sum(self.psi_log_mom[sp,mu,:]), sum(abs(self.psi_log_mom[sp,mu,:])))
+    
+    
     
     dr = np.log(ao_log.rr[1]/ao_log.rr[0])
     self.rr3_dr = ao_log.rr**3 * dr
@@ -69,7 +84,12 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     overlaps = np.zeros(shape)
     
     R2mR1 = R2-R1
+    
     ylm = csphar( R2mR1, 2*self.jmx+1 )
+#    print(ylm[0])
+#    print(ylm[1])
+#    print(ylm[2])
+#    print(ylm[3])
     dist = np.sqrt(sum(R2mR1*R2mR1))
 
     cS = np.zeros((self.jmx*2+1,self.jmx*2+1), dtype='complex128')
@@ -95,13 +115,14 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
       for mu1,l1,s1,f1 in self.sp2info[sp1]:
         for mu2,l2,s2,f2 in self.sp2info[sp2]:
           if self.sp_mu2rcut[sp1,mu1]+self.sp_mu2rcut[sp2,mu2]<dist: continue
-          rS.fill(0.0); cS.fill(0.0);
+
           f1f2_mom = self.psi_log_mom[sp2,mu2,:] * self.psi_log_mom[sp1,mu1,:]
           l2S.fill(0.0)
           for l in range( abs(l1-l2), l1+l2+1):
-            f1f2_rea = self.sbt(f1f2_mom, l,-1)
-            l2S[l] = log_interp(f1f2_rea, dist, self.rhomin, self.dr_jt)*self.const*self.four_pi
-          
+            f1f2_rea = self.sbt(f1f2_mom, l, -1)
+            l2S[l] = log_interp(f1f2_rea, dist, self.rhomin, self.dr_jt)*self.const
+
+          cS.fill(0.0) 
           for m1 in range(-l1,l1+1):
             for m2 in range(-l2,l2+1):
               gc = self.gaunt(l1,-m1,l2,m2)
@@ -111,7 +132,9 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
                 cS[m1+self.jmx,m2+self.jmx] = cS[m1+self.jmx,m2+self.jmx] + l2S[l3]*ylm[ l3*(l3+1)+m3] * \
                   gc[l3ind] * (-1.0)**((3*l1+l2+l)/2+m2)
           
+          rS.fill(0.0)
           self.c2r_( l1,l2, self.jmx,cS,rS,cmat)
           overlaps[s1:f1,s2:f2] = rS[-l1+self.jmx:l1+1+self.jmx,-l2+self.jmx:l2+1+self.jmx]
 
+    
     return overlaps

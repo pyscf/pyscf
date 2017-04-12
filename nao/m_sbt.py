@@ -68,14 +68,14 @@ class sbt_c():
 
       phi2 = -np.arctan(1.0) if tt>200.0 else -np.arctan(np.sinh(np.pi*tt/2)/np.cosh(np.pi*tt/2))  # see Eq. (20)
       phi = phi1+phi2+phi3
-     
+
       self._mult_table1[0,it] = np.sqrt(np.pi/2)*np.exp(1j*phi)/n  # Eq. (18)
       if it==0 : self._mult_table1[0,it] = 0.5*self._mult_table1[0,it]
       phi = -phi2 - np.arctan(2.0*tt)
       if lmax>0 : self._mult_table1[1,it] = np.exp(2.0*1j*phi)*self._mult_table1[0,it] # See Eq. (21)
 
       #    Apply Eq. (24)
-      for lk in range(1,lmax-1):
+      for lk in range(1,lmax):
         phi = -np.arctan(2*tt/(2*lk+1))
         self._mult_table1[lk+1,it] = np.exp(2.0*1j*phi)*self._mult_table1[lk-1,it]
     # END of it in range(n):
@@ -87,7 +87,7 @@ class sbt_c():
     for i in range(nr2): j_ltable[0:lmax+1,i] = xjl( np.exp(self.rhomin+self.kapmin+i*dr), lmax )
 
     for ll in range(lmax+1):
-      self._mult_table2[ll,:] = np.fft.rfft(j_ltable[ll,:])
+      self._mult_table2[ll,:] = np.fft.rfft(j_ltable[ll,:]) # /nr2
     if with_sqrt_pi_2 : self._mult_table2 = self._mult_table2/np.sqrt(np.pi/2)
     
   # 
@@ -131,7 +131,7 @@ class sbt_c():
     r2c_in[self.nr:nr2] = self._premult[self.nr:nr2]*ff[0:self.nr]
     r2c_out = np.fft.rfft(r2c_in)
 
-    temp1 = np.zeros(nr2, dtype='complex128')
+    temp1 = np.zeros((nr2), dtype='complex128')
     temp1[0:self.nr] = np.conj(r2c_out[0:self.nr])*self._mult_table1[am,0:self.nr]
     temp2 = np.fft.fft(temp1)
   
@@ -142,12 +142,12 @@ class sbt_c():
     r2c_in[self.nr:nr2] = 0.0
     r2c_out = np.fft.rfft(r2c_in)
 
-    c2r_in = np.zeros((self.nr+1), dtype='complex128')
-    c2r_in[0:self.nr+1] = np.conj(r2c_out[0:self.nr+1]) * self._mult_table2[am,0:self.nr+1]
+    c2r_in = np.conj(r2c_out[0:self.nr+1]) * self._mult_table2[am,0:self.nr+1]
     c2r_out = np.fft.irfft(c2r_in)*dr
 
     r2c_in[0:self.nr] = abs(gg[0:self.nr]-c2r_out[0:self.nr])
     kdiv = np.argmin(r2c_in[0:self.nr])
-    gg[0:kdiv] = c2r_out[0:kdiv]
+    print(kdiv, sum(gg), sum(c2r_out))
 
-    return(gg)
+    gg[0:kdiv] = c2r_out[0:kdiv]
+    return gg

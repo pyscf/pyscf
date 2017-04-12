@@ -1,6 +1,6 @@
 from pyscf.nao.m_color import color as bc
 from pyscf.nao.m_siesta_ev2ha import siesta_ev2ha
-from pyscf.nao.m_siesta_ang2bohr import siesta_ang2bohr
+from pyscf.nao.m_siesta_ang2bohr import siesta_ang2bohr, siesta_bohr2ang
 import xml.etree.ElementTree as ET
 import re
 import numpy
@@ -33,7 +33,8 @@ def siesta_xml(label="siesta"):
   z3 = list(map(float, [atom.attrib["z3"] for atom in atoms]))
   atom2coord = numpy.empty((natoms,3), dtype='double', order='F')
   for a in range(natoms): atom2coord[a,0:3] = [x3[a],y3[a],z3[a]]
-  atom2coord = atom2coord*siesta_ang2bohr
+  #atom2coord = atom2coord*siesta_ang2bohr
+  atom2coord = atom2coord/siesta_bohr2ang
   
   eigvals=fin.find(pref+"propertyList[@title='Eigenvalues']")
 
