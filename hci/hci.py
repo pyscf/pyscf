@@ -145,6 +145,31 @@ def contract_2e(h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
 
     return ci1
 
+def spin_square(civec, norb, nelec):
+    ss = numpy.dot(civec.T, contract_ss(civec, norb, nelec))
+    s = numpy.sqrt(ss+.25) - .5
+    multip = s*2+1
+    return ss, multip
+
+def contract_ss(civec, norb, nelec):
+    strs = civec._strs
+    ndet = len(strs)
+    ci1 = numpy.zeros_like(civec)
+
+    strs = numpy.asarray(strs, order='C')
+    civec = numpy.asarray(civec, order='C')
+    ci1 = numpy.asarray(ci1, order='C')
+
+    libhci.contract_ss_c(ctypes.c_int(norb), 
+                        ctypes.c_int(nelec[0]), 
+                        ctypes.c_int(nelec[1]), 
+                        strs.ctypes.data_as(ctypes.c_void_p), 
+                        civec.ctypes.data_as(ctypes.c_void_p), 
+                        ctypes.c_ulonglong(ndet), 
+                        ci1.ctypes.data_as(ctypes.c_void_p))
+
+    return ci1
+
 def make_hdiag(h1e, eri, strs, norb, nelec):
     eri = ao2mo.restore(1, eri, norb)
     diagj = numpy.einsum('iijj->ij',eri)
@@ -536,7 +561,6 @@ class SelectedCI(direct_spin1.FCISolver):
         self.ci_coeff_cutoff = .5e-3
         self.select_cutoff = .5e-3
         self.conv_tol = 1e-9
-        # Maximum change in the number of selected determinants allowed to stop iterations (0.01 = 1%)
         self.conv_ndet_tol = 0.001
         self.nroots = 1
         # Maximum memory in MB for storing lists of selected strings
@@ -574,6 +598,22 @@ class SelectedCI(direct_spin1.FCISolver):
             assert(civec.size == len(self._strs))
             civec = as_SCIvector(civec, self._strs)
         return contract_2e_ctypes(h1_h2, civec, norb, nelec, hdiag, **kwargs)
+
+    def contract_ss(self, civec, norb, nelec):
+        if hasattr(civec, '_strs'):
+            self._strs = civec._strs
+        else:
+            assert(civec.size == len(self._strs))
+            civec = as_SCIvector(civec, self._strs)
+        return contract_ss(civec, norb, nelec)
+
+    def spin_square(self, civec, norb, nelec):
+        if hasattr(civec, '_strs'):
+            self._strs = civec._strs
+        else:
+            assert(civec.size == len(self._strs))
+            civec = as_SCIvector(civec, self._strs)
+        return spin_square(civec, norb, nelec)
 
     def make_hdiag(self, h1e, eri, strs, norb, nelec):
         return make_hdiag(h1e, eri, strs, norb, nelec)
