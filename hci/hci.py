@@ -432,7 +432,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     log.info('Number of determinants tolerance:     %8.5e',    myci.conv_ndet_tol)
     log.info('Number of electrons:                  %s',       nelec)
     log.info('Number of orbitals:                   %3d',      norb)
-    log.info('Number of roots:                      %3d\n',    nroots)
+    log.info('Number of roots:                      %3d',    nroots)
 
     nelec = direct_spin1._unpack_nelec(nelec, myci.spin)
     eri = ao2mo.restore(1, eri, norb)
@@ -441,7 +441,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     eri = eri.ravel()
 
     if eri_sorted is None and jk is None and jk_sorted is None:
-        log.debug("Sorting two-electron integrals...")
+        log.debug("\nSorting two-electron integrals...")
         t_start = time.time()
         eri_sorted = abs(eri).argsort()[::-1]
         jk = eri.reshape([norb]*4)
@@ -461,8 +461,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     ci0 = myci.enlarge_space(ci0, h1e, eri, jk, eri_sorted, jk_sorted, norb, nelec)
 
     def hop(c):
-        #hc = myci.contract_2e((h1e, eri), as_SCIvector(c, ci_strs), norb, nelec, hdiag)
-        hc = myci.contract_2e_ctypes((h1e, eri), as_SCIvector(c, ci_strs), norb, nelec, hdiag)
+        hc = myci.contract_2e((h1e, eri), as_SCIvector(c, ci_strs), norb, nelec, hdiag)
         return hc.ravel()
     precond = lambda x, e, *args: x/(hdiag-e+myci.level_shift)
 
@@ -475,7 +474,6 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
         log.info('\nMacroiteration %d', icycle)
         log.info('Number of CI configurations: %d', ci_strs.shape[0])
         hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
-        #e, ci0 = lib.davidson(hop, ci0.reshape(-1), precond, tol=float_tol)
         t_start = time.time()
         e, ci0 = myci.eig(hop, ci0, precond, tol=float_tol, lindep=lindep,
                           max_cycle=max_cycle, max_space=max_space, nroots=nroots,
@@ -519,6 +517,64 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     else:
         return (numpy.array(e)+ecore), [as_SCIvector(ci, ci_strs) for ci in c]
 
+def fix_spin(myci, shift=.2, ss=None, **kwargs):
+    r'''If Selected CI solver cannot stick on spin eigenfunction, modify the solver by
+    adding a shift on spin square operator
+
+    .. math::
+
+        (H + shift*S^2) |\Psi\rangle = E |\Psi\rangle
+
+    Args:
+        myci : An instance of :class:`SelectedCI`
+
+    Kwargs:
+        shift : float
+            Level shift for states which have different spin
+        ss : number
+            S^2 expection value == s*(s+1)
+
+    Returns
+            A modified Selected CI object based on myci.
+    '''
+    if 'ss_value' in kwargs:
+        sys.stderr.write('fix_spin_: kwarg "ss_value" will be removed in future release. '
+                         'It was replaced by "ss"\n')
+        ss_value = kwargs['ss_value']
+    else:
+        ss_value = ss
+
+    old_contract_2e = myci.contract_2e
+
+    def contract_2e(h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
+        if isinstance(nelec, (int, numpy.number)):
+            sz = (nelec % 2) * .5
+        else:
+            sz = abs(nelec[0]-nelec[1]) * .5
+        if ss_value is None:
+            ss = sz*(sz+1)
+        else:
+            ss = ss_value
+
+        if ss < sz*(sz+1)+.1:
+# (S^2-ss)|Psi> to shift state other than the lowest state
+            ci1 = myci.contract_ss(civec, norb, nelec).reshape(civec.shape)
+            ci1 -= ss * civec
+        else:
+# (S^2-ss)^2|Psi> to shift states except the given spin.
+# It still relies on the quality of initial guess
+            tmp = myci.contract_ss(civec, norb, nelec).reshape(civec.shape)
+            tmp -= ss * civec
+            ci1 = -ss * tmp
+            ci1 += myci.contract_ss(tmp, norb, nelec).reshape(civec.shape)
+            tmp = None
+        ci1 *= shift
+
+        ci0 = old_contract_2e(h1_h2, civec, norb, nelec, hdiag, **kwargs)
+        ci1 += ci0.reshape(civec.shape)
+        return ci1
+    myci.contract_2e = contract_2e
+    return myci
 
 def to_fci(civec, norb, nelec, root=0):
     assert(norb <= 64)
@@ -564,7 +620,7 @@ class SelectedCI(direct_spin1.FCISolver):
         self.conv_tol = 1e-9
         self.conv_ndet_tol = 0.001
         self.nroots = 1
-        self.max_iter = 20
+        self.max_iter = 10
         # Maximum memory in MB for storing lists of selected strings
         self.max_memory = 1000
 
@@ -585,21 +641,13 @@ class SelectedCI(direct_spin1.FCISolver):
         return (h1, eri)
 
     def contract_2e(self, h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
-
-        if hasattr(civec, '_strs'):
-            self._strs = civec._strs
-        else:
-            assert(civec.size == len(self._strs))
-            civec = as_SCIvector(civec, self._strs)
-        return contract_2e(h1_h2, civec, norb, nelec, hdiag, **kwargs)
-
-    def contract_2e_ctypes(self, h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
         if hasattr(civec, '_strs'):
             self._strs = civec._strs
         else:
             assert(civec.size == len(self._strs))
             civec = as_SCIvector(civec, self._strs)
         return contract_2e_ctypes(h1_h2, civec, norb, nelec, hdiag, **kwargs)
+#        return contract_2e(h1_h2, civec, norb, nelec, hdiag, **kwargs)
 
     def contract_ss(self, civec, norb, nelec):
         if hasattr(civec, '_strs'):
