@@ -110,18 +110,19 @@ def get_pp(mydf, kpts=None):
                     #:SPG_lm_aoG = numpy.einsum('nmg,gp->nmp', SPG_lmi, aokG)
                     #:tmp = numpy.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
                     #:vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
-            SPG_lmi = buf[:p1]
-            SPG_lmi *= SI[ia].conj()
-            SPG_lm_aoGs = lib.zdot(SPG_lmi, aokG)
-            p1 = 0
-            for l, proj in enumerate(pp[5:]):
-                rl, nl, hl = proj
-                if nl > 0:
-                    p0, p1 = p1, p1+nl*(l*2+1)
-                    hl = numpy.asarray(hl)
-                    SPG_lm_aoG = SPG_lm_aoGs[p0:p1].reshape(nl,l*2+1,-1)
-                    tmp = numpy.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
-                    vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
+            if p1 > 0:
+                SPG_lmi = buf[:p1]
+                SPG_lmi *= SI[ia].conj()
+                SPG_lm_aoGs = lib.zdot(SPG_lmi, aokG)
+                p1 = 0
+                for l, proj in enumerate(pp[5:]):
+                    rl, nl, hl = proj
+                    if nl > 0:
+                        p0, p1 = p1, p1+nl*(l*2+1)
+                        hl = numpy.asarray(hl)
+                        SPG_lm_aoG = SPG_lm_aoGs[p0:p1].reshape(nl,l*2+1,-1)
+                        tmp = numpy.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
+                        vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
         return vppnl * (1./ngs**2)
 
     for k, kpt in enumerate(kpts_lst):
