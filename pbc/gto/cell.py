@@ -18,8 +18,8 @@ from pyscf import dft
 from pyscf.lib import logger
 from pyscf.gto import mole
 from pyscf.gto import moleintor
-from pyscf.gto.mole import _symbol, _rm_digit, _std_symbol, _charge
-from pyscf.gto.mole import conc_env
+from pyscf.gto.mole import _symbol, _rm_digit, _atom_symbol, _std_symbol, _charge
+from pyscf.gto.mole import conc_env, uncontract
 from pyscf.pbc.gto import basis
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.tools import pbc as pbctools
@@ -118,11 +118,16 @@ def format_basis(basis_tab):
     '''
     fmt_basis = {}
     for atom in basis_tab.keys():
+        symb = _atom_symbol(atom)
+        stdsymb = _std_symbol(symb)
         atom_basis = basis_tab[atom]
         if isinstance(atom_basis, (str, unicode)) and 'gth' in atom_basis:
-            fmt_basis[atom] = basis.load(str(atom_basis), _std_symbol(atom))
+            if atom_basis.lower().startswith('unc'):
+                fmt_basis[symb] = uncontract(basis.load(atom_basis[3:], stdsymb))
+            else:
+                fmt_basis[symb] = basis.load(atom_basis, stdsymb)
         else:
-            fmt_basis[atom] = atom_basis
+            fmt_basis[symb] = atom_basis
     return mole.format_basis(fmt_basis)
 
 def copy(cell):
