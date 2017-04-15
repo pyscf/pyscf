@@ -87,7 +87,7 @@ class sbt_c():
     for i in range(nr2): j_ltable[0:lmax+1,i] = xjl( np.exp(self.rhomin+self.kapmin+i*dr), lmax )
 
     for ll in range(lmax+1):
-      self._mult_table2[ll,:] = np.fft.rfft(j_ltable[ll,:]) # /nr2
+      self._mult_table2[ll,:] = np.fft.rfft(j_ltable[ll,:]) /nr2
     if with_sqrt_pi_2 : self._mult_table2 = self._mult_table2/np.sqrt(np.pi/2)
     
   # 
@@ -130,24 +130,22 @@ class sbt_c():
     r2c_in[0:self.nr] = C*self._premult[0:self.nr]*self._smallr[0:self.nr]**(npow+am)
     r2c_in[self.nr:nr2] = self._premult[self.nr:nr2]*ff[0:self.nr]
     r2c_out = np.fft.rfft(r2c_in)
-
+    
     temp1 = np.zeros((nr2), dtype='complex128')
     temp1[0:self.nr] = np.conj(r2c_out[0:self.nr])*self._mult_table1[am,0:self.nr]
-    temp2 = np.fft.fft(temp1)
-  
+    temp2 = np.fft.ifft(temp1)*nr2
     gg[0:self.nr] = (rmin/kmin)**1.5 * (temp2[self.nr:nr2]).real * self._postdiv[0:self.nr]
-
+        
     # obtain the SMALL k results in the array c2r_out
     r2c_in[0:self.nr] = ptr_rr3[0:self.nr] * ff[0:self.nr]
     r2c_in[self.nr:nr2] = 0.0
     r2c_out = np.fft.rfft(r2c_in)
 
     c2r_in = np.conj(r2c_out[0:self.nr+1]) * self._mult_table2[am,0:self.nr+1]
-    c2r_out = np.fft.irfft(c2r_in)*dr
+    c2r_out = np.fft.irfft(c2r_in)*dr*nr2
 
     r2c_in[0:self.nr] = abs(gg[0:self.nr]-c2r_out[0:self.nr])
     kdiv = np.argmin(r2c_in[0:self.nr])
-    print(kdiv, sum(gg), sum(c2r_out))
 
     gg[0:kdiv] = c2r_out[0:kdiv]
     return gg

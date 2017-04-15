@@ -46,25 +46,10 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
 #        print(sp, mu)
 
     self.psi_log_mom = np.zeros(self.psi_log.shape)
-
-    #print(sum(self._premult), sum(abs(self._premult)))
-    #print(sum(self._postdiv), sum(abs(self._postdiv)))
-    #print(sum(sum(self.j_ltable)), sum(sum(abs(self.j_ltable))))
-
-    #print(sum(sum(self._mult_table2)), sum(sum(abs(self._mult_table2))))
-    #print(self._mult_table2[5, 100])
-
-    #print(self.j_ltable[5, 100])
-
-    #print(self._mult_table2.shape)
-
         
     for sp in self.species:
       for mu,am in zip(self.sp2mults[sp], self.sp_mu2j[sp]):
         self.psi_log_mom[sp,mu,:] = self.sbt( self.psi_log[sp,mu,:], am, 1)
-        print(sp, mu, sum(self.psi_log_mom[sp,mu,:]), sum(abs(self.psi_log_mom[sp,mu,:])))
-    
-    
     
     dr = np.log(ao_log.rr[1]/ao_log.rr[0])
     self.rr3_dr = ao_log.rr**3 * dr

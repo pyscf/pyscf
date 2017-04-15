@@ -19,7 +19,7 @@ R2 = np.array([1.4659276763729339,  1.1212154156359782,        0.000000000000000
 oo = me.get_overlap(0, 1, R1, R2)
 
 #print(oo.shape)
-#print(oo)
+print(oo)
 
 #plt.plot(me.kk, np.log(abs(me.psi_log_mom[0,0,:])),
 #  me.kk, me.psi_log_mom[0,1,:], 
