@@ -38,7 +38,9 @@ int GTOcontract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
                 rr[i] = gridx[i]*gridx[i] + gridy[i]*gridy[i] + gridz[i]*gridz[i];
         }
 
-        memset(ectr, 0, sizeof(double)*nctr*BLKSIZE);
+        for (i = 0; i < nctr*BLKSIZE; i++) {
+                ectr[i] = 0;
+        }
         for (j = 0; j < nprim; j++) {
         for (i = 0; i < ngrids; i++) {
                 arr = alpha[j] * rr[i];

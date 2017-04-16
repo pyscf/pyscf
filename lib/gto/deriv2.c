@@ -768,9 +768,9 @@ void GTOshell_eval_grid_cart_deriv1(double *gto, double *ri, double *exps,
                 for (k = 0; k < nc; k++) {
                 for (i = 0; i < bgrids; i++) {
                         if (NOTZERO(exps[k*BLKSIZE+i])) {
-                                ax = exps_2a[i] * gridx[i];
-                                ay = exps_2a[i] * gridy[i];
-                                az = exps_2a[i] * gridz[i];
+                                ax = exps_2a[k*BLKSIZE+i] * gridx[i];
+                                ay = exps_2a[k*BLKSIZE+i] * gridy[i];
+                                az = exps_2a[k*BLKSIZE+i] * gridz[i];
                                 gto [         i] = gridx[i] * exps[k*BLKSIZE+i];
                                 gto [1*ngrids+i] = gridy[i] * exps[k*BLKSIZE+i];
                                 gto [2*ngrids+i] = gridz[i] * exps[k*BLKSIZE+i];
@@ -993,8 +993,8 @@ void GTOshell_eval_grid_cart_deriv1(double *gto, double *ri, double *exps,
                                                 tmp = xpows[lx] * ypows[ly] * zpows[lz];
                                                 gto [n*ngrids+i] = exps[k*BLKSIZE+i] * tmp;
                                                 gtox[n*ngrids+i] = exps_2a[k*BLKSIZE+i] * gridx[i] * tmp;
-                                                gtoy[n*ngrids+i] = exps_2a[i] * gridy[i] * tmp;
-                                                gtoz[n*ngrids+i] = exps_2a[i] * gridz[i] * tmp;
+                                                gtoy[n*ngrids+i] = exps_2a[k*BLKSIZE+i] * gridy[i] * tmp;
+                                                gtoz[n*ngrids+i] = exps_2a[k*BLKSIZE+i] * gridz[i] * tmp;
                                                 gtox[n*ngrids+i] += exps[k*BLKSIZE+i] * lx * xpows[lx-1] * ypows[ly] * zpows[lz];
                                                 gtoy[n*ngrids+i] += exps[k*BLKSIZE+i] * ly * xpows[lx] * ypows[ly-1] * zpows[lz];
                                                 gtoz[n*ngrids+i] += exps[k*BLKSIZE+i] * lz * xpows[lx] * ypows[ly] * zpows[lz-1];
