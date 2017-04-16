@@ -51,6 +51,125 @@ def contract_2e_ctypes(h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
 
     return ci1
 
+def contract_2e(h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
+    h1, eri = h1_h2
+    strs = civec._strs
+    ndet = len(strs)
+    if hdiag is None:
+        hdiag = make_hdiag(h1, eri, strs, norb, nelec)
+    ci1 = numpy.zeros_like(civec)
+
+    eri = eri.reshape([norb]*4)
+
+    for ip in range(ndet):
+        for jp in range(ip):
+            stria, strib = strs[ip].reshape(2,-1)
+            strja, strjb = strs[jp].reshape(2,-1)
+            desa, crea = str_diff(stria, strja)
+            if len(desa) > 2:
+                continue
+            desb, creb = str_diff(strib, strjb)
+            if len(desb) + len(desa) > 2:
+                continue
+            if len(desa) + len(desb) == 1:
+# alpha->alpha
+                if len(desb) == 0:
+                    i,a = desa[0], crea[0]
+                    occsa = str2orblst(stria, norb)[0]
+                    occsb = str2orblst(strib, norb)[0]
+                    fai = h1[a,i]
+                    for k in occsa:
+                        fai += eri[k,k,a,i] - eri[k,i,a,k]
+                    for k in occsb:
+                        fai += eri[k,k,a,i]
+                    sign = cre_des_sign(a, i, stria)
+                    ci1[jp] += sign * fai * civec[ip]
+                    ci1[ip] += sign * fai * civec[jp]
+# beta ->beta
+                elif len(desa) == 0:
+                    i,a = desb[0], creb[0]
+                    occsa = str2orblst(stria, norb)[0]
+                    occsb = str2orblst(strib, norb)[0]
+                    fai = h1[a,i]
+                    for k in occsb:
+                        fai += eri[k,k,a,i] - eri[k,i,a,k]
+                    for k in occsa:
+                        fai += eri[k,k,a,i]
+                    sign = cre_des_sign(a, i, strib)
+                    ci1[jp] += sign * fai * civec[ip]
+                    ci1[ip] += sign * fai * civec[jp]
+
+            else:
+# alpha,alpha->alpha,alpha
+                if len(desb) == 0:
+                    i,j = desa
+                    a,b = crea
+# 6 conditions for i,j,a,b
+# --++, ++--, -+-+, +-+-, -++-, +--+ 
+                    if a > j or i > b:
+# condition --++, ++--
+                        v = eri[a,j,b,i]-eri[a,i,b,j]
+                        sign = cre_des_sign(b, i, stria)
+                        sign*= cre_des_sign(a, j, stria)
+                    else:
+# condition -+-+, +-+-, -++-, +--+ 
+                        v = eri[a,i,b,j]-eri[a,j,b,i]
+                        sign = cre_des_sign(b, j, stria)
+                        sign*= cre_des_sign(a, i, stria)
+                    ci1[jp] += sign * v * civec[ip]
+                    ci1[ip] += sign * v * civec[jp]
+# beta ,beta ->beta ,beta
+                elif len(desa) == 0:
+                    i,j = desb
+                    a,b = creb
+                    if a > j or i > b:
+                        v = eri[a,j,b,i]-eri[a,i,b,j]
+                        sign = cre_des_sign(b, i, strib)
+                        sign*= cre_des_sign(a, j, strib)
+                    else:
+                        v = eri[a,i,b,j]-eri[a,j,b,i]
+                        sign = cre_des_sign(b, j, strib)
+                        sign*= cre_des_sign(a, i, strib)
+                    ci1[jp] += sign * v * civec[ip]
+                    ci1[ip] += sign * v * civec[jp]
+# alpha,beta ->alpha,beta
+                else:
+                    i,a = desa[0], crea[0]
+                    j,b = desb[0], creb[0]
+                    v = eri[a,i,b,j]
+                    sign = cre_des_sign(a, i, stria)
+                    sign*= cre_des_sign(b, j, strib)
+                    ci1[jp] += sign * v * civec[ip]
+                    ci1[ip] += sign * v * civec[jp]
+        ci1[ip] += hdiag[ip] * civec[ip]
+
+    return ci1
+
+def spin_square(civec, norb, nelec):
+    ss = numpy.dot(civec.T, contract_ss(civec, norb, nelec))
+    s = numpy.sqrt(ss+.25) - .5
+    multip = s*2+1
+    return ss, multip
+
+def contract_ss(civec, norb, nelec):
+    strs = civec._strs
+    ndet = len(strs)
+    ci1 = numpy.zeros_like(civec)
+
+    strs = numpy.asarray(strs, order='C')
+    civec = numpy.asarray(civec, order='C')
+    ci1 = numpy.asarray(ci1, order='C')
+
+    libhci.contract_ss_c(ctypes.c_int(norb), 
+                        ctypes.c_int(nelec[0]), 
+                        ctypes.c_int(nelec[1]), 
+                        strs.ctypes.data_as(ctypes.c_void_p), 
+                        civec.ctypes.data_as(ctypes.c_void_p), 
+                        ctypes.c_ulonglong(ndet), 
+                        ci1.ctypes.data_as(ctypes.c_void_p))
+
+    return ci1
+
 def make_hdiag(h1e, eri, strs, norb, nelec):
     eri = ao2mo.restore(1, eri, norb)
     diagj = numpy.einsum('iijj->ij',eri)
@@ -90,7 +209,7 @@ def cre_des_sign(p, q, string):
             mask = numpy.uint64((1 << pb) - (1 << (qb+1)))
         else:
             mask = numpy.uint64((1 << qb) - (1 << (pb+1)))
-        n1 = bin(string[pg]&mask).count('1')
+        n1 = bin(string[-1-pg]&mask).count('1')
 
     if n1 % 2:
         return -1
@@ -287,7 +406,7 @@ def orblst2str(lst, norb):
 
 def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
                        tol=None, lindep=None, max_cycle=None, max_space=None,
-                       nroots=None, davidson_only=None,
+                       nroots=None, davidson_only=None, max_iter=None,
                        max_memory=None, verbose=None, ecore=0, return_integrals=False, 
                        eri_sorted=None, jk=None, jk_sorted=None, **kwargs):
     if verbose is None:
@@ -302,17 +421,18 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     if max_space is None: max_space = myci.max_space
     if max_memory is None: max_memory = myci.max_memory
     if nroots is None: nroots = myci.nroots
+    if max_iter is None: max_iter = myci.max_iter
     if myci.verbose >= logger.WARN:
         myci.check_sanity()
 
     log.info('\nStarting heat-bath CI algorithm...\n')
-    log.info('Selection threshold:                  %8.5e', myci.select_cutoff)
-    log.info('CI coefficient cutoff:                %8.5e', myci.ci_coeff_cutoff)
-    log.info('Energy convergence tolerance:         %8.5e', tol)
-    log.info('Number of determinants tolerance:     %8.5e', myci.conv_ndet_tol)
-    log.info('Number of electrons:                  %s',     nelec)
-    log.info('Number of orbitals:                   %3d',    norb)
-    log.info('Number of roots:                      %3d\n',    nroots)
+    log.info('Selection threshold:                  %8.5e',    myci.select_cutoff)
+    log.info('CI coefficient cutoff:                %8.5e',    myci.ci_coeff_cutoff)
+    log.info('Energy convergence tolerance:         %8.5e',    tol)
+    log.info('Number of determinants tolerance:     %8.5e',    myci.conv_ndet_tol)
+    log.info('Number of electrons:                  %s',       nelec)
+    log.info('Number of orbitals:                   %3d',      norb)
+    log.info('Number of roots:                      %3d',    nroots)
 
     nelec = direct_spin1._unpack_nelec(nelec, myci.spin)
     eri = ao2mo.restore(1, eri, norb)
@@ -321,7 +441,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     eri = eri.ravel()
 
     if eri_sorted is None and jk is None and jk_sorted is None:
-        log.debug("Sorting two-electron integrals...")
+        log.debug("\nSorting two-electron integrals...")
         t_start = time.time()
         eri_sorted = abs(eri).argsort()[::-1]
         jk = eri.reshape([norb]*4)
@@ -341,21 +461,19 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     ci0 = myci.enlarge_space(ci0, h1e, eri, jk, eri_sorted, jk_sorted, norb, nelec)
 
     def hop(c):
-        #hc = myci.contract_2e((h1e, eri), as_SCIvector(c, ci_strs), norb, nelec, hdiag)
-        hc = myci.contract_2e_ctypes((h1e, eri), as_SCIvector(c, ci_strs), norb, nelec, hdiag)
+        hc = myci.contract_2e((h1e, eri), as_SCIvector(c, ci_strs), norb, nelec, hdiag)
         return hc.ravel()
     precond = lambda x, e, *args: x/(hdiag-e+myci.level_shift)
 
     e_last = 0
     float_tol = 3e-4
     conv = False
-    for icycle in range(norb):
+    for icycle in range(max_iter):
         ci_strs = ci0[0]._strs
         float_tol = max(float_tol*.3, tol*1e2)
         log.info('\nMacroiteration %d', icycle)
         log.info('Number of CI configurations: %d', ci_strs.shape[0])
         hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
-        #e, ci0 = lib.davidson(hop, ci0.reshape(-1), precond, tol=float_tol)
         t_start = time.time()
         e, ci0 = myci.eig(hop, ci0, precond, tol=float_tol, lindep=lindep,
                           max_cycle=max_cycle, max_space=max_space, nroots=nroots,
@@ -399,6 +517,89 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     else:
         return (numpy.array(e)+ecore), [as_SCIvector(ci, ci_strs) for ci in c]
 
+def fix_spin(myci, shift=.2, ss=None, **kwargs):
+    r'''If Selected CI solver cannot stick on spin eigenfunction, modify the solver by
+    adding a shift on spin square operator
+
+    .. math::
+
+        (H + shift*S^2) |\Psi\rangle = E |\Psi\rangle
+
+    Args:
+        myci : An instance of :class:`SelectedCI`
+
+    Kwargs:
+        shift : float
+            Level shift for states which have different spin
+        ss : number
+            S^2 expection value == s*(s+1)
+
+    Returns
+            A modified Selected CI object based on myci.
+    '''
+    if 'ss_value' in kwargs:
+        sys.stderr.write('fix_spin_: kwarg "ss_value" will be removed in future release. '
+                         'It was replaced by "ss"\n')
+        ss_value = kwargs['ss_value']
+    else:
+        ss_value = ss
+
+    def contract_2e(h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
+        if isinstance(nelec, (int, numpy.number)):
+            sz = (nelec % 2) * .5
+        else:
+            sz = abs(nelec[0]-nelec[1]) * .5
+        if ss_value is None:
+            ss = sz*(sz+1)
+        else:
+            ss = ss_value
+
+        h1, eri = h1_h2
+        strs = civec._strs
+        ndet = len(strs)
+        if hdiag is None:
+            hdiag = make_hdiag(h1, eri, strs, norb, nelec)
+        ci1 = numpy.zeros_like(civec)
+        ci2 = numpy.zeros_like(civec)
+
+        h1 = numpy.asarray(h1, order='C')
+        eri = numpy.asarray(eri, order='C')
+        strs = numpy.asarray(strs, order='C')
+        civec = numpy.asarray(civec, order='C')
+        hdiag = numpy.asarray(hdiag, order='C')
+        ci1 = numpy.asarray(ci1, order='C')
+        ci2 = numpy.asarray(ci2, order='C')
+
+        libhci.contract_h_c_ss_c(h1.ctypes.data_as(ctypes.c_void_p), 
+                                 eri.ctypes.data_as(ctypes.c_void_p), 
+                                 ctypes.c_int(norb), 
+                                 ctypes.c_int(nelec[0]), 
+                                 ctypes.c_int(nelec[1]), 
+                                 strs.ctypes.data_as(ctypes.c_void_p), 
+                                 civec.ctypes.data_as(ctypes.c_void_p), 
+                                 hdiag.ctypes.data_as(ctypes.c_void_p), 
+                                 ctypes.c_ulonglong(ndet), 
+                                 ci1.ctypes.data_as(ctypes.c_void_p),
+                                 ci2.ctypes.data_as(ctypes.c_void_p))
+
+        if ss < sz*(sz+1)+.1:
+# (S^2-ss)|Psi> to shift state other than the lowest state
+            ci2 -= ss * civec
+        else:
+# (S^2-ss)^2|Psi> to shift states except the given spin.
+# It still relies on the quality of initial guess
+            tmp = ci2.copy()
+            tmp -= ss * civec
+            ci2 = -ss * tmp
+            ci2 += myci.contract_ss(tmp, norb, nelec)
+            tmp = None
+        ci2 *= shift
+        ci1 += ci2
+
+        return ci1
+
+    myci.contract_2e = contract_2e
+    return myci
 
 def to_fci(civec, norb, nelec, root=0):
     assert(norb <= 64)
@@ -442,11 +643,11 @@ class SelectedCI(direct_spin1.FCISolver):
         self.ci_coeff_cutoff = .5e-3
         self.select_cutoff = .5e-3
         self.conv_tol = 1e-9
-        # Maximum change in the number of selected determinants allowed to stop iterations (0.01 = 1%)
         self.conv_ndet_tol = 0.001
         self.nroots = 1
+        self.max_iter = 10
         # Maximum memory in MB for storing lists of selected strings
-        self.max_memory = 10000
+        self.max_memory = 1000
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -465,21 +666,29 @@ class SelectedCI(direct_spin1.FCISolver):
         return (h1, eri)
 
     def contract_2e(self, h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
-
-        if hasattr(civec, '_strs'):
-            self._strs = civec._strs
-        else:
-            assert(civec.size == len(self._strs))
-            civec = as_SCIvector(civec, self._strs)
-        return contract_2e(h1_h2, civec, norb, nelec, hdiag, **kwargs)
-
-    def contract_2e_ctypes(self, h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
         if hasattr(civec, '_strs'):
             self._strs = civec._strs
         else:
             assert(civec.size == len(self._strs))
             civec = as_SCIvector(civec, self._strs)
         return contract_2e_ctypes(h1_h2, civec, norb, nelec, hdiag, **kwargs)
+#        return contract_2e(h1_h2, civec, norb, nelec, hdiag, **kwargs)
+
+    def contract_ss(self, civec, norb, nelec):
+        if hasattr(civec, '_strs'):
+            self._strs = civec._strs
+        else:
+            assert(civec.size == len(self._strs))
+            civec = as_SCIvector(civec, self._strs)
+        return contract_ss(civec, norb, nelec)
+
+    def spin_square(self, civec, norb, nelec):
+        if hasattr(civec, '_strs'):
+            self._strs = civec._strs
+        else:
+            assert(civec.size == len(self._strs))
+            civec = as_SCIvector(civec, self._strs)
+        return spin_square(civec, norb, nelec)
 
     def make_hdiag(self, h1e, eri, strs, norb, nelec):
         return make_hdiag(h1e, eri, strs, norb, nelec)
