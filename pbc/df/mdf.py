@@ -66,16 +66,12 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
             j2cR, j2cI = zdotCN(kLR.T, kLI.T, kLR, kLI)
             j2c[k] -= j2cR + j2cI * 1j
 
-        try:
-            j2c[k] = ('CD', scipy.linalg.cholesky(j2c[k], lower=True))
-        except scipy.linalg.LinAlgError:
-            w, v = scipy.linalg.eigh(j2c[k])
-            log.debug2('metric linear dependency for kpt %s', k)
-            log.debug2('cond = %.4g, drop %d bfns',
-                       w[0]/w[-1], numpy.count_nonzero(w<df.LINEAR_DEP_THR))
-            v = v[:,w>df.LINEAR_DEP_THR].T.conj()
-            v /= numpy.sqrt(w[w>df.LINEAR_DEP_THR]).reshape(-1,1)
-            j2c[k] = ('eig', v)
+        w, v = scipy.linalg.eigh(j2c[k])
+        log.debug('MDF metric for kpt %s cond = %.4g, drop %d bfns',
+                  k, w[0]/w[-1], numpy.count_nonzero(w<df.LINEAR_DEP_THR))
+        v = v[:,w>df.LINEAR_DEP_THR].T.conj()
+        v /= numpy.sqrt(w[w>df.LINEAR_DEP_THR]).reshape(-1,1)
+        j2c[k] = ('eig', v)
 
         kLR *= coulG.reshape(-1,1)
         kLI *= coulG.reshape(-1,1)
