@@ -483,10 +483,9 @@ def get_ewald_params(cell, precision=1e-8, gs=None):
 
     Choice is based on largest G vector and desired relative precision.
 
-    The relative error in the G-space sum is given by (keeping only
-    exponential factors)
+    The relative error in the G-space sum is given by
 
-        precision ~ e^{(-Gmax^2)/(4 \eta^2)}
+        precision ~ 4\pi Gmax^2 e^{(-Gmax^2)/(4 \eta^2)}
 
     which determines eta. Then, real-space cutoff is determined by (exp.
     factors only)
@@ -502,15 +501,15 @@ def get_ewald_params(cell, precision=1e-8, gs=None):
 
     if cell.dimension == 3:
         Gmax = min(np.asarray(cell.gs) * lib.norm(cell.reciprocal_vectors(), axis=1))
-        log_precision = np.log(precision*.1)
+        log_precision = np.log(precision/(4*np.pi*Gmax**2))
         ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
-        ew_cut = np.sqrt(-log_precision)/ew_eta
+        ew_cut = _estimate_rcut(ew_eta**2, 0, 1., 20, precision)
     else:
 # Non-uniform PW grids are used for low-dimensional ewald summation.  The cutoff
 # estimation for long range part based on exp(G^2/(4*eta^2)) does not work for
 # non-uniform grids.  Smooth model density is preferred.
         ew_cut = cell.rcut
-        ew_eta = np.sqrt(max(np.log(ew_cut**2/precision)/ew_cut**2, .1))
+        ew_eta = np.sqrt(max(np.log(4*np.pi*ew_cut**2/precision)/ew_cut**2, .1))
     return ew_eta, ew_cut
 
 def ewald(cell, ew_eta=None, ew_cut=None):

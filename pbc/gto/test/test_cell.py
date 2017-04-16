@@ -203,10 +203,10 @@ class KnowValues(unittest.TestCase):
             ew_eta0, ew_cut0 = cell.get_ewald_params(precision)
             self.assertAlmostEqual(ew_eta0, eta_ref)
             self.assertAlmostEqual(cell.ewald(ew_eta0, ew_cut0), ewald_ref, 9)
-        check(0.001, 4.14068338802, -0.468665787961)
-        check(1e-05, 3.38085382902, -0.468640765097)
-        check(1e-07, 2.92790530241, -0.468640672343)
-        check(1e-09, 2.61879811515, -0.468640671959)
+        check(0.001, 3.15273336976, -0.468640679947)
+        check(1e-05, 2.77596886114, -0.468640671968)
+        check(1e-07, 2.50838938833, -0.468640671931)
+        check(1e-09, 2.30575091612, -0.468640671931)
 
         cell = pgto.Cell()
         numpy.random.seed(10)
@@ -233,7 +233,7 @@ class KnowValues(unittest.TestCase):
         cell.dimension = 2
         cell.rcut = 3.6
         cell.build()
-        self.assertAlmostEqual(cell.ewald(), 3898143.7150205472, 6)
+        self.assertAlmostEqual(cell.ewald(), 3898143.7149599856, 6)
 
     def test_ewald_1d(self):
         cell = pgto.Cell()
