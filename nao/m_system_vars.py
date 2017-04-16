@@ -51,8 +51,12 @@ def diag_check(self):
 #
 #
 class system_vars_c():
-  def __init__(self, label='siesta', Atoms=None, forcetype=-1):
 
+  def __init__(self, label='siesta', Atoms=None, forcetype=-1):
+    """ 
+      Constructor of system_vars class: so far can be initialized 
+      with SIESTA orbitals and Hamiltonian and wavefunctions
+    """
     self.label = label
     self.xml_dict = siesta_xml(self.label)
     self.wfsx = siesta_wfsx_c(self.label)
@@ -63,13 +67,16 @@ class system_vars_c():
     else:
       self.init_ase_atoms(Atoms)
 
+  #
+  #
+  #
   def init_ase_atoms(self, Atoms):
     """ Initialise system vars using siesta file and Atom object from ASE."""
     try:
       import ase
     except:
       warn('no ASE installed: try via siesta.xml')
-      self.init_pure_siesta()
+      self.init_siesta_xml()
 
     self.Atoms = Atoms
    
@@ -112,7 +119,7 @@ class system_vars_c():
   #
   def init_siesta_xml(self):
     """
-    Initialise system var using only the siesta files.
+    Initialise system var using only the siesta files (siesta.xml in particular is needed).
     """
     self.Atoms = None
     

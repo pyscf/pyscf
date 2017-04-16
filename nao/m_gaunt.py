@@ -22,7 +22,7 @@ class gaunt_c():
         ncef = ncef + ((j2+j1)-abs(j1-j2)+1)*(2*j1+1)*(2*j2+1)
     
     self.data = np.zeros((ncef), dtype='float64')
-    self.iptr = np.zeros((nptr+1), dtype='int32')
+    self.iptr = np.zeros((nptr+1), dtype='int64')
 
     ptr = 0
     for j1 in range(jmax+1):
@@ -51,12 +51,10 @@ class gaunt_c():
   #
   #
   #
-  def gaunt(self,j1,m1,j2,m2):
+  def get_gaunt(self,j1,m1,j2,m2):
 
     i1 = j1*(j1+1)+m1
     i2 = j2*(j2+1)+m2
     ind = i1*self.njm+i2
     s,f = self.iptr[ind],self.iptr[ind+1]
     return self.data[s:f]
-    
-    
