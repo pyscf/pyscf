@@ -350,8 +350,8 @@ if __name__ == '__main__':
     hpp = numpy.eye(nsite) * 1.1
     hpp[idx+1,idx] = hpp[idx,idx+1] = .1
     #hpp[:] = 0
-    #print('nelec = ', nelec)
-    print('nphonon = ', nelec)
+    print('nelec = ', nelec)
+    print('nphonon = ', nphonon)
     print('t =\n', t)
     print('u =', u)
     print('g =', g)

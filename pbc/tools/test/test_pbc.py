@@ -80,7 +80,7 @@ class KnowValues(unittest.TestCase):
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
         Ls = tools.get_lattice_Ls(cl1)
-        self.assertEqual(Ls.shape, (609,3))
+        self.assertEqual(Ls.shape, (1509,3))
 
     def test_super_cell(self):
         numpy.random.seed(2)

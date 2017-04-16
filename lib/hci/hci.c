@@ -13,141 +13,159 @@
 //#include <omp.h>
 #include <limits.h>
 
+// Computes C' = H * C in the selected CI basis
 void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uint64_t *strs, double *civec, double *hdiag, uint64_t ndet, double *ci1) {
 
-    #pragma omp parallel default(none) shared(h1, eri, norb, neleca, nelecb, strs, civec, hdiag, ndet, ci1)
+    int *ts = malloc(sizeof(int) * ndet);
+
+    #pragma omp parallel default(none) shared(h1, eri, norb, neleca, nelecb, strs, civec, hdiag, ndet, ci1, ts)
     {
 
     size_t ip, jp, p;
-    int nset = norb / 64 + 1;
+    int nset = (norb + 63) / 64;
  
+    // Calculate excitation level for prescreening
+    ts[0] = 0;
+    uint64_t *str1a = strs;
+    uint64_t *str1b = strs + nset;
+    #pragma omp for schedule(static)
+    for (ip = 1; ip < ndet; ++ip) {
+        uint64_t *stria = strs + ip * 2 * nset;
+        uint64_t *strib = strs + ip * 2 * nset + nset;
+        ts[ip] = (n_excitations(stria, str1a, nset) + n_excitations(strib, str1b, nset));
+    }
+
     // Loop over pairs of determinants
     #pragma omp for schedule(static)
     for (ip = 0; ip < ndet; ++ip) {
         for (jp = 0; jp < ndet; ++jp) {
-            uint64_t *stria = strs + ip * 2 * nset;
-            uint64_t *strib = strs + ip * 2 * nset + nset;
-            uint64_t *strja = strs + jp * 2 * nset;
-            uint64_t *strjb = strs + jp * 2 * nset + nset;
-            int n_excit_a = n_excitations(stria, strja, nset);
-            int n_excit_b = n_excitations(strib, strjb, nset);
-            // Diagonal term
-            if (ip == jp) {
-                ci1[ip] += hdiag[ip] * civec[ip];
-            }
-            // Single excitation
-            else if ((n_excit_a + n_excit_b) == 1) {
-                int *ia;
-                // alpha->alpha
-                if (n_excit_b == 0) {
-                    ia = get_single_excitation(stria, strja, nset);
-                    int i = ia[0];
-                    int a = ia[1];
-                    double sign = compute_cre_des_sign(a, i, stria, nset);
-                    int *occsa = compute_occ_list(stria, nset, norb, neleca);
-                    int *occsb = compute_occ_list(strib, nset, norb, nelecb);
-                    double fai = h1[a * norb + i];
-                    for (p = 0; p < neleca; ++p) {
-                        int k = occsa[p];
-                        int kkai = k * norb * norb * norb + k * norb * norb + a * norb + i;
-                        int kiak = k * norb * norb * norb + i * norb * norb + a * norb + k;
-                        fai += eri[kkai] - eri[kiak];
-                    }
-                    for (p = 0; p < nelecb; ++p) {
-                        int k = occsb[p];
-                        int kkai = k * norb * norb * norb + k * norb * norb + a * norb + i;
-                        fai += eri[kkai];
-                    }
-                    ci1[ip] += sign * fai * civec[jp];
-                    free(occsa);
-                    free(occsb);
+            if (abs(ts[ip] - ts[jp]) < 3) {
+                uint64_t *stria = strs + ip * 2 * nset;
+                uint64_t *strib = strs + ip * 2 * nset + nset;
+                uint64_t *strja = strs + jp * 2 * nset;
+                uint64_t *strjb = strs + jp * 2 * nset + nset;
+                int n_excit_a = n_excitations(stria, strja, nset);
+                int n_excit_b = n_excitations(strib, strjb, nset);
+                // Diagonal term
+                if (ip == jp) {
+                    ci1[ip] += hdiag[ip] * civec[ip];
                 }
-                // beta->beta
-                else if (n_excit_a == 0) {
-                    ia = get_single_excitation(strib, strjb, nset);
-                    int i = ia[0];
-                    int a = ia[1];
-                    double sign = compute_cre_des_sign(a, i, strib, nset);
-                    int *occsa = compute_occ_list(stria, nset, norb, neleca);
-                    int *occsb = compute_occ_list(strib, nset, norb, nelecb);
-                    double fai = h1[a * norb + i];
-                    for (p = 0; p < nelecb; ++p) {
-                        int k = occsb[p];
-                        int kkai = k * norb * norb * norb + k * norb * norb + a * norb + i;
-                        int kiak = k * norb * norb * norb + i * norb * norb + a * norb + k;
-                        fai += eri[kkai] - eri[kiak];
+                // Single excitation
+                else if ((n_excit_a + n_excit_b) == 1) {
+                    int *ia;
+                    // alpha->alpha
+                    if (n_excit_b == 0) {
+                        ia = get_single_excitation(stria, strja, nset);
+                        int i = ia[0];
+                        int a = ia[1];
+                        double sign = compute_cre_des_sign(a, i, stria, nset);
+                        int *occsa = compute_occ_list(stria, nset, norb, neleca);
+                        int *occsb = compute_occ_list(strib, nset, norb, nelecb);
+                        double fai = h1[a * norb + i];
+                        for (p = 0; p < neleca; ++p) {
+                            int k = occsa[p];
+                            int kkai = k * norb * norb * norb + k * norb * norb + a * norb + i;
+                            int kiak = k * norb * norb * norb + i * norb * norb + a * norb + k;
+                            fai += eri[kkai] - eri[kiak];
+                        }
+                        for (p = 0; p < nelecb; ++p) {
+                            int k = occsb[p];
+                            int kkai = k * norb * norb * norb + k * norb * norb + a * norb + i;
+                            fai += eri[kkai];
+                        }
+                        if (fabs(fai) > 1.0E-14) ci1[ip] += sign * fai * civec[jp];
+                        free(occsa);
+                        free(occsb);
                     }
-                    for (p = 0; p < neleca; ++p) {
-                        int k = occsa[p];
-                        int kkai = k * norb * norb * norb + k * norb * norb + a * norb + i;
-                        fai += eri[kkai];
+                    // beta->beta
+                    else if (n_excit_a == 0) {
+                        ia = get_single_excitation(strib, strjb, nset);
+                        int i = ia[0];
+                        int a = ia[1];
+                        double sign = compute_cre_des_sign(a, i, strib, nset);
+                        int *occsa = compute_occ_list(stria, nset, norb, neleca);
+                        int *occsb = compute_occ_list(strib, nset, norb, nelecb);
+                        double fai = h1[a * norb + i];
+                        for (p = 0; p < nelecb; ++p) {
+                            int k = occsb[p];
+                            int kkai = k * norb * norb * norb + k * norb * norb + a * norb + i;
+                            int kiak = k * norb * norb * norb + i * norb * norb + a * norb + k;
+                            fai += eri[kkai] - eri[kiak];
+                        }
+                        for (p = 0; p < neleca; ++p) {
+                            int k = occsa[p];
+                            int kkai = k * norb * norb * norb + k * norb * norb + a * norb + i;
+                            fai += eri[kkai];
+                        }
+                        if (fabs(fai) > 1.0E-14) ci1[ip] += sign * fai * civec[jp];
+                        free(occsa);
+                        free(occsb);
                     }
-                    ci1[ip] += sign * fai * civec[jp];
-                    free(occsa);
-                    free(occsb);
+                   free(ia);
                 }
-               free(ia);
-            }
-            // Double excitation
-            else if ((n_excit_a + n_excit_b) == 2) {
-                int i, j, a, b;
-                // alpha,alpha->alpha,alpha
-                if (n_excit_b == 0) {
-	            int *ijab = get_double_excitation(stria, strja, nset);
-                    i = ijab[0]; j = ijab[1]; a = ijab[2]; b = ijab[3];
-                    double v, sign;
-                    int ajbi = a * norb * norb * norb + j * norb * norb + b * norb + i;
-                    int aibj = a * norb * norb * norb + i * norb * norb + b * norb + j;
-                    if (a > j || i > b) {
-                        v = eri[ajbi] - eri[aibj];
-                        sign = compute_cre_des_sign(b, i, stria, nset);
-                        sign *= compute_cre_des_sign(a, j, stria, nset);
-                    } 
+                // Double excitation
+                else if ((n_excit_a + n_excit_b) == 2) {
+                    int i, j, a, b;
+                    // alpha,alpha->alpha,alpha
+                    if (n_excit_b == 0) {
+	                int *ijab = get_double_excitation(stria, strja, nset);
+                        i = ijab[0]; j = ijab[1]; a = ijab[2]; b = ijab[3];
+                        double v, sign;
+                        int ajbi = a * norb * norb * norb + j * norb * norb + b * norb + i;
+                        int aibj = a * norb * norb * norb + i * norb * norb + b * norb + j;
+                        if (a > j || i > b) {
+                            v = eri[ajbi] - eri[aibj];
+                            sign = compute_cre_des_sign(b, i, stria, nset);
+                            sign *= compute_cre_des_sign(a, j, stria, nset);
+                        } 
+                        else {
+                            v = eri[aibj] - eri[ajbi];
+                            sign = compute_cre_des_sign(b, j, stria, nset);
+                            sign *= compute_cre_des_sign(a, i, stria, nset);
+                        }
+                        if (fabs(v) > 1.0E-14) ci1[ip] += sign * v * civec[jp];
+                        free(ijab);
+                    }
+                    // beta,beta->beta,beta
+                    else if (n_excit_a == 0) {
+	                int *ijab = get_double_excitation(strib, strjb, nset);
+                        i = ijab[0]; j = ijab[1]; a = ijab[2]; b = ijab[3];
+                        double v, sign;
+                        int ajbi = a * norb * norb * norb + j * norb * norb + b * norb + i;
+                        int aibj = a * norb * norb * norb + i * norb * norb + b * norb + j;
+                        if (a > j || i > b) {
+                            v = eri[ajbi] - eri[aibj];
+                            sign = compute_cre_des_sign(b, i, strib, nset);
+                            sign *= compute_cre_des_sign(a, j, strib, nset);
+                        } 
+                        else {
+                            v = eri[aibj] - eri[ajbi];
+                            sign = compute_cre_des_sign(b, j, strib, nset);
+                            sign *= compute_cre_des_sign(a, i, strib, nset);
+                        }
+                        if (fabs(v) > 1.0E-14) ci1[ip] += sign * v * civec[jp];
+                        free(ijab);
+                    }
+                    // alpha,beta->alpha,beta
                     else {
-                        v = eri[aibj] - eri[ajbi];
-                        sign = compute_cre_des_sign(b, j, stria, nset);
-                        sign *= compute_cre_des_sign(a, i, stria, nset);
-                    }
-                    ci1[ip] += sign * v * civec[jp];
-                    free(ijab);
+                        int *ia = get_single_excitation(stria, strja, nset);
+                        int *jb = get_single_excitation(strib, strjb, nset);
+                        i = ia[0]; a = ia[1]; j = jb[0]; b = jb[1];
+                        double v = eri[a * norb * norb * norb + i * norb * norb + b * norb + j];
+                        double sign = compute_cre_des_sign(a, i, stria, nset);
+                        sign *= compute_cre_des_sign(b, j, strib, nset);
+                        if (fabs(v) > 1.0E-14) ci1[ip] += sign * v * civec[jp];
+                        free(ia);
+                        free(jb);
+                   }
                 }
-                // beta,beta->beta,beta
-                else if (n_excit_a == 0) {
-	            int *ijab = get_double_excitation(strib, strjb, nset);
-                    i = ijab[0]; j = ijab[1]; a = ijab[2]; b = ijab[3];
-                    double v, sign;
-                    int ajbi = a * norb * norb * norb + j * norb * norb + b * norb + i;
-                    int aibj = a * norb * norb * norb + i * norb * norb + b * norb + j;
-                    if (a > j || i > b) {
-                        v = eri[ajbi] - eri[aibj];
-                        sign = compute_cre_des_sign(b, i, strib, nset);
-                        sign *= compute_cre_des_sign(a, j, strib, nset);
-                    } 
-                    else {
-                        v = eri[aibj] - eri[ajbi];
-                        sign = compute_cre_des_sign(b, j, strib, nset);
-                        sign *= compute_cre_des_sign(a, i, strib, nset);
-                    }
-                    ci1[ip] += sign * v * civec[jp];
-                    free(ijab);
-                }
-                // alpha,beta->alpha,beta
-                else {
-                    int *ia = get_single_excitation(stria, strja, nset);
-                    int *jb = get_single_excitation(strib, strjb, nset);
-                    i = ia[0]; a = ia[1]; j = jb[0]; b = jb[1];
-                    double v = eri[a * norb * norb * norb + i * norb * norb + b * norb + j];
-                    double sign = compute_cre_des_sign(a, i, stria, nset);
-                    sign *= compute_cre_des_sign(b, j, strib, nset);
-                    ci1[ip] += sign * v * civec[jp];
-                    free(ia);
-                    free(jb);
-               }
-            }
+            } // end if over ts
         } // end loop over jp
     } // end loop over ip
 
     } // end omp
+  
+    free(ts);
 
 }
 
@@ -324,7 +342,7 @@ double compute_cre_des_sign(int p, int q, uint64_t *str, int nset) {
         uint64_t mask;
         if (p > q) mask = (1ULL << pb) - (1ULL << (qb + 1));
         else       mask = (1ULL << qb) - (1ULL << (pb + 1));
-        nperm = popcount(str[pg] & mask);
+        nperm = popcount(str[nset -1 - pg] & mask);
     }
 
     if (nperm % 2) sign = -1.0;
@@ -391,7 +409,7 @@ void select_strs(double *h1, double *eri, double *jk, uint64_t *eri_sorted, uint
     size_t p, q, r, i, k, a, ip, jp, kp, lp, ij, iset, idet;
 
     uint64_t max_strs_add = strs_add_size[0];
-    int nset = norb / 64 + 1;
+    int nset = (norb + 63) / 64;
 
     // Compute Fock intermediates
     double *focka = malloc(sizeof(double) * norb * norb);
@@ -772,4 +790,256 @@ void argunique(uint64_t *strs, uint64_t *sort_idx, uint64_t *nstrs_, int nset) {
 
 }
 
+// Computes C' = S2 * C in the selected CI basis
+void contract_ss_c(int norb, int neleca, int nelecb, uint64_t *strs, double *civec, uint64_t ndet, double *ci1) {
 
+    int *ts = malloc(sizeof(int) * ndet);
+
+    #pragma omp parallel default(none) shared(norb, neleca, nelecb, strs, civec, ndet, ci1, ts)
+    {
+
+    size_t ip, jp, p, q;
+    int nset = (norb + 63) / 64;
+ 
+    // Calculate excitation level for prescreening
+    ts[0] = 0;
+    uint64_t *str1a = strs;
+    uint64_t *str1b = strs + nset;
+    #pragma omp for schedule(static)
+    for (ip = 1; ip < ndet; ++ip) {
+        uint64_t *stria = strs + ip * 2 * nset;
+        uint64_t *strib = strs + ip * 2 * nset + nset;
+        ts[ip] = (n_excitations(stria, str1a, nset) + n_excitations(strib, str1b, nset));
+    }
+
+    // Loop over pairs of determinants
+    #pragma omp for schedule(static)
+    for (ip = 0; ip < ndet; ++ip) {
+        for (jp = 0; jp < ndet; ++jp) {
+            if (abs(ts[ip] - ts[jp]) < 3) {
+                uint64_t *stria = strs + ip * 2 * nset;
+                uint64_t *strib = strs + ip * 2 * nset + nset;
+                uint64_t *strja = strs + jp * 2 * nset;
+                uint64_t *strjb = strs + jp * 2 * nset + nset;
+                int n_excit_a = n_excitations(stria, strja, nset);
+                int n_excit_b = n_excitations(strib, strjb, nset);
+                // Diagonal term
+                if (ip == jp) {
+                    double apb = (double) (neleca + nelecb);
+                    double amb = (double) (neleca - nelecb);
+                    double prefactor = apb / 2.0 + amb * amb / 4.0;
+                    int *occsa = compute_occ_list(stria, nset, norb, neleca);
+                    int *occsb = compute_occ_list(strib, nset, norb, nelecb);
+                    for (p = 0; p < neleca; ++p) {
+                        int pa = occsa[p];
+                        for (q = 0; q < nelecb; ++q) {
+                            int qb = occsb[q];
+                            if (pa == qb) prefactor -= 1.0;
+                        }
+                    }
+                    ci1[ip] += prefactor * civec[ip];
+                    free(occsa);
+                    free(occsb);
+                }
+                // Double excitation
+                else if ((n_excit_a + n_excit_b) == 2) {
+                    int i, j, a, b;
+                    // alpha,beta->alpha,beta
+                    if (n_excit_a == n_excit_b) {
+                        int *ia = get_single_excitation(stria, strja, nset);
+                        int *jb = get_single_excitation(strib, strjb, nset);
+                        i = ia[0]; a = ia[1]; j = jb[0]; b = jb[1];
+                        if (i == b && j == a) {
+                            double sign = compute_cre_des_sign(a, i, stria, nset);
+                            sign *= compute_cre_des_sign(b, j, strib, nset);
+                            ci1[ip] -= sign * civec[jp];
+                        }
+                        free(ia);
+                        free(jb);
+                    }
+                }
+            } // end if over ts
+        } // end loop over jp
+    } // end loop over ip
+
+    } // end omp
+  
+    free(ts);
+
+}
+
+// Computes C' = H * C and C'' = S2 * C simultaneously in the selected CI basis
+void contract_h_c_ss_c(double *h1, double *eri, int norb, int neleca, int nelecb, uint64_t *strs, double *civec, double *hdiag, uint64_t ndet, double *ci1, double *ci2) {
+
+    int *ts = malloc(sizeof(int) * ndet);
+
+    #pragma omp parallel default(none) shared(h1, eri, norb, neleca, nelecb, strs, civec, hdiag, ndet, ci1, ci2, ts)
+    {
+
+    size_t ip, jp, p, q;
+    int nset = (norb + 63) / 64;
+ 
+    // Calculate excitation level for prescreening
+    ts[0] = 0;
+    uint64_t *str1a = strs;
+    uint64_t *str1b = strs + nset;
+    #pragma omp for schedule(static)
+    for (ip = 1; ip < ndet; ++ip) {
+        uint64_t *stria = strs + ip * 2 * nset;
+        uint64_t *strib = strs + ip * 2 * nset + nset;
+        ts[ip] = (n_excitations(stria, str1a, nset) + n_excitations(strib, str1b, nset));
+    }
+
+    // Loop over pairs of determinants
+    #pragma omp for schedule(static)
+    for (ip = 0; ip < ndet; ++ip) {
+        for (jp = 0; jp < ndet; ++jp) {
+            if (abs(ts[ip] - ts[jp]) < 3) {
+                uint64_t *stria = strs + ip * 2 * nset;
+                uint64_t *strib = strs + ip * 2 * nset + nset;
+                uint64_t *strja = strs + jp * 2 * nset;
+                uint64_t *strjb = strs + jp * 2 * nset + nset;
+                int n_excit_a = n_excitations(stria, strja, nset);
+                int n_excit_b = n_excitations(strib, strjb, nset);
+                // Diagonal term
+                if (ip == jp) {
+                    ci1[ip] += hdiag[ip] * civec[ip];
+                    // S^2
+                    double apb = (double) (neleca + nelecb);
+                    double amb = (double) (neleca - nelecb);
+                    double prefactor = apb / 2.0 + amb * amb / 4.0;
+                    int *occsa = compute_occ_list(stria, nset, norb, neleca);
+                    int *occsb = compute_occ_list(strib, nset, norb, nelecb);
+                    for (p = 0; p < neleca; ++p) {
+                        int pa = occsa[p];
+                        for (q = 0; q < nelecb; ++q) {
+                            int qb = occsb[q];
+                            if (pa == qb) prefactor -= 1.0;
+                        }
+                    }
+                    ci2[ip] += prefactor * civec[ip];
+                    free(occsa);
+                    free(occsb);
+                }
+                // Single excitation
+                else if ((n_excit_a + n_excit_b) == 1) {
+                    int *ia;
+                    // alpha->alpha
+                    if (n_excit_b == 0) {
+                        ia = get_single_excitation(stria, strja, nset);
+                        int i = ia[0];
+                        int a = ia[1];
+                        double sign = compute_cre_des_sign(a, i, stria, nset);
+                        int *occsa = compute_occ_list(stria, nset, norb, neleca);
+                        int *occsb = compute_occ_list(strib, nset, norb, nelecb);
+                        double fai = h1[a * norb + i];
+                        for (p = 0; p < neleca; ++p) {
+                            int k = occsa[p];
+                            int kkai = k * norb * norb * norb + k * norb * norb + a * norb + i;
+                            int kiak = k * norb * norb * norb + i * norb * norb + a * norb + k;
+                            fai += eri[kkai] - eri[kiak];
+                        }
+                        for (p = 0; p < nelecb; ++p) {
+                            int k = occsb[p];
+                            int kkai = k * norb * norb * norb + k * norb * norb + a * norb + i;
+                            fai += eri[kkai];
+                        }
+                        if (fabs(fai) > 1.0E-14) ci1[ip] += sign * fai * civec[jp];
+                        free(occsa);
+                        free(occsb);
+                    }
+                    // beta->beta
+                    else if (n_excit_a == 0) {
+                        ia = get_single_excitation(strib, strjb, nset);
+                        int i = ia[0];
+                        int a = ia[1];
+                        double sign = compute_cre_des_sign(a, i, strib, nset);
+                        int *occsa = compute_occ_list(stria, nset, norb, neleca);
+                        int *occsb = compute_occ_list(strib, nset, norb, nelecb);
+                        double fai = h1[a * norb + i];
+                        for (p = 0; p < nelecb; ++p) {
+                            int k = occsb[p];
+                            int kkai = k * norb * norb * norb + k * norb * norb + a * norb + i;
+                            int kiak = k * norb * norb * norb + i * norb * norb + a * norb + k;
+                            fai += eri[kkai] - eri[kiak];
+                        }
+                        for (p = 0; p < neleca; ++p) {
+                            int k = occsa[p];
+                            int kkai = k * norb * norb * norb + k * norb * norb + a * norb + i;
+                            fai += eri[kkai];
+                        }
+                        if (fabs(fai) > 1.0E-14) ci1[ip] += sign * fai * civec[jp];
+                        free(occsa);
+                        free(occsb);
+                    }
+                   free(ia);
+                }
+                // Double excitation
+                else if ((n_excit_a + n_excit_b) == 2) {
+                    int i, j, a, b;
+                    // alpha,alpha->alpha,alpha
+                    if (n_excit_b == 0) {
+	                int *ijab = get_double_excitation(stria, strja, nset);
+                        i = ijab[0]; j = ijab[1]; a = ijab[2]; b = ijab[3];
+                        double v, sign;
+                        int ajbi = a * norb * norb * norb + j * norb * norb + b * norb + i;
+                        int aibj = a * norb * norb * norb + i * norb * norb + b * norb + j;
+                        if (a > j || i > b) {
+                            v = eri[ajbi] - eri[aibj];
+                            sign = compute_cre_des_sign(b, i, stria, nset);
+                            sign *= compute_cre_des_sign(a, j, stria, nset);
+                        } 
+                        else {
+                            v = eri[aibj] - eri[ajbi];
+                            sign = compute_cre_des_sign(b, j, stria, nset);
+                            sign *= compute_cre_des_sign(a, i, stria, nset);
+                        }
+                        if (fabs(v) > 1.0E-14) ci1[ip] += sign * v * civec[jp];
+                        free(ijab);
+                    }
+                    // beta,beta->beta,beta
+                    else if (n_excit_a == 0) {
+	                int *ijab = get_double_excitation(strib, strjb, nset);
+                        i = ijab[0]; j = ijab[1]; a = ijab[2]; b = ijab[3];
+                        double v, sign;
+                        int ajbi = a * norb * norb * norb + j * norb * norb + b * norb + i;
+                        int aibj = a * norb * norb * norb + i * norb * norb + b * norb + j;
+                        if (a > j || i > b) {
+                            v = eri[ajbi] - eri[aibj];
+                            sign = compute_cre_des_sign(b, i, strib, nset);
+                            sign *= compute_cre_des_sign(a, j, strib, nset);
+                        } 
+                        else {
+                            v = eri[aibj] - eri[ajbi];
+                            sign = compute_cre_des_sign(b, j, strib, nset);
+                            sign *= compute_cre_des_sign(a, i, strib, nset);
+                        }
+                        if (fabs(v) > 1.0E-14) ci1[ip] += sign * v * civec[jp];
+                        free(ijab);
+                    }
+                    // alpha,beta->alpha,beta
+                    else {
+                        int *ia = get_single_excitation(stria, strja, nset);
+                        int *jb = get_single_excitation(strib, strjb, nset);
+                        i = ia[0]; a = ia[1]; j = jb[0]; b = jb[1];
+                        double v = eri[a * norb * norb * norb + i * norb * norb + b * norb + j];
+                        double sign = compute_cre_des_sign(a, i, stria, nset);
+                        sign *= compute_cre_des_sign(b, j, strib, nset);
+                        if (fabs(v) > 1.0E-14) ci1[ip] += sign * v * civec[jp];
+                        // S^2
+                        if (i == b && j == a) {
+                            ci2[ip] -= sign * civec[jp];
+                        }
+                        free(ia);
+                        free(jb);
+                   }
+                }
+            } // end if over ts
+        } // end loop over jp
+    } // end loop over ip
+
+    } // end omp
+  
+    free(ts);
+
+}
