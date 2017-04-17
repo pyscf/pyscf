@@ -93,18 +93,19 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
 # In some systems, small integral errors can lead to different treatments of
 # linear dependency which can be observed in the total energy/orbital energy
 # around 4th decimal place.
-        try:
-            j2c = scipy.linalg.cholesky(j2c, lower=True)
-            j2ctag = 'CD'
-        except scipy.linalg.LinAlgError as e:
-            w, v = scipy.linalg.eigh(j2c)
-            log.debug2('metric linear dependency for kpt %s', uniq_kptji_id)
-            log.debug2('cond = %.4g, drop %d bfns',
-                       w[0]/w[-1], numpy.count_nonzero(w<df.LINEAR_DEP_THR))
-            v = v[:,w>df.LINEAR_DEP_THR].T.conj()
-            v /= numpy.sqrt(w[w>df.LINEAR_DEP_THR]).reshape(-1,1)
-            j2c = v
-            j2ctag = 'eig'
+#        try:
+#            j2c = scipy.linalg.cholesky(j2c, lower=True)
+#            j2ctag = 'CD'
+#        except scipy.linalg.LinAlgError as e:
+#
+# Abandon CD treatment for better numerical stablity
+        w, v = scipy.linalg.eigh(j2c)
+        log.debug('MDF metric for kpt %s cond = %.4g, drop %d bfns',
+                  uniq_kptji_id, w[0]/w[-1], numpy.count_nonzero(w<df.LINEAR_DEP_THR))
+        v = v[:,w>df.LINEAR_DEP_THR].T.conj()
+        v /= numpy.sqrt(w[w>df.LINEAR_DEP_THR]).reshape(-1,1)
+        j2c = v
+        j2ctag = 'eig'
         naux0 = j2c.shape[0]
 
         if is_zero(kpt):  # kpti == kptj

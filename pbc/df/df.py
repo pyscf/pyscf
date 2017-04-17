@@ -36,7 +36,7 @@ from pyscf.pbc.df.aft import estimate_eta, get_nuc
 from pyscf.pbc.df.df_jk import zdotCN, zdotNN, zdotNC
 from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, member, unique
 
-LINEAR_DEP_THR = 1e-9
+LINEAR_DEP_THR = 1e-7
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
     auxcell = copy.copy(cell)
@@ -221,9 +221,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
             #log.error(msg)
             #raise scipy.linalg.LinAlgError('\n'.join([e.message, msg]))
             w, v = scipy.linalg.eigh(j2c)
-            log.debug2('metric linear dependency for kpt %s', uniq_kptji_id)
-            log.debug2('cond = %.4g, drop %d bfns',
-                       w[0]/w[-1], numpy.count_nonzero(w<LINEAR_DEP_THR))
+            log.debug('DF metric linear dependency for kpt %s', uniq_kptji_id)
+            log.debug('cond = %.4g, drop %d bfns',
+                      w[0]/w[-1], numpy.count_nonzero(w<LINEAR_DEP_THR))
             v = v[:,w>LINEAR_DEP_THR].T.conj()
             v /= numpy.sqrt(w[w>LINEAR_DEP_THR]).reshape(-1,1)
             j2c = v

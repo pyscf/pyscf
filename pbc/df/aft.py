@@ -26,7 +26,7 @@ def estimate_eta(cell, cutoff=1e-12):
     boundary, density ~ 4pi rmax^2 exp(-eta/2*rmax^2) ~ 1e-12
     '''
     # r^5 to guarantee at least up to f shell converging at boundary
-    eta = max(numpy.log(4*numpy.pi*cell.rcut**5/cutoff)/cell.rcut**2*2, .3)
+    eta = max(numpy.log(4*numpy.pi*cell.rcut**5/cutoff)/cell.rcut**2*2, .2)
     return eta
 
 def get_nuc(mydf, kpts=None):

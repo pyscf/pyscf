@@ -1090,7 +1090,7 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
         nao = mo_coeff.shape[0]
         rho = []
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             rho.append(ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, xctype))
         rho = numpy.hstack(rho)
     else:

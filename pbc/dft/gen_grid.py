@@ -112,7 +112,7 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
             coords, vol = atom_grids_tab[cell.atom_symbol(ia)]
             coords = coords + atm_coords[iL,ia]
             # search for grids in unit cell
-            c = b.dot(coords.T)
+            c = b.dot(coords.T).round(8)
             mask = ((c[0]>=0) & (c[1]>=0) & (c[2]>=0) &
                     (c[0]<=1) & (c[1]<=1) & (c[2]<=1))
             vol = vol[mask]
