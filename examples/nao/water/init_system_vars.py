@@ -2,7 +2,7 @@ from pyscf.nao.m_system_vars import system_vars_c, diag_check
 from pyscf.nao.m_siesta_xml_print import siesta_xml_print
 from pyscf.nao.m_sbt import sbt_c
 from pyscf.nao.m_ao_matelem import ao_matelem_c
-from pyscf.nao.m_log_interp import log_interp
+from pyscf.nao.m_local_vertex import local_vertex_c
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
@@ -15,6 +15,12 @@ print(diag_check(sv))
 me = ao_matelem_c(sv.ao_log)
 oo = me.get_overlap_ap(0, 0, [0.0,0.0,0.0], [0.0,0.0,0.0])
 print(sum(sum(oo)))
+
+lv = local_vertex_c(sv.ao_log)
+print(dir(lv))
+
+
+
 
 #plt.plot(me.kk, np.log(abs(me.psi_log_mom[0,0,:])),
 #  me.kk, me.psi_log_mom[0,1,:], 

@@ -21,8 +21,8 @@ class gaunt_c():
       for j2 in range(jmax+1):
         ncef = ncef + ((j2+j1)-abs(j1-j2)+1)*(2*j1+1)*(2*j2+1)
     
-    self.data = np.zeros((ncef), dtype='float64')
-    self.iptr = np.zeros((nptr+1), dtype='int64')
+    self._gaunt_data = np.zeros((ncef), dtype='float64')
+    self._gaunt_iptr = np.zeros((nptr+1), dtype='int64')
 
     ptr = 0
     for j1 in range(jmax+1):
@@ -33,7 +33,7 @@ class gaunt_c():
             i2 = j2*(j2+1)+m2
             ind = i1*self.njm+i2
             ptr = ptr + ((j2+j1)-abs(j1-j2)+1)
-            self.iptr[ind+1] = ptr
+            self._gaunt_iptr[ind+1] = ptr
 
     for j1 in range(jmax+1):
       for m1 in range(-j1,j1+1):
@@ -42,10 +42,10 @@ class gaunt_c():
           for m2 in range(-j2,j2+1):
             i2 = j2*(j2+1)+m2
             ind = i1*self.njm+i2
-            s,f = self.iptr[ind],self.iptr[ind+1]
+            s,f = self._gaunt_iptr[ind],self._gaunt_iptr[ind+1]
             j3ind = 0
             for j3 in range(abs(j1-j2), j1+j2+1):
-              self.data[s+j3ind] = np.sqrt( (2*j1+1.0)*(2*j2+1.0)*(2*j3+1.0)/(4.0*np.pi) ) * \
+              self._gaunt_data[s+j3ind] = np.sqrt( (2*j1+1.0)*(2*j2+1.0)*(2*j3+1.0)/(4.0*np.pi) ) * \
                 w3j(j1,0,j2,0,j3,0).doit()*w3j(j1,m1,j2,m2,j3,-m1-m2).doit()
               j3ind = j3ind + 1
   #
@@ -56,5 +56,5 @@ class gaunt_c():
     i1 = j1*(j1+1)+m1
     i2 = j2*(j2+1)+m2
     ind = i1*self.njm+i2
-    s,f = self.iptr[ind],self.iptr[ind+1]
-    return self.data[s:f]
+    s,f = self._gaunt_iptr[ind],self._gaunt_iptr[ind+1]
+    return self._gaunt_data[s:f]
