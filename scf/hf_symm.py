@@ -452,7 +452,7 @@ class ROHF(rohf.ROHF):
     def dump_flags(self):
         rohf.ROHF.dump_flags(self)
         if self.irrep_nelec:
-            logger.info('irrep_nelec %s', self.irrep_nelec)
+            logger.info(self, 'irrep_nelec %s', self.irrep_nelec)
         #if self._irrep_doccs:
         #    logger.info('irrep_doccs %s', self.irrep_doccs)
         #if self._irrep_soccs:

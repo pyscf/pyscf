@@ -34,6 +34,8 @@ def make_rdm1_ms0(fname, cibra, ciket, norb, nelec, link_index=None):
         assert(neleca == nelecb)
         link_index = cistring.gen_linkstr_index(range(norb), neleca)
     na, nlink = link_index.shape[:2]
+    assert(cibra.size == na**2)
+    assert(ciket.size == na**2)
     rdm1 = numpy.empty((norb,norb))
     fn = getattr(librdm, fname)
     fn(rdm1.ctypes.data_as(ctypes.c_void_p),
@@ -79,6 +81,8 @@ def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
         link_indexa, link_indexb = link_index
     na,nlinka = link_indexa.shape[:2]
     nb,nlinkb = link_indexb.shape[:2]
+    assert(cibra.size == na*nb)
+    assert(ciket.size == na*nb)
     rdm1 = numpy.empty((norb,norb))
     fn = getattr(librdm, fname)
     fn(rdm1.ctypes.data_as(ctypes.c_void_p),
@@ -106,6 +110,8 @@ def make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
         link_indexa, link_indexb = link_index
     na,nlinka = link_indexa.shape[:2]
     nb,nlinkb = link_indexb.shape[:2]
+    assert(cibra.size == na*nb)
+    assert(ciket.size == na*nb)
     rdm1 = numpy.empty((norb,norb))
     rdm2 = numpy.empty((norb,norb,norb,norb))
     librdm.FCIrdm12_drv(getattr(librdm, fname),
@@ -148,6 +154,8 @@ def make_dm123(fname, cibra, ciket, norb, nelec):
     link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
     na,nlinka = link_indexa.shape[:2]
     nb,nlinkb = link_indexb.shape[:2]
+    assert(cibra.size == na*nb)
+    assert(ciket.size == na*nb)
     rdm1 = numpy.empty((norb,)*2)
     rdm2 = numpy.empty((norb,)*4)
     rdm3 = numpy.empty((norb,)*6)
@@ -216,6 +224,8 @@ def make_dm1234(fname, cibra, ciket, norb, nelec):
     link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
     na,nlinka = link_indexa.shape[:2]
     nb,nlinkb = link_indexb.shape[:2]
+    assert(cibra.size == na*nb)
+    assert(ciket.size == na*nb)
     rdm1 = numpy.empty((norb,)*2)
     rdm2 = numpy.empty((norb,)*4)
     rdm3 = numpy.empty((norb,)*6)
