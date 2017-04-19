@@ -42,7 +42,7 @@ class gaunt_c():
           for m2 in range(-j2,j2+1):
             i2 = j2*(j2+1)+m2
             ind = i1*self.njm+i2
-            s,f = self._gaunt_iptr[ind],self._gaunt_iptr[ind+1]
+            s = self._gaunt_iptr[ind]
             for j3ind,j3 in enumerate(range(abs(j1-j2), j1+j2+1)):
               self._gaunt_data[s+j3ind] = np.sqrt( (2*j1+1.0)*(2*j2+1.0)*(2*j3+1.0)/(4.0*np.pi) ) * \
                 w3j(j1,0,j2,0,j3,0).doit()*w3j(j1,m1,j2,m2,j3,-m1-m2).doit()
