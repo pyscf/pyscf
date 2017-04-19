@@ -17,7 +17,7 @@ oo = me.get_overlap_ap(0, 0, [0.0,0.0,0.0], [0.0,0.0,0.0])
 print(sum(sum(oo)))
 
 lv = local_vertex_c(sv.ao_log)
-print(dir(lv))
+lv.get_local_vertex(0)
 
 
 
