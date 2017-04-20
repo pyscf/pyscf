@@ -3,6 +3,7 @@ from pyscf.nao.m_siesta_xml_print import siesta_xml_print
 from pyscf.nao.m_sbt import sbt_c
 from pyscf.nao.m_ao_matelem import ao_matelem_c
 from pyscf.nao.m_local_vertex import local_vertex_c
+from pyscf.nao.m_prod_log import prod_log_c
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
@@ -12,18 +13,20 @@ sv  = system_vars_c(label)
 
 print(diag_check(sv))
 
-me = ao_matelem_c(sv.ao_log)
-oo = me.get_overlap_ap(0, 0, [0.0,0.0,0.0], [0.0,0.0,0.0])
-print(sum(sum(oo)))
+prd_log = prod_log_c(sv.ao_log, 1e-6)
 
-lv = local_vertex_c(sv.ao_log)
-ldp = lv.get_local_vertex(0)
+#me = ao_matelem_c(sv.ao_log)
+#oo = me.get_overlap_ap(0, 0, [0.0,0.0,0.0], [0.0,0.0,0.0])
+#print(sum(sum(oo)))
 
-for i in range(ldp['j2xff'][0].shape[0]):
-  plt.plot( lv.rr, ldp['j2xff'][0][i,:], label='0,'+str(i))
-plt.xlim([0.0,5.0])
-plt.legend()
-plt.show()
+#lv = local_vertex_c(sv.ao_log)
+#ldp = lv.get_local_vertex(0)
+
+#for i in range(ldp['j2xff'][0].shape[0]):
+#  plt.plot( lv.rr, ldp['j2xff'][0][i,:], label='0,'+str(i))
+#plt.xlim([0.0,5.0])
+#plt.legend()
+#plt.show()
 
 
 

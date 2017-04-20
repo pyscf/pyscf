@@ -2,9 +2,7 @@ from __future__ import print_function
 from __future__ import division
 import numpy as np
 import sys
-from pyscf.nao.m_ao_log import ao_log_c
 from pyscf.nao.m_c2r import c2r_c
-from pyscf.nao.m_gaunt import gaunt_c
 from pyscf.nao.m_ao_matelem import ao_matelem_c
 from scipy.linalg import eigh
 
@@ -27,7 +25,7 @@ class local_vertex_c(ao_matelem_c):
     nr = self.nr
     kk = self.kk
     self.dkappa_pp = 4*np.pi*np.log( kk[nr-1]/kk[0])/(nr-1)*kk
-    self.c2r_c = c2r_c(2*self.jmx)
+    self.c2r_c = c2r_c(2*self.jmx) # local vertex c2r[:,:] coefficients
     
   #
   #
@@ -47,7 +45,7 @@ class local_vertex_c(ao_matelem_c):
     """
     assert(sp>-1)
 
-    jmx_sp = max(self.sp_mu2j[sp,:])
+    jmx_sp = np.amax(self.sp_mu2j[sp])
     j2nf=np.zeros((2*jmx_sp+1), dtype='int64')
     for mu1,j1,s1,f1 in self.sp2info[sp]:
       for mu2,j2,s2,f2 in self.sp2info[sp]:
@@ -68,7 +66,7 @@ class local_vertex_c(ao_matelem_c):
     pack2ff = np.zeros((nmu*(nmu+1)//2,self.nr), dtype='float64') # storage for original products
     for mu2 in self.sp2mults[sp]:
       for mu1 in range(mu2+1):
-        pack2ff[ij2pack(mu1,mu2),:] = self.psi_log[sp,mu1,:]*self.psi_log[sp,mu2,:]
+        pack2ff[ij2pack(mu1,mu2),:] = self.psi_log[sp][mu1,:]*self.psi_log[sp][mu2,:]
     
     j2xff = [] # Storage for dominant product's functions (list of numpy arrays: x*f(r)*f(r))
     j2xww = [] # Storage for dominant product's vertex (angular part of: x*wigner*wigner)
@@ -125,6 +123,6 @@ class local_vertex_c(ao_matelem_c):
                       jn2 = j2*(j2+1)+n2
                       xg2[jm1,jm2]=xg2[jm1,jm2]+self._c2r[m1,n1]*self._c2r[m2,n2] * xg1[2*jmx_sp+m,jn1,jn2]
           xww[domi,:,:,2*jmx_sp+m] = xg2[:,:].real
-      
       j2xww.append(xww)
+
     return {"j2xww": j2xww, "j2xff": j2xff, "j2eva": j2eva }

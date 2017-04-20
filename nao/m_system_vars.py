@@ -11,7 +11,7 @@ from pyscf.nao.m_siesta_hsx import siesta_hsx_c
 from pyscf.nao.m_siesta2blanko_csr import _siesta2blanko_csr
 from pyscf.nao.m_siesta2blanko_denvec import _siesta2blanko_denvec
 from pyscf.nao.m_sv_diag import sv_diag 
-from pyscf.nao.m_siesta_ion_add_sp2 import _add_mu_sp2
+from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
 from pyscf.nao.m_ao_log import ao_log_c
 #
 #
@@ -23,7 +23,7 @@ def get_orb2m(sv):
     sp = sv.atom2sp[atom]
     nmult = sv.sp2nmult[sp]
     for mu in range(nmult):
-      j = sv.sp_mu2j[sp,mu]
+      j = sv.sp_mu2j[sp][mu]
       for m in range(-j,j+1):
         orb2m[orb] = m
         orb = orb + 1
@@ -128,7 +128,7 @@ class system_vars_c():
     for sp in self.wfsx.sp2strspecie:
       self.sp2ion.append(siesta_ion_xml(sp+self.wfsx.ion_suffix[sp]+'.ion.xml'))
     
-    _add_mu_sp2(self, self.sp2ion)
+    _siesta_ion_add_sp2(self, self.sp2ion)
     self.ao_log = ao_log_c(self.sp2ion)
     
     self.natoms = len(self.xml_dict['atom2sp'])
