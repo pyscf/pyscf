@@ -351,5 +351,9 @@ class KUHF(uhf.UHF, khf.KRHF):
                 fh5['scf/kpts'] = self.kpts
         return self
 
+    @lib.with_doc(uhf.spin_square.__doc__)
+    def spin_square(self, mo_coeff=None, s=None):
+        raise NotImplementedError
+
     canonicalize = canonicalize
 
