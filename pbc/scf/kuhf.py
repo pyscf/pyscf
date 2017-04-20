@@ -20,6 +20,7 @@ from pyscf.pbc.scf import khf
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import addons
+import pyscf
 
 
 def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
