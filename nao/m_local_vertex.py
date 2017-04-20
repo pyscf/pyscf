@@ -30,6 +30,7 @@ class local_vertex_c(ao_matelem_c):
     nr = self.nr
     kk = self.kk
     self.dkappa_pp = 4*np.pi*np.log( kk[nr-1]/kk[0])/(nr-1)*kk
+    self.c2r_c = c2r_c(2*self.jmx)
     
   #
   #
@@ -63,19 +64,12 @@ class local_vertex_c(ao_matelem_c):
       for mu1 in range(mu2+1):
         pack2ff[ij2pack(mu1,mu2),:] = self.psi_log[sp,mu1,:]*self.psi_log[sp,mu2,:]
     
-    j2xff = [] # Storage for dominant product functions (list of numpy arrays...)
+    j2xff = [] # Storage for dominant product's functions (list of numpy arrays: x*f(r)*f(r))
+    j2xww = [] # Storage for dominant product's vertex (angular part of: x*wigner*wigner)
     j2eva = [] # Storage for eigenvalues in each angular momentum "sektor"
+    hc_c2r = np.conj(self.c2r_c._c2r)
+    c2r_jm = self.c2r_c._j
     for j,dim in enumerate(j2nf): # Metrik ist dim * dim in diesem Sektor 
-      
-      kinematical_vertex = np.zeros((dim,(jmx_sp+1)**2,(jmx_sp+1)**2), dtype='float64')
-      for n in range(dim):
-        j1,j2 = j_p2js[j][n]
-        if  abs(j1-j2)<=j and j<=j1+j2:
-          for m1 in range(-j1,j1+1):
-            for m2 in range(-j2,j2+1):
-              i3y = self.get_gaunt(j1,m1,j2,m2)*(-1.0)**(m1+m2)
-              kinematical_vertex[n,j1*(j1+1)+m1,j2*(j2+1)+m2]=i3y[j-abs(j1-j2)]
-              kinematical_vertex[n,j2*(j2+1)+m2,j1*(j1+1)+m1]=i3y[j-abs(j1-j2)]
 
       metric = np.zeros((dim,dim), dtype='float64')
       for level_1 in range(dim):
@@ -92,23 +86,39 @@ class local_vertex_c(ao_matelem_c):
         for n in range(dim):
           xff[domi,:] = xff[domi,:] + x[domi,n]*pack2ff[ij2pack(*j_p2mus[j][n]),:]
       j2xff.append(xff)
-      
-      print(j, dim, eva)
 
-      xg=np.zeros((dim, (jmx_sp+1)**2, (jmx_sp+1)**2, 2*(jmx_sp*2)+1), dtype='float64')
+      xww = np.zeros((dim, (jmx_sp+1)**2, (jmx_sp+1)**2, 2*(jmx_sp*2)+1), dtype='float64')
       for domi in range(dim):
+        xg0 = np.zeros(((jmx_sp+1)**2, (jmx_sp+1)**2, 2*(jmx_sp*2)+1), dtype='float64')
         for n in range(dim):
           j1,j2 = j_p2js[j][n]
-          if  abs(j1-j2)<=j and j<=j1+j2:
-            for m1 in range(-j1,j1+1):
-              for m2 in range(-j2,j2+1):
-                m=m1+m2
-                xg[domi,:,:,m] = xg[domi,:,:,2*jmx_sp+m] + x[domi,n]*kinematical_vertex[n,:,:]
+          if j<abs(j1-j2) or j>j1+j2 : continue
+          for m1 in range(-j1,j1+1) : 
+            jm1 = j1*(j1+1)+m1
+            for m2 in range(-j2,j2+1): 
+              m,jm2 = m1+m2,j2*(j2+1)+m2
+              i3y=self.get_gaunt(j1,m1,j2,m2)*(-1.0)**m
+              xg0[jm1,jm2,2*jmx_sp+m] = xg0[jm1,jm2,2*jmx_sp+m] + x[domi,n]*i3y[j-abs(j1-j2)]
 
-      for domi in range(dim):
-        xg1 = np.zeros((dim,2*(jmx_sp*2)+1,(jmx_sp+1)**2,(jmx_sp+1)**2), dtype='complex128')
+        xg1 = np.zeros((2*(jmx_sp*2)+1,(jmx_sp+1)**2,(jmx_sp+1)**2), dtype='complex128')
         for m in range(-j,j+1):
           for m1 in range(-j,j+1):
-            xg1[domi,m,:,:]=xg1[domi,m,:,:] #+ hc_c2r[m1,m]*xg[domi,:,:]
+            xg1[2*jmx_sp+m,:,:]=xg1[2*jmx_sp+m,:,:] + hc_c2r[c2r_jm+m1,c2r_jm+m]*xg0[:,:,2*jmx_sp+m1]
 
-    return 0
+        for m in range(-j,j+1):
+          xg2 = np.zeros(((jmx_sp+1)**2,(jmx_sp+1)**2), dtype='complex128')
+          for j1 in range(jmx_sp+1):
+            for m1 in range(-j1,j1+1):
+              jm1 = j1*(j1+1)+m1
+              for j2 in range(jmx_sp+1):
+                for m2 in range(-j2,j2+1):
+                  jm2 = j2*(j2+1)+m2
+                  for n1 in range(-j1,j1+1):
+                    jn1 = j1*(j1+1)+n1
+                    for n2 in range(-j2,j2+1):
+                      jn2 = j2*(j2+1)+n2
+                      xg2[jm1,jm2]=xg2[jm1,jm2]+self._c2r[m1,n1]*self._c2r[m2,n2] * xg1[2*jmx_sp+m,jn1,jn2]
+          xww[domi,:,:,2*jmx_sp+m] = xg2[:,:].real
+      
+      j2xww.append(xww)
+    return {"j2xww": j2xww, "j2xff": j2xff, "j2eva": j2eva }
