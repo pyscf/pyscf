@@ -58,34 +58,57 @@ class local_vertex_c(ao_matelem_c):
 
     # 
     nmu = len(self.sp2mults[sp])
-    pack2orig_prd = np.zeros((nmu*(nmu+1)//2,self.nr), dtype='float64') # storage for original products
+    pack2ff = np.zeros((nmu*(nmu+1)//2,self.nr), dtype='float64') # storage for original products
     for mu2 in self.sp2mults[sp]:
       for mu1 in range(mu2+1):
-        pack2orig_prd[ij2pack(mu1,mu2),:] = self.psi_log[sp,mu1,:]*self.psi_log[sp,mu2,:]
+        pack2ff[ij2pack(mu1,mu2),:] = self.psi_log[sp,mu1,:]*self.psi_log[sp,mu2,:]
     
+    j2xff = [] # Storage for dominant product functions (list of numpy arrays...)
+    j2eva = [] # Storage for eigenvalues in each angular momentum "sektor"
     for j,dim in enumerate(j2nf): # Metrik ist dim * dim in diesem Sektor 
       
-      kinematical_vertex = np.zeros((self.sp2norbs[sp],self.sp2norbs[sp],dim,2*(2*jmx_sp)+1), dtype='float64')
-      for nummer in range(dim):
-        mu1,mu2,j1,j2 = *j_p2mus[j][nummer],*j_p2js[j][nummer]
-        s1,s2 = self.sp_mu2s[sp,mu1],self.sp_mu2s[sp,mu2]
-        #print(nummer,'|',mu1,j1,s1+j1-j1,s1+j1+j1,'|', mu2,j2,s2+j2-j2,s2+j2+j2)
+      kinematical_vertex = np.zeros((dim,(jmx_sp+1)**2,(jmx_sp+1)**2), dtype='float64')
+      for n in range(dim):
+        j1,j2 = j_p2js[j][n]
         if  abs(j1-j2)<=j and j<=j1+j2:
           for m1 in range(-j1,j1+1):
             for m2 in range(-j2,j2+1):
-              m=m1+m2
-              i3y = self.get_gaunt(j1,m1,j2,m2)*(-1.0)**m
-              kinematical_vertex[s1+j1+m1,s2+j2+m2,nummer,m]=i3y[j-abs(j1-j2)]
-              kinematical_vertex[s2+j2+m2,s1+j1+m1,nummer,m]=kinematical_vertex[s1+j1+m1,s2+j2+m2,nummer,m]
+              i3y = self.get_gaunt(j1,m1,j2,m2)*(-1.0)**(m1+m2)
+              kinematical_vertex[n,j1*(j1+1)+m1,j2*(j2+1)+m2]=i3y[j-abs(j1-j2)]
+              kinematical_vertex[n,j2*(j2+1)+m2,j1*(j1+1)+m1]=i3y[j-abs(j1-j2)]
 
       metric = np.zeros((dim,dim), dtype='float64')
       for level_1 in range(dim):
-        psi12_p = self.sbt(pack2orig_prd[ ij2pack( *j_p2mus[j][level_1] ),:], j, 1)
+        ff12_p = self.sbt(pack2ff[ ij2pack( *j_p2mus[j][level_1] ),:], j, 1)
         for level_2 in range(level_1+1):
-          psi34_p = self.sbt(pack2orig_prd[ ij2pack( *j_p2mus[j][level_2] ),:], j, 1)
-          metric[level_2,level_1]=metric[level_1,level_2]=sum(psi12_p*psi34_p*self.dkappa_pp)  # Coulomb Metrik enthaelt Faktor 1/p**2
+          ff34_p = self.sbt(pack2ff[ ij2pack( *j_p2mus[j][level_2] ),:], j, 1)
+          metric[level_2,level_1]=metric[level_1,level_2]=sum(ff12_p*ff34_p*self.dkappa_pp)  # Coulomb Metrik enthaelt Faktor 1/p**2
 
-      E,X=eigh(metric)
-      print(j, dim, E)
+      eva,x=eigh(metric)
+      j2eva.append(eva)
+        
+      xff = np.zeros((dim,self.nr))   #!!!! Jetzt dominante Orbitale bilden
+      for domi in range(dim):  
+        for n in range(dim):
+          xff[domi,:] = xff[domi,:] + x[domi,n]*pack2ff[ij2pack(*j_p2mus[j][n]),:]
+      j2xff.append(xff)
       
+      print(j, dim, eva)
+
+      xg=np.zeros((dim, (jmx_sp+1)**2, (jmx_sp+1)**2, 2*(jmx_sp*2)+1), dtype='float64')
+      for domi in range(dim):
+        for n in range(dim):
+          j1,j2 = j_p2js[j][n]
+          if  abs(j1-j2)<=j and j<=j1+j2:
+            for m1 in range(-j1,j1+1):
+              for m2 in range(-j2,j2+1):
+                m=m1+m2
+                xg[domi,:,:,m] = xg[domi,:,:,2*jmx_sp+m] + x[domi,n]*kinematical_vertex[n,:,:]
+
+      for domi in range(dim):
+        xg1 = np.zeros((dim,2*(jmx_sp*2)+1,(jmx_sp+1)**2,(jmx_sp+1)**2), dtype='complex128')
+        for m in range(-j,j+1):
+          for m1 in range(-j,j+1):
+            xg1[domi,m,:,:]=xg1[domi,m,:,:] #+ hc_c2r[m1,m]*xg[domi,:,:]
+
     return 0

@@ -17,6 +17,9 @@ mol = gto.M(atom=[('H', 0, 0, i) for i in range(4)],
 #
 # Run HF and CCSD and save results in file h10.chk
 #
+mol.charge = 0
+mol.spin = 0
+
 mf = scf.RHF(mol).set(chkfile='h10.chk').run()
 mycc = cc.CCSD(mf).run()
 lib.chkfile.save('h10.chk', 'cc/t1', mycc.t1)
