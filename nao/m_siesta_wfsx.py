@@ -5,6 +5,7 @@ import numpy
 import sys
 from numpy import empty 
 from pyscf.lib import misc
+from pyscf.data import chemical_symbols
 
 
 dll = misc.load_library("libnao")
@@ -61,24 +62,30 @@ class siesta_wfsx_c():
     self.orb2atm  = idat[i:i+self.norbs]; i=i+self.norbs
     self.orb2ao   = idat[i:i+self.norbs]; i=i+self.norbs
     self.orb2n    = idat[i:i+self.norbs]; i=i+self.norbs
-    self.ion_suffix = {}
     if(self.gamma) : self.nreim = 1;
     else: self.nreim = 2;
     
-
+    # list of caracter that could be used to split the psf file name
+    carac_spe = ['_', '.', '-', ' ']
     splen    = idat[i]; i=i+1
     self.orb2strspecie = []
     for j in range(self.norbs):
       splabel = ''
       for k in range(splen):
         splabel = splabel + chr(idat[i]); i=i+1
-      ch = splabel.strip()[0]
+      splabel = splabel.replace(" ", "")
+
+      # test if the second or third caracter of splabel is 
+      # a special caracter
+      ch = None
+      for sp in chemical_symbols:
+          if sp in splabel:
+              ch = splabel
+      
+      if ch is None:
+        raise ValueError(splabel + " does not contain a chemical symbol?")
+      
       self.orb2strspecie.append(ch)
-      if ch not in self.ion_suffix.keys():
-        self.ion_suffix[ch] = ""
-        if len(splabel.strip()) > 1:
-          for isplab in range(1, len(splabel.strip())):
-            self.ion_suffix[ch] += splabel.strip()[isplab]
 
     self.sp2strspecie = []
     for strsp in self.orb2strspecie:

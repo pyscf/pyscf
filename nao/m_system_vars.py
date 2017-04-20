@@ -13,6 +13,7 @@ from pyscf.nao.m_siesta2blanko_denvec import _siesta2blanko_denvec
 from pyscf.nao.m_sv_diag import sv_diag 
 from pyscf.nao.m_siesta_ion_add_sp2 import _add_mu_sp2
 from pyscf.nao.m_ao_log import ao_log_c
+
 #
 #
 #
@@ -26,7 +27,6 @@ def get_orb2m(sv):
       j = sv.sp_mu2j[sp,mu]
       for m in range(-j,j+1):
         orb2m[orb] = m
-        orb = orb + 1
   return(orb2m)
 
 #
@@ -86,7 +86,7 @@ class system_vars_c():
     for sp in Atoms.get_chemical_symbols():
       if sp not in species:
         species.append(sp)
-        self.sp2ion.append(siesta_ion_xml(sp+self.wfsx.ion_suffix[sp]+'.ion.xml'))
+        self.sp2ion.append(siesta_ion_xml(sp+'.ion.xml'))
     
     _add_mu_sp2(self, self.sp2ion)
     self.sp2ao_log = ao_log_c(self.sp2ion)
@@ -126,7 +126,7 @@ class system_vars_c():
     ##### The parameters as fields     
     self.sp2ion = []
     for sp in self.wfsx.sp2strspecie:
-      self.sp2ion.append(siesta_ion_xml(sp+self.wfsx.ion_suffix[sp]+'.ion.xml'))
+      self.sp2ion.append(siesta_ion_xml(sp+'.ion.xml'))
     
     _add_mu_sp2(self, self.sp2ion)
     self.ao_log = ao_log_c(self.sp2ion)
