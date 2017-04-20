@@ -3,11 +3,8 @@ from __future__ import division
 import numpy as np
 import sys
 from pyscf.nao.m_ao_log import ao_log_c
-from pyscf.nao.m_sbt import sbt_c
 from pyscf.nao.m_c2r import c2r_c
 from pyscf.nao.m_gaunt import gaunt_c
-from pyscf.nao.m_csphar import csphar
-from pyscf.nao.m_log_interp import log_interp
 from pyscf.nao.m_ao_matelem import ao_matelem_c
 from scipy.linalg import eigh
 
@@ -38,6 +35,15 @@ class local_vertex_c(ao_matelem_c):
   def get_local_vertex(self, sp):
     """
       Constructor of vertex for a given specie
+      Args:
+        sp : specie number
+      Result:
+        Dictionary with the product functions, vertex coefficients and eigenvalues
+        in each angular-momentum "sektor"
+          dominant products functions: j2xff
+          dominant vertex coefficients (angular part of): j2xww
+          eigenvalues of Coulomb metric : j2eva
+      
     """
     assert(sp>-1)
 

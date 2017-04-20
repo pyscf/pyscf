@@ -17,8 +17,13 @@ oo = me.get_overlap_ap(0, 0, [0.0,0.0,0.0], [0.0,0.0,0.0])
 print(sum(sum(oo)))
 
 lv = local_vertex_c(sv.ao_log)
-ldp = lv.get_local_vertex(1)
-print( ldp["j2eva"] )
+ldp = lv.get_local_vertex(0)
+
+for i in range(ldp['j2xff'][0].shape[0]):
+  plt.plot( lv.rr, ldp['j2xff'][0][i,:], label='0,'+str(i))
+plt.xlim([0.0,5.0])
+plt.legend()
+plt.show()
 
 
 
