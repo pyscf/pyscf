@@ -222,8 +222,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
 
     if mo_coeff is not None and mf.verbose >= logger.DEBUG:
         ss, s = mf.spin_square((mo_coeff[0][:,mo_occ[0]>0],
-                                  mo_coeff[1][:,mo_occ[1]>0]),
-                                  mf.get_ovlp())
+                                mo_coeff[1][:,mo_occ[1]>0]), mf.get_ovlp())
         logger.debug(mf, 'multiplicity <S^2> = %.8g  2S+1 = %.8g', ss, s)
     return mo_occ
 
@@ -359,8 +358,8 @@ def spin_square(mo, s=1):
     mo_a, mo_b = mo
     nocc_a = mo_a.shape[1]
     nocc_b = mo_b.shape[1]
-    s = reduce(numpy.dot, (mo_a.T, s, mo_b))
-    ssxy = (nocc_a+nocc_b) * .5 - (s**2).sum()
+    s = reduce(numpy.dot, (mo_a.T.conj(), s, mo_b))
+    ssxy = (nocc_a+nocc_b) * .5 - numpy.einsum('ij,ij->', s.conj(), s)
     ssz = (nocc_b-nocc_a)**2 * .25
     ss = ssxy + ssz
     s = numpy.sqrt(ss+.25) - .5
@@ -738,14 +737,8 @@ class UHF(hf.SCF):
     @lib.with_doc(spin_square.__doc__)
     def spin_square(self, mo_coeff=None, s=None):
         if mo_coeff is None:
-            #print(self.mo_coeff.shape)
             mo_coeff = (self.mo_coeff[0][:,self.mo_occ[0]>0],
                         self.mo_coeff[1][:,self.mo_occ[1]>0])
-            if len(self.mo_coeff.shape)==4:
-              #For k-points, let's just print out the gamma point.
-              mo_coeff = (self.mo_coeff[0,0][:,self.mo_occ[0,0]>0],
-                          self.mo_coeff[1,0][:,self.mo_occ[1,0]>0])
-
         if s is None:
             s = self.get_ovlp()
         return spin_square(mo_coeff, s)
@@ -770,8 +763,7 @@ class UHF(hf.SCF):
 
     def _finalize(self):
         ss, s = self.spin_square()
-                                  
-                                 
+
         if self.converged:
             logger.note(self, 'converged SCF energy = %.15g  '
                         '<S^2> = %.8g  2S+1 = %.8g', self.e_tot, ss, s)
