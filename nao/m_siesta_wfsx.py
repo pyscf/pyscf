@@ -66,7 +66,6 @@ class siesta_wfsx_c():
     else: self.nreim = 2;
     
     # list of caracter that could be used to split the psf file name
-    carac_spe = ['_', '.', '-', ' ']
     splen    = idat[i]; i=i+1
     self.orb2strspecie = []
     for j in range(self.norbs):

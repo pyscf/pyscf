@@ -27,6 +27,7 @@ def get_orb2m(sv):
       j = sv.sp_mu2j[sp,mu]
       for m in range(-j,j+1):
         orb2m[orb] = m
+        orb = orb + 1
   return(orb2m)
 
 #
