@@ -38,23 +38,24 @@ class prod_log_c(ao_log_c):
           mu2ff[mu,:],mu2j[mu],mu2rcut[mu] = xff[domi,:], j, np.amax(ao_log.sp_mu2rcut[sp])
 
       mu2s = np.zeros((len(mu2j)+1), dtype='int64')
-      for mu in range(len(mu2j)): mu2s[mu+1] = sum(2*mu2j[0:mu+1]+1) # counting within specie
+      for mu in range(len(mu2j)): mu2s[mu+1] = sum(2*mu2j[0:mu+1]+1) # counting of the atom orbitals
 
       self.psi_log.append(mu2ff);  self.sp_mu2j.append(mu2j);  self.sp_mu2rcut.append(mu2rcut)
 
-      no,npf = sum(2*ao_log.sp_mu2j[sp]+1), sum(2*mu2j+1)  # count number of orbitals and product functions
+      no,npf,nmua = sum(2*ao_log.sp_mu2j[sp]+1), sum(2*mu2j+1), len(ao_log.sp_mu2j[sp])  # count number of orbitals and product functions
       mu2ww = np.zeros((no,no,npf), dtype='float64')
       mu = -1
       for evs,xww,j in zip(ldp['j2eva'],ldp['j2xww'],range(nam)):
         jmx_prd = (xww.shape[3]-1)//2
         for domi,ev in enumerate(evs):
           if ev<=tol: continue
-          for mu1,j1 in enumerate(ao_log.sp_mu2j[sp]):
-            for mu2,j2 in enumerate(ao_log.sp_mu2j[sp]):
+          mu+=1
+          s=mu2s[mu]
+          for mu1,j1,s1 in zip(range(nmua), ao_log.sp_mu2j[sp], ao_log.sp_mu2s[sp]):
+            for mu2,j2,s2 in zip(range(nmua), ao_log.sp_mu2j[sp], ao_log.sp_mu2s[sp]):
               for m1,jm1 in zip( range(-j1,j1+1), range(j2*(j2+1)-j2,j2*(j2+1)+j2+1) ) :
                 for m2,jm2 in zip( range(-j2,j2+1), range(j2*(j2+1)-j2,j2*(j2+1)+j2+1) ):
-                  for m3 in range(-j,j+1):
-                    mu2ww[0,0,0] = xww[domi,jm1,jm2,jmx_prd+m3]
+                  mu2ww[s1+j1+m1,s2+j2+m2,s:s+2*j+1] = xww[domi,jm1,jm2,jmx_prd-j:jmx_prd+j+1]
 
       print(sp, no, npf)
       
