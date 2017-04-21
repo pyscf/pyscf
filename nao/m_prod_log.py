@@ -23,28 +23,28 @@ class prod_log_c(ao_log_c):
     self.sp_mu2rcut = [] # list of numpy arrays containing the maximal radii
     self.sp_mu2j = []    # list of numpy arrays containing the angular momentum of the radial function
     
+  
     for sp in range(ao_log.nspecies):
       ldp = lvc.get_local_vertex(sp)
 
-      mu2jd = []
+      mu2mjd = []
       for j,evs in enumerate(ldp['j2eva']):
         for domi,ev in enumerate(evs):
-          if ev>tol: mu2jd.append([j,domi])
+          if ev>tol: mu2mjd.append([len(mu2mjd),j,domi])
 
-      self.sp2nmult[sp] = sum([sum(evs>tol) for evs in ldp['j2eva']])
+      nmult=self.sp2nmult[sp]=len(mu2mjd)
 
-      nam, nmult = len(ldp['j2eva']), self.sp2nmult[sp]
       mu2ff = np.zeros((nmult, lvc.nr), dtype='float64')
-      mu2j,mu2rcut  = np.zeros((nmult), dtype='int64'),np.zeros((nmult), dtype='float64')
-      mu = -1
-      for evs,xff,j in zip(ldp['j2eva'],ldp['j2xff'],range(nam)):
-        for domi,ev in enumerate(evs):
-          if ev<=tol: continue
-          mu+=1
-          mu2ff[mu,:],mu2j[mu],mu2rcut[mu] = xff[domi,:], j, np.amax(ao_log.sp_mu2rcut[sp])
+      mu2j  = np.zeros((nmult), dtype='int64')
+      mu2rcut = np.array([[ao_log.sp2rcut[sp]]*nmult], dtype='float64')
 
+      for mu,j,domi in mu2mjd:
+        mu2ff[mu,:] = ldp['j2xff'][j][domi,:]
+        mu2j[mu] = j
+        print(mu,j,domi)
+      
       mu2s = np.zeros((len(mu2j)+1), dtype='int64')
-      for mu in range(len(mu2j)): mu2s[mu+1] = sum(2*mu2j[0:mu+1]+1) # counting of the atom orbitals
+      for mu in range(len(mu2j)): mu2s[mu+1] = sum(2*mu2j[0:mu+1]+1) # counting of the product orbitals
 
       self.psi_log.append(mu2ff);  self.sp_mu2j.append(mu2j);  self.sp_mu2rcut.append(mu2rcut)
 
