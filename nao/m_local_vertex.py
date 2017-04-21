@@ -50,6 +50,9 @@ class local_vertex_c(ao_matelem_c):
     for mu1,j1,s1,f1 in self.sp2info[sp]:
       for mu2,j2,s2,f2 in self.sp2info[sp]:
         for j in range(abs(j1-j2),j1+j2+1,2): j2nf[j] = j2nf[j] + 1
+    
+    print(sp, j2nf)
+    
 
     j_p2mus = [ [p for p in range(j2nf[j]) ] for j in range(2*jmx_sp+1)]
     j_p2js  = [ [p for p in range(j2nf[j]) ] for j in range(2*jmx_sp+1)]
@@ -84,6 +87,8 @@ class local_vertex_c(ao_matelem_c):
 
       eva,x=eigh(metric)
       j2eva.append(eva)
+      
+      print(j,dim,eva)
         
       xff = np.zeros((dim,self.nr))   #!!!! Jetzt dominante Orbitale bilden
       for domi in range(dim):  
@@ -91,7 +96,7 @@ class local_vertex_c(ao_matelem_c):
           xff[domi,:] = xff[domi,:] + x[domi,n]*pack2ff[ij2pack(*j_p2mus[j][n]),:]
       j2xff.append(xff)
 
-      xww = np.zeros((dim, (jmx_sp+1)**2, (jmx_sp+1)**2, 2*(jmx_sp*2)+1), dtype='float64')
+      xww = np.zeros((dim, (jmx_sp+1)**2, (jmx_sp+1)**2, 2*j+1), dtype='float64')
       for domi in range(dim):
         xg0 = np.zeros(((jmx_sp+1)**2, (jmx_sp+1)**2, 2*(jmx_sp*2)+1), dtype='float64')
         for n in range(dim):
@@ -122,7 +127,7 @@ class local_vertex_c(ao_matelem_c):
                     for n2 in range(-j2,j2+1):
                       jn2 = j2*(j2+1)+n2
                       xg2[jm1,jm2]=xg2[jm1,jm2]+self._c2r[m1,n1]*self._c2r[m2,n2] * xg1[2*jmx_sp+m,jn1,jn2]
-          xww[domi,:,:,2*jmx_sp+m] = xg2[:,:].real
+          xww[domi,:,:,j+m] = xg2[:,:].real
       j2xww.append(xww)
 
     return {"j2xww": j2xww, "j2xff": j2xff, "j2eva": j2eva }

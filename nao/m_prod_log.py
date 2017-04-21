@@ -50,7 +50,6 @@ class prod_log_c(ao_log_c):
       no,npf,nmua = sum(2*ao_log.sp_mu2j[sp]+1), sum(2*mu2j+1), len(ao_log.sp_mu2j[sp])  # count number of orbitals and product functions
       jmx_prd = max(mu2j)
       mu2ww = np.zeros((no,no,npf), dtype='float64')
-      
       for mu,j,domi in mu2mjd:
         xww = ldp['j2xww'][j]
         s=mu2s[mu]
@@ -58,7 +57,7 @@ class prod_log_c(ao_log_c):
           for mu2,j2,s2 in zip(range(nmua), ao_log.sp_mu2j[sp], ao_log.sp_mu2s[sp]):
             for m1,jm1 in zip( range(-j1,j1+1), range(j1*(j1+1)-j1,j1*(j1+1)+j1+1) ) :
               for m2,jm2 in zip( range(-j2,j2+1), range(j2*(j2+1)-j2,j2*(j2+1)+j2+1) ):
-                mu2ww[s1+j1+m1,s2+j2+m2,s:s+2*j+1] = xww[domi,jm1,jm2,jmx_prd-j:jmx_prd+j+1]
+                mu2ww[s1+j1+m1,s2+j2+m2,s:s+2*j+1] = xww[domi,jm1,jm2,0:2*j+1]
 
       self.sp2vertex.append(mu2ww)
 
