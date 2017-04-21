@@ -12,8 +12,10 @@ label = 'siesta'
 sv  = system_vars_c(label)
 
 print(diag_check(sv))
-
 prd_log = prod_log_c(sv.ao_log, 1e-6)
+#me = ao_matelem_c(prd_log)
+#oo = me.get_overlap_ap(0, 0, [0.0,0.0,0.0], [0.0,1.0,0.5])
+#print(oo)
 
 #me = ao_matelem_c(sv.ao_log)
 #oo = me.get_overlap_ap(0, 0, [0.0,0.0,0.0], [0.0,0.0,0.0])
@@ -21,9 +23,7 @@ prd_log = prod_log_c(sv.ao_log, 1e-6)
 
 #lv = local_vertex_c(sv.ao_log)
 #ldp = lv.get_local_vertex(0)
-
-#for i in range(ldp['j2xff'][0].shape[0]):
-#  plt.plot( lv.rr, ldp['j2xff'][0][i,:], label='0,'+str(i))
+#for i,xff in enumerate(ldp['j2xff'][0]): plt.plot( lv.rr, xff, label='0,'+str(i))
 #plt.xlim([0.0,5.0])
 #plt.legend()
 #plt.show()

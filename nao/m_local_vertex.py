@@ -49,22 +49,21 @@ class local_vertex_c(ao_matelem_c):
     j2nf=np.zeros((2*jmx_sp+1), dtype='int64')
     for mu1,j1,s1,f1 in self.sp2info[sp]:
       for mu2,j2,s2,f2 in self.sp2info[sp]:
-        for j in range(abs(j1-j2),j1+j2+1,2): j2nf[j] = j2nf[j] + 1
+        if mu2<mu1: continue
+        for j in range(abs(j1-j2),j1+j2+1,2): 
+          j2nf[j] = j2nf[j] + 1
     
-    print(sp, j2nf)
-    
-
     j_p2mus = [ [p for p in range(j2nf[j]) ] for j in range(2*jmx_sp+1)]
     j_p2js  = [ [p for p in range(j2nf[j]) ] for j in range(2*jmx_sp+1)]
     j2p = np.zeros((2*jmx_sp+1), dtype='int64')
     for mu1,j1,s1,f1 in self.sp2info[sp]:
       for mu2,j2,s2,f2 in self.sp2info[sp]:
+        if mu2<mu1: continue
         for j in range(abs(j1-j2),j1+j2+1,2):
           j_p2mus[j][j2p[j]] = [mu1,mu2]
           j_p2js[j][j2p[j]] = [j1,j2]
-          j2p[j] = j2p[j] + 1
+          j2p[j]+=1
 
-    # 
     nmu = len(self.sp2mults[sp])
     pack2ff = np.zeros((nmu*(nmu+1)//2,self.nr), dtype='float64') # storage for original products
     for mu2 in self.sp2mults[sp]:
@@ -88,14 +87,19 @@ class local_vertex_c(ao_matelem_c):
       eva,x=eigh(metric)
       j2eva.append(eva)
       
-      print(j,dim,eva)
-        
       xff = np.zeros((dim,self.nr))   #!!!! Jetzt dominante Orbitale bilden
       for domi in range(dim):  
         for n in range(dim):
-          xff[domi,:] = xff[domi,:] + x[domi,n]*pack2ff[ij2pack(*j_p2mus[j][n]),:]
+          xff[domi,:] = xff[domi,:] + x[n,domi]*pack2ff[ij2pack(*j_p2mus[j][n]),:]
       j2xff.append(xff)
-
+      
+      #xe = np.zeros((dim,dim))
+      #for i,ev in enumerate(eva): xe[:,i] = x[:,i]*ev
+      #metric1 = np.matmul(x,xe.transpose())
+      #print(sum(sum(abs(metric1-metric1.transpose()))), sum(sum(abs(metric1-metric))))
+      
+      #print(j, sum(sum(xff)))
+      
       xww = np.zeros((dim, (jmx_sp+1)**2, (jmx_sp+1)**2, 2*j+1), dtype='float64')
       for domi in range(dim):
         xg0 = np.zeros(((jmx_sp+1)**2, (jmx_sp+1)**2, 2*(jmx_sp*2)+1), dtype='float64')

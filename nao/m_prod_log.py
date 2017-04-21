@@ -15,6 +15,7 @@ class prod_log_c(ao_log_c):
   '''
   def __init__(self, ao_log, tol=1e-10):
     
+    self.rr,self.pp = ao_log.rr,ao_log.pp
     self.sp2nmult = np.zeros((ao_log.nspecies), dtype='int64')
     self.nmultmax = max(self.sp2nmult)
     
@@ -36,7 +37,7 @@ class prod_log_c(ao_log_c):
       nmult=len(mu2mjd)
       mu2j = np.array([mjd[1] for mjd in mu2mjd], dtype='int64')
       mu2s = np.array([0]+[sum(2*mu2j[0:mu+1]+1) for mu in range(nmult)], dtype='int64')
-      mu2rcut = np.array([[ao_log.sp2rcut[sp]]*nmult], dtype='float64')
+      mu2rcut = np.array([ao_log.sp2rcut[sp]]*nmult, dtype='float64')
       
       self.sp2nmult[sp]=nmult
       self.sp_mu2j.append(mu2j)
@@ -48,7 +49,6 @@ class prod_log_c(ao_log_c):
       self.psi_log.append(mu2ff)
 
       no,npf,nmua = sum(2*ao_log.sp_mu2j[sp]+1), sum(2*mu2j+1), len(ao_log.sp_mu2j[sp])  # count number of orbitals and product functions
-      jmx_prd = max(mu2j)
       mu2ww = np.zeros((no,no,npf), dtype='float64')
       for mu,j,domi in mu2mjd:
         xww = ldp['j2xww'][j]
