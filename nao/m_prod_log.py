@@ -25,6 +25,12 @@ class prod_log_c(ao_log_c):
     
     for sp in range(ao_log.nspecies):
       ldp = lvc.get_local_vertex(sp)
+
+      mu2jd = []
+      for j,evs in enumerate(ldp['j2eva']):
+        for domi,ev in enumerate(evs):
+          if ev>tol: mu2jd.append([j,domi])
+
       self.sp2nmult[sp] = sum([sum(evs>tol) for evs in ldp['j2eva']])
 
       nam, nmult = len(ldp['j2eva']), self.sp2nmult[sp]
