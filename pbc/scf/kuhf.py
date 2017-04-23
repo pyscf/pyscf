@@ -66,16 +66,29 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
 
     This is a k-point version of scf.hf.SCF.get_occ
     '''
+
     if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
     mo_occ_kpts = np.zeros_like(mo_energy_kpts)
 
     nkpts = len(mo_energy_kpts[0])
     nocc = mf.cell.nelectron * nkpts
 
-    mo_energy = np.sort(mo_energy_kpts.ravel())
-    fermi = mo_energy[nocc-1]
-    mo_occ_kpts[mo_energy_kpts <= fermi] = 1
-
+    #mo_energy = np.sort(mo_energy_kpts.ravel())
+    #fermi = mo_energy[nocc-1]
+    #print("fermi",fermi)
+    #mo_occ_kpts[mo_energy_kpts <= fermi] = 1
+    
+    for k in range(nkpts):
+      e_idx_a = np.argsort(mo_energy_kpts[0,k])
+      e_idx_b = np.argsort(mo_energy_kpts[1,k])
+      e_sort_a = mo_energy_kpts[0,k][e_idx_a]
+      e_sort_b = mo_energy_kpts[1,k][e_idx_b]
+      n_a, n_b = mf.nelec
+      mo_occ_kpts[0,k][e_idx_a[:n_a]] = 1
+      mo_occ_kpts[1,k][e_idx_b[:n_b]] = 1
+    
+    return mo_occ_kpts
+  
     if nocc < mo_energy.size:
         logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
                     mo_energy[nocc-1], mo_energy[nocc])
@@ -266,11 +279,15 @@ class KUHF(uhf.UHF, khf.KRHF):
         if key.lower() == 'chkfile':
             dm_kpts = dm
         else:
-            nao = dm.shape[1]
+            nao = dm.shape[-1]
             nkpts = len(self.kpts)
-            dm_kpts = lib.asarray([dm]*nkpts).reshape(nkpts,2,nao,nao)
-            dm_kpts = dm_kpts.transpose(1,0,2,3)
-            dm[1,:] *= .98  # To break spin symmetry
+            if len(dm.shape)==3:
+              dm_kpts = lib.asarray([dm]*nkpts).reshape(nkpts,2,nao,nao)
+              dm_kpts = dm_kpts.transpose(1,0,2,3)
+            else:
+              dm_kpts=dm
+            dm_kpts[1,:] *= .98  # To break spin symmetry
+            assert dm_kpts.shape[0]==2
         return dm_kpts
 
     get_hcore = khf.KRHF.get_hcore
