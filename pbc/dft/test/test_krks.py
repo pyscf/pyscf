@@ -67,7 +67,7 @@ class KnowValues(unittest.TestCase):
         e1 = mf.scf()
         #print "mf._ecoul =", mf._ecoul
         #print "mf._exc =", mf._exc
-        self.assertAlmostEqual(e1, -10.221426938778345, 8)
+        self.assertAlmostEqual(e1, -10.221426445656439, 8)
 
     def test_klda8_primitive_kpt_222(self):
         ase_atom = ase.build.bulk('C', 'diamond', a=LATTICE_CONST)
@@ -81,7 +81,7 @@ class KnowValues(unittest.TestCase):
         e1 = mf.scf()
         #print "mf._ecoul =", mf._ecoul
         #print "mf._exc =", mf._exc
-        self.assertAlmostEqual(e1, -11.353643738291005, 8)
+        self.assertAlmostEqual(e1, -11.353643583707452, 8)
 
 
 if __name__ == '__main__':

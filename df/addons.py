@@ -14,7 +14,8 @@ class load(ao2mo.load):
         with load(cderifile) as eri:
             print eri.shape
     '''
-    pass
+    def __init__(self, eri, dataname='j3c'):
+        ao2mo.load.__init__(self, eri, dataname)
 
 
 def aug_etb_for_dfbasis(mol, dfbasis='weigend', beta=2.3, start_at='Rb'):

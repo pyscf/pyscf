@@ -161,7 +161,7 @@ class KnowValues(unittest.TestCase):
         mf = pbchf.RHF(cell)
         mf.with_df = pdf.PWDF(cell)
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.2452496710146335, 5)
+        self.assertAlmostEqual(e1, -3.2455039593257098, 5)
 
     def test_rhf_2d(self):
         L = 4
@@ -179,7 +179,7 @@ class KnowValues(unittest.TestCase):
         mf = pbchf.RHF(cell)
         mf.with_df = pdf.PWDF(cell)
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.2683014249123516, 5)
+        self.assertAlmostEqual(e1, -3.2684257145738229, 5)
 
 
 if __name__ == '__main__':
