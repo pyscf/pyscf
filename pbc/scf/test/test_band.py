@@ -37,8 +37,9 @@ class KnowValues(unittest.TestCase):
         bands = []
         h1 = kmf.get_hcore()
         s1 = kmf.get_ovlp()
+        vhf = kmf.get_veff(kpts_band=kpts)
         for i, kpt in enumerate(kpts):
-            fock = h1[i] + kmf.get_veff(kpt_band=kpt)
+            fock = h1[i] + vhf[i]
             bands.append(scipy.linalg.eigh(fock, s1[i])[0])
         self.assertAlmostEqual(finger(bands), -0.76745129086774599, 8)
 

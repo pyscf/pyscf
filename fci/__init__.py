@@ -60,7 +60,7 @@ def FCI(mol, mo=None, singlet=True):
     from pyscf import scf
     from pyscf import symm
     from pyscf import ao2mo
-    cis = solver(mol, singlet=(mol.spin==0))
+    cis = solver(mol, singlet=(singlet and mol.spin==0))
     if mo is None:
         return cis
 
