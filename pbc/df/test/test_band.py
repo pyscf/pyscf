@@ -39,8 +39,8 @@ class KnowValues(unittest.TestCase):
         mf = scf.KRHF(cell)
         mf.kpts = cell.make_kpts([2]*3)
         mf.kernel()
-        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), -0.26538705237640059, 9)
-        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), -0.65622644106336381, 9)
+        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), -0.26538705237640059, 8)
+        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), -0.65622644106336381, 8)
 
     def test_aft_bands(self):
         mf = scf.KRHF(cell)
@@ -65,8 +65,8 @@ class KnowValues(unittest.TestCase):
         mf.with_df.kpts_band = kband
         mf.kpts = cell.make_kpts([2]*3)
         mf.kernel()
-        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), -0.32205722535389097, 6)
-        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), -0.64209385854790524, 6)
+        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), -0.32205954835271078, 8)
+        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), -0.64209375063268592, 8)
 
 
 if __name__ == '__main__':

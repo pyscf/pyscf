@@ -257,7 +257,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
 
 class CCSD(pyscf.cc.ccsd.CCSD):
 
-    def __init__(self, mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=[], mo_coeff=None, mo_occ=None):
         self.kpts = mf.kpts
         self.nkpts = len(self.kpts)
         nkpts = self.nkpts

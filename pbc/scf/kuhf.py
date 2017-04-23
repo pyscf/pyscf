@@ -20,7 +20,7 @@ from pyscf.pbc.scf import khf
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import addons
-import pyscf
+from pyscf.pbc.scf import chkfile
 
 
 def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
@@ -177,7 +177,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
     Returns:
         Density matrix, 3D ndarray
     '''
-    chk_cell, scf_rec = pyscf.pbc.scf.chkfile.load_scf(chkfile_name)
+    chk_cell, scf_rec = chkfile.load_scf(chkfile_name)
 
     if kpts is None:
         kpts = scf_rec['kpts']
@@ -368,6 +368,31 @@ class KUHF(uhf.UHF, khf.KRHF):
             with h5py.File(self.chkfile) as fh5:
                 fh5['scf/kpts'] = self.kpts
         return self
+
+    @lib.with_doc(uhf.spin_square.__doc__)
+    def spin_square(self, mo_coeff=None, s=None):
+        '''Treating the k-point sampling wfn as a giant Slater determinant,
+        the spin_square value is the <S^2> of the giant determinant.
+        '''
+        nkpts = len(self.kpts)
+        if mo_coeff is None:
+            mo_a = [self.mo_coeff[0,k][:,self.mo_occ[0,k]>0] for k in range(nkpts)]
+            mo_b = [self.mo_coeff[1,k][:,self.mo_occ[1,k]>0] for k in range(nkpts)]
+        else:
+            mo_a, mo_b = mo_coeff
+        if s is None:
+            s = self.get_ovlp()
+
+        nelec_a = sum([mo_a[k].shape[1] for k in range(nkpts)])
+        nelec_b = sum([mo_b[k].shape[1] for k in range(nkpts)])
+        ssxy = (nelec_a + nelec_b) * .5
+        for k in range(nkpts):
+            sij = reduce(np.dot, (mo_a[k].T.conj(), s[k], mo_b[k]))
+            ssxy -= np.einsum('ij,ij->', sij.conj(), sij)
+        ssz = (nelec_b-nelec_a)**2 * .25
+        ss = ssxy + ssz
+        s = np.sqrt(ss+.25) - .5
+        return ss, s*2+1
 
     canonicalize = canonicalize
 

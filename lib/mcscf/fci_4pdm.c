@@ -282,7 +282,7 @@ void FCI4pdm_kern_sf(double *rdm1, double *rdm2, double *rdm3, double *rdm4,
         double *t1bra = malloc(sizeof(double) * nnorb * bcount * 2);
         double *t2bra = malloc(sizeof(double) * n4 * bcount * 2);
         double *t1ket = t1bra + nnorb * bcount;
-        double *t2ket = t1bra + n4 * bcount;
+        double *t2ket = t2bra + n4 * bcount;
         double *pbra, *pt2;
 
         // t2[:,i,j,k,l] = E^i_j E^k_l|ket>
@@ -364,7 +364,7 @@ void FCI4pdm_kern_spin0(double *rdm1, double *rdm2, double *rdm3, double *rdm4,
         double *t1bra = malloc(sizeof(double) * nnorb * fill1 * 2);
         double *t2bra = malloc(sizeof(double) * n4 * fill1 * 2);
         double *t1ket = t1bra + nnorb * fill1;
-        double *t2ket = t1bra + n4 * fill1;
+        double *t2ket = t2bra + n4 * fill1;
         double *pbra, *pt2;
 
         FCI_t1ci_sf(bra, t1bra, fill1, stra_id, strb_id,
