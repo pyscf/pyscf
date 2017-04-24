@@ -3,7 +3,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import tempfile
 import time
 from functools import reduce
 import numpy
