@@ -29,13 +29,13 @@ class prod_log_c(ao_log_c):
     for sp in range(ao_log.nspecies):
       ldp = lvc.get_local_vertex(sp)
 
-      mu2mjd = []
+      mu2jd = []
       for j,evs in enumerate(ldp['j2eva']):
         for domi,ev in enumerate(evs):
-          if ev>tol: mu2mjd.append([len(mu2mjd),j,domi])
+          if ev>tol: mu2jd.append([j,domi])
 
-      nmult=len(mu2mjd)
-      mu2j = np.array([mjd[1] for mjd in mu2mjd], dtype='int64')
+      nmult=len(mu2jd)
+      mu2j = np.array([jd[0] for jd in mu2jd], dtype='int64')
       mu2s = np.array([0]+[sum(2*mu2j[0:mu+1]+1) for mu in range(nmult)], dtype='int64')
       mu2rcut = np.array([ao_log.sp2rcut[sp]]*nmult, dtype='float64')
       
@@ -45,19 +45,12 @@ class prod_log_c(ao_log_c):
       self.sp_mu2s.append(mu2s)
 
       mu2ff = np.zeros((nmult, lvc.nr), dtype='float64')
-      for mu,j,domi in mu2mjd: mu2ff[mu,:] = ldp['j2xff'][j][domi,:]
+      for mu,[j,domi] in enumerate(mu2jd): mu2ff[mu,:] = ldp['j2xff'][j][domi,:]
       self.psi_log.append(mu2ff)
 
-      no,npf,nmua = sum(2*ao_log.sp_mu2j[sp]+1), sum(2*mu2j+1), len(ao_log.sp_mu2j[sp])  # count number of orbitals and product functions
-      mu2ww = np.zeros((no,no,npf), dtype='float64')
-      for mu,j,domi in mu2mjd:
-        xww = ldp['j2xww'][j]
-        s=mu2s[mu]
-        for mu1,j1,s1 in zip(range(nmua), ao_log.sp_mu2j[sp], ao_log.sp_mu2s[sp]):
-          for mu2,j2,s2 in zip(range(nmua), ao_log.sp_mu2j[sp], ao_log.sp_mu2s[sp]):
-            for m1,jm1 in zip( range(-j1,j1+1), range(j1*(j1+1)-j1,j1*(j1+1)+j1+1) ) :
-              for m2,jm2 in zip( range(-j2,j2+1), range(j2*(j2+1)-j2,j2*(j2+1)+j2+1) ):
-                mu2ww[s1+j1+m1,s2+j2+m2,s:s+2*j+1] = xww[domi,jm1,jm2,0:2*j+1]
+      no,npf= lvc.sp2norbs[sp], sum(2*mu2j+1)  # count number of orbitals and product functions
+      mu2ww = np.zeros((npf,no,no), dtype='float64')
+      for [j,domi],s in zip(mu2jd,mu2s): mu2ww[s:s+2*j+1,:,:] = ldp['j2xww'][j][domi,0:2*j+1,:,:]
 
       self.sp2vertex.append(mu2ww)
 
