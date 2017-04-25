@@ -27,7 +27,7 @@ cell.build(unit = 'B',
            verbose = 0,
            basis = 'sto3g')
 mf = pbchf.RHF(cell)
-mf.with_df = pdf.PWDF(cell)
+mf.with_df = pdf.AFTDF(cell)
 e.append(mf.kernel())
 
 mf = pbchf.RHF(cell)
@@ -44,7 +44,7 @@ mol = cell.to_mol()
 mf = scf.RHF(mol)
 e.append(mf.kernel())
 
-print('0D:  PW       DF       MDF       super-mole')
+print('0D:  AFT      DF       MDF       super-mole')
 print(e)
 
 ##################################################
@@ -64,7 +64,7 @@ cell.build(unit = 'B',
            verbose = 0,
            basis='sto3g')
 mf = pbchf.KRHF(cell)
-mf.with_df = pdf.PWDF(cell)
+mf.with_df = pdf.AFTDF(cell)
 mf.kpts = cell.make_kpts([4,1,1])
 e.append(mf.kernel())
 
@@ -84,7 +84,7 @@ mol = tools.super_cell(cell, [4,1,1]).to_mol()
 mf = scf.RHF(mol)
 e.append(mf.kernel()/4)
 
-print('1D:  PW       DF       MDF       super-mole')
+print('1D:  AFT      DF       MDF       super-mole')
 print(e)
 
 ##################################################
@@ -104,7 +104,7 @@ cell.build(unit = 'B',
            verbose = 0,
            basis='sto3g')
 mf = pbchf.KRHF(cell)
-mf.with_df = pdf.PWDF(cell)
+mf.with_df = pdf.AFTDF(cell)
 mf.kpts = cell.make_kpts([4,4,1])
 e.append(mf.kernel())
 
@@ -124,6 +124,6 @@ mol = tools.super_cell(cell, [4,4,1]).to_mol()
 mf = scf.RHF(mol)
 e.append(mf.kernel()/16)
 
-print('2D:  PW       DF       MDF       super-mole')
+print('2D:  AFT      DF       MDF       super-mole')
 print(e)
 

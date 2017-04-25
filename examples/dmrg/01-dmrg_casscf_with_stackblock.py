@@ -4,12 +4,16 @@
 #
 
 '''
-Use BLOCK program as the DMRG solver and parallel DMRGSCF on different nodes.
+Block (DMRG) program has two branches.  The OpenMP/MPI hybrid implementation
+Block-1.5 (stackblock) code is more efficient than the old pure MPI
+implementation Block-1.1 in both the computing time and memory footprint.
+This example shows how to input new defined keywords for stackblock program.
 
-BLOCK is invoked through system call.  Different settings.MPIPREFIX needs to
-be specified for PBS and SLURM systems.
+Block-1.5 (stackblock) defines two new keywords memory and num_thrds.  The
+rest keywords are all compatible to the old Block program.
 '''
 
+from pyscf import lib
 from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
@@ -34,12 +38,20 @@ mol = gto.M(
 mf = scf.RHF(mol)
 mf.kernel()
 
+#
+# Pass stackblock keywords memory and num_thrds to fcisolver attributes
+#
 mc = dmrgscf.DMRGSCF(mf, 8, 8)
+mc.fcisolver.memory = 4  # in GB
+mc.fcisolver.num_thrds = 8
 emc = mc.kernel()[0]
 print(emc)
 
 mc = dmrgscf.DMRGSCF(mf, 8, 8)
 mc.state_average_([0.5, 0.5])
+mc.fcisolver.memory = 4  # in GB
+mc.fcisolver.num_thrds = 8
 mc.kernel()
 print(mc.e_tot)
+
 
