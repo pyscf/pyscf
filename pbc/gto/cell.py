@@ -42,6 +42,7 @@ def M(**kwargs):
     cell = Cell()
     cell.build(**kwargs)
     return cell
+C = M
 
 
 def format_pseudo(pseudo_tab):
