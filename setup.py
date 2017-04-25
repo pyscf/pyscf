@@ -55,6 +55,7 @@ setup(
               'pyscf.ao2mo', 'pyscf.cc', 'pyscf.ci', 'pyscf.df',
               'pyscf.dft', 'pyscf.fci', 'pyscf.grad',
               'pyscf.lib', 'pyscf.mcscf', 'pyscf.mp', 'pyscf.nmr', 'pyscf.scf',
+              'pyscf.lo', 'pyscf.tddft', 'pyscf.qmmm', 'pyscf.hessian',
               'pyscf.symm', 'pyscf.tools',
               'pyscf.pbc.gto.basis', 'pyscf.pbc.gto.pseudo',
               'pyscf.pbc.gto', 'pyscf.pbc.scf', 'pyscf.pbc.df', 'pyscf.pbc.dft',
