@@ -5,15 +5,13 @@ Installation
 
 You may already have `cmake <http://www.cmake.org>`_,
 `numpy <http://www.numpy.org/>`_, `scipy <http://www.scipy.org/>`_
-and `h5py <http://www.h5py.org/>`_ installed.  If not, you can use
-``python-pypi`` to install numpy, scipy and h5py::
+and `h5py <http://www.h5py.org/>`_ installed.  If not, you can install
+them from any Python package managers (`Pypi <https://pypi.python.org/>`_,
+`conda <http://conda.pydata.org/>`_).  Here we recommend to use the
+integrated science platform `Anaconda <https://www.continuum.io/downloads#linux>`_.
+(with `conda-cmake <https://anaconda.org/anaconda/cmake>`_).
 
-  $ pip install --target=/path/to/python/libs numpy
-  $ pip install --target=/path/to/python/libs scipy
-  $ pip install --target=/path/to/python/libs h5py
-
-or install the integrated science platform `anaconda <https://www.continuum.io/downloads#linux>`_.
-You can download the latest release version
+You can download the latest PySCF release version
 `1.2 <https://github.com/sunqm/pyscf/releases/tag/v1.2>`_ or the
 develment branch from github
 
@@ -66,14 +64,21 @@ It can be fixed by running the script ``pyscf/lib/_runme_to_fix_dylib_osx10.11.s
 Using optimized BLAS
 ====================
 
-The Linear algebra libraries have significant affects on the performance
-of the PySCF package.  The default installation does not require to
-provide external linear algebra libraries.  It's possible that the setup
-script only find and link to the slow BLAS/LAPACK libraries.  You can
-install the package with other BLAS venders instead of the default one
-to improve the performance,  eg MKL (it can provide 10 times speedup in
-many modules)::
+The default installation does not need to provide external linear
+algebra libraries.  It's possible that the setup script only find and
+link to the slow BLAS/LAPACK libraries.  You can install the package
+with other BLAS venders instead of the default one to improve the
+performance,  eg MKL (it can provide 10 times speedup in many modules)::
 
+  $ cd pyscf/lib/build
+  $ cmake -DBLA_VENDOR=Intel10_64lp_seq ..
+  $ make
+
+If you are using Anaconda as your Python-side platform, you can link PySCF
+to the MKL library coming with Anaconda package::
+
+  $ export MKLROOT=/path/to/anaconda2
+  $ export LD_LIBRARY_PATH=$MKLROOT/lib:$LD_LIBRARY_PATH
   $ cd pyscf/lib/build
   $ cmake -DBLA_VENDOR=Intel10_64lp_seq ..
   $ make
@@ -94,7 +99,6 @@ you can assign the libraries to the variable ``BLAS_LIBRARIES`` in
 
 
 .. _installing_qcint:
-
 
 Using optimized integral library
 ================================
