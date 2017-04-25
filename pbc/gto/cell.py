@@ -890,6 +890,11 @@ class Cell(mole.Mole):
         return _atm, _ecpbas, _env
 
     def lattice_vectors(self):
+        '''Convert the primitive lattice vectors.
+
+        Return 3x3 array in which each row represents one direction of the
+        lattice vectors (unit in Bohr)
+        '''
         if isinstance(self.a, (str, unicode)):
             a = self.a.replace(';',' ').replace(',',' ').replace('\n',' ')
             a = np.asarray([float(x) for x in a.split()]).reshape(3,3)
