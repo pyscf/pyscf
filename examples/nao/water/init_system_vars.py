@@ -1,29 +1,36 @@
-from pyscf.nao.m_system_vars import system_vars_c, diag_check
+from pyscf.nao.m_system_vars import system_vars_c, diag_check, get_overlap
 from pyscf.nao.m_siesta_xml_print import siesta_xml_print
 from pyscf.nao.m_sbt import sbt_c
 from pyscf.nao.m_ao_matelem import ao_matelem_c
 from pyscf.nao.m_local_vertex import local_vertex_c
+from pyscf.nao.m_prod_log import prod_log_c
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
 
 label = 'siesta'
 sv  = system_vars_c(label)
-
 print(diag_check(sv))
 
-me = ao_matelem_c(sv.ao_log)
-oo = me.get_overlap_ap(0, 0, [0.0,0.0,0.0], [0.0,0.0,0.0])
-print(sum(sum(oo)))
+over = get_overlap(sv)
 
-lv = local_vertex_c(sv.ao_log)
-ldp = lv.get_local_vertex(0)
+#prd_log = prod_log_c(sv.ao_log, 1e-6)
+#prd_log._moments()
 
-for i in range(ldp['j2xff'][0].shape[0]):
-  plt.plot( lv.rr, ldp['j2xff'][0][i,:], label='0,'+str(i))
-plt.xlim([0.0,5.0])
-plt.legend()
-plt.show()
+#me = ao_matelem_c(prd_log)
+#oo = me.get_overlap_ap(0, 1, [0.0,0.0,0.0], [0.0,1.0,0.5])
+#print(oo)
+
+#me = ao_matelem_c(sv.ao_log)
+#oo = me.get_overlap_ap(0, 0, [0.0,0.0,0.0], [0.0,0.0,0.0])
+#print(sum(sum(oo)))
+
+#lv = local_vertex_c(sv.ao_log)
+#ldp = lv.get_local_vertex(0)
+#for i,xff in enumerate(ldp['j2xff'][0]): plt.plot( lv.rr, xff, label='0,'+str(i))
+#plt.xlim([0.0,5.0])
+#plt.legend()
+#plt.show()
 
 
 

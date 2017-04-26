@@ -546,7 +546,7 @@ def state_average_(casscf, weights=(0.5,0.5)):
         def __init__(self, mol=None):
             self.nroots = len(weights)
         def kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
-# pass self to fcibase_class.kernel function because orbsym argument is stored in self 
+# pass self to fcibase_class.kernel function because orbsym argument is stored in self
 # but undefined in fcibase object
             e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
                                         nroots=self.nroots, **kwargs)
@@ -709,7 +709,7 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
             ss, multip = collect(solver.spin_square(c0, norb, get_nelec(solver, nelec))
                                  for solver, c0 in loop_civecs(fcisolvers, cs))
             for i, ei in enumerate(es):
-                 log.info('state %d  E = %.15g S^2 = %.7f', i, ei, ss[i])
+                log.info('state %d  E = %.15g S^2 = %.7f', i, ei, ss[i])
             return numpy.einsum('i,i', numpy.array(es), weights), cs
 
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):

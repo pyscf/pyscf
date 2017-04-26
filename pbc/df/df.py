@@ -36,7 +36,7 @@ from pyscf.pbc.df.aft import estimate_eta, get_nuc
 from pyscf.pbc.df.df_jk import (is_zero, gamma_point, member,
                                 zdotCN, zdotNN, zdotNC, KPT_DIFF_TOL)
 
-LINEAR_DEP_THR = 1e-9
+LINEAR_DEP_THR = 1e-7
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
     auxcell = copy.copy(cell)

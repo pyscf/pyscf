@@ -38,7 +38,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(abs(dm).sum(), 13.649710173723346, 9)
 
     def test_1e(self):
-        mf = scf.hf.HF1e(mol)
+        mf = scf.rohf.HF1e(mol)
         self.assertAlmostEqual(mf.scf(), -23.867818585778764, 9)
 
     def test_1e_symm(self):

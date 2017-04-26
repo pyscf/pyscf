@@ -65,7 +65,7 @@ include(ExternalProject)
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
   ExternalProject_Add(libcint
     GIT_REPOSITORY https://github.com/sunqm/libcint.git
-    GIT_TAG master
+    GIT_TAG v2.8.12
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DWITH_RANGE_COULOMB=1 -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
