@@ -74,15 +74,7 @@ class siesta_wfsx_c():
         splabel = splabel + chr(idat[i]); i=i+1
       splabel = splabel.replace(" ", "")
 
-      # test if the second or third caracter of splabel is 
-      # a special caracter
-      ch = None
-      for sp in chemical_symbols:
-          if sp in splabel:
-              ch = splabel
-      
-      if ch is None:
-        raise ValueError(splabel + " does not contain a chemical symbol?")
+      ch = splabel
       
       self.orb2strspecie.append(ch)
 
