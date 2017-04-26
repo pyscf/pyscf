@@ -21,6 +21,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile
+from functools import reduce
 
 
 def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
