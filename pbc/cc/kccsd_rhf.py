@@ -277,7 +277,7 @@ def energy(cc, t1, t2, eris):
 
 class RCCSD(pyscf.cc.ccsd.CCSD):
 
-    def __init__(self, mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=[], mo_coeff=None, mo_occ=None):
         pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kpts = mf.kpts
         self.mo_energy = mf.mo_energy

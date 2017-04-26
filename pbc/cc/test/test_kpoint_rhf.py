@@ -57,7 +57,7 @@ def test_kcell(cell, ngs, nk):
     print "*********************************"
     print ""
 
-    cc = pyscf.pbc.cc.kccsd_rhf.RCCSD(kmf,abs_kpts)
+    cc = pyscf.pbc.cc.kccsd_rhf.RCCSD(kmf)
     cc.conv_tol=1e-15
     cc.verbose = 7
     ecc, t1, t2 = cc.kernel()

@@ -35,6 +35,7 @@
   - Support FCIQMC as plugin CI solver to do FCIQMC-CASSCF
   - UHF-based UCASSCF
   - Density-fitting CASSCF
+  - DMET-CAS and AVAS active space constructor
 
 
 * MP2 (up to ~200 occupied, ~1500 virtual orbitals)
@@ -45,11 +46,11 @@
 
 * CCSD (up to ~100 occupied, ~1500 virtual orbitals)
 
-  - canonical CCSD
-  - canonical CCSD lambda solver
+  - canonical RCCSD, UCCSD
+  - canonical RCCSD lambda solver
   - CCSD 1-particle and 2-particle density matrices
   - CCSD gradients
-  - IP/EA/EE-EOM-CCSD
+  - EOM-IP/EA/EE-CCSD
 
 
 * CCSD(T)
@@ -112,6 +113,7 @@
   - PBC MO integral transformation
   - PBC density fitting
   - Smearing for mean-field calculation
+  - Low-dimensional (0D, 1D, 2D) PBC systems
 
 
 * AO integrals

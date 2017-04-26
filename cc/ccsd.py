@@ -780,7 +780,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             abs(de) < self.diis_start_energy_diff):
             t1_shape_in = t1.shape
             t2_shape_in = t2.shape
-	    nov = numpy.prod(t1_shape_in)
+            nov = numpy.prod(t1_shape_in)
             if t1.base is not None and t1.base is t2.base:
                 t1t2 = t1.base
             else:

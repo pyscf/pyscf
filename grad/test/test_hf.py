@@ -46,12 +46,12 @@ class KnowValues(unittest.TestCase):
     def test_ccsd(self):
         from pyscf import cc
         rhf = scf.RHF(mol)
-        rhf.scf()
+        rhf.set(conv_tol=1e-10).scf()
         mycc = cc.CCSD(rhf)
         mycc.kernel()
         mycc.solve_lambda()
         g1 = grad.ccsd.kernel(mycc)
-        self.assertAlmostEqual(finger(g1), 7.8557320937879354, 9)
+        self.assertAlmostEqual(finger(g1), 7.8557320937879354, 7)
 
 
 if __name__ == "__main__":
