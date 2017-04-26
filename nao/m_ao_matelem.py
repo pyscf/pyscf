@@ -43,10 +43,6 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
       self.sp2info.append([
         [mu, self.sp_mu2j[sp][mu], self.sp_mu2s[sp][mu], self.sp_mu2s[sp][mu+1]] for mu in self.sp2mults[sp] ])
 
-#    for sp in self.species:
-#      for mu in self.sp2info[sp]:
-#        print(sp, mu)
-
     self.psi_log_mom = []
     for sp,nmu in zip(self.species,self.sp2nmult):
       mu2ao = np.zeros((nmu,self.nr), dtype='float64')

@@ -54,5 +54,19 @@ class prod_log_c(ao_log_c):
 
       self.sp2vertex.append(mu2ww)
 
-  ################################################
-  
+  #
+  #
+  #
+  def _moments(self):
+    rr3dr = self.rr**3*np.log(self.rr[1]/self.rr[0])
+    rr4dr = self.rr*rr3dr
+    self.sp2mom0,self.sp2mom1,cs,cd = [],[],np.sqrt(4*np.pi),np.sqrt(4*np.pi/3.0)
+    for sp,nmu in enumerate(self.sp2nmult):
+      nfunct=sum(2*self.sp_mu2j[sp]+1)
+      mom0 = np.zeros((nfunct), dtype='float64')
+      d = np.zeros((nfunct,3), dtype='float64')
+      for mu,[j,s] in enumerate(zip(self.sp_mu2j[sp],self.sp_mu2s[sp])):
+        if j==0:                 mom0[s]  = cs*sum(self.psi_log[sp][mu,:]*rr3dr)
+        if j==1: d[s,1]=d[s+1,2]=d[s+2,0] = cd*sum(self.psi_log[sp][mu,:]*rr4dr)
+      self.sp2mom0.append(mom0)
+      self.sp2mom1.append(d)

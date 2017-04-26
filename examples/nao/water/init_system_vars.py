@@ -13,9 +13,13 @@ sv  = system_vars_c(label)
 
 print(diag_check(sv))
 prd_log = prod_log_c(sv.ao_log, 1e-6)
-#me = ao_matelem_c(prd_log)
-#oo = me.get_overlap_ap(0, 0, [0.0,0.0,0.0], [0.0,1.0,0.5])
-#print(oo)
+print(prd_log.sp2nmult, prd_log.sp_mu2j)
+prd_log._moments()
+print(prd_log.sp2mom1)
+
+me = ao_matelem_c(prd_log)
+oo = me.get_overlap_ap(0, 1, [0.0,0.0,0.0], [0.0,1.0,0.5])
+print(oo)
 
 #me = ao_matelem_c(sv.ao_log)
 #oo = me.get_overlap_ap(0, 0, [0.0,0.0,0.0], [0.0,0.0,0.0])
