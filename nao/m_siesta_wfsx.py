@@ -61,24 +61,21 @@ class siesta_wfsx_c():
     self.orb2atm  = idat[i:i+self.norbs]; i=i+self.norbs
     self.orb2ao   = idat[i:i+self.norbs]; i=i+self.norbs
     self.orb2n    = idat[i:i+self.norbs]; i=i+self.norbs
-    self.ion_suffix = {}
     if(self.gamma) : self.nreim = 1;
     else: self.nreim = 2;
     
-
+    # list of caracter that could be used to split the psf file name
     splen    = idat[i]; i=i+1
     self.orb2strspecie = []
     for j in range(self.norbs):
       splabel = ''
       for k in range(splen):
         splabel = splabel + chr(idat[i]); i=i+1
-      ch = splabel.strip()[0]
+      splabel = splabel.replace(" ", "")
+
+      ch = splabel
+      
       self.orb2strspecie.append(ch)
-      if ch not in self.ion_suffix.keys():
-        self.ion_suffix[ch] = ""
-        if len(splabel.strip()) > 1:
-          for isplab in range(1, len(splabel.strip())):
-            self.ion_suffix[ch] += splabel.strip()[isplab]
 
     self.sp2strspecie = []
     for strsp in self.orb2strspecie:
