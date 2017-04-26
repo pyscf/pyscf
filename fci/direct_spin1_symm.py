@@ -304,6 +304,7 @@ class FCISolver(direct_spin1.FCISolver):
                     orbsym=None, wfnsym=None, **kwargs):
         if orbsym is None: orbsym = self.orbsym
         if wfnsym is None: wfnsym = self.wfnsym
+        wfnsym = _id_wfnsym(self, norb, nelec, wfnsym)
         return contract_2e(eri, fcivec, norb, nelec, link_index, orbsym, wfnsym, **kwargs)
 
     def get_init_guess(self, norb, nelec, nroots, hdiag):
