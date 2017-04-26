@@ -420,7 +420,7 @@ class CISD(lib.StreamObject):
 
     @property
     def e_tot(self):
-        return self.e_corr + self._scf.e_tot
+        return numpy.asarray(self.e_corr) + self._scf.e_tot
 
     @property
     def nocc(self):
@@ -462,11 +462,15 @@ class CISD(lib.StreamObject):
             logger.info(self, 'CISD converged')
         else:
             logger.info(self, 'CISD not converged')
-        if self._scf.e_tot == 0:
-            logger.note(self, 'E_corr = %.16g', self.e_corr)
+        if self.nroots > 1:
+            for i,e in enumerate(self.e_tot):
+                logger.note(self, 'CISD root %d  E = %.16g', i, e)
         else:
-            logger.note(self, 'E(CISD) = %.16g  E_corr = %.16g',
-                        self.e_tot, self.e_corr)
+            if self._scf.e_tot == 0:
+                logger.note(self, 'E_corr = %.16g', self.e_corr)
+            else:
+                logger.note(self, 'E(CISD) = %.16g  E_corr = %.16g',
+                            self.e_tot, self.e_corr)
         return self.e_corr, self.ci
 
     contract = contract
