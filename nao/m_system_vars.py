@@ -1,3 +1,4 @@
+from __future__ import print_function
 from __future__ import division
 import numpy as np
 import sys
@@ -13,21 +14,29 @@ from pyscf.nao.m_siesta2blanko_denvec import _siesta2blanko_denvec
 from pyscf.nao.m_sv_diag import sv_diag 
 from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
 from pyscf.nao.m_ao_log import ao_log_c
+
+#
+#
+#
+def get_overlap(sv):
+  sp2rcut = np.array([max(mu2rcut) for mu2rcut in sv.sp_mu2rcut])
+  
+  for atom1,[sp1,rc1] in enumerate(zip(sv.atom2sp,sp2rcut)):
+    for atom2,[sp2,rc2] in enumerate(zip(sv.atom2sp,sp2rcut)):
+      print(atom1,atom2,sp1,sp2,rc1,rc2)
+  return 
+
+
 #
 #
 #
 def get_orb2m(sv):
   orb2m = np.empty(sv.norbs, dtype='int64')
   orb = 0
-  for atom in range(sv.natoms):
-    sp = sv.atom2sp[atom]
-    nmult = sv.sp2nmult[sp]
-    for mu in range(nmult):
-      j = sv.sp_mu2j[sp][mu]
-      for m in range(-j,j+1):
-        orb2m[orb] = m
-        orb = orb + 1
-  return(orb2m)
+  for atom,sp in enumerate(sv.atom2sp):
+    for mu,j in enumerate(sv.sp_mu2j[sp]):
+      for m in range(-j,j+1): orb2m[orb],orb = m,orb+1
+  return orb2m
 
 #
 #
@@ -35,8 +44,7 @@ def get_orb2m(sv):
 def diag_check(self):
   ksn2e = self.xml_dict['ksn2e']
   ac = True
-  for k in range(self.nkpoints):
-    kvec = self.xml_dict["k2xyzw"][k,0:3]
+  for k,kvec in enumerate(self.xml_dict["k2xyzw"]):
     for spin in range(self.nspin):
       e,x = sv_diag(self, kvec=kvec, spin=spin)
       eref = ksn2e[k,spin,:]
@@ -45,7 +53,7 @@ def diag_check(self):
       if(not acks):
         aerr = sum(abs(eref-e))/len(e)
         print("diag_check: "+bc.RED+str(k)+' '+str(spin)+' '+str(aerr)+bc.ENDC)
-  return(ac)
+  return ac
 
 #
 #
@@ -137,13 +145,11 @@ class system_vars_c():
     self.nkpoints  = self.wfsx.nkpoints
 
     strspecie2sp = {}
-    for sp in range(len(self.wfsx.sp2strspecie)): strspecie2sp[self.wfsx.sp2strspecie[sp]] = sp
+    for sp,strsp in enumerate(self.wfsx.sp2strspecie): strspecie2sp[strsp] = sp
     
     self.atom2sp = np.empty((self.natoms), dtype='int64')
-    for o in range(self.wfsx.norbs):
-      atom = self.wfsx.orb2atm[o]
-      strspecie = self.wfsx.orb2strspecie[o]
-      self.atom2sp[atom-1] = strspecie2sp[strspecie]
+    for o,atom in enumerate(self.wfsx.orb2atm):
+      self.atom2sp[atom-1] = strspecie2sp[self.wfsx.orb2strspecie[o]]
 
     orb2m = get_orb2m(self)
     _siesta2blanko_csr(orb2m, self.hsx.s4_csr, self.hsx.orb_sc2orb_uc)

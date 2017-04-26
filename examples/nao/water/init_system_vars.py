@@ -1,4 +1,4 @@
-from pyscf.nao.m_system_vars import system_vars_c, diag_check
+from pyscf.nao.m_system_vars import system_vars_c, diag_check, get_overlap
 from pyscf.nao.m_siesta_xml_print import siesta_xml_print
 from pyscf.nao.m_sbt import sbt_c
 from pyscf.nao.m_ao_matelem import ao_matelem_c
@@ -10,16 +10,16 @@ import sys
 
 label = 'siesta'
 sv  = system_vars_c(label)
-
 print(diag_check(sv))
-prd_log = prod_log_c(sv.ao_log, 1e-6)
-print(prd_log.sp2nmult, prd_log.sp_mu2j)
-prd_log._moments()
-print(prd_log.sp2mom1)
 
-me = ao_matelem_c(prd_log)
-oo = me.get_overlap_ap(0, 1, [0.0,0.0,0.0], [0.0,1.0,0.5])
-print(oo)
+over = get_overlap(sv)
+
+#prd_log = prod_log_c(sv.ao_log, 1e-6)
+#prd_log._moments()
+
+#me = ao_matelem_c(prd_log)
+#oo = me.get_overlap_ap(0, 1, [0.0,0.0,0.0], [0.0,1.0,0.5])
+#print(oo)
 
 #me = ao_matelem_c(sv.ao_log)
 #oo = me.get_overlap_ap(0, 0, [0.0,0.0,0.0], [0.0,0.0,0.0])
