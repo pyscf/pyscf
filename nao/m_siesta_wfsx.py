@@ -5,7 +5,6 @@ import numpy
 import sys
 from numpy import empty 
 from pyscf.lib import misc
-from pyscf.data import chemical_symbols
 
 
 dll = misc.load_library("libnao")
