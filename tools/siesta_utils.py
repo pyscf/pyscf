@@ -21,3 +21,17 @@ def get_siesta_command(label, directory='./'):
             " with two string arguments.\n" +
             "Example : 'siesta < ./%s > ./%s'.\n" +
             "Got '%s'" % command)
+
+def get_pseudo(sp, suffix=''):
+    """
+        return the path to the pseudopotential of a particular specie
+    """
+    pseudo_path = os.environ['SIESTA_PP_PATH']
+    if pseudo_path is None:
+        raise ValueError('The SIESTA_PP_PATH environement is not defined.')
+    fname = pseudo_path + '/' + sp+suffix + '.psf'
+
+    if os.path.isfile(fname):
+        return fname
+    else:
+        raise ValueError('pseudopotential ' + fname + ' does not exist.')
