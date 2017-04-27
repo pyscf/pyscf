@@ -776,6 +776,4 @@ class UHF(hf.SCF):
 
 def _makevhf(vj, vk):
     vj = vj[0] + vj[1]
-    v_a = vj - vk[0]
-    v_b = vj - vk[1]
-    return lib.asarray((v_a,v_b))
+    return vj - vk
