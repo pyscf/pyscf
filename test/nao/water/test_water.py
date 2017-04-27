@@ -7,6 +7,7 @@ import subprocess
 siesta_fdf = """
 SystemName          Water 
 
+xml.write .true.
 PAO.EnergyShift 100 meV
 
 SpinPolarized .True. 
