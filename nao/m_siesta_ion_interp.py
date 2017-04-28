@@ -1,10 +1,7 @@
 import numpy as np
-import scipy.interpolate as interp
 from pyscf.nao.m_spline_diff2 import spline_diff2
 from pyscf.nao.m_spline_interp import spline_interp
 import sys
-
-import matplotlib.pyplot as plt
 
 #
 #
