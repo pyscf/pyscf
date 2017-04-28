@@ -1,3 +1,4 @@
+from __future__ import division
 import numpy
 
 
@@ -33,7 +34,7 @@ end subroutine ! splint
   """
   assert(type(yy)==numpy.ndarray)
   
-  n=len(yy)
+  n=yy.shape[0]
   nlo=max(int(x/h),0)
   if nlo>n-1: return(0.0)
   nhi=min(nlo+1,n-1)
