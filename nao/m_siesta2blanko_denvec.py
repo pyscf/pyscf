@@ -1,5 +1,4 @@
 import numpy
-from scipy.sparse import csr_matrix
 from numpy import empty 
 
 #

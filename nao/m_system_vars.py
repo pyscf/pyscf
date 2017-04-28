@@ -1,8 +1,6 @@
-from __future__ import print_function
-from __future__ import division
+from __future__ import print_function, division
 import numpy as np
 import sys
-import re
 
 from pyscf.nao.m_color import color as bc
 from pyscf.nao.m_siesta_xml import siesta_xml
@@ -18,19 +16,6 @@ from pyscf.nao.m_ao_log import ao_log_c
 #
 #
 #
-def get_overlap(sv):
-  sp2rcut = np.array([max(mu2rcut) for mu2rcut in sv.sp_mu2rcut])
-  
-  for atom1,[sp1,rc1] in enumerate(zip(sv.atom2sp,sp2rcut)):
-    for atom2,[sp2,rc2] in enumerate(zip(sv.atom2sp,sp2rcut)):
-      print(atom1,atom2,sp1,sp2,rc1,rc2)
-  return 
-
-
-
-#
-#
-#
 def get_orb2m(sv):
   orb2m = np.empty(sv.norbs, dtype='int64')
   orb = 0
@@ -42,18 +27,30 @@ def get_orb2m(sv):
 #
 #
 #
-def diag_check(self):
+def diag_check(self, atol=1e-5, rtol=1e-4):
   ksn2e = self.xml_dict['ksn2e']
   ac = True
   for k,kvec in enumerate(self.xml_dict["k2xyzw"]):
     for spin in range(self.nspin):
       e,x = sv_diag(self, kvec=kvec, spin=spin)
       eref = ksn2e[k,spin,:]
-      acks = np.allclose(eref,e,atol=1e-5,rtol=1e-4)
+      acks = np.allclose(eref,e,atol=atol,rtol=rtol)
       ac = ac and acks
       if(not acks):
         aerr = sum(abs(eref-e))/len(e)
         print("diag_check: "+bc.RED+str(k)+' '+str(spin)+' '+str(aerr)+bc.ENDC)
+  return ac
+
+#
+#
+#
+def overlap_check(sv, tol=1e-5):
+  from pyscf.nao.m_comp_overlap_coo import comp_overlap_coo
+  over = comp_overlap_coo(sv).tocsr()
+  diff = (sv.hsx.s4_csr-over).sum()
+  summ = (sv.hsx.s4_csr+over).sum()
+  ac = diff/summ<tol
+  if not ac: print(diff, summ)
   return ac
 
 #
@@ -70,6 +67,7 @@ class system_vars_c():
     self.xml_dict = siesta_xml(self.label)
     self.wfsx = siesta_wfsx_c(self.label)
     self.hsx = siesta_hsx_c(self.label, forcetype)
+    self.norbs_sc = self.wfsx.norbs if self.hsx.orb_sc2orb_uc is None else len(self.hsx.orb_sc2orb_uc)
   
     if Atoms is None:
       self.init_siesta_xml()
@@ -101,7 +99,7 @@ class system_vars_c():
     self.sp2ao_log = ao_log_c(self.sp2ion)
   
     self.natoms = Atoms.get_positions().shape[0]
-    self.norbs  = self.wfsx.norbs 
+    self.norbs  = self.wfsx.norbs
     self.nspin  = self.wfsx.nspin
     self.nkpoints  = self.wfsx.nkpoints
 
@@ -140,6 +138,7 @@ class system_vars_c():
     _siesta_ion_add_sp2(self, self.sp2ion)
     self.ao_log = ao_log_c(self.sp2ion)
     
+    self.atom2coord = self.xml_dict['atom2coord']
     self.natoms = len(self.xml_dict['atom2sp'])
     self.norbs  = self.wfsx.norbs 
     self.nspin  = self.wfsx.nspin

@@ -1,5 +1,4 @@
 from __future__ import print_function
-from pyscf.nao.m_system_vars import system_vars_c
 from pyscf.tools.siesta_utils import get_siesta_command, get_pseudo
 import subprocess
 import os
@@ -36,5 +35,9 @@ for sp in ['O', 'H']:  os.symlink(get_pseudo(sp), sp+'.psf')
 errorcode = subprocess.call(get_siesta_command(label), shell=True)
 if errorcode: raise RuntimeError('siesta returned an error: {0}'.format(errorcode))
 
-sv  = system_vars_c(label) # run test system_vars
+# run test system_vars
+from pyscf.nao.m_system_vars import system_vars_c, diag_check, overlap_check
+sv  = system_vars_c(label) 
 assert sv.norbs == 23
+assert diag_check(sv)
+assert overlap_check(sv)
