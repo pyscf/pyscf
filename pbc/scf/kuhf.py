@@ -76,28 +76,24 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
 
     #mo_energy = np.sort(mo_energy_kpts.ravel())
     #fermi = mo_energy[nocc-1]
-    #print("fermi",fermi)
     #mo_occ_kpts[mo_energy_kpts <= fermi] = 1
+    homo=[-1e8,-1e8]
+    lumo=[1e8,1e8]
     
     for k in range(nkpts):
-      e_idx_a = np.argsort(mo_energy_kpts[0,k])
-      e_idx_b = np.argsort(mo_energy_kpts[1,k])
-      e_sort_a = mo_energy_kpts[0,k][e_idx_a]
-      e_sort_b = mo_energy_kpts[1,k][e_idx_b]
-      n_a, n_b = mf.nelec
-      mo_occ_kpts[0,k][e_idx_a[:n_a]] = 1
-      mo_occ_kpts[1,k][e_idx_b[:n_b]] = 1
-    
-    return mo_occ_kpts
-  
-    if nocc < mo_energy.size:
-        logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
-                    mo_energy[nocc-1], mo_energy[nocc])
-        if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
-            logger.warn(mf, '!! HOMO %.12g == LUMO %.12g',
-                        mo_energy[nocc-1], mo_energy[nocc])
-    else:
-        logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])
+      for s in [0,1]:
+        e_idx=np.argsort(mo_energy_kpts[s,k])
+        e_sort=mo_energy_kpts[s,k][e_idx]
+        n=mf.nelec[s]
+        
+        mo_occ_kpts[s,k][e_idx[:n]]=1
+        homo[s]=max(homo[s],e_sort[n-1])
+        lumo[s]=min(lumo[s],e_sort[n])
+
+    for nm,s in zip(['alpha','beta'],[0,1]):
+        logger.info(mf, nm+' HOMO = %.12g  LUMO = %.12g',
+                    homo[s],lumo[s])
+
 
     if mf.verbose >= logger.DEBUG:
         np.set_printoptions(threshold=len(mo_energy))
@@ -137,6 +133,67 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     e_coul = e_coul.real
     logger.debug(mf, 'E_coul = %.15g', e_coul)
     return e1+e_coul, e_coul
+
+def analyze(mf, verbose=logger.DEBUG, **kwargs):
+    '''Analyze the given SCF object:  print orbital energies, occupancies;
+    print orbital coefficients; Mulliken population analysis; Dipole moment
+    '''
+    from pyscf.lo import orth
+    from pyscf.tools import dump_mat
+    mo_energy = mf.mo_energy
+    mo_occ = mf.mo_occ
+    mo_coeff = mf.mo_coeff
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mf.stdout, verbose)
+    log.note('Analyze output for the gamma point')
+    #log.note('**** MO energy ****')
+    #log.note('                             alpha | beta                alpha | beta')
+    #for i in range(mo_occ.shape[-1]):
+    #   log.note('MO #%-3d energy= %-18.15g | %-18.15g occ= %g | %g',
+    #             i+1, mo_energy[0][i], mo_energy[1][i],
+    #             mo_occ[0][i], mo_occ[1][i])
+    ovlp_ao = mf.get_ovlp()
+    #if verbose >= logger.DEBUG:
+    #    log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for alpha spin **')
+    #    label = mf.mol.spheric_labels(True)
+    #    orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
+    #    c_inv = numpy.dot(orth_coeff.T, ovlp_ao)
+    #    dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[0]), label, start=1,
+    #                      **kwargs)
+    #    log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for beta spin **')
+    #    dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[1]), label, start=1,
+    #                      **kwargs)
+
+    dm = mf.make_rdm1(mo_coeff, mo_occ)
+    return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log))
+#            mf.dip_moment(mf.mol, dm, verbose=log))
+
+
+def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
+                  s=None):
+    '''Mulliken population analysis, based on meta-Lowdin AOs.
+    '''
+    from pyscf.lo import orth
+    if s is None:
+        s = hf.get_ovlp(mol)
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mol.stdout, verbose)
+    log.note("KUHF mulliken_meta")
+    dm_ao_gamma=dm_ao[:,0,:,:].real.copy()
+    s_gamma=s[0,:,:].real.copy()
+    c = orth.pre_orth_ao(mol, pre_orth_method)
+    orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c, s=s_gamma)
+    c_inv = np.dot(orth_coeff.T, s_gamma)
+    dm_a = reduce(np.dot, (c_inv, dm_ao_gamma[0], c_inv.T.conj()))
+    dm_b = reduce(np.dot, (c_inv, dm_ao_gamma[1], c_inv.T.conj()))
+
+    log.note(' ** Mulliken pop alpha/beta on meta-lowdin orthogonal AOs **')
+    return uhf.mulliken_pop(mol, (dm_a,dm_b), np.eye(orth_coeff.shape[0]), log)
+
 
 def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
     '''Canonicalization diagonalizes the UHF Fock matrix within occupied,
@@ -307,6 +364,12 @@ class KUHF(uhf.UHF, khf.KRHF):
         vhf = uhf._makevhf(vj, vk)
         return vhf
 
+
+    def analyze(self, verbose=None, **kwargs):
+        if verbose is None: verbose = self.verbose
+        return analyze(self, verbose, **kwargs)
+      
+
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):
         if fock is None:
             dm1 = self.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
@@ -369,6 +432,13 @@ class KUHF(uhf.UHF, khf.KRHF):
             with h5py.File(self.chkfile) as fh5:
                 fh5['scf/kpts'] = self.kpts
         return self
+
+    def mulliken_meta(self, mol=None, dm=None, verbose=logger.DEBUG,
+                      pre_orth_method='ANO', s=None):
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        return mulliken_meta(mol, dm, s=s, verbose=verbose,
+                             pre_orth_method=pre_orth_method)
 
     @lib.with_doc(uhf.spin_square.__doc__)
     def spin_square(self, mo_coeff=None, s=None):
