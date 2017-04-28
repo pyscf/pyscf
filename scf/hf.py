@@ -1111,7 +1111,7 @@ class SCF(lib.StreamObject):
             dm = self.init_guess_by_1e(mol)
         elif key.lower() == 'atom':
             dm = self.init_guess_by_atom(mol)
-        elif key.lower() == 'chkfile':
+        elif key.lower().startswith('chk'):
             try:
                 dm = self.init_guess_by_chkfile()
             except (IOError, KeyError):

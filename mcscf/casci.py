@@ -474,6 +474,7 @@ class CASCI(lib.StreamObject):
         nvir = self.mo_coeff.shape[1] - self.ncore - self.ncas
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
                  self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
+        assert(nvir > 0 and self.ncore > 0 and self.ncas > 0)
         log.info('natorb = %s', self.natorb)
         log.info('canonicalization = %s', self.canonicalization)
         log.info('max_memory %d (MB)', self.max_memory)
