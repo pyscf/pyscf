@@ -17,6 +17,25 @@ from pyscf.lib import logger
 #
 #
 #
+def eval_ao_(sv, coords, res):
+  """
+    Compute the values of atomic orbitals on given grid points
+  """
+  return 1.0
+
+#
+#
+#
+def _eval_ao(sv, coords, res):
+  """
+    Compute the values of atomic orbitals on given grid points
+    using a call to the library libnao
+  """
+  return 1.0
+
+#
+#
+#
 def get_orb2m(sv):
   orb2m = np.empty(sv.norbs, dtype='int64')
   orb = 0
