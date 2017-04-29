@@ -12,6 +12,7 @@ from pyscf.nao.m_siesta2blanko_denvec import _siesta2blanko_denvec
 from pyscf.nao.m_sv_diag import sv_diag 
 from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
 from pyscf.nao.m_ao_log import ao_log_c
+from pyscf.lib import logger
 
 #
 #
@@ -63,6 +64,11 @@ class system_vars_c():
       Constructor of system_vars class: so far can be initialized 
       with SIESTA orbitals and Hamiltonian and wavefunctions
     """
+    self.verbose = logger.NOTE  # To be similar to Mole object...
+    self.stdout = sys.stdout
+    self.symmetry = False
+    self.symmetry_subgroup = None
+    
     self.label = label
     self.xml_dict = siesta_xml(self.label)
     self.wfsx = siesta_wfsx_c(self.label)
@@ -73,6 +79,9 @@ class system_vars_c():
       self.init_siesta_xml()
     else:
       self.init_ase_atoms(Atoms)
+    
+    self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
+    self.sp2charge = [ion['z'] for ion in self.sp2ion]
 
   #
   #
@@ -98,7 +107,7 @@ class system_vars_c():
     _add_mu_sp2(self, self.sp2ion)
     self.sp2ao_log = ao_log_c(self.sp2ion)
   
-    self.natoms = Atoms.get_positions().shape[0]
+    self.natm   = Atoms.get_positions().shape[0]
     self.norbs  = self.wfsx.norbs
     self.nspin  = self.wfsx.nspin
     self.nkpoints  = self.wfsx.nkpoints
@@ -139,7 +148,7 @@ class system_vars_c():
     self.ao_log = ao_log_c(self.sp2ion)
     
     self.atom2coord = self.xml_dict['atom2coord']
-    self.natoms = len(self.xml_dict['atom2sp'])
+    self.natm = len(self.xml_dict['atom2sp'])
     self.norbs  = self.wfsx.norbs 
     self.nspin  = self.wfsx.nspin
     self.nkpoints  = self.wfsx.nkpoints
@@ -147,7 +156,7 @@ class system_vars_c():
     strspecie2sp = {}
     for sp,strsp in enumerate(self.wfsx.sp2strspecie): strspecie2sp[strsp] = sp
     
-    self.atom2sp = np.empty((self.natoms), dtype='int64')
+    self.atom2sp = np.empty((self.natm), dtype='int64')
     for o,atom in enumerate(self.wfsx.orb2atm):
       self.atom2sp[atom-1] = strspecie2sp[self.wfsx.orb2strspecie[o]]
 
@@ -161,3 +170,12 @@ class system_vars_c():
       for s in range(self.nspin):
         for n in range(self.norbs):
           _siesta2blanko_denvec(orb2m, self.wfsx.X[:,:,n,s,k])
+
+  #
+  # More functions for similarity with Mole
+  #
+  def atom_symbol(self, ia): return self.sp2symbol[self.atom2sp[ia]]
+  def atom_charge(self, ia): return self.sp2charge[self.atom2sp[ia]]
+  def atom_charges(self): return np.array([self.sp2charge[sp] for sp in self.atom2sp], dtype='int64')
+  def atom_coord(self, ia): return self.atom2coord[ia,:]
+  def atom_coords(self): return self.atom2coord

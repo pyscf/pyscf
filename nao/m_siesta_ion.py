@@ -18,7 +18,7 @@ class siesta_ion_c():
     s = list(filter(None, re.split(r'\s+|=', f.readline()))) # O                    Z=   8    Mass=  16.000        Charge= 0.17977+309
     self.pp_name,self.atomic_number,self.atomic_mass = str(s[0]),int(s[2]),float(s[4])
     try: 
-	  self.charge      = float(s[6])
+      self.charge      = float(s[6])
     except:
       self.charge        = 0.17977e+309
     s = list(filter(None, re.split(r'\s+|=', f.readline()))) # Lmxo=1 Lmxkb= 3    BasisType=split      Semic=F
@@ -46,6 +46,5 @@ class siesta_ion_c():
       self.l2rf_dat.append([lvalue,nsemic,cnfigmx, lst2])
 
     print(self.l2rf_dat)
-  
     f.close()
-    
+

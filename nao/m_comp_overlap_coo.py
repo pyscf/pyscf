@@ -24,7 +24,7 @@ def comp_overlap_coo(sv):
   
   irow,icol,data = np.zeros((nnz), dtype='int64'),np.zeros((nnz), dtype='int64'),np.zeros((nnz), dtype='float64') # Start to construct coo matrix
 
-  atom2s = np.zeros((sv.natoms+1), dtype='int32')
+  atom2s = np.zeros((sv.natm+1), dtype='int32')
   for atom,sp in enumerate(sv.atom2sp): atom2s[atom+1]=atom2s[atom]+me.sp2norbs[sp]
   
   inz=-1
