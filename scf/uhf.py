@@ -738,15 +738,8 @@ class UHF(hf.SCF):
     @lib.with_doc(spin_square.__doc__)
     def spin_square(self, mo_coeff=None, s=None):
         if mo_coeff is None:
-            if len(self.mo_coeff.shape)==4:
-                #For k-points, let's just print out the gamma point.
-                mo_coeff = (self.mo_coeff[0,0][:,self.mo_occ[0,0]>0],
-                            self.mo_coeff[1,0][:,self.mo_occ[1,0]>0])
-            else:
-                mo_coeff = (self.mo_coeff[0][:,self.mo_occ[0]>0],
-                            self.mo_coeff[1][:,self.mo_occ[1]>0])
-              
-
+            mo_coeff = (self.mo_coeff[0][:,self.mo_occ[0]>0],
+                        self.mo_coeff[1][:,self.mo_occ[1]>0])
         if s is None:
             s = self.get_ovlp()
         return spin_square(mo_coeff, s)
