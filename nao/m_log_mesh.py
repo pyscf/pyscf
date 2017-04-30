@@ -18,5 +18,5 @@ def log_mesh(nr, rmin, rmax, kmax):
   rr=numpy.array(numpy.exp( numpy.linspace(rhomin, rhomax, nr), dtype='float64') )
   pp=numpy.array(rr*(numpy.exp(kapmin)/rr[0]), dtype='float64')
 
-  return(rr, pp)
+  return rr, pp
   

@@ -1,7 +1,7 @@
 import numpy as np
 
 #
-# 
+#
 #
 def log_interp(ff, r, rho_min_jt, dr_jt):
   """
@@ -41,3 +41,50 @@ def log_interp(ff, r, rho_min_jt, dr_jt):
        +dy*(dy**2-1.0)*(dy**2-4.0)*ff[k+3])/120.0 
 
   return fv
+
+#
+#
+#
+def comp_coeffs_(self, r, i2coeff):
+  """
+    Interpolation of a function given on the logarithmic mesh (see m_log_mesh how this is defined)
+    6-point interpolation on the exponential mesh (James Talman)
+    Args:
+      r  : radial coordinate for which we want intepolated value
+    Result: 
+      Array of weights to sum with the functions values to obtain the interpolated value
+  """
+  if r<=0.0:
+    i2coeffs.fill(0.0)
+    return 0
+  
+  lr = np.log(r)
+  k  = int((lr-self.rhomin)/self.dr_jt)
+  k  = min(max(k,0), nr-4)
+  dy = (lr-self.rhomin-k*self.dr_jt)/self.dr_jt
+  
+  i2coeff[0] =     -dy*(dy**2-1.0)*(dy-2.0)*(dy-3.0)
+  i2coeff[1] = +5.0*dy*(dy-1.0)*(dy**2-4.0)*(dy-3.0)
+  i2coeff[2] = -10.0*(dy**2-1.0)*(dy**2-4.0)*(dy-3.0)
+  i2coeff[3] = +10.0*dy*(dy+1.0)*(dy**2-4.0)*(dy-3.0)
+  i2coeff[4] = -5.0*dy*(dy**2-1.0)*(dy+2.0)*(dy-3.0)
+  i2coeff[5] =      dy*(dy**2-1.0)*(dy**2-4.0)
+
+  return k
+
+
+class log_interp_c():
+  """
+    Interpolation of radial orbitals given on a log grid (m_log_mesh)
+  """
+  def __init__(self, rr):
+    #assert(type(rr)==np.ndarray)
+    assert(len(rr)>2)
+    self.nr = len(rr)
+    self.rmin = rr[0]
+    self.rmax = rr[self.nr-1]
+    self.rhomin = np.log(rr[0])
+    self.dr_jt = np.log(rr[1]/rr[0])
+
+#    Example:
+#      loginterp =log_interp_c(rr)
