@@ -24,6 +24,49 @@ from pyscf.pbc.scf import chkfile
 from functools import reduce
 
 
+def canonical_occ_(mf):
+    '''Label the occupancies for each orbital for sampled k-points.
+    This is for KUHF objects. 
+    Each k-point has a fixed number of up and down electrons in this, 
+    which results in a finite size error for metallic systems
+    but can accelerate convergence '''
+    assert(isinstance(mf,KUHF))
+  
+    def get_occ(mo_energy_kpts=None,mo_coeff=None):
+        if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
+        print(mo_energy_kpts)
+        mo_occ_kpts = np.zeros_like(np.array(mo_energy_kpts))
+        print("shape",mo_occ_kpts.shape)
+
+        nkpts = np.array(mo_energy_kpts).shape[1]
+        homo=[-1e8,-1e8]
+        lumo=[1e8,1e8]
+    
+
+        for k in range(nkpts):
+           for s in [0,1]:
+                e_idx=np.argsort(mo_energy_kpts[s,k])
+                e_sort=mo_energy_kpts[s,k][e_idx]
+                n=mf.nelec[s]
+        
+                mo_occ_kpts[s,k][e_idx[:n]]=1
+                homo[s]=max(homo[s],e_sort[n-1])
+                lumo[s]=min(lumo[s],e_sort[n])
+
+        for nm,s in zip(['alpha','beta'],[0,1]):
+            logger.info(mf, nm+' HOMO = %.12g  LUMO = %.12g',
+                    homo[s],lumo[s])
+            if homo[s] > lumo[s]:
+                logger.info(mf,"WARNING! HOMO is greater than LUMO! This may result in errors with canonical occupation.")
+
+        return mo_occ_kpts
+      
+    mf.get_occ=get_occ
+    return mf
+canonical_occ=canonical_occ_
+
+
+
 def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
     '''Alpha and beta spin one particle density matrices for all k-points.
 
@@ -72,7 +115,6 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     mo_occ_kpts = np.zeros_like(mo_energy_kpts)
 
     nkpts = len(mo_energy_kpts[0])
-    nocc = mf.cell.nelectron * nkpts
 
     #mo_energy = np.sort(mo_energy_kpts.ravel())
     #fermi = mo_energy[nocc-1]
@@ -80,15 +122,15 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     homo=[-1e8,-1e8]
     lumo=[1e8,1e8]
     
-    for k in range(nkpts):
-      for s in [0,1]:
-        e_idx=np.argsort(mo_energy_kpts[s,k])
-        e_sort=mo_energy_kpts[s,k][e_idx]
-        n=mf.nelec[s]
-        
-        mo_occ_kpts[s,k][e_idx[:n]]=1
-        homo[s]=max(homo[s],e_sort[n-1])
-        lumo[s]=min(lumo[s],e_sort[n])
+
+    nocc=mf.nelec*nkpts
+    for s in [0,1]:
+        mo_energy=mo_energy_kpts[s].ravel()
+        fermi=mo_energy[nocc[s]-1]
+        homo[s]=mo_energy[nocc[s]-1]
+        lumo[s]=mo_energy[nocc[s]]
+        for k in range(nkpts):
+            mo_occ_kpts[s,k][mo_energy_kpts[s,k] <= fermi] =1
 
     for nm,s in zip(['alpha','beta'],[0,1]):
         logger.info(mf, nm+' HOMO = %.12g  LUMO = %.12g',
