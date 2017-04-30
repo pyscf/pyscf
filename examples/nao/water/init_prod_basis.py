@@ -22,6 +22,6 @@ coords[3,0:3] = 0.4,2.5,0.5
 coords[4,0:3] = 0.4,3.5,0.5
 ao_val = np.zeros((sv.ao_log.sp2norbs[0],coords.shape[0]))
 rv = sv.atom2coord[0,:]
-
-print(ao_eval_(sv.ao_log, rv, 0, coords, ao_val))
+ao_eval_(sv.ao_log, rv, 0, coords, ao_val)
+print(ao_val)
 
