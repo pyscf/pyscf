@@ -1,5 +1,4 @@
-from __future__ import print_function
-from __future__ import division
+from __future__ import print_function, division
 import numpy as np
 from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
 from pyscf.nao.m_next235 import next235
@@ -39,6 +38,8 @@ class ao_log_c():
   def __init__(self, sp2ion, nr=None, rmin=None, rmax=None, kmax=None):
     
     _siesta_ion_add_sp2(self, sp2ion) # adds the fields for counting, .nspecies etc.
+    self.sp2norbs = np.array([mu2s[self.sp2nmult[sp]] for sp,mu2s in enumerate(self.sp_mu2s)], dtype='int64')
+    
     self.sp2ion = sp2ion
     
     npts = max(max(ion["paos"]["npts"]) for ion in sp2ion)

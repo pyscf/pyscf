@@ -13,7 +13,7 @@ def csphar(r,lmax):
       r : Cartesian coordinates defining correct theta and phi angles for spherical harmonic
       lmax : Integer, maximal angular momentum
     Result:
-      1-d numpy array of complex128 elements with all spherical harmonics stored in order 0,0; 1,-1; 1,0; 1,+1 ... lmax,lmax, althogether 0 : (2*lmax+1)**2 [-1] elements.
+      1-d numpy array of complex128 elements with all spherical harmonics stored in order 0,0; 1,-1; 1,0; 1,+1 ... lmax,lmax, althogether 0 : (lmax+1)**2 elements.
   """
   #real(8) :: x,y,z,dd,phi,cc,ss,al,aa,bb,zz,cs,rt2lp1
   #integer :: ll,l,m,il1,il2,ind,ll2

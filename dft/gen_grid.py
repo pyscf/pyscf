@@ -111,7 +111,7 @@ def nwchem_prune(nuc, rads, n_ang, radii=radi.BRAGG_RADII):
             Nuclear charge.
 
         rads : 1D array
-            Grid coordinates on radical axis.
+            Grid coordinates on radial axis.
 
         n_ang : int
             Max number of grids over angular part.

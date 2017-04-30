@@ -1,6 +1,5 @@
 from __future__ import print_function
 from ctypes import POINTER, c_int64, c_float, c_char_p, create_string_buffer
-import os
 from pyscf.lib import misc 
 
 dll = misc.load_library("libnao")

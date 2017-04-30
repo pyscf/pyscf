@@ -2,7 +2,6 @@ from ctypes import POINTER, c_int64, c_float, c_double, c_char_p, c_int, create_
 import os
 import sys
 import numpy
-import sys
 from numpy import empty 
 from pyscf.lib import misc
 

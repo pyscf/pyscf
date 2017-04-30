@@ -35,8 +35,8 @@ module m_siesta_wfsx
 subroutine siesta_wfsx_book_size(clabel_in, isize) bind(c, name='siesta_wfsx_book_size')
   use m_null2char, only : null2char
   implicit none
-  !! external
-  character, intent(in) :: clabel_in(*)
+  !! external 
+  character(c_char), intent(in) :: clabel_in(*)
   integer(c_int64_t), intent(inout)  :: isize
   !! internal
   type(siesta_wfsx_t) :: wfsx
@@ -70,7 +70,7 @@ subroutine siesta_wfsx_book_read(clabel_in, dat) bind(c)
   use m_null2char, only : null2char
   implicit none
   !! external
-  character, intent(in) :: clabel_in(*)
+  character(c_char), intent(in) :: clabel_in(*)
   integer(c_int), intent(inout)  :: dat(*)
   !! internal
   type(siesta_wfsx_t) :: wfsx
@@ -118,7 +118,7 @@ subroutine siesta_wfsx_dread(clabel_in, dat) bind(c)
   use m_null2char, only : null2char
   implicit none
   !! external
-  character, intent(in) :: clabel_in(*)
+  character(c_char), intent(in) :: clabel_in(*)
   real(c_double), intent(inout)  :: dat(*)
   !! internal
   type(siesta_wfsx_t) :: wfsx
@@ -152,7 +152,7 @@ subroutine siesta_wfsx_sread(clabel_in, dat) bind(c)
   use m_null2char, only : null2char
   implicit none
   !! external
-  character, intent(in) :: clabel_in(*)
+  character(c_char), intent(in) :: clabel_in(*)
   real(c_float), intent(inout)  :: dat(*)
   !! internal
   type(siesta_wfsx_t) :: wfsx

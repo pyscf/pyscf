@@ -14,6 +14,8 @@ OBJS = \
   m_precision.o \
   m_siesta_wfsx.o \
   m_siesta_hsx.o \
+  m_fact.o   \
+  m_rsphar.o \
   cputime.o
 
 ifndef LINK

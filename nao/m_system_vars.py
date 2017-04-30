@@ -14,24 +14,6 @@ from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
 from pyscf.nao.m_ao_log import ao_log_c
 from pyscf.lib import logger
 
-#
-#
-#
-def eval_ao_(sv, coords, res):
-  """
-    Compute the values of atomic orbitals on given grid points
-  """
-  return 1.0
-
-#
-#
-#
-def _eval_ao(sv, coords, res):
-  """
-    Compute the values of atomic orbitals on given grid points
-    using a call to the library libnao
-  """
-  return 1.0
 
 #
 #

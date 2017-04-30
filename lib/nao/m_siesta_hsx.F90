@@ -106,8 +106,8 @@ subroutine siesta_hsx_read(fname_in, force_basis_type, dat) bind(c, name='siesta
   dat(i) = hsx%nspin; i=i+1;
   dat(i) = hsx%nnz; i=i+1;
   dat(i) = l2s(hsx%is_gamma); i=i+1;
-  dat(i) = hsx%Ne; i=i+1;
-  dat(i) = hsx%Te; i=i+1;
+  dat(i) = real(hsx%Ne, c_float); i=i+1;
+  dat(i) = real(hsx%Te, c_float); i=i+1;
   hsx%H4 = hsx%H4 / 2.0e0 ! Rydberg --> Hartree
   call scopy(size(hsx%H4), hsx%H4,1, dat(i),1); i=i+size(hsx%H4)
   call scopy(size(hsx%S4), hsx%S4,1, dat(i),1); i=i+size(hsx%S4)
@@ -163,7 +163,7 @@ subroutine read_siesta_hsx(fname, force_basis_type, hsx)
   use m_io, only : get_free_handle
   implicit none
   character(len=*), intent(in) :: fname
-  integer(8), intent(in)          :: force_basis_type
+  integer(8), intent(in)       :: force_basis_type
   type(hsx_t), intent(inout)   :: hsx
 
   !! internal
