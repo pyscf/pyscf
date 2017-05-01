@@ -31,3 +31,11 @@ def ao_eval_(ao, ra, isp, coords, res):
       res[s:f,icrd] = fval * rsh[j*(j+1)-j:j*(j+1)+j+1]
 
   return 0
+
+#
+# See above
+#
+def ao_eval(ao, ra, isp, coords):
+  res = np.zeros((ao.sp2norbs[isp],coords.shape[0]), dtype='float64')
+  ao_eval_(ao, ra, isp, coords, res)
+  return res

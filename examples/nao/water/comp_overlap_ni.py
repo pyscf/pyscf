@@ -10,6 +10,11 @@ print(diag_check(sv))
 print(overlap_check(sv))
 
 me = ao_matelem_c(sv)
-R1 = np.zeros((3))
-me.overlap_ni(0, 0, R1, R1)
+R1 = sv.atom2coord[0]
+R2 = sv.atom2coord[1]
 
+overlap_ni = me.overlap_ni(0, 0, R1, R2)
+overlap_am = me.overlap_am(0, 0, R1, R2)
+
+print(abs(overlap_ni-overlap_am).sum()/overlap_am.size)
+print(abs(overlap_ni-overlap_am).max())

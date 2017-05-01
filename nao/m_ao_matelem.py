@@ -29,6 +29,7 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     self.interp_rr = log_interp_c(self.rr)
     
     self.psi_log = ao_log.psi_log
+    self.psi_log_rl = ao_log.psi_log_rl
     self.sp_mu2j = ao_log.sp_mu2j
     self.sp_mu2rcut = ao_log.sp_mu2rcut
     self.sp2nmult = ao_log.sp2nmult
@@ -60,7 +61,7 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     return overlap(self, sp1, sp2, R1, R2)
 
   #
-  def overlap_ni(self, sp1, sp2, R1, R2):
+  def overlap_ni(self, sp1, sp2, R1, R2, level=None):
     """
       Computes overlap for an atom pair. The atom pair is given by a pair of species indices
       and the coordinates of the atoms.
@@ -71,16 +72,15 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
         matrix of orbital overlaps
       The procedure uses the numerical integration in coordinate space.
     """
-
+    
     from pyscf import gto
     from pyscf import dft
-    from pyscf.dft.radi import treutler
     from pyscf.nao.m_gauleg import leggauss_ab
+    from pyscf.nao.m_ao_eval import ao_eval
     assert(sp1>-1)
     assert(sp2>-1)
 
     shape = [self.sp2norbs[sp] for sp in (sp1,sp2)]
-    overlaps = np.zeros(shape)
     
     if ((R1-R2)**2).sum()<1e-7 :
       mol = gto.M( atom=[ [self.sp2charge[sp1], R1]],)
@@ -89,12 +89,31 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
 
     atom2rcut=np.array([self.sp_mu2rcut[sp].max() for sp in (sp1,sp2)])
     grids = dft.gen_grid.Grids(mol)
-    grids.level = 2 # precision as implemented in pyscf
+    grids.level = 3 if level is None else level # precision as implemented in pyscf
     grids.radi_method=leggauss_ab
     grids.build(atom2rcut=atom2rcut)
     
-    inte=0.0
-    for coord,wgt in zip(grids.coords,grids.weights):
-      inte = inte + wgt*1.0
+    ao1 = ao_eval(self, R1, sp1, grids.coords)
+    ao2 = ao_eval(self, R2, sp2, grids.coords)
+    ao1 = ao1 * grids.weights
+    overlaps = np.matmul(ao1, ao2.T)
     
     return overlaps
+
+#
+#
+#
+if __name__ == '__main__':
+  from pyscf.nao.m_system_vars import system_vars_c
+  sv  = system_vars_c()
+  me = ao_matelem_c(sv)
+  R1 = sv.atom2coord[0]
+  R2 = sv.atom2coord[1]
+
+  overlap_am = me.overlap_am(0, 0, R1, R2)
+  for lev in range(9):
+    overlap_ni = me.overlap_ni(0, 0, R1, R2, level=lev)
+    print(lev)
+    print(abs(overlap_ni-overlap_am).sum()/overlap_am.size)
+    print(abs(overlap_ni-overlap_am).max())
+    print(overlap_ni[-1,-1], overlap_am[-1,-1])
