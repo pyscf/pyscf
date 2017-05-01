@@ -15,7 +15,7 @@ def comp_overlap_coo(sv):
   from pyscf.nao.m_ao_matelem import ao_matelem_c
   from scipy.sparse import coo_matrix
   sp2rcut = np.array([max(mu2rcut) for mu2rcut in sv.sp_mu2rcut])
-  me = ao_matelem_c(sv.ao_log)
+  me = ao_matelem_c(sv)
 
   nnz = 0
   for sp1,rv1 in zip(sv.atom2sp,sv.atom2coord):
@@ -31,7 +31,7 @@ def comp_overlap_coo(sv):
   for atom1,[sp1,rv1,s1,f1] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
     for atom2,[sp2,rv2,s2,f2] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
       if (sp2rcut[sp1]+sp2rcut[sp2])**2<=sum((rv1-rv2)**2) : continue
-      oo = me.get_overlap_ap(sp1,sp2,rv1,rv2)
+      oo = me.overlap_am(sp1,sp2,rv1,rv2)
       for o1 in range(s1,f1):
         for o2 in range(s2,f2):
           inz = inz+1

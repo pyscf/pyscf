@@ -33,12 +33,11 @@ def overlap_check(prod_log):
     reproduced by the (local) vertex.
   """
   from pyscf.nao.m_ao_matelem import ao_matelem_c
-
   me = ao_matelem_c(prod_log.ao_log)
   sp2mom0,sp2mom1 = comp_moments(prod_log)
   mael,mxel,acl=[],[],[]
   for sp,[vertex,mom0] in enumerate(zip(prod_log.sp2vertex,sp2mom0)):
-    oo_ref = me.get_overlap_ap(sp,sp,[0.0,0.0,0.0],[0.0,0.0,0.0])
+    oo_ref = me.overlap_am(sp,sp,[0.0,0.0,0.0],[0.0,0.0,0.0])
     oo = np.einsum('ijk,i->jk', vertex, mom0)
     ac = np.allclose(oo_ref, oo, atol=prod_log.tol*10, rtol=prod_log.tol)
     mae = abs(oo_ref-oo).sum()/oo.size
