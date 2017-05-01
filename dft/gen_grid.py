@@ -209,7 +209,7 @@ def original_becke(g):
     return g
 
 def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
-                     level=3, prune=nwchem_prune):
+                     level=3, prune=nwchem_prune, **kvargs):
     '''Generate number of radial grids and angular grids for the given molecule.
 
     Returns:
@@ -233,7 +233,8 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
             else:
                 n_rad = _default_rad(chg, level)
                 n_ang = _default_ang(chg, level)
-            rad, dr = radi_method(n_rad)
+            rcut = kvargs['atom2rcut'][ia] if 'atom2rcut' in kvargs else None
+            rad, dr = radi_method(n_rad, a=0.0, b=rcut)
             rad_weight = 4*numpy.pi * rad*rad * dr
             # atomic_scale = 1
             # rad *= atomic_scale
@@ -429,13 +430,13 @@ class Grids(pyscf.lib.StreamObject):
             logger.info(self, 'User specified grid scheme %s', str(self.atom_grid))
         return self
 
-    def build(self, mol=None):
+    def build(self, mol=None, **kvargs):
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
             self.check_sanity()
         atom_grids_tab = self.gen_atomic_grids(mol, self.atom_grid,
                                                self.radi_method,
-                                               self.level, self.prune)
+                                               self.level, self.prune, **kvargs)
         self.coords, self.weights = \
                 self.gen_partition(mol, atom_grids_tab,
                                    self.radii_adjust, self.atomic_radii,
@@ -456,13 +457,13 @@ class Grids(pyscf.lib.StreamObject):
 
     @pyscf.lib.with_doc(gen_atomic_grids.__doc__)
     def gen_atomic_grids(self, mol, atom_grid=None, radi_method=None,
-                         level=None, prune=None):
+                         level=None, prune=None, **kvargs):
         ''' See gen_grid.gen_atomic_grids function'''
         if atom_grid is None: atom_grid = self.atom_grid
         if radi_method is None: radi_method = mol.radi_method
         if level is None: level = self.level
         if prune is None: prune = self.prune
-        return gen_atomic_grids(mol, atom_grid, self.radi_method, level, prune)
+        return gen_atomic_grids(mol, atom_grid, self.radi_method, level, prune, **kvargs)
 
     @pyscf.lib.with_doc(gen_partition.__doc__)
     def gen_partition(self, mol, atom_grids_tab,

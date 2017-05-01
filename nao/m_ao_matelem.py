@@ -61,9 +61,6 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
 
   #
   def overlap_ni(self, sp1, sp2, R1, R2):
-    from pyscf import gto
-    from pyscf import dft
-    from pyscf.dft.radi import treutler_ahlrichs
     """
       Computes overlap for an atom pair. The atom pair is given by a pair of species indices
       and the coordinates of the atoms.
@@ -74,20 +71,30 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
         matrix of orbital overlaps
       The procedure uses the numerical integration in coordinate space.
     """
+
+    from pyscf import gto
+    from pyscf import dft
+    from pyscf.dft.radi import treutler
+    from pyscf.nao.m_gauleg import leggauss_ab
     assert(sp1>-1)
     assert(sp2>-1)
 
     shape = [self.sp2norbs[sp] for sp in (sp1,sp2)]
     overlaps = np.zeros(shape)
     
-    mol = gto.M( atom=[ [self.sp2charge[sp1], R1], [self.sp2charge[sp2], R2] ],)
-    mol = gto.M( atom=[ [self.sp2charge[sp1], R1] ],)
+    if ((R1-R2)**2).sum()<1e-7 :
+      mol = gto.M( atom=[ [self.sp2charge[sp1], R1]],)
+    else :
+      mol = gto.M( atom=[ [self.sp2charge[sp1], R1], [self.sp2charge[sp2], R2] ],)
+
+    atom2rcut=np.array([self.sp_mu2rcut[sp].max() for sp in (sp1,sp2)])
     grids = dft.gen_grid.Grids(mol)
-    grids.level = 0
-    grids.build()
+    grids.level = 2 # precision as implemented in pyscf
+    grids.radi_method=leggauss_ab
+    grids.build(atom2rcut=atom2rcut)
     
-    rr = [ np.sqrt((coord**2).sum()) for coord in grids.coords ]
-    st = set(rr)
-    print(len(st), max(st), min(st))
+    inte=0.0
+    for coord,wgt in zip(grids.coords,grids.weights):
+      inte = inte + wgt*1.0
     
     return overlaps
