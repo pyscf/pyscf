@@ -82,7 +82,7 @@ class system_vars_c():
       self.init_ase_atoms(Atoms)
     
     self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
-    self.sp2charge = [ion['z'] for ion in self.sp2ion]
+    self.sp2charge = [int(ion['z']) for ion in self.sp2ion]
 
   #
   #

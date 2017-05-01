@@ -83,9 +83,9 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     shape = [self.sp2norbs[sp] for sp in (sp1,sp2)]
     
     if ((R1-R2)**2).sum()<1e-7 :
-      mol = gto.M( atom=[ [self.sp2charge[sp1], R1]],)
+      mol = gto.M( atom=[ [int(self.sp2charge[sp1]), R1]],)
     else :
-      mol = gto.M( atom=[ [self.sp2charge[sp1], R1], [self.sp2charge[sp2], R2] ],)
+      mol = gto.M( atom=[ [int(self.sp2charge[sp1]), R1], [int(self.sp2charge[sp2]), R2] ],)
 
     atom2rcut=np.array([self.sp_mu2rcut[sp].max() for sp in (sp1,sp2)])
     grids = dft.gen_grid.Grids(mol)
