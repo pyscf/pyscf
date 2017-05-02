@@ -1,12 +1,10 @@
 from __future__ import print_function
 from ctypes import POINTER, c_int64, c_float, c_char_p, create_string_buffer
-from pyscf.lib import misc 
-
-dll = misc.load_library("libnao")
+from pyscf.nao.m_libnao import libnao
 
 # interfacing with fortran subroutines 
-dll.siesta_hsx_size.argtypes = (c_char_p, POINTER(c_int64), POINTER(c_int64))
-dll.siesta_hsx_read.argtypes = (c_char_p, POINTER(c_int64), POINTER(c_float))
+libnao.siesta_hsx_size.argtypes = (c_char_p, POINTER(c_int64), POINTER(c_int64))
+libnao.siesta_hsx_read.argtypes = (c_char_p, POINTER(c_int64), POINTER(c_float))
 # END of interfacing with fortran subroutines 
 
 import numpy
@@ -22,10 +20,10 @@ def siesta_hsx_read(label='siesta', force_type=-1):
   fname = create_string_buffer((label+'.HSX').encode())
   ft = c_int64(force_type)
   bufsize = c_int64()
-  dll.siesta_hsx_size(fname, ft, bufsize)
+  libnao.siesta_hsx_size(fname, ft, bufsize)
   
   dat = empty(bufsize.value, dtype="float32")
-  dll.siesta_hsx_read(fname, ft, dat.ctypes.data_as(POINTER(c_float)))
+  libnao.siesta_hsx_read(fname, ft, dat.ctypes.data_as(POINTER(c_float)))
   return dat
 
 #

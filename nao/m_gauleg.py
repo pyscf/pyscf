@@ -12,7 +12,7 @@ def leggauss_ab(n=96, a=-1.0, b=1.0):
 
 # Generates the Gauss-Legendre knots and weights
 #   Fortran version is written by James Talman
-def gauleg(n=96, a=-1.0, b=1.0, eps=1.0e-15, cmx=15, **kvargs):
+def gauleg_ab(n=96, a=-1.0, b=1.0, eps=1.0e-15, cmx=15, **kvargs):
   assert(n>0)
   x,w = np.zeros((n)),np.zeros((n))
   
@@ -38,11 +38,11 @@ def gauleg(n=96, a=-1.0, b=1.0, eps=1.0e-15, cmx=15, **kvargs):
   return x,w
 
 if __name__ == '__main__':
-  from pyscf.nao.m_gauleg import gauleg
+  from pyscf.nao.m_gauleg import gauleg_ab
   from numpy.polynomial.legendre import leggauss
   for n in range(1,320):
     xx1,ww1=leggauss(n)
-    xx2,ww2=gauleg(n)
+    xx2,ww2=gauleg_ab(n)
     if np.allclose(xx1,xx2) and np.allclose(ww1,ww2):
       print(n, 'allclose')
     else:

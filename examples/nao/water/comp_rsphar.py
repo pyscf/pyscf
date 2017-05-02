@@ -16,19 +16,22 @@ rvecs = np.array([[ 0.0, 0.0, 0.0],
                   [-0.1,-0.1,-0.1],
                   ])
 
-rvecs = np.random.rand(50000,3)
+rvecs = np.random.rand(35580,3)
 rvecs = np.add(rvecs, -0.5)
 
-lmax = 4
+lmax = 2
 rsh1 = np.zeros(((lmax+1)**2))
 rsh2 = np.zeros(((lmax+1)**2))
 
-start = timer()
+start1 = timer()
 for i,rvec in enumerate(rvecs):
   rsphar(rvec, lmax, rsh1)
-#  rsphar_libnao(rvec, lmax, rsh2)
-#  if not np.allclose(rsh1, rsh2): print(i, rsh1, rsh2)
+end1 = timer()
 
-end = timer()
-print(end-start)
+start2 = timer()
+for i,rvec in enumerate(rvecs):
+  rsphar_libnao(rvec, lmax, rsh2)
+end2 = timer()
+
+print(end1-start1, end2-start2)
 

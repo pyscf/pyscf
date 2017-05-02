@@ -3,16 +3,13 @@ import os
 import sys
 import numpy
 from numpy import empty 
-from pyscf.lib import misc
-
-
-dll = misc.load_library("libnao")
+from pyscf.nao.m_libnao import libnao
 
 # interfacing with fortran subroutines 
-dll.siesta_wfsx_book_size.argtypes = (c_char_p, POINTER(c_int64))
-dll.siesta_wfsx_book_read.argtypes = (c_char_p, POINTER(c_int))
-dll.siesta_wfsx_dread.argtypes = (c_char_p, POINTER(c_double))
-dll.siesta_wfsx_sread.argtypes = (c_char_p, POINTER(c_float))
+libnao.siesta_wfsx_book_size.argtypes = (c_char_p, POINTER(c_int64))
+libnao.siesta_wfsx_book_read.argtypes = (c_char_p, POINTER(c_int))
+libnao.siesta_wfsx_dread.argtypes = (c_char_p, POINTER(c_double))
+libnao.siesta_wfsx_sread.argtypes = (c_char_p, POINTER(c_float))
 # END of interfacing with fortran subroutines 
 
 #
@@ -22,10 +19,10 @@ def siesta_wfsx_book_read_py(label='siesta'):
 
   name = create_string_buffer(label.encode())
   bufsize = c_int64()
-  dll.siesta_wfsx_book_size(name, bufsize)
+  libnao.siesta_wfsx_book_size(name, bufsize)
     
   idat = empty(bufsize.value, dtype="int32")
-  dll.siesta_wfsx_book_read(name, idat.ctypes.data_as(POINTER(c_int)))
+  libnao.siesta_wfsx_book_read(name, idat.ctypes.data_as(POINTER(c_int)))
   return idat
 
 #
@@ -33,7 +30,7 @@ def siesta_wfsx_book_read_py(label='siesta'):
 #
 def siesta_wfsx_dread(w):
   ddata = numpy.empty(w.nkpoints*w.nspin*w.norbs + + w.nkpoints*3, 'float64')
-  dll.siesta_wfsx_dread(create_string_buffer(w.label.encode()), ddata.ctypes.data_as(POINTER(c_double)))
+  libnao.siesta_wfsx_dread(create_string_buffer(w.label.encode()), ddata.ctypes.data_as(POINTER(c_double)))
   return ddata
 
 #
@@ -42,7 +39,7 @@ def siesta_wfsx_dread(w):
 def siesta_wfsx_sread(w, sdata):
   name = create_string_buffer(w.label.encode())
   bufsize = w.nkpoints*w.nspin*w.norbs**2*w.nreim
-  dll.siesta_wfsx_sread(name, sdata.ctypes.data_as(POINTER(c_float)))
+  libnao.siesta_wfsx_sread(name, sdata.ctypes.data_as(POINTER(c_float)))
 
 
   

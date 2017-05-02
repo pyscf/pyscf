@@ -1,6 +1,7 @@
 from __future__ import print_function, division
 import numpy as np
 from pyscf.nao.m_rsphar_libnao import rsphar
+#from pyscf.nao.m_rsphar import rsphar
 from pyscf.nao.m_log_interp import comp_coeffs_
 
 #
@@ -29,7 +30,7 @@ def ao_eval_(ao, ra, isp, coords, res):
     for j,ff,s,f in zip(ao.sp_mu2j[isp],ao.psi_log_rl[isp],ao.sp_mu2s[isp],ao.sp_mu2s[isp][1:]):
       fval = (ff[ir:ir+6]*coeffs).sum() if j==0 else (ff[ir:ir+6]*coeffs).sum()*r**j
       res[s:f,icrd] = fval * rsh[j*(j+1)-j:j*(j+1)+j+1]
-
+  
   return 0
 
 #
