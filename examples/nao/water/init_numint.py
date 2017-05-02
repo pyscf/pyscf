@@ -1,10 +1,6 @@
 from __future__ import print_function, division
 from pyscf.nao.m_system_vars import system_vars_c, diag_check, overlap_check
-from pyscf.nao.m_prod_log import prod_log_c
-from pyscf.nao.m_prod_log import overlap_check as overlap_check_prod_log
 import numpy as np
-import matplotlib.pyplot as plt
-import sys
 import time
 from pyscf import gto
 from pyscf import dft
@@ -31,4 +27,4 @@ print(overlap_check(sv))
 grids = dft.gen_grid.Grids(sv)
 grids.level = 4
 grids.build()
-print(nr_vxc(sv, grids, mf.xc, dm1, spin=0))
+print(grids.weights.shape, grids.coords.shape)

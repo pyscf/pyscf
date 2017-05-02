@@ -83,9 +83,9 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     return overlap(self, sp1, sp2, R1, R2)
 
   #
-  def overlap_ni(self, sp1, sp2, R1, R2, level=None):
+  def overlap_ni(self, sp1, sp2, R1, R2, **kvargs):
     from pyscf.nao.m_overlap_ni import overlap_ni
-    return overlap_ni(self, sp1, sp2, R1, R2, level=level)
+    return overlap_ni(self, sp1, sp2, R1, R2, **kvargs)
 
 #
 #
