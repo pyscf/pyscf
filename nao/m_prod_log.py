@@ -1,5 +1,7 @@
-from __future__ import print_function,division
+from __future__ import print_function, division
 import numpy as np
+from pyscf.nao.m_dipole_ni import dipole_ni
+from pyscf.nao.m_overlap_ni import overlap_ni
 from pyscf.nao.m_ao_log import ao_log_c
 from pyscf.nao.m_local_vertex import local_vertex_c
 
@@ -27,23 +29,40 @@ def comp_moments(self):
 #
 #
 #
-def overlap_check(sv, prod_log):
-  """
-    Computes the allclose(), mean absolute error and maximal error of the overlap
-    reproduced by the (local) vertex.
-  """
+def overlap_check(sv, prod_log, overlap_funct=overlap_ni, **kvargs):
+  """ Computes the allclose(), mean absolute error and maximal error of the overlap reproduced by the (local) vertex."""
   from pyscf.nao.m_ao_matelem import ao_matelem_c
   me = ao_matelem_c(sv)
   sp2mom0,sp2mom1 = comp_moments(prod_log)
   mael,mxel,acl=[],[],[]
   for sp,[vertex,mom0] in enumerate(zip(prod_log.sp2vertex,sp2mom0)):
-    oo_ref = me.overlap_am(sp,sp,[0.0,0.0,0.0],[0.0,0.0,0.0])
+    oo_ref = overlap_funct(me,sp,sp,np.array([0.0,0.0,0.0]),np.array([0.0,0.0,0.0]),**kvargs)
     oo = np.einsum('ijk,i->jk', vertex, mom0)
     ac = np.allclose(oo_ref, oo, atol=prod_log.tol*10, rtol=prod_log.tol)
     mae = abs(oo_ref-oo).sum()/oo.size
     mxe = abs(oo_ref-oo).max()
     acl.append(ac); mael.append(mae); mxel.append(mxe)
     if not ac: print('overlap check:', sp, mae, mxe, prod_log.tol) 
+  return mael,mxel,acl
+
+#
+#
+#
+def dipole_check(sv, prod_log, dipole_funct=dipole_ni, **kvargs):
+  """ Computes the allclose(), mean absolute error and maximal error of the dipoles reproduced by the (local) vertex. """
+  from pyscf.nao.m_ao_matelem import ao_matelem_c
+  me = ao_matelem_c(sv)
+  sp2mom0,sp2mom1 = comp_moments(prod_log)
+  mael,mxel,acl=[],[],[]
+  for atm,[sp,coord] in enumerate(zip(sv.atom2sp,sv.atom2coord)):
+    dip_moms = np.einsum('j,k->jk', sp2mom0[sp],coord)+sp2mom1[sp]
+    koo2dipme = np.einsum('pab,pc->cab', prod_log.sp2vertex[sp],dip_moms) 
+    dipme_ref = dipole_funct(me,sp,sp,coord,coord, **kvargs)
+    ac = np.allclose(dipme_ref, koo2dipme, atol=prod_log.tol*10, rtol=prod_log.tol)
+    mae = abs(koo2dipme-dipme_ref).sum()/koo2dipme.size
+    mxe = abs(koo2dipme-dipme_ref).max()
+    acl.append(ac); mael.append(mae); mxel.append(mxe)
+    if not ac: print('dipole check:', sp, mae, mxe, prod_log.tol) 
   return mael,mxel,acl
 
 #
@@ -64,7 +83,7 @@ class prod_log_c(ao_log_c):
   '''
   def __init__(self, sv, tol=1e-10):
     
-    ao_log = sv.ao_log
+    ao_log = sv.ao_log    
     self.ao_log = sv.ao_log
     self.tol = tol
     self.rr,self.pp = ao_log.rr,ao_log.pp

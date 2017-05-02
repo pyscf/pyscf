@@ -10,6 +10,27 @@ from pyscf.nao.m_log_interp import log_interp_c
 #
 #
 #
+def build_3dgrid(me, sp1, R1, sp2, R2, level=3):
+  from pyscf import dft
+  from pyscf.nao.m_system_vars import system_vars_c
+  from pyscf.nao.m_gauleg import leggauss_ab
+
+  if ( (R1-R2)**2 ).sum()<1e-7 :
+    mol = system_vars_c(atom=[ [int(me.sp2charge[sp1]), R1] ])
+  else :
+    mol = system_vars_c(atom=[ [int(me.sp2charge[sp1]), R1], [int(me.sp2charge[sp2]), R2] ])
+
+  atom2rcut=np.array([me.sp_mu2rcut[sp].max() for sp in (sp1,sp2)])
+  grids = dft.gen_grid.Grids(mol)
+  grids.level = level # precision as implemented in pyscf
+  grids.radi_method=leggauss_ab
+  grids.build(atom2rcut=atom2rcut)
+  return grids
+
+
+#
+#
+#
 class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
   '''
   Evaluator of matrix elements given by the numerical atomic orbitals.

@@ -13,7 +13,7 @@ from pyscf.nao.m_sv_diag import sv_diag
 from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
 from pyscf.nao.m_ao_log import ao_log_c
 from pyscf.lib import logger
-
+from pyscf.data import chemical_symbols
 
 #
 #
@@ -46,9 +46,9 @@ def diag_check(self, atol=1e-5, rtol=1e-4):
 #
 #
 #
-def overlap_check(sv, tol=1e-5):
+def overlap_check(sv, tol=1e-5, **kvargs):
   from pyscf.nao.m_comp_overlap_coo import comp_overlap_coo
-  over = comp_overlap_coo(sv).tocsr()
+  over = comp_overlap_coo(sv, **kvargs).tocsr()
   diff = (sv.hsx.s4_csr-over).sum()
   summ = (sv.hsx.s4_csr+over).sum()
   ac = diff/summ<tol
@@ -60,7 +60,7 @@ def overlap_check(sv, tol=1e-5):
 #
 class system_vars_c():
 
-  def __init__(self, label='siesta', Atoms=None, forcetype=-1):
+  def __init__(self, label='siesta', Atoms=None, forcetype=-1, atom=None):
     """ 
       Constructor of system_vars class: so far can be initialized 
       with SIESTA orbitals and Hamiltonian and wavefunctions
@@ -69,21 +69,35 @@ class system_vars_c():
     self.stdout = sys.stdout
     self.symmetry = False
     self.symmetry_subgroup = None
-    
-    self.label = label
-    self.xml_dict = siesta_xml(self.label)
-    self.wfsx = siesta_wfsx_c(self.label)
-    self.hsx = siesta_hsx_c(self.label, forcetype)
-    self.norbs_sc = self.wfsx.norbs if self.hsx.orb_sc2orb_uc is None else len(self.hsx.orb_sc2orb_uc)
-  
-    if Atoms is None:
-      self.init_siesta_xml()
-    else:
-      self.init_ase_atoms(Atoms)
-    
-    self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
-    self.sp2charge = [int(ion['z']) for ion in self.sp2ion]
 
+    if atom is None : # i.e. initialization with data from previous SIESTA calculation
+      self.label = label
+      self.xml_dict = siesta_xml(self.label)
+      self.wfsx = siesta_wfsx_c(self.label)
+      self.hsx = siesta_hsx_c(self.label, forcetype)
+      self.norbs_sc = self.wfsx.norbs if self.hsx.orb_sc2orb_uc is None else len(self.hsx.orb_sc2orb_uc)
+  
+      if Atoms is None:
+        self.init_siesta_xml()
+      else:
+        self.init_ase_atoms(Atoms)
+    
+      self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
+      self.sp2charge = [int(ion['z']) for ion in self.sp2ion]
+      
+    else:  # i.e. initialization with xyz-like data
+
+      atom2charge = [atm[0] for atm in atom]
+      self.atom2coord = np.array([atm[1] for atm in atom], dtype='float64')
+      self.sp2charge = list(set(atom2charge))
+      self.sp2symbol = [chemical_symbols[z] for z in self.sp2charge]
+      self.atom2sp = [self.sp2charge.index(charge) for charge in atom2charge]
+      self.natm = len(self.atom2sp)
+#      for ia,coord in enumerate(self.atom2coord):
+#        sp = self.atom2sp[ia]
+#        print(ia,sp,self.sp2charge[sp],self.sp2symbol[sp], coord)
+      
+      
   #
   #
   #

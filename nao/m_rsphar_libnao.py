@@ -17,6 +17,9 @@ def rsphar(r,lmax,res):
     Result:
       1-d numpy array of float64 elements with all spherical harmonics stored in order 0,0; 1,-1; 1,0; 1,+1 ... lmax,lmax, althogether 0 : (lmax+1)**2 elements.
   """
+  r_copy = np.require(r,  dtype='float64', requirements='C')
+  res = np.require(res,  dtype='float64', requirements='CW')
+  
   libnao.rsphar(r.ctypes.data_as(POINTER(c_double)), c_int(lmax), res.ctypes.data_as(POINTER(c_double)))
 
   return 0
