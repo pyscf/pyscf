@@ -20,8 +20,8 @@ class local_vertex_c(ao_matelem_c):
   '''
     Constructor of the local product functions and the product vertex coefficients.
   '''
-  def __init__(self, ao_log):
-    ao_matelem_c.__init__(self, ao_log)
+  def __init__(self, sv):
+    ao_matelem_c.__init__(self, sv)
     nr = self.nr
     kk = self.kk
     self.dkappa_pp = 4*np.pi*np.log( kk[nr-1]/kk[0])/(nr-1)*kk

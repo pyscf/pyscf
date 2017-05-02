@@ -4,49 +4,56 @@ from ctypes import POINTER, c_double, c_int64
 from pyscf.nao.m_libnao import libnao
 
 libnao.ao_eval.argtypes = (
-  POINTER(c_int64), 
-  POINTER(c_double), 
-  POINTER(c_int64),
-  POINTER(c_double),
-  POINTER(c_double), 
-  POINTER(c_int64), 
-  POINTER(c_int64), 
-  POINTER(c_double), 
-  POINTER(c_int64), 
-  POINTER(c_double),
-  POINTER(c_int64), 
-  POINTER(c_double),
-  POINTER(c_int64))
+  POINTER(c_int64),  # nmult
+  POINTER(c_double), # psi_log_rl
+  POINTER(c_int64),  # nr
+  POINTER(c_double), # rhomin_jt
+  POINTER(c_double), # dr_jt 
+  POINTER(c_int64),  # mu2j
+  POINTER(c_int64),  # mu2s
+  POINTER(c_double), # mu2rcut
+  POINTER(c_double), # rvec_atom_center 
+  POINTER(c_int64),  # ncoords
+  POINTER(c_double), # coords
+  POINTER(c_int64),  # norbs
+  POINTER(c_double), # res[orb, icoord]
+  POINTER(c_int64))  # ldres leading dimension of res (ncoords)
 
 #
 #
 #
-def ao_eval_libnao_(ao, ra, isp, coords, res):
+def ao_eval_libnao_(ao, rat, isp, crds, res):
   """
     Compute the values of atomic orbitals on given grid points
     Args:
       ao  : instance of ao_log_c class
-      ra  : vector where the atomic orbitals from "ao" are centered
+      rat : vector where the atomic orbitals from "ao" are centered
       isp : specie index for which we compute
       coords: coordinates on which we compute
     Returns:
       res[norbs,ncoord] : array of atomic orbital values
   """
-  print('ao_eval_libnao_')
-  libnao.ao_eval(c_int64(ao.sp2nmult[isp]), 
+  #print(res_copy.flags)
+  rat_copy = np.require(rat,  dtype='float64', requirements='C')
+  crd_copy = np.require(crds, dtype='float64', requirements='C')
+  res_copy = np.require(res,  dtype='float64', requirements='CW')
+  
+  libnao.ao_eval(
+    c_int64(ao.sp2nmult[isp]), 
     ao.psi_log_rl[isp].ctypes.data_as(POINTER(c_double)),
     c_int64(ao.nr),
     c_double(ao.interp_rr.gammin_jt),
     c_double(ao.interp_rr.dg_jt),
     ao.sp_mu2j[isp].ctypes.data_as(POINTER(c_int64)), 
-    ao.sp_mu2s[isp].ctypes.data_as(POINTER(c_int64)), 
-    ra.ctypes.data_as(POINTER(c_double)), 
-    c_int64(coords.shape[0]), 
-    coords.ctypes.data_as(POINTER(c_double)), 
+    ao.sp_mu2s[isp].ctypes.data_as(POINTER(c_int64)),
+    ao.sp_mu2rcut[isp].ctypes.data_as(POINTER(c_double)),
+    rat_copy.ctypes.data_as(POINTER(c_double)), 
+    c_int64(crd_copy.shape[0]), 
+    crd_copy.ctypes.data_as(POINTER(c_double)), 
     c_int64(ao.sp2norbs[isp]), 
-    res.ctypes.data_as(POINTER(c_double)), 
-    c_int64(res.shape[1]))
-    
+    res_copy.ctypes.data_as(POINTER(c_double)), 
+    c_int64(res.shape[1])  )
+  res = res_copy
   return 0
 
 #
@@ -64,9 +71,9 @@ if __name__ == '__main__':
   from pyscf.nao.m_ao_eval_libnao import ao_eval_libnao
   
   sv  = system_vars_c()
-  ra = np.array([0.0, 0.0, 0.0])
+  ra = np.array([0.3, -0.5, 0.77], dtype='float64')
   coords = np.array([[0.0, 0.0, 0.0], [0.5, 0.5, 0.33]])
-  coords = np.random.rand(35580,3)*5.0
+  #coords = np.random.rand(35580,3)*5.0
   
   print('ao_val2 (reference)')
   ao_val1 = ao_eval(sv.ao_log, ra, 0, coords)
@@ -75,6 +82,6 @@ if __name__ == '__main__':
   ao_val2 = ao_eval_libnao(sv.ao_log, ra, 0, coords)
   
   print(np.allclose(ao_val1,ao_val2))
-  print(ao_val1)
-  print(ao_val2)
+#  print(ao_val1)
+#  print(ao_val2)
 

@@ -17,6 +17,7 @@ subroutine ao_eval(nmu, &
   dr_jt, &
   mu2j, & 
   mu2s, &
+  mu2rcut, &
   rcen, & ! rcen(3)
   ncoords, &
   coords, & ! (3,ncoords)
@@ -26,17 +27,6 @@ subroutine ao_eval(nmu, &
 
   use m_rsphar, only : rsphar  
 
-!    c_int64_t(ao.sp2nmult[isp]), 
-!    ao.psi_log_rl[isp].ctypes.data_as(POINTER(c_double)),
-!    c_int64_t(ao.nr), 
-!    ao.sp_mu2j[isp].ctypes.data_as(POINTER(c_int64_t)), 
-!    ao.sp_mu2s[isp].ctypes.data_as(POINTER(c_int64_t)), 
-!    ra.ctypes.data_as(POINTER(c_double)), 
-!    c_int64_t(coords.shape[0]), 
-!    coords.ctypes.data_as(POINTER(c_double)), 
-!    res.ctypes.data_as(POINTER(c_double)),
-!    c_int64_t(res.shape[1])
-    
   implicit none 
   !! external
   integer(c_int64_t), intent(in)  :: nmu
@@ -46,6 +36,7 @@ subroutine ao_eval(nmu, &
   real(c_double), intent(in)  :: dr_jt
   integer(c_int64_t), intent(in)  :: mu2j(nmu)
   integer(c_int64_t), intent(in)  :: mu2s(nmu+1)
+  real(c_double), intent(in)  :: mu2rcut(nmu)
   real(c_double), intent(in)  :: rcen(3)
   integer(c_int64_t), intent(in)  :: ncoords
   real(c_double), intent(in)  :: coords(3,ncoords)
@@ -54,24 +45,24 @@ subroutine ao_eval(nmu, &
   real(c_double), intent(out) :: res(ldres,norbs) ! norbs is unknown.
   !! internal
   real(c_double), allocatable :: rsh(:)
-  real(c_double) :: coeffs(6), r, fval, coord(3)
-  integer(c_int64_t) :: jmx_sp,icrd, mu, j, s,f,k
+  real(c_double) :: coeffs(6), r, fval, coord(3), rcutmx
+  integer(c_int64_t) :: jmx_sp, icrd, mu, j, s,f,k
 !  write(6,*) nmu
 !  write(6,*) nr
-!  write(6,*) ir_mu2v_rl(1,1), ir_mu2v_rl(1,2), ir_mu2v_rl(nr,1)
+!  write(6,*) ir_mu2v_rl(1:3,1)
+!  write(6,*) ir_mu2v_rl(1:3,2)
+!  write(6,*) ir_mu2v_rl(1:3,3)
 !  write(6,*) rhomin_jt
 !  write(6,*) dr_jt
 !  write(6,*) mu2j
-!  write(6,*) mu2s
+!  write(6,*) mu2s(1:nmu+1)
 !  write(6,*) rcen
 !  write(6,*) ncoords
 !  write(6,*) coords(:,1)
-!  write(6,*) coords(:,2)
-!  write(6,*) coords(:,ncoords-1)
-!  write(6,*) coords(:,ncoords)
 !  write(6,*) norbs
 !  write(6,*) ldres
 
+  rcutmx = maxval(mu2rcut)
   jmx_sp = maxval(mu2j)
   allocate(rsh(0:(jmx_sp+1)**2-1))
   res = 0
@@ -79,13 +70,14 @@ subroutine ao_eval(nmu, &
     coord = coords(:,icrd)-rcen
     call rsphar(coord, int(jmx_sp), rsh)
     r = sqrt(sum(coord**2))
+    if(r>rcutmx) cycle
     call comp_coeffs(r, nr, rhomin_jt, dr_jt, k, coeffs)
     do mu=1,nmu
+      ! if(r>mu2rcut(mu)) cycle
       j=mu2j(mu)
       s=mu2s(mu)+1
       f=mu2s(mu+1)
       fval = sum(ir_mu2v_rl(k:k+5,mu)*coeffs)
-      write(6,*) mu, j, fval, rcen
       if (j>0) fval = fval * (r**j)
       res(icrd,s:f) = fval * rsh(j*(j+1)-j:j*(j+1)+j)
     enddo ! mu

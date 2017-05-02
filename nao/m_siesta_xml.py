@@ -31,7 +31,7 @@ def siesta_xml(label="siesta"):
   x3 = list(map(float, [atom.attrib["x3"] for atom in atoms]))
   y3 = list(map(float, [atom.attrib["y3"] for atom in atoms]))
   z3 = list(map(float, [atom.attrib["z3"] for atom in atoms]))
-  atom2coord = numpy.empty((natoms,3), dtype='double', order='F')
+  atom2coord = numpy.empty((natoms,3), dtype='double')
   for a in range(natoms): atom2coord[a,0:3] = [x3[a],y3[a],z3[a]]
   #atom2coord = atom2coord*siesta_ang2bohr
   atom2coord = atom2coord/siesta_bohr2ang
@@ -39,7 +39,7 @@ def siesta_xml(label="siesta"):
   eigvals=fin.find(pref+"propertyList[@title='Eigenvalues']")
 
   lat=fin.find(pref+"lattice[@dictRef='siesta:ucell']")
-  ucell = numpy.empty((3,3), dtype='double', order='F')
+  ucell = numpy.empty((3,3), dtype='double')
   for i in range(len(lat)): ucell[i,0:3] = list(map(float, filter(None, re.split(r'\s+|=', lat[i].text))))
   ucell = ucell * siesta_ang2bohr
   #print(len(lat), lat.attrib)
@@ -48,12 +48,12 @@ def siesta_xml(label="siesta"):
   fermi_energy=float(eigvals.find(pref+"property[@dictRef='siesta:E_Fermi']")[0].text)*siesta_ev2ha
   
   nkp=int(eigvals.find(pref+"property[@dictRef='siesta:nkpoints']")[0].text)
-  k2xyzw = numpy.empty((nkp,4), dtype='double', order='F')
+  k2xyzw = numpy.empty((nkp,4), dtype='double')
     
   kpt_band=eigvals.findall(pref+"propertyList[@dictRef='siesta:kpt_band']")
   nspin=len(kpt_band)
   norbs = int(kpt_band[0].find(pref+"property[@dictRef='siesta:eigenenergies']")[0].attrib['size'])
-  ksn2e = numpy.empty((nkp,nspin,norbs), dtype='double', order='F')
+  ksn2e = numpy.empty((nkp,nspin,norbs), dtype='double')
 
   for s in range(nspin):
     eigv = kpt_band[s].findall(pref+"property[@dictRef='siesta:eigenenergies']")

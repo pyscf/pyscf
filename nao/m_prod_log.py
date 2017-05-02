@@ -27,13 +27,13 @@ def comp_moments(self):
 #
 #
 #
-def overlap_check(prod_log):
+def overlap_check(sv, prod_log):
   """
     Computes the allclose(), mean absolute error and maximal error of the overlap
     reproduced by the (local) vertex.
   """
   from pyscf.nao.m_ao_matelem import ao_matelem_c
-  me = ao_matelem_c(prod_log.ao_log)
+  me = ao_matelem_c(sv)
   sp2mom0,sp2mom1 = comp_moments(prod_log)
   mael,mxel,acl=[],[],[]
   for sp,[vertex,mom0] in enumerate(zip(prod_log.sp2vertex,sp2mom0)):
@@ -62,15 +62,16 @@ class prod_log_c(ao_log_c):
   Examples:
     
   '''
-  def __init__(self, ao_log, tol=1e-10):
+  def __init__(self, sv, tol=1e-10):
     
-    self.ao_log = ao_log
+    ao_log = sv.ao_log
+    self.ao_log = sv.ao_log
     self.tol = tol
     self.rr,self.pp = ao_log.rr,ao_log.pp
     self.sp2nmult = np.zeros((ao_log.nspecies), dtype='int64')
     self.nmultmax = max(self.sp2nmult)
     
-    lvc = local_vertex_c(ao_log) # constructor of local vertices
+    lvc = local_vertex_c(sv) # constructor of local vertices
     self.psi_log = []  # it is impossible to use constructor of ao_log, no ? Therefore, I define myself...
     self.sp_mu2rcut = [] # list of numpy arrays containing the maximal radii
     self.sp_mu2j = []    # list of numpy arrays containing the angular momentum of the radial function

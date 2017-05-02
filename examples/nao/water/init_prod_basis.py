@@ -11,8 +11,8 @@ sv  = system_vars_c(label)
 print(diag_check(sv))
 print(overlap_check(sv))
 
-prd_log = prod_log_c(sv.ao_log, 1e-6)
-print( overlap_check_prod_log(prd_log) )
+prd_log = prod_log_c(sv, 1e-6)
+print( overlap_check_prod_log(sv, prd_log) )
 
 coords = np.zeros((5,3))
 coords[0,0:3] = 0.4,0.5,0.5
