@@ -55,3 +55,25 @@ def ao_eval_libnao(ao, ra, isp, coords):
   res = np.zeros((ao.sp2norbs[isp],coords.shape[0]), dtype='float64')
   ao_eval_libnao_(ao, ra, isp, coords, res)
   return res
+
+
+if __name__ == '__main__':
+  from pyscf.nao.m_system_vars import system_vars_c
+  from pyscf.nao.m_ao_eval import ao_eval
+  from pyscf.nao.m_ao_eval_libnao import ao_eval_libnao
+  
+  sv  = system_vars_c()
+  ra = np.array([0.0, 0.0, 0.0])
+  coords = np.array([[0.0, 0.0, 0.0], [0.5, 0.5, 0.33]])
+  coords = np.random.rand(35580,3)*5.0
+  
+  print('ao_val2 (reference)')
+  ao_val1 = ao_eval(sv.ao_log, ra, 0, coords)
+
+  print('ao_val2_libnao')
+  ao_val2 = ao_eval_libnao(sv.ao_log, ra, 0, coords)
+  
+  print(np.allclose(ao_val1,ao_val2))
+  print(ao_val1)
+  print(ao_val2)
+

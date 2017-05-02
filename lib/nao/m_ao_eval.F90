@@ -81,8 +81,9 @@ subroutine ao_eval(nmu, &
     r = sqrt(sum(coord**2))
     call comp_coeffs(r, nr, rhomin_jt, dr_jt, k, coeffs)
     do mu=1,nmu
-      j=mu2j(mu); 
-      s=mu2s(mu)+1; f=mu2s(mu+1)
+      j=mu2j(mu)
+      s=mu2s(mu)+1
+      f=mu2s(mu+1)
       fval = sum(ir_mu2v_rl(k:k+5,mu)*coeffs)
       if (j>0) fval = fval * (r**j)
       res(icrd,s:f) = fval * rsh(j*(j+1)-j:j*(j+1)+j)

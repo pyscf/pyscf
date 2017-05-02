@@ -107,7 +107,7 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     
     start4 = timer()
     ao1 = ao1 * grids.weights
-    overlaps = np.matmul(ao1, ao2.T)
+    overlaps = np.einsum("ij,kj->ik", ao1, ao2) #      overlaps = np.matmul(ao1, ao2.T)
     end4 = timer()
     
     print(end1-start1, end2-start2, end3-start3, end4-start4)
