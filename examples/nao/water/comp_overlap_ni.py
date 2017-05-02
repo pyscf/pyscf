@@ -15,7 +15,7 @@ overlap_am = me.overlap_am(0, 0, R1, R2)
 end1 = timer()
 
 start2 = timer()
-overlap_ni = me.overlap_ni(0, 0, R1, R2, level=3)
+overlap_ni = me.overlap_ni(0, 0, R1, R2, level=0)
 end2 = timer()
 
 print(abs(overlap_ni-overlap_am).sum()/overlap_am.size)

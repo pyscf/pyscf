@@ -32,6 +32,7 @@ def ao_eval_libnao_(ao, ra, isp, coords, res):
     Returns:
       res[norbs,ncoord] : array of atomic orbital values
   """
+  print('ao_eval_libnao_')
   libnao.ao_eval(c_int64(ao.sp2nmult[isp]), 
     ao.psi_log_rl[isp].ctypes.data_as(POINTER(c_double)),
     c_int64(ao.nr),

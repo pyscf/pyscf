@@ -85,6 +85,7 @@ subroutine ao_eval(nmu, &
       s=mu2s(mu)+1
       f=mu2s(mu+1)
       fval = sum(ir_mu2v_rl(k:k+5,mu)*coeffs)
+      write(6,*) mu, j, fval, rcen
       if (j>0) fval = fval * (r**j)
       res(icrd,s:f) = fval * rsh(j*(j+1)-j:j*(j+1)+j)
     enddo ! mu

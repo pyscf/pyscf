@@ -1,5 +1,6 @@
 from __future__ import division, print_function
 import numpy as np
+import sys
 from pyscf.nao.m_ao_log import ao_log_c
 from pyscf.nao.m_sbt import sbt_c
 from pyscf.nao.m_c2r import c2r_c
@@ -77,7 +78,7 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     from pyscf import dft
     from pyscf.nao.m_gauleg import leggauss_ab
     from pyscf.nao.m_ao_eval import ao_eval
-    #from pyscf.nao.m_ao_eval_libnao import ao_eval_libnao as ao_eval
+    from pyscf.nao.m_ao_eval_libnao import ao_eval_libnao as ao_eval_libnao
     from timeit import default_timer as timer
     
     assert(sp1>-1)
@@ -101,8 +102,20 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     end2 = timer()
     
     start3 = timer()
-    ao1 = ao_eval(self, R1, sp1, grids.coords)
+    ao1 = ao_eval(self, R1, sp1, grids.coords[0:1,:])
+    print(grids.coords[0,:], sp1, R1)
+    print(ao1[0,0])
+
+    ao1_lib = ao_eval_libnao(self, R1, sp1, grids.coords[0:1,:])
+    print(grids.coords[0,:], sp1, R1)
+    print(ao1_lib[0,0])
+    
+    sys.exit(1)
+    
+    print(np.allclose(ao1, ao1_lib))
+    
     ao2 = ao_eval(self, R2, sp2, grids.coords)
+
     end3 = timer()
     
     start4 = timer()
