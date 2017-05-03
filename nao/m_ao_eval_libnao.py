@@ -72,8 +72,8 @@ if __name__ == '__main__':
   
   sv  = system_vars_c()
   ra = np.array([0.3, -0.5, 0.77], dtype='float64')
-  coords = np.array([[0.0, 0.0, 0.0], [0.5, 0.5, 0.33]])
-  #coords = np.random.rand(35580,3)*5.0
+  #coords = np.array([[0.07716887, 2.82933578, 3.73214881]])
+  coords = np.random.rand(35580,3)*5.0
   
   print('ao_val2 (reference)')
   ao_val1 = ao_eval(sv.ao_log, ra, 0, coords)
@@ -82,6 +82,7 @@ if __name__ == '__main__':
   ao_val2 = ao_eval_libnao(sv.ao_log, ra, 0, coords)
   
   print(np.allclose(ao_val1,ao_val2))
-#  print(ao_val1)
-#  print(ao_val2)
+  for iorb,[oo1,oo2] in enumerate(zip(ao_val1,ao_val2)):
+    print(iorb, abs(oo1-oo2).argmax(), abs(oo1-oo2).max(), coords[abs(oo1-oo2).argmax(),:])
+
 
