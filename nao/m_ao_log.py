@@ -73,7 +73,8 @@ class ao_log_c():
     
     self.sp_mu2rcut = [ np.array(ion["paos"]["cutoff"], dtype='float64') for ion in sp2ion]
     self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut], dtype='float64')
-
+    self.sp2charge = [int(ion['z']) for ion in self.sp2ion]
+    
     #call sp2ion_to_psi_log(sv%sp2ion, sv%rr, sv%psi_log)
     #call init_psi_log_rl(sv%psi_log, sv%rr, sv%uc%mu_sp2j, sv%uc%sp2nmult, sv%psi_log_rl)
     #call sp2ion_to_core(sv%sp2ion, sv%rr, sv%core_log, sv%sp2has_core, sv%sp2rcut_core)

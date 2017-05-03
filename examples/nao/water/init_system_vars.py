@@ -5,3 +5,4 @@ sv  = system_vars_c('siesta')
 print(diag_check(sv))
 print(overlap_check(sv))
 
+print(dir(sv.ao_log))

@@ -83,7 +83,7 @@ class system_vars_c():
         self.init_ase_atoms(Atoms)
     
       self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
-      self.sp2charge = [int(ion['z']) for ion in self.sp2ion]
+      self.sp2charge = self.ao_log.sp2charge
       
     else:  # i.e. initialization with xyz-like data
 

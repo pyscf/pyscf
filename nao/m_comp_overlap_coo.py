@@ -5,18 +5,19 @@ import numpy as np
 #
 #
 #
-def comp_overlap_coo(sv, overlap_funct=overlap_ni,**kvargs):
+def comp_overlap_coo(sv, ao_log=None, overlap_funct=overlap_ni,**kvargs):
   """
     Computes the overlap matrix and returns it in coo format (simplest sparse format to construct)
     Args:
-      sv : (System Variables), this must have arrays of coordinates and ao_log class
+      sv : (System Variables), this must have arrays of coordinates and species, etc
     Returns:
       overlap (real-space overlap) for the whole system
   """
   from pyscf.nao.m_ao_matelem import ao_matelem_c
   from scipy.sparse import coo_matrix
-  sp2rcut = np.array([max(mu2rcut) for mu2rcut in sv.sp_mu2rcut])
-  me = ao_matelem_c(sv)
+  
+  me = ao_matelem_c(sv.ao_log) if ao_log is None else ao_matelem_c(ao_log)
+  sp2rcut = np.array([max(mu2rcut) for mu2rcut in me.sp_mu2rcut])
 
   nnz = 0
   for sp1,rv1 in zip(sv.atom2sp,sv.atom2coord):
@@ -27,7 +28,8 @@ def comp_overlap_coo(sv, overlap_funct=overlap_ni,**kvargs):
 
   atom2s = np.zeros((sv.natm+1), dtype='int32')
   for atom,sp in enumerate(sv.atom2sp): atom2s[atom+1]=atom2s[atom]+me.sp2norbs[sp]
-  
+  norbs = atom2s[-1]
+    
   inz=-1
   for atom1,[sp1,rv1,s1,f1] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
     for atom2,[sp2,rv2,s2,f2] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
@@ -38,7 +40,7 @@ def comp_overlap_coo(sv, overlap_funct=overlap_ni,**kvargs):
           inz = inz+1
           irow[inz],icol[inz],data[inz] = o1,o2,oo[o1-s1,o2-s2]
 
-  return coo_matrix((data, (irow, icol)), shape=(sv.norbs, sv.norbs))
+  return coo_matrix((data, (irow, icol)), shape=(norbs, norbs))
 
 #
 #

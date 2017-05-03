@@ -39,8 +39,7 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     the complex -> real transform (for spherical harmonics) and 
     the spherical Bessel transform.
   '''
-  def __init__(self, sv):
-    ao_log = sv.ao_log
+  def __init__(self, ao_log):
     self.jmx  = -1
     for mu2j in ao_log.sp_mu2j: self.jmx = max(self.jmx, max(mu2j))
 
@@ -59,7 +58,7 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     self.sp2norbs  = ao_log.sp2norbs
     self.species  = range(len(ao_log.sp2nmult))
     self.sp2mults = [ range(ao_log.sp2nmult[sp]) for sp in self.species ]
-    self.sp2charge = sv.sp2charge
+    self.sp2charge = ao_log.sp2charge
     
     self.sp2info = []
     for sp in self.species:

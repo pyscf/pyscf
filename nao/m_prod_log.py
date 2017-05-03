@@ -29,10 +29,10 @@ def comp_moments(self):
 #
 #
 #
-def overlap_check(sv, prod_log, overlap_funct=overlap_ni, **kvargs):
+def overlap_check(prod_log, overlap_funct=overlap_ni, **kvargs):
   """ Computes the allclose(), mean absolute error and maximal error of the overlap reproduced by the (local) vertex."""
   from pyscf.nao.m_ao_matelem import ao_matelem_c
-  me = ao_matelem_c(sv)
+  me = ao_matelem_c(prod_log.ao_log)
   sp2mom0,sp2mom1 = comp_moments(prod_log)
   mael,mxel,acl=[],[],[]
   for sp,[vertex,mom0] in enumerate(zip(prod_log.sp2vertex,sp2mom0)):
@@ -51,7 +51,7 @@ def overlap_check(sv, prod_log, overlap_funct=overlap_ni, **kvargs):
 def dipole_check(sv, prod_log, dipole_funct=dipole_ni, **kvargs):
   """ Computes the allclose(), mean absolute error and maximal error of the dipoles reproduced by the (local) vertex. """
   from pyscf.nao.m_ao_matelem import ao_matelem_c
-  me = ao_matelem_c(sv)
+  me = ao_matelem_c(prod_log.ao_log)
   sp2mom0,sp2mom1 = comp_moments(prod_log)
   mael,mxel,acl=[],[],[]
   for atm,[sp,coord] in enumerate(zip(sv.atom2sp,sv.atom2coord)):
@@ -81,21 +81,24 @@ class prod_log_c(ao_log_c):
   Examples:
     
   '''
-  def __init__(self, sv, tol=1e-10):
+  def __init__(self, ao_log, tol=1e-10):
     
-    ao_log = sv.ao_log    
-    self.ao_log = sv.ao_log
+    self.ao_log = ao_log
     self.tol = tol
-    self.rr,self.pp = ao_log.rr,ao_log.pp
+    self.rr,self.pp,self.nr = ao_log.rr,ao_log.pp,ao_log.nr
+    self.interp_rr = ao_log.interp_rr
     self.sp2nmult = np.zeros((ao_log.nspecies), dtype='int64')
     self.nmultmax = max(self.sp2nmult)
     
-    lvc = local_vertex_c(sv) # constructor of local vertices
-    self.psi_log = []  # it is impossible to use constructor of ao_log, no ? Therefore, I define myself...
+    lvc = local_vertex_c(ao_log) # constructor of local vertices
+    self.psi_log    = [] # radial orbitals: list of arrays
+    self.psi_log_rl = [] # radial orbitals times r**j: list of arrays
     self.sp_mu2rcut = [] # list of numpy arrays containing the maximal radii
-    self.sp_mu2j = []    # list of numpy arrays containing the angular momentum of the radial function
-    self.sp_mu2s = []    # list of numpy arrays containing the starting index for each radial multiplett
-    self.sp2vertex = []  # list of numpy arrays containing the vertex coefficients
+    self.sp_mu2j    = [] # list of numpy arrays containing the angular momentum of the radial function
+    self.sp_mu2s    = [] # list of numpy arrays containing the starting index for each radial multiplett
+    self.sp2vertex  = [] # list of numpy arrays containing the vertex coefficients
+    self.sp2norbs   = [] # number of orbitals per specie
+    self.sp2charge  = ao_log.sp2charge # copy of nuclear charges from atomic orbitals
     
     for sp in range(ao_log.nspecies):
       ldp = lvc.get_local_vertex(sp)
@@ -114,13 +117,20 @@ class prod_log_c(ao_log_c):
       self.sp_mu2j.append(mu2j)
       self.sp_mu2rcut.append(mu2rcut)
       self.sp_mu2s.append(mu2s)
+      self.sp2norbs.append(mu2s[-1])
 
       mu2ff = np.zeros((nmult, lvc.nr), dtype='float64')
       for mu,[j,domi] in enumerate(mu2jd): mu2ff[mu,:] = ldp['j2xff'][j][domi,:]
       self.psi_log.append(mu2ff)
-
+      
+      mu2ff = np.zeros((nmult, lvc.nr), dtype='float64')
+      for mu,[j,domi] in enumerate(mu2jd): mu2ff[mu,:] = ldp['j2xff'][j][domi,:]/lvc.rr**j
+      self.psi_log_rl.append(mu2ff)
+       
       no,npf= lvc.sp2norbs[sp], sum(2*mu2j+1)  # count number of orbitals and product functions
       mu2ww = np.zeros((npf,no,no), dtype='float64')
       for [j,domi],s in zip(mu2jd,mu2s): mu2ww[s:s+2*j+1,:,:] = ldp['j2xww'][j][domi,0:2*j+1,:,:]
 
       self.sp2vertex.append(mu2ww)
+
+    self.jmx = np.amax(np.array( [max(mu2j) for mu2j in self.sp_mu2j], dtype='int32'))

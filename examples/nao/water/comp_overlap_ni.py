@@ -6,7 +6,7 @@ from timeit import default_timer as timer
 
 sv  = system_vars_c()
 
-me = ao_matelem_c(sv)
+me = ao_matelem_c(sv.ao_log)
 R1 = sv.atom2coord[0,:]
 R2 = sv.atom2coord[1,:]
 
