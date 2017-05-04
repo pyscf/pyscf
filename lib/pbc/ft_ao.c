@@ -58,12 +58,15 @@ static void _ft_fill_k(int (*intor)(), void (*eval_gz)(), void (*fsort)(),
         double complex *pbuf;
         int gs0, gs1, dg, dijg, empty;
         int jL0, jLcount, jL;
+        int i;
 
         for (gs0 = 0; gs0 < nGv; gs0 += blksize) {
                 gs1 = MIN(gs0+blksize, nGv);
                 dg = gs1 - gs0;
                 dijg = dij * dg * comp;
-                memset(bufk, 0, sizeof(double complex) * dijg*nkpts);
+                for (i = 0; i < dijg*nkpts; i++) {
+                        bufk[i] = 0;
+                }
 
                 for (jL0 = 0; jL0 < nimgs; jL0 += IMGBLK) {
                         jLcount = MIN(IMGBLK, nimgs-jL0);
@@ -75,7 +78,9 @@ static void _ft_fill_k(int (*intor)(), void (*eval_gz)(), void (*fsort)(),
                                              atm, natm, bas, nbas, env_loc)) {
                                         empty = 0;
                                 } else {
-                                        memset(pbuf, 0, sizeof(double complex) * dijg);
+                                        for (i = 0; i < dijg; i++) {
+                                                pbuf[i] = 0;
+                                        }
                                 }
                                 pbuf += dijg;
                         }
@@ -126,7 +131,9 @@ static void _ft_fill_nk1(int (*intor)(), void (*eval_gz)(), void (*fsort)(),
                 gs1 = MIN(gs0+blksize, nGv);
                 dg = gs1 - gs0;
                 dijg = dij * dg * comp;
-                memset(bufk, 0, sizeof(double complex) * dijg);
+                for (i = 0; i < dijg; i++) {
+                        bufk[i] = 0;
+                }
 
                 for (jL = 0; jL < nimgs; jL++) {
                         shift_bas(env_loc, env, Ls, jptrxyz, jL);

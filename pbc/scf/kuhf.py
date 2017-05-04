@@ -44,7 +44,7 @@ def canonical_occ_(mf):
     
 
         for k in range(nkpts):
-           for s in [0,1]:
+            for s in [0,1]:
                 e_idx=np.argsort(mo_energy_kpts[s,k])
                 e_sort=mo_energy_kpts[s,k][e_idx]
                 n=mf.nelec[s]
@@ -382,10 +382,10 @@ class KUHF(uhf.UHF, khf.KRHF):
             nao = dm.shape[-1]
             nkpts = len(self.kpts)
             if len(dm.shape)==3:
-              dm_kpts = lib.asarray([dm]*nkpts).reshape(nkpts,2,nao,nao)
-              dm_kpts = dm_kpts.transpose(1,0,2,3)
+                dm_kpts = lib.asarray([dm]*nkpts).reshape(nkpts,2,nao,nao)
+                dm_kpts = dm_kpts.transpose(1,0,2,3)
             else:
-              dm_kpts=dm
+                dm_kpts=dm
             dm_kpts[1,:] *= .98  # To break spin symmetry
             assert dm_kpts.shape[0]==2
         return dm_kpts

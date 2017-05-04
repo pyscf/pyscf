@@ -62,7 +62,7 @@ def CCSD(mf, frozen=[], mo_coeff=None, mo_occ=None):
                              'CCSD calculation should be used with HF object')
     except:
         pass
-    return ccsd.CCSD(*args, **kwargs)
+    return ccsd.CCSD(mf, frozen, mo_coeff, mo_occ)
 
 def RCCSD(mf, frozen=[], mo_coeff=None, mo_occ=None):
     from pyscf.cc import rccsd
