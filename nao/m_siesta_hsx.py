@@ -30,7 +30,7 @@ def siesta_hsx_read(label='siesta', force_type=-1):
 #
 #
 class siesta_hsx_c():
-  def __init__(self, label, force_type):
+  def __init__(self, label, force_type=-1):
     dat = siesta_hsx_read(label, force_type)
     i = 0
     self.norbs    =  int(dat[i]); i=i+1;
