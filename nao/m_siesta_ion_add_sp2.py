@@ -12,7 +12,6 @@ def _siesta_ion_add_sp2(self, sp2ion):
   if self.nspecies<1: return
 
   self.sp2nmult = np.array([ion["paos"]["npaos"] for ion in sp2ion], dtype='int64')
-  self.nmultmax = max(self.sp2nmult)
 
   self.sp_mu2rcut = [np.array(ion["paos"]["cutoff"], dtype='float64') for ion in sp2ion]
 

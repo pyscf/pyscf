@@ -30,7 +30,7 @@ class c2r_c():
 
     assert(type(mat[0,0])==np.complex128)
     mat.fill(0.0)
-
+    rmat.fill(0.0)
     for mm1 in range(-j1,j1+1):
       for mm2 in range(-j2,j2+1):
         if mm2 == 0 :

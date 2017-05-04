@@ -60,7 +60,7 @@ def overlap_check(sv, tol=1e-5, **kvargs):
 #
 class system_vars_c():
 
-  def __init__(self, label='siesta', Atoms=None, forcetype=-1, atom=None):
+  def __init__(self, label=None, Atoms=None, atom=None, gto=None, **kvargs):
     """ 
       Constructor of system_vars class: so far can be initialized 
       with SIESTA orbitals and Hamiltonian and wavefunctions
@@ -70,34 +70,63 @@ class system_vars_c():
     self.symmetry = False
     self.symmetry_subgroup = None
 
-    if atom is None : # i.e. initialization with data from previous SIESTA calculation
-      self.label = label
-      self.xml_dict = siesta_xml(self.label)
-      self.wfsx = siesta_wfsx_c(self.label)
-      self.hsx = siesta_hsx_c(self.label, forcetype)
-      self.norbs_sc = self.wfsx.norbs if self.hsx.orb_sc2orb_uc is None else len(self.hsx.orb_sc2orb_uc)
-  
-      if Atoms is None:
-        self.init_siesta_xml()
-      else:
-        self.init_ase_atoms(Atoms)
-    
-      self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
-      self.sp2charge = self.ao_log.sp2charge
-      
-    else:  # i.e. initialization with xyz-like data
-
+    if atom is not None: # Simple xyz-like constructor of (molecular) geometry from a list [n1, [x1,y1,z1], n2, [x2,y2,z2]], where n* are nuclear charges, and [xyz] are coordinates in Bohr
       atom2charge = [atm[0] for atm in atom]
       self.atom2coord = np.array([atm[1] for atm in atom], dtype='float64')
       self.sp2charge = list(set(atom2charge))
       self.sp2symbol = [chemical_symbols[z] for z in self.sp2charge]
       self.atom2sp = [self.sp2charge.index(charge) for charge in atom2charge]
       self.natm = len(self.atom2sp)
-#      for ia,coord in enumerate(self.atom2coord):
-#        sp = self.atom2sp[ia]
-#        print(ia,sp,self.sp2charge[sp],self.sp2symbol[sp], coord)
+      return
+
+    if label is not None and Atoms is None: # Read from SIESTA without ASE input
+      self.label = label
+      self.xml_dict = siesta_xml(self.label)
+      self.wfsx = siesta_wfsx_c(self.label)
+      self.hsx = siesta_hsx_c(self.label, **kvargs)
+      self.norbs_sc = self.wfsx.norbs if self.hsx.orb_sc2orb_uc is None else len(self.hsx.orb_sc2orb_uc)
+      self.init_siesta_xml()
+      self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
+      self.sp2charge = self.ao_log.sp2charge
+      return
       
+    if Atoms is not None:  # Read from SIESTA with ASE input
+      self.label = 'ase' if label is None else label
+      self.xml_dict = siesta_xml(self.label)
+      self.wfsx = siesta_wfsx_c(self.label)
+      self.hsx = siesta_hsx_c(self.label, **kvargs)
+      self.norbs_sc = self.wfsx.norbs if self.hsx.orb_sc2orb_uc is None else len(self.hsx.orb_sc2orb_uc)
+      self.init_ase_atoms(Atoms)
+      self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
+      self.sp2charge = self.ao_log.sp2charge
+      return
+    
+    if gto is not None: # Interpret previous pySCF calculation
+      self.label = 'pyscf' if label is None else label
+      self.init_pyscf_gto(gto, **kvargs)
       
+    
+  #
+  #
+  #
+  def init_pyscf_gto(self, gto, **kvargs):
+    """Interpret previous pySCF calculation"""
+    self.natm = gto.natm
+    a2s = [gto.atom_symbol(ia) for ia in range(gto.natm) ]
+    self.sp2symbol = sorted(list(set(a2s)))
+    self.nspecies = len(self.sp2symbol)
+    self.atom2sp = np.empty((self.natm), dtype='int64')
+    for ia,sym in enumerate(a2s): self.atom2sp[ia] = self.sp2symbol.index(sym)
+
+    self.sp2charge = [-999]*self.nspecies
+    for ia,sp in enumerate(self.atom2sp): self.sp2charge[sp]=gto.atom_charge(ia)
+    self.ao_log = ao_log_c(gto=gto, sv=self, **kvargs)
+    self.atom2coord = np.zeros((self.natm, 3))
+    for ia,coord in enumerate(gto.atom_coords()): self.atom2coord[ia,:]=coord # must be in Bohr already...
+
+    print('finished with GTO.')
+      
+    
   #
   #
   #
@@ -194,3 +223,14 @@ class system_vars_c():
   def atom_charges(self): return np.array([self.sp2charge[sp] for sp in self.atom2sp], dtype='int64')
   def atom_coord(self, ia): return self.atom2coord[ia,:]
   def atom_coords(self): return self.atom2coord
+
+#
+# Example of reading previous pySCF calc.
+#
+if __name__=="__main__":
+  from pyscf import gto
+  from pyscf.nao.m_system_vars import system_vars_c
+  """ Interpreting small Gaussian calculation """
+  mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0; Be 1 0 0', basis='ccpvdz') # coordinates in Angstrom!
+  sv = system_vars_c(gto=mol)
+  print(sv.sp2norbs)

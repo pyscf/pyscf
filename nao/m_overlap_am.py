@@ -19,9 +19,6 @@ def overlap_am(self, sp1, sp2, R1, R2):
     The procedure uses the angular momentum algebra and spherical Bessel transform
     to compute the bilocal overlaps.
   """
-  assert(sp1>-1)
-  assert(sp2>-1)
-
   shape = [self.sp2norbs[sp] for sp in (sp1,sp2)]
   overlaps = np.zeros(shape)
   
@@ -46,7 +43,8 @@ def overlap_am(self, sp1, sp2, R1, R2):
 
     f1f2_mom = np.zeros((self.nr), dtype='float64')
     l2S = np.zeros((2*self.jmx+1), dtype='float64')
-    ir,coeffs = comp_coeffs(self.interp_rr, dist) 
+    ir,coeffs = comp_coeffs(self.interp_rr, dist)
+    _j = self.jmx
     for mu2,l2,s2,f2 in self.sp2info[sp2]:
       for mu1,l1,s1,f1 in self.sp2info[sp1]:
         if self.sp_mu2rcut[sp1][mu1]+self.sp_mu2rcut[sp2][mu2]<dist: continue
@@ -54,7 +52,7 @@ def overlap_am(self, sp1, sp2, R1, R2):
         l2S.fill(0.0)
         for l3 in range( abs(l1-l2), l1+l2+1):
           f1f2_rea = self.sbt(f1f2_mom, l3, -1)
-          l2S[l3] = (f1f2_rea[ir:ir+6]*coeffs).sum()*self.const
+          l2S[l3] = (f1f2_rea[ir:ir+6]*coeffs).sum()*self.const*4*np.pi
           
         cS.fill(0.0) 
         for m1 in range(-l1,l1+1):
@@ -63,11 +61,9 @@ def overlap_am(self, sp1, sp2, R1, R2):
             m3 = m2-m1
             for l3ind,l3 in enumerate(range(abs(l1-l2),l1+l2+1)):
               if abs(m3) > l3 : continue
-              cS[m1+self.jmx,m2+self.jmx] = cS[m1+self.jmx,m2+self.jmx] + l2S[l3]*ylm[ l3*(l3+1)+m3] * \
-                gc[l3ind] * (-1.0)**((3*l1+l2+l3)//2+m2)
+              cS[m1+_j,m2+_j] = cS[m1+_j,m2+_j] + l2S[l3]*ylm[ l3*(l3+1)+m3] * gc[l3ind] * (-1.0)**((3*l1+l2+l3)//2+m2)
                   
-        rS.fill(0.0)
         self.c2r_( l1,l2, self.jmx,cS,rS,cmat)
-        overlaps[s1:f1,s2:f2] = 4*np.pi*rS[-l1+self.jmx:l1+1+self.jmx,-l2+self.jmx:l2+1+self.jmx]
+        overlaps[s1:f1,s2:f2] = rS[-l1+_j:l1+_j+1,-l2+_j:l2+_j+1]
 
   return overlaps

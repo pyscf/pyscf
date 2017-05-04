@@ -88,7 +88,6 @@ class prod_log_c(ao_log_c):
     self.rr,self.pp,self.nr = ao_log.rr,ao_log.pp,ao_log.nr
     self.interp_rr = ao_log.interp_rr
     self.sp2nmult = np.zeros((ao_log.nspecies), dtype='int64')
-    self.nmultmax = max(self.sp2nmult)
     
     lvc = local_vertex_c(ao_log) # constructor of local vertices
     self.psi_log    = [] # radial orbitals: list of arrays
@@ -134,3 +133,32 @@ class prod_log_c(ao_log_c):
       self.sp2vertex.append(mu2ww)
 
     self.jmx = np.amax(np.array( [max(mu2j) for mu2j in self.sp_mu2j], dtype='int32'))
+    
+  def overlap_check(self, overlap_funct=overlap_ni, **kvargs):
+    return overlap_check(self, overlap_funct=overlap_ni, **kvargs)
+    
+#
+#
+#
+if __name__=='__main__':
+  from pyscf.nao.m_system_vars import system_vars_c
+  from pyscf.nao.m_prod_log import prod_log_c
+  import matplotlib.pyplot as plt
+  
+  sv  = system_vars_c()
+  prod_log = prod_log_c(sv.ao_log)
+  print(dir(prod_log))
+  print(prod_log.sp2nmult, prod_log.sp2norbs)
+  print(prod_log.overlap_check())
+  
+  sp = 0
+  for mu,[ff,j] in enumerate(zip(prod_log.psi_log[sp], prod_log.sp_mu2j[sp])):
+    if j==0: 
+      plt.plot(prod_log.rr, ff/abs(ff).max(), "--", label=str(mu)+" j="+str(j))
+    else: 
+      plt.plot(prod_log.rr, ff/abs(ff).max(), label=str(mu)+" j="+str(j))
+  
+  plt.legend()
+  plt.xlim(0.0,6.0)
+  plt.show()
+  
