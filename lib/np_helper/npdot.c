@@ -60,15 +60,15 @@ void NPdgemm(const char trans_a, const char trans_b,
                 nthread = omp_get_num_threads();
                 nblk = MAX((k+nthread-1) / nthread, 1);
                 cpriv = malloc(sizeof(double) * m * n);
-                stride *= nblk;
-                stride_b *= nblk;
+                size_t astride = stride * nblk;
+                size_t bstride = stride_b * nblk;
 #pragma omp for
                 for (i = 0; i < nthread; i++) {
                         di = MIN(nblk, k-i*nblk);
                         if (di > 0) {
                                 dgemm_(&trans_a, &trans_b, &m, &n, &di,
-                                       &alpha, a+stride*i, &lda,
-                                       b+stride_b*i, &ldb,
+                                       &alpha, a+astride*i, &lda,
+                                       b+bstride*i, &ldb,
                                        &D0, cpriv, &m);
                         }
                 }
@@ -98,13 +98,13 @@ void NPdgemm(const char trans_a, const char trans_b,
                 nthread = omp_get_num_threads();
                 nblk = MAX((m+nthread-1) / nthread, 1);
                 nthread = (m+nblk-1) / nblk;
-                stride *= nblk;
+                size_t astride = stride * nblk;
 #pragma omp for
                 for (i = 0; i < nthread; i++) {
                         di = MIN(nblk, m-i*nblk);
                         if (di > 0) {
                                 dgemm_(&trans_a, &trans_b, &di, &n, &k,
-                                       &alpha, a+stride*i, &lda, b, &ldb,
+                                       &alpha, a+astride*i, &lda, b, &ldb,
                                        &beta, c+i*nblk, &ldc);
                         }
                 }
@@ -125,14 +125,14 @@ void NPdgemm(const char trans_a, const char trans_b,
                 nthread = omp_get_num_threads();
                 nblk = MAX((n+nthread-1) / nthread, 1);
                 nthread = (n+nblk-1) / nblk;
-                stride *= nblk;
+                size_t bstride = stride * nblk;
                 size_t cstride = dimc * nblk;
 #pragma omp for
                 for (i = 0; i < nthread; i++) {
                         di = MIN(nblk, n-i*nblk);
                         if (di > 0) {
                                 dgemm_(&trans_a, &trans_b, &m, &di, &k,
-                                       &alpha, a, &lda, b+stride*i, &ldb,
+                                       &alpha, a, &lda, b+bstride*i, &ldb,
                                        &beta, c+cstride*i, &ldc);
                         }
                 }
