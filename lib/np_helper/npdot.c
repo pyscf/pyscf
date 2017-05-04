@@ -21,6 +21,7 @@ void NPdgemm(const char trans_a, const char trans_b,
         a += offseta;
         b += offsetb;
         c += offsetc;
+        const size_t dimc = ldc;
 
         if ((k/m) > 3 && (k/n) > 3) { // parallelize k
 
@@ -28,13 +29,13 @@ void NPdgemm(const char trans_a, const char trans_b,
                 if (beta == 0) {
                         for (i = 0; i < n; i++) {
                                 for (j = 0; j < m; j++) {
-                                        c[i*ldc+j] = 0;
+                                        c[i*dimc+j] = 0;
                                 }
                         }
                 } else {
                         for (i = 0; i < n; i++) {
                                 for (j = 0; j < m; j++) {
-                                        c[i*ldc+j] *= beta;
+                                        c[i*dimc+j] *= beta;
                                 }
                         }
                 }
@@ -46,25 +47,23 @@ void NPdgemm(const char trans_a, const char trans_b,
                 int nblk = MAX((k+nthread-1) / nthread, 1);
                 double D0 = 0;
                 double *cpriv = malloc(sizeof(double) * m * n);
-                int ij, di;
-                size_t stride, stride_b;
+                int di;
+                size_t ij;
+                size_t astride = nblk;
+                size_t bstride = nblk;
                 if (trans_a == 'N') {
-                        stride = lda;
-                } else {
-                        stride = 1;
+                        astride *= lda;
                 }
-                if (trans_b == 'N') {
-                        stride_b = 1;
-                } else {
-                        stride_b = ldb;
+                if (trans_b != 'N') {
+                        bstride *= ldb;
                 }
 #pragma omp for
                 for (i = 0; i < nthread; i++) {
                         di = MIN(nblk, k-i*nblk);
                         if (di > 0) {
                                 dgemm_(&trans_a, &trans_b, &m, &n, &di,
-                                       &alpha, a+stride*i*nblk, &lda,
-                                       b+stride_b*i*nblk, &ldb,
+                                       &alpha, a+astride*i, &lda,
+                                       b+bstride*i, &ldb,
                                        &D0, cpriv, &m);
                         }
                 }
@@ -72,7 +71,7 @@ void NPdgemm(const char trans_a, const char trans_b,
                 if (di > 0) {
                         for (ij = 0, i = 0; i < n; i++) {
                                 for (j = 0; j < m; j++, ij++) {
-                                        c[i*ldc+j] += cpriv[ij];
+                                        c[i*dimc+j] += cpriv[ij];
                                 }
                         }
                 }
@@ -87,18 +86,16 @@ void NPdgemm(const char trans_a, const char trans_b,
                 int nblk = MAX((m+nthread-1) / nthread, 1);
                 nthread = (m+nblk-1) / nblk;
                 int i, di;
-                size_t stride;
-                if (trans_a == 'N') {
-                        stride = 1;
-                } else {
-                        stride = lda;
+                size_t bstride = nblk;
+                if (trans_a != 'N') {
+                        bstride *= lda;
                 }
 #pragma omp for
                 for (i = 0; i < nthread; i++) {
                         di = MIN(nblk, m-i*nblk);
                         if (di > 0) {
                                 dgemm_(&trans_a, &trans_b, &di, &n, &k,
-                                       &alpha, a+stride*i*nblk, &lda, b, &ldb,
+                                       &alpha, a+bstride*i, &lda, b, &ldb,
                                        &beta, c+i*nblk, &ldc);
                         }
                 }
@@ -112,19 +109,18 @@ void NPdgemm(const char trans_a, const char trans_b,
                 int nblk = MAX((n+nthread-1) / nthread, 1);
                 nthread = (n+nblk-1) / nblk;
                 int i, di;
-                size_t stride;
+                size_t bstride = nblk;
+                size_t cstride = dimc * nblk;
                 if (trans_b == 'N') {
-                        stride = ldb;
-                } else {
-                        stride = 1;
+                        bstride *= ldb;
                 }
 #pragma omp for
                 for (i = 0; i < nthread; i++) {
                         di = MIN(nblk, n-i*nblk);
                         if (di > 0) {
                                 dgemm_(&trans_a, &trans_b, &m, &di, &k,
-                                       &alpha, a, &lda, b+stride*i*nblk, &ldb,
-                                       &beta, c+ldc*i*nblk, &ldc);
+                                       &alpha, a, &lda, b+bstride*i, &ldb,
+                                       &beta, c+cstride*i, &ldc);
                         }
                 }
 }
@@ -142,6 +138,7 @@ void NPzgemm(const char trans_a, const char trans_b,
         a += offseta;
         b += offsetb;
         c += offsetc;
+        const size_t dimc = ldc;
 
         if ((k/m) > 3 && (k/n) > 3) { // parallelize k
 
@@ -149,13 +146,13 @@ void NPzgemm(const char trans_a, const char trans_b,
                 if (creal(*beta) == 0 && cimag(*beta) == 0) {
                         for (i = 0; i < n; i++) {
                                 for (j = 0; j < m; j++) {
-                                        c[i*ldc+j] = 0;
+                                        c[i*dimc+j] = 0;
                                 }
                         }
                 } else {
                         for (i = 0; i < n; i++) {
                                 for (j = 0; j < m; j++) {
-                                        c[i*ldc+j] *= beta[0];
+                                        c[i*dimc+j] *= beta[0];
                                 }
                         }
                 }
@@ -167,25 +164,23 @@ void NPzgemm(const char trans_a, const char trans_b,
                 int nblk = MAX((k+nthread-1) / nthread, 1);
                 double complex Z0 = 0;
                 double complex *cpriv = malloc(sizeof(double complex) * m * n);
-                int ij, di;
-                size_t stride, stride_b;
+                int di;
+                size_t ij;
+                size_t astride = nblk;
+                size_t bstride = nblk;
                 if (trans_a == 'N') {
-                        stride = lda;
-                } else {
-                        stride = 1;
+                        astride *= lda;
                 }
-                if (trans_b == 'N') {
-                        stride_b = 1;
-                } else {
-                        stride_b = ldb;
+                if (trans_b != 'N') {
+                        bstride *= ldb;
                 }
 #pragma omp for
                 for (i = 0; i < nthread; i++) {
                         di = MIN(nblk, k-i*nblk);
                         if (di > 0) {
                                 zgemm_(&trans_a, &trans_b, &m, &n, &di,
-                                       alpha, a+stride*i*nblk, &lda,
-                                       b+stride_b*i*nblk, &ldb,
+                                       alpha, a+astride*i, &lda,
+                                       b+bstride*i, &ldb,
                                        &Z0, cpriv, &m);
                         }
                 }
@@ -193,7 +188,7 @@ void NPzgemm(const char trans_a, const char trans_b,
                 if (di > 0) {
                         for (ij = 0, i = 0; i < n; i++) {
                                 for (j = 0; j < m; j++, ij++) {
-                                        c[i*ldc+j] += cpriv[ij];
+                                        c[i*dimc+j] += cpriv[ij];
                                 }
                         }
                 }
@@ -208,18 +203,16 @@ void NPzgemm(const char trans_a, const char trans_b,
                 int nblk = MAX((m+nthread-1) / nthread, 1);
                 nthread = (m+nblk-1) / nblk;
                 int i, di;
-                size_t stride;
-                if (trans_a == 'N') {
-                        stride = 1;
-                } else {
-                        stride = lda;
+                size_t bstride = nblk;
+                if (trans_a != 'N') {
+                        bstride *= lda;
                 }
 #pragma omp for
                 for (i = 0; i < nthread; i++) {
                         di = MIN(nblk, m-i*nblk);
                         if (di > 0) {
                                 zgemm_(&trans_a, &trans_b, &di, &n, &k,
-                                       alpha, a+stride*i*nblk, &lda, b, &ldb,
+                                       alpha, a+bstride*i, &lda, b, &ldb,
                                        beta, c+i*nblk, &ldc);
                         }
                 }
@@ -233,19 +226,18 @@ void NPzgemm(const char trans_a, const char trans_b,
                 int nblk = MAX((n+nthread-1) / nthread, 1);
                 nthread = (n+nblk-1) / nblk;
                 int i, di;
-                size_t stride;
+                size_t bstride = nblk;
+                size_t cstride = dimc * nblk;
                 if (trans_b == 'N') {
-                        stride = ldb;
-                } else {
-                        stride = 1;
+                        bstride *= ldb;
                 }
 #pragma omp for
                 for (i = 0; i < nthread; i++) {
                         di = MIN(nblk, n-i*nblk);
                         if (di > 0) {
                                 zgemm_(&trans_a, &trans_b, &m, &di, &k,
-                                       alpha, a, &lda, b+stride*i*nblk, &ldb,
-                                       beta, c+ldc*i*nblk, &ldc);
+                                       alpha, a, &lda, b+bstride*i, &ldb,
+                                       beta, c+cstride*i, &ldc);
                         }
                 }
 }
