@@ -272,23 +272,14 @@ class AFTDF(lib.StreamObject):
             ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
             nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
             nij = ni*nj
-        blksize = max(16, int(max_memory*.9e6/(nij*(nkpts+1)*16)))
+        blksize = max(16, int(max_memory*.9e6/(nij*nkpts*16)))
         blksize = min(blksize, ngs, 16384)
         buf = numpy.empty(nkpts*nij*blksize, dtype=numpy.complex128)
-        pqkRbuf = numpy.empty(nij*blksize)
-        pqkIbuf = numpy.empty(nij*blksize)
 
         for p0, p1 in self.prange(0, ngs, blksize):
             dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                         b, gxyz[p0:p1], Gvbase, q, kpts, out=buf)
-            nG = p1 - p0
-            for k in range(nkpts):
-                aoao = dat[k].reshape(nG,nij)
-                pqkR = numpy.ndarray((nij,nG), buffer=pqkRbuf)
-                pqkI = numpy.ndarray((nij,nG), buffer=pqkIbuf)
-                pqkR[:] = aoao.real.T
-                pqkI[:] = aoao.imag.T
-                yield (k, pqkR, pqkI, p0, p1)
+            yield dat, p0, p1
 
     def prange(self, start, stop, step):
         return lib.prange(start, stop, step)

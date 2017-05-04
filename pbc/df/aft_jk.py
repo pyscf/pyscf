@@ -18,6 +18,41 @@ from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
 
 
 def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
+    if kpts_band is not None:
+        return get_j_for_bands(mydf, dm_kpts, hermi, kpts, kpts_band)
+
+    cell = mydf.cell
+    log = logger.Logger(mydf.stdout, mydf.verbose)
+    t1 = (time.clock(), time.time())
+
+    dm_kpts = lib.asarray(dm_kpts, order='C')
+    dms = _format_dms(dm_kpts, kpts)
+    nset, nkpts, nao = dms.shape[:3]
+    vj_kpts = numpy.zeros((nset,nkpts,nao,nao), dtype=numpy.complex128)
+    kpt_allow = numpy.zeros(3)
+    coulG = mydf.weighted_coulG(kpt_allow, False, mydf.gs)
+    max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
+    weight = 1./len(kpts)
+    dmsC = dms.conj()
+    for aoaoks, p0, p1 in mydf.ft_loop(mydf.gs, kpt_allow, kpts, max_memory=max_memory):
+        vG = [0] * nset
+        #:rho = numpy.einsum('lkL,lk->L', pqk.conj(), dm)
+        for k, aoao in enumerate(aoaoks):
+            for i in range(nset):
+                rho = numpy.einsum('ij,Lij->L', dmsC[i,k], aoao).conj()
+                vG[i] += rho * coulG[p0:p1]
+        for i in range(nset):
+            vG[i] *= weight
+        for k, aoao in enumerate(aoaoks):
+            for i in range(nset):
+                vj_kpts[i,k] += numpy.einsum('L,Lij->ij', vG[i], aoao)
+    aoao = aoaoks = p0 = p1 = None
+
+    if gamma_point(kpts):
+        vj_kpts = vj_kpts.real.copy()
+    return _format_jks(vj_kpts, dm_kpts, kpts_band, kpts)
+
+def get_j_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = (time.clock(), time.time())
@@ -31,51 +66,34 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     kpt_allow = numpy.zeros(3)
     coulG = mydf.weighted_coulG(kpt_allow, False, mydf.gs)
     ngs = len(coulG)
-    vR = numpy.zeros((nset,ngs))
-    vI = numpy.zeros((nset,ngs))
+    vG = numpy.zeros((nset,ngs), dtype=numpy.complex128)
     max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
-    for k, pqkR, pqkI, p0, p1 \
-            in mydf.ft_loop(mydf.gs, kpt_allow, kpts, max_memory=max_memory):
-        #:rho = numpy.einsum('lkL,lk->L', pqk.conj(), dm)
-        for i in range(nset):
-            rhoR = numpy.dot(dmsR[i,k], pqkR)
-            rhoR+= numpy.dot(dmsI[i,k], pqkI)
-            rhoI = numpy.dot(dmsI[i,k], pqkR)
-            rhoI-= numpy.dot(dmsR[i,k], pqkI)
-            vR[i,p0:p1] += rhoR * coulG[p0:p1]
-            vI[i,p0:p1] += rhoI * coulG[p0:p1]
-    pqkR = pqkI = coulG = None
-    weight = 1./len(kpts)
-    vR *= weight
-    vI *= weight
 
+    dmsC = dms.conj()
+    for aoaoks, p0, p1 in mydf.ft_loop(mydf.gs, kpt_allow, kpts, max_memory=max_memory):
+        #:rho = numpy.einsum('lkL,lk->L', pqk.conj(), dm)
+        for k, aoao in enumerate(aoaoks):
+            for i in range(nset):
+                rho = numpy.einsum('ij,Lij->L', dmsC[i,k], aoao).conj()
+                vG[i,p0:p1] += rho * coulG[p0:p1]
+    aoao = aoaoks = p0 = p1 = None
+    weight = 1./len(kpts)
+    vG *= weight
     t1 = log.timer_debug1('get_j pass 1 to compute J(G)', *t1)
 
     kpts_band, single_kpt_band = _format_kpts_band(kpts_band, kpts)
-    gamma_point = abs(kpts_band).sum() < 1e-9
     nband = len(kpts_band)
-
-    vjR = numpy.zeros((nset,nband,nao*nao))
-    vjI = numpy.zeros((nset,nband,nao*nao))
-    for k, pqkR, pqkI, p0, p1 \
-            in mydf.ft_loop(mydf.gs, kpt_allow, kpts_band,
-                            max_memory=max_memory):
-        for i in range(nset):
-            vjR[i,k] += numpy.dot(pqkR, vR[i,p0:p1])
-            vjR[i,k] -= numpy.dot(pqkI, vI[i,p0:p1])
-        if not gamma_point:
+    vj_kpts = numpy.zeros((nset,nband,nao,nao), dtype=numpy.complex128)
+    for aoaoks, p0, p1 in mydf.ft_loop(mydf.gs, kpt_allow, kpts_band,
+                                        max_memory=max_memory):
+        for k, aoao in enumerate(aoaoks):
             for i in range(nset):
-                vjI[i,k] += numpy.dot(pqkI, vR[i,p0:p1])
-                vjI[i,k] += numpy.dot(pqkR, vI[i,p0:p1])
-    pqkR = pqkI = coulG = None
+                vj_kpts[i,k] += numpy.einsum('L,Lij->ij', vG[i,p0:p1], aoao)
+    aoao = aoaoks = p0 = p1 = None
 
-    if gamma_point:
-        vj_kpts = vjR
-    else:
-        vj_kpts = vjR + vjI*1j
-    vj_kpts = vj_kpts.reshape(nset,nband,nao,nao)
+    if gamma_point(kpts_band):
+        vj_kpts = vj_kpts.real.copy()
     t1 = log.timer_debug1('get_j pass 2', *t1)
-
     return _format_jks(vj_kpts, dm_kpts, kpts_band, kpts, single_kpt_band)
 
 def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
@@ -123,41 +141,45 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         vkcoulG = mydf.weighted_coulG(kpt, True, mydf.gs)
         kptjs = kpts[kptj_idx]
         # <r|-G+k_rs|s> = conj(<s|G-k_rs|r>) = conj(<s|G+k_sr|r>)
-        for k, pqkR, pqkI, p0, p1 \
-                in mydf.ft_loop(mydf.gs, kpt, kptjs, max_memory=max_memory1):
-            ki = kpti_idx[k]
-            kj = kptj_idx[k]
+        buf1R = numpy.empty((blksize*nao**2))
+        buf1I = numpy.empty((blksize*nao**2))
+        for aoaoks, p0, p1 in mydf.ft_loop(mydf.gs, kpt, kptjs, max_memory=max_memory1):
             coulG = numpy.sqrt(vkcoulG[p0:p1])
+            nG = p1 - p0
+            for k, aoao in enumerate(aoaoks):
+                ki = kpti_idx[k]
+                kj = kptj_idx[k]
 
 # case 1: k_pq = (pi|iq)
 #:v4 = numpy.einsum('ijL,lkL->ijkl', pqk, pqk.conj())
 #:vk += numpy.einsum('ijkl,jk->il', v4, dm)
-            pqkR *= coulG
-            pqkI *= coulG
-            pLqR = lib.transpose(pqkR.reshape(nao,nao,-1), axes=(0,2,1), out=bufR)
-            pLqI = lib.transpose(pqkI.reshape(nao,nao,-1), axes=(0,2,1), out=bufI)
-            iLkR = numpy.empty((nao*(p1-p0),nao))
-            iLkI = numpy.empty((nao*(p1-p0),nao))
-            for i in range(nset):
-                iLkR, iLkI = zdotNN(pLqR.reshape(-1,nao), pLqI.reshape(-1,nao),
-                                    dmsR[i,kj], dmsI[i,kj], 1, iLkR, iLkI)
-                zdotNC(iLkR.reshape(nao,-1), iLkI.reshape(nao,-1),
-                       pLqR.reshape(nao,-1).T, pLqI.reshape(nao,-1).T,
-                       1, vkR[i,ki], vkI[i,ki], 1)
+                pLqR = numpy.ndarray((nao,nG,nao), buffer=bufR)
+                pLqI = numpy.ndarray((nao,nG,nao), buffer=bufI)
+                pLqR[:] = aoao.real.reshape(nG,nao,nao).transpose(1,0,2)
+                pLqI[:] = aoao.imag.reshape(nG,nao,nao).transpose(1,0,2)
+                pLqR *= coulG.reshape(1,nG,1)
+                pLqI *= coulG.reshape(1,nG,1)
+                iLkR = numpy.ndarray((nao*nG,nao), buffer=buf1R)
+                iLkI = numpy.ndarray((nao*nG,nao), buffer=buf1I)
+                for i in range(nset):
+                    iLkR, iLkI = zdotNN(pLqR.reshape(-1,nao), pLqI.reshape(-1,nao),
+                                        dmsR[i,kj], dmsI[i,kj], 1, iLkR, iLkI)
+                    zdotNC(iLkR.reshape(nao,-1), iLkI.reshape(nao,-1),
+                           pLqR.reshape(nao,-1).T, pLqI.reshape(nao,-1).T,
+                           1, vkR[i,ki], vkI[i,ki], 1)
 
 # case 2: k_pq = (iq|pi)
 #:v4 = numpy.einsum('iLj,lLk->ijkl', pqk, pqk.conj())
 #:vk += numpy.einsum('ijkl,li->kj', v4, dm)
-            if swap_2e and not is_zero(kpt):
-                iLkR = iLkR.reshape(nao,-1)
-                iLkI = iLkI.reshape(nao,-1)
-                for i in range(nset):
-                    iLkR, iLkI = zdotNN(dmsR[i,ki], dmsI[i,ki], pLqR.reshape(nao,-1),
-                                        pLqI.reshape(nao,-1), 1, iLkR, iLkI)
-                    zdotCN(pLqR.reshape(-1,nao).T, pLqI.reshape(-1,nao).T,
-                           iLkR.reshape(-1,nao), iLkI.reshape(-1,nao),
-                           1, vkR[i,kj], vkI[i,kj], 1)
-            pqkR = pqkI = coulG = pLqR = pLqI = iLkR = iLkI = None
+                if swap_2e and not is_zero(kpt):
+                    iLkR = iLkR.reshape(nao,-1)
+                    iLkI = iLkI.reshape(nao,-1)
+                    for i in range(nset):
+                        iLkR, iLkI = zdotNN(dmsR[i,ki], dmsI[i,ki], pLqR.reshape(nao,-1),
+                                            pLqI.reshape(nao,-1), 1, iLkR, iLkI)
+                        zdotCN(pLqR.reshape(-1,nao).T, pLqI.reshape(-1,nao).T,
+                               iLkR.reshape(-1,nao), iLkI.reshape(-1,nao),
+                               1, vkR[i,kj], vkI[i,kj], 1)
 
     for ki, kpti in enumerate(kpts_band):
         for kj, kptj in enumerate(kpts):
