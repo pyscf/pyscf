@@ -49,10 +49,8 @@ def get_nuc(mydf, kpts=None):
         vpplocG = pseudo.pp_int.get_gth_vlocG_part1(cell, Gv)
         vpplocG = -numpy.einsum('ij,ij->j', cell.get_SI(Gv), vpplocG)
         vpplocG *= kws
-        vGR = vpplocG.real
-        vGI = vpplocG.imag
-        vjR = numpy.zeros((nkpts,nao_pair))
-        vjI = numpy.zeros((nkpts,nao_pair))
+        vG = vpplocG
+        vj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
     else:
         nuccell = copy.copy(cell)
         half_sph_norm = .5/numpy.sqrt(numpy.pi)
@@ -67,40 +65,33 @@ def get_nuc(mydf, kpts=None):
 
         # PP-loc part1 is handled by fakenuc in _int_nuc_vloc
         vj = lib.asarray(mydf._int_nuc_vloc(nuccell, kpts_lst))
-        vjR = vj.real
-        vjI = vj.imag
         t1 = log.timer_debug1('vnuc pass1: analytic int', *t1)
 
         charge = -cell.atom_charges()
         coulG = tools.get_coulG(cell, kpt_allow, gs=mydf.gs, Gv=Gv)
         coulG *= kws
         aoaux = ft_ao.ft_ao(nuccell, Gv)
-        vGR = numpy.einsum('i,xi->x', charge, aoaux.real) * coulG
-        vGI = numpy.einsum('i,xi->x', charge, aoaux.imag) * coulG
+        vG = numpy.einsum('i,xi->x', charge, aoaux) * coulG
 
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
-    for k, pqkR, pqkI, p0, p1 \
-            in mydf.ft_loop(mydf.gs, kpt_allow, kpts_lst,
-                            max_memory=max_memory, aosym='s2'):
+    for aoaoks, p0, p1 in mydf.ft_loop(mydf.gs, kpt_allow, kpts_lst,
+                                       max_memory=max_memory, aosym='s2'):
+        for k, aoao in enumerate(aoaoks):
 # rho_ij(G) nuc(-G) / G^2
 # = [Re(rho_ij(G)) + Im(rho_ij(G))*1j] [Re(nuc(G)) - Im(nuc(G))*1j] / G^2
-        if not gamma_point(kpts_lst[k]):
-            vjI[k] += numpy.einsum('k,xk->x', vGR[p0:p1], pqkI)
-            vjI[k] -= numpy.einsum('k,xk->x', vGI[p0:p1], pqkR)
-        vjR[k] += numpy.einsum('k,xk->x', vGR[p0:p1], pqkR)
-        vjR[k] += numpy.einsum('k,xk->x', vGI[p0:p1], pqkI)
+            vj[k] += numpy.einsum('k,kx->x', vG.conj(), aoao)
     t1 = log.timer_debug1('contracting Vnuc', *t1)
 
-    vj = []
+    vj_kpts = []
     for k, kpt in enumerate(kpts_lst):
         if gamma_point(kpt):
-            vj.append(lib.unpack_tril(vjR[k]))
+            vj_kpts.append(lib.unpack_tril(vj[k].real.copy()))
         else:
-            vj.append(lib.unpack_tril(vjR[k]+vjI[k]*1j))
+            vj_kpts.append(lib.unpack_tril(vj[k]))
 
     if kpts is None or numpy.shape(kpts) == (3,):
-        vj = vj[0]
-    return vj
+        vj_kpts = vj_kpts[0]
+    return vj_kpts
 
 def _int_nuc_vloc(mydf, nuccell, kpts, intor='cint3c2e_sph'):
     '''Vnuc - Vloc'''
