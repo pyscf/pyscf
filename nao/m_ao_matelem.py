@@ -48,6 +48,7 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     gaunt_c.__init__(self, self.jmx)
 
     self.interp_rr = log_interp_c(self.rr)
+    self.interp_pp = log_interp_c(self.kk)
     
     self.psi_log = ao_log.psi_log
     self.psi_log_rl = ao_log.psi_log_rl

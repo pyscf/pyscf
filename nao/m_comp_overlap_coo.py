@@ -5,7 +5,7 @@ import numpy as np
 #
 #
 #
-def comp_overlap_coo(sv, ao_log=None, overlap_funct=overlap_ni,**kvargs):
+def comp_overlap_coo(sv, ao_log=None, funct=overlap_ni,**kvargs):
   """
     Computes the overlap matrix and returns it in coo format (simplest sparse format to construct)
     Args:
@@ -34,7 +34,7 @@ def comp_overlap_coo(sv, ao_log=None, overlap_funct=overlap_ni,**kvargs):
   for atom1,[sp1,rv1,s1,f1] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
     for atom2,[sp2,rv2,s2,f2] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
       if (sp2rcut[sp1]+sp2rcut[sp2])**2<=sum((rv1-rv2)**2) : continue
-      oo = overlap_funct(me,sp1,sp2,rv1,rv2,**kvargs)
+      oo = funct(me,sp1,sp2,rv1,rv2,**kvargs)
       for o1 in range(s1,f1):
         for o2 in range(s2,f2):
           inz = inz+1
@@ -50,8 +50,9 @@ if __name__=='__main__':
   from pyscf.nao.m_system_vars import system_vars_c
   from pyscf.nao.m_overlap_am import overlap_am
   from pyscf.nao.m_overlap_ni import overlap_ni
-  sv = system_vars_c()
-  over = comp_overlap_coo(sv, overlap_funct=overlap_ni, level=7).tocsr()
+
+  sv = system_vars_c(label='siesta')
+  over = comp_overlap_coo(sv, funct=overlap_ni, level=7).tocsr()
   
   diff = (sv.hsx.s4_csr-over).sum()
   summ = (sv.hsx.s4_csr+over).sum()

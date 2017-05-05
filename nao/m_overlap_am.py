@@ -57,8 +57,7 @@ def overlap_am(self, sp1, sp2, R1, R2):
         cS.fill(0.0) 
         for m1 in range(-l1,l1+1):
           for m2 in range(-l2,l2+1):
-            gc = self.get_gaunt(l1,-m1,l2,m2)
-            m3 = m2-m1
+            gc, m3 = self.get_gaunt(l1,-m1,l2,m2), m2-m1
             for l3ind,l3 in enumerate(range(abs(l1-l2),l1+l2+1)):
               if abs(m3) > l3 : continue
               cS[m1+_j,m2+_j] = cS[m1+_j,m2+_j] + l2S[l3]*ylm[ l3*(l3+1)+m3] * gc[l3ind] * (-1.0)**((3*l1+l2+l3)//2+m2)

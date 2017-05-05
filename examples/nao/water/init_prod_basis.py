@@ -38,7 +38,7 @@ me = ao_matelem_c(prod_log)
 #print('ni')
 #print(pp2o_ni.sum())
 
-pp2o_am = comp_overlap_coo(sv, prod_log, overlap_funct=overlap_am).toarray()
+pp2o_am = comp_overlap_coo(sv, prod_log, funct=overlap_am).toarray()
 print('am')
 print(pp2o_am.sum())
 

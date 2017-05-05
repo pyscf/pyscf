@@ -4,7 +4,7 @@ from pyscf.nao.m_ao_matelem import ao_matelem_c
 import numpy as np
 from timeit import default_timer as timer
 
-sv  = system_vars_c()
+sv  = system_vars_c(label='siesta')
 
 me = ao_matelem_c(sv.ao_log)
 R1 = sv.atom2coord[0,:]

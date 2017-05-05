@@ -20,7 +20,7 @@ res = mf._numint.nr_vxc(mol, mf.grids, mf.xc, dm1, spin=0)
 print(res)
 
 
-sv  = system_vars_c()
+sv  = system_vars_c(label='siesta')
 print(diag_check(sv))
 print(overlap_check(sv))
 
