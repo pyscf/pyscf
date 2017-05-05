@@ -225,12 +225,25 @@ class system_vars_c():
   def atom_coords(self): return self.atom2coord
 
 #
-# Example of reading previous pySCF calc.
+# Example of reading pySCF orbitals.
 #
 if __name__=="__main__":
   from pyscf import gto
   from pyscf.nao.m_system_vars import system_vars_c
+  import matplotlib.pyplot as plt
   """ Interpreting small Gaussian calculation """
-  mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0; Be 1 0 0', basis='ccpvdz') # coordinates in Angstrom!
+  mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0; Be 1 0 0', basis='ccpvtz') # coordinates in Angstrom!
   sv = system_vars_c(gto=mol)
-  print(sv.sp2norbs)
+  print(sv.ao_log.sp2norbs)
+  print(sv.ao_log.sp2nmult)
+
+  sp = 0
+  for mu,[ff,j] in enumerate(zip(sv.ao_log.psi_log[sp], sv.ao_log.sp_mu2j[sp])):
+    nc = abs(ff).max()
+    if j==0 : plt.plot(sv.ao_log.rr, ff/nc, '--', label=str(mu)+' j='+str(j))
+    if j>0 : plt.plot(sv.ao_log.rr, ff/nc, label=str(mu)+' j='+str(j))
+  
+  plt.legend()
+  #plt.xlim(0.0, 10.0)
+  plt.show()
+  

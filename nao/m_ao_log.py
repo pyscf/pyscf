@@ -6,7 +6,6 @@ from pyscf.nao.m_log_mesh import log_mesh
 from pyscf.nao.m_log_interp import log_interp_c
 from pyscf.nao.m_siesta_ion_interp import siesta_ion_interp
 
-
 #
 #
 #
@@ -75,30 +74,68 @@ class ao_log_c():
       self.init_ion(sp2ion, nr, rmin, rmax, kmax)
   
   #
-  #
   def init_gto(self, gto, sv, nr=None, rmin=None, rmax=None, kmax=None):
-    """
-      Get's data from a previous pySCF calculation, intializes numerical orbitals from the Gaussian type of orbitals etc.
-    """
+    """ Get's radial orbitals and angular momenta from a previous pySCF calculation, intializes numerical orbitals from the Gaussian type of orbitals etc."""
     self.gto = gto
     self.nr = 1024
-    print(get_default_log_mesh_gto(gto, tol=1e-7))
-    
-#    print(dir(gto))
-#    print(dir(sv))
-    
-    self.sp_mu2j = []
-    self.sp_mu2s = []
+    rmin_def,rmax_def,kmax_def=get_default_log_mesh_gto(gto, tol=1e-7)
 
+    self.rmin = rmin_def if rmin is None else rmin
+    assert(self.rmin>0.0)
+
+    self.kmax = kmax_def if kmax is None else kmax
+    assert(self.kmax>0.0)
+    
+    self.rmax = rmax_def if rmax is None else rmax
+    assert(self.rmax>0.0)
+    
+    self.rr,self.pp = log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
+    self.interp_rr = log_interp_c(self.rr)
+    self.interp_pp = log_interp_c(self.pp)
+    
+    self.sp_mu2j = [0]*sv.nspecies
+    self.psi_log = [0]*sv.nspecies
+    self.psi_log_rl = [0]*sv.nspecies
+    self.sp2nmult = np.zeros(sv.nspecies, dtype='int64')
+    
     seen_species = [] # this is auxiliary to organize the loop over species 
     for ia,sp in enumerate(sv.atom2sp):
       if sp in seen_species: continue
       seen_species.append(sp)
-      self.sp_mu2j.append(np.array([gto.bas_angular(shell_id) for shell_id in gto.atom_shell_ids(ia)], dtype='int64'))
-#      for sid in gto.atom_shell_ids(ia):
-#        print(ia, sid, gto.bas_angular(sid), gto.bas_exp(sid), gto.bas_kappa(sid), gto.bas_ctr_coeff(sid))
-        
-#    print(self.sp_mu2j)
+      self.sp2nmult[sp] = nmu = sum([gto.bas_nctr(sid) for sid in gto.atom_shell_ids(ia)])
+
+      mu2ff = np.zeros((nmu, self.nr))
+      mu2ff_rl = np.zeros((nmu, self.nr))
+      mu2j = np.zeros(nmu, dtype='int64')
+      mu = -1
+      for sid in gto.atom_shell_ids(ia):
+        pows = gto.bas_exp(sid)
+        coeffss = gto.bas_ctr_coeff(sid)
+        for coeffs in coeffss.T:
+          mu=mu+1
+          l = mu2j[mu] = gto.bas_angular(sid)
+          for ir, r in enumerate(self.rr):
+            mu2ff_rl[mu,ir] = sum(pows[:]**((2*l+3)/4.0)*coeffs[:]*np.exp(-pows[:]*r**2))
+            mu2ff[mu,ir] = r**l*mu2ff_rl[mu,ir]
+            
+      self.sp_mu2j[sp] = mu2j
+      norms = [np.sqrt(self.interp_rr.dg_jt*sum(ff**2*self.rr**3)) for ff in mu2ff]
+      for mu,norm in enumerate(norms): 
+        mu2ff[mu,:] = mu2ff[mu,:]/norm
+        mu2ff_rl[mu,:] = mu2ff_rl[mu,:]/norm
+
+      self.psi_log[sp] = mu2ff
+      self.psi_log_rl[sp] = mu2ff_rl
+
+
+    self.sp_mu2s = []
+    for mu2j in self.sp_mu2j:
+      mu2s = np.zeros(len(mu2j)+1, dtype='int64')
+      for mu,j in enumerate(mu2j): mu2s[mu+1] = mu2s[mu]+2*j+1
+      self.sp_mu2s.append(mu2s)
+    
+    self.sp2norbs = [mu2s[-1] for mu2s in self.sp_mu2s]
+    self.sp2charge = sv.sp2charge
 
   #
   #  
