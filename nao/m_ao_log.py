@@ -126,7 +126,9 @@ class ao_log_c():
 
       self.psi_log[sp] = mu2ff
       self.psi_log_rl[sp] = mu2ff_rl
-
+    
+    self.jmx = max([mu2j.max() for mu2j in self.sp_mu2j])
+    
     self.sp_mu2s = []
     for mu2j in self.sp_mu2j:
       mu2s = np.zeros(len(mu2j)+1, dtype='int64')
@@ -153,6 +155,7 @@ class ao_log_c():
       Reads data from a previous SIESTA calculation, interpolates the orbitals on a single log mesh.
     """
     _siesta_ion_add_sp2(self, sp2ion) # adds the fields for counting, .nspecies etc.
+    self.jmx = max([mu2j.max() for mu2j in self.sp_mu2j])
     self.sp2norbs = np.array([mu2s[self.sp2nmult[sp]] for sp,mu2s in enumerate(self.sp_mu2s)], dtype='int64')
     
     self.sp2ion = sp2ion

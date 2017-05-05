@@ -1,5 +1,7 @@
 from __future__ import division, print_function
+from pyscf.nao.m_sbt import sbt_c
 import numpy as np
+import copy
 
 #
 #
@@ -12,12 +14,38 @@ def ao_log_hartree(ao, method=None):
     Result:
       ao_pot with respective radial parts
   """
-  ao_hartree = deepcopy(ao)
+  sbt = sbt_c(ao.rr, ao.pp, lmax=ao.jmx)
   
-  return ao_hartree
+  ao_pot = copy.deepcopy(ao)
+  for sp,mu2ff in enumerate(ao.psi_log):
+    for mu,[ff,am] in enumerate(zip(mu2ff, ao.sp_mu2j[sp])):
+      ao_pot.psi_log[sp][mu,:] = (4*np.pi) * sbt.sbt( sbt.sbt( ff, am, 1)/ao.pp**2, am, -1)
+      ao_pot.psi_log_rl[sp][mu,:] = ao_pot.psi_log[sp][mu,:]/(ao.rr**am)
+
+  for sp in range(ao.nspecies): ao_pot.sp_mu2rcut[sp].fill(ao.rr[-1])
+  ao_pot.sp2rcut.fill(ao.rr[-1])
   
+  return ao_pot
 
-
+#
+#
+#
 if __name__ == '__main__':
   from pyscf.nao.m_system_vars import system_vars_c
+  import matplotlib.pyplot as plt
+  
+  sv = system_vars_c('siesta')
+  
+  ao_h = ao_log_hartree(sv.ao_log)
+  sp = 0
+  for mu,[ff,j] in enumerate(zip(ao_h.psi_log[sp], ao_h.sp_mu2j[sp])):
+    nc = abs(ff).max()
+    if j==0 : plt.plot(ao_h.rr, ff/nc, '--', label=str(mu)+' j='+str(j))
+    if j>0 : plt.plot(ao_h.rr, ff/nc, label=str(mu)+' j='+str(j))
+
+  plt.legend()
+  plt.xlim(0.0,0.1)
+  plt.ylim(0.9,1.1)
+  plt.show()
+  
   
