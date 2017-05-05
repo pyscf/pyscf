@@ -83,7 +83,7 @@ class ao_log_c():
     """ Get's radial orbitals and angular momenta from a previous pySCF calculation, intializes numerical orbitals from the Gaussian type of orbitals etc."""
     self.gto = gto
 
-    rmin_def,rmax_def,kmax_def=get_default_log_mesh_gto(gto, tol)
+    rmin_def,rmax_def,kmax_def = get_default_log_mesh_gto(gto, tol)
 
     self.nr = 1024 if nr is None else nr
     self.rmin = rmin_def if rmin is None else rmin

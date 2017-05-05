@@ -1,7 +1,6 @@
 from __future__ import division, print_function
 import numpy as np
 from pyscf.nao.m_csphar import csphar
-from pyscf.nao.m_log_interp import comp_coeffs
 from pyscf.nao.m_xjl import xjl
 
 #
@@ -23,7 +22,7 @@ def coulomb_am(self, sp1, sp2, R1, R2):
   shape = [self.sp2norbs[sp] for sp in (sp1,sp2)]
   oo2co = np.zeros(shape)
   R2mR1 = np.array(R2)-np.array(R1)
-  dist, ylm = np.sqrt(sum(R2mR1*R2mR1)), csphar( R2mR1, 2*self.jmx+1 )
+  dist,ylm = np.sqrt(sum(R2mR1*R2mR1)), csphar( R2mR1, 2*self.jmx+1 )
   cS = np.zeros((self.jmx*2+1,self.jmx*2+1), dtype='complex128')
   cmat = np.zeros((self.jmx*2+1,self.jmx*2+1), dtype='complex128')
   rS = np.zeros((self.jmx*2+1,self.jmx*2+1))
@@ -61,8 +60,6 @@ if __name__ == '__main__':
   from pyscf.nao.m_system_vars import system_vars_c
   from pyscf.nao.m_prod_log import prod_log_c
   from pyscf.nao.m_ao_matelem import ao_matelem_c
-  from pyscf.nao.m_pack2den import pack2den
-  
   
   ra = np.array([0.0, 0.1, 0.2])
   rb = np.array([0.0, 0.1, 0.0])
