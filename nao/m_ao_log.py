@@ -9,11 +9,12 @@ from pyscf.nao.m_siesta_ion_interp import siesta_ion_interp
 #
 #
 #
-def get_default_log_mesh_gto(gto, tol=1e-7):
+def get_default_log_mesh_gto(gto, tol_in=None):
   rmin_gcs = 10.0
   rmax_gcs = -1.0
   akmx_gcs = -1.0
 
+  tol = 1e-7 if tol_in is None else tol_in
   seen_species = [] # this is auxiliary to organize the loop over species 
   for ia in range(gto.natm):
     if gto.atom_symbol(ia) in seen_species: continue
@@ -64,34 +65,33 @@ class ao_log_c():
   >>> ao = ao_log_c(sv.sp2ion)
   >>> print(ao.psi_log.shape)
   '''
-  def __init__(self, sp2ion=None, gto=None, sv=None, nr=None, rmin=None, rmax=None, kmax=None):
-    """
-      Initializes numerical orbitals from a previous pySCF calculation or from SIESTA calculation (really numerical orbitals)
-    """
-    if sp2ion is None:
-      self.init_gto(gto, sv, nr, rmin, rmax, kmax)
-    else :
-      self.init_ion(sp2ion, nr, rmin, rmax, kmax)
+  def __init__(self, sp2ion=None, gto=None, sv=None, **kvargs):
+    """ Initializes numerical orbitals from a previous pySCF calculation or from SIESTA calculation (really numerical orbitals) """
+    if sp2ion is not None:
+      self.init_ion(sp2ion, **kvargs)
+      return
+    
+    if gto is not None and sv is not None:
+      self.init_gto(gto, sv, **kvargs)
+      return
+    
+    raise RuntimeError('unknown constructor')
+      
   
   #
-  def init_gto(self, gto, sv, nr=None, rmin=None, rmax=None, kmax=None):
+  def init_gto(self, gto, sv, nr=None, rmin=None, rmax=None, kmax=None, tol=1e-7):
     """ Get's radial orbitals and angular momenta from a previous pySCF calculation, intializes numerical orbitals from the Gaussian type of orbitals etc."""
     self.gto = gto
-    self.nr = 1024
-    rmin_def,rmax_def,kmax_def=get_default_log_mesh_gto(gto, tol=1e-7)
 
+    rmin_def,rmax_def,kmax_def=get_default_log_mesh_gto(gto, tol)
+
+    self.nr = 1024 if nr is None else nr
     self.rmin = rmin_def if rmin is None else rmin
-    assert(self.rmin>0.0)
-
     self.kmax = kmax_def if kmax is None else kmax
-    assert(self.kmax>0.0)
-    
     self.rmax = rmax_def if rmax is None else rmax
-    assert(self.rmax>0.0)
-    
+    assert self.rmin>0.0; assert self.kmax>0.0; assert self.nr>1; assert self.rmax>self.rmin;
     self.rr,self.pp = log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
-    self.interp_rr = log_interp_c(self.rr)
-    self.interp_pp = log_interp_c(self.pp)
+    self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
     
     self.sp_mu2j = [0]*sv.nspecies
     self.psi_log = [0]*sv.nspecies
@@ -127,7 +127,6 @@ class ao_log_c():
       self.psi_log[sp] = mu2ff
       self.psi_log_rl[sp] = mu2ff_rl
 
-
     self.sp_mu2s = []
     for mu2j in self.sp_mu2j:
       mu2s = np.zeros(len(mu2j)+1, dtype='int64')
@@ -136,6 +135,16 @@ class ao_log_c():
     
     self.sp2norbs = [mu2s[-1] for mu2s in self.sp_mu2s]
     self.sp2charge = sv.sp2charge
+    self.sp_mu2rcut = []
+    for sp, mu2ff in enumerate(self.psi_log):
+      mu2rcut = np.zeros(len(mu2ff))
+      for mu,ff in enumerate(mu2ff):
+        ffmx,irmx = abs(mu2ff[mu]).max(), abs(mu2ff[mu]).argmax()
+        irrp = np.argmax(abs(ff[irmx:])<ffmx*tol)
+        irrc = irmx+irrp if irrp>0 else -1
+        mu2rcut[mu] = self.rr[irrc]
+      self.sp_mu2rcut.append(mu2rcut)
+    self.sp2rcut = np.array([mu2rcut.max() for mu2rcut in self.sp_mu2rcut])
 
   #
   #  

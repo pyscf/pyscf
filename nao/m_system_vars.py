@@ -104,7 +104,9 @@ class system_vars_c():
     if gto is not None: # Interpret previous pySCF calculation
       self.label = 'pyscf' if label is None else label
       self.init_pyscf_gto(gto, **kvargs)
-      
+      return
+    
+    raise RuntimeError('unknown constructor.')
     
   #
   #
@@ -122,11 +124,8 @@ class system_vars_c():
     for ia,sp in enumerate(self.atom2sp): self.sp2charge[sp]=gto.atom_charge(ia)
     self.ao_log = ao_log_c(gto=gto, sv=self, **kvargs)
     self.atom2coord = np.zeros((self.natm, 3))
-    for ia,coord in enumerate(gto.atom_coords()): self.atom2coord[ia,:]=coord # must be in Bohr already...
+    for ia,coord in enumerate(gto.atom_coords()): self.atom2coord[ia,:]=coord # must be in Bohr already?
 
-    print('finished with GTO.')
-      
-    
   #
   #
   #
@@ -233,17 +232,23 @@ if __name__=="__main__":
   import matplotlib.pyplot as plt
   """ Interpreting small Gaussian calculation """
   mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0; Be 1 0 0', basis='ccpvtz') # coordinates in Angstrom!
-  sv = system_vars_c(gto=mol)
+  sv = system_vars_c(gto=mol, tol=1e-8, nr=512, rmin=1e-5)
+  
   print(sv.ao_log.sp2norbs)
   print(sv.ao_log.sp2nmult)
+  print(sv.ao_log.sp2rcut)
+  print(sv.ao_log.sp_mu2rcut)
+  print(sv.ao_log.nr)
+  print(sv.ao_log.rr[0:4], sv.ao_log.rr[-1:-5:-1])
+  print(sv.ao_log.psi_log[0].shape, sv.ao_log.psi_log_rl[0].shape)
 
   sp = 0
   for mu,[ff,j] in enumerate(zip(sv.ao_log.psi_log[sp], sv.ao_log.sp_mu2j[sp])):
     nc = abs(ff).max()
     if j==0 : plt.plot(sv.ao_log.rr, ff/nc, '--', label=str(mu)+' j='+str(j))
     if j>0 : plt.plot(sv.ao_log.rr, ff/nc, label=str(mu)+' j='+str(j))
-  
+
   plt.legend()
   #plt.xlim(0.0, 10.0)
-  plt.show()
+  #plt.show()
   
