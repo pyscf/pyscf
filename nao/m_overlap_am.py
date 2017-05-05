@@ -28,7 +28,7 @@ def overlap_am(self, sp1, sp2, R1, R2):
   dist = np.sqrt(sum(R2mR1*R2mR1))
   cS = np.zeros((self.jmx*2+1,self.jmx*2+1), dtype='complex128')
   cmat = np.zeros((self.jmx*2+1,self.jmx*2+1), dtype='complex128')
-  rS = np.zeros((self.jmx*2+1,self.jmx*2+1), dtype='float64')
+  rS = np.zeros((self.jmx*2+1,self.jmx*2+1))
   if(dist<1.0e-5): 
     for mu1,l1,s1,f1 in self.sp2info[sp1]:
       for mu2,l2,s2,f2 in self.sp2info[sp2]:
@@ -41,8 +41,8 @@ def overlap_am(self, sp1, sp2, R1, R2):
 
   else:
 
-    f1f2_mom = np.zeros((self.nr), dtype='float64')
-    l2S = np.zeros((2*self.jmx+1), dtype='float64')
+    f1f2_mom = np.zeros((self.nr))
+    l2S = np.zeros((2*self.jmx+1))
     ir,coeffs = comp_coeffs(self.interp_rr, dist)
     _j = self.jmx
     for mu2,l2,s2,f2 in self.sp2info[sp2]:

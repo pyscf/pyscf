@@ -23,14 +23,13 @@ def coulomb_am(self, sp1, sp2, R1, R2):
   shape = [self.sp2norbs[sp] for sp in (sp1,sp2)]
   oo2co = np.zeros(shape)
   R2mR1 = np.array(R2)-np.array(R1)
-  ylm = csphar( R2mR1, 2*self.jmx+1 )
-  dist = np.sqrt(sum(R2mR1*R2mR1))
+  dist, ylm = np.sqrt(sum(R2mR1*R2mR1)), csphar( R2mR1, 2*self.jmx+1 )
   cS = np.zeros((self.jmx*2+1,self.jmx*2+1), dtype='complex128')
   cmat = np.zeros((self.jmx*2+1,self.jmx*2+1), dtype='complex128')
-  rS = np.zeros((self.jmx*2+1,self.jmx*2+1), dtype='float64')
+  rS = np.zeros((self.jmx*2+1,self.jmx*2+1))
 
-  f1f2_mom = np.zeros((self.nr), dtype='float64')
-  l2S = np.zeros((2*self.jmx+1), dtype='float64')
+  f1f2_mom = np.zeros((self.nr))
+  l2S = np.zeros((2*self.jmx+1))
   _j = self.jmx
   
   bessel_pp = np.zeros((_j*2+1, self.nr))
