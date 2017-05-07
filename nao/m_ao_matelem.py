@@ -39,9 +39,31 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     the complex -> real transform (for spherical harmonics) and 
     the spherical Bessel transform.
   '''
-  def __init__(self, ao_log):
-    self.jmx  = -1
-    for mu2j in ao_log.sp_mu2j: self.jmx = max(self.jmx, max(mu2j))
+  def __init__(self, ao1, ao2=None):
+    
+    if ao2==None: # Usual matrix elements, compatibility constructor which will become obsolete...
+      init1(self, ao_log)
+      return
+    
+    init2(self, ao1, ao2)
+  
+  def init2(self, ao1, ao2):
+    """ Constructor for matrix elements between molecular species <a_mol1|O|b_mol2> 
+        or three-center matrix elements <a,b |C| p> """
+    self.jmx = max(ao1.jmx, ao2.jmx)
+    c2r_c.__init__(self, self.jmx)
+    sbt_c.__init__(self, ao1.rr, ao1.pp, lmax=2*self.jmx+1)
+    gaunt_c.__init__(self, self.jmx)
+    assert(ao1.rr==ao2.rr)
+    
+    self.interp_rr = log_interp_c(self.rr)
+    self.interp_pp = log_interp_c(self.kk)
+    self.ao1 = ao1
+    self.ao2 = ao2
+    
+  def init1(self, ao_log):
+    """ Constructor for common matrix elements  <a|O|b> """
+    self.jmx = ao_log.jmx
 
     c2r_c.__init__(self, self.jmx)
     sbt_c.__init__(self, ao_log.rr, ao_log.pp, lmax=2*self.jmx+1)
@@ -62,9 +84,10 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     self.sp2charge = ao_log.sp2charge
     
     self.sp2info = []
-    for sp in self.species:
+    for sp,[mu2j,mu2s] in enumerate(zip(self.sp_mu2j,self.sp_mu2s)):
       self.sp2info.append([
-        [mu, self.sp_mu2j[sp][mu], self.sp_mu2s[sp][mu], self.sp_mu2s[sp][mu+1]] for mu in self.sp2mults[sp] ])
+        [mu, mu2j[mu], mu2s[mu], mu2s[mu+1]] for mu in self.sp2mults[sp] 
+          ])
 
     self.psi_log_mom = []
     for sp,nmu in zip(self.species,self.sp2nmult):
