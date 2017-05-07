@@ -42,10 +42,10 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
   def __init__(self, ao1, ao2=None):
     
     if ao2==None: # Usual matrix elements, compatibility constructor which will become obsolete...
-      init1(self, ao_log)
+      self.init1(ao1)
       return
     
-    init2(self, ao1, ao2)
+    self.init2(ao1, ao2)
   
   def init2(self, ao1, ao2):
     """ Constructor for matrix elements between molecular species <a_mol1|O|b_mol2> 
@@ -85,14 +85,12 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     
     self.sp2info = []
     for sp,[mu2j,mu2s] in enumerate(zip(self.sp_mu2j,self.sp_mu2s)):
-      self.sp2info.append([
-        [mu, mu2j[mu], mu2s[mu], mu2s[mu+1]] for mu in self.sp2mults[sp] 
-          ])
+      self.sp2info.append([ [mu, j, mu2s[mu], mu2s[mu+1]] for mu,j in enumerate(mu2j)])
 
     self.psi_log_mom = []
-    for sp,nmu in zip(self.species,self.sp2nmult):
+    for sp,nmu in enumerate(self.sp2nmult):
       mu2ao = np.zeros((nmu,self.nr), dtype='float64')
-      for mu,am in zip(self.sp2mults[sp], self.sp_mu2j[sp]): mu2ao[mu,:] = self.sbt( self.psi_log[sp][mu,:], am, 1)
+      for mu,am in enumerate(self.sp_mu2j[sp]): mu2ao[mu,:] = self.sbt( self.psi_log[sp][mu,:], am, 1)
       self.psi_log_mom.append(mu2ao)
     
     dr = np.log(ao_log.rr[1]/ao_log.rr[0])
