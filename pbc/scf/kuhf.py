@@ -237,7 +237,7 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
     dm_b = reduce(np.dot, (c_inv, dm_ao_gamma[1], c_inv.T.conj()))
 
     log.note(' ** Mulliken pop alpha/beta on meta-lowdin orthogonal AOs **')
-    return uhf.mulliken_pop(mol, (dm_a,dm_b), np.eye(orth_coeff.sihape[0]), log)
+    return uhf.mulliken_pop(mol, (dm_a,dm_b), np.eye(orth_coeff.shape[0]), log)
 
 
 def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
