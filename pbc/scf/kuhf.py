@@ -34,8 +34,9 @@ def canonical_occ_(mf):
   
     def get_occ(mo_energy_kpts=None,mo_coeff=None):
         if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
-        print(mo_energy_kpts)
-        mo_occ_kpts = np.zeros_like(np.array(mo_energy_kpts))
+        #print(mo_energy_kpts)
+        #mo_occ_kpts = [[],[]] #np.zeros_like(np.array(mo_energy_kpts))
+        mo_occ_kpts=np.zeros_like(mo_energy_kpts)
         print("shape",mo_occ_kpts.shape)
 
         nkpts = np.array(mo_energy_kpts).shape[1]
@@ -45,13 +46,15 @@ def canonical_occ_(mf):
 
         for k in range(nkpts):
            for s in [0,1]:
+                occ=np.zeros_like(mo_energy_kpts[s,k])
                 e_idx=np.argsort(mo_energy_kpts[s,k])
                 e_sort=mo_energy_kpts[s,k][e_idx]
                 n=mf.nelec[s]
         
-                mo_occ_kpts[s,k][e_idx[:n]]=1
+                occ[e_idx[:n]]=1
                 homo[s]=max(homo[s],e_sort[n-1])
                 lumo[s]=min(lumo[s],e_sort[n])
+                mo_occ_kpts[s,k]=occ
 
         for nm,s in zip(['alpha','beta'],[0,1]):
             logger.info(mf, nm+' HOMO = %.12g  LUMO = %.12g',
@@ -100,7 +103,7 @@ def get_fock(mf, h1e_kpts, s_kpts, vhf_kpts, dm_kpts, cycle=-1, diis=None,
         f_kpts = diis.update(s_kpts, dm_kpts, f_kpts, mf, h1e_kpts, vhf_kpts)
     if abs(level_shift_factor) > 1e-4:
         f_kpts =([hf.level_shift(s, dm_kpts[0,k], f_kpts[0,k], shifta)
-                  for k, s in enumerate(s_kpts)] +
+                  for k, s in enumerate(s_kpts)],
                  [hf.level_shift(s, dm_kpts[1,k], f_kpts[1,k], shiftb)
                   for k, s in enumerate(s_kpts)])
     return lib.asarray(f_kpts)
@@ -234,7 +237,7 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
     dm_b = reduce(np.dot, (c_inv, dm_ao_gamma[1], c_inv.T.conj()))
 
     log.note(' ** Mulliken pop alpha/beta on meta-lowdin orthogonal AOs **')
-    return uhf.mulliken_pop(mol, (dm_a,dm_b), np.eye(orth_coeff.shape[0]), log)
+    return uhf.mulliken_pop(mol, (dm_a,dm_b), np.eye(orth_coeff.sihape[0]), log)
 
 
 def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
