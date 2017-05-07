@@ -16,11 +16,11 @@ def build_3dgrid(me, sp1, R1, sp2, R2, level=3):
   from pyscf.nao.m_gauleg import leggauss_ab
 
   if ( (R1-R2)**2 ).sum()<1e-7 :
-    mol = system_vars_c(atom=[ [int(me.sp2charge[sp1]), R1] ])
+    mol = system_vars_c(atom=[ [int(me.ao1.sp2charge[sp1]), R1] ])
   else :
-    mol = system_vars_c(atom=[ [int(me.sp2charge[sp1]), R1], [int(me.sp2charge[sp2]), R2] ])
+    mol = system_vars_c(atom=[ [int(me.ao1.sp2charge[sp1]), R1], [int(me.ao1.sp2charge[sp2]), R2] ])
 
-  atom2rcut=np.array([me.sp_mu2rcut[sp].max() for sp in (sp1,sp2)])
+  atom2rcut=np.array([me.ao1.sp_mu2rcut[sp].max() for sp in (sp1,sp2)])
   grids = dft.gen_grid.Grids(mol)
   grids.level = level # precision as implemented in pyscf
   grids.radi_method=leggauss_ab
@@ -71,30 +71,29 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
 
     self.interp_rr = log_interp_c(self.rr)
     self.interp_pp = log_interp_c(self.kk)
+
+    self.ao1 = ao_log
     
-    self.psi_log = ao_log.psi_log
-    self.psi_log_rl = ao_log.psi_log_rl
-    self.sp_mu2j = ao_log.sp_mu2j
-    self.sp_mu2rcut = ao_log.sp_mu2rcut
-    self.sp2nmult = ao_log.sp2nmult
-    self.sp_mu2s  = ao_log.sp_mu2s
-    self.sp2norbs  = ao_log.sp2norbs
-    self.species  = range(len(ao_log.sp2nmult))
-    self.sp2mults = [ range(ao_log.sp2nmult[sp]) for sp in self.species ]
-    self.sp2charge = ao_log.sp2charge
+#    self.psi_log    = ao_log.psi_log
+#    self.psi_log_rl = ao_log.psi_log_rl
+#    self.sp_mu2j    = ao_log.sp_mu2j
+#    self.sp_mu2rcut = ao_log.sp_mu2rcut
+#    self.sp2nmult   = ao_log.sp2nmult
+#    self.sp_mu2s    = ao_log.sp_mu2s
+#    self.sp2norbs   = ao_log.sp2norbs
+#    self.sp2charge  = ao_log.sp2charge
     
     self.sp2info = []
-    for sp,[mu2j,mu2s] in enumerate(zip(self.sp_mu2j,self.sp_mu2s)):
+    for sp,[mu2j,mu2s] in enumerate(zip(self.ao1.sp_mu2j,self.ao1.sp_mu2s)):
       self.sp2info.append([ [mu, j, mu2s[mu], mu2s[mu+1]] for mu,j in enumerate(mu2j)])
 
     self.psi_log_mom = []
-    for sp,nmu in enumerate(self.sp2nmult):
+    for sp,[nmu,mu2ff,mu2j] in enumerate(zip(self.ao1.sp2nmult,self.ao1.psi_log,self.ao1.sp_mu2j)):
       mu2ao = np.zeros((nmu,self.nr), dtype='float64')
-      for mu,am in enumerate(self.sp_mu2j[sp]): mu2ao[mu,:] = self.sbt( self.psi_log[sp][mu,:], am, 1)
+      for mu,[am,ff] in enumerate(zip(mu2j,mu2ff)): mu2ao[mu,:] = self.sbt( ff, am, 1 )
       self.psi_log_mom.append(mu2ao)
     
-    dr = np.log(ao_log.rr[1]/ao_log.rr[0])
-    self.rr3_dr = ao_log.rr**3 * dr
+    self.rr3_dr = ao_log.rr**3 * np.log(ao_log.rr[1]/ao_log.rr[0])
     self.four_pi = 4*np.pi
     self.const = np.sqrt(np.pi/2.0)
 

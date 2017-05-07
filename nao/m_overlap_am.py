@@ -19,10 +19,13 @@ def overlap_am(self, sp1, sp2, R1, R2):
     The procedure uses the angular momentum algebra and spherical Bessel transform
     to compute the bilocal overlaps.
   """
-  shape = [self.sp2norbs[sp] for sp in (sp1,sp2)]
+  shape = [self.ao1.sp2norbs[sp] for sp in (sp1,sp2)]
   overlaps = np.zeros(shape)
   
   R2mR1 = np.array(R2)-np.array(R1)
+  
+  psi_log = self.ao1.psi_log
+  sp_mu2rcut = self.ao1.sp_mu2rcut
   
   ylm = csphar( R2mR1, 2*self.jmx+1 )
   dist = np.sqrt(sum(R2mR1*R2mR1))
@@ -34,7 +37,7 @@ def overlap_am(self, sp1, sp2, R1, R2):
       for mu2,l2,s2,f2 in self.sp2info[sp2]:
         cS.fill(0.0); rS.fill(0.0);
         if l1==l2 : 
-          sum1 = sum(self.psi_log[sp1][mu1,:]*self.psi_log[sp2][mu2,:]*self.rr3_dr)
+          sum1 = sum(psi_log[sp1][mu1,:]*psi_log[sp2][mu2,:]*self.rr3_dr)
           for m1 in range(-l1,l1+1): cS[m1+self.jmx,m1+self.jmx]=sum1
           self.c2r_( l1,l2, self.jmx,cS,rS,cmat)
         overlaps[s1:f1,s2:f2] = rS[-l1+self.jmx:l1+1+self.jmx,-l2+self.jmx:l2+1+self.jmx]
@@ -47,7 +50,7 @@ def overlap_am(self, sp1, sp2, R1, R2):
     _j = self.jmx
     for mu2,l2,s2,f2 in self.sp2info[sp2]:
       for mu1,l1,s1,f1 in self.sp2info[sp1]:
-        if self.sp_mu2rcut[sp1][mu1]+self.sp_mu2rcut[sp2][mu2]<dist: continue
+        if sp_mu2rcut[sp1][mu1]+sp_mu2rcut[sp2][mu2]<dist: continue
         f1f2_mom = self.psi_log_mom[sp2][mu2,:] * self.psi_log_mom[sp1][mu1,:]
         l2S.fill(0.0)
         for l3 in range( abs(l1-l2), l1+l2+1):

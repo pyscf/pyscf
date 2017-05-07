@@ -20,10 +20,10 @@ def overlap_ni(me, sp1, sp2, R1, R2, **kvargs):
 
     grids = build_3dgrid(me, sp1, R1, sp2, R2, **kvargs)
 
-    ao1 = ao_eval(me, R1, sp1, grids.coords)
+    ao1 = ao_eval(me.ao1, R1, sp1, grids.coords)
     ao1 = ao1 * grids.weights
 
-    ao2 = ao_eval(me, R2, sp2, grids.coords)
+    ao2 = ao_eval(me.ao1, R2, sp2, grids.coords)
 
     overlaps = np.einsum("ij,kj->ik", ao1, ao2) #      overlaps = np.matmul(ao1, ao2.T)
 

@@ -126,7 +126,7 @@ class prod_log_c(ao_log_c):
       for mu,[j,domi] in enumerate(mu2jd): mu2ff[mu,:] = ldp['j2xff'][j][domi,:]/lvc.rr**j
       self.psi_log_rl.append(mu2ff)
        
-      no,npf= lvc.sp2norbs[sp], sum(2*mu2j+1)  # count number of orbitals and product functions
+      no,npf= lvc.ao1.sp2norbs[sp], sum(2*mu2j+1)  # count number of orbitals and product functions
       mu2ww = np.zeros((npf,no,no), dtype='float64')
       for [j,domi],s in zip(mu2jd,mu2s): mu2ww[s:s+2*j+1,:,:] = ldp['j2xww'][j][domi,0:2*j+1,:,:]
 

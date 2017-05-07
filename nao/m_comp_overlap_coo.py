@@ -17,17 +17,17 @@ def comp_overlap_coo(sv, ao_log=None, funct=overlap_ni,**kvargs):
   from scipy.sparse import coo_matrix
   
   me = ao_matelem_c(sv.ao_log) if ao_log is None else ao_matelem_c(ao_log)
-  sp2rcut = np.array([max(mu2rcut) for mu2rcut in me.sp_mu2rcut])
+  sp2rcut = np.array([max(mu2rcut) for mu2rcut in me.ao1.sp_mu2rcut])
 
   nnz = 0
   for sp1,rv1 in zip(sv.atom2sp,sv.atom2coord):
     for sp2,rv2 in zip(sv.atom2sp,sv.atom2coord):
-      if (sp2rcut[sp1]+sp2rcut[sp2])**2>sum((rv1-rv2)**2) : nnz = nnz + me.sp2norbs[sp1]*me.sp2norbs[sp2]
+      if (sp2rcut[sp1]+sp2rcut[sp2])**2>sum((rv1-rv2)**2) : nnz = nnz + me.ao1.sp2norbs[sp1]*me.ao1.sp2norbs[sp2]
   
   irow,icol,data = np.zeros((nnz), dtype='int64'),np.zeros((nnz), dtype='int64'),np.zeros((nnz), dtype='float64') # Start to construct coo matrix
 
   atom2s = np.zeros((sv.natm+1), dtype='int32')
-  for atom,sp in enumerate(sv.atom2sp): atom2s[atom+1]=atom2s[atom]+me.sp2norbs[sp]
+  for atom,sp in enumerate(sv.atom2sp): atom2s[atom+1]=atom2s[atom]+me.ao1.sp2norbs[sp]
   norbs = atom2s[-1]
     
   inz=-1

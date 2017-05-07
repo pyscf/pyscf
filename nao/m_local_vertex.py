@@ -45,7 +45,10 @@ class local_vertex_c(ao_matelem_c):
     """
     assert(sp>-1)
 
-    jmx_sp = np.amax(self.sp_mu2j[sp])
+    mu2s = self.ao1.sp_mu2s[sp]
+    mu2j = self.ao1.sp_mu2j[sp]
+    
+    jmx_sp = np.amax(mu2j)
     j2nf=np.zeros((2*jmx_sp+1), dtype='int64')
     for mu1,j1,s1,f1 in self.sp2info[sp]:
       for mu2,j2,s2,f2 in self.sp2info[sp]:
@@ -64,12 +67,12 @@ class local_vertex_c(ao_matelem_c):
           j_p2js[j][j2p[j]] = [j1,j2]
           j2p[j]+=1
 
-    no = self.sp2norbs[sp]
-    nmu = len(self.sp2mults[sp])
+    no = self.ao1.sp2norbs[sp]
+    nmu = self.ao1.sp2nmult[sp]
     pack2ff = np.zeros((nmu*(nmu+1)//2,self.nr), dtype='float64') # storage for original products
-    for mu2 in self.sp2mults[sp]:
+    for mu2 in range(nmu):
       for mu1 in range(mu2+1):
-        pack2ff[ij2pack(mu1,mu2),:] = self.psi_log[sp][mu1,:]*self.psi_log[sp][mu2,:]
+        pack2ff[ij2pack(mu1,mu2),:] = self.ao1.psi_log[sp][mu1,:]*self.ao1.psi_log[sp][mu2,:]
     
     j2xff = [] # Storage for dominant product's functions (list of numpy arrays: x*f(r)*f(r))
     j2xww = [] # Storage for dominant product's vertex (angular part of: x*wigner*wigner)
@@ -79,7 +82,6 @@ class local_vertex_c(ao_matelem_c):
     jc = self._j
     xww2 = np.zeros((no,no), dtype='complex128')
     for j,dim in enumerate(j2nf): # Metrik ist dim * dim in diesem Sektor 
-
       metric = np.zeros((dim,dim), dtype='float64')
       for level_1 in range(dim):
         ff12_p = self.sbt(pack2ff[ ij2pack( *j_p2mus[j][level_1] ),:], j, 1)
@@ -109,7 +111,7 @@ class local_vertex_c(ao_matelem_c):
         #x = x.transpose()
 
       xff = np.zeros((dim,self.nr))   #!!!! Jetzt dominante Orbitale bilden
-      for domi in range(dim):  
+      for domi in range(dim):
         for n in range(dim):
           xff[domi,:] = xff[domi,:] + x[n,domi]*pack2ff[ij2pack(*j_p2mus[j][n]),:]
       j2xff.append(xff)
@@ -122,8 +124,8 @@ class local_vertex_c(ao_matelem_c):
       kinematical_vertex = np.zeros((dim, 2*j+1, no, no), dtype='float64')
       for num,[[mu1,mu2], [j1,j2]] in enumerate(zip(j_p2mus[j],j_p2js[j])):
         if j<abs(j1-j2) or j>j1+j2 : continue
-        for m1,o1 in zip(range(-j1,j1+1), range(self.sp_mu2s[sp][mu1],self.sp_mu2s[sp][mu1]+2*j1+1)):
-          for m2,o2 in zip(range(-j2,j2+1), range(self.sp_mu2s[sp][mu2],self.sp_mu2s[sp][mu2]+2*j2+1)):
+        for m1,o1 in zip(range(-j1,j1+1), range(mu2s[mu1],mu2s[mu1]+2*j1+1)):
+          for m2,o2 in zip(range(-j2,j2+1), range(mu2s[mu2],mu2s[mu2]+2*j2+1)):
             m=m1+m2
             if abs(m)>j: continue
             i3y=self.get_gaunt(j1,m1,j2,m2)*(-1.0)**m
