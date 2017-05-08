@@ -339,7 +339,7 @@ def _format_kpts_band(kpts_band, kpts):
         kpts_band = numpy.reshape(kpts_band, (-1,3))
     return kpts_band, single_kpt_band
 
-def _format_jks(v_kpts, dm_kpts, kpts_band, kpts, single_kpt_band):
+def _format_jks(v_kpts, dm_kpts, kpts_band, kpts, single_kpt_band=None):
     if kpts_band is kpts:
         return v_kpts.reshape(dm_kpts.shape)
     else:

@@ -1,14 +1,7 @@
-symm
-****
+symm -- Point group symmetry and spin symmetry
+**********************************************
 
 .. automodule:: pyscf.symm
- 
-
-Clebsch Gordon coefficients
-===========================
-
-.. automodule:: pyscf.symm.cg
-   :members:
 
 
 geom
@@ -29,6 +22,13 @@ addons
 ======
 
 .. automodule:: pyscf.symm.addons
+   :members:
+ 
+
+Clebsch Gordon coefficients
+===========================
+
+.. automodule:: pyscf.symm.cg
    :members:
 
 

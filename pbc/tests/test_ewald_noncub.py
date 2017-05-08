@@ -26,7 +26,7 @@ def test_ewald():
     ew_eta0, ew_cut0 = cell.get_ewald_params(1.e-3)
     print ew_eta0, ew_cut0
 
-    ew_cut = (20,20,20)
+    ew_cut = 20
     for ew_eta in [0.05, 0.07, 0.1, 0.3]:
         print pbchf.ewald(cell, ew_eta, ew_cut) # 4.53091146255
 

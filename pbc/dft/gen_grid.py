@@ -153,7 +153,7 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
 
 
 class BeckeGrids(dft.gen_grid.Grids):
-    '''Becke, JCP, 88, 2547 (1988)'''
+    '''Atomic grids for all-electron calculation.'''
     def __init__(self, cell):
         self.cell = cell
         dft.gen_grid.Grids.__init__(self, cell)
@@ -177,6 +177,8 @@ class BeckeGrids(dft.gen_grid.Grids):
         if cell is None: cell = self.cell
         if coords is None: coords = self.coords
         return make_mask(cell, coords, relativity, shls_slice, verbose)
+
+AtomicGrids = BeckeGrids
 
 
 if __name__ == '__main__':

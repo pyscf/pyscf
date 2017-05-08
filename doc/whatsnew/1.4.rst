@@ -1,0 +1,43 @@
+***************************
+  What's New in PySCF 1.4
+***************************
+
+This article explains new features in PySCF 1.4.
+
+
+Relase highlights
+=================
+
+New features:
+
+* Spinor-GTO evaluator
+* Dirac-Kohn-Sham (LDA functional)
+* EDIIS and ADIIS
+* Periodic CCSD with k-point sampling
+* Periodic EOM-IP-CCSD and EOM-EA-CCSD with k-point sampling
+* Update interface to fciqmc for standalone run
+* Routines in fciqmc to read in the spinned one and two RDMs
+* Heat-Bath CI
+* Functions in dmrgci interface to access 3-pdm and 4-pdm
+* Function get_fermi
+
+Improvements:
+
+* Performance of PBC-Gaussian function evaluator
+* Performance of analytical Fourier transformation for AO product
+* Performance of PBC 3-center integrals
+* Performance of PBC PP local-part integrals
+* Numerical stability associated to OpenMP reduce function
+
+
+API changes
+===========
+
+* numint.non0tab -> grids.non0tab.
+
+
+
+Features
+========
+
+

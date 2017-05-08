@@ -3,12 +3,13 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-PySCF --- Python-based simulations of chemistry framework
-=========================================================
+Welcome to PySCF documentation!
+===============================
 
-Pyscf is a quantum chemistry package written in python.  The package aims to
-provide a simple, light-weight and efficient platform for quantum chemistry
-code developing and calculation.  The program is developed in the principle of
+PySCF is a collection of electronic structure programs powered by Python.
+The package aims to provide a simple, light-weight and efficient platform for
+quantum chemistry code developing and calculation.  The program is developed in
+the principle of
 
 * Easy to install, to use, to extend and to be embedded;
 

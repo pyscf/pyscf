@@ -97,6 +97,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
 
     weight = 1./nkpts * (cell.vol/ngs)
 
+    input_band = kpts_band
     kpts_band, single_kpt_band = _format_kpts_band(kpts_band, kpts)
     nband = len(kpts_band)
 
@@ -105,17 +106,31 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     else:
         vk_kpts = np.zeros((nset,nband,nao,nao), dtype=np.complex128)
 
-    for k2, ao_k2 in mydf.aoR_loop(gs, kpts):
-        kpt2 = kpts[k2]
-        aoR_dms = [lib.dot(ao_k2, dms[i,k2]) for i in range(nset)]
-        for k1, ao_k1 in mydf.aoR_loop(gs, kpts_band):
-            kpt1 = kpts_band[k1]
-            vkR_k1k2 = get_vkR(mydf, cell, ao_k1, ao_k2, kpt1, kpt2,
-                               coords, gs, exxdiv)
-            for i in range(nset):
-                tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dms[i])
-                vk_kpts[i,k1] += weight * lib.dot(ao_k1.T.conj(), tmp_Rq)
-        vkR_k1k2 = aoR_dms = tmp_Rq = None
+    if input_band is None:
+        ao_kpts = mydf._numint.eval_ao(cell, coords, kpts, non0tab=mydf.non0tab)
+        for k2, ao_k2 in enumerate(ao_kpts):
+            kpt2 = kpts[k2]
+            aoR_dms = [lib.dot(ao_k2, dms[i,k2]) for i in range(nset)]
+            for k1, ao_k1 in enumerate(ao_kpts):
+                kpt1 = kpts_band[k1]
+                vkR_k1k2 = get_vkR(mydf, cell, ao_k1, ao_k2, kpt1, kpt2,
+                                   coords, gs, exxdiv)
+                for i in range(nset):
+                    tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dms[i])
+                    vk_kpts[i,k1] += weight * lib.dot(ao_k1.T.conj(), tmp_Rq)
+            vkR_k1k2 = aoR_dms = tmp_Rq = None
+    else:
+        for k2, ao_k2 in mydf.aoR_loop(gs, kpts):
+            kpt2 = kpts[k2]
+            aoR_dms = [lib.dot(ao_k2, dms[i,k2]) for i in range(nset)]
+            for k1, ao_k1 in mydf.aoR_loop(gs, kpts_band):
+                kpt1 = kpts_band[k1]
+                vkR_k1k2 = get_vkR(mydf, cell, ao_k1, ao_k2, kpt1, kpt2,
+                                   coords, gs, exxdiv)
+                for i in range(nset):
+                    tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dms[i])
+                    vk_kpts[i,k1] += weight * lib.dot(ao_k1.T.conj(), tmp_Rq)
+            vkR_k1k2 = aoR_dms = tmp_Rq = None
 
     return _format_jks(vk_kpts, dm_kpts, kpts_band, kpts, single_kpt_band)
 

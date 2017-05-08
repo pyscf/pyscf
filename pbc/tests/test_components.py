@@ -77,7 +77,7 @@ def test_components(pseudo=None):
     else:
         print np.einsum("ij,ij", dm, neao + jao)
 
-    ew_cut = (40,40,40)
+    ew_cut = 40
     ew_eta = 0.05
     for ew_eta in [0.1, 0.5, 1.]:
         ew = pbchf.ewald(cell, ew_eta, ew_cut)

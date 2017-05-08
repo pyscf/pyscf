@@ -166,14 +166,14 @@ class DMRGCI(pyscf.lib.StreamObject):
             else:
                 Tol = 1.0e-5
             Noise = Tol
-            while startM < self.maxM:
+            while startM < int(self.maxM):
                 self.scheduleSweeps.append(N_sweep)
                 N_sweep += 4
                 self.scheduleMaxMs.append(startM)
                 startM *= 2
                 self.scheduleTols.append(Tol)
                 self.scheduleNoises.append(Noise)
-            while Tol > self.tol:
+            while Tol > float(self.tol):
                 self.scheduleSweeps.append(N_sweep)
                 N_sweep += 2
                 self.scheduleMaxMs.append(self.maxM)

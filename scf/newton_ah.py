@@ -67,19 +67,21 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
         d1 = reduce(numpy.dot, (mo_coeff[:,viridx], x, mo_coeff[:,occidx].T))
         dm1 = d1 + d1.T
         if hyb is None:
-            v1 = mf.get_veff(mol, dm1)
+            vj, vk = mf.get_jk(mol, dm1)
+            v1 = vj - vk * .5
         else:
+            v1 = mf._numint.nr_rks_fxc(mol, mf.grids, mf.xc, dm0, dm1,
+                                       0, 1, rho0, vxc, fxc)
 # *.7 this magic number can stablize DFT convergence.  Without scaling down
 # the XC hessian, large oscillation is observed in Newton iterations.  It may
 # be due to the numerical integration error.  Scaling down XC hessian can
 # reduce to some extent the integration error.
-            v1 = mf._numint.nr_rks_fxc(mol, mf.grids, mf.xc, dm0, dm1,
-                                       0, 1, rho0, vxc, fxc) * .7
+            v1 *= .7
             if abs(hyb) < 1e-10:
                 v1 += mf.get_j(mol, dm1)
             else:
                 vj, vk = mf.get_jk(mol, dm1)
-                v1 += vj - vk * hyb * .5
+                v1 += vj - vk * (hyb * .5)
         x2 += reduce(numpy.dot, (mo_coeff[:,viridx].T, v1,
                                  mo_coeff[:,occidx])) * 4
         return x2.reshape(-1)
@@ -172,20 +174,22 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                                  mo_coeff[1][:,occidxb].T))
         dm1 = numpy.array((d1a+d1a.T,d1b+d1b.T))
         if hyb is None:
-            v1 = mf.get_veff(mol, dm1)
+            vj, vk = mf.get_jk(mol, dm1)
+            v1 = vj[0]+vj[1] - vk
         else:
+            v1 = mf._numint.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dm1,
+                                       0, 1, rho0, vxc, fxc)
 # *.7 this magic number can stablize DFT convergence.  Without scaling down
 # the XC hessian, large oscillation is observed in Newton iterations.  It may
 # be due to the numerical integration error.  Scaling down XC hessian can
 # reduce to some extent the integration error.
-            v1 = mf._numint.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dm1,
-                                       0, 1, rho0, vxc, fxc) * .7
+            v1 *= .7
             if abs(hyb) < 1e-10:
                 vj = mf.get_j(mol, dm1)
                 v1 += vj[0] + vj[1]
             else:
                 vj, vk = mf.get_jk(mol, dm1)
-                v1 += vj[0]+vj[1] - vk * hyb * .5
+                v1 += vj[0]+vj[1] - vk * hyb
         x2a += reduce(numpy.dot, (mo_coeff[0][:,viridxa].T, v1[0],
                                   mo_coeff[0][:,occidxa]))
         x2b += reduce(numpy.dot, (mo_coeff[1][:,viridxb].T, v1[1],
@@ -744,6 +748,9 @@ def newton(mf):
                                       numpy.dot(mo_coeff[1], u[1])))
 
             def spin_square(self, mo_coeff=None, s=None):
+                if mo_coeff is None:
+                    mo_coeff = (self.mo_coeff[0][:,self.mo_occ[0]>0],
+                                self.mo_coeff[1][:,self.mo_occ[1]>0])
                 if hasattr(self, '_scf') and id(self._scf.mol) != id(self.mol):
                     s = self._scf.get_ovlp()
                 return self._scf.spin_square(mo_coeff, s)

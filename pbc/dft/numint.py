@@ -546,6 +546,38 @@ def nr_uks(ni, cell, grids, xc_code, dm, spin=1, relativity=0, hermi=1,
 nr_rks_vxc = nr_rks
 nr_uks_vxc = nr_uks
 
+#def cache_xc_kernel(ni, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
+#                    max_memory=2000):
+#    '''Compute the 0th order density, Vxc and fxc.  They can be used in TDDFT,
+#    DFT hessian module etc.
+#    '''
+#    xctype = ni._xc_type(xc_code)
+#    if xctype == 'LDA':
+#        ao_deriv = 0
+#    elif xctype == 'GGA':
+#        ao_deriv = 1
+#    else:
+#        raise NotImplementedError('meta-GGA')
+#
+#    if spin == 0:
+#        nao = mo_coeff.shape[0]
+#        rho = []
+#        for ao_k1, ao_k2, mask, weight, coords \
+#                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
+#            rho.append(ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, xctype))
+#        rho = numpy.hstack(rho)
+#    else:
+#        nao = mo_coeff[0].shape[0]
+#        rhoa = []
+#        rhob = []
+#        for ao_k1, ao_k2, mask, weight, coords \
+#                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+#            rhoa.append(ni.eval_rho2(mol, ao, mo_coeff[0], mo_occ[0], mask, xctype))
+#            rhob.append(ni.eval_rho2(mol, ao, mo_coeff[1], mo_occ[1], mask, xctype))
+#        rho = (numpy.hstack(rhoa), numpy.hstack(rhob))
+#    vxc, fxc = ni.eval_xc(xc_code, rho, spin, 0, 2, 0)[1:3]
+#    return rho, vxc, fxc
+
 
 def large_rho_indices(ni, cell, dm, grids, cutoff=1e-10, kpt=numpy.zeros(3),
                       max_memory=2000):

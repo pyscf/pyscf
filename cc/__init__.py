@@ -51,7 +51,18 @@ from pyscf.cc import ccsd_lambda
 from pyscf.cc import ccsd_rdm
 from pyscf.cc import addons
 
-CCSD = ccsd.CCSD
+def CCSD(mf, frozen=[], mo_coeff=None, mo_occ=None):
+    __doc__ = ccsd.CCSD.__doc__
+    try:
+        import sys
+        from pyscf import dft
+        if isinstance(mf, (dft.rks.RKS, dft.uks.UKS, dft.roks.ROKS,
+                           dft.rks_symm.RKS, dft.uks_symm.UKS, dft.rks_symm.ROKS)):
+            sys.stderr.write('CCSD Warning: The first argument mf is a DFT object. '
+                             'CCSD calculation should be used with HF object')
+    except:
+        pass
+    return ccsd.CCSD(mf, frozen, mo_coeff, mo_occ)
 
 def RCCSD(mf, frozen=[], mo_coeff=None, mo_occ=None):
     from pyscf.cc import rccsd

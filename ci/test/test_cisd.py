@@ -88,19 +88,22 @@ class KnowValues(unittest.TestCase):
 
         nmo = mf.mo_coeff.shape[1]
         nocc = mol.nelectron//2
+        ci0 = myci.to_fci(civec, nmo, nocc*2)
+        ref1, ref2 = fci.direct_spin1.make_rdm12(ci0, nmo, nocc*2)
         rdm1 = myci.make_rdm1(civec)
         rdm2 = myci.make_rdm2(civec)
+        self.assertTrue(numpy.allclose(rdm2, ref2))
         self.assertAlmostEqual(finger(rdm1), 2.2685199485281689, 9)
-        self.assertAlmostEqual(finger(rdm2), 6.9406226727865876, 9)
+        self.assertAlmostEqual(finger(rdm2),-3.7944039102480649, 9)
         self.assertAlmostEqual(abs(rdm2-rdm2.transpose(2,3,0,1)).sum(), 0, 9)
         self.assertAlmostEqual(abs(rdm2-rdm2.transpose(1,0,3,2)).sum(), 0, 9)
         h1e = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
         h2e = ao2mo.kernel(mf._eri, mf.mo_coeff)
         h2e = ao2mo.restore(1, h2e, nmo)
         e2 = (numpy.dot(h1e.flatten(),rdm1.flatten()) +
-              numpy.dot(h2e.transpose(0,2,1,3).flatten(),rdm2.flatten()) * .5)
+              numpy.dot(h2e.flatten(),rdm2.flatten()) * .5)
         self.assertAlmostEqual(ecisd + mf.e_tot - mol.energy_nuc(), e2, 9)
-        dm1 = numpy.einsum('ikjk->ij', rdm2)/(mol.nelectron-1)
+        dm1 = numpy.einsum('ijkk->ij', rdm2)/(mol.nelectron-1)
         self.assertAlmostEqual(abs(rdm1 - dm1).sum(), 0, 9)
 
     def test_dot(self):

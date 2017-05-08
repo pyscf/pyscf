@@ -40,7 +40,7 @@ class KnowValues(unittest.TestCase):
         grid.radii_adjust = None
         grid.becke_scheme = gen_grid.stratmann
         coord, weight = grid.build(with_non0tab=False)
-        self.assertAlmostEqual(numpy.linalg.norm(weight), 2559.006415248321, 8)
+        self.assertAlmostEqual(numpy.linalg.norm(weight), 2559.0064040257907, 8)
 
     def test_radi(self):
         grid = gen_grid.Grids(h2o)

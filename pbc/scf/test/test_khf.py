@@ -49,7 +49,7 @@ class KnowValues(unittest.TestCase):
         abs_kpts = cell.get_abs_kpts(scaled_kpts)
         kmf = khf.KRHF(cell, abs_kpts, exxdiv='vcut_sph')
         ekpt = kmf.scf()
-        self.assertAlmostEqual(ekpt, -11.221426555985234, 8)
+        self.assertAlmostEqual(ekpt, -11.221426249047617, 8)
 
         nk = (5, 1, 1)
         scaled_kpts = ase.dft.kpoints.monkhorst_pack(nk)
@@ -102,7 +102,7 @@ class KnowValues(unittest.TestCase):
         dm = kmf1.from_chk(mf.chkfile)
         kmf1.max_cycle = 1
         ekpt = kmf1.scf(dm)
-        self.assertAlmostEqual(ekpt, -11.180713114145902, 8)
+        self.assertAlmostEqual(ekpt, -11.17814699669376, 8)
 
     def test_kuhf(self):
         ngs = 4
@@ -111,7 +111,7 @@ class KnowValues(unittest.TestCase):
         kpts = cell.make_kpts(nk)
         kmf1 = kuhf.KUHF(cell, kpts, exxdiv='vcut_sph')
         ekpt = kmf1.scf()
-        self.assertAlmostEqual(ekpt, -11.221426555985234, 8)
+        self.assertAlmostEqual(ekpt, -11.218735269838586, 8)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.scf.khf")
