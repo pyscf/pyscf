@@ -60,7 +60,10 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     self.interp_pp = log_interp_c(self.kk)
     self.ao1 = ao1
     self.ao2 = ao2
-    
+  
+  #
+  #
+  #
   def init1(self, ao_log):
     """ Constructor for common matrix elements  <a|O|b> """
     self.jmx = ao_log.jmx
@@ -73,19 +76,9 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     self.interp_pp = log_interp_c(self.kk)
 
     self.ao1 = ao_log
-    
-#    self.psi_log    = ao_log.psi_log
-#    self.psi_log_rl = ao_log.psi_log_rl
-#    self.sp_mu2j    = ao_log.sp_mu2j
-#    self.sp_mu2rcut = ao_log.sp_mu2rcut
-#    self.sp2nmult   = ao_log.sp2nmult
-#    self.sp_mu2s    = ao_log.sp_mu2s
-#    self.sp2norbs   = ao_log.sp2norbs
-#    self.sp2charge  = ao_log.sp2charge
-    
-    self.sp2info = []
-    for sp,[mu2j,mu2s] in enumerate(zip(self.ao1.sp_mu2j,self.ao1.sp_mu2s)):
-      self.sp2info.append([ [mu, j, mu2s[mu], mu2s[mu+1]] for mu,j in enumerate(mu2j)])
+
+    self.ao1._add_sp2info()
+    self.ao1._add_psi_log_mom()
 
     self.psi_log_mom = []
     for sp,[nmu,mu2ff,mu2j] in enumerate(zip(self.ao1.sp2nmult,self.ao1.psi_log,self.ao1.sp_mu2j)):

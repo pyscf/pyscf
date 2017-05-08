@@ -47,11 +47,12 @@ class local_vertex_c(ao_matelem_c):
 
     mu2s = self.ao1.sp_mu2s[sp]
     mu2j = self.ao1.sp_mu2j[sp]
+    info = self.ao1.sp2info[sp]
     
     jmx_sp = np.amax(mu2j)
     j2nf=np.zeros((2*jmx_sp+1), dtype='int64')
-    for mu1,j1,s1,f1 in self.sp2info[sp]:
-      for mu2,j2,s2,f2 in self.sp2info[sp]:
+    for mu1,j1,s1,f1 in info:
+      for mu2,j2,s2,f2 in info:
         if mu2<mu1: continue
         for j in range(abs(j1-j2),j1+j2+1,2): 
           j2nf[j] = j2nf[j] + 1
@@ -59,8 +60,8 @@ class local_vertex_c(ao_matelem_c):
     j_p2mus = [ [p for p in range(j2nf[j]) ] for j in range(2*jmx_sp+1)]
     j_p2js  = [ [p for p in range(j2nf[j]) ] for j in range(2*jmx_sp+1)]
     j2p = np.zeros((2*jmx_sp+1), dtype='int64')
-    for mu1,j1,s1,f1 in self.sp2info[sp]:
-      for mu2,j2,s2,f2 in self.sp2info[sp]:
+    for mu1,j1,s1,f1 in info:
+      for mu2,j2,s2,f2 in info:
         if mu2<mu1: continue
         for j in range(abs(j1-j2),j1+j2+1,2):
           j_p2mus[j][j2p[j]] = [mu1,mu2]
@@ -145,8 +146,8 @@ class local_vertex_c(ao_matelem_c):
           
         for m in range(-j,j+1):
           xww2.fill(0.0)
-          for mu1,j1,s1,f1 in self.sp2info[sp]:
-            for mu2,j2,s2,f2 in self.sp2info[sp]:
+          for mu1,j1,s1,f1 in info:
+            for mu2,j2,s2,f2 in info:
               for m1,o1 in zip(range(-j1,j1+1), range(s1,f1+1)):
                 for m2,o2 in zip(range(-j2,j2+1), range(s2,f2+1)):
                   for n1,p1 in zip(range(-j1,j1+1), range(s1,f1+1)):

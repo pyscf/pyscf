@@ -194,7 +194,32 @@ class ao_log_c():
     #call init_psi_log_rl(sv%psi_log, sv%rr, sv%uc%mu_sp2j, sv%uc%sp2nmult, sv%psi_log_rl)
     #call sp2ion_to_core(sv%sp2ion, sv%rr, sv%core_log, sv%sp2has_core, sv%sp2rcut_core)
 
+  #
+  #
+  #
+  def _add_sp2info(self):
+    """ Adds a field sp2info containing, for each specie lists of integer charcteristics: """
+    self.sp2info = []
+    for sp,[mu2j,mu2s] in enumerate(zip(self.sp_mu2j,self.sp_mu2s)):
+      self.sp2info.append([ [mu, j, mu2s[mu], mu2s[mu+1]] for mu,j in enumerate(mu2j)])
 
+  #
+  #
+  #
+  def _add_psi_log_mom(self):
+    """ Adds a field psi_log_mom which contains Bessel transforms of original radial functions (from psi_log) """
+    from pyscf.nao.m_sbt import sbt_c
+    sbt = sbt_c(self.rr, self.pp, lmax=self.jmx)
+    self.psi_log_mom = []
+    for sp,[nmu,mu2ff,mu2j] in enumerate(zip(self.sp2nmult,self.psi_log,self.sp_mu2j)):
+      mu2ao = np.zeros((nmu,self.nr), dtype='float64')
+      for mu,[am,ff] in enumerate(zip(mu2j,mu2ff)): mu2ao[mu,:] = sbt.sbt( ff, am, 1 )
+      self.psi_log_mom.append(mu2ao)
+    del sbt
+
+#
+#
+#
 if __name__=="__main__":
   from pyscf import gto
   from pyscf.nao.m_ao_log import ao_log_c
@@ -203,6 +228,4 @@ if __name__=="__main__":
   ao_log = ao_log_c(gto=mol)
   
   print(ao_log.sp2norbs)
-  
-  
   
