@@ -25,6 +25,7 @@ def overlap_am(self, sp1, sp2, R1, R2):
   R2mR1 = np.array(R2)-np.array(R1)
   
   psi_log = self.ao1.psi_log
+  psi_log_mom = self.ao1.psi_log_mom
   sp_mu2rcut = self.ao1.sp_mu2rcut
   sp2info = self.ao1.sp2info
   
@@ -52,7 +53,7 @@ def overlap_am(self, sp1, sp2, R1, R2):
     for mu2,l2,s2,f2 in sp2info[sp2]:
       for mu1,l1,s1,f1 in sp2info[sp1]:
         if sp_mu2rcut[sp1][mu1]+sp_mu2rcut[sp2][mu2]<dist: continue
-        f1f2_mom = self.psi_log_mom[sp2][mu2,:] * self.psi_log_mom[sp1][mu1,:]
+        f1f2_mom = psi_log_mom[sp2][mu2,:] * psi_log_mom[sp1][mu1,:]
         l2S.fill(0.0)
         for l3 in range( abs(l1-l2), l1+l2+1):
           f1f2_rea = self.sbt(f1f2_mom, l3, -1)

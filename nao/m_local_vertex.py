@@ -48,6 +48,7 @@ class local_vertex_c(ao_matelem_c):
     mu2s = self.ao1.sp_mu2s[sp]
     mu2j = self.ao1.sp_mu2j[sp]
     info = self.ao1.sp2info[sp]
+    mu2ff = self.ao1.psi_log[sp]
     
     jmx_sp = np.amax(mu2j)
     j2nf=np.zeros((2*jmx_sp+1), dtype='int64')
@@ -72,8 +73,7 @@ class local_vertex_c(ao_matelem_c):
     nmu = self.ao1.sp2nmult[sp]
     pack2ff = np.zeros((nmu*(nmu+1)//2,self.nr), dtype='float64') # storage for original products
     for mu2 in range(nmu):
-      for mu1 in range(mu2+1):
-        pack2ff[ij2pack(mu1,mu2),:] = self.ao1.psi_log[sp][mu1,:]*self.ao1.psi_log[sp][mu2,:]
+      for mu1 in range(mu2+1): pack2ff[ij2pack(mu1,mu2),:] = mu2ff[mu1,:]*mu2ff[mu2,:]
     
     j2xff = [] # Storage for dominant product's functions (list of numpy arrays: x*f(r)*f(r))
     j2xww = [] # Storage for dominant product's vertex (angular part of: x*wigner*wigner)

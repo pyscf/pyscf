@@ -79,12 +79,6 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
 
     self.ao1._add_sp2info()
     self.ao1._add_psi_log_mom()
-
-    self.psi_log_mom = []
-    for sp,[nmu,mu2ff,mu2j] in enumerate(zip(self.ao1.sp2nmult,self.ao1.psi_log,self.ao1.sp_mu2j)):
-      mu2ao = np.zeros((nmu,self.nr), dtype='float64')
-      for mu,[am,ff] in enumerate(zip(mu2j,mu2ff)): mu2ao[mu,:] = self.sbt( ff, am, 1 )
-      self.psi_log_mom.append(mu2ao)
     
     self.rr3_dr = ao_log.rr**3 * np.log(ao_log.rr[1]/ao_log.rr[0])
     self.four_pi = 4*np.pi
