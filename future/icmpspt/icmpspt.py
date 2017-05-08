@@ -36,7 +36,7 @@ libmc = lib.load_library('libmcscf')
 
 float_precision = numpy.dtype('Float64')
 mpiprefix=""
-executable="/home/mussard/softwares/icpt/icpt"
+executable="/projects/bamu3429/softwares/icpt/icpt"
 
 if not os.path.isfile(executable):
     msg = ('MPSLCC executable %s not found.  Please specify "executable" in %s'
@@ -265,7 +265,7 @@ def writeMRLCCIntegrals(mc, E1, E2, nfro, fully_ic=False) :
     return energyE0, norb
 
 
-def writeNEVPTIntegralsDF(mc, dm1, dm2, dm1eff, aaavsplit, nfro, fully_ic=False):
+def writeNEVPTIntegralsDF(mc, dm1, dm2, dm1eff, nfro, fully_ic=False):
     # Initializations
     ncor = mc.ncore
     nact = mc.ncas
@@ -277,10 +277,48 @@ def writeNEVPTIntegralsDF(mc, dm1, dm2, dm1eff, aaavsplit, nfro, fully_ic=False)
 
     # Lpq
     Lpq = None
+    #eri_test=numpy.zeros((norb*norb,norb*norb))
     for eris in mc.with_df.loop():
-      Lpq = _ao2mo.nr_e2(eris, mc.mo_coeff,\
-                        (0,norb,0,norb), aosym='s4', out=Lpq).reshape(-1,norb,norb)
+      Lpq = _ao2mo.nr_e2(eris, mo,\
+                        (0,norb,0,norb), aosym='s2', out=Lpq)
+    #  lib.dot(Lpq.T, Lpq, 1, eri_test, 1)
+    #eri_test=eri_test.reshape(norb,norb,norb,norb)
+    #for m in range(norb):
+    #  for n in range(norb):
+    #    for p in range(nact):
+    #      for q in range(nact):
+    #        print '{:5}{:5}{:5}{:5}{:13.6f}'.format(m,n,p,q,eri_test[m,n,ncor+p,ncor+q])
+    Lpq=Lpq.reshape(-1,norb,norb)
     naux  = Lpq.shape[0]
+
+    #from pyscf.ao2mo.incore import _conc_mos, iden_coeffs
+    #mo_here=mo
+    #if isinstance(mo_here, numpy.ndarray) and mo_here.ndim == 2:
+    #  mo_here = (mo_here,) * 4
+    #ijmosym, nij_pair, moij, ijslice = _conc_mos(mo_here[0], mo_here[1], False)
+    #klmosym, nkl_pair, mokl, klslice = _conc_mos(mo_here[2], mo_here[3], False)
+    #mo_eri = numpy.zeros((nij_pair,nkl_pair))
+    #sym = (iden_coeffs(mo_here[0], mo_here[2]) and
+    #       iden_coeffs(mo_here[1], mo_here[3]))
+    #Lij = Lkl = None
+    #print 'info:',ijmosym,klmosym,sym
+    #print 'info:',ijslice,klslice,moij.shape
+    #for eri1 in mc.with_df.loop():
+    #  print 'loop?'
+    #  Lij = _ao2mo.nr_e2(eri1, moij, ijslice, aosym='s2', mosym=ijmosym, out=Lij)
+    #  if sym:
+    #    Lkl = Lij
+    #  else:
+    #    Lkl = _ao2mo.nr_e2(eri1, mokl, klslice, aosym='s2', mosym=klmosym, out=Lkl)
+    #  lib.dot(Lij.T, Lkl, 1, mo_eri, 1)
+    #mo_eri=mo_eri.reshape(norb,norb,norb,norb)
+    #print numpy.allclose(mo_eri,eri_test)
+    ##for m in range(norb):
+    ##  for n in range(norb):
+    ##    for p in range(nact):
+    ##      for q in range(nact):
+    ##        print '{:5}{:5}{:5}{:5}{:13.6f}'.format(m,n,p,q,mo_eri[m,n,ncor+p,ncor+q])
+
 
 
     # int1_eff and energy_core
@@ -294,8 +332,8 @@ def writeNEVPTIntegralsDF(mc, dm1, dm2, dm1eff, aaavsplit, nfro, fully_ic=False)
 
     # energyE0
     energyE0 = 1.0*numpy.einsum('ij,ij',        dm1, int1_eff[ncor:nocc, ncor:nocc])\
-             + 0.5*numpy.einsum('ikjl,Pij,Pkl', dm2, Lpq[:,ncor:nocc, ncor:nocc],\
-                                                     Lpq[:,ncor:nocc, ncor:nocc])
+             + 0.5*numpy.einsum('ikjl,Pij,Pkl', dm2, Lpq[:,   ncor:nocc, ncor:nocc],\
+                                                     Lpq[:,   ncor:nocc, ncor:nocc])
     energyE0 += energy_core
     energyE0 += mc.mol.energy_nuc()
 
@@ -343,8 +381,9 @@ def writeMRLCCIntegralsDF(mc, E1, E2, nfro, fully_ic=False):
     # Lpq
     Lpq = None
     for eris in mc.with_df.loop():
-      Lpq = _ao2mo.nr_e2(eris, mc.mo_coeff,\
-                        (0,norb,0,norb), aosym='s4', out=Lpq).reshape(-1,norb,norb)
+      Lpq = _ao2mo.nr_e2(eris, mo,\
+                        (0,norb,0,norb), aosym='s2', out=Lpq)
+    Lpq=Lpq.reshape(-1,norb,norb)
     naux  = Lpq.shape[0]
 
     # int1
@@ -364,8 +403,8 @@ def writeMRLCCIntegralsDF(mc, E1, E2, nfro, fully_ic=False):
 
     # energyE0
     energyE0 = 1.0*numpy.einsum('ij,ij',        E1, int1_eff[ncor:nocc, ncor:nocc])\
-             + 0.5*numpy.einsum('ikjl,Pij,Pkl', E2, Lpq[:,ncor:nocc, ncor:nocc],\
-                                                    Lpq[:,ncor:nocc, ncor:nocc])
+             + 0.5*numpy.einsum('ikjl,Pij,Pkl', E2, Lpq[:,   ncor:nocc, ncor:nocc],\
+                                                    Lpq[:,   ncor:nocc, ncor:nocc])
     energyE0 += energy_core
     energyE0 += mc.mol.energy_nuc()
 
@@ -418,12 +457,11 @@ def writeNEVPTIntegrals(mc, dm1, dm2, dm1eff, aaavsplit, nfro, fully_ic=False):
     # eris_sp
     # (Note: Integrals are in chemistry notation)
     eris = _ERIS(mc, mo)
-    #print ncor,nact,nvir,norb
-    #print_array(eris['ppaa'],'ppaa')
-    #print_array(eris['papa'],'papa')
-    #print_array(eris['pacv'],'pacv')
-    #print_array(eris['cvcv'].reshape(ncor,nvir,ncor,nvir),'cvcv')
-    #exit(0)
+    #for m in range(norb):
+    #  for n in range(norb):
+    #    for p in range(nact):
+    #      for q in range(nact):
+    #          print '{:5}{:5}{:5}{:5}{:13.6f}'.format(m,n,p,q,eris['ppaa'][m,n,p,q])
     eris_sp={}
     eris_sp['h1eff']= eris['h1eff']
     eris_sp['h1eff'][:ncor,:ncor] += numpy.einsum('abcd,cd', eris['ppaa'][:ncor,:ncor,:,:], dm1eff)
@@ -495,6 +533,11 @@ def writeNEVPTIntegrals(mc, dm1, dm2, dm1eff, aaavsplit, nfro, fully_ic=False):
 
     print "Basic ingredients wrote to int/"
     print ""
+    #for a in range(nvir):
+    #  for p in range(nact):
+    #    for q in range(nact):
+    #      for r in range(nact):
+    #        print '{:5}{:5}{:5}{:5}{:13.6f}'.format(a,p,q,r,eris['ppaa'][nocc+a,ncor+q,p,r])
 
 
     #write FCIDUMP_aaav* and FCIDUMP_aaac
@@ -574,7 +617,7 @@ def writeNEVPTIntegrals(mc, dm1, dm2, dm1eff, aaavsplit, nfro, fully_ic=False):
     return norb, energyE0
 
 
-def executeMRLCC(nelec, ncor, ncas, nfro, naux=0, memory=10, fully_ic=False, third_order=False, cumulantE4=False, df=False, no_handcoded_E3=False):
+def executeMRLCC(nelec, ncor, ncas, nfro, ms2, naux=0, memory=10, fully_ic=False, third_order=False, cumulantE4=False, df=False, no_handcoded_E3=False):
     methods = ['MRLCC_CCVV', 'MRLCC_CCAV', 'MRLCC_ACVV', 'MRLCC_CCAA', 'MRLCC_AAVV', 'MRLCC_CAAV']
     domains = ['eecc','ccae','eeca','ccaa','eeaa','caae']
     if (fully_ic):
@@ -596,6 +639,7 @@ def executeMRLCC(nelec, ncor, ncas, nfro, naux=0, memory=10, fully_ic=False, thi
         f.write('nelec %d\n'%(nelec+(ncor-nfro)*2))
         f.write('nact %d\n'%(nelec))
         f.write('nactorb %d\n'%(ncas))
+        f.write('ms2 %d\n'%(ms2))
         f.write('int1e/fock int/int1eff.npy\n')
         f.write('int1e/coreh int/int1.npy\n')
         #f.write('E3  int/E3.npy\n')
@@ -641,7 +685,7 @@ def executeMRLCC(nelec, ncor, ncas, nfro, naux=0, memory=10, fully_ic=False, thi
     return totalE
 
 
-def executeNEVPT(nelec, ncor, ncas, nfro, naux=0, memory=10, fully_ic=False, third_order=False, cumulantE4=False, df=False, no_handcoded_E3=False):
+def executeNEVPT(nelec, ncor, ncas, nfro, ms2, naux=0, memory=10, fully_ic=False, third_order=False, cumulantE4=False, df=False, no_handcoded_E3=False):
     methods = ['NEVPT2_CCVV', 'NEVPT2_CCAV', 'NEVPT2_ACVV', 'NEVPT2_CCAA', 'NEVPT2_AAVV', 'NEVPT2_CAAV']
     domains = ['eecc','ccae','eeca','ccaa','eeaa','caae']
     if (fully_ic):
@@ -663,6 +707,7 @@ def executeNEVPT(nelec, ncor, ncas, nfro, naux=0, memory=10, fully_ic=False, thi
         f.write('nelec %d\n'%(nelec+(ncor-nfro)*2))
         f.write('nact %d\n'%(nelec))
         f.write('nactorb %d\n'%(ncas))
+        f.write('ms2 %d\n'%(ms2))
         f.write('int1e/fock int/int1eff.npy\n')
         #f.write('E3  int/E3.npy\n')
         #f.write('E2  int/E2.npy\n')
@@ -1071,9 +1116,9 @@ def icmpspt(mc, pttype="NEVPT2", energyE0=0.0, rdmM=0, frozen=0, PTM=1000, PTinc
             dm1eff += dm1
     # now add the contributaion due to the current root
     if (do_dm3):
-      dm3 = mc.fcisolver.make_rdm3(state=root, norb=mc.ncas, nelec=mc.nelecas, dt=float_precision, filetype="notbinary")
+      dm3 = mc.fcisolver.make_rdm3(state=root, norb=mc.ncas, nelec=mc.nelecas, dt=float_precision, filetype="binary")
     elif (do_dm4):
-      dm4 = mc.fcisolver.make_rdm4(state=root, norb=mc.ncas, nelec=mc.nelecas, dt=float_precision, filetype="notbinary")
+      dm4 = mc.fcisolver.make_rdm4(state=root, norb=mc.ncas, nelec=mc.nelecas, dt=float_precision, filetype="binary")
       dm3 = numpy.einsum('ijklmnol', dm4)/(nelec-3)
       numpy.save("int/E4",dm4)
       del dm4
@@ -1108,13 +1153,13 @@ def icmpspt(mc, pttype="NEVPT2", energyE0=0.0, rdmM=0, frozen=0, PTM=1000, PTinc
     if (pttype == "NEVPT2") :
         naux=0
         if (df):
-          norb, naux, energyE0 = writeNEVPTIntegralsDF(mc, dm1, dm2, dm1eff, AAAVsplit, frozen, fully_ic=fully_ic)
+          norb, naux, energyE0 = writeNEVPTIntegralsDF(mc, dm1, dm2, dm1eff, frozen, fully_ic=fully_ic)
         else:
           norb, energyE0 = writeNEVPTIntegrals(mc, dm1, dm2, dm1eff, AAAVsplit, frozen, fully_ic=fully_ic)
         sys.stdout.flush()
 
         totalE = 0.0;
-        totalE += executeNEVPT(nelec, mc.ncore, mc.ncas, frozen,\
+        totalE += executeNEVPT(nelec, mc.ncore, mc.ncas, frozen, mc.mol.spin,\
                                naux=naux, memory=mc.fcisolver.memory,\
                                fully_ic=fully_ic, third_order=third_order,\
                                cumulantE4=cumulantE4, df=df, no_handcoded_E3=no_handcoded_E3)
@@ -1172,7 +1217,7 @@ def icmpspt(mc, pttype="NEVPT2", energyE0=0.0, rdmM=0, frozen=0, PTM=1000, PTinc
         sys.stdout.flush()
 
         totalE = 0.0
-        totalE +=  executeMRLCC(nelec, mc.ncore, mc.ncas, frozen,\
+        totalE +=  executeMRLCC(nelec, mc.ncore, mc.ncas, frozen, mc.mol.spin,\
                                 naux=naux, memory=mc.fcisolver.memory,\
                                 fully_ic=fully_ic, third_order=third_order,\
                                 cumulantE4=cumulantE4, df=df, no_handcoded_E3=no_handcoded_E3)
