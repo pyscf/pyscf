@@ -16,11 +16,11 @@ def build_3dgrid(me, sp1, R1, sp2, R2, level=3):
   from pyscf.nao.m_gauleg import leggauss_ab
 
   if ( (R1-R2)**2 ).sum()<1e-7 :
-    mol = system_vars_c(atom=[ [int(me.ao1.sp2charge[sp1]), R1] ])
+    mol = system_vars_c(atom=[ [int(me.aos[0].sp2charge[sp1]), R1] ])
   else :
-    mol = system_vars_c(atom=[ [int(me.ao1.sp2charge[sp1]), R1], [int(me.ao1.sp2charge[sp2]), R2] ])
+    mol = system_vars_c(atom=[ [int(me.aos[0].sp2charge[sp1]), R1], [int(me.aos[1].sp2charge[sp2]), R2] ])
 
-  atom2rcut=np.array([me.ao1.sp_mu2rcut[sp].max() for sp in (sp1,sp2)])
+  atom2rcut=np.array([me.aos[isp].sp_mu2rcut[sp].max() for isp,sp in enumerate([sp1,sp2])])
   grids = dft.gen_grid.Grids(mol)
   grids.level = level # precision as implemented in pyscf
   grids.radi_method=leggauss_ab
@@ -59,9 +59,13 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     self.ao1._add_psi_log_mom()
 
     if ao2 is not None:
-      self.ao2 = ao_log
+      self.ao2 = ao2
       self.ao2._add_sp2info()
       self.ao2._add_psi_log_mom()
+    else : 
+      self.ao2 = self.ao1
+    
+    self.aos = [self.ao1, self.ao2]
 
   #
   def overlap_am(self, sp1, sp2, R1, R2):
