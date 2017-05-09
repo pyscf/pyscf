@@ -4,14 +4,8 @@ import numpy as np
 import sys
 from pyscf.nao.m_c2r import c2r_c
 from pyscf.nao.m_ao_matelem import ao_matelem_c
+from pyscf.nao.m_pack2den import ij2pack
 from scipy.linalg import eigh
-
-#
-#
-#
-def ij2pack(i,j):
-  ma = max(i,j)
-  return ma*(ma+1)//2+min(i,j)
 
 #
 #

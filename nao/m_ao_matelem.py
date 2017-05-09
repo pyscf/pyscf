@@ -40,49 +40,28 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     the spherical Bessel transform.
   '''
   def __init__(self, ao1, ao2=None):
-    
-    if ao2==None: # Usual matrix elements, compatibility constructor which will become obsolete...
-      self.init1(ao1)
-      return
-    
-    self.init2(ao1, ao2)
-  
-  def init2(self, ao1, ao2):
-    """ Constructor for matrix elements between molecular species <a_mol1|O|b_mol2> 
-        or three-center matrix elements <a,b |C| p> """
-    self.jmx = max(ao1.jmx, ao2.jmx)
+    """ Constructor for general matrix elements  <a|O|b> between the same molecule, different molecules, between atomic orbitals and product orbitals"""
+    self.interp_rr = log_interp_c(ao1.rr)
+    self.interp_pp = log_interp_c(ao1.pp)
+    self.rr3_dr = ao1.rr**3 * np.log(ao1.rr[1]/ao1.rr[0])
+    self.four_pi = 4*np.pi
+    self.const = np.sqrt(np.pi/2.0)
+
+    self.jmx = ao1.jmx
+    if ao2 is not None: self.jmx = max(self.jmx, ao2.jmx)
+
     c2r_c.__init__(self, self.jmx)
     sbt_c.__init__(self, ao1.rr, ao1.pp, lmax=2*self.jmx+1)
     gaunt_c.__init__(self, self.jmx)
-    assert(ao1.rr==ao2.rr)
-    
-    self.interp_rr = log_interp_c(self.rr)
-    self.interp_pp = log_interp_c(self.kk)
+
     self.ao1 = ao1
-    self.ao2 = ao2
-  
-  #
-  #
-  #
-  def init1(self, ao_log):
-    """ Constructor for common matrix elements  <a|O|b> """
-    self.jmx = ao_log.jmx
-
-    c2r_c.__init__(self, self.jmx)
-    sbt_c.__init__(self, ao_log.rr, ao_log.pp, lmax=2*self.jmx+1)
-    gaunt_c.__init__(self, self.jmx)
-
-    self.interp_rr = log_interp_c(self.rr)
-    self.interp_pp = log_interp_c(self.kk)
-
-    self.ao1 = ao_log
-
     self.ao1._add_sp2info()
     self.ao1._add_psi_log_mom()
-    
-    self.rr3_dr = ao_log.rr**3 * np.log(ao_log.rr[1]/ao_log.rr[0])
-    self.four_pi = 4*np.pi
-    self.const = np.sqrt(np.pi/2.0)
+
+    if ao2 is not None:
+      self.ao2 = ao_log
+      self.ao2._add_sp2info()
+      self.ao2._add_psi_log_mom()
 
   #
   def overlap_am(self, sp1, sp2, R1, R2):

@@ -27,3 +27,10 @@ def size2dim(pack_size):
   if ndim != rdim : raise SystemError('!ndim/=rdim')
   if ndim*(ndim+1)//2 != pack_size: SystemError('!pack_size')
   return ndim
+
+#
+#
+#
+def ij2pack(i,j):
+  ma = max(i,j)
+  return ma*(ma+1)//2+min(i,j)
