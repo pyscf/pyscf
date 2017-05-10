@@ -39,3 +39,12 @@ mf.with_df = mydf
 mf.xc = 'bp86'
 mf.kernel()
 
+#
+# Second order SCF solver (which is defined in molecular module) can be used
+# in the PBC SCF code
+#
+mf = scf.RHF(cell)
+mf.with_df = mydf
+mf = scf.newton(mf)
+mf.kernel()
+
