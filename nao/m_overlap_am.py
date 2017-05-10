@@ -6,7 +6,7 @@ from pyscf.nao.m_log_interp import comp_coeffs
 #
 #
 #
-def overlap_am(self, sp1, sp2, R1, R2):
+def overlap_am(self, sp1, R1, sp2, R2):
   """
     Computes overlap for an atom pair. The atom pair is given by a pair of species indices
     and the coordinates of the atoms.

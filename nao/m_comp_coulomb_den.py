@@ -25,7 +25,7 @@ def comp_coulomb_den(sv, ao_log=None, funct=coulomb_am, **kvargs):
   
   for atom1,[sp1,rv1,s1,f1] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
     for atom2,[sp2,rv2,s2,f2] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
-      oo2f = funct(me,sp1,sp2,rv1,rv2,**kvargs)
+      oo2f = funct(me,sp1,rv1,sp2,rv2,**kvargs)
       res[s1:f1,s2:f2] = oo2f[:,:]
 
   return res

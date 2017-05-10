@@ -193,9 +193,7 @@ class ao_log_c():
     #call sp2ion_to_psi_log(sv%sp2ion, sv%rr, sv%psi_log)
     #call init_psi_log_rl(sv%psi_log, sv%rr, sv%uc%mu_sp2j, sv%uc%sp2nmult, sv%psi_log_rl)
     #call sp2ion_to_core(sv%sp2ion, sv%rr, sv%core_log, sv%sp2has_core, sv%sp2rcut_core)
-
-  #
-  #
+  
   #
   def _add_sp2info(self):
     """ Adds a field sp2info containing, for each specie lists of integer charcteristics: """

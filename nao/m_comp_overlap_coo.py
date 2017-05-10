@@ -34,7 +34,7 @@ def comp_overlap_coo(sv, ao_log=None, funct=overlap_ni,**kvargs):
   for atom1,[sp1,rv1,s1,f1] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
     for atom2,[sp2,rv2,s2,f2] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
       if (sp2rcut[sp1]+sp2rcut[sp2])**2<=sum((rv1-rv2)**2) : continue
-      oo = funct(me,sp1,sp2,rv1,rv2,**kvargs)
+      oo = funct(me,sp1,rv1,sp2,rv2,**kvargs)
       for o1 in range(s1,f1):
         for o2 in range(s2,f2):
           inz = inz+1

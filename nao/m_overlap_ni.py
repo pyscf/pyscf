@@ -4,7 +4,7 @@ import numpy as np
 #
 #
 #
-def overlap_ni(me, sp1, sp2, R1, R2, **kvargs):
+def overlap_ni(me, sp1,R1, sp2,R2, **kvargs):
     """
       Computes overlap for an atom pair. The atom pair is given by a pair of species indices
       and the coordinates of the atoms.

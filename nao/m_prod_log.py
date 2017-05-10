@@ -35,8 +35,9 @@ def overlap_check(prod_log, overlap_funct=overlap_ni, **kvargs):
   me = ao_matelem_c(prod_log.ao_log)
   sp2mom0,sp2mom1 = comp_moments(prod_log)
   mael,mxel,acl=[],[],[]
+  R0 = np.array([0.0,0.0,0.0])
   for sp,[vertex,mom0] in enumerate(zip(prod_log.sp2vertex,sp2mom0)):
-    oo_ref = overlap_funct(me,sp,sp,np.array([0.0,0.0,0.0]),np.array([0.0,0.0,0.0]),**kvargs)
+    oo_ref = overlap_funct(me,sp,R0,sp,R0,**kvargs)
     oo = np.einsum('ijk,i->jk', vertex, mom0)
     ac = np.allclose(oo_ref, oo, atol=prod_log.tol*10, rtol=prod_log.tol)
     mae = abs(oo_ref-oo).sum()/oo.size
@@ -84,6 +85,7 @@ class prod_log_c(ao_log_c):
   def __init__(self, ao_log, tol=1e-10):
     
     self.ao_log = ao_log
+    self.nspecies = ao_log.nspecies
     self.tol = tol
     self.rr,self.pp,self.nr = ao_log.rr,ao_log.pp,ao_log.nr
     self.interp_rr = ao_log.interp_rr
@@ -133,9 +135,16 @@ class prod_log_c(ao_log_c):
       self.sp2vertex.append(mu2ww)
 
     self.jmx = np.amax(np.array( [max(mu2j) for mu2j in self.sp_mu2j], dtype='int32'))
+    self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut])
+
     
   def overlap_check(self, overlap_funct=overlap_ni, **kvargs):
     return overlap_check(self, overlap_funct=overlap_ni, **kvargs)
+
+  def hartree_pot(self, method=None):
+    """ Compute Hartree potential of the radial orbitals and return another ao_log_c storage with these potentials."""
+    from pyscf.nao.m_ao_log_hartree import ao_log_hartree as ext
+    return ext(self, method)
     
 #
 #

@@ -6,7 +6,7 @@ from pyscf.nao.m_xjl import xjl
 #
 #
 #
-def coulomb_am(self, sp1, sp2, R1, R2):
+def coulomb_am(self, sp1, R1, sp2, R2):
   """
     Computes Coulomb overlap for an atom pair. The atom pair is given by a pair of species indices and the coordinates of the atoms.
     <a|r^-1|b> = \iint a(r)|r-r'|b(r')  dr dr'
@@ -19,7 +19,7 @@ def coulomb_am(self, sp1, sp2, R1, R2):
     The procedure uses the angular momentum algebra and spherical Bessel transform. It is almost a repetition of bilocal overlaps.
   """
 
-  shape = [self.sp2norbs[sp] for sp in (sp1,sp2)]
+  shape = [self.ao1.sp2norbs[sp] for sp in (sp1,sp2)]
   oo2co = np.zeros(shape)
   R2mR1 = np.array(R2)-np.array(R1)
   dist,ylm = np.sqrt(sum(R2mR1*R2mR1)), csphar( R2mR1, 2*self.jmx+1 )
@@ -34,9 +34,9 @@ def coulomb_am(self, sp1, sp2, R1, R2):
   bessel_pp = np.zeros((_j*2+1, self.nr))
   for ip,p in enumerate(self.kk): bessel_pp[:,ip]=xjl(p*dist, _j*2)*p
   
-  for mu2,l2,s2,f2 in self.sp2info[sp2]:
-    for mu1,l1,s1,f1 in self.sp2info[sp1]:
-      f1f2_mom = self.psi_log_mom[sp2][mu2,:] * self.psi_log_mom[sp1][mu1,:]
+  for mu2,l2,s2,f2 in self.ao1.sp2info[sp2]:
+    for mu1,l1,s1,f1 in self.ao1.sp2info[sp1]:
+      f1f2_mom = self.ao1.psi_log_mom[sp2][mu2,:] * self.ao1.psi_log_mom[sp1][mu1,:]
       l2S.fill(0.0)
       for l3 in range( abs(l1-l2), l1+l2+1):
         l2S[l3] = (f1f2_mom[:]*bessel_pp[l3,:]).sum() + f1f2_mom[0]*bessel_pp[l3,0]/self.interp_pp.dg_jt
@@ -61,7 +61,8 @@ if __name__ == '__main__':
   from pyscf.nao.m_prod_log import prod_log_c
   from pyscf.nao.m_ao_matelem import ao_matelem_c
   
+  sv = system_vars_c("siesta")
   ra = np.array([0.0, 0.1, 0.2])
   rb = np.array([0.0, 0.1, 0.0])
-  me = ao_matelem_c(ao_log)
-  coulo = coulomb_am(me, 0, 0, ra, rb)
+  me = ao_matelem_c(sv.ao_log)
+  coulo = coulomb_am(me, 0, ra, 0, rb)

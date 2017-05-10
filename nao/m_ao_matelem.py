@@ -27,6 +27,41 @@ def build_3dgrid(me, sp1, R1, sp2, R2, level=3):
   grids.build(atom2rcut=atom2rcut)
   return grids
 
+#
+#
+#
+def build_3dgrid3c(me, sp1, sp2, R1, R2, sp3, R3, level=3):
+  from pyscf import dft
+  from pyscf.nao.m_system_vars import system_vars_c
+  from pyscf.nao.m_gauleg import leggauss_ab
+
+  d12 = ((R1-R2)**2).sum()
+  d13 = ((R1-R3)**2).sum()
+  d23 = ((R2-R3)**2).sum()
+  z1 = int(me.aos[0].sp2charge[sp1])
+  z2 = int(me.aos[0].sp2charge[sp2])
+  z3 = int(me.aos[1].sp2charge[sp3])
+  rc1 = me.aos[0].sp2rcut[sp1]
+  rc2 = me.aos[0].sp2rcut[sp2]
+  rc3 = me.aos[1].sp2rcut[sp3]
+  
+  if d12<1e-7 and d23<1e-7 :
+    mol = system_vars_c(atom=[ [z1, R1] ])
+  elif d12<1e-7 and d23>1e-7 and d13>1e-7:
+    mol = system_vars_c(atom=[ [z1, R1], [z3, R3] ])
+  elif d23<1e-7 and d12>1e-7 and d13>1e-7:
+    mol = system_vars_c(atom=[ [z1, R1], [z2, R2] ])
+  elif d13<1e-7 and d12>1e-7 and d23>1e-7:
+    mol = system_vars_c(atom=[ [z1, R1], [z2, R2] ])
+  else :
+    mol = system_vars_c(atom=[ [z1, R1], [z2, R2], [z3, R3] ])
+
+  atom2rcut=np.array([rc1, rc2, rc3])
+  grids = dft.gen_grid.Grids(mol)
+  grids.level = level # precision as implemented in pyscf
+  grids.radi_method=leggauss_ab
+  grids.build(atom2rcut=atom2rcut)
+  return grids
 
 #
 #
@@ -68,14 +103,19 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     self.aos = [self.ao1, self.ao2]
 
   #
-  def overlap_am(self, sp1, sp2, R1, R2):
+  def overlap_am(self, sp1,R1, sp2,R2):
     from pyscf.nao.m_overlap_am import overlap_am as overlap 
-    return overlap(self, sp1, sp2, R1, R2)
+    return overlap(self, sp1,R1, sp2,R2)
 
   #
-  def overlap_ni(self, sp1, sp2, R1, R2, **kvargs):
+  def overlap_ni(self, sp1,R1, sp2,R2, **kvargs):
     from pyscf.nao.m_overlap_ni import overlap_ni
-    return overlap_ni(self, sp1, sp2, R1, R2, **kvargs)
+    return overlap_ni(self, sp1,R1, sp2,R2, **kvargs)
+  
+  def coulomb_am(self, sp1,R1, sp2,R2):
+    from pyscf.nao.m_coulomb_am import coulomb_am as ext
+    return ext(self, sp1,R1, sp2,R2)
+
 
 #
 #
