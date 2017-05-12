@@ -202,8 +202,6 @@ class ao_log_c():
       self.sp2info.append([ [mu, j, mu2s[mu], mu2s[mu+1]] for mu,j in enumerate(mu2j)])
 
   #
-  #
-  #
   def _add_psi_log_mom(self):
     """ Adds a field psi_log_mom which contains Bessel transforms of original radial functions (from psi_log) """
     from pyscf.nao.m_sbt import sbt_c

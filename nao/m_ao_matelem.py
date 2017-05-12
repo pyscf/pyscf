@@ -6,6 +6,7 @@ from pyscf.nao.m_sbt import sbt_c
 from pyscf.nao.m_c2r import c2r_c
 from pyscf.nao.m_gaunt import gaunt_c
 from pyscf.nao.m_log_interp import log_interp_c
+from pyscf.nao.m_ao_log_hartree import ao_log_hartree
 
 #
 #
@@ -74,7 +75,7 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     the complex -> real transform (for spherical harmonics) and 
     the spherical Bessel transform.
   '''
-  def __init__(self, ao1, ao2=None):
+  def __init__(self, ao1, ao2=None, **kvargs):
     """ Constructor for general matrix elements  <a|O|b> between the same molecule, different molecules, between atomic orbitals and product orbitals"""
     self.interp_rr = log_interp_c(ao1.rr)
     self.interp_pp = log_interp_c(ao1.pp)
@@ -96,10 +97,12 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     if ao2 is not None:
       self.ao2 = ao2
       self.ao2._add_sp2info()
+      self.ao2_hartree = ao_log_hartree(self.ao2, **kvargs)
       self.ao2._add_psi_log_mom()
     else : 
       self.ao2 = self.ao1
-    
+      self.ao2_hartree = ao_log_hartree(self.ao1, **kvargs)
+
     self.aos = [self.ao1, self.ao2]
 
   #

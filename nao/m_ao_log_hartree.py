@@ -100,9 +100,9 @@ def ao_log_hartree_lap(ao):
 #
 #
 #
-def ao_log_hartree(ao, method='lap'):
-  if method.upper()=='LAP': return ao_log_hartree_lap_libnao(ao)
-  if method.upper()=='SBT': return ao_log_hartree_sbt(ao)
+def ao_log_hartree(ao, ao_log_hartree_method='lap'):
+  if ao_log_hartree_method.upper()=='LAP': return ao_log_hartree_lap_libnao(ao)
+  if ao_log_hartree_method.upper()=='SBT': return ao_log_hartree_sbt(ao)
   raise RuntimeError('!method')
 
 #
@@ -114,8 +114,8 @@ if __name__ == '__main__':
   
   sv = system_vars_c('siesta')
   
-  ao_h_lap = ao_log_hartree(sv.ao_log, method='lap')
-  ao_h_sbt = ao_log_hartree(sv.ao_log, method='sbt')
+  ao_h_lap = ao_log_hartree(sv.ao_log, ao_log_hartree_method='lap')
+  ao_h_sbt = ao_log_hartree(sv.ao_log, ao_log_hartree_method='sbt')
 
   sp = 0
   for mu,[ff_lap,ff_sbt,j] in enumerate(zip(ao_h_lap.psi_log[sp], ao_h_sbt.psi_log[sp], ao_h_sbt.sp_mu2j[sp])):
