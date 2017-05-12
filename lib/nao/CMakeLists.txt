@@ -2,7 +2,8 @@
 
 add_library(nao SHARED
   cputime.c m_color.F90 m_die.F90 m_log.F90 m_precision.F90 m_siesta_hsx.F90 m_siesta_wfsx.F90
-  m_define_macro.F90 m_io.F90 m_null2char.F90 m_siesta.F90 m_warn.F90 m_rsphar.F90 m_ao_eval.F90 m_fact.F90)
+  m_define_macro.F90 m_io.F90 m_null2char.F90 m_siesta.F90 m_warn.F90 m_rsphar.F90 m_ao_eval.F90 m_fact.F90
+  m_ao_hartree_lap.F90)
 
 set_target_properties(nao PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}
