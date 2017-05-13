@@ -43,6 +43,8 @@ class local_vertex_c(ao_matelem_c):
     mu2j = self.ao1.sp_mu2j[sp]
     info = self.ao1.sp2info[sp]
     mu2ff = self.ao1.psi_log[sp]
+    no = self.ao1.sp2norbs[sp]
+    nmu = self.ao1.sp2nmult[sp]
     
     jmx_sp = np.amax(mu2j)
     j2nf=np.zeros((2*jmx_sp+1), dtype='int64')
@@ -63,8 +65,6 @@ class local_vertex_c(ao_matelem_c):
           j_p2js[j][j2p[j]] = [j1,j2]
           j2p[j]+=1
 
-    no = self.ao1.sp2norbs[sp]
-    nmu = self.ao1.sp2nmult[sp]
     pack2ff = np.zeros((nmu*(nmu+1)//2,self.nr), dtype='float64') # storage for original products
     for mu2 in range(nmu):
       for mu1 in range(mu2+1): pack2ff[ij2pack(mu1,mu2),:] = mu2ff[mu1,:]*mu2ff[mu2,:]
@@ -76,34 +76,16 @@ class local_vertex_c(ao_matelem_c):
     c2r_jm = self.c2r_c._j
     jc = self._j
     xww2 = np.zeros((no,no), dtype='complex128')
-    for j,dim in enumerate(j2nf): # Metrik ist dim * dim in diesem Sektor 
+    for j,dim in enumerate(j2nf): # Metrik ist dim * dim in diesem Sektor
+      lev2ff = np.zeros((dim,self.nr))
+      for lev in range(dim): lev2ff[lev,:] = self.sbt(pack2ff[ ij2pack( *j_p2mus[j][lev] ),:], j, 1)
       metric = np.zeros((dim,dim), dtype='float64')
       for level_1 in range(dim):
-        ff12_p = self.sbt(pack2ff[ ij2pack( *j_p2mus[j][level_1] ),:], j, 1)
         for level_2 in range(level_1+1):
-          ff34_p = self.sbt(pack2ff[ ij2pack( *j_p2mus[j][level_2] ),:], j, 1)
-          metric[level_2,level_1]=metric[level_1,level_2]=sum(ff12_p*ff34_p*self.dkappa_pp)  # Coulomb Metrik enthaelt Faktor 1/p**2
+          metric[level_2,level_1]=metric[level_1,level_2]=sum(lev2ff[level_1,:]*lev2ff[level_2,:]*self.dkappa_pp)  # Coulomb Metrik enthaelt Faktor 1/p**2
 
       eva,x=eigh(metric)
       j2eva.append(eva)
-
-      #if j==0 and sp==0:
-        #x[:,0] = [0.379391313,  -0.109740384,   0.425570488,  -0.523525417,   0.256656945,  -0.398414046,  -0.405245155 ]
-        #x[:,1] = [0.387586743,   9.81706604E-02,0.452922672, -4.16178033E-02,-0.530645430, -6.12854362E-02, 0.589853883 ]
-        #x[:,2] = [0.414766550,   0.228208750,   0.355080962,   0.639254749,   0.325311482,   0.298978776,  -0.214346588 ]
-        #x[:,3] = [0.368397653,  -0.136905298,  -0.296508014,  -0.247163445,   0.591030359,   0.222216651,   0.545743704 ] 
-        #x[:,4] = [0.379803926,   0.160379171,  -0.286661327,  -0.349554688,  -0.379521132,   0.592939496,  -0.360625565 ]
-        #x[:,5] = [0.421171069,   0.334853470,  -0.549279153,   0.223333612,  -0.101834126,  -0.588435948,   -4.77030762E-02]
-        #x[:,6] = [0.276504159,  -0.877296388,  -0.125972241,   0.287030131,  -0.207344413,   -3.01289931E-02, -0.108359329 ]
-        #x = x.transpose()
-      #elif j==1 and sp==0:
-        #x[:,0] = [0.42352697891624486,       0.17730215080624570 ,      -8.4975873977810479E-002,  0.71102789529995780,       0.43918804206781481,       0.28900024584975176     ]
-        #x[:,1] = [0.44944958866067281,      -0.21076173752565167 ,       2.3797677501368575E-002,  0.33016689279828010,      -0.43413710477535150,      -0.67492445869939055     ]
-        #x[:,2] = [0.43428535051812267,      -0.20237976224894444 ,      0.11978226254428881     , -0.11718650923491836,      -0.55684550935891952,       0.65748100846893132     ]
-        #x[:,3] = [0.48167637480533726,      -0.45567740058051126 ,     -0.33050134060457997     , -0.47076474894115550,       0.47190990699223184,       -8.2440470947864455E-002]
-        #x[:,4] = [0.32227384383985724,       0.78603879057007375 ,     -0.39337982104642277     , -0.30006451543909013,      -0.16023204655243106,       -8.8441412930972130E-002]
-        #x[:,5] = [0.30682835468589398,       0.24018117217224128 ,      0.84491784288123473     , -0.24502717152848849,       0.24533374739102393,      -0.11855902192352212]
-        #x = x.transpose()
 
       xff = np.zeros((dim,self.nr))   #!!!! Jetzt dominante Orbitale bilden
       for domi in range(dim):
