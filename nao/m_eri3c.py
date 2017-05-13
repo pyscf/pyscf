@@ -10,7 +10,7 @@ def eri3c(me, sp1,sp2,R1,R2, sp3,R3, **kvargs):
     from pyscf.nao.m_ao_matelem import build_3dgrid3c
     from pyscf.nao.m_ao_eval_libnao import ao_eval_libnao as ao_eval
     
-    grids = build_3dgrid3c(me, sp1,sp2,R2,R2, sp3,R3, **kvargs)
+    grids = build_3dgrid3c(me, sp1,sp2,R1,R2, sp3,R3, **kvargs)
 
     ao1 = grids.weights * ao_eval(me.aos[0], R1, sp1, grids.coords)
     ao2 = ao_eval(me.aos[0], R2, sp2, grids.coords)
