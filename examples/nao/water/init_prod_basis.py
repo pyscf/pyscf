@@ -16,7 +16,7 @@ print(diag_check(sv))
 print(overlap_check(sv))
 
 prod_log = prod_log_c(sv.ao_log, 1e-6)
-
+print(prod_log.sp2norbs)
 #sp = 0
 #for j,ff in zip(prod_log.sp_mu2j[sp], prod_log.psi_log[sp]):
   #if j>0 :

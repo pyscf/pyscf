@@ -97,6 +97,7 @@ class ao_log_c():
     self.psi_log = [0]*sv.nspecies
     self.psi_log_rl = [0]*sv.nspecies
     self.sp2nmult = np.zeros(sv.nspecies, dtype='int64')
+    self.nspecies = sv.nspecies
     
     seen_species = [] # this is auxiliary to organize the loop over species 
     for ia,sp in enumerate(sv.atom2sp):

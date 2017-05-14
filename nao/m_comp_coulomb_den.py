@@ -18,7 +18,7 @@ def comp_coulomb_den(sv, ao_log=None, funct=coulomb_am, **kvargs):
   me = ao_matelem_c(sv.ao_log) if ao_log is None else ao_matelem_c(ao_log)
 
   atom2s = np.zeros((sv.natm+1), dtype='int32')
-  for atom,sp in enumerate(sv.atom2sp): atom2s[atom+1]=atom2s[atom]+me.sp2norbs[sp]
+  for atom,sp in enumerate(sv.atom2sp): atom2s[atom+1]=atom2s[atom]+me.ao2.sp2norbs[sp]
   norbs = atom2s[-1]
   
   res = np.zeros((norbs,norbs))
