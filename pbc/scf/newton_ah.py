@@ -192,7 +192,7 @@ def newton(mf):
     from pyscf.scf import newton_ah
     from pyscf.pbc import scf as pscf
     if not isinstance(mf, (pscf.khf.KRHF, pscf.kuhf.KUHF)):
-        return scf.newton_ah.newton(mf)
+        return newton_ah.newton(mf)
 
     KSCF = newton_ah.newton_SCF_class(mf)
 
