@@ -385,7 +385,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                       icyc, space, max_dx_norm, e, de[ide])
             break
         elif (follow_state and max_dx_norm > 1 and
-              max_dx_norm/max_dx_last > 3 and space > nroots*3):
+              max_dx_norm/max_dx_last > 3 and space > nroots*1):
             log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
                       icyc, space, max_dx_norm, e, de[ide], norm_min)
             log.debug('Large |r| detected, restore to previous x0')

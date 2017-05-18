@@ -313,7 +313,7 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
         def __init__(self):
             self.imic = 0
             self.tot_hop = 0
-            self.tot_kf = 0
+            self.tot_kf = 1  # The call to gen_g_hop
 
     if x0_guess is None:
         x0_guess = g_all
@@ -324,6 +324,9 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
     ikf = 0
     u = 1
     ci_kf = ci0
+
+    if norm_gall < conv_tol_grad:
+        return u, ci_kf, norm_gall, stat, x0_guess
 
     for ah_conv, ihop, w, dxi, hdxi, residual, seig \
             in ciah.davidson_cc(h_op, g_op, precond, x0_guess,
@@ -357,13 +360,13 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
                 g_all = g_all - hdxi
                 dr -= dxi
                 norm_gall = numpy.linalg.norm(g_all)
-                log.info('|g| >> keyframe, Restore previouse step')
+                log.debug('|g| >> keyframe, Restore previouse step')
                 break
 
-            elif (stat.imic >= max_cycle or norm_gall < conv_tol_grad*.5):
+            elif (stat.imic >= max_cycle or norm_gall < conv_tol_grad*.3):
                 break
 
-            elif ((ikf >= max(casscf.kf_interval, casscf.kf_interval-numpy.log(norm_dr+1e-9)) or
+            elif ((ikf >= max(casscf.kf_interval, casscf.kf_interval-numpy.log(norm_dr+1e-7)) or
 # Insert keyframe if the keyframe and the esitimated grad are too different
                    norm_gall < norm_gkf/casscf.kf_trust_region)):
                 ikf = 0
@@ -583,7 +586,7 @@ class CASSCF(mc1step.CASSCF):
         self.ah_conv_tol = 1e-12
         self.ah_max_cycle = 30
         self.ah_lindep = 1e-14
-        self.ah_start_tol = 5.
+        self.ah_start_tol = 5e2
         self.ah_start_cycle = 3
         self.ah_trust_region = 3.
 
@@ -595,7 +598,7 @@ class CASSCF(mc1step.CASSCF):
         self.callback = None
         self.chk_ci = False
 
-        self.fcisolver.max_cycle = 50
+        self.fcisolver.max_cycle = 20
 
 ##################################################
 # don't modify the following attributes, they are not input options

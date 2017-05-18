@@ -28,7 +28,7 @@ def run(b, dm, mo, ci=None):
     mol.symmetry = 1
     mol.build()
     mf = scf.RHF(mol)
-    mf.level_shift_factor = .4
+    mf.level_shift = .4
     mf.max_cycle = 100
     mf.conv_tol = 1e-9
     ehf.append(mf.scf(dm))
