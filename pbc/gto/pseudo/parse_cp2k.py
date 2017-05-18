@@ -16,11 +16,11 @@ def parse(string):
                  if x.strip() and 'END' not in x and '#PSEUDOPOTENTIAL' not in x]
     return _parse(pseudotxt)
 
-def load(pseudofile, symb):
+def load(pseudofile, symb, suffix=None):
     '''Parse the *pseudofile's entry* for atom 'symb', return an internal
     pseudo format which can be assigned to :attr:`Cell.pseudo`
     '''
-    return _parse(search_seg(pseudofile, symb))
+    return _parse(search_seg(pseudofile, symb, suffix))
 
 def _parse(plines):
     header_ln = plines.pop(0)
@@ -55,7 +55,7 @@ def _parse(plines):
         pseudo_params.append([ri, ni, hi])
     return pseudo_params
 
-def search_seg(pseudofile, symb):
+def search_seg(pseudofile, symb, suffix=None):
     '''
     Find the pseudopotential entry for atom 'symb' in file 'pseudofile'
     '''

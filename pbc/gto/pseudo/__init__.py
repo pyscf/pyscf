@@ -60,9 +60,14 @@ def load(pseudo_name, symb):
     if os.path.isfile(pseudo_name):
         return parse_cp2k.load(pseudo_name, symb)
 
-    name = pseudo_name.lower().replace(' ', '').replace('-', '').replace('_', '')
+    name_suffix = pseudo_name.lower().replace('-', '').replace('_', '')
+    name = name_suffix.split()[0]
     pseudomod = ALIAS[name]
+    if ' ' in name_suffix:
+        suffix = name_suffix.split()[1]
+    else:
+        suffix = None
     symb = ''.join(i for i in symb if i.isalpha())
-    p = parse_cp2k.load(os.path.join(os.path.dirname(__file__), pseudomod), symb)
+    p = parse_cp2k.load(os.path.join(os.path.dirname(__file__), pseudomod), symb, suffix)
     return p
 
