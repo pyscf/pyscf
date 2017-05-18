@@ -322,7 +322,7 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
     stat = Statistic()
     dr = 0
     ikf = 0
-    u = 1
+    u = numpy.eye(nmo)
     ci_kf = ci0
 
     if norm_gall < conv_tol_grad:
@@ -353,7 +353,7 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
                       dxmax, norm_dr, w, seig)
 
             max_cycle = max(casscf.max_cycle_micro,
-                            casscf.max_cycle_micro-int(numpy.log(norm_gkf+1e-9)*2))
+                            casscf.max_cycle_micro-int(numpy.log(norm_gkf+1e-7)*2))
             log.debug1('Set max_cycle %d', max_cycle)
             ikf += 1
             if stat.imic > 3 and norm_gall > norm_gkf*casscf.ah_trust_region:
