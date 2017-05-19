@@ -9,10 +9,10 @@ def eri2c(me, sp1,R1,sp2,R2, **kvargs):
     from pyscf.nao.m_ao_matelem import build_3dgrid
     from pyscf.nao.m_ao_eval_libnao import ao_eval_libnao as ao_eval
     
-    grids = build_3dgrid(me, sp1,R1, sp2,R2, **kvargs)
+    grids = build_3dgrid(me, sp1,np.array(R1), sp2,np.array(R2), **kvargs)
 
-    pf = grids.weights * ao_eval(me.ao2,         R1, sp1, grids.coords)
-    qv =                 ao_eval(me.ao2_hartree, R2, sp2, grids.coords)
+    pf = grids.weights * ao_eval(me.ao2,         np.array(R1), sp1, grids.coords)
+    qv =                 ao_eval(me.ao2_hartree, np.array(R2), sp2, grids.coords)
 
     pq2eri = np.einsum('pr,qr->pq',pf,qv)
     return pq2eri

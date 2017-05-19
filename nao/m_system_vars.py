@@ -113,7 +113,7 @@ class system_vars_c():
   #
   def init_pyscf_gto(self, gto, **kvargs):
     """Interpret previous pySCF calculation"""
-    self.natm = gto.natm
+    self.natm=self.natoms = gto.natm
     a2s = [gto.atom_symbol(ia) for ia in range(gto.natm) ]
     self.sp2symbol = sorted(list(set(a2s)))
     self.nspecies = len(self.sp2symbol)
@@ -150,7 +150,7 @@ class system_vars_c():
     _add_mu_sp2(self, self.sp2ion)
     self.sp2ao_log = ao_log_c(self.sp2ion)
   
-    self.natm   = Atoms.get_positions().shape[0]
+    self.natm=self.natoms= Atoms.get_positions().shape[0]
     self.norbs  = self.wfsx.norbs
     self.nspin  = self.wfsx.nspin
     self.nkpoints  = self.wfsx.nkpoints
@@ -191,7 +191,7 @@ class system_vars_c():
     self.ao_log = ao_log_c(self.sp2ion)
     
     self.atom2coord = self.xml_dict['atom2coord']
-    self.natm = len(self.xml_dict['atom2sp'])
+    self.natm=self.natoms=len(self.xml_dict['atom2sp'])
     self.norbs  = self.wfsx.norbs 
     self.nspin  = self.wfsx.nspin
     self.nkpoints  = self.wfsx.nkpoints

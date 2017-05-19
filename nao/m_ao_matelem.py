@@ -119,6 +119,10 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     from pyscf.nao.m_coulomb_am import coulomb_am as ext
     return ext(self, sp1,R1, sp2,R2)
 
+  def coulomb_ni(self, sp1,R1, sp2,R2,**kvargs):
+    from pyscf.nao.m_eri2c import eri2c as ext
+    return ext(self, sp1,R1, sp2,R2,**kvargs)
+
 
 #
 #
