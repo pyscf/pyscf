@@ -637,7 +637,8 @@ class ROHF(rohf.ROHF):
                              self.mo_coeff, self.mo_occ, overwrite_mol=False)
         return self
 
-    def analyze(self, verbose=logger.DEBUG, **kwargs):
+    def analyze(self, verbose=None, **kwargs):
+        if verbose is None: verbose = self.verbose
         from pyscf.lo import orth
         from pyscf.tools import dump_mat
         if not self.mol.symmetry:

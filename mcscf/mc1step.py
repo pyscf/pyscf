@@ -465,10 +465,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
 
     if conv:
         log.info('1-step CASSCF converged in %d macro (%d JK %d micro) steps',
-                 imacro+1, totinner, totmicro)
+                 imacro, totinner, totmicro)
     else:
         log.info('1-step CASSCF not converged, %d macro (%d JK %d micro) steps',
-                 imacro+1, totinner, totmicro)
+                 imacro, totinner, totmicro)
 
     if casscf.canonicalization:
         log.info('CASSCF canonicalization')
@@ -829,6 +829,7 @@ class CASSCF(casci.CASCI):
 
         return mc_ao2mo._ERIS(self, mo, method='incore', level=2)
 
+    # Don't remove the two functions.  They are used in df/approx_hessian code
     def get_h2eff(self, mo_coeff=None):
         return self.get_h2cas(mo_coeff)
     def get_h2cas(self, mo_coeff=None):
@@ -1081,10 +1082,18 @@ class CASSCF(casci.CASCI):
 def _fake_h_for_fast_casci(casscf, mo, eris):
     mc = copy.copy(casscf)
     mc.mo_coeff = mo
-    # vhf for core density matrix
-    mo_inv = numpy.dot(mo.T, mc._scf.get_ovlp())
-    vhf = reduce(numpy.dot, (mo_inv.T, eris.vhf_c, mo_inv))
-    mc.get_veff = lambda *args: vhf
+    ncore = casscf.ncore
+    nocc = ncore + casscf.ncas
+
+    mo_core = mo[:,:ncore]
+    mo_cas = mo[:,ncore:nocc]
+    core_dm = numpy.dot(mo_core, mo_core.T) * 2
+    hcore = casscf.get_hcore()
+    energy_core = casscf._scf.energy_nuc()
+    energy_core += numpy.einsum('ij,ji', core_dm, hcore)
+    energy_core += eris.vhf_c[:ncore,:ncore].trace()
+    h1eff = reduce(numpy.dot, (mo_cas.T, hcore, mo_cas)) + eris.vhf_c[ncore:nocc,ncore:nocc]
+    mc.get_h1eff = lambda *args: (h1eff, energy_core)
 
     ncore = casscf.ncore
     nocc = ncore + casscf.ncas

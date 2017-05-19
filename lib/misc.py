@@ -455,6 +455,9 @@ class H5TmpFile(h5py.File):
     def __del__(self):
         self.close()
 
+def finger(a):
+    return numpy.dot(numpy.cos(numpy.arange(a.size)), a.ravel())
+
 
 if __name__ == '__main__':
     for i,j in tril_equal_pace(90, 30):

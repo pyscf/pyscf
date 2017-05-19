@@ -385,10 +385,10 @@ class KUHF(uhf.UHF, khf.KRHF):
             nao = dm.shape[-1]
             nkpts = len(self.kpts)
             if len(dm.shape)==3:
-              dm_kpts = lib.asarray([dm]*nkpts).reshape(nkpts,2,nao,nao)
-              dm_kpts = dm_kpts.transpose(1,0,2,3)
+                dm_kpts = lib.asarray([dm]*nkpts).reshape(nkpts,2,nao,nao)
+                dm_kpts = dm_kpts.transpose(1,0,2,3)
             else:
-              dm_kpts=dm
+                dm_kpts=dm
             dm_kpts[1,:] *= .98  # To break spin symmetry
             assert dm_kpts.shape[0]==2
         return dm_kpts

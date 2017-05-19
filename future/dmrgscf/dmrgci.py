@@ -26,7 +26,7 @@ from pyscf.dmrgscf import dmrg_sym
 
 import pyscf.lib
 
-libE3unpack = pyscf.lib.load_library('libicmpspt')
+libunpack = pyscf.lib.load_library('libicmpspt')
 
 
 try:
@@ -377,21 +377,29 @@ class DMRGCI(pyscf.lib.StreamObject):
             self.has_threepdm = True
             self.extraline.pop()
 
-        nelectrons = 0
-        if isinstance(nelec, (int, numpy.integer)):
-            nelectrons = nelec
-        else:
-            nelectrons = nelec[0]+nelec[1]
+        # Remove everything
+        os.system("rm -f %s/node0/*twopdm*"%(self.scratchDirectory))
+        os.system("rm -f %s/node0/*tmp"%(self.scratchDirectory))
 
+        # The binary files coming from STACKBLOCK and BLOCK are different
+        # - STACKBLOCK uses the 6-fold symmetry, this must unpacked using "libunpack.unpackE3" (see lib/icmpspt/icmpspt.c)
+        # - BLOCK just writes a list of all values, this is directly read by "unpackE3_BLOCK"
         if (filetype == "binary") :
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin" %(state, state))
-            fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin.unpack" %(state, state))
-            libE3unpack.unpackE3(ctypes.c_char_p(fname), ctypes.c_char_p(fnameout), ctypes.c_int(norb))
+            if 'stackblock' in settings.BLOCKEXE:
+              print 'Reading binary 3RDM from STACKBLOCK'
+              fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin.unpack" %(state, state))
+              libunpack.unpackE3(ctypes.c_char_p(fname), ctypes.c_char_p(fnameout), ctypes.c_int(norb))
+              E3 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
+              E3 = numpy.reshape(E3, (norb, norb, norb, norb, norb, norb), order='F')
+            else:
+              print 'Reading binary 3RDM from BLOCK'
+              E3 = DMRGCI.unpackE3_BLOCK(self,fname,norb)
 
-            E3 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
-            E3 = numpy.reshape(E3, (norb, norb, norb, norb, norb, norb), order='F')
 
-        else :
+        # Both text files are the same: a list of "a,b,c,d,e,f,E3[a,b,c,f,e,d]"
+        else:
+            print 'Reading text-file 3RDM'
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.txt" %(state, state))
             f = open(fname, 'r')
             lines = f.readlines()
@@ -408,6 +416,15 @@ class DMRGCI(pyscf.lib.StreamObject):
                 E3[c,a,b, d,f,e] = integral
                 E3[c,b,a, d,e,f] = integral
 
+        #for i1 in range(norb):
+        #  for i2 in range(norb):
+        #    for i3 in range(norb):
+        #      for i4 in range(norb):
+        #        for i5 in range(norb):
+        #          for i6 in range(norb):
+        #            if (abs(E3[i1,i2,i3,i4,i5,i6])>0.0001):
+        #              print "[BM] ({:5} {:5} {:5}|{:5} {:5} {:5}) {:20.4f}".format(i1,i2,i3,i4,i5,i6,E3[i1,i2,i3,i4,i5,i6])
+        print ''
         return E3
 
     def make_rdm4(self, state, norb, nelec, dt=numpy.dtype('Float64'), filetype = "binary", link_index=None, **kwargs):
@@ -434,21 +451,29 @@ class DMRGCI(pyscf.lib.StreamObject):
             self.has_threepdm = True
             self.extraline.pop()
 
-        nelectrons = 0
-        if isinstance(nelec, (int, numpy.integer)):
-            nelectrons = nelec
-        else:
-            nelectrons = nelec[0]+nelec[1]
+        # Remove everything
+        os.system("rm -f %s/node0/*twopdm*"%(self.scratchDirectory))
+        os.system("rm -f %s/node0/*tmp"%(self.scratchDirectory))
 
+        # The binary files coming from STACKBLOCK and BLOCK are different:
+        # - STACKBLOCK does not have 4RDM
+        #   if it had, it's probably gonna come in a 8-fold symmetry, which must unpacked using "libunpack.unpackE4" (see lib/icmpspt/icmpspt.c)
+        # - BLOCK just writes a list of all values, this is directly read by "unpackE4_BLOCK"
         if (filetype == "binary") :
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin" %(state, state))
-            fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin.unpack" %(state, state))
-            libE4unpack.unpackE4(ctypes.c_char_p(fname), ctypes.c_char_p(fnameout), ctypes.c_int(norb))
+            if 'stackblock' in settings.BLOCKEXE:
+              print 'Reading binary 4RDM from STACKBLOCK'
+              fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin.unpack" %(state, state))
+              libunpack.unpackE4(ctypes.c_char_p(fname), ctypes.c_char_p(fnameout), ctypes.c_int(norb))
+              E4 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
+              E4 = numpy.reshape(E4, (norb, norb, norb, norb, norb, norb, norb, norb), order='F')
+            else:
+              print 'Reading binary 4RDM from BLOCK'
+              E4 = DMRGCI.unpackE4_BLOCK(self,fname,norb)
 
-            E4 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
-            E4 = numpy.reshape(E4, (norb, norb, norb, norb, norb, norb, norb, norb), order='F')
-
-        else :
+        # Both text files are the same: a list of "a,b,c,d,e,f,g,h,E4[a,b,c,d,h,g,f,e]"
+        else:
+            print 'Reading text-file 4RDM'
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.txt" %(state, state))
             f = open(fname, 'r')
             lines = f.readlines()
@@ -470,12 +495,51 @@ class DMRGCI(pyscf.lib.StreamObject):
                     for l in range(4):
                       if ((i==l)or(j==l)or(k==l)):
                         continue
-                      #print up_indexes[i],up_indexes[j],up_indexes[k],up_indexes[l],\
-                      #      dn_indexes[i],dn_indexes[j],dn_indexes[k],dn_indexes[l]
                       E4[up_indexes[i],up_indexes[j],up_indexes[k],up_indexes[l],\
                          dn_indexes[i],dn_indexes[j],dn_indexes[k],dn_indexes[l]] = integral
-              #print ''
+        #for i1 in range(norb):
+        #  for i2 in range(norb):
+        #    for i3 in range(norb):
+        #      for i4 in range(norb):
+        #        for i5 in range(norb):
+        #          for i6 in range(norb):
+        #            for i7 in range(norb):
+        #              for i8 in range(norb):
+        #                if abs(E4[i1,i2,i3,i4,i5,i6,i7,i8]>0.0001):
+        #                  print "[BM] ({:5} {:5} {:5} {:5}|{:5} {:5} {:5} {:5}) {:20.4f}".format(i1,i2,i3,i4,i5,i6,i7,i8,E4[i1,i2,i3,i4,i5,i6,i7,i8])
+        print ''
+        return E4
 
+    def unpackE3_BLOCK(self,fname,norb):
+        E3=numpy.zeros((norb,norb,norb,norb,norb,norb), order='F')
+        fil=open(fname,"rb")
+        fil.seek(93)
+        for a in range(norb):
+          for b in range(norb):
+            for c in range(norb):
+              for d in range(norb):
+                for e in range(norb):
+                  for f in range(norb):
+                    (value,)=struct.unpack('d',fil.read(8))
+                    E3[a,b,c,  f,e,d]=value
+        fil.close()
+        return E3
+
+    def unpackE4_BLOCK(self,fname,norb):
+        E4=numpy.zeros((norb,norb,norb,norb,norb,norb,norb,norb), order='F')
+        fil=open(fname,"rb")
+        fil.seek(109)
+        for a in range(norb):
+          for b in range(norb):
+            for c in range(norb):
+              for d in range(norb):
+                for e in range(norb):
+                  for f in range(norb):
+                    for g in range(norb):
+                      for h in range(norb):
+                        (value,)=struct.unpack('d',fil.read(8))
+                        E4[a,b,c,d,  h,g,f,e]=value
+        fil.close()
         return E4
 
     def clearSchedule(self):

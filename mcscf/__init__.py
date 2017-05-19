@@ -237,6 +237,13 @@ def UCASSCF(mf, ncas, nelecas, **kwargs):
         raise RuntimeError('First argument needs to be UHF object')
     return mc
 
+def newton(mc):
+    from pyscf.mcscf import newton_casscf
+    mc1 = newton_casscf.CASSCF(mc._scf, mc.ncas, mc.nelecas)
+    mc1.__dict__.update(mc.__dict__)
+    mc1.max_cycle_micro = 10
+    return mc1
+
 
 def _convert_to_rhf(mf, convert_df=True):
     import copy

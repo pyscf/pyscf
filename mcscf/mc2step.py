@@ -108,10 +108,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
 
     if conv:
         log.info('2-step CASSCF converged in %d macro (%d JK %d micro) steps',
-                 imacro+1, totinner, totmicro)
+                 imacro, totinner, totmicro)
     else:
         log.info('2-step CASSCF not converged, %d macro (%d JK %d micro) steps',
-                 imacro+1, totinner, totmicro)
+                 imacro, totinner, totmicro)
 
     if casscf.canonicalization:
         log.info('CASSCF canonicalization')
