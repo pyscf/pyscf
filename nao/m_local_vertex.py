@@ -6,6 +6,7 @@ from pyscf.nao.m_c2r import c2r_c
 from pyscf.nao.m_ao_matelem import ao_matelem_c
 from pyscf.nao.m_pack2den import ij2pack
 from scipy.linalg import eigh
+from timeit import default_timer as timer
 
 #
 #
@@ -18,7 +19,7 @@ class local_vertex_c(ao_matelem_c):
     ao_matelem_c.__init__(self, ao_log)
     nr = self.nr
     kk = self.kk
-    self.dkappa_pp = 4*np.pi*np.log( kk[nr-1]/kk[0])/(nr-1)*kk
+    self.dkappa_pp = 4*np.pi*np.log( kk[1]/kk[0])*kk
     self.c2r_c = c2r_c(2*self.jmx) # local vertex c2r[:,:] coefficients
     
   #
@@ -75,14 +76,17 @@ class local_vertex_c(ao_matelem_c):
     hc_c2r = np.conj(self.c2r_c._c2r).transpose()
     c2r_jm = self.c2r_c._j
     jc = self._j
-    xww2 = np.zeros((no,no), dtype='complex128')
+    t1 = 0
+    tstart = timer()
+    xww2 = np.zeros((no,no), dtype=np.complex128)
+    xww3 = np.zeros((no,no), dtype=np.complex128)
     for j,dim in enumerate(j2nf): # Metrik ist dim * dim in diesem Sektor
       lev2ff = np.zeros((dim,self.nr))
       for lev in range(dim): lev2ff[lev,:] = self.sbt(pack2ff[ ij2pack( *j_p2mus[j][lev] ),:], j, 1)
       metric = np.zeros((dim,dim), dtype='float64')
       for level_1 in range(dim):
         for level_2 in range(level_1+1):
-          metric[level_2,level_1]=metric[level_1,level_2]=sum(lev2ff[level_1,:]*lev2ff[level_2,:]*self.dkappa_pp)  # Coulomb Metrik enthaelt Faktor 1/p**2
+          metric[level_2,level_1]=metric[level_1,level_2]=(lev2ff[level_1,:]*lev2ff[level_2,:]*self.dkappa_pp).sum()  # Coulomb Metrik enthaelt Faktor 1/p**2
 
       eva,x=eigh(metric)
       j2eva.append(eva)
@@ -117,20 +121,29 @@ class local_vertex_c(ao_matelem_c):
                 
         xww1 = np.zeros((2*j+1, no, no), dtype='complex128')
         for m in range(-j,j+1):
-          for m1 in range(-j,j+1):
+          for m1 in range(-abs(m),abs(m)+1,2*abs(m) if m!=0 else 1):
             xww1[j+m,:,:]=xww1[j+m,:,:]+hc_c2r[c2r_jm+m1,c2r_jm+m]*xww0[j+m1,:,:]
-          
+
+        t1s = timer()
         for m in range(-j,j+1):
+          
           xww2.fill(0.0)
           for mu1,j1,s1,f1 in info:
-            for mu2,j2,s2,f2 in info:
-              for m1,o1 in zip(range(-j1,j1+1), range(s1,f1+1)):
-                for m2,o2 in zip(range(-j2,j2+1), range(s2,f2+1)):
-                  for n1,p1 in zip(range(-j1,j1+1), range(s1,f1+1)):
-                    for n2,p2 in zip(range(-j2,j2+1), range(s2,f2+1)):
-                      xww2[o1,o2]=xww2[o1,o2]+self._c2r[m1+jc,n1+jc]*self._c2r[m2+jc,n2+jc] * xww1[j+m,p1,p2]
-          xww[domi,j+m,:,:] = xww2[:,:].real
-            
-      j2xww.append(xww)
+            for m1 in range(-j1,j1+1):
+              for n1 in range(-abs(m1),abs(m1)+1,2*abs(m1) if m1!=0 else 1):
+                xww2[s1+m1+j1,:]=xww2[s1+m1+j1,:]+self._c2r[m1+jc,n1+jc] * xww1[j+m,s1+n1+j1,:]
 
+          xww3.fill(0.0)
+          for mu2,j2,s2,f2 in info:
+            for m2 in range(-j2,j2+1):
+              for n2 in range(-abs(m2),abs(m2)+1,2*abs(m2) if m2!=0 else 1):
+                xww3[:,s2+m2+j2]=xww3[:,s2+m2+j2]+self._c2r[m2+jc,n2+jc] * xww2[:,s2+n2+j2]
+                            
+          xww[domi,j+m,:,:] = xww3[:,:].real
+          
+        t1 = t1 + (timer()-t1s)
+      j2xww.append(xww)
+    tfinish = timer()
+    #print(tfinish-tstart, t1)
+    
     return {"j2xww": j2xww, "j2xff": j2xff, "j2eva": j2eva }
