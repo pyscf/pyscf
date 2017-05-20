@@ -82,7 +82,7 @@ class prod_log_c(ao_log_c):
   Examples:
     
   '''
-  def __init__(self, ao_log, tol=1e-10):
+  def __init__(self, ao_log, tol=1e-5):
     
     self.ao_log = ao_log
     self.nspecies = ao_log.nspecies

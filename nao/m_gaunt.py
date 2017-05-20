@@ -1,6 +1,8 @@
 import numpy as np
 import scipy as sp
+from pyscf.nao.m_thrj import thrj
 from sympy.physics.quantum.cg import Wigner3j as w3j
+from sympy.physics.wigner import gaunt as gau
 
 #
 #
@@ -44,10 +46,14 @@ class gaunt_c():
             ind = i1*self.njm+i2
             s = self._gaunt_iptr[ind]
             for j3ind,j3 in enumerate(range(abs(j1-j2), j1+j2+1)):
+              #self._gaunt_data[s+j3ind] = np.sqrt( (2*j1+1.0)*(2*j2+1.0)*(2*j3+1.0)/(4.0*np.pi) ) * \
+              #  w3j(j1,0,j2,0,j3,0).doit()*w3j(j1,m1,j2,m2,j3,-m1-m2).doit() # slow and accurate
+
+              #self._gaunt_data[s+j3ind] = gau(j1,j2,j3,m1,m2,-m1-m2,prec=1e-10) # slow and wrong
+
               self._gaunt_data[s+j3ind] = np.sqrt( (2*j1+1.0)*(2*j2+1.0)*(2*j3+1.0)/(4.0*np.pi) ) * \
-                w3j(j1,0,j2,0,j3,0).doit()*w3j(j1,m1,j2,m2,j3,-m1-m2).doit()
-  #
-  #
+                thrj(j1,j2,j3,0,0,0)*thrj(j1,j2,j3,m1,m2,-m1-m2) # fast and accurate
+
   #
   def get_gaunt(self,j1,m1,j2,m2):
 

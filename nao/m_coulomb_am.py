@@ -23,8 +23,8 @@ def coulomb_am(self, sp1, R1, sp2, R2):
   oo2co = np.zeros(shape)
   R2mR1 = np.array(R2)-np.array(R1)
   dist,ylm = np.sqrt(sum(R2mR1*R2mR1)), csphar( R2mR1, 2*self.jmx+1 )
-  cS = np.zeros((self.jmx*2+1,self.jmx*2+1), dtype='complex128')
-  cmat = np.zeros((self.jmx*2+1,self.jmx*2+1), dtype='complex128')
+  cS = np.zeros((self.jmx*2+1,self.jmx*2+1), dtype=np.complex128)
+  cmat = np.zeros((self.jmx*2+1,self.jmx*2+1), dtype=np.complex128)
   rS = np.zeros((self.jmx*2+1,self.jmx*2+1))
 
   f1f2_mom = np.zeros((self.nr))

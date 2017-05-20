@@ -7,7 +7,9 @@ from pyscf.nao.m_c2r import c2r_c
 from pyscf.nao.m_gaunt import gaunt_c
 from pyscf.nao.m_log_interp import log_interp_c
 from pyscf.nao.m_ao_log_hartree import ao_log_hartree
-
+from timeit import default_timer as timer
+from inspect import currentframe, getframeinfo
+fi = getframeinfo(currentframe())
 #
 #
 #
@@ -89,7 +91,6 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     c2r_c.__init__(self, self.jmx)
     sbt_c.__init__(self, ao1.rr, ao1.pp, lmax=2*self.jmx+1)
     gaunt_c.__init__(self, self.jmx)
-
     self.ao1 = ao1
     self.ao1._add_sp2info()
     self.ao1._add_psi_log_mom()
@@ -110,7 +111,6 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     from pyscf.nao.m_overlap_am import overlap_am as overlap 
     return overlap(self, sp1,R1, sp2,R2)
 
-  #
   def overlap_ni(self, sp1,R1, sp2,R2, **kvargs):
     from pyscf.nao.m_overlap_ni import overlap_ni
     return overlap_ni(self, sp1,R1, sp2,R2, **kvargs)
@@ -122,7 +122,6 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
   def coulomb_ni(self, sp1,R1, sp2,R2,**kvargs):
     from pyscf.nao.m_eri2c import eri2c as ext
     return ext(self, sp1,R1, sp2,R2,**kvargs)
-
 
 #
 #
