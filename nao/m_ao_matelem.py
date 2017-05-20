@@ -8,8 +8,7 @@ from pyscf.nao.m_gaunt import gaunt_c
 from pyscf.nao.m_log_interp import log_interp_c
 from pyscf.nao.m_ao_log_hartree import ao_log_hartree
 from timeit import default_timer as timer
-from inspect import currentframe, getframeinfo
-fi = getframeinfo(currentframe())
+
 #
 #
 #

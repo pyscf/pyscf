@@ -77,6 +77,7 @@ class system_vars_c():
       self.sp2symbol = [chemical_symbols[z] for z in self.sp2charge]
       self.atom2sp = [self.sp2charge.index(charge) for charge in atom2charge]
       self.natm = len(self.atom2sp)
+      self.atom2s = None
       return
 
     if label is not None and Atoms is None: # Read from SIESTA without ASE input
@@ -113,6 +114,7 @@ class system_vars_c():
   #
   def init_pyscf_gto(self, gto, **kvargs):
     """Interpret previous pySCF calculation"""
+    self.gto=gto # Only some data must be copied, not the whole object. Otherwise, an eventual deepcopy(...) may fail.
     self.natm=self.natoms = gto.natm
     a2s = [gto.atom_symbol(ia) for ia in range(gto.natm) ]
     self.sp2symbol = sorted(list(set(a2s)))
@@ -125,6 +127,8 @@ class system_vars_c():
     self.ao_log = ao_log_c(gto=gto, sv=self, **kvargs)
     self.atom2coord = np.zeros((self.natm, 3))
     for ia,coord in enumerate(gto.atom_coords()): self.atom2coord[ia,:]=coord # must be in Bohr already?
+    self.atom2s = np.zeros((self.natm+1), dtype=np.int64)
+    for atom,sp in enumerate(self.atom2sp): self.atom2s[atom+1]=self.atom2s[atom]+self.ao_log.sp2norbs[sp]
 
   #
   #
@@ -162,6 +166,9 @@ class system_vars_c():
     for i, sp in enumerate(Atoms.get_chemical_symbols()):
       self.atom2sp[i] = strspecie2sp[sp]
     
+    self.atom2s = np.zeros((sv.natm+1), dtype=np.int64)
+    for atom,sp in enumerate(sv.atom2sp): atom2s[atom+1]=atom2s[atom]+self.ao_log.sp2norbs[sp]
+
     orb2m = get_orb2m(self)
     _siesta2blanko_csr(orb2m, self.hsx.s4_csr, self.hsx.orb_sc2orb_uc)
 
@@ -199,9 +206,12 @@ class system_vars_c():
     strspecie2sp = {}
     for sp,strsp in enumerate(self.wfsx.sp2strspecie): strspecie2sp[strsp] = sp
     
-    self.atom2sp = np.empty((self.natm), dtype='int64')
+    self.atom2sp = np.empty((self.natm), dtype=np.int64)
     for o,atom in enumerate(self.wfsx.orb2atm):
       self.atom2sp[atom-1] = strspecie2sp[self.wfsx.orb2strspecie[o]]
+
+    self.atom2s = np.zeros((sv.natm+1), dtype=np.int64)
+    for atom,sp in enumerate(sv.atom2sp): atom2s[atom+1]=atom2s[atom]+self.ao_log.sp2norbs[sp]
 
     orb2m = get_orb2m(self)
     _siesta2blanko_csr(orb2m, self.hsx.s4_csr, self.hsx.orb_sc2orb_uc)

@@ -81,7 +81,6 @@ class ao_log_c():
   #
   def init_gto(self, gto, sv, nr=None, rmin=None, rmax=None, kmax=None, tol=1e-7):
     """ Get's radial orbitals and angular momenta from a previous pySCF calculation, intializes numerical orbitals from the Gaussian type of orbitals etc."""
-    self.gto = gto
 
     rmin_def,rmax_def,kmax_def = get_default_log_mesh_gto(gto, tol)
 
@@ -96,7 +95,7 @@ class ao_log_c():
     self.sp_mu2j = [0]*sv.nspecies
     self.psi_log = [0]*sv.nspecies
     self.psi_log_rl = [0]*sv.nspecies
-    self.sp2nmult = np.zeros(sv.nspecies, dtype='int64')
+    self.sp2nmult = np.zeros(sv.nspecies, dtype=np.int64)
     self.nspecies = sv.nspecies
     
     seen_species = [] # this is auxiliary to organize the loop over species 

@@ -8,10 +8,10 @@ import numpy as np
 from timeit import default_timer as timer
 from scipy.sparse import csr_matrix
 
-mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvqz') # coordinates in Angstrom!
+mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvtz') # coordinates in Angstrom!
 sv = system_vars_c(gto=mol)
 t1s = timer()
-prod_log = prod_log_c(sv.ao_log)
+prod_log = prod_log_c(sv.ao_log, tol=1e-5)
 print(timer() - t1s)
 
 t1s = timer()
@@ -22,16 +22,16 @@ m1 = gto.Mole_pure()
 
 for ia,sp in enumerate(sv.atom2sp):
   pab2v=prod_log.sp2vertex[sp]
+  n = pab2v.shape[1]
   pab_shape = [pab2v.shape[0], pab2v.shape[1]*pab2v.shape[2]]
   pab2v_csr = csr_matrix(pab2v.reshape(pab_shape))
   print(pab2v_csr.getnnz(), pab_shape[0]*pab_shape[1])
   t1s = timer()
   coul=me.coulomb_am(sp, [0.0,0.0,0.0], sp, [0.0,0.0,0.0])
-  print(timer() - t1s)
-  #coul=me.coulomb_ni(sp, [0.0,0.0,0.0], sp, [0.0,0.0,0.0], level=5)
   t1s = timer()
-  fci1c = np.einsum('abq,qcd->abcd', np.einsum('pab,pq->abq', pab2v, coul), pab2v)
-  #fci1c = pab2v_csr pab2v, coul), pab2v)
+  #fci1c = np.einsum('abq,qcd->abcd', np.einsum('pab,pq->abq', pab2v, coul), pab2v)
+  qab2tci = coul*pab2v_csr
+  fci1c = (qab2tci.transpose()*pab2v_csr).reshape([n,n,n,n])
 
   print(timer() - t1s)
   m1.build(atom=[mol._atom[ia]], basis=mol.basis)
