@@ -2357,8 +2357,17 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     __add__ = conc_mol
 
-    def cart2sph_coeff(self, normalized_sp=True):
-        '''Transformation matrix to transform the cartesian GTOs to spherical GTOs
+    def cart2sph_coeff(self, normalized='sp'):
+        '''Transformation matrix to transform the Cartesian GTOs to spherical GTOs
+
+        Kwargs:
+            normalized : string or boolean
+                How the Cartesian GTOs are normalized.  Except s and p functions,
+                Cartesian GTOs do not have the universal normalization coefficients
+                for the different components of the same shell.  The value of this
+                argument can be one of 'sp', 'all', None.  'sp' means the Cartesian s
+                and p basis are normalized.  'all' means all Cartesian functions are
+                normalized.  None means none of the Cartesian functions are normalized.
 
         Examples::
 
@@ -2370,9 +2379,12 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         >>> 4.58676826646e-15
         '''
         c2s_l = [cart2sph(l) for l in range(12)]
-        if normalized_sp:
-            c2s_l[0] = numpy.eye(1)
-            c2s_l[1] = numpy.eye(3)
+        if normalized:
+            if normalized.lower() == 'sp':
+                c2s_l[0] = numpy.eye(1)
+                c2s_l[1] = numpy.eye(3)
+            elif normalized.lower() == 'all':
+                raise NotImplementedError
         c2s = []
         for ib in range(self.nbas):
             l = self.bas_angular(ib)
