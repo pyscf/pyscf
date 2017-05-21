@@ -129,6 +129,9 @@ class system_vars_c():
     for ia,coord in enumerate(gto.atom_coords()): self.atom2coord[ia,:]=coord # must be in Bohr already?
     self.atom2s = np.zeros((self.natm+1), dtype=np.int64)
     for atom,sp in enumerate(self.atom2sp): self.atom2s[atom+1]=self.atom2s[atom]+self.ao_log.sp2norbs[sp]
+    self.atom2mu_s = np.zeros((self.natm+1), dtype=np.int64)
+    for atom,sp in enumerate(self.atom2sp): self.atom2mu_s[atom+1]=self.atom2mu_s[atom]+self.ao_log.sp2nmult[sp]
+    
 
   #
   #
@@ -168,6 +171,9 @@ class system_vars_c():
     
     self.atom2s = np.zeros((sv.natm+1), dtype=np.int64)
     for atom,sp in enumerate(sv.atom2sp): atom2s[atom+1]=atom2s[atom]+self.ao_log.sp2norbs[sp]
+
+    self.atom2mu_s = np.zeros((self.natm+1), dtype=np.int64)
+    for atom,sp in enumerate(self.atom2sp): self.atom2mu_s[atom+1]=self.atom2mu_s[atom]+self.ao_log.sp2nmult[sp]
 
     orb2m = get_orb2m(self)
     _siesta2blanko_csr(orb2m, self.hsx.s4_csr, self.hsx.orb_sc2orb_uc)
@@ -212,6 +218,9 @@ class system_vars_c():
 
     self.atom2s = np.zeros((sv.natm+1), dtype=np.int64)
     for atom,sp in enumerate(sv.atom2sp): atom2s[atom+1]=atom2s[atom]+self.ao_log.sp2norbs[sp]
+
+    self.atom2mu_s = np.zeros((self.natm+1), dtype=np.int64)
+    for atom,sp in enumerate(self.atom2sp): self.atom2mu_s[atom+1]=self.atom2mu_s[atom]+self.ao_log.sp2nmult[sp]
 
     orb2m = get_orb2m(self)
     _siesta2blanko_csr(orb2m, self.hsx.s4_csr, self.hsx.orb_sc2orb_uc)

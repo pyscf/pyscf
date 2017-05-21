@@ -28,8 +28,7 @@ for ia,sp in enumerate(sv.atom2sp):
   fci1c = ((coul*pab2v_csr).transpose()*pab2v_csr).reshape([n,n,n,n])
   print(timer() - t1s, 'time fci1c')
   
-  mol1 = gto.Mole_pure(atom=[mol._atom[ia]], basis=mol.basis)
-  mol1.build()
+  mol1 = gto.Mole_pure(atom=[mol._atom[ia]], basis=mol.basis).build()
   eri = mol1.intor('cint2e_sph').reshape(fci1c.shape)
   eri = conv_yzx2xyz_c(mol1).conv_yzx2xyz_4d(eri, 'pyscf2nao')
   eri2 = eri.reshape([n*n, n*n])
