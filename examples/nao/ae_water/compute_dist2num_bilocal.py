@@ -12,10 +12,8 @@ ia1, ia2  = 0,   1
 phi,theta = 0.0, np.pi/4.0
 
 for r in np.linspace(0.2, 7.0, 15):
-  x = r*np.cos(phi)*np.sin(theta)
-  y = r*np.sin(phi)*np.sin(theta)
-  z = r*np.cos(theta)
-  mol = gto.M(atom=[['O', [0, 0, 0]], ['C', [x, y, z]]], basis='ccpvtz', unit='bohr')
+  x,y,z = r*np.cos(phi)*np.sin(theta), r*np.sin(phi)*np.sin(theta), r*np.cos(theta)
+  mol = gto.M(atom=[[8, [0.0, 0.0, 0.0]], [6, [x, y, z]]], basis='ccpvtz', unit='bohr')
   sv = system_vars_c(gto=mol)
   n1,n2 = sv.atom2s[ia1+1]-sv.atom2s[ia1], sv.atom2s[ia2+1]-sv.atom2s[ia2]
   mol2 = gto.Mole_pure(atom=[mol._atom[ia1], mol._atom[ia2]], basis=mol.basis).build()

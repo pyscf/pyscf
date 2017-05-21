@@ -47,7 +47,7 @@ class local_vertex_c(ao_matelem_c):
     nmu = self.ao1.sp2nmult[sp]
     
     jmx_sp = np.amax(mu2j)
-    j2nf=np.zeros((2*jmx_sp+1), dtype='int64')
+    j2nf=np.zeros((2*jmx_sp+1), dtype=np.int64)
     for mu1,j1,s1,f1 in info:
       for mu2,j2,s2,f2 in info:
         if mu2<mu1: continue
@@ -56,7 +56,7 @@ class local_vertex_c(ao_matelem_c):
     
     j_p2mus = [ [p for p in range(j2nf[j]) ] for j in range(2*jmx_sp+1)]
     j_p2js  = [ [p for p in range(j2nf[j]) ] for j in range(2*jmx_sp+1)]
-    j2p = np.zeros((2*jmx_sp+1), dtype='int64')
+    j2p = np.zeros((2*jmx_sp+1), dtype=np.int64)
     for mu1,j1,s1,f1 in info:
       for mu2,j2,s2,f2 in info:
         if mu2<mu1: continue
@@ -65,7 +65,7 @@ class local_vertex_c(ao_matelem_c):
           j_p2js[j][j2p[j]] = [j1,j2]
           j2p[j]+=1
 
-    pack2ff = np.zeros((nmu*(nmu+1)//2,self.nr), dtype='float64') # storage for original products
+    pack2ff = np.zeros((nmu*(nmu+1)//2,self.nr), dtype=np.float64) # storage for original products
     for mu2 in range(nmu):
       for mu1 in range(mu2+1): pack2ff[ij2pack(mu1,mu2),:] = mu2ff[mu1,:]*mu2ff[mu2,:]
     
@@ -82,7 +82,7 @@ class local_vertex_c(ao_matelem_c):
     for j,dim in enumerate(j2nf): # Metrik ist dim * dim in diesem Sektor
       lev2ff = np.zeros((dim,self.nr))
       for lev in range(dim): lev2ff[lev,:] = self.sbt(pack2ff[ ij2pack( *j_p2mus[j][lev] ),:], j, 1)
-      metric = np.zeros((dim,dim), dtype='float64')
+      metric = np.zeros((dim,dim), dtype=np.float64)
       for level_1 in range(dim):
         for level_2 in range(level_1+1):
           metric[level_2,level_1]=metric[level_1,level_2]=(lev2ff[level_1,:]*lev2ff[level_2,:]*self.dkappa_pp).sum()  # Coulomb Metrik enthaelt Faktor 1/p**2
@@ -101,7 +101,7 @@ class local_vertex_c(ao_matelem_c):
       #metric1 = np.matmul(x,xe.transpose())
       #print(sum(sum(abs(metric1-metric1.transpose()))), sum(sum(abs(metric1-metric))))
 
-      kinematical_vertex = np.zeros((dim, 2*j+1, no, no), dtype='float64')
+      kinematical_vertex = np.zeros((dim, 2*j+1, no, no), dtype=np.float64)
       for num,[[mu1,mu2], [j1,j2]] in enumerate(zip(j_p2mus[j],j_p2js[j])):
         if j<abs(j1-j2) or j>j1+j2 : continue
         for m1,o1 in zip(range(-j1,j1+1), range(mu2s[mu1],mu2s[mu1]+2*j1+1)):
@@ -111,14 +111,14 @@ class local_vertex_c(ao_matelem_c):
             i3y=self.get_gaunt(j1,m1,j2,m2)*(-1.0)**m
             kinematical_vertex[num,j+m,o2,o1] = kinematical_vertex[num,j+m,o1,o2] = i3y[j-abs(j1-j2)]
       
-      xww = np.zeros((dim, 2*j+1, no, no), dtype='float64')
+      xww = np.zeros((dim, 2*j+1, no, no), dtype=np.float64)
       
       for domi in range(dim):
-        xww0 = np.zeros((2*j+1, no, no), dtype='float64')
+        xww0 = np.zeros((2*j+1, no, no), dtype=np.float64)
         for num in range(dim): 
           xww0[:,:,:] = xww0[:,:,:] + x[num,domi]*kinematical_vertex[num,:,:,:]
                 
-        xww1 = np.zeros((2*j+1, no, no), dtype='complex128')
+        xww1 = np.zeros((2*j+1, no, no), dtype=np.complex128)
         for m in range(-j,j+1):
           for m1 in range(-abs(m),abs(m)+1,2*abs(m) if m!=0 else 1):
             xww1[j+m,:,:]=xww1[j+m,:,:]+hc_c2r[c2r_jm+m1,c2r_jm+m]*xww0[j+m1,:,:]

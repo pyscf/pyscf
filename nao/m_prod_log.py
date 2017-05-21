@@ -3,7 +3,6 @@ import numpy as np
 from pyscf.nao.m_dipole_ni import dipole_ni
 from pyscf.nao.m_overlap_ni import overlap_ni
 from pyscf.nao.m_ao_log import ao_log_c
-from pyscf.nao.m_local_vertex import local_vertex_c
 
 
 def comp_moments(self):
@@ -71,37 +70,42 @@ def dipole_check(sv, prod_log, dipole_funct=dipole_ni, **kvargs):
 #
 class prod_log_c(ao_log_c):
   '''
-  Holder of product functions and vertices.
+  Holder of (local) product functions and vertices.
   Args:
     ao_log, i.e. holder of the numerical orbitals
-    tol : tolerance to exclude the linear combinations
+    tol : tolerance to keep the linear combinations
   Returns:
     for each specie returns a set of radial functions defining a product basis
     These functions are sufficient to represent the products of original atomic orbitals
     via a product vertex coefficients.
+    
   Examples:
     
   '''
   def __init__(self, ao_log, tol=1e-5):
+    from scipy.sparse import csr_matrix
+    from pyscf.nao.m_local_vertex import local_vertex_c
     
     self.ao_log = ao_log
     self.nspecies = ao_log.nspecies
     self.tol = tol
     self.rr,self.pp,self.nr = ao_log.rr,ao_log.pp,ao_log.nr
     self.interp_rr = ao_log.interp_rr
-    self.sp2nmult = np.zeros((ao_log.nspecies), dtype='int64')
+    self.sp2nmult = np.zeros((ao_log.nspecies), dtype=np.int64)
     
     lvc = local_vertex_c(ao_log) # constructor of local vertices
-    self.psi_log    = [] # radial orbitals: list of arrays
-    self.psi_log_rl = [] # radial orbitals times r**j: list of arrays
-    self.sp_mu2rcut = [] # list of numpy arrays containing the maximal radii
-    self.sp_mu2j    = [] # list of numpy arrays containing the angular momentum of the radial function
-    self.sp_mu2s    = [] # list of numpy arrays containing the starting index for each radial multiplett
-    self.sp2vertex  = [] # list of numpy arrays containing the vertex coefficients
-    self.sp2norbs   = [] # number of orbitals per specie
-    self.sp2charge  = ao_log.sp2charge # copy of nuclear charges from atomic orbitals
+    self.psi_log       = [] # radial orbitals: list of numpy arrays
+    self.psi_log_rl    = [] # radial orbitals times r**j: list of numpy arrays
+    self.sp_mu2rcut    = [] # list of numpy arrays containing the maximal radii
+    self.sp_mu2j       = [] # list of numpy arrays containing the angular momentum of the radial function
+    self.sp_mu2s       = [] # list of numpy arrays containing the starting index for each radial multiplett
+    self.sp2vertex     = [] # list of numpy arrays containing the vertex coefficients <mu,a,b>
+    self.sp2vertex_csr = [] # going to be list of sparse matrices with dimension (nprod,norbs**2) or <mu,ab> . This is a derivative of the sp2vertex
+    self.sp2inv_vv     = [] # this is a future list of matrices (<mu|ab><ab|nu>)^-1. This is a derivative of the sp2vertex
+    self.sp2norbs      = [] # number of orbitals per specie
+    self.sp2charge     = ao_log.sp2charge # copy of nuclear charges from atomic orbitals
     
-    for sp in range(ao_log.nspecies):
+    for sp,no in enumerate(lvc.ao1.sp2norbs):
       ldp = lvc.get_local_vertex(sp)
 
       mu2jd = []
@@ -110,9 +114,9 @@ class prod_log_c(ao_log_c):
           if ev>tol: mu2jd.append([j,domi])
 
       nmult=len(mu2jd)
-      mu2j = np.array([jd[0] for jd in mu2jd], dtype='int64')
-      mu2s = np.array([0]+[sum(2*mu2j[0:mu+1]+1) for mu in range(nmult)], dtype='int64')
-      mu2rcut = np.array([ao_log.sp2rcut[sp]]*nmult, dtype='float64')
+      mu2j = np.array([jd[0] for jd in mu2jd], dtype=np.int64)
+      mu2s = np.array([0]+[sum(2*mu2j[0:mu+1]+1) for mu in range(nmult)], dtype=np.int64)
+      mu2rcut = np.array([ao_log.sp2rcut[sp]]*nmult, dtype=np.float64)
       
       self.sp2nmult[sp]=nmult
       self.sp_mu2j.append(mu2j)
@@ -120,21 +124,24 @@ class prod_log_c(ao_log_c):
       self.sp_mu2s.append(mu2s)
       self.sp2norbs.append(mu2s[-1])
 
-      mu2ff = np.zeros((nmult, lvc.nr), dtype='float64')
+      mu2ff = np.zeros((nmult, lvc.nr), dtype=np.float64)
       for mu,[j,domi] in enumerate(mu2jd): mu2ff[mu,:] = ldp['j2xff'][j][domi,:]
       self.psi_log.append(mu2ff)
       
-      mu2ff = np.zeros((nmult, lvc.nr), dtype='float64')
+      mu2ff = np.zeros((nmult, lvc.nr), dtype=np.float64)
       for mu,[j,domi] in enumerate(mu2jd): mu2ff[mu,:] = ldp['j2xff'][j][domi,:]/lvc.rr**j
       self.psi_log_rl.append(mu2ff)
        
-      no,npf= lvc.ao1.sp2norbs[sp], sum(2*mu2j+1)  # count number of orbitals and product functions
-      mu2ww = np.zeros((npf,no,no), dtype='float64')
+      npf= sum(2*mu2j+1)  # count number of product functions
+      mu2ww = np.zeros((npf,no,no), dtype=np.float64)
       for [j,domi],s in zip(mu2jd,mu2s): mu2ww[s:s+2*j+1,:,:] = ldp['j2xww'][j][domi,0:2*j+1,:,:]
 
       self.sp2vertex.append(mu2ww)
+      self.sp2vertex_csr.append(csr_matrix(mu2ww.reshape([npf,no**2])))
+      v_csr = self.sp2vertex_csr[sp]
+      self.sp2inv_vv.append( np.linalg.inv( (v_csr * v_csr.transpose() ).todense() ))
 
-    self.jmx = np.amax(np.array( [max(mu2j) for mu2j in self.sp_mu2j], dtype='int32'))
+    self.jmx = np.amax(np.array( [max(mu2j) for mu2j in self.sp_mu2j], dtype=np.int32))
     self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut])
 
     

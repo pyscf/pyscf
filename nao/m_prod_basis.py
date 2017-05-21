@@ -1,127 +1,67 @@
-from __future__ import division
+from __future__ import print_function, division
 import numpy as np
-  
 
+#
+#
+#
 class prod_basis_c():
-  """
-    character(100) :: prod_basis_type = ""
-    integer :: check_basis            =-999  ! usual test to perform or skip (overlaps and dipoles comparison)
-    integer :: check_basis_rspace     =-999  ! usual test to perform or skip (overlaps and dipoles comparison) / moments 
-    integer :: check_basis_bloch      =-999  ! recompute k-dependent overlaps out of real-space overlaps.
-    integer :: check_basis_write_report =-999! whether to write a file with a report on usual test of dominant products
-    integer :: cross_check_global_vertex = -999 ! computes the global vertex coefficients and compares
-    integer :: check_zcmmm               = -999 ! check matmuls with the conversion matrix (CM) ac<->dp (CM is stored block-sparse)
-    integer :: check_dfmcm_lap           = -999 ! check a list-based matmul with the conversion matrix (CM) 
-    integer :: check_zspcm_lap           = -999 ! check a list-based matmul of symmetric,packed matrix with the conversion matrix (CM) 
-    integer :: check_exmtrx_vt1_bt2      = -999 ! check an implementation of exchange matrix with atom-centered kernel and dominant product vertex
+  '''
+  Holder of local and bilocal product functions and vertices.
+  Args:
+    system_vars, i.e. holder of the geometry, and orbitals description
+    tol : tolerance to keep the linear combinations
+  Returns:
+    for each specie returns a set of radial functions defining a product basis
+    These functions are sufficient to represent the products of original atomic orbitals
+    via a product vertex coefficients.
     
-    integer :: stop_check_basis_bloch   =-999! whether to stop after an eventual checking of bloch's overlaps
-    integer :: do_shifting_test =-999! additional test to perform or skip 
-    integer :: metric_type      =-999! 1-- Cartesian metric, 2 -- Coulomb metric
-    integer :: normalize_dp     =-999! whether we want to normalize dominant functions after determining them
-    real(8) :: eigmin_local     =-999! eigenvalue threshold to generate local functions
-    real(8) :: eigmin_bilocal   =-999! eigenvalue threshold to generate bilocal functions
-    integer :: optimize_centers =-999! whether we try to optimize centers of bilocal functions
-    integer :: jcutoff          =-999! angular momentum cutoff (desired) for expansion of bilocal dominant products
-    integer :: gl_ord_bilocal   =-999! parameters for numerical integration in construction of bilocal dominant products
-    integer :: gl_pcs_bilocal   =-999! parameters for numerical integration in construction of bilocal dominant products
-    real(8) :: ac_rcut          =-999! radius of a sphere to determine which (atom centered) functions contribute or belong to a given center.
-    character(99) :: ac_method  = "" ! Method to choose the contributing centers: LENS or (SPHERE).
-    character(99) :: cc_method  = "" ! Method to compute conversion coefficients: (DSYEV), DSYEVR, DSYTR
-    character(99) :: cc_omp_para= "" ! Parallelization approach for computation of conversion coefficients PAIRS, ATOMS, (AUTO)
-    real(8) :: cc_inv_eigmin = -999  ! Threshold for dropping small eigenvalues in comput. of convers. coeffs.
-    integer :: check_hkernel_blocks =-999! whether we will (cross) check blocks of Hartree kernel in mixed basis construction
-    integer :: check_hkernel_dp_pb  =-999! generates pb1 = (dp->pb) and pb2, computes kernels and compares the kernels
-    integer :: reexpr_further =-999! tells whether the further computation should be done with quantities that are tensors in dp basis set,
-                              ! but computed indirectly, by converting from a (smaller) reexpressing basis set.
-    integer :: check_hkernel_reexpr =-999 ! test reexpression of dominant products by comparing hkernel_reexpr with hkernel_orig (in dp basis)
-    integer :: report_pair2clist  =-999! flag to cause a report on pair2clist structure (can be a lengthy file)
-    integer :: report_ls_blocks   =-999! flag to cause a report on ls_blocks structure (can be a lengthy file)
-    integer :: bulk_cross_check_hkernel =-999! flag to cause a rather extensive cross check against 
-                                        ! a finite-size calculation which includes all super cell
-    integer :: report_domiprod       =-999! report main metrics of the initialized type domiprod_t 
-    integer :: report_prod_basis_mix =-999! report prod basis with reexpressing coefficients
-    integer :: report_prod_basis_dp  =-999! report prod basis when it is still dominant products only
-    integer :: report_prod_basis     =-999! report prod basis just before testing
-    integer :: gen_aug_lmult         =-999! generate augmented l-multipletts 
-    character(100) :: bilocal_type   = "" ! ATOM or MULT
-    character(100) :: bilocal_center = "" ! algorithm to determine centers for expansion of bilocal product
-    real(8)        :: bilocal_center_pow = -999 ! weight = (coeff * sqrt(<r^2>)**pow)^-1
-    character(100) :: bilocal_center_coeff = "" ! 2*L+1, for example    
-    character(100) :: local_type     = "" ! ATOM or SHELL
-    real(8)        :: core_split_ratio = -999 ! for decision whether an orbital belongs to core
-    integer        :: stop_after_dp = -999
-    integer        :: pb_funct_xsf = -999 ! whether to plot product functions to xsf files...
-    character(100) :: biloc_interm_storage = "" ! type of intermediate storage for generation of bilocal dominant products
-    character(100) :: mixed_interm_storage = "" ! type of intermediate storage for generation of reexpression coefficients
-  """
-
-  def __init__(self, sv, input_params_pb = {}):
+  Examples:
     
-    if sv.wfsx.gamma: check_basis_bloch = True
-    else: check_basis_bloch = False
-    jmx = np.max(sv.sp_mu2j)
+  '''
+  def __init__(self, sv, tol_loc=1e-5, tol_biloc=1e-6):
+    """ First it should work with GTOs """
+    from pyscf.nao.m_prod_log import prod_log_c
+    from pyscf import gto
+    from pyscf.nao.m_conv_yzx2xyz import conv_yzx2xyz_c
+    from pyscf.nao.m_get_atom2bas_s import get_atom2bas_s 
+    self.prod_log = prod_log_c(sv.ao_log, tol_loc) # local basis (for each specie)
 
-    # setup the default value for the inputs
-    self.pb_params = {'prod_basis_type': "DOMIPROD",
-                     'check_basis': True,
-                     'check_basis_rspace': True,
-                     'check_basis_bloch': check_basis_bloch,
-                     'check_basis_write_report': False,
-                     'cross_check_global_vertex': False,
-                     'check_zcmmm': False,
-                     'check_dfmcm_lap': False,
-                     'check_zspcm_lap': False,
-                     'check_exmtrx_vt1_bt2': False,
-                      
-                     'stop_check_basis_bloch': False,
-                     'do_shifting_test': False,
-                     'metric_type': 2,
-                     'normalize_dp': False,
-                     'eigmin_local': 1e-4,
-                     'eigmin_bilocal': 1e-5,
-                      
-                     'jcutoff': max(5+jmx, 2*jmx),
-                     'optimize_centers': 0,
-                     'gl_ord_bilocal': 96,
-                     'gl_pcs_bilocal': 1,
-                      
-                     'ac_rcut': np.max(sv.sp_mu2rcut),
-                     'ac_method': "SPHERE",
-                     'cc_method': "DSYEV",
-                     'cc_omp_para': "AUTO",
-                     'cc_inv_eigmin': 1E-9,
-                     
-                     'check_hkernel_blocks': False,
-                     'check_hkernel_dp_pb': False,
-                     'reexpr_further': False,
-                     'check_hkernel_reexpr': False,
-                     'report_pair2clist': False,
-                     'report_ls_blocks': False,
-                     'bulk_cross_check_hkernel': False,
-                      
-                     'report_domiprod': True,
-                     'report_prod_basis_mix': False,
-                     'report_prod_basis_dp': False,
-                     'report_prod_basis': True,
-                     'gen_aug_lmult': False,
-                     
-                     'bilocal_type': "ATOM",
-                     'bilocal_center': "POW&COEFF",
-                     'bilocal_center_pow': 1.0,
-                     'bilocal_center_coeff': "2*L+1",
-                     'local_type': "ATOM",
-                     'core_split_ratio': 10.0,
-                     'stop_after_dp': False,
-                     'pb_funct_xsf': False,
-                     'biloc_interm_storage': "RD",
-                     'mixed_interm_storage': "RD"}
+    self.bp2vertex = [] # going to be the product vertex coefficients for each bilocal pair 
+    self.bp2info   = [] # going to be some information 
+    self.bp2cc     = [] # going to be the conversion coefficients
+    
+    for ia1,n1 in zip(range(sv.natm), sv.atom2s[1:]-sv.atom2s[0:-1]):
+      for ia2,n2 in zip(range(ia1+1,sv.natm+1), sv.atom2s[ia1+2:]-sv.atom2s[ia1+1:-1]):
 
-    for key, val in input_params_pb.items():
-      if key not in self.pb_params.keys():
-        raise ValueError(key + " not a pb_param!")
-      else:
-        if not isinstance(val, type(self.pb_params[key])):
-          raise ValueError("Wrong type for " + key + " parameter in pb_param!")
-        else:
-          self.pb_params[key] = val
+        mol2 = gto.Mole_pure(atom=[sv._atom[ia1], sv._atom[ia2]], basis=sv.basis).build()
+        bs = get_atom2bas_s(mol2._bas)
+        ss = (bs[0],bs[1], bs[1],bs[2], bs[0],bs[1], bs[1],bs[2])
+        eri = mol2.intor('cint2e_sph', shls_slice=ss).reshape([n1,n2,n1,n2])
+        eri = conv_yzx2xyz_c(mol2).conv_yzx2xyz_4d(eri, 'pyscf2nao', ss).reshape([n1*n2,n1*n2])
+        ee,xx = np.linalg.eigh(eri) # This the simplest way. TODO: diag in each m-channel separately
+        mu2d = [domi for domi,eva in enumerate(ee) if eva>tol_biloc] # choice of important linear combinations happens here
+        nprod=len(mu2d)
+        if nprod<1: continue # Skip the rest of operations in case there is no strong linear combinations.
+        vertex = np.zeros([nprod,n1,n2], dtype=np.float64)
+        for p,d in enumerate(mu2d) : vertex[p,:,:] = xx[:,d].reshape([n1,n2])
+        self.bp2vertex.append(vertex)
+        self.bp2info.append([ia1,ia2])
+        
+        print(ia1, ia2, len(mu2d))
+
+#
+#
+#
+if __name__=='__main__':
+  from pyscf.nao.m_system_vars import system_vars_c
+  from pyscf.nao.m_prod_basis import prod_basis_c
+  from pyscf import gto
+  import numpy as np
+  from timeit import default_timer as timer
+  import matplotlib.pyplot as plt
+  
+  mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz') # coordinates in Angstrom!
+  sv = system_vars_c(gto=mol)
+  pb = prod_basis_c(sv)
+  print(pb.prod_log.sp2norbs)
+  
