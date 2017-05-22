@@ -94,6 +94,8 @@ add_subdirectory(hci)
 
 add_subdirectory(pbc)
 
+add_subdirectory(extras/mbd)
+
 option(ENABLE_LIBXC "Using libxc for XC functional library" ON)
 option(ENABLE_XCFUN "Using xcfun for XC functional library" ON)
 option(BUILD_LIBXC "Download and build libxc library" ON)
