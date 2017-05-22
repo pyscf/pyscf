@@ -12,6 +12,7 @@ import math
 import json
 import numpy
 import scipy.special
+import scipy.linalg
 import ctypes
 from pyscf import lib
 from pyscf.lib import param
@@ -2355,6 +2356,41 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     condense_to_shell = condense_to_shell
 
     __add__ = conc_mol
+
+    def cart2sph_coeff(self, normalized='sp'):
+        '''Transformation matrix to transform the Cartesian GTOs to spherical GTOs
+
+        Kwargs:
+            normalized : string or boolean
+                How the Cartesian GTOs are normalized.  Except s and p functions,
+                Cartesian GTOs do not have the universal normalization coefficients
+                for the different components of the same shell.  The value of this
+                argument can be one of 'sp', 'all', None.  'sp' means the Cartesian s
+                and p basis are normalized.  'all' means all Cartesian functions are
+                normalized.  None means none of the Cartesian functions are normalized.
+
+        Examples::
+
+        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='ccpvtz')
+        >>> c = mol.cart2sph_coeff()
+        >>> s0 = mol.intor('cint1e_ovlp_sph')
+        >>> s1 = c.T.dot(mol.intor('cint1e_ovlp_cart')).dot(c)
+        >>> print(abs(s1-s0).sum())
+        >>> 4.58676826646e-15
+        '''
+        c2s_l = [cart2sph(l) for l in range(12)]
+        if normalized:
+            if normalized.lower() == 'sp':
+                c2s_l[0] = numpy.eye(1)
+                c2s_l[1] = numpy.eye(3)
+            elif normalized.lower() == 'all':
+                raise NotImplementedError
+        c2s = []
+        for ib in range(self.nbas):
+            l = self.bas_angular(ib)
+            for n in range(self.bas_nctr(ib)):
+                c2s.append(c2s_l[l])
+        return scipy.linalg.block_diag(*c2s)
 
 _ELEMENTDIC = dict((k.upper(),v) for k,v in param.ELEMENTS_PROTON.items())
 
