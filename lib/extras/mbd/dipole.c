@@ -37,8 +37,9 @@ void T_gg(double *dip, int ld, const double *r, double sigma) {
     double zeta1 = erf(r_sigma)+a1;
     double zeta2 = a1*(2*r_sigma2);
     T_bare(dip, ld, r);
-    for (int i = 0; i < 3; i++) {
-        for (int j = 0; j < 3; j++) {
+    int i, j;
+    for (i = 0; i < 3; i++) {
+        for (j = 0; j < 3; j++) {
             dip[ld*i+j] *= zeta1;
             dip[ld*i+j] -= zeta2*r[i]*r[j]/r5;
         }
@@ -64,13 +65,13 @@ void add_dipole_matrix(Version version, int n, double *dip, const double *coords
         double beta, double a) {
     double r[3], r_norm, *dip_ij, damping, R_vdw_ij, sigma_ij, sigma_i, sigma_j;
     int ld = 3*n;
-    int p, q;
-    for (int i = 0; i < n; i++) {
+    int p, q, i, j, k, l;
+    for (i = 0; i < n; i++) {
         p = 3*i;
-        for (int j = 0; j <= i; j++) {
+        for (j = 0; j <= i; j++) {
             if (i == j && !shift) continue;
             q = 3*j;
-            for (int k = 0; k < 3; k++) {
+            for (k = 0; k < 3; k++) {
                 r[k] = coords[p+k]-coords[q+k];
                 if (shift) r[k] -= shift[k];
             }
@@ -90,8 +91,8 @@ void add_dipole_matrix(Version version, int n, double *dip, const double *coords
                 case FERMI_DIP_GG:
                     T_gg(dip_ij, ld, r, sigma_ij);
                     damping = 1.-damping_fermi(r_norm, beta*R_vdw_ij, a);
-                    for (int k = 0; k < 3; k++) {
-                        for (int l = 0; l < 3; l++) {
+                    for (k = 0; k < 3; k++) {
+                        for (l = 0; l < 3; l++) {
                             dip_ij[ld*k+l] *= damping;
                         }
                     }
@@ -99,8 +100,8 @@ void add_dipole_matrix(Version version, int n, double *dip, const double *coords
                 case FERMI_DIP:
                     T_bare(dip_ij, ld, r);
                     damping = damping_fermi(r_norm, beta*R_vdw_ij, a);
-                    for (int k = 0; k < 3; k++) {
-                        for (int l = 0; l < 3; l++) {
+                    for (k = 0; k < 3; k++) {
+                        for (l = 0; l < 3; l++) {
                             dip_ij[ld*k+l] *= damping;
                         }
                     }
