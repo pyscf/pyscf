@@ -73,7 +73,7 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
                  shl_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
     '''
     Returns:
-        ao_kpts: (nkpts, ngs, nao) ndarray
+        ao_kpts: (nkpts, [comp], ngs, nao) ndarray
             AO values at each k-point
     '''
     if kpts is None:
