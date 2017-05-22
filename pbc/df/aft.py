@@ -79,7 +79,7 @@ def get_nuc(mydf, kpts=None):
         for k, aoao in enumerate(aoaoks):
 # rho_ij(G) nuc(-G) / G^2
 # = [Re(rho_ij(G)) + Im(rho_ij(G))*1j] [Re(nuc(G)) - Im(nuc(G))*1j] / G^2
-            vj[k] += numpy.einsum('k,kx->x', vG.conj(), aoao)
+            vj[k] += numpy.einsum('k,kx->x', vG[p0:p1].conj(), aoao)
     t1 = log.timer_debug1('contracting Vnuc', *t1)
 
     vj_kpts = []
