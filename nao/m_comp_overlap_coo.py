@@ -21,18 +21,15 @@ def comp_overlap_coo(sv, ao_log=None, funct=overlap_ni,**kvargs):
 
   nnz = 0
   for sp1,rv1 in zip(sv.atom2sp,sv.atom2coord):
+    n1,rc1 = me.ao1.sp2norbs[sp1],sp2rcut[sp1]
     for sp2,rv2 in zip(sv.atom2sp,sv.atom2coord):
-      if (sp2rcut[sp1]+sp2rcut[sp2])**2>sum((rv1-rv2)**2) : nnz = nnz + me.ao1.sp2norbs[sp1]*me.ao1.sp2norbs[sp2]
+      if (rc1+sp2rcut[sp2])**2>((rv1-rv2)**2).sum() : nnz = nnz + n1*me.ao1.sp2norbs[sp2]
   
   irow,icol,data = np.zeros((nnz), dtype='int64'),np.zeros((nnz), dtype='int64'),np.zeros((nnz), dtype='float64') # Start to construct coo matrix
 
-  atom2s = np.zeros((sv.natm+1), dtype='int32')
-  for atom,sp in enumerate(sv.atom2sp): atom2s[atom+1]=atom2s[atom]+me.ao1.sp2norbs[sp]
-  norbs = atom2s[-1]
-    
   inz=-1
-  for atom1,[sp1,rv1,s1,f1] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
-    for atom2,[sp2,rv2,s2,f2] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
+  for atom1,[sp1,rv1,s1,f1] in enumerate(zip(sv.atom2sp,sv.atom2coord,sv.atom2s,sv.atom2s[1:])):
+    for atom2,[sp2,rv2,s2,f2] in enumerate(zip(sv.atom2sp,sv.atom2coord,sv.atom2s,sv.atom2s[1:])):
       if (sp2rcut[sp1]+sp2rcut[sp2])**2<=sum((rv1-rv2)**2) : continue
       oo = funct(me,sp1,rv1,sp2,rv2,**kvargs)
       for o1 in range(s1,f1):
@@ -40,6 +37,7 @@ def comp_overlap_coo(sv, ao_log=None, funct=overlap_ni,**kvargs):
           inz = inz+1
           irow[inz],icol[inz],data[inz] = o1,o2,oo[o1-s1,o2-s2]
 
+  norbs = sv.atom2s[-1]
   return coo_matrix((data, (irow, icol)), shape=(norbs, norbs))
 
 #

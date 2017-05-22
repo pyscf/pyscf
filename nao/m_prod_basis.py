@@ -11,25 +11,25 @@ class prod_basis_c():
     system_vars, i.e. holder of the geometry, and orbitals description
     tol : tolerance to keep the linear combinations
   Returns:
-    for each specie returns a set of radial functions defining a product basis
+    For each specie returns a set of radial functions defining a product basis
     These functions are sufficient to represent the products of original atomic orbitals
     via a product vertex coefficients.
     
   Examples:
-    
   '''
-  def __init__(self, sv, tol_loc=1e-5, tol_biloc=1e-6):
+  def __init__(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut=None):
     """ First it should work with GTOs """
-    from pyscf.nao.m_prod_log import prod_log_c
+    from pyscf.nao import coulomb_am, comp_overlap_coo, get_atom2bas_s, conv_yzx2xyz_c, prod_log_c
+    from scipy.sparse import csr_matrix
     from pyscf import gto
-    from pyscf.nao.m_conv_yzx2xyz import conv_yzx2xyz_c
-    from pyscf.nao.m_get_atom2bas_s import get_atom2bas_s 
+
     self.prod_log = prod_log_c(sv.ao_log, tol_loc) # local basis (for each specie)
+    self.hkernel  = csr_matrix(comp_overlap_coo(sv, self.prod_log, coulomb_am))
 
     self.bp2vertex = [] # going to be the product vertex coefficients for each bilocal pair 
     self.bp2info   = [] # going to be some information 
     self.bp2cc     = [] # going to be the conversion coefficients
-    
+
     for ia1,n1 in zip(range(sv.natm), sv.atom2s[1:]-sv.atom2s[0:-1]):
       for ia2,n2 in zip(range(ia1+1,sv.natm+1), sv.atom2s[ia1+2:]-sv.atom2s[ia1+1:-1]):
 
@@ -38,14 +38,15 @@ class prod_basis_c():
         ss = (bs[0],bs[1], bs[1],bs[2], bs[0],bs[1], bs[1],bs[2])
         eri = mol2.intor('cint2e_sph', shls_slice=ss).reshape([n1,n2,n1,n2])
         eri = conv_yzx2xyz_c(mol2).conv_yzx2xyz_4d(eri, 'pyscf2nao', ss).reshape([n1*n2,n1*n2])
-        ee,xx = np.linalg.eigh(eri) # This the simplest way. TODO: diag in each m-channel separately
-        mu2d = [domi for domi,eva in enumerate(ee) if eva>tol_biloc] # choice of important linear combinations happens here
+        ee,xx = np.linalg.eigh(eri)        # This the simplest way. TODO: diag in each m-channel separately
+        mu2d = [domi for domi,eva in enumerate(ee) if eva>tol_biloc] # The choice of important linear combinations is here
         nprod=len(mu2d)
         if nprod<1: continue # Skip the rest of operations in case there is no strong linear combinations.
         vertex = np.zeros([nprod,n1,n2], dtype=np.float64)
         for p,d in enumerate(mu2d) : vertex[p,:,:] = xx[:,d].reshape([n1,n2])
         self.bp2vertex.append(vertex)
         self.bp2info.append([ia1,ia2])
+        pc_ls = ls_part_centers(sv, ia1, ia2, ac_rcut)
         
         print(ia1, ia2, len(mu2d))
 
