@@ -1585,7 +1585,7 @@ class Mole(lib.StreamObject):
         '''
 # release circular referred objs
 # Note obj.x = obj.member_function causes circular referrence
-        gc.collect()
+#        gc.collect()
 
         if verbose is not None: self.verbose = verbose
         if output is not None: self.output = output
