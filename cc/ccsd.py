@@ -674,18 +674,20 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
         if self.direct:   # AO-direct CCSD
             mol = self.mol
-            nao, nmo = self.mo_coeff.shape
+            mo = _mo_without_core(self, self.mo_coeff)
+            nao, nmo = mo.shape
             nao_pair = nao * (nao+1) // 2
-            aos = numpy.asarray(self.mo_coeff[:,nocc:].T, order='F')
-            outbuf = numpy.empty((nocc*(nocc+1)//2,nao,nao))
-            tau = numpy.ndarray((nocc*(nocc+1)//2,nvir,nvir), buffer=outbuf)
+            aos = numpy.asarray(mo[:,nocc:].T, order='F')
+            nocc2 = nocc*(nocc+1)//2
+            outbuf = numpy.empty((nocc2,nao,nao))
+            tau = numpy.ndarray((nocc2,nvir,nvir), buffer=outbuf)
             p0 = 0
             for i in range(nocc):
                 tau[p0:p0+i+1] = numpy.einsum('a,jb->jab', t1[i], t1[:i+1])
                 tau[p0:p0+i+1] += t2[i,:i+1]
                 p0 += i + 1
-            tau = _ao2mo.nr_e2(tau.reshape(-1,nvir**2), aos, (0,nao,0,nao), 's1', 's1')
-            tau = tau.reshape(-1,nao,nao)
+            tau = _ao2mo.nr_e2(tau.reshape(nocc2,nvir**2), aos, (0,nao,0,nao), 's1', 's1')
+            tau = tau.reshape(nocc2,nao,nao)
             time0 = logger.timer_debug1(self, 'vvvv-tau', *time0)
 
             ao2mopt = _ao2mo.AO2MOpt(mol, 'cint2e_sph', 'CVHFnr_schwarz_cond',
@@ -727,22 +729,21 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                                             (ish0,ish1,ish0,ish1), *time0)
             eribuf = loadbuf = eri = tmp = None
 
-            mo = numpy.asarray(self.mo_coeff, order='F')
             tmp = _ao2mo.nr_e2(outbuf, mo, (nocc,nmo,nocc,nmo), 's1', 's1', out=tau)
-            t2new_tril += tmp.reshape(-1,nvir,nvir)
+            t2new_tril += tmp.reshape(nocc2,nvir,nvir)
 
             if with_ovvv:
                 #: tmp = numpy.einsum('ijcd,ka,kdcb->ijba', tau, t1, eris.ovvv)
                 #: t2new -= tmp + tmp.transpose(1,0,3,2)
                 tmp = _ao2mo.nr_e2(outbuf, mo, (nocc,nmo,0,nocc), 's1', 's1', out=tau)
-                t2new_tril -= lib.ddot(tmp.reshape(-1,nocc), t1).reshape(-1,nvir,nvir)
+                t2new_tril -= lib.ddot(tmp.reshape(nocc2*nvir,nocc), t1).reshape(nocc2,nvir,nvir)
                 tmp = _ao2mo.nr_e2(outbuf, mo, (0,nocc,nocc,nmo), 's1', 's1', out=tau)
                 #: t2new_tril -= numpy.einsum('xkb,ka->xab', tmp.reshape(-1,nocc,nvir), t1)
-                tmp = lib.transpose(tmp.reshape(-1,nocc,nvir), axes=(0,2,1), out=outbuf)
-                tmp = lib.ddot(tmp.reshape(-1,nocc), t1, 1,
-                               numpy.ndarray(t2new_tril.shape, buffer=tau), 0)
-                tmp = lib.transpose(tmp.reshape(-1,nvir,nvir), axes=(0,2,1), out=outbuf)
-                t2new_tril -= tmp.reshape(-1,nvir,nvir)
+                tmp = lib.transpose(tmp.reshape(nocc2,nocc,nvir), axes=(0,2,1), out=outbuf)
+                tmp = lib.ddot(tmp.reshape(nocc2*nvir,nocc), t1, 1,
+                               numpy.ndarray((nocc2*nvir,nvir), buffer=tau), 0)
+                tmp = lib.transpose(tmp.reshape(nocc2,nvir,nvir), axes=(0,2,1), out=outbuf)
+                t2new_tril -= tmp.reshape(nocc2,nvir,nvir)
 
         else:
             #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
@@ -801,15 +802,10 @@ CC = CCSD
 class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore'):
         cput0 = (time.clock(), time.time())
-        moidx = numpy.ones(cc.mo_occ.size, dtype=numpy.bool)
-        if isinstance(cc.frozen, (int, numpy.integer)):
-            moidx[:cc.frozen] = False
-        elif len(cc.frozen) > 0:
-            moidx[numpy.asarray(cc.frozen)] = False
         if mo_coeff is None:
-            self.mo_coeff = mo_coeff = cc.mo_coeff[:,moidx]
+            self.mo_coeff = mo_coeff = _mo_without_core(cc, cc.mo_coeff)
         else:
-            self.mo_coeff = mo_coeff = mo_coeff[:,moidx]
+            self.mo_coeff = mo_coeff = _mo_without_core(cc, mo_coeff)
         dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
         fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
         self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
@@ -976,6 +972,14 @@ class _ERIS:
                     del(feri[key])
         log.timer('CCSD integral transformation', *cput0)
 
+
+def _mo_without_core(cc, mo):
+    moidx = numpy.ones(cc.mo_occ.size, dtype=numpy.bool)
+    if isinstance(cc.frozen, (int, numpy.integer)):
+        moidx[:cc.frozen] = False
+    elif len(cc.frozen) > 0:
+        moidx[numpy.asarray(cc.frozen)] = False
+    return mo[:,moidx]
 
 # assume nvir > nocc, minimal requirements on memory in loop of update_amps
 def _memory_usage_inloop(nocc, nvir):
