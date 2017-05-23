@@ -189,7 +189,7 @@ def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
         x0_guess = dxi
 
 def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
-                max_cycle=30, lindep=1e-14, verbose=logger.WARN):
+                max_cycle=30, lindep=1e-14, dot=numpy.dot, verbose=logger.WARN):
 
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -201,24 +201,31 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
     xs = list(xs)
     ax = list(ax)
     nx = len(xs)
-    if nx == 0:
-        xs.append(x0)
-        ax.append(h_op(x0))
-        nx = 1
 
     heff = numpy.zeros((max_cycle+nx+1,max_cycle+nx+1), dtype=x0.dtype)
     ovlp = numpy.eye(max_cycle+nx+1, dtype=x0.dtype)
+    if nx == 0:
+        xs.append(x0)
+        ax.append(h_op(x0))
+    else:
+        for i in range(1, nx+1):
+            for j in range(1, i+1):
+                heff[i,j] = dot(xs[i-1].conj(), ax[j-1])
+                ovlp[i,j] = dot(xs[i-1].conj(), xs[j-1])
+            heff[1:i,i] = heff[i,1:i].conj()
+            ovlp[1:i,i] = ovlp[i,1:i].conj()
+
     w_t = 0
     for istep in range(max_cycle):
         g = g_op()
         nx = len(xs)
         for i in range(nx):
-            heff[i+1,0] = numpy.dot(xs[i].conj(), g)
-            heff[nx,i+1] = numpy.dot(xs[nx-1].conj(), ax[i])
-            ovlp[nx,i+1] = numpy.dot(xs[nx-1].conj(), xs[i])
+            heff[i+1,0] = dot(xs[i].conj(), g)
+            heff[nx,i+1] = dot(xs[nx-1].conj(), ax[i])
+            ovlp[nx,i+1] = dot(xs[nx-1].conj(), xs[i])
         heff[0,:nx+1] = heff[:nx+1,0].conj()
-        heff[:nx,nx] = heff[nx,:nx].conj()
-        ovlp[:nx,nx] = ovlp[nx,:nx].conj()
+        heff[1:nx,nx] = heff[nx,1:nx].conj()
+        ovlp[1:nx,nx] = ovlp[nx,1:nx].conj()
         nvec = nx + 1
 #        s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
 #        if s0 < lindep:

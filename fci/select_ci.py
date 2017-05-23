@@ -804,6 +804,24 @@ class SelectedCI(direct_spin1.FCISolver):
         ciket = _as_SCIvector_if_not(ciket, self._strs)
         return trans_rdm1(cibra, ciket, norb, nelec, link_index)
 
+    def gen_linkstr(self, norb, nelec, tril=True, spin=None, ci_strs=None):
+        if spin is None:
+            spin = self.spin
+        if ci_strs is None:
+            ci_strs = self._strs
+        neleca, nelecb = direct_spin1._unpack_nelec(nelec, spin)
+        if tril:
+            cd_indexa = cre_des_linkstr_tril(ci_strs[0], norb, neleca)
+            dd_indexa = des_des_linkstr_tril(ci_strs[0], norb, neleca)
+            cd_indexb = cre_des_linkstr_tril(ci_strs[1], norb, nelecb)
+            dd_indexb = des_des_linkstr_tril(ci_strs[1], norb, nelecb)
+        else:
+            cd_indexa = cre_des_linkstr(ci_strs[0], norb, neleca)
+            dd_indexa = des_des_linkstr(ci_strs[0], norb, neleca)
+            cd_indexb = cre_des_linkstr(ci_strs[1], norb, nelecb)
+            dd_indexb = des_des_linkstr(ci_strs[1], norb, nelecb)
+        return cd_indexa, dd_indexa, cd_indexb, dd_indexb
+
 SCI = SelectedCI
 
 

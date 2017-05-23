@@ -22,6 +22,7 @@ from pyscf.mcscf import chkfile
 from pyscf import ao2mo
 from pyscf import scf
 from pyscf.scf import ciah
+from pyscf import fci
 
 
 # gradients, hessian operator and hessian diagonal
@@ -33,9 +34,14 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
     nmo = mo.shape[1]
     ci0 = ci0.ravel()
 
+    if hasattr(casscf.fcisolver, 'gen_linkstr'):
+        linkstrl = casscf.fcisolver.gen_linkstr(ncas, nelecas, True)
+        linkstr  = casscf.fcisolver.gen_linkstr(ncas, nelecas, False)
+    else:
+        linkstrl = linkstr  = None
     def fci_matvec(civec, h1, h2):
         h2cas = casscf.fcisolver.absorb_h1e(h1, h2, ncas, nelecas, .5)
-        hc = casscf.fcisolver.contract_2e(h2cas, civec, ncas, nelecas).ravel()
+        hc = casscf.fcisolver.contract_2e(h2cas, civec, ncas, nelecas, link_index=linkstrl).ravel()
         return hc
 
     # part5
@@ -43,7 +49,7 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
     # part2, part3
     vhf_a = numpy.empty((nmo,nmo))
     # part1 ~ (J + 2K)
-    casdm1, casdm2 = casscf.fcisolver.make_rdm12(ci0, ncas, nelecas)
+    casdm1, casdm2 = casscf.fcisolver.make_rdm12(ci0, ncas, nelecas, link_index=linkstr)
     dm2tmp = casdm2.transpose(1,2,0,3) + casdm2.transpose(0,2,1,3)
     dm2tmp = dm2tmp.reshape(ncas**2,-1)
     hdm2 = numpy.empty((nmo,ncas,nmo,ncas))
@@ -75,7 +81,7 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
 
     h1cas_0 = h1e_mo[ncore:nocc,ncore:nocc] + eris.vhf_c[ncore:nocc,ncore:nocc]
     h2cas_0 = casscf.fcisolver.absorb_h1e(h1cas_0, eri_cas, ncas, nelecas, .5)
-    hc0 = casscf.fcisolver.contract_2e(h2cas_0, ci0, ncas, nelecas).ravel()
+    hc0 = casscf.fcisolver.contract_2e(h2cas_0, ci0, ncas, nelecas, link_index=linkstrl).ravel()
     eci0 = ci0.dot(hc0)
     gci = hc0 - ci0 * eci0
 
@@ -90,7 +96,11 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
         dm_c = numpy.dot(mo_c, mo_c.T) * 2
 
         fcivec *= 1./numpy.linalg.norm(fcivec)
-        casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, nelecas)
+        casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, nelecas, link_index=linkstr)
+        #casscf.with_dep4 = False
+        #casscf.ci_response_space = 3
+        #casscf.ci_grad_trust_region = 3
+        #casdm1, casdm2, gci, fcivec = casscf.update_casdm(mo, u, fcivec, 0, eris, locals())
         dm_a = reduce(numpy.dot, (mo_a, casdm1, mo_a.T))
         vj, vk = casscf.get_jk(casscf.mol, (dm_c, dm_a))
         vhf_c = reduce(numpy.dot, (mo1.T, vj[0]-vk[0]*.5, mo1[:,:nocc]))
@@ -193,7 +203,7 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
         ci1 = x[ngorb:]
 
         # H_cc
-        hci1 = fci_matvec(ci1, h1cas_0, eri_cas)
+        hci1 = casscf.fcisolver.contract_2e(h2cas_0, ci1, ncas, nelecas, link_index=linkstrl).ravel()
         hci1 -= ci1 * eci0
         hci1 -= ((hc0-ci0*eci0)*ci0.dot(ci1) + ci0*(hc0-ci0*eci0).dot(ci1)) * 2
 
@@ -203,9 +213,10 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
         ddm_c = numpy.zeros((nmo,nmo))
         ddm_c[:,:ncore] = rc[:,:ncore] * 2
         ddm_c[:ncore,:]+= rc[:,:ncore].T * 2
-        tdm1, tdm2 = casscf.fcisolver.trans_rdm12(ci1, ci0, ncas, nelecas)
+        tdm1, tdm2 = casscf.fcisolver.trans_rdm12(ci1, ci0, ncas, nelecas, link_index=linkstr)
         tdm1 = tdm1 + tdm1.T
         tdm2 = tdm2 + tdm2.transpose(1,0,3,2)
+        tdm2 =(tdm2 + tdm2.transpose(2,3,0,1)) * .5
         vhf_a = numpy.empty((nmo,ncore))
         paaa = numpy.empty((nmo,ncas,ncas,ncas))
         jk = 0
@@ -325,7 +336,7 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
     u = numpy.eye(nmo)
     ci_kf = ci0
 
-    if norm_gall < conv_tol_grad:
+    if norm_gall < conv_tol_grad*.3:
         return u, ci_kf, norm_gall, stat, x0_guess
 
     for ah_conv, ihop, w, dxi, hdxi, residual, seig \
@@ -392,7 +403,7 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
                 else:
                     g_all = g_all - hdxi
                     dr -= dxi
-                    norm_gall = numpy.linalg.norm(g_all)
+                    norm_gall = norm_gkf = numpy.linalg.norm(g_all)
                     log.debug('Out of trust region. Restore previouse step')
                     break
 
@@ -401,7 +412,7 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
               stat.imic, norm_gall, norm_gorb, norm_gci,
               numpy.linalg.norm(u-numpy.eye(nmo)),
               numpy.linalg.norm(ci_kf-ci0))
-    return u, ci_kf, norm_gall, stat, dxi
+    return u, ci_kf, norm_gkf, stat, dxi
 
 
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
@@ -598,7 +609,8 @@ class CASSCF(mc1step.CASSCF):
         self.callback = None
         self.chk_ci = False
 
-        self.fcisolver.max_cycle = 20
+        self.fcisolver.max_cycle = 25
+        #self.fcisolver.max_space = 25
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -719,7 +731,34 @@ if __name__ == '__main__':
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None#"out_h2o"
-    a = 3.
+    mol.atom = [
+        ['H', ( 1.,-1.    , 0.   )],
+        ['H', ( 0.,-1.    ,-1.   )],
+        ['H', ( 1.,-0.5   ,-1.   )],
+        ['H', ( 0.,-0.5   ,-1.   )],
+        ['H', ( 0.,-0.5   ,-0.   )],
+        ['H', ( 0.,-0.    ,-1.   )],
+        ['H', ( 1.,-0.5   , 0.   )],
+        ['H', ( 0., 1.    , 1.   )],
+    ]
+
+    mol.basis = {'H': 'sto-3g',
+                 'O': '6-31g',}
+    mol.build()
+
+    m = scf.RHF(mol)
+    ehf = m.scf()
+    emc = kernel(CASSCF(m, 4, 4), m.mo_coeff, verbose=4)[1]
+    print(ehf, emc, emc-ehf)
+    print(emc - -3.22013929407)
+
+    mc = CASSCF(m, 4, (3,1))
+    mc.verbose = 4
+    #mc.fcisolver = pyscf.fci.direct_spin1
+    mc.fcisolver = pyscf.fci.solver(mol, False)
+    emc = kernel(mc, m.mo_coeff, verbose=4)[1]
+    print(emc - -15.950852049859-mol.energy_nuc())
+
     mol.atom = [
         ['H', ( 5.,-1.    , 1.   )],
         ['H', ( 0.,-5.    ,-2.   )],
