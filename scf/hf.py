@@ -884,7 +884,7 @@ def unpack_uniq_var(dx, mo_occ):
     nmo = len(mo_occ)
     idx = uniq_var_indices(mo_occ)
 
-    x1 = numpy.zeros((nmo,nmo))
+    x1 = numpy.zeros((nmo,nmo), dtype=dx.dtype)
     x1[idx] = dx
     return x1 - x1.T
 ############

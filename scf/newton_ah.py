@@ -37,7 +37,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
         fock_ao = h1e + mf.get_veff(mol, dm0)
     fock = reduce(numpy.dot, (mo_coeff.T, fock_ao, mo_coeff))
 
-    g = fock[viridx[:,None],occidx] * 2
+    g = fock[occidx[:,None],viridx].T * 2
 
     foo = fock[occidx[:,None],occidx]
     fvv = fock[viridx[:,None],viridx]
@@ -52,38 +52,37 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
         if mf.grids.coords is None:
             mf.grids.build()
-        hyb = mf._numint.hybrid_coeff(mf.xc, spin=(mol.spin>0)+1)
-        rho0, vxc, fxc = mf._numint.cache_xc_kernel(mol, mf.grids, mf.xc,
-                                                    mo_coeff, mo_occ, 0)
+        ni = mf._numint
+        hyb = ni.hybrid_coeff(mf.xc, spin=(mol.spin>0)+1)
+        rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc, mo_coeff, mo_occ, 0)
         dm0 = None #mf.make_rdm1(mo_coeff, mo_occ)
     else:
         hyb = None
 
     def h_op(x):
         x = x.reshape(nvir,nocc)
-        x2 = numpy.einsum('sp,sq->pq', fvv, x) * 2
-        x2-= numpy.einsum('sp,rp->rs', foo, x) * 2
+        x2 = numpy.einsum('sp,sq->pq', fvv, x.conj()) * 2
+        x2-= numpy.einsum('sp,rp->rs', foo, x.conj()) * 2
 
-        d1 = reduce(numpy.dot, (mo_coeff[:,viridx], x, mo_coeff[:,occidx].T))
-        dm1 = d1 + d1.T
+        d1 = reduce(numpy.dot, (mo_coeff[:,viridx], x, mo_coeff[:,occidx].T.conj()))
+        dm1 = d1 + d1.T.conj()
         if hyb is None:
             vj, vk = mf.get_jk(mol, dm1)
             v1 = vj - vk * .5
         else:
-            v1 = mf._numint.nr_rks_fxc(mol, mf.grids, mf.xc, dm0, dm1,
-                                       0, 1, rho0, vxc, fxc)
-# *.7 this magic number can stablize DFT convergence.  Without scaling down
-# the XC hessian, large oscillation is observed in Newton iterations.  It may
-# be due to the numerical integration error.  Scaling down XC hessian can
-# reduce to some extent the integration error.
-            v1 *= .7
+            v1 = ni.nr_rks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, 1, rho0, vxc, fxc)
+## *.7 this magic number can stablize DFT convergence.  Without scaling down
+## the XC hessian, large oscillation is observed in Newton iterations.  It may
+## be due to the numerical integration error.  Scaling down XC hessian can
+## reduce to some extent the integration error.
+#            v1 *= .7
             if abs(hyb) < 1e-10:
                 v1 += mf.get_j(mol, dm1)
             else:
                 vj, vk = mf.get_jk(mol, dm1)
                 v1 += vj - vk * (hyb * .5)
-        x2 += reduce(numpy.dot, (mo_coeff[:,viridx].T, v1,
-                                 mo_coeff[:,occidx])) * 4
+        x2 += reduce(numpy.dot, (mo_coeff[:,occidx].T.conj(), v1,
+                                 mo_coeff[:,viridx])).T * 4
         return x2.reshape(-1)
 
     return g.reshape(-1), h_op, h_diag.reshape(-1)
@@ -137,8 +136,8 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     focka = reduce(numpy.dot, (mo_coeff[0].T, fock_ao[0], mo_coeff[0]))
     fockb = reduce(numpy.dot, (mo_coeff[1].T, fock_ao[1], mo_coeff[1]))
 
-    g = numpy.hstack((focka[viridxa[:,None],occidxa].reshape(-1),
-                      fockb[viridxb[:,None],occidxb].reshape(-1)))
+    g = numpy.hstack((focka[occidxa[:,None],viridxa].T.ravel(),
+                      fockb[occidxb[:,None],viridxb].T.ravel()))
 
     h_diaga =(focka[viridxa,viridxa].reshape(-1,1) - focka[occidxa,occidxa])
     h_diagb =(fockb[viridxb,viridxb].reshape(-1,1) - fockb[occidxb,occidxb])
@@ -151,11 +150,11 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
         if mf.grids.coords is None:
             mf.grids.build()
-        hyb = mf._numint.hybrid_coeff(mf.xc, spin=(mol.spin>0)+1)
-        rho0, vxc, fxc = mf._numint.cache_xc_kernel(mol, mf.grids, mf.xc,
-                                                    mo_coeff, mo_occ, 1)
-        #dm0 =(numpy.dot(mo_coeff[0]*mo_occ[0], mo_coeff[0].T),
-        #      numpy.dot(mo_coeff[1]*mo_occ[1], mo_coeff[1].T))
+        ni = mf._numint
+        hyb = ni.hybrid_coeff(mf.xc, spin=(mol.spin>0)+1)
+        rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc, mo_coeff, mo_occ, 1)
+        #dm0 =(numpy.dot(mo_coeff[0]*mo_occ[0], mo_coeff[0].T.conj()),
+        #      numpy.dot(mo_coeff[1]*mo_occ[1], mo_coeff[1].T.conj()))
         dm0 = None
     else:
         hyb = None
@@ -163,37 +162,36 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     def h_op(x):
         x1a = x[:nvira*nocca].reshape(nvira,nocca)
         x1b = x[nvira*nocca:].reshape(nvirb,noccb)
-        x2a  = numpy.einsum('rp,rq->pq', focka[viridxa[:,None],viridxa], x1a)
-        x2a -= numpy.einsum('sq,ps->pq', focka[occidxa[:,None],occidxa], x1a)
-        x2b  = numpy.einsum('rp,rq->pq', fockb[viridxb[:,None],viridxb], x1b)
-        x2b -= numpy.einsum('sq,ps->pq', fockb[occidxb[:,None],occidxb], x1b)
+        x2a = numpy.einsum('rp,rq->pq', focka[viridxa[:,None],viridxa], x1a.conj())
+        x2a-= numpy.einsum('sq,ps->pq', focka[occidxa[:,None],occidxa], x1a.conj())
+        x2b = numpy.einsum('rp,rq->pq', fockb[viridxb[:,None],viridxb], x1b.conj())
+        x2b-= numpy.einsum('sq,ps->pq', fockb[occidxb[:,None],occidxb], x1b.conj())
 
         d1a = reduce(numpy.dot, (mo_coeff[0][:,viridxa], x1a,
-                                 mo_coeff[0][:,occidxa].T))
+                                 mo_coeff[0][:,occidxa].T.conj()))
         d1b = reduce(numpy.dot, (mo_coeff[1][:,viridxb], x1b,
-                                 mo_coeff[1][:,occidxb].T))
-        dm1 = numpy.array((d1a+d1a.T,d1b+d1b.T))
+                                 mo_coeff[1][:,occidxb].T.conj()))
+        dm1 = numpy.array((d1a+d1a.T.conj(),d1b+d1b.T.conj()))
         if hyb is None:
             vj, vk = mf.get_jk(mol, dm1)
             v1 = vj[0]+vj[1] - vk
         else:
-            v1 = mf._numint.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dm1,
-                                       0, 1, rho0, vxc, fxc)
-# *.7 this magic number can stablize DFT convergence.  Without scaling down
-# the XC hessian, large oscillation is observed in Newton iterations.  It may
-# be due to the numerical integration error.  Scaling down XC hessian can
-# reduce to some extent the integration error.
-            v1 *= .7
+            v1 = ni.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, 1, rho0, vxc, fxc)
+## *.7 this magic number can stablize DFT convergence.  Without scaling down
+## the XC hessian, large oscillation is observed in Newton iterations.  It may
+## be due to the numerical integration error.  Scaling down XC hessian can
+## reduce to some extent the integration error.
+#            v1 *= .7
             if abs(hyb) < 1e-10:
                 vj = mf.get_j(mol, dm1)
                 v1 += vj[0] + vj[1]
             else:
                 vj, vk = mf.get_jk(mol, dm1)
                 v1 += vj[0]+vj[1] - vk * hyb
-        x2a += reduce(numpy.dot, (mo_coeff[0][:,viridxa].T, v1[0],
-                                  mo_coeff[0][:,occidxa]))
-        x2b += reduce(numpy.dot, (mo_coeff[1][:,viridxb].T, v1[1],
-                                  mo_coeff[1][:,occidxb]))
+        x2a += reduce(numpy.dot, (mo_coeff[0][:,occidxa].T.conj(), v1[0],
+                                  mo_coeff[0][:,viridxa])).T
+        x2b += reduce(numpy.dot, (mo_coeff[1][:,occidxb].T.conj(), v1[1],
+                                  mo_coeff[1][:,viridxb])).T
         return numpy.hstack((x2a.ravel(), x2b.ravel()))
 
     return g, h_op, h_diag

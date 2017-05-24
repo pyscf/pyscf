@@ -852,13 +852,16 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=1,
 
 def _rks_gga_wv(rho0, rho1, vxc, fxc, weight):
     vgamma = vxc[1]
-    frr, frg, fgg = fxc[:3]
+    frho, frhogamma, fgg = fxc[:3]
     ngrid = vgamma.size
-    sigma1 = numpy.einsum('xi,xi->i', rho0[1:], rho1[1:])
+    # sigma1 = \nabla(\rho_\alpha+\rho_\beta) dot \nabla(|b><j|) z_{bj}
+    # *2 for alpha + beta
+    sigma1 = numpy.einsum('xi,xi->i', rho0[1:], rho1[1:]) * 2
     wv = numpy.empty((4,ngrid))
-    wv[0]  = frr * rho1[0]
-    wv[0] += frg * sigma1 * 2
-    wv[1:] = (fgg * sigma1 * 4 + frg * rho1[0] * 2) * rho0[1:]
+    wv[0]  = frho * rho1[0]
+    wv[0] += frhogamma * sigma1
+    wv[1:] = (fgg * sigma1 + frhogamma * rho1[0]) * rho0[1:]
+    wv[1:]*= 2  # because \nabla\rho = \nabla(\rho_\alpha+\rho_\beta)
     wv[1:]+= vgamma * rho1[1:] * 2
     wv[1:]*= 2  # for (\nabla\mu) \nu + \mu (\nabla\nu)
     wv *= weight
