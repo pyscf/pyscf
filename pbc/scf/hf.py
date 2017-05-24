@@ -318,7 +318,9 @@ class RHF(hf.RHF):
             if self.exxdiv == 'ewald':
                 from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0
                 # G=0 is not inculded in the ._eri integrals
-                _ewald_exxdiv_for_G0(self.cell, kpt, [dm], [vk])
+                nao = dm.shape[-1]
+                _ewald_exxdiv_for_G0(self.cell, kpt, dm.reshape(-1,nao,nao),
+                                     vk.reshape(-1,nao,nao))
         else:
             vj, vk = self.with_df.get_jk(dm, hermi, kpt, kpt_band,
                                          exxdiv=self.exxdiv)
