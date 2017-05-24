@@ -1327,9 +1327,10 @@ class SCF(lib.StreamObject):
 
     @property
     def diis_file(self):
-        return seif.diis.filename
+        return self.diis.filename
+    @diis_file.setter
     def diis_file(self, x):
-        seif.diis.filename = x
+        self.diis.filename = x
 
     #self.diis_start_cycle = 1 # need > 0 if initial DM is numpy.zeros array
 
