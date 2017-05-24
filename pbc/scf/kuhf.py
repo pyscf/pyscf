@@ -31,7 +31,7 @@ def canonical_occ_(mf):
     which results in a finite size error for metallic systems
     but can accelerate convergence '''
     assert(isinstance(mf,KUHF))
-  
+
     def get_occ(mo_energy_kpts=None,mo_coeff=None):
         if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
         print(mo_energy_kpts)
@@ -41,14 +41,13 @@ def canonical_occ_(mf):
         nkpts = np.array(mo_energy_kpts).shape[1]
         homo=[-1e8,-1e8]
         lumo=[1e8,1e8]
-    
 
         for k in range(nkpts):
             for s in [0,1]:
                 e_idx=np.argsort(mo_energy_kpts[s,k])
                 e_sort=mo_energy_kpts[s,k][e_idx]
                 n=mf.nelec[s]
-        
+
                 mo_occ_kpts[s,k][e_idx[:n]]=1
                 homo[s]=max(homo[s],e_sort[n-1])
                 lumo[s]=min(lumo[s],e_sort[n])
@@ -60,7 +59,7 @@ def canonical_occ_(mf):
                 logger.info(mf,"WARNING! HOMO is greater than LUMO! This may result in errors with canonical occupation.")
 
         return mo_occ_kpts
-      
+
     mf.get_occ=get_occ
     return mf
 canonical_occ=canonical_occ_
@@ -116,26 +115,17 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
 
     nkpts = len(mo_energy_kpts[0])
 
-    #mo_energy = np.sort(mo_energy_kpts.ravel())
-    #fermi = mo_energy[nocc-1]
-    #mo_occ_kpts[mo_energy_kpts <= fermi] = 1
-    homo=[-1e8,-1e8]
-    lumo=[1e8,1e8]
-    
+    nocc_a = mf.nelec[0] * nkpts
+    mo_energy = np.sort(mo_energy_kpts[0].ravel())
+    fermi_a = mo_energy[nocc_a-1]
+    mo_occ_kpts[0,mo_energy_kpts[0]<=fermi_a] = 1
+    logger.info(mf, 'alpha HOMO = %.12g  LUMO = %.12g', fermi_a, mo_energy[nocc_a])
 
-    nocc=mf.nelec*nkpts
-    for s in [0,1]:
-        mo_energy=mo_energy_kpts[s].ravel()
-        fermi=mo_energy[nocc[s]-1]
-        homo[s]=mo_energy[nocc[s]-1]
-        lumo[s]=mo_energy[nocc[s]]
-        for k in range(nkpts):
-            mo_occ_kpts[s,k][mo_energy_kpts[s,k] <= fermi] =1
-
-    for nm,s in zip(['alpha','beta'],[0,1]):
-        logger.info(mf, nm+' HOMO = %.12g  LUMO = %.12g',
-                    homo[s],lumo[s])
-
+    nocc_b = mf.nelec[1] * nkpts
+    mo_energy = np.sort(mo_energy_kpts[1].ravel())
+    fermi_b = mo_energy[nocc_b-1]
+    mo_occ_kpts[1,mo_energy_kpts[1]<=fermi_b] = 1
+    logger.info(mf, 'beta HOMO = %.12g  LUMO = %.12g', fermi_b, mo_energy[nocc_b])
 
     if mf.verbose >= logger.DEBUG:
         np.set_printoptions(threshold=len(mo_energy))
@@ -268,7 +258,7 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
         viridxb = ~occidxb
         eig_(fock[1][k], mo, occidxb, mo_e[1,k], mo)
         eig_(fock[1][k], mo, viridxb, mo_e[1,k], mo)
-    return mo_e, mo
+    return mo_e, mo_coeff_kpts
 
 def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
     '''Read the KHF results from checkpoint file, then project it to the
@@ -410,7 +400,7 @@ class KUHF(uhf.UHF, khf.KRHF):
     def analyze(self, verbose=None, **kwargs):
         if verbose is None: verbose = self.verbose
         return analyze(self, verbose, **kwargs)
-      
+
 
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):
         if fock is None:
@@ -501,7 +491,7 @@ class KUHF(uhf.UHF, khf.KRHF):
         ssxy = (nelec_a + nelec_b) * .5
         for k in range(nkpts):
             sij = reduce(np.dot, (mo_a[k].T.conj(), s[k], mo_b[k]))
-            ssxy -= np.einsum('ij,ij->', sij.conj(), sij)
+            ssxy -= np.einsum('ij,ij->', sij.conj(), sij).real
         ssz = (nelec_b-nelec_a)**2 * .25
         ss = ssxy + ssz
         s = np.sqrt(ss+.25) - .5
