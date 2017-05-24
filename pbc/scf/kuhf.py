@@ -269,7 +269,7 @@ class KUHF(uhf.UHF, khf.KRHF):
             nkpts = len(self.kpts)
             dm_kpts = lib.asarray([dm]*nkpts).reshape(nkpts,2,nao,nao)
             dm_kpts = dm_kpts.transpose(1,0,2,3)
-            dm[1,:] *= .98  # To break spin symmetry
+            dm_kpts[1,:] *= .98  # To break spin symmetry
         return dm_kpts
 
     get_hcore = khf.KRHF.get_hcore

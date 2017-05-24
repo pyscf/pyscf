@@ -939,7 +939,7 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=1,
         make_rhob = make_rhoa
     else:
         make_rhoa, nset = ni._gen_rho_evaluator(mol, dms[0].reshape(-1,nao,nao), hermi)[:2]
-        make_rhob       = ni._gen_rho_evaluator(mol, dms[0].reshape(-1,nao,nao), hermi)[0]
+        make_rhob       = ni._gen_rho_evaluator(mol, dms[1].reshape(-1,nao,nao), hermi)[0]
 
     if ((xctype == 'LDA' and fxc is None) or
         (xctype == 'GGA' and rho0 is None)):

@@ -425,10 +425,6 @@ def nr_rks(ni, cell, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
                 excsum[i] += (den*exc).sum()
                 vmat[i] += ni.eval_mat(cell, ao_k1, weight, rho, vxc,
                                        mask, xctype, 0, verbose)
-
-    #if kpts_band is not None:
-    #    vmat = [v.reshape(nao,nao) for v in vmat]
-
     if nset == 1:
         nelec = nelec[0]
         excsum = excsum[0]
@@ -562,11 +558,6 @@ def nr_uks(ni, cell, grids, xc_code, dm, spin=1, relativity=0, hermi=1,
                 vmatb[i] += ni.eval_mat(cell, ao_k1, weight, (rho_b,rho_a), v,
                                         mask, xctype, 1, verbose)
                 v = None
-
-    if kpts_band is not None:
-        vmata = [v.reshape(nao,nao) for v in vmata]
-        vmatb = [v.reshape(nao,nao) for v in vmatb]
-
     if nset == 1:
         nelec = nelec[:,0]
         excsum = excsum[0]
