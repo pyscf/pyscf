@@ -15,7 +15,6 @@ from pyscf import lib
 from pyscf.dft import numint
 from pyscf.ao2mo import _ao2mo
 from pyscf.pbc.tddft import rhf
-from pyscf.tddft import rks
 
 # dmvo = (X+Y) in AO representation
 def _contract_xc_kernel(mf, dmvo, singlet=True,
@@ -126,7 +125,7 @@ class TDA(rhf.TDA):
             nvir = nmo - nocc
             orbo.append(mo_coeff[k,:,:nocc])
             orbv.append(mo_coeff[k,:,nocc:])
-        rho0, vxc, fxc = mf._numint.cache_xc_kernel(mf.mol, mf.grids, mf.xc,
+        rho0, vxc, fxc = mf._numint.cache_xc_kernel(mf.cell, mf.grids, mf.xc,
                                                     [mo_coeff, mo_coeff],
                                                     [mo_occ*.5, mo_occ*.5], spin=1)
         eai = rhf._get_eai(mo_energy, mo_occ)
@@ -167,10 +166,80 @@ class TDA(rhf.TDA):
         return vind
 
 
+class TDDFT(rhf.TDHF):
+    def get_vind(self, mf):
+        '''
+        [ A   B ][X]
+        [-B* -A*][Y]
+        '''
+        mo_coeff = mf.mo_coeff
+        mo_energy = mf.mo_energy
+        mo_occ = mf.mo_occ
+        nkpts = len(mo_occ)
+        nao, nmo = mo_coeff.shape[1:]
+        orbo = []
+        orbv = []
+        for k in range(nkpts):
+            nocc = numpy.count_nonzero(mo_occ[k]>0)
+            orbo.append(mo_coeff[k,:,:nocc])
+            orbv.append(mo_coeff[k,:,nocc:])
+        rho0, vxc, fxc = mf._numint.cache_xc_kernel(mf.cell, mf.grids, mf.xc,
+                                                    [mo_coeff, mo_coeff],
+                                                    [mo_occ*.5, mo_occ*.5], spin=1)
+        eai = rhf._get_eai(mo_energy, mo_occ)
+        hyb = mf._numint.hybrid_coeff(mf.xc, spin=(mf.cell.spin>0)+1)
+
+        def vind(xys):
+            nz = len(xys)
+            nx = xys[0].size // 2
+            dmxs = [rhf._split_vo(xy[:nx], mo_occ) for xy in xys]
+            dmys = [rhf._split_vo(xy[nx:], mo_occ) for xy in xys]
+            dmvo = numpy.empty((nz,nkpts,nao,nao), dtype=numpy.complex128)
+            for i in range(nz):
+                dmx = dmxs[i]
+                dmy = dmys[i]
+                for k in range(nkpts):
+                    dmvo[i,k] = reduce(numpy.dot, (orbv[k], dmx[k], orbo[k].T.conj()))
+                    dmvo[i,k]+= reduce(numpy.dot, (orbo[k], dmy[k].T, orbv[k].T.conj()))
+
+            mem_now = lib.current_memory()[0]
+            max_memory = max(2000, self.max_memory*.9-mem_now)
+            v1ao = _contract_xc_kernel(mf, dmvo, self.singlet, rho0, vxc, fxc,
+                                       max_memory=max_memory)
+            if abs(hyb) > 1e-10:
+                vj, vk = mf.get_jk(mf.cell, dmvo, hermi=0)
+                if self.singlet:
+                    v1ao += vj * 2 - hyb * vk
+                else:
+                    v1ao -= hyb * vk
+            else:
+                if self.singlet:
+                    vj = mf.get_j(mf.cell, dmvo, hermi=1)
+                    v1ao += vj * 2
+
+            v1s = []
+            for i in range(nz):
+                dmx = dmxs[i]
+                dmy = dmys[i]
+                v1xs = []
+                v1ys = []
+                for k in range(nkpts):
+                    v1x = reduce(numpy.dot, (orbv[k].T.conj(), v1ao[i,k], orbo[k]))
+                    v1y = reduce(numpy.dot, (orbo[k].T.conj(), v1ao[i,k], orbv[k])).T
+                    v1x+= eai[k] * dmx[k]
+                    v1y+= eai[k] * dmy[k]
+                    v1xs.append(v1x.ravel())
+                    v1ys.append(-v1y.ravel())
+                v1s.extend(v1xs)
+                v1s.extend(v1ys)
+            return lib.asarray(v1s).reshape(nz,-1)
+        return vind
+
+
 if __name__ == '__main__':
     from pyscf.pbc import gto
     from pyscf.pbc import scf
-    from pyscf.pbc import dft
+    from pyscf.pbc import dft, df
     cell = gto.Cell()
     cell.unit = 'B'
     cell.atom = '''
@@ -178,30 +247,35 @@ if __name__ == '__main__':
     C  1.68506879  1.68506879  1.68506879
     '''
     cell.a = '''
-    0.      1.7834  1.7834
-    1.7834  0.      1.7834
-    1.7834  1.7834  0.    
+    0.          3.37013758  3.37013758
+    3.37013758  0.          3.37013758
+    3.37013758  3.37013758  0.
     '''
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
-    cell.gs = [9]*3
+    cell.gs = [12]*3
     cell.build()
 
     mf = dft.KRKS(cell, cell.make_kpts([2,1,1]))
+    #mf.with_df = df.MDF(cell, cell.make_kpts([2,1,1]))
+    #mf.with_df.auxbasis = 'weigend'
+    #mf.with_df._cderi = 'eri3d-mdf.h5'
+    #mf.with_df.build(with_j3c=False)
     mf.xc = 'lda'
     mf.kernel()
+#gs=12 -10.3077341607895
+#gs=5  -10.3086623157515
 
-#    td = TDDFTNoHybrid(mf)
-#    #td.verbose = 5
-#    td.nstates = 5
-#    print(td.kernel()[0] * 27.2114)
-
-#    td = TDDFT(mf)
-#    td.nstates = 5
-#    #td.verbose = 5
-#    print(td.kernel()[0] * 27.2114)
+    td = TDDFT(mf)
+    td.nstates = 5
+    td.verbose = 5
+    print(td.kernel()[0] * 27.2114)
+#gs=12 [ 6.08108297  6.10231481  6.10231478  6.38355803  6.38355804]
+#MDF gs=5 [ 6.07919157  6.10251718  6.10253961  6.37202499  6.37565246]
 
     td = TDA(mf)
     td.singlet = False
     td.verbose = 5
     print(td.kernel()[0] * 27.2114)
+#gs=12 [ 4.01539192  5.1750807   5.17508071]
+#MDF gs=5 [ 4.01148649  5.18043397  5.18043459]

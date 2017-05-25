@@ -16,10 +16,11 @@ from pyscf.tddft import rhf
 
 
 class TDA(rhf.TDA):
-#FIXME: numerically unstable?
+#FIXME: numerically unstable with small gs?
+#TODO: Add a warning for small gs.
     def __init__(self, mf):
         self.cell = mf.cell
-        #self.conv_tol = 1e-7
+        self.conv_tol = 1e-7
         rhf.TDA.__init__(self, mf)
 
     def get_vind(self, mf):
@@ -32,7 +33,6 @@ class TDA(rhf.TDA):
         orbv = []
         for k in range(nkpts):
             nocc = numpy.count_nonzero(mo_occ[k]>0)
-            nvir = nmo - nocc
             orbo.append(mo_coeff[k,:,:nocc])
             orbv.append(mo_coeff[k,:,nocc:])
         eai = _get_eai(mo_energy, mo_occ)
@@ -90,9 +90,9 @@ CIS = TDA
 
 class TDHF(rhf.TDHF):
     def __init__(self, mf):
-        raise RuntimeError
+#TODO: Add a warning for small gs.
         self.cell = mf.cell
-        #self.conv_tol = 1e-7
+        self.conv_tol = 1e-7
         rhf.TDHF.__init__(self, mf)
 
     def get_vind(self, mf):
@@ -109,7 +109,6 @@ class TDHF(rhf.TDHF):
         orbv = []
         for k in range(nkpts):
             nocc = numpy.count_nonzero(mo_occ[k]>0)
-            nvir = nmo - nocc
             orbo.append(mo_coeff[k,:,:nocc])
             orbv.append(mo_coeff[k,:,nocc:])
         eai = _get_eai(mo_energy, mo_occ)
@@ -214,6 +213,7 @@ def _split_vo(vo, mo_occ):
 if __name__ == '__main__':
     from pyscf.pbc import gto
     from pyscf.pbc import scf
+    from pyscf.pbc import df
     cell = gto.Cell()
     cell.unit = 'B'
     cell.atom = '''
@@ -221,20 +221,33 @@ if __name__ == '__main__':
     C  1.68506879  1.68506879  1.68506879
     '''
     cell.a = '''
-    0.      1.7834  1.7834
-    1.7834  0.      1.7834
-    1.7834  1.7834  0.    
+    0.          3.37013758  3.37013758
+    3.37013758  0.          3.37013758
+    3.37013758  3.37013758  0.
     '''
 
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
-    cell.gs = [9]*3
+    cell.gs = [12]*3
     cell.build()
-    mf = scf.KRHF(cell, cell.make_kpts([2,1,1])).set(exxdiv=None).run()
+    mf = scf.KRHF(cell, cell.make_kpts([2,1,1])).set(exxdiv=None)
+    #mf.with_df = df.MDF(cell, cell.make_kpts([2,1,1]))
+    #mf.with_df.auxbasis = 'weigend'
+    #mf.with_df._cderi = 'eri3d-mdf.h5'
+    #mf.with_df.build(with_j3c=False)
+    mf.run()
+#gs=9  -8.65192427146353
+#gs=12 -8.65192352289817
+#gs=15 -8.6519235231529
+#MDF gs=5 -8.6519301815144
 
     td = TDA(mf)
     td.verbose = 5
     print(td.kernel()[0] * 27.2114)
+#gs=9  [ 6.0073749   6.09315355  6.3479901 ]
+#gs=12 [ 6.00253282  6.09317929  6.34799109]
+#gs=15 [ 6.00253396  6.09317949  6.34799109]
+#MDF gs=5 [ 6.09317489  6.09318265  6.34798637]
 
 #    from pyscf.pbc import tools
 #    scell = tools.super_cell(cell, [2,1,1])
@@ -246,3 +259,8 @@ if __name__ == '__main__':
     td = TDHF(mf)
     td.verbose = 5
     print(td.kernel()[0] * 27.2114)
+#gs=9  [ 6.03860914  6.21664545  8.20305225]
+#gs=12 [ 6.03868259  6.03860343  6.2167623 ]
+#gs=15 [ 6.03861321  6.03861324  6.21675868]
+#MDF gs=5 [ 6.03861693  6.03861775  6.21675694]
+
