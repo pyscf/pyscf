@@ -16,13 +16,12 @@ def comp_coulomb_den(sv, ao_log=None, funct=coulomb_am, **kvargs):
   from pyscf.nao.m_ao_matelem import ao_matelem_c
   
   me = ao_matelem_c(sv.ao_log) if ao_log is None else ao_matelem_c(ao_log)
-
-  atom2s = np.zeros((sv.natm+1), dtype='int32')
-  for atom,sp in enumerate(sv.atom2sp): atom2s[atom+1]=atom2s[atom]+me.ao2.sp2norbs[sp]
+  atom2s = np.zeros((sv.natm+1), dtype=np.int32)
+  for atom,sp in enumerate(sv.atom2sp): atom2s[atom+1]=atom2s[atom]+me.ao1.sp2norbs[sp]
   norbs = atom2s[-1]
-  
+
   res = np.zeros((norbs,norbs))
-  
+
   for atom1,[sp1,rv1,s1,f1] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
     for atom2,[sp2,rv2,s2,f2] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
       oo2f = funct(me,sp1,rv1,sp2,rv2,**kvargs)

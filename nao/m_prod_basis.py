@@ -17,15 +17,18 @@ class prod_basis_c():
     
   Examples:
   '''
-  def __init__(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut=None):
+  def __init__(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
     """ First it should work with GTOs """
-    from pyscf.nao import coulomb_am, comp_overlap_coo, get_atom2bas_s, conv_yzx2xyz_c, prod_log_c
+    from pyscf.nao import coulomb_am, comp_overlap_coo, get_atom2bas_s, conv_yzx2xyz_c, prod_log_c, ls_part_centers
     from scipy.sparse import csr_matrix
     from pyscf import gto
 
     self.prod_log = prod_log_c(sv.ao_log, tol_loc) # local basis (for each specie)
     self.hkernel  = csr_matrix(comp_overlap_coo(sv, self.prod_log, coulomb_am))
-
+    self.gc2s = np.zeros((sv.natm+1), dtype=np.int32) # global product center (atom) -> start in case of atom-centered basis
+    for gc,sp in enumerate(sv.atom2sp): self.gc2s[gc+1]=self.gc2s[gc]+self.prod_log.sp2norbs[sp]
+    gc2s = self.gc2s
+    
     self.bp2vertex = [] # going to be the product vertex coefficients for each bilocal pair 
     self.bp2info   = [] # going to be some information 
     self.bp2cc     = [] # going to be the conversion coefficients
@@ -42,13 +45,25 @@ class prod_basis_c():
         mu2d = [domi for domi,eva in enumerate(ee) if eva>tol_biloc] # The choice of important linear combinations is here
         nprod=len(mu2d)
         if nprod<1: continue # Skip the rest of operations in case there is no strong linear combinations.
-        vertex = np.zeros([nprod,n1,n2], dtype=np.float64)
+        vertex = np.zeros([nprod,n1,n2])
         for p,d in enumerate(mu2d) : vertex[p,:,:] = xx[:,d].reshape([n1,n2])
         self.bp2vertex.append(vertex)
         self.bp2info.append([ia1,ia2])
-        pc_ls = ls_part_centers(sv, ia1, ia2, ac_rcut)
+
+        lc2c = ls_part_centers(sv, ia1, ia2, ac_rcut_ratio) # list of participating centers
+        lc2s = np.zeros((len(lc2c)+1), dtype=np.int32) # local product center -> start for the current bilocal pair
+        for lc,c in enumerate(lc2c): lc2s[lc+1]=lc2s[lc]+self.prod_log.sp2norbs[sv.atom2sp[c]]
+
+        npbp = lc2s[-1]
+        hkernel_bp = np.zeros((npbp, npbp))
+        for lc1,c1 in enumerate(lc2c):
+          for lc2,c2 in enumerate(lc2c):
+            for i1 in range(lc2s[lc1+1]-lc2s[lc1]):
+              for i2 in range(lc2s[lc2+1]-lc2s[lc2]):
+                hkernel_bp[i1+lc2s[lc1],i2+lc2s[lc2]] = self.hkernel[i1+gc2s[c1],i2+gc2s[c2]]
+        inv_hk = np.linalg.inv(hkernel_bp)
+        print(ia1, ia2, len(mu2d), lc2c, hkernel_bp.sum(), inv_hk.sum())
         
-        print(ia1, ia2, len(mu2d))
 
 #
 #
