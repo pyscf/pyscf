@@ -600,7 +600,6 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=1,
                 rho1 = make_rho(i, ao_k1, mask, xctype)
                 wv = weight * frr * rho1
                 vmat[i] += ni._fxc_mat(cell, ao_k1, wv, mask, xctype, ao_loc)
-                rho1 = None
 
     elif xctype == 'GGA':
         ao_deriv = 1
@@ -625,7 +624,6 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=1,
                 rho1 = make_rho(i, ao_k1, mask, xctype)
                 wv = numint._rks_gga_wv(rho, rho1, vxc0, fxc0, weight)
                 vmat[i] += ni._fxc_mat(cell, ao_k1, wv, mask, xctype, ao_loc)
-                rho1 = sigma1 = None
     else:
         raise NotImplementedError('meta-GGA')
 
@@ -704,7 +702,6 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=1,
 
     vmata = [0] * nset
     vmatb = [0] * nset
-    aow = None
     if xctype == 'LDA':
         ao_deriv = 0
         ip = 0
@@ -795,15 +792,14 @@ def cache_xc_kernel(ni, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
     else:
         raise NotImplementedError('meta-GGA')
 
+    nao = cell.nao_nr()
     if spin == 0:
-        nao = mo_coeff.shape[-2]
         rho = []
         for ao_k1, ao_k2, mask, weight, coords \
                 in ni.block_loop(cell, grids, nao, ao_deriv, kpts, None, max_memory):
             rho.append(ni.eval_rho2(cell, ao_k1, mo_coeff, mo_occ, mask, xctype))
         rho = numpy.hstack(rho)
     else:
-        nao = mo_coeff.shape[-2]
         rhoa = []
         rhob = []
         for ao_k1, ao_k2, mask, weight, coords \
