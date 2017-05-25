@@ -1766,6 +1766,9 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
         self.stdout.write('System: %s  Threads %s\n' %
                           (str(platform.uname()), lib.num_threads()))
+        self.stdout.write('Python %s\n' % sys.version)
+        self.stdout.write('numpy %s  scipy %s\n' %
+                          (numpy.__version__, scipy.__version__))
         self.stdout.write('Date: %s\n' % time.ctime())
         try:
             import pyscf
