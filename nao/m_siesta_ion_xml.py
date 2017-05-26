@@ -1,7 +1,6 @@
-from __future__ import division
+from __future__ import division, print_function
 import numpy as np
 from xml.dom import minidom
-#from ase.calculators.siesta.mbpt_lcao_utils import str2int, str2float
 import sys
 import re
 
@@ -225,3 +224,14 @@ def extract_projector(pro_xml):
     pro['ref_energy'] = float(pro_xml.attributes['ref_energy'].value)
 
     return pro
+
+#
+# Executable part
+#
+if __name__=="__main__":
+  import sys 
+  fname = sys.argv[1]
+  ionxml = siesta_ion_xml(fname)
+  print(dir(ionxml))
+  
+

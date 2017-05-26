@@ -1,8 +1,8 @@
 import numpy as np
 import scipy as sp
 from pyscf.nao.m_thrj import thrj
-from sympy.physics.quantum.cg import Wigner3j as w3j
-from sympy.physics.wigner import gaunt as gau
+#from sympy.physics.quantum.cg import Wigner3j as w3j
+#from sympy.physics.wigner import gaunt as gau
 
 #
 #

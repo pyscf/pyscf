@@ -60,10 +60,9 @@ class prod_basis_c():
           for lc2,c2 in enumerate(lc2c):
             for i1 in range(lc2s[lc1+1]-lc2s[lc1]):
               for i2 in range(lc2s[lc2+1]-lc2s[lc2]):
-                hkernel_bp[i1+lc2s[lc1],i2+lc2s[lc2]] = self.hkernel[i1+gc2s[c1],i2+gc2s[c2]]
+                hkernel_bp[i1+lc2s[lc1],i2+lc2s[lc2]] = self.hkernel[i1+gc2s[c1],i2+gc2s[c2]] # element-by-element construction here
         inv_hk = np.linalg.inv(hkernel_bp)
         print(ia1, ia2, len(mu2d), lc2c, hkernel_bp.sum(), inv_hk.sum())
-        
 
 #
 #
