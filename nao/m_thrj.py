@@ -77,16 +77,13 @@ def thrj(l1i,l2i,l3i,m1i,m2i,m3i):
   l1,l2,l3,m1,m2,m3=l1i,l2i,l3i,m1i,m2i,m3i
   ph = 1.0
   if l1<l2 :
-     l2,l1,m2,m1=l1,l2,m1,m2
-     ph=ph*sgn[l1+l2+l3]
+     l2,l1,m2,m1,ph=l1,l2,m1,m2,ph*sgn[l1+l2+l3]
 
   if l2<l3 :
-     l2,l3,m2,m3=l3,l2,m3,m2
-     ph=ph*sgn[l1+l2+l3]
+     l2,l3,m2,m3,ph=l3,l2,m3,m2,ph*sgn[l1+l2+l3]
 
   if l1<l2 :
-     l1,l2,m1,m2=l2,l1,m2,m1
-     ph=ph*sgn[l1+l2+l3]
+     l1,l2,m1,m2,ph=l2,l1,m2,m1,ph*sgn[l1+l2+l3]
 
   if l1>lmax: raise RuntimeError('thrj: 3-j coefficient out of range')
 

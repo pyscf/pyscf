@@ -218,8 +218,8 @@ class system_vars_c():
     for o,atom in enumerate(self.wfsx.orb2atm):
       self.atom2sp[atom-1] = strspecie2sp[self.wfsx.orb2strspecie[o]]
 
-    self.atom2s = np.zeros((sv.natm+1), dtype=np.int64)
-    for atom,sp in enumerate(sv.atom2sp): atom2s[atom+1]=atom2s[atom]+self.ao_log.sp2norbs[sp]
+    self.atom2s = np.zeros((self.natm+1), dtype=np.int64)
+    for atom,sp in enumerate(self.atom2sp): self.atom2s[atom+1]=self.atom2s[atom]+self.ao_log.sp2norbs[sp]
 
     self.atom2mu_s = np.zeros((self.natm+1), dtype=np.int64)
     for atom,sp in enumerate(self.atom2sp): self.atom2mu_s[atom+1]=self.atom2mu_s[atom]+self.ao_log.sp2nmult[sp]

@@ -8,9 +8,11 @@ import numpy as np
 from timeit import default_timer as timer
 from scipy.sparse import csr_matrix
 
-mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvtz') # coordinates in Angstrom!
+mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz') # coordinates in Angstrom!
 sv = system_vars_c(gto=mol)
+t1s = timer()
 prod_log = prod_log_c(sv.ao_log, tol=1e-9)
+print(timer() - t1s, 'time prod_log')
 me = ao_matelem_c(prod_log)
 
 for ia,sp in enumerate(sv.atom2sp):

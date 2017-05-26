@@ -1,8 +1,10 @@
 from __future__ import print_function, division
 import numpy as np
+from numpy import einsum
 from pyscf.nao.m_dipole_ni import dipole_ni
 from pyscf.nao.m_overlap_ni import overlap_ni
-from pyscf.nao.m_ao_log import ao_log_c
+from pyscf.nao.m_overlap_am import overlap_am
+from pyscf.nao import ao_matelem_c, ao_log_c
 
 
 def comp_moments(self):
@@ -37,7 +39,7 @@ def overlap_check(prod_log, overlap_funct=overlap_ni, **kvargs):
   R0 = np.array([0.0,0.0,0.0])
   for sp,[vertex,mom0] in enumerate(zip(prod_log.sp2vertex,sp2mom0)):
     oo_ref = overlap_funct(me,sp,R0,sp,R0,**kvargs)
-    oo = np.einsum('ijk,i->jk', vertex, mom0)
+    oo = np.einsum('pjk,p->jk', vertex, mom0)
     ac = np.allclose(oo_ref, oo, atol=prod_log.tol*10, rtol=prod_log.tol)
     mae = abs(oo_ref-oo).sum()/oo.size
     mxe = abs(oo_ref-oo).max()
@@ -100,6 +102,7 @@ class prod_log_c(ao_log_c):
     self.sp_mu2j       = [] # list of numpy arrays containing the angular momentum of the radial function
     self.sp_mu2s       = [] # list of numpy arrays containing the starting index for each radial multiplett
     self.sp2vertex     = [] # list of numpy arrays containing the vertex coefficients <mu,a,b>
+    self.sp2lambda     = [] # list of numpy arrays containing the inverse vertex coefficients <p,a,b> L^p_ab defined by F^p(r) = L^p_ab f^a(r) f^b(r)
     self.sp2vertex_csr = [] # going to be list of sparse matrices with dimension (nprod,norbs**2) or <mu,ab> . This is a derivative of the sp2vertex
     self.sp2inv_vv     = [] # this is a future list of matrices (<mu|ab><ab|nu>)^-1. This is a derivative of the sp2vertex
     self.sp2norbs      = [] # number of orbitals per specie
@@ -114,7 +117,7 @@ class prod_log_c(ao_log_c):
           if ev>tol: mu2jd.append([j,domi])
 
       nmult=len(mu2jd)
-      mu2j = np.array([jd[0] for jd in mu2jd], dtype=np.int64)
+      mu2j = np.array([jd[0] for jd in mu2jd], dtype=np.int32)
       mu2s = np.array([0]+[sum(2*mu2j[0:mu+1]+1) for mu in range(nmult)], dtype=np.int64)
       mu2rcut = np.array([ao_log.sp2rcut[sp]]*nmult, dtype=np.float64)
       
@@ -124,34 +127,65 @@ class prod_log_c(ao_log_c):
       self.sp_mu2s.append(mu2s)
       self.sp2norbs.append(mu2s[-1])
 
-      mu2ff = np.zeros((nmult, lvc.nr), dtype=np.float64)
+      mu2ff = np.zeros((nmult, lvc.nr))
       for mu,[j,domi] in enumerate(mu2jd): mu2ff[mu,:] = ldp['j2xff'][j][domi,:]
       self.psi_log.append(mu2ff)
       
-      mu2ff = np.zeros((nmult, lvc.nr), dtype=np.float64)
+      mu2ff = np.zeros((nmult, lvc.nr))
       for mu,[j,domi] in enumerate(mu2jd): mu2ff[mu,:] = ldp['j2xff'][j][domi,:]/lvc.rr**j
       self.psi_log_rl.append(mu2ff)
        
       npf= sum(2*mu2j+1)  # count number of product functions
-      mu2ww = np.zeros((npf,no,no), dtype=np.float64)
+      mu2ww = np.zeros((npf,no,no))
       for [j,domi],s in zip(mu2jd,mu2s): mu2ww[s:s+2*j+1,:,:] = ldp['j2xww'][j][domi,0:2*j+1,:,:]
-
       self.sp2vertex.append(mu2ww)
+      mu2iww = np.zeros((npf,no,no))
+      for [j,domi],s in zip(mu2jd,mu2s): mu2iww[s:s+2*j+1,:,:] = ldp['j2xww_inv'][j][domi,0:2*j+1,:,:]
+      self.sp2lambda.append(mu2iww)
+      
       self.sp2vertex_csr.append(csr_matrix(mu2ww.reshape([npf,no**2])))
       v_csr = self.sp2vertex_csr[sp]
       self.sp2inv_vv.append( np.linalg.inv( (v_csr * v_csr.transpose() ).todense() ))
+      
 
     self.jmx = np.amax(np.array( [max(mu2j) for mu2j in self.sp_mu2j], dtype=np.int32))
     self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut])
 
+    del v_csr, mu2iww, mu2ww, mu2ff # maybe unnecessary
+
     
   def overlap_check(self, overlap_funct=overlap_ni, **kvargs):
+    """ Recompute the overlap between orbitals using the product vertex and scalar moments of product functions""" 
     return overlap_check(self, overlap_funct=overlap_ni, **kvargs)
 
   def hartree_pot(self, method=None):
     """ Compute Hartree potential of the radial orbitals and return another ao_log_c storage with these potentials."""
     from pyscf.nao.m_ao_log_hartree import ao_log_hartree as ext
     return ext(self, method)
+
+  def lambda_check_coulomb(self, **kvargs):
+    """ Check the equality (p|q)<q,cd> = [p,ab] <ab|q>(q|r)<r|cd> """
+    me = ao_matelem_c(self)
+    r0 = np.zeros(3)
+    for sp,[pab,lab] in enumerate(zip(self.sp2vertex, self.sp2lambda)):
+      pq = me.coulomb_am(sp,r0, sp, r0)
+      pcd_ref = einsum('pq,qab->pab', pq, pab)
+      abcd = einsum('abq,qcd->abcd', einsum('pab,pq->abq', pab,pq), pab)
+      pcd = einsum('lab,abcd->lcd', lab, abcd)
+      print((abs(pcd-pcd_ref)).sum()/pcd.size)
+    return True
+    
+  def lambda_check_overlap(self, overlap_funct=overlap_am, **kvargs):
+    """ Check the equality (p) = [p,ab] S^ab, i.e. scalar moments are recomputed with inversed vertex from the ao's overlap """
+    me = ao_matelem_c(self.ao_log)
+    sp2mom0,sp2mom1 = comp_moments(self)
+    mael,mxel,acl=[],[],[]
+    r0 = np.zeros(3)
+    for sp,[lab,mom0_ref] in enumerate(zip(self.sp2lambda,sp2mom0)):
+      ab = overlap_funct(me,sp,r0,sp,r0,**kvargs)
+      mom0 = einsum('lab,ab->l', lab,ab)
+      print('lambda_check_overlap', sp, mom0.sum(), mom0_ref.sum(), (abs(mom0-mom0_ref)).sum()/mom0.size)
+    return mael,mxel,acl
     
 #
 #
@@ -161,12 +195,13 @@ if __name__=='__main__':
   from pyscf.nao.m_prod_log import prod_log_c
   import matplotlib.pyplot as plt
   
-  sv  = system_vars_c()
-  prod_log = prod_log_c(sv.ao_log)
+  sv  = system_vars_c(label='siesta')
+  prod_log = prod_log_c(sv.ao_log, tol=1e-4)
   print(dir(prod_log))
   print(prod_log.sp2nmult, prod_log.sp2norbs)
   print(prod_log.overlap_check())
-  
+  print(prod_log.lambda_check_overlap())
+
   sp = 0
   for mu,[ff,j] in enumerate(zip(prod_log.psi_log[sp], prod_log.sp_mu2j[sp])):
     if j==0: 
@@ -177,4 +212,3 @@ if __name__=='__main__':
   plt.legend()
   plt.xlim(0.0,6.0)
   plt.show()
-  

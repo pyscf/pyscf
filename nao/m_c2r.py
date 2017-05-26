@@ -5,23 +5,53 @@ from pyscf.nao.m_fact import sgn
 #
 #
 class c2r_c():
-  """
-    Conversion from complex to real harmonics
-  """
+  """ Conversion from complex to real harmonics """
   def __init__(self, j):
     self._j = j
-    self._c2r = np.zeros( (2*j+1, 2*j+1), dtype='complex128')
-#    self.hc_c2r = np.zeros( (2*j+1, 2*j+1), dtype='complex128')
-    
+    self._c2r = np.zeros( (2*j+1, 2*j+1), dtype=np.complex128)
     self._c2r[j,j]=1.0
     for m in range(1,j+1):
       self._c2r[m+j, m+j] = sgn[m] * np.sqrt(0.5) 
       self._c2r[m+j,-m+j] = np.sqrt(0.5) 
       self._c2r[-m+j,-m+j]= 1j*np.sqrt(0.5)
       self._c2r[-m+j, m+j]= -sgn[m] * 1j * np.sqrt(0.5)
-
+    
+    self._hc_c2r = np.conj(self._c2r).transpose()
     self._conj_c2r = np.conjugate(self._c2r)
     self._tr_c2r = np.transpose(self._c2r)
+
+  #
+  #
+  #
+  def c2r_moo(self, j, mab_c, mu2info):
+    """ Transform tensor m, orb, orb given in complex spherical harmonics to real spherical harmonic"""
+
+    no = mab_c.shape[1]
+    mab_r = np.zeros((2*j+1, no, no)) # result
+    
+    xww1 = np.zeros((2*j+1, no, no), dtype=np.complex128)
+    xww2 = np.zeros(       (no, no), dtype=np.complex128)
+    xww3 = np.zeros(       (no, no), dtype=np.complex128)
+    _j = self._j
+    for m in range(-j,j+1):
+      for m1 in range(-abs(m),abs(m)+1,2*abs(m) if m!=0 else 1):
+        xww1[j+m,:,:]=xww1[j+m,:,:]+self._hc_c2r[_j+m1,_j+m]*mab_c[j+m1,:,:]
+
+    for m in range(-j,j+1):
+      xww2.fill(0.0)
+      for mu1,j1,s1,f1 in mu2info:
+        for m1 in range(-j1,j1+1):
+          for n1 in range(-abs(m1),abs(m1)+1,2*abs(m1) if m1!=0 else 1):
+            xww2[s1+m1+j1,:]=xww2[s1+m1+j1,:]+self._c2r[m1+_j,n1+_j] * xww1[j+m,s1+n1+j1,:]
+
+      xww3.fill(0.0)
+      for mu2,j2,s2,f2 in mu2info:
+        for m2 in range(-j2,j2+1):
+          for n2 in range(-abs(m2),abs(m2)+1,2*abs(m2) if m2!=0 else 1):
+            xww3[:,s2+m2+j2]=xww3[:,s2+m2+j2]+self._c2r[m2+_j,n2+_j] * xww2[:,s2+n2+j2]
+      
+      mab_r[j+m,:,:] = xww3[:,:].real
+    return mab_r
 
   #
   #
