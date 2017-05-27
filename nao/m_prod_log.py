@@ -139,21 +139,24 @@ class prod_log_c(ao_log_c):
       mu2ww = np.zeros((npf,no,no))
       for [j,domi],s in zip(mu2jd,mu2s): mu2ww[s:s+2*j+1,:,:] = ldp['j2xww'][j][domi,0:2*j+1,:,:]
       self.sp2vertex.append(mu2ww)
-      mu2iww = np.zeros((npf,no,no))
-      for [j,domi],s in zip(mu2jd,mu2s): mu2iww[s:s+2*j+1,:,:] = ldp['j2xww_inv'][j][domi,0:2*j+1,:,:]
-      self.sp2lambda.append(mu2iww)
       
       self.sp2vertex_csr.append(csr_matrix(mu2ww.reshape([npf,no**2])))
       v_csr = self.sp2vertex_csr[sp]
       self.sp2inv_vv.append( np.linalg.inv( (v_csr * v_csr.transpose() ).todense() ))
-      
+
+      #mu2iww = np.zeros((npf,no,no)) # rigorous way of doing it (but does not work)
+      #for [j,domi],s in zip(mu2jd,mu2s): mu2iww[s:s+2*j+1,:,:] = ldp['j2xww_inv'][j][domi,0:2*j+1,:,:]
+      #self.sp2lambda.append(mu2iww)
+
+      mu2iww = np.array(self.sp2inv_vv[sp]*self.sp2vertex_csr[sp]).reshape([npf,no,no]) # lazy way of finding lambda
+      self.sp2lambda.append(mu2iww)
 
     self.jmx = np.amax(np.array( [max(mu2j) for mu2j in self.sp_mu2j], dtype=np.int32))
     self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut])
-
+    
     del v_csr, mu2iww, mu2ww, mu2ff # maybe unnecessary
 
-    
+
   def overlap_check(self, overlap_funct=overlap_ni, **kvargs):
     """ Recompute the overlap between orbitals using the product vertex and scalar moments of product functions""" 
     return overlap_check(self, overlap_funct=overlap_ni, **kvargs)
@@ -163,29 +166,28 @@ class prod_log_c(ao_log_c):
     from pyscf.nao.m_ao_log_hartree import ao_log_hartree as ext
     return ext(self, method)
 
-  def lambda_check_coulomb(self, **kvargs):
+  def lambda_check_coulomb(self):
     """ Check the equality (p|q)<q,cd> = [p,ab] <ab|q>(q|r)<r|cd> """
     me = ao_matelem_c(self)
-    r0 = np.zeros(3)
+    mael,mxel=[],[]
     for sp,[pab,lab] in enumerate(zip(self.sp2vertex, self.sp2lambda)):
-      pq = me.coulomb_am(sp,r0, sp, r0)
+      pq = me.coulomb_am(sp,np.zeros(3), sp, np.zeros(3))
       pcd_ref = einsum('pq,qab->pab', pq, pab)
       abcd = einsum('abq,qcd->abcd', einsum('pab,pq->abq', pab,pq), pab)
       pcd = einsum('lab,abcd->lcd', lab, abcd)
-      print((abs(pcd-pcd_ref)).sum()/pcd.size)
-    return True
+      mael.append(abs(pcd-pcd_ref).sum()/pcd.size); mxel.append(abs(pcd-pcd_ref).max())
+    return mael,mxel
     
   def lambda_check_overlap(self, overlap_funct=overlap_am, **kvargs):
     """ Check the equality (p) = [p,ab] S^ab, i.e. scalar moments are recomputed with inversed vertex from the ao's overlap """
     me = ao_matelem_c(self.ao_log)
     sp2mom0,sp2mom1 = comp_moments(self)
-    mael,mxel,acl=[],[],[]
-    r0 = np.zeros(3)
+    mael,mxel=[],[]
     for sp,[lab,mom0_ref] in enumerate(zip(self.sp2lambda,sp2mom0)):
-      ab = overlap_funct(me,sp,r0,sp,r0,**kvargs)
+      ab = overlap_funct(me,sp,np.zeros(3),sp,np.zeros(3),**kvargs)
       mom0 = einsum('lab,ab->l', lab,ab)
-      print('lambda_check_overlap', sp, mom0.sum(), mom0_ref.sum(), (abs(mom0-mom0_ref)).sum()/mom0.size)
-    return mael,mxel,acl
+      mael.append((abs(mom0-mom0_ref)).sum()/mom0.size); mxel.append((abs(mom0-mom0_ref)).max())
+    return mael,mxel
     
 #
 #
@@ -200,7 +202,7 @@ if __name__=='__main__':
   print(dir(prod_log))
   print(prod_log.sp2nmult, prod_log.sp2norbs)
   print(prod_log.overlap_check())
-  print(prod_log.lambda_check_overlap())
+  print(prod_log.lambda_check_coulomb())
 
   sp = 0
   for mu,[ff,j] in enumerate(zip(prod_log.psi_log[sp], prod_log.sp_mu2j[sp])):

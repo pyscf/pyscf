@@ -72,7 +72,6 @@ class local_vertex_c(ao_matelem_c):
     
     j2xff     = [] # Storage for dominant product's functions (list of numpy arrays: x*f(r)*f(r))
     j2xww     = [] # Storage for dominant product's vertex (angular part of: x*wigner*wigner)
-    j2xww_inv = [] # Storage for inverse product vertex coeffs
     j2eva     = [] # Storage for eigenvalues in each angular momentum "sektor"
     t1 = 0
     tstart = timer()
@@ -109,26 +108,7 @@ class local_vertex_c(ao_matelem_c):
         xww[domi,:,:,:] = self.c2r_c.c2r_moo(j, xww0, info)
       j2xww.append(xww)
 
-
-      kin_vertex_inv = np.zeros((dim, 2*j+1, no, no)) # Build expansion coefficients L^mu_ab defined by F^mu(r) = L^mu_ab f^a(r) f^b(r)
-      for num,[[mu1,mu2], [j1,j2]] in enumerate(zip(j_p2mus[j],j_p2js[j])):
-        if j<abs(j1-j2) or j>j1+j2 : continue
-        for m1,o1 in zip(range(-j1,j1+1), range(mu2s[mu1],mu2s[mu1+1])):
-          for m2,o2 in zip(range(-j2,j2+1), range(mu2s[mu2],mu2s[mu2+1])):
-            m=m1+m2
-            if abs(m)>j: continue
-            tj = thrj(j1,j2,j,0,0,0)
-            if abs(tj)<1e-10: raise RuntimeError('3j is zero ?') 
-            kvinv = thrj(j1,j2,j,m1,m2,m)/tj* (-1)**m
-            kin_vertex_inv[num,j+m,o2,o1] = kin_vertex_inv[num,j+m,o1,o2] = kvinv
-
-      xww = np.zeros((dim, 2*j+1, no, no))
-      for domi in range(dim):
-        xww0 = np.einsum('n,nmab->mab', x[:,domi], kin_vertex_inv[:,:,:,:])
-        xww[domi,:,:,:] = self.c2r_c.c2r_moo(j, xww0, info)
-      j2xww_inv.append(xww)
-
     #tfinish = timer()
     #print(tfinish-tstart, t1)
     
-    return {"j2xww": j2xww, "j2xff": j2xff, "j2eva": j2eva, "j2xww_inv": j2xww_inv }
+    return {"j2xww": j2xww, "j2xff": j2xff, "j2eva": j2eva}
