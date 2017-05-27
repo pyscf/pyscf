@@ -23,8 +23,8 @@ class gaunt_c():
       for j2 in range(jmax+1):
         ncef = ncef + ((j2+j1)-abs(j1-j2)+1)*(2*j1+1)*(2*j2+1)
     
-    self._gaunt_data = np.zeros((ncef), dtype='float64')
-    self._gaunt_iptr = np.zeros((nptr+1), dtype='int64')
+    self._gaunt_data = np.zeros(ncef)
+    self._gaunt_iptr = np.zeros(nptr+1, dtype=np.int64)
 
     ptr = 0
     for j1 in range(jmax+1):

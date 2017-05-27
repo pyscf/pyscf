@@ -17,15 +17,16 @@ class c2r_c():
       self._c2r[-m+j, m+j]= -sgn[m] * 1j * np.sqrt(0.5)
     
     self._hc_c2r = np.conj(self._c2r).transpose()
-    self._conj_c2r = np.conjugate(self._c2r)
+    self._conj_c2r = np.conjugate(self._c2r) # what is the difference ? conj and conjugate
     self._tr_c2r = np.transpose(self._c2r)
+    
+    #print(abs(self._hc_c2r.conj().transpose()-self._c2r).sum())
 
   #
   #
   #
   def c2r_moo(self, j, mab_c, mu2info):
     """ Transform tensor m, orb, orb given in complex spherical harmonics to real spherical harmonic"""
-
     no = mab_c.shape[1]
     mab_r = np.zeros((2*j+1, no, no)) # result
     
@@ -35,7 +36,7 @@ class c2r_c():
     _j = self._j
     for m in range(-j,j+1):
       for m1 in range(-abs(m),abs(m)+1,2*abs(m) if m!=0 else 1):
-        xww1[j+m,:,:]=xww1[j+m,:,:]+self._hc_c2r[_j+m1,_j+m]*mab_c[j+m1,:,:]
+        xww1[j+m,:,:]=xww1[j+m,:,:]+self._c2r[_j+m,_j+m1]*mab_c[j+m1,:,:] # _c2r or _conj_c2r
 
     for m in range(-j,j+1):
       xww2.fill(0.0)
