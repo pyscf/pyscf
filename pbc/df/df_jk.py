@@ -44,6 +44,7 @@ def density_fit(mf, auxbasis=None, gs=None, with_df=None):
         if gs is not None:
             with_df.gs = gs
 
+    mf = copy.copy(mf)
     mf.with_df = with_df
     return mf
 

@@ -499,3 +499,6 @@ class KUHF(uhf.UHF, khf.KRHF):
 
     canonicalize = canonicalize
 
+    def density_fit(self, auxbasis=None, gs=None):
+        return khf.KRHF.density_fit(self, auxbasis, gs)
+

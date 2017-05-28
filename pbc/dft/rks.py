@@ -89,6 +89,15 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     return vhf + vx
 
 
+def _patch_df_beckegrids(density_fit):
+    def new_df(self, auxbasis=None, gs=None):
+        mf = density_fit(self, auxbasis, gs)
+        mf.with_df._j_only = True
+        mf.grids = gen_grid.BeckeGrids(self.cell)
+        return mf
+    return new_df
+
+
 class RKS(pbchf.RHF):
     '''RKS class adapted for PBCs. 
     
@@ -116,3 +125,5 @@ class RKS(pbchf.RHF):
     get_veff = get_veff
     energy_elec = pyscf.dft.rks.energy_elec
 
+    density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
+    mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)

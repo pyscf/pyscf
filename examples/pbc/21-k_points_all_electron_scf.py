@@ -7,7 +7,6 @@ MDF (mixed density fitting) can also be used in k-points sampling.
 
 import numpy
 from pyscf.pbc import gto, scf, dft
-from pyscf.pbc import df
 
 cell = gto.M(
     a = numpy.eye(3)*3.5668,
@@ -27,15 +26,10 @@ cell = gto.M(
 nk = [4,4,4]  # 4 k-poins for each axis, 4^3=64 kpts in total
 kpts = cell.make_kpts(nk)
 
-mydf = df.MDF(cell, kpts)
-mydf.auxbasis = 'weigend'
-
-kmf = scf.KRHF(cell, kpts)
-kmf.with_df = mydf
+kmf = scf.KRHF(cell, kpts).mix_density_fit(auxbasis='weigend')
 kmf.kernel()
 
-kmf = dft.KRKS(cell, kpts)
-kmf.with_df = mydf
+kmf = dft.KRKS(cell, kpts).mix_density_fit(auxbasis='weigend')
 kmf.xc = 'bp86'
 kmf.kernel()
 
@@ -43,8 +37,7 @@ kmf.kernel()
 # Second order SCF solver can be used in the PBC SCF code the same way in the
 # molecular calculation
 #
-mf = scf.KRHF(cell, kpts)
-mf.with_df = mydf
+mf = scf.KRHF(cell, kpts).mix_density_fit(auxbasis='weigend')
 mf = scf.newton(mf)
 mf.kernel()
 
