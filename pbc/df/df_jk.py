@@ -52,7 +52,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = (time.clock(), time.time())
-    if mydf._cderi is None or not mydf.has_kpts(kpts_band):
+    if mydf._cderi is None or mydf.auxcell is None or not mydf.has_kpts(kpts_band):
         mydf.build(kpts_band=kpts_band)
         t1 = log.timer_debug1('Init get_j_kpts', *t1)
 
@@ -124,7 +124,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = (time.clock(), time.time())
-    if mydf._cderi is None or not mydf.has_kpts(kpts_band):
+    if mydf._cderi is None or mydf.auxcell is None or not mydf.has_kpts(kpts_band):
         mydf.build(kpts_band=kpts_band)
         t1 = log.timer_debug1('Init get_k_kpts', *t1)
 
@@ -219,7 +219,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = (time.clock(), time.time())
-    if mydf._cderi is None or not mydf.has_kpts(kpt_band):
+    if mydf._cderi is None or mydf.auxcell is None or not mydf.has_kpts(kpt_band):
         mydf.build(kpts_band=kpt_band)
         t1 = log.timer_debug1('Init get_jk', *t1)
 

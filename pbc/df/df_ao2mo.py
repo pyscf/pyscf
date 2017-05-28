@@ -16,7 +16,7 @@ from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
 
 
 def get_eri(mydf, kpts=None, compact=True):
-    if mydf._cderi is None:
+    if mydf._cderi is None or mydf.auxcell is None:
         mydf.build()
 
     cell = mydf.cell
@@ -84,7 +84,7 @@ def get_eri(mydf, kpts=None, compact=True):
 
 
 def general(mydf, mo_coeffs, kpts=None, compact=True):
-    if mydf._cderi is None:
+    if mydf._cderi is None or mydf.auxcell is None::
         mydf.build()
 
     cell = mydf.cell

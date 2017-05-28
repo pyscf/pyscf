@@ -538,12 +538,12 @@ class DF(aft.AFTDF):
 # With this function to mimic the molecular DF.loop function, the pbc gamma
 # point DF object can be used in the molecular code
     def loop(self):
-        if self._cderi is None:
+        if self._cderi is None or self.auxcell is None:
             self.build()
         return self.sr_loop(compact=True, blksize=self.blockdim)
 
     def get_naoaux(self):
-        if self._cderi is None:
+        if self._cderi is None or self.auxcell is None:
             self.build()
         return self.auxcell.nao_nr()
 
