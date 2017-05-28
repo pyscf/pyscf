@@ -443,7 +443,7 @@ class KUHF(uhf.UHF, khf.KRHF):
         fock = fock + self.get_veff(cell, dm_kpts, kpts=kpts, kpts_band=kpts_band)
         s1e = self.get_ovlp(cell, kpts_band)
         e_a, c_a = self.eig(fock[0], s1e[0])
-        e_b, c_b = self.eig(fock[0], s1e[0])
+        e_b, c_b = self.eig(fock[1], s1e[1])
         if single_kpt_band:
             e_a = e_a[0]
             e_b = e_b[0]
