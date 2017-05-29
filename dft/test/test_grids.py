@@ -2,6 +2,7 @@
 
 import unittest
 import numpy
+from pyscf import lib
 from pyscf import gto
 from pyscf import dft
 from pyscf.dft import gen_grid
@@ -74,6 +75,16 @@ class KnowValues(unittest.TestCase):
         grid.prune = None
         grid.atom_grid = {"H": (10, 58), "O": (10, 50),}
         self.assertRaises(ValueError, grid.build)
+
+    def test_make_mask(self):
+        grid = gen_grid.Grids(h2o)
+        grid.atom_grid = {"H": (10, 110), "O": (10, 110),}
+        grid.build()
+        coords = grid.coords*10.
+        non0 = gen_grid.make_mask(h2o, coords)
+        self.assertEqual(non0.sum(), 106)
+        self.assertAlmostEqual(lib.finger(non0), -0.81399929716237085, 9)
+
 
 
 if __name__ == "__main__":

@@ -8,7 +8,6 @@ any modification.
 
 import numpy
 from pyscf.pbc import gto, scf
-from pyscf.pbc import df
 
 cell = gto.M(
     a = numpy.eye(3)*3.5668,
@@ -34,10 +33,7 @@ cell = gto.M(
 #
 cell.incore_anyway = True
 
-mydf = df.MDF(cell)
-mydf.auxbasis = 'weigend'
-mf = scf.RHF(cell)
-mf.with_df = mydf
+mf = scf.RHF(cell).mix_density_fit(auxbasis='weigend')
 mf.kernel()
 
 #

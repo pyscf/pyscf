@@ -19,7 +19,8 @@ class CASSCF(newton_casscf.CASSCF):
         self.orbsym = []
         newton_casscf.CASSCF.__init__(self, mf, ncas, nelecas, ncore, frozen)
         self.fcisolver = fci.solver(mf.mol, self.nelecas[0]==self.nelecas[1], True)
-        self.fcisolver.max_cycle = 20
+        self.fcisolver.max_cycle = 25
+        #self.fcisolver.max_space = 25
 
     def kernel(self, mo_coeff=None, ci0=None, callback=None, _kern=None):
         if mo_coeff is None:

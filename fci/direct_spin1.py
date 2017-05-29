@@ -628,6 +628,18 @@ class FCISolver(lib.StreamObject):
         from pyscf.fci import spin_op
         return spin_op.contract_ss(fcivec, norb, nelec)
 
+    def gen_linkstr(self, norb, nelec, tril=True, spin=None):
+        if spin is None:
+            spin = self.spin
+        neleca, nelecb = _unpack_nelec(nelec, spin)
+        if tril:
+            link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
+            link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
+        else:
+            link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
+            link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
+        return link_indexa, link_indexb
+
 FCI = FCISolver
 
 

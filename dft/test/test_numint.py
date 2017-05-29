@@ -28,10 +28,8 @@ class KnowValues(unittest.TestCase):
     def test_make_mask(self):
         non0 = dft.numint.make_mask(mol, mf.grids.coords)
         self.assertEqual(non0.sum(), 10244)
-        self.assertAlmostEqual(finger(non0),
-                               -2.6880474684794895, 9)
-        self.assertAlmostEqual(finger(numpy.cos(non0)),
-                               2.5961863522983433, 9)
+        self.assertAlmostEqual(finger(non0), -2.6880474684794895, 9)
+        self.assertAlmostEqual(finger(numpy.cos(non0)), 2.5961863522983433, 9)
 
     def test_dot_ao_dm(self):
         non0tab = dft.numint.make_mask(mol, mf.grids.coords)
@@ -98,6 +96,26 @@ class KnowValues(unittest.TestCase):
         mat0 += numpy.einsum('pi,p,pj->ij', ao[0].conj(), rho[3]*wv, ao[3]) + numpy.einsum('pi,p,pj->ij', ao[3].conj(), rho[3]*wv, ao[0])
         mat1 = dft.numint.eval_mat(mol, ao, weight, rho, vxc, xctype='GGA')
         self.assertTrue(numpy.allclose(mat0, mat1))
+
+    def test_rks_fxc(self):
+        numpy.random.seed(10)
+        nao = mol.nao_nr()
+        dm0 = numpy.random.random((nao,nao))
+        dm0 = dm0 + dm0.T
+        dms = numpy.random.random((2,nao,nao))
+        ni = dft.numint._NumInt()
+        v = ni.nr_rks_fxc(mol, mf.grids, 'B88', dm0, dms, hermi=0)
+        self.assertAlmostEqual(finger(v), -425.5066503451331, 8)
+
+    def test_uks_fxc(self):
+        numpy.random.seed(10)
+        nao = mol.nao_nr()
+        dm0 = numpy.random.random((2,nao,nao))
+        dm0 = dm0 + dm0.transpose(0,2,1)
+        dms = numpy.random.random((2,nao,nao))
+        ni = dft.numint._NumInt()
+        v = ni.nr_uks_fxc(mol, mf.grids, 'B88', dm0, dms)
+        self.assertAlmostEqual(finger(v), 403.75174841356113, 8)
 
 if __name__ == "__main__":
     print("Test numint")

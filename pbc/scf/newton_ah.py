@@ -37,12 +37,12 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
               for k in range(nkpts)]
 
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
-        raise NotImplementedError
         if mf.grids.coords is None:
             mf.grids.build()
-        hyb = mf._numint.hybrid_coeff(mf.xc, spin=(cell.spin>0)+1)
-        rho0, vxc, fxc = mf._numint.cache_xc_kernel(cell, mf.grids, mf.xc,
-                                                    mo_coeff, mo_occ, 0)
+        ni = mf._numint
+        hyb = ni.hybrid_coeff(mf.xc, spin=(cell.spin>0)+1)
+        rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc, mo_coeff,
+                                            mo_occ, 0, mf.kpts)
         dm0 = None #mf.make_rdm1(mo_coeff, mo_occ)
     else:
         hyb = None
@@ -64,10 +64,11 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
             dm1.append(d1+d1.T.conj())
         dm1 = lib.asarray(dm1)
         if hyb is None:
-            v1 = mf.get_veff(cell, dm1)
+            vj, vk = mf.get_jk(cell, dm1)
+            v1 = vj - vk * .5
         else:
-            v1 = mf._numint.nr_rks_fxc(cell, mf.grids, mf.xc, dm0, dm1,
-                                       0, 1, rho0, vxc, fxc)
+            v1 = ni.nr_rks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, 1,
+                               rho0, vxc, fxc, mf.kpts)
             if abs(hyb) < 1e-10:
                 v1 += mf.get_j(cell, dm1)
             else:
@@ -84,7 +85,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
         return numpy.hstack([x.ravel() for x in x2])
 
     return (numpy.hstack([x.ravel() for x in g]), h_op,
-            numpy.hstack([x.ravel() for x in h_diag]))
+            numpy.hstack([x.ravel().real for x in h_diag]))
 
 
 def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
@@ -118,14 +119,12 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
               [make_hdiagb(k) for k in range(nkpts)])
 
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
-        raise NotImplementedError
         if mf.grids.coords is None:
             mf.grids.build()
-        hyb = mf._numint.hybrid_coeff(mf.xc, spin=(cell.spin>0)+1)
-        rho0, vxc, fxc = mf._numint.cache_xc_kernel(cell, mf.grids, mf.xc,
-                                                    mo_coeff, mo_occ, 1)
-        #dm0 =(numpy.dot(mo_coeff[0]*mo_occ[0], mo_coeff[0].T),
-        #      numpy.dot(mo_coeff[1]*mo_occ[1], mo_coeff[1].T))
+        ni = mf._numint
+        hyb = ni.hybrid_coeff(mf.xc, spin=(cell.spin>0)+1)
+        rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc, mo_coeff,
+                                            mo_occ, 1, mf.kpts)
         dm0 = None
     else:
         hyb = None
@@ -152,16 +151,17 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
             dm1a.append(d1+d1.T.conj())
         dm1b = []
         for k in range(nkpts):
-            d1 = reduce(numpy.dot, (mob[k][:,viridxa[k]], x1b[k],
-                                    mob[k][:,occidxa[k]].T.conj()))
+            d1 = reduce(numpy.dot, (mob[k][:,viridxb[k]], x1b[k],
+                                    mob[k][:,occidxb[k]].T.conj()))
             dm1b.append(d1+d1.T.conj())
         dm1 = lib.asarray([dm1a,dm1b])
         dm1a = dm1b = None
         if hyb is None:
-            v1 = mf.get_veff(cell, dm1)
+            vj, vk = mf.get_jk(cell, dm1)
+            v1 = vj[0]+vj[1] - vk
         else:
-            v1 = mf._numint.nr_uks_fxc(cell, mf.grids, mf.xc, dm0, dm1,
-                                       0, 1, rho0, vxc, fxc)
+            v1 = ni.nr_uks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, 1,
+                               rho0, vxc, fxc, mf.kpts)
             if abs(hyb) < 1e-10:
                 vj = mf.get_j(cell, dm1)
                 v1 += vj[0] + vj[1]
@@ -192,6 +192,8 @@ def newton(mf):
     from pyscf.scf import newton_ah
     from pyscf.pbc import scf as pscf
     if not isinstance(mf, (pscf.khf.KRHF, pscf.kuhf.KUHF)):
+# Note for single k-point other than gamma point (mf.kpt != 0) mf object,
+# orbital hessian is approximated by gamma point hessian.
         return newton_ah.newton(mf)
 
     KSCF = newton_ah.newton_SCF_class(mf)

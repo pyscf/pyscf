@@ -60,33 +60,36 @@ class TDA(lib.StreamObject):
             log.warn('Ground state SCF is not converged')
         log.info('\n')
 
-    def get_vind(self, zs):
+    def get_vind(self, mf):
         '''Compute Ax'''
-        mo_coeff = self._scf.mo_coeff
-        mo_energy = self._scf.mo_energy
+        mo_coeff = mf.mo_coeff
+        mo_energy = mf.mo_energy
         nao, nmo = mo_coeff.shape
-        nocc = (self._scf.mo_occ>0).sum()
+        nocc = (mf.mo_occ>0).sum()
         nvir = nmo - nocc
         orbv = mo_coeff[:,nocc:]
         orbo = mo_coeff[:,:nocc]
-        nz = len(zs)
-        dmvo = numpy.empty((nz,nao,nao))
-        for i, z in enumerate(zs):
-            dmvo[i] = reduce(numpy.dot, (orbv, z.reshape(nvir,nocc), orbo.T))
-        vj, vk = self._scf.get_jk(self.mol, dmvo, hermi=0)
-
-        if self.singlet:
-            vhf = vj*2 - vk
-        else:
-            vhf = -vk
-
-        #v1vo = numpy.asarray([reduce(numpy.dot, (orbv.T, v, orbo)) for v in vhf])
-        v1vo = _ao2mo.nr_e2(vhf, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir*nocc)
         eai = lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
         eai = eai.ravel()
-        for i, z in enumerate(zs):
-            v1vo[i] += eai * z
-        return v1vo.reshape(nz,-1)
+
+        def vind(zs):
+            nz = len(zs)
+            dmvo = numpy.empty((nz,nao,nao))
+            for i, z in enumerate(zs):
+                dmvo[i] = reduce(numpy.dot, (orbv, z.reshape(nvir,nocc), orbo.T))
+            vj, vk = mf.get_jk(self.mol, dmvo, hermi=0)
+            if self.singlet:
+                vhf = vj*2 - vk
+            else:
+                vhf = -vk
+
+            #v1vo = numpy.asarray([reduce(numpy.dot, (orbv.T, v, orbo)) for v in vhf])
+            v1vo = _ao2mo.nr_e2(vhf, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir*nocc)
+            for i, z in enumerate(zs):
+                v1vo[i] += eai * z
+            return v1vo.reshape(nz,-1)
+
+        return vind
 
     def get_precond(self, hdiag):
         def precond(x, e, x0):
@@ -118,8 +121,9 @@ class TDA(lib.StreamObject):
             x0 = self.init_guess(eai, self.nstates)
 
         precond = self.get_precond(eai.ravel())
+        vind = self.get_vind(self._scf)
 
-        self.e, x1 = lib.davidson1(self.get_vind, x0, precond,
+        self.e, x1 = lib.davidson1(vind, x0, precond,
                                    tol=self.conv_tol,
                                    nroots=self.nstates, lindep=self.lindep,
                                    max_space=self.max_space,
@@ -131,42 +135,47 @@ CIS = TDA
 
 
 class TDHF(TDA):
-    def get_vind(self, xys):
+    def get_vind(self, mf):
         '''
         [ A  B][X]
         [-B -A][Y]
         '''
-        mo_coeff = self._scf.mo_coeff
-        mo_energy = self._scf.mo_energy
+        mo_coeff = mf.mo_coeff
+        mo_energy = mf.mo_energy
         nao, nmo = mo_coeff.shape
-        nocc = (self._scf.mo_occ>0).sum()
+        nocc = (mf.mo_occ>0).sum()
         nvir = nmo - nocc
         orbv = mo_coeff[:,nocc:]
         orbo = mo_coeff[:,:nocc]
-        nz = len(xys)
-        dms = numpy.empty((nz*2,nao,nao))
-        for i in range(nz):
-            x, y = xys[i].reshape(2,nvir,nocc)
-            dmx = reduce(numpy.dot, (orbv, x, orbo.T))
-            dmy = reduce(numpy.dot, (orbv, y, orbo.T))
-            dms[i   ] = dmx + dmy.T  # AX + BY
-            dms[i+nz] = dms[i].T # = dmy + dmx.T  # AY + BX
-        vj, vk = self._scf.get_jk(self.mol, dms, hermi=0)
-
-        if self.singlet:
-            vhf = vj*2 - vk
-        else:
-            vhf = -vk
-        #vhf = numpy.asarray([reduce(numpy.dot, (orbv.T, v, orbo)) for v in vhf])
-        vhf = _ao2mo.nr_e2(vhf, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir*nocc)
         eai = lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
         eai = eai.ravel()
-        for i, z in enumerate(xys):
-            x, y = z.reshape(2,-1)
-            vhf[i   ] += eai * x  # AX
-            vhf[i+nz] += eai * y  # AY
-        hx = numpy.hstack((vhf[:nz], -vhf[nz:]))
-        return hx.reshape(nz,-1)
+
+        def vind(xys):
+            nz = len(xys)
+            dms = numpy.empty((nz,nao,nao))
+            for i in range(nz):
+                x, y = xys[i].reshape(2,nvir,nocc)
+                dmx = reduce(numpy.dot, (orbv, x, orbo.T))
+                dmy = reduce(numpy.dot, (orbo, y.T, orbv.T))
+                dms[i] = dmx + dmy  # AX + BY
+            vj, vk = mf.get_jk(self.mol, dms, hermi=0)
+            if self.singlet:
+                vhf = vj*2 - vk
+            else:
+                vhf = -vk
+
+            nov = nocc*nvir
+            vhfvo = _ao2mo.nr_e2(vhf, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nov)
+            vhfov = _ao2mo.nr_e2(vhf, mo_coeff, (0,nocc,nocc,nmo))
+            vhfov = vhfov.reshape(-1,nocc,nvir).transpose(0,2,1).reshape(-1,nov)
+            hx = numpy.empty((nz,nov*2))
+            for i, z in enumerate(xys):
+                x, y = z.reshape(2,-1)
+                hx[i,:nov] = vhfvo[i] + eai * x  # AX
+                hx[i,nov:] =-vhfov[i] - eai * y  #-AY
+            return hx
+
+        return vind
 
     def get_precond(self, hdiag):
         def precond(x, e, x0):
@@ -200,6 +209,7 @@ class TDHF(TDA):
             x0 = self.init_guess(eai, self.nstates)
 
         precond = self.get_precond(eai.ravel())
+        vind = self.get_vind(self._scf)
 
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
@@ -207,7 +217,7 @@ class TDHF(TDA):
             idx = realidx[w[realidx].real.argsort()]
             return w[idx].real, v[:,idx].real, idx
 
-        w, x1 = lib.davidson_nosym1(self.get_vind, x0, precond,
+        w, x1 = lib.davidson_nosym1(vind, x0, precond,
                                     tol=self.conv_tol,
                                     nroots=self.nstates, lindep=self.lindep,
                                     max_space=self.max_space, pick=pickeig,
@@ -240,7 +250,7 @@ if __name__ == '__main__':
     mf = scf.RHF(mol)
     mf.scf()
     td = TDA(mf)
-    td.verbose = 5
+    td.verbose = 4
     print(td.kernel()[0] * 27.2114)
 # [ 11.90276464  11.90276464  16.86036434]
 
@@ -249,7 +259,7 @@ if __name__ == '__main__':
 # [ 11.01747918  11.01747918  13.16955056]
 
     td = TDHF(mf)
-    td.verbose = 5
+    td.verbose = 4
     print(td.kernel()[0] * 27.2114)
 # [ 11.83487199  11.83487199  16.66309285]
 

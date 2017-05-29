@@ -10,7 +10,6 @@ technique to improve the accuracy.
 
 import numpy
 from pyscf.pbc import gto, scf, dft
-from pyscf.pbc import df
 
 cell = gto.M(
     a = numpy.eye(3)*3.5668,
@@ -27,15 +26,10 @@ cell = gto.M(
     verbose = 4,
 )
 
-mydf = df.MDF(cell)
-mydf.auxbasis = 'weigend'
-
-mf = scf.RHF(cell)
-mf.with_df = mydf
+mf = scf.RHF(cell).mix_density_fit(auxbasis='weigend')
 mf.kernel()
 
-mf = dft.RKS(cell)
-mf.with_df = mydf
+mf = dft.RKS(cell).mix_density_fit(auxbasis='weigend')
 mf.xc = 'bp86'
 mf.kernel()
 
@@ -43,8 +37,7 @@ mf.kernel()
 # Second order SCF solver can be used in the PBC SCF code the same way in the
 # molecular calculation
 #
-mf = scf.RHF(cell)
-mf.with_df = mydf
+mf = scf.RHF(cell).mix_density_fit(auxbasis='weigend')
 mf = scf.newton(mf)
 mf.kernel()
 

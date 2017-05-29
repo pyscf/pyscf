@@ -373,6 +373,18 @@ class FCISolver(direct_spin1.FCISolver):
                     reorder=True):
         return trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)
 
+    def gen_linkstr(self, norb, nelec, tril=True, spin=None):
+        if isinstance(nelec, (int, numpy.number)):
+            neleca = nelec//2
+        else:
+            neleca, nelecb = nelec
+            assert(neleca == nelecb)
+        if tril:
+            link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
+        else:
+            link_index = cistring.gen_linkstr_index(range(norb), neleca)
+        return link_index
+
 FCI = FCISolver
 
 

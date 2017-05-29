@@ -51,11 +51,12 @@ class UniformGrids(object):
 
     def __init__(self, cell):
         self.cell = cell
+        self.stdout = cell.stdout
+        self.verbose = cell.verbose
         self.coords = None
         self.weights = None
         self.gs = None
-        self.stdout = cell.stdout
-        self.verbose = cell.verbose
+        self.non0tab = None
 
     def build(self, cell=None, with_non0tab=False):
         if cell == None: cell = self.cell

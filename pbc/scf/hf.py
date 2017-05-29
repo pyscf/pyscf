@@ -318,7 +318,9 @@ class RHF(hf.RHF):
             if self.exxdiv == 'ewald':
                 from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0
                 # G=0 is not inculded in the ._eri integrals
-                _ewald_exxdiv_for_G0(self.cell, kpt, [dm], [vk])
+                nao = dm.shape[-1]
+                _ewald_exxdiv_for_G0(self.cell, kpt, dm.reshape(-1,nao,nao),
+                                     vk.reshape(-1,nao,nao))
         else:
             vj, vk = self.with_df.get_jk(dm, hermi, kpt, kpt_band,
                                          exxdiv=self.exxdiv)
@@ -405,4 +407,18 @@ class RHF(hf.RHF):
         else:
             mem_need = nao**4*16/1e6
         return mem_need + lib.current_memory()[0] < self.max_memory*.95
+
+    def density_fit(self, auxbasis=None, with_df=None):
+        from pyscf.df.addons import aug_etb_for_dfbasis
+        from pyscf.pbc.df import df_jk
+        if auxbasis is None:
+            auxbasis = aug_etb_for_dfbasis(self.cell, beta=1.8, start_at=0)
+        return df_jk.density_fit(self, auxbasis, with_df)
+
+    def mix_density_fit(self, auxbasis=None, with_df=None):
+        from pyscf.df.addons import aug_etb_for_dfbasis
+        from pyscf.pbc.df import mdf_jk
+        if auxbasis is None:
+            auxbasis = aug_etb_for_dfbasis(self.cell, beta=1.8, start_at=0)
+        return mdf_jk.density_fit(self, auxbasis, with_df)
 

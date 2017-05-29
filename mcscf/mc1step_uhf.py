@@ -62,7 +62,7 @@ def gen_g_hop(casscf, mo, u, casdm1s, casdm2s, eris):
     gpart(0)
     gpart(1)
 
-    def gorb_update(u, dep4=False):
+    def gorb_update(u, fcivec):
         r0 = casscf.pack_uniq_var(u)
         return g_orb + h_op(r0)
 
@@ -246,21 +246,15 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         max_cycle_micro = casscf.micro_cycle_scheduler(locals())
         max_stepsize = casscf.max_stepsize_scheduler(locals())
         imicro = 0
-        rota = casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
+        rota = casscf.rotate_orb_cc(mo, lambda:fcivec, lambda:casdm1, lambda:casdm2,
                                     eris, r0, conv_tol_grad*.3, max_stepsize, log)
-        for u, g_orb, njk in rota:
+        for u, g_orb, njk, r0 in rota:
             imicro += 1
             norm_gorb = numpy.linalg.norm(g_orb)
             if imicro == 1:
                 norm_gorb0 = norm_gorb
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
-            if norm_gci is None:
-                accepted_gorb = norm_gorb < norm_ddm*2
-            else:
-                accepted_gorb = norm_gorb < norm_gci*1.5
-            if (imicro >= max_cycle_micro and
-                (accepted_gorb or imicro > max_cycle_micro*2 or
-                 norm_gorb > norm_gorb0)):
+            if imicro >= max_cycle_micro:
                 log.debug('micro %d  |u-1|=%5.3g  |g[o]|=%5.3g  ',
                           imicro, norm_t, norm_gorb)
                 break
@@ -318,8 +312,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         if callable(callback):
             callback(locals())
 
-        r0 = casscf.pack_uniq_var(u)
-
     if conv:
         log.info('1-step CASSCF converged in %d macro (%d JK %d micro) steps',
                  imacro+1, totinner, totmicro)
@@ -334,10 +326,10 @@ class CASSCF(casci_uhf.CASCI):
     def __init__(self, mf, ncas, nelecas, ncore=None, frozen=None):
         casci_uhf.CASCI.__init__(self, mf, ncas, nelecas, ncore)
         self.frozen = frozen
-        self.max_stepsize = .03
+        self.max_stepsize = .02
         self.max_cycle_macro = 50
         self.max_cycle_micro = 4
-        self.max_cycle_micro_inner = 4
+        #self.max_cycle_micro_inner = 4
         self.conv_tol = 1e-7
         self.conv_tol_grad = None
         # for augmented hessian
@@ -355,6 +347,8 @@ class CASSCF(casci_uhf.CASCI):
         self.natorb = False
         self.callback = None
         self.chk_ci = False
+        self.kf_interval = 4
+        self.kf_trust_region = 3.0
 
         self.fcisolver.max_cycle = 50
 
@@ -387,7 +381,7 @@ class CASSCF(casci_uhf.CASCI):
         log.info('max. micro cycles = %d', self.max_cycle_micro)
         log.info('conv_tol = %g', self.conv_tol)
         log.info('conv_tol_grad = %s', self.conv_tol_grad)
-        log.info('max_cycle_micro_inner = %d', self.max_cycle_micro_inner)
+        #log.info('max_cycle_micro_inner = %d', self.max_cycle_micro_inner)
         log.info('max. orb step = %g', self.max_stepsize)
         log.info('augmented hessian max_cycle = %d', self.ah_max_cycle)
         log.info('augmented hessian conv_tol = %g', self.ah_conv_tol)
@@ -396,6 +390,8 @@ class CASSCF(casci_uhf.CASCI):
         log.info('augmented hessian start_tol = %g', self.ah_start_tol)
         log.info('augmented hessian start_cycle = %d', self.ah_start_cycle)
         log.info('augmented hessian grad_trust_region = %g', self.ah_grad_trust_region)
+        log.info('kf_trust_region = %g', self.kf_trust_region)
+        log.info('kf_interval = %d', self.kf_interval)
         log.info('ci_response_space = %d', self.ci_response_space)
         #log.info('diis = %s', self.diis)
         log.info('chkfile = %s', self.chkfile)

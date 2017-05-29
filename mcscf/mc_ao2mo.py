@@ -256,9 +256,13 @@ class _ERIS(object):
         nao, nmo = mo.shape
         ncore = casscf.ncore
         ncas = casscf.ncas
+
+        dm_core = numpy.dot(mo[:,:ncore], mo[:,:ncore].T)
+        vj, vk = casscf._scf.get_jk(mol, dm_core)
+        self.vhf_c = reduce(numpy.dot, (mo.T, vj*2-vk, mo))
+
         mem_incore, mem_outcore, mem_basic = _mem_usage(ncore, ncas, nmo)
         mem_now = lib.current_memory()[0]
-
         eri = casscf._scf._eri
         if (method == 'incore' and eri is not None and
             (mem_incore+mem_now < casscf.max_memory*.9) or
@@ -285,9 +289,6 @@ class _ERIS(object):
             self.feri = lib.H5TmpFile(self._tmpfile.name, 'r')
             self.ppaa = self.feri['ppaa']
             self.papa = self.feri['papa']
-        dm_core = numpy.dot(mo[:,:ncore], mo[:,:ncore].T)
-        vj, vk = casscf._scf.get_jk(mol, dm_core)
-        self.vhf_c = reduce(numpy.dot, (mo.T, vj*2-vk, mo))
 
 def _mem_usage(ncore, ncas, nmo):
     nvir = nmo - ncore

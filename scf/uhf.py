@@ -40,12 +40,14 @@ def init_guess_by_1e(mol, breaksym=True):
 
 def init_guess_by_atom(mol, breaksym=True):
     dm = hf.init_guess_by_atom(mol)
+    dmb = dm*.5
     if breaksym:
         #Add off-diagonal part of alpha DM
         dma = mol.intor('cint1e_ovlp_sph') * 1e-2
         for b0, b1, p0, p1 in mol.offset_nr_by_atom():
             dma[p0:p1,p0:p1] = dmb[p0:p1,p0:p1]
     return numpy.array((dma,dmb))
+
 
 def init_guess_by_chkfile(mol, chkfile_name, project=True):
     from pyscf.scf import addons

@@ -115,6 +115,11 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(e1, -2.7862168430230341, 9)
         self.assertTrue(mf.mo_coeff[0].dtype == numpy.complex128)
 
+        mf = pscf.UHF(cell, exxdiv='ewald')
+        e1 = mf.kernel()
+        self.assertAlmostEqual(e1, -4.3511582287379111, 9)
+        self.assertTrue(mf.mo_coeff[0].dtype == numpy.double)
+
 #    def test_rhf_0d(self):
 #        from pyscf.df import mdf_jk
 #        from pyscf.scf import hf

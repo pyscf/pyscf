@@ -55,9 +55,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         max_cycle_micro = 1 # casscf.micro_cycle_scheduler(locals())
         max_stepsize = casscf.max_stepsize_scheduler(locals())
         for imicro in range(max_cycle_micro):
-            rota = casscf.rotate_orb_cc(mo, lambda:casdm1, lambda:casdm2,
+            rota = casscf.rotate_orb_cc(mo, lambda:fcivec, lambda:casdm1, lambda:casdm2,
                                         eris, r0, conv_tol_grad*.3, max_stepsize, log)
-            u, g_orb, njk1 = next(rota)
+            u, g_orb, njk1, r0 = next(rota)
             rota.close()
             njk += njk1
             norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
@@ -83,8 +83,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
             t2m = log.timer('micro iter %d'%imicro, *t2m)
             if norm_t < 1e-4 or abs(de) < tol*.4 or norm_gorb < conv_tol_grad*.2:
                 break
-
-            r0 = casscf.pack_uniq_var(u)
 
         totinner += njk
         totmicro += imicro + 1

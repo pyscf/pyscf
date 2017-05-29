@@ -32,8 +32,8 @@ class KnowValues(unittest.TestCase):
         mf.xc = 'lda,vwn'
         e1 = mf.scf()
         self.assertAlmostEqual(e1, -45.42583489512954, 8)
-        self.assertAlmostEqual(mf._ecoul, 3.2519161200384685, 8)
-        self.assertAlmostEqual(mf._exc, -13.937886385300949, 8)
+        self.assertAlmostEqual(mf._ecoul, 3.2519161200384685, 6)
+        self.assertAlmostEqual(mf._exc, -13.937886385300949, 6)
 
 
 if __name__ == '__main__':

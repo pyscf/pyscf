@@ -884,7 +884,7 @@ def unpack_uniq_var(dx, mo_occ):
     nmo = len(mo_occ)
     idx = uniq_var_indices(mo_occ)
 
-    x1 = numpy.zeros((nmo,nmo))
+    x1 = numpy.zeros((nmo,nmo), dtype=dx.dtype)
     x1[idx] = dx
     return x1 - x1.T
 ############
@@ -1327,9 +1327,10 @@ class SCF(lib.StreamObject):
 
     @property
     def diis_file(self):
-        return seif.diis.filename
+        return self.diis.filename
+    @diis_file.setter
     def diis_file(self, x):
-        seif.diis.filename = x
+        self.diis.filename = x
 
     #self.diis_start_cycle = 1 # need > 0 if initial DM is numpy.zeros array
 

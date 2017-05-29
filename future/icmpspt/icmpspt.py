@@ -36,7 +36,7 @@ libmc = lib.load_library('libmcscf')
 
 float_precision = numpy.dtype('Float64')
 mpiprefix=""
-executable="/projects/bamu3429/softwares/icpt/icpt"
+executable="/home/mussard/softwares/icpt/icpt"
 
 if not os.path.isfile(executable):
     msg = ('MPSLCC executable %s not found.  Please specify "executable" in %s'
@@ -137,7 +137,7 @@ NUMERICAL_ZERO = 1e-14
 #'''
 
 
-def writeMRLCCIntegrals(mc, E1, E2, nfro, fully_ic=False) :
+def writeMRLCCIntegrals(mc, E1, E2, nfro, fully_ic=False, third_order=False) :
     # Initializations
     ncor = mc.ncore
     nact = mc.ncas
@@ -151,8 +151,10 @@ def writeMRLCCIntegrals(mc, E1, E2, nfro, fully_ic=False) :
     # (Note: Integrals are in chemistry notation)
     int2popo = ao2mo.outcore.general_iofree(mc.mol, (mo, mo[:,:nocc], mo, mo[:,:nocc]), compact=False)
     int2ppoo = ao2mo.outcore.general_iofree(mc.mol, (mo, mo, mo[:,:nocc], mo[:,:nocc]), compact=False)
+    int2eeep = ao2mo.outcore.general_iofree(mc.mol, (mo[:,nocc:], mo[:,nocc:], mo[:,nocc:], mo), compact=False)
     int2popo.shape=(norb, nocc, norb, nocc)
     int2ppoo.shape=(norb, norb, nocc, nocc)
+    int2eeep.shape=(nvir, nvir, nvir, norb)
 
     # int1
     hcore    = mc.get_hcore()
@@ -184,26 +186,43 @@ def writeMRLCCIntegrals(mc, E1, E2, nfro, fully_ic=False) :
     import os
     os.system("mkdir -p int")
 
-    numpy.save("int/W:caca", numpy.asfortranarray(int2ppoo[nfro:ncor, nfro:ncor, ncor:nocc, ncor:nocc].transpose(0,2,1,3)))
-    numpy.save("int/W:caac", numpy.asfortranarray(int2popo[nfro:ncor, ncor:nocc, ncor:nocc, nfro:ncor].transpose(0,2,1,3)))
-    numpy.save("int/W:cece", numpy.asfortranarray(int2ppoo[nocc:    , nocc:    , nfro:ncor, nfro:ncor].transpose(2,0,3,1)))
-    numpy.save("int/W:ceec", numpy.asfortranarray(int2popo[nocc:    , nfro:ncor, nocc:    , nfro:ncor].transpose(1,2,0,3)))
-    numpy.save("int/W:aeae", numpy.asfortranarray(int2ppoo[nocc:    , nocc:    , ncor:nocc, ncor:nocc].transpose(2,0,3,1)))
-    numpy.save("int/W:aeea", numpy.asfortranarray(int2popo[nocc:    , ncor:nocc, nocc:    , ncor:nocc].transpose(1,2,0,3)))
-    numpy.save("int/W:cccc", numpy.asfortranarray(int2ppoo[nfro:ncor, nfro:ncor, nfro:ncor, nfro:ncor].transpose(0,2,1,3)))
-    numpy.save("int/W:aaaa", numpy.asfortranarray(int2ppoo[ncor:nocc, ncor:nocc, ncor:nocc, ncor:nocc].transpose(0,2,1,3)))
-    numpy.save("int/W:eecc", numpy.asfortranarray(int2popo[nocc:    , nfro:ncor, nocc:    , nfro:ncor].transpose(0,2,1,3)))
-    numpy.save("int/W:eeca", numpy.asfortranarray(int2popo[nocc:    , nfro:ncor, nocc:    , ncor:nocc].transpose(0,2,1,3)))
-    numpy.save("int/W:ccaa", numpy.asfortranarray(int2popo[nfro:ncor, ncor:nocc, nfro:ncor, ncor:nocc].transpose(0,2,1,3)))
-    numpy.save("int/W:eeaa", numpy.asfortranarray(int2popo[nocc:    , ncor:nocc, nocc:    , ncor:nocc].transpose(0,2,1,3)))
-    numpy.save("int/W:eaca", numpy.asfortranarray(int2popo[nocc:    , nfro:ncor, ncor:nocc, ncor:nocc].transpose(0,2,1,3)))
-    numpy.save("int/W:aeca", numpy.asfortranarray(int2popo[ncor:nocc, nfro:ncor, nocc:    , ncor:nocc].transpose(0,2,1,3)))
-    numpy.save("int/W:ccae", numpy.asfortranarray(int2popo[nfro:ncor, ncor:nocc, nocc:    , nfro:ncor].transpose(0,3,1,2)))
-    numpy.save("int/int1",   numpy.asfortranarray(int1[nfro:,nfro:]))
-    numpy.save("int/int1eff",numpy.asfortranarray(int1_eff[nfro:,nfro:]))
+    # no "e"
+    numpy.save(  "int/W:caca", numpy.asfortranarray(int2ppoo[nfro:ncor, nfro:ncor, ncor:nocc, ncor:nocc].transpose(0,2,1,3)))
+    numpy.save(  "int/W:caac", numpy.asfortranarray(int2popo[nfro:ncor, ncor:nocc, ncor:nocc, nfro:ncor].transpose(0,2,1,3)))
+    numpy.save(  "int/W:cccc", numpy.asfortranarray(int2ppoo[nfro:ncor, nfro:ncor, nfro:ncor, nfro:ncor].transpose(0,2,1,3)))
+    numpy.save(  "int/W:aaaa", numpy.asfortranarray(int2ppoo[ncor:nocc, ncor:nocc, ncor:nocc, ncor:nocc].transpose(0,2,1,3)))
+    numpy.save(  "int/W:ccaa", numpy.asfortranarray(int2popo[nfro:ncor, ncor:nocc, nfro:ncor, ncor:nocc].transpose(0,2,1,3)))
+    if (fully_ic):
+      numpy.save("int/W:caaa", numpy.asfortranarray(int2popo[nfro:ncor, ncor:nocc, ncor:nocc, ncor:nocc].transpose(0,2,1,3)))
+    if (third_order):
+      numpy.save("int/W:ccca", numpy.asfortranarray(int2ppoo[nfro:ncor, nfro:ncor, nfro:ncor, ncor:nocc].transpose(0,2,1,3)))
+    # e***
+    numpy.save(  "int/W:eaca", numpy.asfortranarray(int2popo[nocc:    , nfro:ncor, ncor:nocc, ncor:nocc].transpose(0,2,1,3)))
+    numpy.save(  "int/W:aeca", numpy.asfortranarray(int2popo[ncor:nocc, nfro:ncor, nocc:    , ncor:nocc].transpose(0,2,1,3)))
+    numpy.save(  "int/W:ccae", numpy.asfortranarray(int2popo[nfro:ncor, ncor:nocc, nocc:    , nfro:ncor].transpose(0,3,1,2)))
     if (fully_ic):
       numpy.save("int/W:eaaa", numpy.asfortranarray(int2popo[nocc:    , ncor:nocc, ncor:nocc, ncor:nocc].transpose(0,2,1,3)))
-      numpy.save("int/W:caaa", numpy.asfortranarray(int2popo[nfro:ncor, ncor:nocc, ncor:nocc, ncor:nocc].transpose(0,2,1,3)))
+    if (third_order):
+      numpy.save("int/W:cace", numpy.asfortranarray(int2ppoo[nocc:    , ncor:nocc, nfro:ncor, nfro:ncor].transpose(3,1,2,0)))
+      numpy.save("int/W:ccce", numpy.asfortranarray(int2ppoo[nocc:    , nfro:ncor, nfro:ncor, nfro:ncor].transpose(3,1,2,0)))
+    # ee**
+    numpy.save(  "int/W:cece", numpy.asfortranarray(int2ppoo[nocc:    , nocc:    , nfro:ncor, nfro:ncor].transpose(2,0,3,1)))
+    numpy.save(  "int/W:aeae", numpy.asfortranarray(int2ppoo[nocc:    , nocc:    , ncor:nocc, ncor:nocc].transpose(2,0,3,1)))
+    numpy.save(  "int/W:aece", numpy.asfortranarray(int2ppoo[nocc:    , nocc:    , ncor:nocc, nfro:ncor].transpose(2,0,3,1)))
+    # e*e*
+    numpy.save(  "int/W:ceec", numpy.asfortranarray(int2popo[nocc:    , nfro:ncor, nocc:    , nfro:ncor].transpose(1,2,0,3)))
+    numpy.save(  "int/W:eecc", numpy.asfortranarray(int2popo[nocc:    , nfro:ncor, nocc:    , nfro:ncor].transpose(0,2,1,3))) #doublon?
+    numpy.save(  "int/W:aeea", numpy.asfortranarray(int2popo[nocc:    , ncor:nocc, nocc:    , ncor:nocc].transpose(1,2,0,3)))
+    numpy.save(  "int/W:eeaa", numpy.asfortranarray(int2popo[nocc:    , ncor:nocc, nocc:    , ncor:nocc].transpose(0,2,1,3))) #doublon?
+    numpy.save(  "int/W:eeca", numpy.asfortranarray(int2popo[nocc:    , nfro:ncor, nocc:    , ncor:nocc].transpose(0,2,1,3)))
+    # eee*
+    if (third_order):
+      numpy.save("int/W:eeec", numpy.asfortranarray(int2eeep[    :    ,     :    ,     :    , nfro:ncor].transpose(0,2,1,3)))
+      numpy.save("int/W:eeea", numpy.asfortranarray(int2eeep[    :    ,     :    ,     :    , ncor:nocc].transpose(0,2,1,3)))
+      numpy.save("int/W:eeee", numpy.asfortranarray(int2eeep[    :    ,     :    ,     :    , nocc:    ].transpose(0,2,1,3)))
+
+    numpy.save("int/int1",   numpy.asfortranarray(int1[nfro:,nfro:]))
+    numpy.save("int/int1eff",numpy.asfortranarray(int1_eff[nfro:,nfro:]))
 
     feri = h5py.File("int/int2eeee.hdf5", 'w')
     ao2mo.full(mc.mol, mo[:,nocc:], feri, compact=False)
@@ -1116,9 +1135,9 @@ def icmpspt(mc, pttype="NEVPT2", energyE0=0.0, rdmM=0, frozen=0, PTM=1000, PTinc
             dm1eff += dm1
     # now add the contributaion due to the current root
     if (do_dm3):
-      dm3 = mc.fcisolver.make_rdm3(state=root, norb=mc.ncas, nelec=mc.nelecas, dt=float_precision, filetype="binary")
+      dm3 = mc.fcisolver.make_rdm3(state=root, norb=mc.ncas, nelec=mc.nelecas, dt=float_precision, filetype="notbinary")
     elif (do_dm4):
-      dm4 = mc.fcisolver.make_rdm4(state=root, norb=mc.ncas, nelec=mc.nelecas, dt=float_precision, filetype="binary")
+      dm4 = mc.fcisolver.make_rdm4(state=root, norb=mc.ncas, nelec=mc.nelecas, dt=float_precision, filetype="notbinary")
       dm3 = numpy.einsum('ijklmnol', dm4)/(nelec-3)
       numpy.save("int/E4",dm4)
       del dm4
@@ -1213,7 +1232,7 @@ def icmpspt(mc, pttype="NEVPT2", energyE0=0.0, rdmM=0, frozen=0, PTM=1000, PTinc
         if (df):
           energyE0, norb, naux = writeMRLCCIntegralsDF(mc, dm1, dm2, frozen, fully_ic=fully_ic)
         else:
-          energyE0, norb = writeMRLCCIntegrals(mc, dm1, dm2, frozen, fully_ic=fully_ic)
+          energyE0, norb = writeMRLCCIntegrals(mc, dm1, dm2, frozen, fully_ic=fully_ic, third_order=third_order)
         sys.stdout.flush()
 
         totalE = 0.0
