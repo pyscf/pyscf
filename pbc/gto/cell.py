@@ -749,6 +749,7 @@ class Cell(mole.Mole):
         if precision is not None: self.precision = precision
         if rcut is not None: self.rcut = rcut
         if ecp is not None: self.ecp = ecp
+        if ke_cutoff is not None: self.ke_cutoff = ke_cutoff
 
         assert(self.a is not None)
         assert(self.gs is not None or self.ke_cutoff is not None)

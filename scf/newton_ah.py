@@ -402,6 +402,8 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
 # call mf._scf.get_veff, to avoid density_fit module polluting get_veff function
     vhf = mf._scf.get_veff(mol, dm)
     fock = mf.get_fock(h1e, s1e, vhf, dm, 0, None)
+    log.info('Initial guess |g|= %g',
+             numpy.linalg.norm(mf._scf.get_grad(mo_coeff, mo_occ, fock)))
 # NOTE: DO NOT change the initial guess mo_occ, mo_coeff
     mo_energy, mo_tmp = mf.eig(fock, s1e)
     mf.get_occ(mo_energy, mo_tmp)
