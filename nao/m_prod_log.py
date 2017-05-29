@@ -156,6 +156,8 @@ class prod_log_c(ao_log_c):
     
     del v_csr, mu2iww, mu2ww, mu2ff # maybe unnecessary
 
+  comp_moments = comp_moments
+
   def overlap_check(self, overlap_funct=overlap_ni, **kvargs):
     """ Recompute the overlap between orbitals using the product vertex and scalar moments of product functions""" 
     return overlap_check(self, overlap_funct=overlap_ni, **kvargs)

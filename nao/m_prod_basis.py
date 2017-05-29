@@ -31,9 +31,9 @@ class prod_basis_c():
     
     self.prod_log = prod_log_c(sv.ao_log, tol_loc) # local basis (for each specie)
     self.hkernel_csr  = csr_matrix(comp_overlap_coo(sv, self.prod_log, coulomb_am))
-    self.gc2s = np.zeros((sv.natm+1), dtype=np.int32) # global product center (atom) -> start in case of atom-centered basis
-    for gc,sp in enumerate(sv.atom2sp): self.gc2s[gc+1]=self.gc2s[gc]+self.prod_log.sp2norbs[sp]
-    gc2s = self.gc2s
+    self.c2s = np.zeros((sv.natm+1), dtype=np.int32) # global product Center (atom) -> start in case of atom-centered basis
+    for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp]
+    c2s = self.c2s
     
     self.bp2vertex = [] # going to be the product vertex coefficients for each bilocal pair 
     self.bp2info   = [] # going to be some information including indices of atoms, list of contributing centres, conversion coefficients
@@ -64,7 +64,7 @@ class prod_basis_c():
           for lc2,c2 in enumerate(lc2c):
             for i1 in range(lc2s[lc1+1]-lc2s[lc1]):
               for i2 in range(lc2s[lc2+1]-lc2s[lc2]):
-                hkernel_bp[i1+lc2s[lc1],i2+lc2s[lc2]] = self.hkernel_csr[i1+gc2s[c1],i2+gc2s[c2]] # element-by-element construction here
+                hkernel_bp[i1+lc2s[lc1],i2+lc2s[lc2]] = self.hkernel_csr[i1+c2s[c1],i2+c2s[c2]] # element-by-element construction here
         inv_hk = np.linalg.inv(hkernel_bp)
 
         llp = np.zeros((npbp, nprod))
@@ -82,6 +82,16 @@ class prod_basis_c():
         cc = einsum('ab,bc->ac', inv_hk, llp)
         self.bp2info.append([[ia1,ia2],lc2c,lc2s,cc])
         #print(ia1, ia2, len(mu2d), lc2c, hkernel_bp.sum(), inv_hk.sum())
+
+  def comp_moments(self):
+    """ Computes the scalar and dipole moments for the all functions in the product basis """
+    from pyscf.nao import comp_moments as comp_moments_prod_log
+    sp2mom0,sp2mom1 = comp_moments_prod_log(self, self.prod_log)
+    n = self.c2s[-1]
+    mom0,mom1 = np.zeros(n), np.zeros((n,3))
+    for a,[sp,coord,s,f] in enumerate(zip(self.sv.atom2sp,self.sv.atom2coord,self.c2s,self.c2s[1:])):
+      mom0[s:f] = sp2mom0[sp], mom1[s:f,:] = np.einsum('j,k->jk', sp2mom0[sp],coord)+sp2mom1[sp]
+    return mom0,mom1
 
 #
 #
