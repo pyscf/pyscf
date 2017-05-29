@@ -43,5 +43,5 @@ if __name__=='__main__':
   over_coo = comp_overlap_coo(sv, funct=overlap_am).toarray()
   over_den = comp_coulomb_den(sv, funct=overlap_am)
   
-  print(np.allclose(over_coo, over_den))
+  print(np.allclose(over_coo, over_den)) # must be always true
   

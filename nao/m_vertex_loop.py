@@ -11,55 +11,61 @@ class vertex_loop_c():
   Args:
     instance of prod_basis_c
   Returns:
-    
+    %.vdata : all product vertex blocks packed into an one dimensional array
+    %.i2inf : integer array iteration --> info (start in vdata, atom1,atom2,product center,start functions,finish functions)
   Examples:
   '''
   def __init__(self, pb):
     
-    self.pb = pb
-    
-    self.dpc2info = []
-    for atom,sp in enumerate(pb.sv.atom2sp):
-      self.dpc2info.append([atom,atom,sp,pb.prod_log.sp2vertex[sp].shape[0], 1])
+    self.pb = pb  # "copy" of input data
+    self.c2d = [] #  product Center -> list of the info Dictionaries
+    for atom,sp in enumerate(pb.sv.atom2sp): 
+      self.c2d.append({"atoms": (atom,atom), "pspecie": sp, "vertex": pb.prod_log.sp2vertex[sp], "ptype": 1})
+    for ibp,[i,vertex] in enumerate(zip(pb.bp2info, pb.bp2vertex)): 
+      self.c2d.append({"atoms": (i[0][0], i[0][1]), "pspecie": ibp, "vertex": vertex, "ptype": 2})
 
-    for ibp, bp in enumerate(pb.bp2info):
-      self.dpc2info.append([bp[0][0], bp[0][1],ibp, bp[3].shape[1], 2])
-    
-    ndpc = len(self.dpc2info)
-    self.dpc2s = np.zeros( ndpc+1, np.int32 )
-    for dpc in range(ndpc): self.dpc2s[dpc+1] = self.dpc2s[dpc] + self.dpc2info[dpc][3]
+    ndpc = len(self.c2d)  # number of product centers in this vertex 
+    self.c2t = np.array([self.c2d[c]["ptype"] for c in range(ndpc)]) # product Center -> product specie Type
+    self.c2s = np.zeros( ndpc+1, np.int32 ) # product Center -> Start index of a product function in a global counting for this vertex
+    for c in range(ndpc): self.c2s[c+1] = self.c2s[c] + self.c2d[c]["vertex"].shape[0]
 
-    self.i2ccct = []
-    for dpc,i in enumerate(self.dpc2info):
-      if i[4]==1:
-        self.i2ccct.append([i[0], i[1], dpc, 0])
-      elif i[4]==2:
-        self.i2ccct.append([i[0], i[1], dpc, 0])
-        self.i2ccct.append([i[1], i[0], dpc, 1])
+    niter = sum(self.c2t)
+    self.i2inf = np.zeros( (niter+1,10), np.int64 )
+    atom2s = pb.sv.atom2s
+    i = -1 # iteration in the loop over the whole vertex
+    for c,[d,s,f,t] in enumerate(zip(self.c2d, self.c2s,self.c2s[1:], self.c2t)):
+      if t==1:
+        i = i + 1
+        a1, a2 = d["atoms"][0],d["atoms"][1]
+        self.i2inf[i+1, 0] = self.i2inf[i, 0] + d["vertex"].size
+        self.i2inf[i,1:10] = a1,a2,c,atom2s[a1],atom2s[a2],s,atom2s[a1+1],atom2s[a2+1],f
+        
+      elif t==2:
+        i = i + 1
+        self.i2inf[i+1, 0] = self.i2inf[i, 0] + d["vertex"].size
+        a1, a2 = d["atoms"][0],d["atoms"][1]
+        self.i2inf[i+1, 0] = self.i2inf[i, 0] + d["vertex"].size
+        self.i2inf[i,1:10] = a1,a2,c,atom2s[a1],atom2s[a2],s,atom2s[a1+1],atom2s[a2+1],f
+        i = i + 1
+        self.i2inf[i+1, 0] = self.i2inf[i, 0] + d["vertex"].size
+        a1, a2 = d["atoms"][1],d["atoms"][0]
+        self.i2inf[i+1, 0] = self.i2inf[i, 0] + d["vertex"].size
+        self.i2inf[i,1:10] = a1,a2,c,atom2s[a1],atom2s[a2],s,atom2s[a1+1],atom2s[a2+1],f
       else:
-        raise RuntimeError('type is not 1 or 2')
-    
-    niter = len(self.i2ccct)
-    self.i2s = np.zeros( niter+1, np.int64 )
-    for i,ccct in enumerate(self.i2ccct):
-      s1,f1 = pb.sv.atom2s[ccct[0]], pb.sv.atom2s[ccct[0]+1]
-      s2,f2 = pb.sv.atom2s[ccct[1]], pb.sv.atom2s[ccct[1]+1]
-      s3,f3 = self.dpc2s[ccct[2]],self.dpc2s[ccct[2]+1]
-      self.i2s[i+1] = self.i2s[i] + (f3-s3)*(f2-s2)*(f1-s1)
-    
-    self.data = np.zeros(self.i2s[-1])
-    for i,[ccct,s,f] in enumerate(zip(self.i2ccct,self.i2s,self.i2s[1:])):
-      dpc = ccct[2]
-      info = self.dpc2info[dpc]
-      self.data[s:f] = 0.0
+        raise RuntimeError('wrong product center type?')
       
-    print(self.i2ccct, self.i2s[-1])
+    self.vdata = np.zeros(self.i2inf[-1][0])
+    for i in range(niter):
+      s,f,c = self.i2inf[i][0], self.i2inf[i+1][0],self.i2inf[i][3]
+      self.vdata[s:f] = self.c2d[c]["vertex"].reshape(f-s)
+
+
+
 #
 #
 #
 if __name__=='__main__':
-  from pyscf.nao import system_vars_c, prod_basis_c
-  from pyscf.nao.m_vertex_loop import vertex_loop_c
+  from pyscf.nao import system_vars_c, prod_basis_c, vertex_loop_c
   from pyscf import gto
   import numpy as np
   from timeit import default_timer as timer
@@ -69,4 +75,7 @@ if __name__=='__main__':
   sv = system_vars_c(gto=mol)
   pb = prod_basis_c(sv)
   vl = vertex_loop_c(pb)
+  print(dir(vl))
+  print(vl.vdata.sum())
+  
   
