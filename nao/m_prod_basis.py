@@ -55,7 +55,7 @@ class prod_basis_c():
         self.bp2vertex.append(vertex)
 
         lc2c = ls_part_centers(sv, ia1, ia2, ac_rcut_ratio) # list of participating centers
-        lc2s = np.zeros((len(lc2c)+1), dtype=np.int32) # local product center -> start for the current bilocal pair
+        lc2s = np.zeros((len(lc2c)+1), dtype=np.int64) # local product center -> start for the current bilocal pair
         for lc,c in enumerate(lc2c): lc2s[lc+1]=lc2s[lc]+self.prod_log.sp2norbs[sv.atom2sp[c]]
 
         npbp = lc2s[-1] # size of the functions which will contribute to the given pair ia1,ia2
@@ -82,7 +82,56 @@ class prod_basis_c():
         cc = einsum('ab,bc->ac', inv_hk, llp)
         self.bp2info.append([[ia1,ia2],lc2c,lc2s,cc])
         #print(ia1, ia2, len(mu2d), lc2c, hkernel_bp.sum(), inv_hk.sum())
+    self.dpc2s,self.dpc2t,self.dpc2sp = self.get_c2s_domiprod() # dominant product's counting 
 
+  def get_ad2cc_den(self):
+    """ Returns Conversion Coefficients as dense matrix """
+    nfdp,nfap = self.dpc2s[-1],self.c2s[-1]
+    ad2cc = np.zeros((nfap,nfdp))
+    for sd,fd,pt in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t):
+      if pt==1: ad2cc[sd:fd,sd:fd] = np.identity(fd-sd)
+
+    for sd,fd,pt,spp in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp):
+      if pt==1: continue
+      for c,ls,lf in zip(self.bp2info[spp][1],self.bp2info[spp][2],self.bp2info[spp][2][1:]): 
+        ad2cc[self.c2s[c]:self.c2s[c+1],sd:fd] = self.bp2info[spp][3][ls:lf,:]
+    return ad2cc
+
+  def get_vertex_array(self):
+    """ Returns the product vertex Coefficients as 3d array """
+    nfap = self.c2s[-1]
+    n = self.sv.atom2s[-1]
+    pab2v = np.zeros((nfap,n,n))
+    for atom,[sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
+      if pt!=1: continue
+      s,f = self.sv.atom2s[atom:atom+2]
+      pab2v[sd:fd,s:f,s:f] = self.prod_log.sp2vertex[spp]
+
+    for sd,fd,pt,spp in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp):
+      if pt!=2: continue
+      lab = einsum('ld,dab->lab', self.bp2info[spp][3], self.bp2vertex[spp])
+      a,b = self.bp2info[spp][0][:]
+      sa,fa,sb,fb = self.sv.atom2s[a],self.sv.atom2s[a+1],self.sv.atom2s[b],self.sv.atom2s[b+1]
+      for c,ls,lf in zip(self.bp2info[spp][1],self.bp2info[spp][2],self.bp2info[spp][2][1:]): 
+        pab2v[self.c2s[c]:self.c2s[c+1],sa:fa,sb:fb] = lab[ls:lf,:,:]
+        pab2v[self.c2s[c]:self.c2s[c+1],sb:fb,sa:fa] = einsum('pab->pba', lab[ls:lf,:,:])
+    return pab2v
+
+
+  def get_c2s_domiprod(self):
+    """Compute the array of start indices for dominant product basis set """
+    c2n,c2t,c2sp = [],[],[] #  product Center -> list of the size of the basis set in this center,of center's types,of product species
+    for atom,sp in enumerate(self.sv.atom2sp):
+      c2n.append(self.prod_log.sp2vertex[sp].shape[0]); c2t.append(1); c2sp.append(sp);
+    for ibp,vertex in enumerate(self.bp2vertex): 
+      c2n.append(vertex.shape[0]); c2t.append(2); c2sp.append(ibp);
+
+    ndpc = len(c2n)  # number of product centers in this vertex 
+    c2s = np.zeros(ndpc+1, np.int64 ) # product Center -> Start index of a product function in a global counting for this vertex
+    for c in range(ndpc): c2s[c+1] = c2s[c] + c2n[c]
+    return c2s,c2t,c2sp
+
+  
   def comp_moments(self):
     """ Computes the scalar and dipole moments for the all functions in the product basis """
     from pyscf.nao import comp_moments as comp_moments_prod_log

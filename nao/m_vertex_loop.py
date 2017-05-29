@@ -30,7 +30,7 @@ class vertex_loop_c():
     for c in range(ndpc): self.c2s[c+1] = self.c2s[c] + self.c2d[c]["vertex"].shape[0]
 
     niter = sum(self.c2t)
-    self.i2inf = np.zeros( (niter+1,10), np.int64 )
+    self.i2inf = np.zeros( (niter+1,11), np.int64 )
     atom2s = pb.sv.atom2s
     i = -1 # iteration in the loop over the whole vertex
     for c,[d,s,f,t] in enumerate(zip(self.c2d, self.c2s,self.c2s[1:], self.c2t)):
@@ -38,27 +38,31 @@ class vertex_loop_c():
         i = i + 1
         a1, a2 = d["atoms"][0],d["atoms"][1]
         self.i2inf[i+1, 0] = self.i2inf[i, 0] + d["vertex"].size
-        self.i2inf[i,1:10] = a1,a2,c,atom2s[a1],atom2s[a2],s,atom2s[a1+1],atom2s[a2+1],f
+        self.i2inf[i,1:11] = a1,a2,c,atom2s[a1],atom2s[a2],s,atom2s[a1+1],atom2s[a2+1],f,0
         
       elif t==2:
         i = i + 1
         self.i2inf[i+1, 0] = self.i2inf[i, 0] + d["vertex"].size
         a1, a2 = d["atoms"][0],d["atoms"][1]
         self.i2inf[i+1, 0] = self.i2inf[i, 0] + d["vertex"].size
-        self.i2inf[i,1:10] = a1,a2,c,atom2s[a1],atom2s[a2],s,atom2s[a1+1],atom2s[a2+1],f
+        self.i2inf[i,1:11] = a1,a2,c,atom2s[a1],atom2s[a2],s,atom2s[a1+1],atom2s[a2+1],f,0
         i = i + 1
         self.i2inf[i+1, 0] = self.i2inf[i, 0] + d["vertex"].size
         a1, a2 = d["atoms"][1],d["atoms"][0]
         self.i2inf[i+1, 0] = self.i2inf[i, 0] + d["vertex"].size
-        self.i2inf[i,1:10] = a1,a2,c,atom2s[a1],atom2s[a2],s,atom2s[a1+1],atom2s[a2+1],f
+        self.i2inf[i,1:11] = a1,a2,c,atom2s[a1],atom2s[a2],s,atom2s[a1+1],atom2s[a2+1],f,1
       else:
         raise RuntimeError('wrong product center type?')
       
     self.vdata = np.zeros(self.i2inf[-1][0])
     for i in range(niter):
-      s,f,c = self.i2inf[i][0], self.i2inf[i+1][0],self.i2inf[i][3]
-      self.vdata[s:f] = self.c2d[c]["vertex"].reshape(f-s)
-
+      s,f,c,tr = self.i2inf[i][0], self.i2inf[i+1][0],self.i2inf[i][3],self.i2inf[i][10]
+      if tr==0:
+        self.vdata[s:f] = self.c2d[c]["vertex"].reshape(f-s)
+      elif tr==1:
+        self.vdata[s:f] = einsum('pab->pba', self.c2d[c]["vertex"]).reshape(f-s)
+      else:
+        raise RuntimeError('!tr?')
 
 
 #

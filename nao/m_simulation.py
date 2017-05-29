@@ -15,7 +15,8 @@ class simulation_c():
     self.pb = prod_basis_c(self.sv, **kvargs)
     self.vl = vertex_loop_c(self.pb, **kvargs)
     self.mom0,self.mom1 = self.pb.prod_log.comp_moments()
-    
+    ad2cc = self.pb.get_ad2cc_den()
+    pab2v = self.pb.get_vertex_array()
     
 
 #
