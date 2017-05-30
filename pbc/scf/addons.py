@@ -32,11 +32,54 @@ def project_mo_nr2nr(cell1, mo1, cell2, kpt=None):
 
 def smearing_(mf, sigma=None, method='fermi'):
     '''Fermi-Dirac or Gaussian smearing'''
+    from pyscf.scf import uhf
     from pyscf.pbc.scf import khf
-    from pyscf.pbc.scf import kuhf
     mf_class = mf.__class__
+    is_uhf = isinstance(mf, uhf.UHF)
+    is_khf = isinstance(mf, khf.KRHF)
+    cell_nelec = mf.cell.nelectron
 
-    is_uhf = isinstance(mf, kuhf.KUHF)
+    def fermi_smearing(mo_energy_kpts, fermi, nkpts):
+        # Optimize mu to give correct electron number
+        sigma = mf.sigma
+        def fermi_occ(m):
+            occ = numpy.zeros_like(mo_energy_kpts)
+            de = (mo_energy_kpts - m) / sigma
+            occ[de<40] = 1./(numpy.exp(de[de<40])+1.)
+            return occ
+        def nelec_cost_fn(m):
+            mo_occ_kpts = fermi_occ(m)
+            if not is_uhf:
+                mo_occ_kpts *= 2
+            return ( mo_occ_kpts.sum()/nkpts - cell_nelec )**2
+        res = scipy.optimize.minimize(nelec_cost_fn, fermi, method='Powell')
+        mu = res.x
+        mo_occ_kpts = f = fermi_occ(mu)
+        f = f[(f>0) & (f<1)]
+        entropy = -(f*numpy.log(f) + (1-f)*numpy.log(1-f)).sum()
+        if not is_uhf:
+            mo_occ_kpts *= 2
+            entropy *= 2
+        return mo_occ_kpts, mu, entropy
+
+    def gaussian_smearing(mo_energy_kpts, fermi, nkpts):
+        sigma = mf.sigma
+        def gauss_occ(m):
+            return 1 - scipy.special.erf((mo_energy_kpts-m)/sigma)
+        def nelec_cost_fn(m):
+            mo_occ_kpts = gauss_occ(m)
+            if is_uhf:
+                mo_occ_kpts *= .5
+            return ( mo_occ_kpts.sum()/nkpts - cell_nelec )**2
+        res = scipy.optimize.minimize(nelec_cost_fn, fermi, method='Powell')
+        mu = res.x
+        mo_occ_kpts = gauss_occ(mu)
+        if is_uhf:
+            mo_occ_kpts *= .5
+# Is the entropy correct for spin unrestricted case?
+        entropy = numpy.exp(-((mo_energy_kpts-mu)/sigma)**2).sum() / numpy.sqrt(numpy.pi)
+        return mo_occ_kpts, mu, entropy
+
     def get_occ(mo_energy_kpts=None, mo_coeff_kpts=None):
         '''Label the occupancies for each orbital for sampled k-points.
 
@@ -46,59 +89,36 @@ def smearing_(mf, sigma=None, method='fermi'):
         if mf.sigma is None or mf.sigma == 0:
             return mo_occ_kpts
 
-        if is_uhf:
+        if is_khf and is_uhf:
             nkpts = len(mo_energy_kpts[0])
-            nocc = mf.cell.nelectron * nkpts
-        else:
+            nocc = cell_nelec * nkpts
+        elif is_khf:
             nkpts = len(mo_energy_kpts)
-            nocc = (mf.cell.nelectron * nkpts) // 2
+            nocc = (cell_nelec * nkpts) // 2
+        elif is_uhf:
+            nkpts = 1
+            nocc = cell_nelec
+        else:
+            nkpts = 1
+            nocc = cell_nelec // 2
         mo_energy = numpy.sort(mo_energy_kpts.ravel())
         fermi = mo_energy[nocc-1]
 
-        if method.lower() == 'fermi':  # Fermi-Dirac smearing
-            # Optimize mu to give correct electron number
-            def fermi_occ(m):
-                occ = numpy.zeros_like(mo_energy_kpts)
-                de = (mo_energy_kpts - m) / mf.sigma
-                occ[de<40] = 1./(numpy.exp(de[de<40])+1.)
-                return occ
-            def nelec_cost_fn(m):
-                mo_occ_kpts = fermi_occ(m)
-                if not is_uhf:
-                    mo_occ_kpts *= 2
-                return ( mo_occ_kpts.sum()/nkpts - mf.cell.nelectron )**2
-            res = scipy.optimize.minimize(nelec_cost_fn, fermi, method='Powell')
-            mu = res.x
-            mo_occ_kpts = f = fermi_occ(mu)
-            f = f[(f>0) & (f<1)]
-            mf.entropy = -(f*numpy.log(f) + (1-f)*numpy.log(1-f)).sum()
-            if not is_uhf:
-                mo_occ_kpts *= 2
-                mf.entropy *= 2
+        if mf.smearing_method.lower() == 'fermi':  # Fermi-Dirac smearing
+            mo_occ_kpts, mu, mf.entropy = fermi_smearing(mo_energy_kpts, fermi, nkpts)
 
         else:  # Gaussian smearing
-            def nelec_cost_fn(m):
-                mo_occ_kpts = 1 - scipy.special.erf((mo_energy_kpts-m)/mf.sigma)
-                if is_uhf:
-                    mo_occ_kpts *= .5
-                return ( mo_occ_kpts.sum()/nkpts - mf.cell.nelectron )**2
-            res = scipy.optimize.minimize(nelec_cost_fn, fermi, method='Powell')
-            mu = res.x
-            mo_occ_kpts = 1 - scipy.special.erf((mo_energy_kpts-mu)/mf.sigma)
-            if is_uhf:
-                mo_occ_kpts *= .5
-# Is the entropy correct for spin unrestricted case?
-            mf.entropy = numpy.exp(-((mo_energy_kpts-mu)/mf.sigma)**2).sum() / numpy.sqrt(numpy.pi)
+            mo_occ_kpts, mu, mf.entropy = gaussian_smearing(mo_energy_kpts, fermi, nkpts)
 
-        logger.debug(mf, '    Sum mo_occ_kpts = %s  should equal nelec = %s',
-                     mo_occ_kpts.sum()/nkpts, mf.cell.nelectron)
+        logger.debug(mf, '    Fermi level %g  Sum mo_occ_kpts = %s  should equal nelec = %s',
+                     fermi, mo_occ_kpts.sum()/nkpts, cell_nelec)
         logger.info(mf, '    sigma = %g  Optimized mu = %.12g  entropy = %.12g',
                     mf.sigma, mu, mf.entropy)
 
         return mo_occ_kpts
 
     def get_grad_tril(mo_coeff_kpts, mo_occ_kpts, fock):
-        nkpts = len(mf.kpts)
+        nkpts = len(mo_occ_kpts)
         grad_kpts = []
         for k in range(nkpts):
             f_mo = reduce(numpy.dot, (mo_coeff_kpts[k].T.conj(), fock[k],
@@ -107,24 +127,24 @@ def smearing_(mf, sigma=None, method='fermi'):
             grad_kpts.append(f_mo[numpy.tril_indices(nmo, -1)])
         return numpy.hstack(grad_kpts)
 
-    if isinstance(mf, kuhf.KUHF):
-        def get_grad(mo_coeff_kpts, mo_occ_kpts, fock=None):
-            if fock is None:
-                dm1 = mf.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
-                fock = mf.get_hcore(mf.cell, mf.kpts) + mf.get_veff(mf.cell, dm1)
+    def get_grad(mo_coeff_kpts, mo_occ_kpts, fock=None):
+        if fock is None:
+            dm1 = mf.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
+            fock = mf.get_hcore() + mf.get_veff(mf.cell, dm1)
+
+        if is_khf and is_uhf:
             ga = get_grad_tril(mo_coeff_kpts[0], mo_occ_kpts[0], fock[0])
             gb = get_grad_tril(mo_coeff_kpts[1], mo_occ_kpts[1], fock[1])
-            return numpy.hstack((ga,gb))
-
-    elif isinstance(mf, khf.KRHF):
-        def get_grad(mo_coeff_kpts, mo_occ_kpts, fock=None):
-            if fock is None:
-                dm1 = mf.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
-                fock = mf.get_hcore(mf.cell, mf.kpts) + mf.get_veff(mf.cell, dm1)
-            return get_grad_tril(mo_coeff_kpts, mo_occ_kpts, fock)
-
-    else:
-        raise RuntimeError("Input mf %s is not k-point SCF object" % mf)
+            g = numpy.hstack((ga,gb))
+        elif is_khf:
+            g = get_grad_tril(mo_coeff_kpts, mo_occ_kpts, fock)
+        elif is_uhf:
+            ga = get_grad_tril([mo_coeff_kpts[0]], [mo_occ_kpts[0]], [fock[0]])
+            gb = get_grad_tril([mo_coeff_kpts[1]], [mo_occ_kpts[1]], [fock[1]])
+            g = numpy.hstack((ga,gb))
+        else:
+            g = get_grad_tril([mo_coeff_kpts], [mo_occ_kpts], [fock])
+        return g
 
     def energy_tot(dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
         e_tot = mf.energy_elec(dm_kpts, h1e_kpts, vhf_kpts)[0] + mf.energy_nuc()
@@ -162,4 +182,3 @@ if __name__ == '__main__':
     mf = pscf.KUHF(cell, cell.make_kpts(nks))
     mf = smearing_(mf, .1)
     mf.kernel()
-
