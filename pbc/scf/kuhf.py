@@ -34,8 +34,9 @@ def canonical_occ_(mf):
 
     def get_occ(mo_energy_kpts=None,mo_coeff=None):
         if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
-        print(mo_energy_kpts)
-        mo_occ_kpts = np.zeros_like(np.array(mo_energy_kpts))
+        #print(mo_energy_kpts)
+        #mo_occ_kpts = [[],[]] #np.zeros_like(np.array(mo_energy_kpts))
+        mo_occ_kpts=np.zeros_like(mo_energy_kpts)
         print("shape",mo_occ_kpts.shape)
 
         nkpts = np.array(mo_energy_kpts).shape[1]
@@ -43,11 +44,11 @@ def canonical_occ_(mf):
         lumo=[1e8,1e8]
 
         for k in range(nkpts):
-            for s in [0,1]:
+           for s in [0,1]:
+                occ=np.zeros_like(mo_energy_kpts[s,k])
                 e_idx=np.argsort(mo_energy_kpts[s,k])
                 e_sort=mo_energy_kpts[s,k][e_idx]
                 n=mf.nelec[s]
-
                 mo_occ_kpts[s,k][e_idx[:n]]=1
                 homo[s]=max(homo[s],e_sort[n-1])
                 lumo[s]=min(lumo[s],e_sort[n])
@@ -99,7 +100,7 @@ def get_fock(mf, h1e_kpts, s_kpts, vhf_kpts, dm_kpts, cycle=-1, diis=None,
         f_kpts = diis.update(s_kpts, dm_kpts, f_kpts, mf, h1e_kpts, vhf_kpts)
     if abs(level_shift_factor) > 1e-4:
         f_kpts =([hf.level_shift(s, dm_kpts[0,k], f_kpts[0,k], shifta)
-                  for k, s in enumerate(s_kpts)] +
+                  for k, s in enumerate(s_kpts)],
                  [hf.level_shift(s, dm_kpts[1,k], f_kpts[1,k], shiftb)
                   for k, s in enumerate(s_kpts)])
     return lib.asarray(f_kpts)
@@ -119,13 +120,20 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     mo_energy = np.sort(mo_energy_kpts[0].ravel())
     fermi_a = mo_energy[nocc_a-1]
     mo_occ_kpts[0,mo_energy_kpts[0]<=fermi_a] = 1
-    logger.info(mf, 'alpha HOMO = %.12g  LUMO = %.12g', fermi_a, mo_energy[nocc_a])
+    if nocc_a < len(mo_energy):
+      logger.info(mf, 'alpha HOMO = %.12g  LUMO = %.12g', fermi_a, mo_energy[nocc_a])    
+    else:
+       logger.info(mf, 'alpha HOMO = %.12g  (no LUMO because of small basis) ', fermi_a)
 
     nocc_b = mf.nelec[1] * nkpts
     mo_energy = np.sort(mo_energy_kpts[1].ravel())
     fermi_b = mo_energy[nocc_b-1]
     mo_occ_kpts[1,mo_energy_kpts[1]<=fermi_b] = 1
-    logger.info(mf, 'beta HOMO = %.12g  LUMO = %.12g', fermi_b, mo_energy[nocc_b])
+    if nocc_b < len(mo_energy):
+      logger.info(mf, 'beta HOMO = %.12g  LUMO = %.12g', fermi_b, mo_energy[nocc_b])    
+    else:
+       logger.info(mf, 'beta HOMO = %.12g  (no LUMO because of small basis) ', fermi_b)
+
 
     if mf.verbose >= logger.DEBUG:
         np.set_printoptions(threshold=len(mo_energy))

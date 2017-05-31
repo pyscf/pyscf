@@ -20,7 +20,7 @@ from pyscf.lib import logger
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.pbc.dft import rks
-
+from pyscf.scf import uhf as moluhf
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
              kpts=None, kpts_band=None):
@@ -58,7 +58,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         vhf = lib.asarray([vj[0]+vj[1]] * 2)
     else:
         vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
-        vhf = pbcuhf._makevhf(vj, vk*hyb)
+        #vhf = pbcuhf._makevhf(vj, vk*hyb)
+        vhf=moluhf._makevhf(vj,vk*hyb)
 
         if ground_state:
             ks._exc -= (np.einsum('Kij,Kji', dm[0], vk[0]) +
