@@ -55,7 +55,7 @@ def get_fock(mf, h1e_kpts, s_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
         f_kpts = adiis.update(s_kpts, dm_kpts, f_kpts)
     if abs(level_shift_factor) > 1e-4:
         f_kpts =([hf.level_shift(s, dm_kpts[0,k], f_kpts[0,k], shifta)
-                  for k, s in enumerate(s_kpts)] +
+                  for k, s in enumerate(s_kpts)],
                  [hf.level_shift(s, dm_kpts[1,k], f_kpts[1,k], shiftb)
                   for k, s in enumerate(s_kpts)])
     return lib.asarray(f_kpts)
