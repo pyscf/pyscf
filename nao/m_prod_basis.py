@@ -134,8 +134,8 @@ class prod_basis_c():
   
   def comp_moments(self):
     """ Computes the scalar and dipole moments for the all functions in the product basis """
-    from pyscf.nao import comp_moments as comp_moments_prod_log
-    sp2mom0,sp2mom1 = comp_moments_prod_log(self, self.prod_log)
+    from pyscf.nao.m_prod_log import comp_moments as comp_moments_prod_log
+    sp2mom0,sp2mom1 = comp_moments_prod_log(self.prod_log)
     n = self.c2s[-1]
     mom0,mom1 = np.zeros(n), np.zeros((n,3))
     for a,[sp,coord,s,f] in enumerate(zip(self.sv.atom2sp,self.sv.atom2coord,self.c2s,self.c2s[1:])):
@@ -146,8 +146,7 @@ class prod_basis_c():
 #
 #
 if __name__=='__main__':
-  from pyscf.nao.m_system_vars import system_vars_c
-  from pyscf.nao.m_prod_basis import prod_basis_c
+  from pyscf.nao import prod_basis_c, system_vars_c, comp_overlap_coo
   from pyscf import gto
   import numpy as np
   from timeit import default_timer as timer
@@ -155,5 +154,10 @@ if __name__=='__main__':
   
   mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz') # coordinates in Angstrom!
   sv = system_vars_c(gto=mol)
+  s_ref = comp_overlap_coo(sv).todense()
   pb = prod_basis_c(sv)
-  print(pb.prod_log.sp2norbs)
+  mom0,mom1=pb.comp_moments()
+  pab2v = pb.get_vertex_array()
+  s_chk = einsum('pab,p->ab', pab2v,mom0)
+  print(abs(s_chk-s_ref).sum()/s_ref.size)
+
