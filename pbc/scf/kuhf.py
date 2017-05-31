@@ -174,42 +174,6 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     logger.debug(mf, 'E_coul = %.15g', e_coul)
     return e1+e_coul, e_coul
 
-def analyze(mf, verbose=logger.DEBUG, **kwargs):
-    '''Analyze the given SCF object:  print orbital energies, occupancies;
-    print orbital coefficients; Mulliken population analysis; Dipole moment
-    '''
-    from pyscf.lo import orth
-    from pyscf.tools import dump_mat
-    mo_energy = mf.mo_energy
-    mo_occ = mf.mo_occ
-    mo_coeff = mf.mo_coeff
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mf.stdout, verbose)
-    log.note('Analyze output for the gamma point')
-    #log.note('**** MO energy ****')
-    #log.note('                             alpha | beta                alpha | beta')
-    #for i in range(mo_occ.shape[-1]):
-    #   log.note('MO #%-3d energy= %-18.15g | %-18.15g occ= %g | %g',
-    #             i+1, mo_energy[0][i], mo_energy[1][i],
-    #             mo_occ[0][i], mo_occ[1][i])
-    ovlp_ao = mf.get_ovlp()
-    #if verbose >= logger.DEBUG:
-    #    log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for alpha spin **')
-    #    label = mf.mol.spheric_labels(True)
-    #    orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
-    #    c_inv = numpy.dot(orth_coeff.T, ovlp_ao)
-    #    dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[0]), label, start=1,
-    #                      **kwargs)
-    #    log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for beta spin **')
-    #    dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[1]), label, start=1,
-    #                      **kwargs)
-
-    dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log))
-#            mf.dip_moment(mf.mol, dm, verbose=log))
-
 
 def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
                   s=None):
@@ -218,10 +182,8 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
     from pyscf.lo import orth
     if s is None:
         s = hf.get_ovlp(mol)
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
+    log = logger.new_logger(mf, verbose)
+    log.note('Analyze output for the gamma point')
     log.note("KUHF mulliken_meta")
     dm_ao_gamma=dm_ao[:,0,:,:].real.copy()
     s_gamma=s[0,:,:].real.copy()
@@ -407,7 +369,7 @@ class KUHF(uhf.UHF, khf.KRHF):
 
     def analyze(self, verbose=None, **kwargs):
         if verbose is None: verbose = self.verbose
-        return analyze(self, verbose, **kwargs)
+        return khf.analyze(self, verbose, **kwargs)
 
 
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):
@@ -509,4 +471,21 @@ class KUHF(uhf.UHF, khf.KRHF):
 
     def density_fit(self, auxbasis=None, gs=None):
         return khf.KRHF.density_fit(self, auxbasis, gs)
+
+
+if __name__ == '__main__':
+    from pyscf.pbc import gto
+    cell = gto.Cell()
+    cell.atom = '''
+    He 0 0 1
+    He 1 0 1
+    '''
+    cell.basis = '321g'
+    cell.a = np.eye(3) * 3
+    cell.gs = [5] * 3
+    cell.verbose = 5
+    cell.build()
+    mf = KUHF(cell, [2,1,1])
+    mf.kernel()
+    mf.analyze()
 
