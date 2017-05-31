@@ -357,3 +357,6 @@ class KUHF(uhf.UHF, khf.KRHF):
 
     canonicalize = canonicalize
 
+    def analyze(self, verbose=None, **kwargs):
+        sys.stderr('kuhf.analyze method not available')
+
