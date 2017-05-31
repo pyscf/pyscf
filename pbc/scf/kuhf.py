@@ -10,6 +10,7 @@ See Also:
     hf.py : Hartree-Fock for periodic systems at a single k-point
 '''
 
+import sys
 import time
 import numpy as np
 import scipy.linalg
@@ -20,6 +21,7 @@ from pyscf.pbc.scf import khf
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import addons
+from pyscf.pbc.scf import chkfile
 
 
 def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
@@ -163,7 +165,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
     Returns:
         Density matrix, 3D ndarray
     '''
-    chk_cell, scf_rec = pyscf.pbc.scf.chkfile.load_scf(chkfile_name)
+    chk_cell, scf_rec = chkfile.load_scf(chkfile_name)
 
     if kpts is None:
         kpts = scf_rec['kpts']
@@ -353,10 +355,11 @@ class KUHF(uhf.UHF, khf.KRHF):
 
     @lib.with_doc(uhf.spin_square.__doc__)
     def spin_square(self, mo_coeff=None, s=None):
-        raise NotImplementedError
+        sys.stderr.write('kuhf.spin_square not available\n')
+        return 0, 0
 
     canonicalize = canonicalize
 
     def analyze(self, verbose=None, **kwargs):
-        sys.stderr('kuhf.analyze method not available')
+        sys.stderr.write('kuhf.analyze method not available\n')
 
