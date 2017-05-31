@@ -51,8 +51,13 @@ class prod_basis_c():
         nprod=len(mu2d)
         if nprod<1: continue # Skip the rest of operations in case there is no large linear combinations.
         vertex = np.zeros([nprod,n1,n2])
-        for p,d in enumerate(mu2d) : vertex[p,:,:] = xx[:,d].reshape(n1,n2)
+        lambdx = np.zeros([nprod,n1,n2])
+        for p,d in enumerate(mu2d) : 
+          vertex[p,:,:] = xx[:,d].reshape(n1,n2)
+          lambdx[p,:,:] = xx[:,d].reshape(n1,n2)
         self.bp2vertex.append(vertex)
+        
+        print(ia1,ia2,abs(einsum('pab,qab->pq', lambdx, lambdx).reshape(nprod,nprod)-np.identity(nprod)).sum())
 
         lc2c = ls_part_centers(sv, ia1, ia2, ac_rcut_ratio) # list of participating centers
         lc2s = np.zeros((len(lc2c)+1), dtype=np.int64) # local product center -> start for the current bilocal pair
@@ -76,7 +81,7 @@ class prod_basis_c():
           ss = (bs[2],bs[3], bs[2],bs[3], bs[0],bs[1], bs[1],bs[2])
           tci_ao = mol3.intor('cint2e_sph', shls_slice=ss).reshape(n3,n3,n1,n2)
           tci_ao = conv_yzx2xyz_c(mol3).conv_yzx2xyz_4d(tci_ao, 'pyscf2nao', ss)
-          lp = einsum('lcd,cdp->lp', lcd,einsum('cdab,pab->cdp', tci_ao, vertex))
+          lp = einsum('lcd,cdp->lp', lcd,einsum('cdab,pab->cdp', tci_ao, lambdx))
           llp[s:f,:] = lp
 
         cc = einsum('ab,bc->ac', inv_hk, llp)
@@ -105,6 +110,7 @@ class prod_basis_c():
     for atom,[sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
       if pt!=1: continue
       s,f = self.sv.atom2s[atom:atom+2]
+      print(atom,s,f)
       pab2v[sd:fd,s:f,s:f] = self.prod_log.sp2vertex[spp]
 
     for sd,fd,pt,spp in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp):
@@ -139,7 +145,7 @@ class prod_basis_c():
     n = self.c2s[-1]
     mom0,mom1 = np.zeros(n), np.zeros((n,3))
     for a,[sp,coord,s,f] in enumerate(zip(self.sv.atom2sp,self.sv.atom2coord,self.c2s,self.c2s[1:])):
-      mom0[s:f] = sp2mom0[sp], mom1[s:f,:] = np.einsum('j,k->jk', sp2mom0[sp],coord)+sp2mom1[sp]
+      mom0[s:f],mom1[s:f,:] = sp2mom0[sp], np.einsum('j,k->jk', sp2mom0[sp],coord)+sp2mom1[sp]
     return mom0,mom1
 
 #
@@ -152,12 +158,15 @@ if __name__=='__main__':
   from timeit import default_timer as timer
   import matplotlib.pyplot as plt
   
-  mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz') # coordinates in Angstrom!
+  mol = gto.M(atom='O 0 0 0; H 0 0 0.5; H 0 0.5 0', basis='ccpvdz') # coordinates in Angstrom!
   sv = system_vars_c(gto=mol)
+  print(sv.atom2s)
   s_ref = comp_overlap_coo(sv).todense()
   pb = prod_basis_c(sv)
+  #print(pb.prod_log.lambda_check_overlap())
+  #print(pb.prod_log.lambda_check_coulomb())
   mom0,mom1=pb.comp_moments()
   pab2v = pb.get_vertex_array()
   s_chk = einsum('pab,p->ab', pab2v,mom0)
-  print(abs(s_chk-s_ref).sum()/s_ref.size)
-
+  print(s_chk[0,:]-s_ref[0,:])
+  print(s_chk[14,:]-s_ref[14,:])
