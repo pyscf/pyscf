@@ -14,7 +14,6 @@ See Also:
 import time
 import numpy as np
 from pyscf import lib
-from pyscf.pbc.scf import uhf as pbcuhf
 from pyscf.pbc.scf import kuhf
 from pyscf.lib import logger
 from pyscf.pbc.dft import gen_grid
@@ -58,7 +57,6 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         vhf = lib.asarray([vj[0]+vj[1]] * 2)
     else:
         vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
-        #vhf = pbcuhf._makevhf(vj, vk*hyb)
         vhf=moluhf._makevhf(vj,vk*hyb)
 
         if ground_state:

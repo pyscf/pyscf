@@ -44,7 +44,7 @@ def canonical_occ_(mf):
         lumo=[1e8,1e8]
 
         for k in range(nkpts):
-           for s in [0,1]:
+            for s in [0,1]:
                 occ=np.zeros_like(mo_energy_kpts[s,k])
                 e_idx=np.argsort(mo_energy_kpts[s,k])
                 e_sort=mo_energy_kpts[s,k][e_idx]

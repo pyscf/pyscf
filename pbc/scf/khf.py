@@ -205,8 +205,7 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     log.note('Analyze output for the gamma point')
     ovlp_ao = mf.get_ovlp()
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log))
-#            mf.dip_moment(mf.mol, dm, verbose=log))
+    return mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log)
 
 
 def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',

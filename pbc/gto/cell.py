@@ -740,7 +740,6 @@ class Cell(mole.Mole):
         if h is not None: self.h = h
         if a is not None: self.a = a
         if gs is not None: self.gs = gs
-        if ke_cutoff is not None: self.ke_cutoff=ke_cutoff
         if nimgs is not None: self.nimgs = nimgs
         if ew_eta is not None: self.ew_eta = ew_eta
         if ew_cut is not None: self.ew_cut = ew_cut
