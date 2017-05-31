@@ -24,6 +24,7 @@ from pyscf.lib import logger
 from pyscf.pbc.gto import ecp
 from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile
+from functools import reduce
 
 
 def get_ovlp(mf, cell=None, kpts=None):
@@ -187,6 +188,50 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     e_coul = e_coul.real
     logger.debug(mf, 'E_coul = %.15g', e_coul)
     return e1+e_coul, e_coul
+
+def analyze(mf, verbose=logger.DEBUG, **kwargs):
+    '''Analyze the given SCF object:  print orbital energies, occupancies;
+    print orbital coefficients; Mulliken population analysis; Dipole moment
+    '''
+    from pyscf.lo import orth
+    from pyscf.tools import dump_mat
+    mo_energy = mf.mo_energy
+    mo_occ = mf.mo_occ
+    mo_coeff = mf.mo_coeff
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mf.stdout, verbose)
+    log.note('Analyze output for the gamma point')
+    ovlp_ao = mf.get_ovlp()
+    dm = mf.make_rdm1(mo_coeff, mo_occ)
+    return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log))
+#            mf.dip_moment(mf.mol, dm, verbose=log))
+
+
+def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
+                  s=None):
+    '''Mulliken population analysis, based on meta-Lowdin AOs.
+    '''
+    from pyscf.lo import orth
+    if s is None:
+        s = hf.get_ovlp(mol)
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mol.stdout, verbose)
+    log.note("KRHF mulliken_meta")
+    dm_ao_gamma=dm_ao[0,:,:].real.copy()
+    s_gamma=s[0,:,:].real.copy()
+    c = orth.pre_orth_ao(mol, pre_orth_method)
+    orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c, s=s_gamma)
+    c_inv = np.dot(orth_coeff.T, s_gamma)
+    dm = reduce(np.dot, (c_inv, dm_ao_gamma, c_inv.T.conj()))
+
+    log.note(' ** Mulliken pop alpha/beta on meta-lowdin orthogonal AOs **')
+    return hf.mulliken_pop(mol, dm, np.eye(orth_coeff.shape[0]), log)
+
+
 
 def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
     if fock is None:
@@ -384,6 +429,10 @@ class KRHF(hf.RHF):
         vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
         return vj - vk * .5
 
+    def analyze(self, verbose=None, **kwargs):
+        if verbose is None: verbose = self.verbose
+        return analyze(self, verbose, **kwargs)
+
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):
         '''
         returns 1D array of gradients, like non K-pt version
@@ -461,6 +510,13 @@ class KRHF(hf.RHF):
             with h5py.File(self.chkfile) as fh5:
                 fh5['scf/kpts'] = self.kpts
         return self
+
+    def mulliken_meta(self, mol=None, dm=None, verbose=logger.DEBUG,
+                      pre_orth_method='ANO', s=None):
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        return mulliken_meta(mol, dm, s=s, verbose=verbose,
+                             pre_orth_method=pre_orth_method)
 
     canonicalize = canonicalize
 

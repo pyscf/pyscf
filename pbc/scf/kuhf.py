@@ -120,13 +120,20 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     mo_energy = np.sort(mo_energy_kpts[0].ravel())
     fermi_a = mo_energy[nocc_a-1]
     mo_occ_kpts[0,mo_energy_kpts[0]<=fermi_a] = 1
-    logger.info(mf, 'alpha HOMO = %.12g  LUMO = %.12g', fermi_a, mo_energy[nocc_a])
+    if nocc_a < len(mo_energy):
+      logger.info(mf, 'alpha HOMO = %.12g  LUMO = %.12g', fermi_a, mo_energy[nocc_a])    
+    else:
+       logger.info(mf, 'alpha HOMO = %.12g  (no LUMO because of small basis) ', fermi_a)
 
     nocc_b = mf.nelec[1] * nkpts
     mo_energy = np.sort(mo_energy_kpts[1].ravel())
     fermi_b = mo_energy[nocc_b-1]
     mo_occ_kpts[1,mo_energy_kpts[1]<=fermi_b] = 1
-    logger.info(mf, 'beta HOMO = %.12g  LUMO = %.12g', fermi_b, mo_energy[nocc_b])
+    if nocc_b < len(mo_energy):
+      logger.info(mf, 'beta HOMO = %.12g  LUMO = %.12g', fermi_b, mo_energy[nocc_b])    
+    else:
+       logger.info(mf, 'beta HOMO = %.12g  (no LUMO because of small basis) ', fermi_b)
+
 
     if mf.verbose >= logger.DEBUG:
         np.set_printoptions(threshold=len(mo_energy))
