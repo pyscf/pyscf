@@ -47,20 +47,20 @@ subroutine ao_eval(nmu, &
   real(c_double), allocatable :: rsh(:)
   real(c_double) :: coeffs(6), r, fval, coord(3), rcutmx
   integer(c_int64_t) :: jmx_sp, icrd, mu, j, s,f,k
-!  write(6,*) nmu
-!  write(6,*) nr
-!  write(6,*) ir_mu2v_rl(1:3,1)
-!  write(6,*) ir_mu2v_rl(1:3,2)
-!  write(6,*) ir_mu2v_rl(1:3,3)
-!  write(6,*) rhomin_jt
-!  write(6,*) dr_jt
-!  write(6,*) mu2j
-!  write(6,*) mu2s(1:nmu+1)
-!  write(6,*) rcen
-!  write(6,*) ncoords
-!  write(6,*) coords(:,1)
-!  write(6,*) norbs
-!  write(6,*) ldres
+  !write(6,*) nmu
+  !write(6,*) nr
+  !write(6,*) ir_mu2v_rl(1:3,1)
+  !write(6,*) ir_mu2v_rl(1:3,2)
+  !write(6,*) ir_mu2v_rl(1:3,3)
+  !write(6,*) rhomin_jt
+  !write(6,*) dr_jt
+  !write(6,*) mu2j
+  !write(6,*) mu2s(1:nmu+1)
+  !write(6,*) rcen
+  !write(6,*) ncoords
+  !write(6,*) coords(:,1)
+  !write(6,*) norbs
+  !write(6,*) ldres
 
   rcutmx = maxval(mu2rcut)
   jmx_sp = maxval(mu2j)

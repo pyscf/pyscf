@@ -162,10 +162,10 @@ class prod_log_c(ao_log_c):
     """ Recompute the overlap between orbitals using the product vertex and scalar moments of product functions""" 
     return overlap_check(self, overlap_funct=overlap_ni, **kvargs)
 
-  def hartree_pot(self, method=None):
+  def hartree_pot(self, **kvargs):
     """ Compute Hartree potential of the radial orbitals and return another ao_log_c storage with these potentials."""
     from pyscf.nao.m_ao_log_hartree import ao_log_hartree as ext
-    return ext(self, method)
+    return ext(self, **kvargs)
 
   def lambda_check_coulomb(self):
     """ Check the equality (p|q)<q,cd> = [p,ab] <ab|q>(q|r)<r|cd> """

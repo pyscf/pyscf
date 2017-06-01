@@ -27,13 +27,22 @@ def ao_log_hartree_lap_libnao(ao):
     POINTER(c_double)) # mu2vh(nr,nmult)
 
   ao_pot = copy.deepcopy(ao)
+  
+  rr = np.require(ao.rr, dtype=c_double, requirements='C')  
   for sp in range(ao.nspecies):
+    mu2j = np.require(ao.sp_mu2j[sp], dtype=c_int64, requirements='C')
+    ff_rad = np.require(ao.psi_log[sp], dtype=c_double, requirements='C')
+    ff_pot = np.require(ao_pot.psi_log[sp], dtype=c_double, requirements='CW')
+    
     libnao.ao_hartree_lap(
-      ao.rr.ctypes.data_as(POINTER(c_double)), c_int64(ao.sp2nmult[sp]),
-      ao.psi_log[sp].ctypes.data_as(POINTER(c_double)), c_int64(ao.nr),
-      ao.sp_mu2j[sp].ctypes.data_as(POINTER(c_int64)),
-      ao_pot.psi_log[sp].ctypes.data_as(POINTER(c_double)))
-
+      rr.ctypes.data_as(POINTER(c_double)), 
+      c_int64(ao.sp2nmult[sp]),
+      ff_rad.ctypes.data_as(POINTER(c_double)), 
+      c_int64(ao.nr),
+      mu2j.ctypes.data_as(POINTER(c_int64)),
+      ff_pot.ctypes.data_as(POINTER(c_double)))
+      
+    ao_pot.psi_log[sp] = ff_pot  
     for mu,am in enumerate(ao.sp_mu2j[sp]): ao_pot.psi_log_rl[sp][mu,:] = ao_pot.psi_log[sp][mu,:]/(ao.rr**am)
 
   for sp in range(ao.nspecies): ao_pot.sp_mu2rcut[sp].fill(ao.rr[-1])

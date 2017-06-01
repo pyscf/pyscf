@@ -29,24 +29,29 @@ def ao_eval_libnao_(ao, rat, isp, crds, res):
       ao  : instance of ao_log_c class
       rat : vector where the atomic orbitals from "ao" are centered
       isp : specie index for which we compute
-      coords: coordinates on which we compute
+      crds: coordinates on which we compute
     Returns:
       res[norbs,ncoord] : array of atomic orbital values
   """
   #print(res_copy.flags)
-  rat_copy = np.require(rat,  dtype='float64', requirements='C')
-  crd_copy = np.require(crds, dtype='float64', requirements='C')
-  res_copy = np.require(res,  dtype='float64', requirements='CW')
-  
+  rat_copy = np.require(rat,  dtype=c_double, requirements='C')
+  crd_copy = np.require(crds, dtype=c_double, requirements='C')
+  res_copy = np.require(res,  dtype=c_double, requirements='CW')
+
+  mu2j = np.require(ao.sp_mu2j[isp], dtype=c_int64, requirements='C')
+  mu2s = np.require(ao.sp_mu2s[isp], dtype=c_int64, requirements='C')
+  mu2rcut = np.require(ao.sp_mu2rcut[isp], dtype=c_double, requirements='C')
+  ff = np.require(ao.psi_log_rl[isp], dtype=c_double, requirements='C')
+
   libnao.ao_eval(
     c_int64(ao.sp2nmult[isp]), 
-    ao.psi_log_rl[isp].ctypes.data_as(POINTER(c_double)),
+    ff.ctypes.data_as(POINTER(c_double)),
     c_int64(ao.nr),
     c_double(ao.interp_rr.gammin_jt),
     c_double(ao.interp_rr.dg_jt),
-    ao.sp_mu2j[isp].ctypes.data_as(POINTER(c_int64)), 
-    ao.sp_mu2s[isp].ctypes.data_as(POINTER(c_int64)),
-    ao.sp_mu2rcut[isp].ctypes.data_as(POINTER(c_double)),
+    mu2j.ctypes.data_as(POINTER(c_int64)), 
+    mu2s.ctypes.data_as(POINTER(c_int64)),
+    mu2rcut.ctypes.data_as(POINTER(c_double)),
     rat_copy.ctypes.data_as(POINTER(c_double)), 
     c_int64(crd_copy.shape[0]), 
     crd_copy.ctypes.data_as(POINTER(c_double)), 

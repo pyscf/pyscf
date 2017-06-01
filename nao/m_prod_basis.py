@@ -20,7 +20,7 @@ class prod_basis_c():
   '''
   def __init__(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
     """ First it should work with GTOs """
-    from pyscf.nao import coulomb_am, comp_overlap_coo, get_atom2bas_s, conv_yzx2xyz_c, prod_log_c, ls_part_centers
+    from pyscf.nao import coulomb_am, comp_overlap_coo, get_atom2bas_s, conv_yzx2xyz_c, prod_log_c, ls_part_centers, comp_coulomb_den
     from scipy.sparse import csr_matrix
     from pyscf import gto
 
@@ -31,6 +31,7 @@ class prod_basis_c():
     
     self.prod_log = prod_log_c(sv.ao_log, tol_loc) # local basis (for each specie)
     self.hkernel_csr  = csr_matrix(comp_overlap_coo(sv, self.prod_log, coulomb_am))
+    #self.hkernel_den  = comp_coulomb_den(sv, self.prod_log)
     self.c2s = np.zeros((sv.natm+1), dtype=np.int32) # global product Center (atom) -> start in case of atom-centered basis
     for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp]
     c2s = self.c2s
@@ -57,7 +58,7 @@ class prod_basis_c():
           lambdx[p,:,:] = xx[:,d].reshape(n1,n2)
         self.bp2vertex.append(vertex)
         
-        print(ia1,ia2,abs(einsum('pab,qab->pq', lambdx, lambdx).reshape(nprod,nprod)-np.identity(nprod)).sum())
+        print(ia1,ia2,nprod,abs(einsum('pab,qab->pq', lambdx, lambdx).reshape(nprod,nprod)-np.identity(nprod)).sum())
 
         lc2c = ls_part_centers(sv, ia1, ia2, ac_rcut_ratio) # list of participating centers
         lc2s = np.zeros((len(lc2c)+1), dtype=np.int64) # local product center -> start for the current bilocal pair
@@ -169,4 +170,4 @@ if __name__=='__main__':
   pab2v = pb.get_vertex_array()
   s_chk = einsum('pab,p->ab', pab2v,mom0)
   print(s_chk[0,:]-s_ref[0,:])
-  print(s_chk[14,:]-s_ref[14,:])
+  #print(s_chk[14,:]-s_ref[14,:])
