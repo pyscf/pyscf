@@ -1,5 +1,6 @@
 from __future__ import print_function, division
 from pyscf.nao import system_vars_c, ao_matelem_c, prod_log_c, conv_yzx2xyz_c, get_atom2bas_s, eri3c
+from pyscf.nao.m_prod_log import dipole_check
 from pyscf import gto
 import numpy as np
 from timeit import default_timer as timer
@@ -9,6 +10,7 @@ sv = system_vars_c(gto=mol)
 prod_log = prod_log_c(sv.ao_log)
 print(prod_log.overlap_check())
 print(prod_log.lambda_check_overlap())
+print(dipole_check(sv, prod_log))
 
 ia1 = 0
 ia2 = 1
@@ -20,13 +22,14 @@ bs = get_atom2bas_s(mol3._bas)
 ss = (bs[2],bs[3], bs[2],bs[3], bs[0],bs[1], bs[1],bs[2])
 tci_ao = mol3.intor('cint2e_sph', shls_slice=ss).reshape(n3,n3,n1,n2)
 tci_ao = conv_yzx2xyz_c(mol3).conv_yzx2xyz_4d(tci_ao, 'pyscf2nao', ss)
-
+print(tci_ao.shape)
 
 vhpf = prod_log.hartree_pot()
 me = ao_matelem_c(sv.ao_log, vhpf)
 sp1,sp2,sp3 = [sv.atom2sp[ia] for ia in [ia1,ia2,ia3]]
 R1,R2,R3 = [sv.atom2coord[ia] for ia in [ia1,ia2,ia3]]
 eri_ni = eri3c(me, sp1, sp2, R1, R2, sp3, R3, level=9)
+tci_ni = np.einsum('pab,cdp->abcd', prod_log.sp2vertex[sp3], eri_ni)
+print(tci_ni.shape)
   
-  
-print(ia1, ia2, ia3, tci_ao.sum(), eri_ni.sum())
+print(ia1, ia2, ia3, tci_ao.sum(), tci_ni.sum())

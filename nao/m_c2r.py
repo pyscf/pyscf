@@ -36,7 +36,7 @@ class c2r_c():
     _j = self._j
     for m in range(-j,j+1):
       for m1 in range(-abs(m),abs(m)+1,2*abs(m) if m!=0 else 1):
-        xww1[j+m,:,:]=xww1[j+m,:,:]+self._c2r[_j+m,_j+m1]*mab_c[j+m1,:,:] # _c2r or _conj_c2r
+        xww1[j+m,:,:]=xww1[j+m,:,:]+self._hc_c2r[_j+m1,_j+m]*mab_c[j+m1,:,:] # _c2r or _conj_c2r
 
     for m in range(-j,j+1):
       xww2.fill(0.0)

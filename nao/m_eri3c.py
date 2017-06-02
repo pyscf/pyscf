@@ -16,9 +16,7 @@ def eri3c(me, sp1,sp2,R1,R2, sp3,R3, **kvargs):
     ao1 = grids.weights * ao_eval(me.aos[0], R1, sp1, grids.coords)
     ao2 = ao_eval(me.aos[0], R2, sp2, grids.coords)
     aoao = np.einsum('ar,br->abr', ao1, ao2)
-    print('eri3c: 4', aoao.sum())
     pbf = ao_eval(me.aos[1], R3, sp3, grids.coords)
-    print('eri3c: 5', pbf.sum())
     
     abp2eri = np.einsum('abr,pr->abp',aoao,pbf)
     return abp2eri
