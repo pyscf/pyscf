@@ -23,9 +23,7 @@ def eri3c(me, sp1,sp2,R1,R2, sp3,R3, **kvargs):
 
 
 if __name__=="__main__":
-  from pyscf.nao.m_system_vars import system_vars_c
-  from pyscf.nao.m_ao_matelem import ao_matelem_c
-  from pyscf.nao.m_prod_log import prod_log_c
+  from pyscf.nao.m_system_vars import system_vars_c, ao_matelem_c, prod_log_c
   from pyscf.nao.m_eri3c import eri3c
   
   sv = system_vars_c(label='siesta')

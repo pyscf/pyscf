@@ -1,9 +1,9 @@
-from __future__ import print_function, division
-from pyscf.nao import system_vars_c, ao_matelem_c, prod_log_c, conv_yzx2xyz_c, get_atom2bas_s, eri3c
+from __future__ import print_function
+from pyscf.nao import system_vars_c, prod_log_c, conv_yzx2xyz_c, get_atom2bas_s, ao_matelem_c
+from pyscf.nao.m_system_vars import diag_check, overlap_check
 from pyscf.nao.m_prod_log import dipole_check
 from pyscf import gto
 import numpy as np
-from timeit import default_timer as timer
 
 mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz') # coordinates in Angstrom!
 sv = system_vars_c(gto=mol)
@@ -15,6 +15,7 @@ print('builtin simple center checks done \n')
 
 me = ao_matelem_c(prod_log)
 
+errmx = 0
 for ia1 in range(sv.natoms):
   for ia2 in range(sv.natoms):
 
@@ -30,3 +31,8 @@ for ia1 in range(sv.natoms):
     pq2v = me.coulomb_am(sp1, R1, sp2, R2)
     tci_ni = np.einsum('abq,qcd->abcd', np.einsum('pab,pq->abq', prod_log.sp2vertex[sp1], pq2v), prod_log.sp2vertex[sp2])
     print(ia1, ia2, abs(tci_ao-tci_ni).sum()/tci_ao.size, abs(tci_ao-tci_ni).max())
+    errmx = max(errmx, abs(tci_ao-tci_ni).max())
+
+assert(errmx<3e-5)
+
+
