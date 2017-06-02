@@ -30,10 +30,9 @@ class prod_basis_c():
     self.ac_rcut_ratio = ac_rcut_ratio
     
     self.prod_log = prod_log_c(sv.ao_log, tol_loc) # local basis (for each specie)
-    self.hkernel_csr  = csr_matrix(comp_overlap_coo(sv, self.prod_log, coulomb_am))
-    #self.hkernel_den  = comp_coulomb_den(sv, self.prod_log)
-    self.c2s = np.zeros((sv.natm+1), dtype=np.int32) # global product Center (atom) -> start in case of atom-centered basis
-    for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp]
+    self.hkernel_csr  = csr_matrix(comp_overlap_coo(sv, self.prod_log, coulomb_am)) # compute local part of Coulomb interaction
+    self.c2s = np.zeros((sv.natm+1), dtype=np.int64) # global product Center (atom) -> start in case of atom-centered basis
+    for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] # 
     c2s = self.c2s
     
     self.bp2vertex = [] # going to be the product vertex coefficients for each bilocal pair 
@@ -52,10 +51,7 @@ class prod_basis_c():
         nprod=len(mu2d)
         if nprod<1: continue # Skip the rest of operations in case there is no large linear combinations.
         vertex = np.zeros([nprod,n1,n2])
-        lambdx = np.zeros([nprod,n1,n2])
-        for p,d in enumerate(mu2d) : 
-          vertex[p,:,:] = xx[:,d].reshape(n1,n2)
-          lambdx[p,:,:] = xx[:,d].reshape(n1,n2)
+        for p,d in enumerate(mu2d) : vertex[p,:,:] = xx[:,d].reshape(n1,n2)
         self.bp2vertex.append(vertex)
         
         #print(ia1,ia2,nprod,abs(einsum('pab,qab->pq', lambdx, lambdx).reshape(nprod,nprod)-np.identity(nprod)).sum())
@@ -82,7 +78,7 @@ class prod_basis_c():
           ss = (bs[2],bs[3], bs[2],bs[3], bs[0],bs[1], bs[1],bs[2])
           tci_ao = mol3.intor('cint2e_sph', shls_slice=ss).reshape(n3,n3,n1,n2)
           tci_ao = conv_yzx2xyz_c(mol3).conv_yzx2xyz_4d(tci_ao, 'pyscf2nao', ss)
-          lp = einsum('lcd,cdp->lp', lcd,einsum('cdab,pab->cdp', tci_ao, lambdx))
+          lp = einsum('lcd,cdp->lp', lcd,einsum('cdab,pab->cdp', tci_ao, vertex))
           llp[s:f,:] = lp
 
         cc = einsum('ab,bc->ac', inv_hk, llp)
@@ -111,7 +107,6 @@ class prod_basis_c():
     for atom,[sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
       if pt!=1: continue
       s,f = self.sv.atom2s[atom:atom+2]
-      print(atom,s,f)
       pab2v[sd:fd,s:f,s:f] = self.prod_log.sp2vertex[spp]
 
     for sd,fd,pt,spp in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp):
@@ -156,18 +151,13 @@ if __name__=='__main__':
   from pyscf.nao import prod_basis_c, system_vars_c, comp_overlap_coo
   from pyscf import gto
   import numpy as np
-  from timeit import default_timer as timer
-  import matplotlib.pyplot as plt
   
   mol = gto.M(atom='O 0 0 0; H 0 0 0.5; H 0 0.5 0', basis='ccpvdz') # coordinates in Angstrom!
   sv = system_vars_c(gto=mol)
   print(sv.atom2s)
   s_ref = comp_overlap_coo(sv).todense()
   pb = prod_basis_c(sv)
-  #print(pb.prod_log.lambda_check_overlap())
-  #print(pb.prod_log.lambda_check_coulomb())
   mom0,mom1=pb.comp_moments()
   pab2v = pb.get_vertex_array()
   s_chk = einsum('pab,p->ab', pab2v,mom0)
-  print(s_chk[0,:]-s_ref[0,:])
-  #print(s_chk[14,:]-s_ref[14,:])
+  print(abs(s_chk-s_ref).sum()/s_chk.size, abs(s_chk-s_ref).max())
