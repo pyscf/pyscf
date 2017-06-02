@@ -47,3 +47,11 @@ mf = dft.RKS(cell)
 mf.grids = dft.gen_grid.BeckeGrids(cell)
 mf.xc = 'bp86'
 mf.kernel()
+
+#
+# Second order SCF solver can be used in the PBC SCF code the same way in the
+# molecular calculation
+#
+mf = scf.newton(scf.RHF(cell))
+mf.kernel()
+

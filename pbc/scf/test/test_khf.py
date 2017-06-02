@@ -18,6 +18,9 @@ import ase
 import ase.lattice
 import ase.dft.kpoints
 
+def finger(a):
+    return np.dot(np.cos(np.arange(a.size)), a.ravel())
+
 def make_primitive_cell(ngs):
     from ase.lattice import bulk
     ase_atom = ase.build.bulk('C', 'diamond', a=3.5668)
@@ -112,6 +115,10 @@ class KnowValues(unittest.TestCase):
         kmf1 = kuhf.KUHF(cell, kpts, exxdiv='vcut_sph')
         ekpt = kmf1.scf()
         self.assertAlmostEqual(ekpt, -11.218735269838586, 8)
+        np.random.seed(1)
+        kpts_bands = np.random.random((2,3))
+        e = kmf1.get_bands(kpts_bands)[0]
+        self.assertAlmostEqual(finger(e), -0.045541292730566063, 4)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.scf.khf")

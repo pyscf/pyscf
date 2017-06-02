@@ -10,6 +10,7 @@ See Also:
     hf.py : Hartree-Fock for periodic systems at a single k-point
 '''
 
+import sys
 import time
 import numpy as np
 import scipy.linalg
@@ -20,6 +21,7 @@ from pyscf.pbc.scf import khf
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import addons
+from pyscf.pbc.scf import chkfile
 
 
 def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
@@ -55,7 +57,7 @@ def get_fock(mf, h1e_kpts, s_kpts, vhf_kpts, dm_kpts, cycle=-1, adiis=None,
         f_kpts = adiis.update(s_kpts, dm_kpts, f_kpts)
     if abs(level_shift_factor) > 1e-4:
         f_kpts =([hf.level_shift(s, dm_kpts[0,k], f_kpts[0,k], shifta)
-                  for k, s in enumerate(s_kpts)] +
+                  for k, s in enumerate(s_kpts)],
                  [hf.level_shift(s, dm_kpts[1,k], f_kpts[1,k], shiftb)
                   for k, s in enumerate(s_kpts)])
     return lib.asarray(f_kpts)
@@ -154,7 +156,7 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
         viridxb = ~occidxb
         eig_(fock[1][k], mo, occidxb, mo_e[1,k], mo)
         eig_(fock[1][k], mo, viridxb, mo_e[1,k], mo)
-    return mo_e, mo
+    return mo_e, mo_coeff_kpts
 
 def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
     '''Read the KHF results from checkpoint file, then project it to the
@@ -163,7 +165,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
     Returns:
         Density matrix, 3D ndarray
     '''
-    chk_cell, scf_rec = pyscf.pbc.scf.chkfile.load_scf(chkfile_name)
+    chk_cell, scf_rec = chkfile.load_scf(chkfile_name)
 
     if kpts is None:
         kpts = scf_rec['kpts']
@@ -269,7 +271,7 @@ class KUHF(uhf.UHF, khf.KRHF):
             nkpts = len(self.kpts)
             dm_kpts = lib.asarray([dm]*nkpts).reshape(nkpts,2,nao,nao)
             dm_kpts = dm_kpts.transpose(1,0,2,3)
-            dm[1,:] *= .98  # To break spin symmetry
+            dm_kpts[1,:] *= .98  # To break spin symmetry
         return dm_kpts
 
     get_hcore = khf.KRHF.get_hcore
@@ -328,8 +330,8 @@ class KUHF(uhf.UHF, khf.KRHF):
         fock = self.get_hcore(cell, kpts_band)
         fock = fock + self.get_veff(cell, dm_kpts, kpts=kpts, kpts_band=kpts_band)
         s1e = self.get_ovlp(cell, kpts_band)
-        e_a, c_a = self.eig(fock[0], s1e[0])
-        e_b, c_b = self.eig(fock[0], s1e[0])
+        e_a, c_a = khf.KRHF.eig(self, fock[0], s1e)
+        e_b, c_b = khf.KRHF.eig(self, fock[1], s1e)
         if single_kpt_band:
             e_a = e_a[0]
             e_b = e_b[0]
@@ -353,7 +355,11 @@ class KUHF(uhf.UHF, khf.KRHF):
 
     @lib.with_doc(uhf.spin_square.__doc__)
     def spin_square(self, mo_coeff=None, s=None):
-        raise NotImplementedError
+        sys.stderr.write('kuhf.spin_square not available\n')
+        return 0, 0
 
     canonicalize = canonicalize
+
+    def analyze(self, verbose=None, **kwargs):
+        sys.stderr.write('kuhf.analyze method not available\n')
 
