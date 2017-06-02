@@ -64,5 +64,4 @@ if __name__ == '__main__':
   sv = system_vars_c("siesta")
   ra = np.array([0.0, 0.1, 0.2])
   rb = np.array([0.0, 0.1, 0.0])
-  me = ao_matelem_c(sv.ao_log)
-  coulo = coulomb_am(me, 0, ra, 0, rb)
+  coulo = ao_matelem_c(sv.ao_log).coulomb_am(me, 0, ra, 0, rb)

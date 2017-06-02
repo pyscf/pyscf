@@ -1,10 +1,8 @@
 from __future__ import print_function, division
-from pyscf.nao.m_system_vars import system_vars_c
-from pyscf.nao.m_ao_matelem import ao_matelem_c
+from pyscf.nao import system_vars_c, ao_matelem_c, conv_yzx2xyz_c
 from pyscf.nao.m_comp_overlap_coo import comp_overlap_coo
 from pyscf.nao.m_overlap_am import overlap_am
 from pyscf.nao.m_overlap_ni import overlap_ni
-from conv_yzx2xyz import conv_yzx2xyz
 from pyscf import gto
 import numpy as np
 from timeit import default_timer as timer
@@ -15,7 +13,7 @@ sv = system_vars_c(gto=mol)
 
 start1 = timer()
 over = comp_overlap_coo(sv, funct=overlap_ni, level=4).todense()
-oxyz = conv_yzx2xyz.conv_yzx2xyz_2d(mol, over)
+oxyz = conv_yzx2xyz_c(mol).conv_yzx2xyz_2d(over)
 end1 = timer()
 
 print(abs(oref-oxyz).max())
