@@ -17,7 +17,7 @@ ia2 = 1
 ia3 = 0
 
 n1,n2,n3 = [sv.atom2s[ia+1]-sv.atom2s[ia] for ia in [ia1,ia2,ia3]]
-mol3 = gto.Mole_pure(atom=[sv._atom[ia1], sv._atom[ia2], sv._atom[ia3]], basis=sv.basis).build()
+mol3 = gto.Mole_pure(atom=[sv._atom[ia1], sv._atom[ia2], sv._atom[ia3]], basis=sv.basis, unit='bohr').build()
 bs = get_atom2bas_s(mol3._bas)
 ss = (bs[2],bs[3], bs[2],bs[3], bs[0],bs[1], bs[1],bs[2])
 tci_ao = mol3.intor('cint2e_sph', shls_slice=ss).reshape(n3,n3,n1,n2)

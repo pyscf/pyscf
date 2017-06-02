@@ -42,7 +42,7 @@ class prod_basis_c():
     for ia1,n1 in zip(range(sv.natm), sv.atom2s[1:]-sv.atom2s[0:-1]):
       for ia2,n2 in zip(range(ia1+1,sv.natm+1), sv.atom2s[ia1+2:]-sv.atom2s[ia1+1:-1]):
 
-        mol2 = gto.Mole_pure(atom=[sv._atom[ia1], sv._atom[ia2]], basis=sv.basis).build()
+        mol2 = gto.Mole_pure(atom=[sv._atom[ia1], sv._atom[ia2]], basis=sv.basis, unit='bohr').build()
         bs = get_atom2bas_s(mol2._bas)
         ss = (bs[0],bs[1], bs[1],bs[2], bs[0],bs[1], bs[1],bs[2])
         eri = mol2.intor('cint2e_sph', shls_slice=ss).reshape(n1,n2,n1,n2)
@@ -58,7 +58,7 @@ class prod_basis_c():
           lambdx[p,:,:] = xx[:,d].reshape(n1,n2)
         self.bp2vertex.append(vertex)
         
-        print(ia1,ia2,nprod,abs(einsum('pab,qab->pq', lambdx, lambdx).reshape(nprod,nprod)-np.identity(nprod)).sum())
+        #print(ia1,ia2,nprod,abs(einsum('pab,qab->pq', lambdx, lambdx).reshape(nprod,nprod)-np.identity(nprod)).sum())
 
         lc2c = ls_part_centers(sv, ia1, ia2, ac_rcut_ratio) # list of participating centers
         lc2s = np.zeros((len(lc2c)+1), dtype=np.int64) # local product center -> start for the current bilocal pair
@@ -77,7 +77,7 @@ class prod_basis_c():
         for c,s,f in zip(lc2c,lc2s,lc2s[1:]):
           n3 = sv.atom2s[c+1]-sv.atom2s[c]
           lcd = self.prod_log.sp2lambda[sv.atom2sp[c]]
-          mol3 = gto.Mole_pure(atom=[sv._atom[ia1], sv._atom[ia2], sv._atom[c]], basis=sv.basis).build()
+          mol3 = gto.Mole_pure(atom=[sv._atom[ia1], sv._atom[ia2], sv._atom[c]], basis=sv.basis, unit='bohr').build()
           bs = get_atom2bas_s(mol3._bas)
           ss = (bs[2],bs[3], bs[2],bs[3], bs[0],bs[1], bs[1],bs[2])
           tci_ao = mol3.intor('cint2e_sph', shls_slice=ss).reshape(n3,n3,n1,n2)
