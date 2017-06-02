@@ -1,8 +1,9 @@
 from __future__ import print_function, division
-from pyscf.nao import system_vars_c, ao_matelem_c, conv_yzx2xyz_c
-from pyscf.nao.m_comp_overlap_coo import comp_overlap_coo
+
+from pyscf.nao import system_vars_c, ao_matelem_c, conv_yzx2xyz_c, comp_overlap_coo
 from pyscf.nao.m_overlap_am import overlap_am
 from pyscf.nao.m_overlap_ni import overlap_ni
+
 from pyscf import gto
 import numpy as np
 from timeit import default_timer as timer
