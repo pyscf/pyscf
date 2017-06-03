@@ -474,7 +474,7 @@ class CASCI(lib.StreamObject):
         nvir = self.mo_coeff.shape[1] - self.ncore - self.ncas
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
                  self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
-        assert(nvir > 0 and self.ncore > 0 and self.ncas > 0)
+        assert(self.ncas > 0)
         log.info('natorb = %s', self.natorb)
         log.info('canonicalization = %s', self.canonicalization)
         log.info('max_memory %d (MB)', self.max_memory)
@@ -699,7 +699,7 @@ if __name__ == '__main__':
 
     m = scf.RHF(mol)
     ehf = m.scf()
-    mc = mcscf.CASSCF(m, 4, 4)
+    mc = mcscf.CASCI(m, 4, 4)
     mc.fcisolver = fci.solver(mol)
     mc.natorb = 1
     emc = mc.kernel()[0]
