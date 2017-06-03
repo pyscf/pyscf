@@ -428,8 +428,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         mo, fcivec, mo_energy = \
                 casscf.canonicalize(mo, fcivec, eris, False, casscf.natorb, casdm1, log)
         if casscf.natorb: # dump_chk may save casdm1
-            occ, ucas = casscf._eig(-casdm1, ncore, nocc)[0]
-            casdm1 = -occ
+            nocc = casscf.ncore + casscf.ncas
+            occ, ucas = casscf._eig(-casdm1, casscf.ncore, nocc)
+            casdm1 = numpy.diag(-occ)
 
     if dump_chk:
         casscf.dump_chk(locals())
@@ -600,7 +601,7 @@ class CASSCF(casci.CASCI):
         nvir = self.mo_coeff.shape[1] - self.ncore - self.ncas
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
                  self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
-        assert(nvir > 0 and self.ncore > 0 and self.ncas > 0)
+        assert(self.ncas > 0)
         if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
         log.info('max_cycle_macro = %d', self.max_cycle_macro)
@@ -1112,6 +1113,7 @@ if __name__ == '__main__':
 
     mc = CASSCF(m, 4, (3,1))
     mc.verbose = 4
+    mc.natorb = 1
     #mc.fcisolver = pyscf.fci.direct_spin1
     mc.fcisolver = pyscf.fci.solver(mol, False)
     emc = kernel(mc, m.mo_coeff, verbose=4)[1]

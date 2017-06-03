@@ -164,7 +164,7 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
         intor_name.startswith('cint2c2e')):
         return getints2c(intor_name, atm, bas, env, shls_slice, comp,
                          hermi, ao_loc, cintopt, out)
-    elif intor_name.startswith('cint2e'):
+    elif intor_name.startswith('cint2e') or intor_name.startswith('cint4c1e'):
         return getints2e(intor_name, atm, bas, env, shls_slice, comp,
                          aosym, ao_loc, cintopt, out)
     elif intor_name.startswith('cint3c'):

@@ -89,18 +89,14 @@ def smearing_(mf, sigma=None, method='fermi'):
         if mf.sigma is None or mf.sigma == 0:
             return mo_occ_kpts
 
-        if is_khf and is_uhf:
-            nkpts = len(mo_energy_kpts[0])
-            nocc = cell_nelec * nkpts
-        elif is_khf:
-            nkpts = len(mo_energy_kpts)
-            nocc = (cell_nelec * nkpts) // 2
-        elif is_uhf:
-            nkpts = 1
-            nocc = cell_nelec
+        if is_khf:
+            nkpts = len(mf.kpts)
         else:
             nkpts = 1
-            nocc = cell_nelec // 2
+        if is_uhf:
+            nocc = cell_nelec * nkpts
+        else:
+            nocc = cell_nelec * nkpts // 2
         mo_energy = numpy.sort(mo_energy_kpts.ravel())
         fermi = mo_energy[nocc-1]
 
@@ -118,33 +114,28 @@ def smearing_(mf, sigma=None, method='fermi'):
         return mo_occ_kpts
 
     def get_grad_tril(mo_coeff_kpts, mo_occ_kpts, fock):
-        nkpts = len(mo_occ_kpts)
-        grad_kpts = []
-        for k in range(nkpts):
-            f_mo = reduce(numpy.dot, (mo_coeff_kpts[k].T.conj(), fock[k],
-                                      mo_coeff_kpts[k]))
+        if is_khf:
+            grad_kpts = []
+            for k, mo in enumerate(mo_coeff_kpts):
+                f_mo = reduce(numpy.dot, (mo.T.conj(), fock[k], mo))
+                nmo = f_mo.shape[0]
+                grad_kpts.append(f_mo[numpy.tril_indices(nmo, -1)])
+            return numpy.hstack(grad_kpts)
+        else:
+            f_mo = reduce(numpy.dot, (mo_coeff_kpts.T.conj(), fock, mo_coeff_kpts))
             nmo = f_mo.shape[0]
-            grad_kpts.append(f_mo[numpy.tril_indices(nmo, -1)])
-        return numpy.hstack(grad_kpts)
+            return f_mo[numpy.tril_indices(nmo, -1)]
 
     def get_grad(mo_coeff_kpts, mo_occ_kpts, fock=None):
         if fock is None:
             dm1 = mf.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
             fock = mf.get_hcore() + mf.get_veff(mf.cell, dm1)
-
-        if is_khf and is_uhf:
+        if is_uhf:
             ga = get_grad_tril(mo_coeff_kpts[0], mo_occ_kpts[0], fock[0])
             gb = get_grad_tril(mo_coeff_kpts[1], mo_occ_kpts[1], fock[1])
-            g = numpy.hstack((ga,gb))
-        elif is_khf:
-            g = get_grad_tril(mo_coeff_kpts, mo_occ_kpts, fock)
-        elif is_uhf:
-            ga = get_grad_tril([mo_coeff_kpts[0]], [mo_occ_kpts[0]], [fock[0]])
-            gb = get_grad_tril([mo_coeff_kpts[1]], [mo_occ_kpts[1]], [fock[1]])
-            g = numpy.hstack((ga,gb))
+            return numpy.hstack((ga,gb))
         else:
-            g = get_grad_tril([mo_coeff_kpts], [mo_occ_kpts], [fock])
-        return g
+            return get_grad_tril(mo_coeff_kpts, mo_occ_kpts, fock)
 
     def energy_tot(dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
         e_tot = mf.energy_elec(dm_kpts, h1e_kpts, vhf_kpts)[0] + mf.energy_nuc()
