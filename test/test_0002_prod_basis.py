@@ -1,0 +1,45 @@
+#
+# Author: Peter Koval
+#
+
+from __future__ import print_function, division
+import unittest
+from pyscf import gto
+from pyscf.nao import system_vars_c, prod_log_c
+
+mol = gto.M(
+    verbose = 1,
+    atom = '''
+        O     0    0        0
+        H     0    -0.757   0.587
+        H     0    0.757    0.587''',
+    basis = 'cc-pvdz',
+)
+
+class KnowValues(unittest.TestCase):
+
+  def test_gto2sv_df(self):
+    from pyscf import scf
+    """ Test import of density-fitting Gaussian functions"""
+    mf = scf.density_fit(scf.RHF(mol))
+    self.assertAlmostEqual(mf.scf(), -76.025936299702536, 9)
+    sv = system_vars_c(gto=mol)
+    prod_log = prod_log_c(gto=mf.with_df.auxmol, rr=sv.ao_log.rr, pp=sv.ao_log.pp)
+    #print(dir(mf))
+    #print(dir(mf.mol))
+    #print(dir(mf.with_df.auxmol))
+    #print(mf.with_df.auxmol._basis)
+
+  def test_gto2sv_prod_log(self):
+    """ Test """
+    sv  = system_vars_c(gto=mol)
+    prod_log = prod_log_c(sv.ao_log, tol=1e-4)
+    self.assertAlmostEqual(prod_log.sp2nmult[0], 7)
+    self.assertAlmostEqual(prod_log.sp2nmult[1], 20)
+    self.assertAlmostEqual(prod_log.sp2norbs[0], 15)
+    self.assertAlmostEqual(prod_log.sp2norbs[1], 70)    
+    
+if __name__ == "__main__":
+  print("Full Tests for prod_basis_c")
+  unittest.main()
+

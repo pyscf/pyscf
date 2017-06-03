@@ -80,11 +80,34 @@ class prod_log_c(ao_log_c):
     for each specie returns a set of radial functions defining a product basis
     These functions are sufficient to represent the products of original atomic orbitals
     via a product vertex coefficients.
-    
   Examples:
-    
   '''
-  def __init__(self, ao_log, tol=1e-5):
+  def __init__(self, ao_log=None, gto=None, rr=None, pp=None, **kvargs):
+    
+    if gto is not None:
+      assert(rr is not None)
+      assert(pp is not None)
+      self.init_density_fitting_gto(gto, rr, pp)
+      return
+      
+    if ao_log is not None:
+      self.init_linear_combinations(ao_log, **kvargs)
+      return
+
+
+  def init_density_fitting_gto(self, gto, rr, pp):
+    """ Initializes the radial functions from pyscf"""
+    self.gto = gto
+    self.rr,self.pp,self.nr = rr,pp,len(rr)
+    a2s = [gto.atom_symbol(ia) for ia in range(gto.natm) ]
+    self.sp2symbol = sorted(list(set(a2s)))
+    self.nspecies = len(self.sp2symbol)
+    self.atom2sp = np.empty((gto.natm), dtype=np.int64)
+    for ia,sym in enumerate(a2s): self.atom2sp[ia] = self.sp2symbol.index(sym)
+
+  
+  def init_linear_combinations(self, ao_log, tol=1e-5):
+    """ Builds linear combinations of the original orbital products """
     from scipy.sparse import csr_matrix
     from pyscf.nao.m_local_vertex import local_vertex_c
     
@@ -155,7 +178,8 @@ class prod_log_c(ao_log_c):
     self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut])
     
     del v_csr, mu2iww, mu2ww, mu2ff # maybe unnecessary
-
+  ###
+  
   comp_moments = comp_moments
 
   def overlap_check(self, overlap_funct=overlap_ni, **kvargs):

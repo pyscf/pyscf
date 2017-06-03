@@ -119,7 +119,7 @@ class system_vars_c():
     a2s = [gto.atom_symbol(ia) for ia in range(gto.natm) ]
     self.sp2symbol = sorted(list(set(a2s)))
     self.nspecies = len(self.sp2symbol)
-    self.atom2sp = np.empty((self.natm), dtype='int64')
+    self.atom2sp = np.empty((gto.natm), dtype='int64')
     for ia,sym in enumerate(a2s): self.atom2sp[ia] = self.sp2symbol.index(sym)
 
     self.sp2charge = [-999]*self.nspecies
@@ -129,6 +129,7 @@ class system_vars_c():
     for ia,coord in enumerate(gto.atom_coords()): self.atom2coord[ia,:]=coord # must be in Bohr already?
     self.atom2s = np.zeros((self.natm+1), dtype=np.int64)
     for atom,sp in enumerate(self.atom2sp): self.atom2s[atom+1]=self.atom2s[atom]+self.ao_log.sp2norbs[sp]
+    self.norbs = self.atom2s[-1]
     self.atom2mu_s = np.zeros((self.natm+1), dtype=np.int64)
     for atom,sp in enumerate(self.atom2sp): self.atom2mu_s[atom+1]=self.atom2mu_s[atom]+self.ao_log.sp2nmult[sp]
     self._atom = gto._atom
@@ -243,6 +244,12 @@ class system_vars_c():
   def atom_charges(self): return np.array([self.sp2charge[sp] for sp in self.atom2sp], dtype='int64')
   def atom_coord(self, ia): return self.atom2coord[ia,:]
   def atom_coords(self): return self.atom2coord
+  # 
+  # Compute something for the given system
+  #
+  def comp_overlap_coo(self, **kvargs):
+    from pyscf.nao import comp_overlap_coo
+    return comp_overlap_coo(self, **kvargs)
 
 #
 # Example of reading pySCF orbitals.

@@ -106,7 +106,7 @@ class ao_log_c():
 
       mu2ff = np.zeros((nmu, self.nr))
       mu2ff_rl = np.zeros((nmu, self.nr))
-      mu2j = np.zeros(nmu, dtype='int64')
+      mu2j = np.zeros(nmu, dtype=np.int64)
       mu = -1
       for sid in gto.atom_shell_ids(ia):
         pows = gto.bas_exp(sid)
@@ -131,7 +131,7 @@ class ao_log_c():
     
     self.sp_mu2s = []
     for mu2j in self.sp_mu2j:
-      mu2s = np.zeros(len(mu2j)+1, dtype='int64')
+      mu2s = np.zeros(len(mu2j)+1, dtype=np.int64)
       for mu,j in enumerate(mu2j): mu2s[mu+1] = mu2s[mu]+2*j+1
       self.sp_mu2s.append(mu2s)
     
