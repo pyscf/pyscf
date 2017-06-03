@@ -1341,6 +1341,7 @@ PTR_COMMON_ORIG = 1
 PTR_RINV_ORIG   = 4
 PTR_RINV_ZETA   = 7
 PTR_RANGE_OMEGA = 8
+PTR_F12_ZETA    = 9
 PTR_ECPBAS_OFFSET = 18
 PTR_NECPBAS     = 19
 PTR_ENV_START   = 20
@@ -1900,6 +1901,11 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         self._env[PTR_RANGE_OMEGA] = omega
     set_range_coulomb_ = set_range_coulomb  # for backward compatibility
+
+    def set_f12_zeta(self, zeta):
+        '''Set zeta for YP exp(-zeta r12)/r12 or STG exp(-zeta r12) type integrals  
+        '''
+        self._env[PTR_F12_ZETA] = zeta
 
     def set_nuc_mod(self, atm_id, zeta):
         '''Change the nuclear charge distribution of the given atom ID.  The charge
