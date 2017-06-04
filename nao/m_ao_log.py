@@ -71,11 +71,12 @@ class ao_log_c():
       self.init_ion(sp2ion, **kvargs)
       return
     
-    if gto is not None and sv is not None:
+    if gto is not None:
+      assert(sv is not None)
       self.init_gto(gto, sv, **kvargs)
       return
     
-    raise RuntimeError('unknown constructor')
+    raise RuntimeError(__name__+': unknown constructor')
       
   
   #

@@ -82,29 +82,24 @@ class prod_log_c(ao_log_c):
     via a product vertex coefficients.
   Examples:
   '''
-  def __init__(self, ao_log=None, gto=None, rr=None, pp=None, **kvargs):
+  def __init__(self, ao_log=None, gto=None, sv=None, **kvargs):
     
     if gto is not None:
-      assert(rr is not None)
-      assert(pp is not None)
-      self.init_density_fitting_gto(gto, rr, pp)
+      assert(sv is not None)
+      self.init_density_fitting_gto(gto, sv, **kvargs)
       return
       
     if ao_log is not None:
       self.init_linear_combinations(ao_log, **kvargs)
       return
 
+    raise RuntimeError(__name__+': unknown constructor')
 
-  def init_density_fitting_gto(self, gto, rr, pp):
+
+  def init_density_fitting_gto(self, gto, sv, ao_log_tol=1e-7):
     """ Initializes the radial functions from pyscf"""
     self.gto = gto
-    self.rr,self.pp,self.nr = rr,pp,len(rr)
-    a2s = [gto.atom_symbol(ia) for ia in range(gto.natm) ]
-    self.sp2symbol = sorted(list(set(a2s)))
-    self.nspecies = len(self.sp2symbol)
-    self.atom2sp = np.empty((gto.natm), dtype=np.int64)
-    for ia,sym in enumerate(a2s): self.atom2sp[ia] = self.sp2symbol.index(sym)
-
+    ao_log_c.__init__(self, gto=gto, sv=sv, tol=ao_log_tol)
   
   def init_linear_combinations(self, ao_log, tol=1e-5):
     """ Builds linear combinations of the original orbital products """

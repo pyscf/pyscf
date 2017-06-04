@@ -24,7 +24,14 @@ class KnowValues(unittest.TestCase):
     mf = scf.density_fit(scf.RHF(mol))
     self.assertAlmostEqual(mf.scf(), -76.025936299702536, 9)
     sv = system_vars_c(gto=mol)
-    prod_log = prod_log_c(gto=mf.with_df.auxmol, rr=sv.ao_log.rr, pp=sv.ao_log.pp)
+    prod_log = prod_log_c(gto=mf.with_df.auxmol, sv=sv)
+    print(prod_log.nspecies)
+    print(prod_log.nr)
+    print(prod_log.rr[0], prod_log.rr[-1])
+    print(prod_log.pp[0], prod_log.pp[-1]) 
+    print(sv.ao_log.rr[0], sv.ao_log.rr[-1])
+    print(sv.ao_log.pp[0], sv.ao_log.pp[-1])
+
     #print(dir(mf))
     #print(dir(mf.mol))
     #print(dir(mf.with_df.auxmol))
@@ -33,11 +40,12 @@ class KnowValues(unittest.TestCase):
   def test_gto2sv_prod_log(self):
     """ Test """
     sv  = system_vars_c(gto=mol)
-    prod_log = prod_log_c(sv.ao_log, tol=1e-4)
-    self.assertAlmostEqual(prod_log.sp2nmult[0], 7)
-    self.assertAlmostEqual(prod_log.sp2nmult[1], 20)
-    self.assertAlmostEqual(prod_log.sp2norbs[0], 15)
-    self.assertAlmostEqual(prod_log.sp2norbs[1], 70)    
+    prod_log = prod_log_c(ao_log=sv.ao_log, tol=1e-4)
+    self.assertEqual(prod_log.nspecies, 2)
+    self.assertEqual(prod_log.sp2nmult[0], 7)
+    self.assertEqual(prod_log.sp2nmult[1], 20)
+    self.assertEqual(prod_log.sp2norbs[0], 15)
+    self.assertEqual(prod_log.sp2norbs[1], 70)    
     
 if __name__ == "__main__":
   print("Full Tests for prod_basis_c")
