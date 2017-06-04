@@ -29,7 +29,7 @@ class KnowValues(unittest.TestCase):
     self.assertEqual(prod_log.pp[0], sv.ao_log.pp[0])
     self.assertEqual(prod_log.nspecies, sv.ao_log.nspecies)
     self.assertEqual(prod_log.sp2charge, sv.ao_log.sp2charge)
-    print(prod_log.sp_mu2rcut)
+    #print(prod_log.sp_mu2rcut)
     #prod_log.view()
     #print(dir(mf))
     #print(dir(mf.mol))
