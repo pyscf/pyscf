@@ -8,9 +8,7 @@ from pyscf.nao.m_thrj import thrj
 #
 #
 class gaunt_c():
-  """ 
-    Computation of Gaunt coefficient (precompute then return)
-  """
+  """ Computation of Gaunt coefficient (precompute then return) """
   def __init__(self, jmax=7):
     
     self.jmax = jmax

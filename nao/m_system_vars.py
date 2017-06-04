@@ -114,7 +114,7 @@ class system_vars_c():
   #
   def init_pyscf_gto(self, gto, **kvargs):
     """Interpret previous pySCF calculation"""
-    self.gto=gto # Only some data must be copied, not the whole object. Otherwise, an eventual deepcopy(...) may fail.
+    self.mol=gto # Only some data must be copied, not the whole object. Otherwise, an eventual deepcopy(...) may fail.
     self.natm=self.natoms = gto.natm
     a2s = [gto.atom_symbol(ia) for ia in range(gto.natm) ]
     self.sp2symbol = sorted(list(set(a2s)))

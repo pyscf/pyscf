@@ -1,9 +1,26 @@
 from __future__ import print_function, division
-import numpy as np
-from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
 from pyscf.nao.m_log_mesh import log_mesh_c
-from pyscf.nao.m_log_interp import log_interp_c
-from pyscf.nao.m_siesta_ion_interp import siesta_ion_interp
+
+def comp_moments(self):
+  import numpy as np
+  """
+    Computes the scalar and dipole moments of the product functions
+    Args:
+      argument can be  prod_log_c    or   ao_log_c
+  """
+  rr3dr = self.rr**3*np.log(self.rr[1]/self.rr[0])
+  rr4dr = self.rr*rr3dr
+  sp2mom0,sp2mom1,cs,cd = [],[],np.sqrt(4*np.pi),np.sqrt(4*np.pi/3.0)
+  for sp,nmu in enumerate(self.sp2nmult):
+    nfunct=sum(2*self.sp_mu2j[sp]+1)
+    mom0 = np.zeros((nfunct), dtype='float64')
+    d = np.zeros((nfunct,3), dtype='float64')
+    for mu,[j,s] in enumerate(zip(self.sp_mu2j[sp],self.sp_mu2s[sp])):
+      if j==0:                 mom0[s]  = cs*sum(self.psi_log[sp][mu,:]*rr3dr)
+      if j==1: d[s,1]=d[s+1,2]=d[s+2,0] = cd*sum(self.psi_log[sp][mu,:]*rr4dr)
+    sp2mom0.append(mom0)
+    sp2mom1.append(d)
+  return sp2mom0,sp2mom1
 
 #
 #
@@ -40,34 +57,41 @@ class ao_log_c(log_mesh_c):
   >>> print(ao.psi_log.shape)
   '''
   def __init__(self, sp2ion=None, gto=None, sv=None, log_mesh=None, **kvargs):
-
     """ Initializes numerical orbitals from a previous pySCF calculation or from SIESTA calculation (really numerical orbitals) """
-
+    from pyscf.nao.m_log_interp import log_interp_c
+    
     if sp2ion is not None:
       log_mesh_c.__init__(self, sp2ion=sp2ion, **kvargs)
+      self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
       self.init_ion(sp2ion, **kvargs)
       return
     
     if gto is not None and log_mesh is None:
       assert(sv is not None)
       log_mesh_c.__init__(self, gto=gto, **kvargs)
+      self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
       self.init_gto(gto, sv, **kvargs)
       return
 
     if gto is not None and log_mesh is not None:
       assert(sv is not None)
       log_mesh_c.__init__(self, rr=log_mesh.rr, pp=log_mesh.pp, **kvargs)
+      self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
       self.init_gto(gto, sv, **kvargs)
       return
     
+    if gto is None and log_mesh is not None:
+      log_mesh_c.__init__(self, rr=log_mesh.rr, pp=log_mesh.pp, **kvargs)
+      self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
+      return
+      
     raise RuntimeError(__name__+': unknown constructor')
       
   
   #
   def init_gto(self, gto, sv, rcut_tol=1e-5):
     """ Get's radial orbitals and angular momenta from a previous pySCF calculation, intializes numerical orbitals from the Gaussian type of orbitals etc."""
-
-    self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
+    import numpy as np
     
     self.sp_mu2j = [0]*sv.nspecies
     self.psi_log = [0]*sv.nspecies
@@ -128,14 +152,17 @@ class ao_log_c(log_mesh_c):
   #  
   def init_ion(self, sp2ion):
     """ Reads data from a previous SIESTA calculation, interpolates the orbitals on a single log mesh. """
+
+    from pyscf.nao.m_log_interp import log_interp_c
+    from pyscf.nao.m_siesta_ion_interp import siesta_ion_interp
+    from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
+    import numpy as np
+
     _siesta_ion_add_sp2(self, sp2ion) # adds the fields for counting, .nspecies etc.
     self.jmx = max([mu2j.max() for mu2j in self.sp_mu2j])
     self.sp2norbs = np.array([mu2s[self.sp2nmult[sp]] for sp,mu2s in enumerate(self.sp_mu2s)], dtype='int64')
     
     self.sp2ion = sp2ion
-    
-    self.interp_rr = log_interp_c(self.rr)
-    self.interp_pp = log_interp_c(self.pp)
     
     self.psi_log = siesta_ion_interp(self.rr, sp2ion, 1)
     self.psi_log_rl = siesta_ion_interp(self.rr, sp2ion, 0)
@@ -158,7 +185,10 @@ class ao_log_c(log_mesh_c):
   #
   def _add_psi_log_mom(self):
     """ Adds a field psi_log_mom which contains Bessel transforms of original radial functions (from psi_log) """
+
+    import numpy as np
     from pyscf.nao.m_sbt import sbt_c
+    
     sbt = sbt_c(self.rr, self.pp, lmax=self.jmx)
     self.psi_log_mom = []
     for sp,[nmu,mu2ff,mu2j] in enumerate(zip(self.sp2nmult,self.psi_log,self.sp_mu2j)):
@@ -184,7 +214,8 @@ class ao_log_c(log_mesh_c):
     
     plt.show()
 
-
+  def comp_moments(self):
+    return comp_moments(self)
 #
 #
 #

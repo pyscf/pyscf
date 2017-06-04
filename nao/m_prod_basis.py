@@ -136,8 +136,7 @@ class prod_basis_c():
   
   def comp_moments(self):
     """ Computes the scalar and dipole moments for the all functions in the product basis """
-    from pyscf.nao.m_prod_log import comp_moments as comp_moments_prod_log
-    sp2mom0,sp2mom1 = comp_moments_prod_log(self.prod_log)
+    sp2mom0,sp2mom1 = self.prod_log.comp_moments()
     n = self.c2s[-1]
     mom0,mom1 = np.zeros(n), np.zeros((n,3))
     for a,[sp,coord,s,f] in enumerate(zip(self.sv.atom2sp,self.sv.atom2coord,self.c2s,self.c2s[1:])):

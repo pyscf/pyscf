@@ -7,32 +7,13 @@ from pyscf.nao.m_overlap_am import overlap_am
 from pyscf.nao import ao_matelem_c, ao_log_c
 
 
-def comp_moments(self):
-  """
-    Computes the scalar and dipole moments of the product functions
-    Args:
-      argument can be  prod_log_c    or   ao_log_c
-  """
-  rr3dr = self.rr**3*np.log(self.rr[1]/self.rr[0])
-  rr4dr = self.rr*rr3dr
-  sp2mom0,sp2mom1,cs,cd = [],[],np.sqrt(4*np.pi),np.sqrt(4*np.pi/3.0)
-  for sp,nmu in enumerate(self.sp2nmult):
-    nfunct=sum(2*self.sp_mu2j[sp]+1)
-    mom0 = np.zeros((nfunct), dtype='float64')
-    d = np.zeros((nfunct,3), dtype='float64')
-    for mu,[j,s] in enumerate(zip(self.sp_mu2j[sp],self.sp_mu2s[sp])):
-      if j==0:                 mom0[s]  = cs*sum(self.psi_log[sp][mu,:]*rr3dr)
-      if j==1: d[s,1]=d[s+1,2]=d[s+2,0] = cd*sum(self.psi_log[sp][mu,:]*rr4dr)
-    sp2mom0.append(mom0)
-    sp2mom1.append(d)
-  return sp2mom0,sp2mom1
-
 #
 #
 #
 def overlap_check(prod_log, overlap_funct=overlap_ni, **kvargs):
   """ Computes the allclose(), mean absolute error and maximal error of the overlap reproduced by the (local) vertex."""
   from pyscf.nao.m_ao_matelem import ao_matelem_c
+  from pyscf.nao.m_ao_log import comp_moments
   me = ao_matelem_c(prod_log.ao_log)
   sp2mom0,sp2mom1 = comp_moments(prod_log)
   mael,mxel,acl=[],[],[]
@@ -53,6 +34,7 @@ def overlap_check(prod_log, overlap_funct=overlap_ni, **kvargs):
 def dipole_check(sv, prod_log, dipole_funct=dipole_ni, **kvargs):
   """ Computes the allclose(), mean absolute error and maximal error of the dipoles reproduced by the (local) vertex. """
   from pyscf.nao.m_ao_matelem import ao_matelem_c
+  from pyscf.nao.m_ao_log import comp_moments
   me = ao_matelem_c(prod_log.ao_log)
   sp2mom0,sp2mom1 = comp_moments(prod_log)
   mael,mxel,acl=[],[],[]
@@ -86,10 +68,12 @@ class prod_log_c(ao_log_c):
     
     if auxmol is not None:
       assert(sv is not None)
+      ao_log_c.__init__(self, log_mesh=sv.ao_log) # only log_mesh will be initialized and all the procedures from the class ao_log.
       self.init_density_fitting_gto(auxmol, sv, **kvargs)
       return
       
     if ao_log is not None:
+      ao_log_c.__init__(self, log_mesh=ao_log) # only log_mesh will be initialized and all the procedures from the class ao_log.
       self.init_linear_combinations(ao_log, **kvargs)
       return
 
@@ -98,8 +82,15 @@ class prod_log_c(ao_log_c):
 
   def init_density_fitting_gto(self, auxmol, sv, **kvargs):
     """ Initializes the radial functions from pyscf"""
+    from pyscf.df.incore import aux_e2
     self.auxmol = auxmol
     ao_log_c.__init__(self, gto=auxmol, sv=sv, log_mesh=sv.ao_log, **kvargs)
+    j3c = aux_e2(sv.mol, auxmol, intor='cint3c2e_sph', aosym='s1')
+    nao = sv.mol.nao_nr()
+    naoaux = auxmol.nao_nr()
+    j3c = j3c.reshape(nao,nao,naoaux)
+    print(nao, naoaux)
+
   
   def init_linear_combinations(self, ao_log, tol=1e-5):
     """ Builds linear combinations of the original orbital products """
@@ -174,8 +165,6 @@ class prod_log_c(ao_log_c):
     
     del v_csr, mu2iww, mu2ww, mu2ff # maybe unnecessary
   ###
-  
-  comp_moments = comp_moments
 
   def overlap_check(self, overlap_funct=overlap_ni, **kvargs):
     """ Recompute the overlap between orbitals using the product vertex and scalar moments of product functions""" 
@@ -199,6 +188,7 @@ class prod_log_c(ao_log_c):
     return mael,mxel
     
   def lambda_check_overlap(self, overlap_funct=overlap_am, **kvargs):
+    from pyscf.nao.m_ao_log import comp_moments
     """ Check the equality (p) = [p,ab] S^ab, i.e. scalar moments are recomputed with inversed vertex from the ao's overlap """
     me = ao_matelem_c(self.ao_log)
     sp2mom0,sp2mom1 = comp_moments(self)
@@ -208,7 +198,7 @@ class prod_log_c(ao_log_c):
       mom0 = einsum('lab,ab->l', lab,ab)
       mael.append((abs(mom0-mom0_ref)).sum()/mom0.size); mxel.append((abs(mom0-mom0_ref)).max())
     return mael,mxel
-    
+
 #
 #
 #

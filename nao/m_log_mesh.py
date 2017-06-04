@@ -67,7 +67,7 @@ class log_mesh_c():
   def __init__(self, gto=None, sp2ion=None, tol=1e-7, rr=None, pp=None, nr=None, rmin=None, rmax=None, kmax=None):
 
     if gto is not None:
-      self.gto = gto
+      #self.gto = gto cannot copy GTO object here... because python3 + deepcopy in m_ao_log_hartree fails
       self.tol = tol
       nr_def,rmin_def,rmax_def,kmax_def = get_default_log_mesh_param4gto(gto, tol)
       self.nr   = nr_def   if nr is None else nr
