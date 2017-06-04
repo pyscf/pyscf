@@ -1,5 +1,43 @@
 from __future__ import division, print_function
-import numpy
+import numpy as np
+
+#
+#
+#
+def get_default_log_mesh_param4gto(gto, tol_in=None):
+  rmin_gcs = 10.0
+  rmax_gcs = -1.0
+  akmx_gcs = -1.0
+
+  tol = 1e-7 if tol_in is None else tol_in
+  seen_species = [] # this is auxiliary to organize the loop over species 
+  for ia in range(gto.natm):
+    if gto.atom_symbol(ia) in seen_species: continue
+    seen_species.append(gto.atom_symbol(ia))
+    for sid in gto.atom_shell_ids(ia):
+      for power,coeffs in zip(gto.bas_exp(sid), gto.bas_ctr_coeff(sid)):
+        for coeff in coeffs:
+          rmin_gcs = min(rmin_gcs, np.sqrt( abs(np.log(1.0-tol)/power )))
+          rmax_gcs = max(rmax_gcs, np.sqrt( abs(np.log(abs(coeff))-np.log(tol))/power ))
+          akmx_gcs = max(akmx_gcs, np.sqrt( abs(np.log(abs(coeff))-np.log(tol))*4*power ))
+
+  if rmin_gcs<1e-9 : print('rmin_gcs<1e-9')     # Last check 
+  if rmax_gcs>1e+2 : print('rmax_gcs>1e+2')
+  if akmx_gcs>1e+4 : print('akmx_gcs>1e+4', __name__)
+  return 1024,rmin_gcs,rmax_gcs,akmx_gcs
+
+#
+#
+#
+def get_default_log_mesh_param4ion(sp2ion):
+  from pyscf.nao.m_next235 import next235
+  """ Determines the default (optimal) parameters for radial orbitals given on equidistant grid"""
+  npts = max(max(ion["paos"]["npts"]) for ion in sp2ion)
+  nr_def = next235( max(2.0*npts, 1024.0) )
+  rmin_def = min(min(ion["paos"]["delta"]) for ion in sp2ion)
+  rmax_def = 2.3*max(max(ion["paos"]["cutoff"]) for ion in sp2ion)
+  kmax_def = 1.0/rmin_def/np.pi
+  return nr_def,rmin_def,rmax_def,kmax_def
 
 #
 #
@@ -11,12 +49,54 @@ def log_mesh(nr, rmin, rmax, kmax=None):
   """
   assert(type(nr)==int and nr>2)
   
-  rhomin=numpy.log(rmin)
-  rhomax=numpy.log(rmax)
-  kmax = 1.0/rmin/numpy.pi if kmax is None else kmax
-  kapmin=numpy.log(kmax)-rhomax+rhomin
+  rhomin=np.log(rmin)
+  rhomax=np.log(rmax)
+  kmax = 1.0/rmin/np.pi if kmax is None else kmax
+  kapmin=np.log(kmax)-rhomax+rhomin
 
-  rr=numpy.array(numpy.exp( numpy.linspace(rhomin, rhomax, nr)) )
-  pp=numpy.array(rr*(numpy.exp(kapmin)/rr[0]))
+  rr=np.array(np.exp( np.linspace(rhomin, rhomax, nr)) )
+  pp=np.array(rr*(np.exp(kapmin)/rr[0]))
 
   return rr, pp
+
+#
+#
+#
+class log_mesh_c():
+  ''' Constructor of the log grid used with NAOs.'''
+  def __init__(self, gto=None, sp2ion=None, tol=1e-7, rr=None, pp=None, nr=None, rmin=None, rmax=None, kmax=None):
+
+    if gto is not None:
+      self.gto = gto
+      self.tol = tol
+      nr_def,rmin_def,rmax_def,kmax_def = get_default_log_mesh_param4gto(gto, tol)
+      self.nr   = nr_def   if nr is None else nr
+      self.rmin = rmin_def if rmin is None else rmin
+      self.rmax = rmax_def if rmax is None else rmax
+      self.kmax = kmax_def if kmax is None else kmax
+      assert(self.rmin>0.0); assert(self.kmax>0.0); assert(self.nr>2); assert(self.rmax>self.rmin);
+      self.rr,self.pp = log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
+      return
+    
+    if sp2ion is not None:
+      self.sp2ion = sp2ion
+      nr_def,rmin_def,rmax_def,kmax_def = get_default_log_mesh_param4ion(sp2ion)
+      self.nr = 1024 if nr is None else nr
+      self.rmin = rmin_def if rmin is None else rmin
+      self.rmax = rmax_def if rmax is None else rmax
+      self.kmax = kmax_def if kmax is None else kmax
+      assert(self.rmin>0.0); assert(self.kmax>0.0); assert(self.nr>2); assert(self.rmax>self.rmin);
+      self.rr,self.pp = log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
+      return
+
+    if rr is not None:
+      assert(pp is not None)
+      assert(len(pp)==len(rr))
+      self.rr,self.pp = rr,pp
+      self.nr = len(rr)
+      self.rmin = rr[0]
+      self.rmax = rr[-1]
+      self.kmax = pp[-1]
+      return
+
+    raise RuntimeError('log_mesh_c: unknown constructor')

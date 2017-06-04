@@ -1,40 +1,14 @@
 from __future__ import print_function, division
 import numpy as np
 from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
-from pyscf.nao.m_next235 import next235
-from pyscf.nao.m_log_mesh import log_mesh
+from pyscf.nao.m_log_mesh import log_mesh_c
 from pyscf.nao.m_log_interp import log_interp_c
 from pyscf.nao.m_siesta_ion_interp import siesta_ion_interp
 
 #
 #
 #
-def get_default_log_mesh_gto(gto, tol_in=None):
-  rmin_gcs = 10.0
-  rmax_gcs = -1.0
-  akmx_gcs = -1.0
-
-  tol = 1e-7 if tol_in is None else tol_in
-  seen_species = [] # this is auxiliary to organize the loop over species 
-  for ia in range(gto.natm):
-    if gto.atom_symbol(ia) in seen_species: continue
-    seen_species.append(gto.atom_symbol(ia))
-    for sid in gto.atom_shell_ids(ia):
-      for power,coeffs in zip(gto.bas_exp(sid), gto.bas_ctr_coeff(sid)):
-        for coeff in coeffs:
-          rmin_gcs = min(rmin_gcs, np.sqrt( abs(np.log(1.0-tol)/power )))
-          rmax_gcs = max(rmax_gcs, np.sqrt( abs(np.log(abs(coeff))-np.log(tol))/power ))
-          akmx_gcs = max(akmx_gcs, np.sqrt( abs(np.log(abs(coeff))-np.log(tol))*4*power ))
-
-  if rmin_gcs<1e-9 : print('rmin_gcs<1D-9')     # Last check 
-  if rmax_gcs>1e+2 : print('rmax_gcs>1D+2')
-  if akmx_gcs>1e+4 : print('akmx_gcs>1D+4', __name__)
-  return rmin_gcs,rmax_gcs,akmx_gcs
-
-#
-#
-#
-class ao_log_c():
+class ao_log_c(log_mesh_c):
   '''
   holder of radial orbitals on logarithmic grid.
   Args:
@@ -65,14 +39,24 @@ class ao_log_c():
   >>> ao = ao_log_c(sv.sp2ion)
   >>> print(ao.psi_log.shape)
   '''
-  def __init__(self, sp2ion=None, gto=None, sv=None, **kvargs):
+  def __init__(self, sp2ion=None, gto=None, sv=None, log_mesh=None, **kvargs):
+
     """ Initializes numerical orbitals from a previous pySCF calculation or from SIESTA calculation (really numerical orbitals) """
+
     if sp2ion is not None:
+      log_mesh_c.__init__(self, sp2ion=sp2ion, **kvargs)
       self.init_ion(sp2ion, **kvargs)
       return
     
-    if gto is not None:
+    if gto is not None and log_mesh is None:
       assert(sv is not None)
+      log_mesh_c.__init__(self, gto=gto, **kvargs)
+      self.init_gto(gto, sv, **kvargs)
+      return
+
+    if gto is not None and log_mesh is not None:
+      assert(sv is not None)
+      log_mesh_c.__init__(self, rr=log_mesh.rr, pp=log_mesh.pp, **kvargs)
       self.init_gto(gto, sv, **kvargs)
       return
     
@@ -80,17 +64,9 @@ class ao_log_c():
       
   
   #
-  def init_gto(self, gto, sv, nr=None, rmin=None, rmax=None, kmax=None, tol=1e-7):
+  def init_gto(self, gto, sv, rcut_tol=1e-5):
     """ Get's radial orbitals and angular momenta from a previous pySCF calculation, intializes numerical orbitals from the Gaussian type of orbitals etc."""
 
-    rmin_def,rmax_def,kmax_def = get_default_log_mesh_gto(gto, tol)
-
-    self.nr = 1024 if nr is None else nr
-    self.rmin = rmin_def if rmin is None else rmin
-    self.kmax = kmax_def if kmax is None else kmax
-    self.rmax = rmax_def if rmax is None else rmax
-    assert self.rmin>0.0; assert self.kmax>0.0; assert self.nr>1; assert self.rmax>self.rmin;
-    self.rr,self.pp = log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
     self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
     
     self.sp_mu2j = [0]*sv.nspecies
@@ -110,8 +86,7 @@ class ao_log_c():
       mu2j = np.zeros(nmu, dtype=np.int64)
       mu = -1
       for sid in gto.atom_shell_ids(ia):
-        pows = gto.bas_exp(sid)
-        coeffss = gto.bas_ctr_coeff(sid)
+        pows, coeffss = gto.bas_exp(sid), gto.bas_ctr_coeff(sid)
         for coeffs in coeffss.T:
           mu=mu+1
           l = mu2j[mu] = gto.bas_angular(sid)
@@ -143,7 +118,7 @@ class ao_log_c():
       mu2rcut = np.zeros(len(mu2ff))
       for mu,ff in enumerate(mu2ff):
         ffmx,irmx = abs(mu2ff[mu]).max(), abs(mu2ff[mu]).argmax()
-        irrp = np.argmax(abs(ff[irmx:])<ffmx*tol)
+        irrp = np.argmax(abs(ff[irmx:])<ffmx*rcut_tol)
         irrc = irmx+irrp if irrp>0 else -1
         mu2rcut[mu] = self.rr[irrc]
       self.sp_mu2rcut.append(mu2rcut)
@@ -151,36 +126,14 @@ class ao_log_c():
 
   #
   #  
-  def init_ion(self, sp2ion, nr=None, rmin=None, rmax=None, kmax=None):
-    """
-      Reads data from a previous SIESTA calculation, interpolates the orbitals on a single log mesh.
-    """
+  def init_ion(self, sp2ion):
+    """ Reads data from a previous SIESTA calculation, interpolates the orbitals on a single log mesh. """
     _siesta_ion_add_sp2(self, sp2ion) # adds the fields for counting, .nspecies etc.
     self.jmx = max([mu2j.max() for mu2j in self.sp_mu2j])
     self.sp2norbs = np.array([mu2s[self.sp2nmult[sp]] for sp,mu2s in enumerate(self.sp_mu2s)], dtype='int64')
     
     self.sp2ion = sp2ion
     
-    npts = max(max(ion["paos"]["npts"]) for ion in sp2ion)
-    self.nr = next235( max(2.0*npts, 1024.0) ) if nr is None else nr
-    assert(self.nr>2)
-
-    dmin = min(min(ion["paos"]["delta"]) for ion in sp2ion)
-    assert(dmin>0.0)
-    
-    self.rmin = dmin if rmin is None else rmin
-    assert(self.rmin>0.0)
-
-    self.kmax = 1.0/dmin/np.pi if kmax is None else kmax
-    assert(self.kmax>0.0)
-    
-    dmax = 2.3*max(max(ion["paos"]["cutoff"]) for ion in sp2ion)
-    assert(dmax>0.0)
-    
-    self.rmax = dmax if rmax is None else rmax
-    assert(self.rmax>0.0)
-    
-    self.rr,self.pp = log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
     self.interp_rr = log_interp_c(self.rr)
     self.interp_pp = log_interp_c(self.pp)
     
@@ -213,6 +166,24 @@ class ao_log_c():
       for mu,[am,ff] in enumerate(zip(mu2j,mu2ff)): mu2ao[mu,:] = sbt.sbt( ff, am, 1 )
       self.psi_log_mom.append(mu2ao)
     del sbt
+  
+  # 
+  def view(self):
+    """ Shows a plot of all radial orbitals """
+    import matplotlib.pyplot as plt
+    for sp in range(self.nspecies):
+      plt.figure(sp+1)
+      plt.title('Orbitals for specie='+ str(sp)+' Znuc='+str(self.sp2charge[sp]))
+      for j,ff in zip(self.sp_mu2j[sp], self.psi_log[sp]):
+        if j>0 :
+          plt.plot(self.rr, ff, '--', label=str(j))
+        else:
+          plt.plot(self.rr, ff, '-', label=str(j))
+      #plt.xlim([0.0,3.0])
+      plt.legend()
+    
+    plt.show()
+
 
 #
 #

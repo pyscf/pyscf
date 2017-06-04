@@ -82,11 +82,11 @@ class prod_log_c(ao_log_c):
     via a product vertex coefficients.
   Examples:
   '''
-  def __init__(self, ao_log=None, gto=None, sv=None, **kvargs):
+  def __init__(self, ao_log=None, auxmol=None, sv=None, **kvargs):
     
-    if gto is not None:
+    if auxmol is not None:
       assert(sv is not None)
-      self.init_density_fitting_gto(gto, sv, **kvargs)
+      self.init_density_fitting_gto(auxmol, sv, **kvargs)
       return
       
     if ao_log is not None:
@@ -96,10 +96,10 @@ class prod_log_c(ao_log_c):
     raise RuntimeError(__name__+': unknown constructor')
 
 
-  def init_density_fitting_gto(self, gto, sv, ao_log_tol=1e-7):
+  def init_density_fitting_gto(self, auxmol, sv, **kvargs):
     """ Initializes the radial functions from pyscf"""
-    self.gto = gto
-    ao_log_c.__init__(self, gto=gto, sv=sv, tol=ao_log_tol)
+    self.auxmol = auxmol
+    ao_log_c.__init__(self, gto=auxmol, sv=sv, log_mesh=sv.ao_log, **kvargs)
   
   def init_linear_combinations(self, ao_log, tol=1e-5):
     """ Builds linear combinations of the original orbital products """
