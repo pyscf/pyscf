@@ -148,7 +148,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
     # An extra diagonalization, to remove level shift
     fock = mf.get_fock(h1e, s1e, vhf, dm, cycle, None, 0, 0, 0)
-    norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, fock))
+    norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, h1e+vhf))
     mo_energy, mo_coeff = mf.eig(fock, s1e)
     mo_occ = mf.get_occ(mo_energy, mo_coeff)
     dm, dm_last = mf.make_rdm1(mo_coeff, mo_occ), dm
