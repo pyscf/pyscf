@@ -475,8 +475,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         mo, fcivec, mo_energy = \
                 casscf.canonicalize(mo, fcivec, eris, False, casscf.natorb, casdm1, log)
         if casscf.natorb: # dump_chk may save casdm1
-            occ, ucas = casscf._eig(-casdm1, ncore, nocc)[0]
-            casdm1 = -occ
+            nocc = casscf.ncore + casscf.ncas
+            occ, ucas = casscf._eig(-casdm1, casscf.ncore, nocc)
+            casdm1 = numpy.diag(-occ)
 
     if dump_chk:
         casscf.dump_chk(locals())

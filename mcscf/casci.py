@@ -698,7 +698,7 @@ if __name__ == '__main__':
 
     m = scf.RHF(mol)
     ehf = m.scf()
-    mc = mcscf.CASSCF(m, 4, 4)
+    mc = mcscf.CASCI(m, 4, 4)
     mc.fcisolver = fci.solver(mol)
     mc.natorb = 1
     emc = mc.kernel()[0]
