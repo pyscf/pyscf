@@ -152,6 +152,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     mo_energy, mo_coeff = mf.eig(fock, s1e)
     mo_occ = mf.get_occ(mo_energy, mo_coeff)
     dm, dm_last = mf.make_rdm1(mo_coeff, mo_occ), dm
+    vhf = mf.get_veff(mol, dm, dm_last, vhf)
     e_tot, last_hf_e = mf.energy_tot(dm, h1e, vhf), e_tot
     norm_ddm = numpy.linalg.norm(dm-dm_last)
     logger.info(mf, 'Extra cycle  E= %.15g  delta_E= %4.3g  |g|= %4.3g  |ddm|= %4.3g',

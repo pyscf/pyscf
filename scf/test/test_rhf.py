@@ -275,10 +275,10 @@ class KnowValues(unittest.TestCase):
         pmol.spin = 2
         mf = scf.ROHF(pmol).set(verbose = 0)
         mf.irrep_nelec = {'A1g':6, 'A1u':4, 'E1ux':2, 'E1uy':2}
-        self.assertRaises(ValueError, mf.dump_flags)
+        self.assertRaises(ValueError, mf.build)
 
         mf.irrep_nelec = {'A1g':6, 'A1u':10, 'E1ux':2, 'E1uy':2}
-        self.assertRaises(ValueError, mf.dump_flags)
+        self.assertRaises(ValueError, mf.build)
 
     def test_dip_moment(self):
         mf = scf.RHF(mol)
