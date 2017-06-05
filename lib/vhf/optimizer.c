@@ -90,13 +90,14 @@ int CVHFnrs8_prescreen(int *shls, CVHFOpt *opt,
         assert(k < n);
         assert(l < n);
         double qijkl = opt->q_cond[i*n+j] * opt->q_cond[k*n+l];
-        double dmin = opt->direct_scf_cutoff * qijkl;
-        return (4*opt->dm_cond[j*n+i] > dmin)
+        double dmin = opt->direct_scf_cutoff / qijkl;
+        return qijkl > opt->direct_scf_cutoff
+            &&((4*opt->dm_cond[j*n+i] > dmin)
             || (4*opt->dm_cond[l*n+k] > dmin)
             || (  opt->dm_cond[j*n+k] > dmin)
             || (  opt->dm_cond[j*n+l] > dmin)
             || (  opt->dm_cond[i*n+k] > dmin)
-            || (  opt->dm_cond[i*n+l] > dmin);
+            || (  opt->dm_cond[i*n+l] > dmin));
 }
 
 // return flag to decide whether transpose01324
@@ -145,14 +146,14 @@ void CVHFsetnr_direct_scf(CVHFOpt *opt, int *atm, int natm,
                         shls[1] = jsh;
                         shls[2] = ish;
                         shls[3] = jsh;
-                        qtmp = 0;
+                        qtmp = 1e-100;
                         if (0 != cint2e_sph(buf, shls, atm, natm, bas, nbas, env, NULL)) {
                                 for (i = 0; i < di; i++) {
                                 for (j = 0; j < dj; j++) {
                                         qtmp = MAX(qtmp, fabs(buf[i+di*j+di*dj*i+di*dj*di*j]));
                                 } }
+                                qtmp = sqrt(qtmp);
                         }
-                        qtmp = 1./sqrt(qtmp);
                         opt->q_cond[ish*nbas+jsh] = qtmp;
                         opt->q_cond[jsh*nbas+ish] = qtmp;
                         free(buf);
