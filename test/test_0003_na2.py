@@ -1,0 +1,54 @@
+from __future__ import print_function
+import unittest
+
+
+class KnowValues(unittest.TestCase):
+  
+  def test_gto2sv_df(self):
+    from pyscf import scf
+    from pyscf.tools.siesta_utils import get_siesta_command, get_pseudo
+    import subprocess
+    import os
+
+    siesta_fdf = """
+    xml.write                  .true.
+    PAO.EnergyShift            100 meV
+    %block ChemicalSpeciesLabel
+     1  11  Na
+    %endblock ChemicalSpeciesLabel
+    
+    NumberOfAtoms       2
+    NumberOfSpecies     1
+    %block AtomicCoordinatesAndAtomicSpecies
+        0.77573521    0.00000000    0.00000000   1
+       -0.77573521    0.00000000    0.00000000   1
+    %endblock AtomicCoordinatesAndAtomicSpecies
+    
+    MD.NumCGsteps              0
+    COOP.Write                 .true.
+    WriteDenchar               .true.
+    """
+    label = 'siesta'
+    fi = open(label+'.fdf', 'w')
+    print(siesta_fdf, file=fi)
+    fi.close()
+    for sp in ['Na']: 
+      try:
+        os.remove(sp+'.psf')
+      except :
+        pass
+      try:
+        pppath = get_pseudo(sp)
+      except:
+        print('get_pseudo( '+sp+' ) is not working--> skip siesta run' )
+        return
+      os.symlink(pppath, sp+'.psf')
+    errorcode = subprocess.call(get_siesta_command(label), shell=True)
+    if errorcode: raise RuntimeError('siesta returned an error: {0}'.format(errorcode))
+
+    # run test system_vars
+    from pyscf.nao.m_system_vars import system_vars_c, diag_check, overlap_check
+    sv  = system_vars_c(label) 
+    self.assertEqual(sv.norbs, 10)
+    self.assertTrue( diag_check(sv) )
+    self.assertTrue( overlap_check(sv))

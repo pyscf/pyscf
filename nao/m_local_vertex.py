@@ -65,7 +65,7 @@ class local_vertex_c(ao_matelem_c):
           j_p2mus[j][j2p[j]] = [mu1,mu2]
           j_p2js[j][j2p[j]] = [j1,j2]
           j2p[j]+=1
-
+    
     pack2ff = np.zeros((nmu*(nmu+1)//2,self.nr)) # storage for original products
     for mu2 in range(nmu):
       for mu1 in range(mu2+1): pack2ff[ij2pack(mu1,mu2),:] = mu2ff[mu1,:]*mu2ff[mu2,:]

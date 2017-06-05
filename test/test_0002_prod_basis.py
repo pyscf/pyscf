@@ -39,13 +39,14 @@ class KnowValues(unittest.TestCase):
   def test_gto2sv_prod_log(self):
     """ Test """
     sv = system_vars_c(gto=mol)
+    #print('000>>>')
     prod_log = prod_log_c(ao_log=sv.ao_log, tol=1e-4)
+    #print('111>>>')
     self.assertEqual(prod_log.nspecies, 2)
     self.assertEqual(prod_log.sp2nmult[0], 7)
     self.assertEqual(prod_log.sp2nmult[1], 20)
     self.assertEqual(prod_log.sp2norbs[0], 15)
     self.assertEqual(prod_log.sp2norbs[1], 70)
-    print(dir(prod_log))
     
     
 if __name__ == "__main__":

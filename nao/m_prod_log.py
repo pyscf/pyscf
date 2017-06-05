@@ -89,7 +89,8 @@ class prod_log_c(ao_log_c):
     nao = sv.mol.nao_nr()
     naoaux = auxmol.nao_nr()
     j3c = j3c.reshape(nao,nao,naoaux)
-    print(nao, naoaux)
+    #print(nao, naoaux)
+    return 
 
   
   def init_linear_combinations(self, ao_log, tol=1e-5):
