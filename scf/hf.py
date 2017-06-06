@@ -223,8 +223,8 @@ def get_hcore(mol):
     array([[-0.93767904, -0.59316327],
            [-0.59316327, -0.93767904]])
     '''
-    h = mol.intor_symmetric('cint1e_kin_sph') \
-      + mol.intor_symmetric('cint1e_nuc_sph')
+    h = mol.intor_symmetric('int1e_kin_sph') \
+      + mol.intor_symmetric('int1e_nuc_sph')
     if mol._ecp:
         h += mol.intor_symmetric('ECPscalar_sph')
     return h
@@ -233,7 +233,7 @@ def get_hcore(mol):
 def get_ovlp(mol):
     '''Overlap matrix
     '''
-    return mol.intor_symmetric('cint1e_ovlp_sph')
+    return mol.intor_symmetric('int1e_ovlp_sph')
 
 
 def init_guess_by_minao(mol):
@@ -306,7 +306,7 @@ def init_guess_by_minao(mol):
 
     dm = numpy.dot(c*occ, c.T)
 # normalize eletron number
-#    s = mol.intor_symmetric('cint1e_ovlp_sph')
+#    s = mol.intor_symmetric('int1e_ovlp_sph')
 #    dm *= mol.nelectron / (dm*s).sum()
     return dm
 
@@ -857,7 +857,7 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
         unit = 1.0
 
     mol.set_common_orig((0,0,0))
-    ao_dip = mol.intor_symmetric('cint1e_r_sph', comp=3)
+    ao_dip = mol.intor_symmetric('int1e_r_sph', comp=3)
     el_dip = numpy.einsum('xij,ji->x', ao_dip, dm)
 
     charges = mol.atom_charges()
@@ -1192,7 +1192,7 @@ class SCF(lib.StreamObject):
 
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol
-        opt = _vhf.VHFOpt(mol, 'cint2e_sph', 'CVHFnrs8_prescreen',
+        opt = _vhf.VHFOpt(mol, 'int2e_sph', 'CVHFnrs8_prescreen',
                           'CVHFsetnr_direct_scf',
                           'CVHFsetnr_direct_scf_dm')
         opt.direct_scf_tol = self.direct_scf_tol

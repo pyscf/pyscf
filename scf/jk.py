@@ -19,7 +19,7 @@ from pyscf.lib import logger
 from pyscf.scf import _vhf
 
 
-def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='cint2e_sph',
+def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
            aosym='s1', comp=1, hermi=0, shls_slice=None, verbose=logger.WARN):
     '''Compute J/K matrices for the given density matrix
 
@@ -84,7 +84,7 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='cint2e_sph',
     >>> # Compute coulomb and exchange matrices together
     >>> vj, vk = get_jk(mol, (dm,dm), ('ijkl,ji->kl','ijkl,li->kj'), aosym='s8')
     >>> # Analytical gradients for coulomb matrix
-    >>> j1 = get_jk(mol, dm, 'ijkl,lk->ij', intor='cint2e_ip1_sph', aosym='s2kl', comp=3)
+    >>> j1 = get_jk(mol, dm, 'ijkl,lk->ij', intor='int2e_ip1_sph', aosym='s2kl', comp=3)
 
     >>> # contraction across two molecules
     >>> mol1 = gto.M(atom='He 2 0 0', basis='6-31g')
@@ -98,9 +98,9 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='cint2e_sph',
     >>> ex = numpy.einsum('ij,ji', kcross, dm1)
 
     >>> # Analytical gradients for coulomb matrix between two molecules
-    >>> jcros1 = get_jk((mol1,mol1,mol,mol), dm, scripts='ijkl,lk->ij', intor='cint2e_ip1_sph', comp=3)
+    >>> jcros1 = get_jk((mol1,mol1,mol,mol), dm, scripts='ijkl,lk->ij', intor='int2e_ip1_sph', comp=3)
     >>> # Analytical gradients for coulomb interaction between 1s density and the other molecule
-    >>> jpart1 = get_jk((mol1,mol1,mol,mol), dm, scripts='ijkl,lk->ij', intor='cint2e_ip1_sph', comp=3,
+    >>> jpart1 = get_jk((mol1,mol1,mol,mol), dm, scripts='ijkl,lk->ij', intor='int2e_ip1_sph', comp=3,
     ...                 shls_slice=(0,1,0,1,0,mol.nbas,0,mol.nbas))
     '''
     if isinstance(mols, (tuple, list)):
@@ -160,7 +160,7 @@ if __name__ == '__main__':
 
     nao = mol.nao_nr()
     dm = numpy.random.random((nao,nao))
-    eri0 = mol.intor('cint2e_sph').reshape((nao,)*4)
+    eri0 = mol.intor('int2e_sph').reshape((nao,)*4)
     vj = get_jk(mol, dm, 'ijkl,ji->kl')
     print(numpy.allclose(vj, numpy.einsum('ijkl,ji->kl', eri0, dm)))
     vj = get_jk(mol, dm, 'ijkl,ji->kl', aosym='s8')
@@ -168,14 +168,14 @@ if __name__ == '__main__':
     vk = get_jk(mol, dm, 'ijkl,jk->il', aosym='s8')
     print(numpy.allclose(vk, numpy.einsum('ijkl,jk->il', eri0, dm)))
     vj, vk = get_jk(mol, (dm,dm), ('ijkl,ji->kl','ijkl,li->kj'))
-    eri1 = mol.intor('cint2e_ip1_sph', comp=3).reshape([3]+[nao]*4)
-    j1 = get_jk(mol, dm, 'ijkl,lk->ij', intor='cint2e_ip1_sph', aosym='s2kl', comp=3)
+    eri1 = mol.intor('int2e_ip1_sph', comp=3).reshape([3]+[nao]*4)
+    j1 = get_jk(mol, dm, 'ijkl,lk->ij', intor='int2e_ip1_sph', aosym='s2kl', comp=3)
     print(numpy.allclose(j1, numpy.einsum('xijkl,lk->xij', eri1, dm)))
 
     mol1 = gto.M(atom='He 2 0 0', basis='6-31g')
     nao1 = mol1.nao_nr()
     dm1 = numpy.random.random((nao1,nao1))
-    eri0 = gto.conc_mol(mol, mol1).intor('cint2e_sph').reshape([nao+nao1]*4)
+    eri0 = gto.conc_mol(mol, mol1).intor('int2e_sph').reshape([nao+nao1]*4)
     jcross = get_jk((mol1,mol1,mol,mol), dm, scripts='ijkl,lk->ij', aosym='s4')
     ecoul = numpy.einsum('ij,ij', jcross, dm1)
     print(numpy.allclose(jcross, numpy.einsum('ijkl,lk->ij', eri0[nao:,nao:,:nao,:nao], dm)))
@@ -185,9 +185,9 @@ if __name__ == '__main__':
     print(numpy.allclose(kcross, numpy.einsum('ijkl,jk->il', eri0[nao:,:nao,:nao,nao:], dm)))
     print(ex-numpy.einsum('ijkl,jk,li', eri0[nao:,:nao,:nao,nao:], dm, dm1))
 
-    eri1 = gto.conc_mol(mol, mol1).intor('cint2e_ip1_sph',comp=3).reshape([3]+[nao+nao1]*4)
-    j1cross = get_jk((mol1,mol1,mol,mol), dm, scripts='ijkl,lk->ij', intor='cint2e_ip1_sph', comp=3)
+    eri1 = gto.conc_mol(mol, mol1).intor('int2e_ip1_sph',comp=3).reshape([3]+[nao+nao1]*4)
+    j1cross = get_jk((mol1,mol1,mol,mol), dm, scripts='ijkl,lk->ij', intor='int2e_ip1_sph', comp=3)
     print(numpy.allclose(j1cross, numpy.einsum('xijkl,lk->xij', eri1[:,nao:,nao:,:nao,:nao], dm)))
-    j1part = get_jk((mol1,mol1,mol,mol), dm, scripts='ijkl,lk->ij', intor='cint2e_ip1_sph', comp=3,
+    j1part = get_jk((mol1,mol1,mol,mol), dm, scripts='ijkl,lk->ij', intor='int2e_ip1_sph', comp=3,
                     shls_slice=(0,1,0,1,0,mol.nbas,0,mol.nbas))
     print(numpy.allclose(j1part, numpy.einsum('xijkl,lk->xij', eri1[:,nao:nao+1,nao:nao+1,:nao,:nao], dm)))

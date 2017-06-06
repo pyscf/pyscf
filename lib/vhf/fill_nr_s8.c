@@ -20,12 +20,18 @@ int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
 /*
  * 8-fold symmetry, k>=l, k>=i>=j, 
  */
-static void fillnr_s8(int (*intor)(), int (*fprescreen)(),
-                      double *eri, int ish, int jsh,
-                      CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs)
+static void fillnr_s8(int (*intor)(), int (*fprescreen)(), double *eri,
+                      int ish, int jsh, CVHFOpt *vhfopt, IntorEnvs *envs)
 {
+        const int *atm = envs->atm;
+        const int *bas = envs->bas;
+        const double *env = envs->env;
+        const int natm = envs->natm;
+        const int nbas = envs->nbas;
         const int *ao_loc = envs->ao_loc;
-        const int nao = envs->nao;
+        const int *shls_slice = envs->shls_slice;
+        const CINTOpt *cintopt = envs->cintopt;
+        const int nao = ao_loc[nbas];
         const size_t nao2 = nao * nao;
         const int di = ao_loc[ish+1] - ao_loc[ish];
         const int dj = ao_loc[jsh+1] - ao_loc[jsh];
@@ -43,10 +49,9 @@ static void fillnr_s8(int (*intor)(), int (*fprescreen)(),
                 shls[0] = lsh;
                 shls[1] = ksh;
                 peri = eri + ao_loc[ksh] * nao + ao_loc[lsh];
-                if ((*fprescreen)(shls, vhfopt,
-                                  envs->atm, envs->bas, envs->env)) {
-                        (*intor)(peri, dims, shls, envs->atm, envs->natm,
-                                 envs->bas, envs->nbas, envs->env, cintopt, cache);
+                if ((*fprescreen)(shls, vhfopt, atm, bas, env)) {
+                        (*intor)(peri, dims, shls, atm, natm, bas, nbas, env,
+                                 cintopt, cache);
                 } else {
                         for (ij = 0; ij < di*dj; ij++) {
                                 for (k = ao_loc[lsh]; k < ao_loc[ksh+1]; k++) {
@@ -60,10 +65,12 @@ static void fillnr_s8(int (*intor)(), int (*fprescreen)(),
 }
 
 static void store_ij(int (*intor)(), double *eri, double *buf, int ish, int jsh,
-                     CINTOpt *cintopt, CVHFOpt *vhfopt, struct _VHFEnvs *envs)
+                     CVHFOpt *vhfopt, IntorEnvs *envs)
 {
+        const int nbas = envs->nbas;
         const int *ao_loc = envs->ao_loc;
-        const int nao = envs->nao;
+        const CINTOpt *cintopt = envs->cintopt;
+        const int nao = ao_loc[nbas];
         const size_t nao2 = nao * nao;
         const int di = ao_loc[ish+1] - ao_loc[ish];
         const int dj = ao_loc[jsh+1] - ao_loc[jsh];
@@ -71,8 +78,7 @@ static void store_ij(int (*intor)(), double *eri, double *buf, int ish, int jsh,
         size_t ij0;
         double *peri, *pbuf;
 
-        fillnr_s8(intor, vhfopt->fprescreen,
-                  buf, ish, jsh, cintopt, vhfopt, envs);
+        fillnr_s8(intor, vhfopt->fprescreen, buf, ish, jsh, vhfopt, envs);
         for (i0 = ao_loc[ish], i = 0; i < di; i++, i0++) {
         for (j0 = ao_loc[jsh], j = 0; j < dj; j++, j0++) {
                 if (i0 >= j0) {
@@ -95,9 +101,10 @@ void GTO2e_cart_or_sph(int (*intor)(), double *eri, int *ao_loc,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int nao = ao_loc[nbas];
-        struct _VHFEnvs envs = {natm, nbas, atm, bas, env, nao, ao_loc};
         CINTOpt *cintopt;
         int2e_optimizer(&cintopt, atm, natm, bas, nbas, env);
+        IntorEnvs envs = {natm, nbas, atm, bas, env, NULL, ao_loc, NULL,
+                cintopt, 1};
         CVHFOpt *vhfopt;
         CVHFnr_optimizer(&vhfopt, atm, natm, bas, nbas, env);
         vhfopt->fprescreen = CVHFnr_schwarz_cond;
@@ -107,7 +114,7 @@ void GTO2e_cart_or_sph(int (*intor)(), double *eri, int *ao_loc,
                                                  atm, natm, bas, nbas, env);
 
 #pragma omp parallel default(none) \
-        shared(intor, eri, ao_loc, nbas, envs, cintopt, vhfopt)
+        shared(intor, eri, ao_loc, nbas, envs, vhfopt)
 {
         int i, j, ij;
         double *buf = malloc(sizeof(double) * (di*di*nao*nao + cache_size));
@@ -115,7 +122,7 @@ void GTO2e_cart_or_sph(int (*intor)(), double *eri, int *ao_loc,
         for (ij = 0; ij < nbas*(nbas+1)/2; ij++) {
                 i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
                 j = ij - (i*(i+1)/2);
-                store_ij(intor, eri, buf, i, j, cintopt, vhfopt, &envs);
+                store_ij(intor, eri, buf, i, j, vhfopt, &envs);
         }
         free(buf);
 }

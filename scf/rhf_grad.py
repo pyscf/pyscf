@@ -66,20 +66,20 @@ def grad_nuc(mol, atmlst=None):
 
 
 def get_hcore(mol):
-    h =(mol.intor('cint1e_ipkin_sph', comp=3)
-      + mol.intor('cint1e_ipnuc_sph', comp=3))
+    h =(mol.intor('int1e_ipkin_sph', comp=3)
+      + mol.intor('int1e_ipnuc_sph', comp=3))
     if mol._ecp:
         raise NotImplementedError("gradients for ECP")
     return -h
 
 def get_ovlp(mol):
-    return -mol.intor('cint1e_ipovlp_sph', comp=3)
+    return -mol.intor('int1e_ipovlp_sph', comp=3)
 
 def get_jk(mol, dm):
     '''J = ((-nabla i) j| kl) D_lk
     K = ((-nabla i) j| kl) D_jk
     '''
-    vj, vk = _vhf.direct_mapdm('cint2e_ip1_sph',  # (nabla i,j|k,l)
+    vj, vk = _vhf.direct_mapdm('int2e_ip1_sph',  # (nabla i,j|k,l)
                                's2kl', # ip1_sph has k>=l,
                                ('lk->s1ij', 'jk->s1il'),
                                dm, 3, # xyz, 3 components
@@ -144,13 +144,13 @@ class Gradients(lib.StreamObject):
     def get_j(self, mol=None, dm=None, hermi=0):
         if mol is None: mol = self.mol
         if dm is None: dm = self._scf.make_rdm1()
-        return -_vhf.direct_mapdm('cint2e_ip1_sph', 's2kl', 'lk->s1ij', dm, 3,
+        return -_vhf.direct_mapdm('int2e_ip1_sph', 's2kl', 'lk->s1ij', dm, 3,
                                   mol._atm, mol._bas, mol._env)
 
     def get_k(self, mol=None, dm=None, hermi=0):
         if mol is None: mol = self.mol
         if dm is None: dm = self._scf.make_rdm1()
-        return -_vhf.direct_mapdm('cint2e_ip1_sph', 's2kl', 'jk->s1il', dm, 3,
+        return -_vhf.direct_mapdm('int2e_ip1_sph', 's2kl', 'jk->s1il', dm, 3,
                                   mol._atm, mol._bas, mol._env)
 
     def get_veff(self, mol=None, dm=None):
@@ -167,7 +167,7 @@ class Gradients(lib.StreamObject):
     def _grad_rinv(self, mol, ia):
         r''' for given atom, <|\nabla r^{-1}|> '''
         mol.set_rinv_origin(mol.atom_coord(ia))
-        return -mol.atom_charge(ia) * mol.intor('cint1e_iprinv_sph', comp=3)
+        return -mol.atom_charge(ia) * mol.intor('int1e_iprinv_sph', comp=3)
 
     grad_elec = grad_elec
 

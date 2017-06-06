@@ -43,7 +43,7 @@ def init_guess_by_atom(mol, breaksym=True):
     dmb = dm*.5
     if breaksym:
         #Add off-diagonal part of alpha DM
-        dma = mol.intor('cint1e_ovlp_sph') * 1e-2
+        dma = mol.intor('int1e_ovlp_sph') * 1e-2
         for b0, b1, p0, p1 in mol.offset_nr_by_atom():
             dma[p0:p1,p0:p1] = dmb[p0:p1,p0:p1]
     return numpy.array((dma,dmb))
@@ -354,7 +354,7 @@ def spin_square(mo, s=1):
     >>> mf.kernel()
     -75.623975516256706
     >>> mo = (mf.mo_coeff[0][:,mf.mo_occ[0]>0], mf.mo_coeff[1][:,mf.mo_occ[1]>0])
-    >>> print('S^2 = %.7f, 2S+1 = %.7f' % spin_square(mo, mol.intor('cint1e_ovlp_sph')))
+    >>> print('S^2 = %.7f, 2S+1 = %.7f' % spin_square(mo, mol.intor('int1e_ovlp_sph')))
     S^2 = 0.7570150, 2S+1 = 2.0070027
     '''
     mo_a, mo_b = mo
@@ -553,7 +553,7 @@ def make_asym_dm(mo1, mo2, occ1, occ2, x):
 
     >>> mf1 = scf.UHF(gto.M(atom='H 0 0 0; F 0 0 1.3', basis='ccpvdz')).run()
     >>> mf2 = scf.UHF(gto.M(atom='H 0 0 0; F 0 0 1.4', basis='ccpvdz')).run()
-    >>> s = gto.intor_cross('cint1e_ovlp_sph', mf1.mol, mf2.mol)
+    >>> s = gto.intor_cross('int1e_ovlp_sph', mf1.mol, mf2.mol)
     >>> det, x = det_ovlp(mf1.mo_coeff, mf1.mo_occ, mf2.mo_coeff, mf2.mo_occ, s)
     >>> adm = make_asym_dm(mf1.mo_coeff, mf1.mo_occ, mf2.mo_coeff, mf2.mo_occ, x)
     >>> adm.shape

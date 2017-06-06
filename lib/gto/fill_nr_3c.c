@@ -7,7 +7,7 @@
 #include "config.h"
 #include "cint.h"
 
-int GTOmax_shell_dim(int *ao_loc, int *shls, int ncenter);
+int GTOmax_shell_dim(int *ao_loc, int *shls_slice, int ncenter);
 int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
                       int *atm, int natm, int *bas, int nbas, double *env);
 
@@ -177,15 +177,15 @@ void GTOnr3c_drv(int (*intor)(), void (*fill)(), double *eri, int comp,
         const int jsh1 = shls_slice[3];
         const int nish = ish1 - ish0;
         const int njsh = jsh1 - jsh0;
+        const int di = GTOmax_shell_dim(ao_loc, shls_slice, 3);
+        const int cache_size = GTOmax_cache_size(intor, shls_slice, 3,
+                                                 atm, natm, bas, nbas, env);
 
 #pragma omp parallel default(none) \
         shared(intor, fill, eri, comp, shls_slice, ao_loc, cintopt, \
                atm, natm, bas, nbas, env)
 {
         int ish, jsh, ij;
-        int di = GTOmax_shell_dim(ao_loc, shls_slice, 3);
-        int cache_size = GTOmax_cache_size(intor, shls_slice, 3,
-                                           atm, natm, bas, nbas, env);
         double *buf = malloc(sizeof(double) * (di*di*di*comp + cache_size));
 #pragma omp for schedule(dynamic)
         for (ij = 0; ij < nish*njsh; ij++) {

@@ -83,11 +83,11 @@ class KnowValues(unittest.TestCase):
                 for k in range(mol.nbas):
                     lp = 0
                     for l in range(mol.nbas):
-                        #buf = mol.intor_by_shell('cint2e_ssp1sps2', (i,j,k,l))
+                        #buf = mol.intor_by_shell('int2e_ssp1sps2_spinor', (i,j,k,l))
                         #di, dj, dk, dl = buf.shape
                         #eri0[ip:ip+di,jp:jp+dj,kp:kp+dk,lp:lp+dl] = buf
 
-                        buf = mol.intor_by_shell('cint2e_ssp1ssp2', (i,j,k,l))
+                        buf = mol.intor_by_shell('int2e_ssp1ssp2_spinor', (i,j,k,l))
                         di, dj, dk, dl = buf.shape
                         eri1[ip:ip+di,jp:jp+dj,kp:kp+dk,lp:lp+dl] = buf
                         lp += dl
@@ -137,7 +137,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(vk0, vk1))
 
     def test_time_rev_matrix(self):
-        s = mol.intor_symmetric('cint1e_ovlp')
+        s = mol.intor_symmetric('int1e_ovlp_spinor')
         ts = scf.dhf.time_reversal_matrix(mol, s)
         self.assertTrue(numpy.allclose(s, ts))
 

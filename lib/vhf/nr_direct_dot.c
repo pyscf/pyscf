@@ -22,25 +22,25 @@
 #define LSH1    7
 
 #define JKOP_ALLOCATE(ibra, iket, obra, oket) \
-        static JKArray *JKOperator_allocate_##ibra##iket##obra##oket(int *shls_offset, int *ao_loc, int ncomp) \
+        static JKArray *JKOperator_allocate_##ibra##iket##obra##oket(int *shls_slice, int *ao_loc, int ncomp) \
 { \
         JKArray *jkarray = malloc(sizeof(JKArray)); \
-        jkarray->dm_bra_sh0 = shls_offset[ibra##SH0]; \
-        jkarray->dm_bra_sh1 = shls_offset[ibra##SH1]; \
-        jkarray->dm_ket_sh0 = shls_offset[iket##SH0]; \
-        jkarray->dm_ket_sh1 = shls_offset[iket##SH1]; \
-        jkarray->v_bra_sh0  = shls_offset[obra##SH0]; \
-        jkarray->v_bra_sh1  = shls_offset[obra##SH1]; \
-        jkarray->v_ket_sh0  = shls_offset[oket##SH0]; \
-        jkarray->v_ket_sh1  = shls_offset[oket##SH1]; \
-        jkarray->v_ket_nsh  = shls_offset[oket##SH1] - shls_offset[oket##SH0]; \
+        jkarray->dm_bra_sh0 = shls_slice[ibra##SH0]; \
+        jkarray->dm_bra_sh1 = shls_slice[ibra##SH1]; \
+        jkarray->dm_ket_sh0 = shls_slice[iket##SH0]; \
+        jkarray->dm_ket_sh1 = shls_slice[iket##SH1]; \
+        jkarray->v_bra_sh0  = shls_slice[obra##SH0]; \
+        jkarray->v_bra_sh1  = shls_slice[obra##SH1]; \
+        jkarray->v_ket_sh0  = shls_slice[oket##SH0]; \
+        jkarray->v_ket_sh1  = shls_slice[oket##SH1]; \
+        jkarray->v_ket_nsh  = shls_slice[oket##SH1] - shls_slice[oket##SH0]; \
         jkarray->offset0_outptr = jkarray->v_bra_sh0 * jkarray->v_ket_nsh + jkarray->v_ket_sh0; \
-        jkarray->dm_dims[0] = ao_loc[shls_offset[ibra##SH1]] - ao_loc[shls_offset[ibra##SH0]]; \
-        jkarray->dm_dims[1] = ao_loc[shls_offset[iket##SH1]] - ao_loc[shls_offset[iket##SH0]]; \
-        jkarray->v_dims[0]  = ao_loc[shls_offset[obra##SH1]] - ao_loc[shls_offset[obra##SH0]]; \
-        jkarray->v_dims[1]  = ao_loc[shls_offset[oket##SH1]] - ao_loc[shls_offset[oket##SH0]]; \
-        int outptr_size =((shls_offset[obra##SH1] - shls_offset[obra##SH0]) * \
-                          (shls_offset[oket##SH1] - shls_offset[oket##SH0])); \
+        jkarray->dm_dims[0] = ao_loc[shls_slice[ibra##SH1]] - ao_loc[shls_slice[ibra##SH0]]; \
+        jkarray->dm_dims[1] = ao_loc[shls_slice[iket##SH1]] - ao_loc[shls_slice[iket##SH0]]; \
+        jkarray->v_dims[0]  = ao_loc[shls_slice[obra##SH1]] - ao_loc[shls_slice[obra##SH0]]; \
+        jkarray->v_dims[1]  = ao_loc[shls_slice[oket##SH1]] - ao_loc[shls_slice[oket##SH0]]; \
+        int outptr_size =((shls_slice[obra##SH1] - shls_slice[obra##SH0]) * \
+                          (shls_slice[oket##SH1] - shls_slice[oket##SH0])); \
         jkarray->outptr = malloc(sizeof(int) * outptr_size); \
         memset(jkarray->outptr, NOVALUE, sizeof(int) * outptr_size); \
         jkarray->stack_size = 0; \
@@ -51,10 +51,10 @@
 }
 
 #define JKOP_DATA_SIZE(obra, oket) \
-        static size_t JKOperator_data_size_##obra##oket(int *shls_offset, int *ao_loc) \
+        static size_t JKOperator_data_size_##obra##oket(int *shls_slice, int *ao_loc) \
 { \
-        int nbra = ao_loc[shls_offset[obra##SH1]] - ao_loc[shls_offset[obra##SH0]]; \
-        int nket = ao_loc[shls_offset[oket##SH1]] - ao_loc[shls_offset[oket##SH0]]; \
+        int nbra = ao_loc[shls_slice[obra##SH1]] - ao_loc[shls_slice[obra##SH0]]; \
+        int nket = ao_loc[shls_slice[oket##SH1]] - ao_loc[shls_slice[oket##SH0]]; \
         return nbra * nket; \
 }
 
@@ -87,34 +87,34 @@ static void JKOperator_deallocate(JKArray *jkarray)
         free(jkarray);
 }
 
-static void JKOperator_sanity_check_s1(int *shls_offset)
+static void JKOperator_sanity_check_s1(int *shls_slice)
 {
 }
-static void JKOperator_sanity_check_s2ij(int *shls_offset)
+static void JKOperator_sanity_check_s2ij(int *shls_slice)
 {
-        ASSERT(((shls_offset[0] == shls_offset[2]) &&
-                (shls_offset[1] == shls_offset[3])), "s2ij");
+        ASSERT(((shls_slice[0] == shls_slice[2]) &&
+                (shls_slice[1] == shls_slice[3])), "s2ij");
 }
-static void JKOperator_sanity_check_s2kl(int *shls_offset)
+static void JKOperator_sanity_check_s2kl(int *shls_slice)
 {
-        ASSERT(((shls_offset[4] == shls_offset[6]) &&
-                (shls_offset[5] == shls_offset[7])), "s2kl");
+        ASSERT(((shls_slice[4] == shls_slice[6]) &&
+                (shls_slice[5] == shls_slice[7])), "s2kl");
 }
-static void JKOperator_sanity_check_s4(int *shls_offset)
+static void JKOperator_sanity_check_s4(int *shls_slice)
 {
-        ASSERT(((shls_offset[0] == shls_offset[2]) &&
-                (shls_offset[1] == shls_offset[3])), "s4 ij");
-        ASSERT(((shls_offset[4] == shls_offset[6]) &&
-                (shls_offset[5] == shls_offset[7])), "s4 kl");
+        ASSERT(((shls_slice[0] == shls_slice[2]) &&
+                (shls_slice[1] == shls_slice[3])), "s4 ij");
+        ASSERT(((shls_slice[4] == shls_slice[6]) &&
+                (shls_slice[5] == shls_slice[7])), "s4 kl");
 }
-static void JKOperator_sanity_check_s8(int *shls_offset)
+static void JKOperator_sanity_check_s8(int *shls_slice)
 {
-        ASSERT(((shls_offset[0] == shls_offset[2]) &&
-                (shls_offset[1] == shls_offset[3])), "s8 ij");
-        ASSERT(((shls_offset[4] == shls_offset[6]) &&
-                (shls_offset[5] == shls_offset[7])), "s8 kl");
-        ASSERT(((shls_offset[0] == shls_offset[4]) &&
-                (shls_offset[1] == shls_offset[5])), "s8 ik");
+        ASSERT(((shls_slice[0] == shls_slice[2]) &&
+                (shls_slice[1] == shls_slice[3])), "s8 ij");
+        ASSERT(((shls_slice[4] == shls_slice[6]) &&
+                (shls_slice[5] == shls_slice[7])), "s8 kl");
+        ASSERT(((shls_slice[0] == shls_slice[4]) &&
+                (shls_slice[1] == shls_slice[5])), "s8 ik");
 }
 
 #define iSH     0
@@ -189,7 +189,7 @@ static void nrs1_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
 
         for (icomp = 0; icomp < ncomp; icomp++) {
 
-                memset(buf, 0, sizeof(double)*dij);
+                for (i = 0; i < dij; i++) { buf[i] = 0; }
                 for (l = l0; l < l1; l++) {
                 for (k = k0; k < k1; k++) {
                         for (ij = 0; ij < dij; ij++) {
@@ -407,7 +407,7 @@ static void nrs2ij_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
 
-                        memset(buf, 0, sizeof(double)*dij);
+                        for (i = 0; i < dij; i++) { buf[i] = 0; }
                         for (l = l0; l < l1; l++) {
                         for (k = k0; k < k1; k++) {
                                 for (ij = 0; ij < dij; ij++) {
@@ -538,7 +538,7 @@ static void nrs2kl_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
 
-                        memset(buf, 0, sizeof(double)*dkl);
+                        for (i = 0; i < dkl; i++) { buf[i] = 0; }
                         for (kl = 0; kl < dkl; kl++) {
                         for (ij = 0; ij < dij; ij++) {
                                 buf[kl] += eri[kl*dij+ij] * tdm[ij];
@@ -580,7 +580,7 @@ static void nrs2kl_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
 
-                        memset(buf, 0, sizeof(double)*dij);
+                        for (i = 0; i < dij; i++) { buf[i] = 0; }
                         for (l = l0; l < l1; l++) {
                         for (k = k0; k < k1; k++) {
                                 tdm = dm[k*ncol+l] + dm[l*ncol+k];
@@ -716,7 +716,7 @@ static void nrs4_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
                 int dij = ij;
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
-                        memset(buf, 0, sizeof(double)*dkl);
+                        for (i = 0; i < dkl; i++) { buf[i] = 0; }
                         for (kl = 0; kl < dkl; kl++) {
                         for (ij = 0; ij < dij; ij++) {
                                 buf[kl] += eri[kl*dij+ij] * tdm[ij];
@@ -761,7 +761,7 @@ static void nrs4_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
 
-                        memset(buf, 0, sizeof(double)*dij);
+                        for (i = 0; i < dij; i++) { buf[i] = 0; }
                         for (l = l0; l < l1; l++) {
                         for (k = k0; k < k1; k++) {
                                 tdm = dm[l*ncol+k] + dm[k*ncol+l];
@@ -1095,7 +1095,7 @@ static void nrs8_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
                 } }
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
-                        memset(buf, 0, sizeof(double)*dij);
+                        for (i = 0; i < dij; i++) { buf[i] = 0; }
                         for (l = 0; l < dl; l++) { lp = l0 + l;
                         for (k = 0; k < dk; k++) { kp = k0 + k;
                                 tmp = 0;
@@ -1148,7 +1148,7 @@ static void nrs8_ji_s2kl(double *eri, double *dm, JKArray *out, int *shls,
                 } }
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
-                        memset(buf, 0, sizeof(double)*dij);
+                        for (i = 0; i < dij; i++) { buf[i] = 0; }
                         for (l = 0; l < dl; l++) { lp = l0 + l;
                         for (k = 0; k < dk; k++) { kp = k0 + k;
                                 tdm2 = dm[kp*ncol+lp] + dm[lp*ncol+kp];
@@ -1450,7 +1450,7 @@ static void nra2ij_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
 
-                        memset(buf, 0, sizeof(double)*dij);
+                        for (i = 0; i < dij; i++) { buf[i] = 0; }
                         for (l = l0; l < l1; l++) {
                         for (k = k0; k < k1; k++) {
                                 for (ij = 0; ij < dij; ij++) {
@@ -1587,7 +1587,7 @@ static void nra2kl_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
 
-                        memset(buf, 0, sizeof(double)*dkl);
+                        for (i = 0; i < dkl; i++) { buf[i] = 0; }
                         for (kl = 0; kl < dkl; kl++) {
                         for (ij = 0; ij < dij; ij++) {
                                 buf[kl] += eri[kl*dij+ij] * tdm[ij];
@@ -1636,7 +1636,7 @@ static void nra2kl_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
 
-                        memset(buf, 0, sizeof(double)*dij);
+                        for (i = 0; i < dij; i++) { buf[i] = 0; }
                         for (l = l0; l < l1; l++) {
                         for (k = k0; k < k1; k++) {
                                 tdm = dm[l*ncol+k] - dm[k*ncol+l];
@@ -1770,7 +1770,7 @@ static void nra4ij_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
 
-                        memset(buf, 0, sizeof(double)*dkl);
+                        for (i = 0; i < dkl; i++) { buf[i] = 0; }
                         for (kl = 0; kl < dkl; kl++) {
                         for (ij = 0; ij < dij; ij++) {
                                 buf[kl] += eri[kl*dij+ij] * tdm[ij];
@@ -1814,7 +1814,7 @@ static void nra4ij_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
 
-                        memset(buf, 0, sizeof(double)*dij);
+                        for (i = 0; i < dij; i++) { buf[i] = 0; }
                         for (l = l0; l < l1; l++) {
                         for (k = k0; k < k1; k++) {
                                 tdm = dm[l*ncol+k] + dm[k*ncol+l];
@@ -2151,7 +2151,7 @@ static void nra4kl_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
 
-                        memset(buf, 0, sizeof(double)*dkl);
+                        for (i = 0; i < dkl; i++) { buf[i] = 0; }
                         for (kl = 0; kl < dkl; kl++) {
                         for (ij = 0; ij < dij; ij++) {
                                 buf[kl] += eri[kl*dij+ij] * tdm[ij];
@@ -2203,7 +2203,7 @@ static void nra4kl_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
 
-                        memset(buf, 0, sizeof(double)*dij);
+                        for (i = 0; i < dij; i++) { buf[i] = 0; }
                         for (l = l0; l < l1; l++) {
                         for (k = k0; k < k1; k++) {
                                 tdm = dm[l*ncol+k] - dm[k*ncol+l];

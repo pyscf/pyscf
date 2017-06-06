@@ -194,7 +194,7 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
      [[ 0.10289944  0.48176097]
       [-0.48176097 -0.10289944]]]
     '''
-    intor_name = tocint3(intor_name)
+    intor_name = ascint3(intor_name)
     if (intor_name.startswith('int1e') or
         intor_name.startswith('ECP') or
         intor_name.startswith('int2c2e')):
@@ -409,7 +409,7 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
       [[[[-0.        ]]]]
       [[[[-0.08760462]]]]]
     '''
-    intor_name = tocint3(intor_name)
+    intor_name = ascint3(intor_name)
     atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
     env = numpy.asarray(env, dtype=numpy.double, order='C')
@@ -536,12 +536,14 @@ def _stand_sym_code(sym):
     else:
         return 's' + sym.lower()
 
-def tocint3(intor_name):
+def ascint3(intor_name):
     '''convert cint2 function name to cint3 function name'''
     if intor_name.startswith('cint'):
         intor_name = intor_name[1:]
-        if not (intor_name.endswith('_cart') or intor_name.endswith('_sph')):
-            intor_name = intor_name + '_spinor'
+    if not (intor_name.endswith('_cart') or
+            intor_name.endswith('_sph') or
+            intor_name.endswith('_spinor')):
+        intor_name = intor_name + '_spinor'
     return intor_name
 
 
