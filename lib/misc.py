@@ -456,6 +456,17 @@ class H5TmpFile(h5py.File):
         self.close()
 
 
+def ndpointer(*args, **kwargs):
+    base = numpy.ctypeslib.ndpointer(*args, **kwargs)
+
+    @classmethod
+    def from_param(cls, obj):
+        if obj is None:
+            return obj
+        return base.from_param(obj)
+    return type(base.__name__, (base,), {'from_param': from_param})
+
+
 if __name__ == '__main__':
     for i,j in tril_equal_pace(90, 30):
         print('base=30', i, j, j*(j+1)//2-i*(i+1)//2)
