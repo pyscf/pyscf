@@ -392,7 +392,7 @@ def conc_env(atm1, bas1, env1, atm2, bas2, env2):
     >>> mol2 = gto.M(atom='O 0 0 0', basis='sto3g')
     >>> atm3, bas3, env3 = gto.conc_env(mol1._atm, mol1._bas, mol1._env,
     ...                                 mol2._atm, mol2._bas, mol2._env)
-    >>> gto.moleintor.getints('cint1e_ovlp_sph', atm3, bas3, env3, range(2), range(2,5))
+    >>> gto.moleintor.getints('int1e_ovlp_sph', atm3, bas3, env3, range(2), range(2,5))
     [[ 0.04875181  0.44714688  0.          0.37820346  0.        ]
      [ 0.04875181  0.44714688  0.          0.          0.37820346]]
     '''
@@ -460,8 +460,8 @@ def intor_cross(intor, mol1, mol2, comp=1):
 
     Args:
         intor : str
-            Name of the 1-electron integral, such as cint1e_ovlp_sph (spherical overlap),
-            cint1e_nuc_cart (cartesian nuclear attraction), cint1e_ipovlp
+            Name of the 1-electron integral, such as int1e_ovlp_sph (spherical overlap),
+            int1e_nuc_cart (cartesian nuclear attraction), int1e_ipovlp_spinor
             (spinor overlap gradients), etc.  Ref to :func:`getints` for the
             full list of available 1-electron integral names
         mol1, mol2:
@@ -469,7 +469,7 @@ def intor_cross(intor, mol1, mol2, comp=1):
 
     Kwargs:
         comp : int
-            Components of the integrals, e.g. cint1e_ipovlp has 3 components
+            Components of the integrals, e.g. int1e_ipovlp_sph has 3 components
 
     Returns:
         ndarray of 1-electron integrals, can be either 2-dim or 3-dim, depending on comp
@@ -479,7 +479,7 @@ def intor_cross(intor, mol1, mol2, comp=1):
 
     >>> mol1 = gto.M(atom='H 0 1 0; H 0 0 1', basis='sto3g')
     >>> mol2 = gto.M(atom='O 0 0 0', basis='sto3g')
-    >>> gto.intor_cross('cint1e_ovlp_sph', mol1, mol2)
+    >>> gto.intor_cross('int1e_ovlp_sph', mol1, mol2)
     [[ 0.04875181  0.44714688  0.          0.37820346  0.        ]
      [ 0.04875181  0.44714688  0.          0.          0.37820346]]
     '''
@@ -1453,7 +1453,7 @@ class Mole(lib.StreamObject):
     H
     >>> print(mol.nao_nr())
     2
-    >>> print(mol.intor('cint1e_ovlp_sph'))
+    >>> print(mol.intor('int1e_ovlp_sph'))
     [[ 0.99999999  0.43958641]
      [ 0.43958641  0.99999999]]
     >>> mol.charge = 1
@@ -1927,7 +1927,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''Assume the charge distribution on the "rinv_orig".  zeta is the parameter
         to control the charge distribution: rho(r) = Norm * exp(-zeta * r^2).
         **Be careful** when call this function. It affects the behavior of
-        cint1e_rinv_* functions.  Make sure to set it back to 0 after using it!
+        int1e_rinv_* functions.  Make sure to set it back to 0 after using it!
         '''
         self._env[PTR_RINV_ZETA] = zeta
         return self
@@ -2228,7 +2228,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
         Kwargs:
             comp : int
-                Components of the integrals, e.g. cint1e_ipovlp has 3 components.
+                Components of the integrals, e.g. int1e_ipovlp_sph has 3 components.
             hermi : int
                 Symmetry of the integrals
 
@@ -2242,14 +2242,14 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         Examples:
 
         >>> mol.build(atom='H 0 0 0; H 0 0 1.1', basis='sto-3g')
-        >>> mol.intor('cint1e_ipnuc_sph', comp=3) # <nabla i | V_nuc | j>
+        >>> mol.intor('int1e_ipnuc_sph', comp=3) # <nabla i | V_nuc | j>
         [[[ 0.          0.        ]
           [ 0.          0.        ]]
          [[ 0.          0.        ]
           [ 0.          0.        ]]
          [[ 0.10289944  0.48176097]
           [-0.48176097 -0.10289944]]]
-        >>> mol.intor('cint1e_nuc')
+        >>> mol.intor('int1e_nuc_spinor')
         [[-1.69771092+0.j  0.00000000+0.j -0.67146312+0.j  0.00000000+0.j]
          [ 0.00000000+0.j -1.69771092+0.j  0.00000000+0.j -0.67146312+0.j]
          [-0.67146312+0.j  0.00000000+0.j -1.69771092+0.j  0.00000000+0.j]
@@ -2278,7 +2278,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
         Kwargs:
             comp : int
-                Components of the integrals, e.g. cint1e_ipovlp has 3 components.
+                Components of the integrals, e.g. int1e_ipovlp_sph has 3 components.
 
         Returns:
             ndarray of 1-electron integrals, can be either 2-dim or 3-dim, depending on comp
@@ -2286,7 +2286,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         Examples:
 
         >>> mol.build(atom='H 0 0 0; H 0 0 1.1', basis='sto-3g')
-        >>> mol.intor_symmetric('cint1e_nuc')
+        >>> mol.intor_symmetric('int1e_nuc_spinor')
         [[-1.69771092+0.j  0.00000000+0.j -0.67146312+0.j  0.00000000+0.j]
          [ 0.00000000+0.j -1.69771092+0.j  0.00000000+0.j -0.67146312+0.j]
          [-0.67146312+0.j  0.00000000+0.j -1.69771092+0.j  0.00000000+0.j]
@@ -2304,7 +2304,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
         Kwargs:
             comp : int
-                Components of the integrals, e.g. cint1e_ipovlp has 3 components.
+                Components of the integrals, e.g. int1e_ipovlp has 3 components.
 
         Returns:
             ndarray of 1-electron integrals, can be either 2-dim or 3-dim, depending on comp
@@ -2312,7 +2312,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         Examples:
 
         >>> mol.build(atom='H 0 0 0; H 0 0 1.1', basis='sto-3g')
-        >>> mol.intor_asymmetric('cint1e_nuc')
+        >>> mol.intor_asymmetric('int1e_nuc_spinor')
         [[-1.69771092+0.j  0.00000000+0.j  0.67146312+0.j  0.00000000+0.j]
          [ 0.00000000+0.j -1.69771092+0.j  0.00000000+0.j  0.67146312+0.j]
          [-0.67146312+0.j  0.00000000+0.j -1.69771092+0.j  0.00000000+0.j]
@@ -2382,8 +2382,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
         >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='ccpvtz')
         >>> c = mol.cart2sph_coeff()
-        >>> s0 = mol.intor('cint1e_ovlp_sph')
-        >>> s1 = c.T.dot(mol.intor('cint1e_ovlp_cart')).dot(c)
+        >>> s0 = mol.intor('int1e_ovlp_sph')
+        >>> s1 = c.T.dot(mol.intor('int1e_ovlp_cart')).dot(c)
         >>> print(abs(s1-s0).sum())
         >>> 4.58676826646e-15
         '''

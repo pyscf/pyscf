@@ -137,7 +137,7 @@ def incore(eri, dm, hermi=0):
 
 # use cint2e_sph as cintor, CVHFnrs8_ij_s2kl, CVHFnrs8_jk_s2il as fjk to call
 # direct_mapdm
-def direct(dms, atm, bas, env, vhfopt=None, hermi=0):
+def direct(dms, atm, bas, env, vhfopt=None, hermi=0, cart=False):
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
     c_env = numpy.asarray(env, dtype=numpy.double, order='C')
@@ -154,8 +154,11 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0):
         dms = numpy.asarray(dms, order='C')
 
     if vhfopt is None:
-        cintor = _fpointer('cint2e_sph')
-        cintopt = make_cintopt(c_atm, c_bas, c_env, 'cint2e_sph')
+        if cart:
+            cintor = _fpointer('int2e_cart')
+        else:
+            cintor = _fpointer('int2e_sph')
+        cintopt = make_cintopt(c_atm, c_bas, c_env, 'int2e_sph')
         cvhfopt = pyscf.lib.c_null_ptr()
     else:
         vhfopt.set_dm(dms, atm, bas, env)
@@ -364,21 +367,12 @@ def direct_bindm(intor, aosym, jkdescript,
 
 
 # 8-fold permutation symmetry
-def int2e_sph(atm, bas, env):
-    c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
-    c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
-    c_env = numpy.asarray(env, dtype=numpy.double, order='C')
-    natm = ctypes.c_int(c_atm.shape[0])
-    nbas = ctypes.c_int(c_bas.shape[0])
-    libcvhf.CINTtot_cgto_spheric.restype = ctypes.c_int
-    nao = libcvhf.CINTtot_cgto_spheric(c_bas.ctypes.data_as(ctypes.c_void_p), nbas)
-    nao_pair = nao*(nao+1)//2
-    eri = numpy.empty((nao_pair*(nao_pair+1)//2))
-    libcvhf.int2e_sph(eri.ctypes.data_as(ctypes.c_void_p),
-                      c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-                      c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-                      c_env.ctypes.data_as(ctypes.c_void_p))
-    return eri
+def int2e_sph(atm, bas, env, cart=False):
+    if cart:
+        intor = 'int2e_cart'
+    else:
+        intor = 'int2e_sph'
+    return gto.moleintor.getints4c(intor, atm, bas, env, aosym='s8')
 
 
 ################################################################

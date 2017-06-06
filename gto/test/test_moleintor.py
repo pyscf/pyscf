@@ -62,49 +62,49 @@ class KnowValues(unittest.TestCase):
         for i in range(mol.nbas):
             jp = 0
             for j in range(mol.nbas):
-                buf = mol.intor_by_shell('cint1e_ipovlp_sph', (i,j), comp=3)
+                buf = mol.intor_by_shell('int1e_ipovlp_sph', (i,j), comp=3)
                 di,dj = buf.shape[1:]
                 s0[:,ip:ip+di,jp:jp+dj] = buf
                 jp += dj
             ip += di
-        s = mol.intor('cint1e_ipovlp_sph', comp=3)
+        s = mol.intor('int1e_ipovlp_sph', comp=3)
         self.assertTrue(numpy.allclose(s,s0))
         self.assertAlmostEqual(finger(s), 960.67081839920604, 11)
 
     def test_intor_nr0(self):
-        s = mol.intor('cint1e_ovlp_sph')
+        s = mol.intor('int1e_ovlp_sph')
         self.assertAlmostEqual(finger(s), 622.29059965181796, 11)
 
     def test_intor_nr1(self):
-        s = mol.intor_symmetric('cint1e_ovlp_sph')
+        s = mol.intor_symmetric('int1e_ovlp_sph')
         self.assertAlmostEqual(finger(s), 622.29059965181796, 11)
 
     def test_intor_nr2(self):
-        s = mol.intor_asymmetric('cint1e_ovlp_sph')
+        s = mol.intor_asymmetric('int1e_ovlp_sph')
         self.assertAlmostEqual(finger(s), 622.29059965181796, 11)
 
     def test_intor_nr_cross(self):
         shls_slice = (0, mol.nbas//4, mol.nbas//4, mol.nbas)
-        s = mol.intor('cint1e_ovlp_sph', shls_slice=shls_slice)
+        s = mol.intor('int1e_ovlp_sph', shls_slice=shls_slice)
         self.assertAlmostEqual(finger(s), 99.38188078749701, 11)
 
     def test_intor_r(self):
-        s = mol.intor('cint1e_ovlp')
+        s = mol.intor('int1e_ovlp_spinor')
         self.assertAlmostEqual(finger(s), 1592.2297864313475, 11)
 
     def test_intor_r1(self):
-        s0 = mol.intor('cint1e_ovlp')
-        s1 = mol.intor_symmetric('cint1e_ovlp')
+        s0 = mol.intor('int1e_ovlp_spinor')
+        s1 = mol.intor_symmetric('int1e_ovlp_spinor')
         self.assertTrue(numpy.allclose(s1,s0))
 
     def test_intor_r2(self):
-        s = mol.intor_asymmetric('cint1e_ovlp')
+        s = mol.intor_asymmetric('int1e_ovlp_spinor')
         self.assertAlmostEqual(finger(s), 1592.2297864313475, 11)
 
     def test_intor_r_comp(self):
-        s = mol.intor('cint1e_ipkin', comp=3)
+        s = mol.intor('int1e_ipkin_spinor', comp=3)
         self.assertAlmostEqual(finger(s), 4409.86758420756, 10)
-        s1 = mol.intor_asymmetric('cint1e_ipkin', comp=3)
+        s1 = mol.intor_asymmetric('int1e_ipkin_spinor', comp=3)
         self.assertTrue(numpy.allclose(s1,s))
 
     def test_intor_nr2e(self):
@@ -122,7 +122,7 @@ class KnowValues(unittest.TestCase):
                 for k in range(mol1.nbas):
                     lp = 0
                     for l in range(mol1.nbas):
-                        buf = mol1.intor_by_shell('cint2e_ip1_sph', (i,j,k,l), 3)
+                        buf = mol1.intor_by_shell('int2e_ip1_sph', (i,j,k,l), 3)
                         di,dj,dk,dl = buf.shape[1:]
                         eri0[:,ip:ip+di,jp:jp+dj,kp:kp+dk,lp:lp+dl] = buf
                         lp += dl
@@ -130,29 +130,29 @@ class KnowValues(unittest.TestCase):
                 jp += dj
             ip += di
 
-        eri1 = mol1.intor('cint2e_ip1_sph', comp=3).reshape(3,13,13,13,13)
+        eri1 = mol1.intor('int2e_ip1_sph', comp=3).reshape(3,13,13,13,13)
         self.assertTrue(numpy.allclose(eri0, eri1))
 
         idx = numpy.tril_indices(13)
         naopair = nao * (nao+1) // 2
         ref = eri0[:,idx[0],idx[1]].reshape(3,naopair,-1)
-        eri1 = mol1.intor('cint2e_ip1_sph', comp=3, aosym='s2ij')
+        eri1 = mol1.intor('int2e_ip1_sph', comp=3, aosym='s2ij')
         self.assertTrue(numpy.allclose(ref, eri1))
 
         idx = numpy.tril_indices(13)
         ref = eri0[:,:,:,idx[0],idx[1]].reshape(3,-1,naopair)
-        eri1 = mol1.intor('cint2e_ip1_sph', comp=3, aosym='s2kl')
+        eri1 = mol1.intor('int2e_ip1_sph', comp=3, aosym='s2kl')
         self.assertTrue(numpy.allclose(ref, eri1))
 
         idx = numpy.tril_indices(13)
         ref = eri0[:,idx[0],idx[1]][:,:,idx[0],idx[1]].reshape(3,-1,naopair)
-        eri1 = mol1.intor('cint2e_ip1_sph', comp=3, aosym='s4')
+        eri1 = mol1.intor('int2e_ip1_sph', comp=3, aosym='s4')
         self.assertTrue(numpy.allclose(ref, eri1))
 
 
         shls_slice = [0, 4, 2, 6, 1, 5, 3, 5]
         i0,i1,j0,j1,k0,k1,l0,l1 = mol1.ao_loc_nr()[shls_slice]
-        eri1 = mol1.intor('cint2e_ip1_sph', comp=3, shls_slice=shls_slice)
+        eri1 = mol1.intor('int2e_ip1_sph', comp=3, shls_slice=shls_slice)
         eri1 = eri1.reshape(3,i1-i0,j1-j0,k1-k0,l1-l0)
         self.assertTrue(numpy.allclose(eri0[:,i0:i1,j0:j1,k0:k1,l0:l1], eri1))
 
@@ -160,7 +160,7 @@ class KnowValues(unittest.TestCase):
         i0,i1,j0,j1,k0,k1,l0,l1 = mol1.ao_loc_nr()[shls_slice]
         idx = numpy.tril_indices(2)
         ref = eri0[:,i0:i1,j0:j1,k0:k1,l0:l1][:,idx[0],idx[1]]
-        eri1 = mol1.intor('cint2e_ip1_sph', comp=3, aosym='s2ij', shls_slice=shls_slice)
+        eri1 = mol1.intor('int2e_ip1_sph', comp=3, aosym='s2ij', shls_slice=shls_slice)
         eri1 = eri1.reshape(3,-1,k1-k0,l1-l0)
         self.assertTrue(numpy.allclose(ref, eri1))
 
@@ -168,7 +168,7 @@ class KnowValues(unittest.TestCase):
         i0,i1,j0,j1,k0,k1,l0,l1 = mol1.ao_loc_nr()[shls_slice]
         idx = numpy.tril_indices(2)
         ref = eri0[:,i0:i1,j0:j1,k0:k1,l0:l1][:,:,:,idx[0],idx[1]]
-        eri1 = mol1.intor('cint2e_ip1_sph', comp=3, aosym='s2kl', shls_slice=shls_slice)
+        eri1 = mol1.intor('int2e_ip1_sph', comp=3, aosym='s2kl', shls_slice=shls_slice)
         eri1 = eri1.reshape(3,i1-i0,j1-j0,-1)
         self.assertTrue(numpy.allclose(ref, eri1))
 
@@ -176,14 +176,14 @@ class KnowValues(unittest.TestCase):
         i0,i1,j0,j1,k0,k1,l0,l1 = mol1.ao_loc_nr()[shls_slice]
         idx = numpy.tril_indices(2)
         ref = eri0[:,i0:i1,j0:j1,k0:k1,l0:l1][:,idx[0],idx[1]][:,:,idx[0],idx[1]]
-        eri1 = mol1.intor('cint2e_ip1_sph', comp=3, aosym='s4', shls_slice=shls_slice)
+        eri1 = mol1.intor('int2e_ip1_sph', comp=3, aosym='s4', shls_slice=shls_slice)
         self.assertTrue(numpy.allclose(ref, eri1))
 
 
     def test_rinv_with_zeta(self):
         mol.set_rinv_orig((.2,.3,.4))
         mol.set_rinv_zeta(2.2)
-        v1 = mol.intor('cint1e_rinv_sph')
+        v1 = mol.intor('int1e_rinv_sph')
         mol.set_rinv_zeta(0)
         pmol = gto.M(atom='Ghost .2 .3 .4', unit='b', basis={'Ghost':[[0,(2.2*.5, 1)]]})
         pmol._atm, pmol._bas, pmol._env = \
@@ -191,7 +191,7 @@ class KnowValues(unittest.TestCase):
                          pmol._atm, pmol._bas, pmol._env)
         shls_slice = (pmol.nbas-1,pmol.nbas, pmol.nbas-1,pmol.nbas,
                       0, pmol.nbas, 0, pmol.nbas)
-        v0 = pmol.intor('cint2e_sph', shls_slice=shls_slice)
+        v0 = pmol.intor('int2e_sph', shls_slice=shls_slice)
         nao = pmol.nao_nr()
         v0 = v0.reshape(nao,nao)[:-1,:-1]
         self.assertTrue(numpy.allclose(v0, v1))
@@ -211,28 +211,28 @@ class KnowValues(unittest.TestCase):
             for j in range(mol.nbas):
                 kp = 0
                 for k in range(mol.nbas):
-                    buf = mol.intor_by_shell('cint3c1e_sph', (i,j,k))
+                    buf = mol.intor_by_shell('int3c1e_sph', (i,j,k))
                     di,dj,dk = buf.shape
                     eri0[ip:ip+di,jp:jp+dj,kp:kp+dk] = buf
                     kp += dk
                 jp += dj
             ip += di
 
-        eri1 = mol.intor('cint3c1e_sph')
+        eri1 = mol.intor('int3c1e_sph')
         self.assertTrue(numpy.allclose(eri0, eri1))
 
         idx = numpy.tril_indices(nao)
-        eri1 = mol.intor('cint3c1e_sph', aosym='s2ij')
+        eri1 = mol.intor('int3c1e_sph', aosym='s2ij')
         self.assertTrue(numpy.allclose(eri0[idx], eri1))
 
-        eri1 = mol.intor('cint3c1e_sph', aosym='s2ij',
+        eri1 = mol.intor('int3c1e_sph', aosym='s2ij',
                          shls_slice=(2,5,0,5,0,mol.nbas))
         self.assertTrue(numpy.allclose(eri0[idx][3:28], eri1))
 
-        eri1 = mol.intor('cint3c1e_sph', shls_slice=(2,5,4,9,0,mol.nbas))
+        eri1 = mol.intor('int3c1e_sph', shls_slice=(2,5,4,9,0,mol.nbas))
         self.assertTrue(numpy.allclose(eri0[2:7,6:15], eri1))
 
-        eri1 = mol.intor('cint3c2e_ip1_sph', comp=3, shls_slice=(2,5,4,9,0,mol.nbas))
+        eri1 = mol.intor('int3c2e_ip1_sph', comp=3, shls_slice=(2,5,4,9,0,mol.nbas))
         self.assertAlmostEqual(finger(eri1), 642.70512922279079, 11)
 
 

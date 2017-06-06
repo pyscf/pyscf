@@ -8,8 +8,46 @@
 #include "config.h"
 #include "cint.h"
 
+#define MAX(I,J)        ((I) > (J) ? (I) : (J))
+#define MIN(I,J)        ((I) < (J) ? (I) : (J))
 
-#define NCTRMAX         64
+int GTOmax_shell_dim(int *ao_loc, int *shls_slice, int ncenter)
+{
+        int i;
+        int i0 = shls_slice[0];
+        int i1 = shls_slice[1];
+        int di = 0;
+        for (i = 1; i < ncenter; i++) {
+                i0 = MIN(i0, shls_slice[i*2  ]);
+                i1 = MAX(i1, shls_slice[i*2+1]);
+        }
+        for (i = i0; i < i1; i++) {
+                di = MAX(di, ao_loc[i+1]-ao_loc[i]);
+        }
+        return di;
+}
+int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
+                      int *atm, int natm, int *bas, int nbas, double *env)
+{
+        int i, n;
+        int i0 = shls_slice[0];
+        int i1 = shls_slice[1];
+        for (i = 1; i < ncenter; i++) {
+                i0 = MIN(i0, shls_slice[i*2  ]);
+                i1 = MAX(i1, shls_slice[i*2+1]);
+        }
+        int shls[4];
+        int cache_size = 0;
+        for (i = i0; i < i1; i++) {
+                shls[0] = i;
+                shls[1] = i;
+                shls[2] = i;
+                shls[3] = i;
+                n = (*intor)(NULL, NULL, shls, atm, natm, bas, nbas, env, NULL, NULL);
+                cache_size = MAX(cache_size, n);
+        }
+        return cache_size;
+}
 
 /*
  *************************************************
@@ -17,7 +55,7 @@
  */
 
 void GTOnr2e_fill_s1(int (*intor)(), int (*fprescreen)(),
-                     double *eri, int ncomp, int ishp, int jshp,
+                     double *eri, double *buf, int comp, int ishp, int jshp,
                      int *shls_slice, int *ao_loc, CINTOpt *cintopt,
                      int *atm, int natm, int *bas, int nbas, double *env)
 {
@@ -50,8 +88,7 @@ void GTOnr2e_fill_s1(int (*intor)(), int (*fprescreen)(),
         int i, j, k, l, icomp;
         int ksh, lsh;
         int shls[4];
-        double *buf = malloc(sizeof(double)*di*dj*NCTRMAX*NCTRMAX*ncomp);
-        double *eri0, *peri, *buf0, *pbuf;
+        double *eri0, *peri, *buf0, *pbuf, *cache;
 
         shls[0] = ish;
         shls[1] = jsh;
@@ -64,13 +101,14 @@ void GTOnr2e_fill_s1(int (*intor)(), int (*fprescreen)(),
                 l0 = ao_loc[lsh] - ao_loc[lsh0];
                 dk = ao_loc[ksh+1] - ao_loc[ksh];
                 dl = ao_loc[lsh+1] - ao_loc[lsh];
+                dijk = dij * dk;
+                dijkl = dijk * dl;
+                cache = buf + dijkl * comp;
                 if ((*fprescreen)(shls, atm, bas, env) &&
-                    (*intor)(buf, shls, atm, natm, bas, nbas, env, cintopt)) {
-                        dijk = dij * dk;
-                        dijkl = dijk * dl;
+                    (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, cintopt, cache)) {
                         eri0 = eri + k0*nl+l0;
                         buf0 = buf;
-                        for (icomp = 0; icomp < ncomp; icomp++) {
+                        for (icomp = 0; icomp < comp; icomp++) {
                                 for (i = 0; i < di; i++) {
                                 for (j = 0; j < dj; j++) {
                                         peri = eri0 + nkl*(i*nj+j);
@@ -85,7 +123,7 @@ void GTOnr2e_fill_s1(int (*intor)(), int (*fprescreen)(),
                         }
                 } else {
                         eri0 = eri + k0*nl+l0;
-                        for (icomp = 0; icomp < ncomp; icomp++) {
+                        for (icomp = 0; icomp < comp; icomp++) {
                                 for (i = 0; i < di; i++) {
                                 for (j = 0; j < dj; j++) {
                                         peri = eri0 + nkl*(i*nj+j);
@@ -99,11 +137,10 @@ void GTOnr2e_fill_s1(int (*intor)(), int (*fprescreen)(),
                         }
                 }
         } }
-        free(buf);
 }
 
 void GTOnr2e_fill_s2ij(int (*intor)(), int (*fprescreen)(),
-                       double *eri, int ncomp, int ishp, int jshp,
+                       double *eri, double *buf, int comp, int ishp, int jshp,
                        int *shls_slice, int *ao_loc, CINTOpt *cintopt,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
@@ -140,8 +177,7 @@ void GTOnr2e_fill_s2ij(int (*intor)(), int (*fprescreen)(),
         int i, j, k, l, icomp;
         int ksh, lsh;
         int shls[4];
-        double *buf = malloc(sizeof(double)*di*dj*NCTRMAX*NCTRMAX*ncomp);
-        double *eri0, *peri0, *peri, *buf0, *pbuf;
+        double *eri0, *peri0, *peri, *buf0, *pbuf, *cache;
 
         shls[0] = ish;
         shls[1] = jsh;
@@ -154,13 +190,14 @@ void GTOnr2e_fill_s2ij(int (*intor)(), int (*fprescreen)(),
                 l0 = ao_loc[lsh] - ao_loc[lsh0];
                 dk = ao_loc[ksh+1] - ao_loc[ksh];
                 dl = ao_loc[lsh+1] - ao_loc[lsh];
+                dijk = dij * dk;
+                dijkl = dijk * dl;
+                cache = buf + dijkl * comp;
                 if ((*fprescreen)(shls, atm, bas, env) &&
-                    (*intor)(buf, shls, atm, natm, bas, nbas, env, cintopt)) {
-                        dijk = dij * dk;
-                        dijkl = dijk * dl;
+                    (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, cintopt, cache)) {
                         eri0 = eri + k0*nl+l0;
                         buf0 = buf;
-                        for (icomp = 0; icomp < ncomp; icomp++) {
+                        for (icomp = 0; icomp < comp; icomp++) {
                                 peri0 = eri0;
                                 if (ishp > jshp) {
                                 for (i = 0; i < di; i++, peri0+=nkl*(i0+i)) {
@@ -188,7 +225,7 @@ void GTOnr2e_fill_s2ij(int (*intor)(), int (*fprescreen)(),
                         }
                 } else {
                         eri0 = eri + k0*nl+l0;
-                        for (icomp = 0; icomp < ncomp; icomp++) {
+                        for (icomp = 0; icomp < comp; icomp++) {
                                 peri0 = eri0;
                                 if (ishp > jshp) {
                                 for (i = 0; i < di; i++, peri0+=nkl*(i0+i)) {
@@ -213,11 +250,10 @@ void GTOnr2e_fill_s2ij(int (*intor)(), int (*fprescreen)(),
                         }
                 }
         } }
-        free(buf);
 }
 
 void GTOnr2e_fill_s2kl(int (*intor)(), int (*fprescreen)(),
-                       double *eri, int ncomp, int ishp, int jshp,
+                       double *eri, double *buf, int comp, int ishp, int jshp,
                        int *shls_slice, int *ao_loc, CINTOpt *cintopt,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
@@ -250,8 +286,7 @@ void GTOnr2e_fill_s2kl(int (*intor)(), int (*fprescreen)(),
         int i, j, k, l, icomp;
         int ksh, lsh, kshp, lshp;
         int shls[4];
-        double *buf = malloc(sizeof(double)*di*dj*NCTRMAX*NCTRMAX*ncomp);
-        double *eri0, *peri, *buf0, *pbuf;
+        double *eri0, *peri, *buf0, *pbuf, *cache;
 
         shls[0] = ish;
         shls[1] = jsh;
@@ -266,13 +301,14 @@ void GTOnr2e_fill_s2kl(int (*intor)(), int (*fprescreen)(),
                 l0 = ao_loc[lsh] - ao_loc[lsh0];
                 dk = ao_loc[ksh+1] - ao_loc[ksh];
                 dl = ao_loc[lsh+1] - ao_loc[lsh];
+                dijk = dij * dk;
+                dijkl = dijk * dl;
+                cache = buf + dijkl * comp;
                 if ((*fprescreen)(shls, atm, bas, env) &&
-                    (*intor)(buf, shls, atm, natm, bas, nbas, env, cintopt)) {
-                        dijk = dij * dk;
-                        dijkl = dijk * dl;
+                    (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, cintopt, cache)) {
                         eri0 = eri + k0*(k0+1)/2+l0;
                         buf0 = buf;
-                        for (icomp = 0; icomp < ncomp; icomp++) {
+                        for (icomp = 0; icomp < comp; icomp++) {
                                 if (kshp > lshp) {
                                 for (i = 0; i < di; i++) {
                                 for (j = 0; j < dj; j++) {
@@ -299,7 +335,7 @@ void GTOnr2e_fill_s2kl(int (*intor)(), int (*fprescreen)(),
                         }
                 } else {
                         eri0 = eri + k0*(k0+1)/2+l0;
-                        for (icomp = 0; icomp < ncomp; icomp++) {
+                        for (icomp = 0; icomp < comp; icomp++) {
                                 if (kshp > lshp) {
                                 for (i = 0; i < di; i++) {
                                 for (j = 0; j < dj; j++) {
@@ -323,11 +359,10 @@ void GTOnr2e_fill_s2kl(int (*intor)(), int (*fprescreen)(),
                         }
                 }
         } }
-        free(buf);
 }
 
 void GTOnr2e_fill_s4(int (*intor)(), int (*fprescreen)(),
-                     double *eri, int ncomp, int ishp, int jshp,
+                     double *eri, double *buf, int comp, int ishp, int jshp,
                      int *shls_slice, int *ao_loc, CINTOpt *cintopt,
                      int *atm, int natm, int *bas, int nbas, double *env)
 {
@@ -364,8 +399,7 @@ void GTOnr2e_fill_s4(int (*intor)(), int (*fprescreen)(),
         int i, j, k, l, icomp;
         int ksh, lsh, kshp, lshp;
         int shls[4];
-        double *buf = malloc(sizeof(double)*di*dj*NCTRMAX*NCTRMAX*ncomp);
-        double *eri0, *peri0, *peri, *buf0, *pbuf;
+        double *eri0, *peri0, *peri, *buf0, *pbuf, *cache;
 
         shls[0] = ish;
         shls[1] = jsh;
@@ -380,13 +414,14 @@ void GTOnr2e_fill_s4(int (*intor)(), int (*fprescreen)(),
                 l0 = ao_loc[lsh] - ao_loc[lsh0];
                 dk = ao_loc[ksh+1] - ao_loc[ksh];
                 dl = ao_loc[lsh+1] - ao_loc[lsh];
+                dijk = dij * dk;
+                dijkl = dijk * dl;
+                cache = buf + dijkl * comp;
                 if ((*fprescreen)(shls, atm, bas, env) &&
-                    (*intor)(buf, shls, atm, natm, bas, nbas, env, cintopt)) {
-                        dijk = dij * dk;
-                        dijkl = dijk * dl;
+                    (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, cintopt, cache)) {
                         eri0 = eri + k0*(k0+1)/2+l0;
                         buf0 = buf;
-                        for (icomp = 0; icomp < ncomp; icomp++) {
+                        for (icomp = 0; icomp < comp; icomp++) {
                                 peri0 = eri0;
                                 if (kshp > lshp && ishp > jshp) {
                                 for (i = 0; i < di; i++, peri0+=nkl*(i0+i)) {
@@ -433,11 +468,9 @@ void GTOnr2e_fill_s4(int (*intor)(), int (*fprescreen)(),
                                 eri0 += neri;
                         }
                 } else {
-                        dijk = dij * dk;
-                        dijkl = dijk * dl;
                         eri0 = eri + k0*(k0+1)/2+l0;
                         buf0 = buf;
-                        for (icomp = 0; icomp < ncomp; icomp++) {
+                        for (icomp = 0; icomp < comp; icomp++) {
                                 peri0 = eri0;
                                 if (kshp > lshp && ishp > jshp) {
                                 for (i = 0; i < di; i++, peri0+=nkl*(i0+i)) {
@@ -480,7 +513,6 @@ void GTOnr2e_fill_s4(int (*intor)(), int (*fprescreen)(),
                         }
                 }
         } }
-        free(buf);
 }
 
 static int no_prescreen()
@@ -489,7 +521,7 @@ static int no_prescreen()
 }
 
 void GTOnr2e_fill_drv(int (*intor)(), void (*fill)(), int (*fprescreen)(),
-                      double *eri, int ncomp,
+                      double *eri, int comp,
                       int *shls_slice, int *ao_loc, CINTOpt *cintopt,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
@@ -505,17 +537,22 @@ void GTOnr2e_fill_drv(int (*intor)(), void (*fill)(), int (*fprescreen)(),
         const int njsh = jsh1 - jsh0;
 
 #pragma omp parallel default(none) \
-        shared(fill, fprescreen, eri, intor, ncomp, \
+        shared(fill, fprescreen, eri, intor, comp, \
                shls_slice, ao_loc, cintopt, atm, natm, bas, nbas, env)
 {
         int ij, i, j;
+        int di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
+        int cache_size = GTOmax_cache_size(intor, shls_slice, 4,
+                                           atm, natm, bas, nbas, env);
+        double *buf = malloc(sizeof(double) * (di*di*di*di*comp + cache_size));
 #pragma omp for nowait schedule(dynamic)
         for (ij = 0; ij < nish*njsh; ij++) {
                 i = ij / njsh;
                 j = ij % njsh;
-                (*fill)(intor, fprescreen, eri, ncomp, i, j, shls_slice,
+                (*fill)(intor, fprescreen, eri, buf, comp, i, j, shls_slice,
                         ao_loc, cintopt, atm, natm, bas, nbas, env);
         }
+        free(buf);
 }
 }
 

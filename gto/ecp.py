@@ -19,34 +19,46 @@ from pyscf.gto import moleintor
 
 libecp = moleintor.libcgto
 
-def type1_by_shell(mol, shls):
+def type1_by_shell(mol, shls, cart=False):
     li = mol.bas_angular(shls[0])
     lj = mol.bas_angular(shls[1])
-    di = (li*2+1) * mol.bas_nctr(shls[0])
-    dj = (lj*2+1) * mol.bas_nctr(shls[1])
+    if cart:
+        fn = libecp.ECPtype1_cart
+        di = (li+1)*(li+2)//2 * mol.bas_nctr(shls[0])
+        dj = (lj+1)*(lj+2)//2 * mol.bas_nctr(shls[1])
+    else:
+        fn = libecp.ECPtype1_sph
+        di = (li*2+1) * mol.bas_nctr(shls[0])
+        dj = (lj*2+1) * mol.bas_nctr(shls[1])
     buf = numpy.empty((di,dj), order='F')
-    libecp.ECPtype1_sph(buf.ctypes.data_as(ctypes.c_void_p),
-                        (ctypes.c_int*2)(*shls),
-                        mol._ecpbas.ctypes.data_as(ctypes.c_void_p),
-                        ctypes.c_int(len(mol._ecpbas)),
-                        mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
-                        mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-                        mol._env.ctypes.data_as(ctypes.c_void_p))
+    fn(buf.ctypes.data_as(ctypes.c_void_p),
+       (ctypes.c_int*2)(*shls),
+       mol._ecpbas.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_int(len(mol._ecpbas)),
+       mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
+       mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
+       mol._env.ctypes.data_as(ctypes.c_void_p), lib.c_null_ptr())
     return buf
 
-def type2_by_shell(mol, shls):
+def type2_by_shell(mol, shls, cart=False):
     li = mol.bas_angular(shls[0])
     lj = mol.bas_angular(shls[1])
-    di = (li*2+1) * mol.bas_nctr(shls[0])
-    dj = (lj*2+1) * mol.bas_nctr(shls[1])
+    if cart:
+        fn = libecp.ECPtype2_cart
+        di = (li+1)*(li+2)//2 * mol.bas_nctr(shls[0])
+        dj = (lj+1)*(lj+2)//2 * mol.bas_nctr(shls[1])
+    else:
+        fn = libecp.ECPtype2_sph
+        di = (li*2+1) * mol.bas_nctr(shls[0])
+        dj = (lj*2+1) * mol.bas_nctr(shls[1])
     buf = numpy.empty((di,dj), order='F')
-    libecp.ECPtype2_sph(buf.ctypes.data_as(ctypes.c_void_p),
-                        (ctypes.c_int*2)(*shls),
-                        mol._ecpbas.ctypes.data_as(ctypes.c_void_p),
-                        ctypes.c_int(len(mol._ecpbas)),
-                        mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
-                        mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-                        mol._env.ctypes.data_as(ctypes.c_void_p))
+    fn(buf.ctypes.data_as(ctypes.c_void_p),
+       (ctypes.c_int*2)(*shls),
+       mol._ecpbas.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_int(len(mol._ecpbas)),
+       mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
+       mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
+       mol._env.ctypes.data_as(ctypes.c_void_p), lib.c_null_ptr())
     return buf
 
 def core_configuration(nelec_core):
