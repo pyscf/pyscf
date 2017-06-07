@@ -4,7 +4,7 @@ import ctypes
 import _ctypes
 import numpy
 from pyscf import lib
-from pyscf.gto import moleintor
+from pyscf.gto.moleintor import make_cintopt, make_loc, ascint3
 from pyscf.scf import _vhf
 
 libao2mo = lib.load_library('libao2mo')
@@ -12,8 +12,8 @@ def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libao2mo._handle, name))
 
 class AO2MOpt(object):
-    def __init__(self, mol, intor,
-                 prescreen='CVHFnoscreen', qcondname=None):
+    def __init__(self, mol, intor, prescreen='CVHFnoscreen', qcondname=None):
+        intor = ascint3(intor)
         self._this = ctypes.POINTER(_vhf._CVHFOpt)()
         #print self._this.contents, expect ValueError: NULL pointer access
         self._intor = _fpointer(intor)
@@ -23,7 +23,7 @@ class AO2MOpt(object):
         c_env = numpy.asarray(mol._env, dtype=numpy.double, order='C')
         natm = ctypes.c_int(c_atm.shape[0])
         nbas = ctypes.c_int(c_bas.shape[0])
-        self._cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, intor)
+        self._cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
 
         libao2mo.CVHFinit_optimizer(ctypes.byref(self._this),
                                     c_atm.ctypes.data_as(ctypes.c_void_p), natm,
@@ -44,13 +44,13 @@ class AO2MOpt(object):
 def nr_e1fill(intor, sh_range, atm, bas, env,
               aosym='s1', comp=1, ao2mopt=None, out=None):
     assert(aosym in ('s4', 's2ij', 's2kl', 's1'))
-
+    intor = ascint3(intor)
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
     c_env = numpy.asarray(env, order='C')
     natm = ctypes.c_int(c_atm.shape[0])
     nbas = ctypes.c_int(c_bas.shape[0])
-    ao_loc = moleintor.make_loc(bas, intor)
+    ao_loc = make_loc(bas, intor)
     nao = ao_loc[-1]
 
     klsh0, klsh1, nkl = sh_range
@@ -73,7 +73,7 @@ def nr_e1fill(intor, sh_range, atm, bas, env,
     else:
         cao2mopt = lib.c_null_ptr()
         cintor = _fpointer(intor)
-        cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, intor)
+        cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
 
     fdrv = getattr(libao2mo, 'AO2MOnr_e1fill_drv')
     fill = _fpointer('AO2MOfill_nr_' + aosym)
@@ -196,6 +196,7 @@ def r_e1(intor, mo_coeff, orbs_slice, sh_range, atm, bas, env,
          tao, aosym='s1', comp=1, ao2mopt=None, out=None):
     assert(aosym in ('s4', 's2ij', 's2kl', 's1', 'a2ij', 'a2kl', 'a4ij',
                      'a4kl', 'a4'))
+    intor = ascint3(intor)
     mo_coeff = numpy.asfortranarray(mo_coeff)
     i0, i1, j0, j1 = orbs_slice
     icount = i1 - i0
@@ -230,10 +231,10 @@ def r_e1(intor, mo_coeff, orbs_slice, sh_range, atm, bas, env,
     else:
         cao2mopt = lib.c_null_ptr()
         cintor = _fpointer(intor)
-        cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, intor)
+        cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
 
     tao = numpy.asarray(tao, dtype=numpy.int32)
-    ao_loc = moleintor.make_loc(bas, 'spinor')
+    ao_loc = make_loc(bas, 'spinor')
 
     fdrv = getattr(libao2mo, 'AO2MOr_e1_drv')
     fill = _fpointer('AO2MOfill_r_' + aosym)
@@ -256,6 +257,7 @@ def r_e2(eri, mo_coeff, orbs_slice, tao, ao_loc, aosym='s1', out=None):
     assert(eri.flags.c_contiguous)
     assert(aosym in ('s4', 's2ij', 's2kl', 's1', 'a2ij', 'a2kl', 'a4ij',
                      'a4kl', 'a4'))
+    intor = ascint3(intor)
     mo_coeff = numpy.asfortranarray(mo_coeff)
     nao = mo_coeff.shape[0]
     k0, k1, l0, l1 = orbs_slice

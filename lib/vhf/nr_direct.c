@@ -16,9 +16,6 @@ int GTOmax_shell_dim(const int *ao_loc, const int *shls_slice, int ncenter);
 int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
                       int *atm, int natm, int *bas, int nbas, double *env);
 
-// 9f or 7g or 5h functions should be enough
-#define MAXCGTO         64
-
 #define DECLARE_ALL \
         const int *atm = envs->atm; \
         const int *bas = envs->bas; \

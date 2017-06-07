@@ -17,14 +17,14 @@ IOBUF_WORDS_PREFER = 1e8
 IOBUF_ROW_MIN = 160
 
 def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
-         intor='cint2e', aosym='s4', comp=1,
+         intor='int2e_spinor', aosym='s4', comp=1,
          max_memory=4000, ioblk_size=256, verbose=logger.WARN):
     general(mol, (mo_coeff,)*4, erifile, dataname, tmpdir,
             intor, aosym, comp, max_memory, ioblk_size, verbose)
     return erifile
 
 def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
-            intor='cint2e', aosym='s4', comp=1,
+            intor='int2e_spinor', aosym='s4', comp=1,
             max_memory=4000, ioblk_size=256, verbose=logger.WARN):
     time_0pass = (time.clock(), time.time())
     if isinstance(verbose, logger.Logger):
@@ -149,7 +149,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 
 # swapfile will be overwritten if exists.
 def half_e1(mol, mo_coeffs, swapfile,
-            intor='cint2e', aosym='s4', comp=1,
+            intor='int2e_spinor', aosym='s4', comp=1,
             max_memory=4000, ioblk_size=256, verbose=logger.WARN, ao2mopt=None):
     time0 = (time.clock(), time.time())
     if isinstance(verbose, logger.Logger):
@@ -184,11 +184,11 @@ def half_e1(mol, mo_coeffs, swapfile,
     shranges = outcore.guess_shell_ranges(mol, (aosym not in ('s1', 's2kl', 'a2kl')),
                                           aobuflen, e1buflen, mol.ao_loc_2c(), False)
     if ao2mopt is None:
-#        if intor == 'cint2e':
+#        if intor == 'int2e_spinor':
 #            ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFnr_schwarz_cond',
 #                                     'CVHFsetnr_direct_scf')
-#        elif intor == 'cint2e_spsp1':
-#        elif intor == 'cint2e_spsp1spsp2':
+#        elif intor == 'int2e_spsp1_spinor':
+#        elif intor == 'int2e_spsp1spsp2_spinor':
 #        else:
 #            ao2mopt = _ao2mo.AO2MOpt(mol, intor)
         ao2mopt = _ao2mo.AO2MOpt(mol, intor)
@@ -234,7 +234,7 @@ def half_e1(mol, mo_coeffs, swapfile,
     fswap.close()
     return swapfile
 
-def full_iofree(mol, mo_coeff, intor='cint2e', aosym='s4', comp=1,
+def full_iofree(mol, mo_coeff, intor='int2e_spinor', aosym='s4', comp=1,
                 verbose=logger.WARN):
     erifile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     general(mol, (mo_coeff,)*4, erifile.name, dataname='eri_mo',
@@ -243,7 +243,7 @@ def full_iofree(mol, mo_coeff, intor='cint2e', aosym='s4', comp=1,
     with h5py.File(erifile.name, 'r') as feri:
         return numpy.asarray(feri['eri_mo'])
 
-def general_iofree(mol, mo_coeffs, intor='cint2e', aosym='s4', comp=1,
+def general_iofree(mol, mo_coeffs, intor='int2e_spinor', aosym='s4', comp=1,
                    verbose=logger.WARN):
     erifile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     general(mol, mo_coeffs, erifile.name, dataname='eri_mo',
@@ -326,7 +326,7 @@ if __name__ == '__main__':
             for k in range(mol.nbas):
                 pl = 0
                 for l in range(mol.nbas):
-                    buf = gto.getints_by_shell('cint2e', (i,j,k,l),
+                    buf = gto.getints_by_shell('int2e_spinor', (i,j,k,l),
                                                mol._atm, mol._bas, mol._env)
                     di, dj, dk, dl = buf.shape
                     eri0[pi:pi+di,pj:pj+dj,pk:pk+dk,pl:pl+dl] = buf

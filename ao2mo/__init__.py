@@ -74,7 +74,7 @@ def full(eri_or_mol, mo_coeff, *args, **kwargs):
 
         comp : int
             *Note* this argument is effective when eri_or_mol is Mole object.
-            Components of the integrals, e.g. cint2e_ip_sph has 3 components.
+            Components of the integrals, e.g. int2e_ip_sph has 3 components.
         max_memory : float or int
             *Note* this argument is effective when eri_or_mol is Mole object.
             The maximum size of cache to use (in MB), large cache may **not**
@@ -112,7 +112,7 @@ def full(eri_or_mol, mo_coeff, *args, **kwargs):
     >>> print(eri1.shape)
     (55, 55)
 
-    >>> eri = mol.intor('cint2e_sph', aosym='s8')
+    >>> eri = mol.intor('int2e_sph', aosym='s8')
     >>> eri1 = ao2mo.full(eri, mo1, compact=False)
     >>> print(eri1.shape)
     (100, 100)
@@ -125,11 +125,11 @@ def full(eri_or_mol, mo_coeff, *args, **kwargs):
     >>> view('full.h5', 'new')
     dataset ['eri_mo', 'new'], shape (100, 100)
 
-    >>> ao2mo.full(mol, mo1, 'full.h5', intor='cint2e_ip1_sph', aosym='s1', comp=3)
+    >>> ao2mo.full(mol, mo1, 'full.h5', intor='int2e_ip1_sph', aosym='s1', comp=3)
     >>> view('full.h5')
     dataset ['eri_mo', 'new'], shape (3, 100, 100)
 
-    >>> ao2mo.full(mol, mo1, 'full.h5', intor='cint2e_ip1_sph', aosym='s2kl', comp=3)
+    >>> ao2mo.full(mol, mo1, 'full.h5', intor='int2e_ip1_sph', aosym='s2kl', comp=3)
     >>> view('full.h5')
     dataset ['eri_mo', 'new'], shape (3, 100, 55)
     '''
@@ -202,7 +202,7 @@ def general(eri_or_mol, mo_coeffs, *args, **kwargs):
 
         comp : int
             *Note* this argument is effective when eri_or_mol is Mole object.
-            Components of the integrals, e.g. cint2e_ip_sph has 3 components.
+            Components of the integrals, e.g. int2e_ip_sph has 3 components.
         max_memory : float or int
             *Note* this argument is effective when eri_or_mol is Mole object.
             The maximum size of cache to use (in MB), large cache may **not**
@@ -280,11 +280,11 @@ def general(eri_or_mol, mo_coeffs, *args, **kwargs):
     >>> view('oh2.h5', 'new')
     dataset ['eri_mo', 'new'], shape (55, 55)
 
-    >>> ao2mo.general(mol, (mo1,mo1,mo1,mo1), 'oh2.h5', intor='cint2e_ip1_sph', aosym='s1', comp=3)
+    >>> ao2mo.general(mol, (mo1,mo1,mo1,mo1), 'oh2.h5', intor='int2e_ip1_sph', aosym='s1', comp=3)
     >>> view('oh2.h5')
     dataset ['eri_mo', 'new'], shape (3, 100, 100)
 
-    >>> ao2mo.general(mol, (mo1,mo1,mo1,mo1), 'oh2.h5', intor='cint2e_ip1_sph', aosym='s2kl', comp=3)
+    >>> ao2mo.general(mol, (mo1,mo1,mo1,mo1), 'oh2.h5', intor='int2e_ip1_sph', aosym='s2kl', comp=3)
     >>> view('oh2.h5')
     dataset ['eri_mo', 'new'], shape (3, 100, 55)
     '''
@@ -316,7 +316,7 @@ def kernel(eri_or_mol, mo_coeffs, *args, **kwargs):
 
 def get_ao_eri(mol):
     '''2-electron integrals in AO basis'''
-    return mol.intor('cint2e_sph', aosym='s4')
+    return mol.intor('int2e_sph', aosym='s4')
 get_mo_eri = general
 
 

@@ -15,6 +15,31 @@
 #include "time_rev.h"
 
 
+#define DECLARE_ALL \
+        const int *atm = envs->atm; \
+        const int *bas = envs->bas; \
+        const double *env = envs->env; \
+        const int natm = envs->natm; \
+        const int nbas = envs->nbas; \
+        const int *ao_loc = envs->ao_loc; \
+        const int *shls_slice = envs->shls_slice; \
+        const int *tao = envs->tao; \
+        const CINTOpt *cintopt = envs->cintopt; \
+        const int nao = ao_loc[nbas]; \
+        const int di = ao_loc[ish+1] - ao_loc[ish]; \
+        const int dj = ao_loc[jsh+1] - ao_loc[jsh]; \
+        const int dim = GTOmax_shell_dim(ao_loc, shls_slice+4, 2); \
+        double *cache = (double *)(buf + di * dj * dim * dim * ncomp); \
+        int (*fprescreen)(); \
+        int (*r_vkscreen)(); \
+        if (vhfopt) { \
+                fprescreen = vhfopt->fprescreen; \
+                r_vkscreen = vhfopt->r_vkscreen; \
+        } else { \
+                fprescreen = CVHFnoscreen; \
+                r_vkscreen = CVHFr_vknoscreen; \
+        }
+
 static void transpose01324(double complex * __restrict__ a,
                            double complex * __restrict__ at,
                            int di, int dj, int dk, int dl, int ncomp)
@@ -49,38 +74,14 @@ void CVHFdot_rs1(int (*intor)(), void (**fjk)(),
                  int n_dm, int ncomp, int ish, int jsh,
                  CVHFOpt *vhfopt, IntorEnvs *envs)
 {
-        const int *atm = envs->atm;
-        const int *bas = envs->bas;
-        const double *env = envs->env;
-        const int natm = envs->natm;
-        const int nbas = envs->nbas;
-        const int *ao_loc = envs->ao_loc;
-        const int *shls_slice = envs->shls_slice;
-        const CINTOpt *cintopt = envs->cintopt;
-        const int nao = ao_loc[nbas];
+        DECLARE_ALL;
         const size_t nao2 = nao * nao;
-        const int *tao = envs->tao;
-        const int di = ao_loc[ish+1] - ao_loc[ish];
-        const int dj = ao_loc[jsh+1] - ao_loc[jsh];
-        int dk = GTOmax_shell_dim(ao_loc, shls_slice+4, 2);
-        double *cache = (double *)(buf + di * dj * dk * dk * ncomp);
-        int idm;
-        int ksh, lsh, dl, dijkl;
+        int idm, ksh, lsh, dk, dl, dijkl;
         int shls[4];
         double complex *pv;
         double *dms_cond[n_dm];
         double dm_atleast;
         void (*pf)();
-        int (*fprescreen)();
-        int (*r_vkscreen)();
-
-        if (vhfopt) {
-                fprescreen = vhfopt->fprescreen;
-                r_vkscreen = vhfopt->r_vkscreen;
-        } else {
-                fprescreen = CVHFnoscreen;
-                r_vkscreen = CVHFr_vknoscreen;
-        }
 
 // to make fjk compatible to C-contiguous dm array, put ksh, lsh inner loop
         shls[0] = ish;
@@ -123,38 +124,14 @@ static void dot_rs2sub(int (*intor)(), void (**fjk)(),
                        int n_dm, int ncomp, int ish, int jsh, int ksh_count,
                        CVHFOpt *vhfopt, IntorEnvs *envs)
 {
-        const int *atm = envs->atm;
-        const int *bas = envs->bas;
-        const double *env = envs->env;
-        const int natm = envs->natm;
-        const int nbas = envs->nbas;
-        const int *ao_loc = envs->ao_loc;
-        const int *shls_slice = envs->shls_slice;
-        const CINTOpt *cintopt = envs->cintopt;
-        const int nao = ao_loc[nbas];
+        DECLARE_ALL;
         const size_t nao2 = nao * nao;
-        const int *tao = envs->tao;
-        const int di = ao_loc[ish+1] - ao_loc[ish];
-        const int dj = ao_loc[jsh+1] - ao_loc[jsh];
-        int dk = GTOmax_shell_dim(ao_loc, shls_slice+4, 2);
-        double *cache = (double *)(buf + di * dj * dk * dk * ncomp);
-        int idm;
-        int ksh, lsh, dl, dijkl;
+        int idm, ksh, lsh, dk, dl, dijkl;
         int shls[4];
         double complex *pv;
         double *dms_cond[n_dm];
         double dm_atleast;
         void (*pf)();
-        int (*fprescreen)();
-        int (*r_vkscreen)();
-
-        if (vhfopt) {
-                fprescreen = vhfopt->fprescreen;
-                r_vkscreen = vhfopt->r_vkscreen;
-        } else {
-                fprescreen = CVHFnoscreen;
-                r_vkscreen = CVHFr_vknoscreen;
-        }
 
         shls[0] = ish;
         shls[1] = jsh;
@@ -226,38 +203,14 @@ void CVHFdot_rs8(int (*intor)(), void (**fjk)(),
         if (ish < jsh) {
                 return;
         }
-        const int *atm = envs->atm;
-        const int *bas = envs->bas;
-        const double *env = envs->env;
-        const int natm = envs->natm;
-        const int nbas = envs->nbas;
-        const int *ao_loc = envs->ao_loc;
-        const int *shls_slice = envs->shls_slice;
-        const CINTOpt *cintopt = envs->cintopt;
-        const int nao = ao_loc[nbas];
+        DECLARE_ALL;
         const size_t nao2 = nao * nao;
-        const int *tao = envs->tao;
-        const int di = ao_loc[ish+1] - ao_loc[ish];
-        const int dj = ao_loc[jsh+1] - ao_loc[jsh];
-        int dk = GTOmax_shell_dim(ao_loc, shls_slice+4, 2);
-        double *cache = (double *)(buf + di * dj * dk * dk * ncomp);
-        int idm;
-        int ksh, lsh, dl, dijkl;
+        int idm, ksh, lsh, dk, dl, dijkl;
         int shls[4];
         double complex *pv;
         double *dms_cond[n_dm];
         double dm_atleast;
         void (*pf)();
-        int (*fprescreen)();
-        int (*r_vkscreen)();
-
-        if (vhfopt) {
-                fprescreen = vhfopt->fprescreen;
-                r_vkscreen = vhfopt->r_vkscreen;
-        } else {
-                fprescreen = CVHFnoscreen;
-                r_vkscreen = CVHFr_vknoscreen;
-        }
 
 // to make fjk compatible to C-contiguous dm array, put ksh, lsh inner loop
         shls[0] = ish;

@@ -734,8 +734,8 @@ static void s1_set0(double *eri, double *nop,
 
 #define DISTR_INTS_BY(fcopy, fset0, istride) \
         if ((*fprescreen)(shls, envs->vhfopt, envs->atm, envs->bas, envs->env) && \
-            (*intor)(buf, shls, envs->atm, envs->natm, \
-                     envs->bas, envs->nbas, envs->env, envs->cintopt)) { \
+            (*intor)(buf, NULL, shls, envs->atm, envs->natm, \
+                     envs->bas, envs->nbas, envs->env, envs->cintopt, NULL)) { \
                 pbuf = buf; \
                 for (icomp = 0; icomp < envs->ncomp; icomp++) { \
                         peri = eri + nao2 * nkl * icomp + ioff + ao_loc[jsh]; \
