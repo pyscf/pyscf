@@ -16,16 +16,13 @@ from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.scf import _vhf
 from pyscf.df import incore
-from pyscf.df import _ri
 
 #
 # for auxe1 (P|ij)
 #
 
-libri = lib.load_library('libri')
-
 def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir=None,
-                 int3c='cint3c2e_sph', aosym='s2ij', int2c='cint2c2e_sph', comp=1,
+                 int3c='int3c2e_sph', aosym='s2ij', int2c='int2c2e_sph', comp=1,
                  max_memory=2000, ioblk_size=256, auxmol=None, verbose=0):
     '''3-center 2-electron AO integrals
     '''
@@ -102,7 +99,7 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir
 
 # store cderi in blocks
 def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo',
-                   int3c='cint3c2e_sph', aosym='s2ij', int2c='cint2c2e_sph',
+                   int3c='int3c2e_sph', aosym='s2ij', int2c='int2c2e_sph',
                    comp=1, ioblk_size=256, auxmol=None, verbose=logger.NOTE):
     '''3-center 2-electron AO integrals
     '''
@@ -114,7 +111,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo',
         log = logger.Logger(mol.stdout, verbose)
     if auxmol is None:
         auxmol = incore.format_aux_basis(mol, auxbasis)
-    j2c = incore.fill_2c2e(mol, auxmol, intor=int2c)
+    j2c = auxmol.intor(int2c, hermi=1)
     log.debug('size of aux basis %d', j2c.shape[0])
     time1 = log.timer('2c2e', *time0)
     try:
@@ -123,6 +120,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo',
         j2c[numpy.diag_indices(j2c.shape[1])] += 1e-14
         low = scipy.linalg.cholesky(j2c, lower=True)
     j2c = None
+    naux = low.shape[0]
     time1 = log.timer('Cholesky 2c2e', *time1)
 
     if h5py.is_hdf5(erifile):
@@ -135,12 +133,17 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo',
         feri.create_group('%s/%d'%(dataname,icomp)) # for h5py old version
 
     def store(b, label):
+        if b.ndim == 3 and b.flags.f_contiguous:
+            b = lib.transpose(b.T, axes=(0,2,1)).reshape(naux,-1)
+        else:
+            b = b.reshape((-1,naux)).T
         cderi = scipy.linalg.solve_triangular(low, b, lower=True, overwrite_b=True)
-        if cderi.flags.f_contiguous:
-            cderi = lib.transpose(cderi.T)
         feri[label] = cderi
 
-    atm, bas, env, ao_loc = incore._env_and_aoloc(int3c, mol, auxmol)
+    int3c = gto.moleintor.ascint3(int3c)
+    atm, bas, env = gto.mole.conc_env(mol._atm, mol._bas, mol._env,
+                                      auxmol._atm, auxmol._bas, auxmol._env)
+    ao_loc = gto.moleintor.make_loc(bas, int3c)
     nao = ao_loc[mol.nbas]
     naoaux = ao_loc[-1] - nao
     if aosym == 's1':
@@ -163,13 +166,13 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo',
                   istep+1, len(shranges), *sh_range)
         bstart, bend, nrow = sh_range
         shls_slice = (bstart, bend, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
-        buf = _ri.nr_auxe2(int3c, atm, bas, env, shls_slice, ao_loc,
-                           aosym, comp, cintopt, bufs1)
+        buf = gto.moleintor.getints3c(int3c, atm, bas, env, shls_slice, comp,
+                                      aosym, ao_loc, cintopt, out=bufs1)
         if comp == 1:
-            store(buf.T, '%s/0/%d'%(dataname,istep))
+            store(buf, '%s/0/%d'%(dataname,istep))
         else:
             for icomp in range(comp):
-                store(buf[icomp].T, '%s/%d/%d'%(dataname,icomp,istep))
+                store(buf[icomp], '%s/%d/%d'%(dataname,icomp,istep))
         time1 = log.timer('gen CD eri [%d/%d]' % (istep+1,len(shranges)), *time1)
     buf = bufs1 = None
 
@@ -178,7 +181,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo',
 
 
 def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir=None,
-            int3c='cint3c2e_sph', aosym='s2ij', int2c='cint2c2e_sph', comp=1,
+            int3c='int3c2e_sph', aosym='s2ij', int2c='int2c2e_sph', comp=1,
             max_memory=2000, ioblk_size=256, verbose=0, compact=True):
     ''' Transform ij of (ij|L) to MOs.
     '''

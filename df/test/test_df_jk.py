@@ -99,13 +99,13 @@ class KnowValues(unittest.TestCase):
         mf = scf.density_fit(scf.UHF(mol))
         nao = mol.nao_nr()
         numpy.random.seed(1)
-        dm = numpy.random.random((4,nao,nao))
+        dm = numpy.random.random((2,4,nao,nao))
         vhf = mf.get_veff(mol, dm, hermi=0)
-        self.assertAlmostEqual(numpy.linalg.norm(vhf), 199.20550115531233, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(vhf), 413.82341595365853, 9)
 
     def test_assign_cderi(self):
         nao = mol.nao_nr()
-        w, u = scipy.linalg.eigh(mol.intor('cint2e_sph', aosym='s4'))
+        w, u = scipy.linalg.eigh(mol.intor('int2e_sph', aosym='s4'))
         idx = w > 1e-9
 
         mf = scf.density_fit(scf.UHF(mol))

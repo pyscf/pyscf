@@ -777,5 +777,6 @@ class UHF(hf.SCF):
         return self
 
 def _makevhf(vj, vk):
+    assert(vj.ndim >= 3 and vj.shape[0] == 2 and vj.shape == vk.shape)
     vj = vj[0] + vj[1]
     return vj - vk

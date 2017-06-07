@@ -37,8 +37,8 @@ static void dcopy_s1(double *out, double *in, int comp,
                 in  += dij * dk;
         }
 }
-void RInr3c_fill_s1(int (*intor)(), double *out, int comp,
-                    int ish, int jsh, double *buf,
+void RInr3c_fill_s1(int (*intor)(), double *out, double *buf,
+                    int comp, int ish, int jsh,
                     int *shls_slice, int *ao_loc, CINTOpt *cintopt,
                     int *atm, int natm, int *bas, int nbas, double *env)
 {
@@ -72,7 +72,7 @@ void RInr3c_fill_s1(int (*intor)(), double *out, int comp,
                 shls[2] = ksh;
                 dk = ao_loc[ksh+1] - ao_loc[ksh];
                 k0 = ao_loc[ksh  ] - ao_loc[ksh0];
-                (*intor)(buf, shls, atm, natm, bas, nbas, env, cintopt);
+                (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, cintopt, NULL);
                 dcopy_s1(out+k0*nij, buf, comp, naoj, nij, nijk, di, dj, dk);
         }
 }

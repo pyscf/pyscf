@@ -14,10 +14,10 @@ int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
 /*
  * out[naoi,naoj,naok,comp] in F-order
  */
-void GTOnr3c_fill_s1(int (*intor)(), double *out, double *buf,
-                     int comp, int ish, int jsh,
-                     int *shls_slice, int *ao_loc, CINTOpt *cintopt,
-                     int *atm, int natm, int *bas, int nbas, double *env)
+void GTOr3c_fill_s1(int (*intor)(), double complex *out, double complex *buf,
+                    int comp, int ish, int jsh,
+                    int *shls_slice, int *ao_loc, CINTOpt *cintopt,
+                    int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
@@ -54,13 +54,13 @@ void GTOnr3c_fill_s1(int (*intor)(), double *out, double *buf,
 }
 
 
-static void dcopy_s2_igtj(double *out, double *in, int comp,
+static void zcopy_s2_igtj(double complex *out, double complex *in, int comp,
                           int ip, int nij, int nijk, int di, int dj, int dk)
 {
         const size_t dij = di * dj;
         const size_t ip1 = ip + 1;
         int i, j, k, ic;
-        double *pout, *pin;
+        double complex *pout, *pin;
         for (ic = 0; ic < comp; ic++) {
                 for (k = 0; k < dk; k++) {
                         pout = out + k * nij;
@@ -76,13 +76,13 @@ static void dcopy_s2_igtj(double *out, double *in, int comp,
                 in  += dij * dk;
         }
 }
-static void dcopy_s2_ieqj(double *out, double *in, int comp,
+static void zcopy_s2_ieqj(double complex *out, double complex *in, int comp,
                           int ip, int nij, int nijk, int di, int dj, int dk)
 {
         const size_t dij = di * dj;
         const size_t ip1 = ip + 1;
         int i, j, k, ic;
-        double *pout, *pin;
+        double complex *pout, *pin;
         for (ic = 0; ic < comp; ic++) {
                 for (k = 0; k < dk; k++) {
                         pout = out + k * nij;
@@ -107,10 +107,10 @@ static void dcopy_s2_ieqj(double *out, double *in, int comp,
  *     [*****. ]  <= . may not be filled, if jsh-upper-bound < ish-upper-bound
  *     [      \]
  */
-void GTOnr3c_fill_s2ij(int (*intor)(), double *out, double *buf,
-                       int comp, int ish, int jsh,
-                       int *shls_slice, int *ao_loc, CINTOpt *cintopt,
-                       int *atm, int natm, int *bas, int nbas, double *env)
+void GTOr3c_fill_s2ij(int (*intor)(), double complex *out, double complex *buf,
+                      int comp, int ish, int jsh,
+                      int *shls_slice, int *ao_loc, CINTOpt *cintopt,
+                      int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
@@ -139,7 +139,7 @@ void GTOnr3c_fill_s2ij(int (*intor)(), double *out, double *buf,
         int ksh, dk, k0;
         int shls[3];
         dk = GTOmax_shell_dim(ao_loc, shls_slice, 3);
-        double *cache = buf + di * dj * dk * comp;
+        double *cache = (double *)(buf + di * dj * dk * comp);
 
         shls[0] = ish;
         shls[1] = jsh;
@@ -150,25 +150,25 @@ void GTOnr3c_fill_s2ij(int (*intor)(), double *out, double *buf,
                 k0 = ao_loc[ksh  ] - ao_loc[ksh0];
                 (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, cintopt, cache);
                 if (ip != jp) {
-                        dcopy_s2_igtj(out+k0*nij, buf, comp, ip, nij, nijk, di, dj, dk);
+                        zcopy_s2_igtj(out+k0*nij, buf, comp, ip, nij, nijk, di, dj, dk);
                 } else {
-                        dcopy_s2_ieqj(out+k0*nij, buf, comp, ip, nij, nijk, di, dj, dk);
+                        zcopy_s2_ieqj(out+k0*nij, buf, comp, ip, nij, nijk, di, dj, dk);
                 }
         }
 }
 
-void GTOnr3c_fill_s2jk(int (*intor)(), double *out, double *buf,
-                       int comp, int ish, int jsh,
-                       int *shls_slice, int *ao_loc, CINTOpt *cintopt,
-                       int *atm, int natm, int *bas, int nbas, double *env)
+void GTOr3c_fill_s2jk(int (*intor)(), double complex *out, double complex *buf,
+                      int comp, int ish, int jsh,
+                      int *shls_slice, int *ao_loc, CINTOpt *cintopt,
+                      int *atm, int natm, int *bas, int nbas, double *env)
 {
-        fprintf(stderr, "GTOnr3c_fill_s2jk not implemented\n");
+        fprintf(stderr, "GTOr3c_fill_s2jk not implemented\n");
         exit(1);
 }
 
-void GTOnr3c_drv(int (*intor)(), void (*fill)(), double *eri, int comp,
-                 int *shls_slice, int *ao_loc, CINTOpt *cintopt,
-                 int *atm, int natm, int *bas, int nbas, double *env)
+void GTOr3c_drv(int (*intor)(), void (*fill)(), double complex *eri, int comp,
+                int *shls_slice, int *ao_loc, CINTOpt *cintopt,
+                int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
@@ -179,13 +179,13 @@ void GTOnr3c_drv(int (*intor)(), void (*fill)(), double *eri, int comp,
         const int di = GTOmax_shell_dim(ao_loc, shls_slice, 3);
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 3,
                                                  atm, natm, bas, nbas, env);
-
 #pragma omp parallel default(none) \
         shared(intor, fill, eri, comp, shls_slice, ao_loc, cintopt, \
                atm, natm, bas, nbas, env)
 {
         int ish, jsh, ij;
-        double *buf = malloc(sizeof(double) * (di*di*di*comp + cache_size));
+        double complex *buf = malloc(sizeof(double complex) *
+                                     (di*di*di*comp + cache_size/2));
 #pragma omp for schedule(dynamic)
         for (ij = 0; ij < nish*njsh; ij++) {
                 ish = ij / njsh;

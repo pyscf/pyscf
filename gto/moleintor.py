@@ -249,10 +249,10 @@ def getints2c(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
        bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
        env.ctypes.data_as(ctypes.c_void_p))
 
+    mat = mat.transpose(2,0,1)
     if comp == 1:
-        return mat.reshape((naoi,naoj), order='A')
-    else:
-        return mat.transpose(2,0,1)
+        mat = mat[0]
+    return mat
 
 def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
               aosym='s1', ao_loc=None, cintopt=None, out=None):
@@ -268,11 +268,19 @@ def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
                shls_slice[3] <= nbas and
                shls_slice[5] <= nbas)
     if ao_loc is None:
-        assert('ssc' not in intor_name)
         ao_loc = make_loc(bas, intor_name)
+        if shls_slice[5] > shls_slice[4] and shls_slice[5] > shls_slice[2]:
+            if 'ssc' in intor_name:
+                off = ao_loc[:shls_slice[5]]
+                ao_loc1 = make_loc(bas[shls_slice[5]:], '_cart')
+                ao_loc[shls_slice[5]:] = ao_loc1[1:] + off
+            elif 'spinor' in intor_name:
+                off = ao_loc[:shls_slice[5]]
+                ao_loc1 = make_loc(bas[shls_slice[5]:], '_cart')
+                ao_loc[shls_slice[5]:] = ao_loc1[1:] + off
 
     i0, i1, j0, j1, k0, k1 = shls_slice[:6]
-    naok = ao_loc[k1] - ao_loc[k0];
+    naok = ao_loc[k1] - ao_loc[k0]
 
     if aosym in ('s1',):
         naoi = ao_loc[i1] - ao_loc[i0];
@@ -283,18 +291,19 @@ def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
         nij = ao_loc[i1]*(ao_loc[i1]+1)//2 - ao_loc[i0]*(ao_loc[i0]+1)//2
         shape = (nij, naok, comp)
 
-    if (intor_name.endswith('_cart') or intor_name.endswith('_sph') or
-        intor_name.endswith('_ssc')):
-        mat = numpy.ndarray(shape, numpy.double, out, order='F')
-    else:
-        raise NotImplementedError
+    if 'spinor' in intor_name:
         mat = numpy.ndarray(shape, numpy.complex, out, order='F')
+        drv = libcgto.GTOr3c_drv
+        fill = getattr(libcgto, 'GTOr3c_fill_'+aosym)
+    else:
+        mat = numpy.ndarray(shape, numpy.double, out, order='F')
+        drv = libcgto.GTOnr3c_drv
+        fill = getattr(libcgto, 'GTOnr3c_fill_'+aosym)
 
     if cintopt is None:
         cintopt = make_cintopt(atm, bas, env, intor_name)
 
-    drv = libcgto.GTOnr3c_drv
-    drv(getattr(libcgto, intor_name), getattr(libcgto, 'GTOnr3c_fill_'+aosym),
+    drv(getattr(libcgto, intor_name), fill,
         mat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
         (ctypes.c_int*6)(*(shls_slice[:6])),
         ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
@@ -302,10 +311,10 @@ def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
         bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
         env.ctypes.data_as(ctypes.c_void_p))
 
+    mat = numpy.rollaxis(mat, -1, 0)
     if comp == 1:
-        return mat.reshape(shape[:-1], order='A')
-    else:
-        return numpy.rollaxis(mat, -1, 0)
+        mat = mat[0]
+    return mat
 
 def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
               aosym='s1', ao_loc=None, cintopt=None, out=None):

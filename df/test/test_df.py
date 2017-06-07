@@ -12,7 +12,6 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import ao2mo
 from pyscf import df
-from pyscf.df import _ri
 
 mol = gto.Mole()
 mol.build(
@@ -23,7 +22,6 @@ mol.build(
     basis = 'cc-pvdz',
 )
 
-libri = df.incore.libri
 auxmol = df.incore.format_aux_basis(mol)
 atm, bas, env = gto.conc_env(mol._atm, mol._bas, mol._env,
                              auxmol._atm, auxmol._bas, auxmol._env)
@@ -40,7 +38,7 @@ class KnowValues(unittest.TestCase):
                 pk = 0
                 for k in range(mol.nbas, mol.nbas+auxmol.nbas):
                     shls = (i, j, k)
-                    buf = gto.moleintor.getints_by_shell('cint3c2e_sph',
+                    buf = gto.moleintor.getints_by_shell('int3c2e_sph',
                                                          shls, atm, bas, env)
                     di, dj, dk = buf.shape
                     eri0[pi:pi+di,pj:pj+dj,pk:pk+dk] = buf
@@ -48,11 +46,11 @@ class KnowValues(unittest.TestCase):
                 pj += dj
             pi += di
 
-        j3c = df.incore.aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1')
+        j3c = df.incore.aux_e2(mol, auxmol, intor='int3c2e_sph', aosym='s1')
         self.assertTrue(numpy.allclose(eri0, j3c.reshape(nao,nao,naoaux)))
 
         idx = numpy.tril_indices(nao)
-        j3c = df.incore.aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s2ij')
+        j3c = df.incore.aux_e2(mol, auxmol, intor='int3c2e_sph', aosym='s2ij')
         self.assertTrue(numpy.allclose(eri0[idx], j3c))
 
     def test_aux_e2_diff_bra_ket(self):
@@ -61,12 +59,13 @@ class KnowValues(unittest.TestCase):
         mol1.build(0, 0, verbose=0)
         atm1, bas1, env1 = gto.conc_env(atm, bas, env,
                                         mol1._atm, mol1._bas, mol1._env)
-        ao_loc = gto.moleintor.make_loc(bas1, 'cint3c2e_sph')
+        ao_loc = gto.moleintor.make_loc(bas1, 'int3c2e_sph')
         shls_slice = (0, mol.nbas,
                       mol.nbas+auxmol.nbas, mol.nbas+auxmol.nbas+mol1.nbas,
                       mol.nbas, mol.nbas+auxmol.nbas)
-        j3c = _ri.nr_auxe2('cint3c2e_sph', atm1, bas1, env1, shls_slice,
-                           ao_loc, 's1', 1)
+
+        j3c = gto.moleintor.getints3c('int3c2e_sph', atm1, bas1, env1, comp=1,
+                                      shls_slice=shls_slice, aosym='s1', ao_loc=ao_loc)
 
         nao = mol.nao_nr()
         naoj = mol1.nao_nr()
@@ -79,14 +78,14 @@ class KnowValues(unittest.TestCase):
                 pk = 0
                 for k in range(mol.nbas, mol.nbas+auxmol.nbas):
                     shls = (i, j, k)
-                    buf = gto.moleintor.getints_by_shell('cint3c2e_sph',
+                    buf = gto.moleintor.getints_by_shell('int3c2e_sph',
                                                          shls, atm1, bas1, env1)
                     di, dj, dk = buf.shape
                     eri0[pi:pi+di,pj:pj+dj,pk:pk+dk] = buf
                     pk += dk
                 pj += dj
             pi += di
-        self.assertTrue(numpy.allclose(eri0.reshape(-1,naoaux), j3c))
+        self.assertTrue(numpy.allclose(eri0, j3c))
 
     def test_cholesky_eri(self):
         j2c = df.incore.fill_2c2e(mol, auxmol)
@@ -96,7 +95,7 @@ class KnowValues(unittest.TestCase):
             pj = 0
             for j in range(mol.nbas, len(bas)):
                 shls = (i, j)
-                buf = gto.moleintor.getints_by_shell('cint2c2e_sph',
+                buf = gto.moleintor.getints_by_shell('int2c2e_sph',
                                                      shls, atm, bas, env)
                 di, dj = buf.shape
                 eri0[pi:pi+di,pj:pj+dj] = buf
@@ -104,7 +103,7 @@ class KnowValues(unittest.TestCase):
             pi += di
         self.assertTrue(numpy.allclose(eri0, j2c))
 
-        j3c = df.incore.aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s2ij')
+        j3c = df.incore.aux_e2(mol, auxmol, intor='int3c2e_sph', aosym='s2ij')
         cderi = df.incore.cholesky_eri(mol)
         eri0 = numpy.einsum('pi,pk->ik', cderi, cderi)
         eri1 = numpy.einsum('ik,kl->il', j3c, numpy.linalg.inv(j2c))
@@ -147,21 +146,21 @@ class KnowValues(unittest.TestCase):
         with h5py.File(ftmp.name) as feri:
             self.assertTrue(numpy.allclose(feri['eri_mo'], cderi0.reshape(naux,-1)))
 
-        cderi0 = df.incore.aux_e2(mol, auxmol, intor='cint3c2e_ip1_sph',
-                                  aosym='s1', comp=3)
+        cderi0 = df.incore.aux_e2(mol, auxmol, intor='int3c2e_ip1_sph',
+                                  aosym='s1', comp=3).reshape(3,nao**2,-1)
         j2c = df.incore.fill_2c2e(mol, auxmol)
         low = scipy.linalg.cholesky(j2c, lower=True)
         cderi0 = [scipy.linalg.solve_triangular(low, j3c.T, lower=True)
                   for j3c in cderi0]
         nao = mol.nao_nr()
         df.outcore.general(mol, (numpy.eye(nao),)*2, ftmp.name,
-                           int3c='cint3c2e_ip1_sph', aosym='s1', int2c='cint2c2e_sph',
+                           int3c='int3c2e_ip1_sph', aosym='s1', int2c='int2c2e_sph',
                            comp=3, max_memory=.05, ioblk_size=.02)
         with h5py.File(ftmp.name) as feri:
             self.assertTrue(numpy.allclose(feri['eri_mo'], cderi0))
 
     def test_r_incore(self):
-        j3c = df.r_incore.aux_e2(mol, auxmol, intor='cint3c2e_spinor', aosym='s1')
+        j3c = df.r_incore.aux_e2(mol, auxmol, intor='int3c2e_spinor', aosym='s1')
         nao = mol.nao_2c()
         naoaux = auxmol.nao_nr()
         j3c = j3c.reshape(nao,nao,naoaux)
@@ -174,7 +173,7 @@ class KnowValues(unittest.TestCase):
                 pk = 0
                 for k in range(mol.nbas, mol.nbas+auxmol.nbas):
                     shls = (i, j, k)
-                    buf = gto.moleintor.getints_by_shell('cint3c2e_spinor',
+                    buf = gto.moleintor.getints_by_shell('int3c2e_spinor',
                                                          shls, atm, bas, env)
                     di, dj, dk = buf.shape
                     eri0[pi:pi+di,pj:pj+dj,pk:pk+dk] = buf
@@ -182,7 +181,7 @@ class KnowValues(unittest.TestCase):
                 pj += dj
             pi += di
         self.assertTrue(numpy.allclose(eri0, j3c))
-        eri1 = df.r_incore.aux_e2(mol, auxmol, intor='cint3c2e_spinor',
+        eri1 = df.r_incore.aux_e2(mol, auxmol, intor='int3c2e_spinor',
                                   aosym='s2ij')
         for i in range(naoaux):
             j3c[:,:,i] = lib.unpack_tril(eri1[:,i])

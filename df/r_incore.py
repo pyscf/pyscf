@@ -13,42 +13,22 @@ from pyscf import gto
 from pyscf.df import incore
 from pyscf.scf import _vhf
 
-libri = lib.load_library('libri')
-
 # (ij|L)
-def aux_e2(mol, auxmol, intor='cint3c2e_spinor', aosym='s1', comp=1, hermi=0):
-    atm, bas, env = \
-            gto.conc_env(mol._atm, mol._bas, mol._env,
-                         auxmol._atm, auxmol._bas, auxmol._env)
-    c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
-    c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
-    c_env = numpy.asarray(env, dtype=numpy.double, order='C')
-    natm = ctypes.c_int(mol.natm+auxmol.natm)
-    nbas = ctypes.c_int(mol.nbas)
-
-    nao = mol.nao_2c()
-    naoaux = auxmol.nao_nr()
-    if aosym == 's1':
-        eri = numpy.empty((nao*nao,naoaux), dtype=numpy.complex)
-        fill = getattr(libri, 'RIfill_r_s1_auxe2')
-    else:
-        eri = numpy.empty((nao*(nao+1)//2,naoaux), dtype=numpy.complex)
-        fill = getattr(libri, 'RIfill_r_s2ij_auxe2')
-    fintor = getattr(libri, intor)
-    cintopt = _vhf.make_cintopt(c_atm, c_bas, c_env, intor)
-    libri.RIr_3c2e_auxe2_drv(fintor, fill,
-                             eri.ctypes.data_as(ctypes.c_void_p),
-                             ctypes.c_int(0), ctypes.c_int(mol.nbas),
-                             ctypes.c_int(mol.nbas), ctypes.c_int(auxmol.nbas),
-                             ctypes.c_int(1), cintopt,
-                             c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-                             c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-                             c_env.ctypes.data_as(ctypes.c_void_p))
-    return eri
+def aux_e2(mol, auxmol, intor='int3c2e_spinor', aosym='s1', comp=1, hermi=0):
+    atm, bas, env = gto.mole.conc_env(mol._atm, mol._bas, mol._env,
+                                      auxmol._atm, auxmol._bas, auxmol._env)
+    shls_slice = (0, mol.nbas, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
+    ao_loc1 = mol.ao_loc_2c()
+    ao_loc2 = auxmol.ao_loc_nr()
+    nao = ao_loc1[-1]
+    ao_loc = numpy.append(ao_loc1, ao_loc2[1:]+nao)
+    out = gto.moleintor.getints3c(intor, atm, bas, env, shls_slice,
+                                  comp, aosym, ao_loc=ao_loc)
+    return out
 
 # (L|ij)
-def aux_e1(mol, auxmol, intor='cint3c2e_spinor', aosym='s1', comp=1, hermi=0):
-    pass
+def aux_e1(mol, auxmol, intor='int3c2e_spinor', aosym='s1', comp=1, hermi=0):
+    raise NotImplementedError
 
 
 def cholesky_eri(mol, auxbasis='weigend+etb', aosym='s1', verbose=0):
@@ -66,8 +46,8 @@ def cholesky_eri(mol, auxbasis='weigend+etb', aosym='s1', verbose=0):
     j2c = None
     t1 = log.timer('Cholesky 2c2e', *t1)
 
-    j3c_ll = aux_e2(mol, auxmol, intor='cint3c2e_spinor', aosym=aosym)
-    j3c_ss = aux_e2(mol, auxmol, intor='cint3c2e_spsp1_spinor', aosym=aosym)
+    j3c_ll = aux_e2(mol, auxmol, intor='int3c2e_spinor', aosym=aosym)
+    j3c_ss = aux_e2(mol, auxmol, intor='int3c2e_spsp1_spinor', aosym=aosym)
     t1 = log.timer('3c2e', *t1)
     cderi_ll = scipy.linalg.solve_triangular(low, j3c_ll.T, lower=True,
                                              overwrite_b=True)
