@@ -54,8 +54,8 @@ static void fillnr_s8(int (*intor)(), int (*fprescreen)(), double *eri,
                                  cintopt, cache);
                 } else {
                         for (ij = 0; ij < di*dj; ij++) {
-                                for (k = ao_loc[lsh]; k < ao_loc[ksh+1]; k++) {
-                                for (l = ao_loc[ksh]; l < ao_loc[lsh+1]; l++) {
+                                for (k = 0; k < ao_loc[ksh+1]-ao_loc[ksh]; k++) {
+                                for (l = 0; l < ao_loc[lsh+1]-ao_loc[lsh]; l++) {
                                         peri[k*nao+l] = 0;
                                 } }
                                 peri += nao2;

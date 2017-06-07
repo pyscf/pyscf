@@ -882,7 +882,7 @@ void PBCnr3c_drv(int (*intor)(), void (*fill)(), double complex *eri,
                 count = (nkpts * OF_CMPLX + nimgs) * INTBUFMAX10 * comp;
                 count+= nimgs * nkpts * OF_CMPLX;
         }
-        const int cache_size = GTOmax_cache_size(intor, shls_slice, 4,
+        const int cache_size = GTOmax_cache_size(intor, shls_slice, 3,
                                                  atm, natm, bas, nbas, env);
 
 #pragma omp parallel default(none) \
@@ -1057,7 +1057,7 @@ void PBCnr2c_drv(int (*intor)(), void (*fill)(), double complex *out,
                 expkL_r[i] = creal(expkL[i]);
                 expkL_i[i] = cimag(expkL[i]);
         }
-        const int cache_size = GTOmax_cache_size(intor, shls_slice, 4,
+        const int cache_size = GTOmax_cache_size(intor, shls_slice, 2,
                                                  atm, natm, bas, nbas, env);
 
 #pragma omp parallel default(none) \
