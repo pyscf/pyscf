@@ -19,7 +19,7 @@ def aux_e2(mol, auxmol, intor='int3c2e_spinor', aosym='s1', comp=1, hermi=0):
                                       auxmol._atm, auxmol._bas, auxmol._env)
     shls_slice = (0, mol.nbas, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
     ao_loc1 = mol.ao_loc_2c()
-    ao_loc2 = auxmol.ao_loc_nr()
+    ao_loc2 = auxmol.ao_loc_nr('ssc' in intor)
     nao = ao_loc1[-1]
     ao_loc = numpy.append(ao_loc1, ao_loc2[1:]+nao)
     out = gto.moleintor.getints3c(intor, atm, bas, env, shls_slice,

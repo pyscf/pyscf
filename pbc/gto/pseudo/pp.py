@@ -281,5 +281,5 @@ def get_pp(cell, kpt=np.zeros(3)):
 def get_jvloc_G0(cell, kpt=np.zeros(3)):
     '''Get the (separately divergent) Hartree + Vloc G=0 contribution.
     '''
-    ovlp = cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpt)
+    ovlp = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpt)
     return 1./cell.vol * np.sum(get_alphas(cell)) * ovlp

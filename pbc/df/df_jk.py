@@ -376,7 +376,7 @@ def zdotNC(aR, aI, bR, bI, alpha=1, cR=None, cI=None, beta=0):
     return cR, cI
 
 def _ewald_exxdiv_for_G0(cell, kpts, dms, vk, kpts_band=None):
-    s = cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpts)
+    s = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts)
     madelung = tools.pbc.madelung(cell, kpts)
     if kpts is None:
         for i,dm in enumerate(dms):

@@ -17,7 +17,7 @@ from pyscf.pbc.df.incore import wrap_int3c
 libpbc = lib.load_library('libpbc')
 
 
-def aux_e2(cell, auxcell, erifile, intor='cint3c2e_sph', aosym='s2ij', comp=1,
+def aux_e2(cell, auxcell, erifile, intor='int3c2e_sph', aosym='s2ij', comp=1,
            kptij_lst=None, dataname='eri_mo', shls_slice=None, max_memory=2000,
            verbose=0):
     '''3-center AO integrals (ij|L) with double lattice sum:
@@ -28,6 +28,7 @@ def aux_e2(cell, auxcell, erifile, intor='cint3c2e_sph', aosym='s2ij', comp=1,
         kptij_lst : (*,2,3) array
             A list of (kpti, kptj)
     '''
+    intor = gto.moleintor.ascint3(intor)
     if h5py.is_hdf5(erifile):
         feri = h5py.File(erifile)
         if dataname in feri:

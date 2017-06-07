@@ -267,19 +267,16 @@ def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
         assert(shls_slice[1] <= nbas and
                shls_slice[3] <= nbas and
                shls_slice[5] <= nbas)
-    if ao_loc is None:
-        ao_loc = make_loc(bas, intor_name)
-        if shls_slice[5] > shls_slice[4] and shls_slice[5] > shls_slice[2]:
-            if 'ssc' in intor_name:
-                off = ao_loc[:shls_slice[5]]
-                ao_loc1 = make_loc(bas[shls_slice[5]:], '_cart')
-                ao_loc[shls_slice[5]:] = ao_loc1[1:] + off
-            elif 'spinor' in intor_name:
-                off = ao_loc[:shls_slice[5]]
-                ao_loc1 = make_loc(bas[shls_slice[5]:], '_cart')
-                ao_loc[shls_slice[5]:] = ao_loc1[1:] + off
 
     i0, i1, j0, j1, k0, k1 = shls_slice[:6]
+    if ao_loc is None:
+        ao_loc = make_loc(bas, intor_name)
+        if k0 > j1 and k0 > i1:
+            if 'ssc' in intor_name:
+                ao_loc[k0-1:] = ao_loc[k0] + make_loc(bas[k0:], 'cart')
+            elif 'spinor' in intor_name:
+                ao_loc[k0-1:] = ao_loc[k0] + make_loc(bas[k0:], intor_name)
+
     naok = ao_loc[k1] - ao_loc[k0]
 
     if aosym in ('s1',):

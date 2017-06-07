@@ -56,8 +56,8 @@ def get_pp_loc_part2(cell, kpts=None):
         kpts_lst = numpy.reshape(kpts, (-1,3))
     nkpts = len(kpts_lst)
 
-    intors = ('cint3c2e_sph', 'cint3c1e_sph', 'cint3c1e_pbc_r2_origk_sph',
-              'cint3c1e_pbc_r4_origk_sph', 'cint3c1e_pbc_r6_origk_sph')
+    intors = ('int3c2e_sph', 'int3c1e_sph', 'int3c1e_r2_origk_sph',
+              'int3c1e_r4_origk_sph', 'int3c1e_r6_origk_sph')
     kptij_lst = numpy.hstack((kpts_lst,kpts_lst)).reshape(-1,2,3)
     buf = 0
     for cn in range(1, 5):
@@ -259,8 +259,8 @@ def _int_vnl(cell, fakecell, hl_blocks, kpts):
         return out
 
     hl_dims = numpy.asarray([len(hl) for hl in hl_blocks])
-    out = (int_ket(fakecell._bas[hl_dims>0], 'cint1e_ovlp_sph'),
-           int_ket(fakecell._bas[hl_dims>1], 'cint1e_pbc_r2_origi_sph'),
-           int_ket(fakecell._bas[hl_dims>2], 'cint1e_pbc_r4_origi_sph'))
+    out = (int_ket(fakecell._bas[hl_dims>0], 'int1e_ovlp_sph'),
+           int_ket(fakecell._bas[hl_dims>1], 'int1e_r2_origi_sph'),
+           int_ket(fakecell._bas[hl_dims>2], 'int1e_r4_origi_sph'))
     return out
 

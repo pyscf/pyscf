@@ -535,15 +535,15 @@ void GTOnr2e_fill_drv(int (*intor)(), void (*fill)(), int (*fprescreen)(),
         const int jsh1 = shls_slice[3];
         const int nish = ish1 - ish0;
         const int njsh = jsh1 - jsh0;
+        const int di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
+        const int cache_size = GTOmax_cache_size(intor, shls_slice, 4,
+                                                 atm, natm, bas, nbas, env);
 
 #pragma omp parallel default(none) \
         shared(fill, fprescreen, eri, intor, comp, \
                shls_slice, ao_loc, cintopt, atm, natm, bas, nbas, env)
 {
         int ij, i, j;
-        int di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
-        int cache_size = GTOmax_cache_size(intor, shls_slice, 4,
-                                           atm, natm, bas, nbas, env);
         double *buf = malloc(sizeof(double) * (di*di*di*di*comp + cache_size));
 #pragma omp for nowait schedule(dynamic)
         for (ij = 0; ij < nish*njsh; ij++) {

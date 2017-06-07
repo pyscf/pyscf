@@ -141,7 +141,7 @@ def get_pp(cell, kpt=np.zeros(3)):
                                                    SPG_lm_aoG[j,:])
     vppnl *= (1./ngs**2)
 
-    ovlp = cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpt)
+    ovlp = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpt)
     vpploc += 1./cell.vol * np.sum(pseudo.get_alphas(cell)) * ovlp
     return vpploc + vppnl
 
