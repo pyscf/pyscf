@@ -1,0 +1,81 @@
+#!/usr/bin/env python
+
+'''
+Molecular Electrostatic Potential (MEP)
+See also http://www.cup.uni-muenchen.de/ch/compchem/pop/mep1.html
+'''
+
+import numpy
+from pyscf import gto, scf, lib
+
+mol = gto.M(atom='''
+C   -0.9741771331,0.,-0.6301926171
+C   -0.907244165,0.,0.7404218415
+N   0.4034833469,0.,1.1675913068
+C   1.124080815,0.,0.0676366081
+N   0.3402990549,0.,-1.0525852362
+H   0.6597356899,0.,-2.0102490569
+H   -1.8002953135,0.,-1.3251503429
+H   -1.7267332321,0.,1.4464261172
+H   2.2048589411,0.,0.0167357941
+''',
+verbose = 4,
+basis = '631g')
+mf = scf.RHF(mol).run()
+
+#
+# 1. Define points where to evaluate MEP, eg some points in a cubic box
+#
+xs = numpy.arange(-3., 3.01, .5)
+ys = numpy.arange(-3., 3.01, .5)
+zs = numpy.arange(-3., 3.01, .5)
+points = lib.cartesian_prod([xs,ys,zs])
+
+#
+# 2. Nuclear potential at given points
+#
+Vnuc = 0
+for i in range(mol.natm):
+    r = mol.atom_coord(i)
+    Z = mol.atom_charge(i)
+    rp = r - points
+    Vnuc += Z / numpy.einsum('xi,xi->x', rp, rp)**.5
+
+#
+# 3. Potential of electron density
+#
+dm = mf.make_rdm1()
+Vele = []
+for p in points:
+    mol.set_rinv_orig_(p)
+    Vele.append(numpy.einsum('ij,ij', mol.intor('cint1e_rinv_sph'), dm))
+Vele = numpy.array(Vele)
+
+#
+# 4. MEP at each point
+#
+MEP = Vnuc - Vele
+print(MEP.shape)
+
+#
+# 5. MEP force = -d/dr MEP = -d/dr Vnuc + d/dr Vele
+#
+Fnuc = 0
+for i in range(mol.natm):
+    r = mol.atom_coord(i)
+    Z = mol.atom_charge(i)
+    pr = points - r
+    Fnuc += Z / (numpy.einsum('xi,xi->x', pr, pr)**1.5).reshape(-1,1) * pr
+
+Fele = []
+for p in points:
+    mol.set_rinv_orig_(p)
+    # <i(x)| d/dr 1/|r-x| |j(x)> = <i(x)|-d/dx 1/|r-x| |j(x)>
+    #                            = <d/dx i(x)| 1/|r-x| |j(x)> + <i(x)| 1/|r-x| |d/dx j(x)>
+    d_rinv = mol.intor('cint1e_iprinv_sph', comp=3)
+    d_rinv = d_rinv + d_rinv.transpose(0,2,1)
+    Fele.append(numpy.einsum('xij,ij', d_rinv, dm))
+Fele = numpy.array(Fele)
+
+F_MEP = Fnuc + Fele
+print(F_MEP.shape)
