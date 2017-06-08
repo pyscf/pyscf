@@ -323,7 +323,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], vhf4sij[p0:p1]) * 2
 
 # 2e AO integrals dot 2pdm
-        eri1 = mol.intor('cint2e_ip1_sph', comp=3, aosym='s2kl',
+        eri1 = mol.intor('int2e_ip1', comp=3, aosym='s2kl',
                          shls_slice=(shl0,shl1,0,mol.nbas,0,mol.nbas,0,mol.nbas))
         eri1 = eri1.reshape(3,p1-p0,nao,-1)
         dm2buf = _load_block_tril(dm2ao, p0, p1)

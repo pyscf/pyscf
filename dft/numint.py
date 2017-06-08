@@ -75,7 +75,10 @@ def eval_ao(mol, coords, deriv=0, shls_slice=None,
     (10, 100, 7)
     '''
     comp = (deriv+1)*(deriv+2)*(deriv+3)//6
-    feval = 'GTOval_sph_deriv%d' % deriv
+    if mol.cart:
+        feval = 'GTOval_cart_deriv%d' % deriv
+    else:
+        feval = 'GTOval_sph_deriv%d' % deriv
     return mol.eval_gto(feval, coords, comp, shls_slice, non0tab, out=out)
 
 #TODO: \nabla^2 rho and tau = 1/2 (\nabla f)^2

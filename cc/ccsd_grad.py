@@ -386,7 +386,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
 # 2e AO integrals dot 2pdm
         ip0 = p0
         for b0, b1, nf in shell_prange(mol, shl0, shl1, blksize):
-            eri1 = mol.intor('cint2e_ip1_sph', comp=3, aosym='s2kl',
+            eri1 = mol.intor('int2e_ip1', comp=3, aosym='s2kl',
                              shls_slice=(b0,b1,0,mol.nbas,0,mol.nbas,0,mol.nbas))
             eri1 = eri1.reshape(3,nf,nao,-1)
             dm2buf = numpy.empty((nf,nao,nao_pair))

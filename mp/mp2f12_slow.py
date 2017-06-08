@@ -25,7 +25,7 @@ from pyscf.mp import mp2
 def find_cabs(mol, auxmol, lindep=1e-8):
     cabs_mol = gto.conc_mol(mol, auxmol)
     nao = mol.nao_nr()
-    s = cabs_mol.intor_symmetric('cint1e_ovlp_sph')
+    s = cabs_mol.intor_symmetric('int1e_ovlp')
 
     ls12 = scipy.linalg.solve(s[:nao,:nao], s[:nao,nao:], sym_pos=True)
     s[nao:,nao:] -= s[nao:,:nao].dot(ls12)
@@ -69,11 +69,11 @@ def energy_f12(mf, auxmol, zeta):
     cbs = (0, cabs_mol.nbas)
 
     mol.set_f12_zeta(zeta)
-    Y = mol.intor('cint2e_yp_sph')
+    Y = mol.intor('int2e_yp')
     Y = trans(Y, [mo_o]*4)
 
     cabs_mol.set_f12_zeta(zeta)
-    R = cabs_mol.intor('cint2e_stg_sph', shls_slice=obs+cbs+obs+cbs)
+    R = cabs_mol.intor('int2e_stg', shls_slice=obs+cbs+obs+cbs)
     RmPnQ = trans(R, [mo_o, Pcoeff, mo_o, Pcoeff])
     Rmpnq = RmPnQ[:,:nmo,:,:nmo]
     Rmlnc = RmPnQ[:nocc,:nocc,:nocc,nmo:]
@@ -92,14 +92,14 @@ def energy_f12(mf, auxmol, zeta):
     Rpibj = Rqiaj
 
     cabs_mol.set_f12_zeta(zeta*2)
-    Rbar = cabs_mol.intor('cint2e_stg_sph', shls_slice=cbs+obs+obs+obs)
+    Rbar = cabs_mol.intor('int2e_stg', shls_slice=cbs+obs+obs+obs)
     Rbar = Rbar.reshape(nca,nao,nao,nao)
     Rbar_minj = trans(Rbar[:nao], [mo_o]*4)
     Rbar_miPj = trans(Rbar, [Pcoeff, mo_o, mo_o, mo_o]).transpose(2,3,0,1)
     tau = Rbar[:nao] * zeta**2
     tau = trans(tau, [mo_o]*4)
 
-    v = cabs_mol.intor('cint2e_sph', shls_slice=cbs+obs+obs+obs)
+    v = cabs_mol.intor('int2e', shls_slice=cbs+obs+obs+obs)
     v = v.reshape(nca,nao,nao,nao)
     vpiqj = trans(v[:nao], [mo_coeff, mo_o, mo_coeff, mo_o])
     vlicj = trans(v, [cabs_coeff, mo_o, mo_o, mo_o]).transpose(2,3,0,1)
@@ -107,15 +107,15 @@ def energy_f12(mf, auxmol, zeta):
 
     fPQ = mf.get_hcore(cabs_mol)
     dm = numpy.dot(mo_o, mo_o.T) * 2
-    v = cabs_mol.intor('cint2e_sph', shls_slice=cbs+cbs+obs+obs)
+    v = cabs_mol.intor('int2e', shls_slice=cbs+cbs+obs+obs)
     v = v.reshape(nca,nca,nao,nao)
     fPQ += numpy.einsum('pqij,ji->pq', v, dm)
     fPQ = reduce(numpy.dot, (Pcoeff.T, fPQ, Pcoeff))
-    v = cabs_mol.intor('cint2e_sph', shls_slice=cbs+obs+obs+cbs)
+    v = cabs_mol.intor('int2e', shls_slice=cbs+obs+obs+cbs)
     v = v.reshape(nca,nao,nao,nca)
     kPQ = numpy.einsum('pijq,ij->pq', v, dm)*.5
     kPQ = reduce(numpy.dot, (Pcoeff.T, kPQ, Pcoeff))
-    tPQ = cabs_mol.intor_symmetric('cint1e_kin_sph')
+    tPQ = cabs_mol.intor_symmetric('int1e_kin')
     tPQ = reduce(numpy.dot, (Pcoeff.T, tPQ, Pcoeff))
     hPQ = fPQ - tPQ  # hartree term
     fPQ = hPQ - kPQ

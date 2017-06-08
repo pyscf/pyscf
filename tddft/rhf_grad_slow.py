@@ -42,7 +42,7 @@ def kernel(tdgrad, z, atmlst=None, mf_grad=None, max_memory=2000,
     h1 = rhf_grad.get_hcore(mol)
     s1 = rhf_grad.get_ovlp(mol)
 
-    eri1 = -mol.intor('cint2e_ip1_sph', aosym='s1', comp=3)
+    eri1 = -mol.intor('int2e_ip1', aosym='s1', comp=3)
     eri1 = eri1.reshape(3,nao,nao,nao,nao)
     from pyscf import ao2mo
     eri0 = ao2mo.kernel(mol, mo_coeff)
@@ -60,7 +60,7 @@ def kernel(tdgrad, z, atmlst=None, mf_grad=None, max_memory=2000,
         shl0, shl1, p0, p1 = offsetdic[ia]
 
         mol.set_rinv_origin(mol.atom_coord(ia))
-        h1ao = -mol.atom_charge(ia) * mol.intor('cint1e_iprinv_sph', comp=3)
+        h1ao = -mol.atom_charge(ia) * mol.intor('int1e_iprinv', comp=3)
         h1ao[:,p0:p1] += h1[:,p0:p1]
         h1ao = h1ao + h1ao.transpose(0,2,1)
         h1mo = numpy.einsum('pi,xpq,qj->xij', mo_coeff, h1ao, mo_coeff)

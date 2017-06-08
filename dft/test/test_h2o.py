@@ -112,6 +112,19 @@ class KnowValues(unittest.TestCase):
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         self.assertAlmostEqual(method.scf(), -76.384928891413438, 9)
 
+    def test_nr_uks_b3lypg_cart(self):
+        mol1 = h2o.copy()
+        mol1.basis = 'ccpvdz'
+        mol1.charge = 1
+        mol1.spin = 1
+        mol1.cart = True
+        mol1.build(0, 0)
+        method = dft.UKS(mol1)
+        method.xc = 'b3lypg'
+        method.grids.prune = dft.gen_grid.treutler_prune
+        method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
+        self.assertAlmostEqual(method.scf(), -75.968190479564399, 9)
+
     def test_nr_roks_lsda(self):
         mol1 = h2o.copy()
         mol1.charge = 1
