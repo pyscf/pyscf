@@ -1,7 +1,8 @@
 from __future__ import division
 import os
+import subprocess
 
-def get_siesta_command(label, directory='./'):
+def get_siesta_command(label, directory=''):
     # Setup the siesta command.
     command = os.environ.get('SIESTA_COMMAND')
     if command is None:
@@ -35,3 +36,53 @@ def get_pseudo(sp, suffix=''):
         return fname
     else:
         raise ValueError('pseudopotential ' + fname + ' does not exist.')
+
+def runbash(cmd):
+    """
+    Run a bash command with subprocess, fails if ret != 0
+    """
+    ret = subprocess.call(cmd, shell=True)
+    if ret != 0:
+        raise ValueError(cmd + ": failed with the error {0}".format(ret))
+
+
+def install_siesta():
+    from os.path import expanduser
+    home = expanduser("~")
+    os.chdir(home)
+    siesta_version = "4.1-b2"
+    subprocess.call("rm -r siesta-" + siesta_version + "*", shell=True)
+    runbash("wget https://launchpad.net/siesta/4.1/4.1-b2/+download/siesta-"\
+            + siesta_version + ".tar.gz")
+    runbash("tar -xvzf siesta-" + siesta_version + ".tar.gz")
+    os.chdir("siesta-" + siesta_version + "/Obj/")
+    runbash("sh ../Src/obj_setup.sh")
+    runbash("cp gfortran.make arch.make")
+    runbash("make -j")
+
+    cwd = os.getcwd()
+
+    siesta_dir = cwd
+    pseudo_path = cwd + "/pseudo"
+    os.mkdir(pseudo_path)
+    os.chdir(pseudo_path)
+
+    species = ['H', 'O', 'Na']
+    # seems to not work anymore ??
+    # pseudo_src = https://departments.icmab.es/leem/siesta/Databases/Pseudopotentials/Pseudos_LDA_Abinit/" + sp +"_html/"
+    pseudo_src = "https://mbarbry.pagekite.me/pseudo/"
+    for sp in species:
+        runbash("wget " + pseudo_src + sp +".psf")
+
+    os.chdir(home)
+    f = open(home + "/siesta_pseudo_path.txt", "w")
+    f.write(pseudo_path)
+    f.close()
+
+    f = open(home + "/siesta_dir.txt", "w")
+    f.write(siesta_dir)
+    f.close()
+
+    f = open(home + "/siesta_command.txt", "w")
+    f.write("'siesta < %s |tee %s'\n")
+    f.close()

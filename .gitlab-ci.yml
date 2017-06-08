@@ -1,0 +1,44 @@
+
+python_2_7_tests:
+  script:
+    - apt-get update -qy
+    - apt-get install -qy python-numpy python-scipy python-h5py libblas-dev liblapack-dev cmake gfortran libfftw3-3
+    - echo $HOME
+    - echo $PWD
+    # using 'install from source' instructions
+    - python setup.py install --user > pyscf-install.output
+    - echo "import pyscf.tools.siesta_utils as su; su.install_siesta()" > pyscf_install_siesta.py
+    - python pyscf_install_siesta.py
+    # export environements
+    - cd $HOME
+    - ls
+    - pwd
+    - export SIESTA_PP_PATH=`cat siesta_pseudo_path.txt`
+    - export PATH=`cat siesta_dir.txt`:$PATH
+    - echo $PATH
+    - export SIESTA_COMMAND=`cat siesta_command.txt`
+      #- echo "hola" > siesta.fdf
+      #- siesta < siesta.fdf |tee siesta.out
+    # tests
+    - python --version
+    - echo "import pyscf.test as pt; pt.test()" > pyscf_tests.py
+    - python pyscf_tests.py
+
+#python_3_tests:
+#  script:
+#    - apt-get update -qy
+#    - apt-get install -qy python3-pip python3-numpy python3-scipy python3-h5py libopenblas-dev
+#    # install ase into current python environment to ensure
+#    # any shebang lines in scripts point to python3
+#    - pip3 install --user .
+#    # script path when installing with --user
+#    - export PATH=$HOME/.local/bin:$PATH
+#    # Running from a temporary directory to avoid import errors
+#    - mkdir -p /tmp/test/ && cd /tmp/test && echo $PWD
+#    # Run tests
+#    - python3 --version
+#    - ase info
+#    - ase test -v
+#    # pyflakes code check
+#    - cd $CI_PROJECT_DIR
+#    - python3 ase/test/__init__.py
