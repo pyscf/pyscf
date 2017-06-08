@@ -93,14 +93,14 @@ class prod_log_c(ao_log_c):
     return 
 
   
-  def init_linear_combinations(self, ao_log, tol=1e-5):
+  def init_linear_combinations(self, ao_log, tol_loc=1e-5):
     """ Builds linear combinations of the original orbital products """
     from scipy.sparse import csr_matrix
     from pyscf.nao.m_local_vertex import local_vertex_c
     
     self.ao_log = ao_log
     self.nspecies = ao_log.nspecies
-    self.tol = tol
+    self.tol_loc = tol_loc
     self.rr,self.pp,self.nr = ao_log.rr,ao_log.pp,ao_log.nr
     self.interp_rr = ao_log.interp_rr
     self.sp2nmult = np.zeros((ao_log.nspecies), dtype=np.int64)
@@ -124,7 +124,7 @@ class prod_log_c(ao_log_c):
       mu2jd = []
       for j,evs in enumerate(ldp['j2eva']):
         for domi,ev in enumerate(evs):
-          if ev>tol: mu2jd.append([j,domi])
+          if ev>tol_loc: mu2jd.append([j,domi])
 
       nmult=len(mu2jd)
       mu2j = np.array([jd[0] for jd in mu2jd], dtype=np.int32)
@@ -209,7 +209,7 @@ if __name__=='__main__':
   import matplotlib.pyplot as plt
   
   sv  = system_vars_c(label='siesta')
-  prod_log = prod_log_c(sv.ao_log, tol=1e-4)
+  prod_log = prod_log_c(sv.ao_log, tol_loc=1e-4)
   print(dir(prod_log))
   print(prod_log.sp2nmult, prod_log.sp2norbs)
   print(prod_log.overlap_check())

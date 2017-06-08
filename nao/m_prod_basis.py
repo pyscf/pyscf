@@ -29,7 +29,7 @@ class prod_basis_c():
     self.tol_biloc = tol_biloc
     self.ac_rcut_ratio = ac_rcut_ratio
     
-    self.prod_log = prod_log_c(sv.ao_log, tol_loc) # local basis (for each specie)
+    self.prod_log = prod_log_c(ao_log = sv.ao_log, tol_loc=tol_loc) # local basis (for each specie)
     self.hkernel_csr  = csr_matrix(comp_overlap_coo(sv, self.prod_log, coulomb_am)) # compute local part of Coulomb interaction
     self.c2s = np.zeros((sv.natm+1), dtype=np.int64) # global product Center (atom) -> start in case of atom-centered basis
     for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] # 
