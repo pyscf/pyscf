@@ -71,6 +71,23 @@ class KnowValues(unittest.TestCase):
         nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), -75.58051984397145, 9)
 
+    def test_nr_uhf_cart(self):
+        mol = gto.M(
+            verbose = 5,
+            output = '/dev/null',
+            atom = [
+            ["O" , (0. , 0.     , 0.)],
+            [1   , (0. , -0.757 , 0.587)],
+            [1   , (0. , 0.757  , 0.587)] ],
+            basis = '6-31g',
+            charge = 1,
+            spin = 1,
+        )
+        mol.cart = True
+        mf = scf.newton(scf.UHF(mol))
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -75.58051984397145, 9)
+
 
     def test_nr_rhf_symm(self):
         mol = gto.M(
@@ -286,7 +303,7 @@ class KnowValues(unittest.TestCase):
         mf = dft.UKS(mol)
         mf.xc = 'b3lyp'
         mf1 = scf.fast_newton(mf)
-        self.assertAlmostEqual(mf1.e_tot, -39.69608384046235, 9)
+        self.assertAlmostEqual(mf1.e_tot, -39.696083841107587, 9)
 
         mf1 = scf.fast_newton(dft.UKS(mol))
         self.assertAlmostEqual(mf1.e_tot, -39.330377813428001, 9)

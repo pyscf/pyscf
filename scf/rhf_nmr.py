@@ -35,15 +35,15 @@ def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
     for n, atm_id in enumerate(shielding_nuc):
         mol.set_rinv_origin(mol.atom_coord(atm_id-1))
         if gauge_orig is None:
-            h11 = mol.intor('int1e_giao_a11part_sph', 9)
+            h11 = mol.intor('int1e_giao_a11part', 9)
         else:
-            h11 = mol.intor('int1e_cg_a11part_sph', 9)
+            h11 = mol.intor('int1e_cg_a11part', 9)
         trh11 = -(h11[0] + h11[4] + h11[8])
         h11[0] += trh11
         h11[4] += trh11
         h11[8] += trh11
         if gauge_orig is None:
-            g11 = mol.intor('int1e_a01gp_sph', 9)
+            g11 = mol.intor('int1e_a01gp', 9)
             h11 = h11 + g11[TENSOR_TRANSPOSE] # (mu,B) => (B,mu)
         a11 = [numpy.einsum('ij,ji', dm0, (x+x.T)*.5) for x in h11]
         msc_dia.append(a11)
@@ -60,7 +60,7 @@ def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
     for n, atm_id in enumerate(shielding_nuc):
         mol.set_rinv_origin(mol.atom_coord(atm_id-1))
         # 1/2(A01 dot p + p dot A01) => (ia01p - c.c.)/2 => <ia01p>
-        h01 = mol.intor_asymmetric('int1e_ia01p_sph', 3)
+        h01 = mol.intor_asymmetric('int1e_ia01p', 3)
         # *2 for doubly occupied orbitals
         h01_mo = _mat_ao2mo(h01, mo_coeff, mo_occ) * 2
         for b in range(3):
@@ -81,16 +81,17 @@ def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
         # A10_i dot p + p dot A10_i consistents with <p^2 g>
         # A10_j dot p + p dot A10_j consistents with <g p^2>
         # A10_j dot p + p dot A10_j => i/2 (rjxp - pxrj) = irjxp
-        h1 = .5 * mol.intor('int1e_giao_irjxp_sph', 3)
+        h1 = .5 * mol.intor('int1e_giao_irjxp', 3)
         log.debug('First-order GIAO Fock matrix')
         h1 += make_h10giao(mol, dm0)
     else:
         mol.set_common_origin(gauge_orig)
-        h1 = .5 * mol.intor('int1e_cg_irxp_sph', 3)
+        h1 = .5 * mol.intor('int1e_cg_irxp', 3)
     return h1
 
 def make_h10giao(mol, dm0):
-    vj, vk = _vhf.direct_mapdm('int2e_ig1_sph',  # (g i,j|k,l)
+    intor = mol._add_suffix('int2e_ig1')
+    vj, vk = _vhf.direct_mapdm(intor,  # (g i,j|k,l)
                                'a4ij', ('lk->s1ij', 'jk->s1il'),
                                dm0, 3, # xyz, 3 components
                                mol._atm, mol._bas, mol._env)
@@ -99,13 +100,13 @@ def make_h10giao(mol, dm0):
 #   = (\mu g i|i \nu) - h.c.   anti-symm because of the factor i
     vk = vk - vk.transpose(0,2,1)
     h1 = vj - .5 * vk
-    h1 += mol.intor_asymmetric('int1e_ignuc_sph', 3)
-    h1 += mol.intor('int1e_igkin_sph', 3)
+    h1 += mol.intor_asymmetric('int1e_ignuc', 3)
+    h1 += mol.intor('int1e_igkin', 3)
     return h1
 
 def make_s10(mol, gauge_orig=None):
     if gauge_orig is None:
-        s1 = mol.intor_asymmetric('int1e_igovlp_sph', 3)
+        s1 = mol.intor_asymmetric('int1e_igovlp', 3)
     else:
         nao = mol.nao_nr()
         s1 = numpy.zeros((3,nao,nao))

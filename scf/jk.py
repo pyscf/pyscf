@@ -105,6 +105,7 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
     '''
     if isinstance(mols, (tuple, list)):
         assert(len(mols) == 4)
+        assert(mols[0].cart == mols[1].cart == mols[2].cart == mols[3].cart)
         if shls_slice is None:
             shls_slice = numpy.array([(0, mol.nbas) for mol in mols])
         else:

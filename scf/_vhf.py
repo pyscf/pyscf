@@ -18,13 +18,12 @@ class VHFOpt(object):
         intor = ascint3(intor)
         self._this = ctypes.POINTER(_CVHFOpt)()
         #print self._this.contents, expect ValueError: NULL pointer access
-        self._intor = _fpointer(intor)
+        self._intor = intor
         self._cintopt = pyscf.lib.c_null_ptr()
         self._dmcondname = dmcondname
         self.init_cvhf_direct(mol, intor, prescreen, qcondname)
 
     def init_cvhf_direct(self, mol, intor, prescreen, qcondname):
-        intor = ascint3(intor)
         c_atm = numpy.asarray(mol._atm, dtype=numpy.int32, order='C')
         c_bas = numpy.asarray(mol._bas, dtype=numpy.int32, order='C')
         c_env = numpy.asarray(mol._env, dtype=numpy.double, order='C')
@@ -68,9 +67,11 @@ class VHFOpt(object):
             else:
                 n_dm = len(dm)
             dm = numpy.asarray(dm, order='C')
+            ao_loc = make_loc(c_bas, self._intor)
             fsetdm = getattr(libcvhf, self._dmcondname)
             fsetdm(self._this,
                    dm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n_dm),
+                   ao_loc.ctypes.data_as(ctypes.c_void_p),
                    c_atm.ctypes.data_as(ctypes.c_void_p), natm,
                    c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
                    c_env.ctypes.data_as(ctypes.c_void_p))
@@ -157,16 +158,17 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0, cart=False):
 
     if vhfopt is None:
         if cart:
-            cintor = _fpointer('int2e_cart')
+            intor = 'int2e_cart'
         else:
-            cintor = _fpointer('int2e_sph')
+            intor = 'int2e_sph'
         cintopt = make_cintopt(c_atm, c_bas, c_env, 'int2e_sph')
         cvhfopt = pyscf.lib.c_null_ptr()
     else:
         vhfopt.set_dm(dms, atm, bas, env)
         cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
-        cintor = vhfopt._intor
+        intor = vhfopt._intor
+    cintor = _fpointer(intor)
 
     fdrv = getattr(libcvhf, 'CVHFnr_direct_drv')
     fdot = _fpointer('CVHFdot_nrs8')
@@ -188,7 +190,7 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0, cart=False):
         vjkptr[n_dm+i] = vjk[1,i].ctypes.data_as(ctypes.c_void_p)
         fjk[n_dm+i] = fvk
     shls_slice = (ctypes.c_int*8)(*([0, c_bas.shape[0]]*4))
-    ao_loc = make_loc(bas, 'int2e_sph')
+    ao_loc = make_loc(bas, intor)
 
     fdrv(cintor, fdot, fjk, dmsptr, vjkptr,
          ctypes.c_int(n_dm*2), ctypes.c_int(1),
@@ -242,7 +244,7 @@ def direct_mapdm(intor, aosym, jkdescript,
         vhfopt.set_dm(dms, atm, bas, env)
         cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
-        cintor = vhfopt._intor
+        cintor = getattr(libcvhf, vhfopt._intor)
 
     fdrv = getattr(libcvhf, 'CVHFnr_direct_drv')
     dotsym = _INTSYMAP[aosym]
@@ -326,7 +328,7 @@ def direct_bindm(intor, aosym, jkdescript,
         vhfopt.set_dm(dms, atm, bas, env)
         cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
-        cintor = vhfopt._intor
+        cintor = getattr(libcvhf, vhfopt._intor)
 
     fdrv = getattr(libcvhf, 'CVHFnr_direct_drv')
     dotsym = _INTSYMAP[aosym]
@@ -414,7 +416,7 @@ def rdirect_mapdm(intor, aosym, jkdescript,
         vhfopt.set_dm(dms, atm, bas, env)
         cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
-        cintor = vhfopt._intor
+        cintor = getattr(libcvhf, vhfopt._intor)
 
     fdrv = getattr(libcvhf, 'CVHFr_direct_drv')
     dotsym = _INTSYMAP[aosym]
@@ -487,7 +489,7 @@ def rdirect_bindm(intor, aosym, jkdescript,
         vhfopt.set_dm(dms, atm, bas, env)
         cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
-        cintor = vhfopt._intor
+        cintor = getattr(libcvhf, vhfopt._intor)
 
     fdrv = getattr(libcvhf, 'CVHFr_direct_drv')
     dotsym = _INTSYMAP[aosym]

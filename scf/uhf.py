@@ -43,7 +43,7 @@ def init_guess_by_atom(mol, breaksym=True):
     dmb = dm*.5
     if breaksym:
         #Add off-diagonal part of alpha DM
-        dma = mol.intor('int1e_ovlp_sph') * 1e-2
+        dma = mol.intor('int1e_ovlp') * 1e-2
         for b0, b1, p0, p1 in mol.offset_nr_by_atom():
             dma[p0:p1,p0:p1] = dmb[p0:p1,p0:p1]
     return numpy.array((dma,dmb))
@@ -696,7 +696,7 @@ class UHF(hf.SCF):
                             # might be not defined from mol
         if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
             if self._eri is None:
-                self._eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
+                self._eri = mol.intor('int2e', aosym='s8')
             vj, vk = hf.dot_eri_dm(self._eri, dm.reshape(-1,nao,nao), hermi)
         else:
             vj, vk = hf.SCF.get_jk(self, mol, dm.reshape(-1,nao,nao), hermi)

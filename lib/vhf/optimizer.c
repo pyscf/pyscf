@@ -176,7 +176,7 @@ void CVHFsetnr_direct_scf(CVHFOpt *opt, int *atm, int natm,
 }
 }
 
-void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset,
+void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
                              int *atm, int natm, int *bas, int nbas, double *env)
 {
         if (opt->dm_cond) { // NOT reuse opt->dm_cond because nset may be diff in different call
@@ -185,11 +185,7 @@ void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset,
         opt->dm_cond = (double *)malloc(sizeof(double) * nbas*nbas);
         memset(opt->dm_cond, 0, sizeof(double)*nbas*nbas);
 
-        int *ao_loc = malloc(sizeof(int) * (nbas+1));
-        CINTshells_spheric_offset(ao_loc, bas, nbas);
-        ao_loc[nbas] = ao_loc[nbas-1] + CINTcgto_spheric(nbas-1, bas);
-        int nao = ao_loc[nbas];
-
+        const int nao = ao_loc[nbas];
         double dmax, tmp;
         int i, j, ish, jsh;
         int iset;
@@ -207,7 +203,6 @@ void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset,
                 }
                 opt->dm_cond[ish*nbas+jsh] = dmax;
         } }
-        free(ao_loc);
 }
 
 

@@ -129,10 +129,10 @@ class SpinFreeX2C(X2C):
         xmol, contr_coeff = self.get_xmol(mol)
         c = lib.param.LIGHT_SPEED
         assert('1E' in self.approx.upper())
-        t = xmol.intor_symmetric('int1e_kin_sph')
-        v = xmol.intor_symmetric('int1e_nuc_sph')
-        s = xmol.intor_symmetric('int1e_ovlp_sph')
-        w = xmol.intor_symmetric('int1e_pnucp_sph')
+        t = xmol.intor_symmetric('int1e_kin')
+        v = xmol.intor_symmetric('int1e_nuc')
+        s = xmol.intor_symmetric('int1e_ovlp')
+        w = xmol.intor_symmetric('int1e_pnucp')
         if 'ATOM' in self.approx.upper():
             atom_slices = xmol.offset_nr_by_atom()
             nao = xmol.nao_nr()
@@ -140,18 +140,18 @@ class SpinFreeX2C(X2C):
             for ia in range(xmol.natm):
                 ish0, ish1, p0, p1 = atom_slices[ia]
                 shls_slice = (ish0, ish1, ish0, ish1)
-                t1 = xmol.intor('int1e_kin_sph', shls_slice=shls_slice)
-                v1 = xmol.intor('int1e_nuc_sph', shls_slice=shls_slice)
-                s1 = xmol.intor('int1e_ovlp_sph', shls_slice=shls_slice)
-                w1 = xmol.intor('int1e_pnucp_sph', shls_slice=shls_slice)
+                t1 = xmol.intor('int1e_kin', shls_slice=shls_slice)
+                v1 = xmol.intor('int1e_nuc', shls_slice=shls_slice)
+                s1 = xmol.intor('int1e_ovlp', shls_slice=shls_slice)
+                w1 = xmol.intor('int1e_pnucp', shls_slice=shls_slice)
                 x[p0:p1,p0:p1] = _x2c1e_xmatrix(t1, v1, w1, s1, c)
             h1 = _get_hcore_fw(t, v, w, s, x, c)
         else:
             h1 = _x2c1e_get_hcore(t, v, w, s, c)
 
         if self.basis is not None:
-            s22 = xmol.intor_symmetric('int1e_ovlp_sph')
-            s21 = mole.intor_cross('int1e_ovlp_sph', xmol, mol)
+            s22 = xmol.intor_symmetric('int1e_ovlp')
+            s21 = mole.intor_cross('int1e_ovlp', xmol, mol)
             c = lib.cho_solve(s22, s21)
             h1 = reduce(numpy.dot, (c.T, h1, c))
         if self.xuncontract and contr_coeff is not None:

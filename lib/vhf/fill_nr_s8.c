@@ -17,6 +17,7 @@
 int GTOmax_shell_dim(int *ao_loc, int *shls, int ncenter);
 int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
                       int *atm, int natm, int *bas, int nbas, double *env);
+void int2e_optimizer(CINTOpt **opt, int *atm, int natm, int *bas, int nbas, double *env);
 /*
  * 8-fold symmetry, k>=l, k>=i>=j, 
  */

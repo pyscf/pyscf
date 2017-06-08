@@ -79,7 +79,7 @@ def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
         mo_occ = mf.mo_occ
         mo_energy = mf.mo_energy
     nocc = numpy.count_nonzero(mo_occ != 0)
-    ovlp = mol.intor_symmetric('cint1e_ovlp_sph')
+    ovlp = mol.intor_symmetric('int1e_ovlp_sph')
     log.info('  Total number of HF MOs  is equal to    %d' ,mo_coeff.shape[1])
     log.info('  Number of occupied HF MOs is equal to  %d', nocc)
 

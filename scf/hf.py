@@ -224,17 +224,16 @@ def get_hcore(mol):
     array([[-0.93767904, -0.59316327],
            [-0.59316327, -0.93767904]])
     '''
-    h = mol.intor_symmetric('int1e_kin_sph') \
-      + mol.intor_symmetric('int1e_nuc_sph')
+    h = mol.intor_symmetric('int1e_kin') + mol.intor_symmetric('int1e_nuc')
     if mol._ecp:
-        h += mol.intor_symmetric('ECPscalar_sph')
+        h += mol.intor_symmetric('ECPscalar')
     return h
 
 
 def get_ovlp(mol):
     '''Overlap matrix
     '''
-    return mol.intor_symmetric('int1e_ovlp_sph')
+    return mol.intor_symmetric('int1e_ovlp')
 
 
 def init_guess_by_minao(mol):
@@ -307,7 +306,7 @@ def init_guess_by_minao(mol):
 
     dm = numpy.dot(c*occ, c.T)
 # normalize eletron number
-#    s = mol.intor_symmetric('int1e_ovlp_sph')
+#    s = mol.intor_symmetric('int1e_ovlp')
 #    dm *= mol.nelectron / (dm*s).sum()
     return dm
 
@@ -528,7 +527,7 @@ def get_jk(mol, dm, hermi=1, vhfopt=None):
     dm = numpy.asarray(dm, order='C')
     nao = dm.shape[-1]
     vj, vk = _vhf.direct(dm.reshape(-1,nao,nao), mol._atm, mol._bas, mol._env,
-                         vhfopt=vhfopt, hermi=hermi)
+                         vhfopt=vhfopt, hermi=hermi, cart=mol.cart)
     return vj.reshape(dm.shape), vk.reshape(dm.shape)
 
 
@@ -858,7 +857,7 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
         unit = 1.0
 
     mol.set_common_orig((0,0,0))
-    ao_dip = mol.intor_symmetric('int1e_r_sph', comp=3)
+    ao_dip = mol.intor_symmetric('int1e_r', comp=3)
     el_dip = numpy.einsum('xij,ji->x', ao_dip, dm)
 
     charges = mol.atom_charges()
@@ -1193,7 +1192,11 @@ class SCF(lib.StreamObject):
 
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol
-        opt = _vhf.VHFOpt(mol, 'int2e_sph', 'CVHFnrs8_prescreen',
+        if mol.cart:
+            intor = 'int2e_cart'
+        else:
+            intor = 'int2e_sph'
+        opt = _vhf.VHFOpt(mol, intor, 'CVHFnrs8_prescreen',
                           'CVHFsetnr_direct_scf',
                           'CVHFsetnr_direct_scf_dm')
         opt.direct_scf_tol = self.direct_scf_tol
@@ -1361,7 +1364,7 @@ class RHF(SCF):
         if dm is None: dm = self.make_rdm1()
         if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
             if self._eri is None:
-                self._eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
+                self._eri = mol.intor('int2e', aosym='s8')
             vj, vk = dot_eri_dm(self._eri, dm, hermi)
         else:
             vj, vk = SCF.get_jk(self, mol, dm, hermi)

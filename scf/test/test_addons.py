@@ -36,6 +36,10 @@ class KnowValues(unittest.TestCase):
         mo2 = scf.addons.project_mo_nr2nr(mol, mo1, mol2)
         self.assertAlmostEqual(abs(mo2).sum(), 83.342096002254607, 11)
 
+        mol2.cart = True
+        mo2 = scf.addons.project_mo_nr2nr(mol, mo1, mol2)
+        self.assertAlmostEqual(abs(mo2).sum(), 83.436359425591888, 11)
+
     def test_project_mo_r2r(self):
         nao = mol.nao_2c()
         c = numpy.random.random((nao*2,nao*2))

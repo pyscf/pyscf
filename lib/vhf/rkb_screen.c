@@ -220,14 +220,10 @@ void CVHFrkbssll_direct_scf(CVHFOpt *opt, int *atm, int natm,
 }
 
 static void set_dmcond(double *dmcond, double *dmscond, double complex *dm,
-                       double direct_scf_cutoff, int nset,
+                       double direct_scf_cutoff, int nset, int *ao_loc,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
-        int *ao_loc = malloc(sizeof(int) * (nbas+1));
-        CINTshells_spinor_offset(ao_loc, bas, nbas);
-        ao_loc[nbas] = ao_loc[nbas-1] + CINTcgto_spinor(nbas-1, bas);
-        int nao = ao_loc[nbas];
-
+        const int nao = ao_loc[nbas];
         double dmax, dmaxi, tmp;
         int i, j, ish, jsh;
         int iset;
@@ -249,12 +245,12 @@ static void set_dmcond(double *dmcond, double *dmscond, double complex *dm,
                 }
                 dmcond[ish*nbas+jsh] = dmax;
         } }
-        free(ao_loc);
 }
 
 //  dm_cond ~ 1+nset, dm_cond + dms_cond
 void CVHFrkbllll_direct_scf_dm(CVHFOpt *opt, double complex *dm, int nset,
-                               int *atm, int natm, int *bas, int nbas, double *env)
+                               int *ao_loc, int *atm, int natm,
+                               int *bas, int nbas, double *env)
 {
         if (opt->dm_cond) { // NOT reuse opt->dm_cond because nset may be diff in different call
                 free(opt->dm_cond);
@@ -263,12 +259,12 @@ void CVHFrkbllll_direct_scf_dm(CVHFOpt *opt, double complex *dm, int nset,
         memset(opt->dm_cond, 0, sizeof(double)*nbas*nbas*(1+nset));
         // dmcond followed by dmscond which are max matrix element for each dm
         set_dmcond(opt->dm_cond, opt->dm_cond+nbas*nbas, dm,
-                   opt->direct_scf_cutoff, nset, atm, natm, bas, nbas, env);
+                   opt->direct_scf_cutoff, nset, ao_loc, atm, natm, bas, nbas, env);
 }
 
 void CVHFrkbssss_direct_scf_dm(CVHFOpt *opt, double complex *dm, int nset,
-                               int *atm, int natm, int *bas, int nbas,
-                               double *env)
+                               int *ao_loc, int *atm, int natm,
+                               int *bas, int nbas, double *env)
 {
         if (opt->dm_cond) {
                 free(opt->dm_cond);
@@ -276,14 +272,14 @@ void CVHFrkbssss_direct_scf_dm(CVHFOpt *opt, double complex *dm, int nset,
         opt->dm_cond = (double *)malloc(sizeof(double)*nbas*nbas*(1+nset));
         memset(opt->dm_cond, 0, sizeof(double)*nbas*nbas*(1+nset));
         set_dmcond(opt->dm_cond, opt->dm_cond+nbas*nbas, dm,
-                   opt->direct_scf_cutoff, nset, atm, natm, bas, nbas, env);
+                   opt->direct_scf_cutoff, nset, ao_loc, atm, natm, bas, nbas, env);
 }
 
 // the current order of dmscond (dmll, dmss, dmsl) is consistent to the
 // function _call_veff_ssll in dhf.py
 void CVHFrkbssll_direct_scf_dm(CVHFOpt *opt, double complex *dm, int nset,
-                               int *atm, int natm, int *bas, int nbas,
-                               double *env)
+                               int *ao_loc, int *atm, int natm,
+                               int *bas, int nbas, double *env)
 {
         if (opt->dm_cond) {
                 free(opt->dm_cond);
@@ -309,9 +305,9 @@ void CVHFrkbssll_direct_scf_dm(CVHFOpt *opt, double complex *dm, int nset,
         //double complex *dmls = dm + n2c*n2c*LS*nset;
 
         set_dmcond(dmcondll, dmscondll, dmll,
-                   opt->direct_scf_cutoff, nset, atm, natm, bas, nbas, env);
+                   opt->direct_scf_cutoff, nset, ao_loc, atm, natm, bas, nbas, env);
         set_dmcond(dmcondss, dmscondss, dmss,
-                   opt->direct_scf_cutoff, nset, atm, natm, bas, nbas, env);
+                   opt->direct_scf_cutoff, nset, ao_loc, atm, natm, bas, nbas, env);
         set_dmcond(dmcondsl, dmscondsl, dmsl,
-                   opt->direct_scf_cutoff, nset, atm, natm, bas, nbas, env);
+                   opt->direct_scf_cutoff, nset, ao_loc, atm, natm, bas, nbas, env);
 }

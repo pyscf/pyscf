@@ -217,12 +217,13 @@ def project_mo_nr2nr(mol1, mo1, mol2):
 
         C2 = S^{-1}<AO2|AO1> C1
     '''
-    s22 = mol2.intor_symmetric('int1e_ovlp_sph')
-    s21 = mole.intor_cross('int1e_ovlp_sph', mol2, mol1)
+    s22 = mol2.intor_symmetric('int1e_ovlp')
+    s21 = mole.intor_cross('int1e_ovlp', mol2, mol1)
     return lib.cho_solve(s22, numpy.dot(s21, mo1))
 
 def project_mo_nr2r(mol1, mo1, mol2):
-    s22 = mol2.intor_symmetric('int1e_ovlp')
+    assert(not mol1.cart)
+    s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
     s21 = mole.intor_cross('int1e_ovlp_sph', mol2, mol1)
 
     ua, ub = symm.cg.real2spinor_whole(mol2)
