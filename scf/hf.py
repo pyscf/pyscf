@@ -328,21 +328,29 @@ def init_guess_by_atom(mol):
     Returns:
         Density matrix, 2D ndarray
     '''
+    import copy
     from pyscf.scf import atom_hf
+    from pyscf.scf import addons
     atm_scf = atom_hf.get_atm_nrhf(mol)
-    nbf = mol.nao_nr()
-    dm = numpy.zeros((nbf, nbf))
-    p0 = 0
+    mo = []
+    mo_occ = []
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
-        if symb in atm_scf:
-            e_hf, mo_e, mo_c, mo_occ = atm_scf[symb]
-        else:
-            symb = mol.atom_pure_symbol(ia)
-            e_hf, mo_e, mo_c, mo_occ = atm_scf[symb]
-        p1 = p0 + mo_e.__len__()
-        dm[p0:p1,p0:p1] = numpy.dot(mo_c*mo_occ, mo_c.T.conj())
-        p0 = p1
+        if symb != 'GHOST':
+            if symb in atm_scf:
+                e_hf, e, c, occ = atm_scf[symb]
+            else:
+                symb = mol.atom_pure_symbol(ia)
+                e_hf, e, c, occ = atm_scf[symb]
+            mo.append(c)
+            mo_occ.append(occ)
+    mo = scipy.linalg.block_diag(*mo)
+    mo_occ = numpy.hstack(mo_occ)
+
+    pmol = copy.copy(mol)
+    pmol.cart = False
+    c = addons.project_mo_nr2nr(pmol, mo, mol)
+    dm = numpy.dot(c*mo_occ, c.T)
 
     for k, v in atm_scf.items():
         logger.debug1(mol, 'Atom %s, E = %.12g', k, v[0])
@@ -705,7 +713,7 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     ovlp_ao = mf.get_ovlp()
     if verbose >= logger.DEBUG:
         log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
-        label = mf.mol.spheric_labels(True)
+        label = mf.mol.ao_labels(True)
         orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
         c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
         dump_mat.dump_rec(mf.stdout, c, label, start=1, **kwargs)
@@ -733,7 +741,7 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
         pop = numpy.einsum('ij->i', dm*s).real
     else: # ROHF
         pop = numpy.einsum('ij->i', (dm[0]+dm[1])*s).real
-    label = mol.spheric_labels(False)
+    label = mol.ao_labels(False)
 
     log.note(' ** Mulliken pop  **')
     for i, s in enumerate(label):

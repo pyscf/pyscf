@@ -35,7 +35,7 @@ def lowdinPop(mol,coeff,ova,enorb,occ):
    diff = reduce(numpy.dot,(lcoeff.T,lcoeff)) - numpy.identity(nc)
    print 'diff=',numpy.linalg.norm(diff)
    pthresh = 0.05
-   labels = mol.spheric_labels()
+   labels = mol.ao_labels(None)
    nelec = 0.0
    for iorb in range(nc):
       vec = lcoeff[:,iorb]**2

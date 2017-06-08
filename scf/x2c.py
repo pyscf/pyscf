@@ -337,10 +337,14 @@ def _uncontract_mol(mol, xuncontract=False, exp_drop=0.2):
         else:
             raise RuntimeError('xuncontract needs to be bool, str, tuple or list type')
 
+        nc = mol._bas[ib,mole.NCTR_OF]
+        l = mol._bas[ib,mole.ANG_OF]
+        if mol.cart:
+            degen = (l + 1) * (l + 2) // 2
+        else:
+            degen = l * 2 + 1
         if uncontract_me:
             np = mol._bas[ib,mole.NPRIM_OF]
-            nc = mol._bas[ib,mole.NCTR_OF]
-            l = mol._bas[ib,mole.ANG_OF]
             pexp = mol._bas[ib,mole.PTR_EXP]
 # Modfied partially uncontraction to avoid potentially lindep in the
 # segment-contracted basis
@@ -364,11 +368,10 @@ def _uncontract_mol(mol, xuncontract=False, exp_drop=0.2):
                     bs[k,mole.PTR_COEFF] = ptr + 1
                     ptr += 2
                 _bas.append(bs)
-                d = l * 2 + 1
-                part1 = numpy.zeros((d*(nkept-nc),d*nc))
+                part1 = numpy.zeros((degen*(nkept-nc),degen*nc))
                 c = b_coeff[primitive]
-                for i in range(d):
-                    part1[i::d,i::d] = c
+                for i in range(degen):
+                    part1[i::degen,i::degen] = c
 
 # part2: binding the pGTOs of small exps to the pGTOs of large coefficients
                 bs = mol._bas[ib].copy()
@@ -387,18 +390,16 @@ def _uncontract_mol(mol, xuncontract=False, exp_drop=0.2):
                 ptr += exps.size + cs.size
                 _bas.append(bs)
 
-                part2 = numpy.eye(d*nc)
+                part2 = numpy.eye(degen*nc)
                 for i in range(nc):
-                    part2[i*d:(i+1)*d,i*d:(i+1)*d] *= s1[i]
+                    part2[i*degen:(i+1)*degen,i*degen:(i+1)*degen] *= s1[i]
                 contr_coeff.append(numpy.vstack((part1, part2)))
             else:
                 _bas.append(mol._bas[ib])
-                contr_coeff.append(numpy.eye((l*2+1)*nc))
+                contr_coeff.append(numpy.eye(degen*nc))
         else:
             _bas.append(mol._bas[ib])
-            l = mol.bas_angular(ib)
-            d = l * 2 + 1
-            contr_coeff.append(numpy.eye(d*mol.bas_nctr(ib)))
+            contr_coeff.append(numpy.eye(degen*nc))
     pmol._bas = numpy.asarray(numpy.vstack(_bas), dtype=numpy.int32)
     pmol._env = numpy.hstack((mol._env, _env))
     return pmol, scipy.linalg.block_diag(*contr_coeff)

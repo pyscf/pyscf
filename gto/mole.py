@@ -186,6 +186,7 @@ def format_atom(atoms, origin=0, axes=None, unit='Ang'):
     '''
     def str2atm(line):
         dat = line.split()
+        assert(len(dat) == 4)
         return [_atom_symbol(dat[0]), [float(x) for x in dat[1:4]]]
 
     if isinstance(atoms, (str, unicode)):
@@ -833,13 +834,13 @@ def len_cart(l):
 def npgto_nr(mol, cart=False):
     '''Total number of primitive spherical GTOs for the given :class:`Mole` object'''
     l = mol._bas[:,ANG_OF]
-    if cart:
+    if cart or mol.cart:
         return ((l+1)*(l+2)//2 * mol._bas[:,NPRIM_OF]).sum()
     else:
         return ((l*2+1) * mol._bas[:,NPRIM_OF]).sum()
 def nao_nr(mol, cart=False):
     '''Total number of contracted spherical GTOs for the given :class:`Mole` object'''
-    if cart:
+    if cart or mol.cart:
         return nao_cart(mol)
     else:
         return ((mol._bas[:,ANG_OF]*2+1) * mol._bas[:,NCTR_OF]).sum()
@@ -923,7 +924,7 @@ def ao_loc_nr(mol, cart=False):
     >>> gto.ao_loc_nr(mol)
     [0, 1, 2, 3, 6, 9, 10, 11, 12, 15, 18]
     '''
-    if cart:
+    if cart or mol.cart:
         return moleintor.make_loc(mol._bas, 'cart')
     else:
         return moleintor.make_loc(mol._bas, 'sph')
@@ -1003,7 +1004,7 @@ def energy_nuc(mol, charges=None, coords=None):
     e = (qq/r).sum() * .5
     return e
 
-def spheric_labels(mol, fmt=True):
+def spherical_labels(mol, fmt=True):
     '''Labels for spherical GTO functions
 
     Kwargs:
@@ -1019,12 +1020,12 @@ def spheric_labels(mol, fmt=True):
     Examples:
 
     >>> mol = gto.M(atom='H 0 0 0; Cl 0 0 1', basis='sto-3g')
-    >>> gto.spheric_labels(mol)
+    >>> gto.spherical_labels(mol)
     [(0, 'H', '1s', ''), (1, 'Cl', '1s', ''), (1, 'Cl', '2s', ''), (1, 'Cl', '3s', ''), (1, 'Cl', '2p', 'x'), (1, 'Cl', '2p', 'y'), (1, 'Cl', '2p', 'z'), (1, 'Cl', '3p', 'x'), (1, 'Cl', '3p', 'y'), (1, 'Cl', '3p', 'z')]
     '''
     count = numpy.zeros((mol.natm, 9), dtype=int)
     label = []
-    for ib in range(len(mol._bas)):
+    for ib in range(mol.nbas):
         ia = mol.bas_atom(ib)
         l = mol.bas_angular(ib)
         strl = param.ANGULAR[l]
@@ -1036,17 +1037,19 @@ def spheric_labels(mol, fmt=True):
         else:
             coreshl = pyscf.gto.ecp.core_configuration(nelec_ecp)
             shl_start = coreshl[l]+count[ia,l]+l+1
+        count[ia,l] += nc
         for n in range(shl_start, shl_start+nc):
             for m in range(-l, l+1):
                 label.append((ia, symb, '%d%s' % (n, strl), \
-                              '%s' % param.REAL_SPHERIC[l][l+m]))
-        count[ia,l] += nc
+                              str(param.REAL_SPHERIC[l][l+m])))
+
     if isinstance(fmt, (str, unicode)):
         return [(fmt % x) for x in label]
     elif fmt:
         return ['%d %s %s%-4s' % x for x in label]
     else:
         return label
+spheric_labels = spherical_labels
 
 def cart_labels(mol, fmt=True):
     '''Labels for Cartesian GTO functions
@@ -1058,9 +1061,18 @@ def cart_labels(mol, fmt=True):
         be used as the print format.
 
     Returns:
-        List of [(atom-id, symbol-str, nl-str, str-of-real-spherical-notation)]
+        List of [(atom-id, symbol-str, nl-str, str-of-xyz-notation)]
         or formatted strings based on the argument "fmt"
     '''
+    cartxyz = []
+    for l in range(max(mol._bas[:,ANG_OF])+1):
+        xyz = []
+        for x in range(l, -1, -1):
+            for y in range(l-x, -1, -1):
+                z = l-x-y
+                xyz.append('x'*x + 'y'*y + 'z'*z)
+        cartxyz.append(xyz)
+
     count = numpy.zeros((mol.natm, 9), dtype=int)
     label = []
     for ib in range(len(mol._bas)):
@@ -1075,13 +1087,12 @@ def cart_labels(mol, fmt=True):
         else:
             coreshl = pyscf.gto.ecp.core_configuration(nelec_ecp)
             shl_start = coreshl[l]+count[ia,l]+l+1
-        for n in range(shl_start, shl_start+nc):
-            for lx in reversed(range(l+1)):
-                for ly in reversed(range(l+1-lx)):
-                    lz = l - lx - ly
-                    label.append((ia, symb, '%d%s' % (n, strl),
-                                  ''.join(('x'*lx, 'y'*ly, 'z'*lz))))
         count[ia,l] += nc
+        ncart = (l + 1) * (l + 2) // 2
+        for n in range(shl_start, shl_start+nc):
+            for m in range(ncart):
+                label.append((ia, symb, '%d%s' % (n, strl), cartxyz[l][m]))
+
     if isinstance(fmt, (str, unicode)):
         return [(fmt % x) for x in label]
     elif fmt:
@@ -1089,6 +1100,23 @@ def cart_labels(mol, fmt=True):
     else:
         return label
 
+def ao_labels(mol, fmt=True):
+    '''Labels for AO basis functions
+
+    Kwargs:
+        fmt : str or bool
+        if fmt is boolean, it controls whether to format the labels and the
+        default format is "%d%3s %s%-4s".  if fmt is string, the string will
+        be used as the print format.
+
+    Returns:
+        List of [(atom-id, symbol-str, nl-str, str-of-AO-notation)]
+        or formatted strings based on the argument "fmt"
+    '''
+    if mol.cart:
+        return mol.cart_labels(fmt)
+    else:
+        return mol.spherical_labels(fmt)
 
 def spinor_labels(mol):
     raise RuntimeError('TODO')
@@ -1154,6 +1182,7 @@ def search_ao_nr(mol, atm_id, l, m, atmshell):
             else:
                 return ibf + (atmshell-l1-1)*(l1*2+1) + (l1+m)
         ibf += (l1*2+1) * nc
+    return ibf
 
 def search_ao_r(mol, atm_id, l, j, m, atmshell):
     raise RuntimeError('TODO')
@@ -1171,41 +1200,27 @@ def search_ao_r(mol, atm_id, l, j, m, atmshell):
 #TODO:                return ibf + (atmshell-l1-1)*degen + (degen+m)
 #TODO:        ibf += degen
 
-def offset_nr_by_atom(mol):
-    '''Non-relativistic AO offset for each atom.  Return a list, each item
-    of the list gives (start-shell-id, stop-shell-id, start-AO-id, stop-AO-id)
-    '''
-    aorange = []
-    p0 = p1 = 0
-    b0 = b1 = 0
-    ia0 = 0
-    for ib in range(mol.nbas):
-        if ia0 != mol.bas_atom(ib):
-            aorange.append((b0, ib, p0, p1))
-            ia0 = mol.bas_atom(ib)
-            p0 = p1
-            b0 = ib
-        p1 += (mol.bas_angular(ib)*2+1) * mol.bas_nctr(ib)
-    aorange.append((b0, mol.nbas, p0, p1))
-    return aorange
-
 def offset_2c_by_atom(mol):
     '''2-component AO offset for each atom.  Return a list, each item
     of the list gives (start-shell-id, stop-shell-id, start-AO-id, stop-AO-id)
     '''
-    aorange = []
-    p0 = p1 = 0
-    b0 = b1 = 0
-    ia0 = 0
-    for ib in range(mol.nbas):
-        if ia0 != mol.bas_atom(ib):
-            aorange.append((b0, ib, p0, p1))
-            ia0 = mol.bas_atom(ib)
-            p0 = p1
-            b0 = ib
-        p1 += mol.bas_len_spinor(ib) * mol.bas_nctr(ib)
-    aorange.append((b0, mol.nbas, p0, p1))
+    return offset_ao_by_atom(mol, mol.ao_loc_2c())
+
+def aoslice_by_atom(mol, ao_loc=None):
+    '''AO offsets for each atom.  Return a list, each item of the list gives
+    (start-shell-id, stop-shell-id, start-AO-id, stop-AO-id)
+    '''
+    if ao_loc is None:
+        ao_loc = mol.ao_loc_nr()
+    aorange = numpy.empty((mol.natm,4), dtype=int)
+    bas_atom = mol._bas[:,ATOM_OF]
+    delimiter = numpy.where(bas_atom[0:-1] != bas_atom[1:])[0] + 1
+    aorange[:,0] = shell_start = numpy.append(0, delimiter)
+    aorange[:,1] = shell_end = numpy.append(delimiter, mol.nbas)
+    aorange[:,2] = ao_loc[shell_start]
+    aorange[:,3] = ao_loc[shell_end]
     return aorange
+offset_nr_by_atom = aoslice_by_atom
 
 def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
     '''Compare the two molecules whether they have the same structure.
@@ -2376,6 +2391,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def spheric_labels(self, fmt=False):
         return spheric_labels(self, fmt)
     spherical_labels = spheric_labels
+    ao_labels = ao_labels
 
     def search_shell_id(self, atm_id, l):
         return search_shell_id(self, atm_id, l)
@@ -2385,8 +2401,10 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     offset_nr_by_atom = offset_nr_by_atom
     offset_2c_by_atom = offset_2c_by_atom
+    offset_ao_by_atom = aoslice_by_atom
     aoslice_nr_by_atom = offset_nr_by_atom
     aoslice_2c_by_atom = offset_2c_by_atom
+    aoslice_by_atom = aoslice_by_atom
 
     @lib.with_doc(spinor_labels.__doc__)
     def spinor_labels(self):
