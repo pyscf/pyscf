@@ -77,8 +77,8 @@ def from_chkfile(output, chkfile, tol=1e-15, float_format=DEFAULT_FLOAT_FORMAT):
         eri = ao2mo.full(mol, mo_coeff, verbose=0)
         write_eri(fout, ao2mo.restore(8, eri, nmo), nmo, tol, float_format)
 
-        t = mol.intor_symmetric('cint1e_kin_sph')
-        v = mol.intor_symmetric('cint1e_nuc_sph')
+        t = mol.intor_symmetric('int1e_kin')
+        v = mol.intor_symmetric('int1e_nuc')
         h = reduce(numpy.dot, (mo_coeff.T, t+v, mo_coeff))
         write_hcore(fout, h, nmo, tol, float_format)
         output_format = ' ' + float_format + '  0  0  0  0\n'

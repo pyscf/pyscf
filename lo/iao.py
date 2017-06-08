@@ -34,9 +34,9 @@ def iao(mol, orbocc, minao='minao'):
     '''
     pmol = mol.copy()
     pmol.build(False, False, basis=minao)
-    s1 = mol.intor_symmetric('cint1e_ovlp_sph')
-    s2 = pmol.intor_symmetric('cint1e_ovlp_sph')
-    s12 = gto.mole.intor_cross('cint1e_ovlp_sph', mol, pmol)
+    s1 = mol.intor_symmetric('int1e_ovlp')
+    s2 = pmol.intor_symmetric('int1e_ovlp')
+    s12 = gto.mole.intor_cross('int1e_ovlp', mol, pmol)
     s21 = s12.T
     s1cd = scipy.linalg.cho_factor(s1)
     s2cd = scipy.linalg.cho_factor(s2)

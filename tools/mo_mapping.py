@@ -15,7 +15,7 @@ def mo_map(mol1, mo1, mol2, mo2, base=0, tol=.5):
         Two lists.  First list is the orbital-pair indices, second is the
         overlap value.
     '''
-    s = gto.intor_cross('cint1e_ovlp_sph', mol1, mol2)
+    s = gto.intor_cross('int1e_ovlp', mol1, mol2)
     s = reduce(numpy.dot, (mo1.T, s, mo2))
     idx = numpy.argwhere(abs(s) > tol) + base
     for i,j in idx:
@@ -37,15 +37,13 @@ def mo_1to1map(s):
         s1[:,k] = 0
     return like_input
 
-def mo_comps(test_or_idx, mol, mo_coeff, cart=False, orth_method='meta_lowdin'):
-    '''Pick particular AOs based on the given test function to compute the AO
-    contributions for each MO
+def mo_comps(aolabels_or_baslst, mol, mo_coeff, cart=False, orth_method='meta_lowdin'):
+    '''Given AO(s), show how the AO(s) are distributed in MOs.
 
     Args:
-        test_or_idx : filter function or list
-            If test_or_idx is a list, it is considered as the AO indices.
+        aolabels_or_baslst : filter function or AO labels or AO index
             If it's a function,  the AO indices are the items for which the
-            function value is true.
+            function return value is true.
 
     Kwargs:
         cart : bool
@@ -65,10 +63,10 @@ def mo_comps(test_or_idx, mol, mo_coeff, cart=False, orth_method='meta_lowdin'):
     >>> from pyscf.tools import mo_mapping
     >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='6-31g')
     >>> mf = scf.RHF(mol).run()
-    >>> comp = mo_mapping.mo_comps(lambda x: 'F 2s' in x, mol, mf.mo_coeff)
-    >>> print('MO-id    components')
-    >>> for i in enumerate(comp):
-    ...     print('%-3d      %.10f' % (i, comp[i]))
+    >>> comp = mo_mapping.mo_comps('F 2s', mol, mf.mo_coeff)
+    >>> print('MO-id    F-2s components')
+    >>> for i,c in enumerate(comp):
+    ...     print('%-3d      %.10f' % (i, c))
     MO-id    components
     0        0.0000066344
     1        0.8796915532
@@ -82,26 +80,26 @@ def mo_comps(test_or_idx, mol, mo_coeff, cart=False, orth_method='meta_lowdin'):
     9        0.0000822361
     10       0.0021017982
     '''
-    if cart:
-        s = mol.intor_symmetric('cint1e_ovlp_cart')
-        preao = lo.orth.pre_orth_ao(mol)
-        tc2s = []
-        for ib in range(mol.nbas):
-            l = mol.bas_angular(ib)
-            t = gto.cart2sph(l)
-            for i in range(mol.bas_nctr(ib)):
-                tc2s.append(t)
-        tc2s = scipy.linalg.block_diag(*tc2s)
-        lao = lo.orth.orth_ao(mol, orth_method)
-        lao = numpy.dot(tc2s, lao)
-    else:
-        s = mol.intor_symmetric('cint1e_ovlp_sph')
-        lao = lo.orth.orth_ao(mol, orth_method)
+    import copy
+    if cart and not mol.cart:
+        assert(mo_coeff.shape[0] == mol.nao_nr(cart=True))
+        mol = copy.copy(mol)
+        mol.cart = True
+    s = mol.intor_symmetric('int1e_ovlp')
+    lao = lo.orth.orth_ao(mol, orth_method, s=s)
 
-    if callable(test_or_idx):
-        idx = [i for i,x in enumerate(mol.spheric_labels(1)) if test_or_idx(x)]
+    if callable(aolabels_or_baslst):
+        idx = [i for i,x in enumerate(mol.ao_labels())
+               if aolabels_or_baslst(x)]
+    elif isinstance(aolabels_or_baslst, str):
+        idx = [i for i,t in enumerate(mol.ao_labels())
+               if aolabels_or_baslst in t]
+    elif isinstance(aolabels_or_baslst[0], str):
+        idx = [i for i,t in enumerate(mol.ao_labels())
+               if any(x in t for x in aolabels_or_baslst)]
     else:
-        idx = numpy.asarray(test_or_idx, dtype=int)
+        idx = numpy.asarray(aolabels_or_baslst, dtype=int)
+
     if len(idx) == 0:
         logger.warn(mol, 'Required orbitals are not found')
     mo1 = reduce(numpy.dot, (lao[:,idx].T, s, mo_coeff))
