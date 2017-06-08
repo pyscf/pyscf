@@ -83,7 +83,7 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
 
     ovlp_ao = mf.get_ovlp()
     if mf.verbose >= logger.DEBUG:
-        label = mol.ao_labels(True)
+        label = mol.ao_labels()
         molabel = []
         irorbcnt = {}
         for k, j in enumerate(orbsyma):

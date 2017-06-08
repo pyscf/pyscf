@@ -265,7 +265,7 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     ovlp_ao = mf.get_ovlp()
     if verbose >= logger.DEBUG:
         log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
-        label = mf.mol.ao_labels(True)
+        label = mf.mol.ao_labels()
         orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
         c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
         dump_mat.dump_rec(mf.stdout, c, label, start=1, **kwargs)

@@ -4,14 +4,9 @@
 #
 
 import time
-import ctypes
 import numpy
-import scipy.linalg
-from pyscf import lib
-from pyscf.lib import logger
 from pyscf import gto
 from pyscf.df import incore
-from pyscf.scf import _vhf
 
 # (ij|L)
 def aux_e2(mol, auxmol, intor='int3c2e_spinor', aosym='s1', comp=1, hermi=0):
@@ -31,36 +26,15 @@ def aux_e1(mol, auxmol, intor='int3c2e_spinor', aosym='s1', comp=1, hermi=0):
     raise NotImplementedError
 
 
-def cholesky_eri(mol, auxbasis='weigend+etb', aosym='s1', verbose=0):
-    t0 = (time.clock(), time.time())
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
-    auxmol = incore.format_aux_basis(mol, auxbasis)
-
-    j2c = incore.fill_2c2e(mol, auxmol)
-    log.debug('size of aux basis %d', j2c.shape[0])
-    t1 = log.timer('2c2e', *t0)
-    low = scipy.linalg.cholesky(j2c, lower=True)
-    j2c = None
-    t1 = log.timer('Cholesky 2c2e', *t1)
-
-    j3c_ll = aux_e2(mol, auxmol, intor='int3c2e_spinor', aosym=aosym)
-    j3c_ss = aux_e2(mol, auxmol, intor='int3c2e_spsp1_spinor', aosym=aosym)
-    t1 = log.timer('3c2e', *t1)
-    cderi_ll = scipy.linalg.solve_triangular(low, j3c_ll.T, lower=True,
-                                             overwrite_b=True)
-    cderi_ss = scipy.linalg.solve_triangular(low, j3c_ss.T, lower=True,
-                                             overwrite_b=True)
-    # solve_triangular return cderi in Fortran order
-    cderi = (lib.transpose(cderi_ll.T), lib.transpose(cderi_ss.T))
-    log.timer('cholesky_eri', *t0)
-    return cderi
-
+def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
+                 int3c='int3c2e_spinor', aosym='s1', int2c='int2c2e_sph', comp=1,
+                 verbose=0):
+    return incore.cholesky_eri(mol, auxbasis, auxmol, int3c, aosym, int2c,
+                               comp, verbose, aux_e2)
 
 
 if __name__ == '__main__':
+    from pyscf import lib
     from pyscf import scf
     mol = gto.Mole()
     mol.build(
@@ -71,7 +45,8 @@ if __name__ == '__main__':
         basis = 'ccpvdz',
     )
 
-    cderi = cholesky_eri(mol, verbose=5)
+    cderi = (cholesky_eri(mol, int3c='int3c2e_spinor', verbose=5),
+             cholesky_eri(mol, int3c='int3c2e_spsp1_spinor', verbose=5))
     n2c = mol.nao_2c()
     c2 = .5 / lib.param.LIGHT_SPEED
     def fjk(mol, dm, *args, **kwargs):

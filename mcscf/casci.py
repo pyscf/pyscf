@@ -63,7 +63,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
     ncas = casscf.ncas
     ncore = casscf.ncore
     nocc = ncore + ncas
-    label = casscf.mol.spheric_labels(True)
+    label = casscf.mol.ao_labels()
 
     if isinstance(ci, (tuple, list)):
         ci0 = ci[0]
@@ -260,7 +260,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         log.debug('where_natorb %s', str(where_natorb))
         log.info('Natural occ %s', str(occ))
         log.info('Natural orbital (expansion on meta-Lowdin AOs) in CAS space')
-        label = mc.mol.spheric_labels(True)
+        label = mc.mol.ao_labels()
         orth_coeff = orth.orth_ao(mc.mol, 'meta_lowdin', s=ovlp_ao)
         mo_cas = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff1[:,ncore:nocc]))
         dump_mat.dump_rec(log.stdout, mo_cas, label, start=1)

@@ -73,7 +73,7 @@ def restore(symmetry, eri, norb, tao=None):
     >>> from pyscf.scf import _vhf
     >>> from pyscf import ao2mo
     >>> mol = gto.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
-    >>> eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
+    >>> eri = mol.intor('int2e')
     >>> eri1 = ao2mo.restore(1, eri, mol.nao_nr())
     >>> eri4 = ao2mo.restore(4, eri, mol.nao_nr())
     >>> eri8 = ao2mo.restore(8, eri, mol.nao_nr())

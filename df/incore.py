@@ -5,10 +5,9 @@
 
 import copy
 import time
-import ctypes
 import numpy
 import scipy.linalg
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf.df import addons
@@ -62,21 +61,22 @@ def fill_2c2e(mol, auxmol, intor='int2c2e_sph', comp=1, hermi=1, out=None):
 
 # Note the temporary memory usage is about twice as large as the return cderi
 # array
-def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None, verbose=0):
+def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
+                 int3c='int3c2e_sph', aosym='s2ij', int2c='int2c2e_sph', comp=1,
+                 verbose=0, fauxe2=aux_e2):
     '''
     Returns:
         2D array of (naux,nao*(nao+1)/2) in C-contiguous
     '''
+    assert(comp == 1)
     t0 = (time.clock(), time.time())
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
+    log = logger.new_logger(mol, verbose)
     if auxmol is None:
         auxmol = format_aux_basis(mol, auxbasis)
 
-    j2c = auxmol.intor('int2c2e_sph', hermi=1)
-    log.debug('size of aux basis %d', j2c.shape[0])
+    j2c = auxmol.intor(int2c, hermi=1)
+    naux = j2c.shape[0]
+    log.debug('size of aux basis %d', naux)
     t1 = log.timer('2c2e', *t0)
     try:
         low = scipy.linalg.cholesky(j2c, lower=True)
@@ -86,14 +86,13 @@ def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None, verbose=0):
     j2c = None
     t1 = log.timer('Cholesky 2c2e', *t1)
 
-    j3c = aux_e2(mol, auxmol, intor='int3c2e_sph', aosym='s2ij')
-    j3cT = j3c.T
+    j3c = fauxe2(mol, auxmol, intor=int3c, aosym=aosym).reshape(-1,naux)
     t1 = log.timer('3c2e', *t1)
     cderi = scipy.linalg.solve_triangular(low, j3c.T, lower=True,
                                           overwrite_b=True)
     j3c = None
     if cderi.flags.f_contiguous:
-        cderi = pyscf.lib.transpose(cderi.T)
+        cderi = lib.transpose(cderi.T)
     log.timer('cholesky_eri', *t0)
     return cderi
 

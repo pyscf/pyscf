@@ -64,7 +64,7 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
                  k+1, irname_full[j], irorbcnt[j], mo_energy[k], mo_occ[k])
 
     if verbose >= logger.DEBUG:
-        label = mol.ao_labels(True)
+        label = mol.ao_labels()
         molabel = []
         irorbcnt = {}
         for k, j in enumerate(orbsym):
@@ -696,7 +696,7 @@ class ROHF(rohf.ROHF):
                          mo_energy[k], mo_ea[k], mo_eb[k], mo_occ[k])
 
         if verbose >= logger.DEBUG:
-            label = mol.ao_labels(True)
+            label = mol.ao_labels()
             molabel = []
             irorbcnt = {}
             for k, j in enumerate(orbsym):

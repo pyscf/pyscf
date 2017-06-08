@@ -59,8 +59,11 @@ class DF(lib.StreamObject):
         nao_pair = nao*(nao+1)//2
 
         max_memory = (self.max_memory - lib.current_memory()[0]) * .8
+        int3c = mol._add_suffix('int3c2e')
+        int2c = mol._add_suffix('int2c2e')
         if nao_pair*naux*3*8/1e6 < max_memory:
-            self._cderi = incore.cholesky_eri(mol, auxmol=auxmol, verbose=log)
+            self._cderi = incore.cholesky_eri(mol, int3c=int3c, int2c=int2c,
+                                              auxmol=auxmol, verbose=log)
         else:
             if not isinstance(self._cderi, str):
                 if isinstance(self._cderi_file, str):
@@ -68,7 +71,8 @@ class DF(lib.StreamObject):
                 else:
                     self._cderi = self._cderi_file.name
             outcore.cholesky_eri(mol, self._cderi, dataname='j3c',
-                                 auxmol=auxmol, max_memory=max_memory, verbose=log)
+                                 int3c=int3c, int2c=int2c, auxmol=auxmol,
+                                 max_memory=max_memory, verbose=log)
             if nao_pair*nao*8/1e6 < max_memory:
                 with addons.load(self._cderi, 'j3c') as feri:
                     cderi = numpy.asarray(feri)
@@ -161,14 +165,12 @@ class DF4C(DF):
 
         max_memory = (self.max_memory - lib.current_memory()[0]) * .8
         if nao_pair*naux*3*16/1e6*2 < max_memory:
-            self._cderi = r_incore.cholesky_eri(mol, auxbasis=self.auxbasis,
-                                                aosym='s2', verbose=log)
+            self._cderi =(r_incore.cholesky_eri(mol, auxmol=auxmol, aosym='s2',
+                                                int3c='int3c2e_spinor', verbose=log),
+                          r_incore.cholesky_eri(mol, auxmol=auxmol, aosym='s2',
+                                                int3c='int3c2e_spsp1_spinor', verbose=log))
         else:
             raise NotImplementedError
-            self._cderifile = self._cderi
-            self._cderi = r_outcore.cholesky_eri(mol, self._cderi.name,
-                                                 auxbasis=self.auxbasis,
-                                                 verbose=log)
         return self
 
     def loop(self):

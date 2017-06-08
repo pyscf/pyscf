@@ -38,7 +38,7 @@ def full(eri_ao, mo_coeff, verbose=0, compact=True, **kwargs):
     >>> from pyscf.scf import _vhf
     >>> from pyscf import ao2mo
     >>> mol = gto.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
-    >>> eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
+    >>> eri = mol.intor('int2e_sph', aosym='s8')
     >>> mo1 = numpy.random.random((mol.nao_nr(), 10))
     >>> eri1 = ao2mo.incore.full(eri, mo1)
     >>> print(eri1.shape)
@@ -84,7 +84,7 @@ def general(eri_ao, mo_coeffs, verbose=0, compact=True, **kwargs):
     >>> from pyscf.scf import _vhf
     >>> from pyscf import ao2mo
     >>> mol = gto.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
-    >>> eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
+    >>> eri = mol.intor('int2e_sph', aosym='s8')
     >>> mo1 = numpy.random.random((mol.nao_nr(), 10))
     >>> mo2 = numpy.random.random((mol.nao_nr(), 8))
     >>> mo3 = numpy.random.random((mol.nao_nr(), 6))
@@ -158,7 +158,7 @@ def half_e1(eri_ao, mo_coeffs, compact=True):
     >>> from pyscf import gto
     >>> from pyscf import ao2mo
     >>> mol = gto.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
-    >>> eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
+    >>> eri = mol.intor('int2e_sph', aosym='s8')
     >>> mo1 = numpy.random.random((mol.nao_nr(), 10))
     >>> mo2 = numpy.random.random((mol.nao_nr(), 8))
     >>> eri1 = ao2mo.incore.half_e1(eri, (mo1,mo2))
@@ -173,9 +173,8 @@ def half_e1(eri_ao, mo_coeffs, compact=True):
     (55, 28)
     '''
     eri_ao = numpy.asarray(eri_ao, order='C')
-    nmoi = mo_coeffs[0].shape[1]
+    nao, nmoi = mo_coeffs[0].shape
     nmoj = mo_coeffs[1].shape[1]
-    nao = mo_coeffs[0].shape[0]
     nao_pair = nao*(nao+1)//2
     ijmosym, nij_pair, moij, ijshape = _conc_mos(mo_coeffs[0], mo_coeffs[1], compact)
     ijshape = (ijshape[0], ijshape[1]-ijshape[0],
@@ -187,8 +186,12 @@ def half_e1(eri_ao, mo_coeffs, compact=True):
 
     if eri_ao.size == nao_pair**2: # 4-fold symmetry
         ftrans = _ao2mo.libao2mo.AO2MOtranse1_incore_s4
-    else:
+    elif eri_ao.size == nao_pair*(nao_pair+1)//2:
         ftrans = _ao2mo.libao2mo.AO2MOtranse1_incore_s8
+    else:
+        from pyscf.ao2mo.addons import restore
+        eri_ao = restore(4, eri_ao, nao)
+        ftrans = _ao2mo.libao2mo.AO2MOtranse1_incore_s4
     if ijmosym == 's2':
         fmmm = _ao2mo.libao2mo.AO2MOmmm_nr_s2_s2
     elif nmoi <= nmoj:

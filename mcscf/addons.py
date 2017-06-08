@@ -343,7 +343,7 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
             e, u = numpy.linalg.eigh(reduce(numpy.dot, (rest.T, s, rest)))
             restorb = numpy.dot(rest, u[:,e>1e-7])
             if casscf.mol.symmetry:
-                t = casscf.mol.intor_symmetric('cint1e_kin_sph')
+                t = casscf.mol.intor_symmetric('int1e_kin')
                 t = reduce(numpy.dot, (restorb.T, t, restorb))
                 e, u = numpy.linalg.eigh(t)
                 restorb = numpy.dot(restorb, u)
@@ -475,7 +475,7 @@ def map2hf(casscf, mf_mo=None, base=1, tol=.5):
     '''
     if mf_mo is None:
         mf_mo = casscf._scf.mo_coeff
-    s = casscf.mol.intor_symmetric('cint1e_ovlp_sph')
+    s = casscf.mol.intor_symmetric('int1e_ovlp')
     s = reduce(numpy.dot, (casscf.mo_coeff.T, s, mf_mo))
     idx = numpy.argwhere(abs(s) > tol)
     for i,j in idx:
@@ -879,7 +879,7 @@ if __name__ == '__main__':
 
     mo1 = cas_natorb(mc)[0]
     numpy.set_printoptions(2)
-    print(reduce(numpy.dot, (mo1[:,:6].T, mol.intor('cint1e_ovlp_sph'),
+    print(reduce(numpy.dot, (mo1[:,:6].T, mol.intor('int1e_ovlp_sph'),
                              mo[:,:6])))
 
 # state average

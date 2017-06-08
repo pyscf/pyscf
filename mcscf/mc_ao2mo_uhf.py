@@ -233,8 +233,7 @@ class _ERIS(object):
             ((mem_incore+mem_now) < casscf.max_memory*.9) or
             mol.incore_anyway):
             if eri is None:
-                from pyscf.scf import _vhf
-                eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
+                eri = mol.intor('int2e', aosym='s8')
             self.jkcpp, self.jkcPP, self.jC_pp, self.jc_PP, \
             self.aapp, self.aaPP, self.AApp, self.AAPP, \
             self.appa, self.apPA, self.APPA, \

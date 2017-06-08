@@ -40,6 +40,12 @@ class KnowValues(unittest.TestCase):
         mf = scf.density_fit(scf.UHF(mol))
         self.assertAlmostEqual(mf.scf(), -76.025936299702536, 9)
 
+    def test_uhf_cart(self):
+        pmol = mol.copy()
+        pmol.cart = True
+        mf = scf.density_fit(scf.UHF(pmol))
+        self.assertAlmostEqual(mf.scf(), -76.026760700636046, 9)
+
     def test_rohf(self):
         pmol = mol.copy()
         pmol.charge = 1

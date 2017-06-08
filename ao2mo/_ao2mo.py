@@ -16,7 +16,7 @@ class AO2MOpt(object):
         intor = ascint3(intor)
         self._this = ctypes.POINTER(_vhf._CVHFOpt)()
         #print self._this.contents, expect ValueError: NULL pointer access
-        self._intor = _fpointer(intor)
+        self._intor = intor
 
         c_atm = numpy.asarray(mol._atm, dtype=numpy.int32, order='C')
         c_bas = numpy.asarray(mol._bas, dtype=numpy.int32, order='C')
@@ -31,8 +31,8 @@ class AO2MOpt(object):
                                     c_env.ctypes.data_as(ctypes.c_void_p))
         self._this.contents.fprescreen = _fpointer(prescreen)
 
-        if prescreen != 'CVHFnoscreen':
-            # for cint2e_sph, qcondname is 'CVHFsetnr_direct_scf'
+        if prescreen != 'CVHFnoscreen' and intor in ('int2e_sph', 'int2e_cart'):
+            # for int2e_sph, qcondname is 'CVHFsetnr_direct_scf'
             fsetqcond = getattr(libao2mo, qcondname)
             fsetqcond(self._this,
                       c_atm.ctypes.data_as(ctypes.c_void_p), natm,
@@ -69,11 +69,11 @@ def nr_e1fill(intor, sh_range, atm, bas, env,
     if ao2mopt is not None:
         cao2mopt = ao2mopt._this
         cintopt = ao2mopt._cintopt
-        cintor = ao2mopt._intor
+        intor = ao2mopt._intor
     else:
         cao2mopt = lib.c_null_ptr()
-        cintor = _fpointer(intor)
         cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
+    cintor = _fpointer(intor)
 
     fdrv = getattr(libao2mo, 'AO2MOnr_e1fill_drv')
     fill = _fpointer('AO2MOfill_nr_' + aosym)

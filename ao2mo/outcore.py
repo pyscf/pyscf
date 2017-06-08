@@ -422,7 +422,7 @@ def half_e1(mol, mo_coeffs, swapfile,
                    IOBUF_ROW_MIN)
     shranges = guess_shell_ranges(mol, (aosym in ('s4', 's2kl')), e1buflen, aobuflen)
     if ao2mopt is None:
-        if intor == 'int2e_sph':
+        if intor in ('int2e_sph', 'int2e_cart'):
             ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFnr_schwarz_cond',
                                      'CVHFsetnr_direct_scf')
         else:

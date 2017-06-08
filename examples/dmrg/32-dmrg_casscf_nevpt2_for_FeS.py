@@ -377,7 +377,7 @@ print('diff=',numpy.linalg.norm(diff))
 print('\nLowdin population for LMOs:')
 
 pthresh = 0.02
-labels = mol.spheric_labels()
+labels = mol.ao_labels(None)
 ifACTONLY = False #True
 nelec = 0.0
 nact = 0.0
