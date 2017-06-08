@@ -67,13 +67,18 @@ def get_pp_loc_part2(cell, kpts=None):
                               kptij_lst=kptij_lst)
             buf += numpy.einsum('...i->...', v)
 
-    buf = buf.reshape(nkpts,-1)
-    vpploc = []
-    for k, kpt in enumerate(kpts_lst):
-        v = lib.unpack_tril(buf[k])
-        if abs(kpt).sum() < 1e-9:  # gamma_point:
-            v = v.real
-        vpploc.append(v)
+    if isinstance(buf, int):
+        lib.logger.warn(cell, 'cell.pseudo were specified but its elements %s '
+                        'were not found in the system.', cell._pseudo.keys())
+        vpploc = [0] * nkpts
+    else:
+        buf = buf.reshape(nkpts,-1)
+        vpploc = []
+        for k, kpt in enumerate(kpts_lst):
+            v = lib.unpack_tril(buf[k])
+            if abs(kpt).sum() < 1e-9:  # gamma_point:
+                v = v.real
+            vpploc.append(v)
     if kpts is None or numpy.shape(kpts) == (3,):
         vpploc = vpploc[0]
     return vpploc
