@@ -4,6 +4,8 @@
 #
 
 import numpy
+import time
+import pyscf
 from pyscf import lib
 from pyscf.dft import numint, gen_grid
 
@@ -13,8 +15,8 @@ Gaussian cube file format
 
 def density(mol, outfile, dm, nx=80, ny=80, nz=80):
     coord = mol.atom_coords()
-    box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + 4
-    boxorig = numpy.min(coord,axis=0) - 2
+    box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + 6
+    boxorig = numpy.min(coord,axis=0) - 3
     xs = numpy.arange(nx) * (box[0]/nx)
     ys = numpy.arange(ny) * (box[1]/ny)
     zs = numpy.arange(nz) * (box[2]/nz)
@@ -31,8 +33,8 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80):
     rho = rho.reshape(nx,ny,nz)
 
     with open(outfile, 'w') as f:
-        f.write('Density in real space\n')
-        f.write('Comment line\n')
+        f.write('Electron density in real space (e/Bohr^3)\n')
+        f.write('PySCF Version: %s  Date: %s\n' % (pyscf.__version__, time.ctime()))
         f.write('%5d' % mol.natm)
         f.write(' %14.8f %14.8f %14.8f\n' % tuple(boxorig.tolist()))
         f.write('%5d %14.8f %14.8f %14.8f\n' % (nx, xs[1], 0, 0))
