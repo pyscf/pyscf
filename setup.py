@@ -59,7 +59,9 @@ PLATFORMS        = ['Linux', 'Mac OS-X', 'Unix']
 VERSION          = '1.3.0'
 
 
-compile_C_code()
+compilation = True
+if compilation:
+    compile_C_code()
 
 setup(
     name=NAME,
