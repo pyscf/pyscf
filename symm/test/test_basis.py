@@ -7,17 +7,22 @@ import numpy
 from pyscf import gto
 from pyscf import symm
 
-def get_so(atoms, basis):
+def get_so(atoms, basis, cart=False):
     atoms = gto.mole.format_atom(atoms)
     gpname, origin, axes = symm.detect_symm(atoms)
     gpname, axes = symm.subgroup(gpname, axes)
     atoms = gto.mole.format_atom(atoms, origin, axes)
-    eql_atoms = symm.symm_identical_atoms(gpname, atoms)
-    so = symm.basis.symm_adapted_basis(gpname, eql_atoms, atoms, basis)[0]
+    try:
+        mol = gto.M(atom=atoms, basis=basis)
+    except RuntimeError:
+        mol = gto.M(atom=atoms, basis=basis, spin=1)
+    mol.cart = cart
+    so = symm.basis.symm_adapted_basis(mol, gpname)[0]
     n = 0
     for c in so:
         if c.size > 0:
             n += c.shape[1]
+    assert(n == mol.nao_nr())
     return n, so
 
 
@@ -28,7 +33,8 @@ class KnowValues(unittest.TestCase):
                  [1   , (0. , 0.757 , 0.587,)] ]
         basis = {'H': gto.basis.load('cc_pvqz', 'C'),
                  'O': gto.basis.load('cc_pvqz', 'C'),}
-        self.assertEqual(get_so(atoms,basis)[0], 165)
+        self.assertEqual(get_so(atoms,basis  )[0], 165)
+        self.assertEqual(get_so(atoms,basis,1)[0], 210)
 
     def test_symm_orb_d2h(self):
         atoms = [[1, (0., 0., 0.)],
@@ -39,7 +45,8 @@ class KnowValues(unittest.TestCase):
                  [1, (0.,-1., 0.)],
                  [1, (0., 0.,-1.)]]
         basis = {'H': gto.basis.load('cc_pvqz', 'C'),}
-        self.assertEqual(get_so(atoms,basis)[0], 385)
+        self.assertEqual(get_so(atoms,basis  )[0], 385)
+        self.assertEqual(get_so(atoms,basis,1)[0], 490)
 
     def test_symm_orb_c2v(self):
         atoms = [[1, (1., 0., 2.)],
@@ -57,7 +64,8 @@ class KnowValues(unittest.TestCase):
                  [2, (0.,-1., 0.)]]
         basis = {'H' : gto.basis.load('cc_pvqz', 'C'),
                  'He': gto.basis.load('cc_pvqz', 'C'),}
-        self.assertEqual(get_so(atoms,basis)[0], 220)
+        self.assertEqual(get_so(atoms,basis  )[0], 220)
+        self.assertEqual(get_so(atoms,basis,1)[0], 280)
 
         atoms = [[1, (1., 0., 1.)],
                  [1, (1., 0.,-1.)],
@@ -68,7 +76,8 @@ class KnowValues(unittest.TestCase):
         basis = {'H' : gto.basis.load('cc_pvqz', 'C'),
                  'He': gto.basis.load('cc_pvqz', 'C'),
                  'Li': gto.basis.load('cc_pvqz', 'C'),}
-        self.assertEqual(get_so(atoms,basis)[0], 330)
+        self.assertEqual(get_so(atoms,basis  )[0], 330)
+        self.assertEqual(get_so(atoms,basis,1)[0], 420)
 
     def test_symm_orb_d2(self):
         atoms = [[1, (1., 0., 1.)],
@@ -79,7 +88,8 @@ class KnowValues(unittest.TestCase):
                  [2, (1.,-1.,-2.)]]
         basis = {'H' : gto.basis.load('cc_pvqz', 'C'),
                  'He': gto.basis.load('cc_pvqz', 'C'),}
-        self.assertEqual(get_so(atoms,basis)[0], 330)
+        self.assertEqual(get_so(atoms,basis  )[0], 330)
+        self.assertEqual(get_so(atoms,basis,1)[0], 420)
 
     def test_symm_orb_ci(self):
         atoms = [[1, ( 1., 0., 0.)],

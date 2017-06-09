@@ -197,7 +197,7 @@ class KnowValues(unittest.TestCase):
         dm1 = mf.init_guess_by_atom(mol)
         self.assertTrue(numpy.allclose(dm0, dm1))
 
-        pmol = gto.M(0, 0, atom=mol.atom, basis='ccpvdz')
+        pmol = gto.M(atom=mol.atom, basis='ccpvdz')
         pmol.cart = True
         dm = scf.hf.init_guess_by_atom(pmol)
         self.assertAlmostEqual(numpy.linalg.norm(dm), 2.923422868807739, 8)

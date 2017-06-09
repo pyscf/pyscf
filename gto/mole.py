@@ -1231,7 +1231,7 @@ def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
         cmp_basis : bool
             Whether to compare basis functions for the two molecules
     '''
-    import pyscf.symm
+    from pyscf import symm
 
     if mol1._atom.__len__() != mol2._atom.__len__():
         return False
@@ -1281,12 +1281,12 @@ def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
 
     def inspect(z1, r1, z2, r2):
         place = int(-numpy.log10(tol)) - 1
-        idx = pyscf.symm.argsort_coords(r2, place)
+        idx = symm.argsort_coords(r2, place)
         z2 = z2[idx]
         r2 = r2[idx]
         for rot in (1, rotate_xy, rotate_yz, rotate_zx):
             r1new = numpy.dot(r1, rot)
-            idx = pyscf.symm.argsort_coords(r1new, place)
+            idx = symm.argsort_coords(r1new, place)
             if (numpy.all(z1[idx] == z2) and
                 numpy.allclose(r1new[idx], r2, atol=tol)):
                 return True
@@ -1587,7 +1587,8 @@ class Mole(lib.StreamObject):
     def build(self, dump_input=True, parse_arg=True,
               verbose=None, output=None, max_memory=None,
               atom=None, basis=None, unit=None, nucmod=None, ecp=None,
-              charge=None, spin=None, symmetry=None, symmetry_subgroup=None):
+              charge=None, spin=None, symmetry=None, symmetry_subgroup=None,
+              cart=None):
         '''Setup moleclue and initialize some control parameters.  Whenever you
         change the value of the attributes of :class:`Mole`, you need call
         this function to refresh the internal data of Mole.
@@ -1636,6 +1637,7 @@ class Mole(lib.StreamObject):
         if spin is not None: self.spin = spin
         if symmetry is not None: self.symmetry = symmetry
         if symmetry_subgroup is not None: self.symmetry_subgroup = symmetry_subgroup
+        if cart is not None: self.cart = cart
 
         if parse_arg:
             _update_from_cmdargs_(self)
@@ -1671,18 +1673,18 @@ class Mole(lib.StreamObject):
                 self._ecp = self.format_ecp(self.ecp)
 
         if self.symmetry:
-            import pyscf.symm
+            from pyscf import symm
             if isinstance(self.symmetry, (str, unicode)):
-                self.symmetry = str(pyscf.symm.std_symb(self.symmetry))
+                self.symmetry = str(symm.std_symb(self.symmetry))
                 self.topgroup = self.symmetry
                 orig = 0
                 axes = numpy.eye(3)
-                self.groupname, axes = pyscf.symm.subgroup(self.topgroup, axes)
-                if not pyscf.symm.check_given_symm(self.groupname, self._atom,
-                                                   self._basis):
+                self.groupname, axes = symm.subgroup(self.topgroup, axes)
+                if not symm.check_given_symm(self.groupname, self._atom,
+                                             self._basis):
                     self.topgroup, orig, axes = \
-                            pyscf.symm.detect_symm(self._atom, self._basis)
-                    self.groupname, axes = pyscf.symm.subgroup(self.topgroup, axes)
+                            symm.detect_symm(self._atom, self._basis)
+                    self.groupname, axes = symm.subgroup(self.topgroup, axes)
                     _atom = self.format_atom(self._atom, orig, axes, 'Bohr')
                     _atom = '\n'.join([str(a) for a in _atom])
                     raise RuntimeWarning('Unable to identify input symmetry %s.\n'
@@ -1690,13 +1692,13 @@ class Mole(lib.StreamObject):
                                          (self.symmetry, self.topgroup, _atom))
             else:
                 self.topgroup, orig, axes = \
-                        pyscf.symm.detect_symm(self._atom, self._basis)
-                self.groupname, axes = pyscf.symm.subgroup(self.topgroup, axes)
+                        symm.detect_symm(self._atom, self._basis)
+                self.groupname, axes = symm.subgroup(self.topgroup, axes)
                 if isinstance(self.symmetry_subgroup, (str, unicode)):
                     self.symmetry_subgroup = \
-                            str(pyscf.symm.std_symb(self.symmetry_subgroup))
+                            str(symm.std_symb(self.symmetry_subgroup))
                     assert(self.symmetry_subgroup in
-                           pyscf.symm.param.SUBGROUP[self.groupname])
+                           symm.param.SUBGROUP[self.groupname])
                     if (self.symmetry_subgroup == 'Cs' and self.groupname == 'C2v'):
                         raise RuntimeError('TODO: rotate mirror or axes')
                     self.groupname = self.symmetry_subgroup
@@ -1714,16 +1716,23 @@ class Mole(lib.StreamObject):
                                (self.nelectron, self.spin))
 
         if self.symmetry:
-            import pyscf.symm
+            from pyscf import symm
+            if self.cart and self.groupname in ('Dooh', 'Coov'):
+                if self.groupname == 'Dooh':
+                    self.groupname, lgroup = 'D2h', 'Dooh'
+                else:
+                    self.groupname, lgroup = 'C2v', 'Coov'
+                logger.warn(self, 'This version does not support linear molecule '
+                            'symmetry %s for cartesian GTO basis.  Its subgroup '
+                            '%s is applied', lgroup, self.groupname)
             try:
-                eql_atoms = pyscf.symm.symm_identical_atoms(self.groupname, self._atom)
+                eql_atoms = symm.symm_identical_atoms(self.groupname, self._atom)
             except RuntimeError:
                 raise RuntimeError('''Given symmetry and molecule structure not match.
 Note when symmetry attributes is assigned, the molecule needs to be put in the proper orientation.''')
             self.symm_orb, self.irrep_id = \
-                    pyscf.symm.symm_adapted_basis(self.groupname, eql_atoms,
-                                                  self._atom, self._basis)
-            self.irrep_name = [pyscf.symm.irrep_id2name(self.groupname, ir)
+                    symm.symm_adapted_basis(self, self.groupname, eql_atoms)
+            self.irrep_name = [symm.irrep_id2name(self.groupname, ir)
                                for ir in self.irrep_id]
 
         if dump_input and not self._built and self.verbose > logger.NOTE:
@@ -2539,7 +2548,7 @@ def from_zmatrix(atomstr):
     ['H', array([ 2.67247631,  0.        ,  3.27310166])]
     ['H', array([ 0.53449526,  0.30859098,  2.83668811])]
     '''
-    import pyscf.symm
+    from pyscf.symm import rotation_mat
     atomstr = atomstr.replace(';','\n').replace(',',' ')
     atoms = []
     for line in atomstr.split('\n'):
@@ -2559,7 +2568,7 @@ def from_zmatrix(atomstr):
                     vecn = numpy.cross(v1, numpy.array((0.,0.,1.)))
                 else: # on z
                     vecn = numpy.array((0.,0.,1.))
-                rmat = pyscf.symm.rotation_mat(vecn, ang)
+                rmat = rotation_mat(vecn, ang)
                 c = numpy.dot(rmat, v1) * (bond/numpy.linalg.norm(v1))
                 atoms.append([_atom_symbol(rawd[0]), atoms[bonda][1]+c])
             else: # FIXME
@@ -2572,9 +2581,9 @@ def from_zmatrix(atomstr):
                 v1 = atoms[anga][1] - atoms[bonda][1]
                 v2 = atoms[diha][1] - atoms[anga][1]
                 vecn = numpy.cross(v2, -v1)
-                rmat = pyscf.symm.rotation_mat(v1, -dih)
+                rmat = rotation_mat(v1, -dih)
                 vecn = numpy.dot(rmat, vecn) / numpy.linalg.norm(vecn)
-                rmat = pyscf.symm.rotation_mat(vecn, ang)
+                rmat = rotation_mat(vecn, ang)
                 c = numpy.dot(rmat, v1) * (bond/numpy.linalg.norm(v1))
                 atoms.append([_atom_symbol(rawd[0]), atoms[bonda][1]+c])
     return atoms

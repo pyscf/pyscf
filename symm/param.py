@@ -2,6 +2,8 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import numpy
+
 # D2h   C2h   C2v   D2   Cs   Ci   C2   C1
 # E     E     E     E    E    E    E    E
 # C2x               C2x
@@ -194,3 +196,12 @@ SUBGROUP = {
     'C2' : ('C2' , 'C1'),
     'C1' : ('C1',),
 }
+
+D2H_OPS = {'E'  : numpy.eye(3),
+           'C2z': numpy.diag((-1.,-1., 1.)),
+           'C2x': numpy.diag(( 1.,-1.,-1.)),
+           'C2y': numpy.diag((-1., 1.,-1.)),
+           'i'  : numpy.diag((-1.,-1.,-1.)),
+           'sz' : numpy.diag(( 1., 1.,-1.)),
+           'sx' : numpy.diag((-1., 1., 1.)),
+           'sy' : numpy.diag(( 1.,-1., 1.)),}
