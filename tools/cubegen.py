@@ -13,8 +13,8 @@ Gaussian cube file format
 
 def density(mol, outfile, dm, nx=80, ny=80, nz=80):
     coord = mol.atom_coords()
-    box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + 4
-    boxorig = numpy.min(coord,axis=0) - 2
+    box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + 6
+    boxorig = numpy.min(coord,axis=0) - 3
     xs = numpy.arange(nx) * (box[0]/nx)
     ys = numpy.arange(ny) * (box[1]/ny)
     zs = numpy.arange(nz) * (box[2]/nz)
