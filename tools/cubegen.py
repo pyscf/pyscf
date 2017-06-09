@@ -4,6 +4,8 @@
 #
 
 import numpy
+import time
+import pyscf
 from pyscf import lib
 from pyscf.dft import numint, gen_grid
 
@@ -31,8 +33,8 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80):
     rho = rho.reshape(nx,ny,nz)
 
     with open(outfile, 'w') as f:
-        f.write('Density in real space\n')
-        f.write('Comment line\n')
+        f.write('Electron density in real space (e/Bohr^3)\n')
+        f.write('PySCF Version: %s  Date: %s\n' % (pyscf.__version__, time.ctime()))
         f.write('%5d' % mol.natm)
         f.write(' %14.8f %14.8f %14.8f\n' % tuple(boxorig.tolist()))
         f.write('%5d %14.8f %14.8f %14.8f\n' % (nx, xs[1], 0, 0))
