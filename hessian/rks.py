@@ -58,6 +58,9 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
             xctype = ni._xc_type(mf.xc)
     else:
         xctype = ni._xc_type(mf.xc)
+
+    if mf.grids.coords is None:
+        mf.grids.build(with_non0tab=True)
     grids = mf.grids
     hyb = ni.libxc.hybrid_coeff(mf.xc)
     max_memory = 4000
@@ -115,7 +118,7 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
     if xctype == 'LDA':
         ao_deriv = 2
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             rho = ni.eval_rho2(mol, ao[0], mo_coeff, mo_occ, mask, 'LDA')
             vxc = ni.eval_xc(mf.xc, rho, 0, deriv=1)[1]
             vrho = vxc[0]
@@ -126,7 +129,7 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
     elif xctype == 'GGA':
         ao_deriv = 3
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             rho = ni.eval_rho2(mol, ao[:4], mo_coeff, mo_occ, mask, 'GGA')
             vxc = ni.eval_xc(mf.xc, rho, 0, deriv=1)[1]
             vrho, vgamma = vxc[:2]
@@ -213,7 +216,7 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
             ao_deriv = 1
             vj1[:] = 0
             for ao, mask, weight, coords \
-                    in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
+                    in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
                 rho = ni.eval_rho2(mol, ao[0], mo_coeff, mo_occ, mask, 'LDA')
                 vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
                 vrho = vxc[0]
@@ -260,7 +263,7 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
             ao_deriv = 2
             vj1[:] = 0
             for ao, mask, weight, coords \
-                    in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
+                    in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
                 rho = ni.eval_rho2(mol, ao[:4], mo_coeff, mo_occ, mask, 'GGA')
                 vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
                 vrho, vgamma = vxc[:2]
@@ -454,7 +457,7 @@ def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN
         if xctype == 'LDA':
             ao_deriv = 1
             for ao, mask, weight, coords \
-                    in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
+                    in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
                 rho = ni.eval_rho2(mol, ao[0], mo_coeff, mo_occ, mask, 'LDA')
                 vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
                 vrho = vxc[0]
@@ -484,7 +487,7 @@ def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN
                 return wv
             ao_deriv = 2
             for ao, mask, weight, coords \
-                    in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
+                    in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
                 rho = ni.eval_rho2(mol, ao[:4], mo_coeff, mo_occ, mask, 'GGA')
                 vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
                 vrho, vgamma = vxc[:2]
@@ -578,7 +581,7 @@ def _contract_xc_kernel(mf, xc_code, dms, max_memory=2000):
     if xctype == 'LDA':
         ao_deriv = 0
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             rho = ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, 'LDA')
             fxc = ni.eval_xc(xc_code, rho, 0, deriv=2)[2]
             frho = fxc[0]
@@ -592,7 +595,7 @@ def _contract_xc_kernel(mf, xc_code, dms, max_memory=2000):
     elif xctype == 'GGA':
         ao_deriv = 1
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             rho = ni.eval_rho2(mol, ao[:4], mo_coeff, mo_occ, mask, 'GGA')
             vxc, fxc = ni.eval_xc(xc_code, rho, 0, deriv=2)[1:3]
             vgamma = vxc[1]
