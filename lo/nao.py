@@ -146,13 +146,13 @@ AOSHELL = [
 ]
 
 def prenao(mol, dm):
-    s = mol.intor_symmetric('cint1e_ovlp_sph')
+    s = mol.intor_symmetric('int1e_ovlp')
     p = reduce(numpy.dot, (s, dm, s))
     return _prenao_sub(mol, p, s)[1]
 
 def nao(mol, mf, s=None, restore=True):
     if s is None:
-        s = mol.intor_symmetric('cint1e_ovlp_sph')
+        s = mol.intor_symmetric('int1e_ovlp')
     dm = mf.make_rdm1()
     p = reduce(numpy.dot, (s, dm, s))
     pre_occ, pre_nao = _prenao_sub(mol, p, s)
@@ -166,32 +166,35 @@ def nao(mol, mf, s=None, restore=True):
 
 
 def _prenao_sub(mol, p, s):
-    idx = [[[]]*8 for i in range(mol.natm)]
-    k = 0
-    for ib in range(mol.nbas):
-        ia = mol.bas_atom(ib)
-        l = mol.bas_angular(ib)
-        nc = mol.bas_nctr(ib)
-        idx[ia][l] = idx[ia][l] + list(range(k, k+nc*(l*2+1)))
-        k += nc * (l * 2 + 1)
-
-    nao = mol.nao_nr()
+    ao_loc = mol.ao_loc_nr()
+    nao = ao_loc[-1]
     occ = numpy.zeros(nao)
     cao = numpy.zeros((nao,nao))
 
-    for ia in range(mol.natm):
-        for l, lst in enumerate(idx[ia]):
-            if len(lst) < 1:
+    bas_ang = mol._bas[:,mole.ANG_OF]
+    for ia, (b0,b1,p0,p1) in enumerate(mol.aoslice_by_atom(ao_loc)):
+        l_max = bas_ang[b0:b1].max()
+        for l in range(l_max+1):
+            idx = []
+            for ib in numpy.where(bas_ang[b0:b1] == l)[0]:
+                idx.append(numpy.arange(ao_loc[b0+ib], ao_loc[b0+ib+1]))
+            idx = numpy.hstack(idx)
+            if idx.size < 1:
                 continue
-            degen = l * 2 + 1
-            p_frag = _spheric_average_mat(p, l, lst)
-            s_frag = _spheric_average_mat(s, l, lst)
+
+            if mol.cart:
+                degen = (l + 1) * (l + 2) // 2
+            else:
+                degen = l * 2 + 1
+            p_frag = _spheric_average_mat(p, l, idx, degen)
+            s_frag = _spheric_average_mat(s, l, idx, degen)
             e, v = scipy.linalg.eigh(p_frag, s_frag)
             e = e[::-1]
             v = v[:,::-1]
 
+            idx = idx.reshape(-1,degen)
             for k in range(degen):
-                ilst = lst[k::degen]
+                ilst = idx[:,k]
                 occ[ilst] = e
                 for i,i0 in enumerate(ilst):
                     cao[i0,ilst] = v[i]
@@ -199,7 +202,7 @@ def _prenao_sub(mol, p, s):
 
 def _nao_sub(mol, pre_occ, pre_nao, s=None):
     if s is None:
-        s = mol.intor_symmetric('cint1e_ovlp_sph')
+        s = mol.intor_symmetric('int1e_ovlp')
     core_lst, val_lst, rydbg_lst = _core_val_ryd_list(mol)
     nbf = mol.nao_nr()
     cnao = numpy.empty((nbf,nbf))
@@ -248,25 +251,29 @@ def _core_val_ryd_list(mol):
         ecpcore = core_configuration(nelec_ecp)
         coreshell = [int(x) for x in AOSHELL[nuc][0][::2]]
         cvshell = [int(x) for x in AOSHELL[nuc][1][::2]]
+        if mol.cart:
+            deg = (l + 1) * (l + 2) // 2
+        else:
+            deg = 2 * l + 1
         for n in range(nc):
             if l > 3:
-                rydbg_lst.extend(range(k, k+(2*l+1)))
+                rydbg_lst.extend(range(k, k+deg))
             elif ecpcore[l]+count[ia,l]+n < coreshell[l]:
-                core_lst.extend(range(k, k+(2*l+1)))
+                core_lst.extend(range(k, k+deg))
             elif ecpcore[l]+count[ia,l]+n < cvshell[l]:
-                val_lst.extend(range(k, k+(2*l+1)))
+                val_lst.extend(range(k, k+deg))
             else:
-                rydbg_lst.extend(range(k, k+(2*l+1)))
-            k = k + 2*l+1
+                rydbg_lst.extend(range(k, k+deg))
+            k = k + deg
         count[ia,l] += nc
     return core_lst, val_lst, rydbg_lst
 
-def _spheric_average_mat(mat, l, lst):
-    degen = l * 2 + 1
+def _spheric_average_mat(mat, l, lst, degen=None):
+    if degen is None:
+        degen = l * 2 + 1
     nd = len(lst) // degen
-    t = scipy.linalg.block_diag(*([numpy.ones(degen)/numpy.sqrt(degen)]*nd))
-    mat_frag = reduce(numpy.dot, (t,mat[lst,:][:,lst],t.T))
-    return mat_frag
+    mat_frag = mat[lst][:,lst].reshape(nd,degen,nd,degen)
+    return numpy.einsum('imjn->ij', mat_frag) / degen
 
 def set_atom_conf(element, description):
     '''Change the default atomic core and valence configuration to the one
@@ -333,7 +340,7 @@ if __name__ == "__main__":
     mf = scf.RHF(mol)
     mf.scf()
 
-    s = mol.intor_symmetric('cint1e_ovlp_sph')
+    s = mol.intor_symmetric('int1e_ovlp_sph')
     p = reduce(numpy.dot, (s, mf.make_rdm1(), s))
     o0, c0 = _prenao_sub(mol, p, s)
     print(o0)

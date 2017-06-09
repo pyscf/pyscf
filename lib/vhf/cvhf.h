@@ -24,8 +24,6 @@ typedef struct CVHFOpt_struct {
 } CVHFOpt;
 #endif
 
-void int2e_sph(double *eri, int *atm, int natm, int *bas, int nbas, double *env);
-
 void CVHFinit_optimizer(CVHFOpt **opt, int *atm, int natm,
                         int *bas, int nbas, double *env);
 

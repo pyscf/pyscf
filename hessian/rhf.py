@@ -49,27 +49,28 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
         for i0, ia in enumerate(atmlst):
             mol.set_rinv_origin(mol.atom_coord(ia))
             f['rinv2aa/%d'%ia] = (mol.atom_charge(ia) *
-                                  mol.intor('cint1e_ipiprinv_sph', comp=9))
+                                  mol.intor('int1e_ipiprinv', comp=9))
             f['rinv2ab/%d'%ia] = (mol.atom_charge(ia) *
-                                  mol.intor('cint1e_iprinvip_sph', comp=9))
+                                  mol.intor('int1e_iprinvip', comp=9))
 
-    h1aa =(mol.intor('cint1e_ipipkin_sph', comp=9) +
-           mol.intor('cint1e_ipipnuc_sph', comp=9))
-    h1ab =(mol.intor('cint1e_ipkinip_sph', comp=9) +
-           mol.intor('cint1e_ipnucip_sph', comp=9))
-    s1aa = mol.intor('cint1e_ipipovlp_sph', comp=9)
-    s1ab = mol.intor('cint1e_ipovlpip_sph', comp=9)
-    s1a =-mol.intor('cint1e_ipovlp_sph', comp=3)
+    h1aa =(mol.intor('int1e_ipipkin', comp=9) +
+           mol.intor('int1e_ipipnuc', comp=9))
+    h1ab =(mol.intor('int1e_ipkinip', comp=9) +
+           mol.intor('int1e_ipnucip', comp=9))
+    s1aa = mol.intor('int1e_ipipovlp', comp=9)
+    s1ab = mol.intor('int1e_ipovlpip', comp=9)
+    s1a =-mol.intor('int1e_ipovlp', comp=3)
 
     # Energy weighted density matrix
     dme0 = numpy.einsum('pi,qi,i->pq', mocc, mocc, mo_energy[:nocc]) * 2
 
-    vj1, vk1 = _vhf.direct_mapdm('cint2e_ipip1_sph', 's2kl',
+    int2e_ipip1 = mol._add_suffix('int2e_ipip1')
+    vj1, vk1 = _vhf.direct_mapdm(int2e_ipip1, 's2kl',
                                  ('lk->s1ij', 'jk->s1il'), dm0, 9,
                                  mol._atm, mol._bas, mol._env)
     vhf1ii = vj1 - vk1*.5
     vj1 = vk1 = None
-    t1 = log.timer('contracting cint2e_ipip1_sph', *t1)
+    t1 = log.timer('contracting int2e_ipip1', *t1)
 
     offsetdic = mol.offset_nr_by_atom()
     frinv = h5py.File(tmpf.name, 'r')
@@ -77,6 +78,8 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
     rinv2ab = frinv['rinv2ab']
 
     de2 = numpy.zeros((mol.natm,mol.natm,3,3))
+    int2e_ip1ip2 = mol._add_suffix('int2e_ip1ip2')
+    int2e_ipvip1 = mol._add_suffix('int2e_ipvip1')
     for i0, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = offsetdic[ia]
 
@@ -88,16 +91,16 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
         s1oo = numpy.einsum('xpq,pi,qj->xij', s1ao, mocc, mocc)
 
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
-        vj1, vk1, vk2 = _vhf.direct_bindm('cint2e_ip1ip2_sph', 's1',
+        vj1, vk1, vk2 = _vhf.direct_bindm(int2e_ip1ip2, 's1',
                                           ('ji->s1kl', 'li->s1kj', 'lj->s1ki'),
                                           (dm0[:,p0:p1], dm0[:,p0:p1], dm0), 9,
                                           mol._atm, mol._bas, mol._env,
                                           shls_slice=shls_slice)
         vhf2 = vj1 * 2 - vk1 * .5
         vhf2[:,:,p0:p1] -= vk2 * .5
-        t1 = log.timer('contracting cint2e_ip1ip2_sph for atom %d'%ia, *t1)
+        t1 = log.timer('contracting int2e_ip1ip2 for atom %d'%ia, *t1)
 
-        vj1, vk1 = _vhf.direct_bindm('cint2e_ipvip1_sph', 's2kl',
+        vj1, vk1 = _vhf.direct_bindm(int2e_ipvip1, 's2kl',
                                      ('lk->s1ij', 'li->s1kj'),
                                      (dm0, dm0[:,p0:p1]), 9,
                                      mol._atm, mol._bas, mol._env,
@@ -105,7 +108,7 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
         vhf2[:,:,p0:p1] += vj1.transpose(0,2,1)
         vhf2 -= vk1.transpose(0,2,1) * .5
         vj1 = vk1 = vk2 = None
-        t1 = log.timer('contracting cint2e_ipvip1_sph for atom %d'%ia, *t1)
+        t1 = log.timer('contracting int2e_ipvip1 for atom %d'%ia, *t1)
 
         for j0, ja in enumerate(atmlst):
             q0, q1 = offsetdic[ja][2:]
@@ -153,22 +156,23 @@ def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN
     mocc = mo_coeff[:,mo_occ>0]
     dm0 = numpy.dot(mocc, mocc.T) * 2
 
-    h1a =-(mol.intor('cint1e_ipkin_sph', comp=3) +
-           mol.intor('cint1e_ipnuc_sph', comp=3))
+    h1a =-(mol.intor('int1e_ipkin', comp=3) +
+           mol.intor('int1e_ipnuc', comp=3))
 
     offsetdic = mol.offset_nr_by_atom()
     h1aos = []
+    int2e_ip1 = mol._add_suffix('int2e_ip1')
     for i0, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = offsetdic[ia]
 
         mol.set_rinv_origin(mol.atom_coord(ia))
-        h1ao = -mol.atom_charge(ia) * mol.intor('cint1e_iprinv_sph', comp=3)
+        h1ao = -mol.atom_charge(ia) * mol.intor('int1e_iprinv', comp=3)
         h1ao[:,p0:p1] += h1a[:,p0:p1]
         h1ao = h1ao + h1ao.transpose(0,2,1)
 
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
         vj1, vj2, vk1, vk2 = \
-                _vhf.direct_bindm('cint2e_ip1_sph', 's2kl',
+                _vhf.direct_bindm(int2e_ip1, 's2kl',
                                   ('ji->s2kl', 'lk->s1ij', 'li->s1kj', 'jk->s1il'),
                                   (-dm0[:,p0:p1], -dm0, -dm0[:,p0:p1], -dm0),
                                   3, mol._atm, mol._bas, mol._env,
@@ -213,7 +217,7 @@ def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
     mem_now = lib.current_memory()[0]
     max_memory = max(4000, max_memory*.9-mem_now)
     blksize = max(2, int(max_memory*1e6/8 / (nmo*nocc*3*6)))
-    s1a =-mol.intor('cint1e_ipovlp_sph', comp=3)
+    s1a =-mol.intor('int1e_ipovlp', comp=3)
     mo1s = []
     e1s = []
     for ia0, ia1 in prange(0, len(atmlst), blksize):

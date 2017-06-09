@@ -179,7 +179,7 @@ class MP2(lib.StreamObject):
             mem_incore+mem_now < self.max_memory or
             self.mol.incore_anyway):
             if self._scf._eri is None:
-                eri = self.intor('cint2e_sph', aosym='s8')
+                eri = self.intor('int2e', aosym='s8')
             else:
                 eri = self._scf._eri
             eri = ao2mo.incore.general(eri, (co,cv,co,cv))

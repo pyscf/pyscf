@@ -46,9 +46,7 @@ class KnowValues(unittest.TestCase):
                 for k in range(mol.nbas):
                     lp = 0
                     for l in range(mol.nbas):
-                        buf = gto.moleintor.getints_by_shell('cint2e_ip1_sph',
-                                                             (i,j,k,l), c_atm,
-                                                             c_bas, c_env, 3)
+                        buf = mol.intor_by_shell('int2e_ip1_sph', (i,j,k,l), comp=3)
                         di,dj,dk,dl = buf.shape[1:]
                         eri_ao[:,ip:ip+di,jp:jp+dj,kp:kp+dk,lp:lp+dl] = buf
                         lp += dl
@@ -61,7 +59,7 @@ class KnowValues(unittest.TestCase):
         eriref = numpy.einsum('nijkp,pl->nijkl', eriref, mo)
 
         ao2mo.outcore.full(mol, mo, erifile, dataname='eri_mo',
-                           intor='cint2e_ip1_sph', aosym='s2kl', comp=3,
+                           intor='int2e_ip1_sph', aosym='s2kl', comp=3,
                            max_memory=10, ioblk_size=5, compact=False)
         feri = h5py.File(erifile,'r')
         eri1 = numpy.array(feri['eri_mo']).reshape(3,nao,nao,nao,nao)
@@ -80,9 +78,7 @@ class KnowValues(unittest.TestCase):
                 for k in range(mol.nbas):
                     lp = 0
                     for l in range(mol.nbas):
-                        buf = gto.moleintor.getints_by_shell('cint2e_sph',
-                                                             (i,j,k,l), c_atm,
-                                                             c_bas, c_env, 1)
+                        buf = mol.intor_by_shell('int2e_sph', (i,j,k,l))
                         di,dj,dk,dl = buf.shape
                         eri_ao[ip:ip+di,jp:jp+dj,kp:kp+dk,lp:lp+dl] = buf
                         lp += dl
@@ -95,7 +91,7 @@ class KnowValues(unittest.TestCase):
         eriref = numpy.einsum('ijkp,pl->ijkl', eriref, mo)
 
         ao2mo.outcore.full(mol, mo, erifile, dataname='eri_mo',
-                           intor='cint2e_sph', aosym='s1', comp=1,
+                           intor='int2e_sph', aosym='s1', comp=1,
                            max_memory=10, ioblk_size=5)
         feri = h5py.File(erifile)
         eri1 = numpy.array(feri['eri_mo']).reshape(nao,nao,nao,nao)
@@ -103,7 +99,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(eri1, eriref))
 
         ao2mo.outcore.full(mol, mo, erifile, dataname='eri_mo',
-                           intor='cint2e_sph', aosym='s2ij', comp=1,
+                           intor='int2e_sph', aosym='s2ij', comp=1,
                            max_memory=10, ioblk_size=5)
         feri = h5py.File(erifile)
         eri1 = s2ij_s1(1, numpy.array(feri['eri_mo']), nao)
@@ -112,7 +108,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(eri1, eriref))
 
         ao2mo.outcore.full(mol, mo, erifile, dataname='eri_mo',
-                           intor='cint2e_sph', aosym='s2kl', comp=1,
+                           intor='int2e_sph', aosym='s2kl', comp=1,
                            max_memory=10, ioblk_size=5)
         feri = h5py.File(erifile)
         eri1 = s2kl_s1(1, numpy.array(feri['eri_mo']), nao)

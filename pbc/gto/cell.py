@@ -239,6 +239,7 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
 
         \langle \mu | intor | \nu \rangle, \mu \in cell1, \nu \in cell2
     '''
+    intor = moleintor.ascint3(intor)
     if kpts is None:
         if kpt is not None:
             kpts_lst = np.reshape(kpt, (1,3))
@@ -265,12 +266,7 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
         aosym = 's1'
     else:
         aosym = 's2'
-    if '2c2e' in intor:
-        fill = getattr(libpbc, 'PBCnr2c2e_fill_k'+aosym)
-    else:
-        assert('2e' not in intor)
-        fill = getattr(libpbc, 'PBCnr2c_fill_k'+aosym)
-
+    fill = getattr(libpbc, 'PBCnr2c_fill_k'+aosym)
     fintor = getattr(moleintor.libcgto, intor)
     intopt = lib.c_null_ptr()
 

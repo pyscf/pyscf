@@ -174,10 +174,10 @@ def load(moldenfile):
         mol.basis = basis
         mol.atom = [mol.atom[i] for i in atom_seq]
 
-        mol._cart_gto = True
+        mol.cart = True
         while line:
             if '[5d]' in line or '[9g]' in line:
-                mol._cart_gto = False
+                mol.cart = False
             elif '[MO]' in line:
                 break
             line = f.readline()
@@ -211,11 +211,11 @@ def load(moldenfile):
             mo_coeff.append(orb)
         mo_energy = numpy.array(mo_energy)
         mo_occ = numpy.array(mo_occ)
-        if mol._cart_gto:
+        if mol.cart:
             aoidx = numpy.argsort(order_ao_index(mol, cart=True))
             mo_coeff = (numpy.array(mo_coeff).T)[aoidx]
 # AO are assumed to be normalized in molpro molden file
-            s = mol.intor('cint1e_ovlp_cart')
+            s = mol.intor('int1e_ovlp')
             mo_coeff = numpy.einsum('i,ij->ij', numpy.sqrt(1/s.diagonal()), mo_coeff)
         else:
             aoidx = numpy.argsort(order_ao_index(mol))

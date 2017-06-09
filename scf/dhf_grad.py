@@ -67,9 +67,9 @@ def get_hcore(mol):
     n4c = n2c * 2
     c = lib.param.LIGHT_SPEED
 
-    t  = mol.intor('cint1e_ipkin', comp=3)
-    vn = mol.intor('cint1e_ipnuc', comp=3)
-    wn = mol.intor('cint1e_ipspnucsp', comp=3)
+    t  = mol.intor('int1e_ipkin_spinor', comp=3)
+    vn = mol.intor('int1e_ipnuc_spinor', comp=3)
+    wn = mol.intor('int1e_ipspnucsp_spinor', comp=3)
     h1e = numpy.zeros((3,n4c,n4c), numpy.complex)
     h1e[:,:n2c,:n2c] = vn
     h1e[:,n2c:,:n2c] = t
@@ -82,8 +82,8 @@ def get_ovlp(mol):
     n4c = n2c * 2
     c = lib.param.LIGHT_SPEED
 
-    s  = mol.intor('cint1e_ipovlp', comp=3)
-    t  = mol.intor('cint1e_ipkin', comp=3)
+    s  = mol.intor('int1e_ipovlp_spinor', comp=3)
+    t  = mol.intor('int1e_ipkin_spinor', comp=3)
     s1e = numpy.zeros((3,n4c,n4c), numpy.complex)
     s1e[:,:n2c,:n2c] = s
     s1e[:,n2c:,n2c:] = t * (.5/c**2)
@@ -157,8 +157,8 @@ class Gradients(rhf_grad.Gradients):
         c = lib.param.LIGHT_SPEED
         v = numpy.zeros((3,n4c,n4c), numpy.complex)
         mol.set_rinv_origin(mol.atom_coord(ia))
-        vn = mol.atom_charge(ia) * mol.intor('cint1e_iprinv', comp=3)
-        wn = mol.atom_charge(ia) * mol.intor('cint1e_ipsprinvsp', comp=3)
+        vn = mol.atom_charge(ia) * mol.intor('int1e_iprinv_spinor', comp=3)
+        wn = mol.atom_charge(ia) * mol.intor('int1e_ipsprinvsp_spinor', comp=3)
         v[:,:n2c,:n2c] = vn
         v[:,n2c:,n2c:] = wn * (.25/c**2)
         return -v
@@ -184,7 +184,7 @@ def _call_vhf1_llll(mol, dm):
     vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
     vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
     vj[:,:n2c,:n2c], vk[:,:n2c,:n2c] = \
-            _vhf.rdirect_mapdm('cint2e_ip1', 's2kl',
+            _vhf.rdirect_mapdm('int2e_ip1_spinor', 's2kl',
                                ('lk->s1ij', 'jk->s1il'), dmll, 3,
                                mol._atm, mol._bas, mol._env)
     return vj, vk
@@ -199,19 +199,19 @@ def _call_vhf1(mol, dm):
     vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
     vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
     vj[:,:n2c,:n2c], vk[:,:n2c,:n2c] = \
-            _vhf.rdirect_mapdm('cint2e_ip1', 's2kl',
+            _vhf.rdirect_mapdm('int2e_ip1_spinor', 's2kl',
                                ('lk->s1ij', 'jk->s1il'), dmll, 3,
                                mol._atm, mol._bas, mol._env)
     vj[:,n2c:,n2c:], vk[:,n2c:,n2c:] = \
-            _vhf.rdirect_mapdm('cint2e_ipspsp1spsp2', 's2kl',
+            _vhf.rdirect_mapdm('int2e_ipspsp1spsp2_spinor', 's2kl',
                                ('lk->s1ij', 'jk->s1il'), dmss, 3,
                                mol._atm, mol._bas, mol._env) * c1**4
-    vx = _vhf.rdirect_bindm('cint2e_ipspsp1', 's2kl',
+    vx = _vhf.rdirect_bindm('int2e_ipspsp1_spinor', 's2kl',
                             ('lk->s1ij', 'jk->s1il'), (dmll, dmsl), 3,
                             mol._atm, mol._bas, mol._env) * c1**2
     vj[:,n2c:,n2c:] += vx[0]
     vk[:,n2c:,:n2c] += vx[1]
-    vx = _vhf.rdirect_bindm('cint2e_ip1spsp2', 's2kl',
+    vx = _vhf.rdirect_bindm('int2e_ip1spsp2_spinor', 's2kl',
                             ('lk->s1ij', 'jk->s1il'), (dmss, dmls), 3,
                             mol._atm, mol._bas, mol._env) * c1**2
     vj[:,:n2c,:n2c] += vx[0]

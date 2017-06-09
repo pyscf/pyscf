@@ -1,5 +1,4 @@
-add_library(ri SHARED
-  nr_3c2e.c r_df_incore.c)
+add_library(ri SHARED r_df_incore.c)
 
 set_target_properties(ri PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}

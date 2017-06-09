@@ -97,7 +97,7 @@ def get_nuc(mydf, kpts=None):
         vj_kpts = vj_kpts[0]
     return vj_kpts
 
-def _int_nuc_vloc(mydf, nuccell, kpts, intor='cint3c2e_sph'):
+def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e_sph'):
     '''Vnuc - Vloc'''
     cell = mydf.cell
     nkpts = len(kpts)
@@ -122,7 +122,7 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='cint3c2e_sph'):
     if cell.dimension == 3:
         nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(cell.atom_charges())])
         nucbar *= numpy.pi/cell.vol
-        ovlp = cell.pbc_intor('cint1e_ovlp_sph', 1, lib.HERMITIAN, kpts)
+        ovlp = cell.pbc_intor('int1e_ovlp_sph', 1, lib.HERMITIAN, kpts)
         for k in range(nkpts):
             s = lib.pack_tril(ovlp[k])
             mat[k] += nucbar * s

@@ -217,13 +217,14 @@ def project_mo_nr2nr(mol1, mo1, mol2):
 
         C2 = S^{-1}<AO2|AO1> C1
     '''
-    s22 = mol2.intor_symmetric('cint1e_ovlp_sph')
-    s21 = mole.intor_cross('cint1e_ovlp_sph', mol2, mol1)
+    s22 = mol2.intor_symmetric('int1e_ovlp')
+    s21 = mole.intor_cross('int1e_ovlp', mol2, mol1)
     return lib.cho_solve(s22, numpy.dot(s21, mo1))
 
 def project_mo_nr2r(mol1, mo1, mol2):
-    s22 = mol2.intor_symmetric('cint1e_ovlp')
-    s21 = mole.intor_cross('cint1e_ovlp_sph', mol2, mol1)
+    assert(not mol1.cart)
+    s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
+    s21 = mole.intor_cross('int1e_ovlp_sph', mol2, mol1)
 
     ua, ub = symm.cg.real2spinor_whole(mol2)
     s21 = numpy.dot(ua.T.conj(), s21) + numpy.dot(ub.T.conj(), s21) # (*)
@@ -233,10 +234,10 @@ def project_mo_nr2r(mol1, mo1, mol2):
     return lib.cho_solve(s22, mo2)
 
 def project_mo_r2r(mol1, mo1, mol2):
-    s22 = mol2.intor_symmetric('cint1e_ovlp')
-    t22 = mol2.intor_symmetric('cint1e_spsp')
-    s21 = mole.intor_cross('cint1e_ovlp', mol2, mol1)
-    t21 = mole.intor_cross('cint1e_spsp', mol2, mol1)
+    s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
+    t22 = mol2.intor_symmetric('int1e_spsp_spinor')
+    s21 = mole.intor_cross('int1e_ovlp_spinor', mol2, mol1)
+    t21 = mole.intor_cross('int1e_spsp_spinor', mol2, mol1)
     n2c = s21.shape[1]
     pl = lib.cho_solve(s22, s21)
     ps = lib.cho_solve(t22, t21)

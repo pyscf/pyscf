@@ -111,9 +111,9 @@ class NMR(rhf_nmr.NMR):
             log = logger.Logger(self.stdout, self.verbose)
             log.debug('First-order GIAO Fock matrix')
 
-            h1 = .5 * mol.intor('cint1e_giao_irjxp_sph', 3)
-            h1 += mol.intor_asymmetric('cint1e_ignuc_sph', 3)
-            h1 += mol.intor('cint1e_igkin_sph', 3)
+            h1 = .5 * mol.intor('int1e_giao_irjxp', 3)
+            h1 += mol.intor_asymmetric('int1e_ignuc', 3)
+            h1 += mol.intor('int1e_igkin', 3)
 
             libxc = self._scf._numint.libxc
             hyb = libxc.hybrid_coeff(self._scf.xc, spin=(mol.spin>0)+1)
@@ -125,19 +125,19 @@ class NMR(rhf_nmr.NMR):
                                verbose=self._scf.verbose)
 
             if abs(hyb) > 1e-10:
-                vj, vk = _vhf.direct_mapdm('cint2e_ig1_sph',  # (g i,j|k,l)
+                vj, vk = _vhf.direct_mapdm('int2e_ig1',  # (g i,j|k,l)
                                            'a4ij', ('lk->s1ij', 'jk->s1il'),
                                            dm0, 3, # xyz, 3 components
                                            mol._atm, mol._bas, mol._env)
                 vk = vk - vk.transpose(0,2,1)
                 h1 += vj - .5 * hyb * vk
             else:
-                vj = _vhf.direct_mapdm('cint2e_ig1_sph', 'a4ij', 'lk->s1ij',
+                vj = _vhf.direct_mapdm('int2e_ig1', 'a4ij', 'lk->s1ij',
                                        dm0, 3, mol._atm, mol._bas, mol._env)
                 h1 += vj
         else:
             mol.set_common_origin(gauge_orig)
-            h1 = .5 * mol.intor('cint1e_cg_irxp_sph', 3)
+            h1 = .5 * mol.intor('int1e_cg_irxp', 3)
         pyscf.lib.chkfile.dump(self.chkfile, 'nmr/h1', h1)
         return h1
 

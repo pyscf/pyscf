@@ -21,8 +21,8 @@ h2o.build()
 
 class KnowValues(unittest.TestCase):
     def test_real2spinor(self):
-        s0 = h2o.intor('cint1e_ovlp_sph')
-        s1 = h2o.intor('cint1e_ovlp')
+        s0 = h2o.intor('int1e_ovlp_sph')
+        s1 = h2o.intor('int1e_ovlp_spinor')
 
         ua, ub = symm.cg.real2spinor_whole(h2o)
 

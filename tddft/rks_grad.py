@@ -171,7 +171,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
         shl0, shl1, p0, p1 = offsetdic[ia]
 
         mol.set_rinv_origin(mol.atom_coord(ia))
-        h1ao = -mol.atom_charge(ia) * mol.intor('cint1e_iprinv_sph', comp=3)
+        h1ao = -mol.atom_charge(ia) * mol.intor('int1e_iprinv', comp=3)
         h1ao[:,p0:p1] += h1[:,p0:p1] + veff1[0,:,p0:p1]
 
         # Ground state gradients

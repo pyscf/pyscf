@@ -30,12 +30,12 @@ def dia(mol, dm0, gauge_orig=None, shielding_nuc=None, mb='RMB'):
         mol.set_rinv_origin(mol.atom_coord(atm_id-1))
         if mb.upper() == 'RMB':
             if gauge_orig is None:
-                t11 = mol.intor('cint1e_giao_sa10sa01', 9)
-                t11 += mol.intor('cint1e_spgsa01', 9)
+                t11 = mol.intor('int1e_giao_sa10sa01_spinor', 9)
+                t11 += mol.intor('int1e_spgsa01_spinor', 9)
             else:
-                t11 = mol.intor('cint1e_cg_sa10sa01', 9)
+                t11 = mol.intor('int1e_cg_sa10sa01_spinor', 9)
         elif gauge_orig is None:
-            t11 = mol.intor('cint1e_spgsa01', 9)
+            t11 = mol.intor('int1e_spgsa01_spinor', 9)
         else:
             t11 = numpy.zeros(9)
         h11 = numpy.zeros((9, n4c, n4c), complex)
@@ -59,7 +59,7 @@ def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
     h01 = numpy.zeros((3, n4c, n4c), complex)
     for n, atm_id in enumerate(shielding_nuc):
         mol.set_rinv_origin(mol.atom_coord(atm_id-1))
-        t01 = mol.intor('cint1e_sa01sp', 3)
+        t01 = mol.intor('int1e_sa01sp_spinor', 3)
         for m in range(3):
             h01[m,:n2c,n2c:] = .5 * t01[m]
             h01[m,n2c:,:n2c] = .5 * t01[m].conj().T
@@ -93,9 +93,9 @@ def make_h10giao(mol, dm0, with_gaunt=False, verbose=logger.WARN):
     n2c = n4c // 2
     c = lib.param.LIGHT_SPEED
 
-    tg = mol.intor('cint1e_spgsp', 3)
-    vg = mol.intor('cint1e_gnuc', 3)
-    wg = mol.intor('cint1e_spgnucsp', 3)
+    tg = mol.intor('int1e_spgsp_spinor', 3)
+    vg = mol.intor('int1e_gnuc_spinor', 3)
+    wg = mol.intor('int1e_spgnucsp_spinor', 3)
 
     vj, vk = _call_giao_vhf1(mol, dm0)
     h1 = vj - vk
@@ -124,9 +124,9 @@ def make_h10rkb(mol, dm0, gauge_orig=None, with_gaunt=False,
     n4c = dm0.shape[0]
     n2c = n4c // 2
     if gauge_orig is None:
-        t1 = mol.intor('cint1e_giao_sa10sp', 3)
+        t1 = mol.intor('int1e_giao_sa10sp_spinor', 3)
     else:
-        t1 = mol.intor('cint1e_cg_sa10sp', 3)
+        t1 = mol.intor('int1e_cg_sa10sp_spinor', 3)
     if with_gaunt:
         sys.stderr('NMR gaunt part not implemented')
     h1 = numpy.zeros((3, n4c, n4c), complex)
@@ -149,11 +149,11 @@ def make_h10rmb(mol, dm0, gauge_orig=None, with_gaunt=False,
     n2c = n4c // 2
     c = lib.param.LIGHT_SPEED
     if gauge_orig is None:
-        t1 = mol.intor('cint1e_giao_sa10sp', 3)
-        v1 = mol.intor('cint1e_giao_sa10nucsp', 3)
+        t1 = mol.intor('int1e_giao_sa10sp_spinor', 3)
+        v1 = mol.intor('int1e_giao_sa10nucsp_spinor', 3)
     else:
-        t1 = mol.intor('cint1e_cg_sa10sp', 3)
-        v1 = mol.intor('cint1e_cg_sa10nucsp', 3)
+        t1 = mol.intor('int1e_cg_sa10sp_spinor', 3)
+        v1 = mol.intor('int1e_cg_sa10nucsp_spinor', 3)
 
     if gauge_orig is None:
         #vj, vk = scf.hf.get_vj_vk(pycint.rmb4giao_vhf_coul, mol, dm0)
@@ -200,16 +200,16 @@ def make_s10(mol, gauge_orig=None, mb='RMB'):
     s1 = numpy.zeros((3, n4c, n4c), complex)
     if mb.upper() == 'RMB':
         if gauge_orig is None:
-            t1 = mol.intor('cint1e_giao_sa10sp', 3)
+            t1 = mol.intor('int1e_giao_sa10sp_spinor', 3)
         else:
-            t1 = mol.intor('cint1e_cg_sa10sp', 3)
+            t1 = mol.intor('int1e_cg_sa10sp_spinor', 3)
         for i in range(3):
             t1cc = t1[i] + t1[i].conj().T
             s1[i,n2c:,n2c:] = t1cc * (.25/c**2)
 
     if gauge_orig is None:
-        sg = mol.intor('cint1e_govlp', 3)
-        tg = mol.intor('cint1e_spgsp', 3)
+        sg = mol.intor('int1e_govlp_spinor', 3)
+        tg = mol.intor('int1e_spgsp_spinor', 3)
         s1[:,:n2c,:n2c] += sg
         s1[:,n2c:,n2c:] += tg * (.25/c**2)
     return s1
@@ -328,7 +328,7 @@ def _call_rmb_vhf1(mol, dm, key='giao'):
     dmss = dm[n2c:,n2c:].copy()
     vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
     vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
-    vx = _vhf.rdirect_mapdm('cint2e_'+key+'_sa10sp1spsp2', 's2kl',
+    vx = _vhf.rdirect_mapdm('int2e_'+key+'_sa10sp1spsp2_spinor', 's2kl',
                             ('ji->s2kl', 'lk->s1ij', 'jk->s1il', 'li->s1kj'),
                             dmss, 3, mol._atm, mol._bas, mol._env) * c1**4
     for i in range(3):
@@ -336,7 +336,7 @@ def _call_rmb_vhf1(mol, dm, key='giao'):
     vj[:,n2c:,n2c:] = vx[0] + vx[1]
     vk[:,n2c:,n2c:] = vx[2] + vx[3]
 
-    vx = _vhf.rdirect_bindm('cint2e_'+key+'_sa10sp1', 's2kl',
+    vx = _vhf.rdirect_bindm('int2e_'+key+'_sa10sp1_spinor', 's2kl',
                             ('lk->s1ij', 'ji->s2kl', 'jk->s1il', 'li->s1kj'),
                             (dmll,dmss,dmsl,dmls), 3,
                             mol._atm, mol._bas, mol._env) * c1**2
@@ -360,22 +360,22 @@ def _call_giao_vhf1(mol, dm):
     dmss = dm[n2c:,n2c:].copy()
     vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
     vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
-    vx = _vhf.rdirect_mapdm('cint2e_g1', 'a4ij',
+    vx = _vhf.rdirect_mapdm('int2e_g1_spinor', 'a4ij',
                             ('lk->s2ij', 'jk->s1il'), dmll, 3,
                             mol._atm, mol._bas, mol._env)
     vj[:,:n2c,:n2c] = vx[0]
     vk[:,:n2c,:n2c] = vx[1]
-    vx = _vhf.rdirect_mapdm('cint2e_spgsp1spsp2', 'a4ij',
+    vx = _vhf.rdirect_mapdm('int2e_spgsp1spsp2_spinor', 'a4ij',
                             ('lk->s2ij', 'jk->s1il'), dmss, 3,
                             mol._atm, mol._bas, mol._env) * c1**4
     vj[:,n2c:,n2c:] = vx[0]
     vk[:,n2c:,n2c:] = vx[1]
-    vx = _vhf.rdirect_bindm('cint2e_g1spsp2', 'a4ij',
+    vx = _vhf.rdirect_bindm('int2e_g1spsp2_spinor', 'a4ij',
                             ('lk->s2ij', 'jk->s1il'), (dmss,dmls), 3,
                             mol._atm, mol._bas, mol._env) * c1**2
     vj[:,:n2c,:n2c] += vx[0]
     vk[:,:n2c,n2c:] += vx[1]
-    vx = _vhf.rdirect_bindm('cint2e_spgsp1', 'a4ij',
+    vx = _vhf.rdirect_bindm('int2e_spgsp1_spinor', 'a4ij',
                             ('lk->s2ij', 'jk->s1il'), (dmll,dmsl), 3,
                             mol._atm, mol._bas, mol._env) * c1**2
     vj[:,n2c:,n2c:] += vx[0]

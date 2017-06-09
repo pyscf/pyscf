@@ -36,7 +36,7 @@ int CVHFr_vknoscreen(int *shls, CVHFOpt *opt,
 
 void CVHFsetnr_direct_scf(CVHFOpt *opt, int *atm, int natm,
                           int *bas, int nbas, double *env);
-void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset,
+void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
                              int *atm, int natm, int *bas, int nbas, double *env);
 
 void CVHFnr_optimizer(CVHFOpt **vhfopt, int *atm, int natm,

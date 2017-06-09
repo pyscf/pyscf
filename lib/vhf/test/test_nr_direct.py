@@ -106,13 +106,13 @@ class KnowValues(unittest.TestCase):
         dm1 = numpy.random.random((nao,nao))
         dm1 = dm1 + dm1.T
         vj0, vk0 = scf._vhf.incore(rhf._eri, dm1, 1)
-        vj1, vk1 = runjk(dm1, 1, 'cint2e_sph', 'CVHFdot_nrs8',
+        vj1, vk1 = runjk(dm1, 1, 'int2e_sph', 'CVHFdot_nrs8',
                          'CVHFnrs8_ji_s1kl', 'CVHFnrs8_jk_s1il')
         self.assertTrue(numpy.allclose(vj0,vj1))
         self.assertTrue(numpy.allclose(vk0,vk1))
 
         dm1 = numpy.array((dm1,dm1))
-        vj1, vk1 = runjk(dm1, 1, 'cint2e_sph', 'CVHFdot_nrs8',
+        vj1, vk1 = runjk(dm1, 1, 'int2e_sph', 'CVHFdot_nrs8',
                          'CVHFnrs8_ji_s1kl', 'CVHFnrs8_jk_s1il')
         self.assertTrue(numpy.allclose(vj0,vj1[0]))
         self.assertTrue(numpy.allclose(vk0,vk1[0]))
@@ -123,19 +123,19 @@ class KnowValues(unittest.TestCase):
         eri1 = ao2mo.restore(1, rhf._eri, nao)
         vj0 = numpy.einsum('ijkl,kl->ij', eri1, dm1)
         vk0 = numpy.einsum('ijkl,jk->il', eri1, dm1)
-        vj1, vj2 = runjk(dm1, 1, 'cint2e_sph', 'CVHFdot_nrs4',
+        vj1, vj2 = runjk(dm1, 1, 'int2e_sph', 'CVHFdot_nrs4',
                          'CVHFnrs4_ji_s1kl', 'CVHFnrs4_jk_s1il')
         self.assertTrue(numpy.allclose(vj0,vj1))
         self.assertTrue(numpy.allclose(vk0,vj2))
 
-        vk1 = runjk(dm1, 1, 'cint2e_sph', 'CVHFdot_nrs4',
+        vk1 = runjk(dm1, 1, 'int2e_sph', 'CVHFdot_nrs4',
                     'CVHFnrs4_li_s1kj', 'CVHFnrs4_jk_s1il')
         self.assertTrue(numpy.allclose(vk0,vk1[0]))
         self.assertTrue(numpy.allclose(vk0,vk1[1]))
 
         dm1 = dm1 + dm1.T
         vk0 = numpy.einsum('ijkl,jk->il', eri1, dm1)
-        vk1 = runjk(dm1, 1, 'cint2e_sph', 'CVHFdot_nrs4',
+        vk1 = runjk(dm1, 1, 'int2e_sph', 'CVHFdot_nrs4',
                     'CVHFnrs4_li_s1kj', 'CVHFnrs4_jk_s1il',
                     'CVHFnrs4_li_s1kj', 'CVHFnrs4_jk_s1il')
         self.assertTrue(numpy.allclose(vk0,vk1[0]))
@@ -146,7 +146,7 @@ class KnowValues(unittest.TestCase):
         dm1 = numpy.random.random((nao,nao))
         vj0 = numpy.einsum('ijkl,kl->ij', eri1, dm1)
         vk0 = numpy.einsum('ijkl,jk->il', eri1, dm1)
-        vk1 = runjk(dm1, 1, 'cint2e_sph', 'CVHFdot_nrs2kl',
+        vk1 = runjk(dm1, 1, 'int2e_sph', 'CVHFdot_nrs2kl',
                     'CVHFnrs2kl_ji_s1kl', 'CVHFnrs2kl_lk_s1ij',
                     'CVHFnrs2kl_jk_s1il', 'CVHFnrs2kl_li_s1kj')
         self.assertTrue(numpy.allclose(vj0,vk1[0]))
@@ -154,7 +154,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(vk0,vk1[2]))
         self.assertTrue(numpy.allclose(vk0,vk1[3]))
 
-        vk1 = runjk(dm1, 1, 'cint2e_sph', 'CVHFdot_nrs2ij',
+        vk1 = runjk(dm1, 1, 'int2e_sph', 'CVHFdot_nrs2ij',
                     'CVHFnrs2ij_ji_s1kl', 'CVHFnrs2ij_lk_s1ij',
                     'CVHFnrs2ij_jk_s1il', 'CVHFnrs2ij_li_s1kj')
         self.assertTrue(numpy.allclose(vj0,vk1[0]))
@@ -162,7 +162,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(vk0,vk1[2]))
         self.assertTrue(numpy.allclose(vk0,vk1[3]))
 
-        vk1 = runjk(dm1, 1, 'cint2e_sph', 'CVHFdot_nrs1',
+        vk1 = runjk(dm1, 1, 'int2e_sph', 'CVHFdot_nrs1',
                     'CVHFnrs1_ji_s1kl', 'CVHFnrs1_lk_s1ij',
                     'CVHFnrs1_jk_s1il', 'CVHFnrs1_li_s1kj')
         self.assertTrue(numpy.allclose(vj0,vk1[0]))
@@ -174,33 +174,33 @@ class KnowValues(unittest.TestCase):
         numpy.random.seed(15)
         dm1 = numpy.random.random((nao,nao))
         dm1 = dm1 + dm1.T
-        eri0 = makeri('cint2e_ip1_sph', 3)
+        eri0 = makeri('int2e_ip1_sph', 3)
         vj0 = numpy.einsum('pijkl,ji->pkl', eri0, dm1)
         vk0 = numpy.einsum('pijkl,li->pkj', eri0, dm1)
-        vj1, vk1 = runjk(dm1, 3, 'cint2e_ip1_sph', 'CVHFdot_nrs1',
+        vj1, vk1 = runjk(dm1, 3, 'int2e_ip1_sph', 'CVHFdot_nrs1',
                          'CVHFnrs1_ji_s1kl', 'CVHFnrs1_li_s1kj')
         self.assertTrue(numpy.allclose(vj0,vj1))
         self.assertTrue(numpy.allclose(vk0,vk1))
 
-        vj1, vk1 = runjk(dm1, 3, 'cint2e_ip1_sph', 'CVHFdot_nrs2kl',
+        vj1, vk1 = runjk(dm1, 3, 'int2e_ip1_sph', 'CVHFdot_nrs2kl',
                        'CVHFnrs2kl_ji_s1kl', 'CVHFnrs2kl_li_s1kj')
         self.assertTrue(numpy.allclose(vj0,vj1))
         self.assertTrue(numpy.allclose(vk0,vk1))
 
-        eri0 = makeri('cint2e_ig1_sph', 3)
+        eri0 = makeri('int2e_ig1_sph', 3)
         vj0 = numpy.einsum('pijkl,ji->pkl', eri0, dm1)
         vk0 = numpy.einsum('pijkl,li->pkj', eri0, dm1)
-        vj1, vk1 = runjk(dm1, 3, 'cint2e_ig1_sph', 'CVHFdot_nrs1',
+        vj1, vk1 = runjk(dm1, 3, 'int2e_ig1_sph', 'CVHFdot_nrs1',
                          'CVHFnrs1_ji_s1kl', 'CVHFnrs1_li_s1kj')
         self.assertTrue(numpy.allclose(vj0,vj1))
         self.assertTrue(numpy.allclose(vk0,vk1))
 
-        vj1, vk1 = runjk(dm1, 3, 'cint2e_ig1_sph', 'CVHFdot_nrs2kl',
+        vj1, vk1 = runjk(dm1, 3, 'int2e_ig1_sph', 'CVHFdot_nrs2kl',
                        'CVHFnrs2kl_ji_s1kl', 'CVHFnrs2kl_li_s1kj')
         self.assertTrue(numpy.allclose(vj0,vj1))
         self.assertTrue(numpy.allclose(vk0,vk1))
 
-        vj1, vk1 = runjk(dm1, 3, 'cint2e_ig1_sph', 'CVHFdot_nrs4',
+        vj1, vk1 = runjk(dm1, 3, 'int2e_ig1_sph', 'CVHFdot_nrs4',
                        'CVHFnra4ij_ji_s1kl', 'CVHFnra4ij_li_s1kj')
         self.assertTrue(numpy.allclose(vj0,vj1))
         self.assertTrue(numpy.allclose(vk0,vk1))
@@ -211,7 +211,7 @@ class KnowValues(unittest.TestCase):
         dm1 = numpy.random.random((nao,nao))
         dm1 = dm1 + dm1.T
         vj0, vk0 = scf._vhf.incore(rhf._eri, dm1, 1)
-        vj1, vk1 = runjks2(dm1, 1, 'cint2e_sph', 'CVHFdot_nrs8',
+        vj1, vk1 = runjks2(dm1, 1, 'int2e_sph', 'CVHFdot_nrs8',
                          'CVHFnrs8_ji_s2kl', 'CVHFnrs8_jk_s2il')
         self.assertTrue(numpy.allclose(vj0,vj1))
         self.assertTrue(numpy.allclose(vk0,vk1))
@@ -219,18 +219,18 @@ class KnowValues(unittest.TestCase):
         eri1 = ao2mo.restore(1, rhf._eri, nao)
         vj0 = numpy.einsum('ijkl,kl->ij', eri1, dm1)
         vk0 = numpy.einsum('ijkl,jk->il', eri1, dm1)
-        vj1, vj2 = runjks2(dm1, 1, 'cint2e_sph', 'CVHFdot_nrs4',
+        vj1, vj2 = runjks2(dm1, 1, 'int2e_sph', 'CVHFdot_nrs4',
                          'CVHFnrs4_ji_s2kl', 'CVHFnrs4_jk_s2il')
         self.assertTrue(numpy.allclose(vj0,vj1))
         self.assertTrue(numpy.allclose(vk0,vj2))
 
-        vj1, vk1 = runjks2(dm1, 1, 'cint2e_sph', 'CVHFdot_nrs4',
+        vj1, vk1 = runjks2(dm1, 1, 'int2e_sph', 'CVHFdot_nrs4',
                            'CVHFnrs4_li_s2kj', 'CVHFnrs4_jk_s2il')
         self.assertTrue(numpy.allclose(vk0,vj1))
         self.assertTrue(numpy.allclose(vk0,vk1))
 
         vk0 = numpy.einsum('ijkl,jk->il', eri1, dm1)
-        vk1 = runjks2(dm1, 1, 'cint2e_sph', 'CVHFdot_nrs4',
+        vk1 = runjks2(dm1, 1, 'int2e_sph', 'CVHFdot_nrs4',
                     'CVHFnrs4_li_s2kj', 'CVHFnrs4_jk_s2il',
                     'CVHFnrs4_li_s2kj', 'CVHFnrs4_jk_s2il')
         self.assertTrue(numpy.allclose(vk0,vk1[0]))
@@ -240,7 +240,7 @@ class KnowValues(unittest.TestCase):
 
         vj0 = numpy.einsum('ijkl,kl->ij', eri1, dm1)
         vk0 = numpy.einsum('ijkl,jk->il', eri1, dm1)
-        vk1 = runjks2(dm1, 1, 'cint2e_sph', 'CVHFdot_nrs2kl',
+        vk1 = runjks2(dm1, 1, 'int2e_sph', 'CVHFdot_nrs2kl',
                     'CVHFnrs2kl_ji_s2kl', 'CVHFnrs2kl_lk_s2ij',
                     'CVHFnrs2kl_jk_s2il', 'CVHFnrs2kl_li_s2kj')
         self.assertTrue(numpy.allclose(vj0,vk1[0]))
@@ -248,7 +248,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(vk0,vk1[2]))
         self.assertTrue(numpy.allclose(vk0,vk1[3]))
 
-        vk1 = runjks2(dm1, 1, 'cint2e_sph', 'CVHFdot_nrs2ij',
+        vk1 = runjks2(dm1, 1, 'int2e_sph', 'CVHFdot_nrs2ij',
                     'CVHFnrs2ij_ji_s2kl', 'CVHFnrs2ij_lk_s2ij',
                     'CVHFnrs2ij_jk_s2il', 'CVHFnrs2ij_li_s2kj')
         self.assertTrue(numpy.allclose(vj0,vk1[0]))
@@ -256,7 +256,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(vk0,vk1[2]))
         self.assertTrue(numpy.allclose(vk0,vk1[3]))
 
-        vk1 = runjks2(dm1, 1, 'cint2e_sph', 'CVHFdot_nrs1',
+        vk1 = runjks2(dm1, 1, 'int2e_sph', 'CVHFdot_nrs1',
                     'CVHFnrs1_ji_s2kl', 'CVHFnrs1_lk_s2ij',
                     'CVHFnrs1_jk_s2il', 'CVHFnrs1_li_s2kj')
         self.assertTrue(numpy.allclose(vj0,vk1[0]))
@@ -265,7 +265,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(vk0,vk1[3]))
 
         vj0, vk0 = scf._vhf.incore(rhf._eri, dm1, 1)
-        vj1, vk1 = runjk(dm1, 1, 'cint2e_sph', 'CVHFdot_nrs8',
+        vj1, vk1 = runjk(dm1, 1, 'int2e_sph', 'CVHFdot_nrs8',
                          'CVHFnrs8_ji_s2kl', 'CVHFnrs8_jk_s2il')
         vj1 = lib.hermi_triu(vj1, 1)
         vk1 = lib.hermi_triu(vk1, 1)

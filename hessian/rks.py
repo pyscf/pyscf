@@ -86,28 +86,29 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
         for i0, ia in enumerate(atmlst):
             mol.set_rinv_origin(mol.atom_coord(ia))
             f['rinv2aa/%d'%ia] = (mol.atom_charge(ia) *
-                                  mol.intor('cint1e_ipiprinv_sph', comp=9))
+                                  mol.intor('int1e_ipiprinv', comp=9))
             f['rinv2ab/%d'%ia] = (mol.atom_charge(ia) *
-                                  mol.intor('cint1e_iprinvip_sph', comp=9))
+                                  mol.intor('int1e_iprinvip', comp=9))
 
-    h1aa =(mol.intor('cint1e_ipipkin_sph', comp=9) +
-           mol.intor('cint1e_ipipnuc_sph', comp=9))
-    h1ab =(mol.intor('cint1e_ipkinip_sph', comp=9) +
-           mol.intor('cint1e_ipnucip_sph', comp=9))
-    s1aa = mol.intor('cint1e_ipipovlp_sph', comp=9)
-    s1ab = mol.intor('cint1e_ipovlpip_sph', comp=9)
-    s1a =-mol.intor('cint1e_ipovlp_sph', comp=3)
+    h1aa =(mol.intor('int1e_ipipkin', comp=9) +
+           mol.intor('int1e_ipipnuc', comp=9))
+    h1ab =(mol.intor('int1e_ipkinip', comp=9) +
+           mol.intor('int1e_ipnucip', comp=9))
+    s1aa = mol.intor('int1e_ipipovlp', comp=9)
+    s1ab = mol.intor('int1e_ipovlpip', comp=9)
+    s1a =-mol.intor('int1e_ipovlp', comp=3)
 
     # Energy weighted density matrix
     dme0 = numpy.einsum('pi,qi,i->pq', mocc, mocc, mo_energy[:nocc]) * 2
 
+    int2e_ipip1 = mol._add_suffix('int2e_ipip1')
     if abs(hyb) > 1e-10:
-        vj1, vk1 = _vhf.direct_mapdm('cint2e_ipip1_sph', 's2kl',
+        vj1, vk1 = _vhf.direct_mapdm(int2e_ipip1, 's2kl',
                                      ('lk->s1ij', 'jk->s1il'), dm0, 9,
                                      mol._atm, mol._bas, mol._env)
         veff1ii = vj1 - hyb * .5 * vk1
     else:
-        vj1 = _vhf.direct_mapdm('cint2e_ipip1_sph', 's2kl', 'lk->s1ij', dm0, 9,
+        vj1 = _vhf.direct_mapdm(int2e_ipip1, 's2kl', 'lk->s1ij', dm0, 9,
                                 mol._atm, mol._bas, mol._env)
         veff1ii = vj1.copy()
     vj1[:] = 0
@@ -153,7 +154,7 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
     veff1ii += vj1[[0,1,2,1,3,4,2,4,5]]
     vj1 = vk1 = None
 
-    t1 = log.timer('contracting cint2e_ipip1_sph', *t1)
+    t1 = log.timer('contracting int2e_ipip1', *t1)
 
     offsetdic = mol.offset_nr_by_atom()
     frinv = h5py.File(tmpf.name, 'r')
@@ -172,17 +173,19 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
         s1oo = numpy.einsum('xpq,pi,qj->xij', s1ao, mocc, mocc)
 
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
+        int2e_ip1ip2 = mol._add_suffix('int2e_ip1ip2')
+        int2e_ipvip1 = mol._add_suffix('int2e_ipvip1')
         if abs(hyb) > 1e-10:
-            vj1, vk1, vk2 = _vhf.direct_bindm('cint2e_ip1ip2_sph', 's1',
+            vj1, vk1, vk2 = _vhf.direct_bindm(int2e_ip1ip2, 's1',
                                               ('ji->s1kl', 'li->s1kj', 'lj->s1ki'),
                                               (dm0[:,p0:p1], dm0[:,p0:p1], dm0), 9,
                                               mol._atm, mol._bas, mol._env,
                                               shls_slice=shls_slice)
             veff2 = vj1 * 2 - hyb * .5 * vk1
             veff2[:,:,p0:p1] -= hyb * .5 * vk2
-            t1 = log.timer('contracting cint2e_ip1ip2_sph for atom %d'%ia, *t1)
+            t1 = log.timer('contracting int2e_ip1ip2 for atom %d'%ia, *t1)
 
-            vj1, vk1 = _vhf.direct_bindm('cint2e_ipvip1_sph', 's2kl',
+            vj1, vk1 = _vhf.direct_bindm(int2e_ipvip1, 's2kl',
                                          ('lk->s1ij', 'li->s1kj'),
                                          (dm0, dm0[:,p0:p1]), 9,
                                          mol._atm, mol._bas, mol._env,
@@ -190,21 +193,21 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
             veff2[:,:,p0:p1] += vj1.transpose(0,2,1)
             veff2 -= hyb * .5 * vk1.transpose(0,2,1)
             vj1 = vk1 = vk2 = None
-            t1 = log.timer('contracting cint2e_ipvip1_sph for atom %d'%ia, *t1)
+            t1 = log.timer('contracting int2e_ipvip1 for atom %d'%ia, *t1)
         else:
-            vj1 = _vhf.direct_bindm('cint2e_ip1ip2_sph', 's1',
+            vj1 = _vhf.direct_bindm(int2e_ip1ip2, 's1',
                                     'ji->s1kl', dm0[:,p0:p1], 9,
                                     mol._atm, mol._bas, mol._env,
                                     shls_slice=shls_slice)
             veff2 = vj1 * 2
-            t1 = log.timer('contracting cint2e_ip1ip2_sph for atom %d'%ia, *t1)
+            t1 = log.timer('contracting int2e_ip1ip2 for atom %d'%ia, *t1)
 
-            vj1 = _vhf.direct_bindm('cint2e_ipvip1_sph', 's2kl',
+            vj1 = _vhf.direct_bindm(int2e_ipvip1, 's2kl',
                                     'lk->s1ij', dm0, 9,
                                     mol._atm, mol._bas, mol._env,
                                     shls_slice=shls_slice)
             veff2[:,:,p0:p1] += vj1.transpose(0,2,1)
-            t1 = log.timer('contracting cint2e_ipvip1_sph for atom %d'%ia, *t1)
+            t1 = log.timer('contracting int2e_ipvip1 for atom %d'%ia, *t1)
 
         if xctype == 'LDA':
             ao_deriv = 1
@@ -410,8 +413,8 @@ def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN
     hyb = ni.libxc.hybrid_coeff(mf.xc)
     max_memory = 4000
 
-    h1a =-(mol.intor('cint1e_ipkin_sph', comp=3) +
-           mol.intor('cint1e_ipnuc_sph', comp=3))
+    h1a =-(mol.intor('int1e_ipkin', comp=3) +
+           mol.intor('int1e_ipnuc', comp=3))
 
     offsetdic = mol.offset_nr_by_atom()
     h1aos = []
@@ -419,14 +422,15 @@ def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN
         shl0, shl1, p0, p1 = offsetdic[ia]
 
         mol.set_rinv_origin(mol.atom_coord(ia))
-        h1ao = -mol.atom_charge(ia) * mol.intor('cint1e_iprinv_sph', comp=3)
+        h1ao = -mol.atom_charge(ia) * mol.intor('int1e_iprinv', comp=3)
         h1ao[:,p0:p1] += h1a[:,p0:p1]
         h1ao = h1ao + h1ao.transpose(0,2,1)
 
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
+        int2e_ip1 = mol._add_suffix('int2e_ip1')
         if abs(hyb) > 1e-10:
             vj1, vj2, vk1, vk2 = \
-                    _vhf.direct_bindm('cint2e_ip1_sph', 's2kl',
+                    _vhf.direct_bindm(int2e_ip1, 's2kl',
                                       ('ji->s2kl', 'lk->s1ij', 'li->s1kj', 'jk->s1il'),
                                       (-dm0[:,p0:p1], -dm0, -dm0[:,p0:p1], -dm0),
                                       3, mol._atm, mol._bas, mol._env,
@@ -437,7 +441,7 @@ def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN
             veff[:,p0:p1] += vj2 - hyb*.5*vk2
         else:
             vj1, vj2 = \
-                    _vhf.direct_bindm('cint2e_ip1_sph', 's2kl',
+                    _vhf.direct_bindm(int2e_ip1, 's2kl',
                                       ('ji->s2kl', 'lk->s1ij'),
                                       (-dm0[:,p0:p1], -dm0),
                                       3, mol._atm, mol._bas, mol._env,

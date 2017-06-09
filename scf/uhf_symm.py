@@ -83,7 +83,7 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
 
     ovlp_ao = mf.get_ovlp()
     if mf.verbose >= logger.DEBUG:
-        label = mol.spheric_labels(True)
+        label = mol.ao_labels()
         molabel = []
         irorbcnt = {}
         for k, j in enumerate(orbsyma):
@@ -216,7 +216,7 @@ class UHF(uhf.UHF):
     def dump_flags(self):
         uhf.UHF.dump_flags(self)
         if self.irrep_nelec:
-            logger.info('irrep_nelec %s', self.irrep_nelec)
+            logger.info(self, 'irrep_nelec %s', self.irrep_nelec)
 
     def build(self, mol=None):
         if mol is None: mol = self.mol

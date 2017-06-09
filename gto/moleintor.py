@@ -5,13 +5,9 @@
 
 import numpy
 import ctypes
-import pyscf.lib
+from pyscf import lib
 
-libcgto = pyscf.lib.load_library('libcgto')
-libcgto.CINTcgto_cart.restype = ctypes.c_int
-libcgto.CINTcgto_spheric.restype = ctypes.c_int
-libcgto.CINTcgto_spinor.restype = ctypes.c_int
-libcvhf = pyscf.lib.load_library('libcvhf')
+libcgto = lib.load_library('libcgto')
 
 ANG_OF     = 1
 NPRIM_OF   = 2
@@ -28,92 +24,131 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
     Args:
         intor_name : str
 
-            ==========================  =========  =============
-            Function                    type       Expression
-            ==========================  =========  =============
-            "cint1e_ovlp_sph"           spherical  ( \| \)
-            "cint1e_nuc_sph"            spherical  ( \| nuc \| \)
-            "cint1e_kin_sph"            spherical  (.5 \| p dot p\)
-            "cint1e_ia01p_sph"          spherical  (#C(0 1) \| nabla-rinv \| cross p\)
-            "cint1e_giao_irjxp_sph"     spherical  (#C(0 1) \| r cross p\)
-            "cint1e_cg_irxp_sph"        spherical  (#C(0 1) \| rc cross p\)
-            "cint1e_giao_a11part_sph"   spherical  (-.5 \| nabla-rinv \| r\)
-            "cint1e_cg_a11part_sph"     spherical  (-.5 \| nabla-rinv \| rc\)
-            "cint1e_a01gp_sph"          spherical  (g \| nabla-rinv cross p \|\)
-            "cint1e_igkin_sph"          spherical  (#C(0 .5) g \| p dot p\)
-            "cint1e_igovlp_sph"         spherical  (#C(0 1) g \|\)
-            "cint1e_ignuc_sph"          spherical  (#C(0 1) g \| nuc \|\)
-            "cint1e_z_sph"              spherical  ( \| zc \| \)
-            "cint1e_zz_sph"             spherical  ( \| zc zc \| \)
-            "cint1e_r_sph"              spherical  ( \| rc \| \)
-            "cint1e_r2_sph"             spherical  ( \| rc dot rc \| \)
-            "cint1e_rr_sph"             spherical  ( \| rc rc \| \)
-            "cint1e_pnucp_sph"          spherical  (p* \| nuc dot p \| \)
-            "cint1e_prinvxp_sph"        spherical  (p* \| rinv cross p \| \)
-            "cint1e_ovlp"               spinor     ( \| \)
-            "cint1e_nuc"                spinor     ( \| nuc \|\)
-            "cint1e_srsr"               spinor     (sigma dot r \| sigma dot r\)
-            "cint1e_sr"                 spinor     (sigma dot r \|\)
-            "cint1e_srsp"               spinor     (sigma dot r \| sigma dot p\)
-            "cint1e_spsp"               spinor     (sigma dot p \| sigma dot p\)
-            "cint1e_sp"                 spinor     (sigma dot p \|\)
-            "cint1e_spnucsp"            spinor     (sigma dot p \| nuc \| sigma dot p\)
-            "cint1e_srnucsr"            spinor     (sigma dot r \| nuc \| sigma dot r\)
-            "cint1e_govlp"              spinor     (g \|\)
-            "cint1e_gnuc"               spinor     (g \| nuc \|\)
-            "cint1e_cg_sa10sa01"        spinor     (.5 sigma cross rc \| sigma cross nabla-rinv \|\)
-            "cint1e_cg_sa10sp"          spinor     (.5 rc cross sigma \| sigma dot p\)
-            "cint1e_cg_sa10nucsp"       spinor     (.5 rc cross sigma \| nuc \| sigma dot p\)
-            "cint1e_giao_sa10sa01"      spinor     (.5 sigma cross r \| sigma cross nabla-rinv \|\)
-            "cint1e_giao_sa10sp"        spinor     (.5 r cross sigma \| sigma dot p\)
-            "cint1e_giao_sa10nucsp"     spinor     (.5 r cross sigma \| nuc \| sigma dot p\)
-            "cint1e_sa01sp"             spinor     (\| nabla-rinv cross sigma \| sigma dot p\)
-            "cint1e_spgsp"              spinor     (g sigma dot p \| sigma dot p\)
-            "cint1e_spgnucsp"           spinor     (g sigma dot p \| nuc \| sigma dot p\)
-            "cint1e_spgsa01"            spinor     (g sigma dot p \| nabla-rinv cross sigma \|\)
-            "cint1e_spspsp"             spinor     (sigma dot p \| sigma dot p sigma dot p\)
-            "cint1e_spnuc"              spinor     (sigma dot p \| nuc \|\)
-            "cint1e_ovlp_cart"          cartesian  ( \| \)
-            "cint1e_nuc_cart"           cartesian  ( \| nuc \| \)
-            "cint1e_kin_cart"           cartesian  (.5 \| p dot p\)
-            "cint1e_ia01p_cart"         cartesian  (#C(0 1) \| nabla-rinv \| cross p\)
-            "cint1e_giao_irjxp_cart"    cartesian  (#C(0 1) \| r cross p\)
-            "cint1e_cg_irxp_cart"       cartesian  (#C(0 1) \| rc cross p\)
-            "cint1e_giao_a11part_cart"  cartesian  (-.5 \| nabla-rinv \| r\)
-            "cint1e_cg_a11part_cart"    cartesian  (-.5 \| nabla-rinv \| rc\)
-            "cint1e_a01gp_cart"         cartesian  (g \| nabla-rinv cross p \|\)
-            "cint1e_igkin_cart"         cartesian  (#C(0 .5) g \| p dot p\)
-            "cint1e_igovlp_cart"        cartesian  (#C(0 1) g \|\)
-            "cint1e_ignuc_cart"         cartesian  (#C(0 1) g \| nuc \|\)
-            "cint1e_ipovlp_sph"         spherical  (nabla \|\)
-            "cint1e_ipkin_sph"          spherical  (.5 nabla \| p dot p\)
-            "cint1e_ipnuc_sph"          spherical  (nabla \| nuc \|\)
-            "cint1e_iprinv_sph"         spherical  (nabla \| rinv \|\)
-            "cint1e_rinv_sph"           spherical  (\| rinv \|\)
-            "cint1e_ipovlp"             spinor     (nabla \|\)
-            "cint1e_ipkin"              spinor     (.5 nabla \| p dot p\)
-            "cint1e_ipnuc"              spinor     (nabla \| nuc \|\)
-            "cint1e_iprinv"             spinor     (nabla \| rinv \|\)
-            "cint1e_ipspnucsp"          spinor     (nabla sigma dot p \| nuc \| sigma dot p\)
-            "cint1e_ipsprinvsp"         spinor     (nabla sigma dot p \| rinv \| sigma dot p\)
-            "cint1e_ipovlp_cart"        cartesian  (nabla \|\)
-            "cint1e_ipkin_cart"         cartesian  (.5 nabla \| p dot p\)
-            "cint1e_ipnuc_cart"         cartesian  (nabla \| nuc \|\)
-            "cint1e_iprinv_cart"        cartesian  (nabla \| rinv \|\)
-            "cint1e_rinv_cart"          cartesian  (\| rinv \|\)
-            "cint2e_p1vxp1_sph"         spherical  ( p* \, cross p \| \, \) ; SSO
-            "cint2e_sph"                spherical  ( \, \| \, \)
-            "cint2e_ig1_sph"            spherical  (#C(0 1) g \, \| \, \)
-            "cint2e_ig1_cart"           cartesian  (#C(0 1) g \, \| \, \)
-            "cint2e_ip1_sph"            spherical  (nabla \, \| \,\)
-            "cint2e_ip1_cart"           cartesian  (nabla \, \| \,\)
-            "cint2e_ipip1_sph"          spherical  ( nabla nabla \, \| \, \)
-            "cint2e_ipvip1_sph"         spherical  ( nabla \, nabla \| \, \)
-            "cint2e_ip1ip2_sph"         spherical  ( nabla \, \| nabla \, \)
-            "cint3c2e_ip1_sph"          spherical  (nabla \, \| \)
-            "cint3c2e_ip2_sph"          spherical  ( \, \| nabla\)
-            "cint2c2e_ip1_sph"          spherical  (nabla \| r12 \| \)
-            ==========================  =========  =============
+            ================================  =============
+            Function                          Expression
+            ================================  =============
+            "int1e_ovlp_sph"                  ( \| \)
+            "int1e_nuc_sph"                   ( \| nuc \| \)
+            "int1e_kin_sph"                   (.5 \| p dot p\)
+            "int1e_ia01p_sph"                 (#C(0 1) \| nabla-rinv \| cross p\)
+            "int1e_giao_irjxp_sph"            (#C(0 1) \| r cross p\)
+            "int1e_cg_irxp_sph"               (#C(0 1) \| rc cross p\)
+            "int1e_giao_a11part_sph"          (-.5 \| nabla-rinv \| r\)
+            "int1e_cg_a11part_sph"            (-.5 \| nabla-rinv \| rc\)
+            "int1e_a01gp_sph"                 (g \| nabla-rinv cross p \|\)
+            "int1e_igkin_sph"                 (#C(0 .5) g \| p dot p\)
+            "int1e_igovlp_sph"                (#C(0 1) g \|\)
+            "int1e_ignuc_sph"                 (#C(0 1) g \| nuc \|\)
+            "int1e_z_sph"                     ( \| zc \| \)
+            "int1e_zz_sph"                    ( \| zc zc \| \)
+            "int1e_r_sph"                     ( \| rc \| \)
+            "int1e_r2_sph"                    ( \| rc dot rc \| \)
+            "int1e_rr_sph"                    ( \| rc rc \| \)
+            "int1e_pnucp_sph"                 (p* \| nuc dot p \| \)
+            "int1e_prinvxp_sph"               (p* \| rinv cross p \| \)
+            "int1e_ovlp_spinor"               ( \| \)
+            "int1e_nuc_spinor"                ( \| nuc \|\)
+            "int1e_srsr_spinor"               (sigma dot r \| sigma dot r\)
+            "int1e_sr_spinor"                 (sigma dot r \|\)
+            "int1e_srsp_spinor"               (sigma dot r \| sigma dot p\)
+            "int1e_spsp_spinor"               (sigma dot p \| sigma dot p\)
+            "int1e_sp_spinor"                 (sigma dot p \|\)
+            "int1e_spnucsp_spinor"            (sigma dot p \| nuc \| sigma dot p\)
+            "int1e_srnucsr_spinor"            (sigma dot r \| nuc \| sigma dot r\)
+            "int1e_govlp_spinor"              (g \|\)
+            "int1e_gnuc_spinor"               (g \| nuc \|\)
+            "int1e_cg_sa10sa01_spinor"        (.5 sigma cross rc \| sigma cross nabla-rinv \|\)
+            "int1e_cg_sa10sp_spinor"          (.5 rc cross sigma \| sigma dot p\)
+            "int1e_cg_sa10nucsp_spinor"       (.5 rc cross sigma \| nuc \| sigma dot p\)
+            "int1e_giao_sa10sa01_spinor"      (.5 sigma cross r \| sigma cross nabla-rinv \|\)
+            "int1e_giao_sa10sp_spinor"        (.5 r cross sigma \| sigma dot p\)
+            "int1e_giao_sa10nucsp_spinor"     (.5 r cross sigma \| nuc \| sigma dot p\)
+            "int1e_sa01sp_spinor"             (\| nabla-rinv cross sigma \| sigma dot p\)
+            "int1e_spgsp_spinor"              (g sigma dot p \| sigma dot p\)
+            "int1e_spgnucsp_spinor"           (g sigma dot p \| nuc \| sigma dot p\)
+            "int1e_spgsa01_spinor"            (g sigma dot p \| nabla-rinv cross sigma \|\)
+            "int1e_spspsp_spinor"             (sigma dot p \| sigma dot p sigma dot p\)
+            "int1e_spnuc_spinor"              (sigma dot p \| nuc \|\)
+            "int1e_ovlp_cart"                 ( \| \)
+            "int1e_nuc_cart"                  ( \| nuc \| \)
+            "int1e_kin_cart"                  (.5 \| p dot p\)
+            "int1e_ia01p_cart"                (#C(0 1) \| nabla-rinv \| cross p\)
+            "int1e_giao_irjxp_cart"           (#C(0 1) \| r cross p\)
+            "int1e_cg_irxp_cart"              (#C(0 1) \| rc cross p\)
+            "int1e_giao_a11part_cart"         (-.5 \| nabla-rinv \| r\)
+            "int1e_cg_a11part_cart"           (-.5 \| nabla-rinv \| rc\)
+            "int1e_a01gp_cart"                (g \| nabla-rinv cross p \|\)
+            "int1e_igkin_cart"                (#C(0 .5) g \| p dot p\)
+            "int1e_igovlp_cart"               (#C(0 1) g \|\)
+            "int1e_ignuc_cart"                (#C(0 1) g \| nuc \|\)
+            "int1e_ipovlp_sph"                (nabla \|\)
+            "int1e_ipkin_sph"                 (.5 nabla \| p dot p\)
+            "int1e_ipnuc_sph"                 (nabla \| nuc \|\)
+            "int1e_iprinv_sph"                (nabla \| rinv \|\)
+            "int1e_rinv_sph"                  (\| rinv \|\)
+            "int1e_ipovlp_spinor"             (nabla \|\)
+            "int1e_ipkin_spinor"              (.5 nabla \| p dot p\)
+            "int1e_ipnuc_spinor"              (nabla \| nuc \|\)
+            "int1e_iprinv_spinor"             (nabla \| rinv \|\)
+            "int1e_ipspnucsp_spinor"          (nabla sigma dot p \| nuc \| sigma dot p\)
+            "int1e_ipsprinvsp_spinor"         (nabla sigma dot p \| rinv \| sigma dot p\)
+            "int1e_ipovlp_cart"               (nabla \|\)
+            "int1e_ipkin_cart"                (.5 nabla \| p dot p\)
+            "int1e_ipnuc_cart"                (nabla \| nuc \|\)
+            "int1e_iprinv_cart"               (nabla \| rinv \|\)
+            "int1e_rinv_cart"                 (\| rinv \|\)
+            "int2e_p1vxp1_sph"                ( p* \, cross p \| \, \) ; SSO
+            "int2e_sph"                       ( \, \| \, \)
+            "int2e_ig1_sph"                   (#C(0 1) g \, \| \, \)
+            "int2e_spinor"                    (, \| \, \)
+            "int2e_spsp1_spinor"              (sigma dot p \, sigma dot p \| \, \)
+            "int2e_spsp1spsp2_spinor"         (sigma dot p \, sigma dot p \| sigma dot p \, sigma dot p \)
+            "int2e_srsr1_spinor"              (sigma dot r \, sigma dot r \| \,\)
+            "int2e_srsr1srsr2_spinor"         (sigma dot r \, sigma dot r \| sigma dot r \, sigma dot r\)
+            "int2e_cg_sa10sp1_spinor"         (.5 rc cross sigma \, sigma dot p \| \,\)
+            "int2e_cg_sa10sp1spsp2_spinor"    (.5 rc cross sigma \, sigma dot p \| sigma dot p \, sigma dot p \)
+            "int2e_giao_sa10sp1_spinor"       (.5 r cross sigma \, sigma dot p \| \,\)
+            "int2e_giao_sa10sp1spsp2_spinor"  (.5 r cross sigma \, sigma dot p \| sigma dot p \, sigma dot p \)
+            "int2e_g1_spinor"                 (g \, \| \,\)
+            "int2e_spgsp1_spinor"             (g sigma dot p \, sigma dot p \| \,\)
+            "int2e_g1spsp2_spinor"            (g \, \| sigma dot p \, sigma dot p\)
+            "int2e_spgsp1spsp2_spinor"        (g sigma dot p \, sigma dot p \| sigma dot p \, sigma dot p\)
+            "int2e_spv1_spinor"               (sigma dot p \, \| \,\)
+            "int2e_vsp1_spinor"               (\, sigma dot p \| \,\)
+            "int2e_spsp2_spinor"              (\, \| sigma dot p \, sigma dot p\)
+            "int2e_spv1spv2_spinor"           (sigma dot p \, \| sigma dot p \,\)
+            "int2e_vsp1spv2_spinor"           (\, sigma dot p \| sigma dot p \,\)
+            "int2e_spv1vsp2_spinor"           (sigma dot p \, \| \, sigma dot p\)
+            "int2e_vsp1vsp2_spinor"           (\, sigma dot p \| \, sigma dot p\)
+            "int2e_spv1spsp2_spinor"          (sigma dot p \, \| sigma dot p \, sigma dot p\)
+            "int2e_vsp1spsp2_spinor"          (\, sigma dot p \| sigma dot p \, sigma dot p\)
+            "int2e_ig1_cart"                  (#C(0 1) g \, \| \, \)
+            "int2e_ip1_sph"                   (nabla \, \| \,\)
+            "int2e_ip1_spinor"                (nabla \, \| \,\)
+            "int2e_ipspsp1_spinor"            (nabla sigma dot p \, sigma dot p \| \,\)
+            "int2e_ip1spsp2_spinor"           (nabla \, \| sigma dot p \, sigma dot p\)
+            "int2e_ipspsp1spsp2_spinor"       (nabla sigma dot p \, sigma dot p \| sigma dot p \, sigma dot p\)
+            "int2e_ipsrsr1_spinor"            (nabla sigma dot r \, sigma dot r \| \,\)
+            "int2e_ip1srsr2_spinor"           (nabla \, \| sigma dot r \, sigma dot r\)
+            "int2e_ipsrsr1srsr2_spinor"       (nabla sigma dot r \, sigma dot r \| sigma dot r \, sigma dot r\)
+            "int2e_ip1_cart"                  (nabla \, \| \,\)
+            "int2e_ssp1ssp2_spinor"           ( \, sigma dot p \| gaunt \| \, sigma dot p\)
+            "int2e_cg_ssa10ssp2_spinor"       (rc cross sigma \, \| gaunt \| \, sigma dot p\)
+            "int2e_giao_ssa10ssp2_spinor"     (r cross sigma  \, \| gaunt \| \, sigma dot p\)
+            "int2e_gssp1ssp2_spinor"          (g \, sigma dot p  \| gaunt \| \, sigma dot p\)
+            "int2e_ipip1_sph"                 ( nabla nabla \, \| \, \)
+            "int2e_ipvip1_sph"                ( nabla \, nabla \| \, \)
+            "int2e_ip1ip2_sph"                ( nabla \, \| nabla \, \)
+            "int3c2e_ip1_sph"                 (nabla \, \| \)
+            "int3c2e_ip2_sph"                 ( \, \| nabla\)
+            "int2c2e_ip1_sph"                 (nabla \| r12 \| \)
+            "int3c2e_spinor"                  (nabla \, \| \)
+            "int3c2e_spsp1_spinor"            (nabla \, \| \)
+            "int3c2e_ip1_spinor"              (nabla \, \| \)
+            "int3c2e_ip2_spinor"              ( \, \| nabla\)
+            "int3c2e_ipspsp1_spinor"          (nabla sigma dot p \, sigma dot p \| \)
+            "int3c2e_spsp1ip2_spinor"         (sigma dot p \, sigma dot p \| nabla \)
+            ================================  =============
 
         atm : int32 ndarray
             libcint integral function argument
@@ -126,7 +161,7 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
         shls_slice : 8-element list
             (ish_start, ish_end, jsh_start, jsh_end, ksh_start, ksh_end, lsh_start, lsh_end)
         comp : int
-            Components of the integrals, e.g. cint1e_ipovlp has 3 components.
+            Components of the integrals, e.g. int1e_ipovlp has 3 components.
         hermi : int (1e integral only)
             Symmetry of the 1e integrals
 
@@ -151,7 +186,7 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
     Examples:
 
     >>> mol.build(atom='H 0 0 0; H 0 0 1.1', basis='sto-3g')
-    >>> gto.getints('cint1e_ipnuc_sph', mol._atm, mol._bas, mol._env, comp=3) # <nabla i | V_nuc | j>
+    >>> gto.getints('int1e_ipnuc_sph', mol._atm, mol._bas, mol._env, comp=3) # <nabla i | V_nuc | j>
     [[[ 0.          0.        ]
       [ 0.          0.        ]]
      [[ 0.          0.        ]
@@ -159,15 +194,16 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
      [[ 0.10289944  0.48176097]
       [-0.48176097 -0.10289944]]]
     '''
-    if (intor_name.startswith('cint1e') or
+    intor_name = ascint3(intor_name)
+    if (intor_name.startswith('int1e') or
         intor_name.startswith('ECP') or
-        intor_name.startswith('cint2c2e')):
+        intor_name.startswith('int2c2e')):
         return getints2c(intor_name, atm, bas, env, shls_slice, comp,
                          hermi, ao_loc, cintopt, out)
-    elif intor_name.startswith('cint2e') or intor_name.startswith('cint4c1e'):
-        return getints2e(intor_name, atm, bas, env, shls_slice, comp,
+    elif intor_name.startswith('int2e') or intor_name.startswith('int4c1e'):
+        return getints4c(intor_name, atm, bas, env, shls_slice, comp,
                          aosym, ao_loc, cintopt, out)
-    elif intor_name.startswith('cint3c'):
+    elif intor_name.startswith('int3c'):
         return getints3c(intor_name, atm, bas, env, shls_slice, comp,
                          aosym, ao_loc, cintopt, out)
     else:
@@ -190,40 +226,33 @@ def getints2c(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
     i0, i1, j0, j1 = shls_slice[:4]
     naoi = ao_loc[i1] - ao_loc[i0];
     naoj = ao_loc[j1] - ao_loc[j0];
-    if '_cart' in intor_name or '_sph' in intor_name:
+    if intor_name.endswith('_cart') or intor_name.endswith('_sph'):
         mat = numpy.ndarray((naoi,naoj,comp), numpy.double, out, order='F')
-        if '2c2e' in intor_name:
-            drv_name = 'GTOint2c2e'
-        else:
-            drv_name = 'GTOint2c'
+        drv_name = 'GTOint2c'
     else:
         mat = numpy.ndarray((naoi,naoj,comp), numpy.complex, out, order='F')
         if '2c2e' in intor_name:
-            drv_name = 'GTOint2c2e_spinor'
-            assert(hermi != pyscf.lib.HERMITIAN and
-                   hermi != pyscf.lib.ANTIHERMI)
-        else:
-            drv_name = 'GTOint2c_spinor'
+            assert(hermi != lib.HERMITIAN and
+                   hermi != lib.ANTIHERMI)
+        drv_name = 'GTOint2c_spinor'
 
-#    if cintopt is None:
-#        intopt = make_cintopt(atm, bas, env, intor_name)
-#    else:
-#        intopt = cintopt
-    intopt = pyscf.lib.c_null_ptr()
+    if cintopt is None:
+        cintopt = make_cintopt(atm, bas, env, intor_name)
+#    cintopt = lib.c_null_ptr()
 
     fn = getattr(libcgto, drv_name)
     fn(getattr(libcgto, intor_name), mat.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(comp), ctypes.c_int(hermi),
        (ctypes.c_int*4)(*(shls_slice[:4])),
-       ao_loc.ctypes.data_as(ctypes.c_void_p), intopt,
+       ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
        atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
        bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
        env.ctypes.data_as(ctypes.c_void_p))
 
+    mat = mat.transpose(2,0,1)
     if comp == 1:
-        return mat.reshape((naoi,naoj), order='A')
-    else:
-        return mat.transpose(2,0,1)
+        mat = mat[0]
+    return mat
 
 def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
               aosym='s1', ao_loc=None, cintopt=None, out=None):
@@ -238,12 +267,17 @@ def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
         assert(shls_slice[1] <= nbas and
                shls_slice[3] <= nbas and
                shls_slice[5] <= nbas)
-    if ao_loc is None:
-        assert('ssc' not in intor_name)
-        ao_loc = make_loc(bas, intor_name)
 
     i0, i1, j0, j1, k0, k1 = shls_slice[:6]
-    naok = ao_loc[k1] - ao_loc[k0];
+    if ao_loc is None:
+        ao_loc = make_loc(bas, intor_name)
+        if k0 > j1 and k0 > i1:
+            if 'ssc' in intor_name:
+                ao_loc[k0-1:] = ao_loc[k0] + make_loc(bas[k0:], 'cart')
+            elif 'spinor' in intor_name:
+                ao_loc[k0-1:] = ao_loc[k0] + make_loc(bas[k0:], intor_name)
+
+    naok = ao_loc[k1] - ao_loc[k0]
 
     if aosym in ('s1',):
         naoi = ao_loc[i1] - ao_loc[i0];
@@ -254,65 +288,59 @@ def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
         nij = ao_loc[i1]*(ao_loc[i1]+1)//2 - ao_loc[i0]*(ao_loc[i0]+1)//2
         shape = (nij, naok, comp)
 
-    if '_cart' in intor_name or '_sph' in intor_name or 'ssc' in intor_name:
-        mat = numpy.ndarray(shape, numpy.double, out, order='F')
-    else:
-        raise NotImplementedError
+    if 'spinor' in intor_name:
         mat = numpy.ndarray(shape, numpy.complex, out, order='F')
+        drv = libcgto.GTOr3c_drv
+        fill = getattr(libcgto, 'GTOr3c_fill_'+aosym)
+    else:
+        mat = numpy.ndarray(shape, numpy.double, out, order='F')
+        drv = libcgto.GTOnr3c_drv
+        fill = getattr(libcgto, 'GTOnr3c_fill_'+aosym)
 
     if cintopt is None:
-        intopt = make_cintopt(atm, bas, env, intor_name)
-    else:
-        intopt = cintopt
+        cintopt = make_cintopt(atm, bas, env, intor_name)
 
-    drv = libcgto.GTOnr3c_drv
-    drv(getattr(libcgto, intor_name), getattr(libcgto, 'GTOnr3c_fill_'+aosym),
+    drv(getattr(libcgto, intor_name), fill,
         mat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
         (ctypes.c_int*6)(*(shls_slice[:6])),
-        ao_loc.ctypes.data_as(ctypes.c_void_p), intopt,
+        ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
         atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
         bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
         env.ctypes.data_as(ctypes.c_void_p))
 
+    mat = numpy.rollaxis(mat, -1, 0)
     if comp == 1:
-        return mat.reshape(shape[:-1], order='A')
-    else:
-        return numpy.rollaxis(mat, -1, 0)
+        mat = mat[0]
+    return mat
 
-def getints2e(intor_name, atm, bas, env, shls_slice=None, comp=1,
+def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
               aosym='s1', ao_loc=None, cintopt=None, out=None):
     aosym = _stand_sym_code(aosym)
 
     atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
     env = numpy.asarray(env, dtype=numpy.double, order='C')
-    c_atm = atm.ctypes.data_as(pyscf.lib.c_int_p)
-    c_bas = bas.ctypes.data_as(pyscf.lib.c_int_p)
-    c_env = env.ctypes.data_as(pyscf.lib.c_double_p)
+    c_atm = atm.ctypes.data_as(ctypes.c_void_p)
+    c_bas = bas.ctypes.data_as(ctypes.c_void_p)
+    c_env = env.ctypes.data_as(ctypes.c_void_p)
     natm = atm.shape[0]
     nbas = bas.shape[0]
 
-    if '_cart' in intor_name:
-        libcgto.CINTtot_cgto_cart.restype = ctypes.c_int
-        nao = libcgto.CINTtot_cgto_cart(c_bas, ctypes.c_int(nbas))
-        cgto_in_shell = 'CINTcgto_cart'
-    elif '_sph' in intor_name:
-        libcgto.CINTtot_cgto_spheric.restype = ctypes.c_int
-        nao = libcgto.CINTtot_cgto_spheric(c_bas, ctypes.c_int(nbas))
-        cgto_in_shell = 'CINTcgto_spheric'
-    else:
-        raise NotImplementedError('cint2e spinor AO integrals')
+    ao_loc = make_loc(bas, intor_name)
+    if cintopt is None:
+        cintopt = make_cintopt(atm, bas, env, intor_name)
 
-    if intor_name in ('cint2e_sph', 'cint2e_cart') and aosym == 's8':
+    if aosym == 's8':
+        #assert(intor_name in ('int2e_sph', 'int2e_cart'))
         assert(shls_slice is None)
+        libcvhf = lib.load_library('libcvhf')
+        nao = ao_loc[-1]
         nao_pair = nao*(nao+1)//2
-        if out is None:
-            out = numpy.empty((nao_pair*(nao_pair+1)//2))
-        else:
-            out = numpy.ndarray((nao_pair*(nao_pair+1)//2), buffer=out)
+        out = numpy.ndarray((nao_pair*(nao_pair+1)//2), buffer=out)
         drv = libcvhf.GTO2e_cart_or_sph
-        drv(getattr(libcgto, intor_name), getattr(libcgto, cgto_in_shell),
+        drv(getattr(libcgto, intor_name),
             out.ctypes.data_as(ctypes.c_void_p),
+            ao_loc.ctypes.data_as(ctypes.c_void_p),
             c_atm, ctypes.c_int(natm), c_bas, ctypes.c_int(nbas), c_env)
         return out
 
@@ -324,7 +352,6 @@ def getints2e(intor_name, atm, bas, env, shls_slice=None, comp=1,
         else:
             assert(shls_slice[1] <= nbas and shls_slice[3] <= nbas and
                    shls_slice[5] <= nbas and shls_slice[7] <= nbas)
-        ao_loc = make_loc(bas, intor_name)
         i0, i1, j0, j1, k0, k1, l0, l1 = shls_slice
         naoi = ao_loc[i1] - ao_loc[i0]
         naoj = ao_loc[j1] - ao_loc[j0]
@@ -345,9 +372,7 @@ def getints2e(intor_name, atm, bas, env, shls_slice=None, comp=1,
         else:
             out = numpy.ndarray((comp,nij,nkl), buffer=out)
 
-        if cintopt is None:
-            cintopt = make_cintopt(atm, bas, env, intor_name)
-        prescreen = pyscf.lib.c_null_ptr()
+        prescreen = lib.c_null_ptr()
         drv = libcgto.GTOnr2e_fill_drv
         drv(getattr(libcgto, intor_name),
             getattr(libcgto, 'GTOnr2e_fill_'+aosym), prescreen,
@@ -355,7 +380,6 @@ def getints2e(intor_name, atm, bas, env, shls_slice=None, comp=1,
             (ctypes.c_int*8)(*shls_slice),
             ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
             c_atm, ctypes.c_int(natm), c_bas, ctypes.c_int(nbas), c_env)
-        cintopt = None
         return out
 
 def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
@@ -364,133 +388,7 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
 
     Args:
         intor_name : str
-
-            ==========================  =========  =============
-            Function                    type       Expression
-            ==========================  =========  =============
-            "cint1e_ovlp_sph"           spherical  ( \| \)
-            "cint1e_nuc_sph"            spherical  ( \| nuc \| \)
-            "cint1e_kin_sph"            spherical  (.5 \| p dot p\)
-            "cint1e_ia01p_sph"          spherical  (#C(0 1) \| nabla-rinv \| cross p\)
-            "cint1e_giao_irjxp_sph"     spherical  (#C(0 1) \| r cross p\)
-            "cint1e_cg_irxp_sph"        spherical  (#C(0 1) \| rc cross p\)
-            "cint1e_giao_a11part_sph"   spherical  (-.5 \| nabla-rinv \| r\)
-            "cint1e_cg_a11part_sph"     spherical  (-.5 \| nabla-rinv \| rc\)
-            "cint1e_a01gp_sph"          spherical  (g \| nabla-rinv cross p \|\)
-            "cint1e_igkin_sph"          spherical  (#C(0 .5) g \| p dot p\)
-            "cint1e_igovlp_sph"         spherical  (#C(0 1) g \|\)
-            "cint1e_ignuc_sph"          spherical  (#C(0 1) g \| nuc \|\)
-            "cint1e_z_sph"              spherical  ( \| zc \| \)
-            "cint1e_zz_sph"             spherical  ( \| zc zc \| \)
-            "cint1e_r_sph"              spherical  ( \| rc \| \)
-            "cint1e_r2_sph"             spherical  ( \| rc dot rc \| \)
-            "cint1e_rr_sph"             spherical  ( \| rc rc \| \)
-            "cint1e_pnucp_sph"          spherical  (p* \| nuc dot p \| \)
-            "cint1e_prinvxp_sph"        spherical  (p* \| rinv cross p \| \)
-            "cint1e_ovlp"               spinor     ( \| \)
-            "cint1e_nuc"                spinor     ( \| nuc \|\)
-            "cint1e_srsr"               spinor     (sigma dot r \| sigma dot r\)
-            "cint1e_sr"                 spinor     (sigma dot r \|\)
-            "cint1e_srsp"               spinor     (sigma dot r \| sigma dot p\)
-            "cint1e_spsp"               spinor     (sigma dot p \| sigma dot p\)
-            "cint1e_sp"                 spinor     (sigma dot p \|\)
-            "cint1e_spnucsp"            spinor     (sigma dot p \| nuc \| sigma dot p\)
-            "cint1e_srnucsr"            spinor     (sigma dot r \| nuc \| sigma dot r\)
-            "cint1e_govlp"              spinor     (g \|\)
-            "cint1e_gnuc"               spinor     (g \| nuc \|\)
-            "cint1e_cg_sa10sa01"        spinor     (.5 sigma cross rc \| sigma cross nabla-rinv \|\)
-            "cint1e_cg_sa10sp"          spinor     (.5 rc cross sigma \| sigma dot p\)
-            "cint1e_cg_sa10nucsp"       spinor     (.5 rc cross sigma \| nuc \| sigma dot p\)
-            "cint1e_giao_sa10sa01"      spinor     (.5 sigma cross r \| sigma cross nabla-rinv \|\)
-            "cint1e_giao_sa10sp"        spinor     (.5 r cross sigma \| sigma dot p\)
-            "cint1e_giao_sa10nucsp"     spinor     (.5 r cross sigma \| nuc \| sigma dot p\)
-            "cint1e_sa01sp"             spinor     (\| nabla-rinv cross sigma \| sigma dot p\)
-            "cint1e_spgsp"              spinor     (g sigma dot p \| sigma dot p\)
-            "cint1e_spgnucsp"           spinor     (g sigma dot p \| nuc \| sigma dot p\)
-            "cint1e_spgsa01"            spinor     (g sigma dot p \| nabla-rinv cross sigma \|\)
-            "cint1e_spspsp"             spinor     (sigma dot p \| sigma dot p sigma dot p\)
-            "cint1e_spnuc"              spinor     (sigma dot p \| nuc \|\)
-            "cint1e_ovlp_cart"          cartesian  ( \| \)
-            "cint1e_nuc_cart"           cartesian  ( \| nuc \| \)
-            "cint1e_kin_cart"           cartesian  (.5 \| p dot p\)
-            "cint1e_ia01p_cart"         cartesian  (#C(0 1) \| nabla-rinv \| cross p\)
-            "cint1e_giao_irjxp_cart"    cartesian  (#C(0 1) \| r cross p\)
-            "cint1e_cg_irxp_cart"       cartesian  (#C(0 1) \| rc cross p\)
-            "cint1e_giao_a11part_cart"  cartesian  (-.5 \| nabla-rinv \| r\)
-            "cint1e_cg_a11part_cart"    cartesian  (-.5 \| nabla-rinv \| rc\)
-            "cint1e_a01gp_cart"         cartesian  (g \| nabla-rinv cross p \|\)
-            "cint1e_igkin_cart"         cartesian  (#C(0 .5) g \| p dot p\)
-            "cint1e_igovlp_cart"        cartesian  (#C(0 1) g \|\)
-            "cint1e_ignuc_cart"         cartesian  (#C(0 1) g \| nuc \|\)
-            "cint1e_ipovlp_sph"         spherical  (nabla \|\)
-            "cint1e_ipkin_sph"          spherical  (.5 nabla \| p dot p\)
-            "cint1e_ipnuc_sph"          spherical  (nabla \| nuc \|\)
-            "cint1e_iprinv_sph"         spherical  (nabla \| rinv \|\)
-            "cint1e_rinv_sph"           spherical  (\| rinv \|\)
-            "cint1e_ipovlp"             spinor     (nabla \|\)
-            "cint1e_ipkin"              spinor     (.5 nabla \| p dot p\)
-            "cint1e_ipnuc"              spinor     (nabla \| nuc \|\)
-            "cint1e_iprinv"             spinor     (nabla \| rinv \|\)
-            "cint1e_ipspnucsp"          spinor     (nabla sigma dot p \| nuc \| sigma dot p\)
-            "cint1e_ipsprinvsp"         spinor     (nabla sigma dot p \| rinv \| sigma dot p\)
-            "cint1e_ipovlp_cart"        cartesian  (nabla \|\)
-            "cint1e_ipkin_cart"         cartesian  (.5 nabla \| p dot p\)
-            "cint1e_ipnuc_cart"         cartesian  (nabla \| nuc \|\)
-            "cint1e_iprinv_cart"        cartesian  (nabla \| rinv \|\)
-            "cint1e_rinv_cart"          cartesian  (\| rinv \|\)
-            "cint2e_p1vxp1_sph"         spherical  ( p* \, cross p \| \, \) ; SSO
-            "cint2e_sph"                spherical  ( \, \| \, \)
-            "cint2e_ig1_sph"            spherical  (#C(0 1) g \, \| \, \)
-            "cint2e"                    spinor     (, \| \, \)
-            "cint2e_spsp1"              spinor     (sigma dot p \, sigma dot p \| \, \)
-            "cint2e_spsp1spsp2"         spinor     (sigma dot p \, sigma dot p \| sigma dot p \, sigma dot p \)
-            "cint2e_srsr1"              spinor     (sigma dot r \, sigma dot r \| \,\)
-            "cint2e_srsr1srsr2"         spinor     (sigma dot r \, sigma dot r \| sigma dot r \, sigma dot r\)
-            "cint2e_cg_sa10sp1"         spinor     (.5 rc cross sigma \, sigma dot p \| \,\)
-            "cint2e_cg_sa10sp1spsp2"    spinor     (.5 rc cross sigma \, sigma dot p \| sigma dot p \, sigma dot p \)
-            "cint2e_giao_sa10sp1"       spinor     (.5 r cross sigma \, sigma dot p \| \,\)
-            "cint2e_giao_sa10sp1spsp2"  spinor     (.5 r cross sigma \, sigma dot p \| sigma dot p \, sigma dot p \)
-            "cint2e_g1"                 spinor     (g \, \| \,\)
-            "cint2e_spgsp1"             spinor     (g sigma dot p \, sigma dot p \| \,\)
-            "cint2e_g1spsp2"            spinor     (g \, \| sigma dot p \, sigma dot p\)
-            "cint2e_spgsp1spsp2"        spinor     (g sigma dot p \, sigma dot p \| sigma dot p \, sigma dot p\)
-            "cint2e_spv1"               spinor     (sigma dot p \, \| \,\)
-            "cint2e_vsp1"               spinor     (\, sigma dot p \| \,\)
-            "cint2e_spsp2"              spinor     (\, \| sigma dot p \, sigma dot p\)
-            "cint2e_spv1spv2"           spinor     (sigma dot p \, \| sigma dot p \,\)
-            "cint2e_vsp1spv2"           spinor     (\, sigma dot p \| sigma dot p \,\)
-            "cint2e_spv1vsp2"           spinor     (sigma dot p \, \| \, sigma dot p\)
-            "cint2e_vsp1vsp2"           spinor     (\, sigma dot p \| \, sigma dot p\)
-            "cint2e_spv1spsp2"          spinor     (sigma dot p \, \| sigma dot p \, sigma dot p\)
-            "cint2e_vsp1spsp2"          spinor     (\, sigma dot p \| sigma dot p \, sigma dot p\)
-            "cint2e_ig1_cart"           cartesian  (#C(0 1) g \, \| \, \)
-            "cint2e_ip1_sph"            spherical  (nabla \, \| \,\)
-            "cint2e_ip1"                spinor     (nabla \, \| \,\)
-            "cint2e_ipspsp1"            spinor     (nabla sigma dot p \, sigma dot p \| \,\)
-            "cint2e_ip1spsp2"           spinor     (nabla \, \| sigma dot p \, sigma dot p\)
-            "cint2e_ipspsp1spsp2"       spinor     (nabla sigma dot p \, sigma dot p \| sigma dot p \, sigma dot p\)
-            "cint2e_ipsrsr1"            spinor     (nabla sigma dot r \, sigma dot r \| \,\)
-            "cint2e_ip1srsr2"           spinor     (nabla \, \| sigma dot r \, sigma dot r\)
-            "cint2e_ipsrsr1srsr2"       spinor     (nabla sigma dot r \, sigma dot r \| sigma dot r \, sigma dot r\)
-            "cint2e_ip1_cart"           cartesian  (nabla \, \| \,\)
-            "cint2e_ssp1ssp2"           spinor     ( \, sigma dot p \| gaunt \| \, sigma dot p\)
-            "cint2e_cg_ssa10ssp2"       spinor     (rc cross sigma \, \| gaunt \| \, sigma dot p\)
-            "cint2e_giao_ssa10ssp2"     spinor     (r cross sigma  \, \| gaunt \| \, sigma dot p\)
-            "cint2e_gssp1ssp2"          spinor     (g \, sigma dot p  \| gaunt \| \, sigma dot p\)
-            "cint2e_ipip1_sph"          spherical  ( nabla nabla \, \| \, \)
-            "cint2e_ipvip1_sph"         spherical  ( nabla \, nabla \| \, \)
-            "cint2e_ip1ip2_sph"         spherical  ( nabla \, \| nabla \, \)
-            "cint3c2e_ip1_sph"          spherical  (nabla \, \| \)
-            "cint3c2e_ip2_sph"          spherical  ( \, \| nabla\)
-            "cint2c2e_ip1_sph"          spherical  (nabla \| r12 \| \)
-            "cint3c2e_spinor"           spinor     (nabla \, \| \)
-            "cint3c2e_spsp1_spinor"     spinor     (nabla \, \| \)
-            "cint3c2e_ip1_spinor"       spinor     (nabla \, \| \)
-            "cint3c2e_ip2_spinor"       spinor     ( \, \| nabla\)
-            "cint3c2e_ipspsp1_spinor"   spinor     (nabla sigma dot p \, sigma dot p \| \)
-            "cint3c2e_spsp1ip2_spinor"  spinor     (sigma dot p \, sigma dot p \| nabla \)
-            ==========================  =========  =============
-
+            See also :func:`getints` for the supported intor_name
         shls : list of int
             The AO shell-ids of the integrals
         atm : int32 ndarray
@@ -502,7 +400,7 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
 
     Kwargs:
         comp : int
-            Components of the integrals, e.g. cint1e_ipovlp has 3 components.
+            Components of the integrals, e.g. int1e_ipovlp has 3 components.
 
     Returns:
         ndarray of 2-dim to 5-dim, depending on the integral type (1e,
@@ -512,100 +410,90 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
         The gradients of the spherical 2e integrals
 
     >>> mol.build(atom='H 0 0 0; H 0 0 1.1', basis='sto-3g')
-    >>> gto.getints_by_shell('cint2e_ip1_sph', (0,1,0,1), mol._atm, mol._bas, mol._env, comp=3)
+    >>> gto.getints_by_shell('int2e_ip1_sph', (0,1,0,1), mol._atm, mol._bas, mol._env, comp=3)
     [[[[[-0.        ]]]]
       [[[[-0.        ]]]]
       [[[[-0.08760462]]]]]
     '''
+    intor_name = ascint3(intor_name)
     atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
     env = numpy.asarray(env, dtype=numpy.double, order='C')
     c_bas = bas.ctypes.data_as(ctypes.c_void_p)
     natm = ctypes.c_int(atm.shape[0])
     nbas = ctypes.c_int(bas.shape[0])
-    if '_cart' in intor_name:
+    if intor_name.endswith('_cart'):
         dtype = numpy.double
         def num_cgto_of(basid):
             l = bas[basid,ANG_OF]
             return (l+1)*(l+2)//2 * bas[basid,NCTR_OF]
-    elif '_sph' in intor_name:
+    elif intor_name.endswith('_sph'):
         dtype = numpy.double
         def num_cgto_of(basid):
             l = bas[basid,ANG_OF]
             return (l*2+1) * bas[basid,NCTR_OF]
     else:
-        from pyscf.gto import mole
+        from pyscf.gto.mole import len_spinor
         dtype = numpy.complex
         def num_cgto_of(basid):
             l = bas[basid,ANG_OF]
             k = bas[basid,KAPPA_OF]
-            return mole.len_spinor(l,k) * bas[basid,NCTR_OF]
-    if '3c' in intor_name:
+            return len_spinor(l,k) * bas[basid,NCTR_OF]
+
+    null = lib.c_null_ptr()
+    if intor_name.startswith('int3c'):
         assert(len(shls) == 3)
-        #di, dj, dk = [num_cgto_of(x) for x in shls]
         di = num_cgto_of(shls[0])
         dj = num_cgto_of(shls[1])
         l = bas[shls[2],ANG_OF]
-        if '_ssc' in intor_name: # mixed spherical-cartesian
+        if intor_name.endswith('_ssc'): # mixed spherical-cartesian
             dk = (l+1)*(l+2)//2 * bas[shls[2],NCTR_OF]
         else:
             dk = (l*2+1) * bas[shls[2],NCTR_OF]
         buf = numpy.empty((di,dj,dk,comp), dtype, order='F')
         fintor = getattr(libcgto, intor_name)
         fintor(buf.ctypes.data_as(ctypes.c_void_p),
-               (ctypes.c_int*3)(*shls),
+               null, (ctypes.c_int*3)(*shls),
                atm.ctypes.data_as(ctypes.c_void_p), natm,
                bas.ctypes.data_as(ctypes.c_void_p), nbas,
-               env.ctypes.data_as(ctypes.c_void_p), pyscf.lib.c_null_ptr())
+               env.ctypes.data_as(ctypes.c_void_p), null, null)
         if comp == 1:
             return buf.reshape(di,dj,dk)
         else:
             return buf.transpose(3,0,1,2)
-    elif '2c' in intor_name:
-        assert(len(shls) == 2)
-        #di, dj = [num_cgto_of(x) for x in shls]
-        #buf = numpy.empty((di,dj,comp), dtype, order='F')
-        di = num_cgto_of(shls[0])
-        dj = num_cgto_of(shls[1])
-        buf = numpy.empty((di,dj,comp), order='F') # no complex?
-        fintor = getattr(libcgto, intor_name)
-        fintor(buf.ctypes.data_as(ctypes.c_void_p),
-               (ctypes.c_int*2)(*shls),
-               atm.ctypes.data_as(ctypes.c_void_p), natm,
-               bas.ctypes.data_as(ctypes.c_void_p), nbas,
-               env.ctypes.data_as(ctypes.c_void_p), pyscf.lib.c_null_ptr())
-        if comp == 1:
-            return buf.reshape(di,dj)
-        else:
-            return buf.transpose(2,0,1)
-    elif '2e' in intor_name:
+
+    elif intor_name.startswith('int2e') or intor_name.startswith('int4c'):
         assert(len(shls) == 4)
         di, dj, dk, dl = [num_cgto_of(x) for x in shls]
         buf = numpy.empty((di,dj,dk,dl,comp), dtype, order='F')
         fintor = getattr(libcgto, intor_name)
         fintor(buf.ctypes.data_as(ctypes.c_void_p),
-               (ctypes.c_int*4)(*shls),
+               null, (ctypes.c_int*4)(*shls),
                atm.ctypes.data_as(ctypes.c_void_p), natm,
                bas.ctypes.data_as(ctypes.c_void_p), nbas,
-               env.ctypes.data_as(ctypes.c_void_p), pyscf.lib.c_null_ptr())
+               env.ctypes.data_as(ctypes.c_void_p), null, null)
         if comp == 1:
             return buf.reshape(di,dj,dk,dl)
         else:
             return buf.transpose(4,0,1,2,3)
-    elif '1e' in intor_name or 'ECP' in intor_name:
+
+    elif (intor_name.startswith('int2c') or '1e' in intor_name or
+          'ECP' in intor_name):
         assert(len(shls) == 2)
-        di, dj = [num_cgto_of(x) for x in shls]
+        di = num_cgto_of(shls[0])
+        dj = num_cgto_of(shls[1])
         buf = numpy.empty((di,dj,comp), dtype, order='F')
         fintor = getattr(libcgto, intor_name)
         fintor(buf.ctypes.data_as(ctypes.c_void_p),
-               (ctypes.c_int*2)(*shls),
+               null, (ctypes.c_int*2)(*shls),
                atm.ctypes.data_as(ctypes.c_void_p), natm,
                bas.ctypes.data_as(ctypes.c_void_p), nbas,
-               env.ctypes.data_as(ctypes.c_void_p))
+               env.ctypes.data_as(ctypes.c_void_p), null, null)
         if comp == 1:
             return buf.reshape(di,dj)
         else:
             return buf.transpose(2,0,1)
+
     else:
         raise RuntimeError('Unknown intor %s' % intor_name)
 
@@ -629,12 +517,13 @@ def make_loc(bas, key):
     return ao_loc
 
 def make_cintopt(atm, bas, env, intor):
+    intor = intor.replace('_sph','').replace('_cart','').replace('_spinor','')
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
     c_env = numpy.asarray(env, dtype=numpy.double, order='C')
     natm = c_atm.shape[0]
     nbas = c_bas.shape[0]
-    cintopt = pyscf.lib.c_null_ptr()
+    cintopt = lib.c_null_ptr()
     foptinit = getattr(libcgto, intor+'_optimizer')
     foptinit(ctypes.byref(cintopt),
              c_atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
@@ -653,6 +542,16 @@ def _stand_sym_code(sym):
     else:
         return 's' + sym.lower()
 
+def ascint3(intor_name):
+    '''convert cint2 function name to cint3 function name'''
+    if intor_name.startswith('cint'):
+        intor_name = intor_name[1:]
+    if not (intor_name.endswith('_cart') or
+            intor_name.endswith('_sph') or
+            intor_name.endswith('_spinor')):
+        intor_name = intor_name + '_spinor'
+    return intor_name
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -669,5 +568,5 @@ if __name__ == '__main__':
     mol.set_rinv_origin(mol.atom_coord(0))
     for i in range(mol.nbas):
         for j in range(mol.nbas):
-            print(i, j, getints_by_shell('cint1e_prinvxp_sph', (i,j),
+            print(i, j, getints_by_shell('int1e_prinvxp_sph', (i,j),
                                          mol._atm, mol._bas, mol._env, 3))

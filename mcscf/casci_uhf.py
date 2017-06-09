@@ -278,7 +278,7 @@ class CASCI(lib.StreamObject):
 
         if verbose >= logger.INFO:
             log = logger.Logger(self.stdout, verbose)
-            label = self.mol.spheric_labels(True)
+            label = self.mol.ao_labels()
             if log.verbose >= logger.DEBUG:
                 log.info('alpha density matrix (on AO)')
                 dump_mat.dump_tri(self.stdout, dm1a, label)

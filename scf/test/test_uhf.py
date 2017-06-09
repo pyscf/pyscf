@@ -60,6 +60,20 @@ class KnowValues(unittest.TestCase):
     def test_scf(self):
         self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
 
+    def test_nr_uhf_cart(self):
+        pmol = mol.copy()
+        pmol.cart = True
+        mf = scf.UHF(pmol).run()
+        self.assertAlmostEqual(mf.e_tot, -76.027107008870573, 9)
+
+    def test_nr_uhf_symm_cart(self):
+        pmol = mol.copy()
+        pmol.cart = True
+        pmol.symmetry = 1
+        pmol.build()
+        mf = scf.UHF(pmol).run()
+        self.assertAlmostEqual(mf.e_tot, -76.027107008870573, 9)
+
     def test_get_veff(self):
         nao = mol.nao_nr()
         numpy.random.seed(1)
@@ -158,7 +172,7 @@ class KnowValues(unittest.TestCase):
         pmol.spin = 2
         mf = scf.UHF(pmol).set(verbose = 0)
         mf.irrep_nelec = {'A1g':6, 'A1u':4, 'E1ux':2, 'E1uy':2}
-        self.assertRaises(ValueError, mf.dump_flags)
+        self.assertRaises(ValueError, mf.build)
 
     def test_det_ovlp(self):
         mf = scf.UHF(mol)

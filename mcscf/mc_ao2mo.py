@@ -90,7 +90,8 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     aobuflen = mem_words//(nao_pair+nocc*nmo) + 1
     ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
     shranges = outcore.guess_shell_ranges(mol, True, aobuflen, None, ao_loc)
-    ao2mopt = _ao2mo.AO2MOpt(mol, 'cint2e_sph',
+    intor = mol._add_suffix('int2e')
+    ao2mopt = _ao2mo.AO2MOpt(mol, intor,
                              'CVHFnr_schwarz_cond', 'CVHFsetnr_direct_scf')
     nstep = len(shranges)
     paapp = 0
@@ -114,7 +115,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
         log.debug('[%d/%d], AO [%d:%d], len(buf) = %d',
                   istep+1, nstep, *sh_range)
         buf = bufs1[:sh_range[2]]
-        _ao2mo.nr_e1fill('cint2e_sph', sh_range,
+        _ao2mo.nr_e1fill(intor, sh_range,
                          mol._atm, mol._bas, mol._env, 's4', 1, ao2mopt, buf)
         if log.verbose >= logger.DEBUG1:
             ti1 = log.timer('AO integrals buffer', *ti0)
@@ -268,8 +269,7 @@ class _ERIS(object):
             (mem_incore+mem_now < casscf.max_memory*.9) or
             mol.incore_anyway):
             if eri is None:
-                from pyscf.scf import _vhf
-                eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
+                eri = mol.intor('int2e', aosym='s8')
             self.j_pc, self.k_pc, self.ppaa, self.papa = \
                     trans_e1_incore(eri, mo, casscf.ncore, casscf.ncas)
         else:

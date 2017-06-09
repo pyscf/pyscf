@@ -38,7 +38,7 @@ def get_ovlp(mf, cell=None, kpts=None):
     '''
     if cell is None: cell = mf.cell
     if kpts is None: kpts = mf.kpts
-    return lib.asarray(cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpts))
+    return lib.asarray(cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts))
 
 
 def get_hcore(mf, cell=None, kpts=None):
@@ -382,7 +382,7 @@ class KRHF(hf.RHF):
             nuc = lib.asarray(self.with_df.get_nuc(kpts))
         if len(cell._ecpbas) > 0:
             nuc += lib.asarray(ecp.ecp_int(cell, kpts))
-        t = lib.asarray(cell.pbc_intor('cint1e_kin_sph', 1, 1, kpts))
+        t = lib.asarray(cell.pbc_intor('int1e_kin_sph', 1, 1, kpts))
         return nuc + t
 
     get_ovlp = get_ovlp

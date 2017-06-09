@@ -12,6 +12,7 @@
 
 #define MAX(I,J)        ((I) > (J) ? (I) : (J))
 
+int int2e_sph();
 
 void CVHFinit_optimizer(CVHFOpt **opt, int *atm, int natm,
                         int *bas, int nbas, double *env)
@@ -90,13 +91,14 @@ int CVHFnrs8_prescreen(int *shls, CVHFOpt *opt,
         assert(k < n);
         assert(l < n);
         double qijkl = opt->q_cond[i*n+j] * opt->q_cond[k*n+l];
-        double dmin = opt->direct_scf_cutoff * qijkl;
-        return (4*opt->dm_cond[j*n+i] > dmin)
+        double dmin = opt->direct_scf_cutoff / qijkl;
+        return qijkl > opt->direct_scf_cutoff
+            &&((4*opt->dm_cond[j*n+i] > dmin)
             || (4*opt->dm_cond[l*n+k] > dmin)
             || (  opt->dm_cond[j*n+k] > dmin)
             || (  opt->dm_cond[j*n+l] > dmin)
             || (  opt->dm_cond[i*n+k] > dmin)
-            || (  opt->dm_cond[i*n+l] > dmin);
+            || (  opt->dm_cond[i*n+l] > dmin));
 }
 
 // return flag to decide whether transpose01324
@@ -131,37 +133,50 @@ void CVHFsetnr_direct_scf(CVHFOpt *opt, int *atm, int natm,
                 free(opt->q_cond);
         }
         opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
-
-        double *buf;
-        double qtmp;
-        int i, j, di, dj, ish, jsh;
+        int shls_slice[] = {0, nbas};
+        const int cache_size = GTOmax_cache_size(&int2e_sph, shls_slice, 1,
+                                                 atm, natm, bas, nbas, env);
+#pragma omp parallel default(none) \
+        shared(opt, atm, natm, bas, nbas, env)
+{
+        double qtmp, tmp;
+        int ij, i, j, di, dj, ish, jsh;
         int shls[4];
+        double *cache = malloc(sizeof(double) * cache_size);
+        di = 0;
         for (ish = 0; ish < nbas; ish++) {
-                di = CINTcgto_spheric(ish, bas);
-                for (jsh = 0; jsh <= ish; jsh++) {
-                        dj = CINTcgto_spheric(jsh, bas);
-                        buf = (double *)malloc(sizeof(double) * di*dj*di*dj);
-                        shls[0] = ish;
-                        shls[1] = jsh;
-                        shls[2] = ish;
-                        shls[3] = jsh;
-                        qtmp = 0;
-                        if (0 != cint2e_sph(buf, shls, atm, natm, bas, nbas, env, NULL)) {
-                                for (i = 0; i < di; i++) {
-                                for (j = 0; j < dj; j++) {
-                                        qtmp = MAX(qtmp, fabs(buf[i+di*j+di*dj*i+di*dj*di*j]));
-                                } }
-                        }
-                        qtmp = 1./sqrt(qtmp);
-                        opt->q_cond[ish*nbas+jsh] = qtmp;
-                        opt->q_cond[jsh*nbas+ish] = qtmp;
-                        free(buf);
-
-                }
+                dj = CINTcgto_spheric(ish, bas);
+                di = MAX(di, dj);
         }
+        double *buf = malloc(sizeof(double) * di*di*di*di);
+#pragma omp for schedule(dynamic, 4)
+        for (ij = 0; ij < nbas*(nbas+1)/2; ij++) {
+                ish = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
+                jsh = ij - ish*(ish+1)/2;
+                di = CINTcgto_spheric(ish, bas);
+                dj = CINTcgto_spheric(jsh, bas);
+                shls[0] = ish;
+                shls[1] = jsh;
+                shls[2] = ish;
+                shls[3] = jsh;
+                qtmp = 1e-100;
+                if (0 != int2e_sph(buf, NULL, shls, atm, natm, bas, nbas, env, NULL, cache)) {
+                        for (i = 0; i < di; i++) {
+                        for (j = 0; j < dj; j++) {
+                                tmp = fabs(buf[i+di*j+di*dj*i+di*dj*di*j]);
+                                qtmp = MAX(qtmp, tmp);
+                        } }
+                        qtmp = sqrt(qtmp);
+                }
+                opt->q_cond[ish*nbas+jsh] = qtmp;
+                opt->q_cond[jsh*nbas+ish] = qtmp;
+        }
+        free(buf);
+        free(cache);
+}
 }
 
-void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset,
+void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
                              int *atm, int natm, int *bas, int nbas, double *env)
 {
         if (opt->dm_cond) { // NOT reuse opt->dm_cond because nset may be diff in different call
@@ -170,12 +185,8 @@ void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset,
         opt->dm_cond = (double *)malloc(sizeof(double) * nbas*nbas);
         memset(opt->dm_cond, 0, sizeof(double)*nbas*nbas);
 
-        int *ao_loc = malloc(sizeof(int) * (nbas+1));
-        CINTshells_spheric_offset(ao_loc, bas, nbas);
-        ao_loc[nbas] = ao_loc[nbas-1] + CINTcgto_spheric(nbas-1, bas);
-        int nao = ao_loc[nbas];
-
-        double dmax;
+        const int nao = ao_loc[nbas];
+        double dmax, tmp;
         int i, j, ish, jsh;
         int iset;
         double *pdm;
@@ -186,12 +197,12 @@ void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset,
                         pdm = dm + nao*nao*iset;
                         for (i = ao_loc[ish]; i < ao_loc[ish+1]; i++) {
                         for (j = ao_loc[jsh]; j < ao_loc[jsh+1]; j++) {
-                                dmax = MAX(dmax, fabs(pdm[i*nao+j]));
+                                tmp = fabs(pdm[i*nao+j]);
+                                dmax = MAX(dmax, tmp);
                         } }
                 }
                 opt->dm_cond[ish*nbas+jsh] = dmax;
         } }
-        free(ao_loc);
 }
 
 

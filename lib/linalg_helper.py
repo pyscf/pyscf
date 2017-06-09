@@ -93,7 +93,7 @@ def eigh_by_blocks(h, s=None, labels=None):
     >>> from pyscf import gto, lib, symm
     >>> mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='ccpvdz', symmetry=True)
     >>> c = numpy.hstack(mol.symm_orb)
-    >>> vnuc_so = reduce(numpy.dot, (c.T, mol.intor('cint1e_nuc_sph'), c))
+    >>> vnuc_so = reduce(numpy.dot, (c.T, mol.intor('int1e_nuc_sph'), c))
     >>> orbsym = symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, c)
     >>> lib.eigh_by_blocks(vnuc_so, labels=orbsym)
     (array([-4.50766885, -1.80666351, -1.7808565 , -1.7808565 , -1.74189134,

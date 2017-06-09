@@ -118,7 +118,7 @@ def _run_with_pyscf(FileNameXml):
    )
 
 # compute overlap matrix with PySCF
-   S = mol.intor_symmetric('cint1e_ovlp_sph')
+   S = mol.intor_symmetric('int1e_ovlp_sph')
 # compute overlap matrix of MO basis overlap, using the MOs imported from the XML,
 # and the overlap matrix computed with PySCF to check that MO were imported properly.
    SMo = mdot(COrb.T, S, COrb)

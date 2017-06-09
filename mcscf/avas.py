@@ -79,7 +79,7 @@ def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
         mo_occ = mf.mo_occ
         mo_energy = mf.mo_energy
     nocc = numpy.count_nonzero(mo_occ != 0)
-    ovlp = mol.intor_symmetric('cint1e_ovlp_sph')
+    ovlp = mol.intor_symmetric('int1e_ovlp')
     log.info('  Total number of HF MOs  is equal to    %d' ,mo_coeff.shape[1])
     log.info('  Number of occupied HF MOs is equal to  %d', nocc)
 
@@ -93,11 +93,11 @@ def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
 
     if isinstance(aolabels, str):
         aolabels = re.sub(' +', ' ', aolabels.strip(), count=1)
-        baslst = [i for i,s in enumerate(pmol.spherical_labels(1))
+        baslst = [i for i,s in enumerate(pmol.ao_labels())
                   if aolabels in s]
     elif isinstance(aolabels[0], str):
         aolabels = [re.sub(' +', ' ', x.strip(), count=1) for x in aolabels]
-        baslst = [i for i,s in enumerate(pmol.spherical_labels(1))
+        baslst = [i for i,s in enumerate(pmol.ao_labels())
                   if any(x in s for x in aolabels)]
     else:
         raise RuntimeError
@@ -110,8 +110,8 @@ def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
         s2 = reduce(numpy.dot, (c.T, ovlp, c))
         s21 = reduce(numpy.dot, (c.T, ovlp, mo_coeff))
     else:
-        s2 = pmol.intor_symmetric('cint1e_ovlp_sph')[baslst][:,baslst]
-        s21 = gto.intor_cross('cint1e_ovlp_sph', pmol, mol)[baslst]
+        s2 = pmol.intor_symmetric('int1e_ovlp')[baslst][:,baslst]
+        s21 = gto.intor_cross('int1e_ovlp', pmol, mol)[baslst]
         s21 = numpy.dot(s21, mo_coeff)
     sa = s21.T.dot(scipy.linalg.solve(s2, s21, sym_pos=True))
 

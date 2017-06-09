@@ -65,6 +65,16 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(mcc.ecc, -0.21124878189922872, 8)
         self.assertAlmostEqual(abs(mcc.t2).sum(), 5.4996425901189347, 6)
 
+    def test_ccsd_cart(self):
+        pmol = mol.copy()
+        pmol.cart = True
+        pmol.build()
+        mf = scf.RHF(pmol).set(conv_tol_grad=1e-8).run()
+        mcc = cc.ccsd.CC(mf, frozen=range(1))
+        mcc.conv_tol = 1e-10
+        mcc.kernel()
+        self.assertAlmostEqual(mcc.ecc, -0.21303885376969361, 8)
+
     def test_h2o_non_hf_orbital(self):
         nmo = mf.mo_energy.size
         nocc = mol.nelectron // 2

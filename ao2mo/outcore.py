@@ -18,7 +18,7 @@ IOBLK_SIZE = 256  # MB
 IOBUF_ROW_MIN = 160
 
 def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
-         intor='cint2e_sph', aosym='s4', comp=1,
+         intor='int2e_sph', aosym='s4', comp=1,
          max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True):
     r'''Transfer arbitrary spherical AO integrals to MO integrals for given orbitals
 
@@ -58,7 +58,7 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
             | 'a2kl' : anti-symmetry between k, l in (ij|kl) (TODO)
 
         comp : int
-            Components of the integrals, e.g. cint2e_ip_sph has 3 components.
+            Components of the integrals, e.g. int2e_ip_sph has 3 components.
         max_memory : float or int
             The maximum size of cache to use (in MB), large cache may **not**
             improve performance.
@@ -92,10 +92,10 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
     >>> ao2mo.outcore.full(mol, mo1, 'full.h5', dataname='new', compact=False)
     >>> view('full.h5', 'new')
     dataset ['eri_mo', 'new'], shape (100, 100)
-    >>> ao2mo.outcore.full(mol, mo1, 'full.h5', intor='cint2e_ip1_sph', aosym='s1', comp=3)
+    >>> ao2mo.outcore.full(mol, mo1, 'full.h5', intor='int2e_ip1_sph', aosym='s1', comp=3)
     >>> view('full.h5')
     dataset ['eri_mo', 'new'], shape (3, 100, 100)
-    >>> ao2mo.outcore.full(mol, mo1, 'full.h5', intor='cint2e_ip1_sph', aosym='s2kl', comp=3)
+    >>> ao2mo.outcore.full(mol, mo1, 'full.h5', intor='int2e_ip1_sph', aosym='s2kl', comp=3)
     >>> view('full.h5')
     dataset ['eri_mo', 'new'], shape (3, 100, 55)
     '''
@@ -104,7 +104,7 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
     return erifile
 
 def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
-            intor='cint2e_sph', aosym='s4', comp=1,
+            intor='int2e_sph', aosym='s4', comp=1,
             max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True):
     r'''For the given four sets of orbitals, transfer arbitrary spherical AO
     integrals to MO integrals on the fly.
@@ -146,7 +146,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             | 'a2kl' : anti-symmetry between k, l in (ij|kl) (TODO)
 
         comp : int
-            Components of the integrals, e.g. cint2e_ip_sph has 3 components.
+            Components of the integrals, e.g. int2e_ip_sph has 3 components.
         max_memory : float or int
             The maximum size of cache to use (in MB), large cache may **not**
             improve performance.
@@ -192,10 +192,10 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     >>> ao2mo.outcore.general(mol, (mo1,mo1,mo1,mo1), 'oh2.h5', dataname='new')
     >>> view('oh2.h5', 'new')
     dataset ['eri_mo', 'new'], shape (55, 55)
-    >>> ao2mo.outcore.general(mol, (mo1,mo1,mo1,mo1), 'oh2.h5', intor='cint2e_ip1_sph', aosym='s1', comp=3)
+    >>> ao2mo.outcore.general(mol, (mo1,mo1,mo1,mo1), 'oh2.h5', intor='int2e_ip1_sph', aosym='s1', comp=3)
     >>> view('oh2.h5')
     dataset ['eri_mo', 'new'], shape (3, 100, 100)
-    >>> ao2mo.outcore.general(mol, (mo1,mo1,mo1,mo1), 'oh2.h5', intor='cint2e_ip1_sph', aosym='s2kl', comp=3)
+    >>> ao2mo.outcore.general(mol, (mo1,mo1,mo1,mo1), 'oh2.h5', intor='int2e_ip1_sph', aosym='s2kl', comp=3)
     >>> view('oh2.h5')
     dataset ['eri_mo', 'new'], shape (3, 100, 55)
     '''
@@ -343,7 +343,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 
 # swapfile will be overwritten if exists.
 def half_e1(mol, mo_coeffs, swapfile,
-            intor='cint2e_sph', aosym='s4', comp=1,
+            intor='int2e_sph', aosym='s4', comp=1,
             max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True,
             ao2mopt=None):
     r'''Half transform arbitrary spherical AO integrals to MO integrals
@@ -375,7 +375,7 @@ def half_e1(mol, mo_coeffs, swapfile,
             | 'a2kl' : anti-symmetry between k, l in (ij|kl) (TODO)
 
         comp : int
-            Components of the integrals, e.g. cint2e_ip_sph has 3 components.
+            Components of the integrals, e.g. int2e_ip_sph has 3 components.
         verbose : int
             Print level
         max_memory : float or int
@@ -422,7 +422,7 @@ def half_e1(mol, mo_coeffs, swapfile,
                    IOBUF_ROW_MIN)
     shranges = guess_shell_ranges(mol, (aosym in ('s4', 's2kl')), e1buflen, aobuflen)
     if ao2mopt is None:
-        if intor == 'cint2e_sph':
+        if intor in ('int2e_sph', 'int2e_cart'):
             ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFnr_schwarz_cond',
                                      'CVHFsetnr_direct_scf')
         else:
@@ -500,7 +500,7 @@ def _transpose_to_h5g(h5group, key, dat, blksize, chunks=None):
     for col0, col1 in prange(0, ncol, blksize):
         dset[col0:col1] = lib.transpose(dat[:,col0:col1])
 
-def full_iofree(mol, mo_coeff, intor='cint2e_sph', aosym='s4', comp=1,
+def full_iofree(mol, mo_coeff, intor='int2e_sph', aosym='s4', comp=1,
                 max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True):
     r'''Transfer arbitrary spherical AO integrals to MO integrals for given orbitals
     This function is a wrap for :func:`ao2mo.outcore.general`.  It's not really
@@ -543,7 +543,7 @@ def full_iofree(mol, mo_coeff, intor='cint2e_sph', aosym='s4', comp=1,
             | 'a2kl' : anti-symmetry between k, l in (ij|kl) (TODO)
 
         comp : int
-            Components of the integrals, e.g. cint2e_ip_sph has 3 components.
+            Components of the integrals, e.g. int2e_ip_sph has 3 components.
         verbose : int
             Print level
         max_memory : float or int
@@ -577,10 +577,10 @@ def full_iofree(mol, mo_coeff, intor='cint2e_sph', aosym='s4', comp=1,
     >>> eri1 = ao2mo.outcore.full_iofree(mol, mo1, compact=False)
     >>> print(eri1.shape)
     (100, 100)
-    >>> eri1 = ao2mo.outcore.full_iofree(mol, mo1, intor='cint2e_ip1_sph', aosym='s1', comp=3)
+    >>> eri1 = ao2mo.outcore.full_iofree(mol, mo1, intor='int2e_ip1_sph', aosym='s1', comp=3)
     >>> print(eri1.shape)
     (3, 100, 100)
-    >>> eri1 = ao2mo.outcore.full_iofree(mol, mo1, intor='cint2e_ip1_sph', aosym='s2kl', comp=3)
+    >>> eri1 = ao2mo.outcore.full_iofree(mol, mo1, intor='int2e_ip1_sph', aosym='s2kl', comp=3)
     >>> print(eri1.shape)
     (3, 100, 55)
     '''
@@ -595,7 +595,7 @@ def full_iofree(mol, mo_coeff, intor='cint2e_sph', aosym='s4', comp=1,
             del(feri[key])
         return eri
 
-def general_iofree(mol, mo_coeffs, intor='cint2e_sph', aosym='s4', comp=1,
+def general_iofree(mol, mo_coeffs, intor='int2e_sph', aosym='s4', comp=1,
                    max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True):
     r'''For the given four sets of orbitals, transfer arbitrary spherical AO
     integrals to MO integrals on the fly.  This function is a wrap for
@@ -627,7 +627,7 @@ def general_iofree(mol, mo_coeffs, intor='cint2e_sph', aosym='s4', comp=1,
             | 'a2kl' : anti-symmetry between k, l in (ij|kl) (TODO)
 
         comp : int
-            Components of the integrals, e.g. cint2e_ip_sph has 3 components.
+            Components of the integrals, e.g. int2e_ip_sph has 3 components.
         verbose : int
             Print level
         compact : bool
@@ -665,10 +665,10 @@ def general_iofree(mol, mo_coeffs, intor='cint2e_sph', aosym='s4', comp=1,
     >>> eri1 = ao2mo.outcore.general_iofree(mol, (mo1,mo2,mo3,mo3), compact=False)
     >>> print(eri1.shape)
     (80, 36)
-    >>> eri1 = ao2mo.outcore.general_iofree(mol, (mo1,mo1,mo1,mo1), intor='cint2e_ip1_sph', aosym='s1', comp=3)
+    >>> eri1 = ao2mo.outcore.general_iofree(mol, (mo1,mo1,mo1,mo1), intor='int2e_ip1_sph', aosym='s1', comp=3)
     >>> print(eri1.shape)
     (3, 100, 100)
-    >>> eri1 = ao2mo.outcore.general_iofree(mol, (mo1,mo1,mo1,mo1), intor='cint2e_ip1_sph', aosym='s2kl', comp=3)
+    >>> eri1 = ao2mo.outcore.general_iofree(mol, (mo1,mo1,mo1,mo1), intor='int2e_ip1_sph', aosym='s2kl', comp=3)
     >>> print(eri1.shape)
     (3, 100, 55)
     '''
