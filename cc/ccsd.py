@@ -701,7 +701,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             dmax = max(x[2] for x in sh_ranges)
             eribuf = numpy.empty((dmax,dmax,nao,nao))
             loadbuf = numpy.empty((dmax,dmax,nao,nao))
-            fint = gto.moleintor.getints2e
+            fint = gto.moleintor.getints4c
 
             for ip, (ish0, ish1, ni) in enumerate(sh_ranges):
                 for jsh0, jsh1, nj in sh_ranges[:ip]:

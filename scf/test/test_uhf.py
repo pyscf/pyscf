@@ -67,12 +67,11 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(mf.e_tot, -76.027107008870573, 9)
 
     def test_nr_uhf_symm_cart(self):
-        mol1 = mol.copy()
-        mol1.cart = True
-        mol1.symmetry = 1
-        mol1.build()
-        uhf = scf.UHF(mol1)
-        uhf.conv_tol = 1e-11
+        pmol = mol.copy()
+        pmol.cart = True
+        pmol.symmetry = 1
+        pmol.build()
+        mf = scf.UHF(pmol).run()
         self.assertAlmostEqual(mf.e_tot, -76.027107008870573, 9)
 
     def test_get_veff(self):
