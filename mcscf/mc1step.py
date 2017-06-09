@@ -75,7 +75,6 @@ def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
         mo_a = numpy.dot(mo, ua)
         dm_c = numpy.dot(mo_c, mo_c.T) * 2
 
-        fcivec *= 1./numpy.linalg.norm(fcivec)
         casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, nelecas)
         dm_a = reduce(numpy.dot, (mo_a, casdm1, mo_a.T))
         vj, vk = casscf.get_jk(casscf.mol, (dm_c, dm_a))
