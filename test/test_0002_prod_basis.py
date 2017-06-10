@@ -40,7 +40,7 @@ class KnowValues(unittest.TestCase):
     """ Test """
     sv = system_vars_c(gto=mol)
     #print('000>>>')
-    prod_log = prod_log_c(ao_log=sv.ao_log, tol=1e-4)
+    prod_log = prod_log_c(ao_log=sv.ao_log, tol_loc=1e-4)
     #print('111>>>')
     self.assertEqual(prod_log.nspecies, 2)
     self.assertEqual(prod_log.sp2nmult[0], 7)
