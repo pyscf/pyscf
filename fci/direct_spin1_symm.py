@@ -237,21 +237,21 @@ def reorder_eri(eri, norb, orbsym):
 # pair-id given by order[0] comes first in the sorted pair
 # "rank" is a sorted "order". Given nth (ij| pair, it returns the place(rank)
 # of the sorted pair
-    order = numpy.asarray(numpy.argsort(trilirrep), dtype=numpy.int32)
-    rank_in_irrep = numpy.empty_like(order)
-    old_eri_irrep = numpy.empty_like(order)
+    old_eri_irrep = numpy.asarray(trilirrep, dtype=numpy.int32)
+    rank_in_irrep = numpy.empty_like(old_eri_irrep)
     p0 = 0
     eri_irs = [numpy.zeros((0,0))] * TOTIRREPS
     for ir, nnorb in enumerate(dimirrep):
-        old_eri_irrep[order[p0:p0+nnorb]] = ir
-        rank_in_irrep[order[p0:p0+nnorb]] = numpy.arange(nnorb, dtype=numpy.int32)
-        eri_irs[ir] = lib.take_2d(eri, order[p0:p0+nnorb], order[p0:p0+nnorb])
+        idx = numpy.asarray(numpy.where(trilirrep == ir)[0], dtype=numpy.int32)
+        rank_in_irrep[idx] = numpy.arange(nnorb, dtype=numpy.int32)
+        eri_irs[ir] = lib.take_2d(eri, idx, idx)
         p0 += nnorb
     return eri_irs, rank_in_irrep, old_eri_irrep
 
 def gen_str_irrep(strs, orbsym, link_index, rank_eri, irrep_eri):
     na = len(strs)
     airreps = numpy.zeros(na, dtype=numpy.int32)
+    orbsym = numpy.asarray(orbsym) % 10
     for i, ir in enumerate(orbsym):
         airreps[strs&(1<<i) > 0] ^= ir
     rank = numpy.zeros(na, dtype=numpy.int32)
