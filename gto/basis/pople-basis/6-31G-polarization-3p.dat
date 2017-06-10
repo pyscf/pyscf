@@ -1,0 +1,39 @@
+#  6-31G(3df,3pd)  EMSL  Basis Set Exchange Library  6/9/17 6:23 PM
+# Elements                             References
+# --------                             ----------
+# H - He: W.J. Hehre, R. Ditchfield and J.A. Pople, J. Chem. Phys. 56,
+# Li - Ne: 2257 (1972).  Note: Li and B come from J.D. Dill and J.A.
+# Pople, J. Chem. Phys. 62, 2921 (1975).
+# Na - Ar: M.M. Francl, W.J. Petro, W.J. Hehre, J.S. Binkley, M.S. Gordon,
+# D.J. DeFrees and J.A. Pople, J. Chem. Phys. 77, 3654 (1982)
+# K  - Zn: V. Rassolov, J.A. Pople, M. Ratner and T.L. Windus, J. Chem. Phys.
+# 109, 1223 (1998)
+# Note: He and Ne are unpublished basis sets taken from the Gaussian
+# program
+# 
+
+
+# Elements                             References
+# --------                             ----------
+# H-Ne: M.J. Frisch, J.A. Pople and J.S. Binkley, J. Chem. Phys. 80, 3265 (1984)
+#   
+
+
+BASIS "ao basis" PRINT
+#BASIS SET: (4s,3p,1d) -> [2s,3p,1d]
+H    P
+      3.0000000              1.0000000        
+H    P
+      0.7500000              1.0000000        
+H    P
+      0.1875000              1.0000000        
+#BASIS SET: (4s,3p,1d) -> [2s,3p,1d]
+He    P
+      3.0000000              1.0000000        
+He    P
+      0.7500000              1.0000000        
+He    P
+      0.1875000              1.0000000        
+END
+
+

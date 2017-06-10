@@ -50,22 +50,45 @@ ALIAS = {
     'faegredz'   : 'faegre_dz'      ,
     'iglo'       : 'iglo3'          ,
     'iglo3'      : 'iglo3'          ,
-    '321g'       : '3-21g.dat'      ,
-    '431g'       : '4-31g.dat'      ,
-    '631g'       : '6-31g.dat'      ,
-    '631gs'      : '6-31gs.dat'     ,
-    '631gsp'     : '6-31gsp.dat'    ,
-    '631gps'     : '6-31gsp.dat'    ,
-    '6311g'      : '6-311g.dat'     ,
-    '6311gs'     : '6-311gs.dat'    ,
-    '6311gsp'    : '6-311gsp.dat'   ,
-    '6311gps'    : '6-311gsp.dat'   ,
-    '631g*'      : '6-31gs.dat'     ,
-    '631g*+'     : '6-31gsp.dat'    ,
-    '631g+*'     : '6-31gsp.dat'    ,
-    '6311g*'     : '6-311gs.dat'    ,
-    '6311g*+'    : '6-311gsp.dat'   ,
-    '6311g+*'    : '6-311gsp.dat'   ,
+#    '321g'       : '3-21g.dat'      ,
+#    '431g'       : '4-31g.dat'      ,
+#    '631g'       : '6-31g.dat'      ,
+#    '631gs'      : '6-31gs.dat'     ,
+#    '631gsp'     : '6-31gsp.dat'    ,
+#    '631gps'     : '6-31gsp.dat'    ,
+#    '6311g'      : '6-311g.dat'     ,
+#    '6311gs'     : '6-311gs.dat'    ,
+#    '6311gsp'    : '6-311gsp.dat'   ,
+#    '6311gps'    : '6-311gsp.dat'   ,
+#    '631g*'      : '6-31gs.dat'     ,
+##?    '631g*+'     : '6-31gsp.dat'    ,
+##?    '631g+*'     : '6-31gsp.dat'    ,
+#    '6311g*'     : '6-311gs.dat'    ,
+##?    '6311g*+'    : '6-311gsp.dat'   ,
+##?    '6311g+*'    : '6-311gsp.dat'   ,
+    '321++g'     : 'pople-basis/3-21++G.dat'   ,
+    '321++g*'    : 'pople-basis/3-21++Gs.dat'  ,
+    '321g'       : 'pople-basis/3-21G.dat'     ,
+    '321g*'      : 'pople-basis/3-21Gs.dat'    ,
+    '431g'       : 'pople-basis/4-31G.dat'     ,
+    '631++g'     : 'pople-basis/6-31++G.dat'   ,
+    '631++g*'    : 'pople-basis/6-31++Gs.dat'  ,
+    '631++g**'   : 'pople-basis/6-31++Gss.dat' ,
+    '631+g'      : 'pople-basis/6-31+G.dat'    ,
+    '631+g*'     : 'pople-basis/6-31+Gs.dat'   ,
+    '631+g**'    : 'pople-basis/6-31+Gss.dat'  ,
+    '6311++g'    : 'pople-basis/6-311++G.dat'  ,
+    '6311++g*'   : 'pople-basis/6-311++Gs.dat' ,
+    '6311++g**'  : 'pople-basis/6-311++Gss.dat',
+    '6311+g'     : 'pople-basis/6-311+G.dat'   ,
+    '6311+g*'    : 'pople-basis/6-311+Gs.dat'  ,
+    '6311+g**'   : 'pople-basis/6-311+Gss.dat' ,
+    '6311g'      : 'pople-basis/6-311G.dat'    ,
+    '6311g*'     : 'pople-basis/6-311Gs.dat'   ,
+    '6311g**'    : 'pople-basis/6-311Gss.dat'  ,
+    '631g'       : 'pople-basis/6-31G.dat'     ,
+    '631g*'      : 'pople-basis/6-31Gs.dat'    ,
+    '631g**'     : 'pople-basis/6-31Gss.dat'   ,
     'sto3g'      : 'sto-3g.dat'     ,
     'sto6g'      : 'sto-6g.dat'     ,
     'minao'      : 'minao'          ,
@@ -182,6 +205,58 @@ ALIAS = {
     'augccpv5zoptri' : 'f12-basis/aug-cc-pV5Z-OptRI.dat',
 }
 
+
+POPLE_BASIS_EXTRA = {
+    '321++g'     : 'pople-basis/3-21++G.dat'   ,
+    '321++g*'    : 'pople-basis/3-21++Gs.dat'  ,
+    '321g'       : 'pople-basis/3-21G.dat'     ,
+    '321g*'      : 'pople-basis/3-21Gs.dat'    ,
+    '431g'       : 'pople-basis/4-31G.dat'     ,
+    '631++g'     : 'pople-basis/6-31++G.dat'   ,
+    '631++g*'    : 'pople-basis/6-31++Gs.dat'  ,
+    '631++g**'   : 'pople-basis/6-31++Gss.dat' ,
+    '631+g'      : 'pople-basis/6-31+G.dat'    ,
+    '631+g*'     : 'pople-basis/6-31+Gs.dat'   ,
+    '631+g**'    : 'pople-basis/6-31+Gss.dat'  ,
+    '6311++g'    : 'pople-basis/6-311++G.dat'  ,
+    '6311++g*'   : 'pople-basis/6-311++Gs.dat' ,
+    '6311++g**'  : 'pople-basis/6-311++Gss.dat',
+    '6311+g'     : 'pople-basis/6-311+G.dat'   ,
+    '6311+g*'    : 'pople-basis/6-311+Gs.dat'  ,
+    '6311+g**'   : 'pople-basis/6-311+Gss.dat' ,
+    '6311g'      : 'pople-basis/6-311G.dat'    ,
+    '6311g*'     : 'pople-basis/6-311Gs.dat'   ,
+    '6311g**'    : 'pople-basis/6-311Gss.dat'  ,
+    '631g'       : 'pople-basis/6-31G.dat'     ,
+    '631g*'      : 'pople-basis/6-31Gs.dat'    ,
+    '631g**'     : 'pople-basis/6-31Gss.dat'   ,}
+
+def _is_pople_basis(basis):
+    return (basis.startswith('631') or
+            basis.startswith('321g') or
+            basis.startswith('431g'))
+
+def _parse_pople_basis(basis, symb):
+    mbas = basis[:basis.find('(')]
+    pbas = basis[basis.find('(')+1:basis.find(')')]
+    if ',' in pbas:
+        bas_row2, bas_row1 = pbas.split(',')
+    else:
+        bas_row2, bas_row1 = pbas, ''
+
+    mbasname = mbas[0] + '-' + mbas[1:].upper()
+    def convert(s):
+        if len(s) == 0:
+            return []
+        elif s[0].isalpha():
+            return ['pople-basis/%s-polarization-%s.dat' % (mbasname, s[0])] + convert(s[1:])
+        else:
+            return ['pople-basis/%s-polarization-%s.dat' % (mbasname, s[:2])] + convert(s[2:])
+    if symb in ('H', 'He'):
+        return tuple([ALIAS[mbas]] + convert(bas_row1))
+    else:
+        return tuple([ALIAS[mbas]] + convert(bas_row2))
+
 def parse(string):
     '''Parse the NWChem format basis or ECP text, return an internal basis (ECP)
     format which can be assigned to :attr:`Mole.basis` or :attr:`Mole.ecp`
@@ -228,7 +303,6 @@ def load(filename_or_basisname, symb):
     >>> mol = gto.Mole()
     >>> mol.basis = {'O': load('sto-3g', 'C')}
     '''
-
     if os.path.isfile(filename_or_basisname):
         # read basis from given file
         try:
@@ -237,17 +311,24 @@ def load(filename_or_basisname, symb):
             with open(filename_or_basisname, 'r') as fin:
                 return parse_nwchem.parse(fin.read())
 
-    name = filename_or_basisname.lower().replace(' ', '').replace('-', '').replace('_', '')
-    if name not in ALIAS:
+    name = _format_basis_name(filename_or_basisname)
+    if not (name in ALIAS or _is_pople_basis(name)):
         try:
             return parse(filename_or_basisname)
         except IndexError:
-            raise RuntimeError('basis %s not found' % filename_or_basisname)
-    basmod = ALIAS[name]
+            raise RuntimeError('Basis %s not found' % filename_or_basisname)
+
     symb = ''.join([i for i in symb if i.isalpha()])
+    if name in ALIAS:
+        basmod = ALIAS[name]
+    elif _is_pople_basis(name):
+        basmod = _parse_pople_basis(name, symb)
+    else:
+        raise RuntimeError('Basis %s not found' % filename_or_basisname)
+
     if 'dat' in basmod:
         b = parse_nwchem.load(os.path.join(os.path.dirname(__file__), basmod), symb)
-    elif isinstance(basmod, tuple):
+    elif isinstance(basmod, (tuple, list)) and isinstance(basmod[0], str):
         b = []
         for f in basmod:
             b += parse_nwchem.load(os.path.join(os.path.dirname(__file__), f), symb)
@@ -265,7 +346,6 @@ def load(filename_or_basisname, symb):
 def load_ecp(filename_or_basisname, symb):
     '''Convert the basis of the given symbol to internal format
     '''
-
     if os.path.isfile(filename_or_basisname):
         # read basis from given file
         try:
@@ -274,10 +354,12 @@ def load_ecp(filename_or_basisname, symb):
             with open(filename_or_basisname, 'r') as fin:
                 return parse_nwchem.parse_ecp(fin.read())
 
-    name = filename_or_basisname.lower().replace(' ', '').replace('-', '').replace('_', '')
+    name = _format_basis_name(filename_or_basisname)
     if name not in ALIAS:
         return parse_ecp(filename_or_basisname)
     basmod = ALIAS[name]
     symb = ''.join([i for i in symb if i.isalpha()])
     return parse_nwchem.load_ecp(os.path.join(os.path.dirname(__file__), basmod), symb)
 
+def _format_basis_name(basisname):
+    return basisname.lower().replace('-', '').replace('_', '').replace(' ', '')

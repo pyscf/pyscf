@@ -1,0 +1,65 @@
+#  6-311G(2df,2pd)  EMSL  Basis Set Exchange Library  6/9/17 6:22 PM
+# Elements                             References
+# --------                             ----------
+# H, Li - Ne: R. Krishnan, J.S. Binkley, R. Seeger and J.A. Pople,
+#             J. Chem. Phys. 72, 650 (1980)
+# Na - Ar:    A.D. McLean and G.S. Chandler J. Chem. Phys. 72, 5639, (1980).
+# K  - Ca:    J-P. Blaudeau, M. P. McGrath, L.A. Curtiss and L. Radom,
+#             J. Chem. Phys. 107, 5016 (1997).
+# Ga - Kr:    L. A. Curtiss, M. P. McGrath, J-P. Blandeau, N. E. Davis, 
+#             R. C. Binning, Jr. L. Radom, J. Chem. Phys. 103, 6104 (1995).
+# I      :    M.N. Glukhovstev, A. pross, M.P. McGrath, L. Radom, J. Chem. Phys.
+#             103, 1878 (1995)
+#   
+
+# Elements                             References
+# --------                             ----------
+# H-Ne: M.J. Frisch, J.A. Pople and J.S. Binkley, J. Chem. Phys. 80, 3265 (1984)
+# 
+
+
+
+BASIS "ao basis" PRINT
+#BASIS SET: (11s,5p,2d,1f) -> [4s,3p,2d,1f]
+Li    D
+      0.4000000              1.0000000        
+Li    D
+      0.1000000              1.0000000        
+#BASIS SET: (11s,5p,2d,1f) -> [4s,3p,2d,1f]
+Be    D
+      0.5100000              1.0000000        
+Be    D
+      0.1275000              1.0000000        
+#BASIS SET: (11s,5p,2d,1f) -> [4s,3p,2d,1f]
+B    D
+      0.8020000              1.0000000        
+B    D
+      0.2005000              1.0000000        
+#BASIS SET: (11s,5p,2d,1f) -> [4s,3p,2d,1f]
+C    D
+      1.2520000              1.0000000        
+C    D
+      0.3130000              1.0000000        
+#BASIS SET: (11s,5p,2d,1f) -> [4s,3p,2d,1f]
+N    D
+      1.8260000              1.0000000        
+N    D
+      0.4565000              1.0000000        
+#BASIS SET: (11s,5p,2d,1f) -> [4s,3p,2d,1f]
+O    D
+      2.5840000              1.0000000        
+O    D
+      0.6460000              1.0000000        
+#BASIS SET: (11s,5p,2d,1f) -> [4s,3p,2d,1f]
+F    D
+      3.5000000              1.0000000        
+F    D
+      0.8750000              1.0000000        
+#BASIS SET: (11s,5p,2d,1f) -> [4s,3p,2d,1f]
+Ne    D
+      4.6080000              1.0000000        
+Ne    D
+      1.1520000              1.0000000        
+END
+
+

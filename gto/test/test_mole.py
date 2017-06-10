@@ -200,6 +200,16 @@ C    SP
                     basis={'default':'321g', 'O1': 'sto3g'})
         self.assertEqual(sorted(mol._basis.keys()), ['H', 'O1'])
 
+    def test_parse_pople_basis(self):
+        self.assertEqual(len(gto.basis.load('6-31G(d)'      , 'H')), 2)
+        self.assertEqual(len(gto.basis.load('6-31G(d)'      , 'C')), 6)
+        self.assertEqual(len(gto.basis.load('6-31G(d,p)'    , 'H')), 3)
+        self.assertEqual(len(gto.basis.load('6-31G(d,p)'    , 'C')), 6)
+        self.assertEqual(len(gto.basis.load('6-31G(2d,2p)'  , 'H')), 4)
+        self.assertEqual(len(gto.basis.load('6-31G(2d,2p)'  , 'C')), 7)
+        self.assertEqual(len(gto.basis.load('6-31G(3df,3pd)', 'H')), 6)
+        self.assertEqual(len(gto.basis.load('6-31G(3df,3pd)', 'C')), 9)
+
 
 if __name__ == "__main__":
     print("test mole.py")

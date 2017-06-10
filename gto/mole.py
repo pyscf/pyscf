@@ -282,8 +282,18 @@ def format_basis(basis_tab):
                 fmt_basis[symb] = uncontract(basis.load(atom_basis[3:], stdsymb))
             else:
                 fmt_basis[symb] = basis.load(atom_basis, stdsymb)
+        elif isinstance(atom_basis[0], (str, unicode)):
+            fmt_basis[symb] = []
+            for rawb in atom_basis:
+                b = str(rawb)
+                if b.lower().startswith('unc'):
+                    fmt_basis[symb] += uncontract(basis.load(b[3:], stdsymb))
+                else:
+                    fmt_basis[symb] += basis.load(b, stdsymb)
         else:
             fmt_basis[symb] = nparray_to_list(atom_basis)
+        if len(fmt_basis[symb]) == 0:
+            raise RuntimeError('Basis not found for  %s' % symb)
     return fmt_basis
 
 def uncontract_basis(_basis):
@@ -327,12 +337,11 @@ def format_ecp(ecp_tab):
         symb = _atom_symbol(atom)
         stdsymb = _std_symbol(symb)
         if isinstance(ecp_tab[atom], (str, unicode)):
-            try:
-                fmt_ecp[symb] = basis.load_ecp(str(ecp_tab[atom]), stdsymb)
-            except RuntimeError as e:
-                sys.stderr.write('%s\n' % e.message)
+            fmt_ecp[symb] = basis.load_ecp(str(ecp_tab[atom]), stdsymb)
         else:
             fmt_ecp[symb] = ecp_tab[atom]
+        if len(fmt_ecp[symb]) == 0:
+            raise RuntimeError('ECP not found for  %s' % symb)
     return fmt_ecp
 
 # transform etb to basis format
