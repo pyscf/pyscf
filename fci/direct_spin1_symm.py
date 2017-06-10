@@ -251,6 +251,7 @@ def reorder_eri(eri, norb, orbsym):
 
 def gen_str_irrep(strs, orbsym, link_index, rank_eri, irrep_eri):
     na = len(strs)
+    orbsym = numpy.asarray(orbsym) % 10
     airreps = numpy.zeros(na, dtype=numpy.int32)
     for i, ir in enumerate(orbsym):
         airreps[strs&(1<<i) > 0] ^= ir
