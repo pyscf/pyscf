@@ -50,45 +50,29 @@ ALIAS = {
     'faegredz'   : 'faegre_dz'      ,
     'iglo'       : 'iglo3'          ,
     'iglo3'      : 'iglo3'          ,
-#    '321g'       : '3-21g.dat'      ,
-#    '431g'       : '4-31g.dat'      ,
-#    '631g'       : '6-31g.dat'      ,
-#    '631gs'      : '6-31gs.dat'     ,
-#    '631gsp'     : '6-31gsp.dat'    ,
-#    '631gps'     : '6-31gsp.dat'    ,
-#    '6311g'      : '6-311g.dat'     ,
-#    '6311gs'     : '6-311gs.dat'    ,
-#    '6311gsp'    : '6-311gsp.dat'   ,
-#    '6311gps'    : '6-311gsp.dat'   ,
-#    '631g*'      : '6-31gs.dat'     ,
-##?    '631g*+'     : '6-31gsp.dat'    ,
-##?    '631g+*'     : '6-31gsp.dat'    ,
-#    '6311g*'     : '6-311gs.dat'    ,
-##?    '6311g*+'    : '6-311gsp.dat'   ,
-##?    '6311g+*'    : '6-311gsp.dat'   ,
-    '321++g'     : 'pople-basis/3-21++G.dat'   ,
-    '321++g*'    : 'pople-basis/3-21++Gs.dat'  ,
-    '321g'       : 'pople-basis/3-21G.dat'     ,
-    '321g*'      : 'pople-basis/3-21Gs.dat'    ,
-    '431g'       : 'pople-basis/4-31G.dat'     ,
-    '631++g'     : 'pople-basis/6-31++G.dat'   ,
-    '631++g*'    : 'pople-basis/6-31++Gs.dat'  ,
-    '631++g**'   : 'pople-basis/6-31++Gss.dat' ,
-    '631+g'      : 'pople-basis/6-31+G.dat'    ,
-    '631+g*'     : 'pople-basis/6-31+Gs.dat'   ,
-    '631+g**'    : 'pople-basis/6-31+Gss.dat'  ,
-    '6311++g'    : 'pople-basis/6-311++G.dat'  ,
-    '6311++g*'   : 'pople-basis/6-311++Gs.dat' ,
-    '6311++g**'  : 'pople-basis/6-311++Gss.dat',
-    '6311+g'     : 'pople-basis/6-311+G.dat'   ,
-    '6311+g*'    : 'pople-basis/6-311+Gs.dat'  ,
-    '6311+g**'   : 'pople-basis/6-311+Gss.dat' ,
-    '6311g'      : 'pople-basis/6-311G.dat'    ,
-    '6311g*'     : 'pople-basis/6-311Gs.dat'   ,
-    '6311g**'    : 'pople-basis/6-311Gss.dat'  ,
-    '631g'       : 'pople-basis/6-31G.dat'     ,
-    '631g*'      : 'pople-basis/6-31Gs.dat'    ,
-    '631g**'     : 'pople-basis/6-31Gss.dat'   ,
+    '321++g'     : os.path.join('pople-basis', '3-21++G.dat'   ),
+    '321++g*'    : os.path.join('pople-basis', '3-21++Gs.dat'  ),
+    '321g'       : os.path.join('pople-basis', '3-21G.dat'     ),
+    '321g*'      : os.path.join('pople-basis', '3-21Gs.dat'    ),
+    '431g'       : os.path.join('pople-basis', '4-31G.dat'     ),
+    '631++g'     : os.path.join('pople-basis', '6-31++G.dat'   ),
+    '631++g*'    : os.path.join('pople-basis', '6-31++Gs.dat'  ),
+    '631++g**'   : os.path.join('pople-basis', '6-31++Gss.dat' ),
+    '631+g'      : os.path.join('pople-basis', '6-31+G.dat'    ),
+    '631+g*'     : os.path.join('pople-basis', '6-31+Gs.dat'   ),
+    '631+g**'    : os.path.join('pople-basis', '6-31+Gss.dat'  ),
+    '6311++g'    : os.path.join('pople-basis', '6-311++G.dat'  ),
+    '6311++g*'   : os.path.join('pople-basis', '6-311++Gs.dat' ),
+    '6311++g**'  : os.path.join('pople-basis', '6-311++Gss.dat'),
+    '6311+g'     : os.path.join('pople-basis', '6-311+G.dat'   ),
+    '6311+g*'    : os.path.join('pople-basis', '6-311+Gs.dat'  ),
+    '6311+g**'   : os.path.join('pople-basis', '6-311+Gss.dat' ),
+    '6311g'      : os.path.join('pople-basis', '6-311G.dat'    ),
+    '6311g*'     : os.path.join('pople-basis', '6-311Gs.dat'   ),
+    '6311g**'    : os.path.join('pople-basis', '6-311Gss.dat'  ),
+    '631g'       : os.path.join('pople-basis', '6-31G.dat'     ),
+    '631g*'      : os.path.join('pople-basis', '6-31Gs.dat'    ),
+    '631g**'     : os.path.join('pople-basis', '6-31Gss.dat'   ),
     'sto3g'      : 'sto-3g.dat'     ,
     'sto6g'      : 'sto-6g.dat'     ,
     'minao'      : 'minao'          ,
@@ -185,51 +169,25 @@ ALIAS = {
     'bfd'        : 'bfd_pp.dat',
     'bfdpp'      : 'bfd_pp.dat',
 #
-    'ccpcvdzf12optri': 'f12-basis/cc-pCVDZ-F12-OptRI.dat',
-    'ccpcvtzf12optri': 'f12-basis/cc-pCVTZ-F12-OptRI.dat',
-    'ccpcvqzf12optri': 'f12-basis/cc-pCVQZ-F12-OptRI.dat',
-    'ccpvdzf12optri' : 'f12-basis/cc-pVDZ-F12-OptRI.dat',
-    'ccpvtzf12optri' : 'f12-basis/cc-pVTZ-F12-OptRI.dat',
-    'ccpvqzf12optri' : 'f12-basis/cc-pVQZ-F12-OptRI.dat',
-    'ccpv5zf12'      : 'f12-basis/cc-pV5Z-F12.dat',
-    'ccpvdzf12rev2'  : 'f12-basis/cc-pVDZ-F12rev2.dat',
-    'ccpvtzf12rev2'  : 'f12-basis/cc-pVTZ-F12rev2.dat',
-    'ccpvqzf12rev2'  : 'f12-basis/cc-pVQZ-F12rev2.dat',
-    'ccpv5zf12rev2'  : 'f12-basis/cc-pV5Z-F12rev2.dat',
-    'ccpvdzf12nz'    : 'f12-basis/cc-pVDZ-F12-nZ.dat',
-    'ccpvtzf12nz'    : 'f12-basis/cc-pVTZ-F12-nZ.dat',
-    'ccpvqzf12nz'    : 'f12-basis/cc-pVQZ-F12-nZ.dat',
-    'augccpvdzoptri' : 'f12-basis/aug-cc-pVDZ-OptRI.dat',
-    'augccpvtzoptri' : 'f12-basis/aug-cc-pVTZ-OptRI.dat',
-    'augccpvqzoptri' : 'f12-basis/aug-cc-pVQZ-OptRI.dat',
-    'augccpv5zoptri' : 'f12-basis/aug-cc-pV5Z-OptRI.dat',
+    'ccpcvdzf12optri': os.path.join('f12-basis', 'cc-pCVDZ-F12-OptRI.dat'),
+    'ccpcvtzf12optri': os.path.join('f12-basis', 'cc-pCVTZ-F12-OptRI.dat'),
+    'ccpcvqzf12optri': os.path.join('f12-basis', 'cc-pCVQZ-F12-OptRI.dat'),
+    'ccpvdzf12optri' : os.path.join('f12-basis', 'cc-pVDZ-F12-OptRI.dat' ),
+    'ccpvtzf12optri' : os.path.join('f12-basis', 'cc-pVTZ-F12-OptRI.dat' ),
+    'ccpvqzf12optri' : os.path.join('f12-basis', 'cc-pVQZ-F12-OptRI.dat' ),
+    'ccpv5zf12'      : os.path.join('f12-basis', 'cc-pV5Z-F12.dat'       ),
+    'ccpvdzf12rev2'  : os.path.join('f12-basis', 'cc-pVDZ-F12rev2.dat'   ),
+    'ccpvtzf12rev2'  : os.path.join('f12-basis', 'cc-pVTZ-F12rev2.dat'   ),
+    'ccpvqzf12rev2'  : os.path.join('f12-basis', 'cc-pVQZ-F12rev2.dat'   ),
+    'ccpv5zf12rev2'  : os.path.join('f12-basis', 'cc-pV5Z-F12rev2.dat'   ),
+    'ccpvdzf12nz'    : os.path.join('f12-basis', 'cc-pVDZ-F12-nZ.dat'    ),
+    'ccpvtzf12nz'    : os.path.join('f12-basis', 'cc-pVTZ-F12-nZ.dat'    ),
+    'ccpvqzf12nz'    : os.path.join('f12-basis', 'cc-pVQZ-F12-nZ.dat'    ),
+    'augccpvdzoptri' : os.path.join('f12-basis', 'aug-cc-pVDZ-OptRI.dat' ),
+    'augccpvtzoptri' : os.path.join('f12-basis', 'aug-cc-pVTZ-OptRI.dat' ),
+    'augccpvqzoptri' : os.path.join('f12-basis', 'aug-cc-pVQZ-OptRI.dat' ),
+    'augccpv5zoptri' : os.path.join('f12-basis', 'aug-cc-pV5Z-OptRI.dat' ),
 }
-
-
-POPLE_BASIS_EXTRA = {
-    '321++g'     : 'pople-basis/3-21++G.dat'   ,
-    '321++g*'    : 'pople-basis/3-21++Gs.dat'  ,
-    '321g'       : 'pople-basis/3-21G.dat'     ,
-    '321g*'      : 'pople-basis/3-21Gs.dat'    ,
-    '431g'       : 'pople-basis/4-31G.dat'     ,
-    '631++g'     : 'pople-basis/6-31++G.dat'   ,
-    '631++g*'    : 'pople-basis/6-31++Gs.dat'  ,
-    '631++g**'   : 'pople-basis/6-31++Gss.dat' ,
-    '631+g'      : 'pople-basis/6-31+G.dat'    ,
-    '631+g*'     : 'pople-basis/6-31+Gs.dat'   ,
-    '631+g**'    : 'pople-basis/6-31+Gss.dat'  ,
-    '6311++g'    : 'pople-basis/6-311++G.dat'  ,
-    '6311++g*'   : 'pople-basis/6-311++Gs.dat' ,
-    '6311++g**'  : 'pople-basis/6-311++Gss.dat',
-    '6311+g'     : 'pople-basis/6-311+G.dat'   ,
-    '6311+g*'    : 'pople-basis/6-311+Gs.dat'  ,
-    '6311+g**'   : 'pople-basis/6-311+Gss.dat' ,
-    '6311g'      : 'pople-basis/6-311G.dat'    ,
-    '6311g*'     : 'pople-basis/6-311Gs.dat'   ,
-    '6311g**'    : 'pople-basis/6-311Gss.dat'  ,
-    '631g'       : 'pople-basis/6-31G.dat'     ,
-    '631g*'      : 'pople-basis/6-31Gs.dat'    ,
-    '631g**'     : 'pople-basis/6-31Gss.dat'   ,}
 
 def _is_pople_basis(basis):
     return (basis.startswith('631') or
@@ -239,23 +197,24 @@ def _is_pople_basis(basis):
 def _parse_pople_basis(basis, symb):
     mbas = basis[:basis.find('(')]
     pbas = basis[basis.find('(')+1:basis.find(')')]
-    if ',' in pbas:
-        bas_row2, bas_row1 = pbas.split(',')
-    else:
-        bas_row2, bas_row1 = pbas, ''
 
-    mbasname = mbas[0] + '-' + mbas[1:].upper()
+    pathtmp = os.path.join('pople-basis',
+                           mbas[0]+'-'+mbas[1:].upper() + '-polarization-%s.dat')
     def convert(s):
         if len(s) == 0:
             return []
         elif s[0].isalpha():
-            return ['pople-basis/%s-polarization-%s.dat' % (mbasname, s[0])] + convert(s[1:])
+            return [pathtmp % s[0]] + convert(s[1:])
         else:
-            return ['pople-basis/%s-polarization-%s.dat' % (mbasname, s[:2])] + convert(s[2:])
+            return [pathtmp % s[:2]] + convert(s[2:])
+
     if symb in ('H', 'He'):
-        return tuple([ALIAS[mbas]] + convert(bas_row1))
+        if ',' in pbas:
+            return tuple([ALIAS[mbas]] + convert(pbas.split(',')[1]))
+        else:
+            return ALIAS[mbas]
     else:
-        return tuple([ALIAS[mbas]] + convert(bas_row2))
+        return tuple([ALIAS[mbas]] + convert(pbas.split(',')[0]))
 
 def parse(string):
     '''Parse the NWChem format basis or ECP text, return an internal basis (ECP)
