@@ -1,1 +1,1 @@
-from cisd import CISD
+from pyscf.ci.cisd import CISD
