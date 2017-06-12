@@ -560,7 +560,14 @@ def newton_SCF_class(mf):
             self.build(self.mol)
             self.dump_flags()
 
-            if mo_coeff is None or mo_occ is None:
+            if mo_coeff is not None and mo_occ is None:
+                logger.warn(self, 'Newton solver expects mo_coeff with '
+                            'mo_occ as initial guess but the given initial '
+                            'guess does not have mo_occ.\n      The given '
+                            'argument is treated as density matrix.')
+                dm = mo_coeff
+                mo_coeff, mo_occ = self.from_dm(dm)
+            elif mo_coeff is None or mo_occ is None:
                 logger.debug(self, 'Initial guess orbitals not given. '
                              'Generating initial guess from %s density matrix',
                              self.init_guess)
