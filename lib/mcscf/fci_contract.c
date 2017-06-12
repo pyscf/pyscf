@@ -405,6 +405,7 @@ void FCIcontract_2e_spin1(double *eri, double *ci0, double *ci1,
         free(clinkb);
 }
 
+
 /*
  * eri_ab is mixed integrals (alpha,alpha|beta,beta), |beta,beta) in small strides
  */
@@ -493,32 +494,12 @@ void FCIcontract_uhf2e(double *eri_aa, double *eri_ab, double *eri_bb,
  * hdiag
  *************************************************/
 
-static void gen_occslist(int *occslist, uint64_t *strs,
-                         int nstr, int norb, int nelec)
-{
-        int i, j;
-        int *pocc;
-        for (i = 0; i < nstr; i++) {
-                pocc = occslist + i * nelec;
-                for (j = 0; j < norb; j++) {
-                        if (strs[i] & (1ULL<<j)) {
-                                *pocc = j;
-                                pocc++;
-                        }
-                }
-        }
-}
-
 void FCImake_hdiag_uhf(double *hdiag, double *h1e_a, double *h1e_b,
                        double *jdiag_aa, double *jdiag_ab, double *jdiag_bb,
                        double *kdiag_aa, double *kdiag_bb,
                        int norb, int nstra, int nstrb, int nocca, int noccb,
-                       uint64_t *stra, uint64_t *strb)
+                       int *occslista, int *occslistb)
 {
-        int *occslista = malloc(sizeof(int) * nocca*nstra);
-        int *occslistb = malloc(sizeof(int) * noccb*nstrb);
-        gen_occslist(occslista, stra, nstra, norb, nocca);
-        gen_occslist(occslistb, strb, nstrb, norb, noccb);
 #pragma omp parallel default(none) \
                 shared(hdiag, h1e_a, h1e_b, \
                        jdiag_aa, jdiag_ab, jdiag_bb, kdiag_aa, kdiag_bb, \
@@ -561,15 +542,13 @@ void FCImake_hdiag_uhf(double *hdiag, double *h1e_a, double *h1e_b,
                 }
         }
 }
-        free(occslista);
-        free(occslistb);
 }
 
 void FCImake_hdiag(double *hdiag, double *h1e, double *jdiag, double *kdiag,
-                   int norb, int na, int nocc, uint64_t *strs)
+                   int norb, int na, int nocc, int *occslst)
 {
         FCImake_hdiag_uhf(hdiag, h1e, h1e, jdiag, jdiag, jdiag, kdiag, kdiag,
-                          norb, na, na, nocc, nocc, strs, strs);
+                          norb, na, na, nocc, nocc, occslst, occslst);
 }
 
 static int first1(uint64_t r)

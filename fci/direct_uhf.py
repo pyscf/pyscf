@@ -126,10 +126,11 @@ def make_hdiag(h1e, eri, norb, nelec):
     g2e_ab = ao2mo.restore(1, eri[1], norb)
     g2e_bb = ao2mo.restore(1, eri[2], norb)
 
-    strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
-    strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
-    na = len(strsa)
-    nb = len(strsb)
+    occslsta = occslstb = cistring._gen_occslst(range(norb), neleca)
+    if neleca != nelecb:
+        occslstb = cistring._gen_occslst(range(norb), nelecb)
+    na = len(occslsta)
+    nb = len(occslstb)
 
     hdiag = numpy.empty(na*nb)
     jdiag_aa = numpy.asarray(numpy.einsum('iijj->ij',g2e_aa), order='C')
@@ -148,8 +149,8 @@ def make_hdiag(h1e, eri, norb, nelec):
                              ctypes.c_int(norb),
                              ctypes.c_int(na), ctypes.c_int(nb),
                              ctypes.c_int(neleca), ctypes.c_int(nelecb),
-                             strsa.ctypes.data_as(ctypes.c_void_p),
-                             strsb.ctypes.data_as(ctypes.c_void_p))
+                             occslsta.ctypes.data_as(ctypes.c_void_p),
+                             occslstb.ctypes.data_as(ctypes.c_void_p))
     return numpy.asarray(hdiag)
 
 def absorb_h1e(h1e, eri, norb, nelec, fac=1):
@@ -195,10 +196,8 @@ def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
             addr = numpy.argsort(hdiag)[:np]
     addra = addr // nb
     addrb = addr % nb
-    stra = numpy.array([cistring.addr2str(norb,neleca,ia) for ia in addra],
-                       dtype=numpy.long)
-    strb = numpy.array([cistring.addr2str(norb,nelecb,ib) for ib in addrb],
-                       dtype=numpy.long)
+    stra = cistring.addrs2str(norb, neleca, addra)
+    strb = cistring.addrs2str(norb, nelecb, addrb)
     np = len(addr)
     h0 = numpy.zeros((np,np))
     libfci.FCIpspace_h0tril_uhf(h0.ctypes.data_as(ctypes.c_void_p),

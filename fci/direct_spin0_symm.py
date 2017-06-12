@@ -158,27 +158,18 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
     return numpy.dot(fcivec.ravel(), ci1.ravel())
 
 def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
-    if isinstance(nelec, (int, numpy.number)):
-        nelecb = nelec//2
-        neleca = nelec - nelecb
-    else:
-        neleca, nelecb = nelec
-    strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
-    strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
-    airreps = numpy.zeros(strsa.size, dtype=numpy.int32)
-    birreps = numpy.zeros(strsb.size, dtype=numpy.int32)
-    for i in range(norb):
-        airreps[numpy.bitwise_and(strsa, 1<<i) > 0] ^= orbsym[i]
-        birreps[numpy.bitwise_and(strsb, 1<<i) > 0] ^= orbsym[i]
-    na = len(strsa)
-    nb = len(strsb)
+    neleca, nelecb = direct_spin1._unpack_nelec(nelec)
+    assert(neleca == nelecb)
+    strsa = cistring.gen_strings4orblist(range(norb), neleca)
+    airreps = direct_spin1_symm._gen_strs_irrep(strsa, orbsym)
+    na = nb = len(airreps)
 
     init_strs = []
     iroot = 0
     for addr in numpy.argsort(hdiag):
         addra = addr // nb
         addrb = addr % nb
-        if airreps[addra] ^ birreps[addrb] == wfnsym:
+        if airreps[addra] ^ airreps[addrb] == wfnsym:
             if (addrb,addra) not in init_strs:
                 init_strs.append((addra,addrb))
                 iroot += 1
@@ -320,6 +311,8 @@ if __name__ == '__main__':
     ci1 = cis.contract_2e(eri, fcivec, norb, nelec)
     ci1ref = direct_spin0.contract_2e(eri, fcivec, norb, nelec)
     print(numpy.allclose(ci1ref, ci1))
+    e = cis.kernel(h1e, eri, norb, nelec, ecore=m.energy_nuc(), davidson_only=True)[0]
+    print(e, e - -75.012647118991595)
 
     mol.atom = [['H', (0, 0, i)] for i in range(8)]
     mol.basis = {'H': 'sto-3g'}

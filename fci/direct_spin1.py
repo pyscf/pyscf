@@ -117,10 +117,11 @@ def make_hdiag(h1e, eri, norb, nelec):
     neleca, nelecb = _unpack_nelec(nelec)
     h1e = numpy.asarray(h1e, order='C')
     eri = ao2mo.restore(1, eri, norb)
-    strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
-    strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
-    na = len(strsa)
-    nb = len(strsb)
+    occslsta = occslstb = cistring._gen_occslst(range(norb), neleca)
+    if neleca != nelecb:
+        occslstb = cistring._gen_occslst(range(norb), nelecb)
+    na = len(occslsta)
+    nb = len(occslstb)
 
     hdiag = numpy.empty(na*nb)
     jdiag = numpy.asarray(numpy.einsum('iijj->ij',eri), order='C')
@@ -133,8 +134,8 @@ def make_hdiag(h1e, eri, norb, nelec):
                              ctypes.c_int(norb),
                              ctypes.c_int(na), ctypes.c_int(nb),
                              ctypes.c_int(neleca), ctypes.c_int(nelecb),
-                             strsa.ctypes.data_as(ctypes.c_void_p),
-                             strsb.ctypes.data_as(ctypes.c_void_p))
+                             occslsta.ctypes.data_as(ctypes.c_void_p),
+                             occslstb.ctypes.data_as(ctypes.c_void_p))
     return hdiag
 
 def absorb_h1e(h1e, eri, norb, nelec, fac=1):
@@ -154,6 +155,9 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
 def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
     '''pspace Hamiltonian to improve Davidson preconditioner. See, CPL, 169, 463
     '''
+    if norb > 63:
+        return [0], hdiag[0].reshape(1,1)
+
     neleca, nelecb = _unpack_nelec(nelec)
     h1e = numpy.ascontiguousarray(h1e)
     eri = ao2mo.restore(1, eri, norb)
@@ -168,10 +172,8 @@ def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
         except AttributeError:
             addr = numpy.argsort(hdiag)[:np]
     addra, addrb = divmod(addr, nb)
-    stra = numpy.array([cistring.addr2str(norb,neleca,ia) for ia in addra],
-                       dtype=numpy.uint64)
-    strb = numpy.array([cistring.addr2str(norb,nelecb,ib) for ib in addrb],
-                       dtype=numpy.uint64)
+    stra = cistring.addrs2str(norb, neleca, addra)
+    strb = cistring.addrs2str(norb, nelecb, addrb)
     np = len(addr)
     h0 = numpy.zeros((np,np))
     libfci.FCIpspace_h0tril(h0.ctypes.data_as(ctypes.c_void_p),
@@ -657,8 +659,9 @@ def _unpack_nelec(nelec, spin=None):
 def _unpack(norb, nelec, link_index, spin=None):
     if link_index is None:
         neleca, nelecb = _unpack_nelec(nelec, spin)
-        link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-        link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
+        link_indexa = link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
+        if neleca != nelecb:
+            link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
         return link_indexa, link_indexb
     else:
         return link_index
@@ -700,6 +703,6 @@ if __name__ == '__main__':
     neb = nelec//2 - 1
     nelec = (nea, neb)
 
-    e1 = cis.kernel(h1e, eri, norb, nelec)[0]
+    e1 = cis.kernel(h1e, eri, norb, nelec, davidson_only=True)[0]
     print(e1, e1 - -7.7466756526056004)
 

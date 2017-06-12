@@ -84,27 +84,10 @@ absorb_h1e = direct_spin1.absorb_h1e
 
 @lib.with_doc(direct_spin1.make_hdiag.__doc__)
 def make_hdiag(h1e, eri, norb, nelec):
-    if isinstance(nelec, (int, numpy.number)):
-        neleca = nelec//2
-    else:
-        neleca, nelecb = nelec
-        assert(neleca == nelecb)
-    h1e = numpy.ascontiguousarray(h1e)
-    eri = ao2mo.restore(1, eri, norb)
-    strs = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
-    na = len(strs)
-    hdiag = numpy.empty((na,na))
-    jdiag = numpy.asarray(numpy.einsum('iijj->ij',eri), order='C')
-    kdiag = numpy.asarray(numpy.einsum('ijji->ij',eri), order='C')
-    libfci.FCImake_hdiag(hdiag.ctypes.data_as(ctypes.c_void_p),
-                         h1e.ctypes.data_as(ctypes.c_void_p),
-                         jdiag.ctypes.data_as(ctypes.c_void_p),
-                         kdiag.ctypes.data_as(ctypes.c_void_p),
-                         ctypes.c_int(norb), ctypes.c_int(na),
-                         ctypes.c_int(neleca),
-                         strs.ctypes.data_as(ctypes.c_void_p))
+    hdiag = direct_spin1.make_hdiag(h1e, eri, norb, nelec)
+    na = int(numpy.sqrt(hdiag.size))
 # symmetrize hdiag to reduce numerical error
-    hdiag = lib.transpose_sum(hdiag, inplace=True) * .5
+    hdiag = lib.transpose_sum(hdiag.reshape(na,na), inplace=True) * .5
     return hdiag.ravel()
 
 pspace = direct_spin1.pspace
