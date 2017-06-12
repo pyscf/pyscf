@@ -83,19 +83,13 @@ def energy(cc, t1, t2, eris):
     tau = t2 + 2*t1t1
     e += 0.25 * numpy.dot(tau.flatten(), eris_oovv.flatten())
     e /= nkpts
-    #e += (0.25*einsum('ijab,ijab',t2,eris_oovv)
-    #      + 0.5*einsum('ia,jb,ijab',t1,t1,eris_oovv))
-    print "Energy Real / Imaginary = %.15g %.15g" % (e.real, e.imag)
     return e.real
 
 def update_amps(cc, t1, t2, eris, max_memory=2000):
     time0 = time.clock(), time.time()
     log = logger.Logger(cc.stdout, cc.verbose)
     nkpts, nocc, nvir = t1.shape
-    #nov = nocc*nvir
     fock = eris.fock
-    #t1new = numpy.zeros_like(t1)
-    #t2new = numpy.zeros_like(t2)
 
     fov = fock[:,:nocc,nocc:].copy()
     foo = fock[:,:nocc,:nocc].copy()
@@ -107,7 +101,6 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
 
     tau = imdk.make_tau(cc,t2,t1,t1)
 
-    ### From eom-cc hackathon code ###
     Fvv = imdk.cc_Fvv(cc,t1,t2,eris)
     Foo = imdk.cc_Foo(cc,t1,t2,eris)
     Fov = imdk.cc_Fov(cc,t1,t2,eris)
@@ -116,8 +109,9 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     Wovvo = imdk.cc_Wovvo(cc,t1,t2,eris)
 
     # Move energy terms to the other side
-    Fvv -= fvv
-    Foo -= foo
+    for k in range(nkpts):
+        Fvv[k] -= numpy.diag(numpy.diag(fvv[k]))
+        Foo[k] -= numpy.diag(numpy.diag(foo[k]))
 
     # Get the momentum conservation array
     # Note: chemist's notation for momentum conserving t2(ki,kj,ka,kb), even though
@@ -145,8 +139,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     t1new = numpy.zeros(shape=t1.shape, dtype=t1.dtype)
     for ka in range(nkpts):
         ki = ka
-        # TODO: Does this fov need a conj()? Usually zero w/ canonical HF.
-        t1new[ka] += fov[ka,:,:]
+        t1new[ka] += numpy.array(fov[ka,:,:]).conj()
         t1new[ka] +=  einsum('ie,ae->ia',t1[ka],Fvv[ka])
         t1new[ka] += -einsum('ma,mi->ia',t1[ka],Foo[ka])
         for km in range(nkpts):
@@ -158,9 +151,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
                 t1new[ka] += -0.5*einsum('mnae,nmei->ia',t2[km,kn,ka],eris_oovo[kn,km,ke])
 
     # T2 equation
-    # For conj(), see Hirata and Bartlett, Eq. (36)
-    t2new = eris.oovv.copy().conj()
-
+    t2new = numpy.array(eris.oovv).conj()
     for ki in range(nkpts):
       for kj in range(nkpts):
         for ka in range(nkpts):
@@ -171,25 +162,23 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
             tmp = einsum('ijae,be->ijab',t2[ki,kj,ka],Ftmp)
             t2new[ki,kj,ka] += tmp
 
+            #t2new[ki,kj,kb] -= tmp.transpose(0,1,3,2)
             Ftmp = Fvv[ka] - 0.5*einsum('ma,me->ae',t1[ka],Fov[ka])
             tmp = einsum('ijbe,ae->ijab',t2[ki,kj,kb],Ftmp)
             t2new[ki,kj,ka] -= tmp
-
-            #t2new[ki,kj,kb] -= tmp.transpose(0,1,3,2)
 
             Ftmp = Foo[kj] + 0.5*einsum('je,me->mj',t1[kj],Fov[kj])
             tmp = einsum('imab,mj->ijab',t2[ki,kj,ka],Ftmp)
             t2new[ki,kj,ka] -= tmp
 
+            #t2new[kj,ki,ka] += tmp.transpose(1,0,2,3)
             Ftmp = Foo[ki] + 0.5*einsum('ie,me->mi',t1[ki],Fov[ki])
             tmp = einsum('jmab,mi->ijab',t2[kj,ki,ka],Ftmp)
             t2new[ki,kj,ka] += tmp
 
-            #t2new[kj,ki,ka] += tmp.transpose(1,0,2,3)
-
             for km in range(nkpts):
                 # Wminj
-                #     - km - kn + ka + kb = 0
+                #   - km - kn + ka + kb = 0
                 # =>  kn = ka - km + kb
                 kn = kconserv[ka,km,kb]
                 t2new[ki,kj,ka] += 0.5*einsum('mnab,mnij->ijab',tau[km,kn,ka],Woooo[km,kn,ki])
