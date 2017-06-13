@@ -874,7 +874,7 @@ def _mem_usage(nocc, nvir):
     incore *= 4
     # TODO: Improve incore estimate and add outcore estimate
     outcore = basic = incore
-    return incore, outcore, basic
+    return incore*8/1e6, outcore*8/1e6, basic*8/1e6
 
 
 if __name__ == '__main__':
