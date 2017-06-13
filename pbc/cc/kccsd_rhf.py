@@ -1183,4 +1183,4 @@ def _mem_usage(nkpts, nocc, nvir):
     incore *= 4
     # TODO: Improve incore estimate and add outcore estimate
     outcore = basic = incore
-    return incore*8/1e9, outcore*8/1e9, basic*8/1e9
+    return incore*16/1e6, outcore*16/1e6, basic*16/1e6
