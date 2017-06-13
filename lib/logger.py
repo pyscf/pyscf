@@ -155,7 +155,7 @@ def timer(rec, msg, cpu0=None, wall0=None):
     else:
         rec._t0 = time.clock()
         if rec.verbose >= TIMER_LEVEL:
-            flush(rec, '    CPU time for %s %9.2f sec' % (rec._t0-cpu0))
+            flush(rec, '    CPU time for %s %9.2f sec' % (msg, rec._t0-cpu0))
         return rec._t0
 
 def timer_debug1(rec, msg, cpu0=None, wall0=None):
