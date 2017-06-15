@@ -1084,17 +1084,3 @@ void PBCnr2c_drv(int (*intor)(), void (*fill)(), double complex *out,
         free(expkL_r);
 }
 
-/*
- * Remove the precomputed pair data because the pair data corresponds to
- * the integral of cell-0 while the lattice sum moves shls to all repeated
- * images.
- */
-void PBCformat_intor_optimizer(CINTOpt *cintopt)
-{
-        if (cintopt->data_ptr != NULL) {
-                free(cintopt->data);
-                free(cintopt->data_ptr);
-        }
-        cintopt->data = NULL;
-        cintopt->data_ptr = NULL;
-}

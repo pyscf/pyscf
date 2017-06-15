@@ -126,9 +126,9 @@ def wrap_int3c(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=1,
     fill = 'PBCnr3c_fill_%s%s' % (kk_type, aosym[:2])
     drv = libpbc.PBCnr3c_drv
     cintopt = _vhf.make_cintopt(atm, bas, env, intor)
-# Note shells are shifted in the lattice summation.  The pair data of the
-# original integral optimizer cannot be used.
-    libpbc.PBCformat_intor_optimizer(cintopt)
+# Remove the precomputed pair data because the pair data corresponds to the
+# integral of cell #0 while the lattice sum moves shls to all repeated images.
+    libpbc.CINTdel_pairdata_optimizer(cintopt)
 
     def int3c(shls_slice, out):
         shls_slice = (shls_slice[0], shls_slice[1],
