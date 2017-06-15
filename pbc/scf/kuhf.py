@@ -472,6 +472,8 @@ class KUHF(uhf.UHF, khf.KRHF):
     def density_fit(self, auxbasis=None, gs=None):
         return khf.KRHF.density_fit(self, auxbasis, gs)
 
+    # mix_density_fit inherits from khf.KRHF.mix_density_fit
+
 
 if __name__ == '__main__':
     from pyscf.pbc import gto

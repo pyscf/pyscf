@@ -117,3 +117,5 @@ class UHF(pyscf.scf.uhf.UHF, pbchf.RHF):
     def density_fit(self, auxbasis=None, gs=None):
         return pbchf.RHF.density_fit(self, auxbasis, gs)
 
+    # mix_density_fit inherits from hf.RHF.mix_density_fit
+
