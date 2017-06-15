@@ -111,13 +111,17 @@ static void init1e_envs(CINTEnvVars *envs, const int *shls,
         int ng[] = {0, 0, 0, 0, 0, 0, 0, 0};
         CINTinit_int1e_EnvVars(envs, ng, shls, atm, natm, bas, nbas, env);
 
+        int dli, dlj;
         if (envs->li_ceil < envs->lj_ceil) {
-                int dli = envs->li_ceil + 1;
-                int dlj = envs->li_ceil + envs->lj_ceil + 1;
-                envs->g_stride_i = 1;
-                envs->g_stride_j = dli;
-                envs->g_size     = dli * dlj;
+                dli = envs->li_ceil + 1;
+                dlj = envs->li_ceil + envs->lj_ceil + 1;
+        } else {
+                dli = envs->li_ceil + envs->lj_ceil + 1;
+                dlj = envs->lj_ceil + 1;
         }
+        envs->g_stride_i = 1;
+        envs->g_stride_j = dli;
+        envs->g_size     = dli * dlj;
 }
 
 
