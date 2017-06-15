@@ -257,7 +257,11 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
 
 
 def _regular_step(heff, ovlp, xs, lindep, log):
-    e,c = lib.safe_eigh(heff[1:,1:], ovlp[1:,1:], lindep)[:2]
+    try:
+        e, c = scipy.linalg.eigh(heff[1:,1:], ovlp[1:,1:])
+    except scipy.linalg.LinAlgError:
+        e, c = lib.safe_eigh(heff[1:,1:], ovlp[1:,1:], lindep)[:2]
+
     if e[0] < -1e-5:
         log.debug('Negative hessians found %s', e[e<0])
         log.debug('AH is shifted to avoid negative hessians')
