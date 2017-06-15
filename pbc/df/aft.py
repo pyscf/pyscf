@@ -177,6 +177,7 @@ class AFTDF(lib.StreamObject):
         logger.info(self, '\n')
         logger.info(self, '******** %s flags ********', self.__class__)
         logger.info(self, 'gs = %s', self.gs)
+        logger.info(self, 'eta = %s', self.eta)
         logger.info(self, 'len(kpts) = %d', len(self.kpts))
         logger.debug1(self, '    kpts = %s', self.kpts)
 
