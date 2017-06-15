@@ -257,7 +257,6 @@ def r_e2(eri, mo_coeff, orbs_slice, tao, ao_loc, aosym='s1', out=None):
     assert(eri.flags.c_contiguous)
     assert(aosym in ('s4', 's2ij', 's2kl', 's1', 'a2ij', 'a2kl', 'a4ij',
                      'a4kl', 'a4'))
-    intor = ascint3(intor)
     mo_coeff = numpy.asfortranarray(mo_coeff)
     nao = mo_coeff.shape[0]
     k0, k1, l0, l1 = orbs_slice
