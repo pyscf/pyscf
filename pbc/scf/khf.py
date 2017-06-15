@@ -352,12 +352,13 @@ class KRHF(hf.RHF):
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'N kpts = %d', len(self.kpts))
         logger.debug(self, 'kpts = %s', self.kpts)
-        logger.info(self, 'DF object = %s', self.with_df)
         logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
         #if self.exxdiv == 'vcut_ws':
         #    if self.exx_built is False:
         #        self.precompute_exx()
         #    logger.info(self, 'WS alpha = %s', self.exx_alpha)
+        logger.info(self, 'DF object = %s', self.with_df)
+        self.with_df.dump_flags()
 
     def build(self, cell=None):
         hf.RHF.build(self, cell)

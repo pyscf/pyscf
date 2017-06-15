@@ -277,8 +277,9 @@ class RHF(hf.RHF):
         hf.RHF.dump_flags(self)
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'kpt = %s', self.kpt)
-        logger.info(self, 'DF object = %s', self.with_df)
         logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
+        logger.info(self, 'DF object = %s', self.with_df)
+        self.with_df.dump_flags()
 
     def get_hcore(self, cell=None, kpt=None):
         if cell is None: cell = self.cell
