@@ -208,8 +208,8 @@ def get_grad(mo_coeff, mo_occ, fock=None):
     uniq_var_a = viridxa.reshape(-1,1) & occidxa
     uniq_var_b = viridxb.reshape(-1,1) & occidxb
 
-    focka = reduce(numpy.dot, (mo_coeff.T, fock[0], mo_coeff))
-    fockb = reduce(numpy.dot, (mo_coeff.T, fock[1], mo_coeff))
+    focka = reduce(numpy.dot, (mo_coeff.T.conj(), fock[0], mo_coeff))
+    fockb = reduce(numpy.dot, (mo_coeff.T.conj(), fock[1], mo_coeff))
 
     g = numpy.zeros_like(focka)
     g[uniq_var_a]  = focka[uniq_var_a]

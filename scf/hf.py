@@ -688,9 +688,9 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     occidx = mo_occ > 0
     viridx = ~occidx
 
-    g = reduce(numpy.dot, (mo_coeff[:,viridx].T, fock_ao.T,
-                           mo_coeff[:,occidx].conj())) * 2
-    return g.reshape(-1)
+    g = reduce(numpy.dot, (mo_coeff[:,occidx].T.conj(), fock_ao,
+                           mo_coeff[:,viridx])) * 2
+    return g.T.ravel()
 
 
 def analyze(mf, verbose=logger.DEBUG, **kwargs):
