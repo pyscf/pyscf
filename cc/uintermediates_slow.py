@@ -39,7 +39,8 @@ def cc_Foo(t1,t2,eris):
 
 def cc_Fov(t1,t2,eris):
     nocc, nvir = t1.shape
-    Fme = einsum('nf,mnef->me',t1,eris.oovv)
+    fov = eris.fock[:nocc,nocc:]
+    Fme = fov + einsum('nf,mnef->me',t1,eris.oovv)
     return Fme
 
 def cc_Woooo(t1,t2,eris):
