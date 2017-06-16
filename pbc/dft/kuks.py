@@ -16,10 +16,10 @@ import numpy as np
 from pyscf import lib
 from pyscf.pbc.scf import uhf as pbcuhf
 from pyscf.pbc.scf import kuhf
-from pyscf.pbc.dft import krks
 from pyscf.lib import logger
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
+from pyscf.pbc.dft import rks
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -114,4 +114,5 @@ class KUKS(kuhf.KUHF):
         logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, self._ecoul, self._exc)
         return tot_e, self._ecoul + self._exc
 
-
+    density_fit = rks._patch_df_beckegrids(kuhf.KUHF.density_fit)
+    mix_density_fit = rks._patch_df_beckegrids(kuhf.KUHF.mix_density_fit)

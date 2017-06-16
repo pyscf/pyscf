@@ -458,3 +458,17 @@ class KRHF(hf.RHF):
 
     canonicalize = canonicalize
 
+    def density_fit(self, auxbasis=None, with_df=None):
+        from pyscf.df.addons import aug_etb_for_dfbasis
+        from pyscf.pbc.df import df_jk
+        if auxbasis is None:
+            auxbasis = aug_etb_for_dfbasis(self.cell, beta=1.8, start_at=0)
+        return df_jk.density_fit(self, auxbasis, with_df)
+
+    def mix_density_fit(self, auxbasis=None, with_df=None):
+        from pyscf.df.addons import aug_etb_for_dfbasis
+        from pyscf.pbc.df import mdf_jk
+        if auxbasis is None:
+            auxbasis = aug_etb_for_dfbasis(self.cell, beta=1.8, start_at=0)
+        return mdf_jk.density_fit(self, auxbasis, with_df)
+

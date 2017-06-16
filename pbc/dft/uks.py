@@ -19,6 +19,7 @@ from pyscf.pbc.scf import uhf as pbcuhf
 from pyscf.lib import logger
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
+from pyscf.pbc.dft import rks
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -104,3 +105,5 @@ class UKS(pbcuhf.UHF):
     get_veff = get_veff
     energy_elec = pyscf.dft.uks.energy_elec
 
+    density_fit = rks._patch_df_beckegrids(pbcuhf.UHF.density_fit)
+    mix_density_fit = rks._patch_df_beckegrids(pbcuhf.UHF.mix_density_fit)

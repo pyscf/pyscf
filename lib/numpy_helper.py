@@ -395,7 +395,9 @@ def ddot(a, b, alpha=1, c=None, beta=0):
         trans_a = 'T'
         a = a.T
     else:
-        raise ValueError('a.flags: %s' % str(a.flags))
+        a = numpy.asarray(a, order='C')
+        trans_a = 'N'
+        #raise ValueError('a.flags: %s' % str(a.flags))
 
     assert(k == b.shape[0])
     if b.flags.c_contiguous:
@@ -404,7 +406,9 @@ def ddot(a, b, alpha=1, c=None, beta=0):
         trans_b = 'T'
         b = b.T
     else:
-        raise ValueError('b.flags: %s' % str(b.flags))
+        a = numpy.asarray(a, order='C')
+        trans_a = 'N'
+        #raise ValueError('b.flags: %s' % str(b.flags))
 
     if c is None:
         c = numpy.empty((m,n))
