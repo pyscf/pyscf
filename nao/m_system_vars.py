@@ -9,11 +9,8 @@ from pyscf.nao.m_siesta_ion_xml import siesta_ion_xml
 from pyscf.nao.m_siesta_hsx import siesta_hsx_c
 from pyscf.nao.m_siesta2blanko_csr import _siesta2blanko_csr
 from pyscf.nao.m_siesta2blanko_denvec import _siesta2blanko_denvec
-from pyscf.nao.m_sv_diag import sv_diag 
 from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
 from pyscf.nao.m_ao_log import ao_log_c
-from pyscf.lib import logger
-from pyscf.data import chemical_symbols
 
 #
 #
@@ -30,6 +27,7 @@ def get_orb2m(sv):
 #
 #
 def diag_check(self, atol=1e-5, rtol=1e-4):
+  from pyscf.nao.m_sv_diag import sv_diag 
   ksn2e = self.xml_dict['ksn2e']
   ac = True
   for k,kvec in enumerate(self.xml_dict["k2xyzw"]):
@@ -60,60 +58,49 @@ def overlap_check(sv, tol=1e-5, **kvargs):
 #
 class system_vars_c():
 
-  def __init__(self, label=None, Atoms=None, atom=None, gto=None, **kvargs):
+  def __init__(self):
     """ 
       Constructor of system_vars class: so far can be initialized 
       with SIESTA orbitals and Hamiltonian and wavefunctions
     """
+    self.state = 'call an initialize method...'
+
+  #
+  #
+  #
+  def init_xyzlike(self, atom, label='pyscf'):
+    from pyscf.lib import logger
+    from pyscf.data import chemical_symbols
+    """ This is simple constructor which only initializes geometry info """
     self.verbose = logger.NOTE  # To be similar to Mole object...
     self.stdout = sys.stdout
     self.symmetry = False
     self.symmetry_subgroup = None
 
-    if atom is not None: # Simple xyz-like constructor of (molecular) geometry from a list [n1, [x1,y1,z1], n2, [x2,y2,z2]], where n* are nuclear charges, and [xyz] are coordinates in Bohr
-      atom2charge = [atm[0] for atm in atom]
-      self.atom2coord = np.array([atm[1] for atm in atom], dtype='float64')
-      self.sp2charge = list(set(atom2charge))
-      self.sp2symbol = [chemical_symbols[z] for z in self.sp2charge]
-      self.atom2sp = [self.sp2charge.index(charge) for charge in atom2charge]
-      self.natm = len(self.atom2sp)
-      self.atom2s = None
-      return
+    self.label = label
+    atom2charge = [atm[0] for atm in atom]
+    self.atom2coord = np.array([atm[1] for atm in atom])
+    self.sp2charge = list(set(atom2charge))
+    self.sp2symbol = [chemical_symbols[z] for z in self.sp2charge]
+    self.atom2sp = [self.sp2charge.index(charge) for charge in atom2charge]
+    self.natm=self.natoms=len(self.atom2sp)
+    self.atom2s = None
+    self.state = 'should be useful for something'
+    return self
 
-    if label is not None and Atoms is None: # Read from SIESTA without ASE input
-      self.label = label
-      self.xml_dict = siesta_xml(self.label)
-      self.wfsx = siesta_wfsx_c(self.label)
-      self.hsx = siesta_hsx_c(self.label, **kvargs)
-      self.norbs_sc = self.wfsx.norbs if self.hsx.orb_sc2orb_uc is None else len(self.hsx.orb_sc2orb_uc)
-      self.init_siesta_xml()
-      self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
-      self.sp2charge = self.ao_log.sp2charge
-      return
-      
-    if Atoms is not None:  # Read from SIESTA with ASE input
-      self.label = 'ase' if label is None else label
-      self.xml_dict = siesta_xml(self.label)
-      self.wfsx = siesta_wfsx_c(self.label)
-      self.hsx = siesta_hsx_c(self.label, **kvargs)
-      self.norbs_sc = self.wfsx.norbs if self.hsx.orb_sc2orb_uc is None else len(self.hsx.orb_sc2orb_uc)
-      self.init_ase_atoms(Atoms)
-      self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
-      self.sp2charge = self.ao_log.sp2charge
-      return
-    
-    if gto is not None: # Interpret previous pySCF calculation
-      self.label = 'pyscf' if label is None else label
-      self.init_pyscf_gto(gto, **kvargs)
-      return
-    
-    raise RuntimeError('unknown constructor.')
-    
   #
   #
   #
-  def init_pyscf_gto(self, gto, **kvargs):
+  def init_pyscf_gto(self, gto, label='pyscf', **kvargs):
+    from pyscf.lib import logger
+
     """Interpret previous pySCF calculation"""
+    self.verbose = logger.NOTE  # To be similar to Mole object...
+    self.stdout = sys.stdout
+    self.symmetry = False
+    self.symmetry_subgroup = None
+
+    self.label = label
     self.mol=gto # Only some data must be copied, not the whole object. Otherwise, an eventual deepcopy(...) may fail.
     self.natm=self.natoms = gto.natm
     a2s = [gto.atom_symbol(ia) for ia in range(gto.natm) ]
@@ -134,18 +121,26 @@ class system_vars_c():
     for atom,sp in enumerate(self.atom2sp): self.atom2mu_s[atom+1]=self.atom2mu_s[atom]+self.ao_log.sp2nmult[sp]
     self._atom = gto._atom
     self.basis = gto.basis
+    self.state = 'should be useful for something'
+    return self
     
 
   #
   #
   #
-  def init_ase_atoms(self, Atoms):
+  def init_ase_atoms(self, Atoms, **kvargs):
     """ Initialise system vars using siesta file and Atom object from ASE."""
+    self.label = 'ase' if label is None else label
+    self.xml_dict = siesta_xml(self.label)
+    self.wfsx = siesta_wfsx_c(self.label)
+    self.hsx = siesta_hsx_c(self.label, **kvargs)
+    self.norbs_sc = self.wfsx.norbs if self.hsx.orb_sc2orb_uc is None else len(self.hsx.orb_sc2orb_uc)
+
     try:
       import ase
     except:
       warn('no ASE installed: try via siesta.xml')
-      self.init_siesta_xml()
+      self.init_siesta_xml(**kvargs)
 
     self.Atoms = Atoms
    
@@ -189,15 +184,22 @@ class system_vars_c():
         for n in range(self.norbs):
           _siesta2blanko_denvec(orb2m, self.wfsx.X[:,:,n,s,k])
 
+    self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
+    self.sp2charge = self.ao_log.sp2charge
+    self.state = 'should be useful for something'
+    return self
+
   #
   #
   #
-  def init_siesta_xml(self):
-    """
-    Initialise system var using only the siesta files (siesta.xml in particular is needed).
-    """
-    self.Atoms = None
-    
+  def init_siesta_xml(self, label='siesta', **kvargs):
+    """ Initialise system var using only the siesta files (siesta.xml in particular is needed) """
+    self.label = label
+    self.xml_dict = siesta_xml(self.label)
+    self.wfsx = siesta_wfsx_c(self.label)
+    self.hsx = siesta_hsx_c(self.label, **kvargs)
+    self.norbs_sc = self.wfsx.norbs if self.hsx.orb_sc2orb_uc is None else len(self.hsx.orb_sc2orb_uc)
+   
     ##### The parameters as fields     
     self.sp2ion = []
     for sp in self.wfsx.sp2strspecie:
@@ -236,20 +238,28 @@ class system_vars_c():
         for n in range(self.norbs):
           _siesta2blanko_denvec(orb2m, self.wfsx.X[:,:,n,s,k])
 
-  #
+    self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
+    self.sp2charge = self.ao_log.sp2charge
+    self.state = 'should be useful for something'
+    return self
+
   # More functions for similarity with Mole
-  #
   def atom_symbol(self, ia): return self.sp2symbol[self.atom2sp[ia]]
   def atom_charge(self, ia): return self.sp2charge[self.atom2sp[ia]]
   def atom_charges(self): return np.array([self.sp2charge[sp] for sp in self.atom2sp], dtype='int64')
   def atom_coord(self, ia): return self.atom2coord[ia,:]
   def atom_coords(self): return self.atom2coord
-  # 
-  # Compute something for the given system
-  #
-  def comp_overlap_coo(self, **kvargs):
+
+  def comp_overlap_coo(self, **kvargs):   # Compute something for the given system
     from pyscf.nao import comp_overlap_coo
     return comp_overlap_coo(self, **kvargs)
+  
+  def overlap_check(self, tol=1e-5, **kvargs): # Works only after init_siesta_xml(), extend ?
+    return overlap_check(self, tol=1e-5, **kvargs)
+
+  def diag_check(self, atol=1e-5, rtol=1e-4, **kvargs): # Works only after init_siesta_xml(), extend ?
+    return diag_check(self, atol, rtol, **kvargs)
+
 
 #
 # Example of reading pySCF orbitals.

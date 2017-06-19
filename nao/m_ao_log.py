@@ -13,8 +13,8 @@ def comp_moments(self):
   sp2mom0,sp2mom1,cs,cd = [],[],np.sqrt(4*np.pi),np.sqrt(4*np.pi/3.0)
   for sp,nmu in enumerate(self.sp2nmult):
     nfunct=sum(2*self.sp_mu2j[sp]+1)
-    mom0 = np.zeros((nfunct), dtype='float64')
-    d = np.zeros((nfunct,3), dtype='float64')
+    mom0 = np.zeros((nfunct))
+    d = np.zeros((nfunct,3))
     for mu,[j,s] in enumerate(zip(self.sp_mu2j[sp],self.sp_mu2s[sp])):
       if j==0:                 mom0[s]  = cs*sum(self.psi_log[sp][mu,:]*rr3dr)
       if j==1: d[s,1]=d[s+1,2]=d[s+2,0] = cd*sum(self.psi_log[sp][mu,:]*rr4dr)
@@ -56,32 +56,36 @@ class ao_log_c(log_mesh_c):
   >>> ao = ao_log_c(sv.sp2ion)
   >>> print(ao.psi_log.shape)
   '''
-  def __init__(self, sp2ion=None, gto=None, sv=None, log_mesh=None, rcut_tol=1e-5, **kvargs):
+  def __init__(self, sp2ion=None, gto=None, sv=None, log_mesh=None, rcut_tol=1e-7, **kvargs):
     """ Initializes numerical orbitals from a previous pySCF calculation or from SIESTA calculation (really numerical orbitals) """
     from pyscf.nao.m_log_interp import log_interp_c
     
     if sp2ion is not None:
-      log_mesh_c.__init__(self, sp2ion=sp2ion, **kvargs)
+      log_mesh_c.__init__(self)
+      self.init_log_mesh_ion(sp2ion=sp2ion, **kvargs) 
       self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
       self.init_ion(sp2ion, **kvargs)
       return
     
     if gto is not None and log_mesh is None:
       assert(sv is not None)
-      log_mesh_c.__init__(self, gto=gto, **kvargs)
+      log_mesh_c.__init__(self)
+      self.init_log_mesh_gto(gto, rcut_tol, **kvargs)
       self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
       self.init_gto(gto, sv, rcut_tol)
       return
 
     if gto is not None and log_mesh is not None:
       assert(sv is not None)
-      log_mesh_c.__init__(self, rr=log_mesh.rr, pp=log_mesh.pp, **kvargs)
+      log_mesh_c.__init__(self)
+      self.init_log_mesh(log_mesh.rr, log_mesh.pp)
       self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
       self.init_gto(gto, sv, rcut_tol)
       return
     
     if gto is None and log_mesh is not None:
-      log_mesh_c.__init__(self, rr=log_mesh.rr, pp=log_mesh.pp, **kvargs)
+      log_mesh_c.__init__(self)
+      self.init_log_mesh(log_mesh.rr, log_mesh.pp)
       self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
       return
       

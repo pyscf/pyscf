@@ -18,9 +18,9 @@ def build_3dgrid(me, sp1, R1, sp2, R2, level=3):
   from pyscf.nao.m_gauleg import leggauss_ab
 
   if ( (R1-R2)**2 ).sum()<1e-7 :
-    mol = system_vars_c(atom=[ [int(me.aos[0].sp2charge[sp1]), R1] ])
+    mol=system_vars_c().init_xyzlike([ [int(me.aos[0].sp2charge[sp1]), R1] ])
   else :
-    mol = system_vars_c(atom=[ [int(me.aos[0].sp2charge[sp1]), R1], [int(me.aos[1].sp2charge[sp2]), R2] ])
+    mol=system_vars_c().init_xyzlike([ [int(me.aos[0].sp2charge[sp1]), R1], [int(me.aos[1].sp2charge[sp2]), R2] ])
 
   atom2rcut=np.array([me.aos[isp].sp_mu2rcut[sp].max() for isp,sp in enumerate([sp1,sp2])])
   grids = dft.gen_grid.Grids(mol)

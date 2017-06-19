@@ -64,39 +64,42 @@ def log_mesh(nr, rmin, rmax, kmax=None):
 #
 class log_mesh_c():
   ''' Constructor of the log grid used with NAOs.'''
-  def __init__(self, gto=None, sp2ion=None, rcut_tol=1e-7, rr=None, pp=None, nr=None, rmin=None, rmax=None, kmax=None):
-
-    if gto is not None:
-      #self.gto = gto cannot copy GTO object here... because python3 + deepcopy in m_ao_log_hartree fails
-      self.rcut_tol = rcut_tol
-      nr_def,rmin_def,rmax_def,kmax_def = get_default_log_mesh_param4gto(gto, rcut_tol)
-      self.nr   = nr_def   if nr is None else nr
-      self.rmin = rmin_def if rmin is None else rmin
-      self.rmax = rmax_def if rmax is None else rmax
-      self.kmax = kmax_def if kmax is None else kmax
-      assert(self.rmin>0.0); assert(self.kmax>0.0); assert(self.nr>2); assert(self.rmax>self.rmin);
-      self.rr,self.pp = log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
-      return
+  def __init__(self):
+    self.state = 'call an initialize method...'
+    return
+  
+  def init_log_mesh_gto(self, gto, rcut_tol=1e-7, nr=None, rmin=None, rmax=None, kmax=None):
+    #self.gto = gto cannot copy GTO object here... because python3 + deepcopy in m_ao_log_hartree fails
+    self.rcut_tol = rcut_tol
+    nr_def,rmin_def,rmax_def,kmax_def = get_default_log_mesh_param4gto(gto, rcut_tol)
+    self.nr   = nr_def   if nr is None else nr
+    self.rmin = rmin_def if rmin is None else rmin
+    self.rmax = rmax_def if rmax is None else rmax
+    self.kmax = kmax_def if kmax is None else kmax
+    assert(self.rmin>0.0); assert(self.kmax>0.0); assert(self.nr>2); assert(self.rmax>self.rmin);
+    self.rr,self.pp = log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
+    self.state = 'can be useful for something'
+    return self
     
-    if sp2ion is not None:
-      self.sp2ion = sp2ion
-      nr_def,rmin_def,rmax_def,kmax_def = get_default_log_mesh_param4ion(sp2ion)
-      self.nr = 1024 if nr is None else nr
-      self.rmin = rmin_def if rmin is None else rmin
-      self.rmax = rmax_def if rmax is None else rmax
-      self.kmax = kmax_def if kmax is None else kmax
-      assert(self.rmin>0.0); assert(self.kmax>0.0); assert(self.nr>2); assert(self.rmax>self.rmin);
-      self.rr,self.pp = log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
-      return
+  
+  def init_log_mesh_ion(self, sp2ion, nr=None, rmin=None, rmax=None, kmax=None):
+    self.sp2ion = sp2ion
+    nr_def,rmin_def,rmax_def,kmax_def = get_default_log_mesh_param4ion(sp2ion)
+    self.nr = 1024 if nr is None else nr
+    self.rmin = rmin_def if rmin is None else rmin
+    self.rmax = rmax_def if rmax is None else rmax
+    self.kmax = kmax_def if kmax is None else kmax
+    assert(self.rmin>0.0); assert(self.kmax>0.0); assert(self.nr>2); assert(self.rmax>self.rmin);
+    self.rr,self.pp = log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
+    self.state = 'can be useful for something'
+    return self
 
-    if rr is not None:
-      assert(pp is not None)
-      assert(len(pp)==len(rr))
-      self.rr,self.pp = rr,pp
-      self.nr = len(rr)
-      self.rmin = rr[0]
-      self.rmax = rr[-1]
-      self.kmax = pp[-1]
-      return
-
-    raise RuntimeError('log_mesh_c: unknown constructor')
+  def init_log_mesh(self, rr, pp):
+    assert(len(pp)==len(rr))
+    self.rr,self.pp = rr,pp
+    self.nr = len(rr)
+    self.rmin = rr[0]
+    self.rmax = rr[-1]
+    self.kmax = pp[-1]
+    self.state = 'can be useful for something'
+    return self

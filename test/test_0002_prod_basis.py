@@ -1,6 +1,4 @@
-#
 # Author: Peter Koval
-#
 
 from __future__ import print_function, division
 import unittest
@@ -20,10 +18,10 @@ class KnowValues(unittest.TestCase):
 
   def test_gto2sv_df(self):
     from pyscf import scf
-    """ Test import of density-fitting Gaussian functions"""
+    """ Test import of density-fitting Gaussian functions ... hm """
     mf = scf.density_fit(scf.RHF(mol))
     self.assertAlmostEqual(mf.scf(), -76.025936299702536, 9)
-    sv = system_vars_c(gto=mol)
+    sv = system_vars_c().init_pyscf_gto(mol)
     prod_log = prod_log_c(auxmol=mf.with_df.auxmol, sv=sv)
     self.assertEqual(prod_log.rr[0], sv.ao_log.rr[0])
     self.assertEqual(prod_log.pp[0], sv.ao_log.pp[0])
@@ -37,9 +35,8 @@ class KnowValues(unittest.TestCase):
     #print(mf.with_df.auxmol._basis)
 
   def test_gto2sv_prod_log(self):
-    """ Test """
-    sv = system_vars_c(gto=mol)
-    #print('000>>>')
+    """ Test what ? """
+    sv = system_vars_c().init_pyscf_gto(mol)
     prod_log = prod_log_c(ao_log=sv.ao_log, tol_loc=1e-4)
     #print('111>>>')
     self.assertEqual(prod_log.nspecies, 2)

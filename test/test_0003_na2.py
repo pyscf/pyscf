@@ -4,7 +4,7 @@ import unittest
 
 class KnowValues(unittest.TestCase):
   
-  def test_gto2sv_df(self):
+  def test_siesta2sv_df(self):
     from pyscf import scf
     from pyscf.tools.siesta_utils import get_siesta_command, get_pseudo
     import subprocess
@@ -48,7 +48,11 @@ class KnowValues(unittest.TestCase):
 
     # run test system_vars
     from pyscf.nao.m_system_vars import system_vars_c, diag_check, overlap_check
-    sv  = system_vars_c(label) 
+    sv  = system_vars_c().init_siesta_xml(label)
     self.assertEqual(sv.norbs, 10)
-    self.assertTrue( diag_check(sv) )
-    self.assertTrue( overlap_check(sv))
+    self.assertTrue( sv.diag_check() )
+    self.assertTrue( sv.overlap_check())
+
+if __name__ == "__main__":
+  print("Full Tests for siesta-based sodium")
+  unittest.main()

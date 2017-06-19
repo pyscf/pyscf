@@ -49,8 +49,7 @@ class prod_basis_c():
     self.c2s = np.zeros((sv.natm+1), dtype=np.int64) # global product Center (atom) -> start in case of atom-centered basis
     for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] # 
 
-    # What is the meaning of this copy ??
-    c2s = self.c2s
+    c2s = self.c2s      # What is the meaning of this copy ?? ... This is a pointer to self.c2s
     
     self.bp2vertex = [] # going to be the product vertex coefficients for each bilocal pair 
     self.bp2info   = [] # going to be some information including indices of atoms, list of contributing centres, conversion coefficients
