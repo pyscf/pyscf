@@ -3,10 +3,6 @@ import numpy as np
 import sys
 
 from pyscf.nao.m_color import color as bc
-from pyscf.nao.m_siesta_xml import siesta_xml
-from pyscf.nao.m_siesta_wfsx import siesta_wfsx_c
-from pyscf.nao.m_siesta_ion_xml import siesta_ion_xml
-from pyscf.nao.m_siesta_hsx import siesta_hsx_c
 from pyscf.nao.m_siesta2blanko_csr import _siesta2blanko_csr
 from pyscf.nao.m_siesta2blanko_denvec import _siesta2blanko_denvec
 from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
@@ -130,6 +126,11 @@ class system_vars_c():
   #
   def init_ase_atoms(self, Atoms, **kvargs):
     """ Initialise system vars using siesta file and Atom object from ASE."""
+    from pyscf.nao.m_siesta_xml import siesta_xml
+    from pyscf.nao.m_siesta_wfsx import siesta_wfsx_c
+    from pyscf.nao.m_siesta_ion_xml import siesta_ion_xml
+    from pyscf.nao.m_siesta_hsx import siesta_hsx_c
+
     self.label = 'ase' if label is None else label
     self.xml_dict = siesta_xml(self.label)
     self.wfsx = siesta_wfsx_c(self.label)
@@ -193,6 +194,10 @@ class system_vars_c():
   #
   #
   def init_siesta_xml(self, label='siesta', chdir='.', **kvargs):
+    from pyscf.nao.m_siesta_xml import siesta_xml
+    from pyscf.nao.m_siesta_wfsx import siesta_wfsx_c
+    from pyscf.nao.m_siesta_ion_xml import siesta_ion_xml
+    from pyscf.nao.m_siesta_hsx import siesta_hsx_c
     """ Initialise system var using only the siesta files (siesta.xml in particular is needed) """
     self.label = label
     self.chdir = chdir
