@@ -22,7 +22,7 @@ def cmd_args():
                       action='store', dest='max_memory', metavar='NUM',
                       help='maximum memory to use (in MB)')
 
-    (opts, args_left) = parser.parse_args()
+    (opts, args_left) = parser.parse_known_args()
 
     if opts.quite:
         opts.verbose = pyscf.lib.logger.QUIET
