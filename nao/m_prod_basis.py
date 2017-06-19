@@ -19,7 +19,22 @@ class prod_basis_c():
   Examples:
   '''
   def __init__(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
-    """ First it should work with GTOs """
+    """ First it should work with GTOs
+        Variable belonging to the class prod_basis_c:
+        From input:
+            self.sv: copy of sv (system variable), probably not necessary??
+            self.tol_loc: tolerance for local basis
+            self.tol_biloc: tolerance for bilocal basis
+            self.ac_rcut_ratio: ac rcut ratio??
+        Output:
+            self.prod_log: Holder of (local) product functions and vertices
+            self.hkernel_csr: hartree kernel: local part of Coulomb interaction
+            self.c2s: global product Center (atom) -> start in case of atom-centered basis
+            self.bp2vertex: product vertex coefficients for each bilocal pair
+            self.bp2info: some information including indices of atoms, list of contributing centres, conversion coefficients
+                    Probably better a dictionary than a list, more clear.
+            self.dpc2s, self.dpc2t, self.dpc2sp: product Center -> list of the size of the basis set in this center,of center's types,of product species
+    """
     from pyscf.nao import coulomb_am, comp_overlap_coo, get_atom2bas_s, conv_yzx2xyz_c, prod_log_c, ls_part_centers, comp_coulomb_den
     from scipy.sparse import csr_matrix
     from pyscf import gto
@@ -29,17 +44,20 @@ class prod_basis_c():
     self.tol_biloc = tol_biloc
     self.ac_rcut_ratio = ac_rcut_ratio
     
-    self.prod_log = prod_log_c(sv.ao_log, tol_loc) # local basis (for each specie)
+    self.prod_log = prod_log_c(ao_log = sv.ao_log, tol_loc=tol_loc) # local basis (for each specie)
     self.hkernel_csr  = csr_matrix(comp_overlap_coo(sv, self.prod_log, coulomb_am)) # compute local part of Coulomb interaction
     self.c2s = np.zeros((sv.natm+1), dtype=np.int64) # global product Center (atom) -> start in case of atom-centered basis
     for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] # 
+
+    # What is the meaning of this copy ??
     c2s = self.c2s
     
     self.bp2vertex = [] # going to be the product vertex coefficients for each bilocal pair 
     self.bp2info   = [] # going to be some information including indices of atoms, list of contributing centres, conversion coefficients
 
-    for ia1,n1 in zip(range(sv.natm), sv.atom2s[1:]-sv.atom2s[0:-1]):
-      for ia2,n2 in zip(range(ia1+1,sv.natm+1), sv.atom2s[ia1+2:]-sv.atom2s[ia1+1:-1]):
+    for ia1,n1 in enumerate(sv.atom2s[1:]-sv.atom2s[0:-1]):
+      for ia2,n2 in enumerate(sv.atom2s[ia1+2:]-sv.atom2s[ia1+1:-1]):
+        ia2 += ia1+1
 
         mol2 = gto.Mole_pure(atom=[sv._atom[ia1], sv._atom[ia2]], basis=sv.basis, unit='bohr').build()
         bs = get_atom2bas_s(mol2._bas)
@@ -50,9 +68,11 @@ class prod_basis_c():
         mu2d = [domi for domi,eva in enumerate(ee) if eva>tol_biloc] # The choice of important linear combinations is here
         nprod=len(mu2d)
         if nprod<1: continue # Skip the rest of operations in case there is no large linear combinations.
-        vertex = np.zeros([nprod,n1,n2])
-        for p,d in enumerate(mu2d) : vertex[p,:,:] = xx[:,d].reshape(n1,n2)
-        self.bp2vertex.append(vertex)
+
+        # add new vertex
+        self.bp2vertex.append(np.zeros([nprod,n1,n2]))
+        for p,d in enumerate(mu2d):
+            self.bp2vertex[len(self.bp2vertex) -1][p,:,:] = xx[:,d].reshape(n1,n2)
         
         #print(ia1,ia2,nprod,abs(einsum('pab,qab->pq', lambdx, lambdx).reshape(nprod,nprod)-np.identity(nprod)).sum())
 
@@ -78,7 +98,7 @@ class prod_basis_c():
           ss = (bs[2],bs[3], bs[2],bs[3], bs[0],bs[1], bs[1],bs[2])
           tci_ao = mol3.intor('cint2e_sph', shls_slice=ss).reshape(n3,n3,n1,n2)
           tci_ao = conv_yzx2xyz_c(mol3).conv_yzx2xyz_4d(tci_ao, 'pyscf2nao', ss)
-          lp = einsum('lcd,cdp->lp', lcd,einsum('cdab,pab->cdp', tci_ao, vertex))
+          lp = einsum('lcd,cdp->lp', lcd,einsum('cdab,pab->cdp', tci_ao, self.bp2vertex[len(self.bp2vertex) -1]))
           llp[s:f,:] = lp
 
         cc = einsum('ab,bc->ac', inv_hk, llp)

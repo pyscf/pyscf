@@ -56,7 +56,7 @@ class ao_log_c(log_mesh_c):
   >>> ao = ao_log_c(sv.sp2ion)
   >>> print(ao.psi_log.shape)
   '''
-  def __init__(self, sp2ion=None, gto=None, sv=None, log_mesh=None, **kvargs):
+  def __init__(self, sp2ion=None, gto=None, sv=None, log_mesh=None, rcut_tol=1e-5, **kvargs):
     """ Initializes numerical orbitals from a previous pySCF calculation or from SIESTA calculation (really numerical orbitals) """
     from pyscf.nao.m_log_interp import log_interp_c
     
@@ -70,14 +70,14 @@ class ao_log_c(log_mesh_c):
       assert(sv is not None)
       log_mesh_c.__init__(self, gto=gto, **kvargs)
       self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
-      self.init_gto(gto, sv, **kvargs)
+      self.init_gto(gto, sv, rcut_tol)
       return
 
     if gto is not None and log_mesh is not None:
       assert(sv is not None)
       log_mesh_c.__init__(self, rr=log_mesh.rr, pp=log_mesh.pp, **kvargs)
       self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
-      self.init_gto(gto, sv, **kvargs)
+      self.init_gto(gto, sv, rcut_tol)
       return
     
     if gto is None and log_mesh is not None:
@@ -89,7 +89,7 @@ class ao_log_c(log_mesh_c):
       
   
   #
-  def init_gto(self, gto, sv, rcut_tol=1e-5):
+  def init_gto(self, gto, sv, rcut_tol):
     """ Get's radial orbitals and angular momenta from a previous pySCF calculation, intializes numerical orbitals from the Gaussian type of orbitals etc."""
     import numpy as np
     

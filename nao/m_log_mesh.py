@@ -64,12 +64,12 @@ def log_mesh(nr, rmin, rmax, kmax=None):
 #
 class log_mesh_c():
   ''' Constructor of the log grid used with NAOs.'''
-  def __init__(self, gto=None, sp2ion=None, tol=1e-7, rr=None, pp=None, nr=None, rmin=None, rmax=None, kmax=None):
+  def __init__(self, gto=None, sp2ion=None, rcut_tol=1e-7, rr=None, pp=None, nr=None, rmin=None, rmax=None, kmax=None):
 
     if gto is not None:
       #self.gto = gto cannot copy GTO object here... because python3 + deepcopy in m_ao_log_hartree fails
-      self.tol = tol
-      nr_def,rmin_def,rmax_def,kmax_def = get_default_log_mesh_param4gto(gto, tol)
+      self.rcut_tol = rcut_tol
+      nr_def,rmin_def,rmax_def,kmax_def = get_default_log_mesh_param4gto(gto, rcut_tol)
       self.nr   = nr_def   if nr is None else nr
       self.rmin = rmin_def if rmin is None else rmin
       self.rmax = rmax_def if rmax is None else rmax
