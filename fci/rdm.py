@@ -75,8 +75,9 @@ def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
     ciket = numpy.asarray(ciket, order='C')
     if link_index is None:
         neleca, nelecb = _unpack_nelec(nelec)
-        link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
-        link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
+        link_indexa = link_indexb = cistring.gen_linkstr_index(range(norb), neleca)
+        if neleca != nelecb:
+            link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
     else:
         link_indexa, link_indexb = link_index
     na,nlinka = link_indexa.shape[:2]
@@ -104,8 +105,9 @@ def make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
     ciket = numpy.asarray(ciket, order='C')
     if link_index is None:
         neleca, nelecb = _unpack_nelec(nelec)
-        link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
-        link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
+        link_indexa = link_indexb = cistring.gen_linkstr_index(range(norb), neleca)
+        if neleca != nelecb:
+            link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
     else:
         link_indexa, link_indexb = link_index
     na,nlinka = link_indexa.shape[:2]

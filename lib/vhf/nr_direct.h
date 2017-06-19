@@ -27,13 +27,13 @@ typedef struct {
 } JKArray;
 
 typedef struct {
-        JKArray *(*allocate)(int *shls_offset, int *ao_loc, int ncomp);
+        JKArray *(*allocate)(int *shls_slice, int *ao_loc, int ncomp);
         void (*deallocate)(JKArray *);
         void (*contract)(double *eri, double *dm, JKArray *vjk, int *shls,
                          int i0, int i1, int j0, int j1,
                          int k0, int k1, int l0, int l1);
-        size_t (*data_size)(int *shls_offset, int *ao_loc);
-        void (*sanity_check)(int *shls_offset);
+        size_t (*data_size)(int *shls_slice, int *ao_loc);
+        void (*sanity_check)(int *shls_slice);
 } JKOperator;
 
 typedef struct {
@@ -42,7 +42,7 @@ typedef struct {
         const int *atm;
         const int *bas;
         const double *env;
-        int *shls_offset;
+        int *shls_slice;
         int *ao_loc;  /* size of nbas+1, last element = nao */
         int *tao;     /* time reversal mappings, index start from 1 */
         CINTOpt *cintopt;
@@ -64,6 +64,6 @@ struct _VHFEnvs {
 
 void CVHFnr_direct_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
                        double **dms, double **vjk, int n_dm, int ncomp,
-                       int *shls_offset, int *ao_loc,
+                       int *shls_slice, int *ao_loc,
                        CINTOpt *cintopt, CVHFOpt *vhfopt,
                        int *atm, int natm, int *bas, int nbas, double *env);

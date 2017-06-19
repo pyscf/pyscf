@@ -49,7 +49,7 @@ class KnowValues(unittest.TestCase):
                 for k in range(mol.nbas):
                     l0 = 0
                     for l in range(mol.nbas):
-                        buf = gto.getints_by_shell('cint2e_ip1_sph', (i,j,k,l),
+                        buf = gto.getints_by_shell('int2e_ip1_sph', (i,j,k,l),
                                                    c_atm, c_bas, c_env, 3)
                         di,dj,dk,dl = buf.shape[1:]
                         eri0[:,i0:i0+di,j0:j0+dj,k0:k0+dk,l0:l0+dl] = buf
@@ -59,7 +59,7 @@ class KnowValues(unittest.TestCase):
             i0 += di
         vj0 = numpy.einsum('nijkl,lk->nij', eri0, dm)
         vk0 = numpy.einsum('nijkl,jk->nil', eri0, dm)
-        vj1, vk1 = _vhf.direct_mapdm('cint2e_ip1_sph', 's2kl',
+        vj1, vk1 = _vhf.direct_mapdm('int2e_ip1_sph', 's2kl',
                                      ('lk->s1ij', 'jk->s1il'),
                                      dm, 3, mol._atm, mol._bas, mol._env)
         self.assertTrue(numpy.allclose(vj0,vj1))
@@ -68,11 +68,11 @@ class KnowValues(unittest.TestCase):
     def test_direct_bindm(self):
         numpy.random.seed(1)
         dm = numpy.random.random((nao,nao))
-        vj0, vk0 = _vhf.direct_mapdm('cint2e_ip1_sph', 's2kl',
+        vj0, vk0 = _vhf.direct_mapdm('int2e_ip1_sph', 's2kl',
                                      ('lk->s1ij', 'jk->s1il'),
                                      dm, 3, mol._atm, mol._bas, mol._env)
         dms = (dm,dm)
-        vj1, vk1 = _vhf.direct_bindm('cint2e_ip1_sph', 's2kl',
+        vj1, vk1 = _vhf.direct_bindm('int2e_ip1_sph', 's2kl',
                                      ('lk->s1ij', 'jk->s1il'),
                                      dms, 3, mol._atm, mol._bas, mol._env)
         self.assertTrue(numpy.allclose(vj0,vj1))
@@ -95,7 +95,7 @@ class KnowValues(unittest.TestCase):
                 for k in range(mol.nbas):
                     l0 = 0
                     for l in range(mol.nbas):
-                        buf = gto.getints_by_shell('cint2e_g1', (i,j,k,l),
+                        buf = gto.getints_by_shell('int2e_g1_spinor', (i,j,k,l),
                                                    c_atm, c_bas, c_env, 3)
                         di,dj,dk,dl = buf.shape[1:]
                         eri0[:,i0:i0+di,j0:j0+dj,k0:k0+dk,l0:l0+dl] = buf
@@ -104,7 +104,7 @@ class KnowValues(unittest.TestCase):
                 j0 += dj
             i0 += di
         vk0 = numpy.einsum('nijkl,jk->nil', eri0, dm)
-        vj1, vk1 = _vhf.rdirect_mapdm('cint2e_g1', 'a4ij',
+        vj1, vk1 = _vhf.rdirect_mapdm('int2e_g1_spinor', 'a4ij',
                                       ('lk->s2ij', 'jk->s1il'),
                                       dm, 3, mol._atm, mol._bas, mol._env)
         self.assertTrue(numpy.allclose(vk0,vk1))
@@ -126,7 +126,7 @@ class KnowValues(unittest.TestCase):
                 for k in range(mol.nbas):
                     l0 = 0
                     for l in range(mol.nbas):
-                        buf = gto.getints_by_shell('cint2e_spsp1', (i,j,k,l),
+                        buf = gto.getints_by_shell('int2e_spsp1_spinor', (i,j,k,l),
                                                    c_atm, c_bas, c_env, 1)
                         di,dj,dk,dl = buf.shape
                         eri0[i0:i0+di,j0:j0+dj,k0:k0+dk,l0:l0+dl] = buf
@@ -136,7 +136,7 @@ class KnowValues(unittest.TestCase):
             i0 += di
 
         vk0 = numpy.einsum('ijkl,jk->il', eri0, dm)
-        vk1 = _vhf.rdirect_bindm('cint2e_spsp1', 's4', ('jk->s1il',),
+        vk1 = _vhf.rdirect_bindm('int2e_spsp1_spinor', 's4', ('jk->s1il',),
                                  (dm,), 1, mol._atm, mol._bas, mol._env)
         self.assertTrue(numpy.allclose(vk0,vk1))
 

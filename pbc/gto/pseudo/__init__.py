@@ -18,6 +18,7 @@ ALIAS = {
     'gthpade'    : 'gth-pade.dat'   ,
     'gthpbe'     : 'gth-pbe.dat'    ,
     'gthpbesol'  : 'gth-pbesol.dat' ,
+    'gthhf    '  : 'gth-hf.dat' ,
 }
 
 def parse(string):

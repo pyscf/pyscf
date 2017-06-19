@@ -1,46 +1,66 @@
-#  6-31++G**  EMSL  Basis Set Exchange Library  9/15/14 7:32 AM
+#  6-31+G**  EMSL  Basis Set Exchange Library  6/9/17 6:22 PM
 # Elements                             References
 # --------                             ----------
-# H - He: W.J. Hehre, R. Ditchfield and J.A. Pople, J. Chem. Phys. 56,
-# Li - Ne: 2257 (1972).  Note: Li and B come from J.D. Dill and J.A.
-# Pople, J. Chem. Phys. 62, 2921 (1975).
-# Na - Ar: M.M. Francl, W.J. Petro, W.J. Hehre, J.S. Binkley, M.S. Gordon,
-# D.J. DeFrees and J.A. Pople, J. Chem. Phys. 77, 3654 (1982)
-# K  - Zn: V. Rassolov, J.A. Pople, M. Ratner and T.L. Windus, J. Chem. Phys.
-# 109, 1223 (1998)
-# Note: He and Ne are unpublished basis sets taken from the Gaussian
-# program
+# H He                 : W.J. Hehre, R. Ditchfield and J.A. Pople, "Self-Consistent Molecular Orbital Methods. XII.
+# Further Extensions of Gaussian-Type Basis Sets for Use in Molecular Orbital Studies of
+# Organic Molecules", J. Chem. Phys. 56, 2257 (1972). DOI: 10.1063/1.1677527.
+# Li                   : J.D. Dill and J.A. Pople, "Self-consistent molecular orbital methods. XV. Extended
+# Gaussian-type basis sets for lithium, beryllium, and boron", J. Chem. Phys. 62, 2921
+# (1975). DOI: 10.1063/1.430801.
+# Li                   : T. Clark, J. Chandrasekhar, G. W. Spitznagel, and P. v. R. Schleyer, "Efficient diffuse
+# function-augmented basis-sets for anion calculations. 3. The 3-21+G basis set for 1st-row
+# elements, Li-F," J. Comp. Chem., 4, 294-301 (1983). DOI: 10.1002/jcc.540040303.
+# Be                   : W.J. Hehre, R. Ditchfield and J.A. Pople, "Self-Consistent Molecular Orbital Methods. XII.
+# Further Extensions of Gaussian-Type Basis Sets for Use in Molecular Orbital Studies of
+# Organic Molecules", J. Chem. Phys. 56, 2257 (1972). DOI: 10.1063/1.1677527.
+# Be                   : T. Clark, J. Chandrasekhar, G. W. Spitznagel, and P. v. R. Schleyer, "Efficient diffuse
+# function-augmented basis-sets for anion calculations. 3. The 3-21+G basis set for 1st-row
+# elements, Li-F," J. Comp. Chem., 4, 294-301 (1983). DOI: 10.1002/jcc.540040303.
+# B                    : J.D. Dill and J.A. Pople, "Self-consistent molecular orbital methods. XV. Extended
+# Gaussian-type basis sets for lithium, beryllium, and boron", J. Chem. Phys. 62, 2921
+# (1975). DOI: 10.1063/1.430801.
+# B                    : T. Clark, J. Chandrasekhar, G. W. Spitznagel, and P. v. R. Schleyer, "Efficient diffuse
+# function-augmented basis-sets for anion calculations. 3. The 3-21+G basis set for 1st-row
+# elements, Li-F," J. Comp. Chem., 4, 294-301 (1983). DOI: 10.1002/jcc.540040303.
+# C N O F Ne           : W.J. Hehre, R. Ditchfield and J.A. Pople, "Self-Consistent Molecular Orbital Methods. XII.
+# Further Extensions of Gaussian-Type Basis Sets for Use in Molecular Orbital Studies of
+# Organic Molecules", J. Chem. Phys. 56, 2257 (1972). DOI: 10.1063/1.1677527.
+# C N O F Ne           : T. Clark, J. Chandrasekhar, G. W. Spitznagel, and P. v. R. Schleyer, "Efficient diffuse
+# function-augmented basis-sets for anion calculations. 3. The 3-21+G basis set for 1st-row
+# elements, Li-F," J. Comp. Chem., 4, 294-301 (1983). DOI: 10.1002/jcc.540040303.
+# Na Mg Al Si P S Cl Ar: M.M. Francl, W.J. Petro, W.J. Hehre, J.S. Binkley, M.S. Gordon, D.J. DeFrees and J.A.
+# Pople, "Self-consistent molecular orbital methods. XXIII. A polarization-type basis set
+# for second-row elements", J. Chem. Phys. 77, 3654 (1982). DOI: 10.1063/1.444267.
+# Na Mg Al Si P S Cl Ar: M. J. Frisch, J. A. Pople, and J. S. Binkley, "Self-Consistent Molecular Orbital Methods.
+# 25. Supplementary Functions for Gaussian Basis Sets," J. Chem. Phys., 80, 3265-69 (1984).
+# DOI: 10.1063/1.447079.
+# K Ca                 : V. Rassolov, J.A. Pople, M. Ratner and T.L. Windus, "6-31G* basis set for atoms K through
+# Zn", J. Chem. Phys. 109, 1223 (1998). DOI: 10.1063/1.476673.
+# K Ca                 : M. J. Frisch, J. A. Pople, and J. S. Binkley, "Self-Consistent Molecular Orbital Methods.
+# 25. Supplementary Functions for Gaussian Basis Sets," J. Chem. Phys., 80, 3265-69 (1984).
+# DOI: 10.1063/1.447079.
 # 
 
 
-# Elements                             Reference
-# --------                             ----------
-# H, Li-Cl: T. Clark, J. Chandrasekhar,  G.W. Spitznagel, P.V.R. Schleyer, 
-#           J. Comp. Chem. 4, 294 (1983).
-#   
-
-# Elements                             References
-# --------                             ----------
-# H,Li - Ne: P.C. Hariharan and J.A. Pople, Theoret. Chimica Acta 28, 213 (1973).
-# Na - Ar  : M.M. Francl, W.J. Petro, W.J. Hehre, J.S. Binkley, M.S. Gordon, D.J.
-#            DeFrees and J.A. Pople, J. Chem. Phys. 77, 3654 (1982).
-# K  - Zn:   V.A. Rassolov, J.A. Pople, M.A. Ratner, and T.L. Windus
-#            J. Chem. Phys. 109, 1223 (1998)
-#            Note: He and Ne are unpublished basis sets taken from Gaussian.
-#   
-
 
 BASIS "ao basis" PRINT
-#BASIS SET: (5s,1p) -> [3s,1p]
+#BASIS SET: (4s,1p) -> [2s,1p]
 H    S
      18.7311370              0.03349460       
       2.8253937              0.23472695       
       0.6401217              0.81375733       
 H    S
-      0.1612778              1.0000000        
-H    S
-      0.0360000              1.0000000        
+      0.1612778              1.00000000       
 H    P
+      1.1000000              1.0000000        
+#BASIS SET: (4s,1p) -> [2s,1p]
+He    S
+     38.4216340              0.0237660        
+      5.7780300              0.1546790        
+      1.2417740              0.4696300        
+He    S
+      0.2979640              1.0000000        
+He    P
       1.1000000              1.0000000        
 #BASIS SET: (11s,5p,1d) -> [4s,3p,1d]
 Li    S
@@ -417,7 +437,7 @@ K    SP
 K    SP
       0.0047000              1.0000000              1.0000000        
 K    D
-      0.2000000              1.0000000        
+      0.2000000              1.000000E+00     
 #BASIS SET: (23s,17p,1d) -> [6s,5p,1d]
 Ca    S
   35264.8600000              1.813501E-03     
@@ -449,5 +469,7 @@ Ca    SP
 Ca    SP
       0.0071000              1.0000000              1.0000000        
 Ca    D
-      0.2000000              1.0000000        
+      0.2000000              1.000000E+00     
 END
+
+

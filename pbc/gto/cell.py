@@ -239,6 +239,7 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
 
         \langle \mu | intor | \nu \rangle, \mu \in cell1, \nu \in cell2
     '''
+    intor = moleintor.ascint3(intor)
     if kpts is None:
         if kpt is not None:
             kpts_lst = np.reshape(kpt, (1,3))
@@ -265,12 +266,7 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
         aosym = 's1'
     else:
         aosym = 's2'
-    if '2c2e' in intor:
-        fill = getattr(libpbc, 'PBCnr2c2e_fill_k'+aosym)
-    else:
-        assert('2e' not in intor)
-        fill = getattr(libpbc, 'PBCnr2c_fill_k'+aosym)
-
+    fill = getattr(libpbc, 'PBCnr2c_fill_k'+aosym)
     fintor = getattr(moleintor.libcgto, intor)
     intopt = lib.c_null_ptr()
 
@@ -740,7 +736,6 @@ class Cell(mole.Mole):
         if h is not None: self.h = h
         if a is not None: self.a = a
         if gs is not None: self.gs = gs
-        if ke_cutoff is not None: self.ke_cutoff=ke_cutoff
         if nimgs is not None: self.nimgs = nimgs
         if ew_eta is not None: self.ew_eta = ew_eta
         if ew_cut is not None: self.ew_cut = ew_cut
@@ -750,6 +745,7 @@ class Cell(mole.Mole):
         if precision is not None: self.precision = precision
         if rcut is not None: self.rcut = rcut
         if ecp is not None: self.ecp = ecp
+        if ke_cutoff is not None: self.ke_cutoff = ke_cutoff
 
         assert(self.a is not None)
         assert(self.gs is not None or self.ke_cutoff is not None)

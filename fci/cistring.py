@@ -27,6 +27,9 @@ def gen_strings4orblist(orb_list, nelec):
     >>> [bin(x) for x in gen_strings4orblist((3,1,0,2),2)]
     [0b1010, 0b1001, 0b11, 0b1100, 0b110, 0b101]
     '''
+    if len(orb_list) > 63:
+        return _gen_occslst(orb_list, nelec)
+
     assert(nelec >= 0)
     if nelec == 0:
         return [0]
@@ -35,21 +38,46 @@ def gen_strings4orblist(orb_list, nelec):
     def gen_str_iter(orb_list, nelec):
         if nelec == 1:
             res = [(1<<i) for i in orb_list]
-            res.reverse()
         elif nelec >= len(orb_list):
             n = 0
             for i in orb_list:
                 n = n | (1<<i)
             res = [n]
         else:
-            restorb = orb_list[1:]
+            restorb = orb_list[:-1]
+            thisorb = 1 << orb_list[-1]
             res = gen_str_iter(restorb, nelec)
             for n in gen_str_iter(restorb, nelec-1):
-                res.append(n | (1<<orb_list[0]))
+                res.append(n | thisorb)
         return res
-    strings = gen_str_iter(orb_list[::-1], nelec)
+    strings = gen_str_iter(orb_list, nelec)
     assert(strings.__len__() == num_strings(len(orb_list),nelec))
     return numpy.asarray(strings, dtype=numpy.int64)
+
+def _gen_occslst(orb_list, nelec):
+    '''Generate occupied orbital list for each string.
+    '''
+    assert(nelec >= 0)
+    if nelec == 0:
+        return numpy.zeros((1,nelec), dtype=numpy.int32)
+    elif nelec > len(orb_list):
+        return numpy.zeros((0,nelec), dtype=numpy.int32)
+    def gen_occs_iter(orb_list, nelec):
+        if nelec == 1:
+            res = [[i] for i in orb_list]
+        elif nelec >= len(orb_list):
+            res = [orb_list]
+        else:
+            restorb = orb_list[:-1]
+            thisorb = orb_list[-1]
+            res = gen_occs_iter(restorb, nelec)
+            for n in gen_occs_iter(restorb, nelec-1):
+                res.append(n + [thisorb])
+        return res
+    occslst = gen_occs_iter(list(orb_list), nelec)
+    return numpy.asarray(occslst, dtype=numpy.int32).view(OIndexList)
+class OIndexList(numpy.ndarray):
+    pass
 
 def num_strings(n, m):
     if m < 0 or m > n:
@@ -79,8 +107,63 @@ def gen_linkstr_index_o0(orb_list, nelec, strs=None):
                 linktab.append((a, i, strdic[str1], cre_des_sign(a, i, str0)))
         return linktab
 
-    t = [propgate1e(s) for s in strs]
+    t = [propgate1e(s) for s in strs.astype(numpy.int64)]
     return numpy.array(t, dtype=numpy.int32)
+
+def gen_linkstr_index_o1(orb_list, nelec, strs=None, tril=False):
+    if nelec == 0:
+        return numpy.zeros((0,0,4), dtype=numpy.int32)
+
+    if strs is None:
+        strs = _gen_occslst(orb_list, nelec)
+    occslst = strs
+
+    orb_list = numpy.asarray(orb_list)
+    norb = len(orb_list)
+    assert(numpy.all(numpy.arange(norb) == orb_list))
+
+    strdic = dict((tuple(s), i) for i,s in enumerate(occslst))
+    nvir = norb - nelec
+    def propgate1e(str0):
+        addr0 = strdic[tuple(str0)]
+        tab = numpy.empty((nelec,4), dtype=numpy.int32)
+        tab[:,0] = tab[:,1] = str0
+        tab[:,2] = addr0
+        tab[:,3] = 1
+        linktab = [tab]
+
+        virmask = numpy.ones(norb, dtype=bool)
+        virmask[str0] = False
+        vir = orb_list[virmask]
+        str0 = numpy.asarray(str0)
+        # where to put vir-orb, ie how many occ-orb in the left
+        where_vir = numpy.sum(str0.reshape(-1,1) < vir, axis=0)
+        parity_occ_orb = 1  # parity for annihilating occupied orbital
+        for n,i in enumerate(str0):  # loop over all occupied orbitals
+            # o,v which index is bigger, to determine whether to annihilate occ-orb first 
+            reorder_to_ov = vir > i
+            str1s = numpy.empty((nvir,nelec), dtype=int)
+            str1s[:] = str0
+            str1s[:,n] = vir
+            str1s.sort(axis=1)
+            addr = [strdic[tuple(s)] for s in str1s]
+            parity = (where_vir + reorder_to_ov + 1) % 2 #? +1 so that even parity has +1, odd parity = 0
+            parity[parity == 0] = -1
+            parity *= parity_occ_orb
+            tab = numpy.empty((nvir,4), dtype=numpy.int32)
+            tab[:,0] = vir
+            tab[:,1] = i
+            tab[:,2] = addr
+            tab[:,3] = parity
+            linktab.append(tab)
+            parity_occ_orb *= -1
+        return numpy.vstack(linktab)
+
+    lidx = [propgate1e(s) for s in occslst]
+    lidx = numpy.asarray(lidx, dtype=numpy.int32)
+    if tril:
+        lidx = reform_linkstr_index(lidx)
+    return lidx
 
 # return [cre, des, target_address, parity]
 def gen_linkstr_index(orb_list, nocc, strs=None, tril=False):
@@ -95,7 +178,11 @@ def gen_linkstr_index(orb_list, nocc, strs=None, tril=False):
     '''
     if strs is None:
         strs = gen_strings4orblist(orb_list, nocc)
-    strs = numpy.array(strs, dtype=numpy.uint64)
+
+    if isinstance(strs, OIndexList):
+        return gen_linkstr_index_o1(orb_list, nocc, strs, tril)
+
+    strs = numpy.array(strs, dtype=numpy.int64)
     assert(all(strs[:-1] < strs[1:]))
     norb = len(orb_list)
     nvir = norb - nocc
@@ -122,10 +209,7 @@ def reform_linkstr_index(link_index):
     link_new = link_index.copy()
     a = link_index[:,:,0]
     i = link_index[:,:,1]
-    ai = a*(a+1)//2 + i
-    ia = i*(i+1)//2 + a
-    link_new[:,:,0][a>i ] = ai[a>i ]
-    link_new[:,:,0][a<=i] = ia[a<=i]
+    link_new[:,:,0] = numpy.maximum(a*(a+1)//2+i, i*(i+1)//2+a)
     link_new[:,:,1] = 0
     return link_new
 
@@ -149,7 +233,8 @@ def gen_cre_str_index_o0(orb_list, nelec):
                 linktab.append((i, 0, credic[str1], cre_sign(i, str0)))
         return linktab
 
-    t = [progate1e(s) for s in gen_strings4orblist(orb_list, nelec)]
+    strs = gen_strings4orblist(orb_list, nelec)
+    t = [progate1e(s) for s in strs.astype(numpy.int64)]
     return numpy.array(t, dtype=numpy.int32)
 def gen_cre_str_index_o1(orb_list, nelec):
     norb = len(orb_list)
@@ -185,7 +270,8 @@ def gen_des_str_index_o0(orb_list, nelec):
                 linktab.append((0, i, desdic[str1], des_sign(i, str0)))
         return linktab
 
-    t = [progate1e(s) for s in gen_strings4orblist(orb_list, nelec)]
+    strs = gen_strings4orblist(orb_list, nelec)
+    t = [progate1e(s) for s in strs.astype(numpy.int64)]
     return numpy.array(t, dtype=numpy.int32)
 def gen_des_str_index_o1(orb_list, nelec):
     assert(nelec > 0)
@@ -282,7 +368,19 @@ def addr2str_o1(norb, nelec, addr):
     return str1
 def addr2str(norb, nelec, addr):
     '''Convert CI determinant address to string'''
-    return addr2str_o1(norb, nelec, addr)
+    return addrs2str(norb, nelec, [addr])[0]
+def addrs2str(norb, nelec, addrs):
+    '''Convert a list of CI determinant address to string'''
+    #return [addr2str_o1(norb, nelec, addr) for addr in addrs]
+    addrs = numpy.asarray(addrs, dtype=numpy.int32)
+    assert(all(num_strings(norb, nelec) > addrs))
+    count = addrs.size
+    strs = numpy.empty(count, dtype=numpy.int64)
+    libfci.FCIaddrs2str(strs.ctypes.data_as(ctypes.c_void_p),
+                        addrs.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(count),
+                        ctypes.c_int(norb), ctypes.c_int(nelec))
+    return strs
 
 #def str2addr_o0(norb, nelec, string):
 #    if norb <= nelec or nelec == 0:
@@ -304,7 +402,7 @@ def addr2str(norb, nelec, addr):
 #            nelec_left -= 1
 #    return addr
 def str2addr(norb, nelec, string):
-    '''Convert the string to the CI determinant address'''
+    '''Convert string to CI determinant address'''
     if isinstance(string, str):
         assert(string.count('1') == nelec)
         string = int(string, 2)
@@ -313,6 +411,16 @@ def str2addr(norb, nelec, string):
     libfci.FCIstr2addr.restype = ctypes.c_int
     return libfci.FCIstr2addr(ctypes.c_int(norb), ctypes.c_int(nelec),
                               ctypes.c_ulonglong(string))
+def strs2addr(norb, nelec, strings):
+    '''Convert a list of string to CI determinant address'''
+    strings = numpy.asarray(strings, dtype=numpy.int64)
+    count = strings.size
+    addrs = numpy.empty(count, dtype=numpy.int32)
+    libfci.FCIstrs2addr(addrs.ctypes.data_as(ctypes.c_void_p),
+                        strings.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(count),
+                        ctypes.c_int(norb), ctypes.c_int(nelec))
+    return addrs
 
 def tn_strs(norb, nelec, n):
     '''Generate strings for Tn amplitudes.  Eg n=1 (T1) has nvir*nocc strings,
@@ -336,6 +444,8 @@ if __name__ == '__main__':
     tab1 = gen_linkstr_index_o0(range(8), 4)
     tab2 = gen_linkstr_index(range(8), 4)
     print(abs(tab1 - tab2).sum())
+    tab3 = gen_linkstr_index_o1(range(8), 4)
+    print(abs(tab1 - tab3).sum())
 
     print(addr2str_o0(6, 3, 7) - addr2str(6, 3, 7))
     print(addr2str_o0(6, 3, 8) - addr2str(6, 3, 8))
@@ -344,6 +454,8 @@ if __name__ == '__main__':
     print(str2addr(6, 3, addr2str(6, 3, 7)) - 7)
     print(str2addr(6, 3, addr2str(6, 3, 8)) - 8)
     print(str2addr(7, 4, addr2str(7, 4, 9)) - 9)
+    print(numpy.allclose(numpy.arange(20),
+                         strs2addr(6, 3, addrs2str(6, 3, range(20)))))
 
     tab1 = gen_cre_str_index_o0(range(8), 4)
     tab2 = gen_cre_str_index_o1(range(8), 4)

@@ -23,42 +23,56 @@ ALIAS = {
     'augccpvdz'  : 'aug-cc-pvdz.dat',
     'augccpvtz'  : 'aug-cc-pvtz.dat',
     'augccpvqz'  : 'aug-cc-pvqz.dat',
+    'augccpv5z'  : 'aug-cc-pv5z.dat',
     'ccpvdzdk'   : 'cc-pvdz-dk.dat' ,
     'ccpvtzdk'   : 'cc-pvtz-dk.dat' ,
     'ccpvqzdk'   : 'cc-pvqz-dk.dat' ,
     'ccpv5zdk'   : 'cc-pv5z-dk.dat' ,
-    'augccpvdzdk': 'aug-cc-pvdz-dk.dat',
-    'augccpvtzdk': 'aug-cc-pvtz-dk.dat',
-    'augccpvqzdk': 'aug-cc-pvqz-dk.dat',
-    'ccpvdzdkh'   : 'cc-pvdz-dk.dat' ,
-    'ccpvtzdkh'   : 'cc-pvtz-dk.dat' ,
-    'ccpvqzdkh'   : 'cc-pvqz-dk.dat' ,
-    'ccpv5zdkh'   : 'cc-pv5z-dk.dat' ,
+    'ccpvdzdkh'  : 'cc-pvdz-dk.dat' ,
+    'ccpvtzdkh'  : 'cc-pvtz-dk.dat' ,
+    'ccpvqzdkh'  : 'cc-pvqz-dk.dat' ,
+    'ccpv5zdkh'  : 'cc-pv5z-dk.dat' ,
+    'augccpvdzdk' : 'aug-cc-pvdz-dk.dat',
+    'augccpvtzdk' : 'aug-cc-pvtz-dk.dat',
+    'augccpvqzdk' : 'aug-cc-pvqz-dk.dat',
+    'augccpv5zdk' : 'aug-cc-pv5z-dk.dat',
     'augccpvdzdkh': 'aug-cc-pvdz-dk.dat',
     'augccpvtzdkh': 'aug-cc-pvtz-dk.dat',
     'augccpvqzdkh': 'aug-cc-pvqz-dk.dat',
+    'augccpv5zdkh': 'aug-cc-pv5z-dk.dat',
+    'ccpvtzdk3'   : 'cc-pVTZ-DK3.dat'   ,
+    'ccpvqzdk3'   : 'cc-pVQZ-DK3.dat'   ,
+    'augccpvtzdk3': 'aug-cc-pVTZ-DK3.dat',
+    'augccpvqzdk3': 'aug-cc-pVQZ-DK3.dat',
     'dyalldz'    : 'dyall_dz'       ,
     'dyallqz'    : 'dyall_qz'       ,
     'dyalltz'    : 'dyall_tz'       ,
     'faegredz'   : 'faegre_dz'      ,
     'iglo'       : 'iglo3'          ,
     'iglo3'      : 'iglo3'          ,
-    '321g'       : '3-21g.dat'      ,
-    '431g'       : '4-31g.dat'      ,
-    '631g'       : '6-31g.dat'      ,
-    '631gs'      : '6-31gs.dat'     ,
-    '631gsp'     : '6-31gsp.dat'    ,
-    '631gps'     : '6-31gsp.dat'    ,
-    '6311g'      : '6-311g.dat'     ,
-    '6311gs'     : '6-311gs.dat'    ,
-    '6311gsp'    : '6-311gsp.dat'   ,
-    '6311gps'    : '6-311gsp.dat'   ,
-    '631g*'      : '6-31gs.dat'     ,
-    '631g*+'     : '6-31gsp.dat'    ,
-    '631g+*'     : '6-31gsp.dat'    ,
-    '6311g*'     : '6-311gs.dat'    ,
-    '6311g*+'    : '6-311gsp.dat'   ,
-    '6311g+*'    : '6-311gsp.dat'   ,
+    '321++g'     : os.path.join('pople-basis', '3-21++G.dat'   ),
+    '321++g*'    : os.path.join('pople-basis', '3-21++Gs.dat'  ),
+    '321g'       : os.path.join('pople-basis', '3-21G.dat'     ),
+    '321g*'      : os.path.join('pople-basis', '3-21Gs.dat'    ),
+    '431g'       : os.path.join('pople-basis', '4-31G.dat'     ),
+    '631++g'     : os.path.join('pople-basis', '6-31++G.dat'   ),
+    '631++g*'    : os.path.join('pople-basis', '6-31++Gs.dat'  ),
+    '631++g**'   : os.path.join('pople-basis', '6-31++Gss.dat' ),
+    '631+g'      : os.path.join('pople-basis', '6-31+G.dat'    ),
+    '631+g*'     : os.path.join('pople-basis', '6-31+Gs.dat'   ),
+    '631+g**'    : os.path.join('pople-basis', '6-31+Gss.dat'  ),
+    '6311++g'    : os.path.join('pople-basis', '6-311++G.dat'  ),
+    '6311++g*'   : os.path.join('pople-basis', '6-311++Gs.dat' ),
+    '6311++g**'  : os.path.join('pople-basis', '6-311++Gss.dat'),
+    '6311+g'     : os.path.join('pople-basis', '6-311+G.dat'   ),
+    '6311+g*'    : os.path.join('pople-basis', '6-311+Gs.dat'  ),
+    '6311+g**'   : os.path.join('pople-basis', '6-311+Gss.dat' ),
+    '6311g'      : os.path.join('pople-basis', '6-311G.dat'    ),
+    '6311g*'     : os.path.join('pople-basis', '6-311Gs.dat'   ),
+    '6311g**'    : os.path.join('pople-basis', '6-311Gss.dat'  ),
+    '631g'       : os.path.join('pople-basis', '6-31G.dat'     ),
+    '631g*'      : os.path.join('pople-basis', '6-31Gs.dat'    ),
+    '631g**'     : os.path.join('pople-basis', '6-31Gss.dat'   ),
     'sto3g'      : 'sto-3g.dat'     ,
     'sto6g'      : 'sto-6g.dat'     ,
     'minao'      : 'minao'          ,
@@ -95,6 +109,30 @@ ALIAS = {
     'ahlrichs'   : 'ahlrichs_cfit.dat',
     'ccpvtzfit'  : 'cc-pvtz_fit.dat',
     'ccpvdzfit'  : 'cc-pvdz_fit.dat',
+    'ccpwcvtzmp2fit': 'cc-pwCVTZ_MP2FIT.dat',
+    'ccpvqzmp2fit': 'cc-pVQZ_MP2FIT.dat',
+    'ccpv5zmp2fit': 'cc-pV5Z_MP2FIT.dat',
+    'augccpwcvtzmp2fit': 'aug-cc-pwCVTZ_MP2FIT.dat',
+    'augccpvqzmp2fit': 'aug-cc-pVQZ_MP2FIT.dat',
+    'augccpv5zmp2fit': 'aug-cc-pV5Z_MP2FIT.dat',
+    'ccpcvdz'    : ('cc-pvdz.dat', 'cc-pCVDZ.dat'),
+    'ccpcvtz'    : ('cc-pvtz.dat', 'cc-pCVTZ.dat'),
+    'ccpcvqz'    : ('cc-pvqz.dat', 'cc-pCVQZ.dat'),
+    #'ccpcv5z'    : 'cc-pCV5Z.dat',
+    'ccpcv6z'    : 'cc-pCV6Z.dat',
+    'ccpwcvdz'   : ('cc-pvdz.dat', 'cc-pwCVDZ.dat'),
+    'ccpwcvtz'   : 'cc-pwCVTZ.dat',
+    'ccpwcvqz'   : 'cc-pwCVQZ.dat',
+    'ccpwcv5z'   : 'cc-pwCV5Z.dat',
+    'ccpwcvdzdk' : ('cc-pvdz.dat', 'cc-pwCVDZ-DK.dat'),
+    'ccpwcvtzdk' : 'cc-pwCVTZ-DK.dat',
+    'ccpwcvqzdk' : 'cc-pwCVQZ-DK.dat',
+    'ccpwcvtzdk3': 'cc-pwCVTZ-DK3.dat',
+    'ccpwcvqzdk3': 'cc-pwCVQZ-DK3.dat',
+    'augccpwcvtzdk' : 'aug-cc-pwCVTZ-DK.dat',
+    'augccpwcvqzdk' : 'aug-cc-pwCVQZ-DK.dat',
+    'augccpwcvtzdk3': 'aug-cc-pwCVTZ-DK3.dat',
+    'augccpwcvqzdk3': 'aug-cc-pwCVQZ-DK3.dat',
     'dgaussa1cfit': 'DgaussA1_dft_cfit.dat',
     'dgaussa1xfit': 'DgaussA1_dft_xfit.dat',
     'dgaussa2cfit': 'DgaussA2_dft_cfit.dat',
@@ -113,6 +151,16 @@ ALIAS = {
     'stuttgartdz': 'stuttgart_dz.dat',
     'stuttgartrlc': 'stuttgart_dz.dat',
     'stuttgartrsc': 'stuttgart_rsc.dat',
+    'ccpwcvdzpp' : 'cc-pwCVDZ-PP.dat',
+    'ccpwcvtzpp' : 'cc-pwCVTZ-PP.dat',
+    'ccpwcvqzpp' : 'cc-pwCVQZ-PP.dat',
+    'ccpwcv5zpp' : 'cc-pwCV5Z-PP.dat',
+    'ccpvdzppnr' : 'cc-pVDZ-PP-NR.dat',
+    'ccpvtzppnr' : 'cc-pVTZ-PP-NR.dat',
+    'augccpvdzpp': ('cc-pvdz-pp.dat', 'aug-cc-pVDZ-PP.dat'),
+    'augccpvtzpp': ('cc-pvtz-pp.dat', 'aug-cc-pVTZ-PP.dat'),
+    'augccpvqzpp': ('cc-pvqz-pp.dat', 'aug-cc-pVQZ-PP.dat'),
+    'augccpv5zpp': ('cc-pv5z-pp.dat', 'aug-cc-pV5Z-PP.dat'),
 # Burkatzki-Filippi-Dolg pseudo potential
     'bfdvdz'     : 'bfd_vdz.dat',
     'bfdvtz'     : 'bfd_vtz.dat',
@@ -120,7 +168,53 @@ ALIAS = {
     'bfdv5z'     : 'bfd_v5z.dat',
     'bfd'        : 'bfd_pp.dat',
     'bfdpp'      : 'bfd_pp.dat',
+#
+    'ccpcvdzf12optri': os.path.join('f12-basis', 'cc-pCVDZ-F12-OptRI.dat'),
+    'ccpcvtzf12optri': os.path.join('f12-basis', 'cc-pCVTZ-F12-OptRI.dat'),
+    'ccpcvqzf12optri': os.path.join('f12-basis', 'cc-pCVQZ-F12-OptRI.dat'),
+    'ccpvdzf12optri' : os.path.join('f12-basis', 'cc-pVDZ-F12-OptRI.dat' ),
+    'ccpvtzf12optri' : os.path.join('f12-basis', 'cc-pVTZ-F12-OptRI.dat' ),
+    'ccpvqzf12optri' : os.path.join('f12-basis', 'cc-pVQZ-F12-OptRI.dat' ),
+    'ccpv5zf12'      : os.path.join('f12-basis', 'cc-pV5Z-F12.dat'       ),
+    'ccpvdzf12rev2'  : os.path.join('f12-basis', 'cc-pVDZ-F12rev2.dat'   ),
+    'ccpvtzf12rev2'  : os.path.join('f12-basis', 'cc-pVTZ-F12rev2.dat'   ),
+    'ccpvqzf12rev2'  : os.path.join('f12-basis', 'cc-pVQZ-F12rev2.dat'   ),
+    'ccpv5zf12rev2'  : os.path.join('f12-basis', 'cc-pV5Z-F12rev2.dat'   ),
+    'ccpvdzf12nz'    : os.path.join('f12-basis', 'cc-pVDZ-F12-nZ.dat'    ),
+    'ccpvtzf12nz'    : os.path.join('f12-basis', 'cc-pVTZ-F12-nZ.dat'    ),
+    'ccpvqzf12nz'    : os.path.join('f12-basis', 'cc-pVQZ-F12-nZ.dat'    ),
+    'augccpvdzoptri' : os.path.join('f12-basis', 'aug-cc-pVDZ-OptRI.dat' ),
+    'augccpvtzoptri' : os.path.join('f12-basis', 'aug-cc-pVTZ-OptRI.dat' ),
+    'augccpvqzoptri' : os.path.join('f12-basis', 'aug-cc-pVQZ-OptRI.dat' ),
+    'augccpv5zoptri' : os.path.join('f12-basis', 'aug-cc-pV5Z-OptRI.dat' ),
 }
+
+def _is_pople_basis(basis):
+    return (basis.startswith('631') or
+            basis.startswith('321g') or
+            basis.startswith('431g'))
+
+def _parse_pople_basis(basis, symb):
+    mbas = basis[:basis.find('(')]
+    pbas = basis[basis.find('(')+1:basis.find(')')]
+
+    pathtmp = os.path.join('pople-basis',
+                           mbas[0]+'-'+mbas[1:].upper() + '-polarization-%s.dat')
+    def convert(s):
+        if len(s) == 0:
+            return []
+        elif s[0].isalpha():
+            return [pathtmp % s[0]] + convert(s[1:])
+        else:
+            return [pathtmp % s[:2]] + convert(s[2:])
+
+    if symb in ('H', 'He'):
+        if ',' in pbas:
+            return tuple([ALIAS[mbas]] + convert(pbas.split(',')[1]))
+        else:
+            return ALIAS[mbas]
+    else:
+        return tuple([ALIAS[mbas]] + convert(pbas.split(',')[0]))
 
 def parse(string):
     '''Parse the NWChem format basis or ECP text, return an internal basis (ECP)
@@ -168,7 +262,6 @@ def load(filename_or_basisname, symb):
     >>> mol = gto.Mole()
     >>> mol.basis = {'O': load('sto-3g', 'C')}
     '''
-
     if os.path.isfile(filename_or_basisname):
         # read basis from given file
         try:
@@ -177,16 +270,27 @@ def load(filename_or_basisname, symb):
             with open(filename_or_basisname, 'r') as fin:
                 return parse_nwchem.parse(fin.read())
 
-    name = filename_or_basisname.lower().replace(' ', '').replace('-', '').replace('_', '')
-    if name not in ALIAS:
+    name = _format_basis_name(filename_or_basisname)
+    if not (name in ALIAS or _is_pople_basis(name)):
         try:
             return parse(filename_or_basisname)
         except IndexError:
-            raise RuntimeError('basis %s not found' % filename_or_basisname)
-    basmod = ALIAS[name]
+            raise RuntimeError('Basis %s not found' % filename_or_basisname)
+
     symb = ''.join([i for i in symb if i.isalpha()])
+    if name in ALIAS:
+        basmod = ALIAS[name]
+    elif _is_pople_basis(name):
+        basmod = _parse_pople_basis(name, symb)
+    else:
+        raise RuntimeError('Basis %s not found' % filename_or_basisname)
+
     if 'dat' in basmod:
         b = parse_nwchem.load(os.path.join(os.path.dirname(__file__), basmod), symb)
+    elif isinstance(basmod, (tuple, list)) and isinstance(basmod[0], str):
+        b = []
+        for f in basmod:
+            b += parse_nwchem.load(os.path.join(os.path.dirname(__file__), f), symb)
     else:
         if sys.version_info < (2,7):
             fp, pathname, description = imp.find_module(basmod, __path__)
@@ -201,7 +305,6 @@ def load(filename_or_basisname, symb):
 def load_ecp(filename_or_basisname, symb):
     '''Convert the basis of the given symbol to internal format
     '''
-
     if os.path.isfile(filename_or_basisname):
         # read basis from given file
         try:
@@ -210,10 +313,12 @@ def load_ecp(filename_or_basisname, symb):
             with open(filename_or_basisname, 'r') as fin:
                 return parse_nwchem.parse_ecp(fin.read())
 
-    name = filename_or_basisname.lower().replace(' ', '').replace('-', '').replace('_', '')
+    name = _format_basis_name(filename_or_basisname)
     if name not in ALIAS:
         return parse_ecp(filename_or_basisname)
     basmod = ALIAS[name]
     symb = ''.join([i for i in symb if i.isalpha()])
     return parse_nwchem.load_ecp(os.path.join(os.path.dirname(__file__), basmod), symb)
 
+def _format_basis_name(basisname):
+    return basisname.lower().replace('-', '').replace('_', '').replace(' ', '')

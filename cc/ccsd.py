@@ -690,7 +690,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             tau = tau.reshape(nocc2,nao,nao)
             time0 = logger.timer_debug1(self, 'vvvv-tau', *time0)
 
-            ao2mopt = _ao2mo.AO2MOpt(mol, 'cint2e_sph', 'CVHFnr_schwarz_cond',
+            intor = mol._add_suffix('int2e')
+            ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFnr_schwarz_cond',
                                      'CVHFsetnr_direct_scf')
             outbuf[:] = 0
             ao_loc = mol.ao_loc_nr()
@@ -700,11 +701,11 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             dmax = max(x[2] for x in sh_ranges)
             eribuf = numpy.empty((dmax,dmax,nao,nao))
             loadbuf = numpy.empty((dmax,dmax,nao,nao))
-            fint = gto.moleintor.getints2e
+            fint = gto.moleintor.getints4c
 
             for ip, (ish0, ish1, ni) in enumerate(sh_ranges):
                 for jsh0, jsh1, nj in sh_ranges[:ip]:
-                    eri = fint('cint2e_sph', mol._atm, mol._bas, mol._env,
+                    eri = fint(intor, mol._atm, mol._bas, mol._env,
                                shls_slice=(ish0,ish1,jsh0,jsh1), aosym='s2kl',
                                ao_loc=ao_loc, cintopt=ao2mopt._cintopt, out=eribuf)
                     i0, i1 = ao_loc[ish0], ao_loc[ish1]
@@ -717,7 +718,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                     contract_rec_(outbuf, tau, tmp, i0, i1, j0, j1)
                     time0 = logger.timer_debug1(self, 'AO-vvvv [%d:%d,%d:%d]' %
                                                 (ish0,ish1,jsh0,jsh1), *time0)
-                eri = fint('cint2e_sph', mol._atm, mol._bas, mol._env,
+                eri = fint(intor, mol._atm, mol._bas, mol._env,
                            shls_slice=(ish0,ish1,ish0,ish1), aosym='s4',
                            ao_loc=ao_loc, cintopt=ao2mopt._cintopt, out=eribuf)
                 i0, i1 = ao_loc[ish0], ao_loc[ish1]

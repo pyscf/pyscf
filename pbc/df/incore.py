@@ -39,7 +39,7 @@ def format_aux_basis(cell, auxbasis='weigend+etb'):
     return auxcell
 
 #@memory_cache
-def aux_e2(cell, auxcell, intor='cint3c2e_sph', aosym='s1', comp=1,
+def aux_e2(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=1,
            kptij_lst=numpy.zeros((1,2,3)), shls_slice=None):
     '''3-center AO integrals (ij|L) with double lattice sum:
     \sum_{lm} (i[l]j[m]|L[0]), where L is the auxiliary basis.
@@ -47,6 +47,7 @@ def aux_e2(cell, auxcell, intor='cint3c2e_sph', aosym='s1', comp=1,
     Returns:
         (nao_pair, naux) array
     '''
+    intor = gto.moleintor.ascint3(intor)
     if shls_slice is None:
         shls_slice = (0, cell.nbas, 0, cell.nbas, 0, auxcell.nbas)
 
@@ -83,14 +84,14 @@ def aux_e2(cell, auxcell, intor='cint3c2e_sph', aosym='s1', comp=1,
         out = out[0]
     return out
 
-def wrap_int3c(cell, auxcell, intor='cint3c2e_sph', aosym='s1', comp=1,
+def wrap_int3c(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=1,
                kptij_lst=numpy.zeros((1,2,3))):
     nbas = cell.nbas
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                  cell._atm, cell._bas, cell._env)
     ao_loc = gto.moleintor.make_loc(bas, intor)
     aux_loc = auxcell.ao_loc_nr('ssc' in intor)
-    ao_loc = numpy.asarray(numpy.hstack([ao_loc[:-1], ao_loc[-1]+aux_loc]),
+    ao_loc = numpy.asarray(numpy.hstack([ao_loc, ao_loc[-1]+aux_loc[1:]]),
                            dtype=numpy.int32)
     atm, bas, env = gto.conc_env(atm, bas, env,
                                  auxcell._atm, auxcell._bas, auxcell._env)
@@ -125,6 +126,9 @@ def wrap_int3c(cell, auxcell, intor='cint3c2e_sph', aosym='s1', comp=1,
     fill = 'PBCnr3c_fill_%s%s' % (kk_type, aosym[:2])
     drv = libpbc.PBCnr3c_drv
     cintopt = _vhf.make_cintopt(atm, bas, env, intor)
+# Remove the precomputed pair data because the pair data corresponds to the
+# integral of cell #0 while the lattice sum moves shls to all repeated images.
+    libpbc.CINTdel_pairdata_optimizer(cintopt)
 
     def int3c(shls_slice, out):
         shls_slice = (shls_slice[0], shls_slice[1],
@@ -140,13 +144,14 @@ def wrap_int3c(cell, auxcell, intor='cint3c2e_sph', aosym='s1', comp=1,
             (ctypes.c_int*6)(*shls_slice),
             ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
             atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
-            bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+            bas.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nbas),  # need to pass cell.nbas to libpbc.PBCnr3c_drv
             env.ctypes.data_as(ctypes.c_void_p))
         return out
     return int3c
 
 
-def fill_2c2e(cell, auxcell, intor='cint2c2e_sph', hermi=0, kpt=numpy.zeros(3)):
+def fill_2c2e(cell, auxcell, intor='int2c2e_sph', hermi=0, kpt=numpy.zeros(3)):
     '''2-center 2-electron AO integrals (L|ij), where L is the auxiliary basis.
     '''
     if hermi != 0:

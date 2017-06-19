@@ -101,23 +101,23 @@ class SpinFreeX2C(X2C):
             for ia in range(xcell.natm):
                 ish0, ish1, p0, p1 = atom_slices[ia]
                 shls_slice = (ish0, ish1, ish0, ish1)
-                t1 = xcell.intor('cint1e_kin_sph', shls_slice=shls_slice)
-                v1 = xcell.intor('cint1e_nuc_sph', shls_slice=shls_slice)
-                s1 = xcell.intor('cint1e_ovlp_sph', shls_slice=shls_slice)
-                w1 = xcell.intor('cint1e_pnucp_sph', shls_slice=shls_slice)
+                t1 = xcell.intor('int1e_kin_sph', shls_slice=shls_slice)
+                v1 = xcell.intor('int1e_nuc_sph', shls_slice=shls_slice)
+                s1 = xcell.intor('int1e_ovlp_sph', shls_slice=shls_slice)
+                w1 = xcell.intor('int1e_pnucp_sph', shls_slice=shls_slice)
                 vloc[p0:p1,p0:p1] = v1
                 wloc[p0:p1,p0:p1] = w1
                 x[p0:p1,p0:p1] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
         else:
             raise NotImplementedError
 
-        t = xcell.pbc_intor('cint1e_kin_sph', 1, lib.HERMITIAN, kpts_lst)
-        s = xcell.pbc_intor('cint1e_ovlp_sph', 1, lib.HERMITIAN, kpts_lst)
+        t = xcell.pbc_intor('int1e_kin_sph', 1, lib.HERMITIAN, kpts_lst)
+        s = xcell.pbc_intor('int1e_ovlp_sph', 1, lib.HERMITIAN, kpts_lst)
         v = with_df.get_nuc(kpts_lst)
         #w = get_pnucp(with_df, kpts_lst)
         if self.basis is not None:
             s22 = s
-            s21 = pbcgto.intor_cross('cint1e_ovlp_sph', xcell, cell, kpts=kpts_lst)
+            s21 = pbcgto.intor_cross('int1e_ovlp_sph', xcell, cell, kpts=kpts_lst)
 
         h1_kpts = []
         for k in range(len(kpts_lst)):
@@ -178,7 +178,7 @@ def get_pnucp(mydf, kpts=None):
         nuccell._bas = numpy.asarray(chg_bas, dtype=numpy.int32)
         nuccell._env = numpy.hstack((cell._env, chg_env))
 
-        wj = lib.asarray(mydf._int_nuc_vloc(nuccell, kpts_lst, 'cint3c2e_pvp1_sph'))
+        wj = lib.asarray(mydf._int_nuc_vloc(nuccell, kpts_lst, 'int3c2e_pvp1_sph'))
         wjR = wj.real
         wjI = wj.imag
         t1 = log.timer_debug1('pnucp pass1: analytic int', *t1)
@@ -205,7 +205,7 @@ def get_pnucp(mydf, kpts=None):
     if mydf.eta != 0 and cell.dimension == 3:
         nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
         nucbar *= numpy.pi/cell.vol * 2
-        ovlp = cell.pbc_intor('cint1e_kin_sph', 1, lib.HERMITIAN, kpts_lst)
+        ovlp = cell.pbc_intor('int1e_kin_sph', 1, lib.HERMITIAN, kpts_lst)
         for k in range(nkpts):
             s = lib.pack_tril(ovlp[k])
             wjR[k] -= nucbar * s.real

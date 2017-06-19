@@ -35,7 +35,7 @@ def dump_tri(stdout, c, label=None,
         >>> from pyscf import gto
         >>> mol = gto.M(atom='C 0 0 0')
         >>> dm = numpy.eye(mol.nao_nr())
-        >>> dump_tri(sys.stdout, dm, label=mol.spheric_labels(True), ncol=9, digits=2)
+        >>> dump_tri(sys.stdout, dm, label=mol.ao_labels(), ncol=9, digits=2)
                     #0     #1     #2     #3     #4     #5     #6     #7     #8   
         0  C 1s     1.00
         0  C 2s     0.00   1.00
@@ -106,7 +106,7 @@ def dump_rec(stdout, c, label=None, label2=None,
         >>> from pyscf import gto
         >>> mol = gto.M(atom='C 0 0 0')
         >>> dm = numpy.eye(mol.nao_nr())
-        >>> dump_rec(sys.stdout, dm, label=mol.spheric_labels(True), ncol=9, digits=2)
+        >>> dump_rec(sys.stdout, dm, label=mol.ao_labels(), ncol=9, digits=2)
                     #0     #1     #2     #3     #4     #5     #6     #7     #8   
         0  C 1s     1.00   0.00   0.00   0.00   0.00   0.00   0.00   0.00   0.00
         0  C 2s     0.00   1.00   0.00   0.00   0.00   0.00   0.00   0.00   0.00
@@ -171,7 +171,7 @@ def dump_mo(mol, c, label=None,
         0  C 3pz    0.00   0.00   0.00   0.00   0.00   0.00   0.00   0.00   1.00
     '''
     if label is None:
-        label = mol.spheric_labels(True)
+        label = mol.ao_labels()
     dump_rec(mol.stdout, c, label, None, ncol, digits, start)
 
 

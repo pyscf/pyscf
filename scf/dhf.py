@@ -98,9 +98,9 @@ def get_hcore(mol):
     n4c = n2c * 2
     c = lib.param.LIGHT_SPEED
 
-    t  = mol.intor_symmetric('cint1e_spsp') * .5
-    vn = mol.intor_symmetric('cint1e_nuc')
-    wn = mol.intor_symmetric('cint1e_spnucsp')
+    t  = mol.intor_symmetric('int1e_spsp_spinor') * .5
+    vn = mol.intor_symmetric('int1e_nuc_spinor')
+    wn = mol.intor_symmetric('int1e_spnucsp_spinor')
     h1e = numpy.empty((n4c, n4c), numpy.complex)
     h1e[:n2c,:n2c] = vn
     h1e[n2c:,:n2c] = t
@@ -113,8 +113,8 @@ def get_ovlp(mol):
     n4c = n2c * 2
     c = lib.param.LIGHT_SPEED
 
-    s = mol.intor_symmetric('cint1e_ovlp')
-    t = mol.intor_symmetric('cint1e_spsp')
+    s = mol.intor_symmetric('int1e_ovlp_spinor')
+    t = mol.intor_symmetric('int1e_spsp_spinor')
     s1e = numpy.zeros((n4c, n4c), numpy.complex)
     s1e[:n2c,:n2c] = s
     s1e[n2c:,n2c:] = t * (.5/c)**2
@@ -350,18 +350,18 @@ class UHF(hf.SCF):
         if mol is None: mol = self.mol
         def set_vkscreen(opt, name):
             opt._this.contents.r_vkscreen = _vhf._fpointer(name)
-        opt_llll = _vhf.VHFOpt(mol, 'cint2e', 'CVHFrkbllll_prescreen',
+        opt_llll = _vhf.VHFOpt(mol, 'int2e_spinor', 'CVHFrkbllll_prescreen',
                                'CVHFrkbllll_direct_scf',
                                'CVHFrkbllll_direct_scf_dm')
         opt_llll.direct_scf_tol = self.direct_scf_tol
         set_vkscreen(opt_llll, 'CVHFrkbllll_vkscreen')
-        opt_ssss = _vhf.VHFOpt(mol, 'cint2e_spsp1spsp2',
+        opt_ssss = _vhf.VHFOpt(mol, 'int2e_spsp1spsp2_spinor',
                                'CVHFrkbllll_prescreen',
                                'CVHFrkbssss_direct_scf',
                                'CVHFrkbssss_direct_scf_dm')
         opt_ssss.direct_scf_tol = self.direct_scf_tol
         set_vkscreen(opt_ssss, 'CVHFrkbllll_vkscreen')
-        opt_ssll = _vhf.VHFOpt(mol, 'cint2e_spsp1',
+        opt_ssll = _vhf.VHFOpt(mol, 'int2e_spsp1_spinor',
                                'CVHFrkbssll_prescreen',
                                'CVHFrkbssll_direct_scf',
                                'CVHFrkbssll_direct_scf_dm')
@@ -523,7 +523,7 @@ def _call_veff_llll(mol, dm, hermi=1, mf_opt=None):
         dms = []
         for dmi in dm:
             dms.append(dmi[:n2c,:n2c].copy())
-    vj, vk = _vhf.rdirect_mapdm('cint2e', 's8',
+    vj, vk = _vhf.rdirect_mapdm('int2e_spinor', 's8',
                                 ('ji->s2kl', 'jk->s1il'), dms, 1,
                                 mol._atm, mol._bas, mol._env, mf_opt)
     return _jk_triu_(vj, vk, hermi)
@@ -546,7 +546,7 @@ def _call_veff_ssll(mol, dm, hermi=1, mf_opt=None):
         + ('ji->s2kl',) * n_dm \
         + ('jk->s1il',) * n_dm
     c1 = .5 / lib.param.LIGHT_SPEED
-    vx = _vhf.rdirect_bindm('cint2e_spsp1', 's4', jks, dms, 1,
+    vx = _vhf.rdirect_bindm('int2e_spsp1_spinor', 's4', jks, dms, 1,
                             mol._atm, mol._bas, mol._env, mf_opt) * c1**2
     vj = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex)
     vk = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex)
@@ -568,16 +568,16 @@ def _call_veff_ssss(mol, dm, hermi=1, mf_opt=None):
         dms = []
         for dmi in dm:
             dms.append(dmi[n2c:,n2c:].copy())
-    vj, vk = _vhf.rdirect_mapdm('cint2e_spsp1spsp2', 's8',
+    vj, vk = _vhf.rdirect_mapdm('int2e_spsp1spsp2_spinor', 's8',
                                 ('ji->s2kl', 'jk->s1il'), dms, 1,
                                 mol._atm, mol._bas, mol._env, mf_opt) * c1**4
     return _jk_triu_(vj, vk, hermi)
 
 def _call_veff_gaunt_breit(mol, dm, hermi=1, mf_opt=None, with_breit=False):
     if with_breit:
-        intor_prefix = 'cint2e_breit_'
+        intor_prefix = 'int2e_breit_'
     else:
-        intor_prefix = 'cint2e_'
+        intor_prefix = 'int2e_'
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         n_dm = 1
         n2c = dm.shape[0] // 2
@@ -599,7 +599,7 @@ def _call_veff_gaunt_breit(mol, dm, hermi=1, mf_opt=None, with_breit=False):
 
     jks = ('lk->s1ij',) * n_dm \
         + ('jk->s1il',) * n_dm
-    vx = _vhf.rdirect_bindm(intor_prefix+'ssp1ssp2', 's1', jks, dms[:n_dm*2], 1,
+    vx = _vhf.rdirect_bindm(intor_prefix+'ssp1ssp2_spinor', 's1', jks, dms[:n_dm*2], 1,
                             mol._atm, mol._bas, mol._env, mf_opt)
     vj[:,:n2c,n2c:] = vx[:n_dm,:,:]
     vk[:,:n2c,n2c:] = vx[n_dm:,:,:]
@@ -607,7 +607,7 @@ def _call_veff_gaunt_breit(mol, dm, hermi=1, mf_opt=None, with_breit=False):
     jks = ('lk->s1ij',) * n_dm \
         + ('li->s1kj',) * n_dm \
         + ('jk->s1il',) * n_dm
-    vx = _vhf.rdirect_bindm(intor_prefix+'ssp1sps2', 's1', jks, dms[n_dm*2:], 1,
+    vx = _vhf.rdirect_bindm(intor_prefix+'ssp1sps2_spinor', 's1', jks, dms[n_dm*2:], 1,
                             mol._atm, mol._bas, mol._env, mf_opt)
     vj[:,:n2c,n2c:]+= vx[      :n_dm  ,:,:]
     vk[:,n2c:,n2c:] = vx[n_dm  :n_dm*2,:,:]

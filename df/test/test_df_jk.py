@@ -40,6 +40,12 @@ class KnowValues(unittest.TestCase):
         mf = scf.density_fit(scf.UHF(mol))
         self.assertAlmostEqual(mf.scf(), -76.025936299702536, 9)
 
+    def test_uhf_cart(self):
+        pmol = mol.copy()
+        pmol.cart = True
+        mf = scf.density_fit(scf.UHF(pmol))
+        self.assertAlmostEqual(mf.scf(), -76.026760700636046, 9)
+
     def test_rohf(self):
         pmol = mol.copy()
         pmol.charge = 1
@@ -99,13 +105,13 @@ class KnowValues(unittest.TestCase):
         mf = scf.density_fit(scf.UHF(mol))
         nao = mol.nao_nr()
         numpy.random.seed(1)
-        dm = numpy.random.random((4,nao,nao))
+        dm = numpy.random.random((2,4,nao,nao))
         vhf = mf.get_veff(mol, dm, hermi=0)
-        self.assertAlmostEqual(numpy.linalg.norm(vhf), 199.20550115531233, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(vhf), 413.82341595365853, 9)
 
     def test_assign_cderi(self):
         nao = mol.nao_nr()
-        w, u = scipy.linalg.eigh(mol.intor('cint2e_sph', aosym='s4'))
+        w, u = scipy.linalg.eigh(mol.intor('int2e_sph', aosym='s4'))
         idx = w > 1e-9
 
         mf = scf.density_fit(scf.UHF(mol))

@@ -91,9 +91,10 @@ class UHF(pyscf.scf.uhf.UHF, pbchf.RHF):
         pyscf.scf.uhf.UHF.dump_flags(self)
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'kpt = %s', self.kpt)
-        logger.info(self, 'DF object = %s', self.with_df)
         logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
         logger.info(self, 'number electrons alpha = %d  beta = %d', *self.nelec)
+        logger.info(self, 'DF object = %s', self.with_df)
+        self.with_df.dump_flags()
 
     get_hcore = pbchf.RHF.get_hcore
     get_ovlp = pbchf.RHF.get_ovlp
@@ -116,4 +117,6 @@ class UHF(pyscf.scf.uhf.UHF, pbchf.RHF):
 
     def density_fit(self, auxbasis=None, gs=None):
         return pbchf.RHF.density_fit(self, auxbasis, gs)
+
+    # mix_density_fit inherits from hf.RHF.mix_density_fit
 

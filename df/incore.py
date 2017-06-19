@@ -5,16 +5,12 @@
 
 import copy
 import time
-import ctypes
 import numpy
 import scipy.linalg
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
-from pyscf.df import _ri
 from pyscf.df import addons
-
-libri = pyscf.lib.load_library('libri')
 
 def format_aux_basis(mol, auxbasis='weigend+etb'):
     '''Generate a fake Mole object which uses the density fitting auxbasis as
@@ -39,16 +35,15 @@ def format_aux_basis(mol, auxbasis='weigend+etb'):
 
 
 # (ij|L)
-def aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, out=None):
+def aux_e2(mol, auxmol, intor='int3c2e_sph', aosym='s1', comp=1, out=None):
     '''3-center AO integrals (ij|L), where L is the auxiliary basis.
     '''
-    atm, bas, env, ao_loc = _env_and_aoloc(intor, mol, auxmol)
+    pmol = gto.mole.conc_mol(mol, auxmol)
     shls_slice = (0, mol.nbas, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
-    return _ri.nr_auxe2(intor, atm, bas, env, shls_slice, ao_loc,
-                        aosym, comp, out=out)
+    return pmol.intor(intor, comp, aosym=aosym, shls_slice=shls_slice, out=out)
 
 # (L|ij)
-def aux_e1(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, out=None):
+def aux_e1(mol, auxmol, intor='int3c2e_sph', aosym='s1', comp=1, out=None):
     '''3-center 2-electron AO integrals (L|ij), where L is the auxiliary basis.
     '''
     if comp == 1:
@@ -58,7 +53,7 @@ def aux_e1(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1, out=None):
     return out
 
 
-def fill_2c2e(mol, auxmol, intor='cint2c2e_sph', comp=1, hermi=1, out=None):
+def fill_2c2e(mol, auxmol, intor='int2c2e_sph', comp=1, hermi=1, out=None):
     '''2-center 2-electron AO integrals for auxiliary basis (auxmol)
     '''
     return auxmol.intor(intor, comp=comp, hermi=hermi, out=out)
@@ -66,21 +61,22 @@ def fill_2c2e(mol, auxmol, intor='cint2c2e_sph', comp=1, hermi=1, out=None):
 
 # Note the temporary memory usage is about twice as large as the return cderi
 # array
-def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None, verbose=0):
+def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
+                 int3c='int3c2e_sph', aosym='s2ij', int2c='int2c2e_sph', comp=1,
+                 verbose=0, fauxe2=aux_e2):
     '''
     Returns:
         2D array of (naux,nao*(nao+1)/2) in C-contiguous
     '''
+    assert(comp == 1)
     t0 = (time.clock(), time.time())
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
+    log = logger.new_logger(mol, verbose)
     if auxmol is None:
         auxmol = format_aux_basis(mol, auxbasis)
 
-    j2c = fill_2c2e(mol, auxmol, intor='cint2c2e_sph')
-    log.debug('size of aux basis %d', j2c.shape[0])
+    j2c = auxmol.intor(int2c, hermi=1)
+    naux = j2c.shape[0]
+    log.debug('size of aux basis %d', naux)
     t1 = log.timer('2c2e', *t0)
     try:
         low = scipy.linalg.cholesky(j2c, lower=True)
@@ -90,28 +86,15 @@ def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None, verbose=0):
     j2c = None
     t1 = log.timer('Cholesky 2c2e', *t1)
 
-    j3c = aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s2ij')
-    j3cT = j3c.T
+    j3c = fauxe2(mol, auxmol, intor=int3c, aosym=aosym).reshape(-1,naux)
     t1 = log.timer('3c2e', *t1)
     cderi = scipy.linalg.solve_triangular(low, j3c.T, lower=True,
                                           overwrite_b=True)
     j3c = None
     if cderi.flags.f_contiguous:
-        cderi = pyscf.lib.transpose(cderi.T)
+        cderi = lib.transpose(cderi.T)
     log.timer('cholesky_eri', *t0)
     return cderi
-
-
-def _env_and_aoloc(intor, mol, auxmol):
-    atm, bas, env = gto.mole.conc_env(mol._atm, mol._bas, mol._env,
-                                      auxmol._atm, auxmol._bas, auxmol._env)
-    if 'ssc' in intor:
-        ao_loc = mol.ao_loc_nr()
-        nao = ao_loc[-1]
-        ao_loc = numpy.hstack((ao_loc[:-1], nao+auxmol.ao_loc_nr(cart=True)))
-    else:
-        ao_loc = gto.moleintor.make_loc(bas, intor)
-    return atm, bas, env, ao_loc
 
 
 if __name__ == '__main__':
@@ -129,7 +112,7 @@ if __name__ == '__main__':
     mol.build()
 
     auxmol = format_aux_basis(mol)
-    j3c = aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s1')
+    j3c = aux_e2(mol, auxmol, intor='int3c2e_sph', aosym='s1')
     nao = mol.nao_nr()
     naoaux = auxmol.nao_nr()
     j3c = j3c.reshape(nao,nao,naoaux)
@@ -145,7 +128,7 @@ if __name__ == '__main__':
             pk = 0
             for k in range(mol.nbas, mol.nbas+auxmol.nbas):
                 shls = (i, j, k)
-                buf = gto.moleintor.getints_by_shell('cint3c2e_sph',
+                buf = gto.moleintor.getints_by_shell('int3c2e_sph',
                                                      shls, atm, bas, env)
                 di, dj, dk = buf.shape
                 eri0[pi:pi+di,pj:pj+dj,pk:pk+dk] = buf
@@ -161,7 +144,7 @@ if __name__ == '__main__':
         pj = 0
         for j in range(mol.nbas, len(bas)):
             shls = (i, j)
-            buf = gto.moleintor.getints_by_shell('cint2c2e_sph',
+            buf = gto.moleintor.getints_by_shell('int2c2e_sph',
                                                  shls, atm, bas, env)
             di, dj = buf.shape
             eri0[pi:pi+di,pj:pj+dj] = buf
@@ -169,7 +152,7 @@ if __name__ == '__main__':
         pi += di
     print(numpy.allclose(eri0, j2c))
 
-    j3c = aux_e2(mol, auxmol, intor='cint3c2e_sph', aosym='s2ij')
+    j3c = aux_e2(mol, auxmol, intor='int3c2e_sph', aosym='s2ij')
     cderi = cholesky_eri(mol)
     eri0 = numpy.einsum('pi,pk->ik', cderi, cderi)
     eri1 = numpy.einsum('ik,kl->il', j3c, numpy.linalg.inv(j2c))

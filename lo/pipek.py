@@ -19,7 +19,7 @@ from pyscf.lo import boys
 def atomic_pops(mol, mo_coeff, method='meta_lowdin'):
     '''kwarg method can be one of mulliken, lowdin, meta_lowdin
     '''
-    s = mol.intor_symmetric('cint1e_ovlp_sph')
+    s = mol.intor_symmetric('int1e_ovlp')
     nmo = mo_coeff.shape[1]
     proj = numpy.empty((mol.natm,nmo,nmo))
 

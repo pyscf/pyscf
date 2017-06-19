@@ -70,10 +70,14 @@ def mm_charge(method, coords, charges, unit=None):
                 v = 0
                 for i,q in enumerate(charges):
                     mol.set_rinv_origin(coords[i])
-                    v += mol.intor('cint1e_rinv_sph') * -q
+                    v += mol.intor('int1e_rinv') * -q
             else:
                 fakemol = _make_fakemol(coords)
-                j3c = df.incore.aux_e2(mol, fakemol, intor='cint3c2e_sph', aosym='s2ij')
+                if mol.cart:
+                    intor = 'int3c2e_cart'
+                else:
+                    intor = 'int3c2e_sph'
+                j3c = df.incore.aux_e2(mol, fakemol, intor=intor, aosym='s2ij')
                 v = lib.unpack_tril(numpy.einsum('xk,k->x', j3c, -charges))
             return h1e + v
 
@@ -142,10 +146,10 @@ def mm_charge_grad(method, coords, charges, unit=None):
                 v = 0
                 for i,q in enumerate(charges):
                     mol.set_rinv_origin(coords[i])
-                    v += mol.intor('cint1e_iprinv_sph', comp=3) * q
+                    v += mol.intor('int1e_iprinv', comp=3) * q
             else:
                 fakemol = _make_fakemol(coords)
-                j3c = df.incore.aux_e2(mol, fakemol, intor='cint3c2e_ip1_sph',
+                j3c = df.incore.aux_e2(mol, fakemol, intor='int3c2e_ip1',
                                        aosym='s1', comp=3)
                 v = numpy.einsum('ixk,k->ix', j3c, charges).reshape(3,nao,nao)
             return method.get_hcore(mol) - v

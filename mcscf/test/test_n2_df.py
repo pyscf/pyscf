@@ -136,7 +136,7 @@ class KnowValues(unittest.TestCase):
 
     def test_assign_cderi(self):
         nao = molsym.nao_nr()
-        w, u = scipy.linalg.eigh(mol.intor('cint2e_sph', aosym='s4'))
+        w, u = scipy.linalg.eigh(mol.intor('int2e_sph', aosym='s4'))
         idx = w > 1e-9
 
         mf = scf.density_fit(scf.RHF(molsym))

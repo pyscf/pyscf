@@ -82,11 +82,11 @@ def dipole_integral(mol, mo_coeff):
     charge_center = numpy.einsum('z,zx->x', mol.atom_charges(), mol.atom_coords())
     mol.set_common_orig(charge_center)
     dip = numpy.asarray([reduce(lib.dot, (mo_coeff.T, x, mo_coeff))
-                         for x in mol.intor_symmetric('cint1e_r_sph', comp=3)])
+                         for x in mol.intor_symmetric('int1e_r', comp=3)])
     return dip
 
 def atomic_init_guess(mol, mo_coeff):
-    s = mol.intor_symmetric('cint1e_ovlp_sph')
+    s = mol.intor_symmetric('int1e_ovlp')
     c = orth.orth_ao(mol, s=s)
     mo = reduce(numpy.dot, (c.T, s, mo_coeff))
     nmo = mo_coeff.shape[1]
@@ -204,7 +204,7 @@ class Boys(ciah.CIAHOptimizer):
         if u is None: u = numpy.eye(self.mo_coeff.shape[1])
         mo_coeff = lib.dot(self.mo_coeff, u)
         dip = dipole_integral(self.mol, mo_coeff)
-        r2 = self.mol.intor_symmetric('cint1e_r2_sph')
+        r2 = self.mol.intor_symmetric('int1e_r2')
         r2 = numpy.einsum('pi,pi->', mo_coeff, lib.dot(r2, mo_coeff))
         val = r2 - numpy.einsum('xii,xii->', dip, dip)
         return val * 2

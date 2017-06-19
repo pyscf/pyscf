@@ -46,7 +46,7 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True, tol=1e-9):
     '''
     nmo = mo.shape[1]
     if s is None:
-        s = mol.intor_symmetric('cint1e_ovlp_sph')
+        s = mol.intor_symmetric('int1e_ovlp')
     mo_s = numpy.dot(mo.T, s)
     norm = numpy.zeros((len(irrep_name), nmo))
     for i, csym in enumerate(symm_orb):
@@ -116,7 +116,7 @@ def symmetrize_orb(mol, mo, orbsym=None, s=None, check=False):
     ['A', 'A', 'B1', 'B2', 'B3', 'A', 'B1', 'B2', 'B3']
     '''
     if s is None:
-        s = mol.intor_symmetric('cint1e_ovlp_sph')
+        s = mol.intor_symmetric('int1e_ovlp')
     if orbsym is None:
         orbsym = label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
                                 mo, s=s, check=check)
@@ -168,7 +168,7 @@ def symmetrize_space(mol, mo, s=None, check=True):
     '''
     from pyscf.tools import mo_mapping
     if s is None:
-        s = mol.intor_symmetric('cint1e_ovlp_sph')
+        s = mol.intor_symmetric('int1e_ovlp')
     nmo = mo.shape[1]
     mo_s = numpy.dot(mo.T, s)
     if check:
@@ -279,7 +279,7 @@ def eigh(h, orbsym):
     >>> from pyscf import gto, symm
     >>> mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='ccpvdz', symmetry=True)
     >>> c = numpy.hstack(mol.symm_orb)
-    >>> vnuc_so = reduce(numpy.dot, (c.T, mol.intor('cint1e_nuc_sph'), c))
+    >>> vnuc_so = reduce(numpy.dot, (c.T, mol.intor('int1e_nuc_sph'), c))
     >>> orbsym = symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, c)
     >>> symm.eigh(vnuc_so, orbsym)
     (array([-4.50766885, -1.80666351, -1.7808565 , -1.7808565 , -1.74189134,

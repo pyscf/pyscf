@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 //#include <omp.h>
 #include "config.h"
 #include "vhf/fblas.h"
@@ -87,11 +88,11 @@ int FCIdes_sign(int p, uint64_t string0)
 static int binomial(int n, int m)
 {
         int i;
-        uint64_t num = 1;
-        uint64_t div = 1;
-        double dnum = 1;
-        double ddiv = 1;
-        if (n < 28) {
+        if (m >= n) {
+                return 1;
+        } else if (n < 28) {
+                uint64_t num = 1;
+                uint64_t div = 1;
                 if (m+m >= n) {
                         for (i = 0; i < n-m; i++) {
                                 num *= m+i+1;
@@ -105,6 +106,8 @@ static int binomial(int n, int m)
                 }
                 return num / div;
         } else {
+                double dnum = 1;
+                double ddiv = 1;
                 if (m+m >= n) {
                         for (i = 0; i < n-m; i++) {
                                 dnum *= m+i+1;
@@ -135,7 +138,71 @@ int FCIstr2addr(int norb, int nelec, uint64_t string)
         }
         return addr;
 }
+void FCIstrs2addr(int *addrs, uint64_t *strings, int count, int norb, int nelec)
+{
+        int i, norb_left, nelec_left;
+        size_t addr;
+        uint64_t nextaddr0 = binomial(norb-1, nelec);
+        uint64_t nextaddr, str;
+        for (i = 0; i < count; i++) {
+                str = strings[i];
+                addr = 0;
+                nelec_left = nelec;
+                nextaddr = nextaddr0;
+                for (norb_left = norb - 1; norb_left >= 0; norb_left--) {
+                        if (nelec_left == 0 || norb_left < nelec_left) {
+                                break;
+                        } else if ((1ULL<<norb_left) & str) {
+                                assert(nextaddr == binomial(norb_left, nelec_left));
+                                addr += nextaddr;
+                                nextaddr *= nelec_left;
+                                nextaddr /= norb_left;
+                                nelec_left--;
+                        } else {
+                                nextaddr *= norb_left - nelec_left;
+                                nextaddr /= norb_left;
+                        }
+                }
+                addrs[i] = addr;
+        }
+}
 
+void FCIaddrs2str(uint64_t *strings, int *addrs, int count, int norb, int nelec)
+{
+        int i, nelec_left, norb_left, addr;
+        uint64_t nextaddr0 = binomial(norb-1, nelec);
+        uint64_t nextaddr, str1;
+        for (i = 0; i < count; i++) {
+                addr = addrs[i];
+                if (addr == 0 || nelec == norb || nelec == 0) {
+                        strings[i] = (1UL << nelec) - 1UL;
+                        continue;
+                }
+
+                str1 = 0;
+                nelec_left = nelec;
+                nextaddr = nextaddr0;
+                for (norb_left = norb-1; norb_left >= 0; norb_left--) {
+                        assert(nextaddr == binomial(norb_left, nelec_left));
+                        if (nelec_left == 0) {
+                                break;
+                        } else if (addr == 0) {
+                                str1 |= (1UL << nelec_left) - 1UL;
+                                break;
+                        } else if (nextaddr <= addr) {
+                                str1 |= 1UL << norb_left;
+                                addr -= nextaddr;
+                                nextaddr *= nelec_left;
+                                nextaddr /= norb_left;
+                                nelec_left--;
+                        } else {
+                                nextaddr *= norb_left - nelec_left;
+                                nextaddr /= norb_left;
+                        }
+                }
+                strings[i] = str1;
+        }
+}
 
 // [cre, des, target_address, parity]
 void FCIlinkstr_index(int *link_index, int norb, int na, int nocc,
@@ -147,6 +214,8 @@ void FCIlinkstr_index(int *link_index, int norb, int na, int nocc,
         int nlink = nocc * nvir + nocc;
         int str_id, io, iv, i, a, k, ia;
         uint64_t str0, str1;
+        uint64_t str1s[nocc*nvir];
+        int addrbuf[nocc*nvir];
         int *tab;
 
         for (str_id = 0; str_id < na; str_id++) {
@@ -171,15 +240,20 @@ void FCIlinkstr_index(int *link_index, int norb, int na, int nocc,
                         for (i = 0; i < nocc; i++) {
                         for (a = 0; a < nvir; a++, k++) {
                                 str1 = (str0^(1ULL<<occ[i])) | (1ULL<<vir[a]);
+                                str1s[k-nocc] = str1;
                                 if (vir[a] > occ[i]) {
                                         ia = vir[a]*(vir[a]+1)/2+occ[i];
                                 } else {
                                         ia = occ[i]*(occ[i]+1)/2+vir[a];
                                 }
                                 tab[k*4+0] = ia;
-                                tab[k*4+2] = FCIstr2addr(norb, nocc, str1);
+                                //tab[k*4+2] = FCIstr2addr(norb, nocc, str1);
                                 tab[k*4+3] = FCIcre_des_sign(vir[a], occ[i], str0);
                         } }
+                        FCIstrs2addr(addrbuf, str1s, nocc*nvir, norb, nocc);
+                        for (k = 0; k < nocc*nvir; k++) {
+                                tab[(k+nocc)*4+2] = addrbuf[k];
+                        }
 
                 } else {
                         for (k = 0; k < nocc; k++) {
@@ -191,11 +265,16 @@ void FCIlinkstr_index(int *link_index, int norb, int na, int nocc,
                         for (i = 0; i < nocc; i++) {
                         for (a = 0; a < nvir; a++, k++) {
                                 str1 = (str0^(1ULL<<occ[i])) | (1ULL<<vir[a]);
+                                str1s[k-nocc] = str1;
                                 tab[k*4+0] = vir[a];
                                 tab[k*4+1] = occ[i];
-                                tab[k*4+2] = FCIstr2addr(norb, nocc, str1);
+                                //tab[k*4+2] = FCIstr2addr(norb, nocc, str1);
                                 tab[k*4+3] = FCIcre_des_sign(vir[a], occ[i], str0);
                         } }
+                        FCIstrs2addr(addrbuf, str1s, nocc*nvir, norb, nocc);
+                        for (k = 0; k < nocc*nvir; k++) {
+                                tab[(k+nocc)*4+2] = addrbuf[k];
+                        }
                 }
         }
 }

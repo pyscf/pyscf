@@ -1,0 +1,63 @@
+################################################################################
+#
+# HF potential definitions in the GTH-format:
+#
+# Element symbol  Name of the potential  Alias names
+# n_elec(s)  n_elec(p)  n_elec(d)  ...
+# r_loc   nexp_ppl        cexp_ppl(1) ... cexp_ppl(nexp_ppl)
+# nprj
+# r(1)    nprj_ppnl(1)    ((hprj_ppnl(1,i,j),j=i,nprj_ppnl(1)),i=1,nprj_ppnl(1))
+# r(2)    nprj_ppnl(2)    ((hprj_ppnl(2,i,j),j=i,nprj_ppnl(2)),i=1,nprj_ppnl(2))
+#  .       .               .
+#  .       .               .
+#  .       .               .
+# r(nprj) nprj_ppnl(nprj) ((hprj_ppnl(nprj,i,j),j=i,nprj_ppnl(nprj)),
+#                                               i=1,nprj_ppnl(nprj))
+#
+# n_elec   : Number of electrons for each angular momentum quantum number
+#            (electronic configuration -> s p d ...)
+# r_loc    : Radius for the local part defined by the Gaussian function
+#            exponent alpha_erf
+# nexp_ppl : Number of the local pseudopotential functions
+# cexp_ppl : Coefficients of the local pseudopotential functions
+# nprj     : Number of the non-local projectors => nprj = SIZE(nprj_ppnl(:))
+# r        : Radius of the non-local part for angular momentum quantum number l
+#            defined by the Gaussian function exponents alpha_prj_ppnl
+# nprj_ppnl: Number of the non-local projectors for the angular momentum
+#            quantum number l
+# hprj_ppnl: Coefficients of the non-local projector functions
+#
+################################################################################
+#
+# HF functional
+#
+################################################################################
+#PSEUDOPOTENTIAL
+H GTH-HF-q1 GTH-HF
+    1    0    0    0
+    0.196680577426       2   -4.122010670148    0.685113494453
+       0
+#PSEUDOPOTENTIAL
+Li GTH-HF-q3 GTH-HF
+    3    0    0    0
+    0.4002328            4  -14.0759074         9.6264143         -1.7970056       0.0871019
+       0
+#PSEUDOPOTENTIAL
+C GTH-HF-q4 GTH-HF
+    2    2    0    0
+    0.315416975333       2   -8.867306339232    1.255277018021
+       1
+    0.301022709314       1    9.800185699152
+#PSEUDOPOTENTIAL
+N GTH-HF-q5 GTH-HF
+    2    3    0    0
+    0.293004428534       2  -12.353673551345    1.940376934223
+       1
+    0.255011990622       1   13.748056543074
+#PSEUDOPOTENTIAL
+O GTH-HF-q6 GTH-HF
+    2    4    0    0
+    0.246496621432       2  -17.087623980861    2.645053514530
+       1
+    0.220770923508       1   18.522680682057
+#PSEUDOPOTENTIAL

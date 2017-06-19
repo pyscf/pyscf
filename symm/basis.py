@@ -8,8 +8,7 @@ Generate symmetry adapted basis
 
 from functools import reduce
 import numpy
-import pyscf.lib
-import pyscf.gto
+from pyscf.gto import mole
 from pyscf.symm import geom
 from pyscf.symm import param
 
@@ -32,66 +31,70 @@ def tot_parity_odd(op, l, m):
         gx,gy,gz = param.SPHERIC_GTO_PARITY_ODD[l][l+m]
         return (ox and gx)^(oy and gy)^(oz and gz)
 
-def symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
+def symm_adapted_basis(mol, gpname, eql_atom_ids=None):
+    if eql_atom_ids is None:
+        eql_atom_ids = geom.symm_identical_atoms(gpname, mol._atom)
     if gpname in ('Dooh', 'Coov'):
-        return linearmole_symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab)
-    decimals = int(-numpy.log10(geom.TOLERANCE)) - 1
-    opdic = geom.symm_ops(gpname)
-    ops = [opdic[op] for op in param.OPERATOR_TABLE[gpname]]
-    chartab = param.CHARACTER_TABLE[gpname]
+        return linearmole_symm_adapted_basis(mol, gpname, eql_atom_ids)
+
+    ops = numpy.asarray([param.D2H_OPS[op] for op in param.OPERATOR_TABLE[gpname]])
+    chartab = numpy.array([x[1:] for x in param.CHARACTER_TABLE[gpname]])
     nirrep = chartab.__len__()
-    nfn, basoff = _basis_offset_for_atoms(atoms, basis_tab)
-    coords = numpy.around([a[1] for a in atoms], decimals=decimals)
+    aoslice = mol.aoslice_by_atom()
+    nao = mol.nao_nr()
+    atom_coords = mol.atom_coords()
 
-    sodic = {}
-    def add_so(ir, c):
-        if ir in sodic:
-            sodic[ir].append(c)
-        else:
-            sodic[ir] = [c]
+    sodic = [[] for i in range(8)]
     for atom_ids in eql_atom_ids:
-        at0 = atoms[atom_ids[0]]
-        symb = pyscf.gto.mole._symbol(at0[0])
-        op_coords = numpy.around([numpy.dot(at0[1], op) for op in ops],
-                                 decimals=decimals)
-# num atoms in atom_ids smaller than num ops?
-## the coord-ids generated from the ops sequence
-#        id_coords = numpy.argsort(geom.argsort_coords(op_coords))
-## which atom_id that each coord-id corresponds to
-#        from_atom_id = numpy.argsort(geom.argsort_coords(coords[atom_ids]))
-#        op_relate_atoms = atom_ids[from_atom_id[id_coords]]
-        coords0 = coords[atom_ids]
-        idx = []
-        for c in op_coords:
-            idx.append(numpy.argwhere(numpy.sum(abs(coords0-c),axis=1)
-                                      <geom.TOLERANCE)[0,0])
-        op_relate_atoms = numpy.array(atom_ids)[idx]
+        r0 = mol.atom_coord(atom_ids[0])
+        op_coords = numpy.einsum('x,nxy->ny', r0, ops)
+# Using ops to generate other atoms from atom_ids[0]
+        coords0 = atom_coords[atom_ids]
+        natm = len(atom_ids)
+        dc = abs(op_coords.reshape(-1,1,3) - coords0).sum(axis=2)
+        op_relate_idx = numpy.argwhere(dc < geom.TOLERANCE)[:,1]
+        ao_loc = numpy.array([aoslice[atom_ids[i],2] for i in op_relate_idx])
 
-        ib = 0
-        if symb in basis_tab:
-            bas0 = basis_tab[symb]
-        else:
-            bas0 = basis_tab[pyscf.gto.mole._rm_digit(symb)]
-        for b in bas0:
-            angl = b[0]
-            for i in range(_num_contract(b)):
-                for m in range(-angl,angl+1):
-                    sign = [-1 if tot_parity_odd(op,angl,m) else 1
-                            for op in param.OPERATOR_TABLE[gpname]]
-                    c = numpy.zeros((nirrep,nfn))
-                    for op_id, atm_id in enumerate(op_relate_atoms):
-                        idx = basoff[atm_id] + ib
-                        for ir, irrep in enumerate(chartab):
-                            c[ir,idx] += irrep[op_id+1] * sign[op_id]
-                    norms = numpy.sqrt(numpy.einsum('ij,ij->i', c, c))
-                    for ir in range(nirrep):
-                        if(norms[ir] > 1e-12):
-                            add_so(ir, c[ir]/norms[ir])
-                    ib += 1
+        b0, b1 = aoslice[atom_ids[0],:2]
+        ip = 0
+        for ib in range(b0, b1):
+            l = mol.bas_angular(ib)
+            if mol.cart:
+                degen = (l + 1) * (l + 2) // 2
+                cbase = numpy.zeros((degen,nirrep,nao))
+                for op_id, op in enumerate(ops):
+                    n = 0
+                    for x in range(l, -1, -1):
+                        for y in range(l-x, -1, -1):
+                            z = l-x-y
+                            idx = ao_loc[op_id] + n
+                            sign = op[0,0]**x * op[1,1]**y * op[2,2]**z
+                            cbase[n,:,idx] += sign * chartab[:,op_id]
+                            n += 1
+            else:
+                degen = l * 2 + 1
+                cbase = numpy.zeros((degen,nirrep,nao))
+                for op_id, op in enumerate(param.OPERATOR_TABLE[gpname]):
+                    for n, m in enumerate(range(-l, l+1)):
+                        idx = ao_loc[op_id] + n
+                        if tot_parity_odd(op, l, m):
+                            cbase[n,:,idx] -= chartab[:,op_id]
+                        else:
+                            cbase[n,:,idx] += chartab[:,op_id]
+            norms = numpy.sqrt(numpy.einsum('mij,mij->mi', cbase, cbase))
+
+            for i in range(mol.bas_nctr(ib)):
+                for n, ir in numpy.argwhere(norms > 1e-12):
+                    c = numpy.zeros(nao)
+                    c[ip:] = cbase[n,ir,:nao-ip] / norms[n,ir]
+                    sodic[ir].append(c)
+                ip += degen
     so = []
-    irrep_ids = sorted(sodic.keys())
-    for ir in irrep_ids:
-        so.append(numpy.vstack(sodic[ir]).T)
+    irrep_ids = []
+    for ir, c in enumerate(sodic):
+        if len(c) > 0:
+            irrep_ids.append(ir)
+            so.append(numpy.vstack(c).T)
     return so, irrep_ids
 
 def dump_symm_adapted_basis(mol, so):
@@ -104,11 +107,11 @@ def _basis_offset_for_atoms(atoms, basis_tab):
     basoff = [0]
     n = 0
     for at in atoms:
-        symb = pyscf.gto.mole._symbol(at[0])
+        symb = mole._symbol(at[0])
         if symb in basis_tab:
             bas0 = basis_tab[symb]
         else:
-            bas0 = basis_tab[pyscf.gto.mole._rm_digit(symb)]
+            bas0 = basis_tab[mole._rm_digit(symb)]
         for b in bas0:
             angl = b[0]
             n += _num_contract(b) * (angl*2+1)
@@ -244,22 +247,27 @@ def linearmole_irrep_id2symb(gpname, irrep_id):
     else:
         raise RuntimeError('%s is not proper for linear molecule.' % gpname)
 
-def linearmole_symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
+def linearmole_symm_adapted_basis(mol, gpname, eql_atom_ids=None):
     assert(gpname in ('Dooh', 'Coov'))
-    nbf, basoff = _basis_offset_for_atoms(atoms, basis_tab)
+    assert(not mol.cart)
+    if eql_atom_ids is None:
+        eql_atom_ids = geom.symm_identical_atoms(gpname, mol._atom)
+    aoslice = mol.aoslice_by_atom()
+    basoff = aoslice[:,2]
+    nao = mol.nao_nr()
     sodic = {}
     shalf = numpy.sqrt(.5)
     def plus(i0, i1):
-        c = numpy.zeros(nbf)
+        c = numpy.zeros(nao)
         c[i0] = c[i1] = shalf
         return c
     def minus(i0, i1):
-        c = numpy.zeros(nbf)
+        c = numpy.zeros(nao)
         c[i0] = shalf
         c[i1] =-shalf
         return c
     def identity(i0):
-        c = numpy.zeros(nbf)
+        c = numpy.zeros(nao)
         c[i0] = 1
         return c
     def add_so(irrep_name, c):
@@ -273,19 +281,15 @@ def linearmole_symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
             if len(atom_ids) == 2:
                 at0 = atom_ids[0]
                 at1 = atom_ids[1]
-                symb = pyscf.gto.mole._symbol(atoms[at0][0])
-                ib = 0
-                if symb in basis_tab:
-                    bas0 = basis_tab[symb]
-                else:
-                    bas0 = basis_tab[pyscf.gto.mole._rm_digit(symb)]
-                for b in bas0:
-                    angl = b[0]
-                    nc = _num_contract(b)
+                ip = 0
+                b0, b1, p0, p1 = aoslice[at0]
+                for ib in range(b0, b1):
+                    angl = mol.bas_angular(ib)
+                    nc = mol.bas_nctr(ib)
                     degen = angl * 2 + 1
                     if angl == 1:
                         for i in range(nc):
-                            aoff = ib + i*degen + angl
+                            aoff = ip + i*degen + angl
 # m = 0
                             idx0 = basoff[at0] + aoff + 1
                             idx1 = basoff[at1] + aoff + 1
@@ -302,7 +306,7 @@ def linearmole_symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
                             add_so('E1gy', minus(idy0, idy1))
                     else:
                         for i in range(nc):
-                            aoff = ib + i*degen + angl
+                            aoff = ip + i*degen + angl
 # m = 0
                             idx0 = basoff[at0] + aoff
                             idx1 = basoff[at1] + aoff
@@ -328,22 +332,18 @@ def linearmole_symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
                                     add_so('E%dgx'%m, plus (idx0, idx1))
                                     add_so('E%duy'%m, minus(idy0, idy1))
                                     add_so('E%dux'%m, minus(idx0, idx1))
-                    ib += nc * degen
+                    ip += nc * degen
             elif len(atom_ids) == 1:
                 at0 = atom_ids[0]
-                symb = pyscf.gto.mole._symbol(atoms[at0][0])
-                ib = 0
-                if symb in basis_tab:
-                    bas0 = basis_tab[symb]
-                else:
-                    bas0 = basis_tab[pyscf.gto.mole._rm_digit(symb)]
-                for b in bas0:
-                    angl = b[0]
-                    nc = _num_contract(b)
+                ip = 0
+                b0, b1, p0, p1 = aoslice[at0]
+                for ib in range(b0, b1):
+                    angl = mol.bas_angular(ib)
+                    nc = mol.bas_nctr(ib)
                     degen = angl * 2 + 1
                     if angl == 1:
                         for i in range(nc):
-                            aoff = ib + i*degen + angl
+                            aoff = ip + i*degen + angl
 # m = 0
                             idx0 = basoff[at0] + aoff + 1
                             add_so('A1u', identity(idx0))
@@ -354,7 +354,7 @@ def linearmole_symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
                             add_so('E1ux', identity(idx0))
                     else:
                         for i in range(nc):
-                            aoff = ib + i*degen + angl
+                            aoff = ip + i*degen + angl
                             idx0 = basoff[at0] + aoff
 # m = 0
                             if angl % 2:
@@ -371,23 +371,20 @@ def linearmole_symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
                                 else: # d, g functions
                                     add_so('E%dgy'%m, identity(idy0))
                                     add_so('E%dgx'%m, identity(idx0))
-                    ib += nc * degen
+                    ip += nc * degen
     elif gpname == 'Coov':
         for atom_ids in eql_atom_ids:
             at0 = atom_ids[0]
-            symb = pyscf.gto.mole._symbol(atoms[at0][0])
-            ib = 0
-            if symb in basis_tab:
-                bas0 = basis_tab[symb]
-            else:
-                bas0 = basis_tab[pyscf.gto.mole._rm_digit(symb)]
-            for b in bas0:
-                angl = b[0]
-                nc = _num_contract(b)
+            symb = mole._symbol(atoms[at0][0])
+            ip = 0
+            b0, b1, p0, p1 = aoslice[at0]
+            for ib in range(b0, b1):
+                angl = mol.bas_angular(ib)
+                nc = mol.bas_nctr(ib)
                 degen = angl * 2 + 1
                 if angl == 1:
                     for i in range(nc):
-                        aoff = ib + i*degen + angl
+                        aoff = ip + i*degen + angl
 # m = 0
                         idx0 = basoff[at0] + aoff + 1
                         add_so('A1', identity(idx0))
@@ -398,7 +395,7 @@ def linearmole_symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
                         add_so('E1y', identity(idy0))
                 else:
                     for i in range(nc):
-                        aoff = ib + i*degen + angl
+                        aoff = ip + i*degen + angl
                         idx0 = basoff[at0] + aoff
 # m = 0
                         add_so('A1', identity(idx0))
@@ -408,7 +405,7 @@ def linearmole_symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
                             idy0 = basoff[at0] + aoff - m
                             add_so('E%dx'%m, identity(idx0))
                             add_so('E%dy'%m, identity(idy0))
-                ib += nc * degen
+                ip += nc * degen
 
     so = []
     irrep_ids = []
@@ -423,7 +420,7 @@ def linearmole_symm_adapted_basis(gpname, eql_atom_ids, atoms, basis_tab):
 
 
 if __name__ == "__main__":
-    h2o = pyscf.gto.Mole()
+    h2o = mole.Mole()
     h2o.verbose = 0
     h2o.output = None
     h2o.atom = [['O' , (1. , 0.    , 0.   ,)],
@@ -433,25 +430,28 @@ if __name__ == "__main__":
                  'O': 'cc-pvdz',}
     h2o.build()
     gpname, origin, axes = geom.detect_symm(h2o._atom)
-    atoms = pyscf.gto.mole.format_atom(h2o._atom, origin, axes)
+    atoms = mole.format_atom(h2o._atom, origin, axes)
+    h2o.build(False, False, atom=atoms)
     print(gpname)
     eql_atoms = geom.symm_identical_atoms(gpname, atoms)
-    print(symm_adapted_basis(gpname, eql_atoms, atoms, h2o._basis))
+    print(symm_adapted_basis(h2o, gpname, eql_atoms)[1])
 
-    mol = pyscf.gto.M(
+    mol = mole.M(
         atom = [['H', (0,0,0)], ['H', (0,0,-1)], ['H', (0,0,1)]],
         basis = 'ccpvtz', charge=1)
     gpname, orig, axes = geom.detect_symm(mol._atom)
-    atoms = pyscf.gto.mole.format_atom(mol._atom, orig, axes)
+    atoms = mole.format_atom(mol._atom, orig, axes)
+    mol.build(False, False, atom=atoms)
     print(gpname)
     eql_atoms = geom.symm_identical_atoms(gpname, atoms)
-    print(symm_adapted_basis(gpname, eql_atoms, atoms, mol._basis)[1])
+    print(symm_adapted_basis(mol, gpname, eql_atoms)[1])
 
-    mol = pyscf.gto.M(
+    mol = mole.M(
         atom = [['H', (0,0,0)], ['H', (0,0,-1)], ['He', (0,0,1)]],
         basis = 'ccpvtz')
     gpname, orig, axes = geom.detect_symm(mol._atom)
-    atoms = pyscf.gto.mole.format_atom(mol._atom, orig, axes)
+    atoms = mole.format_atom(mol._atom, orig, axes)
+    mol.build(False, False, atom=atoms)
     print(gpname)
     eql_atoms = geom.symm_identical_atoms(gpname, atoms)
-    print(symm_adapted_basis(gpname, eql_atoms, atoms, mol._basis)[1])
+    print(symm_adapted_basis(mol, gpname, eql_atoms)[1])

@@ -8,8 +8,6 @@ import ctypes
 import numpy
 import numpy as np
 from pyscf.pbc import gto as pgto
-import pyscf.gto
-import pyscf.gto.moleintor
 
 
 L = 1.5
@@ -171,13 +169,13 @@ class KnowValues(unittest.TestCase):
         kpts = numpy.random.random((4,3))
         kpts[0] = 0
         self.assertEqual(list(cl1.nimgs), [30,20,18])
-        s0 = cl1.pbc_intor('cint1e_ovlp_sph', hermi=0, kpts=kpts)
+        s0 = cl1.pbc_intor('int1e_ovlp_sph', hermi=0, kpts=kpts)
         self.assertAlmostEqual(finger(s0[0]), 492.30658304804126, 4)
         self.assertAlmostEqual(finger(s0[1]), 37.812956255000756-28.972806230140314j, 4)
         self.assertAlmostEqual(finger(s0[2]),-26.113285893260819-34.448501789693566j, 4)
         self.assertAlmostEqual(finger(s0[3]), 186.58921213429491+123.90133823378201j, 4)
 
-        s1 = cl1.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpts[0])
+        s1 = cl1.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts[0])
         self.assertAlmostEqual(finger(s1), 492.30658304804126, 4)
 
     def test_ecp_pseudo(self):

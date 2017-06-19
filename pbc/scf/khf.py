@@ -38,7 +38,7 @@ def get_ovlp(mf, cell=None, kpts=None):
     '''
     if cell is None: cell = mf.cell
     if kpts is None: kpts = mf.kpts
-    return lib.asarray(cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpts))
+    return lib.asarray(cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts))
 
 
 def get_hcore(mf, cell=None, kpts=None):
@@ -198,15 +198,9 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mf.stdout, verbose)
-    log.note('Analyze output for the gamma point')
     ovlp_ao = mf.get_ovlp()
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log))
-#            mf.dip_moment(mf.mol, dm, verbose=log))
+    return mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=verbose)
 
 
 def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
@@ -216,10 +210,8 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
     from pyscf.lo import orth
     if s is None:
         s = hf.get_ovlp(mol)
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
+    log = logger.new_logger(mf, verbose)
+    log.note('Analyze output for the gamma point')
     log.note("KRHF mulliken_meta")
     dm_ao_gamma=dm_ao[0,:,:].real.copy()
     s_gamma=s[0,:,:].real.copy()
@@ -360,12 +352,13 @@ class KRHF(hf.RHF):
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'N kpts = %d', len(self.kpts))
         logger.debug(self, 'kpts = %s', self.kpts)
-        logger.info(self, 'DF object = %s', self.with_df)
         logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
         #if self.exxdiv == 'vcut_ws':
         #    if self.exx_built is False:
         #        self.precompute_exx()
         #    logger.info(self, 'WS alpha = %s', self.exx_alpha)
+        logger.info(self, 'DF object = %s', self.with_df)
+        self.with_df.dump_flags()
 
     def build(self, cell=None):
         hf.RHF.build(self, cell)
@@ -390,7 +383,7 @@ class KRHF(hf.RHF):
             nuc = lib.asarray(self.with_df.get_nuc(kpts))
         if len(cell._ecpbas) > 0:
             nuc += lib.asarray(ecp.ecp_int(cell, kpts))
-        t = lib.asarray(cell.pbc_intor('cint1e_kin_sph', 1, 1, kpts))
+        t = lib.asarray(cell.pbc_intor('int1e_kin_sph', 1, 1, kpts))
         return nuc + t
 
     get_ovlp = get_ovlp
@@ -533,5 +526,22 @@ class KRHF(hf.RHF):
         if auxbasis is None:
             auxbasis = aug_etb_for_dfbasis(self.cell, beta=1.8, start_at=0)
         return mdf_jk.density_fit(self, auxbasis, with_df)
+
+
+if __name__ == '__main__':
+    from pyscf.pbc import gto
+    cell = gto.Cell()
+    cell.atom = '''
+    He 0 0 1
+    He 1 0 1
+    '''
+    cell.basis = '321g'
+    cell.a = np.eye(3) * 3
+    cell.gs = [5] * 3
+    cell.verbose = 5
+    cell.build()
+    mf = KRHF(cell, [2,1,1])
+    mf.kernel()
+    mf.analyze()
 
 

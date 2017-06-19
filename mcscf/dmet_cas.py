@@ -64,10 +64,10 @@ def kernel(mf, dm, aolabels_or_baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
         dm = sum(dm)
     mol = mf.mol
     if isinstance(aolabels_or_baslst, str):
-        baslst = [i for i,t in enumerate(mol.spherical_labels(1))
+        baslst = [i for i,t in enumerate(mol.ao_labels())
                   if aolabels_or_baslst in t]
     elif isinstance(aolabels_or_baslst[0], str):
-        baslst = [i for i,t in enumerate(mol.spherical_labels(1))
+        baslst = [i for i,t in enumerate(mol.ao_labels())
                   if any(x in t for x in aolabels_or_baslst)]
     else:
         baslst = aolabels_or_baslst
@@ -127,7 +127,7 @@ def kernel(mf, dm, aolabels_or_baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
     log.debug('DMET impurity and bath orbitals on orthogonal AOs')
     log.debug('DMET %d impurity sites/occ', nimp)
     if log.verbose >= logger.DEBUG1:
-        label = mol.spherical_labels(True)
+        label = mol.ao_labels()
         occ_label = ['#%d/%.5f'%(i+1,x) for i,x in enumerate(occi)]
         #dump_mat.dump_rec(mol.stdout, numpy.dot(corth[:,baslst], ui),
         #                  label=label, label2=occ_label, start=1)
@@ -232,7 +232,7 @@ if __name__ == '__main__':
     mf = scf.RHF(mol)
     mf.scf()
 
-    aolst = [i for i,s in enumerate(mol.spherical_labels(1)) if 'H 1s' in s]
+    aolst = [i for i,s in enumerate(mol.ao_labels()) if 'H 1s' in s]
     dm = mf.make_rdm1()
     ncas, nelecas, mo = guess_cas(mf, dm, aolst, verbose=4)
     mc = mcscf.CASSCF(mf, ncas, nelecas).set(verbose=4)

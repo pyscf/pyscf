@@ -31,7 +31,7 @@ from pyscf.pbc.scf import addons
 def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
     '''
-    return cell.pbc_intor('cint1e_ovlp_sph', hermi=1, kpts=kpt)
+    return cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpt)
 
 
 def get_hcore(cell, kpt=np.zeros(3)):
@@ -51,7 +51,7 @@ def get_hcore(cell, kpt=np.zeros(3)):
 def get_t(cell, kpt=np.zeros(3)):
     '''Get the kinetic energy AO matrix.
     '''
-    return cell.pbc_intor('cint1e_kin_sph', hermi=1, kpts=kpt)
+    return cell.pbc_intor('int1e_kin_sph', hermi=1, kpts=kpt)
 
 
 def get_nuc(cell, kpt=np.zeros(3)):
@@ -277,8 +277,9 @@ class RHF(hf.RHF):
         hf.RHF.dump_flags(self)
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'kpt = %s', self.kpt)
-        logger.info(self, 'DF object = %s', self.with_df)
         logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
+        logger.info(self, 'DF object = %s', self.with_df)
+        self.with_df.dump_flags()
 
     def get_hcore(self, cell=None, kpt=None):
         if cell is None: cell = self.cell
@@ -289,7 +290,7 @@ class RHF(hf.RHF):
             nuc = self.with_df.get_nuc(kpt)
         if len(cell._ecpbas) > 0:
             nuc += ecp.ecp_int(cell, kpt)
-        return nuc + cell.pbc_intor('cint1e_kin_sph', 1, 1, kpt)
+        return nuc + cell.pbc_intor('int1e_kin_sph', 1, 1, kpt)
 
     def get_ovlp(self, cell=None, kpt=None):
         if cell is None: cell = self.cell

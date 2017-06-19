@@ -1,0 +1,59 @@
+#
+#N.J. DeYonker, K.A. Peterson, A.K. Wilson, J. Phys. Chem. A 111, 11383 (2007). Core-valence correlation consistent polarized Valence Double- Basis Set for Ga Note: these should be added to the all-electron cc-pVDZ basis sets
+#
+
+#BASIS SET:
+Ga s
+1.2779 1.000000E+00
+Ga p
+1.3887 1.000000E+00
+Ga d
+1.1408 1.000000E+00
+Ga f
+4.7219 1.000000E+00
+#BASIS SET:
+Ge s
+1.4495 1.000000E+00
+Ge p
+1.6125 1.000000E+00
+Ge d
+1.4022 1.000000E+00
+Ge f
+5.2437 1.000000E+00
+#BASIS SET:
+As s
+1.6258 1.000000E+00
+As p
+1.8519 1.000000E+00
+As d
+1.6777 1.000000E+00
+As f
+5.7862 1.000000E+00
+#BASIS SET:
+Se s
+1.8055 1.000000E+00
+Se p
+2.0984 1.000000E+00
+Se d
+1.9588 1.000000E+00
+Se f
+6.3588 1.000000E+00
+#BASIS SET:
+Br s
+1.9893 1.000000E+00
+Br p
+2.3575 1.000000E+00
+Br d
+2.2311 1.000000E+00
+Br f
+6.9714 1.000000E+00
+#BASIS SET:
+Kr s
+2.1789 1.000000E+00
+Kr p
+2.6320 1.000000E+00
+Kr d
+2.5723 1.000000E+00
+Kr f
+7.5841 1.000000E+00
+END

@@ -89,10 +89,10 @@ class X2C(lib.StreamObject):
         xmol, contr_coeff_nr = self.get_xmol(mol)
         c = lib.param.LIGHT_SPEED
         assert('1E' in self.approx.upper())
-        s = xmol.intor_symmetric('cint1e_ovlp')
-        t = xmol.intor_symmetric('cint1e_spsp') * .5
-        v = xmol.intor_symmetric('cint1e_nuc')
-        w = xmol.intor_symmetric('cint1e_spnucsp')
+        s = xmol.intor_symmetric('int1e_ovlp_spinor')
+        t = xmol.intor_symmetric('int1e_spsp_spinor') * .5
+        v = xmol.intor_symmetric('int1e_nuc_spinor')
+        w = xmol.intor_symmetric('int1e_spnucsp_spinor')
         if 'ATOM' in self.approx.upper():
             atom_slices = xmol.offset_2c_by_atom()
             n2c = xmol.nao_2c()
@@ -100,18 +100,18 @@ class X2C(lib.StreamObject):
             for ia in range(xmol.natm):
                 ish0, ish1, p0, p1 = atom_slices[ia]
                 shls_slice = (ish0, ish1, ish0, ish1)
-                s1 = xmol.intor('cint1e_ovlp', shls_slice=shls_slice)
-                t1 = xmol.intor('cint1e_spsp', shls_slice=shls_slice) * .5
-                v1 = xmol.intor('cint1e_nuc', shls_slice=shls_slice)
-                w1 = xmol.intor('cint1e_spnucsp', shls_slice=shls_slice)
+                s1 = xmol.intor('int1e_ovlp_spinor', shls_slice=shls_slice)
+                t1 = xmol.intor('int1e_spsp_spinor', shls_slice=shls_slice) * .5
+                v1 = xmol.intor('int1e_nuc_spinor', shls_slice=shls_slice)
+                w1 = xmol.intor('int1e_spnucsp_spinor', shls_slice=shls_slice)
                 x[p0:p1,p0:p1] = _x2c1e_xmatrix(t1, v1, w1, s1, c)
             h1 = _get_hcore_fw(t, v, w, s, x, c)
         else:
             h1 = _x2c1e_get_hcore(t, v, w, s, c)
 
         if self.basis is not None:
-            s22 = xmol.intor_symmetric('cint1e_ovlp')
-            s21 = mole.intor_cross('cint1e_ovlp', xmol, mol)
+            s22 = xmol.intor_symmetric('int1e_ovlp_spinor')
+            s21 = mole.intor_cross('int1e_ovlp_spinor', xmol, mol)
             c = lib.cho_solve(s22, s21)
             h1 = reduce(numpy.dot, (c.T.conj(), h1, c))
         elif self.xuncontract:
@@ -129,10 +129,10 @@ class SpinFreeX2C(X2C):
         xmol, contr_coeff = self.get_xmol(mol)
         c = lib.param.LIGHT_SPEED
         assert('1E' in self.approx.upper())
-        t = xmol.intor_symmetric('cint1e_kin_sph')
-        v = xmol.intor_symmetric('cint1e_nuc_sph')
-        s = xmol.intor_symmetric('cint1e_ovlp_sph')
-        w = xmol.intor_symmetric('cint1e_pnucp_sph')
+        t = xmol.intor_symmetric('int1e_kin')
+        v = xmol.intor_symmetric('int1e_nuc')
+        s = xmol.intor_symmetric('int1e_ovlp')
+        w = xmol.intor_symmetric('int1e_pnucp')
         if 'ATOM' in self.approx.upper():
             atom_slices = xmol.offset_nr_by_atom()
             nao = xmol.nao_nr()
@@ -140,18 +140,18 @@ class SpinFreeX2C(X2C):
             for ia in range(xmol.natm):
                 ish0, ish1, p0, p1 = atom_slices[ia]
                 shls_slice = (ish0, ish1, ish0, ish1)
-                t1 = xmol.intor('cint1e_kin_sph', shls_slice=shls_slice)
-                v1 = xmol.intor('cint1e_nuc_sph', shls_slice=shls_slice)
-                s1 = xmol.intor('cint1e_ovlp_sph', shls_slice=shls_slice)
-                w1 = xmol.intor('cint1e_pnucp_sph', shls_slice=shls_slice)
+                t1 = xmol.intor('int1e_kin', shls_slice=shls_slice)
+                v1 = xmol.intor('int1e_nuc', shls_slice=shls_slice)
+                s1 = xmol.intor('int1e_ovlp', shls_slice=shls_slice)
+                w1 = xmol.intor('int1e_pnucp', shls_slice=shls_slice)
                 x[p0:p1,p0:p1] = _x2c1e_xmatrix(t1, v1, w1, s1, c)
             h1 = _get_hcore_fw(t, v, w, s, x, c)
         else:
             h1 = _x2c1e_get_hcore(t, v, w, s, c)
 
         if self.basis is not None:
-            s22 = xmol.intor_symmetric('cint1e_ovlp_sph')
-            s21 = mole.intor_cross('cint1e_ovlp_sph', xmol, mol)
+            s22 = xmol.intor_symmetric('int1e_ovlp')
+            s21 = mole.intor_cross('int1e_ovlp', xmol, mol)
             c = lib.cho_solve(s22, s21)
             h1 = reduce(numpy.dot, (c.T, h1, c))
         if self.xuncontract and contr_coeff is not None:
@@ -169,7 +169,7 @@ def get_jk(mol, dm, hermi=1, mf_opt=None):
     dd = numpy.zeros((n2c*2,)*2, dtype=numpy.complex)
     dd[:n2c,:n2c] = dm
     dhf._call_veff_llll(mol, dd, hermi, None)
-    vj, vk = _vhf.rdirect_mapdm('cint2e', 's8',
+    vj, vk = _vhf.rdirect_mapdm('int2e_spinor', 's8',
                                 ('ji->s2kl', 'jk->s1il'), dm, 1,
                                 mol._atm, mol._bas, mol._env, mf_opt)
     return dhf._jk_triu_(vj, vk, hermi)
@@ -255,7 +255,7 @@ class UHF(hf.SCF):
 
     def get_ovlp(self, mol=None):
         if mol is None: mol = self.mol
-        return mol.intor_symmetric('cint1e_ovlp')
+        return mol.intor_symmetric('int1e_ovlp_spinor')
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
@@ -281,7 +281,7 @@ class UHF(hf.SCF):
         if mol is None: mol = self.mol
         def set_vkscreen(opt, name):
             opt._this.contents.r_vkscreen = _vhf._fpointer(name)
-        opt = _vhf.VHFOpt(mol, 'cint2e', 'CVHFrkbllll_prescreen',
+        opt = _vhf.VHFOpt(mol, 'int2e_spinor', 'CVHFrkbllll_prescreen',
                           'CVHFrkbllll_direct_scf',
                           'CVHFrkbllll_direct_scf_dm')
         opt.direct_scf_tol = self.direct_scf_tol
@@ -337,10 +337,14 @@ def _uncontract_mol(mol, xuncontract=False, exp_drop=0.2):
         else:
             raise RuntimeError('xuncontract needs to be bool, str, tuple or list type')
 
+        nc = mol._bas[ib,mole.NCTR_OF]
+        l = mol._bas[ib,mole.ANG_OF]
+        if mol.cart:
+            degen = (l + 1) * (l + 2) // 2
+        else:
+            degen = l * 2 + 1
         if uncontract_me:
             np = mol._bas[ib,mole.NPRIM_OF]
-            nc = mol._bas[ib,mole.NCTR_OF]
-            l = mol._bas[ib,mole.ANG_OF]
             pexp = mol._bas[ib,mole.PTR_EXP]
 # Modfied partially uncontraction to avoid potentially lindep in the
 # segment-contracted basis
@@ -364,11 +368,10 @@ def _uncontract_mol(mol, xuncontract=False, exp_drop=0.2):
                     bs[k,mole.PTR_COEFF] = ptr + 1
                     ptr += 2
                 _bas.append(bs)
-                d = l * 2 + 1
-                part1 = numpy.zeros((d*(nkept-nc),d*nc))
+                part1 = numpy.zeros((degen*(nkept-nc),degen*nc))
                 c = b_coeff[primitive]
-                for i in range(d):
-                    part1[i::d,i::d] = c
+                for i in range(degen):
+                    part1[i::degen,i::degen] = c
 
 # part2: binding the pGTOs of small exps to the pGTOs of large coefficients
                 bs = mol._bas[ib].copy()
@@ -387,18 +390,16 @@ def _uncontract_mol(mol, xuncontract=False, exp_drop=0.2):
                 ptr += exps.size + cs.size
                 _bas.append(bs)
 
-                part2 = numpy.eye(d*nc)
+                part2 = numpy.eye(degen*nc)
                 for i in range(nc):
-                    part2[i*d:(i+1)*d,i*d:(i+1)*d] *= s1[i]
+                    part2[i*degen:(i+1)*degen,i*degen:(i+1)*degen] *= s1[i]
                 contr_coeff.append(numpy.vstack((part1, part2)))
             else:
                 _bas.append(mol._bas[ib])
-                contr_coeff.append(numpy.eye((l*2+1)*nc))
+                contr_coeff.append(numpy.eye(degen*nc))
         else:
             _bas.append(mol._bas[ib])
-            l = mol.bas_angular(ib)
-            d = l * 2 + 1
-            contr_coeff.append(numpy.eye(d*mol.bas_nctr(ib)))
+            contr_coeff.append(numpy.eye(degen*nc))
     pmol._bas = numpy.asarray(numpy.vstack(_bas), dtype=numpy.int32)
     pmol._env = numpy.hstack((mol._env, _env))
     return pmol, scipy.linalg.block_diag(*contr_coeff)

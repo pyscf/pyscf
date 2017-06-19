@@ -170,14 +170,14 @@ def kernel(cc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None):
     im1 = reduce(numpy.dot, (mo_coeff, im1, mo_coeff.T))
     dme0 = grad.rhf.make_rdm1e(cc._scf.mo_energy, mo_coeff, cc._scf.mo_occ)
 
-    h1 =-(mol.intor('cint1e_ipkin_sph', comp=3)
-         +mol.intor('cint1e_ipnuc_sph', comp=3))
-    s1 =-mol.intor('cint1e_ipovlp_sph', comp=3)
+    h1 =-(mol.intor('int1e_ipkin', comp=3)
+         +mol.intor('int1e_ipnuc', comp=3))
+    s1 =-mol.intor('int1e_ipovlp', comp=3)
     zeta = lib.direct_sum('i+j->ij', mo_energy, mo_energy) * .5
     zeta[nocc:,:nocc] = mo_energy[:nocc]
     zeta[:nocc,nocc:] = mo_energy[:nocc].reshape(-1,1)
     zeta = reduce(numpy.dot, (mo_coeff, zeta*dm1mo, mo_coeff.T))
-    eri0 = mol.intor('cint2e_ip1_sph', 3).reshape(3,nao,nao,nao,nao)
+    eri0 = mol.intor('int2e_ip1', 3).reshape(3,nao,nao,nao,nao)
     dm2 = numpy.zeros((nmo,)*4)
     dm2[:nocc,nocc:,:nocc,nocc:] = dovov
     dm2[nocc:,nocc:,nocc:,nocc:] = dvvvv
@@ -209,7 +209,7 @@ def kernel(cc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None):
               + numpy.einsum('xji,ij->x', s1[:,p0:p1], im1[:,p0:p1]))
 # h[1] \dot DM, *2 for +c.c.,  contribute to f1
         mol.set_rinv_origin(mol.atom_coord(k))
-        vrinv = -mol.atom_charge(k) * mol.intor('cint1e_iprinv_sph', comp=3)
+        vrinv = -mol.atom_charge(k) * mol.intor('int1e_iprinv', comp=3)
         de[k] +=(numpy.einsum('xij,ij->x', h1[:,p0:p1], dm1ao[p0:p1])
                + numpy.einsum('xji,ij->x', h1[:,p0:p1], dm1ao[:,p0:p1]))
         de[k] +=(numpy.einsum('xij,ij->x', vrinv, dm1ao)

@@ -64,7 +64,7 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
                  k+1, irname_full[j], irorbcnt[j], mo_energy[k], mo_occ[k])
 
     if verbose >= logger.DEBUG:
-        label = mol.spheric_labels(True)
+        label = mol.ao_labels()
         molabel = []
         irorbcnt = {}
         for k, j in enumerate(orbsym):
@@ -285,15 +285,12 @@ class RHF(hf.RHF):
         self.irrep_nelec = {} # {'ir_name':int,...}
         self._keys = self._keys.union(['irrep_nelec'])
 
-    def dump_flags(self):
-        hf.RHF.dump_flags(self)
-        if self.mol.symmetry:
-            check_irrep_nelec(self.mol, self.irrep_nelec, self.mol.nelectron)
-
     def build(self, mol=None):
         for irname in self.irrep_nelec:
             if irname not in self.mol.irrep_name:
                 logger.warn(self, '!! No irrep %s', irname)
+        if mol.symmetry:
+            check_irrep_nelec(self.mol, self.irrep_nelec, self.mol.nelectron)
         return hf.RHF.build(self, mol)
 
     eig = eig
@@ -699,7 +696,7 @@ class ROHF(rohf.ROHF):
                          mo_energy[k], mo_ea[k], mo_eb[k], mo_occ[k])
 
         if verbose >= logger.DEBUG:
-            label = mol.spheric_labels(True)
+            label = mol.ao_labels()
             molabel = []
             irorbcnt = {}
             for k, j in enumerate(orbsym):

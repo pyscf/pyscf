@@ -26,17 +26,17 @@ def eval_gto(mol, eval_name, coords,
     Args:
         eval_name : str
 
-            ==========================  =========  =======================
-            Function                    type       Expression
-            ==========================  =========  =======================
-            "GTOval_sph"                spherical  |AO>
-            "GTOval_ip_sph"             spherical  nabla |AO>
-            "GTOval_ig_sph"             spherical  (#C(0 1) g) |AO>
-            "GTOval_ipig_sph"           spherical  (#C(0 1) nabla g) |AO>
-            "GTOval_cart"               cart       |AO>
-            "GTOval_ip_cart"            cart       nabla |AO>
-            "GTOval_ig_cart"            cart       (#C(0 1) g)|AO>
-            ==========================  =========  =======================
+            ==========================  =======================
+            Function                    Expression
+            ==========================  =======================
+            "GTOval_sph"                |AO>
+            "GTOval_ip_sph"             nabla |AO>
+            "GTOval_ig_sph"             (#C(0 1) g) |AO>
+            "GTOval_ipig_sph"           (#C(0 1) nabla g) |AO>
+            "GTOval_cart"               |AO>
+            "GTOval_ip_cart"            nabla |AO>
+            "GTOval_ig_cart"            (#C(0 1) g)|AO>
+            ==========================  =======================
 
         atm : int32 ndarray
             libcint integral function argument
@@ -73,6 +73,13 @@ def eval_gto(mol, eval_name, coords,
     >>> print(ao_value.shape)
     (3, 100, 24)
     '''
+    if not ('_sph' in eval_name or '_cart' in eval_name or
+            '_spinor' in eval_name):
+        if mol.cart:
+            eval_name = eval_name + '_cart'
+        else:
+            eval_name = eval_name + '_sph'
+
     atm = numpy.asarray(mol._atm, dtype=numpy.int32, order='C')
     bas = numpy.asarray(mol._bas, dtype=numpy.int32, order='C')
     env = numpy.asarray(mol._env, dtype=numpy.double, order='C')

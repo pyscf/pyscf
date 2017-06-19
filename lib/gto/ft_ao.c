@@ -42,10 +42,10 @@
 #define NCTRMAX         72
 
 typedef struct {
-        const int *atm;
-        const int *bas;
-        const double *env;
-        const int *shls;
+        int *atm;
+        int *bas;
+        double *env;
+        int *shls;
         int natm;
         int nbas;
 
@@ -53,25 +53,13 @@ typedef struct {
         int j_l;
         int k_l;
         int l_l;
-        int i_prim;
-        int j_prim;
-        int k_prim;
-        int l_prim;
-        int i_ctr;
-        int j_ctr;
-        int k_ctr;
-        int l_ctr;
         int nfi;  // number of cartesion components
         int nfj;
         int nfk;
         int nfl;
         int nf;  // = nfi*nfj*nfk*nfl;
-        int _padding1;
-        const double *ri;
-        const double *rj;
-        const double *rk;
-        const double *rl;
-        double common_factor;
+        int _padding;
+        int x_ctr[4];
 
         int gbits;
         int ncomp_e1; // = 1 if spin free, = 4 when spin included, it
@@ -88,33 +76,26 @@ typedef struct {
         int g_stride_l; // nrys_roots * shift of (i,k,l++,j)
         int g_stride_j; // nrys_roots * shift of (i,k,l,j++)
         int nrys_roots;
-        int g_size;
+        int g_size;  // ref to cint2e.c g = malloc(sizeof(double)*g_size)
 
         int g2d_ijmax;
         int g2d_klmax;
-        const double *rx_in_rijrx;
-        const double *rx_in_rklrx;
-        double rirj[3]; // diff by an sign in different g0_2d4d algorithm
+        double common_factor;
+        double _padding1;
+        double rirj[3]; // diff by sign in different g0_2d4d algorithm
         double rkrl[3];
+        double *rx_in_rijrx;
+        double *rx_in_rklrx;
 
-        void (*f_rr)();  // function to compute recursive relation
+        double *ri;
+        double *rj;
+        double *rk;
+        double *rl;
 
-        /* */
-        void (*f_gout)();
-
-        /* values are assigned during calculation */
-        double ai;
-        double aj;
-        double ak;
-        double al;
-        double aij;
-        double akl;
-        double rij[3];
-        double rijrx[3];
-        double rkl[3];
-        double rklrx[3];
-        int *idx;
+// Other definitions in CINTEnvVars are different in libcint and qcint.
+// They should not used in this function.
 } CINTEnvVars;
+
 
 void CINTg1e_index_xyz(int *idx, const CINTEnvVars *envs);
 double CINTsquare_dist(const double *r1, const double *r2);
@@ -130,13 +111,17 @@ static void init1e_envs(CINTEnvVars *envs, const int *shls,
         int ng[] = {0, 0, 0, 0, 0, 0, 0, 0};
         CINTinit_int1e_EnvVars(envs, ng, shls, atm, natm, bas, nbas, env);
 
+        int dli, dlj;
         if (envs->li_ceil < envs->lj_ceil) {
-                int dli = envs->li_ceil + 1;
-                int dlj = envs->li_ceil + envs->lj_ceil + 1;
-                envs->g_stride_i = 1;
-                envs->g_stride_j = dli;
-                envs->g_size     = dli * dlj;
+                dli = envs->li_ceil + 1;
+                dlj = envs->li_ceil + envs->lj_ceil + 1;
+        } else {
+                dli = envs->li_ceil + envs->lj_ceil + 1;
+                dlj = envs->lj_ceil + 1;
         }
+        envs->g_stride_i = 1;
+        envs->g_stride_j = dli;
+        envs->g_size     = dli * dlj;
 }
 
 
@@ -802,8 +787,10 @@ int GTO_aopair_early_contract(double complex *out, CINTEnvVars *envs,
         const int j_sh = shls[1];
         const int i_l = envs->i_l;
         const int j_l = envs->j_l;
-        const int i_ctr = envs->i_ctr;
-        const int j_ctr = envs->j_ctr;
+        const int i_ctr = envs->x_ctr[0];
+        const int j_ctr = envs->x_ctr[1];
+        const int i_prim = bas(NPRIM_OF, i_sh);
+        const int j_prim = bas(NPRIM_OF, j_sh);
         const int nf = envs->nf;
         const double *ri = envs->ri;
         const double *rj = envs->rj;
@@ -848,14 +835,14 @@ int GTO_aopair_early_contract(double complex *out, CINTEnvVars *envs,
         double fac1 = SQRTPI * M_PI * CINTcommon_fac_sp(i_l) * CINTcommon_fac_sp(j_l);
 
         *jempty = 1;
-        for (jp = 0; jp < envs->j_prim; jp++) {
+        for (jp = 0; jp < j_prim; jp++) {
                 if (j_ctr == 1) {
                         fac1j = fac1 * cj[jp];
                 } else {
                         fac1j = fac1;
                         *iempty = 1;
                 }
-                for (ip = 0; ip < envs->i_prim; ip++) {
+                for (ip = 0; ip < i_prim; ip++) {
                         aij = ai[ip] + aj[jp];
                         eij = (ai[ip] * aj[jp] / aij) * rrij;
                         if (eij > EXPCUTOFF) {
@@ -868,13 +855,13 @@ int GTO_aopair_early_contract(double complex *out, CINTEnvVars *envs,
                                      fac*fac1i, Gv, b, gxyz, gs, nGv);
 
                         prim_to_ctr(gctri, len_g1d*nGv, g1d+offset_g1d*nGv,
-                                    envs->i_prim, i_ctr, ci+ip, *iempty);
+                                    i_prim, i_ctr, ci+ip, *iempty);
                         *iempty = 0;
                 }
                 if (!*iempty) {
                         if (j_ctr > 1) {
                                 prim_to_ctr(gctrj, i_ctr*len_g1d*nGv, gctri,
-                                            envs->j_prim,j_ctr, cj+jp, *jempty);
+                                            j_prim,j_ctr, cj+jp, *jempty);
                         }
                         *jempty = 0;
                 }
@@ -907,8 +894,10 @@ int GTO_aopair_lazy_contract(double complex *gctr, CINTEnvVars *envs,
         const int j_sh = shls[1];
         const int i_l = envs->i_l;
         const int j_l = envs->j_l;
-        const int i_ctr = envs->i_ctr;
-        const int j_ctr = envs->j_ctr;
+        const int i_ctr = envs->x_ctr[0];
+        const int j_ctr = envs->x_ctr[1];
+        const int i_prim = bas(NPRIM_OF, i_sh);
+        const int j_prim = bas(NPRIM_OF, j_sh);
         const int nf = envs->nf;
         const double *ri = envs->ri;
         const double *rj = envs->rj;
@@ -958,14 +947,14 @@ int GTO_aopair_lazy_contract(double complex *gctr, CINTEnvVars *envs,
         double fac1 = SQRTPI * M_PI * CINTcommon_fac_sp(i_l) * CINTcommon_fac_sp(j_l);
 
         *jempty = 1;
-        for (jp = 0; jp < envs->j_prim; jp++) {
+        for (jp = 0; jp < j_prim; jp++) {
                 if (j_ctr == 1) {
                         fac1j = fac1 * cj[jp];
                 } else {
                         fac1j = fac1;
                         *iempty = 1;
                 }
-                for (ip = 0; ip < envs->i_prim; ip++) {
+                for (ip = 0; ip < i_prim; ip++) {
                         aij = ai[ip] + aj[jp];
                         eij = (ai[ip] * aj[jp] / aij) * rrij;
                         if (eij > EXPCUTOFF) {
@@ -983,14 +972,14 @@ int GTO_aopair_lazy_contract(double complex *gctr, CINTEnvVars *envs,
 
                         inner_prod(g, gout, idx, envs, nGv, *gempty);
                         if (i_ctr > 1) {
-                                prim_to_ctr(gctri, nf*nGv, gout, envs->i_prim,
+                                prim_to_ctr(gctri, nf*nGv, gout, i_prim,
                                             i_ctr, ci+ip, *iempty);
                         }
                         *iempty = 0;
                 }
                 if (!*iempty) {
                         if (j_ctr > 1) {
-                                prim_to_ctr(gctr, i_ctr*nf*nGv, gctri, envs->j_prim,
+                                prim_to_ctr(gctr, i_ctr*nf*nGv, gctri, j_prim,
                                             j_ctr, cj+jp, *jempty);
                         }
                         *jempty = 0;
@@ -1195,8 +1184,8 @@ static void zcopy_ij(double complex *out, const double complex *gctr,
 static void aopair_c2s_cart(double complex *out, double complex *gctr,
                             CINTEnvVars *envs, int *dims, int nGv)
 {
-        const int i_ctr = envs->i_ctr;
-        const int j_ctr = envs->j_ctr;
+        const int i_ctr = envs->x_ctr[0];
+        const int j_ctr = envs->x_ctr[1];
         const int nfi = envs->nfi;
         const int nfj = envs->nfj;
         const int ni = nfi*i_ctr;
@@ -1222,8 +1211,8 @@ static void aopair_c2s_sph(double complex *out, double complex *gctr,
 {
         const int i_l = envs->i_l;
         const int j_l = envs->j_l;
-        const int i_ctr = envs->i_ctr;
-        const int j_ctr = envs->j_ctr;
+        const int i_ctr = envs->x_ctr[0];
+        const int j_ctr = envs->x_ctr[1];
         const int di = i_l * 2 + 1;
         const int dj = j_l * 2 + 1;
         const int ni = di*i_ctr;
@@ -1269,8 +1258,12 @@ int GTO_ft_ovlp_cart(double complex *out, int *shls, int *dims,
         CINTEnvVars envs;
         init1e_envs(&envs, shls, atm, natm, bas, nbas, env);
 
-        const int i_ctr = envs.i_ctr;
-        const int j_ctr = envs.j_ctr;
+        const int i_sh = shls[0];
+        const int j_sh = shls[1];
+        const int i_ctr = bas(NCTR_OF, i_sh);
+        const int j_ctr = bas(NCTR_OF, j_sh);
+        const int i_prim = bas(NPRIM_OF, i_sh);
+        const int j_prim = bas(NPRIM_OF, j_sh);
         int ntot = envs.nf * i_ctr * j_ctr * nGv;
         double complex *gctr = malloc(sizeof(double complex) * ntot);
         if (eval_gz == NULL) {
@@ -1281,7 +1274,7 @@ int GTO_ft_ovlp_cart(double complex *out, int *shls, int *dims,
         }
 
         if (eval_aopair == NULL) {
-                if (envs.i_prim*envs.j_prim < i_ctr*j_ctr*3) {
+                if (i_prim*j_prim < i_ctr*j_ctr*3) {
                         eval_aopair = GTO_aopair_lazy_contract;
                 } else {
                         eval_aopair = GTO_aopair_early_contract;
@@ -1305,8 +1298,12 @@ int GTO_ft_ovlp_sph(double complex *out, int *shls, int *dims,
         CINTEnvVars envs;
         init1e_envs(&envs, shls, atm, natm, bas, nbas, env);
 
-        const int i_ctr = envs.i_ctr;
-        const int j_ctr = envs.j_ctr;
+        const int i_sh = shls[0];
+        const int j_sh = shls[1];
+        const int i_ctr = bas(NCTR_OF, i_sh);
+        const int j_ctr = bas(NCTR_OF, j_sh);
+        const int i_prim = bas(NPRIM_OF, i_sh);
+        const int j_prim = bas(NPRIM_OF, j_sh);
         int ntot = envs.nf * i_ctr * j_ctr * nGv;
         double complex *gctr = malloc(sizeof(double complex) * ntot);
         if (eval_gz == NULL) {
@@ -1317,7 +1314,7 @@ int GTO_ft_ovlp_sph(double complex *out, int *shls, int *dims,
         }
 
         if (eval_aopair == NULL) {
-                if (envs.i_prim*envs.j_prim < i_ctr*j_ctr*3) {
+                if (i_prim*j_prim < i_ctr*j_ctr*3) {
                         eval_aopair = GTO_aopair_lazy_contract;
                 } else {
                         eval_aopair = GTO_aopair_early_contract;

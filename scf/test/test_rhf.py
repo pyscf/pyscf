@@ -84,6 +84,12 @@ class KnowValues(unittest.TestCase):
     def test_scf(self):
         self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
 
+    def test_nr_rhf_cart(self):
+        pmol = mol.copy()
+        pmol.cart = True
+        mf = scf.RHF(pmol).run()
+        self.assertAlmostEqual(mf.e_tot, -76.027107008870573, 9)
+
     def test_nr_rohf(self):
         pmol = mol.copy()
         pmol.charge = 1
@@ -275,10 +281,10 @@ class KnowValues(unittest.TestCase):
         pmol.spin = 2
         mf = scf.ROHF(pmol).set(verbose = 0)
         mf.irrep_nelec = {'A1g':6, 'A1u':4, 'E1ux':2, 'E1uy':2}
-        self.assertRaises(ValueError, mf.dump_flags)
+        self.assertRaises(ValueError, mf.build)
 
         mf.irrep_nelec = {'A1g':6, 'A1u':10, 'E1ux':2, 'E1uy':2}
-        self.assertRaises(ValueError, mf.dump_flags)
+        self.assertRaises(ValueError, mf.build)
 
     def test_dip_moment(self):
         mf = scf.RHF(mol)

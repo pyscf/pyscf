@@ -12,8 +12,8 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
-from pyscf.df import _ri
 
+libri = lib.load_library('libri')
 
 OCCDROP = 1e-12
 
@@ -85,7 +85,8 @@ def density_fit(mf, auxbasis='weigend+etb', with_df=None):
             if self.with_df:
                 if mol is None: mol = self.mol
                 if dm is None: dm = self.make_rdm1()
-                return self.with_df.get_jk(dm, hermi)
+                vj, vk = self.with_df.get_jk(dm, hermi)
+                return vj, vk
             else:
                 return mf_class.get_jk(self, mol, dm, hermi)
 
@@ -93,7 +94,8 @@ def density_fit(mf, auxbasis='weigend+etb', with_df=None):
             if self.with_df:
                 if mol is None: mol = self.mol
                 if dm is None: dm = self.make_rdm1()
-                return self.with_df.get_jk(dm, hermi, with_k=False)[0]
+                vj = self.with_df.get_jk(dm, hermi, with_k=False)[0]
+                return vj
             else:
                 return mf_class.get_j(self, mol, dm, hermi)
 
@@ -101,7 +103,8 @@ def density_fit(mf, auxbasis='weigend+etb', with_df=None):
             if self.with_df:
                 if mol is None: mol = self.mol
                 if dm is None: dm = self.make_rdm1()
-                return self.with_df.get_jk(dm, hermi, with_j=False)[1]
+                vk = self.with_df.get_jk(dm, hermi, with_j=False)[1]
+                return vk
             else:
                 return mf_class.get_k(self, mol, dm, hermi)
 
@@ -129,16 +132,13 @@ def get_jk(dfobj, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
     t0 = t1 = (time.clock(), time.time())
     log = logger.Logger(dfobj.stdout, dfobj.verbose)
 
-    if len(dms) == 0:
+    dms = numpy.asarray(dms)
+    dms_shape = dms.shape
+    nao = dms.shape[-1]
+    dms = dms.reshape(-1,nao,nao)
+    nset = dms.shape[0]
+    if nset == 0:
         return [], []
-    elif isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-        nset = 1
-        dms = [dms]
-        is_single_dm = True
-    else:
-        nset = len(dms)
-        is_single_dm = False
-    nao = dms[0].shape[0]
 
     fmmm = _ao2mo.libao2mo.AO2MOmmm_bra_nr_s2
     fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
@@ -227,11 +227,8 @@ def get_jk(dfobj, dms, hermi=1, vhfopt=None, with_j=True, with_k=True):
                                      buf2.reshape(-1,nao))
             t1 = log.timer_debug1('jk', *t1)
 
-    if is_single_dm:
-        vj = vj[0]
-        vk = vk[0]
     logger.timer(dfobj, 'vj and vk', *t0)
-    return vj, vk
+    return vj.reshape(dms_shape), vk.reshape(dms_shape)
 
 
 def r_get_jk(dfobj, dms, hermi=1):
@@ -244,12 +241,12 @@ def r_get_jk(dfobj, dms, hermi=1):
     n2c = ao_loc[-1]
 
     def fjk(dm):
-        fmmm = _ri.libri.RIhalfmmm_r_s2_bra_noconj
+        fmmm = libri.RIhalfmmm_r_s2_bra_noconj
         fdrv = _ao2mo.libao2mo.AO2MOr_e2_drv
-        ftrans = _ri.libri.RItranse2_r_s2
+        ftrans = libri.RItranse2_r_s2
         vj = numpy.zeros_like(dm)
         vk = numpy.zeros_like(dm)
-        fcopy = _ri.libri.RImmm_r_s2_transpose
+        fcopy = libri.RImmm_r_s2_transpose
         rargs = (ctypes.c_int(n2c), (ctypes.c_int*4)(0, n2c, 0, 0),
                  tao.ctypes.data_as(ctypes.c_void_p),
                  ao_loc.ctypes.data_as(ctypes.c_void_p),

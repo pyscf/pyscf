@@ -252,9 +252,9 @@ static void fill_s1(int (*intor)(), int (*fprescreen)(), double complex *eri,
                         n = di * dj * dk * dl * envs->ncomp;
                         if ((*fprescreen)(shls, envs->vhfopt,
                                           envs->atm, envs->bas, envs->env)) {
-                                (*intor)(pbuf, shls, envs->atm, envs->natm,
+                                (*intor)(pbuf, NULL, shls, envs->atm, envs->natm,
                                          envs->bas, envs->nbas, envs->env,
-                                         envs->cintopt);
+                                         envs->cintopt, NULL);
                         } else {
                                 memset(pbuf, 0, sizeof(double complex)*n);
                         }
@@ -319,9 +319,9 @@ static void fill_s2(int (*intor)(), int (*fprescreen)(), double complex *eri,
                         n = di * dj * dk * dl * envs->ncomp;
                         if ((*fprescreen)(shls, envs->vhfopt,
                                           envs->atm, envs->bas, envs->env)) {
-                                (*intor)(pbuf, shls, envs->atm, envs->natm,
+                                (*intor)(pbuf, NULL, shls, envs->atm, envs->natm,
                                          envs->bas, envs->nbas, envs->env,
-                                         envs->cintopt);
+                                         envs->cintopt, NULL);
                         } else {
                                 memset(pbuf, 0, sizeof(double complex)*n);
                         }

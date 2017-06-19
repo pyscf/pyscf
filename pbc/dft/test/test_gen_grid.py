@@ -39,7 +39,7 @@ class KnowValues(unittest.TestCase):
         grids.level = 3
         grids.build()
         s1 = get_ovlp(cell, grids)
-        s2 = cell.pbc_intor('cint1e_ovlp_sph')
+        s2 = cell.pbc_intor('int1e_ovlp_sph')
         self.assertAlmostEqual(numpy.linalg.norm(s1-s2), 0, 5)
         self.assertEqual(grids.weights.size, 15416)
 

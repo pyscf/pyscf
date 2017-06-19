@@ -26,8 +26,6 @@ def get_veff(ks_grad, mol=None, dm=None):
     if mf.grids.coords is None:
         mf.grids.build(with_non0tab=True)
     grids = mf.grids
-    if mf._numint.non0tab is None:
-        mf._numint.non0tab = mf._numint.make_mask(mol, mf.grids.coords)
     hyb = mf._numint.libxc.hybrid_coeff(mf.xc, spin=(mol.spin>0)+1)
 
     mem_now = pyscf.lib.current_memory()[0]
@@ -82,7 +80,7 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     if xctype == 'LDA':
         ao_deriv = 1
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             for idm in range(nset):
                 rho = make_rho(idm, ao[0], mask, 'LDA')
                 vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1, verbose)[1]
@@ -95,7 +93,7 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     elif xctype == 'GGA':
         ao_deriv = 2
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             for idm in range(nset):
                 rho = make_rho(idm, ao, mask, 'GGA')
                 vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1, verbose)[1]

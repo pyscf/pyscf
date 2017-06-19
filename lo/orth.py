@@ -55,14 +55,11 @@ def project_to_atomic_orbitals(mol, basname):
     from pyscf.scf.addons import project_mo_nr2nr
     from pyscf.gto.ecp import core_configuration
     def search_atm_l(atm, l):
+        bas_ang = atm._bas[:,gto.ANG_OF]
+        ao_loc = atm.ao_loc_nr()
         idx = []
-        p0 = 0
-        for ib, b in enumerate(atm._bas):
-            l0 = atm.bas_angular(ib)
-            nctr = atm.bas_nctr(ib)
-            if l0 == l:
-                idx.extend(range(p0,p0+(2*l+1)*nctr))
-            p0 += (2*l0+1) * nctr
+        for ib in numpy.where(bas_ang == l)[0]:
+            idx.extend(range(ao_loc[ib], ao_loc[ib+1]))
         return idx
 
     aos = {}
@@ -72,16 +69,18 @@ def project_to_atomic_orbitals(mol, basname):
         stdsymb = gto.mole._std_symbol(symb)
         atm._atm, atm._bas, atm._env = \
                 atm.make_env([[stdsymb,(0,0,0)]], {stdsymb:mol._basis[symb]}, [])
+        atm.cart = mol.cart
 
         if 'GHOST' in symb.upper():
             aos[symb] = numpy.eye(atm.nao_nr())
             continue
 
-        s0 = atm.intor_symmetric('cint1e_ovlp_sph')
+        s0 = atm.intor_symmetric('int1e_ovlp')
 
         basis_add = gto.basis.load(basname, stdsymb)
         atmp._atm, atmp._bas, atmp._env = \
                 atmp.make_env([[stdsymb,(0,0,0)]], {stdsymb:basis_add}, [])
+        atmp.cart = mol.cart
         ano = project_mo_nr2nr(atmp, 1, atm)
         rm_ano = numpy.eye(ano.shape[0]) - reduce(numpy.dot, (ano, ano.T, s0))
         nelec_ecp = 0
@@ -100,15 +99,19 @@ def project_to_atomic_orbitals(mol, basname):
             idxp = numpy.asarray(search_atm_l(atmp, l))
             if l < 4:
                 idxp = idxp[ecpcore[l]:]
+            if mol.cart:
+                degen = (l + 1) * (l + 2) // 2
+            else:
+                degen = l * 2 + 1
             if len(idx) > len(idxp) > 0:
 # For angular l, first place the projected ANO, then the rest AOs.
                 sdiag = reduce(numpy.dot, (rm_ano[:,idx].T, s0, rm_ano[:,idx])).diagonal()
-                nleft = (len(idx) - len(idxp)) // (2*l+1)
-                shell_average = numpy.einsum('ij->i', sdiag.reshape(-1,l*2+1))
+                nleft = (len(idx) - len(idxp)) // degen
+                shell_average = numpy.einsum('ij->i', sdiag.reshape(-1,degen))
                 shell_rest = numpy.argsort(-shell_average)[:nleft]
                 idx_rest = []
                 for k in shell_rest:
-                    idx_rest.extend(idx[k*(2*l+1):(k+1)*(2*l+1)])
+                    idx_rest.extend(idx[k*degen:(k+1)*degen])
                 c[:,idx[:len(idxp)]] = ano[:,idxp]
                 c[:,idx[len(idxp):]] = rm_ano[:,idx_rest]
             elif len(idxp) >= len(idx) > 0:  # More ANOs than the mol basis functions
@@ -132,6 +135,7 @@ def project_to_atomic_orbitals(mol, basname):
 pre_orth_project_ano = project_to_atomic_orbitals
 
 def pre_orth_ao_atm_scf(mol):
+    assert(not mol.cart)
     from pyscf.scf import atom_hf
     atm_scf = atom_hf.get_atm_nrhf(mol)
     nbf = mol.nao_nr()
@@ -163,7 +167,7 @@ def orth_ao(mol, method='meta_lowdin', pre_orth_ao=None, scf_method=None,
     '''
     from pyscf.lo import nao
     if s is None:
-        s = mol.intor_symmetric('cint1e_ovlp_sph')
+        s = mol.intor_symmetric('int1e_ovlp')
 
     if pre_orth_ao is None:
 #        pre_orth_ao = numpy.eye(mol.nao_nr())
@@ -205,6 +209,6 @@ if __name__ == '__main__':
     c0 = nao.prenao(mol, mf.make_rdm1())
     c = orth_ao(mol, 'meta_lowdin', c0)
 
-    s = mol.intor_symmetric('cint1e_ovlp_sph')
+    s = mol.intor_symmetric('int1e_ovlp_sph')
     p = reduce(numpy.dot, (s, mf.make_rdm1(), s))
     print(reduce(numpy.dot, (c.T, p, c)).diagonal())

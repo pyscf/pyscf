@@ -56,10 +56,13 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
     nb, nlinkb = link_indexb.shape[:2]
     eri_irs, rank_eri, irrep_eri = reorder_eri(eri, norb, orbsym)
 
-    strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
-    strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
+    strsa = cistring.gen_strings4orblist(range(norb), neleca)
     aidx, link_indexa = gen_str_irrep(strsa, orbsym, link_indexa, rank_eri, irrep_eri)
-    bidx, link_indexb = gen_str_irrep(strsb, orbsym, link_indexb, rank_eri, irrep_eri)
+    if neleca == nelecb:
+        bidx, link_indexb = aidx, link_indexa
+    else:
+        strsb = cistring.gen_strings4orblist(range(norb), nelecb)
+        bidx, link_indexb = gen_str_irrep(strsb, orbsym, link_indexb, rank_eri, irrep_eri)
 
     Tirrep = ctypes.c_void_p*TOTIRREPS
     linka_ptr = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in link_indexa])
@@ -188,15 +191,21 @@ def _id_wfnsym(cis, norb, nelec, wfnsym):
         wfnsym = symm.irrep_name2id(cis.mol.groupname, wfnsym) % 10
     return wfnsym
 
-def _get_init_guess(strsa, strsb, nroots, hdiag, orbsym, wfnsym=0):
-    airreps = numpy.zeros(strsa.size, dtype=numpy.int32)
-    birreps = numpy.zeros(strsb.size, dtype=numpy.int32)
-    for i, ir in enumerate(orbsym):
-        airreps[numpy.bitwise_and(strsa, 1<<i) > 0] ^= ir
-        birreps[numpy.bitwise_and(strsb, 1<<i) > 0] ^= ir
-    na = len(strsa)
-    nb = len(strsb)
+def _gen_strs_irrep(strs, orbsym):
+    orbsym = numpy.asarray(orbsym) % 10
+    irreps = numpy.zeros(len(strs), dtype=numpy.int32)
+    if isinstance(strs, cistring.OIndexList):
+        nocc = strs.shape[1]
+        for i in range(nocc):
+            irreps ^= orbsym[strs[:,i]]
+    else:
+        for i, ir in enumerate(orbsym):
+            irreps[numpy.bitwise_and(strs, 1<<i) > 0] ^= ir
+    return irreps
 
+def _get_init_guess(airreps, birreps, nroots, hdiag, orbsym, wfnsym=0):
+    na = len(airreps)
+    nb = len(birreps)
     ci0 = []
     iroot = 0
     for addr in numpy.argsort(hdiag):
@@ -218,9 +227,12 @@ def _get_init_guess(strsa, strsb, nroots, hdiag, orbsym, wfnsym=0):
     return ci0
 def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
     neleca, nelecb = direct_spin1._unpack_nelec(nelec)
-    strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
-    strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
-    return _get_init_guess(strsa, strsb, nroots, hdiag, orbsym, wfnsym)
+    strsa = cistring.gen_strings4orblist(range(norb), neleca)
+    airreps = birreps = _gen_strs_irrep(strsa, orbsym)
+    if neleca != nelecb:
+        strsb = cistring.gen_strings4orblist(range(norb), nelecb)
+        birreps = _gen_strs_irrep(strsb, orbsym)
+    return _get_init_guess(airreps, birreps, nroots, hdiag, orbsym, wfnsym)
 
 def reorder_eri(eri, norb, orbsym):
     if orbsym is None:
@@ -237,23 +249,20 @@ def reorder_eri(eri, norb, orbsym):
 # pair-id given by order[0] comes first in the sorted pair
 # "rank" is a sorted "order". Given nth (ij| pair, it returns the place(rank)
 # of the sorted pair
-    order = numpy.asarray(numpy.argsort(trilirrep), dtype=numpy.int32)
-    rank_in_irrep = numpy.empty_like(order)
-    old_eri_irrep = numpy.empty_like(order)
+    old_eri_irrep = numpy.asarray(trilirrep, dtype=numpy.int32)
+    rank_in_irrep = numpy.empty_like(old_eri_irrep)
     p0 = 0
     eri_irs = [numpy.zeros((0,0))] * TOTIRREPS
     for ir, nnorb in enumerate(dimirrep):
-        old_eri_irrep[order[p0:p0+nnorb]] = ir
-        rank_in_irrep[order[p0:p0+nnorb]] = numpy.arange(nnorb, dtype=numpy.int32)
-        eri_irs[ir] = lib.take_2d(eri, order[p0:p0+nnorb], order[p0:p0+nnorb])
+        idx = numpy.asarray(numpy.where(trilirrep == ir)[0], dtype=numpy.int32)
+        rank_in_irrep[idx] = numpy.arange(nnorb, dtype=numpy.int32)
+        eri_irs[ir] = lib.take_2d(eri, idx, idx)
         p0 += nnorb
     return eri_irs, rank_in_irrep, old_eri_irrep
 
 def gen_str_irrep(strs, orbsym, link_index, rank_eri, irrep_eri):
-    na = len(strs)
-    airreps = numpy.zeros(na, dtype=numpy.int32)
-    for i, ir in enumerate(orbsym):
-        airreps[strs&(1<<i) > 0] ^= ir
+    airreps = _gen_strs_irrep(strs, orbsym)
+    na = len(airreps)
     rank = numpy.zeros(na, dtype=numpy.int32)
     aidx = [numpy.zeros(0,dtype=numpy.int32)] * TOTIRREPS
     for ir in range(TOTIRREPS):
@@ -392,7 +401,9 @@ if __name__ == '__main__':
     ci1 = contract_2e(eri, fcivec, norb, nelec, orbsym=orbsym)
     ci1ref = direct_spin1.contract_2e(eri, fcivec, norb, nelec)
     print(numpy.allclose(ci1ref, ci1))
-
+    cis.wfnsym = 3
+    e = cis.kernel(h1e, eri, norb, nelec, ecore=m.energy_nuc(), davidson_only=True)[0]
+    print(e, e - -74.695029029452357)
 
     mol.atom = [['H', (0, 0, i)] for i in range(8)]
     mol.basis = {'H': 'sto-3g'}

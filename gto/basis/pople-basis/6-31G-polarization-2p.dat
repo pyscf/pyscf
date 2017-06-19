@@ -1,0 +1,22 @@
+#  6-31G(,2p)  EMSL  Basis Set Exchange Library  6/9/17 6:23 PM
+# Elements                             References
+# --------                             ----------
+# H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar: Larry A. Curtiss, Krishnan Raghavachari, Paul C. Redfern, Vitaly Rassolov, and John A. Pople, Gaussian-3 (G3) theory for molecules containing first and second-row atoms, The Journal of Chemical Physics 109, 7764 (1998).
+# 
+
+
+
+BASIS "ao basis" PRINT
+#BASIS SET: (4s,2p) -> [2s,2p]
+H    P
+      1.5000000              1.0000000        
+H    P
+      0.3750000              1.0000000        
+#BASIS SET: (4s,2p) -> [2s,2p]
+He    P
+      1.5000000              1.0000000        
+He    P
+      0.3750000              1.0000000        
+END
+
+

@@ -28,7 +28,7 @@ class KnowValues(unittest.TestCase):
         numpy.random.seed(15)
         nmo = 12
         mo = numpy.random.random((nao,nmo))
-        eri = _vhf.int2e_sph(mol._atm, mol._bas, mol._env)
+        eri = mol.intor('int2e_sph', aosym='s8')
         eriref = ao2mo.restore(1, eri, nao)
         eriref = numpy.einsum('pjkl,pi->ijkl', eriref, mo)
         eriref = numpy.einsum('ipkl,pj->ijkl', eriref, mo)

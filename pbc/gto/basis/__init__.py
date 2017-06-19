@@ -20,6 +20,9 @@ ALIAS = {
     'gthszv'      : 'gth-szv.dat',
     'gthtzv2p'    : 'gth-tzv2p.dat',
     'gthtzvp'     : 'gth-tzvp.dat',
+    'gthccdzvp'   : 'gth-cc-dzvp.dat',
+    'gthcctzvp'   : 'gth-cc-tzvp.dat',
+    'gthccqzvp'   : 'gth-cc-qzvp.dat',
 }
 
 def parse(string):
