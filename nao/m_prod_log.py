@@ -64,7 +64,7 @@ class prod_log_c(ao_log_c):
     via a product vertex coefficients.
   Examples:
   '''
-  def __init__(self, ao_log=None, auxmol=None, sv=None, **kvargs):
+  def __init__(self):
     ao_log_c.__init__(self) # only log_mesh will be initialized and all the procedures from the class ao_log.
     return
 
