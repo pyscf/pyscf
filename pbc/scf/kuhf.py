@@ -360,6 +360,11 @@ class KUHF(uhf.UHF, khf.KRHF):
 
     canonicalize = canonicalize
 
+    def density_fit(self, auxbasis=None, gs=None):
+        return khf.KRHF.density_fit(self, auxbasis, gs)
+
+    # mix_density_fit inherits from khf.KRHF.mix_density_fit
+
     def analyze(self, verbose=None, **kwargs):
         sys.stderr.write('kuhf.analyze method not available\n')
 

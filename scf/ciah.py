@@ -247,21 +247,26 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
 
 
 def _regular_step(heff, ovlp, xs, lindep, log):
+    e,c = lib.safe_eigh(heff[1:,1:], ovlp[1:,1:], lindep)[:2]
+    if e[0] < -1e-5:
+        log.debug('Negative hessians found %s', e[e<0])
+        log.debug('AH is shifted to avoid negative hessians')
+        heff = heff.copy()
+        sc = numpy.dot(ovlp[1:,1:], c)
+        e[(-0.1<e) & (e<0)] = .1
+        e = abs(e)
+        heff[1:,1:] = numpy.dot(sc*e, sc.T.conj())
+
     w, v, seig = lib.safe_eigh(heff, ovlp, lindep)
     if log.verbose >= logger.DEBUG3:
         numpy.set_printoptions(3, linewidth=1000)
         log.debug3('v[0] %s', v[0])
         log.debug3('AH eigs %s', w)
-        log.debug3('H eigs %s', scipy.linalg.eigh(heff[1:,1:])[0])
         numpy.set_printoptions(8, linewidth=75)
 
     idx = numpy.where(abs(v[0]) > 0.1)[0]
     sel = idx[0]
     #sel = 0
-
-    if w[sel] < -1e-5:
-        log.debug1('AH might follow negative hessians %s', w[:sel])
-
     w_t = w[sel]
     xtrial = _dgemv(v[1:,sel]/v[0,sel], xs)
     return xtrial, w_t, v[:,sel], sel, seig
