@@ -32,21 +32,23 @@ module m_siesta_wfsx
 !
 !
 !
-subroutine siesta_wfsx_book_size(clabel_in, isize) bind(c, name='siesta_wfsx_book_size')
+subroutine siesta_wfsx_book_size(fname_in, isize, ios) bind(c, name='siesta_wfsx_book_size')
   use m_null2char, only : null2char
   implicit none
   !! external 
-  character(c_char), intent(in) :: clabel_in(*)
+  character(c_char), intent(in) :: fname_in(*)
   integer(c_int64_t), intent(inout)  :: isize
+  integer(c_int), intent(inout)  :: ios
   !! internal
   type(siesta_wfsx_t) :: wfsx
-  character(1000) :: clabel
+  character(1000) :: fname
   integer :: strsym_len, strspecie_len
   
-  call null2char(clabel_in, clabel)
-  
-  call siesta_get_wfsx(clabel, wfsx)
   isize = 0
+  call null2char(fname_in, fname)
+  call siesta_get_wfsx(fname, wfsx, ios)
+  if(ios/=0) return
+  
   isize = isize + 1 !  integer(siesta_int)              :: nkpoints=-999
   isize = isize + 1 !  integer(siesta_int)              :: nspin = -999
   isize = isize + 1 !  integer(siesta_int)              :: norbs = -999
@@ -66,20 +68,23 @@ end subroutine ! siesta_wfsx_book_size
 !
 !
 !
-subroutine siesta_wfsx_book_read(clabel_in, dat) bind(c)
+subroutine siesta_wfsx_book_read(fname_in, dat, ios) bind(c)
   use m_null2char, only : null2char
   implicit none
   !! external
-  character(c_char), intent(in) :: clabel_in(*)
-  integer(c_int), intent(inout)  :: dat(*)
+  character(c_char), intent(in) :: fname_in(*)
+  integer(c_int), intent(inout) :: dat(*)
+  integer(c_int), intent(inout) :: ios
   !! internal
   type(siesta_wfsx_t) :: wfsx
-  character(1000) :: clabel
+  character(1000) :: fname
   integer :: i, n, j, splen, symlen, k
   
-  call null2char(clabel_in, clabel)
+  call null2char(fname_in, fname)
 
-  call siesta_get_wfsx(clabel, wfsx)
+  call siesta_get_wfsx(fname, wfsx, ios)
+  if(ios/=0) return
+  
   i = 1
   n = wfsx%norbs
   if(n<1) _die('!n<1')
@@ -114,20 +119,22 @@ end subroutine ! siesta_wfsx_book_read
 !
 !
 !
-subroutine siesta_wfsx_dread(clabel_in, dat) bind(c)
+subroutine siesta_wfsx_dread(fname_in, dat, ios) bind(c)
   use m_null2char, only : null2char
   implicit none
   !! external
-  character(c_char), intent(in) :: clabel_in(*)
-  real(c_double), intent(inout)  :: dat(*)
+  character(c_char), intent(in) :: fname_in(*)
+  real(c_double), intent(inout) :: dat(*)
+  integer(c_int), intent(inout) :: ios 
   !! internal
   type(siesta_wfsx_t) :: wfsx
-  character(1000) :: clabel
+  character(1000) :: fname
   integer :: i, k, j, s
   
-  call null2char(clabel_in, clabel)
+  call null2char(fname_in, fname)
 
-  call siesta_get_wfsx(clabel, wfsx)
+  call siesta_get_wfsx(fname, wfsx, ios)
+  if(ios/=0) return
   i = 1
   do k=1,wfsx%nkpoints
     do s=1,wfsx%nspin
@@ -148,20 +155,23 @@ end subroutine ! siesta_wfsx_dread
 !
 !
 !
-subroutine siesta_wfsx_sread(clabel_in, dat) bind(c)
+subroutine siesta_wfsx_sread(fname_in, dat, ios) bind(c)
   use m_null2char, only : null2char
   implicit none
   !! external
-  character(c_char), intent(in) :: clabel_in(*)
+  character(c_char), intent(in) :: fname_in(*)
   real(c_float), intent(inout)  :: dat(*)
+  integer(c_int), intent(inout) :: ios
   !! internal
   type(siesta_wfsx_t) :: wfsx
-  character(1000) :: clabel
+  character(1000) :: fname
   integer :: nreim, l, r, i, k, j, s
   
-  call null2char(clabel_in, clabel)
+  call null2char(fname_in, fname)
 
-  call siesta_get_wfsx(clabel, wfsx)
+  call siesta_get_wfsx(fname, wfsx, ios)
+  if(ios/=0) return
+  
   i = 1
   nreim = 1
   if(.not. wfsx%gamma) nreim = 2;
@@ -195,46 +205,24 @@ end function !l2i
 ! Open a .WFSX file and reads the eigenvectors and eigenenergies from this file
 ! structure siesta_wfsx_t will be filled
 !
-subroutine siesta_get_wfsx(clabel, wfsx)
+subroutine siesta_get_wfsx(fname, wfsx, ios)
   use m_io, only : get_free_handle
   implicit none
-  character(len=*), intent(in) :: clabel
+  character(len=*), intent(in) :: fname
   type(siesta_wfsx_t), intent(inout)  :: wfsx
+  integer, intent(inout) :: ios
 
   ! internal
-  integer :: ifile, iostat, i, natoms, norb_max
-  !! reading eigenvectors
-  real(8) :: real_E_eV
-  integer(siesta_int) :: ispin_in
-  integer(siesta_int) :: ikpoint_in
-  integer(siesta_int) :: imolecular_orb_in
+  integer :: ifile, i, natoms, norb_max
+  real(8) :: real_E_eV   !! reading eigenvectors
+  integer(siesta_int) :: ispin_in, ikpoint_in, imolecular_orb_in
   integer(siesta_int) :: norbitals_in !! number of saved molecular (!) orbitals
   integer :: ikpoint, ispin, imolecular_orb
-  character(1000) :: fname
-  logical :: lexist_wfsx, lexist_fullbz_wfsx
-!  iv = iv_in - 1
   
-  !if(iv>1) write(ilog,*)'siesta_get_wfsx: enter';
-
-  !! Executable statements
-  inquire(file=trim(clabel)//'.WFSX', exist=lexist_wfsx)
-  inquire(file=trim(clabel)//'.fullBZ.WFSX', exist=lexist_fullbz_wfsx)
-  if(lexist_wfsx .and. (.not. lexist_fullbz_wfsx)) then
-    fname = trim(clabel)//'.WFSX'
-  else if ((.not. lexist_wfsx) .and. lexist_fullbz_wfsx) then 
-    fname = trim(clabel)//'.fullBZ.WFSX'
-  else if (lexist_wfsx .and. lexist_fullbz_wfsx) then
-    _warn('Both .WFSX and .fullBZ.WFSX are present. I will use .fullBZ.WFSX... ')
-    fname = trim(clabel)//'.fullBZ.WFSX'
-  else
-    _die('none of .WFSX or .fullBZ.WFSX are present. I need one.')
-  endif 
-
   ifile = get_free_handle()
-  open(ifile, file=fname, form='unformatted', action='read', status='old',iostat=iostat);
-  if(iostat/=0) call die('siesta_get_wfsx: error: file '//trim(fname)//' ?');
-
-
+  open(ifile, file=fname, form='unformatted', action='read', status='old',iostat=ios);
+  if(ios/=0) return
+  
   rewind(ifile)
   read(ifile) wfsx%nkpoints, wfsx%gamma
   read(ifile) wfsx%nspin

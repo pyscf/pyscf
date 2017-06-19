@@ -18,9 +18,8 @@ class prod_basis_c():
     
   Examples:
   '''
-  def __init__(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
-    """ First it should work with GTOs
-        Variable belonging to the class prod_basis_c:
+  def __init__(self):
+    """ Variable belonging to the class prod_basis_c:
         From input:
             self.sv: copy of sv (system variable), probably not necessary??
             self.tol_loc: tolerance for local basis
@@ -35,6 +34,40 @@ class prod_basis_c():
                     Probably better a dictionary than a list, more clear.
             self.dpc2s, self.dpc2t, self.dpc2sp: product Center -> list of the size of the basis set in this center,of center's types,of product species
     """
+    
+    return
+
+  def init_prod_basis_pp(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
+    """ Talman's procedure should be working well with Pseudo-Potential starting point..."""
+    from pyscf.nao import coulomb_am, comp_overlap_coo, get_atom2bas_s, conv_yzx2xyz_c, prod_log_c, ls_part_centers, comp_coulomb_den
+    from scipy.sparse import csr_matrix
+
+    self.sv = sv
+    self.tol_loc = tol_loc
+    self.tol_biloc = tol_biloc
+    self.ac_rcut_ratio = ac_rcut_ratio
+    
+    self.prod_log = prod_log_c(ao_log = sv.ao_log, tol_loc=tol_loc) # local basis (for each specie)
+    self.hkernel_csr  = csr_matrix(comp_overlap_coo(sv, self.prod_log, coulomb_am)) # compute local part of Coulomb interaction
+    self.c2s = np.zeros((sv.natm+1), dtype=np.int64) # global product Center (atom) -> start in case of atom-centered basis
+    for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] # 
+
+    c2s = self.c2s      # What is the meaning of this copy ?? ... This is a pointer to self.c2s
+
+    self.bp2vertex = [] # going to be the product vertex coefficients for each bilocal pair 
+    self.bp2info   = [] # going to be some information including indices of atoms, list of contributing centres, conversion coefficients
+
+    for ia1,n1 in enumerate(sv.atom2s[1:]-sv.atom2s[0:-1]):
+      for ia2,n2 in enumerate(sv.atom2s[ia1+2:]-sv.atom2s[ia1+1:-1]):
+        ia2 += ia1+1
+
+    self.dpc2s,self.dpc2t,self.dpc2sp = self.get_c2s_domiprod() # dominant product's counting 
+    return self
+
+
+  
+  def init_prod_basis_gto(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
+    """ It should work with GTOs as well."""
     from pyscf.nao import coulomb_am, comp_overlap_coo, get_atom2bas_s, conv_yzx2xyz_c, prod_log_c, ls_part_centers, comp_coulomb_den
     from scipy.sparse import csr_matrix
     from pyscf import gto
@@ -104,6 +137,7 @@ class prod_basis_c():
         self.bp2info.append([[ia1,ia2],lc2c,lc2s,cc])
         #print(ia1, ia2, len(mu2d), lc2c, hkernel_bp.sum(), inv_hk.sum())
     self.dpc2s,self.dpc2t,self.dpc2sp = self.get_c2s_domiprod() # dominant product's counting 
+    return self
 
   def get_ad2cc_den(self):
     """ Returns Conversion Coefficients as dense matrix """
@@ -119,7 +153,7 @@ class prod_basis_c():
     return ad2cc
 
   def get_vertex_array(self):
-    """ Returns the product vertex Coefficients as 3d array """
+    """ Returns the product Vertex Coefficients as 3d array """
     nfap = self.c2s[-1]
     n = self.sv.atom2s[-1]
     pab2v = np.zeros((nfap,n,n))
@@ -137,7 +171,6 @@ class prod_basis_c():
         pab2v[self.c2s[c]:self.c2s[c+1],sa:fa,sb:fb] = lab[ls:lf,:,:]
         pab2v[self.c2s[c]:self.c2s[c+1],sb:fb,sa:fa] = einsum('pab->pba', lab[ls:lf,:,:])
     return pab2v
-
 
   def get_c2s_domiprod(self):
     """Compute the array of start indices for dominant product basis set """

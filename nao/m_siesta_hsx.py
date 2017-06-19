@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, division
 from ctypes import POINTER, c_int64, c_float, c_char_p, create_string_buffer
 from pyscf.nao.m_libnao import libnao
 
@@ -15,13 +15,13 @@ from numpy import empty
 #
 #
 #
-def siesta_hsx_read(label='siesta', force_type=-1): 
+def siesta_hsx_read(fname, force_type=-1): 
 
-  fname = create_string_buffer((label+'.HSX').encode())
+  fname = create_string_buffer(fname.encode())
   ft = c_int64(force_type)
   bufsize = c_int64()
   libnao.siesta_hsx_size(fname, ft, bufsize)
-  
+  if bufsize.value<=0 : return None
   dat = empty(bufsize.value, dtype="float32")
   libnao.siesta_hsx_read(fname, ft, dat.ctypes.data_as(POINTER(c_float)))
   return dat
@@ -30,8 +30,11 @@ def siesta_hsx_read(label='siesta', force_type=-1):
 #
 #
 class siesta_hsx_c():
-  def __init__(self, label, force_type=-1):
-    dat = siesta_hsx_read(label, force_type)
+  def __init__(self, fname='siesta.HSX', force_type=-1):
+    
+    self.fname = fname
+    dat = siesta_hsx_read(fname, force_type)
+    if dat is None: raise RuntimeError('file HSX not found '+ fname)
     i = 0
     self.norbs    =  int(dat[i]); i=i+1;
     self.norbs_sc =  int(dat[i]); i=i+1;

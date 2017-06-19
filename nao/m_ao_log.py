@@ -56,47 +56,29 @@ class ao_log_c(log_mesh_c):
   >>> ao = ao_log_c(sv.sp2ion)
   >>> print(ao.psi_log.shape)
   '''
-  def __init__(self, sp2ion=None, gto=None, sv=None, log_mesh=None, rcut_tol=1e-7, **kvargs):
+  def __init__(self):
     """ Initializes numerical orbitals from a previous pySCF calculation or from SIESTA calculation (really numerical orbitals) """
-    from pyscf.nao.m_log_interp import log_interp_c
+    log_mesh_c.__init__(self)
+    return
     
-    if sp2ion is not None:
-      log_mesh_c.__init__(self)
-      self.init_log_mesh_ion(sp2ion=sp2ion, **kvargs) 
-      self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
-      self.init_ion(sp2ion, **kvargs)
-      return
-    
-    if gto is not None and log_mesh is None:
-      assert(sv is not None)
-      log_mesh_c.__init__(self)
-      self.init_log_mesh_gto(gto, rcut_tol, **kvargs)
-      self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
-      self.init_gto(gto, sv, rcut_tol)
-      return
-
-    if gto is not None and log_mesh is not None:
-      assert(sv is not None)
-      log_mesh_c.__init__(self)
-      self.init_log_mesh(log_mesh.rr, log_mesh.pp)
-      self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
-      self.init_gto(gto, sv, rcut_tol)
-      return
-    
-    if gto is None and log_mesh is not None:
-      log_mesh_c.__init__(self)
-      self.init_log_mesh(log_mesh.rr, log_mesh.pp)
-      self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
-      return
-      
-    raise RuntimeError(__name__+': unknown constructor')
-      
-  
-  #
-  def init_gto(self, gto, sv, rcut_tol):
+  def init_ao_log_gto_suggest_mesh(self, gto, sv, rcut_tol=1e-7, **kvargs):
     """ Get's radial orbitals and angular momenta from a previous pySCF calculation, intializes numerical orbitals from the Gaussian type of orbitals etc."""
+    self.init_log_mesh_gto(gto, rcut_tol, **kvargs)
+    self._init_ao_log_gto(gto, sv, rcut_tol)
+    return self
+
+  def init_ao_log_gto_lm(self, gto, sv, lm, rcut_tol=1e-7):
+    """ Get's radial orbitals and angular momenta from a previous pySCF calculation, with a given log mesh (radial grid)"""
+    self.init_log_mesh(lm.rr, lm.pp)
+    self._init_ao_log_gto(gto, sv, rcut_tol)
+    return self
+
+  def _init_ao_log_gto(self, gto, sv, rcut_tol):
+    """ supposed to be private """
     import numpy as np
-    
+    from pyscf.nao.m_log_interp import log_interp_c
+
+    self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
     self.sp_mu2j = [0]*sv.nspecies
     self.psi_log = [0]*sv.nspecies
     self.psi_log_rl = [0]*sv.nspecies
@@ -151,10 +133,11 @@ class ao_log_c(log_mesh_c):
         mu2rcut[mu] = self.rr[irrc]
       self.sp_mu2rcut.append(mu2rcut)
     self.sp2rcut = np.array([mu2rcut.max() for mu2rcut in self.sp_mu2rcut])
+    return self
 
   #
   #  
-  def init_ion(self, sp2ion):
+  def init_ao_log_ion(self, sp2ion, **kvargs):
     """ Reads data from a previous SIESTA calculation, interpolates the orbitals on a single log mesh. """
 
     from pyscf.nao.m_log_interp import log_interp_c
@@ -162,6 +145,8 @@ class ao_log_c(log_mesh_c):
     from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
     import numpy as np
 
+    self.init_log_mesh_ion(sp2ion, **kvargs)
+    self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
     _siesta_ion_add_sp2(self, sp2ion) # adds the fields for counting, .nspecies etc.
     self.jmx = max([mu2j.max() for mu2j in self.sp_mu2j])
     self.sp2norbs = np.array([mu2s[self.sp2nmult[sp]] for sp,mu2s in enumerate(self.sp_mu2s)], dtype='int64')
@@ -174,11 +159,13 @@ class ao_log_c(log_mesh_c):
     self.sp_mu2rcut = [ np.array(ion["paos"]["cutoff"], dtype='float64') for ion in sp2ion]
     self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut], dtype='float64')
     self.sp2charge = [int(ion['z']) for ion in self.sp2ion]
-    
+
     #call sp2ion_to_psi_log(sv%sp2ion, sv%rr, sv%psi_log)
     #call init_psi_log_rl(sv%psi_log, sv%rr, sv%uc%mu_sp2j, sv%uc%sp2nmult, sv%psi_log_rl)
     #call sp2ion_to_core(sv%sp2ion, sv%rr, sv%core_log, sv%sp2has_core, sv%sp2rcut_core)
-  
+    
+    return self
+
   #
   def _add_sp2info(self):
     """ Adds a field sp2info containing, for each specie lists of integer charcteristics: """

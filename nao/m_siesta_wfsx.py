@@ -1,3 +1,4 @@
+from __future__ import print_function, division
 from ctypes import POINTER, c_int64, c_float, c_double, c_char_p, c_int, create_string_buffer
 import os
 import sys
@@ -6,31 +7,34 @@ from numpy import empty
 from pyscf.nao.m_libnao import libnao
 
 # interfacing with fortran subroutines 
-libnao.siesta_wfsx_book_size.argtypes = (c_char_p, POINTER(c_int64))
-libnao.siesta_wfsx_book_read.argtypes = (c_char_p, POINTER(c_int))
-libnao.siesta_wfsx_dread.argtypes = (c_char_p, POINTER(c_double))
-libnao.siesta_wfsx_sread.argtypes = (c_char_p, POINTER(c_float))
+libnao.siesta_wfsx_book_size.argtypes = (c_char_p, POINTER(c_int64), POINTER(c_int))
+libnao.siesta_wfsx_book_read.argtypes = (c_char_p, POINTER(c_int), POINTER(c_int))
+libnao.siesta_wfsx_dread.argtypes = (c_char_p, POINTER(c_double), POINTER(c_int))
+libnao.siesta_wfsx_sread.argtypes = (c_char_p, POINTER(c_float), POINTER(c_int))
 # END of interfacing with fortran subroutines 
 
 #
 #
 #
-def siesta_wfsx_book_read_py(label='siesta'): 
-
-  name = create_string_buffer(label.encode())
+def siesta_wfsx_book_read_py(fname):
+  """ Creates buffer for integer data from .WFSX files """
+  name = create_string_buffer(fname.encode())
   bufsize = c_int64()
-  libnao.siesta_wfsx_book_size(name, bufsize)
-    
+  ios = c_int(22)
+  libnao.siesta_wfsx_book_size(name, bufsize, ios)
+  if ios.value!=0 : return None
   idat = empty(bufsize.value, dtype="int32")
-  libnao.siesta_wfsx_book_read(name, idat.ctypes.data_as(POINTER(c_int)))
+  libnao.siesta_wfsx_book_read(name, idat.ctypes.data_as(POINTER(c_int)), ios)
+  if ios.value!=0 : return None
   return idat
 
 #
 #
 #
 def siesta_wfsx_dread(w):
-  ddata = numpy.empty(w.nkpoints*w.nspin*w.norbs + + w.nkpoints*3, 'float64')
-  libnao.siesta_wfsx_dread(create_string_buffer(w.label.encode()), ddata.ctypes.data_as(POINTER(c_double)))
+  ddata = numpy.empty(w.nkpoints*w.nspin*w.norbs + + w.nkpoints*3)
+  ios = c_int(22)
+  libnao.siesta_wfsx_dread(create_string_buffer(w.label.encode()), ddata.ctypes.data_as(POINTER(c_double)), ios)
   return ddata
 
 #
@@ -39,16 +43,27 @@ def siesta_wfsx_dread(w):
 def siesta_wfsx_sread(w, sdata):
   name = create_string_buffer(w.label.encode())
   bufsize = w.nkpoints*w.nspin*w.norbs**2*w.nreim
-  libnao.siesta_wfsx_sread(name, sdata.ctypes.data_as(POINTER(c_float)))
+  ios = c_int(22)
+  libnao.siesta_wfsx_sread(name, sdata.ctypes.data_as(POINTER(c_float)), ios)
 
 
-  
 class siesta_wfsx_c():
-  def __init__(self, label='siesta'):
+  def __init__(self, label='siesta', chdir='.'):
 
-    self.label    = label
-    ### Read integer data
-    idat = siesta_wfsx_book_read_py(label)
+    self.label = label
+    ends = ['fullBZ.WFSX', 'WFSX']
+    for end in ends:
+      fname = chdir+'/'+label+'.'+end
+      idat = siesta_wfsx_book_read_py(fname)
+      if idat is None :
+        print(fname, ' skip') 
+        continue
+      self.fname = fname
+      break
+        
+    if idat is None :
+      raise RuntimeError('No .WFSX file found')
+    
     i = 0
     self.nkpoints = idat[i]; i=i+1
     self.nspin    = idat[i]; i=i+1

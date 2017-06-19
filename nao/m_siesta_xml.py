@@ -7,8 +7,7 @@ import numpy
 
 pref = "{http://www.xml-cml.org/schema}"
 
-def siesta_xml(label="siesta"):
-  fname = label+".xml"
+def siesta_xml(fname="siesta.xml"):
   try :
     tree = ET.parse(fname)
   except:

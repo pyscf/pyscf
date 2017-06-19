@@ -52,11 +52,15 @@ subroutine siesta_hsx_size(fname_in, force_basis_type, isize) & !, force_basis_t
   integer(c_int64_t), intent(in) :: force_basis_type
   integer(c_int64_t), intent(inout) :: isize 
   !! internal
+  integer(c_int) :: ios
   type(hsx_t) :: hsx
   character(1000) :: fname
  
+  
   call null2char(fname_in, fname)
-  call read_siesta_hsx(fname, force_basis_type, hsx)
+  call read_siesta_hsx(fname, force_basis_type, hsx, ios)
+  isize = -1
+  if(ios/=0) return
 
   isize = 1 ! norbs
   isize = isize + 1 ! norbs_sc
@@ -94,11 +98,12 @@ subroutine siesta_hsx_read(fname_in, force_basis_type, dat) bind(c, name='siesta
   real(c_float), intent(inout) :: dat(*)
 
   integer :: i
+  integer(c_int) :: ios
   character(1000) :: fname
   type(hsx_t) :: hsx
 
   call null2char(fname_in, fname)
-  call read_siesta_hsx(fname, force_basis_type, hsx)
+  call read_siesta_hsx(fname, force_basis_type, hsx, ios)
 
   i = 1;
   dat(i) = hsx%norbs; i=i+1;
@@ -158,18 +163,19 @@ end subroutine !dealloc
 !!
 !!
 !!
-subroutine read_siesta_hsx(fname, force_basis_type, hsx)
+subroutine read_siesta_hsx(fname, force_basis_type, hsx, ios)
   use m_precision, only : siesta_int
   use m_io, only : get_free_handle
   implicit none
-  character(len=*), intent(in) :: fname
-  integer(8), intent(in)       :: force_basis_type
-  type(hsx_t), intent(inout)   :: hsx
+  character(len=*), intent(in)   :: fname
+  integer(c_int64_t), intent(in) :: force_basis_type
+  type(hsx_t), intent(inout)     :: hsx
+  integer(c_int), intent(inout)  :: ios
 
   !! internal
   logical(siesta_int) :: gamma_si
   integer(siesta_int) :: n, n_sc, nspin, nnz
-  integer :: ifile, ios, i, spin, sum_row2nnz
+  integer :: ifile, i, spin, sum_row2nnz
   integer(siesta_int), allocatable :: row2nnz(:), ref(:), iaux(:)
 
   !! executable
@@ -178,24 +184,20 @@ subroutine read_siesta_hsx(fname, force_basis_type, hsx)
   
   ifile = get_free_handle();
   open(ifile,file=trim(fname),form='unformatted',action='read',status='old',iostat=ios);
-  if(ios/=0) _die('file '//trim(fname)//' ?')
+  if(ios/=0) return
   rewind(ifile, iostat=ios)
-  if(ios/=0)_die('ios /= 0')
+  if(ios/=0) return
   read(ifile,iostat=ios) n, n_sc, nspin, nnz
-
+  if(ios/=0) return
+  
   hsx%norbs = n
   hsx%norbs_sc = n_sc
   hsx%nspin = nspin
   hsx%nnz = nnz
   
-  if(ios/=0) then
-    write(6,*) "ios = ", ios; _die('ios /= 0')
-  endif
+  if(ios/=0) return
   read(ifile,iostat=ios) gamma_si
-  if(ios/=0)then
-    write(6,*) "ios = ", ios; _die('ios /= 0')
-    _die('ios /= 0')
-  endif
+  if(ios/=0) return
   hsx%is_gamma = gamma_si
 
   select case (force_basis_type)
@@ -213,7 +215,7 @@ subroutine read_siesta_hsx(fname, force_basis_type, hsx)
     allocate(iaux(hsx%norbs_sc))
     allocate(hsx%orb_sc2orb_uc(hsx%norbs_sc))
     read(ifile,iostat=ios) (iaux(i), i=1,hsx%norbs_sc)
-    if (ios/=0) _die("ios/=0")
+    if(ios/=0) return
     hsx%orb_sc2orb_uc = iaux
 
     !! Consistency check to catch a read error issue observed with ifort 12.0.0 compiler

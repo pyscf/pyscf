@@ -111,7 +111,7 @@ class system_vars_c():
 
     self.sp2charge = [-999]*self.nspecies
     for ia,sp in enumerate(self.atom2sp): self.sp2charge[sp]=gto.atom_charge(ia)
-    self.ao_log = ao_log_c(gto=gto, sv=self, **kvargs)
+    self.ao_log = ao_log_c().init_ao_log_gto_suggest_mesh(gto, self, **kvargs)
     self.atom2coord = np.zeros((self.natm, 3))
     for ia,coord in enumerate(gto.atom_coords()): self.atom2coord[ia,:]=coord # must be in Bohr already?
     self.atom2s = np.zeros((self.natm+1), dtype=np.int64)
@@ -192,22 +192,23 @@ class system_vars_c():
   #
   #
   #
-  def init_siesta_xml(self, label='siesta', **kvargs):
+  def init_siesta_xml(self, label='siesta', chdir='.', **kvargs):
     """ Initialise system var using only the siesta files (siesta.xml in particular is needed) """
     self.label = label
-    self.xml_dict = siesta_xml(self.label)
-    self.wfsx = siesta_wfsx_c(self.label)
-    self.hsx = siesta_hsx_c(self.label, **kvargs)
+    self.chdir = chdir
+    self.xml_dict = siesta_xml(chdir+'/'+self.label+'.xml')
+    self.wfsx = siesta_wfsx_c(label, chdir)
+    self.hsx = siesta_hsx_c(chdir+'/'+self.label+'.HSX', **kvargs)
     self.norbs_sc = self.wfsx.norbs if self.hsx.orb_sc2orb_uc is None else len(self.hsx.orb_sc2orb_uc)
-   
+
     ##### The parameters as fields     
     self.sp2ion = []
     for sp in self.wfsx.sp2strspecie:
       self.sp2ion.append(siesta_ion_xml(sp+'.ion.xml'))
     
     _siesta_ion_add_sp2(self, self.sp2ion)
-    self.ao_log = ao_log_c(self.sp2ion)
-    
+    self.ao_log = ao_log_c().init_ao_log_ion(self.sp2ion)
+
     self.atom2coord = self.xml_dict['atom2coord']
     self.natm=self.natoms=len(self.xml_dict['atom2sp'])
     self.norbs  = self.wfsx.norbs 

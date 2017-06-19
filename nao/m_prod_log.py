@@ -21,11 +21,11 @@ def overlap_check(prod_log, overlap_funct=overlap_ni, **kvargs):
   for sp,[vertex,mom0] in enumerate(zip(prod_log.sp2vertex,sp2mom0)):
     oo_ref = overlap_funct(me,sp,R0,sp,R0,**kvargs)
     oo = np.einsum('pjk,p->jk', vertex, mom0)
-    ac = np.allclose(oo_ref, oo, atol=prod_log.tol*10, rtol=prod_log.tol)
+    ac = np.allclose(oo_ref, oo, atol=prod_log.tol_loc*10, rtol=prod_log.tol_loc)
     mae = abs(oo_ref-oo).sum()/oo.size
     mxe = abs(oo_ref-oo).max()
     acl.append(ac); mael.append(mae); mxel.append(mxe)
-    if not ac: print('overlap check:', sp, mae, mxe, prod_log.tol) 
+    if not ac: print('overlap check:', sp, mae, mxe, prod_log.tol_loc) 
   return mael,mxel,acl
 
 #
@@ -65,40 +65,31 @@ class prod_log_c(ao_log_c):
   Examples:
   '''
   def __init__(self, ao_log=None, auxmol=None, sv=None, **kvargs):
-    
-    if auxmol is not None:
-      assert(sv is not None)
-      ao_log_c.__init__(self, log_mesh=sv.ao_log) # only log_mesh will be initialized and all the procedures from the class ao_log.
-      self.init_density_fitting_gto(auxmol, sv, **kvargs)
-      return
-      
-    if ao_log is not None:
-      ao_log_c.__init__(self, log_mesh=ao_log) # only log_mesh will be initialized and all the procedures from the class ao_log.
-      self.init_linear_combinations(ao_log, **kvargs)
-      return
+    ao_log_c.__init__(self) # only log_mesh will be initialized and all the procedures from the class ao_log.
+    return
 
-    raise RuntimeError(__name__+': unknown constructor')
-
-
-  def init_density_fitting_gto(self, auxmol, sv, **kvargs):
+  def init_density_fitting_gto(self, auxmol, sv, rcut_tol=1e-7):
     """ Initializes the radial functions from pyscf"""
     from pyscf.df.incore import aux_e2
+    self.init_log_mesh(sv.ao_log.rr, sv.ao_log.pp)
     self.auxmol = auxmol
-    ao_log_c.__init__(self, gto=auxmol, sv=sv, log_mesh=sv.ao_log, **kvargs)
+    ao_log_c.__init__(self)
+    self.init_ao_log_gto_lm(auxmol, sv, sv.ao_log, rcut_tol)
     j3c = aux_e2(sv.mol, auxmol, intor='cint3c2e_sph', aosym='s1')
     nao = sv.mol.nao_nr()
     naoaux = auxmol.nao_nr()
     j3c = j3c.reshape(nao,nao,naoaux)
     #print(nao, naoaux)
-    return 
+    return self
 
   
-  def init_linear_combinations(self, ao_log, tol_loc=1e-5):
+  def init_domiprod(self, ao_log, tol_loc=1e-5):
     """ Builds linear combinations of the original orbital products """
     from scipy.sparse import csr_matrix
     from pyscf.nao.m_local_vertex import local_vertex_c
     
     self.ao_log = ao_log
+    self.init_log_mesh(ao_log.rr, ao_log.pp)
     self.nspecies = ao_log.nspecies
     self.tol_loc = tol_loc
     self.rr,self.pp,self.nr = ao_log.rr,ao_log.pp,ao_log.nr
@@ -165,6 +156,7 @@ class prod_log_c(ao_log_c):
     self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut])
     
     del v_csr, mu2iww, mu2ww, mu2ff # maybe unnecessary
+    return self
   ###
 
   def overlap_check(self, overlap_funct=overlap_ni, **kvargs):
