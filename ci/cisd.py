@@ -9,6 +9,7 @@ Solve CISD equation  H C = C e  where e = E_HF + E_CORR
 
 import time
 import numpy
+from functools import reduce
 from pyscf import ao2mo
 from pyscf import lib
 from pyscf.lib import logger

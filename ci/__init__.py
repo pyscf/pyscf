@@ -1,1 +1,3 @@
-from cisd import CISD
+from pyscf.ci import cisd
+
+CISD = cisd.CISD
