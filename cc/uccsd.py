@@ -13,7 +13,7 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.cc import rccsd
 from pyscf.lib import linalg_helper
-import uintermediates as imd
+from pyscf.cc import uintermediates as imd
 from pyscf.cc.addons import spatial2spin, spin2spatial
 
 #einsum = np.einsum

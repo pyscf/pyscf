@@ -25,11 +25,20 @@ t2[i,j,a,b] = (ia|jb) / D_ij^ab
 def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
     nocc = mp.nocc
     nvir = mp.nmo - nocc
-    eia = lib.direct_sum('i-a->ia', mo_energy[:nocc], mo_energy[nocc:])
-    t2 = numpy.empty((nocc,nocc,nvir,nvir))
-    emp2 = 0
+    moidx = numpy.ones(mp.mo_occ.size, dtype=numpy.bool)
+    if isinstance(mp.frozen, (int, numpy.integer)):
+        moidx[:mp.frozen] = False
+    else:
+        moidx[mp.frozen] = False
+    mo_e = mo_energy[moidx]
+    eia = mo_e[:nocc,None] - mo_e[None,nocc:]
+    mo = _mo_without_core(mp, mo_coeff)
 
-    with mp.ao2mo(mo_coeff) as ovov:
+    t2 = numpy.empty((nocc,nocc,nvir,nvir))
+
+    emp2 = 0.0
+
+    with mp.ao2mo(mo) as ovov:
         for i in range(nocc):
             gi = numpy.asarray(ovov[i*nvir:(i+1)*nvir])
             gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
@@ -123,19 +132,56 @@ def make_rdm2(mp, t2, verbose=logger.NOTE):
 
 
 class MP2(lib.StreamObject):
-    def __init__(self, mf):
+    def __init__(self, mf, frozen=[], mo_coeff=None, mo_occ=None):
+
+        if mo_coeff  is None: mo_coeff  = mf.mo_coeff
+        if mo_occ    is None: mo_occ    = mf.mo_occ
+
         self.mol = mf.mol
         self._scf = mf
         self.verbose = self.mol.verbose
         self.stdout = self.mol.stdout
         self.max_memory = mf.max_memory
 
-        self.nocc = self.mol.nelectron // 2
-        self.nmo = len(mf.mo_energy)
+        self.frozen = frozen
 
+##################################################
+# don't modify the following attributes, they are not input options
+        self.mo_coeff = mo_coeff
+        self.mo_occ = mo_occ
+        self._nocc = None
+        self._nmo = None
         self.emp2 = None
         self.e_corr = None
         self.t2 = None
+
+    @property
+    def nocc(self):
+        if self._nocc is not None:
+            return self._nocc
+        elif isinstance(self.frozen, (int, numpy.integer)):
+            return int(self.mo_occ.sum()) // 2 - self.frozen
+        elif self.frozen:
+            occ_idx = self.mo_occ > 0
+            occ_idx[numpy.asarray(self.frozen)] = False
+            return numpy.count_nonzero(occ_idx)
+        else:
+            return int(self.mo_occ.sum()) // 2
+    @nocc.setter
+    def nocc(self, n):
+        self._nocc = n
+
+    @property
+    def nmo(self):
+        if self._nmo is not None:
+            return self._nmo
+        if isinstance(self.frozen, (int, numpy.integer)):
+            return len(self.mo_occ) - self.frozen
+        else:
+            return len(self.mo_occ) - len(self.frozen)
+    @nmo.setter
+    def nmo(self, n):
+        self._nmo = n
 
     def kernel(self, mo_energy=None, mo_coeff=None):
         if mo_coeff is None:
@@ -165,9 +211,9 @@ class MP2(lib.StreamObject):
         cv = mo_coeff[:,nocc:]
         mem_incore, mem_outcore, mem_basic = _mem_usage(nocc, nvir)
         mem_now = lib.current_memory()[0]
-        if mem_now < mem_basic:
-            warnings.warn('%s: Not enough memory. Available mem %s MB, required mem %s MB\n' %
-                          (self.ao2mo, mem_now, mem_basic))
+#        if mem_now < mem_basic:
+#            warnings.warn('%s: Not enough memory. Available mem %s MB, required mem %s MB\n' %
+#                          (self.ao2mo, mem_now, mem_basic))
         if hasattr(self._scf, 'with_df') and self._scf.with_df:
             # To handle the PBC or custom 2-electron with 3-index tensor.
             # Call dfmp2.MP2 for efficient DF-MP2 implementation.
@@ -199,6 +245,14 @@ class MP2(lib.StreamObject):
     def make_rdm2(self, t2=None):
         if t2 is None: t2 = self.t2
         return make_rdm2(self, t2, self.verbose)
+
+def _mo_without_core(mp, mo):
+    moidx = numpy.ones(mp.mo_occ.size, dtype=numpy.bool)
+    if isinstance(mp.frozen, (int, numpy.integer)):
+        moidx[:mp.frozen] = False
+    elif len(mp.frozen) > 0:
+        moidx[numpy.asarray(mp.frozen)] = False
+    return mo[:,moidx]
 
 def _mem_usage(nocc, nvir):
     nmo = nocc + nvir
