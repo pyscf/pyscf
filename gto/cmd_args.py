@@ -11,7 +11,7 @@ def cmd_args():
     '''
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--verbose',
-                      action='store_false', dest='verbose',
+                      action='store_false', dest='verbose', default=0,
                       help='make lots of noise')
     parser.add_argument('-q', '--quiet',
                       action='store_false', dest='quite', default=False,
