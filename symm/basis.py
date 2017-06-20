@@ -375,7 +375,6 @@ def linearmole_symm_adapted_basis(mol, gpname, eql_atom_ids=None):
     elif gpname == 'Coov':
         for atom_ids in eql_atom_ids:
             at0 = atom_ids[0]
-            symb = mole._symbol(atoms[at0][0])
             ip = 0
             b0, b1, p0, p1 = aoslice[at0]
             for ib in range(b0, b1):
