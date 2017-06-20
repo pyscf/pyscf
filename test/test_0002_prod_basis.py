@@ -20,7 +20,7 @@ class KnowValues(unittest.TestCase):
     mf = scf.density_fit(scf.RHF(mol))
     self.assertAlmostEqual(mf.scf(), -76.025936299702536, 9)
     sv = system_vars_c().init_pyscf_gto(mol)
-    prod_log = prod_log_c().init_density_fitting_gto(mf.with_df.auxmol, sv)
+    prod_log = prod_log_c().init_prod_log_df(mf.with_df.auxmol, sv)
     self.assertEqual(prod_log.rr[0], sv.ao_log.rr[0])
     self.assertEqual(prod_log.pp[0], sv.ao_log.pp[0])
     self.assertEqual(prod_log.nspecies, sv.ao_log.nspecies)
@@ -35,7 +35,7 @@ class KnowValues(unittest.TestCase):
   def test_gto2sv_prod_log(self):
     """ Test what ? """
     sv = system_vars_c().init_pyscf_gto(mol)
-    prod_log = prod_log_c().init_domiprod(sv.ao_log, tol_loc=1e-4)
+    prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc=1e-4)
     mae,mxe,lll=prod_log.overlap_check()
     self.assertTrue(all(lll))
     self.assertEqual(prod_log.nspecies, 2)

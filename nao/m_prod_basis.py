@@ -63,7 +63,7 @@ class prod_basis_c():
     for ia1,n1 in enumerate(sv.atom2s[1:]-sv.atom2s[0:-1]):
       for ia2,n2 in enumerate(sv.atom2s[ia1+2:]-sv.atom2s[ia1+1:-1]):
         ia2+=ia1+1
-        print(ia1, ia2)
+        #print(ia1, ia2)
 
 
     self.dpc2s,self.dpc2t,self.dpc2sp = self.get_c2s_domiprod() # dominant product's counting 
