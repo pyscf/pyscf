@@ -209,7 +209,7 @@ class system_vars_c():
     ##### The parameters as fields     
     self.sp2ion = []
     for sp in self.wfsx.sp2strspecie:
-      self.sp2ion.append(siesta_ion_xml(sp+'.ion.xml'))
+      self.sp2ion.append(siesta_ion_xml(chdir+'/'+sp+'.ion.xml'))
     
     _siesta_ion_add_sp2(self, self.sp2ion)
     self.ao_log = ao_log_c().init_ao_log_ion(self.sp2ion)
