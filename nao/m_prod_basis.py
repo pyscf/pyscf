@@ -46,20 +46,25 @@ class prod_basis_c():
     self.tol_loc = tol_loc
     self.tol_biloc = tol_biloc
     self.ac_rcut_ratio = ac_rcut_ratio
-    
-    self.prod_log = prod_log_c(ao_log = sv.ao_log, tol_loc=tol_loc) # local basis (for each specie)
+
+    self.prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc) # local basis (for each specie)
+
     self.hkernel_csr  = csr_matrix(comp_overlap_coo(sv, self.prod_log, coulomb_am)) # compute local part of Coulomb interaction
+
     self.c2s = np.zeros((sv.natm+1), dtype=np.int64) # global product Center (atom) -> start in case of atom-centered basis
+
     for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] # 
 
-    c2s = self.c2s      # What is the meaning of this copy ?? ... This is a pointer to self.c2s
+    c2s = self.c2s 
 
     self.bp2vertex = [] # going to be the product vertex coefficients for each bilocal pair 
     self.bp2info   = [] # going to be some information including indices of atoms, list of contributing centres, conversion coefficients
 
     for ia1,n1 in enumerate(sv.atom2s[1:]-sv.atom2s[0:-1]):
       for ia2,n2 in enumerate(sv.atom2s[ia1+2:]-sv.atom2s[ia1+1:-1]):
-        ia2 += ia1+1
+        ia2+=ia1+1
+        print(ia1, ia2)
+
 
     self.dpc2s,self.dpc2t,self.dpc2sp = self.get_c2s_domiprod() # dominant product's counting 
     return self

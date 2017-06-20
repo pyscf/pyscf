@@ -12,7 +12,7 @@ def leggauss_ab(n=96, a=-1.0, b=1.0):
 
 # Generates the Gauss-Legendre knots and weights
 #   Fortran version is written by James Talman
-def gauleg_ab(n=96, a=-1.0, b=1.0, eps=1.0e-15, cmx=15, **kvargs):
+def gauleg_ab(n=96, a=-1.0, b=1.0, eps=1.0e-15, cmx=15):
   assert(n>0)
   x,w = np.zeros((n)),np.zeros((n))
   

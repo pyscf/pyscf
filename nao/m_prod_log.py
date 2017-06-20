@@ -68,7 +68,7 @@ class prod_log_c(ao_log_c):
     ao_log_c.__init__(self) # only log_mesh will be initialized and all the procedures from the class ao_log.
     return
 
-  def init_density_fitting_gto(self, auxmol, sv, rcut_tol=1e-7):
+  def init_prod_log_df(self, auxmol, sv, rcut_tol=1e-7):
     """ Initializes the radial functions from pyscf"""
     from pyscf.df.incore import aux_e2
     self.init_log_mesh(sv.ao_log.rr, sv.ao_log.pp)
@@ -83,7 +83,7 @@ class prod_log_c(ao_log_c):
     return self
 
   
-  def init_domiprod(self, ao_log, tol_loc=1e-5):
+  def init_prod_log_dp(self, ao_log, tol_loc=1e-5):
     """ Builds linear combinations of the original orbital products """
     from scipy.sparse import csr_matrix
     from pyscf.nao.m_local_vertex import local_vertex_c
