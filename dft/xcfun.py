@@ -139,7 +139,7 @@ def is_gga(xc_code):
         return (all((is_gga(x) or is_lda(x) for x in xc_code)) and
                 not is_lda(xc_code))
 
-def hybrid_coeff(xc_code, spin=1):
+def hybrid_coeff(xc_code, spin=0):
     return parse_xc(xc_code)[0]
 
 def parse_xc_name(xc_name):

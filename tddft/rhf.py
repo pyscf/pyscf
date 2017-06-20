@@ -12,6 +12,102 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
+from pyscf.dft import numint
+from pyscf.scf import hf_symm
+
+
+def gen_tda_hop(mf, fock_ao=None, singlet=True, wfnsym=None, max_memory=2000):
+    '''(A+B)x
+    
+    Kwargs:
+        wfnsym : int
+            Point group symmetry for excited CIS wavefunction.
+    '''
+    mol = mf.mol
+    mo_coeff = mf.mo_coeff
+    assert(mo_coeff.dtype == numpy.double)
+    mo_energy = mf.mo_energy
+    mo_occ = mf.mo_occ
+    nao, nmo = mo_coeff.shape
+    occidx = numpy.where(mo_occ==2)[0]
+    viridx = numpy.where(mo_occ==0)[0]
+    nocc = len(occidx)
+    nvir = len(viridx)
+    orbv = mo_coeff[:,viridx]
+    orbo = mo_coeff[:,occidx]
+
+    if wfnsym is not None and mol.symmetry:
+        orbsym = hf_symm.get_orbsym(mol, mo_coeff)
+        sym_forbid = (orbsym[viridx].reshape(-1,1) ^ orbsym[occidx]) != wfnsym
+
+    if fock_ao is None:
+        #dm0 = mf.make_rdm1(mo_coeff, mo_occ)
+        #fock_ao = mf.get_hcore() + mf.get_veff(mol, dm0)
+        foo = numpy.diag(mo_energy[occidx])
+        fvv = numpy.diag(mo_energy[viridx])
+    else:
+        fock = reduce(numpy.dot, (mo_coeff.T, fock_ao, mo_coeff))
+        foo = fock[occidx[:,None],occidx]
+        fvv = fock[viridx[:,None],viridx]
+
+    hdiag = fvv.diagonal().reshape(-1,1) - foo.diagonal()
+    if wfnsym is not None and mol.symmetry:
+        hdiag[sym_forbid] = 0
+    hdiag = hdiag.ravel()
+
+    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
+        if mf.grids.coords is None:
+            mf.grids.build()
+        ni = mf._numint
+        hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
+        dm0 = None # mf.make_rdm1(mo_coeff, mo_occ)
+        mo_occ = [mf.mo_occ*.5, mf.mo_occ*.5]
+        rho0, vxc, fxc = ni.cache_xc_kernel(mf.mol, mf.grids, mf.xc,
+                                            [mo_coeff,mo_coeff], mo_occ, spin=1)
+    else:
+        hyb = None
+
+    mem_now = lib.current_memory()[0]
+    max_memory = max(2000, max_memory*.8-mem_now)
+
+    def vind(zs):
+        nz = len(zs)
+        if wfnsym is not None and mol.symmetry:
+            zs = numpy.copy(zs).reshape(-1,nvir,nocc)
+            zs[:,sym_forbid] = 0
+        dmvo = numpy.empty((nz,nao,nao))
+        for i, z in enumerate(zs):
+            dmvo[i] = reduce(numpy.dot, (orbv, z.reshape(nvir,nocc), orbo.T))
+
+        if hyb is None:
+            if singlet:
+                vj, vk = mf.get_jk(mol, dmvo, hermi=0)
+                v1ao = vj*2 - vk
+            else:
+                v1ao = -mf.get_k(mol, dmvo, hermi=0)
+        else:
+            v1ao = numint.nr_rks_fxc_st(ni, mol, mf.grids, mf.xc, dm0, dmvo, 0,
+                                        singlet, rho0, vxc, fxc, max_memory)
+            if abs(hyb) > 1e-10:
+                if singlet:
+                    vj, vk = mf.get_jk(mf.mol, dmvo, hermi=0)
+                    v1ao += vj * 2 - hyb * vk
+                else:
+                    v1ao += -hyb * mf.get_k(mol, dmvo, hermi=0)
+            else:
+                if singlet:
+                    v1ao += mf.get_j(mf.mol, dmvo, hermi=0) * 2
+
+        #v1vo = numpy.asarray([reduce(numpy.dot, (orbv.T, v, orbo)) for v in v1ao])
+        v1vo = _ao2mo.nr_e2(v1ao, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir,nocc)
+        for i, z in enumerate(zs):
+            v1vo[i]+= numpy.einsum('ps,sq->pq', fvv, z.reshape(nvir,nocc))
+            v1vo[i]-= numpy.einsum('ps,rp->rs', foo, z.reshape(nvir,nocc))
+        if wfnsym is not None and mol.symmetry:
+            v1vo[:,sym_forbid] = 0
+        return v1vo.reshape(nz,-1)
+
+    return vind, hdiag
 
 
 class TDA(lib.StreamObject):
@@ -25,6 +121,7 @@ class TDA(lib.StreamObject):
         self.conv_tol = 1e-9
         self.nstates = 3
         self.singlet = True
+        self.wfnsym = None
         self.lindep = 1e-12
         self.level_shift = 0
         self.max_space = 50
@@ -33,7 +130,7 @@ class TDA(lib.StreamObject):
         self.chkfile = mf.chkfile
 
         # xy = (X,Y), normlized to 1/2: 2(XX-YY) = 1
-        # In TDA or TDHF, Y = 0
+        # In TDA, Y = 0
         self.e = None
         self.xy = None
         self._keys = set(self.__dict__.keys())
@@ -43,11 +140,11 @@ class TDA(lib.StreamObject):
         log.info('\n')
         log.info('******** %s for %s ********',
                  self.__class__, self._scf.__class__)
-        log.info('nstates = %d', self.nstates)
         if self.singlet:
-            log.info('Singlet')
+            log.info('nstates = %d singlet', self.nstates)
         else:
-            log.info('Triplet')
+            log.info('nstates = %d triplet', self.nstates)
+        log.info('wfnsym = %s', self.wfnsym)
         log.info('conv_tol = %g', self.conv_tol)
         log.info('eigh lindep = %g', self.lindep)
         log.info('eigh level_shift = %g', self.level_shift)
@@ -62,34 +159,8 @@ class TDA(lib.StreamObject):
 
     def get_vind(self, mf):
         '''Compute Ax'''
-        mo_coeff = mf.mo_coeff
-        mo_energy = mf.mo_energy
-        nao, nmo = mo_coeff.shape
-        nocc = (mf.mo_occ>0).sum()
-        nvir = nmo - nocc
-        orbv = mo_coeff[:,nocc:]
-        orbo = mo_coeff[:,:nocc]
-        eai = lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
-        eai = eai.ravel()
-
-        def vind(zs):
-            nz = len(zs)
-            dmvo = numpy.empty((nz,nao,nao))
-            for i, z in enumerate(zs):
-                dmvo[i] = reduce(numpy.dot, (orbv, z.reshape(nvir,nocc), orbo.T))
-            vj, vk = mf.get_jk(self.mol, dmvo, hermi=0)
-            if self.singlet:
-                vhf = vj*2 - vk
-            else:
-                vhf = -vk
-
-            #v1vo = numpy.asarray([reduce(numpy.dot, (orbv.T, v, orbo)) for v in vhf])
-            v1vo = _ao2mo.nr_e2(vhf, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir*nocc)
-            for i, z in enumerate(zs):
-                v1vo[i] += eai * z
-            return v1vo.reshape(nz,-1)
-
-        return vind
+        return gen_tda_hop(mf, singlet=self.singlet, wfnsym=self.wfnsym,
+                           max_memory=self.max_memory)
 
     def get_precond(self, hdiag):
         def precond(x, e, x0):
@@ -98,8 +169,21 @@ class TDA(lib.StreamObject):
             return x/diagd
         return precond
 
-    def init_guess(self, eai, nstates=None):
+    def init_guess(self, mf, nstates=None, wfnsym=None):
         if nstates is None: nstates = self.nstates
+        if wfnsym is None: wfnsym = self.wfnsym
+
+        mo_energy = mf.mo_energy
+        mo_occ = mf.mo_occ
+        occidx = numpy.where(mo_occ==2)[0]
+        viridx = numpy.where(mo_occ==0)[0]
+        eai = lib.direct_sum('a-i->ai', mo_energy[viridx], mo_energy[occidx])
+
+        if wfnsym is not None and mf.mol.symmetry:
+            orbsym = hf_symm.get_orbsym(mf.mol, mf.mo_coeff)
+            sym_forbid = (orbsym[viridx].reshape(-1,1) ^ orbsym[occidx]) != wfnsym
+            eai[sym_forbid] = 1e99
+
         nov = eai.size
         nroot = min(nstates, nov)
         x0 = numpy.zeros((nroot, nov))
@@ -112,24 +196,25 @@ class TDA(lib.StreamObject):
         '''TDA diagonalization solver
         '''
         self.check_sanity()
+        self.dump_flags()
 
-        mo_energy = self._scf.mo_energy
-        nocc = (self._scf.mo_occ>0).sum()
-        eai = lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
+        vind, hdiag = self.get_vind(self._scf)
+        precond = self.get_precond(hdiag)
 
         if x0 is None:
-            x0 = self.init_guess(eai, self.nstates)
-
-        precond = self.get_precond(eai.ravel())
-        vind = self.get_vind(self._scf)
-
+            x0 = self.init_guess(self._scf, self.nstates)
         self.e, x1 = lib.davidson1(vind, x0, precond,
                                    tol=self.conv_tol,
                                    nroots=self.nstates, lindep=self.lindep,
                                    max_space=self.max_space,
                                    verbose=self.verbose)[1:]
+
+        nocc = (self._scf.mo_occ>0).sum()
+        nmo = self._scf.mo_occ.size
+        nvir = nmo - nocc
 # 1/sqrt(2) because self.x is for alpha excitation amplitude and 2(X^+*X) = 1
-        self.xy = [(xi.reshape(eai.shape)*numpy.sqrt(.5),0) for xi in x1]
+        self.xy = [(xi.reshape(nvir,nocc)*numpy.sqrt(.5),0) for xi in x1]
+        #TODO: analyze CIS wfn point group symmetry
         return self.e, self.xy
 CIS = TDA
 
@@ -140,76 +225,120 @@ class TDHF(TDA):
         [ A  B][X]
         [-B -A][Y]
         '''
+        wfnsym = self.wfnsym
+        singlet = self.singlet
+
+        mol = mf.mol
         mo_coeff = mf.mo_coeff
+        assert(mo_coeff.dtype == numpy.double)
         mo_energy = mf.mo_energy
+        mo_occ = mf.mo_occ
         nao, nmo = mo_coeff.shape
-        nocc = (mf.mo_occ>0).sum()
-        nvir = nmo - nocc
-        orbv = mo_coeff[:,nocc:]
-        orbo = mo_coeff[:,:nocc]
-        eai = lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
-        eai = eai.ravel()
+        occidx = numpy.where(mo_occ==2)[0]
+        viridx = numpy.where(mo_occ==0)[0]
+        nocc = len(occidx)
+        nvir = len(viridx)
+        orbv = mo_coeff[:,viridx]
+        orbo = mo_coeff[:,occidx]
+
+        if wfnsym is not None and mol.symmetry:
+            orbsym = hf_symm.get_orbsym(mol, mo_coeff)
+            sym_forbid = (orbsym[viridx].reshape(-1,1) ^ orbsym[occidx]) != wfnsym
+
+        #dm0 = mf.make_rdm1(mo_coeff, mo_occ)
+        #fock_ao = mf.get_hcore() + mf.get_veff(mol, dm0)
+        #fock = reduce(numpy.dot, (mo_coeff.T, fock_ao, mo_coeff))
+        #foo = fock[occidx[:,None],occidx]
+        #fvv = fock[viridx[:,None],viridx]
+        foo = numpy.diag(mo_energy[occidx])
+        fvv = numpy.diag(mo_energy[viridx])
+
+        e_ai = hdiag = fvv.diagonal().reshape(-1,1) - foo.diagonal()
+        if wfnsym is not None and mol.symmetry:
+            hdiag[sym_forbid] = 0
+        hdiag = numpy.hstack((hdiag.ravel(), hdiag.ravel()))
+
+        if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
+            if mf.grids.coords is None:
+                mf.grids.build()
+            ni = mf._numint
+            hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
+            dm0 = None # mf.make_rdm1(mf.mo_coeff, mf.mo_occ)
+            mo_occ = [mf.mo_occ*.5, mf.mo_occ*.5]
+            rho0, vxc, fxc = ni.cache_xc_kernel(mf.mol, mf.grids, mf.xc,
+                                                [mo_coeff,mo_coeff], mo_occ, spin=1)
+        else:
+            hyb = None
+
+        mem_now = lib.current_memory()[0]
+        max_memory = max(2000, self.max_memory*.8-mem_now)
 
         def vind(xys):
             nz = len(xys)
+            if wfnsym is not None and mol.symmetry:
+                # shape(nz,2,nvir,nocc): 2 ~ X,Y
+                xys = numpy.copy(zs).reshape(nz,2,nvir,nocc)
+                xys[:,:,sym_forbid] = 0
             dms = numpy.empty((nz,nao,nao))
             for i in range(nz):
                 x, y = xys[i].reshape(2,nvir,nocc)
                 dmx = reduce(numpy.dot, (orbv, x, orbo.T))
                 dmy = reduce(numpy.dot, (orbo, y.T, orbv.T))
                 dms[i] = dmx + dmy  # AX + BY
-            vj, vk = mf.get_jk(self.mol, dms, hermi=0)
-            if self.singlet:
-                vhf = vj*2 - vk
+
+            if hyb is None:
+                if singlet:
+                    vj, vk = mf.get_jk(mol, dms, hermi=0)
+                    v1ao = vj*2 - vk
+                else:
+                    v1ao = -mf.get_k(mol, dms, hermi=0)
             else:
-                vhf = -vk
+                v1ao = numint.nr_rks_fxc_st(ni, mol, mf.grids, mf.xc, dm0, dms, 0,
+                                            singlet, rho0, vxc, fxc, max_memory)
+                if abs(hyb) > 1e-10:
+                    if singlet:
+                        vj, vk = mf.get_jk(mf.mol, dms, hermi=0)
+                        v1ao += vj * 2 - hyb * vk
+                    else:
+                        v1ao += -hyb * mf.get_k(mol, dms, hermi=0)
+                else:
+                    if singlet:
+                        v1ao += mf.get_j(mf.mol, dms, hermi=0) * 2
 
-            nov = nocc*nvir
-            vhfvo = _ao2mo.nr_e2(vhf, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nov)
-            vhfov = _ao2mo.nr_e2(vhf, mo_coeff, (0,nocc,nocc,nmo))
-            vhfov = vhfov.reshape(-1,nocc,nvir).transpose(0,2,1).reshape(-1,nov)
-            hx = numpy.empty((nz,nov*2))
-            for i, z in enumerate(xys):
-                x, y = z.reshape(2,-1)
-                hx[i,:nov] = vhfvo[i] + eai * x  # AX
-                hx[i,nov:] =-vhfov[i] - eai * y  #-AY
-            return hx
+            v1vo = _ao2mo.nr_e2(v1ao, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir,nocc)
+            v1ov = _ao2mo.nr_e2(v1ao, mo_coeff, (0,nocc,nocc,nmo))
+            v1ov = v1ov.reshape(-1,nocc,nvir).transpose(0,2,1)
+            hx = numpy.empty((nz,2,nvir,nocc), dtype=v1vo.dtype)
+            for i in range(nz):
+                x, y = xys[i].reshape(2,nvir,nocc)
+                hx[i,0] = v1vo[i]
+                hx[i,0]+= numpy.einsum('ps,sq->pq', fvv, x)  # AX
+                hx[i,0]-= numpy.einsum('ps,rp->rs', foo, x)  # AX
+                hx[i,1] =-v1ov[i]
+                hx[i,1]-= numpy.einsum('ps,sq->pq', fvv, y)  #-AY
+                hx[i,1]+= numpy.einsum('ps,rp->rs', foo, y)  #-AY
 
-        return vind
+            if wfnsym is not None and mol.symmetry:
+                hx[:,:,sym_forbid] = 0
+            return hx.reshape(nz,-1)
 
-    def get_precond(self, hdiag):
-        def precond(x, e, x0):
-            diagd = hdiag - (e-self.level_shift)
-            diagd[abs(diagd)<1e-8] = 1e-8
-            y = x.reshape(2,-1)/diagd
-            return y.reshape(-1)
-        return precond
+        return vind, hdiag
 
-    def init_guess(self, eai, nstates=None):
-        if nstates is None: nstates = self.nstates
-        nov = eai.size
-        nroot = min(nstates, nov)
-        x0 = numpy.zeros((nroot, nov*2))
-        idx = numpy.argsort(eai.ravel())
-        for i in range(nroot):
-            x0[i,idx[i]] = 1  # lowest excitations
-        return x0
+    def init_guess(self, mf, nstates=None, wfnsym=None):
+        x0 = TDA.init_guess(self, mf, nstates, wfnsym)
+        y0 = numpy.zeros_like(x0)
+        return numpy.hstack((x0,y0))
 
     def kernel(self, x0=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
         '''
         self.check_sanity()
+        self.dump_flags()
 
-        mo_energy = self._scf.mo_energy
-        nocc = (self._scf.mo_occ>0).sum()
-        eai = lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
-        nvir = eai.shape[0]
-
+        vind, hdiag = self.get_vind(self._scf)
+        precond = self.get_precond(hdiag)
         if x0 is None:
-            x0 = self.init_guess(eai, self.nstates)
-
-        precond = self.get_precond(eai.ravel())
-        vind = self.get_vind(self._scf)
+            x0 = self.init_guess(self._scf, self.nstates)
 
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
@@ -222,6 +351,10 @@ class TDHF(TDA):
                                     nroots=self.nstates, lindep=self.lindep,
                                     max_space=self.max_space, pick=pickeig,
                                     verbose=self.verbose)[1:]
+
+        nocc = (self._scf.mo_occ>0).sum()
+        nmo = self._scf.mo_occ.size
+        nvir = nmo - nocc
         self.e = w
         def norm_xy(z):
             x, y = z.reshape(2,nvir,nocc)
@@ -247,10 +380,9 @@ if __name__ == '__main__':
     mol.basis = '631g'
     mol.build()
 
-    mf = scf.RHF(mol)
-    mf.scf()
+    mf = scf.RHF(mol).run()
     td = TDA(mf)
-    td.verbose = 4
+    td.verbose = 3
     print(td.kernel()[0] * 27.2114)
 # [ 11.90276464  11.90276464  16.86036434]
 
@@ -259,7 +391,7 @@ if __name__ == '__main__':
 # [ 11.01747918  11.01747918  13.16955056]
 
     td = TDHF(mf)
-    td.verbose = 4
+    td.verbose = 3
     print(td.kernel()[0] * 27.2114)
 # [ 11.83487199  11.83487199  16.66309285]
 

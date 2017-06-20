@@ -70,7 +70,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    hyb = ks._numint.hybrid_coeff(ks.xc, spin=(mol.spin>0)+1)
+    hyb = ks._numint.hybrid_coeff(ks.xc, spin=mol.spin)
     if abs(hyb) < 1e-10:
         if (ks._eri is not None or not ks.direct_scf or
             not hasattr(ks, '_dm_last') or

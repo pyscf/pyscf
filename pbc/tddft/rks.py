@@ -102,11 +102,11 @@ def _contract_xc_kernel(mf, dmvo, singlet=True,
                                         (frho,frhogamma,fgg), weight)
                 v1ao[i] += ni._fxc_mat(cell, ao_k1, wv, mask, xctype, ao_loc)
 
+        for i in range(ndm):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
+            v1ao[i] = v1ao[i] + v1ao[i].swapaxes(-2,-1).conj()
+
     else:
         raise NotImplementedError('meta-GGA')
-
-    for i in range(ndm):
-        v1ao[i] = (v1ao[i] + v1ao[i].swapaxes(-2,-1).conj()) * .5
 
     return lib.asarray(v1ao)
 
@@ -129,7 +129,7 @@ class TDA(rhf.TDA):
                                                     [mo_coeff, mo_coeff],
                                                     [mo_occ*.5, mo_occ*.5], spin=1)
         eai = rhf._get_eai(mo_energy, mo_occ)
-        hyb = mf._numint.hybrid_coeff(mf.xc, spin=1)
+        hyb = mf._numint.hybrid_coeff(mf.xc, spin=0)
 
         def vind(zs):
             nz = len(zs)
@@ -187,7 +187,7 @@ class TDDFT(rhf.TDHF):
                                                     [mo_coeff, mo_coeff],
                                                     [mo_occ*.5, mo_occ*.5], spin=1)
         eai = rhf._get_eai(mo_energy, mo_occ)
-        hyb = mf._numint.hybrid_coeff(mf.xc, spin=(mf.cell.spin>0)+1)
+        hyb = mf._numint.hybrid_coeff(mf.xc, spin=mf.cell.spin)
 
         def vind(xys):
             nz = len(xys)

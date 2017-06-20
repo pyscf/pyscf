@@ -624,14 +624,16 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=1,
                 rho1 = make_rho(i, ao_k1, mask, xctype)
                 wv = numint._rks_gga_wv(rho, rho1, vxc0, fxc0, weight)
                 vmat[i] += ni._fxc_mat(cell, ao_k1, wv, mask, xctype, ao_loc)
+
+        # call swapaxes method to swap last two indices because vmat may be a 3D
+        # array (nset,nao,nao) in single k-point mode or a 4D array
+        # (nset,nkpts,nao,nao) in k-points mode
+        for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
+            vmat[i] = vmat[i] + vmat[i].swapaxes(-2,-1).conj()
+
     else:
         raise NotImplementedError('meta-GGA')
 
-    # call swapaxes method to swap last two indices because vmat may be a 3D
-    # array (nset,nao,nao) in single k-point mode or a 4D array
-    # (nset,nkpts,nao,nao) in k-points mode
-    for i in range(nset):
-        vmat[i] = (vmat[i] + vmat[i].swapaxes(-2,-1).conj()) * .5
     if nset == 1:
         vmat = vmat[0]
     return vmat
@@ -753,12 +755,13 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=1,
                                               vxc0, fxc0, weight)
                 vmata[i] += ni._fxc_mat(cell, ao_k1, wva, mask, xctype, ao_loc)
                 vmatb[i] += ni._fxc_mat(cell, ao_k1, wvb, mask, xctype, ao_loc)
+
+        for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
+            vmata[i] = vmata[i] + vmata[i].swapaxes(-1,-2).conj()
+            vmatb[i] = vmatb[i] + vmatb[i].swapaxes(-1,-2).conj()
     else:
         raise NotImplementedError('meta-GGA')
 
-    for i in range(nset):
-        vmata[i] = (vmata[i] + vmata[i].swapaxes(-1,-2).conj()) * .5
-        vmatb[i] = (vmatb[i] + vmatb[i].swapaxes(-1,-2).conj()) * .5
     if nset == 1:
         vmata = vmata[0]
         vmatb = vmatb[0]

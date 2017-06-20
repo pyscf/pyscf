@@ -16,25 +16,17 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
 
-# Real RHF
-# Real UHF
-# Real GHF
-
 def rhf_stability(mf, internal=True, external=False, verbose=None):
     if internal:
         rhf_internal(mf, verbose)
     if external:
         rhf_external(mf, verbose)
-    # TODO: return eigenvectors of modified Fock matrix
-    return mf
 
 def uhf_stability(mf, internal=True, external=False, verbose=None):
     if internal:
         uhf_internal(mf, verbose)
     if external:
         uhf_external(mf, verbose)
-    # TODO: return eigenvectors of modified Fock matrix
-    return mf
 
 def rhf_internal(mf, verbose=None):
     log = logger.new_logger(mf, verbose)
@@ -61,12 +53,11 @@ def rhf_internal(mf, verbose=None):
 
     nov = nocc * nvir
     e = scipy.linalg.eigh(h.reshape(nov,nov))[0]
-    log.debug('rhf_internal: lowest eig = %g', e[0])
+    log.debug('rhf_internal: lowest eigs = %s', e[e<=max(e[0],1e-5)])
     if e[0] < -1e-5:
-        log.note('RHF wavefunction has an internal instablity')
+        log.log('RHF wavefunction has an internal instablity')
     else:
-        log.note('RHF wavefunction is stable in the intenral stabliaty analysis')
-    return e[0]
+        log.log('RHF wavefunction is stable in the intenral stablity analysis')
 
 def rhf_external(mf, verbose=None):
     log = logger.new_logger(mf, verbose)
@@ -77,6 +68,7 @@ def rhf_external(mf, verbose=None):
     nmo = mo_coeff.shape[1]
     nocc = numpy.count_nonzero(mo_occ)
     nvir = nmo - nocc
+    nov = nocc * nvir
 
     eri_mo = ao2mo.full(mol, mo_coeff)
     eri_mo = ao2mo.restore(1, eri_mo, nmo)
@@ -91,13 +83,12 @@ def rhf_external(mf, verbose=None):
     h-= numpy.einsum('ckdl->kcld', eri_mo[nocc:,:nocc,nocc:,:nocc]) * 2
     h+= numpy.einsum('cldk->kcld', eri_mo[nocc:,:nocc,nocc:,:nocc])
 
-    nov = nocc * nvir
     e1 = scipy.linalg.eigh(h.reshape(nov,nov))[0]
-    log.debug('rhf_external: lowest eig = %g', e1[0])
+    log.debug('rhf_external: lowest eigs = %s', e1[e1<=max(e1[0],1e-5)])
     if e1[0] < -1e-5:
-        log.note('RHF wavefunction has an RHF real -> complex instablity')
+        log.log('RHF wavefunction has an RHF real -> complex instablity')
     else:
-        log.note('RHF wavefunction is stable in the RHF real -> complex stabliaty analysis')
+        log.log('RHF wavefunction is stable in the RHF real -> complex stablity analysis')
 
     h =-numpy.einsum('cdlk->kcld', eri_mo[nocc:,nocc:,:nocc,:nocc])
     for a in range(nvir):
@@ -105,12 +96,11 @@ def rhf_external(mf, verbose=None):
             h[i,a,i,a] += eai[a,i]
     h-= numpy.einsum('cldk->kcld', eri_mo[nocc:,:nocc,nocc:,:nocc])
     e3 = scipy.linalg.eigh(h.reshape(nov,nov))[0]
-    log.debug('rhf_external: lowest eig of H = %g', e3[0])
+    log.debug('rhf_external: lowest eigs of H = %s', e3[e3<=max(e3[0],1e-5)])
     if e3[0] < -1e-5:
-        log.note('RHF wavefunction has an RHF -> UHF instablity.')
+        log.log('RHF wavefunction has an RHF -> UHF instablity.')
     else:
-        log.note('RHF wavefunction is stable in the RHF -> UHF stabliaty analysis')
-    return e1[0], e3[0]
+        log.log('RHF wavefunction is stable in the RHF -> UHF stablity analysis')
 
 def uhf_internal(mf, verbose=None):
     log = logger.new_logger(mf, verbose)
@@ -152,12 +142,12 @@ def uhf_internal(mf, verbose=None):
     hall[:nova,nova:] = hab.reshape(nova,novb)
     hall[nova:,:nova] = hab.reshape(nova,novb).T
     e = scipy.linalg.eigh(hall)[0]
-    log.debug('uhf_internal: lowest eig of H = %g', e[0])
+    log.debug('uhf_internal: lowest eigs of H = %s', e[e<=max(e[0],1e-5)])
     if e[0] < -1e-5:
-        log.note('UHF wavefunction has an internal instablity')
+        log.log('UHF wavefunction has an internal instablity. '
+                 'It maybe corresponds to (spatial) symmetry broken wfn.')
     else:
-        log.note('UHF wavefunction is stable in the intenral stabliaty analysis')
-    return e[0]
+        log.log('UHF wavefunction is stable in the intenral stablity analysis')
 
 def uhf_external(mf, verbose=None):
     log = logger.new_logger(mf, verbose)
@@ -193,20 +183,20 @@ def uhf_external(mf, verbose=None):
     hall[:nova,:nova] = haa.reshape(nova,nova)
     hall[nova:,nova:] = hbb.reshape(novb,novb)
     e1 = scipy.linalg.eigh(hall)[0]
-    log.debug('uhf_external: lowest eig of H = %g', e1[0])
+    log.debug('uhf_external: lowest eigs of H = %s', e1[e1<=max(e1[0],1e-5)])
     if e1[0] < -1e-5:
-        log.note('UHF wavefunction has an UHF real -> complex instablity')
+        log.log('UHF wavefunction has an UHF real -> complex instablity')
     else:
-        log.note('UHF wavefunction is stable in the UHF real -> complex stabliaty analysis')
+        log.log('UHF wavefunction is stable in the UHF real -> complex stablity analysis')
 
     h11 =-numpy.einsum('abji->iajb', eri_ab[nocca:,nocca:,:noccb,:noccb])
     for a in range(nvira):
         for i in range(noccb):
-            h11[i,a,i,a] += mo_eb[nocca+a] - mo_eb[i]
+            h11[i,a,i,a] += mo_ea[nocca+a] - mo_eb[i]
     h22 =-numpy.einsum('jiab->iajb', eri_ab[:nocca,:nocca,noccb:,noccb:])
     for a in range(nvirb):
         for i in range(nocca):
-            h22[i,a,i,a] += mo_ea[noccb+a] - mo_eb[i]
+            h22[i,a,i,a] += mo_eb[noccb+a] - mo_ea[i]
     h12 =-numpy.einsum('ajbi->iajb', eri_ab[nocca:,:nocca,noccb:,:noccb])
     h21 =-numpy.einsum('biaj->iajb', eri_ab[nocca:,:nocca,noccb:,:noccb])
 
@@ -218,12 +208,11 @@ def uhf_external(mf, verbose=None):
     hall[:n1,n1:] = h12.reshape(n1,n2)
     hall[n1:,:n1] = h21.reshape(n2,n1)
     e3 = scipy.linalg.eigh(hall)[0]
-    log.debug('uhf_external: lowest eig of H = %g', e3[0])
+    log.debug('uhf_external: lowest eigs of H = %s', e3[e3<=max(e3[0],1e-5)])
     if e3[0] < -1e-5:
-        log.note('UHF wavefunction has an UHF -> GHF instablity.')
+        log.log('UHF wavefunction has an UHF -> GHF instablity.')
     else:
-        log.note('UHF wavefunction is stable in the UHF -> GHF stabliaty analysis')
-    return e1[0], e3[0]
+        log.log('UHF wavefunction is stable in the UHF -> GHF stablity analysis')
 
 
 if __name__ == '__main__':
@@ -233,7 +222,7 @@ if __name__ == '__main__':
     rhf_stability(mf, True, True, verbose=5)
 
     mf = scf.UHF(mol).run()
-    uhf_stability(mf, True, True, verbose=5)
+    uhf_stability(mf, not True, True, verbose=5)
 
     mol.spin = 2
     mf = scf.UHF(mol).run()

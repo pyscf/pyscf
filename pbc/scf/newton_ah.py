@@ -40,7 +40,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
         if mf.grids.coords is None:
             mf.grids.build()
         ni = mf._numint
-        hyb = ni.hybrid_coeff(mf.xc, spin=(cell.spin>0)+1)
+        hyb = ni.hybrid_coeff(mf.xc, spin=cell.spin)
         rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc, mo_coeff,
                                             mo_occ, 0, mf.kpts)
         dm0 = None #mf.make_rdm1(mo_coeff, mo_occ)
@@ -77,11 +77,10 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
 
         x2 = [0] * nkpts
         for k in range(nkpts):
-            x2[k] = numpy.einsum('sp,sq->pq', fvv[k], x1[k].conj()) * 2
-            x2[k]-= numpy.einsum('sp,rp->rs', foo[k], x1[k].conj()) * 2
-
-            x2[k] += reduce(numpy.dot, (mo_coeff[k][:,occidx[k]].T.conj(), v1[k],
-                                        mo_coeff[k][:,viridx[k]])).T * 4
+            x2[k] = numpy.einsum('ps,sq->pq', fvv[k], x1[k]) * 2
+            x2[k]-= numpy.einsum('ps,rp->rs', foo[k], x1[k]) * 2
+            x2[k] += reduce(numpy.dot, (mo_coeff[k][:,viridx[k]].T.conj(), v1[k],
+                                        mo_coeff[k][:,occidx[k]])) * 4
         return numpy.hstack([x.ravel() for x in x2])
 
     return (numpy.hstack([x.ravel() for x in g]), h_op,
@@ -122,7 +121,7 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
         if mf.grids.coords is None:
             mf.grids.build()
         ni = mf._numint
-        hyb = ni.hybrid_coeff(mf.xc, spin=(cell.spin>0)+1)
+        hyb = ni.hybrid_coeff(mf.xc, spin=cell.spin)
         rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc, mo_coeff,
                                             mo_occ, 1, mf.kpts)
         dm0 = None
@@ -172,15 +171,15 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
         x2a = [0] * nkpts
         x2b = [0] * nkpts
         for k in range(nkpts):
-            x2a[k] = numpy.einsum('sp,sq->pq', focka[k][viridxa[k][:,None],viridxa[k]], x1a[k].conj())
-            x2a[k]-= numpy.einsum('sp,rp->rs', focka[k][occidxa[k][:,None],occidxa[k]], x1a[k].conj())
-            x2b[k] = numpy.einsum('sp,sq->pq', fockb[k][viridxb[k][:,None],viridxb[k]], x1b[k].conj())
-            x2b[k]-= numpy.einsum('sp,rp->rs', fockb[k][occidxb[k][:,None],occidxb[k]], x1b[k].conj())
+            x2a[k] = numpy.einsum('ps,sq->pq', focka[k][viridxa[k][:,None],viridxa[k]], x1a[k])
+            x2a[k]-= numpy.einsum('ps,rp->rs', focka[k][occidxa[k][:,None],occidxa[k]], x1a[k])
+            x2b[k] = numpy.einsum('ps,sq->pq', fockb[k][viridxb[k][:,None],viridxb[k]], x1b[k])
+            x2b[k]-= numpy.einsum('ps,rp->rs', fockb[k][occidxb[k][:,None],occidxb[k]], x1b[k])
 
-            x2a[k] += reduce(numpy.dot, (moa[k][:,occidxa[k]].T.conj(), v1[0][k],
-                                         moa[k][:,viridxa[k]])).T
-            x2b[k] += reduce(numpy.dot, (mob[k][:,occidxb[k]].T.conj(), v1[1][k],
-                                         mob[k][:,viridxb[k]])).T
+            x2a[k] += reduce(numpy.dot, (moa[k][:,viridxa[k]].T.conj(), v1[0][k],
+                                         moa[k][:,occidxa[k]]))
+            x2b[k] += reduce(numpy.dot, (mob[k][:,viridxb[k]].T.conj(), v1[1][k],
+                                         mob[k][:,occidxb[k]]))
 
         return numpy.hstack([x.ravel() for x in (x2a+x2b)])
 

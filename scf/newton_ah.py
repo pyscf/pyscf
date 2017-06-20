@@ -25,17 +25,18 @@ from pyscf.scf import hf_symm, uhf_symm
 def expmat(a):
     return scipy.linalg.expm(a)
 
-def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
+def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
+                  with_symmetry=True):
     mol = mf.mol
     occidx = numpy.where(mo_occ==2)[0]
     viridx = numpy.where(mo_occ==0)[0]
     nocc = len(occidx)
     nvir = len(viridx)
-    if mol.symmetry:
+    orbo = mo_coeff[:,occidx]
+    orbv = mo_coeff[:,viridx]
+    if with_symmetry and mol.symmetry:
         orbsym = hf_symm.get_orbsym(mol, mo_coeff)
         sym_forbid = orbsym[viridx].reshape(-1,1) != orbsym[occidx]
-    else:
-        sym_forbid = numpy.zeros((nvir,nocc), dtype=bool)
 
     if fock_ao is None:
         if h1e is None: h1e = mf.get_hcore()
@@ -50,6 +51,10 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
 
     h_diag = (fvv.diagonal().reshape(-1,1)-foo.diagonal()) * 2
 
+    if with_symmetry and mol.symmetry:
+        g[sym_forbid] = 0
+        h_diag[sym_forbid] = 0
+
     # To project Hessians from another basis if different basis sets are used
     # in newton solver and underlying mean-filed solver.
     if hasattr(mf, '_scf') and id(mf._scf.mol) != id(mol):
@@ -59,24 +64,29 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
         if mf.grids.coords is None:
             mf.grids.build()
         ni = mf._numint
-        hyb = ni.hybrid_coeff(mf.xc, spin=(mol.spin>0)+1)
+        hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
         rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc, mo_coeff, mo_occ, 0)
         dm0 = None #mf.make_rdm1(mo_coeff, mo_occ)
     else:
         hyb = None
 
     def h_op(x):
-        x = x.reshape(nvir,nocc).copy()
-        x[sym_forbid] = 0
-        x2 = numpy.einsum('sp,sq->pq', fvv, x.conj()) * 2
-        x2-= numpy.einsum('sp,rp->rs', foo, x.conj()) * 2
+        x = x.reshape(nvir,nocc)
+        if with_symmetry and mol.symmetry:
+            x = x.copy()
+            x[sym_forbid] = 0
+        x2 = numpy.einsum('ps,sq->pq', fvv, x)
+        #x2-= .5*numpy.einsum('ps,rp->rs', foo, x)
+        #x2-= .5*numpy.einsum('sp,rp->rs', foo, x)
+        x2-= numpy.einsum('ps,rp->rs', foo, x)
 
-        d1 = reduce(numpy.dot, (mo_coeff[:,viridx], x, mo_coeff[:,occidx].T.conj()))
+        d1 = reduce(numpy.dot, (orbv, x, orbo.T.conj()))
         dm1 = d1 + d1.T.conj()
         if hyb is None:
             vj, vk = mf.get_jk(mol, dm1)
             v1 = vj - vk * .5
         else:
+            # The singlet hessian
             v1 = ni.nr_rks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, 1, rho0, vxc, fxc)
 ## *.7 this magic number can stablize DFT convergence.  Without scaling down
 ## the XC hessian, large oscillation is observed in Newton iterations.  It may
@@ -88,16 +98,19 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
             else:
                 vj, vk = mf.get_jk(mol, dm1)
                 v1 += vj - vk * (hyb * .5)
-        x2 += reduce(numpy.dot, (mo_coeff[:,occidx].T.conj(), v1,
-                                 mo_coeff[:,viridx])).T * 4
-        return x2.reshape(-1)
+        x2 += reduce(numpy.dot, (orbv.T.conj(), v1, orbo)) * 2
+        if with_symmetry and mol.symmetry:
+            x2[sym_forbid] = 0
+        return x2.reshape(-1) * 2
 
     return g.reshape(-1), h_op, h_diag.reshape(-1)
 
-def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
+def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
+                   with_symmetry=True):
     mo_occa = occidxa = mo_occ > 0
     mo_occb = occidxb = mo_occ ==2
-    ug, uh_op, uh_diag = gen_g_hop_uhf(mf, (mo_coeff,)*2, (mo_occa,mo_occb), fock_ao)
+    ug, uh_op, uh_diag = gen_g_hop_uhf(mf, (mo_coeff,)*2, (mo_occa,mo_occb),
+                                       fock_ao, None, with_symmetry)
 
     viridxa = ~occidxa
     viridxb = ~occidxb
@@ -125,8 +138,13 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
 
     return g, h_op, h_diag
 
-def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
+def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
+                  with_symmetry=True):
     mol = mf.mol
+    if hasattr(mf, '_scf') and id(mf._scf.mol) != id(mol):
+        mo_coeff = (addons.project_mo_nr2nr(mf._scf.mol, mo_coeff[0], mol),
+                    addons.project_mo_nr2nr(mf._scf.mol, mo_coeff[1], mol))
+
     occidxa = numpy.where(mo_occ[0]>0)[0]
     occidxb = numpy.where(mo_occ[1]>0)[0]
     viridxa = numpy.where(mo_occ[0]==0)[0]
@@ -135,13 +153,15 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     noccb = len(occidxb)
     nvira = len(viridxa)
     nvirb = len(viridxb)
-    if mol.symmetry:
+    orboa = mo_coeff[0][:,occidxa]
+    orbob = mo_coeff[1][:,occidxb]
+    orbva = mo_coeff[0][:,viridxa]
+    orbvb = mo_coeff[1][:,viridxb]
+    if with_symmetry and mol.symmetry:
         orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
         sym_forbida = orbsyma[viridxa].reshape(-1,1) != orbsyma[occidxa]
         sym_forbidb = orbsymb[viridxb].reshape(-1,1) != orbsymb[occidxb]
         sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
-    else:
-        sym_forbid = numpy.zeros(nvira * nocca + nvirb * noccb, dtype=bool)
 
     if fock_ao is None:
         if h1e is None: h1e = mf.get_hcore()
@@ -156,22 +176,20 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
 
     g = numpy.hstack((focka[occidxa[:,None],viridxa].T.ravel(),
                       fockb[occidxb[:,None],viridxb].T.ravel()))
-    g[sym_forbid] = 0
 
-    h_diaga =(focka[viridxa,viridxa].reshape(-1,1) - focka[occidxa,occidxa])
-    h_diagb =(fockb[viridxb,viridxb].reshape(-1,1) - fockb[occidxb,occidxb])
+    h_diaga = focka[viridxa,viridxa].reshape(-1,1) - focka[occidxa,occidxa]
+    h_diagb = fockb[viridxb,viridxb].reshape(-1,1) - fockb[occidxb,occidxb]
     h_diag = numpy.hstack((h_diaga.reshape(-1), h_diagb.reshape(-1)))
-    h_diag[sym_forbid] = 0
 
-    if hasattr(mf, '_scf') and id(mf._scf.mol) != id(mol):
-        mo_coeff = (addons.project_mo_nr2nr(mf._scf.mol, mo_coeff[0], mol),
-                    addons.project_mo_nr2nr(mf._scf.mol, mo_coeff[1], mol))
+    if with_symmetry and mol.symmetry:
+        g[sym_forbid] = 0
+        h_diag[sym_forbid] = 0
 
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
         if mf.grids.coords is None:
             mf.grids.build()
         ni = mf._numint
-        hyb = ni.hybrid_coeff(mf.xc, spin=(mol.spin>0)+1)
+        hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
         rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc, mo_coeff, mo_occ, 1)
         #dm0 =(numpy.dot(mo_coeff[0]*mo_occ[0], mo_coeff[0].T.conj()),
         #      numpy.dot(mo_coeff[1]*mo_occ[1], mo_coeff[1].T.conj()))
@@ -180,17 +198,18 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
         hyb = None
 
     def h_op(x):
+        if with_symmetry and mol.symmetry:
+            x = x.copy()
+            x[sym_forbid] = 0
         x1a = x[:nvira*nocca].reshape(nvira,nocca)
         x1b = x[nvira*nocca:].reshape(nvirb,noccb)
-        x2a = numpy.einsum('rp,rq->pq', fvva, x1a.conj())
-        x2a-= numpy.einsum('sq,ps->pq', fooa, x1a.conj())
-        x2b = numpy.einsum('rp,rq->pq', fvvb, x1b.conj())
-        x2b-= numpy.einsum('sq,ps->pq', foob, x1b.conj())
+        x2a = numpy.einsum('pr,rq->pq', fvva, x1a)
+        x2a-= numpy.einsum('sq,ps->pq', fooa, x1a)
+        x2b = numpy.einsum('pr,rq->pq', fvvb, x1b)
+        x2b-= numpy.einsum('sq,ps->pq', foob, x1b)
 
-        d1a = reduce(numpy.dot, (mo_coeff[0][:,viridxa], x1a,
-                                 mo_coeff[0][:,occidxa].T.conj()))
-        d1b = reduce(numpy.dot, (mo_coeff[1][:,viridxb], x1b,
-                                 mo_coeff[1][:,occidxb].T.conj()))
+        d1a = reduce(numpy.dot, (orbva, x1a, orboa.T.conj()))
+        d1b = reduce(numpy.dot, (orbvb, x1b, orbob.T.conj()))
         dm1 = numpy.array((d1a+d1a.T.conj(),d1b+d1b.T.conj()))
         if hyb is None:
             vj, vk = mf.get_jk(mol, dm1)
@@ -208,12 +227,11 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
             else:
                 vj, vk = mf.get_jk(mol, dm1)
                 v1 += vj[0]+vj[1] - vk * hyb
-        x2a += reduce(numpy.dot, (mo_coeff[0][:,occidxa].T.conj(), v1[0],
-                                  mo_coeff[0][:,viridxa])).T
-        x2b += reduce(numpy.dot, (mo_coeff[1][:,occidxb].T.conj(), v1[1],
-                                  mo_coeff[1][:,viridxb])).T
+        x2a += reduce(numpy.dot, (orbva.T.conj(), v1[0], orboa))
+        x2b += reduce(numpy.dot, (orbvb.T.conj(), v1[1], orbob))
         x2 = numpy.hstack((x2a.ravel(), x2b.ravel()))
-        x2[sym_forbid] = 0
+        if with_symmetry and mol.symmetry:
+            x2[sym_forbid] = 0
         return x2
 
     return g, h_op, h_diag
@@ -278,9 +296,17 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
 #            x *= 1e-2/norm_x
         return x
 
-    kf_trust_region = mf.kf_trust_region
     g_op = lambda: g_orb
-    x0_guess = g_orb
+    x0_guess = numpy.zeros_like(g_orb)
+    sym_allow = h_diag != 0
+    x0_guess[sym_allow] = 1. / h_diag[sym_allow]
+# TODO test which initial guess is better
+#    x0_guess = g_orb
+#    x0_guess = numpy.zeros_like(g_orb)
+#    x0_guess[sym_allow] = g_orb[sym_allow] / h_diag[sym_allow]
+
+    kf_trust_region = mf.kf_trust_region
+    ah_max_cycle = min(mf.ah_max_cycle, numpy.count_nonzero(sym_allow))
     while True:
         ah_conv_tol = min(norm_gorb**2, mf.ah_conv_tol)
         # increase the AH accuracy when approach convergence
@@ -299,7 +325,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
 
         for ah_end, ihop, w, dxi, hdxi, residual, seig \
                 in ciah.davidson_cc(h_op, g_op, precond, x0_guess,
-                                    tol=ah_conv_tol, max_cycle=mf.ah_max_cycle,
+                                    tol=ah_conv_tol, max_cycle=ah_max_cycle,
                                     lindep=mf.ah_lindep, verbose=log):
             norm_residual = numpy.linalg.norm(residual)
             if (ah_end or ihop == mf.ah_max_cycle or # make sure to use the last step
@@ -399,7 +425,10 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
         log.debug1('Set  kf_trust_region = %g', kf_trust_region)
         g_orb = g_kf
         norm_gorb = norm_gkf
-        x0_guess = dxi
+        if norm_dxi != 0:
+            x0_guess = dxi
+        else:
+            x0_guess = g_kf
 
 
 def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
