@@ -670,7 +670,7 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms, relativity=0, singlet=True
             else:
                 frho = u_u - u_d
 
-            for i, dm in enumerate(dms):
+            for i in range(nset):
                 rho1 = ni.eval_rho(cell, ao_k1, dm, mask, xctype)
                 wv = weight * frho * rho1
                 vmat[i] += ni._fxc_mat(cell, ao_k1, wv, mask, xctype, ao_loc)
@@ -708,7 +708,7 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms, relativity=0, singlet=True
                 fgg = uu_uu - uu_dd
                 frhogamma = u_uu - u_dd
 
-            for i, dm in enumerate(dms):
+            for i in range(nset):
                 # rho1[0 ] = |b><j| z_{bj}
                 # rho1[1:] = \nabla(|b><j|) z_{bj}
                 rho1 = make_rho(i, ao_k1, mask, xctype)

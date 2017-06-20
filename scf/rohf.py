@@ -379,6 +379,10 @@ class ROHF(hf.RHF):
 
     canonicalize = canonicalize
 
+    def stability(self, internal=True, external=False, verbose=None):
+        from pyscf.scf.stability import rohf_stability
+        return rohf_stability(self, internal, external, verbose)
+
 
 class HF1e(ROHF):
     def scf(self, *args):

@@ -776,6 +776,10 @@ class UHF(hf.SCF):
                         self.e_tot, self.max_cycle, ss, s)
         return self
 
+    def stability(self, internal=True, external=False, verbose=None):
+        from pyscf.scf.stability import uhf_stability
+        return uhf_stability(self, internal, external, verbose)
+
 def _makevhf(vj, vk):
     assert(vj.ndim >= 3 and vj.shape[0] == 2 and vj.shape == vk.shape)
     vj = vj[0] + vj[1]

@@ -98,10 +98,10 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
             else:
                 vj, vk = mf.get_jk(mol, dm1)
                 v1 += vj - vk * (hyb * .5)
-        x2 += reduce(numpy.dot, (orbv.T.conj(), v1, orbo)) * 2
+        x2 += reduce(numpy.dot, (orbv.T.conj(), v1, orbo)) * 4
         if with_symmetry and mol.symmetry:
             x2[sym_forbid] = 0
-        return x2.reshape(-1) * 2
+        return x2.reshape(-1)
 
     return g.reshape(-1), h_op, h_diag.reshape(-1)
 

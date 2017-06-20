@@ -1384,6 +1384,10 @@ class RHF(SCF):
         addons.convert_to_rhf(mf, self)
         return self
 
+    def stability(self, internal=True, external=False, verbose=None):
+        from pyscf.scf.stability import rhf_stability
+        return rhf_stability(self, internal, external, verbose)
+
 
 if __name__ == '__main__':
     mol = gto.Mole()
