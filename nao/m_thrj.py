@@ -1,7 +1,7 @@
 from __future__ import print_function, division
 import numpy as np
 from pyscf.nao.m_fact import fact as fac, sgn
-from ctypes import POINTER, c_double, c_int32
+from ctypes import POINTER, c_double, c_int32, c_int, byref
 
 lmax = 20
 uselibnao = True
@@ -87,5 +87,26 @@ def thrj(l1i,l2i,l3i,m1i,m2i,m3i):
 
   if l1>lmax: raise RuntimeError('thrj: 3-j coefficient out of range')
 
+  if l1>l2+l3 or m1+m2+m3 != 0: return 0.0
+   
   icc=ixxa[l1]+ixxb[l2]+ixxc[l2]*(l2+m2)+ixxc[l3]-l3+m3
   return ph*aa[icc-1]
+
+
+def thrj_nobuf(l1,l2,l3,m1,m2,m3):
+  """ Wigner3j symbol without buffer. Written by James Talman. """
+  from pyscf.nao.m_libnao import libnao
+  from ctypes import POINTER, c_double, c_int32, c_int, byref
+
+  libnao.thrj_subr.argtypes = (
+    POINTER(c_int),  # l1
+    POINTER(c_int),  # l2
+    POINTER(c_int),  # l3
+    POINTER(c_int),  # m1
+    POINTER(c_int),  # m2
+    POINTER(c_int),  # m3 
+   POINTER(c_double))  # thrj
+
+  aa = c_double()
+  libnao.thrj_subr( c_int32(l1),c_int32(l2),c_int32(l3),c_int32(m1),c_int32(m2),c_int32(m3), byref(aa)) # call library function
+  return aa.value

@@ -1,7 +1,6 @@
 from __future__ import print_function, division
 import numpy as np
 from pyscf.nao import log_mesh_c
-
 #
 #
 #
@@ -14,6 +13,7 @@ class prod_talman_c(log_mesh_c):
       ngl : order of Gauss-Legendre quadrature
     """
     from numpy.polynomial.legendre import leggauss
+    from pyscf.nao.m_log_interp import log_interp_c
     assert ngl>2
     assert lbdmxa>0
     assert hasattr(log_mesh, 'rr')
@@ -31,18 +31,71 @@ class prod_talman_c(log_mesh_c):
     for kappa in range(1,2*(lbdmxa+jmx)+1):
       self.plval[kappa+1, :]= ((2*kappa+1)*self.xx*self.plval[kappa, :]-kappa*self.plval[kappa-1, :])/(kappa+1)
 
+    self.log_interp = log_interp_c(self.rr)
     return
     
   def prdred(self,phia,la,ra, phib,lb,rb,rcen):
+    from numpy import sqrt
+    from pyscf.nao.m_thrj import thrj
+    from pyscf.nao.m_fact import fact as fac, sgn
+
     assert la>-1
     assert lb>-1
     
     jtb,clbdtb,lbdtb=self.prdred_terms(la,lb)
+    nterm = len(jtb)
+    
+    ya = phia/self.rr**la
+    yb = phib/self.rr**lb
+    raa,rbb=sqrt(sum((ra-rcen)**2)),sqrt(sum((rb-rcen)**2))
+    ijmx=la+lb
+    fval=np.zeros([2*self.lbdmxa+ijmx+1, self.nr])
+    yz = np.zeros(self.ngl)
+    kpmax = 0
+    for ir,r in enumerate(self.rr):
+      for igl,x in enumerate(self.xx):
+        a1 = sqrt(r*r-2*raa*r*x+raa**2)
+        a2 = sqrt(r*r+2*rbb*r*x+rbb**2)
+        yz[igl]=self.log_interp(ya,a1)*self.log_interp(yb,a2)
 
-    ya=phia/self.rr**la
-    yb=phib/self.rr**lb
+      kpmax = 2*self.lbdmxa+ijmx if raa+rbb>1.0e-5 else 0 
+      for kappa in range(kpmax+1):
+        fval[kappa,ir]=0.5*(self.plval[kappa,:]*yz*self.ww).sum()
 
-    return 0
+    rhotb=np.zeros([nterm,self.nr])
+    for ix,[ij,clbd,clbdp] in enumerate(zip(jtb, clbdtb, lbdtb)):
+      for lbd1 in range(la+1):
+        lbdp1 = la-lbd1
+        aa = thrj(lbd1,lbdp1,la,0,0,0)*fac[lbd1]*fac[lbdp1]*fac[2*la+1] / (fac[2*lbd1]*fac[2*lbdp1]*fac[la])
+
+        for lbd2 in range(lb+1):
+          lbdp2=lb-lbd2
+          bb=thrj(lbd2,lbdp2,lb,0,0,0)*fac[lbd2]*fac[lbdp2]*fac[2*lb+1] / (fac[2*lbd2]*fac[2*lbdp2]*fac[lb])
+          bb=aa*bb
+          
+          for kappa in range(kpmax+1):
+            sumb=0.0
+            lcmin=max(abs(lbd1-lbd2),abs(clbd-kappa))
+            lcmax=min(lbd1+lbd2,clbd+kappa)
+            for lc in range(lcmin,lcmax+1,2):
+              lcpmin=max(abs(lbdp1-lbdp2),abs(clbdp-kappa))
+              lcpmax=min(lbdp1+lbdp2,clbdp+kappa)
+              for lcp in range(lcpmin,lcpmax+1,2):
+                if abs(lc-ij)<=lcp and lcp<=lc+ij:
+                  sumb = sumb+(2*lc+1)*(2*lcp+1) * \
+                    thrj(lbd1,lbd2,lc,0,0,0) * \
+                    thrj(lbdp1,lbdp2,lcp,0,0,0) * \
+                    thrj(lc,clbd,kappa,0,0,0) * \
+                    thrj(lcp,clbdp,kappa,0,0,0) * \
+                    sixj(clbd,clbdp,ij,lcp,lc,kappa) * \
+                    ninej(la,lb,ij,lbd1,lbd2,lc,lbdp1,lbdp2,lcp)
+              
+              cc=sgn(lbd1+kappa+lb)*(2*ij+1)*(2*kappa+1) * (2*clbd+1)*(2*clbdp+1)*bb*sumb
+              if cc != 0.0:
+                lbd1_p_lbd2 = lbd1 + lbd2
+                rhotb[ix,:] = rhotb[ix,:] + cc*self.rr[:]**(lbd1_p_lbd2) *(raa**lbdp1)* (rbb**lbdp2)* fval[kappa,:]
+
+    return jtb,clbdtb,lbdtb,rhotb
 
 
   def prdred_terms(self,la,lb):

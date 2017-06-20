@@ -74,7 +74,7 @@ def comp_coeffs_(self, r, i2coeff):
 #
 #
 def comp_coeffs(self, r):
-  i2coeff = np.zeros((6), dtype='float64')
+  i2coeff = np.zeros(6)
   k = comp_coeffs_(self, r, i2coeff)
   return k,i2coeff
 
@@ -90,6 +90,10 @@ class log_interp_c():
     self.gammin_jt = np.log(gg[0])
     self.dg_jt = np.log(gg[1]/gg[0])
 
+  def __call__(self, ff, r):
+    k,cc = comp_coeffs(self, r)
+    return sum(cc*ff[k:k+6])
+  
 #    Example:
 #      loginterp =log_interp_c(rr)
 
@@ -101,7 +105,7 @@ if __name__ == '__main__':
   gc = 0.234450
   ff = np.array([np.exp(-gc*r**2) for r in rr])
   rho_min_jt, dr_jt = np.log(rr[0]), np.log(rr[1]/rr[0]) 
-  for r in np.linspace(0.0, 25.0, 100):
+  for r in np.linspace(0.01, 25.0, 100):
     yref = log_interp(ff, r, rho_min_jt, dr_jt)
     k,coeffs = comp_coeffs(interp_c, r)
     y = sum(coeffs*ff[k:k+6])
