@@ -130,6 +130,9 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
                              dtype=numpy.uint8)
+    # (D + D.T)/2 because eval_rho computes 2*(|\nabla i> D_ij <j|) instead of
+    # |\nabla i> D_ij <j| + |i> D_ij <\nabla j| for efficiency
+    dm = (dm + dm.conj().T) * .5
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
     if xctype == 'LDA':
@@ -863,6 +866,7 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms, relativity=0, singlet=True,
     xctype = ni._xc_type(xc_code)
 
     dms = numpy.asarray(dms)
+    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms)
     if ((xctype == 'LDA' and fxc is None) or
         (xctype == 'GGA' and rho0 is None)):
         make_rho0 = ni._gen_rho_evaluator(mol, dm0, hermi=1)[0]
@@ -870,10 +874,9 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms, relativity=0, singlet=True,
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
 
+    vmat = numpy.zeros((nset,nao,nao))
     aow = None
     if xctype == 'LDA':
-        make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms)
-        vmat = numpy.zeros((nset,nao,nao))
         ao_deriv = 0
         ip = 0
         for ao, mask, weight, coords \
@@ -904,10 +907,6 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms, relativity=0, singlet=True,
                 rho1 = None
 
     elif xctype == 'GGA':
-        # (D + D.T)/2 because only 2*(|\nabla i> D_ij <j|) is computed in eval_rho
-        dms = (dms + dms.transpose(0,2,1).conj()) * .5
-        make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms)
-        vmat = numpy.zeros((nset,nao,nao))
         ao_deriv = 1
         ip = 0
         for ao, mask, weight, coords \

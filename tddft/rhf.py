@@ -61,9 +61,8 @@ def gen_tda_hop(mf, fock_ao=None, singlet=True, wfnsym=None, max_memory=2000):
         ni = mf._numint
         hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
         dm0 = None # mf.make_rdm1(mo_coeff, mo_occ)
-        mo_occ = [mf.mo_occ*.5, mf.mo_occ*.5]
         rho0, vxc, fxc = ni.cache_xc_kernel(mf.mol, mf.grids, mf.xc,
-                                            [mo_coeff,mo_coeff], mo_occ, spin=1)
+                                            [mo_coeff]*2, [mo_occ*.5]*2, spin=1)
     else:
         hyb = None
 
@@ -264,9 +263,8 @@ class TDHF(TDA):
             ni = mf._numint
             hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
             dm0 = None # mf.make_rdm1(mf.mo_coeff, mf.mo_occ)
-            mo_occ = [mf.mo_occ*.5, mf.mo_occ*.5]
             rho0, vxc, fxc = ni.cache_xc_kernel(mf.mol, mf.grids, mf.xc,
-                                                [mo_coeff,mo_coeff], mo_occ, spin=1)
+                                                [mo_coeff]*2, [mo_occ*.5]*2, spin=1)
         else:
             hyb = None
 

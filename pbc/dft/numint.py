@@ -163,6 +163,7 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', verbose=None):
     if numpy.iscomplexobj(ao) or numpy.iscomplexobj(dm):
         shls_slice = (0, cell.nbas)
         ao_loc = cell.ao_loc_nr()
+        dm = (dm + dm.conj().T) * .5
         dm = dm.astype(numpy.complex128)
 
         def dot_bra(bra, aodm):
@@ -575,6 +576,7 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=1,
         kpts = numpy.zeros((1,3))
     xctype = ni._xc_type(xc_code)
 
+    dms = lib.asarray(dms)
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms, hermi)
     if ((xctype == 'LDA' and fxc is None) or
         (xctype == 'GGA' and rho0 is None)):
@@ -634,9 +636,97 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=1,
     else:
         raise NotImplementedError('meta-GGA')
 
-    if nset == 1:
-        vmat = vmat[0]
-    return vmat
+    return lib.asarray(vmat).reshape(dms.shape)
+
+def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms, relativity=0, singlet=True,
+                  rho0=None, vxc=None, fxc=None, kpts=None, max_memory=2000,
+                  verbose=None):
+    xctype = ni._xc_type(xc_code)
+
+    dms = lib.asarray(dms)
+    make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms)
+    if ((xctype == 'LDA' and fxc is None) or
+        (xctype == 'GGA' and rho0 is None)):
+        make_rho0 = ni._gen_rho_evaluator(cell, dm0, 1)[0]
+
+    ao_loc = cell.ao_loc_nr()
+    vmat = [0] * nset
+    if xctype == 'LDA':
+        ao_deriv = 0
+        ip = 0
+        for ao_k1, ao_k2, mask, weight, coords \
+                in ni.block_loop(cell, grids, nao, ao_deriv, kpts, None, max_memory):
+            ngrid = weight.size
+            if fxc is None:
+                rho = make_rho0(0, ao_k1, mask, xctype)
+                rho *= .5  # alpha density
+                fxc0 = ni.eval_xc(xc_code, (rho,rho), 1, deriv=2)[2]
+                u_u, u_d, d_d = fxc0[0].T
+            else:
+                u_u, u_d, d_d = fxc[0][ip:ip+ngrid].T
+                ip += ngrid
+            if singlet:
+                frho = u_u + u_d
+            else:
+                frho = u_u - u_d
+
+            for i, dm in enumerate(dms):
+                rho1 = ni.eval_rho(cell, ao_k1, dm, mask, xctype)
+                wv = weight * frho * rho1
+                vmat[i] += ni._fxc_mat(cell, ao_k1, wv, mask, xctype, ao_loc)
+
+    elif xctype == 'GGA':
+        ao_deriv = 1
+        ip = 0
+        for ao_k1, ao_k2, mask, weight, coords \
+                in ni.block_loop(cell, grids, nao, ao_deriv, kpts, None, max_memory):
+            ngrid = weight.size
+            if vxc is None or fxc is None:
+                rho = make_rho0(0, ao_k1, mask, xctype)
+                rho *= .5  # alpha density
+                vxc0, fxc0 = ni.eval_xc(xc_code, (rho,rho), 1, deriv=2)[1:3]
+
+                vsigma = vxc0[1].T
+                u_u, u_d, d_d = fxc0[0].T  # v2rho2
+                u_uu, u_ud, u_dd, d_uu, d_ud, d_dd = fxc0[1].T  # v2rhosigma
+                uu_uu, uu_ud, uu_dd, ud_ud, ud_dd, dd_dd = fxc0[2].T  # v2sigma2
+            else:
+                rho = rho0[0][:,ip:ip+ngrid]
+                vsigma = vxc[1][ip:ip+ngrid].T
+                u_u, u_d, d_d = fxc[0][ip:ip+ngrid].T  # v2rho2
+                u_uu, u_ud, u_dd, d_uu, d_ud, d_dd = fxc[1][ip:ip+ngrid].T  # v2rhosigma
+                uu_uu, uu_ud, uu_dd, ud_ud, ud_dd, dd_dd = fxc[2][ip:ip+ngrid].T  # v2sigma2
+
+            if singlet:
+                fgamma = vsigma[0] + vsigma[1] * .5
+                frho = u_u + u_d
+                fgg = uu_uu + .5*ud_ud + 2*uu_ud + uu_dd
+                frhogamma = u_uu + u_dd + u_ud
+            else:
+                fgamma = vsigma[0] - vsigma[1] * .5
+                frho = u_u - u_d
+                fgg = uu_uu - uu_dd
+                frhogamma = u_uu - u_dd
+
+            for i, dm in enumerate(dms):
+                # rho1[0 ] = |b><j| z_{bj}
+                # rho1[1:] = \nabla(|b><j|) z_{bj}
+                rho1 = make_rho(i, ao_k1, mask, xctype)
+                wv = numint._rks_gga_wv(rho, rho1, (None,fgamma),
+                                        (frho,frhogamma,fgg), weight)
+                vmat[i] += ni._fxc_mat(cell, ao_k1, wv, mask, xctype, ao_loc)
+
+        # call swapaxes method to swap last two indices because vmat may be a 3D
+        # array (nset,nao,nao) in single k-point mode or a 4D array
+        # (nset,nkpts,nao,nao) in k-points mode
+        for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
+            vmat[i] = vmat[i] + vmat[i].swapaxes(-2,-1).conj()
+
+    else:
+        raise NotImplementedError('meta-GGA')
+
+    return lib.asarray(vmat).reshape(dms.shape)
+
 
 def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=1,
                rho0=None, vxc=None, fxc=None, kpts=None, max_memory=2000,
@@ -684,12 +774,8 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=1,
 
     dms = numpy.asarray(dms)
     nao = dms.shape[-1]
-    if dms.ndim == 2:
-        make_rhoa, nset = ni._gen_rho_evaluator(cell, dms*.5, hermi)[:2]
-        make_rhob = make_rhoa
-    else:
-        make_rhoa, nset = ni._gen_rho_evaluator(cell, dms[0].reshape(-1,nao,nao), hermi)[:2]
-        make_rhob       = ni._gen_rho_evaluator(cell, dms[1].reshape(-1,nao,nao), hermi)[0]
+    make_rhoa, nset = ni._gen_rho_evaluator(cell, dms[0], hermi)[:2]
+    make_rhob       = ni._gen_rho_evaluator(cell, dms[1], hermi)[0]
 
     if ((xctype == 'LDA' and fxc is None) or
         (xctype == 'GGA' and rho0 is None)):
@@ -762,10 +848,7 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=1,
     else:
         raise NotImplementedError('meta-GGA')
 
-    if nset == 1:
-        vmata = vmata[0]
-        vmatb = vmatb[0]
-    return lib.asarray((vmata,vmatb))
+    return lib.asarray((vmata,vmatb)).reshape(dms.shape)
 
 def _fxc_mat(cell, ao, wv, non0tab, xctype, ao_loc):
     shls_slice = (0, cell.nbas)

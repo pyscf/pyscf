@@ -80,8 +80,8 @@ def gen_tda_hop(mf, fock_ao=None, wfnsym=None, max_memory=2000):
             vj, vk = mf.get_jk(mol, dmvo, hermi=0)
             v1ao = vj[0] + vj[1] - vk
         else:
-            v1ao = ni.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dmvo, 0, 0, rho0,
-                                 vxc, fxc, max_memory)
+            v1ao = ni.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dmvo, 0, 0,
+                                 rho0, vxc, fxc, max_memory)
             if abs(hyb) > 1e-10:
                 vj, vk = mf.get_jk(mf.mol, dmvo, hermi=0)
                 v1ao += vj[0] + vj[1] - hyb * vk
@@ -268,8 +268,8 @@ class TDHF(TDA):
                 vj, vk = mf.get_jk(mol, dms, hermi=0)
                 v1ao = vj[0] + vj[1] - vk
             else:
-                v1ao = ni.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dms, 0, 0, rho0,
-                                     vxc, fxc, max_memory)
+                v1ao = ni.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dms, 0, 0,
+                                     rho0, vxc, fxc, max_memory)
                 if abs(hyb) > 1e-10:
                     vj, vk = mf.get_jk(mf.mol, dms, hermi=0)
                     v1ao += vj[0] + vj[1] - hyb * vk

@@ -57,9 +57,8 @@ class TDDFTNoHybrid(TDA):
         ni = mf._numint
         hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
         dm0 = None # mf.make_rdm1(mf.mo_coeff, mf.mo_occ)
-        mo_occ = [mf.mo_occ*.5, mf.mo_occ*.5]
         rho0, vxc, fxc = ni.cache_xc_kernel(mf.mol, mf.grids, mf.xc,
-                                            [mo_coeff,mo_coeff], mo_occ, spin=1)
+                                            [mo_coeff]*2, [mo_occ*.5]*2, spin=1)
 
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
