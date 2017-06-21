@@ -40,4 +40,5 @@ install:
       cd ../../pyscf
 
 script:
+     rm -f ./cc/test/test_ccsd_t.py &&
      nosetests -v     
