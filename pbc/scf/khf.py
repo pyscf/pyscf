@@ -210,7 +210,7 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
     from pyscf.lo import orth
     if s is None:
         s = hf.get_ovlp(mol)
-    log = logger.new_logger(mf, verbose)
+    log = logger.new_logger(mol, verbose)
     log.note('Analyze output for the gamma point')
     log.note("KRHF mulliken_meta")
     dm_ao_gamma=dm_ao[0,:,:].real.copy()
