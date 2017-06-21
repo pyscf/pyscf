@@ -17,7 +17,7 @@ import scipy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import newton_ah
-from pyscf.scf import hf_symm, uhf_symm
+from pyscf.scf import hf, hf_symm, uhf_symm
 
 def rhf_stability(mf, internal=True, external=False, verbose=None):
     mo_i = mo_e = None
@@ -58,16 +58,16 @@ def rhf_internal(mf, with_symmetry=True, verbose=None):
         x0[numpy.argmin(hdiag)] = 1
     e, v = lib.davidson(hop, x0, precond, tol=1e-4, verbose=log)
     if e < -1e-5:
-        log.log('RHF/RKS wavefunction has an internal instablity')
+        log.note('RHF/RKS wavefunction has an internal instablity')
         mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
     else:
-        log.log('RHF/RKS wavefunction is stable in the intenral stablity analysis')
+        log.note('RHF/RKS wavefunction is stable in the intenral stablity analysis')
         mo = mf.mo_coeff
     return mo
 
 def _rotate_mo(mo_coeff, mo_occ, dx):
     nmo = mo_occ.size
-    dr = scf.hf.unpack_uniq_var(dx, mo_occ)
+    dr = hf.unpack_uniq_var(dx, mo_occ)
     u = newton_ah.expmat(dr)
     return numpy.dot(mo_coeff, u)
 
@@ -177,9 +177,9 @@ def rhf_external(mf, with_symmetry=True, verbose=None):
         x0[numpy.argmin(hdiag)] = 1
     e1, v1 = lib.davidson(hop1, x0, precond, tol=1e-4, verbose=log)
     if e1 < -1e-5:
-        log.log('RHF/RKS wavefunction has a real -> complex instablity')
+        log.note('RHF/RKS wavefunction has a real -> complex instablity')
     else:
-        log.log('RHF/RKS wavefunction is stable in the real -> complex stablity analysis')
+        log.note('RHF/RKS wavefunction is stable in the real -> complex stablity analysis')
 
     def precond(dx, e, x0):
         hdiagd = hdiag2 - e
@@ -188,12 +188,12 @@ def rhf_external(mf, with_symmetry=True, verbose=None):
     x0 = v1
     e3, v3 = lib.davidson(hop2, x0, precond, tol=1e-4, verbose=log)
     if e3 < -1e-5:
-        log.log('RHF/RKS wavefunction has a RHF/RKS -> UHF/UKS instablity.')
+        log.note('RHF/RKS wavefunction has a RHF/RKS -> UHF/UKS instablity.')
         nocca = numpy.count_nonzero(mf.mo_occ[0]> 0)
         nvira = numpy.count_nonzero(mf.mo_occ[0]==0)
         mo = (_rotate_mo(mf.mo_coeff, mf.mo_occ, v3), mf.mo_coeff)
     else:
-        log.log('RHF/RKS wavefunction is stable in the RHF/RKS -> UHF/UKS stablity analysis')
+        log.note('RHF/RKS wavefunction is stable in the RHF/RKS -> UHF/UKS stablity analysis')
         mo = (mf.mo_coeff, mf.mo_coeff)
     return mo
 
@@ -212,10 +212,10 @@ def rohf_internal(mf, with_symmetry=True, verbose=None):
         x0[numpy.argmin(hdiag)] = 1
     e, v = lib.davidson(hop, x0, precond, tol=1e-4, verbose=log)
     if e < -1e-5:
-        log.log('ROHF wavefunction has an internal instablity.')
+        log.note('ROHF wavefunction has an internal instablity.')
         mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
     else:
-        log.log('ROHF wavefunction is stable in the intenral stablity analysis')
+        log.note('ROHF wavefunction is stable in the intenral stablity analysis')
         mo = mf.mo_coeff
     return mo
 
@@ -237,13 +237,13 @@ def uhf_internal(mf, with_symmetry=True, verbose=None):
         x0[numpy.argmin(hdiag)] = 1
     e, v = lib.davidson(hop, x0, precond, tol=1e-4, verbose=log)
     if e < -1e-5:
-        log.log('UHF/UKS wavefunction has an internal instablity.')
+        log.note('UHF/UKS wavefunction has an internal instablity.')
         nocca = numpy.count_nonzero(mf.mo_occ[0]> 0)
         nvira = numpy.count_nonzero(mf.mo_occ[0]==0)
         mo = (_rotate_mo(mf.mo_coeff[0], mf.mo_occ[0], v[:nocca*nvira]),
               _rotate_mo(mf.mo_coeff[1], mf.mo_occ[1], v[nocca*nvira:]))
     else:
-        log.log('UHF/UKS wavefunction is stable in the intenral stablity analysis')
+        log.note('UHF/UKS wavefunction is stable in the intenral stablity analysis')
         mo = mf.mo_coeff
     return mo
 
@@ -383,9 +383,9 @@ def uhf_external(mf, with_symmetry=True, verbose=None):
         x0[numpy.argmin(hdiag)] = 1
     e1, v = lib.davidson(hop1, x0, precond, tol=1e-4, verbose=log)
     if e1 < -1e-5:
-        log.log('UHF/UKS wavefunction has a real -> complex instablity')
+        log.note('UHF/UKS wavefunction has a real -> complex instablity')
     else:
-        log.log('UHF/UKS wavefunction is stable in the real -> complex stablity analysis')
+        log.note('UHF/UKS wavefunction is stable in the real -> complex stablity analysis')
 
     def precond(dx, e, x0):
         hdiagd = hdiag2 - e
@@ -399,7 +399,7 @@ def uhf_external(mf, with_symmetry=True, verbose=None):
     log.debug('uhf_external: lowest eigs of H = %s', e3)
     mo = scipy.linalg.block_diag(*mf.mo_coeff)
     if e3 < -1e-5:
-        log.log('UHF/UKS wavefunction has an UHF/UKS -> GHF/GKS instablity.')
+        log.note('UHF/UKS wavefunction has an UHF/UKS -> GHF/GKS instablity.')
         occidxa = numpy.where(mf.mo_occ[0]> 0)[0]
         viridxa = numpy.where(mf.mo_occ[0]==0)[0]
         occidxb = numpy.where(mf.mo_occ[1]> 0)[0]
@@ -415,7 +415,7 @@ def uhf_external(mf, with_symmetry=True, verbose=None):
         u = newton_ah.expmat(dx - dx.T)
         mo = numpy.dot(mo, u)
     else:
-        log.log('UHF/UKS wavefunction is stable in the UHF/UKS -> GHF/GKS stablity analysis')
+        log.note('UHF/UKS wavefunction is stable in the UHF/UKS -> GHF/GKS stablity analysis')
     return mo
 
 
