@@ -131,27 +131,47 @@ def density_fit(mf, auxbasis='weigend+etb', with_df=None):
 def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
     t0 = t1 = (time.clock(), time.time())
     log = logger.Logger(dfobj.stdout, dfobj.verbose)
+    assert(with_j or with_k)
 
+    mol = dfobj.mol
     fmmm = _ao2mo.libao2mo.AO2MOmmm_bra_nr_s2
     fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
     ftrans = _ao2mo.libao2mo.AO2MOtranse2_nr_s2
     null = lib.c_null_ptr()
 
-    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-        dms = [dm]
-    else:
-        dms = dm
-    nao = dms[0].shape[-1]
-    nset = len(dms)
+    dms = numpy.asarray(dm)
+    dm_shape = dms.shape
+    nao = dm_shape[-1]
+    dms = dms.reshape(-1,nao,nao)
+    nset = dms.shape[0]
     vj = [0] * nset
     vk = [0] * nset
 
-    if hasattr(dm, 'mo_coeff') or not with_k:
-        mo_coeff = dm.mo_coeff
-        mo_occ = dm.mo_occ
-        if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-            mo_coeff = [mo_coeff]
-            mo_occ   = [mo_occ]
+    if not with_k:
+        dmtril = []
+        for k in range(nset):
+            dmtril.append(lib.pack_tril(dms[k]+dms[k].T))
+            i = numpy.arange(nao)
+            dmtril[k][i*(i+1)//2+i] *= .5
+        for eri1 in dfobj.loop():
+            naux, nao_pair = eri1.shape
+            for k in range(nset):
+                rho = numpy.einsum('px,x->p', eri1, dmtril[k])
+                vj[k] += numpy.einsum('p,px->x', rho, eri1)
+
+    elif hasattr(dm, 'mo_coeff'):
+        mo_coeff = numpy.asarray(dm.mo_coeff, order='F')
+        mo_occ   = numpy.asarray(dm.mo_occ)
+        nmo = mo_occ.shape[-1]
+        mo_coeff = mo_coeff.reshape(-1,nao,nmo)
+        mo_occ   = mo_occ.reshape(-1,nmo)
+        if mo_occ.shape[0] * 2 == nset: # handle ROHF DM
+            mo_coeff = numpy.vstack((mo_coeff, mo_coeff))
+            mo_occa = numpy.array(mo_occ> 0, dtype=numpy.double)
+            mo_occb = numpy.array(mo_occ==2, dtype=numpy.double)
+            assert(mo_occa.sum() + mo_occb.sum() == mol.nelectron)
+            mo_occ = numpy.vstack((mo_occa, mo_occb))
+
         dmtril = []
         orbo = []
         for k in range(nset):
@@ -159,10 +179,10 @@ def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
                 dmtril.append(lib.pack_tril(dms[k]+dms[k].T))
                 i = numpy.arange(nao)
                 dmtril[k][i*(i+1)//2+i] *= .5
-            if with_k:
-                c = numpy.einsum('pi,i->pi', mo_coeff[k][:,mo_occ[k]>0],
-                                 numpy.sqrt(mo_occ[k][mo_occ[k]>0]))
-                orbo.append(numpy.asarray(c, order='F'))
+
+            c = numpy.einsum('pi,i->pi', mo_coeff[k][:,mo_occ[k]>0],
+                             numpy.sqrt(mo_occ[k][mo_occ[k]>0]))
+            orbo.append(numpy.asarray(c, order='F'))
 
         buf = numpy.empty((dfobj.blockdim*nao,nao))
         for eri1 in dfobj.loop():
@@ -172,23 +192,23 @@ def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
                 if with_j:
                     rho = numpy.einsum('px,x->p', eri1, dmtril[k])
                     vj[k] += numpy.einsum('p,px->x', rho, eri1)
-                if with_k:
-                    nocc = orbo[k].shape[1]
-                    if nocc > 0:
-                        buf1 = buf[:naux*nocc]
-                        fdrv(ftrans, fmmm,
-                             buf1.ctypes.data_as(ctypes.c_void_p),
-                             eri1.ctypes.data_as(ctypes.c_void_p),
-                             orbo[k].ctypes.data_as(ctypes.c_void_p),
-                             ctypes.c_int(naux), ctypes.c_int(nao),
-                             (ctypes.c_int*4)(0, nocc, 0, nao),
-                             null, ctypes.c_int(0))
-                        vk[k] += lib.dot(buf1.T, buf1)
+
+                nocc = orbo[k].shape[1]
+                if nocc > 0:
+                    buf1 = buf[:naux*nocc]
+                    fdrv(ftrans, fmmm,
+                         buf1.ctypes.data_as(ctypes.c_void_p),
+                         eri1.ctypes.data_as(ctypes.c_void_p),
+                         orbo[k].ctypes.data_as(ctypes.c_void_p),
+                         ctypes.c_int(naux), ctypes.c_int(nao),
+                         (ctypes.c_int*4)(0, nocc, 0, nao),
+                         null, ctypes.c_int(0))
+                    vk[k] += lib.dot(buf1.T, buf1)
             t1 = log.timer_debug1('jk', *t1)
     else:
         #:vk = numpy.einsum('pij,jk->pki', cderi, dm)
         #:vk = numpy.einsum('pki,pkj->ij', cderi, vk)
-        rargs = (ctypes.c_int(nao), (ctypes.c_int*4)(0, nao, 0, 0),
+        rargs = (ctypes.c_int(nao), (ctypes.c_int*4)(0, nao, 0, nao),
                  null, ctypes.c_int(0))
         dms = [numpy.asarray(x, order='F') for x in dms]
         buf = numpy.empty((2,dfobj.blockdim,nao,nao))
@@ -201,20 +221,17 @@ def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
                      eri1.ctypes.data_as(ctypes.c_void_p),
                      dms[k].ctypes.data_as(ctypes.c_void_p),
                      ctypes.c_int(naux), *rargs)
-                rho = numpy.einsum('kii->k', buf1)
-                vj[k] += numpy.einsum('p,px->x', rho, eri1)
+                if with_j:
+                    rho = numpy.einsum('kii->k', buf1)
+                    vj[k] += numpy.einsum('p,px->x', rho, eri1)
 
-                if with_k:
-                    buf2 = lib.unpack_tril(eri1, out=buf[1])
-                    vk[k] += lib.dot(buf1.reshape(-1,nao).T,
-                                     buf2.reshape(-1,nao))
+                buf2 = lib.unpack_tril(eri1, out=buf[1])
+                vk[k] += lib.dot(buf1.reshape(-1,nao).T,
+                                 buf2.reshape(-1,nao))
             t1 = log.timer_debug1('jk', *t1)
 
-    if with_j: vj = lib.unpack_tril(vj, hermi)
-    if with_k: vk = numpy.asarray(vk)
-    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-        vj = vj[0]
-        vk = vk[0]
+    if with_j: vj = lib.unpack_tril(vj, 1).reshape(dm_shape)
+    if with_k: vk = numpy.asarray(vk).reshape(dm_shape)
     logger.timer(dfobj, 'vj and vk', *t0)
     return vj, vk
 
@@ -344,3 +361,7 @@ if __name__ == '__main__':
     method = density_fit(pyscf.scf.UHF(mol))
     energy = method.scf()
     print(energy, -75.6310072359)
+
+    method = density_fit(pyscf.scf.RHF(mol))
+    energy = method.scf()
+    print(energy, -75.6265157244)
