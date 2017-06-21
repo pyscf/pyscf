@@ -89,10 +89,8 @@ def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
         +(_trace(dm1a, ovlpaa)
         + _trace(dm1b, ovlpbb)) *.25
 
-    dm2baab = _make_rdm2_baab(fcivec, norb, nelec)
-    dm2abba = _make_rdm2_abba(fcivec, norb, nelec)
-    dm2baab = rdm.reorder_rdm(dm1b, dm2baab, inplace=True)[1]
-    dm2abba = rdm.reorder_rdm(dm1a, dm2abba, inplace=True)[1]
+    dm2abba = -dm2ab.transpose(0,3,2,1)  # alpha^+ beta^+ alpha beta
+    dm2baab = -dm2ab.transpose(2,1,0,3)  # beta^+ alpha^+ beta alpha
     ssxy =(_bi_trace(dm2abba, ovlpab, ovlpba)
          + _bi_trace(dm2baab, ovlpba, ovlpab) \
          + _trace(dm1a, ovlpaa)
@@ -145,64 +143,18 @@ def local_spin(fcivec, norb, nelec, mo_coeff=None, ovlp=1, aolst=[]):
 # for S+*S-
 # dm(pq,rs) * [p(beta)^+ q(alpha) r(alpha)^+ s(beta)]
 # size of intermediate determinants (norb,neleca+1;norb,nelecb-1)
-def _make_rdm2_baab(fcivec, norb, nelec):
-    fcivec = numpy.asarray(fcivec, order='C')
-    neleca, nelecb = _unpack_nelec(nelec)
-    if neleca == norb or nelecb == 0: # no intermediate determinants
-        return numpy.zeros((norb,norb,norb,norb))
-    ades_index = cistring.gen_des_str_index(range(norb), neleca+1)
-    bcre_index = cistring.gen_cre_str_index(range(norb), nelecb-1)
-    instra = cistring.num_strings(norb, neleca+1)
-    nb = cistring.num_strings(norb, nelecb)
-    dm1 = numpy.empty((norb,norb))
-    dm2 = numpy.empty((norb,norb,norb,norb))
-    librdm.FCIspindm12_drv(librdm.FCIdm2_baab_kern,
-                           dm1.ctypes.data_as(ctypes.c_void_p),
-                           dm2.ctypes.data_as(ctypes.c_void_p),
-                           fcivec.ctypes.data_as(ctypes.c_void_p),
-                           fcivec.ctypes.data_as(ctypes.c_void_p),
-                           ctypes.c_int(norb),
-                           ctypes.c_int(instra), ctypes.c_int(nb),
-                           ctypes.c_int(neleca), ctypes.c_int(nelecb),
-                           ades_index.ctypes.data_as(ctypes.c_void_p),
-                           bcre_index.ctypes.data_as(ctypes.c_void_p))
-    return dm2
 def make_rdm2_baab(fcivec, norb, nelec):
-    dm2 = _make_rdm2_baab(fcivec, norb, nelec)
-    dm1b = rdm.make_rdm1_spin1('FCImake_rdm1b', fcivec, fcivec, norb, nelec)
-    dm1b, dm2 = rdm.reorder_rdm(dm1b, dm2, inplace=True)
-    return dm2
+    dm2aa, dm2ab, dm2bb = direct_spin1.make_rdm12s(fcivec, norb, nelec)[1]
+    dm2baab = -dm2ab.transpose(2,1,0,3)
+    return dm2baab
 
 # for S-*S+
 # dm(pq,rs) * [q(alpha)^+ p(beta) s(beta)^+ r(alpha)]
 # size of intermediate determinants (norb,neleca-1;norb,nelecb+1)
-def _make_rdm2_abba(fcivec, norb, nelec):
-    fcivec = numpy.asarray(fcivec, order='C')
-    neleca, nelecb = _unpack_nelec(nelec)
-    if nelecb == norb or neleca == 0: # no intermediate determinants
-        return numpy.zeros((norb,norb,norb,norb))
-    acre_index = cistring.gen_cre_str_index(range(norb), neleca-1)
-    bdes_index = cistring.gen_des_str_index(range(norb), nelecb+1)
-    instra = cistring.num_strings(norb, neleca-1)
-    nb = cistring.num_strings(norb, nelecb)
-    dm1 = numpy.empty((norb,norb))
-    dm2 = numpy.empty((norb,norb,norb,norb))
-    librdm.FCIspindm12_drv(librdm.FCIdm2_abba_kern,
-                           dm1.ctypes.data_as(ctypes.c_void_p),
-                           dm2.ctypes.data_as(ctypes.c_void_p),
-                           fcivec.ctypes.data_as(ctypes.c_void_p),
-                           fcivec.ctypes.data_as(ctypes.c_void_p),
-                           ctypes.c_int(norb),
-                           ctypes.c_int(instra), ctypes.c_int(nb),
-                           ctypes.c_int(neleca), ctypes.c_int(nelecb),
-                           acre_index.ctypes.data_as(ctypes.c_void_p),
-                           bdes_index.ctypes.data_as(ctypes.c_void_p))
-    return dm2
 def make_rdm2_abba(fcivec, norb, nelec):
-    dm2 = _make_rdm2_abba(fcivec, norb, nelec)
-    dm1a = rdm.make_rdm1_spin1('FCImake_rdm1a', fcivec, fcivec, norb, nelec)
-    dm1a, dm2 = rdm.reorder_rdm(dm1a, dm2, inplace=True)
-    return dm2
+    dm2aa, dm2ab, dm2bb = direct_spin1.make_rdm12s(fcivec, norb, nelec)[1]
+    dm2abba = -dm2ab.transpose(0,3,2,1)
+    return dm2abba
 
 
 def contract_ss(fcivec, norb, nelec):

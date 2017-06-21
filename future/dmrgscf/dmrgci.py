@@ -765,15 +765,20 @@ def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
         neleca, nelecb = nelec
     integralFile = os.path.join(DMRGCI.runtimeDir, DMRGCI.integralFile)
     if DMRGCI.groupname is not None and DMRGCI.orbsym is not []:
-        orbsym = dmrg_sym.convert_orbsym(DMRGCI.groupname, DMRGCI.orbsym)
+        orbsym = numpy.asarray(dmrg_sym.convert_orbsym(DMRGCI.groupname, DMRGCI.orbsym))
+        pair_irrep = (orbsym.reshape(-1,1) ^ orbsym)[numpy.tril_indices(ncas)]
+        sym_forbid = pair_irrep.reshape(-1,1) != pair_irrep.ravel()
+        eri_cas = pyscf.ao2mo.restore(4, eri_cas, ncas)
+        eri_cas[sym_forbid] = 0
+        eri_cas = pyscf.ao2mo.restore(8, eri_cas, ncas)
     else:
         orbsym = []
+        eri_cas = pyscf.ao2mo.restore(8, eri_cas, ncas)
     if not os.path.exists(DMRGCI.scratchDirectory):
         os.makedirs(DMRGCI.scratchDirectory)
     if not os.path.exists(DMRGCI.runtimeDir):
         os.makedirs(DMRGCI.runtimeDir)
 
-    eri_cas = pyscf.ao2mo.restore(8, eri_cas, ncas)
     pyscf.tools.fcidump.from_integrals(integralFile, h1eff, eri_cas, ncas,
                                        neleca+nelecb, ecore, ms=abs(neleca-nelecb),
                                        orbsym=orbsym)
