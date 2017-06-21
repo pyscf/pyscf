@@ -691,30 +691,26 @@ class UHF(hf.SCF):
         '''
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        dm = numpy.asarray(dm)
-        nao = dm.shape[-1]  # Get nao from dm shape because the hamiltonian
-                            # might be not defined from mol
         if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
             if self._eri is None:
                 self._eri = mol.intor('int2e', aosym='s8')
-            vj, vk = hf.dot_eri_dm(self._eri, dm.reshape(-1,nao,nao), hermi)
+            vj, vk = hf.dot_eri_dm(self._eri, dm, hermi)
         else:
-            vj, vk = hf.SCF.get_jk(self, mol, dm.reshape(-1,nao,nao), hermi)
-        return vj.reshape(dm.shape), vk.reshape(dm.shape)
+            vj, vk = hf.SCF.get_jk(self, mol, dm, hermi)
+        return numpy.asarray(vj), numpy.asarray(vk)
 
     @lib.with_doc(get_veff.__doc__)
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        dm = numpy.asarray(dm)
-        if dm.ndim == 2:
+        if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
             dm = numpy.asarray((dm*.5,dm*.5))
         if (self._eri is not None or not self.direct_scf or
             mol.incore_anyway or self._is_mem_enough()):
             vj, vk = self.get_jk(mol, dm, hermi)
             vhf = _makevhf(vj, vk)
         else:
-            ddm = dm - numpy.asarray(dm_last)
+            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
             vj, vk = self.get_jk(mol, ddm, hermi)
             vhf = _makevhf(vj, vk) + numpy.asarray(vhf_last)
         return vhf
