@@ -14,6 +14,22 @@ Gaussian cube file format
 '''
 
 def density(mol, outfile, dm, nx=80, ny=80, nz=80):
+    """Calculates electron density.
+
+    Args:
+        mol (Mole): Molecule to calculate the electron density for.
+        outfile (str): Name of Cube file to be written.
+        dm (str): Density matrix of molecule.
+        nx (int): Number of grid point divisions in x direction.
+           Note this is function of the molecule's size; a larger molecule
+           will have a coarser representation than a smaller one for the
+           same value.
+        ny (int): Number of grid point divisions in y direction.
+        nz (int): Number of grid point divisions in z direction.
+
+
+    """
+
     coord = mol.atom_coords()
     box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + 6
     boxorig = numpy.min(coord,axis=0) - 3
