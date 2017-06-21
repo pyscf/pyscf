@@ -106,9 +106,6 @@ def mep(mol, outfile, dm, nx=80, ny=80, nz=80):
        rp = r - coords
        Vnuc += Z / numpy.einsum('xi,xi->x', rp, rp)**.5
 
-    ngrids = nx * ny * nz
-    blksize = min(200, ngrids)
-
     # Potential of electron density
     Vele = []
     for p in coords:
