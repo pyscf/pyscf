@@ -36,19 +36,26 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80):
         f.write('Electron density in real space (e/Bohr^3)\n')
         f.write('PySCF Version: %s  Date: %s\n' % (pyscf.__version__, time.ctime()))
         f.write('%5d' % mol.natm)
-        f.write(' %14.8f %14.8f %14.8f\n' % tuple(boxorig.tolist()))
-        f.write('%5d %14.8f %14.8f %14.8f\n' % (nx, xs[1], 0, 0))
-        f.write('%5d %14.8f %14.8f %14.8f\n' % (ny, 0, ys[1], 0))
-        f.write('%5d %14.8f %14.8f %14.8f\n' % (nz, 0, 0, zs[1]))
+        f.write('%12.6f%12.6f%12.6f\n' % tuple(boxorig.tolist()))
+        f.write('%5d%12.6f%12.6f%12.6f\n' % (nx, xs[1], 0, 0))
+        f.write('%5d%12.6f%12.6f%12.6f\n' % (ny, 0, ys[1], 0))
+        f.write('%5d%12.6f%12.6f%12.6f\n' % (nz, 0, 0, zs[1]))
         for ia in range(mol.natm):
             chg = mol.atom_charge(ia)
-            f.write('%5d %f' % (chg, chg))
-            f.write(' %14.8f %14.8f %14.8f\n' % tuple(coord[ia]))
-        fmt = ' %14.8e' * nz + '\n'
+            f.write('%5d%12.6f'% (chg, chg))
+            f.write('%12.6f%12.6f%12.6f\n' % tuple(coord[ia]))
+
         for ix in range(nx):
             for iy in range(ny):
-                f.write(fmt % tuple(rho[ix,iy].tolist()))
-
+                for iz in range(0,nz,6):
+                    remainder  = (nz-iz)
+                    if (remainder > 6 ):
+                        fmt = '%13.5E' * 6 + '\n'
+                        f.write(fmt % tuple(rho[ix,iy,iz:iz+6].tolist()))
+                    else:
+                        fmt = '%13.5E' * remainder + '\n'
+                        f.write(fmt % tuple(rho[ix,iy,iz:iz+remainder].tolist()))
+                        break
 
 if __name__ == '__main__':
     from pyscf import gto, scf
@@ -56,5 +63,5 @@ if __name__ == '__main__':
     mol = gto.M(atom='H 0 0 0; H 0 0 1')
     mf = scf.RHF(mol)
     mf.scf()
-    cubegen.density(mol, 'h2.cube', mf.make_rdm1())
+    cubegen.density(mol, 'h2_den.cube', mf.make_rdm1())
 
