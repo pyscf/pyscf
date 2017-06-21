@@ -39,7 +39,6 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80):
     coords = lib.cartesian_prod([xs,ys,zs])
     coords = numpy.asarray(coords, order='C') - (-boxorig)
 
-    nao = mol.nao_nr()
     ngrids = nx * ny * nz
     blksize = min(200, ngrids)
     rho = numpy.empty(ngrids)
@@ -107,7 +106,6 @@ def mep(mol, outfile, dm, nx=80, ny=80, nz=80):
        rp = r - coords
        Vnuc += Z / numpy.einsum('xi,xi->x', rp, rp)**.5
 
-    nao = mol.nao_nr()
     ngrids = nx * ny * nz
     blksize = min(200, ngrids)
 
