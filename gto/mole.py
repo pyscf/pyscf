@@ -337,11 +337,15 @@ def format_ecp(ecp_tab):
         symb = _atom_symbol(atom)
         stdsymb = _std_symbol(symb)
         if isinstance(ecp_tab[atom], (str, unicode)):
-            fmt_ecp[symb] = basis.load_ecp(str(ecp_tab[atom]), stdsymb)
+            ecp_dat = basis.load_ecp(str(ecp_tab[atom]), stdsymb)
+            if ecp_dat is None or len(ecp_dat) == 0:
+                #raise RuntimeError('ECP not found for  %s' % symb)
+                sys.stderr.write('ECP %s not found for  %s\n' %
+                                 (ecp_tab[atom], symb))
+            else:
+                fmt_ecp[symb] = ecp_dat
         else:
             fmt_ecp[symb] = ecp_tab[atom]
-        if len(fmt_ecp[symb]) == 0:
-            raise RuntimeError('ECP not found for  %s' % symb)
     return fmt_ecp
 
 # transform etb to basis format
@@ -1538,9 +1542,9 @@ class Mole(lib.StreamObject):
         self.irrep_name = None
         self.incore_anyway = False
         self._nelectron = None
-        self._atom = None
-        self._basis = None
-        self._ecp = None
+        self._atom = []
+        self._basis = []
+        self._ecp = []
         self._built = False
         self._keys = set(self.__dict__.keys())
         self.__dict__.update(kwargs)
