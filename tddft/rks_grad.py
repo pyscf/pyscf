@@ -55,7 +55,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     mem_now = pyscf.lib.current_memory()[0]
     max_memory = max(2000, td_grad.max_memory*.9-mem_now)
 
-    hyb = mf._numint.hybrid_coeff(mf.xc, spin=(mol.spin>0)+1)
+    hyb = mf._numint.hybrid_coeff(mf.xc, spin=mol.spin)
     f1vo, f1oo, vxc1, k1ao = \
             _contract_xc_kernel(td_grad, mf.xc, dmzvop,
                                 dmzoo, True, True, singlet, max_memory)

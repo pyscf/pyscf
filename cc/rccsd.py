@@ -1458,9 +1458,9 @@ class _ERIS:
                  ao2mofn=ao2mo.full):
         cput0 = (time.clock(), time.time())
         if mo_coeff is None:
-            self.mo_coeff = mo_coeff = _mo_without_core(cc, cc.mo_coeff)
+            self.mo_coeff = mo_coeff = ccsd._mo_without_core(cc, cc.mo_coeff)
         else:  # If mo_coeff is not canonical orbital
-            self.mo_coeff = mo_coeff = _mo_without_core(cc, mo_coeff)
+            self.mo_coeff = mo_coeff = ccsd._mo_without_core(cc, mo_coeff)
         dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
         fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
         self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))

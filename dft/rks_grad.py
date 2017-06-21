@@ -26,7 +26,7 @@ def get_veff(ks_grad, mol=None, dm=None):
     if mf.grids.coords is None:
         mf.grids.build(with_non0tab=True)
     grids = mf.grids
-    hyb = mf._numint.libxc.hybrid_coeff(mf.xc, spin=(mol.spin>0)+1)
+    hyb = mf._numint.libxc.hybrid_coeff(mf.xc, spin=mol.spin)
 
     mem_now = pyscf.lib.current_memory()[0]
     max_memory = max(2000, ks_grad.max_memory*.9-mem_now)

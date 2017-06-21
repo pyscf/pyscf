@@ -760,7 +760,7 @@ class HF1e(ROHF):
 class SymmetrizedOrbitals(numpy.ndarray):
     pass
 def attach_orbsym(mo, orbsym):
-    mo = mo.view(SymmetrizedOrbitals)
+    mo = numpy.asarray(mo).view(SymmetrizedOrbitals)
     mo.orbsym = orbsym
     return mo
 

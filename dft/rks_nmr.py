@@ -116,7 +116,7 @@ class NMR(rhf_nmr.NMR):
             h1 += mol.intor('int1e_igkin', 3)
 
             libxc = self._scf._numint.libxc
-            hyb = libxc.hybrid_coeff(self._scf.xc, spin=(mol.spin>0)+1)
+            hyb = libxc.hybrid_coeff(self._scf.xc, spin=mol.spin)
 
             mem_now = pyscf.lib.current_memory()[0]
             max_memory = max(2000, self._scf.max_memory*.9-mem_now)
@@ -144,7 +144,7 @@ class NMR(rhf_nmr.NMR):
     def get_vind(self, mo1):
         mol = self.mol
         libxc = self._scf._numint.libxc
-        hyb = libxc.hybrid_coeff(self._scf.xc, spin=(mol.spin>0)+1)
+        hyb = libxc.hybrid_coeff(self._scf.xc, spin=mol.spin)
 
         if abs(hyb) > 1e-10:
             mo_coeff = self._scf.mo_coeff

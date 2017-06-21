@@ -86,7 +86,7 @@ def smearing_(mf, sigma=None, method='fermi'):
         This is a k-point version of scf.hf.SCF.get_occ
         '''
         mo_occ_kpts = mf_class.get_occ(mf, mo_energy_kpts, mo_coeff_kpts)
-        if mf.sigma is None or mf.sigma == 0:
+        if mf.sigma == 0:
             return mo_occ_kpts
 
         if is_khf:

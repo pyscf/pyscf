@@ -126,6 +126,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         mo_energy, mo_coeff = mf.eig(fock, s1e)
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
+        dm = _attach_mo(dm, mo_coeff, mo_occ)  # to improve DFT get_veff efficiency
         vhf = mf.get_veff(mol, dm, dm_last, vhf)
         e_tot = mf.energy_tot(dm, h1e, vhf)
 
@@ -152,6 +153,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     mo_energy, mo_coeff = mf.eig(fock, s1e)
     mo_occ = mf.get_occ(mo_energy, mo_coeff)
     dm, dm_last = mf.make_rdm1(mo_coeff, mo_occ), dm
+    dm = _attach_mo(dm, mo_coeff, mo_occ)  # to improve DFT get_veff efficiency
     vhf = mf.get_veff(mol, dm, dm_last, vhf)
     e_tot, last_hf_e = mf.energy_tot(dm, h1e, vhf), e_tot
     norm_ddm = numpy.linalg.norm(dm-dm_last)
@@ -901,6 +903,14 @@ def unpack_uniq_var(dx, mo_occ):
     x1 = numpy.zeros((nmo,nmo), dtype=dx.dtype)
     x1[idx] = dx
     return x1 - x1.T
+
+class DMArray(numpy.ndarray):
+    pass
+def _attach_mo(a, mo_coeff, mo_occ):
+    a = numpy.asarray(a).view(DMArray)
+    a.mo_coeff = mo_coeff
+    a.mo_occ = mo_occ
+    return a
 ############
 
 
@@ -1383,6 +1393,10 @@ class RHF(SCF):
         from pyscf.scf import addons
         addons.convert_to_rhf(mf, self)
         return self
+
+    def stability(self, internal=True, external=False, verbose=None):
+        from pyscf.scf.stability import rhf_stability
+        return rhf_stability(self, internal, external, verbose)
 
 
 if __name__ == '__main__':

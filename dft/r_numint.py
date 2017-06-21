@@ -69,7 +69,7 @@ def _rho2x2_to_rho_m(rho2x2):
     return rho, m
 
 #TODO: \nabla^2 rho and tau = 1/2 (\nabla f)^2
-def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
+def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
     aoa, aob = ao
     ngrids, nao = aoa.shape[-2:]
     xctype = xctype.upper()

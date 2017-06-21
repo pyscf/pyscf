@@ -527,6 +527,10 @@ class KRHF(hf.RHF):
             auxbasis = aug_etb_for_dfbasis(self.cell, beta=1.8, start_at=0)
         return mdf_jk.density_fit(self, auxbasis, with_df)
 
+    def stability(self, internal=True, external=False, verbose=None):
+        from pyscf.pbc.scf.stability import rhf_stability
+        return rhf_stability(self, internal, external, verbose)
+
 
 if __name__ == '__main__':
     from pyscf.pbc import gto
