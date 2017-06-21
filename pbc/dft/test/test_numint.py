@@ -24,11 +24,11 @@ def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shl_slice=N
     aoR = 0
     for L in cell.get_lattice_Ls():
         if gamma_point:
-            aoR += pyscf.dft.numint.eval_ao(cell, coords-L, deriv, relativity,
+            aoR += pyscf.dft.numint.eval_ao(cell, coords-L, deriv,
                                             shl_slice, non0tab, out, verbose)
         else:
             factor = numpy.exp(1j*numpy.dot(kpt,L))
-            aoR += pyscf.dft.numint.eval_ao(cell, coords-L, deriv, relativity,
+            aoR += pyscf.dft.numint.eval_ao(cell, coords-L, deriv,
                                             shl_slice, non0tab, out, verbose) * factor
     return numpy.asarray(aoR)
 
@@ -192,7 +192,7 @@ class KnowValues(unittest.TestCase):
         dm = dm + dm.T
         ao =(numpy.random.random((10,ngrids,nao)) +
              numpy.random.random((10,ngrids,nao))*1j)
-        ao = numpy.asarray(ao, order='F')
+        ao = ao.transpose(0,2,1).copy().transpose(0,2,1)
 
         rho0 = numpy.zeros((6,ngrids), dtype=numpy.complex128)
         rho0[0] = numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[0].conj())

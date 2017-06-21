@@ -375,10 +375,12 @@ def eval_mat(mol, ao, weight, rho, vxc,
         vlapl, vtau = vxc[2:]
         if vlapl is None:
             vlpal = 0
-        aow = numpy.einsum('npi,p->npi', ao[1:4], weight*(.25*vtau+vlapl), out=aow)
-        mat += _dot_ao_ao(mol, ao[1], aow[0], non0tab, shls_slice, ao_loc)
-        mat += _dot_ao_ao(mol, ao[2], aow[1], non0tab, shls_slice, ao_loc)
-        mat += _dot_ao_ao(mol, ao[3], aow[2], non0tab, shls_slice, ao_loc)
+        aow = numpy.einsum('pi,p->pi', ao[1], weight*(.25*vtau+vlapl), out=aow)
+        mat += _dot_ao_ao(mol, ao[1], aow, non0tab, shls_slice, ao_loc)
+        aow = numpy.einsum('pi,p->pi', ao[2], weight*(.25*vtau+vlapl), out=aow)
+        mat += _dot_ao_ao(mol, ao[2], aow, non0tab, shls_slice, ao_loc)
+        aow = numpy.einsum('pi,p->pi', ao[3], weight*(.25*vtau+vlapl), out=aow)
+        mat += _dot_ao_ao(mol, ao[3], aow, non0tab, shls_slice, ao_loc)
 
         XX, YY, ZZ = 4, 7, 9
         ao2 = ao[XX] + ao[YY] + ao[ZZ]
