@@ -96,7 +96,7 @@ def thrj(l1i,l2i,l3i,m1i,m2i,m3i):
 def thrj_nobuf(l1,l2,l3,m1,m2,m3):
   """ Wigner3j symbol without buffer. Written by James Talman. """
   from pyscf.nao.m_libnao import libnao
-  from ctypes import POINTER, c_double, c_int32, c_int, byref
+  from ctypes import POINTER, c_double, c_int, byref
 
   libnao.thrj_subr.argtypes = (
     POINTER(c_int),  # l1
@@ -108,5 +108,5 @@ def thrj_nobuf(l1,l2,l3,m1,m2,m3):
    POINTER(c_double))  # thrj
 
   aa = c_double()
-  libnao.thrj_subr( c_int32(l1),c_int32(l2),c_int32(l3),c_int32(m1),c_int32(m2),c_int32(m3), byref(aa)) # call library function
+  libnao.thrj_subr( c_int(l1),c_int(l2),c_int(l3),c_int(m1),c_int(m2),c_int(m3), byref(aa)) # call library function
   return aa.value

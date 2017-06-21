@@ -2,7 +2,7 @@ module m_prod_talman
 
 #include "m_define_macro.F90"
   use m_log, only : die
-  use iso_c_binding, only: c_double, c_int64_t, c_int
+  use iso_c_binding, only: c_double, c_int64_t, c_int, c_double_complex
 
   implicit none
   private die
@@ -64,18 +64,19 @@ module m_prod_talman
 !      enddo
 !
 
-subroutine prdred(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb,nterm,ord,pcs,rho_min_jt,dr_jt)
+subroutine prdred(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb,nterm,ord,pcs,rho_min_jt,dr_jt) &
+  bind(c, name='prdred')
   use m_ao_eval, only : comp_coeffs
   use m_fact, only : fac, sgn
   use m_numint, only : gl_knts, gl_wgts
 !  use m_timing, only : get_cdatetime
   implicit none
   !! external
-  integer, intent(in)  :: nr, nterm, ord,pcs,la,lb
-  real(8), intent(in)  :: phia(nr),phib(nr),rr(nr),ra(3),rb(3),rcen(3)
-  integer, intent(in)  :: lbdtb(nterm),clbdtb(nterm),lbdmxa,jtb(nterm)
-  real(8), intent(in)  :: rho_min_jt, dr_jt
-  real(8), intent(out) :: rhotb(nr,nterm)
+  integer(c_int), intent(in)  :: nr, nterm, ord,pcs,la,lb
+  real(c_double), intent(in)  :: phia(nr),phib(nr),rr(nr),ra(3),rb(3),rcen(3)
+  integer(c_int), intent(in)  :: lbdtb(nterm),clbdtb(nterm),lbdmxa,jtb(nterm)
+  real(c_double), intent(in)  :: rho_min_jt, dr_jt
+  real(c_double), intent(out) :: rhotb(nr,nterm)
   
   !! internal
   real(8) :: ya(nr), yb(nr)
@@ -89,7 +90,8 @@ subroutine prdred(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb
   real(8) :: ccs(6)!, rhomin_jt, dr_jt
   integer(c_int64_t) :: k
 
-!     write(6,*) 'prdred', lbdmxa, 2*lbdmxa+la+lb
+!  write(6,*) ' prdred    ', lbdmxa, 2*lbdmxa+la+lb
+!  write(6,*) ' size(fac) ', size(fac)
 
   !rhomin_jt = log(rr(1))
   !dr_jt = log(rr(2)/rr(1))
@@ -296,76 +298,77 @@ function sixj(j1,j2,j3,l1,l2,l3)
   return
 end function !sixj
 
-!!
-!!
-!!
-!subroutine csphar_talman(r,res,lmax) 
-!  use m_fact, only : rttwo, sgn
-!  implicit none 
-!  real(8), intent(in) :: r(3)
-!  integer, intent(in) :: lmax
-!  complex(8), intent(out) :: res(0:)
+!
+!
+!
+subroutine csphar_talman(r,ylm,lmax) bind(c, name='csphar_talman')
+  use m_fact, only : sgn
+  implicit none 
+  real(c_double), intent(in) :: r(3)
+  integer(c_int), intent(in) :: lmax
+  complex(c_double_complex), intent(inout) :: ylm(*)
   
-!  real(8) :: x,y,z,dd,phi,cc,ss,al,aa,bb,zz,cs
-!  integer ll,l,m,il1,il2,ind,ll2
-!  real(8) :: pi
-!  pi = 4D0*atan(1D0)
-  
-!  x=r(1) 
-!  y=r(2) 
-!  z=r(3) 
-!  rttwo=sqrt(2.0D0)
-!  dd=sqrt(x*x+y*y+z*z)
-!  if (dd.lt.1.0d-10) then
-!     ll=(lmax+1)**2-1 
-!     do  l=1,ll 
-!       res(l)=0.0D0 
-!     end do
-!     res(0)=1.0D0
-!     return
-!  endif
-!  if (x.eq.0) then
-!    phi=0.5D0*pi
-!    if (y.lt.0.0D0) phi=-phi 
-!  else
-!    phi=atan(y/x) 
-!    if (x.lt.0.0D0) phi=phi+pi 
-!  endif
-!  ss=sqrt(x*x+y*y)/dd 
-!  cc=z/dd
-!  res(0)=1.0D0
-!  if (lmax.eq.0) return
-!  do l=1,lmax 
-!    al=l 
-!    il2=(l+1)**2-1 
-!    il1=l**2-1
-!    res(il2)=-ss*sqrt((al-0.5D0)/al)*res(il1) 
-!    res(il2-1)=cc*sqrt(2.0D0*al-1.0D0)*res(il1)
-!  end do
-!  if (lmax.ge.2) then
-!    do m=0,lmax-2
-!      if (m.lt.lmax) then
-!        do l=m+1,lmax-1
-!          ind=l*(l+1)+m 
-!          aa=l**2-m**2
-!          bb=(l+1)**2-m**2
-!          zz=(l+l+1.0D0)*cc*dble(res(ind))-sqrt(aa)*dble(res(ind-2*l)) 
-!          res(ind+2*(l+1))=zz/sqrt(bb) 
-!        end do
-!      endif
-!    enddo
-!  endif
-!  do l=0,lmax
-!    ll2=l*(l+1)
-!    do m=0,l
-!      cs=sin(m*phi)
-!      cc=cos(m*phi)
-!      res(ll2+m)=cmplx(cc,cs,8)*res(ll2+m)
-!      res(ll2-m)=sgn(m)*conjg(res(ll2+m))
-!    enddo
-!  enddo
-!  return 
-!end subroutine !csphar
+  real(c_double) :: x,y,z,dd,phi,cc,ss,al,aa,bb,zz,cs
+  integer ll,l,m,il1,il2,ind,ll2
+  real(c_double) :: pi, rttwo
+  pi = 4D0*atan(1D0)
+  rttwo=sqrt(2.0D0)
+
+  x=r(1) 
+  y=r(2) 
+  z=r(3) 
+  dd=sqrt(x*x+y*y+z*z)
+  if (dd.lt.1.0d-10) then
+     ll=(lmax+1)**2-1 
+     do  l=1,ll 
+       ylm(l+1)=0.0D0 
+     end do
+     ylm(1)=1.0D0
+     return
+  endif
+  if (x.eq.0) then
+    phi=0.5D0*pi
+    if (y.lt.0.0D0) phi=-phi 
+  else
+    phi=atan(y/x) 
+    if (x.lt.0.0D0) phi=phi+pi 
+  endif
+  ss=sqrt(x*x+y*y)/dd 
+  cc=z/dd
+  ylm(1)=1.0D0
+  if (lmax.eq.0) return
+  do l=1,lmax 
+    al=l 
+    il2=(l+1)**2-1 
+    il1=l**2-1
+    ylm(il2+1)=-ss*sqrt((al-0.5D0)/al)*ylm(il1+1) 
+    ylm(il2)=cc*sqrt(2.0D0*al-1.0D0)*ylm(il1+1)
+  end do
+  if (lmax.ge.2) then
+    do m=0,lmax-2
+      if (m.lt.lmax) then
+        do l=m+1,lmax-1
+          ind=l*(l+1)+m 
+          aa=l**2-m**2
+          bb=(l+1)**2-m**2
+          zz=(l+l+1.0D0)*cc*dble(ylm(ind+1))-sqrt(aa)*dble(ylm(ind-2*l+1)) 
+          ylm(ind+2*(l+1)+1)=zz/sqrt(bb) 
+        end do
+      endif
+    enddo
+  endif
+  do l=0,lmax
+    ll2=l*(l+1)
+    do m=0,l
+      cs=sin(m*phi)
+      cc=cos(m*phi)
+      ylm(ll2+m+1)=cmplx(cc,cs,8)*ylm(ll2+m+1)
+      ylm(ll2-m+1)=sgn(m)*conjg(ylm(ll2+m+1))
+    enddo
+  enddo
+  return 
+
+end subroutine !csphar_talman
 
 !!
 !!

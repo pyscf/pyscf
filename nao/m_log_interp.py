@@ -91,6 +91,7 @@ class log_interp_c():
     self.dg_jt = np.log(gg[1]/gg[0])
 
   def __call__(self, ff, r):
+    assert len(ff)==self.nr
     k,cc = comp_coeffs(self, r)
     return sum(cc*ff[k:k+6])
   

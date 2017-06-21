@@ -15,14 +15,11 @@ def csphar(r,lmax):
     Result:
       1-d numpy array of complex128 elements with all spherical harmonics stored in order 0,0; 1,-1; 1,0; 1,+1 ... lmax,lmax, althogether 0 : (lmax+1)**2 elements.
   """
-  #real(8) :: x,y,z,dd,phi,cc,ss,al,aa,bb,zz,cs,rt2lp1
-  #integer :: ll,l,m,il1,il2,ind,ll2
-
   x=r[0]
   y=r[1] 
   z=r[2] 
   dd=np.sqrt(x*x+y*y+z*z)
-  res = np.zeros(((lmax+1)**2), dtype='complex128')
+  res = np.zeros(((lmax+1)**2), dtype=np.complex128)
 
   res[0] = onedivsqrt4pi
 

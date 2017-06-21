@@ -1,46 +1,87 @@
 from __future__ import print_function, division
 import numpy as np
 from pyscf.nao import log_mesh_c
+from pyscf.nao.m_libnao import libnao
+from ctypes import POINTER, c_double, c_int, byref
+
+# phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb,nterm,ord,pcs,rho_min_jt,dr_jt
+
+"""
+ Reduction of the products of two atomic orbitals placed at some distance
+ [1] Talman JD. Multipole Expansions for Numerical Orbital Products, Int. J. Quant. Chem. 107, 1578--1584 (2007)
+ ngl : order of Gauss-Legendre quadrature
+"""
+
+libnao.prdred.argtypes = (
+  POINTER(c_double), # phia(nr)
+  POINTER(c_int),    # la
+  POINTER(c_double), # ra(3)
+  POINTER(c_double), # phib(nr)
+  POINTER(c_int),    # lb
+  POINTER(c_double), # rb(3)
+  POINTER(c_double), # rcen(3)
+  POINTER(c_int),    # lbdmxa
+  POINTER(c_double), # rhotb(nr,nterm)
+  POINTER(c_double), # rr(nr)
+  POINTER(c_int),    # nr
+  POINTER(c_int),    # jtb(nterm)
+  POINTER(c_int),    # clbdtb(nterm)
+  POINTER(c_int),    # lbdtb(nterm)
+  POINTER(c_int),    # nterm
+  POINTER(c_int),    # ord
+  POINTER(c_int),    # pcs
+  POINTER(c_double), # rho_min_jt
+  POINTER(c_double)) # dr_jt
+
 #
 #
 #
 class prod_talman_c(log_mesh_c):
   
-  def __init__(self, log_mesh, jmx=7, ngl=96, lbdmxa=12):
+  def __init__(self, log_mesh, jmx=7, ngl=96, lbdmx=None):
     """
-    Reduction of the products of two atomic orbitals placed at some distance
+    Expansion of the products of two atomic orbitals placed at given locations and around a center between these locations 
     [1] Talman JD. Multipole Expansions for Numerical Orbital Products, Int. J. Quant. Chem. 107, 1578--1584 (2007)
       ngl : order of Gauss-Legendre quadrature
+      log_mesh : instance of log_mesh_c defining the logarithmic mesh (rr and pp arrays)
+      jmx : maximal angular momentum quantum number of each atomic orbital in a product
+      lbdmx : maximal angular momentum quantum number used for the expansion of the product phia*phib
     """
     from numpy.polynomial.legendre import leggauss
     from pyscf.nao.m_log_interp import log_interp_c
-    assert ngl>2
-    assert lbdmxa>0
-    assert hasattr(log_mesh, 'rr')
+    assert ngl>2 
+    assert jmx>-1
+    assert hasattr(log_mesh, 'rr') 
     assert hasattr(log_mesh, 'pp')
     
     self.ngl = ngl
-    self.lbdmxa = lbdmxa
+    self.lbdmx = jmx+1 if lbdmx is None else lbdmx # default jmx+1 is inspired by quantum chemistry auxiliary basis for density fitting of Dunning basis sets (cc-pV*Z).
     self.xx,self.ww = leggauss(ngl)
     log_mesh_c.__init__(self)
     self.init_log_mesh(log_mesh.rr, log_mesh.pp)
 
-    self.plval=np.zeros([2*(lbdmxa+jmx+1), ngl])
+    self.plval=np.zeros([2*(self.lbdmx+jmx+1), ngl])
     self.plval[0,:] = 1.0
     self.plval[1,:] = self.xx
-    for kappa in range(1,2*(lbdmxa+jmx)+1):
+    for kappa in range(1,2*(self.lbdmx+jmx)+1):
       self.plval[kappa+1, :]= ((2*kappa+1)*self.xx*self.plval[kappa, :]-kappa*self.plval[kappa-1, :])/(kappa+1)
 
     self.log_interp = log_interp_c(self.rr)
     return
-    
+
   def prdred(self,phia,la,ra, phib,lb,rb,rcen):
+    """ Reduce two atomic orbitals given by their radial functions phia, phib,  
+    angular momentum quantum numbers la, lb and their centers ra,rb.
+    The expansion is done around a center rcen."""
     from numpy import sqrt
     from pyscf.nao.m_thrj import thrj
     from pyscf.nao.m_fact import fact as fac, sgn
 
-    assert la>-1
-    assert lb>-1
+    assert la>-1 
+    assert lb>-1 
+    assert len(rcen)==3 
+    assert len(ra)==3 
+    assert len(rb)==3
     
     jtb,clbdtb,lbdtb=self.prdred_terms(la,lb)
     nterm = len(jtb)
@@ -103,7 +144,7 @@ class prod_talman_c(log_mesh_c):
     nterm=0
     ijmx=la+lb
     for ij in range(abs(la-lb),ijmx+1):
-      for clbd in range(self.lbdmxa+1):
+      for clbd in range(self.lbdmx+1):
           nterm=nterm+ (clbd+ij+1 - abs(clbd-ij))
 
     jtb = np.zeros(nterm, dtype=np.int32)
@@ -112,7 +153,7 @@ class prod_talman_c(log_mesh_c):
     
     ix=-1
     for ij in range(abs(la-lb),ijmx+1):
-      for clbd in range(self.lbdmxa+1):
+      for clbd in range(self.lbdmx+1):
         for lbd in range(abs(clbd-ij),clbd+ij+1):
           ix=ix+1
           jtb[ix]=ij
@@ -120,6 +161,70 @@ class prod_talman_c(log_mesh_c):
           lbdtb[ix]=lbd
           
     return jtb,clbdtb,lbdtb
+  
+  def prdred_libnao(self,phia,la,ra, phib,lb,rb,rcen):
+    """ By calling a subroutine  """
+    assert len(phia)==self.nr
+    assert len(phib)==self.nr
+    
+    jtb,clbdtb,lbdtb=self.prdred_terms(la,lb)
+    nterm     = len(jtb)
+    
+    jtb_cp    = np.require(jtb,  dtype=c_int, requirements='C')
+    clbdtb_cp = np.require(clbdtb, dtype=c_int, requirements='C')
+    lbdtb_cp  = np.require(lbdtb,  dtype=c_int, requirements='C')
+    rhotb_cp  = np.require( np.zeros([nterm, self.nr]), dtype=c_double, requirements='CW')
+    rr_cp     = np.require(self.rr,dtype=c_double, requirements='C')
+    phia_cp   = np.require(phia,dtype=c_double, requirements='C')
+    phib_cp   = np.require(phib,dtype=c_double, requirements='C')
+    ra_cp     = np.require(ra,dtype=c_double, requirements='C')
+    rb_cp     = np.require(rb,dtype=c_double, requirements='C')
+    rcen_cp   = np.require(rcen,dtype=c_double, requirements='C')
+    
+    libnao.prdred(phia_cp.ctypes.data_as(POINTER(c_double)), c_int(la), ra_cp.ctypes.data_as(POINTER(c_double)),
+                  phib_cp.ctypes.data_as(POINTER(c_double)), c_int(lb), rb_cp.ctypes.data_as(POINTER(c_double)),
+                  rcen_cp.ctypes.data_as(POINTER(c_double)), 
+                  c_int(self.lbdmx),
+                  rhotb_cp.ctypes.data_as(POINTER(c_double)),
+                  rr_cp.ctypes.data_as(POINTER(c_double)),
+                  c_int(self.nr),
+                  jtb_cp.ctypes.data_as(POINTER(c_int)),
+                  clbdtb_cp.ctypes.data_as(POINTER(c_int)),
+                  lbdtb_cp.ctypes.data_as(POINTER(c_int)),
+                  c_int(nterm),
+                  c_int(self.ngl),
+                  c_int(1),
+                  c_double(self.log_interp.gammin_jt),
+                  c_double(self.log_interp.dg_jt) )
+    rhotb = rhotb_cp
+    return jtb,clbdtb,lbdtb,rhotb
+
+  
+  def prdred_further(self, ja,ma,jb,mb,rcen,jtb,clbdtb,lbdtb,rhotb):
+    """ Evaluate the Talman's expansion at given Cartesian coordinates"""
+    from pyscf.nao.m_thrj import thrj
+    from pyscf.nao.m_csphar_talman_libnao import csphar_talman_libnao as csphar_jt
+    from numpy import sqrt, pi
+    
+    nterm = len(jtb)
+    assert nterm == len(clbdtb)
+    assert nterm == len(lbdtb)
+    assert nterm == rhotb.shape[0]
+    assert self.nr == rhotb.shape[1]
+  
+    ffr = np.zeros([clbdtb.max()+1,self.nr], np.complex128)
+    ylm_cr = csphar_jt(rcen, lbdtb.max())
+    m = mb + ma
+    for j,clbd,lbd,rho in zip(jtb,clbdtb,lbdtb,rhotb):
+      tj1  = thrj(ja,jb,j,ma,mb,-m)
+      tj2  = thrj(j,clbd,lbd,-m,m,0)
+      ffr[clbd,:]=ffr[clbd,:] + tj1*tj2*rho*ylm_cr[lbd*(lbd+1)]
+      
+    ffr = ffr*sqrt((2*jb+1)*(2*ja+1))/(4*pi)
+    return ffr
+    
+    
+    
     
 #
 #
