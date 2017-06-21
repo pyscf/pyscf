@@ -255,9 +255,8 @@ class CCSD(pyscf.cc.ccsd.CCSD):
         nmo = mf.mo_energy.shape[1]
         nso = 2*nmo
         # calculating spin orbitals...
-        if mo_energy is None:
-            mo_energy = numpy.zeros(shape=(nkpts,nso))
-            mo_energy[:,0::2] = mo_energy[:,1::2] = mf.mo_energy
+        mo_energy = numpy.zeros(shape=(nkpts,nso))
+        mo_energy[:,0::2] = mo_energy[:,1::2] = mf.mo_energy
         self.mo_energy = mo_energy
         if mo_coeff is None:
             # TODO: Careful for real/complex here, in the future
