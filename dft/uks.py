@@ -75,7 +75,9 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     if ground_state:
         ks._ecoul = numpy.einsum('ij,ji', dm[0]+dm[1], vj[0]+vj[1]) * .5
 
-    if small_rho_cutoff > 1e-20 and ground_state:
+    nelec = mol.nelec
+    if (small_rho_cutoff > 1e-20 and ground_state and
+        abs(n[0]-nelec[0]) < 0.01*n[0] and abs(n[1]-nelec[1]) < 0.01*n[1]):
         idx = ks._numint.large_rho_indices(mol, dm[0]+dm[1], ks.grids,
                                            small_rho_cutoff)
         logger.debug(ks, 'Drop grids %d',
