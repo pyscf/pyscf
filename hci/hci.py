@@ -637,6 +637,45 @@ def from_fci(fcivec, ci_strs, norb, nelec):
         civec[idet] = fcivec[ka,kb]
     return as_SCIvector(civec, ci_strs)
 
+def make_rdm12s(civec, norb, nelec):
+    '''Spin orbital 1- and 2-particle reduced density matrices (aa, bb, aaaa, aabb, bbbb)
+    '''
+    strs = civec._strs
+    ndet = len(strs)
+    rdm1a = numpy.zeros(norb*norb)
+    rdm1b = numpy.zeros(norb*norb)
+    rdm2aa = numpy.zeros(norb*norb*norb*norb)
+    rdm2ab = numpy.zeros(norb*norb*norb*norb)
+    rdm2bb = numpy.zeros(norb*norb*norb*norb)
+
+    civec = numpy.asarray(civec, order='C')
+    strs = numpy.asarray(strs, order='C')
+    rdm1a  = numpy.asarray(rdm1a, order='C')
+    rdm1b  = numpy.asarray(rdm1b, order='C')
+    rdm2aa = numpy.asarray(rdm2aa, order='C')
+    rdm2ab = numpy.asarray(rdm2ab, order='C')
+    rdm2bb = numpy.asarray(rdm2bb, order='C')
+
+    libhci.compute_rdm12s(ctypes.c_int(norb), 
+                          ctypes.c_int(nelec[0]), 
+                          ctypes.c_int(nelec[1]), 
+                          strs.ctypes.data_as(ctypes.c_void_p), 
+                          civec.ctypes.data_as(ctypes.c_void_p), 
+                          ctypes.c_ulonglong(ndet), 
+                          rdm1a.ctypes.data_as(ctypes.c_void_p),
+                          rdm1b.ctypes.data_as(ctypes.c_void_p),
+                          rdm2aa.ctypes.data_as(ctypes.c_void_p),
+                          rdm2ab.ctypes.data_as(ctypes.c_void_p),
+                          rdm2bb.ctypes.data_as(ctypes.c_void_p))
+
+    rdm1a = rdm1a.reshape([norb]*2)
+    rdm1b = rdm1b.reshape([norb]*2)
+    rdm2aa = rdm2aa.reshape([norb]*4)
+    rdm2ab = rdm2ab.reshape([norb]*4)
+    rdm2bb = rdm2bb.reshape([norb]*4)
+
+    return rdm1a, rdm1b, rdm2aa, rdm2ab, rdm2bb
+
 class SelectedCI(direct_spin1.FCISolver):
     def __init__(self, mol=None):
         direct_spin1.FCISolver.__init__(self, mol)
@@ -702,6 +741,16 @@ class SelectedCI(direct_spin1.FCISolver):
             civec = as_SCIvector(civec, self._strs)
 
         return to_fci(civec, norb, nelec)
+
+    def make_rdm12s(self, civec, norb, nelec):
+
+        if hasattr(civec, '_strs'):
+            self._strs = civec._strs
+        else:
+            assert(civec.size == len(self._strs))
+            civec = as_SCIvector(civec, self._strs)
+
+        return make_rdm12s(civec, norb, nelec)
 
     enlarge_space = enlarge_space
     kernel = kernel_float_space

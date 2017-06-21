@@ -1043,3 +1043,209 @@ void contract_h_c_ss_c(double *h1, double *eri, int norb, int neleca, int nelecb
     free(ts);
 
 }
+
+// 2-RDM is stored in physicists notation: gamma_pqsr=<\Phi|a_p^dag a_q^dag a_r a_s|\Phi>
+void compute_rdm12s(int norb, int neleca, int nelecb, uint64_t *strs, double *civec, uint64_t ndet, double *rdm1a, double *rdm1b, double *rdm2aa, double *rdm2ab, double *rdm2bb) {
+
+    #pragma omp parallel default(none) shared(norb, neleca, nelecb, strs, civec, ndet, rdm1a, rdm1b, rdm2aa, rdm2ab, rdm2bb)
+    {
+
+    size_t ip, jp, p, q, r, s;
+    int nset = (norb + 63) / 64;
+ 
+    // Loop over pairs of determinants
+    #pragma omp for schedule(static)
+    for (ip = 0; ip < ndet; ++ip) {
+        for (jp = 0; jp < ndet; ++jp) {
+            uint64_t *stria = strs + ip * 2 * nset;
+            uint64_t *strib = strs + ip * 2 * nset + nset;
+            uint64_t *strja = strs + jp * 2 * nset;
+            uint64_t *strjb = strs + jp * 2 * nset + nset;
+            int n_excit_a = n_excitations(stria, strja, nset);
+            int n_excit_b = n_excitations(strib, strjb, nset);
+            // Diagonal term
+            if (ip == jp) {
+                int *occsa = compute_occ_list(stria, nset, norb, neleca);
+                int *occsb = compute_occ_list(strib, nset, norb, nelecb);
+                double ci_sq = civec[ip] * civec[ip];
+                // Diagonal rdm1_aa
+                for (p = 0; p < neleca; ++p) {
+                    int k = occsa[p];
+                    int kk = k * norb + k;
+                    rdm1a[kk] += ci_sq;
+                }
+                // Diagonal rdm1_bb
+                for (p = 0; p < nelecb; ++p) {
+                    int k = occsb[p];
+                    int kk = k * norb + k;
+                    rdm1b[kk] += ci_sq;
+                }
+                // Diagonal rdm2_aaaa
+                for (p = 0; p < neleca; ++p) {
+                    int k = occsa[p];
+                    for (q = 0; q < neleca; ++q) {
+                        int j = occsa[q];
+                        int kjkj = k * norb * norb * norb + j * norb * norb + k * norb + j;
+                        int kjjk = k * norb * norb * norb + j * norb * norb + j * norb + k;
+                        rdm2aa[kjkj] += ci_sq;
+                        rdm2aa[kjjk] -= ci_sq;
+                    }
+                    // Diagonal rdm2_abab
+                    for (q = 0; q < nelecb; ++q) {
+                        int j = occsb[q];
+                        int kjkj = k * norb * norb * norb + j * norb * norb + k * norb + j;
+                        rdm2ab[kjkj] += ci_sq;
+                    }
+                }
+                // Diagonal rdm2_bbbb
+                for (p = 0; p < nelecb; ++p) {
+                    int k = occsb[p];
+                    for (q = 0; q < nelecb; ++q) {
+                        int j = occsb[q];
+                        int kjkj = k * norb * norb * norb + j * norb * norb + k * norb + j;
+                        int kjjk = k * norb * norb * norb + j * norb * norb + j * norb + k;
+                        rdm2bb[kjkj] += ci_sq;
+                        rdm2bb[kjjk] -= ci_sq;
+                    }
+                }
+                free(occsa);
+                free(occsb);
+            }
+            // Single excitation
+            else if ((n_excit_a + n_excit_b) == 1) {
+                int *ia;
+                // alpha->alpha
+                if (n_excit_b == 0) {
+                    ia = get_single_excitation(stria, strja, nset);
+                    int i = ia[0];
+                    int a = ia[1];
+                    double sign = compute_cre_des_sign(a, i, stria, nset);
+                    int *occsa = compute_occ_list(stria, nset, norb, neleca);
+                    int *occsb = compute_occ_list(strib, nset, norb, nelecb);
+                    double ci_sq = sign * civec[ip] * civec[jp];
+                    // rdm1_aa
+                    rdm1a[a * norb + i] += ci_sq;
+                    // rdm2_aaaa
+                    for (p = 0; p < neleca; ++p) {
+                        int k = occsa[p];
+                        int akik = a * norb * norb * norb + k * norb * norb + i * norb + k;
+                        int akki = a * norb * norb * norb + k * norb * norb + k * norb + i;
+                        int kaki = k * norb * norb * norb + a * norb * norb + k * norb + i;
+                        int kaik = k * norb * norb * norb + a * norb * norb + i * norb + k;
+                        rdm2aa[akik] += ci_sq;
+                        rdm2aa[akki] -= ci_sq;
+                        rdm2aa[kaik] -= ci_sq;
+                        rdm2aa[kaki] += ci_sq;
+                    }
+                    // rdm2_abab
+                    for (p = 0; p < nelecb; ++p) {
+                        int k = occsb[p];
+                        int akik = a * norb * norb * norb + k * norb * norb + i * norb + k;
+                        rdm2ab[akik] += ci_sq;
+                    }
+                    free(occsa);
+                    free(occsb);
+                }
+                // beta->beta
+                else if (n_excit_a == 0) {
+                    ia = get_single_excitation(strib, strjb, nset);
+                    int i = ia[0];
+                    int a = ia[1];
+                    double sign = compute_cre_des_sign(a, i, strib, nset);
+                    int *occsa = compute_occ_list(stria, nset, norb, neleca);
+                    int *occsb = compute_occ_list(strib, nset, norb, nelecb);
+                    double ci_sq = sign * civec[ip] * civec[jp];
+                    // rdm1_bb
+                    rdm1b[a * norb + i] += ci_sq;
+                    // rdm2_bbbb
+                    for (p = 0; p < nelecb; ++p) {
+                        int k = occsb[p];
+                        int akik = a * norb * norb * norb + k * norb * norb + i * norb + k;
+                        int akki = a * norb * norb * norb + k * norb * norb + k * norb + i;
+                        int kaki = k * norb * norb * norb + a * norb * norb + k * norb + i;
+                        int kaik = k * norb * norb * norb + a * norb * norb + i * norb + k;
+                        rdm2bb[akik] += ci_sq;
+                        rdm2bb[akki] -= ci_sq;
+                        rdm2bb[kaik] -= ci_sq;
+                        rdm2bb[kaki] += ci_sq;
+                    }
+                    // rdm2_abab
+                    for (p = 0; p < neleca; ++p) {
+                        int k = occsa[p];
+                        int kaki = k * norb * norb * norb + a * norb * norb + k * norb + i;
+                        rdm2ab[kaki] += ci_sq;
+                    }
+                    free(occsa);
+                    free(occsb);
+                }
+               free(ia);
+            }
+            // Double excitation
+            else if ((n_excit_a + n_excit_b) == 2) {
+                int i, j, a, b;
+                // alpha,alpha->alpha,alpha
+                if (n_excit_b == 0) {
+	            int *ijab = get_double_excitation(stria, strja, nset);
+                    i = ijab[0]; j = ijab[1]; a = ijab[2]; b = ijab[3];
+                    double sign;
+                    int abij = a * norb * norb * norb + b * norb * norb + i * norb + j;
+                    int abji = a * norb * norb * norb + b * norb * norb + j * norb + i;
+                    if (a > j || i > b) {
+                        sign = compute_cre_des_sign(b, i, stria, nset);
+                        sign *= compute_cre_des_sign(a, j, stria, nset);
+                        double ci_sq = sign * civec[ip] * civec[jp];
+                        rdm2aa[abij] += ci_sq;
+                        rdm2aa[abji] -= ci_sq;
+                    } 
+                    else {
+                        sign = compute_cre_des_sign(b, j, stria, nset);
+                        sign *= compute_cre_des_sign(a, i, stria, nset);
+                        double ci_sq = sign * civec[ip] * civec[jp];
+                        rdm2aa[abij] -= ci_sq;
+                        rdm2aa[abji] += ci_sq;
+                    }
+                    free(ijab);
+                }
+                // beta,beta->beta,beta
+                else if (n_excit_a == 0) {
+	            int *ijab = get_double_excitation(strib, strjb, nset);
+                    i = ijab[0]; j = ijab[1]; a = ijab[2]; b = ijab[3];
+                    double v, sign;
+                    int abij = a * norb * norb * norb + b * norb * norb + i * norb + j;
+                    int abji = a * norb * norb * norb + b * norb * norb + j * norb + i;
+                    if (a > j || i > b) {
+                        sign = compute_cre_des_sign(b, i, strib, nset);
+                        sign *= compute_cre_des_sign(a, j, strib, nset);
+                        double ci_sq = sign * civec[ip] * civec[jp];
+                        rdm2bb[abij] += ci_sq;
+                        rdm2bb[abji] -= ci_sq;
+                    } 
+                    else {
+                        sign = compute_cre_des_sign(b, j, strib, nset);
+                        sign *= compute_cre_des_sign(a, i, strib, nset);
+                        double ci_sq = sign * civec[ip] * civec[jp];
+                        rdm2bb[abij] -= ci_sq;
+                        rdm2bb[abji] += ci_sq;
+                    }
+                    free(ijab);
+                }
+                // alpha,beta->alpha,beta
+                else {
+                    int *ia = get_single_excitation(stria, strja, nset);
+                    int *jb = get_single_excitation(strib, strjb, nset);
+                    i = ia[0]; a = ia[1]; j = jb[0]; b = jb[1];
+                    double sign = compute_cre_des_sign(a, i, stria, nset);
+                    sign *= compute_cre_des_sign(b, j, strib, nset);
+                    double ci_sq = sign * civec[ip] * civec[jp];
+                    int abij = a * norb * norb * norb + b * norb * norb + i * norb + j;
+                    rdm2ab[abij] -= ci_sq;
+                    free(ia);
+                    free(jb);
+               }
+            }
+        } // end loop over jp
+    } // end loop over ip
+
+    } // end omp
+  
+}
