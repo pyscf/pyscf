@@ -112,12 +112,12 @@ class KnowValues(unittest.TestCase):
     def test_r_uhf(self):
         uhf = dhf.UHF(mol)
         uhf.conv_tol_grad = 1e-5
-        self.assertAlmostEqual(uhf.scf(), -76.038520463270061, 9)
+        self.assertAlmostEqual(uhf.scf(), -76.038520463270061, 7)
 
     def test_r_rhf(self):
         uhf = dhf.RHF(mol)
         uhf.conv_tol_grad = 1e-5
-        self.assertAlmostEqual(uhf.scf(), -76.038520463270061, 9)
+        self.assertAlmostEqual(uhf.scf(), -76.038520463270061, 7)
 
     def test_level_shift_uhf(self):
         uhf = scf.UHF(mol)

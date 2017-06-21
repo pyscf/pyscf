@@ -150,8 +150,8 @@ def mm_charge_grad(method, coords, charges, unit=None):
             else:
                 fakemol = _make_fakemol(coords)
                 j3c = df.incore.aux_e2(mol, fakemol, intor='int3c2e_ip1',
-                                       aosym='s1', comp=3)
-                v = numpy.einsum('ixk,k->ix', j3c, charges).reshape(3,nao,nao)
+                                       aosym='s1', comp=3).reshape(3,nao,nao,-1)
+                v = numpy.einsum('ipqk,k->ipq', j3c, charges)
             return method.get_hcore(mol) - v
 
         def grad_nuc(self, mol=None, atmlst=None):

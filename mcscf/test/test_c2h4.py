@@ -56,7 +56,7 @@ class KnowValues(unittest.TestCase):
         mc = mcscf.CASSCF(mf, 4, 4)
         mc.conv_tol = 1e-8
         emc = mc.mc2step()[0]
-        self.assertAlmostEqual(emc, -77.9916207, 6)
+        self.assertAlmostEqual(emc, -78.01037956, 6)
 
     def test_mc1step_4o4e(self):
         mc = mcscf.CASSCF(mf, 4, 4)

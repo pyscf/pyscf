@@ -51,7 +51,7 @@ class KnowValues(unittest.TestCase):
         mycc.kernel()
         mycc.solve_lambda()
         g1 = grad.ccsd.kernel(mycc)
-        self.assertAlmostEqual(finger(g1), 7.8557320937879354, 7)
+        self.assertAlmostEqual(finger(g1), 7.8557320937879354, 6)
 
 
 if __name__ == "__main__":

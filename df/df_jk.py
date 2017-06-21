@@ -133,7 +133,6 @@ def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
     log = logger.Logger(dfobj.stdout, dfobj.verbose)
     assert(with_j or with_k)
 
-    mol = dfobj.mol
     fmmm = _ao2mo.libao2mo.AO2MOmmm_bra_nr_s2
     fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
     ftrans = _ao2mo.libao2mo.AO2MOtranse2_nr_s2
@@ -169,7 +168,7 @@ def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
             mo_coeff = numpy.vstack((mo_coeff, mo_coeff))
             mo_occa = numpy.array(mo_occ> 0, dtype=numpy.double)
             mo_occb = numpy.array(mo_occ==2, dtype=numpy.double)
-            assert(mo_occa.sum() + mo_occb.sum() == mol.nelectron)
+            assert(mo_occa.sum() + mo_occb.sum() == mo_occ.sum())
             mo_occ = numpy.vstack((mo_occa, mo_occb))
 
         dmtril = []
