@@ -8,6 +8,7 @@ import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.scf.hf import _attach_mo
 try:
     from pyscf.dft import libxc
 except (ImportError, OSError):
@@ -82,7 +83,7 @@ def eval_ao(mol, coords, deriv=0, shls_slice=None,
     return mol.eval_gto(feval, coords, comp, shls_slice, non0tab, out=out)
 
 #TODO: \nabla^2 rho and tau = 1/2 (\nabla f)^2
-def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
+def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
     r'''Calculate the electron density for LDA functional, and the density
     derivatives for GGA functional.
 
@@ -103,6 +104,8 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
             array can be obtained by calling :func:`make_mask`
         xctype : str
             LDA/GGA/mGGA.  It affects the shape of the return density.
+        hermi : bool
+            dm is hermitian or not
         verbose : int or object of :class:`Logger`
             No effects.
 
@@ -130,9 +133,11 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
                              dtype=numpy.uint8)
-    # (D + D.T)/2 because eval_rho computes 2*(|\nabla i> D_ij <j|) instead of
-    # |\nabla i> D_ij <j| + |i> D_ij <\nabla j| for efficiency
-    dm = (dm + dm.conj().T) * .5
+    if not hermi:
+        # (D + D.T)/2 because eval_rho computes 2*(|\nabla i> D_ij <j|) instead of
+        # |\nabla i> D_ij <j| + |i> D_ij <\nabla j| for efficiency
+        dm = (dm + dm.conj().T) * .5
+
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
     if xctype == 'LDA':
@@ -434,7 +439,7 @@ def _dot_ao_dm(mol, ao, dm, non0tab, shls_slice, ao_loc, out=None):
        (ctypes.c_int*2)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p))
     return vm
 
-def nr_vxc(mol, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
+def nr_vxc(mol, grids, xc_code, dm, spin=0, relativity=0, hermi=0,
            max_memory=2000, verbose=None):
     if isinstance(spin, (list, tuple, numpy.ndarray)):
 # shift the old args (..., x_id, c_id, dm, spin, ..)
@@ -453,7 +458,7 @@ def nr_vxc(mol, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
         return nr_uks(ni, mol, grids, xc_code, dm, relativity,
                       hermi, max_memory, verbose)
 
-def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
+def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
            max_memory=2000, verbose=None):
     '''Calculate RKS XC functional and potential matrix on given meshgrids
     for a set of density matrices
@@ -587,7 +592,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
         vmat = vmat.reshape(nao,nao)
     return nelec, excsum, vmat
 
-def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
+def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
            max_memory=2000, verbose=None):
     '''Calculate UKS XC functional and potential matrix on given meshgrids
     for a set of density matrices
@@ -628,14 +633,10 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
 
-    dms = numpy.asarray(dms)
-    nao = dms.shape[-1]
-    if dms.ndim == 2:
-        make_rhoa, nset = ni._gen_rho_evaluator(mol, dms*.5, hermi)[:2]
-        make_rhob = make_rhoa
-    else:
-        make_rhoa, nset = ni._gen_rho_evaluator(mol, dms[0].reshape(-1,nao,nao), hermi)[:2]
-        make_rhob       = ni._gen_rho_evaluator(mol, dms[1].reshape(-1,nao,nao), hermi)[0]
+    dma, dmb = _format_uks_dm(dms)
+    nao = dma.shape[-1]
+    make_rhoa, nset = ni._gen_rho_evaluator(mol, dma, hermi)[:2]
+    make_rhob       = ni._gen_rho_evaluator(mol, dmb, hermi)[0]
 
     nelec = numpy.zeros((2,nset))
     excsum = numpy.zeros(nset)
@@ -743,15 +744,34 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     for i in range(nset):
         vmat[0,i] = vmat[0,i] + vmat[0,i].T
         vmat[1,i] = vmat[1,i] + vmat[1,i].T
-    if nset == 1:
+    if isinstance(dma, numpy.ndarray) and dma.ndim == 2:
+        vmat = vmat[:,0]
         nelec = nelec.reshape(2)
         excsum = excsum[0]
-    return nelec, excsum, vmat.reshape(dms.shape)
+    return nelec, excsum, vmat
+
+def _format_uks_dm(dms):
+    if isinstance(dms, numpy.ndarray) and dms.ndim == 2:  # RHF DM
+        dma = dmb = dms * .5
+        if hasattr(dms, 'mo_coeff'):
+            _attach_mo(dma, dms.mo_coeff, dms.mo_occ*.5)
+    else:
+        dma, dmb = dms
+        if hasattr(dms, 'mo_coeff'):
+            if dms.mo_coeff[0].ndim < dma.ndim: # handle ROKS
+                mo_occa = numpy.array(dms.mo_occ> 0, dtype=numpy.double)
+                mo_occb = numpy.array(dms.mo_occ==2, dtype=numpy.double)
+                dma = _attach_mo(dma, dms.mo_coeff, mo_occa)
+                dmb = _attach_mo(dmb, dms.mo_coeff, mo_occb)
+            else:
+                dma = _attach_mo(dma, dms.mo_coeff[0], dms.mo_occ[0])
+                dmb = _attach_mo(dmb, dms.mo_coeff[1], dms.mo_occ[1])
+    return dma, dmb
 
 nr_rks_vxc = nr_rks
 nr_uks_vxc = nr_uks
 
-def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=1,
+def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                rho0=None, vxc=None, fxc=None, max_memory=2000, verbose=None):
     '''Contract RKS XC (singlet hessian) kernel matrix with given density matrices
 
@@ -792,7 +812,6 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=1,
     '''
     xctype = ni._xc_type(xc_code)
 
-    dms = numpy.asarray(dms)
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi)
     if ((xctype == 'LDA' and fxc is None) or
         (xctype == 'GGA' and rho0 is None)):
@@ -855,7 +874,9 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=1,
     else:
         raise NotImplementedError('meta-GGA')
 
-    return vmat.reshape(dms.shape)
+    if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
+        vmat = vmat[0]
+    return vmat
 
 def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms, relativity=0, singlet=True,
                   rho0=None, vxc=None, fxc=None, max_memory=2000, verbose=None):
@@ -865,8 +886,7 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms, relativity=0, singlet=True,
     '''
     xctype = ni._xc_type(xc_code)
 
-    dms = numpy.asarray(dms)
-    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms)
+    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi=0)
     if ((xctype == 'LDA' and fxc is None) or
         (xctype == 'GGA' and rho0 is None)):
         make_rho0 = ni._gen_rho_evaluator(mol, dm0, hermi=1)[0]
@@ -957,7 +977,9 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms, relativity=0, singlet=True,
     else:
         raise NotImplementedError('meta-GGA')
 
-    return vmat.reshape(dms.shape)
+    if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
+        vmat = vmat[0]
+    return vmat
 
 def _rks_gga_wv(rho0, rho1, vxc, fxc, weight):
     vgamma = vxc[1]
@@ -975,7 +997,7 @@ def _rks_gga_wv(rho0, rho1, vxc, fxc, weight):
     wv[0] *= .5  # v+v.T should be applied in the caller
     return wv
 
-def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=1,
+def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                rho0=None, vxc=None, fxc=None, max_memory=2000, verbose=None):
     '''Contract UKS XC kernel matrix with given density matrices
 
@@ -1016,22 +1038,16 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=1,
     '''
     xctype = ni._xc_type(xc_code)
 
-    dms = numpy.asarray(dms)
+    dma, dmb = _format_uks_dm(dms)
     nao = dms.shape[-1]
-    if dms.ndim == 2:
-        make_rhoa, nset = ni._gen_rho_evaluator(mol, dms*.5, hermi)[:2]
-        make_rhob = make_rhoa
-    else:
-        make_rhoa, nset = ni._gen_rho_evaluator(mol, dms[0].reshape(-1,nao,nao), hermi)[:2]
-        make_rhob       = ni._gen_rho_evaluator(mol, dms[1].reshape(-1,nao,nao), hermi)[0]
+    make_rhoa, nset = ni._gen_rho_evaluator(mol, dma, hermi)[:2]
+    make_rhob       = ni._gen_rho_evaluator(mol, dmb, hermi)[0]
 
     if ((xctype == 'LDA' and fxc is None) or
         (xctype == 'GGA' and rho0 is None)):
-        if isinstance(dm0, numpy.ndarray) and dm0.ndim == 2:
-            make_rho0a = make_rho0b = ni._gen_rho_evaluator(mol, dm0*.5, 1)[0]
-        else:
-            make_rho0a = ni._gen_rho_evaluator(mol, dm0[0], 1)[0]
-            make_rho0b = ni._gen_rho_evaluator(mol, dm0[1], 1)[0]
+        dm0a, dm0b = _format_uks_dm(dm0)
+        make_rho0a = ni._gen_rho_evaluator(mol, dm0a, 1)[0]
+        make_rho0b = ni._gen_rho_evaluator(mol, dm0b, 1)[0]
 
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
@@ -1101,7 +1117,9 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=1,
     else:
         raise NotImplementedError('meta-GGA')
 
-    return vmat.reshape(dms.shape)
+    if isinstance(dma, numpy.ndarray) and dma.ndim == 2:
+        vmat = vmat[:,0]
+    return vmat
 
 def _uks_gga_wv(rho0, rho1, vxc, fxc, weight):
     uu, ud, dd = vxc[1].T
@@ -1172,7 +1190,7 @@ def _uks_gga_wv(rho0, rho1, vxc, fxc, weight):
     wvb[0] *= .5  # v+v.T should be applied in the caller
     return wva, wvb
 
-def nr_fxc(mol, grids, xc_code, dm0, dms, spin0, relativity=0, hermi=1,
+def nr_fxc(mol, grids, xc_code, dm0, dms, spin0, relativity=0, hermi=0,
            rho0=None, vxc=None, fxc=None, max_memory=2000, verbose=None):
     r'''Contract XC kernel matrix with given density matrices
 
@@ -1240,7 +1258,7 @@ class _NumInt(object):
     def __init__(self):
         self.libxc = libxc
 
-    def nr_vxc(self, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
+    def nr_vxc(self, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
                max_memory=2000, verbose=None):
         '''Evaluate RKS/UKS XC functional and potential matrix on given meshgrids
         for a set of density matrices.  See :func:`nr_rks` and :func:`nr_uks`
@@ -1278,8 +1296,8 @@ class _NumInt(object):
         return eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab, xctype, verbose)
 
     @lib.with_doc(eval_rho.__doc__)
-    def eval_rho(self, mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
-        return eval_rho(mol, ao, dm, non0tab, xctype, verbose)
+    def eval_rho(self, mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
+        return eval_rho(mol, ao, dm, non0tab, xctype, hermi, verbose)
 
     def block_loop(self, mol, grids, nao, deriv=0, max_memory=2000,
                    non0tab=None, blksize=None, buf=None):
@@ -1306,33 +1324,27 @@ class _NumInt(object):
             ao = self.eval_ao(mol, coords, deriv=deriv, non0tab=non0, out=buf)
             yield ao, non0, weight, coords
 
-    def _gen_rho_evaluator(self, mol, dms, hermi=1):
-        if 0 and hermi == 1:
-            natocc = []
-            natorb = []
+    def _gen_rho_evaluator(self, mol, dms, hermi=0):
+        if hasattr(dms, 'mo_coeff'):
+            mo_coeff = dms.mo_coeff
+            mo_occ = dms.mo_occ
             if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-                e, c = scipy.linalg.eigh(dms)
-                natocc.append(e)
-                natorb.append(c)
-                nao = dms.shape[0]
-            else:
-                for dm in dms:
-                    e, c = scipy.linalg.eigh(dm)
-                    natocc.append(e)
-                    natorb.append(c)
-                nao = dms[0].shape[0]
-            ndms = len(natocc)
+                mo_coeff = [mo_coeff]
+                mo_occ = [mo_occ]
+            nao = mo_coeff[0].shape[0]
+            ndms = len(mo_occ)
             def make_rho(idm, ao, non0tab, xctype):
-                return self.eval_rho2(mol, ao, natorb[idm], natocc[idm], non0tab, xctype)
+                return self.eval_rho2(mol, ao, mo_coeff[idm], mo_occ[idm],
+                                      non0tab, xctype)
         else:
             if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-                nao = dms.shape[0]
                 dms = [dms]
-            else:
-                nao = dms[0].shape[0]
+            if not hermi:
+                dms = [(dm+dm.conj().T)*.5 for dm in dms]
+            nao = dms[0].shape[0]
             ndms = len(dms)
             def make_rho(idm, ao, non0tab, xctype):
-                return self.eval_rho(mol, ao, dms[idm], non0tab, xctype)
+                return self.eval_rho(mol, ao, dms[idm], non0tab, xctype, hermi=1)
         return make_rho, ndms, nao
 
 ####################
@@ -1366,7 +1378,7 @@ if __name__ == '__main__':
         ["O" , (0. , 0.     , 0.)],
         [1   , (0. , -0.757 , 0.587)],
         [1   , (0. , 0.757  , 0.587)] ],
-        basis = '6311g*',)
+        basis = '6311g**',)
     mf = dft.RKS(mol)
     mf.grids.atom_grid = {"H": (30, 194), "O": (30, 194),},
     mf.grids.prune = None

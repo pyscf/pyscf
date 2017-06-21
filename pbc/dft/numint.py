@@ -9,6 +9,7 @@ import ctypes
 import numpy
 import h5py
 from pyscf import lib
+from pyscf.scf.hf import _attach_mo
 from pyscf.dft import numint
 from pyscf.dft.numint import eval_mat, _dot_ao_ao, _dot_ao_dm
 from pyscf.dft.numint import OCCDROP
@@ -127,7 +128,7 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
     return ao_kpts
 
 
-def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', verbose=None):
+def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
     '''Collocate the *real* density (opt. gradients) on the real-space grid.
 
     Args:
@@ -163,7 +164,8 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', verbose=None):
     if numpy.iscomplexobj(ao) or numpy.iscomplexobj(dm):
         shls_slice = (0, cell.nbas)
         ao_loc = cell.ao_loc_nr()
-        dm = (dm + dm.conj().T) * .5
+        if not hermi:
+            dm = (dm + dm.conj().T) * .5
         dm = dm.astype(numpy.complex128)
 
         def dot_bra(bra, aodm):
@@ -200,7 +202,7 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', verbose=None):
             rho[5] *= .5
     else:
         # real orbitals and real DM
-        rho = numint.eval_rho(cell, ao, dm, non0tab, xctype, verbose)
+        rho = numint.eval_rho(cell, ao, dm, non0tab, xctype, hermi, verbose)
     return rho
 
 def eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
@@ -297,7 +299,7 @@ def eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
     return rho
 
 
-def nr_rks(ni, cell, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
+def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
            kpts=None, kpts_band=None, max_memory=2000, verbose=None):
     '''Calculate RKS XC functional and potential matrix for given meshgrids and density matrix
 
@@ -315,7 +317,7 @@ def nr_rks(ni, cell, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
         xc_code : str
             XC functional description.
             See :func:`parse_xc` of pyscf/dft/libxc.py for more details.
-        dm : 2D/3D array or a list of 2D/3D arrays
+        dms : 2D/3D array or a list of 2D/3D arrays
             Density matrices (2D) / density matrices for k-points (3D)
 
     Kwargs:
@@ -343,7 +345,7 @@ def nr_rks(ni, cell, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
     if kpts is None:
         kpts = numpy.zeros((1,3))
     xctype = ni._xc_type(xc_code)
-    make_rho, nset, nao = ni._gen_rho_evaluator(cell, dm)
+    make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms, hermi)
 
     nelec = numpy.zeros(nset)
     excsum = numpy.zeros(nset)
@@ -395,7 +397,7 @@ def nr_rks(ni, cell, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
         vmat = vmat[0]
     return nelec, excsum, vmat
 
-def nr_uks(ni, cell, grids, xc_code, dm, spin=1, relativity=0, hermi=1,
+def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=0,
            kpts=None, kpts_band=None, max_memory=2000, verbose=None):
     '''Calculate UKS XC functional and potential matrix for given meshgrids and density matrix
 
@@ -413,7 +415,7 @@ def nr_uks(ni, cell, grids, xc_code, dm, spin=1, relativity=0, hermi=1,
         xc_code : str
             XC functional description.
             See :func:`parse_xc` of pyscf/dft/libxc.py for more details.
-        dm :
+        dms :
             Density matrices
 
     Kwargs:
@@ -422,7 +424,7 @@ def nr_uks(ni, cell, grids, xc_code, dm, spin=1, relativity=0, hermi=1,
         relativity : int
             No effects.
         hermi : int
-            No effects
+            Input density matrices symmetric or not
         max_memory : int or float
             The maximum size of cache to use (in MB).
         verbose : int or object of :class:`Logger`
@@ -441,10 +443,10 @@ def nr_uks(ni, cell, grids, xc_code, dm, spin=1, relativity=0, hermi=1,
     if kpts is None:
         kpts = numpy.zeros((1,3))
     xctype = ni._xc_type(xc_code)
-    dm = numpy.asarray(dm)
-    nao = dm.shape[-1]
-    make_rhoa, nset = ni._gen_rho_evaluator(cell, dm[0].reshape(-1,nao,nao))[:2]
-    make_rhob       = ni._gen_rho_evaluator(cell, dm[1].reshape(-1,nao,nao))[0]
+    dma, dmb = _format_uks_dm(dms)
+    nao = dma.shape[-1]
+    make_rhoa, nset = ni._gen_rho_evaluator(cell, dma, hermi)[:2]
+    make_rhob       = ni._gen_rho_evaluator(cell, dmb, hermi)[0]
 
     nelec = numpy.zeros((2,nset))
     excsum = numpy.zeros(nset)
@@ -522,17 +524,31 @@ def nr_uks(ni, cell, grids, xc_code, dm, spin=1, relativity=0, hermi=1,
                 vmatb[i] += ni.eval_mat(cell, ao_k1, weight, (rho_b,rho_a), v,
                                         mask, xctype, 1, verbose)
                 v = None
-    if nset == 1:
+
+    if dma.ndim == vmata[0].ndim:  # One set of DMs in the input
         nelec = nelec[:,0]
         excsum = excsum[0]
         vmata = vmata[0]
         vmatb = vmatb[0]
     return nelec, excsum, lib.asarray((vmata,vmatb))
 
+def _format_uks_dm(dms):
+    dma, dmb = dms
+    if hasattr(dms, 'mo_coeff'):
+        if dms.mo_coeff[0].ndim < dma.ndim: # handle ROKS
+            mo_occa = numpy.array(dms.mo_occ> 0, dtype=numpy.double)
+            mo_occb = numpy.array(dms.mo_occ==2, dtype=numpy.double)
+            dma = _attach_mo(dma, dms.mo_coeff, mo_occa)
+            dmb = _attach_mo(dmb, dms.mo_coeff, mo_occb)
+        else:
+            dma = _attach_mo(dma, dms.mo_coeff[0], dms.mo_occ[0])
+            dmb = _attach_mo(dmb, dms.mo_coeff[1], dms.mo_occ[1])
+    return dma, dmb
+
 nr_rks_vxc = nr_rks
 nr_uks_vxc = nr_uks
 
-def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=1,
+def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                rho0=None, vxc=None, fxc=None, kpts=None, max_memory=2000,
                verbose=None):
     '''Contract RKS XC kernel matrix with given density matrices
@@ -576,7 +592,6 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=1,
         kpts = numpy.zeros((1,3))
     xctype = ni._xc_type(xc_code)
 
-    dms = lib.asarray(dms)
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms, hermi)
     if ((xctype == 'LDA' and fxc is None) or
         (xctype == 'GGA' and rho0 is None)):
@@ -636,14 +651,16 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=1,
     else:
         raise NotImplementedError('meta-GGA')
 
-    return lib.asarray(vmat).reshape(dms.shape)
+    if isinstance(dms, numpy.ndarray) and dms.ndim == vmat[0].ndim:
+        # One set of DMs in the input
+        vmat = vmat[0]
+    return lib.asarray(vmat)
 
 def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms, relativity=0, singlet=True,
                   rho0=None, vxc=None, fxc=None, kpts=None, max_memory=2000,
                   verbose=None):
     xctype = ni._xc_type(xc_code)
 
-    dms = lib.asarray(dms)
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms)
     if ((xctype == 'LDA' and fxc is None) or
         (xctype == 'GGA' and rho0 is None)):
@@ -671,7 +688,7 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms, relativity=0, singlet=True
                 frho = u_u - u_d
 
             for i in range(nset):
-                rho1 = ni.eval_rho(cell, ao_k1, dm, mask, xctype)
+                rho1 = make_rho(i, ao_k1, mask, xctype)
                 wv = weight * frho * rho1
                 vmat[i] += ni._fxc_mat(cell, ao_k1, wv, mask, xctype, ao_loc)
 
@@ -716,19 +733,18 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms, relativity=0, singlet=True
                                         (frho,frhogamma,fgg), weight)
                 vmat[i] += ni._fxc_mat(cell, ao_k1, wv, mask, xctype, ao_loc)
 
-        # call swapaxes method to swap last two indices because vmat may be a 3D
-        # array (nset,nao,nao) in single k-point mode or a 4D array
-        # (nset,nkpts,nao,nao) in k-points mode
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
             vmat[i] = vmat[i] + vmat[i].swapaxes(-2,-1).conj()
 
     else:
         raise NotImplementedError('meta-GGA')
 
-    return lib.asarray(vmat).reshape(dms.shape)
+    if isinstance(dms, numpy.ndarray) and dms.ndim == vmat[0].ndim:
+        vmat = vmat[0]
+    return lib.asarray(vmat)
 
 
-def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=1,
+def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                rho0=None, vxc=None, fxc=None, kpts=None, max_memory=2000,
                verbose=None):
     '''Contract UKS XC kernel matrix with given density matrices
@@ -772,18 +788,16 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=1,
         kpts = numpy.zeros((1,3))
     xctype = ni._xc_type(xc_code)
 
-    dms = numpy.asarray(dms)
-    nao = dms.shape[-1]
-    make_rhoa, nset = ni._gen_rho_evaluator(cell, dms[0], hermi)[:2]
-    make_rhob       = ni._gen_rho_evaluator(cell, dms[1], hermi)[0]
+    dma, dmb = _format_uks_dm(dms)
+    nao = dma.shape[-1]
+    make_rhoa, nset = ni._gen_rho_evaluator(cell, dma, hermi)[:2]
+    make_rhob       = ni._gen_rho_evaluator(cell, dmb, hermi)[0]
 
     if ((xctype == 'LDA' and fxc is None) or
         (xctype == 'GGA' and rho0 is None)):
-        if isinstance(dm0, numpy.ndarray) and dm0.ndim == 2:
-            make_rho0a = make_rho0b = ni._gen_rho_evaluator(cell, dm0*.5, 1)[0]
-        else:
-            make_rho0a = ni._gen_rho_evaluator(cell, dm0[0], 1)[0]
-            make_rho0b = ni._gen_rho_evaluator(cell, dm0[1], 1)[0]
+        dm0a, dm0b = _format_uks_dm(dms)
+        make_rho0a = ni._gen_rho_evaluator(cell, dm0a, 1)
+        make_rho0b = ni._gen_rho_evaluator(cell, dm0b, 1)
 
     shls_slice = (0, cell.nbas)
     ao_loc = cell.ao_loc_nr()
@@ -848,7 +862,10 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=1,
     else:
         raise NotImplementedError('meta-GGA')
 
-    return lib.asarray((vmata,vmatb)).reshape(dms.shape)
+    if dma.ndim == vmata[0].ndim:  # One set of DMs in the input
+        vmata = vmata[0]
+        vmatb = vmatb[0]
+    return lib.asarray((vmata,vmatb))
 
 def _fxc_mat(cell, ao, wv, non0tab, xctype, ao_loc):
     shls_slice = (0, cell.nbas)
@@ -925,14 +942,14 @@ class _NumInt(numint._NumInt):
                   verbose=None):
         return make_mask(cell, coords, relativity, shls_slice, verbose)
 
-    def eval_rho(self, cell, ao, dm, non0tab=None, xctype='LDA', verbose=None):
-        return eval_rho(cell, ao, dm, non0tab, xctype, verbose)
+    def eval_rho(self, cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
+        return eval_rho(cell, ao, dm, non0tab, xctype, hermi, verbose)
 
     def eval_rho2(self, cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
                   verbose=None):
         return eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab, xctype, verbose)
 
-    def nr_vxc(self, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
+    def nr_vxc(self, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
                kpt=None, kpt_band=None, max_memory=2000, verbose=None):
         '''Evaluate RKS/UKS XC functional and potential matrix.
         See :func:`nr_rks` and :func:`nr_uks` for more details.
@@ -945,16 +962,16 @@ class _NumInt(numint._NumInt):
                                kpt, kpt_band, max_memory, verbose)
 
     @lib.with_doc(nr_rks.__doc__)
-    def nr_rks(self, cell, grids, xc_code, dms, hermi=1,
+    def nr_rks(self, cell, grids, xc_code, dms, hermi=0,
                kpt=numpy.zeros(3), kpt_band=None, max_memory=2000, verbose=None):
         return nr_rks(self, cell, grids, xc_code, dms,
-                      0, 0, 1, kpt, kpt_band, max_memory, verbose)
+                      0, 0, hermi, kpt, kpt_band, max_memory, verbose)
 
     @lib.with_doc(nr_uks.__doc__)
-    def nr_uks(self, cell, grids, xc_code, dms, hermi=1,
+    def nr_uks(self, cell, grids, xc_code, dms, hermi=0,
                kpt=numpy.zeros(3), kpt_band=None, max_memory=2000, verbose=None):
         return nr_uks(self, cell, grids, xc_code, dms,
-                      1, 0, 1, kpt, kpt_band, max_memory, verbose)
+                      1, 0, hermi, kpt, kpt_band, max_memory, verbose)
 
     def eval_mat(self, cell, ao, weight, rho, vxc,
                  non0tab=None, xctype='LDA', spin=0, verbose=None):
@@ -1001,7 +1018,7 @@ class _NumInt(numint._NumInt):
             ao_k1 = ao_k2 = None
 
     def _gen_rho_evaluator(self, cell, dms, hermi=0):
-        return numint._NumInt._gen_rho_evaluator(self, cell, dms, 0)
+        return numint._NumInt._gen_rho_evaluator(self, cell, dms, hermi)
 
     nr_rks_fxc = nr_rks_fxc
     nr_uks_fxc = nr_uks_fxc
@@ -1028,7 +1045,7 @@ class _KNumInt(numint._NumInt):
         return make_mask(cell, coords, relativity, shls_slice, verbose)
 
     def eval_rho(self, cell, ao_kpts, dm_kpts, non0tab=None, xctype='LDA',
-                 verbose=None):
+                 hermi=0, verbose=None):
         '''
         Args:
             cell : Mole or Cell object
@@ -1043,7 +1060,8 @@ class _KNumInt(numint._NumInt):
         nkpts = len(ao_kpts)
         rhoR = 0
         for k in range(nkpts):
-            rhoR += eval_rho(cell, ao_kpts[k], dm_kpts[k], non0tab, xctype, verbose)
+            rhoR += eval_rho(cell, ao_kpts[k], dm_kpts[k], non0tab, xctype,
+                             hermi, verbose)
         rhoR *= 1./nkpts
         return rhoR
 
@@ -1057,7 +1075,7 @@ class _KNumInt(numint._NumInt):
         rhoR *= 1./nkpts
         return rhoR
 
-    def nr_vxc(self, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
+    def nr_vxc(self, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
                kpts=None, kpts_band=None, max_memory=2000, verbose=None):
         '''Evaluate RKS/UKS XC functional and potential matrix.
         See :func:`nr_rks` and :func:`nr_uks` for more details.
@@ -1070,7 +1088,7 @@ class _KNumInt(numint._NumInt):
                                kpts, kpts_band, max_memory, verbose)
 
     @lib.with_doc(nr_rks.__doc__)
-    def nr_rks(self, cell, grids, xc_code, dms, hermi=1, kpts=None, kpts_band=None,
+    def nr_rks(self, cell, grids, xc_code, dms, hermi=0, kpts=None, kpts_band=None,
                max_memory=2000, verbose=None, **kwargs):
         if kpts is None:
             if 'kpt' in kwargs:
@@ -1085,7 +1103,7 @@ class _KNumInt(numint._NumInt):
                       hermi, kpts, kpts_band, max_memory, verbose)
 
     @lib.with_doc(nr_uks.__doc__)
-    def nr_uks(self, cell, grids, xc_code, dms, hermi=1, kpts=None, kpts_band=None,
+    def nr_uks(self, cell, grids, xc_code, dms, hermi=0, kpts=None, kpts_band=None,
                max_memory=2000, verbose=None, **kwargs):
         if kpts is None:
             if 'kpt' in kwargs:
@@ -1157,15 +1175,30 @@ class _KNumInt(numint._NumInt):
             yield ao_k1, ao_k2, non0, weight, coords
             ao_k1 = ao_k2 = None
 
-    def _gen_rho_evaluator(self, cell, dms, hermi=1):
-        if isinstance(dms, numpy.ndarray) and dms.ndim == 3:
-            nao = dms.shape[-1]
-            dms = [dms]
+    def _gen_rho_evaluator(self, cell, dms, hermi=0):
+        if hasattr(dms, 'mo_coeff'):
+            mo_coeff = dms.mo_coeff
+            mo_occ = dms.mo_occ
+            if isinstance(dms, numpy.ndarray) and dms.ndim == 3:
+                mo_coeff = [mo_coeff]
+                mo_occ = [mo_occ]
+            nao = mo_coeff[0].shape[1]
+            ndms = len(mo_occ)
+            def make_rho(idm, ao, non0tab, xctype):
+                return self.eval_rho2(cell, ao, mo_coeff[idm], mo_occ[idm],
+                                      non0tab, xctype)
         else:
+            if isinstance(dms, numpy.ndarray) and dms.ndim == 3:
+                nao = dms.shape[-1]
+                dms = [dms]
+            if not hermi:
+                #       dm.shape = (nkpts, nao, nao)
+                dms = [(dm+dm.conj().transpose(0,2,1))*.5 for dm in dms]
             nao = dms[0].shape[-1]
-        ndms = len(dms)
-        def make_rho(idm, ao_kpts, non0tab, xctype):
-            return self.eval_rho(cell, ao_kpts, dms[idm], non0tab, xctype)
+            ndms = len(dms)
+            def make_rho(idm, ao_kpts, non0tab, xctype):
+                return self.eval_rho(cell, ao_kpts, dms[idm], non0tab, xctype,
+                                     hermi=1)
         return make_rho, ndms, nao
 
     nr_rks_fxc = nr_rks_fxc
