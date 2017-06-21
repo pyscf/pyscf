@@ -1052,9 +1052,25 @@ void compute_rdm12s(int norb, int neleca, int nelecb, uint64_t *strs, double *ci
 
     size_t ip, jp, p, q, r, s;
     int nset = (norb + 63) / 64;
+    double ci_sq = 0.0;
+    double *rdm1a_private = malloc(sizeof(double) * norb * norb);
+    double *rdm1b_private = malloc(sizeof(double) * norb * norb);
+    double *rdm2aa_private = malloc(sizeof(double) * norb * norb * norb * norb);
+    double *rdm2ab_private = malloc(sizeof(double) * norb * norb * norb * norb);
+    double *rdm2bb_private = malloc(sizeof(double) * norb * norb * norb * norb);
+
+    for (p = 0; p < norb * norb; ++p) {
+        rdm1a_private[p] = 0.0;
+        rdm1b_private[p] = 0.0;
+    }
+    for (p = 0; p < norb * norb * norb * norb; ++p) {
+        rdm2aa_private[p] = 0.0;
+        rdm2ab_private[p] = 0.0;
+        rdm2bb_private[p] = 0.0;
+    }
  
     // Loop over pairs of determinants
-    #pragma omp for schedule(static)
+    #pragma omp for schedule(static) 
     for (ip = 0; ip < ndet; ++ip) {
         for (jp = 0; jp < ndet; ++jp) {
             uint64_t *stria = strs + ip * 2 * nset;
@@ -1067,18 +1083,18 @@ void compute_rdm12s(int norb, int neleca, int nelecb, uint64_t *strs, double *ci
             if (ip == jp) {
                 int *occsa = compute_occ_list(stria, nset, norb, neleca);
                 int *occsb = compute_occ_list(strib, nset, norb, nelecb);
-                double ci_sq = civec[ip] * civec[ip];
+                ci_sq = civec[ip] * civec[ip];
                 // Diagonal rdm1_aa
                 for (p = 0; p < neleca; ++p) {
                     int k = occsa[p];
                     int kk = k * norb + k;
-                    rdm1a[kk] += ci_sq;
+                    rdm1a_private[kk] += ci_sq;
                 }
                 // Diagonal rdm1_bb
                 for (p = 0; p < nelecb; ++p) {
                     int k = occsb[p];
                     int kk = k * norb + k;
-                    rdm1b[kk] += ci_sq;
+                    rdm1b_private[kk] += ci_sq;
                 }
                 // Diagonal rdm2_aaaa
                 for (p = 0; p < neleca; ++p) {
@@ -1087,14 +1103,14 @@ void compute_rdm12s(int norb, int neleca, int nelecb, uint64_t *strs, double *ci
                         int j = occsa[q];
                         int kjkj = k * norb * norb * norb + j * norb * norb + k * norb + j;
                         int kjjk = k * norb * norb * norb + j * norb * norb + j * norb + k;
-                        rdm2aa[kjkj] += ci_sq;
-                        rdm2aa[kjjk] -= ci_sq;
+                        rdm2aa_private[kjkj] += ci_sq;
+                        rdm2aa_private[kjjk] -= ci_sq;
                     }
                     // Diagonal rdm2_abab
                     for (q = 0; q < nelecb; ++q) {
                         int j = occsb[q];
                         int kjkj = k * norb * norb * norb + j * norb * norb + k * norb + j;
-                        rdm2ab[kjkj] += ci_sq;
+                        rdm2ab_private[kjkj] += ci_sq;
                     }
                 }
                 // Diagonal rdm2_bbbb
@@ -1104,8 +1120,8 @@ void compute_rdm12s(int norb, int neleca, int nelecb, uint64_t *strs, double *ci
                         int j = occsb[q];
                         int kjkj = k * norb * norb * norb + j * norb * norb + k * norb + j;
                         int kjjk = k * norb * norb * norb + j * norb * norb + j * norb + k;
-                        rdm2bb[kjkj] += ci_sq;
-                        rdm2bb[kjjk] -= ci_sq;
+                        rdm2bb_private[kjkj] += ci_sq;
+                        rdm2bb_private[kjjk] -= ci_sq;
                     }
                 }
                 free(occsa);
@@ -1122,9 +1138,9 @@ void compute_rdm12s(int norb, int neleca, int nelecb, uint64_t *strs, double *ci
                     double sign = compute_cre_des_sign(a, i, stria, nset);
                     int *occsa = compute_occ_list(stria, nset, norb, neleca);
                     int *occsb = compute_occ_list(strib, nset, norb, nelecb);
-                    double ci_sq = sign * civec[ip] * civec[jp];
+                    ci_sq = sign * civec[ip] * civec[jp];
                     // rdm1_aa
-                    rdm1a[a * norb + i] += ci_sq;
+                    rdm1a_private[a * norb + i] += ci_sq;
                     // rdm2_aaaa
                     for (p = 0; p < neleca; ++p) {
                         int k = occsa[p];
@@ -1132,16 +1148,16 @@ void compute_rdm12s(int norb, int neleca, int nelecb, uint64_t *strs, double *ci
                         int akki = a * norb * norb * norb + k * norb * norb + k * norb + i;
                         int kaki = k * norb * norb * norb + a * norb * norb + k * norb + i;
                         int kaik = k * norb * norb * norb + a * norb * norb + i * norb + k;
-                        rdm2aa[akik] += ci_sq;
-                        rdm2aa[akki] -= ci_sq;
-                        rdm2aa[kaik] -= ci_sq;
-                        rdm2aa[kaki] += ci_sq;
+                        rdm2aa_private[akik] += ci_sq;
+                        rdm2aa_private[akki] -= ci_sq;
+                        rdm2aa_private[kaik] -= ci_sq;
+                        rdm2aa_private[kaki] += ci_sq;
                     }
                     // rdm2_abab
                     for (p = 0; p < nelecb; ++p) {
                         int k = occsb[p];
                         int akik = a * norb * norb * norb + k * norb * norb + i * norb + k;
-                        rdm2ab[akik] += ci_sq;
+                        rdm2ab_private[akik] += ci_sq;
                     }
                     free(occsa);
                     free(occsb);
@@ -1154,9 +1170,9 @@ void compute_rdm12s(int norb, int neleca, int nelecb, uint64_t *strs, double *ci
                     double sign = compute_cre_des_sign(a, i, strib, nset);
                     int *occsa = compute_occ_list(stria, nset, norb, neleca);
                     int *occsb = compute_occ_list(strib, nset, norb, nelecb);
-                    double ci_sq = sign * civec[ip] * civec[jp];
+                    ci_sq = sign * civec[ip] * civec[jp];
                     // rdm1_bb
-                    rdm1b[a * norb + i] += ci_sq;
+                    rdm1b_private[a * norb + i] += ci_sq;
                     // rdm2_bbbb
                     for (p = 0; p < nelecb; ++p) {
                         int k = occsb[p];
@@ -1164,16 +1180,16 @@ void compute_rdm12s(int norb, int neleca, int nelecb, uint64_t *strs, double *ci
                         int akki = a * norb * norb * norb + k * norb * norb + k * norb + i;
                         int kaki = k * norb * norb * norb + a * norb * norb + k * norb + i;
                         int kaik = k * norb * norb * norb + a * norb * norb + i * norb + k;
-                        rdm2bb[akik] += ci_sq;
-                        rdm2bb[akki] -= ci_sq;
-                        rdm2bb[kaik] -= ci_sq;
-                        rdm2bb[kaki] += ci_sq;
+                        rdm2bb_private[akik] += ci_sq;
+                        rdm2bb_private[akki] -= ci_sq;
+                        rdm2bb_private[kaik] -= ci_sq;
+                        rdm2bb_private[kaki] += ci_sq;
                     }
                     // rdm2_abab
                     for (p = 0; p < neleca; ++p) {
                         int k = occsa[p];
                         int kaki = k * norb * norb * norb + a * norb * norb + k * norb + i;
-                        rdm2ab[kaki] += ci_sq;
+                        rdm2ab_private[kaki] += ci_sq;
                     }
                     free(occsa);
                     free(occsb);
@@ -1193,16 +1209,16 @@ void compute_rdm12s(int norb, int neleca, int nelecb, uint64_t *strs, double *ci
                     if (a > j || i > b) {
                         sign = compute_cre_des_sign(b, i, stria, nset);
                         sign *= compute_cre_des_sign(a, j, stria, nset);
-                        double ci_sq = sign * civec[ip] * civec[jp];
-                        rdm2aa[abij] += ci_sq;
-                        rdm2aa[abji] -= ci_sq;
+                        ci_sq = sign * civec[ip] * civec[jp];
+                        rdm2aa_private[abij] += ci_sq;
+                        rdm2aa_private[abji] -= ci_sq;
                     } 
                     else {
                         sign = compute_cre_des_sign(b, j, stria, nset);
                         sign *= compute_cre_des_sign(a, i, stria, nset);
-                        double ci_sq = sign * civec[ip] * civec[jp];
-                        rdm2aa[abij] -= ci_sq;
-                        rdm2aa[abji] += ci_sq;
+                        ci_sq = sign * civec[ip] * civec[jp];
+                        rdm2aa_private[abij] -= ci_sq;
+                        rdm2aa_private[abji] += ci_sq;
                     }
                     free(ijab);
                 }
@@ -1216,16 +1232,16 @@ void compute_rdm12s(int norb, int neleca, int nelecb, uint64_t *strs, double *ci
                     if (a > j || i > b) {
                         sign = compute_cre_des_sign(b, i, strib, nset);
                         sign *= compute_cre_des_sign(a, j, strib, nset);
-                        double ci_sq = sign * civec[ip] * civec[jp];
-                        rdm2bb[abij] += ci_sq;
-                        rdm2bb[abji] -= ci_sq;
+                        ci_sq = sign * civec[ip] * civec[jp];
+                        rdm2bb_private[abij] += ci_sq;
+                        rdm2bb_private[abji] -= ci_sq;
                     } 
                     else {
                         sign = compute_cre_des_sign(b, j, strib, nset);
                         sign *= compute_cre_des_sign(a, i, strib, nset);
-                        double ci_sq = sign * civec[ip] * civec[jp];
-                        rdm2bb[abij] -= ci_sq;
-                        rdm2bb[abji] += ci_sq;
+                        ci_sq = sign * civec[ip] * civec[jp];
+                        rdm2bb_private[abij] -= ci_sq;
+                        rdm2bb_private[abji] += ci_sq;
                     }
                     free(ijab);
                 }
@@ -1236,15 +1252,28 @@ void compute_rdm12s(int norb, int neleca, int nelecb, uint64_t *strs, double *ci
                     i = ia[0]; a = ia[1]; j = jb[0]; b = jb[1];
                     double sign = compute_cre_des_sign(a, i, stria, nset);
                     sign *= compute_cre_des_sign(b, j, strib, nset);
-                    double ci_sq = sign * civec[ip] * civec[jp];
+                    ci_sq = sign * civec[ip] * civec[jp];
                     int abij = a * norb * norb * norb + b * norb * norb + i * norb + j;
-                    rdm2ab[abij] -= ci_sq;
+                    rdm2ab_private[abij] -= ci_sq;
                     free(ia);
                     free(jb);
                }
             }
         } // end loop over jp
     } // end loop over ip
+
+    #pragma omp critical
+    {
+    for (p = 0; p < norb * norb; ++p) {
+        rdm1a[p] += rdm1a_private[p];
+        rdm1b[p] += rdm1b_private[p];
+    }
+    for (p = 0; p < norb * norb * norb * norb; ++p) {
+        rdm2aa[p] += rdm2aa_private[p];
+        rdm2ab[p] += rdm2ab_private[p];
+        rdm2bb[p] += rdm2bb_private[p];
+    }
+    }
 
     } // end omp
   
