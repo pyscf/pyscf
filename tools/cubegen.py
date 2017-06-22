@@ -39,7 +39,6 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80):
     coords = lib.cartesian_prod([xs,ys,zs])
     coords = numpy.asarray(coords, order='C') - (-boxorig)
 
-    nao = mol.nao_nr()
     ngrids = nx * ny * nz
     blksize = min(8000, ngrids)
     rho = numpy.empty(ngrids)
