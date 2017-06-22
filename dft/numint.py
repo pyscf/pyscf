@@ -178,6 +178,7 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
         c0 = _dot_ao_dm(mol, ao, dm, nao, ngrids, non0tab)
         rho = numpy.einsum('pi,pi->p', ao, c0)
     elif xctype == 'GGA':
+        dm = (dm + dm.conj().T) * .5
         rho = numpy.empty((4,ngrids))
         c0 = _dot_ao_dm(mol, ao[0], dm, nao, ngrids, non0tab)
         rho[0] = numpy.einsum('pi,pi->p', c0, ao[0])
@@ -187,6 +188,7 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', verbose=None):
             #c1 = _dot_ao_dm(mol, ao[i], dm.T, nao, ngrids, non0tab)
             #rho[i] += numpy.einsum('pi,pi->p', c1, ao[0])
     else: # meta-GGA
+        dm = (dm + dm.conj().T) * .5
         # rho[4] = \nabla^2 rho, rho[5] = 1/2 |nabla f|^2
         rho = numpy.empty((6,ngrids))
         c0 = _dot_ao_dm(mol, ao[0], dm, nao, ngrids, non0tab)

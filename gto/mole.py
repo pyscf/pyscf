@@ -1606,7 +1606,7 @@ class Mole(lib.StreamObject):
 
         # avoid to open output file twice
         if parse_arg and self.output is not None \
-           and self.stdout.name != self.output:
+           and self.stdout.getvalue() != self.output:
             self.stdout = open(self.output, 'w')
 
         if self.verbose >= logger.WARN:

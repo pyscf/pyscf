@@ -166,6 +166,7 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', verbose=None):
     # complex orbitals or density matrix
     if numpy.iscomplexobj(ao) or numpy.iscomplexobj(dm):
 
+        dm = (dm + dm.conj().T) * .5
         def re_im(a):
             return (numpy.asarray(a.real, order='C'),
                     numpy.asarray(a.imag, order='C'))

@@ -115,7 +115,8 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the Fock matrix in occupied, open,
     virtual subspaces separatedly (without change occupancy).
     '''
-    if not mf.mol.symmetry:
+    mol = mf.mol
+    if not mol.symmetry:
         return hf.canonicalize(mf, mo_coeff, mo_occ, fock)
 
     if fock is None:
