@@ -204,24 +204,23 @@ class prod_talman_c(log_mesh_c):
     """ Evaluate the Talman's expansion at given Cartesian coordinates"""
     from pyscf.nao.m_thrj import thrj
     from pyscf.nao.m_csphar_talman_libnao import csphar_talman_libnao as csphar_jt
-    from numpy import sqrt, pi
+    from numpy import zeros, sqrt, pi
     
+    assert all(rcen == zeros(3)) # this works only when center is at the origin
     nterm = len(jtb)
     assert nterm == len(clbdtb)
     assert nterm == len(lbdtb)
     assert nterm == rhotb.shape[0]
     assert self.nr == rhotb.shape[1]
-  
-    ffr = np.zeros([clbdtb.max()+1,self.nr], np.complex128)
-    ylm_cr = csphar_jt(rcen, lbdtb.max())
+
+    ffr = zeros([self.lbdmx+1,self.nr], np.complex128)
+    ylm_cr = csphar_jt(rcen, lbdtb.max()+1)
     m = mb + ma
     for j,clbd,lbd,rho in zip(jtb,clbdtb,lbdtb,rhotb):
-      tj1  = thrj(ja,jb,j,ma,mb,-m)
-      tj2  = thrj(j,clbd,lbd,-m,m,0)
-      ffr[clbd,:]=ffr[clbd,:] + tj1*tj2*rho*ylm_cr[lbd*(lbd+1)]
-      
-    ffr = ffr*sqrt((2*jb+1)*(2*ja+1))/(4*pi)
-    return ffr
+      ffr[clbd,:]=ffr[clbd,:] + thrj(ja,jb,j,ma,mb,-m)*thrj(j,clbd,lbd,-m,m,0) * rho * ylm_cr[lbd*(lbd+1)]
+
+    #ffr = ffr*sqrt((2*jb+1)*(2*ja+1))/(4*pi)
+    return ffr,m
     
     
     

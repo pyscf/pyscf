@@ -74,6 +74,9 @@ else:
 def thrj(l1i,l2i,l3i,m1i,m2i,m3i):
   """ Wigner3j symbol. Written by James Talman. """
 
+  if abs(m1i)>l1i or abs(m2i)>l2i or abs(m3i)>l3i: return 0.0
+  if m1i+m2i+m3i != 0: return 0.0
+
   l1,l2,l3,m1,m2,m3=l1i,l2i,l3i,m1i,m2i,m3i
   ph = 1.0
   if l1<l2 :
@@ -87,7 +90,7 @@ def thrj(l1i,l2i,l3i,m1i,m2i,m3i):
 
   if l1>lmax: raise RuntimeError('thrj: 3-j coefficient out of range')
 
-  if l1>l2+l3 or m1+m2+m3 != 0: return 0.0
+  if l1>l2+l3: return 0.0
    
   icc=ixxa[l1]+ixxb[l2]+ixxc[l2]*(l2+m2)+ixxc[l3]-l3+m3
   return ph*aa[icc-1]

@@ -38,45 +38,38 @@ class KnowValues(unittest.TestCase):
     
     dname = os.path.dirname(os.path.abspath(__file__))
     sp2ion = []
-    sp2ion.append(siesta_ion_xml(dname+'/H.ion.xml'))
     sp2ion.append(siesta_ion_xml(dname+'/O.ion.xml'))
 
-    aos = ao_log_c().init_ao_log_ion(sp2ion, nr=512, rmin=0.0025)
+    aos = ao_log_c().init_ao_log_ion(sp2ion)
+    jmx = aos.jmx
     pt = prod_talman_c(aos)
 
-    spa,mua,spb,mub =0,0,1,1
+    spa,mua,spb,mub =0,0,0,0
     la,lb = aos.sp_mu2j[spa][mua],aos.sp_mu2j[spb][mub]
-    oas,oaf = aos.sp_mu2s[spa][mua],aos.sp_mu2s[spa][mua+1]
-    obs,obf = aos.sp_mu2s[spb][mub],aos.sp_mu2s[spb][mub+1]
-    
+    phia,phib = aos.psi_log[spa][mua,:],aos.psi_log[spb][mub,:]
+    rav,rbv,rcv = array([0.0,0.0,-1.0]),array([0.0,0.0,1.0]), zeros(3)
+
     jtb,clbdtb,lbdtb=pt.prdred_terms(la,lb)
-    ra,rb,rcen = array([0.0,0.0,-0.5]),array([0.0,0.0,0.5]), zeros(3)
+    jtb,clbdtb,lbdtb,rhotb = pt.prdred_libnao(phia,la,rav,phib,lb,rbv,rcv)
 
-    jtb,clbdtb,lbdtb,rhotb = \
-      pt.prdred_libnao(aos.psi_log[spa][mua,:],la,ra,aos.psi_log[spb][mub,:],lb,rb, rcen)
+    coord = np.array([0.0, 0.0, 0.22]) # Point at which we will compute the expansion and the original product
+    ylma,ylmb,ylmc = csphar_jt(coord-rav, jmx), csphar_jt(coord-rbv, jmx),csphar_jt(coord+rcv, pt.lbdmx)
+    ras,rbs,rcs = sqrt(sum((coord-rav)**2)),sqrt(sum((coord-rbv)**2)),sqrt(sum((coord+rcv)**2))
 
-    coords = np.array([[0.110, 0.260, 0.22]])
-    rscal  = sqrt(sum((coords[0] - rcen)**2))
-    aosa,aosb = ao_eval(aos, ra, spa, coords), ao_eval(aos, rb, spb, coords)
+    print('\n test_prdred_eval')
+    for ma in range(-la,la+1):
+      aovala = ylma[la*(la+1)+ma]*pt.log_interp(phia, ras)
+      for mb in range(-lb,lb+1):
+        aovalb = ylmb[lb*(lb+1)+mb]*pt.log_interp(phib, rbs)
 
-    ylm = csphar_jt(coords[0,:], clbdtb.max())
-     
-    #print('\n test_prdred_eval')
+        ffr,m = pt.prdred_further(la,ma,lb,mb,rcv,jtb,clbdtb,lbdtb,rhotb)
+        ffr_vals = zeros(pt.lbdmx+1, dtype=np.complex128)
+        for iclbd,ff in enumerate(ffr): ffr_vals[iclbd] = pt.log_interp(ff, rcs)
+        prdval = 0.0
+        for j,ffr_val in enumerate(ffr_vals): prdval = prdval + ffr_val*ylmc[j*(j+1)+m]
+        
+        print(ma,mb, aovala, aovalb, aovala*aovalb, prdval)
     
-    for oa in range(oas,oaf):
-      ma = oas-oa-la
-      for ob in range(obs,obf):
-        mb = obs-ob-lb
-        ffr = pt.prdred_further(la,ma,lb,mb,rcen,jtb,clbdtb,lbdtb,rhotb)
-
-        ffr_vals = np.zeros(ffr.shape[0], dtype=np.complex128)
-        for iclbd,ff in enumerate(ffr): ffr_vals[iclbd] = pt.log_interp(ff, rscal)
-    
-        prdval = 0.0+0.0j
-        for clbd,ffr_val in enumerate(ffr_vals): prdval = prdval + ffr_val*ylm[clbd*(clbd+1)]
-
-        #print(ma,mb,oa,ob,ffr_vals)
-        #print(prdval, aosb[oa,0]*aosa[ob,0])
 
 if __name__ == "__main__":
   unittest.main()

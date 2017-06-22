@@ -10,9 +10,9 @@ class KnowValues(unittest.TestCase):
     for l1 in range(0,3):
       for l2 in range(0,3):
         for l3 in range(0,3):
-          for m1 in range(-l1,l1+1):
-            for m2 in range(-l2,l2+1):
-              for m3 in range(-l3,l3+1):
+          for m1 in range(-4,4+1):
+            for m2 in range(-4,4+1):
+              for m3 in range(-4,4+1):
                 w3j1 = thrj(l1, l2, l3, m1, m2, m3)
                 w3j2 = thrj_nobuf(l1, l2, l3, m1, m2, m3)
                 w3j3 = float(wigner_3j(l1, l2, l3, m1, m2, m3))
