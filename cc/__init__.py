@@ -66,8 +66,22 @@ def CCSD(mf, frozen=[], mo_coeff=None, mo_occ=None):
 
 def RCCSD(mf, frozen=[], mo_coeff=None, mo_occ=None):
     from pyscf.cc import rccsd
+    mf = _convert_to_rhf(mf)
     return rccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)
 
 def UCCSD(mf, frozen=[[],[]], mo_coeff=None, mo_occ=None):
     from pyscf.cc import uccsd
+    mf = _convert_to_uhf(mf)
     return uccsd.UCCSD(mf, frozen, mo_coeff, mo_occ)
+
+def _convert_to_rhf(mf):
+    from pyscf import scf
+    if isinstance(mf, scf.uhf.UHF):
+        mf = scf.addons.convert_to_rhf(mf)
+    return mf
+
+def _convert_to_uhf(mf):
+    from pyscf import scf
+    if not isinstance(mf, scf.uhf.UHF):
+        mf = scf.addons.convert_to_uhf(mf)
+    return mf
