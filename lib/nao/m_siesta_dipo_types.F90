@@ -1,0 +1,32 @@
+module m_siesta_dipo_types
+#include "m_define_macro.F90"
+  use m_log, only : die
+  use m_precision, only : siesta_int
+  implicit none
+  private die
+
+!!! DSP modified for dipole
+  type siesta_dipo_t
+    integer(siesta_int)              :: norbitals = -999     !! Number of orbitals in (unit cell)
+    integer(siesta_int)              :: norbitals_sc = -999  !! Number of orbitals in super cell
+    integer(siesta_int)              :: nnonzero = -999      !! Number of nonzero matrix elements in H and S
+    integer(siesta_int), allocatable :: sc_orb2uc_orb(:)     !! Index "super cell orbital --> unit cell orbital" indxuo in SIESTA
+    integer(siesta_int), allocatable :: row2nnzero(:)        !! (norbitals)
+    integer(siesta_int), allocatable :: sparse_ind2column(:) !! (nnonzero)
+    real(4), allocatable    :: dipo_sparse(:,:)        !! (nnonzero,nspin)
+    real(4), allocatable    :: dipo_corr_sparse(:,:)          !! (nnonzero)
+    real(4), allocatable    :: overlap_sparse(:)          !! (nnonzero)
+  end type siesta_dipo_t
+
+!! DSP Quick change to compute dipole matrix from Siesta input
+!! Next type contains information about the dipole matrix elements in the orbital basis
+!! and the correction due to the non-local pseudos
+  type dft_dipo_t
+      real(8), allocatable ::  dipo(:,:,:)   ! (xyz, orbital, supercell_orbital)
+      real(8), allocatable :: dipo_corr(:,:,:) !  (xyz, orbital, supercell_orbital)
+      real(8), allocatable :: overlap(:,:) !  (orbital, supercell_orbital)
+  end type ! dft_dipo_t
+
+end module m_siesta_dipo_types
+
+  

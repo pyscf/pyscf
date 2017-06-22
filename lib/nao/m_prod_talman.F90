@@ -183,7 +183,7 @@ end subroutine !prdred
 !
 !
 !
-subroutine prdred_fval(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb,nterm,ord,pcs,rho_min_jt,dr_jt) &
+subroutine prdred(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb,nterm,ord,pcs,rho_min_jt,dr_jt) &
   bind(c, name='prdred_fval')
   use m_fact, only : fac, sgn
   use m_numint, only : gl_knts, gl_wgts

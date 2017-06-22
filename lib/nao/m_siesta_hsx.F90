@@ -1,207 +1,95 @@
 module m_siesta_hsx
-#include "m_define_macro.F90"
-  
-  use iso_c_binding, only: c_char, c_double, c_float, c_int64_t, c_int
+#include "m_define_macro.F90"  
   use m_die, only : die
-  
+  use m_precision, only : siesta_int
   implicit none
+  private die
 
   !!
-  !! Holds info about hamiltonian and overlap in sparse form
-  !! 
-  type hsx_t
-    !! First index belongs to unit cell, second to super cell
-    integer              :: norbs = -999       !! Number of orbitals in (unit cell)
-    integer              :: norbs_sc = -999    !! Number of orbitals in super cell
-    integer              :: nspin  = -999      !! Number of spins in calculation
-    integer              :: nnz = -999         !! Number of nonzero matrix elements in H and S
-    logical              :: is_gamma = .false. !! whether it is gamma calculation
- 
-    integer, allocatable :: orb_sc2orb_uc(:)   !! Index "super cell orbital --> unit cell orbital" indxuo in SIESTA
+  !! type to hold information from .HSX file
+  type siesta_hsx_t
+    integer(siesta_int)              :: norbitals = -999     !! Number of orbitals in (unit cell)
+    integer(siesta_int)              :: norbitals_sc = -999  !! Number of orbitals in super cell
+    integer(siesta_int)              :: nspin  = -999        !! Number of spins in calculation
+    integer(siesta_int)              :: nnonzero = -999      !! Number of nonzero matrix elements in H and S
+    logical(siesta_int)              :: is_gamma = .false.   !! whether it is gamma calculation
+    integer(siesta_int), allocatable :: sc_orb2uc_orb(:)     !! Index "super cell orbital --> unit cell orbital" indxuo in SIESTA
+    integer(siesta_int), allocatable :: row2nnzero(:)        !! (norbitals)
+    integer(siesta_int), allocatable :: sparse_ind2column(:) !! (nnonzero)
+    real(4), allocatable    :: H_sparse(:,:)        !! (nnonzero,nspin)
+    real(4), allocatable    :: S_sparse(:)          !! (nnonzero)
+    real(4), allocatable    :: aB2RaB_sparse(:,:)   !! (3,nnonzero) Spatial vectors between orbital centers. 
+                                                    !! First index belongs to unit cell, second to super cell 
+    real(8) :: Total_electronic_charge = -999       !! Total electronic charge
+    real(8) :: Temp                    = -999       !! Temperature
+    !! ??? X
+  end type !siesta_hsx_t
 
-    ! CRS (Compressed Row Storage) control arrays. Data arrays below
-    integer, allocatable :: row_ptr(:)   !! (norbs+1)
-    integer, allocatable :: col_ind(:)   !! (nnz)
-    ! END of CRS (Compressed Row Storage) control arrays. Data arrays below
-
-    real(4), allocatable :: H4(:,:)      !! (nnz,nspin)
-    real(4), allocatable :: S4(:)        !! (nnz)
-    real(4), allocatable :: X4(:,:)      !! (xyz,nnz) Spatial vectors between orbital centers aB2RaB4() 
-
-    real(8), allocatable :: H8(:,:)      !! (nnz,nspin)
-    real(8), allocatable :: S8(:)        !! (nnz)
-    real(8), allocatable :: X8(:,:)      !! (xyz,nnz) Spatial vectors between orbital centers
-
-    real(8) :: Ne = -999  !! Number of electrons: Total electronic charge
-    real(8) :: Te = -999  !! Temperature of electrons
-  end type !hsx_t
+  interface realloc_if_necessary
+    module procedure realloc_if_necessary_i8_d
+    module procedure realloc_if_necessary_i4_d
+    module procedure realloc_if_necessary_i4_i4
+    module procedure realloc_if_necessary_i8_i8
+  end interface  ! realloc_if_necessary
 
   contains  
-
-!!
-!!
-!!
-subroutine siesta_hsx_size(fname_in, force_basis_type, isize) & !, force_basis_type, isize) 
-  bind(c, name='siesta_hsx_size')
-  
-  use m_precision, only : siesta_int
-  use m_io, only : get_free_handle
-  use m_null2char, only : null2char
-  !! external
-  character(kind=c_char), intent(in) :: fname_in(*)
-  integer(c_int64_t), intent(in) :: force_basis_type
-  integer(c_int64_t), intent(inout) :: isize 
-  !! internal
-  integer(c_int) :: ios
-  type(hsx_t) :: hsx
-  character(1000) :: fname
- 
-  
-  call null2char(fname_in, fname)
-  call read_siesta_hsx(fname, force_basis_type, hsx, ios)
-  isize = -1
-  if(ios/=0) return
-
-  isize = 1 ! norbs
-  isize = isize + 1 ! norbs_sc
-  isize = isize + 1 ! nspin
-  isize = isize + 1 ! nnz
-  isize = isize + 1 ! is_gamma
-  isize = isize + 1 ! Ne
-  isize = isize + 1 ! Te
-  _assert(hsx%H4)
-  _assert(hsx%S4)
-  _assert(hsx%X4)
-  _assert(hsx%row_ptr)
-  _assert(hsx%col_ind)
-
-  isize = isize + size(hsx%row_ptr)
-  isize = isize + size(hsx%col_ind)
-  isize = isize + size(hsx%H4)
-  isize = isize + size(hsx%S4)
-  isize = isize + size(hsx%X4)
-
-  if(allocated(hsx%orb_sc2orb_uc))isize = isize + size(hsx%orb_sc2orb_uc)
-  
-end subroutine ! siesta_hsx_size
-
-!!
-!!
-!!
-subroutine siesta_hsx_read(fname_in, force_basis_type, dat) bind(c, name='siesta_hsx_read')
-  use m_precision, only : siesta_int
-  use m_io, only : get_free_handle
-  use m_null2char, only : null2char
-  !! external
-  character(kind=c_char), intent(in) :: fname_in(*)
-  integer(c_int64_t), intent(in)    :: force_basis_type
-  real(c_float), intent(inout) :: dat(*)
-
-  integer :: i
-  integer(c_int) :: ios
-  character(1000) :: fname
-  type(hsx_t) :: hsx
-
-  call null2char(fname_in, fname)
-  call read_siesta_hsx(fname, force_basis_type, hsx, ios)
-
-  i = 1;
-  dat(i) = hsx%norbs; i=i+1;
-  dat(i) = hsx%norbs_sc; i=i+1;
-  dat(i) = hsx%nspin; i=i+1;
-  dat(i) = hsx%nnz; i=i+1;
-  dat(i) = l2s(hsx%is_gamma); i=i+1;
-  dat(i) = real(hsx%Ne, c_float); i=i+1;
-  dat(i) = real(hsx%Te, c_float); i=i+1;
-  hsx%H4 = hsx%H4 / 2.0e0 ! Rydberg --> Hartree
-  call scopy(size(hsx%H4), hsx%H4,1, dat(i),1); i=i+size(hsx%H4)
-  call scopy(size(hsx%S4), hsx%S4,1, dat(i),1); i=i+size(hsx%S4)
-  call scopy(size(hsx%X4), hsx%X4,1, dat(i),1); i=i+size(hsx%X4)
-  dat(i:i+size(hsx%row_ptr)-1) = hsx%row_ptr; i=i+size(hsx%row_ptr);
-  dat(i:i+size(hsx%col_ind)-1) = hsx%col_ind; i=i+size(hsx%col_ind);
-  if(allocated(hsx%orb_sc2orb_uc)) then
-    dat(i:i+size(hsx%orb_sc2orb_uc)-1) = hsx%orb_sc2orb_uc; i=i+size(hsx%orb_sc2orb_uc);
-  endif
-
-end subroutine ! siesta_hsx_read
-
-!
-!
-!
-real(c_float) function l2s(l)
-  implicit none
-  logical, intent(in) :: l
-  if(l) then; l2s=1; else; l2s=0; endif
-end function !l2s   
 
 !
 !
 !
 subroutine dealloc(hsx)
   implicit none
-  type(hsx_t), intent(inout) :: hsx
+  type(siesta_hsx_t), intent(inout) :: hsx
   
-  _dealloc(hsx%orb_sc2orb_uc)
-  _dealloc(hsx%row_ptr)
-  _dealloc(hsx%col_ind)
-  _dealloc(hsx%H4)
-  _dealloc(hsx%S4)
-  _dealloc(hsx%X4)
-  _dealloc(hsx%H8)
-  _dealloc(hsx%S8)
-  _dealloc(hsx%X8)
-  hsx%norbs = -999
-  hsx%norbs_sc = -999
-  hsx%nspin = -999
-  hsx%nnz   = -999
-  hsx%Ne    = -999
-  hsx%Te    = -999
+  _dealloc(hsx%sc_orb2uc_orb)
+  _dealloc(hsx%row2nnzero)
+  _dealloc(hsx%sparse_ind2column)
+  _dealloc(hsx%H_sparse)
+  _dealloc(hsx%S_sparse)
+  _dealloc(hsx%aB2RaB_sparse)
   
 end subroutine !dealloc 
-    
+  
+
 
 !!
 !!
 !!
-subroutine read_siesta_hsx(fname, force_basis_type, hsx, ios)
+subroutine siesta_get_hsx(fname, force_basis_type, hsx, iv, ilog)
+  use m_log, only : die, log_size_note
   use m_precision, only : siesta_int
   use m_io, only : get_free_handle
   implicit none
-  character(len=*), intent(in)   :: fname
-  integer(c_int64_t), intent(in) :: force_basis_type
-  type(hsx_t), intent(inout)     :: hsx
-  integer(c_int), intent(inout)  :: ios
+  character(len=*), intent(in)      :: fname
+  integer, intent(in)               :: force_basis_type
+  type(siesta_hsx_t), intent(inout) :: hsx
+  integer, intent(in)               :: iv, ilog
 
   !! internal
-  logical(siesta_int) :: gamma_si
-  integer(siesta_int) :: n, n_sc, nspin, nnz
-  integer :: ifile, i, spin, sum_row2nnz
-  integer(siesta_int), allocatable :: row2nnz(:), ref(:), iaux(:)
-
-  !! executable
-  
-  call dealloc(hsx)
-  
+  integer(siesta_int), allocatable  ::  int_buff(:)   !! buffer for pointers (to nonzero elements) within a column
+  real(4),    allocatable  :: sp_buff(:)     !! buffer for vector values (of nonzero elements) within a column
+  real(4),    allocatable  :: sp_buff3(:, :) !! buffer for vector values (of nonzero elements) for reading coord differences
+  integer :: ifile, ios, irow, ispin, sum_row2nnzero, maxnnzero, d,f,i
+  integer, allocatable :: row2displ(:), ref(:)
+ 
+  if(iv>0) write(ilog,*)'siesta_get_hsx: enter'
   ifile = get_free_handle();
   open(ifile,file=trim(fname),form='unformatted',action='read',status='old',iostat=ios);
-  if(ios/=0) return
+  if(ios/=0) _die('file '//trim(fname)//' ?')
   rewind(ifile, iostat=ios)
-  if(ios/=0) return
-  read(ifile,iostat=ios) n, n_sc, nspin, nnz
-  if(ios/=0) return
-  
-  hsx%norbs = n
-  hsx%norbs_sc = n_sc
-  hsx%nspin = nspin
-  hsx%nnz = nnz
-  
-  if(ios/=0) return
-  read(ifile,iostat=ios) gamma_si
-  if(ios/=0) return
-  hsx%is_gamma = gamma_si
+  if(ios/=0)_die('ios /= 0')
+  read(ifile,iostat=ios) hsx%norbitals, hsx%norbitals_sc, hsx%nspin, hsx%nnonzero
+  if(ios/=0)_die('ios /= 0')
+  call log_size_note("hsx%norbitals", hsx%norbitals, iv); 
+  call log_size_note("hsx%norbitals_sc", hsx%norbitals_sc, iv); 
+  call log_size_note("hsx%nspin", hsx%nspin, iv); 
+  call log_size_note("hsx%nnonzero", hsx%nnonzero, iv); 
+
+  read(ifile,iostat=ios) hsx%is_gamma
+  if(ios/=0)_die('ios /= 0')
 
   select case (force_basis_type)
-  case(1)
+  case(1) 
     hsx%is_gamma = .true.
   case(2)
     hsx%is_gamma = .false.
@@ -211,20 +99,18 @@ subroutine read_siesta_hsx(fname, force_basis_type, hsx, ios)
   
   !! Read index array super cell orbital --> unit cell orbital. Specific for periodic case...
   if(.not. hsx%is_gamma) then
-    !if(iv>0)write(ilog,*) '.not. hsx%is_gamma', hsx%is_gamma, (.not. hsx%is_gamma)
-    allocate(iaux(hsx%norbs_sc))
-    allocate(hsx%orb_sc2orb_uc(hsx%norbs_sc))
-    read(ifile,iostat=ios) (iaux(i), i=1,hsx%norbs_sc)
-    if(ios/=0) return
-    hsx%orb_sc2orb_uc = iaux
+    if(iv>0)write(ilog,*) '.not. hsx%is_gamma', hsx%is_gamma, (.not. hsx%is_gamma)
+    allocate(hsx%sc_orb2uc_orb(hsx%norbitals_sc))
+    read(ifile,iostat=ios) (hsx%sc_orb2uc_orb(i), i=1,hsx%norbitals_sc)
+    if (ios/=0) _die("ios/=0")
 
     !! Consistency check to catch a read error issue observed with ifort 12.0.0 compiler
-    allocate(ref(hsx%norbs))
-    do i=1,hsx%norbs; ref(i)=i; enddo
-    if(any(hsx%orb_sc2orb_uc(1:hsx%norbs)/=ref)) then
+    allocate(ref(hsx%norbitals))
+    do i=1,hsx%norbitals; ref(i)=i; enddo
+    if(any(hsx%sc_orb2uc_orb(1:hsx%norbitals)/=ref)) then
       write(0,'(a20,a20,a20)') 'o ', ' hsx%sc_orb2uc_orb(o)', ' ref(o)'
-      do i=1,hsx%norbs
-        write(0,'(3i20)') i, hsx%orb_sc2orb_uc(i), ref(i)
+      do i=1,hsx%norbitals
+        write(0,'(3i20)') i, hsx%sc_orb2uc_orb(i), ref(i)
       enddo  
       write(0,*) 'Current conventions for .HSX files are violated.'
       write(0,*) 'This may indicate a problem (i) with (intel) fortran compiler'
@@ -233,120 +119,279 @@ subroutine read_siesta_hsx(fname, force_basis_type, hsx, ios)
       write(0,*) 'variables representations. In the latter case try using '
       write(0,*) '  force_basis_type  1 -- for finite size systems (molecules) '
       write(0,*) '  force_basis_type  2 -- for extenden systems (solids, slabs etc.) '
-      _die('any(hsx%orb_sc2orb_uc(1:norbs)/=ref)')
+      _die('any(hsx%sc_orb2uc_orb(1:norbs)/=ref)')
     endif
     !! END of Consistency check to catch a read error issue observed with ifort 12.0.0 compiler
   endif
   !! END of Read index array super cell orbital --> unit cell orbital. Specific for periodic case...
 
-  _dealloc(row2nnz)
-  allocate(row2nnz(hsx%norbs))
-  read(ifile,iostat=ios) (row2nnz(i), i=1,hsx%norbs)
-  if (ios/=0) _die("ios/=0")
-  sum_row2nnz = sum(row2nnz)
-  if (sum_row2nnz /= hsx%nnz) then
-    write(0,*) __FILE__, __LINE__, sum_row2nnz, hsx%nnz, hsx%norbs, hsx%is_gamma
-    write(0,*) row2nnz
-    _die('sum_row2nnz /= hsx%nnz');
+  !! allocate the buffers
+  if(allocated(hsx%row2nnzero)) deallocate(hsx%row2nnzero)
+  allocate(hsx%row2nnzero(hsx%norbitals));
+  if(allocated(hsx%sparse_ind2column)) deallocate(hsx%sparse_ind2column)
+  allocate(hsx%sparse_ind2column(hsx%nnonzero));
+
+  read(ifile,iostat=ios) (hsx%row2nnzero(i), i=1,hsx%norbitals);
+  if (ios/=0) stop "siesta_get_hsx: (ios/=0) hsx%row2nnzero"
+  sum_row2nnzero = sum(hsx%row2nnzero)
+
+  if (sum_row2nnzero /= hsx%nnonzero) then
+    write(0,*) 'siesta_get_hsx: sum_col2nnzero /= nnonzero ', &
+      sum_row2nnzero, hsx%nnonzero, hsx%norbitals, hsx%is_gamma;
+    write(0,*) hsx%row2nnzero;
+    _die('sum_row2nnzero /= hsx%nnonzero');
   endif
 
-  !! Fill the displacements (according to row2nnzero) row_ptr
-  allocate(hsx%row_ptr(hsx%norbs+1))
-  hsx%row_ptr = -999
-  hsx%row_ptr(1) = 1
-  do i=1, hsx%norbs; hsx%row_ptr(i+1)=hsx%row_ptr(i)+row2nnz(i); enddo
-  !! END of Fill the displacements (according to row2nnz) row_ptr
+  !! Fill the displacements (according to row2nnzero) row2displ
+  allocate(row2displ(hsx%norbitals))
+  row2displ(1)=0
+  do irow=2, hsx%norbitals
+    row2displ(irow) = row2displ(irow-1) + hsx%row2nnzero(irow-1)
+  enddo
+  !! END of Fill the displacements (according to row2nnzero) row2displ
 
-  !! Fill the columns for each row index
-  allocate(hsx%col_ind(hsx%nnz))
-  if(.not. allocated(iaux)) then
-    allocate(iaux(hsx%norbs_sc))
-  else
-    if(size(iaux)<hsx%norbs_sc) _die('!iaux')  
-  endif
-  
-  do i=1, hsx%norbs
-    if (hsx%row_ptr(i+1)-hsx%row_ptr(i)/=row2nnz(i)) then
-      write(0,*) i, hsx%row_ptr(i+1), hsx%row_ptr(i) 
-      _die('hsx%row_ptr(i+1)-hsx%row_ptr(i)/=f')
-    endif
+  maxnnzero = maxval(hsx%row2nnzero)
+  allocate(int_buff(maxnnzero));
 
-    read(ifile,iostat=ios)iaux(1:row2nnz(i)) ! read set of columns for given row
+  !! Fill the rows for each index in *_sparse arrays
+  do irow=1, hsx%norbitals
+    f = hsx%row2nnzero(irow)
+    read(ifile,iostat=ios)int_buff(1:f) ! read set of rows where nonzero elements reside
     if (ios/=0) then
       write(0,*) 'error: ios=', ios
-      _die('ios/=0')
+      stop "siesta_get_hsx: (ios/=0) int_buff 1"
     endif
-    hsx%col_ind(hsx%row_ptr(i):hsx%row_ptr(i+1)-1) = iaux(1:row2nnz(i))
-
+    d = row2displ(irow)
+    hsx%sparse_ind2column(d+1:d+f) = int_buff(1:f);
   enddo
-  !! END of Fill the columns for each row index
+  !! END of Fill the rows for each index in *_sparse arrays
 
-  allocate(hsx%H4(hsx%nnz,hsx%nspin)); ! Hamiltonian matrix in sparse form
-  allocate(hsx%S4(hsx%nnz));           ! Overlap matrix in sparse form
-  allocate(hsx%X4(3,hsx%nnz));         ! Distances between atoms from unit cell and super cell.
+  !! Allocate H, S and X matrices
+  allocate(sp_buff(maxnnzero));
+  allocate(sp_buff3(3,maxnnzero));
+
+  if(allocated(hsx%H_sparse)) deallocate(hsx%H_sparse)
+  allocate(hsx%H_sparse(hsx%nnonzero,hsx%nspin)); ! Hamiltonian matrix in sparse form
+
+  if(allocated(hsx%S_sparse)) deallocate(hsx%S_sparse)
+  allocate(hsx%S_sparse(hsx%nnonzero));       ! Overlap matrix in sparse form
+
+  if(allocated(hsx%aB2RaB_sparse)) deallocate(hsx%aB2RaB_sparse)
+  allocate(hsx%aB2RaB_sparse(3,hsx%nnonzero)); ! Distances between atoms from unit cell and super cell.
   !! END of Allocate H, S and X matrices
 
   !! Read the data to H_sparse array
-  do spin=1,hsx%nspin
-    do i=1,hsx%norbs
-      read(ifile,iostat=ios)hsx%H4(hsx%row_ptr(i):hsx%row_ptr(i+1)-1, spin)
-      if (ios/=0) _die('ios/=0')
+  do ispin=1,hsx%nspin
+    do irow=1,hsx%norbitals
+      d = row2displ(irow)
+      f = hsx%row2nnzero(irow)
+      read(ifile,iostat=ios)sp_buff(1:f)
+      if (ios/=0) stop "siesta_get_hsx: (ios/=0) Hamiltonian matrix"
+      hsx%H_sparse(d+1:d+f, ispin) = sp_buff(1:f); 
     enddo
   enddo
-  ! unfortunately we do not know m-numbers at this point and the conversion must happen after
+
   !! END of Read the data to H_sparse array
+  if(iv>1) write(ilog,*) 'sum(abs(hsx%H_sparse))', sum(abs(hsx%H_sparse))
 
   !! Read the data to S_sparse array
-  do i=1,hsx%norbs
-    read(ifile,iostat=ios)hsx%S4(hsx%row_ptr(i):hsx%row_ptr(i+1)-1)
-    if (ios/=0) _die('ios/=0')
+  do irow=1,hsx%norbitals
+    d = row2displ(irow)
+    f = hsx%row2nnzero(irow)
+    read(ifile,iostat=ios)sp_buff(1:f)
+    if (ios/=0) then
+      write(ilog,*)ios, d, f, irow
+      stop "siesta_get_hsx: (ios/=0) overlap matrix"
+    endif
+    hsx%S_sparse(d+1:d+f) = sp_buff(1:f);
   enddo
   !! END of Read the data to S_sparse array
-  ! unfortunately we do not know m-numbers at this point and the conversion must happen after
 
-  read(ifile,iostat=ios) hsx%Ne, hsx%Te  ! Total electronic charge and Temperature
-  if (ios/=0) _die('ios/=0')
+  read(ifile,iostat=ios) hsx%total_electronic_charge, hsx%temp  ! Total electronic charge and Temperature
+  if (ios/=0) stop "siesta_get_hsx: (ios/=0) total_electronic_charge, temp"
+  call log_size_note("siesta_get_hsx: hsx%total_electronic_charge", hsx%total_electronic_charge, iv);
+  call log_size_note("siesta_get_hsx: hsx%temp, Ry", hsx%temp, iv);
 
-  !! Read the data to ab_2_RB_minus_Ra array
-  do i=1,hsx%norbs
-    read(ifile,iostat=ios)hsx%X4(1:3,hsx%row_ptr(i):hsx%row_ptr(i+1)-1)
-    if (ios/=0) _die('ios/=0')
+  !! Read the data to ab_2_Ra_minus_RB array
+  do irow=1,hsx%norbitals
+    d = row2displ(irow)
+    f = hsx%row2nnzero(irow)
+    read(ifile,iostat=ios)sp_buff3(1:3,1:f)
+    if (ios/=0) stop "siesta_get_hsx: (ios/=0) overlap matrix"
+    hsx%aB2RaB_sparse(1:3,d+1:d+f) = sp_buff3(1:3,1:f);
   enddo
-  !! END of Read the data to ab_2_RB_minus_Ra array
-  close(ifile)
+  !! END of Read the data to S_sparse array
 
-  _dealloc(iaux)
-  _dealloc(ref)
-  _dealloc(row2nnz)
+  close(ifile);
+  if(iv>1) write(ilog,*)'siesta_get_hsx: ', trim(fname);
+  if(iv>1) write(ilog,*)'siesta_get_hsx: exit'
 
-end subroutine !read_siesta_hsx
+end subroutine !siesta_get_hsx
 
 !
 !
 !
-subroutine crs2dns4(m, crs, row_ptr, col_ind, dns, emptyvalue)
+subroutine siesta_write_sparse(fname, numh, listhptr, listh, matrix_sparse, iv, ilog)
+  use m_io, only : get_free_handle
+  use m_precision, only : siesta_int
   !! external
-  implicit none
-  integer, intent(in)    :: m
-  real(4), intent(in)    :: crs(:)
-  integer, intent(in)    :: row_ptr(:), col_ind(:)
-  real(4), intent(inout) :: dns(:,:)
-  real(4), intent(in), optional :: emptyvalue
+  character(*), intent(in) :: fname
+  integer, intent(in) :: numh(:), listh(:), listhptr(:)
+  real(8), intent(in) :: matrix_sparse(:)
+  integer, intent(in) :: iv, ilog
 
   !! internal
-  integer :: i,si
+  integer :: ifile, ios
 
-  if(present(emptyvalue)) then; dns = emptyvalue; else; dns = 0; endif
+  ifile = get_free_handle()
+  open(ifile, file=fname, action='write', form='unformatted', iostat=ios)
+  if(ios/=0) then
+    write(0,'(a,a,a,i6,a)') 'siesta_write_sparse: ', trim(fname), ' io error', ios, ' ==> return'
+    return
+  endif
 
-  do i=1,m
-    do si=row_ptr(i),row_ptr(i+1)-1
-      
-      dns(i,col_ind(si)) = crs(si)
-
-    enddo ! sparse index
-  enddo ! row
+  write(ifile) size(numh)
+  write(ifile) numh
+  write(ifile) size(listhptr)
+  write(ifile) listhptr
+  write(ifile) size(listh)
+  write(ifile) listh
+  write(ifile) size(matrix_sparse)
+  write(ifile) matrix_sparse
+  close(ifile)
+  if(iv>0) write(ilog,*)'siesta_write_sparse: ', trim(fname);
   
-end subroutine !crs2dns4
+end subroutine !! siesta_write_sparse
+
+!
+!
+!
+subroutine siesta_read_sparse(fname, numh_out, listhptr_out, listh_out, matrix_sparse_out, iv, ilog)
+  use m_io, only : get_free_handle
+  use m_precision, only : siesta_int
+  !! external
+  character(*), intent(in) :: fname
+  integer, intent(inout), allocatable :: numh_out(:), listh_out(:), listhptr_out(:)
+  real(8), intent(inout), allocatable :: matrix_sparse_out(:)
+  integer, intent(in) :: iv, ilog
+  
+  !! internal
+  integer :: ifile, ios
+  integer(siesta_int) :: s
+  integer(siesta_int), allocatable :: numh(:), listh(:), listhptr(:)
+  real(8), allocatable :: matrix_sparse(:)
+  
+  ifile = get_free_handle()
+  open(ifile, file=fname, action='read', form='unformatted', iostat=ios)
+  if(ios/=0) then
+    write(0,'(a,a,a,i6,a)') 'siesta_read_sparse: ', trim(fname), ' io error', ios, ' ==> return'
+    return
+  endif
+
+  read(ifile) s; 
+  allocate(numh(s))
+  read(ifile) numh(1:s)
+  call realloc_if_necessary(int(s), numh_out)
+  numh_out = numh
+
+  read(ifile) s; 
+  allocate(listhptr(s))
+  read(ifile) listhptr(1:s)
+  call realloc_if_necessary(int(s), listhptr_out)
+  listhptr_out = listhptr 
+
+  read(ifile) s; 
+  allocate(listh(s))
+  read(ifile) listh(1:s)
+  call realloc_if_necessary(int(s), listh_out)
+  listh_out = listh 
+
+  read(ifile) s; 
+  allocate(matrix_sparse(s))
+  read(ifile) matrix_sparse(1:s)
+  call realloc_if_necessary(s, matrix_sparse_out)
+  matrix_sparse_out = matrix_sparse
+
+  close(ifile)
+  if(iv>0) write(ilog,*)'siesta_read_sparse: ', trim(fname);
+  
+end subroutine !! siesta_read_sparse
+
+!
+!
+
+subroutine sparse2full(ndim1, ndim2, M_full, ldm, &
+M_sparse, row2nnzero, row2displ, sparse_ind2column, emptyvalue)
+!! external
+implicit none
+integer, intent(in)    :: ndim1, ndim2, ldm
+real(8), intent(inout) :: M_full(ldm,ndim2)
+real(8), intent(in)    :: M_sparse(*)
+integer, intent(in)    :: row2nnzero(*), row2displ(*), sparse_ind2column(*)
+real(8), intent(in), optional :: emptyvalue
+
+!! internal
+integer :: icol, i, irow, sparse_ind
+
+if(present(emptyvalue)) then
+M_full = emptyvalue
+else
+M_full = 0
+endif
+
+do irow=1,ndim1
+do i=1,row2nnzero(irow);
+sparse_ind = row2displ(irow)+i;
+icol = sparse_ind2column(sparse_ind);
+M_full(irow,icol) = M_sparse(sparse_ind) !! a bit mess with columns and rows
+enddo
+enddo
+
+end subroutine !sparse2full
 
 
-end module !m_hsx
+!
+!
+!
+subroutine realloc_if_necessary_i4_i4(minsize, array)
+  implicit none
+  integer(4), intent(in) :: minsize
+  integer(4), allocatable, intent(inout) :: array(:)
+  
+  if( .not. allocated(array) ) allocate(array(minsize) )
+  if( allocated(array) .and. minsize>size(array) ) then; deallocate(array); allocate(array(minsize) ); endif
+end subroutine ! reallocate_if_necessary_integer
+
+subroutine realloc_if_necessary_i8_i8(minsize, array)
+  integer(8), intent(in) :: minsize
+  integer(8), allocatable, intent(inout) :: array(:)
+  
+  if( .not. allocated(array) ) allocate(array(minsize) )
+  if( allocated(array) .and. minsize>size(array) ) then; deallocate(array); allocate(array(minsize) ); endif
+end subroutine ! reallocate_if_necessary_integer
+
+!
+!
+!
+subroutine realloc_if_necessary_i4_d(minsize, array)
+  implicit none
+  integer(4), intent(in) :: minsize
+  real(8), allocatable, intent(inout) :: array(:)
+  
+  if( .not. allocated(array) ) allocate(array(minsize) )
+  if( allocated(array) .and. minsize>size(array) ) then; deallocate(array); allocate(array(minsize) ); endif
+end subroutine ! reallocate_if_necessary_integer
+
+!
+!
+!
+subroutine realloc_if_necessary_i8_d(minsize, array)
+  implicit none
+  integer(8), intent(in) :: minsize
+  real(8), allocatable, intent(inout) :: array(:)
+  
+  if( .not. allocated(array) ) allocate(array(minsize) )
+  if( allocated(array) .and. minsize>size(array) ) then; deallocate(array); allocate(array(minsize) ); endif
+end subroutine ! reallocate_if_necessary_integer
+
+end module !m_siesta_hsx
