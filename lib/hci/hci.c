@@ -1199,53 +1199,65 @@ void compute_rdm12s(int norb, int neleca, int nelecb, uint64_t *strs, double *ci
             // Double excitation
             else if ((n_excit_a + n_excit_b) == 2) {
                 int i, j, a, b;
-                // alpha,alpha->alpha,alpha
+                // rdm2_aaaa
                 if (n_excit_b == 0) {
 	            int *ijab = get_double_excitation(stria, strja, nset);
                     i = ijab[0]; j = ijab[1]; a = ijab[2]; b = ijab[3];
                     double sign;
+                    int baij = b * norb * norb * norb + a * norb * norb + i * norb + j;
+                    int baji = b * norb * norb * norb + a * norb * norb + j * norb + i;
                     int abij = a * norb * norb * norb + b * norb * norb + i * norb + j;
                     int abji = a * norb * norb * norb + b * norb * norb + j * norb + i;
                     if (a > j || i > b) {
                         sign = compute_cre_des_sign(b, i, stria, nset);
                         sign *= compute_cre_des_sign(a, j, stria, nset);
                         ci_sq = sign * civec[ip] * civec[jp];
-                        rdm2aa_private[abij] += ci_sq;
-                        rdm2aa_private[abji] -= ci_sq;
+                        rdm2aa_private[baij] += ci_sq;
+                        rdm2aa_private[baji] -= ci_sq;
+                        rdm2aa_private[abij] -= ci_sq;
+                        rdm2aa_private[abji] += ci_sq;
                     } 
                     else {
                         sign = compute_cre_des_sign(b, j, stria, nset);
                         sign *= compute_cre_des_sign(a, i, stria, nset);
                         ci_sq = sign * civec[ip] * civec[jp];
-                        rdm2aa_private[abij] -= ci_sq;
-                        rdm2aa_private[abji] += ci_sq;
+                        rdm2aa_private[baij] -= ci_sq;
+                        rdm2aa_private[baji] += ci_sq;
+                        rdm2aa_private[abij] += ci_sq;
+                        rdm2aa_private[abji] -= ci_sq;
                     }
                     free(ijab);
                 }
-                // beta,beta->beta,beta
+                // rdm2_bbbb
                 else if (n_excit_a == 0) {
 	            int *ijab = get_double_excitation(strib, strjb, nset);
                     i = ijab[0]; j = ijab[1]; a = ijab[2]; b = ijab[3];
                     double v, sign;
+                    int baij = b * norb * norb * norb + a * norb * norb + i * norb + j;
+                    int baji = b * norb * norb * norb + a * norb * norb + j * norb + i;
                     int abij = a * norb * norb * norb + b * norb * norb + i * norb + j;
                     int abji = a * norb * norb * norb + b * norb * norb + j * norb + i;
                     if (a > j || i > b) {
                         sign = compute_cre_des_sign(b, i, strib, nset);
                         sign *= compute_cre_des_sign(a, j, strib, nset);
                         ci_sq = sign * civec[ip] * civec[jp];
-                        rdm2bb_private[abij] += ci_sq;
-                        rdm2bb_private[abji] -= ci_sq;
+                        rdm2bb_private[baij] += ci_sq;
+                        rdm2bb_private[baji] -= ci_sq;
+                        rdm2bb_private[abij] -= ci_sq;
+                        rdm2bb_private[abji] += ci_sq;
                     } 
                     else {
                         sign = compute_cre_des_sign(b, j, strib, nset);
                         sign *= compute_cre_des_sign(a, i, strib, nset);
                         ci_sq = sign * civec[ip] * civec[jp];
-                        rdm2bb_private[abij] -= ci_sq;
-                        rdm2bb_private[abji] += ci_sq;
+                        rdm2bb_private[baij] -= ci_sq;
+                        rdm2bb_private[baji] += ci_sq;
+                        rdm2bb_private[abij] += ci_sq;
+                        rdm2bb_private[abji] -= ci_sq;
                     }
                     free(ijab);
                 }
-                // alpha,beta->alpha,beta
+                // rdm2_abab
                 else {
                     int *ia = get_single_excitation(stria, strja, nset);
                     int *jb = get_single_excitation(strib, strjb, nset);
@@ -1254,7 +1266,7 @@ void compute_rdm12s(int norb, int neleca, int nelecb, uint64_t *strs, double *ci
                     sign *= compute_cre_des_sign(b, j, strib, nset);
                     ci_sq = sign * civec[ip] * civec[jp];
                     int abij = a * norb * norb * norb + b * norb * norb + i * norb + j;
-                    rdm2ab_private[abij] -= ci_sq;
+                    rdm2ab_private[abij] += ci_sq;
                     free(ia);
                     free(jb);
                }
