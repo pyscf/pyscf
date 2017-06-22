@@ -38,7 +38,7 @@ libnao.prdred.argtypes = (
 #
 class prod_talman_c(log_mesh_c):
   
-  def __init__(self, log_mesh, jmx=7, ngl=96, lbdmx=None):
+  def __init__(self, log_mesh, jmx=7, ngl=96, lbdmx=14):
     """
     Expansion of the products of two atomic orbitals placed at given locations and around a center between these locations 
     [1] Talman JD. Multipole Expansions for Numerical Orbital Products, Int. J. Quant. Chem. 107, 1578--1584 (2007)
@@ -49,6 +49,7 @@ class prod_talman_c(log_mesh_c):
     """
     from numpy.polynomial.legendre import leggauss
     from pyscf.nao.m_log_interp import log_interp_c
+    from pyscf.nao.m_csphar_talman_libnao import csphar_talman_libnao as csphar_jt
     assert ngl>2 
     assert jmx>-1
     assert hasattr(log_mesh, 'rr') 
@@ -67,6 +68,8 @@ class prod_talman_c(log_mesh_c):
       self.plval[kappa+1, :]= ((2*kappa+1)*self.xx*self.plval[kappa, :]-kappa*self.plval[kappa-1, :])/(kappa+1)
 
     self.log_interp = log_interp_c(self.rr)
+    self.ylm_cr = csphar_jt([0.0,0.0,1.0], self.lbdmx+2*jmx)
+
     return
 
   def prdred(self,phia,la,ra, phib,lb,rb,rcen):
@@ -203,8 +206,9 @@ class prod_talman_c(log_mesh_c):
   def prdred_further(self, ja,ma,jb,mb,rcen,jtb,clbdtb,lbdtb,rhotb):
     """ Evaluate the Talman's expansion at given Cartesian coordinates"""
     from pyscf.nao.m_thrj import thrj
+    from pyscf.nao.m_fact import sgn
     from pyscf.nao.m_csphar_talman_libnao import csphar_talman_libnao as csphar_jt
-    from numpy import zeros, sqrt, pi
+    from numpy import zeros, sqrt, pi, array
     
     assert all(rcen == zeros(3)) # this works only when center is at the origin
     nterm = len(jtb)
@@ -214,17 +218,30 @@ class prod_talman_c(log_mesh_c):
     assert self.nr == rhotb.shape[1]
 
     ffr = zeros([self.lbdmx+1,self.nr], np.complex128)
-    ylm_cr = csphar_jt(rcen, lbdtb.max()+1)
+    m = mb + ma
+    ylm_cr = csphar_jt([0.0,0.0,1.0], lbdtb.max())
+    for j,clbd,lbd,rho in zip(jtb,clbdtb,lbdtb,rhotb):
+      ffr[clbd,:]=ffr[clbd,:] + thrj(ja,jb,j,ma,mb,-m)*thrj(j,clbd,lbd,-m,m,0)*rho*ylm_cr[lbd*(lbd+1)]
+    return ffr,m
+
+  def prdred_further_scalar(self, ja,ma,jb,mb,rcen,jtb,clbdtb,lbdtb,rhotb):
+    """ Evaluate the Talman's expansion at given Cartesian coordinates"""
+    from pyscf.nao.m_thrj import thrj
+    from pyscf.nao.m_csphar_talman_libnao import csphar_talman_libnao as csphar_jt
+    from numpy import zeros, sqrt, pi, array
+    
+    assert all(rcen == zeros(3)) # this works only when center is at the origin
+    nterm = len(jtb)
+    assert nterm == len(clbdtb)
+    assert nterm == len(lbdtb)
+    assert nterm == len(rhotb)
+
+    ffr = zeros([self.lbdmx+1], np.complex128)
     m = mb + ma
     for j,clbd,lbd,rho in zip(jtb,clbdtb,lbdtb,rhotb):
-      ffr[clbd,:]=ffr[clbd,:] + thrj(ja,jb,j,ma,mb,-m)*thrj(j,clbd,lbd,-m,m,0) * rho * ylm_cr[lbd*(lbd+1)]
-
-    #ffr = ffr*sqrt((2*jb+1)*(2*ja+1))/(4*pi)
+      ffr[clbd]=ffr[clbd] + thrj(ja,jb,j,ma,mb,-m)*thrj(j,clbd,lbd,-m,m,0)*rho*self.ylm_cr[lbd*(lbd+1)]
     return ffr,m
-    
-    
-    
-    
+
 #
 #
 #

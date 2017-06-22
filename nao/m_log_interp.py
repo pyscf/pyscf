@@ -91,9 +91,11 @@ class log_interp_c():
     self.dg_jt = np.log(gg[1]/gg[0])
 
   def __call__(self, ff, r):
-    assert len(ff)==self.nr
+    assert ff.shape[-1]==self.nr
     k,cc = comp_coeffs(self, r)
-    return sum(cc*ff[k:k+6])
+    result = np.zeros(ff.shape[0:-2])
+    for j,c in enumerate(cc): result = result + c*ff[...,j+k]
+    return result
   
 #    Example:
 #      loginterp =log_interp_c(rr)

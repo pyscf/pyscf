@@ -18,7 +18,7 @@ class KnowValues(unittest.TestCase):
     
     self.assertAlmostEqual(ylm_py[1], 0.075393004386513446-0.15078600877302686j)
 
-    rvecs = [[0.1, 0.2, -0.4], [5.1, 2.2, -9.4], [0.9, 0.6, -0.2]]
+    rvecs = [[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.1, 0.2, -0.4], [5.1, 2.2, -9.4], [0.9, 0.6, -0.2]]
     for rvec in rvecs:
        ylm_py_ref = csphar(rvec, lmax)
        ylm_py = talman2world(csphar_talman_libnao(rvec, lmax))
