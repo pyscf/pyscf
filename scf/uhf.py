@@ -200,21 +200,21 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     mo_occ[1][e_idx_b[:n_b]] = 1
     if mf.verbose >= logger.INFO and n_a < nmo and n_b > 0 and n_b < nmo:
         if e_sort_a[n_a-1]+1e-3 > e_sort_a[n_a]:
-            logger.warn(mf, '!! alpha nocc = %d  HOMO %.15g >= LUMO %.15g',
+            logger.warn(mf, 'alpha nocc = %d  HOMO %.15g >= LUMO %.15g',
                         n_a, e_sort_a[n_a-1], e_sort_a[n_a])
         else:
             logger.info(mf, '  alpha nocc = %d  HOMO = %.15g  LUMO = %.15g',
                         n_a, e_sort_a[n_a-1], e_sort_a[n_a])
 
         if e_sort_b[n_b-1]+1e-3 > e_sort_b[n_b]:
-            logger.warn(mf, '!! beta  nocc = %d  HOMO %.15g >= LUMO %.15g',
+            logger.warn(mf, 'beta  nocc = %d  HOMO %.15g >= LUMO %.15g',
                         n_b, e_sort_b[n_b-1], e_sort_b[n_b])
         else:
             logger.info(mf, '  beta  nocc = %d  HOMO = %.15g  LUMO = %.15g',
                         n_b, e_sort_b[n_b-1], e_sort_b[n_b])
 
         if e_sort_a[n_a-1]+1e-3 > e_sort_b[n_b]:
-            logger.warn(mf, '!! system HOMO %.15g >= system LUMO %.15g',
+            logger.warn(mf, 'system HOMO %.15g >= system LUMO %.15g',
                         e_sort_b[n_a-1], e_sort_b[n_b])
 
         numpy.set_printoptions(threshold=nmo)

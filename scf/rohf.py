@@ -146,7 +146,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
         ehomo = max(mo_energy[mo_occ> 0])
         elumo = min(mo_energy[mo_occ==0])
         if ehomo+1e-3 > elumo:
-            logger.warn(mf.mol, '!! HOMO %.15g >= LUMO %.15g',
+            logger.warn(mf.mol, 'HOMO %.15g >= LUMO %.15g',
                         ehomo, elumo)
         else:
             logger.info(mf, '  HOMO = %.15g  LUMO = %.15g',

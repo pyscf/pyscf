@@ -308,7 +308,7 @@ class RHF(hf.RHF):
     def build(self, mol=None):
         for irname in self.irrep_nelec:
             if irname not in self.mol.irrep_name:
-                logger.warn(self, '!! No irrep %s', irname)
+                logger.warn(self, 'No irrep %s', irname)
         if mol.symmetry:
             check_irrep_nelec(self.mol, self.irrep_nelec, self.mol.nelectron)
         return hf.RHF.build(self, mol)
@@ -732,10 +732,10 @@ def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym, title='',
             log.debug('%s%s nocc = %d  HOMO = %.15g  LUMO = %.15g',
                       title, irname, nocc, e_ir[nocc-1], e_ir[nocc])
             if e_ir[nocc-1]+1e-3 > elumo:
-                log.warn('!! %s%s HOMO %.15g > system LUMO %.15g',
+                log.warn('%s%s HOMO %.15g > system LUMO %.15g',
                          title, irname, e_ir[nocc-1], elumo)
             if e_ir[nocc] < ehomo+1e-3:
-                log.warn('!! %s%s LUMO %.15g < system HOMO %.15g',
+                log.warn('%s%s LUMO %.15g < system HOMO %.15g',
                          title, irname, e_ir[nocc], ehomo)
         log.debug('   mo_energy = %s', e_ir)
 

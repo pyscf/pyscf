@@ -8,7 +8,6 @@ import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf.hf import _attach_mo
 try:
     from pyscf.dft import libxc
 except (ImportError, OSError):
@@ -16,6 +15,7 @@ except (ImportError, OSError):
     libxc = xcfun
 
 from pyscf.dft.gen_grid import make_mask, BLKSIZE
+from pyscf.scf.hf import _attach_mo
 
 libdft = lib.load_library('libdft')
 OCCDROP = 1e-12

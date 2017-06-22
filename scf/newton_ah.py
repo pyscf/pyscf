@@ -98,10 +98,10 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
             else:
                 vj, vk = mf.get_jk(mol, dm1)
                 v1 += vj - vk * (hyb * .5)
-        x2 += reduce(numpy.dot, (orbv.T.conj(), v1, orbo)) * 4
+        x2 += reduce(numpy.dot, (orbv.T.conj(), v1, orbo)) * 2
         if with_symmetry and mol.symmetry:
             x2[sym_forbid] = 0
-        return x2.reshape(-1)
+        return x2.reshape(-1) * 2
 
     return g.reshape(-1), h_op, h_diag.reshape(-1)
 
@@ -297,16 +297,9 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
         return x
 
     g_op = lambda: g_orb
-    x0_guess = numpy.zeros_like(g_orb)
-    sym_allow = h_diag != 0
-    x0_guess[sym_allow] = 1. / h_diag[sym_allow]
-# TODO test which initial guess is better
-#    x0_guess = g_orb
-#    x0_guess = numpy.zeros_like(g_orb)
-#    x0_guess[sym_allow] = g_orb[sym_allow] / h_diag[sym_allow]
+    x0_guess = g_orb
 
     kf_trust_region = mf.kf_trust_region
-    ah_max_cycle = min(mf.ah_max_cycle, numpy.count_nonzero(sym_allow))
     while True:
         ah_conv_tol = min(norm_gorb**2, mf.ah_conv_tol)
         # increase the AH accuracy when approach convergence
@@ -325,7 +318,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
 
         for ah_end, ihop, w, dxi, hdxi, residual, seig \
                 in ciah.davidson_cc(h_op, g_op, precond, x0_guess,
-                                    tol=ah_conv_tol, max_cycle=ah_max_cycle,
+                                    tol=ah_conv_tol, max_cycle=mf.ah_max_cycle,
                                     lindep=mf.ah_lindep, verbose=log):
             norm_residual = numpy.linalg.norm(residual)
             if (ah_end or ihop == mf.ah_max_cycle or # make sure to use the last step
@@ -509,14 +502,16 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         callback(locals())
 
     rotaiter.close()
+    mo_energy, mo_coeff1 = mf._scf.canonicalize(mo_coeff, mo_occ, fock)
     if mf.canonicalization:
         log.info('Canonicalize SCF orbitals')
-        mo_energy, mo_coeff = mf._scf.canonicalize(mo_coeff, mo_occ, fock)
-        mo_occ = mf._scf.get_occ(mo_energy, mo_coeff)
-    else:
-        mo_energy = mf._scf.canonicalize(mo_coeff, mo_occ, fock)[0]
+        mo_coeff = mo_coeff1
     log.info('macro X = %d  E=%.15g  |g|= %g  total %d KF %d JK',
              imacro+1, e_tot, norm_gorb, kftot, jktot)
+    if (any(mo_occ==0) and
+        mo_energy[mo_occ>0].max() > mo_energy[mo_occ==0].min()):
+        log.warn('HOMO %s > LUMO %s was found in the canonicalized orbitals.',
+                 mo_energy[mo_occ>0].max(), mo_energy[mo_occ==0].min())
     return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
 
 # Note which function that "density_fit" decorated.  density-fit have been
@@ -560,7 +555,7 @@ def newton_SCF_class(mf):
         '''
         def __init__(self):
             self._scf = mf
-            self.max_cycle_inner = 20
+            self.max_cycle_inner = 12
             self.max_stepsize = .05
             self.canonicalization = True
 
@@ -576,7 +571,7 @@ def newton_SCF_class(mf):
 #               ah_start_tol = 1e-7
 #               max_stepsize = 1.5
 #               ah_grad_trust_region = 1e6
-            self.kf_interval = 5
+            self.kf_interval = 4
             self.kf_trust_region = 5
             self_keys = set(self.__dict__.keys())
 
@@ -609,6 +604,7 @@ def newton_SCF_class(mf):
             log.info('ah_grad_trust_region = %g', self.ah_grad_trust_region)
             log.info('kf_interval = %d', self.kf_interval)
             log.info('kf_trust_region = %d', self.kf_trust_region)
+            log.info('canonicalization = %s', self.canonicalization)
             log.info('max_memory %d MB (current use %d MB)',
                      self.max_memory, lib.current_memory()[0])
 
