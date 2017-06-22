@@ -3,6 +3,7 @@
 
 sudo: required
 language: python
+group: deprecated-2017Q2
 
 git:
   depth: 3
