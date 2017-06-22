@@ -1,9 +1,12 @@
 cmake_minimum_required (VERSION 2.8)
 project (pyscf)
 
+include(arch.inc OPTIONAL)
+
 set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
 #set(CMAKE_BUILD_TYPE DEBUG)
 set(CMAKE_VERBOSE_MAKEFILE OFF)
+
 if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffast-math")
   if(UNIX AND NOT APPLE)
@@ -14,18 +17,23 @@ endif()
 set(CMAKE_MACOSX_RPATH OFF)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-find_package(BLAS REQUIRED)
-if(BLA_VENDOR MATCHES "Intel*")
-  if (${DISABLE_AVX})
-    find_library(BLAS_mkl_def_LIBRARY
-      NAMES mkl_def
-      PATHS ENV;LD_LIBRARY_PATH)
-    set(BLAS_LIBRARIES ${BLAS_LIBRARIES};${BLAS_mkl_def_LIBRARY})
-  else()
-    find_library(BLAS_mkl_avx_LIBRARY
-      NAMES mkl_avx
-      PATHS ENV;LD_LIBRARY_PATH)
-    set(BLAS_LIBRARIES ${BLAS_LIBRARIES};${BLAS_mkl_avx_LIBRARY})
+if (DEFINED BLAS_LIBRARIES)
+  message("BLAS libraries are defined (in arch.inc):")
+else()
+  message("Looking for BLAS libraries...")
+  find_package(BLAS REQUIRED)
+  if(BLA_VENDOR MATCHES "Intel*")
+    if (${DISABLE_AVX})
+      find_library(BLAS_mkl_def_LIBRARY
+        NAMES mkl_def
+        PATHS ENV;LD_LIBRARY_PATH)
+      set(BLAS_LIBRARIES ${BLAS_LIBRARIES};${BLAS_mkl_def_LIBRARY})
+    else()
+      find_library(BLAS_mkl_avx_LIBRARY
+        NAMES mkl_avx
+        PATHS ENV;LD_LIBRARY_PATH)
+      set(BLAS_LIBRARIES ${BLAS_LIBRARIES};${BLAS_mkl_avx_LIBRARY})
+    endif()
   endif()
 endif()
 message("BLAS libraries: ${BLAS_LIBRARIES}")
@@ -45,10 +53,20 @@ include(FortranCInterface)
 FortranCInterface_HEADER(FC.h MACRO_NAMESPACE “FC_”)
 #This creates a “FC.h” header that defines mangling macros
 
-find_package(LAPACK REQUIRED)
+if (DEFINED LAPACK_LIBRARIES)
+  message("LAPACK libraries are defined (in arch.inc):")
+else()
+  message("Looking for LAPACK libraries...")
+  find_package(LAPACK REQUIRED)
+endif()
 message("LAPACK libraries: ${LAPACK_LIBRARIES}")
 
-find_library(FFTW_LIBRARIES NAMES fftw3 libfftw3)
+if (DEFINED FFTW_LIBRARIES)
+  message("FFTW libraries are defined (in arch.inc):")
+else()
+  message("Looking for FFTW libraries...")
+  find_library(FFTW_LIBRARIES NAMES fftw3 libfftw3)
+endif()
 message("FFTW libraries: ${FFTW_LIBRARIES}")
 
 check_function_exists(ffsll HAVE_FFS)
