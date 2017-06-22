@@ -38,3 +38,10 @@ kmf.grids = dft.gen_grid.BeckeGrids(cell)
 kmf.xc = 'm06'
 kmf.kernel()
 
+#
+# Second order SCF solver (which is defined in pbc module) should be used
+# in the k-point calculations
+#
+mf = scf.newton(scf.KRHF(cell, kpts))
+mf.kernel()
+

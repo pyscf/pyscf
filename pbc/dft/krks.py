@@ -18,6 +18,7 @@ from pyscf.pbc.scf import khf
 from pyscf.lib import logger
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
+from pyscf.pbc.dft import rks
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -78,7 +79,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if ground_state:
         ks._ecoul = (1./nkpts) * np.einsum('Kij,Kji', dm, vj).real * .5
 
-    if small_rho_cutoff > 1e-20 and ground_state:
+    if (small_rho_cutoff > 1e-20 and ground_state and
+        abs(n-cell.nelectron) < 0.01*n):
         # Filter grids the first time setup grids
         idx = ks._numint.large_rho_indices(cell, dm, ks.grids,
                                            small_rho_cutoff, kpts)
@@ -123,4 +125,7 @@ class KRKS(khf.KRHF):
         tot_e = e1 + self._ecoul + self._exc
         logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, self._ecoul, self._exc)
         return tot_e, self._ecoul + self._exc
+
+    density_fit = rks._patch_df_beckegrids(khf.KRHF.density_fit)
+    mix_density_fit = rks._patch_df_beckegrids(khf.KRHF.mix_density_fit)
 

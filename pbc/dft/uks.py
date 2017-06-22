@@ -19,6 +19,7 @@ from pyscf.pbc.scf import uhf as pbcuhf
 from pyscf.lib import logger
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
+from pyscf.pbc.dft import rks
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -43,7 +44,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     ground_state = (dm.ndim == 3)
 
     if hermi == 2:  # because rho = 0
-        n, ks._exc, vx = 0, 0, 0
+        n, ks._exc, vx = (0,0), 0, 0
     else:
         n, ks._exc, vx = ks._numint.nr_uks(cell, ks.grids, ks.xc, dm, 1,
                                            kpt, kpt_band)
@@ -65,7 +66,9 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if ground_state:
         ks._ecoul = numpy.einsum('ij,ji', dm[0]+dm[1], vj[0]+vj[1]).real * .5
 
-    if small_rho_cutoff > 1e-20 and ground_state:
+    nelec = cell.nelec
+    if (small_rho_cutoff > 1e-20 and ground_state and
+        abs(n[0]-nelec[0]) < 0.01*n[0] and abs(n[1]-nelec[1]) < 0.01*n[1]):
         # Filter grids the first time setup grids
         idx = ks._numint.large_rho_indices(cell, dm, ks.grids,
                                            small_rho_cutoff, kpt)
@@ -104,3 +107,5 @@ class UKS(pbcuhf.UHF):
     get_veff = get_veff
     energy_elec = pyscf.dft.uks.energy_elec
 
+    density_fit = rks._patch_df_beckegrids(pbcuhf.UHF.density_fit)
+    mix_density_fit = rks._patch_df_beckegrids(pbcuhf.UHF.mix_density_fit)

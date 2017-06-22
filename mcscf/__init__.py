@@ -252,7 +252,7 @@ def _convert_to_rhf(mf, convert_df=True):
 
     # Avoid doing density fitting
     if (convert_df and hasattr(mf, 'with_df') and
-        isinstance(mf.with_df, (pyscf.df.DF, pyscf.df.MDF))):
+        isinstance(mf.with_df, pyscf.df.DF)):
         mf = copy.copy(mf)
         logger.warn(mf, 'CASSCF: The first argument is a density-fitting SCF object. '
                     'Its orbitals are taken as the initial guess of CASSCF.\n'

@@ -23,7 +23,7 @@ Similar to the input in molecule calculation, one need first create a
 .. literalinclude:: ../../../examples/pbc/00-input_cell.py
 
 Addition to the basic parameters :attr:`atom`, :attr:`basis`, you need at least
-set lattice parameter :attr:`a`, dense of FFT-mesh :attr:`gs` to
+set the lattice vectors :attr:`a`, the dense of FFT-mesh :attr:`gs` to
 describe the cell.  Lattice vector .a is a 3x3 array. Each row of .a
 is a real space primitive vector.
 

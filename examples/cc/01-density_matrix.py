@@ -24,4 +24,5 @@ dm2 = mycc.make_rdm2()
 #
 # Relaxed CCSD density matrix in MO basis
 #
-dm1 += response_dm1(mycc, mycc.t1, mycc.t2, mycc.l1, mycc.l2)
+from pyscf.cc import ccsd_grad
+dm1 += ccsd_grad.response_dm1(mycc, mycc.t1, mycc.t2, mycc.l1, mycc.l2)

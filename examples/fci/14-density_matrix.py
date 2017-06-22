@@ -7,6 +7,11 @@
 Compute FCI 1,2,3,4-particle density matrices
 '''
 
+#
+# Note: Environment variable LD_PRELOAD=...libmkl_def.so may cause this script
+# crashing
+#
+
 import numpy
 from pyscf import gto, scf, fci
 

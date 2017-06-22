@@ -15,8 +15,8 @@ einsum = lib.einsum
 
 class CCSD(molCCSD):
 
-    def __init__(self, mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
-        molCCSD.__init__(self, mf, frozen, mo_energy, mo_coeff, mo_occ)
+    def __init__(self, mf, frozen=[], mo_coeff=None, mo_occ=None):
+        molCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     def dump_flags(self):
         molCCSD.dump_flags(self)
@@ -28,8 +28,8 @@ class CCSD(molCCSD):
 
 class RCCSD(molRCCSD):
 
-    def __init__(self, mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
-        molRCCSD.__init__(self, mf, frozen, mo_energy, mo_coeff, mo_occ)
+    def __init__(self, mf, frozen=[], mo_coeff=None, mo_occ=None):
+        molRCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     def dump_flags(self):
         molRCCSD.dump_flags(self)

@@ -11,6 +11,7 @@ import time
 import math
 import json
 import numpy
+import scipy
 import scipy.special
 import ctypes
 from pyscf import lib
@@ -1585,7 +1586,7 @@ class Mole(lib.StreamObject):
         '''
 # release circular referred objs
 # Note obj.x = obj.member_function causes circular referrence
-        gc.collect()
+#        gc.collect()
 
         if verbose is not None: self.verbose = verbose
         if output is not None: self.output = output
@@ -1605,7 +1606,7 @@ class Mole(lib.StreamObject):
 
         # avoid to open output file twice
         if parse_arg and self.output is not None \
-           and self.stdout.name != self.output:
+           and self.stdout.getvalue() != self.output:
             self.stdout = open(self.output, 'w')
 
         if self.verbose >= logger.WARN:
@@ -1762,6 +1763,9 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
         self.stdout.write('System: %s  Threads %s\n' %
                           (str(platform.uname()), lib.num_threads()))
+        self.stdout.write('Python %s\n' % sys.version)
+        self.stdout.write('numpy %s  scipy %s\n' %
+                          (numpy.__version__, scipy.__version__))
         self.stdout.write('Date: %s\n' % time.ctime())
         try:
             import pyscf

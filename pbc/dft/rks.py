@@ -77,7 +77,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if ground_state:
         ks._ecoul = numpy.einsum('ij,ji', dm, vj).real * .5
 
-    if small_rho_cutoff > 1e-20 and ground_state:
+    if (small_rho_cutoff > 1e-20 and ground_state and
+        abs(n-cell.nelectron) < 0.01*n):
         # Filter grids the first time setup grids
         idx = ks._numint.large_rho_indices(cell, dm, ks.grids,
                                            small_rho_cutoff, kpt)
@@ -87,6 +88,15 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         ks.grids.weights = numpy.asarray(ks.grids.weights[idx], order='C')
         ks._numint.non0tab = None
     return vhf + vx
+
+
+def _patch_df_beckegrids(density_fit):
+    def new_df(self, auxbasis=None, gs=None):
+        mf = density_fit(self, auxbasis, gs)
+        mf.with_df._j_only = True
+        mf.grids = gen_grid.BeckeGrids(self.cell)
+        return mf
+    return new_df
 
 
 class RKS(pbchf.RHF):
@@ -116,3 +126,5 @@ class RKS(pbchf.RHF):
     get_veff = get_veff
     energy_elec = pyscf.dft.rks.energy_elec
 
+    density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
+    mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)

@@ -187,8 +187,8 @@ Restart CCSD
 ------------
 
 
-APIs
-====
+Attributes and methods
+======================
 
 CCSD
 ----

@@ -244,13 +244,14 @@ def reorder_eri(eri, norb, orbsym):
     eri_irs = [numpy.zeros((0,0))] * TOTIRREPS
     for ir, nnorb in enumerate(dimirrep):
         old_eri_irrep[order[p0:p0+nnorb]] = ir
-        rank_in_irrep[order[p0:p0+nnorb]] = numpy.arange(nnorb)
+        rank_in_irrep[order[p0:p0+nnorb]] = numpy.arange(nnorb, dtype=numpy.int32)
         eri_irs[ir] = lib.take_2d(eri, order[p0:p0+nnorb], order[p0:p0+nnorb])
         p0 += nnorb
     return eri_irs, rank_in_irrep, old_eri_irrep
 
 def gen_str_irrep(strs, orbsym, link_index, rank_eri, irrep_eri):
     na = len(strs)
+    orbsym = numpy.asarray(orbsym) % 10
     airreps = numpy.zeros(na, dtype=numpy.int32)
     for i, ir in enumerate(orbsym):
         airreps[strs&(1<<i) > 0] ^= ir
@@ -260,13 +261,12 @@ def gen_str_irrep(strs, orbsym, link_index, rank_eri, irrep_eri):
         aidx[ir] = numpy.where(airreps == ir)[0]
         ma = len(aidx[ir])
         if ma > 0:
-            rank[aidx[ir]] = numpy.arange(ma)
+            rank[aidx[ir]] = numpy.arange(ma, dtype=numpy.int32)
     link_index = link_index.copy()
     link_index[:,:,1] = irrep_eri[link_index[:,:,0]]
     link_index[:,:,0] = rank_eri[link_index[:,:,0]]
     link_index[:,:,2] = rank[link_index[:,:,2]]
-    link_index = [link_index.take(aidx[ir], axis=0)
-                  for ir in range(TOTIRREPS)]
+    link_index = [link_index.take(aidx[ir], axis=0) for ir in range(TOTIRREPS)]
     return aidx, link_index
 
 

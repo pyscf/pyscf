@@ -152,8 +152,8 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
             dm1a.append(d1+d1.T.conj())
         dm1b = []
         for k in range(nkpts):
-            d1 = reduce(numpy.dot, (mob[k][:,viridxa[k]], x1b[k],
-                                    mob[k][:,occidxa[k]].T.conj()))
+            d1 = reduce(numpy.dot, (mob[k][:,viridxb[k]], x1b[k],
+                                    mob[k][:,occidxb[k]].T.conj()))
             dm1b.append(d1+d1.T.conj())
         dm1 = lib.asarray([dm1a,dm1b])
         dm1a = dm1b = None
@@ -192,7 +192,7 @@ def newton(mf):
     from pyscf.scf import newton_ah
     from pyscf.pbc import scf as pscf
     if not isinstance(mf, (pscf.khf.KRHF, pscf.kuhf.KUHF)):
-        return scf.newton_ah.newton(mf)
+        return newton_ah.newton(mf)
 
     KSCF = newton_ah.newton_SCF_class(mf)
 

@@ -24,6 +24,7 @@ from pyscf.lib import logger
 from pyscf.pbc.gto import ecp
 from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile
+from functools import reduce
 
 
 def get_ovlp(mf, cell=None, kpts=None):
@@ -374,6 +375,9 @@ class KRHF(hf.RHF):
         vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
         return vj - vk * .5
 
+    def analyze(self, verbose=None, **kwargs):
+        sys.stderr('khf.analyze method not available')
+
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):
         '''
         returns 1D array of gradients, like non K-pt version
@@ -453,4 +457,18 @@ class KRHF(hf.RHF):
         return self
 
     canonicalize = canonicalize
+
+    def density_fit(self, auxbasis=None, with_df=None):
+        from pyscf.df.addons import aug_etb_for_dfbasis
+        from pyscf.pbc.df import df_jk
+        if auxbasis is None:
+            auxbasis = aug_etb_for_dfbasis(self.cell, beta=1.8, start_at=0)
+        return df_jk.density_fit(self, auxbasis, with_df)
+
+    def mix_density_fit(self, auxbasis=None, with_df=None):
+        from pyscf.df.addons import aug_etb_for_dfbasis
+        from pyscf.pbc.df import mdf_jk
+        if auxbasis is None:
+            auxbasis = aug_etb_for_dfbasis(self.cell, beta=1.8, start_at=0)
+        return mdf_jk.density_fit(self, auxbasis, with_df)
 

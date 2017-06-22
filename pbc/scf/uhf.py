@@ -114,4 +114,8 @@ class UHF(pyscf.scf.uhf.UHF, pbchf.RHF):
     dump_chk = pbchf.RHF.dump_chk
     _is_mem_enough = pbchf.RHF._is_mem_enough
 
+    def density_fit(self, auxbasis=None, gs=None):
+        return pbchf.RHF.density_fit(self, auxbasis, gs)
+
+    # mix_density_fit inherits from hf.RHF.mix_density_fit
 

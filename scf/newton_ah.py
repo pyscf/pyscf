@@ -67,7 +67,8 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
         d1 = reduce(numpy.dot, (mo_coeff[:,viridx], x, mo_coeff[:,occidx].T))
         dm1 = d1 + d1.T
         if hyb is None:
-            v1 = mf.get_veff(mol, dm1)
+            vj, vk = mf.get_jk(mol, dm1)
+            v1 = vj - vk * .5
         else:
             v1 = mf._numint.nr_rks_fxc(mol, mf.grids, mf.xc, dm0, dm1,
                                        0, 1, rho0, vxc, fxc)
@@ -75,7 +76,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 v1 += mf.get_j(mol, dm1)
             else:
                 vj, vk = mf.get_jk(mol, dm1)
-                v1 += vj - vk * hyb * .5
+                v1 += vj - vk * (hyb * .5)
         x2 += reduce(numpy.dot, (mo_coeff[:,viridx].T, v1,
                                  mo_coeff[:,occidx])) * 4
         return x2.reshape(-1)
@@ -168,7 +169,8 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                                  mo_coeff[1][:,occidxb].T))
         dm1 = numpy.array((d1a+d1a.T,d1b+d1b.T))
         if hyb is None:
-            v1 = mf.get_veff(mol, dm1)
+            vj, vk = mf.get_jk(mol, dm1)
+            v1 = vj[0]+vj[1] - vk
         else:
             v1 = mf._numint.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dm1,
                                        0, 1, rho0, vxc, fxc)
@@ -177,7 +179,7 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 v1 += vj[0] + vj[1]
             else:
                 vj, vk = mf.get_jk(mol, dm1)
-                v1 += vj[0]+vj[1] - vk * hyb * .5
+                v1 += vj[0]+vj[1] - vk * hyb
         x2a += reduce(numpy.dot, (mo_coeff[0][:,viridxa].T, v1[0],
                                   mo_coeff[0][:,occidxa]))
         x2b += reduce(numpy.dot, (mo_coeff[1][:,viridxb].T, v1[1],
@@ -499,7 +501,6 @@ def newton_SCF_class(mf):
 #               ah_start_tol = 1e-7
 #               max_stepsize = 1.5
 #               ah_grad_trust_region = 1e6
-            self.ah_decay_rate = .8
             self.kf_interval = 5
             self.kf_trust_region = 5
             self_keys = set(self.__dict__.keys())
@@ -533,7 +534,6 @@ def newton_SCF_class(mf):
             log.info('ah_grad_trust_region = %g', self.ah_grad_trust_region)
             log.info('kf_interval = %d', self.kf_interval)
             log.info('kf_trust_region = %d', self.kf_trust_region)
-            log.info('augmented hessian decay rate = %g', self.ah_decay_rate)
             log.info('max_memory %d MB (current use %d MB)',
                      self.max_memory, lib.current_memory()[0])
 
@@ -560,7 +560,14 @@ def newton_SCF_class(mf):
             self.build(self.mol)
             self.dump_flags()
 
-            if mo_coeff is None or mo_occ is None:
+            if mo_coeff is not None and mo_occ is None:
+                logger.warn(self, 'Newton solver expects mo_coeff with '
+                            'mo_occ as initial guess but the given initial '
+                            'guess does not have mo_occ.\n      The given '
+                            'argument is treated as density matrix.')
+                dm = mo_coeff
+                mo_coeff, mo_occ = self.from_dm(dm)
+            elif mo_coeff is None or mo_occ is None:
                 logger.debug(self, 'Initial guess orbitals not given. '
                              'Generating initial guess from %s density matrix',
                              self.init_guess)
@@ -724,6 +731,9 @@ def newton(mf):
                                       numpy.dot(mo_coeff[1], u[1])))
 
             def spin_square(self, mo_coeff=None, s=None):
+                if mo_coeff is None:
+                    mo_coeff = (self.mo_coeff[0][:,self.mo_occ[0]>0],
+                                self.mo_coeff[1][:,self.mo_occ[1]>0])
                 if hasattr(self, '_scf') and id(self._scf.mol) != id(self.mol):
                     s = self._scf.get_ovlp()
                 return self._scf.spin_square(mo_coeff, s)

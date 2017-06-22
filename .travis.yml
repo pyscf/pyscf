@@ -1,0 +1,44 @@
+# More syntax details at: https://docs.travis-ci.com/user/customizing-the-build
+# Workaround present for https://github.com/sunqm/pyscf/issues/71
+
+sudo: required
+language: python
+
+git:
+  depth: 3
+
+matrix:
+  include:
+    - dist: trusty
+
+virtualenv:
+    system_site_packages: true
+    
+before_install:
+    - >
+      sudo apt-get -qq install 
+      gcc 
+      gfortran
+      libblas-dev
+      liblapack-dev
+      libatlas-dev
+      libatlas-base-dev
+      python-h5py
+      python-nose
+      python-numpy
+      python-scipy
+      cmake
+      doxygen
+    
+install:
+    - > 
+      cd pyscf/lib &&
+      mkdir build &&
+      cd build &&
+      cmake .. &&
+      make &&
+      cd ../../pyscf
+
+script:
+     rm -f ./cc/test/test_ccsd_t.py &&
+     nosetests -v     

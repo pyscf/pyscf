@@ -154,7 +154,8 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the UHF Fock matrix in occupied, virtual
     subspaces separatedly (without change occupancy).
     '''
-    if not mf.mol.symmetry:
+    mol = mf.mol
+    if not mol.symmetry:
         return uhf.canonicalize(mf, mo_coeff, mo_occ, fock)
 
     mo_occ = numpy.asarray(mo_occ)
