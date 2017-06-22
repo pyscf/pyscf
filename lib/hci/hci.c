@@ -1286,6 +1286,12 @@ void compute_rdm12s(int norb, int neleca, int nelecb, uint64_t *strs, double *ci
         rdm2bb[p] += rdm2bb_private[p];
     }
     }
+ 
+    free(rdm1a_private);
+    free(rdm1b_private);
+    free(rdm2aa_private);
+    free(rdm2ab_private);
+    free(rdm2bb_private);
 
     } // end omp
   
