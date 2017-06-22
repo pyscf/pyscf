@@ -656,6 +656,7 @@ def make_rdm12s(civec, norb, nelec):
     rdm2ab = numpy.asarray(rdm2ab, order='C')
     rdm2bb = numpy.asarray(rdm2bb, order='C')
 
+    # Compute 1- and 2-RDMs
     libhci.compute_rdm12s(ctypes.c_int(norb), 
                           ctypes.c_int(nelec[0]), 
                           ctypes.c_int(nelec[1]), 
@@ -674,7 +675,12 @@ def make_rdm12s(civec, norb, nelec):
     rdm2ab = rdm2ab.reshape([norb]*4)
     rdm2bb = rdm2bb.reshape([norb]*4)
 
-    return rdm1a, rdm1b, rdm2aa, rdm2ab, rdm2bb
+    # Sort 2-RDM into chemists' notation: <p_1 q_2|r_1 s_2> -> (p_1 r_1| q_2 s_2)
+    rdm2aa = rdm2aa.transpose(0,2,1,3)
+    rdm2ab = rdm2ab.transpose(0,2,1,3)
+    rdm2bb = rdm2bb.transpose(0,2,1,3)
+
+    return (rdm1a, rdm1b), (rdm2aa, rdm2ab, rdm2bb)
 
 class SelectedCI(direct_spin1.FCISolver):
     def __init__(self, mol=None):
