@@ -14,11 +14,6 @@ endif()
 set(CMAKE_MACOSX_RPATH OFF)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-enable_language(Fortran)
-include(FortranCInterface)
-FortranCInterface_HEADER(FC.h MACRO_NAMESPACE “FC_”)
-#This creates a “FC.h” header that defines mangling macros
-
 find_package(BLAS REQUIRED)
 if(BLA_VENDOR MATCHES "Intel*")
   if (${DISABLE_AVX})
@@ -45,16 +40,16 @@ message("BLAS libraries: ${BLAS_LIBRARIES}")
 
 # set(BLAS_LIBRARIES "-Wl,-rpath=${MKLROOT}/lib/intel64/ ${BLAS_LIBRARIES}")
 
-if (FFTW_INCLUDES)
-  # Already in cache, be silent
-  set (FFTW_FIND_QUIETLY FALSE)
-  message("FFTW libraries: ${FFTW_LIBRARIES}")
-  set(FFTW_LIBRARIES ${FFTW_LIBRARIES})
-endif (FFTW_INCLUDES)
+enable_language(Fortran)
+include(FortranCInterface)
+FortranCInterface_HEADER(FC.h MACRO_NAMESPACE “FC_”)
+#This creates a “FC.h” header that defines mangling macros
 
 find_package(LAPACK REQUIRED)
 message("LAPACK libraries: ${LAPACK_LIBRARIES}")
 
+find_library(FFTW_LIBRARIES NAMES fftw3 libfftw3)
+message("FFTW libraries: ${FFTW_LIBRARIES}")
 
 check_function_exists(ffsll HAVE_FFS)
 
@@ -64,6 +59,8 @@ if(OPENMP_FOUND)
 else ()
   set(OpenMP_C_FLAGS " ")
 endif()
+
+message("OpenMP: ${OPENMP_FOUND}")
 
 find_package(PythonInterp REQUIRED)
 #find_package(PythonLibs REQUIRED)
