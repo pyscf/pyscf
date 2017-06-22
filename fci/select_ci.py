@@ -273,13 +273,15 @@ def make_hdiag(h1e, eri, ci_strs, norb, nelec):
     c_h1e = h1e.ctypes.data_as(ctypes.c_void_p)
     c_jdiag = jdiag.ctypes.data_as(ctypes.c_void_p)
     c_kdiag = kdiag.ctypes.data_as(ctypes.c_void_p)
+    occslsta = cistring._strs2occslst(ci_strs[0], norb)
+    occslstb = cistring._strs2occslst(ci_strs[1], norb)
     libfci.FCImake_hdiag_uhf(hdiag.ctypes.data_as(ctypes.c_void_p),
                              c_h1e, c_h1e, c_jdiag, c_jdiag, c_jdiag, c_kdiag, c_kdiag,
                              ctypes.c_int(norb),
                              ctypes.c_int(na), ctypes.c_int(nb),
                              ctypes.c_int(nelec[0]), ctypes.c_int(nelec[1]),
-                             ci_strs[0].ctypes.data_as(ctypes.c_void_p),
-                             ci_strs[1].ctypes.data_as(ctypes.c_void_p))
+                             occslsta.ctypes.data_as(ctypes.c_void_p),
+                             occslstb.ctypes.data_as(ctypes.c_void_p))
     return hdiag
 
 def kernel_fixed_space(myci, h1e, eri, norb, nelec, ci_strs, ci0=None,

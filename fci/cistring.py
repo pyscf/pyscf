@@ -76,6 +76,18 @@ def _gen_occslst(orb_list, nelec):
         return res
     occslst = gen_occs_iter(list(orb_list), nelec)
     return numpy.asarray(occslst, dtype=numpy.int32).view(OIndexList)
+def _strs2occslst(strs, norb):
+    na = len(strs)
+    one_particle_strs = numpy.asarray([1<<i for i in range(norb)])
+    occ_masks = (strs.reshape(-1,1) & one_particle_strs) != 0
+    occslst = numpy.where(occ_masks)[1].reshape(na,-1)
+    return numpy.asarray(occslst, dtype=numpy.int32).view(OIndexList)
+def _occslst2strs(occslst):
+    na, nelec = occslst.shape
+    strs = numpy.zeros(na, dtype=numpy.int64)
+    for i in range(nelec):
+        strs ^= 1 << occslst[:,i]
+    return strs
 class OIndexList(numpy.ndarray):
     pass
 
@@ -441,6 +453,10 @@ if __name__ == '__main__':
 #    index = gen_linkstr_index(range(8), 4)
 #    idx16 = index[:16]
 #    print(idx16[:,:,2])
+    strs = gen_strings4orblist(range(8), 4)
+    occlst = _gen_occslst(range(8), 4)
+    print(abs(occlst - _strs2occslst(strs, 8)).sum())
+    print(abs(strs - _occslst2strs(occlst)).sum())
     tab1 = gen_linkstr_index_o0(range(8), 4)
     tab2 = gen_linkstr_index(range(8), 4)
     print(abs(tab1 - tab2).sum())
