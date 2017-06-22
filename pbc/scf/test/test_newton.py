@@ -36,15 +36,14 @@ class KnowValues(unittest.TestCase):
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -10.137043711032916, 8)
 
-# FIXME
-#    def test_nr_rhf_k1(self):
-#        kpts = cell.make_kpts([2,1,1,])
-#        mf = scf.RHF(cell)
-#        mf.kpt = kpts[1]
-#        mf = scf.newton(mf)
-#        mf.conv_tol_grad = 1e-4
-#        mf.kernel()
-#        self.assertAlmostEqual(mf.e_tot, -11.336879498930173, 8)
+    def test_nr_rhf_k1(self):
+        kpts = cell.make_kpts([2,1,1,])
+        mf = scf.RHF(cell)
+        mf.kpt = kpts[1]
+        mf = scf.newton(mf)
+        mf.conv_tol_grad = 1e-4
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -11.336879498930173, 8)
 
     def test_nr_uhf(self):
         mf = scf.UHF(cell)
@@ -97,9 +96,7 @@ class KnowValues(unittest.TestCase):
         mf = scf.newton(mf)
         mf.conv_tol_grad = 1e-4
         mf.kernel()
-        # FIXME
-        #?self.assertAlmostEqual(mf.e_tot, -10.683267257972522, 8)
-        self.assertAlmostEqual(mf.e_tot, -10.6902187709643, 8)
+        self.assertAlmostEqual(mf.e_tot, -10.683267257972522, 8)
 
     def test_nr_krks_lda(self):
         mf = dft.KRKS(cell, cell.make_kpts([2,1,1]))

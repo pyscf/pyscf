@@ -141,7 +141,7 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
         logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
                     mo_energy[nocc-1], mo_energy[nocc])
         if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
-            logger.warn(mf, '!! HOMO %.12g == LUMO %.12g',
+            logger.warn(mf, 'HOMO %.12g == LUMO %.12g',
                         mo_energy[nocc-1], mo_energy[nocc])
     else:
         logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])

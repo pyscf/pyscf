@@ -508,7 +508,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         mo_coeff = mo_coeff1
     log.info('macro X = %d  E=%.15g  |g|= %g  total %d KF %d JK',
              imacro+1, e_tot, norm_gorb, kftot, jktot)
-    if (any(mo_occ==0) and
+    if (numpy.any(mo_occ==0) and
         mo_energy[mo_occ>0].max() > mo_energy[mo_occ==0].min()):
         log.warn('HOMO %s > LUMO %s was found in the canonicalized orbitals.',
                  mo_energy[mo_occ>0].max(), mo_energy[mo_occ==0].min())
