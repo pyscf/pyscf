@@ -45,6 +45,17 @@ message("BLAS libraries: ${BLAS_LIBRARIES}")
 
 # set(BLAS_LIBRARIES "-Wl,-rpath=${MKLROOT}/lib/intel64/ ${BLAS_LIBRARIES}")
 
+if (FFTW_INCLUDES)
+  # Already in cache, be silent
+  set (FFTW_FIND_QUIETLY FALSE)
+  message("FFTW libraries: ${FFTW_LIBRARIES}")
+  set(FFTW_LIBRARIES ${FFTW_LIBRARIES})
+endif (FFTW_INCLUDES)
+
+find_package(LAPACK REQUIRED)
+message("LAPACK libraries: ${LAPACK_LIBRARIES}")
+
+
 check_function_exists(ffsll HAVE_FFS)
 
 find_package(OpenMP)

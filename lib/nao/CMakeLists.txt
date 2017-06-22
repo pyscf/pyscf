@@ -10,4 +10,12 @@ set_target_properties(nao PROPERTIES
   LINK_FLAGS ${OpenMP_C_FLAGS})
 
 target_compile_options(nao PRIVATE -pedantic -O2 -Wall -ffree-line-length-0)
-target_link_libraries(nao ${BLAS_LIBRARIES})
+
+# - Find FFTW
+# Find the native FFTW includes and library
+#
+#  FFTW_INCLUDES    - where to find fftw3.h
+#  FFTW_LIBRARIES   - List of libraries when using FFTW.
+#  FFTW_FOUND       - True if FFTW found.
+
+target_link_libraries(nao ${FFTW_LIBRARIES} ${LAPACK_LIBRARIES})
