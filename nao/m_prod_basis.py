@@ -37,6 +37,92 @@ class prod_basis_c():
     
     return
 
+  def init_pb_pp_libnao_apair(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
+    """ Talman's procedure should be working well with Pseudo-Potential starting point...
+        This subroutine prepares the class for a later atom pair by atom pair generation 
+        of the dominant product vertices and the conversion coefficients by calling 
+        subroutines from the library libnao.
+    """
+    from pyscf.nao import coulomb_am, comp_overlap_coo, get_atom2bas_s, conv_yzx2xyz_c, prod_log_c, ls_part_centers, comp_coulomb_den
+    from scipy.sparse import csr_matrix
+    from pyscf.nao.m_libnao import libnao
+    from ctypes import POINTER, c_double, c_int64
+    
+    self.sv = sv
+    self.tol_loc,self.tol_biloc,self.ac_rcut_ratio = tol_loc, tol_biloc, ac_rcut_ratio
+    self.prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc) # local basis (for each specie)
+    self.c2s = np.zeros((sv.natm+1), dtype=np.int64) # global product Center (atom) -> start in case of atom-centered basis
+    for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] # 
+    self.sv_pbloc_data = self.chain_data_pb_pp_apair()
+    libnao.sv_prod_log.argtypes = (
+      POINTER(c_int64),      # ndat
+      POINTER(c_double))     # dat(ndat)
+    libnao.sv_prod_log(c_int64(len(self.sv_pbloc_data)), self.sv_pbloc_data.ctypes.data_as(POINTER(c_double)))
+    
+    return self
+  
+  def chain_data_pb_pp_apair(self):
+    """ This subroutine creates a buffer of information to communicate with the library libnao """
+    from numpy import zeros, concatenate as conc
+
+    aos,sv,pl = self.sv.ao_log, self.sv, self.prod_log
+    assert aos.nr==pl.nr
+    assert aos.nspecies==pl.nspecies
+    
+    nr,nsp,nmt,nrt = aos.nr,aos.nspecies, sum(aos.sp2nmult),aos.nr*sum(aos.sp2nmult)
+    nat,na1,tna,nms = sv.natoms,sv.natoms+1,3*sv.natoms,sum(aos.sp2nmult)+aos.nspecies
+    nmtp,nrtp,nmsp = sum(pl.sp2nmult),pl.nr*sum(pl.sp2nmult),sum(pl.sp2nmult)+pl.nspecies
+
+    ndat = 200 + 2*nr + 4*nsp + 2*nmt + nrt + nms + nat + 2*na1 + tna + \
+      4*nsp + 2*nmtp + nrtp + nmsp
+      
+    dat = np.zeros(ndat)
+    
+    # Simple parameters
+    i = 0
+    dat[i] = -999.0; i+=1 # pointer to the empty space in simple parameter
+    dat[i] = aos.nspecies; i+=1
+    dat[i] = aos.nr; i+=1
+    dat[i] = aos.rmin;  i+=1;
+    dat[i] = aos.rmax;  i+=1;
+    dat[i] = aos.kmax;  i+=1;
+    dat[i] = aos.jmx;   i+=1;
+    dat[i] = conc(aos.psi_log).sum(); i+=1;
+    dat[i] = conc(pl.psi_log).sum(); i+=1;
+    dat[i] = sv.natoms; i+=1
+    dat[i] = sv.norbs; i+=1
+    dat[i] = sv.norbs_sc; i+=1
+    dat[i] = sv.nspin; i+=1
+    dat[0] = i
+    # Pointers to data
+    i = 99
+    s = 199
+    dat[i] = s+1; i+=1; f=s+nr;  dat[s:f] = aos.rr; s=f; # pointer to rr
+    dat[i] = s+1; i+=1; f=s+nr;  dat[s:f] = aos.pp; s=f; # pointer to pp
+    dat[i] = s+1; i+=1; f=s+nsp; dat[s:f] = aos.sp2nmult; s=f; # pointer to sp2nmult
+    dat[i] = s+1; i+=1; f=s+nsp; dat[s:f] = aos.sp2rcut;  s=f; # pointer to sp2rcut
+    dat[i] = s+1; i+=1; f=s+nsp; dat[s:f] = aos.sp2norbs; s=f; # pointer to sp2norbs
+    dat[i] = s+1; i+=1; f=s+nsp; dat[s:f] = aos.sp2charge; s=f; # pointer to sp2charge    
+    dat[i] = s+1; i+=1; f=s+nmt; dat[s:f] = conc(aos.sp_mu2j); s=f; # pointer to sp_mu2j
+    dat[i] = s+1; i+=1; f=s+nmt; dat[s:f] = conc(aos.sp_mu2rcut); s=f; # pointer to sp_mu2rcut
+    dat[i] = s+1; i+=1; f=s+nrt; dat[s:f] = conc(aos.psi_log).reshape(nrt); s=f; # pointer to psi_log
+    dat[i] = s+1; i+=1; f=s+nms; dat[s:f] = conc(aos.sp_mu2s); s=f; # pointer to sp_mu2s
+    dat[i] = s+1; i+=1; f=s+nat; dat[s:f] = sv.atom2sp; s=f; # pointer to atom2sp
+    dat[i] = s+1; i+=1; f=s+na1; dat[s:f] = sv.atom2s; s=f; # pointer to atom2s
+    dat[i] = s+1; i+=1; f=s+na1; dat[s:f] = sv.atom2mu_s; s=f; # pointer to atom2mu_s
+    dat[i] = s+1; i+=1; f=s+tna; dat[s:f] = conc(sv.atom2coord); s=f; # pointer to atom2mu_s
+    dat[i] = s+1; i+=1; f=s+nsp; dat[s:f] = pl.sp2nmult; s=f; # sp2nmult of product basis
+    dat[i] = s+1; i+=1; f=s+nsp; dat[s:f] = pl.sp2rcut; s=f; # sp2nmult of product basis
+    dat[i] = s+1; i+=1; f=s+nsp; dat[s:f] = pl.sp2norbs; s=f; # sp2norbs of product basis
+    dat[i] = s+1; i+=1; f=s+nsp; dat[s:f] = pl.sp2charge; s=f; # sp2norbs of product basis
+    dat[i] = s+1; i+=1; f=s+nmtp; dat[s:f] = conc(pl.sp_mu2j); s=f; # pointer to sp_mu2j
+    dat[i] = s+1; i+=1; f=s+nmtp; dat[s:f] = conc(pl.sp_mu2rcut); s=f; # pointer to sp_mu2rcut
+    dat[i] = s+1; i+=1; f=s+nrtp; dat[s:f] = conc(pl.psi_log).reshape(nrtp); s=f; # pointer to psi_log
+    dat[i] = s+1; i+=1; f=s+nmsp; dat[s:f] = conc(pl.sp_mu2s); s=f; # pointer to sp_mu2s
+    dat[i] = s+1; # this is a terminator to simple operation
+
+    return dat
+    
   def init_prod_basis_pp(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
     """ Talman's procedure should be working well with Pseudo-Potential starting point..."""
     from pyscf.nao import coulomb_am, comp_overlap_coo, get_atom2bas_s, conv_yzx2xyz_c, prod_log_c, ls_part_centers, comp_coulomb_den
@@ -69,8 +155,6 @@ class prod_basis_c():
     self.dpc2s,self.dpc2t,self.dpc2sp = self.get_c2s_domiprod() # dominant product's counting 
     return self
 
-
-  
   def init_prod_basis_gto(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
     """ It should work with GTOs as well."""
     from pyscf.nao import coulomb_am, comp_overlap_coo, get_atom2bas_s, conv_yzx2xyz_c, prod_log_c, ls_part_centers, comp_coulomb_den
