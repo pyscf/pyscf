@@ -30,7 +30,7 @@ class KnowValues(unittest.TestCase):
         c1[:nao,:nao] = lo.orth.lowdin(mol.intor('int1e_ovlp_sph'))
         c = numpy.hstack((c1,cabs_coeff))
         s = reduce(numpy.dot, (c.T, cabs_mol.intor('int1e_ovlp_sph'), c))
-        self.assertAlmostEqual(numpy.linalg.norm(s-numpy.eye(c.shape[1])), 0, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(s-numpy.eye(c.shape[1])), 0, 8)
 
 
 if __name__ == "__main__":

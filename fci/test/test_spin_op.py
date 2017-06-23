@@ -562,6 +562,8 @@ class KnowValues(unittest.TestCase):
         ss = fci.spin_op.spin_square0(ci0, norb, nelec)
         self.assertAlmostEqual(ss[0], 6, 9)
 
+# This test pollutes fci.direct_spin1 module namespace.  It should be excluded
+# from nosetests
     def test_contract_ss(self):
         self.assertAlmostEqual(e0, -25.4538751043, 9)
         nelec = (6,4)

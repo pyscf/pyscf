@@ -61,7 +61,7 @@ option(BUILD_LIBCINT "Using libcint for analytical gaussian integral" ON)
 if(BUILD_LIBCINT)
 #if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
   ExternalProject_Add(libcint
-    GIT_REPOSITORY https://github.com/sunqm/libcint.git
+    GIT_REPOSITORY https://github.com/sunqm/qcint.git
     GIT_TAG cint3
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
