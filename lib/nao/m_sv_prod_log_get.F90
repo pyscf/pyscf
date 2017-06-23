@@ -1,0 +1,131 @@
+module m_sv_prod_log_get
+
+  use iso_c_binding, only: c_double, c_int64_t
+
+  implicit none
+
+  contains
+
+!
+!
+!
+subroutine sv_prod_log_get(n,d, sv)
+  use m_system_vars, only : system_vars_t
+  implicit none
+  !! external
+  integer(c_int64_t), intent(in) :: n
+  real(c_double), intent(in) :: d(n)
+  type(system_vars_t), intent(inout) :: sv
+  !! internal
+  integer(c_int64_t) :: nsp, nr, s, f, i, jmx, nmumx, mu, sp
+  real(c_double) :: rmin, rmax, kmax, psi_log_sum
+  real(c_double), allocatable :: sp2rcut(:)
+  integer(c_int64_t), allocatable :: mu_sp2s(:,:)
+
+  sv%uc%systemlabel = "libnao"
+  i = 2
+  nsp  = int( d(i), c_int64_t); i=i+1;
+  nr   = int( d(i), c_int64_t); i=i+1;
+  rmin = d(i); i=i+1;
+  rmax = d(i); i=i+1;
+  kmax = d(i); i=i+1;
+  jmx  = int( d(i), c_int64_t); i=i+1;
+  psi_log_sum = d(i); i=i+1;
+
+  allocate(sv%uc%sp2label(nsp))
+  allocate(sv%uc%sp2nmult(nsp))
+  allocate(sv%uc%sp2norbs(nsp))
+  allocate(sp2rcut(nsp))
+  allocate(sv%uc%sp2element(nsp))
+
+  allocate(sv%rr(nr))
+  allocate(sv%pp(nr))
+  
+  i = 100
+  s = int( d(i), c_int64_t); f=s+nr-1; sv%rr(:) = d(s:f); i=i+1
+  s = int( d(i), c_int64_t); f=s+nr-1; sv%pp(:) = d(s:f); i=i+1
+  s = int( d(i), c_int64_t); f=s+nsp-1; sv%uc%sp2nmult(:) = int(d(s:f));   i=i+1
+  s = int( d(i), c_int64_t); f=s+nsp-1; sp2rcut(:) = d(s:f);    i=i+1
+  s = int( d(i), c_int64_t); f=s+nsp-1; sv%uc%sp2norbs(:) = int(d(s:f));   i=i+1
+  s = int( d(i), c_int64_t); f=s+nsp-1; sv%uc%sp2element(:) = int(d(s:f)); i=i+1
+
+  !write(6,*) '  sv%uc%sp2nmult ', sv%uc%sp2nmult
+  !write(6,*) '  sv%uc%sp2norbs ', sv%uc%sp2norbs
+  !write(6,*) '         sp2rcut ', sp2rcut
+  !write(6,*) 'sv%uc%sp2element ', sv%uc%sp2element
+
+  nmumx = maxval(sv%uc%sp2nmult)
+  allocate(sv%uc%mu_sp2j(nmumx,nsp))
+  allocate(sv%uc%mu_sp2n(nmumx,nsp))
+  allocate(sv%uc%mu_sp2rcut(nmumx,nsp))
+  sv%uc%mu_sp2j = -999
+  sv%uc%mu_sp2n = -999
+  sv%uc%mu_sp2rcut = -999
+  s = int( d(i), c_int64_t);
+  do sp=1,nsp
+    f=s+sv%uc%sp2nmult(sp)-1; sv%uc%mu_sp2j(1:f-s+1,sp) = int(d(s:f)); s=f+1;
+  enddo
+  if(jmx/=maxval(sv%uc%mu_sp2j)) then; 
+    write(6,*) __FILE__, __LINE__, jmx, maxval(sv%uc%mu_sp2j); 
+    write(6,*) sv%uc%mu_sp2j
+    stop '!jmx';
+  endif
+  
+  
+  i = i + 1
+  if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
+  do sp=1,nsp
+    f=s+sv%uc%sp2nmult(sp)-1; sv%uc%mu_sp2rcut(1:f-s+1,sp) = d(s:f); s=f+1;
+  enddo
+
+  !write(6,*) 'sv%uc%mu_sp2rcut ', sv%uc%mu_sp2rcut
+
+
+  i = i + 1
+  if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
+  allocate(sv%psi_log(nr,nmumx,nsp))
+  sv%psi_log = 0
+  do sp=1,nsp
+    do mu=1,sv%uc%sp2nmult(sp); f=s+nr-1; sv%psi_log(1:nr,mu,sp) = d(s:f); s=f+1; enddo
+  enddo
+  
+  if( abs(psi_log_sum-sum(sv%psi_log))/abs(psi_log_sum)>5d-14 ) then; 
+    write(6,*) __FILE__, __LINE__, psi_log_sum, sum(sv%psi_log);
+    stop '!psi_log_sum';
+  endif
+  
+  !write(6,*) abs(psi_log_sum-sum(sv%psi_log))/abs(psi_log_sum)
+  
+
+  !do sp=1,nsp
+  !  do mu=1,sv%uc%sp2nmult(sp)
+  !    write(6,*) 'sv%psi_log ', sv%psi_log(1:3,mu,sp)
+  !  enddo
+  !enddo
+
+  i = i + 1
+  if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
+      
+  allocate(mu_sp2s(nmumx+1,nsp))
+  mu_sp2s = -999
+  do sp=1,nsp; f=s+sv%uc%sp2nmult(sp); mu_sp2s(1:f-s+1,sp) = int(d(s:f), c_int64_t); s=f+1; enddo
+
+  !do sp=1,nsp; write(6,*) 'mu_sp2s ', mu_sp2s(:,sp); enddo
+
+  i = i + 1
+  if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
+  
+  
+  allocate(sv%psi_log_rl(nr,nmumx,nsp))
+  do sp=1,nsp
+    do mu=1,sv%uc%sp2nmult(sp)
+      sv%psi_log(1:nr,mu,sp) = sv%psi_log(1:nr,mu,sp)/(sv%rr**sv%uc%mu_sp2j(mu,sp))
+    enddo
+  enddo
+
+  sv%jmx = int(jmx)
+  sv%norb_max = maxval(sv%uc%sp2norbs)
+  
+end subroutine ! m_sv_prod_log_get
+
+end module ! m_sv_prod_log_get

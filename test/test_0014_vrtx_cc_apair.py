@@ -6,6 +6,7 @@ class KnowValues(unittest.TestCase):
 
   def test_get_vrtx_cc_apair(self):
     """ This is for poke into a buffer to transfer to the library """
+    from pyscf.nao.m_siesta_ion_xml import siesta_ion_xml
     from pyscf.nao import ao_log_c
     import os
     from pyscf.nao.m_libnao import libnao
@@ -21,11 +22,12 @@ class KnowValues(unittest.TestCase):
       POINTER(c_int64),    # nout
       POINTER(c_double) )  # dout(nout)
 
-    svn = ao_log_c().init_ao_log_ion(s2i).get_aoneo() # construct representation of system_vars_c
+    svn = ao_log_c().init_ao_log_ion(s2i).get_aoneo() # construct representation of system_vat
     self.assertAlmostEqual(svn.sum(), 60906.882217023987) 
-    dat = zeros(1000000)
+    #dat = np.zeros(1000000)
     #libnao.vrtx_cc_apair(c_int64(len(svn)), svn.ctypes.data_as(POINTER(c_double)),
     #  c_int64(len(dat)), dat.ctypes.data_as(POINTER(c_double)))
+    
     
 if __name__ == "__main__":
   unittest.main()
