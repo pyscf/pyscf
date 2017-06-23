@@ -266,7 +266,13 @@ class system_vars_c():
   def diag_check(self, atol=1e-5, rtol=1e-4, **kvargs): # Works only after init_siesta_xml(), extend ?
     return diag_check(self, atol, rtol, **kvargs)
 
-
+  def get_svneo(self):
+    """Packs the data into one array for a later transfer to the library """
+    svn = np.require(np.zeros(10000), dtype=np.float64, requirements='CW')
+    ptr = 0
+    svn[ptr] = self.nspecies; ptr+=1;
+    svn[ptr] = self.ao_log.nr; ptr+=1;
+    return svn
 #
 # Example of reading pySCF orbitals.
 #

@@ -207,6 +207,44 @@ class ao_log_c(log_mesh_c):
 
   def comp_moments(self):
     return comp_moments(self)
+  
+  def get_aoneo(self):
+    """Packs the data into one array for a later transfer to the library """
+    import numpy as np
+    from numpy import require, float64, concatenate as conc
+    nr  = self.nr
+    nsp = self.nspecies
+    nmt = sum(self.sp2nmult)    
+    nrt = nr*nmt
+    nms = nmt+nsp
+
+    nsvn = 200 + 2*nr + 4*nsp + 2*nmt + nrt + nms
+    svn = require(np.zeros(nsvn), dtype=float64, requirements='CW')
+    # Simple parameters
+    i = 0
+    svn[i] = nsp;        i+=1;
+    svn[i] = nr;         i+=1;
+    svn[i] = self.rmin;  i+=1;
+    svn[i] = self.rmax;  i+=1;
+    svn[i] = self.kmax;  i+=1;
+    svn[i] = self.jmx;   i+=1;
+    svn[i] = conc(self.psi_log).sum(); i+=1;
+    # Pointers to data
+    i = 99
+    s = 199
+    svn[i] = s+1; i+=1; f=s+nr;  svn[s:f] = self.rr; s=f; # pointer to rr
+    svn[i] = s+1; i+=1; f=s+nr;  svn[s:f] = self.pp; s=f; # pointer to pp
+    svn[i] = s+1; i+=1; f=s+nsp; svn[s:f] = self.sp2nmult; s=f; # pointer to sp2nmult
+    svn[i] = s+1; i+=1; f=s+nsp; svn[s:f] = self.sp2rcut;  s=f; # pointer to sp2rcut
+    svn[i] = s+1; i+=1; f=s+nsp; svn[s:f] = self.sp2norbs; s=f; # pointer to sp2norbs
+    svn[i] = s+1; i+=1; f=s+nsp; svn[s:f] = self.sp2charge; s=f; # pointer to sp2charge    
+    svn[i] = s+1; i+=1; f=s+nmt; svn[s:f] = conc(self.sp_mu2j); s=f; # pointer to sp_mu2j
+    svn[i] = s+1; i+=1; f=s+nmt; svn[s:f] = conc(self.sp_mu2rcut); s=f; # pointer to sp_mu2rcut
+    svn[i] = s+1; i+=1; f=s+nrt; svn[s:f] = conc(self.psi_log).reshape(nrt); s=f; # pointer to psi_log
+    svn[i] = s+1; i+=1; f=s+nms; svn[s:f] = conc(self.sp_mu2s); s=f; # pointer to sp_mu2s
+    svn[i] = s+1; # this is a terminator to simple operation
+    return svn
+
 #
 #
 #
