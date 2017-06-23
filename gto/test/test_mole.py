@@ -80,7 +80,7 @@ C    SP
 
     def test_search_bas(self):
         self.assertEqual(mol0.search_shell_id(1, 1), 7)
-        self.assertEqual(mol0.search_ao_nr(1, 1, -1, 5), None)
+        self.assertRaises(RuntimeError, mol0.search_ao_nr, 1, 1, -1, 5)
         self.assertEqual(mol0.search_ao_nr(1, 1, -1, 4), 16)
 
     def test_atom_types(self):

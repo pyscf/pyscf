@@ -41,5 +41,8 @@ install:
       make &&
       cd ../../pyscf
 
+before_script:
+      export PYTHONPATH=$(pwd):$PYTHONPATH
+
 script:
-     nosetests -v -e.*ccsd_t -e.*future* -e.*pbc -e.*mcsf\/test\/test_bz*
+      nosetests -v -e ccsd_t -e pbc -e test_bz -e pyscf -e dmrgscf -e fciqmcscf -e icmpspt -e examples -e test_tdrks_grad

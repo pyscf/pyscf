@@ -580,8 +580,8 @@ class KnowValues(unittest.TestCase):
         c0 = numpy.zeros((na,na))
         c0[0,0] = 1
         e, ci0 = fci.direct_spin0.kernel(h1, h2, norb, nelec, ci0=c0)
-        self.assertAlmostEqual(e, -25.4095560762, 9)
-        self.assertAlmostEqual(fci.spin_op.spin_square0(ci0, norb, nelec)[0], 0, 9)
+        self.assertAlmostEqual(e, -25.4095560762, 7)
+        self.assertAlmostEqual(fci.spin_op.spin_square0(ci0, norb, nelec)[0], 0, 7)
 
 
 if __name__ == "__main__":

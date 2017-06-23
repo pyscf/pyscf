@@ -242,6 +242,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
     mf.mo_coeff  = mf1.mo_coeff
     mf.mo_occ    = mf1.mo_occ
 
+    mf = copy.copy(mf)
     def mf_kernel(*args, **kwargs):
         logger.warn(mf, "fast_newton is a wrap function to quickly setup and call Newton solver. "
                     "There's no need to call kernel function again for fast_newton.")
