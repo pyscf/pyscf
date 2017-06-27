@@ -1418,14 +1418,15 @@ class RCCSD(ccsd.CCSD):
         size = nov + nocc*(nocc-1)//2*nvir*(nvir-1)//2
         t1 = vector[:nov].copy().reshape((nocc,nvir))
         t2 = np.zeros((nocc**2,nvir**2), dtype=vector.dtype)
-        t2tril = vector[nov:size].reshape(nocc*(nocc-1)//2, -1)
-        otril = np.tril_indices(nocc, k=-1)
-        vtril = np.tril_indices(nvir, k=-1)
-        lib.takebak_2d(t2, t2tril, otril[0]*nocc+otril[1], vtril[0]*nvir+vtril[1])
-        lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[1]*nvir+vtril[0])
-        t2tril = -t2tril
-        lib.takebak_2d(t2, t2tril, otril[0]*nocc+otril[1], vtril[1]*nvir+vtril[0])
-        lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[0]*nvir+vtril[1])
+        if nocc > 1 and nvir > 1:
+            t2tril = vector[nov:size].reshape(nocc*(nocc-1)//2, -1)
+            otril = np.tril_indices(nocc, k=-1)
+            vtril = np.tril_indices(nvir, k=-1)
+            lib.takebak_2d(t2, t2tril, otril[0]*nocc+otril[1], vtril[0]*nvir+vtril[1])
+            lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[1]*nvir+vtril[0])
+            t2tril = -t2tril
+            lib.takebak_2d(t2, t2tril, otril[0]*nocc+otril[1], vtril[1]*nvir+vtril[0])
+            lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[0]*nvir+vtril[1])
         return t1, t2.reshape(nocc,nocc,nvir,nvir)
 
     def amplitudes_to_vector_triplet(self, t1, t2, out=None):
@@ -1457,15 +1458,10 @@ class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore',
                  ao2mofn=ao2mo.full):
         cput0 = (time.clock(), time.time())
-        moidx = numpy.ones(cc.mo_occ.size, dtype=numpy.bool)
-        if isinstance(cc.frozen, (int, numpy.integer)):
-            moidx[:cc.frozen] = False
-        elif len(cc.frozen) > 0:
-            moidx[numpy.asarray(cc.frozen)] = False
         if mo_coeff is None:
-            self.mo_coeff = mo_coeff = cc.mo_coeff[:,moidx]
+            self.mo_coeff = mo_coeff = ccsd._mo_without_core(cc, cc.mo_coeff)
         else:  # If mo_coeff is not canonical orbital
-            self.mo_coeff = mo_coeff = mo_coeff[:,moidx]
+            self.mo_coeff = mo_coeff = ccsd._mo_without_core(cc, mo_coeff)
         dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
         fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
         self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))

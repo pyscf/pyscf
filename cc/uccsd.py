@@ -2275,10 +2275,11 @@ def get_umoidx(cc):
         frozen = cc.frozen
     moidxa = numpy.ones(cc.mo_occ[0].size, dtype=bool)
     moidxb = numpy.ones(cc.mo_occ[1].size, dtype=bool)
-    if len(frozen[0]) > 0:
-        moidxa[numpy.asarray(frozen[0])] = False
-    if len(frozen[1]) > 0:
-        moidxb[numpy.asarray(frozen[1])] = False
+    if isinstance(frozen, numpy.ndarray) or frozen:
+        if len(frozen[0]) > 0:
+            moidxa[numpy.asarray(frozen[0])] = False
+        if len(frozen[1]) > 0:
+            moidxb[numpy.asarray(frozen[1])] = False
 
     return moidxa,moidxb
 
