@@ -1674,7 +1674,10 @@ class UCCSD(rccsd.RCCSD):
 
     def amplitudes_from_rccsd(self, t1, t2):
         '''Convert spatial orbital T1,T2 to spin-orbital T1,T2'''
-        return addons.spatial2spin(t1), addons.spatial2spin(t2)
+        orbspin = self.orbspin
+        t2aa = t2 - t2.transpose(0,1,3,2)
+        return (spatial2spin((t1, t1), orbspin),
+                spatial2spin((t2aa, t2, t2aa), orbspin))
 
     def spatial2spin(self, tx, orbspin=None):
         if orbspin is None: orbspin = self.orbspin
@@ -2272,7 +2275,7 @@ def get_umoidx(cc):
         frozen = cc.frozen
     moidxa = numpy.ones(cc.mo_occ[0].size, dtype=bool)
     moidxb = numpy.ones(cc.mo_occ[1].size, dtype=bool)
-    if frozen:
+    if isinstance(frozen, numpy.ndarray) or frozen:
         if len(frozen[0]) > 0:
             moidxa[numpy.asarray(frozen[0])] = False
         if len(frozen[1]) > 0:
@@ -2363,7 +2366,7 @@ class _IMDS:
         cput0 = (time.clock(), time.time())
         log = logger.Logger(self.stdout, self.verbose)
 
-        t1,t2,eris = self.t1, self.t2, self.eris
+        t1, t2, eris = self.t1, self.t2, self.eris
         t1 = spatial2spin(t1, eris.orbspin)
         t2 = spatial2spin(t2, eris.orbspin)
         nocc, nvir = t1.shape
