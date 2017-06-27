@@ -33,14 +33,6 @@ class fields:
                 self.nuc_dip = np.einsum('i,ix->x', charges, coords)
                 return
 
-        def Update(self,c_mat):
-                '''
-                Args:
-                        c_mat: Transformation matrix (AOx??)
-                Updates dip_int to (?? x ??)
-                '''
-                return
-
         def ImpulseAmp(self,time):
                 amp = self.fieldAmplitude*np.sin(self.FieldFreq*time)*(1.0/sqrt(2.0*3.1415*self.Tau*self.Tau))*np.exp(-1.0*np.power(time-self.tOn,2.0)/(2.0*self.Tau*self.Tau));
                 IsOn = False
