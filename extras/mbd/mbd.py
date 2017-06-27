@@ -1,3 +1,15 @@
+#!/usr/bin/env python
+#
+# Author: Jan Hermann <jan@hermann.in>
+#
+
+'''
+Many-Body van der Waals Interactions
+
+Refs:
+    Phys. Rev. Lett. 108, 236402
+'''
+
 from . import _mbd
 from .vdw_param import vdw_params
 import numpy as np

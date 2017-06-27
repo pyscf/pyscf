@@ -7,7 +7,6 @@
 Dirac Hartree-Fock
 '''
 
-import ctypes
 import time
 from functools import reduce
 import numpy
@@ -16,7 +15,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import _vhf
-import pyscf.scf.chkfile
+from pyscf.scf import chkfile
 
 
 def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
@@ -140,7 +139,7 @@ def init_guess_by_atom(mol):
 
 def init_guess_by_chkfile(mol, chkfile_name, project=True):
     from pyscf.scf import addons
-    chk_mol, scf_rec = pyscf.scf.chkfile.load_scf(chkfile_name)
+    chk_mol, scf_rec = chkfile.load_scf(chkfile_name)
 
     if numpy.iscomplexobj(scf_rec['mo_coeff']):
         mo = scf_rec['mo_coeff']

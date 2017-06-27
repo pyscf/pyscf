@@ -1,3 +1,8 @@
+#!/usr/bin/env python
+#
+# Author: Jan Hermann <jan@hermann.in>
+#
+
 import pyscf.lib
 from pyscf.lib import ndpointer
 import numpy as np
