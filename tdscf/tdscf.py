@@ -197,17 +197,18 @@ class tdscf:
                 return rkmat
 
         def initialcondition(self,prm):
-                print '''
-                ===================================
-                |  Realtime TDSCF module          |
-                ===================================
-                | J. Parkhill, T. Nguyen          |
-                | J. Koh, J. Herr,  K. Yao        |
-                ===================================
-                | Refs: 10.1021/acs.jctc.5b00262  |
-                |       10.1063/1.4916822         |
-                ===================================
-                '''
+                
+                logger.log(self,'''
+                        ===================================
+                        |  Realtime TDSCF module          |
+                        ===================================
+                        | J. Parkhill, T. Nguyen          |
+                        | J. Koh, J. Herr,  K. Yao        |
+                        ===================================
+                        | Refs: 10.1021/acs.jctc.5b00262  |
+                        |       10.1063/1.4916822         |
+                        ===================================
+                        ''')
                 n_ao = self.n_ao = self.the_scf.make_rdm1().shape[0]
                 n_mo = self.n_mo = n_ao # should be fixed.
                 n_occ = self.n_occ = int(sum(self.the_scf.mo_occ)/2)
@@ -253,24 +254,24 @@ class tdscf:
                                         else:
                                                 self.params[s[0]] = float(s[1])
 
-                print "============================="
-                print "         Parameters"
-                print "============================="
-                print "Model:", self.params["Model"]
-                print "Method:", self.params["Method"]
-                print "dt:", self.params["dt"]
-                print "MaxIter:", self.params["MaxIter"]
-                print "ExDir:", self.params["ExDir"]
-                print "EyDir:", self.params["EyDir"]
-                print "EzDir:", self.params["EzDir"]
-                print "FieldAmplitude:", self.params["FieldAmplitude"]
-                print "FieldFreq:", self.params["FieldFreq"]
-                print "Tau:", self.params["Tau"]
-                print "tOn:", self.params["tOn"]
-                print "ApplyImpulse:", self.params["ApplyImpulse"]
-                print "ApplyCw:", self.params["ApplyCw"]
-                print "StatusEvery:", self.params["StatusEvery"]
-                print "=============================\n\n"
+                logger.log(self,"=============================")
+                logger.log(self,"         Parameters")
+                logger.log(self,"=============================")
+                logger.log(self,"Model: " + self.params["Model"])
+                logger.log(self,"Method: "+ self.params["Method"])
+                logger.log(self,"dt: %.2f", self.params["dt"])
+                logger.log(self,"MaxIter: %d", self.params["MaxIter"])
+                logger.log(self,"ExDir: %.2f", self.params["ExDir"])
+                logger.log(self,"EyDir: %.2f", self.params["EyDir"])
+                logger.log(self,"EzDir: %.2f", self.params["EzDir"])
+                logger.log(self,"FieldAmplitude: %.4f", self.params["FieldAmplitude"])
+                logger.log(self,"FieldFreq: %.4f", self.params["FieldFreq"])
+                logger.log(self,"Tau: %.2f", self.params["Tau"])
+                logger.log(self,"tOn: %.2f", self.params["tOn"])
+                logger.log(self,"ApplyImpulse: %d", self.params["ApplyImpulse"])
+                logger.log(self,"ApplyCw: %d", self.params["ApplyCw"])
+                logger.log(self,"StatusEvery: %d", self.params["StatusEvery"])
+                logger.log(self,"=============================\n\n")
 
                 return
 
@@ -332,7 +333,7 @@ class tdscf:
                 logger.log(self, 'Ne: %f', np.trace(Pmo))
                 logger.log(self, 'Converged Energy: %f', E)
                 #logger.log(self, 'Eigenvalues: %f',  self.eigs.real)
-                print "Eigenvalues: ", self.eigs.real
+                #print "Eigenvalues: ", self.eigs.real
                 end = time.time()
                 logger.log(self, 'Initial Fock Built time: %f', end-start)
                 return Plao
