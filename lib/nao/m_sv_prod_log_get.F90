@@ -17,10 +17,10 @@ subroutine sv_prod_log_get(n,d, sv)
   real(c_double), intent(in) :: d(n)
   type(system_vars_t), intent(inout) :: sv
   !! internal
-  integer(c_int64_t) :: nsp, nr, s, f, i, jmx, nmumx, mu, sp
-  real(c_double) :: rmin, rmax, kmax, psi_log_sum
+  integer(c_int64_t) :: nsp, nr, s, f, i, jmx, nmumx, mu, sp, natoms, norbs, norbs_sc, nspin
+  real(c_double) :: rmin, rmax, kmax, psi_log_sum, prod_log_sum
   real(c_double), allocatable :: sp2rcut(:)
-  integer(c_int64_t), allocatable :: mu_sp2s(:,:)
+  integer(c_int64_t), allocatable :: mu_sp2s(:,:), atom2s(:)
 
   sv%uc%systemlabel = "libnao"
   i = 2
@@ -31,6 +31,11 @@ subroutine sv_prod_log_get(n,d, sv)
   kmax = d(i); i=i+1;
   jmx  = int( d(i), c_int64_t); i=i+1;
   psi_log_sum = d(i); i=i+1;
+  prod_log_sum = d(i); i=i+1;
+  natoms  = int( d(i), c_int64_t); i=i+1;
+  norbs  = int( d(i), c_int64_t); i=i+1;
+  norbs_sc  = int( d(i), c_int64_t); i=i+1;
+  nspin  = int( d(i), c_int64_t); i=i+1;
 
   allocate(sv%uc%sp2label(nsp))
   allocate(sv%uc%sp2nmult(nsp))
@@ -108,14 +113,11 @@ subroutine sv_prod_log_get(n,d, sv)
       
   allocate(mu_sp2s(nmumx+1,nsp))
   mu_sp2s = -999
-  do sp=1,nsp; f=s+sv%uc%sp2nmult(sp); mu_sp2s(1:f-s+1,sp) = int(d(s:f), c_int64_t); s=f+1; enddo
+  do sp=1,nsp; f=s+sv%uc%sp2nmult(sp); mu_sp2s(1:f-s+1,sp) = int(d(s:f), c_int64_t)+1; s=f+1; enddo
 
-  !do sp=1,nsp; write(6,*) 'mu_sp2s ', mu_sp2s(:,sp); enddo
-
-  i = i + 1
-  if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
-  
-  
+  do sp=1,nsp; write(6,*) 'mu_sp2s ', mu_sp2s(:,sp); enddo
+ 
+  !! Finishing with sp2*
   allocate(sv%psi_log_rl(nr,nmumx,nsp))
   do sp=1,nsp
     do mu=1,sv%uc%sp2nmult(sp)
@@ -125,6 +127,41 @@ subroutine sv_prod_log_get(n,d, sv)
 
   sv%jmx = int(jmx)
   sv%norb_max = maxval(sv%uc%sp2norbs)
+  !! END of Finishing with sp2*
+  
+  if (natoms<1) then
+    write(6,*) __FILE__, __LINE__, natoms;
+    stop '!natoms<1';
+  endif
+  
+  allocate(sv%atom_sc2coord(3,natoms))
+  allocate(sv%atom_sc2start_orb(natoms))
+  allocate(sv%atom_sc2atom_uc(natoms))
+  allocate(sv%uc%atom2coord(3,natoms))
+  allocate(sv%uc%atom2sp(natoms))
+  allocate(atom2s(natoms+1))
+  sv%atom_sc2coord = -999.0D0
+  sv%atom_sc2start_orb = -999
+  sv%atom_sc2atom_uc = -999
+  sv%uc%atom2coord = -999.0D0
+  sv%uc%atom2sp = -999
+  
+  i = i + 1
+  if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
+  f=s+natoms-1; sv%uc%atom2sp(1:natoms) = int(d(s:f))+1; s=f+1;
+  
+  !write(6,*) __FILE__, __LINE__, ' sv%uc%atom2sp ', sv%uc%atom2sp
+  !write(6,*) __FILE__, __LINE__, ' sv%uc%sp2element ', sv%uc%sp2element
+
+  i = i + 1
+  if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
+  f=s+natoms+1-1; atom2s(1:natoms+1) = int(d(s:f))+1; s=f+1;
+
+  i = i + 1
+  if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
+
+  
+  
   
 end subroutine ! m_sv_prod_log_get
 
