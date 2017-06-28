@@ -78,6 +78,14 @@ def write_chk(mc,root,chkfile):
     else :
         fh5.create_dataset('mc/orbsym',data=[])
 
+    if mc.orbsym is not [] and mc.mol.symmetry:
+        orbsym = numpy.asarray(mc.orbsym)
+        pair_irrep = orbsym.reshape(-1,1) ^ orbsym
+    else:
+        pair_irrep = None
+
+    ncore = mc.ncore
+    nocc = mc.ncore + mc.ncas
     mo_core = mc.mo_coeff[:,:mc.ncore]
     mo_cas  = mc.mo_coeff[:,mc.ncore:mc.ncore+mc.ncas]
     mo_virt = mc.mo_coeff[:,mc.ncore+mc.ncas:]
@@ -85,15 +93,23 @@ def write_chk(mc,root,chkfile):
     core_vhf = mc.get_veff(mc.mol,core_dm)
     h1e_Sr =  reduce(numpy.dot, (mo_virt.T,mc.get_hcore()+core_vhf , mo_cas))
     h1e_Si =  reduce(numpy.dot, (mo_cas.T, mc.get_hcore()+core_vhf , mo_core))
+    h1e, e_core = mc.h1e_for_cas()
+    if pair_irrep is not None:
+        h1e_Sr[pair_irrep[nocc:,ncore:nocc] != 0] = 0
+        h1e_Si[pair_irrep[ncore:nocc,:ncore] != 0] = 0
+        h1e[pair_irrep[ncore:nocc,ncore:nocc] != 0] = 0
     fh5['h1e_Si']     =       h1e_Si
     fh5['h1e_Sr']     =       h1e_Sr
-    h1e, e_core = mc.h1e_for_cas()
     fh5['h1e']        =       h1e
     fh5['e_core']     =       e_core
 
     if mc._scf._eri is None:
         h2e_t = ao2mo.general(mc.mol, (mc.mo_coeff,mo_cas,mo_cas,mo_cas), compact=False)
         h2e_t = h2e_t.reshape(-1,mc.ncas,mc.ncas,mc.ncas)
+        if pair_irrep is not None:
+            sym_forbid = (pair_irrep[:,ncore:nocc].reshape(-1,1) !=
+                          pair_irrep[ncore:nocc,ncore:nocc].ravel()).reshape(h2e_t.shape)
+            h2e_t[sym_forbid] = 0
         h2e =h2e_t[mc.ncore:mc.ncore+mc.ncas,:,:,:]
         fh5['h2e'] = h2e
 
@@ -107,6 +123,10 @@ def write_chk(mc,root,chkfile):
         eri = mc._scf._eri
         h2e_t = ao2mo.general(eri, [mc.mo_coeff,mo_cas,mo_cas,mo_cas], compact=False)
         h2e_t = h2e_t.reshape(-1,mc.ncas,mc.ncas,mc.ncas)
+        if pair_irrep is not None:
+            sym_forbid = (pair_irrep[:,ncore:nocc].reshape(-1,1) !=
+                          pair_irrep[ncore:nocc,ncore:nocc].ravel()).reshape(h2e_t.shape)
+            h2e_t[sym_forbid] = 0
         h2e =h2e_t[mc.ncore:mc.ncore+mc.ncas,:,:,:]
         fh5['h2e'] = h2e
 

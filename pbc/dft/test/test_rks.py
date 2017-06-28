@@ -95,7 +95,7 @@ class KnowValues(unittest.TestCase):
         mf.kpt = np.random.random(3)
         mf.max_cycle = 1
         dm = mf.from_chk(mf1.chkfile)
-        self.assertAlmostEqual(mf.scf(dm), -4.7088482555684914, 8)
+        self.assertAlmostEqual(mf.scf(dm), -4.7248854773545279, 8)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.rks")

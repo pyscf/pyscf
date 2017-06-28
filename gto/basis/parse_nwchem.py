@@ -165,6 +165,7 @@ def _parse(raw_basis):
 
 def _parse_ecp(raw_ecp):
     ecp_add = []
+    nelec = None
     for line in raw_ecp:
         dat = line.lstrip()
         if dat.startswith('#'): # comment line
@@ -184,10 +185,11 @@ def _parse_ecp(raw_ecp):
             line = dat.replace('D','e').split()
             l = int(line[0])
             by_ang[l].append([float(x) for x in line[1:]])
-    bsort = []
-    for l in range(-1, MAXL):
-        bsort.extend([b for b in ecp_add if b[0] == l])
-    return [nelec, bsort]
+    if nelec is not None:
+        bsort = []
+        for l in range(-1, MAXL):
+            bsort.extend([b for b in ecp_add if b[0] == l])
+        return [nelec, bsort]
 
 if __name__ == '__main__':
     from pyscf import gto

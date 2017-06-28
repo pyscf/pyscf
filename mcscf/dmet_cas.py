@@ -54,6 +54,8 @@ def kernel(mf, dm, aolabels_or_baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
     >>> mc = mcscf.CASSCF(mf, ncas, nelecas).run(mo)
     '''
     from pyscf import lo
+    from pyscf.tools import mo_mapping
+
     if isinstance(verbose, logger.Logger):
         log = verbose
     elif verbose is not None:
@@ -63,22 +65,13 @@ def kernel(mf, dm, aolabels_or_baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
     if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2): # ROHF/UHF DM
         dm = sum(dm)
     mol = mf.mol
-    if isinstance(aolabels_or_baslst, str):
-        baslst = [i for i,t in enumerate(mol.ao_labels())
-                  if aolabels_or_baslst in t]
-    elif isinstance(aolabels_or_baslst[0], str):
-        baslst = [i for i,t in enumerate(mol.ao_labels())
-                  if any(x in t for x in aolabels_or_baslst)]
-    else:
-        baslst = aolabels_or_baslst
-    baslst = numpy.asarray(baslst)
-    if base != 0:
-        baslst = [i-base for i in baslst]
     if s is None:
         s = mf.get_ovlp()
 
     if (not isinstance(mf, scf.hf.SCF)) and hasattr(mf, '_scf'):
         mf = mf._scf
+
+    baslst = mo_mapping._aolabels2baslst(mol, aolabels_or_baslst, base)
 
     nao = dm.shape[0]
     nimp = len(baslst)
@@ -92,7 +85,6 @@ def kernel(mf, dm, aolabels_or_baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
     else:
         corth = numpy.eye(nao)
 
-    baslst = numpy.asarray(baslst)
     notimp = numpy.asarray([i for i in range(nao) if i not in baslst])
     occi, ui = scipy.linalg.eigh(-dm[baslst[:,None],baslst])
     occi *= -1
@@ -237,5 +229,5 @@ if __name__ == '__main__':
     ncas, nelecas, mo = guess_cas(mf, dm, aolst, verbose=4)
     mc = mcscf.CASSCF(mf, ncas, nelecas).set(verbose=4)
     emc = mc.kernel(mo)[0]
-    print(emc,0)
+    print(emc,)
 

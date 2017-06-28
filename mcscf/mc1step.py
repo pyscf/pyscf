@@ -680,10 +680,13 @@ class CASSCF(casci.CASCI):
             log = logger.Logger(self.stdout, verbose)
 
         e_tot, e_ci, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log)
-        if not isinstance(e_ci, (float, numpy.number)):
+        if numpy.size(e_ci) != 1:
             raise RuntimeError('Multiple roots are detected in fcisolver.  '
                                'CASSCF does not know which state to optimize.\n'
                                'See also  mcscf.state_average  or  mcscf.state_specific  for excited states.')
+        elif numpy.ndim(e_ci) != 0:
+            # This is a workaround for external CI solver compatibility.
+            e_ci = e_ci[0]
 
         if envs is not None and log.verbose >= logger.INFO:
             log.debug('CAS space CI energy = %.15g', e_ci)

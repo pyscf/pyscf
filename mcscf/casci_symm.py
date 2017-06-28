@@ -68,8 +68,8 @@ def eig(mat, orbsym):
     norb = mat.shape[0]
     e = numpy.zeros(norb)
     c = numpy.zeros((norb,norb))
-    for i0 in sorted(set(orbsym)):
-        lst = numpy.where(orbsym == i0)[0]
+    for ir in set(orbsym):
+        lst = numpy.where(orbsym == ir)[0]
         if len(lst) > 0:
             w, v = scf.hf.eig(mat[lst[:,None],lst], None)
             e[lst] = w
@@ -81,8 +81,7 @@ def label_symmetry_(mc, mo_coeff):
     irrep_name = mc.mol.irrep_id
     s = mc._scf.get_ovlp()
     try:
-        mc.orbsym = symm.label_orb_symm(mc.mol, irrep_name,
-                                        mc.mol.symm_orb, mo_coeff, s=s)
+        mc.orbsym = scf.hf_symm.get_orbsym(mc._scf.mol, mo_coeff, s)
     except ValueError:
         logger.warn(mc, 'mc1step_symm symmetrizes input orbitals')
         ncore = mc.ncore

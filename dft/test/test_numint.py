@@ -105,7 +105,7 @@ class KnowValues(unittest.TestCase):
         dms = numpy.random.random((2,nao,nao))
         ni = dft.numint._NumInt()
         v = ni.nr_rks_fxc(mol, mf.grids, 'B88', dm0, dms, hermi=0)
-        self.assertAlmostEqual(finger(v), -425.5066503451331, 8)
+        self.assertAlmostEqual(finger(v), -425.5736438177176, 8)
 
     def test_uks_fxc(self):
         numpy.random.seed(10)
@@ -115,7 +115,7 @@ class KnowValues(unittest.TestCase):
         dms = numpy.random.random((2,nao,nao))
         ni = dft.numint._NumInt()
         v = ni.nr_uks_fxc(mol, mf.grids, 'B88', dm0, dms)
-        self.assertAlmostEqual(finger(v), 403.75174841356113, 8)
+        self.assertAlmostEqual(finger(v), 403.56257213149746, 8)
 
 if __name__ == "__main__":
     print("Test numint")

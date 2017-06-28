@@ -40,7 +40,7 @@ def get_vxc_giao(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
         ao_deriv = 0
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory,
-                                 ni.non0tab, blksize=blksize, buf=buf):
+                                 blksize=blksize, buf=buf):
             rho = make_rho(0, ao, mask, 'LDA')
             vxc = ni.eval_xc(xc_code, rho, 0, deriv=1)[1]
             vrho = vxc[0]
@@ -59,7 +59,7 @@ def get_vxc_giao(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
         ao_deriv = 1
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory,
-                                 ni.non0tab, blksize=blksize, buf=buf):
+                                 blksize=blksize, buf=buf):
             rho = make_rho(0, ao, mask, 'GGA')
             vxc = ni.eval_xc(xc_code, rho, 0, deriv=1)[1]
             vrho, vsigma = vxc[:2]
@@ -116,7 +116,7 @@ class NMR(rhf_nmr.NMR):
             h1 += mol.intor('int1e_igkin', 3)
 
             libxc = self._scf._numint.libxc
-            hyb = libxc.hybrid_coeff(self._scf.xc, spin=(mol.spin>0)+1)
+            hyb = libxc.hybrid_coeff(self._scf.xc, spin=mol.spin)
 
             mem_now = pyscf.lib.current_memory()[0]
             max_memory = max(2000, self._scf.max_memory*.9-mem_now)
@@ -124,15 +124,16 @@ class NMR(rhf_nmr.NMR):
                                self._scf.xc, dm0, max_memory=max_memory,
                                verbose=self._scf.verbose)
 
+            intor = mol._add_suffix('int2e_ig1')
             if abs(hyb) > 1e-10:
-                vj, vk = _vhf.direct_mapdm('int2e_ig1',  # (g i,j|k,l)
+                vj, vk = _vhf.direct_mapdm(intor,  # (g i,j|k,l)
                                            'a4ij', ('lk->s1ij', 'jk->s1il'),
                                            dm0, 3, # xyz, 3 components
                                            mol._atm, mol._bas, mol._env)
                 vk = vk - vk.transpose(0,2,1)
                 h1 += vj - .5 * hyb * vk
             else:
-                vj = _vhf.direct_mapdm('int2e_ig1', 'a4ij', 'lk->s1ij',
+                vj = _vhf.direct_mapdm(intor, 'a4ij', 'lk->s1ij',
                                        dm0, 3, mol._atm, mol._bas, mol._env)
                 h1 += vj
         else:
@@ -144,7 +145,7 @@ class NMR(rhf_nmr.NMR):
     def get_vind(self, mo1):
         mol = self.mol
         libxc = self._scf._numint.libxc
-        hyb = libxc.hybrid_coeff(self._scf.xc, spin=(mol.spin>0)+1)
+        hyb = libxc.hybrid_coeff(self._scf.xc, spin=mol.spin)
 
         if abs(hyb) > 1e-10:
             mo_coeff = self._scf.mo_coeff

@@ -86,7 +86,7 @@ def smearing_(mf, sigma=None, method='fermi'):
         This is a k-point version of scf.hf.SCF.get_occ
         '''
         mo_occ_kpts = mf_class.get_occ(mf, mo_energy_kpts, mo_coeff_kpts)
-        if mf.sigma is None or mf.sigma == 0:
+        if mf.sigma == 0 or not mf.sigma or not mf.smearing_method:
             return mo_occ_kpts
 
         if is_khf:
@@ -127,6 +127,8 @@ def smearing_(mf, sigma=None, method='fermi'):
             return f_mo[numpy.tril_indices(nmo, -1)]
 
     def get_grad(mo_coeff_kpts, mo_occ_kpts, fock=None):
+        if mf.sigma == 0 or not mf.sigma or not mf.smearing_method:
+            return mf_class.get_grad(mf, mo_coeff_kpts, mo_occ_kpts, fock)
         if fock is None:
             dm1 = mf.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
             fock = mf.get_hcore() + mf.get_veff(mf.cell, dm1)
@@ -139,7 +141,8 @@ def smearing_(mf, sigma=None, method='fermi'):
 
     def energy_tot(dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
         e_tot = mf.energy_elec(dm_kpts, h1e_kpts, vhf_kpts)[0] + mf.energy_nuc()
-        if mf.entropy is not None and mf.verbose >= logger.INFO:
+        if (mf.sigma and mf.smearing_method and
+            mf.entropy is not None and mf.verbose >= logger.INFO):
             e_free = e_tot - mf.sigma * mf.entropy
             e_zero = e_tot - mf.sigma * mf.entropy * .5
             logger.info(mf, '    Total E(T) = %.15g  Free energy = %.15g  E0 = %.15g',

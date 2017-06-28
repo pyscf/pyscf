@@ -2,7 +2,7 @@
 
 add_library(fci SHARED
   fci_contract.c fci_contract_nosym.c
-  fci_rdm.c fci_string.c fci_spin.c fci_4pdm.c
+  fci_rdm.c fci_string.c fci_4pdm.c
   select_ci.c)
 
 set_target_properties(fci PROPERTIES

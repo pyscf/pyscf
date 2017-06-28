@@ -52,19 +52,17 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     else:
         small_rho_cutoff = 0
 
-    dm = numpy.asarray(dm)
-    nao = dm.shape[-1]
-    ground_state = (dm.ndim == 2)
-
     if hermi == 2:  # because rho = 0
         n, ks._exc, vx = 0, 0, 0
     else:
-        n, ks._exc, vx = ks._numint.nr_rks(cell, ks.grids, ks.xc, dm, 1,
+        n, ks._exc, vx = ks._numint.nr_rks(cell, ks.grids, ks.xc, dm, 0,
                                            kpt, kpt_band)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    hyb = ks._numint.hybrid_coeff(ks.xc, spin=(cell.spin>0)+1)
+    ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2)
+
+    hyb = ks._numint.hybrid_coeff(ks.xc, spin=cell.spin)
     if abs(hyb) < 1e-10:
         vhf = vj = ks.get_j(cell, dm, hermi, kpt, kpt_band)
     else:
@@ -77,7 +75,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if ground_state:
         ks._ecoul = numpy.einsum('ij,ji', dm, vj).real * .5
 
-    if small_rho_cutoff > 1e-20 and ground_state:
+    if (small_rho_cutoff > 1e-20 and ground_state and
+        abs(n-cell.nelectron) < 0.01*n):
         # Filter grids the first time setup grids
         idx = ks._numint.large_rho_indices(cell, dm, ks.grids,
                                            small_rho_cutoff, kpt)

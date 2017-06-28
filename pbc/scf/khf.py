@@ -141,7 +141,7 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
         logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
                     mo_energy[nocc-1], mo_energy[nocc])
         if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
-            logger.warn(mf, '!! HOMO %.12g == LUMO %.12g',
+            logger.warn(mf, 'HOMO %.12g == LUMO %.12g',
                         mo_energy[nocc-1], mo_energy[nocc])
     else:
         logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])
@@ -526,6 +526,10 @@ class KRHF(hf.RHF):
         if auxbasis is None:
             auxbasis = aug_etb_for_dfbasis(self.cell, beta=1.8, start_at=0)
         return mdf_jk.density_fit(self, auxbasis, with_df)
+
+    def stability(self, internal=True, external=False, verbose=None):
+        from pyscf.pbc.scf.stability import rhf_stability
+        return rhf_stability(self, internal, external, verbose)
 
 
 if __name__ == '__main__':

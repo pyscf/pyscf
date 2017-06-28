@@ -38,20 +38,23 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     else:
         small_rho_cutoff = 0
 
-    dm = numpy.asarray(dm)
-    nao = dm.shape[-1]
-    # ndim = 3 : dm.shape = (alpha_beta, nao, nao)
-    ground_state = (dm.ndim == 3)
+    if not isinstance(dm, numpy.ndarray):
+        dm = numpy.asarray(dm)
+    if dm.ndim == 2:  # RHF DM
+        dm = numpy.asarray((dm*.5,dm*.5))
 
     if hermi == 2:  # because rho = 0
-        n, ks._exc, vx = 0, 0, 0
+        n, ks._exc, vx = (0,0), 0, 0
     else:
-        n, ks._exc, vx = ks._numint.nr_uks(cell, ks.grids, ks.xc, dm, 1,
+        n, ks._exc, vx = ks._numint.nr_uks(cell, ks.grids, ks.xc, dm, 0,
                                            kpt, kpt_band)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    hyb = ks._numint.hybrid_coeff(ks.xc, spin=(cell.spin>0)+1)
+    # ndim = 3 : dm.shape = ([alpha,beta], nao, nao)
+    ground_state = (dm.ndim == 3 and dm.shape[0] == 2)
+
+    hyb = ks._numint.hybrid_coeff(ks.xc, spin=cell.spin)
     if abs(hyb) < 1e-10:
         vj = ks.get_j(cell, dm, hermi, kpt, kpt_band)
         vhf = lib.asarray([vj[0]+vj[1]] * 2)
@@ -66,7 +69,9 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if ground_state:
         ks._ecoul = numpy.einsum('ij,ji', dm[0]+dm[1], vj[0]+vj[1]).real * .5
 
-    if small_rho_cutoff > 1e-20 and ground_state:
+    nelec = cell.nelec
+    if (small_rho_cutoff > 1e-20 and ground_state and
+        abs(n[0]-nelec[0]) < 0.01*n[0] and abs(n[1]-nelec[1]) < 0.01*n[1]):
         # Filter grids the first time setup grids
         idx = ks._numint.large_rho_indices(cell, dm, ks.grids,
                                            small_rho_cutoff, kpt)

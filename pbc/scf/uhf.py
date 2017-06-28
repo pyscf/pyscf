@@ -120,3 +120,7 @@ class UHF(pyscf.scf.uhf.UHF, pbchf.RHF):
 
     # mix_density_fit inherits from hf.RHF.mix_density_fit
 
+    def stability(self, internal=True, external=False, verbose=None):
+        from pyscf.pbc.scf.stability import uhf_stability
+        return uhf_stability(self, internal, external, verbose)
+

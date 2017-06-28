@@ -13,157 +13,228 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf.tddft import rhf
+from pyscf.pbc.dft import numint
 
 
 class TDA(rhf.TDA):
 #FIXME: numerically unstable with small gs?
-#TODO: Add a warning for small gs.
+#TODO: Add a warning message for small gs.
     def __init__(self, mf):
         self.cell = mf.cell
-        self.conv_tol = 1e-7
+        self.conv_tol = 1e-6
         rhf.TDA.__init__(self, mf)
 
     def get_vind(self, mf):
+        singlet = self.singlet
+        cell = mf.cell
+        kpts = mf.kpts
+
         mo_coeff = mf.mo_coeff
         mo_energy = mf.mo_energy
         mo_occ = mf.mo_occ
         nkpts = len(mo_occ)
-        nao, nmo = mo_coeff.shape[1:]
-        orbo = []
-        orbv = []
-        for k in range(nkpts):
-            nocc = numpy.count_nonzero(mo_occ[k]>0)
-            orbo.append(mo_coeff[k,:,:nocc])
-            orbv.append(mo_coeff[k,:,nocc:])
+        nao, nmo = mo_coeff[0].shape
+        occidx = [numpy.where(mo_occ[k]==2)[0] for k in range(nkpts)]
+        viridx = [numpy.where(mo_occ[k]==0)[0] for k in range(nkpts)]
+        orbo = [mo_coeff[k][:,occidx[k]] for k in range(nkpts)]
+        orbv = [mo_coeff[k][:,viridx[k]] for k in range(nkpts)]
         eai = _get_eai(mo_energy, mo_occ)
+        hdiag = numpy.hstack([x.ravel() for x in eai])
+
+        if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
+            if mf.grids.coords is None:
+                mf.grids.build()
+            ni = mf._numint
+            hyb = ni.hybrid_coeff(mf.xc, spin=cell.spin)
+            dm0 = None # mf.make_rdm1(mo_coeff, mo_occ)
+            rho0, vxc, fxc = ni.cache_xc_kernel(mf.cell, mf.grids, mf.xc,
+                                                [mo_coeff]*2, [mo_occ*.5]*2,
+                                                spin=1, kpts=kpts)
+        else:
+            hyb = None
+
+        mem_now = lib.current_memory()[0]
+        max_memory = max(2000, self.max_memory*.8-mem_now)
 
         def vind(zs):
             nz = len(zs)
-            dm1s = [_split_vo(z, mo_occ) for z in zs]
+            z1s = [_unpack(z, mo_occ) for z in zs]
             dmvo = numpy.empty((nz,nkpts,nao,nao), dtype=numpy.complex128)
             for i in range(nz):
-                dm1 = dm1s[i]
+                dm1 = z1s[i]
                 for k in range(nkpts):
                     dmvo[i,k] = reduce(numpy.dot, (orbv[k], dm1[k], orbo[k].T.conj()))
 
-            vj, vk = mf.get_jk(mf.cell, dmvo, hermi=0)
-            if self.singlet:
-                vhf = vj*2 - vk
+            if hyb is None:
+                if singlet:
+                    vj, vk = mf.get_jk(cell, dmvo, hermi=0)
+                    v1ao = vj*2 - vk
+                else:
+                    v1ao = -mf.get_k(cell, dmvo, hermi=0)
             else:
-                vhf = -vk
+                v1ao = numint.nr_rks_fxc_st(ni, cell, mf.grids, mf.xc, dm0, dmvo, 0,
+                                            singlet, rho0, vxc, fxc, kpts, max_memory)
+                if abs(hyb) > 1e-10:
+                    vj, vk = mf.get_jk(cell, dmvo, hermi=0)
+                    if self.singlet:
+                        v1ao += vj * 2 - hyb * vk
+                    else:
+                        v1ao += -hyb * vk
+                else:
+                    if self.singlet:
+                        v1ao += mf.get_j(cell, dmvo, hermi=0) * 2
 
             v1s = []
             for i in range(nz):
-                dm1 = dm1s[i]
+                dm1 = z1s[i]
                 for k in range(nkpts):
-                    v1vo = reduce(numpy.dot, (orbv[k].T.conj(), vhf[i,k], orbo[k]))
+                    v1vo = reduce(numpy.dot, (orbv[k].T.conj(), v1ao[i,k], orbo[k]))
                     v1vo += eai[k] * dm1[k]
                     v1s.append(v1vo.ravel())
             return lib.asarray(v1s).reshape(nz,-1)
-        return vind
+        return vind, hdiag
+
+    def init_guess(self, mf, nstates=None):
+        if nstates is None: nstates = self.nstates
+
+        mo_energy = mf.mo_energy
+        mo_occ = mf.mo_occ
+        eai = numpy.hstack([x.ravel() for x in _get_eai(mo_energy, mo_occ)])
+
+        nov = eai.size
+        nroot = min(nstates, nov)
+        x0 = numpy.zeros((nroot, nov))
+        idx = numpy.argsort(eai.ravel())
+        for i in range(nroot):
+            x0[i,idx[i]] = 1  # lowest excitations
+        return x0
 
     def kernel(self, x0=None):
         '''TDA diagonalization solver
         '''
         self.check_sanity()
+        self.dump_flags()
 
-        mo_energy = self._scf.mo_energy
-        mo_occ = self._scf.mo_occ
-        eai = numpy.hstack([x.ravel() for x in _get_eai(mo_energy, mo_occ)])
+        vind, hdiag = self.get_vind(self._scf)
+        precond = self.get_precond(hdiag)
 
         if x0 is None:
-            x0 = self.init_guess(eai, self.nstates)
-
-        precond = self.get_precond(eai)
-        vind = self.get_vind(self._scf)
-
+            x0 = self.init_guess(self._scf, self.nstates)
         self.e, x1 = lib.davidson1(vind, x0, precond,
                                    tol=self.conv_tol,
                                    nroots=self.nstates, lindep=self.lindep,
                                    max_space=self.max_space,
                                    verbose=self.verbose)[1:]
+
+        mo_occ = self._scf.mo_occ
 # 1/sqrt(2) because self.x is for alpha excitation amplitude and 2(X^+*X) = 1
-        self.xy = [(_split_vo(xi*numpy.sqrt(.5), mo_occ), 0) for xi in x1]
+        self.xy = [(_unpack(xi*numpy.sqrt(.5), mo_occ), 0) for xi in x1]
         return self.e, self.xy
 CIS = TDA
 
 
-class TDHF(rhf.TDHF):
-    def __init__(self, mf):
-#TODO: Add a warning for small gs.
-        self.cell = mf.cell
-        self.conv_tol = 1e-7
-        rhf.TDHF.__init__(self, mf)
-
+class TDHF(TDA):
     def get_vind(self, mf):
         '''
         [ A   B ][X]
         [-B* -A*][Y]
         '''
+        singlet = self.singlet
+        cell = mf.cell
+        kpts = mf.kpts
+
         mo_coeff = mf.mo_coeff
         mo_energy = mf.mo_energy
         mo_occ = mf.mo_occ
         nkpts = len(mo_occ)
-        nao, nmo = mo_coeff.shape[1:]
-        orbo = []
-        orbv = []
-        for k in range(nkpts):
-            nocc = numpy.count_nonzero(mo_occ[k]>0)
-            orbo.append(mo_coeff[k,:,:nocc])
-            orbv.append(mo_coeff[k,:,nocc:])
+        nao, nmo = mo_coeff[0].shape
+        occidx = [numpy.where(mo_occ[k]==2)[0] for k in range(nkpts)]
+        viridx = [numpy.where(mo_occ[k]==0)[0] for k in range(nkpts)]
+        orbo = [mo_coeff[k][:,occidx[k]] for k in range(nkpts)]
+        orbv = [mo_coeff[k][:,viridx[k]] for k in range(nkpts)]
         eai = _get_eai(mo_energy, mo_occ)
+        hdiag = numpy.hstack([x.ravel() for x in eai])
+        tot_x = hdiag.size
+        hdiag = numpy.hstack((hdiag, hdiag))
+
+        if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
+            if mf.grids.coords is None:
+                mf.grids.build()
+            ni = mf._numint
+            hyb = ni.hybrid_coeff(mf.xc, spin=cell.spin)
+            dm0 = None # mf.make_rdm1(mo_coeff, mo_occ)
+            rho0, vxc, fxc = ni.cache_xc_kernel(mf.cell, mf.grids, mf.xc,
+                                                [mo_coeff]*2, [mo_occ*.5]*2,
+                                                spin=1, kpts=kpts)
+        else:
+            hyb = None
+
+        mem_now = lib.current_memory()[0]
+        max_memory = max(2000, self.max_memory*.8-mem_now)
 
         def vind(xys):
             nz = len(xys)
-            nx = xys[0].size // 2
-            dmxs = [_split_vo(xy[:nx], mo_occ) for xy in xys]
-            dmys = [_split_vo(xy[nx:], mo_occ) for xy in xys]
+            z1xs = [_unpack(xy[:tot_x], mo_occ) for xy in xys]
+            z1ys = [_unpack(xy[tot_x:], mo_occ) for xy in xys]
             dmvo = numpy.empty((nz,nkpts,nao,nao), dtype=numpy.complex128)
             for i in range(nz):
-                dmx = dmxs[i]
-                dmy = dmys[i]
+                dmx = z1xs[i]
+                dmy = z1ys[i]
                 for k in range(nkpts):
                     dmvo[i,k] = reduce(numpy.dot, (orbv[k], dmx[k], orbo[k].T.conj()))
                     dmvo[i,k]+= reduce(numpy.dot, (orbo[k], dmy[k].T, orbv[k].T.conj()))
 
-            vj, vk = mf.get_jk(mf.cell, dmvo, hermi=0)
-            if self.singlet:
-                vhf = vj*2 - vk
+            if hyb is None:
+                if singlet:
+                    vj, vk = mf.get_jk(cell, dmvo, hermi=0)
+                    v1ao = vj*2 - vk
+                else:
+                    v1ao = -mf.get_k(cell, dmvo, hermi=0)
             else:
-                vhf = -vk
+                v1ao = numint.nr_rks_fxc_st(ni, cell, mf.grids, mf.xc, dm0, dmvo, 0,
+                                            singlet, rho0, vxc, fxc, kpts, max_memory)
+                if abs(hyb) > 1e-10:
+                    vj, vk = mf.get_jk(cell, dmvo, hermi=0)
+                    if self.singlet:
+                        v1ao += vj * 2 - hyb * vk
+                    else:
+                        v1ao += -hyb * vk
+                else:
+                    if self.singlet:
+                        v1ao += mf.get_j(cell, dmvo, hermi=0) * 2
 
             v1s = []
             for i in range(nz):
-                dmx = dmxs[i]
-                dmy = dmys[i]
+                dmx = z1xs[i]
+                dmy = z1ys[i]
                 v1xs = []
                 v1ys = []
                 for k in range(nkpts):
-                    v1x = reduce(numpy.dot, (orbv[k].T.conj(), vhf[i,k], orbo[k]))
-                    v1y = reduce(numpy.dot, (orbo[k].T.conj(), vhf[i,k], orbv[k])).T
+                    v1x = reduce(numpy.dot, (orbv[k].T.conj(), v1ao[i,k], orbo[k]))
+                    v1y = reduce(numpy.dot, (orbo[k].T.conj(), v1ao[i,k], orbv[k])).T
                     v1x+= eai[k] * dmx[k]
                     v1y+= eai[k] * dmy[k]
                     v1xs.append(v1x.ravel())
                     v1ys.append(-v1y.ravel())
-                v1s.extend(v1xs)
-                v1s.extend(v1ys)
+                v1s += v1xs + v1ys
             return lib.asarray(v1s).reshape(nz,-1)
-        return vind
+        return vind, hdiag
+
+    def init_guess(self, mf, nstates=None):
+        x0 = TDA.init_guess(self, mf, nstates)
+        y0 = numpy.zeros_like(x0)
+        return numpy.hstack((x0,y0))
 
     def kernel(self, x0=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
         '''
         self.check_sanity()
+        self.dump_flags()
 
-        mo_energy = self._scf.mo_energy
-        mo_occ = self._scf.mo_occ
-        eai = numpy.hstack([x.ravel() for x in _get_eai(mo_energy, mo_occ)])
-
+        vind, hdiag = self.get_vind(self._scf)
+        precond = self.get_precond(hdiag)
         if x0 is None:
-            x0 = self.init_guess(eai, self.nstates)
-
-        precond = self.get_precond(eai.ravel())
-        vind = self.get_vind(self._scf)
+            x0 = self.init_guess(self._scf, self.nstates)
 
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
@@ -176,6 +247,7 @@ class TDHF(rhf.TDHF):
                                     nroots=self.nstates, lindep=self.lindep,
                                     max_space=self.max_space, pick=pickeig,
                                     verbose=self.verbose)[1:]
+        mo_occ = self._scf.mo_occ
         self.e = w
         def norm_xy(z):
             x, y = z.reshape(2,-1)
@@ -183,7 +255,7 @@ class TDHF(rhf.TDHF):
             norm = 1/numpy.sqrt(norm)
             x *= norm
             y *= norm
-            return _split_vo(x, mo_occ), _split_vo(y, mo_occ)
+            return _unpack(x, mo_occ), _unpack(y, mo_occ)
         self.xy = [norm_xy(z) for z in x1]
 
         return self.e, self.xy
@@ -192,13 +264,14 @@ RPA = TDHF
 
 def _get_eai(mo_energy, mo_occ):
     eai = []
-    nocc = numpy.sum(mo_occ > 0, axis=1)
-    for k, no in enumerate(nocc):
-        ai = lib.direct_sum('a-i->ai', mo_energy[k,no:], mo_energy[k,:no])
+    for k, occ in enumerate(mo_occ):
+        occidx = occ >  0
+        viridx = occ == 0
+        ai = lib.direct_sum('a-i->ai', mo_energy[k,viridx], mo_energy[k,occidx])
         eai.append(ai)
     return eai
 
-def _split_vo(vo, mo_occ):
+def _unpack(vo, mo_occ):
     nmo = mo_occ.shape[-1]
     nocc = numpy.sum(mo_occ > 0, axis=1)
     z = []

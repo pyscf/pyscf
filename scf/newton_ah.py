@@ -19,17 +19,24 @@ from pyscf import symm
 from pyscf.lib import logger
 from pyscf.scf import chkfile
 from pyscf.scf import addons
+from pyscf.scf import hf_symm, uhf_symm
 
 # http://scicomp.stackexchange.com/questions/1234/matrix-exponential-of-a-skew-hermitian-matrix-with-fortran-95-and-lapack
 def expmat(a):
     return scipy.linalg.expm(a)
 
-def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
+def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
+                  with_symmetry=True):
     mol = mf.mol
     occidx = numpy.where(mo_occ==2)[0]
     viridx = numpy.where(mo_occ==0)[0]
     nocc = len(occidx)
     nvir = len(viridx)
+    orbo = mo_coeff[:,occidx]
+    orbv = mo_coeff[:,viridx]
+    if with_symmetry and mol.symmetry:
+        orbsym = hf_symm.get_orbsym(mol, mo_coeff)
+        sym_forbid = orbsym[viridx].reshape(-1,1) != orbsym[occidx]
 
     if fock_ao is None:
         if h1e is None: h1e = mf.get_hcore()
@@ -44,6 +51,10 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
 
     h_diag = (fvv.diagonal().reshape(-1,1)-foo.diagonal()) * 2
 
+    if with_symmetry and mol.symmetry:
+        g[sym_forbid] = 0
+        h_diag[sym_forbid] = 0
+
     # To project Hessians from another basis if different basis sets are used
     # in newton solver and underlying mean-filed solver.
     if hasattr(mf, '_scf') and id(mf._scf.mol) != id(mol):
@@ -53,7 +64,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
         if mf.grids.coords is None:
             mf.grids.build()
         ni = mf._numint
-        hyb = ni.hybrid_coeff(mf.xc, spin=(mol.spin>0)+1)
+        hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
         rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc, mo_coeff, mo_occ, 0)
         dm0 = None #mf.make_rdm1(mo_coeff, mo_occ)
     else:
@@ -61,15 +72,21 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
 
     def h_op(x):
         x = x.reshape(nvir,nocc)
-        x2 = numpy.einsum('sp,sq->pq', fvv, x.conj()) * 2
-        x2-= numpy.einsum('sp,rp->rs', foo, x.conj()) * 2
+        if with_symmetry and mol.symmetry:
+            x = x.copy()
+            x[sym_forbid] = 0
+        x2 = numpy.einsum('ps,sq->pq', fvv, x)
+        #x2-= .5*numpy.einsum('ps,rp->rs', foo, x)
+        #x2-= .5*numpy.einsum('sp,rp->rs', foo, x)
+        x2-= numpy.einsum('ps,rp->rs', foo, x)
 
-        d1 = reduce(numpy.dot, (mo_coeff[:,viridx], x, mo_coeff[:,occidx].T.conj()))
+        d1 = reduce(numpy.dot, (orbv, x, orbo.T.conj()))
         dm1 = d1 + d1.T.conj()
         if hyb is None:
             vj, vk = mf.get_jk(mol, dm1)
             v1 = vj - vk * .5
         else:
+            # The singlet hessian
             v1 = ni.nr_rks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, 1, rho0, vxc, fxc)
 ## *.7 this magic number can stablize DFT convergence.  Without scaling down
 ## the XC hessian, large oscillation is observed in Newton iterations.  It may
@@ -81,16 +98,19 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
             else:
                 vj, vk = mf.get_jk(mol, dm1)
                 v1 += vj - vk * (hyb * .5)
-        x2 += reduce(numpy.dot, (mo_coeff[:,occidx].T.conj(), v1,
-                                 mo_coeff[:,viridx])).T * 4
-        return x2.reshape(-1)
+        x2 += reduce(numpy.dot, (orbv.T.conj(), v1, orbo)) * 2
+        if with_symmetry and mol.symmetry:
+            x2[sym_forbid] = 0
+        return x2.reshape(-1) * 2
 
     return g.reshape(-1), h_op, h_diag.reshape(-1)
 
-def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
+def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
+                   with_symmetry=True):
     mo_occa = occidxa = mo_occ > 0
     mo_occb = occidxb = mo_occ ==2
-    ug, uh_op, uh_diag = gen_g_hop_uhf(mf, (mo_coeff,)*2, (mo_occa,mo_occb), fock_ao)
+    ug, uh_op, uh_diag = gen_g_hop_uhf(mf, (mo_coeff,)*2, (mo_occa,mo_occb),
+                                       fock_ao, None, with_symmetry)
 
     viridxa = ~occidxa
     viridxb = ~occidxb
@@ -98,11 +118,11 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     uniq_var_b = viridxb.reshape(-1,1) & occidxb
     uniq_ab = uniq_var_a | uniq_var_b
     nmo = mo_coeff.shape[-1]
-    nocca = mo_occa.sum()
+    nocca = numpy.count_nonzero(mo_occa)
     nvira = nmo - nocca
 
     def sum_ab(x):
-        x1 = numpy.zeros((nmo,nmo))
+        x1 = numpy.zeros((nmo,nmo), dtype=x.dtype)
         x1[uniq_var_a]  = x[:nvira*nocca]
         x1[uniq_var_b] += x[nvira*nocca:]
         return x1[uniq_ab]
@@ -110,7 +130,7 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     g = sum_ab(ug)
     h_diag = sum_ab(uh_diag)
     def h_op(x):
-        x1 = numpy.zeros((nmo,nmo))
+        x1 = numpy.zeros((nmo,nmo), dtype=x.dtype)
         # unpack ROHF rotation parameters
         x1[uniq_ab] = x
         x1 = numpy.hstack((x1[uniq_var_a],x1[uniq_var_b]))
@@ -118,8 +138,13 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
 
     return g, h_op, h_diag
 
-def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
+def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
+                  with_symmetry=True):
     mol = mf.mol
+    if hasattr(mf, '_scf') and id(mf._scf.mol) != id(mol):
+        mo_coeff = (addons.project_mo_nr2nr(mf._scf.mol, mo_coeff[0], mol),
+                    addons.project_mo_nr2nr(mf._scf.mol, mo_coeff[1], mol))
+
     occidxa = numpy.where(mo_occ[0]>0)[0]
     occidxb = numpy.where(mo_occ[1]>0)[0]
     viridxa = numpy.where(mo_occ[0]==0)[0]
@@ -128,6 +153,15 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     noccb = len(occidxb)
     nvira = len(viridxa)
     nvirb = len(viridxb)
+    orboa = mo_coeff[0][:,occidxa]
+    orbob = mo_coeff[1][:,occidxb]
+    orbva = mo_coeff[0][:,viridxa]
+    orbvb = mo_coeff[1][:,viridxb]
+    if with_symmetry and mol.symmetry:
+        orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
+        sym_forbida = orbsyma[viridxa].reshape(-1,1) != orbsyma[occidxa]
+        sym_forbidb = orbsymb[viridxb].reshape(-1,1) != orbsymb[occidxb]
+        sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
 
     if fock_ao is None:
         if h1e is None: h1e = mf.get_hcore()
@@ -135,23 +169,27 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
         fock_ao = h1e + mf.get_veff(mol, dm0)
     focka = reduce(numpy.dot, (mo_coeff[0].T, fock_ao[0], mo_coeff[0]))
     fockb = reduce(numpy.dot, (mo_coeff[1].T, fock_ao[1], mo_coeff[1]))
+    fooa = focka[occidxa[:,None],occidxa]
+    fvva = focka[viridxa[:,None],viridxa]
+    foob = fockb[occidxb[:,None],occidxb]
+    fvvb = fockb[viridxb[:,None],viridxb]
 
     g = numpy.hstack((focka[occidxa[:,None],viridxa].T.ravel(),
                       fockb[occidxb[:,None],viridxb].T.ravel()))
 
-    h_diaga =(focka[viridxa,viridxa].reshape(-1,1) - focka[occidxa,occidxa])
-    h_diagb =(fockb[viridxb,viridxb].reshape(-1,1) - fockb[occidxb,occidxb])
+    h_diaga = focka[viridxa,viridxa].reshape(-1,1) - focka[occidxa,occidxa]
+    h_diagb = fockb[viridxb,viridxb].reshape(-1,1) - fockb[occidxb,occidxb]
     h_diag = numpy.hstack((h_diaga.reshape(-1), h_diagb.reshape(-1)))
 
-    if hasattr(mf, '_scf') and id(mf._scf.mol) != id(mol):
-        mo_coeff = (addons.project_mo_nr2nr(mf._scf.mol, mo_coeff[0], mol),
-                    addons.project_mo_nr2nr(mf._scf.mol, mo_coeff[1], mol))
+    if with_symmetry and mol.symmetry:
+        g[sym_forbid] = 0
+        h_diag[sym_forbid] = 0
 
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
         if mf.grids.coords is None:
             mf.grids.build()
         ni = mf._numint
-        hyb = ni.hybrid_coeff(mf.xc, spin=(mol.spin>0)+1)
+        hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
         rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc, mo_coeff, mo_occ, 1)
         #dm0 =(numpy.dot(mo_coeff[0]*mo_occ[0], mo_coeff[0].T.conj()),
         #      numpy.dot(mo_coeff[1]*mo_occ[1], mo_coeff[1].T.conj()))
@@ -160,17 +198,18 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
         hyb = None
 
     def h_op(x):
+        if with_symmetry and mol.symmetry:
+            x = x.copy()
+            x[sym_forbid] = 0
         x1a = x[:nvira*nocca].reshape(nvira,nocca)
         x1b = x[nvira*nocca:].reshape(nvirb,noccb)
-        x2a = numpy.einsum('rp,rq->pq', focka[viridxa[:,None],viridxa], x1a.conj())
-        x2a-= numpy.einsum('sq,ps->pq', focka[occidxa[:,None],occidxa], x1a.conj())
-        x2b = numpy.einsum('rp,rq->pq', fockb[viridxb[:,None],viridxb], x1b.conj())
-        x2b-= numpy.einsum('sq,ps->pq', fockb[occidxb[:,None],occidxb], x1b.conj())
+        x2a = numpy.einsum('pr,rq->pq', fvva, x1a)
+        x2a-= numpy.einsum('sq,ps->pq', fooa, x1a)
+        x2b = numpy.einsum('pr,rq->pq', fvvb, x1b)
+        x2b-= numpy.einsum('sq,ps->pq', foob, x1b)
 
-        d1a = reduce(numpy.dot, (mo_coeff[0][:,viridxa], x1a,
-                                 mo_coeff[0][:,occidxa].T.conj()))
-        d1b = reduce(numpy.dot, (mo_coeff[1][:,viridxb], x1b,
-                                 mo_coeff[1][:,occidxb].T.conj()))
+        d1a = reduce(numpy.dot, (orbva, x1a, orboa.T.conj()))
+        d1b = reduce(numpy.dot, (orbvb, x1b, orbob.T.conj()))
         dm1 = numpy.array((d1a+d1a.T.conj(),d1b+d1b.T.conj()))
         if hyb is None:
             vj, vk = mf.get_jk(mol, dm1)
@@ -188,11 +227,12 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
             else:
                 vj, vk = mf.get_jk(mol, dm1)
                 v1 += vj[0]+vj[1] - vk * hyb
-        x2a += reduce(numpy.dot, (mo_coeff[0][:,occidxa].T.conj(), v1[0],
-                                  mo_coeff[0][:,viridxa])).T
-        x2b += reduce(numpy.dot, (mo_coeff[1][:,occidxb].T.conj(), v1[1],
-                                  mo_coeff[1][:,viridxb])).T
-        return numpy.hstack((x2a.ravel(), x2b.ravel()))
+        x2a += reduce(numpy.dot, (orbva.T.conj(), v1[0], orboa))
+        x2b += reduce(numpy.dot, (orbvb.T.conj(), v1[1], orbob))
+        x2 = numpy.hstack((x2a.ravel(), x2b.ravel()))
+        if with_symmetry and mol.symmetry:
+            x2[sym_forbid] = 0
+        return x2
 
     return g, h_op, h_diag
 
@@ -256,9 +296,10 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
 #            x *= 1e-2/norm_x
         return x
 
-    kf_trust_region = mf.kf_trust_region
     g_op = lambda: g_orb
     x0_guess = g_orb
+
+    kf_trust_region = mf.kf_trust_region
     while True:
         ah_conv_tol = min(norm_gorb**2, mf.ah_conv_tol)
         # increase the AH accuracy when approach convergence
@@ -377,7 +418,10 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
         log.debug1('Set  kf_trust_region = %g', kf_trust_region)
         g_orb = g_kf
         norm_gorb = norm_gkf
-        x0_guess = dxi
+        if norm_dxi != 0:
+            x0_guess = dxi
+        else:
+            x0_guess = g_kf
 
 
 def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
@@ -458,14 +502,16 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         callback(locals())
 
     rotaiter.close()
+    mo_energy, mo_coeff1 = mf._scf.canonicalize(mo_coeff, mo_occ, fock)
     if mf.canonicalization:
         log.info('Canonicalize SCF orbitals')
-        mo_energy, mo_coeff = mf._scf.canonicalize(mo_coeff, mo_occ, fock)
-        mo_occ = mf._scf.get_occ(mo_energy, mo_coeff)
-    else:
-        mo_energy = mf._scf.canonicalize(mo_coeff, mo_occ, fock)[0]
+        mo_coeff = mo_coeff1
     log.info('macro X = %d  E=%.15g  |g|= %g  total %d KF %d JK',
              imacro+1, e_tot, norm_gorb, kftot, jktot)
+    if (numpy.any(mo_occ==0) and
+        mo_energy[mo_occ>0].max() > mo_energy[mo_occ==0].min()):
+        log.warn('HOMO %s > LUMO %s was found in the canonicalized orbitals.',
+                 mo_energy[mo_occ>0].max(), mo_energy[mo_occ==0].min())
     return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
 
 # Note which function that "density_fit" decorated.  density-fit have been
@@ -509,7 +555,7 @@ def newton_SCF_class(mf):
         '''
         def __init__(self):
             self._scf = mf
-            self.max_cycle_inner = 20
+            self.max_cycle_inner = 12
             self.max_stepsize = .05
             self.canonicalization = True
 
@@ -525,7 +571,7 @@ def newton_SCF_class(mf):
 #               ah_start_tol = 1e-7
 #               max_stepsize = 1.5
 #               ah_grad_trust_region = 1e6
-            self.kf_interval = 5
+            self.kf_interval = 4
             self.kf_trust_region = 5
             self_keys = set(self.__dict__.keys())
 
@@ -558,6 +604,7 @@ def newton_SCF_class(mf):
             log.info('ah_grad_trust_region = %g', self.ah_grad_trust_region)
             log.info('kf_interval = %d', self.kf_interval)
             log.info('kf_trust_region = %d', self.kf_trust_region)
+            log.info('canonicalization = %s', self.canonicalization)
             log.info('max_memory %d MB (current use %d MB)',
                      self.max_memory, lib.current_memory()[0])
 
@@ -633,7 +680,11 @@ def newton_SCF_class(mf):
             return numpy.dot(u0, expmat(dr))
 
         def rotate_mo(self, mo_coeff, u, log=None):
-            return numpy.dot(mo_coeff, u)
+            mo = numpy.dot(mo_coeff, u)
+            if self._scf.mol.symmetry:
+                orbsym = hf_symm.get_orbsym(self._scf.mol, mo_coeff)
+                mo = hf_symm.attach_orbsym(mo, orbsym)
+            return mo
     return CIAH_SCF
 
 def newton(mf):
@@ -653,46 +704,27 @@ def newton(mf):
     SCF = newton_SCF_class(mf)
     class RHF(SCF):
         def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
-            mol = self._scf.mol
-            if mol.symmetry:
-# label the symmetry every time calling gen_g_hop because kernel function may
-# change mo_coeff ordering after calling self.eig
-                self._orbsym = symm.label_orb_symm(mol, mol.irrep_id,
-                        mol.symm_orb, mo_coeff, s=self._scf.get_ovlp())
             return gen_g_hop_rhf(self, mo_coeff, mo_occ, fock_ao, h1e)
 
         def update_rotate_matrix(self, dx, mo_occ, u0=1):
             dr = scf.hf.unpack_uniq_var(dx, mo_occ)
-            if self._scf.mol.symmetry:
-                dr = mc1step_symm._symmetrize(dr, self._orbsym, None)
             return numpy.dot(u0, expmat(dr))
 
         def rotate_mo(self, mo_coeff, u, log=None):
-            #from pyscf.lo import orth
-            #s = self._scf.get_ovlp()
-            #if self._scf.mol.symmetry:
-            #    s = symm.symmetrize_matrix(s, self._scf._scf.mol.symm_orb)
-            #return orth.vec_lowdin(numpy.dot(mo_coeff, u), s)
-            mo = numpy.dot(mo_coeff, u)
+            mo = SCF.rotate_mo(self, mo_coeff, u, log)
             if log is not None and log.verbose >= logger.DEBUG:
-                idx = numpy.where(self.mo_occ > 0)[0]
+                idx = self.mo_occ > 0
                 s = reduce(numpy.dot, (mo[:,idx].T, self._scf.get_ovlp(),
                                        self.mo_coeff[:,idx]))
                 log.debug('Overlap to initial guess, SVD = %s',
                           _effective_svd(s, 1e-5))
                 log.debug('Overlap to last step, SVD = %s',
-                          _effective_svd(lib.take_2d(u,idx,idx), 1e-5))
+                          _effective_svd(u[idx][:,idx], 1e-5))
             return mo
 
     if isinstance(mf, scf.rohf.ROHF):
         class ROHF(RHF):
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
-                mol = self._scf.mol
-                if mol.symmetry:
-# label the symmetry every time calling gen_g_hop because kernel function may
-# change mo_coeff ordering after calling self.eig
-                    self._orbsym = symm.label_orb_symm(mol, mol.irrep_id,
-                            mol.symm_orb, mo_coeff, s=self._scf.get_ovlp())
                 return gen_g_hop_rohf(self, mo_coeff, mo_occ, fock_ao, h1e)
 
             def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, diis=None,
@@ -716,13 +748,6 @@ def newton(mf):
     elif isinstance(mf, scf.uhf.UHF):
         class UHF(SCF):
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
-                mol = self._scf.mol
-                if mol.symmetry:
-                    ovlp_ao = self._scf.get_ovlp()
-                    self._orbsym =(symm.label_orb_symm(mol, mol.irrep_id,
-                                            mol.symm_orb, mo_coeff[0], s=ovlp_ao),
-                                   symm.label_orb_symm(mol, mol.irrep_id,
-                                            mol.symm_orb, mo_coeff[1], s=ovlp_ao))
                 return gen_g_hop_uhf(self, mo_coeff, mo_occ, fock_ao, h1e)
 
             def update_rotate_matrix(self, dx, mo_occ, u0=1):
@@ -730,29 +755,27 @@ def newton(mf):
                 occidxb = mo_occ[1] > 0
                 viridxa = ~occidxa
                 viridxb = ~occidxb
+
                 nmo = len(occidxa)
-                nocca = occidxa.sum()
-                nvira = nmo - nocca
+                dr = numpy.zeros((2,nmo,nmo), dtype=dx.dtype)
+                uniq = numpy.array((viridxa.reshape(-1,1) & occidxa,
+                                    viridxb.reshape(-1,1) & occidxb))
+                dr[uniq] = dx
+                dr = dr - dr.conj().transpose(0,2,1)
 
-                dra = numpy.zeros((nmo,nmo))
-                drb = numpy.zeros((nmo,nmo))
-                dra[viridxa[:,None]&occidxa] = dx[:nocca*nvira]
-                drb[viridxb[:,None]&occidxb] = dx[nocca*nvira:]
-                dra = dra - dra.T
-                drb = drb - drb.T
-
-                if self._scf.mol.symmetry:
-                    dra = mc1step_symm._symmetrize(dra, self._orbsym[0], None)
-                    drb = mc1step_symm._symmetrize(drb, self._orbsym[1], None)
                 if isinstance(u0, int) and u0 == 1:
-                    return numpy.asarray((expmat(dra), expmat(drb)))
+                    return numpy.asarray((expmat(dr[0]), expmat(dr[1])))
                 else:
-                    return numpy.asarray((numpy.dot(u0[0], expmat(dra)),
-                                          numpy.dot(u0[1], expmat(drb))))
+                    return numpy.asarray((numpy.dot(u0[0], expmat(dr[0])),
+                                          numpy.dot(u0[1], expmat(dr[1]))))
 
             def rotate_mo(self, mo_coeff, u, log=None):
-                return numpy.asarray((numpy.dot(mo_coeff[0], u[0]),
-                                      numpy.dot(mo_coeff[1], u[1])))
+                mo = numpy.asarray((numpy.dot(mo_coeff[0], u[0]),
+                                    numpy.dot(mo_coeff[1], u[1])))
+                if self._scf.mol.symmetry:
+                    orbsym = uhf_symm.get_orbsym(self._scf.mol, mo_coeff)
+                    mo = hf_symm.attach_orbsym(mo, orbsym)
+                return mo
 
             def spin_square(self, mo_coeff=None, s=None):
                 if mo_coeff is None:

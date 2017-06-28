@@ -54,8 +54,10 @@ def cc_Foo(t1,t2,eris):
 def cc_Fov(t1,t2,eris):
     nocc, nvir = t1.shape
     eris_ovov = np.asarray(eris.ovov)
-    Fme = np.einsum('nf,menf->me',t1,eris_ovov)
-    Fme-= np.einsum('nf,mfne->me',t1,eris_ovov)
+    fov = eris.fock[:nocc,nocc:]
+    Fme = fov.copy()
+    Fme += np.einsum('nf,menf->me',t1,eris_ovov)
+    Fme -= np.einsum('nf,mfne->me',t1,eris_ovov)
     return Fme
 
 def cc_Woooo(t1,t2,eris):

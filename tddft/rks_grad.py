@@ -55,7 +55,11 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     mem_now = pyscf.lib.current_memory()[0]
     max_memory = max(2000, td_grad.max_memory*.9-mem_now)
 
-    hyb = mf._numint.hybrid_coeff(mf.xc, spin=(mol.spin>0)+1)
+    ni = mf._numint
+    hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
+    dm0 = None # mf.make_rdm1(mo_coeff, mo_occ)
+    rho0, vxc, fxc = ni.cache_xc_kernel(mf.mol, mf.grids, mf.xc,
+                                        [mo_coeff]*2, [mo_occ*.5]*2, spin=1)
     f1vo, f1oo, vxc1, k1ao = \
             _contract_xc_kernel(td_grad, mf.xc, dmzvop,
                                 dmzoo, True, True, singlet, max_memory)
@@ -91,9 +95,10 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
 # Cannot make call to ._td.get_vind because first order orbitals are solved
 # through closed shell ground state CPHF.
         dm = reduce(numpy.dot, (orbv, x.reshape(nvir,nocc), orbo.T))
+        dm = dm + dm.T
 # Call singlet XC kernel contraction, for closed shell ground state
-        vindxc = rks._contract_xc_kernel(td_grad._td, mf.xc,
-                                         [dm+dm.T], True, max_memory)
+        vindxc = numint.nr_rks_fxc_st(ni, mol, mf.grids, mf.xc, dm0, dm, 0,
+                                      singlet, rho0, vxc, fxc, max_memory)
         if abs(hyb) > 1e-10:
             vj, vk = mf.get_jk(mol, (dm+dm.T))
             veff = vj * 2 - hyb * vk + vindxc
@@ -202,16 +207,8 @@ def _contract_xc_kernel(td_grad, xc_code, xai, oovv=None, with_vxc=True,
     mf = td_grad._scf
     grids = mf.grids
 
-    ni = copy.copy(mf._numint)
-    if rks.USE_XCFUN:
-        try:
-            ni.libxc = dft.xcfun
-            xctype = ni._xc_type(xc_code)
-        except (ImportError, KeyError, NotImplementedError):
-            ni.libxc = dft.libxc
-            xctype = ni._xc_type(xc_code)
-    else:
-        xctype = ni._xc_type(xc_code)
+    ni = mf._numint
+    xctype = ni._xc_type(xc_code)
 
     mo_coeff = mf.mo_coeff
     mo_energy = mf.mo_energy
@@ -246,7 +243,7 @@ def _contract_xc_kernel(td_grad, xc_code, xai, oovv=None, with_vxc=True,
         ao_deriv = 1
         if singlet:
             for ao, mask, weight, coords \
-                    in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
+                    in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
                 rho = ni.eval_rho2(mol, ao[0], mo_coeff, mo_occ, mask, 'LDA')
                 vxc, fxc, kxc = ni.eval_xc(xc_code, rho, 0, deriv=deriv)[1:]
 
@@ -282,11 +279,11 @@ def _contract_xc_kernel(td_grad, xc_code, xai, oovv=None, with_vxc=True,
                 aow += numpy.einsum('npi,np->pi', ao[1:4], wv[1:])
                 tmp = numint._dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
                 vmat[0] += tmp + tmp.T
-                vmat[1:] += rks_grad._gga_grad_sum(mol, ao, wv, mask)
-
+                vmat[1:] += rks_grad._gga_grad_sum(mol, ao, wv, mask,
+                                                   shls_slice, ao_loc)
             ao_deriv = 2
             for ao, mask, weight, coords \
-                    in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, ni.non0tab):
+                    in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
                 rho = ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, 'GGA')
                 vxc, fxc, kxc = ni.eval_xc(xc_code, rho, 0, deriv=deriv)[1:]
 
@@ -388,6 +385,7 @@ if __name__ == '__main__':
 
     mf = dft.RKS(mol)
     mf.xc = 'b3lyp'
+    mf._numint.libxc = dft.xcfun
     mf.grids.prune = False
     mf.scf()
 

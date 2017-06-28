@@ -200,21 +200,21 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     mo_occ[1][e_idx_b[:n_b]] = 1
     if mf.verbose >= logger.INFO and n_a < nmo and n_b > 0 and n_b < nmo:
         if e_sort_a[n_a-1]+1e-3 > e_sort_a[n_a]:
-            logger.warn(mf, '!! alpha nocc = %d  HOMO %.15g >= LUMO %.15g',
+            logger.warn(mf, 'alpha nocc = %d  HOMO %.15g >= LUMO %.15g',
                         n_a, e_sort_a[n_a-1], e_sort_a[n_a])
         else:
             logger.info(mf, '  alpha nocc = %d  HOMO = %.15g  LUMO = %.15g',
                         n_a, e_sort_a[n_a-1], e_sort_a[n_a])
 
         if e_sort_b[n_b-1]+1e-3 > e_sort_b[n_b]:
-            logger.warn(mf, '!! beta  nocc = %d  HOMO %.15g >= LUMO %.15g',
+            logger.warn(mf, 'beta  nocc = %d  HOMO %.15g >= LUMO %.15g',
                         n_b, e_sort_b[n_b-1], e_sort_b[n_b])
         else:
             logger.info(mf, '  beta  nocc = %d  HOMO = %.15g  LUMO = %.15g',
                         n_b, e_sort_b[n_b-1], e_sort_b[n_b])
 
         if e_sort_a[n_a-1]+1e-3 > e_sort_b[n_b]:
-            logger.warn(mf, '!! system HOMO %.15g >= system LUMO %.15g',
+            logger.warn(mf, 'system HOMO %.15g >= system LUMO %.15g',
                         e_sort_b[n_a-1], e_sort_b[n_b])
 
         numpy.set_printoptions(threshold=nmo)
@@ -691,30 +691,26 @@ class UHF(hf.SCF):
         '''
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        dm = numpy.asarray(dm)
-        nao = dm.shape[-1]  # Get nao from dm shape because the hamiltonian
-                            # might be not defined from mol
         if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
             if self._eri is None:
                 self._eri = mol.intor('int2e', aosym='s8')
-            vj, vk = hf.dot_eri_dm(self._eri, dm.reshape(-1,nao,nao), hermi)
+            vj, vk = hf.dot_eri_dm(self._eri, dm, hermi)
         else:
-            vj, vk = hf.SCF.get_jk(self, mol, dm.reshape(-1,nao,nao), hermi)
-        return vj.reshape(dm.shape), vk.reshape(dm.shape)
+            vj, vk = hf.SCF.get_jk(self, mol, dm, hermi)
+        return numpy.asarray(vj), numpy.asarray(vk)
 
     @lib.with_doc(get_veff.__doc__)
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        dm = numpy.asarray(dm)
-        if dm.ndim == 2:
+        if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
             dm = numpy.asarray((dm*.5,dm*.5))
         if (self._eri is not None or not self.direct_scf or
             mol.incore_anyway or self._is_mem_enough()):
             vj, vk = self.get_jk(mol, dm, hermi)
             vhf = _makevhf(vj, vk)
         else:
-            ddm = dm - numpy.asarray(dm_last)
+            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
             vj, vk = self.get_jk(mol, ddm, hermi)
             vhf = _makevhf(vj, vk) + numpy.asarray(vhf_last)
         return vhf
@@ -775,6 +771,10 @@ class UHF(hf.SCF):
                         '<S^2> = %.8g  2S+1 = %.8g',
                         self.e_tot, self.max_cycle, ss, s)
         return self
+
+    def stability(self, internal=True, external=False, verbose=None):
+        from pyscf.scf.stability import uhf_stability
+        return uhf_stability(self, internal, external, verbose)
 
 def _makevhf(vj, vk):
     assert(vj.ndim >= 3 and vj.shape[0] == 2 and vj.shape == vk.shape)

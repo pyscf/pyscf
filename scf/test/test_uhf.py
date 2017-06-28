@@ -151,19 +151,20 @@ class KnowValues(unittest.TestCase):
         energy = numpy.array([[34, 2 , 54, 43, 42, 33, 20, 61, 29, 26, 62, 52, 13, 51, 18, 78, 85, 49, 84, 7],
                               [29, 26, 13, 54, 18, 78, 85, 49, 84, 62, 42, 74, 20, 61, 51, 34, 2 , 33, 52, 3]])
         mf.irrep_nelec = {'A1g':7, 'A1u':3, 'E1ux':2, 'E1uy':2}
-        self.assertTrue(numpy.allclose(mf.get_occ(energy, orbsym=orbsym),
+        mo_coeff = scf.hf_symm.attach_orbsym([numpy.eye(energy.size)]*2, orbsym)
+        self.assertTrue(numpy.allclose(mf.get_occ(energy, mo_coeff),
                 [[1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1],
                  [0, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0]]))
         mf.irrep_nelec = {'A1g':(5,2), 'A1u':(1,2)}
-        self.assertTrue(numpy.allclose(mf.get_occ(energy, orbsym=orbsym),
+        self.assertTrue(numpy.allclose(mf.get_occ(energy, mo_coeff),
                 [[1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0],
                  [1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1]]))
         mf.irrep_nelec = {'E1ux':2, 'E1uy':2}
-        self.assertTrue(numpy.allclose(mf.get_occ(energy, orbsym=orbsym),
+        self.assertTrue(numpy.allclose(mf.get_occ(energy, mo_coeff),
                 [[0, 1, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1],
                  [0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1]]))
         mf.irrep_nelec = {}
-        self.assertTrue(numpy.allclose(mf.get_occ(energy, orbsym=orbsym),
+        self.assertTrue(numpy.allclose(mf.get_occ(energy, mo_coeff),
                 [[0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1],
                  [0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1]]))
 

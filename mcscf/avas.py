@@ -59,6 +59,8 @@ def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
     >>> ncas, nelecas, mo = avas.avas(mf, ['Cr 3d', 'Cr 4s'])
     >>> mc = mcscf.CASSCF(mf, ncas, nelecas).run(mo)
     '''
+    from pyscf.tools import mo_mapping
+
     if isinstance(verbose, logger.Logger):
         log = verbose
     elif verbose is not None:
@@ -91,17 +93,7 @@ def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
     pmol.basis = minao
     pmol.build(False, False)
 
-    if isinstance(aolabels, str):
-        aolabels = re.sub(' +', ' ', aolabels.strip(), count=1)
-        baslst = [i for i,s in enumerate(pmol.ao_labels())
-                  if aolabels in s]
-    elif isinstance(aolabels[0], str):
-        aolabels = [re.sub(' +', ' ', x.strip(), count=1) for x in aolabels]
-        baslst = [i for i,s in enumerate(pmol.ao_labels())
-                  if any(x in s for x in aolabels)]
-    else:
-        raise RuntimeError
-    baslst = numpy.asarray(baslst)
+    baslst = mo_mapping._aolabels2baslst(pmol, aolabels)
     log.info('reference AO indices for %s %s: %s', minao, aolabels, baslst)
 
     if with_iao:

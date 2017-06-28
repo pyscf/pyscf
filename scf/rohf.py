@@ -146,7 +146,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
         ehomo = max(mo_energy[mo_occ> 0])
         elumo = min(mo_energy[mo_occ==0])
         if ehomo+1e-3 > elumo:
-            logger.warn(mf.mol, '!! HOMO %.15g >= LUMO %.15g',
+            logger.warn(mf.mol, 'HOMO %.15g >= LUMO %.15g',
                         ehomo, elumo)
         else:
             logger.info(mf, '  HOMO = %.15g  LUMO = %.15g',
@@ -208,8 +208,8 @@ def get_grad(mo_coeff, mo_occ, fock=None):
     uniq_var_a = viridxa.reshape(-1,1) & occidxa
     uniq_var_b = viridxb.reshape(-1,1) & occidxb
 
-    focka = reduce(numpy.dot, (mo_coeff.T, fock[0], mo_coeff))
-    fockb = reduce(numpy.dot, (mo_coeff.T, fock[1], mo_coeff))
+    focka = reduce(numpy.dot, (mo_coeff.T.conj(), fock[0], mo_coeff))
+    fockb = reduce(numpy.dot, (mo_coeff.T.conj(), fock[1], mo_coeff))
 
     g = numpy.zeros_like(focka)
     g[uniq_var_a]  = focka[uniq_var_a]
@@ -352,23 +352,15 @@ class ROHF(hf.RHF):
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        dm = numpy.asarray(dm)
-        nao = dm.shape[-1]
-        if dm.ndim == 2:
+        if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
             dm = numpy.array((dm*.5, dm*.5))
         if (self._eri is not None or not self.direct_scf or
             mol.incore_anyway or self._is_mem_enough()):
-            vj, vk = self.get_jk(mol, (dm[1], dm[0]-dm[1]), hermi)
-            vj = numpy.asarray((vj[0]+vj[1], vj[0]))
-            vk = numpy.asarray((vk[0]+vk[1], vk[0]))
+            vj, vk = self.get_jk(mol, dm, hermi)
             vhf = uhf._makevhf(vj, vk)
         else:
             ddm = dm - numpy.asarray(dm_last)
-            ddm = numpy.asarray((ddm[1],                # closed shell
-                                 ddm[0]-ddm[1]))        # open shell
             vj, vk = self.get_jk(mol, ddm, hermi)
-            vj = numpy.asarray((vj[0]+vj[1], vj[0]))
-            vk = numpy.asarray((vk[0]+vk[1], vk[0]))
             vhf = uhf._makevhf(vj, vk) + numpy.asarray(vhf_last)
         return vhf
 
@@ -378,6 +370,10 @@ class ROHF(hf.RHF):
         return analyze(self, verbose, **kwargs)
 
     canonicalize = canonicalize
+
+    def stability(self, internal=True, external=False, verbose=None):
+        from pyscf.scf.stability import rohf_stability
+        return rohf_stability(self, internal, external, verbose)
 
 
 class HF1e(ROHF):

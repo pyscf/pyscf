@@ -62,7 +62,7 @@ class KnowValues(unittest.TestCase):
         mf.run(conv_tol=1e-15, xc='lda,vwn')
         g = grad.RKS(mf)
         g1 = g.grad()
-        self.assertAlmostEqual(finger(g1), 0.098438461959390822, 9)
+        self.assertAlmostEqual(finger(g1), 0.098438461959390822, 7)
 
     def test_rks_bp86(self):
         mf = dft.RKS(h2o)
@@ -70,7 +70,7 @@ class KnowValues(unittest.TestCase):
         mf.run(conv_tol=1e-15, xc='b88,p86')
         g = grad.RKS(mf)
         g1 = g.grad()
-        self.assertAlmostEqual(finger(g1), 0.10362532283229957, 9)
+        self.assertAlmostEqual(finger(g1), 0.10362532283229957, 7)
 
     def test_rks_b3lypg(self):
         mf = dft.RKS(h2o)
@@ -78,7 +78,7 @@ class KnowValues(unittest.TestCase):
         mf.run(conv_tol=1e-15, xc='b3lypg')
         g = grad.RKS(mf)
         g1 = g.grad()
-        self.assertAlmostEqual(finger(g1), 0.066541921001296467, 9)
+        self.assertAlmostEqual(finger(g1), 0.066541921001296467, 7)
 
 
 if __name__ == "__main__":

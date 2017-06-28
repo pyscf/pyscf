@@ -15,7 +15,7 @@ einsum = lib.einsum
 
 class CCSD(molCCSD):
 
-    def __init__(self, mf, frozen=[], mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=[[],[]], mo_coeff=None, mo_occ=None):
         molCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     def dump_flags(self):

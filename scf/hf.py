@@ -106,6 +106,15 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         logger.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g). '
                     'SCF may be inaccurate and hard to converge.', numpy.max(cond))
 
+    if isinstance(mf.diis, lib.diis.DIIS):
+        mf_diis = mf.diis
+    elif mf.diis:
+        mf_diis = diis.SCF_DIIS(mf, mf.diis_file)
+        mf_diis.space = mf.diis_space
+        mf_diis.rollback = mf.diis_space_rollback
+    else:
+        mf_diis = None
+
     vhf = mf.get_veff(mol, dm)
     e_tot = mf.energy_tot(dm, h1e, vhf)
     logger.info(mf, 'init E= %.15g', e_tot)
@@ -122,10 +131,11 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         dm_last = dm
         last_hf_e = e_tot
 
-        fock = mf.get_fock(h1e, s1e, vhf, dm, cycle, mf.diis)
+        fock = mf.get_fock(h1e, s1e, vhf, dm, cycle, mf_diis)
         mo_energy, mo_coeff = mf.eig(fock, s1e)
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
+        dm = _attach_mo(dm, mo_coeff, mo_occ)  # to improve DFT get_veff efficiency
         vhf = mf.get_veff(mol, dm, dm_last, vhf)
         e_tot = mf.energy_tot(dm, h1e, vhf)
 
@@ -152,6 +162,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     mo_energy, mo_coeff = mf.eig(fock, s1e)
     mo_occ = mf.get_occ(mo_energy, mo_coeff)
     dm, dm_last = mf.make_rdm1(mo_coeff, mo_occ), dm
+    dm = _attach_mo(dm, mo_coeff, mo_occ)  # to improve DFT get_veff efficiency
     vhf = mf.get_veff(mol, dm, dm_last, vhf)
     e_tot, last_hf_e = mf.energy_tot(dm, h1e, vhf), e_tot
     norm_ddm = numpy.linalg.norm(dm-dm_last)
@@ -659,7 +670,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     mo_occ[e_idx[:nocc]] = 2
     if mf.verbose >= logger.INFO and nocc < nmo:
         if e_sort[nocc-1]+1e-3 > e_sort[nocc]:
-            logger.warn(mf, '!! HOMO %.15g == LUMO %.15g',
+            logger.warn(mf, 'HOMO %.15g == LUMO %.15g',
                         e_sort[nocc-1], e_sort[nocc])
         else:
             logger.info(mf, '  HOMO = %.15g  LUMO = %.15g',
@@ -688,9 +699,9 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     occidx = mo_occ > 0
     viridx = ~occidx
 
-    g = reduce(numpy.dot, (mo_coeff[:,viridx].T, fock_ao.T,
-                           mo_coeff[:,occidx].conj())) * 2
-    return g.reshape(-1)
+    g = reduce(numpy.dot, (mo_coeff[:,occidx].T.conj(), fock_ao,
+                           mo_coeff[:,viridx])) * 2
+    return g.T.ravel()
 
 
 def analyze(mf, verbose=logger.DEBUG, **kwargs):
@@ -901,6 +912,14 @@ def unpack_uniq_var(dx, mo_occ):
     x1 = numpy.zeros((nmo,nmo), dtype=dx.dtype)
     x1[idx] = dx
     return x1 - x1.T
+
+class DMArray(numpy.ndarray):
+    pass
+def _attach_mo(a, mo_coeff, mo_occ):
+    a = numpy.asarray(a).view(DMArray)
+    a.mo_coeff = mo_coeff
+    a.mo_occ = mo_occ
+    return a
 ############
 
 
@@ -924,7 +943,7 @@ class SCF(lib.StreamObject):
         init_guess : str
             initial guess method.  It can be one of 'minao', 'atom', '1e', 'chkfile'.
             Default is 'minao'
-        DIIS : object of DIIS class listed in :mod:`scf.diis`
+        diis : boolean or object of DIIS class listed in :mod:`scf.diis`
             Default is :class:`diis.SCF_DIIS`. Set it to None to turn off DIIS.
         diis_space : int
             DIIS space size.  By default, 8 Fock matrices and errors vector are stored.
@@ -983,8 +1002,14 @@ class SCF(lib.StreamObject):
         self.conv_tol_grad = None
         self.max_cycle = 50
         self.init_guess = 'minao'
-        self.diis = diis.SCF_DIIS(self)
+        # To avoid diis pollution form previous run, self.diis should not be
+        # initialized as DIIS instance here
+        self.diis = True
+        self.diis_space = 8
         self.diis_start_cycle = 1 # need > 0 if initial DM is numpy.zeros array
+        self.diis_file = None
+        # Give diis_space_rollback=True a trial if other efforts not converge
+        self.diis_space_rollback = False
         self.damp = 0
         self.level_shift = 0
         self.direct_scf = True
@@ -1010,13 +1035,6 @@ class SCF(lib.StreamObject):
             not self._is_mem_enough()):
 # Should I lazy initialize direct SCF?
             self.opt = self.init_direct_scf(mol)
-        if isinstance(self.diis, bool) and self.diis:
-            logger.warn(self, 'WARN: Attribute .diis needs to be initialized as '
-                        'a DIIS object by calling\n'
-                        '    scf.DIIS(mol), scf.ADIIS(mol) or scf.EDIIS(mol)\n'
-                        'instead of a True/False boolean value.  It is now '
-                        'initialized as scf.DIIS object')
-            self.diis = diis.DIIS(self)
 
     def dump_flags(self):
         logger.info(self, '\n')
@@ -1025,10 +1043,14 @@ class SCF(lib.StreamObject):
         logger.info(self, 'initial guess = %s', self.init_guess)
         logger.info(self, 'damping factor = %g', self.damp)
         logger.info(self, 'level shift factor = %s', self.level_shift)
-        if self.diis:
+        if isinstance(self.diis, lib.diis.DIIS):
             logger.info(self, 'DIIS = %s', self.diis)
             logger.info(self, 'DIIS start cycle = %d', self.diis_start_cycle)
             logger.info(self, 'DIIS space = %d', self.diis.space)
+        elif self.diis:
+            logger.info(self, 'DIIS = %s', diis.SCF_DIIS)
+            logger.info(self, 'DIIS start cycle = %d', self.diis_start_cycle)
+            logger.info(self, 'DIIS space = %d', self.diis_space)
         logger.info(self, 'SCF tol = %g', self.conv_tol)
         logger.info(self, 'SCF gradient tol = %s', self.conv_tol_grad)
         logger.info(self, 'max. SCF cycles = %d', self.max_cycle)
@@ -1336,22 +1358,6 @@ class SCF(lib.StreamObject):
                          'It is replaced by attribute .damp\n')
         self.damp = x
 
-    @property
-    def diis_space(self):
-        return self.diis.space
-    @diis_space.setter
-    def diis_space(self, x):
-        self.diis.space = x
-
-    @property
-    def diis_file(self):
-        return self.diis.filename
-    @diis_file.setter
-    def diis_file(self, x):
-        self.diis.filename = x
-
-    #self.diis_start_cycle = 1 # need > 0 if initial DM is numpy.zeros array
-
 
 ############
 
@@ -1383,6 +1389,10 @@ class RHF(SCF):
         from pyscf.scf import addons
         addons.convert_to_rhf(mf, self)
         return self
+
+    def stability(self, internal=True, external=False, verbose=None):
+        from pyscf.scf.stability import rhf_stability
+        return rhf_stability(self, internal, external, verbose)
 
 
 if __name__ == '__main__':

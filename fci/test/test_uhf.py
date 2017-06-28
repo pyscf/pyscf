@@ -61,7 +61,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(ci1, ci1ref))
         ci1ref = fci.direct_spin1.contract_2e(g2er, ci0, norb, nelecr)
         ci1 = fci.direct_uhf.contract_2e(g2es, ci0, norb, nelecr)
-        self.assertTrue(numpy.allclose(ci1, ci1ref))
+        self.assertAlmostEqual(numpy.linalg.norm(ci1-ci1ref), 0, 8)
         self.assertAlmostEqual(numpy.linalg.norm(ci1), 201.86408542259386, 7)
         ci3 = fci.direct_uhf.contract_2e(g2ei, ci2, norb, neleci)
         self.assertAlmostEqual(numpy.linalg.norm(ci3), 120.7768063693274, 7)

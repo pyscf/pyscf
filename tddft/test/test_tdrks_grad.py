@@ -56,6 +56,7 @@ class KnowValues(unittest.TestCase):
     def test_tddft_b3lyp(self):
         mf = dft.RKS(mol)
         mf.xc = 'b3lyp'
+        mf._numint.libxc = dft.xcfun
         mf.grids.prune = False
         mf.scf()
         td = tddft.TDDFT(mf).run(nstates=3)
