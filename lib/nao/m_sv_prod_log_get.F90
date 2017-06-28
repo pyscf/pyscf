@@ -163,22 +163,22 @@ subroutine sv_prod_log_get(n,d, sv, pb)
   
   i = i + 1
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
-  f=s+natoms-1; sv%uc%atom2sp(1:natoms) = int(d(s:f))+1; s=f+1;
+  f=s+natoms-1; sv%uc%atom2sp(1:natoms) = int(d(s:f), c_int64_t)+1; s=f+1;
   
   !write(6,*) __FILE__, __LINE__, ' sv%uc%atom2sp ', sv%uc%atom2sp
   !write(6,*) __FILE__, __LINE__, ' sv%uc%sp2element ', sv%uc%sp2element
 
   i = i + 1
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
-  f=s+natoms+1-1; atom2s(1:natoms+1) = int(d(s:f))+1; s=f+1;
+  f=s+natoms+1-1; atom2s(1:natoms+1) = int(d(s:f), c_int64_t)+1; s=f+1;
 
   i = i + 1
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
-  f=s+natoms+1-1; atom2mu_s(1:natoms+1) = int(d(s:f))+1; s=f+1;
+  f=s+natoms+1-1; atom2mu_s(1:natoms+1) = int(d(s:f), c_int64_t)+1; s=f+1;
 
   i = i + 1
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
-  do atom=1,natoms; f=s+3-1; sv%uc%atom2coord(1:3,atom) = int(d(s:f))+1; s=f+1; enddo;
+  do atom=1,natoms; f=s+3-1; sv%uc%atom2coord(1:3,atom) = d(s:f); s=f+1; enddo;
 
   pb%sv => sv
   pb%pb_p%eigmin_local = tol_loc
@@ -194,11 +194,11 @@ subroutine sv_prod_log_get(n,d, sv, pb)
   
   i = i + 1
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
-  f=s+nsp-1; sp2nmultp(1:nsp) = int(d(s:f)); s=f+1;
+  f=s+nsp-1; sp2nmultp(1:nsp) = int(d(s:f), c_int64_t); s=f+1;
 
   i = i + 1
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
-  f=s+nsp-1; sp2rcutp(1:nsp) = int(d(s:f)); s=f+1;
+  f=s+nsp-1; sp2rcutp(1:nsp) = d(s:f); s=f+1;
   
   sp2rcut
   
