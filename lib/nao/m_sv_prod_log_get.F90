@@ -9,18 +9,23 @@ module m_sv_prod_log_get
 !
 !
 !
-subroutine sv_prod_log_get(n,d, sv)
+subroutine sv_prod_log_get(n,d, sv, pb)
   use m_system_vars, only : system_vars_t
+  use m_prod_basis_type, only : prod_basis_t
   implicit none
   !! external
   integer(c_int64_t), intent(in) :: n
   real(c_double), intent(in) :: d(n)
-  type(system_vars_t), intent(inout) :: sv
+  type(system_vars_t), intent(inout), target :: sv
+  type(prod_basis_t), intent(inout) :: pb
   !! internal
-  integer(c_int64_t) :: nsp, nr, s, f, i, jmx, nmumx, mu, sp, natoms, norbs, norbs_sc, nspin
-  real(c_double) :: rmin, rmax, kmax, psi_log_sum, prod_log_sum
+  integer(c_int64_t) :: nsp, nr, s, f, i, jmx, nmumx, mu, sp, natoms, norbs, norbs_sc
+  integer(c_int64_t) :: atom, nspin 
+  integer(c_int64_t) :: ac_npc_max ! maximal number of participating centers
+  real(c_double) :: rmin, rmax, kmax, psi_log_sum, prod_log_sum, tol_loc, tol_biloc, ac_rcut_ratio
+  real(c_double) :: ac_rcut_max
   real(c_double), allocatable :: sp2rcut(:)
-  integer(c_int64_t), allocatable :: mu_sp2s(:,:), atom2s(:)
+  integer(c_int64_t), allocatable :: mu_sp2s(:,:), atom2s(:), atom2mu_s(:)
 
   sv%uc%systemlabel = "libnao"
   i = 2
@@ -36,7 +41,14 @@ subroutine sv_prod_log_get(n,d, sv)
   norbs  = int( d(i), c_int64_t); i=i+1;
   norbs_sc  = int( d(i), c_int64_t); i=i+1;
   nspin  = int( d(i), c_int64_t); i=i+1;
+  tol_loc  = d(i); i=i+1;
+  tol_biloc  = d(i); i=i+1;
+  ac_rcut_ratio  = d(i); i=i+1;
+  ac_npc_max  = int( d(i), c_int64_t); i=i+1;
 
+  if (nsp<1) then; write(6,*) __FILE__, __LINE__, nsp; stop '!nsp'; endif
+  if (nr<1) then; write(6,*) __FILE__, __LINE__, nr; stop '!nr'; endif
+  
   allocate(sv%uc%sp2label(nsp))
   allocate(sv%uc%sp2nmult(nsp))
   allocate(sv%uc%sp2norbs(nsp))
@@ -60,6 +72,7 @@ subroutine sv_prod_log_get(n,d, sv)
   !write(6,*) 'sv%uc%sp2element ', sv%uc%sp2element
 
   nmumx = maxval(sv%uc%sp2nmult)
+  if (nmumx<1) then; write(6,*) __FILE__, __LINE__, nmumx; stop '!nmumx'; endif
   allocate(sv%uc%mu_sp2j(nmumx,nsp))
   allocate(sv%uc%mu_sp2n(nmumx,nsp))
   allocate(sv%uc%mu_sp2rcut(nmumx,nsp))
@@ -140,11 +153,13 @@ subroutine sv_prod_log_get(n,d, sv)
   allocate(sv%uc%atom2coord(3,natoms))
   allocate(sv%uc%atom2sp(natoms))
   allocate(atom2s(natoms+1))
+  allocate(atom2mu_s(natoms+1))
   sv%atom_sc2coord = -999.0D0
   sv%atom_sc2start_orb = -999
   sv%atom_sc2atom_uc = -999
   sv%uc%atom2coord = -999.0D0
   sv%uc%atom2sp = -999
+  atom2s = -999
   
   i = i + 1
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
@@ -159,9 +174,39 @@ subroutine sv_prod_log_get(n,d, sv)
 
   i = i + 1
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
+  f=s+natoms+1-1; atom2mu_s(1:natoms+1) = int(d(s:f))+1; s=f+1;
 
+  i = i + 1
+  if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
+  do atom=1,natoms; f=s+3-1; sv%uc%atom2coord(1:3,atom) = int(d(s:f))+1; s=f+1; enddo;
+
+  pb%sv => sv
+  pb%pb_p%eigmin_local = tol_loc
+  pb%pb_p%eigmin_bilocal = tol_biloc
+  ac_rcut_max = maxval(sv%uc%mu_sp2rcut)
+  pb%pb_p%ac_rcut = ac_rcut_ratio * ac_rcut_max
+  allocate(pb%sp_local2vertex(nsp))
+  allocate(pb%sp_local2functs(nsp))
+  allocate(sp2nmultp(nsp))
+  allocate(sp2rcutp(nsp))
+  allocate(sp2norbsp(nsp))
+  allocate(sp2chrgp(nsp))
+  
+  i = i + 1
+  if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
+  f=s+nsp-1; sp2nmultp(1:nsp) = int(d(s:f)); s=f+1;
+
+  i = i + 1
+  if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
+  f=s+nsp-1; sp2rcutp(1:nsp) = int(d(s:f)); s=f+1;
+  
+  sp2rcut
   
   
+  do sp=1,nsp
+!    allocate(pb%sp_local2functs(sp)%mu2j(nmup))
+!    allocate(pb%sp_local2functs(sp)%ir_mu2v(nr,nmu))  
+  enddo   
   
 end subroutine ! m_sv_prod_log_get
 

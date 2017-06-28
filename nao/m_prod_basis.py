@@ -25,6 +25,7 @@ class prod_basis_c():
             self.tol_loc: tolerance for local basis
             self.tol_biloc: tolerance for bilocal basis
             self.ac_rcut_ratio: ac rcut ratio??
+            self.ac_npc_max: maximal number of participating centers
         Output:
             self.prod_log: Holder of (local) product functions and vertices
             self.hkernel_csr: hartree kernel: local part of Coulomb interaction
@@ -37,7 +38,7 @@ class prod_basis_c():
     
     return
 
-  def init_pb_pp_libnao_apair(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
+  def init_pb_pp_libnao_apair(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0, ac_npc_max=8):
     """ Talman's procedure should be working well with Pseudo-Potential starting point...
         This subroutine prepares the class for a later atom pair by atom pair generation 
         of the dominant product vertices and the conversion coefficients by calling 
@@ -49,7 +50,7 @@ class prod_basis_c():
     from ctypes import POINTER, c_double, c_int64
     
     self.sv = sv
-    self.tol_loc,self.tol_biloc,self.ac_rcut_ratio = tol_loc, tol_biloc, ac_rcut_ratio
+    self.tol_loc,self.tol_biloc,self.ac_rcut_ratio,self.ac_npc_max = tol_loc, tol_biloc, ac_rcut_ratio, ac_npc_max
     self.prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc) # local basis (for each specie)
     self.c2s = np.zeros((sv.natm+1), dtype=np.int64) # global product Center (atom) -> start in case of atom-centered basis
     for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] # 
@@ -72,9 +73,10 @@ class prod_basis_c():
     nr,nsp,nmt,nrt = aos.nr,aos.nspecies, sum(aos.sp2nmult),aos.nr*sum(aos.sp2nmult)
     nat,na1,tna,nms = sv.natoms,sv.natoms+1,3*sv.natoms,sum(aos.sp2nmult)+aos.nspecies
     nmtp,nrtp,nmsp = sum(pl.sp2nmult),pl.nr*sum(pl.sp2nmult),sum(pl.sp2nmult)+pl.nspecies
-
+    nvrt = sum(aos.sp2norbs*aos.sp2norbs*pl.sp2norbs)
+    
     ndat = 200 + 2*nr + 4*nsp + 2*nmt + nrt + nms + nat + 2*na1 + tna + \
-      4*nsp + 2*nmtp + nrtp + nmsp
+      4*nsp + 2*nmtp + nrtp + nmsp + nvrt
       
     dat = np.zeros(ndat)
     
@@ -93,6 +95,10 @@ class prod_basis_c():
     dat[i] = sv.norbs; i+=1
     dat[i] = sv.norbs_sc; i+=1
     dat[i] = sv.nspin; i+=1
+    dat[i] = self.tol_loc; i+=1
+    dat[i] = self.tol_biloc; i+=1
+    dat[i] = self.ac_rcut_ratio; i+=1
+    dat[i] = self.ac_npc_max; i+=1
     dat[0] = i
     # Pointers to data
     i = 99
@@ -110,7 +116,7 @@ class prod_basis_c():
     dat[i] = s+1; i+=1; f=s+nat; dat[s:f] = sv.atom2sp; s=f; # pointer to atom2sp
     dat[i] = s+1; i+=1; f=s+na1; dat[s:f] = sv.atom2s; s=f; # pointer to atom2s
     dat[i] = s+1; i+=1; f=s+na1; dat[s:f] = sv.atom2mu_s; s=f; # pointer to atom2mu_s
-    dat[i] = s+1; i+=1; f=s+tna; dat[s:f] = conc(sv.atom2coord); s=f; # pointer to atom2mu_s
+    dat[i] = s+1; i+=1; f=s+tna; dat[s:f] = conc(sv.atom2coord); s=f; # pointer to atom2coord
     dat[i] = s+1; i+=1; f=s+nsp; dat[s:f] = pl.sp2nmult; s=f; # sp2nmult of product basis
     dat[i] = s+1; i+=1; f=s+nsp; dat[s:f] = pl.sp2rcut; s=f; # sp2nmult of product basis
     dat[i] = s+1; i+=1; f=s+nsp; dat[s:f] = pl.sp2norbs; s=f; # sp2norbs of product basis
@@ -119,7 +125,8 @@ class prod_basis_c():
     dat[i] = s+1; i+=1; f=s+nmtp; dat[s:f] = conc(pl.sp_mu2rcut); s=f; # pointer to sp_mu2rcut
     dat[i] = s+1; i+=1; f=s+nrtp; dat[s:f] = conc(pl.psi_log).reshape(nrtp); s=f; # pointer to psi_log
     dat[i] = s+1; i+=1; f=s+nmsp; dat[s:f] = conc(pl.sp_mu2s); s=f; # pointer to sp_mu2s
-    dat[i] = s+1; # this is a terminator to simple operation
+    dat[i] = s+1; i+=1; f=s+nvrt; dat[s:f] = conc([v.flatten() for v in pl.sp2vertex]); s=f; # pointer to sp2vertex
+    dat[i] = s+1; # this is a terminator to simplify operation
 
     return dat
     

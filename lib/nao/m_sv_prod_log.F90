@@ -48,7 +48,7 @@ subroutine sv_prod_log(ninp,dinp) bind(c, name='sv_prod_log')
 
   !! executable statements
   call init_fact()  !! Initializations for product reduction in Talman's way
-  call sv_prod_log_get(ninp,dinp, sv)
+  call sv_prod_log_get(ninp,dinp, sv, pb)
     
 end subroutine ! sv_prod_log
 
