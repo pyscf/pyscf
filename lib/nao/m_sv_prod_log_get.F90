@@ -1,6 +1,7 @@
 module m_sv_prod_log_get
 
   use iso_c_binding, only: c_double, c_int64_t
+#include "m_define_macro.F90"
 
   implicit none
 
@@ -20,12 +21,14 @@ subroutine sv_prod_log_get(n,d, sv, pb)
   type(prod_basis_t), intent(inout) :: pb
   !! internal
   integer(c_int64_t) :: nsp, nr, s, f, i, jmx, nmumx, mu, sp, natoms, norbs, norbs_sc
-  integer(c_int64_t) :: atom, nspin 
+  integer(c_int64_t) :: atom, nspin, mup, nmup, np, no, p, o2
   integer(c_int64_t) :: ac_npc_max ! maximal number of participating centers
   real(c_double) :: rmin, rmax, kmax, psi_log_sum, prod_log_sum, tol_loc, tol_biloc, ac_rcut_ratio
   real(c_double) :: ac_rcut_max
-  real(c_double), allocatable :: sp2rcut(:)
+  real(c_double), allocatable :: sp2rcut(:), sp2rcutp(:)
   integer(c_int64_t), allocatable :: mu_sp2s(:,:), atom2s(:), atom2mu_s(:)
+  integer(c_int64_t), allocatable :: sp2norbsp(:), sp2chrgp(:), sp2nmultp(:)
+  integer, allocatable :: mu2s(:)
 
   sv%uc%systemlabel = "libnao"
   i = 2
@@ -163,7 +166,7 @@ subroutine sv_prod_log_get(n,d, sv, pb)
   
   i = i + 1
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
-  f=s+natoms-1; sv%uc%atom2sp(1:natoms) = int(d(s:f), c_int64_t)+1; s=f+1;
+  f=s+natoms-1; sv%uc%atom2sp(1:natoms) = int(d(s:f))+1; s=f+1;
   
   !write(6,*) __FILE__, __LINE__, ' sv%uc%atom2sp ', sv%uc%atom2sp
   !write(6,*) __FILE__, __LINE__, ' sv%uc%sp2element ', sv%uc%sp2element
@@ -191,6 +194,10 @@ subroutine sv_prod_log_get(n,d, sv, pb)
   allocate(sp2rcutp(nsp))
   allocate(sp2norbsp(nsp))
   allocate(sp2chrgp(nsp))
+  sp2nmultp = -999
+  sp2rcutp = -999
+  sp2norbsp = -999
+  sp2chrgp = -999
   
   i = i + 1
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
@@ -200,14 +207,74 @@ subroutine sv_prod_log_get(n,d, sv, pb)
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
   f=s+nsp-1; sp2rcutp(1:nsp) = d(s:f); s=f+1;
   
-  sp2rcut
-  
+  i = i + 1
+  if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
+  f=s+nsp-1; sp2norbsp(:) = int(d(s:f), c_int64_t); s=f+1;
+
+  i = i + 1
+  if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
+  f=s+nsp-1; sp2chrgp(:) = int(d(s:f), c_int64_t); s=f+1;
   
   do sp=1,nsp
-!    allocate(pb%sp_local2functs(sp)%mu2j(nmup))
-!    allocate(pb%sp_local2functs(sp)%ir_mu2v(nr,nmu))  
-  enddo   
+    nmup = sp2nmultp(sp)
+    allocate(pb%sp_local2functs(sp)%mu2j(nmup))
+    allocate(pb%sp_local2functs(sp)%ir_mu2v(nr,nmup))
+    allocate(pb%sp_local2functs(sp)%mu2si(nmup))
+    allocate(pb%sp_local2functs(sp)%mu2rcut(nmup))
+    no = sv%uc%sp2norbs(sp)
+    np = sp2norbsp(sp)
+    allocate(pb%sp_local2vertex(sp)%vertex(no,no,np))
+  enddo
   
+  i = i + 1
+  if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
+  do sp=1,nsp
+    nmup = sp2nmultp(sp)
+    f=s+nmup-1; pb%sp_local2functs(sp)%mu2j(1:nmup) = int(d(s:f)); s=f+1;
+  enddo
+
+  i = i + 1
+  if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
+  do sp=1,nsp
+    nmup = sp2nmultp(sp)
+    f=s+nmup-1; pb%sp_local2functs(sp)%mu2rcut(1:nmup) = d(s:f); s=f+1;
+  enddo
+
+  i = i + 1
+  if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
+  do sp=1,nsp
+    nmup = sp2nmultp(sp)
+    do mup=1,nmup
+      f=s+nr-1; pb%sp_local2functs(sp)%ir_mu2v(1:nr,mup) = d(s:f); s=f+1;
+    enddo ! mup
+  enddo ! sp
+
+  i = i + 1
+  if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
+  _dealloc(mu2s)
+  allocate(mu2s(maxval(sp2nmultp)))
+  do sp=1,nsp
+    nmup = sp2nmultp(sp)
+    f=s+nmup+1-1; mu2s(1:nmup+1) = int( d(s:f) ); s=f+1;
+    pb%sp_local2functs(sp)%mu2si(1:nmup) = mu2s(1:nmup)+1
+  enddo
+
+  i = i + 1
+  if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
+  do sp=1,nsp
+    no = sv%uc%sp2norbs(sp)
+    np = sp2norbsp(sp)
+    do p=1,np
+      do o2=1,no
+        f=s+no-1; pb%sp_local2vertex(sp)%vertex(1:no,o2,p) = d(s:f); s=f+1;
+      enddo ! o2
+    enddo ! p
+  enddo ! sp
+
+  i = i + 1
+  if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
+
+
 end subroutine ! m_sv_prod_log_get
 
 end module ! m_sv_prod_log_get
