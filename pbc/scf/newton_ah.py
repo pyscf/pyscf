@@ -7,13 +7,10 @@
 Co-iterative augmented hessian (CIAH) second order SCF solver
 '''
 
-import sys
-import time
-import copy
 from functools import reduce
 import numpy
-import scipy.linalg
 from pyscf import lib
+from pyscf.pbc.scf import khf, kuhf
 
 def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     cell = mf.cell
@@ -38,46 +35,26 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     h_diag = [(fvv[k].diagonal().reshape(-1,1)-foo[k].diagonal()) * 2
               for k in range(nkpts)]
 
-    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
-        if mf.grids.coords is None:
-            mf.grids.build()
-        ni = mf._numint
-        hyb = ni.hybrid_coeff(mf.xc, spin=cell.spin)
-        rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc, mo_coeff,
-                                            mo_occ, 0, mf.kpts)
-        dm0 = None #mf.make_rdm1(mo_coeff, mo_occ)
-    else:
-        hyb = None
+    vind = _gen_rhf_response(mf, singlet=None, hermi=1)
 
     def h_op(x1):
         x1 = _unpack(x1, mo_occ)
         dm1 = []
         for k in range(nkpts):
-            d1 = reduce(numpy.dot, (orbv[k], x1[k], orbo[k].T.conj()))
+            # *2 for double occupancy
+            d1 = reduce(numpy.dot, (orbv[k], x1[k]*2, orbo[k].T.conj()))
             dm1.append(d1+d1.T.conj())
-        dm1 = lib.asarray(dm1)
-        if hyb is None:
-            vj, vk = mf.get_jk(cell, dm1)
-            v1 = vj - vk * .5
-        else:
-            v1 = ni.nr_rks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, 1,
-                               rho0, vxc, fxc, mf.kpts)
-            if abs(hyb) < 1e-10:
-                v1 += mf.get_j(cell, dm1)
-            else:
-                vj, vk = mf.get_jk(cell, dm1)
-                v1 += vj - vk * hyb * .5
 
+        v1 = vind(lib.asarray(dm1))
         x2 = [0] * nkpts
         for k in range(nkpts):
             x2[k] = numpy.einsum('ps,sq->pq', fvv[k], x1[k]) * 2
             x2[k]-= numpy.einsum('ps,rp->rs', foo[k], x1[k]) * 2
-            x2[k] += reduce(numpy.dot, (orbv[k].T.conj(), v1[k], orbo[k])) * 4
+            x2[k] += reduce(numpy.dot, (orbv[k].T.conj(), v1[k], orbo[k])) * 2
         return numpy.hstack([x.ravel() for x in x2])
 
     return (numpy.hstack([x.ravel() for x in g]), h_op,
             numpy.hstack([x.ravel().real for x in h_diag]))
-
 
 def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     cell = mf.cell
@@ -112,42 +89,20 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     h_diag = ([fvva[k].diagonal().reshape(-1,1)-fooa[k].diagonal() for k in range(nkpts)] +
               [fvvb[k].diagonal().reshape(-1,1)-foob[k].diagonal() for k in range(nkpts)])
 
-    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
-        if mf.grids.coords is None:
-            mf.grids.build()
-        ni = mf._numint
-        hyb = ni.hybrid_coeff(mf.xc, spin=cell.spin)
-        rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc, mo_coeff,
-                                            mo_occ, 1, mf.kpts)
-        dm0 = None
-    else:
-        hyb = None
+    vind = _gen_uhf_response(mf, hermi=1)
+    nao = orboa[0].shape[0]
 
     def h_op(x1):
         x1a = _unpack(x1[:tot_vopair_a], mo_occ[0])
         x1b = _unpack(x1[tot_vopair_a:], mo_occ[1])
-        dm1a = []
+        dm1 = numpy.empty((2,nkpts,nao,nao), dtype=x1.dtype)
         for k in range(nkpts):
             d1 = reduce(numpy.dot, (orbva[k], x1a[k], orboa[k].T.conj()))
-            dm1a.append(d1+d1.T.conj())
-        dm1b = []
+            dm1[0,k] = d1+d1.T.conj()
         for k in range(nkpts):
             d1 = reduce(numpy.dot, (orbvb[k], x1b[k], orbob[k].T.conj()))
-            dm1b.append(d1+d1.T.conj())
-        dm1 = lib.asarray([dm1a,dm1b])
-        dm1a = dm1b = None
-        if hyb is None:
-            vj, vk = mf.get_jk(cell, dm1)
-            v1 = vj[0]+vj[1] - vk
-        else:
-            v1 = ni.nr_uks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, 1,
-                               rho0, vxc, fxc, mf.kpts)
-            if abs(hyb) < 1e-10:
-                vj = mf.get_j(cell, dm1)
-                v1 += vj[0] + vj[1]
-            else:
-                vj, vk = mf.get_jk(cell, dm1)
-                v1 += vj[0]+vj[1] - vk * hyb * .5
+            dm1[1,k] = d1+d1.T.conj()
+        v1 = vind(dm1)
 
         x2a = [0] * nkpts
         x2b = [0] * nkpts
@@ -164,6 +119,142 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
 
     return (numpy.hstack([x.ravel() for x in g]), h_op,
             numpy.hstack([x.ravel() for x in h_diag]))
+
+def _gen_rhf_response(mf, singlet=None, hermi=0, max_memory=None):
+    from pyscf.pbc.dft import numint
+    assert(isinstance(mf, khf.KRHF))
+
+    cell = mf.cell
+    kpts = mf.kpts
+    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
+        if mf.grids.coords is None:
+            mf.grids.build()
+        ni = mf._numint
+        hyb = ni.hybrid_coeff(mf.xc, spin=cell.spin)
+        if singlet is None:  # for newton solver
+            rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc, mf.mo_coeff,
+                                                mf.mo_occ, 0, kpts)
+        else:
+            rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc,
+                                                [mf.mo_coeff]*2, [mf.mo_occ*.5]*2,
+                                                spin=1, kpts=kpts)
+        dm0 = None #mf.make_rdm1(mo_coeff, mo_occ)
+
+        if max_memory is None:
+            mem_now = lib.current_memory()[0]
+            max_memory = max(2000, mf.max_memory*.8-mem_now)
+
+        if singlet is None:
+            def vind(dm1):
+                # The singlet hessian
+                if hermi == 2:
+                    v1 = numpy.zeros_like(dm1)
+                else:
+                    v1 = ni.nr_rks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, hermi,
+                                       rho0, vxc, fxc, kpts, max_memory)
+                if abs(hyb) > 1e-10:
+                    if hermi != 2:
+                        vj, vk = mf.get_jk(cell, dm1, hermi=hermi, kpts=kpts)
+                        v1 += vj - .5 * hyb * vk
+                    else:
+                        v1 -= .5 * hyb * mf.get_k(cell, dm1, hermi=hermi, kpts=kpts)
+                elif hermi != 2:
+                    v1 += mf.get_j(cell, dm1, hermi=hermi, kpts=kpts)
+                return v1
+
+        elif singlet:
+            def vind(dm1):
+                if hermi == 2:
+                    v1 = numpy.zeros_like(dm1)
+                else:
+                    # nr_rks_fxc_st requires alpha of dm1
+                    v1 = numint.nr_rks_fxc_st(ni, cell, mf.grids, mf.xc, dm0, dm1, 0,
+                                              True, rho0, vxc, fxc, kpts, max_memory)
+                    v1 *= .5
+                if abs(hyb) > 1e-10:
+                    if hermi != 2:
+                        vj, vk = mf.get_jk(cell, dm1, hermi=hermi, kpts=kpts)
+                        v1 += vj - .5 * hyb * vk
+                    else:
+                        v1 -= .5 * hyb * mf.get_k(cell, dm1, hermi=hermi, kpts=kpts)
+                elif hermi != 2:
+                    v1 += mf.get_j(cell, dm1, hermi=hermi, kpts=kpts)
+                return v1
+        else:
+            def vind(dm1):
+                if hermi == 2:
+                    v1 = numpy.zeros_like(dm1)
+                else:
+                    # nr_rks_fxc_st requires alpha of dm1
+                    v1 = numint.nr_rks_fxc_st(ni, cell, mf.grids, mf.xc, dm0, dm1, 0,
+                                              False, rho0, vxc, fxc, kpts, max_memory)
+                    v1 *= .5
+                if abs(hyb) > 1e-10:
+                    v1 += -.5 * hyb * mf.get_k(cell, dm1, hermi=hermi, kpts=kpts)
+                return v1
+
+    else:  # HF
+        if (singlet is None or singlet) and hermi != 2:
+            def vind(dm1):
+                vj, vk = mf.get_jk(cell, dm1, hermi=hermi, kpts=kpts)
+                return vj - .5 * vk
+        else:
+            def vind(dm1):
+                return -.5 * mf.get_k(cell, dm1, hermi=hermi, kpts=kpts)
+
+    return vind
+
+def _gen_uhf_response(mf, with_j=True, hermi=0, max_memory=None):
+    from pyscf.pbc.dft import numint
+    assert(isinstance(mf, kuhf.KUHF))
+
+    cell = mf.cell
+    kpts = mf.kpts
+    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
+        if mf.grids.coords is None:
+            mf.grids.build()
+        ni = mf._numint
+        hyb = ni.hybrid_coeff(mf.xc, spin=cell.spin)
+        rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc,
+                                            mf.mo_coeff, mf.mo_occ, 1, kpts)
+        #dm0 =(numpy.dot(mo_coeff[0]*mo_occ[0], mo_coeff[0].T.conj()),
+        #      numpy.dot(mo_coeff[1]*mo_occ[1], mo_coeff[1].T.conj()))
+        dm0 = None
+
+        if max_memory is None:
+            mem_now = lib.current_memory()[0]
+            max_memory = max(2000, mf.max_memory*.8-mem_now)
+
+        def vind(dm1):
+            if hermi == 2:
+                v1 = numpy.zeros_like(dm1)
+            else:
+                v1 = ni.nr_uks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, hermi,
+                                   rho0, vxc, fxc, kpts, max_memory)
+            if abs(hyb) < 1e-10:
+                if with_j:
+                    vj = mf.get_j(cell, dm1, hermi=hermi, kpts=kpts)
+                    v1 += vj[0] + vj[1]
+            else:
+                if with_j:
+                    vj, vk = mf.get_jk(cell, dm1, hermi=hermi, kpts=kpts)
+                    v1 += vj[0] + vj[1] - vk * hyb
+                else:
+                    v1 -= hyb * mf.get_k(cell, dm1, hermi=hermi, kpts=kpts)
+            return v1
+
+    elif with_j:
+        def vind(dm1):
+            vj, vk = mf.get_jk(cell, dm1, hermi=hermi, kpts=kpts)
+            v1 = vj[0] + vj[1] - vk
+            return v1
+
+    else:
+        def vind(dm1):
+            return -mf.get_k(cell, dm1, hermi=hermi, kpts=kpts)
+
+    return vind
+
 
 def _unpack(vo, mo_occ):
     nmo = mo_occ.shape[-1]

@@ -18,6 +18,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import newton_ah
 from pyscf.scf import hf, hf_symm, uhf_symm
+from pyscf.scf.newton_ah import _gen_rhf_response, _gen_uhf_response
 
 def rhf_stability(mf, internal=True, external=False, verbose=None):
     mo_i = mo_e = None
@@ -100,19 +101,7 @@ def _gen_hop_rhf_external(mf, with_symmetry=True, verbose=None):
         hdiag[sym_forbid] = 0
     hdiag = hdiag.ravel()
 
-    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
-        if mf.grids.coords is None:
-            mf.grids.build()
-        ni = mf._numint
-        hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
-        rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
-                                            [mo_coeff]*2, [mo_occ*.5]*2, spin=1)
-    else:
-        hyb = None
-
-    mem_now = lib.current_memory()[0]
-    max_memory = max(2000, mf.max_memory*.8-mem_now)
-
+    vrespz = _gen_rhf_response(mf, singlet=None, hermi=2)
     def hop_real2complex(x1):
         x1 = x1.reshape(nvir,nocc)
         if with_symmetry and mol.symmetry:
@@ -121,20 +110,16 @@ def _gen_hop_rhf_external(mf, with_symmetry=True, verbose=None):
         x2 = numpy.einsum('ps,sq->pq', fvv, x1)
         x2-= numpy.einsum('ps,rp->rs', foo, x1)
 
-        d1 = reduce(numpy.dot, (orbv, x1, orbo.T.conj()))
+        d1 = reduce(numpy.dot, (orbv, x1*2, orbo.T.conj()))
         dm1 = d1 - d1.T.conj()
 # No Coulomb and fxc contribution for anti-hermitian DM
-        if hyb is None:
-            v1 = mf.get_k(mol, dm1, hermi=2)
-            x2 -= reduce(numpy.dot, (orbv.T.conj(), v1, orbo))
-        elif abs(hyb) > 1e-10:
-            v1 = hyb * mf.get_k(mol, dm1, hermi=2)
-            x2 -= reduce(numpy.dot, (orbv.T.conj(), v1, orbo))
-
+        v1 = vrespz(dm1)
+        x2 += reduce(numpy.dot, (orbv.T.conj(), v1, orbo))
         if with_symmetry and mol.symmetry:
             x2[sym_forbid] = 0
         return x2.ravel()
 
+    vresp1 = _gen_rhf_response(mf, singlet=False, hermi=1)
     def hop_rhf2uhf(x1):
         from pyscf.dft import numint
         # See also rhf.TDA triplet excitation
@@ -145,16 +130,9 @@ def _gen_hop_rhf_external(mf, with_symmetry=True, verbose=None):
         x2 = numpy.einsum('ps,sq->pq', fvv, x1)
         x2-= numpy.einsum('ps,rp->rs', foo, x1)
 
-        d1 = reduce(numpy.dot, (orbv, x1, orbo.T.conj()))
+        d1 = reduce(numpy.dot, (orbv, x1*2, orbo.T.conj()))
         dm1 = d1 + d1.T.conj()
-        if hyb is None:
-            v1ao = -mf.get_k(mol, dm1, hermi=1)
-        else:
-            v1ao = numint.nr_rks_fxc_st(ni, mol, mf.grids, mf.xc, dm0, dm1, 0,
-                                        False, rho0, vxc, fxc, max_memory)
-            if abs(hyb) > 1e-10:
-                v1ao += -hyb * mf.get_k(mol, dm1, hermi=1)
-
+        v1ao = vresp1(dm1)
         x2 += reduce(numpy.dot, (orbv.T.conj(), v1ao, orbo))
         if with_symmetry and mol.symmetry:
             x2[sym_forbid] = 0
@@ -287,18 +265,10 @@ def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
     if with_symmetry and mol.symmetry:
         hdiag1[sym_forbid1] = 0
 
-    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
-        if mf.grids.coords is None:
-            mf.grids.build()
-        ni = mf._numint
-        hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
-        rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc, mo_coeff, mo_occ, 1)
-    else:
-        hyb = None
-
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)
 
+    vrespz = _gen_uhf_response(mf, hermi=1)
     def hop_real2complex(x1):
         if with_symmetry and mol.symmetry:
             x1 = x1.copy()
@@ -313,16 +283,11 @@ def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
         d1a = reduce(numpy.dot, (orbva, x1a, orboa.T.conj()))
         d1b = reduce(numpy.dot, (orbvb, x1b, orbob.T.conj()))
         dm1 = numpy.array((d1a-d1a.T.conj(), d1b-d1b.T.conj()))
-        if hyb is None:
-            v1 = mf.get_k(mol, dm1, hermi=2)
-            x2a -= reduce(numpy.dot, (orbva.T.conj(), v1[0], orboa))
-            x2b -= reduce(numpy.dot, (orbvb.T.conj(), v1[1], orbob))
-        elif abs(hyb) > 1e-10:
-            v1 = mf.get_k(mol, dm1, hermi=2) * hyb
-            x2a -= reduce(numpy.dot, (orbva.T.conj(), v1[0], orboa))
-            x2b -= reduce(numpy.dot, (orbvb.T.conj(), v1[1], orbob))
-        x2 = numpy.hstack((x2a.ravel(), x2b.ravel()))
 
+        v1 = vrespz(dm1)
+        x2a += reduce(numpy.dot, (orbva.T.conj(), v1[0], orboa))
+        x2b += reduce(numpy.dot, (orbvb.T.conj(), v1[1], orbob))
+        x2 = numpy.hstack((x2a.ravel(), x2b.ravel()))
         if with_symmetry and mol.symmetry:
             x2[sym_forbid1] = 0
         return x2
@@ -338,6 +303,7 @@ def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
     if with_symmetry and mol.symmetry:
         hdiag2[sym_forbid2] = 0
 
+    vresp1 = _gen_uhf_response(mf, with_j=False, hermi=0)
     def hop_uhf2ghf(x1):
         if with_symmetry and mol.symmetry:
             x1 = x1.copy()
@@ -352,13 +318,7 @@ def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
         d1ab = reduce(numpy.dot, (orbva, x1ab, orbob.T.conj()))
         d1ba = reduce(numpy.dot, (orbvb, x1ba, orboa.T.conj()))
         dm1 = numpy.array((d1ab+d1ba.T.conj(), d1ba+d1ab.T.conj()))
-        if hyb is None:
-            v1 = -mf.get_k(mol, dm1, hermi=0)
-        else:
-            v1 = ni.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, 0,
-                               rho0, vxc, fxc, max_memory)
-            if abs(hyb) > 1e-10:
-                v1 += -hyb * mf.get_k(mol, dm1, hermi=0)
+        v1 = vresp1(dm1)
         x2ab += reduce(numpy.dot, (orbva.T.conj(), v1[0], orbob))
         x2ba += reduce(numpy.dot, (orbvb.T.conj(), v1[1], orboa))
         x2 = numpy.hstack((x2ab.ravel(), x2ba.ravel()))

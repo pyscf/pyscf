@@ -16,6 +16,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.scf import cphf
+from pyscf.scf.newton_ah import _gen_rhf_response
 
 # flatten([[XX, XY, XZ],
 #          [YX, YY, YZ],
@@ -27,13 +28,13 @@ TENSOR_IDX = numpy.arange(9)
 TENSOR_TRANSPOSE = TENSOR_IDX.reshape(3,3).T.flatten()
 def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
     if shielding_nuc is None:
-        shielding_nuc = range(1, mol.natm+1)
+        shielding_nuc = range(mol.natm)
     if gauge_orig is not None:
         mol.set_common_origin(gauge_orig)
 
     msc_dia = []
     for n, atm_id in enumerate(shielding_nuc):
-        mol.set_rinv_origin(mol.atom_coord(atm_id-1))
+        mol.set_rinv_origin(mol.atom_coord(atm_id))
         if gauge_orig is None:
             h11 = mol.intor('int1e_giao_a11part', 9)
         else:
@@ -44,8 +45,8 @@ def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
         h11[8] += trh11
         if gauge_orig is None:
             g11 = mol.intor('int1e_a01gp', 9)
-            h11 = h11 + g11[TENSOR_TRANSPOSE] # (mu,B) => (B,mu)
-        a11 = [numpy.einsum('ij,ji', dm0, (x+x.T)*.5) for x in h11]
+            h11+= g11[TENSOR_TRANSPOSE] # (mu,B) => (B,mu)
+        a11 = numpy.einsum('xij,ij->x', h11, dm0)
         msc_dia.append(a11)
         #     XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ = 1..9
         #  => [[XX, XY, XZ], [YX, YY, YZ], [ZX, ZY, ZZ]]
@@ -53,23 +54,24 @@ def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
 
 def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
     if shielding_nuc is None:
-        shielding_nuc = range(1, mol.natm+1)
-    msc_para = numpy.zeros((len(shielding_nuc),3,3))
-    para_vir = numpy.zeros((len(shielding_nuc),3,3))
-    para_occ = numpy.zeros((len(shielding_nuc),3,3))
+        shielding_nuc = range(mol.natm)
+    para_vir = numpy.empty((len(shielding_nuc),3,3))
+    para_occ = numpy.empty((len(shielding_nuc),3,3))
+    occidx = mo_occ > 0
+    viridx = mo_occ == 0
+    orbo = mo_coeff[:,occidx]
+    orbv = mo_coeff[:,viridx]
+    # *2 for doubly occupied orbitals
+    dm10_oo = numpy.asarray([reduce(numpy.dot, (orbo, x[occidx]*2, orbo.T.conj())) for x in mo10])
+    dm10_vo = numpy.asarray([reduce(numpy.dot, (orbv, x[viridx]*2, orbo.T.conj())) for x in mo10])
     for n, atm_id in enumerate(shielding_nuc):
-        mol.set_rinv_origin(mol.atom_coord(atm_id-1))
-        # 1/2(A01 dot p + p dot A01) => (ia01p - c.c.)/2 => <ia01p>
+        mol.set_rinv_origin(mol.atom_coord(atm_id))
+        # 1/2(A01 dot p + p dot A01) => (ia01p - c.c.)/2 => <ia01p> = <1/r^3 rxp>
         h01 = mol.intor_asymmetric('int1e_ia01p', 3)
-        # *2 for doubly occupied orbitals
-        h01_mo = _mat_ao2mo(h01, mo_coeff, mo_occ) * 2
-        for b in range(3):
-            for m in range(3):
-                # c10^T * h01 + c.c.
-                p = numpy.einsum('ij,ji->i',h01_mo[m], mo10[b].T) * 2
-                msc_para[n,b,m] = p.sum()
-                para_occ[n,b,m] = p[mo_occ>0].sum()
-                para_vir[n,b,m] = msc_para[n,b,m] - para_occ[n,b,m]
+        # *2 for c10^T * h01 + c.c.
+        para_occ[n] = numpy.einsum('xij,yij->xy', dm10_oo, h01) * 2
+        para_vir[n] = numpy.einsum('xij,yij->xy', dm10_vo, h01) * 2
+    msc_para = para_occ + para_vir
     return msc_para, para_vir, para_occ
 
 def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
@@ -112,16 +114,6 @@ def make_s10(mol, gauge_orig=None):
         s1 = numpy.zeros((3,nao,nao))
     return s1
 
-def make_rdm1_1(mo1occ, mo0, occ):
-    ''' DM^1 = (i * C_occ^1 C_occ^{0,dagger}) + c.c.  on AO'''
-    mocc = mo0[:,occ>0] * occ[occ>0]
-    dm1 = []
-    for i in range(3):
-        tmp = reduce(numpy.dot, (mo0, mo1occ[i], mocc.T.conj()))
-        # note the minus sign due to the phase i
-        dm1.append(tmp - tmp.T)
-    return numpy.array(dm1)
-
 def solve_mo1(mo_energy, mo_occ, h1, s1):
     '''uncoupled equation'''
     e_a = mo_energy[mo_occ==0]
@@ -147,7 +139,7 @@ class NMR(lib.StreamObject):
         self.chkfile = scf_method.chkfile
         self._scf = scf_method
 
-        self.shielding_nuc = [i+1 for i in range(self.mol.natm)]
+        self.shielding_nuc = range(self.mol.natm)
 # gauge_orig=None will call GIAO. Specify coordinate for common gauge
         self.gauge_orig = None
         self.cphf = True
@@ -190,7 +182,8 @@ class NMR(lib.StreamObject):
         if self.verbose >= logger.WARN:
             self.check_sanity()
 
-        facppm = 1e6/lib.param.LIGHT_SPEED**2
+        c = 137.03599967994  # lib.param.LIGHT_SPEED
+        facppm = 1./c**2 * 1e6
         msc_para, para_vir, para_occ = [x*facppm for x in self.para(mo10=mo1)]
         msc_dia = self.dia() * facppm
         e11 = msc_para + msc_dia
@@ -227,11 +220,6 @@ class NMR(lib.StreamObject):
             mo10 = self.mo10
         return para(mol, mo10, mo_coeff, mo_occ, shielding_nuc)
 
-    def make_rdm1_1(self, mo1occ, mo0=None, occ=None):
-        if mo0 is None: mo0 = self._scf.mo_coeff
-        if occ is None: occ = self._scf.mo_occ
-        return make_rdm1_1(mo1occ, mo0, occ)
-
     def make_h10(self, mol=None, dm0=None, gauge_orig=None):
         if mol is None: mol = self.mol
         if dm0 is None: dm0 = self._scf.make_rdm1()
@@ -253,16 +241,20 @@ class NMR(lib.StreamObject):
         if mo_occ    is None: mo_occ = self._scf.mo_occ
 
         mol = self.mol
+        mo_coeff = self._scf.mo_coeff
+        orbo = mo_coeff[:,mo_occ>0]
         if h1 is None:
-            mo_coeff = self._scf.mo_coeff
             dm0 = self._scf.make_rdm1(mo_coeff, mo_occ)
-            h1 = _mat_ao2mo(self.make_h10(mol, dm0), mo_coeff, mo_occ)
+            h1 = numpy.asarray([reduce(numpy.dot, (mo_coeff.T.conj(), x, orbo))
+                                for x in self.make_h10(mol, dm0)])
         if s1 is None:
-            s1 = _mat_ao2mo(self.make_s10(mol), mo_coeff, mo_occ)
+            s1 = numpy.asarray([reduce(numpy.dot, (mo_coeff.T.conj(), x, orbo))
+                                for x in self.make_s10(mol)])
 
         cput1 = log.timer('first order Fock matrix', *cput1)
         if self.cphf:
-            mo10, mo_e10 = cphf.solve(self.get_vind, mo_energy, mo_occ, h1, s1,
+            vind = self.gen_vind(self._scf)
+            mo10, mo_e10 = cphf.solve(vind, mo_energy, mo_occ, h1, s1,
                                       self.max_cycle_cphf, self.conv_tol,
                                       verbose=log)
         else:
@@ -270,23 +262,33 @@ class NMR(lib.StreamObject):
         logger.timer(self, 'solving mo1 eqn', *cput1)
         return mo10, mo_e10
 
-    def get_vind(self, mo1):
+    def gen_vind(self, mo1):
         '''Induced potential'''
+        vresp = _gen_rhf_response(self._scf, hermi=2)
         mo_coeff = self._scf.mo_coeff
         mo_occ = self._scf.mo_occ
-        dm1 = self.make_rdm1_1(mo1, mo_coeff, mo_occ)
-        #direct_scf_bak, self._scf.direct_scf = self._scf.direct_scf, False
-        v_ao = self._scf.get_veff(self.mol, dm1, hermi=2)
-        #self._scf.direct_scf = direct_scf_bak
-        return _mat_ao2mo(v_ao, mo_coeff, mo_occ)
+        occidx = mo_occ > 0
+        orbo = mo_coeff[:,occidx]
+        nocc = orbo.shape[1]
+        nao, nmo = mo_coeff.shape
+        def vind(mo1):
+            #direct_scf_bak, self._scf.direct_scf = self._scf.direct_scf, False
+            dm1 = numpy.asarray([reduce(numpy.dot, (mo_coeff, x*2, orbo.T.conj()))
+                                 for x in mo1.reshape(3,nmo,nocc)])
+            dm1 = dm1 - dm1.transpose(0,2,1).conj()
+            v1mo = numpy.asarray([reduce(numpy.dot, (mo_coeff.T.conj(), x, orbo))
+                                  for x in vresp(dm1)])
+            #self._scf.direct_scf = direct_scf_bak
+            return v1mo.ravel()
+        return vind
 
 
-def _mat_ao2mo(mat, mo_coeff, occ):
-    '''transform an AO-based matrix to a MO-based matrix. The MO-based
-    matrix only has the occupied columns M[:,:nocc]'''
-    mo0 = mo_coeff[:,occ>0]
-    mat_mo = [reduce(numpy.dot, (mo_coeff.T.conj(),i,mo0)) for i in mat]
-    return numpy.array(mat_mo)
+#def _mat_ao2mo(mat, mo_coeff, occ):
+#    '''transform an AO-based matrix to a MO-based matrix. The MO-based
+#    matrix only has the occupied columns M[:,:nocc]'''
+#    mo0 = mo_coeff[:,occ>0]
+#    mat_mo = [reduce(numpy.dot, (mo_coeff.T.conj(),i,mo0)) for i in mat]
+#    return numpy.array(mat_mo)
 
 def _write(stdout, msc3x3, title):
     stdout.write('%s\n' % title)
@@ -310,12 +312,40 @@ if __name__ == '__main__':
                  'F': '6-31g',}
     mol.build()
 
-    rhf = scf.RHF(mol)
-    rhf.max_memory = 0
-    rhf.scf()
+    rhf = scf.RHF(mol).run()
     nmr = NMR(rhf)
     nmr.cphf = True
     #nmr.gauge_orig = (0,0,0)
-    msc = nmr.shielding() # _xx,_yy = 375.232839, _zz = 483.002139
-    print(msc)
+    msc = nmr.kernel() # _xx,_yy = 375.232839, _zz = 483.002139
+    print(msc[1][0,0], msc[1][1,1], 375.232839)
+    print(msc[1][2,2], 483.002139)
+    print(lib.finger(msc) - -132.22895063293751)
+
+    nmr.cphf = True
+    nmr.gauge_orig = (1,1,1)
+    msc = nmr.shielding()
+    print(msc[1][0,0], msc[1][1,1], 342.447242)
+    print(msc[1][2,2], 483.002139)
+    print(lib.finger(msc) - -108.48528212325664)
+
+    nmr.cphf = False
+    nmr.gauge_orig = None
+    msc = nmr.shielding()
+    print(msc[1][0,0], msc[1][1,1], 449.032227)
+    print(msc[1][2,2], 483.002139)
+    print(lib.finger(msc) - -133.26526049655627)
+
+    mol.atom.extend([
+        [1 , (1. , 0.3, .417)],
+        [1 , (0.2, 1. , 0.)],])
+    mol.build()
+    mf = scf.RHF(mol).run()
+    nmr = NMR(mf)
+    nmr.cphf = False
+    nmr.gauge_orig = None
+    msc = nmr.shielding()
+    print(msc[1][0,0], 283.514599)
+    print(msc[1][1,1], 292.578151)
+    print(msc[1][2,2], 257.348176)
+    print(lib.finger(msc) - -153.53481135510407)
 

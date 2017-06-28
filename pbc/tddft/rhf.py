@@ -14,6 +14,7 @@ from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf.tddft import rhf
 from pyscf.pbc.dft import numint
+from pyscf.pbc.scf.newton_ah import _gen_rhf_response
 
 
 class TDA(rhf.TDA):
@@ -41,49 +42,21 @@ class TDA(rhf.TDA):
         eai = _get_eai(mo_energy, mo_occ)
         hdiag = numpy.hstack([x.ravel() for x in eai])
 
-        if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
-            if mf.grids.coords is None:
-                mf.grids.build()
-            ni = mf._numint
-            hyb = ni.hybrid_coeff(mf.xc, spin=cell.spin)
-            dm0 = None # mf.make_rdm1(mo_coeff, mo_occ)
-            rho0, vxc, fxc = ni.cache_xc_kernel(mf.cell, mf.grids, mf.xc,
-                                                [mo_coeff]*2, [mo_occ*.5]*2,
-                                                spin=1, kpts=kpts)
-        else:
-            hyb = None
-
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
+        vresp = _gen_rhf_response(mf, singlet, hermi=0, max_memory=max_memory)
 
         def vind(zs):
             nz = len(zs)
             z1s = [_unpack(z, mo_occ) for z in zs]
             dmvo = numpy.empty((nz,nkpts,nao,nao), dtype=numpy.complex128)
             for i in range(nz):
-                dm1 = z1s[i]
+                # *2 for double occupancy
+                dm1 = z1s[i] * 2
                 for k in range(nkpts):
                     dmvo[i,k] = reduce(numpy.dot, (orbv[k], dm1[k], orbo[k].T.conj()))
 
-            if hyb is None:
-                if singlet:
-                    vj, vk = mf.get_jk(cell, dmvo, hermi=0)
-                    v1ao = vj*2 - vk
-                else:
-                    v1ao = -mf.get_k(cell, dmvo, hermi=0)
-            else:
-                v1ao = numint.nr_rks_fxc_st(ni, cell, mf.grids, mf.xc, dm0, dmvo, 0,
-                                            singlet, rho0, vxc, fxc, kpts, max_memory)
-                if abs(hyb) > 1e-10:
-                    vj, vk = mf.get_jk(cell, dmvo, hermi=0)
-                    if self.singlet:
-                        v1ao += vj * 2 - hyb * vk
-                    else:
-                        v1ao += -hyb * vk
-                else:
-                    if self.singlet:
-                        v1ao += mf.get_j(cell, dmvo, hermi=0) * 2
-
+            v1ao = vresp(dmvo)
             v1s = []
             for i in range(nz):
                 dm1 = z1s[i]
@@ -157,20 +130,9 @@ class TDHF(TDA):
         tot_x = hdiag.size
         hdiag = numpy.hstack((hdiag, hdiag))
 
-        if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
-            if mf.grids.coords is None:
-                mf.grids.build()
-            ni = mf._numint
-            hyb = ni.hybrid_coeff(mf.xc, spin=cell.spin)
-            dm0 = None # mf.make_rdm1(mo_coeff, mo_occ)
-            rho0, vxc, fxc = ni.cache_xc_kernel(mf.cell, mf.grids, mf.xc,
-                                                [mo_coeff]*2, [mo_occ*.5]*2,
-                                                spin=1, kpts=kpts)
-        else:
-            hyb = None
-
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
+        vresp = _gen_rhf_response(mf, singlet, hermi=0, max_memory=max_memory)
 
         def vind(xys):
             nz = len(xys)
@@ -178,31 +140,14 @@ class TDHF(TDA):
             z1ys = [_unpack(xy[tot_x:], mo_occ) for xy in xys]
             dmvo = numpy.empty((nz,nkpts,nao,nao), dtype=numpy.complex128)
             for i in range(nz):
-                dmx = z1xs[i]
-                dmy = z1ys[i]
+                # *2 for double occupancy
+                dmx = z1xs[i] * 2
+                dmy = z1ys[i] * 2
                 for k in range(nkpts):
                     dmvo[i,k] = reduce(numpy.dot, (orbv[k], dmx[k], orbo[k].T.conj()))
                     dmvo[i,k]+= reduce(numpy.dot, (orbo[k], dmy[k].T, orbv[k].T.conj()))
 
-            if hyb is None:
-                if singlet:
-                    vj, vk = mf.get_jk(cell, dmvo, hermi=0)
-                    v1ao = vj*2 - vk
-                else:
-                    v1ao = -mf.get_k(cell, dmvo, hermi=0)
-            else:
-                v1ao = numint.nr_rks_fxc_st(ni, cell, mf.grids, mf.xc, dm0, dmvo, 0,
-                                            singlet, rho0, vxc, fxc, kpts, max_memory)
-                if abs(hyb) > 1e-10:
-                    vj, vk = mf.get_jk(cell, dmvo, hermi=0)
-                    if self.singlet:
-                        v1ao += vj * 2 - hyb * vk
-                    else:
-                        v1ao += -hyb * vk
-                else:
-                    if self.singlet:
-                        v1ao += mf.get_j(cell, dmvo, hermi=0) * 2
-
+            v1ao = vresp(dmvo)
             v1s = []
             for i in range(nz):
                 dmx = z1xs[i]

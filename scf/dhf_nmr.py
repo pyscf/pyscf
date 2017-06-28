@@ -19,7 +19,7 @@ from pyscf.scf import rhf_nmr
 
 def dia(mol, dm0, gauge_orig=None, shielding_nuc=None, mb='RMB'):
     if shielding_nuc is None:
-        shielding_nuc = range(1, mol.natm+1)
+        shielding_nuc = range(mol.natm)
     if gauge_orig is not None:
         mol.set_common_origin(gauge_orig)
 
@@ -27,7 +27,7 @@ def dia(mol, dm0, gauge_orig=None, shielding_nuc=None, mb='RMB'):
     n2c = n4c // 2
     msc_dia = []
     for n, atm_id in enumerate(shielding_nuc):
-        mol.set_rinv_origin(mol.atom_coord(atm_id-1))
+        mol.set_rinv_origin(mol.atom_coord(atm_id))
         if mb.upper() == 'RMB':
             if gauge_orig is None:
                 t11 = mol.intor('int1e_giao_sa10sa01_spinor', 9)
@@ -50,20 +50,21 @@ def dia(mol, dm0, gauge_orig=None, shielding_nuc=None, mb='RMB'):
 
 def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
     if shielding_nuc is None:
-        shielding_nuc = range(1, mol.natm+1)
+        shielding_nuc = range(mol.natm)
     n4c = mo_coeff.shape[1]
     n2c = n4c // 2
     msc_para = numpy.zeros((len(shielding_nuc),3,3))
     para_neg = numpy.zeros((len(shielding_nuc),3,3))
     para_occ = numpy.zeros((len(shielding_nuc),3,3))
     h01 = numpy.zeros((3, n4c, n4c), complex)
+    orbo = mo_coeff[:,mo_occ>0]
     for n, atm_id in enumerate(shielding_nuc):
-        mol.set_rinv_origin(mol.atom_coord(atm_id-1))
+        mol.set_rinv_origin(mol.atom_coord(atm_id))
         t01 = mol.intor('int1e_sa01sp_spinor', 3)
         for m in range(3):
             h01[m,:n2c,n2c:] = .5 * t01[m]
             h01[m,n2c:,:n2c] = .5 * t01[m].conj().T
-        h01_mo = rhf_nmr._mat_ao2mo(h01, mo_coeff, mo_occ)
+        h01_mo = [reduce(numpy.dot, (mo_coeff.conj().T, x, orbo)) for x in h01]
         for b in range(3):
             for m in range(3):
                 # + c.c.
@@ -73,15 +74,6 @@ def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
                 para_occ[n,b,m] = p[mo_occ>0].sum()
     para_pos = msc_para - para_neg - para_occ
     return msc_para, para_pos, para_neg, para_occ
-
-def make_rdm1_1(mo1occ, mo0, occ):
-    ''' DM^1 = C_occ^1 C_occ^{0,dagger} + c.c.  on AO'''
-    mocc = mo0[:,occ>0] * occ[occ>0]
-    dm1 = []
-    for i in range(3):
-        tmp = reduce(numpy.dot, (mo0, mo1occ[i], mocc.T.conj()))
-        dm1.append(tmp + tmp.T.conj())
-    return numpy.array(dm1)
 
 def make_h10giao(mol, dm0, with_gaunt=False, verbose=logger.WARN):
     if isinstance(verbose, logger.Logger):
@@ -276,11 +268,6 @@ class NMR(rhf_nmr.NMR):
             mo10 = self.mo10
         return para(mol, mo10, mo_coeff, mo_occ, shielding_nuc)
 
-    def make_rdm1_1(self, mo1occ, mo0=None, occ=None):
-        if mo0 is None: mo0 = self._scf.mo_coeff
-        if occ is None: occ = self._scf.mo_occ
-        return make_rdm1_1(mo1occ, mo0, occ)
-
     def make_h10(self, mol=None, dm0=None, gauge_orig=None):
         if mol is None: mol = self.mol
         if dm0 is None: dm0 = self._scf.make_rdm1()
@@ -308,16 +295,25 @@ class NMR(rhf_nmr.NMR):
         if gauge_orig is None: gauge_orig = self.gauge_orig
         return make_s10(mol, gauge_orig, mb=self.mb)
 
-    def get_vind(self, mo1):
+    def gen_vind(self, mo1):
         '''Induced potential'''
         mo_coeff = self._scf.mo_coeff
         mo_occ = self._scf.mo_occ
-        dm1 = self.make_rdm1_1(mo1, mo_coeff, mo_occ)
-        direct_scf_bak, self._scf.direct_scf = self._scf.direct_scf, False
+        occidx = mo_occ > 0
+        orbo = mo_coeff[:,occidx]
+        nao, nmo = mo_coeff.shape
+        nocc = orbo.shape[1]
+        def vind(mo1):
+            direct_scf_bak, self._scf.direct_scf = self._scf.direct_scf, False
+            dm1 = numpy.asarray([reduce(numpy.dot, (mo_coeff, x, orbo.T.conj()))
+                                 for x in mo1.reshape(3,nmo,nocc)])
+            dm1 = dm1 + dm1.transpose(0,2,1).conj()
 # hermi=1 because dm1 = C^1 C^{0dagger} + C^0 C^{1dagger}
-        v_ao = self._scf.get_veff(self.mol, dm1, hermi=1)
-        self._scf.direct_scf = direct_scf_bak
-        return rhf_nmr._mat_ao2mo(v_ao, mo_coeff, mo_occ)
+            v1mo = numpy.asarray([reduce(numpy.dot, (mo_coeff.T.conj(), x, orbo))
+                                  for x in self._scf.get_veff(self.mol, dm1, hermi=1)])
+            self._scf.direct_scf = direct_scf_bak
+            return v1mo.ravel()
+        return vind
 
 def _call_rmb_vhf1(mol, dm, key='giao'):
     c1 = .5 / lib.param.LIGHT_SPEED

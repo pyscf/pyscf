@@ -17,6 +17,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import newton_ah
+from pyscf.pbc.scf.newton_ah import _gen_rhf_response, _gen_uhf_response
 
 def rhf_stability(mf, internal=True, external=False, verbose=None):
     mo_i = mo_e = None
@@ -97,36 +98,17 @@ def _gen_hop_rhf_external(mf, verbose=None):
              for k in range(nkpts)]
     hdiag = numpy.hstack([x.ravel() for x in hdiag])
 
-    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
-        if mf.grids.coords is None:
-            mf.grids.build()
-        ni = mf._numint
-        hyb = ni.hybrid_coeff(mf.xc, spin=cell.spin)
-        rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc,
-                                            [mo_coeff]*2, [mo_occ*.5]*2,
-                                            spin=1, kpts=kpts)
-    else:
-        hyb = None
-
-    mem_now = lib.current_memory()[0]
-    max_memory = max(2000, mf.max_memory*.8-mem_now)
-
+    vresp1 = _gen_rhf_response(mf, singlet=False, hermi=1)
     def hop_rhf2uhf(x1):
         x1 = _unpack(x1, mo_occ)
         dmvo = []
         for k in range(nkpts):
-            dm1 = reduce(numpy.dot, (orbv[k], x1[k], orbo[k].T.conj()))
+            # *2 for double occupancy
+            dm1 = reduce(numpy.dot, (orbv[k], x1[k]*2, orbo[k].T.conj()))
             dmvo.append(dm1 + dm1.T.conj())
         dmvo = lib.asarray(dmvo)
 
-        if hyb is None:
-            v1ao = -mf.get_k(cell, dmvo, hermi=1)
-        else:
-            v1ao = numint.nr_rks_fxc_st(ni, cell, mf.grids, mf.xc, dm0, dmvo, 0,
-                                        False, rho0, vxc, fxc, kpts, max_memory)
-            if abs(hyb) > 1e-10:
-                v1ao += -hyb * mf.get_k(cell, dmvo, hermi=1)
-
+        v1ao = vresp1(dmvo)
         x2 = [0] * nkpts
         for k in range(nkpts):
             x2[k] = numpy.einsum('ps,sq->pq', fvv[k], x1[k])
@@ -220,19 +202,7 @@ def _gen_hop_uhf_external(mf, verbose=None):
     hdiagba = [fvvb[k].diagonal().reshape(-1,1) - fooa[k].diagonal() for k in range(nkpts)]
     hdiag2 = numpy.hstack([x.ravel() for x in (hdiagab + hdiagba)])
 
-    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
-        if mf.grids.coords is None:
-            mf.grids.build()
-        ni = mf._numint
-        hyb = ni.hybrid_coeff(mf.xc, spin=cell.spin)
-        rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc,
-                                            mo_coeff, mo_occ, spin=1, kpts=kpts)
-    else:
-        hyb = None
-
-    mem_now = lib.current_memory()[0]
-    max_memory = max(2000, mf.max_memory*.8-mem_now)
-
+    vresp1 = _gen_uhf_response(mf, with_j=False, hermi=0)
     def hop_uhf2ghf(x1):
         x1ab = []
         x1ba = []
@@ -255,16 +225,8 @@ def _gen_hop_uhf_external(mf, verbose=None):
             d1ba = reduce(numpy.dot, (orbvb[k], x1ba[k], orboa[k].T.conj()))
             dm1ab.append(d1ab+d1ba.T.conj())
             dm1ba.append(d1ba+d1ab.T.conj())
-        dm1 = lib.asarray([dm1ab,dm1ba])
 
-        if hyb is None:
-            v1ao = -mf.get_k(cell, dm1, hermi=0)
-        else:
-            v1ao = ni.nr_uks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, 0,
-                                 rho0, vxc, fxc, kpts, max_memory)
-            if abs(hyb) > 1e-10:
-                v1ao += -hyb * mf.get_k(cell, dm1, hermi=0)
-
+        v1ao = vresp1(lib.asarray([dm1ab,dm1ba]))
         x2ab = [0] * nkpts
         x2ba = [0] * nkpts
         for k in range(nkpts):

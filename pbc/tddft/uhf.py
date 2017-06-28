@@ -11,6 +11,7 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.tddft import uhf
 from pyscf.scf import uhf_symm
 from pyscf.pbc.tddft.rhf import _get_eai
+from pyscf.pbc.scf.newton_ah import _gen_uhf_response
 
 
 class TDA(uhf.TDA):
@@ -45,19 +46,9 @@ class TDA(uhf.TDA):
         tot_x_a = sum(x.size for x in e_ai_a)
         tot_x_b = sum(x.size for x in e_ai_b)
 
-        if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
-            if mf.grids.coords is None:
-                mf.grids.build()
-            ni = mf._numint
-            hyb = ni.hybrid_coeff(mf.xc, spin=cell.spin)
-            dm0 = None # mf.make_rdm1(mo_coeff, mo_occ)
-            rho0, vxc, fxc = ni.cache_xc_kernel(mf.cell, mf.grids, mf.xc,
-                                                mo_coeff, mo_occ, spin=1, kpts=kpts)
-        else:
-            hyb = None
-
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
+        vresp = _gen_uhf_response(mf, hermi=0, max_memory=max_memory)
 
         def vind(zs):
             nz = len(zs)
@@ -69,19 +60,7 @@ class TDA(uhf.TDA):
                     dmvo[0,i,k] = reduce(numpy.dot, (orbva[k], dm1a[k], orboa[k].T.conj()))
                     dmvo[1,i,k] = reduce(numpy.dot, (orbvb[k], dm1b[k], orbob[k].T.conj()))
 
-            if hyb is None:
-                vj, vk = mf.get_jk(cell, dmvo, hermi=0)
-                v1ao = vj[0] + vj[1] - vk
-            else:
-                v1ao = ni.nr_uks_fxc(cell, mf.grids, mf.xc, dm0, dmvo, 0, 0,
-                                     rho0, vxc, fxc, kpts, max_memory)
-                if abs(hyb) > 1e-10:
-                    vj, vk = mf.get_jk(mf.cell, dmvo, hermi=0)
-                    v1ao += vj[0] + vj[1] - hyb * vk
-                else:
-                    vj = mf.get_j(mf.cell, dmvo, hermi=0)
-                    v1ao += vj[0] + vj[1]
-
+            v1ao = vresp(dmvo)
             v1s = []
             for i in range(nz):
                 dm1a, dm1b = zs[i]
@@ -170,19 +149,9 @@ class TDHF(TDA):
         tot_x_b = sum(x.size for x in e_ai_b)
         tot_x = tot_x_a + tot_x_b
 
-        if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
-            if mf.grids.coords is None:
-                mf.grids.build()
-            ni = mf._numint
-            hyb = ni.hybrid_coeff(mf.xc, spin=cell.spin)
-            dm0 = None # mf.make_rdm1(mo_coeff, mo_occ)
-            rho0, vxc, fxc = ni.cache_xc_kernel(mf.cell, mf.grids, mf.xc,
-                                                mo_coeff, mo_occ, spin=1, kpts=kpts)
-        else:
-            hyb = None
-
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
+        vresp = _gen_uhf_response(mf, hermi=0, max_memory=max_memory)
 
         def vind(xys):
             nz = len(xys)
@@ -200,19 +169,7 @@ class TDHF(TDA):
                     dmy = reduce(numpy.dot, (orbob[k], yb[k].T, orbvb[k].T.conj()))
                     dmvo[1,i,k] = dmx + dmy  # AX + BY
 
-            if hyb is None:
-                vj, vk = mf.get_jk(cell, dmvo, hermi=0)
-                v1ao = vj[0] + vj[1] - vk
-            else:
-                v1ao = ni.nr_uks_fxc(cell, mf.grids, mf.xc, dm0, dmvo, 0, 0,
-                                     rho0, vxc, fxc, kpts, max_memory)
-                if abs(hyb) > 1e-10:
-                    vj, vk = mf.get_jk(mf.cell, dmvo, hermi=0)
-                    v1ao += vj[0] + vj[1] - hyb * vk
-                else:
-                    vj = mf.get_j(mf.cell, dmvo, hermi=0)
-                    v1ao += vj[0] + vj[1]
-
+            v1ao = vresp(dmvo)
             v1s = []
             for i in range(nz):
                 xa, xb = x1s[i]

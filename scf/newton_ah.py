@@ -20,6 +20,7 @@ from pyscf.lib import logger
 from pyscf.scf import chkfile
 from pyscf.scf import addons
 from pyscf.scf import hf_symm, uhf_symm
+from pyscf.scf import hf, uhf
 
 # http://scicomp.stackexchange.com/questions/1234/matrix-exponential-of-a-skew-hermitian-matrix-with-fortran-95-and-lapack
 def expmat(a):
@@ -60,15 +61,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
     if hasattr(mf, '_scf') and id(mf._scf.mol) != id(mol):
         mo_coeff = addons.project_mo_nr2nr(mf._scf.mol, mo_coeff, mol)
 
-    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
-        if mf.grids.coords is None:
-            mf.grids.build()
-        ni = mf._numint
-        hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
-        rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc, mo_coeff, mo_occ, 0)
-        dm0 = None #mf.make_rdm1(mo_coeff, mo_occ)
-    else:
-        hyb = None
+    vind = _gen_rhf_response(mf, singlet=None, hermi=1)
 
     def h_op(x):
         x = x.reshape(nvir,nocc)
@@ -80,25 +73,11 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         #x2-= .5*numpy.einsum('sp,rp->rs', foo, x)
         x2-= numpy.einsum('ps,rp->rs', foo, x)
 
-        d1 = reduce(numpy.dot, (orbv, x, orbo.T.conj()))
+        # *2 for double occupancy
+        d1 = reduce(numpy.dot, (orbv, x*2, orbo.T.conj()))
         dm1 = d1 + d1.T.conj()
-        if hyb is None:
-            vj, vk = mf.get_jk(mol, dm1)
-            v1 = vj - vk * .5
-        else:
-            # The singlet hessian
-            v1 = ni.nr_rks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, 1, rho0, vxc, fxc)
-## *.7 this magic number can stablize DFT convergence.  Without scaling down
-## the XC hessian, large oscillation is observed in Newton iterations.  It may
-## be due to the numerical integration error.  Scaling down XC hessian can
-## reduce to some extent the integration error.
-#            v1 *= .7
-            if abs(hyb) < 1e-10:
-                v1 += mf.get_j(mol, dm1)
-            else:
-                vj, vk = mf.get_jk(mol, dm1)
-                v1 += vj - vk * (hyb * .5)
-        x2 += reduce(numpy.dot, (orbv.T.conj(), v1, orbo)) * 2
+        v1 = vind(dm1)
+        x2 += reduce(numpy.dot, (orbv.T.conj(), v1, orbo))
         if with_symmetry and mol.symmetry:
             x2[sym_forbid] = 0
         return x2.reshape(-1) * 2
@@ -185,17 +164,7 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         g[sym_forbid] = 0
         h_diag[sym_forbid] = 0
 
-    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
-        if mf.grids.coords is None:
-            mf.grids.build()
-        ni = mf._numint
-        hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
-        rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc, mo_coeff, mo_occ, 1)
-        #dm0 =(numpy.dot(mo_coeff[0]*mo_occ[0], mo_coeff[0].T.conj()),
-        #      numpy.dot(mo_coeff[1]*mo_occ[1], mo_coeff[1].T.conj()))
-        dm0 = None
-    else:
-        hyb = None
+    vind = _gen_uhf_response(mf, hermi=1)
 
     def h_op(x):
         if with_symmetry and mol.symmetry:
@@ -211,22 +180,7 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         d1a = reduce(numpy.dot, (orbva, x1a, orboa.T.conj()))
         d1b = reduce(numpy.dot, (orbvb, x1b, orbob.T.conj()))
         dm1 = numpy.array((d1a+d1a.T.conj(),d1b+d1b.T.conj()))
-        if hyb is None:
-            vj, vk = mf.get_jk(mol, dm1)
-            v1 = vj[0]+vj[1] - vk
-        else:
-            v1 = ni.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, 1, rho0, vxc, fxc)
-## *.7 this magic number can stablize DFT convergence.  Without scaling down
-## the XC hessian, large oscillation is observed in Newton iterations.  It may
-## be due to the numerical integration error.  Scaling down XC hessian can
-## reduce to some extent the integration error.
-#            v1 *= .7
-            if abs(hyb) < 1e-10:
-                vj = mf.get_j(mol, dm1)
-                v1 += vj[0] + vj[1]
-            else:
-                vj, vk = mf.get_jk(mol, dm1)
-                v1 += vj[0]+vj[1] - vk * hyb
+        v1 = vind(dm1)
         x2a += reduce(numpy.dot, (orbva.T.conj(), v1[0], orboa))
         x2b += reduce(numpy.dot, (orbvb.T.conj(), v1[1], orbob))
         x2 = numpy.hstack((x2a.ravel(), x2b.ravel()))
@@ -235,6 +189,140 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         return x2
 
     return g, h_op, h_diag
+
+
+def _gen_rhf_response(mf, singlet=None, hermi=0, max_memory=None):
+    from pyscf.dft import numint
+    assert(isinstance(mf, hf.RHF))
+
+    mol = mf.mol
+    nao = mf.mo_coeff.shape[0]
+    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
+        if mf.grids.coords is None:
+            mf.grids.build()
+        ni = mf._numint
+        hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
+        if singlet is None:  # for newton solver
+            rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
+                                                mf.mo_coeff, mf.mo_occ, 0)
+        else:
+            rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
+                                                [mf.mo_coeff]*2, [mf.mo_occ*.5]*2, spin=1)
+        dm0 = None #mf.make_rdm1(mo_coeff, mo_occ)
+
+        if max_memory is None:
+            mem_now = lib.current_memory()[0]
+            max_memory = max(2000, mf.max_memory*.8-mem_now)
+
+        if singlet is None:
+            def vind(dm1):
+                # The singlet hessian
+                if hermi == 2:
+                    v1 = numpy.zeros_like(dm1)
+                else:
+                    v1 = ni.nr_rks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, hermi,
+                                       rho0, vxc, fxc, max_memory)
+                if abs(hyb) > 1e-10:
+                    if hermi != 2:
+                        vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
+                        v1 += vj - .5 * hyb * vk
+                    else:
+                        v1 -= .5 * hyb * mf.get_k(mol, dm1, hermi=hermi)
+                elif hermi != 2:
+                    v1 += mf.get_j(mol, dm1, hermi=hermi)
+                return v1
+
+        elif singlet:
+            def vind(dm1):
+                if hermi == 2:
+                    v1 = numpy.zeros_like(dm1)
+                else:
+                    # nr_rks_fxc_st requires alpha of dm1, dm1*.5 should be scaled
+                    v1 = numint.nr_rks_fxc_st(ni, mol, mf.grids, mf.xc, dm0, dm1, 0,
+                                              True, rho0, vxc, fxc, max_memory)
+                    v1 *= .5
+                if abs(hyb) > 1e-10:
+                    if hermi != 2:
+                        vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
+                        v1 += vj - .5 * hyb * vk
+                    else:
+                        v1 -= .5 * hyb * mf.get_k(mol, dm1, hermi=hermi)
+                elif hermi != 2:
+                    v1 += mf.get_j(mol, dm1, hermi=hermi)
+                return v1
+        else:
+            def vind(dm1):
+                if hermi == 2:
+                    v1 = numpy.zeros_like(dm1)
+                else:
+                    # nr_rks_fxc_st requires alpha of dm1, dm1*.5 should be scaled
+                    v1 = numint.nr_rks_fxc_st(ni, mol, mf.grids, mf.xc, dm0, dm1, 0,
+                                              False, rho0, vxc, fxc, max_memory)
+                    v1 *= .5
+                if abs(hyb) > 1e-10:
+                    v1 += -.5 * hyb * mf.get_k(mol, dm1, hermi=hermi)
+                return v1
+
+    else:  # HF
+        if (singlet is None or singlet) and hermi != 2:
+            def vind(dm1):
+                vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
+                return vj - .5 * vk
+        else:
+            def vind(dm1):
+                return -.5 * mf.get_k(mol, dm1, hermi=hermi)
+
+    return vind
+
+
+def _gen_uhf_response(mf, with_j=True, hermi=0, max_memory=None):
+    from pyscf.dft import numint
+
+    mol = mf.mol
+    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
+        if mf.grids.coords is None:
+            mf.grids.build()
+        ni = mf._numint
+        hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
+        rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
+                                            mf.mo_coeff, mf.mo_occ, 1)
+        #dm0 =(numpy.dot(mo_coeff[0]*mo_occ[0], mo_coeff[0].T.conj()),
+        #      numpy.dot(mo_coeff[1]*mo_occ[1], mo_coeff[1].T.conj()))
+        dm0 = None
+
+        if max_memory is None:
+            mem_now = lib.current_memory()[0]
+            max_memory = max(2000, mf.max_memory*.8-mem_now)
+
+        def vind(dm1):
+            if hermi == 2:
+                v1 = numpy.zeros_like(dm1)
+            else:
+                v1 = ni.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, hermi,
+                                   rho0, vxc, fxc, max_memory)
+            if abs(hyb) < 1e-10:
+                if with_j:
+                    vj = mf.get_j(mol, dm1, hermi=hermi)
+                    v1 += vj[0] + vj[1]
+            else:
+                if with_j:
+                    vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
+                    v1 += vj[0] + vj[1] - vk * hyb
+                else:
+                    v1 -= hyb * mf.get_k(mol, dm1, hermi=hermi)
+            return v1
+
+    elif with_j:
+        def vind(dm1):
+            vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
+            v1 = vj[0] + vj[1] - vk
+            return v1
+
+    else:
+        def vind(dm1):
+            return -mf.get_k(mol, dm1, hermi=hermi)
+
+    return vind
 
 
 def project_mol(mol, projectbasis={}):

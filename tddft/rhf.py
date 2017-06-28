@@ -14,6 +14,7 @@ from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf.dft import numint
 from pyscf.scf import hf_symm
+from pyscf.scf.newton_ah import _gen_rhf_response
 
 
 def gen_tda_hop(mf, fock_ao=None, singlet=True, wfnsym=None, max_memory=2000):
@@ -55,19 +56,7 @@ def gen_tda_hop(mf, fock_ao=None, singlet=True, wfnsym=None, max_memory=2000):
         hdiag[sym_forbid] = 0
     hdiag = hdiag.ravel()
 
-    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
-        if mf.grids.coords is None:
-            mf.grids.build()
-        ni = mf._numint
-        hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
-        dm0 = None # mf.make_rdm1(mo_coeff, mo_occ)
-        rho0, vxc, fxc = ni.cache_xc_kernel(mf.mol, mf.grids, mf.xc,
-                                            [mo_coeff]*2, [mo_occ*.5]*2, spin=1)
-    else:
-        hyb = None
-
-    mem_now = lib.current_memory()[0]
-    max_memory = max(2000, max_memory*.8-mem_now)
+    vresp = _gen_rhf_response(mf, singlet, hermi=0)
 
     def vind(zs):
         nz = len(zs)
@@ -76,27 +65,9 @@ def gen_tda_hop(mf, fock_ao=None, singlet=True, wfnsym=None, max_memory=2000):
             zs[:,sym_forbid] = 0
         dmvo = numpy.empty((nz,nao,nao))
         for i, z in enumerate(zs):
-            dmvo[i] = reduce(numpy.dot, (orbv, z.reshape(nvir,nocc), orbo.T))
-
-        if hyb is None:
-            if singlet:
-                vj, vk = mf.get_jk(mol, dmvo, hermi=0)
-                v1ao = vj*2 - vk
-            else:
-                v1ao = -mf.get_k(mol, dmvo, hermi=0)
-        else:
-            v1ao = numint.nr_rks_fxc_st(ni, mol, mf.grids, mf.xc, dm0, dmvo, 0,
-                                        singlet, rho0, vxc, fxc, max_memory)
-            if abs(hyb) > 1e-10:
-                if singlet:
-                    vj, vk = mf.get_jk(mf.mol, dmvo, hermi=0)
-                    v1ao += vj * 2 - hyb * vk
-                else:
-                    v1ao += -hyb * mf.get_k(mol, dmvo, hermi=0)
-            else:
-                if singlet:
-                    v1ao += mf.get_j(mf.mol, dmvo, hermi=0) * 2
-
+            # *2 for double occupancy
+            dmvo[i] = reduce(numpy.dot, (orbv, z.reshape(nvir,nocc)*2, orbo.T))
+        v1ao = vresp(dmvo)
         #v1vo = numpy.asarray([reduce(numpy.dot, (orbv.T, v, orbo)) for v in v1ao])
         v1vo = _ao2mo.nr_e2(v1ao, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir,nocc)
         for i, z in enumerate(zs):
@@ -156,7 +127,7 @@ class TDA(lib.StreamObject):
             log.warn('Ground state SCF is not converged')
         log.info('\n')
 
-    def get_vind(self, mf):
+    def gen_vind(self, mf):
         '''Compute Ax'''
         return gen_tda_hop(mf, singlet=self.singlet, wfnsym=self.wfnsym,
                            max_memory=self.max_memory)
@@ -197,7 +168,7 @@ class TDA(lib.StreamObject):
         self.check_sanity()
         self.dump_flags()
 
-        vind, hdiag = self.get_vind(self._scf)
+        vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
 
         if x0 is None:
@@ -219,7 +190,7 @@ CIS = TDA
 
 
 class TDHF(TDA):
-    def get_vind(self, mf):
+    def gen_vind(self, mf):
         '''
         [ A  B][X]
         [-B -A][Y]
@@ -257,19 +228,7 @@ class TDHF(TDA):
             hdiag[sym_forbid] = 0
         hdiag = numpy.hstack((hdiag.ravel(), hdiag.ravel()))
 
-        if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
-            if mf.grids.coords is None:
-                mf.grids.build()
-            ni = mf._numint
-            hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
-            dm0 = None # mf.make_rdm1(mf.mo_coeff, mf.mo_occ)
-            rho0, vxc, fxc = ni.cache_xc_kernel(mf.mol, mf.grids, mf.xc,
-                                                [mo_coeff]*2, [mo_occ*.5]*2, spin=1)
-        else:
-            hyb = None
-
-        mem_now = lib.current_memory()[0]
-        max_memory = max(2000, self.max_memory*.8-mem_now)
+        vresp = _gen_rhf_response(mf, singlet, hermi=0)
 
         def vind(xys):
             nz = len(xys)
@@ -280,29 +239,12 @@ class TDHF(TDA):
             dms = numpy.empty((nz,nao,nao))
             for i in range(nz):
                 x, y = xys[i].reshape(2,nvir,nocc)
-                dmx = reduce(numpy.dot, (orbv, x, orbo.T))
-                dmy = reduce(numpy.dot, (orbo, y.T, orbv.T))
+                # *2 for double occupancy
+                dmx = reduce(numpy.dot, (orbv, x*2, orbo.T))
+                dmy = reduce(numpy.dot, (orbo, y.T*2, orbv.T))
                 dms[i] = dmx + dmy  # AX + BY
 
-            if hyb is None:
-                if singlet:
-                    vj, vk = mf.get_jk(mol, dms, hermi=0)
-                    v1ao = vj*2 - vk
-                else:
-                    v1ao = -mf.get_k(mol, dms, hermi=0)
-            else:
-                v1ao = numint.nr_rks_fxc_st(ni, mol, mf.grids, mf.xc, dm0, dms, 0,
-                                            singlet, rho0, vxc, fxc, max_memory)
-                if abs(hyb) > 1e-10:
-                    if singlet:
-                        vj, vk = mf.get_jk(mf.mol, dms, hermi=0)
-                        v1ao += vj * 2 - hyb * vk
-                    else:
-                        v1ao += -hyb * mf.get_k(mol, dms, hermi=0)
-                else:
-                    if singlet:
-                        v1ao += mf.get_j(mf.mol, dms, hermi=0) * 2
-
+            v1ao = vresp(dms)
             v1vo = _ao2mo.nr_e2(v1ao, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir,nocc)
             v1ov = _ao2mo.nr_e2(v1ao, mo_coeff, (0,nocc,nocc,nmo))
             v1ov = v1ov.reshape(-1,nocc,nvir).transpose(0,2,1)
@@ -333,7 +275,7 @@ class TDHF(TDA):
         self.check_sanity()
         self.dump_flags()
 
-        vind, hdiag = self.get_vind(self._scf)
+        vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)

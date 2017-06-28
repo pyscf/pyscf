@@ -880,15 +880,18 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         vmat = vmat[0]
     return vmat
 
-def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms, relativity=0, singlet=True,
+def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet=True,
                   rho0=None, vxc=None, fxc=None, max_memory=2000, verbose=None):
     '''Associated to singlet or triplet Hessian
+    Note the difference to nr_rks_fxc, dms_alpha is the response density
+    matrices of alpha spin, alpha+/-beta DM is applied due to singlet/triplet
+    coupling
 
     Ref. CPL, 256, 454
     '''
     xctype = ni._xc_type(xc_code)
 
-    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi=0)
+    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms_alpha, hermi=0)
     if ((xctype == 'LDA' and fxc is None) or
         (xctype == 'GGA' and rho0 is None)):
         make_rho0 = ni._gen_rho_evaluator(mol, dm0, hermi=1)[0]
@@ -979,7 +982,7 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms, relativity=0, singlet=True,
     else:
         raise NotImplementedError('meta-GGA')
 
-    if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
+    if isinstance(dms_alpha, numpy.ndarray) and dms_alpha.ndim == 2:
         vmat = vmat[0]
     return vmat
 

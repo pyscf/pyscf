@@ -501,9 +501,12 @@ def dot_eri_dm(eri, dm, hermi=0):
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         vj, vk = _vhf.incore(eri, dm, hermi=hermi)
     else:
-        vjk = [_vhf.incore(eri, dmi, hermi=hermi) for dmi in dm]
-        vj = numpy.array([v[0] for v in vjk])
-        vk = numpy.array([v[1] for v in vjk])
+        dm = numpy.asarray(dm, order='C')
+        nao = dm.shape[-1]
+        dms = dm.reshape(-1,nao,nao)
+        vjk = [_vhf.incore(eri, dmi, hermi=hermi) for dmi in dms]
+        vj = numpy.array([v[0] for v in vjk]).reshape(dm.shape)
+        vk = numpy.array([v[1] for v in vjk]).reshape(dm.shape)
     return vj, vk
 
 

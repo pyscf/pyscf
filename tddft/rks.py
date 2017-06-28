@@ -14,6 +14,7 @@ from pyscf.dft import numint
 from pyscf import dft
 from pyscf.tddft import rhf
 from pyscf.ao2mo import _ao2mo
+from pyscf.scf.newton_ah import _gen_rhf_response
 
 
 TDA = rhf.TDA
@@ -24,7 +25,7 @@ RPA = TDDFT = rhf.TDHF
 class TDDFTNoHybrid(TDA):
     ''' Solve (A-B)(A+B)(X+Y) = (X+Y)w^2
     '''
-    def get_vind(self, mf):
+    def gen_vind(self, mf):
         wfnsym = self.wfnsym
         singlet = self.singlet
 
@@ -52,28 +53,16 @@ class TDDFTNoHybrid(TDA):
         edai = eai.ravel() * dai
         hdiag = eai.ravel() ** 2
 
-        if mf.grids.coords is None:
-            mf.grids.build()
-        ni = mf._numint
-        hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
-        dm0 = None # mf.make_rdm1(mf.mo_coeff, mf.mo_occ)
-        rho0, vxc, fxc = ni.cache_xc_kernel(mf.mol, mf.grids, mf.xc,
-                                            [mo_coeff]*2, [mo_occ*.5]*2, spin=1)
-
-        mem_now = lib.current_memory()[0]
-        max_memory = max(2000, self.max_memory*.8-mem_now)
+        vresp = _gen_rhf_response(mf, singlet, hermi=1)
 
         def vind(zs):
             nz = len(zs)
             dmvo = numpy.empty((nz,nao,nao))
             for i, z in enumerate(zs):
-                dm = reduce(numpy.dot, (orbv, (dai*z).reshape(nvir,nocc), orbo.T))
+                # *2 for double occupancy
+                dm = reduce(numpy.dot, (orbv, (dai*z).reshape(nvir,nocc)*2, orbo.T))
                 dmvo[i] = dm + dm.T # +cc for A+B and K_{ai,jb} in A == K_{ai,bj} in B
-            v1ao = numint.nr_rks_fxc_st(ni, mol, mf.grids, mf.xc, dm0, dmvo, 0,
-                                        self.singlet, rho0, vxc, fxc, max_memory)
-            if self.singlet:
-                v1ao += mf.get_j(mf.mol, dmvo, hermi=1) * 2
-
+            v1ao = vresp(dmvo)
             v1vo = _ao2mo.nr_e2(v1ao, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir*nocc)
             for i, z in enumerate(zs):
                 # numpy.sqrt(eai) * (eai*dai*z + v1vo)
@@ -93,7 +82,7 @@ class TDDFTNoHybrid(TDA):
         self.check_sanity()
         self.dump_flags()
 
-        vind, hdiag = self.get_vind(self._scf)
+        vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
