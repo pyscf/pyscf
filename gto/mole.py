@@ -1605,8 +1605,9 @@ class Mole(lib.StreamObject):
             _update_from_cmdargs_(self)
 
         # avoid to open output file twice
-        if parse_arg and self.output is not None \
-           and self.stdout.getvalue() != self.output:
+        if (parse_arg and self.output is not None and
+            not (hasattr(self.stdout, 'name') and  # to handle StringIO().name bug
+                 self.stdout.name == self.output)):
             self.stdout = open(self.output, 'w')
 
         if self.verbose >= logger.WARN:

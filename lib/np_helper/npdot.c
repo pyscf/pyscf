@@ -17,20 +17,30 @@ void NPdgemm(const char trans_a, const char trans_b,
              double *a, double *b, double *c,
              const double alpha, const double beta)
 {
+        const size_t dimc = ldc;
+        int i, j;
+        if (m == 0 || n == 0) {
+                return;
+        } else if (k == 0) {
+                for (i = 0; i < n; i++) {
+                for (j = 0; j < m; j++) {
+                        c[i*dimc+j] = 0;
+                } }
+                return;
+        }
         a += offseta;
         b += offsetb;
         c += offsetc;
-        const size_t dimc = ldc;
 
         size_t stride;
         int nthread = 1;
-        int i, di, nblk;
+        int di, nblk;
 
         if ((k/m) > 3 && (k/n) > 3) { // parallelize k
 
                 const double D0 = 0;
                 double *cpriv;
-                int ij, j, stride_b;
+                int ij, stride_b;
                 if (trans_a == 'N') {
                         stride = lda;
                 } else {

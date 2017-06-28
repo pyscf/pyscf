@@ -165,6 +165,7 @@ def _parse(raw_basis):
 
 def _parse_ecp(raw_ecp):
     ecp_add = []
+    nelec = 0
     for line in raw_ecp:
         dat = line.lstrip()
         if dat.startswith('#'): # comment line

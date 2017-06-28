@@ -437,7 +437,6 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
     if mf.canonicalization:
         log.info('Canonicalize SCF orbitals')
         mo_energy, mo_coeff = mf._scf.canonicalize(mo_coeff, mo_occ, fock)
-        mo_occ = mf._scf.get_occ(mo_energy, mo_coeff)
     else:
         mo_energy = mf._scf.canonicalize(mo_coeff, mo_occ, fock)[0]
     log.info('macro X = %d  E=%.15g  |g|= %g  total %d JK',
