@@ -12,8 +12,8 @@ import scipy.linalg
 import pyscf.lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
-from pyscf.scf import rhf_nmr
 from pyscf.dft import numint
+from pyscf.prop.nmr import rhf
 
 
 def get_vxc_giao(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
@@ -95,9 +95,9 @@ def get_vxc_giao(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
     return vmat - vmat.transpose(0,2,1)
 
 
-class NMR(rhf_nmr.NMR):
+class NMR(rhf.NMR):
     def __init__(self, scf_method):
-        rhf_nmr.NMR.__init__(self, scf_method)
+        rhf.NMR.__init__(self, scf_method)
         libxc = scf_method._numint.libxc
         if not libxc.is_hybrid_xc(self._scf.xc):
             self.cphf = False

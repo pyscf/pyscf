@@ -15,7 +15,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import scf
 from pyscf.scf import _vhf
-from pyscf.scf import rhf_nmr
+from pyscf.prop.nmr import rhf
 
 def dia(mol, dm0, gauge_orig=None, shielding_nuc=None, mb='RMB'):
     if shielding_nuc is None:
@@ -207,16 +207,16 @@ def make_s10(mol, gauge_orig=None, mb='RMB'):
     return s1
 
 
-class NMR(rhf_nmr.NMR):
+class NMR(rhf.NMR):
     __doc__ = 'magnetic shielding constants'
     def __init__(self, scf_method):
-        rhf_nmr.NMR.__init__(self, scf_method)
+        rhf.NMR.__init__(self, scf_method)
         self.cphf = True
         self.mb = 'RMB'
         self._keys = self._keys.union(['mb'])
 
     def dump_flags(self):
-        rhf_nmr.NMR.dump_flags(self)
+        rhf.NMR.dump_flags(self)
         logger.info(self, 'MB basis = %s', self.mb)
         return self
 
@@ -237,15 +237,15 @@ class NMR(rhf_nmr.NMR):
         logger.timer(self, 'NMR shielding', *cput0)
         if self.verbose > logger.QUIET:
             for i, atm_id in enumerate(self.shielding_nuc):
-                rhf_nmr._write(self.stdout, e11[i],
-                               '\ntotal shielding of atom %d %s'
-                               % (atm_id, self.mol.atom_symbol(atm_id-1)))
-                rhf_nmr._write(self.stdout, msc_dia[i], 'dia-magnetism')
-                rhf_nmr._write(self.stdout, msc_para[i], 'para-magnetism')
+                rhf._write(self.stdout, e11[i],
+                           '\ntotal shielding of atom %d %s'
+                           % (atm_id, self.mol.atom_symbol(atm_id-1)))
+                rhf._write(self.stdout, msc_dia[i], 'dia-magnetism')
+                rhf._write(self.stdout, msc_para[i], 'para-magnetism')
                 if self.verbose >= logger.INFO:
-                    rhf_nmr._write(self.stdout, para_occ[i], 'occ part of para-magnetism')
-                    rhf_nmr._write(self.stdout, para_pos[i], 'vir-pos part of para-magnetism')
-                    rhf_nmr._write(self.stdout, para_neg[i], 'vir-neg part of para-magnetism')
+                    rhf._write(self.stdout, para_occ[i], 'occ part of para-magnetism')
+                    rhf._write(self.stdout, para_pos[i], 'vir-pos part of para-magnetism')
+                    rhf._write(self.stdout, para_neg[i], 'vir-neg part of para-magnetism')
             self.stdout.flush()
         return e11
 

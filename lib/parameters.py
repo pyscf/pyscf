@@ -14,7 +14,7 @@ LIGHT_SPEED = float(os.environ.get('PYSCF_LIGHT_SPEED', LIGHT_SPEED))
 # BOHR = .529 177 210 92(17) e-10m  #http://physics.nist.gov/cgi-bin/cuu/Value?bohrrada0
 BOHR = 0.52917721092  # Angstroms
 
-G_ELECTRON = -2.00231930436182  # http://physics.nist.gov/cgi-bin/cuu/Value?gem
+G_ELECTRON = 2.00231930436182  # http://physics.nist.gov/cgi-bin/cuu/Value?gem
 
 OUTPUT_DIGITS = int(os.environ.get('PYSCF_OUTPUT_DIGITS', 5))
 OUTPUT_COLS   = int(os.environ.get('PYSCF_OUTPUT_COLS', 5))

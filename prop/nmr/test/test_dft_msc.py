@@ -4,7 +4,7 @@ import unittest
 import numpy
 from pyscf import gto
 from pyscf import dft
-from pyscf import nmr
+from pyscf.prop import nmr
 
 mol = gto.Mole()
 mol.verbose = 5
