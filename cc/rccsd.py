@@ -98,7 +98,7 @@ def update_amps(cc, t1, t2, eris):
     # T1 equation
     t1new = np.array(fov).conj()
     t1new += -2*einsum('kc,ka,ic->ia',fov,t1,t1)
-    eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,-1)).reshape(nocc,nvir,nvir,nvir)
+    eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,nvir**2)).reshape(nocc,nvir,nvir,nvir)
     t1new +=   einsum('ac,ic->ia',Fvv,t1)
     t1new +=  -einsum('ki,ka->ia',Foo,t1)
     t1new += 2*einsum('kc,kica->ia',Fov,t2)
@@ -896,7 +896,7 @@ class RCCSD(ccsd.CCSD):
         Hr2-= lib.einsum('mj,imab->ijab', imds.Foo   , r2)
 
         tau2 = make_tau(r2, r1, t1, fac=2)
-        #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,-1)).reshape(nocc,nvir,nvir,nvir)
+        #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,nvir**2)).reshape(nocc,nvir,nvir,nvir)
         #:Hr1 += lib.einsum('mfae,imef->ia', eris_ovvv, rho)
         #:tmp = lib.einsum('meaf,ijef->maij', eris_ovvv, tau2)
         #:Hr2 -= lib.einsum('ma,mbij->ijab', t1, tmp)
@@ -998,7 +998,7 @@ class RCCSD(ccsd.CCSD):
         tau2aa-= np.einsum('ia,jb->jiab', r1, t1)
         tau2aa = tau2aa - tau2aa.transpose(0,1,3,2)
         tau2aa+= r2aa
-        #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,-1)).reshape(nocc,nvir,nvir,nvir)
+        #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,nvir**2)).reshape(nocc,nvir,nvir,nvir)
         #:Hr1 += lib.einsum('mfae,imef->ia', eris_ovvv, theta)
         #:tmpaa = lib.einsum('meaf,ijef->maij', eris_ovvv, tau2aa)
         #:tmpab = lib.einsum('meAF,iJeF->mAiJ', eris_ovvv, tau2ab)
@@ -1107,7 +1107,7 @@ class RCCSD(ccsd.CCSD):
         tau2aaba += r2aaba * .5
         tau2aaba = tau2aaba - tau2aaba.transpose(1,0,2,3)
 
-        #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,-1)).reshape(nocc,nvir,nvir,nvir)
+        #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,nvir**2)).reshape(nocc,nvir,nvir,nvir)
         #:Hr1 += einsum('mfae,imef->ia', eris_ovvv, r2baaa)
         #:Hr1 += einsum('mfae,imef->ia', eris_ovvv, r2aaba)
         #:tmp1aaba = lib.einsum('meaf,ijef->maij', eris_ovvv, tau2baaa)
@@ -1273,7 +1273,7 @@ class RCCSD(ccsd.CCSD):
         Hr2baaa += Wooab.reshape(nocc,nocc,1,1)
         Hr2aaba += Wooaa.reshape(nocc,nocc,1,1)
 
-        #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,-1)).reshape(nocc,nvir,nvir,nvir)
+        #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,nvir**2)).reshape(nocc,nvir,nvir,nvir)
         #:tmp = np.einsum('mb,mbaa->ab', t1, eris_ovvv)
         #:Wvvaa += np.einsum('mb,maab->ab', t1, eris_ovvv)
         mem_now = lib.current_memory()[0]
@@ -1333,10 +1333,10 @@ class RCCSD(ccsd.CCSD):
         size = nov + nocc**2*nvir*(nvir+1)//2
         t1 = vector[:nov].copy().reshape((nocc,nvir))
         t2 = np.zeros((nocc,nocc,nvir,nvir), dtype=vector.dtype)
-        t2tril = vector[nov:size].reshape(nocc**2, -1)
+        t2tril = vector[nov:size].reshape(nocc**2,nvir*(nvir+1)//2)
         oidx = np.arange(nocc**2).reshape(nocc,nocc).T.ravel()
         vtril = np.tril_indices(nvir)
-        lib.takebak_2d(t2.reshape(nocc**2,-1), t2tril, oidx, vtril[1]*nvir+vtril[0])
+        lib.takebak_2d(t2.reshape(nocc**2,nvir**2), t2tril, oidx, vtril[1]*nvir+vtril[0])
         lib.unpack_tril(t2tril, filltriu=0, out=t2)
         return t1, t2
 
@@ -1386,7 +1386,7 @@ class RCCSD(ccsd.CCSD):
         oidxab = np.arange(nocc**2, dtype=np.int32)
         vidxab = np.arange(nvir**2, dtype=np.int32)
 
-        v = pvec[:nbaaa].reshape(nocc*nocc,-1)
+        v = pvec[:nbaaa].reshape(nocc*nocc,nvir*(nvir-1)//2)
         lib.takebak_2d(t2baaa, v, oidxab, vtril[0]*nvir+vtril[1])
         lib.takebak_2d(t2baaa,-v, oidxab, vtril[1]*nvir+vtril[0])
         v = pvec[nbaaa:nbaaa+naaba].reshape(-1,nvir*nvir)
@@ -1406,7 +1406,7 @@ class RCCSD(ccsd.CCSD):
         vtril = np.tril_indices(nvir, k=-1)
         otril = otril[0]*nocc + otril[1]
         vtril = vtril[0]*nvir + vtril[1]
-        lib.take_2d(t2.reshape(nocc**2,-1), otril, vtril, out=vector[nov:])
+        lib.take_2d(t2.reshape(nocc**2,nvir**2), otril, vtril, out=vector[nov:])
         return vector
 
     def vector_to_amplitudes_s4(self, vector, nocc=None, nvir=None):
@@ -1419,7 +1419,7 @@ class RCCSD(ccsd.CCSD):
         t1 = vector[:nov].copy().reshape((nocc,nvir))
         t2 = np.zeros((nocc**2,nvir**2), dtype=vector.dtype)
         if nocc > 1 and nvir > 1:
-            t2tril = vector[nov:size].reshape(nocc*(nocc-1)//2, -1)
+            t2tril = vector[nov:size].reshape(nocc*(nocc-1)//2,nvir*(nvir-1)//2)
             otril = np.tril_indices(nocc, k=-1)
             vtril = np.tril_indices(nvir, k=-1)
             lib.takebak_2d(t2, t2tril, otril[0]*nocc+otril[1], vtril[0]*nvir+vtril[1])
@@ -1436,7 +1436,7 @@ class RCCSD(ccsd.CCSD):
         size = size1 + nov*(nov+1)//2
         vector = np.ndarray(size, t1.dtype, buffer=out)
         self.amplitudes_to_vector_s4(t1, t2[0], out=vector)
-        t2ab = t2[1].transpose(0,2,1,3).reshape(nov,-1)
+        t2ab = t2[1].transpose(0,2,1,3).reshape(nov,nov)
         lib.pack_tril(t2ab, out=vector[size1:])
         return vector
 
@@ -1491,7 +1491,7 @@ class _ERIS:
             self.oovv = eri[:nocc,:nocc,nocc:,nocc:].copy()
             self.ovvo = eri[:nocc,nocc:,nocc:,:nocc].copy()
             ovvv = eri[:nocc,nocc:,nocc:,nocc:].reshape(-1,nvir,nvir)
-            self.ovvv = lib.pack_tril(ovvv).reshape(nocc,nvir,-1)
+            self.ovvv = lib.pack_tril(ovvv).reshape(nocc,nvir,nvir*(nvir+1)//2)
             self.vvvv = ao2mo.restore(4, eri[nocc:,nocc:,nocc:,nocc:].copy(), nvir)
         else:
             orbo = mo_coeff[:,:nocc]
@@ -1630,7 +1630,7 @@ class _IMDS:
         fov = eris.fock[:nocc,nocc:]
         fvv = eris.fock[nocc:,nocc:]
 
-        #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,-1)).reshape(nocc,nvir,nvir,nvir)
+        #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,nvir**2)).reshape(nocc,nvir,nvir,nvir)
         #:self.Fvv  = np.einsum('mf,mfae->ae', t1, eris_ovvv) * 2
         #:self.Fvv -= np.einsum('mf,meaf->ae', t1, eris_ovvv)
         #:self.woVvO = lib.einsum('jf,mebf->mbej', t1, eris_ovvv)
@@ -1738,7 +1738,7 @@ class _IMDS:
         #:self.wvOvV += tmpab
 
         #:theta = t2*2 - t2.transpose(0,1,3,2)
-        #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,-1)).reshape(nocc,nvir,nvir,nvir)
+        #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,nvir**2)).reshape(nocc,nvir,nvir,nvir)
         #:ovvv = eris_ovvv*2 - eris_ovvv.transpose(0,3,2,1)
         #:tmpab = lib.einsum('mebf,miaf->eiab', eris_ovvv, t2)
         #:tmpab = tmpab + tmpab.transpose(0,1,3,2) * .5
@@ -1790,7 +1790,8 @@ def _add_vvvv_(cc, t2, eris, Ht2):
     idxo = np.arange(nocc)
     t2tril[idxo*(idxo+1)//2+idxo] *= .5
     idxo = np.tril_indices(nocc)
-    lib.takebak_2d(Ht2.reshape(nocc**2,-1), t2tril.reshape(-1,nvir**2),
+    lib.takebak_2d(Ht2.reshape(nocc**2,nvir**2),
+                   t2tril.reshape(nocc*(nocc+1)//2,nvir**2),
                    idxo[0]*nocc+idxo[1], np.arange(nvir**2))
     return Ht2
 

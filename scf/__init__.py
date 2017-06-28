@@ -138,7 +138,10 @@ def UHF(mol, *args):
     '''This is a wrap function to decide which UHF class to use.
     '''
     if mol.nelectron == 1:
-        return RHF(mol)
+        if not mol.symmetry or mol.groupname is 'C1':
+            return uhf.HF1e(mol, *args)
+        else:
+            return uhf_symm.HF1e(mol, *args)
     elif not mol.symmetry or mol.groupname is 'C1':
         return uhf.UHF(mol, *args)
     else:

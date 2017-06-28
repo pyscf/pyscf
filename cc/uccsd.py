@@ -2095,8 +2095,8 @@ class _ERIS:
             self.OVOV = eri_bb[:noccb,noccb:,:noccb,noccb:].copy()
             self.OOVV = eri_bb[:noccb,:noccb,noccb:,noccb:].copy()
             self.OVVO = eri_bb[:noccb,noccb:,noccb:,:noccb].copy()
-            OVVV = eri_bb[:noccb,noccb:,noccb:,noccb:].reshape(-1,nvirb,nvirb)
-            self.OVVV = lib.pack_tril(OVVV).reshape(noccb,nvirb,-1)
+            OVVV = eri_bb[:noccb,noccb:,noccb:,noccb:].reshape(noccb*nvirb,nvirb,nvirb)
+            self.OVVV = lib.pack_tril(OVVV).reshape(noccb,nvirb,nvirb*(nvirb+1)//2)
             OVVV = None
             self.VVVV = ao2mo.restore(4, eri_bb[noccb:,noccb:,noccb:,noccb:].copy(), nvirb)
             self.ooOO = eri_ab[:nocca,:nocca,:noccb,:noccb].copy()
@@ -2106,10 +2106,10 @@ class _ERIS:
             self.ovOV = eri_ab[:nocca,nocca:,:noccb,noccb:].copy()
             self.ooVV = eri_ab[:nocca,:nocca,noccb:,noccb:].copy()
             self.ovVO = eri_ab[:nocca,nocca:,noccb:,:noccb].copy()
-            ovVV = eri_ab[:nocca,nocca:,noccb:,noccb:].reshape(-1,nvirb,nvirb)
-            self.ovVV = lib.pack_tril(ovVV).reshape(nocca,nvira,-1)
+            ovVV = eri_ab[:nocca,nocca:,noccb:,noccb:].reshape(nocca*nvira,nvirb,nvirb)
+            self.ovVV = lib.pack_tril(ovVV).reshape(nocca,nvira,nvirb*(nvirb+1)//2)
             ovVV = None
-            vvVV = eri_ab[nocca:,nocca:,noccb:,noccb:].reshape(nvira**2,-1)
+            vvVV = eri_ab[nocca:,nocca:,noccb:,noccb:].reshape(nvira**2,nvirb**2)
             idxa = np.tril_indices(nvira)
             idxb = np.tril_indices(nvirb)
             self.vvVV = lib.take_2d(vvVV, idxa[0]*nvira+idxa[1], idxb[0]*nvirb+idxb[1])
@@ -2121,8 +2121,8 @@ class _ERIS:
             self.OOvv = eri_ba[:noccb,:noccb,nocca:,nocca:].copy()
             self.OVvo = eri_ba[:noccb,noccb:,nocca:,:nocca].copy()
             #self.OVvv = eri_ba[:noccb,noccb:,nocca:,nocca:].copy()
-            OVvv = eri_ba[:noccb,noccb:,nocca:,nocca:].reshape(-1,nvira,nvira)
-            self.OVvv = lib.pack_tril(OVvv).reshape(noccb,nvirb,-1)
+            OVvv = eri_ba[:noccb,noccb:,nocca:,nocca:].reshape(noccb*nvirb,nvira,nvira)
+            self.OVvv = lib.pack_tril(OVvv).reshape(noccb,nvirb,nvira*(nvira+1)//2)
             OVvv = None
             #self.VVvv = eri_ba[noccb:,noccb:,nocca:,nocca:].copy()
         else:
