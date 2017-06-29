@@ -45,47 +45,55 @@ def load_ecp(basisfile, symb):
 def search_seg(basisfile, symb):
     with open(basisfile, 'r') as fin:
         # ignore head
-        dat = fin.readline().strip().upper()
-        while dat and not dat[1:].lstrip().startswith('BASIS'):
-            dat = fin.readline().strip().upper()
+        dat = fin.readline().upper()
+        while dat and not dat.strip()[1:].lstrip().startswith('BASIS'):
+            dat = fin.readline().upper()
+
         # searching
-        dat = fin.readline().strip().upper()
-        while dat and not dat.startswith('END'):
+        dat = fin.readline().upper()
+        while dat and not dat.lstrip().startswith('END'):
+            dat = dat.strip()
             if dat.split(' ', 1)[0] == symb.upper():
                 seg = []
-                while (dat and
-                       not dat[1:].lstrip().startswith('BASIS') and
-                       not dat.startswith('END')):
+                while dat:
+                    dat = dat.strip()
+                    if (dat[1:].lstrip().startswith('BASIS') or
+                        dat.startswith('END')):
+                        break
                     seg.append(dat)
-                    dat = fin.readline().strip().upper()
+                    dat = fin.readline().upper()
                 return seg
             else:
-                while dat and not dat[1:].lstrip().startswith('BASIS'):
-                    dat = fin.readline().strip().upper()
-            dat = fin.readline().strip().upper()
+                while dat and not dat.strip()[1:].lstrip().startswith('BASIS'):
+                    dat = fin.readline().upper()
+            dat = fin.readline().upper()
     return []
 
 def search_ecp(basisfile, symb):
     with open(basisfile, 'r') as fin:
         # ignore head
-        dat = fin.readline().strip().upper()
-        while dat and not dat.startswith('ECP'):
-            dat = fin.readline().strip().upper()
+        dat = fin.readline().upper()
+        while dat and not dat.lstrip().startswith('ECP'):
+            dat = fin.readline().upper()
 
-        dat = fin.readline().strip().upper()
+        dat = fin.readline().upper()
         # searching
-        while (dat and
-               dat.split(' ', 1)[0] != symb.upper() and
-               not dat.startswith('END')):
-            dat = fin.readline().strip().upper()
+        while dat:
+            dat = dat.strip()
+            if (dat.split(' ', 1)[0] == symb.upper() or
+                dat.startswith('END')):
+                break
+            dat = fin.readline().upper()
 
         seg = []
-        while dat and not dat.startswith('END'):
-            if dat[0].isalpha() and dat.split(' ', 1)[0] == symb.upper():
+        while dat:
+            dat = dat.strip()
+            if ((dat[0].isalpha() and dat.split(' ', 1)[0] != symb.upper()) or
+                dat.startswith('END')):
                 return seg
-            if dat: # remove blank lines
+            elif dat: # remove blank lines
                 seg.append(dat)
-            dat = fin.readline().strip().upper()
+            dat = fin.readline().upper()
     return []
 
 def convert_basis_to_nwchem(symb, basis):
