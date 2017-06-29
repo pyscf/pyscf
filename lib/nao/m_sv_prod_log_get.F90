@@ -21,14 +21,16 @@ subroutine sv_prod_log_get(n,d, sv, pb)
   type(prod_basis_t), intent(inout) :: pb
   !! internal
   integer(c_int64_t) :: nsp, nr, s, f, i, jmx, nmumx, mu, sp, natoms, norbs, norbs_sc
-  integer(c_int64_t) :: atom, nspin, mup, nmup, np, no, p, o2
+  integer(c_int64_t) :: atom, nspin, mup, nmup, np, no, p, o2, j, s1, f1
   integer(c_int64_t) :: ac_npc_max ! maximal number of participating centers
+  integer(c_int64_t) :: jcutoff ! maximal ang mom for expanding bilocals
   real(c_double) :: rmin, rmax, kmax, psi_log_sum, prod_log_sum, tol_loc, tol_biloc, ac_rcut_ratio
-  real(c_double) :: ac_rcut_max
+  real(c_double) :: ac_rcut_max, psum
   real(c_double), allocatable :: sp2rcut(:), sp2rcutp(:)
   integer(c_int64_t), allocatable :: mu_sp2s(:,:), atom2s(:), atom2mu_s(:)
   integer(c_int64_t), allocatable :: sp2norbsp(:), sp2chrgp(:), sp2nmultp(:)
   integer, allocatable :: mu2s(:)
+  integer :: metric_type
 
   sv%uc%systemlabel = "libnao"
   i = 2
@@ -48,9 +50,13 @@ subroutine sv_prod_log_get(n,d, sv, pb)
   tol_biloc  = d(i); i=i+1;
   ac_rcut_ratio  = d(i); i=i+1;
   ac_npc_max  = int( d(i), c_int64_t); i=i+1;
+  jcutoff = int( d(i), c_int64_t); i=i+1;
+  metric_type = int(d(i)); i=i+1;
 
   if (nsp<1) then; write(6,*) __FILE__, __LINE__, nsp; stop '!nsp'; endif
   if (nr<1) then; write(6,*) __FILE__, __LINE__, nr; stop '!nr'; endif
+  if (jcutoff<jmx) then; write(6,*) __FILE__, __LINE__, jcutoff, jmx; stop '!jcutoff'; endif
+  if (metric_type<1) then; write(6,*) __FILE__, __LINE__, metric_type; stop '!metric_type'; endif
   
   allocate(sv%uc%sp2label(nsp))
   allocate(sv%uc%sp2nmult(nsp))
@@ -79,9 +85,11 @@ subroutine sv_prod_log_get(n,d, sv, pb)
   allocate(sv%uc%mu_sp2j(nmumx,nsp))
   allocate(sv%uc%mu_sp2n(nmumx,nsp))
   allocate(sv%uc%mu_sp2rcut(nmumx,nsp))
+  allocate(sv%uc%mu_sp2start_ao(nmumx,nsp))
   sv%uc%mu_sp2j = -999
   sv%uc%mu_sp2n = -999
   sv%uc%mu_sp2rcut = -999
+  sv%uc%mu_sp2start_ao = -999
   s = int( d(i), c_int64_t);
   do sp=1,nsp
     f=s+sv%uc%sp2nmult(sp)-1; sv%uc%mu_sp2j(1:f-s+1,sp) = int(d(s:f)); s=f+1;
@@ -91,8 +99,7 @@ subroutine sv_prod_log_get(n,d, sv, pb)
     write(6,*) sv%uc%mu_sp2j
     stop '!jmx';
   endif
-  
-  
+
   i = i + 1
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
   do sp=1,nsp
@@ -100,7 +107,6 @@ subroutine sv_prod_log_get(n,d, sv, pb)
   enddo
 
   !write(6,*) 'sv%uc%mu_sp2rcut ', sv%uc%mu_sp2rcut
-
 
   i = i + 1
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
@@ -110,19 +116,10 @@ subroutine sv_prod_log_get(n,d, sv, pb)
     do mu=1,sv%uc%sp2nmult(sp); f=s+nr-1; sv%psi_log(1:nr,mu,sp) = d(s:f); s=f+1; enddo
   enddo
   
-  if( abs(psi_log_sum-sum(sv%psi_log))/abs(psi_log_sum)>5d-14 ) then; 
+  if( abs(psi_log_sum-sum(sv%psi_log))/abs(psi_log_sum)>5d-13 ) then; 
     write(6,*) __FILE__, __LINE__, psi_log_sum, sum(sv%psi_log);
     stop '!psi_log_sum';
   endif
-  
-  !write(6,*) abs(psi_log_sum-sum(sv%psi_log))/abs(psi_log_sum)
-  
-
-  !do sp=1,nsp
-  !  do mu=1,sv%uc%sp2nmult(sp)
-  !    write(6,*) 'sv%psi_log ', sv%psi_log(1:3,mu,sp)
-  !  enddo
-  !enddo
 
   i = i + 1
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
@@ -131,7 +128,7 @@ subroutine sv_prod_log_get(n,d, sv, pb)
   mu_sp2s = -999
   do sp=1,nsp; f=s+sv%uc%sp2nmult(sp); mu_sp2s(1:f-s+1,sp) = int(d(s:f), c_int64_t)+1; s=f+1; enddo
 
-  do sp=1,nsp; write(6,*) 'mu_sp2s ', mu_sp2s(:,sp); enddo
+  !do sp=1,nsp; write(6,*) 'mu_sp2s ', mu_sp2s(:,sp); enddo
  
   !! Finishing with sp2*
   allocate(sv%psi_log_rl(nr,nmumx,nsp))
@@ -143,6 +140,15 @@ subroutine sv_prod_log_get(n,d, sv, pb)
 
   sv%jmx = int(jmx)
   sv%norb_max = maxval(sv%uc%sp2norbs)
+
+  sv%uc%mu_sp2start_ao = 0
+  do sp=1,nsp
+    f1 = 0
+    do mu=1,sv%uc%sp2nmult(sp)
+      j = sv%uc%mu_sp2j(mu,sp)
+      s1 = f1+1; sv%uc%mu_sp2start_ao(mu,sp)=int(s1); f1 = s1 + 2*j+1 - 1; 
+    enddo
+  enddo 
   !! END of Finishing with sp2*
   
   if (natoms<1) then
@@ -183,11 +189,42 @@ subroutine sv_prod_log_get(n,d, sv, pb)
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
   do atom=1,natoms; f=s+3-1; sv%uc%atom2coord(1:3,atom) = d(s:f); s=f+1; enddo;
 
+  sv%norbs = int(atom2s(natoms+1)-1)
+  if(sv%norbs<nsp) then
+    write(6,*) __FILE__, __LINE__, sv%norbs, nsp; stop '!norbs';
+  endif  
+  no = 0
+  do atom=1,natoms
+    sp = sv%uc%atom2sp(atom)
+    do mu=1,sv%uc%sp2nmult(sp)
+      no = no + 2*sv%uc%mu_sp2j(mu,sp)+1
+    enddo 
+  enddo
+  if(no /= sv%norbs) then
+    write(6,*) __FILE__, __LINE__, no, sv%norbs; stop '!norbs';
+  endif
+  
+  _dealloc(sv%uc%atom2sfo)
+  allocate(sv%uc%atom2sfo(2,natoms))
+  do atom=1,natoms
+    sp = sv%uc%atom2sp(atom)
+    sv%uc%atom2sfo(1,atom) = int(atom2s(atom))
+    sv%uc%atom2sfo(2,atom) = int(atom2s(atom+1))
+  enddo
+
+  !! Product basis now................ PPPPPPPPPPPPPPPPPPPP
   pb%sv => sv
+  pb%pb_p%metric_type = metric_type
   pb%pb_p%eigmin_local = tol_loc
   pb%pb_p%eigmin_bilocal = tol_biloc
+  pb%pb_p%jcutoff = int(jcutoff)
+  pb%pb_p%bilocal_type = "ATOM"
+  pb%pb_p%bilocal_center = "POW&COEFF"
+  pb%pb_p%bilocal_center_pow = 1D0
+  pb%pb_p%bilocal_center_coeff = "2*L+1"
   ac_rcut_max = maxval(sv%uc%mu_sp2rcut)
   pb%pb_p%ac_rcut = ac_rcut_ratio * ac_rcut_max
+
   allocate(pb%sp_local2vertex(nsp))
   allocate(pb%sp_local2functs(nsp))
   allocate(sp2nmultp(nsp))
@@ -202,18 +239,30 @@ subroutine sv_prod_log_get(n,d, sv, pb)
   i = i + 1
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
   f=s+nsp-1; sp2nmultp(1:nsp) = int(d(s:f), c_int64_t); s=f+1;
+  if(any(sp2nmultp<1)) then
+    write(6,*) __FILE__, __LINE__, sp2nmultp; stop '!sp2nmultp';
+  endif
 
   i = i + 1
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
   f=s+nsp-1; sp2rcutp(1:nsp) = d(s:f); s=f+1;
+  if(any(sp2rcutp<0)) then
+    write(6,*) __FILE__, __LINE__, sp2rcutp; stop '!sp2rcutp';
+  endif
   
   i = i + 1
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
   f=s+nsp-1; sp2norbsp(:) = int(d(s:f), c_int64_t); s=f+1;
+  if(any(sp2norbsp<1)) then
+    write(6,*) __FILE__, __LINE__, sp2norbsp; stop '!sp2norbsp';
+  endif
 
   i = i + 1
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
   f=s+nsp-1; sp2chrgp(:) = int(d(s:f), c_int64_t); s=f+1;
+  if(sum(abs(sp2chrgp-sv%uc%sp2element))/=0) then
+    write(6,*) __FILE__, __LINE__, sv%uc%sp2element, sp2chrgp; stop '!sp2element';
+  endif
   
   do sp=1,nsp
     nmup = sp2nmultp(sp)
@@ -224,6 +273,9 @@ subroutine sv_prod_log_get(n,d, sv, pb)
     no = sv%uc%sp2norbs(sp)
     np = sp2norbsp(sp)
     allocate(pb%sp_local2vertex(sp)%vertex(no,no,np))
+    pb%sp_local2functs(sp)%sp = int(sp)
+    pb%sp_local2functs(sp)%rcut = sp2rcutp(sp)
+    pb%sp_local2functs(sp)%nfunct = int(sp2norbsp(sp))
   enddo
   
   i = i + 1
@@ -273,6 +325,26 @@ subroutine sv_prod_log_get(n,d, sv, pb)
 
   i = i + 1
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
+
+  psum = 0
+  do sp=1,nsp; psum = psum + sum(pb%sp_local2functs(sp)%ir_mu2v); enddo ! sp
+
+  if( abs(prod_log_sum-psum)/abs(prod_log_sum)>5d-13 ) then; 
+    write(6,*) __FILE__, __LINE__, prod_log_sum, psum;
+    stop '!prod_log_sum';
+  endif
+  
+  _dealloc(pb%pp)
+  _dealloc(pb%rr)
+  _dealloc(pb%atom2coord)
+  allocate(pb%rr(nr))
+  allocate(pb%pp(nr))
+  allocate(pb%atom2coord(3,sv%natoms))
+  pb%atom2coord = sv%uc%atom2coord
+  pb%rr = sv%rr
+  pb%pp = sv%pp
+
+  
 
 
 end subroutine ! m_sv_prod_log_get

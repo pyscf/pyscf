@@ -129,7 +129,7 @@ subroutine init_parallel(para, iv)
   para%paratype = trim(para%paratype) // "SEQ"
 #endif
 
-  if (para%master) then
+  if (para%master .and. iv>0) then
     write(ilog,'(a,a)')  "Type of parallelisation:    ", para%paratype
     write(ilog,'(a,i4)') "Number of nodes:            ", para%nodes
     write(ilog,'(a,i4)') "Number of threads per node: ", para%num_threads

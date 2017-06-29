@@ -3,7 +3,7 @@ module m_functs_l_mult_type
 ! The purpose of the module is to store and deal with a functions in m-multipletts
 !
 #include "m_define_macro.F90"
-  use m_log, only : die
+  use m_die, only : die
 
   implicit none
   private die

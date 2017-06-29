@@ -38,7 +38,7 @@ class prod_basis_c():
     
     return
 
-  def init_pb_pp_libnao_apair(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0, ac_npc_max=8):
+  def init_pb_pp_libnao_apair(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0, ac_npc_max=8, jcutoff=14, metric_type=2):
     """ Talman's procedure should be working well with Pseudo-Potential starting point...
         This subroutine prepares the class for a later atom pair by atom pair generation 
         of the dominant product vertices and the conversion coefficients by calling 
@@ -51,6 +51,7 @@ class prod_basis_c():
     
     self.sv = sv
     self.tol_loc,self.tol_biloc,self.ac_rcut_ratio,self.ac_npc_max = tol_loc, tol_biloc, ac_rcut_ratio, ac_npc_max
+    self.jcutoff,self.metric_type = jcutoff, metric_type
     self.prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc) # local basis (for each specie)
     self.c2s = np.zeros((sv.natm+1), dtype=np.int64) # global product Center (atom) -> start in case of atom-centered basis
     for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] # 
@@ -99,6 +100,8 @@ class prod_basis_c():
     dat[i] = self.tol_biloc; i+=1
     dat[i] = self.ac_rcut_ratio; i+=1
     dat[i] = self.ac_npc_max; i+=1
+    dat[i] = self.jcutoff; i+=1
+    dat[i] = self.metric_type; i+=1
     dat[0] = i
     # Pointers to data
     i = 99

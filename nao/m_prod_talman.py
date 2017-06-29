@@ -56,7 +56,7 @@ class prod_talman_c(log_mesh_c):
     assert hasattr(log_mesh, 'pp')
     
     self.ngl = ngl
-    self.lbdmx = jmx+1 if lbdmx is None else lbdmx # default jmx+1 is inspired by quantum chemistry auxiliary basis for density fitting of Dunning basis sets (cc-pV*Z).
+    self.lbdmx = lbdmx
     self.xx,self.ww = leggauss(ngl)
     log_mesh_c.__init__(self)
     self.init_log_mesh(log_mesh.rr, log_mesh.pp)
