@@ -780,3 +780,17 @@ def _makevhf(vj, vk):
     assert(vj.ndim >= 3 and vj.shape[0] == 2 and vj.shape == vk.shape)
     vj = vj[0] + vj[1]
     return vj - vk
+
+
+class HF1e(UHF):
+    def scf(self, *args):
+        logger.info(self, '\n')
+        logger.info(self, '******** 1 electron system ********')
+        self.converged = True
+        h1e = self.get_hcore(self.mol)
+        s1e = self.get_ovlp(self.mol)
+        self.mo_energy, self.mo_coeff = self.eig([h1e]*2, s1e)
+        self.mo_occ = self.get_occ(self.mo_energy, self.mo_coeff)
+        self.e_tot = self.mo_energy[0][self.mo_occ[0]>0][0] + self.mol.energy_nuc()
+        self._finalize()
+        return self.e_tot

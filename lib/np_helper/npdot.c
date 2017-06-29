@@ -18,14 +18,23 @@ void NPdgemm(const char trans_a, const char trans_b,
              double *a, double *b, double *c,
              const double alpha, const double beta)
 {
+        const size_t dimc = ldc;
+        int i, j;
+        if (m == 0 || n == 0) {
+                return;
+        } else if (k == 0) {
+                for (i = 0; i < n; i++) {
+                for (j = 0; j < m; j++) {
+                        c[i*dimc+j] = 0;
+                } }
+                return;
+        }
         a += offseta;
         b += offsetb;
         c += offsetc;
-        const size_t dimc = ldc;
 
         if ((k/m) > 3 && (k/n) > 3) { // parallelize k
 
-                int i, j;
                 if (beta == 0) {
                         for (i = 0; i < n; i++) {
                                 for (j = 0; j < m; j++) {
@@ -85,7 +94,7 @@ void NPdgemm(const char trans_a, const char trans_b,
                 int nthread = omp_get_num_threads();
                 int nblk = MAX((m+nthread-1) / nthread, 1);
                 nthread = (m+nblk-1) / nblk;
-                int i, di;
+                int di;
                 size_t bstride = nblk;
                 if (trans_a != 'N') {
                         bstride *= lda;
@@ -108,7 +117,7 @@ void NPdgemm(const char trans_a, const char trans_b,
                 int nthread = omp_get_num_threads();
                 int nblk = MAX((n+nthread-1) / nthread, 1);
                 nthread = (n+nblk-1) / nblk;
-                int i, di;
+                int di;
                 size_t bstride = nblk;
                 size_t cstride = dimc * nblk;
                 if (trans_b == 'N') {
@@ -135,14 +144,23 @@ void NPzgemm(const char trans_a, const char trans_b,
              double complex *a, double complex *b, double complex *c,
              const double complex *alpha, const double complex *beta)
 {
+        const size_t dimc = ldc;
+        int i, j;
+        if (m == 0 || n == 0) {
+                return;
+        } else if (k == 0) {
+                for (i = 0; i < n; i++) {
+                for (j = 0; j < m; j++) {
+                        c[i*dimc+j] = 0;
+                } }
+                return;
+        }
         a += offseta;
         b += offsetb;
         c += offsetc;
-        const size_t dimc = ldc;
 
         if ((k/m) > 3 && (k/n) > 3) { // parallelize k
 
-                int i, j;
                 if (creal(*beta) == 0 && cimag(*beta) == 0) {
                         for (i = 0; i < n; i++) {
                                 for (j = 0; j < m; j++) {
@@ -202,7 +220,7 @@ void NPzgemm(const char trans_a, const char trans_b,
                 int nthread = omp_get_num_threads();
                 int nblk = MAX((m+nthread-1) / nthread, 1);
                 nthread = (m+nblk-1) / nblk;
-                int i, di;
+                int di;
                 size_t bstride = nblk;
                 if (trans_a != 'N') {
                         bstride *= lda;
@@ -225,7 +243,7 @@ void NPzgemm(const char trans_a, const char trans_b,
                 int nthread = omp_get_num_threads();
                 int nblk = MAX((n+nthread-1) / nthread, 1);
                 nthread = (n+nblk-1) / nblk;
-                int i, di;
+                int di;
                 size_t bstride = nblk;
                 size_t cstride = dimc * nblk;
                 if (trans_b == 'N') {
