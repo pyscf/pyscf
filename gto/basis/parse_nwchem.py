@@ -94,7 +94,7 @@ def search_ecp(basisfile, symb):
             elif dat: # remove blank lines
                 seg.append(dat)
             dat = fin.readline().upper()
-    raise RuntimeError('ECP not found for  %s  in  %s' % (symb, basisfile))
+    return []
 
 def convert_basis_to_nwchem(symb, basis):
     '''Convert the internal basis format to NWChem format string'''
@@ -171,7 +171,7 @@ def _parse(raw_basis):
 
 def _parse_ecp(raw_ecp):
     ecp_add = []
-    nelec = 0
+    nelec = None
     for line in raw_ecp:
         dat = line.strip()
         if dat.startswith('#'): # comment line
@@ -191,10 +191,11 @@ def _parse_ecp(raw_ecp):
             line = dat.replace('D','e').split()
             l = int(line[0])
             by_ang[l].append([float(x) for x in line[1:]])
-    bsort = []
-    for l in range(-1, MAXL):
-        bsort.extend([b for b in ecp_add if b[0] == l])
-    return [nelec, bsort]
+    if nelec is not None:
+        bsort = []
+        for l in range(-1, MAXL):
+            bsort.extend([b for b in ecp_add if b[0] == l])
+        return [nelec, bsort]
 
 if __name__ == '__main__':
     from pyscf import gto
