@@ -4,11 +4,6 @@ module m_vrtx_cc_apair
   use m_precision, only : blas_int
   use m_die, only : die
   use m_warn, only : warn
-  use m_system_vars, only : system_vars_t
-  use m_prod_basis_param, only : prod_basis_param_t
-  use m_orb_rspace_type, only : orb_rspace_aux_t
-  use m_parallel, only : para_t
-  use m_pair_info, only : pair_info_t
   use iso_c_binding, only: c_double, c_int64_t
   !use m_timing, only : get_cdatetime
   
@@ -17,58 +12,50 @@ module m_vrtx_cc_apair
   private warn
   !private get_cdatetime
 
-!
-! This is generation of vertex coefficients and conversion coefficients
-! at the same time.
-!  
-
   contains
 
 !
 ! The subroutine is generating the dominant product vertices and conversion coefficiens
 ! for a given atom pair
 !
-subroutine vrtx_cc_apair(ninp,dinp, nout,dout) bind(c, name='vrtx_cc_apair')
-
-  use m_system_vars, only : system_vars_t
-  use m_fact, only : init_fact
-  use m_parallel, only : para_t
-  use m_prod_basis_param, only : prod_basis_param_t
-  use m_orb_rspace_type, only : init_orb_rspace_aux
-  use m_pair_info, only : pair_info_t, distr_atom_pairs_info
-  use m_biloc_aux, only : biloc_aux_t, init_biloc_aux
-  use m_dp_aux, only : dp_aux_t
-  use m_prod_basis_type, only : prod_basis_t
-  use m_sv_get, only : sv_get
-  
+subroutine vrtx_cc_apair(sp12_c,rc12,dout,nout) bind(c, name='vrtx_cc_apair')
+  use m_sv_prod_log, only : a, bp2info, ff2, evals, vertex_real2, oo2num, m2nf, vertex_cmplx2, rhotb 
+  use m_bilocal_vertex, only : make_bilocal_vertex_rf
   implicit none
   !! external
-  integer(c_int64_t), intent(in) :: ninp
-  real(c_double), intent(in) :: dinp(ninp)
+  integer(c_int64_t), intent(in) :: sp12_c(2)
+  real(c_double), intent(in) :: rc12(3,2)
   integer(c_int64_t), intent(inout) :: nout
   real(c_double), intent(inout) :: dout(nout)
   !! internal
-  type(system_vars_t) :: sv
-  type(prod_basis_param_t) :: pb_p
-  type(pair_info_t), allocatable :: bp2info(:)
-  type(dp_aux_t) :: dp_a
-  type(prod_basis_t) :: pb
-  type(para_t) :: para
-  type(biloc_aux_t) :: a
-  type(orb_rspace_aux_t) :: orb_a
-  integer :: ul, nbp_node
-  !! executable statements
-  call init_fact()  !! Initializations for product reduction in Talman's way
-  
-  call sv_get(ninp,dinp, sv)
-  call init_orb_rspace_aux(sv, orb_a, ul)
-  allocate(bp2info(1))
-  
-  !call init_biloc_aux(sv, pb_p, bp2info, para, orb_a, a)
-  
-  !nbp_node = size(bp2info)
-  !call make_bilocal_vertex(a, nbp_node, bp2info, dp_a, pb, iv)
-    
+  integer :: nrfmx, ls, rf
+  integer(c_int64_t) :: sp12(2)
+  real(8) :: ttt(9), rcut, center(3)
+  logical :: lready 
+
+  if(.not. allocated(bp2info)) then; write(6,*) __FILE__, __LINE__; stop '!bp2info'; endif
+
+  sp12 = sp12_c+1 ! getting zero based indices !
+  write(6,*) ' a%sv%uc%sp2nmult ' , a%sv%uc%sp2nmult
+  write(6,*) ' sp12 ', sp12
+
+  bp2info(1)%atoms = -1
+  bp2info(1)%species(1:2) = int(sp12(1:2))
+  bp2info(1)%coords(1:3,1:2) = rc12(1:3,1:2)
+  bp2info(1)%cells = 0
+  bp2info(1)%ls2nrf(1:2) = a%sv%uc%sp2nmult(sp12(1:2))
+  nrfmx = maxval(bp2info(1)%ls2nrf)
+  _dealloc(bp2info(1)%rf_ls2mu)
+  allocate(bp2info(1)%rf_ls2mu(nrfmx,2))
+  bp2info(1)%rf_ls2mu = -999
+  do ls=1,2; do rf=1,bp2info(1)%ls2nrf(ls); bp2info(1)%rf_ls2mu(rf,ls) = rf; enddo; enddo 
+
+  call make_bilocal_vertex_rf(a, bp2info(1), &
+    ff2, evals, vertex_real2, lready, rcut, center, oo2num, m2nf, &
+    vertex_cmplx2, rhotb, ttt)
+
+  !call apair_put(bp2info, ff2, evals, vertex_real2, lready, rcut, center, oo2num, m2nf, dout, nout)
+ 
 end subroutine ! vrtx_cc_apair
 
 

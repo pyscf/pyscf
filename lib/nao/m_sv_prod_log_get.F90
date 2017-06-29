@@ -10,7 +10,7 @@ module m_sv_prod_log_get
 !
 !
 !
-subroutine sv_prod_log_get(n,d, sv, pb)
+subroutine sv_prod_log_get(d,n, sv, pb)
   use m_system_vars, only : system_vars_t
   use m_prod_basis_type, only : prod_basis_t
   implicit none
@@ -30,7 +30,7 @@ subroutine sv_prod_log_get(n,d, sv, pb)
   integer(c_int64_t), allocatable :: mu_sp2s(:,:), atom2s(:), atom2mu_s(:)
   integer(c_int64_t), allocatable :: sp2norbsp(:), sp2chrgp(:), sp2nmultp(:)
   integer, allocatable :: mu2s(:)
-  integer :: metric_type
+  integer :: metric_type, ngl, optimize_centers
 
   sv%uc%systemlabel = "libnao"
   i = 2
@@ -52,6 +52,8 @@ subroutine sv_prod_log_get(n,d, sv, pb)
   ac_npc_max  = int( d(i), c_int64_t); i=i+1;
   jcutoff = int( d(i), c_int64_t); i=i+1;
   metric_type = int(d(i)); i=i+1;
+  optimize_centers = int(d(i)); i=i+1;
+  ngl = int(d(i)); i=i+1;
 
   if (nsp<1) then; write(6,*) __FILE__, __LINE__, nsp; stop '!nsp'; endif
   if (nr<1) then; write(6,*) __FILE__, __LINE__, nr; stop '!nr'; endif
@@ -218,6 +220,9 @@ subroutine sv_prod_log_get(n,d, sv, pb)
   pb%pb_p%eigmin_local = tol_loc
   pb%pb_p%eigmin_bilocal = tol_biloc
   pb%pb_p%jcutoff = int(jcutoff)
+  pb%pb_p%optimize_centers = optimize_centers
+  pb%pb_p%gl_ord_bilocal = ngl
+  pb%pb_p%gl_pcs_bilocal = 1
   pb%pb_p%bilocal_type = "ATOM"
   pb%pb_p%bilocal_center = "POW&COEFF"
   pb%pb_p%bilocal_center_pow = 1D0

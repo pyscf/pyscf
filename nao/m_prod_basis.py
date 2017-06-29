@@ -1,6 +1,14 @@
 from __future__ import print_function, division
 import numpy as np
-from numpy import einsum
+from numpy import einsum, zeros
+from ctypes import POINTER, c_double, c_int64
+from pyscf.nao.m_libnao import libnao
+
+libnao.vrtx_cc_apair.argtypes = (
+  POINTER(c_int64),   # sp12(1:2)
+  POINTER(c_double),  # rc12(1:3,1:2)
+  POINTER(c_double),  # dout(nout)
+  POINTER(c_int64))   # nout
 
 #
 #
@@ -38,7 +46,7 @@ class prod_basis_c():
     
     return
 
-  def init_pb_pp_libnao_apair(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0, ac_npc_max=8, jcutoff=14, metric_type=2):
+  def init_pb_pp_libnao_apair(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0, ac_npc_max=8, jcutoff=14, metric_type=2, optimize_centers=0, ngl=96):
     """ Talman's procedure should be working well with Pseudo-Potential starting point...
         This subroutine prepares the class for a later atom pair by atom pair generation 
         of the dominant product vertices and the conversion coefficients by calling 
@@ -51,20 +59,21 @@ class prod_basis_c():
     
     self.sv = sv
     self.tol_loc,self.tol_biloc,self.ac_rcut_ratio,self.ac_npc_max = tol_loc, tol_biloc, ac_rcut_ratio, ac_npc_max
-    self.jcutoff,self.metric_type = jcutoff, metric_type
+    self.jcutoff,self.metric_type,self.optimize_centers,self.ngl = jcutoff, metric_type, optimize_centers, ngl
     self.prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc) # local basis (for each specie)
     self.c2s = np.zeros((sv.natm+1), dtype=np.int64) # global product Center (atom) -> start in case of atom-centered basis
     for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] # 
     self.sv_pbloc_data = self.chain_data_pb_pp_apair()
     libnao.sv_prod_log.argtypes = (
-      POINTER(c_int64),      # ndat
-      POINTER(c_double))     # dat(ndat)
-    libnao.sv_prod_log(c_int64(len(self.sv_pbloc_data)), self.sv_pbloc_data.ctypes.data_as(POINTER(c_double)))
-    
+      POINTER(c_double),     # dat(ndat)
+      POINTER(c_int64))      # ndat
+
+    libnao.sv_prod_log(self.sv_pbloc_data.ctypes.data_as(POINTER(c_double)), c_int64(len(self.sv_pbloc_data)))
     return self
   
   def chain_data_pb_pp_apair(self):
-    """ This subroutine creates a buffer of information to communicate with the library libnao """
+    """ This subroutine creates a buffer of information to communicate the system variables and the local product vertex to libnao. Later, one will be able to generate the bilocal vertex and conversion coefficient for a given pair of atom species and their coordinates ."""
+    
     from numpy import zeros, concatenate as conc
 
     aos,sv,pl = self.sv.ao_log, self.sv, self.prod_log
@@ -79,7 +88,7 @@ class prod_basis_c():
     ndat = 200 + 2*nr + 4*nsp + 2*nmt + nrt + nms + nat + 2*na1 + tna + \
       4*nsp + 2*nmtp + nrtp + nmsp + nvrt
       
-    dat = np.zeros(ndat)
+    dat = zeros(ndat)
     
     # Simple parameters
     i = 0
@@ -102,6 +111,8 @@ class prod_basis_c():
     dat[i] = self.ac_npc_max; i+=1
     dat[i] = self.jcutoff; i+=1
     dat[i] = self.metric_type; i+=1
+    dat[i] = self.optimize_centers; i+=1
+    dat[i] = self.ngl; i+=1
     dat[0] = i
     # Pointers to data
     i = 99
@@ -132,6 +143,22 @@ class prod_basis_c():
     dat[i] = s+1; # this is a terminator to simplify operation
 
     return dat
+    
+
+  def comp_apair_pp_libint(self, a1,a2):
+    """ Get's the vertex coefficient and conversion coefficients for a pair of atoms given by their atom indices """
+    if not hasattr(self, 'sv_pbloc_data') : raise RuntimeError('.sv_pbloc_data is absent')
+    from ctypes import POINTER, c_double, c_int64
+    
+    sp12 = np.require( np.array([self.sv.atom2sp[a] for a in (a1,a2)], dtype=c_int64), requirements='C')
+    rc12 = np.require( np.array([self.sv.atom2coord[a,:] for a in (a1,a2)]), requirements='C')
+    nout = 1000000
+    dout = np.require( zeros(nout), requirements='CW')
+
+    libnao.vrtx_cc_apair( sp12.ctypes.data_as(POINTER(c_int64)), rc12.ctypes.data_as(POINTER(c_double)), dout.ctypes.data_as(POINTER(c_double)), c_int64(nout) )
+    
+    print('dout.sum() ', dout.sum())    
+    
     
   def init_prod_basis_pp(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
     """ Talman's procedure should be working well with Pseudo-Potential starting point..."""
