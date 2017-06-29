@@ -669,7 +669,7 @@ def make_ecp_env(mol, _atm, ecp, pre_env=[]):
                 ecp0 = _ecpdic[_rm_digit(symb)]
             else:
                 ecp0 = None
-            if ecp0 is not None:
+            if ecp0 is not None and ecp0[0] > 0:
                 _atm[ia,CHARGE_OF ] = _charge(symb) - ecp0[0]
                 b = ecp0[1].copy()
                 b[:,ATOM_OF] = ia
