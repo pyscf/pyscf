@@ -4,10 +4,9 @@
 #
 
 '''
-Coupled pertubed Hartree-Fock solver
+Restricted coupled pertubed Hartree-Fock solver
 '''
 
-import sys
 import time
 import numpy
 from pyscf import lib
@@ -27,23 +26,18 @@ def solve(fvind, mo_energy, mo_occ, h1, s1=None,
     else:
         return solve_withs1(fvind, mo_energy, mo_occ, h1, s1,
                             max_cycle, tol, hermi, verbose)
+kernel = solve
 
 # h1 shape is (:,nvir,nocc)
 def solve_nos1(fvind, mo_energy, mo_occ, h1,
                max_cycle=20, tol=1e-9, hermi=False, verbose=logger.WARN):
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(sys.stdout, verbose)
+    '''For field independent basis. First order overlap matrix is zero'''
+    log = logger.new_logger(verbose=verbose)
     t0 = (time.clock(), time.time())
 
     e_a = mo_energy[mo_occ==0]
     e_i = mo_energy[mo_occ>0]
     e_ai = 1 / lib.direct_sum('a-i->ai', e_a, e_i)
-    nocc = e_i.size
-    nvir = e_a.size
-    nmo = nocc + nvir
-
     mo1base = h1 * -e_ai
 
     def vind_vo(mo1):
@@ -58,13 +52,12 @@ def solve_nos1(fvind, mo_energy, mo_occ, h1,
 # h1 shape is (:,nvir+nocc,nocc)
 def solve_withs1(fvind, mo_energy, mo_occ, h1, s1,
                  max_cycle=20, tol=1e-9, hermi=False, verbose=logger.WARN):
-    ''' C^1_{ij} = -1/2 S1
+    '''For field dependent basis. First order overlap matrix is non-zero.
+    The first order orbitals are set to
+    C^1_{ij} = -1/2 S1
     e1 = h1 - s1*e0 + (e0_j-e0_i)*c1 + vhf[c1]
     '''
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(sys.stdout, verbose)
+    log = logger.new_logger(verbose=verbose)
     t0 = (time.clock(), time.time())
 
     occidx = mo_occ > 0
@@ -75,9 +68,7 @@ def solve_withs1(fvind, mo_energy, mo_occ, h1, s1,
     nvir, nocc = e_ai.shape
     nmo = nocc + nvir
 
-# Do not reshape h1 because h1 may be a 2D array (nvir,nocc)
     s1 = s1.reshape(-1,nmo,nocc)
-
     hs = mo1base = h1.reshape(-1,nmo,nocc) - s1*e_i
     mo_e1 = hs[:,occidx,:].copy()
 
@@ -94,11 +85,11 @@ def solve_withs1(fvind, mo_energy, mo_occ, h1, s1,
     mo1 = mo1.reshape(mo1base.shape)
     log.timer('krylov solver in CPHF', *t0)
 
-    v_mo = fvind(mo1.reshape(h1.shape)).reshape(-1,nmo,nocc)
-    mo1[:,viridx] = mo1base[:,viridx] - v_mo[:,viridx]*e_ai
+    v1mo = fvind(mo1.reshape(h1.shape)).reshape(-1,nmo,nocc)
+    mo1[:,viridx] = mo1base[:,viridx] - v1mo[:,viridx]*e_ai
 
     mo_e1 += mo1[:,occidx] * lib.direct_sum('i-j->ij', e_i, e_i)
-    mo_e1 += v_mo[:,occidx,:]
+    mo_e1 += v1mo[:,occidx,:]
 
     if h1.ndim == 3:
         return mo1, mo_e1

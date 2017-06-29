@@ -113,14 +113,14 @@ def make_h10rkb(mol, dm0, gauge_orig=None, with_gaunt=False,
     else:
         log = logger.Logger(mol.stdout, verbose)
     log.debug('first order Fock matrix / RKB')
-    n4c = dm0.shape[0]
-    n2c = n4c // 2
     if gauge_orig is None:
         t1 = mol.intor('int1e_giao_sa10sp_spinor', 3)
     else:
         t1 = mol.intor('int1e_cg_sa10sp_spinor', 3)
     if with_gaunt:
         sys.stderr('NMR gaunt part not implemented')
+    n2c = t1.shape[2]
+    n4c = n2c * 2
     h1 = numpy.zeros((3, n4c, n4c), complex)
     for i in range(3):
         h1[i,:n2c,n2c:] += .5 * t1[i]

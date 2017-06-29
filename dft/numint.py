@@ -662,6 +662,7 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 nelec[1,idm] += den.sum()
                 excsum[idm] += (den*exc).sum()
 
+                # *.5 due to +c.c. in the end
                 aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho[:,0], out=aow)
                 vmat[0,idm] += _dot_ao_ao(mol, ao, aow, mask, shls_slice, ao_loc)
                 aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho[:,1], out=aow)
@@ -687,7 +688,7 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 excsum[idm] += (den*exc).sum()
 
                 wv = numpy.empty((4,ngrid))
-                wv[0]  = weight * vrho[:,0] * .5
+                wv[0]  = weight * vrho[:,0] * .5  # *.5 due to +c.c. in the end
                 wv[1:] = rho_a[1:] * (weight * vsigma[:,0] * 2)  # sigma_uu
                 wv[1:]+= rho_b[1:] * (weight * vsigma[:,1])      # sigma_ud
                 aow = numpy.einsum('npi,np->pi', ao, wv, out=aow)
@@ -720,7 +721,7 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 excsum[idm] += (den*exc).sum()
 
                 wv = numpy.empty((4,ngrid))
-                wv[0]  = weight * vrho[:,0] * .5
+                wv[0]  = weight * vrho[:,0] * .5  # *.5 due to +c.c. in the end
                 wv[1:] = rho_a[1:4] * (weight * vsigma[:,0] * 2)  # sigma_uu
                 wv[1:]+= rho_b[1:4] * (weight * vsigma[:,1])      # sigma_ud
                 aow = numpy.einsum('npi,np->pi', ao[:4], wv, out=aow)
