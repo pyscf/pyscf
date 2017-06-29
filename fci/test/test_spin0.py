@@ -51,7 +51,7 @@ class KnowValues(unittest.TestCase):
         ci1 = fci.direct_spin0.contract_2e(g2e, ci0, norb, nelec)
         ci1ref = fci.direct_spin1.contract_2e(g2e, ci0, norb, nelec)
         self.assertTrue(numpy.allclose(ci1ref, ci1))
-        self.assertAlmostEqual(numpy.linalg.norm(ci1), 15.076640155228787, 8)
+        self.assertAlmostEqual(numpy.linalg.norm(ci1), 15.076640155228787, 7)
 
     def test_kernel(self):
         e, c = fci.direct_spin0.kernel(h1e, g2e, norb, nelec)

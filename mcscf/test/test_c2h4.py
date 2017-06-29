@@ -63,7 +63,7 @@ class KnowValues(unittest.TestCase):
         mc.dynamic_micro_step = True
         mc.conv_tol = 1e-8
         emc = mc.mc1step()[0]
-        self.assertAlmostEqual(emc, -78.0103838390, 6)
+        self.assertAlmostEqual(emc, -78.0103838390, 5)
 
 
 if __name__ == "__main__":
