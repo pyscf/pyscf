@@ -1193,7 +1193,7 @@ def search_ao_nr(mol, atm_id, l, m, atmshell):
         else:
             degen = l1 * 2 + 1
         nc = mol.bas_nctr(ib)
-        print ia, l1, '|', nc, atmshell, ibf
+        print(ia, l1, '|', nc, atmshell, ibf)
         if ia == atm_id and l1 == l:
             if atmshell > nc+l1:
                 atmshell = atmshell - nc

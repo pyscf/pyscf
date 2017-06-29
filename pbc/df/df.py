@@ -618,4 +618,10 @@ class _load_and_unpack(object):
         v = numpy.asarray(self.dat[p0:p1])
         v = lib.transpose(v.reshape(-1,nao,nao), axes=(0,2,1)).conj()
         return v.reshape(-1,nao**2)
+    def __getitem__(self, p0, p1):
+        nao = int(numpy.sqrt(self.shape[1]))
+        v = numpy.asarray(self.dat[p0:p1])
+        v = lib.transpose(v.reshape(-1,nao,nao), axes=(0,2,1)).conj()
+        return v.reshape(-1,nao**2)
+      
 
