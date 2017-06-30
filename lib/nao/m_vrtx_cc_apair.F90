@@ -18,7 +18,7 @@ module m_vrtx_cc_apair
 ! The subroutine is generating the dominant product vertices and conversion coefficiens for a given atom pair
 !
 subroutine vrtx_cc_apair(sp12_c,rc12,dout,nout) bind(c, name='vrtx_cc_apair')
-  use m_sv_prod_log, only : a, dp_a, bp2info, pb, ff2, evals, vertex_real2, oo2num, m2nf, vertex_cmplx2, rhotb, bessel_pp, f1f2_mom, r_scalar_pow_jp1, roverlap, S_comp, ylm
+  use m_sv_prod_log, only : a, dp_a, bp2info, pb, ff2, evals, vertex_real2, oo2num, p2n, tmp, m2nf, vertex_cmplx2, rhotb, bessel_pp, f1f2_mom, r_scalar_pow_jp1, roverlap, S_comp, ylm
   use m_bilocal_vertex, only : make_bilocal_vertex_rf
   use m_init_pair_info, only : init_pair_info
   use m_init_bpair_functs_vrtx, only : init_bpair_functs_vrtx
@@ -30,6 +30,8 @@ subroutine vrtx_cc_apair(sp12_c,rc12,dout,nout) bind(c, name='vrtx_cc_apair')
   use m_tci_ac_ac, only : tci_ac_ac
   use m_tci_ac_ac_cpy, only : tci_ac_ac_cpy
   use m_prod_basis_type, only : get_i2s
+  use m_pb_reexpr_comm, only : init_counting_fini
+  use m_apair_put, only : apair_put
   
   implicit none
   !! external
@@ -40,12 +42,12 @@ subroutine vrtx_cc_apair(sp12_c,rc12,dout,nout) bind(c, name='vrtx_cc_apair')
   !! internal  
   type(book_pb_t), allocatable :: ic2book(:)
   integer(c_int64_t) :: ic, nc, npre
-  real(c_double) :: ttt(9), time(9), t1, t2, tt(9), tloc(9), rcut, center(3)
+  real(c_double) :: ttt(9), t1, t2, tt(9), rcut, center(3)
   logical :: lready, lcheck_cpy
   real(c_double), allocatable :: fmm_mem(:), vc_ac_ac(:,:), vc_ac_ac_ref(:,:)
   integer(blas_int), allocatable :: ipiv(:)
   integer(blas_int) :: info
-  integer :: pair, natoms, ibp, sp12(2)
+  integer :: pair, natoms, ibp, sp12(2), npdp
   integer, allocatable :: i2s(:)
    
   if(nout<1) _die('nout<1')
@@ -59,6 +61,7 @@ subroutine vrtx_cc_apair(sp12_c,rc12,dout,nout) bind(c, name='vrtx_cc_apair')
   pair = natoms + ibp
   lcheck_cpy = .false.
   tt = 0
+  ttt = 0
 
   call init_pair_info(sp12, rc12, a%sv, bp2info(ibp))
   
@@ -67,9 +70,8 @@ subroutine vrtx_cc_apair(sp12_c,rc12,dout,nout) bind(c, name='vrtx_cc_apair')
     vertex_cmplx2, rhotb, ttt)
 
   !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
-  call init_bpair_functs_vrtx(a, bp2info(ibp), &
-    m2nf, evals, ff2, vertex_real2, lready, rcut, center, dp_a, &
-    fmm_mem, pb%sp_biloc2vertex(ibp))
+  call init_bpair_functs_vrtx(a, bp2info(ibp), m2nf, evals, ff2, &
+    vertex_real2, lready, rcut, center, dp_a, fmm_mem, pb%sp_biloc2vertex(ibp))
 
   !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
   pb%book_dp(pair)%top = -1
@@ -96,6 +98,10 @@ subroutine vrtx_cc_apair(sp12_c,rc12,dout,nout) bind(c, name='vrtx_cc_apair')
     ic2book(ic)%si(3) = i2s(ic)
     ic2book(ic)%fi(3) = i2s(ic+1)-1
   enddo ! ic
+  
+  !write(6,*) __FILE__, __LINE__
+  !write(6,*) i2s
+  
   npre = i2s(size(i2s))-1
    
   !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
@@ -124,7 +130,51 @@ subroutine vrtx_cc_apair(sp12_c,rc12,dout,nout) bind(c, name='vrtx_cc_apair')
     endif
   endif
 
-  !call apair_put(bp2info, ff2, evals, vertex_real2, lready, rcut, center, oo2num, m2nf, dout, nout)
+  _t1    
+  info = 0
+  !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
+  call DGETRF(npre, npre, vc_ac_ac, npre, ipiv, info )
+  !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
+  if(info/=0) then
+    write(0,*) __FILE__, __LINE__, info, npre
+    call die('DGETRF: info/=0')
+  endif
+  !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
+  _t2(tt(4))
+  npdp = size(pb%sp_biloc2vertex(ibp)%vertex,3)
+  !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
+  p2n(pair) = npdp
+  !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
+  call init_counting_fini(ic2book, pb%coeffs(pair))
+  allocate(pb%coeffs(pair)%coeffs_ac_dp(npre, npdp))
+  pb%coeffs(pair)%is_reexpr = 1
+  _t1
+  !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
+  call tci_ac_dp(dp_a%hk%ca, ic2book, fmm_mem, pb%coeffs(pair)%coeffs_ac_dp, &
+    bessel_pp, f1f2_mom, roverlap, ylm, S_comp, r_scalar_pow_jp1, tmp)
+  _t2(tt(5))  
+  !! Reexpressing coefficients are computed and stored
+  _t1
+  !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
+  call DGETRS("N", npre, npdp, vc_ac_ac,npre, ipiv, pb%coeffs(pair)%coeffs_ac_dp, npre, info)
+  !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
+  if(info/=0) then
+    write(0,*) __FILE__, __LINE__, info, npre, npdp, ibp
+    call die('DGETRS: info/=0')
+  endif
+  !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
+  _t2(tt(6))
+  !! END of Reexpressing coefficients are computed and stored
+    
+!    write(6,*) __FILE__, __LINE__, nc, npre, ic2book(:)%ic
+!    write(6,'(a,i5,3x,2i8,3x,6f9.2)')  __FILE__, __LINE__, ibp, nbp, tt(1:6)
+
+  !do sp=1,size(pb%sp_local2vertex)
+  !  write(6,*) sp, ubound(pb%sp_local2vertex(sp)%vertex)
+  !enddo
+  !write(6,*) ' sum(pb%coeffs(pair)%coeffs_ac_dp) ', sum(pb%coeffs(pair)%coeffs_ac_dp), ubound(pb%coeffs(pair)%coeffs_ac_dp)
+  
+  call apair_put(pb, pair, dout, nout)
  
 end subroutine ! vrtx_cc_apair
 

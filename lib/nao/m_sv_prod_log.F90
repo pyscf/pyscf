@@ -61,7 +61,7 @@ subroutine sv_prod_log(dinp,ninp) bind(c, name='sv_prod_log')
   real(c_double), intent(in) :: dinp(ninp)
   !! internal
 
-  integer :: ul, natoms, nr, jcutoff, jmx, norbs_max, nf_max, nterm_max
+  integer :: ul, natoms, nr, jcutoff, jmx, norbs_max, nf_max, nterm_max, pair
   real(c_double) :: ac_rcut
   real(c_double), allocatable :: sp2rcut(:)
   
@@ -103,6 +103,12 @@ subroutine sv_prod_log(dinp,ninp) bind(c, name='sv_prod_log')
   allocate(r_scalar_pow_jp1(0:2*a%jcutoff));
   allocate(tmp(-a%jcutoff:a%jcutoff))
   !! END of Comput of Coulomb matrix elements
+
+  allocate(p2n(1+natoms))
+  p2n = -999  
+  do pair=1,natoms
+    p2n(pair) = pb%book_dp(pair)%fi(3)-pb%book_dp(pair)%si(3)+1
+  enddo
 
 
 end subroutine ! sv_prod_log
