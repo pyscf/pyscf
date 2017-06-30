@@ -78,7 +78,7 @@ def update_amps(mycc, t1, t2, eris):
     t2new_tril = numpy.zeros((nocc*(nocc+1)//2,nvir,nvir))
     mycc.add_wvvVV_(t1, t2, eris, t2new_tril)
     idxo = numpy.tril_indices(nocc)
-    lib.takebak_2d(t2new.reshape(nocc**2,-1), t2new_tril.reshape(-1,nvir**2),
+    lib.takebak_2d(t2new.reshape(nocc**2,nvir**2), t2new_tril.reshape(-1,nvir**2),
                    idxo[0]*nocc+idxo[1], numpy.arange(nvir**2))
     idxo = numpy.arange(nocc)
     t2new[idxo,idxo] *= .5
@@ -102,8 +102,8 @@ def update_amps(mycc, t1, t2, eris):
     foo += numpy.einsum('kc,jikc->ij', 2*t1, eris_ooov)
     foo += numpy.einsum('kc,jkic->ij',  -t1, eris_ooov)
     woooo = lib.ddot(eris_ooov.reshape(-1,nvir), t1.T).reshape((nocc,)*4)
-    woooo = lib.transpose_sum(woooo.reshape(nocc*nocc,-1), inplace=True)
-    woooo += _cp(eris.oooo).reshape(nocc**2,-1)
+    woooo = lib.transpose_sum(woooo.reshape(nocc**2,nocc**2), inplace=True)
+    woooo += _cp(eris.oooo).reshape(nocc**2,nocc**2)
     woooo = _cp(woooo.reshape(nocc,nocc,nocc,nocc).transpose(0,2,1,3))
     eris_ooov = None
     time1 = log.timer_debug1('woooo', *time1)
@@ -355,7 +355,8 @@ def update_amps(mycc, t1, t2, eris):
     #: t2new += numpy.einsum('ijac,bc->ijab', t2, ft_ab)
     #: t2new -= numpy.einsum('ki,kjab->ijab', ft_ij, t2)
     lib.ddot(t2.reshape(-1,nvir), ft_ab.T, 1, t2new.reshape(-1,nvir), 1)
-    lib.ddot(ft_ij.T, t2.reshape(nocc,-1),-1, t2new.reshape(nocc,-1), 1)
+    lib.ddot(ft_ij.T, t2.reshape(nocc,nocc*nvir**2),-1,
+             t2new.reshape(nocc,nocc*nvir**2), 1)
 
     mo_e = fock.diagonal()
     eia = mo_e[:nocc,None] - mo_e[None,nocc:]

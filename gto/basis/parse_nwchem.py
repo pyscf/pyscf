@@ -23,7 +23,7 @@ def parse(string):
     '''
     bastxt = []
     for dat in string.splitlines():
-        x = dat.split('#')[0].strip()  # Use # to start comments
+        x = dat.split('#')[0].strip().upper()  # Use # to start comments
         if (x and not x.startswith('END') and not x.startswith('BASIS')):
             bastxt.append(x)
     return _parse(bastxt)
@@ -34,7 +34,7 @@ def load(basisfile, symb):
 def parse_ecp(string):
     ecptxt = []
     for dat in string.splitlines():
-        x = dat.split('#')[0].strip()
+        x = dat.split('#')[0].strip().upper()
         if (x and not x.startswith('END') and not x.startswith('ECP')):
             ecptxt.append(x)
     return _parse_ecp(ecptxt)
@@ -45,50 +45,56 @@ def load_ecp(basisfile, symb):
 def search_seg(basisfile, symb):
     with open(basisfile, 'r') as fin:
         # ignore head
-        dat = fin.readline().lstrip(' ')
-        while dat and not dat.startswith('#BASIS SET'):
-            dat = fin.readline().lstrip(' ')
+        dat = fin.readline().upper()
+        while dat and not dat.strip()[1:].lstrip().startswith('BASIS'):
+            dat = fin.readline().upper()
+
         # searching
-        dat = fin.readline().lstrip(' ')
-        while dat and not dat.startswith('END'):
-            if symb+' ' in dat:
+        dat = fin.readline().upper()
+        while dat and not dat.lstrip().startswith('END'):
+            dat = dat.strip()
+            if dat.split(' ', 1)[0] == symb.upper():
                 seg = []
-                while (dat and
-                       not dat.startswith('#BASIS SET') and
-                       not dat.startswith('END')):
-                    x = dat.splitlines()[0].strip()
-                    if x:  # remove blank lines
-                        seg.append(x)
-                    dat = fin.readline().lstrip(' ')
+                while dat:
+                    dat = dat.strip()
+                    if (dat[1:].lstrip().startswith('BASIS') or
+                        dat.startswith('END')):
+                        break
+                    seg.append(dat)
+                    dat = fin.readline().upper()
                 return seg
             else:
-                while dat and not dat.startswith('#BASIS SET'):
-                    dat = fin.readline().lstrip(' ')
-            dat = fin.readline().lstrip(' ')
+                while dat and not dat.strip()[1:].lstrip().startswith('BASIS'):
+                    dat = fin.readline().upper()
+            dat = fin.readline().upper()
     raise RuntimeError('Basis not found for  %s  in  %s' % (symb, basisfile))
 
 def search_ecp(basisfile, symb):
     with open(basisfile, 'r') as fin:
         # ignore head
-        dat = fin.readline().lstrip(' ')
-        while dat and not dat.startswith('ECP'):
-            dat = fin.readline().lstrip(' ')
+        dat = fin.readline().upper()
+        while dat and not dat.lstrip().startswith('ECP'):
+            dat = fin.readline().upper()
 
-        dat = fin.readline().lstrip(' ')
+        dat = fin.readline().upper()
         # searching
-        while (dat and
-               not dat.startswith(symb+' ') and
-               not dat.startswith('END')):
-            dat = fin.readline()
+        while dat:
+            dat = dat.strip()
+            if (dat.split(' ', 1)[0] == symb.upper() or
+                dat.startswith('END')):
+                break
+            dat = fin.readline().upper()
 
         seg = []
-        while dat and not dat.startswith('END'):
-            if dat[0].isalpha() and symb+' ' not in dat:
+        while dat:
+            dat = dat.strip()
+            if ((dat[0].isalpha() and dat.split(' ', 1)[0] != symb.upper()) or
+                dat.startswith('END')):
                 return seg
-            if dat: # remove blank lines
+            elif dat: # remove blank lines
                 seg.append(dat)
-            dat = fin.readline().splitlines()[0].strip()
-    raise RuntimeError('ECP not found for  %s  in  %s' % (symb, basisfile))
+            dat = fin.readline().upper()
+    return []
 
 def convert_basis_to_nwchem(symb, basis):
     '''Convert the internal basis format to NWChem format string'''
@@ -141,11 +147,11 @@ def convert_ecp_to_nwchem(symb, ecp):
 def _parse(raw_basis):
     basis_add = []
     for line in raw_basis:
-        dat = line.lstrip()
+        dat = line.strip()
         if dat.startswith('#'):
             continue
         elif dat[0].isalpha():
-            key = dat.split()[1].upper()
+            key = dat.split()[1]
             if key == 'SP':
                 basis_add.append([0])
                 basis_add.append([1])
@@ -165,12 +171,13 @@ def _parse(raw_basis):
 
 def _parse_ecp(raw_ecp):
     ecp_add = []
+    nelec = None
     for line in raw_ecp:
-        dat = line.lstrip()
+        dat = line.strip()
         if dat.startswith('#'): # comment line
             continue
         elif dat[0].isalpha():
-            key = dat.split()[1].upper()
+            key = dat.split()[1]
             if key == 'NELEC':
                 nelec = int(dat.split()[2])
                 continue
@@ -184,10 +191,11 @@ def _parse_ecp(raw_ecp):
             line = dat.replace('D','e').split()
             l = int(line[0])
             by_ang[l].append([float(x) for x in line[1:]])
-    bsort = []
-    for l in range(-1, MAXL):
-        bsort.extend([b for b in ecp_add if b[0] == l])
-    return [nelec, bsort]
+    if nelec is not None:
+        bsort = []
+        for l in range(-1, MAXL):
+            bsort.extend([b for b in ecp_add if b[0] == l])
+        return [nelec, bsort]
 
 if __name__ == '__main__':
     from pyscf import gto

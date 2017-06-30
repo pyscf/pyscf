@@ -32,6 +32,7 @@ class KnowValues(unittest.TestCase):
     def test_boys(self):
         idx = numpy.array([17,20,21,22,23,30,36,41,42,47,48,49])-1
         loc = boys.Boys(mol)
+        loc.max_cycle = 100
         mo = loc.kernel(mf.mo_coeff[:,idx])
         dip = boys.dipole_integral(mol, mo)
         z = numpy.einsum('xii,xii->', dip, dip)
@@ -53,6 +54,7 @@ class KnowValues(unittest.TestCase):
     def test_pipek(self):
         idx = numpy.array([17,20,21,22,23,30,36,41,42,47,48,49])-1
         loc = pipek.PipekMezey(mol)
+        loc.max_cycle = 100
         mo = loc.kernel(mf.mo_coeff[:,idx])
         pop = pipek.atomic_pops(mol, mo)
         z = numpy.einsum('xii,xii->', pop, pop)

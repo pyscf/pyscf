@@ -31,7 +31,7 @@ class KnowValues(unittest.TestCase):
         m = nmr.RKS(mf)
         m.gauge_orig = (1,1,1)
         msc = m.kernel()
-        self.assertAlmostEqual(finger(msc), 13.743109885011432, 7)
+        self.assertAlmostEqual(finger(msc), 13.743109885011432, 5)
 
     def test_nr_b3lyp_common_gauge(self):
         mf = dft.RKS(mol)
@@ -42,7 +42,7 @@ class KnowValues(unittest.TestCase):
         m = nmr.RKS(mf)
         m.gauge_orig = (1,1,1)
         msc = m.kernel()
-        self.assertAlmostEqual(finger(msc), 15.205571299799631, 7)
+        self.assertAlmostEqual(finger(msc), 15.205571299799631, 5)
 
     def test_nr_lda_giao(self):
         mf = dft.RKS(mol)
@@ -52,7 +52,7 @@ class KnowValues(unittest.TestCase):
         mf.scf()
         m = nmr.RKS(mf)
         msc = m.kernel()
-        self.assertAlmostEqual(finger(msc), 58.250320885937683, 7)
+        self.assertAlmostEqual(finger(msc), 58.250312294198054, 5)
 
     def test_nr_b3lyp_giao(self):
         mf = dft.RKS(mol)
@@ -62,7 +62,7 @@ class KnowValues(unittest.TestCase):
         mf.scf()
         m = nmr.RKS(mf)
         msc = m.kernel()
-        self.assertAlmostEqual(finger(msc), 54.526985564166701, 7)
+        self.assertAlmostEqual(finger(msc), 54.526977509331694, 5)
 
 
 

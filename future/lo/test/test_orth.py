@@ -61,8 +61,8 @@ class KnowValues(unittest.TestCase):
         c = orth.weight_orth(s, weight)
         self.assertTrue(numpy.allclose(reduce(numpy.dot, (c.T, s, c)),
                                        numpy.eye(n)))
-        self.assertAlmostEqual(numpy.linalg.norm(c), 36.56738258719514, 9)
-        self.assertAlmostEqual(abs(c).sum(), 1908.8535852660757, 7)
+        self.assertAlmostEqual(numpy.linalg.norm(c), 36.56738258719514, 8)
+        self.assertAlmostEqual(abs(c).sum(), 1908.8535852660757, 6)
 
     def test_orth_ao(self):
         c0 = orth.pre_orth_ao(mol, method='scf')

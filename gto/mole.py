@@ -323,10 +323,12 @@ def format_ecp(ecp_tab):
         symb = _atom_symbol(atom)
         stdsymb = _std_symbol(symb)
         if isinstance(ecp_tab[atom], (str, unicode)):
-            try:
-                fmt_ecp[symb] = basis.load_ecp(str(ecp_tab[atom]), stdsymb)
-            except RuntimeError as e:
-                sys.stderr.write('%s\n' % e.message)
+            ecp_dat = basis.load_ecp(str(ecp_tab[atom]), stdsymb)
+            if ecp_dat is None or len(ecp_dat) == 0:
+                sys.stderr.write('ECP %s not found for  %s\n' %
+                                 (ecp_tab[atom], symb))
+            else:
+                fmt_ecp[symb] = ecp_dat
         else:
             fmt_ecp[symb] = ecp_tab[atom]
     return fmt_ecp
@@ -1605,8 +1607,9 @@ class Mole(lib.StreamObject):
             _update_from_cmdargs_(self)
 
         # avoid to open output file twice
-        if parse_arg and self.output is not None \
-           and self.stdout.getvalue() != self.output:
+        if (parse_arg and self.output is not None and
+            not (hasattr(self.stdout, 'name') and  # to handle StringIO().name bug
+                 self.stdout.name == self.output)):
             self.stdout = open(self.output, 'w')
 
         if self.verbose >= logger.WARN:

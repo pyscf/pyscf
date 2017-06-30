@@ -1674,7 +1674,10 @@ class UCCSD(rccsd.RCCSD):
 
     def amplitudes_from_rccsd(self, t1, t2):
         '''Convert spatial orbital T1,T2 to spin-orbital T1,T2'''
-        return addons.spatial2spin(t1), addons.spatial2spin(t2)
+        orbspin = self.orbspin
+        t2aa = t2 - t2.transpose(0,1,3,2)
+        return (spatial2spin((t1, t1), orbspin),
+                spatial2spin((t2aa, t2, t2aa), orbspin))
 
     def spatial2spin(self, tx, orbspin=None):
         if orbspin is None: orbspin = self.orbspin
@@ -2095,8 +2098,8 @@ class _ERIS:
             self.OVOV = eri_bb[:noccb,noccb:,:noccb,noccb:].copy()
             self.OOVV = eri_bb[:noccb,:noccb,noccb:,noccb:].copy()
             self.OVVO = eri_bb[:noccb,noccb:,noccb:,:noccb].copy()
-            OVVV = eri_bb[:noccb,noccb:,noccb:,noccb:].reshape(-1,nvirb,nvirb)
-            self.OVVV = lib.pack_tril(OVVV).reshape(noccb,nvirb,-1)
+            OVVV = eri_bb[:noccb,noccb:,noccb:,noccb:].reshape(noccb*nvirb,nvirb,nvirb)
+            self.OVVV = lib.pack_tril(OVVV).reshape(noccb,nvirb,nvirb*(nvirb+1)//2)
             OVVV = None
             self.VVVV = ao2mo.restore(4, eri_bb[noccb:,noccb:,noccb:,noccb:].copy(), nvirb)
             self.ooOO = eri_ab[:nocca,:nocca,:noccb,:noccb].copy()
@@ -2106,10 +2109,10 @@ class _ERIS:
             self.ovOV = eri_ab[:nocca,nocca:,:noccb,noccb:].copy()
             self.ooVV = eri_ab[:nocca,:nocca,noccb:,noccb:].copy()
             self.ovVO = eri_ab[:nocca,nocca:,noccb:,:noccb].copy()
-            ovVV = eri_ab[:nocca,nocca:,noccb:,noccb:].reshape(-1,nvirb,nvirb)
-            self.ovVV = lib.pack_tril(ovVV).reshape(nocca,nvira,-1)
+            ovVV = eri_ab[:nocca,nocca:,noccb:,noccb:].reshape(nocca*nvira,nvirb,nvirb)
+            self.ovVV = lib.pack_tril(ovVV).reshape(nocca,nvira,nvirb*(nvirb+1)//2)
             ovVV = None
-            vvVV = eri_ab[nocca:,nocca:,noccb:,noccb:].reshape(nvira**2,-1)
+            vvVV = eri_ab[nocca:,nocca:,noccb:,noccb:].reshape(nvira**2,nvirb**2)
             idxa = np.tril_indices(nvira)
             idxb = np.tril_indices(nvirb)
             self.vvVV = lib.take_2d(vvVV, idxa[0]*nvira+idxa[1], idxb[0]*nvirb+idxb[1])
@@ -2121,8 +2124,8 @@ class _ERIS:
             self.OOvv = eri_ba[:noccb,:noccb,nocca:,nocca:].copy()
             self.OVvo = eri_ba[:noccb,noccb:,nocca:,:nocca].copy()
             #self.OVvv = eri_ba[:noccb,noccb:,nocca:,nocca:].copy()
-            OVvv = eri_ba[:noccb,noccb:,nocca:,nocca:].reshape(-1,nvira,nvira)
-            self.OVvv = lib.pack_tril(OVvv).reshape(noccb,nvirb,-1)
+            OVvv = eri_ba[:noccb,noccb:,nocca:,nocca:].reshape(noccb*nvirb,nvira,nvira)
+            self.OVvv = lib.pack_tril(OVvv).reshape(noccb,nvirb,nvira*(nvira+1)//2)
             OVvv = None
             #self.VVvv = eri_ba[noccb:,noccb:,nocca:,nocca:].copy()
         else:
@@ -2272,10 +2275,11 @@ def get_umoidx(cc):
         frozen = cc.frozen
     moidxa = numpy.ones(cc.mo_occ[0].size, dtype=bool)
     moidxb = numpy.ones(cc.mo_occ[1].size, dtype=bool)
-    if len(frozen[0]) > 0:
-        moidxa[numpy.asarray(frozen[0])] = False
-    if len(frozen[1]) > 0:
-        moidxb[numpy.asarray(frozen[1])] = False
+    if isinstance(frozen, numpy.ndarray) or frozen:
+        if len(frozen[0]) > 0:
+            moidxa[numpy.asarray(frozen[0])] = False
+        if len(frozen[1]) > 0:
+            moidxb[numpy.asarray(frozen[1])] = False
 
     return moidxa,moidxb
 
@@ -2362,7 +2366,7 @@ class _IMDS:
         cput0 = (time.clock(), time.time())
         log = logger.Logger(self.stdout, self.verbose)
 
-        t1,t2,eris = self.t1, self.t2, self.eris
+        t1, t2, eris = self.t1, self.t2, self.eris
         t1 = spatial2spin(t1, eris.orbspin)
         t2 = spatial2spin(t2, eris.orbspin)
         nocc, nvir = t1.shape

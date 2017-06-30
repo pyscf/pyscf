@@ -3,6 +3,7 @@
 
 sudo: required
 language: python
+group: deprecated-2017Q2
 
 git:
   depth: 3
@@ -25,6 +26,7 @@ before_install:
       libatlas-base-dev
       python-h5py
       python-nose
+      python-nose-exclude
       python-numpy
       python-scipy
       cmake
@@ -39,6 +41,13 @@ install:
       make &&
       cd ../../pyscf
 
+before_script:
+      export PYTHONPATH=$(pwd):$PYTHONPATH
+
 script:
-     rm -f ./cc/test/test_ccsd_t.py &&
-     nosetests -v     
+    - >
+      nosetests -v -e ccsd_t -e pbc -e pyscf -e dmrgscf -e fciqmcscf -e icmpspt -e examples
+      -e test_bz
+      -e test_tdrks_grad
+      -e test_mc2step_4o4e
+      -e test_contract_ss

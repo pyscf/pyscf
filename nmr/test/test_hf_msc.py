@@ -37,56 +37,56 @@ class KnowValues(unittest.TestCase):
         m.cphf = False
         m.gauge_orig = (1,1,1)
         msc = m.shielding()
-        self.assertAlmostEqual(finger(msc), 1636.7415597401566, 7)
+        self.assertAlmostEqual(finger(msc), 1636.7413165636394, 5)
 
     def test_nr_common_gauge_cpscf(self):
         m = nmr.RHF(nrhf)
         m.cphf = True
         m.gauge_orig = (1,1,1)
         msc = m.shielding()
-        self.assertAlmostEqual(finger(msc), 1562.3861795033072, 7)
+        self.assertAlmostEqual(finger(msc), 1562.3859473764551, 5)
 
     def test_nr_giao_ucpscf(self):
         m = nmr.RHF(nrhf)
         m.cphf = False
         m.gauge_orig = None
         msc = m.shielding()
-        self.assertAlmostEqual(finger(msc), 1488.0951043676009, 7)
+        self.assertAlmostEqual(finger(msc), 1488.0948832784416, 5)
 
     def test_nr_giao_cpscf(self):
         m = nmr.RHF(nrhf)
         m.cphf = True
         m.gauge_orig = None
         msc = m.shielding()
-        self.assertAlmostEqual(finger(msc), 1358.9828083982654, 7)
+        self.assertAlmostEqual(finger(msc), 1358.9826064972372, 5)
 
     def test_rmb_common_gauge_ucpscf(self):
         m = nmr.DHF(rhf)
         m.cphf = False
         m.gauge_orig = (1,1,1)
         msc = m.shielding()
-        self.assertAlmostEqual(finger(msc), 1642.188139214476, 6)
+        self.assertAlmostEqual(finger(msc), 1642.1878944169432, 5)
 
     def test_rmb_common_gauge_cpscf(self):
         m = nmr.DHF(rhf)
         m.cphf = True
         m.gauge_orig = (1,1,1)
         msc = m.shielding()
-        self.assertAlmostEqual(finger(msc), 1569.0433810781599, 6)
+        self.assertAlmostEqual(finger(msc), 1569.0431469270311, 5)
 
     def test_rmb_giao_ucpscf(self):
         m = nmr.DHF(rhf)
         m.cphf = False
         m.gauge_orig = None
         msc = m.shielding()
-        self.assertAlmostEqual(finger(msc), 1493.7245824376751, 6)
+        self.assertAlmostEqual(finger(msc), 1493.7243596881835, 5)
 
     def test_rmb_giao_cpscf(self):
         m = nmr.DHF(rhf)
         m.cphf = True
         m.gauge_orig = None
         msc = m.shielding()
-        self.assertAlmostEqual(finger(msc), 1365.4715388244801, 6)
+        self.assertAlmostEqual(finger(msc), 1365.4713349881783, 5)
 
     def test_rkb_giao_cpscf(self):
         m = nmr.DHF(rhf)
@@ -94,7 +94,7 @@ class KnowValues(unittest.TestCase):
         m.cphf = True
         m.gauge_orig = None
         msc = m.shielding()
-        self.assertAlmostEqual(finger(msc), 1923.9130080878424, 6)
+        self.assertAlmostEqual(finger(msc), 1923.9127246223129, 5)
 
     def test_rkb_common_gauge_cpscf(self):
         m = nmr.DHF(rhf)
@@ -102,7 +102,7 @@ class KnowValues(unittest.TestCase):
         m.cphf = True
         m.gauge_orig = (1,1,1)
         msc = m.shielding()
-        self.assertAlmostEqual(finger(msc), 1980.1214211466136, 6)
+        self.assertAlmostEqual(finger(msc), 1980.1211286797848, 5)
 
     def test_make_h10(self):
         numpy.random.seed(1)
