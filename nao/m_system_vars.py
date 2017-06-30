@@ -205,7 +205,7 @@ class system_vars_c():
     self.wfsx = siesta_wfsx_c(label, chdir)
     self.hsx = siesta_hsx_c(chdir+'/'+self.label+'.HSX', **kvargs)
     self.norbs_sc = self.wfsx.norbs if self.hsx.orb_sc2orb_uc is None else len(self.hsx.orb_sc2orb_uc)
-
+    self.ucell = self.xml_dict["ucell"]
     ##### The parameters as fields     
     self.sp2ion = []
     for sp in self.wfsx.sp2strspecie:

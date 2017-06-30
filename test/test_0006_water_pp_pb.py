@@ -9,6 +9,7 @@ class KnowValues(unittest.TestCase):
     import os
     dname = os.path.dirname(os.path.abspath(__file__))
     sv = system_vars_c().init_siesta_xml(chdir=dname)
+    self.assertTrue(abs(sv.ucell).sum()>0)
     pb = prod_basis_c().init_pb_pp_libnao_apair(sv)
     self.assertEqual(sv.norbs, 23)
     pb.comp_apair_pp_libint(0,1)

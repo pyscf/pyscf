@@ -21,7 +21,7 @@ subroutine sv_prod_log_get(d,n, sv, pb)
   type(prod_basis_t), intent(inout) :: pb
   !! internal
   integer(c_int64_t) :: nsp, nr, s, f, i, jmx, nmumx, mu, sp, natoms, norbs, norbs_sc
-  integer(c_int64_t) :: atom, nspin, mup, nmup, np, no, p, o2, j, s1, f1
+  integer(c_int64_t) :: atom, nspin, mup, nmup, np, no, p, o2, j, s1, f1, ott
   integer(c_int64_t) :: ac_npc_max ! maximal number of participating centers
   integer(c_int64_t) :: jcutoff ! maximal ang mom for expanding bilocals
   real(c_double) :: rmin, rmax, kmax, psi_log_sum, prod_log_sum, tol_loc, tol_biloc, ac_rcut_ratio
@@ -171,7 +171,11 @@ subroutine sv_prod_log_get(d,n, sv, pb)
   sv%uc%atom2coord = -999.0D0
   sv%uc%atom2sp = -999
   atom2s = -999
-  
+
+  i = i + 1
+  if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
+  do ott=1,3; f=s+3-1; sv%uc%uc_vecs(1:3,ott) = d(s:f); s=f+1; enddo
+
   i = i + 1
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
   f=s+natoms-1; sv%uc%atom2sp(1:natoms) = int(d(s:f))+1; s=f+1;
@@ -191,6 +195,7 @@ subroutine sv_prod_log_get(d,n, sv, pb)
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
   do atom=1,natoms; f=s+3-1; sv%uc%atom2coord(1:3,atom) = d(s:f); s=f+1; enddo;
 
+  sv%natoms = int(natoms)
   sv%norbs = int(atom2s(natoms+1)-1)
   if(sv%norbs<nsp) then
     write(6,*) __FILE__, __LINE__, sv%norbs, nsp; stop '!norbs';
@@ -229,6 +234,7 @@ subroutine sv_prod_log_get(d,n, sv, pb)
   pb%pb_p%bilocal_center_coeff = "2*L+1"
   ac_rcut_max = maxval(sv%uc%mu_sp2rcut)
   pb%pb_p%ac_rcut = ac_rcut_ratio * ac_rcut_max
+  pb%pb_p%ac_method = "LENS"
 
   allocate(pb%sp_local2vertex(nsp))
   allocate(pb%sp_local2functs(nsp))
@@ -309,7 +315,7 @@ subroutine sv_prod_log_get(d,n, sv, pb)
   i = i + 1
   if(s/=d(i)) then; write(6,*) __FILE__, __LINE__, s, d(i); stop '!incr'; endif
   _dealloc(mu2s)
-  allocate(mu2s(maxval(sp2nmultp)))
+  allocate(mu2s(maxval(sp2nmultp)+1))
   do sp=1,nsp
     nmup = sp2nmultp(sp)
     f=s+nmup+1-1; mu2s(1:nmup+1) = int( d(s:f) ); s=f+1;
@@ -348,9 +354,7 @@ subroutine sv_prod_log_get(d,n, sv, pb)
   pb%atom2coord = sv%uc%atom2coord
   pb%rr = sv%rr
   pb%pp = sv%pp
-
-  
-
+  pb%uc_vecs = sv%uc%uc_vecs
 
 end subroutine ! m_sv_prod_log_get
 

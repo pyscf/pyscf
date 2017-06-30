@@ -39,7 +39,7 @@ end subroutine
 !!
 !!
 subroutine preinit_dp_aux(sv, a)
-  use m_system_vars, only : system_vars_t, get_uc_vecs, get_sp2norbs,get_sp2rcut
+  use m_system_vars, only : system_vars_t, get_uc_vecs_ptr, get_sp2norbs, get_sp2rcut
   use m_system_vars, only : get_atom2coord
   use m_bulk_uc_vecs, only : get_coeff_vecs
  
@@ -48,9 +48,9 @@ subroutine preinit_dp_aux(sv, a)
   type(system_vars_t), intent(in) :: sv
   type(dp_aux_t), intent(inout) :: a
   !! internal
-  real(8) :: uc_vecs(3,3)
+  real(8), pointer :: uc_vecs(:,:)
     
-  uc_vecs = get_uc_vecs(sv)
+  uc_vecs => get_uc_vecs_ptr(sv)
   a%coeff_vecs = get_coeff_vecs(uc_vecs)
   call get_sp2norbs(sv, a%sp2norbs)
   call get_sp2rcut(sv, a%sp2rcut)

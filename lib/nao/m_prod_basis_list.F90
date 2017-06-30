@@ -259,8 +259,7 @@ subroutine gen_list_of_pairs_dp(sv, pb_p, pair2info, iv_in, ilog)
 #define _sname 'gen_list_of_pairs_dp'
   use m_pair_info, only : pair_info_t, is_bilocal, is_local, cp_pair_info
   use m_sc_dmatrix, only : get_stored_npairs,sc_dmatrix_t,get_stored_atoms,get_stored_cells
-  use m_system_vars, only : get_uc_vecs, system_vars_t, get_rcuts, get_overlap_sc_ptr
-  use m_system_vars, only : get_natoms
+  use m_system_vars, only : get_natoms, system_vars_t, get_rcuts, get_overlap_sc_ptr
   use m_prod_basis_param, only : prod_basis_param_t, get_bilocal_type
   implicit none
   !! external
@@ -325,7 +324,7 @@ end subroutine ! gen_list_of_pairs_dp
 subroutine get_pair2info_atom(sv, p2i)
   use m_bilocal_vertex, only : pair_info_t
   use m_sc_dmatrix, only : get_stored_npairs,sc_dmatrix_t,get_stored_atoms,get_stored_cells
-  use m_system_vars, only : get_uc_vecs, system_vars_t, get_rcuts, get_overlap_sc_ptr
+  use m_system_vars, only : get_uc_vecs_ptr, system_vars_t, get_rcuts, get_overlap_sc_ptr
   use m_system_vars, only : get_sp2nmult_ptr, get_atom2coord_ptr, get_atom2sp_ptr
   use m_prod_basis_param, only : prod_basis_param_t   
   implicit none
@@ -334,14 +333,14 @@ subroutine get_pair2info_atom(sv, p2i)
   type(pair_info_t), intent(inout), allocatable :: p2i(:)
   !! internal
   integer :: npairs, ip, atoms(2), cells(3,2), rf, ls, nmu(2), turn, nstored_pairs, pair
-  real(8) :: uc_vecs(3,3), shifts(3,2), coords(3,2), dist, rcuts(2)
+  real(8) :: shifts(3,2), coords(3,2), dist, rcuts(2)
   type(sc_dmatrix_t), pointer :: sc_s
   integer, pointer :: sp2nmult(:), atom2sp(:)
-  real(8), pointer :: atom2coord(:,:)
+  real(8), pointer :: atom2coord(:,:), uc_vecs(:,:)
   
   sp2nmult => get_sp2nmult_ptr(sv)
   atom2sp => get_atom2sp_ptr(sv)  
-  uc_vecs = get_uc_vecs(sv)
+  uc_vecs => get_uc_vecs_ptr(sv)
   sc_s => get_overlap_sc_ptr(sv)
   nstored_pairs = get_stored_npairs(sc_s)
   atom2coord => get_atom2coord_ptr(sv)
@@ -386,7 +385,7 @@ end subroutine ! get_pair2info_atom
 subroutine get_pair2info_mult(sv, p2i)
   use m_bilocal_vertex, only : pair_info_t
   use m_sc_dmatrix, only : get_stored_npairs,sc_dmatrix_t,get_stored_atoms,get_stored_cells
-  use m_system_vars, only : get_uc_vecs, system_vars_t, get_rcuts, get_overlap_sc_ptr
+  use m_system_vars, only : get_uc_vecs_ptr, system_vars_t, get_rcuts, get_overlap_sc_ptr
   use m_system_vars, only : get_sp2nmult_ptr, get_atom2coord_ptr, get_atom2sp_ptr
   use m_system_vars, only : get_mu_sp2rcut_ptr
   use m_prod_basis_param, only : prod_basis_param_t   
@@ -397,14 +396,14 @@ subroutine get_pair2info_mult(sv, p2i)
   !! internal
   integer :: npairs, ip, atoms(2), cells(3,2), rf, ls, nmu(2)
   integer :: turn, nstored_pairs, pair, mub, mua, sp(2)
-  real(8) :: uc_vecs(3,3), shifts(3,2), coords(3,2), dist, rcuts(2), dist_mult
+  real(8) :: shifts(3,2), coords(3,2), dist, rcuts(2), dist_mult
   type(sc_dmatrix_t), pointer :: sc_s
   integer, pointer :: sp2nmult(:), atom2sp(:)
-  real(8), pointer :: atom2coord(:,:), mu_sp2rcut(:,:)
+  real(8), pointer :: atom2coord(:,:), mu_sp2rcut(:,:), uc_vecs(:,:)
   logical :: lbilocal
   
   sp2nmult => get_sp2nmult_ptr(sv)
-  uc_vecs = get_uc_vecs(sv)
+  uc_vecs => get_uc_vecs_ptr(sv)
   sc_s => get_overlap_sc_ptr(sv)
   nstored_pairs = get_stored_npairs(sc_s)
   atom2coord => get_atom2coord_ptr(sv)

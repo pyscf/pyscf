@@ -800,9 +800,8 @@ subroutine print_info_sv(ifile, sv)
   write(ifile,'(a43,g15.8)') 'get_temperature(sv) ', get_temperature(sv)
   write(ifile,'(a43,g15.8)') 'get_fermi_energy(sv) ', get_fermi_energy(sv)
 
-  uc_vecs = get_uc_vecs(sv)
-  write(ifile,'(a43)') 'get_uc_vecs(sv)'
-  write(ifile,'(3g16.8)') uc_vecs
+  write(ifile,'(a43)') 'sv%uc%uc_vecs'
+  write(ifile,'(3g16.8)') sv%uc%uc_vecs
   V_uc = 0.0D0
   V_uc = abs(dot_product( uc_vecs(:,1),cross_product(uc_vecs(:,2),uc_vecs(:,3))))
   !write(ifile,'(a43,f12.8)') 'Volume of unit cell: ',  V_uc
@@ -1549,20 +1548,6 @@ end subroutine ! block_red2bloch
 !end subroutine !  get_uc_vecs_subr
   
 !
-! get_uc_vecs
-!
-function get_uc_vecs(sv) result(uc_vecs)
-  use m_dft_hsx, only : hsx_2_uc_vectors
-  implicit none
-  !! external
-  type(system_vars_t), intent(in) :: sv
-  real(8) :: uc_vecs(3,3)
-  !! internal
-  call hsx_2_uc_vectors(sv%dft_hsx, uc_vecs, 0, 6)
-end function !  get_uc_vecs
-  
-
-!
 !
 !
 subroutine mu_sp2rcut_to_atom2rcut(mu_sp2rcut, atom2specie, atom2rcut)
@@ -1791,7 +1776,7 @@ subroutine alloc_init_rr_pp_uc_vecs_coords(sv, uc_vecs, rr, pp, coords)
   !! internal
   integer :: nr, natoms
   
-  uc_vecs = get_uc_vecs(sv)
+  uc_vecs = sv%uc%uc_vecs
   nr = get_nr(sv)
   _dealloc(rr)
   _dealloc(pp)

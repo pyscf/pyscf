@@ -200,8 +200,7 @@ subroutine init_aux_pb(pb, logical_overlap, scr_const, use_mult, aux, iv)
   pi = 4.0D0*atan(1.0D0)
   !! END of Dimensions
 
-  if(.not. associated(pb%pb_p%p)) _die('!pb%pb_p%p')
-  aux%bcrs_mv_block_size = get_i(pb%pb_p%p, 'bcrs_mv_block_size')
+  aux%bcrs_mv_block_size = 15
   call block_split(aux%ncenters, aux%bcrs_mv_block_size, aux%nblocks, aux%block2start)
 
   aux%uc_vecs = get_uc_vecs(pb)

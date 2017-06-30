@@ -85,7 +85,7 @@ class prod_basis_c():
     nmtp,nrtp,nmsp = sum(pl.sp2nmult),pl.nr*sum(pl.sp2nmult),sum(pl.sp2nmult)+pl.nspecies
     nvrt = sum(aos.sp2norbs*aos.sp2norbs*pl.sp2norbs)
     
-    ndat = 200 + 2*nr + 4*nsp + 2*nmt + nrt + nms + nat + 2*na1 + tna + \
+    ndat = 200 + 2*nr + 4*nsp + 2*nmt + nrt + nms + 3*3 + nat + 2*na1 + tna + \
       4*nsp + 2*nmtp + nrtp + nmsp + nvrt
       
     dat = zeros(ndat)
@@ -127,6 +127,7 @@ class prod_basis_c():
     dat[i] = s+1; i+=1; f=s+nmt; dat[s:f] = conc(aos.sp_mu2rcut); s=f; # pointer to sp_mu2rcut
     dat[i] = s+1; i+=1; f=s+nrt; dat[s:f] = conc(aos.psi_log).reshape(nrt); s=f; # pointer to psi_log
     dat[i] = s+1; i+=1; f=s+nms; dat[s:f] = conc(aos.sp_mu2s); s=f; # pointer to sp_mu2s
+    dat[i] = s+1; i+=1; f=s+3*3; dat[s:f] = conc(sv.ucell); s=f; # pointer to ucell (123,xyz) ?
     dat[i] = s+1; i+=1; f=s+nat; dat[s:f] = sv.atom2sp; s=f; # pointer to atom2sp
     dat[i] = s+1; i+=1; f=s+na1; dat[s:f] = sv.atom2s; s=f; # pointer to atom2s
     dat[i] = s+1; i+=1; f=s+na1; dat[s:f] = sv.atom2mu_s; s=f; # pointer to atom2mu_s
@@ -148,8 +149,8 @@ class prod_basis_c():
   def comp_apair_pp_libint(self, a1,a2):
     """ Get's the vertex coefficient and conversion coefficients for a pair of atoms given by their atom indices """
     if not hasattr(self, 'sv_pbloc_data') : raise RuntimeError('.sv_pbloc_data is absent')
-    from ctypes import POINTER, c_double, c_int64
-    
+    assert a1>-1
+    assert a2>-1
     sp12 = np.require( np.array([self.sv.atom2sp[a] for a in (a1,a2)], dtype=c_int64), requirements='C')
     rc12 = np.require( np.array([self.sv.atom2coord[a,:] for a in (a1,a2)]), requirements='C')
     nout = 1000000
