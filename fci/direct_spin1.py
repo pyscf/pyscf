@@ -621,10 +621,10 @@ class FCISolver(lib.StreamObject):
         nelec = _unpack_nelec(nelec, self.spin)
         return trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)
 
-    def large_ci(self, fcivec, norb, nelec, tol=.1):
+    def large_ci(self, fcivec, norb, nelec, tol=.1, return_strs=True):
         from pyscf.fci import addons
         nelec = _unpack_nelec(nelec, self.spin)
-        return addons.large_ci(fcivec, norb, nelec, tol)
+        return addons.large_ci(fcivec, norb, nelec, tol, return_strs)
 
     def contract_ss(self, fcivec, norb, nelec):
         from pyscf.fci import spin_op

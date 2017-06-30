@@ -42,6 +42,12 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose([abs(x[0]) for x in res], refci))
         self.assertEqual([x[1:] for x in res], refstr)
 
+        res = fci.addons.large_ci(ci0, norb, nelec, tol=.1, return_strs=False)
+        refa = numpy.array(((0,1,2), (0,1,2), (0,1,3), (0,1,3), (0,2,4)))
+        refb = numpy.array(((0,1,2), (0,1,3), (0,1,2), (0,1,3), (0,2,4)))
+        self.assertTrue(numpy.all([x[1] for x in res] == refa))
+        self.assertTrue(numpy.all([x[2] for x in res] == refb))
+
     def test__init__file(self):
         c1 = fci.FCI(mol, m.mo_coeff)
         self.assertAlmostEqual(c1.kernel()[0], -2.8227809167209683, 9)

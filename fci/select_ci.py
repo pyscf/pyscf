@@ -737,11 +737,18 @@ class SelectedCI(direct_spin1.FCISolver):
         nelec = direct_spin1._unpack_nelec(nelec, self.spin)
         return spin_square(_as_SCIvector_if_not(civec_strs, self._strs), norb, nelec)
 
-    def large_ci(self, civec_strs, norb, nelec, tol=.1):
+    def large_ci(self, civec_strs, norb, nelec, tol=.1, return_strs=True):
         nelec = direct_spin1._unpack_nelec(nelec, self.spin)
         ci, _, (strsa, strsb) = _unpack(civec_strs, nelec, self._strs)
-        return [(ci[i,j], bin(strsa[i]), bin(strsb[j]))
-                for i,j in numpy.argwhere(abs(ci) > tol)]
+        addra, addrb = numpy.where(abs(ci) > tol)
+        if return_strs:
+            strsa = [bin(x) for x in strsa[addra]]
+            strsb = [bin(x) for x in strsb[addrb]]
+            return list(zip(ci[addra,addrb], strsa, strsb))
+        else:
+            occslsta = cistring._strs2occslst(strsa[addra], norb)
+            occslstb = cistring._strs2occslst(strsb[addrb], norb)
+            return list(zip(ci[addra,addrb], occslsta, occslstb))
 
     def contract_ss(self, fcivec, norb, nelec):
         return contract_ss(fcivec, norb, nelec)

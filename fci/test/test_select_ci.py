@@ -166,6 +166,13 @@ class KnowValues(unittest.TestCase):
         res = myci.large_ci(c1, norb, nelec, .25)
         self.assertEqual([x[1] for x in res], ['0b1111', '0b1111', '0b10111', '0b10111'])
         self.assertEqual([x[2] for x in res], ['0b1111', '0b10111', '0b1111', '0b10111'])
+
+        res = myci.large_ci(c1, norb, nelec, .25, return_strs=False)
+        refa = numpy.array(((0,1,2,3), (0,1,2,3), (0,1,2,4), (0,1,2,4)))
+        refb = numpy.array(((0,1,2,3), (0,1,2,4), (0,1,2,3), (0,1,2,4)))
+        self.assertTrue(numpy.all([x[1] for x in res] == refa))
+        self.assertTrue(numpy.all([x[2] for x in res] == refb))
+
         self.assertAlmostEqual(myci.spin_square(c1, norb, nelec)[0], 0, 2)
 
     def test_cre_des_linkstr(self):

@@ -124,15 +124,17 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
             log.info('** Largest CI components **')
             if isinstance(ci, (tuple, list)):
                 for i, civec in enumerate(ci):
-                    res = casscf.fcisolver.large_ci(civec, casscf.ncas, casscf.nelecas)
-                    log.info(' string alpha, string beta, state %d CI coefficient', i)
+                    res = casscf.fcisolver.large_ci(civec, casscf.ncas, casscf.nelecas,
+                                                    large_ci_tol, return_strs=False)
+                    log.info('  [alpha occ-orbitals] [beta occ-orbitals]  state %-3d CI coefficient', i)
                     for c,ia,ib in res:
-                        log.info('  %9s    %9s    %.12f', ia, ib, c)
+                        log.info('  %-20s %-30s %.12f', ia, ib, c)
             else:
-                log.info(' string alpha, string beta, CI coefficient')
-                res = casscf.fcisolver.large_ci(ci, casscf.ncas, casscf.nelecas)
+                log.info('  [alpha occ-orbitals] [beta occ-orbitals]            CI coefficient')
+                res = casscf.fcisolver.large_ci(ci, casscf.ncas, casscf.nelecas,
+                                                large_ci_tol, return_strs=False)
                 for c,ia,ib in res:
-                    log.info('  %9s    %9s    %.12f', ia, ib, c)
+                    log.info('  %-20s %-30s %.12f', ia, ib, c)
 
         casscf._scf.mulliken_meta(casscf.mol, dm1, s=ovlp_ao, verbose=log)
     return dm1a, dm1b
