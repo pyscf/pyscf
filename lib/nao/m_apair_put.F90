@@ -23,7 +23,7 @@ subroutine apair_put(pb, pair, d,n)
   real(c_double), intent(inout) :: d(n)
   !! internal
   type(book_pb_t), pointer :: bk
-  integer(c_int64_t) :: b, p, s, f, nn(3)
+  integer(c_int64_t) :: i, b, p, s, f, nn(3)
   real(c_double), pointer :: vrtx(:,:,:), cc(:,:)
   
   if( n<2 ) then; write(6,*)__FILE__, __LINE__, n; stop '!n<2'; endif
@@ -31,16 +31,29 @@ subroutine apair_put(pb, pair, d,n)
   if( bk%ic<1 ) then; write(6,*)__FILE__, __LINE__, bk%ic; stop '!%ic<1'; endif
 
   vrtx => get_vertex_dp_ptr(pb, pair)
-  nn = ubound(vrtx)-lbound(vrtx)+1
-  if(any(nn<1)) then; write(6,*)__FILE__, __LINE__, bk%ic; stop '!%nn<1'; endif
-  s = 1
-  d(s) = nn(3); s=s+1
-  d(s) = nn(2); s=s+1
-  d(s) = nn(1); s=s+1
-  d(s) = bk%ic; s=s+1
-  d(s) = bk%top; s=s+1
-  d(s) = bk%spp; s=s+1
+  if(size(vrtx)<1) then; write(6,*)__FILE__, __LINE__, size(vrtx); stop '!%vrtx<1'; endif
+  i = 1
+  nn = ubound(vrtx)
+  d(i) = nn(3); i=i+1
+  d(i) = nn(2); i=i+1
+  d(i) = nn(1); i=i+1
+  d(i) = bk%ic; i=i+1
+  d(i) = bk%top; i=i+1
+  d(i) = bk%spp; i=i+1
+  if (allocated(pb%coeffs)) then
+    cc   => get_coeffs_pp_ptr(pb, pair)
+    d(i) = 1; i=i+1
+    d(i) = ubound(cc,1); i=i+1
+    d(i) = ubound(cc,2); i=i+1
+    d(i) = size(pb%coeffs(pair)%ind2book_re); i=i+1 ! number of participating centers
+  else
+    d(i) = 0; i=i+1
+    d(i) = 0; i=i+1
+    d(i) = 0; i=i+1
+    d(i) = 0; i=i+1 ! number of participating centers
+  endif
 
+  s = i
   do p=1,nn(3)
     do b=1,nn(2)
       f = s + nn(1) - 1; 

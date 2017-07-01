@@ -163,6 +163,7 @@ class prod_basis_c():
 
     dout = np.require( zeros(nout.value), requirements='CW')
     libnao.get_vrtx_cc_apair( dout.ctypes.data_as(POINTER(c_double)), nout )
+    print(dout.sum())
     
 
   def init_prod_basis_pp(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
