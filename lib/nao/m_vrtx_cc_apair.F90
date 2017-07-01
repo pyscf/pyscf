@@ -15,9 +15,30 @@ module m_vrtx_cc_apair
   contains
 
 !
+!
+!
+subroutine get_vrtx_cc_apair(dout,nout) bind(c, name='get_vrtx_cc_apair')
+  use m_apair_put, only : apair_put
+  use m_sv_prod_log, only : pb
+  use m_system_vars, only : get_natoms
+  
+  implicit none
+  !! external
+  integer(c_int64_t), intent(inout) :: nout
+  real(c_double), intent(inout) :: dout(nout)
+  !! internal
+  integer :: natoms
+
+  natoms = get_natoms(pb%sv)
+  call apair_put(pb, natoms+1, dout,nout)
+
+end subroutine ! get_vrtx_cc_apair
+
+
+!
 ! The subroutine is generating the dominant product vertices and conversion coefficiens for a given atom pair
 !
-subroutine vrtx_cc_apair(sp12_c,rc12,dout,nout) bind(c, name='vrtx_cc_apair')
+subroutine gen_vrtx_cc_apair(sp12_c,rc12,nout) bind(c, name='gen_vrtx_cc_apair')
   use m_sv_prod_log, only : a, dp_a, bp2info, pb, ff2, evals, vertex_real2, oo2num, p2n, tmp, m2nf, vertex_cmplx2, rhotb, bessel_pp, f1f2_mom, r_scalar_pow_jp1, roverlap, S_comp, ylm
   use m_bilocal_vertex, only : make_bilocal_vertex_rf
   use m_init_pair_info, only : init_pair_info
@@ -31,14 +52,13 @@ subroutine vrtx_cc_apair(sp12_c,rc12,dout,nout) bind(c, name='vrtx_cc_apair')
   use m_tci_ac_ac_cpy, only : tci_ac_ac_cpy
   use m_prod_basis_type, only : get_i2s
   use m_pb_reexpr_comm, only : init_counting_fini
-  use m_apair_put, only : apair_put
+  use m_apair_size, only : apair_size
   
   implicit none
   !! external
   integer(c_int64_t), intent(in) :: sp12_c(2)
   real(c_double), intent(in) :: rc12(3,2)
-  integer(c_int64_t), intent(in) :: nout
-  real(c_double), intent(inout) :: dout(nout)
+  integer(c_int64_t), intent(inout) :: nout
   !! internal  
   type(book_pb_t), allocatable :: ic2book(:)
   integer(c_int64_t) :: ic, nc, npre
@@ -50,11 +70,10 @@ subroutine vrtx_cc_apair(sp12_c,rc12,dout,nout) bind(c, name='vrtx_cc_apair')
   integer :: pair, natoms, ibp, sp12(2), npdp
   integer, allocatable :: i2s(:)
    
-  if(nout<1) _die('nout<1')
   if(.not. allocated(bp2info)) then; write(6,*) __FILE__, __LINE__; stop '!bp2info'; endif
   natoms = get_natoms(pb%sv)
   
-  dout(1:nout) = 0
+  nout = 0
   sp12 = int(sp12_c)+1 ! I got zero-based indices...
 
   ibp  = 1
@@ -174,7 +193,7 @@ subroutine vrtx_cc_apair(sp12_c,rc12,dout,nout) bind(c, name='vrtx_cc_apair')
   !enddo
   !write(6,*) ' sum(pb%coeffs(pair)%coeffs_ac_dp) ', sum(pb%coeffs(pair)%coeffs_ac_dp), ubound(pb%coeffs(pair)%coeffs_ac_dp)
   
-  call apair_put(pb, pair, dout, nout)
+  call apair_size(pb, pair, nout)
  
 end subroutine ! vrtx_cc_apair
 

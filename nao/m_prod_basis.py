@@ -1,13 +1,16 @@
 from __future__ import print_function, division
 import numpy as np
 from numpy import einsum, zeros
-from ctypes import POINTER, c_double, c_int64
+from ctypes import POINTER, c_double, c_int64, byref
 from pyscf.nao.m_libnao import libnao
 
-libnao.vrtx_cc_apair.argtypes = (
+libnao.gen_vrtx_cc_apair.argtypes = (
   POINTER(c_int64),   # sp12(1:2)
   POINTER(c_double),  # rc12(1:3,1:2)
-  POINTER(c_double),  # dout(nout)
+  POINTER(c_int64))   # nout
+
+libnao.get_vrtx_cc_apair.argtypes = (
+  POINTER(c_double),  # dat(nout)
   POINTER(c_int64))   # nout
 
 #
@@ -149,18 +152,19 @@ class prod_basis_c():
   def comp_apair_pp_libint(self, a1,a2):
     """ Get's the vertex coefficient and conversion coefficients for a pair of atoms given by their atom indices """
     if not hasattr(self, 'sv_pbloc_data') : raise RuntimeError('.sv_pbloc_data is absent')
-    assert a1>-1
-    assert a2>-1
+    assert a1>=0
+    assert a2>=0
     sp12 = np.require( np.array([self.sv.atom2sp[a] for a in (a1,a2)], dtype=c_int64), requirements='C')
     rc12 = np.require( np.array([self.sv.atom2coord[a,:] for a in (a1,a2)]), requirements='C')
-    nout = 1000000
-    dout = np.require( zeros(nout), requirements='CW')
 
-    libnao.vrtx_cc_apair( sp12.ctypes.data_as(POINTER(c_int64)), rc12.ctypes.data_as(POINTER(c_double)), dout.ctypes.data_as(POINTER(c_double)), c_int64(nout) )
+    nout = c_int64(0)
+    libnao.gen_vrtx_cc_apair( sp12.ctypes.data_as(POINTER(c_int64)), rc12.ctypes.data_as(POINTER(c_double)), byref(nout) )
+    if nout.value<2 : raise RuntimeError('nout<2')
+
+    dout = np.require( zeros(nout.value), requirements='CW')
+    libnao.get_vrtx_cc_apair( dout.ctypes.data_as(POINTER(c_double)), nout )
     
-    print('dout.sum() ', dout.sum())    
-    
-    
+
   def init_prod_basis_pp(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
     """ Talman's procedure should be working well with Pseudo-Potential starting point..."""
     from pyscf.nao import coulomb_am, comp_overlap_coo, get_atom2bas_s, conv_yzx2xyz_c, prod_log_c, ls_part_centers, comp_coulomb_den
