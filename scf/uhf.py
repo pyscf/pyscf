@@ -794,3 +794,6 @@ class HF1e(UHF):
         self.e_tot = self.mo_energy[0][self.mo_occ[0]>0][0] + self.mol.energy_nuc()
         self._finalize()
         return self.e_tot
+
+    def spin_square(self, mo_coeff=None, s=None):
+        return .75, 2

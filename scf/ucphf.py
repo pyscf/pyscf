@@ -90,9 +90,10 @@ def solve_withs1(fvind, mo_energy, mo_occ, h1, s1,
     eai_a = mo_energy[0][viridxa,None] - mo_energy[0][occidxa]
     eai_b = mo_energy[1][viridxb,None] - mo_energy[1][occidxb]
     s1_a = s1[0].reshape(-1,nmoa,nocca)
-    s1_b = s1[1].reshape(-1,nmob,noccb)
-    hs_a = mo1base_a = h1[0].reshape(-1,nmoa,nocca) - s1_a * mo_energy[0][occidxa]
-    hs_b = mo1base_b = h1[1].reshape(-1,nmob,noccb) - s1_b * mo_energy[1][occidxb]
+    nset = s1_a.shape[0]
+    s1_b = s1[1].reshape(nset,nmob,noccb)
+    hs_a = mo1base_a = h1[0].reshape(nset,nmoa,nocca) - s1_a * mo_energy[0][occidxa]
+    hs_b = mo1base_b = h1[1].reshape(nset,nmob,noccb) - s1_b * mo_energy[1][occidxb]
     mo_e1_a = hs_a[:,occidxa].copy()
     mo_e1_b = hs_b[:,occidxb].copy()
 
@@ -103,7 +104,6 @@ def solve_withs1(fvind, mo_energy, mo_occ, h1, s1,
 
     eai_a = 1. / eai_a
     eai_b = 1. / eai_b
-    nset = hs_a.shape[0]
     mo1base = numpy.hstack((mo1base_a.reshape(nset,-1), mo1base_b.reshape(nset,-1)))
 
     def vind_vo(mo1):

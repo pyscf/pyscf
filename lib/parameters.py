@@ -10,6 +10,7 @@ TMPDIR = os.environ.get('PYSCF_TMPDIR', TMPDIR)
 
 LIGHT_SPEED = 137.03599967994  #http://physics.nist.gov/cgi-bin/cuu/Value?alph
 #LIGHT_SPEED = 137.0359895
+ALPHA = 1./ LIGHT_SPEED
 LIGHT_SPEED = float(os.environ.get('PYSCF_LIGHT_SPEED', LIGHT_SPEED))
 # BOHR = .529 177 210 92(17) e-10m  #http://physics.nist.gov/cgi-bin/cuu/Value?bohrrada0
 BOHR = 0.52917721092  # Angstroms
