@@ -18,14 +18,6 @@ from pyscf.scf.newton_ah import _gen_uhf_response
 from pyscf.prop.nmr import rhf as rhf_nmr
 
 
-# flatten([[XX, XY, XZ],
-#          [YX, YY, YZ],
-#          [ZX, ZY, ZZ]])
-TENSOR_IDX = numpy.arange(9)
-# flatten([[XX, YX, ZX],
-#          [XY, YY, ZY],
-#          [XZ, YZ, ZZ]])
-TENSOR_TRANSPOSE = TENSOR_IDX.reshape(3,3).T.flatten()
 def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
     if shielding_nuc is None:
         shielding_nuc = range(mol.natm)
@@ -44,13 +36,12 @@ def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
         h11[4] += trh11
         h11[8] += trh11
         if gauge_orig is None:
-            g11 = mol.intor('int1e_a01gp', 9)
-            h11+= g11[TENSOR_TRANSPOSE] # (mu,B) => (B,mu)
+            h11 += mol.intor('int1e_a01gp', 9)
         a11 = numpy.einsum('xij,ij->x', h11, dm0)
         msc_dia.append(a11)
         #     XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ = 1..9
         #  => [[XX, XY, XZ], [YX, YY, YZ], [ZX, ZY, ZZ]]
-    return numpy.array(msc_dia).reshape(-1, 3, 3)
+        return numpy.array(msc_dia).reshape(-1, 3, 3)
 
 def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
     if shielding_nuc is None:
@@ -75,11 +66,9 @@ def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
         dm10_vo[i]+= reduce(numpy.dot, (orbvb, mo10[1][i][viridxb], orbob.conj().T))
     for n, atm_id in enumerate(shielding_nuc):
         mol.set_rinv_origin(mol.atom_coord(atm_id))
-        # 1/2(A01 dot p + p dot A01) => (ia01p - c.c.)/2 => <ia01p> = <1/r^3 rxp>
-        h01 = mol.intor_asymmetric('int1e_ia01p', 3)
-        # *2 for c10^T * h01 + c.c.
-        para_occ[n] = numpy.einsum('xij,yij->xy', dm10_oo, h01) * 2
-        para_vir[n] = numpy.einsum('xij,yij->xy', dm10_vo, h01) * 2
+        h01 = mol.intor_asymmetric('int1e_prinvxp', 3)
+        para_occ[n] = numpy.einsum('xji,yij->xy', dm10_oo, h01) * 2
+        para_vir[n] = numpy.einsum('xji,yij->xy', dm10_vo, h01) * 2
     msc_para = para_occ + para_vir
     return msc_para, para_vir, para_occ
 
@@ -90,10 +79,10 @@ def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
         # A10_j dot p + p dot A10_j consistents with <g p^2>
         # A10_j dot p + p dot A10_j => i/2 (rjxp - pxrj) = irjxp
         log.debug('First-order GIAO Fock matrix')
-        h1 = .5 * mol.intor('int1e_giao_irjxp', 3) + make_h10giao(mol, dm0)
+        h1 = -.5 * mol.intor('int1e_giao_irjxp', 3) + make_h10giao(mol, dm0)
     else:
         mol.set_common_origin(gauge_orig)
-        h1 = .5 * mol.intor('int1e_cg_irxp', 3)
+        h1 = -.5 * mol.intor('int1e_cg_irxp', 3)
         h1 = (h1, h1)
     return h1
 
@@ -101,15 +90,12 @@ def make_h10giao(mol, dm0):
     intor = mol._add_suffix('int2e_ig1')
     vj, vk = _vhf.direct_mapdm(intor,  # (g i,j|k,l)
                                'a4ij', ('lk->s1ij', 'jk->s1il'),
-                               dm0, 3, # xyz, 3 components
+                               -dm0, 3, # xyz, 3 components
                                mol._atm, mol._bas, mol._env)
-# J = i[(i i|\mu g\nu) + (i gi|\mu \nu)] = i (i i|\mu g\nu)
-# K = i[(\mu gi|i \nu) + (\mu i|i g\nu)]
-#   = (\mu g i|i \nu) - h.c.   anti-symm because of the factor i
     vk = vk - vk.transpose(0,1,3,2)
     h1 = vj[0] + vj[1] - vk
-    h1 += mol.intor_asymmetric('int1e_ignuc', 3)
-    h1 += mol.intor('int1e_igkin', 3)
+    h1 -= mol.intor_asymmetric('int1e_ignuc', 3)
+    h1 -= mol.intor('int1e_igkin', 3)
     return h1
 
 def solve_mo1(mo_energy, mo_occ, h1, s1):
@@ -142,13 +128,15 @@ def solve_mo1(mo_energy, mo_occ, h1, s1):
 
 
 class NMR(rhf_nmr.NMR):
-    def __init__(self, scf_method):
-        rhf_nmr.NMR.__init__(self, scf_method)
-        s2 = scf_method.spin_square()[0]
-        if s2 > 1e-4:
-            logger.warn(self, '<S^2> = %s. UHF-NMR shielding may have large error.\n'
-                        'paramagnetic NMR should include this result plus '
-                        'g-tensor and HFC tensors.', s2)
+
+    def shielding(self, mo1=None):
+        if hasattr(self._scf, 'spin_square'):
+            s2 = self._scf.spin_square()[0]
+            if s2 > 1e-4:
+                logger.warn(self, '<S^2> = %s. UHF-NMR shielding may have large error.\n'
+                            'paramagnetic NMR should include this result plus '
+                            'g-tensor and HFC tensors.', s2)
+        return rhf_nmr.NMR.shielding(self, mo1)
 
     def dia(self, mol=None, dm0=None, gauge_orig=None, shielding_nuc=None):
         if mol is None: mol = self.mol
@@ -264,22 +252,16 @@ if __name__ == '__main__':
     nmr.cphf = True
     #nmr.gauge_orig = (0,0,0)
     msc = nmr.kernel() # _xx,_yy = 375.232839, _zz = 483.002139
-    print(msc[1][0,0], msc[1][1,1], 375.232839)
-    print(msc[1][2,2], 483.002139)
     print(lib.finger(msc) - -132.22894626177765)
 
     nmr.cphf = True
     nmr.gauge_orig = (1,1,1)
     msc = nmr.shielding()
-    print(msc[1][0,0], msc[1][1,1], 324.803172)
-    print(msc[1][2,2], 483.002066)
     print(lib.finger(msc) - 4.0519712753371522)
 
     nmr.cphf = False
     nmr.gauge_orig = None
     msc = nmr.shielding()
-    print(msc[1][0,0], msc[1][1,1], 449.032227)
-    print(msc[1][2,2], 483.002139)
     print(lib.finger(msc) - -133.26525857962628)
 
     mol.atom.extend([
@@ -291,8 +273,5 @@ if __name__ == '__main__':
     nmr.cphf = False
     nmr.gauge_orig = None
     msc = nmr.shielding()
-    print(msc[1][0,0], 283.514599)
-    print(msc[1][1,1], 292.578151)
-    print(msc[1][2,2], 257.348176)
     print(lib.finger(msc) - -153.53475826780419)
 

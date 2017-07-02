@@ -15,7 +15,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import scf
 from pyscf.scf import _vhf
-from pyscf.prop.nmr import rhf
+from pyscf.prop.nmr import rhf as rhf_nmr
 
 def dia(mol, dm0, gauge_orig=None, shielding_nuc=None, mb='RMB'):
     if shielding_nuc is None:
@@ -207,16 +207,16 @@ def make_s10(mol, gauge_orig=None, mb='RMB'):
     return s1
 
 
-class NMR(rhf.NMR):
+class NMR(rhf_nmr.NMR):
     __doc__ = 'magnetic shielding constants'
     def __init__(self, scf_method):
-        rhf.NMR.__init__(self, scf_method)
+        rhf_nmr.NMR.__init__(self, scf_method)
         self.cphf = True
         self.mb = 'RMB'
         self._keys = self._keys.union(['mb'])
 
     def dump_flags(self):
-        rhf.NMR.dump_flags(self)
+        rhf_nmr.NMR.dump_flags(self)
         logger.info(self, 'MB basis = %s', self.mb)
         return self
 
@@ -226,26 +226,25 @@ class NMR(rhf.NMR):
         if self.verbose >= logger.WARN:
             self.check_sanity()
 
-        facppm = 1e6/lib.param.LIGHT_SPEED**2
         t0 = (time.clock(), time.time())
-        msc_dia = self.dia() * facppm
+        msc_dia = self.dia() * rhf_nmr.UNIT_PPM
         t0 = logger.timer(self, 'h11', *t0)
         msc_para, para_pos, para_neg, para_occ = \
-                [x*facppm for x in self.para(mo10=mo1)]
+                [x*rhf_nmr.UNIT_PPM for x in self.para(mo10=mo1)]
         e11 = msc_para + msc_dia
 
         logger.timer(self, 'NMR shielding', *cput0)
         if self.verbose > logger.QUIET:
             for i, atm_id in enumerate(self.shielding_nuc):
-                rhf._write(self.stdout, e11[i],
-                           '\ntotal shielding of atom %d %s'
-                           % (atm_id, self.mol.atom_symbol(atm_id-1)))
-                rhf._write(self.stdout, msc_dia[i], 'dia-magnetism')
-                rhf._write(self.stdout, msc_para[i], 'para-magnetism')
+                rhf_nmr._write(self.stdout, e11[i],
+                               '\ntotal shielding of atom %d %s'
+                               % (atm_id, self.mol.atom_symbol(atm_id-1)))
+                rhf_nmr._write(self.stdout, msc_dia[i], 'dia-magnetism')
+                rhf_nmr._write(self.stdout, msc_para[i], 'para-magnetism')
                 if self.verbose >= logger.INFO:
-                    rhf._write(self.stdout, para_occ[i], 'occ part of para-magnetism')
-                    rhf._write(self.stdout, para_pos[i], 'vir-pos part of para-magnetism')
-                    rhf._write(self.stdout, para_neg[i], 'vir-neg part of para-magnetism')
+                    rhf_nmr._write(self.stdout, para_occ[i], 'occ part of para-magnetism')
+                    rhf_nmr._write(self.stdout, para_pos[i], 'vir-pos part of para-magnetism')
+                    rhf_nmr._write(self.stdout, para_neg[i], 'vir-neg part of para-magnetism')
             self.stdout.flush()
         return e11
 

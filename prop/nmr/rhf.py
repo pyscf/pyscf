@@ -17,14 +17,12 @@ from pyscf.scf import _vhf
 from pyscf.scf import cphf
 from pyscf.scf.newton_ah import _gen_rhf_response
 
+UNIT_PPM = 1./137.03599967994**2 * 1e6
+
 # flatten([[XX, XY, XZ],
 #          [YX, YY, YZ],
 #          [ZX, ZY, ZZ]])
 TENSOR_IDX = numpy.arange(9)
-# flatten([[XX, YX, ZX],
-#          [XY, YY, ZY],
-#          [XZ, YZ, ZZ]])
-TENSOR_TRANSPOSE = TENSOR_IDX.reshape(3,3).T.flatten()
 def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
     if shielding_nuc is None:
         shielding_nuc = range(mol.natm)
@@ -34,6 +32,7 @@ def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
     msc_dia = []
     for n, atm_id in enumerate(shielding_nuc):
         mol.set_rinv_origin(mol.atom_coord(atm_id))
+# a11part = (B dot) -1/2 frac{\vec{r}_N}{r_N^3} r (dot mu)
         if gauge_orig is None:
             h11 = mol.intor('int1e_giao_a11part', 9)
         else:
@@ -43,14 +42,14 @@ def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
         h11[4] += trh11
         h11[8] += trh11
         if gauge_orig is None:
-            g11 = mol.intor('int1e_a01gp', 9)
-            h11+= g11[TENSOR_TRANSPOSE] # (mu,B) => (B,mu)
+            h11 += mol.intor('int1e_a01gp', 9)
         a11 = numpy.einsum('xij,ij->x', h11, dm0)
         msc_dia.append(a11)
         #     XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ = 1..9
         #  => [[XX, XY, XZ], [YX, YY, YZ], [ZX, ZY, ZZ]]
     return numpy.array(msc_dia).reshape(-1, 3, 3)
 
+# Note mo10 is the imaginary part of MO^1
 def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
     if shielding_nuc is None:
         shielding_nuc = range(mol.natm)
@@ -65,15 +64,17 @@ def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
     dm10_vo = numpy.asarray([reduce(numpy.dot, (orbv, x[viridx]*2, orbo.T.conj())) for x in mo10])
     for n, atm_id in enumerate(shielding_nuc):
         mol.set_rinv_origin(mol.atom_coord(atm_id))
-        # 1/2(A01 dot p + p dot A01) => (ia01p - c.c.)/2 => <ia01p> = <1/r^3 rxp>
-        h01 = mol.intor_asymmetric('int1e_ia01p', 3)
-        # *2 for c10^T * h01 + c.c.
-        para_occ[n] = numpy.einsum('xij,yij->xy', dm10_oo, h01) * 2
-        para_vir[n] = numpy.einsum('xij,yij->xy', dm10_vo, h01) * 2
+        # 1/2(A01 dot p + p dot A01) => (a01p + c.c.)/2 ~ <a01p>
+        # Im[A01 dot p] = Im[vec{r}/r^3 x vec{p}] = Im[-i p (1/r) x p] = -p (1/r) x p
+        h01 = mol.intor_asymmetric('int1e_prinvxp', 3)  # = -Im[H^{01}]
+        # <H^{01},MO^1> = - Tr(Im[H^{01}],Im[MO^1]) = Tr(-Im[H^{01}],Im[MO^1])
+        para_occ[n] = numpy.einsum('xji,yij->xy', dm10_oo, h01) * 2 # *2 for + c.c.
+        para_vir[n] = numpy.einsum('xji,yij->xy', dm10_vo, h01) * 2 # *2 for + c.c.
     msc_para = para_occ + para_vir
     return msc_para, para_vir, para_occ
 
 def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
+    '''Imaginary part of H10 operator'''
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -81,32 +82,34 @@ def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
     if gauge_orig is None:
         # A10_i dot p + p dot A10_i consistents with <p^2 g>
         # A10_j dot p + p dot A10_j consistents with <g p^2>
-        # A10_j dot p + p dot A10_j => i/2 (rjxp - pxrj) = irjxp
+        # A10_j dot p + p dot A10_j => Im[1/2 (rjxp - pxrj)] = -1/2 <irjxp>
         log.debug('First-order GIAO Fock matrix')
-        h1 = .5 * mol.intor('int1e_giao_irjxp', 3) + make_h10giao(mol, dm0)
+        h1 = -.5 * mol.intor('int1e_giao_irjxp', 3) + make_h10giao(mol, dm0)
     else:
         mol.set_common_origin(gauge_orig)
-        h1 = .5 * mol.intor('int1e_cg_irxp', 3)
+        h1 = -.5 * mol.intor('int1e_cg_irxp', 3)
     return h1
 
 def make_h10giao(mol, dm0):
+# J = Im[(i i|\mu g\nu) + (i gi|\mu \nu)] = -i (i i|\mu g\nu)
+# K = Im[(\mu gi|i \nu) + (\mu i|i g\nu)]
+#   = [-i (\mu g i|i \nu)] - h.c.   (-h.c. for anti-symm because of the factor -i)
     intor = mol._add_suffix('int2e_ig1')
     vj, vk = _vhf.direct_mapdm(intor,  # (g i,j|k,l)
                                'a4ij', ('lk->s1ij', 'jk->s1il'),
-                               dm0, 3, # xyz, 3 components
+                               -dm0, 3, # xyz, 3 components
                                mol._atm, mol._bas, mol._env)
-# J = i[(i i|\mu g\nu) + (i gi|\mu \nu)] = i (i i|\mu g\nu)
-# K = i[(\mu gi|i \nu) + (\mu i|i g\nu)]
-#   = (\mu g i|i \nu) - h.c.   anti-symm because of the factor i
     vk = vk - vk.transpose(0,2,1)
     h1 = vj - .5 * vk
-    h1 += mol.intor_asymmetric('int1e_ignuc', 3)
-    h1 += mol.intor('int1e_igkin', 3)
+# Im[<g\mu|H|g\nu>] = -i * (gnuc + gkin)
+    h1 -= mol.intor_asymmetric('int1e_ignuc', 3)
+    h1 -= mol.intor('int1e_igkin', 3)
     return h1
 
 def make_s10(mol, gauge_orig=None):
     if gauge_orig is None:
-        s1 = mol.intor_asymmetric('int1e_igovlp', 3)
+# Im[<g\mu |g\nu>]
+        s1 = -mol.intor_asymmetric('int1e_igovlp', 3)
     else:
         nao = mol.nao_nr()
         s1 = numpy.zeros((3,nao,nao))
@@ -148,15 +151,10 @@ class NMR(lib.StreamObject):
         self.mo_e10 = None
         self._keys = set(self.__dict__.keys())
 
-## ** default method **
-#        # RHF: exchange parts
-#        if not isinstance(scf_method, pyscf.scf.hf.RHF):
-#            raise AttributeError('TODO: UHF')
-
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
-        log.info('******** %s shielding for %s ********',
+        log.info('******** %s for %s ********',
                  self.__class__, self._scf.__class__)
         if self.gauge_orig is None:
             log.info('gauge = GIAO')
@@ -169,7 +167,6 @@ class NMR(lib.StreamObject):
             log.info('CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
         if not self._scf.converged:
             log.warn('Ground state SCF is not converged')
-        log.info('\n')
         return self
 
     def kernel(self, mo1=None):
@@ -179,16 +176,17 @@ class NMR(lib.StreamObject):
         self.check_sanity()
         self.dump_flags()
 
-        c = 137.03599967994  # lib.param.LIGHT_SPEED
-        facppm = 1./c**2 * 1e6
-        msc_para, para_vir, para_occ = [x*facppm for x in self.para(mo10=mo1)]
-        msc_dia = self.dia() * facppm
+        msc_dia = self.dia() * UNIT_PPM
+        msc_para, para_vir, para_occ = self.para(mo10=mo1)
+        msc_para *= UNIT_PPM
+        para_vir *= UNIT_PPM
+        para_occ *= UNIT_PPM
         e11 = msc_para + msc_dia
 
         logger.timer(self, 'NMR shielding', *cput0)
         if self.verbose > logger.QUIET:
             for i, atm_id in enumerate(self.shielding_nuc):
-                _write(self.stdout, e11[i], \
+                _write(self.stdout, e11[i],
                        '\ntotal shielding of atom %d %s' \
                        % (atm_id, self.mol.atom_symbol(atm_id-1)))
                 _write(self.stdout, msc_dia[i], 'dia-magnetism')
@@ -339,5 +337,5 @@ if __name__ == '__main__':
     print(msc[1][0,0], 283.514599)
     print(msc[1][1,1], 292.578151)
     print(msc[1][2,2], 257.348176)
-    print(lib.finger(msc) - -153.53481135510407)
+    print(lib.finger(msc) - -123.98600632099961)
 

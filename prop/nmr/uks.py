@@ -103,8 +103,8 @@ class NMR(uhf_nmr.NMR):
             mem_now = lib.current_memory()[0]
             max_memory = max(2000, mf.max_memory*.9-mem_now)
             dm0 = _attach_mo(dm0, mf.mo_coeff, mf.mo_occ)  # to improve get_vxc_giao efficiency
-            h1 = get_vxc_giao(ni, mol, mf.grids, mf.xc, dm0,
-                              max_memory=max_memory, verbose=mf.verbose)
+            h1 = -get_vxc_giao(ni, mol, mf.grids, mf.xc, dm0,
+                               max_memory=max_memory, verbose=mf.verbose)
 
             intor = mol._add_suffix('int2e_ig1')
             if abs(hyb) > 1e-10:
@@ -113,18 +113,18 @@ class NMR(uhf_nmr.NMR):
                                            dm0, 3, # xyz, 3 components
                                            mol._atm, mol._bas, mol._env)
                 vk = vk - vk.transpose(0,1,3,2)
-                h1 += vj[0] + vj[1] - hyb * vk
+                h1 -= vj[0] + vj[1] - hyb * vk
             else:
                 vj = _vhf.direct_mapdm(intor, 'a4ij', 'lk->s1ij',
                                        dm0, 3, mol._atm, mol._bas, mol._env)
-                h1 += vj[0] + vj[1]
+                h1 -= vj[0] + vj[1]
 
-            h1 += .5 * mol.intor('int1e_giao_irjxp', 3)
-            h1 += mol.intor_asymmetric('int1e_ignuc', 3)
-            h1 += mol.intor('int1e_igkin', 3)
+            h1 -= .5 * mol.intor('int1e_giao_irjxp', 3)
+            h1 -= mol.intor_asymmetric('int1e_ignuc', 3)
+            h1 -= mol.intor('int1e_igkin', 3)
         else:
             mol.set_common_origin(gauge_orig)
-            h1 = .5 * mol.intor('int1e_cg_irxp', 3)
+            h1 = -.5 * mol.intor('int1e_cg_irxp', 3)
             h1 = (h1, h1)
         lib.chkfile.dump(self.chkfile, 'nmr/h1', h1)
         return h1
