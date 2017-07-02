@@ -22,7 +22,7 @@ def kernel(gobj, gauge_orig=None, mb='RKB', with_gaunt=False, verbose=None):
     mf = gobj._scf
     mol = mf.mol
 # Add finite field to remove degeneracy
-    mag_field = numpy.ones(3) * 1e-7
+    mag_field = numpy.ones(3) * 1e-6
     h10 = dhf_nmr.make_h10rkb(mol, None, None, False, log)
     sc = numpy.dot(mf.get_ovlp(), mf.mo_coeff)
     h0 = reduce(numpy.dot, (sc*mf.mo_energy, sc.conj().T))
@@ -43,6 +43,7 @@ def kernel(gobj, gauge_orig=None, mb='RKB', with_gaunt=False, verbose=None):
          numpy.einsum('xij,ji->x', s10, dme))
 # Intrinsic mu_B = eh/2mc
 # First order Dirac operator is 1/c * h10 => g ~ Tr(h10,DM)/c / mu_B = 2 Tr(h10,DM)
+    g *= 2
     c = lib.param.LIGHT_SPEED
     n4c = dm0.shape[0]
     n2c = n4c // 2
@@ -51,7 +52,7 @@ def kernel(gobj, gauge_orig=None, mb='RKB', with_gaunt=False, verbose=None):
     Sigma[:,n2c:,n2c:] = .25/c**2 * mol.intor('int1e_spsigmasp_spinor', comp=3)
     effspin = numpy.einsum('xij,ji->x', Sigma, dm0) * .5
     log.debug('Eff-spin %s', effspin.real)
-    g = (g * 2 / effspin).real
+    g = (g / effspin).real
 
     facppt = 1e3
     gshift = (g - lib.param.G_ELECTRON) * facppt

@@ -250,13 +250,13 @@ def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
         log.debug('First-order GIAO Fock matrix')
         h1 = -.5 * mol.intor('int1e_giao_irjxp', 3)
         h1 += uhf_nmr.make_h10giao(mol, dm0)
-        if 0:
+        if 0:  # from MB basis
             a10nucp = .5 * mol.intor('int1e_inuc_rxp', 3)
             h1 += a10nucp.transpose(0,2,1) - a10nucp
     else:
         mol.set_common_origin(gauge_orig)
         h1 = -.5 * mol.intor('int1e_cg_irxp', 3)
-        if 0:
+        if 0:  # from MB basis
             a10nucp = .5 * mol.intor('int1e_inuc_rcxp', 3)
             h1 += a10nucp.transpose(0,2,1) - a10nucp
         h1 = (h1, h1)

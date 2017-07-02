@@ -92,7 +92,7 @@ def make_h10giao(mol, dm0, with_gaunt=False, verbose=logger.WARN):
     vj, vk = _call_giao_vhf1(mol, dm0)
     h1 = vj - vk
     if with_gaunt:
-        sys.stderr('NMR gaunt part not implemented')
+        sys.stderr('NMR gaunt part not implemented\n')
 #TODO:        import pyscf.lib.pycint as pycint
 #TODO:        vj, vk = scf.hf.get_vj_vk(pycint.rkb_giao_vhf_gaunt, mol, dm0)
 #TODO:        h1 += vj - vk
@@ -118,7 +118,7 @@ def make_h10rkb(mol, dm0, gauge_orig=None, with_gaunt=False,
     else:
         t1 = mol.intor('int1e_cg_sa10sp_spinor', 3)
     if with_gaunt:
-        sys.stderr('NMR gaunt part not implemented')
+        sys.stderr('NMR gaunt part not implemented\n')
     n2c = t1.shape[2]
     n4c = n2c * 2
     h1 = numpy.zeros((3, n4c, n4c), complex)
@@ -152,7 +152,7 @@ def make_h10rmb(mol, dm0, gauge_orig=None, with_gaunt=False,
         vj, vk = _call_rmb_vhf1(mol, dm0, 'giao')
         h1 = vj - vk
         if with_gaunt:
-            sys.stderr('NMR gaunt part not implemented')
+            sys.stderr('NMR gaunt part not implemented\n')
             #import pyscf.lib.pycint as pycint
             #vj, vk = scf.hf.get_vj_vk(pycint.rmb4giao_vhf_gaunt, mol, dm0)
             #h1 += vj - vk
@@ -161,7 +161,7 @@ def make_h10rmb(mol, dm0, gauge_orig=None, with_gaunt=False,
         vj, vk = _call_rmb_vhf1(mol, dm0, 'cg')
         h1 = vj - vk
         if with_gaunt:
-            sys.stderr('NMR gaunt part not implemented')
+            sys.stderr('NMR gaunt part not implemented\n')
             #import pyscf.lib.pycint as pycint
             #vj, vk = scf.hf.get_vj_vk(pycint.rmb4cg_vhf_gaunt, mol, dm0)
             #h1 += vj - vk
@@ -238,7 +238,7 @@ class NMR(rhf_nmr.NMR):
             for i, atm_id in enumerate(self.shielding_nuc):
                 rhf_nmr._write(self.stdout, e11[i],
                                '\ntotal shielding of atom %d %s'
-                               % (atm_id, self.mol.atom_symbol(atm_id-1)))
+                               % (atm_id, self.mol.atom_symbol(atm_id)))
                 rhf_nmr._write(self.stdout, msc_dia[i], 'dia-magnetism')
                 rhf_nmr._write(self.stdout, msc_para[i], 'para-magnetism')
                 if self.verbose >= logger.INFO:

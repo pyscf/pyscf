@@ -188,7 +188,7 @@ class NMR(lib.StreamObject):
             for i, atm_id in enumerate(self.shielding_nuc):
                 _write(self.stdout, e11[i],
                        '\ntotal shielding of atom %d %s' \
-                       % (atm_id, self.mol.atom_symbol(atm_id-1)))
+                       % (atm_id, self.mol.atom_symbol(atm_id)))
                 _write(self.stdout, msc_dia[i], 'dia-magnetism')
                 _write(self.stdout, msc_para[i], 'para-magnetism')
                 if self.verbose >= logger.INFO:
