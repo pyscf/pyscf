@@ -15,19 +15,20 @@ def comp_overlap_coo(sv, ao_log=None, funct=overlap_ni,**kvargs):
   """
   from pyscf.nao.m_ao_matelem import ao_matelem_c
   from scipy.sparse import coo_matrix
+  from numpy import zeros
   
   me = ao_matelem_c(sv.ao_log) if ao_log is None else ao_matelem_c(ao_log)
-  atom2s = np.zeros((sv.natm+1), dtype=np.int32)
+  atom2s = zeros((sv.natm+1), dtype=np.int32)
   for atom,sp in enumerate(sv.atom2sp): atom2s[atom+1]=atom2s[atom]+me.ao1.sp2norbs[sp]
   sp2rcut = np.array([max(mu2rcut) for mu2rcut in me.ao1.sp_mu2rcut])
-  
+
   nnz = 0
   for sp1,rv1 in zip(sv.atom2sp,sv.atom2coord):
     n1,rc1 = me.ao1.sp2norbs[sp1],sp2rcut[sp1]
     for sp2,rv2 in zip(sv.atom2sp,sv.atom2coord):
       if (rc1+sp2rcut[sp2])**2>((rv1-rv2)**2).sum() : nnz = nnz + n1*me.ao1.sp2norbs[sp2]
-  
-  irow,icol,data = np.zeros((nnz), dtype=np.int64),np.zeros((nnz), dtype=np.int64),np.zeros((nnz)) # Start to construct coo matrix
+
+  irow,icol,data = zeros(nnz, dtype=np.int64),zeros(nnz, dtype=np.int64), zeros(nnz) # Start to construct coo matrix
 
   inz=-1
   for atom1,[sp1,rv1,s1,f1] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):

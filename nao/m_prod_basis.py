@@ -147,16 +147,16 @@ class prod_basis_c():
     dat[i] = s+1; # this is a terminator to simplify operation
 
     return dat
-    
 
   def comp_apair_pp_libint(self, a1,a2):
     """ Get's the vertex coefficient and conversion coefficients for a pair of atoms given by their atom indices """
+    lsc = self.ls_contributing(a1,a2)
+    
     if not hasattr(self, 'sv_pbloc_data') : raise RuntimeError('.sv_pbloc_data is absent')
     assert a1>=0
     assert a2>=0
     sp12 = np.require( np.array([self.sv.atom2sp[a] for a in (a1,a2)], dtype=c_int64), requirements='C')
     rc12 = np.require( np.array([self.sv.atom2coord[a,:] for a in (a1,a2)]), requirements='C')
-
     nout = c_int64(0)
     libnao.gen_vrtx_cc_apair( sp12.ctypes.data_as(POINTER(c_int64)), rc12.ctypes.data_as(POINTER(c_double)), byref(nout) )
     if nout.value<2 : raise RuntimeError('nout<2')
@@ -164,6 +164,14 @@ class prod_basis_c():
     dout = np.require( zeros(nout.value), requirements='CW')
     libnao.get_vrtx_cc_apair( dout.ctypes.data_as(POINTER(c_double)), nout )
     print(dout.sum())
+
+  def ls_contributing(self, a1,a2):
+    """ Get the list of contributing centers """
+    from m_ls_contributing import ls_contributing
+    
+    sp12 = np.array([self.sv.atom2sp[a] for a in (a1,a2)])
+    rc12 = np.array([self.sv.atom2coord[a,:] for a in (a1,a2)])
+    lsc = ls_contributing(self, sp12, rc12)
     
 
   def init_prod_basis_pp(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
@@ -209,7 +217,7 @@ class prod_basis_c():
     self.tol_biloc = tol_biloc
     self.ac_rcut_ratio = ac_rcut_ratio
     
-    self.prod_log = prod_log_c(ao_log = sv.ao_log, tol_loc=tol_loc) # local basis (for each specie)
+    self.prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc) # local basis (for each specie) 
     self.hkernel_csr  = csr_matrix(comp_overlap_coo(sv, self.prod_log, coulomb_am)) # compute local part of Coulomb interaction
     self.c2s = np.zeros((sv.natm+1), dtype=np.int64) # global product Center (atom) -> start in case of atom-centered basis
     for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] # 
