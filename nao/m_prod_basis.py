@@ -4,14 +4,13 @@ from numpy import einsum, zeros
 from ctypes import POINTER, c_double, c_int64, byref
 from pyscf.nao.m_libnao import libnao
 
-libnao.gen_vrtx_cc_apair.argtypes = (
-  POINTER(c_int64),   # sp12(1:2)
-  POINTER(c_double),  # rc12(1:3,1:2)
-  POINTER(c_int64))   # nout
-
-libnao.get_vrtx_cc_apair.argtypes = (
-  POINTER(c_double),  # dat(nout)
-  POINTER(c_int64))   # nout
+libnao.gen_get_vrtx_cc_apair.argtypes = (
+  POINTER(c_int64),   # sp12(1:2)     ! chemical species indices
+  POINTER(c_double),  # rc12(1:3,1:2) ! positions of species
+  POINTER(c_int64),   # lscc(ncc)     ! list of contributing centers
+  POINTER(c_int64),   # ncc           ! number of contributing centers 
+  POINTER(c_double),  # dout(nout)    ! vertex & converting coefficients
+  POINTER(c_int64))   # nout          ! size of the buffer for vertex & converting coefficients
 
 #
 #
@@ -49,6 +48,17 @@ class prod_basis_c():
     
     return
 
+  def init_pb_pp_all_pairs(self):
+    """ Generate the information about all bilocal pairs """
+    sv = self.sv
+    self.bp2info   = [] # going to be some information including indices of atoms, list of contributing centres, conversion coefficients
+    for ia1 in range(sv.natoms):
+      for ia2 in range(ia1+1,sv.natoms):
+        vrtx_lscc_cc = self.comp_apair_pp_libint(ia1,ia2)
+        if vrtx_lscc_cc is not None:
+          self.bp2info.append([[ia1,ia2],vrtx_lscc_cc[0],vrtx_lscc_cc[1],vrtx_lscc_cc[2]])
+  
+  
   def init_pb_pp_libnao_apair(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0, ac_npc_max=8, jcutoff=14, metric_type=2, optimize_centers=0, ngl=96):
     """ Talman's procedure should be working well with Pseudo-Potential starting point...
         This subroutine prepares the class for a later atom pair by atom pair generation 
@@ -63,6 +73,7 @@ class prod_basis_c():
     self.sv = sv
     self.tol_loc,self.tol_biloc,self.ac_rcut_ratio,self.ac_npc_max = tol_loc, tol_biloc, ac_rcut_ratio, ac_npc_max
     self.jcutoff,self.metric_type,self.optimize_centers,self.ngl = jcutoff, metric_type, optimize_centers, ngl
+    self.ac_rcut = ac_rcut_ratio*max(sv.ao_log.sp2rcut)    
     self.prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc) # local basis (for each specie)
     self.c2s = np.zeros((sv.natm+1), dtype=np.int64) # global product Center (atom) -> start in case of atom-centered basis
     for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] # 
@@ -150,29 +161,43 @@ class prod_basis_c():
 
   def comp_apair_pp_libint(self, a1,a2):
     """ Get's the vertex coefficient and conversion coefficients for a pair of atoms given by their atom indices """
+    from operator import mul
     lsc = self.ls_contributing(a1,a2)
     
     if not hasattr(self, 'sv_pbloc_data') : raise RuntimeError('.sv_pbloc_data is absent')
     assert a1>=0
     assert a2>=0
-    sp12 = np.require( np.array([self.sv.atom2sp[a] for a in (a1,a2)], dtype=c_int64), requirements='C')
-    rc12 = np.require( np.array([self.sv.atom2coord[a,:] for a in (a1,a2)]), requirements='C')
-    nout = c_int64(0)
-    libnao.gen_vrtx_cc_apair( sp12.ctypes.data_as(POINTER(c_int64)), rc12.ctypes.data_as(POINTER(c_double)), byref(nout) )
-    if nout.value<2 : raise RuntimeError('nout<2')
+    sv = self.sv
+    aos = self.sv.ao_log
+    sp12 = np.require( np.array([sv.atom2sp[a] for a in (a1,a2)], dtype=c_int64), requirements='C')
+    rc12 = np.require( np.array([sv.atom2coord[a,:] for a in (a1,a2)]), requirements='C')
+    lscc = np.require( np.array(self.ls_contributing(a1,a2), dtype=c_int64), requirements='C')
+    npmx = aos.sp2norbs[sv.atom2sp[a1]]*aos.sp2norbs[sv.atom2sp[a2]]
+    npcc = sum([self.prod_log.sp2norbs[sv.atom2sp[ia]] for ia in lscc ])
+    nout = c_int64(npmx**2+npmx*npcc)
+    dout = np.require( np.zeros(nout.value), requirements='CW')
+    
+    libnao.gen_get_vrtx_cc_apair( sp12.ctypes.data_as(POINTER(c_int64)), rc12.ctypes.data_as(POINTER(c_double)), lscc.ctypes.data_as(POINTER(c_int64)), c_int64(len(lscc)), dout.ctypes.data_as(POINTER(c_double)), nout )
+    
+    if dout[0]<1: return None
+    
+    nnn = [int(dout[0]), int(dout[1]), int(dout[2])]
+    nnc = [int(dout[8]), int(dout[7])]
+    ncc = int(dout[9])
+    if ncc!=len(lscc): raise RuntimeError('ncc!=len(lscc)')
+    s = 10; f=s+reduce(mul, nnn, 1)
+    vrtx  = dout[s:f].reshape(nnn)
+    s = f;  f=s+reduce(mul, nnc, 1)
+    ccoe  = dout[s:f].reshape(nnc)
+    return [vrtx, lscc, ccoe]
 
-    dout = np.require( zeros(nout.value), requirements='CW')
-    libnao.get_vrtx_cc_apair( dout.ctypes.data_as(POINTER(c_double)), nout )
-    print(dout.sum())
 
   def ls_contributing(self, a1,a2):
     """ Get the list of contributing centers """
     from m_ls_contributing import ls_contributing
-    
     sp12 = np.array([self.sv.atom2sp[a] for a in (a1,a2)])
     rc12 = np.array([self.sv.atom2coord[a,:] for a in (a1,a2)])
-    lsc = ls_contributing(self, sp12, rc12)
-    
+    return ls_contributing(self, sp12, rc12)
 
   def init_prod_basis_pp(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
     """ Talman's procedure should be working well with Pseudo-Potential starting point..."""
@@ -216,6 +241,7 @@ class prod_basis_c():
     self.tol_loc = tol_loc
     self.tol_biloc = tol_biloc
     self.ac_rcut_ratio = ac_rcut_ratio
+    self.ac_rcut = ac_rcut_ratio*max(sv.ao_log.sp2rcut)
     
     self.prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc) # local basis (for each specie) 
     self.hkernel_csr  = csr_matrix(comp_overlap_coo(sv, self.prod_log, coulomb_am)) # compute local part of Coulomb interaction

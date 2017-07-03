@@ -23,7 +23,7 @@ subroutine apair_put(pb, pair, d,n)
   real(c_double), intent(inout) :: d(n)
   !! internal
   type(book_pb_t), pointer :: bk
-  integer(c_int64_t) :: i, b, p, s, f, nn(3)
+  integer(c_int64_t) :: i, b, p, s, f, nn(3),nac
   real(c_double), pointer :: vrtx(:,:,:), cc(:,:)
   
   if( n<2 ) then; write(6,*)__FILE__, __LINE__, n; stop '!n<2'; endif
@@ -40,11 +40,13 @@ subroutine apair_put(pb, pair, d,n)
   d(i) = bk%ic; i=i+1
   d(i) = bk%top; i=i+1
   d(i) = bk%spp; i=i+1
+
   if (allocated(pb%coeffs)) then
     cc   => get_coeffs_pp_ptr(pb, pair)
     d(i) = 1; i=i+1
     d(i) = ubound(cc,1); i=i+1
     d(i) = ubound(cc,2); i=i+1
+    if(ubound(cc,2)/=nn(3)) then; write(6,*)__FILE__, __LINE__, ubound(cc,2), nn(3); stop '!ubound(cc,2)/=nn(3)'; endif
     d(i) = size(pb%coeffs(pair)%ind2book_re); i=i+1 ! number of participating centers
   else
     d(i) = 0; i=i+1
@@ -65,13 +67,14 @@ subroutine apair_put(pb, pair, d,n)
   enddo ! p
 
   if (allocated(pb%coeffs)) then
-    cc   => get_coeffs_pp_ptr(pb, pair)
-    f = s; 
-    if ( f>n ) then; write(6,*)__FILE__, __LINE__, f,n; stop '!f>n'; endif
-    d(s) = size(pb%coeffs(pair)%ind2book_re); s = f + 1;
-    f = s;
-    
-    f = s + size(cc) - 1;
+    cc => get_coeffs_pp_ptr(pb, pair)
+    nac = size(cc,1)
+    do p=1,nn(3)
+      f=s+nac-1;
+      if ( f>n ) then; write(6,*)__FILE__, __LINE__, f,n; stop '!f>n'; endif
+      d(s:f) = pb%coeffs(pair)%coeffs_ac_dp(:,p);
+      s = f + 1;
+    enddo
   endif
 
   !write(6,*) __FILE__, __LINE__

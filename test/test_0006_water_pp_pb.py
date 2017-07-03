@@ -12,9 +12,9 @@ class KnowValues(unittest.TestCase):
     self.assertTrue(abs(sv.ucell).sum()>0)
     pb = prod_basis_c().init_pb_pp_libnao_apair(sv)
     self.assertEqual(sv.norbs, 23)
-    pb.comp_apair_pp_libint(0,1)
-    
-    
+    ap = pb.comp_apair_pp_libint(0,1)
+    pb.init_pb_pp_all_pairs()
+    self.assertEqual(len(pb.bp2info), 3)
 
 if __name__ == "__main__":
   unittest.main()

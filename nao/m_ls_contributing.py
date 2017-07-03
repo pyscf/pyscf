@@ -9,12 +9,8 @@ def ls_contributing(pb, sp12, ra12):
   sp12 : a couple of species
   ra12 : a couple of coordinates, correspondingly
   """
-  sv = pb.sv
-  pl = pb.prod_log
-
-  ls = []
   ra3 = 0.5*(ra12[0,:] + ra12[1,:])
-  for sp, rvec in zip(sv.atom2sp,sv.atom2coord):
-    rc = pl.sp2rcut[sp]
-    #print(rc-sqrt(sum((ra12[0,:]-rvec)**2)), rc-sqrt(sum((ra12[1,:]-rvec)**2)) )
+  ia2dist = np.zeros(pb.sv.natoms)
+  for ia,rvec in enumerate(pb.sv.atom2coord-ra3): ia2dist[ia] = sqrt((rvec**2).sum())
+  return np.argsort(ia2dist)[0:pb.ac_npc_max]
 

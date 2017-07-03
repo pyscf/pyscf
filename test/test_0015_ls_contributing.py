@@ -17,10 +17,16 @@ class KnowValues(unittest.TestCase):
     sv = system_vars_c().init_pyscf_gto(mol)
     pb = prod_basis_c()
     pb.sv = sv
-    pb.sv.ao_log.sp2rcut[0] = 12.0
+    pb.sv.ao_log.sp2rcut[0] = 10.0
     pb.prod_log = sv.ao_log
-    pb.prod_log.sp2rcut[0] = 12.0
-    pb.ls_contributing(0,1)
+    pb.prod_log.sp2rcut[0] = 10.0
+    pb.ac_rcut = max(sv.ao_log.sp2rcut)
+    pb.ac_npc_max = 10
+    lsc = pb.ls_contributing(0,1)
+    self.assertEqual(len(lsc),10)
+    lsref = [ 0,  1, 13,  7,  5, 43, 42, 39, 38, 10]
+    for i,ref in enumerate(lsref) : self.assertEqual(lsc[i],ref)
+    
 
     
 if __name__ == "__main__":
