@@ -17,18 +17,8 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import _vhf
 from pyscf.prop.nmr import rhf as rhf_nmr
 from pyscf.prop.nmr import uhf as uhf_nmr
-
-# flatten([[XX, XY, XZ],
-#          [YX, YY, YZ],
-#          [ZX, ZY, ZZ]])
-TENSOR_IDX = numpy.arange(9)
-# flatten([[XX, YX, ZX],
-#          [XY, YY, ZY],
-#          [XZ, YZ, ZZ]])
-TENSOR_TRANSPOSE = TENSOR_IDX.reshape(3,3).T.flatten()
 
 def dia(gobj, mol, dm0, gauge_orig=None):
     if isinstance(dm0, numpy.ndarray) and dm0.ndim == 2: # RHF DM
@@ -53,6 +43,7 @@ def dia(gobj, mol, dm0, gauge_orig=None):
     for ia in range(mol.natm):
         mol.set_rinv_origin(mol.atom_coord(ia))
         Z = mol.atom_charge(ia)
+        #FIXME: when ECP is enabled
         if gobj.with_so_eff_charge:
             Z = koseki_charge(Z)
 # GC(1e) = 1/4c^2 Z/(2r_N^3) [vec{r}_N dot r sigma dot B - B dot vec{r}_N r dot sigma]
@@ -69,12 +60,13 @@ def dia(gobj, mol, dm0, gauge_orig=None):
         for ia in range(mol.natm):
             mol.set_rinv_origin(mol.atom_coord(ia))
             Z = mol.atom_charge(ia)
+            #FIXME: when ECP is enabled
             if gobj.with_so_eff_charge:
                 Z = koseki_charge(Z)
             h11 += Z * mol.intor('int1e_a01gp', 9)
     gc1e = numpy.einsum('xij,ji->x', h11, spindm).reshape(3,3)
 
-    if 0:  # correction of order c^{-2} from MB basis, does it exist?
+    if 0:  # correction of order c^{-2} from MB basis or DPT (JCP,115,7356), does it exist?
         gc1e += numpy.einsum('ij,ji', mol.intor('int1e_nuc'), spindm) * numpy.eye(3)
 
     gc1e *= g_so * (alpha2/4) / effspin
@@ -188,6 +180,7 @@ def para(mol, mo10, mo_coeff, mo_occ):
         hso1e = 0
         for ia in range(mol.natm):
             mol.set_rinv_origin(mol.atom_coord(ia))
+            #FIXME: when ECP is enabled
             Z = koseki_charge(mol.atom_charge(ia))
             hso1e += -Z * mol.intor('int1e_prinvxp', 3)
     else:
@@ -241,6 +234,7 @@ def make_para_soc2e(gobj, dm0, dm10):
     gpara2e *= (alpha2/4) / effspin
     return gpara2e
 
+# FIXME: test the MB basis contribution
 def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
     log = logger.new_logger(mol, verbose=verbose)
     if gauge_orig is None:

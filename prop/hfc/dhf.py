@@ -16,6 +16,8 @@ from pyscf.prop.nmr import dhf as dhf_nmr
 from pyscf.prop.hfc import parameters
 
 
+# Due to the value of lib.param.NUC_MAGNETON, SI unit is used in this module
+
 # TODO: 3 SCF for sx, sy, sz
 
 def make_h01(mol, atm_id):
@@ -59,8 +61,8 @@ def kernel(hfcobj, with_gaunt=False, verbose=None):
         orbo = mo_coeff[:,occidx]
         dm0 = numpy.dot(orbo, orbo.T.conj())
         e01 = numpy.einsum('xij,ji->x', h01, dm0)
-        g_ratio = parameters.GYROMAGNETIC_RATIO[nuc][2]
-        e01 *= g_ratio / 2 * lib.param.LIGHT_SPEED
+        g_ratio = parameters.ISOTOPE[nuc][2]
+        e01 *= g_ratio
 
         effspin = numpy.einsum('xij,ji->x', Sigma, dm0) * .5
         log.debug('atom %d Eff-spin %s', atm_id, effspin.real)

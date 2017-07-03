@@ -17,7 +17,7 @@ from pyscf.scf import _vhf
 from pyscf.scf import cphf
 from pyscf.scf.newton_ah import _gen_rhf_response
 
-UNIT_PPM = 1./137.03599967994**2 * 1e6
+UNIT_PPM = lib.param.ALPHA**2 * 1e6
 
 # flatten([[XX, XY, XZ],
 #          [YX, YY, YZ],
