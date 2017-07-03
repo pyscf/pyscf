@@ -46,18 +46,7 @@ class prod_basis_c():
             self.dpc2s, self.dpc2t, self.dpc2sp: product Center -> list of the size of the basis set in this center,of center's types,of product species
     """
     
-    return
-
-  def init_pb_pp_all_pairs(self):
-    """ Generate the information about all bilocal pairs """
-    sv = self.sv
-    self.bp2info   = [] # going to be some information including indices of atoms, list of contributing centres, conversion coefficients
-    for ia1 in range(sv.natoms):
-      for ia2 in range(ia1+1,sv.natoms):
-        vrtx_lscc_cc = self.comp_apair_pp_libint(ia1,ia2)
-        if vrtx_lscc_cc is not None:
-          self.bp2info.append([[ia1,ia2],vrtx_lscc_cc[0],vrtx_lscc_cc[1],vrtx_lscc_cc[2]])
-  
+    return  
   
   def init_pb_pp_libnao_apair(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0, ac_npc_max=8, jcutoff=14, metric_type=2, optimize_centers=0, ngl=96):
     """ Talman's procedure should be working well with Pseudo-Potential starting point...
@@ -162,8 +151,7 @@ class prod_basis_c():
   def comp_apair_pp_libint(self, a1,a2):
     """ Get's the vertex coefficient and conversion coefficients for a pair of atoms given by their atom indices """
     from operator import mul
-    lsc = self.ls_contributing(a1,a2)
-    
+    from pyscf.nao.m_prod_biloc import prod_biloc_c
     if not hasattr(self, 'sv_pbloc_data') : raise RuntimeError('.sv_pbloc_data is absent')
     assert a1>=0
     assert a2>=0
@@ -171,25 +159,26 @@ class prod_basis_c():
     aos = self.sv.ao_log
     sp12 = np.require( np.array([sv.atom2sp[a] for a in (a1,a2)], dtype=c_int64), requirements='C')
     rc12 = np.require( np.array([sv.atom2coord[a,:] for a in (a1,a2)]), requirements='C')
-    lscc = np.require( np.array(self.ls_contributing(a1,a2), dtype=c_int64), requirements='C')
+    cc2a = np.require( np.array(self.ls_contributing(a1,a2), dtype=c_int64), requirements='C')
     npmx = aos.sp2norbs[sv.atom2sp[a1]]*aos.sp2norbs[sv.atom2sp[a2]]
-    npcc = sum([self.prod_log.sp2norbs[sv.atom2sp[ia]] for ia in lscc ])
-    nout = c_int64(npmx**2+npmx*npcc)
+    npac = sum([self.prod_log.sp2norbs[sv.atom2sp[ia]] for ia in cc2a ])
+    nout = c_int64(npmx**2+npmx*npac)
     dout = np.require( np.zeros(nout.value), requirements='CW')
     
-    libnao.gen_get_vrtx_cc_apair( sp12.ctypes.data_as(POINTER(c_int64)), rc12.ctypes.data_as(POINTER(c_double)), lscc.ctypes.data_as(POINTER(c_int64)), c_int64(len(lscc)), dout.ctypes.data_as(POINTER(c_double)), nout )
+    libnao.gen_get_vrtx_cc_apair( sp12.ctypes.data_as(POINTER(c_int64)), rc12.ctypes.data_as(POINTER(c_double)), cc2a.ctypes.data_as(POINTER(c_int64)), c_int64(len(cc2a)), dout.ctypes.data_as(POINTER(c_double)), nout )
     
     if dout[0]<1: return None
     
-    nnn = [int(dout[0]), int(dout[1]), int(dout[2])]
+    nnn = map(int, dout[0:3])
     nnc = [int(dout[8]), int(dout[7])]
     ncc = int(dout[9])
-    if ncc!=len(lscc): raise RuntimeError('ncc!=len(lscc)')
-    s = 10; f=s+reduce(mul, nnn, 1)
-    vrtx  = dout[s:f].reshape(nnn)
-    s = f;  f=s+reduce(mul, nnc, 1)
-    ccoe  = dout[s:f].reshape(nnc)
-    return [vrtx, lscc, ccoe]
+    if ncc!=len(cc2a): raise RuntimeError('ncc!=len(cc2a)')
+    s = 10; f=s+reduce(mul, nnn, 1); vrtx  = dout[s:f].reshape(nnn)
+    s = f;  f=s+reduce(mul, nnc, 1); ccoe  = dout[s:f].reshape(nnc)
+    cc2s = np.zeros(len(cc2a)+1, dtype=np.int64)
+    for cc,a in enumerate(cc2a): cc2s[cc+1] = cc2s[cc] + self.prod_log.sp2norbs[sv.atom2sp[a]]
+    pbiloc = prod_biloc_c(atoms=np.array([a2,a1]),vrtx=vrtx,cc2a=cc2a,cc2s=cc2s,cc=ccoe)
+    return pbiloc
 
 
   def ls_contributing(self, a1,a2):
@@ -199,36 +188,17 @@ class prod_basis_c():
     rc12 = np.array([self.sv.atom2coord[a,:] for a in (a1,a2)])
     return ls_contributing(self, sp12, rc12)
 
-  def init_prod_basis_pp(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
-    """ Talman's procedure should be working well with Pseudo-Potential starting point..."""
-    from pyscf.nao import coulomb_am, comp_overlap_coo, get_atom2bas_s, conv_yzx2xyz_c, prod_log_c, ls_part_centers, comp_coulomb_den
-    from scipy.sparse import csr_matrix
-
-    self.sv = sv
-    self.tol_loc = tol_loc
-    self.tol_biloc = tol_biloc
-    self.ac_rcut_ratio = ac_rcut_ratio
-
-    self.prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc) # local basis (for each specie)
-
-    self.hkernel_csr  = csr_matrix(comp_overlap_coo(sv, self.prod_log, coulomb_am)) # compute local part of Coulomb interaction
-
-    self.c2s = np.zeros((sv.natm+1), dtype=np.int64) # global product Center (atom) -> start in case of atom-centered basis
-
-    for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] # 
-
-    c2s = self.c2s 
-
-    self.bp2vertex = [] # going to be the product vertex coefficients for each bilocal pair 
-    self.bp2info   = [] # going to be some information including indices of atoms, list of contributing centres, conversion coefficients
-
-    for ia1,n1 in enumerate(sv.atom2s[1:]-sv.atom2s[0:-1]):
-      for ia2,n2 in enumerate(sv.atom2s[ia1+2:]-sv.atom2s[ia1+1:-1]):
-        ia2+=ia1+1
-        #print(ia1, ia2)
-
-
-    self.dpc2s,self.dpc2t,self.dpc2sp = self.get_c2s_domiprod() # dominant product's counting 
+  def init_prod_basis_pp(self):
+    """ Talman's procedure should be working well with Pseudo-Potential starting point. Before doing this, the method .init_pb_pp_libnao_apair() must be called"""
+    
+    from pyscf.nao.m_prod_biloc import prod_biloc_c
+    sv = self.sv
+    self.bp2info = [] # going to be some information including indices of atoms, list of contributing centres, conversion coefficients
+    for ia1 in range(sv.natoms):
+      for ia2 in range(ia1+1,sv.natoms):
+        pbiloc = self.comp_apair_pp_libint(ia1,ia2)
+        self.bp2info.append(pbiloc)
+    self.dpc2s,self.dpc2t,self.dpc2sp = self.get_c2s_domiprod() # dominant product's counting
     return self
 
   def init_prod_basis_gto(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
@@ -305,37 +275,40 @@ class prod_basis_c():
     self.dpc2s,self.dpc2t,self.dpc2sp = self.get_c2s_domiprod() # dominant product's counting 
     return self
 
-  def get_ad2cc_den(self):
+  def get_da2cc_den(self):
     """ Returns Conversion Coefficients as dense matrix """
     nfdp,nfap = self.dpc2s[-1],self.c2s[-1]
-    ad2cc = np.zeros((nfap,nfdp))
+    da2cc = np.zeros((nfdp,nfap))
     for sd,fd,pt in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t):
-      if pt==1: ad2cc[sd:fd,sd:fd] = np.identity(fd-sd)
+      if pt==1: da2cc[sd:fd,sd:fd] = np.identity(fd-sd)
 
     for sd,fd,pt,spp in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp):
       if pt==1: continue
-      for c,ls,lf in zip(self.bp2info[spp][1],self.bp2info[spp][2],self.bp2info[spp][2][1:]): 
-        ad2cc[self.c2s[c]:self.c2s[c+1],sd:fd] = self.bp2info[spp][3][ls:lf,:]
-    return ad2cc
+      inf = self.bp2info[spp]
+      for c,ls,lf in zip(inf.cc2a, inf.cc2s, inf.cc2s[1:]): 
+        da2cc[sd:fd, self.c2s[c]:self.c2s[c+1]] = inf.cc[:,ls:lf]
+    return da2cc
 
   def get_vertex_array(self):
     """ Returns the product Vertex Coefficients as 3d array """
+    atom2so = self.sv.atom2s
     nfap = self.c2s[-1]
     n = self.sv.atom2s[-1]
     pab2v = np.zeros((nfap,n,n))
     for atom,[sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
       if pt!=1: continue
-      s,f = self.sv.atom2s[atom:atom+2]
+      s,f = atom2so[atom:atom+2]
       pab2v[sd:fd,s:f,s:f] = self.prod_log.sp2vertex[spp]
 
     for sd,fd,pt,spp in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp):
       if pt!=2: continue
-      lab = einsum('ld,dab->lab', self.bp2info[spp][3], self.bp2vertex[spp])
-      a,b = self.bp2info[spp][0][:]
-      sa,fa,sb,fb = self.sv.atom2s[a],self.sv.atom2s[a+1],self.sv.atom2s[b],self.sv.atom2s[b+1]
-      for c,ls,lf in zip(self.bp2info[spp][1],self.bp2info[spp][2],self.bp2info[spp][2][1:]): 
-        pab2v[self.c2s[c]:self.c2s[c+1],sa:fa,sb:fb] = lab[ls:lf,:,:]
-        pab2v[self.c2s[c]:self.c2s[c+1],sb:fb,sa:fa] = einsum('pab->pba', lab[ls:lf,:,:])
+      inf= self.bp2info[spp]
+      lab = einsum('dl,dab->lab', inf.cc, inf.vrtx)
+      a,b = inf.atoms
+      sa,fa,sb,fb = atom2so[a],atom2so[a+1],atom2so[b],atom2so[b+1]
+      for a,ls,lf in zip(inf.cc2a, inf.cc2s, inf.cc2s[1:]):
+        pab2v[self.c2s[a]:self.c2s[a+1],sa:fa,sb:fb] = lab[ls:lf,:,:]
+        pab2v[self.c2s[a]:self.c2s[a+1],sb:fb,sa:fa] = einsum('pab->pba', lab[ls:lf,:,:])
     return pab2v
 
   def get_c2s_domiprod(self):
@@ -343,8 +316,8 @@ class prod_basis_c():
     c2n,c2t,c2sp = [],[],[] #  product Center -> list of the size of the basis set in this center,of center's types,of product species
     for atom,sp in enumerate(self.sv.atom2sp):
       c2n.append(self.prod_log.sp2vertex[sp].shape[0]); c2t.append(1); c2sp.append(sp);
-    for ibp,vertex in enumerate(self.bp2vertex): 
-      c2n.append(vertex.shape[0]); c2t.append(2); c2sp.append(ibp);
+    for ibp,inf in enumerate(self.bp2info): 
+      c2n.append(inf.vrtx.shape[0]); c2t.append(2); c2sp.append(ibp);
 
     ndpc = len(c2n)  # number of product centers in this vertex 
     c2s = np.zeros(ndpc+1, np.int64 ) # product Center -> Start index of a product function in a global counting for this vertex

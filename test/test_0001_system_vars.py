@@ -50,7 +50,7 @@ class KnowValues(unittest.TestCase):
     from pyscf.nao import conv_yzx2xyz_c, overlap_am
     sv = system_vars_c().init_pyscf_gto(mol)
     oref = conv_yzx2xyz_c(mol).conv_yzx2xyz_2d(mol.intor_symmetric('cint1e_ovlp_sph'), direction='pyscf2nao')
-    over = sv.comp_overlap_coo(funct=overlap_am).todense()
+    over = sv.overlap_coo(funct=overlap_am).toarray()
     self.assertTrue(abs(over-oref).sum()<5e-9)
 
 

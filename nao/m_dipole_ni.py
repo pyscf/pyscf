@@ -4,7 +4,7 @@ import numpy as np
 #
 #
 #
-def dipole_ni(me, sp1, sp2, R1, R2, **kvargs):
+def dipole_ni(me, sp1, R1, sp2, R2, **kvargs):
     """
       Computes overlap for an atom pair. The atom pair is given by a pair of species indices
       and the coordinates of the atoms.
@@ -23,9 +23,7 @@ def dipole_ni(me, sp1, sp2, R1, R2, **kvargs):
     ao1 = ao_eval(me.ao1, R1, sp1, grids.coords)
     ao1 = ao1 * grids.weights
     ko1 = np.einsum('ik,oi->koi', grids.coords, ao1)
-
     ao2 = ao_eval(me.ao1, R2, sp2, grids.coords)
-
     koo2dip = np.einsum("koi,pi->kop", ko1, ao2)
 
     return koo2dip

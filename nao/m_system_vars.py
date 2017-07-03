@@ -256,9 +256,13 @@ class system_vars_c():
   def atom_coord(self, ia): return self.atom2coord[ia,:]
   def atom_coords(self): return self.atom2coord
 
-  def comp_overlap_coo(self, **kvargs):   # Compute something for the given system
+  def overlap_coo(self, **kvargs):   # Compute something for the given system
     from pyscf.nao import comp_overlap_coo
     return comp_overlap_coo(self, **kvargs)
+
+  def dipole_coo(self, **kvargs):   # Compute something for the given system
+    from pyscf.nao.m_dipole_coo import dipole_coo
+    return dipole_coo(self, **kvargs)
   
   def overlap_check(self, tol=1e-5, **kvargs): # Works only after init_siesta_xml(), extend ?
     return overlap_check(self, tol=1e-5, **kvargs)
