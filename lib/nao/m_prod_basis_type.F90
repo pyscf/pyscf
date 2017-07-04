@@ -8,7 +8,7 @@ module m_prod_basis_type
   use m_functs_l_mult_type, only : functs_l_mult_t
   use m_coeffs_type, only : d_coeffs_ac_dp_t
   use m_system_vars, only : system_vars_t
-  use m_prod_basis_param, only : prod_basis_param_t
+  use m_prod_basis_param, only : prod_basis_param_t, dealloc_pb_p=>dealloc
   use m_vertex_3cent, only : vertex_3cent_t
   
   implicit none
@@ -73,6 +73,36 @@ module m_prod_basis_type
   allocate(slave(size(master)));
 
   contains
+
+
+subroutine dealloc(v)
+  implicit none
+  type(prod_basis_t), intent(inout) :: v
+  
+  v%sv => null()
+  call dealloc_pb_p(v%pb_p)
+  
+  _dealloc(v%rr)
+  _dealloc(v%pp)
+  _dealloc(v%atom2coord)
+  _dealloc(v%sp_local2vertex)
+  _dealloc(v%sp_local2functs)
+  _dealloc(v%sp_local2functs_mom)
+  _dealloc(v%sp_biloc2vertex)
+  _dealloc(v%sp_biloc2functs)
+  _dealloc(v%sp_biloc2functs_mom)
+  _dealloc(v%book_dp)
+  _dealloc(v%coeffs)
+  _dealloc(v%book_re)
+  _dealloc(v%book_uc)
+
+  v%uc_vecs = 0
+  v%nfunct_irr = 0
+  v%irr_trans_inv_sym = 0
+  v%book_type = 0
+  v%BlochPhaseConv = ""
+
+end subroutine ! dealloc
 
 !
 !

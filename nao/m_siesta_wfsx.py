@@ -2,8 +2,8 @@ from __future__ import print_function, division
 from ctypes import POINTER, c_int64, c_float, c_double, c_char_p, c_int, create_string_buffer
 import os
 import sys
-import numpy
-from numpy import empty 
+import numpy as np
+from numpy import zeros, empty 
 from pyscf.nao.m_libnao import libnao
 
 # interfacing with fortran subroutines 
@@ -32,7 +32,7 @@ def siesta_wfsx_book_read_py(fname):
 #
 #
 def siesta_wfsx_dread(w):
-  ddata = numpy.empty(w.nkpoints*w.nspin*w.norbs + + w.nkpoints*3)
+  ddata = empty(w.nkpoints*w.nspin*w.norbs + + w.nkpoints*3)
   ios = c_int(22)
   libnao.siesta_wfsx_dread(create_string_buffer(w.label.encode()), ddata.ctypes.data_as(POINTER(c_double)), ios)
   return ddata
@@ -104,8 +104,8 @@ class siesta_wfsx_c():
     ### Read double precision data
     ddata = siesta_wfsx_dread(self)
 
-    self.ksn2e = numpy.empty((self.nkpoints,self.nspin,self.norbs), dtype='float64')
-    self.k2xyz = numpy.empty((self.nkpoints,3), dtype='float64')
+    self.ksn2e = empty((self.nkpoints,self.nspin,self.norbs), dtype='float64')
+    self.k2xyz = empty((self.nkpoints,3), dtype='float64')
     i = 0
     for k in range(self.nkpoints):
       for s in range(self.nspin):
@@ -117,5 +117,5 @@ class siesta_wfsx_c():
           self.k2xyz[k,j] = ddata[i]; i=i+1
 
     ### Read single precision data
-    self.X = numpy.empty((self.nreim,self.norbs,self.norbs,self.nspin,self.nkpoints), dtype='float32')
-    siesta_wfsx_sread(self, self.X)
+    self.x = np.require(zeros((self.nreim,self.norbs,self.norbs,self.nspin,self.nkpoints), dtype=np.float32), requirements='CW')
+    siesta_wfsx_sread(self, self.x)

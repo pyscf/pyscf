@@ -72,6 +72,66 @@ contains
 !
 !
 !
+subroutine dealloc(v)
+  implicit none
+  type(prod_basis_param_t), intent(inout) :: v
+
+  v%p=>null()
+  v%check_basis = -999
+  v%check_basis_rspace = -999
+  v%check_basis_bloch = -999
+  v%check_basis_write_report = -999
+  v%cross_check_global_vertex = -999
+  v%check_zcmmm = -999
+  v%check_dfmcm_lap = -999
+  v%check_zspcm_lap = -999
+  v%check_exmtrx_vt1_bt2 = -999
+  v%stop_check_basis_bloch = -999
+  v%do_shifting_test = -999
+  v%metric_type = -999
+  v%normalize_dp = -999
+  v%eigmin_local = -999
+  v%eigmin_bilocal = -999
+  v%optimize_centers = -999
+  v%jcutoff = -999
+  v%gl_ord_bilocal = -999
+  v%gl_pcs_bilocal = -999
+  v%ac_rcut = -999
+  v%cc_inv_eigmin = -999
+  v%check_hkernel_blocks = -999
+  v%check_hkernel_dp_pb = -999
+  v%reexpr_further = -999
+  v%check_hkernel_reexpr = -999
+  v%report_pair2clist = -999
+  v%report_ls_blocks = -999
+  v%bulk_cross_check_hkernel = -999
+  v%report_domiprod = -999
+  v%report_prod_basis_mix = -999
+  v%report_prod_basis_dp = -999
+  v%report_prod_basis = -999
+  v%gen_aug_lmult = -999
+  v%bilocal_center_pow = -999
+  v%core_split_ratio = -999
+  v%stop_after_dp = -999
+  v%pb_funct_xsf = -999
+    
+  v%prod_basis_type = ''
+  v%ac_method = ''
+  v%cc_method = ''
+  v%cc_omp_para = ''
+  v%bilocal_type = ''
+  v%bilocal_center = ''
+  v%bilocal_center_coeff = ''
+  v%local_type = ''
+  v%biloc_interm_storage = ''
+  v%mixed_interm_storage = ''
+
+end subroutine ! dealloc 
+
+
+!
+!
+!
 subroutine init_prod_basis_param(inp, sv, p, iv, param)
   use m_input, only : input_t, init_parameter
   use m_upper, only : upper

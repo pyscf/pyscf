@@ -75,16 +75,24 @@ subroutine dealloc(ca)
 !    complex(8), allocatable :: conjg_c2r_diag1(:)
 !    complex(8), allocatable :: conjg_c2r_diag2(:)
 !    real(8), allocatable    :: GGG(:,:,:)
-  
+
+  ca%pb=>null()
+    
   _dealloc(ca%j1_j2_to_gaunt1)
   _dealloc(ca%tr_c2r_diag1)
   _dealloc(ca%tr_c2r_diag2)
   _dealloc(ca%conjg_c2r_diag1)
   _dealloc(ca%conjg_c2r_diag2)
   _dealloc(ca%GGG)
+  _dealloc(ca%Gamma_Gaunt)
   _dealloc(ca%pair2wigner_matrices)
+  !_dealloc(ca%sp_local2functs_mom)
+  !_dealloc(ca%sp_biloc2functs_mom)
+  ca%sp_local2functs_mom=>null()
+  ca%sp_biloc2functs_mom=>null()
   _dealloc(ca%sp_local2moms)
   _dealloc(ca%sp_biloc2moms)
+
   _dealloc(ca%spp2rcut_type_of_mu1)
   _dealloc(ca%spp2nfun_type_of_mu1)
   _dealloc(ca%spp2rcut_type_of_mu2)
@@ -94,13 +102,24 @@ subroutine dealloc(ca)
   _dealloc(ca%p2srrsfn)
   _dealloc(ca%mu_sp2jsfn)
   _dealloc(ca%block2start)
-  ca%pb => null()
-  !_dealloc(ca%sp_local2functs_mom)
-  !_dealloc(ca%sp_biloc2functs_mom)
-  ca%sp_local2functs_mom=>null()
-  ca%sp_biloc2functs_mom=>null()
+  _dealloc(ca%sp2nmu)
+
   call sbt_destroy(ca%tp)
 
+  ca%uc_vecs = 0
+  ca%nr = -999
+  ca%dkappa = -999
+  ca%jcutoff = -999
+  ca%ncenters = -999
+  ca%logical_overlap = .false.
+  ca%nfmx = -999
+  ca%jcl = -999
+  ca%book_type = -999
+  ca%use_mult = -999
+  ca%scr_const = -999
+  ca%bcrs_mv_block_size = -999
+  ca%nblocks = -999
+  
 end subroutine ! dealloc
 
 !
@@ -192,6 +211,8 @@ subroutine init_aux_pb(pb, logical_overlap, scr_const, use_mult, aux, iv)
   !! Dimensions
   real(8) :: pi
 
+  call dealloc(aux)
+  
   aux%pb => pb 
   aux%jcutoff = max(get_jcutoff(pb), get_jcutoff_param(pb%pb_p))
   aux%dkappa=get_dr_jt(pb%pp)

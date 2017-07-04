@@ -11,8 +11,8 @@ module m_sv_prod_log_get
 !
 !
 subroutine sv_prod_log_get(d,n, sv, pb)
-  use m_system_vars, only : system_vars_t
-  use m_prod_basis_type, only : prod_basis_t
+  use m_system_vars, only : system_vars_t, dealloc_sv=>dealloc
+  use m_prod_basis_type, only : prod_basis_t, dealloc_pb=>dealloc
   implicit none
   !! external
   integer(c_int64_t), intent(in) :: n
@@ -31,6 +31,9 @@ subroutine sv_prod_log_get(d,n, sv, pb)
   integer(c_int64_t), allocatable :: sp2norbsp(:), sp2chrgp(:), sp2nmultp(:)
   integer, allocatable :: mu2s(:)
   integer :: metric_type, ngl, optimize_centers
+
+  call dealloc_sv(sv)
+  call dealloc_pb(pb)
 
   sv%uc%systemlabel = "libnao"
   i = 2
@@ -59,7 +62,7 @@ subroutine sv_prod_log_get(d,n, sv, pb)
   if (nr<1) then; write(6,*) __FILE__, __LINE__, nr; stop '!nr'; endif
   if (jcutoff<jmx) then; write(6,*) __FILE__, __LINE__, jcutoff, jmx; stop '!jcutoff'; endif
   if (metric_type<1) then; write(6,*) __FILE__, __LINE__, metric_type; stop '!metric_type'; endif
-  
+    
   allocate(sv%uc%sp2label(nsp))
   allocate(sv%uc%sp2nmult(nsp))
   allocate(sv%uc%sp2norbs(nsp))

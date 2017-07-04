@@ -1,5 +1,6 @@
 from __future__ import print_function, division
 import numpy as np
+from scipy.sparse import coo_matrix
 from numpy import einsum, zeros
 from ctypes import POINTER, c_double, c_int64, byref
 from pyscf.nao.m_libnao import libnao
@@ -40,9 +41,7 @@ class prod_basis_c():
             self.prod_log: Holder of (local) product functions and vertices
             self.hkernel_csr: hartree kernel: local part of Coulomb interaction
             self.c2s: global product Center (atom) -> start in case of atom-centered basis
-            self.bp2vertex: product vertex coefficients for each bilocal pair
             self.bp2info: some information including indices of atoms, list of contributing centres, conversion coefficients
-                    Probably better a dictionary than a list, more clear.
             self.dpc2s, self.dpc2t, self.dpc2sp: product Center -> list of the size of the basis set in this center,of center's types,of product species
     """
     
@@ -169,12 +168,12 @@ class prod_basis_c():
     
     if dout[0]<1: return None
     
-    nnn = map(int, dout[0:3])
-    nnc = [int(dout[8]), int(dout[7])]
+    nnn = np.array(dout[0:3], dtype=int)
+    nnc = np.array([dout[8],dout[7]], dtype=int)
     ncc = int(dout[9])
     if ncc!=len(cc2a): raise RuntimeError('ncc!=len(cc2a)')
-    s = 10; f=s+reduce(mul, nnn, 1); vrtx  = dout[s:f].reshape(nnn)
-    s = f;  f=s+reduce(mul, nnc, 1); ccoe  = dout[s:f].reshape(nnc)
+    s = 10; f=s+np.prod(nnn); vrtx  = dout[s:f].reshape(nnn)
+    s = f;  f=s+np.prod(nnc); ccoe  = dout[s:f].reshape(nnc)
     cc2s = np.zeros(len(cc2a)+1, dtype=np.int64)
     for cc,a in enumerate(cc2a): cc2s[cc+1] = cc2s[cc] + self.prod_log.sp2norbs[sv.atom2sp[a]]
     pbiloc = prod_biloc_c(atoms=np.array([a2,a1]),vrtx=vrtx,cc2a=cc2a,cc2s=cc2s,cc=ccoe)
@@ -183,7 +182,7 @@ class prod_basis_c():
 
   def ls_contributing(self, a1,a2):
     """ Get the list of contributing centers """
-    from m_ls_contributing import ls_contributing
+    from pyscf.nao.m_ls_contributing import ls_contributing
     sp12 = np.array([self.sv.atom2sp[a] for a in (a1,a2)])
     rc12 = np.array([self.sv.atom2coord[a,:] for a in (a1,a2)])
     return ls_contributing(self, sp12, rc12)
@@ -198,7 +197,9 @@ class prod_basis_c():
       for ia2 in range(ia1+1,sv.natoms):
         pbiloc = self.comp_apair_pp_libint(ia1,ia2)
         self.bp2info.append(pbiloc)
-    self.dpc2s,self.dpc2t,self.dpc2sp = self.get_c2s_domiprod() # dominant product's counting
+    self.dpc2s,self.dpc2t,self.dpc2sp = self.init_c2s_domiprod() # dominant product's counting
+    self.npdp = self.dpc2s[-1]
+    self.norbs = self.sv.norbs
     return self
 
   def init_prod_basis_gto(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
@@ -275,10 +276,10 @@ class prod_basis_c():
     self.dpc2s,self.dpc2t,self.dpc2sp = self.get_c2s_domiprod() # dominant product's counting 
     return self
 
-  def get_da2cc_den(self):
+  def get_da2cc_den(self, dtype=np.float64):
     """ Returns Conversion Coefficients as dense matrix """
     nfdp,nfap = self.dpc2s[-1],self.c2s[-1]
-    da2cc = np.zeros((nfdp,nfap))
+    da2cc = np.zeros((nfdp,nfap), dtype=dtype)
     for sd,fd,pt in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t):
       if pt==1: da2cc[sd:fd,sd:fd] = np.identity(fd-sd)
 
@@ -289,12 +290,48 @@ class prod_basis_c():
         da2cc[sd:fd, self.c2s[c]:self.c2s[c+1]] = inf.cc[:,ls:lf]
     return da2cc
 
-  def get_vertex_array(self):
-    """ Returns the product Vertex Coefficients as 3d array """
+  def get_da2cc_nnz(self):
+    """ Computes the number of non-zero matrix elements in the conversion matrix ac <=> dp """
+    nnz = 0
+    for sd,fd,pt in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t):
+      if pt==1: nnz = nnz + (fd-sd)
+
+    for sd,fd,pt,spp in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp):
+      if pt==1: continue
+      inf = self.bp2info[spp]
+      for c,ls,lf in zip(inf.cc2a, inf.cc2s, inf.cc2s[1:]): nnz = nnz + (fd-sd)*(lf-ls)
+    return nnz
+
+  def get_da2cc_coo(self, dtype=np.float64):
+    """ Returns Conversion Coefficients as sparse COO matrix """
+
+    nfdp,nfap = self.dpc2s[-1],self.c2s[-1]
+    nnz = self.get_da2cc_nnz()
+    irow,icol,data = zeros(nnz, dtype=np.int64),zeros(nnz, dtype=np.int64), zeros(nnz, dtype=dtype) # Start to construct coo matrix
+
+    inz = 0
+    for sd,fd,pt in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t):
+      if pt!=1: continue
+      for d in range(sd,fd): 
+        irow[inz],icol[inz],data[inz] = d,d,1.0
+        inz+=1
+
+    for sd,fd,pt,spp in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp):
+      if pt==1: continue
+      inf = self.bp2info[spp]
+      for c,ls,lf in zip(inf.cc2a, inf.cc2s, inf.cc2s[1:]): 
+        for d in range(sd,fd):
+          for a in range(self.c2s[c],self.c2s[c+1]):
+            irow[inz],icol[inz],data[inz] = d,a,inf.cc[d-sd,a-self.c2s[c]+ls]
+            inz+=1
+    return coo_matrix((data,(irow,icol)), dtype=dtype, shape=(nfdp, nfap))
+    
+  def get_ac_vertex_array(self, dtype=np.float64):
+    """ Returns the product vertex coefficients as 3d array (dense table) """
     atom2so = self.sv.atom2s
     nfap = self.c2s[-1]
     n = self.sv.atom2s[-1]
-    pab2v = np.zeros((nfap,n,n))
+    pab2v = np.require( np.zeros((nfap,n,n), dtype=dtype), requirements='CW')
     for atom,[sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
       if pt!=1: continue
       s,f = atom2so[atom:atom+2]
@@ -306,12 +343,78 @@ class prod_basis_c():
       lab = einsum('dl,dab->lab', inf.cc, inf.vrtx)
       a,b = inf.atoms
       sa,fa,sb,fb = atom2so[a],atom2so[a+1],atom2so[b],atom2so[b+1]
-      for a,ls,lf in zip(inf.cc2a, inf.cc2s, inf.cc2s[1:]):
-        pab2v[self.c2s[a]:self.c2s[a+1],sa:fa,sb:fb] = lab[ls:lf,:,:]
-        pab2v[self.c2s[a]:self.c2s[a+1],sb:fb,sa:fa] = einsum('pab->pba', lab[ls:lf,:,:])
+      for c,ls,lf in zip(inf.cc2a, inf.cc2s, inf.cc2s[1:]):
+        pab2v[self.c2s[c]:self.c2s[c+1],sa:fa,sb:fb] = lab[ls:lf,:,:]
+        pab2v[self.c2s[c]:self.c2s[c+1],sb:fb,sa:fa] = einsum('pab->pba', lab[ls:lf,:,:])
     return pab2v
 
-  def get_c2s_domiprod(self):
+  def get_dp_vertex_array(self, dtype=np.float64):
+    """ Returns the product vertex coefficients as 3d array for dominant products """
+    atom2so = self.sv.atom2s
+    nfdp = self.dpc2s[-1]
+    n = self.sv.atom2s[-1]
+    pab2v = np.require(np.zeros((nfdp,n,n), dtype=dtype), requirements='CW')
+    for atom,[sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
+      if pt!=1: continue
+      s,f = atom2so[atom:atom+2]
+      pab2v[sd:fd,s:f,s:f] = self.prod_log.sp2vertex[spp]
+
+    for sd,fd,pt,spp in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp):
+      if pt!=2: continue
+      inf= self.bp2info[spp]
+      a,b = inf.atoms
+      sa,fa,sb,fb = atom2so[a],atom2so[a+1],atom2so[b],atom2so[b+1]
+      pab2v[sd:fd,sa:fa,sb:fb] = inf.vrtx
+      pab2v[sd:fd,sb:fb,sa:fa] = einsum('pab->pba', inf.vrtx)
+    return pab2v
+
+  def get_dp_vertex_nnz(self):
+    """ Number of non-zero elements in the dominant product vertex """
+    atom2so = self.sv.atom2s
+    nnz = 0
+    for atom,[sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
+      if pt!=1: continue
+      s,f = atom2so[atom:atom+2]
+      nnz = nnz + (fd-sd)*(f-s)**2
+
+    for sd,fd,pt,spp in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp):
+      if pt!=2: continue
+      a,b = self.bp2info[spp].atoms
+      sa,fa,sb,fb = atom2so[a],atom2so[a+1],atom2so[b],atom2so[b+1]
+      nnz = nnz + 2*(fd-sd)*(fb-sb)*(fa-sa)
+    return nnz
+
+  def get_dp_vertex_coo(self, dtype=np.float64):
+    """ Returns the product vertex coefficients as 3d array for dominant products, in a sparse format coo(p,ab)"""
+    nnz = self.get_dp_vertex_nnz()
+    irow,icol,data = zeros(nnz, dtype=np.int64),zeros(nnz, dtype=np.int64), zeros(nnz, dtype=dtype) # Start to construct coo matrix
+
+    atom2so = self.sv.atom2s
+    nfdp = self.dpc2s[-1]
+    n = self.sv.atom2s[-1]
+    inz = 0
+    for atom,[sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
+      if pt!=1: continue
+      s,f = atom2so[atom:atom+2]
+      for p in range(sd,fd):
+        for a in range(s,f):
+          for b in range(s,f):
+            irow[inz],icol[inz],data[inz] = p,a+b*n,self.prod_log.sp2vertex[spp][p-sd,a-s,b-s]
+            inz+=1
+
+    for sd,fd,pt,spp in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp):
+      if pt!=2: continue
+      inf= self.bp2info[spp]
+      a,b = inf.atoms
+      sa,fa,sb,fb = atom2so[a],atom2so[a+1],atom2so[b],atom2so[b+1]
+      for p in range(sd,fd):
+        for a in range(sa,fa):
+          for b in range(sb,fb):
+            irow[inz],icol[inz],data[inz] = p,a+b*n,inf.vrtx[p-sd,a-sa,b-sb]; inz+=1;
+            irow[inz],icol[inz],data[inz] = p,b+a*n,inf.vrtx[p-sd,a-sa,b-sb]; inz+=1;
+    return coo_matrix((data, (irow, icol)), dtype=dtype, shape=(nfdp,n*n))
+
+  def init_c2s_domiprod(self):
     """Compute the array of start indices for dominant product basis set """
     c2n,c2t,c2sp = [],[],[] #  product Center -> list of the size of the basis set in this center,of center's types,of product species
     for atom,sp in enumerate(self.sv.atom2sp):
@@ -324,15 +427,20 @@ class prod_basis_c():
     for c in range(ndpc): c2s[c+1] = c2s[c] + c2n[c]
     return c2s,c2t,c2sp
 
-  
-  def comp_moments(self):
+  def comp_moments(self, dtype=np.float64):
     """ Computes the scalar and dipole moments for the all functions in the product basis """
     sp2mom0,sp2mom1 = self.prod_log.comp_moments()
     n = self.c2s[-1]
-    mom0,mom1 = np.zeros(n), np.zeros((n,3))
+    mom0 = np.require(np.zeros(n, dtype=dtype), requirements='CW')
+    mom1 = np.require(np.zeros((n,3), dtype=dtype), requirements='CW')
     for a,[sp,coord,s,f] in enumerate(zip(self.sv.atom2sp,self.sv.atom2coord,self.c2s,self.c2s[1:])):
       mom0[s:f],mom1[s:f,:] = sp2mom0[sp], np.einsum('j,k->jk', sp2mom0[sp],coord)+sp2mom1[sp]
     return mom0,mom1
+
+  def comp_coulomb_pack(self, **kvargs):
+    """ Computes the packed version of the Hartree kernel """
+    from pyscf.nao.m_comp_coulomb_pack import comp_coulomb_pack
+    return comp_coulomb_pack(self.sv, self.prod_log, **kvargs)
 
 #
 #

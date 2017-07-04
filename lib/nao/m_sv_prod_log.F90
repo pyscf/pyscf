@@ -76,6 +76,7 @@ subroutine sv_prod_log(dinp,ninp) bind(c, name='sv_prod_log')
   call init_orb_rspace_aux(sv, orb_a, ul)
   call init_biloc_aux(sv, pb%pb_p, bp2info, para, orb_a, a)
   
+  _dealloc(bp2info)
   allocate(bp2info(1))
 
   natoms = get_natoms(a%sv)
@@ -88,6 +89,20 @@ subroutine sv_prod_log(dinp,ninp) bind(c, name='sv_prod_log')
   ac_rcut   = a%pb_p%ac_rcut
   call get_sp2rcut(sv, sp2rcut)
 
+  _dealloc(ff2)
+  _dealloc(vertex_cmplx2)
+  _dealloc(vertex_real2)
+  _dealloc(evals)
+  _dealloc(rhotb)
+  _dealloc(bessel_pp)
+  _dealloc(f1f2_mom)
+  _dealloc(roverlap)
+  _dealloc(ylm)
+  _dealloc(S_comp)
+  _dealloc(r_scalar_pow_jp1)
+  _dealloc(tmp)
+  _dealloc(p2n)
+  
   allocate(ff2(nr,0:jcutoff,nf_max,-jmx*2:jmx*2,2))
   allocate(vertex_cmplx2(-jmx*2:jmx*2,nf_max,norbs_max,norbs_max,2))
   allocate(vertex_real2(-jmx*2:jmx*2,nf_max,norbs_max,norbs_max,2))

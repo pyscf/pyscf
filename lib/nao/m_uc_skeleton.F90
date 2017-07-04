@@ -28,6 +28,27 @@ module m_uc_skeleton
 
 contains
 
+
+subroutine dealloc(v)
+  implicit none
+  type(uc_skeleton_t), intent(inout) :: v
+  _dealloc(v%sp2label)
+  _dealloc(v%sp2nmult)
+  _dealloc(v%sp2norbs)
+  _dealloc(v%sp2element)
+  _dealloc(v%mu_sp2j)
+  _dealloc(v%mu_sp2n)
+  _dealloc(v%mu_sp2rcut)
+  _dealloc(v%mu_sp2start_ao)
+  _dealloc(v%atom2sp)
+  _dealloc(v%atom2coord)
+  _dealloc(v%atom2sfo)
+
+  v%uc_vecs = -999
+  v%systemlabel = ""
+  
+end subroutine ! dealloc
+
 !
 ! The initialization procedure is in the module m_wfsx__uc_skeleton
 ! and procedure init_basis_with_species(...) in the module m_scf_comm

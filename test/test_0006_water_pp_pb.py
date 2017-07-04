@@ -13,15 +13,8 @@ class KnowValues(unittest.TestCase):
     self.assertTrue(abs(sv.ucell).sum()>0)
     pb = prod_basis_c().init_pb_pp_libnao_apair(sv)
     self.assertEqual(sv.norbs, 23)
-    biloc = pb.comp_apair_pp_libint(0,1)
-    #print(biloc.vrtx.shape)
-    biloc = pb.comp_apair_pp_libint(1,2)
-    #print(biloc.vrtx.shape)
-
     pb.init_prod_basis_pp()
-    #print(' pb.c2s[-1] ', pb.c2s[-1])
-    #print(' pb.dpc2s[-1] ', pb.dpc2s[-1])
-
+    
     self.assertEqual(len(pb.bp2info), 3)
     vden = pb.get_vertex_array()
     ccden = pb.get_da2cc_den()

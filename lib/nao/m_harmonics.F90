@@ -1,5 +1,7 @@
 module m_harmonics
 
+#include "m_define_macro.F90"
+
   implicit none
 
 contains
@@ -37,7 +39,9 @@ subroutine init_c2r_hc_c2r(jcutoff, c2r, hc_c2r)
   complex(8), intent(inout), allocatable :: c2r(:,:), hc_c2r(:,:)
   ! internal
   integer :: m
-  
+
+  _dealloc(c2r)
+  _dealloc(hc_c2r)  
   allocate(c2r(-jcutoff:jcutoff, -jcutoff:jcutoff))
   allocate(hc_c2r(-jcutoff:jcutoff, -jcutoff:jcutoff))
   c2r=0.d0
@@ -196,15 +200,17 @@ end function legendre_pnm
 
 function Y_lm(l,m,vect)
   implicit none
-  real(8), intent(in) :: vect(3)
+  real(8), intent(in) :: vect(:)
   integer, intent(in) :: l,m
+  complex(8) :: Y_lm
   ! internal
   integer :: m2, Kronecker
   real(8) :: x,y,z,r,cosinus,pi
-  complex(8) :: Y_lm,Y2,phase
+  complex(8) :: Y2,phase
   real(8), parameter :: eps=1.0D-12
   logical :: singular, positive
 
+  Y_lm = 0
   if (abs(m) > l) then; write(*,*)' Y_lm: abs(m) > l '; stop; end if
   x=vect(1);y=vect(2);z=vect(3);
   pi=4*atan(dble(1))

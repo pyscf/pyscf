@@ -3,15 +3,15 @@ module m_system_vars
 #include "m_define_macro.F90"
 
   use m_arrays, only : d_array2_t
-  use m_dft_hsx, only : dft_hsx_t
-  use m_siesta_dipo_types, only : dft_dipo_t
-  use m_hs, only : hs_t
-  use m_hsx, only : hsx_t
+  use m_dft_hsx, only : dft_hsx_t, dealloc_dft_hsx=>dealloc
+  use m_siesta_dipo_types, only : dft_dipo_t, dealloc_dipo=>dealloc
+  use m_hs, only : hs_t, dealloc_hs=>dealloc
+  use m_hsx, only : hsx_t, dealloc_hsx=>dealloc
   use m_die, only : die
   use m_warn, only : warn
-  use m_dft_wf4, only : dft_wf4_t
-  use m_dft_wf8, only : dft_wf8_t
-  use m_uc_skeleton, only : uc_skeleton_t
+  use m_dft_wf4, only : dft_wf4_t, dealloc_dft_wf4=>dealloc
+  use m_dft_wf8, only : dft_wf8_t, dealloc_dft_wf8=>dealloc
+  use m_uc_skeleton, only : uc_skeleton_t, dealloc_uc=>dealloc
   use m_siesta_ion, only : siesta_ion_t
     
   implicit none
@@ -62,6 +62,44 @@ module m_system_vars
   
   
 contains
+
+!
+!
+!
+subroutine dealloc(sv)
+  implicit none
+  type(system_vars_t), intent(inout) :: sv
+
+  call dealloc_dft_hsx(sv%dft_hsx)
+  call dealloc_dft_wf4(sv%dft_wf4)
+  call dealloc_dft_wf8(sv%dft_wf8)
+  call dealloc_dipo(sv%dft_dipo)
+  call dealloc_hsx(sv%hsx)
+  call dealloc_hs(sv%hs)
+  call dealloc_uc(sv%uc)
+  _dealloc(sv%atom_sc2start_orb)
+  _dealloc(sv%atom_sc2atom_uc)
+  _dealloc(sv%atom_sc2coord)
+  _dealloc(sv%rr)
+  _dealloc(sv%pp)
+  _dealloc(sv%psi_log_rl)
+  _dealloc(sv%psi_log)
+  _dealloc(sv%nsk2occ)
+  _dealloc(sv%core_log)
+  _dealloc(sv%sp2has_core)
+  _dealloc(sv%sp2rcut_core)
+  _dealloc(sv%sp2ion)
+
+  sv%Temp = -999
+  sv%norbs = -999 
+  sv%norb_max = -999
+  sv%natoms = -999
+  sv%nspin = -999
+  sv%jmx = -999
+  sv%nocc = -999
+  sv%is_dft_wf4 = .true.
+
+end subroutine ! dealloc
 
 !
 !
@@ -913,6 +951,8 @@ function get_basis_type(sv) result(isys_type)
   implicit none
   type(system_vars_t), intent(in) :: sv
   integer :: isys_type
+  
+  isys_type = -999
   
   if (allocated(sv%dft_wf4%X)) then
       

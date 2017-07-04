@@ -1,6 +1,6 @@
 module m_siesta_dipo_types
 #include "m_define_macro.F90"
-  use m_log, only : die
+  use m_die, only : die
   use m_precision, only : siesta_int
   implicit none
   private die
@@ -26,6 +26,18 @@ module m_siesta_dipo_types
       real(8), allocatable :: dipo_corr(:,:,:) !  (xyz, orbital, supercell_orbital)
       real(8), allocatable :: overlap(:,:) !  (orbital, supercell_orbital)
   end type ! dft_dipo_t
+
+contains 
+
+subroutine dealloc(d)
+  implicit none
+  type(dft_dipo_t), intent(inout) :: d
+  _dealloc(d%dipo)
+  _dealloc(d%dipo_corr)
+  _dealloc(d%overlap)
+  
+end subroutine ! dealloc
+
 
 end module m_siesta_dipo_types
 

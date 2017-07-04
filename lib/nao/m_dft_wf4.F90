@@ -20,6 +20,22 @@ module m_dft_wf4
 
 contains
 
+
+subroutine dealloc(v)
+  implicit none
+  type(dft_wf4_t), intent(inout) :: v
+  _dealloc(v%kpoints)
+  _dealloc(v%E)
+  _dealloc(v%X)
+  v%desc = -999
+  v%fermi_energy = -999
+  v%eigenvalues_shift = -999
+  v%BlochPhaseConv = ""
+  
+end subroutine ! dealloc
+
+
+
 !
 !
 !

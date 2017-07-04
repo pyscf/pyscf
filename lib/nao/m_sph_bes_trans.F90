@@ -380,17 +380,20 @@ subroutine sbt_destroy(p)
   type(Talman_plan_t), intent(inout) :: p
   
   !$OMP PARALLEL
+  !$OMP CRITICAL
+  if(allocated(c2r_in)) then
+    call dfftw_destroy_plan(plan12)
+    call dfftw_destroy_plan(plan_r2c)
+    call dfftw_destroy_plan(plan_c2r)
+  endif
+  !$OMP END CRITICAL
+
   _dealloc(temp1)
   _dealloc(temp2)
   _dealloc(r2c_in)
   _dealloc(r2c_out)
   _dealloc(c2r_in)
   _dealloc(c2r_out)
-  !$OMP CRITICAL
-  call dfftw_destroy_plan(plan12)
-  call dfftw_destroy_plan(plan_r2c)
-  call dfftw_destroy_plan(plan_c2r)
-  !$OMP END CRITICAL
   !$OMP END PARALLEL
   nr = -999
 

@@ -19,16 +19,18 @@ module m_dft_wf8
 
 contains
 
-!
-!
-!!
-subroutine dealloc(wf)
+
+
+subroutine dealloc(v)
   implicit none
-  type(dft_wf8_t), intent(inout) :: wf
-  
-  _dealloc(wf%kpoints)
-  _dealloc(wf%X)
-  _dealloc(wf%E)
+  type(dft_wf8_t), intent(inout) :: v
+  _dealloc(v%kpoints)
+  _dealloc(v%E)
+  _dealloc(v%X)
+  v%desc = -999
+  v%fermi_energy = -999
+  v%eigenvalues_shift = -999
+  v%BlochPhaseConv = ""
   
 end subroutine ! dealloc
 
