@@ -194,7 +194,6 @@ class NMR(lib.StreamObject):
                 if self.verbose >= logger.INFO:
                     _write(self.stdout, para_occ[i], 'occ part of para-magnetism')
                     _write(self.stdout, para_vir[i], 'vir part of para-magnetism')
-        self.stdout.flush()
         return e11
 
     def dia(self, mol=None, dm0=None, gauge_orig=None, shielding_nuc=None):
@@ -285,6 +284,7 @@ def _write(stdout, msc3x3, title):
     stdout.write('B_x %s\n' % str(msc3x3[0]))
     stdout.write('B_y %s\n' % str(msc3x3[1]))
     stdout.write('B_z %s\n' % str(msc3x3[2]))
+    stdout.flush()
 
 
 if __name__ == '__main__':

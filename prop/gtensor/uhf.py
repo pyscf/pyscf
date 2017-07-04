@@ -100,13 +100,13 @@ def make_dia_gc2e(gobj, dm0, gauge_orig):
     if gobj.with_sso:
         # spin-density should be contracted to electron 1 (associated to operator r_i)
         ej += g_so/2 * numpy.einsum('xyijkl,ij,kl->xy', gc2e_ri, spindm, dma+dmb)
-        ek += g_so/2 * numpy.einsum('xyijkl,ij,kl->xy', gc2e_ri, dma, dma)
-        ek -= g_so/2 * numpy.einsum('xyijkl,ij,kl->xy', gc2e_ri, dmb, dmb)
+        ek += g_so/2 * numpy.einsum('xyijkl,jk,li->xy', gc2e_ri, dma, dma)
+        ek -= g_so/2 * numpy.einsum('xyijkl,jk,li->xy', gc2e_ri, dmb, dmb)
     if gobj.with_soo:
         # spin-density should be contracted to electron 1 (associated to operator r_i)
         ej += 2 * numpy.einsum('xyijkl,ij,kl->xy', gc2e_ri, dma+dmb, dma-dmb)
-        ek += 2 * numpy.einsum('xyijkl,ij,kl->xy', gc2e_ri, dma, dma)
-        ek -= 2 * numpy.einsum('xyijkl,ij,kl->xy', gc2e_ri, dmb, dmb)
+        ek += 2 * numpy.einsum('xyijkl,jk,li->xy', gc2e_ri, dma, dma)
+        ek -= 2 * numpy.einsum('xyijkl,jk,li->xy', gc2e_ri, dmb, dmb)
     gc2e = (ej - ek) / 2
     gc2e -= numpy.eye(3) * gc2e.trace()
 
@@ -117,18 +117,18 @@ def make_dia_gc2e(gobj, dm0, gauge_orig):
         ek = numpy.zeros((3,3))
         if gobj.with_sso:
             ej += -2 * g_so/2 * numpy.einsum('yxijkl,ij,kl->xy', giao2e1, spindm, dma+dmb)
-            ek += -2 * g_so/2 * numpy.einsum('yxijkl,ij,kl->xy', giao2e1, dma, dma)
-            ek -= -2 * g_so/2 * numpy.einsum('yxijkl,ij,kl->xy', giao2e1, dmb, dmb)
+            ek += -2 * g_so/2 * numpy.einsum('yxijkl,jk,li->xy', giao2e1, dma, dma)
+            ek -= -2 * g_so/2 * numpy.einsum('yxijkl,jk,li->xy', giao2e1, dmb, dmb)
             ej += -2 * g_so/2 * numpy.einsum('yxijkl,ij,kl->xy', giao2e2, spindm, dma+dmb)
-            ek += -2 * g_so/2 * numpy.einsum('yxijkl,ij,kl->xy', giao2e2, dma, dma)
-            ek -= -2 * g_so/2 * numpy.einsum('yxijkl,ij,kl->xy', giao2e2, dmb, dmb)
+            ek += -2 * g_so/2 * numpy.einsum('yxijkl,jk,li->xy', giao2e2, dma, dma)
+            ek -= -2 * g_so/2 * numpy.einsum('yxijkl,jk,li->xy', giao2e2, dmb, dmb)
         if gobj.with_soo:
             ej += -2 * 2 * numpy.einsum('yxijkl,ij,kl->xy', giao2e1, dma+dmb, spindm)
-            ek += -2 * 2 * numpy.einsum('yxijkl,ij,kl->xy', giao2e1, dma, dma)
-            ek -= -2 * 2 * numpy.einsum('yxijkl,ij,kl->xy', giao2e1, dmb, dmb)
+            ek += -2 * 2 * numpy.einsum('yxijkl,jk,li->xy', giao2e1, dma, dma)
+            ek -= -2 * 2 * numpy.einsum('yxijkl,jk,li->xy', giao2e1, dmb, dmb)
             ej += -2 * 2 * numpy.einsum('yxijkl,ij,kl->xy', giao2e2, dma+dmb, spindm)
-            ek += -2 * 2 * numpy.einsum('yxijkl,ij,kl->xy', giao2e2, dma, dma)
-            ek -= -2 * 2 * numpy.einsum('yxijkl,ij,kl->xy', giao2e2, dmb, dmb)
+            ek += -2 * 2 * numpy.einsum('yxijkl,jk,li->xy', giao2e2, dma, dma)
+            ek -= -2 * 2 * numpy.einsum('yxijkl,jk,li->xy', giao2e2, dmb, dmb)
         gc2e += (ej - ek) / 2
 
     if 0:  # correction of order c^{-2} from MB basis, does it exist?
@@ -201,6 +201,7 @@ def para(mol, mo10, mo_coeff, mo_occ):
     gpara = gpara1e + gpara2e
     return gpara
 
+#TODO: option to use SOMF?  JCP 122, 034107
 def make_para_soc2e(gobj, dm0, dm10):
     alpha2 = lib.param.ALPHA ** 2
     effspin = mol.spin * .5
@@ -219,17 +220,17 @@ def make_para_soc2e(gobj, dm0, dm10):
     if gobj.with_sso:
         ej += g_so/2 * numpy.einsum('yijkl,ji,xlk->xy', hso2e, dm0a-dm0b, dm10a+dm10b)
         ej += g_so/2 * numpy.einsum('yijkl,xji,lk->xy', hso2e, dm10a-dm10b, dm0a+dm0b)
-        ek += g_so/2 * numpy.einsum('yijkl,ji,xlk->xy', hso2e, dm0a, dm10a)
-        ek -= g_so/2 * numpy.einsum('yijkl,ji,xlk->xy', hso2e, dm0b, dm10b)
-        ek += g_so/2 * numpy.einsum('yijkl,xji,lk->xy', hso2e, dm10a, dm0a)
-        ek -= g_so/2 * numpy.einsum('yijkl,xji,lk->xy', hso2e, dm10b, dm0b)
+        ek += g_so/2 * numpy.einsum('yijkl,jk,xli->xy', hso2e, dm0a, dm10a)
+        ek -= g_so/2 * numpy.einsum('yijkl,jk,xli->xy', hso2e, dm0b, dm10b)
+        ek += g_so/2 * numpy.einsum('yijkl,xjk,li->xy', hso2e, dm10a, dm0a)
+        ek -= g_so/2 * numpy.einsum('yijkl,xjk,li->xy', hso2e, dm10b, dm0b)
     if gobj.with_soo:
         ej += 2 * numpy.einsum('yijkl,ji,xlk->xy', hso2e, dm0a+dm0b, dm10a-dm10b)
         ej += 2 * numpy.einsum('yijkl,xji,lk->xy', hso2e, dm10a+dm10b, dm0a-dm0b)
-        ek += 2 * numpy.einsum('yijkl,ji,xlk->xy', hso2e, dm0a, dm10a)
-        ek -= 2 * numpy.einsum('yijkl,ji,xlk->xy', hso2e, dm0b, dm10b)
-        ek += 2 * numpy.einsum('yijkl,xji,lk->xy', hso2e, dm10a, dm0a)
-        ek -= 2 * numpy.einsum('yijkl,xji,lk->xy', hso2e, dm10b, dm0b)
+        ek += 2 * numpy.einsum('yijkl,jk,xli->xy', hso2e, dm0a, dm10a)
+        ek -= 2 * numpy.einsum('yijkl,jk,xli->xy', hso2e, dm0b, dm10b)
+        ek += 2 * numpy.einsum('yijkl,xjk,li->xy', hso2e, dm10a, dm0a)
+        ek -= 2 * numpy.einsum('yijkl,xjk,li->xy', hso2e, dm10b, dm0b)
     gpara2e = -(ej - ek) * 2 # * 2 for + c.c.
     gpara2e *= (alpha2/4) / effspin
     return gpara2e
@@ -285,6 +286,7 @@ class GTensor(uhf_nmr.NMR):
         logger.info(self, 'with_soo = %s (2e spin-other-orbit coupling)', self.with_soo)
         logger.info(self, 'with_so_eff_charge = %s (1e SO effective charge)',
                     self.with_so_eff_charge)
+        return self
 
     def kernel(self, mo1=None):
         cput0 = (time.clock(), time.time())
@@ -334,6 +336,7 @@ if __name__ == '__main__':
     gobj.with_soo = True
     gobj.with_so_eff_charge = False
     print(gobj.kernel())
+    exit()
 
     mol = gto.M(atom='H 0 0 0; H 0 0 1.',
                 basis='ccpvdz', spin=1, charge=-1, verbose=3)

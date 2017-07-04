@@ -48,6 +48,7 @@ def dia(gobj, mol, dm0, hfc_nuc=None, verbose=None):
     for i, atm_id in enumerate(hfc_nuc):
         Z = mole._charge(mol.atom_symbol(atm_id))
         nuc_spin, g_nuc = parameters.ISOTOPE[Z][1:3]
+# g factor of other isotopes can be found in file nuclear_g_factor.dat
         gyromag = 1e-6/(2*numpy.pi) * parameters.g_factor_to_gyromagnetic_ratio(g_nuc)
         log.info('Atom %d %s  nuc-spin %g  nuc-g-factor %g  gyromagnetic ratio %g (in MHz)',
                  atm_id, mol.atom_symbol(atm_id), nuc_spin, g_nuc, gyromag)
@@ -161,7 +162,7 @@ def _write(rec, msc3x3, title):
     rec.stdout.write('I_z %s\n' % str(msc3x3[2]))
 
 
-class HFCTensor(uhf_nmr.NMR):
+class HyperfineCoupling(uhf_nmr.NMR):
     '''dE = I dot gtensor dot s'''
     def __init__(self, scf_method):
         self.with_sso = False  # Two-electron spin-same-orbit coupling
@@ -176,6 +177,7 @@ class HFCTensor(uhf_nmr.NMR):
         logger.info(self, 'with_soo = %s (2e spin-other-orbit coupling)', self.with_soo)
         logger.info(self, 'with_so_eff_charge = %s (1e SO effective charge)',
                     self.with_so_eff_charge)
+        return self
 
     def kernel(self, mo1=None):
         cput0 = (time.clock(), time.time())
@@ -221,6 +223,8 @@ class HFCTensor(uhf_nmr.NMR):
         nao = mol.nao_nr()
         return numpy.zeros((3,nao,nao))
 
+HFC = HyperfineCoupling
+
 
 if __name__ == '__main__':
     from pyscf import gto, scf
@@ -228,7 +232,7 @@ if __name__ == '__main__':
                 basis='ccpvdz', spin=1, charge=-1, verbose=3)
     mf = scf.UHF(mol)
     mf.kernel()
-    gobj = HFCTensor(mf)
+    gobj = HFC(mf)
     gobj.with_sso = True
     gobj.with_soo = True
     gobj.with_so_eff_charge = False
@@ -238,7 +242,7 @@ if __name__ == '__main__':
                 basis='ccpvdz', spin=1, charge=-1, verbose=3)
     mf = scf.UHF(mol)
     mf.kernel()
-    gobj = HFCTensor(mf)
+    gobj = HFC(mf)
     print(gobj.kernel())
 
     mol = gto.M(atom='''
@@ -247,7 +251,7 @@ if __name__ == '__main__':
                 basis='ccpvdz', spin=1, charge=0, verbose=3)
     mf = scf.UHF(mol)
     mf.kernel()
-    print(HFCTensor(mf).kernel())
+    print(HFC(mf).kernel())
 
     mol = gto.M(atom='''
                 H 0   0   1
@@ -258,5 +262,5 @@ if __name__ == '__main__':
                 basis='ccpvdz', spin=1, charge=1, verbose=3)
     mf = scf.UHF(mol)
     mf.kernel()
-    print(HFCTensor(mf).kernel())
+    print(HFC(mf).kernel())
 
