@@ -58,14 +58,15 @@ class prod_basis_c():
     from scipy.sparse import csr_matrix
     from pyscf.nao.m_libnao import libnao
     from ctypes import POINTER, c_double, c_int64
-    
+    from numpy import zeros, concatenate as conc
+              
     self.sv = sv
     self.tol_loc,self.tol_biloc,self.ac_rcut_ratio,self.ac_npc_max = tol_loc, tol_biloc, ac_rcut_ratio, ac_npc_max
     self.jcutoff,self.metric_type,self.optimize_centers,self.ngl = jcutoff, metric_type, optimize_centers, ngl
     self.ac_rcut = ac_rcut_ratio*max(sv.ao_log.sp2rcut)    
     self.prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc) # local basis (for each specie)
     self.c2s = np.zeros((sv.natm+1), dtype=np.int64) # global product Center (atom) -> start in case of atom-centered basis
-    for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] # 
+    for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] #
     self.sv_pbloc_data = self.chain_data_pb_pp_apair()
     libnao.sv_prod_log.argtypes = (
       POINTER(c_double),     # dat(ndat)
@@ -145,7 +146,6 @@ class prod_basis_c():
     dat[i] = s+1; i+=1; f=s+nmsp; dat[s:f] = conc(pl.sp_mu2s); s=f; # pointer to sp_mu2s
     dat[i] = s+1; i+=1; f=s+nvrt; dat[s:f] = conc([v.flatten() for v in pl.sp2vertex]); s=f; # pointer to sp2vertex
     dat[i] = s+1; # this is a terminator to simplify operation
-
     return dat
 
   def comp_apair_pp_libint(self, a1,a2):

@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<cml convention="CMLComp" fileId="siesta.xml" xmlns="http://www.xml-cml.org/schema" xmlns:siesta="http://www.uam.es/siesta/namespace" xmlns:siestaUnits="http://www.uam.es/siesta/namespace/units" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:fpx="http://www.uszla.me.uk/fpx" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:units="http://www.uszla.me.uk/FoX/units" xmlns:cmlUnits="http://www.xml-cml.org/units/units" xmlns:siUnits="http://www.xml-cml.org/units/siUnits" xmlns:atomicUnits="http://www.xml-cml.org/units/atomic">
-  <metadata name="UUID" content="09c6c150-6020-11e7-6312-0d795af86768"/>
+<cml convention="CMLComp" fileId="water.xml" xmlns="http://www.xml-cml.org/schema" xmlns:siesta="http://www.uam.es/siesta/namespace" xmlns:siestaUnits="http://www.uam.es/siesta/namespace/units" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:fpx="http://www.uszla.me.uk/fpx" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:units="http://www.uszla.me.uk/FoX/units" xmlns:cmlUnits="http://www.xml-cml.org/units/units" xmlns:siUnits="http://www.xml-cml.org/units/siUnits" xmlns:atomicUnits="http://www.xml-cml.org/units/atomic">
+  <metadata name="UUID" content="cd9c3310-6022-11e7-6ec8-7c1368f722e5"/>
   <metadataList>
     <metadata name="siesta:Program" content="Siesta"/>
     <metadata name="siesta:Version" content="siesta-4.0b-494"/>
     <metadata name="siesta:Arch" content="x86_64-mkl_mpi"/>
     <metadata name="siesta:Flags" content="mpif90 -I.      -g -O2"/>
-    <metadata name="siesta:StartTime" content="2017-07-03T16-46-54"/>
+    <metadata name="siesta:StartTime" content="2017-07-03T17-06-42"/>
     <metadata name="siesta:Mode" content="Serial"/>
     <metadata name="siesta:Nodes" content="         1"/>
     <metadata name="siesta:NetCDF" content="false"/>
@@ -14,14 +14,15 @@
   <module title="Initial System">
     <molecule>
       <atomArray>
-        <atom elementType="Na" x3="4.105012312222e-1" y3="0.000000000000e0" z3="0.000000000000e0" ref="siesta:e001"/>
-        <atom elementType="Na" x3="-4.105012312222e-1" y3="0.000000000000e0" z3="0.000000000000e0" ref="siesta:e001"/>
+        <atom elementType="O" x3="0.000000000000e0" y3="-1.648060000000e-3" z3="0.000000000000e0" ref="siesta:e001"/>
+        <atom elementType="H" x3="7.757352100000e-1" y3="5.933214100000e-1" z3="0.000000000000e0" ref="siesta:e002"/>
+        <atom elementType="H" x3="-7.757352100000e-1" y3="5.933214100000e-1" z3="0.000000000000e0" ref="siesta:e002"/>
       </atomArray>
     </molecule>
     <lattice dictRef="siesta:ucell">
-      <latticeVector units="siestaUnits:angstrom" dictRef="cml:latticeVector">2.210667632813e1 0.000000000000e0 0.000000000000e0</latticeVector>
-      <latticeVector units="siestaUnits:angstrom" dictRef="cml:latticeVector">0.000000000000e0 2.040005886613e1 0.000000000000e0</latticeVector>
-      <latticeVector units="siestaUnits:angstrom" dictRef="cml:latticeVector">0.000000000000e0 0.000000000000e0 2.040005886613e1</latticeVector>
+      <latticeVector units="siestaUnits:angstrom" dictRef="cml:latticeVector">1.384721919309e1 0.000000000000e0 0.000000000000e0</latticeVector>
+      <latticeVector units="siestaUnits:angstrom" dictRef="cml:latticeVector">0.000000000000e0 1.087881504536e1 0.000000000000e0</latticeVector>
+      <latticeVector units="siestaUnits:angstrom" dictRef="cml:latticeVector">0.000000000000e0 0.000000000000e0 1.062217830507e1</latticeVector>
     </lattice>
     <property dictRef="siesta:shape">
       <scalar dataType="xsd:string">molecule</scalar>
@@ -29,16 +30,16 @@
   </module>
   <parameterList title="Input Parameters">
     <parameter dictRef="siesta:sname" name="SystemName">
-      <scalar dataType="xsd:string"></scalar>
+      <scalar dataType="xsd:string">Water</scalar>
     </parameter>
     <parameter dictRef="siesta:slabel" name="SystemLabel">
-      <scalar dataType="xsd:string">siesta</scalar>
+      <scalar dataType="xsd:string">water</scalar>
     </parameter>
     <parameter dictRef="siesta:verbosity" name="LongOutput">
       <scalar dataType="xsd:boolean">false</scalar>
     </parameter>
     <parameter title="NumberOfSpecies" dictRef="siesta:ns">
-      <scalar dataType="xsd:integer" units="cmlUnits:countable">1</scalar>
+      <scalar dataType="xsd:integer" units="cmlUnits:countable">2</scalar>
     </parameter>
     <parameter name="WriteDenChar">
       <scalar dataType="xsd:boolean">true</scalar>
@@ -53,7 +54,7 @@
       <scalar dataType="fpx:real" units="siestaUnits:e__">0.000000000000e0</scalar>
     </parameter>
     <parameter dictRef="siesta:maxscf" name="MaxSCFIterations">
-      <scalar dataType="xsd:integer" units="cmlUnits:countable">50</scalar>
+      <scalar dataType="xsd:integer" units="cmlUnits:countable">100</scalar>
     </parameter>
     <parameter dictRef="siesta:minscf" name="MinSCFIterations">
       <scalar dataType="xsd:integer" units="cmlUnits:countable">0</scalar>
@@ -116,7 +117,7 @@
       <scalar dataType="fpx:real" units="cmlUnits:dimensionless">1.000000000000e0</scalar>
     </parameter>
     <parameter dictRef="siesta:etemp" name="ElectronicTemperature">
-      <scalar dataType="fpx:real" units="siestaUnits:Ry">1.900000000000e-3</scalar>
+      <scalar dataType="fpx:real" units="siestaUnits:Ry">1.900069268915e-3</scalar>
     </parameter>
     <parameter dictRef="siesta:fixspin" name="FixSpin">
       <scalar dataType="xsd:boolean">false</scalar>
@@ -137,7 +138,7 @@
     </property>
     <kpoint coords="0.000000000000e0 0.000000000000e0 0.000000000000e0" weight="1.000000000000e0"/>
     <property dictRef="siesta:kcutof">
-      <scalar dataType="fpx:real" units="siestaUnits:angstrom">5.397620975302e0</scalar>
+      <scalar dataType="fpx:real" units="siestaUnits:angstrom">2.810506224471e0</scalar>
     </property>
   </propertyList>
   <property dictRef="siesta:kscell">
@@ -149,58 +150,59 @@
   <module serial="1" dictRef="Single-Point" role="step">
     <molecule>
       <atomArray>
-        <atom elementType="Na" x3="4.105012312222e-1" y3="0.000000000000e0" z3="0.000000000000e0" ref="siesta:e001"/>
-        <atom elementType="Na" x3="-4.105012312222e-1" y3="0.000000000000e0" z3="0.000000000000e0" ref="siesta:e001"/>
+        <atom elementType="O" x3="0.000000000000e0" y3="-1.648060000000e-3" z3="0.000000000000e0" ref="siesta:e001"/>
+        <atom elementType="H" x3="7.757352100000e-1" y3="5.933214100000e-1" z3="0.000000000000e0" ref="siesta:e002"/>
+        <atom elementType="H" x3="-7.757352100000e-1" y3="5.933214100000e-1" z3="0.000000000000e0" ref="siesta:e002"/>
       </atomArray>
     </molecule>
     <lattice dictRef="siesta:ucell">
-      <latticeVector units="siestaUnits:Ang" dictRef="cml:latticeVector">1.169834465929e1 0.000000000000e0 0.000000000000e0</latticeVector>
-      <latticeVector units="siestaUnits:Ang" dictRef="cml:latticeVector">0.000000000000e0 1.079524195060e1 0.000000000000e0</latticeVector>
-      <latticeVector units="siestaUnits:Ang" dictRef="cml:latticeVector">0.000000000000e0 0.000000000000e0 1.079524195060e1</latticeVector>
+      <latticeVector units="siestaUnits:Ang" dictRef="cml:latticeVector">7.327629910942e0 0.000000000000e0 0.000000000000e0</latticeVector>
+      <latticeVector units="siestaUnits:Ang" dictRef="cml:latticeVector">0.000000000000e0 5.756818709261e0 0.000000000000e0</latticeVector>
+      <latticeVector units="siestaUnits:Ang" dictRef="cml:latticeVector">0.000000000000e0 0.000000000000e0 5.621012448942e0</latticeVector>
     </lattice>
     <crystal title="Lattice Parameters">
-      <cellParameter latticeType="real" parameterType="length" units="units:angstrom">11.698345 10.795242 10.795242</cellParameter>
+      <cellParameter latticeType="real" parameterType="length" units="units:angstrom">7.327630 5.756819 5.621012</cellParameter>
       <cellParameter latticeType="real" parameterType="angle" units="units:degree">90.000000 90.000000 90.000000</cellParameter>
     </crystal>
     <propertyList>
       <property dictRef="siesta:ntm" title="Mesh">
-        <array size="3" dataType="xsd:integer" units="cmlUnits:countable">72 72 72</array>
+        <array size="3" dataType="xsd:integer" units="cmlUnits:countable">48 36 36</array>
       </property>
       <property dictRef="siesta:g2max" title="Requested Cut-Off">
         <scalar dataType="fpx:real" units="siestaUnits:Ry">1.000000000000e2</scalar>
       </property>
       <property dictRef="siesta:g2mesh" title="Actual Cut-Off">
-        <scalar dataType="fpx:real" units="siestaUnits:Ry">1.046930453622e2</scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:Ry">1.080790604016e2</scalar>
       </property>
     </propertyList>
     <module serial="1" dictRef="SCF" role="step">
       <propertyList title="Energy Decomposition">
         <property dictRef="siesta:Ebs">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.880386</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-122.111481</scalar>
         </property>
         <property dictRef="siesta:Eions">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">15.960236</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">815.854478</scalar>
         </property>
         <property dictRef="siesta:Ena">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">14.204852</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">175.007584</scalar>
         </property>
         <property dictRef="siesta:Ekin">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">4.348515</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">341.667405</scalar>
         </property>
         <property dictRef="siesta:Enl">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">5.146920</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-52.600870</scalar>
         </property>
         <property dictRef="siesta:DEna">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-0.000000        </scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-0.000002     </scalar>
         </property>
         <property dictRef="siesta:DUscf">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">0.000000                 </scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">0.000000             </scalar>
         </property>
         <property dictRef="siesta:DUext">
           <scalar dataType="fpx:real" units="siestaUnits:eV">0.000000</scalar>
         </property>
         <property dictRef="siesta:Exc">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-14.240994</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-109.627194</scalar>
         </property>
         <property dictRef="siesta:Ecorrec">
           <scalar dataType="fpx:real" units="siestaUnits:eV">0.000000</scalar>
@@ -218,233 +220,311 @@
           <scalar dataType="fpx:real" units="siestaUnits:eV">0.000000</scalar>
         </property>
         <property dictRef="siesta:EharrsK">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.023564</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-466.526525</scalar>
         </property>
         <property dictRef="siesta:EtotK">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-6.500942</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-461.407555</scalar>
         </property>
         <property dictRef="siesta:FreeEK">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-6.500942</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-461.407555</scalar>
         </property>
       </propertyList>
       <propertyList title="SCF Cycle">
         <property dictRef="siesta:Eharrs">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0235639</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-466.5265252</scalar>
         </property>
         <property dictRef="siesta:FreeE">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-6.5009417</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-461.4075554</scalar>
         </property>
         <property dictRef="siesta:Ef">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.4009127</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-4.2774095</scalar>
         </property>
       </propertyList>
     </module>
     <module serial="2" dictRef="SCF" role="step">
       <propertyList title="SCF Cycle">
         <property dictRef="siesta:Eharrs">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266890</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-467.2355328</scalar>
         </property>
         <property dictRef="siesta:FreeE">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0265500</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.0663277</scalar>
         </property>
         <property dictRef="siesta:Ef">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.1954723</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">0.2078978</scalar>
         </property>
       </propertyList>
     </module>
     <module serial="3" dictRef="SCF" role="step">
       <propertyList title="SCF Cycle">
         <property dictRef="siesta:Eharrs">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266836</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.9383594</scalar>
         </property>
         <property dictRef="siesta:FreeE">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0265839</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.3511209</scalar>
         </property>
         <property dictRef="siesta:Ef">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.1969776</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-1.4862131</scalar>
         </property>
       </propertyList>
     </module>
     <module serial="4" dictRef="SCF" role="step">
       <propertyList title="SCF Cycle">
         <property dictRef="siesta:Eharrs">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266809</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8458829</scalar>
         </property>
         <property dictRef="siesta:FreeE">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266085</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.4799358</scalar>
         </property>
         <property dictRef="siesta:Ef">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.1980015</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-1.9256790</scalar>
         </property>
       </propertyList>
     </module>
     <module serial="5" dictRef="SCF" role="step">
       <propertyList title="SCF Cycle">
         <property dictRef="siesta:Eharrs">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266796</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8381087</scalar>
         </property>
         <property dictRef="siesta:FreeE">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266264</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.5699311</scalar>
         </property>
         <property dictRef="siesta:Ef">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.1986950</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.0429073</scalar>
         </property>
       </propertyList>
     </module>
     <module serial="6" dictRef="SCF" role="step">
       <propertyList title="SCF Cycle">
         <property dictRef="siesta:Eharrs">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266790</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8373284</scalar>
         </property>
         <property dictRef="siesta:FreeE">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266396</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.6368310</scalar>
         </property>
         <property dictRef="siesta:Ef">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.1991625</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.0721902</scalar>
         </property>
       </propertyList>
     </module>
     <module serial="7" dictRef="SCF" role="step">
       <propertyList title="SCF Cycle">
         <property dictRef="siesta:Eharrs">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266787</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8372110</scalar>
         </property>
         <property dictRef="siesta:FreeE">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266494</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.6869353</scalar>
         </property>
         <property dictRef="siesta:Ef">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.1994758</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.0778363</scalar>
         </property>
       </propertyList>
     </module>
     <module serial="8" dictRef="SCF" role="step">
       <propertyList title="SCF Cycle">
         <property dictRef="siesta:Eharrs">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266785</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8371806</scalar>
         </property>
         <property dictRef="siesta:FreeE">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266567</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.7244994</scalar>
         </property>
         <property dictRef="siesta:Ef">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.1996843</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.0776873</scalar>
         </property>
       </propertyList>
     </module>
     <module serial="9" dictRef="SCF" role="step">
       <propertyList title="SCF Cycle">
         <property dictRef="siesta:Eharrs">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266785</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8371697</scalar>
         </property>
         <property dictRef="siesta:FreeE">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266622</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.7526680</scalar>
         </property>
         <property dictRef="siesta:Ef">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.1998220</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.0765166</scalar>
         </property>
       </propertyList>
     </module>
     <module serial="10" dictRef="SCF" role="step">
       <propertyList title="SCF Cycle">
         <property dictRef="siesta:Eharrs">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266784</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8371653</scalar>
         </property>
         <property dictRef="siesta:FreeE">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266662</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.7737927</scalar>
         </property>
         <property dictRef="siesta:Ef">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.1999120</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.0754629</scalar>
         </property>
       </propertyList>
     </module>
     <module serial="11" dictRef="SCF" role="step">
       <propertyList title="SCF Cycle">
         <property dictRef="siesta:Eharrs">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266784</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8371635</scalar>
         </property>
         <property dictRef="siesta:FreeE">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266693</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.7896356</scalar>
         </property>
         <property dictRef="siesta:Ef">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.1999700</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.0747025</scalar>
         </property>
       </propertyList>
     </module>
     <module serial="12" dictRef="SCF" role="step">
       <propertyList title="SCF Cycle">
         <property dictRef="siesta:Eharrs">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266784</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8371628</scalar>
         </property>
         <property dictRef="siesta:FreeE">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266716</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8015175</scalar>
         </property>
         <property dictRef="siesta:Ef">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.2000069</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.0741906</scalar>
         </property>
       </propertyList>
     </module>
     <module serial="13" dictRef="SCF" role="step">
       <propertyList title="SCF Cycle">
         <property dictRef="siesta:Eharrs">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266784</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8371624</scalar>
         </property>
         <property dictRef="siesta:FreeE">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266733</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8104288</scalar>
         </property>
         <property dictRef="siesta:Ef">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.2000298</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.0738539</scalar>
         </property>
       </propertyList>
     </module>
     <module serial="14" dictRef="SCF" role="step">
       <propertyList title="SCF Cycle">
         <property dictRef="siesta:Eharrs">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266784</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8371623</scalar>
         </property>
         <property dictRef="siesta:FreeE">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266746</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8171122</scalar>
         </property>
         <property dictRef="siesta:Ef">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.2000436</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.0736336</scalar>
         </property>
       </propertyList>
     </module>
     <module serial="15" dictRef="SCF" role="step">
       <propertyList title="SCF Cycle">
         <property dictRef="siesta:Eharrs">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266784</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8371622</scalar>
         </property>
         <property dictRef="siesta:FreeE">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266755</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8221247</scalar>
         </property>
         <property dictRef="siesta:Ef">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.2000516</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.0734892</scalar>
+        </property>
+      </propertyList>
+    </module>
+    <module serial="16" dictRef="SCF" role="step">
+      <propertyList title="SCF Cycle">
+        <property dictRef="siesta:Eharrs">
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8371622</scalar>
+        </property>
+        <property dictRef="siesta:FreeE">
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8258841</scalar>
+        </property>
+        <property dictRef="siesta:Ef">
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.0733937</scalar>
+        </property>
+      </propertyList>
+    </module>
+    <module serial="17" dictRef="SCF" role="step">
+      <propertyList title="SCF Cycle">
+        <property dictRef="siesta:Eharrs">
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8371622</scalar>
+        </property>
+        <property dictRef="siesta:FreeE">
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8287036</scalar>
+        </property>
+        <property dictRef="siesta:Ef">
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.0733300</scalar>
+        </property>
+      </propertyList>
+    </module>
+    <module serial="18" dictRef="SCF" role="step">
+      <propertyList title="SCF Cycle">
+        <property dictRef="siesta:Eharrs">
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8371622</scalar>
+        </property>
+        <property dictRef="siesta:FreeE">
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8308182</scalar>
+        </property>
+        <property dictRef="siesta:Ef">
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.0732871</scalar>
+        </property>
+      </propertyList>
+    </module>
+    <module serial="19" dictRef="SCF" role="step">
+      <propertyList title="SCF Cycle">
+        <property dictRef="siesta:Eharrs">
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8371622</scalar>
+        </property>
+        <property dictRef="siesta:FreeE">
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8324042</scalar>
+        </property>
+        <property dictRef="siesta:Ef">
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.0732579</scalar>
+        </property>
+      </propertyList>
+    </module>
+    <module serial="20" dictRef="SCF" role="step">
+      <propertyList title="SCF Cycle">
+        <property dictRef="siesta:Eharrs">
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8371622</scalar>
+        </property>
+        <property dictRef="siesta:FreeE">
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8335937</scalar>
+        </property>
+        <property dictRef="siesta:Ef">
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.0732378</scalar>
+        </property>
+      </propertyList>
+    </module>
+    <module serial="21" dictRef="SCF" role="step">
+      <propertyList title="SCF Cycle">
+        <property dictRef="siesta:Eharrs">
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8371622</scalar>
+        </property>
+        <property dictRef="siesta:FreeE">
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8344858</scalar>
+        </property>
+        <property dictRef="siesta:Ef">
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-2.0732238</scalar>
         </property>
       </propertyList>
     </module>
     <module title="SCF Finalization">
       <propertyList title="Final KS Energy">
         <property dictRef="siesta:E_KS">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.026678</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.837162</scalar>
         </property>
         <property dictRef="siesta:E_KS_egg">
-          <scalar dataType="fpx:real" units="siestaUnits:eV">-7.026678</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:eV">-465.837162</scalar>
         </property>
       </propertyList>
       <propertyList title="Forces">
         <property dictRef="siesta:forces">
-          <matrix rows="3" columns="2" dataType="fpx:real" units="siestaUnits:evpa">1.904631955400e1 -8.829848876021e-16 -1.594887375800e-14 -1.904631955400e1 -2.499970685594e-16 -1.026380884491e-14</matrix>
+          <matrix rows="3" columns="3" dataType="fpx:real" units="siestaUnits:evpa">-1.413287922880e-14 3.518855674838e-1 5.122733234457e-11 -1.989515699248e-1 -1.892028190015e-1 -2.662259139524e-11 1.989515699248e-1 -1.892028190015e-1 -2.674826845937e-11</matrix>
         </property>
         <property dictRef="siesta:ftot">
-          <array size="3" dataType="fpx:real" units="siestaUnits:evpa">-1.141808689980e-14 -1.132981956161e-15 -2.621268260292e-14</array>
+          <array size="3" dataType="fpx:real" units="siestaUnits:evpa">1.012463174319e-14 -2.652007051921e-2 -2.143527510035e-12</array>
         </property>
         <property dictRef="siesta:fmax">
-          <scalar dataType="fpx:real" units="siestaUnits:evpa">1.904631955400e1</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:evpa">3.518855674838e-1</scalar>
         </property>
         <property dictRef="siesta:fres">
-          <scalar dataType="fpx:real" units="siestaUnits:evpa">1.099639772157e1</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:evpa">1.746686769575e-1</scalar>
         </property>
         <property dictRef="siesta:cfmax">
-          <scalar dataType="fpx:real" units="siestaUnits:evpa">1.904631955400e1</scalar>
+          <scalar dataType="fpx:real" units="siestaUnits:evpa">3.518855674838e-1</scalar>
         </property>
       </propertyList>
     </module>
@@ -452,18 +532,19 @@
   <module title="Finalization">
     <molecule>
       <atomArray>
-        <atom elementType="Na" x3="4.105012312222e-1" y3="0.000000000000e0" z3="0.000000000000e0" ref="siesta:e001"/>
-        <atom elementType="Na" x3="-4.105012312222e-1" y3="0.000000000000e0" z3="0.000000000000e0" ref="siesta:e001"/>
+        <atom elementType="O" x3="0.000000000000e0" y3="-1.648060000000e-3" z3="0.000000000000e0" ref="siesta:e001"/>
+        <atom elementType="H" x3="7.757352100000e-1" y3="5.933214100000e-1" z3="0.000000000000e0" ref="siesta:e002"/>
+        <atom elementType="H" x3="-7.757352100000e-1" y3="5.933214100000e-1" z3="0.000000000000e0" ref="siesta:e002"/>
       </atomArray>
     </molecule>
     <lattice dictRef="siesta:ucell">
-      <latticeVector units="siestaUnits:Ang" dictRef="cml:latticeVector">1.169834465929e1 0.000000000000e0 0.000000000000e0</latticeVector>
-      <latticeVector units="siestaUnits:Ang" dictRef="cml:latticeVector">0.000000000000e0 1.079524195060e1 0.000000000000e0</latticeVector>
-      <latticeVector units="siestaUnits:Ang" dictRef="cml:latticeVector">0.000000000000e0 0.000000000000e0 1.079524195060e1</latticeVector>
+      <latticeVector units="siestaUnits:Ang" dictRef="cml:latticeVector">7.327629910942e0 0.000000000000e0 0.000000000000e0</latticeVector>
+      <latticeVector units="siestaUnits:Ang" dictRef="cml:latticeVector">0.000000000000e0 5.756818709261e0 0.000000000000e0</latticeVector>
+      <latticeVector units="siestaUnits:Ang" dictRef="cml:latticeVector">0.000000000000e0 0.000000000000e0 5.621012448942e0</latticeVector>
     </lattice>
     <propertyList title="Eigenvalues">
       <property dictRef="siesta:E_Fermi" title="Fermi Energy">
-        <scalar dataType="fpx:real" units="siestaUnits:ev">-2.20005</scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:ev">-2.07322</scalar>
       </property>
       <property dictRef="siesta:nkpoints" title="Number of k-points">
         <scalar dataType="xsd:integer" units="cmlUnits:countable">1</scalar>
@@ -471,37 +552,37 @@
       <propertyList dictRef="siesta:kpt_band">
         <kpoint coords="0.000000000000e0 0.000000000000e0 0.000000000000e0" weight="1.000000000000e0"/>
         <property dictRef="siesta:eigenenergies">
-          <array size="10" dataType="fpx:real" units="siestaUnits:ev">-3.748872036464e0 -1.264310770740e0 -1.264310770739e0 -1.209188106618e0 2.350314038564e0 2.350314038603e0 2.447532580845e0 6.737077633142e0 8.850267389270e0 2.293466516668e1</array>
+          <array size="23" dataType="fpx:real" units="siestaUnits:ev">-2.426282020766e1 -1.251712706279e1 -8.373154539081e0 -6.415845375197e0 1.567630073152e0 3.782398002391e0 9.779676304777e0 1.149811323337e1 1.197567934980e1 1.320196248487e1 1.461593834774e1 2.119112241510e1 2.387195589041e1 2.749024035149e1 2.826406436030e1 3.158581591651e1 4.235774408834e1 4.369253109666e1 4.540333849424e1 4.870077721754e1 4.964729916648e1 7.050907057041e1 9.453466518602e1</array>
         </property>
       </propertyList>
     </propertyList>
     <propertyList title="Energy Decomposition">
       <property dictRef="siesta:Ebs">
-        <scalar dataType="fpx:real" units="siestaUnits:eV">-7.497744</scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:eV">-103.137894</scalar>
       </property>
       <property dictRef="siesta:Eions">
-        <scalar dataType="fpx:real" units="siestaUnits:eV">15.960236</scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:eV">815.854478</scalar>
       </property>
       <property dictRef="siesta:Ena">
-        <scalar dataType="fpx:real" units="siestaUnits:eV">14.204852</scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:eV">175.007584</scalar>
       </property>
       <property dictRef="siesta:Ekin">
-        <scalar dataType="fpx:real" units="siestaUnits:eV">4.789585</scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:eV">351.769106</scalar>
       </property>
       <property dictRef="siesta:Enl">
-        <scalar dataType="fpx:real" units="siestaUnits:eV">4.638692</scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:eV">-62.176200</scalar>
       </property>
       <property dictRef="siesta:DEna">
-        <scalar dataType="fpx:real" units="siestaUnits:eV">-0.162359</scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:eV">-2.594518</scalar>
       </property>
       <property dictRef="siesta:DUscf">
-        <scalar dataType="fpx:real" units="siestaUnits:eV">0.028240 </scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:eV">0.749718</scalar>
       </property>
       <property dictRef="siesta:DUext">
         <scalar dataType="fpx:real" units="siestaUnits:eV">0.000000</scalar>
       </property>
       <property dictRef="siesta:Exc">
-        <scalar dataType="fpx:real" units="siestaUnits:eV">-14.565452</scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:eV">-112.738374</scalar>
       </property>
       <property dictRef="siesta:Ecorrec">
         <scalar dataType="fpx:real" units="siestaUnits:eV">0.000000</scalar>
@@ -519,70 +600,70 @@
         <scalar dataType="fpx:real" units="siestaUnits:eV">0.000000</scalar>
       </property>
       <property dictRef="siesta:EharrsK">
-        <scalar dataType="fpx:real" units="siestaUnits:eV">-7.026678</scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:eV">-465.837162</scalar>
       </property>
       <property dictRef="siesta:EtotK">
-        <scalar dataType="fpx:real" units="siestaUnits:eV">-7.026678</scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:eV">-465.837162</scalar>
       </property>
       <property dictRef="siesta:FreeEK">
-        <scalar dataType="fpx:real" units="siestaUnits:eV">-7.026678</scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:eV">-465.837162</scalar>
       </property>
     </propertyList>
     <propertyList title="Final Energy">
       <property dictRef="siesta:Ebs">
-        <scalar dataType="fpx:real" units="siestaUnits:eV">-7.4977441</scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:eV">-103.1378944</scalar>
       </property>
       <property dictRef="siesta:Ekin">
-        <scalar dataType="fpx:real" units="siestaUnits:eV">4.7895849</scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:eV">351.7691063</scalar>
       </property>
       <property dictRef="siesta:Uscf">
-        <scalar dataType="fpx:real" units="siestaUnits:eV">6.1540264</scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:eV">382.8903315</scalar>
       </property>
       <property dictRef="siesta:DUext">
         <scalar dataType="fpx:real" units="siestaUnits:eV">0.0000000</scalar>
       </property>
       <property dictRef="siesta:Exc">
-        <scalar dataType="fpx:real" units="siestaUnits:eV">-14.5654523</scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:eV">-112.7383739</scalar>
       </property>
       <property dictRef="siesta:I-e">
-        <scalar dataType="fpx:real" units="siestaUnits:eV">-14.0155501</scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:eV">-1072.9762749</scalar>
       </property>
       <property dictRef="siesta:I-I">
-        <scalar dataType="fpx:real" units="siestaUnits:eV">10.6107127</scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:eV">-14.7819511</scalar>
       </property>
       <property dictRef="siesta:Ekinion">
         <scalar dataType="fpx:real" units="siestaUnits:eV">0.0000000</scalar>
       </property>
       <property dictRef="siesta:Etot">
-        <scalar dataType="fpx:real" units="siestaUnits:eV">-7.0266784</scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:eV">-465.8371622</scalar>
       </property>
     </propertyList>
     <propertyList title="Force Summary">
       <property dictRef="siesta:forces">
-        <matrix rows="3" columns="2" dataType="fpx:real" units="siestaUnits:evpa">1.904631955400e1 -8.829848876021e-16 -1.594887375800e-14 -1.904631955400e1 -2.499970685594e-16 -1.026380884491e-14</matrix>
+        <matrix rows="3" columns="3" dataType="fpx:real" units="siestaUnits:evpa">-1.413287922880e-14 3.518855674838e-1 5.122733234457e-11 -1.989515699248e-1 -1.892028190015e-1 -2.662259139524e-11 1.989515699248e-1 -1.892028190015e-1 -2.674826845937e-11</matrix>
       </property>
       <property dictRef="siesta:ftot">
-        <array size="3" dataType="fpx:real" units="siestaUnits:evpa">-1.141808689980e-14 -1.132981956161e-15 -2.621268260292e-14</array>
+        <array size="3" dataType="fpx:real" units="siestaUnits:evpa">1.012463174319e-14 -2.652007051921e-2 -2.143527510035e-12</array>
       </property>
     </propertyList>
     <property dictRef="siesta:stress">
-      <matrix rows="3" columns="3" dataType="fpx:real" units="siestaUnits:eV_Ang__3">-1.147448075201e-2 -1.236448267946e-19 -1.737711079276e-19 1.551518978351e-19 1.867188682854e-6 1.180711261027e-18 -6.893973921233e-18 1.470367353128e-18 1.867188682789e-6</matrix>
+      <matrix rows="3" columns="3" dataType="fpx:real" units="siestaUnits:eV_Ang__3">1.283470676100e-3 1.299273206966e-17 2.180523608848e-17 2.004176313866e-16 7.472846706803e-4 -1.088492498598e-15 -1.118684821940e-16 1.325317985125e-13 -6.280487495438e-4</matrix>
     </property>
     <propertyList title="Final Pressure">
       <property dictRef="siesta:cellvol" title="cell volume">
-        <scalar dataType="fpx:real" units="siestaUnits:Ang__3">1.363292901782e3</scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:Ang__3">2.371158727292e2</scalar>
       </property>
       <property dictRef="siesta:pressSol" title="Pressure of Solid">
-        <scalar dataType="fpx:real" units="siestaUnits:kbar">6.126120155193e0</scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:kbar">-7.491360088081e-1</scalar>
       </property>
       <property dictRef="siesta:pressMol" title="Pressure of Molecule">
-        <scalar dataType="fpx:real" units="siestaUnits:kbar">3.572161539276e-4</scalar>
+        <scalar dataType="fpx:real" units="siestaUnits:kbar">4.294848943864e-1</scalar>
       </property>
     </propertyList>
     <property dictRef="siesta:dipol" title="Electric dipole">
-      <array size="3" dataType="fpx:real" units="siestaUnits:Debye">-1.599428095828e-13 -6.558364067088e-16 -1.023648522747e-12</array>
+      <array size="3" dataType="fpx:real" units="siestaUnits:Debye">-2.545641554618e-15 1.423253160285e0 3.548257107148e-11</array>
     </property>
   </module>
-  <metadata name="siesta:EndTime" content="2017-07-03T16-46-58"/>
+  <metadata name="siesta:EndTime" content="2017-07-03T17-06-44"/>
   <metadata name="dc:contributor" content="FoX-4.1.0 (http://www.uszla.me.uk/FoX)"/>
 </cml>

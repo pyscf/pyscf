@@ -116,7 +116,7 @@ class prod_log_c(ao_log_c):
       for j,evs in enumerate(ldp['j2eva']):
         for domi,ev in enumerate(evs):
           if ev>tol_loc: mu2jd.append([j,domi])
-
+      
       nmult=len(mu2jd)
       mu2j = np.array([jd[0] for jd in mu2jd], dtype=np.int32)
       mu2s = np.array([0]+[sum(2*mu2j[0:mu+1]+1) for mu in range(nmult)], dtype=np.int64)

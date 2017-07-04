@@ -9,11 +9,19 @@ class KnowValues(unittest.TestCase):
     from numpy import einsum, array
     import os
     dname = os.path.dirname(os.path.abspath(__file__))
-    sv = system_vars_c().init_siesta_xml(chdir=dname)
+    sv = system_vars_c().init_siesta_xml(label='water', chdir=dname)
     self.assertTrue(abs(sv.ucell).sum()>0)
     pb = prod_basis_c().init_pb_pp_libnao_apair(sv)
     self.assertEqual(sv.norbs, 23)
+    biloc = pb.comp_apair_pp_libint(0,1)
+    #print(biloc.vrtx.shape)
+    biloc = pb.comp_apair_pp_libint(1,2)
+    #print(biloc.vrtx.shape)
+
     pb.init_prod_basis_pp()
+    #print(' pb.c2s[-1] ', pb.c2s[-1])
+    #print(' pb.dpc2s[-1] ', pb.dpc2s[-1])
+
     self.assertEqual(len(pb.bp2info), 3)
     vden = pb.get_vertex_array()
     ccden = pb.get_da2cc_den()
@@ -26,11 +34,15 @@ class KnowValues(unittest.TestCase):
     dref = array([dc.toarray() for dc in dcoo])
     dipo = einsum('lab,lx->xab', vden, moms[1])
     
-    #print(abs(oref-over).sum()/(oref.size))
-    #print(abs(oref-over).max())
+    emean = (abs(oref-over).sum()/(oref.size))
+    emax  = (abs(oref-over).max())
+    self.assertAlmostEqual(emean, 0.000102115844911)
+    self.assertAlmostEqual(emax, 0.00182562129245)
 
-    #print(abs(dref-dipo).sum()/(dref.size))
-    #print(abs(dref-dipo).max())
+    emean = (abs(dref-dipo).sum()/(dref.size))
+    emax = (abs(dref-dipo).max())
+    self.assertAlmostEqual(emean, 0.000618731257284)
+    self.assertAlmostEqual(emax, 0.0140744946617)
     
 #    print(vden.shape)
 #    print(ccden.shape)

@@ -136,7 +136,7 @@ subroutine sv_prod_log_get(d,n, sv, pb)
   allocate(sv%psi_log_rl(nr,nmumx,nsp))
   do sp=1,nsp
     do mu=1,sv%uc%sp2nmult(sp)
-      sv%psi_log(1:nr,mu,sp) = sv%psi_log(1:nr,mu,sp)/(sv%rr**sv%uc%mu_sp2j(mu,sp))
+      sv%psi_log_rl(1:nr,mu,sp) = sv%psi_log(1:nr,mu,sp)/(sv%rr**sv%uc%mu_sp2j(mu,sp))
     enddo
   enddo
 

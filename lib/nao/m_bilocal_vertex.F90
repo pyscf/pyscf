@@ -106,6 +106,7 @@ _t1
   call comp_expansion(a, pair_info, lready, center, rcut, oo2num, m2nf, rf_ls2so, ff2, rhotb)
 _t2(tthr(1))  
   if(lready) return;  
+  !write(6,*) __FILE__, __LINE__, sum(rhotb)
 
 _t1  
   call comp_sph_bes_trans_expansions(a, m2nf, ff2)
@@ -643,7 +644,7 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
   !write(6,'(2es20.12,3x,2es20.12)') radii, a%sp2radii(sp(1:2))
   
   center = inf%coords(1:3,1) + (1-fact_z1)* trans_vec
-  
+
   nr = a%nr
   ord = get_GL_ord_bilocal(a%pb_p)
   pcs = get_GL_pcs_bilocal(a%pb_p)
@@ -732,6 +733,10 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
       call init_jt_aux(j1,j2,jcutoff, nterm,jtb,clbdtb,lbdtb)
       Ra = (/ 0.0D0, 0.0D0, -d12*(1D0-fact_z1)/);
       Rb = (/ 0.0D0, 0.0D0,  d12*(fact_z1)/);
+
+!      write(6,*) __FILE__, __LINE__, rf1, rf2, &
+!        sum(a%psi_log(1:nr,mu2,sp(2))), sum(a%psi_log(1:nr,mu1,sp(1)))
+
       rhotb = 0
       call prdred( &
         a%psi_log(1:nr,mu2,sp(2)),j2,Rb,  a%psi_log(1:nr,mu1,sp(1)),j1,Ra, &
