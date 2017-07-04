@@ -16,7 +16,7 @@ class KnowValues(unittest.TestCase):
     pb.init_prod_basis_pp()
     
     self.assertEqual(len(pb.bp2info), 3)
-    vden = pb.get_vertex_array()
+    vden = pb.get_ac_vertex_array()
     ccden = pb.get_da2cc_den()
     moms = pb.comp_moments()
 
