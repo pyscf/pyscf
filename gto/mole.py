@@ -323,10 +323,12 @@ def format_ecp(ecp_tab):
         symb = _atom_symbol(atom)
         stdsymb = _std_symbol(symb)
         if isinstance(ecp_tab[atom], (str, unicode)):
-            try:
-                fmt_ecp[symb] = basis.load_ecp(str(ecp_tab[atom]), stdsymb)
-            except RuntimeError as e:
-                sys.stderr.write('%s\n' % e.message)
+            ecp_dat = basis.load_ecp(str(ecp_tab[atom]), stdsymb)
+            if ecp_dat is None or len(ecp_dat) == 0:
+                sys.stderr.write('ECP %s not found for  %s\n' %
+                                 (ecp_tab[atom], symb))
+            else:
+                fmt_ecp[symb] = ecp_dat
         else:
             fmt_ecp[symb] = ecp_tab[atom]
     return fmt_ecp
