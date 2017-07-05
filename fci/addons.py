@@ -7,17 +7,21 @@ from pyscf import lib
 from pyscf.fci import cistring
 from pyscf import symm
 
-def large_ci(ci, norb, nelec, tol=.1):
+def large_ci(ci, norb, nelec, tol=.1, return_strs=True):
     '''Search for the largest CI coefficients
     '''
     neleca, nelecb = _unpack(nelec)
-    idx = numpy.argwhere(abs(ci) > tol)
-    res = []
-    for i,j in idx:
-        res.append((ci[i,j],
-                    bin(cistring.addr2str(norb, neleca, i)),
-                    bin(cistring.addr2str(norb, nelecb, j))))
-    return res
+    addra, addrb = numpy.where(abs(ci) > tol)
+    strsa = cistring.addrs2str(norb, neleca, addra)
+    strsb = cistring.addrs2str(norb, nelecb, addrb)
+    if return_strs:
+        strsa = [bin(x) for x in strsa]
+        strsb = [bin(x) for x in strsb]
+        return list(zip(ci[addra,addrb], strsa, strsb))
+    else:
+        occslsta = cistring._strs2occslst(strsa, norb)
+        occslstb = cistring._strs2occslst(strsb, norb)
+        return list(zip(ci[addra,addrb], occslsta, occslstb))
 
 def initguess_triplet(norb, nelec, binstring):
     '''Generate a triplet initial guess for FCI solver

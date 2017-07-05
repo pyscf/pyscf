@@ -258,7 +258,8 @@ class CASCI(lib.StreamObject):
         self.ci, self.mo_coeff, occ = addons.cas_natorb(self, mo_coeff, ci0)
         return self.ci, self.mo_coeff
 
-    def analyze(self, mo_coeff=None, ci=None, verbose=logger.DEBUG):
+    def analyze(self, mo_coeff=None, ci=None, verbose=logger.DEBUG,
+                large_ci_tol=0.1, **kwargs):
         from pyscf.tools import dump_mat
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if ci is None: ci = self.ci
@@ -297,16 +298,21 @@ class CASCI(lib.StreamObject):
                 log.info('beta <mo-mcscf|mo-hf> %d  %d  %12.8f' % (i+1,j+1,s[i,j]))
 
             log.info('\n** Largest CI components **')
-            if ci is not None and numpy.ndim(ci) >= 2:
+            if (hasattr(self.fcisolver, 'large_ci') and
+                ci is not None and numpy.ndim(ci) >= 2):
                 if ci[0].ndim == 2:
                     for i, state in enumerate(ci):
-                        log.info(' string alpha, string beta, state %d CI coefficients', i)
-                        for c,ia,ib in fci.addons.large_ci(state, self.ncas, self.nelecas):
-                            log.info('  %9s    %9s    %.12f', ia, ib, c)
+                        log.info('  [alpha occ-orbitals] [beta occ-orbitals]  state %-3d CI coefficient', i)
+                        res = self.fcisolver.large_ci(state, self.ncas, self.nelecas,
+                                                      large_ci_tol, return_strs=False)
+                        for c,ia,ib in res:
+                            log.info('  %-20s %-30s %.12f', ia, ib, c)
                 else:
-                    log.info(' string alpha, string beta, CI coefficients')
-                    for c,ia,ib in fci.addons.large_ci(ci, self.ncas, self.nelecas):
-                        log.info('  %9s    %9s    %.12f', ia, ib, c)
+                    log.info('  [alpha occ-orbitals] [beta occ-orbitals]            CI coefficient')
+                    res = self.fcisolver.large_ci(ci, self.ncas, self.nelecas,
+                                                  large_ci_tol, return_strs=False)
+                    for c,ia,ib in res:
+                        log.info('  %-20s %-30s %.12f', ia, ib, c)
         return dm1a, dm1b
 
     def spin_square(self, fcivec=None, mo_coeff=None, ovlp=None):
