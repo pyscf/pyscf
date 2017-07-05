@@ -34,17 +34,19 @@ def siesta_wfsx_book_read_py(fname):
 def siesta_wfsx_dread(w):
   ddata = empty(w.nkpoints*w.nspin*w.norbs + + w.nkpoints*3)
   ios = c_int(22)
-  libnao.siesta_wfsx_dread(create_string_buffer(w.label.encode()), ddata.ctypes.data_as(POINTER(c_double)), ios)
+  libnao.siesta_wfsx_dread(create_string_buffer(w.fname.encode()), ddata.ctypes.data_as(POINTER(c_double)), ios)
+  if ios.value!=0 : raise RuntimeError('ios!=0 %d'%(ios.value))
   return ddata
 
 #
 #
 #
 def siesta_wfsx_sread(w, sdata):
-  name = create_string_buffer(w.label.encode())
+  name = create_string_buffer(w.fname.encode())
   bufsize = w.nkpoints*w.nspin*w.norbs**2*w.nreim
   ios = c_int(22)
   libnao.siesta_wfsx_sread(name, sdata.ctypes.data_as(POINTER(c_float)), ios)
+  if ios.value!=0 : raise RuntimeError('ios!=0 %d'%(ios.value))
 
 
 class siesta_wfsx_c():
@@ -83,9 +85,7 @@ class siesta_wfsx_c():
       for k in range(splen):
         splabel = splabel + chr(idat[i]); i=i+1
       splabel = splabel.replace(" ", "")
-
       ch = splabel
-      
       self.orb2strspecie.append(ch)
 
     self.sp2strspecie = []
@@ -104,8 +104,8 @@ class siesta_wfsx_c():
     ### Read double precision data
     ddata = siesta_wfsx_dread(self)
 
-    self.ksn2e = empty((self.nkpoints,self.nspin,self.norbs), dtype='float64')
-    self.k2xyz = empty((self.nkpoints,3), dtype='float64')
+    self.ksn2e = empty((self.nkpoints,self.nspin,self.norbs))
+    self.k2xyz = empty((self.nkpoints,3))
     i = 0
     for k in range(self.nkpoints):
       for s in range(self.nspin):
@@ -117,5 +117,5 @@ class siesta_wfsx_c():
           self.k2xyz[k,j] = ddata[i]; i=i+1
 
     ### Read single precision data
-    self.x = np.require(zeros((self.nreim,self.norbs,self.norbs,self.nspin,self.nkpoints), dtype=np.float32), requirements='CW')
+    self.x = np.require(zeros((self.nkpoints,self.nspin,self.norbs,self.norbs,self.nreim), dtype=np.float32), requirements='CW')
     siesta_wfsx_sread(self, self.x)

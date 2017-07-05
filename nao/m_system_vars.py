@@ -219,6 +219,7 @@ class system_vars_c():
     self.norbs  = self.wfsx.norbs 
     self.nspin  = self.wfsx.nspin
     self.nkpoints  = self.wfsx.nkpoints
+    self.fermi_energy = self.xml_dict['fermi_energy']
 
     strspecie2sp = {}
     for sp,strsp in enumerate(self.wfsx.sp2strspecie): strspecie2sp[strsp] = sp
