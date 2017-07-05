@@ -67,20 +67,25 @@ SG1RADII = numpy.array((
     4.0909, 3.1579, 2.5714, 2.1687, 1.8750, 1.6514, 1.4754, 1.3333))
 
 
-#? gauss-legendre quadrature
-
 # Murray, N.C. Handy, G.J. Laming,  Mol. Phys. 78, 997(1993)
-def murray(n, **kwargs):
+def murray(n, *args, **kwargs):
     raise RuntimeError('Not implemented')
 
-def becke(n, **kwargs):
-# second kind gauss-chebyshev quadrature
-    raise RuntimeError('Not implemented')
+def becke(n, charge, **kwargs):
+    '''Becke, JCP, 88, 2547 (1988)'''
+    if charge == 1:
+        rm = BRAGG_RADII[charge]
+    else:
+        rm = BRAGG_RADII[charge] * .5
+    t, w = numpy.polynomial.chebyshev.chebgauss(n)
+    r = (1+t)/(1-t) * rm
+    w *= 2/(1-t)**2 * rm
+    return r, w
 
 # scale rad and rad_weight if necessary
 # gauss-legendre
-def delley(n, **kwargs):
-    '''Delley radial grids'''
+def delley(n, *args, **kwargs):
+    '''B. Delley radial grids. Ref. JCP, 104, 9848 log2 algorithm'''
     r = numpy.empty(n)
     dr = numpy.empty(n)
     r_outer = 12.
@@ -110,7 +115,7 @@ def mura_knowles(n, charge=None, **kwargs):
 
 # Gauss-Chebyshev of the second kind,  and the transformed interval [0,\infty)
 # Ref  Matthias Krack and Andreas M. Koster,  J. Chem. Phys. 108 (1998), 3226
-def gauss_chebyshev(n, **kwargs):
+def gauss_chebyshev(n, *args, **kwargs):
     '''Gauss-Chebyshev (JCP, 108, 3226) radial grids'''
     ln2 = 1 / numpy.log(2)
     fac = 16./3 / (n+1)
@@ -123,7 +128,7 @@ def gauss_chebyshev(n, **kwargs):
     return r, dr
 
 
-def treutler_ahlrichs(n, **kwargs):
+def treutler_ahlrichs(n, *args, **kwargs):
     '''Treutler-Ahlrichs (JCP 102, 346 (M4)) radial grids'''
     r = numpy.empty(n)
     dr = numpy.empty(n)

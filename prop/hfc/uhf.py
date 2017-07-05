@@ -140,18 +140,18 @@ def make_soc2e(gobj, dm0):
         vj[:] += g_so/2 * numpy.einsum('yijkl,ji->ykl', hso2e, dma-dmb)
         vj[0] += g_so/2 * numpy.einsum('yijkl,lk->yij', hso2e, dma+dmb)
         vj[1] -= g_so/2 * numpy.einsum('yijkl,lk->yij', hso2e, dma+dmb)
-        vk[0] += g_so/2 * numpy.einsum('yijkl,ji->ykl', hso2e, dma)
-        vk[1] -= g_so/2 * numpy.einsum('yijkl,ji->ykl', hso2e, dmb)
-        vk[0] += g_so/2 * numpy.einsum('yijkl,lk->yij', hso2e, dma)
-        vk[0] -= g_so/2 * numpy.einsum('yijkl,lk->yij', hso2e, dmb)
+        vk[0] += g_so/2 * numpy.einsum('yijkl,jk->yil', hso2e, dma)
+        vk[1] -= g_so/2 * numpy.einsum('yijkl,jk->yil', hso2e, dmb)
+        vk[0] += g_so/2 * numpy.einsum('yijkl,li->ykj', hso2e, dma)
+        vk[0] -= g_so/2 * numpy.einsum('yijkl,li->ykj', hso2e, dmb)
     if gobj.with_soo:
         vj[0] += 2 * numpy.einsum('yijkl,ji->ykl', hso2e, dma+dmb)
         vj[1] -= 2 * numpy.einsum('yijkl,ji->ykl', hso2e, dma+dmb)
         vj[:] += 2 * numpy.einsum('yijkl,lk->yij', hso2e, dma-dmb)
-        vk[0] += 2 * numpy.einsum('yijkl,ji->ykl', hso2e, dma)
-        vk[1] -= 2 * numpy.einsum('yijkl,ji->ykl', hso2e, dmb)
-        vk[0] += 2 * numpy.einsum('yijkl,lk->yij', hso2e, dma)
-        vk[1] -= 2 * numpy.einsum('yijkl,lk->yij', hso2e, dmb)
+        vk[0] += 2 * numpy.einsum('yijkl,jk->yil', hso2e, dma)
+        vk[1] -= 2 * numpy.einsum('yijkl,jk->yil', hso2e, dmb)
+        vk[0] += 2 * numpy.einsum('yijkl,li->ykj', hso2e, dma)
+        vk[1] -= 2 * numpy.einsum('yijkl,li->ykj', hso2e, dmb)
     hso2e = vj - vk
     return hso2e
 
@@ -160,6 +160,7 @@ def _write(rec, msc3x3, title):
     rec.stdout.write('I_x %s\n' % str(msc3x3[0]))
     rec.stdout.write('I_y %s\n' % str(msc3x3[1]))
     rec.stdout.write('I_z %s\n' % str(msc3x3[2]))
+    rec.stdout.flush()
 
 
 class HyperfineCoupling(uhf_nmr.NMR):
@@ -197,7 +198,6 @@ class HyperfineCoupling(uhf_nmr.NMR):
                 if self.verbose >= logger.INFO:
                     _write(gobj, hfc_dia[n], 'HFC diamagnetic terms')
                     _write(gobj, hfc_para[n], 'HFC paramagnetic terms')
-        self.stdout.flush()
         return hfc_tensor
 
     def dia(self, mol=None, dm0=None):

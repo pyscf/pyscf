@@ -245,7 +245,6 @@ class NMR(rhf_nmr.NMR):
                     rhf_nmr._write(self.stdout, para_occ[i], 'occ part of para-magnetism')
                     rhf_nmr._write(self.stdout, para_pos[i], 'vir-pos part of para-magnetism')
                     rhf_nmr._write(self.stdout, para_neg[i], 'vir-neg part of para-magnetism')
-            self.stdout.flush()
         return e11
 
     def dia(self, mol=None, dm0=None, gauge_orig=None, shielding_nuc=None):
@@ -294,23 +293,23 @@ class NMR(rhf_nmr.NMR):
         if gauge_orig is None: gauge_orig = self.gauge_orig
         return make_s10(mol, gauge_orig, mb=self.mb)
 
-    def gen_vind(self, mo1):
+    def gen_vind(self, mf):
         '''Induced potential'''
-        mo_coeff = self._scf.mo_coeff
-        mo_occ = self._scf.mo_occ
+        mo_coeff = mf.mo_coeff
+        mo_occ = mf.mo_occ
         occidx = mo_occ > 0
         orbo = mo_coeff[:,occidx]
         nao, nmo = mo_coeff.shape
         nocc = orbo.shape[1]
         def vind(mo1):
-            direct_scf_bak, self._scf.direct_scf = self._scf.direct_scf, False
+            #direct_scf_bak, mf.direct_scf = mf.direct_scf, False
             dm1 = numpy.asarray([reduce(numpy.dot, (mo_coeff, x, orbo.T.conj()))
                                  for x in mo1.reshape(3,nmo,nocc)])
             dm1 = dm1 + dm1.transpose(0,2,1).conj()
 # hermi=1 because dm1 = C^1 C^{0dagger} + C^0 C^{1dagger}
             v1mo = numpy.asarray([reduce(numpy.dot, (mo_coeff.T.conj(), x, orbo))
-                                  for x in self._scf.get_veff(self.mol, dm1, hermi=1)])
-            self._scf.direct_scf = direct_scf_bak
+                                  for x in mf.get_veff(self.mol, dm1, hermi=1)])
+            #mf.direct_scf = direct_scf_bak
             return v1mo.ravel()
         return vind
 

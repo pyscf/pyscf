@@ -234,7 +234,7 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
             else:
                 n_rad = _default_rad(chg, level)
                 n_ang = _default_ang(chg, level)
-            rad, dr = radi_method(n_rad)
+            rad, dr = radi_method(n_rad, chg)
             rad_weight = 4*numpy.pi * rad*rad * dr
             # atomic_scale = 1
             # rad *= atomic_scale
@@ -503,7 +503,7 @@ class Grids(lib.StreamObject):
                          level=None, prune=None):
         ''' See gen_grid.gen_atomic_grids function'''
         if atom_grid is None: atom_grid = self.atom_grid
-        if radi_method is None: radi_method = mol.radi_method
+        if radi_method is None: radi_method = self.radi_method
         if level is None: level = self.level
         if prune is None: prune = self.prune
         return gen_atomic_grids(mol, atom_grid, self.radi_method, level, prune)

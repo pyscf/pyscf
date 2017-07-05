@@ -82,7 +82,7 @@ def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
     if gauge_orig is None:
         # A10_i dot p + p dot A10_i consistents with <p^2 g>
         # A10_j dot p + p dot A10_j consistents with <g p^2>
-        # A10_j dot p + p dot A10_j => Im[1/2 (rjxp - pxrj)] = -1/2 <irjxp>
+        # 1/2(A10_j dot p + p dot A10_j) => Im[1/4 (rjxp - pxrj)] = -1/2 <irjxp>
         log.debug('First-order GIAO Fock matrix')
         h1 = -.5 * mol.intor('int1e_giao_irjxp', 3) + make_h10giao(mol, dm0)
     else:
@@ -258,23 +258,23 @@ class NMR(lib.StreamObject):
         logger.timer(self, 'solving mo1 eqn', *cput1)
         return mo10, mo_e10
 
-    def gen_vind(self, mo1):
+    def gen_vind(self, mf):
         '''Induced potential'''
-        vresp = _gen_rhf_response(self._scf, hermi=2)
-        mo_coeff = self._scf.mo_coeff
-        mo_occ = self._scf.mo_occ
+        vresp = _gen_rhf_response(mf, hermi=2)
+        mo_coeff = mf.mo_coeff
+        mo_occ = mf.mo_occ
         occidx = mo_occ > 0
         orbo = mo_coeff[:,occidx]
         nocc = orbo.shape[1]
         nao, nmo = mo_coeff.shape
         def vind(mo1):
-            #direct_scf_bak, self._scf.direct_scf = self._scf.direct_scf, False
+            #direct_scf_bak, mf.direct_scf = mf.direct_scf, False
             dm1 = [reduce(numpy.dot, (mo_coeff, x*2, orbo.T.conj()))
                    for x in mo1.reshape(3,nmo,nocc)]
             dm1 = numpy.asarray([d1-d1.conj().T for d1 in dm1])
             v1mo = numpy.asarray([reduce(numpy.dot, (mo_coeff.T.conj(), x, orbo))
                                   for x in vresp(dm1)])
-            #self._scf.direct_scf = direct_scf_bak
+            #mf.direct_scf = direct_scf_bak
             return v1mo.ravel()
         return vind
 

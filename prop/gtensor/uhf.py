@@ -305,7 +305,6 @@ class GTensor(uhf_nmr.NMR):
             _write(gobj, gdia, 'g-tensor diamagnetic terms', logger.INFO)
             _write(gobj, gpara, 'g-tensor paramagnetic terms', logger.INFO)
             _write(gobj, gshift*1e3, 'g-shift (ppt)', logger.NOTE)
-        self.stdout.flush()
         return gtensor
 
     def dia(self, mol=None, dm0=None, gauge_orig=None):
