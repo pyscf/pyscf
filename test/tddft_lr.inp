@@ -18,7 +18,12 @@ DOS_Zero_Level          Vacuum   Fermi  (Vacuum)
 xc_functional          LDA   HF
 xc_authors             CA    HF
 
-do_tddft_iter           0
+do_tddft_iter           1
+ iexchange              0
+ icorrelation           0
+ omega_max_win1         54.4228
+ nff                    500
+ freq_eps_win1          0.272114
 
 do_scf                  0   ! Parameters for SCF 
   Poisson.Method         OBC.PB
@@ -40,8 +45,8 @@ do_qsGW                    0  ! Parameters for GW with spectral functions
 
   plot_pdos_fin            1   ! Plot PDOS resolved in angular momentum of atomic orbitals
   
-  d_omega_win1           0.12  ! Limit for target window.
-  omega_max_win1_factor  1.15   !2.5 !4.0 !2.1 !2.5 !2.1 !2.5
+  _d_omega_win1           0.12  ! Limit for target window.
+  _omega_max_win1_factor  1.15   !2.5 !4.0 !2.1 !2.5 !2.1 !2.5
 
   chi0_zip_tolerance    1e-2  ! nonlocal compresion
   chi0_zip_EH_or_EF     1 

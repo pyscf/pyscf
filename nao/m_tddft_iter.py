@@ -1,8 +1,6 @@
 from __future__ import print_function, division
 import numpy as np
 from scipy.sparse import csr_matrix
-#from pyscf.nao import system_vars_c, prod_basis_c
-from pyscf.nao import coulomb_am, comp_coulomb_den
 
 class tddft_iter_c():
 
@@ -11,29 +9,25 @@ class tddft_iter_c():
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
     assert tddft_iter_tol>1e-12
     assert type(tddft_iter_broadening)==float
-    assert len(sv.wfsx.x)==1 # i.e. real eigenvectors
+    assert sv.wfsx.x.shape[-1]==1 # i.e. real eigenvectors we accept here
 
-    self.tddft_iter_tol = tddft_iter_tol
-    self.eps = tddft_iter_broadening
-    self.sv = sv
-    self.pb = pb
+    self.tddft_iter_tol,self.eps = tddft_iter_tol,tddft_iter_broadening
+    self.sv, self.pb, self.norbs, self.nspin = sv, pb, sv.norbs, sv.nspin
     self.v_dab = pb.get_dp_vertex_coo(dtype=np.float32).tocsr()
     self.cc_da = pb.get_da2cc_coo(dtype=np.float32).tocsr()
     self.moms0,self.moms1 = pb.comp_moments(dtype=np.float32)
     self.kernel = pb.comp_coulomb_pack(dtype=np.float32)
-    self.norbs = sv.norbs
     self.telec = sv.hsx.telec if telec is None else telec
     self.nelec = sv.hsx.nelec if nelec is None else nelec
     self.fermi_energy = sv.fermi_energy if fermi_energy is None else fermi_energy
-    self.nspin = sv.nspin
     self.x  = np.require(sv.wfsx.x, dtype=np.float32, requirements='CW')
     self.ksn2e = np.require(sv.wfsx.ksn2e, dtype=np.float32, requirements='CW')
     ksn2fd = fermi_dirac_occupations(self.telec, self.ksn2e, self.fermi_energy)
     self.ksn2f = (3-self.nspin)*ksn2fd
     self.nfermi = np.argmax(ksn2fd[0,0,:]<nfermi_tol)
     self.vstart = np.argmax(1.0-ksn2fd[0,0,:]>nfermi_tol)
-    self.xocc = self.x[0,0,0:self.nfermi,:,0]  # I do not know whether python creates a copy at this point
-    self.xvrt = self.x[0,0,self.vstart:,:,0]   # I do not know whether python creates a copy at this point
+    self.xocc = self.x[0,0,0:self.nfermi,:,0]  # does python creates a copy at this point ?
+    self.xvrt = self.x[0,0,self.vstart:,:,0]   # does python creates a copy at this point ?
     
   def apply_rf0(self, v, omega=0.0, eps_in=None):
     """ This applies the non-interacting response function to a vector or a set of vectors """
@@ -43,8 +37,8 @@ class tddft_iter_c():
     n = self.norbs
     sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([n,n]))
     nb2v = self.xocc*sab
-    nm2v = np.zeros([self.nfermi,len(self.xvrt)], dtype=np.complex64)
-    np.dot(nb2v, np.transpose(self.xvrt), nm2v)
+    #nm2v = np.zeros([self.nfermi,len(self.xvrt)], dtype=np.complex64)
+    nm2v = np.dot(nb2v, np.transpose(self.xvrt))
     
     for i,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
       for j,[em,fm] in enumerate(zip(self.ksn2e[0,0,self.vstart:],self.ksn2f[0,0,self.vstart:])):
