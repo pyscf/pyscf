@@ -41,12 +41,12 @@ def dipole_check(sv, prod_log, dipole_funct=dipole_ni, **kvargs):
   for atm,[sp,coord] in enumerate(zip(sv.atom2sp,sv.atom2coord)):
     dip_moms = np.einsum('j,k->jk', sp2mom0[sp],coord)+sp2mom1[sp]
     koo2dipme = np.einsum('pab,pc->cab', prod_log.sp2vertex[sp],dip_moms) 
-    dipme_ref = dipole_funct(me,sp,sp,coord,coord, **kvargs)
-    ac = np.allclose(dipme_ref, koo2dipme, atol=prod_log.tol*10, rtol=prod_log.tol)
+    dipme_ref = dipole_funct(me,sp,coord,sp,coord, **kvargs)
+    ac = np.allclose(dipme_ref, koo2dipme, atol=prod_log.tol_loc*10, rtol=prod_log.tol_loc)
     mae = abs(koo2dipme-dipme_ref).sum()/koo2dipme.size
     mxe = abs(koo2dipme-dipme_ref).max()
     acl.append(ac); mael.append(mae); mxel.append(mxe)
-    if not ac: print('dipole check:', sp, mae, mxe, prod_log.tol) 
+    if not ac: print('dipole check:', sp, mae, mxe, prod_log.tol_loc)
   return mael,mxel,acl
 
 #

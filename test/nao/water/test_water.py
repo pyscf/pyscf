@@ -37,7 +37,7 @@ if errorcode: raise RuntimeError('siesta returned an error: {0}'.format(errorcod
 
 # run test system_vars
 from pyscf.nao.m_system_vars import system_vars_c, diag_check, overlap_check
-sv  = system_vars_c(label) 
+sv  = system_vars_c().init_siesta_xml(label = label)
 assert sv.norbs == 23
 assert diag_check(sv)
 assert overlap_check(sv)
