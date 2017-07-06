@@ -6,8 +6,8 @@ from pyscf import gto
 import numpy as np
 
 mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz') # coordinates in Angstrom!
-sv = system_vars_c(gto=mol)
-prod_log = prod_log_c(sv.ao_log)
+sv  = system_vars_c().init_pyscf_gto(mol)
+prod_log = prod_log_c().init_prod_log_dp(sv.ao_log)
 print(prod_log.overlap_check())
 print(prod_log.lambda_check_overlap())
 print(dipole_check(sv, prod_log))
