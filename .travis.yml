@@ -39,7 +39,7 @@ install:
       cd build &&
       cmake .. &&
       make &&
-      cd ../../pyscf
+      cd ../..
 
 before_script:
       export PYTHONPATH=$(pwd):$PYTHONPATH
