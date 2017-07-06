@@ -96,7 +96,7 @@ class siesta_wfsx_c():
     symlen   = idat[i]; i=i+1
     self.orb2strsym = []
     for j in range(self.norbs):
-      symlabel = ''
+      symlabel = '' # make oneliner here (to oneline)
       for k in range(symlen):
         symlabel = symlabel + chr(idat[i]); i=i+1
       self.orb2strsym.append(symlabel.strip())

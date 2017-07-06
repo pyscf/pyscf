@@ -1,6 +1,5 @@
 from __future__ import print_function, division
-import os,unittest
-import numpy as np
+import os,unittest,numpy as np
 from pyscf.nao import system_vars_c, prod_basis_c, tddft_iter_c
 
 dname = os.path.dirname(os.path.abspath(__file__))
@@ -22,8 +21,9 @@ class KnowValues(unittest.TestCase):
       pxx[iomega] = -np.dot(dn0, vext[0,:]).imag
     
     data = np.array([omegas*Hartree2eV, pxx])
-    np.savetxt('water.tddft_iter.omega.pxx.txt', data.T, fmt=['%f','%f'])
+    data_ref = np.loadtxt(dname+'/water.tddft_iter.omega.pxx.txt-ref')
+    #derr = abs(data_ref-data.T).sum()/data_ref.size
+    #np.savetxt('water.tddft_iter.omega.pxx.txt', data.T, fmt=['%f','%f'])
+    self.assertTrue(np.allclose(data_ref,data.T, rtol=1.0, atol=1e-05))
 
-
-if __name__ == "__main__":
-  unittest.main()
+if __name__ == "__main__": unittest.main()

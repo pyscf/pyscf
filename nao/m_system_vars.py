@@ -183,7 +183,7 @@ class system_vars_c():
     for k in range(self.nkpoints):
       for s in range(self.nspin):
         for n in range(self.norbs):
-          _siesta2blanko_denvec(orb2m, self.wfsx.X[:,:,n,s,k])
+          _siesta2blanko_denvec(orb2m, self.wfsx.X[k,s,n,:,:])
 
     self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
     self.sp2charge = self.ao_log.sp2charge
