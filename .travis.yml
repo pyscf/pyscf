@@ -42,7 +42,7 @@ install:
       cd ../..
 
 before_script:
-      export PYTHONPATH=$(pwd)/pyscf:$PYTHONPATH
+      export PYTHONPATH=$(pwd):$PYTHONPATH
 
 script:
     - >
