@@ -89,7 +89,7 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     h_diag = ([fvva[k].diagonal().reshape(-1,1)-fooa[k].diagonal() for k in range(nkpts)] +
               [fvvb[k].diagonal().reshape(-1,1)-foob[k].diagonal() for k in range(nkpts)])
 
-    vind = _gen_uhf_response(mf, hermi=1)
+    vind = _gen_uhf_response(mf, mo_coeff, mo_occ, hermi=1)
     nao = orboa[0].shape[0]
 
     def h_op(x1):
@@ -120,10 +120,13 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     return (numpy.hstack([x.ravel() for x in g]), h_op,
             numpy.hstack([x.ravel() for x in h_diag]))
 
-def _gen_rhf_response(mf, singlet=None, hermi=0, max_memory=None):
+def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
+                      singlet=None, hermi=0, max_memory=None):
     from pyscf.pbc.dft import numint
     assert(isinstance(mf, khf.KRHF))
 
+    if mo_coeff is None: mo_coeff = mf.mo_coeff
+    if mo_occ is None: mo_occ = mf.mo_occ
     cell = mf.cell
     kpts = mf.kpts
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
@@ -204,10 +207,13 @@ def _gen_rhf_response(mf, singlet=None, hermi=0, max_memory=None):
 
     return vind
 
-def _gen_uhf_response(mf, with_j=True, hermi=0, max_memory=None):
+def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
+                      with_j=True, hermi=0, max_memory=None):
     from pyscf.pbc.dft import numint
     assert(isinstance(mf, kuhf.KUHF))
 
+    if mo_coeff is None: mo_coeff = mf.mo_coeff
+    if mo_occ is None: mo_occ = mf.mo_occ
     cell = mf.cell
     kpts = mf.kpts
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):

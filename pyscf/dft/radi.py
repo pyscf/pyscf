@@ -103,10 +103,10 @@ def mura_knowles(n, charge=None, **kwargs):
     r = numpy.empty(n)
     dr = numpy.empty(n)
 # 7 for Li, Be, Na, Mg, K, Ca, otherwise 5
-    if charge is None:
-        far = 5.2
-    else:
+    if charge in (3, 4, 11, 12, 19, 20):
         far = 7
+    else:
+        far = 5.2
     for i in range(n):
         x = (i+.5) / n
         r[i] = -far * numpy.log(1-x**3)

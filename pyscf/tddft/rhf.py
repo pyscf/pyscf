@@ -56,7 +56,7 @@ def gen_tda_hop(mf, fock_ao=None, singlet=True, wfnsym=None, max_memory=2000):
         hdiag[sym_forbid] = 0
     hdiag = hdiag.ravel()
 
-    vresp = _gen_rhf_response(mf, singlet, hermi=0)
+    vresp = _gen_rhf_response(mf, singlet=singlet, hermi=0)
 
     def vind(zs):
         nz = len(zs)
@@ -228,7 +228,7 @@ class TDHF(TDA):
             hdiag[sym_forbid] = 0
         hdiag = numpy.hstack((hdiag.ravel(), hdiag.ravel()))
 
-        vresp = _gen_rhf_response(mf, singlet, hermi=0)
+        vresp = _gen_rhf_response(mf, singlet=singlet, hermi=0)
 
         def vind(xys):
             nz = len(xys)

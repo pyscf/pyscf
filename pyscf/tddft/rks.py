@@ -53,7 +53,7 @@ class TDDFTNoHybrid(TDA):
         edai = eai.ravel() * dai
         hdiag = eai.ravel() ** 2
 
-        vresp = _gen_rhf_response(mf, singlet, hermi=1)
+        vresp = _gen_rhf_response(mf, singlet=singlet, hermi=1)
 
         def vind(zs):
             nz = len(zs)

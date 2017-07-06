@@ -164,7 +164,7 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         g[sym_forbid] = 0
         h_diag[sym_forbid] = 0
 
-    vind = _gen_uhf_response(mf, hermi=1)
+    vind = _gen_uhf_response(mf, mo_coeff, mo_occ, hermi=1)
 
     def h_op(x):
         if with_symmetry and mol.symmetry:
@@ -191,12 +191,15 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
     return g, h_op, h_diag
 
 
-def _gen_rhf_response(mf, singlet=None, hermi=0, max_memory=None):
+def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
+                      singlet=None, hermi=0, max_memory=None):
     from pyscf.dft import numint
     assert(isinstance(mf, hf.RHF))
 
+    if mo_coeff is None: mo_coeff = mf.mo_coeff
+    if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
-    nao = mf.mo_coeff.shape[0]
+    nao = mo_coeff.shape[0]
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
         if mf.grids.coords is None:
             mf.grids.build()
@@ -204,10 +207,10 @@ def _gen_rhf_response(mf, singlet=None, hermi=0, max_memory=None):
         hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
         if singlet is None:  # for newton solver
             rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
-                                                mf.mo_coeff, mf.mo_occ, 0)
+                                                mo_coeff, mo_occ, 0)
         else:
             rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
-                                                [mf.mo_coeff]*2, [mf.mo_occ*.5]*2, spin=1)
+                                                [mo_coeff]*2, [mo_occ*.5]*2, spin=1)
         dm0 = None #mf.make_rdm1(mo_coeff, mo_occ)
 
         if max_memory is None:
@@ -275,9 +278,12 @@ def _gen_rhf_response(mf, singlet=None, hermi=0, max_memory=None):
     return vind
 
 
-def _gen_uhf_response(mf, with_j=True, hermi=0, max_memory=None):
+def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
+                      with_j=True, hermi=0, max_memory=None):
     from pyscf.dft import numint
 
+    if mo_coeff is None: mo_coeff = mf.mo_coeff
+    if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
         if mf.grids.coords is None:
@@ -285,7 +291,7 @@ def _gen_uhf_response(mf, with_j=True, hermi=0, max_memory=None):
         ni = mf._numint
         hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
         rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
-                                            mf.mo_coeff, mf.mo_occ, 1)
+                                            mo_coeff, mo_occ, 1)
         #dm0 =(numpy.dot(mo_coeff[0]*mo_occ[0], mo_coeff[0].T.conj()),
         #      numpy.dot(mo_coeff[1]*mo_occ[1], mo_coeff[1].T.conj()))
         dm0 = None
