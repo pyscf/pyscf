@@ -1,1 +1,0 @@
-../scf/rhf_nmr.py

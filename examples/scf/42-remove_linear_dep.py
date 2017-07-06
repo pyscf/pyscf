@@ -20,7 +20,7 @@ mol = gto.M(atom=['H 0 0 %f'%i for i in range(10)], unit='Bohr',
 #
 #       mf = scf.RHF(mol).apply(scf.addons.remove_linear_dep_)
 #
-# This example details the method we implemented
+# This example demonstrated the details we implemented
 #
 
 #
