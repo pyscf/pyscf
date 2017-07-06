@@ -158,25 +158,25 @@ class prod_basis_c():
     aos = self.sv.ao_log
     sp12 = np.require( np.array([sv.atom2sp[a] for a in (a1,a2)], dtype=c_int64), requirements='C')
     rc12 = np.require( np.array([sv.atom2coord[a,:] for a in (a1,a2)]), requirements='C')
-    cc2a = np.require( np.array(self.ls_contributing(a1,a2), dtype=c_int64), requirements='C')
+    icc2a = np.require( np.array(self.ls_contributing(a1,a2), dtype=c_int64), requirements='C')
     npmx = aos.sp2norbs[sv.atom2sp[a1]]*aos.sp2norbs[sv.atom2sp[a2]]
-    npac = sum([self.prod_log.sp2norbs[sv.atom2sp[ia]] for ia in cc2a ])
+    npac = sum([self.prod_log.sp2norbs[sv.atom2sp[ia]] for ia in icc2a ])
     nout = c_int64(npmx**2+npmx*npac)
     dout = np.require( np.zeros(nout.value), requirements='CW')
     
-    libnao.gen_get_vrtx_cc_apair( sp12.ctypes.data_as(POINTER(c_int64)), rc12.ctypes.data_as(POINTER(c_double)), cc2a.ctypes.data_as(POINTER(c_int64)), c_int64(len(cc2a)), dout.ctypes.data_as(POINTER(c_double)), nout )
+    libnao.gen_get_vrtx_cc_apair( sp12.ctypes.data_as(POINTER(c_int64)), rc12.ctypes.data_as(POINTER(c_double)), icc2a.ctypes.data_as(POINTER(c_int64)), c_int64(len(icc2a)), dout.ctypes.data_as(POINTER(c_double)), nout )
     
     if dout[0]<1: return None
     
     nnn = np.array(dout[0:3], dtype=int)
     nnc = np.array([dout[8],dout[7]], dtype=int)
     ncc = int(dout[9])
-    if ncc!=len(cc2a): raise RuntimeError('ncc!=len(cc2a)')
+    if ncc!=len(icc2a): raise RuntimeError('ncc!=len(icc2a)')
     s = 10; f=s+np.prod(nnn); vrtx  = dout[s:f].reshape(nnn)
     s = f;  f=s+np.prod(nnc); ccoe  = dout[s:f].reshape(nnc)
-    cc2s = np.zeros(len(cc2a)+1, dtype=np.int64)
-    for cc,a in enumerate(cc2a): cc2s[cc+1] = cc2s[cc] + self.prod_log.sp2norbs[sv.atom2sp[a]]
-    pbiloc = prod_biloc_c(atoms=np.array([a2,a1]),vrtx=vrtx,cc2a=cc2a,cc2s=cc2s,cc=ccoe)
+    icc2s = np.zeros(len(icc2a)+1, dtype=np.int64)
+    for icc,a in enumerate(icc2a): icc2s[icc+1] = icc2s[icc] + self.prod_log.sp2norbs[sv.atom2sp[a]]
+    pbiloc = prod_biloc_c(atoms=np.array([a2,a1]),vrtx=vrtx,cc2a=icc2a,cc2s=icc2s,cc=ccoe)
     return pbiloc
 
 

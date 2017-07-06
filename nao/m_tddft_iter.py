@@ -30,7 +30,7 @@ class tddft_iter_c():
     self.xvrt = self.x[0,0,self.vstart:,:,0]   # does python creates a copy at this point ?
     
   def apply_rf0(self, v, omega=0.0, eps_in=None):
-    """ This applies the non-interacting response function to a vector or a set of vectors """
+    """ This applies the non-interacting response function to a vector (a set of vectors?) """
     assert len(v)==len(self.moms0), "%r, %r "%(len(v), len(self.moms0))
     eps = self.eps if eps_in is None else eps_in
     vdp = self.cc_da * np.require(v, dtype=np.complex64)
