@@ -32,6 +32,8 @@ class ao_log_c(log_mesh_c):
     ions : list of ion structures (read from ion files from siesta)
       or 
     gto  : gaussian type of orbitals object from pySCF
+      or
+    gpaw : ??
 
   Returns:
     ao_log:
@@ -138,7 +140,10 @@ class ao_log_c(log_mesh_c):
   #
   #  
   def init_ao_log_ion(self, sp2ion, **kvargs):
-    """ Reads data from a previous SIESTA calculation, interpolates the orbitals on a single log mesh. """
+    """
+        Reads data from a previous SIESTA calculation,
+        interpolates the orbitals on a single log mesh.
+    """
 
     from pyscf.nao.m_log_interp import log_interp_c
     from pyscf.nao.m_siesta_ion_interp import siesta_ion_interp

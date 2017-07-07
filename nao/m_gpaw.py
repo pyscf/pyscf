@@ -9,7 +9,7 @@ from gpaw.io import Reader
 from gpaw import restart
 
 
-class gpaw_reader():
+class gpaw_reader_c():
     """
     GPAW reader class. Read DFT input from the GPAW LCAO calculator.
 
@@ -46,6 +46,28 @@ class gpaw_reader():
         self.atoms, self.calc = restart(filename)
         reader = Reader(filename)
         print(reader.keys())
+        print("ha: ", reader.ha)
+        print("occupations: ", reader.occupations.keys())
+        print("parameters: ", reader.parameters.keys())
+        print("======================")
+        #[u'basis', u'h', u'poissonsolver', u'nbands', u'mode', u'convergence', u'setups']
+        print(reader.parameters.basis)
+        print(reader.parameters.poissonsolver)
+        print(reader.parameters.nbands)
+        print(reader.parameters.mode)
+        print(reader.parameters.convergence)
+        print(reader.parameters.setups)
+        print("======================")
+        print("density: ", reader.density.keys())
+        print("density[atomic_density_matrices]: ", reader.density.atomic_density_matrices.shape)
+        print("wf: ", reader.wave_functions.keys())
+        print("scf: ", reader.scf.converged)
+        print("results: ", reader.results.keys())
+        print("atoms: ", reader.atoms.keys())
+        print("bohr: ", reader.bohr)
+        print("gpaw version: ", reader.gpaw_version)
+        print("version: ", reader.version)
+        print("hamiltonien: ", reader.hamiltonian.keys())
 
         self.Read_WaveFunctions(reader.wave_functions)
         self.dataset_path = gpaw.setup_paths[0]
@@ -79,7 +101,7 @@ class gpaw_reader():
             setup.n_j.sort()
             for l, n in zip(setup.l_j, setup.n_j):
                 nf += 2 * l + 1
-                self.orb2strsym.extend(strsym[l])
+                #self.orb2strsym.extend(strsym[l]) To be implemented!!
             self.orb2atm[ni:nf] = ia + 1
             self.orb2ao[ni:nf] = np.arange(1, nf-ni + 1, dtype=np.int)
             self.orb2n[ni:nf] = np.ones((nf-ni), dtype=np.int)*np.max(setup.n_j)
