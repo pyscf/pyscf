@@ -199,7 +199,42 @@ class system_vars_c():
     from pyscf.nao.m_siesta_wfsx import siesta_wfsx_c
     from pyscf.nao.m_siesta_ion_xml import siesta_ion_xml
     from pyscf.nao.m_siesta_hsx import siesta_hsx_c
-    """ Initialise system var using only the siesta files (siesta.xml in particular is needed) """
+    """
+        Initialise system var using only the siesta files (siesta.xml in particular is needed)
+
+        System variables:
+        -----------------
+            label (string): calculation label
+            chdir (string): calculation directory
+            xml_dict (dict): information extracted from the xml siesta output,
+                    see m_siesta_xml
+            wfsx: class use to extract the information about wavefunctions,
+                see m_siesta_wfsx
+            hsx: class to ???
+                see m_siesta_hsx
+            norbs_sc (integer): number of orbital
+            ucell (array, float): unit cell
+            sp2ion (list): species to ions, list of the species
+                associated to the information extract from the ion
+                files, see m_siesta_ion_xml
+            ao_log: Atomic orbital on an logarithmic grid,
+                see m_ao_log
+            atom2coord (array, float): array containing the
+                coordinate of each atom.
+            natm (integer): number of atoms
+            norbs (integer): number of orbitals
+            nspin (integer): number of spin
+            nkpoints (integer): number of kpoints
+            fermi_energy (float): Fermi energy
+            atom2sp (list): atom to specie, list associating the atoms
+                to them specie number
+            atom2s: ??
+            atom2mu_s: ??
+            sp2symbol (list): list soociating the species to them symbol
+            sp2charge (list): list associating the species to them charge
+            state (string): ??
+    """
+
     self.label = label
     self.chdir = chdir
     self.xml_dict = siesta_xml(chdir+'/'+self.label+'.xml')
@@ -223,17 +258,26 @@ class system_vars_c():
     self.fermi_energy = self.xml_dict['fermi_energy']
 
     strspecie2sp = {}
-    for sp,strsp in enumerate(self.wfsx.sp2strspecie): strspecie2sp[strsp] = sp
+    # initialise a dictionary with species string as key
+    # associated to the specie number
+    for sp,strsp in enumerate(self.wfsx.sp2strspecie):
+        strspecie2sp[strsp] = sp
     
+    # list of atoms associated to them specie number
     self.atom2sp = np.empty((self.natm), dtype=np.int64)
     for o,atom in enumerate(self.wfsx.orb2atm):
       self.atom2sp[atom-1] = strspecie2sp[self.wfsx.orb2strspecie[o]]
 
+    # ?? atom2s ??
     self.atom2s = np.zeros((self.natm+1), dtype=np.int64)
-    for atom,sp in enumerate(self.atom2sp): self.atom2s[atom+1]=self.atom2s[atom]+self.ao_log.sp2norbs[sp]
+    for atom,sp in enumerate(self.atom2sp):
+        self.atom2s[atom+1]=self.atom2s[atom]+self.ao_log.sp2norbs[sp]
 
+    # atom2mu_s list of atom associated to them mu number (defenition of mu??)
+    # mu number of orbitals by atoms ??
     self.atom2mu_s = np.zeros((self.natm+1), dtype=np.int64)
-    for atom,sp in enumerate(self.atom2sp): self.atom2mu_s[atom+1]=self.atom2mu_s[atom]+self.ao_log.sp2nmult[sp]
+    for atom,sp in enumerate(self.atom2sp):
+        self.atom2mu_s[atom+1]=self.atom2mu_s[atom]+self.ao_log.sp2nmult[sp]
 
     orb2m = get_orb2m(self)
     _siesta2blanko_csr(orb2m, self.hsx.s4_csr, self.hsx.orb_sc2orb_uc)
@@ -251,7 +295,19 @@ class system_vars_c():
     self.state = 'should be useful for something'
     return self
 
-  def init_gpaw(self, gpaw, label="gpaw"):
+  def init_gpaw(self, gpaw, label="gpaw", **kvargs):
+    """
+      Initialise system variables with gpaw inputs:
+
+      Input parameters:
+      -----------------
+        gpaw: file name of the gpaw input
+        kvargs: optional arguments, need a list of precise arguments somewhere!!
+    """
+    from pyscf.lib import logger
+
+    self.label = label
+    self.verbose = logger.NOTE
     self.wfsx = gpaw_reader_c(gpaw)
 
     ##### The parameters as fields
@@ -279,6 +335,9 @@ class system_vars_c():
     print(self.sp2symbol, self.sp2charge)
     print(self.atom2sp)
     print(self.atom2coord.shape)
+
+    #self.ao_log = ao_log_c().init_ao_log_gto_suggest_mesh(self, **kvargs)
+    raise ValueError("Not yet implemented!!")
 
   # More functions for similarity with Mole
   def atom_symbol(self, ia): return self.sp2symbol[self.atom2sp[ia]]
