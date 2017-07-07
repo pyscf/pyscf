@@ -1,7 +1,7 @@
 from __future__ import print_function, division
 import numpy as np
 from scipy.sparse import csr_matrix
-from scipy.sparse.linalg import lgmres, LinearOperator
+from scipy.sparse.linalg import gmres, lgmres, LinearOperator
 
 class tddft_iter_c():
 
@@ -12,6 +12,8 @@ class tddft_iter_c():
     assert type(tddft_iter_broadening)==float
     assert sv.wfsx.x.shape[-1]==1 # i.e. real eigenvectors we accept here
 
+    self.rf0_ncalls = 0
+    self.matvec_ncalls = 0
     self.tddft_iter_tol = tddft_iter_tol
     self.eps = tddft_iter_broadening
     self.sv, self.pb, self.norbs, self.nspin = sv, pb, sv.norbs, sv.nspin
@@ -35,6 +37,7 @@ class tddft_iter_c():
   def apply_rf0(self, v, comega=1j*0.0):
     """ This applies the non-interacting response function to a vector (a set of vectors?) """
     assert len(v)==len(self.moms0), "%r, %r "%(len(v), len(self.moms0))
+    self.rf0_ncalls+=1
     vdp = self.cc_da * np.require(v, dtype=np.complex64)
     n = self.norbs
     sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([n,n]))
@@ -57,10 +60,11 @@ class tddft_iter_c():
     assert len(vext)==len(self.moms0), "%r, %r "%(len(vext), len(self.moms0))
     self.comega_current = comega
     veff_op = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=np.complex64)
-    resgm = lgmres(veff_op, np.require(vext, dtype=np.complex64, requirements='C'), tol=self.tddft_iter_tol)
+    resgm = gmres(veff_op, np.require(vext, dtype=np.complex64, requirements='C'), tol=self.tddft_iter_tol)
     return resgm
   
   def vext2veff_matvec(self, v):
+    self.matvec_ncalls+=1 
     return v-np.dot(self.kernel, self.apply_rf0(v, self.comega_current))
 
   def comp_polariz_xx(self, comegas):

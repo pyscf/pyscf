@@ -28,8 +28,11 @@ class KnowValues(unittest.TestCase):
     pxx = -td.comp_polariz_xx(omegas).imag
     data = np.array([omegas.real*27.2114, pxx])
     data_ref = np.loadtxt(dname+'/water.tddft_iter.omega.inter.pxx.txt-ref')
-    self.assertTrue(np.allclose(data_ref,data.T, rtol=1.0, atol=1e-05))
+    print('    td.rf0_ncalls ', td.rf0_ncalls)
+    print(' td.matvec_ncalls ', td.matvec_ncalls)
 
+    self.assertTrue(np.allclose(data_ref,data.T, rtol=1.0, atol=1e-05))
+    
     #np.savetxt('water.tddft_iter.omega.inter.pxx.txt', data.T, fmt=['%f','%f'])
 
 
