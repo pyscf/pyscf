@@ -9,7 +9,7 @@ from gpaw.io import Reader
 from gpaw import restart
 
 
-class gpaw_reader():
+class gpaw_reader_c():
     """
     GPAW reader class. Read DFT input from the GPAW LCAO calculator.
 
@@ -79,7 +79,7 @@ class gpaw_reader():
             setup.n_j.sort()
             for l, n in zip(setup.l_j, setup.n_j):
                 nf += 2 * l + 1
-                self.orb2strsym.extend(strsym[l])
+                #self.orb2strsym.extend(strsym[l]) To be implemented!!
             self.orb2atm[ni:nf] = ia + 1
             self.orb2ao[ni:nf] = np.arange(1, nf-ni + 1, dtype=np.int)
             self.orb2n[ni:nf] = np.ones((nf-ni), dtype=np.int)*np.max(setup.n_j)
