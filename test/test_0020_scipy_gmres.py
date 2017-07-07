@@ -19,6 +19,7 @@ class vext2veff_c():
     self.omega = np.float32(omega)
     self.eps = np.float32(eps)
     self.shape = (n,n)
+    self.dtype = np.complex64
 
   def matvec(self, v):
     return np.dot((self.omega+1j*self.eps)*A, v)
