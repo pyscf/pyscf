@@ -5,7 +5,7 @@ import numpy as np
 #
 #
 #
-def comp_coulomb_den(sv, ao_log=None, funct=coulomb_am, **kvargs):
+def comp_coulomb_den(sv, ao_log=None, funct=coulomb_am, dtype=np.float64, **kvargs):
   """
     Computes the matrix elements given by funct, for instance coulomb interaction
     Args:
@@ -20,7 +20,7 @@ def comp_coulomb_den(sv, ao_log=None, funct=coulomb_am, **kvargs):
   for atom,sp in enumerate(sv.atom2sp): atom2s[atom+1]=atom2s[atom]+me.ao1.sp2norbs[sp]
   norbs = atom2s[-1]
 
-  res = np.zeros((norbs,norbs))
+  res = np.zeros((norbs,norbs), dtype=dtype)
 
   for atom1,[sp1,rv1,s1,f1] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
     for atom2,[sp2,rv2,s2,f2] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):

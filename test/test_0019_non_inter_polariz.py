@@ -6,24 +6,31 @@ dname = os.path.dirname(os.path.abspath(__file__))
 sv = system_vars_c().init_siesta_xml(label='water', chdir=dname)
 pb = prod_basis_c().init_pb_pp_libnao_apair(sv)
 pb.init_prod_basis_pp()
+td = tddft_iter_c(pb.sv, pb, tddft_iter_broadening=1e-2)
 
 class KnowValues(unittest.TestCase):
 
   def test_non_inter_polariz(self):
-    """ This is iterative TDDFT with SIESTA starting point """
-    td = tddft_iter_c(pb.sv, pb, tddft_iter_broadening=1e-2)
-    omegas = np.linspace(0.0,2.0,500)
+    """ This is non-interacting polarizability TDDFT with SIESTA starting point """
+    omegas = np.linspace(0.0,2.0,500)+1j*td.eps
     pxx = np.zeros_like(omegas)
     vext = np.transpose(td.moms1)
-    Hartree2eV = 27.2114
-    for iomega,omega in enumerate(omegas):
-      dn0 = td.apply_rf0(vext[0,:], omega)
-      pxx[iomega] = -np.dot(dn0, vext[0,:]).imag
-    
-    data = np.array([omegas*Hartree2eV, pxx])
+    for iomega,omega in enumerate(omegas): pxx[iomega] = -np.dot(td.apply_rf0(vext[0,:], omega), vext[0,:]).imag
+
+    data = np.array([omegas*21.2114, pxx])
     data_ref = np.loadtxt(dname+'/water.tddft_iter.omega.pxx.txt-ref')
-    #derr = abs(data_ref-data.T).sum()/data_ref.size
-    #np.savetxt('water.tddft_iter.omega.pxx.txt', data.T, fmt=['%f','%f'])
     self.assertTrue(np.allclose(data_ref,data.T, rtol=1.0, atol=1e-05))
+    #np.savetxt('water.tddft_iter.omega.pxx.txt', data.T, fmt=['%f','%f'])
+
+  def test_inter_polariz(self):
+    """ This is interacting polarizability with SIESTA starting point """
+    omegas = np.linspace(0.0,2.0,150)+1j*td.eps
+    pxx = -td.comp_polariz_xx(omegas).imag
+    data = np.array([omegas.real*27.2114, pxx])
+    data_ref = np.loadtxt(dname+'/water.tddft_iter.omega.inter.pxx.txt-ref')
+    self.assertTrue(np.allclose(data_ref,data.T, rtol=1.0, atol=1e-05))
+
+    #np.savetxt('water.tddft_iter.omega.inter.pxx.txt', data.T, fmt=['%f','%f'])
+
 
 if __name__ == "__main__": unittest.main()
