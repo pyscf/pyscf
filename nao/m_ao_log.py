@@ -1,8 +1,8 @@
 from __future__ import print_function, division
 from pyscf.nao.m_log_mesh import log_mesh_c
+import numpy as np
 
 def comp_moments(self):
-  import numpy as np
   """
     Computes the scalar and dipole moments of the product functions
     Args:
@@ -53,13 +53,9 @@ class ao_log_c(log_mesh_c):
       interp_pp instance of log_interp_c to interpolate along momentum-space axis
 
   Examples:
-
-  >>> sv = system_vars()
-  >>> ao = ao_log_c(sv.sp2ion)
-  >>> print(ao.psi_log.shape)
   '''
   def __init__(self):
-    """ Initializes numerical orbitals from a previous pySCF calculation or from SIESTA calculation (really numerical orbitals) """
+    """ Initializes numerical orbitals  """
     log_mesh_c.__init__(self)
     return
     
@@ -155,11 +151,11 @@ class ao_log_c(log_mesh_c):
     _siesta_ion_add_sp2(self, sp2ion) # adds the fields for counting, .nspecies etc.
     self.jmx = max([mu2j.max() for mu2j in self.sp_mu2j])
     self.sp2norbs = np.array([mu2s[self.sp2nmult[sp]] for sp,mu2s in enumerate(self.sp_mu2s)], dtype='int64')
-    
-    self.sp2ion = sp2ion
-    
+        
     self.psi_log = siesta_ion_interp(self.rr, sp2ion, 1)
     self.psi_log_rl = siesta_ion_interp(self.rr, sp2ion, 0)
+
+    self.sp2ion = sp2ion
     
     self.sp_mu2rcut = [ np.array(ion["paos"]["cutoff"], dtype='float64') for ion in sp2ion]
     self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut], dtype='float64')
@@ -169,6 +165,22 @@ class ao_log_c(log_mesh_c):
     #call init_psi_log_rl(sv%psi_log, sv%rr, sv%uc%mu_sp2j, sv%uc%sp2nmult, sv%psi_log_rl)
     #call sp2ion_to_core(sv%sp2ion, sv%rr, sv%core_log, sv%sp2has_core, sv%sp2rcut_core)
     
+    return self
+
+  #
+  #
+  def init_ao_log_gpaw(self, setups, **kvargs):
+    """ Reads radial orbitals from a previous GPAW calculation. """
+    from pyscf.nao.m_log_interp import log_interp_c
+    from pyscf.nao.m_siesta_ion_interp import siesta_ion_interp
+    self.setups = setups
+    self.init_log_mesh_gpaw(setups, **kvargs)
+    self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
+    sdic = setups.setups
+    self.nspecies = len(sdic.keys())
+    #for key in sdic.keys():
+    #  print(dir(sdic[key]), sdic[key].rcut_j)
+      
     return self
 
   #

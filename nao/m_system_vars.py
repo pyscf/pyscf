@@ -7,8 +7,10 @@ from pyscf.nao.m_siesta2blanko_csr import _siesta2blanko_csr
 from pyscf.nao.m_siesta2blanko_denvec import _siesta2blanko_denvec
 from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
 from pyscf.nao.m_ao_log import ao_log_c
-from pyscf.nao.m_gpaw import gpaw_reader_c
-
+try:
+  from pyscf.nao.m_gpaw import gpaw_reader_c
+except:
+  pass # no gpaw...
 #
 #
 #
@@ -210,7 +212,7 @@ class system_vars_c():
                     see m_siesta_xml
             wfsx: class use to extract the information about wavefunctions,
                 see m_siesta_wfsx
-            hsx: class to ???
+            hsx: class to store a sparse representation of hamiltonian and overlap
                 see m_siesta_hsx
             norbs_sc (integer): number of orbital
             ucell (array, float): unit cell
@@ -228,11 +230,11 @@ class system_vars_c():
             fermi_energy (float): Fermi energy
             atom2sp (list): atom to specie, list associating the atoms
                 to them specie number
-            atom2s: ??
-            atom2mu_s: ??
+            atom2s: atom -> first atomic orbital in a global orbital counting
+            atom2mu_s: atom -> first multiplett (radial orbital) in a global counting of radial orbitals
             sp2symbol (list): list soociating the species to them symbol
             sp2charge (list): list associating the species to them charge
-            state (string): ??
+            state (string): this is an internal information on the current status of the class
     """
 
     self.label = label

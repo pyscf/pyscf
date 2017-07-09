@@ -4,7 +4,6 @@ import os,unittest,numpy as np
 try:
   from ase import Atoms
   from gpaw import GPAW
-  skip_test = False
   fname = os.path.dirname(os.path.abspath(__file__))+'/h2o.gpw'
 
   if os.path.isfile(fname):
@@ -21,25 +20,19 @@ try:
     calc.write(fname, mode='all') # write DFT output
 
 except:
-  skip_test = True
+  calc = None
 
 class KnowValues(unittest.TestCase):
 
-  def test_nao_after_gpaw(self):
-    """ Do GPAW LCAO calculation, then init system_vars_c with it """
-    if skip_test: return
-
-    print(dir(calc.atoms))
-    print(dir(calc))
-    print(dir(calc.hamiltonian))
-#    for aname in dir(calc.hamiltonian):
-#      print(aname, getattr(calc.hamiltonian, aname))
-    print(calc.setups.id_a) # this is atom->specie !
-    #print(dir(calc.setups))
-    #print(calc.setups.nao)
-    #print(dir(calc.setups.setups[(1, 'paw', u'dzp')])) 
-#    O = calc.setups.setups[(8, 'paw', u'dzp')]
-#    for aname in dir(O):
-#      print(aname, getattr(O, aname))
+  def test_ao_log_after_gpaw(self):
+    """ init ao_log_c with it radial orbitals from GPAW """
+    from pyscf.nao import ao_log_c
+    if calc is None: return
+    self.assertTrue(hasattr(calc, 'setups'))
+    aos = ao_log_c().init_ao_log_gpaw(calc.setups)
+    self.assertEqual(aos.nr, 1024)
+    #print(aos.nr)
+    #print(aos.rr[0])
+    #print(aos.rr[-1])
 
 if __name__ == "__main__": unittest.main()

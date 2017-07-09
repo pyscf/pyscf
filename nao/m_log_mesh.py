@@ -42,6 +42,28 @@ def get_default_log_mesh_param4ion(sp2ion):
 #
 #
 #
+def get_default_log_mesh_param4gpaw(sp2dic):
+  """ Determines the default (optimal) parameters for radial orbitals given on equidistant grid"""
+  sp2key = sp2dic.keys()
+  nr_def = 1024
+  rmin_def = 1.0e100
+  rmax_grid = -1.0e100
+  for key in sp2key: 
+    rmin_def = min(rmin_def, sp2dic[key].basis.rgd.r_g[1])
+    rmax_grid = max(rmax_grid, sp2dic[key].basis.rgd.r_g[-1])
+  rmax_def = 2.3*rmax_grid
+  kmax_def = 1.0/rmin_def/np.pi
+  return nr_def,rmin_def,rmax_def,kmax_def
+
+#    sp2dic = setups.setups
+#    print('dir(r_g) ', dir(sp2dic[sp2id[1]].basis.rgd.r_g))
+#    print(sp2dic[sp2id[0]].basis.rgd.r_g.size)
+#    print(sp2dic[sp2id[1]].basis.rgd.r_g.size)
+        
+
+#
+#
+#
 def log_mesh(nr, rmin, rmax, kmax=None):
   """
   Initializes log grid in real and reciprocal (momentum) spaces.
@@ -69,6 +91,7 @@ class log_mesh_c():
     return
   
   def init_log_mesh_gto(self, gto, rcut_tol=1e-7, nr=None, rmin=None, rmax=None, kmax=None):
+    """ Initialize an optimal logarithmic mesh based on Gaussian orbitals from pySCF"""
     #self.gto = gto cannot copy GTO object here... because python3 + deepcopy in m_ao_log_hartree fails
     self.rcut_tol = rcut_tol
     nr_def,rmin_def,rmax_def,kmax_def = get_default_log_mesh_param4gto(gto, rcut_tol)
@@ -83,13 +106,30 @@ class log_mesh_c():
     
   
   def init_log_mesh_ion(self, sp2ion, nr=None, rmin=None, rmax=None, kmax=None):
+    """ Initialize an optimal logarithmic mesh based on information from SIESTA ion files"""
     self.sp2ion = sp2ion
     nr_def,rmin_def,rmax_def,kmax_def = get_default_log_mesh_param4ion(sp2ion)
-    self.nr = 1024 if nr is None else nr
+    self.nr = nr_def if nr is None else nr
     self.rmin = rmin_def if rmin is None else rmin
     self.rmax = rmax_def if rmax is None else rmax
     self.kmax = kmax_def if kmax is None else kmax
     assert(self.rmin>0.0); assert(self.kmax>0.0); assert(self.nr>2); assert(self.rmax>self.rmin);
+    self.rr,self.pp = log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
+    self.state = 'can be useful for something'
+    return self
+
+  def init_log_mesh_gpaw(self, setups, nr=None, rmin=None, rmax=None, kmax=None):
+    """ This initializes an optimal logarithmic mesh based on setups from GPAW""" 
+    self.setups = setups
+    nr_def,rmin_def,rmax_def,kmax_def = get_default_log_mesh_param4gpaw(setups.setups)
+    self.nr = nr_def if nr is None else nr
+    self.rmin = rmin_def if rmin is None else rmin
+    self.rmax = rmax_def if rmax is None else rmax
+    self.kmax = kmax_def if kmax is None else kmax
+    assert self.rmin>0.0
+    assert self.kmax>0.0 
+    assert self.nr>2
+    assert self.rmax>self.rmin
     self.rr,self.pp = log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
     self.state = 'can be useful for something'
     return self
