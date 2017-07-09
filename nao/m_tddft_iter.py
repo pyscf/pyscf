@@ -1,7 +1,7 @@
 from __future__ import print_function, division
 import numpy as np
 from scipy.sparse import csr_matrix
-from scipy.sparse.linalg import gmres, lgmres, LinearOperator
+from scipy.sparse.linalg import gmres, lgmres as gmres_alias, LinearOperator
 
 class tddft_iter_c():
 
@@ -60,7 +60,7 @@ class tddft_iter_c():
     assert len(vext)==len(self.moms0), "%r, %r "%(len(vext), len(self.moms0))
     self.comega_current = comega
     veff_op = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=np.complex64)
-    resgm = gmres(veff_op, np.require(vext, dtype=np.complex64, requirements='C'), tol=self.tddft_iter_tol)
+    resgm = gmres_alias(veff_op, np.require(vext, dtype=np.complex64, requirements='C'), tol=self.tddft_iter_tol)
     return resgm
   
   def vext2veff_matvec(self, v):
@@ -72,7 +72,7 @@ class tddft_iter_c():
     polariz = np.zeros_like(comegas, dtype=np.complex64)
     for iw,comega in enumerate(comegas):
       veff,info = self.comp_veff(self.moms1[:,0], comega)
-      #print(iw, info)
+      #print(iw, info, veff.sum())
       polariz[iw] = np.dot(self.moms1[:,0], self.apply_rf0( veff, comega ))
     return polariz
     

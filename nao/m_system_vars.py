@@ -7,7 +7,7 @@ from pyscf.nao.m_siesta2blanko_csr import _siesta2blanko_csr
 from pyscf.nao.m_siesta2blanko_denvec import _siesta2blanko_denvec
 from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
 from pyscf.nao.m_ao_log import ao_log_c
-#from pyscf.nao.m_gpaw import gpaw_reader_c
+from pyscf.nao.m_gpaw import gpaw_reader_c
 
 #
 #

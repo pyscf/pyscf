@@ -30,9 +30,7 @@ class KnowValues(unittest.TestCase):
     data_ref = np.loadtxt(dname+'/water.tddft_iter.omega.inter.pxx.txt-ref')
     #print('    td.rf0_ncalls ', td.rf0_ncalls)
     #print(' td.matvec_ncalls ', td.matvec_ncalls)
-
     self.assertTrue(np.allclose(data_ref,data.T, rtol=1.0, atol=1e-05))
-    
     #np.savetxt('water.tddft_iter.omega.inter.pxx.txt', data.T, fmt=['%f','%f'])
 
 

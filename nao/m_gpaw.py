@@ -1,8 +1,8 @@
-from __future__ import division
+from __future__ import division, print_function
 import numpy as np
 try:
     import gpaw
-    print(gpaw.__version__)
+    #print('gpaw.__version__', gpaw.__version__)
 except:
     raise ValueError("GPAW need to be installed to use the gpaw input!")
 from gpaw.io import Reader
