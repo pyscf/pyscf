@@ -177,10 +177,31 @@ class ao_log_c(log_mesh_c):
     self.init_log_mesh_gpaw(setups, **kvargs)
     self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
     sdic = setups.setups
-    self.nspecies = len(sdic.keys())
-    #for key in sdic.keys():
-    #  print(dir(sdic[key]), sdic[key].rcut_j)
-      
+    self.sp_mu2j = [np.array(sdic[key].l_orb_j, np.int64) for key in sdic.keys()]
+    self.sp2nmult = np.array([len(mu2j) for mu2j in self.sp_mu2j], dtype=np.int64)
+    self.nspecies = len(self.sp_mu2j)
+    self.jmx = max([max(mu2j) for mu2j in self.sp_mu2j])
+    self.sp2norbs = np.array([sum(2*mu2j+1) for mu2j in self.sp_mu2j], dtype=np.int64)
+    self.sp_mu2rcut = []
+    self.psi_log = []
+    for sp,[key,nmu] in enumerate(zip(sdic.keys(), self.sp2nmult)):
+      self.sp_mu2rcut.append(np.array([phit.get_cutoff() for phit in sdic[key].phit_j]))
+
+      mu2ff = np.zeros([nmu, self.nr])
+      #print(dir(sdic[key]))
+      for mu,phit in enumerate(sdic[key].phit_j):
+        for ir, r in enumerate(self.rr): mu2ff[mu,ir],deriv = phit.get_value_and_derivative(r)
+        self.psi_log.append(mu2ff)
+        #print(mu, phit.get_value_and_derivative(0.0004), dir(phit))
+    
+    #print(self.sp_mu2j)
+    #print(self.sp2nmult)
+    #print(self.nspecies)
+    #print(self.jmx)
+    #print(self.sp2norbs)
+    #print(self.sp_mu2rcut)
+    #print(self.psi_log)
+    
     return self
 
   #
