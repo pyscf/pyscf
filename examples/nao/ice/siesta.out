@@ -5,7 +5,7 @@ PP flags      : -DFC_HAVE_FLUSH -DFC_HAVE_ABORT -DMPI
 PARALLEL version
 
 * Running on    4 nodes in parallel
->> Start of run:  23-MAR-2017  16:19:44
+>> Start of run:  10-JUL-2017  19:36:54
 
                            ***********************       
                            *  WELCOME TO SIESTA  *       
@@ -515,10 +515,6 @@ outcell: Cell volume (Ang**3)        :    389.7822
 New_DM. Step:     1
 Initializing Density Matrix...
 
-iodm: Reading Density Matrix from files
-WARNING: Wrong nspin in DM file:      1
-WARNING: Falling back to atomic initialization of DM.
-
 initdm: Initial spin polarization (Qup-Qdown) =   48.000000
 New grid distribution:   1
            1       1:   24    1:   12    1:   12
@@ -568,7 +564,7 @@ siesta: FreeEng =     -5613.669761
 
    scf: iscf   Eharris(eV)      E_KS(eV)   FreeEng(eV)    dDmax  Ef(eV)
    scf:    1    -5555.3593    -5613.6698    -5613.6698  0.96424 -4.1910
-timer: Routine,Calls,Time,% =    IterSCF     1       7.164  76.28
+timer: Routine,Calls,Time,% =    IterSCF     1       8.404  75.33
    scf:    2    -5612.1648    -5582.3020    -5582.3020  0.12588 -2.9332
    scf:    3    -5595.3220    -5585.6232    -5585.6232  0.07432 -6.0265
    scf:    4    -5594.5807    -5589.6085    -5589.6085  0.01369 -5.3749
@@ -688,4 +684,4 @@ siesta:         254.94226880        234.78074271  kBar
 (Free)Eharris+ p_basis*V_orbitals  =       -5586.691465
 
 siesta: Total spin polarization (Qup-Qdown) =   -0.000000
->> End of run:  23-MAR-2017  16:20:52
+>> End of run:  10-JUL-2017  19:38:13

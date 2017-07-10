@@ -1,5 +1,4 @@
-import numpy
-from numpy import empty 
+import numpy as np
 
 #
 #
@@ -21,9 +20,11 @@ def _siesta2blanko_denvec(orb2m, vec, orb_sc2orb_uc=None):
 
   elif(nreim==2):
     
-    for i in range(n):
-      v = numpy.complex_(vec[i,0],vec[i,1])*orb2ph[i]
-      vec[i,0],vec[i,1] = v[0],v[1]
+    v = np.zeros(n, dtype=np.complex128)
+    for i,reim in enumerate(vec): v[i] = reim[0]+1j*reim[1]
+    v = v * orb2ph
+    vec[:,0] = v.real
+    vec[:,1] = v.imag
 
   else:
     raise SystemError('!nreim')

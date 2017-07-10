@@ -14,7 +14,7 @@ try:
     atoms.center(vacuum=3.5)
     convergence = {'density': 1e-7}     # Increase accuracy of density for ground state
     poissonsolver = PoissonSolver(eps=1e-14, remove_moment=1 + 3)     # Increase accuracy of Poisson Solver and apply multipole corrections up to l=1
-    calc = GPAW(setups={'Na': '1'}, basis='dzp', xc='LDA', h=0.3, nbands=23, convergence=convergence, poissonsolver=poissonsolver, mode='lcao', txt=None)     # nbands must be equal to norbs (in this case 10)
+    calc = GPAW(basis='dzp', xc='LDA', h=0.3, nbands=23, convergence=convergence, poissonsolver=poissonsolver, mode='lcao', txt=None)     # nbands must be equal to norbs (in this case 23)
     atoms.set_calculator(calc)
     atoms.get_potential_energy()    # Do SCF the ground state
     calc.write(fname, mode='all') # write DFT output

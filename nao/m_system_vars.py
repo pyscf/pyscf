@@ -38,13 +38,13 @@ def get_orb2j(sv):
 #
 #
 #
-def diag_check(self, atol=1e-5, rtol=1e-4):
+def diag_check(sv, atol=1e-5, rtol=1e-4):
   from pyscf.nao.m_sv_diag import sv_diag 
-  ksn2e = self.xml_dict['ksn2e']
+  ksn2e = sv.xml_dict['ksn2e']
   ac = True
-  for k,kvec in enumerate(self.xml_dict["k2xyzw"]):
-    for spin in range(self.nspin):
-      e,x = sv_diag(self, kvec=kvec, spin=spin)
+  for k,kvec in enumerate(sv.xml_dict["k2xyzw"]):
+    for spin in range(sv.nspin):
+      e,x = sv_diag(sv, kvec=kvec[0:3], spin=spin)
       eref = ksn2e[k,spin,:]
       acks = np.allclose(eref,e,atol=atol,rtol=rtol)
       ac = ac and acks

@@ -1,5 +1,7 @@
+from __future__ import print_function, division
 import numpy
 from pyscf.nao.m_siesta_hsx_bloch_mat import siesta_hsx_bloch_mat
+from timeit import default_timer as timer
 #
 #
 #
@@ -12,7 +14,7 @@ def sv_get_denmat(sv, mattype='hamiltonian', prec=64, kvec=[0.0,0.0,0.0], spin=0
   
   if(sv.hsx.is_gamma):
 
-    mat = numpy.empty((sv.norbs,sv.norbs), dtype='float'+str(prec), order='F')
+    mat = numpy.empty((sv.norbs,sv.norbs), dtype='float'+str(prec))
     if(mtl=='hamiltonian'):
       mat = sv.hsx.spin2h4_csr[spin].todense()
     elif(mtl=='overlap'):
@@ -21,11 +23,13 @@ def sv_get_denmat(sv, mattype='hamiltonian', prec=64, kvec=[0.0,0.0,0.0], spin=0
       raise SystemError('!mattype')
 
   else:
+    #t1 = timer()
     if(mtl=='hamiltonian'):
       mat = siesta_hsx_bloch_mat(sv.hsx.spin2h4_csr[spin], sv.hsx, prec=prec, kvec=kvec)
     elif(mtl=='overlap'):
       mat = siesta_hsx_bloch_mat(sv.hsx.s4_csr, sv.hsx, prec=prec, kvec=kvec)
     else:
       raise SystemError('!mattype')
-
+    #t2 = timer(); print(t2-t1)
+    
   return mat
