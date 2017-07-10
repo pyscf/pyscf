@@ -50,7 +50,7 @@ def siesta_wfsx_sread(w, sdata):
 
 
 class siesta_wfsx_c():
-  def __init__(self, label='siesta', chdir='.'):
+  def __init__(self, label='siesta', chdir='.', force_gamma=None):
 
     self.label = label
     ends = ['fullBZ.WFSX', 'WFSX']
@@ -70,12 +70,14 @@ class siesta_wfsx_c():
     self.nkpoints = idat[i]; i=i+1
     self.nspin    = idat[i]; i=i+1
     self.norbs    = idat[i]; i=i+1
-    self.gamma    = idat[i]>0; i=i+1
+    self.gamma    = idat[i]>0 if force_gamma is None else force_gamma; i=i+1
     self.orb2atm  = idat[i:i+self.norbs]; i=i+self.norbs
     self.orb2ao   = idat[i:i+self.norbs]; i=i+self.norbs
     self.orb2n    = idat[i:i+self.norbs]; i=i+self.norbs
-    if(self.gamma) : self.nreim = 1;
-    else: self.nreim = 2;
+    if(self.gamma) :
+      self.nreim = 1;
+    else: 
+      self.nreim = 2;
     
     # list of caracter that could be used to split the psf file name
     splen    = idat[i]; i=i+1
@@ -117,5 +119,6 @@ class siesta_wfsx_c():
           self.k2xyz[k,j] = ddata[i]; i=i+1
 
     ### Read single precision data
+    
     self.x = np.require(zeros((self.nkpoints,self.nspin,self.norbs,self.norbs,self.nreim), dtype=np.float32), requirements='CW')
     siesta_wfsx_sread(self, self.x)

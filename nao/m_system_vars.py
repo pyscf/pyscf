@@ -68,9 +68,9 @@ class system_vars_c():
   #
   #
   def init_xyzlike(self, atom, label='pyscf'):
+    """ This is simple constructor which only initializes geometry info """
     from pyscf.lib import logger
     from pyscf.data import chemical_symbols
-    """ This is simple constructor which only initializes geometry info """
     self.verbose = logger.NOTE  # To be similar to Mole object...
     self.stdout = sys.stdout
     self.symmetry = False
@@ -91,9 +91,9 @@ class system_vars_c():
   #
   #
   def init_pyscf_gto(self, gto, label='pyscf', **kvargs):
+    """Interpret previous pySCF calculation"""
     from pyscf.lib import logger
 
-    """Interpret previous pySCF calculation"""
     self.verbose = logger.NOTE  # To be similar to Mole object...
     self.stdout = sys.stdout
     self.symmetry = False
@@ -240,7 +240,7 @@ class system_vars_c():
     self.label = label
     self.chdir = chdir
     self.xml_dict = siesta_xml(chdir+'/'+self.label+'.xml')
-    self.wfsx = siesta_wfsx_c(label, chdir)
+    self.wfsx = siesta_wfsx_c(label, chdir, **kvargs)
     self.hsx = siesta_hsx_c(chdir+'/'+self.label+'.HSX', **kvargs)
     self.norbs_sc = self.wfsx.norbs if self.hsx.orb_sc2orb_uc is None else len(self.hsx.orb_sc2orb_uc)
     self.ucell = self.xml_dict["ucell"]

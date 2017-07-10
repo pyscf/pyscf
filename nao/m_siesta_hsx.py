@@ -15,10 +15,16 @@ from numpy import empty
 #
 #
 #
-def siesta_hsx_read(fname, force_type=-1): 
+def siesta_hsx_read(fname, force_gamma=None): 
 
   fname = create_string_buffer(fname.encode())
-  ft = c_int64(force_type)
+  if force_gamma is None: 
+    ft = c_int64(-1)
+  elif force_gamma: 
+    ft = c_int64(1)
+  elif not force_gamma: 
+    ft = c_int64(2)
+  
   bufsize = c_int64()
   libnao.siesta_hsx_size(fname, ft, bufsize)
   if bufsize.value<=0 : return None
@@ -30,10 +36,10 @@ def siesta_hsx_read(fname, force_type=-1):
 #
 #
 class siesta_hsx_c():
-  def __init__(self, fname='siesta.HSX', force_type=-1):
+  def __init__(self, fname='siesta.HSX', force_gamma=None):
     
     self.fname = fname
-    dat = siesta_hsx_read(fname, force_type)
+    dat = siesta_hsx_read(fname, force_gamma)
     if dat is None: raise RuntimeError('file HSX not found '+ fname)
     i = 0
     self.norbs    =  int(dat[i]); i=i+1;
