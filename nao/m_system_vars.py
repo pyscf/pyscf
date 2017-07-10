@@ -3,6 +3,7 @@ import numpy as np
 import sys
 
 from pyscf.nao.m_color import color as bc
+from pyscf.nao.m_system_vars_dos import system_vars_dos, system_vars_pdos
 from pyscf.nao.m_siesta2blanko_csr import _siesta2blanko_csr
 from pyscf.nao.m_siesta2blanko_denvec import _siesta2blanko_denvec
 from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
@@ -11,6 +12,7 @@ try:
   from pyscf.nao.m_gpaw import gpaw_reader_c
 except:
   pass # no gpaw...
+
 #
 #
 #
@@ -21,6 +23,17 @@ def get_orb2m(sv):
     for mu,j in enumerate(sv.sp_mu2j[sp]):
       for m in range(-j,j+1): orb2m[orb],orb = m,orb+1
   return orb2m
+
+#
+#
+#
+def get_orb2j(sv):
+  orb2j = np.empty(sv.norbs, dtype='int64')
+  orb = 0
+  for atom,sp in enumerate(sv.atom2sp):
+    for mu,j in enumerate(sv.sp_mu2j[sp]):
+      for m in range(-j,j+1): orb2j[orb],orb = j,orb+1
+  return orb2j
 
 #
 #
@@ -201,40 +214,33 @@ class system_vars_c():
     from pyscf.nao.m_siesta_wfsx import siesta_wfsx_c
     from pyscf.nao.m_siesta_ion_xml import siesta_ion_xml
     from pyscf.nao.m_siesta_hsx import siesta_hsx_c
+    from timeit import default_timer as timer
     """
-        Initialise system var using only the siesta files (siesta.xml in particular is needed)
+      Initialise system var using only the siesta files (siesta.xml in particular is needed)
 
-        System variables:
-        -----------------
-            label (string): calculation label
-            chdir (string): calculation directory
-            xml_dict (dict): information extracted from the xml siesta output,
-                    see m_siesta_xml
-            wfsx: class use to extract the information about wavefunctions,
-                see m_siesta_wfsx
-            hsx: class to store a sparse representation of hamiltonian and overlap
-                see m_siesta_hsx
-            norbs_sc (integer): number of orbital
-            ucell (array, float): unit cell
-            sp2ion (list): species to ions, list of the species
-                associated to the information extract from the ion
-                files, see m_siesta_ion_xml
-            ao_log: Atomic orbital on an logarithmic grid,
-                see m_ao_log
-            atom2coord (array, float): array containing the
-                coordinate of each atom.
-            natm (integer): number of atoms
-            norbs (integer): number of orbitals
-            nspin (integer): number of spin
-            nkpoints (integer): number of kpoints
-            fermi_energy (float): Fermi energy
-            atom2sp (list): atom to specie, list associating the atoms
-                to them specie number
-            atom2s: atom -> first atomic orbital in a global orbital counting
-            atom2mu_s: atom -> first multiplett (radial orbital) in a global counting of radial orbitals
-            sp2symbol (list): list soociating the species to them symbol
-            sp2charge (list): list associating the species to them charge
-            state (string): this is an internal information on the current status of the class
+      System variables:
+      -----------------
+        label (string): calculation label
+        chdir (string): calculation directory
+        xml_dict (dict): information extracted from the xml siesta output, see m_siesta_xml
+        wfsx: class use to extract the information about wavefunctions, see m_siesta_wfsx
+        hsx: class to store a sparse representation of hamiltonian and overlap, see m_siesta_hsx
+        norbs_sc (integer): number of orbital
+        ucell (array, float): unit cell
+        sp2ion (list): species to ions, list of the species associated to the information from the ion files, see m_siesta_ion_xml
+        ao_log: Atomic orbital on an logarithmic grid, see m_ao_log
+        atom2coord (array, float): array containing the coordinates of each atom.
+        natm, natoms (integer): number of atoms
+        norbs (integer): number of orbitals
+        nspin (integer): number of spin
+        nkpoints (integer): number of kpoints
+        fermi_energy (float): Fermi energy
+        atom2sp (list): atom to specie, list associating the atoms to their specie number
+        atom2s: atom -> first atomic orbital in a global orbital counting
+        atom2mu_s: atom -> first multiplett (radial orbital) in a global counting of radial orbitals
+        sp2symbol (list): list soociating the species to them symbol
+        sp2charge (list): list associating the species to them charge
+        state (string): this is an internal information on the current status of the class
     """
 
     self.label = label
@@ -246,9 +252,8 @@ class system_vars_c():
     self.ucell = self.xml_dict["ucell"]
     ##### The parameters as fields     
     self.sp2ion = []
-    for sp in self.wfsx.sp2strspecie:
-      self.sp2ion.append(siesta_ion_xml(chdir+'/'+sp+'.ion.xml'))
-    
+    for sp in self.wfsx.sp2strspecie: self.sp2ion.append(siesta_ion_xml(chdir+'/'+sp+'.ion.xml'))
+
     _siesta_ion_add_sp2(self, self.sp2ion)
     self.ao_log = ao_log_c().init_ao_log_ion(self.sp2ion)
 
@@ -262,8 +267,7 @@ class system_vars_c():
     strspecie2sp = {}
     # initialise a dictionary with species string as key
     # associated to the specie number
-    for sp,strsp in enumerate(self.wfsx.sp2strspecie):
-        strspecie2sp[strsp] = sp
+    for sp,strsp in enumerate(self.wfsx.sp2strspecie): strspecie2sp[strsp] = sp
     
     # list of atoms associated to them specie number
     self.atom2sp = np.empty((self.natm), dtype=np.int64)
@@ -280,18 +284,21 @@ class system_vars_c():
     self.atom2mu_s = np.zeros((self.natm+1), dtype=np.int64)
     for atom,sp in enumerate(self.atom2sp):
         self.atom2mu_s[atom+1]=self.atom2mu_s[atom]+self.ao_log.sp2nmult[sp]
-
-    orb2m = get_orb2m(self)
+    
+    orb2m = self.get_orb2m()
     _siesta2blanko_csr(orb2m, self.hsx.s4_csr, self.hsx.orb_sc2orb_uc)
 
     for s in range(self.nspin):
       _siesta2blanko_csr(orb2m, self.hsx.spin2h4_csr[s], self.hsx.orb_sc2orb_uc)
     
+    #t1 = timer()
     for k in range(self.nkpoints):
       for s in range(self.nspin):
         for n in range(self.norbs):
           _siesta2blanko_denvec(orb2m, self.wfsx.x[k,s,n,:,:])
+    #t2 = timer(); print(t2-t1, 'rsh wfsx'); t1 = timer()
 
+    
     self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
     self.sp2charge = self.ao_log.sp2charge
     self.state = 'should be useful for something'
@@ -347,6 +354,11 @@ class system_vars_c():
   def atom_charges(self): return np.array([self.sp2charge[sp] for sp in self.atom2sp], dtype='int64')
   def atom_coord(self, ia): return self.atom2coord[ia,:]
   def atom_coords(self): return self.atom2coord
+  # More functions for convenience (see PDoS)
+  def get_orb2j(self): return get_orb2j(self)
+  def get_orb2m(self): return get_orb2m(self)
+  def dos(self, zomegas): return system_vars_dos(self, zomegas)
+  def pdos(self, zomegas): return system_vars_pdos(self, zomegas)
 
   def overlap_coo(self, **kvargs):   # Compute something for the given system
     from pyscf.nao import comp_overlap_coo
@@ -362,13 +374,13 @@ class system_vars_c():
   def diag_check(self, atol=1e-5, rtol=1e-4, **kvargs): # Works only after init_siesta_xml(), extend ?
     return diag_check(self, atol, rtol, **kvargs)
 
-  def get_svneo(self):
-    """Packs the data into one array for a later transfer to the library """
-    svn = np.require(np.zeros(10000), dtype=np.float64, requirements='CW')
-    ptr = 0
-    svn[ptr] = self.nspecies; ptr+=1;
-    svn[ptr] = self.ao_log.nr; ptr+=1;
-    return svn
+  #def get_svneo(self):
+    #"""Packs the data into one array for a later transfer to the library """
+    #svn = np.require(np.zeros(10000), dtype=np.float64, requirements='CW')
+    #ptr = 0
+    #svn[ptr] = self.nspecies; ptr+=1;
+    #svn[ptr] = self.ao_log.nr; ptr+=1;
+    #return svn
 #
 # Example of reading pySCF orbitals.
 #
