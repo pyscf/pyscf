@@ -430,8 +430,8 @@ class UCCSD(rccsd.RCCSD):
             nocca = len(self.mo_occ[0]) - (self.frozen+1)//2
             noccb = len(self.mo_occ[1]) - self.frozen//2
         elif isinstance(self.frozen[0], (int, numpy.integer)):
-            nocca = int(self.mo_occ[0].sum()) - self.frozen[0]
-            noccb = int(self.mo_occ[1].sum()) - self.frozen[1]
+            nocca = int(self.mo_occ[0].sum()) - len(self.frozen)
+            noccb = int(self.mo_occ[1].sum()) - len(self.frozen)
         else:
             mo_occa, mo_occb = self.mo_occ
             if len(self.frozen[0]) > 0:
@@ -451,12 +451,12 @@ class UCCSD(rccsd.RCCSD):
             nmoa = self.mo_occ[0].size - (self.frozen+1)//2
             nmob = self.mo_occ[1].size - self.frozen//2
         elif isinstance(self.frozen[0], (int, numpy.integer)):
-            nmoa = self.mo_occ[0].size - self.frozen[0]
-            nmob = self.mo_occ[1].size - self.frozen[1]
+            nmoa = self.mo_occ[0].size - len(self.frozen)
+            nmob = self.mo_occ[1].size - len(self.frozen)
         else:
             nmoa = len(self.mo_occ[0]) - len(self.frozen[0])
             nmob = len(self.mo_occ[1]) - len(self.frozen[1])
-            return nmoa, nmob
+        return nmoa, nmob
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
@@ -2273,6 +2273,15 @@ def get_umoidx(cc):
             frozen[idx[0]].append(idx[1])
     else:
         frozen = cc.frozen
+        if isinstance(frozen[0], (int, numpy.integer)):
+            logger.warn(cc, 'Attribute frozen=%s is found in UCCSD method.\n'
+                        'UCCSD method requires a length-two list of lists '
+                        'for the frozen orbital indices for alpha and beta'
+                        'orbitals.\nIn this version, same frozen indices '
+                        'are used for both alpha and beta orbitals. This'
+                        'will raise an error in future pyscf release.',
+                        frozen)
+            frozen = [frozen,frozen]
     moidxa = numpy.ones(cc.mo_occ[0].size, dtype=bool)
     moidxb = numpy.ones(cc.mo_occ[1].size, dtype=bool)
     if isinstance(frozen, numpy.ndarray) or frozen:
