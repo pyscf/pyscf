@@ -19,9 +19,27 @@ mol = gto.M(
 )
 
 #
-# Add "ghost" as prefix for the ghost atom.  In this input, the basis set of the
-# unmodified atom is applied for the ghost atom.  In the following example,
-# ghost-O uses the O 6-31G basis.
+# Specify diffierent basis for different ghost atoms
+#
+mol = gto.M(atom='''
+ghost1     0.000000000     0.000000000     2.500000000
+ghost2    -0.663641000    -0.383071000     3.095377000
+ghost2     0.663588000     0.383072000     3.095377000
+O     1.000000000     0.000000000     2.500000000
+H    -1.663641000    -0.383071000     3.095377000
+H     1.663588000     0.383072000     3.095377000
+''',
+            basis={'ghost1':gto.basis.load('sto3g', 'O'),
+                   'ghost2':gto.basis.load('631g', 'H'),
+                   'O':'631g', 'H':'631g'}
+)
+
+
+#
+# Add "ghost" as prefix for the ghost atom.  In this input, the atoms prefixed
+# with ghost are ghost atoms.  Their charges are zero.  However, the basis set
+# of the unmodified atom is applied for the ghost atom.  In the following
+# example, ghost-O uses the 6-31G basis of oxygen atom.
 #
 mol = gto.M(atom='''
 ghost-O     0.000000000     0.000000000     2.500000000
