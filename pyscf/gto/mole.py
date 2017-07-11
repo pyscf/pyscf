@@ -2494,11 +2494,13 @@ def _rm_digit(symb):
         return ''.join([i for i in symb if i.isalpha()])
 
 def _remove_prefix_ghost(symb):
-    assert(symb.upper().startswith('GHOST'))
-    for i, x in enumerate(symb[5:]):
-        if x.isalpha():
-            break
-    return symb[5+i:]
+    if len(symb) < 6:
+        return symb
+    else:
+        for i, x in enumerate(symb[5:]):
+            if x.isalpha():
+                break
+        return symb[5+i:]
 
 def _charge(symb_or_chg):
     if isinstance(symb_or_chg, (str, unicode)):
@@ -2535,8 +2537,7 @@ def _atom_symbol(symb_or_chg):
             symb = param.ELEMENTS[int(a)][0]
         else:
             rawsymb = _rm_digit(a)
-            if len(rawsymb) > 5 and rawsymb.upper().startswith('GHOST'):
-                rawsymb = _remove_prefix_ghost(rawsymb)
+            rawsymb = _remove_prefix_ghost(rawsymb)
             stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
             symb = a.replace(rawsymb, stdsymb)
     return symb
