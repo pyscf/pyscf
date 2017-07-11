@@ -19,12 +19,16 @@ def _siesta2blanko_denvec(orb2m, vec, orb_sc2orb_uc=None):
     vec[:,0] = vec[:,0]*orb2ph[:]
 
   elif(nreim==2):
-    
-    v = np.zeros(n, dtype=np.complex128)
-    for i,reim in enumerate(vec): v[i] = reim[0]+1j*reim[1]
-    v = v * orb2ph
-    vec[:,0] = v.real
-    vec[:,1] = v.imag
+
+    #print(vec[0:3,:], ' vec')
+    cvec = vec.view(dtype=np.complex64)
+    #print(cvec[0:3], 'cvec', cvec.shape) # I expected cvec.shape = (n), but got (n,1)...
+    cvec[:,0] = cvec[:,0] * orb2ph
+    #print(cvec[0:3], ' cvec2')
+    vec = cvec.view(dtype=np.float32)
+    #print(vec[0:3], ' vec2')
+
+    #raise RuntimeError('debug')
 
   else:
     raise SystemError('!nreim')
