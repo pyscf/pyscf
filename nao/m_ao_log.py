@@ -177,22 +177,36 @@ class ao_log_c(log_mesh_c):
     self.init_log_mesh_gpaw(setups, **kvargs)
     self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
     sdic = setups.setups
+    self.sp2key = sdic.keys()
+    #key0 = sdic.keys()[0]
+    #print(key0, sdic[key0].Z, dir(sdic[key0]))
     self.sp_mu2j = [np.array(sdic[key].l_orb_j, np.int64) for key in sdic.keys()]
     self.sp2nmult = np.array([len(mu2j) for mu2j in self.sp_mu2j], dtype=np.int64)
+    self.sp2charge = np.array([sdic[key].Z for key in sdic.keys()], dtype=np.int64)
     self.nspecies = len(self.sp_mu2j)
     self.jmx = max([max(mu2j) for mu2j in self.sp_mu2j])
     self.sp2norbs = np.array([sum(2*mu2j+1) for mu2j in self.sp_mu2j], dtype=np.int64)
     self.sp_mu2rcut = []
+    self.psi_log_rl = []
     self.psi_log = []
-    for sp,[key,nmu] in enumerate(zip(sdic.keys(), self.sp2nmult)):
+    for sp,[key,nmu,mu2j] in enumerate(zip(sdic.keys(), self.sp2nmult, self.sp_mu2j)):
       self.sp_mu2rcut.append(np.array([phit.get_cutoff() for phit in sdic[key].phit_j]))
-
       mu2ff = np.zeros([nmu, self.nr])
-      #print(dir(sdic[key]))
       for mu,phit in enumerate(sdic[key].phit_j):
         for ir, r in enumerate(self.rr): mu2ff[mu,ir],deriv = phit.get_value_and_derivative(r)
-        self.psi_log.append(mu2ff)
-        #print(mu, phit.get_value_and_derivative(0.0004), dir(phit))
+        self.psi_log_rl.append(mu2ff)
+        self.psi_log.append(mu2ff* (self.rr**mu2j[mu]))
+    
+    self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut], dtype='float64') # derived from sp_mu2rcut
+
+    self.sp_mu2s = []  # derived from sp_mu2j
+    for mu2j in self.sp_mu2j:
+      mu2s = np.zeros(len(mu2j)+1, dtype=np.int64)
+      for mu,j in enumerate(mu2j): mu2s[mu+1] = mu2s[mu]+2*j+1
+      self.sp_mu2s.append(mu2s)
+
+    #self._add_sp2info()
+    #self._add_psi_log_mom()
     
     #print(self.sp_mu2j)
     #print(self.sp2nmult)
@@ -201,7 +215,10 @@ class ao_log_c(log_mesh_c):
     #print(self.sp2norbs)
     #print(self.sp_mu2rcut)
     #print(self.psi_log)
-    
+    #print(self.sp2charge)
+    #print(self.sp2rcut)
+    #print(self.sp_mu2s)
+
     return self
 
   #

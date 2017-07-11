@@ -24,13 +24,13 @@ except:
 
 class KnowValues(unittest.TestCase):
 
-  def test_ao_log_after_gpaw(self):
+  def test_sv_after_gpaw(self):
     """ init ao_log_c with it radial orbitals from GPAW """
-    from pyscf.nao import ao_log_c
+    from pyscf.nao import system_vars_c
     if calc is None: return
     self.assertTrue(hasattr(calc, 'setups'))
-    aos = ao_log_c().init_ao_log_gpaw(calc.setups)
-    self.assertEqual(aos.nr, 1024)
+    sv = system_vars_c().init_gpaw(calc)
+    self.assertEqual(sv.ao_log.nr, 1024)
 
     #print(aos.nr)
     #print(aos.rr[0])

@@ -8,10 +8,6 @@ from pyscf.nao.m_siesta2blanko_csr import _siesta2blanko_csr
 from pyscf.nao.m_siesta2blanko_denvec import _siesta2blanko_denvec
 from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
 from pyscf.nao.m_ao_log import ao_log_c
-try:
-  from pyscf.nao.m_gpaw import gpaw_reader_c
-except:
-  pass # no gpaw...
 
 #
 #
@@ -274,7 +270,6 @@ class system_vars_c():
     for o,atom in enumerate(self.wfsx.orb2atm):
       self.atom2sp[atom-1] = strspecie2sp[self.wfsx.orb2strspecie[o]]
 
-    # ?? atom2s ??
     self.atom2s = np.zeros((self.natm+1), dtype=np.int64)
     for atom,sp in enumerate(self.atom2sp):
         self.atom2s[atom+1]=self.atom2s[atom]+self.ao_log.sp2norbs[sp]
@@ -304,50 +299,11 @@ class system_vars_c():
     self.state = 'should be useful for something'
     return self
 
-  def init_gpaw(self, gpaw, label="gpaw", **kvargs):
-    """
-      Initialise system variables with gpaw inputs:
-
-      Input parameters:
-      -----------------
-        gpaw: file name of the gpaw input
-        kvargs: optional arguments, need a list of precise arguments somewhere!!
-    """
-    from pyscf.lib import logger
-
-    self.label = label
-    self.verbose = logger.NOTE
-    self.wfsx = gpaw_reader_c(gpaw)
-
-    ##### The parameters as fields
-    self.natom = self.wfsx.atoms.get_atomic_numbers().shape[0]
-    self.sp2symbol = []
-    self.sp2charge = []
-
-    for sp, ch in zip(self.wfsx.atoms.get_chemical_symbols(), self.wfsx.atoms.get_atomic_numbers()):
-      if sp not in self.sp2symbol:
-        self.sp2symbol.append(sp)
-        self.sp2charge.append(ch)
-
-    self.nspecies = len(self.sp2symbol)
-    self.atom2sp = np.empty((self.natom), dtype='int64')
-
-    for i, sp in enumerate(self.wfsx.atoms.get_chemical_symbols()):
-      j = 0
-      while sp != self.sp2symbol[j]:
-        j += 1
-      self.atom2sp[i] = j
-
-    self.atom2coord = self.wfsx.atoms.get_positions()
-    self.norbs = self.wfsx.norbs
-
-    print(self.sp2symbol, self.sp2charge)
-    print(self.atom2sp)
-    print(self.atom2coord.shape)
-
-    #self.ao_log = ao_log_c().init_ao_log_gto_suggest_mesh(self, **kvargs)
-    raise ValueError("Not yet implemented!!")
-
+  def init_gpaw(self, calc, label="gpaw", chdir='.', **kvargs):
+    from pyscf.nao.m_system_vars_gpaw import system_vars_gpaw
+    return system_vars_gpaw(self, calc, label="gpaw", chdir='.', **kvargs)
+    
+    
   # More functions for similarity with Mole
   def atom_symbol(self, ia): return self.sp2symbol[self.atom2sp[ia]]
   def atom_charge(self, ia): return self.sp2charge[self.atom2sp[ia]]
