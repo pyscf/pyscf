@@ -4,7 +4,7 @@ from distutils.core import setup
 import subprocess
 import os
 
-def compile_C_code():
+def compile_C_code(verbose=0):
     """
     Compile automaticaly the C and Fortran code
     when installing the program with python setup.py
@@ -15,9 +15,10 @@ def compile_C_code():
     os.chdir("lib/build")
 
     ret = subprocess.call("cmake ..", shell = True)
+    comp = "make VERBOSE={0}".format(verbose)
     if ret != 0:
         raise ValueError("cmake returned error {0}".format(ret))
-    ret = subprocess.call("make", shell = True)
+    ret = subprocess.call(comp, shell = True)
     if ret != 0:
         raise ValueError("make returned error {0}".format(ret))
 
