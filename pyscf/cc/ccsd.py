@@ -697,7 +697,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             outbuf[:] = 0
             ao_loc = mol.ao_loc_nr()
             max_memory = max(0, self.max_memory - lib.current_memory()[0])
-            dmax = max(4, int(numpy.sqrt(max_memory*.95e6/8/nao**2/2)))
+            dmax = max(4, numpy.sqrt(max_memory*.95e6/8/nao**2/2))
             sh_ranges = ao2mo.outcore.balance_partition(ao_loc, dmax)
             dmax = max(x[2] for x in sh_ranges)
             eribuf = numpy.empty((dmax,dmax,nao,nao))
