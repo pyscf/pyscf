@@ -14,22 +14,23 @@ def system_vars_gpaw(self, calc, label="gpaw", chdir='.', **kvargs):
   from pyscf.data import chemical_symbols
   from pyscf.nao.m_gpaw_wfsx import gpaw_wfsx_c
   from pyscf.nao.m_ao_log import ao_log_c
+  import ase.units as units
 
   self.label = label
   self.chdir = '.'
   self.verbose = logger.NOTE
   
-  ang2bohr = 1.889725989
   self.ao_log = ao_log_c().init_ao_log_gpaw(calc.setups)
-  self.atom2coord = calc.get_atoms().get_positions()*ang2bohr
+  self.atom2coord = calc.get_atoms().get_positions()/units.Bohr
   self.natm = self.natoms = len(self.atom2coord)
   
   self.atom2sp = np.array([self.ao_log.sp2key.index(key) for key in calc.setups.id_a], dtype=np.int64)
-  self.ucell = None #calc.ucell
+  self.ucell = calc.atoms.get_cell()/units.Bohr
   self.norbs = calc.setups.nao
+  self.norbs_sc = self.norbs
   self.nspin = calc.get_number_of_spins()
   self.nkpoints  = 1
-  self.fermi_energy = calc.get_fermi_level()/27.2114
+  self.fermi_energy = calc.get_fermi_level()/units.Ha
   self.atom2s = np.zeros((self.natm+1), dtype=np.int64)
   for atom,sp in enumerate(self.atom2sp):
     self.atom2s[atom+1]=self.atom2s[atom]+self.ao_log.sp2norbs[sp]

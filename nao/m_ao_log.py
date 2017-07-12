@@ -173,7 +173,14 @@ class ao_log_c(log_mesh_c):
     """ Reads radial orbitals from a previous GPAW calculation. """
     from pyscf.nao.m_log_interp import log_interp_c
     from pyscf.nao.m_siesta_ion_interp import siesta_ion_interp
-    self.setups = setups
+
+    #self.setups = setups if setup is saved in ao_log, we grt the following error
+    #                           while performing copy
+    #    File "/home/marc/anaconda2/lib/python2.7/copy.py", line 182, in deepcopy
+    #    rv = reductor(2)
+    #    TypeError: can't pickle Spline objects
+
+
     self.init_log_mesh_gpaw(setups, **kvargs)
     self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
     sdic = setups.setups
@@ -189,13 +196,17 @@ class ao_log_c(log_mesh_c):
     self.sp_mu2rcut = []
     self.psi_log_rl = []
     self.psi_log = []
+
+
     for sp,[key,nmu,mu2j] in enumerate(zip(sdic.keys(), self.sp2nmult, self.sp_mu2j)):
       self.sp_mu2rcut.append(np.array([phit.get_cutoff() for phit in sdic[key].phit_j]))
       mu2ff = np.zeros([nmu, self.nr])
       for mu,phit in enumerate(sdic[key].phit_j):
-        for ir, r in enumerate(self.rr): mu2ff[mu,ir],deriv = phit.get_value_and_derivative(r)
-        self.psi_log_rl.append(mu2ff)
-        self.psi_log.append(mu2ff* (self.rr**mu2j[mu]))
+        for ir, r in enumerate(self.rr):
+            mu2ff[mu,ir],deriv = phit.get_value_and_derivative(r)
+
+      self.psi_log_rl.append(mu2ff)
+      self.psi_log.append(mu2ff* (self.rr**mu2j[mu]))
     
     self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut], dtype='float64') # derived from sp_mu2rcut
 

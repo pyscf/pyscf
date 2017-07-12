@@ -26,11 +26,12 @@ class KnowValues(unittest.TestCase):
 
   def test_sv_after_gpaw(self):
     """ init ao_log_c with it radial orbitals from GPAW """
-    from pyscf.nao import system_vars_c
+    from pyscf.nao import system_vars_c, prod_basis_c
     if calc is None: return
     self.assertTrue(hasattr(calc, 'setups'))
     sv = system_vars_c().init_gpaw(calc)
     self.assertEqual(sv.ao_log.nr, 1024)
+    pb = prod_basis_c().init_pb_pp_libnao_apair(sv)
 
     #print(aos.nr)
     #print(aos.rr[0])

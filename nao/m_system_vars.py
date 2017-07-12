@@ -300,6 +300,47 @@ class system_vars_c():
     return self
 
   def init_gpaw(self, calc, label="gpaw", chdir='.', **kvargs):
+    """
+        use the data from a GPAW LCAO calculations as input to
+        initialize system variables.
+
+        Input parameters:
+        -----------------
+            calc: GPAW calculator
+            label (optional, string): label used for the calculations
+            chdir (optional, string): path to the directory in which are stored the
+                data from gpaw
+            kvargs (optional, dict): dictionary of optional arguments
+                We may need a list of optional arguments!
+
+        Example:
+        --------
+            from ase import Atoms
+            from gpaw import GPAW
+            fname = os.path.dirname(os.path.abspath(__file__))+'/h2o.gpw'
+            if os.path.isfile(fname):
+                # Import data from a previous gpaw calculations
+                calc = GPAW(fname, txt=None) # read previous calculation if the file exists
+            else:
+                # Run first gpaw to initialize the calculator
+                from gpaw import PoissonSolver
+                atoms = Atoms('H2O', positions=[[0.0,-0.757,0.587], [0.0,+0.757,0.587], [0.0,0.0,0.0]])
+                atoms.center(vacuum=3.5)
+                convergence = {'density': 1e-7}     # Increase accuracy of density for ground state
+                poissonsolver = PoissonSolver(eps=1e-14, remove_moment=1 + 3)     # Increase accuracy of Poisson Solver and apply multipole corrections up to l=1
+                calc = GPAW(basis='dzp', xc='LDA', h=0.3, nbands=23, convergence=convergence, poissonsolver=poissonsolver, mode='lcao', txt=None)     # nbands must be equal to norbs (in this case 23)
+                atoms.set_calculator(calc)
+                atoms.get_potential_energy()    # Do SCF the ground state
+                calc.write(fname, mode='all') # write DFT output
+
+            from pyscf.nao import system_vars_c
+            sv = system_vars_c().init_gpaw(calc)
+    """
+    try:
+        import ase
+        import gpaw
+    except:
+        raise ValueError("ASE and GPAW must be installed for using system_vars_gpaw")
     from pyscf.nao.m_system_vars_gpaw import system_vars_gpaw
     return system_vars_gpaw(self, calc, label="gpaw", chdir='.', **kvargs)
     
