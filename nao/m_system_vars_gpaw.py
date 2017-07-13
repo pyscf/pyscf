@@ -13,6 +13,7 @@ def system_vars_gpaw(self, calc, label="gpaw", chdir='.', **kvargs):
   from pyscf.lib import logger
   from pyscf.data import chemical_symbols
   from pyscf.nao.m_gpaw_wfsx import gpaw_wfsx_c
+  from pyscf.nao.m_gpaw_hsx import gpaw_hsx_c
   from pyscf.nao.m_ao_log import ao_log_c
   import ase.units as units
 
@@ -30,7 +31,7 @@ def system_vars_gpaw(self, calc, label="gpaw", chdir='.', **kvargs):
   self.norbs_sc = self.norbs
   self.nspin = calc.get_number_of_spins()
   self.nkpoints  = 1
-  self.fermi_energy = calc.get_fermi_level()/units.Ha
+  self.fermi_energy = float(calc.get_fermi_level()/units.Ha) # ensure that fermi_energy is float type
   self.atom2s = np.zeros((self.natm+1), dtype=np.int64)
 
   for atom, sp in enumerate(self.atom2sp):
@@ -43,6 +44,8 @@ def system_vars_gpaw(self, calc, label="gpaw", chdir='.', **kvargs):
   self.sp2symbol = [chemical_symbols[Z] for Z in self.ao_log.sp2charge]
   self.sp2charge = self.ao_log.sp2charge
   self.wfsx = gpaw_wfsx_c(calc)
+
+  self.hsx = gpaw_hsx_c(self, calc)
 
   #print(self.atom2coord)
   #print(self.natoms)
