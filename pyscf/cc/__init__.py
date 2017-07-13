@@ -53,6 +53,11 @@ from pyscf.cc import addons
 
 def CCSD(mf, frozen=[], mo_coeff=None, mo_occ=None):
     __doc__ = ccsd.CCSD.__doc__
+    from pyscf import scf
+
+    if isinstance(mf, scf.uhf.UHF):
+        return UCCSD(mf, frozen, mo_coeff, mo_occ)
+
     try:
         import sys
         from pyscf import dft
