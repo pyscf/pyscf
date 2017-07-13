@@ -3,8 +3,7 @@ import os,unittest,numpy as np
 
 class KnowValues(unittest.TestCase):
 
-  def test_read_siesta_bulk_spin(self):
-    """ Test reading of bulk, spin-resolved SIESTA calculation  """
+  def test_dft_gto(self):
     #!/usr/bin/env python
     #
     # Author: Qiming Sun <osirpt.sun@gmail.com>
@@ -16,6 +15,8 @@ class KnowValues(unittest.TestCase):
     '''
     
     mol = gto.Mole().build( atom = 'H 0 0 0; F 0 0 1.1', basis = '631g', verbose = 0)    
+    print(mol._atom)
+    print(mol.nao_nr())
     mydft = dft.RKS(mol)
     mydft.xc = 'lda,vwn'  #; mydft.xc = 'b3lyp'
     mydft.kernel()

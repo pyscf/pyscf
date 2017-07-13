@@ -297,6 +297,18 @@ class system_vars_c():
     self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
     self.sp2charge = self.ao_log.sp2charge
     self.state = 'should be useful for something'
+
+    # Trying to be similar to mole object from pySCF 
+    self.nelectron = self.hsx.nelec
+    self.spin = self.nspin
+    self.verbose = 1 
+    self.stdout = sys.stdout
+    self.symmetry = False
+    self.symmetry_subgroup = None
+    self._built = True 
+    self.max_memory = 20000
+    self.incore_anyway = False
+    self._atom = [(self.sp2symbol[sp], list(self.atom2coord[ia,:])) for ia,sp in enumerate(self.atom2sp)]
     return self
 
   def init_gpaw(self, calc, label="gpaw", chdir='.', **kvargs):
@@ -351,6 +363,16 @@ class system_vars_c():
   def atom_charges(self): return np.array([self.sp2charge[sp] for sp in self.atom2sp], dtype='int64')
   def atom_coord(self, ia): return self.atom2coord[ia,:]
   def atom_coords(self): return self.atom2coord
+  def nao_nr(self): return self.norbs
+  def atom_nelec_core(self, ia): return self.sp2charge[self.atom2sp[ia]]-self.ao_log.sp2valence[self.atom2sp[ia]]
+  def intor_symmetric(self, type_str):
+    """ Uff ... """
+    if type_str.lower()=='cint1e_ovlp_sph':
+      mat = self.overlap_coo().todense()
+    else:
+      raise RuntimeError('not implemented...')
+    return mat
+
   # More functions for convenience (see PDoS)
   def get_orb2j(self): return get_orb2j(self)
   def get_orb2m(self): return get_orb2m(self)
