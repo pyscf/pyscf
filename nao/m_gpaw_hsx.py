@@ -35,14 +35,14 @@ class gpaw_hsx_c():
    # self.nelec    =  dat[i]; i=i+1;
    # self.telec    =  dat[i]; i=i+1;
    #
-   # self.h4 = np.reshape(dat[i:i+self.nnz*self.nspin], (self.nspin,self.nnz)); i=i+self.nnz*self.n…
+   # self.h4 = np.reshape(dat[i:i+self.nnz*self.nspin], (self.nspin,self.nnz)); i=i+self.nnz*self.n
    # self.s4 = dat[i:i+self.nnz]; i = i + self.nnz;
    # self.x4 = np.reshape(dat[i:i+self.nnz*3], (self.nnz,3)); i = i + self.nnz*3;
    # self.row_ptr = np.array(dat[i:i+self.norbs+1]-1, dtype='int'); i = i + self.norbs+1;
    # self.col_ind = np.array(dat[i:i+self.nnz]-1, dtype='int'); i = i + self.nnz;
    # self.spin2h4_csr = []
    # for s in range(self.nspin):
-   #     self.spin2h4_csr.append(csr_matrix((self.h4[s,:], self.col_ind, self.row_ptr), dtype=np.floa…
+   #     self.spin2h4_csr.append(csr_matrix((self.h4[s,:], self.col_ind, self.row_ptr), dtype=np.floa
    # self.s4_csr = csr_matrix((self.s4, self.col_ind, self.row_ptr), dtype=np.float32)
    #
     #self.orb_sc2orb_uc=None

@@ -37,8 +37,7 @@ class KnowValues(unittest.TestCase):
     sv = system_vars_c().init_gpaw(calc)
     self.assertEqual(sv.ao_log.nr, 1024)
     over = sv.overlap_coo().toarray()
-
-    error = sv.wfsx.check_overlaps(over)
+    error = sv.hsx.check_overlaps(over)
     self.assertLess(error, 1e-4)
     #print("overlap error: ", error/over.size)
 
