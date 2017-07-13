@@ -43,7 +43,8 @@ def ao_log_hartree_lap_libnao(ao):
       ff_pot.ctypes.data_as(POINTER(c_double)))
       
     ao_pot.psi_log[sp] = ff_pot  
-    for mu,am in enumerate(ao.sp_mu2j[sp]): ao_pot.psi_log_rl[sp][mu,:] = ao_pot.psi_log[sp][mu,:]/(ao.rr**am)
+    for mu,am in enumerate(ao.sp_mu2j[sp]):
+        ao_pot.psi_log_rl[sp][mu,:] = ao_pot.psi_log[sp][mu,:]/(ao.rr**am)
 
   for sp in range(ao.nspecies): ao_pot.sp_mu2rcut[sp].fill(ao.rr[-1])
   ao_pot.sp2rcut.fill(ao.rr[-1])

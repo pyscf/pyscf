@@ -32,12 +32,13 @@ def system_vars_gpaw(self, calc, label="gpaw", chdir='.', **kvargs):
   self.nkpoints  = 1
   self.fermi_energy = calc.get_fermi_level()/units.Ha
   self.atom2s = np.zeros((self.natm+1), dtype=np.int64)
-  for atom,sp in enumerate(self.atom2sp):
-    self.atom2s[atom+1]=self.atom2s[atom]+self.ao_log.sp2norbs[sp]
+
+  for atom, sp in enumerate(self.atom2sp):
+    self.atom2s[atom+1] = self.atom2s[atom] + self.ao_log.sp2norbs[sp]
 
   self.atom2mu_s = np.zeros((self.natm+1), dtype=np.int64)
-  for atom,sp in enumerate(self.atom2sp):
-    self.atom2mu_s[atom+1]=self.atom2mu_s[atom]+self.ao_log.sp2nmult[sp]
+  for atom, sp in enumerate(self.atom2sp):
+    self.atom2mu_s[atom+1] = self.atom2mu_s[atom] + self.ao_log.sp2nmult[sp]
 
   self.sp2symbol = [chemical_symbols[Z] for Z in self.ao_log.sp2charge]
   self.sp2charge = self.ao_log.sp2charge
