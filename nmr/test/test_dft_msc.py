@@ -52,7 +52,7 @@ class KnowValues(unittest.TestCase):
         mf.scf()
         m = nmr.RKS(mf)
         msc = m.kernel()
-        self.assertAlmostEqual(finger(msc), 58.250312294198054, 5)
+        self.assertAlmostEqual(finger(msc), 58.642932758748856, 5)
 
     def test_nr_b3lyp_giao(self):
         mf = dft.RKS(mol)
@@ -62,11 +62,11 @@ class KnowValues(unittest.TestCase):
         mf.scf()
         m = nmr.RKS(mf)
         msc = m.kernel()
-        self.assertAlmostEqual(finger(msc), 54.526977509331694, 5)
+        self.assertAlmostEqual(finger(msc), 55.069383506691494, 5)
 
 
 
 if __name__ == "__main__":
     print("Full Tests of RHF-MSC DHF-MSC for HF")
     unittest.main()
-    import sys; sys.exit()
+

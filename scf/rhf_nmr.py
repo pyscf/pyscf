@@ -43,8 +43,7 @@ def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
         h11[4] += trh11
         h11[8] += trh11
         if gauge_orig is None:
-            g11 = mol.intor('cint1e_a01gp_sph', 9)
-            h11 = h11 + g11[TENSOR_TRANSPOSE] # (mu,B) => (B,mu)
+            h11 += mol.intor('cint1e_a01gp_sph', 9)
         a11 = [numpy.einsum('ij,ji', dm0, (x+x.T)*.5) for x in h11]
         msc_dia.append(a11)
         #     XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ = 1..9
