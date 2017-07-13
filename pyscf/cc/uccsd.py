@@ -1669,7 +1669,7 @@ class UCCSD(rccsd.RCCSD):
             sizeab = nocca * noccb * nvira * nvirb
             t1a, t2aa = self.vector_to_amplitudes_ee(vector[:sizea], nocca, nvira)
             t1b, t2bb = self.vector_to_amplitudes_ee(vector[sizea:sizea+sizeb], noccb, nvirb)
-            t2ab = vector[-sizeab:].copy().reshape(nocca,noccb,nvira,nvirb)
+            t2ab = vector[size-sizeab:].copy().reshape(nocca,noccb,nvira,nvirb)
             return (t1a,t1b), (t2aa,t2ab,t2bb)
 
     def amplitudes_from_rccsd(self, t1, t2):
@@ -2056,8 +2056,8 @@ class _ERIS:
             cc.orbspin = self.orbspin
 
         self.feri = lib.H5TmpFile()
-        if 0 and hasattr(cc._scf, 'with_df') and cc._scf.with_df:
-            pass
+        if hasattr(cc._scf, 'with_df') and cc._scf.with_df:
+            raise NotImplementedError
         elif (method == 'incore' and cc._scf._eri is not None and
             (mem_incore+mem_now < cc.max_memory) or cc.mol.incore_anyway):
             moa = so_coeff[:,idxa]
