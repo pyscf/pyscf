@@ -15,8 +15,8 @@ class KnowValues(unittest.TestCase):
     '''
     
     mol = gto.Mole().build( atom = 'H 0 0 0; F 0 0 1.1', basis = '631g', verbose = 0)    
-    print(mol._atom)
-    print(mol.nao_nr())
+    #print(mol._atom)
+    #print(mol.nao_nr())
     mydft = dft.RKS(mol)
     mydft.xc = 'lda,vwn'  #; mydft.xc = 'b3lyp'
     mydft.kernel()
