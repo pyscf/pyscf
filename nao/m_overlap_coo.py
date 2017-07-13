@@ -1,7 +1,7 @@
 from __future__ import print_function, division
 from pyscf.nao.m_overlap_ni import overlap_ni
 
-def comp_overlap_coo(sv, ao_log=None, funct=overlap_ni,**kvargs):
+def overlap_coo(sv, ao_log=None, funct=overlap_ni,**kvargs):
     """
     Computes the overlap matrix and returns it in coo format (simplest sparse format to construct)
     Args:
@@ -24,7 +24,7 @@ def comp_overlap_coo(sv, ao_log=None, funct=overlap_ni,**kvargs):
       for sp2,rv2 in zip(sv.atom2sp,sv.atom2coord):
         if (rc1+sp2rcut[sp2])**2>((rv1-rv2)**2).sum() : nnz = nnz + n1*me.ao1.sp2norbs[sp2]
 
-    irow,icol,data = zeros(nnz, dtype=int64),zeros(nnz, dtype=int64),zeros(nnz, dtype=float64) # Start to construct coo matrix
+    irow,icol,data = zeros(nnz, dtype=int64),zeros(nnz, dtype=int64),zeros(nnz) # Start to construct coo matrix
 
     inz=-1
     for atom1,[sp1,rv1,s1,f1] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):

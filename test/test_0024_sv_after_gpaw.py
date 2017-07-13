@@ -30,8 +30,7 @@ class KnowValues(unittest.TestCase):
 
   def test_sv_after_gpaw(self):
     """ init ao_log_c with it radial orbitals from GPAW """
-    from pyscf.nao import system_vars_c, prod_basis_c
-    from pyscf.nao import coulomb_am, comp_overlap_coo
+    from pyscf.nao import system_vars_c
 
     if calc is None: return
 

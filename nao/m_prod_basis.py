@@ -53,11 +53,10 @@ class prod_basis_c():
         of the dominant product vertices and the conversion coefficients by calling 
         subroutines from the library libnao.
     """
-    from pyscf.nao import coulomb_am, comp_overlap_coo, get_atom2bas_s, conv_yzx2xyz_c, prod_log_c, ls_part_centers, comp_coulomb_den
-    from scipy.sparse import csr_matrix
+    from pyscf.nao import prod_log_c
     from pyscf.nao.m_libnao import libnao
+    from scipy.sparse import csr_matrix
     from ctypes import POINTER, c_double, c_int64
-    from numpy import zeros, concatenate as conc
               
     self.sv = sv
     self.tol_loc,self.tol_biloc,self.ac_rcut_ratio,self.ac_npc_max = tol_loc, tol_biloc, ac_rcut_ratio, ac_npc_max

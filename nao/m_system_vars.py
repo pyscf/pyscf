@@ -380,8 +380,8 @@ class system_vars_c():
   def pdos(self, zomegas): return system_vars_pdos(self, zomegas)
 
   def overlap_coo(self, **kvargs):   # Compute something for the given system
-    from pyscf.nao import comp_overlap_coo
-    return comp_overlap_coo(self, **kvargs)
+    from pyscf.nao import overlap_coo
+    return overlap_coo(self, **kvargs)
 
   def dipole_coo(self, **kvargs):   # Compute something for the given system
     from pyscf.nao.m_dipole_coo import dipole_coo
