@@ -29,12 +29,12 @@ class KnowValues(unittest.TestCase):
     """ Do GPAW LCAO calculation, then init system_vars_c with it """
     if skip_test: return
 
-    print(dir(calc.atoms))
-    print(dir(calc))
-    print(dir(calc.hamiltonian))
+    #print(dir(calc.atoms))
+    #print(dir(calc))
+    #print(dir(calc.hamiltonian))
 #    for aname in dir(calc.hamiltonian):
 #      print(aname, getattr(calc.hamiltonian, aname))
-    print(calc.setups.id_a) # this is atom->specie !
+    #print(calc.setups.id_a) # this is atom->specie !
     #print(dir(calc.setups))
     #print(calc.setups.nao)
     #print(dir(calc.setups.setups[(1, 'paw', u'dzp')])) 
