@@ -4,7 +4,7 @@ from pyscf.nao import system_vars_c, prod_basis_c, tddft_iter_c
 from numpy import allclose, float32, einsum
 
 dname = os.path.dirname(os.path.abspath(__file__))
-sv = system_vars_c().init_siesta_xml(label='water', chdir=dname)
+sv = system_vars_c().init_siesta_xml(label='water', cd=dname)
 pb = prod_basis_c().init_pb_pp_libnao_apair(sv)
 pb.init_prod_basis_pp()
 

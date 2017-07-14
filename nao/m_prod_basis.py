@@ -63,9 +63,10 @@ class prod_basis_c():
     self.prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc) # local basis (for each specie)
     self.c2s = zeros((sv.natm+1), dtype=int64) # global product Center (atom) -> start in case of atom-centered basis
     for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] #
-    self.sv_pbloc_data = self.chain_data_pb_pp_apair()
+    self.sv_pbloc_data = True
+    data = self.chain_data_pb_pp_apair()
     libnao.sv_prod_log.argtypes = (POINTER(c_double), POINTER(c_int64))
-    libnao.sv_prod_log(self.sv_pbloc_data.ctypes.data_as(POINTER(c_double)), c_int64(len(self.sv_pbloc_data)))
+    libnao.sv_prod_log(data.ctypes.data_as(POINTER(c_double)), c_int64(len(data)))
     return self
   
   def chain_data_pb_pp_apair(self):

@@ -41,7 +41,7 @@ class KnowValues(unittest.TestCase):
     self.assertTrue(sv.atom2s is None)
 
   def test_ase_atoms(self):
-    """ To be written: init with ASE onject """
+    """ To be written: init with ASE object """
     #sv = system_vars_c().init_ase_atoms()
     self.assertTrue(True)
     

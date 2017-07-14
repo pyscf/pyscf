@@ -4,7 +4,6 @@ module m_sv_prod_log
   use m_precision, only : blas_int
   use m_die, only : die
   use m_warn, only : warn
-  use m_system_vars, only : system_vars_t
   use m_prod_basis_param, only : prod_basis_param_t
   use m_orb_rspace_type, only : orb_rspace_aux_t
   use m_parallel, only : para_t
@@ -21,7 +20,6 @@ module m_sv_prod_log
   private warn
   !private get_cdatetime
   
-  type(system_vars_t) :: sv
   type(prod_basis_t) :: pb
   type(para_t) :: para
   type(orb_rspace_aux_t) :: orb_a
@@ -46,10 +44,11 @@ module m_sv_prod_log
 subroutine sv_prod_log(dinp,ninp) bind(c, name='sv_prod_log')
 
   use m_fact, only : init_fact
+  use m_sv_libnao, only : sv  
   use m_sv_prod_log_get, only : sv_prod_log_get
+  use m_system_vars, only : get_nr, get_jmx, get_norbs_max, get_natoms, get_sp2rcut
   use m_biloc_aux, only : init_biloc_aux
   use m_orb_rspace_type, only : init_orb_rspace_aux
-  use m_system_vars, only : get_nr, get_jmx, get_norbs_max, get_natoms, get_sp2rcut
   use m_prod_basis_param, only : get_jcutoff
   use m_parallel, only : init_parallel  
   use m_dp_aux, only: preinit_dp_aux, deallocate_dp_aux

@@ -4,13 +4,11 @@ import numpy as np
 #
 #
 #
-def density_cart(crds):
+def dens_libnao(crds):
   """
     Compute the values of atomic orbitals on given grid points
     Args:
-      sv     : instance of system_vars_c class
       crds   : vector where the atomic orbitals from "ao" are centered
-      sab2dm : density matrix
     Returns:
       res[ncoord] : array of density
   """

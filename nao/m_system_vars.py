@@ -204,7 +204,7 @@ class system_vars_c():
   #
   #
   #
-  def init_siesta_xml(self, label='siesta', chdir='.', **kvargs):
+  def init_siesta_xml(self, label='siesta', cd='.', **kvargs):
     from pyscf.nao.m_siesta_xml import siesta_xml
     from pyscf.nao.m_siesta_wfsx import siesta_wfsx_c
     from pyscf.nao.m_siesta_ion_xml import siesta_ion_xml
@@ -239,15 +239,15 @@ class system_vars_c():
     """
 
     self.label = label
-    self.chdir = chdir
-    self.xml_dict = siesta_xml(chdir+'/'+self.label+'.xml')
-    self.wfsx = siesta_wfsx_c(label, chdir, **kvargs)
-    self.hsx = siesta_hsx_c(chdir+'/'+self.label+'.HSX', **kvargs)
+    self.cd = cd
+    self.xml_dict = siesta_xml(cd+'/'+self.label+'.xml')
+    self.wfsx = siesta_wfsx_c(label, cd, **kvargs)
+    self.hsx = siesta_hsx_c(cd+'/'+self.label+'.HSX', **kvargs)
     self.norbs_sc = self.wfsx.norbs if self.hsx.orb_sc2orb_uc is None else len(self.hsx.orb_sc2orb_uc)
     self.ucell = self.xml_dict["ucell"]
     ##### The parameters as fields     
     self.sp2ion = []
-    for sp in self.wfsx.sp2strspecie: self.sp2ion.append(siesta_ion_xml(chdir+'/'+sp+'.ion.xml'))
+    for sp in self.wfsx.sp2strspecie: self.sp2ion.append(siesta_ion_xml(cd+'/'+sp+'.ion.xml'))
 
     _siesta_ion_add_sp2(self, self.sp2ion)
     self.ao_log = ao_log_c().init_ao_log_ion(self.sp2ion)
@@ -310,7 +310,7 @@ class system_vars_c():
     self._atom = [(self.sp2symbol[sp], list(self.atom2coord[ia,:])) for ia,sp in enumerate(self.atom2sp)]
     return self
 
-  def init_gpaw(self, calc, label="gpaw", chdir='.', **kvargs):
+  def init_gpaw(self, calc, label="gpaw", cd='.', **kvargs):
     """
         use the data from a GPAW LCAO calculations as input to
         initialize system variables.
@@ -378,11 +378,15 @@ class system_vars_c():
   def dos(self, zomegas): return system_vars_dos(self, zomegas)
   def pdos(self, zomegas): return system_vars_pdos(self, zomegas)
 
-  def overlap_coo(self, **kvargs):   # Compute something for the given system
+  def overlap_coo(self, **kvargs):   # Compute overlap matrix for the given system
     from pyscf.nao import overlap_coo
     return overlap_coo(self, **kvargs)
 
-  def dipole_coo(self, **kvargs):   # Compute something for the given system
+  def overlap_lil(self, **kvargs):   # Compute overlap matrix in list of lists format
+    from pyscf.nao.m_overlap_lil import overlap_lil
+    return overlap_lil(self, **kvargs)
+
+  def dipole_coo(self, **kvargs):   # Compute dipole matrix elements for the given system
     from pyscf.nao.m_dipole_coo import dipole_coo
     return dipole_coo(self, **kvargs)
   
@@ -392,13 +396,21 @@ class system_vars_c():
   def diag_check(self, atol=1e-5, rtol=1e-4, **kvargs): # Works only after init_siesta_xml(), extend ?
     return diag_check(self, atol, rtol, **kvargs)
 
-  #def get_svneo(self):
-    #"""Packs the data into one array for a later transfer to the library """
-    #svn = np.require(np.zeros(10000), dtype=np.float64, requirements='CW')
-    #ptr = 0
-    #svn[ptr] = self.nspecies; ptr+=1;
-    #svn[ptr] = self.ao_log.nr; ptr+=1;
-    #return svn
+  def vxc_exc_lil(self, sab2dm, **kvargs):   # Compute exchange-correlation potentials and energies
+    from pyscf.nao.m_vxc_exc_lil import vxc_exc_lil
+    return vxc_exc_lil(self, sab2dm, **kvargs)
+
+  def init_libnao(self):
+    """ Initialization of data on libnao site """
+    from pyscf.nao.m_libnao import libnao
+    from pyscf.nao.m_sv_chain_data import sv_chain_data
+    from ctypes import POINTER, c_double, c_int64, byref
+    data = sv_chain_data(self)
+    libnao.init_sv_libnao.argtypes = (POINTER(c_double), POINTER(c_int64))
+    libnao.init_sv_libnao(data.ctypes.data_as(POINTER(c_double)), c_int64(len(data)))
+    self.init_sv_libnao = True
+    return self
+    
 #
 # Example of reading pySCF orbitals.
 #

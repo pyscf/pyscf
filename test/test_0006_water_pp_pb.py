@@ -9,7 +9,7 @@ class KnowValues(unittest.TestCase):
     from numpy import einsum, array
     import os
     dname = os.path.dirname(os.path.abspath(__file__))
-    sv = system_vars_c().init_siesta_xml(label='water', chdir=dname)
+    sv = system_vars_c().init_siesta_xml(label='water', cd=dname)
     self.assertTrue(abs(sv.ucell).sum()>0)
     pb = prod_basis_c().init_pb_pp_libnao_apair(sv)
     self.assertEqual(sv.norbs, 23)
