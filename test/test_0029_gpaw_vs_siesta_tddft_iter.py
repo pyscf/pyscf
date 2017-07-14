@@ -101,6 +101,7 @@ class KnowValues(unittest.TestCase):
     pxx["nonin"]["siesta"], pxx["inter"]["siesta"] = run_tddft_iter(siesta_calc, "siesta", omegas)
     pxx["nonin"]["gpaw"], pxx["inter"]["gpaw"] = run_tddft_iter(gpaw_calc, "gpaw", omegas)
 
+    import ase.units as un
     for key, val in pxx.items():
         freq_shift = abs(omegas[np.argmax(val["siesta"])] - omegas[np.argmax(val["gpaw"])])
         self.assertLess(freq_shift*un.Ha, 5.0)
