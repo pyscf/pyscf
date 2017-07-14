@@ -160,7 +160,7 @@ class prod_basis_c():
     icc2a = np.require( np.array(self.ls_contributing(a1,a2), dtype=c_int64), requirements='C')
     npmx = aos.sp2norbs[sv.atom2sp[a1]]*aos.sp2norbs[sv.atom2sp[a2]]
     npac = sum([self.prod_log.sp2norbs[sv.atom2sp[ia]] for ia in icc2a ])
-    nout = c_int64(npmx**2+npmx*npac)
+    nout = c_int64(npmx**2+npmx*npac+10)
     dout = np.require( np.zeros(nout.value), requirements='CW')
     
     libnao.gen_get_vrtx_cc_apair( sp12.ctypes.data_as(POINTER(c_int64)), rc12.ctypes.data_as(POINTER(c_double)), icc2a.ctypes.data_as(POINTER(c_int64)), c_int64(len(icc2a)), dout.ctypes.data_as(POINTER(c_double)), nout )
