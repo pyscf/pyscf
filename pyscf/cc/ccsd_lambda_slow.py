@@ -137,9 +137,7 @@ def update_amps(cc, t1, t2, l1, l2, eris, saved):
     log = logger.Logger(cc.stdout, cc.verbose)
     nocc, nvir = t1.shape
     nov = nocc * nvir
-    foo = eris.fock[:nocc,:nocc]
     fov = eris.fock[:nocc,nocc:]
-    fvv = eris.fock[:nocc,:nocc]
     l1new = numpy.zeros_like(l1)
     l2new = numpy.zeros_like(l2)
 

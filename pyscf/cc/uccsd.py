@@ -1664,6 +1664,7 @@ class UCCSD(rccsd.RCCSD):
         if vector.size == size:
             return self.vector_to_amplitudes_ee(vector, nocc, nvir)
         else:
+            size = vector.size
             sizea = nocca * nvira + nocca*(nocca-1)//2*nvira*(nvira-1)//2
             sizeb = noccb * nvirb + noccb*(noccb-1)//2*nvirb*(nvirb-1)//2
             sizeab = nocca * noccb * nvira * nvirb

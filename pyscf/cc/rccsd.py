@@ -1473,8 +1473,8 @@ class _ERIS:
         mem_now = lib.current_memory()[0]
 
         log = logger.Logger(cc.stdout, cc.verbose)
-        if 0 and hasattr(cc._scf, 'with_df') and cc._scf.with_df:
-            pass
+        if hasattr(cc._scf, 'with_df') and cc._scf.with_df:
+            raise NotImplementedError
         elif (method == 'incore' and (mem_incore+mem_now < cc.max_memory)
             or cc.mol.incore_anyway):
             if ao2mofn == ao2mo.full:
