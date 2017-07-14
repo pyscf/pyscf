@@ -15,8 +15,9 @@ def dipole_coo(sv, ao_log=None, funct=dipole_ni, **kvargs):
   from pyscf.nao.m_ao_matelem import ao_matelem_c
   from scipy.sparse import coo_matrix
   from numpy import array, int64, zeros
-  
-  me = ao_matelem_c(sv.ao_log) if ao_log is None else ao_matelem_c(ao_log)
+
+  aome = ao_matelem_c(sv.ao_log.rr, sv.ao_log.pp)
+  me = aome.init_one_set(sv.ao_log) if ao_log is None else aome.init_one_set(ao_log)
   atom2s = zeros((sv.natm+1), dtype=int64)
   for atom,sp in enumerate(sv.atom2sp): atom2s[atom+1]=atom2s[atom]+me.ao1.sp2norbs[sp]
   sp2rcut = array([max(mu2rcut) for mu2rcut in me.ao1.sp_mu2rcut])

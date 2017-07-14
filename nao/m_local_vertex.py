@@ -11,18 +11,13 @@ from timeit import default_timer as timer
 #
 #
 class local_vertex_c(ao_matelem_c):
-  '''
-    Constructor of the local product functions and the product vertex coefficients.
-  '''
+  ''' Constructor of the local product functions and the product vertex coefficients. '''
   def __init__(self, ao_log):
-    ao_matelem_c.__init__(self, ao_log)
-    nr = self.nr
-    kk = self.kk
-    self.dkappa_pp = 4*np.pi*np.log( kk[1]/kk[0])*kk
+    ao_matelem_c.__init__(self, ao_log.rr, ao_log.pp)
+    self.init_one_set(ao_log) # @classmethod ???
+    self.dkappa_pp = 4*np.pi*np.log( self.kk[1]/self.kk[0])*self.kk
     self.c2r_c = c2r_c(2*self.jmx) # local vertex c2r[:,:] coefficients
     
-  #
-  #
   #
   def get_local_vertex(self, sp):
     from pyscf.nao.m_thrj import thrj

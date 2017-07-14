@@ -53,8 +53,7 @@ def diag_check(sv, atol=1e-5, rtol=1e-4):
 #
 #
 def overlap_check(sv, tol=1e-5, **kvargs):
-  from pyscf.nao.m_comp_overlap_coo import comp_overlap_coo
-  over = comp_overlap_coo(sv, **kvargs).tocsr()
+  over = sv.overlap_coo(**kvargs).tocsr()
   diff = (sv.hsx.s4_csr-over).sum()
   summ = (sv.hsx.s4_csr+over).sum()
   ac = diff/summ<tol

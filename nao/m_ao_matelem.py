@@ -79,17 +79,34 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     the complex -> real transform (for spherical harmonics) and 
     the spherical Bessel transform.
   '''
-  def __init__(self, ao1, ao2=None, **kvargs):
-    """ Constructor for general matrix elements  <a|O|b> between the same molecule, different molecules, between atomic orbitals and product orbitals"""
-    self.interp_rr = log_interp_c(ao1.rr)
-    self.interp_pp = log_interp_c(ao1.pp)
-    self.rr3_dr = ao1.rr**3 * np.log(ao1.rr[1]/ao1.rr[0])
+  def __init__(self, rr, pp):
+    """ Basic """
+    self.interp_rr = log_interp_c(rr)
+    self.interp_pp = log_interp_c(pp)
+    self.rr3_dr = rr**3 * np.log(rr[1]/rr[0])
     self.four_pi = 4*np.pi
     self.const = np.sqrt(np.pi/2.0)
 
-    self.jmx = ao1.jmx
-    if ao2 is not None: self.jmx = max(self.jmx, ao2.jmx)
+  # @classmethod # I don't understand something about classmethod
+  def init_one_set(self, ao, **kvargs):
+    """ Constructor for two-center matrix elements, i.e. one set of radial orbitals per specie is provided """
+    self.jmx = ao.jmx
+    c2r_c.__init__(self, self.jmx)
+    sbt_c.__init__(self, ao.rr, ao.pp, lmax=2*self.jmx+1)
+    gaunt_c.__init__(self, self.jmx)
+    self.ao1 = ao
+    self.ao1._add_sp2info()
+    self.ao1._add_psi_log_mom()
+    
+    self.ao2 = self.ao1
+    self.ao2_hartree = ao_log_hartree(self.ao1, **kvargs)
+    self.aos = [self.ao1, self.ao2]
+    return self
 
+  # @classmethod # I don't understand something about classmethod
+  def init_two_sets(self, ao1, ao2, **kvargs):
+    """ Constructor for matrix elements between product functions and orbital's products: two sets of radial orbitals must be provided. """
+    self.jmx = max(ao1.jmx, ao2.jmx)
     c2r_c.__init__(self, self.jmx)
     sbt_c.__init__(self, ao1.rr, ao1.pp, lmax=2*self.jmx+1)
     gaunt_c.__init__(self, self.jmx)
@@ -97,16 +114,12 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     self.ao1._add_sp2info()
     self.ao1._add_psi_log_mom()
 
-    if ao2 is not None:
-      self.ao2 = ao2
-      self.ao2._add_sp2info()
-      self.ao2_hartree = ao_log_hartree(self.ao2, **kvargs)
-      self.ao2._add_psi_log_mom()
-    else : 
-      self.ao2 = self.ao1
-      self.ao2_hartree = ao_log_hartree(self.ao1, **kvargs)
-
+    self.ao2 = ao2
+    self.ao2._add_sp2info()
+    self.ao2_hartree = ao_log_hartree(self.ao2, **kvargs)
+    self.ao2._add_psi_log_mom()
     self.aos = [self.ao1, self.ao2]
+    return self
 
   #
   def overlap_am(self, sp1,R1, sp2,R2):
@@ -124,21 +137,3 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
   def coulomb_ni(self, sp1,R1, sp2,R2,**kvargs):
     from pyscf.nao.m_eri2c import eri2c as ext
     return ext(self, sp1,R1, sp2,R2,**kvargs)
-
-#
-#
-#
-if __name__ == '__main__':
-  from pyscf.nao.m_system_vars import system_vars_c
-  sv  = system_vars_c()
-  me = ao_matelem_c(sv)
-  R1 = sv.atom2coord[0]
-  R2 = sv.atom2coord[1]
-
-  overlap_am = me.overlap_am(0, 0, R1, R2)
-  for lev in range(9):
-    overlap_ni = me.overlap_ni(0, 0, R1, R2, level=lev)
-    print(lev)
-    print(abs(overlap_ni-overlap_am).sum()/overlap_am.size)
-    print(abs(overlap_ni-overlap_am).max())
-    print(overlap_ni[-1,-1], overlap_am[-1,-1])

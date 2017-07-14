@@ -1,7 +1,7 @@
 from __future__ import print_function, division
 import numpy as np
 from scipy.sparse import coo_matrix
-from numpy import einsum, zeros
+from numpy import array, einsum, zeros, int64
 from ctypes import POINTER, c_double, c_int64, byref
 from pyscf.nao.m_libnao import libnao
 
@@ -55,27 +55,21 @@ class prod_basis_c():
     """
     from pyscf.nao import prod_log_c
     from pyscf.nao.m_libnao import libnao
-    from scipy.sparse import csr_matrix
-    from ctypes import POINTER, c_double, c_int64
               
     self.sv = sv
     self.tol_loc,self.tol_biloc,self.ac_rcut_ratio,self.ac_npc_max = tol_loc, tol_biloc, ac_rcut_ratio, ac_npc_max
     self.jcutoff,self.metric_type,self.optimize_centers,self.ngl = jcutoff, metric_type, optimize_centers, ngl
     self.ac_rcut = ac_rcut_ratio*max(sv.ao_log.sp2rcut)    
     self.prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc) # local basis (for each specie)
-    self.c2s = np.zeros((sv.natm+1), dtype=np.int64) # global product Center (atom) -> start in case of atom-centered basis
+    self.c2s = zeros((sv.natm+1), dtype=int64) # global product Center (atom) -> start in case of atom-centered basis
     for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] #
     self.sv_pbloc_data = self.chain_data_pb_pp_apair()
-    libnao.sv_prod_log.argtypes = (
-      POINTER(c_double),     # dat(ndat)
-      POINTER(c_int64))      # ndat
-
+    libnao.sv_prod_log.argtypes = (POINTER(c_double), POINTER(c_int64))
     libnao.sv_prod_log(self.sv_pbloc_data.ctypes.data_as(POINTER(c_double)), c_int64(len(self.sv_pbloc_data)))
     return self
   
   def chain_data_pb_pp_apair(self):
     """ This subroutine creates a buffer of information to communicate the system variables and the local product vertex to libnao. Later, one will be able to generate the bilocal vertex and conversion coefficient for a given pair of atom species and their coordinates ."""
-    
     from numpy import zeros, concatenate as conc
 
     aos,sv,pl = self.sv.ao_log, self.sv, self.prod_log
@@ -161,7 +155,7 @@ class prod_basis_c():
     npmx = aos.sp2norbs[sv.atom2sp[a1]]*aos.sp2norbs[sv.atom2sp[a2]]
     npac = sum([self.prod_log.sp2norbs[sv.atom2sp[ia]] for ia in icc2a ])
     nout = c_int64(npmx**2+npmx*npac+10)
-    dout = np.require( np.zeros(nout.value), requirements='CW')
+    dout = np.require( zeros(nout.value), requirements='CW')
     
     libnao.gen_get_vrtx_cc_apair( sp12.ctypes.data_as(POINTER(c_int64)), rc12.ctypes.data_as(POINTER(c_double)), icc2a.ctypes.data_as(POINTER(c_int64)), c_int64(len(icc2a)), dout.ctypes.data_as(POINTER(c_double)), nout )
     
@@ -175,7 +169,7 @@ class prod_basis_c():
     s = f;  f=s+np.prod(nnc); ccoe  = dout[s:f].reshape(nnc)
     icc2s = np.zeros(len(icc2a)+1, dtype=np.int64)
     for icc,a in enumerate(icc2a): icc2s[icc+1] = icc2s[icc] + self.prod_log.sp2norbs[sv.atom2sp[a]]
-    pbiloc = prod_biloc_c(atoms=np.array([a2,a1]),vrtx=vrtx,cc2a=icc2a,cc2s=icc2s,cc=ccoe)
+    pbiloc = prod_biloc_c(atoms=array([a2,a1]),vrtx=vrtx,cc2a=icc2a,cc2s=icc2s,cc=ccoe)
     return pbiloc
 
 
@@ -215,7 +209,7 @@ class prod_basis_c():
     
     self.prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc) # local basis (for each specie) 
     self.hkernel_csr  = csr_matrix(comp_overlap_coo(sv, self.prod_log, coulomb_am)) # compute local part of Coulomb interaction
-    self.c2s = np.zeros((sv.natm+1), dtype=np.int64) # global product Center (atom) -> start in case of atom-centered basis
+    self.c2s = zeros((sv.natm+1), dtype=int64) # global product Center (atom) -> start in case of atom-centered basis
     for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] # 
 
     c2s = self.c2s      # What is the meaning of this copy ?? ... This is a pointer to self.c2s
@@ -238,14 +232,14 @@ class prod_basis_c():
         if nprod<1: continue # Skip the rest of operations in case there is no large linear combinations.
 
         # add new vertex
-        self.bp2vertex.append(np.zeros([nprod,n1,n2]))
+        self.bp2vertex.append(zeros([nprod,n1,n2]))
         for p,d in enumerate(mu2d):
             self.bp2vertex[len(self.bp2vertex) -1][p,:,:] = xx[:,d].reshape(n1,n2)
         
         #print(ia1,ia2,nprod,abs(einsum('pab,qab->pq', lambdx, lambdx).reshape(nprod,nprod)-np.identity(nprod)).sum())
 
         lc2c = ls_part_centers(sv, ia1, ia2, ac_rcut_ratio) # list of participating centers
-        lc2s = np.zeros((len(lc2c)+1), dtype=np.int64) # local product center -> start for the current bilocal pair
+        lc2s = zeros((len(lc2c)+1), dtype=int64) # local product center -> start for the current bilocal pair
         for lc,c in enumerate(lc2c): lc2s[lc+1]=lc2s[lc]+self.prod_log.sp2norbs[sv.atom2sp[c]]
 
         npbp = lc2s[-1] # size of the functions which will contribute to the given pair ia1,ia2
@@ -306,7 +300,7 @@ class prod_basis_c():
 
     nfdp,nfap = self.dpc2s[-1],self.c2s[-1]
     nnz = self.get_da2cc_nnz()
-    irow,icol,data = zeros(nnz, dtype=np.int64),zeros(nnz, dtype=np.int64), zeros(nnz, dtype=dtype) # Start to construct coo matrix
+    irow,icol,data = zeros(nnz, dtype=int64),zeros(nnz, dtype=int64), zeros(nnz, dtype=dtype) # Start to construct coo matrix
 
     inz = 0
     for sd,fd,pt in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t):
@@ -386,7 +380,7 @@ class prod_basis_c():
   def get_dp_vertex_coo(self, dtype=np.float64):
     """ Returns the product vertex coefficients as 3d array for dominant products, in a sparse format coo(p,ab)"""
     nnz = self.get_dp_vertex_nnz()
-    irow,icol,data = zeros(nnz, dtype=np.int64),zeros(nnz, dtype=np.int64), zeros(nnz, dtype=dtype) # Start to construct coo matrix
+    irow,icol,data = zeros(nnz, dtype=int64),zeros(nnz, dtype=int64), zeros(nnz, dtype=dtype) # Start to construct coo matrix
 
     atom2so = self.sv.atom2s
     nfdp = self.dpc2s[-1]
@@ -433,7 +427,7 @@ class prod_basis_c():
     mom0 = np.require(np.zeros(n, dtype=dtype), requirements='CW')
     mom1 = np.require(np.zeros((n,3), dtype=dtype), requirements='CW')
     for a,[sp,coord,s,f] in enumerate(zip(self.sv.atom2sp,self.sv.atom2coord,self.c2s,self.c2s[1:])):
-      mom0[s:f],mom1[s:f,:] = sp2mom0[sp], np.einsum('j,k->jk', sp2mom0[sp],coord)+sp2mom1[sp]
+      mom0[s:f],mom1[s:f,:] = sp2mom0[sp], einsum('j,k->jk', sp2mom0[sp],coord)+sp2mom1[sp]
     return mom0,mom1
 
   def comp_coulomb_pack(self, **kvargs):

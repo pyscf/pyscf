@@ -14,7 +14,7 @@ def overlap_check(prod_log, overlap_funct=overlap_ni, **kvargs):
   """ Computes the allclose(), mean absolute error and maximal error of the overlap reproduced by the (local) vertex."""
   from pyscf.nao.m_ao_matelem import ao_matelem_c
   from pyscf.nao.m_ao_log import comp_moments
-  me = ao_matelem_c(prod_log.ao_log)
+  me = ao_matelem_c(prod_log.rr, prod_log.pp).init_one_set(prod_log.ao_log)
   sp2mom0,sp2mom1 = comp_moments(prod_log)
   mael,mxel,acl=[],[],[]
   R0 = np.array([0.0,0.0,0.0])
