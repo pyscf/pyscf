@@ -56,6 +56,8 @@ def kernel(mycc, eris, t1=None, t2=None, l1=None, l2=None,
         if normt < tol:
             conv = True
             break
+    l1 = spin2spatial(l1, eris.orbspin)
+    l2 = spin2spatial(l2, eris.orbspin)
     return conv, l1, l2
 
 
@@ -385,5 +387,5 @@ if __name__ == '__main__':
     mf = scf.UHF(mol).run()
     mycc = uccsd.UCCSD(mf)
     eris = mycc.ao2mo()
-    mycc.kernel()#eris=eris)
+    mycc.kernel(eris=eris)
     conv, l1, l2 = kernel(mycc, eris, mycc.t1, mycc.t2, tol=1e-8)

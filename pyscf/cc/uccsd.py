@@ -524,6 +524,44 @@ class UCCSD(rccsd.RCCSD):
                         cctyp, self.e_tot, self.e_corr)
         return self.e_corr, self.t1, self.t2
 
+    def solve_lambda(self, t1=None, t2=None, l1=None, l2=None,
+                     eris=None):
+        from pyscf.cc import uccsd_lambda_slow as uccsd_lambda
+        if t1 is None: t1 = self.t1
+        if t2 is None: t2 = self.t2
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        self.converged_lambda, self.l1, self.l2 = \
+                uccsd_lambda.kernel(self, eris, t1, t2, l1, l2,
+                                    max_cycle=self.max_cycle,
+                                    tol=self.conv_tol_normt,
+                                    verbose=self.verbose)
+        return self.l1, self.l2
+
+    def make_rdm1(self, t1=None, t2=None, l1=None, l2=None):
+        '''Un-relaxed 1-particle density matrix in MO space
+
+        Returns:
+            dm1a, dm1b
+        '''
+        from pyscf.cc import uccsd_rdm_slow as uccsd_rdm
+        if t1 is None: t1 = self.t1
+        if t2 is None: t2 = self.t2
+        if l1 is None: l1 = self.l1
+        if l2 is None: l2 = self.l2
+        if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
+        return uccsd_rdm.make_rdm1(self, t1, t2, l1, l2)
+
+    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None):
+        '''2-particle density matrix in spin-oribital basis.
+        '''
+        from pyscf.cc import uccsd_rdm_slow as uccsd_rdm
+        if t1 is None: t1 = self.t1
+        if t2 is None: t2 = self.t2
+        if l1 is None: l1 = self.l1
+        if l2 is None: l2 = self.l2
+        if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
+        return uccsd_rdm.make_rdm2(self, t1, t2, l1, l2)
+
     def ao2mo(self, mo_coeff=None):
         return _ERIS(self, mo_coeff)
 

@@ -606,9 +606,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
     def make_rdm2(self, t1=None, t2=None, l1=None, l2=None):
         '''2-particle density matrix in MO space.  The density matrix is
-        stored in physicist notation
+        stored as
 
-        dm2[p,q,r,s] = <p^+ q^+ s r>
+        dm2[p,r,q,s] = <p^+ q^+ s r>
         '''
         from pyscf.cc import ccsd_rdm
         if t1 is None: t1 = self.t1

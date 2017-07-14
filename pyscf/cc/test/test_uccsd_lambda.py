@@ -222,7 +222,7 @@ class KnowValues(unittest.TestCase):
         t2 = addons.spatial2spin(t2r)
         l1r = numpy.random.random((nocc,nvir))*.1
         l2r = numpy.random.random((nocc,nocc,nvir,nvir))*.1
-        l2r = t2r + t2r.transpose(1,0,3,2)
+        l2r = l2r + l2r.transpose(1,0,3,2)
         l1 = addons.spatial2spin(l1r)
         l2 = addons.spatial2spin(l2r)
         l1ref, l2ref = update_l1l2(mf, t1, t2, l1, l2, eris.orbspin)
