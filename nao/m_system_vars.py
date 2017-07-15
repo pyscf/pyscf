@@ -436,7 +436,22 @@ class system_vars_c():
     libnao.init_sv_libnao(data.ctypes.data_as(POINTER(c_double)), c_int64(len(data)))
     self.init_sv_libnao = True
     return self
-    
+
+  def dens_elec_vec(self, coords, dm):
+    """ Electronic density: python vectorized version """
+    from m_dens_elec_vec import dens_elec_vec
+    return dens_elec_vec(self, coords, dm)
+  
+  def get_occupations(self, telec=None, ksn2e=None, fermi_energy=None):
+    """ Compute occupations of electron levels according to Fermi-Dirac distribution """
+    from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
+    Telec = self.hsx.telec if telec is None else telec
+    ksn2E = self.wfsx.ksn2e if ksn2e is None else ksn2e
+    Fermi = self.fermi_energy if fermi_energy is None else fermi_energy
+    ksn2fd = fermi_dirac_occupations(Telec, ksn2E, Fermi)
+    ksn2fd = (3.0-self.nspin)*ksn2fd
+    return ksn2fd
+
 #
 # Example of reading pySCF orbitals.
 #

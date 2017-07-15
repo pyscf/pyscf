@@ -7,15 +7,15 @@ class KnowValues(unittest.TestCase):
     """ Compute density in coordinate space with system_vars_c, integrate and compare with number of electrons """
     from pyscf.nao import system_vars_c
     from pyscf.nao.m_comp_dm import comp_dm
-    from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
     from timeit import default_timer as timer
     
     sv = system_vars_c().init_siesta_xml(label='water', cd=os.path.dirname(os.path.abspath(__file__)))
-    ksn2fd = fermi_dirac_occupations(sv.hsx.telec, sv.wfsx.ksn2e, sv.fermi_energy)
-    ksn2f = (3-sv.nspin)*ksn2fd
-    dm = comp_dm(sv.wfsx.x, ksn2f)
+    dm = comp_dm(sv.wfsx.x, sv.get_occupations())
     grid = sv.build_3dgrid(level=9)
     
+    t1 = timer()
+    dens1 = sv.dens_elec_vec(grid.coords, dm)
+    t2 = timer(); print(t2-t1); t1 = timer()
     
     t1 = timer()
     dens = sv.dens_elec(grid.coords, dm)

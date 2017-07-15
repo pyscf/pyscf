@@ -11,13 +11,7 @@ libnao.dens_libnao.argtypes = (
 
 
 def dens_libnao(crds, nspin):
-  """
-    Compute the values of atomic orbitals on given grid points
-    Args:
-      crds   : vector where the atomic orbitals from "ao" are centered
-    Returns:
-      res[ncoord] : array of density
-  """
+  """  Compute the electronic density using library call """
   assert crds.ndim==2  
   assert crds.shape[-1]==3
   
