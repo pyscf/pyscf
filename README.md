@@ -31,6 +31,11 @@ Installation
         cmake ..
         make
 
+  Note during the compilation, external libraries (libcint, libxc, xcfun) will
+  be downloaded and installed.  If you want to disable the automatic
+  downloading, the [document] (http://sunqm.github.io/pyscf/install.html#installation-without-network)
+  shows an instruction to manually build these packages.
+
 * To make python be able to find pyscf, edit environment variable
   `PYTHONPATH`, e.g.  if pyscf is installed in /opt/pyscf
 
@@ -69,7 +74,6 @@ Installation
         ExternalProject_Add(libcint
           GIT_REPOSITORY https://github.com/sunqm/qcint.git
           ...
-
 
 
 Known problems
