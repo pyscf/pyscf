@@ -128,6 +128,7 @@ class system_vars_c():
     for atom,sp in enumerate(self.atom2sp): self.atom2mu_s[atom+1]=self.atom2mu_s[atom]+self.ao_log.sp2nmult[sp]
     self._atom = gto._atom
     self.basis = gto.basis
+    self.init_libnao()
     self.state = 'should be useful for something'
     return self
     
@@ -295,6 +296,7 @@ class system_vars_c():
     
     self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
     self.sp2charge = self.ao_log.sp2charge
+    self.init_libnao()
     self.state = 'should be useful for something'
 
     # Trying to be similar to mole object from pySCF 
@@ -396,9 +398,31 @@ class system_vars_c():
   def diag_check(self, atol=1e-5, rtol=1e-4, **kvargs): # Works only after init_siesta_xml(), extend ?
     return diag_check(self, atol, rtol, **kvargs)
 
-  def vxc_exc_lil(self, sab2dm, **kvargs):   # Compute exchange-correlation potentials and energies
+  def vxc_exc_lil(self, dm, **kvargs):   # Compute exchange-correlation potentials and energies
     from pyscf.nao.m_vxc_exc_lil import vxc_exc_lil
-    return vxc_exc_lil(self, sab2dm, **kvargs)
+    return vxc_exc_lil(self, dm, **kvargs)
+
+  def build_3dgrid(self, level=3):
+    """ Build a global grid and weights for a molecular integration (integration in 3-dimensional coordinate space) """
+    from pyscf import dft
+    from pyscf.nao.m_gauleg import leggauss_ab
+    grid = dft.gen_grid.Grids(self)
+    grid.level = level # precision as implemented in pyscf
+    grid.radi_method=leggauss_ab
+    atom2rcut=np.zeros(self.natoms)
+    for ia,sp in enumerate(self.atom2sp): atom2rcut[ia] = self.ao_log.sp2rcut[sp]
+    grid.build(atom2rcut=atom2rcut)
+    return grid
+
+  def dens_elec(self, coords, dm):
+    """ Compute electronic density for a given density matrix and on a given set of coordinates """
+    from pyscf.nao.m_dens_libnao import dens_libnao
+    from pyscf.nao.m_init_dm_libnao import init_dm_libnao
+    from pyscf.nao.m_init_dens_libnao import init_dens_libnao
+    if not self.init_sv_libnao : raise RuntimeError('not self.init_sv_libnao')
+    if init_dm_libnao(dm)!=0 : raise RuntimeError('init_dm_libnao(dm)!=0')
+    if init_dens_libnao()!=0 : raise RuntimeError('init_dens_libnao()!=0')
+    return dens_libnao(coords, self.nspin)
 
   def init_libnao(self):
     """ Initialization of data on libnao site """

@@ -14,7 +14,7 @@ module m_dm_libnao
   private warn
   !private get_cdatetime
   
-  real(c_double), allocatable :: cbask2dm(:,:,:,:,:)
+  real(c_double), allocatable, target :: cbask2dm(:,:,:,:,:)
   
   contains
 

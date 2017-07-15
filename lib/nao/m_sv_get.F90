@@ -42,6 +42,9 @@ subroutine sv_get(d,n, sv)
 
   if (nsp<1) then; write(6,*) __FILE__, __LINE__, nsp; stop '!nsp'; endif
   if (nr<1) then; write(6,*) __FILE__, __LINE__, nr; stop '!nr'; endif
+  if (nspin<1 .or. nspin>2) then; write(6,*) __FILE__, __LINE__, nspin; stop '!nspin'; endif
+  sv%nspin = int(nspin)
+
     
   allocate(sv%uc%sp2label(nsp))
   allocate(sv%uc%sp2nmult(nsp))

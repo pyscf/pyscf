@@ -14,7 +14,7 @@ module m_sv_libnao
   private warn
   !private get_cdatetime
   
-  type(system_vars_t) :: sv
+  type(system_vars_t), target :: sv
   
   contains
 

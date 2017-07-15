@@ -81,6 +81,7 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
   def __init__(self, rr, pp, sv=None, sab2dm=None):
     """ Basic """
     from pyscf.nao.m_init_dm_libnao import init_dm_libnao
+    from pyscf.nao.m_init_dens_libnao import init_dens_libnao
     
     self.interp_rr = log_interp_c(rr)
     self.interp_pp = log_interp_c(pp)
@@ -89,6 +90,7 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     self.const = np.sqrt(np.pi/2.0)
     self.sv = None if sv is None else sv.init_libnao()
     self.sab2dm = None if sab2dm is None else init_dm_libnao(sab2dm)
+    if sab2dm is not None and sv is not None : init_dens_libnao()
 
   # @classmethod # I don't understand something about classmethod
   def init_one_set(self, ao, **kvargs):
