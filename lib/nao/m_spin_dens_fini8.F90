@@ -31,6 +31,38 @@ module m_spin_dens_fini8
 
 contains
 
+!
+!
+!
+subroutine dealloc(sda)
+  implicit none
+  type(spin_dens_aux_t), intent(inout) :: sda
+
+  sda%coord =>null()
+  sda%DM =>null()
+  sda%atom2sp =>null()
+  sda%sp2nmult =>null()
+  sda%mu_sp2j =>null()
+  sda%mu_sp2start_ao =>null()
+  _dealloc(sda%atom2start_orb)
+  _dealloc(sda%sp2jmx)
+  _dealloc(sda%atom2rcut)
+  sda%mu_sp2rcut =>null()
+  sda%psi_log =>null()
+  sda%natoms = -999
+  sda%nspin =-999
+  sda%nr =-999
+  sda%jmx =-999
+  sda%dr_jt=-999
+  sda%one_over_dr_jt=-999
+  sda%rho_min_jt=-999
+  sda%one120 = 1.0D0/120D0
+  sda%one12=1.0D0/12D0
+  sda%one24 = 1.0D0/24D0  
+  
+end subroutine ! dealloc
+  
+
 !!
 !!
 !!
@@ -50,6 +82,9 @@ subroutine init_spin_dens(sv, DM, sda)
   integer :: norbs, jdim
   real(8), pointer :: rr(:)
   type(uc_skeleton_t), pointer :: uc
+
+  call dealloc(sda)
+  
   uc=>get_uc_ptr(sv) 
   norbs = get_norbs(sv)
   sda%nr = get_nr(sv)

@@ -1330,6 +1330,7 @@ subroutine get_atom2rcut(sv, atm2rcut)
   integer:: natoms, atom, sp
   
   natoms = get_natoms(sv)
+  _dealloc(atm2rcut)
   allocate(atm2rcut(natoms))
   do atom=1,natoms
     sp = get_sp(sv%uc, atom)
