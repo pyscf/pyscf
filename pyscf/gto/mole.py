@@ -114,7 +114,7 @@ def cart2j_kappa(kappa, l=None):
        c2smat[nf:].ctypes.data_as(ctypes.c_void_p),
        cmat.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(nf*2), ctypes.c_int(nf),
-       ctypes.c_int(1), ctypes.c_int(l), ctypes.c_int(kappa))
+       ctypes.c_int(1), ctypes.c_int(kappa), ctypes.c_int(l))
     if l == 0:
         c2smat *= 0.282094791773878143
     elif l == 1:

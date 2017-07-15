@@ -1,9 +1,11 @@
 import numpy
+from pyscf.gto import mole
 from pyscf.lib.parameters import NUC_MAGNETON, PLANCK
 
 # nuclear magneton are taken from http://easyspin.org/documentation/isotopetable.html
 # isotope-mass, spin, nuclear-g-factor
 ISOTOPE = (
+    (0  , 0.  ,         0.0),
     (1  , 1./2,  5.58569468),  # H
     (3  , 1./2, -4.25499544),  # He
     (7  , 3./2,    2.170951),  # Li
@@ -106,3 +108,9 @@ def g_factor_to_gyromagnetic_ratio(g):
     '''Larmor freq in Hz'''
     return NUC_MAGNETON/PLANCK * g
 
+def get_nuc_g_factor(symb, mass=None):
+    Z = mole._charge(symb)
+# g factor of other isotopes can be found in file nuclear_g_factor.dat
+    nuc_spin, g_nuc = ISOTOPE[Z][1:3]
+    #gyromag = g_factor_to_gyromagnetic_ratio(g_nuc)
+    return g_nuc
