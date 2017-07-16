@@ -11,11 +11,11 @@ class KnowValues(unittest.TestCase):
     
     sv = system_vars_c().init_siesta_xml(label='water', cd=os.path.dirname(os.path.abspath(__file__)))
     dm = comp_dm(sv.wfsx.x, sv.get_occupations())
-    grid = sv.build_3dgrid(level=9)
+    grid = sv.build_3dgrid(level=3)
     
-    t1 = timer()
-    dens1 = sv.dens_elec_vec(grid.coords, dm)
-    t2 = timer(); print(t2-t1); t1 = timer()
+    #t1 = timer()
+    #dens1 = sv.dens_elec_vec(grid.coords, dm)
+    #t2 = timer(); print(t2-t1); t1 = timer()
     
     t1 = timer()
     dens = sv.dens_elec(grid.coords, dm)

@@ -1,12 +1,12 @@
 from __future__ import print_function, division
 from numpy import require, zeros, linalg, compress
 from scipy.spatial.distance import cdist
-from m_rsphar_libnao import rsphar_vec as rsphar_vec_libnao
-from m_rsphar_vec import rsphar_vec as rsphar_vec_python
 from timeit import default_timer as timer
 
 def dens_elec_vec(sv, crds, dm):
   """ Compute the electronic density using vectorized oprators """
+  from pyscf.nao.m_rsphar_vec import rsphar_vec as rsphar_vec_python
+
   assert crds.ndim==2  
   assert crds.shape[-1]==3  
   nc = crds.shape[0]
@@ -17,13 +17,7 @@ def dens_elec_vec(sv, crds, dm):
     bmask = lngs<sv.ao_log.sp2rcut[sp]
     crds_selec = compress(bmask[:,0], crds, axis=0)
     t1 = timer()
-    
     rsh1 = rsphar_vec_python(crds_selec, lmax)
     t2 = timer(); print(t2-t1); t1 = timer()
-    
-    rsh2 = rsphar_vec_libnao(crds_selec, lmax)
-    t2 = timer(); print(t2-t1); t1 = timer()
-    
-    print( abs(rsh1-rsh2).sum() )
-    
+        
   return 0
