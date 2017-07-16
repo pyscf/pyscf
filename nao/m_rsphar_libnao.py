@@ -21,5 +21,20 @@ def rsphar(r,lmax,res):
   res = np.require(res,  dtype='float64', requirements='CW')
   
   libnao.rsphar(r.ctypes.data_as(POINTER(c_double)), c_int(lmax), res.ctypes.data_as(POINTER(c_double)))
-
   return 0
+
+#
+#
+#
+def rsphar_vec(rvs,lmax):
+  """
+    Computes (all) real spherical harmonics up to the angular momentum lmax
+    Args:
+      rvs : Cartesian coordinates defining correct theta and phi angles for spherical harmonic
+      lmax : Integer, maximal angular momentum
+    Result:
+      1-d numpy array of float64 elements with all spherical harmonics stored in order 0,0; 1,-1; 1,0; 1,+1 ... lmax,lmax, althogether 0 : (lmax+1)**2 elements.
+  """
+  res = np.zeros((rvs.shape[0], (lmax+1)**2))
+  for irv,rvec in enumerate(rvs): rsphar(rvec,lmax,res[irv,:])
+  return res
