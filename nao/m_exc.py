@@ -12,7 +12,7 @@ def exc(sv, dm, xc_code, **kvargs):
       sv : (System Variables), this must have arrays of coordinates and species, etc
       xc_code : is a string must comply with pySCF's convention PZ  
         "LDA,PZ"
-        "0.8*LDA+0.2*,PZ"
+        "0.8*LDA+0.2*B88,PZ"
     Returns:
       exc x+c energy
   """
