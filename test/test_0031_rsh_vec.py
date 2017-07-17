@@ -11,7 +11,7 @@ class KnowValues(unittest.TestCase):
     from timeit import default_timer as timer
     
     ll = [0,1,2,3,4]
-    crds = np.random.rand(2000000, 3)
+    crds = np.random.rand(20000, 3)
     for lmax in ll:
       t1 = timer()
       rsh1 = rsphar_exp_vec_libnao(crds.T, lmax)
@@ -20,7 +20,7 @@ class KnowValues(unittest.TestCase):
       rsh2 = rsphar_vec_libnao(crds, lmax)
       t2 = timer(); tlibnao = (t2-t1); t1 = timer()
       
-      print( abs(rsh1.T-rsh2).sum(), tpython, tlibnao)
+      #print( abs(rsh1.T-rsh2).sum(), tpython, tlibnao)
 #      print( rsh1[1,:])
 #      print( rsh2[1,:])
 
