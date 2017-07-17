@@ -192,7 +192,7 @@ class prod_basis_c():
     for ia1 in range(sv.natoms):
       for ia2 in range(ia1+1,sv.natoms):
         pbiloc = self.comp_apair_pp_libint(ia1,ia2)
-        self.bp2info.append(pbiloc)
+        if pbiloc is not None : self.bp2info.append(pbiloc)
     self.dpc2s,self.dpc2t,self.dpc2sp = self.init_c2s_domiprod() # dominant product's counting
     self.npdp = self.dpc2s[-1]
     self.norbs = self.sv.norbs
