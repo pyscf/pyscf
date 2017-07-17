@@ -3,7 +3,7 @@ from __future__ import print_function, division
 #
 #
 #
-def vxc_exc_lil(sv, dm, ao_log=None, **kvargs):
+def vxc_lil(sv, dm, ao_log=None, **kvargs):
   """
     Computes the exchange-correlation matrix elements
     Args:

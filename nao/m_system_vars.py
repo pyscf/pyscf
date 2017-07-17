@@ -400,9 +400,13 @@ class system_vars_c():
   def diag_check(self, atol=1e-5, rtol=1e-4, **kvargs): # Works only after init_siesta_xml(), extend ?
     return diag_check(self, atol, rtol, **kvargs)
 
-  def vxc_exc_lil(self, dm, **kvargs):   # Compute exchange-correlation potentials and energies
-    from pyscf.nao.m_vxc_exc_lil import vxc_exc_lil
-    return vxc_exc_lil(self, dm, **kvargs)
+  def vxc_lil(self, dm, **kvargs):   # Compute exchange-correlation potentials
+    from pyscf.nao.m_vxc_exc_lil import vxc_lil
+    return vxc_lil(self, dm, **kvargs)
+
+  def exc(self, dm, xc_code, **kvargs):   # Compute exchange-correlation energies
+    from pyscf.nao.m_exc import exc
+    return exc(self, dm, xc_code, **kvargs)
 
   def build_3dgrid(self, level=3):
     """ Build a global grid and weights for a molecular integration (integration in 3-dimensional coordinate space) """
