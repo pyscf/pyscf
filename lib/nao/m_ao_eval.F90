@@ -68,7 +68,7 @@ subroutine ao_eval(nmu, &
   res = 0
   do icrd = 1,ncoords
     coord = coords(:,icrd)-rcen
-    call rsphar(coord, int(jmx_sp), rsh)
+    call rsphar(coord, jmx_sp, rsh)
     r = sqrt(sum(coord**2))
     if(r>rcutmx) cycle
     call comp_coeffs(r, nr, rhomin_jt, dr_jt, k, coeffs)
