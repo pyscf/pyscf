@@ -159,7 +159,9 @@ class prod_basis_c():
     dout = np.require( zeros(nout.value), requirements='CW')
     
     libnao.gen_get_vrtx_cc_apair( sp12.ctypes.data_as(POINTER(c_int64)), rc12.ctypes.data_as(POINTER(c_double)), icc2a.ctypes.data_as(POINTER(c_int64)), c_int64(len(icc2a)), dout.ctypes.data_as(POINTER(c_double)), nout )
-    
+   
+    print(a1, a2, dout[0:4])
+ 
     if dout[0]<1: return None
     
     nnn = np.array(dout[0:3], dtype=int)
