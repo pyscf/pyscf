@@ -147,7 +147,10 @@ subroutine rsphar_vec(r,nc,lmax,res) bind(c, name='rsphar_vec')
   ! internal
   integer(c_int64_t) :: ic
   
-  if (nc<1) _die('nc<1')
+  if (nc<1) then
+    write(6,*) nc
+    stop 'nc<1'
+  endif
   
   do ic=1,nc
     call rsphar(r(:,ic), int(lmax), res(:,ic))
