@@ -137,7 +137,6 @@ end subroutine !rsphar
 ! real spherical harmonics 
 !
 subroutine rsphar_vec(r,nc,lmax,res) bind(c, name='rsphar_vec')
-  use m_fact, only : onediv4pi, rttwo, sgn, pi, init_fact
   use iso_c_binding, only: c_char, c_double, c_float, c_int64_t, c_int
 
   implicit none
@@ -146,12 +145,12 @@ subroutine rsphar_vec(r,nc,lmax,res) bind(c, name='rsphar_vec')
   integer(c_int64_t), intent(in)  :: lmax
   real(c_double), intent(inout)   :: res((lmax+1)**2,nc) 
   ! internal
-  integer :: ic
+  integer(c_int64_t) :: ic
   
   if (nc<1) _die('nc<1')
   
   do ic=1,nc
-    call rsphar(r(:,ic), lmax, res(:,ic))
+    call rsphar(r(:,ic), int(lmax), res(:,ic))
   enddo
 
 end subroutine !rsphar_vec
