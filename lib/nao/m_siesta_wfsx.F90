@@ -32,13 +32,14 @@ module m_siesta_wfsx
 !
 !
 !
-subroutine siesta_wfsx_book_size(fname_in, isize, ios) bind(c, name='siesta_wfsx_book_size')
+subroutine siesta_wfsx_book_size(fname_in, nreim, isize, ios) bind(c, name='siesta_wfsx_book_size')
   use m_null2char, only : null2char
   implicit none
   !! external 
   character(c_char), intent(in) :: fname_in(*)
+  integer(c_int64_t), intent(in)  :: nreim
   integer(c_int64_t), intent(inout)  :: isize
-  integer(c_int), intent(inout)  :: ios
+  integer(c_int64_t), intent(inout)  :: ios
   !! internal
   type(siesta_wfsx_t) :: wfsx
   character(1000) :: fname
@@ -46,7 +47,7 @@ subroutine siesta_wfsx_book_size(fname_in, isize, ios) bind(c, name='siesta_wfsx
   
   isize = 0
   call null2char(fname_in, fname)
-  call siesta_get_wfsx(fname, wfsx, ios)
+  call siesta_get_wfsx(fname, nreim, wfsx, ios)
   if(ios/=0) return
   
   isize = isize + 1 !  integer(siesta_int)              :: nkpoints=-999
@@ -68,13 +69,14 @@ end subroutine ! siesta_wfsx_book_size
 !
 !
 !
-subroutine siesta_wfsx_book_read(fname_in, dat, ios) bind(c)
+subroutine siesta_wfsx_book_read(fname_in, nreim, dat, ios) bind(c)
   use m_null2char, only : null2char
   implicit none
   !! external
   character(c_char), intent(in) :: fname_in(*)
-  integer(c_int), intent(inout) :: dat(*)
-  integer(c_int), intent(inout) :: ios
+  integer(c_int64_t), intent(inout) :: nreim
+  integer(c_int64_t), intent(inout) :: dat(*)
+  integer(c_int64_t), intent(inout) :: ios
   !! internal
   type(siesta_wfsx_t) :: wfsx
   character(1000) :: fname
@@ -82,7 +84,7 @@ subroutine siesta_wfsx_book_read(fname_in, dat, ios) bind(c)
   
   call null2char(fname_in, fname)
 
-  call siesta_get_wfsx(fname, wfsx, ios)
+  call siesta_get_wfsx(fname, nreim, wfsx, ios)
   if(ios/=0) return
   
   i = 1
@@ -119,13 +121,14 @@ end subroutine ! siesta_wfsx_book_read
 !
 !
 !
-subroutine siesta_wfsx_dread(fname_in, dat, ios) bind(c)
+subroutine siesta_wfsx_dread(fname_in, nreim, dat, ios) bind(c)
   use m_null2char, only : null2char
   implicit none
   !! external
   character(c_char), intent(in) :: fname_in(*)
+  integer(c_int64_t), intent(in) :: nreim 
   real(c_double), intent(inout) :: dat(*)
-  integer(c_int), intent(inout) :: ios 
+  integer(c_int64_t), intent(inout) :: ios 
   !! internal
   type(siesta_wfsx_t) :: wfsx
   character(1000) :: fname
@@ -133,7 +136,7 @@ subroutine siesta_wfsx_dread(fname_in, dat, ios) bind(c)
   
   call null2char(fname_in, fname)
 
-  call siesta_get_wfsx(fname, wfsx, ios)
+  call siesta_get_wfsx(fname, nreim, wfsx, ios)
   if(ios/=0) return
   i = 1
   do k=1,wfsx%nkpoints
@@ -155,27 +158,26 @@ end subroutine ! siesta_wfsx_dread
 !
 !
 !
-subroutine siesta_wfsx_sread(fname_in, dat, ios) bind(c)
+subroutine siesta_wfsx_sread(fname_in, nreim, dat, ios) bind(c, name='siesta_wfsx_sread')
   use m_null2char, only : null2char
   implicit none
   !! external
   character(c_char), intent(in) :: fname_in(*)
   real(c_float), intent(inout)  :: dat(*)
-  integer(c_int), intent(inout) :: ios
+  integer(c_int64_t), intent(in) :: nreim
+  integer(c_int64_t), intent(inout) :: ios
   !! internal
   type(siesta_wfsx_t) :: wfsx
   character(1000) :: fname
-  integer :: nreim, l, r, i, k, j, s
+  integer(c_int64_t) :: l, r, i, k, j, s
   
   call null2char(fname_in, fname)
 
-  call siesta_get_wfsx(fname, wfsx, ios)
+  call siesta_get_wfsx(fname, nreim, wfsx, ios)
   if(ios/=0) return
   
   i = 1
-  nreim = 1
-  if(.not. wfsx%gamma) nreim = 2;
-  
+
   do k=1,wfsx%nkpoints
     do s=1,wfsx%nspin
       do j=1,wfsx%norbs
@@ -205,12 +207,13 @@ end function !l2i
 ! Open a .WFSX file and reads the eigenvectors and eigenenergies from this file
 ! structure siesta_wfsx_t will be filled
 !
-subroutine siesta_get_wfsx(fname, wfsx, ios)
+subroutine siesta_get_wfsx(fname, nreim, wfsx, ios)
   use m_io, only : get_free_handle
   implicit none
   character(len=*), intent(in) :: fname
+  integer(c_int64_t), intent(in) :: nreim
   type(siesta_wfsx_t), intent(inout)  :: wfsx
-  integer, intent(inout) :: ios
+  integer(c_int64_t), intent(inout) :: ios
 
   ! internal
   integer :: ifile, i, natoms, norb_max
@@ -251,11 +254,18 @@ subroutine siesta_get_wfsx(fname, wfsx, ios)
   !! Allocate wfsx%kpoints, wfsx%DFT_E, wfsx%DFT_X
   allocate(wfsx%kpoints(3,wfsx%nkpoints))
   allocate(wfsx%DFT_E(wfsx%norbs, wfsx%nspin, wfsx%nkpoints))
-  if(wfsx%gamma) then ! gamma calculation k={0,0,0} --> eigenvectors are real
-    allocate(wfsx%DFT_X(1,wfsx%norbs,wfsx%norbs, wfsx%nspin, wfsx%nkpoints))
+  if(nreim<0 .or. nreim>2) then
+    if(wfsx%gamma) then ! gamma calculation k={0,0,0} --> eigenvectors are real
+      allocate(wfsx%DFT_X(1,wfsx%norbs,wfsx%norbs, wfsx%nspin, wfsx%nkpoints))
+    else
+      allocate(wfsx%DFT_X(2,wfsx%norbs,wfsx%norbs, wfsx%nspin, wfsx%nkpoints))
+    endif
   else
-    allocate(wfsx%DFT_X(2,wfsx%norbs,wfsx%norbs, wfsx%nspin, wfsx%nkpoints))
+    allocate(wfsx%DFT_X(nreim,wfsx%norbs,wfsx%norbs, wfsx%nspin, wfsx%nkpoints))
+    if(nreim==1) wfsx%gamma = .true.
+    if(nreim==2) wfsx%gamma = .false.
   endif
+    
   wfsx%kpoints = -999
   wfsx%DFT_X   = -999
   wfsx%DFT_E   = -999

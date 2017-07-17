@@ -20,7 +20,7 @@ def siesta_wfsx_book_read_py(fname):
   """ Creates buffer for integer data from .WFSX files """
   name = create_string_buffer(fname.encode())
   bufsize = c_int64()
-  ios = c_int(22)
+  ios = c_int64(22)
   libnao.siesta_wfsx_book_size(name, bufsize, ios)
   if ios.value!=0 : return None
   idat = empty(bufsize.value, dtype="int32")
@@ -41,22 +41,26 @@ def siesta_wfsx_dread(w):
 #
 #
 #
-def siesta_wfsx_sread(w, sdata):
+def siesta_wfsx_sread(w, sdata, nreim):
   name = create_string_buffer(w.fname.encode())
   bufsize = w.nkpoints*w.nspin*w.norbs**2*w.nreim
-  ios = c_int(22)
-  libnao.siesta_wfsx_sread(name, sdata.ctypes.data_as(POINTER(c_float)), ios)
+  ios = c_int(-999)
+  libnao.siesta_wfsx_sread(name, sdata.ctypes.data_as(POINTER(c_float)), c_int64(nreim), ios)
   if ios.value!=0 : raise RuntimeError('ios!=0 %d'%(ios.value))
 
 
 class siesta_wfsx_c():
   def __init__(self, label='siesta', chdir='.', force_gamma=None):
 
+    nreim = -999
+    if force_gamma is not None:
+      if force_gamma : nreim = 1
+    
     self.label = label
     ends = ['fullBZ.WFSX', 'WFSX']
     for end in ends:
       fname = chdir+'/'+label+'.'+end
-      idat = siesta_wfsx_book_read_py(fname)
+      idat = siesta_wfsx_book_read_py(fname, nreim)
       if idat is None :
         print(fname, ' skip') 
         continue
@@ -121,4 +125,4 @@ class siesta_wfsx_c():
     ### Read single precision data
     
     self.x = np.require(zeros((self.nkpoints,self.nspin,self.norbs,self.norbs,self.nreim), dtype=np.float32), requirements='CW')
-    siesta_wfsx_sread(self, self.x)
+    siesta_wfsx_sread(self, self.x, self.nreim)
