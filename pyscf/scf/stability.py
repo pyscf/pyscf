@@ -304,6 +304,7 @@ def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
         hdiag2[sym_forbid2] = 0
 
     vresp1 = _gen_uhf_response(mf, with_j=False, hermi=0)
+    # Spin flip GHF solution is not considered
     def hop_uhf2ghf(x1):
         if with_symmetry and mol.symmetry:
             x1 = x1.copy()

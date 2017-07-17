@@ -62,6 +62,7 @@ def solve_nos1(fvind, mo_energy, mo_occ, h1,
         mo1 = (mo1[:nocca*nvira].reshape(nvira,nocca),
                mo1[nocca*nvira:].reshape(nvirb,noccb))
     else:
+        mo1 = mo1.reshape(mo1base.shape)
         mo1_a = mo1[:,:nvira*nocca].reshape(-1,nvira,nocca)
         mo1_b = mo1[:,nvira*nocca:].reshape(-1,nvirb,noccb)
         mo1 = (mo1_a, mo1_b)

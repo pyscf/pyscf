@@ -4,7 +4,7 @@
 #
 
 '''
-Non-relativistic spin-spin coupling (SSC) constants
+Non-relativistic RHF spin-spin coupling (SSC) constants
 '''
 
 
@@ -52,10 +52,10 @@ def dso_integral(mol, orig1, orig2):
     pmol = mol + fakemol
     pmol.set_rinv_origin(orig1)
     # <nabla i, j | k>  k is a fictitious basis for numerical integraion
-    mat1 = pmol.intor('int3c1e_iprinv', comp=3,
+    mat1 = pmol.intor(mol._add_suffix('int3c1e_iprinv'), comp=3,
                       shls_slice=(0, mol.nbas, 0, mol.nbas, mol.nbas, pmol.nbas))
     # <i, j | nabla k>
-    mat  = pmol.intor('int3c1e_iprinv', comp=3,
+    mat  = pmol.intor(mol._add_suffix('int3c1e_iprinv'), comp=3,
                       shls_slice=(mol.nbas, pmol.nbas, 0, mol.nbas, 0, mol.nbas))
     mat += mat1.transpose(0,3,1,2) + mat1.transpose(0,3,2,1)
     return mat
@@ -99,10 +99,37 @@ def make_h1_pso(mol, mo_coeff, mo_occ, atmlst):
     return h1
 
 def make_h1_fc(mol, mo_coeff, mo_occ, atmlst):
-    pass
+    coords = mol.atom_coords()
+    ao = numint.eval_ao(mol, coords)
+    mo = ao.dot(mo_coeff)
+    mo_o = mo[:,mo_occ>0]
+    h1 = []
+    for ia in atmlst:
+        h1.append(8*numpy.pi/3 * numpy.einsum('p,i->pi', mo[ia], mo_o[ia]))
+    return h1
 
 def make_h1_sd(mol, mo_coeff, mo_occ, atmlst):
-    pass
+    orbo = mo_coeff[:,mo_occ> 0]
+    nao, nmo = mo_coeff.shape
+
+    h1 = []
+    for ia in atmlst:
+        mol.set_rinv_origin(mol.atom_coord(ia))
+        ipipv = mol.intor('int1e_ipiprinv', 9).reshape(3,3,nao,nao)
+        ipvip = mol.intor('int1e_iprinvip', 9).reshape(3,3,nao,nao)
+        h1ao = ipipv + ipvip
+        h1ao = h1ao + h1ao.transpose(1,0,3,2)
+        for i in range(3):
+            for j in range(3):
+                h1.append(orbv.T.conj().dot(h1ao[i,j]).dot(orbo))
+    return h1
+
+def _uniq_atoms(nuc_pair):
+    atm1lst = sorted(set([i for i,j in nuc_pair]))
+    atm2lst = sorted(set([j for i,j in nuc_pair]))
+    atm1dic = dict([(ia,k) for k,ia in enumerate(atm1lst)])
+    atm2dic = dict([(ia,k) for k,ia in enumerate(atm2lst)])
+    return atm1dic, atm2dic
 
 def _write(stdout, msc3x3, title):
     stdout.write('%s\n' % title)
@@ -117,6 +144,7 @@ class SpinSpinCoupling(rhf_nmr.NMR):
         mol = scf_method.mol
         self.nuc_pair = [(i,j) for i in range(mol.natm) for j in range(i)]
         rhf_nmr.NMR.__init__(self, scf_method)
+        self.with_sd = False
 
     def dump_flags(self):
         rhf_nmr.NMR.dump_flags(self)
@@ -139,7 +167,6 @@ class SpinSpinCoupling(rhf_nmr.NMR):
             mo1 = self.mo10 = self.solve_mo1()[0]
         ssc_para = self.make_pso(mol, mo1, mo_coeff, mo_occ)
         e11 = ssc_para + ssc_dia
-        e11 = ssc_dia
         logger.timer(self, 'spin-spin coupling', *cput0)
 
         if self.verbose > logger.QUIET:

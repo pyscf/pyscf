@@ -333,3 +333,5 @@ if __name__ == '__main__':
     jj = nmr.kernel() # _xx,_yy = 2.1377e-08, _zz = 3.1448e-08
     print(jj)
     print(lib.finger(jj))
+
+# unc-ANO J(iso) = 647.75556 Hz

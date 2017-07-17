@@ -45,8 +45,8 @@ def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
             h11 += mol.intor('int1e_a01gp', 9)
         a11 = numpy.einsum('xij,ij->x', h11, dm0)
         msc_dia.append(a11)
-        #     XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ = 1..9
-        #  => [[XX, XY, XZ], [YX, YY, YZ], [ZX, ZY, ZZ]]
+    # XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ = 1..9
+    # => [[XX, XY, XZ], [YX, YY, YZ], [ZX, ZY, ZZ]]
     return numpy.array(msc_dia).reshape(-1, 3, 3)
 
 # Note mo10 is the imaginary part of MO^1
@@ -134,9 +134,9 @@ def solve_mo1(mo_energy, mo_occ, h1, s1):
 
 class NMR(lib.StreamObject):
     def __init__(self, scf_method):
-        self.verbose = scf_method.verbose
-        self.stdout = scf_method.stdout
         self.mol = scf_method.mol
+        self.verbose = scf_method.mol.verbose
+        self.stdout = scf_method.mol.stdout
         self.chkfile = scf_method.chkfile
         self._scf = scf_method
 

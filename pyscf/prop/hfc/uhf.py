@@ -48,7 +48,6 @@ def dia(gobj, mol, dm0, hfc_nuc=None, verbose=None):
     for i, atm_id in enumerate(hfc_nuc):
         Z = mole._charge(mol.atom_symbol(atm_id))
         nuc_spin, g_nuc = parameters.ISOTOPE[Z][1:3]
-# g factor of other isotopes can be found in file nuclear_g_factor.dat
         gyromag = 1e-6/(2*numpy.pi) * parameters.g_factor_to_gyromagnetic_ratio(g_nuc)
         log.info('Atom %d %s  nuc-spin %g  nuc-g-factor %g  gyromagnetic ratio %g (in MHz)',
                  atm_id, mol.atom_symbol(atm_id), nuc_spin, g_nuc, gyromag)
@@ -62,7 +61,7 @@ def dia(gobj, mol, dm0, hfc_nuc=None, verbose=None):
 # e11 includes fermi-contact and spin-dipolar contriutions and a rank-2 contact
 # term.  We ignore the contribution of rank-2 contact term, view it as part of
 # SD contribution.  See also TCA, 73, 173
-        fermi_contact = (4*numpy.pi/3 * fac * gyromag *
+        fermi_contact = (8*numpy.pi/3 * fac * gyromag *
                          numpy.einsum('i,j,ji', ao[atm_id], ao[atm_id], spindm))
         dip = e11 - numpy.eye(3) * fermi_contact
         log.info('FC %s', fermi_contact)
@@ -93,10 +92,7 @@ def para(mol, mo1, mo_coeff, mo_occ, hfc_nuc=None):
         dm10[i]+= reduce(numpy.dot, (mo_coeff[1], mo1[1][i], orbob.conj().T))
     para = numpy.empty((len(hfc_nuc),3,3))
     for n, atm_id in enumerate(hfc_nuc):
-        Z = mole._charge(mol.atom_symbol(atm_id))
-        nuc_spin, g_nuc = parameters.ISOTOPE[Z][1:3]
-        gyromag = 1e-6/(2*numpy.pi) * parameters.g_factor_to_gyromagnetic_ratio(g_nuc)
-
+        gyromag = parameters.get_gyro(mol, mol.atom_symbol(atm_id))
         mol.set_rinv_origin(mol.atom_coord(atm_id))
         h01 = mol.intor_asymmetric('int1e_prinvxp', 3)
         para[n] = numpy.einsum('xji,yij->yx', dm10, h01) * 2

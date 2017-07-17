@@ -50,6 +50,8 @@ def gen_tda_hop(mf, fock_ao=None, wfnsym=None, max_memory=2000):
     e_ai = hdiag = numpy.hstack((e_ai_a.reshape(-1), e_ai_b.reshape(-1)))
     if wfnsym is not None and mol.symmetry:
         hdiag[sym_forbid] = 0
+    mo_a = numpy.asarray(numpy.hstack((orboa,orbva)), order='F')
+    mo_b = numpy.asarray(numpy.hstack((orbob,orbvb)), order='F')
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, max_memory*.8-mem_now)
@@ -68,8 +70,8 @@ def gen_tda_hop(mf, fock_ao=None, wfnsym=None, max_memory=2000):
             dmvo[1,i] = reduce(numpy.dot, (orbvb, zb, orbob.T))
 
         v1ao = vresp(dmvo)
-        v1a = _ao2mo.nr_e2(v1ao[0], mo_coeff[0], (nocca,nmo,0,nocca)).reshape(-1,nvira,nocca)
-        v1b = _ao2mo.nr_e2(v1ao[1], mo_coeff[1], (noccb,nmo,0,noccb)).reshape(-1,nvirb,noccb)
+        v1a = _ao2mo.nr_e2(v1ao[0], mo_a, (nocca,nmo,0,nocca)).reshape(-1,nvira,nocca)
+        v1b = _ao2mo.nr_e2(v1ao[1], mo_b, (noccb,nmo,0,noccb)).reshape(-1,nvirb,noccb)
         for i, z in enumerate(zs):
             za = z[:nocca*nvira].reshape(nvira,nocca)
             zb = z[nocca*nvira:].reshape(nvirb,noccb)
@@ -208,6 +210,8 @@ class TDHF(TDA):
         if wfnsym is not None and mol.symmetry:
             hdiag[sym_forbid] = 0
         hdiag = numpy.hstack((hdiag.ravel(), hdiag.ravel()))
+        mo_a = numpy.asarray(numpy.hstack((orboa,orbva)), order='F')
+        mo_b = numpy.asarray(numpy.hstack((orbob,orbvb)), order='F')
 
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
@@ -234,10 +238,10 @@ class TDHF(TDA):
                 dms[1,i] = dmx + dmy  # AX + BY
 
             v1ao  = vresp(dms)
-            v1avo = _ao2mo.nr_e2(v1ao[0], mo_coeff[0], (nocca,nmo,0,nocca))
-            v1bvo = _ao2mo.nr_e2(v1ao[1], mo_coeff[1], (noccb,nmo,0,noccb))
-            v1aov = _ao2mo.nr_e2(v1ao[0], mo_coeff[0], (0,nocca,nocca,nmo))
-            v1bov = _ao2mo.nr_e2(v1ao[1], mo_coeff[1], (0,noccb,noccb,nmo))
+            v1avo = _ao2mo.nr_e2(v1ao[0], mo_a, (nocca,nmo,0,nocca))
+            v1bvo = _ao2mo.nr_e2(v1ao[1], mo_b, (noccb,nmo,0,noccb))
+            v1aov = _ao2mo.nr_e2(v1ao[0], mo_a, (0,nocca,nocca,nmo))
+            v1bov = _ao2mo.nr_e2(v1ao[1], mo_b, (0,noccb,noccb,nmo))
             hx = numpy.empty((nz,2,nvira*nocca+nvirb*noccb), dtype=v1avo.dtype)
             for i in range(nz):
                 x, y = xys[i].reshape(2,-1)
