@@ -13,6 +13,6 @@ class KnowValues(unittest.TestCase):
     ksn2fd = fermi_dirac_occupations(sv.hsx.telec, sv.wfsx.ksn2e, sv.fermi_energy)
     ksn2f = (3-sv.nspin)*ksn2fd
     dm = comp_dm(sv.wfsx.x, ksn2f)
-    vxc = sv.vxc_lil(dm)
+    vxc = sv.vxc_lil(dm, 'LDA,PZ')
   
 if __name__ == "__main__": unittest.main()

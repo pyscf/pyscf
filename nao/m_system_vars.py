@@ -400,9 +400,9 @@ class system_vars_c():
   def diag_check(self, atol=1e-5, rtol=1e-4, **kvargs): # Works only after init_siesta_xml(), extend ?
     return diag_check(self, atol, rtol, **kvargs)
 
-  def vxc_lil(self, dm, **kvargs):   # Compute exchange-correlation potentials
+  def vxc_lil(self, dm, xc_code, **kvargs):   # Compute exchange-correlation potentials
     from pyscf.nao.m_vxc_lil import vxc_lil
-    return vxc_lil(self, dm, **kvargs)
+    return vxc_lil(self, dm, xc_code, deriv=1, **kvargs)
 
   def exc(self, dm, xc_code, **kvargs):   # Compute exchange-correlation energies
     from pyscf.nao.m_exc import exc

@@ -181,11 +181,11 @@ class prod_basis_c():
     rc12 = np.array([self.sv.atom2coord[a,:] for a in (a1,a2)])
     return ls_contributing(self, sp12, rc12)
 
-  def init_prod_basis_pp(self):
-    """ Talman's procedure should be working well with Pseudo-Potential starting point. Before doing this, the method .init_pb_pp_libnao_apair() must be called"""
-    
+  def init_prod_basis_pp(self, sv):
+    """ Talman's procedure should be working well with Pseudo-Potential starting point."""
     from pyscf.nao.m_prod_biloc import prod_biloc_c
-    sv = self.sv
+
+    self.init_pb_pp_libnao_apair(sv)
     self.bp2info = [] # going to be some information including indices of atoms, list of contributing centres, conversion coefficients
     for ia1 in range(sv.natoms):
       rc1 = sv.ao_log.sp2rcut[sv.atom2sp[ia1]]

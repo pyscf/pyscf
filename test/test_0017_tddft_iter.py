@@ -5,8 +5,7 @@ from numpy import allclose, float32, einsum
 
 dname = os.path.dirname(os.path.abspath(__file__))
 sv = system_vars_c().init_siesta_xml(label='water', cd=dname)
-pb = prod_basis_c().init_pb_pp_libnao_apair(sv)
-pb.init_prod_basis_pp()
+pb = prod_basis_c().init_prod_basis_pp(sv)
 
 class KnowValues(unittest.TestCase):
   

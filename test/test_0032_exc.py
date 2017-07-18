@@ -4,7 +4,7 @@ import os,unittest,numpy as np
 class KnowValues(unittest.TestCase):
 
   def test_exc(self):
-    """ Compute real spherical harmonics via a vectorized algorithm """
+    """ Compute exchange-correlation energy """
     from timeit import default_timer as timer
 
     from pyscf.nao import system_vars_c

@@ -4,7 +4,7 @@ import os,unittest,numpy as np
 class KnowValues(unittest.TestCase):
 
   def test_tddft_iter_lda(self):
-    """ Compute TDDFT interaction kernel  """
+    """ Compute polarization with LDA TDDFT  """
     from timeit import default_timer as timer
 
     from pyscf.nao import system_vars_c, prod_basis_c, tddft_iter_c
@@ -13,7 +13,7 @@ class KnowValues(unittest.TestCase):
     
     dname = os.path.dirname(os.path.abspath(__file__))
     sv = system_vars_c().init_siesta_xml(label='water', cd=os.path.dirname(os.path.abspath(__file__)))
-    pb = prod_basis_c().init_pb_pp_libnao_apair(sv).init_prod_basis_pp()
+    pb = prod_basis_c().init_prod_basis_pp(sv)
     td = tddft_iter_c(pb.sv, pb, tddft_iter_broadening=1e-2, xc_code='LDA,PZ')
     omegas = np.linspace(0.0,2.0,150)+1j*td.eps
     pxx = -td.comp_polariz_xx(omegas).imag

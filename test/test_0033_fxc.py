@@ -12,7 +12,7 @@ class KnowValues(unittest.TestCase):
     from timeit import default_timer as timer
     
     sv = system_vars_c().init_siesta_xml(label='water', cd=os.path.dirname(os.path.abspath(__file__)))
-    pb = prod_basis_c().init_pb_pp_libnao_apair(sv).init_prod_basis_pp()
+    pb = prod_basis_c().init_prod_basis_pp(sv)
     dm = comp_dm(sv.wfsx.x, sv.get_occupations())
     fxc = pb.comp_fxc_lil(dm, xc_code='1.0*LDA,1.0*PZ', level=4)
 

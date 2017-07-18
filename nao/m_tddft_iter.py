@@ -86,4 +86,3 @@ class tddft_iter_c():
       #print(iw, info, veff.sum())
       polariz[iw] = np.dot(self.moms1[:,0], self.apply_rf0( veff, comega ))
     return polariz
-    

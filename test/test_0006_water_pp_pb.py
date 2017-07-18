@@ -11,9 +11,8 @@ class KnowValues(unittest.TestCase):
     dname = os.path.dirname(os.path.abspath(__file__))
     sv = system_vars_c().init_siesta_xml(label='water', cd=dname)
     self.assertTrue(abs(sv.ucell).sum()>0)
-    pb = prod_basis_c().init_pb_pp_libnao_apair(sv)
+    pb = prod_basis_c().init_prod_basis_pp(sv)
     self.assertEqual(sv.norbs, 23)
-    pb.init_prod_basis_pp()
     
     self.assertEqual(len(pb.bp2info), 3)
     vden = pb.get_ac_vertex_array()
