@@ -6,13 +6,7 @@ sv = system_vars_c().init_siesta_xml(label='siesta', cd='.', force_gamma=True)
 pb = prod_basis_c().init_pb_pp_libnao_apair(sv)
 pb.init_prod_basis_pp()
 
-
 """ This is iterative TDDFT with SIESTA starting point """
 td = tddft_iter_c(pb.sv, pb)
-self.assertTrue(hasattr(td, 'x'))
-self.assertTrue(td.ksn2f.sum()==8.0) # water: O -- 6 electrons in the valence + H2 -- 2 electrons
-self.assertEqual(td.xocc.shape[0], 4)
-self.assertEqual(td.xvrt.shape[0], 19)
-
 dn0 = td.apply_rf0(td.moms1[:,0])
     

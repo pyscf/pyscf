@@ -17,10 +17,14 @@ class tddft_iter_c():
     self.tddft_iter_tol = tddft_iter_tol
     self.eps = tddft_iter_broadening
     self.sv, self.pb, self.norbs, self.nspin = sv, pb, sv.norbs, sv.nspin
+    print('before vertex_coo')
     self.v_dab = pb.get_dp_vertex_coo(dtype=np.float32).tocsr()
+    print('before conversion coefficients coo')
     self.cc_da = pb.get_da2cc_coo(dtype=np.float32).tocsr()
+    print('before moments')
     self.moms0,self.moms1 = pb.comp_moments(dtype=np.float32)
     self.nprod = self.moms0.size
+    print('before kernel')
     self.kernel = pb.comp_coulomb_den(dtype=np.float32)
     self.telec = sv.hsx.telec if telec is None else telec
     self.nelec = sv.hsx.nelec if nelec is None else nelec
@@ -31,6 +35,7 @@ class tddft_iter_c():
     self.ksn2f = (3-self.nspin)*ksn2fd
     self.nfermi = np.argmax(ksn2fd[0,0,:]<nfermi_tol)
     self.vstart = np.argmax(1.0-ksn2fd[0,0,:]>nfermi_tol)
+    print('before xocc, xvrt')
     self.xocc = self.x[0,0,0:self.nfermi,:,0]  # does python creates a copy at this point ?
     self.xvrt = self.x[0,0,self.vstart:,:,0]   # does python creates a copy at this point ?
     
@@ -39,18 +44,19 @@ class tddft_iter_c():
     assert len(v)==len(self.moms0), "%r, %r "%(len(v), len(self.moms0))
     self.rf0_ncalls+=1
     vdp = self.cc_da * np.require(v, dtype=np.complex64)
-    n = self.norbs
-    sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([n,n]))
+    no = self.norbs
+    sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
     nb2v = self.xocc*sab
     #nm2v = np.zeros([self.nfermi,len(self.xvrt)], dtype=np.complex64)
     nm2v = np.dot(nb2v, np.transpose(self.xvrt))
     
-    for i,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
-      for j,[em,fm] in enumerate(zip(self.ksn2e[0,0,self.vstart:],self.ksn2f[0,0,self.vstart:])):
-        nm2v[i,j] = nm2v[i,j] * (fn-fm) * ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
+    for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
+      for j,[em,fm] in enumerate(zip(self.ksn2e[0,0,n+1:],self.ksn2f[0,0,n+1:])):
+        m = j+n+1-self.vstart
+        nm2v[n,m] = nm2v[n,m] * (fn-fm) * ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
         
     nb2v = np.dot(nm2v,self.xvrt)
-    ab2v = np.dot(np.transpose(self.xocc),nb2v).reshape(n*n)
+    ab2v = np.dot(np.transpose(self.xocc),nb2v).reshape(no*no)
     vdp = self.v_dab*ab2v
     res = vdp*self.cc_da
     return res
