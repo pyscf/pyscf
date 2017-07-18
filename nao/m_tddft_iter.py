@@ -17,14 +17,14 @@ class tddft_iter_c():
     self.tddft_iter_tol = tddft_iter_tol
     self.eps = tddft_iter_broadening
     self.sv, self.pb, self.norbs, self.nspin = sv, pb, sv.norbs, sv.nspin
-    print('before vertex_coo')
+    #print('before vertex_coo')
     self.v_dab = pb.get_dp_vertex_coo(dtype=np.float32).tocsr()
-    print('before conversion coefficients coo')
+    #print('before conversion coefficients coo')
     self.cc_da = pb.get_da2cc_coo(dtype=np.float32).tocsr()
-    print('before moments')
+    #print('before moments')
     self.moms0,self.moms1 = pb.comp_moments(dtype=np.float32)
     self.nprod = self.moms0.size
-    print('before kernel')
+    #print('before kernel')
     self.kernel = pb.comp_coulomb_den(dtype=np.float32)
     self.telec = sv.hsx.telec if telec is None else telec
     self.nelec = sv.hsx.nelec if nelec is None else nelec
