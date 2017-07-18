@@ -5,6 +5,11 @@
 
 '''
 Non-relativistic RHF spin-spin coupling (SSC) constants
+
+Ref.
+Chem. Rev., 99, 293
+JCP, 113, 3530
+JCP, 113, 9402
 '''
 
 
@@ -15,8 +20,9 @@ from pyscf import lib
 from pyscf import gto
 from pyscf import tools
 from pyscf.lib import logger
-from pyscf.scf import _vhf
 from pyscf.scf import cphf
+from pyscf.ao2mo import _ao2mo
+from pyscf.dft import numint
 from pyscf.scf.newton_ah import _gen_rhf_response
 from pyscf.prop.nmr import rhf as rhf_nmr
 from pyscf.prop.hfc.parameters import get_nuc_g_factor
@@ -98,18 +104,97 @@ def make_h1_pso(mol, mo_coeff, mo_occ, atmlst):
         h1 += [reduce(numpy.dot, (orbv.T.conj(), x, orbo)) for x in h1ao]
     return h1
 
+def make_fc(sscobj, nuc_pair=None):
+    '''Only Fermi-contact'''
+    if nuc_pair is None: nuc_pair = sscobj.nuc_pair
+    mol = sscobj.mol
+    mo_coeff = sscobj._scf.mo_coeff
+    mo_occ = sscobj._scf.mo_occ
+    atm1dic, atm2dic = _uniq_atoms(nuc_pair)
+
+    h1 = make_h1_fc(mol, mo_coeff, mo_occ, sorted(atm2dic.keys()))
+    mo1 = solve_mo1_fc(sscobj, h1)
+    h1 = make_h1_fc(mol, mo_coeff, mo_occ, sorted(atm1dic.keys()))
+    para = []
+    for i,j in nuc_pair:
+        at1 = atm1dic[i]
+        at2 = atm2dic[j]
+        e = numpy.einsum('ij,ij', h1[at1], mo1[at2]) * 2  # *2 for double occupancy
+        para.append(e*2)  # *2 for +c.c.
+    return numpy.einsum(',k,xy->kxy', lib.param.ALPHA**4, para, numpy.eye(3))
+
+def solve_mo1_fc(sscobj, h1):
+    cput1 = (time.clock(), time.time())
+    log = logger.Logger(sscobj.stdout, sscobj.verbose)
+    mol = sscobj.mol
+    mo_energy = sscobj._scf.mo_energy
+    mo_coeff = sscobj._scf.mo_coeff
+    mo_occ = sscobj._scf.mo_occ
+    nset = len(h1)
+    eai = 1. / lib.direct_sum('i-a->ai', mo_energy[mo_occ>0], mo_energy[mo_occ==0])
+    mo1 = numpy.asarray(h1) * eai
+    if not sscobj.cphf:
+        return mo1
+
+    orbo = mo_coeff[:,mo_occ> 0]
+    orbv = mo_coeff[:,mo_occ==0]
+    nocc = orbo.shape[1]
+    nvir = orbv.shape[1]
+    nmo = nocc + nvir
+
+    vresp = _gen_rhf_response(mf, singlet=False, hermi=2)
+    mo_v_o = numpy.asarray(numpy.hstack((orbv,orbo)), order='F')
+    def vind(mo1):
+        dm1 = _dm1_mo2ao(mo1.reshape(nset,nvir,nocc), orbv, orbo*2)  # *2 for double occupancy
+        dm1 = dm1 - dm1.transpose(0,2,1)
+        v1 = vresp(dm1)
+        v1 = _ao2mo.nr_e2(v1, mo_v_o, (0,nvir,nvir,nmo)).reshape(nset,nvir,nocc)
+        v1 *= eai
+        return v1.ravel()
+
+    mo1 = lib.krylov(vind, mo1.ravel(), tol=1e-9, max_cycle=20, verbose=log)
+    log.timer('solving FC CPHF eqn', *cput1)
+    return mo1.reshape(nset,nvir,nocc)
+
+def make_fcsd(sscobj, nuc_pair=None):
+    '''FC + SD contributions to 2nd order energy'''
+    if nuc_pair is None: nuc_pair = sscobj.nuc_pair
+    mol = sscobj.mol
+    mo_coeff = sscobj._scf.mo_coeff
+    mo_occ = sscobj._scf.mo_occ
+    atm1dic, atm2dic = _uniq_atoms(nuc_pair)
+
+    h1 = make_h1_fcsd(mol, mo_coeff, mo_occ, sorted(atm2dic.keys()))
+    mo1 = solve_mo1_fc(sscobj, h1)
+    h1 = make_h1_fcsd(mol, mo_coeff, mo_occ, sorted(atm1dic.keys()))
+    nocc = numpy.count_nonzero(mo_occ> 0)
+    nvir = numpy.count_nonzero(mo_occ==0)
+    mo1 = numpy.asarray(mo1).reshape(-1,3,3,nvir,nocc)
+    h1  = numpy.asarray(h1).reshape(-1,3,3,nvir,nocc)
+    para = []
+    for i,j in nuc_pair:
+        at1 = atm1dic[i]
+        at2 = atm2dic[j]
+        e = numpy.einsum('xwij,ywij->xy', h1[at1], mo1[at2]) * 2  # *2 for double occupancy
+        para.append(e*2)  # *2 for +c.c.
+    return numpy.asarray(para) * lib.param.ALPHA**4
+
+
 def make_h1_fc(mol, mo_coeff, mo_occ, atmlst):
     coords = mol.atom_coords()
     ao = numint.eval_ao(mol, coords)
     mo = ao.dot(mo_coeff)
-    mo_o = mo[:,mo_occ>0]
+    orbo = mo[:,mo_occ> 0]
+    orbv = mo[:,mo_occ==0]
+    fac = 8*numpy.pi/3 *.5  # *.5 due to s = 1/2 * pauli-matrix
     h1 = []
     for ia in atmlst:
-        h1.append(8*numpy.pi/3 * numpy.einsum('p,i->pi', mo[ia], mo_o[ia]))
+        h1.append(fac * numpy.einsum('p,i->pi', orbv[ia], orbo[ia]))
     return h1
 
-def make_h1_sd(mol, mo_coeff, mo_occ, atmlst):
+def make_h1_fcsd(mol, mo_coeff, mo_occ, atmlst):
     orbo = mo_coeff[:,mo_occ> 0]
+    orbv = mo_coeff[:,mo_occ==0]
     nao, nmo = mo_coeff.shape
 
     h1 = []
@@ -117,11 +202,12 @@ def make_h1_sd(mol, mo_coeff, mo_occ, atmlst):
         mol.set_rinv_origin(mol.atom_coord(ia))
         ipipv = mol.intor('int1e_ipiprinv', 9).reshape(3,3,nao,nao)
         ipvip = mol.intor('int1e_iprinvip', 9).reshape(3,3,nao,nao)
-        h1ao = ipipv + ipvip
-        h1ao = h1ao + h1ao.transpose(1,0,3,2)
+        h1ao = ipipv + ipvip  # (nabla i | r/r^3 | j)
+        h1ao = h1ao + h1ao.transpose(0,1,3,2)
+        h1ao -= h1ao[0,0] + h1ao[1,1] + h1ao[2,2]
         for i in range(3):
             for j in range(3):
-                h1.append(orbv.T.conj().dot(h1ao[i,j]).dot(orbo))
+                h1.append(orbv.T.conj().dot(h1ao[i,j]).dot(orbo) * .5)
     return h1
 
 def _uniq_atoms(nuc_pair):
@@ -130,6 +216,14 @@ def _uniq_atoms(nuc_pair):
     atm1dic = dict([(ia,k) for k,ia in enumerate(atm1lst)])
     atm2dic = dict([(ia,k) for k,ia in enumerate(atm2lst)])
     return atm1dic, atm2dic
+
+def _dm1_mo2ao(dm1, ket, bra):
+    nao, nket = ket.shape
+    nbra = bra.shape[1]
+    nset = len(dm1)
+    dm1 = lib.ddot(ket, dm1.transpose(1,0,2).reshape(nket,nset*nbra))
+    dm1 = dm1.reshape(nao,nset,nbra).transpose(1,0,2).reshape(nset*nao,nbra)
+    return lib.ddot(dm1, bra.T).reshape(nset,nao,nao)
 
 def _write(stdout, msc3x3, title):
     stdout.write('%s\n' % title)
@@ -143,12 +237,15 @@ class SpinSpinCoupling(rhf_nmr.NMR):
     def __init__(self, scf_method):
         mol = scf_method.mol
         self.nuc_pair = [(i,j) for i in range(mol.natm) for j in range(i)]
+        self.with_fc = True
+        self.with_fcsd = False
         rhf_nmr.NMR.__init__(self, scf_method)
-        self.with_sd = False
 
     def dump_flags(self):
         rhf_nmr.NMR.dump_flags(self)
         logger.info(self, 'nuc_pair %s', self.nuc_pair)
+        logger.info(self, 'with Fermi-contact  %s', self.with_fc)
+        logger.info(self, 'with Fermi-contact + spin-dipole  %s', self.with_fcsd)
         return self
 
     def kernel(self, mo1=None):
@@ -165,8 +262,14 @@ class SpinSpinCoupling(rhf_nmr.NMR):
 
         if mo1 is None:
             mo1 = self.mo10 = self.solve_mo1()[0]
-        ssc_para = self.make_pso(mol, mo1, mo_coeff, mo_occ)
-        e11 = ssc_para + ssc_dia
+        ssc_pso = self.make_pso(mol, mo1, mo_coeff, mo_occ)
+        e11 = ssc_dia + ssc_pso
+        if self.with_fcsd:
+            ssc_fcsd = self.make_fcsd(self.nuc_pair)
+            e11 += ssc_fcsd
+        elif self.with_fc:
+            ssc_fc = self.make_fc(self.nuc_pair)
+            e11 += ssc_fc
         logger.timer(self, 'spin-spin coupling', *cput0)
 
         if self.verbose > logger.QUIET:
@@ -183,8 +286,8 @@ class SpinSpinCoupling(rhf_nmr.NMR):
                            '\nSSC E11 between %d %s and %d %s' \
                            % (i, self.mol.atom_symbol(i),
                               j, self.mol.atom_symbol(j)))
-                    _write(self.stdout, ssc_dia [k], 'dia-magnetism')
-                    _write(self.stdout, ssc_para[k], 'para-magnetism')
+#                    _write(self.stdout, ssc_dia [k], 'dia-magnetism')
+#                    _write(self.stdout, ssc_para[k], 'para-magnetism')
 
             gyro = [get_nuc_g_factor(mol.atom_symbol(ia)) for ia in range(natm)]
             jtensor = numpy.einsum('ij,i,j->ij', ktensor, gyro, gyro)
@@ -197,7 +300,18 @@ class SpinSpinCoupling(rhf_nmr.NMR):
         return e11
 
     dia = make_dso = make_dso
-    para = make_pso = make_pso
+    make_pso = make_pso
+    make_fc = make_fc
+    make_fcsd = make_fcsd
+
+    def para(self, mol=None, mo10=None, mo_coeff=None, mo_occ=None,
+             nuc_pair=None):
+        ssc_para = self.make_pso(mol, mo1, mo_coeff, mo_occ)
+        if self.with_fcsd:
+            ssc_para += self.make_fcsd(mol, mo1, mo_coeff, mo_occ)
+        elif self.with_fc:
+            ssc_para += self.make_fc(mol, mo1, mo_coeff, mo_occ)
+        return ssc_para
 
     def solve_mo1(self, mo_energy=None, mo_occ=None, nuc_pair=None,
                   with_cphf=None):
@@ -253,7 +367,7 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     mol = gto.Mole()
-    mol.verbose = 4
+    mol.verbose = 0
     mol.output = None
 
     mol.atom.extend([
@@ -264,10 +378,12 @@ if __name__ == '__main__':
                  'F': '6-31g',}
     mol.build()
 
-    rhf = scf.RHF(mol).run()
-    nmr = SSC(rhf)
-    nmr.cphf = True
-    #nmr.gauge_orig = (0,0,0)
-    jj = nmr.kernel() # _xx,_yy = , _zz =
+    mf = scf.RHF(mol).run()
+    ssc = SSC(mf)
+    ssc.verbose = 4
+    ssc.cphf = True
+    ssc.with_fc = True
+    ssc.with_fcsd = True
+    jj = ssc.kernel()
     print(jj)
-    print(lib.finger(jj))
+    print(lib.finger(jj)*1e8 - 7.4788796413621164)

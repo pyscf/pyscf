@@ -21,7 +21,7 @@ from pyscf.dft import numint
 from pyscf.scf.newton_ah import _gen_uhf_response
 from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.ssc import rhf as rhf_ssc
-from pyscf.prop.ssc.rhf import _uniq_atoms
+from pyscf.prop.ssc.rhf import _uniq_atoms, _dm1_mo2ao, _write
 from pyscf.prop.hfc.parameters import get_nuc_g_factor
 
 NUMINT_GRIDS = 30
@@ -86,14 +86,13 @@ def make_fc(sscobj, nuc_pair=None):
     for i,j in nuc_pair:
         at1 = atm1dic[i]
         at2 = atm2dic[j]
-        # z contribution
-        e = numpy.einsum('ij,ij', h1aa[at1], mo1aa[at2])
-        e+= numpy.einsum('ij,ij', h1bb[at1], mo1bb[at2])
-        # x,y contributions
-        e+= numpy.einsum('ij,ij', h1ab[at1], mo1ab[at2]) * 2
-        e+= numpy.einsum('ij,ij', h1ba[at1], mo1ba[at2]) * 2
-        para.append(e*2)  # *2 for +c.c.
-    return numpy.einsum(',k,xy->kxy', lib.param.ALPHA**4, para, numpy.eye(3))
+        ez  = numpy.einsum('ij,ij', h1aa[at1], mo1aa[at2]) * 2  # *2 for +c.c.
+        ez += numpy.einsum('ij,ij', h1bb[at1], mo1bb[at2]) * 2
+        ex  = numpy.einsum('ij,ij', h1ab[at1], mo1ab[at2]) * 2
+        ex += numpy.einsum('ij,ij', h1ba[at1], mo1ba[at2]) * 2
+        ey = ex
+        para.append(numpy.diag([ex,ey,ez]))
+    return numpy.asarray(para) * lib.param.ALPHA**4
 
 def solve_mo1_fc(sscobj, h1):
     cput1 = (time.clock(), time.time())
@@ -205,14 +204,14 @@ def make_fcsd(sscobj, nuc_pair=None):
         at1 = atm1dic[i]
         at2 = atm2dic[j]
         # x contributions
-        e = numpy.einsum('xij,yij', h1ab[at1,0], mo1ab[at2,0])
-        e+= numpy.einsum('xij,yij', h1ba[at1,0], mo1ba[at2,0])
-        # x contributions
-        e+= numpy.einsum('xij,yij', h1ab[at1,1], mo1ab[at2,1])
-        e+= numpy.einsum('xij,yij', h1ba[at1,1], mo1ba[at2,1])
+        e = numpy.einsum('xij,yij->xy', h1ab[at1,0], mo1ab[at2,0])
+        e+= numpy.einsum('xij,yij->xy', h1ba[at1,0], mo1ba[at2,0])
+        # y contributions
+        e+= numpy.einsum('xij,yij->xy', h1ab[at1,1], mo1ab[at2,1])
+        e+= numpy.einsum('xij,yij->xy', h1ba[at1,1], mo1ba[at2,1])
         # z contribution
-        e+= numpy.einsum('xij,yij', h1aa[at1,2], mo1aa[at2,2])
-        e+= numpy.einsum('xij,yij', h1bb[at1,2], mo1bb[at2,2])
+        e+= numpy.einsum('xij,yij->xy', h1aa[at1,2], mo1aa[at2,2])
+        e+= numpy.einsum('xij,yij->xy', h1bb[at1,2], mo1bb[at2,2])
         para.append(e*2)  # *2 for +c.c.
     return numpy.asarray(para) * lib.param.ALPHA**4
 
@@ -248,13 +247,13 @@ def make_h1_fcsd(mol, mo_coeff, mo_occ, atmlst):
     h1ab = []
     h1ba = []
     h1bb = []
-#TODO: replace the 3x3 cartesian tensor by 6 components
     for ia in atmlst:
         mol.set_rinv_origin(mol.atom_coord(ia))
         ipipv = mol.intor('int1e_ipiprinv', 9).reshape(3,3,nao,nao)
         ipvip = mol.intor('int1e_iprinvip', 9).reshape(3,3,nao,nao)
         h1ao = ipipv + ipvip
-        h1ao = h1ao + h1ao.transpose(1,0,3,2)
+        h1ao = h1ao + h1ao.transpose(0,1,3,2)
+        h1ao -= h1ao[0,0] + h1ao[1,1] + h1ao[2,2]
         # *.5 due to s = 1/2 * pauli-matrix
         for i in range(3):
             for j in range(3):
@@ -263,21 +262,6 @@ def make_h1_fcsd(mol, mo_coeff, mo_occ, atmlst):
                 h1ba.append(orbvb.T.conj().dot(h1ao[i,j]).dot(orboa) * .5)
                 h1bb.append(orbvb.T.conj().dot(h1ao[i,j]).dot(orbob) * .5)
     return h1aa, h1ab, h1ba, h1bb
-
-def _dm1_mo2ao(dm1, ket, bra):
-    nao, nket = ket.shape
-    nbra = bra.shape[1]
-    nset = len(dm1)
-    dm1 = lib.ddot(ket, dm1.transpose(1,0,2).reshape(nket,nset*nbra))
-    dm1 = dm1.reshape(nao,nset,nbra).transpose(1,0,2).reshape(nset*nao,nbra)
-    return lib.ddot(dm1, bra.T).reshape(nset,nao,nao)
-
-def _write(stdout, msc3x3, title):
-    stdout.write('%s\n' % title)
-    stdout.write('mu_x %s\n' % str(msc3x3[0]))
-    stdout.write('mu_y %s\n' % str(msc3x3[1]))
-    stdout.write('mu_z %s\n' % str(msc3x3[2]))
-    stdout.flush()
 
 
 class SpinSpinCoupling(uhf_nmr.NMR):
@@ -312,7 +296,7 @@ class SpinSpinCoupling(uhf_nmr.NMR):
 
         if mo1 is None:
             mo1 = self.mo10 = self.solve_mo1()[0]
-        ssc_pso  = self.make_pso(mol, mo1, mo_coeff, mo_occ)
+        ssc_pso = self.make_pso(mol, mo1, mo_coeff, mo_occ)
         e11 = ssc_dia + ssc_pso
         if self.with_fcsd:
             ssc_fcsd = self.make_fcsd(self.nuc_pair)
@@ -433,7 +417,7 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     mol = gto.Mole()
-    mol.verbose = 4
+    mol.verbose = 0
     mol.output = None
 
     mol.atom.extend([
@@ -446,9 +430,10 @@ if __name__ == '__main__':
 
     mf = scf.UHF(mol).run()
     ssc = SSC(mf)
+    ssc.verbose = 4
     ssc.cphf = True
     ssc.with_fc = True
-    #ssc.with_fcsd = True
-    jj = ssc.kernel() # _xx,_yy = , _zz =
+    ssc.with_fcsd = True
+    jj = ssc.kernel()
     print(jj)
-    print(lib.finger(jj))
+    print(lib.finger(jj)*1e8 - 7.4788705851190009)
