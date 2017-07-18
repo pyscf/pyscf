@@ -95,8 +95,14 @@ def cart2sph(l):
            cmat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l))
         return c2sph
 
-def cart2j_kappa(kappa, l=None):
-    '''Cartesian to spinor, indexed by kappa'''
+def cart2j_kappa(kappa, l=None, normalized=None):
+    '''Cartesian to spinor, indexed by kappa
+
+    Kwargs:
+        normalized :
+            How the Cartesian GTOs are normalized.  'sp' means the s and p
+            functions are normalized.
+    '''
     if kappa < 0:
         l = -kappa - 1
         nd = l * 2 + 2
@@ -115,15 +121,16 @@ def cart2j_kappa(kappa, l=None):
        cmat.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(nf*2), ctypes.c_int(nf),
        ctypes.c_int(1), ctypes.c_int(kappa), ctypes.c_int(l))
-    if l == 0:
-        c2smat *= 0.282094791773878143
-    elif l == 1:
-        c2smat *= 0.488602511902919921
+    if normalized != 'sp':
+        if l == 0:
+            c2smat *= 0.282094791773878143
+        elif l == 1:
+            c2smat *= 0.488602511902919921
     return c2smat
 
-def cart2j_l(l):
+def cart2j_l(l, normalized=None):
     '''Cartesian to spinor, indexed by l'''
-    return cart2j_kappa(0, l)
+    return cart2j_kappa(0, l, normalized)
 
 def atom_types(atoms, basis=None):
     '''symmetry inequivalent atoms'''

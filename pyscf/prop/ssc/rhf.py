@@ -71,12 +71,9 @@ def dso_integral(mol, orig1, orig2):
 def make_pso(sscobj, mol, mo1, mo_coeff, mo_occ, nuc_pair=None):
     if nuc_pair is None: nuc_pair = sscobj.nuc_pair
     para = []
-    orbo = mo_coeff[:,mo_occ> 0]
-    orbv = mo_coeff[:,mo_occ==0]
-    nocc = orbo.shape[1]
-    nvir = orbv.shape[1]
+    nocc = numpy.count_nonzero(mo_occ> 0)
+    nvir = numpy.count_nonzero(mo_occ==0)
     # *2 for doubly occupied orbitals
-    dm10 = numpy.asarray([reduce(numpy.dot, (orbv, x*2, orbo.T.conj())) for x in mo1])
     atm1lst = sorted(set([i for i,j in nuc_pair]))
     atm2lst = sorted(set([j for i,j in nuc_pair]))
     atm1dic = dict([(ia,k) for k,ia in enumerate(atm1lst)])
@@ -86,8 +83,8 @@ def make_pso(sscobj, mol, mo1, mo_coeff, mo_occ, nuc_pair=None):
     h1 = numpy.asarray(h1).reshape(len(atm1lst),3,nvir,nocc)
     for i,j in nuc_pair:
         # PSO = -Tr(Im[h1_ov], Im[mo1_vo]) + cc = 2 * Tr(Im[h1_vo], Im[mo1_vo])
-        e = numpy.einsum('xij,yij->xy', h1[atm1dic[i]], mo1[atm2dic[j]]) * 2
-        para.append(e)
+        e = numpy.einsum('xij,yij->xy', h1[atm1dic[i]], mo1[atm2dic[j]])
+        para.append(e*4)  # *4 for +c.c. and double occupnacy
     return numpy.asarray(para) * lib.param.ALPHA**4
 
 def make_h1_pso(mol, mo_coeff, mo_occ, atmlst):
@@ -119,8 +116,8 @@ def make_fc(sscobj, nuc_pair=None):
     for i,j in nuc_pair:
         at1 = atm1dic[i]
         at2 = atm2dic[j]
-        e = numpy.einsum('ij,ij', h1[at1], mo1[at2]) * 2  # *2 for double occupancy
-        para.append(e*2)  # *2 for +c.c.
+        e = numpy.einsum('ij,ij', h1[at1], mo1[at2])
+        para.append(e*4)  # *4 for +c.c. and for double occupancy
     return numpy.einsum(',k,xy->kxy', lib.param.ALPHA**4, para, numpy.eye(3))
 
 def solve_mo1_fc(sscobj, h1):
@@ -131,8 +128,8 @@ def solve_mo1_fc(sscobj, h1):
     mo_coeff = sscobj._scf.mo_coeff
     mo_occ = sscobj._scf.mo_occ
     nset = len(h1)
-    eai = 1. / lib.direct_sum('i-a->ai', mo_energy[mo_occ>0], mo_energy[mo_occ==0])
-    mo1 = numpy.asarray(h1) * eai
+    eai = 1. / lib.direct_sum('a-i->ai', mo_energy[mo_occ==0], mo_energy[mo_occ>0])
+    mo1 = numpy.asarray(h1) * -eai
     if not sscobj.cphf:
         return mo1
 
@@ -142,11 +139,11 @@ def solve_mo1_fc(sscobj, h1):
     nvir = orbv.shape[1]
     nmo = nocc + nvir
 
-    vresp = _gen_rhf_response(mf, singlet=False, hermi=2)
+    vresp = _gen_rhf_response(mf, singlet=False, hermi=1)
     mo_v_o = numpy.asarray(numpy.hstack((orbv,orbo)), order='F')
     def vind(mo1):
         dm1 = _dm1_mo2ao(mo1.reshape(nset,nvir,nocc), orbv, orbo*2)  # *2 for double occupancy
-        dm1 = dm1 - dm1.transpose(0,2,1)
+        dm1 = dm1 + dm1.transpose(0,2,1)
         v1 = vresp(dm1)
         v1 = _ao2mo.nr_e2(v1, mo_v_o, (0,nvir,nvir,nmo)).reshape(nset,nvir,nocc)
         v1 *= eai
@@ -175,8 +172,8 @@ def make_fcsd(sscobj, nuc_pair=None):
     for i,j in nuc_pair:
         at1 = atm1dic[i]
         at2 = atm2dic[j]
-        e = numpy.einsum('xwij,ywij->xy', h1[at1], mo1[at2]) * 2  # *2 for double occupancy
-        para.append(e*2)  # *2 for +c.c.
+        e = numpy.einsum('xwij,ywij->xy', h1[at1], mo1[at2])
+        para.append(e*4)  # *4 for +c.c. and for double occupancy
     return numpy.asarray(para) * lib.param.ALPHA**4
 
 
@@ -204,7 +201,10 @@ def make_h1_fcsd(mol, mo_coeff, mo_occ, atmlst):
         ipvip = mol.intor('int1e_iprinvip', 9).reshape(3,3,nao,nao)
         h1ao = ipipv + ipvip  # (nabla i | r/r^3 | j)
         h1ao = h1ao + h1ao.transpose(0,1,3,2)
-        h1ao -= h1ao[0,0] + h1ao[1,1] + h1ao[2,2]
+        trace = h1ao[0,0] + h1ao[1,1] + h1ao[2,2]
+        h1ao[0,0] -= trace
+        h1ao[1,1] -= trace
+        h1ao[2,2] -= trace
         for i in range(3):
             for j in range(3):
                 h1.append(orbv.T.conj().dot(h1ao[i,j]).dot(orbo) * .5)
@@ -322,12 +322,13 @@ class SpinSpinCoupling(rhf_nmr.NMR):
         if nuc_pair  is None: nuc_pair = self.nuc_pair
         if with_cphf is None: with_cphf = self.cphf
 
+        mo_coeff = self._scf.mo_coeff
         atmlst = sorted(set([j for i,j in nuc_pair]))
         mol = self.mol
-        h1 = numpy.asarray(make_h1_pso(mol, self._scf.mo_coeff, mo_occ, atmlst))
+        h1 = numpy.asarray(make_h1_pso(mol, mo_coeff, mo_occ, atmlst))
 
         if with_cphf:
-            vind = self.gen_vind(self._scf)
+            vind = self.gen_vind(self._scf, mo_coeff, mo_occ)
             mo1, mo_e1 = cphf.solve(vind, mo_energy, mo_occ, h1, None,
                                     self.max_cycle_cphf, self.conv_tol,
                                     verbose=log)
@@ -338,11 +339,9 @@ class SpinSpinCoupling(rhf_nmr.NMR):
         logger.timer(self, 'solving mo1 eqn', *cput1)
         return mo1, mo_e1
 
-    def gen_vind(self, mf):
+    def gen_vind(self, mf, mo_coeff, mo_occ):
         '''Induced potential'''
         vresp = _gen_rhf_response(mf, hermi=2)
-        mo_coeff = mf.mo_coeff
-        mo_occ = mf.mo_occ
         occidx = mo_occ > 0
         orbo = mo_coeff[:, occidx]
         orbv = mo_coeff[:,~occidx]
@@ -386,4 +385,4 @@ if __name__ == '__main__':
     ssc.with_fcsd = True
     jj = ssc.kernel()
     print(jj)
-    print(lib.finger(jj)*1e8 - 7.4788796413621164)
+    print(lib.finger(jj)*1e8 - 0.12374812977885304)

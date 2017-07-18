@@ -19,13 +19,14 @@ from pyscf import gto
 from pyscf import tools
 from pyscf.lib import logger
 from pyscf.scf import cphf
-from pyscf.prop.ssc import rhf as rhf_ssc
 from pyscf.prop.nmr import dhf as dhf_nmr
+from pyscf.prop.ssc import rhf as rhf_ssc
+from pyscf.prop.ssc.rhf import _write
 from pyscf.prop.hfc.parameters import get_nuc_g_factor
 
 NUMINT_GRIDS = 30
 
-def make_dso(sscobj, mol, dm0, nuc_pair=None, mb='RMB'):
+def make_dia(sscobj, mol, dm0, nuc_pair=None, mb='RMB'):
     '''orbital diamagnetic term'''
     if nuc_pair is None:
         nuc_pair = sscobj.nuc_pair
@@ -98,7 +99,7 @@ def sa01sa01_integral(mol, orig1, orig2):
     c2s_b = []
     for i in range(mol.nbas):
         l = mol.bas_angular(i)
-        c1 = gto.mole.cart2j_kappa(mol.bas_kappa(i), l)
+        c1 = gto.mole.cart2j_kappa(mol.bas_kappa(i), l, 'sp')
         nf = (l+1)*(l+2)//2
         c2s_a.append(c1[:nf])
         c2s_b.append(c1[nf:])
@@ -125,33 +126,32 @@ def sa01sa01_integral(mol, orig1, orig2):
 
 
 # Note mo10 is the imaginary part of MO^1
-def make_pso(sscobj, mol, mo1, mo_coeff, mo_occ, nuc_pair=None):
+def make_para(sscobj, mol, mo1, mo_coeff, mo_occ, nuc_pair=None):
     if nuc_pair is None: nuc_pair = sscobj.nuc_pair
     if sscobj.mb.upper().startswith('ST'):
         nmo = mo_occ.size
         mo_coeff = mo_coeff[:,nmo//2:]
         mo_occ   = mo_occ[nmo//2:]
 
-    orbo = mo_coeff[:,mo_occ> 0]
-    nocc = orbo.shape[1]
-    nao, nmo = mo_coeff.shape
-    dm10 = numpy.asarray([mo_coeff.dot(x).dot(orbo.T.conj()) for x in mo1])
+    nocc = numpy.count_nonzero(mo_occ> 0)
+    nvir = numpy.count_nonzero(mo_occ==0)
     atm1lst = sorted(set([i for i,j in nuc_pair]))
     atm2lst = sorted(set([j for i,j in nuc_pair]))
     atm1dic = dict([(ia,k) for k,ia in enumerate(atm1lst)])
     atm2dic = dict([(ia,k) for k,ia in enumerate(atm2lst)])
-    mo1 = mo1.reshape(len(atm1lst),3,nmo,nocc)
-    h1 = make_h1_pso(mol, mo_coeff, mo_occ, atm1lst)
-    h1 = numpy.asarray(h1).reshape(len(atm1lst),3,nmo,nocc)
+    mo1 = mo1.reshape(len(atm1lst),3,nvir,nocc)
+    h1 = make_h1(mol, mo_coeff, mo_occ, atm1lst)
+    h1 = numpy.asarray(h1).reshape(len(atm1lst),3,nvir,nocc)
 
     para = []
     for i,j in nuc_pair:
-        e = numpy.einsum('xij,yij->xy', h1[atm1dic[i]].conj(), mo1[atm2dic[j]]) * 2
+        e = numpy.einsum('xij,yij->xy', h1[atm1dic[i]], mo1[atm2dic[j]].conj()) * 2
         para.append(e.real)
     return numpy.asarray(para) * lib.param.ALPHA**4
 
-def make_h1_pso(mol, mo_coeff, mo_occ, atmlst):
+def make_h1(mol, mo_coeff, mo_occ, atmlst):
     orbo = mo_coeff[:,mo_occ> 0]
+    orbv = mo_coeff[:,mo_occ==0]
     n4c = mo_coeff.shape[0]
     n2c = n4c // 2
     h1 = []
@@ -162,15 +162,8 @@ def make_h1_pso(mol, mo_coeff, mo_occ, atmlst):
         for k in range(3):
             h01[:n2c,n2c:] = .5 * a01int[k]
             h01[n2c:,:n2c] = .5 * a01int[k].conj().T
-            h1.append(mo_coeff.conj().T.dot(h01).dot(orbo))
+            h1.append(orbv.conj().T.dot(h01).dot(orbo))
     return h1
-
-def _write(stdout, msc3x3, title):
-    stdout.write('%s\n' % title)
-    stdout.write('mu_x %s\n' % str(msc3x3[0]))
-    stdout.write('mu_y %s\n' % str(msc3x3[1]))
-    stdout.write('mu_z %s\n' % str(msc3x3[2]))
-    stdout.flush()
 
 
 class SpinSpinCoupling(dhf_nmr.NMR):
@@ -196,11 +189,11 @@ class SpinSpinCoupling(dhf_nmr.NMR):
         mo_coeff = self._scf.mo_coeff
         mo_occ = self._scf.mo_occ
 
-        ssc_dia = self.make_dso(mol, dm0, mb=self.mb)
+        ssc_dia = self.make_dia(mol, dm0, mb=self.mb)
 
         if mo1 is None:
             mo1 = self.mo10 = self.solve_mo1()[0]
-        ssc_para = self.make_pso(mol, mo1, mo_coeff, mo_occ)
+        ssc_para = self.make_para(mol, mo1, mo_coeff, mo_occ)
         e11 = ssc_para + ssc_dia
         logger.timer(self, 'spin-spin coupling', *cput0)
 
@@ -231,8 +224,8 @@ class SpinSpinCoupling(dhf_nmr.NMR):
             tools.dump_mat.dump_tri(self.stdout, jtensor, label)
         return e11
 
-    dia = make_dso = make_dso
-    para = make_pso = make_pso
+    make_dia = make_dia
+    make_para = make_para
 
     def solve_mo1(self, mo_energy=None, mo_occ=None, nuc_pair=None,
                   with_cphf=None):
@@ -251,18 +244,16 @@ class SpinSpinCoupling(dhf_nmr.NMR):
             mo_occ = mo_occ[nmo//2:]
         atmlst = sorted(set([j for i,j in nuc_pair]))
         mol = self.mol
-        h1 = numpy.asarray(make_h1_pso(mol, mo_coeff, mo_occ, atmlst))
+        h1 = numpy.asarray(make_h1(mol, mo_coeff, mo_occ, atmlst))
 
         if with_cphf:
-            s1 = numpy.zeros_like(h1)
-            vind = self.gen_vind(self._scf)
-            mo1, mo_e1 = cphf.solve(vind, mo_energy, mo_occ, h1, s1,
+            vind = self.gen_vind(self._scf, mo_coeff, mo_occ)
+            mo1, mo_e1 = cphf.solve(vind, mo_energy, mo_occ, h1, None,
                                     self.max_cycle_cphf, self.conv_tol,
                                     verbose=log)
         else:
             e_ai = lib.direct_sum('i-a->ai', mo_energy[mo_occ>0], mo_energy[mo_occ==0])
-            mo1 = h1
-            mo1[:,mo_occ==0] *= 1 / e_ai
+            mo1 = h1 / e_ai
             mo_e1 = None
 
 # Calculate RMB with approximation
@@ -270,40 +261,33 @@ class SpinSpinCoupling(dhf_nmr.NMR):
 # bar{C}_{pi}^1 ~= C_{pi}^1 - <p|Z_RMB|i>
         if self.mb.upper() == 'RMB':
             orbo = mo_coeff[:,mo_occ> 0]
+            orbv = mo_coeff[:,mo_occ==0]
             n4c = mo_coeff.shape[0]
             n2c = n4c // 2
             c = lib.param.LIGHT_SPEED
-            cS_T = mo_coeff[n2c:].conj().T
+            orbvS_T = orbv[n2c:].conj().T
             for ia in atmlst:
                 mol.set_rinv_origin(mol.atom_coord(ia))
                 a01int = mol.intor('int1e_sa01sp_spinor', 3)
                 for k in range(3):
-                    s1 = cS_T.dot(a01int[k].conj().T).dot(orbo[n2c:])
+                    s1 = orbvS_T.dot(a01int[k].conj().T).dot(orbo[n2c:])
                     mo1[ia*3+k] -= s1 * (.25/c**2)
 
         logger.timer(self, 'solving mo1 eqn', *cput1)
         return mo1, mo_e1
 
-    def gen_vind(self, mf):
-        '''Induced potential'''
-        mo_coeff = mf.mo_coeff
-        mo_occ = mf.mo_occ
-        if self.mb.upper().startswith('ST'):
-# Sternheim approximation, CPHF is solved with electron-electron rotation
-            nmo = mo_occ.size
-            mo_coeff = mo_coeff[:,nmo//2:]
-            mo_occ   = mo_occ[nmo//2:]
-
+    def gen_vind(self, mf, mo_coeff, mo_occ):
         occidx = mo_occ > 0
-        orbo = mo_coeff[:,occidx]
+        orbo = mo_coeff[:, occidx]
+        orbv = mo_coeff[:,~occidx]
         nocc = orbo.shape[1]
-        nao, nmo = mo_coeff.shape
+        nvir = orbv.shape[1]
         def vind(mo1):
             #direct_scf_bak, mf.direct_scf = mf.direct_scf, False
-            dm1 = [mo_coeff.dot(x).dot(orbo.T.conj())
-                   for x in mo1.reshape(-1,nmo,nocc)]
+            dm1 = [orbv.dot(x).dot(orbo.T.conj())
+                   for x in mo1.reshape(-1,nvir,nocc)]
             dm1 = numpy.asarray([d1+d1.conj().T for d1 in dm1])
-            v1mo = numpy.asarray([mo_coeff.conj().T.dot(x).dot(orbo)
+            v1mo = numpy.asarray([orbv.conj().T.dot(x).dot(orbo)
                                   for x in mf.get_veff(self.mol, dm1, hermi=1)])
             #mf.direct_scf = direct_scf_bak
             return v1mo.ravel()
@@ -323,15 +307,14 @@ if __name__ == '__main__':
         [1   , (0. , 0. , .917)],
         ['F' , (0. , 0. , 0.)], ])
     mol.nucmod = {'F': 2} # gaussian nuclear model
-    mol.basis = {'H': 'unc-6-31g',
-                 'F': 'unc-6-31g',}
+    mol.basis = {'H': '6-31g',
+                 'F': '6-31g',}
     mol.build()
 
     rhf = scf.DHF(mol).run()
-    nmr = SSC(rhf)
-    nmr.mb = 'RKB' # 'RMB'
-    jj = nmr.kernel() # _xx,_yy = 2.1377e-08, _zz = 3.1448e-08
+    ssc = SSC(rhf)
+    ssc.cphf = True
+    #ssc.mb = 'RKB' # 'RMB'
+    jj = ssc.kernel()
     print(jj)
-    print(lib.finger(jj))
-
-# unc-ANO J(iso) = 647.75556 Hz
+    print(lib.finger(jj)*1e8 - 0.12144116396441988)

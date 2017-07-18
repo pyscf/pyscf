@@ -39,8 +39,8 @@ def make_pso(sscobj, mol, mo1, mo_coeff, mo_occ, nuc_pair=None):
     atm1dic, atm2dic = _uniq_atoms(nuc_pair)
     h1a, h1b = make_h1_pso(mol, mo_coeff, mo_occ, sorted(atm1dic.keys()))
     mo1a, mo1b = mo1
-    nocca, nvira = mo1a[0].shape
-    noccb, nvirb = mo1b[0].shape
+    nvira, nocca = h1a[0].shape
+    nvirb, noccb = h1b[0].shape
     mo1a = mo1a.reshape(len(atm2dic),3,nvira,nocca)
     mo1b = mo1b.reshape(len(atm2dic),3,nvirb,noccb)
     h1a = numpy.asarray(h1a).reshape(len(atm1dic),3,nvira,nocca)
@@ -49,7 +49,7 @@ def make_pso(sscobj, mol, mo1, mo_coeff, mo_occ, nuc_pair=None):
     for i,j in nuc_pair:
         # PSO = -Tr(Im[h1_ov], Im[mo1_vo]) + cc = 2 * Tr(Im[h1_vo], Im[mo1_vo])
         e = numpy.einsum('xij,yij->xy', h1a[atm1dic[i]], mo1a[atm2dic[j]]) * 2
-        e = numpy.einsum('xij,yij->xy', h1b[atm1dic[i]], mo1b[atm2dic[j]]) * 2
+        e+= numpy.einsum('xij,yij->xy', h1b[atm1dic[i]], mo1b[atm2dic[j]]) * 2
         para.append(e)
     return numpy.asarray(para) * lib.param.ALPHA**4
 
@@ -94,6 +94,7 @@ def make_fc(sscobj, nuc_pair=None):
         para.append(numpy.diag([ex,ey,ez]))
     return numpy.asarray(para) * lib.param.ALPHA**4
 
+# See also the UHF to GHF stability analysis
 def solve_mo1_fc(sscobj, h1):
     cput1 = (time.clock(), time.time())
     log = logger.Logger(sscobj.stdout, sscobj.verbose)
@@ -103,13 +104,15 @@ def solve_mo1_fc(sscobj, h1):
     mo_occ = sscobj._scf.mo_occ
     h1aa, h1ab, h1ba, h1bb = h1
     nset = len(h1aa)
-    eai_aa = 1. / lib.direct_sum('i-a->ai', mo_energy[0][mo_occ[0]>0], mo_energy[0][mo_occ[0]==0])
-    eai_ab = 1. / lib.direct_sum('i-a->ai', mo_energy[0][mo_occ[0]>0], mo_energy[1][mo_occ[1]==0])
-    eai_ba = 1. / lib.direct_sum('i-a->ai', mo_energy[1][mo_occ[1]>0], mo_energy[0][mo_occ[0]==0])
-    eai_bb = 1. / lib.direct_sum('i-a->ai', mo_energy[1][mo_occ[1]>0], mo_energy[1][mo_occ[1]==0])
+    eai_aa = 1. / lib.direct_sum('a-i->ai', mo_energy[0][mo_occ[0]==0], mo_energy[0][mo_occ[0]>0])
+    eai_ab = 1. / lib.direct_sum('a-i->ai', mo_energy[1][mo_occ[1]==0], mo_energy[0][mo_occ[0]>0])
+    eai_ba = 1. / lib.direct_sum('a-i->ai', mo_energy[0][mo_occ[0]==0], mo_energy[1][mo_occ[1]>0])
+    eai_bb = 1. / lib.direct_sum('a-i->ai', mo_energy[1][mo_occ[1]==0], mo_energy[1][mo_occ[1]>0])
 
-    mo1_fc = (numpy.asarray(h1aa) * eai_aa, numpy.asarray(h1ab) * eai_ab,
-              numpy.asarray(h1ba) * eai_ba, numpy.asarray(h1bb) * eai_bb)
+    mo1_fc = (numpy.asarray(h1aa) * -eai_aa,
+              numpy.asarray(h1ab) * -eai_ab,
+              numpy.asarray(h1ba) * -eai_ba,
+              numpy.asarray(h1bb) * -eai_bb)
     h1aa = h1ab = h1ba = h1bb = None
     if not sscobj.cphf:
         return mo1_fc
@@ -149,10 +152,10 @@ def solve_mo1_fc(sscobj, h1):
         dm1ab = _dm1_mo2ao(mo1ab, orbva, orbob)
         dm1ba = _dm1_mo2ao(mo1ba, orbvb, orboa)
         dm1bb = _dm1_mo2ao(mo1bb, orbvb, orbob)
-        dm1 = numpy.vstack([dm1aa-dm1aa.transpose(0,2,1),
-                            dm1ab-dm1ba.transpose(0,2,1),
-                            dm1ba-dm1ab.transpose(0,2,1),
-                            dm1bb-dm1bb.transpose(0,2,1)])
+        dm1 = numpy.vstack([dm1aa+dm1aa.transpose(0,2,1),
+                            dm1ab+dm1ba.transpose(0,2,1),
+                            dm1ba+dm1ab.transpose(0,2,1),
+                            dm1bb+dm1bb.transpose(0,2,1)])
         v1 = vresp(dm1)
         v1aa = _ao2mo.nr_e2(v1[      :nset  ], mo_va_oa, (0,nvira,nvira,nvira+nocca))
         v1ab = _ao2mo.nr_e2(v1[nset*1:nset*2], mo_va_ob, (0,nvira,nvira,nvira+noccb))
@@ -253,7 +256,10 @@ def make_h1_fcsd(mol, mo_coeff, mo_occ, atmlst):
         ipvip = mol.intor('int1e_iprinvip', 9).reshape(3,3,nao,nao)
         h1ao = ipipv + ipvip
         h1ao = h1ao + h1ao.transpose(0,1,3,2)
-        h1ao -= h1ao[0,0] + h1ao[1,1] + h1ao[2,2]
+        trace = h1ao[0,0] + h1ao[1,1] + h1ao[2,2]
+        h1ao[0,0] -= trace
+        h1ao[1,1] -= trace
+        h1ao[2,2] -= trace
         # *.5 due to s = 1/2 * pauli-matrix
         for i in range(3):
             for j in range(3):
@@ -356,6 +362,7 @@ class SpinSpinCoupling(uhf_nmr.NMR):
         if nuc_pair  is None: nuc_pair = self.nuc_pair
         if with_cphf is None: with_cphf = self.cphf
 
+        mo_coeff = self._scf.mo_coeff
         atmlst = sorted(set([j for i,j in nuc_pair]))
         mol = self.mol
         h1a, h1b = make_h1_pso(mol, self._scf.mo_coeff, mo_occ, atmlst)
@@ -363,7 +370,7 @@ class SpinSpinCoupling(uhf_nmr.NMR):
         h1b = numpy.asarray(h1b)
 
         if with_cphf:
-            vind = self.gen_vind(self._scf)
+            vind = self.gen_vind(self._scf, mo_coeff, mo_occ)
             mo1, mo_e1 = ucphf.solve(vind, mo_energy, mo_occ, (h1a,h1b), None,
                                      self.max_cycle_cphf, self.conv_tol,
                                      verbose=log)
@@ -376,11 +383,9 @@ class SpinSpinCoupling(uhf_nmr.NMR):
         logger.timer(self, 'solving mo1 eqn', *cput1)
         return mo1, mo_e1
 
-    def gen_vind(self, mf):
+    def gen_vind(self, mf, mo_coeff, mo_occ):
         '''Induced potential'''
         vresp = _gen_uhf_response(mf, with_j=False, hermi=0)
-        mo_coeff = mf.mo_coeff
-        mo_occ = mf.mo_occ
         occidxa = mo_occ[0] > 0
         occidxb = mo_occ[1] > 0
         orboa = mo_coeff[0][:, occidxa]
@@ -436,4 +441,4 @@ if __name__ == '__main__':
     ssc.with_fcsd = True
     jj = ssc.kernel()
     print(jj)
-    print(lib.finger(jj)*1e8 - 7.4788705851190009)
+    print(lib.finger(jj)*1e8 - 0.12374695912503765)

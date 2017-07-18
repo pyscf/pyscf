@@ -173,7 +173,7 @@ class NMR(rhf_nmr.NMR):
 
         cput1 = log.timer('first order Fock matrix', *cput1)
         if self.cphf:
-            vind = self.gen_vind(self._scf)
+            vind = self.gen_vind(self._scf, mo_coeff, mo_occ)
             mo10, mo_e10 = ucphf.solve(vind, mo_energy, mo_occ, h1, s1,
                                        self.max_cycle_cphf, self.conv_tol,
                                        verbose=log)
@@ -182,11 +182,9 @@ class NMR(rhf_nmr.NMR):
         logger.timer(self, 'solving mo1 eqn', *cput1)
         return mo10, mo_e10
 
-    def gen_vind(self, mf):
+    def gen_vind(self, mf, mo_coeff, mo_occ):
         '''Induced potential'''
         vresp = _gen_uhf_response(self._scf, hermi=2)
-        mo_coeff = mf.mo_coeff
-        mo_occ = mf.mo_occ
         occidxa = mo_occ[0] > 0
         occidxb = mo_occ[1] > 0
         orboa = mo_coeff[0][:,occidxa]
