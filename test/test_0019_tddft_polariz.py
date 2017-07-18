@@ -6,7 +6,7 @@ dname = os.path.dirname(os.path.abspath(__file__))
 sv = system_vars_c().init_siesta_xml(label='water', cd=dname)
 pb = prod_basis_c().init_pb_pp_libnao_apair(sv)
 pb.init_prod_basis_pp()
-td = tddft_iter_c(pb.sv, pb, tddft_iter_broadening=1e-2)
+td = tddft_iter_c(pb.sv, pb, tddft_iter_broadening=1e-2, xc_code='RPA')
 
 class KnowValues(unittest.TestCase):
 

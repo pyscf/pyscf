@@ -16,7 +16,7 @@ def init_dm_libnao(dm):
     POINTER(c_int64)) # alloc_stat
   
   alloc_stat = c_int64(-999)
-  
+
   libnao.init_dm_libnao(d.ctypes.data_as(POINTER(c_double)),
     c_int64(d.shape[-1]), 
     c_int64(d.shape[-2]),
@@ -24,6 +24,8 @@ def init_dm_libnao(dm):
     c_int64(d.shape[-5]),
     byref(alloc_stat))
 
-  if alloc_stat.value!=0 : raise RuntimeError('could not allocate?') 
+  if alloc_stat.value!=0 : 
+    raise RuntimeError('could not allocate?') 
+    return None
 
-  return alloc_stat.value
+  return dm

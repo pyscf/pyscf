@@ -444,6 +444,11 @@ class prod_basis_c():
     from pyscf.nao.m_comp_coulomb_den import comp_coulomb_den
     return comp_coulomb_den(self.sv, self.prod_log, **kvargs)
 
+  def comp_fxc_lil(self, dm, xc_code, **kvargs):
+    """ Computes the packed version of the Hartree kernel """
+    from pyscf.nao.m_vxc_lil import vxc_lil
+    return vxc_lil(self.sv, dm, xc_code, deriv=2, ao_log=self.prod_log, **kvargs)
+
 #
 #
 #

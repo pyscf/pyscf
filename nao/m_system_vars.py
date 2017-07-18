@@ -401,7 +401,7 @@ class system_vars_c():
     return diag_check(self, atol, rtol, **kvargs)
 
   def vxc_lil(self, dm, **kvargs):   # Compute exchange-correlation potentials
-    from pyscf.nao.m_vxc_exc_lil import vxc_lil
+    from pyscf.nao.m_vxc_lil import vxc_lil
     return vxc_lil(self, dm, **kvargs)
 
   def exc(self, dm, xc_code, **kvargs):   # Compute exchange-correlation energies
@@ -426,7 +426,7 @@ class system_vars_c():
     from pyscf.nao.m_init_dm_libnao import init_dm_libnao
     from pyscf.nao.m_init_dens_libnao import init_dens_libnao
     if not self.init_sv_libnao : raise RuntimeError('not self.init_sv_libnao')
-    if init_dm_libnao(dm)!=0 : raise RuntimeError('init_dm_libnao(dm)!=0')
+    if init_dm_libnao(dm) is None : raise RuntimeError('init_dm_libnao(dm) is None')
     if init_dens_libnao()!=0 : raise RuntimeError('init_dens_libnao()!=0')
     return dens_libnao(coords, self.nspin)
 
