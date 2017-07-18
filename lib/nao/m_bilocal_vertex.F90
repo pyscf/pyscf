@@ -666,8 +666,8 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
   !! Compute the cutoff according to radii, check, if not overlapping return
   rc2_new = maxval(rcuts)**2 - d12**2/4
   if(rc2_new<0) then
-    write(6,'(a35,4g20.10)') 'rcuts, d12, rc2_new: ', rcuts, d12, rc2_new
-    _warn('what a case, rc2_new<0!')
+    !write(6,'(a35,4g20.10)') 'rcuts, d12, rc2_new: ', rcuts, d12, rc2_new
+    !_warn('what a case, rc2_new<0!')
     rcut = -999
     lready = .true.
     return

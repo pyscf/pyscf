@@ -1,7 +1,7 @@
 from __future__ import print_function, division
 import numpy as np
 from scipy.sparse import coo_matrix
-from numpy import array, einsum, zeros, int64
+from numpy import array, einsum, zeros, int64, sqrt
 from ctypes import POINTER, c_double, c_int64, byref
 from pyscf.nao.m_libnao import libnao
 
@@ -190,7 +190,10 @@ class prod_basis_c():
     sv = self.sv
     self.bp2info = [] # going to be some information including indices of atoms, list of contributing centres, conversion coefficients
     for ia1 in range(sv.natoms):
+      rc1 = sv.ao_log.sp2rcut[sv.atom2sp[ia1]]
       for ia2 in range(ia1+1,sv.natoms):
+        rc2,dist = sv.ao_log.sp2rcut[sv.atom2sp[ia2]], sqrt(((sv.atom2coord[ia1]-sv.atom2coord[ia2])**2).sum())
+        if dist>rc1+rc2 : continue
         pbiloc = self.comp_apair_pp_libint(ia1,ia2)
         if pbiloc is not None : self.bp2info.append(pbiloc)
     self.dpc2s,self.dpc2t,self.dpc2sp = self.init_c2s_domiprod() # dominant product's counting
