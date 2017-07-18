@@ -3,9 +3,9 @@ import numpy as np
 from pyscf.nao import system_vars_c, prod_basis_c, tddft_iter_c
 
 sv = system_vars_c().init_siesta_xml(label='siesta', cd='.', force_gamma=True)
-pb = prod_basis_c().init_pb_pp_libnao_apair(sv).init_prod_basis_pp()
+pb = prod_basis_c().init_prod_basis_pp(sv)
 td = tddft_iter_c(pb.sv, pb)
-omegas = np.linspace(0.0,0.5,150)+1j*td.eps
+omegas = np.linspace(0.0,0.25,150)+1j*td.eps
 #td.kernel.fill(0.0)
 pxx = -td.comp_polariz_xx(omegas).imag
 data = np.array([omegas.real*27.2114, pxx])

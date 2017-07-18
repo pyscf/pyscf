@@ -1,7 +1,6 @@
 from __future__ import print_function, division
 import numpy as np
 from scipy.sparse import csr_matrix
-from scipy.sparse.linalg import gmres, lgmres as gmres_alias, LinearOperator
 
 class tddft_iter_c():
 
@@ -67,6 +66,8 @@ class tddft_iter_c():
     return res
 
   def comp_veff(self, vext, comega=1j*0.0):
+    from scipy.sparse.linalg import gmres, lgmres as gmres_alias, LinearOperator
+    
     """ This computes an effective field (scalar potential) given the external scalar potential """
     assert len(vext)==len(self.moms0), "%r, %r "%(len(vext), len(self.moms0))
     self.comega_current = comega
