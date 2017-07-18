@@ -35,7 +35,7 @@ class tddft_iter_c():
     self.ksn2f = (3-self.nspin)*ksn2fd
     self.nfermi = np.argmax(ksn2fd[0,0,:]<nfermi_tol)
     self.vstart = np.argmax(1.0-ksn2fd[0,0,:]>nfermi_tol)
-    print('before xocc, xvrt')
+    #print('before xocc, xvrt')
     self.xocc = self.x[0,0,0:self.nfermi,:,0]  # does python creates a copy at this point ?
     self.xvrt = self.x[0,0,self.vstart:,:,0]   # does python creates a copy at this point ?
     
