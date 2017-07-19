@@ -5,6 +5,7 @@
 
 '''
 Unrestricted Dirac Hartree-Fock hyperfine coupling tensor
+(In testing)
 
 Refs: JCP, 134, 044111
 '''
@@ -12,11 +13,8 @@ Refs: JCP, 134, 044111
 from functools import reduce
 import numpy
 from pyscf import lib
-from pyscf.prop.nmr import dhf as dhf_nmr
-from pyscf.prop.hfc import parameters
-
-
-# Due to the value of lib.param.NUC_MAGNETON, SI unit is used in this module
+from pyscf.prop.ssc import dhf as dhf_ssc
+from pyscf.prop.ssc.parameters import get_nuc_g_factor
 
 # TODO: 3 SCF for sx, sy, sz
 
@@ -49,37 +47,48 @@ def kernel(hfcobj, with_gaunt=False, verbose=None):
     hfc = []
     for atm_id in range(mol.natm):
         symb = mol.atom_symbol(atm_id)
-        nuc = mol.atom_charge(atm_id)
+        nuc_mag = .5 * (lib.param.E_MASS/lib.param.PROTON_MASS)  # e*hbar/2m
+        nuc_gyro = get_nuc_g_factor(symb) * nuc_mag
+        e_gyro = .5 * lib.param.G_ELECTRON
+        au2MHz = lib.param.HARTREE2J / lib.param.PLANCK * 1e-6
+        fac = lib.param.ALPHA**2 * nuc_gyro * e_gyro * au2MHz
+        #logger.debug('factor (MHz) %s', fac)
+
         h01 = make_h01(mol, 0)
-        h01b = h0 + numpy.einsum('xij,x->ij', h01, nuc_spin)
-        h01b = reduce(numpy.dot, (mf.mo_coeff.conj().T, h01b, mf.mo_coeff))
-        mo_energy, v = numpy.linalg.eigh(h01b)
-        mo_coeff = numpy.dot(mf.mo_coeff, v)
-        mo_occ = mf.get_occ(mo_energy, mo_coeff)
+        mo_occ = mf.mo_occ
+        mo_coeff = mf.mo_coeff
+        if 0:
+            h01b = h0 + numpy.einsum('xij,x->ij', h01, nuc_spin)
+            h01b = reduce(numpy.dot, (mf.mo_coeff.conj().T, h01b, mf.mo_coeff))
+            mo_energy, v = numpy.linalg.eigh(h01b)
+            mo_coeff = numpy.dot(mf.mo_coeff, v)
+            mo_occ = mf.get_occ(mo_energy, mo_coeff)
 
         occidx = mo_occ > 0
         orbo = mo_coeff[:,occidx]
         dm0 = numpy.dot(orbo, orbo.T.conj())
-        e01 = numpy.einsum('xij,ji->x', h01, dm0)
-        g_ratio = parameters.ISOTOPE[nuc][2]
-        e01 *= g_ratio
+        e01 = numpy.einsum('xij,ji->x', h01, dm0) * fac
 
         effspin = numpy.einsum('xij,ji->x', Sigma, dm0) * .5
         log.debug('atom %d Eff-spin %s', atm_id, effspin.real)
 
-        hfc.append((e01 / effspin).real)
-    return hfc
+        e01 = (e01 / effspin).real
+        hfc.append(e01)
+    return numpy.asarray(hfc)
 
-class HyperfineCoupling(dhf_nmr.NMR):
+class HyperfineCoupling(dhf_ssc.SSC):
     kernel = kernel
+
+HFC = HyperfineCoupling
 
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     mol = gto.M(
-        atom = [['li', (0.,0.,0.)],
+        atom = [['Li', (0.,0.,0.)],
                 #['He', (.4,.7,0.)],
                ],
         basis = 'ccpvdz', spin=1)
     mf = scf.DHF(mol).run()
-    print HyperfineCoupling(mf).kernel()
+    hfc = HFC(mf)
+    print(hfc.kernel())

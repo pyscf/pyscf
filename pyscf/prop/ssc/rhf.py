@@ -25,7 +25,7 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.dft import numint
 from pyscf.scf.newton_ah import _gen_rhf_response
 from pyscf.prop.nmr import rhf as rhf_nmr
-from pyscf.prop.hfc.parameters import get_nuc_g_factor
+from pyscf.prop.ssc.parameters import get_nuc_g_factor
 
 NUMINT_GRIDS = 30
 
@@ -197,6 +197,9 @@ def make_h1_fcsd(mol, mo_coeff, mo_occ, atmlst):
     h1 = []
     for ia in atmlst:
         mol.set_rinv_origin(mol.atom_coord(ia))
+# Should equal to
+#        a01p = mol.intor('int1e_sa01sp', 12).reshape(3,4,nao,nao)
+#        h1ao = -(a01p[:,:3] + a01p[:,:3].transpose(0,1,3,2))
         ipipv = mol.intor('int1e_ipiprinv', 9).reshape(3,3,nao,nao)
         ipvip = mol.intor('int1e_iprinvip', 9).reshape(3,3,nao,nao)
         h1ao = ipipv + ipvip  # (nabla i | r/r^3 | j)
@@ -313,19 +316,18 @@ class SpinSpinCoupling(rhf_nmr.NMR):
             ssc_para += self.make_fc(mol, mo1, mo_coeff, mo_occ)
         return ssc_para
 
-    def solve_mo1(self, mo_energy=None, mo_occ=None, nuc_pair=None,
-                  with_cphf=None):
+    def solve_mo1(self, mo_energy=None, mo_occ=None, h1=None, with_cphf=None):
         cput1 = (time.clock(), time.time())
         log = logger.Logger(self.stdout, self.verbose)
         if mo_energy is None: mo_energy = self._scf.mo_energy
         if mo_occ    is None: mo_occ = self._scf.mo_occ
-        if nuc_pair  is None: nuc_pair = self.nuc_pair
         if with_cphf is None: with_cphf = self.cphf
 
-        mo_coeff = self._scf.mo_coeff
-        atmlst = sorted(set([j for i,j in nuc_pair]))
         mol = self.mol
-        h1 = numpy.asarray(make_h1_pso(mol, mo_coeff, mo_occ, atmlst))
+        mo_coeff = self._scf.mo_coeff
+        if h1 is None:
+            atmlst = sorted(set([j for i,j in self.nuc_pair]))
+            h1 = numpy.asarray(make_h1_pso(mol, mo_coeff, mo_occ, atmlst))
 
         if with_cphf:
             vind = self.gen_vind(self._scf, mo_coeff, mo_occ)
@@ -340,7 +342,7 @@ class SpinSpinCoupling(rhf_nmr.NMR):
         return mo1, mo_e1
 
     def gen_vind(self, mf, mo_coeff, mo_occ):
-        '''Induced potential'''
+        '''Induced potential associated with h1_PSO'''
         vresp = _gen_rhf_response(mf, hermi=2)
         occidx = mo_occ > 0
         orbo = mo_coeff[:, occidx]

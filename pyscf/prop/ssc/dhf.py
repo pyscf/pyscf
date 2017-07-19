@@ -22,7 +22,7 @@ from pyscf.scf import cphf
 from pyscf.prop.nmr import dhf as dhf_nmr
 from pyscf.prop.ssc import rhf as rhf_ssc
 from pyscf.prop.ssc.rhf import _write
-from pyscf.prop.hfc.parameters import get_nuc_g_factor
+from pyscf.prop.ssc.parameters import get_nuc_g_factor
 
 NUMINT_GRIDS = 30
 
@@ -227,24 +227,25 @@ class SpinSpinCoupling(dhf_nmr.NMR):
     make_dia = make_dia
     make_para = make_para
 
-    def solve_mo1(self, mo_energy=None, mo_occ=None, nuc_pair=None,
+    def solve_mo1(self, mo_energy=None, mo_occ=None, h1=None,
                   with_cphf=None):
         cput1 = (time.clock(), time.time())
         log = logger.Logger(self.stdout, self.verbose)
         if mo_energy is None: mo_energy = self._scf.mo_energy
         if mo_occ    is None: mo_occ = self._scf.mo_occ
-        if nuc_pair  is None: nuc_pair = self.nuc_pair
         if with_cphf is None: with_cphf = self.cphf
 
+        mol = self.mol
         mo_coeff = self._scf.mo_coeff
         if self.mb.upper().startswith('ST'):  # Sternheim approximation
             nmo = mo_occ.size
             mo_energy = mo_energy[nmo//2:]
             mo_coeff = mo_coeff[:,nmo//2:]
             mo_occ = mo_occ[nmo//2:]
-        atmlst = sorted(set([j for i,j in nuc_pair]))
-        mol = self.mol
-        h1 = numpy.asarray(make_h1(mol, mo_coeff, mo_occ, atmlst))
+
+        if h1 is None:
+            atmlst = sorted(set([j for i,j in self.nuc_pair]))
+            h1 = numpy.asarray(make_h1(mol, mo_coeff, mo_occ, atmlst))
 
         if with_cphf:
             vind = self.gen_vind(self._scf, mo_coeff, mo_occ)

@@ -22,7 +22,7 @@ from pyscf.scf.newton_ah import _gen_uhf_response
 from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.ssc import rhf as rhf_ssc
 from pyscf.prop.ssc.rhf import _uniq_atoms, _dm1_mo2ao, _write
-from pyscf.prop.hfc.parameters import get_nuc_g_factor
+from pyscf.prop.ssc.parameters import get_nuc_g_factor
 
 NUMINT_GRIDS = 30
 
@@ -252,14 +252,8 @@ def make_h1_fcsd(mol, mo_coeff, mo_occ, atmlst):
     h1bb = []
     for ia in atmlst:
         mol.set_rinv_origin(mol.atom_coord(ia))
-        ipipv = mol.intor('int1e_ipiprinv', 9).reshape(3,3,nao,nao)
-        ipvip = mol.intor('int1e_iprinvip', 9).reshape(3,3,nao,nao)
-        h1ao = ipipv + ipvip
-        h1ao = h1ao + h1ao.transpose(0,1,3,2)
-        trace = h1ao[0,0] + h1ao[1,1] + h1ao[2,2]
-        h1ao[0,0] -= trace
-        h1ao[1,1] -= trace
-        h1ao[2,2] -= trace
+        a01p = mol.intor('int1e_sa01sp', 12).reshape(3,4,nao,nao)
+        h1ao = -(a01p[:,:3] + a01p[:,:3].transpose(0,1,3,2))
         # *.5 due to s = 1/2 * pauli-matrix
         for i in range(3):
             for j in range(3):
@@ -353,19 +347,20 @@ class SpinSpinCoupling(uhf_nmr.NMR):
             ssc_para += self.make_fc(mol, mo1, mo_coeff, mo_occ)
         return ssc_para
 
-    def solve_mo1(self, mo_energy=None, mo_occ=None, nuc_pair=None,
-                  with_cphf=None):
+    def solve_mo1(self, mo_energy=None, mo_occ=None, h1=None, with_cphf=None):
         cput1 = (time.clock(), time.time())
         log = logger.Logger(self.stdout, self.verbose)
         if mo_energy is None: mo_energy = self._scf.mo_energy
         if mo_occ    is None: mo_occ = self._scf.mo_occ
-        if nuc_pair  is None: nuc_pair = self.nuc_pair
         if with_cphf is None: with_cphf = self.cphf
 
-        mo_coeff = self._scf.mo_coeff
-        atmlst = sorted(set([j for i,j in nuc_pair]))
         mol = self.mol
-        h1a, h1b = make_h1_pso(mol, self._scf.mo_coeff, mo_occ, atmlst)
+        mo_coeff = self._scf.mo_coeff
+        if h1 is None:
+            atmlst = sorted(set([j for i,j in self.nuc_pair]))
+            h1a, h1b = make_h1_pso(mol, self._scf.mo_coeff, mo_occ, atmlst)
+        else:
+            h1a, h1b = h1
         h1a = numpy.asarray(h1a)
         h1b = numpy.asarray(h1b)
 
@@ -384,7 +379,7 @@ class SpinSpinCoupling(uhf_nmr.NMR):
         return mo1, mo_e1
 
     def gen_vind(self, mf, mo_coeff, mo_occ):
-        '''Induced potential'''
+        '''Induced potential associated with h1_PSO'''
         vresp = _gen_uhf_response(mf, with_j=False, hermi=0)
         occidxa = mo_occ[0] > 0
         occidxb = mo_occ[1] > 0
