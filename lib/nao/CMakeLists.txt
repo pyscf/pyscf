@@ -10,7 +10,7 @@ set_target_properties(nao PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_D
   )
 
 #target_compile_options(nao PRIVATE -pedantic -g -DDEBUG -O0 -fbounds-check -fbacktrace -Wall -ffree-line-length-0)
-target_compile_options(nao PRIVATE -pedantic -g -DDEBUG -O2 -Wall -ffree-line-length-0)
+#target_compile_options(nao PRIVATE -pedantic -g -DDEBUG -O2 -Wall -ffree-line-length-0)
 
 # - Find FFTW
 # Find the native FFTW includes and library
