@@ -1,9 +1,13 @@
 from __future__ import print_function, division
+import sys
 import numpy as np
 from pyscf.nao import system_vars_c, prod_basis_c, tddft_iter_c
 
 sv = system_vars_c().init_siesta_xml(label='siesta', cd='.', force_gamma=True)
-pb = prod_basis_c().init_prod_basis_pp(sv)
+pb = prod_basis_c().init_prod_basis_pp_fopenmp(sv)
+
+sys.exit(0)
+
 td = tddft_iter_c(pb.sv, pb)
 omegas = np.linspace(0.0,0.25,150)+1j*td.eps
 pxx = -td.comp_polariz_xx(omegas).imag

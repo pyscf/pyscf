@@ -18,7 +18,7 @@ module m_gen_get_vrtx_cc_apair
 ! The subroutine is generating the dominant product vertices and conversion coefficiens for a given atom pair
 !
 subroutine gen_get_vrtx_cc_apair(sp12_0b,rc12,lscc_0b,ncc,dout,nout) bind(c, name='gen_get_vrtx_cc_apair')
-  use m_sv_prod_log, only : a, dp_a, bp2info, pb, ff2, evals, vertex_real2, oo2num, p2n, tmp, m2nf, vertex_cmplx2, rhotb, bessel_pp, f1f2_mom, r_scalar_pow_jp1, roverlap, S_comp, ylm
+  use m_sv_prod_log, only : a, dp_a, pb, ff2, evals, vertex_real2, oo2num, p2n, tmp, m2nf, vertex_cmplx2, rhotb, bessel_pp, f1f2_mom, r_scalar_pow_jp1, roverlap, S_comp, ylm
   use m_bilocal_vertex, only : make_bilocal_vertex_rf
   use m_init_pair_info, only : init_pair_info
   use m_init_bpair_functs_vrtx, only : init_bpair_functs_vrtx
@@ -31,6 +31,7 @@ subroutine gen_get_vrtx_cc_apair(sp12_0b,rc12,lscc_0b,ncc,dout,nout) bind(c, nam
   use m_prod_basis_type, only : get_i2s
   use m_pb_reexpr_comm, only : init_counting_fini
   use m_apair_put, only : apair_put
+  use m_pair_info, only : pair_info_t
   
   implicit none
   !! external
@@ -42,6 +43,7 @@ subroutine gen_get_vrtx_cc_apair(sp12_0b,rc12,lscc_0b,ncc,dout,nout) bind(c, nam
   real(c_double), intent(inout) :: dout(nout)
 
   !! internal
+  type(pair_info_t) :: bp2info
   type(book_pb_t), allocatable :: ic2book(:)
   integer(c_int64_t) :: ic, nc, npre
   real(c_double) :: ttt(9), t1, t2, tt(9), rcut, center(3)
@@ -53,7 +55,7 @@ subroutine gen_get_vrtx_cc_apair(sp12_0b,rc12,lscc_0b,ncc,dout,nout) bind(c, nam
   integer, allocatable :: i2s(:)
    
   if( nout < 2 ) then; write(6,*) __FILE__, __LINE__; stop '!nout<2'; endif
-  if(.not. allocated(bp2info)) then; write(6,*) __FILE__, __LINE__; stop '!bp2info'; endif
+  if(.not. allocated(rhotb)) then; write(6,*) __FILE__, __LINE__; stop '!rhotb'; endif
   natoms = get_natoms(pb%sv)
 
   dout = 0
@@ -68,14 +70,13 @@ subroutine gen_get_vrtx_cc_apair(sp12_0b,rc12,lscc_0b,ncc,dout,nout) bind(c, nam
   tt = 0
   ttt = 0
 
-  call init_pair_info(sp12, rc12, a%sv, bp2info(ibp))
+  call init_pair_info(sp12, rc12, ncc, lscc_0b(:)+1, a%sv, bp2info)
   
-  call make_bilocal_vertex_rf(a, bp2info(ibp), &
-    ff2, evals, vertex_real2, lready, rcut, center, oo2num, m2nf, &
+  call make_bilocal_vertex_rf(a, bp2info, ff2, evals, vertex_real2, lready, rcut, center, oo2num, m2nf, &
     vertex_cmplx2, rhotb, ttt)
 
   !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
-  call init_bpair_functs_vrtx(a, bp2info(ibp), m2nf, evals, ff2, &
+  call init_bpair_functs_vrtx(a, bp2info, m2nf, evals, ff2, &
     vertex_real2, lready, rcut, center, dp_a, fmm_mem, pb%sp_biloc2vertex(ibp))
 
   !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
@@ -89,8 +90,8 @@ subroutine gen_get_vrtx_cc_apair(sp12_0b,rc12,lscc_0b,ncc,dout,nout) bind(c, nam
   pb%book_dp(pair)%top = 2
   pb%book_dp(pair)%spp = ibp
   pb%book_dp(pair)%coord = center
-  pb%book_dp(pair)%atoms = bp2info(ibp)%atoms
-  pb%book_dp(pair)%cells(1:3,1:2) = bp2info(ibp)%cells(1:3,1:2)
+  pb%book_dp(pair)%atoms = bp2info%atoms
+  pb%book_dp(pair)%cells(1:3,1:2) = bp2info%cells(1:3,1:2)
   !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
   !call constr_clist_fini(pb%sv, pb%book_dp(pair), pb%pb_p, sp2rcut, ic2book)
   !call constr_clist_sprc(pb%sv, sp12, rc12, pb%pb_p, dp_a%sp2rcut, ic2book)

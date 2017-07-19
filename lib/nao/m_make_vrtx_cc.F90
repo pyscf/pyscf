@@ -1,4 +1,4 @@
-module m_comp_vrtx_cc
+module m_make_vrtx_cc
 
   use m_precision, only : blas_int
 #include "m_define_macro.F90" 
@@ -25,58 +25,11 @@ module m_comp_vrtx_cc
 
   contains
 
-!
-! The program which creates bilocal_dominant
-!
-subroutine comp_vrtx_cc(sv, pb_p, bp2info, dp_a, pb, para, iv_in)
-  use m_system_vars, only : system_vars_t
-  use m_log, only : log_memory_note, log_timing_note
-  use m_fact, only : init_fact
-  use m_parallel, only : para_t
-  use m_prod_basis_param, only : prod_basis_param_t
-  use m_orb_rspace_type, only : init_orb_rspace_aux
-  use m_pair_info, only : pair_info_t, distr_atom_pairs_info
-  use m_biloc_aux, only : biloc_aux_t, init_biloc_aux
-  use m_dp_aux, only : dp_aux_t
-  use m_prod_basis_type, only : prod_basis_t
-  
-  implicit none
-  !! external
-  type(system_vars_t), intent(in) :: sv
-  type(prod_basis_param_t), intent(in) :: pb_p
-  type(pair_info_t), allocatable, intent(in) :: bp2info(:)
-  type(dp_aux_t), intent(in) :: dp_a
-  type(prod_basis_t), intent(inout) :: pb
-  type(para_t), intent(in) :: para
-  integer, intent(in) :: iv_in
-  !! internal
-  type(biloc_aux_t) :: a
-  type(orb_rspace_aux_t) :: orb_a
-  integer :: ul, nbp_node, iv
-  real(8) :: t1,t2,t=0
-
-  !! executable statements
-  iv = iv_in - 1
-_mem_note
-  call init_fact()  !! Initializations for product reduction in Talman's way
-  call init_orb_rspace_aux(sv, orb_a, ul)
-  call init_biloc_aux(sv, pb_p, para, orb_a, a)
-_mem_note
-  
-_t1
-  nbp_node = size(bp2info)
-  call make_bilocal_vertex(a, nbp_node, bp2info, dp_a, pb, iv)
-_t2(t)
-  call log_timing_note('timing-comp_vrtx_cc-', t, iv)
-    
-_mem_note
-
-end subroutine ! bilocal_vertex_rd
 
 !
-!   MAKE_dominant_vertex  a la Talman 
+!   MAKE_dominant_vertex  a la Talman for a given list of contributing atoms
 !
-subroutine make_bilocal_vertex(a, nbp, bp2info, dp_a, pb, iv_in)
+subroutine make_vrtx_cc(a, nbp, bp2info, dp_a, pb, iv_in)
   use m_system_vars, only : system_vars_t, get_nr, get_nmult_max, get_sp2rcut
   use m_log, only : log_memory_note, log_timing_note
   use m_system_vars, only : get_nr, get_jmx, get_norbs_max, get_natoms
@@ -219,7 +172,10 @@ subroutine make_bilocal_vertex(a, nbp, bp2info, dp_a, pb, iv_in)
     pb%book_dp(pair)%atoms = bp2info(ibp)%atoms
     pb%book_dp(pair)%cells(1:3,1:2) = bp2info(ibp)%cells(1:3,1:2)
     !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
-    call constr_clist_fini(sv, pb%book_dp(pair), pb%pb_p, sp2rcut, ic2book)
+    
+    !call constr_clist_fini(sv, pb%book_dp(pair), pb%pb_p, sp2rcut, ic2book)
+    call conv_lscc_1b(sv, bp2info(ibp)%cc2atom, bp2info(ibp)%ncc, ic2book)
+    
     !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
     call get_i2s(pb, ic2book, i2s)
     nc = size(ic2book)
@@ -345,8 +301,49 @@ subroutine make_bilocal_vertex(a, nbp, bp2info, dp_a, pb, iv_in)
   write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__, ' tloc: ', tloc
 #endif
 
-end subroutine !make_bilocal_vertex
+end subroutine !make_vrtx_cc
 
 
+!
+! Convert list of participating centers (atoms)
+!
+subroutine conv_lscc_1b(sv, lscc_1b, ncc, a)
+  use m_system_vars, only : system_vars_t, get_atom2coord_ptr, get_atom2sp_ptr
+  use m_book_pb, only : book_pb_t
+  use iso_c_binding, only : c_double, c_int64_t
+  implicit none
+  !! external
+  type(system_vars_t), intent(in) :: sv
+  integer, intent(in) :: lscc_1b(:)
+  integer, intent(in) :: ncc
+  type(book_pb_t), intent(inout), allocatable :: a(:)
+  !! internal
+  integer(c_int64_t) :: ic, ia
+  real(8), pointer :: atom2coord(:,:)
+  integer, pointer :: atom2sp(:)
+  atom2coord => get_atom2coord_ptr(sv)
+  atom2sp => get_atom2sp_ptr(sv)
+  
+  if(ncc<1) _die('ncc<1')
+  
+  _dealloc(a)
+  allocate(a(ncc))
+  
+  do ic=1,ncc
+    ia = lscc_1b(ic) ! one-based we are accepting ....
+    a(ic)%atoms      = int(ia)
+    a(ic)%cells      = 0
+    a(ic)%coord      = atom2coord(:,ia)
+    a(ic)%spp        = atom2sp(ia)
+    a(ic)%top        = 1
+    a(ic)%ic         = int(ia) ! This must be a local pair index, but atom should be ok with current conventions
+    a(ic)%si         = -999
+    a(ic)%fi         = -999
+    a(ic)%si(3)      = -998 !
+    a(ic)%fi(3)      = -999 !
+  enddo ! atom
+  
+end subroutine ! conv_lscc_1b
 
-end module !m_comp_vrtx_cc
+
+end module !m_make_vrtx_cc

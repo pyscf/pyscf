@@ -29,7 +29,7 @@ module m_init_pair_info
 !
 ! Initialization of the pair_info_t in a simplest case, when only specie-indices and coordinates are given.
 !
-subroutine init_pair_info(sp12, rc12, sv, info)
+subroutine init_pair_info(sp12, rc12, ncc, cc2atom, sv, info)
   use m_system_vars, only : system_vars_t
   use iso_c_binding, only: c_double, c_int64_t
   use m_pair_info, only : pair_info_t
@@ -38,6 +38,8 @@ subroutine init_pair_info(sp12, rc12, sv, info)
   !! external
   integer, intent(in) :: sp12(:)
   real(c_double), intent(in) :: rc12(:,:)
+  integer(c_int64_t), intent(in) :: ncc
+  integer(c_int64_t), intent(in) :: cc2atom(:)
   type(system_vars_t), intent(in) :: sv
   type(pair_info_t), intent(inout) :: info
   !! internal
@@ -53,6 +55,14 @@ subroutine init_pair_info(sp12, rc12, sv, info)
   allocate(info%rf_ls2mu(nrfmx,2))
   info%rf_ls2mu = -999
   do ls=1,2; do rf=1,info%ls2nrf(ls); info%rf_ls2mu(rf,ls) = rf; enddo; enddo 
+
+  _dealloc(info%cc2atom)
+  info%ncc = ncc
+  if(ncc>0) then
+    if(any(cc2atom(1:ncc)<1)) _die('cc2atom(1:ncc)<1')
+    allocate(info%cc2atom(ncc))
+    info%cc2atom(:) = cc2atom(:)
+  endif
 
 end subroutine ! init_pair_info
 

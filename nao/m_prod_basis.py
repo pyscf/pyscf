@@ -4,12 +4,20 @@ from scipy.sparse import coo_matrix
 from numpy import array, einsum, zeros, int64, sqrt
 from ctypes import POINTER, c_double, c_int64, byref
 from pyscf.nao.m_libnao import libnao
+from timeit import default_timer as timer
 
 libnao.gen_get_vrtx_cc_apair.argtypes = (
   POINTER(c_int64),   # sp12(1:2)     ! chemical species indices
   POINTER(c_double),  # rc12(1:3,1:2) ! positions of species
   POINTER(c_int64),   # lscc(ncc)     ! list of contributing centers
   POINTER(c_int64),   # ncc           ! number of contributing centers 
+  POINTER(c_double),  # dout(nout)    ! vertex & converting coefficients
+  POINTER(c_int64))   # nout          ! size of the buffer for vertex & converting coefficients
+
+libnao.gen_get_vrtx_cc_apairs.argtypes = (
+  POINTER(c_int64),   # npairs        ! chemical species indices
+  POINTER(c_double),  # p2srncc       ! species indices, positions of species, number of cc, cc
+  POINTER(c_int64),   # ncc           ! leading dimension of p2srncc
   POINTER(c_double),  # dout(nout)    ! vertex & converting coefficients
   POINTER(c_int64))   # nout          ! size of the buffer for vertex & converting coefficients
 
@@ -46,6 +54,58 @@ class prod_basis_c():
     """
     
     return  
+
+  def init_prod_basis_pp(self, sv, **kvargs):
+    """ Talman's procedure should be working well with Pseudo-Potential starting point."""
+    from pyscf.nao.m_prod_biloc import prod_biloc_c
+
+    #t1 = timer()    
+    self.init_pb_pp_libnao_apair(sv, **kvargs)
+    #t2 = timer(); print(t2-t1); t1=timer();
+    self.bp2info = [] # going to be some information including indices of atoms, list of contributing centres, conversion coefficients
+    for ia1 in range(sv.natoms):
+      rc1 = sv.ao_log.sp2rcut[sv.atom2sp[ia1]]
+      for ia2 in range(ia1+1,sv.natoms):
+        rc2,dist = sv.ao_log.sp2rcut[sv.atom2sp[ia2]], sqrt(((sv.atom2coord[ia1]-sv.atom2coord[ia2])**2).sum())
+        if dist>rc1+rc2 : continue
+        pbiloc = self.comp_apair_pp_libint(ia1,ia2)
+        if pbiloc is not None : self.bp2info.append(pbiloc)
+    
+    self.dpc2s,self.dpc2t,self.dpc2sp = self.init_c2s_domiprod() # dominant product's counting
+    self.npdp = self.dpc2s[-1]
+    self.norbs = self.sv.norbs
+    return self
+
+  def init_prod_basis_pp_fopenmp(self, sv, **kvargs):
+    """ Talman's procedure should be working well with Pseudo-Potential starting point."""
+    from pyscf.nao.m_prod_biloc import prod_biloc_c
+    self.init_pb_pp_libnao_apair(sv, **kvargs)
+    nout = 0
+    aos = sv.ao_log
+    p2srncc = []
+    for a1,[sp1,ra1] in enumerate(zip(sv.atom2sp, sv.atom2coord)):
+      rc1 = aos.sp2rcut[sp1]
+      for a2,[sp2,ra2] in enumerate(zip(sv.atom2sp[a1+1:], sv.atom2coord[a1+1:])):
+        a2+=a1+1
+        rc2,dist = aos.sp2rcut[sp2], sqrt(((ra1-ra2)**2).sum())
+        if dist>rc1+rc2 : continue
+        cc2atom = self.ls_contributing(a1,a2)
+        p2srncc.append([sp1,sp2]+list(ra1)+list(ra2)+[len(cc2atom)]+list(cc2atom))
+        npmx = aos.sp2norbs[sp1]*aos.sp2norbs[sp2]
+        npac = sum([self.prod_log.sp2norbs[sv.atom2sp[ia]] for ia in cc2atom ])
+        nout = nout + (npmx**2+npmx*npac+10)
+    #print(np.asarray(p2srncc))
+    dout = np.require( zeros(nout), requirements='CW')
+    p2srncc_cp = np.require(  np.asarray(p2srncc), requirements='C')
+    npairs = p2srncc_cp.shape[0]
+    ld = p2srncc_cp.shape[1]
+    print(npairs, ld)
+    libnao.gen_get_vrtx_cc_apairs( c_int64(npairs), p2srncc_cp.ctypes.data_as(POINTER(c_double)), 
+      c_int64(ld), dout.ctypes.data_as(POINTER(c_double)), c_int64(nout) )
+
+    if dout[0]<1: return None
+
+    return self
   
   def init_pb_pp_libnao_apair(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0, ac_npc_max=8, jcutoff=14, metric_type=2, optimize_centers=0, ngl=96):
     """ Talman's procedure should be working well with Pseudo-Potential starting point...
@@ -55,7 +115,7 @@ class prod_basis_c():
     """
     from pyscf.nao import prod_log_c
     from pyscf.nao.m_libnao import libnao
-              
+    
     self.sv = sv
     self.tol_loc,self.tol_biloc,self.ac_rcut_ratio,self.ac_npc_max = tol_loc, tol_biloc, ac_rcut_ratio, ac_npc_max
     self.jcutoff,self.metric_type,self.optimize_centers,self.ngl = jcutoff, metric_type, optimize_centers, ngl
@@ -148,6 +208,8 @@ class prod_basis_c():
     if not hasattr(self, 'sv_pbloc_data') : raise RuntimeError('.sv_pbloc_data is absent')
     assert a1>=0
     assert a2>=0
+    
+    t1 = timer()
     sv = self.sv
     aos = self.sv.ao_log
     sp12 = np.require( np.array([sv.atom2sp[a] for a in (a1,a2)], dtype=c_int64), requirements='C')
@@ -158,8 +220,7 @@ class prod_basis_c():
     nout = c_int64(npmx**2+npmx*npac+10)
     dout = np.require( zeros(nout.value), requirements='CW')
     
-    libnao.gen_get_vrtx_cc_apair( sp12.ctypes.data_as(POINTER(c_int64)), rc12.ctypes.data_as(POINTER(c_double)), icc2a.ctypes.data_as(POINTER(c_int64)), c_int64(len(icc2a)), dout.ctypes.data_as(POINTER(c_double)), nout )
-    
+    libnao.gen_get_vrtx_cc_apair( sp12.ctypes.data_as(POINTER(c_int64)), rc12.ctypes.data_as(POINTER(c_double)), icc2a.ctypes.data_as(POINTER(c_int64)), c_int64(len(icc2a)), dout.ctypes.data_as(POINTER(c_double)), nout )    
     if dout[0]<1: return None
     
     nnn = np.array(dout[0:3], dtype=int)
@@ -171,6 +232,7 @@ class prod_basis_c():
     icc2s = np.zeros(len(icc2a)+1, dtype=np.int64)
     for icc,a in enumerate(icc2a): icc2s[icc+1] = icc2s[icc] + self.prod_log.sp2norbs[sv.atom2sp[a]]
     pbiloc = prod_biloc_c(atoms=array([a2,a1]),vrtx=vrtx,cc2a=icc2a,cc2s=icc2s,cc=ccoe)
+    
     return pbiloc
 
 
@@ -180,24 +242,6 @@ class prod_basis_c():
     sp12 = np.array([self.sv.atom2sp[a] for a in (a1,a2)])
     rc12 = np.array([self.sv.atom2coord[a,:] for a in (a1,a2)])
     return ls_contributing(self, sp12, rc12)
-
-  def init_prod_basis_pp(self, sv):
-    """ Talman's procedure should be working well with Pseudo-Potential starting point."""
-    from pyscf.nao.m_prod_biloc import prod_biloc_c
-
-    self.init_pb_pp_libnao_apair(sv)
-    self.bp2info = [] # going to be some information including indices of atoms, list of contributing centres, conversion coefficients
-    for ia1 in range(sv.natoms):
-      rc1 = sv.ao_log.sp2rcut[sv.atom2sp[ia1]]
-      for ia2 in range(ia1+1,sv.natoms):
-        rc2,dist = sv.ao_log.sp2rcut[sv.atom2sp[ia2]], sqrt(((sv.atom2coord[ia1]-sv.atom2coord[ia2])**2).sum())
-        if dist>rc1+rc2 : continue
-        pbiloc = self.comp_apair_pp_libint(ia1,ia2)
-        if pbiloc is not None : self.bp2info.append(pbiloc)
-    self.dpc2s,self.dpc2t,self.dpc2sp = self.init_c2s_domiprod() # dominant product's counting
-    self.npdp = self.dpc2s[-1]
-    self.norbs = self.sv.norbs
-    return self
 
   def init_prod_basis_gto(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
     """ It should work with GTOs as well."""

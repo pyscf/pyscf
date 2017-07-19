@@ -434,7 +434,7 @@ class system_vars_c():
     """ Initialization of data on libnao site """
     from pyscf.nao.m_libnao import libnao
     from pyscf.nao.m_sv_chain_data import sv_chain_data
-    from ctypes import POINTER, c_double, c_int64, byref
+    from ctypes import POINTER, c_double, c_int64
     data = sv_chain_data(self)
     libnao.init_sv_libnao.argtypes = (POINTER(c_double), POINTER(c_int64))
     libnao.init_sv_libnao(data.ctypes.data_as(POINTER(c_double)), c_int64(len(data)))

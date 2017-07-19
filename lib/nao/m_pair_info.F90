@@ -22,6 +22,8 @@ module m_pair_info
     integer :: cells(3,2)=-999
     integer :: ls2nrf(2) = -999 ! ! a correspondence : local specie (1 or 2) --> number of radial functions
     integer, allocatable :: rf_ls2mu(:,:) ! ! a correspondence : radial function, local specie (1 or 2) --> "multiplett" in system_vars_t
+    integer :: ncc = -999 ! number of contributing centers
+    integer, allocatable :: cc2atom(:) ! contributing center --> atom correspondence
   end type ! pair_info_t
 
   contains
@@ -35,6 +37,7 @@ subroutine dealloc_bp2info(bp2info)
   type(pair_info_t), intent(inout) :: bp2info
 
   _dealloc(bp2info%rf_ls2mu)
+  _dealloc(bp2info%cc2atom)
 
 end subroutine ! dealloc_bp2info
 

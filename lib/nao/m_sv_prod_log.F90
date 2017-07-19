@@ -23,7 +23,6 @@ module m_sv_prod_log
   type(prod_basis_t) :: pb
   type(para_t) :: para
   type(orb_rspace_aux_t) :: orb_a
-  type(pair_info_t), allocatable :: bp2info(:)
   type(biloc_aux_t) :: a
   type(dp_aux_t) :: dp_a
   
@@ -73,10 +72,7 @@ subroutine sv_prod_log(dinp,ninp) bind(c, name='sv_prod_log')
   call hkernel_pb_bcrs(pb, dp_a%hk)
   
   call init_orb_rspace_aux(sv, orb_a, ul)
-  call init_biloc_aux(sv, pb%pb_p, bp2info, para, orb_a, a)
-  
-  _dealloc(bp2info)
-  allocate(bp2info(1))
+  call init_biloc_aux(sv, pb%pb_p, para, orb_a, a)
 
   natoms = get_natoms(a%sv)
   nr = get_nr(a%sv)

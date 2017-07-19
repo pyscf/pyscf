@@ -9,7 +9,6 @@ module m_biloc_aux
   use m_orb_rspace_type, only : orb_rspace_aux_t
   use m_parallel, only : para_t
   use m_sph_bes_trans, only : Talman_plan_t
-  use m_pair_info, only : pair_info_t
   use m_interp, only : interp_t
   use m_log, only : log_memory_note
   
@@ -21,20 +20,19 @@ module m_biloc_aux
   !private get_cdatetime
   
   type biloc_aux_t
-    type(system_vars_t), pointer :: sv
-    type(prod_basis_param_t), pointer :: pb_p
-    type(pair_info_t), pointer :: bp2info(:)
-    type(para_t), pointer :: para
-    type(orb_rspace_aux_t), pointer :: orb_a
+    type(system_vars_t), pointer :: sv =>null()
+    type(prod_basis_param_t), pointer :: pb_p =>null()
+    type(para_t), pointer :: para =>null()
+    type(orb_rspace_aux_t), pointer :: orb_a =>null()
     type(Talman_plan_t) :: Talman_plan
     type(interp_t)  :: interp_log
-    real(8), pointer :: rr(:)
-    real(8), pointer :: pp(:)
-    integer, pointer :: mu_sp2j(:,:)
-    integer, pointer :: mu_sp2start_ao(:,:)
-    integer, pointer :: sp2nmult(:)
-    real(8), pointer :: psi_log(:,:,:)
-    real(8), pointer :: mu_sp2rcut(:,:)
+    real(8), pointer :: rr(:) =>null()
+    real(8), pointer :: pp(:) =>null()
+    integer, pointer :: mu_sp2j(:,:) =>null()
+    integer, pointer :: mu_sp2start_ao(:,:) =>null()
+    integer, pointer :: sp2nmult(:) =>null()
+    real(8), pointer :: psi_log(:,:,:) =>null()
+    real(8), pointer :: mu_sp2rcut(:,:) =>null()
     
     integer :: nr = -999
     integer :: nf_max = -999
@@ -58,7 +56,7 @@ module m_biloc_aux
 !
 !
 !
-subroutine init_biloc_aux(sv, pb_p, bp2info, para, orb_a, a)
+subroutine init_biloc_aux(sv, pb_p, para, orb_a, a)
   use m_system_vars, only : get_norbs_max, get_jmx
   use m_system_vars, only : get_psi_log_ptr, get_sp2nmult_ptr, get_mu_sp2j_ptr, get_nr
   use m_system_vars, only : get_rr_ptr, get_pp_ptr, get_sp2norbs
@@ -69,14 +67,12 @@ subroutine init_biloc_aux(sv, pb_p, bp2info, para, orb_a, a)
   use m_sph_bes_trans, only : sbt_plan
   use m_prod_talman, only : csphar_talman
   use m_harmonics, only : init_c2r_hc_c2r
-  use m_pair_info, only : pair_info_t
   use m_interp, only : init_interp
     
   implicit none
   !! external
   type(system_vars_t), intent(in), target :: sv
   type(prod_basis_param_t), intent(in), target :: pb_p
-  type(pair_info_t), intent(in), target :: bp2info(:)
   type(para_t), intent(in), target :: para
   type(orb_rspace_aux_t), intent(in), target :: orb_a
   type(biloc_aux_t), intent(inout) :: a
@@ -88,7 +84,6 @@ subroutine init_biloc_aux(sv, pb_p, bp2info, para, orb_a, a)
   
   a%sv => sv
   a%pb_p => pb_p
-  a%bp2info => bp2info
   a%para => para
   a%orb_a => orb_a
   a%mu_sp2start_ao => get_mu_sp2start_ao_ptr(orb_a)
