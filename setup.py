@@ -1,33 +1,7 @@
 import sys
 import subprocess
 from distutils.core import setup
-import subprocess
 import os
-
-def compile_C_code(verbose=0, build_type="Release"):
-    """
-    Compile automaticaly the C and Fortran code
-    when installing the program with python setup.py
-    """
-
-    if build_type not in ["Release", "Debug", "None"]:
-        raise ValueError("build type must be Release, Debug or None")
-    ret = subprocess.call("rm -rf lib/build", shell = True)
-
-    os.mkdir("lib/build")
-    os.chdir("lib/build")
-
-    cmd = "cmake -DCMAKE_BUILD_TYPE=" + build_type + " .."
-    ret = subprocess.call(cmd, shell = True)
-    if ret != 0:
-        raise ValueError("cmake returned error {0}".format(ret))
-    cmd = "make VERBOSE={0}".format(verbose)
-    ret = subprocess.call(cmd, shell = True)
-    if ret != 0:
-        raise ValueError("make returned error {0}".format(ret))
-
-    os.chdir("../..")
-
 
 if sys.version_info[0] >= 3: # from Cython 0.14
     from distutils.command.build_py import build_py_2to3 as build_py
@@ -62,11 +36,6 @@ AUTHOR           = 'Qiming Sun'
 AUTHOR_EMAIL     = 'osirpt.sun@gmail.com'
 PLATFORMS        = ['Linux', 'Mac OS-X', 'Unix']
 VERSION          = '1.3.0'
-
-
-compilation = True
-if compilation:
-    compile_C_code(build_type="Debug")
 
 setup(
     name=NAME,
