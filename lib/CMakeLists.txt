@@ -1,14 +1,21 @@
 cmake_minimum_required (VERSION 2.8)
 project (pyscf)
+enable_language(Fortran)
 
-include(arch.inc OPTIONAL)
+#include(arch.inc OPTIONAL)
 
-set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
-#set(CMAKE_BUILD_TYPE DEBUG)
-set(CMAKE_VERBOSE_MAKEFILE OFF)
+#set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
+IF( NOT CMAKE_BUILD_TYPE )
+  SET( CMAKE_BUILD_TYPE Release ... FORCE )
+ENDIF()
 
 if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffast-math")
+  set(CMAKE_C_FLAGS_DEBUG "-Wall -pg -O0")
+  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} ")
+  set(CMAKE_C_FLAGS_RELEASE "-Wall -O2 -ffast-math")
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} ")
+  set(CMAKE_Fortran_FLAGS_DEBUG "-pedantic -pg -DDEBUG -O0 -fbounds-check -fbacktrace -Wall -ffree-line-length-0")
+  set(CMAKE_Fortran_FLAGS_RELEASE "-pedantic -O2 -Wall -ffree-line-length-0")
   if(UNIX AND NOT APPLE)
     set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-as-needed")
   endif()
@@ -16,6 +23,7 @@ endif()
 
 set(CMAKE_MACOSX_RPATH OFF)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
+
 
 if (DEFINED BLAS_LIBRARIES)
   message("BLAS libraries are defined (in arch.inc):")
@@ -48,7 +56,6 @@ message("BLAS libraries: ${BLAS_LIBRARIES}")
 
 # set(BLAS_LIBRARIES "-Wl,-rpath=${MKLROOT}/lib/intel64/ ${BLAS_LIBRARIES}")
 
-enable_language(Fortran)
 include(FortranCInterface)
 FortranCInterface_HEADER(FC.h MACRO_NAMESPACE “FC_”)
 #This creates a “FC.h” header that defines mangling macros
