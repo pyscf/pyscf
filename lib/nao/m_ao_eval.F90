@@ -25,7 +25,7 @@ subroutine ao_eval(nmu, &
   res, & ! (ldres,norbs)
   ldres ) bind(c, name='ao_eval')
 
-  use m_rsphar, only : rsphar  
+  use m_rsphar, only : rsphar, dealloc_rsphar, init_rsphar
 
   implicit none 
   !! external
@@ -64,8 +64,19 @@ subroutine ao_eval(nmu, &
 
   rcutmx = maxval(mu2rcut)
   jmx_sp = maxval(mu2j)
+  !$OMP PARALLEL DEFAULT(NONE) &
+  !$OMP PRIVATE (icrd, rsh, coord, r, coeffs, mu) &
+  !$OMP PRIVATE (j, s, f, k, fval) &
+  !$OMP SHARED (coords, rcen, jmx_sp, ncoords, res, rcutmx) &
+  !$OMP SHARED (nr, rhomin_jt, dr_jt, nmu, ir_mu2v_rl, mu2j, mu2s)
+
   allocate(rsh(0:(jmx_sp+1)**2-1))
   res = 0
+  !$OMP CRITICAL
+  call init_rsphar(jmx_sp)
+  !$OMP END CRITICAL
+
+  !$OMP DO
   do icrd = 1,ncoords
     coord = coords(:,icrd)-rcen
     call rsphar(coord, jmx_sp, rsh)
@@ -82,8 +93,15 @@ subroutine ao_eval(nmu, &
       res(icrd,s:f) = fval * rsh(j*(j+1)-j:j*(j+1)+j)
     enddo ! mu
   enddo ! icrd
+  !$OMP END DO
   
   _dealloc(rsh)
+  !$OMP CRITICAL
+  call dealloc_rsphar()
+  !$OMP END CRITICAL
+
+  !$OMP END PARALLEL
+
   
 end subroutine !ao_eval
 

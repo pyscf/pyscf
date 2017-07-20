@@ -8,24 +8,22 @@ module m_rsphar
   
   integer(c_int64_t) :: lmx = -1
   real(c_double), allocatable  :: lm2aa(:), lm2bb(:), l2tlp1(:), l2tlm1(:), l21mhl(:)
+  !$OMP THREADPRIVATE(lm2aa, lm2bb, l2tlp1, l2tlm1, l21mhl, lmx)
 
   contains
 
 !
 !
 !
-subroutine init_rsphar(lmx, lm2aa, lm2bb, l2tlp1, l2tlm1, l21mhl)
+subroutine init_rsphar(lmax)
   ! external
-  integer(c_int64_t), intent(in) :: lmx
-  real(c_double), intent(inout), allocatable :: lm2aa(:), lm2bb(:), l2tlp1(:), l2tlm1(:), l21mhl(:)
+  integer(c_int64_t), intent(in) :: lmax
+  !real(c_double), intent(inout), allocatable :: lm2aa(:), lm2bb(:), l2tlp1(:), l2tlm1(:), l21mhl(:)
   ! internal
   integer(c_int64_t) :: l,m,ind
-  _dealloc(lm2aa)
-  _dealloc(lm2bb)
-  _dealloc(l2tlp1)
-  _dealloc(l2tlm1)
-  _dealloc(l21mhl)
   
+  lmx = lmax
+  call dealloc_rsphar()
   allocate(lm2aa(0:(lmx+1)**2-1))
   allocate(lm2bb(0:(lmx+1)**2-1))
   allocate(l2tlp1(0:lmx))
@@ -47,8 +45,18 @@ subroutine init_rsphar(lmx, lm2aa, lm2bb, l2tlp1, l2tlm1, l21mhl)
     enddo
   enddo
   
-  
 end subroutine !  
+
+!
+!
+!
+subroutine dealloc_rsphar()
+  _dealloc(lm2aa)
+  _dealloc(lm2bb)
+  _dealloc(l2tlp1)
+  _dealloc(l2tlm1)
+  _dealloc(l21mhl)
+end subroutine ! dealloc_rsphar
 
 !
 ! real spherical harmonics fast and tested
@@ -66,10 +74,12 @@ subroutine rsphar(r,lmax,res) bind(c, name='rsphar')
   integer(c_int64_t) :: l,m,il1,il2,ind,ll2,twol,l2
   real(c_double) :: dd,phi,cc,ss,zz,cs,P,rt2lp1, xxpyy
 
+  !$OMP CRITICAL
   if(lmx<lmax) then
-    call init_rsphar(lmax, lm2aa, lm2bb, l2tlp1, l2tlm1, l21mhl)
+    call init_rsphar(lmax)
     lmx = lmax
   endif
+  !$OMP END CRITICAL
   
   if(.not. allocated(sgn)) then
     call init_fact()
@@ -153,7 +163,7 @@ subroutine rsphar_vec(r,nc,lmax,res) bind(c, name='rsphar_vec')
   endif
 
   if(lmx<lmax) then
-    call init_rsphar(lmax, lm2aa, lm2bb, l2tlp1, l2tlm1, l21mhl)
+    call init_rsphar(lmax)
     lmx = lmax
   endif
   
