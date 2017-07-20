@@ -5,6 +5,7 @@
 
 '''
 Non-relativistic unrestricted Hartree-Fock g-tensor
+(In testing)
 
 Refs:
     JPC, 101, 3388
@@ -28,12 +29,14 @@ def dia(gobj, mol, dm0, gauge_orig=None):
     spindm = dma - dmb
     effspin = mol.spin * .5
     alpha2 = lib.param.ALPHA ** 2
-    # FIXME: see JPC, 101, 3388, why?
-    g_so = (lib.param.G_ELECTRON - 1) * 2
+    ## FIXME: see JPC, 101, 3388, why?
+    #g_so = (lib.param.G_ELECTRON - 1) * 2
+    fac = lib.param.G_ELECTRON / 2
+    fac = 1
 
 # relativistic mass correction (RMC)
     rmc = -numpy.einsum('ij,ji', mol.intor('int1e_kin'), spindm)
-    rmc *= lib.param.G_ELECTRON/2 / effspin * alpha2
+    rmc *= fac / effspin * alpha2
     logger.info(gobj, 'RMC = %s', rmc)
 
 # GC(1e)
@@ -69,7 +72,9 @@ def dia(gobj, mol, dm0, gauge_orig=None):
     if 0:  # correction of order c^{-2} from MB basis or DPT (JCP,115,7356), does it exist?
         gc1e += numpy.einsum('ij,ji', mol.intor('int1e_nuc'), spindm) * numpy.eye(3)
 
-    gc1e *= g_so * (alpha2/4) / effspin
+    # The factor of GC(1e) is consistent to JCP, 119, 10489.
+    # Equation (4) in JCP, 115, 11080 may be missing 1/2
+    gc1e *= (alpha2/4) / effspin
     _write(gobj, gc1e, 'GC(1e)')
 
     if gobj.with_sso or gobj.with_soo:
@@ -86,8 +91,9 @@ def make_dia_gc2e(gobj, dm0, gauge_orig):
     spindm = dma - dmb
     effspin = mol.spin * .5
     alpha2 = lib.param.ALPHA ** 2
-    # FIXME: see JPC, 101, 3388 Eq (11c), why?
-    g_so = (lib.param.G_ELECTRON - 1) * 2
+    ## FIXME: see JPC, 101, 3388 Eq (11c), why?
+    #g_so = (lib.param.G_ELECTRON - 1) * 2
+    g_so = 2
     nao = dma.shape[0]
 
     if gauge_orig is None:
@@ -107,10 +113,10 @@ def make_dia_gc2e(gobj, dm0, gauge_orig):
         ej += 2 * numpy.einsum('xyijkl,ij,kl->xy', gc2e_ri, dma+dmb, dma-dmb)
         ek += 2 * numpy.einsum('xyijkl,jk,li->xy', gc2e_ri, dma, dma)
         ek -= 2 * numpy.einsum('xyijkl,jk,li->xy', gc2e_ri, dmb, dmb)
-    gc2e = (ej - ek) / 2
+    gc2e = ej - ek
     gc2e -= numpy.eye(3) * gc2e.trace()
 
-    if gauge_orig is None:
+    if gauge_orig is None:  # CHECK factor -2
         giao2e1 = mol.intor('int2e_ipvg1_xp1', comp=9, aosym='s1').reshape(3,3,nao,nao,nao,nao)
         giao2e2 = mol.intor('int2e_ipvg2_xp1', comp=9, aosym='s1').reshape(3,3,nao,nao,nao,nao)
         ej = numpy.zeros((3,3))
@@ -129,15 +135,15 @@ def make_dia_gc2e(gobj, dm0, gauge_orig):
             ej += -2 * 2 * numpy.einsum('yxijkl,ij,kl->xy', giao2e2, dma+dmb, spindm)
             ek += -2 * 2 * numpy.einsum('yxijkl,jk,li->xy', giao2e2, dma, dma)
             ek -= -2 * 2 * numpy.einsum('yxijkl,jk,li->xy', giao2e2, dmb, dmb)
-        gc2e += (ej - ek) / 2
+        gc2e += ej - ek
 
     if 0:  # correction of order c^{-2} from MB basis, does it exist?
         vj, vk = gobj._scf.get_jk(mol, dm0)
         vhf = vj[0] + vj[1] - vk
-        gc2e += numpy.einsum('ij,ji', vhf[0], dma) * numpy.eye(3)
-        gc2e -= numpy.einsum('ij,ji', vhf[1], dmb) * numpy.eye(3)
+        gc2e += numpy.einsum('ij,ji', vhf[0], dma) * numpy.eye(3) * 2
+        gc2e -= numpy.einsum('ij,ji', vhf[1], dmb) * numpy.eye(3) * 2
 
-    gc2e *= (alpha2/2) / effspin
+    gc2e *= (alpha2/4) / effspin
     return gc2e
 
 def koseki_charge(z):
@@ -166,6 +172,7 @@ def para(mol, mo10, mo_coeff, mo_occ):
     nao = mo_coeff[0].shape[0]
     # FIXME: see JPC, 101, 3388 Eq (11c), why?
     g_so = (lib.param.G_ELECTRON - 1) * 2
+    g_so = 2
 
     orboa = mo_coeff[0][:,mo_occ[0]>0]
     orbob = mo_coeff[1][:,mo_occ[1]>0]
@@ -205,8 +212,9 @@ def para(mol, mo10, mo_coeff, mo_occ):
 def make_para_soc2e(gobj, dm0, dm10):
     alpha2 = lib.param.ALPHA ** 2
     effspin = mol.spin * .5
-    # FIXME: see JPC, 101, 3388 Eq (11c), why?
-    g_so = (lib.param.G_ELECTRON - 1) * 2
+    ## FIXME: see JPC, 101, 3388 Eq (11c), why?
+    #g_so = (lib.param.G_ELECTRON - 1) * 2
+    g_so = 2
 
     dm0a, dm0b = dm0
     dm10a, dm10b = dm10
@@ -235,6 +243,25 @@ def make_para_soc2e(gobj, dm0, dm10):
     gpara2e *= (alpha2/4) / effspin
     return gpara2e
 
+def para_for_debug(gobj, mol, mo10, mo_coeff, mo_occ):
+    from pyscf.prop.hfc.uhf import make_h1_soc
+    effspin = mol.spin * .5
+    # The factor is consistent to JCP, 119, 10489.
+    fac = lib.param.ALPHA**2 / 4 / effspin
+
+    orboa = mo_coeff[0][:,mo_occ[0]>0]
+    orbob = mo_coeff[1][:,mo_occ[1]>0]
+    dm0a = numpy.dot(orboa, orboa.T)
+    dm0b = numpy.dot(orbob, orbob.T)
+    dm10a = numpy.asarray([reduce(numpy.dot, (mo_coeff[0], x, orboa.T)) for x in mo10[0]])
+    dm10b = numpy.asarray([reduce(numpy.dot, (mo_coeff[1], x, orbob.T)) for x in mo10[1]])
+
+    h1a, h1b = make_h1_soc(gobj, (dm0a,dm0b))
+    e = numpy.einsum('xij,yij->xy', dm10a, h1a) * 2
+    e+= numpy.einsum('xij,yij->xy', dm10b, h1b) * 2
+    return fac * e
+
+
 # FIXME: test the MB basis contribution
 def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
     log = logger.new_logger(mol, verbose=verbose)
@@ -260,6 +287,7 @@ def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
 def _write(gobj, gtensor, title, level=logger.INFO):
     if gobj.verbose >= level:
         w, v = numpy.linalg.eigh(numpy.dot(gtensor, gtensor.T))
+        #gobj.stdout.write('sqrt(ggT) %s\n' % numpy.sqrt(w))
         idxmax = abs(v).argmax(axis=0)
         v[:,v[idxmax,[0,1,2]]<0] *= -1  # format phase
         sorted_axis = numpy.argsort(idxmax)
@@ -281,7 +309,18 @@ class GTensor(uhf_nmr.NMR):
         uhf_nmr.NMR.__init__(self, scf_method)
 
     def dump_flags(self):
-        uhf_nmr.NMR.dump_flags(self)
+        log = logger.Logger(self.stdout, self.verbose)
+        log.info('\n')
+        log.info('******** %s for %s ********',
+                 self.__class__, self._scf.__class__)
+        if self.gauge_orig is None:
+            log.info('gauge = GIAO')
+        else:
+            log.info('Common gauge = %s', str(self.gauge_orig))
+        log.info('with cphf = %s', self.cphf)
+        if self.cphf:
+            log.info('CPHF conv_tol = %g', self.conv_tol)
+            log.info('CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
         logger.info(self, 'with_sso = %s (2e spin-same-orbit coupling)', self.with_sso)
         logger.info(self, 'with_soo = %s (2e spin-other-orbit coupling)', self.with_soo)
         logger.info(self, 'with_so_eff_charge = %s (1e SO effective charge)',
@@ -320,22 +359,24 @@ class GTensor(uhf_nmr.NMR):
         if mo10 is None:
             self.mo10, self.mo_e10 = self.solve_mo1()
             mo10 = self.mo10
+        if 0:
+            return para_for_debug(self, mol, mo10, mo_coeff, mo_occ)
         return para(mol, mo10, mo_coeff, mo_occ)
 
 
 if __name__ == '__main__':
     from pyscf import gto, scf
     mol = gto.M(atom='Ne 0 0 0',
-                basis='ccpvdz', spin=1, charge=-1, verbose=3)
+                basis='ccpvdz', spin=2, charge=2, verbose=3)
     mf = scf.UHF(mol)
     mf.kernel()
     gobj = GTensor(mf)
+    gobj.verbose=4
     gobj.gauge_orig = (0,0,0)
     gobj.with_sso = True
     gobj.with_soo = True
     gobj.with_so_eff_charge = False
     print(gobj.kernel())
-    exit()
 
     mol = gto.M(atom='H 0 0 0; H 0 0 1.',
                 basis='ccpvdz', spin=1, charge=-1, verbose=3)

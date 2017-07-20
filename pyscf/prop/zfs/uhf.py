@@ -5,8 +5,11 @@
 
 '''
 Non-relativistic unrestricted Hartree-Fock zero-field splitting
+(In testing)
 
 Refs:
+    JCP, 134, 194113
+    PRB, 60, 9566
     JCP, 127, 164112
 '''
 
@@ -16,8 +19,10 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.gto import mole
-from pyscf.dft import numint
+from pyscf.ao2mo import _ao2mo
+from pyscf.scf.newton_ah import _gen_uhf_response
 from pyscf.prop.nmr import uhf as uhf_nmr
+from pyscf.prop.ssc.rhf import _dm1_mo2ao
 from pyscf.prop.gtensor.uhf import koseki_charge
 
 
@@ -31,38 +36,70 @@ def direct_spin_spin(zfsobj, mol, dm0, verbose=None):
     effspin = mol.spin * .5
     nao = dma.shape[0]
 
-    s2 = effspin * (effspin * 2 - 1)
-    fac = lib.param.G_ELECTRON**2 * lib.param.ALPHA**2 / s2 / 16
+    # Use QED g-factor or Dirac g-factor
+    #g_fac = lib.param.G_ELECTRON**2/4  # QED
+    g_fac = 1
+    fac = g_fac * lib.param.ALPHA**2 / 8 / (effspin * (effspin - .5))
 
     hss = mol.intor('int2e_ip1ip2', comp=9).reshape(3,3,nao,nao,nao,nao)
-    hss = hss - hss.transpose(0,1,3,2,4,5)
-    hss = hss - hss.transpose(0,1,2,3,5,4)
+    hss = hss + hss.transpose(0,1,3,2,4,5)
+    hss = hss + hss.transpose(0,1,2,3,5,4)
     ej = numpy.einsum('xyijkl,ji,lk', hss, spindm, spindm)
     ek = numpy.einsum('xyijkl,jk,li', hss, spindm, spindm)
-    ess = (ej - ek) * fac
-    h_fc = mol.intor('int4c1e').reshape(nao,nao,nao,nao)
-    ej = numpy.einsum('ijkl,ji,lk', h_fc, spindm, spindm)
-    ek = numpy.einsum('ijkl,jk,li', h_fc, spindm, spindm)
-    e_fc = (ej - ek) * fac * (8*numpy.pi/3)
-    dipdip = ess + e_fc * numpy.eye(3)
-    return dipdip
+    dss = (ej - ek) * fac
+
+# 2-electron Fermi contact term
+# FC contribution is zero in mean-field calculations because of the 16-fold
+# symmetry of the 4-index tensor.
+# Generally, in a CI-like wfn, FC may have contributions to the direction
+# spin-spin coupling.
+    if 0:
+        h_fc = mol.intor('int4c1e').reshape(nao,nao,nao,nao)
+        ej = numpy.einsum('ijkl,ji,lk', h_fc, spindm, spindm)
+        ek = numpy.einsum('ijkl,jk,li', h_fc, spindm, spindm)
+        e_fc = (ej - ek) * fac * (4*numpy.pi/3)
+        dss -= e_fc * numpy.eye(3)
+    return dss
 
 # Note mo1 is the imaginary part of MO^1
-def soc_part(zfsobj, mol, mo1, mo_coeff, mo_occ):
-    effspin = mol.spin * .5
-    h1aa, h1bb, h1ab, h1ba = make_h1_mo(mol, mo_coeff, mo_occ)
-    dkl = .25/effspin**2 * numpy.einsum('xij,yij->xy', h1aa, mo1[0])
-    dkl+= .25/effspin**2 * numpy.einsum('xij,yij->xy', h1bb, mo1[1])
-    dkl-= .25/effspin**2 * numpy.einsum('xij,yij->xy', h1ab, mo1[2])
-    dkl-= .25/effspin**2 * numpy.einsum('xij,yij->xy', h1ba, mo1[3])
-    dkl *= lib.param.ALPHA**2 / 2
-    return dkl
+def make_soc(zfsobj, mol, mo_coeff, mo_occ):
+    h1 = make_h1_soc(zfsobj, mol, mo_coeff, mo_occ)
+    mo1 = solve_mo1(zfsobj, h1)
+    h1aa, h1ab, h1ba, h1bb = h1
+    mo1aa, mo1ab, mo1ba, mo1bb = mo1
 
-def make_h1_mo(mol, mo_coeff, mo_occ):
+    effspin = mol.spin * .5
+    if 0: # Pederson-Khanna formula , PRB, 60, 9566
+        fac = -.25 / effspin**2
+        dso  = fac * numpy.einsum('xij,yij->xy', h1aa, mo1aa)
+        dso += fac * numpy.einsum('xij,yij->xy', h1bb, mo1bb)
+        dso -= fac * numpy.einsum('xij,yij->xy', h1ab, mo1ab)
+        dso -= fac * numpy.einsum('xij,yij->xy', h1ba, mo1ba)
+    elif 0: # Neese formula, see JCP, 127, 164112
+        facy = -.25 / ((effspin-.5)*effspin)
+        facz = -.25 / effspin**2
+        facx = -.25 / ((effspin+.5)*(effspin+1))
+        dso  = facz * numpy.einsum('xij,yij->xy', h1aa, mo1aa)
+        dso += facz * numpy.einsum('xij,yij->xy', h1bb, mo1bb)
+        dso -= facx * numpy.einsum('xij,yij->xy', h1ab, mo1ab)
+        dso -= facy * numpy.einsum('xij,yij->xy', h1ba, mo1ba)
+    else: # van Wullen formula, JCP, 134, 194113
+        # Note the sign difference to van Wullen's paper, due to the
+        # anti-symmetricity of the Hamiltonian
+        fac = -.25 / (effspin*(effspin-.5))
+        dso  = fac * numpy.einsum('xij,yij->xy', h1aa, mo1aa)
+        dso += fac * numpy.einsum('xij,yij->xy', h1bb, mo1bb)
+        dso -= fac * numpy.einsum('xij,yij->xy', h1ab, mo1ab)
+        dso -= fac * numpy.einsum('xij,yij->xy', h1ba, mo1ba)
+
+    dso *= lib.param.ALPHA ** 4 / 4
+    return dso
+
+def make_h1_soc(zfsobj, mol, mo_coeff, mo_occ):
     occidxa = mo_occ[0] > 0
     occidxb = mo_occ[1] > 0
-    orboa = mo_coeff[0][:,occidxa]
-    orbob = mo_coeff[1][:,occidxb]
+    orboa = mo_coeff[0][:, occidxa]
+    orbob = mo_coeff[1][:, occidxb]
     orbva = mo_coeff[0][:,~occidxa]
     orbvb = mo_coeff[1][:,~occidxb]
 # hso1e is the imaginary part of [i sigma dot pV x p]
@@ -82,19 +119,18 @@ def make_h1_mo(mol, mo_coeff, mo_occ):
     h1ba = numpy.asarray([reduce(numpy.dot, (orbvb.T, x, orboa)) for x in hso1e])
 
     if zfsobj.with_sso or zfsobj.with_soo:
-        hso2e = make_soc2e_mo(zfsobj, mo_coeff, mo_occ)
+        hso2e = make_soc2e(zfsobj, mo_coeff, mo_occ)
     else:
         hso2e = (0, 0, 0, 0)
 
     h1aa += hso2e[0]
-    h1bb += hso2e[1]
-    h1ab += hso2e[2]
-    h1ba += hso2e[3]
-    return h1aa, h1bb, h1ab, h1ba
+    h1ab += hso2e[1]
+    h1ba += hso2e[2]
+    h1bb += hso2e[3]
+    return h1aa, h1ab, h1ba, h1bb
 
-# Using SOMF approximation in this implementation
-#TODO: full SSO+SOO without approximation
-def make_soc2e_mo(zfsobj, mo_coeff, mo_occ):
+# Using the approximation in JCP, 122, 034107
+def make_soc2e(zfsobj, mo_coeff, mo_occ):
     occidxa = mo_occ[0] > 0
     occidxb = mo_occ[1] > 0
     orboa = mo_coeff[0][:,occidxa]
@@ -114,95 +150,130 @@ def make_soc2e_mo(zfsobj, mo_coeff, mo_occ):
     hso2e = vj - vk * 1.5
 
     haa = numpy.asarray([reduce(numpy.dot, (orbva.T, x, orboa)) for x in hso2e])
-    hbb = numpy.asarray([reduce(numpy.dot, (orbvb.T, x, orbob)) for x in hso2e])
     hab = numpy.asarray([reduce(numpy.dot, (orbva.T, x, orbob)) for x in hso2e])
     hba = numpy.asarray([reduce(numpy.dot, (orbvb.T, x, orboa)) for x in hso2e])
-    return haa, hbb, hab, hba
+    hbb = numpy.asarray([reduce(numpy.dot, (orbvb.T, x, orbob)) for x in hso2e])
+    return haa, hab, hba, hbb
 
-def solve_mo1(zfsobj):
-    log = logger.new_logger(zfsobj, zfsobj.verbose)
-    mol = zfsobj.mol
-    mf = zfsobj._scf
-    mo_energy = mf.mo_energy
-    mo_coeff = mf.mo_coeff
-    mo_occ = mf.mo_occ
+def solve_mo1(sscobj, h1):
+    cput1 = (time.clock(), time.time())
+    log = logger.Logger(sscobj.stdout, sscobj.verbose)
+    mol = sscobj.mol
+    mo_energy = sscobj._scf.mo_energy
+    mo_coeff = sscobj._scf.mo_coeff
+    mo_occ = sscobj._scf.mo_occ
+    h1aa, h1ab, h1ba, h1bb = h1
+    nset = len(h1aa)
+    eai_aa = 1. / lib.direct_sum('a-i->ai', mo_energy[0][mo_occ[0]==0], mo_energy[0][mo_occ[0]>0])
+    eai_ab = 1. / lib.direct_sum('a-i->ai', mo_energy[0][mo_occ[0]==0], mo_energy[1][mo_occ[1]>0])
+    eai_ba = 1. / lib.direct_sum('a-i->ai', mo_energy[1][mo_occ[1]==0], mo_energy[0][mo_occ[0]>0])
+    eai_bb = 1. / lib.direct_sum('a-i->ai', mo_energy[1][mo_occ[1]==0], mo_energy[1][mo_occ[1]>0])
 
-    h1 = make_h1_mo(mol, mo_coeff, mo_occ)
-    h1aa, h1bb, h1ab, h1ba = h1
+    mo1 = (numpy.asarray(h1aa) * -eai_aa,
+           numpy.asarray(h1ab) * -eai_ab,
+           numpy.asarray(h1ba) * -eai_ba,
+           numpy.asarray(h1bb) * -eai_bb)
+    h1aa = h1ab = h1ba = h1bb = None
+    if not sscobj.cphf:
+        return mo1
 
-    occidxa = mo_occ[0] > 0
-    occidxb = mo_occ[1] > 0
-    viridxa = ~occidxa
-    viridxb = ~occidxb
-    orboa = mo_coeff[0][:, occidxa]
-    orbob = mo_coeff[1][:, occidxb]
-    orbva = mo_coeff[0][:,~occidxa]
-    orbvb = mo_coeff[1][:,~occidxb]
-    eai_aa = -1 / (mo_energy[0][viridxa,None] - mo_energy[0][occidxa])
-    eai_bb = -1 / (mo_energy[1][viridxb,None] - mo_energy[1][occidxb])
-    eai_ab = -1 / (mo_energy[0][viridxa,None] - mo_energy[1][occidxb])
-    eai_ba = -1 / (mo_energy[1][viridxb,None] - mo_energy[0][occidxa])
-    mo1_aa = h1aa * eai_aa
-    mo1_bb = h1bb * eai_bb
-    mo1_ab = h1ab * eai_ab
-    mo1_ba = h1ba * eai_ba
+    orboa = mo_coeff[0][:,mo_occ[0]> 0]
+    orbva = mo_coeff[0][:,mo_occ[0]==0]
+    orbob = mo_coeff[1][:,mo_occ[1]> 0]
+    orbvb = mo_coeff[1][:,mo_occ[1]==0]
+    nocca = orboa.shape[1]
+    nvira = orbva.shape[1]
+    noccb = orbob.shape[1]
+    nvirb = orbvb.shape[1]
+    p1 = nvira * nocca
+    p2 = p1 + nvira * noccb
+    p3 = p2 + nvirb * nocca
+    def _split_mo1(mo1):
+        mo1 = mo1.reshape(nset,-1)
+        mo1aa = mo1[:,  :p1].reshape(nset,nvira,nocca)
+        mo1ab = mo1[:,p1:p2].reshape(nset,nvira,noccb)
+        mo1ba = mo1[:,p2:p3].reshape(nset,nvirb,nocca)
+        mo1bb = mo1[:,p3:  ].reshape(nset,nvirb,noccb)
+        return mo1aa, mo1ab, mo1ba, mo1bb
 
-    if zfsobj.cphf:
-        nvira, nocca = eai_aa.shape
-        nvirb, noccb = eai_bb.shape
-        p0 = nvira * nocca
-        p1 = p0 + nvirb * noccb
-        p2 = p1 + nvira * noccb
-        p3 = p2 + nvirb * nocca
-        def vind(x):
-            x = x.reshape(3,-1)
-            mo1_aa = x[:,  :p0].reshape(3,nvira,nocca)
-            mo1_bb = x[:,p0:p1].reshape(3,nvirb,noccb)
-            mo1_ab = x[:,p1:p2].reshape(3,nvira,noccb)
-            mo1_ba = x[:,p2:  ].reshape(3,nvirb,nocca)
-            dm1 = numpy.asarray([reduce(numpy.dot, (orbva, x, orboa.T)) for x in mo1_aa] +
-                                [reduce(numpy.dot, (orbvb, x, orbob.T)) for x in mo1_bb] +
-                                [reduce(numpy.dot, (orbva, x, orbob.T)) for x in mo1_ab] +
-                                [reduce(numpy.dot, (orbvb, x, orboa.T)) for x in mo1_ba])
-            dm1 = dm1 - dm1.transpose(0,2,1)
-            vj, vk = mf.get_jk(mol, dm1, hermi=2)
-            v1ao = -vk
-            mo1_aa = [reduce(numpy.dot, (orbva.T, v1ao[i], orboa)) for i in range(3)  ]
-            mo1_bb = [reduce(numpy.dot, (orbvb.T, v1ao[i], orbob)) for i in range(3,6)]
-            mo1_ab = [reduce(numpy.dot, (orbva.T, v1ao[i], orbob)) for i in range(6,9)]
-            mo1_ba = [reduce(numpy.dot, (orbvb.T, v1ao[i], orboa)) for i in range(9,12)]
-            mo1_aa = (numpy.asarray(mo1_aa) * eai_aa).reshape(3,-1)
-            mo1_bb = (numpy.asarray(mo1_bb) * eai_bb).reshape(3,-1)
-            mo1_ab = (numpy.asarray(mo1_ab) * eai_ab).reshape(3,-1)
-            mo1_ba = (numpy.asarray(mo1_ba) * eai_ba).reshape(3,-1)
-            return numpy.hstack((mo1_aa, mo1_bb, mo1_ab, mo1_ba)).ravel()
+    mo1 = numpy.hstack((mo1[0].reshape(nset,-1),
+                        mo1[1].reshape(nset,-1),
+                        mo1[2].reshape(nset,-1),
+                        mo1[3].reshape(nset,-1)))
 
-        mo1 = numpy.hstack((mo1_aa.reshape(3,-1), mo1_bb.reshape(3,-1),
-                            mo1_ab.reshape(3,-1), mo1_ba.reshape(3,-1)))
-        mo1 = lib.krylov(vind, mo1.ravel(), tol=1e-9, max_cycle=20, verbose=log)
-        mo1 = mo1.reshape(3,-1)
-        mo1_aa = mo1[:,  :p0].reshape(3,nvira,nocca)
-        mo1_bb = mo1[:,p0:p1].reshape(3,nvirb,noccb)
-        mo1_ab = mo1[:,p1:p2].reshape(3,nvira,noccb)
-        mo1_ba = mo1[:,p2:  ].reshape(3,nvirb,nocca)
+    vresp = _gen_uhf_response(mf, with_j=False, hermi=0)
+    mo_va_oa = numpy.asarray(numpy.hstack((orbva,orboa)), order='F')
+    mo_va_ob = numpy.asarray(numpy.hstack((orbva,orbob)), order='F')
+    mo_vb_oa = numpy.asarray(numpy.hstack((orbvb,orboa)), order='F')
+    mo_vb_ob = numpy.asarray(numpy.hstack((orbvb,orbob)), order='F')
+    def vind(mo1):
+        mo1aa, mo1ab, mo1ba, mo1bb = _split_mo1(mo1)
+        dm1aa = _dm1_mo2ao(mo1aa, orbva, orboa)
+        dm1ab = _dm1_mo2ao(mo1ab, orbva, orbob)
+        dm1ba = _dm1_mo2ao(mo1ba, orbvb, orboa)
+        dm1bb = _dm1_mo2ao(mo1bb, orbvb, orbob)
+        # imaginary Hermitian
+        dm1 = numpy.vstack([dm1aa-dm1aa.transpose(0,2,1),
+                            dm1ab-dm1ba.transpose(0,2,1),
+                            dm1ba-dm1ab.transpose(0,2,1),
+                            dm1bb-dm1bb.transpose(0,2,1)])
+        v1 = vresp(dm1)
+        v1aa = _ao2mo.nr_e2(v1[      :nset  ], mo_va_oa, (0,nvira,nvira,nvira+nocca))
+        v1ab = _ao2mo.nr_e2(v1[nset*1:nset*2], mo_va_ob, (0,nvira,nvira,nvira+noccb))
+        v1ba = _ao2mo.nr_e2(v1[nset*2:nset*3], mo_vb_oa, (0,nvirb,nvirb,nvirb+nocca))
+        v1bb = _ao2mo.nr_e2(v1[nset*3:      ], mo_vb_ob, (0,nvirb,nvirb,nvirb+noccb))
+        v1aa = v1aa.reshape(nset,nvira,nocca)
+        v1ab = v1ab.reshape(nset,nvira,noccb)
+        v1ba = v1ba.reshape(nset,nvirb,nocca)
+        v1bb = v1bb.reshape(nset,nvirb,noccb)
+        v1aa *= eai_aa
+        v1ab *= eai_ab
+        v1ba *= eai_ba
+        v1bb *= eai_bb
+        v1mo = numpy.hstack((v1aa.reshape(nset,-1), v1ab.reshape(nset,-1),
+                             v1ba.reshape(nset,-1), v1bb.reshape(nset,-1)))
+        return v1mo.ravel()
 
-    return (mo1_aa, mo1_bb, mo1_ab, mo1_ba)
+    mo1 = lib.krylov(vind, mo1.ravel(), tol=1e-9, max_cycle=20, verbose=log)
+    log.timer('solving FC CPHF eqn', *cput1)
+    mo1 = _split_mo1(mo1)
+    return mo1
 
 
-class ZeroFieldSplitting(uhf_nmr.NMR):
+class ZeroFieldSplitting(lib.StreamObject):
     '''dE = I dot gtensor dot s'''
     def __init__(self, scf_method):
+        self.mol = scf_method.mol
+        self.verbose = scf_method.mol.verbose
+        self.stdout = scf_method.mol.stdout
+        self.chkfile = scf_method.chkfile
+        self._scf = scf_method
+
+        self.cphf = True
+        self.max_cycle_cphf = 20
+        self.conv_tol = 1e-9
         self.with_sso = False  # Two-electron spin-same-orbit coupling
         self.with_soo = False  # Two-electron spin-other-orbit coupling
         self.with_so_eff_charge = True
-        uhf_nmr.NMR.__init__(self, scf_method)
+
+        self.mo10 = None
+        self.mo_e10 = None
+        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self):
-        uhf_nmr.NMR.dump_flags(self)
+        log = logger.Logger(self.stdout, self.verbose)
+        log.info('\n')
+        log.info('******** %s for %s ********',
+                 self.__class__, self._scf.__class__)
+        log.info('with cphf = %s', self.cphf)
+        if self.cphf:
+            log.info('CPHF conv_tol = %g', self.conv_tol)
+            log.info('CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
         logger.info(self, 'with_sso = %s (2e spin-same-orbit coupling)', self.with_sso)
         logger.info(self, 'with_soo = %s (2e spin-other-orbit coupling)', self.with_soo)
         logger.info(self, 'with_so_eff_charge = %s (1e SO effective charge)',
                     self.with_so_eff_charge)
+        return self
 
     def kernel(self, mo1=None):
         cput0 = (time.clock(), time.time())
@@ -213,17 +284,28 @@ class ZeroFieldSplitting(uhf_nmr.NMR):
         dm0 = self._scf.make_rdm1()
 
         zfs_ss = direct_spin_spin(self, mol, dm0)
-        mo1 = solve_mo1(self)
-        zfs_soc = soc_part(zfsobj, mol, mo1, self._scf.mo_coeff, self._scf.mo_occ)
+        zfs_soc = make_soc(zfsobj, mol, self._scf.mo_coeff, self._scf.mo_occ)
         zfs_tensor = zfs_ss + zfs_soc
+        zfs_diag = numpy.linalg.eigh(zfs_tensor)[0]
+        dtrace = zfs_tensor.trace()
+        zfs_diag -= dtrace / 3
+        zidx = numpy.argmax(abs(zfs_diag))
+        dvalue = zfs_diag[zidx] * 1.5
+        tmp = zfs_diag + dvalue/3
+        tmp[zidx] = 0
+        evalue = abs(tmp).max()
+        au2cm = lib.param.HARTREE2J / lib.param.PLANCK / lib.param.LIGHT_SPEED_SI * 1e-2
+        logger.debug(self, 'D trace = %s', dtrace)
+        logger.note(self, 'Axial   parameter D = %s (cm^{-1})', dvalue*au2cm)
+        logger.note(self, 'Rhombic parameter E = %s (cm^{-1})', evalue*au2cm)
 
-        logger.timer(self, 'ZFS tensor', *cput0)
-        if self.verbose > logger.QUIET:
+        if self.verbose > logger.debug:
             self.stdout.write('\nZero-field splitting tensor\n')
             self.stdout.write('S_x %s\n' % zfs_tensor[0])
             self.stdout.write('S_y %s\n' % zfs_tensor[1])
             self.stdout.write('S_z %s\n' % zfs_tensor[2])
             self.stdout.flush()
+        logger.timer(self, 'ZFS tensor', *cput0)
         return zfs_tensor
 
 ZFS = ZeroFieldSplitting
@@ -236,7 +318,8 @@ if __name__ == '__main__':
     mf = scf.UHF(mol)
     mf.kernel()
     zfsobj = ZFS(mf)
-    zfsobj.with_sso = True
-    zfsobj.with_soo = True
-    zfsobj.with_so_eff_charge = False
+    #zfsobj.cphf = False
+    #zfsobj.with_sso = True
+    #zfsobj.with_soo = True
+    #zfsobj.with_so_eff_charge = False
     print(zfsobj.kernel())

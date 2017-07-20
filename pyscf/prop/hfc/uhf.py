@@ -121,15 +121,19 @@ def solve_mo1_soc(hfcobj, mo_energy=None, mo_occ=None, h1=None, with_cphf=None):
     mo1, mo_e1 = uhf_ssc.SSC.solve_mo1(hfcobj, mo_energy, mo_occ, h1, with_cphf)
     return mo1, mo_e1
 
-def make_h1_soc(hfcobj, dm0):
+def make_h1_soc(gobj, dm0):
     '''1-electron and 2-electron spin-orbit coupling integrals.
-    Note sigma (pauli matrix) is considered in the SOC integrals, but the
-    factor 1/2 in the spin operator s=sigma/2 is not included.
+
+    1-electron SOC integral is the imaginary part of [i sigma dot pV x p],
+    ie [sigma dot pV x p].
+
+    Note sigma_z is considered in the SOC integrals (the (-) sign for beta-beta
+    block is included in the integral).  The factor 1/2 in the spin operator
+    s=sigma/2 is not included.
     '''
-# hso1e is the imaginary part of [i sigma dot pV x p]
 # JCP, 122, 034107 Eq (2) = 1/4c^2 hso1e
-    mol = hfcobj.mol
-    if hfcobj.with_so_eff_charge:
+    mol = gobj.mol
+    if gobj.with_so_eff_charge:
         hso1e = 0
         for ia in range(mol.natm):
             mol.set_rinv_origin(mol.atom_coord(ia))
@@ -141,20 +145,21 @@ def make_h1_soc(hfcobj, dm0):
     hso = numpy.asarray((hso1e,-hso1e))
 
 # TODO: test SOMF and the treatments in JCP, 122, 034107
-    if hfcobj.with_sso or hfcobj.with_soo:
-        hso2e = make_h1_soc2e(hfcobj, dm0)
+    if gobj.with_sso or gobj.with_soo:
+        hso2e = make_h1_soc2e(gobj, dm0)
         hso += hso2e
 
     return hso
 
-def make_h1_soc2e(hfcobj, dm0):
+# Note the (-) sign of beta-beta block is included in the integral
+def make_h1_soc2e(gobj, dm0):
     dma, dmb = dm0
     nao = dma.shape[0]
 # hso2e is the imaginary part of SSO
     hso2e = mol.intor('int2e_p1vxp1', 3).reshape(3,nao,nao,nao,nao)
     vj = numpy.zeros((2,3,nao,nao))
     vk = numpy.zeros((2,3,nao,nao))
-    if hfcobj.with_sso:
+    if gobj.with_sso:
         vj[:] += numpy.einsum('yijkl,ji->ykl', hso2e, dma-dmb)
         vj[0] += numpy.einsum('yijkl,lk->yij', hso2e, dma+dmb)
         vj[1] -= numpy.einsum('yijkl,lk->yij', hso2e, dma+dmb)
@@ -162,7 +167,7 @@ def make_h1_soc2e(hfcobj, dm0):
         vk[1] -= numpy.einsum('yijkl,jk->yil', hso2e, dmb)
         vk[0] += numpy.einsum('yijkl,li->ykj', hso2e, dma)
         vk[1] -= numpy.einsum('yijkl,li->ykj', hso2e, dmb)
-    if hfcobj.with_soo:
+    if gobj.with_soo:
         vj[0] += 2 * numpy.einsum('yijkl,ji->ykl', hso2e, dma+dmb)
         vj[1] -= 2 * numpy.einsum('yijkl,ji->ykl', hso2e, dma+dmb)
         vj[:] += 2 * numpy.einsum('yijkl,lk->yij', hso2e, dma-dmb)

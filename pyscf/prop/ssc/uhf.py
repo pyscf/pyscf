@@ -105,8 +105,8 @@ def solve_mo1_fc(sscobj, h1):
     h1aa, h1ab, h1ba, h1bb = h1
     nset = len(h1aa)
     eai_aa = 1. / lib.direct_sum('a-i->ai', mo_energy[0][mo_occ[0]==0], mo_energy[0][mo_occ[0]>0])
-    eai_ab = 1. / lib.direct_sum('a-i->ai', mo_energy[1][mo_occ[1]==0], mo_energy[0][mo_occ[0]>0])
-    eai_ba = 1. / lib.direct_sum('a-i->ai', mo_energy[0][mo_occ[0]==0], mo_energy[1][mo_occ[1]>0])
+    eai_ab = 1. / lib.direct_sum('a-i->ai', mo_energy[0][mo_occ[0]==0], mo_energy[1][mo_occ[1]>0])
+    eai_ba = 1. / lib.direct_sum('a-i->ai', mo_energy[1][mo_occ[1]==0], mo_energy[0][mo_occ[0]>0])
     eai_bb = 1. / lib.direct_sum('a-i->ai', mo_energy[1][mo_occ[1]==0], mo_energy[1][mo_occ[1]>0])
 
     mo1_fc = (numpy.asarray(h1aa) * -eai_aa,
@@ -141,7 +141,7 @@ def solve_mo1_fc(sscobj, h1):
                            mo1_fc[2].reshape(nset,-1),
                            mo1_fc[3].reshape(nset,-1)))
 
-    vresp = _gen_uhf_response(mf, with_j=False, hermi=0)
+    vresp = _gen_uhf_response(mf, with_j=False, hermi=1)
     mo_va_oa = numpy.asarray(numpy.hstack((orbva,orboa)), order='F')
     mo_va_ob = numpy.asarray(numpy.hstack((orbva,orbob)), order='F')
     mo_vb_oa = numpy.asarray(numpy.hstack((orbvb,orboa)), order='F')
