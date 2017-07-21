@@ -8,7 +8,6 @@ module m_rsphar
   
   integer(c_int64_t) :: lmx = -1
   real(c_double), allocatable  :: lm2aa(:), lm2bb(:), l2tlp1(:), l2tlm1(:), l21mhl(:)
-  !$OMP THREADPRIVATE(lm2aa, lm2bb, l2tlp1, l2tlm1, l21mhl, lmx)
 
   contains
 

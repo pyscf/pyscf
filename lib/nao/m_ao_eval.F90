@@ -64,6 +64,9 @@ subroutine ao_eval(nmu, &
 
   rcutmx = maxval(mu2rcut)
   jmx_sp = maxval(mu2j)
+  call init_rsphar(jmx_sp)
+
+
   !$OMP PARALLEL DEFAULT(NONE) &
   !$OMP PRIVATE (icrd, rsh, coord, r, coeffs, mu) &
   !$OMP PRIVATE (j, s, f, k, fval) &
@@ -72,9 +75,6 @@ subroutine ao_eval(nmu, &
 
   allocate(rsh(0:(jmx_sp+1)**2-1))
   res = 0
-  !$OMP CRITICAL
-  call init_rsphar(jmx_sp)
-  !$OMP END CRITICAL
 
   !$OMP DO
   do icrd = 1,ncoords
@@ -96,12 +96,9 @@ subroutine ao_eval(nmu, &
   !$OMP END DO
   
   _dealloc(rsh)
-  !$OMP CRITICAL
-  call dealloc_rsphar()
-  !$OMP END CRITICAL
-
   !$OMP END PARALLEL
 
+  call dealloc_rsphar()
   
 end subroutine !ao_eval
 
