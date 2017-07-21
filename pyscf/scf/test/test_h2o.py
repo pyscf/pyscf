@@ -179,6 +179,10 @@ class KnowValues(unittest.TestCase):
         dm1 = mf.get_init_guess(key='minao')
         self.assertTrue(numpy.allclose(dm0, dm1))
 
+        pmol = gto.M(atom='ghost-O 0 0 0; H 0 0 0.5; H 0 0.5 0', basis='ccpvdz')
+        dm1 = mf.get_init_guess(key='minao')
+        self.assertAlmostEqual(numpy.linalg.norm(dm), 3.0334714065913482, 8)
+
     def test_init_guess_atom(self):
         dm = scf.hf.init_guess_by_atom(mol)
         s = scf.hf.get_ovlp(mol)
@@ -201,6 +205,10 @@ class KnowValues(unittest.TestCase):
         pmol.cart = True
         dm = scf.hf.init_guess_by_atom(pmol)
         self.assertAlmostEqual(numpy.linalg.norm(dm), 2.923422868807739, 8)
+
+        pmol = gto.M(atom='ghost-O 0 0 0; H 0 0 0.5; H 0 0.5 0', basis='ccpvdz')
+        dm = scf.hf.init_guess_by_atom(pmol)
+        self.assertAlmostEqual(numpy.linalg.norm(dm), 0.86450726178750226, 8)
 
     def test_init_guess_1e(self):
         dm = scf.hf.init_guess_by_1e(mol)

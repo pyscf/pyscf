@@ -296,7 +296,7 @@ def init_guess_by_minao(mol):
     basis = {}
     occdic = {}
     for symb in atmlst:
-        if symb != 'GHOST':
+        if 'GHOST' not in symb:
             nelec_ecp = nelec_ecp_dic[symb]
             stdsymb = gto.mole._std_symbol(symb)
             occ_add, basis_add = minao_basis(stdsymb, nelec_ecp)
@@ -306,7 +306,7 @@ def init_guess_by_minao(mol):
     new_atom = []
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
-        if symb != 'GHOST':
+        if 'GHOST' not in symb:
             occ.append(occdic[symb])
             new_atom.append(mol._atom[ia])
     occ = numpy.hstack(occ)
@@ -347,14 +347,13 @@ def init_guess_by_atom(mol):
     mo_occ = []
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
-        if symb != 'GHOST':
-            if symb in atm_scf:
-                e_hf, e, c, occ = atm_scf[symb]
-            else:
-                symb = mol.atom_pure_symbol(ia)
-                e_hf, e, c, occ = atm_scf[symb]
-            mo.append(c)
-            mo_occ.append(occ)
+        if symb in atm_scf:
+            e_hf, e, c, occ = atm_scf[symb]
+        else:
+            symb = mol.atom_pure_symbol(ia)
+            e_hf, e, c, occ = atm_scf[symb]
+        mo.append(c)
+        mo_occ.append(occ)
     mo = scipy.linalg.block_diag(*mo)
     mo_occ = numpy.hstack(mo_occ)
 

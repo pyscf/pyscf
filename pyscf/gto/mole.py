@@ -275,6 +275,8 @@ def format_basis(basis_tab):
     for atom in basis_tab.keys():
         symb = _atom_symbol(atom)
         stdsymb = _std_symbol(symb)
+        if stdsymb.startswith('GHOST-'):
+            stdsymb = stdsymb[6:]
         atom_basis = basis_tab[atom]
         if isinstance(atom_basis, (str, unicode)):
             atom_basis = str(atom_basis)
@@ -614,14 +616,21 @@ def make_env(atoms, basis, pre_env=[], nucmod={}):
         puresymb = _rm_digit(symb)
         if symb in _basdic:
             b = _basdic[symb].copy()
-            b[:,ATOM_OF] = ia
-            _bas.append(b)
         elif puresymb in _basdic:
             b = _basdic[puresymb].copy()
-            b[:,ATOM_OF] = ia
-            _bas.append(b)
+        elif symb.upper().startswith('GHOST'):
+            symb = _remove_prefix_ghost(symb)
+            puresymb = _rm_digit(symb)
+            if symb in _basdic:
+                b = _basdic[symb].copy()
+            elif puresymb in _basdic:
+                b = _basdic[puresymb].copy()
+            else:
+                sys.stderr.write('Warn: Basis not found for atom %d %s\n' % (ia, symb))
         else:
             sys.stderr.write('Warn: Basis not found for atom %d %s\n' % (ia, symb))
+        b[:,ATOM_OF] = ia
+        _bas.append(b)
 
     if _atm:
         _atm = numpy.asarray(numpy.vstack(_atm), numpy.int32).reshape(-1, ATM_SLOTS)
@@ -2484,9 +2493,21 @@ def _rm_digit(symb):
     else:
         return ''.join([i for i in symb if i.isalpha()])
 
+def _remove_prefix_ghost(symb):
+    if len(symb) < 6:
+        return symb
+    else:
+        for i, x in enumerate(symb[5:]):
+            if x.isalpha():
+                break
+        return symb[5+i:]
+
 def _charge(symb_or_chg):
     if isinstance(symb_or_chg, (str, unicode)):
-        return param.ELEMENTS_PROTON[str(_rm_digit(symb_or_chg))]
+        if 'GHOST' in symb_or_chg.upper():
+            return 0
+        else:
+            return param.ELEMENTS_PROTON[str(_rm_digit(symb_or_chg))]
     else:
         return symb_or_chg
 
@@ -2498,8 +2519,12 @@ def _symbol(symb_or_chg):
 
 def _std_symbol(symb_or_chg):
     if isinstance(symb_or_chg, (str, unicode)):
-        rawsymb = str(_rm_digit(symb_or_chg))
-        return param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
+        rawsymb = str(_rm_digit(symb_or_chg)).upper()
+        if len(rawsymb) > 5 and rawsymb.startswith('GHOST'):
+            rawsymb = _remove_prefix_ghost(rawsymb)
+            return 'GHOST-' + param.ELEMENTS[_ELEMENTDIC[rawsymb]][0]
+        else:
+            return param.ELEMENTS[_ELEMENTDIC[rawsymb]][0]
     else:
         return param.ELEMENTS[symb_or_chg][0]
 
@@ -2512,6 +2537,7 @@ def _atom_symbol(symb_or_chg):
             symb = param.ELEMENTS[int(a)][0]
         else:
             rawsymb = _rm_digit(a)
+            rawsymb = _remove_prefix_ghost(rawsymb)
             stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
             symb = a.replace(rawsymb, stdsymb)
     return symb
@@ -2683,8 +2709,7 @@ def filatov_nuc_mod(nuc_charge, c=param.LIGHT_SPEED):
     Ref. M. Filatov and D. Cremer, Theor. Chem. Acc. 108, 168 (2002)
          M. Filatov and D. Cremer, Chem. Phys. Lett. 351, 259 (2002)
     '''
-    if isinstance(nuc_charge, (str, unicode)):
-        nuc_charge = _charge(nuc_charge)
+    nuc_charge = _charge(nuc_charge)
     r = (-0.263188*nuc_charge + 106.016974 + 138.985999/nuc_charge) / c**2
     zeta = 1 / (r**2)
     return zeta

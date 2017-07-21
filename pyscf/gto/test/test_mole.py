@@ -210,6 +210,27 @@ C    SP
         self.assertEqual(len(gto.basis.load('6-31G(3df,3pd)', 'H')), 6)
         self.assertEqual(len(gto.basis.load('6-31G(3df,3pd)', 'C')), 9)
 
+    def test_remove_prefix_ghost(self):
+        self.assertEqual(gto.mole._remove_prefix_ghost('ghost---ho'), 'ho')
+
+    def test_ghost(self):
+        mol = gto.M(
+            atom = 'C 0 0 0; ghost 0 0 2',
+            basis = {'C': 'sto3g', 'ghost': gto.basis.load('sto3g', 'H')}
+        )
+        self.assertEqual(mol.nao_nr(), 6)
+
+        mol = gto.M(atom='''
+        ghost-O     0.000000000     0.000000000     2.500000000
+        ghost_H    -0.663641000    -0.383071000     3.095377000
+        ghost.H     0.663588000     0.383072000     3.095377000
+        O     1.000000000     0.000000000     2.500000000
+        H    -1.663641000    -0.383071000     3.095377000
+        H     1.663588000     0.383072000     3.095377000
+        ''',
+        basis='631g')
+        self.assertEqual(mol.nao_nr(), 26)
+
 
 if __name__ == "__main__":
     print("test mole.py")
