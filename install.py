@@ -5,7 +5,7 @@ import os
 import subprocess
 
 
-def compile_C_code(verbose=0, build_type="Release"):
+def compile_C_code(verbose=0, build_type="Release", clean=0):
     """
         Compile automaticaly the C and Fortran code
         when installing the program with python setup.py
@@ -14,8 +14,12 @@ def compile_C_code(verbose=0, build_type="Release"):
     if build_type not in ["Release", "Debug", "None"]:
         raise ValueError("build type must be Release, Debug or None")
 
-    ret = subprocess.call("rm -rf lib/build", shell = True)
-    os.mkdir("lib/build")
+    if clean == 1:
+        ret = subprocess.call("rm -rf lib/build", shell = True)
+    try:
+        os.mkdir("lib/build")
+    except:
+        print("lib/build")
     os.chdir("lib/build")
 
     cmd = "cmake -DCMAKE_BUILD_TYPE=" + build_type + " .."
@@ -32,15 +36,16 @@ def compile_C_code(verbose=0, build_type="Release"):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--command', type=str, default = "install", help="run: python setup.py <command>")
-parser.add_argument('--compile', type=int, default = 1, help="compile C and Fortran code")
+parser.add_argument('--command', type=str, default = "build", help="run: python setup.py <command>")
+parser.add_argument('--compile', type=int, default = 0, help="compile C and Fortran code")
+parser.add_argument('--clean', type=int, default = 0, help="compile C and Fortran code")
 parser.add_argument('--build_type', type=str, default = "Release", help="compile code in Release or Debug mode")
 parser.add_argument('--verbose', type=int, default = 0, help="verbosity for compilation")
 
 args = parser.parse_args()
 
 if args.compile==1:
-    compile_C_code(verbose=args.verbose, build_type=args.build_type)
+    compile_C_code(verbose=args.verbose, build_type=args.build_type, clean= args.clean)
 
 if args.command not in ["install", "build", "None"]:
     raise ValueError("command must be build or install")
