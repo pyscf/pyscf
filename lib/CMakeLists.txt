@@ -6,15 +6,19 @@ enable_language(Fortran)
 
 #set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
 IF( NOT CMAKE_BUILD_TYPE )
-  SET( CMAKE_BUILD_TYPE Release ... FORCE )
+  #SET( CMAKE_BUILD_TYPE Release ... FORCE )
+  set(CMAKE_C_FLAGS "-Wall -O2 -ffast-math")
+  set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS_RELEASE} ")
+  set(CMAKE_Fortran_FLAGS "-pedantic -O2 -Wall -ffree-line-length-0")
 ENDIF()
 
 if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
   set(CMAKE_C_FLAGS_DEBUG "-Wall -pg -O0")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} ")
+  set(CMAKE_Fortran_FLAGS_DEBUG "-pedantic -pg -DDEBUG -O0 -fbounds-check -fbacktrace -Wall -ffree-line-length-0")
+
   set(CMAKE_C_FLAGS_RELEASE "-Wall -O2 -ffast-math")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} ")
-  set(CMAKE_Fortran_FLAGS_DEBUG "-pedantic -pg -DDEBUG -O0 -fbounds-check -fbacktrace -Wall -ffree-line-length-0")
   set(CMAKE_Fortran_FLAGS_RELEASE "-pedantic -O2 -Wall -ffree-line-length-0")
   if(UNIX AND NOT APPLE)
     set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-as-needed")
