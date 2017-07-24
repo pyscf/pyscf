@@ -75,30 +75,38 @@ def FCI(mol_or_mf, mo=None, singlet=True):
     class CISolver(cis.__class__):
         def __init__(self):
             self.__dict__.update(cis.__dict__)
-            if mf is None:
-                self.h1e = reduce(numpy.dot, (mo.T, scf.hf.get_hcore(mol), mo))
-                self.eri = ao2mo.full(mol, mo)
-                if mol.symmetry:
-                    self.orbsym = scf.hf_symm.get_orbsym(mol, mo)
-            else:
-                self.h1e = reduce(numpy.dot, (mo.T, mf.get_hcore(mol), mo))
-                if mf._eri is None:
-                    self.eri = ao2mo.full(mol, mo)
-                else:
-                    self.eri = ao2mo.full(mf._eri, mo)
-                if mol.symmetry:
-                    self.orbsym = scf.hf_symm.get_orbsym(mol, mo, mf.get_ovlp(mol))
+            self.orbsym = None
             self.eci = None
             self.ci = None
+            if mol.symmetry:
+                if mf is None:
+                    self.orbsym = scf.hf_symm.get_orbsym(mol, mo)
+                else:
+                    self.orbsym = scf.hf_symm.get_orbsym(mol, mo, mf.get_ovlp(mol))
             self._keys = set(self.__dict__.keys())
 
         def kernel(self, h1e=None, eri=None, norb=None, nelec=None, ci0=None,
                    ecore=None, **kwargs):
-            if h1e is None: h1e = self.h1e
-            if eri is None: eri = self.eri
+            if h1e is None or eri is None:
+                if mf is None:
+                    if h1e is None:
+                        h1e = reduce(numpy.dot, (mo.T, scf.hf.get_hcore(mol), mo))
+                    if eri is None:
+                        eri = ao2mo.full(mol, mo)
+                    if ecore is None:
+                        ecore = mol.energy_nuc()
+                else:
+                    if h1e is None:
+                        h1e = reduce(numpy.dot, (mo.T, mf.get_hcore(mol), mo))
+                    if eri is None:
+                        if mf._eri is None:
+                            eri = ao2mo.full(mol, mo)
+                        else:
+                            eri = ao2mo.full(mf._eri, mo)
+                    if ecore is None:
+                        ecore = mf.energy_nuc()
             if norb is None: norb = mo.shape[1]
             if nelec is None: nelec = mol.nelec
-            if ecore is None: ecore = mol.energy_nuc()
             self.eci, self.ci = \
                     cis.__class__.kernel(self, h1e, eri, norb, nelec, ci0,
                                          ecore=ecore, **kwargs)
