@@ -15,19 +15,26 @@ module m_rsphar
 !
 !
 subroutine init_rsphar(lmax)
+  use m_fact, only : sgn, init_fact
   ! external
   integer(c_int64_t), intent(in) :: lmax
   !real(c_double), intent(inout), allocatable :: lm2aa(:), lm2bb(:), l2tlp1(:), l2tlm1(:), l21mhl(:)
   ! internal
   integer(c_int64_t) :: l,m,ind
   
-  lmx = lmax
   call dealloc_rsphar()
+  lmx = lmax
   allocate(lm2aa(0:(lmx+1)**2-1))
   allocate(lm2bb(0:(lmx+1)**2-1))
   allocate(l2tlp1(0:lmx))
   allocate(l2tlm1(0:lmx))
   allocate(l21mhl(0:lmx))
+
+  lm2aa = 0D0
+  lm2bb = 0D0
+  l2tlp1 = 0D0
+  l2tlm1 = 0D0
+  l21mhl = 0D0
   
   do l=0,lmx
     l2tlp1(l) = sqrt(2D0*l+1)
@@ -43,13 +50,17 @@ subroutine init_rsphar(lmax)
       lm2bb(ind) = sqrt(1d0*(l+1)**2-m**2)
     enddo
   enddo
-  
+
+  if(.not. allocated(sgn)) then
+    call init_fact()
+  endif
 end subroutine !  
 
 !
 !
 !
 subroutine dealloc_rsphar()
+  lmx = -1
   _dealloc(lm2aa)
   _dealloc(lm2bb)
   _dealloc(l2tlp1)
@@ -63,29 +74,23 @@ end subroutine ! dealloc_rsphar
 ! warn: sgn in m_fact :-)
 !
 subroutine rsphar(r,lmax,res) bind(c, name='rsphar')
-  use m_fact, only : onediv4pi, rttwo, sgn, pi, init_fact
+  use m_fact, only : onediv4pi, rttwo, sgn, pi
 
   implicit none 
   real(c_double), intent(in)  :: r(3)
   integer(c_int64_t), intent(in)  :: lmax
-  real(c_double), intent(out) :: res((lmax+1)**2) 
+  real(c_double), intent(inout) :: res((lmax+1)**2)
   ! internal
   integer(c_int64_t) :: l,m,il1,il2,ind,ll2,twol,l2
   real(c_double) :: dd,phi,cc,ss,zz,cs,P,rt2lp1, xxpyy
 
-  !$OMP CRITICAL
   if(lmx<lmax) then
+    ! probably better to raise an error here, and do the initialization
+    ! before to call rsphar
     call init_rsphar(lmax)
     lmx = lmax
   endif
-  !$OMP END CRITICAL
   
-  if(.not. allocated(sgn)) then
-    call init_fact()
-    !write(0,*) __FILE__, __LINE__
-    !stop '!sgn'
-  endif
-
   xxpyy = r(1)*r(1)+r(2)*r(2);
   dd=sqrt(xxpyy+r(3)*r(3))
 
