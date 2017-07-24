@@ -4,11 +4,6 @@ module m_make_vrtx_cc
 #include "m_define_macro.F90" 
   use m_die, only : die
   use m_warn, only : warn
-  use m_system_vars, only : system_vars_t
-  use m_prod_basis_param, only : prod_basis_param_t
-  use m_orb_rspace_type, only : orb_rspace_aux_t
-  use m_parallel, only : para_t
-  use m_pair_info, only : pair_info_t
   use m_log, only : log_memory_note
   
   !use m_timing, only : get_cdatetime
@@ -19,12 +14,10 @@ module m_make_vrtx_cc
   !private get_cdatetime
 
 !
-! This is generation of vertex coefficients and conversion coefficients
-! at the same time.
+! This is generation of vertex coefficients and conversion coefficients at the same time.
 !  
 
   contains
-
 
 !
 !   MAKE_dominant_vertex  a la Talman for a given list of contributing atoms
@@ -47,9 +40,7 @@ subroutine make_vrtx_cc(a, nbp, bp2info, dp_a, pb, iv_in)
   use m_precision, only : blas_int
   use m_pb_reexpr_comm, only : init_counting_fini
   use m_coeffs_type, only : init_unit_coeffs, alloc_coeffs
-  use m_expell_empty_pairs, only : expell_empty_pairs
   use m_init_bpair_functs_vrtx, only : init_bpair_functs_vrtx
-  !use m_functs_m_mult_type, only : functs_m_mult_t
     
   implicit none
   type(biloc_aux_t), intent(in) :: a
@@ -77,7 +68,6 @@ subroutine make_vrtx_cc(a, nbp, bp2info, dp_a, pb, iv_in)
   real(8), allocatable :: fmm_mem(:)
   integer(blas_int), allocatable :: ipiv(:)
   integer(blas_int) :: info
-!  type(functs_m_mult_t) :: frea
   
   iv = iv_in - 1
   
@@ -112,7 +102,9 @@ subroutine make_vrtx_cc(a, nbp, bp2info, dp_a, pb, iv_in)
     p2n(pair) = pb%book_dp(pair)%fi(3)-pb%book_dp(pair)%si(3)+1
   enddo
 
-  write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__, ' Hola!!!!!'
+  ! write(6,*) __FILE__, __LINE__
+  !write(6,*) natoms, nr, jcutoff, jmx, nf_max, nterm_max, ac_rcut, nbp, size(p2n) 
+  !write(6,*) sp2rcut
   
   lcheck_cpy = .false.
   !$OMP PARALLEL DEFAULT(NONE) &
@@ -275,10 +267,8 @@ subroutine make_vrtx_cc(a, nbp, bp2info, dp_a, pb, iv_in)
     !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
   !$OMP END PARALLEL
 
-  !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
-  call expell_empty_pairs(pb%book_dp, p2n, pb%coeffs)
   pb%irr_trans_inv_sym = 1
-  pb%nfunct_irr = get_nfunct3(pb%book_dp)
+  pb%nfunct_irr = -999
   
   _dealloc(pb%book_re)
   allocate(pb%book_re(natoms))

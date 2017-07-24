@@ -1,4 +1,4 @@
-module m_gen_get_vrtx_cc_apair
+module m_vrtx_cc_apair
 
 #include "m_define_macro.F90" 
   use m_precision, only : blas_int
@@ -17,8 +17,12 @@ module m_gen_get_vrtx_cc_apair
 !
 ! The subroutine is generating the dominant product vertices and conversion coefficiens for a given atom pair
 !
-subroutine gen_get_vrtx_cc_apair(sp12_0b,rc12,lscc_0b,ncc,dout,nout) bind(c, name='gen_get_vrtx_cc_apair')
-  use m_sv_prod_log, only : a, dp_a, pb, ff2, evals, vertex_real2, oo2num, p2n, tmp, m2nf, vertex_cmplx2, rhotb, bessel_pp, f1f2_mom, r_scalar_pow_jp1, roverlap, S_comp, ylm
+subroutine vrtx_cc_apair(sp12_0b,rc12,lscc_0b,ncc,dout,nout) bind(c, name='vrtx_cc_apair')
+  use m_init_vrtx_cc_apair, only : ff2, evals, vertex_real2, oo2num, p2n, tmp, m2nf, vertex_cmplx2, rhotb, bessel_pp, f1f2_mom, r_scalar_pow_jp1, roverlap, S_comp, ylm
+  use m_pb_libnao, only : pb
+  use m_dp_aux_libnao, only : dp_a
+  use m_biloc_aux_libnao, only : a
+  
   use m_bilocal_vertex, only : make_bilocal_vertex_rf
   use m_init_pair_info, only : init_pair_info
   use m_init_bpair_functs_vrtx, only : init_bpair_functs_vrtx
@@ -184,7 +188,7 @@ subroutine gen_get_vrtx_cc_apair(sp12_0b,rc12,lscc_0b,ncc,dout,nout) bind(c, nam
   
   call apair_put(pb, pair, dout, nout)
  
-end subroutine ! gen_get_vrtx_cc_apair
+end subroutine ! vrtx_cc_apair
 
 
 !
@@ -227,4 +231,4 @@ subroutine conv_lscc_0b(sv, lscc_0b, ncc, a)
 end subroutine ! conv_lscc_0b
 
 
-end module !m_gen_get_vrtx_cc_apair
+end module !m_vrtx_cc_apair

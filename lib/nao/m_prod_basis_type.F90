@@ -213,8 +213,9 @@ real(8) function get_rcut_per_center(pb, bk, icwp)
   !! external
   type(prod_basis_t), intent(in) :: pb
   type(book_pb_t), intent(in) :: bk
-  integer, intent(in) :: icwp       ! index of the center within bookkeping record
+  integer, intent(in) :: icwp       ! index of the center within bookkeeping record
 
+  get_rcut_per_center = -999
   select case (bk%top)
   case(1)
     get_rcut_per_center = pb%sp_local2functs(bk%spp)%rcut
@@ -267,6 +268,7 @@ integer function get_nc_book(pb, bk)
   type(book_pb_t), intent(in) :: bk
   type(prod_basis_t), intent(in) :: pb
   
+  get_nc_book = -999
   select case (bk%top)
   case(1)
     get_nc_book = 1

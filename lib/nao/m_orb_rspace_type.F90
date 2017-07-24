@@ -107,6 +107,9 @@ subroutine init_orb_rspace_aux(sv, a, ul_slm)
   rr => get_rr_ptr(sv)
   
   call grid_2_dr_and_rho_min(a%nr, rr, a%dr_jt, a%rho_min_jt)
+!  write(6,*) __FILE__, __LINE__
+!  write(6,*) a%nr, a%dr_jt, a%rho_min_jt
+  
   a%one_over_dr_jt = 1D0/a%dr_jt
   lub = get_lu_slm(a%jmx)
   ul_slm = lub(2)
@@ -308,6 +311,7 @@ real(8) function get_rho_min_jt(orb_a)
   implicit none
   type(orb_rspace_aux_t), intent(in) :: orb_a
   if(orb_a%rho_min_jt==-999) _die('%rho_min_jt==-999')
+  if(orb_a%rho_min_jt==0) _die('%rho_min_jt==0')
   get_rho_min_jt = orb_a%rho_min_jt
 end function ! get_rho_min_jt
 
@@ -317,7 +321,7 @@ end function ! get_rho_min_jt
 real(8) function get_dr_jt(orb_a)
   implicit none
   type(orb_rspace_aux_t), intent(in) :: orb_a
-  if(orb_a%dr_jt==-999) _die('%dr_jt==-999')
+  if(orb_a%dr_jt<0) _die('%dr_jt<0?')
   get_dr_jt = orb_a%dr_jt
 end function ! get_dr_jt
 

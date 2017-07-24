@@ -103,10 +103,11 @@ subroutine make_bilocal_vertex_rf(a, pair_info, &
   integer, allocatable :: rf_ls2so(:,:)
 
 _t1
+  rhotb = 0
   call comp_expansion(a, pair_info, lready, center, rcut, oo2num, m2nf, rf_ls2so, ff2, rhotb)
 _t2(tthr(1))  
   if(lready) return;  
-  !write(6,*) __FILE__, __LINE__, sum(rhotb)
+!  write(6,*) __FILE__, __LINE__, sum(rhotb)
 
 _t1  
   call comp_sph_bes_trans_expansions(a, m2nf, ff2)
@@ -744,6 +745,13 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
         ord, pcs, rho_min_jt, dr_jt);
       !! END of Compute the X_{j Lambda Lambda'}(r, R, alpha)
       
+!      write(6,*) __FILE__, __LINE__
+!      write(6,*) sum(a%psi_log)
+!      write(6,*) sum(Rb), j2
+!      write(6,*) sum(Ra), j1
+!      write(6,*) sum(zerovec), jcutoff
+!      write(6,*) ord, pcs, rho_min_jt, dr_jt
+!      write(6,*) sum(a%rr), sum(a%pp)
       do m1=-j1,j1
         o1 = c1 + m1
         

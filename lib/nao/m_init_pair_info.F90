@@ -57,11 +57,11 @@ subroutine init_pair_info(sp12, rc12, ncc, cc2atom, sv, info)
   do ls=1,2; do rf=1,info%ls2nrf(ls); info%rf_ls2mu(rf,ls) = rf; enddo; enddo 
 
   _dealloc(info%cc2atom)
-  info%ncc = ncc
+  info%ncc = int(ncc)
   if(ncc>0) then
     if(any(cc2atom(1:ncc)<1)) _die('cc2atom(1:ncc)<1')
     allocate(info%cc2atom(ncc))
-    info%cc2atom(:) = cc2atom(:)
+    info%cc2atom(:) = int(cc2atom(:))
   endif
 
 end subroutine ! init_pair_info

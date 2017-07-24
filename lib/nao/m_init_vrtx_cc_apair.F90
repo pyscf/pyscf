@@ -1,16 +1,10 @@
-module m_sv_prod_log
+module m_init_vrtx_cc_apair
 
 #include "m_define_macro.F90" 
   use m_precision, only : blas_int
   use m_die, only : die
   use m_warn, only : warn
-  use m_prod_basis_param, only : prod_basis_param_t
-  use m_orb_rspace_type, only : orb_rspace_aux_t
-  use m_parallel, only : para_t
   use m_pair_info, only : pair_info_t
-  use m_prod_basis_type, only : prod_basis_t
-  use m_biloc_aux, only : biloc_aux_t
-  use m_dp_aux, only : dp_aux_t
   use iso_c_binding, only: c_double, c_double_complex, c_int64_t
  
   !use m_timing, only : get_cdatetime
@@ -19,13 +13,7 @@ module m_sv_prod_log
   private die
   private warn
   !private get_cdatetime
-  
-  type(prod_basis_t) :: pb
-  type(para_t) :: para
-  type(orb_rspace_aux_t) :: orb_a
-  type(biloc_aux_t) :: a
-  type(dp_aux_t) :: dp_a
-  
+    
   real(c_double), allocatable :: ff2(:,:,:,:,:), evals(:,:,:), vertex_real2(:,:,:,:,:)
   real(c_double), allocatable :: rhotb(:,:), sp2rcut(:)
   integer, allocatable :: oo2num(:,:), m2nf(:), p2n(:)
@@ -40,10 +28,16 @@ module m_sv_prod_log
 !
 ! 
 !
-subroutine sv_prod_log(dinp,ninp) bind(c, name='sv_prod_log')
+subroutine init_vrtx_cc_apair(dinp,ninp) bind(c, name='init_vrtx_cc_apair')
 
   use m_fact, only : init_fact
-  use m_sv_libnao, only : sv  
+  use m_sv_libnao, only : sv
+  use m_pb_libnao, only : pb
+  use m_para_libnao, only : para
+  use m_orb_rspace_aux_libnao, only : orb_a
+  use m_biloc_aux_libnao, only : a  
+  use m_dp_aux_libnao, only : dp_a
+  
   use m_sv_prod_log_get, only : sv_prod_log_get
   use m_system_vars, only : get_nr, get_jmx, get_norbs_max, get_natoms, get_sp2rcut
   use m_biloc_aux, only : init_biloc_aux
@@ -121,7 +115,7 @@ subroutine sv_prod_log(dinp,ninp) bind(c, name='sv_prod_log')
   enddo
 
 
-end subroutine ! sv_prod_log
+end subroutine ! init_vrtx_cc_apair
 
 
-end module !m_sv_prod_log
+end module !m_init_vrtx_cc_apair

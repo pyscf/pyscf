@@ -6,7 +6,11 @@ from ctypes import POINTER, c_double, c_int64, byref
 from pyscf.nao.m_libnao import libnao
 from timeit import default_timer as timer
 
-libnao.gen_get_vrtx_cc_apair.argtypes = (
+libnao.init_vrtx_cc_apair.argtypes = (POINTER(c_double), POINTER(c_int64))
+
+libnao.init_vrtx_cc_batch.argtypes = (POINTER(c_double), POINTER(c_int64))
+
+libnao.vrtx_cc_apair.argtypes = (
   POINTER(c_int64),   # sp12(1:2)     ! chemical species indices
   POINTER(c_double),  # rc12(1:3,1:2) ! positions of species
   POINTER(c_int64),   # lscc(ncc)     ! list of contributing centers
@@ -14,12 +18,17 @@ libnao.gen_get_vrtx_cc_apair.argtypes = (
   POINTER(c_double),  # dout(nout)    ! vertex & converting coefficients
   POINTER(c_int64))   # nout          ! size of the buffer for vertex & converting coefficients
 
-libnao.gen_get_vrtx_cc_apairs.argtypes = (
+libnao.vrtx_cc_batch.argtypes = (
   POINTER(c_int64),   # npairs        ! chemical species indices
   POINTER(c_double),  # p2srncc       ! species indices, positions of species, number of cc, cc
   POINTER(c_int64),   # ncc           ! leading dimension of p2srncc
-  POINTER(c_double),  # dout(nout)    ! vertex & converting coefficients
-  POINTER(c_int64))   # nout          ! size of the buffer for vertex & converting coefficients
+  POINTER(c_int64))   # p2ndp         ! pair -> number of dominant products in this pair
+
+libnao.get_vrtx_cc_batch.argtypes = (
+  POINTER(c_int64),   # ps            ! start pair 
+  POINTER(c_int64),   # pf            ! finish pair
+  POINTER(c_double),  # data          ! output data buffer
+  POINTER(c_int64))   # ndat          ! size of data buffer
 
 #
 #
@@ -60,7 +69,11 @@ class prod_basis_c():
     from pyscf.nao.m_prod_biloc import prod_biloc_c
 
     #t1 = timer()    
-    self.init_pb_pp_libnao_apair(sv, **kvargs)
+    self.init_inp_param_prod_log_dp(sv, **kvargs)
+    data = self.chain_data()
+    libnao.init_vrtx_cc_apair(data.ctypes.data_as(POINTER(c_double)), c_int64(len(data)))
+    self.sv_pbloc_data = True
+    
     #t2 = timer(); print(t2-t1); t1=timer();
     self.bp2info = [] # going to be some information including indices of atoms, list of contributing centres, conversion coefficients
     for ia1 in range(sv.natoms):
@@ -76,13 +89,18 @@ class prod_basis_c():
     self.norbs = self.sv.norbs
     return self
 
-  def init_prod_basis_pp_fopenmp(self, sv, **kvargs):
+  def init_prod_basis_pp_batch(self, sv, **kvargs):
     """ Talman's procedure should be working well with Pseudo-Potential starting point."""
+    from pyscf.nao import prod_log_c
     from pyscf.nao.m_prod_biloc import prod_biloc_c
-    self.init_pb_pp_libnao_apair(sv, **kvargs)
-    nout = 0
+    
+    self.init_inp_param_prod_log_dp(sv, **kvargs)
+    data = self.chain_data()
+    libnao.init_vrtx_cc_batch(data.ctypes.data_as(POINTER(c_double)), c_int64(len(data)))
+    self.sv_pbloc_data = True
+
     aos = sv.ao_log
-    p2srncc = []
+    p2srncc,p2npac,p2atoms = [],[],[]
     for a1,[sp1,ra1] in enumerate(zip(sv.atom2sp, sv.atom2coord)):
       rc1 = aos.sp2rcut[sp1]
       for a2,[sp2,ra2] in enumerate(zip(sv.atom2sp[a1+1:], sv.atom2coord[a1+1:])):
@@ -90,24 +108,51 @@ class prod_basis_c():
         rc2,dist = aos.sp2rcut[sp2], sqrt(((ra1-ra2)**2).sum())
         if dist>rc1+rc2 : continue
         cc2atom = self.ls_contributing(a1,a2)
+        p2atoms.append([a1,a2])
         p2srncc.append([sp1,sp2]+list(ra1)+list(ra2)+[len(cc2atom)]+list(cc2atom))
-        npmx = aos.sp2norbs[sp1]*aos.sp2norbs[sp2]
-        npac = sum([self.prod_log.sp2norbs[sv.atom2sp[ia]] for ia in cc2atom ])
-        nout = nout + (npmx**2+npmx*npac+10)
+        p2npac.append( sum([self.prod_log.sp2norbs[sv.atom2sp[ia]] for ia in cc2atom ]))
     #print(np.asarray(p2srncc))
-    dout = np.require( zeros(nout), requirements='CW')
+    p2ndp = np.require( zeros(len(p2srncc), dtype=np.int64), requirements='CW')
     p2srncc_cp = np.require(  np.asarray(p2srncc), requirements='C')
     npairs = p2srncc_cp.shape[0]
     ld = p2srncc_cp.shape[1]
-    print(npairs, ld)
-    libnao.gen_get_vrtx_cc_apairs( c_int64(npairs), p2srncc_cp.ctypes.data_as(POINTER(c_double)), 
-      c_int64(ld), dout.ctypes.data_as(POINTER(c_double)), c_int64(nout) )
+    libnao.vrtx_cc_batch( c_int64(npairs), p2srncc_cp.ctypes.data_as(POINTER(c_double)), 
+      c_int64(ld), p2ndp.ctypes.data_as(POINTER(c_int64)))
 
-    if dout[0]<1: return None
+
+    self.bp2info = [] # going to be indices of atoms, list of contributing centres, conversion coefficients
+
+    nout = 0
+    sp2norbs = sv.ao_log.sp2norbs
+    for srncc,ndp,npac in zip(p2srncc,p2ndp,p2npac):
+      sp1,sp2 = srncc[0],srncc[1]
+      nout = nout + ndp*sp2norbs[sp1]*sp2norbs[sp2]+npac*ndp
+      
+    dout = np.require( zeros(nout), requirements='CW')
+    libnao.get_vrtx_cc_batch(c_int64(0),c_int64(npairs),dout.ctypes.data_as(POINTER(c_double)),c_int64(nout))
+
+    self.bp2info = []
+    f = 0
+    for srncc,ndp,npac,[a1,a2] in zip(p2srncc,p2ndp,p2npac,p2atoms):
+      if ndp<1 : continue
+      sp1,sp2,ncc = srncc[0],srncc[1],srncc[8]
+      icc2a = srncc[9:9+ncc]
+      nnn = np.array((ndp,sp2norbs[sp1],sp2norbs[sp2]), dtype=int)
+      nnc = np.array([ndp,npac], dtype=int)
+      s = f;  f=s+np.prod(nnn); vrtx  = dout[s:f].reshape(nnn)
+      s = f;  f=s+np.prod(nnc); ccoe  = dout[s:f].reshape(nnc)
+      icc2s = np.zeros(len(icc2a)+1, dtype=np.int64)
+      for icc,a in enumerate(icc2a): icc2s[icc+1] = icc2s[icc] + self.prod_log.sp2norbs[sv.atom2sp[a]]
+      pbiloc = prod_biloc_c(atoms=array([a2,a1]),vrtx=vrtx,cc2a=icc2a,cc2s=icc2s,cc=ccoe)
+      self.bp2info.append(pbiloc)
+
+    self.dpc2s,self.dpc2t,self.dpc2sp = self.init_c2s_domiprod() # dominant product's counting
+    self.npdp = self.dpc2s[-1]
+    self.norbs = self.sv.norbs
 
     return self
   
-  def init_pb_pp_libnao_apair(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0, ac_npc_max=8, jcutoff=14, metric_type=2, optimize_centers=0, ngl=96):
+  def init_inp_param_prod_log_dp(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0, ac_npc_max=8, jcutoff=14, metric_type=2, optimize_centers=0, ngl=96):
     """ Talman's procedure should be working well with Pseudo-Potential starting point...
         This subroutine prepares the class for a later atom pair by atom pair generation 
         of the dominant product vertices and the conversion coefficients by calling 
@@ -123,13 +168,9 @@ class prod_basis_c():
     self.prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc) # local basis (for each specie)
     self.c2s = zeros((sv.natm+1), dtype=int64) # global product Center (atom) -> start in case of atom-centered basis
     for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] #
-    self.sv_pbloc_data = True
-    data = self.chain_data_pb_pp_apair()
-    libnao.sv_prod_log.argtypes = (POINTER(c_double), POINTER(c_int64))
-    libnao.sv_prod_log(data.ctypes.data_as(POINTER(c_double)), c_int64(len(data)))
     return self
   
-  def chain_data_pb_pp_apair(self):
+  def chain_data(self):
     """ This subroutine creates a buffer of information to communicate the system variables and the local product vertex to libnao. Later, one will be able to generate the bilocal vertex and conversion coefficient for a given pair of atom species and their coordinates ."""
     from numpy import zeros, concatenate as conc
 
@@ -220,7 +261,7 @@ class prod_basis_c():
     nout = c_int64(npmx**2+npmx*npac+10)
     dout = np.require( zeros(nout.value), requirements='CW')
     
-    libnao.gen_get_vrtx_cc_apair( sp12.ctypes.data_as(POINTER(c_int64)), rc12.ctypes.data_as(POINTER(c_double)), icc2a.ctypes.data_as(POINTER(c_int64)), c_int64(len(icc2a)), dout.ctypes.data_as(POINTER(c_double)), nout )    
+    libnao.vrtx_cc_apair( sp12.ctypes.data_as(POINTER(c_int64)), rc12.ctypes.data_as(POINTER(c_double)), icc2a.ctypes.data_as(POINTER(c_int64)), c_int64(len(icc2a)), dout.ctypes.data_as(POINTER(c_double)), nout )    
     if dout[0]<1: return None
     
     nnn = np.array(dout[0:3], dtype=int)

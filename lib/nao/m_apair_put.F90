@@ -80,8 +80,7 @@ subroutine apair_put(pb, pair, d,n)
   !write(6,*) __FILE__, __LINE__
   !write(6,*) pb%coeffs(pair)%ind2book_re
   !write(6,*) pb%coeffs(pair)%ind2sfp_loc
-  
-  
+
 end subroutine ! apair_put
 
 end module ! m_apair_put

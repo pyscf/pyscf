@@ -2,7 +2,7 @@ module m_vertex_3cent
 
 ! The purpose of the module is to store and deal with a real space information of a product basis
 #include "m_define_macro.F90"
-  use m_log, only : die
+  use m_die, only : die
   
   implicit none
   private die
