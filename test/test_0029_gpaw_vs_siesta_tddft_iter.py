@@ -11,8 +11,7 @@ def run_tddft_iter(calculator, label, freq):
         raise ValueError("Only siesta or gpaw calculator for the moment!")
 
 
-    pb = prod_basis_c().init_pb_pp_libnao_apair(sv)
-    pb.init_prod_basis_pp()
+    pb = prod_basis_c().init_prod_basis_pp(sv)
     td = tddft_iter_c(pb.sv, pb, tddft_iter_broadening=1e-2)
     omegas = np.linspace(freq[0], freq[freq.shape[0]-1], freq.shape[0]) + 1j*td.eps
 
