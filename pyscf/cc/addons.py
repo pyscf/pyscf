@@ -3,32 +3,30 @@
 import numpy
 from pyscf import lib
 
-def spatial2spinorb(t1_or_t2):
+def spatial2spin(tx, orbspin=None):
     '''Convert T1/T2 of spatial orbital representation to T1/T2 of
-    spin-orbital representation'''
-    if t1_or_t2.ndim == 2:
-        t1 = t1_or_t2
-        nocc, nvir = t1.shape
-        orbspin = numpy.zeros((nocc+nvir)*2, dtype=int)
-        orbspin[1::2] = 1
-        return spatial2spin((t1,t1), orbspin)
-    else:
-        t2 = t1_or_t2
-        nocc, nvir = t2.shape[::2]
-        orbspin = numpy.zeros((nocc+nvir)*2, dtype=int)
-        orbspin[1::2] = 1
-        t2aa = t2 - t2.transpose(0,1,3,2)
-        return spatial2spin((t2aa,t2,t2aa), orbspin)
+    spin-orbital representation
 
-def spatial2spin(tx, orbspin):
-    '''call orbspin_of_sorted_mo_energy to get orbspin'''
-    if len(tx) == 2:  # t1
+    call orbspin_of_sorted_mo_energy to get orbspin
+    '''
+    if isinstance(tx, numpy.ndarray) and tx.ndim == 2:
+        # RCCSD t1 amplitudes
+        return spatial2spin((tx,tx), orbspin)
+    elif isinstance(tx, numpy.ndarray) and tx.ndim == 4:
+        # RCCSD t2 amplitudes
+        t2aa = tx - tx.transpose(0,1,3,2)
+        return spatial2spin((t2aa,tx,t2aa), orbspin)
+    elif len(tx) == 2:  # t1
         t1a, t1b = tx
         nocc_a, nvir_a = t1a.shape
         nocc_b, nvir_b = t1b.shape
     else:
         t2aa, t2ab, t2bb = tx
         nocc_a, nocc_b, nvir_a, nvir_b = t2ab.shape
+
+    if orbspin is None:
+        orbspin = numpy.zeros((nocc_a+nvir_a)*2, dtype=int)
+        orbspin[1::2] = 1
 
     nocc = nocc_a + nocc_b
     nvir = nvir_a + nvir_b
@@ -64,6 +62,8 @@ def spatial2spin(tx, orbspin):
         lib.takebak_2d(t2, abba, idxoab.ravel()  , idxvba.T.ravel())
         lib.takebak_2d(t2, abba, idxoba.T.ravel(), idxvab.ravel()  )
         return t2.reshape(nocc,nocc,nvir,nvir)
+
+spatial2spinorb = spatial2spin
 
 def spin2spatial(tx, orbspin):
     '''call orbspin_of_sorted_mo_energy to get orbspin'''

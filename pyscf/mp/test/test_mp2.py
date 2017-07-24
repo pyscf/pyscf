@@ -2,8 +2,9 @@
 import unittest
 from functools import reduce
 import numpy
-from pyscf import scf
+from pyscf import lib
 from pyscf import gto
+from pyscf import scf
 from pyscf import ao2mo
 from pyscf import mp
 
@@ -93,6 +94,34 @@ class KnowValues(unittest.TestCase):
                 dm2ref[i,i,j,j] += 4
                 dm2ref[i,j,j,i] -= 2
         self.assertTrue(numpy.allclose(pt.make_rdm2(), dm2ref))
+
+    def test_mp2_with_df(self):
+        pt = mp.mp2.MP2(mf.density_fit())
+        e = pt.kernel(with_t2=False)[0]
+        self.assertAlmostEqual(e, -0.20425449198401671, 9)
+
+    def test_mp2_frozen(self):
+        pt = mp.mp2.MP2(mf)
+        pt.frozen = [1]
+        e = pt.kernel(with_t2=False)[0]
+        self.assertAlmostEqual(e, -0.14660835345250667, 9)
+
+    def test_mp2_outcore_frozen(self):
+        pt = mp.mp2.MP2(mf)
+        pt.max_memory = 0
+        pt.frozen = [1]
+        e = pt.kernel(with_t2=False)[0]
+        self.assertAlmostEqual(e, -0.14660835345250667, 9)
+
+    def test_mp2_ao2mo_ovov(self):
+        pt = mp.mp2.MP2(mf)
+        orbo = mf.mo_coeff[:,:8]
+        orbv = mf.mo_coeff[:,8:]
+        ftmp = lib.H5TmpFile()
+        h5dat = mp.mp2._ao2mo_ovov(pt, orbo, orbv, ftmp, 1)
+        ovov = numpy.asarray(h5dat)
+        ovov_ref = ao2mo.general(mf._eri, (orbo,orbv,orbo,orbv))
+        self.assertAlmostEqual(numpy.linalg.norm(ovov_ref-ovov), 0, 9)
 
 
 

@@ -347,9 +347,7 @@ def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None):
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
     nov = nocc * nvir
-    foo = eris.fock[:nocc,:nocc]
     fov = eris.fock[:nocc,nocc:]
-    fvv = eris.fock[:nocc,:nocc]
 
     #:mba = numpy.einsum('klca,klcb->ba', l2, t2*2-t2.transpose(0,1,3,2))
     #:mij = numpy.einsum('ikcd,jkcd->ij', l2, t2*2-t2.transpose(0,1,3,2))
