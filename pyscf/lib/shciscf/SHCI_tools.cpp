@@ -277,7 +277,7 @@ extern "C"
 		{
 			if ( fabs( h1e[ i ] ) > tol )
 			{
-				div_t pq = div( i, norb );
+				div_t pq = div(static_cast<int>(i),static_cast<int>(norb) );
 				p = pq.rem + 1;
 				q = pq.quot + 1;
 				fOut << h1e[ i ] << "    " << p << "  " << q << endStr;
