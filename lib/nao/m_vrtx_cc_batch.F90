@@ -62,9 +62,15 @@ subroutine vrtx_cc_batch(npairs,p2srncc,ld,p2ndp) bind(c, name='vrtx_cc_batch')
   p2ndp = 0
   do p=1,npairs
     top = pb%book_dp(p+natoms)%top
-    if(top/=2) _die('top/=2')
-    spp = pb%book_dp(p+natoms)%spp
-    if (allocated(pb%sp_biloc2vertex(spp)%vertex)) p2ndp(p) = ubound(pb%sp_biloc2vertex(spp)%vertex,3)
+    if(top==2) then
+      spp = pb%book_dp(p+natoms)%spp
+      if (.not. allocated(pb%sp_biloc2vertex(spp)%vertex)) _die('should be alloc')
+      p2ndp(p) = ubound(pb%sp_biloc2vertex(spp)%vertex,3)
+    else if (top==1) then
+      _die('!top==1?')
+    else
+      p2ndp(p)=0; cycle
+    endif
   enddo
   
 end subroutine !vrtx_cc_batch
@@ -95,15 +101,22 @@ subroutine get_vrtx_cc_batch(ps_0b,pf_0b,dout,nout) bind(c, name='get_vrtx_cc_ba
   do p=ps_0b+1,pf_0b
     ibook = p+natoms
     top = pb%book_dp(ibook)%top
-    if(top/=2) _die('top/=2')
-    spp = pb%book_dp(ibook)%spp
-    if (.not. allocated(pb%sp_biloc2vertex(spp)%vertex)) cycle
-    s = f + 1; n = size(pb%sp_biloc2vertex(spp)%vertex); f = s + n - 1;
-    if(f>nout) _die('f>nout')
-    call dcopy(n, pb%sp_biloc2vertex(spp)%vertex,1, dout(s),1)
-    s = f + 1; n = size(pb%coeffs(ibook)%coeffs_ac_dp); f = s + n - 1;
-    if(f>nout) _die('f>nout')
-    call dcopy(n, pb%coeffs(ibook)%coeffs_ac_dp,1, dout(s),1)
+    if(top==2) then
+      spp = pb%book_dp(ibook)%spp
+      if (.not. allocated(pb%sp_biloc2vertex(spp)%vertex)) _die('!should be alloc')
+      s = f + 1; n = size(pb%sp_biloc2vertex(spp)%vertex); f = s + n - 1;
+      if(f>nout) _die('f>nout')
+      call dcopy(n, pb%sp_biloc2vertex(spp)%vertex,1, dout(s),1)
+      
+      if (.not. allocated(pb%coeffs(ibook)%coeffs_ac_dp)) _die('!should be alloc')
+      s = f + 1; n = size(pb%coeffs(ibook)%coeffs_ac_dp); f = s + n - 1;
+      if(f>nout) _die('f>nout')
+      call dcopy(n, pb%coeffs(ibook)%coeffs_ac_dp,1, dout(s),1)
+    else if (top==1) then
+      _die('!top==1?')      
+    else
+      cycle
+    endif
   enddo ! p
   
 end subroutine !get_vrtx_cc_batch
