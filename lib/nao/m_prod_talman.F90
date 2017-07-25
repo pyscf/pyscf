@@ -271,12 +271,14 @@ subroutine prdred_all_interp_coeffs(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,n
   do ir=1,nr
     do igla=1,ord
       k1 = int(ijxr2ck(7,1,igla,ir))
-      f1 = sum(ya(k1:k1+5)*ijxr2ck(1:6,1,igla,ir))
+      !f1 = sum(ya(k1:k1+5)*ijxr2ck(1:6,1,igla,ir))
       !f1 = ddot(6, ya(k1),1, ijxr2ck(1,1,igla,ir),1)
-
+      f1 = dot_product(ya(k1:k1+5), ijxr2ck(1:6,1,igla,ir))
+      
       k2 = int(ijxr2ck(7,2,igla,ir))
-      f2 = sum(yb(k2:k2+5)*ijxr2ck(1:6,2,igla,ir))
+      !f2 = sum(yb(k2:k2+5)*ijxr2ck(1:6,2,igla,ir))
       !f2 = ddot(6, yb(k2),1, ijxr2ck(1,2,igla,ir),1)
+      f2 = dot_product(yb(k2:k2+5), ijxr2ck(1:6,2,igla,ir))
       
       yz(igla)=f1*f2
     enddo
