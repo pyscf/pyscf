@@ -225,6 +225,7 @@ end subroutine ! all_interp_coeffs
 subroutine prdred_all_interp_coeffs(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb,nterm,xgla,wgla,ord,ijxr2ck) &
   bind(c, name='prdred_all_interp_coeffs')
   use m_fact, only : fac, sgn
+  use m_precision, only : blas_int
   implicit none
   !! external
   integer(c_int), intent(in)  :: nr, nterm,la,lb,ord
@@ -238,10 +239,12 @@ subroutine prdred_all_interp_coeffs(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,n
   real(8) :: ya(nr), yb(nr)
   real(8) :: raa,rbb,f1,f2,sumb,aa,bb,cc,thrj1,thrj2
   real(8) :: t1,t2,tt(9)
-  integer :: ir,ix,ijmx,ij,clbd,kappa,kpmax,igla, lbd1_p_lbd2, k1,k2
+  integer(blas_int) :: k1,k2
+  integer :: ir,ix,ijmx,ij,clbd,kappa,kpmax,igla, lbd1_p_lbd2
   integer :: lbd1,lbdp1,lbd2,lbdp2,lc,lcmin,lcmax,lcp,lcpmin,lcpmax,clbdp
   real(8), allocatable :: plval(:,:), fval(:,:)
   real(8) :: yz(ord)
+  real(8), external :: ddot
 
 !     write(6,*) 'prdred', lbdmxa, 2*lbdmxa+la+lb
   _t1
@@ -268,11 +271,13 @@ subroutine prdred_all_interp_coeffs(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,n
   do ir=1,nr
     do igla=1,ord
       k1 = int(ijxr2ck(7,1,igla,ir))
-      f1 = sum(ya(k1:k1+5)*ijxr2ck(1:6,1,igla,ir))
+      !f1 = sum(ya(k1:k1+5)*ijxr2ck(1:6,1,igla,ir))
+      f1 = ddot(6, ya(k1),1, ijxr2ck(1,1,igla,ir),1)
 
       k2 = int(ijxr2ck(7,2,igla,ir))
-      f2 = sum(yb(k2:k2+5)*ijxr2ck(1:6,2,igla,ir))
-
+      !f2 = sum(yb(k2:k2+5)*ijxr2ck(1:6,2,igla,ir))
+      f2 = ddot(6, yb(k2),1, ijxr2ck(1,2,igla,ir),1)
+      
       yz(igla)=f1*f2
     enddo
     kpmax=0
