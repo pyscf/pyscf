@@ -26,7 +26,8 @@ subroutine ao_eval(nmu, &
   ldres ) bind(c, name='ao_eval')
 
   use m_rsphar, only : rsphar, dealloc_rsphar, init_rsphar
-
+  use m_interp_coeffs, only : interp_coeffs
+  
   implicit none 
   !! external
   integer(c_int64_t), intent(in)  :: nmu
@@ -67,7 +68,7 @@ subroutine ao_eval(nmu, &
     call rsphar(coord, jmx_sp, rsh)
     r = sqrt(sum(coord**2))
     if(r>rcutmx) cycle
-    call comp_coeffs(r, nr, rhomin_jt, dr_jt, k, coeffs)
+    call interp_coeffs(r, nr, rhomin_jt, dr_jt, k, coeffs)
     do mu=1,nmu
       ! if(r>mu2rcut(mu)) cycle
       j=mu2j(mu)
@@ -83,43 +84,5 @@ subroutine ao_eval(nmu, &
   _dealloc(rsh)
   !$OMP END PARALLEL
 end subroutine !ao_eval
-
-
-!
-! Compute values of atomic orbitals for a given specie
-!
-subroutine comp_coeffs(r, nr, gammin_jt, dg_jt, k, coeffs)
-  implicit none 
-  !! external
-  real(c_double), intent(in) :: r, gammin_jt, dg_jt
-  integer(c_int64_t), intent(in) :: nr
-  integer(c_int64_t), intent(out) :: k
-  real(c_double), intent(out) :: coeffs(:)
-  !! internal
-  real(c_double) :: dy, lr
-  
-  if (r<=0) then
-    coeffs = 0
-    coeffs(1) = 1
-    k = 1
-    return
-  endif  
-
-  lr = log(r)
-  k  = int((lr-gammin_jt)/dg_jt+1)
-  k  = min(max(k,3_c_int64_t), nr-3_c_int64_t)
-  dy = (lr-gammin_jt-(k-1_c_int64_t)*dg_jt)/dg_jt
-  
-  coeffs(1) =     -dy*(dy**2-1.0D0)*(dy-2.0D0)*(dy-3.0D0)/120.0D0
-  coeffs(2) = +5.0D0*dy*(dy-1.0D0)*(dy**2-4.0D0)*(dy-3.0D0)/120.0D0
-  coeffs(3) = -10.0D0*(dy**2-1.0D0)*(dy**2-4.0D0)*(dy-3.0D0)/120.0D0
-  coeffs(4) = +10.0D0*dy*(dy+1.0D0)*(dy**2-4.0D0)*(dy-3.0D0)/120.0D0
-  coeffs(5) = -5.0D0*dy*(dy**2-1.0D0)*(dy+2.0D0)*(dy-3.0D0)/120.0D0
-  coeffs(6) =      dy*(dy**2-1.0D0)*(dy**2-4.0D0)/120.0D0
-
-  k = k - 2
-  return
-   
-end subroutine !comp_coeffs
 
 end module !m_ao_eval

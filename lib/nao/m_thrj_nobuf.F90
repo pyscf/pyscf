@@ -1,7 +1,7 @@
 module m_thrj_nobuf
 
 #include "m_define_macro.F90"
-  use m_log, only : die
+  use m_die, only : die
   use iso_c_binding, only: c_double, c_int64_t, c_int, c_double_complex
 
   implicit none

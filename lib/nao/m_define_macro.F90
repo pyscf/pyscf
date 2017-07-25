@@ -33,7 +33,7 @@
 #define _pack_indx(i,j) j*(j-1)/2+i
 #define _pack_size(n) n*(n+1)/2
 #define _t1 call cputime(t1)
-#define _t2(t)call cputime(t2);t=t+(t2-t1)
+#define _t2(t)call cputime(t2);t=t+(t2-t1);call cputime(t1);
 #define _conc(a,b) trim(a)//', '//trim(b)
 #define _realloc1(a,l,u) if(allocated(a))then;if(any(lbound(a)/=l) .or. any(ubound(a)/=u)) deallocate(a);endif 
 #define _realloc(a,n) if(allocated(a)) deallocate(a); allocate(a(n))

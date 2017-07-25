@@ -54,14 +54,18 @@ function thrj(l1i,l2i,l3i,m1i,m2i,m3i)
   use m_fact, only : fac, sgn
   implicit none
   integer, intent(in) :: l1i,l2i,l3i,m1i,m2i,m3i
+  real(8) :: thrj
   !! external
   integer :: l1,l2,l3,m1,m2,m3,ii,ic,iz,it,itmin,itmax,lg,icc
-  real(8) :: thrj,xx,ss,ph,yyx
+  real(8) :: xx,ss,ph,yyx
   integer, save :: istart
   data istart /0/
   integer, parameter :: lmax=34 ! how much 3-j coefficients will be stored
   integer :: no3j=-1
 
+  thrj = 0d0
+  if (abs(m1i)>l1i .or. abs(m2i)>l2i .or. abs(m3i)>l3i) return
+  if (m1i+m2i+m3i /= 0) return
 
   if (istart.eq.0) then ! 
   !$OMP CRITICAL 
@@ -146,6 +150,9 @@ function thrj(l1i,l2i,l3i,m1i,m2i,m3i)
      write (0,*) 'thrj: 3-j coefficient out of range ==>stop'
      stop
   endif
+
+  if (l1>l2+l3) return
+
   icc=ixxa(l1)+ixxb(l2)+ixxc(l2)*(l2+m2)+ixxc(l3)-l3+m3   
   thrj=ph*aa(icc)
   return

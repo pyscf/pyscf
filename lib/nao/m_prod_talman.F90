@@ -1,7 +1,7 @@
 module m_prod_talman
 
 #include "m_define_macro.F90"
-  use m_log, only : die
+  use m_die, only : die
   use iso_c_binding, only: c_double, c_int64_t, c_int, c_double_complex
 
   implicit none
@@ -66,7 +66,7 @@ module m_prod_talman
 
 subroutine prdred_coeffs(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb,nterm,ord,pcs,rho_min_jt,dr_jt) &
   bind(c, name='prdred')
-  use m_ao_eval, only : comp_coeffs
+  use m_interp_coeffs, only : interp_coeffs
   use m_fact, only : fac, sgn
   use m_numint, only : gl_knts, gl_wgts
 !  use m_timing, only : get_cdatetime
@@ -115,11 +115,11 @@ subroutine prdred_coeffs(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdt
   do i=1,nr
     do igla=1,pcs*ord
       a1=sqrt(rr(i)**2-2.0d0*raa*rr(i)*xgla(igla)+raa**2)
-      call comp_coeffs(a1, int(nr,c_int64_t), rho_min_jt, dr_jt, k, ccs)
+      call interp_coeffs(a1, int(nr,c_int64_t), rho_min_jt, dr_jt, k, ccs)
       f1 = sum(ya(k:k+5)*ccs)
 
       a2=sqrt(rr(i)**2+2.0d0*rbb*rr(i)*xgla(igla)+rbb**2)
-      call comp_coeffs(a2, int(nr,c_int64_t), rho_min_jt, dr_jt, k, ccs)
+      call interp_coeffs(a2, int(nr,c_int64_t), rho_min_jt, dr_jt, k, ccs)
       f2 = sum(yb(k:k+5)*ccs)
 
       yz(igla)=f1*f2
@@ -178,70 +178,109 @@ subroutine prdred_coeffs(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdt
      enddo
   enddo
   return
-end subroutine !prdred
+end subroutine !prdred_coeffs
+
+!!
+!!
+!!
+subroutine all_interp_coeffs(ra,rb,rcen,rr,nr,xgla,ord,ijxr2ck)
+  use m_interp_coeffs, only : interp_coeffs
+  implicit none
+  !! external
+  integer(c_int), intent(in) :: nr, ord
+  real(c_double), intent(in) :: rr(nr),ra(3),rb(3),rcen(3),xgla(ord)
+  real(c_double), intent(inout) :: ijxr2ck(7,2,ord,nr)
+  !! internal
+  integer :: ir, igla
+  integer(c_int64_t) :: nr8, k
+  real(c_double) :: a1, a2, raa, rbb, r2aa, r2bb, rho_min_jt, dr_jt
+
+  nr8 = nr
+  dr_jt = (log(rr(nr))-log(rr(1)))/(nr-1)
+  rho_min_jt = log(rr(1))
+
+  raa=sqrt(sum((ra-rcen)**2))
+  rbb=sqrt(sum((rb-rcen)**2))
+  do ir=1,nr
+    r2aa = rr(ir)**2+raa**2
+    r2bb = rr(ir)**2+rbb**2
+    
+    do igla=1,ord
+      a1=(r2aa-2.0d0*raa*rr(ir)*xgla(igla))
+      call interp_coeffs(sqrt(a1), nr8, rho_min_jt, dr_jt, k, ijxr2ck(1:6,1,igla,ir))
+      ijxr2ck(7,1,igla,ir) = real(k, c_double)
+
+      a2=(r2bb+2.0d0*rbb*rr(ir)*xgla(igla))
+      call interp_coeffs(sqrt(a2), nr8, rho_min_jt, dr_jt, k, ijxr2ck(1:6,2,igla,ir))
+      ijxr2ck(7,2,igla,ir) = real(k, c_double)
+    enddo
+  enddo
+  
+end subroutine ! all_interp_coeffs
+
 
 !
 !
 !
-subroutine prdred(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb,nterm,ord,pcs,rho_min_jt,dr_jt) &
-  bind(c, name='prdred_fval')
+subroutine prdred_all_interp_coeffs(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb,nterm,xgla,wgla,ord,ijxr2ck) &
+  bind(c, name='prdred_all_interp_coeffs')
   use m_fact, only : fac, sgn
-  use m_numint, only : gl_knts, gl_wgts
-!  use m_timing, only : get_cdatetime
   implicit none
   !! external
-  integer(c_int), intent(in)  :: nr, nterm, ord,pcs,la,lb
+  integer(c_int), intent(in)  :: nr, nterm,la,lb,ord
   real(c_double), intent(in)  :: phia(nr),phib(nr),rr(nr),ra(3),rb(3),rcen(3)
   integer(c_int), intent(in)  :: lbdtb(nterm),clbdtb(nterm),lbdmxa,jtb(nterm)
-  real(c_double), intent(in)  :: rho_min_jt, dr_jt
-  real(c_double), intent(out) :: rhotb(nr,nterm)
+  real(c_double), intent(in)  :: xgla(ord), wgla(ord)
+  real(c_double), intent(in)  :: ijxr2ck(7,2,ord,nr)
+  real(c_double), intent(inout) :: rhotb(nr,nterm)
   
   !! internal
   real(8) :: ya(nr), yb(nr)
-  real(8) :: yz(ord*pcs)
-  real(8) :: raa,rbb,a1,a2,f1,f2,sumb,aa,bb,cc
-  integer :: i,ix,ijmx,ij,clbd,kappa,kpmax,igla, lbd1_p_lbd2
+  real(8) :: raa,rbb,f1,f2,sumb,aa,bb,cc,thrj1,thrj2
+  real(8) :: t1,t2,tt(9)
+  integer :: ir,ix,ijmx,ij,clbd,kappa,kpmax,igla, lbd1_p_lbd2, k1,k2
   integer :: lbd1,lbdp1,lbd2,lbdp2,lc,lcmin,lcmax,lcp,lcpmin,lcpmax,clbdp
-
-  real(8) :: plval(ord*pcs,0:2*lbdmxa+la+lb), fval(nr,0:2*lbdmxa+la+lb)
-  real(8) :: xgla(ord*pcs), wgla(ord*pcs)
+  real(8), allocatable :: plval(:,:), fval(:,:)
+  real(8) :: yz(ord)
 
 !     write(6,*) 'prdred', lbdmxa, 2*lbdmxa+la+lb
+  _t1
+  tt = 0
 
+  allocate(plval(ord,0:2*lbdmxa+la+lb))
+  allocate(fval(nr,0:2*lbdmxa+la+lb))
+  
   kpmax = -999
   ijmx=la+lb;
-  call GL_knts(xgla, -1.0D0, 1.0D0, ord, pcs);
-  call GL_wgts(wgla, -1.0D0, 1.0D0, ord, pcs);
-
-  plval(:,0)=1.0D0
-  plval(:,1)=xgla(:)
+  plval(1:ord,0)=1.D0
+  plval(1:ord,1)=xgla(1:ord)
   do kappa=1,2*lbdmxa+ijmx-1
-    plval(:,kappa+1)=((2*kappa+1)*xgla*plval(:,kappa)-&
-         kappa*plval(:,kappa-1))/(kappa+1)
+    plval(:,kappa+1)=((2*kappa+1)*xgla*plval(:,kappa)-kappa*plval(:,kappa-1))/(kappa+1)
   end do
   ya=phia/rr**la
   yb=phib/rr**lb
 
+  _t2(tt(1))
+  
   raa=sqrt(sum((ra-rcen)**2))
   rbb=sqrt(sum((rb-rcen)**2))
   fval=0
-  do i=1,nr
-    do igla=1,pcs*ord
-      a1=sqrt(rr(i)**2-2.0d0*raa*rr(i)*xgla(igla)+raa**2)
-      f1 = get_fval(ya, a1, rho_min_jt, dr_jt, nr);
+  do ir=1,nr
+    do igla=1,ord
+      k1 = int(ijxr2ck(7,1,igla,ir))
+      f1 = sum(ya(k1:k1+5)*ijxr2ck(1:6,1,igla,ir))
 
-      a2=sqrt(rr(i)**2+2.0d0*rbb*rr(i)*xgla(igla)+rbb**2)
-      f2 = get_fval(yb, a2, rho_min_jt, dr_jt, nr);
+      k2 = int(ijxr2ck(7,2,igla,ir))
+      f2 = sum(yb(k2:k2+5)*ijxr2ck(1:6,2,igla,ir))
 
       yz(igla)=f1*f2
     enddo
     kpmax=0
     if (raa+rbb .gt. 1.0d-5) kpmax=2*lbdmxa+ijmx
-    do kappa=0,kpmax
-      fval(i,kappa)=0.5d0*sum(plval(:,kappa)*yz*wgla)
-    enddo
+    do kappa=0,kpmax; fval(ir,kappa)=0.5d0*sum(plval(:,kappa)*yz*wgla); enddo
   enddo
 
+  _t2(tt(2))
 
   rhotb=0.0D0
   do ix=1,nterm
@@ -263,17 +302,20 @@ subroutine prdred(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb
               lcmin=max(abs(lbd1-lbd2),abs(clbd-kappa))
               lcmax=min(lbd1+lbd2,clbd+kappa)
               do lc=lcmin,lcmax,2
+                 thrj1 = thrj(lbd1,lbd2,lc,0,0,0)
+                 thrj2 = thrj(lc,clbd,kappa,0,0,0)
+
                  lcpmin=max(abs(lbdp1-lbdp2),abs(clbdp-kappa))
                  lcpmax=min(lbdp1+lbdp2,clbdp+kappa)
                  do lcp=lcpmin,lcpmax,2
                     if ((abs(lc-ij).le.lcp).and.(lcp.le.lc+ij)) then
                        sumb=sumb+(2*lc+1)*(2*lcp+1)&
-                            *thrj(lbd1,lbd2,lc,0,0,0)&
-                            *thrj(lbdp1,lbdp2,lcp,0,0,0)&
-                            *thrj(lc,clbd,kappa,0,0,0)&
-                            *thrj(lcp,clbdp,kappa,0,0,0)&
-                            *sixj(clbd,clbdp,ij,lcp,lc,kappa)&
-                            *ninej(la,lb,ij,lbd1,lbd2,lc,lbdp1,lbdp2,lcp)
+                            * thrj1 &
+                            * thrj(lbdp1,lbdp2,lcp,0,0,0) &
+                            * thrj2 &
+                            * thrj(lcp,clbdp,kappa,0,0,0) &
+                            * sixj(clbd,clbdp,ij,lcp,lc,kappa) &
+                            * ninej(la,lb,ij,lbd1,lbd2,lc,lbdp1,lbdp2,lcp)
                     endif
                  enddo
               enddo
@@ -281,46 +323,158 @@ subroutine prdred(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb
                    *(2*clbd+1)*(2*clbdp+1)*bb*sumb
               if (cc .ne. 0.0D0) then
                 lbd1_p_lbd2 = lbd1 + lbd2
-                rhotb(:,ix)=rhotb(:,ix)+cc*rr(1:nr)**(lbd1_p_lbd2)&
-                      *dpowi(raa, lbdp1)*dpowi(rbb, lbdp2)*fval(:,kappa)
+                rhotb(:,ix)=rhotb(:,ix)+cc*rr(1:nr)**(lbd1_p_lbd2) &
+                      * dpowi(raa, lbdp1) * dpowi(rbb, lbdp2)*fval(:,kappa)
               endif
            enddo
         enddo
      enddo
   enddo
+  
+  _t2(tt(3))
+  !write(6,*) __FILE__, __LINE__, tt(1:3)
+ 
+  _dealloc(fval)
+  _dealloc(plval)
+  
   return
-end subroutine !prdred
+end subroutine !prdred_all_interp_coeffs
 
 
-!!
-!! 6-point interpolation on the exponential mesh (J. Talman)
-!!
-real(8) function get_fval(ff, r, rho_min_jt, dr_jt, nr)
+!
+!
+!
+subroutine prdred(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb,nterm,xgla,wgla,ord,rho_min_jt,dr_jt) &
+  bind(c, name='prdred_checkit')
+  use m_fact, only : fac, sgn
+  use m_interp_coeffs, only : interp_coeffs
+!  use m_timing, only : get_cdatetime
   implicit none
   !! external
-  real(8), intent(in) :: ff(:), r, rho_min_jt, dr_jt
-  integer, intent(in) :: nr
-
+  integer(c_int), intent(in)  :: nr, nterm,la,lb,ord
+  real(c_double), intent(in)  :: phia(nr),phib(nr),rr(nr),ra(3),rb(3),rcen(3)
+  integer(c_int), intent(in)  :: lbdtb(nterm),clbdtb(nterm),lbdmxa,jtb(nterm)
+  real(c_double), intent(in)  :: rho_min_jt, dr_jt
+  real(c_double), intent(in)  :: xgla(ord), wgla(ord)
+  real(c_double), intent(inout) :: rhotb(nr,nterm)
+  
   !! internal
-  real(8) :: dy
-  integer  :: k
+  real(8) :: ya(nr), yb(nr)
+  real(8) :: raa,rbb,a1,a2,f1,f2,sumb,aa,bb,cc,thrj1,thrj2,r2aa,r2bb
+  !real(8) :: t1,t2,tt(9)
+  real(8) :: coeff1(-2:3), coeff2(-2:3)
+  integer :: i,ix,ijmx,ij,clbd,kappa,kpmax,igla, lbd1_p_lbd2
+  integer(c_int64_t) :: k, nr8
+  integer :: lbd1,lbdp1,lbd2,lbdp2,lc,lcmin,lcmax,lcp,lcpmin,lcpmax,clbdp
+  real(8), allocatable :: plval(:,:), fval(:,:)
+  real(8) :: yz(ord)
 
-  if(r<=0) then; get_fval=ff(1); return; endif;
+!     write(6,*) 'prdred', lbdmxa, 2*lbdmxa+la+lb
+  !_t1
+  !tt = 0
+  nr8 = int(nr, c_int64_t)
+  
+  allocate(plval(ord,0:2*lbdmxa+la+lb))
+  allocate(fval(nr,0:2*lbdmxa+la+lb))
+  
+  kpmax = -999
+  ijmx=la+lb;
+  plval(:,0)=1.D0
+  plval(:,1)=xgla(:)
+  do kappa=1,2*lbdmxa+ijmx-1
+    plval(:,kappa+1)=((2*kappa+1)*xgla*plval(:,kappa)-kappa*plval(:,kappa-1))/(kappa+1)
+  end do
+  ya=phia/rr**la
+  yb=phib/rr**lb
 
-  k=int((log(r)-rho_min_jt)/dr_jt+1)
-  k=max(k,3)
-  k=min(k,nr-3)
+  !_t2(tt(2))
+  
+  raa=sqrt(sum((ra-rcen)**2))
+  rbb=sqrt(sum((rb-rcen)**2))
+  fval=0
+  do i=1,nr
+    r2aa = rr(i)**2+raa**2
+    r2bb = rr(i)**2+rbb**2
+    
+    do igla=1,ord
+      a1=(r2aa-2.0d0*raa*rr(i)*xgla(igla))
+      call interp_coeffs(sqrt(a1), nr8, rho_min_jt, dr_jt, k, coeff1)
+      f1 = sum(ya(k:k+5)*coeff1)
+      !f1 = get_fval(ya, sqrt(a1), rho_min_jt, dr_jt, nr);
 
-  dy=(log(r)-rho_min_jt-(k-1)*dr_jt)/dr_jt
+      a2=(r2bb+2.0d0*rbb*rr(i)*xgla(igla))
+      call interp_coeffs(sqrt(a2), nr8, rho_min_jt, dr_jt, k, coeff2)
+      f2 = sum(yb(k:k+5)*coeff2)
+      !f2 = get_fval(yb, sqrt(a2), rho_min_jt, dr_jt, nr);
 
-  get_fval =(-dy*(dy**2-1.0d0)*(dy-2.0d0)*(dy-3.0d0)*ff(k-2)&
-       +5.0d0*dy*(dy-1.0d0)*(dy**2-4.0d0)*(dy-3.0d0)*ff(k-1)&
-       -10.0d0*(dy**2-1.0d0)*(dy**2-4.0d0)*(dy-3.0d0)*ff(k)&
-       +10.0d0*dy*(dy+1.0d0)*(dy**2-4.0d0)*(dy-3.0d0)*ff(k+1)&
-       -5.0d0*dy*(dy**2-1.0d0)*(dy+2.0d0)*(dy-3.0d0)*ff(k+2)&
-       +dy*(dy**2-1.0d0)*(dy**2-4.0d0)*ff(k+3))/120.0d0 
+      yz(igla)=f1*f2
+    enddo
+    kpmax=0
+    if (raa+rbb .gt. 1.0d-5) kpmax=2*lbdmxa+ijmx
+    do kappa=0,kpmax
+      fval(i,kappa)=0.5d0*sum(plval(:,kappa)*yz*wgla)
+    enddo
+  enddo
 
-end function !interp
+  !_t2(tt(3))
+
+  rhotb=0.0D0
+  do ix=1,nterm
+     ij=jtb(ix)
+     clbd=clbdtb(ix)
+     clbdp=lbdtb(ix)
+     do lbd1=0,la
+        lbdp1=la-lbd1
+        aa=thrj(lbd1,lbdp1,la,0,0,0)*fac(lbd1)*fac(lbdp1)*fac(2*la+1)&
+             /(fac(2*lbd1)*fac(2*lbdp1)*fac(la))
+
+        do lbd2=0,lb
+           lbdp2=lb-lbd2
+           bb=thrj(lbd2,lbdp2,lb,0,0,0)*fac(lbd2)*fac(lbdp2)*fac(2*lb+1)&
+                /(fac(2*lbd2)*fac(2*lbdp2)*fac(lb))
+           bb=aa*bb
+           do kappa=0,kpmax
+              sumb=0.0d0
+              lcmin=max(abs(lbd1-lbd2),abs(clbd-kappa))
+              lcmax=min(lbd1+lbd2,clbd+kappa)
+              do lc=lcmin,lcmax,2
+                 thrj1 = thrj(lbd1,lbd2,lc,0,0,0)
+                 thrj2 = thrj(lc,clbd,kappa,0,0,0)
+
+                 lcpmin=max(abs(lbdp1-lbdp2),abs(clbdp-kappa))
+                 lcpmax=min(lbdp1+lbdp2,clbdp+kappa)
+                 do lcp=lcpmin,lcpmax,2
+                    if ((abs(lc-ij).le.lcp).and.(lcp.le.lc+ij)) then
+                       sumb=sumb+(2*lc+1)*(2*lcp+1)&
+                            * thrj1 &
+                            * thrj(lbdp1,lbdp2,lcp,0,0,0) &
+                            * thrj2 &
+                            * thrj(lcp,clbdp,kappa,0,0,0) &
+                            * sixj(clbd,clbdp,ij,lcp,lc,kappa) &
+                            * ninej(la,lb,ij,lbd1,lbd2,lc,lbdp1,lbdp2,lcp)
+                    endif
+                 enddo
+              enddo
+              cc=sgn(lbd1+kappa+lb)*(2*ij+1)*(2*kappa+1)&
+                   *(2*clbd+1)*(2*clbdp+1)*bb*sumb
+              if (cc .ne. 0.0D0) then
+                lbd1_p_lbd2 = lbd1 + lbd2
+                rhotb(:,ix)=rhotb(:,ix)+cc*rr(1:nr)**(lbd1_p_lbd2) &
+                      * dpowi(raa, lbdp1) * dpowi(rbb, lbdp2)*fval(:,kappa)
+              endif
+           enddo
+        enddo
+     enddo
+  enddo
+  
+  !_t2(tt(4))
+  !write(6,*) __FILE__, __LINE__, tt(1:4)
+ 
+  _dealloc(fval)
+  _dealloc(plval)
+  
+  return
+end subroutine !prdred
 
 
 !

@@ -108,27 +108,24 @@ _t1
 _t2(tthr(1))  
   if(lready) return;  
 !  write(6,*) __FILE__, __LINE__, sum(rhotb)
-
-_t1  
+ 
   call comp_sph_bes_trans_expansions(a, m2nf, ff2)
-_t2(tthr(2))
-_t1  
+_t2(tthr(2)) 
   call diag_metric(a, m2nf, ff2, evals)
 _t2(tthr(3))  
-_t1
+
   call comp_domiprod_expansions(a, m2nf, evals, ff2)
 _t2(tthr(4))
 
-_t1  
   call comp_vertex_rot_coord_sys(a, pair_info, oo2num, m2nf, rf_ls2so, evals, vertex_real2)
 _t2(tthr(5))  
-_t1  
+
   call transform_vertex_cmplx2real(a, pair_info, m2nf, rf_ls2so, vertex_real2, vertex_cmplx2)
 _t2(tthr(6))  
-_t1  
+
   vertex_real2(:,:,:,:,1) = real(vertex_cmplx2(:,:,:,:,2),8)
 _t2(tthr(7))  
-_t1  
+
   call rotate_real_vertex(a, pair_info, rf_ls2so, vertex_real2, real_wigner )
 _t2(tthr(8))
   
@@ -597,13 +594,15 @@ end subroutine ! comp_sph_bes_trans_expansions
 !
 !
 subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, rhotb)
-  use m_prod_basis_param, only : get_jcutoff, get_GL_ord_bilocal, get_GL_pcs_bilocal
+  use m_prod_basis_param, only : get_jcutoff, get_GL_ord_bilocal
   use m_orb_rspace_type, only : get_rho_min_jt, get_dr_jt
   use m_interpolation, only : find
-  use m_prod_talman, only : prdred
+  use m_prod_talman, only : prdred, all_interp_coeffs, prdred_all_interp_coeffs
   use m_thrj_nobuf, only : thrj
   use m_pair_info, only : pair_info_t, get_rf_ls2so
   use m_biloc_aux, only : biloc_aux_t  
+  use m_numint, only : gl_knts, gl_wgts
+
   implicit none
   !! external
   type(biloc_aux_t), intent(in) :: a
@@ -619,13 +618,13 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
   
   !! internal
   integer :: sp(2), mu1, mu2, j1, j2, jcutoff, nr, ix, j, c1, c2, jmx12, no(2), mu!, k
-  integer :: clbd, lbd, nterm, ord, pcs, o1, o2, m1, m2, m, num, irc, nrf(2), jmax(2)
+  integer :: clbd, lbd, nterm, ord, o1, o2, m1, m2, m, num, irc, nrf(2), jmax(2)
   integer :: rf1, rf2
   integer :: ls ! L[ocal] S[pecie] : i.e. 1 or 2
   integer :: rf ! R[adial] F[unction] : i.e. a pointer in the list of radial functions (multipletts)
   real(8) :: rc2_new, trans_vec(3), d12, rcuts(2), wghts(2)
   real(8) :: Ra(3), Rb(3), rho_min_jt, dr_jt, tj1, tj2, pi, fact_z1
-  real(8), allocatable :: FFr(:,:)
+  real(8), allocatable :: FFr(:,:), xgla(:), wgla(:), ijxr2ck(:,:,:,:)
   integer, allocatable :: jtb(:), clbdtb(:), lbdtb(:)
   real(8), parameter :: zerovec(3) = (/0.0D0, 0.0D0, 0.0D0/);
   
@@ -647,9 +646,6 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
   center = inf%coords(1:3,1) + (1-fact_z1)* trans_vec
 
   nr = a%nr
-  ord = get_GL_ord_bilocal(a%pb_p)
-  pcs = get_GL_pcs_bilocal(a%pb_p)
-
   rho_min_jt = get_rho_min_jt(a%orb_a)
   dr_jt = get_dr_jt(a%orb_a)
   nrf(1:2) = inf%ls2nrf(1:2)
@@ -712,11 +708,22 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
   allocate(jtb(a%nterm_max))
   allocate(clbdtb(a%nterm_max))
   allocate(lbdtb(a%nterm_max))
-    
+
+  Ra = [ 0.0D0, 0.0D0, -d12*(1D0-fact_z1) ]
+  Rb = [ 0.0D0, 0.0D0,  d12*(fact_z1)     ]
+
+  ord = get_GL_ord_bilocal(a%pb_p)  
+  allocate(xgla(ord))
+  allocate(wgla(ord))
+  allocate(ijxr2ck(7,2,ord,a%nr))
+  call GL_knts(xgla, -1.0D0, 1.0D0, ord, 1)
+  call GL_wgts(wgla, -1.0D0, 1.0D0, ord, 1)
+  call all_interp_coeffs(ra,rb,zerovec,a%rr,nr,xgla,ord,ijxr2ck)
+  
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   !! Orbitale fuer Atom_1  und  Atom_2 - um r=0 entwickeln. Konvention:  1: (0,0,-d12/2) 2: (0,0,d12/2) !!
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  ff2(:,:,:,:,1) = 0.0D0
+  ff2(:,:,:,:,1) = 0
 
   m2nf = 0;
   oo2num = -999
@@ -732,17 +739,21 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
   
       !! Compute the X_{j Lambda Lambda'}(r, R, alpha)
       call init_jt_aux(j1,j2,jcutoff, nterm,jtb,clbdtb,lbdtb)
-      Ra = (/ 0.0D0, 0.0D0, -d12*(1D0-fact_z1)/);
-      Rb = (/ 0.0D0, 0.0D0,  d12*(fact_z1)/);
 
 !      write(6,*) __FILE__, __LINE__, rf1, rf2, &
 !        sum(a%psi_log(1:nr,mu2,sp(2))), sum(a%psi_log(1:nr,mu1,sp(1)))
 
       rhotb = 0
-      call prdred( &
+!      call prdred( &
+!        a%psi_log(1:nr,mu2,sp(2)),j2,Rb,  a%psi_log(1:nr,mu1,sp(1)),j1,Ra, &
+!        zerovec, jcutoff, rhotb, a%rr, nr, jtb, clbdtb, lbdtb, nterm, &
+!        xgla, wgla, ord, rho_min_jt, dr_jt);
+
+      call prdred_all_interp_coeffs( &
         a%psi_log(1:nr,mu2,sp(2)),j2,Rb,  a%psi_log(1:nr,mu1,sp(1)),j1,Ra, &
         zerovec, jcutoff, rhotb, a%rr, nr, jtb, clbdtb, lbdtb, nterm, &
-        ord, pcs, rho_min_jt, dr_jt);
+        xgla, wgla, ord, ijxr2ck)
+
       !! END of Compute the X_{j Lambda Lambda'}(r, R, alpha)
       
 !      write(6,*) __FILE__, __LINE__
@@ -835,6 +846,9 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
   _dealloc(jtb)
   _dealloc(clbdtb)
   _dealloc(lbdtb)
+  _dealloc(xgla)
+  _dealloc(wgla)
+  _dealloc(ijxr2ck)
 
   
 end subroutine !comp_expansion 
