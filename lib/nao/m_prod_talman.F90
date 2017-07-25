@@ -218,6 +218,22 @@ subroutine all_interp_coeffs(ra,rb,rcen,rr,nr,xgla,ord,ijxr2ck)
   
 end subroutine ! all_interp_coeffs
 
+!!
+!!
+!!
+!subroutine all_legendre_poly(xgla,ord,xj2p)
+!  implicit none
+!  integer(c_int), intent(in) :: ord
+!  real(c_double), intent(in) :: xgla(ord)
+  
+
+!  plval(1:ord,0)=1.D0
+!  plval(1:ord,1)=xgla(1:ord)
+!  do kappa=1,2*lbdmxa+ijmx-1
+!    plval(:,kappa+1)=((2*kappa+1)*xgla*plval(:,kappa)-kappa*plval(:,kappa-1))/(kappa+1)
+!  end do
+
+!end subroutine ! all_legendre_poly
 
 !
 !
