@@ -32,6 +32,7 @@ module m_biloc_aux
     integer, pointer :: mu_sp2start_ao(:,:) =>null()
     integer, pointer :: sp2nmult(:) =>null()
     real(8), pointer :: psi_log(:,:,:) =>null()
+    real(8), pointer :: psi_log_rl(:,:,:) =>null()
     real(8), pointer :: mu_sp2rcut(:,:) =>null()
     
     integer :: nr = -999
@@ -60,7 +61,7 @@ subroutine init_biloc_aux(sv, pb_p, para, orb_a, a)
   use m_system_vars, only : get_norbs_max, get_jmx
   use m_system_vars, only : get_psi_log_ptr, get_sp2nmult_ptr, get_mu_sp2j_ptr, get_nr
   use m_system_vars, only : get_rr_ptr, get_pp_ptr, get_sp2norbs
-  use m_system_vars, only : get_mu_sp2rcut_ptr
+  use m_system_vars, only : get_mu_sp2rcut_ptr, get_psi_log_rl_ptr
   use m_orb_rspace_type, only : get_mu_sp2start_ao_ptr
   use m_prod_basis_param, only : get_jcutoff, get_metric_type, get_bilocal_center
   use m_prod_basis_param, only : get_bilocal_center_coeff, get_bilocal_center_pow
@@ -90,6 +91,7 @@ subroutine init_biloc_aux(sv, pb_p, para, orb_a, a)
   a%mu_sp2j=> get_mu_sp2j_ptr(sv)
   a%sp2nmult => get_sp2nmult_ptr(sv)
   a%psi_log => get_psi_log_ptr(sv)
+  a%psi_log_rl => get_psi_log_rl_ptr(sv)
   a%mu_sp2rcut => get_mu_sp2rcut_ptr(sv)
   
           

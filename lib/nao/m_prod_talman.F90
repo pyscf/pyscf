@@ -222,28 +222,28 @@ end subroutine ! all_interp_coeffs
 !
 !
 !
-subroutine prdred_all_interp_coeffs(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb,nterm,xgla,wgla,ord,ijxr2ck) &
+subroutine prdred_all_interp_coeffs(ya,la,ra,yb,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb,nterm,xgla,wgla,ord,ijxr2ck) &
   bind(c, name='prdred_all_interp_coeffs')
   use m_fact, only : fac, sgn
   use m_precision, only : blas_int
   implicit none
   !! external
   integer(c_int), intent(in)  :: nr, nterm,la,lb,ord
-  real(c_double), intent(in)  :: phia(nr),phib(nr),rr(nr),ra(3),rb(3),rcen(3)
+  real(c_double), intent(in)  :: ya(nr),yb(nr) ! radial orbitals / rr^l
+  real(c_double), intent(in)  :: rr(nr),ra(3),rb(3),rcen(3)
   integer(c_int), intent(in)  :: lbdtb(nterm),clbdtb(nterm),lbdmxa,jtb(nterm)
   real(c_double), intent(in)  :: xgla(ord), wgla(ord)
   real(c_double), intent(in)  :: ijxr2ck(7,2,ord,nr)
   real(c_double), intent(inout) :: rhotb(nr,nterm)
   
   !! internal
-  real(8) :: ya(nr), yb(nr)
+  real(8) :: yz(ord)
   real(8) :: raa,rbb,f1,f2,sumb,aa,bb,cc,thrj1,thrj2
   real(8) :: t1,t2,tt(9)
   integer(blas_int) :: k1,k2
   integer :: ir,ix,ijmx,ij,clbd,kappa,kpmax,igla, lbd1_p_lbd2
   integer :: lbd1,lbdp1,lbd2,lbdp2,lc,lcmin,lcmax,lcp,lcpmin,lcpmax,clbdp
   real(8), allocatable :: plval(:,:), fval(:,:)
-  real(8) :: yz(ord)
   real(8), external :: ddot
 
 !     write(6,*) 'prdred', lbdmxa, 2*lbdmxa+la+lb
@@ -260,8 +260,6 @@ subroutine prdred_all_interp_coeffs(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,n
   do kappa=1,2*lbdmxa+ijmx-1
     plval(:,kappa+1)=((2*kappa+1)*xgla*plval(:,kappa)-kappa*plval(:,kappa-1))/(kappa+1)
   end do
-  ya=phia/rr**la
-  yb=phib/rr**lb
 
   _t2(tt(1))
   

@@ -750,7 +750,7 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
 !        xgla, wgla, ord, rho_min_jt, dr_jt);
 
       call prdred_all_interp_coeffs( &
-        a%psi_log(1:nr,mu2,sp(2)),j2,Rb,  a%psi_log(1:nr,mu1,sp(1)),j1,Ra, &
+        a%psi_log_rl(1:nr,mu2,sp(2)),j2,Rb,  a%psi_log_rl(1:nr,mu1,sp(1)),j1,Ra, &
         zerovec, jcutoff, rhotb, a%rr, nr, jtb, clbdtb, lbdtb, nterm, &
         xgla, wgla, ord, ijxr2ck)
 

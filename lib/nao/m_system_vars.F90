@@ -395,6 +395,22 @@ end function ! get_psi_log_ptr
 !
 !
 !
+function get_psi_log_rl_ptr(sv) result(ptr)
+  implicit none
+  type(system_vars_t), intent(in), target :: sv
+  real(8), pointer :: ptr(:,:,:)
+  !! internal
+  integer :: nsp
+  nsp = get_nspecies(sv)
+  if(.not. allocated(sv%psi_log_rl)) _die('!psi_log_rl')
+  if(size(sv%psi_log_rl,3)/=nsp) _die('? size3')
+  ptr => sv%psi_log_rl
+end function ! get_psi_log_rl_ptr
+
+
+!
+!
+!
 function get_atom2sfo_ptr(sv) result(ptr)
   use m_uc_skeleton, only : get_atom2sfo_ptr_uc=>get_atom2sfo_ptr
   implicit none
