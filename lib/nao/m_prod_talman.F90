@@ -267,6 +267,9 @@ subroutine prdred_all_interp_coeffs(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,n
   
   raa=sqrt(sum((ra-rcen)**2))
   rbb=sqrt(sum((rb-rcen)**2))
+  kpmax=0
+  if (raa+rbb .gt. 1.0d-5) kpmax=2*lbdmxa+ijmx
+
   fval=0
   do ir=1,nr
     do igla=1,ord
@@ -282,9 +285,8 @@ subroutine prdred_all_interp_coeffs(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,n
       
       yz(igla)=f1*f2
     enddo
-    kpmax=0
-    if (raa+rbb .gt. 1.0d-5) kpmax=2*lbdmxa+ijmx
-    do kappa=0,kpmax; fval(ir,kappa)=0.5d0*sum(plval(:,kappa)*yz*wgla); enddo
+    yz = yz*wgla
+    do kappa=0,kpmax; fval(ir,kappa)=0.5d0*dot_product(plval(:,kappa), yz); enddo
   enddo
 
   _t2(tt(2))
