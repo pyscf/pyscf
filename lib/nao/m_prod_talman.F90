@@ -286,8 +286,8 @@ subroutine prdred_all_interp_coeffs(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,n
       yz(igla)=f1*f2
     enddo
     yz = yz*wgla
-    call DGEMV('T', ord, kpmax+1,0.5d0,plval,ord,yz,1,0d0,fval(ir,0),nr)
-    !do kappa=0,kpmax; fval(ir,kappa)=0.5d0*dot_product(plval(:,kappa), yz); enddo
+    !call DGEMV('T', ord, kpmax+1,0.5d0,plval,ord,yz,1,0d0,fval(ir,0),nr)
+    do kappa=0,kpmax; fval(ir,kappa)=0.5d0*dot_product(plval(:,kappa), yz); enddo
   enddo
 
   _t2(tt(2))
