@@ -164,11 +164,8 @@ subroutine read_siesta_hsx(fname, force_basis_type, hsx)
 
   !! Fill the columns for each row index
   allocate(hsx%col_ind(hsx%nnz))
-  if(.not. allocated(iaux)) then
-    allocate(iaux(hsx%norbs_sc))
-  else
-    if(size(iaux)<hsx%norbs_sc) _die('!iaux')  
-  endif
+  _dealloc(iaux)
+  allocate(iaux(hsx%norbs_sc))
   
   do i=1, hsx%norbs
     if (hsx%row_ptr(i+1)-hsx%row_ptr(i)/=row2nnz(i)) then

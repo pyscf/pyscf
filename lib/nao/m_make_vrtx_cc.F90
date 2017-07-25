@@ -142,13 +142,15 @@ subroutine make_vrtx_cc(a, nbp, bp2info, dp_a, pb, iv_in)
       ff2, evals, vertex_real2, lready, rcut, center, oo2num, m2nf, &
       vertex_cmplx2, rhotb, ttt)
     _t2(tt(1))  
-    _t1
-    !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
+
+    _t1    
     call init_bpair_functs_vrtx(a, bp2info(ibp), &
       m2nf, evals, ff2, vertex_real2, lready, rcut, center, dp_a, &
       fmm_mem, pb%sp_biloc2vertex(ibp))
     _t2(tt(2))  
-      
+    
+    !write(6,*) __FILE__, __LINE__, ibp, sum(pb%sp_biloc2vertex(ibp)%vertex)
+
     !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
     pb%book_dp(pair)%top = -1
     pb%book_dp(pair)%spp = -999
@@ -243,7 +245,7 @@ subroutine make_vrtx_cc(a, nbp, bp2info, dp_a, pb, iv_in)
 !    write(6,*) __FILE__, __LINE__, nc, npre, ic2book(:)%ic
 !    write(6,'(a,i5,3x,2i8,3x,6f9.2)')  __FILE__, __LINE__, ibp, nbp, tt(1:6)
     
-  enddo
+  enddo ! ibp
   !$OMP END DO
   !$OMP CRITICAL
     !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__

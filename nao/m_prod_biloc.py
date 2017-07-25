@@ -8,10 +8,10 @@ class prod_biloc_c():
   Holder of bilocal product vertices and conversion coefficients.
   Args:
     atoms : atom pair (atom indices)
-    vrtx : dominant product vertex coefficients
+    vrtx : dominant product vertex coefficients: product,orb1,orb0
     cc2a : contributing center -> atom index
-    cc2a : contributing center -> start of the local product's counting
-    cc  : conversion coefficients
+    cc2s : contributing center -> start of the local product's counting
+    cc   : conversion coefficients: product, atom-centered product
   Returns:
     structure with these fields
   '''

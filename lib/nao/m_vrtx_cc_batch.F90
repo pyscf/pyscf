@@ -1,16 +1,11 @@
 module m_vrtx_cc_batch
 
 #include "m_define_macro.F90" 
-  use m_precision, only : blas_int
   use m_die, only : die
-  use m_warn, only : warn
   use iso_c_binding, only: c_double, c_int64_t
-  !use m_timing, only : get_cdatetime
   
   implicit none
   private die
-  private warn
-  !private get_cdatetime
 
   contains
 
@@ -21,19 +16,10 @@ subroutine vrtx_cc_batch(npairs,p2srncc,ld,p2ndp) bind(c, name='vrtx_cc_batch')
   use m_pb_libnao, only : pb
   use m_dp_aux_libnao, only : dp_a
   use m_biloc_aux_libnao, only : a
-  use m_bilocal_vertex, only : make_bilocal_vertex_rf
-  use m_init_bpair_functs_vrtx, only : init_bpair_functs_vrtx
   use m_system_vars, only : get_natoms  
-  use m_prod_basis_list, only : constr_clist_fini  
-  use m_book_pb, only : book_pb_t
-  use m_tci_ac_dp, only : tci_ac_dp
-  use m_tci_ac_ac, only : tci_ac_ac
-  use m_tci_ac_ac_cpy, only : tci_ac_ac_cpy
-  use m_prod_basis_type, only : get_i2s
-  use m_pb_reexpr_comm, only : init_counting_fini
-  use m_apair_put, only : apair_put
   use m_pair_info, only : pair_info_t
   use m_init_pair_info_array, only : init_pair_info_array
+  use m_precision, only : blas_int
   use m_make_vrtx_cc, only : make_vrtx_cc
   use m_make_book_dp_longer, only : make_book_dp_longer
   implicit none
@@ -90,6 +76,7 @@ end subroutine !vrtx_cc_batch
 subroutine get_vrtx_cc_batch(ps_0b,pf_0b,dout,nout) bind(c, name='get_vrtx_cc_batch')
   use m_pb_libnao, only : pb
   use m_system_vars, only : get_natoms
+  use m_precision, only : blas_int
 
   implicit none
   !! external
@@ -99,23 +86,24 @@ subroutine get_vrtx_cc_batch(ps_0b,pf_0b,dout,nout) bind(c, name='get_vrtx_cc_ba
   real(c_double), intent(inout) :: dout(nout) ! data buffer
 
   !! internal 
-  integer(c_int64_t) :: f,s,n,p,top,spp,natoms
-  
+  integer(c_int64_t) :: f,s,p,top,spp,natoms,ibook
+  integer(blas_int) :: n
+    
   natoms = get_natoms(pb%sv)
 
   f = 0
   do p=ps_0b+1,pf_0b
-    top = pb%book_dp(p+natoms)%top
+    ibook = p+natoms
+    top = pb%book_dp(ibook)%top
     if(top/=2) _die('top/=2')
-    spp = pb%book_dp(p+natoms)%spp
+    spp = pb%book_dp(ibook)%spp
     if (.not. allocated(pb%sp_biloc2vertex(spp)%vertex)) cycle
     s = f + 1; n = size(pb%sp_biloc2vertex(spp)%vertex); f = s + n - 1;
     if(f>nout) _die('f>nout')
     call dcopy(n, pb%sp_biloc2vertex(spp)%vertex,1, dout(s),1)
-
-    s = f + 1; n = size(pb%coeffs(p)%coeffs_ac_dp); f = s + n - 1;
+    s = f + 1; n = size(pb%coeffs(ibook)%coeffs_ac_dp); f = s + n - 1;
     if(f>nout) _die('f>nout')
-    call dcopy(n, pb%coeffs(p)%coeffs_ac_dp,1, dout(s),1)
+    call dcopy(n, pb%coeffs(ibook)%coeffs_ac_dp,1, dout(s),1)
   enddo ! p
   
 end subroutine !get_vrtx_cc_batch

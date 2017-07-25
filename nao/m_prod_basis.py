@@ -136,12 +136,12 @@ class prod_basis_c():
     for srncc,ndp,npac,[a1,a2] in zip(p2srncc,p2ndp,p2npac,p2atoms):
       if ndp<1 : continue
       sp1,sp2,ncc = srncc[0],srncc[1],srncc[8]
-      icc2a = srncc[9:9+ncc]
-      nnn = np.array((ndp,sp2norbs[sp1],sp2norbs[sp2]), dtype=int)
-      nnc = np.array([ndp,npac], dtype=int)
+      icc2a = array(srncc[9:9+ncc], dtype=int64)
+      nnn = np.array((ndp,sp2norbs[sp2],sp2norbs[sp1]), dtype=int64)
+      nnc = np.array([ndp,npac], dtype=int64)
       s = f;  f=s+np.prod(nnn); vrtx  = dout[s:f].reshape(nnn)
       s = f;  f=s+np.prod(nnc); ccoe  = dout[s:f].reshape(nnc)
-      icc2s = np.zeros(len(icc2a)+1, dtype=np.int64)
+      icc2s = np.zeros(len(icc2a)+1, dtype=int64)
       for icc,a in enumerate(icc2a): icc2s[icc+1] = icc2s[icc] + self.prod_log.sp2norbs[sv.atom2sp[a]]
       pbiloc = prod_biloc_c(atoms=array([a2,a1]),vrtx=vrtx,cc2a=icc2a,cc2s=icc2s,cc=ccoe)
       self.bp2info.append(pbiloc)

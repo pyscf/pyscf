@@ -78,10 +78,11 @@ subroutine vrtx_cc_apair(sp12_0b,rc12,lscc_0b,ncc,dout,nout) bind(c, name='vrtx_
   
   call make_bilocal_vertex_rf(a, bp2info, ff2, evals, vertex_real2, lready, rcut, center, oo2num, m2nf, &
     vertex_cmplx2, rhotb, ttt)
-
-  !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
+  
   call init_bpair_functs_vrtx(a, bp2info, m2nf, evals, ff2, &
     vertex_real2, lready, rcut, center, dp_a, fmm_mem, pb%sp_biloc2vertex(ibp))
+
+  !write(6,*) __FILE__, __LINE__, ibp, sum(pb%sp_biloc2vertex(ibp)%vertex)
 
   !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
   pb%book_dp(pair)%top = -1
