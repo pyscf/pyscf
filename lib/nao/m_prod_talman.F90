@@ -421,7 +421,7 @@ pure subroutine prdred_all_interp_values(xrj2f1,la,ra,xrj2f2,lb,rb,rcen,lbdmxa,r
               lcmax=min(lbd1+lbd2,clbd+kappa)
               do lc=lcmin,lcmax,2
                  thrj1 = thrj(lbd1,lbd2,lc,0,0,0)*thrj(lc,clbd,kappa,0,0,0)
-                 if(thrj1<1d-15) cycle
+                 
                  lcpmin=max(abs(lbdp1-lbdp2),abs(clbdp-kappa))
                  lcpmax=min(lbdp1+lbdp2,clbdp+kappa)
                  do lcp=lcpmin,lcpmax,2
