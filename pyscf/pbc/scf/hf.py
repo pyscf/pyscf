@@ -278,8 +278,15 @@ class RHF(hf.RHF):
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'kpt = %s', self.kpt)
         logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
+        if isinstance(self.exxdiv, str) and self.exxdiv.lower() == 'ewald':
+            madelung = tools.pbc.madelung(self.cell, [self.kpt])
+            logger.info(self, '    Total energy shift due to Ewald probe charge'
+                        ' = -1/2 * Nelec*madelung/cell.vol = %.12g',
+                        madelung*self.cell.nelectron * -.5)
+            logger.debug(self, '    madelung = %s', madelung)
         logger.info(self, 'DF object = %s', self.with_df)
         self.with_df.dump_flags()
+        return self
 
     def get_hcore(self, cell=None, kpt=None):
         if cell is None: cell = self.cell
