@@ -118,7 +118,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
 
     if fock is None:
         dm = mf.make_rdm1(mo_coeff, mo_occ)
-        fock = mf.get_hcore() + mf.get_jk(mol, dm)
+        fock = mf.get_hcore() + mf.get_veff(mf.mol, dm)
     coreidx = mo_occ == 2
     viridx = mo_occ == 0
     openidx = ~(coreidx | viridx)
@@ -704,7 +704,7 @@ class ROHF(rohf.ROHF):
     def canonicalize(self, mo_coeff, mo_occ, fock=None):
         dm = self.make_rdm1(mo_coeff, mo_occ)
         if fock is None:
-            fock = self.get_hcore() + self.get_jk(mol, dm)
+            fock = self.get_hcore() + self.get_veff(self.mol, dm)
         if isinstance(fock, numpy.ndarray) and fock.ndim == 3:
             fock = rohf.get_roothaan_fock(fock, dm, self.get_ovlp())
         return canonicalize(self, mo_coeff, mo_occ, fock)

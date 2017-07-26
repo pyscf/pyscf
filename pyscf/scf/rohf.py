@@ -278,7 +278,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     if fock is None:
-        fock = mf.get_hcore() + mf.get_jk(mol, dm)
+        fock = mf.get_hcore() + mf.get_veff(mf.mol, dm)
     if isinstance(fock, numpy.ndarray) and fock.ndim == 3:
         fock = get_roothaan_fock(fock, dm, mf.get_ovlp())
     return hf.canonicalize(mf, mo_coeff, mo_occ, fock)
