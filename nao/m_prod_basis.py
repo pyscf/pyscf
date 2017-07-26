@@ -93,7 +93,8 @@ class prod_basis_c():
     """ Talman's procedure should be working well with Pseudo-Potential starting point."""
     from pyscf.nao import prod_log_c
     from pyscf.nao.m_prod_biloc import prod_biloc_c
-    
+
+    t1 = timer()
     self.init_inp_param_prod_log_dp(sv, **kvargs)
     data = self.chain_data()
     libnao.init_vrtx_cc_batch(data.ctypes.data_as(POINTER(c_double)), c_int64(len(data)))
@@ -116,10 +117,13 @@ class prod_basis_c():
     p2srncc_cp = np.require(  np.asarray(p2srncc), requirements='C')
     npairs = p2srncc_cp.shape[0]
     ld = p2srncc_cp.shape[1]
+    t2 = timer(); print('call vrtx_cc_batch ', t2-t1, 'npairs ', npairs); t1=timer()
+    
     libnao.vrtx_cc_batch( c_int64(npairs), p2srncc_cp.ctypes.data_as(POINTER(c_double)), 
       c_int64(ld), p2ndp.ctypes.data_as(POINTER(c_int64)))
 
-
+    t2 = timer(); print('after vrtx_cc_batch ', t2-t1); t1=timer()
+    
     self.bp2info = [] # going to be indices of atoms, list of contributing centres, conversion coefficients
 
     nout = 0

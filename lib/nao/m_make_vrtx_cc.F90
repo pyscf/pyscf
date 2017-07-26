@@ -134,7 +134,7 @@ subroutine make_vrtx_cc(a, nbp, bp2info, dp_a, pb, iv_in)
   ttt = 0
   tt = 0
   tt1 = 0
-  !$OMP DO 
+  !$OMP DO SCHEDULE(DYNAMIC)
   do ibp=1, nbp
     pair = ibp + natoms
 
@@ -240,7 +240,7 @@ subroutine make_vrtx_cc(a, nbp, bp2info, dp_a, pb, iv_in)
     _t2(tt(6))
     !! END of Reexpressing coefficients are computed and stored
     
-    !write(6,'(a,i5,3x,i8,3x,6f9.3,3x,6f9.3,3x,3f9.3)')  __FILE__, __LINE__, ibp, tt(1:6), ttt(1:6), tt1(1:3)
+    !write(6,'(a,i5,3x,i8,3x,6f9.3,3x,6f9.3,3x,3f9.3)')  __FILE__, __LINE__, ibp, tt(1:6), ttt(1:6)
     
   enddo ! ibp
   !$OMP END DO
