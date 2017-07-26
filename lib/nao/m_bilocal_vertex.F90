@@ -597,7 +597,7 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
   use m_prod_basis_param, only : get_jcutoff, get_GL_ord_bilocal
   use m_orb_rspace_type, only : get_rho_min_jt, get_dr_jt
   use m_interpolation, only : find
-  use m_prod_talman, only : prdred, all_interp_coeffs, prdred_all_interp_coeffs, all_interp_values, prdred_all_interp_values
+  use m_prod_talman, only : prdred, all_interp_coeffs, prdred_all_interp_coeffs, all_interp_values, prdred_all_interp_values, all_interp_values1, prdred_all_interp_values1 
   use m_thrj_nobuf, only : thrj
   use m_pair_info, only : pair_info_t, get_rf_ls2so
   use m_biloc_aux, only : biloc_aux_t  
@@ -625,9 +625,9 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
   real(8) :: rc2_new, trans_vec(3), d12, rcuts(2), wghts(2)
 !  real(8) :: t1, t2
   real(8) :: Ra(3), Rb(3), rho_min_jt, dr_jt, tj1, tj2, pi, fact_z1
-  real(8), allocatable :: FFr(:,:), ijxr2ck(:,:,:,:), fval(:,:), yz(:)
-  real(8), allocatable, target :: xrjm2f1(:,:,:,:), xrjm2f2_data(:,:,:,:)
-  real(8), pointer :: xrjm2f2(:,:,:,:)
+  real(8), allocatable :: FFr(:,:), ixrj2ck(:,:,:,:), fval(:,:), yz(:)
+  real(8), allocatable :: xrjm2f1(:,:,:,:), xrjm2f2(:,:,:,:)
+  real(8), allocatable :: xrm2f1(:,:,:), xrm2f2(:,:,:)
   integer, allocatable :: jtb(:), clbdtb(:), lbdtb(:)
   real(8), parameter :: zerovec(3) = (/0.0D0, 0.0D0, 0.0D0/);
   
@@ -716,19 +716,19 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
   Ra = [ 0.0D0, 0.0D0, -d12*(1D0-fact_z1) ]
   Rb = [ 0.0D0, 0.0D0,  d12*(fact_z1)     ]
 
-  allocate(ijxr2ck(7,2,a%ord,a%nr))
-  call all_interp_coeffs(Ra,Rb,zerovec,a%rr,nr,a%xgla,a%sqrt_wgla,a%ord,ijxr2ck)
+  allocate(ixrj2ck(7,a%ord,a%nr,2))
+  call all_interp_coeffs(Ra,Rb,zerovec,a%rr,nr,a%xgla,a%sqrt_wgla,a%ord,ixrj2ck)
   
-  allocate(xrjm2f1(a%ord,a%nr,2,nrf(1)))
-  call all_interp_values(a%psi_log_rl(:,1:nrf(1),sp(1)),nr,nrf(1), ijxr2ck, a%ord, xrjm2f1)
+  !allocate(xrjm2f1(a%ord,a%nr,2,nrf(1)))
+  !allocate(xrjm2f2(a%ord,a%nr,2,nrf(2)))
+  !call all_interp_values(a%psi_log_rl(:,1:nrf(1),sp(1)),nr,nrf(1), ixrj2ck, a%ord, xrjm2f1)
+  !call all_interp_values(a%psi_log_rl(:,1:nrf(2),sp(2)),nr,nrf(2), ixrj2ck, a%ord, xrjm2f2)
 
-  if(sp(1)==sp(2)) then
-    xrjm2f2 => xrjm2f1
-  else
-    allocate(xrjm2f2_data(a%ord,a%nr,2,nrf(2)))
-    xrjm2f2 => xrjm2f2_data
-    call all_interp_values(a%psi_log_rl(:,1:nrf(2),sp(2)),nr,nrf(2), ijxr2ck, a%ord, xrjm2f2)
-  endif
+  allocate(xrm2f1(a%ord,a%nr,nrf(1)))
+  allocate(xrm2f2(a%ord,a%nr,nrf(2)))
+  call all_interp_values1(a%psi_log_rl(:,1:nrf(1),sp(1)),nr,nrf(1), ixrj2ck(:,:,:,2), a%ord, xrm2f1)
+  call all_interp_values1(a%psi_log_rl(:,1:nrf(2),sp(2)),nr,nrf(2), ixrj2ck(:,:,:,1), a%ord, xrm2f2)
+
   
   allocate(fval(a%nr,0:2*(a%jcutoff+jmx12)))
   allocate(yz(a%ord))
@@ -768,10 +768,15 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
 !        a%ord, a%plval, a%jmax_pl, ijxr2ck)
       
 !      _t1
-      call prdred_all_interp_values(xrjm2f2(:,:,:,mu2),j2,Rb, xrjm2f1(:,:,:,mu1),j1,Ra, &
+!      call prdred_all_interp_values(xrjm2f2(:,:,:,mu2),j2,Rb, xrjm2f1(:,:,:,mu1),j1,Ra, &
+!        zerovec, jcutoff, rhotb, a%rr, nr, jtb, clbdtb, lbdtb, nterm, &
+!        a%ord, a%plval, a%jmax_pl, fval, yz)
+!      _t2(tt(2))  
+
+      call prdred_all_interp_values1(xrm2f2(:,:,mu2),j2,Rb, xrm2f1(:,:,mu1),j1,Ra, &
         zerovec, jcutoff, rhotb, a%rr, nr, jtb, clbdtb, lbdtb, nterm, &
         a%ord, a%plval, a%jmax_pl, fval, yz)
-!      _t2(tt(2))  
+
       !! END of Compute the X_{j Lambda Lambda'}(r, R, alpha)
       
 !      write(6,*) __FILE__, __LINE__
@@ -865,9 +870,9 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
   _dealloc(jtb)
   _dealloc(clbdtb)
   _dealloc(lbdtb)
-  _dealloc(ijxr2ck)
+  _dealloc(ixrj2ck)
   _dealloc(xrjm2f1)
-  _dealloc(xrjm2f2_data)
+  _dealloc(xrjm2f2)
   _dealloc(fval)
   _dealloc(yz)
 
