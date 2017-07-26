@@ -3,6 +3,7 @@
 
 sudo: required
 language: python
+group: deprecated-2017Q2
 
 git:
   depth: 3
@@ -15,25 +16,38 @@ virtualenv:
     system_site_packages: true
     
 before_install:
-    - sudo apt-get -qq install gcc 
-    - sudo apt-get -qq install gfortran
-    - sudo apt-get -qq install libblas-dev
-    - sudo apt-get -qq install liblapack-dev
-    - sudo apt-get -qq install libatlas-dev
-    - sudo apt-get -qq install libatlas-base-dev
-    - sudo apt-get -qq install python-h5py
-    - sudo apt-get -qq install python-nose
-    - sudo apt-get -qq install python-numpy
-    - sudo apt-get -qq install python-scipy
-    - sudo apt-get -qq install cmake
-    - sudo apt-get -qq install doxygen
+    - >
+      sudo apt-get -qq install 
+      gcc 
+      gfortran
+      libblas-dev
+      liblapack-dev
+      libatlas-dev
+      libatlas-base-dev
+      python-h5py
+      python-nose
+      python-nose-exclude
+      python-numpy
+      python-scipy
+      cmake
+      doxygen
+    
+install:
+    - > 
+      cd pyscf/lib &&
+      mkdir build &&
+      cd build &&
+      cmake .. &&
+      make &&
+      cd ../..
+
+before_script:
+      export PYTHONPATH=$(pwd):$PYTHONPATH
 
 script:
-     cd pyscf/lib &&
-     mkdir build &&
-     cd build &&
-     cmake .. &&
-     make &&
-     cd ../../.. &&
-     export PYTHONPATH=$PWD &&
-     find ./ -type f | grep test_ | xargs -I{} python {}
+    - >
+      nosetests -v -e ccsd_t -e pbc -e pyscf -e dmrgscf -e fciqmcscf -e icmpspt -e examples
+      -e test_bz
+      -e test_tdrks_grad
+      -e test_mc2step_4o4e
+      -e test_contract_ss

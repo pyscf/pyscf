@@ -53,10 +53,75 @@ For Mac OsX user, you may get an import error if your OsX version is
     Referenced from: xxx/pyscf/lib/libcgto.dylib
     Reason: unsafe use of relative rpath libcint.2.8.dylib in xxx/pyscf/lib/libao2mo.dylib with restricted binary
 
+This is caused by the RPATH 
 It can be fixed by running the script ``pyscf/lib/_runme_to_fix_dylib_osx10.11.sh`` in ``pyscf/lib``::
  
     cd pyscf/lib
     sh _runme_to_fix_dylib_osx10.11.sh
+
+
+.. note::
+
+  RPATH has been built in the dynamic library.  This may cause library loading
+  error on some systems.  You can run ``pyscf/lib/_runme_to_remove_rpath.sh`` to
+  remove the rpath code from the library head.  Another workaround is to set
+  ``-DCMAKE_SKIP_RPATH=1`` and ``-DCMAKE_MACOSX_RPATH=0`` in cmake command line.
+  When the RPATH was removed, you need to add ``pyscf/lib`` and
+  ``pyscf/lib/deps/lib`` in ``LD_LIBRARY_PATH``.
+
+
+Installation without network
+============================
+
+If you get problem to download the external libraries on your computer, you can
+manually build the libraries, as shown in the following instructions.  First,
+you need to install libcint, libxc or xcfun libraries.
+`libcint cint3 branch <https://github.com/sunqm/libcint/tree/cint3>`_
+and `xcfun stable-1.x branch <https://github.com/dftlibs/xcfun/tree/stable-1.x`_
+are required by PySCF.  They can be downloaded from github::
+
+    $ git clone https://github.com/sunqm/libcint.git
+    $ cd libcint
+    $ git checkout origin/cint3
+    $ cd .. && tar czf libcint.tar.gz libcint
+
+    $ git clone https://github.com/sunqm/xcfun.git
+    $ cd xcfun
+    $ git checkout origin/stable-1.x
+    $ cd .. && tar czf xcfun.tar.gz xcfun
+
+libxc-2.2.* can be found in http://octopus-code.org/wiki/Main_Page .
+Assuming ``/opt`` is the place where these libraries will be installed, these
+packages should be compiled with the flags::
+
+    $ tar xvzf libcint.tar.gz
+    $ cd libcint
+    $ mkdir build && cd build
+    $ cmake -DWITH_F12=1 -DWITH_RANGE_COULOMB=1 -DWITH_COULOMB_ERF=1 \
+        -DCMAKE_INSTALL_PREFIX:PATH=/opt -DCMAKE_INSTALL_LIBDIR:PATH=lib ..
+    $ make && make install
+
+    $ tar xvzf libxc-2.2.2.tar.gz
+    $ cd libxc-2.2.2
+    $ mkdir build && cd build
+    $ ../configure --prefix=/opt --libdir=/opt/lib --enable-shared --disable-fortran LIBS=-lm
+    $ make && make install
+
+    $ tar xvzf xcfun.tar.gz
+    $ cd xcfun
+    $ mkdir build && cd build
+    $ cmake -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1 -DXC_MAX_ORDER=3 -DXCFUN_ENABLE_TESTS=0 \
+        -DCMAKE_INSTALL_PREFIX:PATH=/opt -DCMAKE_INSTALL_LIBDIR:PATH=lib ..
+    $ make && make install
+
+Next compile PySCF::
+
+    $ cd pyscf/pyscf/lib
+    $ mkdir build && cd build
+    $ cmake -DBUILD_LIBCINT=0 -DBUILD_LIBXC=0 -DBUILD_XCFUN=0 -DCMAKE_INSTALL_PREFIX:PATH=/opt ..
+    $ make
+
+Finally update the ``PYTHONPATH`` environment for Python interpreter.
 
 
 .. _installing_blas:

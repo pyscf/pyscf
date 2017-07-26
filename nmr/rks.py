@@ -1,1 +1,0 @@
-../dft/rks_nmr.py
