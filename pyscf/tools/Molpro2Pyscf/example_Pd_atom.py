@@ -1,3 +1,12 @@
+# TODO: By PySCF-1.5 release
+# 1. code style
+#   * Indent: 3 -> 4
+#   * Line wrap around 80 columns
+# 
+# 2. Move to pyscf/examples/tools
+#
+
+
 # Developed by Elvira Sayfutyarova:
 #  using wmme program provided by Gerald Knizia
 #

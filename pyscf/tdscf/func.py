@@ -1,3 +1,10 @@
+# TODO: refactor the code before adding to FEATURES list by PySCF-1.5 release
+# 1. code style
+#   * Indent: 8 -> 4
+#   * Function/method should be all lowercase
+#   * Use either double quote or single quote, not mix
+#
+
 import numpy as np
 
 

@@ -1,3 +1,19 @@
+# TODO: By PySCF-1.5 release
+# 1. code style
+#   * Indent space: 3 -> 4
+#   * Function/method should be all lowercase
+#   * Line wrap around 80 columns
+#   * Use either double quote or single quote, not mix
+# 
+# 2. Conventions required by PySCF
+#   * Use proper logger function for debug messages
+#   * Add attribute ._keys for sanity check
+#   * Class attributes should be all lowercase
+#   * Use .verbose to control print level
+# 
+# 3. Use proper functions provided by PySCF
+#
+
 #  This file is adapted with permission from the wmme program of Gerald Knizia.
 #  See http://sites.psu.edu/knizia/software/
 #====================================================

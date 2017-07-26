@@ -1,3 +1,37 @@
+# TODO: refactor the code before adding to FEATURES list by PySCF-1.5 release
+# 1. code style
+#   * Indent: 8 -> 4
+#   * The statement "from import *"
+#   * Change the statement "from tdfields import" to relative import or "from pyscf.tdscf.tdfields ..."
+#   * Avoid the circular import "from tdscf import *" which may depend on the PYTHONPATH
+#   * Class name should be capitalized
+#   * Constant should be all uppercase
+#   * Function/method should be all lowercase
+#   * Inherite class from object or lib.StreamObject
+#   * Remove the unused modules: ctypes, func, os, ...
+#   * Line wrap around 80 columns
+#   * Use either double quote or single quote, not mix
+#   * Avoid python builtin keyword: iter, time, ...
+#   * Use # instead of triple quotes for deprecated code
+# 
+# 2. Conventions required by PySCF
+#   * Class attributes should be immutable.
+#   * Class should not hold intermediate states.
+#   * Use proper logger function for debug messages
+#   * Suffix _ only be used for functions with side effect
+#   * Add attribute ._keys for sanity check
+#   * Meaningful return value for methods
+#   * Class attributes should be all lowercase
+#   * Use attributes or constants instead of the magic number like 10**-10
+#   * Use .verbose to control print level
+#   * Remove unused arguments in function definition
+# 
+# 3. Use proper functions provided by PySCF
+#   * Switch between df.incore and df.outcore according to system memory
+#   * Use mol.intor instead of mol.intor_by_shell
+#   * Use get_veff of scf object instead of get_vxc
+#
+
 import numpy as np
 import scipy, os, time
 import scipy.linalg

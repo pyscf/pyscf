@@ -1,3 +1,14 @@
+# TODO: By PySCF-1.5 release
+# 1. code style
+#   * Indent space: 3 -> 4
+#   * Function/method should be all lowercase
+#   * Line wrap around 80 columns
+#   * Use either double quote or single quote, not mix
+# 
+# 2. Use proper functions provided by PySCF
+#
+
+
 # Developed by Elvira Sayfutyarova:
 #  using wmme program provided by Gerald Knizia
 #
