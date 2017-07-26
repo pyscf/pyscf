@@ -4,10 +4,11 @@ import scipy.linalg
 from tdscf import *
 import func
 from pyscf import gto, dft, scf, ao2mo, df
+from pyscf.lib import logger
 from tdfields import *
 from cmath import *
 import ctypes
-
+import sys
 
 FsPerAu = 0.0241888
 
@@ -15,25 +16,22 @@ class tdscf:
         """
         A general TDSCF object.
         Other types of propagations may inherit from this.
-
-        By default it does
         """
         def __init__(self,the_scf_,prm=None,output = 'log.dat', prop_=True):
                 """
                 Args:
-                        the_scf an SCF object from pyscf (should probably take advantage of complex RKS already in PYSCF)
+                        the_scf_: rks object 
+                        prm: parameter (look at examples/tdscf how it is written)
+                        ouput: str of output filename
                 Returns:
                         Nothing.
                 """
-                #To be Sorted later
+                self.stdout = sys.stdout
+                self.verbose = 1 # for now (to use PYSCF's logger)
                 self.Enuc = the_scf_.energy_nuc()#the_scf_.e_tot - dft.rks.energy_elec(the_scf_,the_scf_.make_rdm1())[0]
                 self.eri3c = None
                 self.eri2c = None
                 self.n_aux = None
-                self.muxo = None
-                self.muyo = None
-                self.muzo = None
-                self.mu0 = None
                 self.hyb = the_scf_._numint.hybrid_coeff(the_scf_.xc, spin=(the_scf_.mol.spin>0)+1)
                 self.adiis = None
                 self.Exc = None
@@ -70,13 +68,13 @@ class tdscf:
                 start = time.time()
                 self.prop(output)
                 end = time.time()
-                print "Propagation time:", end - start
+                logger.log(self,'Propagation time: %f', end-start)
                 return
 
 
 
         def auxmol_set(self,auxbas = "weigend"):
-                print "GENERATING INTEGRALS"
+                logger.log(self,'GENERATING INTEGRAL')
                 auxmol = gto.Mole()
                 auxmol.atom = self.mol.atom
                 auxmol.basis = auxbas
@@ -87,7 +85,7 @@ class tdscf:
                 atm, bas, env = gto.conc_env(mol._atm, mol._bas, mol._env, auxmol._atm, auxmol._bas, auxmol._env)
                 eri3c = df.incore.aux_e1(mol, auxmol, intor='cint3c2e_sph', aosym='s1', comp=1 )
                 eri3c = eri3c.reshape(naux,nao,nao).T
-                print "ERI3C INTEGRALS GENERATED"
+                logger.log(self,'ERI3C INTEGRALS GENERATED')
                 eri2c = np.empty((naux,naux))
                 pk = 0
                 for k in range(mol.nbas, mol.nbas+auxmol.nbas):
@@ -99,7 +97,7 @@ class tdscf:
                                 eri2c[pk:pk+dk,pl:pl+dl] = buf
                                 pl += dl
                         pk += dk
-                print "ERI2C INTEGRALS GENERATED"
+                logger.log(self,'ERI2C INTEGRALS GENERATED')
                 self.eri3c = eri3c
                 self.eri2c = eri2c
                 RSinv = MatrixPower(eri2c,-0.5)
@@ -108,7 +106,7 @@ class tdscf:
 
                 self.S = self.the_scf.get_ovlp() # (ao X ao)
                 self.X = MatrixPower(self.S,-1./2.) # AO, LAO
-                print "BpqR GENERATED"
+                logger.log(self,'BpqR GENERATED')
 
                 return
 
@@ -199,22 +197,23 @@ class tdscf:
                 return rkmat
 
         def initialcondition(self,prm):
-                print '''
-                ===================================
-                |  Realtime TDSCF module          |
-                ===================================
-                | J. Parkhill, T. Nguyen          |
-                | J. Koh, J. Herr,  K. Yao        |
-                ===================================
-                | Refs: 10.1021/acs.jctc.5b00262  |
-                |       10.1063/1.4916822         |
-                ===================================
-                '''
+                
+                logger.log(self,'''
+                        ===================================
+                        |  Realtime TDSCF module          |
+                        ===================================
+                        | J. Parkhill, T. Nguyen          |
+                        | J. Koh, J. Herr,  K. Yao        |
+                        ===================================
+                        | Refs: 10.1021/acs.jctc.5b00262  |
+                        |       10.1063/1.4916822         |
+                        ===================================
+                        ''')
                 n_ao = self.n_ao = self.the_scf.make_rdm1().shape[0]
                 n_mo = self.n_mo = n_ao # should be fixed.
                 n_occ = self.n_occ = int(sum(self.the_scf.mo_occ)/2)
                 self.n_virt = self.n_mo - self.n_occ
-                print "n_ao:", n_ao, "n_mo:", n_mo, "n_occ:", n_occ
+                logger.log(self,'n_ao: %d       n_mo: %d        n_occ: %d', n_ao,n_mo,n_occ)
                 self.ReadParams(prm)
                 self.InitializeLiouvillian()
                 return
@@ -255,24 +254,24 @@ class tdscf:
                                         else:
                                                 self.params[s[0]] = float(s[1])
 
-                print "============================="
-                print "         Parameters"
-                print "============================="
-                print "Model:", self.params["Model"]
-                print "Method:", self.params["Method"]
-                print "dt:", self.params["dt"]
-                print "MaxIter:", self.params["MaxIter"]
-                print "ExDir:", self.params["ExDir"]
-                print "EyDir:", self.params["EyDir"]
-                print "EzDir:", self.params["EzDir"]
-                print "FieldAmplitude:", self.params["FieldAmplitude"]
-                print "FieldFreq:", self.params["FieldFreq"]
-                print "Tau:", self.params["Tau"]
-                print "tOn:", self.params["tOn"]
-                print "ApplyImpulse:", self.params["ApplyImpulse"]
-                print "ApplyCw:", self.params["ApplyCw"]
-                print "StatusEvery:", self.params["StatusEvery"]
-                print "=============================\n\n"
+                logger.log(self,"=============================")
+                logger.log(self,"         Parameters")
+                logger.log(self,"=============================")
+                logger.log(self,"Model: " + self.params["Model"])
+                logger.log(self,"Method: "+ self.params["Method"])
+                logger.log(self,"dt: %.2f", self.params["dt"])
+                logger.log(self,"MaxIter: %d", self.params["MaxIter"])
+                logger.log(self,"ExDir: %.2f", self.params["ExDir"])
+                logger.log(self,"EyDir: %.2f", self.params["EyDir"])
+                logger.log(self,"EzDir: %.2f", self.params["EzDir"])
+                logger.log(self,"FieldAmplitude: %.4f", self.params["FieldAmplitude"])
+                logger.log(self,"FieldFreq: %.4f", self.params["FieldFreq"])
+                logger.log(self,"Tau: %.2f", self.params["Tau"])
+                logger.log(self,"tOn: %.2f", self.params["tOn"])
+                logger.log(self,"ApplyImpulse: %d", self.params["ApplyImpulse"])
+                logger.log(self,"ApplyCw: %d", self.params["ApplyCw"])
+                logger.log(self,"StatusEvery: %d", self.params["StatusEvery"])
+                logger.log(self,"=============================\n\n")
 
                 return
 
@@ -318,24 +317,25 @@ class tdscf:
                         # Fill up the density in the MO basis and then Transform back
                         Pmo = 0.5*np.diag(self.the_scf.mo_occ).astype(complex)
                         Plao = TransMat(Pmo,self.V,-1)
-                        print "Ne", np.trace(Plao), np.trace(Pmo)
                         Eold = E
                         E = self.energy(Plao)
                         self.F = self.FockBuild(Plao,it)
                         err = abs(E-Eold)
-                        if (it%1 ==0):
-                                print "Iteration:", it,"; Energy:",E,"; Error =",err
+                        if (self.verbose > 1):
+                                logger.log(self, 'Ne: %f', np.trace(Pmo))
+                                logger.log(self, 'Iteration: %d         Energy: %.11f      Error = %.11f', it, E, err)
                         it += 1
                 Pmo = 0.5*np.diag(self.the_scf.mo_occ).astype(complex)
                 Plao = TransMat(Pmo,self.V,-1)
                 self.C = np.dot(self.X,self.V)
                 self.rho = TransMat(Plao,self.V)
                 self.rhoM12 = TransMat(Plao,self.V)
-                print "Ne", np.trace(Plao), np.trace(self.rho),
-                print "Energy:",E
-                print "Initial Fock Matrix(MO)\n", TransMat(self.F,self.V)
+                logger.log(self, 'Ne: %f', np.trace(Pmo))
+                logger.log(self, 'Converged Energy: %f', E)
+                #logger.log(self, 'Eigenvalues: %f',  self.eigs.real)
+                #print "Eigenvalues: ", self.eigs.real
                 end = time.time()
-                print "Initial Fock Built time:",end-start
+                logger.log(self, 'Initial Fock Built time: %f', end-start)
                 return Plao
 
         def Split_RK4_Step_MMUT(self, w, v , oldrho , time, dt ,IsOn):
@@ -365,24 +365,6 @@ class tdscf:
 
                 return newrho
 
-        def rhodot(self,rho,time,F):
-                '''
-                Args:
-                        rho: LAO basis density
-                        time: au
-                        F: Orig. MO basis fock.
-                Returns:
-                        kt: rhodot(MO)
-                '''
-                raise Exception("Not fixed")
-                print "F",F
-                print "Rho", rho
-                Ft, IsOn = self.field.ApplyField(F,self.C, time)
-                tmp = -1.j*(np.dot(Ft,rho) - np.dot(rho,Ft))
-                print "Ft",Ft
-                print "tmp[0,1]", tmp[0,1], tmp[1,0], tmp[0,1]/rho[0,1]
-                return -1.j*(np.dot(Ft,rho) - np.dot(rho,Ft))
-
         def TDDFTstep(self,time):
                 if (self.params["Method"] == "MMUT"):
                         self.F = self.FockBuild(TransMat(self.rho,self.V,-1)) # is LAO basis
@@ -405,40 +387,6 @@ class tdscf:
                         NewRho = self.Split_RK4_Step_MMUT(w, v, NewRhoM12, time,self.params["dt"]/2.0, IsOn)
                         self.rho = 0.5*(NewRho+(NewRho.T.conj()));
                         self.rhoM12 = 0.5*(NewRhoM12+(NewRhoM12.T.conj()))
-                elif (self.params["Method"] == "RK4"):
-                        raise Exception("Broken.")
-                        dt = self.params["dt"]
-                        rho = self.rho.copy()
-                        C = self.C.copy()
-                        # First perform a fock build
-                        # MO -> AO requires C
-                        self.FockBuild( TransMat(rho,C, -1) )
-                        #Fmo = TransMat(self.F,self.Cinv,-1) # AO -> MO requires Cinv NOT A NORM CONSERVING TRANSFORMATION, HENCE WRONG EIGVALUES.
-                        Fmo = TransMat(self.F,C)# C will F(AO) to F(MO)
-
-                        k1 = self.rhodot(rho,time,Fmo)
-                        v2 = (0.5 * dt)*k1
-                        v2 += rho
-                        #print Fmo
-                        self.FockBuild( TransMat(v2, C, -1) )
-                        Fmo = TransMat(self.F,C)
-                        k2 = self.rhodot(v2, time + 0.5*dt,Fmo)
-                        v3 = (0.5 * dt)*k2
-                        v3 += rho
-
-                        self.FockBuild( TransMat(v3, C, -1) )
-                        Fmo = TransMat(self.F,C)
-                        k3 = self.rhodot(v3, time + 0.5*dt,Fmo)
-                        v4 = (1.0 * dt)*k3
-                        v4 += rho
-
-                        self.FockBuild( TransMat(v4, C, -1) )
-                        Fmo = TransMat(self.F,C)
-                        k4 = self.rhodot(v4, time + dt,Fmo)
-
-                        drho = dt/6.0 * (k1 + 2.0*k2 + 2.0*k3 + k4)
-                        self.rho += drho
-                        self.rho = 0.5 * (self.rho + self.rho.T.conj())
                 else:
                         raise Exception("Unknown Method...")
                 return
@@ -486,8 +434,8 @@ class tdscf:
                 tore = str(self.t)+" "+str(self.dipole().real).rstrip(']').lstrip('[')+ " " +str(self.energy(TransMat(self.rho,self.V,-1),False))+" "+str(np.trace(self.rho))
 
                 if iter%self.params["StatusEvery"] ==0 or iter == self.params["MaxIter"]-1:
-                        print 't:', self.t*FsPerAu, " (Fs)  Energy:",self.energy(TransMat(self.rho,self.V,-1)), " Tr ",(np.trace(self.rho))
-                        print('Dipole moment(X, Y, Z, au): %8.5f, %8.5f, %8.5f' %(self.dipole().real[0],self.dipole().real[1],self.dipole().real[2]))
+                        logger.log(self, 't: %f fs    Energy: %f a.u.   Total Density: %f', self.t*FsPerAu,self.energy(TransMat(self.rho,self.V,-1)), 2*np.trace(self.rho))
+                        logger.log(self, 'Dipole moment(X, Y, Z, au): %8.5f, %8.5f, %8.5f', self.dipole().real[0],self.dipole().real[1],self.dipole().real[2] )
                 return tore
 
         def prop(self,output):
@@ -497,8 +445,8 @@ class tdscf:
                 iter = 0
                 self.t = 0
                 f = open(output,'a')
-                print "Energy Gap (eV)",abs(self.eigs[self.n_occ]-self.eigs[self.n_occ-1])*27.2114
-                print "\n\nPropagation Begins"
+                logger.log(self,'Energy Gap (eV): %f',abs(self.eigs[self.n_occ]-self.eigs[self.n_occ-1])*27.2114)
+                logger.log(self,'\n\nPropagation Begins')
                 start = time.time()
                 while (iter<self.params["MaxIter"]):
                         self.step(self.t)
@@ -509,7 +457,7 @@ class tdscf:
                         self.t = self.t + self.params["dt"]
                         if iter%self.params["StatusEvery"] ==0 or iter == self.params["MaxIter"]-1:
                                 end = time.time()
-                                print (end - start)/(60*60*self.t * FsPerAu * 0.001), "hr/ps"
+                                logger.log(self, '%f hr/ps', (end - start)/(60*60*self.t * FsPerAu * 0.001))
                         iter = iter + 1
 
                 f.close()
