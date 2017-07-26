@@ -8,7 +8,6 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import hf
-from pyscf.scf import _vhf
 from pyscf.scf import chkfile
 
 
@@ -132,7 +131,6 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
 
     >>> import numpy
     >>> from pyscf import gto, scf
-    >>> from pyscf.scf import _vhf
     >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1')
     >>> dmsa = numpy.random.random((3,mol.nao_nr(),mol.nao_nr()))
     >>> dmsb = numpy.random.random((3,mol.nao_nr(),mol.nao_nr()))
@@ -456,7 +454,7 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
     return mulliken_pop(mol, (dm_a,dm_b), numpy.eye(orth_coeff.shape[0]), log)
 mulliken_pop_meta_lowdin_ao = mulliken_meta
 
-def map_rhf_to_uhf(mf):
+def rhf_to_uhf(mf):
     '''Create UHF object based on the RHF object'''
     from pyscf.scf import addons
     return addons.convert_to_uhf(mf)

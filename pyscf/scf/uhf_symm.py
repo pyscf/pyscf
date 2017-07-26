@@ -149,7 +149,7 @@ def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
                         for k, ir in enumerate(mol.irrep_id)])
     return irrep_nelec
 
-map_rhf_to_uhf = uhf.map_rhf_to_uhf
+rhf_to_uhf = uhf.rhf_to_uhf
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the UHF Fock matrix in occupied, virtual
