@@ -109,7 +109,7 @@ subroutine make_bilocal_vertex(a, nbp, bp2info, dp_a, pb, iv_in)
   !Internal
   type(system_vars_t), pointer :: sv => null()
   type(book_pb_t), allocatable :: ic2book(:)
-  real(8) :: ttt(9), time(9), t1, t2, tt(9), tloc(9)
+  real(8) :: ttt(9), time(9), t1, t2, tt(9), tloc(9), tt1(9)
   integer :: nr,jcutoff,nf_max,jmx,norbs_max,ibp,nterm_max, iv, nbp1, nf
   integer :: pair, natoms, npre, ic, nc, npdp, i
   real(8), allocatable :: ff2(:,:,:,:,:), evals(:,:,:), vertex_real2(:,:,:,:,:)
@@ -168,7 +168,7 @@ subroutine make_bilocal_vertex(a, nbp, bp2info, dp_a, pb, iv_in)
   !$OMP SHARED(lcheck_cpy) &
   !$OMP PRIVATE(ff2,vertex_cmplx2,rhotb,evals,ibp,vertex_real2,ttt) &
   !$OMP PRIVATE(center, rcut, lready, oo2num, m2nf, ic2book, pair,ic,nc) &
-  !$OMP PRIVATE(info, ipiv, vc_ac_ac,npdp,npre,i2s,fmm_mem,tmp,t1,t2,tt) &
+  !$OMP PRIVATE(info, ipiv, vc_ac_ac,npdp,npre,i2s,fmm_mem,tmp,t1,t2,tt,tt1) &
   !$OMP PRIVATE(r_scalar_pow_jp1,S_comp,ylm,roverlap,f1f2_mom,bessel_pp) &
   !$OMP PRIVATE(vc_ac_ac_ref)
   allocate(ff2(nr,0:jcutoff,nf_max,-jmx*2:jmx*2,2))
@@ -188,14 +188,14 @@ subroutine make_bilocal_vertex(a, nbp, bp2info, dp_a, pb, iv_in)
   !! END of Comput of Coulomb matrix elements
   ttt = 0
   tt = 0
+  tt1 = 0
   !$OMP DO SCHEDULE(DYNAMIC,1)
   do ibp=1, nbp
     pair = ibp + natoms
     _t1
     !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
     call make_bilocal_vertex_rf(a, bp2info(ibp), &
-      ff2, evals, vertex_real2, lready, rcut, center, oo2num, m2nf, &
-      vertex_cmplx2, rhotb, ttt)
+      ff2, evals, vertex_real2, lready, rcut, center, oo2num, m2nf, vertex_cmplx2, rhotb, ttt)!, tt1)
     _t2(tt(1))  
     _t1
     !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__

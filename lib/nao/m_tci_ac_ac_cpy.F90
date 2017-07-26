@@ -107,11 +107,11 @@ subroutine tci_ac_ac_cpy(hk, i2book, j2book, array)
     return
   endif  
   
-  if(iprint<nprint) then
-    iprint = iprint + 1 
-    write(6,*) __FILE__, __LINE__, iprint, nprint
-    _warn('!overlapping???')
-  endif  
+  !if(iprint<nprint) then
+    !iprint = iprint + 1 
+    !write(6,*) __FILE__, __LINE__, iprint, nprint
+    !_warn('!overlapping???')
+  !endif  
   !!  
   !! Now I will compute the non-overlapping blocks (i.e. add Hartree kernel)
   !!

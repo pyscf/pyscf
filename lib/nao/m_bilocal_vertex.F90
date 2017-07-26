@@ -80,7 +80,7 @@ end subroutine ! dealloc
 !
 subroutine make_bilocal_vertex_rf(a, pair_info, &
   ff2, evals, vertex_real2, lready, rcut, center, oo2num, m2nf, &
-  vertex_cmplx2, rhotb, tthr)
+  vertex_cmplx2, rhotb, tthr) !,tt1)
   use m_pair_info, only : pair_info_t
   use m_biloc_aux, only : biloc_aux_t  
   use m_prod_basis_type, only : prod_basis_t
@@ -96,7 +96,7 @@ subroutine make_bilocal_vertex_rf(a, pair_info, &
   integer, allocatable :: m2nf(:)                                      ! output
   complex(8), allocatable, intent(inout) :: vertex_cmplx2(:,:,:,:,:)
   real(8), intent(inout) :: rhotb(:,:)  
-  real(8), intent(inout) :: tthr(:)
+  real(8), intent(inout) :: tthr(:)!, tt1(:)
   !! internal
   real(8) :: t1, t2
   real(8), allocatable :: real_wigner(:,:)
@@ -104,7 +104,7 @@ subroutine make_bilocal_vertex_rf(a, pair_info, &
 
 _t1
   rhotb = 0
-  call comp_expansion(a, pair_info, lready, center, rcut, oo2num, m2nf, rf_ls2so, ff2, rhotb)
+  call comp_expansion(a, pair_info, lready, center, rcut, oo2num, m2nf, rf_ls2so, ff2, rhotb) !, tt1)
 _t2(tthr(1))  
   if(lready) return;  
 !  write(6,*) __FILE__, __LINE__, sum(rhotb)
@@ -597,11 +597,10 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
   use m_prod_basis_param, only : get_jcutoff, get_GL_ord_bilocal
   use m_orb_rspace_type, only : get_rho_min_jt, get_dr_jt
   use m_interpolation, only : find
-  use m_prod_talman, only : prdred, all_interp_coeffs, prdred_all_interp_coeffs
+  use m_prod_talman, only : prdred, all_interp_coeffs, prdred_all_interp_coeffs, all_interp_values, prdred_all_interp_values
   use m_thrj_nobuf, only : thrj
   use m_pair_info, only : pair_info_t, get_rf_ls2so
   use m_biloc_aux, only : biloc_aux_t  
-  use m_numint, only : gl_knts, gl_wgts
 
   implicit none
   !! external
@@ -615,22 +614,27 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
   real(8), intent(inout), allocatable, target :: ff2(:,:,:,:,:)
   !! auxiliary
   real(8), intent(inout) :: rhotb(:,:)
+  !real(8), intent(inout) :: tt(:)
   
   !! internal
   integer :: sp(2), mu1, mu2, j1, j2, jcutoff, nr, ix, j, c1, c2, jmx12, no(2), mu!, k
-  integer :: clbd, lbd, nterm, ord, o1, o2, m1, m2, m, num, irc, nrf(2), jmax(2)
+  integer :: clbd, lbd, nterm, o1, o2, m1, m2, m, num, irc, nrf(2), jmax(2)
   integer :: rf1, rf2
   integer :: ls ! L[ocal] S[pecie] : i.e. 1 or 2
   integer :: rf ! R[adial] F[unction] : i.e. a pointer in the list of radial functions (multipletts)
   real(8) :: rc2_new, trans_vec(3), d12, rcuts(2), wghts(2)
+!  real(8) :: t1, t2
   real(8) :: Ra(3), Rb(3), rho_min_jt, dr_jt, tj1, tj2, pi, fact_z1
-  real(8), allocatable :: FFr(:,:), xgla(:), wgla(:), ijxr2ck(:,:,:,:)
+  real(8), allocatable :: FFr(:,:), ijxr2ck(:,:,:,:), fval(:,:), yz(:)
+  real(8), allocatable, target :: xrjm2f1(:,:,:,:), xrjm2f2_data(:,:,:,:)
+  real(8), pointer :: xrjm2f2(:,:,:,:)
   integer, allocatable :: jtb(:), clbdtb(:), lbdtb(:)
   real(8), parameter :: zerovec(3) = (/0.0D0, 0.0D0, 0.0D0/);
   
   if(.not. allocated(inf%rf_ls2mu))_die('!rf_ls2mu')
   if(any(inf%ls2nrf<1))_die('ls2nrf<1')
-
+   
+!  _t1 
   pi = 4D0*atan(1d0)
   lready = .false.
   jcutoff = get_jcutoff(a%pb_p)
@@ -712,14 +716,24 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
   Ra = [ 0.0D0, 0.0D0, -d12*(1D0-fact_z1) ]
   Rb = [ 0.0D0, 0.0D0,  d12*(fact_z1)     ]
 
-  ord = get_GL_ord_bilocal(a%pb_p)  
-  allocate(xgla(ord))
-  allocate(wgla(ord))
-  allocate(ijxr2ck(7,2,ord,a%nr))
-  call GL_knts(xgla, -1.0D0, 1.0D0, ord, 1)
-  call GL_wgts(wgla, -1.0D0, 1.0D0, ord, 1)
-  call all_interp_coeffs(ra,rb,zerovec,a%rr,nr,xgla,ord,ijxr2ck)
+  allocate(ijxr2ck(7,2,a%ord,a%nr))
+  call all_interp_coeffs(Ra,Rb,zerovec,a%rr,nr,a%xgla,a%sqrt_wgla,a%ord,ijxr2ck)
   
+  allocate(xrjm2f1(a%ord,a%nr,2,nrf(1)))
+  call all_interp_values(a%psi_log_rl(:,1:nrf(1),sp(1)),nr,nrf(1), ijxr2ck, a%ord, xrjm2f1)
+
+  if(sp(1)==sp(2)) then
+    xrjm2f2 => xrjm2f1
+  else
+    allocate(xrjm2f2_data(a%ord,a%nr,2,nrf(2)))
+    xrjm2f2 => xrjm2f2_data
+    call all_interp_values(a%psi_log_rl(:,1:nrf(2),sp(2)),nr,nrf(2), ijxr2ck, a%ord, xrjm2f2)
+  endif
+  
+  allocate(fval(a%nr,0:2*(a%jcutoff+jmx12)))
+  allocate(yz(a%ord))
+  
+!  _t2(tt(1))
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   !! Orbitale fuer Atom_1  und  Atom_2 - um r=0 entwickeln. Konvention:  1: (0,0,-d12/2) 2: (0,0,d12/2) !!
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -743,17 +757,21 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
 !      write(6,*) __FILE__, __LINE__, rf1, rf2, &
 !        sum(a%psi_log(1:nr,mu2,sp(2))), sum(a%psi_log(1:nr,mu1,sp(1)))
 
-      rhotb = 0
 !      call prdred( &
 !        a%psi_log(1:nr,mu2,sp(2)),j2,Rb,  a%psi_log(1:nr,mu1,sp(1)),j1,Ra, &
 !        zerovec, jcutoff, rhotb, a%rr, nr, jtb, clbdtb, lbdtb, nterm, &
 !        xgla, wgla, ord, rho_min_jt, dr_jt);
 
-      call prdred_all_interp_coeffs( &
-        a%psi_log_rl(1:nr,mu2,sp(2)),j2,Rb,  a%psi_log_rl(1:nr,mu1,sp(1)),j1,Ra, &
+!      call prdred_all_interp_coeffs( &
+!        a%psi_log_rl(1:nr,mu2,sp(2)),j2,Rb,  a%psi_log_rl(1:nr,mu1,sp(1)),j1,Ra, &
+!        zerovec, jcutoff, rhotb, a%rr, nr, jtb, clbdtb, lbdtb, nterm, &
+!        a%ord, a%plval, a%jmax_pl, ijxr2ck)
+      
+!      _t1
+      call prdred_all_interp_values(xrjm2f2(:,:,:,mu2),j2,Rb, xrjm2f1(:,:,:,mu1),j1,Ra, &
         zerovec, jcutoff, rhotb, a%rr, nr, jtb, clbdtb, lbdtb, nterm, &
-        xgla, wgla, ord, ijxr2ck)
-
+        a%ord, a%plval, a%jmax_pl, fval, yz)
+!      _t2(tt(2))  
       !! END of Compute the X_{j Lambda Lambda'}(r, R, alpha)
       
 !      write(6,*) __FILE__, __LINE__
@@ -839,6 +857,7 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
           ff2(1:irc,0:jcutoff,num,m,1)=FFr(1:irc,0:jcutoff)
         enddo ! m2
       enddo ! m1
+!      _t2(tt(3))
     enddo ! mu2
   enddo! mu1
 
@@ -846,9 +865,11 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
   _dealloc(jtb)
   _dealloc(clbdtb)
   _dealloc(lbdtb)
-  _dealloc(xgla)
-  _dealloc(wgla)
   _dealloc(ijxr2ck)
+  _dealloc(xrjm2f1)
+  _dealloc(xrjm2f2_data)
+  _dealloc(fval)
+  _dealloc(yz)
 
   
 end subroutine !comp_expansion 

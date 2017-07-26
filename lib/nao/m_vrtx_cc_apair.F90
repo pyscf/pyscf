@@ -50,7 +50,8 @@ subroutine vrtx_cc_apair(sp12_0b,rc12,lscc_0b,ncc,dout,nout) bind(c, name='vrtx_
   type(pair_info_t) :: bp2info
   type(book_pb_t), allocatable :: ic2book(:)
   integer(c_int64_t) :: ic, nc, npre
-  real(c_double) :: ttt(9), t1, t2, tt(9), rcut, center(3)
+  real(c_double) :: ttt(9), t1, t2, tt(9), tt1(9)
+  real(c_double) :: rcut, center(3)
   logical :: lready, lcheck_cpy
   real(c_double), allocatable :: fmm_mem(:), vc_ac_ac(:,:), vc_ac_ac_ref(:,:)
   integer(blas_int), allocatable :: ipiv(:)
@@ -73,13 +74,14 @@ subroutine vrtx_cc_apair(sp12_0b,rc12,lscc_0b,ncc,dout,nout) bind(c, name='vrtx_
   lcheck_cpy = .false.
   tt = 0
   ttt = 0
+  tt1 = 0
 
   _t1
   call init_pair_info(sp12, rc12, ncc, lscc_0b(:)+1, a%sv, bp2info)
   _t2(tt(1))
   
   call make_bilocal_vertex_rf(a, bp2info, ff2, evals, vertex_real2, lready, rcut, center, oo2num, m2nf, &
-    vertex_cmplx2, rhotb, ttt)
+    vertex_cmplx2, rhotb, ttt)!, tt1)
   _t2(tt(2))  
 
   call init_bpair_functs_vrtx(a, bp2info, m2nf, evals, ff2, &

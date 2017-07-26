@@ -180,15 +180,16 @@ subroutine prdred_coeffs(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdt
   return
 end subroutine !prdred_coeffs
 
-!!
-!!
-!!
-subroutine all_interp_coeffs(ra,rb,rcen,rr,nr,xgla,ord,ijxr2ck)
+!
+! Compute all interpolation coefficients needed for a given geometry (coordinates of atoms and center of expansion)
+! the coefficient are also multiplied with square root of the integration weigths
+!
+subroutine all_interp_coeffs(ra,rb,rcen,rr,nr,xgla,sqrt_wgla,ord,ijxr2ck)
   use m_interp_coeffs, only : interp_coeffs
   implicit none
   !! external
   integer(c_int), intent(in) :: nr, ord
-  real(c_double), intent(in) :: rr(nr),ra(3),rb(3),rcen(3),xgla(ord)
+  real(c_double), intent(in) :: rr(nr),ra(3),rb(3),rcen(3),xgla(ord), sqrt_wgla(ord)
   real(c_double), intent(inout) :: ijxr2ck(7,2,ord,nr)
   !! internal
   integer :: ir, igla
@@ -208,47 +209,31 @@ subroutine all_interp_coeffs(ra,rb,rcen,rr,nr,xgla,ord,ijxr2ck)
     do igla=1,ord
       a1=(r2aa-2.0d0*raa*rr(ir)*xgla(igla))
       call interp_coeffs(sqrt(a1), nr8, rho_min_jt, dr_jt, k, ijxr2ck(1:6,1,igla,ir))
+      ijxr2ck(1:6,1,igla,ir) = ijxr2ck(1:6,1,igla,ir)*sqrt_wgla(igla)
       ijxr2ck(7,1,igla,ir) = real(k, c_double)
 
       a2=(r2bb+2.0d0*rbb*rr(ir)*xgla(igla))
       call interp_coeffs(sqrt(a2), nr8, rho_min_jt, dr_jt, k, ijxr2ck(1:6,2,igla,ir))
+      ijxr2ck(1:6,2,igla,ir) = ijxr2ck(1:6,2,igla,ir)*sqrt_wgla(igla) 
       ijxr2ck(7,2,igla,ir) = real(k, c_double)
     enddo
   enddo
   
 end subroutine ! all_interp_coeffs
 
-!!
-!!
-!!
-!subroutine all_legendre_poly(xgla,ord,xj2p)
-!  implicit none
-!  integer(c_int), intent(in) :: ord
-!  real(c_double), intent(in) :: xgla(ord)
-  
-
-!  plval(1:ord,0)=1.D0
-!  plval(1:ord,1)=xgla(1:ord)
-!  do kappa=1,2*lbdmxa+ijmx-1
-!    plval(:,kappa+1)=((2*kappa+1)*xgla*plval(:,kappa)-kappa*plval(:,kappa-1))/(kappa+1)
-!  end do
-
-!end subroutine ! all_legendre_poly
-
 !
 !
 !
-subroutine prdred_all_interp_coeffs(ya,la,ra,yb,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb,nterm,xgla,wgla,ord,ijxr2ck) &
+subroutine prdred_all_interp_coeffs(ya,la,ra,yb,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb,nterm,ord,plval,jmax,ijxr2ck) &
   bind(c, name='prdred_all_interp_coeffs')
   use m_fact, only : fac, sgn
-  use m_precision, only : blas_int
   implicit none
   !! external
-  integer(c_int), intent(in)  :: nr, nterm,la,lb,ord
+  integer(c_int), intent(in)  :: nr, nterm,la,lb,ord,jmax
   real(c_double), intent(in)  :: ya(nr),yb(nr) ! radial orbitals / rr^l
   real(c_double), intent(in)  :: rr(nr),ra(3),rb(3),rcen(3)
   integer(c_int), intent(in)  :: lbdtb(nterm),clbdtb(nterm),lbdmxa,jtb(nterm)
-  real(c_double), intent(in)  :: xgla(ord), wgla(ord)
+  real(c_double), intent(in)  :: plval(ord,jmax+1)
   real(c_double), intent(in)  :: ijxr2ck(7,2,ord,nr)
   real(c_double), intent(inout) :: rhotb(nr,nterm)
   
@@ -256,33 +241,18 @@ subroutine prdred_all_interp_coeffs(ya,la,ra,yb,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jt
   real(8) :: yz(ord)
   real(8) :: raa,rbb,f1,f2,sumb,aa,bb,cc,thrj1,thrj2
   real(8) :: t1,t2,tt(9)
-  integer(blas_int) :: k1,k2
-  integer :: ir,ix,ijmx,ij,clbd,kappa,kpmax,igla, lbd1_p_lbd2
+  integer :: ir,ix,ij,clbd,kappa,kpmax,igla, lbd1_p_lbd2,k1,k2
   integer :: lbd1,lbdp1,lbd2,lbdp2,lc,lcmin,lcmax,lcp,lcpmin,lcpmax,clbdp
-  real(8), allocatable :: plval(:,:), fval(:,:)
-  real(8), external :: ddot
+  real(8), allocatable :: fval(:,:)
 
 !     write(6,*) 'prdred', lbdmxa, 2*lbdmxa+la+lb
   _t1
   tt = 0
-
-  allocate(plval(ord,0:2*lbdmxa+la+lb))
   allocate(fval(nr,0:2*lbdmxa+la+lb))
-  
-  kpmax = -999
-  ijmx=la+lb;
-  plval(1:ord,0)=1.D0
-  plval(1:ord,1)=xgla(1:ord)
-  do kappa=1,2*lbdmxa+ijmx-1
-    plval(:,kappa+1)=((2*kappa+1)*xgla*plval(:,kappa)-kappa*plval(:,kappa-1))/(kappa+1)
-  end do
-
-  _t2(tt(1))
-  
   raa=sqrt(sum((ra-rcen)**2))
   rbb=sqrt(sum((rb-rcen)**2))
   kpmax=0
-  if (raa+rbb .gt. 1.0d-5) kpmax=2*lbdmxa+ijmx
+  if (raa+rbb .gt. 1.0d-5) kpmax=2*lbdmxa+la+lb
 
   fval=0
   do ir=1,nr
@@ -299,12 +269,12 @@ subroutine prdred_all_interp_coeffs(ya,la,ra,yb,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jt
       
       yz(igla)=f1*f2
     enddo
-    yz = yz*wgla
+    !yz = yz*wgla
     !call DGEMV('T', ord, kpmax+1,0.5d0,plval,ord,yz,1,0d0,fval(ir,0),nr)
-    do kappa=0,kpmax; fval(ir,kappa)=0.5d0*dot_product(plval(:,kappa), yz); enddo
+    do kappa=0,kpmax; fval(ir,kappa)=0.5d0*dot_product(plval(:,kappa+1), yz); enddo
   enddo
 
-  _t2(tt(2))
+  _t2(tt(1))
 
   rhotb=0.0D0
   do ix=1,nterm
@@ -355,14 +325,133 @@ subroutine prdred_all_interp_coeffs(ya,la,ra,yb,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jt
      enddo
   enddo
   
-  _t2(tt(3))
-  !write(6,*) __FILE__, __LINE__, tt(1:3)
+  _t2(tt(2))
+  !write(6,*) __FILE__, __LINE__, tt(1:2)
  
   _dealloc(fval)
-  _dealloc(plval)
   
   return
 end subroutine !prdred_all_interp_coeffs
+
+!
+! Interpolate all radial orbitals of a given specie according to a latter need in the subroutine prdred(...)
+!
+subroutine all_interp_values(m2ff,nr,nmu, ijxr2ck,ord, xrjm2v)
+  implicit none
+  !! external
+  integer(c_int), intent(in) :: nr, ord, nmu
+  real(c_double), intent(in) :: m2ff(nr,nmu)
+  real(c_double), intent(in) :: ijxr2ck(7,2,ord,nr)
+  real(c_double), intent(inout) :: xrjm2v(ord,nr,2,nmu)
+  !! internal
+  integer :: ir, igla, k1, k2, imu
+  
+  xrjm2v = 0D0
+  do ir=1,nr
+    do igla=1,ord
+      k1 = int(ijxr2ck(7,1,igla,ir))
+      k2 = int(ijxr2ck(7,2,igla,ir))
+      
+      do imu=1,nmu
+        xrjm2v(igla,ir,1,imu) = dot_product(m2ff(k1:k1+5,imu), ijxr2ck(1:6,1,igla,ir))
+        xrjm2v(igla,ir,2,imu) = dot_product(m2ff(k2:k2+5,imu), ijxr2ck(1:6,2,igla,ir))
+      enddo ! imu
+    enddo
+  enddo
+
+end subroutine ! all_interp_values
+
+!
+! Do product reduction with all needed values of radial orbitals precomputed
+!
+pure subroutine prdred_all_interp_values(xrj2f1,la,ra,xrj2f2,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb,nterm,ord,plval,jmax,fval,yz) &
+  bind(c, name='prdred_all_interp_values')
+  use m_fact, only : fac, sgn
+  implicit none
+  !! external
+  integer(c_int), intent(in)  :: nr, nterm,la,lb,ord,jmax
+  real(c_double), intent(in)  :: xrj2f1(ord,nr,2) ! values of first radial orbital / rr^l as needed (ord,nr,2)
+  real(c_double), intent(in)  :: xrj2f2(ord,nr,2) ! values of second radial orbital / rr^l as needed
+  real(c_double), intent(in)  :: rr(nr),ra(3),rb(3),rcen(3)
+  integer(c_int), intent(in)  :: lbdtb(nterm),clbdtb(nterm),lbdmxa,jtb(nterm)
+  real(c_double), intent(in)  :: plval(ord,jmax+1)
+  real(c_double), intent(inout) :: rhotb(nr,nterm)
+  real(c_double), intent(inout) :: fval(nr,jmax+1),yz(ord)
+  
+  !! internal
+  real(8) :: raa,rbb,sumb,aa,bb,cc,thrj1
+!  real(8) :: t1,t2,tt(9)
+  integer :: ir,ix,ij,clbd,k,kpmax,lbd1_p_lbd2,kappa
+  integer :: lbd1,lbdp1,lbd2,lbdp2,lc,lcmin,lcmax,lcp,lcpmin,lcpmax,clbdp
+
+! write(6,*) 'prdred', lbdmxa, 2*lbdmxa+la+lb
+  !_t1
+  !tt = 0
+  raa=sqrt(sum((ra-rcen)**2))
+  rbb=sqrt(sum((rb-rcen)**2))
+  kpmax=0
+  if (raa+rbb .gt. 1.0d-5) kpmax=2*lbdmxa+la+lb
+  
+  fval(1:nr,1:kpmax+1)=0
+  do ir=1,nr
+    yz(1:ord)=xrj2f1(:,ir,1)*xrj2f2(:,ir,2)
+    do k=1,kpmax+1; fval(ir,k)=0.5d0*dot_product(plval(:,k), yz); enddo
+  enddo
+  
+  !_t2(tt(1))
+
+  rhotb=0.0D0
+  do ix=1,nterm
+     ij=jtb(ix)
+     clbd=clbdtb(ix)
+     clbdp=lbdtb(ix)
+     do lbd1=0,la
+        lbdp1=la-lbd1
+        aa=thrj(lbd1,lbdp1,la,0,0,0)*fac(lbd1)*fac(lbdp1)*fac(2*la+1)&
+             /(fac(2*lbd1)*fac(2*lbdp1)*fac(la))
+
+        do lbd2=0,lb
+           lbdp2=lb-lbd2
+           bb=thrj(lbd2,lbdp2,lb,0,0,0)*fac(lbd2)*fac(lbdp2)*fac(2*lb+1)&
+                /(fac(2*lbd2)*fac(2*lbdp2)*fac(lb))
+           bb=aa*bb
+           do kappa=0,kpmax
+              sumb=0.0d0
+              lcmin=max(abs(lbd1-lbd2),abs(clbd-kappa))
+              lcmax=min(lbd1+lbd2,clbd+kappa)
+              do lc=lcmin,lcmax,2
+                 thrj1 = thrj(lbd1,lbd2,lc,0,0,0)*thrj(lc,clbd,kappa,0,0,0)
+                 if(thrj1<1d-15) cycle
+                 lcpmin=max(abs(lbdp1-lbdp2),abs(clbdp-kappa))
+                 lcpmax=min(lbdp1+lbdp2,clbdp+kappa)
+                 do lcp=lcpmin,lcpmax,2
+                    if ((abs(lc-ij).le.lcp).and.(lcp.le.lc+ij)) then
+                       sumb=sumb+(2*lc+1)*(2*lcp+1)&
+                            * thrj1 &
+                            * thrj(lbdp1,lbdp2,lcp,0,0,0) &
+                            * thrj(lcp,clbdp,kappa,0,0,0) &
+                            * sixj(clbd,clbdp,ij,lcp,lc,kappa) &
+                            * ninej(la,lb,ij,lbd1,lbd2,lc,lbdp1,lbdp2,lcp)
+                    endif
+                 enddo
+              enddo
+              cc=sgn(lbd1+kappa+lb)*(2*ij+1)*(2*kappa+1)&
+                   *(2*clbd+1)*(2*clbdp+1)*bb*sumb
+              if (cc .ne. 0.0D0) then
+                lbd1_p_lbd2 = lbd1 + lbd2
+                rhotb(:,ix)=rhotb(:,ix)+cc*rr(1:nr)**(lbd1_p_lbd2) &
+                      * dpowi(raa, lbdp1) * dpowi(rbb, lbdp2)*fval(:,kappa+1)
+              endif
+           enddo
+        enddo
+     enddo
+  enddo
+  
+  !_t2(tt(2))
+  !write(6,'(a,i5,3x,2f9.4)') __FILE__, __LINE__, tt(1:2)
+   
+  return
+end subroutine !prdred_all_interp_values
 
 
 !
@@ -504,7 +593,7 @@ end subroutine !prdred
 !
 !
 !
-real(8) function dpowi(a,b)
+pure real(8) function dpowi(a,b)
   implicit none
   real(8), intent(in) :: a
   integer, intent(in) :: b
@@ -528,7 +617,7 @@ end subroutine ! thrj_subr
 !
 ! 3j, 6j, 9j symbols from Talman
 !
-function thrj(l1,l2,l3,m1,m2,m3)
+pure function thrj(l1,l2,l3,m1,m2,m3)
   use m_fact, only : sgn, fac
   implicit none
   integer(c_int), intent(in) :: l1,l2,l3,m1,m2,m3   !! exernal
@@ -572,7 +661,7 @@ function thrj(l1,l2,l3,m1,m2,m3)
 end function !thrj
 
 
-function ninej(j1,j2,j12,j3,j4,j34,j13,j24,j)
+pure  function ninej(j1,j2,j12,j3,j4,j34,j13,j24,j)
   implicit none
   !! external
   integer(c_int), intent(in) :: j1,j2,j12,j3,j4,j34,j13,j24,j
@@ -592,7 +681,7 @@ function ninej(j1,j2,j12,j3,j4,j34,j13,j24,j)
 end function !ninej
 
 
-function sixj(j1,j2,j3,l1,l2,l3)
+pure  function sixj(j1,j2,j3,l1,l2,l3)
   use m_fact, only : sgn, fac
   implicit none
   !! external

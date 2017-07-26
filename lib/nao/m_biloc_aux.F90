@@ -41,13 +41,19 @@ module m_biloc_aux
     integer :: nterm_max = -999
     integer(blas_int) :: lwork =-999
     integer :: jmx = -999
-    integer :: jcutoff = -999 
+    integer :: jcutoff = -999
+    integer :: ord = -999
+    integer :: jmax_pl = -999
     
     complex(8), allocatable :: ylm_cr(:)
     complex(8), allocatable :: c2r(:,:)
     complex(8), allocatable :: hc_c2r(:,:)
     real(8), allocatable :: mu_sp2inv_wght(:,:)
     real(8), allocatable :: dkappa_pp(:)
+    real(8), allocatable :: plval(:,:)
+    real(8), allocatable :: xgla(:)
+    real(8), allocatable :: wgla(:)
+    real(8), allocatable :: sqrt_wgla(:)
     integer, allocatable :: sp2norbs(:)
     
   end type ! biloc_aux_t
@@ -63,13 +69,15 @@ subroutine init_biloc_aux(sv, pb_p, para, orb_a, a)
   use m_system_vars, only : get_rr_ptr, get_pp_ptr, get_sp2norbs
   use m_system_vars, only : get_mu_sp2rcut_ptr, get_psi_log_rl_ptr
   use m_orb_rspace_type, only : get_mu_sp2start_ao_ptr
-  use m_prod_basis_param, only : get_jcutoff, get_metric_type, get_bilocal_center
+  use m_prod_basis_param, only : get_jcutoff, get_metric_type, get_bilocal_center, get_GL_ord_bilocal
   use m_prod_basis_param, only : get_bilocal_center_coeff, get_bilocal_center_pow
   use m_sph_bes_trans, only : sbt_plan
   use m_prod_talman, only : csphar_talman
   use m_harmonics, only : init_c2r_hc_c2r
   use m_interp, only : init_interp
-    
+  use m_all_legendre_poly, only : all_legendre_poly
+  use m_numint, only : gl_knts, gl_wgts
+  
   implicit none
   !! external
   type(system_vars_t), intent(in), target :: sv
@@ -81,7 +89,7 @@ subroutine init_biloc_aux(sv, pb_p, para, orb_a, a)
   integer :: jmax, metric_type, nn(2)
   real(8), parameter :: unitvec_z(3) = [0D0,0D0,1D0]
   character(100) :: ccenter, ccoeff
-  real(8) :: pow
+  real(8) :: pow, spos
   
   a%sv => sv
   a%pb_p => pb_p
@@ -121,7 +129,7 @@ _dealloc_u(a%mu_sp2inv_wght, nn)
   a%jcutoff = get_jcutoff(pb_p)
   a%jmx = get_jmx(sv)
   a%nterm_max = get_nterm_max(a%jmx, a%jcutoff)
-  jmax = a%jcutoff+a%jmx*2 
+  jmax = a%jcutoff+a%jmx*2
 _dealloc_u(a%ylm_cr, (jmax+1)**2)
   if(.not. allocated(a%ylm_cr)) allocate(a%ylm_cr(0:(jmax+1)**2));
   call csphar_talman(unitvec_z, a%ylm_cr(0:), jmax);
@@ -131,6 +139,24 @@ _dealloc_u(a%ylm_cr, (jmax+1)**2)
   a%pp => get_pp_ptr(sv)
   call sbt_plan(a%Talman_plan, a%nr, max(a%jcutoff,2*a%jmx+1), a%rr, a%pp, .true.)
   call init_interp(a%rr, a%interp_log)
+
+  _dealloc(a%xgla)
+  _dealloc(a%wgla)
+  _dealloc(a%sqrt_wgla)
+  a%ord = get_GL_ord_bilocal(pb_p)
+  allocate(a%xgla(a%ord))
+  allocate(a%wgla(a%ord))
+  allocate(a%sqrt_wgla(a%ord))
+  call GL_knts(a%xgla, -1.0D0, 1.0D0, a%ord, 1)
+  call GL_wgts(a%wgla, -1.0D0, 1.0D0, a%ord, 1)
+  spos = sum(abs(a%wgla - abs(a%wgla)))
+  if(spos>1d-14) _die('!spos>1d-14')
+  a%sqrt_wgla = sqrt(a%wgla)
+  !write(6,*) __FILE__, __LINE__, sum(abs(a%wgla - abs(a%wgla)))
+  a%jmax_pl = 2*(a%jcutoff+a%jmx)
+  _dealloc(a%plval)
+  allocate(a%plval(a%ord,0:2*(a%jcutoff+a%jmx)))
+  call all_legendre_poly(a%xgla,a%ord,a%plval,2*(a%jcutoff+a%jmx))
   
   metric_type = get_metric_type(pb_p)
 _dealloc_u(a%dkappa_pp, a%nr)

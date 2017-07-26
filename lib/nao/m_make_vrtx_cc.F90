@@ -53,7 +53,7 @@ subroutine make_vrtx_cc(a, nbp, bp2info, dp_a, pb, iv_in)
   !Internal
   type(system_vars_t), pointer :: sv => null()
   type(book_pb_t), allocatable :: ic2book(:)
-  real(8) :: ttt(9), time(9), t1, t2, tt(9), tloc(9)
+  real(8) :: ttt(9), time(9), t1, t2, tt(9), tloc(9), tt1(9)
   integer :: nr,jcutoff,nf_max,jmx,norbs_max,ibp,nterm_max, iv, nbp1, nf
   integer :: pair, natoms, npre, ic, nc, npdp, i
   real(8), allocatable :: ff2(:,:,:,:,:), evals(:,:,:), vertex_real2(:,:,:,:,:)
@@ -113,7 +113,7 @@ subroutine make_vrtx_cc(a, nbp, bp2info, dp_a, pb, iv_in)
   !$OMP SHARED(lcheck_cpy) &
   !$OMP PRIVATE(ff2,vertex_cmplx2,rhotb,evals,ibp,vertex_real2,ttt) &
   !$OMP PRIVATE(center, rcut, lready, oo2num, m2nf, ic2book, pair,ic,nc) &
-  !$OMP PRIVATE(info, ipiv, vc_ac_ac,npdp,npre,i2s,fmm_mem,tmp,t1,t2,tt) &
+  !$OMP PRIVATE(info, ipiv, vc_ac_ac,npdp,npre,i2s,fmm_mem,tmp,t1,t2,tt,tt1) &
   !$OMP PRIVATE(r_scalar_pow_jp1,S_comp,ylm,roverlap,f1f2_mom,bessel_pp) &
   !$OMP PRIVATE(vc_ac_ac_ref)
   allocate(ff2(nr,0:jcutoff,nf_max,-jmx*2:jmx*2,2))
@@ -133,17 +133,18 @@ subroutine make_vrtx_cc(a, nbp, bp2info, dp_a, pb, iv_in)
   !! END of Comput of Coulomb matrix elements
   ttt = 0
   tt = 0
-  !$OMP DO SCHEDULE(DYNAMIC,1)
+  tt1 = 0
+  !$OMP DO 
   do ibp=1, nbp
     pair = ibp + natoms
-    _t1
+
     !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
+    _t1
     call make_bilocal_vertex_rf(a, bp2info(ibp), &
       ff2, evals, vertex_real2, lready, rcut, center, oo2num, m2nf, &
-      vertex_cmplx2, rhotb, ttt)
+      vertex_cmplx2, rhotb, ttt)!, tt1)
     _t2(tt(1))  
 
-    _t1    
     call init_bpair_functs_vrtx(a, bp2info(ibp), &
       m2nf, evals, ff2, vertex_real2, lready, rcut, center, dp_a, &
       fmm_mem, pb%sp_biloc2vertex(ibp))
@@ -185,7 +186,7 @@ subroutine make_vrtx_cc(a, nbp, bp2info, dp_a, pb, iv_in)
     _dealloc(ipiv)
     allocate(vc_ac_ac(npre,npre))
     allocate(ipiv(npre))
-    _t1
+
     !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
     call tci_ac_ac_cpy(dp_a%hk, ic2book, ic2book, vc_ac_ac)
     _t2(tt(3))
@@ -206,7 +207,6 @@ subroutine make_vrtx_cc(a, nbp, bp2info, dp_a, pb, iv_in)
       endif
     endif
     
-    _t1    
     info = 0
     !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
     call DGETRF(npre, npre, vc_ac_ac, npre, ipiv, info )
@@ -224,13 +224,11 @@ subroutine make_vrtx_cc(a, nbp, bp2info, dp_a, pb, iv_in)
     call init_counting_fini(ic2book, pb%coeffs(pair))
     allocate(pb%coeffs(pair)%coeffs_ac_dp(npre, npdp))
     pb%coeffs(pair)%is_reexpr = 1
-    _t1
     !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
     call tci_ac_dp(dp_a%hk%ca, ic2book, fmm_mem, pb%coeffs(pair)%coeffs_ac_dp, &
       bessel_pp, f1f2_mom, roverlap, ylm, S_comp, r_scalar_pow_jp1, tmp)
     _t2(tt(5))  
     !! Reexpressing coefficients are computed and stored
-    _t1
     !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
     call DGETRS("N", npre, npdp, vc_ac_ac,npre, ipiv, pb%coeffs(pair)%coeffs_ac_dp, npre, info)
     !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
@@ -242,8 +240,7 @@ subroutine make_vrtx_cc(a, nbp, bp2info, dp_a, pb, iv_in)
     _t2(tt(6))
     !! END of Reexpressing coefficients are computed and stored
     
-!    write(6,*) __FILE__, __LINE__, nc, npre, ic2book(:)%ic
-!    write(6,'(a,i5,3x,2i8,3x,6f9.2)')  __FILE__, __LINE__, ibp, nbp, tt(1:6)
+    !write(6,'(a,i5,3x,i8,3x,6f9.3,3x,6f9.3,3x,3f9.3)')  __FILE__, __LINE__, ibp, tt(1:6), ttt(1:6), tt1(1:3)
     
   enddo ! ibp
   !$OMP END DO
