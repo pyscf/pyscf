@@ -1,16 +1,34 @@
-PySCF 1.4 alpha (2017-07-?)
+PySCF 1.4 alpha (2017-07-24)
 --------------------------
 * Added
   - Spinor-GTO evaluator
   - Dirac-Kohn-Sham (LDA functional)
   - EDIIS and ADIIS
   - Periodic CCSD with k-point sampling
-  - Periodic EOM-IP-CCSD and EOM-EA-CCSD with k-point sampling
-  - Update interface to fciqmc for standalone run
+  - Periodic EOM-IP-CCSD and EOM-EA-CCSD for single k-point calculation
+  - spin-square value (per unit) of KUHF calculation
+  - Update interface to fciqmc for standalone executing
   - Routines in fciqmc to read in the spinned one and two RDMs
   - Heat-Bath CI
   - Functions in dmrgci interface to access 3-pdm and 4-pdm
   - Function get_fermi
+  - UCCSD lambda equation and 1,2-particle density matrix
+  - SCF wfn stability analysis
+  - Many-Body van der Waals Interactions (MBD)
+  - Second order SCF solver for periodic HF and DFT
+  - TDDFT for periodic k-point HF and DFT
+  - U-TDHF and U-TDDFT for molecular and crystal systems
+  - Many-body dispersion
+  - MP2-F12 and F12 basis and F12 RI basis
+  - Cartesian GTO (6d 10f) basis in molecular calculations
+  - CP2K's HF pseudopotential data
+  - Frozen core MP2
+  - Molecular electrostatic potential (MEP)
+  - CPHF and UCPHF solver
+  - Non-relativistic RHF, UHF 4-component UHF spin-spin coupling
+  - non-relativistic UHF, 4-component UHF g-tensor (in testing)
+  - non-relativistic UHF, 4-component UHF hyperfine coupling (in testing)
+  - non-relativistic UHF zero-field spliting (in testing)
 * Improved
   - Performance of PBC-Gaussian function evaluator
   - Performance of analytical Fourier transformation for AO product
@@ -18,8 +36,17 @@ PySCF 1.4 alpha (2017-07-?)
   - Performance of PBC PP local-part integrals
   - Numerical stability associated to OpenMP reduce function
   - Performance of FCI 2-electron contraction function
+  - Basis parser for Pople style basis sets
+  - Arbitrary problem size in FCI solver
+  - Symmetry labels in orbital coefficients
+  - Disk usage of integral transformation in MP2
+  - Performance of J/K contractions in molecular density fitting code
+  - Input gemoertry parser for ghost atoms
 * Bugfix
   - PBC super cell function.  Atoms was missing on the super cell boundary
+  - PBC dft atomic grids for low-dimensional systems
+  - The missing occ-vir blocks of Fock matrix in UCCSD
+  - MGGA integration error
 * Removed
   - Dependence to joblib library
 

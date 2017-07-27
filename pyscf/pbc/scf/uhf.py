@@ -89,12 +89,9 @@ class UHF(pyscf.scf.uhf.UHF, pbchf.RHF):
 
     def dump_flags(self):
         pyscf.scf.uhf.UHF.dump_flags(self)
-        logger.info(self, '******** PBC SCF flags ********')
-        logger.info(self, 'kpt = %s', self.kpt)
-        logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
-        logger.info(self, 'number electrons alpha = %d  beta = %d', *self.nelec)
-        logger.info(self, 'DF object = %s', self.with_df)
+        pbchf.RHF.dump_flags(self)
         self.with_df.dump_flags()
+        return self
 
     get_hcore = pbchf.RHF.get_hcore
     get_ovlp = pbchf.RHF.get_ovlp
