@@ -13,7 +13,7 @@ def _siesta2blanko_denvec(orb2m, vec, orb_sc2orb_uc=None):
     orb_sc2m = np.zeros_like(orb_sc2orb_uc)
     for orb_sc,orb_uc in enumerate(orb_sc2orb_uc): orb_sc2m[orb_sc] = orb2m[orb_uc]
 
-  orb2ph = (-1)**orb_sc2m
+  orb2ph = (-1.0)**orb_sc2m
   
   if(nreim==1):
     vec[:,0] = vec[:,0]*orb2ph[:]
