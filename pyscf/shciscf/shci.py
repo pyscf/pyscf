@@ -25,7 +25,7 @@ ndpointer = numpy.ctypeslib.ndpointer
 
 # Settings
 try:
-   from pyscf.future.shciscf import settings
+   from pyscf.shciscf import settings
 except ImportError:
     import sys
     sys.stderr.write('''settings.py not found.  Please create %s
@@ -34,7 +34,6 @@ except ImportError:
 
 # Libraries
 libE3unpack = load_library('libicmpspt')
-# TODO: Organize this better.
 shciLib = load_library('libshciscf')
 
 transformDinfh = shciLib.transformDinfh
@@ -62,8 +61,7 @@ fcidumpFromIntegral.argtypes = [ctypes.c_char_p,
                                 ctypes.c_size_t,
                                 ctypes.c_double,
                                 ndpointer(ctypes.c_int32, flags="C_CONTIGUOUS"),
-                                ctypes.c_size_t,
-                                ctypes.c_double
+                                ctypes.c_size_t
 ]
 
 r2RDM = shciLib.r2RDM
@@ -228,7 +226,6 @@ class SHCI(pyscf.lib.StreamObject):
 
         onepdm = numpy.einsum('ikjj->ik', twopdm)
         onepdm /= (nelectrons-1)
-
         return onepdm, twopdm
 
     def trans_rdm1(self, statebra, stateket, norb, nelec, link_index=None, **kwargs):
@@ -750,8 +747,8 @@ def writeIntegralFile(SHCI, h1eff, eri_cas, norb, nelec, ecore=0):
        # Writes the FCIDUMP file using functions in SHCI_tools.cpp.
        fcidumpFromIntegral( integralFile, h1eff, eri_cas, norb, neleca+nelecb,
                             ecore, numpy.asarray(orbsym, dtype=numpy.int32),
-                            abs(neleca-nelecb), 1e-15 )
-
+                            abs(neleca-nelecb) )
+       print "ECORE: ",ecore
 
 def executeSHCI(SHCI):
     file1 = os.path.join(SHCI.runtimeDir, "%s/shci.e"%(SHCI.prefix))
@@ -895,7 +892,7 @@ def doSOC(mc, gtensor=False):
 
 if __name__ == '__main__':
     from pyscf import gto, scf, mcscf, dmrgscf
-    from pyscf.future.shciscf import shci
+    from pyscf.shciscf import shci
 
     # Initialize N2 molecule
     b = 1.098
@@ -944,9 +941,9 @@ if __name__ == '__main__':
     with open( mch.fcisolver.outputFile, 'r' ) as f:
     	lines = f.readlines()
 
-    e_PT = float( lines[ len(lines) - 1 ].split()[2] )
+    #e_PT = float( lines[ len(lines) - 1 ].split()[2] )
 
-    # e_PT = shci.readEnergy( mch.fcisolver )
+    e_PT = shci.readEnergy( mch.fcisolver )
 
     # Comparison Calculations
     del_PT = e_PT - e_noPT
