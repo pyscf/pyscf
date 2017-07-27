@@ -318,8 +318,8 @@ def spin_square(mo, s=1):
              - \langle i^\alpha|i^\alpha\rangle \langle j^\beta|j^\beta\rangle
              - \langle i^\beta|i^\beta\rangle \langle j^\alpha|j^\alpha\rangle
              + \langle i^\beta|i^\beta\rangle \langle j^\beta|j^\beta\rangle) \\
-            &-\frac{1}{4}(\langle i^\alpha|i^\alpha\rangle \langle i^\alpha|i^\alpha\rangle
-             + \langle i^\beta|i^\beta\rangle\langle i^\beta|i^\beta\rangle) \\
+            &-\frac{1}{4}(\langle i^\alpha|j^\alpha\rangle \langle j^\alpha|i^\alpha\rangle
+             + \langle i^\beta|j^\beta\rangle\langle j^\beta|i^\beta\rangle) \\
             &=\frac{1}{4}(n_\alpha^2 - n_\alpha n_\beta - n_\beta n_\alpha + n_\beta^2)
              -\frac{1}{4}(n_\alpha + n_\beta) \\
             &=\frac{1}{4}((n_\alpha-n_\beta)^2 - (n_\alpha+n_\beta))
@@ -359,7 +359,7 @@ def spin_square(mo, s=1):
     nocc_a = mo_a.shape[1]
     nocc_b = mo_b.shape[1]
     s = reduce(numpy.dot, (mo_a.T.conj(), s, mo_b))
-    ssxy = (nocc_a+nocc_b) * .5 - numpy.einsum('ij,ij->', s.conj(), s)
+    ssxy = (nocc_a+nocc_b) * .5 - numpy.einsum('ij,ji->', s, s)
     ssz = (nocc_b-nocc_a)**2 * .25
     ss = ssxy + ssz
     s = numpy.sqrt(ss+.25) - .5
@@ -412,14 +412,15 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
         log = logger.Logger(mol.stdout, verbose)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = numpy.array((dm*.5, dm*.5))
-    pop_a = numpy.einsum('ij->i', dm[0]*s)
-    pop_b = numpy.einsum('ij->i', dm[1]*s)
+    pop_a = numpy.einsum('ij,ji->i', dm[0], s).real
+    pop_b = numpy.einsum('ij,ji->i', dm[1], s).real
     label = mol.ao_labels(fmt=None)
 
     log.note(' ** Mulliken pop       alpha | beta **')
     for i, s in enumerate(label):
         log.note('pop of  %s %10.5f | %-10.5f',
                  '%d%s %s%4s'%s, pop_a[i], pop_b[i])
+    log.note('In total          %10.5f | %-10.5f', sum(pop_a), sum(pop_b))
 
     log.note(' ** Mulliken atomic charges  **')
     chg = numpy.zeros(mol.natm)
@@ -727,6 +728,7 @@ class UHF(hf.SCF):
                       pre_orth_method='ANO', s=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
+        if s is None: s = self.get_ovlp(mol)
         return mulliken_meta(mol, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 

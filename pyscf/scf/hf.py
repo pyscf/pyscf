@@ -751,9 +751,9 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     else:
         log = logger.Logger(mol.stdout, verbose)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-        pop = numpy.einsum('ij->i', dm*s).real
+        pop = numpy.einsum('ij,ji->i', dm, s).real
     else: # ROHF
-        pop = numpy.einsum('ij->i', (dm[0]+dm[1])*s).real
+        pop = numpy.einsum('ij,ji->i', dm[0]+dm[1], s).real
     label = mol.ao_labels(fmt=None)
 
     log.note(' ** Mulliken pop  **')
@@ -879,7 +879,7 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
 
     mol.set_common_orig((0,0,0))
     ao_dip = mol.intor_symmetric('int1e_r', comp=3)
-    el_dip = numpy.einsum('xij,ji->x', ao_dip, dm)
+    el_dip = numpy.einsum('xij,ji->x', ao_dip, dm).real
 
     charges = mol.atom_charges()
     coords  = mol.atom_coords()
@@ -1287,6 +1287,7 @@ class SCF(lib.StreamObject):
                       pre_orth_method='ANO', s=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
+        if s is None: s = self.get_ovlp(mol)
         return mulliken_meta(mol, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
     def mulliken_pop_meta_lowdin_ao(self, *args, **kwargs):

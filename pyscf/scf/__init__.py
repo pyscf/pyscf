@@ -94,6 +94,7 @@ from pyscf.scf import hf_symm as rhf_symm
 from pyscf.scf import uhf
 from pyscf.scf import uhf_symm
 from pyscf.scf import dhf
+from pyscf.scf import ghf
 from pyscf.scf import chkfile
 from pyscf.scf import addons
 from pyscf.scf import diis
@@ -104,6 +105,7 @@ from pyscf.scf.addons import *
 from pyscf.scf import x2c
 from pyscf.scf.x2c import sfx2c1e, sfx2c
 from pyscf.scf import newton_ah
+from pyscf.scf.ghf import GHF
 
 
 
