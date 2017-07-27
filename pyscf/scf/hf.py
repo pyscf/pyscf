@@ -1160,9 +1160,10 @@ class SCF(lib.StreamObject):
         if self.verbose >= logger.DEBUG1:
             s = self.get_ovlp()
             if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-                nelec = (dm.T*s).sum()
+                nelec = numpy.einsum('ij,ji', dm, s)
             else:  # UHF
-                nelec = (dm[0].T*s).sum() + (dm[1].T*s).sum()
+                nelec = numpy.einsum('ij,ji', dm[0], s)
+                nelec+= numpy.einsum('ij,ji', dm[1], s)
             logger.debug1(self, 'Nelec from initial guess = %g', nelec.real)
         return dm
 

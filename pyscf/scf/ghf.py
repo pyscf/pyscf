@@ -251,8 +251,8 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
     '''Mulliken population analysis, based on meta-Lowdin AOs.
     '''
     nao = mol.nao_nr()
-    dma = dm[:nao,:nao]
-    dmb = dm[nao:,nao:]
+    dma = dm_ao[:nao,:nao]
+    dmb = dm_ao[nao:,nao:]
     if s is not None:
         assert(s.size == nao**2 or
                numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
@@ -313,6 +313,17 @@ class GHF(hf.SCF):
         g = reduce(numpy.dot, (mo_coeff[:,occidx].T.conj(), fock,
                                mo_coeff[:,viridx]))
         return g.T.ravel()
+
+    def init_guess_by_minao(self, mol=None):
+        return _from_rhf_init_dm(hf.SCF.init_guess_by_minao(self, mol))
+
+    def init_guess_by_atom(self, mol=None):
+        return _from_rhf_init_dm(hf.SCF.init_guess_by_atom(self, mol))
+
+    def init_guess_by_chkfile(self, chkfile=None, project=True):
+        from pyscf.scf import uhf
+        dma, dmb = uhf.init_guess_by_chkfile(mol, chkfile, project)
+        return scipy.linalg.block_diag(dma, dmb)
 
     def get_jk(self, mol=None, dm=None, hermi=0):
         if mol is None: mol = self.mol
@@ -410,16 +421,27 @@ class GHF(hf.SCF):
 #        from pyscf.scf.stability import uhf_stability
 #        return uhf_stability(self, internal, external, verbose)
 
+def _from_rhf_init_dm(dm, breaksym=True):
+    dma = dm * .5
+    dm = scipy.linalg.block_diag(dma, dma)
+    if breaksym:
+        nao = dma.shape[0]
+        idx, idy = numpy.diag_indices(nao)
+        dm[idx+nao,idy] = dm[idx,idy+nao] = dma.diagonal() * .05
+    return dm
+
 
 if __name__ == '__main__':
     from pyscf import gto
     mol = gto.Mole()
-    mol.verbose = 4
+    mol.verbose = 3
     mol.atom = 'H 0 0 0; H 0 0 1; O .5 .6 .2'
     mol.basis = 'ccpvdz'
     mol.build()
 
     mf = GHF(mol)
+    mf.kernel()
+
     dm = mf.init_guess_by_1e(mol)
     dm = dm + 0j
     nao = mol.nao_nr()
