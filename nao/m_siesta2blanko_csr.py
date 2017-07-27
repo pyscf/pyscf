@@ -12,7 +12,7 @@ def _siesta2blanko_csr(orb2m, mat, orb_sc2orb_uc=None):
   n = len(orb2m)
   if(n!=len(mat.indptr)-1): raise SystemError('!number of orbitals should be equal to number of rows?')
   
-  ptr2ph = np.zeros_like(mat.data)
+  ptr2ph = np.zeros_like(mat.data, dtype = np.float64)
   
   if orb_sc2orb_uc is None:
     orb_sc2m = orb2m
@@ -21,8 +21,8 @@ def _siesta2blanko_csr(orb2m, mat, orb_sc2orb_uc=None):
     for orb_sc,orb_uc in enumerate(orb_sc2orb_uc): orb_sc2m[orb_sc] = orb2m[orb_uc]
   
   for row in range(n):
-    ph1, s, f = (-1)**orb2m[row], mat.indptr[row], mat.indptr[row+1]
-    ptr2ph[s:f] = ph1 * (-1)**orb_sc2m[mat.indices[s:f]]
+    ph1, s, f = (-1.0)**orb2m[row], mat.indptr[row], mat.indptr[row+1]
+    ptr2ph[s:f] = ph1 * (-1.0)**orb_sc2m[mat.indices[s:f]]
 
   mat.data = mat.data*ptr2ph
   return 0
@@ -48,7 +48,7 @@ def _siesta2blanko_csr_slow(orb2m, mat, orb_sc2orb_uc=None):
       icol = mat.indices[ind]
       if(icol>=n): icol=orb_sc2orb_uc[icol]
       m2 = orb2m[icol]
-      col_phase[ind-mat.indptr[row]] = (-1)**m2
+      col_phase[ind-mat.indptr[row]] = (-1.0)**m2
     
     col_data = col_data*col_phase
     mat.data[mat.indptr[row]:mat.indptr[row+1]] = col_data
