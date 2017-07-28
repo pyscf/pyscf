@@ -56,6 +56,7 @@ def gen_tda_hop(mf, fock_ao=None, singlet=True, wfnsym=None, max_memory=2000):
         hdiag[sym_forbid] = 0
     hdiag = hdiag.ravel()
 
+    mo_coeff = numpy.asarray(numpy.hstack((orbo,orbv)), order='F')
     vresp = _gen_rhf_response(mf, singlet=singlet, hermi=0)
 
     def vind(zs):
@@ -228,6 +229,7 @@ class TDHF(TDA):
             hdiag[sym_forbid] = 0
         hdiag = numpy.hstack((hdiag.ravel(), hdiag.ravel()))
 
+        mo_coeff = numpy.asarray(numpy.hstack((orbo,orbv)), order='F')
         vresp = _gen_rhf_response(mf, singlet=singlet, hermi=0)
 
         def vind(xys):

@@ -226,14 +226,11 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
 
 def get_grad(mo_coeff, mo_occ, fock_ao):
     '''DHF Gradients'''
-    occidx = numpy.where(mo_occ> 0)[0]
-    viridx = numpy.where(mo_occ==0)[0]
-    nocc = len(occidx)
-    nvir = len(viridx)
-
-    fock = reduce(numpy.dot, (mo_coeff.T.conj(), fock_ao, mo_coeff))
-    g = fock[occidx[:,None],viridx].T
-    return g.reshape(-1)
+    occidx = mo_occ > 0
+    viridx = ~occidx
+    g = reduce(numpy.dot, (mo_coeff[:,viridx].T.conj(), fock_ao,
+                           mo_coeff[:,occidx]))
+    return g.ravel()
 
 
 class UHF(hf.SCF):

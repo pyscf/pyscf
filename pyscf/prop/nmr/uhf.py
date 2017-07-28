@@ -14,34 +14,15 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.scf import ucphf
+from pyscf.ao2mo import _ao2mo
 from pyscf.scf.newton_ah import _gen_uhf_response
 from pyscf.prop.nmr import rhf as rhf_nmr
 
 
 def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
-    if shielding_nuc is None:
-        shielding_nuc = range(mol.natm)
-    if gauge_orig is not None:
-        mol.set_common_origin(gauge_orig)
-
-    msc_dia = []
-    for n, atm_id in enumerate(shielding_nuc):
-        mol.set_rinv_origin(mol.atom_coord(atm_id))
-        if gauge_orig is None:
-            h11 = mol.intor('int1e_giao_a11part', 9)
-        else:
-            h11 = mol.intor('int1e_cg_a11part', 9)
-        trh11 = -(h11[0] + h11[4] + h11[8])
-        h11[0] += trh11
-        h11[4] += trh11
-        h11[8] += trh11
-        if gauge_orig is None:
-            h11 += mol.intor('int1e_a01gp', 9)
-        a11 = numpy.einsum('xij,ij->x', h11, dm0)
-        msc_dia.append(a11)
-        #     XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ = 1..9
-        #  => [[XX, XY, XZ], [YX, YY, YZ], [ZX, ZY, ZZ]]
-        return numpy.array(msc_dia).reshape(-1, 3, 3)
+    if not (isinstance(dm0, numpy.ndarray) and dm0.ndim == 2):
+        dm0 = dm0[0] + dm0[1]
+    return rhf_nmr.dia(mol, dm0, gauge_orig, shielding_nuc)
 
 def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
     if shielding_nuc is None:
@@ -192,7 +173,7 @@ class NMR(rhf_nmr.NMR):
 
         cput1 = log.timer('first order Fock matrix', *cput1)
         if self.cphf:
-            vind = self.gen_vind(self._scf)
+            vind = self.gen_vind(self._scf, mo_coeff, mo_occ)
             mo10, mo_e10 = ucphf.solve(vind, mo_energy, mo_occ, h1, s1,
                                        self.max_cycle_cphf, self.conv_tol,
                                        verbose=log)
@@ -201,11 +182,9 @@ class NMR(rhf_nmr.NMR):
         logger.timer(self, 'solving mo1 eqn', *cput1)
         return mo10, mo_e10
 
-    def gen_vind(self, mo1):
+    def gen_vind(self, mf, mo_coeff, mo_occ):
         '''Induced potential'''
         vresp = _gen_uhf_response(self._scf, hermi=2)
-        mo_coeff = self._scf.mo_coeff
-        mo_occ = self._scf.mo_occ
         occidxa = mo_occ[0] > 0
         occidxb = mo_occ[1] > 0
         orboa = mo_coeff[0][:,occidxa]
@@ -215,7 +194,6 @@ class NMR(rhf_nmr.NMR):
         nao, nmo = mo_coeff[0].shape
         nvira = nmo - nocca
         def vind(mo1):
-            #direct_scf_bak, self._scf.direct_scf = self._scf.direct_scf, False
             mo1a = mo1.reshape(3,-1)[:,:nocca*nmo].reshape(3,nmo,nocca)
             mo1b = mo1.reshape(3,-1)[:,nocca*nmo:].reshape(3,nmo,noccb)
             dm1a = [reduce(numpy.dot, (mo_coeff[0], x, orboa.T.conj())) for x in mo1a]
@@ -227,7 +205,6 @@ class NMR(rhf_nmr.NMR):
             v1b = [reduce(numpy.dot, (mo_coeff[1].T.conj(), x, orbob)) for x in v1ao[1]]
             v1mo = numpy.hstack((numpy.asarray(v1a).reshape(3,-1),
                                  numpy.asarray(v1b).reshape(3,-1)))
-            #self._scf.direct_scf = direct_scf_bak
             return v1mo.ravel()
         return vind
 
@@ -273,5 +250,5 @@ if __name__ == '__main__':
     nmr.cphf = False
     nmr.gauge_orig = None
     msc = nmr.shielding()
-    print(lib.finger(msc) - -153.53475826780419)
+    print(lib.finger(msc) - -123.98596361883168)
 

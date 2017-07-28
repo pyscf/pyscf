@@ -134,18 +134,24 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
 
         max_memory1 = max_memory * (nkptj+1)/(nkptj+5)
         blksize = max(int(max_memory1*4e6/(nkptj+5)/16/nao**2), 16)
-        bufR = numpy.empty((blksize*nao**2))
-        bufI = numpy.empty((blksize*nao**2))
+
+        #bufR = numpy.empty((blksize*nao**2))
+        #bufI = numpy.empty((blksize*nao**2))
         # Use DF object to mimic KRHF/KUHF object in function get_coulG
         mydf.exxdiv = exxdiv
         vkcoulG = mydf.weighted_coulG(kpt, True, mydf.gs)
         kptjs = kpts[kptj_idx]
         # <r|-G+k_rs|s> = conj(<s|G-k_rs|r>) = conj(<s|G+k_sr|r>)
-        buf1R = numpy.empty((blksize*nao**2))
-        buf1I = numpy.empty((blksize*nao**2))
+        #buf1R = numpy.empty((blksize*nao**2))
+        #buf1I = numpy.empty((blksize*nao**2))
         for aoaoks, p0, p1 in mydf.ft_loop(mydf.gs, kpt, kptjs, max_memory=max_memory1):
             coulG = numpy.sqrt(vkcoulG[p0:p1])
             nG = p1 - p0
+            bufR = numpy.empty((nG*nao**2))
+            bufI = numpy.empty((nG*nao**2))
+            buf1R = numpy.empty((nG*nao**2))
+            buf1I = numpy.empty((nG*nao**2))
+            
             for k, aoao in enumerate(aoaoks):
                 ki = kpti_idx[k]
                 kj = kptj_idx[k]

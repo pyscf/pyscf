@@ -1,3 +1,18 @@
+# TODO: By PySCF-1.5 release
+# 1. code style
+#   * Indent: 3 -> 4
+#   * Constant should be all uppercase
+#   * Function/method should be all lowercase
+#   * Line wrap around 80 columns
+#   * Use either double quote or single quote, not mix
+# 
+# 2. Conventions required by PySCF
+#   * Use PYSCF_TMPDIR to replace _TmpDir
+# 
+# 3. Use proper functions provided by PySCF
+#
+
+
 #  This file is adapted with permission from the wmme program of Gerald Knizia.
 #  See http://sites.psu.edu/knizia/software/
 #====================================================

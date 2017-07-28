@@ -5,7 +5,7 @@ import pyscf.dft
 from  pyscf import gto, tdscf
 np.set_printoptions(linewidth=220, suppress = True,precision = 7)
 
-def TestTDDFT():
+def TestTDHF():
     """
     Tests Basic Propagation Functionality. TDDFT
     """
@@ -39,4 +39,4 @@ def TestTDDFT():
     print "Inital SCF finished. E=", the_scf.kernel()
     aprop = tdscf.tdscf(the_scf,prm,output)
     return
-TestTDDFT()
+TestTDHF()

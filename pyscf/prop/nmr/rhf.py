@@ -45,8 +45,8 @@ def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
             h11 += mol.intor('int1e_a01gp', 9)
         a11 = numpy.einsum('xij,ij->x', h11, dm0)
         msc_dia.append(a11)
-        #     XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ = 1..9
-        #  => [[XX, XY, XZ], [YX, YY, YZ], [ZX, ZY, ZZ]]
+    # XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ = 1..9
+    # => [[XX, XY, XZ], [YX, YY, YZ], [ZX, ZY, ZZ]]
     return numpy.array(msc_dia).reshape(-1, 3, 3)
 
 # Note mo10 is the imaginary part of MO^1
@@ -134,9 +134,9 @@ def solve_mo1(mo_energy, mo_occ, h1, s1):
 
 class NMR(lib.StreamObject):
     def __init__(self, scf_method):
-        self.verbose = scf_method.verbose
-        self.stdout = scf_method.stdout
         self.mol = scf_method.mol
+        self.verbose = scf_method.mol.verbose
+        self.stdout = scf_method.mol.stdout
         self.chkfile = scf_method.chkfile
         self._scf = scf_method
 
@@ -249,7 +249,7 @@ class NMR(lib.StreamObject):
 
         cput1 = log.timer('first order Fock matrix', *cput1)
         if with_cphf:
-            vind = self.gen_vind(self._scf)
+            vind = self.gen_vind(self._scf, mo_coeff, mo_occ)
             mo10, mo_e10 = cphf.solve(vind, mo_energy, mo_occ, h1, s1,
                                       self.max_cycle_cphf, self.conv_tol,
                                       verbose=log)
@@ -258,11 +258,9 @@ class NMR(lib.StreamObject):
         logger.timer(self, 'solving mo1 eqn', *cput1)
         return mo10, mo_e10
 
-    def gen_vind(self, mf):
+    def gen_vind(self, mf, mo_coeff, mo_occ):
         '''Induced potential'''
         vresp = _gen_rhf_response(mf, hermi=2)
-        mo_coeff = mf.mo_coeff
-        mo_occ = mf.mo_occ
         occidx = mo_occ > 0
         orbo = mo_coeff[:,occidx]
         nocc = orbo.shape[1]

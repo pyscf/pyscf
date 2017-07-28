@@ -86,8 +86,8 @@ class KnowValues(unittest.TestCase):
     def test_spin_square(self):
         self.assertAlmostEqual(mf.spin_square(mf.mo_coeff)[0], 0, 9)
 
-    def test_map_rhf_to_uhf(self):
-        scf.uhf.map_rhf_to_uhf(scf.RHF(mol))
+    def test_rhf_to_uhf(self):
+        scf.uhf.rhf_to_uhf(scf.RHF(mol))
 
     def test_uhf_symm(self):
         pmol = mol.copy()

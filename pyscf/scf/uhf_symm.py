@@ -3,14 +3,16 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import time
+'''
+Non-relativistic unrestricted Hartree-Fock with point group symmetry.
+'''
+
 from functools import reduce
 import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf import symm
 from pyscf.lib import logger
-from pyscf.scf import hf
 from pyscf.scf import hf_symm
 from pyscf.scf import uhf
 from pyscf.scf import chkfile
@@ -26,35 +28,32 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
-    log = logger.Logger(mf.stdout, verbose)
-    nirrep = len(mol.irrep_id)
     ovlp_ao = mf.get_ovlp()
-    orbsyma, orbsymb = get_orbsym(mf.mol, mo_coeff, ovlp_ao, False)
-    tot_sym = 0
-    noccsa = [sum(orbsyma[mo_occ[0]>0]==ir) for ir in mol.irrep_id]
-    noccsb = [sum(orbsymb[mo_occ[1]>0]==ir) for ir in mol.irrep_id]
-    for i, ir in enumerate(mol.irrep_id):
-        if (noccsa[i]+noccsb[i]) % 2:
-            tot_sym ^= ir
-    if mol.groupname in ('Dooh', 'Coov', 'SO3'):
-        log.note('TODO: total symmetry for %s', mol.groupname)
-    else:
-        log.note('total symmetry = %s',
-                 symm.irrep_id2name(mol.groupname, tot_sym))
-    log.note('alpha occupancy for each irrep:  '+(' %4s'*nirrep),
-             *mol.irrep_name)
-    log.note('                                 '+(' %4d'*nirrep),
-             *noccsa)
-    log.note('beta  occupancy for each irrep:  '+(' %4s'*nirrep),
-             *mol.irrep_name)
-    log.note('                                 '+(' %4d'*nirrep),
-             *noccsb)
+    log = logger.new_logger(mf, verbose)
+    if log.verbose >= logger.NOTE:
+        nirrep = len(mol.irrep_id)
+        ovlp_ao = mf.get_ovlp()
+        orbsyma, orbsymb = get_orbsym(mf.mol, mo_coeff, ovlp_ao, False)
+        tot_sym = 0
+        noccsa = [sum(orbsyma[mo_occ[0]>0]==ir) for ir in mol.irrep_id]
+        noccsb = [sum(orbsymb[mo_occ[1]>0]==ir) for ir in mol.irrep_id]
+        for i, ir in enumerate(mol.irrep_id):
+            if (noccsa[i]+noccsb[i]) % 2:
+                tot_sym ^= ir
+        if mol.groupname in ('Dooh', 'Coov', 'SO3'):
+            log.note('TODO: total symmetry for %s', mol.groupname)
+        else:
+            log.note('total symmetry = %s',
+                     symm.irrep_id2name(mol.groupname, tot_sym))
+        log.note('alpha occupancy for each irrep:  '+(' %4s'*nirrep),
+                 *mol.irrep_name)
+        log.note('                                 '+(' %4d'*nirrep),
+                 *noccsa)
+        log.note('beta  occupancy for each irrep:  '+(' %4s'*nirrep),
+                 *mol.irrep_name)
+        log.note('                                 '+(' %4d'*nirrep),
+                 *noccsb)
 
-    ss, s = mf.spin_square((mo_coeff[0][:,mo_occ[0]>0],
-                            mo_coeff[1][:,mo_occ[1]>0]), ovlp_ao)
-    log.note('multiplicity <S^2> = %.8g  2S+1 = %.8g', ss, s)
-
-    if verbose >= logger.NOTE:
         log.note('**** MO energy ****')
         irname_full = {}
         for k, ir in enumerate(mol.irrep_id):
@@ -76,7 +75,6 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
             log.note('beta  MO #%d (%s #%d), energy= %.15g occ= %g',
                      k+1, irname_full[j], irorbcnt[j], mo_energy[1][k], mo_occ[1][k])
 
-    ovlp_ao = mf.get_ovlp()
     if mf.verbose >= logger.DEBUG:
         label = mol.ao_labels()
         molabel = []
@@ -149,7 +147,7 @@ def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
                         for k, ir in enumerate(mol.irrep_id)])
     return irrep_nelec
 
-map_rhf_to_uhf = uhf.map_rhf_to_uhf
+rhf_to_uhf = uhf.rhf_to_uhf
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the UHF Fock matrix in occupied, virtual
@@ -163,7 +161,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     assert(mo_occ.ndim == 2)
     if fock is None:
         dm = mf.make_rdm1(mo_coeff, mo_occ)
-        fock = mf.get_hcore() + mf.get_jk(mol, dm)
+        fock = mf.get_hcore() + mf.get_veff(mf.mol, dm)
     occidxa = mo_occ[0] == 1
     occidxb = mo_occ[1] == 1
     viridxa = ~occidxa
@@ -245,6 +243,7 @@ class UHF(uhf.UHF):
         uhf.UHF.dump_flags(self)
         if self.irrep_nelec:
             logger.info(self, 'irrep_nelec %s', self.irrep_nelec)
+        return self
 
     def build(self, mol=None):
         if mol is None: mol = self.mol

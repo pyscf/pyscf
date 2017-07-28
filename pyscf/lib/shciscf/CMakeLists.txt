@@ -1,4 +1,4 @@
-add_library(shciscf SHARED SHCI_tools.cpp)
+add_library(shciscf SHARED libSHCITools.c)
 
 set_target_properties(shciscf PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}

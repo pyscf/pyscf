@@ -246,24 +246,22 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mf.stdout, verbose)
+    log = logger.new_logger(mf, verbose)
+    if log.verbose >= logger.NOTE:
+        log.note('**** MO energy ****')
+        if mf._focka_ao is None:
+            for i,c in enumerate(mo_occ):
+                log.note('MO #%-3d energy= %-18.15g occ= %g', i+1, mo_energy[i], c)
+        else:
+            mo_ea = numpy.einsum('ik,ik->k', mo_coeff, mf._focka_ao.dot(mo_coeff))
+            mo_eb = numpy.einsum('ik,ik->k', mo_coeff, mf._fockb_ao.dot(mo_coeff))
+            log.note('                Roothaan           | alpha              | beta')
+            for i,c in enumerate(mo_occ):
+                log.note('MO #%-3d energy= %-18.15g | %-18.15g | %-18.15g occ= %g',
+                         i+1, mo_energy[i], mo_ea[i], mo_eb[i], c)
 
-    log.note('**** MO energy ****')
-    if mf._focka_ao is None:
-        for i,c in enumerate(mo_occ):
-            log.note('MO #%-3d energy= %-18.15g occ= %g', i+1, mo_energy[i], c)
-    else:
-        mo_ea = numpy.einsum('ik,ik->k', mo_coeff, mf._focka_ao.dot(mo_coeff))
-        mo_eb = numpy.einsum('ik,ik->k', mo_coeff, mf._fockb_ao.dot(mo_coeff))
-        log.note('                Roothaan           | alpha              | beta')
-        for i,c in enumerate(mo_occ):
-            log.note('MO #%-3d energy= %-18.15g | %-18.15g | %-18.15g occ= %g',
-                     i+1, mo_energy[i], mo_ea[i], mo_eb[i], c)
     ovlp_ao = mf.get_ovlp()
-    if verbose >= logger.DEBUG:
+    if log.verbose >= logger.DEBUG:
         log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
         label = mf.mol.ao_labels()
         orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
@@ -278,7 +276,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     if fock is None:
-        fock = mf.get_hcore() + mf.get_jk(mol, dm)
+        fock = mf.get_hcore() + mf.get_veff(mf.mol, dm)
     if isinstance(fock, numpy.ndarray) and fock.ndim == 3:
         fock = get_roothaan_fock(fock, dm, mf.get_ovlp())
     return hf.canonicalize(mf, mo_coeff, mo_occ, fock)

@@ -16,7 +16,8 @@ from pyscf.scf import _vhf
 
 def sfx2c1e(mf):
     '''Spin-free X2C.
-    For the given SCF object, update the hcore constructor.
+    For the given SCF object, it updates the hcore constructor.  All integrals
+    are computed in the real spherical GTO basis.
 
     Args:
         mf : an SCF object
@@ -63,6 +64,9 @@ sfx2c = sfx2c1e
 
 
 class X2C(lib.StreamObject):
+    '''2-component X2c (including spin-free and spin-dependent terms) in
+    the j-adapted spinor basis.
+    '''
     def __init__(self, mol=None):
         self.exp_drop = 0.2
         self.approx = '1e'  # 'atom1e'
@@ -85,6 +89,9 @@ class X2C(lib.StreamObject):
             return mol, None
 
     def get_hcore(self, mol=None):
+        '''2-component X2c hcore Hamiltonian (including spin-free and
+        spin-dependent terms) in the j-adapted spinor basis.
+        '''
         if mol is None: mol = self.mol
         xmol, contr_coeff_nr = self.get_xmol(mol)
         c = lib.param.LIGHT_SPEED
@@ -124,7 +131,12 @@ class X2C(lib.StreamObject):
 
 
 class SpinFreeX2C(X2C):
+    '''1-component X2c (spin-free part only) in the real spherical GTO basis.
+    '''
     def get_hcore(self, mol=None):
+        '''1-component X2c hcore Hamiltonian  (spin-free part only) in the
+        real spherical GTO basis.
+        '''
         if mol is None: mol = self.mol
         xmol, contr_coeff = self.get_xmol(mol)
         c = lib.param.LIGHT_SPEED
@@ -160,11 +172,16 @@ class SpinFreeX2C(X2C):
 
 
 def get_hcore(mol):
-    '''Foldy-Wouthuysen hcore'''
+    '''2-component X2c hcore Hamiltonian (including spin-free and
+    spin-dependent terms) in the j-adapted spinor basis.
+    '''
     x2c = X2C(mol)
     return x2c.get_hcore(mol)
 
 def get_jk(mol, dm, hermi=1, mf_opt=None):
+    '''non-relativistic J/K matrices (without SSO,SOO etc) in the j-adapted
+    spinor basis.
+    '''
     n2c = dm.shape[0]
     dd = numpy.zeros((n2c*2,)*2, dtype=numpy.complex)
     dd[:n2c,:n2c] = dm

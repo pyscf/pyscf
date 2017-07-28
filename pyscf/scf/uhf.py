@@ -8,7 +8,6 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import hf
-from pyscf.scf import _vhf
 from pyscf.scf import chkfile
 
 
@@ -132,7 +131,6 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
 
     >>> import numpy
     >>> from pyscf import gto, scf
-    >>> from pyscf.scf import _vhf
     >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1')
     >>> dmsa = numpy.random.random((3,mol.nao_nr(),mol.nao_nr()))
     >>> dmsb = numpy.random.random((3,mol.nao_nr(),mol.nao_nr()))
@@ -320,8 +318,8 @@ def spin_square(mo, s=1):
              - \langle i^\alpha|i^\alpha\rangle \langle j^\beta|j^\beta\rangle
              - \langle i^\beta|i^\beta\rangle \langle j^\alpha|j^\alpha\rangle
              + \langle i^\beta|i^\beta\rangle \langle j^\beta|j^\beta\rangle) \\
-            &-\frac{1}{4}(\langle i^\alpha|i^\alpha\rangle \langle i^\alpha|i^\alpha\rangle
-             + \langle i^\beta|i^\beta\rangle\langle i^\beta|i^\beta\rangle) \\
+            &-\frac{1}{4}(\langle i^\alpha|j^\alpha\rangle \langle j^\alpha|i^\alpha\rangle
+             + \langle i^\beta|j^\beta\rangle\langle j^\beta|i^\beta\rangle) \\
             &=\frac{1}{4}(n_\alpha^2 - n_\alpha n_\beta - n_\beta n_\alpha + n_\beta^2)
              -\frac{1}{4}(n_\alpha + n_\beta) \\
             &=\frac{1}{4}((n_\alpha-n_\beta)^2 - (n_\alpha+n_\beta))
@@ -376,19 +374,17 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mf.stdout, verbose)
+    log = logger.new_logger(mf, verbose)
+    if log.verbose >= logger.NOTE:
+        log.note('**** MO energy ****')
+        log.note('                             alpha | beta                alpha | beta')
+        for i in range(mo_occ.shape[1]):
+            log.note('MO #%-3d energy= %-18.15g | %-18.15g occ= %g | %g',
+                     i+1, mo_energy[0][i], mo_energy[1][i],
+                     mo_occ[0][i], mo_occ[1][i])
 
-    log.note('**** MO energy ****')
-    log.note('                             alpha | beta                alpha | beta')
-    for i in range(mo_occ.shape[1]):
-        log.note('MO #%-3d energy= %-18.15g | %-18.15g occ= %g | %g',
-                 i+1, mo_energy[0][i], mo_energy[1][i],
-                 mo_occ[0][i], mo_occ[1][i])
     ovlp_ao = mf.get_ovlp()
-    if verbose >= logger.DEBUG:
+    if log.verbose >= logger.DEBUG:
         log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for alpha spin **')
         label = mf.mol.ao_labels()
         orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
@@ -414,14 +410,15 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
         log = logger.Logger(mol.stdout, verbose)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = numpy.array((dm*.5, dm*.5))
-    pop_a = numpy.einsum('ij->i', dm[0]*s)
-    pop_b = numpy.einsum('ij->i', dm[1]*s)
+    pop_a = numpy.einsum('ij,ji->i', dm[0], s).real
+    pop_b = numpy.einsum('ij,ji->i', dm[1], s).real
     label = mol.ao_labels(fmt=None)
 
     log.note(' ** Mulliken pop       alpha | beta **')
     for i, s in enumerate(label):
         log.note('pop of  %s %10.5f | %-10.5f',
                  '%d%s %s%4s'%s, pop_a[i], pop_b[i])
+    log.note('In total          %10.5f | %-10.5f', sum(pop_a), sum(pop_b))
 
     log.note(' ** Mulliken atomic charges  **')
     chg = numpy.zeros(mol.natm)
@@ -456,7 +453,7 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
     return mulliken_pop(mol, (dm_a,dm_b), numpy.eye(orth_coeff.shape[0]), log)
 mulliken_pop_meta_lowdin_ao = mulliken_meta
 
-def map_rhf_to_uhf(mf):
+def rhf_to_uhf(mf):
     '''Create UHF object based on the RHF object'''
     from pyscf.scf import addons
     return addons.convert_to_uhf(mf)
@@ -469,7 +466,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     assert(mo_occ.ndim == 2)
     if fock is None:
         dm = mf.make_rdm1(mo_coeff, mo_occ)
-        fock = mf.get_hcore() + mf.get_jk(mol, dm)
+        fock = mf.get_hcore() + mf.get_veff(mf.mol, dm)
     occidxa = mo_occ[0] == 1
     occidxb = mo_occ[1] == 1
     viridxa = mo_occ[0] == 0
@@ -729,6 +726,7 @@ class UHF(hf.SCF):
                       pre_orth_method='ANO', s=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
+        if s is None: s = self.get_ovlp(mol)
         return mulliken_meta(mol, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 

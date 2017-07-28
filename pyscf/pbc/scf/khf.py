@@ -24,6 +24,7 @@ from pyscf.lib import logger
 from pyscf.pbc.gto import ecp
 from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile
+from pyscf.pbc import tools
 from functools import reduce
 
 
@@ -210,7 +211,7 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
     from pyscf.lo import orth
     if s is None:
         s = hf.get_ovlp(mol)
-    log = logger.new_logger(mf, verbose)
+    log = logger.new_logger(mol, verbose)
     log.note('Analyze output for the gamma point')
     log.note("KRHF mulliken_meta")
     dm_ao_gamma=dm_ao[0,:,:].real.copy()
@@ -357,8 +358,15 @@ class KRHF(hf.RHF):
         #    if self.exx_built is False:
         #        self.precompute_exx()
         #    logger.info(self, 'WS alpha = %s', self.exx_alpha)
+        if isinstance(self.exxdiv, str) and self.exxdiv.lower() == 'ewald':
+            madelung = tools.pbc.madelung(self.cell, [self.kpts])
+            logger.info(self, '    Total energy shift due to Ewald probe charge'
+                        ' = -1/2 * Nelec*madelung/cell.vol = %.12g',
+                        madelung*self.cell.nelectron * -.5)
+            logger.debug(self, '    madelung = %s', madelung)
         logger.info(self, 'DF object = %s', self.with_df)
         self.with_df.dump_flags()
+        return self
 
     def build(self, cell=None):
         hf.RHF.build(self, cell)

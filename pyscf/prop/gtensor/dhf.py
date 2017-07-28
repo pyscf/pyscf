@@ -66,10 +66,10 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     mol = gto.M(
-        atom = [['li', (0.,0.,0.)],
+        atom = [['Ne', (0.,0.,0.)],
                 #['He', (.4,.7,0.)],
                ],
-        basis = 'ccpvdz', spin=1)
+        basis = 'ccpvdz', spin=2, charge=2)
     mf = scf.DHF(mol).run()
     print GTensor(mf).kernel((0,0,0))
     print GTensor(mf).kernel(mb='RMB')

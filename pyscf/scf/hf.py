@@ -700,10 +700,9 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     '''
     occidx = mo_occ > 0
     viridx = ~occidx
-
-    g = reduce(numpy.dot, (mo_coeff[:,occidx].T.conj(), fock_ao,
-                           mo_coeff[:,viridx])) * 2
-    return g.T.ravel()
+    g = reduce(numpy.dot, (mo_coeff[:,viridx].T.conj(), fock_ao,
+                           mo_coeff[:,occidx])) * 2
+    return g.ravel()
 
 
 def analyze(mf, verbose=logger.DEBUG, **kwargs):
@@ -715,14 +714,12 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mf.stdout, verbose)
+    log = logger.new_logger(mf, verbose)
+    if log.verbose >= logger.NOTE:
+        log.note('**** MO energy ****')
+        for i,c in enumerate(mo_occ):
+            log.note('MO #%-3d energy= %-18.15g occ= %g', i+1, mo_energy[i], c)
 
-    log.note('**** MO energy ****')
-    for i,c in enumerate(mo_occ):
-        log.note('MO #%-3d energy= %-18.15g occ= %g', i+1, mo_energy[i], c)
     ovlp_ao = mf.get_ovlp()
     if verbose >= logger.DEBUG:
         log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
@@ -751,9 +748,9 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     else:
         log = logger.Logger(mol.stdout, verbose)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-        pop = numpy.einsum('ij->i', dm*s).real
+        pop = numpy.einsum('ij,ji->i', dm, s).real
     else: # ROHF
-        pop = numpy.einsum('ij->i', (dm[0]+dm[1])*s).real
+        pop = numpy.einsum('ij,ji->i', dm[0]+dm[1], s).real
     label = mol.ao_labels(fmt=None)
 
     log.note(' ** Mulliken pop  **')
@@ -832,7 +829,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''
     if fock is None:
         dm = mf.make_rdm1(mo_coeff, mo_occ)
-        fock = mf.get_hcore() + mf.get_jk(mol, dm)
+        fock = mf.get_hcore() + mf.get_veff(mf.mol, dm)
     coreidx = mo_occ == 2
     viridx = mo_occ == 0
     openidx = ~(coreidx | viridx)
@@ -879,7 +876,7 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
 
     mol.set_common_orig((0,0,0))
     ao_dip = mol.intor_symmetric('int1e_r', comp=3)
-    el_dip = numpy.einsum('xij,ji->x', ao_dip, dm)
+    el_dip = numpy.einsum('xij,ji->x', ao_dip, dm).real
 
     charges = mol.atom_charges()
     coords  = mol.atom_coords()
@@ -913,7 +910,7 @@ def unpack_uniq_var(dx, mo_occ):
 
     x1 = numpy.zeros((nmo,nmo), dtype=dx.dtype)
     x1[idx] = dx
-    return x1 - x1.T
+    return x1 - x1.T.conj()
 
 class DMArray(numpy.ndarray):
     pass
@@ -1160,9 +1157,10 @@ class SCF(lib.StreamObject):
         if self.verbose >= logger.DEBUG1:
             s = self.get_ovlp()
             if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-                nelec = (dm.T*s).sum()
+                nelec = numpy.einsum('ij,ji', dm, s)
             else:  # UHF
-                nelec = (dm[0].T*s).sum() + (dm[1].T*s).sum()
+                nelec = numpy.einsum('ij,ji', dm[0], s)
+                nelec+= numpy.einsum('ij,ji', dm[1], s)
             logger.debug1(self, 'Nelec from initial guess = %g', nelec.real)
         return dm
 
@@ -1287,6 +1285,7 @@ class SCF(lib.StreamObject):
                       pre_orth_method='ANO', s=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
+        if s is None: s = self.get_ovlp(mol)
         return mulliken_meta(mol, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
     def mulliken_pop_meta_lowdin_ao(self, *args, **kwargs):

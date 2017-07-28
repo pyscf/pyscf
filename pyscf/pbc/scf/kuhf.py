@@ -182,7 +182,7 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
     from pyscf.lo import orth
     if s is None:
         s = hf.get_ovlp(mol)
-    log = logger.new_logger(mf, verbose)
+    log = logger.new_logger(mol, verbose)
     log.note('Analyze output for the gamma point')
     log.note("KUHF mulliken_meta")
     dm_ao_gamma=dm_ao[:,0,:,:].real.copy()
@@ -317,17 +317,9 @@ class KUHF(uhf.UHF, khf.KRHF):
 
     def dump_flags(self):
         uhf.UHF.dump_flags(self)
-        logger.info(self, '\n')
-        logger.info(self, '******** PBC SCF flags ********')
-        logger.info(self, 'N kpts = %d', len(self.kpts))
-        logger.debug(self, 'kpts = %s', self.kpts)
-        logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
-        #if self.exxdiv == 'vcut_ws':
-        #    if self.exx_built is False:
-        #        self.precompute_exx()
-        #    logger.info(self, 'WS alpha = %s', self.exx_alpha)
-        logger.info(self, 'DF object = %s', self.with_df)
+        khf.KRHF.dump_flags(self)
         self.with_df.dump_flags()
+        return self
 
     def build(self, cell=None):
         uhf.UHF.build(self, cell)

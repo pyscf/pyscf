@@ -1,3 +1,25 @@
+# TODO: refactor the code before adding to FEATURES list by PySCF-1.5 release
+# 1. code style
+#   * Indent: 8 -> 4
+#   * The statement "from import *"
+#   * Class name should be capitalized
+#   * Function/method should be all lowercase
+#   * Inherite class from object or lib.StreamObject
+#   * Remove the unused modules: func, os, ...
+#   * Line wrap around 80 columns
+#   * Use either double quote or single quote, not mix
+#   * Avoid python builtin keyword: time, ...
+# 
+# 2. Conventions required by PySCF
+#   * Class attributes should be immutable.
+#   * Class should not hold intermediate states.
+#   * Suffix _ only be used for functions with side effect
+#   * Add attribute ._keys for sanity check
+#   * Meaningful return value for methods
+#   * Class attributes should be all lowercase
+#   * Remove unused arguments in function definition
+#
+
 import numpy as np
 from cmath import *
 from func import *
@@ -33,14 +55,6 @@ class fields:
                 self.nuc_dip = np.einsum('i,ix->x', charges, coords)
                 return
 
-        def Update(self,c_mat):
-                '''
-                Args:
-                        c_mat: Transformation matrix (AOx??)
-                Updates dip_int to (?? x ??)
-                '''
-                return
-
         def ImpulseAmp(self,time):
                 amp = self.fieldAmplitude*np.sin(self.FieldFreq*time)*(1.0/sqrt(2.0*3.1415*self.Tau*self.Tau))*np.exp(-1.0*np.power(time-self.tOn,2.0)/(2.0*self.Tau*self.Tau));
                 IsOn = False
@@ -69,7 +83,7 @@ class fields:
                 amp, IsOn = self.ImpulseAmp(time)
                 mpol = self.pol * amp
                 if (IsOn):
-                        print "Field on"
+                        #print "Field on"
                         return a_mat + 2.0*np.einsum("kij,k->ij",self.dip_ints,mpol), True
                 else:
                         return a_mat, False

@@ -17,6 +17,7 @@ from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
 from pyscf.fci import cistring
+from functools import reduce
 _dgemm = lib.numpy_helper._dgemm
 
 def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8, verbose=logger.INFO):

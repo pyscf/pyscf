@@ -16,10 +16,15 @@ LIGHT_SPEED = float(os.environ.get('PYSCF_LIGHT_SPEED', LIGHT_SPEED))
 BOHR = 0.52917721092  # Angstroms
 
 G_ELECTRON = 2.00231930436182   # http://physics.nist.gov/cgi-bin/cuu/Value?gem
-PROTON_MASS = 1836.15267389     # http://physics.nist.gov/cgi-bin/cuu/Value?mpsme
+E_MASS = 9.10938356e-31         # kg https://physics.nist.gov/cgi-bin/cuu/Value?me
+PROTON_MASS = 1.672621898e-27   # kg https://physics.nist.gov/cgi-bin/cuu/Value?mp
 BOHR_MAGNETON = 927.4009994e-26 # J/T http://physics.nist.gov/cgi-bin/cuu/Value?mub
-NUC_MAGNETON = BOHR_MAGNETON / PROTON_MASS
+NUC_MAGNETON = BOHR_MAGNETON * E_MASS / PROTON_MASS
 PLANCK = 6.626070040e-34        # J*s http://physics.nist.gov/cgi-bin/cuu/Value?h
+HARTREE2J = 4.359744650e-18     # J https://physics.nist.gov/cgi-bin/cuu/Value?hrj
+HARTREE2EV = 27.21138602        # eV https://physics.nist.gov/cgi-bin/cuu/Value?threv
+E_CHARGE = 1.6021766208e-19     # C https://physics.nist.gov/cgi-bin/cuu/Value?e
+LIGHT_SPEED_SI = 299792458      # https://physics.nist.gov/cgi-bin/cuu/Value?c
 
 OUTPUT_DIGITS = int(os.environ.get('PYSCF_OUTPUT_DIGITS', 5))
 OUTPUT_COLS   = int(os.environ.get('PYSCF_OUTPUT_COLS', 5))

@@ -78,6 +78,26 @@ def dynamic_occ_(mf, tol=1e-3):
     return mf
 dynamic_occ = dynamic_occ_
 
+def dynamic_level_shift_(mf, factor=1.):
+    '''Dynamically change the level shift in each SCF cycle.  The level shift
+    value is set to (HF energy change * factor)
+    '''
+    old_get_fock = mf.get_fock
+    last_e = [None]
+    def get_fock(h1e, s1e, vhf, dm, cycle=-1, diis=None,
+                 diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+        ehf =(numpy.einsum('ij,ji', h1e, dm) +
+              numpy.einsum('ij,ji', vhf, dm) * .5)
+        if last_e[0] is not None:
+            level_shift_factor = abs(ehf-last_e[0]) * factor
+            logger.info(mf, 'Set level shift to %g', level_shift_factor)
+        last_e[0] = ehf
+        return old_get_fock(h1e, s1e, vhf, dm, cycle, diis, diis_start_cycle,
+                            level_shift_factor, damp_factor)
+    mf.get_fock = get_fock
+    return mf
+dynamic_level_shift = dynamic_level_shift_
+
 def float_occ_(mf):
     '''for UHF, do not fix the nelec_alpha. determine occupation based on energy spectrum'''
     from pyscf.scf import uhf
@@ -250,7 +270,7 @@ def remove_linear_dep_(mf, threshold=1e-8):
     def eigh(h, s):
         d, t = numpy.linalg.eigh(s)
         x = t[:,d>threshold] / numpy.sqrt(d[d>threshold])
-        xhx = reduce(numpy.dot, (x.T, h, x))
+        xhx = reduce(numpy.dot, (x.T.conj(), h, x))
         e, c = numpy.linalg.eigh(xhx)
         c = numpy.dot(x, c)
         return e, c

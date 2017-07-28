@@ -93,6 +93,8 @@ from pyscf.scf import hf_symm
 from pyscf.scf import hf_symm as rhf_symm
 from pyscf.scf import uhf
 from pyscf.scf import uhf_symm
+from pyscf.scf import ghf
+from pyscf.scf import ghf_symm
 from pyscf.scf import dhf
 from pyscf.scf import chkfile
 from pyscf.scf import addons
@@ -108,8 +110,8 @@ from pyscf.scf import newton_ah
 
 
 def RHF(mol, *args):
-    '''This is a wrap function to decide which SCF class to use, RHF or ROHF
-    '''
+    __doc__ = '''This is a wrap function to decide which SCF class to use, RHF or ROHF\n
+    ''' + hf.RHF.__doc__
     if mol.nelectron == 1:
         if mol.symmetry:
             return rhf_symm.HF1e(mol)
@@ -127,16 +129,16 @@ def RHF(mol, *args):
             return rhf_symm.RHF(mol, *args)
 
 def ROHF(mol, *args):
-    '''This is a wrap function to decide which ROHF class to use.
-    '''
+    __doc__ = '''This is a wrap function to decide which ROHF class to use.\n
+    ''' + rohf.ROHF.__doc__
     if not mol.symmetry or mol.groupname is 'C1':
         return rohf.ROHF(mol, *args)
     else:
         return hf_symm.ROHF(mol, *args)
 
 def UHF(mol, *args):
-    '''This is a wrap function to decide which UHF class to use.
-    '''
+    __doc__ = '''This is a wrap function to decide which UHF class to use.\n
+    ''' + uhf.UHF.__doc__
     if mol.nelectron == 1:
         if not mol.symmetry or mol.groupname is 'C1':
             return uhf.HF1e(mol, *args)
@@ -147,13 +149,22 @@ def UHF(mol, *args):
     else:
         return uhf_symm.UHF(mol, *args)
 
+def GHF(mol, *args):
+    __doc__ = '''Non-relativistic generalized Hartree-Fock class.\n
+    ''' + ghf.GHF.__doc__
+    if not mol.symmetry or mol.groupname is 'C1':
+        return ghf.GHF(mol, *args)
+    else:
+        return ghf_symm.GHF(mol, *args)
+
 def DHF(mol, *args):
-    '''This is a wrap function to decide which Dirac-Hartree-Fock class to use.
-    '''
+    '''This is a wrap function to decide which Dirac-Hartree-Fock class to use.\n
+    ''' + dhf.UHF.__doc__
     if mol.nelectron == 1:
         return dhf.HF1e(mol)
     else:
         return dhf.UHF(mol, *args)
+
 
 def X2C(mol, *args):
     return x2c.UHF(mol, *args)

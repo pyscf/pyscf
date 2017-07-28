@@ -44,6 +44,9 @@ def rohf_stability(mf, internal=True, external=False, verbose=None):
         mo_e = rohf_external(mf, verbose=verbose)
     return mo_i, mo_e
 
+def ghf_stability(mf, internal=True, external=False, verbose=None):
+    raise NotImplementedError
+
 def rhf_internal(mf, with_symmetry=True, verbose=None):
     log = logger.new_logger(mf, verbose)
     g, hop, hdiag = newton_ah.gen_g_hop_rhf(mf, mf.mo_coeff, mf.mo_occ,
@@ -304,6 +307,7 @@ def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
         hdiag2[sym_forbid2] = 0
 
     vresp1 = _gen_uhf_response(mf, with_j=False, hermi=0)
+    # Spin flip GHF solution is not considered
     def hop_uhf2ghf(x1):
         if with_symmetry and mol.symmetry:
             x1 = x1.copy()

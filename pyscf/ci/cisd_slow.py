@@ -15,6 +15,7 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.fci import cistring
+from functools import reduce
 
 def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8,
            verbose=logger.INFO):
