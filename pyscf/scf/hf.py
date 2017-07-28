@@ -700,10 +700,9 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     '''
     occidx = mo_occ > 0
     viridx = ~occidx
-
-    g = reduce(numpy.dot, (mo_coeff[:,occidx].T.conj(), fock_ao,
-                           mo_coeff[:,viridx])) * 2
-    return g.T.ravel()
+    g = reduce(numpy.dot, (mo_coeff[:,viridx].T.conj(), fock_ao,
+                           mo_coeff[:,occidx])) * 2
+    return g.ravel()
 
 
 def analyze(mf, verbose=logger.DEBUG, **kwargs):
@@ -715,14 +714,12 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mf.stdout, verbose)
+    log = logger.new_logger(mf, verbose)
+    if log.verbose >= logger.NOTE:
+        log.note('**** MO energy ****')
+        for i,c in enumerate(mo_occ):
+            log.note('MO #%-3d energy= %-18.15g occ= %g', i+1, mo_energy[i], c)
 
-    log.note('**** MO energy ****')
-    for i,c in enumerate(mo_occ):
-        log.note('MO #%-3d energy= %-18.15g occ= %g', i+1, mo_energy[i], c)
     ovlp_ao = mf.get_ovlp()
     if verbose >= logger.DEBUG:
         log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
@@ -913,7 +910,7 @@ def unpack_uniq_var(dx, mo_occ):
 
     x1 = numpy.zeros((nmo,nmo), dtype=dx.dtype)
     x1[idx] = dx
-    return x1 - x1.T
+    return x1 - x1.T.conj()
 
 class DMArray(numpy.ndarray):
     pass

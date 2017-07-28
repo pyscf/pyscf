@@ -44,6 +44,9 @@ def rohf_stability(mf, internal=True, external=False, verbose=None):
         mo_e = rohf_external(mf, verbose=verbose)
     return mo_i, mo_e
 
+def ghf_stability(mf, internal=True, external=False, verbose=None):
+    raise NotImplementedError
+
 def rhf_internal(mf, with_symmetry=True, verbose=None):
     log = logger.new_logger(mf, verbose)
     g, hop, hdiag = newton_ah.gen_g_hop_rhf(mf, mf.mo_coeff, mf.mo_occ,

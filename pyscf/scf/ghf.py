@@ -4,7 +4,7 @@
 #
 
 '''
-Generalized Hartree-Fock
+Non-relativistic generalized Hartree-Fock
 '''
 
 import time
@@ -33,13 +33,13 @@ def get_jk(mol, dm, hermi=0,
             + [dmi[nao:,nao:] for dmi in dm]
             + [dmi[nao:,:nao] for dmi in dm])
     dms = numpy.asarray(dms)
-    if dm.dtype == numpy.complex128:
+    if dms.dtype == numpy.complex128:
         dms = numpy.vstack((dms.real, dms.imag))
         hermi = 0
 
     j1, k1 = jkbuild(mol, dms, hermi)
 
-    if dm.dtype == numpy.complex128:
+    if dms.dtype == numpy.complex128:
         if with_j: j1 = j1[:n_dm*3] + j1[n_dm*3:] * 1j
         if with_k: k1 = k1[:n_dm*3] + k1[n_dm*3:] * 1j
 
@@ -92,8 +92,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
         numpy.set_printoptions(threshold=1000)
 
     if mo_coeff is not None and mf.verbose >= logger.DEBUG:
-        ss, s = mf.spin_square((mo_coeff[0][:,mo_occ[0]>0],
-                                mo_coeff[1][:,mo_occ[1]>0]), mf.get_ovlp())
+        ss, s = mf.spin_square(mo_coeff[:,mo_occ>0], mf.get_ovlp())
         logger.debug(mf, 'multiplicity <S^2> = %.8g  2S+1 = %.8g', ss, s)
     return mo_occ
 
@@ -191,8 +190,7 @@ def spin_square(mo, s=1):
     '''
     nao = mo.shape[0] // 2
     if isinstance(s, numpy.ndarray):
-        assert(s.size == nao**2 or
-               numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
+        assert(s.size == nao**2 or numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
         s = s[:nao,:nao]
     mo_a = mo[:nao]
     mo_b = mo[nao:]
@@ -216,7 +214,6 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Dipole moment
     '''
-    from pyscf.lo import orth
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
@@ -225,7 +222,6 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     else:
         log = logger.Logger(mf.stdout, verbose)
 
-#?Compute neleca and nelecb
     log.note('**** MO energy ****')
     for i,c in enumerate(mo_occ):
         log.note('MO #%-3d energy= %-18.15g occ= %g', i+1, mo_energy[i], c)
@@ -241,8 +237,7 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     dma = dm[:nao,:nao]
     dmb = dm[nao:,nao:]
     if s is not None:
-        assert(s.size == nao**2 or
-               numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
+        assert(s.size == nao**2 or numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
         s = s[:nao,:nao]
     return uhf.mulliken_pop(mol, (dma,dmb), s, verbose)
 
@@ -254,8 +249,7 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
     dma = dm_ao[:nao,:nao]
     dmb = dm_ao[nao:,nao:]
     if s is not None:
-        assert(s.size == nao**2 or
-               numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
+        assert(s.size == nao**2 or numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
         s = s[:nao,:nao]
     return uhf.mulliken_meta(mol, (dma,dmb), verbose, pre_orth_method, s)
 
@@ -328,7 +322,7 @@ class GHF(hf.SCF):
     def get_jk(self, mol=None, dm=None, hermi=0):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        if mol.nao_nr() == dm[0].shape[0] * 2:  # GHF density matrix, shape (2N,2N)
+        if mol.nao_nr() * 2 == dm[0].shape[0]:  # GHF density matrix, shape (2N,2N)
             return get_jk(mol, dm, hermi, True, True, self.get_jk)
         else:
             if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
@@ -342,7 +336,7 @@ class GHF(hf.SCF):
     def get_j(self, mol=None, dm=None, hermi=0):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        if mol.nao_nr() == dm[0].shape[0] * 2:  # GHF density matrix, shape (2N,2N)
+        if mol.nao_nr() * 2 == dm[0].shape[0]:  # GHF density matrix, shape (2N,2N)
             return get_jk(mol, dm, hermi, True, False, self.get_jk)[0]
         else:
             return hf.SCF.get_j(self, mol, dm, hermi)
@@ -350,7 +344,7 @@ class GHF(hf.SCF):
     def get_k(self, mol=None, dm=None, hermi=0):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        if mol.nao_nr() == dm[0].shape[0] * 2:  # GHF density matrix, shape (2N,2N)
+        if mol.nao_nr() * 2 == dm[0].shape[0]:  # GHF density matrix, shape (2N,2N)
             return get_jk(mol, dm, hermi, False, True, self.get_jk)[1]
         else:
             return hf.SCF.get_k(self, mol, dm, hermi)

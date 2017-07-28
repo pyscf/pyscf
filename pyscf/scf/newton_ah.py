@@ -45,7 +45,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         fock_ao = h1e + mf.get_veff(mol, dm0)
     fock = reduce(numpy.dot, (mo_coeff.T, fock_ao, mo_coeff))
 
-    g = fock[occidx[:,None],viridx].T * 2
+    g = fock[viridx[:,None],occidx] * 2
 
     foo = fock[occidx[:,None],occidx]
     fvv = fock[viridx[:,None],viridx]
@@ -153,8 +153,8 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
     foob = fockb[occidxb[:,None],occidxb]
     fvvb = fockb[viridxb[:,None],viridxb]
 
-    g = numpy.hstack((focka[occidxa[:,None],viridxa].T.ravel(),
-                      fockb[occidxb[:,None],viridxb].T.ravel()))
+    g = numpy.hstack((focka[viridxa[:,None],occidxa].ravel(),
+                      fockb[viridxb[:,None],occidxb].ravel()))
 
     h_diaga = focka[viridxa,viridxa].reshape(-1,1) - focka[occidxa,occidxa]
     h_diagb = fockb[viridxb,viridxb].reshape(-1,1) - fockb[occidxb,occidxb]
@@ -189,6 +189,56 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         return x2
 
     return g, h_op, h_diag
+
+def gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
+                  with_symmetry=True):
+    mol = mf.mol
+    occidx = numpy.where(mo_occ==1)[0]
+    viridx = numpy.where(mo_occ==0)[0]
+    nocc = len(occidx)
+    nvir = len(viridx)
+    orbo = mo_coeff[:,occidx]
+    orbv = mo_coeff[:,viridx]
+    if with_symmetry and mol.symmetry:
+        orbsym = scf.ghf_symm.get_orbsym(mol, mo_coeff)
+        sym_forbid = orbsym[viridx].reshape(-1,1) != orbsym[occidx]
+
+    if fock_ao is None:
+        if h1e is None: h1e = mf.get_hcore()
+        dm0 = mf.make_rdm1(mo_coeff, mo_occ)
+        fock_ao = h1e + mf.get_veff(mol, dm0)
+    fock = reduce(numpy.dot, (mo_coeff.T.conj(), fock_ao, mo_coeff))
+
+    g = fock[viridx[:,None],occidx]
+
+    foo = fock[occidx[:,None],occidx]
+    fvv = fock[viridx[:,None],viridx]
+
+    h_diag = (fvv.diagonal().reshape(-1,1)-foo.diagonal())
+
+    if with_symmetry and mol.symmetry:
+        g[sym_forbid] = 0
+        h_diag[sym_forbid] = 0
+
+    vind = _gen_ghf_response(mf, mo_coeff, mo_occ, hermi=1)
+
+    def h_op(x):
+        x = x.reshape(nvir,nocc)
+        if with_symmetry and mol.symmetry:
+            x = x.copy()
+            x[sym_forbid] = 0
+        x2 = numpy.einsum('ps,sq->pq', fvv, x)
+        x2-= numpy.einsum('ps,rp->rs', foo, x)
+
+        d1 = reduce(numpy.dot, (orbv, x, orbo.T.conj()))
+        dm1 = d1 + d1.T.conj()
+        v1 = vind(dm1)
+        x2 += reduce(numpy.dot, (orbv.T.conj(), v1, orbo))
+        if with_symmetry and mol.symmetry:
+            x2[sym_forbid] = 0
+        return x2.ravel()
+
+    return g.reshape(-1), h_op, h_diag.reshape(-1)
 
 
 def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
@@ -331,6 +381,28 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
     return vind
 
 
+def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
+                      with_j=True, hermi=0, max_memory=None):
+    from pyscf.dft import numint
+
+    if mo_coeff is None: mo_coeff = mf.mo_coeff
+    if mo_occ is None: mo_occ = mf.mo_occ
+    mol = mf.mol
+    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
+        raise NotImplementedError
+
+    elif with_j:
+        def vind(dm1):
+            vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
+            return vj - vk
+
+    else:
+        def vind(dm1):
+            return -mf.get_k(mol, dm1, hermi=hermi)
+
+    return vind
+
+
 def project_mol(mol, projectbasis={}):
     from pyscf import df
     uniq_atoms = set([a[0] for a in mol._atom])
@@ -397,7 +469,6 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
     while True:
         ah_conv_tol = min(norm_gorb**2, mf.ah_conv_tol)
         # increase the AH accuracy when approach convergence
-        ah_start_tol = min(norm_gorb*5, mf.ah_start_tol)
         #ah_start_cycle = max(mf.ah_start_cycle, int(-numpy.log10(norm_gorb)))
         ah_start_cycle = mf.ah_start_cycle
         g_orb0 = g_orb
@@ -415,6 +486,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                                     tol=ah_conv_tol, max_cycle=mf.ah_max_cycle,
                                     lindep=mf.ah_lindep, verbose=log):
             norm_residual = numpy.linalg.norm(residual)
+            ah_start_tol = min(norm_gorb*5, mf.ah_start_tol)
             if (ah_end or ihop == mf.ah_max_cycle or # make sure to use the last step
                 ((norm_residual < ah_start_tol) and (ihop >= ah_start_cycle)) or
                 (seig < mf.ah_lindep)):
@@ -880,6 +952,19 @@ def newton(mf):
                 return self._scf.spin_square(mo_coeff, s)
         return UHF()
 
+    elif isinstance(mf, scf.ghf.GHF):
+        class GHF(SCF):
+            def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
+                return gen_g_hop_ghf(self, mo_coeff, mo_occ, fock_ao, h1e)
+
+            def rotate_mo(self, mo_coeff, u, log=None):
+                mo = numpy.dot(mo_coeff, u)
+                if self._scf.mol.symmetry:
+                    orbsym = scf.ghf_symm.get_orbsym(self._scf.mol, mo_coeff)
+                    mo = hf_symm.attach_orbsym(mo, orbsym)
+                return mo
+        return GHF()
+
     elif isinstance(mf, scf.dhf.UHF):
         raise RuntimeError('Not support Dirac-HF')
 
@@ -950,8 +1035,12 @@ if __name__ == '__main__':
     nrmf.conv_tol_grad = 1e-5
     e5 = nrmf.kernel()
 
+    m = newton(scf.GHF(mol))
+    e6 = m.kernel()
+
     print(e0 - -2.93707955256)
     print(e1 - -2.99456398848)
     print(e2 - -2.99663808314)
     print(e4 - -2.99663808186)
     print(e5 - -2.99634506072)
+    print(e6 - -3.002844505604826)

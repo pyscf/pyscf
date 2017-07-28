@@ -359,7 +359,7 @@ def spin_square(mo, s=1):
     nocc_a = mo_a.shape[1]
     nocc_b = mo_b.shape[1]
     s = reduce(numpy.dot, (mo_a.T.conj(), s, mo_b))
-    ssxy = (nocc_a+nocc_b) * .5 - numpy.einsum('ij,ji->', s, s)
+    ssxy = (nocc_a+nocc_b) * .5 - numpy.einsum('ij,ij->', s.conj(), s)
     ssz = (nocc_b-nocc_a)**2 * .25
     ss = ssxy + ssz
     s = numpy.sqrt(ss+.25) - .5
@@ -374,19 +374,17 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mf.stdout, verbose)
+    log = logger.new_logger(mf, verbose)
+    if log.verbose >= logger.NOTE:
+        log.note('**** MO energy ****')
+        log.note('                             alpha | beta                alpha | beta')
+        for i in range(mo_occ.shape[1]):
+            log.note('MO #%-3d energy= %-18.15g | %-18.15g occ= %g | %g',
+                     i+1, mo_energy[0][i], mo_energy[1][i],
+                     mo_occ[0][i], mo_occ[1][i])
 
-    log.note('**** MO energy ****')
-    log.note('                             alpha | beta                alpha | beta')
-    for i in range(mo_occ.shape[1]):
-        log.note('MO #%-3d energy= %-18.15g | %-18.15g occ= %g | %g',
-                 i+1, mo_energy[0][i], mo_energy[1][i],
-                 mo_occ[0][i], mo_occ[1][i])
     ovlp_ao = mf.get_ovlp()
-    if verbose >= logger.DEBUG:
+    if log.verbose >= logger.DEBUG:
         log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for alpha spin **')
         label = mf.mol.ao_labels()
         orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
