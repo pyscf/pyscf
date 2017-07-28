@@ -78,6 +78,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
 # aa, ab
     ci0 = []
     ci1 = []
+    print len(aidx), len(bidx), wfnsym
     for ir in range(TOTIRREPS):
         ma, mb = aidx[ir].size, bidx[wfnsym^ir].size
         ci0.append(numpy.zeros((ma,mb)))
@@ -188,8 +189,8 @@ def _id_wfnsym(cis, norb, nelec, wfnsym):
         for i in cis.orbsym[nelecb:neleca]:
             wfnsym ^= i
     elif isinstance(wfnsym, str):
-        wfnsym = symm.irrep_name2id(cis.mol.groupname, wfnsym) % 10
-    return wfnsym
+        wfnsym = symm.irrep_name2id(cis.mol.groupname, wfnsym)
+    return wfnsym % 10
 
 def _gen_strs_irrep(strs, orbsym):
     orbsym = numpy.asarray(orbsym) % 10
