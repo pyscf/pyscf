@@ -2,6 +2,15 @@ from __future__ import division, print_function
 import numpy as np
 from pyscf.nao.m_csphar import csphar
 from pyscf.nao.m_xjl import xjl
+import warnings
+try:
+    import numba
+    from pyscf.nao.m_xjl_numba import get_bessel_xjl_numba
+    use_numba = True
+except:
+    warnings.warn("numba not installed, using python routines")
+    use_numba = False
+
 #from pyscf.nao.m_libnao import libnao
 #from ctypes import POINTER, c_double, c_int64, byref
 import sys
@@ -56,9 +65,12 @@ def coulomb_am(self, sp1, R1, sp2, R2):
   l2S = np.zeros((2*self.jmx+1), dtype = np.float64)
   _j = self.jmx
   
-  bessel_pp = np.zeros((_j*2+1, self.nr))
-  for ip,p in enumerate(self.kk): bessel_pp[:,ip]=xjl(p*dist, _j*2)*p
-  
+  if use_numba:
+    bessel_pp = get_bessel_xjl_numba(self.kk, dist, _j, self.nr)
+  else:
+    bessel_pp = np.zeros((_j*2+1, self.nr))
+    for ip,p in enumerate(self.kk): bessel_pp[:,ip]=xjl(p*dist, _j*2)*p
+
 #
 # We need to improve the performance of this loops.
 # I tried with fortran, but it is a bit of work to do here.
