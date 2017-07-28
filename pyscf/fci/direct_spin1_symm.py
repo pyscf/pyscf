@@ -78,7 +78,6 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
 # aa, ab
     ci0 = []
     ci1 = []
-    print len(aidx), len(bidx), wfnsym
     for ir in range(TOTIRREPS):
         ma, mb = aidx[ir].size, bidx[wfnsym^ir].size
         ci0.append(numpy.zeros((ma,mb)))
