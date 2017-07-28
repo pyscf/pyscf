@@ -18,7 +18,8 @@ class CASSCF(newton_casscf.CASSCF):
         assert(mf.mol.symmetry)
         self.orbsym = []
         newton_casscf.CASSCF.__init__(self, mf, ncas, nelecas, ncore, frozen)
-        self.fcisolver = fci.solver(mf.mol, self.nelecas[0]==self.nelecas[1], True)
+        #self.fcisolver = fci.solver(mf.mol, self.nelecas[0]==self.nelecas[1], True)
+        self.fcisolver = fci.solver(mf.mol, False, True)
         self.fcisolver.max_cycle = 25
         #self.fcisolver.max_space = 25
 

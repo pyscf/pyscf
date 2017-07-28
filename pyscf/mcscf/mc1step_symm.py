@@ -18,7 +18,8 @@ class CASSCF(mc1step.CASSCF):
         assert(mf.mol.symmetry)
         self.orbsym = []
         mc1step.CASSCF.__init__(self, mf, ncas, nelecas, ncore, frozen)
-        self.fcisolver = fci.solver(mf.mol, self.nelecas[0]==self.nelecas[1], True)
+        #self.fcisolver = fci.solver(mf.mol, self.nelecas[0]==self.nelecas[1], True)
+        self.fcisolver = fci.solver(mf.mol, False, True)
 
     def mc1step(self, mo_coeff=None, ci0=None, callback=None):
         return self.kernel(mo_coeff, ci0, callback, mc1step.kernel)
