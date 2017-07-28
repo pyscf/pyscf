@@ -19,7 +19,8 @@ class CASCI(casci.CASCI):
 #TODO:        self.wfnsym = symm.param.CHARACTER_TABLE[mol.groupname][0][0]
         self.orbsym = []
         casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
-        self.fcisolver = fci.solver(mf.mol, self.nelecas[0]==self.nelecas[1], True)
+        #self.fcisolver = fci.solver(mf.mol, self.nelecas[0]==self.nelecas[1], True)
+        self.fcisolver = fci.solver(mf.mol, False, True)
 
     def kernel(self, mo_coeff=None, ci0=None):
         if mo_coeff is None:
