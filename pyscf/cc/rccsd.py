@@ -211,7 +211,7 @@ class RCCSD(ccsd.CCSD):
             if self.converged:
                 logger.info(self, 'CCSD converged')
             else:
-                logger.info(self, 'CCSD not converged')
+                logger.note(self, 'CCSD not converged')
         if self._scf.e_tot == 0:
             logger.note(self, 'E_corr = %.16g', self.e_corr)
         else:
