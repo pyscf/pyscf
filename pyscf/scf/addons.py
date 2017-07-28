@@ -270,7 +270,7 @@ def remove_linear_dep_(mf, threshold=1e-8):
     def eigh(h, s):
         d, t = numpy.linalg.eigh(s)
         x = t[:,d>threshold] / numpy.sqrt(d[d>threshold])
-        xhx = reduce(numpy.dot, (x.T, h, x))
+        xhx = reduce(numpy.dot, (x.T.conj(), h, x))
         e, c = numpy.linalg.eigh(xhx)
         c = numpy.dot(x, c)
         return e, c
