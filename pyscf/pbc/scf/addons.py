@@ -159,6 +159,48 @@ def smearing_(mf, sigma=None, method='fermi'):
     mf.get_grad = get_grad
     return mf
 
+
+def canonical_occ_(mf):
+    '''Label the occupancies for each orbital for sampled k-points.
+    This is for KUHF objects.
+    Each k-point has a fixed number of up and down electrons in this,
+    which results in a finite size error for metallic systems
+    but can accelerate convergence '''
+    from pyscf.pbc.scf import kuhf
+    assert(isinstance(mf, kuhf.KUHF))
+
+    def get_occ(mo_energy_kpts=None,mo_coeff=None):
+        if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
+        mo_energy_kpts = numpy.asarray(mo_energy_kpts)
+        mo_occ_kpts = numpy.zeros_like(mo_energy_kpts)
+        logger.debug1(mf, "mo_occ_kpts.shape", mo_occ_kpts.shape)
+
+        nkpts = len(mo_energy_kpts[0])
+        homo=[-1e8,-1e8]
+        lumo=[1e8,1e8]
+
+        for k in range(nkpts):
+            for s in [0,1]:
+                occ=numpy.zeros_like(mo_energy_kpts[s,k])
+                e_idx=numpy.argsort(mo_energy_kpts[s,k])
+                e_sort=mo_energy_kpts[s,k][e_idx]
+                n=mf.nelec[s]
+                mo_occ_kpts[s,k,e_idx[:n]]=1
+                homo[s]=max(homo[s],e_sort[n-1])
+                lumo[s]=min(lumo[s],e_sort[n])
+
+        for nm,s in zip(['alpha','beta'],[0,1]):
+            logger.info(mf, nm+' HOMO = %.12g  LUMO = %.12g', homo[s], lumo[s])
+            if homo[s] > lumo[s]:
+                logger.warn(mf, "WARNING! HOMO is greater than LUMO! This may result in errors with canonical occupation.")
+
+        return mo_occ_kpts
+
+    mf.get_occ=get_occ
+    return mf
+canonical_occ=canonical_occ_
+
+
 if __name__ == '__main__':
     import pyscf.pbc.gto as pbcgto
     import pyscf.pbc.scf as pscf
