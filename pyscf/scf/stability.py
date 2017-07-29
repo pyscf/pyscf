@@ -44,7 +44,7 @@ def rohf_stability(mf, internal=True, external=False, verbose=None):
         mo_e = rohf_external(mf, verbose=verbose)
     return mo_i, mo_e
 
-def ghf_stability(mf, internal=True, external=False, verbose=None):
+def ghf_stability(mf, verbose=None):
     raise NotImplementedError
 
 def rhf_internal(mf, with_symmetry=True, verbose=None):

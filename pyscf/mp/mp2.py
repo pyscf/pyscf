@@ -182,6 +182,11 @@ class MP2(lib.StreamObject):
         self._nmo = n
 
     def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=True):
+        '''
+        Args:
+            with_t2 : bool
+                Whether to generate and hold t2 amplitudes in memory.
+        '''
         if mo_energy is None:
             mo_energy = self.mo_energy
         if mo_coeff is None:

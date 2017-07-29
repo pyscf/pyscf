@@ -257,7 +257,7 @@ def get_orbsym(mol, mo_coeff, s=None, check=False):
         mo_a = mo_coeff[:nao].copy()
         mo_b = mo_coeff[nao:]
         zero_alpha_idx = numpy.linalg.norm(mo_a, axis=0) < 1e-7
-        mo_a[zero_alpha_idx] = mo_b[zero_alpha_idx]
+        mo_a[:,zero_alpha_idx] = mo_b[:,zero_alpha_idx]
         orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
                                      mo_a, s, check)
     return numpy.asarray(orbsym)
@@ -282,4 +282,5 @@ if __name__ == '__main__':
     method.irrep_nelec['A1u'] = 1
     energy = method.kernel()
     print(energy - -126.117033823738)
+    method.canonicalize(method.mo_coeff, method.mo_occ)
     method.analyze()

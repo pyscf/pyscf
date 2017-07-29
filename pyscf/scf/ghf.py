@@ -33,13 +33,13 @@ def get_jk(mol, dm, hermi=0,
             + [dmi[nao:,nao:] for dmi in dm]
             + [dmi[nao:,:nao] for dmi in dm])
     dms = numpy.asarray(dms)
-    if dms.dtype == numpy.complex128:
+    if dm[0].dtype == numpy.complex128:
         dms = numpy.vstack((dms.real, dms.imag))
         hermi = 0
 
     j1, k1 = jkbuild(mol, dms, hermi)
 
-    if dms.dtype == numpy.complex128:
+    if dm[0].dtype == numpy.complex128:
         if with_j: j1 = j1[:n_dm*3] + j1[n_dm*3:] * 1j
         if with_k: k1 = k1[:n_dm*3] + k1[n_dm*3:] * 1j
 
@@ -411,9 +411,9 @@ class GHF(hf.SCF):
                         self.e_tot, self.max_cycle, ss, s)
         return self
 
-#    def stability(self, internal=True, external=False, verbose=None):
-#        from pyscf.scf.stability import uhf_stability
-#        return uhf_stability(self, internal, external, verbose)
+    def stability(self, verbose=None):
+        from pyscf.scf.stability import ghf_stability
+        return ghf_stability(self, verbose)
 
 def _from_rhf_init_dm(dm, breaksym=True):
     dma = dm * .5

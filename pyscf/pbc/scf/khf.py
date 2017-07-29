@@ -360,10 +360,10 @@ class KRHF(hf.RHF):
         #    logger.info(self, 'WS alpha = %s', self.exx_alpha)
         if isinstance(self.exxdiv, str) and self.exxdiv.lower() == 'ewald':
             madelung = tools.pbc.madelung(self.cell, [self.kpts])
+            logger.info(self, '    madelung (= occupied orbital energy shift) = %s', madelung)
             logger.info(self, '    Total energy shift due to Ewald probe charge'
                         ' = -1/2 * Nelec*madelung/cell.vol = %.12g',
                         madelung*self.cell.nelectron * -.5)
-            logger.debug(self, '    madelung = %s', madelung)
         logger.info(self, 'DF object = %s', self.with_df)
         self.with_df.dump_flags()
         return self
