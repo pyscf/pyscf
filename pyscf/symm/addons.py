@@ -47,20 +47,22 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True, tol=1e-9):
     nmo = mo.shape[1]
     if s is None:
         s = mol.intor_symmetric('int1e_ovlp')
-    mo_s = numpy.dot(mo.T, s)
+    s_mo = numpy.dot(s, mo)
     norm = numpy.zeros((len(irrep_name), nmo))
     for i, csym in enumerate(symm_orb):
-        moso = numpy.dot(mo_s, csym)
+        moso = numpy.dot(csym.T, s_mo)
         ovlpso = reduce(numpy.dot, (csym.T, s, csym))
         try:
-            norm[i] = numpy.einsum('ik,ki->i', moso, lib.cho_solve(ovlpso, moso.T))
+            s_moso = lib.cho_solve(ovlpso, moso)
         except:
             ovlpso[numpy.diag_indices(csym.shape[1])] += 1e-12
-            norm[i] = numpy.einsum('ik,ki->i', moso, lib.cho_solve(ovlpso, moso.T))
+            s_moso = lib.cho_solve(ovlpso, moso)
+        norm[i] = numpy.einsum('ki,ki->i', moso.conj(), s_moso).real
     norm /= numpy.sum(norm, axis=0)  # for orbitals which are not normalized
     iridx = numpy.argmax(norm, axis=0)
     orbsym = numpy.asarray([irrep_name[i] for i in iridx])
     logger.debug(mol, 'irreps of each MO %s', orbsym)
+
     if check:
         largest_norm = norm[iridx,numpy.arange(nmo)]
         orbidx = numpy.where(largest_norm < 1-tol)[0]
@@ -121,7 +123,7 @@ def symmetrize_orb(mol, mo, orbsym=None, s=None, check=False):
         orbsym = label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
                                 mo, s=s, check=check)
     orbsym = numpy.asarray(orbsym)
-    mo_s = numpy.dot(mo.T, s)
+    s_mo = numpy.dot(s, mo)
     mo1 = numpy.empty_like(mo)
 
     if orbsym[0] in mol.irrep_name:
@@ -133,7 +135,7 @@ def symmetrize_orb(mol, mo, orbsym=None, s=None, check=False):
         idx = orbsym == ir
         csym = mol.symm_orb[i]
         ovlpso = reduce(numpy.dot, (csym.T, s, csym))
-        sc = lib.cho_solve(ovlpso, numpy.dot(mo_s[idx], csym).T)
+        sc = lib.cho_solve(ovlpso, numpy.dot(csym.T, s_mo[:,idx]))
         mo1[:,idx] = numpy.dot(csym, sc)
     return mo1
 
@@ -170,25 +172,26 @@ def symmetrize_space(mol, mo, s=None, check=True):
     if s is None:
         s = mol.intor_symmetric('int1e_ovlp')
     nmo = mo.shape[1]
-    mo_s = numpy.dot(mo.T, s)
+    s_mo = numpy.dot(s, mo)
     if check:
-        assert(numpy.allclose(numpy.dot(mo_s, mo), numpy.eye(nmo)))
+        assert(numpy.allclose(numpy.dot(mo.T.conj(), s_mo), numpy.eye(nmo)))
+
     mo1 = []
     for i, csym in enumerate(mol.symm_orb):
-        moso = numpy.dot(mo_s, csym)
+        moso = numpy.dot(csym.T, s_mo)
         ovlpso = reduce(numpy.dot, (csym.T, s, csym))
 
 # excluding orbitals which are already symmetrized
         try:
-            diag = numpy.einsum('ik,ki->i', moso, lib.cho_solve(ovlpso, moso.T))
+            diag = numpy.einsum('ki,ki->i', moso.conj(), lib.cho_solve(ovlpso, moso))
         except:
             ovlpso[numpy.diag_indices(csym.shape[1])] += 1e-12
-            diag = numpy.einsum('ik,ki->i', moso, lib.cho_solve(ovlpso, moso.T))
+            diag = numpy.einsum('ki,ki->i', moso.conj(), lib.cho_solve(ovlpso, moso))
         idx = abs(1-diag) < 1e-8
         orb_exclude = mo[:,idx]
         mo1.append(orb_exclude)
-        moso1 = moso[~idx]
-        dm = numpy.dot(moso1.T, moso1)
+        moso1 = moso[:,~idx]
+        dm = numpy.dot(moso1, moso1.T.conj())
 
         if dm.trace() > 1e-8:
             e, u = scipy.linalg.eigh(dm, ovlpso)
