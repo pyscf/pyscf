@@ -26,9 +26,11 @@ class tddft_iter_c():
     self.nprod = self.moms0.size
     #print('before kernel')
     self.kernel = pb.comp_coulomb_den(dtype=np.float32)
+    #print("en first part")
     if xc_code.upper()!='RPA' :
       dm = comp_dm(sv.wfsx.x, sv.get_occupations())
       self.kernel = self.kernel + pb.comp_fxc_lil(dm, xc_code, dtype=np.float32).todense()
+    #print("end kernel")
 
     self.telec = sv.hsx.telec if telec is None else telec
     self.nelec = sv.hsx.nelec if nelec is None else nelec

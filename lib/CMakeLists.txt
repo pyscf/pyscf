@@ -5,14 +5,16 @@ enable_language(Fortran)
 #include(arch.inc OPTIONAL)
 
 #set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
-IF( NOT CMAKE_BUILD_TYPE )
-  #SET( CMAKE_BUILD_TYPE Release ... FORCE )
-  set(CMAKE_C_FLAGS "-Wall -O2 -ffast-math")
-  set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS_RELEASE} ")
-  set(CMAKE_Fortran_FLAGS "-pedantic -O2 -Wall -ffree-line-length-0")
-ENDIF()
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+  # using GCC
+  IF( NOT CMAKE_BUILD_TYPE )
+    #SET( CMAKE_BUILD_TYPE Release ... FORCE )
+    set(CMAKE_C_FLAGS "-Wall -O2 -ffast-math")
+    set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS_RELEASE} ")
+    set(CMAKE_Fortran_FLAGS "-pedantic -O2 -Wall -ffree-line-length-0")
+  ENDIF()
 
-if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
+
   set(CMAKE_C_FLAGS_DEBUG "-Wall -pg -O0")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} ")
   set(CMAKE_Fortran_FLAGS_DEBUG "-pedantic -pg -DDEBUG -O0 -fbounds-check -fbacktrace -Wall -ffree-line-length-0")
@@ -23,6 +25,24 @@ if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
   if(UNIX AND NOT APPLE)
     set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-as-needed")
   endif()
+
+elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
+  # using Intel C++
+  IF( NOT CMAKE_BUILD_TYPE )
+    #SET( CMAKE_BUILD_TYPE Release ... FORCE )
+    set(CMAKE_C_FLAGS "-O3 ")
+    set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS_RELEASE} ")
+    set(CMAKE_Fortran_FLAGS "-O3 ")
+  ENDIF()
+
+
+  set(CMAKE_C_FLAGS_DEBUG "-Wall -pg -O0")
+  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} ")
+  set(CMAKE_Fortran_FLAGS_DEBUG "-warn all -O0 -pg -CB -debug --DDEBUG -traceback -check -ftrapuv")
+
+  set(CMAKE_C_FLAGS_RELEASE "-O3 ")
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} ")
+  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 ")
 endif()
 
 set(CMAKE_MACOSX_RPATH OFF)

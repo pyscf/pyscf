@@ -16,7 +16,6 @@ def vxc_lil(sv, dm, xc_code, deriv, ao_log=None, dtype=float64, **kvargs):
   from pyscf.nao.m_ao_matelem import ao_matelem_c
   from scipy.sparse import lil_matrix
 
-
   aome = ao_matelem_c(sv.ao_log.rr, sv.ao_log.pp, sv, dm)
   me = aome.init_one_set(sv.ao_log) if ao_log is None else aome.init_one_set(ao_log)
   atom2s = zeros((sv.natm+1), dtype=int64)

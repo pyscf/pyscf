@@ -5,7 +5,7 @@ import os
 import subprocess
 
 
-def compile_C_code(verbose=0, build_type="Release", clean=0):
+def compile_C_code(verbose=0, build_type="Release", clean=0, compiler="gnu"):
     """
         Compile automaticaly the C and Fortran code
         when installing the program with python setup.py
@@ -22,7 +22,17 @@ def compile_C_code(verbose=0, build_type="Release", clean=0):
         print("lib/build")
     os.chdir("lib/build")
 
-    cmd = "cmake -DCMAKE_BUILD_TYPE=" + build_type + " .."
+    cmd = "cmake -DCMAKE_BUILD_TYPE=" + build_type
+    if compiler not in ["gnu", "intel"]:
+        raise ValueError("Only gnu and intel compiler supported")
+
+    comp = ""
+    if compiler == "intel":
+        comp = " -D CMAKE_C_COMPILER=icc -D CMAKE_CXX_COMPILER=icpc  -D CMAKE_FORTRAN_COMPILER=ifort"
+    cmd += comp
+
+
+    cmd += " .."
     ret = subprocess.call(cmd, shell = True)
     if ret != 0:
         raise ValueError("cmake returned error {0}".format(ret))
@@ -41,11 +51,13 @@ parser.add_argument('--compile', type=int, default = 0, help="compile C and Fort
 parser.add_argument('--clean', type=int, default = 0, help="compile C and Fortran code")
 parser.add_argument('--build_type', type=str, default = "Release", help="compile code in Release or Debug mode")
 parser.add_argument('--verbose', type=int, default = 0, help="verbosity for compilation")
+parser.add_argument('--compiler', type=str, default = "gnu", help="compiler: gnu or intel")
 
 args = parser.parse_args()
 
 if args.compile==1:
-    compile_C_code(verbose=args.verbose, build_type=args.build_type, clean= args.clean)
+    compile_C_code(verbose=args.verbose, build_type=args.build_type, clean= args.clean,
+            compiler = args.compiler)
 
 if args.command not in ["install", "build", "None"]:
     raise ValueError("command must be build or install")
