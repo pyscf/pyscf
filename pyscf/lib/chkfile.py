@@ -36,17 +36,24 @@ def load(chkfile, key):
     >>> scfdat.keys()
     ['e_tot', 'mo_occ', 'mo_energy', 'mo_coeff']
     '''
-    def loadasdic(key, group):
+    def load_as_dic(key, group):
         if key in group:
             val = group[key]
             if isinstance(val, h5py.Group):
-                return dict([(k, loadasdic(k, val)) for k in val])
+                return dict([(k, load_as_dic(k, val)) for k in val])
+            else:
+                return val.value
+        elif key + '__from_list__' in group:
+            val = group[key+'__from_list__']
+            if isinstance(val, h5py.Group):
+                return [load_as_dic(k, val) for k in val]
             else:
                 return val.value
         else:
             return None
+
     with h5py.File(chkfile, 'r') as fh5:
-        return loadasdic(key, fh5)
+        return load_as_dic(key, fh5)
 
 def dump_chkfile_key(chkfile, key, value):
     dump(chkfile, key, value)
@@ -83,21 +90,30 @@ def dump(chkfile, key, value):
     >>> f['symm/Ci/op']
     <HDF5 dataset "op": shape (2,), type "|S1">
     '''
-    def saveasgroup(key, value, root):
+    def save_as_group(key, value, root):
         if isinstance(value, dict):
             root1 = root.create_group(key)
             for k in value:
-                saveasgroup(k, value[k], root1)
+                save_as_group(k, value[k], root1)
         else:
-            root[key] = value
+            try:
+                root[key] = value
+            except (TypeError, ValueError) as e:
+                if not (e.args[0] == "Object dtype dtype('O') has no native HDF5 equivalent" or
+                        e.args[0].startswith('could not broadcast input array')):
+                    raise e
+                root1 = root.create_group(key + '__from_list__')
+                for k, v in enumerate(value):
+                    save_as_group(str(k), v, root1)
+
     if h5py.is_hdf5(chkfile):
         with h5py.File(chkfile, 'r+') as fh5:
             if key in fh5:
                 del(fh5[key])
-            saveasgroup(key, value, fh5)
+            save_as_group(key, value, fh5)
     else:
         with h5py.File(chkfile, 'w') as fh5:
-            saveasgroup(key, value, fh5)
+            save_as_group(key, value, fh5)
 
 
 def load_mol(chkfile):

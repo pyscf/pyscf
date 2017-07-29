@@ -535,14 +535,16 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=0,
 def _format_uks_dm(dms):
     dma, dmb = dms
     if hasattr(dms, 'mo_coeff'):
-        if dms.mo_coeff[0].ndim < dma.ndim: # handle ROKS
+        mo_coeff = dms.mo_coeff
+        if (isinstance(mo_coeff[0], numpy.ndarray) and
+            mo_coeff[0].ndim < dma.ndim): # handle ROKS
             mo_occa = numpy.array(dms.mo_occ> 0, dtype=numpy.double)
             mo_occb = numpy.array(dms.mo_occ==2, dtype=numpy.double)
-            dma = _attach_mo(dma, dms.mo_coeff, mo_occa)
-            dmb = _attach_mo(dmb, dms.mo_coeff, mo_occb)
+            dma = _attach_mo(dma, mo_coeff, mo_occa)
+            dmb = _attach_mo(dmb, mo_coeff, mo_occb)
         else:
-            dma = _attach_mo(dma, dms.mo_coeff[0], dms.mo_occ[0])
-            dmb = _attach_mo(dmb, dms.mo_coeff[1], dms.mo_occ[1])
+            dma = _attach_mo(dma, mo_coeff[0], dms.mo_occ[0])
+            dmb = _attach_mo(dmb, mo_coeff[1], dms.mo_occ[1])
     return dma, dmb
 
 nr_rks_vxc = nr_rks
@@ -1189,7 +1191,7 @@ class _KNumInt(numint._NumInt):
             if isinstance(dms, numpy.ndarray) and dms.ndim == 3:
                 mo_coeff = [mo_coeff]
                 mo_occ = [mo_occ]
-            nao = mo_coeff[0].shape[1]
+            nao = cell.nao_nr()
             ndms = len(mo_occ)
             def make_rho(idm, ao, non0tab, xctype):
                 return self.eval_rho2(cell, ao, mo_coeff[idm], mo_occ[idm],

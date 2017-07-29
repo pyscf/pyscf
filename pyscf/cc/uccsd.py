@@ -516,7 +516,7 @@ class UCCSD(rccsd.RCCSD):
             if self.converged:
                 logger.info(self, 'CCSD converged')
             else:
-                logger.info(self, 'CCSD not converged')
+                logger.note(self, 'CCSD not converged')
         if self._scf.e_tot == 0:
             logger.note(self, 'E_corr = %.16g', self.e_corr)
         else:
@@ -1921,9 +1921,7 @@ class _ERISspin:
             cc.orbspin = self.orbspin
 
         self.feri = lib.H5TmpFile()
-        if 0 and hasattr(cc._scf, 'with_df') and cc._scf.with_df:
-            pass
-        elif (method == 'incore' and cc._scf._eri is not None and
+        if (method == 'incore' and cc._scf._eri is not None and
             (mem_incore+mem_now < cc.max_memory) or cc.mol.incore_anyway):
             idxa = self.orbspin == 0
             idxb = self.orbspin == 1
@@ -1955,6 +1953,10 @@ class _ERISspin:
             self.ovvo = eri[:nocc,nocc:,nocc:,:nocc].copy()
             self.ovvv = eri[:nocc,nocc:,nocc:,nocc:].copy()
             self.vvvv = eri[nocc:,nocc:,nocc:,nocc:].copy()
+
+        elif hasattr(cc._scf, 'with_df') and cc._scf.with_df:
+            raise NotImplementedError
+
         else:
             orbo = so_coeff[:,:nocc]
             orbv = so_coeff[:,nocc:]
@@ -2095,9 +2097,7 @@ class _ERIS:
             cc.orbspin = self.orbspin
 
         self.feri = lib.H5TmpFile()
-        if hasattr(cc._scf, 'with_df') and cc._scf.with_df:
-            raise NotImplementedError
-        elif (method == 'incore' and cc._scf._eri is not None and
+        if (method == 'incore' and cc._scf._eri is not None and
             (mem_incore+mem_now < cc.max_memory) or cc.mol.incore_anyway):
             moa = so_coeff[:,idxa]
             mob = so_coeff[:,idxb]
@@ -2167,6 +2167,8 @@ class _ERIS:
             self.OVvv = lib.pack_tril(OVvv).reshape(noccb,nvirb,nvira*(nvira+1)//2)
             OVvv = None
             #self.VVvv = eri_ba[noccb:,noccb:,nocca:,nocca:].copy()
+        elif hasattr(cc._scf, 'with_df') and cc._scf.with_df:
+            raise NotImplementedError
         else:
             moa = so_coeff[:,idxa]
             mob = so_coeff[:,idxb]

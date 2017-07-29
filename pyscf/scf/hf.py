@@ -157,19 +157,20 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         cycle += 1
 
     # An extra diagonalization, to remove level shift
-    fock = mf.get_fock(h1e, s1e, vhf, dm, cycle, None, 0, 0, 0)
-    norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, h1e+vhf))
-    mo_energy, mo_coeff = mf.eig(fock, s1e)
-    mo_occ = mf.get_occ(mo_energy, mo_coeff)
-    dm, dm_last = mf.make_rdm1(mo_coeff, mo_occ), dm
-    dm = _attach_mo(dm, mo_coeff, mo_occ)  # to improve DFT get_veff efficiency
-    vhf = mf.get_veff(mol, dm, dm_last, vhf)
-    e_tot, last_hf_e = mf.energy_tot(dm, h1e, vhf), e_tot
-    norm_ddm = numpy.linalg.norm(dm-dm_last)
-    logger.info(mf, 'Extra cycle  E= %.15g  delta_E= %4.3g  |g|= %4.3g  |ddm|= %4.3g',
-                e_tot, e_tot-last_hf_e, norm_gorb, norm_ddm)
-    if dump_chk:
-        mf.dump_chk(locals())
+    if scf_conv:
+        fock = mf.get_fock(h1e, s1e, vhf, dm, cycle, None, 0, 0, 0)
+        norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, h1e+vhf))
+        mo_energy, mo_coeff = mf.eig(fock, s1e)
+        mo_occ = mf.get_occ(mo_energy, mo_coeff)
+        dm, dm_last = mf.make_rdm1(mo_coeff, mo_occ), dm
+        dm = _attach_mo(dm, mo_coeff, mo_occ)  # to improve DFT get_veff efficiency
+        vhf = mf.get_veff(mol, dm, dm_last, vhf)
+        e_tot, last_hf_e = mf.energy_tot(dm, h1e, vhf), e_tot
+        norm_ddm = numpy.linalg.norm(dm-dm_last)
+        logger.info(mf, 'Extra cycle  E= %.15g  delta_E= %4.3g  |g|= %4.3g  |ddm|= %4.3g',
+                    e_tot, e_tot-last_hf_e, norm_gorb, norm_ddm)
+        if dump_chk:
+            mf.dump_chk(locals())
     logger.timer(mf, 'scf_cycle', *cput0)
     return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
 

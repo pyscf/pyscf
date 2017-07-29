@@ -35,7 +35,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     h_diag = [(fvv[k].diagonal().reshape(-1,1)-foo[k].diagonal()) * 2
               for k in range(nkpts)]
 
-    vind = _gen_rhf_response(mf, singlet=None, hermi=1)
+    vind = _gen_rhf_response(mf, mo_coeff, mo_occ, singlet=None, hermi=1)
 
     def h_op(x1):
         x1 = _unpack(x1, mo_occ)
@@ -135,11 +135,11 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
         ni = mf._numint
         hyb = ni.hybrid_coeff(mf.xc, spin=cell.spin)
         if singlet is None:  # for newton solver
-            rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc, mf.mo_coeff,
-                                                mf.mo_occ, 0, kpts)
+            rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc, mo_coeff,
+                                                mo_occ, 0, kpts)
         else:
             rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc,
-                                                [mf.mo_coeff]*2, [mf.mo_occ*.5]*2,
+                                                [mo_coeff]*2, [mo_occ*.5]*2,
                                                 spin=1, kpts=kpts)
         dm0 = None #mf.make_rdm1(mo_coeff, mo_occ)
 
@@ -154,7 +154,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     v1 = numpy.zeros_like(dm1)
                 else:
                     v1 = ni.nr_rks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, hermi,
-                                       rho0, vxc, fxc, kpts, max_memory)
+                                       rho0, vxc, fxc, kpts, max_memory=max_memory)
                 if abs(hyb) > 1e-10:
                     if hermi != 2:
                         vj, vk = mf.get_jk(cell, dm1, hermi=hermi, kpts=kpts)
@@ -172,7 +172,8 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 else:
                     # nr_rks_fxc_st requires alpha of dm1
                     v1 = numint.nr_rks_fxc_st(ni, cell, mf.grids, mf.xc, dm0, dm1, 0,
-                                              True, rho0, vxc, fxc, kpts, max_memory)
+                                              True, rho0, vxc, fxc, kpts,
+                                              max_memory=max_memory)
                     v1 *= .5
                 if abs(hyb) > 1e-10:
                     if hermi != 2:
@@ -190,7 +191,8 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 else:
                     # nr_rks_fxc_st requires alpha of dm1
                     v1 = numint.nr_rks_fxc_st(ni, cell, mf.grids, mf.xc, dm0, dm1, 0,
-                                              False, rho0, vxc, fxc, kpts, max_memory)
+                                              False, rho0, vxc, fxc, kpts,
+                                              max_memory=max_memory)
                     v1 *= .5
                 if abs(hyb) > 1e-10:
                     v1 += -.5 * hyb * mf.get_k(cell, dm1, hermi=hermi, kpts=kpts)
@@ -222,7 +224,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
         ni = mf._numint
         hyb = ni.hybrid_coeff(mf.xc, spin=cell.spin)
         rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc,
-                                            mf.mo_coeff, mf.mo_occ, 1, kpts)
+                                            mo_coeff, mo_occ, 1, kpts)
         #dm0 =(numpy.dot(mo_coeff[0]*mo_occ[0], mo_coeff[0].T.conj()),
         #      numpy.dot(mo_coeff[1]*mo_occ[1], mo_coeff[1].T.conj()))
         dm0 = None
@@ -236,7 +238,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
                 v1 = numpy.zeros_like(dm1)
             else:
                 v1 = ni.nr_uks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, hermi,
-                                   rho0, vxc, fxc, kpts, max_memory)
+                                   rho0, vxc, fxc, kpts, max_memory=max_memory)
             if abs(hyb) < 1e-10:
                 if with_j:
                     vj = mf.get_j(cell, dm1, hermi=hermi, kpts=kpts)
@@ -263,11 +265,11 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
 
 
 def _unpack(vo, mo_occ):
-    nmo = mo_occ.shape[-1]
-    nocc = numpy.sum(mo_occ > 0, axis=1)
     z = []
     ip = 0
-    for k, no in enumerate(nocc):
+    for occ in mo_occ:
+        nmo = occ.size
+        no = numpy.count_nonzero(occ>0)
         nv = nmo - no
         z.append(vo[ip:ip+nv*no].reshape(nv,no))
         ip += nv * no
@@ -293,7 +295,6 @@ def newton(mf):
 
             def update_rotate_matrix(self, dx, mo_occ, u0=1):
                 nkpts = len(mo_occ[0])
-                nmo = mo_occ[0].shape[-1]
                 p0 = 0
                 u = []
                 for occ in mo_occ:
@@ -302,7 +303,8 @@ def newton(mf):
                         occidx = occ[k] > 0
                         viridx = ~occidx
                         nocc = occidx.sum()
-                        nvir = nmo - nocc
+                        nvir = viridx.sum()
+                        nmo = nocc + nvir
                         dr = numpy.zeros((nmo,nmo), dtype=dx.dtype)
                         dr[viridx[:,None]&occidx] = dx[p0:p0+nocc*nvir]
                         dr = dr - dr.T.conj()
@@ -330,14 +332,14 @@ def newton(mf):
             gen_g_hop = gen_g_hop_rhf
 
             def update_rotate_matrix(self, dx, mo_occ, u0=1):
-                nmo = mo_occ.shape[-1]
                 p0 = 0
                 u = []
                 for k, occ in enumerate(mo_occ):
                     occidx = occ > 0
                     viridx = ~occidx
                     nocc = occidx.sum()
-                    nvir = nmo - nocc
+                    nvir = viridx.sum()
+                    nmo = nocc + nvir
                     dr = numpy.zeros((nmo,nmo), dtype=dx.dtype)
                     dr[viridx[:,None]&occidx] = dx[p0:p0+nocc*nvir]
                     dr = dr - dr.T.conj()

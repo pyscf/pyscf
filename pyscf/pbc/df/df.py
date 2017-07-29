@@ -131,7 +131,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
     t1 = (time.clock(), time.time())
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
-    fused_cell, fuse = fuse_auxcell(mydf, auxcell)
+    fused_cell, fuse = fuse_auxcell(mydf, auxcell)#, 0)
     outcore.aux_e2(cell, fused_cell, mydf._cderi, 'int3c2e_sph', aosym='s2',
                    kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
     t1 = log.timer_debug1('3c2e', *t1)
@@ -155,7 +155,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
     feri = h5py.File(mydf._cderi)
 
 # An alternative method to evalute j2c. This method might have larger numerical error?
-#    chgcell = make_modchg_basis(auxcell, mydf.eta)
+#    chgcell = make_modchg_basis(auxcell, mydf.eta, 0)
 #    for k, kpt in enumerate(uniq_kpts):
 #        aoaux = ft_ao.ft_ao(chgcell, Gv, None, b, gxyz, Gvbase, kpt).T
 #        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, gs))
@@ -548,8 +548,8 @@ class DF(aft.AFTDF):
         return self.auxcell.nao_nr()
 
 
-def fuse_auxcell(mydf, auxcell):
-    chgcell = make_modchg_basis(auxcell, mydf.eta)
+def fuse_auxcell(mydf, auxcell, l_max=3):
+    chgcell = make_modchg_basis(auxcell, mydf.eta, l_max)
     fused_cell = copy.copy(auxcell)
     fused_cell._atm, fused_cell._bas, fused_cell._env = \
             gto.conc_env(auxcell._atm, auxcell._bas, auxcell._env,

@@ -128,15 +128,16 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     This is a k-point version of scf.hf.SCF.get_occ
     '''
     if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
-    mo_occ_kpts = np.zeros_like(mo_energy_kpts)
 
-    nkpts = mo_energy_kpts.shape[0]
+    nkpts = len(mo_energy_kpts)
     nocc = (mf.cell.nelectron * nkpts) // 2
 
     # TODO: implement Fermi smearing and print mo_energy kpt by kpt
-    mo_energy = np.sort(mo_energy_kpts.ravel())
+    mo_energy = np.sort(np.hstack(mo_energy_kpts))
     fermi = mo_energy[nocc-1]
-    mo_occ_kpts[mo_energy_kpts <= fermi] = 2
+    mo_occ_kpts = []
+    for mo_e in mo_energy_kpts:
+        mo_occ_kpts.append((mo_e <= fermi).astype(np.double) * 2)
 
     if nocc < mo_energy.size:
         logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
@@ -153,11 +154,23 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
         for k,kpt in enumerate(mf.cell.get_scaled_kpts(mf.kpts)):
             logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s %s',
                          k, kpt[0], kpt[1], kpt[2],
-                         mo_energy_kpts[k,mo_occ_kpts[k]> 0],
-                         mo_energy_kpts[k,mo_occ_kpts[k]==0])
+                         mo_energy_kpts[k][mo_occ_kpts[k]> 0],
+                         mo_energy_kpts[k][mo_occ_kpts[k]==0])
         np.set_printoptions(threshold=1000)
 
     return mo_occ_kpts
+
+
+def get_grad(mo_coeff_kpts, mo_occ_kpts, fock):
+    '''
+    returns 1D array of gradients, like non K-pt version
+    note that occ and virt indices of different k pts now occur
+    in sequential patches of the 1D array
+    '''
+    nkpts = len(mo_occ_kpts)
+    grad_kpts = [hf.get_grad(mo_coeff_kpts[k], mo_occ_kpts[k], fock[k])
+                 for k in range(nkpts)]
+    return np.hstack(grad_kpts)
 
 
 def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
@@ -230,9 +243,11 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
     if fock is None:
         dm = mf.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
         fock = mf.get_hcore() + mf.get_jk(mol, dm)
-    mo_coeff_kpts = mo_coeff_kpts.copy()
-    mo_e = np.empty_like(mo_occ_kpts)
+    mo_coeff = []
+    mo_energy = []
     for k, mo in enumerate(mo_coeff_kpts):
+        mo1 = np.empty_like(mo)
+        mo_e = np.empty_like(mo_occ_kpts[k])
         occidx = mo_occ_kpts[k] == 2
         viridx = ~occidx
         for idx in (occidx, viridx):
@@ -240,9 +255,11 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
                 orb = mo[:,idx]
                 f1 = reduce(np.dot, (orb.T.conj(), fock[k], orb))
                 e, c = scipy.linalg.eigh(f1)
-                mo[:,idx] = np.dot(orb, c)
-                mo_e[k,idx] = e
-    return mo_e, mo_coeff_kpts
+                mo1[:,idx] = np.dot(orb, c)
+                mo_e[idx] = e
+        mo_coeff.append(mo1)
+        mo_energy.append(mo_e)
+    return mo_energy, mo_coeff
 
 
 def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
@@ -443,11 +460,7 @@ class KRHF(hf.RHF):
         if fock is None:
             dm1 = self.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
             fock = self.get_hcore(self.cell, self.kpts) + self.get_veff(self.cell, dm1)
-
-        nkpts = len(self.kpts)
-        grad_kpts = [hf.get_grad(mo_coeff_kpts[k], mo_occ_kpts[k], fock[k])
-                     for k in range(nkpts)]
-        return np.hstack(grad_kpts)
+        return get_grad(mo_coeff_kpts, mo_occ_kpts, fock)
 
     def eig(self, h_kpts, s_kpts):
         nkpts = len(h_kpts)
@@ -458,7 +471,7 @@ class KRHF(hf.RHF):
             e, c = self._eigh(h_kpts[k], s_kpts[k])
             eig_kpts.append(e)
             mo_coeff_kpts.append(c)
-        return lib.asarray(eig_kpts), lib.asarray(mo_coeff_kpts)
+        return eig_kpts, mo_coeff_kpts
 
     def make_rdm1(self, mo_coeff_kpts=None, mo_occ_kpts=None):
         if mo_coeff_kpts is None:
