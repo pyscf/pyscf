@@ -819,7 +819,51 @@ class _ERIS:
         mem_now = lib.current_memory()[0]
 
         log = logger.Logger(cc.stdout, cc.verbose)
-        if hasattr(cc._scf, 'with_df') and cc._scf.with_df:
+        if (method == 'incore' and cc._scf._eri is not None and
+            (mem_incore+mem_now < cc.max_memory) or cc.mol.incore_anyway):
+            eri1 = ao2mo.incore.full(cc._scf._eri, mo_coeff)
+            #:eri1 = ao2mo.restore(1, eri1, nmo)
+            #:self.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
+            #:self.ooov = eri1[:nocc,:nocc,:nocc,nocc:].copy()
+            #:self.ovoo = eri1[:nocc,nocc:,:nocc,:nocc].copy()
+            #:self.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
+            #:self.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
+            #:ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
+            #:self.ovvv = numpy.empty((nocc,nvir,nvir*(nvir+1)//2))
+            #:for i in range(nocc):
+            #:    for j in range(nvir):
+            #:        self.ovvv[i,j] = lib.pack_tril(ovvv[i,j])
+            #:self.vvvv = ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:], nvir)
+            nvir_pair = nvir * (nvir+1) // 2
+            self.oooo = numpy.empty((nocc,nocc,nocc,nocc))
+            self.ooov = numpy.empty((nocc,nocc,nocc,nvir))
+            self.ovoo = numpy.empty((nocc,nvir,nocc,nocc))
+            self.oovv = numpy.empty((nocc,nocc,nvir,nvir))
+            self.ovov = numpy.empty((nocc,nvir,nocc,nvir))
+            self.ovvv = numpy.empty((nocc,nvir,nvir_pair))
+            self.vvvv = numpy.empty((nvir_pair,nvir_pair))
+            ij = 0
+            outbuf = numpy.empty((nmo,nmo,nmo))
+            for i in range(nocc):
+                buf = lib.unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
+                for j in range(i+1):
+                    self.oooo[i,j] = self.oooo[j,i] = buf[j,:nocc,:nocc]
+                    self.ooov[i,j] = self.ooov[j,i] = buf[j,:nocc,nocc:]
+                    self.oovv[i,j] = self.oovv[j,i] = buf[j,nocc:,nocc:]
+                ij += i + 1
+            ij1 = 0
+            for i in range(nocc,nmo):
+                buf = lib.unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
+                self.ovoo[:,i-nocc] = buf[:nocc,:nocc,:nocc]
+                self.ovov[:,i-nocc] = buf[:nocc,:nocc,nocc:]
+                for j in range(nocc):
+                    self.ovvv[j,i-nocc] = lib.pack_tril(_cp(buf[j,nocc:,nocc:]))
+                for j in range(nocc, i+1):
+                    self.vvvv[ij1] = lib.pack_tril(_cp(buf[j,nocc:,nocc:]))
+                    ij1 += 1
+                ij += i + 1
+
+        elif hasattr(cc._scf, 'with_df') and cc._scf.with_df:
             #log.warn('CCSD detected DF being bound to the HF object. '
             #         'MO integrals are computed based on the DF 3-tensor integrals.\n'
             #         'You can switch to dfccsd.CCSD for the DF-CCSD implementation')
@@ -866,49 +910,6 @@ class _ERIS:
             self.ovvv = self.feri1['ovvv']
             self.vvvv = self.feri1['vvvv']
 
-        elif (method == 'incore' and cc._scf._eri is not None and
-            (mem_incore+mem_now < cc.max_memory) or cc.mol.incore_anyway):
-            eri1 = ao2mo.incore.full(cc._scf._eri, mo_coeff)
-            #:eri1 = ao2mo.restore(1, eri1, nmo)
-            #:self.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
-            #:self.ooov = eri1[:nocc,:nocc,:nocc,nocc:].copy()
-            #:self.ovoo = eri1[:nocc,nocc:,:nocc,:nocc].copy()
-            #:self.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
-            #:self.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
-            #:ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
-            #:self.ovvv = numpy.empty((nocc,nvir,nvir*(nvir+1)//2))
-            #:for i in range(nocc):
-            #:    for j in range(nvir):
-            #:        self.ovvv[i,j] = lib.pack_tril(ovvv[i,j])
-            #:self.vvvv = ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:], nvir)
-            nvir_pair = nvir * (nvir+1) // 2
-            self.oooo = numpy.empty((nocc,nocc,nocc,nocc))
-            self.ooov = numpy.empty((nocc,nocc,nocc,nvir))
-            self.ovoo = numpy.empty((nocc,nvir,nocc,nocc))
-            self.oovv = numpy.empty((nocc,nocc,nvir,nvir))
-            self.ovov = numpy.empty((nocc,nvir,nocc,nvir))
-            self.ovvv = numpy.empty((nocc,nvir,nvir_pair))
-            self.vvvv = numpy.empty((nvir_pair,nvir_pair))
-            ij = 0
-            outbuf = numpy.empty((nmo,nmo,nmo))
-            for i in range(nocc):
-                buf = lib.unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
-                for j in range(i+1):
-                    self.oooo[i,j] = self.oooo[j,i] = buf[j,:nocc,:nocc]
-                    self.ooov[i,j] = self.ooov[j,i] = buf[j,:nocc,nocc:]
-                    self.oovv[i,j] = self.oovv[j,i] = buf[j,nocc:,nocc:]
-                ij += i + 1
-            ij1 = 0
-            for i in range(nocc,nmo):
-                buf = lib.unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
-                self.ovoo[:,i-nocc] = buf[:nocc,:nocc,:nocc]
-                self.ovov[:,i-nocc] = buf[:nocc,:nocc,nocc:]
-                for j in range(nocc):
-                    self.ovvv[j,i-nocc] = lib.pack_tril(_cp(buf[j,nocc:,nocc:]))
-                for j in range(nocc, i+1):
-                    self.vvvv[ij1] = lib.pack_tril(_cp(buf[j,nocc:,nocc:]))
-                    ij1 += 1
-                ij += i + 1
         else:
             cput1 = time.clock(), time.time()
             self.feri1 = lib.H5TmpFile()

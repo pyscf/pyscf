@@ -1473,9 +1473,7 @@ class _ERIS:
         mem_now = lib.current_memory()[0]
 
         log = logger.Logger(cc.stdout, cc.verbose)
-        if hasattr(cc._scf, 'with_df') and cc._scf.with_df:
-            raise NotImplementedError
-        elif (method == 'incore' and (mem_incore+mem_now < cc.max_memory)
+        if (method == 'incore' and (mem_incore+mem_now < cc.max_memory)
             or cc.mol.incore_anyway):
             if ao2mofn == ao2mo.full:
                 eri = ao2mo.restore(1, ao2mofn(cc._scf._eri, mo_coeff), nmo)
@@ -1493,6 +1491,10 @@ class _ERIS:
             ovvv = eri[:nocc,nocc:,nocc:,nocc:].reshape(-1,nvir,nvir)
             self.ovvv = lib.pack_tril(ovvv).reshape(nocc,nvir,nvir*(nvir+1)//2)
             self.vvvv = ao2mo.restore(4, eri[nocc:,nocc:,nocc:,nocc:].copy(), nvir)
+
+        elif hasattr(cc._scf, 'with_df') and cc._scf.with_df:
+            raise NotImplementedError
+
         else:
             orbo = mo_coeff[:,:nocc]
             orbv = mo_coeff[:,nocc:]

@@ -17,13 +17,13 @@ def KRCCSD(mf, frozen=[], mo_coeff=None, mo_occ=None):
     return kccsd_rhf.RCCSD(mf, frozen, mo_coeff, mo_occ)
 
 def _convert_to_rhf(mf):
-    from pyscf import scf
+    from pyscf.pbc import scf
     if isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_rhf(mf)
     return mf
 
 def _convert_to_uhf(mf):
-    from pyscf import scf
+    from pyscf.pbc import scf
     if not isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_uhf(mf)
     return mf

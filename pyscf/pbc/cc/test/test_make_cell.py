@@ -36,6 +36,7 @@ def make_cell(L, ngs):
     cell.gs = np.array([ngs,ngs,ngs])
 
     #cell.verbose = 4
+    cell.output = '/dev/null'
     cell.build()
     return cell
 
@@ -50,6 +51,7 @@ def test_cell_n0( L = 5.0, ngs = 4):
     cell.pseudo = 'gth-pade'
     cell.gs = np.array([ngs,ngs,ngs])
 
+    cell.output = '/dev/null'
     cell.build()
     return cell
 
@@ -63,6 +65,7 @@ def test_cell_n1( L = 5.0, ngs = 4):
     cell.pseudo = 'gth-pade'
     cell.gs = np.array([ngs,ngs,ngs])
 
+    cell.output = '/dev/null'
     cell.build()
     return cell
 
@@ -79,6 +82,7 @@ def test_cell_n2( L = 5.0, ngs = 4):
     cell.pseudo = 'gth-pade'
     cell.gs = np.array([ngs,ngs,ngs])
 
+    cell.output = '/dev/null'
     cell.build()
     return cell
 
@@ -102,5 +106,6 @@ def test_cell_n3( ngs ):
     cell.pseudo = "gth-pade"
     cell.gs = np.array([ngs,ngs,ngs])
 
+    cell.output = '/dev/null'
     cell.build()
     return cell

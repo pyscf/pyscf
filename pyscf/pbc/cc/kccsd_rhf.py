@@ -902,22 +902,26 @@ class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore',
                  ao2mofn=pyscf.ao2mo.outcore.general_iofree):
         cput0 = (time.clock(), time.time())
-        moidx = numpy.ones(cc.mo_occ.shape, dtype=numpy.bool)
+        moidx = [numpy.ones(x.size, dtype=numpy.bool) for x in cc.mo_energy]
         nkpts = cc.nkpts
         nmo = cc.nmo
         if isinstance(cc.frozen, (int, numpy.integer)):
-            moidx[:,:cc.frozen] = False
+            for k in range(nkpts):
+                moidx[k][:cc.frozen] = False
         elif len(cc.frozen) > 0:
-            moidx[:,numpy.asarray(cc.frozen)] = False
+            for k in range(nkpts):
+                moidx[k][numpy.asarray(cc.frozen)] = False
+
         nao = cc.mo_coeff[0].shape[0]
-        self.mo_coeff = numpy.zeros((nkpts,nao,nmo), dtype=cc.mo_coeff.dtype)
-        self.fock = numpy.zeros((nkpts,nmo,nmo), dtype=cc.mo_coeff.dtype)
+        dtype = cc.mo_coeff[0].dtype
+        self.mo_coeff = numpy.zeros((nkpts,nao,nmo), dtype=dtype)
+        self.fock = numpy.zeros((nkpts,nmo,nmo), dtype=dtype)
         if mo_coeff is None:
             for kp in range(nkpts):
                 self.mo_coeff[kp] = cc.mo_coeff[kp][:,moidx[kp]]
             mo_coeff = self.mo_coeff
             for kp in range(nkpts):
-                self.fock[kp] = numpy.diag(cc.mo_energy[kp][moidx[kp]]).astype(mo_coeff.dtype)
+                self.fock[kp] = numpy.diag(cc.mo_energy[kp][moidx[kp]]).astype(dtype)
         else:  # If mo_coeff is not canonical orbital
             for kp in range(nkpts):
                 self.mo_coeff[kp] = mo_coeff[kp][:,moidx[kp]]
@@ -930,7 +934,7 @@ class _ERIS:
             veff = vj - vk * .5
             fockao = cc._scf.get_hcore() + veff
             for kp in range(nkpts):
-                self.fock[kp] = reduce(numpy.dot, (mo_coeff[kp].T.conj(), fockao[kp], mo_coeff[kp])).astype(mo_coeff.dtype)
+                self.fock[kp] = reduce(numpy.dot, (mo_coeff[kp].T.conj(), fockao[kp], mo_coeff[kp])).astype(dtype)
 
         nocc = cc.nocc
         nmo = cc.nmo
@@ -948,7 +952,7 @@ class _ERIS:
         if (method == 'incore' and (mem_incore+mem_now < cc.max_memory)
             or cc.mol.incore_anyway):
             log.info('using incore ERI storage')
-            eri = numpy.zeros((nkpts,nkpts,nkpts,nmo,nmo,nmo,nmo), dtype=mo_coeff.dtype)
+            eri = numpy.zeros((nkpts,nkpts,nkpts,nmo,nmo,nmo,nmo), dtype=dtype)
 
             # Looping over unique list of k-vectors
             for pqr in range(nUnique_klist):
@@ -984,15 +988,13 @@ class _ERIS:
             _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
             self.feri1 = h5py.File(_tmpfile1.name)
 
-            if mo_coeff.dtype == np.complex: ds_type = 'c16'
-            else: ds_type = 'f8'
-            self.oooo = self.feri1.create_dataset('oooo', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), ds_type)
-            self.ooov = self.feri1.create_dataset('ooov', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), ds_type)
-            self.oovv = self.feri1.create_dataset('oovv', (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), ds_type)
-            self.ovov = self.feri1.create_dataset('ovov', (nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), ds_type)
-            self.voov = self.feri1.create_dataset('voov', (nkpts,nkpts,nkpts,nvir,nocc,nocc,nvir), ds_type)
-            self.vovv = self.feri1.create_dataset('vovv', (nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir), ds_type)
-            self.vvvv = self.feri1.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), ds_type)
+            self.oooo = self.feri1.create_dataset('oooo', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), dtype.char)
+            self.ooov = self.feri1.create_dataset('ooov', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), dtype.char)
+            self.oovv = self.feri1.create_dataset('oovv', (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype.char)
+            self.ovov = self.feri1.create_dataset('ovov', (nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype.char)
+            self.voov = self.feri1.create_dataset('voov', (nkpts,nkpts,nkpts,nvir,nocc,nocc,nvir), dtype.char)
+            self.vovv = self.feri1.create_dataset('vovv', (nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir), dtype.char)
+            self.vvvv = self.feri1.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype.char)
 
             # <ij|pq>  = (ip|jq)
             cput1 = time.clock(), time.time()

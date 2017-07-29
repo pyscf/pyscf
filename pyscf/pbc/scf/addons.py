@@ -201,6 +201,127 @@ def canonical_occ_(mf):
 canonical_occ=canonical_occ_
 
 
+def convert_to_uhf(mf, out=None):
+    '''Convert the given mean-field object to the corresponding unrestricted
+    HF/KS object
+    '''
+    from pyscf.pbc import scf
+    from pyscf.pbc import dft
+    def update_mo_(mf, mf1):
+        _keys = mf._keys.union(mf1._keys)
+        mf1.__dict__.update(mf.__dict__)
+        mf1._keys = _keys
+        if mf.mo_energy is not None:
+            mf1.mo_energy = numpy.array((mf.mo_energy, mf.mo_energy))
+            mf1.mo_coeff = numpy.array((mf.mo_coeff, mf.mo_coeff))
+            mo_occ = numpy.asarray(mf.mo_occ)
+            mf1.mo_occ = numpy.array((mo_occ>0, mo_occ==2), dtype=numpy.double)
+        return mf1
+
+    if out is not None:
+        assert(isinstance(out, (scf.uhf.UHF, scf.kuhf.KUHF)))
+        if isinstance(mf, (scf.uhf.UHF, scf.kuhf.KUHF)):
+            out.__dict.__update(mf)
+        else:  # RHF
+            out = update_mo_(mf, out)
+        return out
+
+    else:
+        scf_class = {scf.hf.RHF    : scf.uhf.UHF,
+                     scf.khf.KRHF  : scf.kuhf.KUHF,
+                     dft.rks.RKS   : dft.uks.UKS,
+                     dft.krks.KRKS : dft.kuks.KUKS}
+
+        if isinstance(mf, (scf.uhf.UHF, scf.kuhf.KUHF)):
+            out = copy.copy(mf)
+
+        elif mf.__class__ in scf_class:
+            out = update_mo_(mf, scf_class[mf.__class__](mf.cell))
+
+        else:
+            msg =('Warn: Converting a decorated RHF object to the decorated '
+                  'UHF object is unsafe.\nIt is recommended to create a '
+                  'decorated UHF object explicitly and pass it to '
+                  'convert_to_uhf function eg:\n'
+                  '    convert_to_uhf(mf, out=density_fit(scf.UHF(cell)))\n')
+            sys.stderr.write(msg)
+# Python resolve the subclass inheritance dynamically based on MRO.  We can
+# change the subclass inheritance order to substitute RHF/RKS with UHF/UKS.
+            mro = mf.__class__.__mro__
+            mronew = None
+            for i, cls in enumerate(mro):
+                if cls in scf_class:
+                    mronew = mro[:i] + hf_class[cls].__mro__
+                    break
+            if mronew is None:
+                raise RuntimeError('%s object is not SCF object')
+            out = update_mo_(mf, lib.overwrite_mro(mf, mronew))
+
+        return out
+
+def convert_to_rhf(mf, out=None):
+    '''Convert the given mean-field object to the corresponding restricted
+    HF/KS object
+    '''
+    from pyscf import scf
+    from pyscf import dft
+    def update_mo_(mf, mf1):
+        _keys = mf._keys.union(mf1._keys)
+        mf1.__dict__.update(mf.__dict__)
+        mf1._keys = _keys
+        if mf.mo_energy is not None:
+            mf1.mo_energy = mf.mo_energy[0]
+            mf1.mo_coeff =  mf.mo_coeff[0]
+            mf1.mo_occ = numpy.asarray(mf.mo_occ[0]) + numpy.asarray(mf.mo_occ[1])
+        return mf1
+
+    if out is not None:
+        assert(isinstance(out, (scf.hf.RHF, scf.khf.KRHF)))
+        if isinstance(mf, (scf.hf.RHF, scf.khf.KRHF)):
+            out.__dict.__update(mf)
+        else:  # UHF
+            out = update_mo_(mf, out)
+        return out
+
+    else:
+        scf_class = {scf.uhf.UHF   : scf.hf.RHF,
+                     scf.kuhf.KUHF : scf.khf.KRHF,
+                     dft.uks.UKS   : dft.rks.RKS,
+                     dft.kuks.KUKS : dft.krks.KRKS}
+
+        if isinstance(mf, (scf.hf.RHF, scf.khf.KRHF)):
+            out = copy.copy(mf)
+
+        elif mf.__class__ in scf_class:
+            out = update_mo_(mf, scf_class[mf.__class__](mf.cell))
+
+        else:
+            msg =('Warn: Converting a decorated UHF object to the decorated '
+                  'RHF object is unsafe.\nIt is recommended to create a '
+                  'decorated RHF object explicitly and pass it to '
+                  'convert_to_rhf function eg:\n'
+                  '    convert_to_rhf(mf, out=density_fit(scf.RHF(cell)))\n')
+            sys.stderr.write(msg)
+# Python resolve the subclass inheritance dynamically based on MRO.  We can
+# change the subclass inheritance order to substitute RHF/RKS with UHF/UKS.
+            mro = mf.__class__.__mro__
+            mronew = None
+            for i, cls in enumerate(mro):
+                if cls in scf_class:
+                    mronew = mro[:i] + hf_class[cls].__mro__
+                    break
+            if mronew is None:
+                raise RuntimeError('%s object is not SCF object')
+            out = update_mo_(mf, lib.overwrite_mro(mf, mronew))
+
+        return out
+
+def convert_to_khf(mf, out=None):
+    '''Convert gamma point SCF object to k-point SCF object
+    '''
+    raise NotImplementedError
+
+
 if __name__ == '__main__':
     import pyscf.pbc.gto as pbcgto
     import pyscf.pbc.scf as pscf

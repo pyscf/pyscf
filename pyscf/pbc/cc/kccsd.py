@@ -15,6 +15,12 @@ import pyscf.cc
 import pyscf.cc.ccsd
 from pyscf.pbc.cc import kintermediates as imdk
 
+#
+#FIXME: When linear dependence is found in KHF and handled by function
+# pyscf.scf.addons.remove_linear_dep_, different k-point may have different
+# number of orbitals.
+#
+
 #einsum = np.einsum
 einsum = lib.einsum
 
@@ -252,7 +258,7 @@ class CCSD(pyscf.cc.ccsd.CCSD):
         nkpts = self.nkpts
 
         nao = mf.cell.nao_nr()
-        nmo = mf.mo_energy.shape[1]
+        nmo = mf.mo_energy[0].size
         nso = 2*nmo
         # calculating spin orbitals...
         mo_energy = numpy.zeros(shape=(nkpts,nso))
@@ -339,7 +345,7 @@ class CCSD(pyscf.cc.ccsd.CCSD):
         self.emp2 /= nkpts
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2.real)
         logger.timer(self, 'init mp2', *time0)
-        print "MP2 energy =", self.emp2
+        #print("MP2 energy =", self.emp2)
         return self.emp2, t1, t2
 
     def ccsd(self, t1=None, t2=None, mo_coeff=None, eris=None):
@@ -371,17 +377,17 @@ class _ERIS:
     """_ERIS handler for PBCs."""
     def __init__(self, cc, mo_coeff=None, method='incore'):
         cput0 = (time.clock(), time.time())
-        moidx = numpy.ones(shape=cc.mo_energy.shape, dtype=numpy.bool)
+        moidx = [numpy.ones(x.size, dtype=numpy.bool) for x in cc.mo_energy]
         nkpts = cc.nkpts
         nmo = cc.nmo()
         # TODO change this for k-points ... seems like it should work
         if isinstance(cc.frozen, (int, numpy.integer)):
             for k in range(nkpts):
-                moidx[k,:cc.frozen] = False
+                moidx[k][:cc.frozen] = False
         elif len(cc.frozen) > 0:
             for k in range(nkpts):
-                moidx[k,numpy.asarray(cc.frozen)] = False
-        assert(numpy.count_nonzero(moidx) % 2 == 0) # works for restricted CCSD only
+                moidx[k][numpy.asarray(cc.frozen)] = False
+        assert(sum(numpy.count_nonzero(x) for x in moidx) % 2 == 0) # works for restricted CCSD only
         if mo_coeff is None:
             # TODO make this work for frozen maybe... seems like it should work
             nao = cc._scf.cell.nao_nr()
@@ -394,7 +400,8 @@ class _ERIS:
                 self.fock[k] = numpy.diag(cc.mo_energy[k][moidx[k]])
         else:  # If mo_coeff is not canonical orbital
             # TODO does this work for k-points? changed to conjugate.
-            self.mo_coeff = mo_coeff = mo_coeff[:,moidx]
+            raise NotImplementedError
+            self.mo_coeff = mo_coeff = [c[:,moidx[k]] for k,c in enumerate(mo_coeff)]
             dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
             fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
             self.fock = reduce(numpy.dot, (numpy.conj(mo_coeff.T), fockao, mo_coeff))
