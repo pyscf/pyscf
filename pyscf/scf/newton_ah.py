@@ -61,7 +61,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
     if hasattr(mf, '_scf') and id(mf._scf.mol) != id(mol):
         mo_coeff = addons.project_mo_nr2nr(mf._scf.mol, mo_coeff, mol)
 
-    vind = _gen_rhf_response(mf, singlet=None, hermi=1)
+    vind = _gen_rhf_response(mf, mo_coeff, mo_occ, singlet=None, hermi=1)
 
     def h_op(x):
         x = x.reshape(nvir,nocc)
@@ -274,7 +274,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     v1 = numpy.zeros_like(dm1)
                 else:
                     v1 = ni.nr_rks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, hermi,
-                                       rho0, vxc, fxc, max_memory)
+                                       rho0, vxc, fxc, max_memory=max_memory)
                 if abs(hyb) > 1e-10:
                     if hermi != 2:
                         vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
@@ -292,7 +292,8 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 else:
                     # nr_rks_fxc_st requires alpha of dm1, dm1*.5 should be scaled
                     v1 = numint.nr_rks_fxc_st(ni, mol, mf.grids, mf.xc, dm0, dm1, 0,
-                                              True, rho0, vxc, fxc, max_memory)
+                                              True, rho0, vxc, fxc,
+                                              max_memory=max_memory)
                     v1 *= .5
                 if abs(hyb) > 1e-10:
                     if hermi != 2:
@@ -310,7 +311,8 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 else:
                     # nr_rks_fxc_st requires alpha of dm1, dm1*.5 should be scaled
                     v1 = numint.nr_rks_fxc_st(ni, mol, mf.grids, mf.xc, dm0, dm1, 0,
-                                              False, rho0, vxc, fxc, max_memory)
+                                              False, rho0, vxc, fxc,
+                                              max_memory=max_memory)
                     v1 *= .5
                 if abs(hyb) > 1e-10:
                     v1 += -.5 * hyb * mf.get_k(mol, dm1, hermi=hermi)
@@ -355,7 +357,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
                 v1 = numpy.zeros_like(dm1)
             else:
                 v1 = ni.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, hermi,
-                                   rho0, vxc, fxc, max_memory)
+                                   rho0, vxc, fxc, max_memory=max_memory)
             if abs(hyb) < 1e-10:
                 if with_j:
                     vj = mf.get_j(mol, dm1, hermi=hermi)
@@ -442,10 +444,6 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
         conv_tol_grad = numpy.sqrt(mf.conv_tol*.1)
 
     t2m = (time.clock(), time.time())
-    if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
-        nmo = mo_coeff.shape[-1]
-    else:
-        nmo = mo_coeff[0].shape[-1]
     g_orb, h_op, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao)
     g_kf = g_orb
     norm_gkf = norm_gorb = numpy.linalg.norm(g_orb)
@@ -569,8 +567,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
             u = mf.rotate_mo(ukf, u)
         jkcount += ihop + 1
         log.debug('    tot inner=%d  %d JK  |g|= %4.3g  |u-1|= %4.3g',
-                  imic, jkcount, norm_gorb,
-                  numpy.linalg.norm(u-numpy.eye(nmo)))
+                  imic, jkcount, norm_gorb, numpy.linalg.norm(dr))
         h_op = h_diag = None
         t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
         mo_coeff, mo_occ, fock_ao = (yield u, g_kf, kfcount, jkcount)

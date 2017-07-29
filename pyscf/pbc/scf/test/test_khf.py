@@ -59,7 +59,7 @@ class KnowValues(unittest.TestCase):
         abs_kpts = cell.get_abs_kpts(scaled_kpts)
         kmf = khf.KRHF(cell, abs_kpts, exxdiv='vcut_sph')
         ekpt = kmf.scf()
-        self.assertAlmostEqual(ekpt, -12.337299038604856, 8)
+        self.assertAlmostEqual(ekpt, -12.337299166550796, 8)
 
         supcell = pyscf.pbc.tools.super_cell(cell, nk)
         supcell.gs = np.array([nk[0]*ngs + (nk[0]-1)//2,
@@ -96,7 +96,7 @@ class KnowValues(unittest.TestCase):
         mf.init_guess = 'chkfile'
         dm1 = mf.from_chk(kmf.chkfile)
         mf.max_cycle = 1
-        e1 = mf.kernel()
+        e1 = mf.kernel(dm1)
         self.assertAlmostEqual(e1, ekpt, 9)
 
         nk = (3, 1, 1)
@@ -118,7 +118,7 @@ class KnowValues(unittest.TestCase):
         np.random.seed(1)
         kpts_bands = np.random.random((2,3))
         e = kmf1.get_bands(kpts_bands)[0]
-        self.assertAlmostEqual(finger(e), -0.045541292730566063, 8)
+        self.assertAlmostEqual(finger(np.array(e)), -0.045541292730566063, 8)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.scf.khf")

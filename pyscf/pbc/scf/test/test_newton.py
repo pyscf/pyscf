@@ -158,7 +158,7 @@ class KnowValues(unittest.TestCase):
         mf = scf.newton(mf)
         mf.grids.build()
         g, hop, hdiag = mf.gen_g_hop(mo, mo_occ, [mf.get_hcore()]*2)
-        self.assertAlmostEqual(numpy.linalg.norm(hop(dm1)), 21.920199161109764, 7)
+        self.assertAlmostEqual(numpy.linalg.norm(hop(dm1)), 31.551906770196428, 7)
 
 
 if __name__ == "__main__":

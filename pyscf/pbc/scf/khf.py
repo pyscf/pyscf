@@ -154,8 +154,8 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
         for k,kpt in enumerate(mf.cell.get_scaled_kpts(mf.kpts)):
             logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s %s',
                          k, kpt[0], kpt[1], kpt[2],
-                         mo_energy_kpts[k,mo_occ_kpts[k]> 0],
-                         mo_energy_kpts[k,mo_occ_kpts[k]==0])
+                         mo_energy_kpts[k][mo_occ_kpts[k]> 0],
+                         mo_energy_kpts[k][mo_occ_kpts[k]==0])
         np.set_printoptions(threshold=1000)
 
     return mo_occ_kpts
@@ -246,8 +246,8 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
     mo_coeff = []
     mo_energy = []
     for k, mo in enumerate(mo_coeff_kpts):
-        mo1 = numpy.empty_like(mo)
-        mo_e = numpy.empty_like(mo_occ_kpts[k])
+        mo1 = np.empty_like(mo)
+        mo_e = np.empty_like(mo_occ_kpts[k])
         occidx = mo_occ_kpts[k] == 2
         viridx = ~occidx
         for idx in (occidx, viridx):
@@ -256,7 +256,7 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
                 f1 = reduce(np.dot, (orb.T.conj(), fock[k], orb))
                 e, c = scipy.linalg.eigh(f1)
                 mo1[:,idx] = np.dot(orb, c)
-                mo_e[k][idx] = e
+                mo_e[idx] = e
         mo_coeff.append(mo1)
         mo_energy.append(mo_e)
     return mo_energy, mo_coeff
