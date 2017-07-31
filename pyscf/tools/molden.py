@@ -6,6 +6,7 @@
 # MOLDEN format:
 # http://www.cmbi.ru.nl/molden/molden_format.html
 
+import sys
 import numpy
 import pyscf
 from pyscf import lib
@@ -178,9 +179,25 @@ def load(moldenfile):
         while line:
             if '[5d]' in line or '[9g]' in line:
                 mol.cart = False
-            elif '[MO]' in line:
+            elif '[core]' in line:
+                line = f.readline()
+                while line:
+                    dat = line.split(':')
+                    if dat[0].strip().isdigit():
+                        atm_id = int(dat[0].strip()) - 1
+                        nelec_core = int(dat[1].strip())
+                        mol.ecp[atoms[atm_id][0]] = [nelec_core, []]
+                    elif '[MO]' in line:
+                        break
+                    line = f.readline()
+            if '[MO]' in line:
                 break
             line = f.readline()
+
+        if mol.ecp:
+            sys.stderr.write('\nECP were dectected in the molden file.\n'
+                             'Note Molden format does not support ECP data. '
+                             'ECP information was lost when saving the molden file.\n\n')
         try:
             mol.build(0, 0)
         except RuntimeError:
@@ -259,6 +276,14 @@ def header(mol, fout, ignore_h=False):
                     fout.write('    %18.14g  %18.14g\n' % (es[ip], cs[ip,ic]))
         fout.write('\n')
     fout.write('[5d]\n[9g]\n\n')
+
+    if mol._ecp:  # See https://github.com/zorkzou/Molden2AIM
+        fout.write('[core]\n')
+        for ia in range(mol.natm):
+            nelec_ecp_core = mol.atom_nelec_core(ia)
+            if nelec_ecp_core != 0:
+                fout.write('%s : %d\n' % (ia+1, nelec_ecp_core))
+    fout.write('\n')
 
 def order_ao_index(mol, cart=False):
 # reorder d,f,g fucntion to
