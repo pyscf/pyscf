@@ -29,12 +29,12 @@ def kernel(mycc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
         log = logger.Logger(mycc.stdout, verbose)
 
     if t1 is None and t2 is None:
-        t1, t2 = mycc.init_amps(eris)[1:]
+        t1, t2 = mycc.get_init_guess(eris)[1:]
     elif t1 is None:
         nocc, nvir = t2.shape[0], t2.shape[2]
         t1 = numpy.zeros((nocc,nvir))
     elif t2 is None:
-        t2 = mycc.init_amps(eris)[2]
+        t2 = mycc.get_init_guess(eris)[2]
 
     cput1 = cput0 = (time.clock(), time.time())
     nocc, nvir = t1.shape
@@ -535,6 +535,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         log.info('diis_start_cycle = %d', self.diis_start_cycle)
         log.info('diis_start_energy_diff = %g', self.diis_start_energy_diff)
 
+    def get_init_guess(self, eris=None):
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        return self.init_amps(eris)
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
         mo_e = eris.fock.diagonal()

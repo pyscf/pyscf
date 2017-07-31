@@ -4,7 +4,9 @@
 #
 
 '''
-Solve CISD equation  H C = C e  where e = E_HF + E_CORR
+non-relativistic RCISD
+
+The RCISD equation is  H C = C e  where e = E_HF + E_CORR
 '''
 
 import time
@@ -306,7 +308,7 @@ class CISD(lib.StreamObject):
         self.stdout = self.mol.stdout
         self.max_memory = mf.max_memory
 
-        self.conv_tol = 1e-7
+        self.conv_tol = 1e-9
         self.max_cycle = 50
         self.max_space = 12
         self.frozen = frozen
@@ -412,16 +414,27 @@ if __name__ == '__main__':
         ['H', ( 0.,-1.    , 1.   )],
     ]
     mol.charge = 2
-    mol.basis = '3-21g'
+    #mol.basis = '3-21g'
     mol.build()
+    mf = scf.RHF(mol).run(max_cycle=1)
+    etot = CISD(mf).kernel()[0] + mf.e_tot
     mf = scf.RHF(mol).run()
-    ecisd = CISD(mf).kernel()[0]
+    ecisd, civec = CISD(mf).kernel()
+    print(ecisd + mf.e_tot - etot)
     print(ecisd - -0.024780739973407784)
+    nmo = mf.mo_occ.size
+    nocc = mol.nelectron // 2
     h2e = ao2mo.kernel(mf._eri, mf.mo_coeff)
     h1e = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
-    eci = fci.direct_spin0.kernel(h1e, h2e, mf.mo_coeff.shape[1], mol.nelectron)[0]
+    eci,fcivec = fci.direct_spin0.kernel(h1e, h2e, nmo, mol.nelectron)
     eci = eci + mol.energy_nuc() - mf.e_tot
     print(ecisd - eci)
+    rdm1 = make_rdm1(civec, nmo, nocc)
+    rdm2 = make_rdm2(civec, nmo, nocc)
+    dm1ref, dm2ref = fci.direct_spin0.make_rdm12(fcivec, nmo, mol.nelectron)
+    dm2ref = dm2ref.transpose(0,2,1,3)
+    print(abs(rdm1-dm1ref).max(), 'r')
+    print(abs(rdm2-dm2ref).max(), 'r')
 
     mol = gto.Mole()
     mol.verbose = 0
