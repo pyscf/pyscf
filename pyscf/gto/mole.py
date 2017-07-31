@@ -687,12 +687,12 @@ def make_ecp_env(mol, _atm, ecp, pre_env=[]):
                 ecp0 = None
             if ecp0 is not None:
                 _atm[ia,CHARGE_OF ] = _charge(symb) - ecp0[0]
-                b = ecp0[1].copy()
+                b = ecp0[1].copy().reshape(-1,BAS_SLOTS)
                 b[:,ATOM_OF] = ia
                 _ecpbas.append(b)
     if _ecpbas:
         _ecpbas = numpy.asarray(numpy.vstack(_ecpbas), numpy.int32)
-        _env = numpy.hstack((pre_env, numpy.hstack(_env)))
+        _env = numpy.hstack([pre_env] + _env)
     else:
         _ecpbas = numpy.zeros((0,BAS_SLOTS), numpy.int32)
         _env = pre_env
@@ -739,7 +739,7 @@ def pack(mol):
     class.  Modifications to mol._atm, mol._bas, mol._env are not tracked.
     Use :func:`dumps` to serialize the entire Mole object.
     '''
-    return {'atom'    : mol.atom,
+    mdic = {'atom'    : mol.atom,
             'unit'    : mol.unit,
             'basis'   : mol.basis,
             'charge'  : mol.charge,
@@ -749,6 +749,11 @@ def pack(mol):
             'nucmod'  : mol.nucmod,
             'ecp'     : mol.ecp,
             'verbose' : mol.verbose}
+    if mol.symmetry and not isinstance(mol.symmetry, str):
+        mdic['symmetry'] = mol.groupname
+        mdic['atom'] = mol._atom
+        mdic['unit'] = 'AU'
+    return mdic
 def unpack(moldic):
     '''Unpack a dict which is packed by :func:`pack`, to generate the input
     arguments for :class:`Mole` object.
