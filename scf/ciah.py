@@ -250,12 +250,6 @@ def _regular_step(heff, ovlp, xs, lindep, log):
     e,c = lib.safe_eigh(heff[1:,1:], ovlp[1:,1:], lindep)[:2]
     if e[0] < -1e-5:
         log.debug('Negative hessians found %s', e[e<0])
-        log.debug('AH is shifted to avoid negative hessians')
-        heff = heff.copy()
-        sc = numpy.dot(ovlp[1:,1:], c)
-        e[(-0.1<e) & (e<0)] = .1
-        e = abs(e)
-        heff[1:,1:] = numpy.dot(sc*e, sc.T.conj())
 
     w, v, seig = lib.safe_eigh(heff, ovlp, lindep)
     if log.verbose >= logger.DEBUG3:
