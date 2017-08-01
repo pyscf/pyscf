@@ -95,6 +95,10 @@ def dump(chkfile, key, value):
             root1 = root.create_group(key)
             for k in value:
                 save_as_group(k, value[k], root1)
+        elif isinstance(value, (tuple, list)):
+            root1 = root.create_group(key + '__from_list__')
+            for k, v in enumerate(value):
+                save_as_group(str(k), v, root1)
         else:
             try:
                 root[key] = value

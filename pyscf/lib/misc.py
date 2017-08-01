@@ -470,6 +470,44 @@ def ndpointer(*args, **kwargs):
     return type(base.__name__, (base,), {'from_param': from_param})
 
 
+class call_in_background(object):
+    '''Asynchonously execute the given function
+
+    Usage:
+        with call_in_background(fun) as async_fun:
+            async_fun(a, b)  # == fun(a, b)
+            do_something_else()
+
+        with call_in_background(fun1, fun2) as (afun1, afun2):
+            afun2(a, b)
+            do_something_else()
+            afun2(a, b)
+            do_something_else()
+            afun1(a, b)
+            do_something_else()
+    '''
+    def __init__(self, *fns):
+        self.fns = fns
+        self.handler = None
+
+    def __enter__(self):
+        def def_async_fn(fn):
+            def async_fn(*args, **kwargs):
+                if self.handler is not None:
+                    self.handler.join()
+                self.handler = background_thread(fn, *args, **kwargs)
+                return self.handler
+            return async_fn
+        if len(self.fns) == 1:
+            return def_async_fn(self.fns[0])
+        else:
+            return [def_async_fn(fn) for fn in self.fns]
+
+    def __exit__(self, type, value, traceback):
+        if self.handler is not None:
+            self.handler.join()
+
+
 if __name__ == '__main__':
     for i,j in tril_equal_pace(90, 30):
         print('base=30', i, j, j*(j+1)//2-i*(i+1)//2)
