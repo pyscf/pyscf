@@ -82,18 +82,10 @@ def update_amps(cc, t1, t2, eris):
     Foo = imd.cc_Foo(t1,t2,eris)
     Fvv = imd.cc_Fvv(t1,t2,eris)
     Fov = imd.cc_Fov(t1,t2,eris)
-    Loo = imd.Loo(t1,t2,eris)
-    Lvv = imd.Lvv(t1,t2,eris)
-    Woooo = imd.cc_Woooo(t1,t2,eris)
-    Wvvvv = imd.cc_Wvvvv(t1,t2,eris)
-    Wvoov = imd.cc_Wvoov(t1,t2,eris)
-    Wvovo = imd.cc_Wvovo(t1,t2,eris)
 
     # Move energy terms to the other side
     Foo -= np.diag(np.diag(foo))
     Fvv -= np.diag(np.diag(fvv))
-    Loo -= np.diag(np.diag(foo))
-    Lvv -= np.diag(np.diag(fvv))
 
     # T1 equation
     t1new = np.array(fov).conj()
@@ -116,16 +108,53 @@ def update_amps(cc, t1, t2, eris):
 
     # T2 equation
     t2new = np.array(eris.oovv).conj()
-    t2new += einsum('klij,klab->ijab',Woooo,t2)
-    t2new += einsum('klij,ka,lb->ijab',Woooo,t1,t1)
-    for a in range(nvir):
-        Wvvvv_a = np.array(Wvvvv[a])
-        t2new[:,:,a,:] += einsum('bcd,ijcd->ijb',Wvvvv_a,t2)
-        t2new[:,:,a,:] += einsum('bcd,ic,jd->ijb',Wvvvv_a,t1,t1)
-    tmp = einsum('ac,ijcb->ijab',Lvv,t2)
-    t2new += (tmp + tmp.transpose(1,0,3,2))
-    tmp = einsum('ki,kjab->ijab',Loo,t2)
-    t2new -= (tmp + tmp.transpose(1,0,3,2))
+    if cc.cc2:
+        Woooo2 = np.array(eris.oooo)
+        Woooo2 += einsum('klic,jc->klij',eris.ooov,t1)
+        Woooo2 += einsum('lkjc,ic->klij',eris.ooov,t1)
+        Woooo2 += einsum('klcd,ic,jd->klij',eris.oovv,t1,t1)
+        t2new += einsum('klij,ka,lb->ijab',Woooo2,t1,t1)
+        # avoid transpose inside loop
+        ovvv = np.array(eris.vovv).transpose(1,0,3,2)
+        for a in range(nvir):
+            Wvvvv2_a = eris.vvvv[a]
+            Wvvvv2_a += -einsum('kcd,kb->bcd',eris.vovv[a],t1)
+            Wvvvv2_a += -np.einsum('k,kbcd->bcd',t1[:,a],ovvv)
+            t2new[:,:,a,:] += einsum('bcd,ic,jd->ijb',Wvvvv2_a,t1,t1)
+        Lvv2 = fvv - einsum('kc,ka->ac',fov,t1)
+        Lvv2 -= np.diag(np.diag(fvv))
+        tmp = einsum('ac,ijcb->ijab',Lvv2,t2)
+        t2new += (tmp + tmp.transpose(1,0,3,2))
+        Loo2 = foo + einsum('kc,ic->ki',fov,t1)
+        Loo2 -= np.diag(np.diag(foo))
+        tmp = einsum('ki,kjab->ijab',Loo2,t2)
+        t2new -= (tmp + tmp.transpose(1,0,3,2))
+    else:
+        Loo = imd.Loo(t1,t2,eris)
+        Lvv = imd.Lvv(t1,t2,eris)
+        Loo -= np.diag(np.diag(foo))
+        Lvv -= np.diag(np.diag(fvv))
+        Woooo = imd.cc_Woooo(t1,t2,eris)
+        Wvoov = imd.cc_Wvoov(t1,t2,eris)
+        Wvovo = imd.cc_Wvovo(t1,t2,eris)
+        Wvvvv = imd.cc_Wvvvv(t1,t2,eris)
+        t2new += einsum('klij,klab->ijab',Woooo,t2)
+        t2new += einsum('klij,ka,lb->ijab',Woooo,t1,t1)
+        for a in range(nvir):
+            Wvvvv_a = np.array(Wvvvv[a])
+            t2new[:,:,a,:] += einsum('bcd,ijcd->ijb',Wvvvv_a,t2)
+            t2new[:,:,a,:] += einsum('bcd,ic,jd->ijb',Wvvvv_a,t1,t1)
+        tmp = einsum('ac,ijcb->ijab',Lvv,t2)
+        t2new += (tmp + tmp.transpose(1,0,3,2))
+        tmp = einsum('ki,kjab->ijab',Loo,t2)
+        t2new -= (tmp + tmp.transpose(1,0,3,2))
+        tmp = 2*einsum('akic,kjcb->ijab',Wvoov,t2) - einsum('akci,kjcb->ijab',Wvovo,t2)
+        t2new += (tmp + tmp.transpose(1,0,3,2))
+        tmp = einsum('akic,kjbc->ijab',Wvoov,t2)
+        t2new -= (tmp + tmp.transpose(1,0,3,2))
+        tmp = einsum('bkci,kjac->ijab',Wvovo,t2)
+        t2new -= (tmp + tmp.transpose(1,0,3,2))
+
     tmp2 = np.array(eris.vovv).transpose(3,2,1,0).conj() \
             - einsum('kbic,ka->abic',eris.ovov,t1)
     tmp = einsum('abic,jc->ijab',tmp2,t1)
@@ -133,12 +162,6 @@ def update_amps(cc, t1, t2, eris):
     tmp2 = np.array(eris.ooov).transpose(3,2,1,0).conj() \
             + einsum('akic,jc->akij',eris.voov,t1)
     tmp = einsum('akij,kb->ijab',tmp2,t1)
-    t2new -= (tmp + tmp.transpose(1,0,3,2))
-    tmp = 2*einsum('akic,kjcb->ijab',Wvoov,t2) - einsum('akci,kjcb->ijab',Wvovo,t2)
-    t2new += (tmp + tmp.transpose(1,0,3,2))
-    tmp = einsum('akic,kjbc->ijab',Wvoov,t2)
-    t2new -= (tmp + tmp.transpose(1,0,3,2))
-    tmp = einsum('bkci,kjac->ijab',Wvovo,t2)
     t2new -= (tmp + tmp.transpose(1,0,3,2))
 
     t1new /= eia
@@ -186,15 +209,19 @@ class RCCSD(ccsd.CCSD):
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
 
-    def kernel(self, t1=None, t2=None, eris=None, mbpt2=False):
-        return self.ccsd(t1, t2, eris, mbpt2)
-    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
+    def kernel(self, t1=None, t2=None, eris=None, mbpt2=False, cc2=False):
+        return self.ccsd(t1, t2, eris, mbpt2, cc2)
+    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False, cc2=False):
         '''Ground-state CCSD.
 
         Kwargs:
             mbpt2 : bool
                 Use one-shot MBPT2 approximation to CCSD.
+            cc2 : bool
+                Use CC2 approximation to CCSD.
         '''
+        if mbpt2 and cc2:
+            raise RuntimeError('MBPT2 and CC2 are mutually exclusive approximations to the CCSD ground state.')
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         self.eris = eris
         self.dump_flags()
@@ -202,15 +229,20 @@ class RCCSD(ccsd.CCSD):
             cctyp = 'MBPT2'
             self.e_corr, self.t1, self.t2 = self.init_amps(eris)
         else:
-            cctyp = 'CCSD'
+            if cc2:
+                cctyp = 'CC2'
+                self.cc2 = True
+            else:
+                cctyp = 'CCSD'
+                self.cc2 = False
             self.converged, self.e_corr, self.t1, self.t2 = \
                     kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                            tol=self.conv_tol, tolnormt=self.conv_tol_normt,
                            verbose=self.verbose)
             if self.converged:
-                logger.info(self, 'CCSD converged')
+                logger.info(self, '%s converged', cctyp)
             else:
-                logger.info(self, 'CCSD not converged')
+                logger.info(self, '%s not converged', cctyp)
         if self._scf.e_tot == 0:
             logger.note(self, 'E_corr = %.16g', self.e_corr)
         else:
