@@ -78,8 +78,9 @@ class PipekMezey(boys.Boys):
         if u is None: u = numpy.eye(self.mo_coeff.shape[1])
         mo_coeff = lib.dot(self.mo_coeff, u)
         pop = atomic_pops(self.mol, mo_coeff, self.pop_method)
-        g = numpy.einsum('xii,xip->pi', pop, pop) * 2
-        return -self.pack_uniq_var(g)
+        g0 = numpy.einsum('xii,xip->pi', pop, pop)
+        g = -self.pack_uniq_var(g0-g0.T) * 2
+        return g
 
     def cost_function(self, u=None):
         if u is None: u = numpy.eye(self.mo_coeff.shape[1])

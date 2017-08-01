@@ -295,8 +295,16 @@ class KUHF(uhf.UHF, khf.KRHF):
             dm1 = self.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
             fock = self.get_hcore(self.cell, self.kpts) + self.get_veff(self.cell, dm1)
 
+        def grad(mo, mo_occ, fock):
+            occidx = mo_occ > 0
+            viridx = ~occidx
+            g = reduce(np.dot, (mo[:,viridx].T.conj(), fock, mo[:,occidx]))
+            return g.ravel()
+
         nkpts = len(self.kpts)
-        grad_kpts = [uhf.get_grad(mo_coeff_kpts[:,k], mo_occ_kpts[:,k], fock[:,k])
+        grad_kpts = [grad(mo_coeff_kpts[0][k], mo_occ_kpts[0][k], fock[0][k])
+                     for k in range(nkpts)]
+        grad_kpts+= [grad(mo_coeff_kpts[1][k], mo_occ_kpts[1][k], fock[1][k])
                      for k in range(nkpts)]
         return np.hstack(grad_kpts)
 

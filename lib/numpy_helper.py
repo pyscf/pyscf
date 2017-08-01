@@ -406,8 +406,8 @@ def ddot(a, b, alpha=1, c=None, beta=0):
         trans_b = 'T'
         b = b.T
     else:
-        a = numpy.asarray(a, order='C')
-        trans_a = 'N'
+        b = numpy.asarray(b, order='C')
+        trans_b = 'N'
         #raise ValueError('b.flags: %s' % str(b.flags))
 
     if c is None:

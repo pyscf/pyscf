@@ -286,7 +286,7 @@ def init_guess_by_minao(mol):
     basis = {}
     occdic = {}
     for symb in atmlst:
-        if symb != 'GHOST':
+        if 'GHOST' not in symb:
             nelec_ecp = nelec_ecp_dic[symb]
             stdsymb = gto.mole._std_symbol(symb)
             occ_add, basis_add = minao_basis(stdsymb, nelec_ecp)
@@ -296,7 +296,7 @@ def init_guess_by_minao(mol):
     new_atom = []
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
-        if symb != 'GHOST':
+        if 'GHOST' not in symb:
             occ.append(occdic[symb])
             new_atom.append(mol._atom[ia])
     occ = numpy.hstack(occ)
@@ -812,7 +812,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''
     if fock is None:
         dm = mf.make_rdm1(mo_coeff, mo_occ)
-        fock = mf.get_hcore() + mf.get_jk(mol, dm)
+        fock = mf.get_hcore() + mf.get_veff(mf.mol, dm)
     coreidx = mo_occ == 2
     viridx = mo_occ == 0
     openidx = ~(coreidx | viridx)

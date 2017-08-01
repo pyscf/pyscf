@@ -459,7 +459,7 @@ class Grids(pyscf.lib.StreamObject):
                          level=None, prune=None):
         ''' See gen_grid.gen_atomic_grids function'''
         if atom_grid is None: atom_grid = self.atom_grid
-        if radi_method is None: radi_method = mol.radi_method
+        if radi_method is None: radi_method = self.radi_method
         if level is None: level = self.level
         if prune is None: prune = self.prune
         return gen_atomic_grids(mol, atom_grid, self.radi_method, level, prune)
