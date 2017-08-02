@@ -65,6 +65,7 @@ def coulomb_am(self, sp1, R1, sp2, R2):
   l2S = np.zeros((2*self.jmx+1), dtype = np.float64)
   _j = self.jmx
   
+  use_numba = False
   if use_numba:
     bessel_pp = get_bessel_xjl_numba(self.kk, dist, _j, self.nr)
   else:

@@ -75,7 +75,7 @@ subroutine init_spin_dens(sv, DM, sda)
   use m_uc_skeleton, only : get_atom2start_orb
   use m_interpolation, only : grid_2_dr_and_rho_min
   implicit none
-  type(system_vars_t), intent(in), target :: sv
+  type(system_vars_t), intent(inout), target :: sv
   real(8), intent(in), target :: DM(:,:,:)
   type(spin_dens_aux_t), intent(inout) :: sda
   ! internal

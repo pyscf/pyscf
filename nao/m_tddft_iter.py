@@ -1,6 +1,7 @@
 from __future__ import print_function, division
 import numpy as np
 from scipy.sparse import csr_matrix
+from timeit import default_timer as timer
 
 class tddft_iter_c():
 
@@ -25,7 +26,11 @@ class tddft_iter_c():
     self.moms0,self.moms1 = pb.comp_moments(dtype=np.float32)
     self.nprod = self.moms0.size
     #print('before kernel')
+    t1 = timer()
     self.kernel = pb.comp_coulomb_den(dtype=np.float32)
+    t2 = timer()
+    print("Time Hartree kernel: ", t2-t1)
+
     #print("en first part")
     if xc_code.upper()!='RPA' :
       dm = comp_dm(sv.wfsx.x, sv.get_occupations())

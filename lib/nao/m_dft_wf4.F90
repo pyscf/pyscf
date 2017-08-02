@@ -9,7 +9,10 @@ module m_dft_wf4
   type dft_wf4_t
     integer(mpi_int)     :: desc(50)= -999 ! Scalapack descriptor of eigen vectors X
     real(8), allocatable :: kpoints(:,:)   ! (xyz, kpoint)
-    real(4), allocatable :: X(:,:,:,:,:)   ! (reim, orbital, state, spin, kpoint)
+
+    ! Order of the array different from the fortran original version since python is row major
+    real(4), allocatable :: X(:,:,:,:,:)   ! dimension: (nkpoints, nspin, norbs, norbs, nreim)
+    integer :: size_X(1:5) = -999          ! (nkpoints, nspin, norbs, norbs, nreim)
     real(8), allocatable :: E(:,:,:)       !                (state, spin, kpoint)
     real(8) :: fermi_energy   = -999       ! Fermi energy
     real(8) :: eigenvalues_shift =-999     ! E = E_orig + eigenvalues_shift
@@ -21,6 +24,9 @@ module m_dft_wf4
 contains
 
 
+!
+!
+!
 subroutine dealloc(v)
   implicit none
   type(dft_wf4_t), intent(inout) :: v
@@ -33,6 +39,19 @@ subroutine dealloc(v)
   v%BlochPhaseConv = ""
   
 end subroutine ! dealloc
+
+!
+!
+!
+subroutine init_size_X(size_x, wf)
+  implicit none
+  integer, intent(in) :: size_x(1:5)
+  type(dft_wf4_t), intent(inout) :: wf
+
+
+  wf%size_X = size_x
+
+end subroutine !init_size_X
 
 
 

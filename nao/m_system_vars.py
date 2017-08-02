@@ -434,10 +434,15 @@ class system_vars_c():
     """ Initialization of data on libnao site """
     from pyscf.nao.m_libnao import libnao
     from pyscf.nao.m_sv_chain_data import sv_chain_data
-    from ctypes import POINTER, c_double, c_int64
+    from ctypes import POINTER, c_double, c_int64, c_int32
+
+    size_x = np.zeros(len(self.wfsx.x.shape), dtype=np.int32)
+    for i, sh in enumerate(self.wfsx.x.shape):
+        size_x[i] = sh
+
     data = sv_chain_data(self)
     libnao.init_sv_libnao.argtypes = (POINTER(c_double), POINTER(c_int64))
-    libnao.init_sv_libnao(data.ctypes.data_as(POINTER(c_double)), c_int64(len(data)))
+    libnao.init_sv_libnao(data.ctypes.data_as(POINTER(c_double)), c_int64(len(data)), size_x.ctypes.data_as(POINTER(c_int32)))
     self.init_sv_libnao = True
     return self
 

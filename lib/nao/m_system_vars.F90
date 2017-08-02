@@ -104,6 +104,23 @@ end subroutine ! dealloc
 !
 !
 !
+subroutine init_size_dft_wf_X(size_x, sv)
+  use m_dft_wf4, only : init_size_X
+
+  implicit none
+  type(system_vars_t), intent(inout) :: sv
+  integer, intent(in) :: size_x(1:5)
+
+  if (sv%is_dft_wf4) then
+    call init_size_X(size_x, sv%dft_wf4)
+  else
+    _die("implemented only for dft_wf4")
+  endif
+
+end subroutine !init_size_dft_wf_x
+!
+!
+!
 function get_uc_vecs_ptr(sv) result(uc_vecs)
   implicit none
   !! external
@@ -1254,26 +1271,14 @@ function get_nspin(sv) result(n)
   integer :: n
   n = sv%nspin
 
-  ! somehow dft_wf4%X and dft_wf8%X are not allocated
-  ! it seems that with gnu compiler this is not a problem, because it still
-  ! return a size of 1, but with intel compiler the size is 0
-  ! we should think about other tests
-
-  !if (sv%is_dft_wf4) then
-  !  print*, "size sv%dft_wf4%X", shape(sv%dft_wf4%X), allocated(sv%dft_wf4%X)
-  !  print*, "size sv%dft_wf8%X", shape(sv%dft_wf8%X)
-  !  if(n/=size(sv%dft_wf4%X,4)) then
-  !    print*, "n = ", n, "size(sv%dft_wf4%X,4) = ", size(sv%dft_wf4%X,4)
-  !    _die('(nspin/=size(sv%dft_wf4%X,4))')
-  !  endif
-  !  if(n/=size(sv%dft_wf4%E,2)) then
-   !   print*, "n = ", n, "size(sv%dft_wf4%X,2) = ", size(sv%dft_wf4%X,2)
-   !   _die('(nspin/=size(sv%dft_wf4%E,2))')
-   ! endif
-  !else
-  !  if(n/=size(sv%dft_wf8%X,4)) _die('(nspin/=size(sv%dft_wf8%X,4))')
-  !  if(n/=size(sv%dft_wf8%E,2)) _die('(nspin/=size(sv%dft_wf8%E,2))')
-  !endif
+  if (sv%is_dft_wf4) then
+    if(n/= sv%dft_wf4%size_X(2)) then
+      print*, "n = ", n, "sv%dft_wf4%size_X = ", sv%dft_wf4%size_X
+      _die('(nspin/= sv%dft_wf4%size_X(2))')
+    endif
+  else
+    _die("only for dft_wf4!")
+  endif
   if(n<1) _die('nspin<1')
 end function !get_nspin 
 
