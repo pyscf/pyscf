@@ -322,7 +322,7 @@ class KRHF(hf.RHF):
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell
         dm = hf.RHF.get_init_guess(self, cell, key)
-        if key.lower() == 'chkfile':
+        if key.lower() in ('chkfile', '1e'):
             dm_kpts = dm
         else:
             dm_kpts = lib.asarray([dm]*len(self.kpts))
