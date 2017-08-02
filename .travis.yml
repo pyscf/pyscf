@@ -46,7 +46,7 @@ before_script:
 
 script:
     - >
-      nosetests -v -e ccsd_t -e pbc -e pyscf -e dmrgscf -e fciqmcscf -e icmpspt -e examples
+      nosetests -v -e pbc -e pyscf -e dmrgscf -e fciqmcscf -e icmpspt -e examples
       -e test_bz
       -e test_tdrks_grad
       -e test_mc2step_4o4e

@@ -55,6 +55,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     o_ir_loc = o_ir_loc.astype(numpy.int32)
     v_ir_loc = v_ir_loc.astype(numpy.int32)
     oo_ir_loc = oo_ir_loc.astype(numpy.int32)
+    et_sum = [0]
     def contract(a0, a1, b0, b1, cache):
         cache_row_a, cache_col_a, cache_row_b, cache_col_b = cache
         drv = _ccsd.libcc.CCsd_t_contract
@@ -76,6 +77,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
                  cache_row_b.ctypes.data_as(ctypes.c_void_p),
                  cache_col_b.ctypes.data_as(ctypes.c_void_p))
         cpu2[:] = log.timer_debug1('contract %d:%d,%d:%d'%(a0,a1,b0,b1), *cpu2)
+        et_sum[0] += et
         return et
 
     def tril_prange(start, stop, step):
@@ -88,40 +90,25 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     max_memory = max(2000, mycc.max_memory - mem_now)
     bufsize = max(1, (max_memory*1e6/8-nocc**3*100)*.7/(nocc*nmo))
     log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
-    et = 0
-    handler = None
-    for a0, a1, na in reversed(tril_prange(0, nvir, bufsize)):
-        if handler is not None:
-            et += handler.get()
-            handler = None
-            gc.collect()
-        # DO NOT prefetch here to reserve more memory for cache_a
-        cache_row_a = numpy.asarray(eris_vvop[a0:a1,:a1])
-        cache_col_a = numpy.asarray(eris_vvop[:a0,a0:a1])
-        handler = lib.background_thread(contract, a0, a1, a0, a1,
-                                        (cache_row_a,cache_col_a,
-                                         cache_row_a,cache_col_a))
+    with lib.call_in_background(contract) as async_contract:
+        for a0, a1, na in reversed(tril_prange(0, nvir, bufsize)):
+            cache_row_a = numpy.asarray(eris_vvop[a0:a1,:a1])
+            cache_col_a = numpy.asarray(eris_vvop[:a0,a0:a1])
+            async_contract(a0, a1, a0, a1, (cache_row_a,cache_col_a,
+                                            cache_row_a,cache_col_a))
 
-        for b0, b1, nb in tril_prange(0, a0, bufsize/10):
-            cache_row_b = numpy.asarray(eris_vvop[b0:b1,:b1])
-            cache_col_b = numpy.asarray(eris_vvop[:b0,b0:b1])
-            if handler is not None:
-                et += handler.get()
-                handler = None
-                gc.collect()
-            handler = lib.background_thread(contract, a0, a1, b0, b1,
-                                            (cache_row_a,cache_col_a,
-                                             cache_row_b,cache_col_b))
-            cache_row_b = cache_col_b = None
-        cache_row_a = cache_col_a = None
-    if handler is not None:
-        et += handler.get()
-        handler = None
+            for b0, b1, nb in tril_prange(0, a0, bufsize/10):
+                cache_row_b = numpy.asarray(eris_vvop[b0:b1,:b1])
+                cache_col_b = numpy.asarray(eris_vvop[:b0,b0:b1])
+                async_contract(a0, a1, b0, b1, (cache_row_a,cache_col_a,
+                                                cache_row_b,cache_col_b))
+                cache_row_b = cache_col_b = None
+            cache_row_a = cache_col_a = None
 
     t2[:] = ftmp['t2']
     ftmp.close()
     _tmpfile = None
-    et *= 2
+    et = et_sum[0] * 2
     log.timer('CCSD(T)', *cpu0)
     log.note('CCSD(T) correction = %.15g', et)
     return et

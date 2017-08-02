@@ -134,62 +134,61 @@ def update_amps(mycc, t1, t2, eris):
     #: wOoVv -= numpy.einsum('jbik,ka->jiba', eris.ovoo, t1)
         wOoVv = numpy.ndarray((nocc,p1-p0,nvir,nvir), buffer=buf3)
         wooVV = numpy.ndarray((p1-p0,nocc,nvir,nvir), buffer=buf4)
-        handler = None
         readbuf = numpy.empty((p1-p0,blknvir,nvir_pair))
         prefetchbuf = numpy.empty((p1-p0,blknvir,nvir_pair))
         ovvvbuf = numpy.empty((p1-p0,blknvir,nvir,nvir))
-        for q0, q1 in lib.prange(0, nvir, blknvir):
-            if q0 == 0:
-                readbuf[:] = eris.ovvv[p0:p1,q0:q1]
-            else:
-                readbuf, prefetchbuf = prefetchbuf, readbuf
-            handler = async_do(handler, prefect_ovvv, p0, p1, q0, q1, prefetchbuf)
-            eris_ovvv = numpy.ndarray(((p1-p0)*(q1-q0),nvir_pair), buffer=readbuf)
-            #:eris_ovvv = _cp(eris.ovvv[p0:p1,q0:q1])
-            eris_ovvv = lib.unpack_tril(eris_ovvv, out=ovvvbuf)
-            eris_ovvv = eris_ovvv.reshape(p1-p0,q1-q0,nvir,nvir)
+        with lib.call_in_background(prefect_ovvv) as preload_ovvv:
+            for q0, q1 in lib.prange(0, nvir, blknvir):
+                if q0 == 0:
+                    readbuf[:] = eris.ovvv[p0:p1,q0:q1]
+                else:
+                    readbuf, prefetchbuf = prefetchbuf, readbuf
+                preload_ovvv(p0, p1, q0, q1, prefetchbuf)
+                eris_ovvv = numpy.ndarray(((p1-p0)*(q1-q0),nvir_pair), buffer=readbuf)
+                #:eris_ovvv = _cp(eris.ovvv[p0:p1,q0:q1])
+                eris_ovvv = lib.unpack_tril(eris_ovvv, out=ovvvbuf)
+                eris_ovvv = eris_ovvv.reshape(p1-p0,q1-q0,nvir,nvir)
 
-            #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
-            #: tmp = numpy.einsum('ijcd,kcdb->ijbk', tau, eris.ovvv)
-            #: t2new += numpy.einsum('ka,ijbk->ijab', -t1, tmp)
-            if not mycc.direct:
-                eris_vovv = lib.transpose(eris_ovvv.reshape(-1,nvir))
-                eris_vovv = eris_vovv.reshape(nvir*(p1-p0),-1)
-                tmp = numpy.ndarray((nocc,nocc,nvir,p1-p0), buffer=buf1)
-                for j0, j1 in prange(0, nocc, blksize):
-                    tau = numpy.ndarray((j1-j0,nocc,q1-q0,nvir), buffer=buf2)
-                    tau = numpy.einsum('ia,jb->ijab', t1[j0:j1,q0:q1], t1, out=tau)
-                    tau += t2[j0:j1,:,q0:q1]
-                    lib.ddot(tau.reshape((j1-j0)*nocc,-1), eris_vovv.T, 1,
-                             tmp[j0:j1].reshape((j1-j0)*nocc,-1), 0)
-                tmp1 = numpy.ndarray((nocc,nocc,nvir,p1-p0), buffer=buf2)
-                tmp1[:] = tmp.transpose(1,0,2,3)
-                lib.ddot(tmp1.reshape(-1,p1-p0), t1[p0:p1], -1, t2new.reshape(-1,nvir), 1)
-                eris_vovv = tau = tmp1 = tmp = None
+                #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
+                #: tmp = numpy.einsum('ijcd,kcdb->ijbk', tau, eris.ovvv)
+                #: t2new += numpy.einsum('ka,ijbk->ijab', -t1, tmp)
+                if not mycc.direct:
+                    eris_vovv = lib.transpose(eris_ovvv.reshape(-1,nvir))
+                    eris_vovv = eris_vovv.reshape(nvir*(p1-p0),-1)
+                    tmp = numpy.ndarray((nocc,nocc,nvir,p1-p0), buffer=buf1)
+                    for j0, j1 in prange(0, nocc, blksize):
+                        tau = numpy.ndarray((j1-j0,nocc,q1-q0,nvir), buffer=buf2)
+                        tau = numpy.einsum('ia,jb->ijab', t1[j0:j1,q0:q1], t1, out=tau)
+                        tau += t2[j0:j1,:,q0:q1]
+                        lib.ddot(tau.reshape((j1-j0)*nocc,-1), eris_vovv.T, 1,
+                                 tmp[j0:j1].reshape((j1-j0)*nocc,-1), 0)
+                    tmp1 = numpy.ndarray((nocc,nocc,nvir,p1-p0), buffer=buf2)
+                    tmp1[:] = tmp.transpose(1,0,2,3)
+                    lib.ddot(tmp1.reshape(-1,p1-p0), t1[p0:p1], -1, t2new.reshape(-1,nvir), 1)
+                    eris_vovv = tau = tmp1 = tmp = None
 
-            fvv += numpy.einsum('kc,kcba->ab', 2*t1[p0:p1,q0:q1], eris_ovvv)
-            fvv[:,q0:q1] += numpy.einsum('kc,kbca->ab', -t1[p0:p1], eris_ovvv)
+                fvv += numpy.einsum('kc,kcba->ab', 2*t1[p0:p1,q0:q1], eris_ovvv)
+                fvv[:,q0:q1] += numpy.einsum('kc,kbca->ab', -t1[p0:p1], eris_ovvv)
 
-            #: wooVV -= numpy.einsum('jc,icba->ijba', t1, eris_ovvv)
-            tmp = t1[:,q0:q1].copy()
-            for i in range(eris_ovvv.shape[0]):
-                lib.ddot(tmp, eris_ovvv[i].reshape(q1-q0,-1), -1,
-                         wooVV[i].reshape(nocc,-1))
+                #: wooVV -= numpy.einsum('jc,icba->ijba', t1, eris_ovvv)
+                tmp = t1[:,q0:q1].copy()
+                for i in range(eris_ovvv.shape[0]):
+                    lib.ddot(tmp, eris_ovvv[i].reshape(q1-q0,-1), -1,
+                             wooVV[i].reshape(nocc,-1))
 
-            #: wOoVv += numpy.einsum('ibac,jc->jiba', eris_ovvv, t1)
-            tmp = numpy.ndarray((nocc,p1-p0,q1-q0,nvir), buffer=buf1)
-            lib.ddot(t1, eris_ovvv.reshape(-1,nvir).T, 1, tmp.reshape(nocc,-1))
-            wOoVv[:,:,q0:q1] = tmp
+                #: wOoVv += numpy.einsum('ibac,jc->jiba', eris_ovvv, t1)
+                tmp = numpy.ndarray((nocc,p1-p0,q1-q0,nvir), buffer=buf1)
+                lib.ddot(t1, eris_ovvv.reshape(-1,nvir).T, 1, tmp.reshape(nocc,-1))
+                wOoVv[:,:,q0:q1] = tmp
 
-            #: theta = t2.transpose(1,0,2,3) * 2 - t2
-            #: t1new += numpy.einsum('ijcb,jcba->ia', theta, eris.ovvv)
-            theta = tmp
-            theta[:] = t2[p0:p1,:,q0:q1,:].transpose(1,0,2,3)
-            theta *= 2
-            theta -= t2[:,p0:p1,q0:q1,:]
-            lib.ddot(theta.reshape(nocc,-1), eris_ovvv.reshape(-1,nvir), 1, t1new, 1)
-            theta = tmp = None
-        handler.join()
+                #: theta = t2.transpose(1,0,2,3) * 2 - t2
+                #: t1new += numpy.einsum('ijcb,jcba->ia', theta, eris.ovvv)
+                theta = tmp
+                theta[:] = t2[p0:p1,:,q0:q1,:].transpose(1,0,2,3)
+                theta *= 2
+                theta -= t2[:,p0:p1,q0:q1,:]
+                lib.ddot(theta.reshape(nocc,-1), eris_ovvv.reshape(-1,nvir), 1, t1new, 1)
+                theta = tmp = None
         readbuf = prefetchbuf = ovvvbuf = eris_ovvv = None
         time2 = log.timer_debug1('ovvv [%d:%d]'%(p0, p1), *time1)
 
@@ -376,6 +375,166 @@ def update_amps(mycc, t1, t2, eris):
     time0 = log.timer_debug1('update t1 t2', *time0)
     return t1new, t2new
 
+
+def add_wvvVV_(mycc, t1, t2, eris, t2new_tril, with_ovvv=True):
+    time0 = time.clock(), time.time()
+    nocc, nvir = t1.shape
+
+    #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
+    #: t2new += numpy.einsum('ijcd,acdb->ijab', tau, vvvv)
+    def contract_rec_(t2new_tril, tau, eri, i0, i1, j0, j1):
+        nao = tau.shape[-1]
+        ic = i1 - i0
+        jc = j1 - j0
+        #: t2tril[:,j0:j1] += numpy.einsum('xcd,cdab->xab', tau[:,i0:i1], eri)
+        _dgemm('N', 'N', nocc*(nocc+1)//2, jc*nao, ic*nao,
+               tau.reshape(-1,nao*nao), eri.reshape(-1,jc*nao),
+               t2new_tril.reshape(-1,nao*nao), 1, 1, i0*nao, 0, j0*nao)
+
+        #: t2tril[:,i0:i1] += numpy.einsum('xcd,abcd->xab', tau[:,j0:j1], eri)
+        _dgemm('N', 'T', nocc*(nocc+1)//2, ic*nao, jc*nao,
+               tau.reshape(-1,nao*nao), eri.reshape(-1,jc*nao),
+               t2new_tril.reshape(-1,nao*nao), 1, 1, j0*nao, 0, i0*nao)
+
+    def contract_tril_(t2new_tril, tau, eri, a0, a):
+        nvir = tau.shape[-1]
+        #: t2new[i,:i+1, a] += numpy.einsum('xcd,cdb->xb', tau[:,a0:a+1], eri)
+        _dgemm('N', 'N', nocc*(nocc+1)//2, nvir, (a+1-a0)*nvir,
+               tau.reshape(-1,nvir*nvir), eri.reshape(-1,nvir),
+               t2new_tril.reshape(-1,nvir*nvir), 1, 1, a0*nvir, 0, a*nvir)
+
+        #: t2new[i,:i+1,a0:a] += numpy.einsum('xd,abd->xab', tau[:,a], eri[:a])
+        if a > a0:
+            _dgemm('N', 'T', nocc*(nocc+1)//2, (a-a0)*nvir, nvir,
+                   tau.reshape(-1,nvir*nvir), eri.reshape(-1,nvir),
+                   t2new_tril.reshape(-1,nvir*nvir), 1, 1, a*nvir, 0, a0*nvir)
+
+    if mycc.direct:   # AO-direct CCSD
+        mol = mycc.mol
+        mo = _mo_without_core(mycc, mycc.mo_coeff)
+        nao, nmo = mo.shape
+        nao_pair = nao * (nao+1) // 2
+        aos = numpy.asarray(mo[:,nocc:].T, order='F')
+        nocc2 = nocc*(nocc+1)//2
+        outbuf = numpy.empty((nocc2,nao,nao))
+        tau = numpy.ndarray((nocc2,nvir,nvir), buffer=outbuf)
+        p0 = 0
+        for i in range(nocc):
+            tau[p0:p0+i+1] = numpy.einsum('a,jb->jab', t1[i], t1[:i+1])
+            tau[p0:p0+i+1] += t2[i,:i+1]
+            p0 += i + 1
+        tau = _ao2mo.nr_e2(tau.reshape(nocc2,nvir**2), aos, (0,nao,0,nao), 's1', 's1')
+        tau = tau.reshape(nocc2,nao,nao)
+        time0 = logger.timer_debug1(mycc, 'vvvv-tau', *time0)
+
+        intor = mol._add_suffix('int2e')
+        ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFnr_schwarz_cond',
+                                 'CVHFsetnr_direct_scf')
+        outbuf[:] = 0
+        ao_loc = mol.ao_loc_nr()
+        max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
+        dmax = max(4, numpy.sqrt(max_memory*.95e6/8/nao**2/2))
+        sh_ranges = ao2mo.outcore.balance_partition(ao_loc, dmax)
+        dmax = max(x[2] for x in sh_ranges)
+        eribuf = numpy.empty((dmax,dmax,nao,nao))
+        loadbuf = numpy.empty((dmax,dmax,nao,nao))
+        fint = gto.moleintor.getints4c
+
+        for ip, (ish0, ish1, ni) in enumerate(sh_ranges):
+            for jsh0, jsh1, nj in sh_ranges[:ip]:
+                eri = fint(intor, mol._atm, mol._bas, mol._env,
+                           shls_slice=(ish0,ish1,jsh0,jsh1), aosym='s2kl',
+                           ao_loc=ao_loc, cintopt=ao2mopt._cintopt, out=eribuf)
+                i0, i1 = ao_loc[ish0], ao_loc[ish1]
+                j0, j1 = ao_loc[jsh0], ao_loc[jsh1]
+                tmp = numpy.ndarray((i1-i0,nao,j1-j0,nao), buffer=loadbuf)
+                _ccsd.libcc.CCload_eri(tmp.ctypes.data_as(ctypes.c_void_p),
+                                       eri.ctypes.data_as(ctypes.c_void_p),
+                                       (ctypes.c_int*4)(i0, i1, j0, j1),
+                                       ctypes.c_int(nao))
+                contract_rec_(outbuf, tau, tmp, i0, i1, j0, j1)
+                time0 = logger.timer_debug1(mycc, 'AO-vvvv [%d:%d,%d:%d]' %
+                                            (ish0,ish1,jsh0,jsh1), *time0)
+            eri = fint(intor, mol._atm, mol._bas, mol._env,
+                       shls_slice=(ish0,ish1,ish0,ish1), aosym='s4',
+                       ao_loc=ao_loc, cintopt=ao2mopt._cintopt, out=eribuf)
+            i0, i1 = ao_loc[ish0], ao_loc[ish1]
+            for i in range(i1-i0):
+                p0, p1 = i*(i+1)//2, (i+1)*(i+2)//2
+                tmp = lib.unpack_tril(eri[p0:p1], out=loadbuf)
+                contract_tril_(outbuf, tau, tmp, i0, i0+i)
+            time0 = logger.timer_debug1(mycc, 'AO-vvvv [%d:%d,%d:%d]' %
+                                        (ish0,ish1,ish0,ish1), *time0)
+        eribuf = loadbuf = eri = tmp = None
+
+        tmp = _ao2mo.nr_e2(outbuf, mo, (nocc,nmo,nocc,nmo), 's1', 's1', out=tau)
+        t2new_tril += tmp.reshape(nocc2,nvir,nvir)
+
+        if with_ovvv:
+            #: tmp = numpy.einsum('ijcd,ka,kdcb->ijba', tau, t1, eris.ovvv)
+            #: t2new -= tmp + tmp.transpose(1,0,3,2)
+            tmp = _ao2mo.nr_e2(outbuf, mo, (nocc,nmo,0,nocc), 's1', 's1', out=tau)
+            t2new_tril -= lib.ddot(tmp.reshape(nocc2*nvir,nocc), t1).reshape(nocc2,nvir,nvir)
+            tmp = _ao2mo.nr_e2(outbuf, mo, (0,nocc,nocc,nmo), 's1', 's1', out=tau)
+            #: t2new_tril -= numpy.einsum('xkb,ka->xab', tmp.reshape(-1,nocc,nvir), t1)
+            tmp = lib.transpose(tmp.reshape(nocc2,nocc,nvir), axes=(0,2,1), out=outbuf)
+            tmp = lib.ddot(tmp.reshape(nocc2*nvir,nocc), t1, 1,
+                           numpy.ndarray((nocc2*nvir,nvir), buffer=tau), 0)
+            tmp = lib.transpose(tmp.reshape(nocc2,nvir,nvir), axes=(0,2,1), out=outbuf)
+            t2new_tril -= tmp.reshape(nocc2,nvir,nvir)
+
+    else:
+        #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
+        #: t2new += numpy.einsum('ijcd,acdb->ijab', tau, vvvv)
+        tau = numpy.empty((nocc*(nocc+1)//2,nvir,nvir))
+        p0 = 0
+        for i in range(nocc):
+            tau[p0:p0+i+1] = numpy.einsum('a,jb->jab', t1[i], t1[:i+1])
+            tau[p0:p0+i+1] += t2[i,:i+1]
+            p0 += i + 1
+        time0 = logger.timer_debug1(mycc, 'vvvv-tau', *time0)
+        max_memory = max(2000, mycc.max_memory - lib.current_memory()[0])
+        blksize = int(max(4, max_memory*.95e6/8/(nvir**3*2)))
+
+        def block_contract(buf, a0, a1):
+            for a in range(a0, a1):
+                contract_tril_(t2new_tril, tau, buf[a-a0], 0, a)
+
+        with lib.call_in_background(block_contract) as bcontract:
+            p0 = 0
+            outbuf = numpy.empty((blksize,nvir,nvir,nvir))
+            outbuf1 = numpy.empty_like(outbuf)
+            for a0, a1 in lib.prange(0, nvir, blksize):
+                for a in range(a0, a1):
+                    lib.unpack_tril(eris.vvvv[p0:p0+a+1], out=outbuf[a-a0])
+                    p0 += a+1
+                bcontract(outbuf, a0, a1)
+                outbuf, outbuf1 = outbuf1, outbuf
+                time0 = logger.timer_debug1(mycc, 'vvvv [%d:%d]'%(a0,a1), *time0)
+    return t2new_tril
+
+
+def get_nocc(mycc):
+    if mycc._nocc is not None:
+        return mycc._nocc
+    elif isinstance(mycc.frozen, (int, numpy.integer)):
+        return int(mycc.mo_occ.sum()) // 2 - mycc.frozen
+    elif mycc.frozen:
+        occ_idx = mycc.mo_occ > 0
+        occ_idx[numpy.asarray(mycc.frozen)] = False
+        return numpy.count_nonzero(occ_idx)
+    else:
+        return int(mycc.mo_occ.sum()) // 2
+
+def get_nmo(mycc):
+    if mycc._nmo is not None:
+        return mycc._nmo
+    if isinstance(mycc.frozen, (int, numpy.integer)):
+        return len(mycc.mo_occ) - mycc.frozen
+    else:
+        return len(mycc.mo_occ) - len(mycc.frozen)
+
+
 def energy(mycc, t1, t2, eris):
     '''CCSD correlation energy'''
     nocc, nvir = t1.shape
@@ -489,30 +648,12 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def e_tot(self):
         return self.e_corr + self._scf.e_tot
 
-    @property
-    def nocc(self):
-        if self._nocc is not None:
-            return self._nocc
-        elif isinstance(self.frozen, (int, numpy.integer)):
-            return int(self.mo_occ.sum()) // 2 - self.frozen
-        elif self.frozen:
-            occ_idx = self.mo_occ > 0
-            occ_idx[numpy.asarray(self.frozen)] = False
-            return numpy.count_nonzero(occ_idx)
-        else:
-            return int(self.mo_occ.sum()) // 2
+    nocc = property(get_nocc)
     @nocc.setter
     def nocc(self, n):
         self._nocc = n
 
-    @property
-    def nmo(self):
-        if self._nmo is not None:
-            return self._nmo
-        if isinstance(self.frozen, (int, numpy.integer)):
-            return len(self.mo_occ) - self.frozen
-        else:
-            return len(self.mo_occ) - len(self.frozen)
+    nmo = property(get_nmo)
     @nmo.setter
     def nmo(self, n):
         self._nmo = n
@@ -534,6 +675,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         #log.info('diis_file = %s', self.diis_file)
         log.info('diis_start_cycle = %d', self.diis_start_cycle)
         log.info('diis_start_energy_diff = %g', self.diis_start_energy_diff)
+        log.info('max_memory %d MB (current use %d MB)',
+                 self.max_memory, lib.current_memory()[0])
+        return self
 
     def get_init_guess(self, eris=None):
         if eris is None: eris = self.ao2mo(self.mo_coeff)
@@ -622,156 +766,30 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2)
 
     def ao2mo(self, mo_coeff=None):
-        #nocc = self.nocc
-        #nmo = self.nmo
-        #nvir = nmo - nocc
-        #eri1 = ao2mo.incore.full(self._scf._eri, mo_coeff)
-        #eri1 = ao2mo.restore(1, eri1, nmo)
-        #eris = lambda:None
-        #eris.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
-        #eris.ooov = eri1[:nocc,:nocc,:nocc,nocc:].copy()
-        #eris.ovoo = eri1[:nocc,nocc:,:nocc,:nocc].copy()
-        #eris.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
-        #eris.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
-        #ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
-        #eris.ovvv = numpy.empty((nocc,nvir,nvir*(nvir+1)//2))
-        #for i in range(nocc):
-        #    for j in range(nvir):
-        #        eris.ovvv[i,j] = lib.pack_tril(ovvv[i,j])
-        #eris.vvvv = ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:].copy(), nvir)
-        #eris.fock = numpy.diag(self._scf.mo_energy)
-        #return eris
+        # Pseudo code how _ERIS are implemented:
+        # nocc = self.nocc
+        # nmo = self.nmo
+        # nvir = nmo - nocc
+        # eri1 = ao2mo.incore.full(self._scf._eri, mo_coeff)
+        # eri1 = ao2mo.restore(1, eri1, nmo)
+        # eris = lambda:None
+        # eris.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
+        # eris.ooov = eri1[:nocc,:nocc,:nocc,nocc:].copy()
+        # eris.ovoo = eri1[:nocc,nocc:,:nocc,:nocc].copy()
+        # eris.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
+        # eris.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
+        # ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
+        # eris.ovvv = numpy.empty((nocc,nvir,nvir*(nvir+1)//2))
+        # for i in range(nocc):
+        #     for j in range(nvir):
+        #         eris.ovvv[i,j] = lib.pack_tril(ovvv[i,j])
+        # eris.vvvv = ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:].copy(), nvir)
+        # eris.fock = numpy.diag(self._scf.mo_energy)
+        # return eris
         return _ERIS(self, mo_coeff)
 
-    def add_wvvVV_(self, t1, t2, eris, t2new_tril, with_ovvv=True):
-        time0 = time.clock(), time.time()
-        nocc, nvir = t1.shape
+    add_wvvVV_ = add_wvvVV_
 
-        #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
-        #: t2new += numpy.einsum('ijcd,acdb->ijab', tau, vvvv)
-        def contract_rec_(t2new_tril, tau, eri, i0, i1, j0, j1):
-            nao = tau.shape[-1]
-            ic = i1 - i0
-            jc = j1 - j0
-            #: t2tril[:,j0:j1] += numpy.einsum('xcd,cdab->xab', tau[:,i0:i1], eri)
-            _dgemm('N', 'N', nocc*(nocc+1)//2, jc*nao, ic*nao,
-                   tau.reshape(-1,nao*nao), eri.reshape(-1,jc*nao),
-                   t2new_tril.reshape(-1,nao*nao), 1, 1, i0*nao, 0, j0*nao)
-
-            #: t2tril[:,i0:i1] += numpy.einsum('xcd,abcd->xab', tau[:,j0:j1], eri)
-            _dgemm('N', 'T', nocc*(nocc+1)//2, ic*nao, jc*nao,
-                   tau.reshape(-1,nao*nao), eri.reshape(-1,jc*nao),
-                   t2new_tril.reshape(-1,nao*nao), 1, 1, j0*nao, 0, i0*nao)
-
-        def contract_tril_(t2new_tril, tau, eri, a0, a):
-            nvir = tau.shape[-1]
-            #: t2new[i,:i+1, a] += numpy.einsum('xcd,cdb->xb', tau[:,a0:a+1], eri)
-            _dgemm('N', 'N', nocc*(nocc+1)//2, nvir, (a+1-a0)*nvir,
-                   tau.reshape(-1,nvir*nvir), eri.reshape(-1,nvir),
-                   t2new_tril.reshape(-1,nvir*nvir), 1, 1, a0*nvir, 0, a*nvir)
-
-            #: t2new[i,:i+1,a0:a] += numpy.einsum('xd,abd->xab', tau[:,a], eri[:a])
-            if a > a0:
-                _dgemm('N', 'T', nocc*(nocc+1)//2, (a-a0)*nvir, nvir,
-                       tau.reshape(-1,nvir*nvir), eri.reshape(-1,nvir),
-                       t2new_tril.reshape(-1,nvir*nvir), 1, 1, a*nvir, 0, a0*nvir)
-
-        if self.direct:   # AO-direct CCSD
-            mol = self.mol
-            mo = _mo_without_core(self, self.mo_coeff)
-            nao, nmo = mo.shape
-            nao_pair = nao * (nao+1) // 2
-            aos = numpy.asarray(mo[:,nocc:].T, order='F')
-            nocc2 = nocc*(nocc+1)//2
-            outbuf = numpy.empty((nocc2,nao,nao))
-            tau = numpy.ndarray((nocc2,nvir,nvir), buffer=outbuf)
-            p0 = 0
-            for i in range(nocc):
-                tau[p0:p0+i+1] = numpy.einsum('a,jb->jab', t1[i], t1[:i+1])
-                tau[p0:p0+i+1] += t2[i,:i+1]
-                p0 += i + 1
-            tau = _ao2mo.nr_e2(tau.reshape(nocc2,nvir**2), aos, (0,nao,0,nao), 's1', 's1')
-            tau = tau.reshape(nocc2,nao,nao)
-            time0 = logger.timer_debug1(self, 'vvvv-tau', *time0)
-
-            intor = mol._add_suffix('int2e')
-            ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFnr_schwarz_cond',
-                                     'CVHFsetnr_direct_scf')
-            outbuf[:] = 0
-            ao_loc = mol.ao_loc_nr()
-            max_memory = max(0, self.max_memory - lib.current_memory()[0])
-            dmax = max(4, numpy.sqrt(max_memory*.95e6/8/nao**2/2))
-            sh_ranges = ao2mo.outcore.balance_partition(ao_loc, dmax)
-            dmax = max(x[2] for x in sh_ranges)
-            eribuf = numpy.empty((dmax,dmax,nao,nao))
-            loadbuf = numpy.empty((dmax,dmax,nao,nao))
-            fint = gto.moleintor.getints4c
-
-            for ip, (ish0, ish1, ni) in enumerate(sh_ranges):
-                for jsh0, jsh1, nj in sh_ranges[:ip]:
-                    eri = fint(intor, mol._atm, mol._bas, mol._env,
-                               shls_slice=(ish0,ish1,jsh0,jsh1), aosym='s2kl',
-                               ao_loc=ao_loc, cintopt=ao2mopt._cintopt, out=eribuf)
-                    i0, i1 = ao_loc[ish0], ao_loc[ish1]
-                    j0, j1 = ao_loc[jsh0], ao_loc[jsh1]
-                    tmp = numpy.ndarray((i1-i0,nao,j1-j0,nao), buffer=loadbuf)
-                    _ccsd.libcc.CCload_eri(tmp.ctypes.data_as(ctypes.c_void_p),
-                                           eri.ctypes.data_as(ctypes.c_void_p),
-                                           (ctypes.c_int*4)(i0, i1, j0, j1),
-                                           ctypes.c_int(nao))
-                    contract_rec_(outbuf, tau, tmp, i0, i1, j0, j1)
-                    time0 = logger.timer_debug1(self, 'AO-vvvv [%d:%d,%d:%d]' %
-                                                (ish0,ish1,jsh0,jsh1), *time0)
-                eri = fint(intor, mol._atm, mol._bas, mol._env,
-                           shls_slice=(ish0,ish1,ish0,ish1), aosym='s4',
-                           ao_loc=ao_loc, cintopt=ao2mopt._cintopt, out=eribuf)
-                i0, i1 = ao_loc[ish0], ao_loc[ish1]
-                for i in range(i1-i0):
-                    p0, p1 = i*(i+1)//2, (i+1)*(i+2)//2
-                    tmp = lib.unpack_tril(eri[p0:p1], out=loadbuf)
-                    contract_tril_(outbuf, tau, tmp, i0, i0+i)
-                time0 = logger.timer_debug1(self, 'AO-vvvv [%d:%d,%d:%d]' %
-                                            (ish0,ish1,ish0,ish1), *time0)
-            eribuf = loadbuf = eri = tmp = None
-
-            tmp = _ao2mo.nr_e2(outbuf, mo, (nocc,nmo,nocc,nmo), 's1', 's1', out=tau)
-            t2new_tril += tmp.reshape(nocc2,nvir,nvir)
-
-            if with_ovvv:
-                #: tmp = numpy.einsum('ijcd,ka,kdcb->ijba', tau, t1, eris.ovvv)
-                #: t2new -= tmp + tmp.transpose(1,0,3,2)
-                tmp = _ao2mo.nr_e2(outbuf, mo, (nocc,nmo,0,nocc), 's1', 's1', out=tau)
-                t2new_tril -= lib.ddot(tmp.reshape(nocc2*nvir,nocc), t1).reshape(nocc2,nvir,nvir)
-                tmp = _ao2mo.nr_e2(outbuf, mo, (0,nocc,nocc,nmo), 's1', 's1', out=tau)
-                #: t2new_tril -= numpy.einsum('xkb,ka->xab', tmp.reshape(-1,nocc,nvir), t1)
-                tmp = lib.transpose(tmp.reshape(nocc2,nocc,nvir), axes=(0,2,1), out=outbuf)
-                tmp = lib.ddot(tmp.reshape(nocc2*nvir,nocc), t1, 1,
-                               numpy.ndarray((nocc2*nvir,nvir), buffer=tau), 0)
-                tmp = lib.transpose(tmp.reshape(nocc2,nvir,nvir), axes=(0,2,1), out=outbuf)
-                t2new_tril -= tmp.reshape(nocc2,nvir,nvir)
-
-        else:
-            #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
-            #: t2new += numpy.einsum('ijcd,acdb->ijab', tau, vvvv)
-            tau = numpy.empty((nocc*(nocc+1)//2,nvir,nvir))
-            p0 = 0
-            for i in range(nocc):
-                tau[p0:p0+i+1] = numpy.einsum('a,jb->jab', t1[i], t1[:i+1])
-                tau[p0:p0+i+1] += t2[i,:i+1]
-                p0 += i + 1
-            time0 = logger.timer_debug1(self, 'vvvv-tau', *time0)
-            p0 = 0
-            outbuf = numpy.empty((nvir,nvir,nvir))
-            outbuf1 = numpy.empty((nvir,nvir,nvir))
-            handler = None
-            for a in range(nvir):
-                buf = lib.unpack_tril(eris.vvvv[p0:p0+a+1], out=outbuf)
-                outbuf, outbuf1 = outbuf1, outbuf
-                handler = async_do(handler, contract_tril_, t2new_tril, tau, buf, 0, a)
-                p0 += a+1
-                time0 = logger.timer_debug1(self, 'vvvv %d'%a, *time0)
-            handler.join()
-        return t2new_tril
     def add_wvvVV(self, t1, t2, eris, with_ovvv=True):
         nocc, nvir = t1.shape
         t2new_tril = numpy.zeros((nocc*(nocc+1)//2,nvir,nvir))
@@ -963,17 +981,17 @@ class _ERIS:
                               feri, max_memory=max_memory, verbose=log)
                 cput1 = log.timer_debug1('transforming oppp', *cput1)
                 blksize = max(1, int(min(8e9,max_memory*.5e6)/8/nmo**2))
-                handler = None
-                for i in range(nocc):
-                    for p0, p1 in lib.prange(0, nvir, blksize):
-                        eri = _cp(feri['eri_mo'][i*nmo+p0:i*nmo+p1])
-                        handler = async_do(handler, save_vir_frac, i, p0, p1, eri)
-                    for p0, p1 in lib.prange(0, nocc, blksize):
-                        eri = _cp(feri['eri_mo'][i*nmo+nvir+p0:i*nmo+nvir+p1])
-                        handler = async_do(handler, save_occ_frac, i, p0, p1, eri)
-                    cput1 = log.timer_debug1('sorting %d'%i, *cput1)
-                if handler is not None:
-                    handler.join()
+
+                with lib.call_in_background(save_vir_frac,
+                                            save_occ_frac) as (sav_v, sav_o):
+                    for i in range(nocc):
+                        for p0, p1 in lib.prange(0, nvir, blksize):
+                            eri = _cp(feri['eri_mo'][i*nmo+p0:i*nmo+p1])
+                            sav_v(i, p0, p1, eri)
+                        for p0, p1 in lib.prange(0, nocc, blksize):
+                            eri = _cp(feri['eri_mo'][i*nmo+nvir+p0:i*nmo+nvir+p1])
+                            sav_o(i, p0, p1, eri)
+                        cput1 = log.timer_debug1('sorting %d'%i, *cput1)
                 for key in feri.keys():
                     del(feri[key])
         log.timer('CCSD integral transformation', *cput0)
@@ -1071,12 +1089,6 @@ def prange(start, end, step):
 def _cp(a):
     return numpy.array(a, copy=False, order='C')
 
-def async_do(handler, fn, *args):
-    if handler is not None:
-        handler.join()
-    handler = lib.background_thread(fn, *args)
-    return handler
-
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -1125,11 +1137,11 @@ if __name__ == '__main__':
     mcc = CCSD(rhf.density_fit())
     eris = mcc.ao2mo()
     emp2, t1, t2 = mcc.init_amps(eris)
-    print(abs(t2).sum() - 4.9318753386921648)
-    print(emp2 - -0.2040173789981149)
+    print(abs(t2).sum() - 4.9497459404635027)
+    print(emp2 - -0.20378410853394652)
     t1, t2 = update_amps(mcc, t1, t2, eris)
-    print(abs(t1).sum()-0.0469613256475975)
-    print(abs(t2).sum()-5.3782605785516173)
+    print(abs(t1).sum() - 0.04740146211751467)
+    print(abs(t2).sum() - 5.3943058907680506 )
 
     mcc = CCSD(rhf)
     eris = mcc.ao2mo()
