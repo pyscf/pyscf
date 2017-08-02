@@ -287,7 +287,6 @@ class KUHF(uhf.UHF, khf.KRHF):
     def dump_flags(self):
         uhf.UHF.dump_flags(self)
         khf.KRHF.dump_flags(self)
-        self.with_df.dump_flags()
         return self
 
     def build(self, cell=None):
@@ -303,11 +302,11 @@ class KUHF(uhf.UHF, khf.KRHF):
         else:
             nao = dm.shape[-1]
             nkpts = len(self.kpts)
-            if len(dm.shape)==3:
+            if dm.ndim == 3:
                 dm_kpts = lib.asarray([dm]*nkpts).reshape(nkpts,2,nao,nao)
                 dm_kpts = dm_kpts.transpose(1,0,2,3)
             else:
-                dm_kpts=dm
+                dm_kpts = dm
             dm_kpts[1,:] *= .98  # To break spin symmetry
             assert dm_kpts.shape[0]==2
         return dm_kpts

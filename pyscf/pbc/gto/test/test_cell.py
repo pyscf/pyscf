@@ -34,7 +34,7 @@ def finger(a):
     w = numpy.cos(numpy.arange(a.size))
     return numpy.dot(a.ravel(), w)
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_nimgs(self):
         self.assertTrue(list(cl.get_nimgs(9e-1)), [1,1,1])
         self.assertTrue(list(cl.get_nimgs(1e-2)), [2,2,2])
@@ -81,9 +81,9 @@ class KnowValues(unittest.TestCase):
         3.370137329  3.370137329  0.000000000''',
         gs = [7,7,7])
         rcut = max([cell.bas_rcut(ib, 1e-8) for ib in range(cell.nbas)])
-        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (911, 3))
+        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1217, 3))
         rcut = max([cell.bas_rcut(ib, 1e-9) for ib in range(cell.nbas)])
-        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1097, 3))
+        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1241, 3))
 
     def test_ewald(self):
         cell = pgto.Cell()
@@ -168,7 +168,7 @@ class KnowValues(unittest.TestCase):
         numpy.random.seed(12)
         kpts = numpy.random.random((4,3))
         kpts[0] = 0
-        self.assertEqual(list(cl1.nimgs), [30,20,18])
+        self.assertEqual(list(cl1.nimgs), [32,21,19])
         s0 = cl1.pbc_intor('int1e_ovlp_sph', hermi=0, kpts=kpts)
         self.assertAlmostEqual(finger(s0[0]), 492.30658304804126, 4)
         self.assertAlmostEqual(finger(s0[1]), 37.812956255000756-28.972806230140314j, 4)
