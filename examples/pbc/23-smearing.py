@@ -31,12 +31,12 @@ print('Entropy = %s' % mf.entropy)
 #
 mf = scf.addons.smearing_(scf.UHF(cell))
 mf.sigma = .1
-mf.merthod = 'gauss'
+mf.method = 'gauss'
 mf.max_cycle = 2
 mf.kernel()
 
 mf.sigma = .05
-mf.merthod = 'fermi'
+mf.method = 'fermi'
 mf.max_cycle = 50
 mf.kernel()
 

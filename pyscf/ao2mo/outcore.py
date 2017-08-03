@@ -267,38 +267,27 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     time_1pass = log.timer('AO->MO transformation for %s 1 pass'%intor,
                            *time_0pass)
 
-    ioblk_size = max(max_memory*.1, ioblk_size)
-    iobuflen = guess_e2bufsize(ioblk_size, nij_pair, max(nao_pair,nkl_pair))[0]
-    reading_frame = [numpy.empty((iobuflen,nao_pair)),
-                     numpy.empty((iobuflen,nao_pair))]
     def prefetch(icomp, row0, row1, buf):
         if icomp+1 < comp:
             icomp += 1
-        else:
+        else:  # move to next row-block
             row0, row1 = row1, min(nij_pair, row1+iobuflen)
             icomp = 0
         if row0 < row1:
             _load_from_h5g(fswap['%d'%icomp], row0, row1, buf)
-    def async_read(icomp, row0, row1, thread_read):
-        buf_current, buf_prefetch = reading_frame
-        reading_frame[:] = [buf_prefetch, buf_current]
-        if thread_read is None:
-            _load_from_h5g(fswap['%d'%icomp], row0, row1, buf_current)
-        else:
-            thread_read.join()
-        thread_read = lib.background_thread(prefetch, icomp, row0, row1, buf_prefetch)
-        return buf_current[:row1-row0], thread_read
 
     def save(icomp, row0, row1, buf):
         if comp == 1:
             h5d_eri[row0:row1] = buf[:row1-row0]
         else:
             h5d_eri[icomp,row0:row1] = buf[:row1-row0]
-    def async_write(icomp, row0, row1, buf, thread_io):
-        if thread_io is not None:
-            thread_io.join()
-        thread_io = lib.background_thread(save, icomp, row0, row1, buf)
-        return thread_io
+
+    ioblk_size = max(max_memory*.1, ioblk_size)
+    iobuflen = guess_e2bufsize(ioblk_size, nij_pair, max(nao_pair,nkl_pair))[0]
+    buf = numpy.empty((iobuflen,nao_pair))
+    buf_prefetch = numpy.empty_like(buf)
+    outbuf = numpy.empty((iobuflen,nkl_pair))
+    buf_write = numpy.empty_like(outbuf)
 
     log.debug('step2: kl-pair (ao %d, mo %d), mem %.8g MB, ioblock %.8g MB',
               nao_pair, nkl_pair, iobuflen*nao_pair*8/1e6,
@@ -308,30 +297,30 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     ijmoblks = int(numpy.ceil(float(nij_pair)/iobuflen)) * comp
     ao_loc = mol.ao_loc_nr('cart' in intor)
     ti0 = time_1pass
-    bufs1 = numpy.empty((iobuflen,nkl_pair))
-    buf_write = numpy.empty_like(bufs1)
     istep = 0
-    read_handler = write_handler = None
+    with lib.call_in_background(prefetch) as bprefetch:
+        with lib.call_in_background(save) as bsave:
+            _load_from_h5g(fswap['0'], 0, min(nij_pair, iobuflen), buf_prefetch)
 
-    for row0, row1 in prange(0, nij_pair, iobuflen):
-        nrow = row1 - row0
+            for row0, row1 in prange(0, nij_pair, iobuflen):
+                nrow = row1 - row0
 
-        for icomp in range(comp):
-            istep += 1
-            log.debug1('step 2 [%d/%d], [%d,%d:%d], row = %d',
-                       istep, ijmoblks, icomp, row0, row1, nrow)
+                for icomp in range(comp):
+                    istep += 1
+                    log.debug1('step 2 [%d/%d], [%d,%d:%d], row = %d',
+                               istep, ijmoblks, icomp, row0, row1, nrow)
 
-            buf, read_handler = async_read(icomp, row0, row1, read_handler)
-            _ao2mo.nr_e2(buf, mokl, klshape, aosym, klmosym,
-                         ao_loc=ao_loc, out=bufs1)
-            write_handler = async_write(icomp, row0, row1, bufs1, write_handler)
-            bufs1, buf_write = buf_write, bufs1  # avoid flushing writing buffer
+                    buf, buf_prefetch = buf_prefetch, buf
+                    bprefetch(icomp, row0, row1, buf_prefetch)
+                    _ao2mo.nr_e2(buf, mokl, klshape, aosym, klmosym,
+                                 ao_loc=ao_loc, out=outbuf)
+                    bsave(icomp, row0, row1, outbuf)
+                    outbuf, buf_write = buf_write, outbuf  # avoid flushing writing buffer
 
-            ti1 = (time.clock(), time.time())
-            log.debug1('step 2 [%d/%d] CPU time: %9.2f, Wall time: %9.2f',
-                       istep, ijmoblks, ti1[0]-ti0[0], ti1[1]-ti0[1])
-            ti0 = ti1
-    write_handler.join()
+                    ti1 = (time.clock(), time.time())
+                    log.debug1('step 2 [%d/%d] CPU time: %9.2f, Wall time: %9.2f',
+                               istep, ijmoblks, ti1[0]-ti0[0], ti1[1]-ti0[1])
+                    ti0 = ti1
     fswap.close()
     if isinstance(erifile, str):
         feri.close()

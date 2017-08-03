@@ -489,13 +489,20 @@ def _x2c1e_get_hcore(t, v, w, s, c):
 # Taking A matrix as basis and rewrite the FW Hcore formula, to avoid inversing matrix
 #   R^dag \tilde{S} R = S
 #   R = S^{-1/2} [S^{-1/2}\tilde{S}S^{-1/2}]^{-1/2} S^{1/2}
-#   R = (A^+ S A)^{1/2} = (A^+ S A)^{-1/2} A^+ S A
-#   h1 = (A^+)^{-1} R^+ (A^+ h1 A) R A^{-1}
-#      = \tilde{S} A R^+ A^+ h1 A R A^+ \tilde{S}   (1)
-#      = S A R^{-1}^+ A^+ h1 A R^{-1} A^+ S         (2)
+# Using A matrix as basis, the representation of R is
+#   R[A] = (A^+ S A)^{1/2} = (A^+ S A)^{-1/2} A^+ S A
+# Construct h = R^+ h1 R in two steps, first in basis A matrix, then back
+# transformed to AO basis
+#   h  = (A^+)^{-1} R[A]^+ (A^+ h1 A) R[A] A^{-1}         (0)
+# Using (A^+)^{-1} = \tilde{S} A, h can be transformed to
+#   h  = \tilde{S} A R[A]^+ A^+ h1 A R[A] A^+ \tilde{S}   (1)
+# Using R[A] = R[A]^{-1} A^+ S A,  Eq (0) turns to
+#      = S A R[A]^{-1}^+ A^+ h1 A R[A]^{-1} A^+ S
+#      = S A R[A]^{-1}^+ e R[A]^{-1} A^+ S                (2)
     w, u = numpy.linalg.eigh(reduce(numpy.dot, (cl.T.conj(), s, cl)))
     idx = w > 1e-14
 # Adopt (2) here becuase X is not appeared in Eq (2).
+# R[A] = u w^{1/2} u^+,  so R[A]^{-1} A^+ S in Eq (2) is
     r = reduce(numpy.dot, (u[:,idx]/numpy.sqrt(w[idx]), u[:,idx].T.conj(),
                            cl.T.conj(), s))
     h1 = reduce(numpy.dot, (r.T.conj()*e[nao:], r))

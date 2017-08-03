@@ -1856,16 +1856,16 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
             pyscfdir = os.path.abspath(os.path.join(__file__, '..', '..'))
             self.stdout.write('PySCF version %s\n' % pyscf.__version__)
             self.stdout.write('PySCF path  %s\n' % pyscfdir)
-            with open(os.path.join(pyscfdir, '.git', 'ORIG_HEAD')) as f:
+            with open(os.path.join(pyscfdir, '..', '.git', 'ORIG_HEAD')) as f:
                 self.stdout.write('GIT ORIG_HEAD %s' % f.read())
-            head = os.path.join(pyscfdir, '.git', 'HEAD')
+            head = os.path.join(pyscfdir, '..', '.git', 'HEAD')
             with open(head, 'r') as f:
                 head = f.read().splitlines()[0]
                 self.stdout.write('GIT HEAD      %s\n' % head)
             # or command(git log -1 --pretty=%H)
             if head.startswith('ref:'):
                 branch = os.path.basename(head)
-                head = os.path.join(pyscfdir, '.git', head.split(' ')[1])
+                head = os.path.join(pyscfdir, '..', '.git', head.split(' ')[1])
                 with open(head, 'r') as f:
                     self.stdout.write('GIT %s branch  %s' % (branch, f.readline()))
             for key in os.environ:

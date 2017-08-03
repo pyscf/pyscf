@@ -321,7 +321,7 @@ def get_nimgs(cell, precision=None):
     return nimgs
 
 def _estimate_rcut(alpha, l, cc, r0, precision=1e-8):
-    tmp = 2*np.log((cc+1e-200)*(r0**2*alpha)**l/precision)
+    tmp = 2*np.log((cc+1e-200)*(2*l+1)*alpha*(r0**2*alpha)**(l+1)/precision)
     rcut = np.sqrt(max(0, tmp.max())/alpha)
     return rcut
 
@@ -336,7 +336,7 @@ def bas_rcut(cell, bas_id, precision=1e-8):
     cs = cell.bas_ctr_coeff(bas_id)
     cs = np.max(cs**2,axis=1)
     rcut = _estimate_rcut(es, l, cs, 20, precision)
-    #rcut = _estimate_rcut(es, l, cs, rcut, precision)
+    rcut = _estimate_rcut(es, l, cs, rcut, precision)
     return rcut.max()
 
 def get_bounding_sphere(cell, rcut):
@@ -673,6 +673,9 @@ class Cell(mole.Mole):
             To define pseudopotential.
         precision : float
             To control Ewald sums and lattice sums accuracy
+        rcut : float
+            Cutoff radius (unit Bohr) in lattice summation. By default is
+            estimated based on the required :attr:`precision`.
         ke_cutoff : float
             If set, defines a spherical cutoff of fourier components, with .5 * G**2 < ke_cutoff
         dimension : int
