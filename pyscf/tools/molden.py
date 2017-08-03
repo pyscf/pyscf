@@ -197,7 +197,7 @@ def load(moldenfile):
         if mol.ecp:
             sys.stderr.write('\nECP were dectected in the molden file.\n'
                              'Note Molden format does not support ECP data. '
-                             'ECP information was lost when saving the molden file.\n\n')
+                             'ECP information was lost when saving to molden format.\n\n')
         try:
             mol.build(0, 0)
         except RuntimeError:

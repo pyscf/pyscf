@@ -142,7 +142,6 @@ def contract(myci, civec, eris):
     for j in range(nocc):
         t2[:,j] += numpy.einsum('ia,b->iab', c1, fov[j])
 
-    eris_vovv = lib.unpack_tril(eris.vovv).reshape(nvir,nocc,nvir,-1)
     unit = _memory_usage_inloop(nocc, nvir)
     max_memory = max(2000, myci.max_memory - lib.current_memory()[0])
     blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory/unit)))
@@ -226,8 +225,8 @@ def amplitudes_to_cisdvec(c0, c1, c2):
 
 def cisdvec_to_amplitudes(civec, nocc, nvir):
     c0 = civec[0]
-    c1 = civec[1:nov+1].reshape(nocc,nvir)
-    c2 = civec[nov+1:].reshape(nocc,nocc,nvir,nvir)
+    c1 = civec[1:nocc*nvir+1].reshape(nocc,nvir)
+    c2 = civec[nocc*nvir+1:].reshape(nocc,nocc,nvir,nvir)
     return c0, c1, c2
 
 def dot(v1, v2, nocc, nvir):
@@ -257,9 +256,7 @@ def to_fci(cisdvec, norb, nelec):
         neleca, nelecb = nelec
     nocc = neleca
     nvir = norb - nocc
-    c0 = cisdvec[0]
-    c1 = cisdvec[1:nocc*nvir+1].reshape(nocc,nvir)
-    c2 = cisdvec[nocc*nvir+1:].reshape(nocc,nocc,nvir,nvir)
+    c0, c1, c2 = cisdvec_to_amplitudes(civec, nocc, nvir)
     t1addr, t1sign = t1strs(norb, nocc)
 
     na = cistring.num_strings(norb, nocc)
@@ -301,15 +298,12 @@ def from_fci(ci0, norb, nelec):
     c2 = numpy.einsum('i,j,ij->ij', t1sign, t1sign, ci0[t1addr][:,t1addr])
     c1 = c1.reshape(nvir,nocc).T
     c2 = c2.reshape(nvir,nocc,nvir,nocc).transpose(1,3,0,2)
-    return numpy.hstack((c0, c1[::-1].ravel(), c2[::-1,::-1].ravel()))
-
+    return amplitudes_to_cisdvec(c0, c1[::-1], c2[::-1,::-1])
 
 
 def make_rdm1(ci, nmo, nocc):
     nvir = nmo - nocc
-    c0 = ci[0]
-    c1 = ci[1:nocc*nvir+1].reshape(nocc,nvir)
-    c2 = ci[nocc*nvir+1:].reshape(nocc,nocc,nvir,nvir)
+    c0, c1, c2 = cisdvec_to_amplitudes(civec, nocc, nvir)
     dov = c0*c1 * 2
     dov += numpy.einsum('jb,ijab->ia', c1, c2) * 4
     dov -= numpy.einsum('jb,ijba->ia', c1, c2) * 2
@@ -339,9 +333,7 @@ def make_rdm2(ci, nmo, nocc):
     nvir = nmo - nocc
     noo = nocc**2
     nov = nocc * nvir
-    c0 = ci[0]
-    c1 = ci[1:nocc*nvir+1].reshape(nocc,nvir)
-    c2 = ci[nocc*nvir+1:].reshape(nocc,nocc,nvir,nvir)
+    c0, c1, c2 = cisdvec_to_amplitudes(civec, nocc, nvir)
     doovv = c0*c2
     dvvvo = numpy.einsum('ia,ikcd->cdak', c1, c2)
     dovoo =-numpy.einsum('ia,klac->ickl', c1, c2)

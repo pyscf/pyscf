@@ -19,7 +19,6 @@ from pyscf.ci.cisd_slow import t1strs, t2strs
 from pyscf.fci import cistring
 
 einsum = lib.einsum
-#einsum = numpy.einsum
 
 def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8,
            verbose=logger.INFO):
@@ -40,9 +39,10 @@ def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8,
     def precond(x, e, *args):
         return x / (diag - e)
 
-    ecisd, ci = lib.davidson(op, ci0, precond, max_cycle=max_cycle, tol=tol,
-                             verbose=verbose)
-    conv = True  # It should be checked in lib.davidson function
+    conv, ecisd, ci = lib.davidson1(lambda xs: [op(x) for x in xs],
+                                    ci0, precond,
+                                    max_cycle=max_cycle, tol=tol,
+                                    verbose=verbose)
     return conv, ecisd, ci
 
 
@@ -121,7 +121,6 @@ def amplitudes_to_cisdvec(c0, c1, c2):
     return numpy.hstack((c0, c1.ravel(), c2[ooidx][:,vvidx[0],vvidx[1]].ravel()))
 
 def cisdvec_to_amplitudes(civec, nocc, nvir):
-    c0 = civec[0]
     c0 = civec[0]
     c1 = civec[1:nocc*nvir+1].reshape(nocc,nvir)
     c2 = _unpack_4fold(civec[nocc*nvir+1:], nocc, nvir)
@@ -247,6 +246,8 @@ def make_rdm1(ci, nmo, nocc):
     return rdm1
 
 def make_rdm2(ci, nmo, nocc):
+    '''spin-orbital 2pdm in physicist's notation
+    '''
     nvir = nmo - nocc
     c0, c1, c2 = cisdvec_to_amplitudes(ci, nocc, nvir)
     doovv = c0 * c2 * .5
@@ -341,6 +342,7 @@ class CISD(lib.StreamObject):
         return self.e_corr, self.ci
 
     def get_init_guess(self, eris=None):
+        # MP2 initial guess
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
         time0 = time.clock(), time.time()
@@ -350,7 +352,7 @@ class CISD(lib.StreamObject):
         eijab = lib.direct_sum('ia,jb->ijab',eia,eia)
         t1 = eris.fock[:nocc,nocc:] / eia
         eris_oovv = numpy.array(eris.oovv)
-        t2 = eris_oovv/eijab
+        t2 = eris_oovv / eijab
         self.emp2 = 0.25*einsum('ijab,ijab', t2.conj(), eris_oovv).real
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
         logger.timer(self, 'init mp2', *time0)

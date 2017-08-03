@@ -372,6 +372,42 @@ def update_amps(cc, t1, t2, eris):
     return t1new, t2new
 
 
+def get_nocc(mycc):
+    if mycc._nocc is not None:
+        return mycc._nocc
+    if isinstance(mycc.frozen, (int, numpy.integer)):
+        nocca = len(mycc.mo_occ[0]) - (mycc.frozen+1)//2
+        noccb = len(mycc.mo_occ[1]) - mycc.frozen//2
+    elif isinstance(mycc.frozen[0], (int, numpy.integer)):
+        nocca = int(mycc.mo_occ[0].sum()) - len(mycc.frozen)
+        noccb = int(mycc.mo_occ[1].sum()) - len(mycc.frozen)
+    else:
+        mo_occa, mo_occb = mycc.mo_occ
+        if len(mycc.frozen[0]) > 0:
+            mo_occa = mo_occa.copy()
+            mo_occa[numpy.asarray(mycc.frozen[0])] = 0
+        if len(mycc.frozen[1]) > 0:
+            mo_occb = mo_occb.copy()
+            mo_occb[numpy.asarray(mycc.frozen[1])] = 0
+        nocca = np.count_nonzero(mo_occa==1)
+        noccb = np.count_nonzero(mo_occb==1)
+    return nocca, noccb
+
+def get_nmo(mycc):
+    if mycc._nmo is not None:
+        return mycc._nmo
+    if isinstance(mycc.frozen, (int, numpy.integer)):
+        nmoa = mycc.mo_occ[0].size - (mycc.frozen+1)//2
+        nmob = mycc.mo_occ[1].size - mycc.frozen//2
+    elif isinstance(mycc.frozen[0], (int, numpy.integer)):
+        nmoa = mycc.mo_occ[0].size - len(mycc.frozen)
+        nmob = mycc.mo_occ[1].size - len(mycc.frozen)
+    else:
+        nmoa = len(mycc.mo_occ[0]) - len(mycc.frozen[0])
+        nmob = len(mycc.mo_occ[1]) - len(mycc.frozen[1])
+    return nmoa, nmob
+
+
 def energy(cc, t1, t2, eris):
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
@@ -423,40 +459,8 @@ class UCCSD(rccsd.RCCSD):
         nmoa, nmob = self.get_nmo()
         return nmoa + nmob
 
-    def get_nocc(self):
-        if self._nocc is not None:
-            return self._nocc
-        if isinstance(self.frozen, (int, numpy.integer)):
-            nocca = len(self.mo_occ[0]) - (self.frozen+1)//2
-            noccb = len(self.mo_occ[1]) - self.frozen//2
-        elif isinstance(self.frozen[0], (int, numpy.integer)):
-            nocca = int(self.mo_occ[0].sum()) - len(self.frozen)
-            noccb = int(self.mo_occ[1].sum()) - len(self.frozen)
-        else:
-            mo_occa, mo_occb = self.mo_occ
-            if len(self.frozen[0]) > 0:
-                mo_occa = mo_occa.copy()
-                mo_occa[numpy.asarray(self.frozen[0])] = 0
-            if len(self.frozen[1]) > 0:
-                mo_occb = mo_occb.copy()
-                mo_occb[numpy.asarray(self.frozen[1])] = 0
-            nocca = np.count_nonzero(mo_occa==1)
-            noccb = np.count_nonzero(mo_occb==1)
-        return nocca, noccb
-
-    def get_nmo(self):
-        if self._nmo is not None:
-            return self._nmo
-        if isinstance(self.frozen, (int, numpy.integer)):
-            nmoa = self.mo_occ[0].size - (self.frozen+1)//2
-            nmob = self.mo_occ[1].size - self.frozen//2
-        elif isinstance(self.frozen[0], (int, numpy.integer)):
-            nmoa = self.mo_occ[0].size - len(self.frozen)
-            nmob = self.mo_occ[1].size - len(self.frozen)
-        else:
-            nmoa = len(self.mo_occ[0]) - len(self.frozen[0])
-            nmob = len(self.mo_occ[1]) - len(self.frozen[1])
-        return nmoa, nmob
+    get_nocc = get_nocc
+    get_nmo = get_nmo
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()

@@ -537,6 +537,25 @@ def get_nmo(mycc):
     else:
         return len(mycc.mo_occ) - len(mycc.frozen)
 
+def amplitudes_to_vector(t1, t2, out=None):
+    nocc, nvir = t1.shape
+    nov = nocc * nvir
+    size = nov + nocc*(nocc+1)//2*nvir**2
+    vector = numpy.ndarray(size, t1.dtype, buffer=out)
+    vector[:nov] = t1.ravel()
+    vector[nov:] = t2[numpy.tril_indices(nocc)].ravel()
+    return vector
+
+def vector_to_amplitudes(vector, nocc, nvir):
+    nov = nocc * nvir
+    t1 = vector[:nov].copy().reshape((nocc,nvir))
+    t2 = numpy.zeros((nocc,nocc,nvir,nvir), vector.dtype)
+    t2tril = vector[nov:].reshape(nocc*(nocc+1)//2,nvir,nvir)
+    idx = numpy.tril_indices(nocc)
+    t2[idx[0],idx[1]] = t2tril
+    t2[idx[1],idx[0]] = t2tril.transpose(0,2,1)
+    return t1, t2
+
 
 def energy(mycc, t1, t2, eris):
     '''CCSD correlation energy'''
@@ -805,21 +824,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def diis_(self, t1, t2, istep, normt, de, adiis):
         if (istep > self.diis_start_cycle and
             abs(de) < self.diis_start_energy_diff):
-            t1_shape_in = t1.shape
-            t2_shape_in = t2.shape
-            nov = numpy.prod(t1_shape_in)
-            if t1.base is not None and t1.base is t2.base:
-                t1t2 = t1.base
-            else:
-#NOTE: here overwriting .data to reduce memory usage, the contents of
-# t1, t2 are CHANGED!  If the pass-in t1/t2 are used elsewhere, be very
-# careful to call this function
-                t1t2 = numpy.hstack((t1.ravel(),t2.ravel()))
-                t1.data = t1t2.data
-                t2.data = t1t2.data
-            t1t2 = adiis.update(t1t2)
-            t1 = t1t2[:nov].reshape(t1_shape_in)
-            t2 = t1t2[nov:].reshape(t2_shape_in)
+            vec = amplitudes_to_vector(t1, t2)
+            nocc, nvir = t1.shape
+            t1, t2 = vector_to_amplitudes(adiis.update(vec), nocc, nvir)
             logger.debug1(self, 'DIIS for step %d', istep)
         return t1, t2
 
@@ -1118,6 +1125,9 @@ if __name__ == '__main__':
     t1 = numpy.random.random((nocc,nvir)) * .1
     t2 = numpy.random.random((nocc,nocc,nvir,nvir)) * .1
     t2 = t2 + t2.transpose(1,0,3,2)
+    r1, r2 = vector_to_amplitudes(amplitudes_to_vector(t1, t2), nocc, nvir)
+    print abs(t1-r1).max()
+    print abs(t2-r2).max()
 
     def finger(a):
         return numpy.dot(a.ravel(), numpy.cos(numpy.arange(a.size)))
