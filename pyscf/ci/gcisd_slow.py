@@ -43,6 +43,9 @@ def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8,
                                     ci0, precond,
                                     max_cycle=max_cycle, tol=tol,
                                     verbose=verbose)
+    if myci.nroots == 1:
+        ecisd = ecisd[0]
+        ci = ci[0]
     return conv, ecisd, ci
 
 
@@ -310,6 +313,7 @@ class CISD(lib.StreamObject):
         self.max_cycle = 50
         self.max_space = 12
         self.frozen = frozen
+        self.nroots = 1
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -356,7 +360,7 @@ class CISD(lib.StreamObject):
         self.emp2 = 0.25*einsum('ijab,ijab', t2.conj(), eris_oovv).real
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
         logger.timer(self, 'init mp2', *time0)
-        return self.emp2, amplitudes_to_cisdvec(0, t1, t2)
+        return self.emp2, amplitudes_to_cisdvec(1, t1, t2)
 
     def ao2mo(self, mo_coeff=None):
         return _ERIS(self, mo_coeff)
@@ -490,9 +494,10 @@ if __name__ == '__main__':
     print(numpy.linalg.norm(abs(hdiag0)-abs(hdiag1)))
 
     ecisd = myci.kernel()[0]
+    print ecisd, mf.e_tot
     efci = fci.direct_uhf.kernel((h1a,h1b), (eri_aa,eri_ab,eri_bb),
                                  h1a.shape[0], mol.nelec)[0]
-    print(ecisd, ecisd - -0.037063615573810438, '> E(fci)', efci-ehf0)
+    print(ecisd, ecisd - -0.037067274690894436, '> E(fci)', efci-ehf0)
 
     mol = gto.Mole()
     mol.verbose = 0
@@ -504,7 +509,7 @@ if __name__ == '__main__':
     ]
     mol.charge = 2
     mol.spin = 2
-    mol.basis = '3-21g'
+    mol.basis = '6-31g'
     mol.build()
     mf = scf.UHF(mol).run(conv_tol=1e-14)
     ehf0 = mf.e_tot - mol.energy_nuc()

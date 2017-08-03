@@ -33,7 +33,6 @@ def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8, verbose=logger.INFO):
     nmo = myci.nmo
     nocc = myci.nocc
     nvir = nmo - nocc
-    mo_energy = eris.fock.diagonal()
     diag = myci.make_diagonal(eris)
     ehf = diag[0]
     diag -= ehf
@@ -83,20 +82,15 @@ def make_diagonal(myci, eris):
 
     jksum = (jdiag[:nocc,:nocc] * 2 - kdiag[:nocc,:nocc]).sum()
     ehf = mo_energy[:nocc].sum() * 2 - jksum
-    e1diag = numpy.empty((nocc,nvir))
-    e2diag = numpy.empty((nocc,nocc,nvir,nvir))
-    for i in range(nocc):
-        for a in range(nocc, nmo):
-            e1diag[i,a-nocc] = ehf - mo_energy[i] + mo_energy[a] \
-                    - jdiag[i,a] + kdiag[i,a]
-            for j in range(nocc):
-                for b in range(nocc, nmo):
-                    e2diag[i,j,a-nocc,b-nocc] = ehf \
-                            - mo_energy[i] - mo_energy[j] \
-                            + mo_energy[a] + mo_energy[b] \
-                            + jdiag[i,j] - jdiag[i,a] + kdiag[i,a] \
-                            - jdiag[j,a] - jdiag[i,b] - jdiag[j,b] \
-                            + kdiag[j,b] + jdiag[a,b]
+    e_ia = lib.direct_sum('a-i->ia', mo_energy[nocc:], mo_energy[:nocc])
+    e_ia -= jdiag[:nocc,nocc:] - kdiag[:nocc,nocc:]
+    e1diag = ehf + e_ia
+    e2diag = lib.direct_sum('ia+jb->ijab', e_ia, e_ia)
+    e2diag += ehf
+    e2diag += jdiag[:nocc,:nocc].reshape(nocc,nocc,1,1)
+    e2diag -= jdiag[:nocc,nocc:].reshape(nocc,1,1,nvir)
+    e2diag -= jdiag[:nocc,nocc:].reshape(1,nocc,nvir,1)
+    e2diag += jdiag[nocc:,nocc:].reshape(1,1,nvir,nvir)
     return numpy.hstack((ehf, e1diag.reshape(-1), e2diag.reshape(-1)))
 
 def contract(myci, civec, eris):
@@ -107,9 +101,7 @@ def contract(myci, civec, eris):
     nvir = nmo - nocc
     nov = nocc * nvir
     noo = nocc**2
-    c0 = civec[0]
-    c1 = civec[1:nov+1].reshape(nocc,nvir)
-    c2 = civec[nov+1:].reshape(nocc,nocc,nvir,nvir)
+    c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
 
     cinew = numpy.zeros_like(civec)
     t1 = cinew[1:nov+1].reshape(nocc,nvir)
@@ -223,7 +215,8 @@ def contract(myci, civec, eris):
 def amplitudes_to_cisdvec(c0, c1, c2):
     return numpy.hstack((c0, c1.ravel(), c2.ravel()))
 
-def cisdvec_to_amplitudes(civec, nocc, nvir):
+def cisdvec_to_amplitudes(civec, nmo, nocc):
+    nvir = nmo - nocc
     c0 = civec[0]
     c1 = civec[1:nocc*nvir+1].reshape(nocc,nvir)
     c2 = civec[nocc*nvir+1:].reshape(nocc,nocc,nvir,nvir)
@@ -256,7 +249,7 @@ def to_fci(cisdvec, norb, nelec):
         neleca, nelecb = nelec
     nocc = neleca
     nvir = norb - nocc
-    c0, c1, c2 = cisdvec_to_amplitudes(civec, nocc, nvir)
+    c0, c1, c2 = cisdvec_to_amplitudes(cisdvec, norb, nocc)
     t1addr, t1sign = t1strs(norb, nocc)
 
     na = cistring.num_strings(norb, nocc)
@@ -303,7 +296,7 @@ def from_fci(ci0, norb, nelec):
 
 def make_rdm1(ci, nmo, nocc):
     nvir = nmo - nocc
-    c0, c1, c2 = cisdvec_to_amplitudes(civec, nocc, nvir)
+    c0, c1, c2 = cisdvec_to_amplitudes(ci, nmo, nocc)
     dov = c0*c1 * 2
     dov += numpy.einsum('jb,ijab->ia', c1, c2) * 4
     dov -= numpy.einsum('jb,ijba->ia', c1, c2) * 2
@@ -333,7 +326,7 @@ def make_rdm2(ci, nmo, nocc):
     nvir = nmo - nocc
     noo = nocc**2
     nov = nocc * nvir
-    c0, c1, c2 = cisdvec_to_amplitudes(civec, nocc, nvir)
+    c0, c1, c2 = cisdvec_to_amplitudes(ci, nmo, nocc)
     doovv = c0*c2
     dvvvo = numpy.einsum('ia,ikcd->cdak', c1, c2)
     dovoo =-numpy.einsum('ia,klac->ickl', c1, c2)
