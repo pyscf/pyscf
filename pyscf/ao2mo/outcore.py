@@ -312,7 +312,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 
                     buf, buf_prefetch = buf_prefetch, buf
                     bprefetch(icomp, row0, row1, buf_prefetch)
-                    _ao2mo.nr_e2(buf, mokl, klshape, aosym, klmosym,
+                    _ao2mo.nr_e2(buf[:nrow], mokl, klshape, aosym, klmosym,
                                  ao_loc=ao_loc, out=outbuf)
                     bsave(icomp, row0, row1, outbuf)
                     outbuf, buf_write = buf_write, outbuf  # avoid flushing writing buffer

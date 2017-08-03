@@ -16,11 +16,11 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
         log = logger.Logger(cc.stdout, verbose)
 
     if t1 is None and t2 is None:
-        t1, t2 = cc.init_amps(eris)[1:]
+        t1, t2 = cc.get_init_guess(eris)[1:]
     elif t1 is None:
         t1 = numpy.zeros((nocc,nvir))
     elif t2 is None:
-        t2 = cc.init_amps(eris)[2]
+        t2 = cc.get_init_guess(eris)[2]
 
     nocc, nvir = t1.shape
 
@@ -209,6 +209,9 @@ class CCSD(lib.StreamObject):
         self._nmo = len(self.mo_occ)
         return self._nmo
 
+    def get_init_guess(self, eris=None):
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        return self.init_amps(eris)
     def init_amps(self, eris):
         nocc = self.nocc
         nvir = self.nmo - nocc
@@ -289,6 +292,7 @@ if __name__ == '__main__':
     mcc = CCSD(rhf)
     eris = mcc.ao2mo()
     emp2, t1, t2 = mcc.init_amps(eris)
+    #print emp2, 'emp2'
     print(abs(t2).sum() - 4.95565712182)
     foo, fov, fvv = make_inter_F(mcc, t1, t2, eris)
     print(abs(foo).sum() - 0.220378654203)

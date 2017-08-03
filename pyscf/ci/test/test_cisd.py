@@ -66,9 +66,9 @@ class KnowValues(unittest.TestCase):
         mol.charge = 2
         mol.basis = '3-21g'
         mol.build()
-        mf = scf.RHF(mol).run()
+        mf = scf.RHF(mol).run(conv_tol=1e-14)
         ecisd = ci.CISD(mf).kernel()[0]
-        self.assertAlmostEqual(ecisd, -0.024780739973407784, 12)
+        self.assertAlmostEqual(ecisd, -0.024780739973407784, 8)
 
     def test_rdm(self):
         mol = gto.Mole()
@@ -81,10 +81,10 @@ class KnowValues(unittest.TestCase):
         mol.basis = {'H': 'sto-3g',
                      'O': 'sto-3g',}
         mol.build()
-        mf = scf.RHF(mol).run()
+        mf = scf.RHF(mol).run(conv_tol=1e-14)
         myci = ci.CISD(mf)
         ecisd, civec = myci.kernel()
-        self.assertAlmostEqual(ecisd, -0.048878084082066106, 12)
+        self.assertAlmostEqual(ecisd, -0.048878084082066106, 8)
 
         nmo = mf.mo_coeff.shape[1]
         nocc = mol.nelectron//2
@@ -93,8 +93,8 @@ class KnowValues(unittest.TestCase):
         rdm1 = myci.make_rdm1(civec)
         rdm2 = myci.make_rdm2(civec)
         self.assertTrue(numpy.allclose(rdm2, ref2))
-        self.assertAlmostEqual(finger(rdm1), 2.2685199485281689, 9)
-        self.assertAlmostEqual(finger(rdm2),-3.7944039102480649, 9)
+        self.assertAlmostEqual(finger(rdm1), 2.2685303884654933, 5)
+        self.assertAlmostEqual(finger(rdm2),-3.7944286346871299, 5)
         self.assertAlmostEqual(abs(rdm2-rdm2.transpose(2,3,0,1)).sum(), 0, 9)
         self.assertAlmostEqual(abs(rdm2-rdm2.transpose(1,0,3,2)).sum(), 0, 9)
         h1e = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
@@ -113,6 +113,44 @@ class KnowValues(unittest.TestCase):
         civec2 = numpy.random.random((1+nocc*nvir+nocc**2*nvir**2))
         self.assertAlmostEqual(ci.cisd.dot(civec1, civec2, nocc, nvir),
                                64.274937664180186, 13)
+
+    def test_ao_direct(self):
+        mol = gto.Mole()
+        mol.verbose = 0
+        mol.atom = [
+            ['O', ( 0., 0.    , 0.   )],
+            ['H', ( 0., -0.757, 0.587)],
+            ['H', ( 0., 0.757 , 0.587)],]
+        mol.basis = 'ccpvtz'
+        mol.build()
+        mf = scf.RHF(mol).run(conv_tol=1e-14)
+        myci = ci.CISD(mf)
+        myci.max_memory = 1
+        myci.direct = True
+        ecisd, civec = myci.kernel()
+        self.assertAlmostEqual(ecisd, -0.2694965385156135, 8)
+
+    def test_ao2mo(self):
+        mol = gto.Mole()
+        mol.verbose = 0
+        mol.atom = [
+            ['O', ( 0., 0.    , 0.   )],
+            ['H', ( 0., -0.757, 0.587)],
+            ['H', ( 0., 0.757 , 0.587)],]
+        mol.basis = 'ccpvtz'
+        mol.build()
+        mf = scf.RHF(mol).run(conv_tol=1e-14)
+        myci = ci.CISD(mf)
+        eris0 = ci.cisd._make_eris_incore(myci)
+        eris1 = ci.cisd._make_eris_outcore(myci)
+
+        self.assertAlmostEqual(abs(eris0.oooo-eris1.oooo).max(), 0, 11)
+        self.assertAlmostEqual(abs(eris0.vooo-eris1.vooo).max(), 0, 11)
+        self.assertAlmostEqual(abs(eris0.vvoo-eris1.vvoo).max(), 0, 11)
+        self.assertAlmostEqual(abs(eris0.voov-eris1.voov).max(), 0, 11)
+        self.assertAlmostEqual(abs(eris0.vovv-eris1.vovv).max(), 0, 11)
+        self.assertAlmostEqual(abs(eris0.vvvv-eris1.vvvv).max(), 0, 11)
+
 
 if __name__ == "__main__":
     print("Full Tests for CISD")

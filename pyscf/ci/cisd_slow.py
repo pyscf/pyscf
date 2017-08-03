@@ -25,7 +25,7 @@ def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8,
     nmo = myci.nmo
     nocc = myci.nocc
     mo_energy = eris.fock.diagonal()
-    diag = make_diagonal(mol, mo_energy, eris, nocc)
+    diag = make_diagonal(eris)
     ehf = diag[0]
     diag -= ehf
 
@@ -54,7 +54,9 @@ def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8,
     conv = True  # It should be checked in lib.davidson function
     return conv, ecisd, ci
 
-def make_diagonal(mol, mo_energy, eris, nocc):
+def make_diagonal(eris):
+    mo_energy = eris.fock.diagonal()
+    nocc = eris.nocc
     nmo = mo_energy.size
     nvir = nmo - nocc
     jdiag = numpy.zeros((nmo,nmo))
@@ -239,6 +241,8 @@ def make_rdm1(ci, nmo, nocc):
     return rdm1
 
 def make_rdm2(ci, nmo, nocc):
+    '''spin-traced 2pdm in physicist's notation
+    '''
     nvir = nmo - nocc
     c0 = ci[0]
     c1 = ci[1:nocc*nvir+1].reshape(nocc,nvir)
@@ -351,7 +355,7 @@ class CISD(lib.StreamObject):
         return self.e_corr, self.ci
 
     def ao2mo(self, mo_coeff=None):
-        return _ERIS(self, mo_coeff)
+        return _RCISD_ERIs(self, mo_coeff)
 
     def add_wvvVV(self, t2, eris):
         nvir = self.nmo - self.nocc
@@ -372,11 +376,11 @@ class CISD(lib.StreamObject):
         if ci is None: ci = self.ci
         return make_rdm2(ci, self.nmo, self.nocc)
 
-class _ERIS(object):
+class _RCISD_ERIs(object):
     def __init__(self, myci, mo_coeff, method='incore'):
         mol = myci.mol
         mf = myci._scf
-        nocc = myci.nocc
+        nocc = self.nocc = myci.nocc
         nmo = myci.nmo
         nvir = nmo - nocc
         if mo_coeff is None:
@@ -414,7 +418,7 @@ if __name__ == '__main__':
         ['H', ( 0.,-1.    , 1.   )],
     ]
     mol.charge = 2
-    #mol.basis = '3-21g'
+    mol.basis = '3-21g'
     mol.build()
     mf = scf.RHF(mol).run(max_cycle=1)
     etot = CISD(mf).kernel()[0] + mf.e_tot

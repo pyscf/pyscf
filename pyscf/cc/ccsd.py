@@ -411,7 +411,10 @@ def add_wvvVV_(mycc, t1, t2, eris, t2new_tril, with_ovvv=True):
 
     if mycc.direct:   # AO-direct CCSD
         mol = mycc.mol
-        mo = _mo_without_core(mycc, mycc.mo_coeff)
+        if hasattr(eris, 'mo_coeff'):
+            mo = eris.mo_coeff
+        else:
+            mo = _mo_without_core(mycc, mycc.mo_coeff)
         nao, nmo = mo.shape
         nao_pair = nao * (nao+1) // 2
         aos = numpy.asarray(mo[:,nocc:].T, order='F')
