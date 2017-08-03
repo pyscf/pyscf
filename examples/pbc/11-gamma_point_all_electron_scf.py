@@ -29,7 +29,13 @@ cell = gto.M(
 mf = scf.RHF(cell).mix_density_fit(auxbasis='weigend')
 mf.kernel()
 
-mf = dft.RKS(cell).mix_density_fit(auxbasis='weigend')
+# Or use even-tempered Gaussian basis as auxiliary fitting functions.
+# The following auxbasis is generated based on the expression
+#    alpha = a * 1.7^i   i = 0..N
+# where a and N are determined by the smallest and largest exponets of AO basis.
+import pyscf.df
+auxbasis = pyscf.df.addons.aug_etb_for_dfbasis(cell, beta=1.7, start_at=0)
+mf = dft.RKS(cell).mix_density_fit(auxbasis=auxbasis)
 mf.xc = 'bp86'
 mf.kernel()
 

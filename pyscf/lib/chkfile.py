@@ -114,6 +114,8 @@ def dump(chkfile, key, value):
         with h5py.File(chkfile, 'r+') as fh5:
             if key in fh5:
                 del(fh5[key])
+            elif key + '__from_list__' in fh5:
+                del(fh5[key+'__from_list__'])
             save_as_group(key, value, fh5)
     else:
         with h5py.File(chkfile, 'w') as fh5:

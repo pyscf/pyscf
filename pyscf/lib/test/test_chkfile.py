@@ -29,8 +29,7 @@ class KnowValues(unittest.TestCase):
         a = [numpy.eye(4), numpy.eye(4)]
         lib.chkfile.save(fchk.name, 'a', a)
         dat = lib.chkfile.load(fchk.name, 'a')
-        self.assertTrue(isinstance(dat, numpy.ndarray))
-        self.assertTrue(dat.shape, (2,4,4))
+        self.assertTrue(isinstance(dat, list))
 
 if __name__ == "__main__":
     print("Full Tests for lib.chkfile")

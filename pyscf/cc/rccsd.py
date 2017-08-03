@@ -682,7 +682,7 @@ class RCCSD(ccsd.CCSD):
         if diag is None:
             diag = self.eeccsd_diag()[0]
         nocc = self.nocc
-        nvir = self.nmo - nocc
+        nmo = self.nmo
 
         user_guess = False
         if guess:
@@ -698,7 +698,7 @@ class RCCSD(ccsd.CCSD):
                 for i in idx:
                     g = np.zeros_like(diag)
                     g[i] = 1.0
-                    t1, t2 = self.vector_to_amplitudes(g, nocc, nvir)
+                    t1, t2 = self.vector_to_amplitudes(g, nmo, nocc)
                     if np.linalg.norm(t1) > .9:
                         guess.append(g)
                         n += 1
@@ -734,7 +734,7 @@ class RCCSD(ccsd.CCSD):
         if nroots == 1:
             eee, evecs = [self.eee], [evecs]
         for n, en, vn in zip(range(nroots), eee, evecs):
-            t1, t2 = self.vector_to_amplitudes(vn, nocc, nvir)
+            t1, t2 = self.vector_to_amplitudes(vn, nmo, nocc)
             logger.info(self, 'EOM-EE singlet root %d E = %.16g  qpwt = %.6g',
                         n, en, np.linalg.norm(t1)**2)
         logger.timer(self, 'EOM-EE-CCSD singlet', *cput0)
@@ -1327,11 +1327,10 @@ class RCCSD(ccsd.CCSD):
         lib.pack_tril(t2.reshape(-1,nvir,nvir), out=vector[nov:])
         return vector
 
-    def vector_to_amplitudes(self, vector, nocc=None, nvir=None):
-        if nocc is None:
-            nocc = self.nocc
-        if nvir is None:
-            nvir = self.nmo - nocc
+    def vector_to_amplitudes(self, vector, nmo=None, nocc=None):
+        if nocc is None: nocc = self.nocc
+        if nmo is None: nmo = self.nmo
+        nvir = nmo - nocc
         nov = nocc * nvir
         size = nov + nocc**2*nvir*(nvir+1)//2
         t1 = vector[:nov].copy().reshape((nocc,nvir))

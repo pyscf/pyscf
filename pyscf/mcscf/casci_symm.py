@@ -20,7 +20,7 @@ class CASCI(casci.CASCI):
         self.orbsym = []
         casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
         #self.fcisolver = fci.solver(mf.mol, self.nelecas[0]==self.nelecas[1], True)
-        self.fcisolver = fci.solver(mf.mol, False, True)
+        self.fcisolver = fci.solver(mf.mol, singlet=False, symm=True)
 
     def kernel(self, mo_coeff=None, ci0=None):
         if mo_coeff is None:

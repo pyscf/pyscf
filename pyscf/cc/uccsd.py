@@ -891,7 +891,7 @@ class UCCSD(rccsd.RCCSD):
                 for i in idx:
                     g = np.zeros_like(diag)
                     g[i] = 1.0
-                    t1, t2 = self.vector_to_amplitudes(g, (nocca,noccb), (nvira,nvirb))
+                    t1, t2 = self.vector_to_amplitudes(g, (nmoa,nmob), (nocca,noccb))
                     if np.linalg.norm(t1[0]) > .9 or np.linalg.norm(t1[1]) > .9:
                         guess.append(g)
                         n += 1
@@ -927,7 +927,7 @@ class UCCSD(rccsd.RCCSD):
         if nroots == 1:
             eee, evecs = [self.eee], [evecs]
         for n, en, vn in zip(range(nroots), eee, evecs):
-            t1, t2 = self.vector_to_amplitudes(vn, (nocca,noccb), (nvira,nvirb))
+            t1, t2 = self.vector_to_amplitudes(vn, (nmoa,nmob), (nocca,noccb))
             qpwt = np.linalg.norm(t1[0])**2 + np.linalg.norm(t1[1])**2
             logger.info(self, 'EOM-EE root %d E = %.16g  qpwt = %.6g', n, en, qpwt)
         logger.timer(self, 'EOM-EE-CCSD', *cput0)
@@ -1689,16 +1689,16 @@ class UCCSD(rccsd.RCCSD):
         vector[sizea+sizeb:] = t2[1].ravel()
         return vector
 
-    def vector_to_amplitudes(self, vector, nocc=None, nvir=None):
+    def vector_to_amplitudes(self, vector, nmo=None, nocc=None):
         if nocc is None:
             nocca, noccb = self.get_nocc()
         else:
             nocca, noccb = nocc
-        if nvir is None:
+        if nmo is None:
             nmoa, nmob = self.get_nmo()
-            nvira, nvirb = nmoa-nocca, nmob-noccb
         else:
-            nvira, nvirb = nvir
+            nmoa, nmob = nmo
+        nvira, nvirb = nmoa-nocca, nmob-noccb
         nocc = nocca + noccb
         nvir = nvira + nvirb
         nov = nocc * nvir
@@ -2371,7 +2371,9 @@ def uspatial2spin(cc, moidx, mo_coeff):
         spin : (nso,) ndarary
             The spin (0 or 1) of each spin-orbital
     '''
-
+# Note: Always recompute the fock matrix in UCCSD because the mf object may be
+# converted from ROHF object in which orbital energies are eigenvalues of
+# Roothaan Fock rather than the true alpha, beta orbital energies.
     dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
     fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
     fockab = [reduce(numpy.dot, (mo_coeff[0].T, fockao[0], mo_coeff[0])),

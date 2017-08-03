@@ -19,6 +19,7 @@ cell.a = '''
 3.370137329, 3.370137329, 0.000000000'''
 cell.unit = 'B'
 cell.gs = [7]*3
+cell.verbose = 5
 cell.build()
 
 #
@@ -28,6 +29,7 @@ kpts = cell.get_abs_kpts([0.25, 0.25, 0.25])
 kmf = scf.KRHF(cell, exxdiv=None)
 kmf.kpts = kpts
 ehf = kmf.kernel()
+exit()
 
 mycc = cc.KRCCSD(kmf)
 mycc.kernel()

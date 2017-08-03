@@ -749,10 +749,10 @@ def pack(mol):
             'nucmod'  : mol.nucmod,
             'ecp'     : mol.ecp,
             'verbose' : mol.verbose}
-    if mol.symmetry and not isinstance(mol.symmetry, str):
-        mdic['symmetry'] = mol.groupname
-        mdic['atom'] = mol._atom
-        mdic['unit'] = 'AU'
+#    if mol.symmetry and not isinstance(mol.symmetry, str):
+#        mdic['symmetry'] = mol.groupname
+#        mdic['atom'] = mol._atom
+#        mdic['unit'] = 'AU'
     return mdic
 def unpack(moldic):
     '''Unpack a dict which is packed by :func:`pack`, to generate the input

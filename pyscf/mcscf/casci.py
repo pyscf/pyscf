@@ -451,7 +451,7 @@ class CASCI(lib.StreamObject):
             assert(isinstance(ncore, (int, numpy.integer)))
             self.ncore = ncore
         #self.fcisolver = fci.solver(mol, self.nelecas[0]==self.nelecas[1], False)
-        self.fcisolver = fci.solver(mol, False, False)
+        self.fcisolver = fci.solver(mol, singlet=False, symm=False)
 # CI solver parameters are set in fcisolver object
         self.fcisolver.lindep = 1e-10
         self.fcisolver.max_cycle = 50

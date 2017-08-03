@@ -546,7 +546,8 @@ def amplitudes_to_vector(t1, t2, out=None):
     vector[nov:] = t2[numpy.tril_indices(nocc)].ravel()
     return vector
 
-def vector_to_amplitudes(vector, nocc, nvir):
+def vector_to_amplitudes(vector, nmo, nocc):
+    nvir = nmo - nocc
     nov = nocc * nvir
     t1 = vector[:nov].copy().reshape((nocc,nvir))
     t2 = numpy.zeros((nocc,nocc,nvir,nvir), vector.dtype)
@@ -826,7 +827,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             abs(de) < self.diis_start_energy_diff):
             vec = amplitudes_to_vector(t1, t2)
             nocc, nvir = t1.shape
-            t1, t2 = vector_to_amplitudes(adiis.update(vec), nocc, nvir)
+            t1, t2 = vector_to_amplitudes(adiis.update(vec), nocc+nvir, nocc)
             logger.debug1(self, 'DIIS for step %d', istep)
         return t1, t2
 
@@ -1125,7 +1126,7 @@ if __name__ == '__main__':
     t1 = numpy.random.random((nocc,nvir)) * .1
     t2 = numpy.random.random((nocc,nocc,nvir,nvir)) * .1
     t2 = t2 + t2.transpose(1,0,3,2)
-    r1, r2 = vector_to_amplitudes(amplitudes_to_vector(t1, t2), nocc, nvir)
+    r1, r2 = vector_to_amplitudes(amplitudes_to_vector(t1, t2), nocc+nvir, nocc)
     print abs(t1-r1).max()
     print abs(t2-r2).max()
 
