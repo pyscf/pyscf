@@ -64,90 +64,90 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     return conv, eccsd, t1, t2
 
 
-def update_amps(cc, t1, t2, eris):
-    # Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004) Eqs.(35)-(36)
-    time0 = time.clock(), time.time()
-    log = logger.Logger(cc.stdout, cc.verbose)
-    nocc, nvir = t1.shape
-    fock = eris.fock
-
-    fov = fock[:nocc,nocc:]
-    foo = fock[:nocc,:nocc]
-    fvv = fock[nocc:,nocc:]
-
-    mo_e = eris.fock.diagonal()
-    eia = mo_e[:nocc,None] - mo_e[None,nocc:]
-    eijab = lib.direct_sum('ia,jb->ijab',eia,eia)
-
-    Foo = imd.cc_Foo(t1,t2,eris)
-    Fvv = imd.cc_Fvv(t1,t2,eris)
-    Fov = imd.cc_Fov(t1,t2,eris)
-    Loo = imd.Loo(t1,t2,eris)
-    Lvv = imd.Lvv(t1,t2,eris)
-    Woooo = imd.cc_Woooo(t1,t2,eris)
-    Wvvvv = imd.cc_Wvvvv(t1,t2,eris)
-    Wvoov = imd.cc_Wvoov(t1,t2,eris)
-    Wvovo = imd.cc_Wvovo(t1,t2,eris)
-
-    # Move energy terms to the other side
-    Foo -= np.diag(np.diag(foo))
-    Fvv -= np.diag(np.diag(fvv))
-    Loo -= np.diag(np.diag(foo))
-    Lvv -= np.diag(np.diag(fvv))
-
-    # T1 equation
-    t1new = np.array(fov).conj()
-    t1new += -2*einsum('kc,ka,ic->ia',fov,t1,t1)
-    eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,nvir**2)).reshape(nocc,nvir,nvir,nvir)
-    t1new +=   einsum('ac,ic->ia',Fvv,t1)
-    t1new +=  -einsum('ki,ka->ia',Foo,t1)
-    t1new += 2*einsum('kc,kica->ia',Fov,t2)
-    t1new +=  -einsum('kc,ikca->ia',Fov,t2)
-    t1new +=   einsum('kc,ic,ka->ia',Fov,t1,t1)
-    t1new += 2*einsum('iack,kc->ia',eris.ovvo,t1)
-    t1new +=  -einsum('kiac,kc->ia',eris.oovv,t1)
-    t1new += 2*einsum('kdac,ikcd->ia',eris_ovvv,t2)
-    t1new +=  -einsum('kcad,ikcd->ia',eris_ovvv,t2)
-    t1new += 2*einsum('kdac,ic,kd->ia',eris_ovvv,t1,t1)
-    t1new +=  -einsum('kcad,ic,kd->ia',eris_ovvv,t1,t1)
-    t1new += -2*einsum('kilc,klac->ia',eris.ooov,t2)
-    t1new +=  einsum('likc,klac->ia',eris.ooov,t2)
-    t1new += -2*einsum('kilc,ka,lc->ia',eris.ooov,t1,t1)
-    t1new +=  einsum('likc,ka,lc->ia',eris.ooov,t1,t1)
-
-    # T2 equation
-    t2new = np.array(eris.ovov).transpose(0,2,1,3).conj().copy()
-    t2new += einsum('klij,klab->ijab',Woooo,t2)
-    t2new += einsum('klij,ka,lb->ijab',Woooo,t1,t1)
-    for a in range(nvir):
-        Wvvvv_a = np.array(Wvvvv[a])
-        t2new[:,:,a,:] += einsum('bcd,ijcd->ijb',Wvvvv_a,t2)
-        t2new[:,:,a,:] += einsum('bcd,ic,jd->ijb',Wvvvv_a,t1,t1)
-    tmp = einsum('ac,ijcb->ijab',Lvv,t2)
-    t2new += (tmp + tmp.transpose(1,0,3,2))
-    tmp = einsum('ki,kjab->ijab',Loo,t2)
-    t2new -= (tmp + tmp.transpose(1,0,3,2))
-    tmp2 = np.array(eris_ovvv).transpose(1,3,0,2).conj() \
-            - einsum('kibc,ka->abic',eris.oovv,t1)
-    tmp = einsum('abic,jc->ijab',tmp2,t1)
-    t2new += (tmp + tmp.transpose(1,0,3,2))
-    tmp2 = np.array(eris.ooov).transpose(3,1,2,0).conj() \
-            + einsum('iack,jc->akij',eris.ovvo,t1)
-    tmp = einsum('akij,kb->ijab',tmp2,t1)
-    t2new -= (tmp + tmp.transpose(1,0,3,2))
-    tmp = 2*einsum('akic,kjcb->ijab',Wvoov,t2) - einsum('akci,kjcb->ijab',Wvovo,t2)
-    t2new += (tmp + tmp.transpose(1,0,3,2))
-    tmp = einsum('akic,kjbc->ijab',Wvoov,t2)
-    t2new -= (tmp + tmp.transpose(1,0,3,2))
-    tmp = einsum('bkci,kjac->ijab',Wvovo,t2)
-    t2new -= (tmp + tmp.transpose(1,0,3,2))
-
-    t1new /= eia
-    t2new /= eijab
-
-    time0 = log.timer_debug1('update t1 t2', *time0)
-
-    return t1new, t2new
+#def update_amps(cc, t1, t2, eris):
+#    # Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004) Eqs.(35)-(36)
+#    time0 = time.clock(), time.time()
+#    log = logger.Logger(cc.stdout, cc.verbose)
+#    nocc, nvir = t1.shape
+#    fock = eris.fock
+#
+#    fov = fock[:nocc,nocc:]
+#    foo = fock[:nocc,:nocc]
+#    fvv = fock[nocc:,nocc:]
+#
+#    mo_e = eris.fock.diagonal()
+#    eia = mo_e[:nocc,None] - mo_e[None,nocc:]
+#    eijab = lib.direct_sum('ia,jb->ijab',eia,eia)
+#
+#    Foo = imd.cc_Foo(t1,t2,eris)
+#    Fvv = imd.cc_Fvv(t1,t2,eris)
+#    Fov = imd.cc_Fov(t1,t2,eris)
+#    Loo = imd.Loo(t1,t2,eris)
+#    Lvv = imd.Lvv(t1,t2,eris)
+#    Woooo = imd.cc_Woooo(t1,t2,eris)
+#    Wvvvv = imd.cc_Wvvvv(t1,t2,eris)
+#    Wvoov = imd.cc_Wvoov(t1,t2,eris)
+#    Wvovo = imd.cc_Wvovo(t1,t2,eris)
+#
+#    # Move energy terms to the other side
+#    Foo -= np.diag(np.diag(foo))
+#    Fvv -= np.diag(np.diag(fvv))
+#    Loo -= np.diag(np.diag(foo))
+#    Lvv -= np.diag(np.diag(fvv))
+#
+#    # T1 equation
+#    t1new = np.array(fov).conj()
+#    t1new += -2*einsum('kc,ka,ic->ia',fov,t1,t1)
+#    eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,nvir**2)).reshape(nocc,nvir,nvir,nvir)
+#    t1new +=   einsum('ac,ic->ia',Fvv,t1)
+#    t1new +=  -einsum('ki,ka->ia',Foo,t1)
+#    t1new += 2*einsum('kc,kica->ia',Fov,t2)
+#    t1new +=  -einsum('kc,ikca->ia',Fov,t2)
+#    t1new +=   einsum('kc,ic,ka->ia',Fov,t1,t1)
+#    t1new += 2*einsum('iack,kc->ia',eris.ovvo,t1)
+#    t1new +=  -einsum('kiac,kc->ia',eris.oovv,t1)
+#    t1new += 2*einsum('kdac,ikcd->ia',eris_ovvv,t2)
+#    t1new +=  -einsum('kcad,ikcd->ia',eris_ovvv,t2)
+#    t1new += 2*einsum('kdac,ic,kd->ia',eris_ovvv,t1,t1)
+#    t1new +=  -einsum('kcad,ic,kd->ia',eris_ovvv,t1,t1)
+#    t1new += -2*einsum('kilc,klac->ia',eris.ooov,t2)
+#    t1new +=  einsum('likc,klac->ia',eris.ooov,t2)
+#    t1new += -2*einsum('kilc,ka,lc->ia',eris.ooov,t1,t1)
+#    t1new +=  einsum('likc,ka,lc->ia',eris.ooov,t1,t1)
+#
+#    # T2 equation
+#    t2new = np.array(eris.ovov).transpose(0,2,1,3).conj().copy()
+#    t2new += einsum('klij,klab->ijab',Woooo,t2)
+#    t2new += einsum('klij,ka,lb->ijab',Woooo,t1,t1)
+#    for a in range(nvir):
+#        Wvvvv_a = np.array(Wvvvv[a])
+#        t2new[:,:,a,:] += einsum('bcd,ijcd->ijb',Wvvvv_a,t2)
+#        t2new[:,:,a,:] += einsum('bcd,ic,jd->ijb',Wvvvv_a,t1,t1)
+#    tmp = einsum('ac,ijcb->ijab',Lvv,t2)
+#    t2new += (tmp + tmp.transpose(1,0,3,2))
+#    tmp = einsum('ki,kjab->ijab',Loo,t2)
+#    t2new -= (tmp + tmp.transpose(1,0,3,2))
+#    tmp2 = np.array(eris_ovvv).transpose(1,3,0,2).conj() \
+#            - einsum('kibc,ka->abic',eris.oovv,t1)
+#    tmp = einsum('abic,jc->ijab',tmp2,t1)
+#    t2new += (tmp + tmp.transpose(1,0,3,2))
+#    tmp2 = np.array(eris.ooov).transpose(3,1,2,0).conj() \
+#            + einsum('iack,jc->akij',eris.ovvo,t1)
+#    tmp = einsum('akij,kb->ijab',tmp2,t1)
+#    t2new -= (tmp + tmp.transpose(1,0,3,2))
+#    tmp = 2*einsum('akic,kjcb->ijab',Wvoov,t2) - einsum('akci,kjcb->ijab',Wvovo,t2)
+#    t2new += (tmp + tmp.transpose(1,0,3,2))
+#    tmp = einsum('akic,kjbc->ijab',Wvoov,t2)
+#    t2new -= (tmp + tmp.transpose(1,0,3,2))
+#    tmp = einsum('bkci,kjac->ijab',Wvovo,t2)
+#    t2new -= (tmp + tmp.transpose(1,0,3,2))
+#
+#    t1new /= eia
+#    t2new /= eijab
+#
+#    time0 = log.timer_debug1('update t1 t2', *time0)
+#
+#    return t1new, t2new
 
 
 def energy(cc, t1, t2, eris):
@@ -162,7 +162,10 @@ def energy(cc, t1, t2, eris):
 
 
 class RCCSD(ccsd.CCSD):
+    '''restricted CCSD with IP-EOM, EA-EOM, EE-EOM, and SF-EOM capabilities
 
+    Ground-state CCSD is performed in optimized ccsd.CCSD and EOM is performed here.
+    '''
     def __init__(self, mf, frozen=[], mo_coeff=None, mo_occ=None):
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.max_space = 20
@@ -1814,7 +1817,7 @@ def _mem_usage(nocc, nvir):
     incore *= 4
     # TODO: Improve incore estimate and add outcore estimate
     outcore = basic = incore
-    return incore*8/1e9, outcore*8/1e9, basic*8/1e9
+    return incore*8/1e6, outcore*8/1e6, basic*8/1e6
 
 
 if __name__ == '__main__':
