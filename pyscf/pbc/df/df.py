@@ -356,6 +356,8 @@ class DF(aft.AFTDF):
         logger.info(self, 'eta = %s', self.eta)
         if isinstance(self._cderi, str):
             logger.info(self, '_cderi = %s', self._cderi)
+        elif isinstance(self._cderi_file, str):
+            logger.info(self, '_cderi = %s', self._cderi_file)
         else:
             logger.info(self, '_cderi = %s', self._cderi_file.name)
         logger.info(self, 'len(kpts) = %d', len(self.kpts))

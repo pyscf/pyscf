@@ -46,6 +46,8 @@ class DF(lib.StreamObject):
         logger.info(self, 'max_memory = %s', self.max_memory)
         if isinstance(self._cderi, str):
             logger.info(self, '_cderi = %s', self._cderi)
+        elif isinstance(self._cderi_file, str):
+            logger.info(self, '_cderi = %s', self._cderi_file)
         else:
             logger.info(self, '_cderi = %s', self._cderi_file.name)
 
@@ -82,7 +84,7 @@ class DF(lib.StreamObject):
         return self
 
     def loop(self):
-        if self._cderi is None:
+        if self._cderi is None or self.auxmol is None:
             self.build()
         with addons.load(self._cderi, 'j3c') as feri:
             naoaux = feri.shape[0]
@@ -102,7 +104,7 @@ class DF(lib.StreamObject):
     def get_naoaux(self):
 # determine naoaux with self._cderi, because DF object may be used as CD
 # object when self._cderi is provided.
-        if self._cderi is None:
+        if self._cderi is None or self.auxmol is None:
             self.build()
         with addons.load(self._cderi, 'j3c') as feri:
             return feri.shape[0]
@@ -174,7 +176,7 @@ class DF4C(DF):
         return self
 
     def loop(self):
-        if self._cderi is None:
+        if self._cderi is None or self.auxmol is None:
             self.build()
         with addons.load(self._cderi[0], 'j3c') as ferill:
             naoaux = ferill.shape[0]
