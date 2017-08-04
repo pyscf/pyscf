@@ -490,6 +490,7 @@ class CISD(lib.StreamObject):
         ci2 /= lib.direct_sum('ia,jb->ijab', e_ia, e_ia)
         self.emp2 = numpy.einsum('ijab,aijb', ci2, eris_voov)
         eris_voov = None
+        logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
         return self.emp2, amplitudes_to_cisdvec(ci0, ci1, ci2)
 
     contract = contract

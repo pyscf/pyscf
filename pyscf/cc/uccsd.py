@@ -378,7 +378,11 @@ def get_nocc(mycc):
     if isinstance(mycc.frozen, (int, numpy.integer)):
         nocca = len(mycc.mo_occ[0]) - (mycc.frozen+1)//2
         noccb = len(mycc.mo_occ[1]) - mycc.frozen//2
-    elif isinstance(mycc.frozen[0], (int, numpy.integer)):
+    elif len(mycc.frozen) == 0:
+        nocca = int(mycc.mo_occ[0].sum())
+        noccb = int(mycc.mo_occ[1].sum())
+    elif (len(mycc.frozen) > 0 and
+          isinstance(mycc.frozen[0], (int, numpy.integer))):
         nocca = int(mycc.mo_occ[0].sum()) - len(mycc.frozen)
         noccb = int(mycc.mo_occ[1].sum()) - len(mycc.frozen)
     else:
@@ -399,6 +403,9 @@ def get_nmo(mycc):
     if isinstance(mycc.frozen, (int, numpy.integer)):
         nmoa = mycc.mo_occ[0].size - (mycc.frozen+1)//2
         nmob = mycc.mo_occ[1].size - mycc.frozen//2
+    elif len(mycc.frozen) == 0:
+        nmoa = mycc.mo_occ[0].size
+        nmob = mycc.mo_occ[1].size
     elif isinstance(mycc.frozen[0], (int, numpy.integer)):
         nmoa = mycc.mo_occ[0].size - len(mycc.frozen)
         nmob = mycc.mo_occ[1].size - len(mycc.frozen)
@@ -2100,7 +2107,6 @@ class _ERIS:
             log.warn('Overwrite cc.orbspin by _ERIS.')
             cc.orbspin = self.orbspin
 
-        self.feri = lib.H5TmpFile()
         if (method == 'incore' and cc._scf._eri is not None and
             (mem_incore+mem_now < cc.max_memory) or cc.mol.incore_anyway):
             moa = so_coeff[:,idxa]
@@ -2189,6 +2195,7 @@ class _ERIS:
             orbvb = mob[:,noccb:]
             self.dtype = so_coeff.dtype
             ds_type = so_coeff.dtype.char
+            self.feri = lib.H5TmpFile()
             self.oooo = self.feri.create_dataset('oooo', (nocca,nocca,nocca,nocca), ds_type)
             self.ooov = self.feri.create_dataset('ooov', (nocca,nocca,nocca,nvira), ds_type)
             self.ovoo = self.feri.create_dataset('ovoo', (nocca,nvira,nocca,nocca), ds_type)
@@ -2318,7 +2325,7 @@ def get_umoidx(cc):
             frozen[idx[0]].append(idx[1])
     else:
         frozen = cc.frozen
-        if isinstance(frozen[0], (int, numpy.integer)):
+        if len(frozen) > 0 and isinstance(frozen[0], (int, numpy.integer)):
             logger.warn(cc, 'Attribute frozen=%s is found in UCCSD method.\n'
                         'UCCSD method requires a length-two list of lists '
                         'for the frozen orbital indices for alpha and beta'

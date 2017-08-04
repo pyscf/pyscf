@@ -4,7 +4,7 @@
 #
 
 '''
-General spin-orbital CISD
+Unrestricted CISD
 '''
 
 import time
@@ -158,8 +158,8 @@ def contract(myci, civec, eris):
     t1a = einsum('ie,ae->ia', c1a, fvva)
     t1b = einsum('ie,ae->ia', c1b, fvvb)
     #:t1 -= einsum('ma,mi->ia', c1, foo)
-    t1a -=einsum('ma,mi->ia', c1a, fooa)
-    t1b -=einsum('ma,mi->ia', c1b, foob)
+    t1a -= einsum('ma,mi->ia', c1a, fooa)
+    t1b -= einsum('ma,mi->ia', c1b, foob)
     #:t1 += einsum('imae,me->ia', c2, fov)
     t1a += numpy.einsum('imae,me->ia', c2aa, fova)
     t1a += numpy.einsum('imae,me->ia', c2ab, fovb)
@@ -421,8 +421,8 @@ def from_fci(ci0, nmoa_nmob, nocca_noccb):
     t1addra, t1signa = t1strs(norba, nocca)
     t1addrb, t1signb = t1strs(norbb, noccb)
 
-    na = fci.cistring.num_strings(norba, nocca)
-    nb = fci.cistring.num_strings(norbb, noccb)
+    na = cistring.num_strings(norba, nocca)
+    nb = cistring.num_strings(norbb, noccb)
     ci0 = ci0.reshape(na,nb)
     c0 = ci0[0,0]
     c1a = ((ci0[t1addra,0] * t1signa).reshape(nvira,nocca).T)[::-1]
@@ -444,8 +444,6 @@ def from_fci(ci0, nmoa_nmob, nocca_noccb):
 def make_rdm1(ci, nmoa_nmob, nocca_noccb):
     nmoa, nmob = nmoa_nmob
     nocca, noccb = nocca_noccb
-    nvira = nmoa - nocca
-    nvirb = nmob - noccb
     c0, c1, c2 = cisdvec_to_amplitudes(ci, nmoa_nmob, nocca_noccb)
     c1a, c1b = c1
     c2aa, c2ab, c2bb = c2
@@ -490,8 +488,6 @@ def make_rdm2(ci, nmoa_nmob, nocca_noccb):
     '''
     nmoa, nmob = nmoa_nmob
     nocca, noccb = nocca_noccb
-    nvira = nmoa - nocca
-    nvirb = nmob - noccb
     c0, c1, c2 = cisdvec_to_amplitudes(ci, nmoa_nmob, nocca_noccb)
     c1a, c1b = c1
     c2aa, c2ab, c2bb = c2
