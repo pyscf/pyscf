@@ -183,7 +183,8 @@ if __name__ == '__main__':
 
     e = mp2.MP2(mf).kernel()[0]
     auxmol = mol.copy()
-    auxmol.basis = 'cc-pVDZ-F12-OptRI'
+    #auxmol.basis = 'cc-pVDZ-F12-OptRI'
+    auxmol.basis = ('ccpvdz-fit', 'cc-pVDZ-F12-OptRI')
     #auxmol.basis = 'cc-pVTZ'
     auxmol.build(False, False)
     print('MP2', e)

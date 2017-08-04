@@ -117,18 +117,32 @@ def format_basis(basis_tab):
         (0.4852528328, -0.3995676063),
         (0.1658236932, -0.5531027541)]]}
     '''
+    def convert(basis_name, symb):
+        if basis_name.lower().startswith('unc'):
+            return uncontract(basis.load(basis_name[3:], symb))
+        else:
+            return basis.load(basis_name, symb)
+
     fmt_basis = {}
     for atom in basis_tab.keys():
         symb = _atom_symbol(atom)
         stdsymb = _std_symbol(symb)
+        if stdsymb.startswith('GHOST-'):
+            stdsymb = stdsymb[6:]
         atom_basis = basis_tab[atom]
-        if isinstance(atom_basis, (str, unicode)) and 'gth' in atom_basis:
-            if atom_basis.lower().startswith('unc'):
-                fmt_basis[symb] = uncontract(basis.load(atom_basis[3:], stdsymb))
+        if isinstance(atom_basis, (str, unicode)):
+            if 'gth' in atom_basis:
+                bset = convert(str(atom_basis), symb)
             else:
-                fmt_basis[symb] = basis.load(atom_basis, stdsymb)
+                bset = atom_basis
         else:
-            fmt_basis[symb] = atom_basis
+            bset = []
+            for rawb in atom_basis:
+                if isinstance(rawb, (str, unicode)) and 'gth' in rawb:
+                    bset.append(convert(str(rawb), stdsymb))
+                else:
+                    bset.append(rawb)
+        fmt_basis[symb] = bset
     return mole.format_basis(fmt_basis)
 
 def copy(cell):

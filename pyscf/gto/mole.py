@@ -278,29 +278,32 @@ def format_basis(basis_tab):
                 val.append(x)
         return val
 
+    def convert(basis_name, symb):
+        if basis_name.lower().startswith('unc'):
+            return uncontract(basis.load(basis_name[3:], symb))
+        else:
+            return basis.load(basis_name, symb)
+
     fmt_basis = {}
-    for atom in basis_tab.keys():
+    for atom in basis_tab:
         symb = _atom_symbol(atom)
         stdsymb = _std_symbol(symb)
         if stdsymb.startswith('GHOST-'):
             stdsymb = stdsymb[6:]
         atom_basis = basis_tab[atom]
         if isinstance(atom_basis, (str, unicode)):
-            atom_basis = str(atom_basis)
-            if atom_basis.lower().startswith('unc'):
-                fmt_basis[symb] = uncontract(basis.load(atom_basis[3:], stdsymb))
-            else:
-                fmt_basis[symb] = basis.load(atom_basis, stdsymb)
-        elif isinstance(atom_basis[0], (str, unicode)):
-            fmt_basis[symb] = []
+            bset = convert(str(atom_basis), stdsymb)
+        elif any(isinstance(x, (str, unicode)) for x in atom_basis):
+            bset = []
             for rawb in atom_basis:
-                b = str(rawb)
-                if b.lower().startswith('unc'):
-                    fmt_basis[symb] += uncontract(basis.load(b[3:], stdsymb))
+                if isinstance(rawb, (str, unicode)):
+                    bset += convert(str(rawb), stdsymb)
                 else:
-                    fmt_basis[symb] += basis.load(b, stdsymb)
+                    bset += nparray_to_list(rawb)
         else:
-            fmt_basis[symb] = nparray_to_list(atom_basis)
+            bset = nparray_to_list(atom_basis)
+        fmt_basis[symb] = bset
+
         if len(fmt_basis[symb]) == 0:
             raise RuntimeError('Basis not found for  %s' % symb)
     return fmt_basis
@@ -1692,11 +1695,12 @@ class Mole(lib.StreamObject):
         self._atom = self.format_atom(self.atom, unit=self.unit)
         uniq_atoms = set([a[0] for a in self._atom])
 
-        if isinstance(self.basis, (str, unicode)):
+        if isinstance(self.basis, (str, unicode, tuple, list)):
             # specify global basis for whole molecule
-            _basis = dict(((a, str(self.basis)) for a in uniq_atoms))
+            _basis = dict(((a, self.basis) for a in uniq_atoms))
         elif 'default' in self.basis:
-            _basis = dict(((a, self.basis['default']) for a in uniq_atoms))
+            default_basis = self.basis['default']
+            _basis = dict(((a, default_basis) for a in uniq_atoms))
             _basis.update(self.basis)
             del(_basis['default'])
         else:
