@@ -15,7 +15,7 @@ from pyscf.pbc.df.fft_ao2mo import _format_kpts
 
 
 def get_eri(mydf, kpts=None, compact=True):
-    if mydf._cderi is None:
+    if mydf._cderi is None or mydf.auxcell is None:
         mydf.build()
 
     cell = mydf.cell
@@ -83,7 +83,7 @@ def get_eri(mydf, kpts=None, compact=True):
 
 
 def general(mydf, mo_coeffs, kpts=None, compact=True):
-    if mydf._cderi is None:
+    if mydf._cderi is None or mydf.auxcell is None:
         mydf.build()
 
     cell = mydf.cell
