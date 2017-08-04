@@ -136,7 +136,6 @@ def contract(myci, civec, eris):
     for j in range(nocc):
         t2[:,j] += numpy.einsum('ia,b->iab', c1, fov[j])
 
-    eris_vovv = lib.unpack_tril(eris.vovv).reshape(nvir,nocc,nvir,-1)
     unit = _memory_usage_inloop(nocc, nvir)
     max_memory = max(2000, myci.max_memory - lib.current_memory()[0])
     blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory/unit)))
