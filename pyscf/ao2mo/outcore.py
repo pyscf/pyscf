@@ -435,40 +435,35 @@ def half_e1(mol, mo_coeffs, swapfile,
         for icomp in range(comp):
             _transpose_to_h5g(fswap, '%d/%d'%(icomp,istep), iobuf[icomp],
                               e2buflen, None)
-    def async_write(istep, iobuf, thread_io):
-        if thread_io is not None:
-            thread_io.join()
-        thread_io = lib.background_thread(save, istep, iobuf)
-        return thread_io
 
     # transform e1
     ti0 = log.timer('Initializing ao2mo.outcore.half_e1', *time0)
-    bufs1 = numpy.empty((comp*e1buflen,nao_pair))
-    bufs2 = numpy.empty((comp*e1buflen,nij_pair))
-    buf_write = numpy.empty_like(bufs2)
-    write_handler = None
-    for istep,sh_range in enumerate(shranges):
-        log.debug1('step 1 [%d/%d], AO [%d:%d], len(buf) = %d', \
-                   istep+1, nstep, *(sh_range[:3]))
-        buflen = sh_range[2]
-        iobuf = numpy.ndarray((comp,buflen,nij_pair), buffer=bufs2)
-        nmic = len(sh_range[3])
-        p0 = 0
-        for imic, aoshs in enumerate(sh_range[3]):
-            log.debug2('      fill iobuf micro [%d/%d], AO [%d:%d], len(aobuf) = %d', \
-                       imic+1, nmic, *aoshs)
-            buf = numpy.ndarray((comp*aoshs[2],nao_pair), buffer=bufs1) # (@)
-            _ao2mo.nr_e1fill(intor, aoshs, mol._atm, mol._bas, mol._env,
-                             aosym, comp, ao2mopt, out=buf)
-            buf = _ao2mo.nr_e1(buf, moij, ijshape, aosym, ijmosym)
-            iobuf[:,p0:p0+aoshs[2]] = buf.reshape(comp,aoshs[2],-1)
-            p0 += aoshs[2]
-        ti0 = log.timer_debug1('gen AO/transform MO [%d/%d]'%(istep+1,nstep), *ti0)
+    with lib.call_in_background(save) as bsave:
+        buf1 = numpy.empty((comp*e1buflen,nao_pair))
+        buf2 = numpy.empty((comp*e1buflen,nij_pair))
+        buf_write = numpy.empty_like(buf2)
+        fill = _ao2mo.nr_e1fill
+        f_e1 = _ao2mo.nr_e1
+        for istep,sh_range in enumerate(shranges):
+            log.debug1('step 1 [%d/%d], AO [%d:%d], len(buf) = %d', \
+                       istep+1, nstep, *(sh_range[:3]))
+            buflen = sh_range[2]
+            iobuf = numpy.ndarray((comp,buflen,nij_pair), buffer=buf2)
+            nmic = len(sh_range[3])
+            p1 = 0
+            for imic, aoshs in enumerate(sh_range[3]):
+                log.debug2('      fill iobuf micro [%d/%d], AO [%d:%d], len(aobuf) = %d',
+                           imic+1, nmic, *aoshs)
+                buf = fill(intor, aoshs, mol._atm, mol._bas, mol._env,
+                           aosym, comp, ao2mopt, out=buf1).reshape(-1,nao_pair)
+                buf = f_e1(buf, moij, ijshape, aosym, ijmosym)
+                p0, p1 = p1, p1 + aoshs[2]
+                iobuf[:,p0:p1] = buf.reshape(comp,aoshs[2],nij_pair)
+            ti0 = log.timer_debug1('gen AO/transform MO [%d/%d]'%(istep+1,nstep), *ti0)
 
-        write_handler = async_write(istep, iobuf, write_handler)
-        bufs2, buf_write = buf_write, bufs2  # avoid flushing writing buffer
-    write_handler.join()
-    bufs1 = bufs2 = None
+            bsave(istep, iobuf)
+            buf2, buf_write = buf_write, buf2
+
     if isinstance(swapfile, str):
         fswap.close()
     return swapfile

@@ -59,10 +59,7 @@ def nr_e1fill(intor, sh_range, atm, bas, env,
         nao_pair = nao * (nao+1) // 2
     else:
         nao_pair = nao * nao
-    if out is None:
-        out = numpy.empty((comp,nkl,nao_pair))
-    else:
-        out = numpy.ndarray((comp,nkl,nao_pair), buffer=out)
+    out = numpy.ndarray((comp,nkl,nao_pair), buffer=out)
     if out.size == 0:
         return out
 
