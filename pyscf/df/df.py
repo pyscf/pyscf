@@ -40,17 +40,17 @@ class DF(lib.StreamObject):
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
-        logger.info(self, '\n')
-        logger.info(self, '******** %s flags ********', self.__class__)
-        logger.info(self, 'auxbasis = %s', self.auxbasis)
-        logger.info(self, 'max_memory = %s', self.max_memory)
+        log.info('\n')
+        log.info('******** %s flags ********', self.__class__)
+        log.info('auxbasis = %s', self.auxbasis)
+        log.info('max_memory = %s', self.max_memory)
         if isinstance(self._cderi, str):
-            logger.info(self, '_cderi = %s  where DF integrals are loaded (readonly).',
-                        self._cderi)
+            log.info('_cderi = %s  where DF integrals are loaded (readonly).',
+                     self._cderi)
         elif isinstance(self._cderi_to_save, str):
-            logger.info(self, '_cderi_to_save = %s', self._cderi_to_save)
+            log.info('_cderi_to_save = %s', self._cderi_to_save)
         else:
-            logger.info(self, '_cderi_to_save = %s', self._cderi_to_save.name)
+            log.info('_cderi_to_save = %s', self._cderi_to_save.name)
 
     def build(self):
         t0 = (time.clock(), time.time())

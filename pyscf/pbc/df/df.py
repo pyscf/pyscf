@@ -349,25 +349,25 @@ class DF(aft.AFTDF):
         self._cderi = None
         self._keys = set(self.__dict__.keys())
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
-        logger.info(self, '\n')
-        logger.info(self, '******** %s flags ********', self.__class__)
-        logger.info(self, 'gs = %s', self.gs)
-        logger.info(self, 'auxbasis = %s', self.auxbasis)
-        logger.info(self, 'eta = %s', self.eta)
+    def dump_flags(self, log=None):
+        log = logger.new_logger(self, log)
+        log.info('\n')
+        log.info('******** %s flags ********', self.__class__)
+        log.info('gs = %s', self.gs)
+        log.info('auxbasis = %s', self.auxbasis)
+        log.info('eta = %s', self.eta)
         if isinstance(self._cderi, str):
-            logger.info(self, '_cderi = %s  where DF integrals are loaded (readonly).',
-                        self._cderi)
+            log.info('_cderi = %s  where DF integrals are loaded (readonly).',
+                     self._cderi)
         elif isinstance(self._cderi_to_save, str):
-            logger.info(self, '_cderi_to_save = %s', self._cderi_to_save)
+            log.info('_cderi_to_save = %s', self._cderi_to_save)
         else:
-            logger.info(self, '_cderi_to_save = %s', self._cderi_to_save.name)
-        logger.info(self, 'len(kpts) = %d', len(self.kpts))
-        logger.debug1(self, '    kpts = %s', self.kpts)
+            log.info('_cderi_to_save = %s', self._cderi_to_save.name)
+        log.info('len(kpts) = %d', len(self.kpts))
+        log.debug1('    kpts = %s', self.kpts)
         if self.kpts_band is not None:
-            logger.info(self, 'len(kpts_band) = %d', len(self.kpts_band))
-            logger.debug1(self, '    kpts_band = %s', self.kpts_band)
+            log.info('len(kpts_band) = %d', len(self.kpts_band))
+            log.debug1('    kpts_band = %s', self.kpts_band)
 
     def build(self, j_only=None, with_j3c=True, kpts_band=None):
         if self.kpts_band is not None:
