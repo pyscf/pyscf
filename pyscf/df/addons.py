@@ -70,3 +70,6 @@ def aug_etb_for_dfbasis(mol, dfbasis='weigend', beta=2.3, start_at='Rb'):
             newbasis[symb] = gto.expand_etbs(etb)
 
     return newbasis
+
+def aug_etb(mol, beta=2.3):
+    return aug_etb_for_dfbasis(mol, beta=beta, start_at=0)

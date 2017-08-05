@@ -32,7 +32,7 @@ class DF(lib.StreamObject):
 
         self.auxbasis = 'weigend+etb'
         self.auxmol = None
-        self._cderi_file = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+        self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         self._cderi = None
         self._call_count = 0
         self.blockdim = 240
@@ -45,11 +45,12 @@ class DF(lib.StreamObject):
         logger.info(self, 'auxbasis = %s', self.auxbasis)
         logger.info(self, 'max_memory = %s', self.max_memory)
         if isinstance(self._cderi, str):
-            logger.info(self, '_cderi = %s', self._cderi)
-        elif isinstance(self._cderi_file, str):
-            logger.info(self, '_cderi = %s', self._cderi_file)
+            logger.info(self, '_cderi = %s  where DF integrals are loaded (readonly).',
+                        self._cderi)
+        elif isinstance(self._cderi_to_save, str):
+            logger.info(self, '_cderi_to_save = %s', self._cderi_to_save)
         else:
-            logger.info(self, '_cderi = %s', self._cderi_file.name)
+            logger.info(self, '_cderi_to_save = %s', self._cderi_to_save.name)
 
     def build(self):
         t0 = (time.clock(), time.time())
@@ -63,28 +64,30 @@ class DF(lib.StreamObject):
         max_memory = (self.max_memory - lib.current_memory()[0]) * .8
         int3c = mol._add_suffix('int3c2e')
         int2c = mol._add_suffix('int2c2e')
-        if nao_pair*naux*3*8/1e6 < max_memory:
+        if (nao_pair*naux*3*8/1e6 < max_memory and
+            not isinstance(self._cderi_to_save, str)):
             self._cderi = incore.cholesky_eri(mol, int3c=int3c, int2c=int2c,
                                               auxmol=auxmol, verbose=log)
         else:
-            if not isinstance(self._cderi, str):
-                if isinstance(self._cderi_file, str):
-                    self._cderi = self._cderi_file
-                else:
-                    self._cderi = self._cderi_file.name
-            outcore.cholesky_eri(mol, self._cderi, dataname='j3c',
+            if isinstance(self._cderi_to_save, str):
+                cderi = self._cderi_to_save
+            else:
+                cderi = self._cderi_to_save.name
+            if isinstance(self._cderi, str):
+                log.warn('Value of _cderi is ignored. DF integrals will be '
+                         'saved in file %s .', cderi)
+            outcore.cholesky_eri(mol, cderi, dataname='j3c',
                                  int3c=int3c, int2c=int2c, auxmol=auxmol,
                                  max_memory=max_memory, verbose=log)
-            if nao_pair*nao*8/1e6 < max_memory:
-                with addons.load(self._cderi, 'j3c') as feri:
+            if nao_pair*naux*8/1e6 < max_memory:
+                with addons.load(cderi, 'j3c') as feri:
                     cderi = numpy.asarray(feri)
-                self._cderi = cderi
+            self._cderi = cderi
             log.timer_debug1('Generate density fitting integrals', *t0)
-
         return self
 
     def loop(self):
-        if self._cderi is None or self.auxmol is None:
+        if self._cderi is None:
             self.build()
         with addons.load(self._cderi, 'j3c') as feri:
             naoaux = feri.shape[0]
@@ -104,7 +107,7 @@ class DF(lib.StreamObject):
     def get_naoaux(self):
 # determine naoaux with self._cderi, because DF object may be used as CD
 # object when self._cderi is provided.
-        if self._cderi is None or self.auxmol is None:
+        if self._cderi is None:
             self.build()
         with addons.load(self._cderi, 'j3c') as feri:
             return feri.shape[0]
@@ -176,7 +179,7 @@ class DF4C(DF):
         return self
 
     def loop(self):
-        if self._cderi is None or self.auxmol is None:
+        if self._cderi is None:
             self.build()
         with addons.load(self._cderi[0], 'j3c') as ferill:
             naoaux = ferill.shape[0]

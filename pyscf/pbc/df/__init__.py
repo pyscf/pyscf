@@ -8,6 +8,7 @@ from .df import DF
 from .mdf import MDF
 from .aft import AFTDF
 from .fft import FFTDF
+from pyscf.df.addons import aug_etb
 
 # For backward compatibility
 pwdf = aft

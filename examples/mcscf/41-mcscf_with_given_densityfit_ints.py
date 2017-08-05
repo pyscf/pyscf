@@ -9,6 +9,8 @@ from pyscf import gto, df, scf, mcscf
 
 '''
 Input Cholesky decomposed integrals for CASSCF
+
+See also examples/df/40-precompute_df_ints.py
 '''
 
 mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='ccpvdz')

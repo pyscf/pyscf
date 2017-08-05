@@ -19,13 +19,19 @@ def format_aux_basis(mol, auxbasis='weigend+etb'):
     pmol = copy.copy(mol)  # just need shallow copy
 
     if auxbasis == 'weigend+etb':
-        pmol._basis = pmol.format_basis(addons.aug_etb_for_dfbasis(mol))
-    elif isinstance(auxbasis, str):
+        _basis = addons.aug_etb_for_dfbasis(mol)
+    elif isinstance(auxbasis, (str, unicode, list, tuple)):
         uniq_atoms = set([a[0] for a in mol._atom])
-        pmol._basis = pmol.format_basis(dict([(a, auxbasis)
-                                              for a in uniq_atoms]))
+        _basis = dict([(a, auxbasis) for a in uniq_atoms])
+    elif 'default' in auxbasis:
+        uniq_atoms = set([a[0] for a in mol._atom])
+        _basis = dict(((a, auxbasis['default']) for a in uniq_atoms))
+        _basis.update(auxbasis)
+        del(_basis['default'])
     else:
-        pmol._basis = pmol.format_basis(auxbasis)
+        _basis = auxbasis
+    pmol._basis = pmol.format_basis(_basis)
+
     pmol._atm, pmol._bas, pmol._env = \
             pmol.make_env(mol._atom, pmol._basis, mol._env[:gto.PTR_ENV_START])
     pmol._built = True

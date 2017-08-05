@@ -127,12 +127,12 @@ def make_modchg_basis(auxcell, smooth_eta, l_max=3):
 
 # kpti == kptj: s2 symmetry
 # kpti == kptj == 0 (gamma point): real
-def _make_j3c(mydf, cell, auxcell, kptij_lst):
+def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     t1 = (time.clock(), time.time())
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     fused_cell, fuse = fuse_auxcell(mydf, auxcell)#, 0)
-    outcore.aux_e2(cell, fused_cell, mydf._cderi, 'int3c2e_sph', aosym='s2',
+    outcore.aux_e2(cell, fused_cell, cderi_file, 'int3c2e_sph', aosym='s2',
                    kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
     t1 = log.timer_debug1('3c2e', *t1)
 
@@ -152,7 +152,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst):
     log.debug2('uniq_kpts %s', uniq_kpts)
     # j2c ~ (-kpt_ji | kpt_ji)
     j2c = fused_cell.pbc_intor('int2c2e_sph', hermi=1, kpts=uniq_kpts)
-    feri = h5py.File(mydf._cderi)
+    feri = h5py.File(cderi_file)
 
 # An alternative method to evalute j2c. This method might have larger numerical error?
 #    chgcell = make_modchg_basis(auxcell, mydf.eta, 0)
@@ -343,7 +343,9 @@ class DF(aft.AFTDF):
         self.auxcell = None
         self.blockdim = 256
         self._j_only = False
-        self._cderi_file = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+# If _cderi_to_save is specified, the 3C-integral tensor will be saved in this file.
+        self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+# If _cderi is specified, the 3C-integral tensor will be read from this file
         self._cderi = None
         self._keys = set(self.__dict__.keys())
 
@@ -355,11 +357,12 @@ class DF(aft.AFTDF):
         logger.info(self, 'auxbasis = %s', self.auxbasis)
         logger.info(self, 'eta = %s', self.eta)
         if isinstance(self._cderi, str):
-            logger.info(self, '_cderi = %s', self._cderi)
-        elif isinstance(self._cderi_file, str):
-            logger.info(self, '_cderi = %s', self._cderi_file)
+            logger.info(self, '_cderi = %s  where DF integrals are loaded (readonly).',
+                        self._cderi)
+        elif isinstance(self._cderi_to_save, str):
+            logger.info(self, '_cderi_to_save = %s', self._cderi_to_save)
         else:
-            logger.info(self, '_cderi = %s', self._cderi_file.name)
+            logger.info(self, '_cderi_to_save = %s', self._cderi_to_save.name)
         logger.info(self, 'len(kpts) = %d', len(self.kpts))
         logger.debug1(self, '    kpts = %s', self.kpts)
         if self.kpts_band is not None:
@@ -397,15 +400,17 @@ class DF(aft.AFTDF):
             kptij_lst.extend([(ki, ki) for ki in kband_uniq])
             kptij_lst = numpy.asarray(kptij_lst)
 
-        if not isinstance(self._cderi, str):
-            if isinstance(self._cderi_file, str):
-                self._cderi = self._cderi_file
-            else:
-                self._cderi = self._cderi_file.name
-
         if with_j3c:
+            if isinstance(self._cderi_to_save, str):
+                cderi = self._cderi_to_save
+            else:
+                cderi = self._cderi_to_save.name
+            if isinstance(self._cderi, str):
+                log.warn('Value of _cderi is ignored. DF integrals will be '
+                         'saved in file %s .', cderi)
+            self._cderi = cderi
             t1 = (time.clock(), time.time())
-            self._make_j3c(self.cell, self.auxcell, kptij_lst)
+            self._make_j3c(self.cell, self.auxcell, kptij_lst, cderi)
             t1 = logger.timer_debug1(self, 'j3c', *t1)
         return self
 
@@ -540,12 +545,12 @@ class DF(aft.AFTDF):
 # With this function to mimic the molecular DF.loop function, the pbc gamma
 # point DF object can be used in the molecular code
     def loop(self):
-        if self._cderi is None or self.auxcell is None:
+        if self._cderi is None:
             self.build()
         return self.sr_loop(compact=True, blksize=self.blockdim)
 
     def get_naoaux(self):
-        if self._cderi is None or self.auxcell is None:
+        if self._cderi is None:
             self.build()
         return self.auxcell.nao_nr()
 

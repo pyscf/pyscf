@@ -29,7 +29,6 @@ kpts = cell.get_abs_kpts([0.25, 0.25, 0.25])
 kmf = scf.KRHF(cell, exxdiv=None)
 kmf.kpts = kpts
 ehf = kmf.kernel()
-exit()
 
 mycc = cc.KRCCSD(kmf)
 mycc.kernel()

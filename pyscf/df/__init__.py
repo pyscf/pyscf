@@ -18,7 +18,7 @@ from . import incore
 from . import outcore
 from . import addons
 from .incore import format_aux_basis
-from .addons import load
+from .addons import load, aug_etb
 from .df import DF, DF4C
 
 from . import r_incore

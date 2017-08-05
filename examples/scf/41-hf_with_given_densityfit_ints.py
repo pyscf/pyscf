@@ -5,6 +5,9 @@
 
 '''
 Input Cholesky decomposed integrals for SCF module by overwriting the _cderi attribute.
+
+See also:
+examples/df/40-precompute_df_ints.py
 '''
 
 import tempfile
