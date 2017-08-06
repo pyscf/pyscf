@@ -1244,6 +1244,7 @@ class SCF(lib.StreamObject):
                       pre_orth_method='ANO', s=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
+        if s is None: s = self.get_ovlp(mol)
         return mulliken_meta(mol, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
     def mulliken_pop_meta_lowdin_ao(self, *args, **kwargs):
