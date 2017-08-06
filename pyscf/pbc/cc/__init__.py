@@ -1,18 +1,18 @@
 from pyscf.pbc.cc import ccsd
 
-def CCSD(mf, frozen=[[],[]], mo_coeff=None, mo_occ=None):
+def CCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     mf = _convert_to_uhf(mf)
     return ccsd.CCSD(mf, frozen, mo_coeff, mo_occ)
 
-def RCCSD(mf, frozen=[], mo_coeff=None, mo_occ=None):
+def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     mf = _convert_to_rhf(mf)
     return ccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)
 
-def KCCSD(mf, frozen=[], mo_coeff=None, mo_occ=None):
+def KCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     from pyscf.pbc.cc import kccsd
     return kccsd.CCSD(mf, frozen, mo_coeff, mo_occ)
 
-def KRCCSD(mf, frozen=[], mo_coeff=None, mo_occ=None):
+def KRCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     from pyscf.pbc.cc import kccsd_rhf
     return kccsd_rhf.RCCSD(mf, frozen, mo_coeff, mo_occ)
 

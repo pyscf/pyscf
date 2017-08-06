@@ -185,7 +185,7 @@ def energy(cc, t1, t2, eris):
 
 class RCCSD(ccsd.CCSD):
 
-    def __init__(self, mf, frozen=[], mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.max_space = 20
         self._keys = self._keys.union(['max_space'])
@@ -736,11 +736,7 @@ class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore',
                  ao2mofn=ao2mo.outcore.general_iofree):
         cput0 = (time.clock(), time.time())
-        moidx = numpy.ones(cc.mo_occ.size, dtype=numpy.bool)
-        if isinstance(cc.frozen, (int, numpy.integer)):
-            moidx[:cc.frozen] = False
-        elif len(cc.frozen) > 0:
-            moidx[numpy.asarray(cc.frozen)] = False
+        moidx = ccsd.get_moidx(cc)
         if mo_coeff is None:
             self.mo_coeff = mo_coeff = cc.mo_coeff[:,moidx]
         else:  # If mo_coeff is not canonical orbital

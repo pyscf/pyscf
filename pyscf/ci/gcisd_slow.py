@@ -299,7 +299,7 @@ def make_rdm2(ci, nmo, nocc):
 
 
 class CISD(lib.StreamObject):
-    def __init__(self, mf, frozen=[[],[]], mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         if mo_coeff is None: mo_coeff = mf.mo_coeff
         if mo_occ   is None: mo_occ   = mf.mo_occ
 
@@ -392,7 +392,7 @@ class _ERIS(object):
         self.mo_coeff = mo_coeff
         myci.orbspin = self.orbspin = orbspin
 
-        eri = ao2mo.kernel(mf._eri, mo_coeff, compact=False)
+        eri = ao2mo.kernel(myci._scf._eri, mo_coeff, compact=False)
         eri = eri.reshape([nmo]*4)
         for i in range(nmo):
             for j in range(i):

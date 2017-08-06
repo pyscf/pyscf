@@ -36,8 +36,8 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     if t1 is None and t2 is None:
         t1, t2 = cc.init_amps(eris)[1:]
     elif t1 is None:
-        nocc = cc.nocc()
-        nvir = cc.nmo() - nocc
+        nocc = cc.get_nocc()
+        nvir = cc.get_nmo() - nocc
         nkpts = cc.nkpts
         t1 = numpy.zeros((nkpts,nocc,nvir), numpy.complex128)
     elif t2 is None:
@@ -250,9 +250,37 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     return t1new, t2new
 
 
+def get_nocc(cc):
+    # Spin orbitals
+    # TODO: Possibly change this to make it work with k-points with frozen
+    #       As of right now it works, but just not sure how the frozen list will work
+    #       with it
+    if cc._nocc is not None:
+        return cc._nocc
+    elif isinstance(cc.frozen, (int, numpy.integer)):
+        nocc = int(cc.mo_occ[0].sum()) - cc.frozen
+    elif isinstance(cc.frozen[0], (int, numpy.integer)):
+        nocc = int(cc.mo_occ[0].sum()) - len(cc.frozen)
+    else:
+        raise NotImplementedError
+    return nocc
+
+def get_nmo(cc):
+    # TODO: Change this for frozen at k-points, seems like it should work
+    if cc._nmo is not None:
+        return cc._nmo
+    elif isinstance(cc.frozen, (int, numpy.integer)):
+        nmo = len(cc.mo_energy[0]) - cc.frozen
+    elif isinstance(cc.frozen[0], (int, numpy.integer)):
+        nmo = len(cc.mo_occ[0]) - len(cc.frozen)
+    else:
+        raise NotImplementedError
+    return nmo
+
+
 class CCSD(pyscf.cc.ccsd.CCSD):
 
-    def __init__(self, mf, frozen=[], mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         self.kpts = mf.kpts
         self.nkpts = len(self.kpts)
         nkpts = self.nkpts
@@ -288,34 +316,29 @@ class CCSD(pyscf.cc.ccsd.CCSD):
         pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
 
-    def nocc(self):
-        # Spin orbitals
-        # TODO: Possibly change this to make it work with k-points with frozen
-        #       As of right now it works, but just not sure how the frozen list will work
-        #       with it
-        self._nocc = int(self.mo_occ[0].sum())
-        return self._nocc
+    nocc = property(get_nocc)
+    @nocc.setter
+    def nocc(self, n):
+        self._nocc = n
 
-    def nmo(self):
-        # TODO: Change this for frozen at k-points, seems like it should work
-        if isinstance(self.frozen, (int, numpy.integer)):
-            self._nmo = len(self.mo_energy[0]) - self.frozen
-        else:
-            if len(self.frozen) > 0:
-                self._nmo = len(self.mo_energy[0]) - len(self.frozen[0])
-            else:
-                self._nmo = len(self.mo_energy[0])
-        return self._nmo
+    nmo = property(get_nmo)
+    @nmo.setter
+    def nmo(self, n):
+        self._nmo = n
+
+    get_nocc = get_nocc
+    get_nmo = get_nmo
 
     def dump_flags(self):
-        pyscf.cc.ccsd.CCSD.dump_flags(self)
         logger.info(self, '\n')
         logger.info(self, '******** PBC CC flags ********')
+        pyscf.cc.ccsd.CCSD.dump_flags(self)
+        return self
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.get_nocc()
+        nvir = self.get_nmo() - nocc
         nkpts = self.nkpts
         t1 = numpy.zeros((nkpts,nocc,nvir), dtype=numpy.complex128)
         t2 = numpy.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=numpy.complex128)
@@ -372,21 +395,41 @@ class CCSD(pyscf.cc.ccsd.CCSD):
     def update_amps(self, t1, t2, eris, max_memory=2000):
         return update_amps(self, t1, t2, eris, max_memory)
 
+    def amplitudes_to_vector(self, t1, t2):
+        return numpy.hstack((t1.ravel(), t2.ravel()))
+
+    def vector_to_amplitudes(self, vec, nmo=None, nocc=None):
+        if nocc is None: nocc = self.nocc
+        if nmo is None: nmo = self.nmo
+        nvir = nmo - nocc
+        nkpts = self.nkpts
+        nov = nkpts*nocc*nvir
+        t1 = vec[:nov].reshape(nkpts,nocc,nvir)
+        t2 = vec[nov:].reshape(nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir)
+        return t1, t2
+
+
+def get_moidx(cc):
+    moidx = [numpy.ones(x.size, dtype=numpy.bool) for x in cc.mo_energy]
+    if isinstance(cc.frozen, (int, numpy.integer)):
+        for idx in moidx:
+            idx[:cc.frozen] = False
+    elif isinstance(cc.frozen[0], (int, numpy.integer)):
+        frozen = list(cc.frozen)
+        for idx in moidx:
+            idx[frozen] = False
+    else:
+        raise NotImplementedError
+    return moidx
+
 
 class _ERIS:
     """_ERIS handler for PBCs."""
     def __init__(self, cc, mo_coeff=None, method='incore'):
         cput0 = (time.clock(), time.time())
-        moidx = [numpy.ones(x.size, dtype=numpy.bool) for x in cc.mo_energy]
+        moidx = get_moidx(cc)
         nkpts = cc.nkpts
-        nmo = cc.nmo()
-        # TODO change this for k-points ... seems like it should work
-        if isinstance(cc.frozen, (int, numpy.integer)):
-            for k in range(nkpts):
-                moidx[k][:cc.frozen] = False
-        elif len(cc.frozen) > 0:
-            for k in range(nkpts):
-                moidx[k][numpy.asarray(cc.frozen)] = False
+        nmo = cc.get_nmo()
         assert(sum(numpy.count_nonzero(x) for x in moidx) % 2 == 0) # works for restricted CCSD only
         if mo_coeff is None:
             # TODO make this work for frozen maybe... seems like it should work
@@ -406,8 +449,8 @@ class _ERIS:
             fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
             self.fock = reduce(numpy.dot, (numpy.conj(mo_coeff.T), fockao, mo_coeff))
 
-        nocc = cc.nocc()
-        nmo = cc.nmo()
+        nocc = cc.get_nocc()
+        nmo = cc.get_nmo()
         nvir = nmo - nocc
         mem_incore, mem_outcore, mem_basic = pyscf.cc.ccsd._mem_usage(nocc, nvir)
         mem_now = lib.current_memory()[0]

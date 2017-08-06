@@ -17,6 +17,7 @@ import pyscf.ao2mo
 from pyscf.lib import logger
 import pyscf.cc
 import pyscf.cc.ccsd
+from pyscf.pbc.cc.kccsd import get_moidx
 from pyscf.pbc.cc import kintermediates_rhf as imdk
 from pyscf.lib import linalg_helper
 
@@ -280,9 +281,36 @@ def energy(cc, t1, t2, eris):
     return e.real
 
 
+def get_nocc(cc):
+    '''The number of occupied orbitals per k-point.'''
+    if cc._nocc is not None:
+        return cc._nocc
+    elif isinstance(cc.frozen, (int, numpy.integer)):
+        nocc = int(cc.mo_occ[0].sum()) // 2 - cc.frozen
+    elif isinstance(cc.frozen[0], (int, numpy.integer)):
+        occ_idx = cc.mo_occ[0] > 0
+        occ_idx[list(cc.frozen)] = False
+        nocc = numpy.count_nonzero(occ_idx)
+    else:
+        raise NotImplementedError
+    return nocc
+
+def get_nmo(cc):
+    '''The number of molecular orbitals per k-point.'''
+    if cc._nmo is not None:
+        return cc._nmo
+    if isinstance(cc.frozen, (int, numpy.integer)):
+        nmo = len(cc.mo_occ[0]) - cc.frozen
+    elif isinstance(cc.frozen[0], (int, numpy.integer)):
+        nmo = len(cc.mo_occ[0]) - len(cc.frozen)
+    else:
+        raise NotImplementedError
+    return nmo
+
+
 class RCCSD(pyscf.cc.ccsd.CCSD):
 
-    def __init__(self, mf, frozen=[], mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.max_space = 20
         self._keys = self._keys.union(['max_space'])
@@ -295,37 +323,18 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         self.made_ip_imds = False
         self.made_ea_imds = False
 
-    @property
-    def nocc(self):
-        '''The number of occupied orbitals per k-point.'''
-        if self._nocc is not None:
-            return self._nocc
-        elif isinstance(self.frozen, (int, numpy.integer)):
-            return int(self.mo_occ[0].sum()) // 2 - self.frozen
-        elif self.frozen:
-            occ_idx = self.mo_occ[0] > 0
-            occ_idx[numpy.asarray(self.frozen)] = False
-            return numpy.count_nonzero(occ_idx)
-        else:
-            return int(self.mo_occ[0].sum()) // 2
-        self._nocc = int(self.mo_occ[0].sum()) // 2
-        return self._nocc
+    nocc = property(get_nocc)
     @nocc.setter
     def nocc(self, n):
         self._nocc = n
 
-    @property
-    def nmo(self):
-        '''The number of molecular orbitals per k-point.'''
-        if self._nmo is not None:
-            return self._nmo
-        if isinstance(self.frozen, (int, numpy.integer)):
-            return len(self.mo_occ[0]) - self.frozen
-        else:
-            return len(self.mo_occ[0]) - len(self.frozen)
+    nmo = property(get_nmo)
     @nmo.setter
     def nmo(self, n):
         self._nmo = n
+
+    get_nocc = get_nocc
+    get_nmo = get_nmo
 
     def dump_flags(self):
         pyscf.cc.ccsd.CCSD.dump_flags(self)
@@ -898,19 +907,27 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         #                    index += 1
         return vector
 
+    def amplitudes_to_vector(self, t1, t2):
+        return np.hstack((t1.ravel(), t2.ravel()))
+
+    def vector_to_amplitudes(self, vec, nmo=None, nocc=None):
+        if nocc is None: nocc = self.nocc
+        if nmo is None: nmo = self.nmo
+        nvir = nmo - nocc
+        nkpts = self.nkpts
+        nov = nkpts*nocc*nvir
+        t1 = vec[:nov].reshape(nkpts,nocc,nvir)
+        t2 = vec[nov:].reshape(nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir)
+        return t1, t2
+
+
 class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore',
                  ao2mofn=pyscf.ao2mo.outcore.general_iofree):
         cput0 = (time.clock(), time.time())
-        moidx = [numpy.ones(x.size, dtype=numpy.bool) for x in cc.mo_energy]
+        moidx = get_moidx(cc)
         nkpts = cc.nkpts
         nmo = cc.nmo
-        if isinstance(cc.frozen, (int, numpy.integer)):
-            for k in range(nkpts):
-                moidx[k][:cc.frozen] = False
-        elif len(cc.frozen) > 0:
-            for k in range(nkpts):
-                moidx[k][numpy.asarray(cc.frozen)] = False
 
         nao = cc.mo_coeff[0].shape[0]
         dtype = cc.mo_coeff[0].dtype

@@ -21,9 +21,9 @@ import pyscf.pbc.cc.kccsd_rhf
 import ase
 import ase.lattice
 import ase.dft.kpoints
-import test_make_cell
+import make_test_cell
 
-def test_kcell(cell, ngs, nk):
+def run_kcell(cell, ngs, nk):
     #############################################
     # Do a k-point calculation                  #
     #############################################
@@ -68,47 +68,47 @@ class KnowValues(unittest.TestCase):
     def test_111_n0(self):
         L = 10.0
         ngs = 5
-        cell = test_make_cell.test_cell_n0(L,ngs)
+        cell = make_test_cell.test_cell_n0(L,ngs)
 #        print "cell gs =", cell.gs
         nk = (1, 1, 1)
         hf_111 = -0.73491491306419987
         cc_111 = -1.1580008204825658e-05
-        escf, ecc = test_kcell(cell,ngs,nk)
+        escf, ecc = run_kcell(cell,ngs,nk)
         self.assertAlmostEqual(escf,hf_111,9)
         self.assertAlmostEqual(ecc, cc_111,6)
 
     def test_111_n1(self):
         L = 7.0
         ngs = 4
-        cell = test_make_cell.test_cell_n1(L,ngs)
+        cell = make_test_cell.test_cell_n1(L,ngs)
 #        print "cell gs =", cell.gs
         nk = (1, 1, 1)
         hf_111 = -0.73506011036963814
         cc_111 = -0.023265431169472835
-        escf, ecc = test_kcell(cell,ngs,nk)
+        escf, ecc = run_kcell(cell,ngs,nk)
         self.assertAlmostEqual(escf,hf_111,9)
         self.assertAlmostEqual(ecc, cc_111,6)
 
     def test_111_n3(self):
         ngs = 5
-        cell = test_make_cell.test_cell_n3(ngs)
+        cell = make_test_cell.test_cell_n3(ngs)
 #        print "cell gs =", cell.gs
         nk = (1, 1, 1)
         hf_111 = -7.4117951240232118
         cc_111 = -0.19468901057053406
-        escf, ecc = test_kcell(cell,ngs,nk)
+        escf, ecc = run_kcell(cell,ngs,nk)
         self.assertAlmostEqual(escf,hf_111,9)
         self.assertAlmostEqual(ecc, cc_111,6)
 
     def test_311_n1(self):
         L = 7.0
         ngs = 4
-        cell = test_make_cell.test_cell_n1(L,ngs)
+        cell = make_test_cell.test_cell_n1(L,ngs)
         print "cell gs =", cell.gs
         nk = (3, 1, 1)
         hf_311 = -0.92687629918229486
         cc_311 = -0.042702177586414237
-        escf, ecc = test_kcell(cell,ngs,nk)
+        escf, ecc = run_kcell(cell,ngs,nk)
         self.assertAlmostEqual(escf,hf_311, 9)
         self.assertAlmostEqual(ecc, cc_311, 6)
 

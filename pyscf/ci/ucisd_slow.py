@@ -627,7 +627,7 @@ def make_rdm2(ci, nmoa_nmob, nocca_noccb):
 
 
 class CISD(lib.StreamObject):
-    def __init__(self, mf, frozen=[[],[]], mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         if mo_coeff is None: mo_coeff = mf.mo_coeff
         if mo_occ   is None: mo_occ   = mf.mo_occ
 

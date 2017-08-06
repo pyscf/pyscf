@@ -87,14 +87,14 @@ def test_cell_n2( L = 5.0, ngs = 4):
     return cell
 
 
-def test_cell_n3( ngs ):
+def test_cell_n3(ngs=4):
+    """
+    Take ASE Diamond structure, input into PySCF and run
+    """
     import ase
     import pyscf.pbc.tools.pyscf_ase as pyscf_ase
     import ase.lattice
     from ase.lattice import bulk
-    """
-    Take ASE Diamond structure, input into PySCF and run
-    """
     ase_atom = bulk('C', 'diamond', a=3.5668)
 
     cell = pbcgto.Cell()

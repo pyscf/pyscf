@@ -13,7 +13,7 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
-from pyscf.cc.ccsd_t_lambde_slow import p6_, r6_
+from pyscf.cc.ccsd_t_lambda_slow import p6_, r6_
 from pyscf.cc import ccsd_rdm
 
 def gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None):

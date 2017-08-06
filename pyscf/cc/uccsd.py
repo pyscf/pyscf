@@ -52,12 +52,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
         t1, t2 = t1new, t2new
         t1new = t2new = None
         if cc.diis:
-            if (istep > cc.diis_start_cycle and
-                abs(eccsd-eold) < cc.diis_start_energy_diff):
-                vec = adiis.update(vec)
-                t1, t2 = cc.vector_to_amplitudes(vec)
-                log.debug1('DIIS for step %d', istep)
-        vec = None
+            t1, t2 = cc.diis(t1, t2, istep, normt, eccsd-eold, adiis)
         eold, eccsd = eccsd, energy(cc, t1, t2, eris)
         log.info('istep = %d  E(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
                  istep, eccsd, eccsd - eold, normt)
@@ -376,36 +371,28 @@ def get_nocc(mycc):
     if mycc._nocc is not None:
         return mycc._nocc
     if isinstance(mycc.frozen, (int, numpy.integer)):
-        nocca = len(mycc.mo_occ[0]) - (mycc.frozen+1)//2
-        noccb = len(mycc.mo_occ[1]) - mycc.frozen//2
-    elif len(mycc.frozen) == 0:
-        nocca = int(mycc.mo_occ[0].sum())
-        noccb = int(mycc.mo_occ[1].sum())
-    elif (len(mycc.frozen) > 0 and
-          isinstance(mycc.frozen[0], (int, numpy.integer))):
-        nocca = int(mycc.mo_occ[0].sum()) - len(mycc.frozen)
-        noccb = int(mycc.mo_occ[1].sum()) - len(mycc.frozen)
+        nocca = int(mycc.mo_occ[0].sum()) - mycc.frozen
+        noccb = int(mycc.mo_occ[1].sum()) - mycc.frozen
+        assert(nocca > 0 and noccb > 0)
     else:
-        mo_occa, mo_occb = mycc.mo_occ
-        if len(mycc.frozen[0]) > 0:
-            mo_occa = mo_occa.copy()
-            mo_occa[numpy.asarray(mycc.frozen[0])] = 0
-        if len(mycc.frozen[1]) > 0:
-            mo_occb = mo_occb.copy()
-            mo_occb[numpy.asarray(mycc.frozen[1])] = 0
-        nocca = np.count_nonzero(mo_occa==1)
-        noccb = np.count_nonzero(mo_occb==1)
+        frozen = mycc.frozen
+        if len(frozen) > 0 and isinstance(frozen[0], (int, numpy.integer)):
+# The same frozen orbital indices for alpha and beta orbitals
+            frozen = [frozen, frozen]
+        occidxa = mycc.mo_occ[0] > 0
+        occidxa[list(frozen[0])] = False
+        occidxb = mycc.mo_occ[1] > 0
+        occidxb[list(frozen[1])] = False
+        nocca = np.count_nonzero(occidxa)
+        noccb = np.count_nonzero(occidxb)
     return nocca, noccb
 
 def get_nmo(mycc):
     if mycc._nmo is not None:
         return mycc._nmo
-    if isinstance(mycc.frozen, (int, numpy.integer)):
-        nmoa = mycc.mo_occ[0].size - (mycc.frozen+1)//2
-        nmob = mycc.mo_occ[1].size - mycc.frozen//2
-    elif len(mycc.frozen) == 0:
-        nmoa = mycc.mo_occ[0].size
-        nmob = mycc.mo_occ[1].size
+    elif isinstance(mycc.frozen, (int, numpy.integer)):
+        nmoa = mycc.mo_occ[0].size - mycc.frozen
+        nmob = mycc.mo_occ[1].size - mycc.frozen
     elif isinstance(mycc.frozen[0], (int, numpy.integer)):
         nmoa = mycc.mo_occ[0].size - len(mycc.frozen)
         nmob = mycc.mo_occ[1].size - len(mycc.frozen)
@@ -442,7 +429,12 @@ def energy(cc, t1, t2, eris):
 
 class UCCSD(rccsd.RCCSD):
 
-    def __init__(self, mf, frozen=[[],[]], mo_coeff=None, mo_occ=None):
+# argument frozen can be
+# * An integer : The same number of inner-most alpha and beta orbitals are frozen
+# * One list : Same alpha and beta orbital indices to be frozen
+# * A pair of list : First list is the orbital indices to be frozen for alpha
+#       orbitals, second list is for beta orbitals
+    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         rccsd.RCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         # Spin-orbital CCSD needs a stricter tolerance than spatial-orbital
         self.conv_tol_normt = 1e-6
@@ -2311,36 +2303,28 @@ class _ERIS:
 
 def get_umoidx(cc):
     '''Get MO boolean indices for unrestricted reference, accounting for frozen orbs.'''
+    moidxa = numpy.ones(cc.mo_occ[0].size, dtype=bool)
+    moidxb = numpy.ones(cc.mo_occ[1].size, dtype=bool)
     if isinstance(cc.frozen, (int, numpy.integer)):
-        dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
-        fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
-        eab = list()
-        for a in range(2):
-            eab.append( np.diag(reduce(numpy.dot, (cc.mo_coeff[a].T, fockao[a], cc.mo_coeff[a]))) )
-        eab = np.array(eab)
-        #FIXME: if occ-energy > vir-energy, vir orbitals may be appeared in occ set and may be frozen
-        idxs = np.column_stack(np.unravel_index(np.argsort(eab.ravel()), (2, eab.shape[1])))
-        frozen = [[],[]]
-        for n, idx in zip(range(cc.frozen), idxs):
-            frozen[idx[0]].append(idx[1])
+        moidxa[:cc.frozen] = False
+        moidxb[:cc.frozen] = False
+#        dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
+#        fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
+#        eab = list()
+#        for a in range(2):
+#            eab.append( np.diag(reduce(numpy.dot, (cc.mo_coeff[a].T, fockao[a], cc.mo_coeff[a]))) )
+#        eab = np.array(eab)
+#        #FIXME: if occ-energy > vir-energy, vir orbitals may be appeared in occ set and may be frozen
+#        idxs = np.column_stack(np.unravel_index(np.argsort(eab.ravel()), (2, eab.shape[1])))
+#        frozen = [[],[]]
+#        for n, idx in zip(range(cc.frozen), idxs):
+#            frozen[idx[0]].append(idx[1])
     else:
         frozen = cc.frozen
         if len(frozen) > 0 and isinstance(frozen[0], (int, numpy.integer)):
-            logger.warn(cc, 'Attribute frozen=%s is found in UCCSD method.\n'
-                        'UCCSD method requires a length-two list of lists '
-                        'for the frozen orbital indices for alpha and beta'
-                        'orbitals.\nIn this version, same frozen indices '
-                        'are used for both alpha and beta orbitals. This'
-                        'will raise an error in future pyscf release.',
-                        frozen)
             frozen = [frozen,frozen]
-    moidxa = numpy.ones(cc.mo_occ[0].size, dtype=bool)
-    moidxb = numpy.ones(cc.mo_occ[1].size, dtype=bool)
-    if isinstance(frozen, numpy.ndarray) or frozen:
-        if len(frozen[0]) > 0:
-            moidxa[numpy.asarray(frozen[0])] = False
-        if len(frozen[1]) > 0:
-            moidxb[numpy.asarray(frozen[1])] = False
+        moidxa[list(frozen[0])] = False
+        moidxb[list(frozen[1])] = False
 
     return moidxa,moidxb
 

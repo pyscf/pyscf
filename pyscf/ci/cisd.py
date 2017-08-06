@@ -385,7 +385,7 @@ def make_rdm2(ci, nmo, nocc):
 
 
 class CISD(lib.StreamObject):
-    def __init__(self, mf, frozen=[], mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         if mo_coeff is None: mo_coeff = mf.mo_coeff
         if mo_occ   is None: mo_occ   = mf.mo_occ
 
@@ -424,7 +424,7 @@ class CISD(lib.StreamObject):
         nocc = self.nocc
         nvir = self.nmo - nocc
         log.info('CISD nocc = %d, nvir = %d', nocc, nvir)
-        if self.frozen:
+        if self.frozen is not 0:
             log.info('frozen orbitals %s', str(self.frozen))
         log.info('max_cycle = %d', self.max_cycle)
         log.info('direct = %d', self.direct)
@@ -451,11 +451,14 @@ class CISD(lib.StreamObject):
     def nmo(self, n):
         self._nmo = n
 
-    def kernel(self, ci0=None, mo_coeff=None, eris=None):
-        return self.cisd(ci0, mo_coeff, eris)
-    def cisd(self, ci0=None, mo_coeff=None, eris=None):
+    get_nocc = ccsd.get_nocc
+    get_nmo = ccsd.get_nmo
+
+    def kernel(self, ci0=None, eris=None):
+        return self.cisd(ci0, eris)
+    def cisd(self, ci0=None, eris=None):
         if eris is None:
-            eris = self.ao2mo(mo_coeff)
+            eris = self.ao2mo(self.mo_coeff)
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self.dump_flags()
@@ -553,12 +556,12 @@ class _RCISD_ERIs:
     def __init__(self, myci, mo_coeff=None):
         if mo_coeff is None:
             mo_coeff = ccsd._mo_without_core(myci, myci.mo_coeff)
-            self.fock = numpy.diag(myci._scf.mo_energy)
         else:
             mo_coeff = ccsd._mo_without_core(myci, mo_coeff)
-            dm = myci._scf.make_rdm1(myci.mo_coeff, myci.mo_occ)
-            fockao = myci._scf.get_hcore() + myci._scf.get_veff(myci.mol, dm)
-            self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
+# Note: Recomputed fock matrix since SCF may not be fully converged.
+        dm = myci._scf.make_rdm1(myci.mo_coeff, myci.mo_occ)
+        fockao = myci._scf.get_hcore() + myci._scf.get_veff(myci.mol, dm)
+        self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
         self.mo_coeff = mo_coeff
         self.nocc = myci.nocc
 

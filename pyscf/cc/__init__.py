@@ -51,7 +51,7 @@ from pyscf.cc import ccsd_lambda
 from pyscf.cc import ccsd_rdm
 from pyscf.cc import addons
 
-def CCSD(mf, frozen=[], mo_coeff=None, mo_occ=None):
+def CCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = ccsd.CCSD.__doc__
     from pyscf import scf
 
@@ -69,7 +69,8 @@ def CCSD(mf, frozen=[], mo_coeff=None, mo_occ=None):
         pass
     return ccsd.CCSD(mf, frozen, mo_coeff, mo_occ)
 
-def RCCSD(mf, frozen=[], mo_coeff=None, mo_occ=None):
+def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+    import numpy
     from pyscf.cc import rccsd
     from pyscf import lib
     from pyscf import scf
@@ -79,11 +80,11 @@ def RCCSD(mf, frozen=[], mo_coeff=None, mo_occ=None):
         lib.logger.warn(mf, 'RCCSD method does not support ROHF method. ROHF object '
                         'is converted to UHF object and UCCSD method is called.')
         mf = scf.addons.convert_to_uhf(mf)
-        return UCCSD(mf, [frozen,frozen], mo_coeff, mo_occ)
+        return UCCSD(mf, frozen, mo_coeff, mo_occ)
     else:
         return rccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)
 
-def UCCSD(mf, frozen=[[],[]], mo_coeff=None, mo_occ=None):
+def UCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     from pyscf.cc import uccsd
     from pyscf import scf
     if not isinstance(mf, scf.uhf.UHF):

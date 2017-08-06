@@ -243,14 +243,11 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     log = logger.Logger(mycc.stdout, mycc.verbose)
     time0 = time.clock(), time.time()
     mol = mycc.mol
-    moidx = numpy.ones(mycc.mo_energy.size, dtype=numpy.bool)
-    if isinstance(mycc.frozen, (int, numpy.integer)):
+    if mycc.frozen is not 0:
         raise NotImplementedError('frozen orbital ccsd_grad')
-        moidx[:mycc.frozen] = False
-    else:
-        moidx[mycc.frozen] = False
+    moidx = ccsd.get_moidx(mycc)
     mo_coeff = mycc.mo_coeff[:,moidx]  #FIXME: ensure mycc.mo_coeff is canonical orbital
-    mo_energy = mycc.mo_energy[moidx]
+    mo_energy = eris.fock.diagonal()
     nocc, nvir = t1.shape
     nao, nmo = mo_coeff.shape
     nao_pair = nao * (nao+1) // 2

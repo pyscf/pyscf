@@ -23,10 +23,7 @@ BLKMIN = 4
 
 def kernel(mycc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
            verbose=logger.INFO):
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mycc.stdout, verbose)
+    log = logger.new_logger(mycc, verbose)
 
     if t1 is None and t2 is None:
         t1, t2 = mycc.get_init_guess(eris)[1:]
@@ -521,18 +518,18 @@ def get_nocc(mycc):
     if mycc._nocc is not None:
         return mycc._nocc
     elif isinstance(mycc.frozen, (int, numpy.integer)):
-        return int(mycc.mo_occ.sum()) // 2 - mycc.frozen
-    elif mycc.frozen:
-        occ_idx = mycc.mo_occ > 0
-        occ_idx[numpy.asarray(mycc.frozen)] = False
-        return numpy.count_nonzero(occ_idx)
+        nocc = int(mycc.mo_occ.sum()) // 2 - mycc.frozen
+        assert(nocc > 0)
+        return nocc
     else:
-        return int(mycc.mo_occ.sum()) // 2
+        occ_idx = mycc.mo_occ > 0
+        occ_idx[list(mycc.frozen)] = False
+        return numpy.count_nonzero(occ_idx)
 
 def get_nmo(mycc):
     if mycc._nmo is not None:
         return mycc._nmo
-    if isinstance(mycc.frozen, (int, numpy.integer)):
+    elif isinstance(mycc.frozen, (int, numpy.integer)):
         return len(mycc.mo_occ) - mycc.frozen
     else:
         return len(mycc.mo_occ) - len(mycc.frozen)
@@ -618,7 +615,7 @@ class CCSD(lib.StreamObject):
         l1, l2 : 
             Lambda amplitudes l1[i,a], l2[i,j,a,b]  (i,j in occ, a,b in virt)
     '''
-    def __init__(self, mf, frozen=[], mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         from pyscf import gto
         if isinstance(mf, gto.Mole):
             raise RuntimeError('''
@@ -681,6 +678,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def nmo(self, n):
         self._nmo = n
 
+    get_nocc = get_nocc
+    get_nmo = get_nmo
+
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('')
@@ -688,7 +688,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         nocc = self.nocc
         nvir = self.nmo - nocc
         log.info('CCSD nocc = %d, nvir = %d', nocc, nvir)
-        if self.frozen:
+        if self.frozen is not 0:
             log.info('frozen orbitals %s', str(self.frozen))
         log.info('max_cycle = %d', self.max_cycle)
         log.info('direct = %d', self.direct)
@@ -825,11 +825,18 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def diis_(self, t1, t2, istep, normt, de, adiis):
         if (istep > self.diis_start_cycle and
             abs(de) < self.diis_start_energy_diff):
-            vec = amplitudes_to_vector(t1, t2)
-            nocc, nvir = t1.shape
-            t1, t2 = vector_to_amplitudes(adiis.update(vec), nocc+nvir, nocc)
+            vec = self.amplitudes_to_vector(t1, t2)
+            t1, t2 = self.vector_to_amplitudes(adiis.update(vec))
             logger.debug1(self, 'DIIS for step %d', istep)
         return t1, t2
+
+    def amplitudes_to_vector(self, t1, t2):
+        return amplitudes_to_vector(t1, t2)
+
+    def vector_to_amplitudes(self, vec, nmo=None, nocc=None):
+        if nocc is None: nocc = self.nocc
+        if nmo is None: nmo = self.nmo
+        return vector_to_amplitudes(vec, nmo, nocc)
 
 CC = CCSD
 
@@ -1008,13 +1015,15 @@ class _ERIS:
         log.timer('CCSD integral transformation', *cput0)
 
 
-def _mo_without_core(cc, mo):
+def get_moidx(cc):
     moidx = numpy.ones(cc.mo_occ.size, dtype=numpy.bool)
     if isinstance(cc.frozen, (int, numpy.integer)):
         moidx[:cc.frozen] = False
     elif len(cc.frozen) > 0:
-        moidx[numpy.asarray(cc.frozen)] = False
-    return mo[:,moidx]
+        moidx[list(cc.frozen)] = False
+    return moidx
+def _mo_without_core(cc, mo):
+    return mo[:,get_moidx(cc)]
 
 # assume nvir > nocc, minimal requirements on memory in loop of update_amps
 def _memory_usage_inloop(nocc, nvir):
@@ -1033,14 +1042,12 @@ def _mem_usage(nocc, nvir):
     return incore, outcore, basic
 
 def residual_as_diis_errvec(mycc):
+# Seems not quite useful
+# Cannot be used with non-conanical mf object
     def fupdate(t1, t2, istep, normt, de, adiis):
         nocc, nvir = t1.shape
         nov = nocc*nvir
-        moidx = numpy.ones(mycc.mo_occ.size, dtype=numpy.bool)
-        if isinstance(mycc.frozen, (int, numpy.integer)):
-            moidx[:mycc.frozen] = False
-        else:
-            moidx[mycc.frozen] = False
+        moidx = get_moidx(mycc)
         mo_e = mycc._scf.mo_energy[moidx]
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
         if (istep > mycc.diis_start_cycle and
