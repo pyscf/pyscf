@@ -14,7 +14,7 @@ from pyscf import ao2mo
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
-from pyscf.cc import uccsd_slow
+from pyscf.cc import uccsd
 from pyscf.ci.cisd_slow import t1strs, t2strs
 from pyscf.fci import cistring
 
@@ -329,8 +329,15 @@ class CISD(lib.StreamObject):
     def e_tot(self):
         return numpy.asarray(self.e_corr) + self._scf.e_tot
 
-    nocc = property(uccsd_slow.nocc)
-    nmo  = property(uccsd_slow.nmo)
+    @property
+    def nocc(self):
+        nocca, noccb = uccsd.get_nocc(self)
+        return nocca + noccb
+
+    @property
+    def nmo(self):
+        nmoa, nmob = uccsd.get_nmo(self)
+        return nmoa + nmob
 
     def kernel(self, ci0=None, mo_coeff=None, eris=None):
         if eris is None:
@@ -387,8 +394,8 @@ class _ERIS(object):
         nocc = myci.nocc
         nmo = myci.nmo
         nvir = nmo - nocc
-        moidx = uccsd_slow.get_umoidx(myci)
-        self.fock, mo_coeff, orbspin = uccsd_slow.uspatial2spin(myci, moidx, mo_coeff)
+        moidx = uccsd.get_umoidx(myci)
+        self.fock, mo_coeff, orbspin = uccsd.uspatial2spin(myci, moidx, mo_coeff)
         self.mo_coeff = mo_coeff
         myci.orbspin = self.orbspin = orbspin
 

@@ -23,11 +23,8 @@ CCSD(T)
 
 # JCP, 94, 442.  Error in Eq (1), should be [ia] >= [jb] >= [kc]
 def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mycc.stdout, verbose)
     cpu1 = cpu0 = (time.clock(), time.time())
+    log = logger.new_logger(mycc, verbose)
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
 
@@ -41,8 +38,9 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
 
     ftmp['t2'] = t2  # read back late.  Cache t2T in t2 to reduce memory footprint
     mo_energy, t1T, t2T, vooo = _sort_t2_vooo_(mycc, orbsym, t1, t2, eris)
+    cpu1 = log.timer_debug1('CCSD(T) sort_eri', *cpu1)
 
-    cpu2 = [time.clock(), time.time()]
+    cpu2 = list(cpu1)
     orbsym = numpy.hstack((numpy.sort(orbsym[:nocc]),numpy.sort(orbsym[nocc:])))
     o_ir_loc = numpy.append(0, numpy.cumsum(numpy.bincount(orbsym[:nocc], minlength=8)))
     v_ir_loc = numpy.append(0, numpy.cumsum(numpy.bincount(orbsym[nocc:], minlength=8)))
@@ -90,16 +88,16 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     max_memory = max(2000, mycc.max_memory - mem_now)
     bufsize = max(1, (max_memory*1e6/8-nocc**3*100)*.7/(nocc*nmo))
     log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
-    with lib.call_in_background(contract) as async_contract:
-        for a0, a1, na in reversed(tril_prange(0, nvir, bufsize)):
-            cache_row_a = numpy.asarray(eris_vvop[a0:a1,:a1])
-            cache_col_a = numpy.asarray(eris_vvop[:a0,a0:a1])
+    for a0, a1, na in reversed(tril_prange(0, nvir, bufsize)):
+        with lib.call_in_background(contract) as async_contract:
+            cache_row_a = numpy.asarray(eris_vvop[a0:a1,:a1], order='C')
+            cache_col_a = numpy.asarray(eris_vvop[:a0,a0:a1], order='C')
             async_contract(a0, a1, a0, a1, (cache_row_a,cache_col_a,
                                             cache_row_a,cache_col_a))
 
-            for b0, b1, nb in tril_prange(0, a0, bufsize/10):
-                cache_row_b = numpy.asarray(eris_vvop[b0:b1,:b1])
-                cache_col_b = numpy.asarray(eris_vvop[:b0,b0:b1])
+            for b0, b1, nb in tril_prange(0, a0, bufsize/6):
+                cache_row_b = numpy.asarray(eris_vvop[b0:b1,:b1], order='C')
+                cache_col_b = numpy.asarray(eris_vvop[:b0,b0:b1], order='C')
                 async_contract(a0, a1, b0, b1, (cache_row_a,cache_col_a,
                                                 cache_row_b,cache_col_b))
                 cache_row_b = cache_col_b = None
@@ -118,10 +116,9 @@ def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
     mol = mycc.mol
     nmo = nocc + nvir
 
-    mol = mycc.mol
     if mol.symmetry:
         orbsym = symm.addons.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                            mycc.mo_coeff, check=False)
+                                            eris.mo_coeff, check=False)
         orbsym = numpy.asarray(orbsym, dtype=numpy.int32) % 10
     else:
         orbsym = numpy.zeros(nmo, dtype=numpy.int32)
@@ -131,22 +128,23 @@ def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
     vrank = numpy.argsort(v_sorted)
 
     max_memory = max(2000, mycc.max_memory - lib.current_memory()[0])
-    max_memory = min(8000, max_memory*.5)
+    max_memory = min(8000, max_memory*.9)
     blksize = min(nvir, max(16, int(max_memory*1e6/8/(nvir*nocc*nmo))))
-    buf = numpy.empty((blksize,nvir,nocc,nmo))
-    fn = _ccsd.libcc.CCsd_t_sort_transpose
-    for j0, j1 in lib.prange(0, nvir, blksize):
-        vvopbuf = numpy.ndarray((j1-j0,nvir,nocc,nmo), buffer=buf)
-        ovov = numpy.asarray(eris.ovov[:,j0:j1])
-        ovvv = numpy.asarray(eris.ovvv[:,j0:j1])
-        fn(vvopbuf.ctypes.data_as(ctypes.c_void_p),
-           ovov.ctypes.data_as(ctypes.c_void_p),
-           ovvv.ctypes.data_as(ctypes.c_void_p),
-           orbsym.ctypes.data_as(ctypes.c_void_p),
-           ctypes.c_int(nocc), ctypes.c_int(nvir), ctypes.c_int(j1-j0))
-        for j in range(j0,j1):
-            vvop[vrank[j]] = vvopbuf[j-j0]
-        cpu1 = log.timer_debug1('transpose %d:%d'%(j0,j1), *cpu1)
+    with lib.call_in_background(vvop.__setitem__) as save:
+        bufopv = numpy.empty((nocc,nmo,nvir))
+        buf1 = numpy.empty_like(bufopv)
+        buf = numpy.empty((nocc,nvir,nvir))
+        for j0, j1 in lib.prange(0, nvir, blksize):
+            ovov = numpy.asarray(eris.ovov[:,j0:j1])
+            ovvv = numpy.asarray(eris.ovvv[:,j0:j1])
+            for j in range(j0,j1):
+                oov = ovov[o_sorted,j-j0]
+                ovv = lib.unpack_tril(ovvv[o_sorted,j-j0], out=buf)
+                bufopv[:,:nocc,:] = oov[:,o_sorted][:,:,v_sorted]
+                bufopv[:,nocc:,:] = ovv[:,v_sorted][:,:,v_sorted]
+                save(vrank[j], bufopv.transpose(2,0,1))
+                bufopv, buf1 = buf1, bufopv
+            cpu1 = log.timer_debug1('transpose %d:%d'%(j0,j1), *cpu1)
 
     return orbsym
 

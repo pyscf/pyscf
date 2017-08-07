@@ -28,9 +28,9 @@ class KnowValues(unittest.TestCase):
         numpy.random.seed(12)
         nocc, nvir = 5, 12
         eris = lambda :None
-        eris.ovvv = numpy.random.random((nocc*nvir,nvir*(nvir+1)//2)) * .1
+        eris.ovvv = numpy.random.random((nocc,nvir,nvir*(nvir+1)//2)) * .1
         eris.ovoo = numpy.random.random((nocc,nvir,nocc,nocc)) * .1
-        eris.ovov = numpy.random.random((nocc*nvir,nocc*nvir)) * .1
+        eris.ovov = numpy.random.random((nocc,nvir,nocc,nvir)) * .1
         t1 = numpy.random.random((nocc,nvir)) * .1
         t2 = numpy.random.random((nocc,nocc,nvir,nvir)) * .1
         t2 = t2 + t2.transpose(1,0,3,2)

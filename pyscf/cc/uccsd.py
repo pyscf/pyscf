@@ -2111,8 +2111,8 @@ class _ERIS:
             eri_ab = ao2mo.general(cc._scf._eri, (moa,moa,mob,mob), compact=False)
             eri_ba = lib.transpose(eri_ab)
 
-            nocca = np.count_nonzero(self.orbspin[:nocc] == 0)
-            noccb = np.count_nonzero(self.orbspin[:nocc] == 1)
+            self.nocca = nocca = np.count_nonzero(self.orbspin[:nocc] == 0)
+            self.noccb = noccb = np.count_nonzero(self.orbspin[:nocc] == 1)
             nvira = np.count_nonzero(self.orbspin[nocc:] == 0)
             nvirb = np.count_nonzero(self.orbspin[nocc:] == 1)
             nmoa = nocca + nvira
@@ -2176,8 +2176,8 @@ class _ERIS:
             mob = so_coeff[:,idxb]
             nmoa = moa.shape[1]
             nmob = mob.shape[1]
-            nocca = int(cc.mo_occ[0][moidx[0]].sum())
-            noccb = int(cc.mo_occ[1][moidx[1]].sum())
+            self.nocca = nocca = int(cc.mo_occ[0][moidx[0]].sum())
+            self.noccb = noccb = int(cc.mo_occ[1][moidx[1]].sum())
             nvira = nmoa - nocca
             nvirb = nmob - noccb
 

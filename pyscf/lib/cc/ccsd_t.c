@@ -8,12 +8,20 @@
 #include "np_helper/np_helper.h"
 #include "vhf/fblas.h"
 
+typedef struct {
+        double *cache[6];
+        short a;
+        short b;
+        short c;
+        short _padding;
+} CacheJob;
+
 /*
  * 4 * w + w.transpose(1,2,0) + w.transpose(2,0,1)
  * - 2 * w.transpose(2,1,0) - 2 * w.transpose(0,2,1)
  * - 2 * w.transpose(1,0,2)
  */
-static void permute3(double *out, double *w, int n)
+static void permute(double *out, double *w, int n)
 {
         int nn = n * n;
         int i, j, k;
@@ -31,10 +39,11 @@ static void permute3(double *out, double *w, int n)
 }
 
 /*
+ * t2T = t2.transpose(2,3,1,0)
  * ov = vv_op[:,nocc:]
  * oo = vv_op[:,:nocc]
  * w = numpy.einsum('if,fjk->ijk', ov, t2T[c])
- * w-= numpy.einsum('ijm,mk->ijk', eris_vooo[a], t2T[c,b])
+ * w-= numpy.einsum('ijm,mk->ijk', vooo[a], t2T[c,b])
  * v = numpy.einsum('ij,k->ijk', oo, t1T[c]*.5)
  * v+= w
  */
@@ -188,8 +197,8 @@ static void sym_wv(double *w, double *v, double *vooo, double *vv_op,
     et+= numpy.einsum('ijk,jki', z[4], w)
     et+= numpy.einsum('ijk,kji', z[5], w)
  */
-static double permute_contract(double *z0, double *z1, double *z2, double *z3,
-                               double *z4, double *z5, double *w, int n)
+double _ccsd_t_permute_contract(double *z0, double *z1, double *z2, double *z3,
+                                double *z4, double *z5, double *w, int n)
 {
         int nn = n * n;
         int i, j, k;
@@ -199,17 +208,17 @@ static double permute_contract(double *z0, double *z1, double *z2, double *z3,
         for (j = 0; j < n; j++) {
         for (k = 0; k < n; k++) {
                 et += z0[i*nn+j*n+k] * w[i*nn+j*n+k];
-                et += z1[i*nn+j*n+k] * w[i*nn+k*n+j];
-                et += z2[i*nn+j*n+k] * w[j*nn+i*n+k];
-                et += z3[i*nn+j*n+k] * w[k*nn+i*n+j];
-                et += z4[i*nn+j*n+k] * w[j*nn+k*n+i];
-                et += z5[i*nn+j*n+k] * w[k*nn+j*n+i];
+                et += z1[i*nn+k*n+j] * w[i*nn+j*n+k];
+                et += z2[j*nn+i*n+k] * w[i*nn+j*n+k];
+                et += z3[j*nn+k*n+i] * w[i*nn+j*n+k];
+                et += z4[k*nn+i*n+j] * w[i*nn+j*n+k];
+                et += z5[k*nn+j*n+i] * w[i*nn+j*n+k];
         } } }
         return et;
 }
 
-static void get_denorm(double *d3, double *mo_energy, int nocc,
-                       int a, int b, int c)
+void _ccsd_t_get_denorm(double *d3, double *mo_energy, int nocc,
+                        int a, int b, int c)
 {
         int i, j, k, n;
         double abc = mo_energy[nocc+a] + mo_energy[nocc+b] + mo_energy[nocc+c];
@@ -270,14 +279,14 @@ static double contract6(int nocc, int nvir, int a, int b, int c,
                 sym_wv(w5, v5, vooo, cache[5], t1T, t2T, nocc, nvir, c, b, a,
                        nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym);
         }
-        permute3(z0, v0, nocc);
-        permute3(z1, v1, nocc);
-        permute3(z2, v2, nocc);
-        permute3(z3, v3, nocc);
-        permute3(z4, v4, nocc);
-        permute3(z5, v5, nocc);
+        permute(z0, v0, nocc);
+        permute(z1, v1, nocc);
+        permute(z2, v2, nocc);
+        permute(z3, v3, nocc);
+        permute(z4, v4, nocc);
+        permute(z5, v5, nocc);
 
-        get_denorm(denorm, mo_energy, nocc, a, b, c);
+        _ccsd_t_get_denorm(denorm, mo_energy, nocc, a, b, c);
         if (a == c) {
                 for (i = 0; i < nooo; i++) {
                         denorm[i] *= 1./6;
@@ -297,34 +306,23 @@ static double contract6(int nocc, int nvir, int a, int b, int c,
         }
 
         double et = 0;
-        et += permute_contract(z0, z1, z2, z3, z4, z5, w0, nocc);
-        et += permute_contract(z1, z0, z4, z5, z2, z3, w1, nocc);
-        et += permute_contract(z2, z3, z0, z1, z5, z4, w2, nocc);
-        et += permute_contract(z3, z2, z5, z4, z0, z1, w3, nocc);
-        et += permute_contract(z4, z5, z1, z0, z3, z2, w4, nocc);
-        et += permute_contract(z5, z4, z3, z2, z1, z0, w5, nocc);
+        et += _ccsd_t_permute_contract(z0, z1, z2, z3, z4, z5, w0, nocc);
+        et += _ccsd_t_permute_contract(z1, z0, z4, z5, z2, z3, w1, nocc);
+        et += _ccsd_t_permute_contract(z2, z3, z0, z1, z5, z4, w2, nocc);
+        et += _ccsd_t_permute_contract(z3, z2, z5, z4, z0, z1, w3, nocc);
+        et += _ccsd_t_permute_contract(z4, z5, z1, z0, z3, z2, w4, nocc);
+        et += _ccsd_t_permute_contract(z5, z4, z3, z2, z1, z0, w5, nocc);
         return et;
 }
 
-
-double CCsd_t_contract(double *mo_energy, double *t1T, double *t2T, double *vooo,
-                       int nocc, int nvir, int a0, int a1, int b0, int b1,
-                       int nirrep, int *o_ir_loc, int *v_ir_loc,
-                       int *oo_ir_loc, int *orbsym,
-                       double *cache_row_a, double *cache_col_a,
-                       double *cache_row_b, double *cache_col_b)
+size_t _ccsd_t_gen_jobs(CacheJob *jobs, int nocc, int nvir,
+                        int a0, int a1, int b0, int b1,
+                        double *cache_row_a, double *cache_col_a,
+                        double *cache_row_b, double *cache_col_b)
 {
         size_t nov = nocc * (nocc+nvir);
         int da = a1 - a0;
         int db = b1 - b0;
-        struct CacheJob {
-                double *cache[6];
-                short a;
-                short b;
-                short c;
-                short _padding;
-        };
-        struct CacheJob *jobs = malloc(sizeof(struct CacheJob) * da*db*b1);
         int a, b, c;
         size_t m;
 
@@ -383,18 +381,36 @@ double CCsd_t_contract(double *mo_energy, double *t1T, double *t2T, double *vooo
                         }
                 } }
         }
+        return m;
+}
+
+
+double CCsd_t_contract(double *mo_energy, double *t1T, double *t2T, double *vooo,
+                       int nocc, int nvir, int a0, int a1, int b0, int b1,
+                       int nirrep, int *o_ir_loc, int *v_ir_loc,
+                       int *oo_ir_loc, int *orbsym,
+                       double *cache_row_a, double *cache_col_a,
+                       double *cache_row_b, double *cache_col_b)
+{
+        size_t nov = nocc * (nocc+nvir);
+        int da = a1 - a0;
+        int db = b1 - b0;
+        CacheJob *jobs = malloc(sizeof(CacheJob) * da*db*b1);
+        size_t njobs = _ccsd_t_gen_jobs(jobs, nocc, nvir, a0, a1, b0, b1,
+                                        cache_row_a, cache_col_a,
+                                        cache_row_b, cache_col_b);
 
         double e_tot = 0;
 #pragma omp parallel default(none) \
-        shared(m, nocc, nvir, mo_energy, t1T, t2T, nirrep, o_ir_loc, \
-               v_ir_loc, oo_ir_loc, orbsym, vooo, jobs, e_tot) \
-        private(a, b, c)
+        shared(njobs, nocc, nvir, mo_energy, t1T, t2T, nirrep, o_ir_loc, \
+               v_ir_loc, oo_ir_loc, orbsym, vooo, jobs, e_tot)
 {
+        int a, b, c;
         size_t k;
         double *cache1 = malloc(sizeof(double) * nocc*nocc*nocc*19);
         double e = 0;
 #pragma omp for schedule (dynamic, 32)
-        for (k = 0; k < m; k++) {
+        for (k = 0; k < njobs; k++) {
                 a = jobs[k].a;
                 b = jobs[k].b;
                 c = jobs[k].c;
@@ -407,84 +423,5 @@ double CCsd_t_contract(double *mo_energy, double *t1T, double *t2T, double *vooo
         e_tot += e;
 }
         return e_tot;
-}
-
-/*
- * vvop[:,:,:,:nocc] = ovov.transpose(1,3,0,2) # irrep_sort last v
- * vvop[:,:,:,nocc:] = ovvv.transpose(1,2,0,3) # irrep_sort o and last vv
- */
-static void sort_transpose(double *vvop, double *ovov, double *ovvv,
-                           int *optr, int *vptr,
-                           int nocc, int nvir, int dv, int iv)
-{
-        size_t nmo = nocc + nvir;
-        size_t nov = nocc * nvir;
-        size_t nop = nocc * nmo;
-        size_t nvov = dv * nov;
-        size_t nvv = nvir * (nvir+1) / 2;
-        int i, j, a, b, ab;
-        int ip, jp, ap, bp;
-        double *pvvop, *povov, *povvv;
-
-        vvop += iv * nvir * nop;
-        ovov += iv * nov;
-        ovvv += iv * nvv;
-
-        for (a = 0; a < nvir; a++) {
-                ap = vptr[a];
-                pvvop = vvop + ap * nop;
-                povov = ovov + a;
-                for (i = 0; i < nocc; i++) {
-                        ip = optr[i];
-                        for (j = 0; j < nocc; j++) {
-                                jp = optr[j];
-                                pvvop[ip*nmo+jp] = povov[i*nvov+j*nvir];
-                        }
-                }
-        }
-
-        for (i = 0; i < nocc; i++) {
-                ip = optr[i];
-                pvvop = vvop + ip * nmo + nocc;
-                povvv = ovvv + i * dv * nvv;
-                for (ab = 0, a = 0; a < nvir; a++) {
-                        ap = vptr[a];
-                        for (b = 0; b <= a; b++, ab++) {
-                                bp = vptr[b];
-                                pvvop[ap*nop+bp] = povvv[ab];
-                                pvvop[bp*nop+ap] = povvv[ab];
-                        }
-                }
-        }
-}
-
-void CCsd_t_sort_transpose(double *vvop, double *ovov, double *ovvv,
-                           int *orbsym, int nocc, int nvir, int dv)
-{
-        int optr[nocc];
-        int vptr[nvir];
-        int i, k, ir;
-        for (k = 0, ir = 0; ir < 8; ir++) {
-                for (i = 0; i < nocc; i++) { if (orbsym[i] == ir) {
-                        optr[i] = k;
-                        k++;
-                } }
-        }
-        for (k = 0, ir = 0; ir < 8; ir++) {
-                for (i = 0; i < nvir; i++) { if (orbsym[nocc+i] == ir) {
-                        vptr[i] = k;
-                        k++;
-                } }
-        }
-
-#pragma omp parallel default(none) \
-        shared(vvop, ovov, ovvv, nocc, nvir, dv, optr, vptr) \
-        private(i)
-{
-#pragma omp for schedule (dynamic)
-        for (i = 0; i < dv; i++) {
-                sort_transpose(vvop, ovov, ovvv, optr, vptr, nocc, nvir, dv, i);
-        }
-}
 }
 
