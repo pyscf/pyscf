@@ -1739,7 +1739,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         if _ecp:
             _atm, _ecpbas, _env = make_ecp_env(self, _atm, _ecp, pre_env)
         else:
-            _atm, _ecpbas, _env = _atm, [], pre_env
+            _atm, _ecpbas, _env = _atm, numpy.zeros((0,8)), pre_env
         return _atm, _ecpbas, _env
 
     tot_electrons = tot_electrons
@@ -1938,7 +1938,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     def has_ecp(self):
         '''Whether pesudo potential is used in the system.'''
-        return self._ecpbas.size > 0
+        return len(self._ecpbas) > 0
 
 
 #######################################################
