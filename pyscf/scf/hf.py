@@ -797,12 +797,9 @@ def mulliken_meta(mol, dm, verbose=logger.DEBUG, pre_orth_method='ANO',
     from pyscf.lo import orth
     if s is None:
         s = get_ovlp(mol)
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
+    log = logger.new_logger(mol, verbose)
     if mol.has_ecp():
-# No rereference AO basis in the environment of ECP are available for now
+# Rereference AO basis in the environment of ECP is not available
         c = numpy.eye(s.shape[0])
     else:
         c = orth.pre_orth_ao(mol, pre_orth_method)

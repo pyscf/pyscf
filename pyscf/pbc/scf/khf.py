@@ -216,6 +216,7 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     logger.debug(mf, 'E_coul = %.15g', e_coul)
     return e1+e_coul, e_coul
 
+
 def analyze(mf, verbose=logger.DEBUG, **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Dipole moment
@@ -240,16 +241,19 @@ def mulliken_meta(cell, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
     log = logger.new_logger(cell, verbose)
     log.note('Analyze output for the gamma point')
     log.note("KRHF mulliken_meta")
-    dm_ao_gamma=dm_ao[0,:,:].real.copy()
-    s_gamma=s[0,:,:].real.copy()
-    c = orth.pre_orth_ao(cell, pre_orth_method)
+    dm_ao_gamma = dm_ao[0,:,:].real
+    s_gamma = s[0,:,:].real
+    if cell.has_ecp():
+# Rereference AO basis in the environment of ECP is not available
+        c = numpy.eye(s_gamma.shape[0])
+    else:
+        c = orth.pre_orth_ao(cell, pre_orth_method)
     orth_coeff = orth.orth_ao(cell, 'meta_lowdin', pre_orth_ao=c, s=s_gamma)
     c_inv = np.dot(orth_coeff.T, s_gamma)
     dm = reduce(np.dot, (c_inv, dm_ao_gamma, c_inv.T.conj()))
 
     log.note(' ** Mulliken pop alpha/beta on meta-lowdin orthogonal AOs **')
     return hf.mulliken_pop(cell, dm, np.eye(orth_coeff.shape[0]), log)
-
 
 
 def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):

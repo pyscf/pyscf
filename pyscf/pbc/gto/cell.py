@@ -1035,5 +1035,6 @@ class Cell(mole.Mole):
         return mol
 
     def has_ecp(self):
-        '''Whether pesudo potential is used.'''
-        return self._pseudo or (self._ecpbas.size > 0)
+        '''Whether pesudo potential is used in the system.'''
+        return self.pseudo or self._pseudo or (self._ecpbas.size > 0)
+
