@@ -16,6 +16,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.cc import uccsd
+from pyscf.ci import cisd
 from pyscf.cc.rccsd import _unpack_4fold, _mem_usage
 from pyscf.ci.ucisd_slow import from_fci, to_fci
 from pyscf.ci.ucisd_slow import make_rdm1, make_rdm2
@@ -380,41 +381,7 @@ def cisdvec_to_amplitudes(civec, nmoa_nmob, nocca_noccb):
     return c0, (c1a,c1b), (c2aa,c2ab,c2bb)
 
 
-class UCISD(lib.StreamObject):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
-        if mo_coeff is None: mo_coeff = mf.mo_coeff
-        if mo_occ   is None: mo_occ   = mf.mo_occ
-
-        self.mol = mf.mol
-        self._scf = mf
-        self.verbose = self.mol.verbose
-        self.stdout = self.mol.stdout
-        self.max_memory = mf.max_memory
-
-        self.conv_tol = 1e-9
-        self.max_cycle = 50
-        self.max_space = 12
-        self.lindep = 1e-14
-        self.nroots = 1
-        self.level_shift = 0  # in precond
-
-        self.frozen = frozen
-        self.direct = False
-        self.chkfile = None
-
-##################################################
-# don't modify the following attributes, they are not input options
-        self.converged = False
-        self.mo_coeff = mo_coeff
-        self.mo_occ = mo_occ
-        self.e_corr = None
-        self.ci = None
-        self._nocc = None
-        self._nmo = None
-
-    @property
-    def e_tot(self):
-        return numpy.asarray(self.e_corr) + self._scf.e_tot
+class UCISD(cisd.CISD):
 
     @property
     def nocc(self):
@@ -436,14 +403,14 @@ class UCISD(lib.StreamObject):
                 kernel(self, eris, ci0, max_cycle=self.max_cycle,
                        tol=self.conv_tol, verbose=self.verbose)
         if self.converged:
-            logger.info(self, 'CISD converged')
+            logger.info(self, 'UCISD converged')
         else:
-            logger.info(self, 'CISD not converged')
+            logger.info(self, 'UCISD not converged')
         if self.nroots > 1:
             for i,e in enumerate(self.e_tot):
-                logger.note(self, 'CISD root %d  E = %.16g', i, e)
+                logger.note(self, 'UCISD root %d  E = %.16g', i, e)
         else:
-            logger.note(self, 'E(CISD) = %.16g  E_corr = %.16g',
+            logger.note(self, 'E(UCISD) = %.16g  E_corr = %.16g',
                         self.e_tot, self.e_corr)
         return self.e_corr, self.ci
 

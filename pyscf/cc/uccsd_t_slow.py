@@ -169,7 +169,7 @@ if __name__ == '__main__':
     mol.build()
     mf = scf.UHF(mol).run(conv_tol=1e-14)
     numpy.random.seed(10)
-    mo = numpy.random.random(mf.mo_coeff.shape)
+    mf.mo_coeff = numpy.random.random(mf.mo_coeff.shape)
 
     numpy.random.seed(12)
     nocca, noccb = mol.nelec
@@ -187,7 +187,7 @@ if __name__ == '__main__':
     t2ab = .1 * numpy.random.random((nocca,noccb,nvira,nvirb))
     t1 = t1a, t1b
     t2 = t2aa, t2ab, t2bb
-    e3a = kernel(_ERIS(uccsd.UCCSD(scf.addons.convert_to_uhf(mf)), mo),
+    e3a = kernel(_ERIS(uccsd.UCCSD(scf.addons.convert_to_uhf(mf)), mf.mo_coeff),
                  [t1a,t1b], [t2aa, t2ab, t2bb])
-    print(e3a - -548537.54842897109)
+    print(e3a - 8193.064821311109)
 

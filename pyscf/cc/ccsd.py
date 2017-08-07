@@ -764,6 +764,13 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                                    verbose=self.verbose)
         return self.l1, self.l2
 
+    def ccsd_t(self, t1=None, t2=None, eris=None):
+        from pyscf.cc import ccsd_t
+        if t1 is None: t1 = self.t1
+        if t2 is None: t2 = self.t2
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        return ccsd_t.kernel(self, eris, t1, t2, self.verbose)
+
     def make_rdm1(self, t1=None, t2=None, l1=None, l2=None):
         '''Un-relaxed 1-particle density matrix in MO space'''
         from pyscf.cc import ccsd_rdm
@@ -837,6 +844,24 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if nocc is None: nocc = self.nocc
         if nmo is None: nmo = self.nmo
         return vector_to_amplitudes(vec, nmo, nocc)
+
+    def dump_chk(self, ci=None, frozen=None, mo_coeff=None, mo_occ=None):
+        if ci is None: ci = self.ci
+        if frozen is None: frozen = self.frozen
+        ci_chk = {'e_corr': self.e_corr,
+                  'ci': ci,
+                  'frozen': frozen}
+
+        if mo_coeff is not None: ci_chk['mo_coeff'] = mo_coeff
+        if mo_occ is not None: ci_chk['mo_occ'] = mo_occ
+        if self._nmo is not None: ci_chk['_nmo'] = self._nmo
+        if self._nocc is not None: ci_chk['_nocc'] = self._nocc
+
+        if self.chkfile is not None:
+            chkfile = self.chkfile
+        else:
+            chkfile = self._scf.chkfile
+        lib.chkfile.save(chkfile, 'cisd', ci_chk)
 
 CC = CCSD
 
@@ -1192,4 +1217,5 @@ if __name__ == '__main__':
     mcc.ccsd()
     print(mcc.ecc - -0.213343234198275)
     print(abs(mcc.t2).sum() - 5.63970304662375)
+    print(mcc.ccsd_t() - -0.003060021865720902)
 

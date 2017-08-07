@@ -373,7 +373,7 @@ def get_nocc(mycc):
     if isinstance(mycc.frozen, (int, numpy.integer)):
         nocca = int(mycc.mo_occ[0].sum()) - mycc.frozen
         noccb = int(mycc.mo_occ[1].sum()) - mycc.frozen
-        assert(nocca > 0 and noccb > 0)
+        #assert(nocca > 0 and noccb > 0)
     else:
         frozen = mycc.frozen
         if len(frozen) > 0 and isinstance(frozen[0], (int, numpy.integer)):
@@ -511,15 +511,15 @@ class UCCSD(rccsd.RCCSD):
             cctyp = 'MBPT2'
             self.e_corr, self.t1, self.t2 = self.init_amps(eris)
         else:
-            cctyp = 'CCSD'
+            cctyp = 'UCCSD'
             self.converged, self.e_corr, self.t1, self.t2 = \
                     kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                            tol=self.conv_tol, tolnormt=self.conv_tol_normt,
                            verbose=self.verbose)
             if self.converged:
-                logger.info(self, 'CCSD converged')
+                logger.info(self, 'UCCSD converged')
             else:
-                logger.note(self, 'CCSD not converged')
+                logger.note(self, 'UCCSD not converged')
         if self._scf.e_tot == 0:
             logger.note(self, 'E_corr = %.16g', self.e_corr)
         else:
@@ -539,6 +539,13 @@ class UCCSD(rccsd.RCCSD):
                                     tol=self.conv_tol_normt,
                                     verbose=self.verbose)
         return self.l1, self.l2
+
+    def ccsd_t(self, t1=None, t2=None, eris=None):
+        from pyscf.cc import uccsd_t
+        if t1 is None: t1 = self.t1
+        if t2 is None: t2 = self.t2
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        return uccsd_t.kernel(self, eris, t1, t2, self.verbose)
 
     def make_rdm1(self, t1=None, t2=None, l1=None, l2=None):
         '''Un-relaxed 1-particle density matrix in MO space
@@ -3173,6 +3180,7 @@ if __name__ == '__main__':
     mycc = UCCSD(mf)
     ecc, t1, t2 = mycc.kernel()
     print(ecc - -0.2133432712431435)
+    print(mycc.ccsd_t() - -0.003060021865720902)
 
     e,v = mycc.ipccsd(nroots=8)
     print(e[0] - 0.4335604332073799)

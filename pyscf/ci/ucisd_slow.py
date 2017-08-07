@@ -13,9 +13,8 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
+from pyscf.ci import cisd
 from pyscf.cc import uccsd
-from pyscf.ci.cisd_slow import t1strs, t2strs
-from pyscf.fci import cistring
 
 einsum = lib.einsum
 
@@ -379,6 +378,7 @@ def _unpack_4fold(c2vec, nocc, nvir):
 
 def to_fci(cisdvec, nmoa_nmob, nocca_noccb):
     from pyscf import fci
+    from pyscf.ci.cisd_slow import t2strs
     norba, norbb = nmoa_nmob
     nocca, noccb = nocca_noccb
     nvira = norba - nocca
@@ -386,8 +386,8 @@ def to_fci(cisdvec, nmoa_nmob, nocca_noccb):
     c0, c1, c2 = cisdvec_to_amplitudes(cisdvec, nmoa_nmob, nocca_noccb)
     c1a, c1b = c1
     c2aa, c2ab, c2bb = c2
-    t1addra, t1signa = t1strs(norba, nocca)
-    t1addrb, t1signb = t1strs(norbb, noccb)
+    t1addra, t1signa = cisd.t1strs(norba, nocca)
+    t1addrb, t1signb = cisd.t1strs(norbb, noccb)
 
     na = fci.cistring.num_strings(norba, nocca)
     nb = fci.cistring.num_strings(norbb, noccb)
@@ -414,15 +414,17 @@ def to_fci(cisdvec, nmoa_nmob, nocca_noccb):
     return fcivec
 
 def from_fci(ci0, nmoa_nmob, nocca_noccb):
+    from pyscf import fci
+    from pyscf.ci.cisd_slow import t2strs
     norba, norbb = nmoa_nmob
     nocca, noccb = nocca_noccb
     nvira = norba - nocca
     nvirb = norbb - noccb
-    t1addra, t1signa = t1strs(norba, nocca)
-    t1addrb, t1signb = t1strs(norbb, noccb)
+    t1addra, t1signa = cisd.t1strs(norba, nocca)
+    t1addrb, t1signb = cisd.t1strs(norbb, noccb)
 
-    na = cistring.num_strings(norba, nocca)
-    nb = cistring.num_strings(norbb, noccb)
+    na = fci.cistring.num_strings(norba, nocca)
+    nb = fci.cistring.num_strings(norbb, noccb)
     ci0 = ci0.reshape(na,nb)
     c0 = ci0[0,0]
     c1a = ((ci0[t1addra,0] * t1signa).reshape(nvira,nocca).T)[::-1]
@@ -626,41 +628,7 @@ def make_rdm2(ci, nmoa_nmob, nocca_noccb):
     return dm2aa, dm2ab, dm2bb
 
 
-class CISD(lib.StreamObject):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
-        if mo_coeff is None: mo_coeff = mf.mo_coeff
-        if mo_occ   is None: mo_occ   = mf.mo_occ
-
-        self.mol = mf.mol
-        self._scf = mf
-        self.verbose = self.mol.verbose
-        self.stdout = self.mol.stdout
-        self.max_memory = mf.max_memory
-
-        self.conv_tol = 1e-9
-        self.max_cycle = 50
-        self.max_space = 12
-        self.lindep = 1e-14
-        self.nroots = 1
-        self.level_shift = 0  # in precond
-
-        self.frozen = frozen
-        self.direct = False
-        self.chkfile = None
-
-##################################################
-# don't modify the following attributes, they are not input options
-        self.converged = False
-        self.mo_coeff = mo_coeff
-        self.mo_occ = mo_occ
-        self.e_corr = None
-        self.ci = None
-        self._nocc = None
-        self._nmo = None
-
-    @property
-    def e_tot(self):
-        return numpy.asarray(self.e_corr) + self._scf.e_tot
+class CISD(cisd.CISD):
 
     @property
     def nocc(self):
