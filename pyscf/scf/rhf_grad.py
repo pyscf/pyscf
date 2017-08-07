@@ -68,7 +68,7 @@ def grad_nuc(mol, atmlst=None):
 def get_hcore(mol):
     h =(mol.intor('int1e_ipkin', comp=3)
       + mol.intor('int1e_ipnuc', comp=3))
-    if mol._ecp:
+    if mol.has_ecp():
         raise NotImplementedError("gradients for ECP")
     return -h
 

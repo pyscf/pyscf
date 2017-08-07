@@ -237,7 +237,7 @@ def get_hcore(mol):
            [-0.59316327, -0.93767904]])
     '''
     h = mol.intor_symmetric('int1e_kin') + mol.intor_symmetric('int1e_nuc')
-    if mol._ecp:
+    if mol.has_ecp():
         h += mol.intor_symmetric('ECPscalar')
     return h
 
@@ -801,7 +801,11 @@ def mulliken_meta(mol, dm, verbose=logger.DEBUG, pre_orth_method='ANO',
         log = verbose
     else:
         log = logger.Logger(mol.stdout, verbose)
-    c = orth.pre_orth_ao(mol, pre_orth_method)
+    if mol.has_ecp():
+# No rereference AO basis in the environment of ECP are available for now
+        c = numpy.eye(s.shape[0])
+    else:
+        c = orth.pre_orth_ao(mol, pre_orth_method)
     orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c, s=s)
     c_inv = numpy.dot(orth_coeff.T, s)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:

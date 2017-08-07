@@ -2028,6 +2028,10 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
             self.__dict__.update(mol.__dict__)
         return self
 
+    def has_ecp(self):
+        '''Whether pesudo potential is used.'''
+        return self._ecpbas.size > 0
+
 
 #######################################################
 #NOTE: atm_id or bas_id start from 0

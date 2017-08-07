@@ -277,7 +277,7 @@ def header(mol, fout, ignore_h=False):
         fout.write('\n')
     fout.write('[5d]\n[9g]\n\n')
 
-    if mol._ecp:  # See https://github.com/zorkzou/Molden2AIM
+    if mol.has_ecp():  # See https://github.com/zorkzou/Molden2AIM
         fout.write('[core]\n')
         for ia in range(mol.natm):
             nelec_ecp_core = mol.atom_nelec_core(ia)

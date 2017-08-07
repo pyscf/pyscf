@@ -83,13 +83,14 @@ def project_to_atomic_orbitals(mol, basname):
         atmp.cart = mol.cart
         ano = project_mo_nr2nr(atmp, 1, atm)
         rm_ano = numpy.eye(ano.shape[0]) - reduce(numpy.dot, (ano, ano.T, s0))
-        nelec_ecp = 0
-        if mol._ecp:
+        if mol.has_ecp():
             if symb in mol._ecp:
                 nelec_ecp = mol._ecp[symb][0]
             elif stdsymb in mol._ecp:
                 nelec_ecp = mol._ecp[stdsymb][0]
-        ecpcore = core_configuration(nelec_ecp)
+            ecpcore = core_configuration(nelec_ecp)
+        else:
+            ecpcore = [0] * 4
         c = rm_ano.copy()
         for l in range(param.L_MAX):
             idx  = numpy.asarray(search_atm_l(atm, l))
