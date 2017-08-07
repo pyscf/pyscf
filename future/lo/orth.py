@@ -85,7 +85,7 @@ def project_to_atomic_orbitals(mol, basname):
         ano = project_mo_nr2nr(atmp, 1, atm)
         rm_ano = numpy.eye(ano.shape[0]) - reduce(numpy.dot, (ano, ano.T, s0))
         nelec_ecp = 0
-        if mol._ecp:
+        if mol.has_ecp():
             if symb in mol._ecp:
                 nelec_ecp = mol._ecp[symb][0]
             elif stdsymb in mol._ecp:

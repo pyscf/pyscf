@@ -11,8 +11,8 @@ from pyscf.scf import hf
 
 
 def get_atm_nrhf(mol):
-    if mol._ecp:
-        raise RuntimeError('Atomic calculation with ECP is not implemented')
+    if mol.has_ecp():
+        raise NotImplementedError('Atomic calculation with ECP is not implemented')
 
     atm_scf_result = {}
     for a, b in mol._basis.items():

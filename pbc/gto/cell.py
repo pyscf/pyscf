@@ -1022,3 +1022,8 @@ class Cell(mole.Mole):
         cell_dic = [(key, getattr(self, key)) for key in mol.__dict__.keys()]
         mol.__dict__.update(cell_dic)
         return mol
+
+    def has_ecp(self):
+        '''Whether pesudo potential is used in the system.'''
+        return self.pseudo or self._pseudo or (self._ecpbas.size > 0)
+
