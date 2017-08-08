@@ -267,7 +267,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     time_1pass = log.timer('AO->MO transformation for %s 1 pass'%intor,
                            *time_0pass)
 
-    def prefetch(icomp, row0, row1, buf):
+    def load(icomp, row0, row1, buf):
         if icomp+1 < comp:
             icomp += 1
         else:  # move to next row-block
@@ -298,8 +298,8 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     ao_loc = mol.ao_loc_nr('cart' in intor)
     ti0 = time_1pass
     istep = 0
-    with lib.call_in_background(prefetch) as bprefetch:
-        with lib.call_in_background(save) as bsave:
+    with lib.call_in_background(load) as prefetch:
+        with lib.call_in_background(save) as async_write:
             _load_from_h5g(fswap['0'], 0, min(nij_pair, iobuflen), buf_prefetch)
 
             for row0, row1 in prange(0, nij_pair, iobuflen):
@@ -311,10 +311,10 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
                                istep, ijmoblks, icomp, row0, row1, nrow)
 
                     buf, buf_prefetch = buf_prefetch, buf
-                    bprefetch(icomp, row0, row1, buf_prefetch)
+                    prefetch(icomp, row0, row1, buf_prefetch)
                     _ao2mo.nr_e2(buf[:nrow], mokl, klshape, aosym, klmosym,
                                  ao_loc=ao_loc, out=outbuf)
-                    bsave(icomp, row0, row1, outbuf)
+                    async_write(icomp, row0, row1, outbuf)
                     outbuf, buf_write = buf_write, outbuf  # avoid flushing writing buffer
 
                     ti1 = (time.clock(), time.time())
@@ -438,7 +438,7 @@ def half_e1(mol, mo_coeffs, swapfile,
 
     # transform e1
     ti0 = log.timer('Initializing ao2mo.outcore.half_e1', *time0)
-    with lib.call_in_background(save) as bsave:
+    with lib.call_in_background(save) as async_write:
         buf1 = numpy.empty((comp*e1buflen,nao_pair))
         buf2 = numpy.empty((comp*e1buflen,nij_pair))
         buf_write = numpy.empty_like(buf2)
@@ -461,7 +461,7 @@ def half_e1(mol, mo_coeffs, swapfile,
                 iobuf[:,p0:p1] = buf.reshape(comp,aoshs[2],nij_pair)
             ti0 = log.timer_debug1('gen AO/transform MO [%d/%d]'%(istep+1,nstep), *ti0)
 
-            bsave(istep, iobuf)
+            async_write(istep, iobuf)
             buf2, buf_write = buf_write, buf2
 
     if isinstance(swapfile, str):

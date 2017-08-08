@@ -37,7 +37,7 @@ rhf.scf()
 class KnowValues(unittest.TestCase):
     def test_ccsd(self):
         mcc = cc.ccsd.CC(rhf)
-        mcc.conv_tol = 1e-9
+        mcc.conv_tol = 1e-12
         mcc.conv_tol_normt = 1e-6
         mcc.kernel()
         self.assertTrue(numpy.allclose(mcc.t2,mcc.t2.transpose(1,0,3,2)))

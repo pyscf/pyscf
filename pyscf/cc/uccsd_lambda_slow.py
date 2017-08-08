@@ -50,7 +50,11 @@ def kernel(mycc, eris, t1=None, t2=None, l1=None, l2=None,
         l1, l2 = l1new, l2new
         l1new = l2new = None
         if mycc.diis:
+            l1 = spin2spatial(l1, eris.orbspin)
+            l2 = spin2spatial(l2, eris.orbspin)
             l1, l2 = mycc.diis(l1, l2, istep, normt, 0, adiis)
+            l1 = spatial2spin(l1, eris.orbspin)
+            l2 = spatial2spin(l2, eris.orbspin)
         log.info('cycle = %d  norm(lambda1,lambda2) = %.6g', istep+1, normt)
         cput0 = log.timer('UCCSD iter', *cput0)
         if normt < tol:

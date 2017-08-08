@@ -113,15 +113,13 @@ def update_amps(mycc, t1, t2, eris):
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d,%d',
                max_memory, nocc, nvir, blksize, blknvir)
     nvir_pair = nvir * (nvir+1) // 2
-    def prefect_ovvv(p0, p1, q0, q1, prefetch):
+    def load_ovvv(p0, p1, q0, q1, buf):
         if q1 != nvir:
             q0, q1 = q1, min(nvir, q1+blknvir)
-            readbuf = numpy.ndarray((p1-p0,q1-q0,nvir_pair), buffer=prefetch)
+            readbuf = numpy.ndarray((p1-p0,q1-q0,nvir_pair), buffer=buf)
             readbuf[:] = eris.ovvv[p0:p1,q0:q1]
-    def prefect_ovov(p0, p1, buf):
-        buf[:] = eris.ovov[p0:p1]
-    def prefect_oovv(p0, p1, buf):
-        buf[:] = eris.oovv[p0:p1]
+    def load_eri(eri, p0, p1, buf):
+        buf[:] = eri[p0:p1]
 
     buflen = max(nocc*nvir**2, nocc**3)
     bufs = numpy.empty((5,blksize*buflen))
@@ -134,13 +132,11 @@ def update_amps(mycc, t1, t2, eris):
         readbuf = numpy.empty((p1-p0,blknvir,nvir_pair))
         prefetchbuf = numpy.empty((p1-p0,blknvir,nvir_pair))
         ovvvbuf = numpy.empty((p1-p0,blknvir,nvir,nvir))
-        with lib.call_in_background(prefect_ovvv) as preload_ovvv:
+        with lib.call_in_background(load_ovvv) as prefetch_ovvv:
+            prefetchbuf[:] = eris.ovvv[p0:p1,0:min(nvir,blknvir)]
             for q0, q1 in lib.prange(0, nvir, blknvir):
-                if q0 == 0:
-                    readbuf[:] = eris.ovvv[p0:p1,q0:q1]
-                else:
-                    readbuf, prefetchbuf = prefetchbuf, readbuf
-                preload_ovvv(p0, p1, q0, q1, prefetchbuf)
+                readbuf, prefetchbuf = prefetchbuf, readbuf
+                prefetch_ovvv(p0, p1, q0, q1, prefetchbuf)
                 eris_ovvv = numpy.ndarray(((p1-p0)*(q1-q0),nvir_pair), buffer=readbuf)
                 #:eris_ovvv = _cp(eris.ovvv[p0:p1,q0:q1])
                 eris_ovvv = lib.unpack_tril(eris_ovvv, out=ovvvbuf)
@@ -195,34 +191,30 @@ def update_amps(mycc, t1, t2, eris):
 
         eris_ooov = _cp(eris.ooov[p0:p1])
         eris_oovv = numpy.empty((p1-p0,nocc,nvir,nvir))
-        handler = lib.background_thread(prefect_oovv, p0, p1, eris_oovv)
-        tmp = numpy.ndarray((p1-p0,nocc,nvir,nocc), buffer=buf1)
-        tmp[:] = eris_ooov.transpose(0,1,3,2)
-        #: wooVV = numpy.einsum('ka,ijkb->ijba', t1, eris.ooov[p0:p1])
-        lib.ddot(tmp.reshape(-1,nocc), t1, 1, wooVV.reshape(-1,nvir), 1)
-        t2new[p0:p1] += wOoVv.transpose(1,0,2,3)
+        with lib.call_in_background(load_eri) as prefetch:
+            prefetch(eris.oovv, p0, p1, eris_oovv)
+            tmp = numpy.ndarray((p1-p0,nocc,nvir,nocc), buffer=buf1)
+            tmp[:] = eris_ooov.transpose(0,1,3,2)
+            #: wooVV = numpy.einsum('ka,ijkb->ijba', t1, eris.ooov[p0:p1])
+            lib.ddot(tmp.reshape(-1,nocc), t1, 1, wooVV.reshape(-1,nvir), 1)
+            t2new[p0:p1] += wOoVv.transpose(1,0,2,3)
 
-        #:eris_oovv = _cp(eris.oovv[p0:p1])
-        handler.join()
         eris_ovov = numpy.empty((p1-p0,nvir,nocc,nvir))
-        handler = lib.background_thread(prefect_ovov, p0, p1, eris_ovov)
-    #: g2 = 2 * eris.oOVv - eris.oovv
-    #: t1new += numpy.einsum('jb,ijba->ia', t1, g2)
-        t1new[p0:p1] += numpy.einsum('jb,ijba->ia',  -t1, eris_oovv)
-        wooVV -= eris_oovv
+        with lib.call_in_background(load_eri) as prefetch:
+            prefetch(eris.ovov, p0, p1, eris_ovov)
+            t1new[p0:p1] += numpy.einsum('jb,ijba->ia',  -t1, eris_oovv)
+            wooVV -= eris_oovv
 
-        #tmp = numpy.einsum('ic,jkbc->jikb', t1, eris_oovv)
-        #t2new[p0:p1] += numpy.einsum('ka,jikb->ijba', -t1, tmp)
-        tmp1 = numpy.ndarray((nocc,nocc*nvir), buffer=buf1)
-        tmp2 = numpy.ndarray((nocc*nvir,nocc), buffer=buf2)
-        for j in range(p1-p0):
-            tmp = lib.ddot(t1, eris_oovv[j].reshape(-1,nvir).T, 1, tmp1)
-            lib.transpose(_cp(tmp).reshape(nocc,nocc,nvir), axes=(0,2,1), out=tmp2)
-            t2new[:,p0+j] -= lib.ddot(tmp2, t1).reshape(nocc,nvir,nvir)
+            #tmp = numpy.einsum('ic,jkbc->jikb', t1, eris_oovv)
+            #t2new[p0:p1] += numpy.einsum('ka,jikb->ijba', -t1, tmp)
+            tmp1 = numpy.ndarray((nocc,nocc*nvir), buffer=buf1)
+            tmp2 = numpy.ndarray((nocc*nvir,nocc), buffer=buf2)
+            for j in range(p1-p0):
+                tmp = lib.ddot(t1, eris_oovv[j].reshape(-1,nvir).T, 1, tmp1)
+                lib.transpose(_cp(tmp).reshape(nocc,nocc,nvir), axes=(0,2,1), out=tmp2)
+                t2new[:,p0+j] -= lib.ddot(tmp2, t1).reshape(nocc,nvir,nvir)
         eris_oovv = None
 
-        #:eris_ovov = _cp(eris.ovov[p0:p1])
-        handler.join()
         for i in range(p1-p0):
             t2new[p0+i] += eris_ovov[i].transpose(1,0,2) * .5
         t1new[p0:p1] += numpy.einsum('jb,iajb->ia', 2*t1, eris_ovov)
