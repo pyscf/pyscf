@@ -12,9 +12,9 @@ import copy
 import ctypes
 import math
 import numpy
-import pyscf.lib
+from pyscf import lib
 
-_itrf = pyscf.lib.load_library('libxcfun_itrf')
+_itrf = lib.load_library('libxcfun_itrf')
 
 XC = XC_CODES = {
 'SLATERX'       :  0,  # Slater LDA exchange
@@ -89,6 +89,7 @@ MGGA_IDS = set([22, 23, 24, 25, 26, 27, 29, 30, 31, 32, 33, 34, 35, 36, 37])
 MLGGA_IDS = set([28])
 HYB_XC = set(('PBE0'    , 'PBE1PBE' , 'B3PW91'  , 'B3P86'   , 'B3LYP'   ,
               'B3LYPG'  , 'O3LYP'   , 'M062X'   , 'CAMB3LYP',))
+MAX_DERIV_ORDER = 3
 
 def is_lda(xc_code):
     if isinstance(xc_code, str):
@@ -138,6 +139,17 @@ def is_gga(xc_code):
     else:
         return (all((is_gga(x) or is_lda(x) for x in xc_code)) and
                 not is_lda(xc_code))
+
+def max_deriv_order(xc_code):
+    hyb, fn_facs = parse_xc(xc_code)
+    return MAX_DERIV_ORDER
+
+def test_deriv_order(xc_code, deriv, raise_error=False):
+    support = deriv <= max_deriv_order(xc_code)
+    if not support and raise_error:
+        raise NotImplementedError('xcfun library does not support derivative '
+                                  'order %d for  %s' % (deriv, xc_code))
+    return support
 
 def hybrid_coeff(xc_code, spin=0):
     return parse_xc(xc_code)[0]

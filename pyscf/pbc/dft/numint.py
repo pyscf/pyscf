@@ -994,6 +994,8 @@ class _NumInt(numint._NumInt):
                    kpt_band=None, max_memory=2000, non0tab=None, blksize=None):
         '''Define this macro to loop over grids by blocks.
         '''
+        if grids.coords is None:
+            grids.build(with_non0tab=True)
         ngrids = grids.weights.size
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
@@ -1148,6 +1150,8 @@ class _KNumInt(numint._NumInt):
                    kpts_band=None, max_memory=2000, non0tab=None, blksize=None):
         '''Define this macro to loop over grids by blocks.
         '''
+        if grids.coords is None:
+            grids.build(with_non0tab=True)
         ngrids = grids.weights.size
         nkpts = len(kpts)
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6

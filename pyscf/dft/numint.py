@@ -1309,6 +1309,8 @@ class _NumInt(object):
                    non0tab=None, blksize=None, buf=None):
         '''Define this macro to loop over grids by blocks.
         '''
+        if grids.coords is None:
+            grids.build(with_non0tab=True)
         ngrids = grids.weights.size
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE

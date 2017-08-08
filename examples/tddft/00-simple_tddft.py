@@ -3,11 +3,11 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-from pyscf import gto, dft, tddft
-
 '''
 A simple example to run TDDFT calculation.
 '''
+
+from pyscf import gto, dft, tddft
 
 mol = gto.Mole()
 mol.build(

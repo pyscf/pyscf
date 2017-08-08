@@ -67,6 +67,8 @@ class UniformGrids(object):
 
         if with_non0tab:
             self.non0tab = self.make_mask(cell, self.coords)
+        else:
+            self.non0tab = None
         return self.coords, self.weights
 
     def dump_flags(self):
@@ -75,9 +77,9 @@ class UniformGrids(object):
         else:
             logger.info(self, 'Uniform grid, gs = %s', self.gs)
 
-    def kernel(self, cell=None):
+    def kernel(self, cell=None, with_non0tab=False):
         self.dump_flags()
-        return self.build(cell)
+        return self.build(cell, with_non0tab)
 
     @lib.with_doc(make_mask.__doc__)
     def make_mask(self, cell=None, coords=None, relativity=0, shls_slice=None,
@@ -177,6 +179,8 @@ class BeckeGrids(dft.gen_grid.Grids):
                                                     prune=self.prune)
         if with_non0tab:
             self.non0tab = self.make_mask(cell, self.coords)
+        else:
+            self.non0tab = None
         logger.info(self, 'tot grids = %d', len(self.weights))
         logger.info(self, 'cell vol = %.9g  sum(weights) = %.9g',
                     cell.vol, self.weights.sum())

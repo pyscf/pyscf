@@ -130,9 +130,9 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
     cell = mf.cell
     kpts = mf.kpts
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
-        if mf.grids.coords is None:
-            mf.grids.build()
         ni = mf._numint
+        ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
+
         hyb = ni.hybrid_coeff(mf.xc, spin=cell.spin)
         if singlet is None:  # for newton solver
             rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc, mo_coeff,
@@ -219,9 +219,9 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
     cell = mf.cell
     kpts = mf.kpts
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
-        if mf.grids.coords is None:
-            mf.grids.build()
         ni = mf._numint
+        ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
+
         hyb = ni.hybrid_coeff(mf.xc, spin=cell.spin)
         rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc,
                                             mo_coeff, mo_occ, 1, kpts)

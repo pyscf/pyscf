@@ -1,7 +1,8 @@
-import pyscf
+from pyscf import dft, lib
 import ctypes
 
-libdft = pyscf.lib.load_library('libxcfun_itrf')
+#libdft = lib.load_library('libxcfun_itrf')
+libdft = dft.xcfun._itrf
 libdft.xc_name.restype = ctypes.c_char_p
 libdft.XCFUN_xc_type.restype = ctypes.c_int
 libdft.xc_short_description.restype = ctypes.c_char_p

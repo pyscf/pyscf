@@ -13,9 +13,9 @@ import copy
 import ctypes
 import math
 import numpy
-import pyscf.lib
+from pyscf import lib
 
-_itrf = pyscf.lib.load_library('libxc_itrf')
+_itrf = lib.load_library('libxc_itrf')
 
 # xc_code from libxc
 XC = XC_CODES = {
@@ -369,10 +369,10 @@ XC = XC_CODES = {
 }
 
 XC_KEYS = set(XC_CODES.keys())
-LDA_IDS = set((1,  2,  3,  4,  5,  6,  7,  8,  9, 10,
-               11, 12, 13, 14, 15, 16, 17, 17, 18, 19,
-               20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
-               30, 31, 50, 51,))
+LDA_IDS = set((1,  2,  3,  4,  5,  6,  7,  8,  9,  10,
+               11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+               21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+               31, 50, 51,))
 GGA_IDS = set(( 47,  48,  49,  52,  53,  54,  55,  56,  57,  58,
                 59,  60,  61,  62,  63,  65,  66,  67,  68,  69,
                 70,  71,  79,  80,  82,  83,  84,  85,  86,  87,
@@ -421,6 +421,30 @@ X_AND_C_IDS = set(( 20,  65,  66,  67,  93,  94,  95,  96,  97, 146,
                    432, 433, 434, 435, 436, 437, 453, 454, 455, 456,
                     64, 242, 438, 439, 440, 441, 442, 443, 444, 445,
                    446, 447, 448, 449, 450, 451, 452, 457, 458,))
+
+MAX_DERIV_ORDER = (-1,
+ 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 1, 3, 2, 3, 3, 2, 1, 1, 3, 3,
+ 2, 3, 3, 3, 3, 3,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 3, 3, 2, 3,
+ 3, 2, 3, 3, 3, 3, 2, 3, 3, 3, 1, 1, 1, 1, 2, 2, 2,-1, 3, 3, 3, 1, 1, 1, 1,
+ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 1, 1, 2, 2, 2, 2, 2, 3, 2, 2,
+ 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 2, 3, 3, 3, 3, 3, 2, 2, 3, 2, 3,
+ 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 2, 3, 2, 3, 1, 1, 2, 3, 3, 2,
+ 3, 2, 3, 2, 2, 2, 2, 3, 2, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+ 2, 2, 2, 2, 2, 2, 0, 2, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2,
+ 3, 3, 1, 1, 1, 3, 0, 0, 0, 1, 1, 3, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 3, 1,
+ 1, 1, 1, 1, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 3,-1,-1,-1,-1,-1,
+-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+ 2, 2, 1, 2, 2, 1, 2, 2,-1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+ 3, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+ 1, 1, 2, 2, 1, 1, 1, 1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 2,
+ 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 2, 2, 2, 2, 2, 3, 3, 3, 1, 1,
+ 1, 1, 1, 1, 1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1)
 
 def is_lda(xc_code):
     if isinstance(xc_code, str):
@@ -472,6 +496,31 @@ def is_gga(xc_code):
         return (all((is_gga(x) or is_lda(x) for x in xc_code)) and
                 not is_lda(xc_code))
 
+def max_deriv_order(xc_code):
+    hyb, fn_facs = parse_xc(xc_code)
+    deriv = [MAX_DERIV_ORDER[xc_id[0]] for xc_id in fn_facs]
+    return min(deriv)
+
+def test_deriv_order(xc_code, deriv, raise_error=False):
+    support = deriv <= max_deriv_order(xc_code)
+    if not support and raise_error:
+        from pyscf.dft import xcfun
+        msg = ('libxc library does not support derivative order %d for  %s' %
+               (deriv, xc_code))
+        try:
+            if xcfun.test_deriv_order(xc_code, deriv, raise_error=False):
+                msg += ('''
+    This functional derivative is supported in the xcfun library.
+    The following code can be used to change the libxc library to xcfun library:
+
+        from pyscf.dft import xcfun
+        mf._numint.libxc = xcfun
+''')
+            raise NotImplementedError(msg)
+        except (NotImplementedError, KeyError):
+            raise NotImplementedError(msg)
+    return support
+
 def hybrid_coeff(xc_code, spin=0):
     '''Support recursively defining hybrid functional
     '''
@@ -514,7 +563,7 @@ def parse_xc(description):
     '''
 
     if isinstance(description, int):
-        return 0, ((description, 1.))
+        return 0, [(description, 1.)]
     elif not isinstance(description, str): #isinstance(description, (tuple,list)):
         return parse_xc('%s,%s' % tuple(description))
 

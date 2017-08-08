@@ -484,6 +484,8 @@ class Grids(lib.StreamObject):
                                    self.becke_scheme)
         if with_non0tab:
             self.non0tab = self.make_mask(mol, self.coords)
+        else:
+            self.non0tab = None
         logger.info(self, 'tot grids = %d', len(self.weights))
         return self.coords, self.weights
     def setup_grids(self, mol=None):
@@ -494,9 +496,9 @@ class Grids(lib.StreamObject):
                           'and will be removed in future release.\n')
         return self.build(mol)
 
-    def kernel(self, mol=None):
+    def kernel(self, mol=None, with_non0tab=False):
         self.dump_flags()
-        return self.build(mol)
+        return self.build(mol, with_non0tab)
 
     @lib.with_doc(gen_atomic_grids.__doc__)
     def gen_atomic_grids(self, mol, atom_grid=None, radi_method=None,
