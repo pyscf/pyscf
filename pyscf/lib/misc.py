@@ -117,20 +117,6 @@ def arg_first_match(test, lst):
             return i
     raise ValueError('No element of the given list matches the test condition.')
 
-def tril_equal_pace(n, base=0, npace=0, minimal=1):
-    idx = numpy.arange(n+1)
-    cum = idx * (idx+1) // 2
-    if base == 0:
-        assert(npace > 0)
-        segsize = float(cum[-1]) / (npace-.5)
-        displs = _blocksize_partition(cum, segsize)
-        if len(displs) != npace+1:
-            displs = _balanced_partition(cum, npace)
-    else:
-        displs = _blocksize_partition(cum, base)
-    for p0, p1 in zip(displs[:-1], displs[1:]):
-        yield p0, p1
-
 def _balanced_partition(cum, ntasks):
     segsize = float(cum[-1]) / ntasks
     bounds = numpy.arange(ntasks+1) * segsize
@@ -162,6 +148,13 @@ def flatten(lst):
 def prange(start, end, step):
     for i in range(start, end, step):
         yield i, min(i+step, end)
+
+def prange_tril(start, stop, blocksize):
+    '''for p0, p1 in prange_tril: p1*(p1+1)/2-p0*(p0+1)/2 < blocksize'''
+    idx = numpy.arange(start, stop+1)
+    cum_costs = idx*(idx+1)//2 - start*(start+1)//2
+    displs = [x+start for x in _blocksize_partition(cum_costs, blocksize)]
+    return zip(displs[:-1], displs[1:])
 
 
 class ctypes_stdout(object):
@@ -523,7 +516,5 @@ class call_in_background(object):
 
 
 if __name__ == '__main__':
-    for i,j in tril_equal_pace(90, 30):
-        print('base=30', i, j, j*(j+1)//2-i*(i+1)//2)
-    for i,j in tril_equal_pace(90, npace=5):
-        print('npace=5', i, j, j*(j+1)//2-i*(i+1)//2)
+    for i,j in prange_tril(0, 90, 300):
+        print(i, j, j*(j+1)//2-i*(i+1)//2)

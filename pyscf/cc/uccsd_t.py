@@ -9,7 +9,6 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.cc import _ccsd
-from pyscf.ao2mo.outcore import balance_partition
 
 '''
 UCCSD(T)
@@ -50,11 +49,6 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     eris_VvOp = ftmp['VvOp']
     cpu1 = log.timer_debug1('UCCSD(T) sort_eri', *cpu1)
 
-    def tril_prange(start, stop, step):
-        cum_costs = numpy.arange(stop+1)**2
-        tasks = balance_partition(cum_costs, step, start, stop)
-        return tasks
-
     et_sum = [0]
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mycc.max_memory - mem_now)
@@ -63,14 +57,14 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
     orbsym = numpy.zeros(mo_ea.size, dtype=int)
     contract = _gen_contract_aaa(t1aT, t2aaT, eris_vooo, mo_ea, orbsym, log)
-    for a0, a1, na in reversed(tril_prange(0, nvira, bufsize)):
+    for a0, a1 in reversed(list(lib.prange_tril(0, nvira, bufsize))):
         with lib.call_in_background(contract) as ctr:
             cache_row_a = numpy.asarray(eris_vvop[a0:a1,:a1], order='C')
             cache_col_a = numpy.asarray(eris_vvop[:a0,a0:a1], order='C')
             ctr(et_sum, a0, a1, a0, a1, (cache_row_a,cache_col_a,
                                          cache_row_a,cache_col_a))
 
-            for b0, b1, nb in tril_prange(0, a0, bufsize/6):
+            for b0, b1 in lib.prange_tril(0, a0, bufsize/6):
                 cache_row_b = numpy.asarray(eris_vvop[b0:b1,:b1], order='C')
                 cache_col_b = numpy.asarray(eris_vvop[:b0,b0:b1], order='C')
                 ctr(et_sum, a0, a1, b0, b1, (cache_row_a,cache_col_a,
@@ -84,14 +78,14 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
     orbsym = numpy.zeros(mo_eb.size, dtype=int)
     contract = _gen_contract_aaa(t1bT, t2bbT, eris_VOOO, mo_eb, orbsym, log)
-    for a0, a1, na in reversed(tril_prange(0, nvirb, bufsize)):
+    for a0, a1 in reversed(list(lib.prange_tril(0, nvirb, bufsize))):
         with lib.call_in_background(contract) as ctr:
             cache_row_a = numpy.asarray(eris_VVOP[a0:a1,:a1], order='C')
             cache_col_a = numpy.asarray(eris_VVOP[:a0,a0:a1], order='C')
             ctr(et_sum, a0, a1, a0, a1, (cache_row_a,cache_col_a,
                                          cache_row_a,cache_col_a))
 
-            for b0, b1, nb in tril_prange(0, a0, bufsize/6):
+            for b0, b1 in lib.prange_tril(0, a0, bufsize/6):
                 cache_row_b = numpy.asarray(eris_vvop[b0:b1,:b1], order='C')
                 cache_col_b = numpy.asarray(eris_vvop[:b0,b0:b1], order='C')
                 ctr(et_sum, a0, a1, b0, b1, (cache_row_a,cache_col_a,
@@ -112,7 +106,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
         with lib.call_in_background(contract) as ctr:
             cache_row_a = numpy.asarray(eris_VvOp[a0:a1,:], order='C')
             cache_col_a = numpy.asarray(eris_vVoP[:,a0:a1], order='C')
-            for b0, b1, nb in tril_prange(0, nvira, bufsize):
+            for b0, b1 in lib.prange_tril(0, nvira, bufsize):
                 cache_row_b = numpy.asarray(eris_vvop[b0:b1,:b1], order='C')
                 cache_col_b = numpy.asarray(eris_vvop[:b0,b0:b1], order='C')
                 ctr(et_sum, a0, a1, b0, b1, (cache_row_a,cache_col_a,
@@ -131,7 +125,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
         with lib.call_in_background(contract) as ctr:
             cache_row_a = numpy.asarray(eris_vVoP[a0:a1,:], order='C')
             cache_col_a = numpy.asarray(eris_VvOp[:,a0:a1], order='C')
-            for b0, b1, nb in tril_prange(0, nvirb, bufsize):
+            for b0, b1 in lib.prange_tril(0, nvirb, bufsize):
                 cache_row_b = numpy.asarray(eris_VVOP[b0:b1,:b1], order='C')
                 cache_col_b = numpy.asarray(eris_VVOP[:b0,b0:b1], order='C')
                 ctr(et_sum, a0, a1, b0, b1, (cache_row_a,cache_col_a,

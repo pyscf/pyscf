@@ -13,7 +13,6 @@ from pyscf import lib
 from pyscf import symm
 from pyscf.lib import logger
 from pyscf.cc import _ccsd
-from pyscf.ao2mo.outcore import balance_partition
 
 '''
 CCSD(T)
@@ -78,24 +77,19 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
         et_sum[0] += et
         return et
 
-    def tril_prange(start, stop, step):
-        cum_costs = numpy.arange(stop+1)**2
-        tasks = balance_partition(cum_costs, step, start, stop)
-        return tasks
-
     # The rest 20% memory for cache b
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mycc.max_memory - mem_now)
     bufsize = max(1, (max_memory*1e6/8-nocc**3*100)*.7/(nocc*nmo))
     log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
-    for a0, a1, na in reversed(tril_prange(0, nvir, bufsize)):
+    for a0, a1 in reversed(list(lib.prange_tril(0, nvir, bufsize))):
         with lib.call_in_background(contract) as async_contract:
             cache_row_a = numpy.asarray(eris_vvop[a0:a1,:a1], order='C')
             cache_col_a = numpy.asarray(eris_vvop[:a0,a0:a1], order='C')
             async_contract(a0, a1, a0, a1, (cache_row_a,cache_col_a,
                                             cache_row_a,cache_col_a))
 
-            for b0, b1, nb in tril_prange(0, a0, bufsize/6):
+            for b0, b1 in lib.prange_tril(0, a0, bufsize/6):
                 cache_row_b = numpy.asarray(eris_vvop[b0:b1,:b1], order='C')
                 cache_col_b = numpy.asarray(eris_vvop[:b0,b0:b1], order='C')
                 async_contract(a0, a1, b0, b1, (cache_row_a,cache_col_a,
