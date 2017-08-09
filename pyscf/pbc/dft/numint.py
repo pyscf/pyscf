@@ -378,7 +378,8 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
                 vmat[i] += ni.eval_mat(cell, ao_k1, weight, rho, vxc,
                                        mask, xctype, 0, verbose)
     else:
-        assert(all(x not in xc_code.upper() for x in ('CC06', 'CS', 'BR89', 'MK00')))
+        if (any(x in xc_code.upper() for x in ('CC06', 'CS', 'BR89', 'MK00'))):
+            raise NotImplementedError('laplacian in meta-GGA method')
         ao_deriv = 2
         for ao_k1, ao_k2, mask, weight, coords \
                 in ni.block_loop(cell, grids, nao, ao_deriv, kpts, kpts_band,
