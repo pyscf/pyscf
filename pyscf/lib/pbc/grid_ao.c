@@ -159,6 +159,7 @@ void PBCeval_sph_iter(void (*feval)(),  int (*fexp)(),
         const int atmstart = bas[sh0*BAS_SLOTS+ATOM_OF];
         const int atmend = bas[(sh1-1)*BAS_SLOTS+ATOM_OF]+1;
         const int atmcount = atmend - atmstart;
+        const size_t Ngrids = ngrids;
         int i, k, l, m, np, nc, atm_id, bas_id, deg, dcart, di, ao_id;
         size_t off;
         double fac;
@@ -169,7 +170,7 @@ void PBCeval_sph_iter(void (*feval)(),  int (*fexp)(),
         double *aobuf = cart_gto + BLKSIZE*NCTR_CART*ncomp*param[POS_E1];
 
         for (i = 0; i < ncomp; i++) {
-                off = (i*nao+ao_loc[sh0])*ngrids + offao;
+                off = (i*nao+ao_loc[sh0])*Ngrids + offao;
                 set0(ao, nkpts, offao, ngrids, bgrids, ao_loc[sh1]-ao_loc[sh0]);
         }
         for (m = 0; m < nimgs; m++) {
@@ -209,7 +210,7 @@ void PBCeval_sph_iter(void (*feval)(),  int (*fexp)(),
         }
         di = nc * deg;
         for (i = 0; i < ncomp; i++) {
-                off = (i*nao+ao_id)*ngrids + offao;
+                off = (i*nao+ao_id)*Ngrids + offao;
                 pao = aobuf + i*di*BLKSIZE;
                 axpy(ao, pao, expLk+m*nkpts, nkpts, off, ngrids, bgrids, di);
         }
@@ -235,6 +236,7 @@ void PBCeval_loop(void (*fiter)(), void (*feval)(), int (*fexp)(),
         int shloc[shls_slice[1]-shls_slice[0]+1];
         const int nshblk = GTOshloc_by_atom(shloc, shls_slice, ao_loc, atm, bas);
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
+        const size_t Ngrids = ngrids;
 
 #pragma omp parallel default(none) \
         shared(fiter, feval, fexp, param, ngrids, \
@@ -254,7 +256,7 @@ void PBCeval_loop(void (*fiter)(), void (*feval)(), int (*fexp)(),
                 ish = shloc[iloc];
                 ib = k - iloc * nblk;
                 ip = ib * BLKSIZE;
-                aoff = (ao_loc[ish] - ao_loc[sh0]) * ngrids + ip;
+                aoff = (ao_loc[ish] - ao_loc[sh0]) * Ngrids + ip;
                 (*fiter)(feval, fexp, nao, ngrids, MIN(ngrids-ip, BLKSIZE), aoff,
                          param, shloc+iloc, ao_loc, buf, Ls, nimgs, expLk, nkpts,
                          ao, coord+ip, non0table+ib*nbas,

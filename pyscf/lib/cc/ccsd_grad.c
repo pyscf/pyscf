@@ -61,7 +61,7 @@ void CVHFics2kl_jk_s1il(double *eri, double *dm, double *vk,
                         int nao, int ic, int jc);
 void CCvhfs2kl(double *eri, double *dm, double *vj, double *vk, int ni, int nj)
 {
-        const int npair = nj*(nj+1)/2;
+        const size_t npair = nj*(nj+1)/2;
         int i, j;
         size_t ij, off;
 
