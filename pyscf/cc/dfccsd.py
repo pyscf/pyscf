@@ -154,19 +154,19 @@ def _make_eris_df(cc, mo_coeff=None):
     fswap = lib.H5TmpFile()
     mo = numpy.asarray(eris.mo_coeff, order='F')
     ijslice = (0, nmo, 0, nmo)
-    Lpq = Lvv = None
+    Lpqbuf = numpy.empty((with_df.blockdim,nmo,nmo))
     vvbuf = numpy.empty((with_df.blockdim,nvir,nvir))
     p1 = 0
     for k, eri1 in enumerate(with_df.loop()):
-        Lpq = _ao2mo.nr_e2(eri1, mo, ijslice, aosym='s2', mosym='s1', out=Lpq)
+        Lpq = _ao2mo.nr_e2(eri1, mo, ijslice, aosym='s2', mosym='s1', out=Lpqbuf)
         p0, p1 = p1, p1 + Lpq.shape[0]
         Lpq = Lpq.reshape(p1-p0,nmo,nmo)
         Loo[p0:p1] = Lpq[:,:nocc,:nocc]
         Lov[p0:p1] = Lpq[:,:nocc,nocc:]
         vvbuf[:p1-p0] = Lpq[:,nocc:,nocc:]
-        Lvv = lib.pack_tril(vvbuf[:p1-p0], out=Lvv)
+        Lvv = lib.pack_tril(vvbuf[:p1-p0], out=Lpqbuf)
         fswap[str(k)] = lib.transpose(Lvv, out=vvbuf)
-    Lpq = vvbuf = Lvv = None
+    Lpq = Lvv = Lpqbuf = vvbuf = None
     Loo = Loo.reshape(naux,nocc**2)
     Lov = Lov.reshape(naux,nocc*nvir)
 

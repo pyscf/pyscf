@@ -25,6 +25,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
+from pyscf.df import addons
 from pyscf.df.outcore import _guess_shell_ranges
 from pyscf.pbc.gto.cell import _estimate_rcut
 from pyscf.pbc.df import outcore
@@ -461,6 +462,8 @@ class DF(aft.AFTDF):
     def sr_loop(self, kpti_kptj=numpy.zeros((2,3)), max_memory=2000,
                 compact=True, blksize=None):
         '''Short range part'''
+        if self._cderi is None:
+            self.build()
         kpti, kptj = kpti_kptj
         unpack = is_zero(kpti-kptj) and not compact
         is_real = is_zero(kpti_kptj)
@@ -545,14 +548,18 @@ class DF(aft.AFTDF):
 # With this function to mimic the molecular DF.loop function, the pbc gamma
 # point DF object can be used in the molecular code
     def loop(self):
-        if self._cderi is None:
-            self.build()
-        return self.sr_loop(compact=True, blksize=self.blockdim)
+        for LpqR, LpqI in self.sr_loop(compact=True, blksize=self.blockdim):
+# LpqI should be 0 for gamma point DF
+#            assert(numpy.linalg.norm(LpqI) < 1e-12)
+            yield LpqR
 
     def get_naoaux(self):
+# determine naoaux with self._cderi, because DF object may be used as CD
+# object when self._cderi is provided.
         if self._cderi is None:
             self.build()
-        return self.auxcell.nao_nr()
+        with addons.load(self._cderi, 'j3c/0') as feri:
+            return feri.shape[0]
 
 
 def fuse_auxcell(mydf, auxcell, l_max=3):

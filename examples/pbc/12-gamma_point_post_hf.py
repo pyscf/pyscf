@@ -24,15 +24,6 @@ cell = gto.M(
     verbose = 4,
 )
 
-#
-# Switch on incore_anyway flag to ensure that all 2e-integrals are held in
-# memory.  These integrals are needed by the post-HF methods.
-#
-# Note the "incore" version of molecule code is applied here. This limits the
-# system size.
-#
-cell.incore_anyway = True
-
 mf = scf.RHF(cell).mix_density_fit(auxbasis='weigend')
 mf.kernel()
 

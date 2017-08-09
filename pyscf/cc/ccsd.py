@@ -920,9 +920,9 @@ class _ERIS:
                 ij += i + 1
 
         elif hasattr(cc._scf, 'with_df') and cc._scf.with_df:
-            #log.warn('CCSD detected DF being bound to the HF object. '
-            #         'MO integrals are computed based on the DF 3-tensor integrals.\n'
-            #         'You can switch to dfccsd.CCSD for the DF-CCSD implementation')
+            log.warn('CCSD detected DF being used in the HF object. '
+                     'MO integrals are computed based on the DF 3-index tensors.\n'
+                     "It\'s recommended to use dfccsd.CCSD for the DF-CCSD calculations")
             nvir_pair = nvir * (nvir+1) // 2
             oooo = numpy.zeros((nocc*nocc,nocc*nocc))
             ooov = numpy.zeros((nocc*nocc,nocc*nvir))

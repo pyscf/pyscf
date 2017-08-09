@@ -18,6 +18,7 @@ from pyscf.df.outcore import _guess_shell_ranges
 from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import df
+from pyscf.pbc.df import aft
 from pyscf.pbc.df.df import make_modrho_basis, fuse_auxcell
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
 from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, unique
@@ -243,4 +244,10 @@ class MDF(df.DF):
 # With this function to mimic the molecular DF.loop function, the pbc gamma
 # point DF object can be used in the molecular code
     def loop(self):
-        raise RuntimeError('MDF method does not support the symmetric-DF interface')
+        for dat in aft.AFTDF.loop(self):
+            yield dat
+        for dat in df.DF.loop(self):
+            yield dat
+
+    def get_naoaux(self):
+        return df.DF.get_naoaux(self) + aft.AFTDF.get_naoaux(self)

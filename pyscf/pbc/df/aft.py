@@ -337,7 +337,7 @@ class AFTDF(lib.StreamObject):
             yield Lpq
 
     def get_naoaux(self):
-        gs = numpy.asarray(mydf.gs)
+        gs = numpy.asarray(self.gs)
         ngs = numpy.prod(gs*2+1)
         return ngs * 2
 

@@ -67,7 +67,12 @@ def CCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
                              'CCSD calculation should be used with HF object')
     except:
         pass
-    return ccsd.CCSD(mf, frozen, mo_coeff, mo_occ)
+
+    if hasattr(mf, 'with_df') and 'pbc' in str(mf.__module__):
+        from pyscf.cc import dfccsd
+        return dfccsd.CCSD(mf, frozen, mo_coeff, mo_occ)
+    else:
+        return ccsd.CCSD(mf, frozen, mo_coeff, mo_occ)
 
 def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     import numpy
@@ -81,12 +86,22 @@ def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
                         'is converted to UHF object and UCCSD method is called.')
         mf = scf.addons.convert_to_uhf(mf)
         return UCCSD(mf, frozen, mo_coeff, mo_occ)
+
+    elif hasattr(mf, 'with_df') and 'pbc' in str(mf.__module__):
+        from pyscf.cc import dfccsd
+        return dfccsd.CCSD(mf, frozen, mo_coeff, mo_occ)
+
     else:
         return rccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)
+
 
 def UCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     from pyscf.cc import uccsd
     from pyscf import scf
     if not isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_uhf(mf)
-    return uccsd.UCCSD(mf, frozen, mo_coeff, mo_occ)
+
+    if hasattr(mf, 'with_df') and 'pbc' in str(mf.__module__):
+        raise NotImplementedError('DF-UCCSD')
+    else:
+        return uccsd.UCCSD(mf, frozen, mo_coeff, mo_occ)
