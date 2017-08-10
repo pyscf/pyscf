@@ -309,53 +309,90 @@ def _ao2mo_ovov(mp, orbo, orbv, feri, max_memory=2000, verbose=None):
     ftmp = lib.H5TmpFile()
     log.debug('max_memory = %s  dmax = %s', max_memory, dmax)
 
+    buf_i = numpy.empty((nocc*dmax**2*nao))
+    buf_li = numpy.empty((nocc**2*dmax**2))
+    buf1 = numpy.empty_like(buf_li)
+
     fint = gto.moleintor.getints4c
-    aoao_idx = numpy.arange(nao*nao).reshape(nao,nao)
-    jk_idx = []
+    jk_blk_slices = []
     count = 0
     time1 = time0
-    for ip, (ish0, ish1, ni) in enumerate(sh_ranges):
-        for jsh0, jsh1, nj in sh_ranges[:ip+1]:
-            i0, i1 = ao_loc[ish0], ao_loc[ish1]
-            j0, j1 = ao_loc[jsh0], ao_loc[jsh1]
+    with lib.call_in_background(ftmp.__setitem__) as save:
+        for ip, (ish0, ish1, ni) in enumerate(sh_ranges):
+            for jsh0, jsh1, nj in sh_ranges[:ip+1]:
+                i0, i1 = ao_loc[ish0], ao_loc[ish1]
+                j0, j1 = ao_loc[jsh0], ao_loc[jsh1]
+                jk_blk_slices.append((i0,i1,j0,j1))
 
-            eri = fint(int2e, mol._atm, mol._bas, mol._env,
-                       shls_slice=(0,nbas,ish0,ish1, jsh0,jsh1,0,nbas),
-                       aosym='s1', ao_loc=ao_loc, cintopt=ao2mopt._cintopt,
-                       out=eribuf)
-            buf_i = lib.ddot(orbo.T, eri.reshape(nao,(i1-i0)*(j1-j0)*nao))
-            buf_li = lib.ddot(orbo.T, buf_i.reshape(nocc*(i1-i0)*(j1-j0),nao).T)
-            buf_li = buf_li.reshape(nocc,nocc,(i1-i0),(j1-j0))
-            ftmp[str(count)] = buf_li.transpose(1,0,2,3).reshape(nocc**2,-1)
-            jk_idx.append(aoao_idx[i0:i1,j0:j1].ravel())
-            count += 1
-            if ish0 != jsh0:
-                ftmp[str(count)] = buf_li.transpose(0,1,3,2).reshape(nocc**2,-1)
-                jk_idx.append(aoao_idx[j0:j1,i0:i1].ravel())
+                eri = fint(int2e, mol._atm, mol._bas, mol._env,
+                           shls_slice=(0,nbas,ish0,ish1, jsh0,jsh1,0,nbas),
+                           aosym='s1', ao_loc=ao_loc, cintopt=ao2mopt._cintopt,
+                           out=eribuf)
+                tmp_i = numpy.ndarray((nocc,(i1-i0)*(j1-j0)*nao), buffer=buf_i)
+                tmp_li = numpy.ndarray((nocc,nocc*(i1-i0)*(j1-j0)), buffer=buf_li)
+                lib.ddot(orbo.T, eri.reshape(nao,(i1-i0)*(j1-j0)*nao), c=tmp_i)
+                lib.ddot(orbo.T, tmp_i.reshape(nocc*(i1-i0)*(j1-j0),nao).T, c=tmp_li)
+                tmp_li = tmp_li.reshape(nocc,nocc,(i1-i0),(j1-j0))
+                save(str(count), tmp_li.transpose(1,0,2,3))
+                buf_li, buf1 = buf1, buf_li
                 count += 1
-            time1 = log.timer_debug1('partial ao2mo [%d:%d,%d:%d]' %
-                                     (ish0,ish1,jsh0,jsh1), *time1)
+                time1 = log.timer_debug1('partial ao2mo [%d:%d,%d:%d]' %
+                                         (ish0,ish1,jsh0,jsh1), *time1)
     time1 = time0 = log.timer('mp2 ao2mo_ovov pass1', *time0)
-    eri = eribuf = buf_i = buf_li = None
+    eri = eribuf = tmp_i = tmp_li = buf_i = buf_li = buf1 = None
 
     chunks = (nvir,nvir)
     h5dat = feri.create_dataset('ovov', (nocc*nvir,nocc*nvir), 'f8',
                                 chunks=chunks)
-    jk_where = numpy.argsort(numpy.hstack(jk_idx))
-    occblk = max(4, int(max_memory*.9e6/8/(nao**2*nocc)/2))
-    for i0, i1 in lib.prange(0, nocc, occblk):
-        eri = numpy.empty(((i1-i0)*nocc,nao**2))
+    # jk_where is the sorting indices for the stacked (oO|pP) integrals in pass 2
+    jk_where = []
+    aoao_idx = numpy.arange(nao*nao).reshape(nao,nao)
+    for i0, i1, j0, j1 in jk_blk_slices:
+        # idx of pP in <oO|pP>
+        jk_where.append(aoao_idx[i0:i1,j0:j1].ravel())
+        if i0 != j0:
+            # idx of pP in (<oO|pP>).transpose(1,0,3,2)
+            jk_where.append(aoao_idx[j0:j1,i0:i1].ravel())
+    jk_where = numpy.argsort(numpy.hstack(jk_where)).astype(numpy.int32)
+    orbv = numpy.asarray(orbv, order='F')
+
+    occblk = int(min(nocc, max(4, 250/nocc, max_memory*.9e6/8/(nao**2*nocc)/3)))
+    def load(i0, eri):
+        if i0 >= nocc:
+            return
+        i1 = min(i0+occblk, nocc)
+        eri = eri[:(i1-i0)*nocc]
         p1 = 0
-        for k in range(count):
-            dat = numpy.asarray(ftmp[str(k)][i0*nocc:i1*nocc])
+        for k, jk_slice in enumerate(jk_blk_slices):
+            dat = numpy.asarray(ftmp[str(k)][i0:i1]).reshape((i1-i0)*nocc,-1)
             p0, p1 = p1, p1 + dat.shape[1]
             eri[:,p0:p1] = dat
+            if jk_slice[0] != jk_slice[2]:
+                dat = numpy.asarray(ftmp[str(k)][:,i0:i1])
+                dat = dat.transpose(1,0,3,2).reshape((i1-i0)*nocc,-1)
+                p0, p1 = p1, p1 + dat.shape[1]
+                eri[:,p0:p1] = dat
+
+    def save(i0, i1, dat):
         for i in range(i0, i1):
-            dat = numpy.take(eri[(i-i0)*nocc:(i-i0+1)*nocc], jk_where, axis=1)
-            dat = _ao2mo.nr_e2(dat, orbv, (0,nvir,0,nvir), 's1', 's1')
-            dat = dat.reshape(nocc,nvir,nvir)
-            h5dat[i*nvir:(i+1)*nvir] = dat.transpose(1,0,2).reshape(nvir,nocc*nvir)
-        time1 = log.timer_debug1('pass2 ao2mo [%d:%d]' % (i0,i1), *time1)
+            h5dat[i*nvir:(i+1)*nvir] = dat[i-i0].reshape(nvir,nocc*nvir)
+
+    buf_prefecth = numpy.empty((occblk*nocc,nao**2))
+    buf = numpy.empty_like(buf_prefecth)
+    buf1 = numpy.empty_like(buf_prefecth)
+    with lib.call_in_background(load) as prefetch:
+        with lib.call_in_background(save) as bsave:
+            load(0, buf_prefecth)
+            for i0, i1 in lib.prange(0, nocc, occblk):
+                buf, buf_prefecth = buf_prefecth, buf
+                eri = buf[:(i1-i0)*nocc]
+                prefetch(i1, buf_prefecth)
+
+                idx = numpy.arange(eri.shape[0], dtype=numpy.int32)
+                dat = lib.take_2d(eri, idx, jk_where, out=buf1)
+                dat = _ao2mo.nr_e2(dat, orbv, (0,nvir,0,nvir), 's1', 's1', out=eri)
+                bsave(i0, i1, dat.reshape(i1-i0,nocc,nvir,nvir).transpose(0,2,1,3))
+                time1 = log.timer_debug1('pass2 ao2mo [%d:%d]' % (i0,i1), *time1)
 
     time0 = log.timer('mp2 ao2mo_ovov pass2', *time0)
     return h5dat
