@@ -267,14 +267,39 @@ def init_guess_by_minao(mol):
     from pyscf.scf import addons
 
     def minao_basis(symb, nelec_ecp):
-        basis_add = gto.basis.load('ano', symb)
+        stdsymb = gto.mole._std_symbol(symb)
+# Projected ANO basis for ECP has wrong density in core region.  The assumption
+# here is the ECP basis is natural orbital.  TODO: Additional check should be
+# made to test whether this initial guess reasonable
+        if nelec_ecp > 0:
+            basis_add = mol._basis[symb]
+            occ = []
+            basis_new = []
+            coreshl = gto.ecp.core_configuration(nelec_ecp)
+            for l in range(4):
+                ndocc, nfrac = atom_hf.frac_occ(stdsymb, l)
+                assert(ndocc >= coreshl[l])
+                ndocc -= coreshl[l]
+                occ.extend([2]*(ndocc*(2*l+1)))
+                if nfrac > 1e-15:
+                    occ.extend([nfrac]*(2*l+1))
+                    ndocc += 1
+                for bas in basis_add:
+                    if ndocc <= 0:
+                        break
+                    if bas[0] == l:
+                        basis_new.append([l] + [b[:ndocc+1] for b in bas[1:]])
+                        ndocc -= len(bas[1]) - 1  # first column of bas[1] is exp
+            return occ, basis_new
+
+        basis_add = gto.basis.load('ano', stdsymb)
         occ = []
         basis_new = []
 # coreshl defines the core shells to be removed in the initial guess
         coreshl = gto.ecp.core_configuration(nelec_ecp)
         #coreshl = (0,0,0,0)  # it keeps all core electrons in the initial guess
         for l in range(4):
-            ndocc, nfrac = atom_hf.frac_occ(symb, l)
+            ndocc, nfrac = atom_hf.frac_occ(stdsymb, l)
             if coreshl[l] > 0:
                 occ.extend([0]*coreshl[l]*(2*l+1))
             if ndocc > coreshl[l]:
@@ -299,8 +324,7 @@ def init_guess_by_minao(mol):
     for symb in atmlst:
         if 'GHOST' not in symb:
             nelec_ecp = nelec_ecp_dic[symb]
-            stdsymb = gto.mole._std_symbol(symb)
-            occ_add, basis_add = minao_basis(stdsymb, nelec_ecp)
+            occ_add, basis_add = minao_basis(symb, nelec_ecp)
             occdic[symb] = occ_add
             basis[symb] = basis_add
     occ = []

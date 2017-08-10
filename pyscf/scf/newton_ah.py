@@ -722,7 +722,7 @@ def newton_SCF_class(mf):
             self.max_stepsize = .05
             self.canonicalization = True
 
-            self.ah_start_tol = 5.
+            self.ah_start_tol = 1e9
             self.ah_start_cycle = 1
             self.ah_level_shift = 0
             self.ah_conv_tol = 1e-12
