@@ -204,10 +204,11 @@ def contract(myci, civec, eris):
             t2[:,:,i] += tmp.reshape(nocc,nocc,nvir).transpose(1,0,2)
         tmp = eris_vovv = None
 
+    #:t2 + t2.transpose(1,0,3,2)
     for i in range(nocc):
-        for j in range(i+1):
-            t2[i,j]+= t2[j,i].T
-            t2[j,i] = t2[i,j].T
+        if i > 0:
+            t2[i,:i] += t2[:i,i].transpose(0,2,1)
+        t2[i,i] = t2[i,i] + t2[i,i].T
 
     cinew[0] += numpy.einsum('ia,ia->', fov, c1) * 2
     cinew[0] += numpy.einsum('aijb,ijab->', eris.voov, c2) * 2

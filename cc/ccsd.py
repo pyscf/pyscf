@@ -365,13 +365,13 @@ def update_amps(mycc, t1, t2, eris):
     t1new /= eia
 
     #: t2new = t2new + t2new.transpose(1,0,3,2)
-    ij = 0
     for i in range(nocc):
-        for j in range(i+1):
-            t2new[i,j] += t2new[j,i].T
-            t2new[i,j] /= lib.direct_sum('a,b->ab', eia[i], eia[j])
-            t2new[j,i]  = t2new[i,j].T
-            ij += 1
+        if i > 0:
+            t2new[i,:i] += t2new[:i,i].transpose(0,2,1)
+            t2new[i,:i] /= lib.direct_sum('a,jb->jab', eia[i], eia[:i])
+            t2new[:i,i] = t2new[i,:i].transpose(0,2,1)
+        t2new[i,i] = t2new[i,i] + t2new[i,i].T
+        t2new[i,i] /= lib.direct_sum('a,b->ab', eia[i], eia[i])
 
     time0 = log.timer_debug1('update t1 t2', *time0)
     return t1new, t2new
