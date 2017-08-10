@@ -245,7 +245,7 @@ def mulliken_meta(cell, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
     s_gamma = s[0,:,:].real
     if cell.has_ecp():
 # Rereference AO basis in the environment of ECP is not available
-        c = numpy.eye(s_gamma.shape[0])
+        c = np.eye(s_gamma.shape[0])
     else:
         c = orth.pre_orth_ao(cell, pre_orth_method)
     orth_coeff = orth.orth_ao(cell, 'meta_lowdin', pre_orth_ao=c, s=s_gamma)
@@ -414,7 +414,24 @@ class KRHF(hf.RHF):
             dm_kpts = dm
         else:
             dm_kpts = lib.asarray([dm]*len(self.kpts))
+        if cell.dimension < 3:
+            ne = np.einsum('kij,kji->k', dm_kpts, self.get_ovlp(cell))
+            if np.any(abs(ne - cell.nelectron).sum() > 1e-7):
+                logger.warn(self, 'Big error detected in the electron number '
+                            'of initial guess density matrix (Ne/cell = %g)!\n'
+                            '  This can cause huge error in Fock matrix and '
+                            'lead to instability in SCF for low-dimensional '
+                            'systems.\n  DM is normalized to correct number '
+                            'of electrons', ne.mean())
+                dm_kpts *= cell.nelectron / ne.reshape(-1,1,1)
         return dm_kpts
+
+    def init_guess_by_1e(self, cell=None):
+        if cell is None: cell = self.cell
+        if cell.dimension < 3:
+            logger.warn(self, 'Hcore initial guess is not recommended in '
+                        'the SCF of low-dimensional systems.')
+        return hf.RHF.init_guess_by_1e(cell)
 
     def get_hcore(self, cell=None, kpts=None):
         if cell is None: cell = self.cell

@@ -406,6 +406,28 @@ class RHF(hf.RHF):
 
     get_bands = get_bands
 
+    def get_init_guess(self, cell=None, key='minao'):
+        if cell is None: cell = self.cell
+        dm = hf.RHF.get_init_guess(self, cell, key)
+        if cell.dimension < 3:
+            ne = np.einsum('ij,ji', dm, self.get_ovlp(cell))
+            if abs(ne - cell.nelectron).sum() > 1e-7:
+                logger.warn(self, 'Big error detected in the electron number '
+                            'of initial guess density matrix (Ne/cell = %g)!\n'
+                            '  This can cause huge error in Fock matrix and '
+                            'lead to instability in SCF for low-dimensional '
+                            'systems.\n  DM is normalized to correct number '
+                            'of electrons', ne)
+                dm *= cell.nelectron / ne
+        return dm
+
+    def init_guess_by_1e(self, cell=None):
+        if cell is None: cell = self.cell
+        if cell.dimension < 3:
+            logger.warn(self, 'Hcore initial guess is not recommended in '
+                        'the SCF of low-dimensional systems.')
+        return hf.RHF.init_guess_by_1e(cell)
+
     def init_guess_by_chkfile(self, chk=None, project=True, kpt=None):
         if chk is None: chk = self.chkfile
         if kpt is None: kpt = self.kpt

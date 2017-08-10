@@ -12,8 +12,8 @@ See Also:
 
 import sys
 import numpy as np
-import pyscf.scf.hf
-import pyscf.scf.uhf
+import pyscf.scf.hf as mol_hf
+import pyscf.scf.uhf as mol_uhf
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import hf as pbchf
@@ -54,10 +54,10 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpt=None):
         else:
             return mo
     if mo.ndim == 2:
-        dm = pyscf.scf.hf.make_rdm1(fproj(mo), mo_occ)
+        dm = mol_hf.make_rdm1(fproj(mo), mo_occ)
     else:  # UHF
-        dm = np.asarray((pyscf.scf.hf.make_rdm1(fproj(mo[0]), mo_occ[0]),
-                         pyscf.scf.hf.make_rdm1(fproj(mo[1]), mo_occ[1])))
+        dm = np.asarray((mol_hf.make_rdm1(fproj(mo[0]), mo_occ[0]),
+                         mol_hf.make_rdm1(fproj(mo[1]), mo_occ[1])))
 
     # Real DM for gamma point
     if kpt is None or np.allclose(kpt, 0):
@@ -65,13 +65,13 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpt=None):
     return dm
 
 
-class UHF(pyscf.scf.uhf.UHF, pbchf.RHF):
+class UHF(mol_uhf.UHF, pbchf.RHF):
     '''UHF class for PBCs.
     '''
     def __init__(self, cell, kpt=np.zeros(3), exxdiv='ewald'):
         from pyscf.pbc import df
         self.cell = cell
-        pyscf.scf.uhf.UHF.__init__(self, cell)
+        mol_uhf.UHF.__init__(self, cell)
 
         self.with_df = df.FFTDF(cell)
         self.exxdiv = exxdiv
@@ -88,7 +88,7 @@ class UHF(pyscf.scf.uhf.UHF, pbchf.RHF):
         self.with_df.kpts = np.reshape(x, (-1,3))
 
     def dump_flags(self):
-        pyscf.scf.uhf.UHF.dump_flags(self)
+        mol_uhf.UHF.dump_flags(self)
         pbchf.RHF.dump_flags(self)
         self.with_df.dump_flags()
         return self
@@ -101,6 +101,31 @@ class UHF(pyscf.scf.uhf.UHF, pbchf.RHF):
     get_jk_incore = pbchf.RHF.get_jk_incore
     energy_tot = pbchf.RHF.energy_tot
     get_bands = pbchf.get_bands
+
+    def get_init_guess(self, cell=None, key='minao'):
+        if cell is None: cell = self.cell
+        dm = mol_uhf.UHF.get_init_guess(self, cell, key)
+        if cell.dimension < 3:
+            if isinstance(dm, np.ndarray) and dm.ndim == 2:
+                ne = np.einsum('ij,ji', dm, self.get_ovlp(cell))
+            else:
+                ne = np.einsum('xij,ji', dm, self.get_ovlp(cell))
+            if abs(ne - cell.nelectron).sum() > 1e-7:
+                logger.warn(self, 'Big error detected in the electron number '
+                            'of initial guess density matrix (Ne/cell = %g)!\n'
+                            '  This can cause huge error in Fock matrix and '
+                            'lead to instability in SCF for low-dimensional '
+                            'systems.\n  DM is normalized to correct number '
+                            'of electrons', ne)
+                dm *= cell.nelectron / ne
+        return dm
+
+    def init_guess_by_1e(self, cell=None):
+        if cell is None: cell = self.cell
+        if cell.dimension < 3:
+            logger.warn(self, 'Hcore initial guess is not recommended in '
+                        'the SCF of low-dimensional systems.')
+        return mol_uhf.UHF.init_guess_by_1e(cell)
 
     def init_guess_by_chkfile(self, chk=None, project=True, kpt=None):
         if chk is None: chk = self.chkfile
