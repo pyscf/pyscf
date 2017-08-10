@@ -42,14 +42,12 @@ def kernel(mycc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
         adiis.space = mycc.diis_space
     else:
         adiis = lambda t1,t2,*args: (t1,t2)
-    print abs(t2-t2.transpose(1,0,3,2)).sum()
 
     conv = False
     for istep in range(max_cycle):
         t1new, t2new = mycc.update_amps(t1, t2, eris)
         normt = numpy.linalg.norm(t1new-t1) + numpy.linalg.norm(t2new-t2)
         t1, t2 = t1new, t2new
-        print abs(t2-t2.transpose(1,0,3,2)).sum()
         t1new = t2new = None
         if mycc.diis:
             t1, t2 = mycc.diis(t1, t2, istep, normt, eccsd-eold, adiis)
