@@ -42,12 +42,14 @@ def kernel(mycc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
         adiis.space = mycc.diis_space
     else:
         adiis = lambda t1,t2,*args: (t1,t2)
+    print abs(t2-t2.transpose(1,0,3,2)).sum()
 
     conv = False
     for istep in range(max_cycle):
         t1new, t2new = mycc.update_amps(t1, t2, eris)
         normt = numpy.linalg.norm(t1new-t1) + numpy.linalg.norm(t2new-t2)
         t1, t2 = t1new, t2new
+        print abs(t2-t2.transpose(1,0,3,2)).sum()
         t1new = t2new = None
         if mycc.diis:
             t1, t2 = mycc.diis(t1, t2, istep, normt, eccsd-eold, adiis)
@@ -353,13 +355,13 @@ def update_amps(mycc, t1, t2, eris):
     t1new /= eia
 
     #: t2new = t2new + t2new.transpose(1,0,3,2)
-    ij = 0
     for i in range(nocc):
-        for j in range(i+1):
-            t2new[i,j] += t2new[j,i].T
-            t2new[i,j] /= lib.direct_sum('a,b->ab', eia[i], eia[j])
-            t2new[j,i]  = t2new[i,j].T
-            ij += 1
+        if i > 0:
+            t2new[i,:i] += t2new[:i,i].transpose(0,2,1)
+            t2new[i,:i] /= lib.direct_sum('a,jb->jab', eia[i], eia[:i])
+            t2new[:i,i] = t2new[i,:i].transpose(0,2,1)
+        t2new[i,i] = t2new[i,i] + t2new[i,i].T
+        t2new[i,i] /= lib.direct_sum('a,b->ab', eia[i], eia[i])
 
     time0 = log.timer_debug1('update t1 t2', *time0)
     return t1new, t2new
@@ -824,8 +826,13 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def diis_(self, t1, t2, istep, normt, de, adiis):
         if (istep > self.diis_start_cycle and
             abs(de) < self.diis_start_energy_diff):
-            vec = self.amplitudes_to_vector(t1, t2)
-            t1, t2 = self.vector_to_amplitudes(adiis.update(vec))
+            #vec = self.amplitudes_to_vector(t1, t2)
+            #t1, t2 = self.vector_to_amplitudes(adiis.update(vec))
+            vec = numpy.hstack((t1.ravel(),t2.ravel()))
+            t1t2 = adiis.update(vec)
+            nov = t1.size
+            t1 = t1t2[:nov].reshape(t1.shape)
+            t2 = t1t2[nov:].reshape(t2.shape)
             logger.debug1(self, 'DIIS for step %d', istep)
         return t1, t2
 
