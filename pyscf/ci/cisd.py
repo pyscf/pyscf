@@ -205,7 +205,8 @@ def contract(myci, civec, eris):
     #:t2 + t2.transpose(1,0,3,2)
     for i in range(nocc):
         if i > 0:
-            t2[i,:i] += t2[:i,i].transpose(0,2,1)
+            t2[i,:i]+= t2[:i,i].transpose(0,2,1)
+            t2[:i,i] = t2[i,:i].transpose(0,2,1)
         t2[i,i] = t2[i,i] + t2[i,i].T
 
     cinew[0] += numpy.einsum('ia,ia->', fov, c1) * 2
