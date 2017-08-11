@@ -97,17 +97,24 @@ def smearing_(mf, sigma=None, method='fermi'):
             nocc = cell_nelec * nkpts
         else:
             nocc = cell_nelec * nkpts // 2
-        mo_energy = numpy.sort(mo_energy_kpts.ravel())
+        mo_es = numpy.hstack(mo_energy_kpts)
+        mo_energy = numpy.sort(numpy.hstack(mo_energy_kpts))
         fermi = mo_energy[nocc-1]
 
         if mf.smearing_method.lower() == 'fermi':  # Fermi-Dirac smearing
-            mo_occ_kpts, mu, mf.entropy = fermi_smearing(mo_energy_kpts, fermi, nkpts)
+            mo_occs, mu, mf.entropy = fermi_smearing(mo_es, fermi, nkpts)
 
         else:  # Gaussian smearing
-            mo_occ_kpts, mu, mf.entropy = gaussian_smearing(mo_energy_kpts, fermi, nkpts)
+            mo_occs, mu, mf.entropy = gaussian_smearing(mo_es, fermi, nkpts)
+        mo_occ_kpts = []
+        p1 = 0
+        for e in mo_energy_kpts:
+            p0, p1 = p1, p1 + e.size
+            occ = mo_occs[p0:p1]
+            mo_occ_kpts.append(occ)
 
         logger.debug(mf, '    Fermi level %g  Sum mo_occ_kpts = %s  should equal nelec = %s',
-                     fermi, mo_occ_kpts.sum()/nkpts, cell_nelec)
+                     fermi, mo_occs.sum()/nkpts, cell_nelec)
         logger.info(mf, '    sigma = %g  Optimized mu = %.12g  entropy = %.12g',
                     mf.sigma, mu, mf.entropy)
 
