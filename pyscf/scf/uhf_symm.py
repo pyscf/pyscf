@@ -354,10 +354,6 @@ class UHF(uhf.UHF):
 
         vir_idx = (mo_occ[0]==0)
         if self.verbose >= logger.INFO and numpy.count_nonzero(vir_idx) > 0:
-            ehomoa = max(mo_energy[0][mo_occ[0]>0 ])
-            elumoa = min(mo_energy[0][mo_occ[0]==0])
-            ehomob = max(mo_energy[1][mo_occ[1]>0 ])
-            elumob = min(mo_energy[1][mo_occ[1]==0])
             noccsa = []
             noccsb = []
             p0 = 0
@@ -365,25 +361,26 @@ class UHF(uhf.UHF):
                 irname = mol.irrep_name[i]
                 ir_idxa = orbsyma == ir
                 ir_idxb = orbsymb == ir
-
                 noccsa.append(numpy.count_nonzero(mo_occ[0][ir_idxa]))
                 noccsb.append(numpy.count_nonzero(mo_occ[1][ir_idxb]))
-                if ehomoa in mo_energy[0][ir_idxa]:
-                    irhomoa = irname
-                if elumoa in mo_energy[0][ir_idxa]:
-                    irlumoa = irname
-                if ehomob in mo_energy[1][ir_idxb]:
-                    irhomob = irname
-                if elumob in mo_energy[1][ir_idxb]:
-                    irlumob = irname
 
+            ir_id2name = dict(zip(mol.irrep_id, mol.irrep_name))
+            ehomo = ehomoa = max(mo_energy[0][mo_occ[0]>0 ])
+            elumo = elumoa = min(mo_energy[0][mo_occ[0]==0])
+            irhomoa = ir_id2name[orbsyma[mo_energy[0] == ehomoa][0]]
+            irlumoa = ir_id2name[orbsyma[mo_energy[0] == elumoa][0]]
             logger.info(self, 'alpha HOMO (%s) = %.15g  LUMO (%s) = %.15g',
                         irhomoa, ehomoa, irlumoa, elumoa)
-            logger.info(self, 'beta  HOMO (%s) = %.15g  LUMO (%s) = %.15g',
-                        irhomob, ehomob, irlumob, elumob)
+            if nelecb_float > 0:
+                ehomob = max(mo_energy[1][mo_occ[1]>0 ])
+                elumob = min(mo_energy[1][mo_occ[1]==0])
+                irhomob = ir_id2name[orbsymb[mo_energy[1] == ehomob][0]]
+                irlumob = ir_id2name[orbsymb[mo_energy[1] == elumob][0]]
+                logger.info(self, 'beta  HOMO (%s) = %.15g  LUMO (%s) = %.15g',
+                            irhomob, ehomob, irlumob, elumob)
+                ehomo = max(ehomoa,ehomob)
+                elumo = min(elumoa,elumob)
 
-            ehomo = max(ehomoa,ehomob)
-            elumo = min(elumoa,elumob)
             logger.debug(self, 'alpha irrep_nelec = %s', noccsa)
             logger.debug(self, 'beta  irrep_nelec = %s', noccsb)
             hf_symm._dump_mo_energy(mol, mo_energy[0], mo_occ[0], ehomo, elumo,
