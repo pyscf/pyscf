@@ -824,13 +824,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def diis_(self, t1, t2, istep, normt, de, adiis):
         if (istep > self.diis_start_cycle and
             abs(de) < self.diis_start_energy_diff):
-            #vec = self.amplitudes_to_vector(t1, t2)
-            #t1, t2 = self.vector_to_amplitudes(adiis.update(vec))
-            vec = numpy.hstack((t1.ravel(),t2.ravel()))
-            t1t2 = adiis.update(vec)
-            nov = t1.size
-            t1 = t1t2[:nov].reshape(t1.shape)
-            t2 = t1t2[nov:].reshape(t2.shape)
+            vec = self.amplitudes_to_vector(t1, t2)
+            t1, t2 = self.vector_to_amplitudes(adiis.update(vec))
             logger.debug1(self, 'DIIS for step %d', istep)
         return t1, t2
 
