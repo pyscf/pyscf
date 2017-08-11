@@ -268,30 +268,6 @@ def init_guess_by_minao(mol):
 
     def minao_basis(symb, nelec_ecp):
         stdsymb = gto.mole._std_symbol(symb)
-# Projected ANO basis for ECP has wrong density in core region.  The assumption
-# here is the ECP basis is natural orbital.  TODO: Additional check should be
-# made to test whether this initial guess reasonable
-        if nelec_ecp > 0:
-            basis_add = mol._basis[symb]
-            occ = []
-            basis_new = []
-            coreshl = gto.ecp.core_configuration(nelec_ecp)
-            for l in range(4):
-                ndocc, nfrac = atom_hf.frac_occ(stdsymb, l)
-                assert(ndocc >= coreshl[l])
-                ndocc -= coreshl[l]
-                occ.extend([2]*(ndocc*(2*l+1)))
-                if nfrac > 1e-15:
-                    occ.extend([nfrac]*(2*l+1))
-                    ndocc += 1
-                for bas in basis_add:
-                    if ndocc <= 0:
-                        break
-                    if bas[0] == l:
-                        basis_new.append([l] + [b[:ndocc+1] for b in bas[1:]])
-                        ndocc -= len(bas[1]) - 1  # first column of bas[1] is exp
-            return occ, basis_new
-
         basis_add = gto.basis.load('ano', stdsymb)
         occ = []
         basis_new = []
@@ -309,6 +285,35 @@ def init_guess_by_minao(mol):
                 ndocc += 1
             if ndocc > 0:
                 basis_new.append([l] + [b[:ndocc+1] for b in basis_add[l][1:]])
+
+        if nelec_ecp > 0:
+            occ4ecp = []
+            basis4ecp = []
+            for l in range(4):
+                ndocc, nfrac = atom_hf.frac_occ(stdsymb, l)
+                assert(ndocc >= coreshl[l])
+                ndocc -= coreshl[l]
+                occ4ecp.extend([2]*(ndocc*(2*l+1)))
+                if nfrac > 1e-15:
+                    occ4ecp.extend([nfrac]*(2*l+1))
+                    ndocc += 1
+                for bas in mol._basis[symb]:
+                    if ndocc <= 0:
+                        break
+                    if bas[0] == l:
+                        basis4ecp.append([l] + [b[:ndocc+1] for b in bas[1:]])
+                        ndocc -= len(bas[1]) - 1  # first column of bas[1] is exp
+# Compared to ANO valence basis, to check whether the ECP basis set has
+# reasonable AO-character contraction.  The ANO valence AO should have
+# significant overlap to ECP basis if the ECP basis has AO-character.
+            atm1 = gto.Mole()
+            atm2 = gto.Mole()
+            atom = [[symb, (0.,0.,0.)]]
+            atm1._atm, atm1._bas, atm1._env = atm1.make_env(atom, {symb:basis4ecp}, [])
+            atm2._atm, atm2._bas, atm2._env = atm2.make_env(atom, {symb:basis_new}, [])
+            s12 = gto.intor_cross('int1e_ovlp', atm1, atm2)[:,numpy.array(occ)>0]
+            if abs(numpy.linalg.det(s12)) > .1:
+                occ, basis_new = occ4ecp, basis4ecp
         return occ, basis_new
 
     atmlst = set([mol.atom_symbol(ia) for ia in range(mol.natm)])
