@@ -1151,8 +1151,8 @@ if __name__ == '__main__':
     t2 = numpy.random.random((nocc,nocc,nvir,nvir)) * .1
     t2 = t2 + t2.transpose(1,0,3,2)
     r1, r2 = vector_to_amplitudes(amplitudes_to_vector(t1, t2), nocc+nvir, nocc)
-    print abs(t1-r1).max()
-    print abs(t2-r2).max()
+    print(abs(t1-r1).max())
+    print(abs(t2-r2).max())
 
     def finger(a):
         return numpy.dot(a.ravel(), numpy.cos(numpy.arange(a.size)))
