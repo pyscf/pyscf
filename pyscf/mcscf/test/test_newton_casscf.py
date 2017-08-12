@@ -3,7 +3,7 @@
 import unittest
 from functools import reduce
 import numpy
-from pyscf import gto, scf, lib
+from pyscf import gto, scf, lib, fci
 from pyscf.mcscf import newton_casscf
 
 mol = gto.Mole()
@@ -20,11 +20,12 @@ mol.atom = [
 ]
 mol.basis = 'sto-3g'
 mol.build()
-mf = scf.RHF(mol).run()
+mf = scf.RHF(mol).run(conv_tol=1e-14)
 numpy.random.seed(1)
 mf.mo_coeff = numpy.random.random(mf.mo_coeff.shape)
 mc = newton_casscf.CASSCF(mf, 4, 4)
-ci0 = numpy.random.random(36)
+mc.fcisolver = fci.direct_spin1.FCI(mol)
+ci0 = numpy.random.random((6,6))
 ci0/= numpy.linalg.norm(ci0)
 
 
@@ -32,12 +33,12 @@ class KnowValues(unittest.TestCase):
     def test_gen_g_hop(self):
         mo = mc.mo_coeff
         gall, gop, hop, hdiag = newton_casscf.gen_g_hop(mc, mo, ci0, mc.ao2mo(mo))
-        self.assertAlmostEqual(lib.finger(gall), 6.3906103343021083, 8)
-        self.assertAlmostEqual(lib.finger(hdiag), -7.9071928112940615, 8)
+        self.assertAlmostEqual(lib.finger(gall), 21.288022525148595, 8)
+        self.assertAlmostEqual(lib.finger(hdiag), -4.6864640132374618, 8)
         x = numpy.random.random(gall.size)
         u, ci1 = newton_casscf.extract_rotation(mc, x, 1, ci0)
-        self.assertAlmostEqual(lib.finger(gop(u, ci1)), -419.68206754700418, 8)
-        self.assertAlmostEqual(lib.finger(hop(x)), 78.31792009930723, 8)
+        self.assertAlmostEqual(lib.finger(gop(u, ci1)), -412.9441873541524, 8)
+        self.assertAlmostEqual(lib.finger(hop(x)), 73.358310983341198, 8)
 
 
 if __name__ == "__main__":
