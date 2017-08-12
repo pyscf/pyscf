@@ -271,7 +271,7 @@ def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)
 
-    vrespz = _gen_uhf_response(mf, hermi=1)
+    vrespz = _gen_uhf_response(mf, with_j=False, hermi=2)
     def hop_real2complex(x1):
         if with_symmetry and mol.symmetry:
             x1 = x1.copy()
