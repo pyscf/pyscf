@@ -106,12 +106,15 @@ def smearing_(mf, sigma=None, method='fermi'):
 
         else:  # Gaussian smearing
             mo_occs, mu, mf.entropy = gaussian_smearing(mo_es, fermi, nkpts)
-        mo_occ_kpts = []
-        p1 = 0
-        for e in mo_energy_kpts:
-            p0, p1 = p1, p1 + e.size
-            occ = mo_occs[p0:p1]
-            mo_occ_kpts.append(occ)
+        if isinstance(mo_energy_kpts, numpy.ndarray):
+            mo_occ_kpts = mo_occs.reshape(mo_energy_kpts.shape)
+        else:
+            mo_occ_kpts = []
+            p1 = 0
+            for e in mo_energy_kpts:
+                p0, p1 = p1, p1 + e.size
+                occ = mo_occs[p0:p1]
+                mo_occ_kpts.append(occ)
 
         logger.debug(mf, '    Fermi level %g  Sum mo_occ_kpts = %s  should equal nelec = %s',
                      fermi, mo_occs.sum()/nkpts, cell_nelec)
