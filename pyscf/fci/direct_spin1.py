@@ -377,7 +377,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
 
     addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, max(pspace_size,nroots))
     if pspace_size > 0:
-        pw, pv = scipy.linalg.eigh(h0)
+        pw, pv = fci.eig(h0)
     else:
         pw = pv = None
 
@@ -464,6 +464,59 @@ def make_diag_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
 
 
 class FCISolver(lib.StreamObject):
+    '''Full CI solver
+
+    Attributes:
+        verbose : int
+            Print level.  Default value equals to :class:`Mole.verbose`.
+        max_cycle : int
+            Total number of iterations. Default is 100
+        max_space : tuple of int
+            Davidson iteration space size. Default is 14.
+        conv_tol : float
+            Energy convergence tolerance. Default is 1e-10.
+        level_shift : float
+            Level shift applied in the preconditioner to avoid singularity.
+            Default is 1e-3
+        davidson_only : bool
+            By default, the entire Hamiltonian matrix will be constructed and
+            diagonalized if the system is small (see attribute pspace_size).
+            Setting this parameter to True will enforce the eigenvalue
+            problems being solved by Davidson subspace algorithm.  This flag
+            should be enabled when initial guess is given or particular spin
+            symmetry or point-group symmetry is required because the initial
+            guess or symmetry are completely ignored in the direct diagonlization.
+        pspace_size : int
+            The dimension of Hamiltonian matrix over which Davidson iteration
+            algorithm will be used for the eigenvalue problem.  Default is 400.
+            This is roughly corresponding to a (6e,6o) system.
+        nroots : int
+            Number of states to be solved.  Default is 1, the ground state.
+        spin : int or None
+            Spin (2S = nalpha-nbeta) of the system.  If this attribute is None,
+            spin will be determined by the argument nelec (number of electrons)
+            of the kernel function.
+        wfnsym : str or int
+            Symmetry of wavefunction.  It is used only in direct_spin1_symm
+            and direct_spin0_symm solver.
+
+    Saved results
+
+        converged : bool
+            Whether davidson iteration is converged
+
+    Examples:
+
+    >>> from pyscf import gto, scf, ao2mo, fci
+    >>> mol = gto.M(atom='Li 0 0 0; Li 0 0 1', basis='sto-3g')
+    >>> mf = scf.RHF(mol).run()
+    >>> h1 = mf.mo_coeff.T.dot(mf.get_hcore()).dot(mf.mo_coeff)
+    >>> eri = ao2mo.kernel(mol, mf.mo_coeff)
+    >>> cisolver = fci.direct_spin1.FCI(mol)
+    >>> e, ci = cisolver.kernel(h1, eri, h1.shape[1], mol.nelec, ecore=mol.energy_nuc())
+    >>> print(e)
+    -14.4197890826
+    '''
     def __init__(self, mol=None):
         if mol is None:
             self.stdout = sys.stdout
@@ -474,7 +527,7 @@ class FCISolver(lib.StreamObject):
             self.verbose = mol.verbose
             self.max_memory = mol.max_memory
         self.mol = mol
-        self.max_cycle = 50
+        self.max_cycle = 100
         self.max_space = 12
         self.conv_tol = 1e-10
         self.lindep = 1e-14
@@ -487,12 +540,13 @@ class FCISolver(lib.StreamObject):
         self.davidson_only = False
         self.nroots = 1
         self.pspace_size = 400
+        self.spin = None
 # Initialize symmetry attributes for the compatibility with direct_spin1_symm
 # solver.  They are not used by direct_spin1 solver.
         self.orbsym = None
         self.wfnsym = None
-        self.spin = None
 
+        self.converged = False
         self._keys = set(self.__dict__.keys())
 
     def dump_flags(self, verbose=None):
@@ -531,12 +585,22 @@ class FCISolver(lib.StreamObject):
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
 
-    def eig(self, op, x0, precond, **kwargs):
+    def eig(self, op, x0=None, precond=None, **kwargs):
+        if isinstance(op, numpy.ndarray):
+            self.converged = True
+            return scipy.linalg.eigh(op)
+
         if kwargs['nroots'] == 1 and x0[0].size > 6.5e7: # 500MB
             lessio = True
         else:
             lessio = False
-        return lib.davidson(op, x0, precond, lessio=lessio, **kwargs)
+        self.converged, e, ci = \
+                lib.davidson1(lambda xs: [op(x) for x in xs],
+                              x0, precond, lessio=lessio, **kwargs)
+        if kwargs['nroots'] == 1:
+            e = e[0]
+            ci = ci[0]
+        return e, ci
 
     def make_precond(self, hdiag, pspaceig, pspaceci, addr):
         if pspaceig is None:

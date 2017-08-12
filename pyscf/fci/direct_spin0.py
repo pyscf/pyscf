@@ -221,7 +221,7 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
 
     addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, max(pspace_size,nroots))
     if pspace_size > 0:
-        pw, pv = scipy.linalg.eigh(h0)
+        pw, pv = fci.eig(h0)
     else:
         pw = pv = None
 

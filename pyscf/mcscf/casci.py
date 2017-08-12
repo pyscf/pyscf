@@ -454,7 +454,7 @@ class CASCI(lib.StreamObject):
         self.fcisolver = fci.solver(mol, singlet=False, symm=False)
 # CI solver parameters are set in fcisolver object
         self.fcisolver.lindep = 1e-10
-        self.fcisolver.max_cycle = 50
+        self.fcisolver.max_cycle = 200
         self.fcisolver.conv_tol = 1e-8
         self.natorb = False
         self.canonicalization = True
@@ -563,6 +563,11 @@ class CASCI(lib.StreamObject):
                 self.canonicalize_(mo_coeff, self.ci[0],
                                    cas_natorb=self.natorb, verbose=log)
 
+        if hasattr(self.fcisolver, 'converged'):
+            if self.fcisolver.converged:
+                log.info('CASCI converged')
+            else:
+                log.info('CASCI not converged')
         if log.verbose >= logger.NOTE and hasattr(self.fcisolver, 'spin_square'):
             if isinstance(self.e_cas, (float, numpy.number)):
                 ss = self.fcisolver.spin_square(self.ci, self.ncas, self.nelecas)
