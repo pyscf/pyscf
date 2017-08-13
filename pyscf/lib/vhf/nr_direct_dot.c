@@ -2508,3 +2508,387 @@ static void nra4kl_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
 }
 ADD_JKOP(nra4kl_li_s2kj, L, I, K, J, s4);
 
+/*
+ * aa4: 4-fold permutation symmetry with anti-symm for ij and anti-symm for kl
+ */
+static void nraa4_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
+                           int i0, int i1, int j0, int j1,
+                           int k0, int k1, int l0, int l1)
+{
+        if (i0 == j0) {
+                nra2kl_ji_s1kl(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
+        } else if (k0 == l0) {
+                nra2ij_ji_s1kl(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
+        } else {
+                DECLARE(vkl, k, l);
+                LOCATE(vlk, l, k);
+                int i, j, k, l, ij, kl, icomp;
+                double buf[MAXCGTO*MAXCGTO];
+                double tdm[MAXCGTO*MAXCGTO];
+
+                for (ij = 0, j = j0; j < j1; j++) {
+                        for (i = i0; i < i1; i++, ij++) {
+                                tdm[ij] = dm[j*ncol+i] - dm[i*ncol+j];
+                        }
+                }
+                int dij = ij;
+
+                for (icomp = 0; icomp < ncomp; icomp++) {
+
+                        for (i = 0; i < dkl; i++) { buf[i] = 0; }
+                        for (kl = 0; kl < dkl; kl++) {
+                        for (ij = 0; ij < dij; ij++) {
+                                buf[kl] += eri[kl*dij+ij] * tdm[ij];
+                        } }
+
+                        for (kl = 0, l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++, kl++) {
+                                vkl[k*dl+l] += buf[kl];
+                                vlk[kl] -= buf[kl];
+                        } }
+                        eri += dij * dkl;
+                        vkl += dkl;
+                        vlk += dkl;
+                }
+        }
+}
+ADD_JKOP(nraa4_ji_s1kl, J, I, K, L, s4);
+
+static void nraa4_ji_s2kl(double *eri, double *dm, JKArray *out, int *shls,
+                           int i0, int i1, int j0, int j1,
+                           int k0, int k1, int l0, int l1)
+{
+        nra2ij_ji_s2kl(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
+}
+ADD_JKOP(nraa4_ji_s2kl, J, I, K, L, s4);
+
+static void nraa4_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
+                           int i0, int i1, int j0, int j1,
+                           int k0, int k1, int l0, int l1)
+{
+        if (i0 == j0) {
+                nra2kl_lk_s1ij(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
+        } else if (k0 == l0) {
+                nra2ij_lk_s1ij(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
+        } else {
+                DECLARE(vij, i, j);
+                LOCATE(vji, j, i);
+                int i, j, k, l, ij, icomp;
+                double buf[MAXCGTO*MAXCGTO];
+                double tdm;
+
+                for (icomp = 0; icomp < ncomp; icomp++) {
+
+                        for (i = 0; i < dij; i++) { buf[i] = 0; }
+                        for (l = l0; l < l1; l++) {
+                        for (k = k0; k < k1; k++) {
+                                tdm = dm[l*ncol+k] - dm[k*ncol+l];
+                                for (ij = 0; ij < dij; ij++) {
+                                        buf[ij] += eri[ij] * tdm;
+                                }
+                                eri += dij;
+                        } }
+
+                        for (ij = 0, j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ij++) {
+                                vij[i*dj+j] += buf[ij];
+                                vji[ij] -= buf[ij];
+                        } }
+                        vij += dij;
+                        vji += dij;
+                }
+        }
+}
+ADD_JKOP(nraa4_lk_s1ij, L, K, I, J, s4);
+
+static void nraa4_lk_s2ij(double *eri, double *dm, JKArray *out, int *shls,
+                           int i0, int i1, int j0, int j1,
+                           int k0, int k1, int l0, int l1)
+{
+        nra2kl_lk_s1ij(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
+}
+ADD_JKOP(nraa4_lk_s2ij, L, K, I, J, s4);
+
+static void nraa4_lk_a2ij(double *eri, double *dm, JKArray *out, int *shls,
+                           int i0, int i1, int j0, int j1,
+                           int k0, int k1, int l0, int l1)
+{
+        nra2kl_lk_s1ij(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
+}
+ADD_JKOP(nraa4_lk_a2ij, L, K, I, J, s4);
+
+static void nraa4_jk_s1il(double *eri, double *dm, JKArray *out, int *shls,
+                           int i0, int i1, int j0, int j1,
+                           int k0, int k1, int l0, int l1)
+{
+        if (i0 == j0) {
+                nra2kl_jk_s1il(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
+        } else if (k0 == l0) {
+                nra2ij_jk_s1il(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
+        } else {
+                DECLARE(vik, i, k);
+                int dj = j1 - j0;
+                int dl = l1 - l0;
+                LOCATE(vil, i, l);
+                LOCATE(vjk, j, k);
+                LOCATE(vjl, j, l);
+                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+
+                for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
+                        for (l = 0; l < dl; l++) { lp = l0 + l;
+                        for (k = 0; k < dk; k++) { kp = k0 + k;
+                        for (j = 0; j < dj; j++) { jp = j0 + j;
+                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
+                                vjk[j*dk+k] += eri[ijkl] * dm[ip*ncol+lp];
+                                vjl[j*dl+l] -= eri[ijkl] * dm[ip*ncol+kp];
+                                vik[i*dk+k] -= eri[ijkl] * dm[jp*ncol+lp];
+                                vil[i*dl+l] += eri[ijkl] * dm[jp*ncol+kp];
+                        } } } }
+                        vjk += djk;
+                        vjl += djl;
+                        vik += dik;
+                        vil += dil;
+                }
+        }
+}
+ADD_JKOP(nraa4_jk_s1il, J, K, I, L, s4);
+
+static void nraa4_jk_s2il(double *eri, double *dm, JKArray *out, int *shls,
+                           int i0, int i1, int j0, int j1,
+                           int k0, int k1, int l0, int l1)
+{
+        if (i0 == j0) {
+                nra2kl_jk_s2il(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
+        } else if (k0 == l0) {
+                nra2ij_jk_s2il(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
+        } else if (i0 < l0) {
+        } else if (i0 < k0) {
+                if (j0 < l0) { // j < l <= i < k
+                        DECLARE(v, i, l);
+                        int i, j, k, l, ijkl, icomp;
+                        for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
+                                for (l = 0; l < dl; l++) {
+                                for (k = k0; k < k1; k++) {
+                                for (j = j0; j < j1; j++) {
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        v[i*dl+l] += eri[ijkl] * dm[j*ncol+k];
+                                } } } }
+                                v += dil;
+                        }
+                } else { // l <= j < i < k
+                        DECLARE(vil, i, l);
+                        int dj = j1 - j0;
+                        LOCATE(vjl, j, l);
+                        int i, j, k, l, ip, jp, ijkl, icomp;
+                        for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
+                                for (l = 0; l < dl; l++) {
+                                for (k = k0; k < k1; k++) {
+                                for (j = 0; j < dj; j++) { jp = j0 + j;
+                                for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
+                                        vjl[j*dl+l] -= eri[ijkl] *dm[ip*ncol+k];
+                                        vil[i*dl+l] += eri[ijkl] *dm[jp*ncol+k];
+                                } } } }
+                                vjl += djl;
+                                vil += dil;
+                        }
+                }
+        } else if (j0 < l0) { // j < l < k <= i
+                DECLARE(vil, i, l);
+                int dk = k1 - k0;
+                LOCATE(vik, i, k);
+                int i, j, k, l, kp, lp, ijkl, icomp;
+                for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
+                        for (l = 0; l < dl; l++) { lp = l0 + l;
+                        for (k = 0; k < dk; k++) { kp = k0 + k;
+                        for (j = j0; j < j1; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vil[i*dl+l] += eri[ijkl] * dm[j*ncol+kp];
+                                vik[i*dk+k] -= eri[ijkl] * dm[j*ncol+lp];
+                        } } } }
+                        vil += dil;
+                        vik += dik;
+                }
+        } else if (j0 < k0) { // l <= j < k <= i
+                DECLARE(vjl, j, l);
+                int di = i1 - i0;
+                int dk = k1 - k0;
+                LOCATE(vik, i, k);
+                LOCATE(vil, i, l);
+                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
+                        for (l = 0; l < dl; l++) { lp = l0 + l;
+                        for (k = 0; k < dk; k++) { kp = k0 + k;
+                        for (j = 0; j < dj; j++) { jp = j0 + j;
+                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
+                                vjl[j*dl+l] -= eri[ijkl] * dm[ip*ncol+kp];
+                                vil[i*dl+l] += eri[ijkl] * dm[jp*ncol+kp];
+                                vik[i*dk+k] -= eri[ijkl] * dm[jp*ncol+lp];
+                        } } } }
+                        vjl += djl;
+                        vil += dil;
+                        vik += dik;
+                }
+        } else { // l < k <= j < i
+                DECLARE(vjl, j, l);
+                int di = i1 - i0;
+                int dk = k1 - k0;
+                LOCATE(vik, i, k);
+                LOCATE(vjk, j, k);
+                LOCATE(vil, i, l);
+                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
+                        for (l = 0; l < dl; l++) { lp = l0 + l;
+                        for (k = 0; k < dk; k++) { kp = k0 + k;
+                        for (j = 0; j < dj; j++) { jp = j0 + j;
+                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
+                                vjk[j*dk+k] += eri[ijkl] * dm[ip*ncol+lp];
+                                vjl[j*dl+l] -= eri[ijkl] * dm[ip*ncol+kp];
+                                vik[i*dk+k] -= eri[ijkl] * dm[jp*ncol+lp];
+                                vil[i*dl+l] += eri[ijkl] * dm[jp*ncol+kp];
+                        } } } }
+                        vjk += djk;
+                        vjl += djl;
+                        vik += dik;
+                        vil += dil;
+                }
+        }
+}
+ADD_JKOP(nraa4_jk_s2il, J, K, I, L, s4);
+
+static void nraa4_li_s1kj(double *eri, double *dm, JKArray *out, int *shls,
+                           int i0, int i1, int j0, int j1,
+                           int k0, int k1, int l0, int l1)
+{
+        if (i0 == j0) {
+                nra2kl_li_s1kj(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
+        } else if (k0 == l0) {
+                nra2ij_li_s1kj(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
+        } else {
+                DECLARE(vki, k, i);
+                int dj = j1 - j0;
+                int dl = l1 - l0;
+                LOCATE(vkj, k, j);
+                LOCATE(vli, l, i);
+                LOCATE(vlj, l, j);
+                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
+                        for (l = 0; l < dl; l++) { lp = l0 + l;
+                        for (k = 0; k < dk; k++) { kp = k0 + k;
+                        for (j = 0; j < dj; j++) { jp = j0 + j;
+                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
+                                vkj[k*dj+j] += eri[ijkl] * dm[lp*ncol+ip];
+                                vki[k*di+i] -= eri[ijkl] * dm[lp*ncol+jp];
+                                vlj[l*dj+j] -= eri[ijkl] * dm[kp*ncol+ip];
+                                vli[l*di+i] += eri[ijkl] * dm[kp*ncol+jp];
+                        } } } }
+                        vkj += dkj;
+                        vki += dki;
+                        vlj += dlj;
+                        vli += dli;
+                }
+        }
+}
+ADD_JKOP(nraa4_li_s1kj, L, I, K, J, s4);
+
+static void nraa4_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
+                           int i0, int i1, int j0, int j1,
+                           int k0, int k1, int l0, int l1)
+{
+        if (i0 == j0) {
+                nra2kl_li_s2kj(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
+        } else if (k0 == l0) {
+                nra2ij_li_s2kj(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
+        } else if (k0 < j0) {
+        } else if (k0 < i0) {
+                if (l0 < j0) { // l < j < k < i
+                        DECLARE(v, k, j);
+                        int i, j, k, l, ijkl, icomp;
+                        for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
+                                for (l = l0; l < l1; l++) {
+                                for (k = 0; k < dk; k++) {
+                                for (j = 0; j < dj; j++) {
+                                for (i = i0; i < i1; i++, ijkl++) {
+                                        v[k*dj+j] += eri[ijkl] * dm[l*ncol+i];
+                                } } } }
+                                v += dkj;
+                        }
+                } else { // j <= l < k < i
+                        DECLARE(vkj, k, j);
+                        int dl = l1 - l0;
+                        LOCATE(vlj, l, j);
+                        int i, j, k, l, kp, lp, ijkl, icomp;
+                        for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
+                                for (l = 0; l < dl; l++) { lp = l0 + l;
+                                for (k = 0; k < dk; k++) { kp = k0 + k;
+                                for (j = 0; j < dj; j++) {
+                                for (i = i0; i < i1; i++, ijkl++) {
+                                        vkj[k*dj+j] += eri[ijkl] *dm[lp*ncol+i];
+                                        vlj[l*dj+j] -= eri[ijkl] *dm[kp*ncol+i];
+                                } } } }
+                                vkj += dkj;
+                                vlj += dlj;
+                        }
+                }
+        } else if (l0 < j0) { // l < j < i <= k
+                DECLARE(vki, k, i);
+                int dj = j1 - j0;
+                LOCATE(vkj, k, j);
+                int i, j, k, l, ip, jp, ijkl, icomp;
+                for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
+                        for (l = l0; l < l1; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) { jp = j0 + j;
+                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
+                                vkj[k*dj+j] += eri[ijkl] * dm[l*ncol+ip];
+                                vki[k*di+i] -= eri[ijkl] * dm[l*ncol+jp];
+                        } } } }
+                        vkj += dkj;
+                        vki += dki;
+                }
+        } else if (l0 < i0) { // j <= l < i <= k
+                DECLARE(vki, k, i);
+                int dj = j1 - j0;
+                int dl = l1 - l0;
+                LOCATE(vkj, k, j);
+                LOCATE(vlj, l, j);
+                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
+                        for (l = 0; l < dl; l++) { lp = l0 + l;
+                        for (k = 0; k < dk; k++) { kp = k0 + k;
+                        for (j = 0; j < dj; j++) { jp = j0 + j;
+                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
+                                vkj[k*dj+j] += eri[ijkl] * dm[lp*ncol+ip];
+                                vki[k*di+i] -= eri[ijkl] * dm[lp*ncol+jp];
+                                vlj[l*dj+j] -= eri[ijkl] * dm[kp*ncol+ip];
+                        } } } }
+                        vkj += dkj;
+                        vki += dki;
+                        vlj += dlj;
+                }
+        } else { // j < i <= l < k
+                DECLARE(vki, k, i);
+                int dj = j1 - j0;
+                int dl = l1 - l0;
+                LOCATE(vkj, k, j);
+                LOCATE(vli, l, i);
+                LOCATE(vlj, l, j);
+                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
+                        for (l = 0; l < dl; l++) { lp = l0 + l;
+                        for (k = 0; k < dk; k++) { kp = k0 + k;
+                        for (j = 0; j < dj; j++) { jp = j0 + j;
+                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
+                                vkj[k*dj+j] += eri[ijkl] * dm[lp*ncol+ip];
+                                vki[k*di+i] -= eri[ijkl] * dm[lp*ncol+jp];
+                                vlj[l*dj+j] -= eri[ijkl] * dm[kp*ncol+ip];
+                                vli[l*di+i] += eri[ijkl] * dm[kp*ncol+jp];
+                        } } } }
+                        vkj += dkj;
+                        vki += dki;
+                        vlj += dlj;
+                        vli += dli;
+                }
+        }
+}
+ADD_JKOP(nraa4_li_s2kj, L, I, K, J, s4);
+

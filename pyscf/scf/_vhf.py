@@ -214,7 +214,7 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0, cart=False):
 def direct_mapdm(intor, aosym, jkdescript,
                  dms, ncomp, atm, bas, env, vhfopt=None, shls_slice=None):
     assert(aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
-                     'a4ij', 'a4kl', 'a2ij', 'a2kl'))
+                     'aa4', 'a4ij', 'a4kl', 'a2ij', 'a2kl'))
     intor = ascint3(intor)
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
@@ -297,7 +297,7 @@ def direct_mapdm(intor, aosym, jkdescript,
 def direct_bindm(intor, aosym, jkdescript,
                  dms, ncomp, atm, bas, env, vhfopt=None, shls_slice=None):
     assert(aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
-                     'a4ij', 'a4kl', 'a2ij', 'a2kl'))
+                     'aa4', 'a4ij', 'a4kl', 'a2ij', 'a2kl'))
     intor = ascint3(intor)
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
@@ -536,6 +536,7 @@ _INTSYMAP= {
     's2ij': 's2ij',
     's2kl': 's2kl',
     's1'  : 's1'  ,
+    'aa4' : 's4'  ,
     'a4ij': 's4'  ,
     'a4kl': 's4'  ,
     'a2ij': 's2ij',
