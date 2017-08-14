@@ -23,7 +23,25 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.scf.newton_ah import _gen_uhf_response
 from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.ssc.rhf import _dm1_mo2ao
-from pyscf.prop.gtensor.uhf import koseki_charge
+
+
+def koseki_charge(z):
+    '''Koseki effective charge in SO correction
+
+    Ref:
+    JPC 96, 10768
+    JPC, 99, 12764
+    JPCA, 102, 10430
+    '''
+    # JPC 96, 10768
+    if z <= 2:
+        return z
+    elif z <= 10:
+        return z * (.3 + z * .05)
+    elif z <= 18:
+        return z * (1.05 - z * .0125)
+    else:
+        return z
 
 
 def direct_spin_spin(zfsobj, mol, dm0, verbose=None):

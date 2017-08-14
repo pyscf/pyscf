@@ -41,9 +41,6 @@ def get_vxc_giao(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
             rho = vxc = vrho = aow = None
     elif xctype == 'GGA':
         buf = numpy.empty((10,blksize,nao))
-        XX, XY, XZ = 0, 1, 2
-        YX, YY, YZ = 3, 4, 5
-        ZX, ZY, ZZ = 6, 7, 8
         ao_deriv = 1
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory,
@@ -109,16 +106,12 @@ class NMR(rhf_nmr.NMR):
             max_memory = max(2000, mf.max_memory*.9-mem_now)
             dm0 = _attach_mo(dm0, mf.mo_coeff, mf.mo_occ)  # to improve get_vxc_giao efficiency
             h1 -= get_vxc_giao(ni, mol, mf.grids, mf.xc, dm0,
-                               max_memory=max_memory, verbose=mf.verbose)
+                               max_memory=max_memory, verbose=self.verbose)
 
             intor = mol._add_suffix('int2e_ig1')
             if abs(hyb) > 1e-10:
-                vj, vk = _vhf.direct_mapdm(intor,  # (g i,j|k,l)
-                                           'a4ij', ('lk->s1ij', 'jk->s1il'),
-                                           dm0, 3, # xyz, 3 components
-                                           mol._atm, mol._bas, mol._env)
-                vk = vk - vk.transpose(0,2,1)
-                h1 -= vj - .5 * hyb * vk
+                vj, vk = rhf_nmr.get_jk(mol, dm0)
+                h1 += vj - .5 * hyb * vk
             else:
                 vj = _vhf.direct_mapdm(intor, 'a4ij', 'lk->s1ij',
                                        dm0, 3, mol._atm, mol._bas, mol._env)

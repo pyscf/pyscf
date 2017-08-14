@@ -64,12 +64,12 @@ def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
     dm10_vo = numpy.asarray([reduce(numpy.dot, (orbv, x[viridx]*2, orbo.T.conj())) for x in mo10])
     for n, atm_id in enumerate(shielding_nuc):
         mol.set_rinv_origin(mol.atom_coord(atm_id))
-        # 1/2(A01 dot p + p dot A01) => (a01p + c.c.)/2 ~ <a01p>
+        # H^{01} = 1/2(A01 dot p + p dot A01) => (a01p + c.c.)/2 ~ <a01p>
         # Im[A01 dot p] = Im[vec{r}/r^3 x vec{p}] = Im[-i p (1/r) x p] = -p (1/r) x p
-        h01 = mol.intor_asymmetric('int1e_prinvxp', 3)  # = -Im[H^{01}]
+        h01i = mol.intor_asymmetric('int1e_prinvxp', 3)  # = -Im[H^{01}]
         # <H^{01},MO^1> = - Tr(Im[H^{01}],Im[MO^1]) = Tr(-Im[H^{01}],Im[MO^1])
-        para_occ[n] = numpy.einsum('xji,yij->xy', dm10_oo, h01) * 2 # *2 for + c.c.
-        para_vir[n] = numpy.einsum('xji,yij->xy', dm10_vo, h01) * 2 # *2 for + c.c.
+        para_occ[n] = numpy.einsum('xji,yij->xy', dm10_oo, h01i) * 2 # *2 for + c.c.
+        para_vir[n] = numpy.einsum('xji,yij->xy', dm10_vo, h01i) * 2 # *2 for + c.c.
     msc_para = para_occ + para_vir
     return msc_para, para_vir, para_occ
 
@@ -90,7 +90,7 @@ def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
         h1 = -.5 * mol.intor('int1e_cg_irxp', 3)
     return h1
 
-def make_h10giao(mol, dm0):
+def get_jk(mol, dm0):
 # J = Im[(i i|\mu g\nu) + (i gi|\mu \nu)] = -i (i i|\mu g\nu)
 # K = Im[(\mu gi|i \nu) + (\mu i|i g\nu)]
 #   = [-i (\mu g i|i \nu)] - h.c.   (-h.c. for anti-symm because of the factor -i)
@@ -99,7 +99,11 @@ def make_h10giao(mol, dm0):
                                'a4ij', ('lk->s1ij', 'jk->s1il'),
                                -dm0, 3, # xyz, 3 components
                                mol._atm, mol._bas, mol._env)
-    vk = vk - vk.transpose(0,2,1)
+    vk = vk - numpy.swapaxes(vk, -1, -2)
+    return vj, vk
+
+def make_h10giao(mol, dm0):
+    vj, vk = get_jk(mol, dm0)
     h1 = vj - .5 * vk
 # Im[<g\mu|H|g\nu>] = -i * (gnuc + gkin)
     h1 -= mol.intor_asymmetric('int1e_ignuc', 3)

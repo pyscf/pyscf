@@ -68,12 +68,7 @@ def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
     return h1
 
 def make_h10giao(mol, dm0):
-    intor = mol._add_suffix('int2e_ig1')
-    vj, vk = _vhf.direct_mapdm(intor,  # (g i,j|k,l)
-                               'a4ij', ('lk->s1ij', 'jk->s1il'),
-                               -dm0, 3, # xyz, 3 components
-                               mol._atm, mol._bas, mol._env)
-    vk = vk - vk.transpose(0,1,3,2)
+    vj, vk = rhf_nmr.get_jk(mol, dm0)
     h1 = vj[0] + vj[1] - vk
     h1 -= mol.intor_asymmetric('int1e_ignuc', 3)
     h1 -= mol.intor('int1e_igkin', 3)
