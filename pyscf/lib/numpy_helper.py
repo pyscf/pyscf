@@ -633,8 +633,8 @@ def direct_sum(subscripts, *operands):
 
     Examples:
 
-    >>> a = numpy.ones((6,5))
-    >>> b = numpy.ones((4,3,2))
+    >>> a = numpy.random((6,5))
+    >>> b = numpy.random((4,3,2))
     >>> direct_sum('ij,klm->ijklm', a, b).shape
     (6, 5, 4, 3, 2)
     >>> direct_sum('ij,klm', a, b).shape
@@ -647,6 +647,10 @@ def direct_sum(subscripts, *operands):
     (6, 5, 4, 3, 2)
     >>> direct_sum('-i-j+klm->mjlik', a[0], a[:,0], b).shape
     (2, 6, 3, 5, 4)
+    >>> c = numpy.random((3,5))
+    >>> z = direct_sum('ik+jk->kij', a, c).shape  # This is slow
+    >>> abs(a.T.reshape(5,6,1) + c.reshape(5,1,3) - z).sum()
+    0.0
     '''
 
     def sign_and_symbs(subscript):

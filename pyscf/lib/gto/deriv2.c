@@ -22,7 +22,7 @@ double CINTcommon_fac_sp(int l);
 
 void GTOshell_eval_grid_cart_deriv2(double *cgto, double *ri, double *exps,
                                     double *coord, double *alpha, double *coeff,
-                                    int l, int np, int nc,
+                                    double *env, int l, int np, int nc,
                                     int nao, int ngrids, int bgrids)
 {
         const int degen = (l+1)*(l+2)/2;
@@ -193,7 +193,7 @@ void GTOval_spinor_deriv2(int ngrids, int *shls_slice, int *ao_loc,
 
 void GTOshell_eval_grid_cart_deriv3(double *cgto, double *ri, double *exps,
                                     double *coord, double *alpha, double *coeff,
-                                    int l, int np, int nc,
+                                    double *env, int l, int np, int nc,
                                     int nao, int ngrids, int bgrids)
 {
         const int degen = (l+1)*(l+2)/2;
@@ -417,7 +417,7 @@ void GTOval_spinor_deriv3(int ngrids, int *shls_slice, int *ao_loc,
 
 void GTOshell_eval_grid_cart_deriv4(double *cgto, double *ri, double *exps,
                                     double *coord, double *alpha, double *coeff,
-                                    int l, int np, int nc,
+                                    double *env, int l, int np, int nc,
                                     int nao, int ngrids, int bgrids)
 {
         const int degen = (l+1)*(l+2)/2;
@@ -722,7 +722,7 @@ void GTOval_spinor_deriv4(int ngrids, int *shls_slice, int *ao_loc,
 
 void GTOshell_eval_grid_cart_deriv1(double *gto, double *ri, double *exps,
                                     double *coord, double *alpha, double *coeff,
-                                    int l, int np, int nc,
+                                    double *env, int l, int np, int nc,
                                     int nao, int ngrids, int bgrids)
 {
         const int degen = (l+1)*(l+2)/2;

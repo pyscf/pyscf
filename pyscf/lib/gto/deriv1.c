@@ -69,7 +69,7 @@ int GTOcontract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
 // contracted factors = \sum c_{i} exp(-a_i*r_i**2)
 void GTOshell_eval_grid_cart(double *gto, double *ri, double *exps,
                              double *coord, double *alpha, double *coeff,
-                             int l, int np, int nc,
+                             double *env, int l, int np, int nc,
                              int nao, int ngrids, int blksize)
 {
         int lx, ly, lz, i, k, n = 0;
@@ -238,7 +238,7 @@ int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
 
 void GTOshell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
                                 double *coord, double *alpha, double *coeff,
-                                int l, int np, int nc,
+                                double *env, int l, int np, int nc,
                                 int nao, int ngrids, int blksize)
 {
         const int degen = (l+1)*(l+2)/2;

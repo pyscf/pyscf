@@ -165,10 +165,10 @@ void GTOeval_sph_iter(void (*feval)(),  int (*fexp)(), double fac,
                         ri = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
                         if (l <= 1) { // s, p functions
                                 (*feval)(ao+ao_id*Ngrids, ri, eprim, pcoord, p_exp, pcoeff,
-                                         l, np, nc, nao, ngrids, bgrids);
+                                         env, l, np, nc, nao, ngrids, bgrids);
                         } else {
                                 (*feval)(cart_gto, ri, eprim, pcoord, p_exp, pcoeff,
-                                         l, np, nc, nc*dcart, bgrids, bgrids);
+                                         env, l, np, nc, nc*dcart, bgrids, bgrids);
                                 pcart = cart_gto;
                                 for (i = 0; i < ncomp; i++) {
                                         pao = ao + (i*nao+ao_id)*Ngrids;
@@ -225,7 +225,7 @@ void GTOeval_cart_iter(void (*feval)(),  int (*fexp)(), double fac,
                     (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac1)) {
                         ri = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
                         (*feval)(ao+ao_id*Ngrids, ri, eprim, pcoord, p_exp, pcoeff,
-                                 l, np, nc, nao, ngrids, bgrids);
+                                 env, l, np, nc, nao, ngrids, bgrids);
                 } else {
                         for (i = 0; i < ncomp; i++) {
                                 _dset0(ao+(i*nao+ao_id)*Ngrids, ngrids, bgrids, nc*deg);
@@ -278,7 +278,7 @@ void GTOeval_spinor_iter(void (*feval)(), int (*fexp)(), void (*c2s)(), double f
                         dcart = (l+1)*(l+2)/2;
                         ri = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
                         (*feval)(cart_gto, ri, eprim, pcoord, p_exp, pcoeff,
-                                 l, np, nc, nc*dcart, bgrids, bgrids);
+                                 env, l, np, nc, nc*dcart, bgrids, bgrids);
                         for (i = 0; i < ncomp; i++) {
                                 pcart = cart_gto + i * nc*dcart*bgrids*ncomp_e1;
                                 off = (i*nao+ao_id)*Ngrids;

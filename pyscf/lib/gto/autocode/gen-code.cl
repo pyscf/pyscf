@@ -159,7 +159,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defun gen-code-eval-ao (fout intname expr &optional (sp 'spinor))
+(defun gen-code-eval-ao (fout intname expr)
   (let* ((op-rev (reverse (effect-keys expr)))
          (op-len (length op-rev))
          (raw-script (eval-gto expr))
@@ -172,7 +172,7 @@
          (tensors (/ goutinc e1comps)))
     (format fout "/*  ~{~a ~}|GTO> */~%" expr)
     (format fout "static void shell_eval_~a(double *cgto, double *ri, double *exps,
-double *coord, double *alpha, double *coeff,
+double *coord, double *alpha, double *coeff, double *env,
 int l, int np, int nc, int nao, int ngrids, int bgrids)
 {" intname)
     (format fout "
@@ -182,12 +182,15 @@ double e;
 double *pgto;
 double *gridx = coord;
 double *gridy = coord+BLKSIZE;
-double *gridz = coord+BLKSIZE*2;~%")
+double *gridz = coord+BLKSIZE*2;
+double fx0[SIMDD*16*~a];
+double fy0[SIMDD*16*~a];
+double fz0[SIMDD*16*~a];~%" (ash 1 op-len) (ash 1 op-len) (ash 1 op-len))
     (loop
-       for i in (range (ash 1 op-len)) do
-         (format fout "double fx~d[SIMDD*16];~%" i)
-         (format fout "double fy~d[SIMDD*16];~%" i)
-         (format fout "double fz~d[SIMDD*16];~%" i))
+       for i in (range (1- (ash 1 op-len))) do
+         (format fout "double *fx~d = fx~d + SIMDD*16;~%" (1+ i) i)
+         (format fout "double *fy~d = fy~d + SIMDD*16;~%" (1+ i) i)
+         (format fout "double *fz~d = fz~d + SIMDD*16;~%" (1+ i) i))
     (format fout "double buf[SIMDD*nc*~d];~%" goutinc)
     (format fout "double s[SIMDD*~d];~%" (expt 3 op-len))
     (format fout "double *gto0 = cgto;~%")
@@ -276,46 +279,46 @@ for (n = 0; n < SIMDD; n++) {
     (format fout "}~%")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; determine function caller
-    (if (eql sp 'spinor)
-      (format fout "void ~a(int ngrids, int *shls_slice, int *ao_loc,
+;;; _cart
+    (format fout "void ~a_cart(int ngrids, int *shls_slice, int *ao_loc,
+double *ao, double *coord, char *non0table,
+int *atm, int natm, int *bas, int nbas, double *env)
+{~%" intname)
+    (format fout "int param[] = {~d, ~d};~%" e1comps tensors)
+    (format fout "GTOeval_cart_drv(shell_eval_~a, GTOprim_exp, ~a,
+ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
+atm, natm, bas, nbas, env);~%}~%" intname (factor-of expr))
+;;; _sph
+    (format fout "void ~a_sph(int ngrids, int *shls_slice, int *ao_loc,
+double *ao, double *coord, char *non0table,
+int *atm, int natm, int *bas, int nbas, double *env)
+{~%" intname)
+    (format fout "int param[] = {~d, ~d};~%" e1comps tensors)
+    (format fout "GTOeval_sph_drv(shell_eval_~a, GTOprim_exp, ~a,
+ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
+atm, natm, bas, nbas, env);~%}~%" intname (factor-of expr))
+;;; _spinor
+    (format fout "void ~a_spinor(int ngrids, int *shls_slice, int *ao_loc,
 double complex *ao, double *coord, char *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {~%" intname)
-      (format fout "void ~a(int ngrids, int *shls_slice, int *ao_loc,
-double *ao, double *coord, char *non0table,
-int *atm, int natm, int *bas, int nbas, double *env)
-{~%" intname))
     (format fout "int param[] = {~d, ~d};~%" e1comps tensors)
-    (cond ((eql sp 'spinor)
-           (format fout "GTOeval_spinor_drv(shell_eval_~a, GTOprim_exp, CINTc2s_~aket_spinor_~a, ~a,
+    (format fout "GTOeval_spinor_drv(shell_eval_~a, GTOprim_exp, CINTc2s_~aket_spinor_~a, ~a,
 ngrids, param, shls_slice, ao_loc, ao, coord, non0table, atm, natm, bas, nbas, env);~%}~%"
-                   intname
-                   (if (eql ts1 'ts) "" "i")
-                   (if (eql sf1 'sf) "sf1" "si1")
-                   (factor-of expr)))
-          ((eql sp 'spheric)
-           (format fout "GTOeval_sph_drv(shell_eval_~a, GTOprim_exp, ~a,
-ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
-atm, natm, bas, nbas, env);~%}~%" intname (factor-of expr)))
-          ((eql sp 'cart)
-           (format fout "GTOeval_cart_drv(shell_eval_~a, GTOprim_exp, ~a,
-ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
-atm, natm, bas, nbas, env);~%}~%" intname (factor-of expr))))))
+            intname
+            (if (eql ts1 'ts) "" "i")
+            (if (eql sf1 'sf) "sf1" "si1")
+            (factor-of expr))))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defun gen-eval (filename &rest items)
-  "sp can be one of 'spinor 'spheric 'cart"
   (with-open-file (fout (mkstr filename)
                         :direction :output :if-exists :supersede)
     (dump-header fout)
     (flet ((gen-code (item)
              (let ((intname (mkstr (car item)))
-                   (sp (cadr item))
-                   (raw-infix (caddr item)))
-               (if (member sp '(spinor spheric cart))
-                   (gen-code-eval-ao fout intname raw-infix sp)
-                   (error "gen-cint: unknown ~a in ~a~%" sp item)))))
+                   (raw-infix (cadr item)))
+               (gen-code-eval-ao fout intname raw-infix))))
       (mapcar #'gen-code items))))
 
 ;; vim: ft=lisp
