@@ -8,6 +8,8 @@
 import sys
 import time
 import numpy
+from functools import reduce
+
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import ciah

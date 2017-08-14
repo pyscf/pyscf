@@ -8,6 +8,7 @@
 import time
 import numpy
 import scipy.linalg
+from functools import reduce
 
 from pyscf import lib
 from pyscf.lib import logger

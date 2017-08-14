@@ -8,6 +8,8 @@
 import sys
 import time
 import numpy
+from functools import reduce
+
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.lo import boys
