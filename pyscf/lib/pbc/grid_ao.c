@@ -16,19 +16,19 @@
 
 double CINTcommon_fac_sp(int l);
 void GTOshell_eval_grid_cart(double *gto, double *ri, double *exps,
-                             double *coord, double *alpha, double *coeff,
+                             double *coord, double *alpha, double *coeff, double *env,
                              int l, int np, int nc, int nao, int ngrids, int bgrids);
 void GTOshell_eval_grid_cart_deriv1(double *gto, double *ri, double *exps,
-                                    double *coord, double *alpha, double *coeff,
+                                    double *coord, double *alpha, double *coeff, double *env,
                                     int l, int np, int nc, int nao, int ngrids, int bgrids);
 void GTOshell_eval_grid_cart_deriv2(double *cgto, double *ri, double *exps,
-                                    double *coord, double *alpha, double *coeff,
+                                    double *coord, double *alpha, double *coeff, double *env,
                                     int l, int np, int nc, int nao, int ngrids, int bgrids);
 void GTOshell_eval_grid_cart_deriv3(double *cgto, double *ri, double *exps,
-                                    double *coord, double *alpha, double *coeff,
+                                    double *coord, double *alpha, double *coeff, double *env,
                                     int l, int np, int nc, int nao, int ngrids, int bgrids);
 void GTOshell_eval_grid_cart_deriv4(double *cgto, double *ri, double *exps,
-                                    double *coord, double *alpha, double *coeff,
+                                    double *coord, double *alpha, double *coeff, double *env,
                                     int l, int np, int nc, int nao, int ngrids, int bgrids);
 
 /*
@@ -193,10 +193,10 @@ void PBCeval_sph_iter(void (*feval)(),  int (*fexp)(),
                                 dcart = (l+1)*(l+2)/2;
                                 ri = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
         if (l <= 1) { // s, p functions
-                (*feval)(aobuf, ri, eprim, pcoord, p_exp, pcoeff,
+                (*feval)(aobuf, ri, eprim, pcoord, p_exp, pcoeff, env,
                          l, np, nc, nc*dcart, BLKSIZE, bgrids);
         } else {
-                (*feval)(cart_gto, ri, eprim, pcoord, p_exp, pcoeff,
+                (*feval)(cart_gto, ri, eprim, pcoord, p_exp, pcoeff, env,
                          l, np, nc, nc*dcart, bgrids, bgrids);
                 pcart = cart_gto;
                 pao = aobuf;
