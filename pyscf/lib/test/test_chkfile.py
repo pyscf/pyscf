@@ -26,10 +26,18 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(isinstance(dat, list))
         self.assertTrue(numpy.all(a[1] == dat[1]))
 
-        a = [numpy.eye(4), numpy.eye(4)]
+        a = [[numpy.eye(4), numpy.eye(4)]]*2
         lib.chkfile.save(fchk.name, 'a', a)
         dat = lib.chkfile.load(fchk.name, 'a')
         self.assertTrue(isinstance(dat, list))
+        self.assertTrue(isinstance(dat[0], list))
+
+        a = {'x':[numpy.eye(4), numpy.eye(4)],
+             'y':[numpy.eye(4)]}
+        lib.chkfile.save(fchk.name, 'a', a)
+        dat = lib.chkfile.load(fchk.name, 'a')
+        self.assertTrue('x' in dat)
+        self.assertTrue('y' in dat)
 
 if __name__ == "__main__":
     print("Full Tests for lib.chkfile")

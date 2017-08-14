@@ -404,26 +404,9 @@ def init_guess_by_chkfile(mol, chkfile_name, project=True):
     Returns:
         Density matrix, 2D ndarray
     '''
-    from pyscf.scf import addons
-    chk_mol, scf_rec = chkfile.load_scf(chkfile_name)
-
-    def fproj(mo):
-        if project:
-            return addons.project_mo_nr2nr(chk_mol, mo, mol)
-        else:
-            return mo
-    if scf_rec['mo_coeff'].ndim == 2:
-        mo = scf_rec['mo_coeff']
-        mo_occ = scf_rec['mo_occ']
-        if numpy.iscomplexobj(mo):
-            raise NotImplementedError('TODO: project DHF orbital to RHF orbital')
-        dm = make_rdm1(fproj(mo), mo_occ)
-    else:  # UHF
-        mo = scf_rec['mo_coeff']
-        mo_occ = scf_rec['mo_occ']
-        dm = make_rdm1(fproj(mo[0]), mo_occ[0]) \
-           + make_rdm1(fproj(mo[1]), mo_occ[1])
-    return dm
+    from pyscf.scf import uhf
+    dm = uhf.init_guess_by_chkfile(mol, chkfile_name, project)
+    return dm[0] + dm[1]
 
 
 def get_init_guess(mol, key='minao'):
@@ -1167,9 +1150,7 @@ class SCF(lib.StreamObject):
     def get_init_guess(self, mol=None, key='minao'):
         if mol is None:
             mol = self.mol
-        if callable(key):
-            dm = key(mol)
-        elif key.lower() == '1e':
+        if key.lower() == '1e':
             dm = self.init_guess_by_1e(mol)
         elif getattr(mol, 'natm', 0) == 0:
             logger.info(self, 'No atom found in mol. Use 1e initial guess')
@@ -1188,11 +1169,11 @@ class SCF(lib.StreamObject):
         if self.verbose >= logger.DEBUG1:
             s = self.get_ovlp()
             if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-                nelec = numpy.einsum('ij,ji', dm, s)
+                nelec = numpy.einsum('ij,ji', dm, s).real
             else:  # UHF
-                nelec = numpy.einsum('ij,ji', dm[0], s)
-                nelec+= numpy.einsum('ij,ji', dm[1], s)
-            logger.debug1(self, 'Nelec from initial guess = %g', nelec.real)
+                nelec =(numpy.einsum('ij,ji', dm[0], s).real,
+                        numpy.einsum('ij,ji', dm[1], s).real)
+            logger.debug1(self, 'Nelec from initial guess = %s', nelec)
         return dm
 
     # full density matrix for RHF

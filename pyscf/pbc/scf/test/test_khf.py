@@ -34,7 +34,7 @@ def make_primitive_cell(ngs):
     cell.pseudo = 'gth-pade'
     cell.gs = np.array([ngs,ngs,ngs])
 
-    cell.verbose = 5
+    cell.verbose = 7
     cell.output = '/dev/null'
     cell.build()
     return cell

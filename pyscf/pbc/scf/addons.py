@@ -13,7 +13,7 @@ from pyscf.pbc import gto as pbcgto
 from pyscf.lib import logger
 
 
-def project_mo_nr2nr(cell1, mo1, cell2, kpt=None):
+def project_mo_nr2nr(cell1, mo1, cell2, kpts=None):
     r''' Project orbital coefficients
 
     .. math::
@@ -24,10 +24,13 @@ def project_mo_nr2nr(cell1, mo1, cell2, kpt=None):
 
         C2 = S^{-1}<AO2|AO1> C1
     '''
-    s22 = cell2.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpt)
-    s21 = pbcgto.intor_cross('int1e_ovlp_sph', cell2, cell1, kpts=kpt)
-    mo2 = numpy.dot(s21, mo1)
-    return scipy.linalg.cho_solve(scipy.linalg.cho_factor(s22), mo2)
+    s22 = cell2.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts)
+    s21 = pbcgto.intor_cross('int1e_ovlp_sph', cell2, cell1, kpts=kpts)
+    if kpts is None or numpy.shape(kpts) == (3,):  # A single k-point
+        return scipy.linalg.solve(s22, s21.dot(mo1), sym_pos=True)
+    else:
+        return [scipy.linalg.solve(s22[k], s21[k].dot(mo1[k]), sym_pos=True)
+                for k, kpt in enumerate(kpts)]
 
 
 def smearing_(mf, sigma=None, method='fermi'):

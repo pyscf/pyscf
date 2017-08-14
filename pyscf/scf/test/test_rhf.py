@@ -8,7 +8,7 @@ from pyscf import gto
 from pyscf import scf
 
 mol = gto.M(
-    verbose = 5,
+    verbose = 7,
     output = '/dev/null',
     atom = '''
 O     0    0        0

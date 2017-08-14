@@ -162,41 +162,9 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpt=None):
     Returns:
         Density matrix, (nao,nao) ndarray
     '''
-    chk_cell, scf_rec = chkfile.load_scf(chkfile_name)
-    mo = scf_rec['mo_coeff']
-    mo_occ = scf_rec['mo_occ']
-    if kpt is None:
-        kpt = np.zeros(3)
-    if 'kpt' in scf_rec:
-        chk_kpt = scf_rec['kpt']
-    elif 'kpts' in scf_rec:
-        kpts = scf_rec['kpts'] # the closest kpt from KRHF results
-        where = np.argmin(lib.norm(kpts-kpt, axis=1))
-        chk_kpt = kpts[where]
-        if mo.ndim == 3:  # KRHF:
-            mo = mo[where]
-            mo_occ = mo_occ[where]
-        else:
-            mo = mo[:,where]
-            mo_occ = mo_occ[:,where]
-    else:  # from molecular code
-        chk_kpt = np.zeros(3)
-
-    def fproj(mo):
-        if project:
-            return addons.project_mo_nr2nr(chk_cell, mo, cell, chk_kpt-kpt)
-        else:
-            return mo
-    if mo.ndim == 2:
-        dm = make_rdm1(fproj(mo), mo_occ)
-    else:  # UHF
-        dm =(make_rdm1(fproj(mo[0]), mo_occ[0]) +
-             make_rdm1(fproj(mo[1]), mo_occ[1]))
-
-    # Real DM for gamma point
-    if kpt is None or np.allclose(kpt, 0):
-        dm = dm.real
-    return dm
+    from pyscf.pbc.scf import uhf
+    dm = uhf.init_guess_by_chkfile(cell, chkfile_name, project, kpt)
+    return dm[0] + dm[1]
 
 
 def dot_eri_dm(eri, dm, hermi=0):

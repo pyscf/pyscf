@@ -286,53 +286,9 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
     Returns:
         Density matrix, 3D ndarray
     '''
-    chk_cell, scf_rec = chkfile.load_scf(chkfile_name)
-
-    if kpts is None:
-        kpts = scf_rec['kpts']
-
-    if 'kpt' in scf_rec:
-        chk_kpts = scf_rec['kpt'].reshape(-1,3)
-    elif 'kpts' in scf_rec:
-        chk_kpts = scf_rec['kpts']
-    else:
-        chk_kpts = np.zeros((1,3))
-
-    mo = scf_rec['mo_coeff']
-    mo_occ = scf_rec['mo_occ']
-    if 'kpts' not in scf_rec:  # gamma point or single k-point
-        if mo.ndim == 2:
-            mo = mo.reshape((1,)+mo.shape)
-            mo_occ = mo_occ.reshape((1,)+mo_occ.shape)
-        else:  # UHF
-            mo = mo.reshape((2,1)+mo.shape[1:])
-            mo_occ = mo_occ.reshape((2,1)+mo_occ.shape[1:])
-
-    def fproj(mo, kpt):
-        if project:
-            return addons.project_mo_nr2nr(chk_cell, mo, cell, kpt)
-        else:
-            return mo
-
-    if kpts.shape == chk_kpts.shape and np.allclose(kpts, chk_kpts):
-        def makedm(mos, occs):
-            mos = [fproj(mo, None) for mo in mos]
-            return make_rdm1(mos, occs)
-    else:
-        where = [np.argmin(lib.norm(chk_kpts-kpt, axis=1)) for kpt in kpts]
-        def makedm(mos, occs):
-            mos = [fproj(mos[w], chk_kpts[w]-kpts[i]) for i,w in enumerate(where)]
-            return make_rdm1(mos, occs[where])
-
-    if mo.ndim == 3:  # KRHF
-        dm = makedm(mo, mo_occ)
-    else:  # KUHF
-        dm = makedm(mo[0], mo_occ[0]) + makedm(mo[1], mo_occ[1])
-
-    # Real DM for gamma point
-    if np.allclose(kpts, 0):
-        dm = dm.real
-    return dm
+    from pyscf.pbc.scf import kuhf
+    dm = kuhf.init_guess_by_chkfile(cell, chkfile_name, project, kpts)
+    return dm[0] + dm[1]
 
 
 class KRHF(hf.RHF):
@@ -408,12 +364,29 @@ class KRHF(hf.RHF):
         #    self.precompute_exx()
 
     def get_init_guess(self, cell=None, key='minao'):
-        if cell is None: cell = self.cell
-        dm = hf.RHF.get_init_guess(self, cell, key)
-        if key.lower() == 'chkfile':
-            dm_kpts = dm
+        if cell is None:
+            cell = self.cell
+        dm_kpts = None
+        if key.lower() == '1e':
+            dm = self.init_guess_by_1e(cell)
+        elif getattr(cell, 'natm', 0) == 0:
+            logger.info(self, 'No atom found in cell. Use 1e initial guess')
+            dm = self.init_guess_by_1e(cell)
+        elif key.lower() == 'atom':
+            dm = self.init_guess_by_atom(cell)
+        elif key.lower().startswith('chk'):
+            try:
+                dm_kpts = self.from_chk()
+            except (IOError, KeyError):
+                logger.warn(self, 'Fail in reading %s. Use MINAO initial guess',
+                            self.chkfile)
+                dm = self.init_guess_by_minao(cell)
         else:
+            dm = self.init_guess_by_minao(cell)
+
+        if dm_kpts is None:
             dm_kpts = lib.asarray([dm]*len(self.kpts))
+
         if cell.dimension < 3:
             ne = np.einsum('kij,kji->k', dm_kpts, self.get_ovlp(cell))
             if np.any(abs(ne - cell.nelectron).sum() > 1e-7):

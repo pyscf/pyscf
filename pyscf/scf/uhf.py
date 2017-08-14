@@ -63,11 +63,9 @@ def init_guess_by_chkfile(mol, chkfile_name, project=True):
         if numpy.iscomplexobj(mo):
             raise NotImplementedError('TODO: project DHF orbital to UHF orbital')
         mo_coeff = fproj(mo)
-        mo_a = mo_coeff[:,mo_occ>0]
-        mo_b = mo_coeff[:,mo_occ>1]
-        dm_a = numpy.dot(mo_a, mo_a.T)
-        dm_b = numpy.dot(mo_b, mo_b.T)
-        dm = numpy.array((dm_a, dm_b))
+        mo_occa = (mo_occ>1e-8).astype(numpy.double)
+        mo_occb = mo_occ - mo_occa
+        dm = make_rdm1([mo_coeff,mo_coeff], [mo_occa,mo_occb])
     else: #UHF
         mo = scf_rec['mo_coeff']
         mo_occ = scf_rec['mo_occ']

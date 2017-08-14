@@ -226,15 +226,17 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
     mo_occ = scf_rec['mo_occ']
     if 'kpts' not in scf_rec:  # gamma point or single k-point
         if mo.ndim == 2:
-            mo = mo.reshape((1,)+mo.shape)
-            mo_occ = mo_occ.reshape((1,)+mo_occ.shape)
+            mo = np.expand_dims(mo, axis=0)
+            mo_occ = np.expand_dims(mo_occ, axis=0)
         else:  # UHF
-            mo = mo.reshape((2,1)+mo.shape[1:])
-            mo_occ = mo_occ.reshape((2,1)+mo_occ.shape[1:])
+            mo = [np.expand_dims(mo[0], axis=0),
+                  np.expand_dims(mo[1], axis=0)]
+            mo_occ = [np.expand_dims(mo_occ[0], axis=0),
+                      np.expand_dims(mo_occ[1], axis=0)]
 
-    def fproj(mo, kpt):
+    def fproj(mo, kpts):
         if project:
-            return addons.project_mo_nr2nr(chk_cell, mo, cell, kpt)
+            return addons.project_mo_nr2nr(chk_cell, mo, cell, kpts)
         else:
             return mo
 
@@ -249,13 +251,16 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
             where = [np.argmin(lib.norm(chk_kpts-kpt, axis=1)) for kpt in kpts]
             moa, mob = mos
             occa, occb = occs
-            mos = ([fproj(moa[w], chk_kpts[w]-kpts[i]) for i,w in enumerate(where)],
-                   [fproj(mob[w], chk_kpts[w]-kpts[i]) for i,w in enumerate(where)])
-            occs = (occa[where],occb[where])
+            dkpts = [chk_kpts[w]-kpts[i] for i,w in enumerate(where)]
+            mos = (fproj([moa[w] for w in where], dkpts),
+                   fproj([mob[w] for w in where], dkpts))
+            occs = ([occa[i] for i in where], [occb[i] for i in where])
             return make_rdm1(mos, occs)
 
-    if mo.ndim == 3:  # KRHF
-        dm = makedm((mo, mo), (mo_occ*.5, mo_occ*.5))
+    if mo[0].ndim == 2:  # KRHF
+        mo_occa = [(occ>1e-8).astype(np.double) for occ in mo_occ]
+        mo_occb = [occ-mo_occa[k] for k,occ in enumerate(mo_occ)]
+        dm = makedm((mo, mo), (mo_occa, mo_occb))
     else:  # KUHF
         dm = makedm(mo, mo_occ)
 
@@ -299,18 +304,32 @@ class KUHF(uhf.UHF, khf.KRHF):
         #    self.precompute_exx()
 
     def get_init_guess(self, cell=None, key='minao'):
-        if cell is None: cell = self.cell
-        dm = uhf.UHF.get_init_guess(self, cell, key)
-        if key.lower() == 'chkfile':
-            dm_kpts = dm
+        if cell is None:
+            cell = self.cell
+        dm_kpts = None
+        if key.lower() == '1e':
+            dm = self.init_guess_by_1e(cell)
+        elif getattr(cell, 'natm', 0) == 0:
+            logger.info(self, 'No atom found in cell. Use 1e initial guess')
+            dm = self.init_guess_by_1e(cell)
+        elif key.lower() == 'atom':
+            dm = self.init_guess_by_atom(cell)
+        elif key.lower().startswith('chk'):
+            try:
+                dm_kpts = self.from_chk()
+            except (IOError, KeyError):
+                logger.warn(self, 'Fail in reading %s. Use MINAO initial guess',
+                            self.chkfile)
+                dm = self.init_guess_by_minao(cell)
         else:
+            dm = self.init_guess_by_minao(cell)
+
+        if dm_kpts is None:
+            assert(dm.ndim == 3)
             nao = dm.shape[-1]
             nkpts = len(self.kpts)
-            if dm.ndim == 3:
-                dm_kpts = lib.asarray([dm]*nkpts).reshape(nkpts,2,nao,nao)
-                dm_kpts = dm_kpts.transpose(1,0,2,3)
-            else:
-                dm_kpts = dm
+            dm_kpts = lib.asarray([dm]*nkpts).reshape(nkpts,2,nao,nao)
+            dm_kpts = dm_kpts.transpose(1,0,2,3)
             dm_kpts[0,:] *= 1.01
             dm_kpts[1,:] *= 0.99  # To break spin symmetry
             assert dm_kpts.shape[0]==2

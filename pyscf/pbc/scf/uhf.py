@@ -39,13 +39,13 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpt=None):
         kpts = scf_rec['kpts'] # the closest kpt from KRHF results
         where = np.argmin(lib.norm(kpts-kpt, axis=1))
         chk_kpt = kpts[where]
-        if mo.ndim == 3:  # KRHF:
+        if mo[0].ndim == 2:  # KRHF
             mo = mo[where]
             mo_occ = mo_occ[where]
         else:
             mo = mo[:,where]
             mo_occ = mo_occ[:,where]
-    else:
+    else:  # from molecular code
         chk_kpt = np.zeros(3)
 
     def fproj(mo):
@@ -54,10 +54,12 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpt=None):
         else:
             return mo
     if mo.ndim == 2:
-        dm = mol_hf.make_rdm1(fproj(mo), mo_occ)
+        mo = fproj(mo)
+        mo_occa = (mo_occ>1e-8).astype(np.double)
+        mo_occb = mo_occ - mo_occa
+        dm = mol_uhf.make_rdm1([mo,mo], [mo_occa,mo_occb])
     else:  # UHF
-        dm = np.asarray((mol_hf.make_rdm1(fproj(mo[0]), mo_occ[0]),
-                         mol_hf.make_rdm1(fproj(mo[1]), mo_occ[1])))
+        dm = mol_uhf.make_rdm1([fproj(mo[0]),fproj(mo[1])], mo_occ)
 
     # Real DM for gamma point
     if kpt is None or np.allclose(kpt, 0):

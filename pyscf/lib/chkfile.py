@@ -39,18 +39,20 @@ def load(chkfile, key):
     def load_as_dic(key, group):
         if key in group:
             val = group[key]
-            if isinstance(val, h5py.Group):
-                return dict([(k, load_as_dic(k, val)) for k in val])
-            else:
-                return val.value
         elif key + '__from_list__' in group:
-            val = group[key+'__from_list__']
-            if isinstance(val, h5py.Group):
-                return [load_as_dic(k, val) for k in val]
-            else:
-                return val.value
+            key = key + '__from_list__'
+            val = group[key]
         else:
             return None
+
+        if isinstance(val, h5py.Group):
+            if key.endswith('__from_list__'):
+                return [load_as_dic(k, val) for k in val]
+            else:
+                return dict([(k.replace('__from_list__', ''),
+                              load_as_dic(k, val)) for k in val])
+        else:
+            return val.value
 
     with h5py.File(chkfile, 'r') as fh5:
         return load_as_dic(key, fh5)
