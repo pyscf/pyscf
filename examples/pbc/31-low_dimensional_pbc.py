@@ -51,14 +51,14 @@ e.append(mf.kernel())
 mf = pbchf.RHF(cell)
 mf.with_df = pdf.DF(cell)
 mf.with_df.auxbasis = 'weigend'
-# The above two lines of initialization can be replaced by a shortcut function
+# The above two lines of initialization can be replaced by density_fit method
 # mf = pbchf.RHF(cell).density_fit(auxbasis='weigend')
 e.append(mf.kernel())
 
 mf = pbchf.RHF(cell)
 mf.with_df = pdf.MDF(cell)
 mf.with_df.auxbasis = 'weigend'
-# The above two lines of initialization can be replaced by a shortcut function
+# The above two lines of initialization can be replaced by density_fit method
 # mf = pbchf.RHF(cell).mix_density_fit(auxbasis='weigend')
 e.append(mf.kernel())
 

@@ -167,6 +167,11 @@ class FFTDF(lib.StreamObject):
 
     def aoR_loop(self, gs=None, kpts=None, kpts_band=None):
         cell = self.cell
+        if cell.dimension < 3:
+            raise RuntimeError('FFTDF method does not support low-dimensional '
+                               'PBC system.  DF, MDF or AFTDF methods should '
+                               'be used.\nSee also examples/pbc/31-low_dimensional_pbc.py')
+
         if kpts is None: kpts = self.kpts
         kpts = numpy.asarray(kpts)
 
