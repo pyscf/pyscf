@@ -864,6 +864,9 @@ class _ERIS:
             self.mo_coeff = mo_coeff = _mo_without_core(cc, cc.mo_coeff)
         else:
             self.mo_coeff = mo_coeff = _mo_without_core(cc, mo_coeff)
+# Note: Always recompute the fock matrix because cc._scf.mo_energy may not be
+# the eigenvalue of Fock matrix (eg when level shift is used in the scf object
+# and the scf does not converge, mo_energy has the contribution of level shift).
         dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
         fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
         self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))

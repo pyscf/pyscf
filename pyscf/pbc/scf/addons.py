@@ -29,6 +29,7 @@ def project_mo_nr2nr(cell1, mo1, cell2, kpts=None):
     if kpts is None or numpy.shape(kpts) == (3,):  # A single k-point
         return scipy.linalg.solve(s22, s21.dot(mo1), sym_pos=True)
     else:
+        assert(len(kpts) == len(mo1))
         return [scipy.linalg.solve(s22[k], s21[k].dot(mo1[k]), sym_pos=True)
                 for k, kpt in enumerate(kpts)]
 

@@ -402,7 +402,7 @@ def check_given_symm(gpname, atoms, basis=None):
         if numpy.allclose(coords[:,:2], 0, atol=TOLERANCE):
             opdic = symm_ops(gpname)
             rawsys = SymmSys(atoms, basis)
-            return rawsys.has_icenter()
+            return rawsys.has_icenter() and numpy.allclose(rawsys.charge_center, 0)
         else:
             return False
     elif gpname == 'Coov':

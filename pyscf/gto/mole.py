@@ -1245,7 +1245,7 @@ def offset_2c_by_atom(mol):
     '''2-component AO offset for each atom.  Return a list, each item
     of the list gives (start-shell-id, stop-shell-id, start-AO-id, stop-AO-id)
     '''
-    return offset_ao_by_atom(mol, mol.ao_loc_2c())
+    return aoslice_by_atom(mol, mol.ao_loc_2c())
 
 def aoslice_by_atom(mol, ao_loc=None):
     '''AO offsets for each atom.  Return a list, each item of the list gives
