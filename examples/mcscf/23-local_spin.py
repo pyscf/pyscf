@@ -3,6 +3,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import numpy
 from pyscf import gto, scf, mcscf
 from pyscf import fci
 
@@ -30,7 +31,7 @@ mocas = mo[:,5:9]
 mc.kernel(mo)
 print('RHF-CASCI total energy of O2', mc.e_tot)
 print('S^2 = %.7f, 2S+1 = %.7f' % mcscf.spin_square(mc))
-ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), range(9))
+ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), numpy.arange(9))
 print('local spin for O = %.7f, 2S+1 = %.7f' % ss)
 
 
@@ -55,7 +56,7 @@ mc.kernel(mo)
 print('\n')
 print('UHF-CASCI total energy of O2', mc.e_tot)
 print('S^2 = %.7f, 2S+1 = %.7f' % mcscf.spin_square(mc))
-ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), range(9))
+ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), numpy.arange(9))
 print('local spin (CAS space) for O = %.7f, 2S+1 = %.7f' % ss)
 
 
@@ -83,11 +84,11 @@ mc.kernel(mo)
 print('\n')
 print('RHF-CASCI total energy of O2+H2 %.12f' % mc.e_tot)
 print('S^2 = %.7f, 2S+1 = %.7f' % mcscf.spin_square(mc))
-ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), range(9))
+ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), numpy.arange(9))
 print('local spin for O = %.7f, 2S+1 = %.7f' % ss)
-ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), range(18))
+ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), numpy.arange(18))
 print('local spin for O2 = %.7f, 2S+1 = %.7f' % ss)
-ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), range(18,22))
+ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), numpy.arange(18,22))
 print('local spin for H2 = %.7f, 2S+1 = %.7f' % ss)
 
 
@@ -116,11 +117,11 @@ mc.kernel(mo)
 print('\n')
 print('RHF-CASCI total energy of O2+O2 singlet %.12f = monomer*2' % mc.e_tot)
 print('S^2 = %.7f, 2S+1 = %.7f' % mcscf.spin_square(mc))
-ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), range(9))
+ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), numpy.arange(9))
 print('local spin for O = %.7f, 2S+1 = %.7f' % ss)
-ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), range(18))
+ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), numpy.arange(18))
 print('local spin for O2 = %.7f, 2S+1 = %.7f' % ss)
-ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), range(18,36))
+ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), numpy.arange(18,36))
 print('local spin for another O2 = %.7f, 2S+1 = %.7f' % ss)
 
 
@@ -133,10 +134,10 @@ mc.kernel(mo)
 print('\n')
 print('RHF-CASCI total energy of O2+O2 quintet %.12f = monomer*2' % mc.e_tot)
 print('S^2 = %.7f, 2S+1 = %.7f' % mcscf.spin_square(mc))
-ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), range(9))
+ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), numpy.arange(9))
 print('local spin for O = %.7f, 2S+1 = %.7f' % ss)
-ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), range(18))
+ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), numpy.arange(18))
 print('local spin for O2 = %.7f, 2S+1 = %.7f' % ss)
-ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), range(18,36))
+ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), numpy.arange(18,36))
 print('local spin for another O2 = %.7f, 2S+1 = %.7f' % ss)
 

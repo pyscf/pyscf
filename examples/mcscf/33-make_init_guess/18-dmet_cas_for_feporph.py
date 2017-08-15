@@ -207,7 +207,7 @@ mo = dmet_cas(mc, mf.make_rdm1(), idx3d+idx4d)
 #
 fci.addons.fix_spin_(mc.fcisolver, ss=2)  # Triplet, ss = S*(S+1)
 mc.fcisolver.wfnsym = 'B1g'
-mc.frozen = range(mc.ncore+5, mc.ncore+10)  # 6th-10th active orbitals are Fe 4d
+mc.frozen = numpy.arange(mc.ncore+5, mc.ncore+10)  # 6th-10th active orbitals are Fe 4d
 mc.kernel(mo)
 mo = mc.mo_coeff
 
