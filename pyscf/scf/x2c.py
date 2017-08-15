@@ -58,6 +58,12 @@ def sfx2c1e(mf):
             else:
                 return mf_class.get_hcore(self, mol)
 
+        def dump_flags(self):
+            mf_class.dump_flags(self)
+            if self.with_x2c:
+                self.with_x2c.dump_flags()
+            return self
+
     return X2C_HF()
 
 sfx2c = sfx2c1e
@@ -74,6 +80,17 @@ class X2C(lib.StreamObject):
         self.basis = None
         self.mol = mol
 
+    def dump_flags(self):
+        log = logger.Logger(self.mol.stdout, self.mol.verbose)
+        log.info('\n')
+        log.info('******** %s flags ********', self.__class__)
+        log.info('exp_drop = %g', self.exp_drop)
+        log.info('approx = %s',    self.approx)
+        log.info('xuncontract = %d', self.xuncontract)
+        if self.basis is not None:
+            log.info('basis for X matrix = %s', self.basis)
+        return self
+
     def get_xmol(self, mol=None):
         if mol is None:
             mol = self.mol
@@ -83,7 +100,8 @@ class X2C(lib.StreamObject):
             xmol.build(False, False, basis=self.basis)
             return xmol, None
         elif self.xuncontract:
-            xmol, contr_coeff = _uncontract_mol(mol, self.xuncontract)
+            xmol, contr_coeff = _uncontract_mol(mol, self.xuncontract,
+                                                self.exp_drop)
             return xmol, contr_coeff
         else:
             return mol, None
@@ -239,6 +257,12 @@ class UHF(hf.SCF):
             self.check_sanity()
         if self.direct_scf:
             self.opt = self.init_direct_scf(self.mol)
+
+    def dump_flags(self):
+        hf.SCF.dump_flags(self)
+        if self.with_x2c:
+            self.with_x2c.dump_flags()
+        return self
 
     def init_guess_by_minao(self, mol=None):
         '''Initial guess in terms of the overlap to minimal basis.'''
@@ -519,7 +543,7 @@ def _proj_dmll(mol_nr, dm_nr, mol):
 
 
 if __name__ == '__main__':
-    mol = gto.Mole()
+    mol = mole.Mole()
     mol.build(
         verbose = 0,
         atom = [["O" , (0. , 0.     , 0.)],
@@ -532,7 +556,7 @@ if __name__ == '__main__':
     enr = method.kernel()
     print('E(NR) = %.12g' % enr)
 
-    method = sfx2c1e(pyscf.scf.RHF(mol))
+    method = sfx2c1e(hf.RHF(mol))
     esfx2c = method.kernel()
     print('E(SFX2C1E) = %.12g' % esfx2c)
     method.with_x2c.basis = 'unc-ccpvqz-dk'
