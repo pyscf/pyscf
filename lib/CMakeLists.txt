@@ -5,7 +5,7 @@ enable_language(Fortran)
 #include(arch.inc OPTIONAL)
 
 #set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
   # using GCC
   IF( NOT CMAKE_BUILD_TYPE )
     #SET( CMAKE_BUILD_TYPE Release ... FORCE )
@@ -26,7 +26,7 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-as-needed")
   endif()
 
-elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
+elseif ("${CMAKE_C_COMPILER_ID}" STREQUAL "Intel")
   # using Intel C++
   IF( NOT CMAKE_BUILD_TYPE )
     #SET( CMAKE_BUILD_TYPE Release ... FORCE )
