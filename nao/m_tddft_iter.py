@@ -3,15 +3,40 @@ import numpy as np
 from scipy.sparse import csr_matrix
 from timeit import default_timer as timer
 
+try:
+    import numba
+    from pyscf.nao.m_iter_div_eigenenergy_numba import div_eigenenergy_numba
+    use_numba = True
+except:
+    use_numba = False
+
+
 class tddft_iter_c():
 
-  def __init__(self, sv, pb, tddft_iter_tol=1e-2, tddft_iter_broadening=0.00367493, nfermi_tol=1e-5, telec=None, nelec=None, fermi_energy=None, xc_code='LDA,PZ'):
+  def __init__(self, sv, pb, tddft_iter_tol=1e-2, tddft_iter_broadening=0.00367493,
+          nfermi_tol=1e-5, telec=None, nelec=None, fermi_energy=None, xc_code='LDA,PZ',
+          GPU=False):
     """ Iterative TDDFT a la PK, DF, OC JCTC """
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
     from pyscf.nao.m_comp_dm import comp_dm
+
     assert tddft_iter_tol>1e-6
     assert type(tddft_iter_broadening)==float
     assert sv.wfsx.x.shape[-1]==1 # i.e. real eigenvectors we accept here
+
+    if GPU:
+        try:
+            import skcuda.linalg as culinalg
+            import pycuda.gpuarray as gpuarray
+            culinalg.init()
+            self.GPU=True
+            print("GPU initialization")
+        except:
+            print("GPU lib failed to load, continuating with CPU")
+            self.GPU = False
+    else:
+        self.GPU = False
+
 
     self.rf0_ncalls = 0
     self.matvec_ncalls = 0
@@ -59,15 +84,42 @@ class tddft_iter_c():
     sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
     nb2v = self.xocc*sab
     #nm2v = np.zeros([self.nfermi,len(self.xvrt)], dtype=np.complex64)
-    nm2v = np.dot(nb2v, np.transpose(self.xvrt))
-    
-    for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
-      for j,[em,fm] in enumerate(zip(self.ksn2e[0,0,n+1:],self.ksn2f[0,0,n+1:])):
-        m = j+n+1-self.vstart
-        nm2v[n,m] = nm2v[n,m] * (fn-fm) * ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
+
+    if self.GPU:
+        xvrt_gpu = gpuarray.to_gpu(np.transpose(self.xvrt))
+        nb2v_gpu = gpuarray.to_gpu(nb2v)
+
+        nm2v_gpu = culinalg.dot(nb2v, np.transpose(self.xvrt))
+        nm2v = nm2v_gpu.get()
+
+        xvrt_gpu.gpudata.free()
+        nb2v_gpu.gpudata.free()
+        nm2v_gpu.gpudata.free()
+
+        if use_numba:
+            div_eigenenergy_numba(self.ksn2e, self.ksn2f, self.nfermi, self.vstart, comega, nm2v)
+        else:
+            for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
+              for j,[em,fm] in enumerate(zip(self.ksn2e[0,0,n+1:],self.ksn2f[0,0,n+1:])):
+                m = j+n+1-self.vstart
+                nm2v[n,m] = nm2v[n,m] * (fn-fm) * ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
+
+        nb2v = np.dot(nm2v,self.xvrt)
+        ab2v = np.dot(np.transpose(self.xocc),nb2v).reshape(no*no)
+    else:
+        nm2v = np.dot(nb2v, np.transpose(self.xvrt))
         
-    nb2v = np.dot(nm2v,self.xvrt)
-    ab2v = np.dot(np.transpose(self.xocc),nb2v).reshape(no*no)
+        if use_numba:
+            div_eigenenergy_numba(self.ksn2e, self.ksn2f, self.nfermi, self.vstart, comega, nm2v)
+        else:
+            for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
+              for j,[em,fm] in enumerate(zip(self.ksn2e[0,0,n+1:],self.ksn2f[0,0,n+1:])):
+                m = j+n+1-self.vstart
+                nm2v[n,m] = nm2v[n,m] * (fn-fm) * ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
+
+        nb2v = np.dot(nm2v,self.xvrt)
+        ab2v = np.dot(np.transpose(self.xocc),nb2v).reshape(no*no)
+
     vdp = self.v_dab*ab2v
     res = vdp*self.cc_da
     return res
