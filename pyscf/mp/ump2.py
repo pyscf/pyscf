@@ -49,11 +49,16 @@ class UMP2(pyscf.lib.StreamObject):
 
     @property
     def nocc(self):
-        return uccsd.nocc(self)
+        nocca, noccb = self.get_nocc()
+        return nocca + noccb
 
     @property
     def nmo(self):
-        return uccsd.nmo(self)
+        nmoa, nmob = self.get_nmo()
+        return nmoa + nmob
+
+    get_nocc = uccsd.get_nocc
+    get_nmo = uccsd.get_nmo
 
     def kernel(self, mo_coeff=None):
         if mo_coeff is None:
