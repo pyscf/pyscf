@@ -55,7 +55,7 @@ def CCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = ccsd.CCSD.__doc__
     from pyscf import scf
 
-    if isinstance(mf, scf.uhf.UHF):
+    if isinstance(mf, scf.uhf.UHF) or mf.mol.spin != 0:
         return UCCSD(mf, frozen, mo_coeff, mo_occ)
 
     try:

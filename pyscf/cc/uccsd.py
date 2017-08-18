@@ -546,6 +546,7 @@ class UCCSD(rccsd.RCCSD):
         if t2 is None: t2 = self.t2
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         return uccsd_t.kernel(self, eris, t1, t2, self.verbose)
+    uccsd_t = ccsd_t
 
     def make_rdm1(self, t1=None, t2=None, l1=None, l2=None):
         '''Un-relaxed 1-particle density matrix in MO space

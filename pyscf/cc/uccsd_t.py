@@ -341,8 +341,9 @@ if __name__ == '__main__':
     mol.basis = '3-21g'
     mol.build()
     mf = scf.UHF(mol).run(conv_tol=1e-14)
+    nao, nmo = mf.mo_coeff[0].shape
     numpy.random.seed(10)
-    mf.mo_coeff = numpy.random.random(mf.mo_coeff.shape)
+    mf.mo_coeff = numpy.random.random((2,nao,nmo))
 
     numpy.random.seed(12)
     nocca, noccb = mol.nelec
