@@ -37,10 +37,10 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     t2aaT = t2aa.transpose(2,3,0,1).copy()
     t2bbT = t2bb.transpose(2,3,0,1).copy()
 
-    eris_vooo = numpy.asarray(eris.ovoo.transpose(1,2,0,3), order='C')
-    eris_VOOO = numpy.asarray(eris.OVOO.transpose(1,2,0,3), order='C')
-    eris_vOoO = numpy.asarray(eris.ovOO.transpose(1,2,0,3), order='C')
-    eris_VoOo = numpy.asarray(eris.OVoo.transpose(1,2,0,3), order='C')
+    eris_vooo = numpy.asarray(eris.ovoo).transpose(1,2,0,3).copy()
+    eris_VOOO = numpy.asarray(eris.OVOO).transpose(1,2,0,3).copy()
+    eris_vOoO = numpy.asarray(eris.ovOO).transpose(1,2,0,3).copy()
+    eris_VoOo = numpy.asarray(eris.OVoo).transpose(1,2,0,3).copy()
 
     _sort_eri(mycc, eris, ftmp, log)
     eris_vvop = ftmp['vvop']
