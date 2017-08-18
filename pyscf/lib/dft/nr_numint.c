@@ -16,6 +16,10 @@
 int VXCao_empty_blocks(char *empty, unsigned char *non0table, int *shls_slice,
                        int *ao_loc)
 {
+        if (non0table == NULL || shls_slice == NULL || ao_loc == NULL) {
+                return 0;
+        }
+
         const int sh0 = shls_slice[0];
         const int sh1 = shls_slice[1];
 
