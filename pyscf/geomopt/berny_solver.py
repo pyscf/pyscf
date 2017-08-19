@@ -10,21 +10,22 @@ except ImportError:
                       'can be found on github https://github.com/azag0/pyberny')
 
 from pyscf import lib
-from pyscf.geomopt.grad import gen_grad_solver
+from pyscf.geomopt.grad import gen_grad_scanner
 
-def kernel(method, mol=None):
-    '''Optimize the
+def kernel(method, mol=None, **kwargs):
+    '''Optimize the geometry of the given mol object.  Note this function will
+    change the attribute atom of mol object.
     '''
     if mol is None:
         mol = method.mol
     geom = to_berny_geom(mol)
-    g_solver = gen_grad_solver(method)
+    g_scanner = gen_grad_scanner(method)
     optimizer = Berny(geom, log=Logger(out=method.stdout), **kwargs)
     dm0 = None
     for geom in optimizer:
         atom = geom_to_atom(geom)
         mol.set_geom_(atom)
-        energy, gradients = g_solver(mol)
+        energy, gradients = g_scanner(mol)
         optimizer.send((energy, gradients))
     return geom
 
@@ -42,11 +43,11 @@ def as_berny_solver(method, mol=None):
     '''
     if mol is None:
         mol = method.mol
-    g_solver = gen_grad_solver(method)
+    g_scanner = gen_grad_scanner(method)
     atom = yield
     while True:
         mol.set_geom_(atom)
-        energy, gradients = g_solver(mol)
+        energy, gradients = g_scanner(mol)
         atom = yield energy, gradients
 
 

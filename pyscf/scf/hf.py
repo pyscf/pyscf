@@ -1464,6 +1464,10 @@ class RHF(SCF):
         from pyscf.scf.stability import rhf_stability
         return rhf_stability(self, internal, external, verbose)
 
+    def nuc_grad_method(self):
+        from pyscf.grad import rhf
+        return rhf.Gradients(self)
+
 
 if __name__ == '__main__':
     mol = gto.Mole()

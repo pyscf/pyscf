@@ -1,11 +1,9 @@
 from pyscf import grad
 
-def gen_grad_solver(method):
-    from pyscf import scf, dft, cc
-    if isinstance(method, dft.rks.RKS):
-        return grad.RKS(method).as_scanner()
-    elif isinstance(method, scf.hf.RHF):
-        return grad.RHF(method).as_scanner()
+def gen_grad_scanner(method):
+    from pyscf import scf, cc
+    if isinstance(method, scf.hf.SCF) and hasattr(method, 'nuc_grad_method'):
+        return method.nuc_grad_method().as_scanner()
     elif isinstance(method, cc.ccsd.CCSD):
         return grad.ccsd.as_scanner(method)
     else:

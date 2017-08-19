@@ -199,6 +199,10 @@ class RKS(hf.RHF):
     get_veff = get_veff
     energy_elec = energy_elec
 
+    def nuc_grad_method(self):
+        from pyscf.grad import rks
+        return rks.Gradients(self)
+
     def define_xc_(self, description):
         raise RuntimeError('define_xc_ method is depercated.  '
                            'Set mf.xc = %s instead.' % description)

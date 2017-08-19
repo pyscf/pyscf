@@ -432,7 +432,7 @@ def as_scanner(cc):
         cc.mo_coeff = cc._scf.mo_coeff
         cc.mo_occ = cc._scf.mo_occ
         eris = cc.ao2mo(cc.mo_coeff)
-        mf_grad = rhf_grad.Gradients(cc._scf)
+        mf_grad = cc._scf.nuc_grad_method()
         cc.kernel(cc.t1, cc.t2, eris=eris)
         cc.solve_lambda(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris)
         de = kernel(cc, cc.t1, cc.t2, cc.l1, cc.l2, eris=eris, mf_grad=mf_grad)
