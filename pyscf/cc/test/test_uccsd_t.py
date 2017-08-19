@@ -11,8 +11,9 @@ mol.atom = [
     [8 , (0. , 0.     , 0.)],
     [1 , (0. , -.757 , .587)],
     [1 , (0. ,  .757 , .587)]]
-mol.symmetry = True
-mol.basis = 'ccpvdz'
+mol.spin = 2
+mol.basis = '3-21g'
+mol.symmetry = 'C2v'
 mol.build()
 mol1 = copy.copy(mol)
 mol1.symmetry = False
@@ -47,10 +48,10 @@ class KnowValues(unittest.TestCase):
         mycc = cc.UCCSD(mf1)
         eris = mycc.ao2mo(mf1.mo_coeff)
         e3a = uccsd_t.kernel(mycc, eris, [t1a,t1b], [t2aa, t2ab, t2bb])
-        self.assertAlmostEqual(e3a, -5175827.902065379, 6)
+        self.assertAlmostEqual(e3a, 8193.064821311109, 6)
 
         e3a = mcc.ccsd_t()
-        self.assertAlmostEqual(e3a, -0.0030600226107389866, 11)
+        self.assertAlmostEqual(e3a, -0.0009857042572475674, 11)
 
     #def test_uccsd_t_symm(self):
     #    mf = scf.UHF(mol).run(conv_tol=1e-14)

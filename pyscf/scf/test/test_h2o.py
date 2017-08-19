@@ -290,7 +290,7 @@ class KnowValues(unittest.TestCase):
 
         mf_scanner = dft.RKS(molsym).set(xc='bp86').as_scanner()
         self.assertAlmostEqual(mf_scanner(molsym), -76.385043416002361, 9)
-        self.assertAlmostEqual(mf_scanner(mol1), -76.372743600375088, 9)
+        self.assertAlmostEqual(mf_scanner(mol1), -76.372784697245777, 9)
 
 
 

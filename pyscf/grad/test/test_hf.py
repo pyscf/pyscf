@@ -51,7 +51,7 @@ class KnowValues(unittest.TestCase):
         mycc.kernel()
         mycc.solve_lambda()
         g1 = grad.ccsd.kernel(mycc)
-        self.assertAlmostEqual(finger(g1), 7.8557320937879354, 6)
+        self.assertAlmostEqual(finger(g1), 0.43305028391866857, 6)
 
     def test_rhf_scanner(self):
         mol1 = mol.copy()
@@ -73,7 +73,7 @@ class KnowValues(unittest.TestCase):
         e, de = mf_scanner(mol)
         self.assertAlmostEqual(finger(de), 0.458572523892797, 7)
         e, de = mf_scanner(mol1)
-        self.assertAlmostEqual(finger(de), 4.543556456207229, 7)
+        self.assertAlmostEqual(finger(de), 0.12763259021187467, 7)
 
     def test_ccsd_scanner(self):
         from pyscf import cc
@@ -84,9 +84,9 @@ class KnowValues(unittest.TestCase):
         mycc = cc.CCSD(scf.RHF(mol).set(conv_tol=1e-14))
         cc_scanner = grad.ccsd.as_scanner(mycc)
         e, de = cc_scanner(mol)
-        self.assertAlmostEqual(finger(de), 0.4330503011412547, 7)
+        self.assertAlmostEqual(finger(de), 0.4330503011412547, 5)
         e, de = cc_scanner(mol1)
-        self.assertAlmostEqual(finger(de), 0.10534638975831109, 7)
+        self.assertAlmostEqual(finger(de), 0.10534638975831109, 5)
 
 
 if __name__ == "__main__":

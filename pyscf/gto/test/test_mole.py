@@ -31,6 +31,8 @@ mol0.build()
 class KnowValues(unittest.TestCase):
     def test_intor_cross(self):
         mol1 = mol0.unpack(mol0.pack())
+        mol1.symmetry = True
+        mol1.unit = 'Ang'
         mol1.atom = '''
                 1    0  1  1
                 O    0  0  0
