@@ -8,6 +8,7 @@ set_target_properties(nao PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_D
   COMPILE_FLAGS ${OpenMP_C_FLAGS}
   LINK_FLAGS ${OpenMP_C_FLAGS}
   )
+target_link_libraries(nao ${FFTW_LIBRARIES} ${LAPACK_LIBRARIES})
 
 #target_compile_options(nao PRIVATE -pedantic -g -DDEBUG -O0 -fbounds-check -fbacktrace -Wall -ffree-line-length-0)
 #target_compile_options(nao PRIVATE -pedantic -g -DDEBUG -O2 -Wall -ffree-line-length-0)
@@ -18,5 +19,3 @@ set_target_properties(nao PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_D
 #  FFTW_INCLUDES    - where to find fftw3.h
 #  FFTW_LIBRARIES   - List of libraries when using FFTW.
 #  FFTW_FOUND       - True if FFTW found.
-
-target_link_libraries(nao ${FFTW_LIBRARIES} ${LAPACK_LIBRARIES})
