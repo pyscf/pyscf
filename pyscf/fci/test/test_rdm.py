@@ -92,6 +92,42 @@ class KnowValues(unittest.TestCase):
         dm1a, dm2a = fci.rdm.reorder_rdm(dm1a, dm2a)
         self.assertTrue(numpy.allclose(dm2a,dm2a.transpose(2,3,0,1)))
 
+    def test_full_alpha(self):
+        nelec = (6,3)
+        norb = 6
+        npair = norb*(norb+1)/2
+        numpy.random.seed(12)
+        h1 = numpy.random.random((norb,norb))
+        h1 = h1 + h1.T
+        h2 = numpy.random.random((npair,npair)) * .1
+        h2 = h2 + h2.T
+        cis = fci.direct_spin1.FCI()
+        e, c = cis.kernel(h1, h2, norb, nelec, verbose=5)
+        dm1s, dm2s = cis.make_rdm12s(c, norb, nelec)
+        self.assertAlmostEqual(abs(dm1s[0]).sum(), 6, 9)
+        self.assertAlmostEqual(dm1s[1].trace(), 3, 9)
+        self.assertAlmostEqual(abs(dm2s[0]).sum(), 60, 9)
+        self.assertAlmostEqual(abs(numpy.einsum('iijk->jk', dm2s[1])/6-dm1s[1]).sum(), 0, 9)
+        self.assertAlmostEqual(abs(numpy.einsum('iijk->jk', dm2s[2])/2-dm1s[1]).sum(), 0, 9)
+
+    def test_0beta(self):
+        nelec = (3,0)
+        norb = 6
+        npair = norb*(norb+1)/2
+        numpy.random.seed(12)
+        h1 = numpy.random.random((norb,norb))
+        h1 = h1 + h1.T
+        h2 = numpy.random.random((npair,npair)) * .1
+        h2 = h2 + h2.T
+        cis = fci.direct_spin1.FCI()
+        e, c = cis.kernel(h1, h2, norb, nelec, verbose=5)
+        dm1s, dm2s = cis.make_rdm12s(c, norb, nelec)
+        self.assertAlmostEqual(dm1s[0].trace(), 3, 9)
+        self.assertAlmostEqual(abs(dm1s[1]).sum(), 0, 9)
+        self.assertAlmostEqual(abs(numpy.einsum('iijk->jk', dm2s[0])/2-dm1s[0]).sum(), 0, 9)
+        self.assertAlmostEqual(abs(dm2s[1]).sum(), 0, 9)
+        self.assertAlmostEqual(abs(dm2s[2]).sum(), 0, 9)
+
 # (6o,6e)   ~ 4MB
 # (8o,8e)   ~ 153MB
 # (10o,10e) ~ 4.8GB
