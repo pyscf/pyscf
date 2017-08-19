@@ -274,6 +274,7 @@ class KnowValues(unittest.TestCase):
         check(scf.dhf.UHF, 7.3540281989311271)
 
     def test_scanner(self):
+        from pyscf import dft
         mol1 = molsym.copy()
         mol1.set_geom_('''
         O   0.   0.       .1
@@ -284,12 +285,12 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(mf_scanner(mol1), -75.97901175977492, 9)
 
         mf_scanner = scf.fast_newton(scf.ROHF(molsym)).as_scanner()
-        atom = '''
-        O   0.   0.       .1
-        H   0.   -0.757   0.587
-        H   0.   0.757    0.587'''
         self.assertAlmostEqual(mf_scanner(molsym), -75.983948498066198, 9)
         self.assertAlmostEqual(mf_scanner(mol1), -75.97974371226907, 9)
+
+        mf_scanner = dft.RKS(molsym).set(xc='bp86').as_scanner()
+        self.assertAlmostEqual(mf_scanner(molsym), -76.385043416002361, 9)
+        self.assertAlmostEqual(mf_scanner(mol1), -76.372743600375088, 9)
 
 
 

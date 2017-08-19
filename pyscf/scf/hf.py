@@ -957,7 +957,7 @@ def as_scanner(mf):
         >>> hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
         -98.414750424294368
     '''
-    logger.info(mf, '\nSet %s as a scanner\n', mf.__class__)
+    logger.info(mf, 'Set %s as a scanner', mf.__class__)
     def solver(mol):
         mf_obj = mf
         while mf_obj is not None:

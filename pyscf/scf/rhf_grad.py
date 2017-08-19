@@ -99,6 +99,36 @@ def make_rdm1e(mo_energy, mo_coeff, mo_occ):
     return numpy.dot(mo0e, mo0.T.conj())
 
 
+def as_scanner(grad_mf):
+    '''Generating a nuclear gradients scanner/solver (for geometry optimizer).
+
+    The returned solver is a function. This function requires one argument
+    "mol" as input and returns energy and first order nuclear derivatives.
+
+    The solver will automatically use the results of last calculation as the
+    initial guess of the new calculation.  All parameters assigned in the
+    nuc-grad object and SCF object (DIIS, conv_tol, max_memory etc) are
+    automatically applied in the solver.
+
+    Note scanner has side effects.  It may change many underlying objects
+    (_scf, with_df, with_x2c, ...) during calculation.
+
+    Examples::
+        >>> from pyscf import gto, scf, grad
+        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
+        >>> hf_scanner = scf.RHF(mol).apply(grad.RHF).as_scanner()
+        >>> e_tot, grad = hf_scanner(mol)
+    '''
+    mf_scanner = grad_mf._scf.as_scanner()
+    logger.info(grad_mf, 'Set %s as a scanner', grad_mf.__class__)
+    def solver(mol):
+        e_tot = mf_scanner(mol)
+        grad_mf.mol = mol
+        de = grad_mf.kernel()
+        return e_tot, de
+    return solver
+
+
 class Gradients(lib.StreamObject):
     '''Non-relativistic restricted Hartree-Fock gradients'''
     def __init__(self, scf_method):
@@ -203,6 +233,8 @@ class Gradients(lib.StreamObject):
         logger.note(self, '--------------')
         logger.timer(self, 'SCF gradients', *cput0)
         return self.de
+
+    as_scanner = as_scanner
 
 
 if __name__ == '__main__':
