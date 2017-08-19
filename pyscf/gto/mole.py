@@ -735,11 +735,10 @@ def copy(mol):
     return newmol
 
 def pack(mol):
-    '''Pack the input args of :class:`Mole` to a dict, which can be serialized
-    with :mod:`pickle` or :mod:`json`.
+    '''Pack the input args of :class:`Mole` to a dict.
 
-    Note this function only pack the input arguments than the entire Mole
-    class.  Modifications to mol._atm, mol._bas, mol._env are not tracked.
+    Note this function only pack the input arguments (not the entire Mole
+    class).  Modifications to mol._atm, mol._bas, mol._env are not tracked.
     Use :func:`dumps` to serialize the entire Mole object.
     '''
     mdic = {'atom'    : mol.atom,
@@ -752,10 +751,10 @@ def pack(mol):
             'nucmod'  : mol.nucmod,
             'ecp'     : mol.ecp,
             'verbose' : mol.verbose}
-#    if mol.symmetry and not isinstance(mol.symmetry, str):
-#        mdic['symmetry'] = mol.groupname
-#        mdic['atom'] = mol._atom
-#        mdic['unit'] = 'AU'
+    if mol.symmetry and not isinstance(mol.symmetry, str):
+        mdic['symmetry'] = mol.groupname
+        mdic['atom'] = mol._atom
+        mdic['unit'] = 'AU'
     return mdic
 def unpack(moldic):
     '''Unpack a dict which is packed by :func:`pack`, to generate the input
@@ -2018,6 +2017,21 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         self._env[PTR_RINV_ZETA] = zeta
         return self
     set_rinv_zeta_ = set_rinv_zeta  # for backward compatibility
+
+    def set_geom_(self, atoms, unit='Angstrom', symmetry=None):
+        '''Replace geometry
+        '''
+        self.atom = atoms
+        self.unit = unit
+        if symmetry is not None:
+            self.symmetry = symmetry
+        self.build(False, False)
+        logger.info(self, 'New geometry (unit Bohr)')
+        coords = self.atom_coords()
+        for ia in range(self.natm):
+            logger.info(self, ' %3d %-4s %16.12f %16.12f %16.12f',
+                        ia+1, self.atom_symbol(ia), *coords[ia])
+        return self
 
     def update(self, chkfile):
         return self.update_from_chk(chkfile)

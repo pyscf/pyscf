@@ -25,30 +25,7 @@ def init_guess_by_atom(mol):
     dm = hf.init_guess_by_atom(mol)
     return numpy.array((dm*.5, dm*.5))
 
-def init_guess_by_chkfile(mol, chkfile, project=True):
-    from pyscf.scf import addons
-    if isinstance(chkfile, pyscf.gto.Mole):
-        raise TypeError('''
-You see this error message because of the API updates.
-The first argument is chkfile file name.''')
-    chk_mol, scf_rec = pyscf.scf.chkfile.load_scf(chkfile)
-
-    def fproj(mo):
-        if project:
-            return addons.project_mo_nr2nr(chk_mol, mo, mol)
-        else:
-            return mo
-    if scf_rec['mo_coeff'].ndim == 2:
-        mo = scf_rec['mo_coeff']
-        mo_occ = scf_rec['mo_occ']
-        if numpy.iscomplexobj(mo):
-            raise NotImplementedError('TODO: project DHF orbital to ROHF orbital')
-        dm = make_rdm1(fproj(mo), mo_occ)
-    else:  # UHF
-        mo = scf_rec['mo_coeff']
-        mo_occ = scf_rec['mo_occ']
-        dm = uhf.make_rdm1((fproj(mo[0]),fproj(mo[1])), mo_occ)
-    return dm
+init_guess_by_chkfile = uhf.init_guess_by_chkfile
 
 def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None,

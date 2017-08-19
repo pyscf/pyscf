@@ -933,6 +933,55 @@ def _attach_mo(a, mo_coeff, mo_occ):
     a.mo_coeff = mo_coeff
     a.mo_occ = mo_occ
     return a
+
+
+def as_scanner(mf):
+    '''Generating a scanner/solver for HF PES.
+
+    The returned solver is a function. This function requires one argument
+    "mol" as input and returns total HF energy.
+
+    The solver will automatically use the results of last calculation as the
+    initial guess of the new calculation.  All parameters assigned in the
+    SCF object (DIIS, conv_tol, max_memory etc) are automatically applied in
+    the solver.
+
+    Note scanner has side effects.  It may change many underlying objects
+    (_scf, with_df, with_x2c, ...) during calculation.
+
+    Examples::
+        >>> from pyscf import gto, scf
+        >>> hf_scanner = scf.RHF(gto.Mole().set(verbose=4)).as_scanner()
+        >>> hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
+        -98.552190448277955
+        >>> hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
+        -98.414750424294368
+    '''
+    logger.info(mf, '\nSet %s as a scanner\n', mf.__class__)
+    def solver(mol):
+        mf_obj = mf
+        while mf_obj is not None:
+            mf_obj.mol = mol
+            mf_obj.opt = None
+            mf_obj._eri = None
+            if hasattr(mf_obj, 'with_df') and mf_obj.with_df:
+                mf_obj.with_df.mol = mol
+                mf_obj.auxmol = None
+                mf_obj._cderi = None
+            if hasattr(mf_obj, 'with_x2c') and mf_obj.with_x2c:
+                mf_obj.with_x2c.mol = mol
+            mf_obj = getattr(mf_obj, '_scf', None)
+
+        if mf.mo_coeff is None:
+            dm0 = None
+        elif mol.natm > 0:
+            dm0 = mf.from_chk(mf.chkfile)
+        else:
+            dm0 = mf.make_rdm1()
+        mf.kernel(dm0=dm0)
+        return mf.e_tot
+    return solver
+
 ############
 
 
@@ -1337,6 +1386,8 @@ class SCF(lib.StreamObject):
         if chkfile is None: chkfile = self.chkfile
         self.__dict__.update(chkmod.load(chkfile, 'scf'))
         return self
+
+    as_scanner = as_scanner
 
     @property
     def hf_energy(self):

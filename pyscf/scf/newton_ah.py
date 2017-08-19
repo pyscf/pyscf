@@ -785,30 +785,31 @@ def newton_SCF_class(mf):
                 self.opt = self.init_direct_scf(mol)
                 self._eri = None
 
-        def kernel(self, mo_coeff=None, mo_occ=None):
-            if mo_coeff is None:
-                mo_coeff = self.mo_coeff
-            if mo_occ is None:
-                mo_occ = self.mo_occ
+        def kernel(self, mo_coeff=None, mo_occ=None, dm0=None):
             cput0 = (time.clock(), time.time())
-
-            self.build(self.mol)
-            self.dump_flags()
-
-            if mo_coeff is not None and mo_occ is None:
+            if dm0 is not None:
+                mo_coeff, mo_occ = self.from_dm(dm0)
+            elif mo_coeff is not None and mo_occ is None:
                 logger.warn(self, 'Newton solver expects mo_coeff with '
                             'mo_occ as initial guess but the given initial '
                             'guess does not have mo_occ.\n      The given '
                             'argument is treated as density matrix.')
                 dm = mo_coeff
                 mo_coeff, mo_occ = self.from_dm(dm)
-            elif mo_coeff is None or mo_occ is None:
-                logger.debug(self, 'Initial guess orbitals not given. '
-                             'Generating initial guess from %s density matrix',
-                             self.init_guess)
-                dm = mf.get_init_guess(self.mol, self.init_guess)
-                mo_coeff, mo_occ = self.from_dm(dm)
-            # save initial guess because some methods may access them
+            else:
+                if mo_coeff is None: mo_coeff = self.mo_coeff
+                if mo_occ is None: mo_occ = self.mo_occ
+                if mo_coeff is None or mo_occ is None:
+                    logger.debug(self, 'Initial guess orbitals not given. '
+                                 'Generating initial guess from %s density matrix',
+                                 self.init_guess)
+                    dm = mf.get_init_guess(self.mol, self.init_guess)
+                    mo_coeff, mo_occ = self.from_dm(dm)
+
+            self.build(self.mol)
+            self.dump_flags()
+
+            # save initial guess because some methods may need them
             self.mo_coeff = mo_coeff
             self.mo_occ = mo_occ
 

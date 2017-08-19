@@ -141,21 +141,18 @@ def init_guess_by_chkfile(mol, chkfile_name, project=True):
     from pyscf.scf import addons
     chk_mol, scf_rec = chkfile.load_scf(chkfile_name)
 
-    if numpy.iscomplexobj(scf_rec['mo_coeff']):
-        mo = scf_rec['mo_coeff']
-        mo_occ = scf_rec['mo_occ']
+    mo = scf_rec['mo_coeff']
+    mo_occ = scf_rec['mo_occ']
+    if numpy.iscomplexobj(mo[0]):  # DHF
+#TODO: check if mo is GHF orbital
         if project:
             dm = make_rdm1(addons.project_mo_r2r(chk_mol, mo, mol), mo_occ)
         else:
             dm = make_rdm1(mo, mo_occ)
     else:
-        if scf_rec['mo_coeff'].ndim == 2: # nr-RHF
-            mo = scf_rec['mo_coeff']
-            mo_occ = scf_rec['mo_occ']
+        if mo[0].ndim == 1: # nr-RHF
             dm = reduce(numpy.dot, (mo*mo_occ, mo.T))
         else: # nr-UHF
-            mo = scf_rec['mo_coeff']
-            mo_occ = scf_rec['mo_occ']
             dm = reduce(numpy.dot, (mo[0]*mo_occ[0], mo[0].T)) \
                + reduce(numpy.dot, (mo[1]*mo_occ[1], mo[1].T))
         dm = _proj_dmll(chk_mol, dm, mol)
