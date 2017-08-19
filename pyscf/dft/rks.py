@@ -71,7 +71,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     hyb = ks._numint.hybrid_coeff(ks.xc, spin=mol.spin)
     if abs(hyb) < 1e-10:
         if (ks._eri is not None or not ks.direct_scf or
-            not hasattr(ks, '_dm_last') or
+            ks._dm_last is None or
             not isinstance(vhf_last, numpy.ndarray)):
             vhf = vj = ks.get_j(mol, dm, hermi)
         else:
@@ -82,7 +82,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vhf = ks._vj_last = vj
     else:
         if (ks._eri is not None or not ks.direct_scf or
-            not hasattr(ks, '_dm_last') or
+            ks._dm_last is None or
             not isinstance(vhf_last, numpy.ndarray)):
             vj, vk = ks.get_jk(mol, dm, hermi)
         else:
@@ -212,6 +212,7 @@ def _dft_common_init_(mf):
     mf._ecoul = 0
     mf._exc = 0
     mf._numint = numint._NumInt()
+    mf._dm_last = None
     mf._keys = mf._keys.union(['xc', 'grids', 'small_rho_cutoff'])
 
 

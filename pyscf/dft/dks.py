@@ -74,7 +74,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     hyb = ks._numint.hybrid_coeff(ks.xc, spin=mol.spin)
     if abs(hyb) < 1e-10:
         if (ks._eri is not None or not ks.direct_scf or
-            not hasattr(ks, '_dm_last') or
+            ks._dm_last is None or
             not isinstance(vhf_last, numpy.ndarray)):
             vhf = vj = ks.get_j(mol, dm, hermi)
         else:
@@ -86,7 +86,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     else:
         raise NotImplementedError
         if (ks._eri is not None or not ks.direct_scf or
-            not hasattr(ks, '_dm_last') or
+            ks._dm_last is None or
             not isinstance(vhf_last, numpy.ndarray)):
             vj, vk = ks.get_jk(mol, dm, hermi)
         else:
@@ -131,6 +131,7 @@ class UKS(dhf.UHF):
         self._ecoul = 0
         self._exc = 0
         self._numint = r_numint._RNumInt()
+        self._dm_last = None
         self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
 
     def dump_flags(self):

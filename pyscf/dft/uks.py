@@ -46,7 +46,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     hyb = ks._numint.hybrid_coeff(ks.xc, spin=mol.spin)
     if abs(hyb) < 1e-10:
         if (ks._eri is not None or not ks.direct_scf or
-            not hasattr(ks, '_dm_last') or
+            ks._dm_last is None or
             not isinstance(vhf_last, numpy.ndarray)):
             vj = ks.get_j(mol, dm, hermi)
         else:
@@ -59,7 +59,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         vhf = numpy.asarray((vhf,vhf))
     else:
         if (ks._eri is not None or not ks.direct_scf or
-            not hasattr(ks, '_dm_last') or
+            ks._dm_last is None or
             not isinstance(vhf_last, numpy.ndarray)):
             vj, vk = ks.get_jk(mol, dm, hermi)
         else:

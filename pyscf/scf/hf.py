@@ -971,6 +971,11 @@ def as_scanner(mf):
                 mf_obj._cderi = None
             if hasattr(mf_obj, 'with_x2c') and mf_obj.with_x2c:
                 mf_obj.with_x2c.mol = mol
+            if hasattr(mf_obj, 'grids'):  # DFT
+                mf_obj.grids.mol = mol
+                mf_obj.grids.coords = None
+                mf_obj.grids.weights = None
+                mf_obj._dm_last = None
             mf_obj = getattr(mf_obj, '_scf', None)
 
         if mf.mo_coeff is None:
@@ -1322,6 +1327,7 @@ class SCF(lib.StreamObject):
 # Be carefule with the effects of :attr:`SCF.direct_scf` on this function
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
+        print 'jjjjjjjjjjjjjjjj', self.direct_scf
         if self.direct_scf:
             ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
             vj, vk = self.get_jk(mol, ddm, hermi=hermi)
