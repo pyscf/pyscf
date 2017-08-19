@@ -7,8 +7,8 @@ from pyscf import scf
 from pyscf import cc
 
 mol = gto.Mole()
-mol.verbose = 0
-mol.output = None
+mol.verbose = 7
+mol.output = '/dev/null'
 mol.atom = [
     [8 , (0. , 0.     , 0.)],
     [1 , (0. , -0.757 , 0.587)],
@@ -130,6 +130,17 @@ class KnowValues(unittest.TestCase):
         dm2 = mcc.make_rdm2()
         self.assertAlmostEqual(numpy.linalg.norm(dm1), 4.4227836730016374, 7)
         self.assertAlmostEqual(numpy.linalg.norm(dm2), 20.074629443311355, 7)
+
+    def test_scanner(self):
+        mol1 = mol.copy()
+        mol1.set_geom_('''
+        O   0.   0.       .1
+        H   0.   -0.757   0.587
+        H   0.   0.757    0.587''')
+        cc_scanner = scf.RHF(mol).apply(cc.CCSD).as_scanner()
+        self.assertAlmostEqual(cc_scanner(mol), -76.240108935038691, 9)
+        self.assertAlmostEqual(cc_scanner(mol1), -76.228972886940639, 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for H2O")

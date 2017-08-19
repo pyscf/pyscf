@@ -75,6 +75,19 @@ class KnowValues(unittest.TestCase):
         e, de = mf_scanner(mol1)
         self.assertAlmostEqual(finger(de), 4.543556456207229, 7)
 
+    def test_ccsd_scanner(self):
+        from pyscf import cc
+        mol1 = mol.copy()
+        mol1.set_geom_('''
+        H   0.   0.   0.9
+        F   0.   0.1  0.''')
+        mycc = cc.CCSD(scf.RHF(mol).set(conv_tol=1e-14))
+        cc_scanner = grad.ccsd.as_scanner(mycc)
+        e, de = cc_scanner(mol)
+        self.assertAlmostEqual(finger(de), 0.4330503011412547, 7)
+        e, de = cc_scanner(mol1)
+        self.assertAlmostEqual(finger(de), 0.10534638975831109, 7)
+
 
 if __name__ == "__main__":
     print("Full Tests for HF")

@@ -14,10 +14,10 @@ Simple usage::
     >>> grad.RHF(mf).kernel()
 '''
 
-import pyscf.grad.rhf
-import pyscf.grad.dhf
-import pyscf.grad.rks
-import pyscf.grad.ccsd
+from pyscf.grad import rhf
+from pyscf.grad import dhf
+from pyscf.grad import rks
+from pyscf.grad import ccsd
 from pyscf.grad.rhf  import Gradients as RHF
 from pyscf.grad.dhf  import Gradients as DHF
 from pyscf.grad.rks  import Gradients as RKS

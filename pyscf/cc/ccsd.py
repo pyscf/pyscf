@@ -562,6 +562,40 @@ def energy(mycc, t1, t2, eris):
     return e
 
 
+def as_scanner(cc):
+    '''Generating a scanner/solver for CCSD PES.
+
+    The returned solver is a function. This function requires one argument
+    "mol" as input and returns total CCSD energy.
+
+    The solver will automatically use the results of last calculation as the
+    initial guess of the new calculation.  All parameters assigned in the
+    CCSD and the underlying SCF objects (conv_tol, max_memory etc) are
+    automatically applied in the solver.
+
+    Note scanner has side effects.  It may change many underlying objects
+    (_scf, with_df, with_x2c, ...) during calculation.
+
+    Examples::
+
+        >>> from pyscf import gto, scf, cc
+        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
+        >>> cc_scanner = cc.CCSD(scf.RHF(mol)).as_scanner()
+        >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
+        >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
+    '''
+    mf_scanner = cc._scf.as_scanner()
+    logger.info(cc, 'Set %s as a scanner', cc.__class__)
+    def solver(mol):
+        mf_scanner(mol)
+        cc.mol = mol
+        cc.mo_coeff = cc._scf.mo_coeff
+        cc.mo_occ = cc._scf.mo_occ
+        cc.kernel(cc.t1, cc.t2)
+        return cc.e_tot
+    return solver
+
+
 class CCSD(lib.StreamObject):
     '''restricted CCSD
 
@@ -649,6 +683,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.l2 = None
         self._nocc = None
         self._nmo = None
+        self.chkfile = None
 
         self._keys = set(self.__dict__.keys())
 
@@ -742,6 +777,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             logger.note(self, 'E(CCSD) = %.16g  E_corr = %.16g',
                         self.e_tot, self.e_corr)
         return self.e_corr, self.t1, self.t2
+
+    as_scanner = as_scanner
+
 
     def solve_lambda(self, t1=None, t2=None, l1=None, l2=None,
                      eris=None):

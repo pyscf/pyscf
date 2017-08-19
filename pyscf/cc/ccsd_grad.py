@@ -93,7 +93,7 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
 
     max_memory = mycc.max_memory - lib.current_memory()[0]
     unit = max(nvir**3*2.5, nvir**3*2+nocc*nvir**2)
-    blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/unit))
+    blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*1e6/8/unit)))
     iobuflen = int(256e6/8/(blksize*nvir))
     log.debug1('IX_intermediates pass 1: block size = %d, nocc = %d in %d blocks',
                blksize, nocc, int((nocc+blksize-1)/blksize))
@@ -288,7 +288,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     if mf_grad is None:
         mf_grad = rhf_grad.Gradients(mycc._scf)
 
-    log = logger.Logger(mycc.stdout, mycc.verbose)
+    log = logger.new_logger(mycc.stdout, verbose)
     time0 = time.clock(), time.time()
     mol = mycc.mol
     if mycc.frozen is not 0:
@@ -306,8 +306,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     time1 = log.timer('rdm1 intermediates', *time0)
 
     log.debug('Build ccsd rdm2 intermediates')
-    _d2tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-    fd2intermediate = h5py.File(_d2tmpfile.name, 'w')
+    fd2intermediate = lib.H5TmpFile()
     d2 = ccsd_rdm.gamma2_outcore(mycc, t1, t2, l1, l2, fd2intermediate)
     time1 = log.timer('rdm2 intermediates', *time1)
     log.debug('Build ccsd response_rdm1')
@@ -327,17 +326,14 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     time1 = log.timer('response_rdm1', *time1)
 
     log.debug('symmetrized rdm2 and MO->AO transformation')
-    _dm2file = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
 # Basically, 4 times of dm2 is computed. *2 in _rdm2_mo2ao, *2 in _load_block_tril
-    fdm2 = h5py.File(_dm2file.name, 'w')
+    fdm2 = lib.H5TmpFile()
     dm1_with_hf = dm1mo.copy()
     for i in range(nocc):  # HF 2pdm ~ 4(ij)(kl)-2(il)(jk), diagonal+1 because of 4*dm2
         dm1_with_hf[i,i] += 1
     _rdm2_mo2ao(mycc, d2, dm1_with_hf, mo_coeff, fdm2)
     time1 = log.timer('MO->AO transformation', *time1)
-    for key in fd2intermediate.keys():
-        del(fd2intermediate[key])
-    fd2intermediate.close()
+    fd2intermediate = None
 
 #TODO: pass hf_grad object to compute h1 and s1
     log.debug('h1 and JK1')
@@ -395,18 +391,54 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         log.debug('grad of atom %d %s = %s', ia, mol.atom_symbol(ia), de[k])
         time1 = log.timer('grad of atom %d'%ia, *time1)
 
+    de += rhf_grad.grad_nuc(mol)
     log.note('CCSD gradinets')
     log.note('==============')
     log.note('           x                y                z')
     for k, ia in enumerate(atmlst):
-        log.note('%d %s  %15.9f  %15.9f  %15.9f', ia, mol.atom_symbol(ia),
-                 de[k,0], de[k,1], de[k,2])
+        log.note('%d %s  %15.9f  %15.9f  %15.9f', ia, mol.atom_symbol(ia), *de[k])
     log.timer('CCSD gradients', *time0)
-    for key in fdm2.keys():
-        del(fdm2[key])
-    fdm2.close()
-    _d2tmpfile = _dm2file = None
+    fdm2 = None
     return de
+
+
+def as_scanner(cc):
+    '''Generating a scanner/solver for CCSD PES.
+
+    The returned solver is a function. This function requires one argument
+    "mol" as input and returns total CCSD energy.
+
+    The solver will automatically use the results of last calculation as the
+    initial guess of the new calculation.  All parameters assigned in the
+    CCSD and the underlying SCF objects (conv_tol, max_memory etc) are
+    automatically applied in the solver.
+
+    Note scanner has side effects.  It may change many underlying objects
+    (_scf, with_df, with_x2c, ...) during calculation.
+
+    Examples::
+
+        >>> from pyscf import gto, scf, cc
+        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
+        >>> cc_scanner = cc.CCSD(scf.RHF(mol)).as_scanner()
+        >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
+        >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
+    '''
+    mf_scanner = cc._scf.as_scanner()
+    logger.info(cc, 'Set nuclear gradients of %s as a scanner', cc.__class__)
+    def solver(mol):
+        mf_scanner(mol)
+        cc.mol = mol
+        cc.mo_coeff = cc._scf.mo_coeff
+        cc.mo_occ = cc._scf.mo_occ
+        eris = cc.ao2mo(cc.mo_coeff)
+        mf_grad = rhf_grad.Gradients(cc._scf)
+        cc.kernel(cc.t1, cc.t2, eris=eris)
+        cc.solve_lambda(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris)
+        de = kernel(cc, cc.t1, cc.t2, cc.l1, cc.l2, eris=eris, mf_grad=mf_grad)
+        return cc.e_tot, de
+    return solver
+
 
 def shell_prange(mol, start, stop, blksize):
     nao = 0
@@ -453,7 +485,8 @@ def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave=None):
     _tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     fswap = h5py.File(_tmpfile.name)
     max_memory = mycc.max_memory - lib.current_memory()[0]
-    blksize = max(1, int(max_memory*1e6/8/(nmo*nao_pair+nmo**3+nvir**3)))
+    blksize = int(max_memory*1e6/8/(nmo*nao_pair+nmo**3+nvir**3))
+    blksize = min(nocc, max(ccsd.BLKMIN, blksize))
     iobuflen = int(256e6/8/(blksize*nmo))
     log.debug1('_rdm2_mo2ao pass 1: blksize = %d, iobuflen = %d', blksize, iobuflen)
     fswap.create_group('o')  # for h5py old version
@@ -665,7 +698,7 @@ if __name__ == '__main__':
     l1, l2 = mycc.solve_lambda()
     g1 = kernel(mycc, t1, t2, l1, l2, mf_grad=grad.RHF(mf))
     print('gcc')
-    print(g1 + grad.grad_nuc(mol))
+    print(g1)
 #[[ 0   0                1.00950925e-02]
 # [ 0   2.28063426e-02  -5.04754623e-03]
 # [ 0  -2.28063426e-02  -5.04754623e-03]]
@@ -687,6 +720,6 @@ if __name__ == '__main__':
     l1, l2 = mycc.solve_lambda()
     g1 = kernel(mycc, t1, t2, l1, l2, mf_grad=grad.RHF(mf))
     print('gcc')
-    print(g1 + grad.grad_nuc(mol))
+    print(g1)
 #[[ 0.          0.         -0.07080036]
 # [ 0.          0.          0.07080036]]

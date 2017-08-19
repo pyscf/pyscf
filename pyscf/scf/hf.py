@@ -950,8 +950,9 @@ def as_scanner(mf):
     (_scf, with_df, with_x2c, ...) during calculation.
 
     Examples::
+
         >>> from pyscf import gto, scf
-        >>> hf_scanner = scf.RHF(gto.Mole().set(verbose=4)).as_scanner()
+        >>> hf_scanner = scf.RHF(gto.Mole().set(verbose=0)).as_scanner()
         >>> hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
         -98.552190448277955
         >>> hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))

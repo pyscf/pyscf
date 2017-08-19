@@ -330,12 +330,12 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         log.debug('grad of atom %d %s = %s', ia, mol.atom_symbol(ia), de[k])
         time1 = log.timer('grad of atom %d'%ia, *time1)
 
+    de += rhf_grad.grad_nuc(mol)
     log.note('CCSD gradinets')
     log.note('==============')
     log.note('           x                y                z')
     for k, ia in enumerate(atmlst):
-        log.note('%d %s  %15.9f  %15.9f  %15.9f', ia, mol.atom_symbol(ia),
-                 de[k,0], de[k,1], de[k,2])
+        log.note('%d %s  %15.9f  %15.9f  %15.9f', ia, mol.atom_symbol(ia), *de[k])
     log.timer('CCSD gradients', *time0)
     return de
 
@@ -532,7 +532,7 @@ if __name__ == '__main__':
     l1, l2 = mycc.solve_lambda()
     g1 = kernel(mycc, t1, t2, l1, l2, mf_grad=grad.RHF(mf))
     print('gcc')
-    print(g1 + grad.grad_nuc(mol))
+    print(g1)
 #[[ 0   0                1.00950925e-02]
 # [ 0   2.28063426e-02  -5.04754623e-03]
 # [ 0  -2.28063426e-02  -5.04754623e-03]]
@@ -554,6 +554,6 @@ if __name__ == '__main__':
     l1, l2 = mycc.solve_lambda()
     g1 = kernel(mycc, t1, t2, l1, l2, mf_grad=grad.RHF(mf))
     print('gcc')
-    print(g1 + grad.grad_nuc(mol))
+    print(g1)
 #[[ 0.          0.         -0.07080036]
 # [ 0.          0.          0.07080036]]

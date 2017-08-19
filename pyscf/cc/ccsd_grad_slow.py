@@ -239,7 +239,7 @@ def kernel(cc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None):
                + numpy.einsum('xji,ij->x', vrinv, dm0))
         de[k] -=(numpy.einsum('xij,ij->x', s1[:,p0:p1], dme0[p0:p1])
                + numpy.einsum('xji,ij->x', s1[:,p0:p1], dme0[:,p0:p1]))
-
+    de += grad.rhf.grad_nuc(mol)
     return de
 
 
@@ -320,7 +320,7 @@ if __name__ == '__main__':
     ecc, t1, t2 = mycc.kernel()
     l1, l2 = mycc.solve_lambda()
     g1 = kernel(mycc, t1, t2, l1, l2)
-    print(g1+grad.rhf.grad_nuc(mol))
+    print(g1)
 #[[ 0   0                1.00950925e-02]
 # [ 0   2.28063426e-02  -5.04754623e-03]
 # [ 0  -2.28063426e-02  -5.04754623e-03]]
@@ -341,7 +341,7 @@ if __name__ == '__main__':
     ecc, t1, t2 = mycc.kernel()
     l1, l2 = mycc.solve_lambda()
     g1 = kernel(mycc, t1, t2, l1, l2)
-    print(g1+grad.rhf.grad_nuc(mol))
+    print(g1)
 # [[ 0.          0.         -0.07080036]
 #  [ 0.          0.          0.07080036]]
 
