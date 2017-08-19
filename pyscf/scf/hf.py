@@ -1327,7 +1327,6 @@ class SCF(lib.StreamObject):
 # Be carefule with the effects of :attr:`SCF.direct_scf` on this function
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        print 'jjjjjjjjjjjjjjjj', self.direct_scf
         if self.direct_scf:
             ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
             vj, vk = self.get_jk(mol, ddm, hermi=hermi)

@@ -32,8 +32,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         ks : an instance of :class:`RKS`
             XC functional are controlled by ks.xc attribute.  Attribute
             ks.grids might be initialized.  The ._exc and ._ecoul attributes
-            will be updated after return.  Attributes ._dm_last, ._vj_last and
-            ._vk_last might be changed if direct SCF method is applied.
+            will be updated after return.
         dm : ndarray or list of ndarrays
             A density matrix or a list of density matrices
 
