@@ -21,7 +21,6 @@ def kernel(method, mol=None, **kwargs):
     geom = to_berny_geom(mol)
     g_scanner = gen_grad_scanner(method)
     optimizer = Berny(geom, log=Logger(out=method.stdout), **kwargs)
-    dm0 = None
     for geom in optimizer:
         atom = geom_to_atom(geom)
         mol.set_geom_(atom)

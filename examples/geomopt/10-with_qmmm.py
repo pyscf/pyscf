@@ -1,6 +1,6 @@
 import numpy
 from pyscf import gto, scf, cc, qmmm
-from pyscf.geomopt import berny
+from pyscf.geomopt import berny_solver
 
 mol = gto.M(atom='''
 C       1.1879  -0.3829 0.0000
@@ -21,7 +21,7 @@ charges = (numpy.arange(5) + 1.) * -.001
 mf = qmmm.mm_charge(scf.RHF(mol), coords, charges)
 #mf.verbose=4
 #mf.kernel()
-print(berny.kernel(mf, mol))
+print(berny_solver.kernel(mf, mol))
 
 mycc = cc.CCSD(mf)
-print(berny.kernel(mycc, mol))
+print(berny_solver.kernel(mycc, mol))
