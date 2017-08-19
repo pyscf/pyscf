@@ -11,22 +11,22 @@ except ImportError:
 from pyscf import lib
 from pyscf import geomopt
 
-def geom_to_pyscf_atom(geom):
+def geom_to_atom(geom):
     return list(geom)
 
-def pyscf_to_berny_geom(mol):
+def to_berny_geom(mol):
     species = [mol.atom_symbol(i) for i in range(mol.natm)]
     coords = mol.atom_coords() * lib.param.BOHR
     return geomlib.Molecule(species, coords)
 
 def optimize(method, **kwargs):
     mol = method.mol
-    geom = pyscf_to_berny_geom(mol)
+    geom = to_berny_geom(mol)
     g_solver = geomopt.gen_grad_solver(method)
     optimizer = Berny(geom, log=Logger(out=method.stdout), **kwargs)
     dm0 = None
     for geom in optimizer:
-        atom = geom_to_pyscf_atom(geom)
+        atom = geom_to_atom(geom)
         mol.set_geom_(atom)
         energy, gradients = g_solver(mol)
         optimizer.send((energy, gradients))
