@@ -4,7 +4,7 @@ Interface to geometry optimizer pyberny
 '''
 from __future__ import absolute_import
 try:
-    from berny import Berny, geomlib, Logger
+    from berny import Berny, geomlib, Logger, optimize as optimize_berny
 except ImportError:
     raise ImportError('Geometry optimizer pyberny not found.\npyberny library '
                       'can be found on github https://github.com/azag0/pyberny')
@@ -50,10 +50,14 @@ def as_berny_solver(method, mol=None):
         atom = yield energy, gradients
 
 
+def optimize(method, mol, **kwargs):
+    optimize_berny(as_berny_solver(method), to_berny_geom(mol), **kwargs)
+    return method.mol
+
+
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf, dft, cc
-    from berny import optimize
     mol = gto.M(atom='''
 C       1.1879  -0.3829 0.0000
 C       0.0000  0.5526  0.0000
@@ -70,7 +74,10 @@ H       -0.0227 1.1812  -0.8852
 
     mf = scf.RHF(mol)
     print(kernel(mf).dumps('xyz'))
-    print(optimize(as_berny_solver(mf), to_berny_geom(mol)).dumps('xyz'))
+    print(optimize_berny(as_berny_solver(mf), to_berny_geom(mol)).dumps('xyz'))
+    mol0 = optimize(mf, mol1)
+    scf.RHF(mol1).kernel()
+    scf.RHF(mol0).kernel()
 
     mf = dft.RKS(mol)
     mf.xc = 'pbe'
