@@ -155,6 +155,8 @@ class KnowValues(unittest.TestCase):
 
     def test_nr_uhf(self):
         g = gtensor.uhf.GTensor(nrhf)
+        g.dia_soc2e = False
+        g.para_soc2e = True
         g.sso = True
         g.soo = True
         g.so_eff_charge = True

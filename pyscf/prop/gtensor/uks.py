@@ -13,22 +13,18 @@ Refs:
     JCP, 119, 10489
 '''
 
-import time
 from functools import reduce
 import numpy
 from pyscf import lib
-from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.dft import numint
-from pyscf.prop.nmr import rhf as rhf_nmr
-from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.gtensor import uhf as uhf_g
 from pyscf.prop.gtensor.uhf import _write, align
 
 
 # Note mo10 is the imaginary part of MO^1
 def para(gobj, mo10, mo_coeff, mo_occ, qed_fac=1):
-    assert(not ((gobj.sso or gobj.soo) and gobj.so_eff_charge))
+    #assert(not ((gobj.sso or gobj.soo) and gobj.so_eff_charge))
     mol = gobj.mol
     effspin = mol.spin * .5
     muB = .5  # Bohr magneton
@@ -98,12 +94,12 @@ def make_para_soc2e(gobj, dm0, dm10, sso_qed_fac=1):
 # effects are not fully tested.  Approximation of JCP, 115, 11080 Eq (34) is
 # used here.
 # ~ <H^{01},MO^1> = - Tr(Im[H^{01}],Im[MO^1])
-    gpara2e = -sso_qed_fac * (ej - ek)
+    gpara2e = -sso_qed_fac * (ej - ek * hyb)
     gpara2e *= (alpha2/4) / effspin / muB
     return gpara2e
 
 
-# Treat the Vxc as one-particle operator as Vnuc
+# Treat Vxc as one-particle operator Vnuc
 def get_vxc_soc(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
     xctype = ni._xc_type(xc_code)
     make_rhoa, nset, nao = ni._gen_rho_evaluator(mol, dms[0], hermi=1)
@@ -212,23 +208,14 @@ class GTensor(uhf_g.GTensor):
 
 if __name__ == '__main__':
     from pyscf import gto, scf
-    mol = gto.M(atom='Ne 0 0 0',
-                basis='ccpvdz', spin=2, charge=2, verbose=3)
-    mf = scf.UKS(mol)
-    mf.kernel()
-    gobj = GTensor(mf)
-    gobj.verbose=4
-    gobj.gauge_orig = (0,0,0)
-    gobj.para_soc2e = True
-    gobj.so_eff_charge = False
-    print(gobj.kernel())
-
     mol = gto.M(atom='H 0 0 0; H 0 0 1.',
                 basis='ccpvdz', spin=1, charge=-1, verbose=3)
-    mf = scf.UKS(mol).set(xc='bp86')
-    mf.kernel()
+    mf = scf.UKS(mol).set(xc='bp86').run()
     gobj = GTensor(mf)
-    print(gobj.kernel())
+    gobj.gauge_orig = (0,0,0)
+    gobj.para_soc2e = False
+    gobj.so_eff_charge = True
+    print(gobj.align(gobj.kernel())[0])
 
     mol = gto.M(atom='''
                 H 0   0   1
@@ -237,8 +224,7 @@ if __name__ == '__main__':
                 H .8  .7  .6
                 ''',
                 basis='ccpvdz', spin=1, charge=1, verbose=3)
-    mf = scf.UKS(mol).set(xc='bp86')
-    mf.kernel()
+    mf = scf.UKS(mol).set(xc='bp86').run()
     gobj = GTensor(mf)
     #print(gobj.kernel())
     gobj.sso = True

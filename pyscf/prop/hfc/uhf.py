@@ -5,7 +5,6 @@
 
 '''
 Non-relativistic unrestricted Hartree-Fock hyperfine coupling tensor
-(In testing)
 
 Refs:
     JCP, 120, 2127
@@ -23,6 +22,7 @@ from pyscf.prop.ssc import uhf as uhf_ssc
 from pyscf.prop.ssc.parameters import get_nuc_g_factor
 from pyscf.prop.ssc.rhf import _dm1_mo2ao
 from pyscf.prop.zfs.uhf import koseki_charge
+from pyscf.prop.gtensor.uhf import align, get_jk_soc
 
 def make_fcsd(hfcobj, dm0, hfc_nuc=None, verbose=None):
     log = logger.new_logger(hfcobj, verbose)
@@ -56,9 +56,9 @@ def make_fcsd(hfcobj, dm0, hfc_nuc=None, verbose=None):
         fc = 8*numpy.pi/3 * numpy.einsum('i,j,ji', ao[atm_id], ao[atm_id], spindm)
         sd = fcsd - numpy.eye(3) * fc
 
-        log.info('FC %s', fac * nuc_gyro * fc)
+        log.info('FC of atom %d  %s (in MHz)', atm_id, fac * nuc_gyro * fc)
         if hfcobj.verbose >= logger.INFO:
-            _write(hfcobj, fac * nuc_gyro * sd, 'SD')
+            _write(hfcobj, align(fac*nuc_gyro*sd)[0], 'SD of atom %d (in MHz)' % atm_id)
         hfc.append(fac * nuc_gyro * fcsd)
     return numpy.asarray(hfc)
 
@@ -99,8 +99,11 @@ def make_pso_soc(hfcobj, hfc_nuc=None):
         # Im[A01 dot p] = Im[vec{r}/r^3 x vec{p}] = Im[-i p (1/r) x p] = -p (1/r) x p
         mol.set_rinv_origin(mol.atom_coord(atm_id))
         h1ao = -mol.intor_asymmetric('int1e_prinvxp', 3)
-        e = numpy.einsum('xij,yij->xy', h1ao, dm1)
-        para.append(fac * nuc_gyro * e)
+        de = numpy.einsum('xij,yij->xy', h1ao, dm1)
+        de *= fac * nuc_gyro
+        if hfcobj.verbose >= logger.INFO:
+            _write(hfcobj, align(de)[0], 'PSO of atom %d (in MHz)' % atm_id)
+        para.append(de)
     return numpy.asarray(para)
 
 def solve_mo1_soc(hfcobj, mo_energy=None, mo_occ=None, h1=None, with_cphf=None):
@@ -121,7 +124,7 @@ def solve_mo1_soc(hfcobj, mo_energy=None, mo_occ=None, h1=None, with_cphf=None):
     mo1, mo_e1 = uhf_ssc.SSC.solve_mo1(hfcobj, mo_energy, mo_occ, h1, with_cphf)
     return mo1, mo_e1
 
-def make_h1_soc(gobj, dm0):
+def make_h1_soc(hfcobj, dm0):
     '''1-electron and 2-electron spin-orbit coupling integrals.
 
     1-electron SOC integral is the imaginary part of [i sigma dot pV x p],
@@ -132,8 +135,8 @@ def make_h1_soc(gobj, dm0):
     s=sigma/2 is not included.
     '''
 # JCP, 122, 034107 Eq (2) = 1/4c^2 hso1e
-    mol = gobj.mol
-    if gobj.so_eff_charge:
+    mol = hfcobj.mol
+    if hfcobj.so_eff_charge or not hfcobj.para_soc2e:
         hso1e = 0
         for ia in range(mol.natm):
             mol.set_rinv_origin(mol.atom_coord(ia))
@@ -142,65 +145,73 @@ def make_h1_soc(gobj, dm0):
             hso1e += -Z * mol.intor('int1e_prinvxp', 3)
     else:
         hso1e = mol.intor('int1e_pnucxp', 3)
-    hso = numpy.asarray((hso1e,-hso1e))
+    hso = [hso1e, -hso1e]
 
-# TODO: test SOMF and the treatments in JCP, 122, 034107
-    if gobj.sso or gobj.soo:
-        hso2e = make_h1_soc2e(gobj, dm0)
-        hso += hso2e
+    if hfcobj.para_soc2e and (hfcobj.sso or hfcobj.soo):
+        hso2e = hfcobj.make_h1_soc2e(dm0)
+        hso[0] += hso2e[0]
+        hso[1] += hso2e[1]
 
     return hso
 
 # Note the (-) sign of beta-beta block is included in the integral
-def make_h1_soc2e(gobj, dm0):
-    dma, dmb = dm0
-    nao = dma.shape[0]
-# hso2e is the imaginary part of SSO
-    hso2e = mol.intor('int2e_p1vxp1', 3).reshape(3,nao,nao,nao,nao)
-    vj = numpy.zeros((2,3,nao,nao))
-    vk = numpy.zeros((2,3,nao,nao))
-    if gobj.sso:
-        vj[:] += numpy.einsum('yijkl,ji->ykl', hso2e, dma-dmb)
-        vj[0] += numpy.einsum('yijkl,lk->yij', hso2e, dma+dmb)
-        vj[1] -= numpy.einsum('yijkl,lk->yij', hso2e, dma+dmb)
-        vk[0] += numpy.einsum('yijkl,jk->yil', hso2e, dma)
-        vk[1] -= numpy.einsum('yijkl,jk->yil', hso2e, dmb)
-        vk[0] += numpy.einsum('yijkl,li->ykj', hso2e, dma)
-        vk[1] -= numpy.einsum('yijkl,li->ykj', hso2e, dmb)
-    if gobj.soo:
-        vj[0] += 2 * numpy.einsum('yijkl,ji->ykl', hso2e, dma+dmb)
-        vj[1] -= 2 * numpy.einsum('yijkl,ji->ykl', hso2e, dma+dmb)
-        vj[:] += 2 * numpy.einsum('yijkl,lk->yij', hso2e, dma-dmb)
-        vk[0] += 2 * numpy.einsum('yijkl,jk->yil', hso2e, dma)
-        vk[1] -= 2 * numpy.einsum('yijkl,jk->yil', hso2e, dmb)
-        vk[0] += 2 * numpy.einsum('yijkl,li->ykj', hso2e, dma)
-        vk[1] -= 2 * numpy.einsum('yijkl,li->ykj', hso2e, dmb)
-    hso2e = vj - vk
+def make_h1_soc2e(hfcobj, dm0):
+    mol = hfcobj.mol
+    vj, vk = get_jk_soc(mol, dm0)
+    vjaa = 0
+    vjbb = 0
+    vkaa = 0
+    vkbb = 0
+    if hfcobj.sso:
+        vj1 = vj[0] + vj[1]
+        vjaa += vj1
+        vjbb -= vj1
+        vkaa += vk[0]
+        vkbb -= vk[1]
+    if hfcobj.soo:
+        vj1 = vj[0] - vj[1]
+        vjaa += vj1 * 2
+        vjbb += vj1 * 2
+        vkaa += vk[0] * 2
+        vkbb -= vk[1] * 2
+    hso2e = (vjaa-vkaa, vjbb-vkbb)
     return hso2e
 
-def _write(rec, msc3x3, title):
-    rec.stdout.write('%s\n' % title)
-    rec.stdout.write('I_x %s\n' % str(msc3x3[0]))
-    rec.stdout.write('I_y %s\n' % str(msc3x3[1]))
-    rec.stdout.write('I_z %s\n' % str(msc3x3[2]))
-    rec.stdout.flush()
+def _write(hfcobj, tensor, title):
+    hfcobj.stdout.write('%s %s\n' % (title, tensor.diagonal()))
+    if hfcobj.verbose >= logger.DEBUG:
+        hfcobj.stdout.write('%s\n' % title)
+        hfcobj.stdout.write('I_x %s\n' % str(tensor[0]))
+        hfcobj.stdout.write('I_y %s\n' % str(tensor[1]))
+        hfcobj.stdout.write('I_z %s\n' % str(tensor[2]))
+        hfcobj.stdout.flush()
 
 
 class HyperfineCoupling(uhf_ssc.SSC):
     '''dE = I dot gtensor dot s'''
     def __init__(self, scf_method):
-        self.sso = False  # Two-electron spin-same-orbit coupling
-        self.soo = False  # Two-electron spin-other-orbit coupling
-        self.so_eff_charge = True
+        self.para_soc2e = True  # Two-electron spin-orbit coupling
+        self.sso = True  # Two-electron spin-same-orbit coupling
+        self.soo = True  # Two-electron spin-other-orbit coupling
+        self.so_eff_charge = False  # Koseki effective SOC charge
         self.hfc_nuc = range(scf_method.mol.natm)
         uhf_nmr.NMR.__init__(self, scf_method)
 
     def dump_flags(self):
-        uhf_nmr.NMR.dump_flags(self)
+        logger.info(self, '\n')
+        logger.info(self, '******** %s for %s ********',
+                 self.__class__, self._scf.__class__)
+        logger.info(self, 'HFC for atoms %s', str(self.hfc_nuc))
+        if self.cphf:
+            logger.info(self, 'CPHF conv_tol = %g', self.conv_tol)
+            logger.info(self, 'CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
+        logger.info(self, 'para_soc2e = %s', self.para_soc2e)
         logger.info(self, 'sso = %s (2e spin-same-orbit coupling)', self.sso)
         logger.info(self, 'soo = %s (2e spin-other-orbit coupling)', self.soo)
         logger.info(self, 'so_eff_charge = %s (1e SO effective charge)',
                     self.so_eff_charge)
+        if not self._scf.converged:
+            logger.warn('Ground state SCF is not converged')
         return self
 
     def kernel(self, mo1=None):
@@ -209,21 +220,22 @@ class HyperfineCoupling(uhf_ssc.SSC):
         self.dump_flags()
         mol = self.mol
 
-        dm0 = mf.make_rdm1()
+        dm0 = self._scf.make_rdm1()
         hfc_tensor = self.make_fcsd(dm0, self.hfc_nuc)
         hfc_tensor += self.make_pso_soc(self.hfc_nuc)
 
         logger.timer(self, 'HFC tensor', *cput0)
         if self.verbose > logger.QUIET:
             for i, atm_id in enumerate(self.hfc_nuc):
-                _write(self, hfc_tensor[i],
-                       '\nHyperfine coupling tensor of atom %d %s'
+                _write(self, align(hfc_tensor[i])[0],
+                       '\nHyperfine coupling tensor of atom %d %s (in MHz)'
                        % (atm_id, mol.atom_symbol(atm_id)))
         return hfc_tensor
 
     make_fcsd = make_fcsd
     make_pso_soc = make_pso_soc
     solve_mo1 = solve_mo1_soc
+    make_h1_soc2e = make_h1_soc2e
 
 HFC = HyperfineCoupling
 
@@ -232,31 +244,39 @@ if __name__ == '__main__':
     from pyscf import gto, scf
     mol = gto.M(atom='Ne 0 0 0',
                 basis='ccpvdz', spin=1, charge=-1, verbose=3)
-    mf = scf.UHF(mol)
-    mf.kernel()
+    mf = scf.UHF(mol).run()
     hfc = HFC(mf)
+    #hfc.verbose = 4
     hfc.sso = True
     hfc.soo = True
     hfc.so_eff_charge = False
-    print(lib.finger(hfc.kernel()))
+    print(lib.finger(hfc.kernel()),)
+
+    mol = gto.M(atom='C 0 0 0; O 0 0 1.12',
+                basis='ccpvdz', spin=1, charge=1, verbose=3)
+    mf = scf.UHF(mol).run()
+    hfc = HFC(mf)
+    #hfc.verbose = 4
+    hfc.sso = True
+    hfc.soo = True
+    hfc.so_eff_charge = False
+    print(lib.finger(hfc.kernel()) - 323.96293610190781)
 
     mol = gto.M(atom='H 0 0 0; H 0 0 1.',
                 basis='ccpvdz', spin=1, charge=-1, verbose=3)
-    mf = scf.UHF(mol)
-    mf.kernel()
+    mf = scf.UHF(mol).run()
     hfc = HFC(mf)
     hfc.cphf = True
-    print(lib.finger(hfc.kernel()))
+    print(lib.finger(hfc.kernel()) - -23.376864877326888)
 
     mol = gto.M(atom='''
                 Li 0   0   1
                 ''',
                 basis='ccpvdz', spin=1, charge=0, verbose=3)
-    mf = scf.UHF(mol)
-    mf.kernel()
+    mf = scf.UHF(mol).run()
     hfc = HFC(mf)
     hfc.cphf = True
-    print(lib.finger(hfc.kernel()))
+    print(lib.finger(hfc.kernel()) - 55.653597133253925)
 
     mol = gto.M(atom='''
                 H 0   0   1
@@ -265,8 +285,18 @@ if __name__ == '__main__':
                 H .8  .7  .6
                 ''',
                 basis='ccpvdz', spin=1, charge=1, verbose=3)
-    mf = scf.UHF(mol)
-    mf.kernel()
+    mf = scf.UHF(mol).run()
     hfc = HFC(mf)
-    print(lib.finger(hfc.kernel()))
+    print(lib.finger(hfc.kernel()) - 220.64088515064489)
+
+    nao, nmo = mf.mo_coeff[0].shape
+    numpy.random.seed(1)
+    dm0 = numpy.random.random((2,nao,nao))
+    dm0 = dm0 + dm0.transpose(0,2,1)
+    hfc.sso = True
+    hfc.soo = True
+    hfc.so_eff_charge = False
+    h1a, h1b = make_h1_soc(hfc, dm0)
+    print(lib.finger(h1a) - -13.574938902220254)
+    print(lib.finger(h1b) - 30.266331488847413)
 

@@ -50,7 +50,7 @@ class KnowValues(unittest.TestCase):
         mf1.xc = 'b3lyp'
         g = gtensor.uks.GTensor(mf1)
         dat = g.make_para_soc2e(dm0, dm1, 1)
-        self.assertAlmostEqual(lib.finger(dat), -0.10286574328340109, 9)
+        self.assertAlmostEqual(lib.finger(dat), -0.103162219789111, 9)
 
     def test_nr_uks(self):
         g = gtensor.uhf.GTensor(mf)
@@ -59,7 +59,7 @@ class KnowValues(unittest.TestCase):
         g.so_eff_charge = True
         g.cphf = False
         dat = g.kernel()
-        self.assertAlmostEqual(lib.finger(dat), 0.39488041643104993, 7)
+        self.assertAlmostEqual(lib.finger(dat), 0.40013028270603912, 7)
 
 
 if __name__ == "__main__":

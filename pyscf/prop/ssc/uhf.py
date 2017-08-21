@@ -401,11 +401,11 @@ class SpinSpinCoupling(uhf_nmr.NMR):
             nset = mo1a.shape[0]
             dm1a = _dm1_mo2ao(mo1a, orbva, orboa)
             dm1b = _dm1_mo2ao(mo1b, orbvb, orbob)
-            dm1 = numpy.vstack([dm1a-dm1a.transpose(0,2,1),
-                                dm1b-dm1b.transpose(0,2,1)])
+            dm1 = numpy.asarray([dm1a-dm1a.transpose(0,2,1),
+                                 dm1b-dm1b.transpose(0,2,1)])
             v1 = vresp(dm1)
-            v1a = _ao2mo.nr_e2(v1[    :nset], mo_va_oa, (0,nvira,nvira,nvira+nocca))
-            v1b = _ao2mo.nr_e2(v1[nset:    ], mo_vb_ob, (0,nvirb,nvirb,nvirb+noccb))
+            v1a = _ao2mo.nr_e2(v1[0], mo_va_oa, (0,nvira,nvira,nvira+nocca))
+            v1b = _ao2mo.nr_e2(v1[1], mo_vb_ob, (0,nvirb,nvirb,nvirb+noccb))
             v1mo = numpy.hstack((v1a.reshape(nset,-1), v1b.reshape(nset,-1)))
             return v1mo.ravel()
         return vind

@@ -355,6 +355,9 @@ def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
     return h1
 
 def align(gtensor):
+    '''Transform the orientation of g-tensor.
+    The new orientations are the eigenvector of G matrix (G=g.gT)
+    '''
     w, v = numpy.linalg.eigh(numpy.dot(gtensor, gtensor.T))
     idxmax = abs(v).argmax(axis=0)
     v[:,v[idxmax,[0,1,2]]<0] *= -1  # format phase
@@ -378,9 +381,9 @@ class GTensor(uhf_nmr.NMR):
     def __init__(self, scf_method):
         self.dia_soc2e = False  # Two-electron spin-orbit coupling
         self.para_soc2e = True  # Two-electron spin-orbit coupling
-        self.sso = False  # Two-electron spin-same-orbit coupling
-        self.soo = False  # Two-electron spin-other-orbit coupling
-        self.so_eff_charge = True  # Koseki effective SOC charge
+        self.sso = True  # Two-electron spin-same-orbit coupling
+        self.soo = True  # Two-electron spin-other-orbit coupling
+        self.so_eff_charge = False  # Koseki effective SOC charge
         self.mb = False   # corresponding to RMB basis (DO NOT use, in testing)
         uhf_nmr.NMR.__init__(self, scf_method)
 
@@ -418,14 +421,14 @@ class GTensor(uhf_nmr.NMR):
         logger.timer(self, 'g-tensor', *cput0)
         if self.verbose >= logger.NOTE:
             logger.note(self, 'free electron g %s', lib.param.G_ELECTRON)
-            gtensor, v = align(gtensor)
+            gtot, v = align(gtensor)
             gdia = reduce(numpy.dot, (v.T, gdia, v))
             gpara = reduce(numpy.dot, (v.T, gpara, v))
-            gshift = gtensor - numpy.eye(3) * lib.param.G_ELECTRON
+            gshift = gtot - numpy.eye(3) * lib.param.G_ELECTRON
             if self.verbose >= logger.INFO:
                 _write(self, gdia, 'g-tensor diamagnetic terms')
                 _write(self, gpara, 'g-tensor paramagnetic terms')
-            _write(self, gtensor, 'g-tensor total')
+            _write(self, gtot, 'g-tensor total')
             _write(self, gshift*1e3, 'g-shift (ppt)')
         return gtensor
 
@@ -451,36 +454,23 @@ class GTensor(uhf_nmr.NMR):
 
 if __name__ == '__main__':
     from pyscf import gto, scf
-    #mol = gto.M(atom='Ne 0 0 0',
-    #            basis='ccpvdz', spin=2, charge=2, verbose=3)
-    #mf = scf.UHF(mol)
-    #mf.kernel()
-    #gobj = GTensor(mf)
-    #gobj.verbose=4
-    #gobj.gauge_orig = (0,0,0)
-    #gobj.sso = True
-    #gobj.soo = True
-    #gobj.so_eff_charge = False
-    #print(gobj.kernel())
-
     mol = gto.M(atom='C 0 0 0; O 0 0 1.25',
                 basis='ccpvdz', spin=1, charge=1, verbose=3)
-    mf = scf.newton(scf.UHF(mol))
-    mf.kernel()
+    mf = scf.newton(scf.UHF(mol)).run()
     gobj = GTensor(mf)
     gobj.sso = True
     gobj.soo = True
     gobj.so_eff_charge = False
     gobj.gauge_orig = (0,0,0)
-    print(gobj.kernel())
+    print(gobj.align(gobj.kernel())[0])
 
     mol = gto.M(atom='''
                 H 0   0   1
                 ''',
                 basis='ccpvdz', spin=1, charge=0, verbose=3)
-    mf = scf.UHF(mol)
-    mf.kernel()
-    print(GTensor(mf).kernel())
+    mf = scf.UHF(mol).run()
+    gobj = GTensor(mf)
+    print(gobj.align(gobj.kernel())[0])
 
     mol = gto.M(atom='''
                 H 0   0   1
@@ -489,8 +479,7 @@ if __name__ == '__main__':
                 H .8  .7  .6
                 ''',
                 basis='ccpvdz', spin=1, charge=1, verbose=3)
-    mf = scf.UHF(mol)
-    mf.kernel()
+    mf = scf.UHF(mol).run()
     gobj = GTensor(mf)
     #print(gobj.kernel())
     gobj.sso = True
