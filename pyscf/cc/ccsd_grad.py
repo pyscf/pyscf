@@ -424,13 +424,16 @@ def as_scanner(cc):
         >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
         >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
-    mf_scanner = cc._scf.as_scanner()
+    import copy
     logger.info(cc, 'Set nuclear gradients of %s as a scanner', cc.__class__)
+    cc = copy.copy(cc)
+    cc._scf = cc._scf.as_scanner()
     def solver(mol):
+        mf_scanner = cc._scf
         mf_scanner(mol)
         cc.mol = mol
-        cc.mo_coeff = cc._scf.mo_coeff
-        cc.mo_occ = cc._scf.mo_occ
+        cc.mo_coeff = mf_scanner.mo_coeff
+        cc.mo_occ = mf_scanner.mo_occ
         eris = cc.ao2mo(cc.mo_coeff)
         mf_grad = cc._scf.nuc_grad_method()
         cc.kernel(cc.t1, cc.t2, eris=eris)

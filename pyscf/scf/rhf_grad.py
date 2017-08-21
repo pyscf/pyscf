@@ -121,14 +121,18 @@ def as_scanner(grad_mf):
         >>> e_tot, grad = hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
         >>> e_tot, grad = hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
-    mf_scanner = grad_mf._scf.as_scanner()
-    logger.info(grad_mf, 'Set %s as a scanner', grad_mf.__class__)
-    def solver(mol):
-        e_tot = mf_scanner(mol)
-        grad_mf.mol = mol
-        de = grad_mf.kernel()
-        return e_tot, de
-    return solver
+    logger.info(grad_mf, 'Create scanner for %s', grad_mf.__class__)
+    class SCF_GradScanner(grad_mf.__class__):
+        def __init__(self, g):
+            self.__dict__.update(g.__dict__)
+            self._scf = g._scf.as_scanner()
+        def __call__(self, mol):
+            mf_scanner = self._scf
+            e_tot = mf_scanner(mol)
+            self.mol = mol
+            de = self.kernel()
+            return e_tot, de
+    return SCF_GradScanner(grad_mf)
 
 
 class Gradients(lib.StreamObject):
@@ -148,7 +152,7 @@ class Gradients(lib.StreamObject):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
         if not self._scf.converged:
-            log.warn(self, 'Ground state SCF is not converged')
+            log.warn('Ground state SCF is not converged')
         log.info('******** %s for %s ********',
                  self.__class__, self._scf.__class__)
         log.info('chkfile = %s', self.chkfile)

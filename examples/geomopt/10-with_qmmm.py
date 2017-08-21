@@ -21,7 +21,7 @@ charges = (numpy.arange(5) + 1.) * -.001
 mf = qmmm.mm_charge(scf.RHF(mol), coords, charges)
 #mf.verbose=4
 #mf.kernel()
-print(berny_solver.kernel(mf, mol))
+mol1 = berny_solver.optimize(mf)
 
 mycc = cc.CCSD(mf)
-print(berny_solver.kernel(mycc, mol))
+mol1 = berny_solver.optimize(mycc)

@@ -1,5 +1,5 @@
 '''
-Interface to geometry optimizer pyberny
+Interface to geometry optimizer pyberny https://github.com/azag0/pyberny
 (In testing)
 '''
 from __future__ import absolute_import
@@ -9,24 +9,9 @@ except ImportError:
     raise ImportError('Geometry optimizer pyberny not found.\npyberny library '
                       'can be found on github https://github.com/azag0/pyberny')
 
+import copy
 from pyscf import lib
 from pyscf.geomopt.grad import gen_grad_scanner
-
-def kernel(method, mol=None, **kwargs):
-    '''Optimize the geometry of the given mol object.  Note this function will
-    change the attribute atom of mol object.
-    '''
-    if mol is None:
-        mol = method.mol
-    geom = to_berny_geom(mol)
-    g_scanner = gen_grad_scanner(method)
-    optimizer = Berny(geom, log=Logger(out=method.stdout), **kwargs)
-    for geom in optimizer:
-        atom = geom_to_atom(geom)
-        mol.set_geom_(atom)
-        energy, gradients = g_scanner(mol)
-        optimizer.send((energy, gradients))
-    return geom
 
 def to_berny_geom(mol):
     species = [mol.atom_symbol(i) for i in range(mol.natm)]
@@ -36,23 +21,26 @@ def to_berny_geom(mol):
 def geom_to_atom(geom):
     return list(geom)
 
-def as_berny_solver(method, mol=None):
+def as_berny_solver(method):
+    '''Generate a solver for berny optimize function.
     '''
-    Generate a solver for berny optimize function
-    '''
-    if mol is None:
-        mol = method.mol
+    mol = copy.copy(method.mol)
     g_scanner = gen_grad_scanner(method)
-    atom = yield
+    geom = yield
     while True:
-        mol.set_geom_(atom)
+        mol.set_geom_(geom_to_atom(geom))
         energy, gradients = g_scanner(mol)
-        atom = yield energy, gradients
+        geom = yield energy, gradients
 
 
-def optimize(method, mol, **kwargs):
-    optimize_berny(as_berny_solver(method), to_berny_geom(mol), **kwargs)
-    return method.mol
+def optimize(method, **kwargs):
+    '''Optimize the geometry with the given method.
+    '''
+    mol = copy.copy(method.mol)
+    geom = optimize_berny(as_berny_solver(method), to_berny_geom(mol), **kwargs)
+    mol.set_geom_(geom_to_atom(geom))
+    return mol
+kernel = optimize
 
 
 if __name__ == '__main__':
@@ -70,20 +58,17 @@ H       -0.0227 1.1812  0.8852
 H       -0.0227 1.1812  -0.8852
                 ''',
                 basis='3-21g')
-    mol1 = mol.copy()
 
     mf = scf.RHF(mol)
-    print(kernel(mf).dumps('xyz'))
-    print(optimize_berny(as_berny_solver(mf), to_berny_geom(mol)).dumps('xyz'))
-    mol0 = optimize(mf, mol1)
-    scf.RHF(mol1).kernel()
-    scf.RHF(mol0).kernel()
+    mol1 = optimize(mf)
+    print(mf.kernel() - -153.219208484874)
+    print(scf.RHF(mol1).kernel() - -153.222680852335)
 
     mf = dft.RKS(mol)
     mf.xc = 'pbe'
     mf.conv_tol = 1e-7
-    print(kernel(mf, mol1).dumps('xyz'))
+    mol1 = optimize(mf)
 
     mycc = cc.CCSD(scf.RHF(mol))
-    print(kernel(mycc).dumps('xyz'))
+    mol1 = optimize(mycc)
 

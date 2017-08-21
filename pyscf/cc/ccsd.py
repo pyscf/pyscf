@@ -584,16 +584,20 @@ def as_scanner(cc):
         >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
         >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
-    mf_scanner = cc._scf.as_scanner()
     logger.info(cc, 'Set %s as a scanner', cc.__class__)
-    def solver(mol):
-        mf_scanner(mol)
-        cc.mol = mol
-        cc.mo_coeff = cc._scf.mo_coeff
-        cc.mo_occ = cc._scf.mo_occ
-        cc.kernel(cc.t1, cc.t2)
-        return cc.e_tot
-    return solver
+    class CCSD_Scanner(cc.__class__):
+        def __init__(self, cc):
+            self.__dict__.update(cc.__dict__)
+            self._scf = cc._scf.as_scanner()
+        def __call__(self, mol):
+            mf_scanner = self._scf
+            mf_scanner(mol)
+            self.mol = mol
+            self.mo_coeff = mf_scanner.mo_coeff
+            self.mo_occ = mf_scanner.mo_occ
+            self.kernel(self.t1, self.t2)[0]
+            return self.e_tot
+    return CCSD_Scanner(cc)
 
 
 class CCSD(lib.StreamObject):

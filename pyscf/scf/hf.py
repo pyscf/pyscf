@@ -958,35 +958,57 @@ def as_scanner(mf):
         >>> hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
         -98.414750424294368
     '''
-    logger.info(mf, 'Set %s as a scanner', mf.__class__)
-    def solver(mol):
-        mf_obj = mf
-        while mf_obj is not None:
-            mf_obj.mol = mol
-            mf_obj.opt = None
-            mf_obj._eri = None
-            if hasattr(mf_obj, 'with_df') and mf_obj.with_df:
-                mf_obj.with_df.mol = mol
-                mf_obj.auxmol = None
-                mf_obj._cderi = None
-            if hasattr(mf_obj, 'with_x2c') and mf_obj.with_x2c:
-                mf_obj.with_x2c.mol = mol
-            if hasattr(mf_obj, 'grids'):  # DFT
-                mf_obj.grids.mol = mol
-                mf_obj.grids.coords = None
-                mf_obj.grids.weights = None
-                mf_obj._dm_last = None
-            mf_obj = getattr(mf_obj, '_scf', None)
+    import copy
+    logger.info(mf, 'Create scanner for %s', mf.__class__)
 
-        if mf.mo_coeff is None:
-            dm0 = None
-        elif mol.natm > 0:
-            dm0 = mf.from_chk(mf.chkfile)
-        else:
-            dm0 = mf.make_rdm1()
-        mf.kernel(dm0=dm0)
-        return mf.e_tot
-    return solver
+    class SCF_Scanner(mf.__class__):
+        def __init__(self, mf_obj):
+            self.__dict__.update(mf_obj.__dict__)
+            mf_obj = self
+            # partial deepcopy to avoid overwriting existing object
+            while mf_obj is not None:
+                if hasattr(mf_obj, 'with_df'):
+                    mf_obj.with_df = copy.copy(mf_obj.with_df)
+                if hasattr(mf_obj, 'with_x2c'):
+                    mf_obj.with_x2c = copy.copy(mf_obj.with_x2c)
+                if hasattr(mf_obj, 'grids'):  # DFT
+                    mf_obj.grids = copy.copy(mf_obj.grids)
+                    mf_obj._numint = copy.copy(mf_obj._numint)
+                if hasattr(mf_obj, '_scf'):
+                    mf_obj._scf = copy.copy(mf_obj._scf)
+                    mf_obj = mf_obj._scf
+                else:
+                    break
+
+        def __call__(self, mol):
+            mf_obj = self
+            while mf_obj is not None:
+                mf_obj.mol = mol
+                mf_obj.opt = None
+                mf_obj._eri = None
+                if hasattr(mf_obj, 'with_df') and mf_obj.with_df:
+                    mf_obj.with_df.mol = mol
+                    mf_obj.auxmol = None
+                    mf_obj._cderi = None
+                if hasattr(mf_obj, 'with_x2c') and mf_obj.with_x2c:
+                    mf_obj.with_x2c.mol = mol
+                if hasattr(mf_obj, 'grids'):  # DFT
+                    mf_obj.grids.mol = mol
+                    mf_obj.grids.coords = None
+                    mf_obj.grids.weights = None
+                    mf_obj._dm_last = None
+                mf_obj = getattr(mf_obj, '_scf', None)
+
+            if self.mo_coeff is None:
+                dm0 = None
+            elif mol.natm > 0:
+                dm0 = self.from_chk(self.chkfile)
+            else:
+                dm0 = self.make_rdm1()
+            e_tot = self.kernel(dm0=dm0)
+            return e_tot
+
+    return SCF_Scanner(mf)
 
 ############
 
