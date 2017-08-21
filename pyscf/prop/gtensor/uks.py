@@ -23,34 +23,35 @@ from pyscf.dft import numint
 from pyscf.prop.nmr import rhf as rhf_nmr
 from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.gtensor import uhf as uhf_g
-from pyscf.prop.gtensor.uhf import _write
+from pyscf.prop.gtensor.uhf import _write, align
 
 
 # Note mo10 is the imaginary part of MO^1
-def para(gobj, mo10, mo_coeff, mo_occ, soc_fac=1):
-    assert(not ((gobj.with_sso or gobj.with_soo) and gobj.with_so_eff_charge))
+def para(gobj, mo10, mo_coeff, mo_occ, qed_fac=1):
+    assert(not ((gobj.sso or gobj.soo) and gobj.so_eff_charge))
     mol = gobj.mol
     effspin = mol.spin * .5
-    # FIXME: see JPC, 101, 3388 Eq (11c), why?
-    #soc_fac = (lib.param.G_ELECTRON - 1)
+    muB = .5  # Bohr magneton
+    #qed_fac = (lib.param.G_ELECTRON - 1)
 
     orboa = mo_coeff[0][:,mo_occ[0]>0]
     orbob = mo_coeff[1][:,mo_occ[1]>0]
     dm0a = numpy.dot(orboa, orboa.T)
     dm0b = numpy.dot(orbob, orbob.T)
-    dm10a = numpy.asarray([reduce(numpy.dot, (mo_coeff[0], x, orboa.T)) for x in mo10[0]])
-    dm10b = numpy.asarray([reduce(numpy.dot, (mo_coeff[1], x, orbob.T)) for x in mo10[1]])
+    dm10a = [reduce(numpy.dot, (mo_coeff[0], x, orboa.T)) for x in mo10[0]]
+    dm10b = [reduce(numpy.dot, (mo_coeff[1], x, orbob.T)) for x in mo10[1]]
+    dm10a = numpy.asarray([x-x.T for x in dm10a])
+    dm10b = numpy.asarray([x-x.T for x in dm10b])
 
-    hso1e = uhf_g.make_h01_soc1e(gobj, mo_coeff, mo_occ, soc_fac)
+    hso1e = uhf_g.make_h01_soc1e(gobj, mo_coeff, mo_occ, qed_fac)
     gpara1e =-numpy.einsum('xji,yij->xy', dm10a, hso1e)
     gpara1e+= numpy.einsum('xji,yij->xy', dm10b, hso1e)
-    gpara1e *= 2 # *2 for + c.c.
-    gpara1e *= 1./effspin
-    _write(gobj, gpara1e, 'SOC(1e)/OZ')
+    gpara1e *= 1./effspin / muB
+    _write(gobj, align(gpara1e)[0], 'SOC(1e)/OZ')
 
-    if gobj.with_sso or gobj.with_soo:
-        gpara2e = gobj.make_para_soc2e((dm0a,dm0b), (dm10a,dm10b), soc_fac)
-        _write(gobj, gpara2e, 'SOC(2e)/OZ')
+    if gobj.para_soc2e:
+        gpara2e = gobj.make_para_soc2e((dm0a,dm0b), (dm10a,dm10b), qed_fac)
+        _write(gobj, align(gpara2e)[0], 'SOC(2e)/OZ')
     else:
         gpara2e = 0
 
@@ -58,12 +59,12 @@ def para(gobj, mo10, mo_coeff, mo_occ, soc_fac=1):
     return gpara
 
 
-def make_para_soc2e(gobj, dm0, dm10, sso_fac=1):
+def make_para_soc2e(gobj, dm0, dm10, sso_qed_fac=1):
     mol = gobj.mol
     alpha2 = lib.param.ALPHA ** 2
     effspin = mol.spin * .5
-    ## FIXME: see JPC, 101, 3388 Eq (11c), why?
-    #sso_fac = (lib.param.G_ELECTRON - 1)
+    muB = .5  # Bohr magneton
+    #sso_qed_fac = (lib.param.G_ELECTRON - 1)
 
     mf = gobj._scf
     ni = mf._numint
@@ -75,6 +76,7 @@ def make_para_soc2e(gobj, dm0, dm10, sso_fac=1):
     dm10a, dm10b = dm10
     ej  = numpy.einsum('yil,xli->xy', v1[0], dm10a)
     ej -= numpy.einsum('yil,xli->xy', v1[1], dm10b)
+    #ej *= -2  #Veff(-2X) approximation of JCP 122 034107
     if abs(hyb) > 1e-10:
         vj, vk = uhf_g.get_jk_soc(mol, dm0)
         ek  = numpy.einsum('yil,xli->xy', vk[0], dm10a)
@@ -91,13 +93,13 @@ def make_para_soc2e(gobj, dm0, dm10, sso_fac=1):
         ek = 0
 
 # Different approximations for the spin operator part are used in
-# JCP, 122, 034107 Eq (15) and JCP, 115, 11080 Eq (34).  The formulae of the
-# so-called spin-averaging in JCP, 122, 034107 Eq (15) is not well documented
-# and its effects are not fully tested.  Approximation of JCP, 115, 11080 Eq (34)
-# are adopted here.
+# JCP, 122, 034107 Eq (15) and JCP, 115, 11080 Eq (34).  The spin-averaging
+# approximation in JCP, 122, 034107 Eq (15) is not well documented and its
+# effects are not fully tested.  Approximation of JCP, 115, 11080 Eq (34) is
+# used here.
 # ~ <H^{01},MO^1> = - Tr(Im[H^{01}],Im[MO^1])
-    gpara2e = -sso_fac * (ej - ek) * 2 # * 2 for + c.c.
-    gpara2e *= (alpha2/4) / effspin
+    gpara2e = -sso_qed_fac * (ej - ek)
+    gpara2e *= (alpha2/4) / effspin / muB
     return gpara2e
 
 
@@ -122,7 +124,7 @@ def get_vxc_soc(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
             rho_a = make_rhoa(0, ao[0], mask, 'LDA')
             rho_b = make_rhob(0, ao[0], mask, 'LDA')
             vxc = ni.eval_xc(xc_code, (rho_a, rho_b), 1, deriv=1)[1]
-            vrho = vxc[0] * .5  # *.5 for symmetrization in the end
+            vrho = vxc[0]
             aow = numpy.einsum('xpi,p->xpi', ao[1:], weight*vrho[:,0])
             _cross3x3_(vmat[0], mol, aow, ao[1:], mask, shls_slice, ao_loc)
             aow = numpy.einsum('xpi,p->xpi', ao[1:], weight*vrho[:,1])
@@ -156,10 +158,12 @@ def get_vxc_soc(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
             aow = _half_contract(ip_ao, ipip_ao, wvb)
             _cross3x3_(vmat[1], mol, aow, ip_ao, mask, shls_slice, ao_loc)
             rho = vxc = vrho = vsigma = wv = aow = None
+        vmat = vmat - vmat.transpose(0,1,3,2)
+
     else:
         raise NotImplementedError('meta-GGA')
 
-    return vmat - vmat.transpose(0,1,3,2)
+    return vmat
 
 
 def _cross3x3_(out, mol, ao1, ao2, mask, shls_slice, ao_loc):
@@ -190,6 +194,10 @@ def _half_contract(ip_ao, ipip_ao, wv):
 
 class GTensor(uhf_g.GTensor):
     '''dE = B dot gtensor dot s'''
+    def __init__(self, scf_method):
+        uhf_g.GTensor.__init__(self, scf_method)
+        self.dia_soc2e = False
+        self.para_soc2e = True
 
     def para(self, mo10=None, mo_coeff=None, mo_occ=None):
         if mo_coeff is None: mo_coeff = self._scf.mo_coeff
@@ -211,9 +219,8 @@ if __name__ == '__main__':
     gobj = GTensor(mf)
     gobj.verbose=4
     gobj.gauge_orig = (0,0,0)
-    gobj.with_sso = True
-    gobj.with_soo = True
-    gobj.with_so_eff_charge = False
+    gobj.para_soc2e = True
+    gobj.so_eff_charge = False
     print(gobj.kernel())
 
     mol = gto.M(atom='H 0 0 0; H 0 0 1.',
@@ -234,17 +241,19 @@ if __name__ == '__main__':
     mf.kernel()
     gobj = GTensor(mf)
     #print(gobj.kernel())
-    gobj.with_sso = True
-    gobj.with_soo = True
-    gobj.with_so_eff_charge = False
+    gobj.sso = True
+    gobj.soo = True
+    gobj.so_eff_charge = False
     nao, nmo = mf.mo_coeff[0].shape
     nelec = mol.nelec
     numpy.random.seed(1)
     mo10 =[numpy.random.random((3,nmo,nelec[0])),
            numpy.random.random((3,nmo,nelec[1]))]
-    print(lib.finger(para(gobj, mo10, mf.mo_coeff, mf.mo_occ)) - -1.0906625289931683e-05)
+    print(lib.finger(para(gobj, mo10, mf.mo_coeff, mf.mo_occ)) - -2.1813250579863279e-05)
     numpy.random.seed(1)
     dm0 = numpy.random.random((2,nao,nao))
     dm0 = dm0 + dm0.transpose(0,2,1)
     dm10 = numpy.random.random((2,3,nao,nao))
-    print(lib.finger(make_para_soc2e(gobj, dm0, dm10)) - 0.001803694894463183)
+    dm10 = dm10 - dm10.transpose(0,1,3,2)
+    print(lib.finger(make_para_soc2e(gobj, dm0, dm10)) - 0.0036073897889263721)
+

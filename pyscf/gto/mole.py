@@ -2641,6 +2641,7 @@ def from_zmatrix(atomstr):
                 bond  = float(rawd[2])
                 anga  = int(rawd[3]) - 1
                 ang   = float(rawd[4])/180*numpy.pi
+                assert(ang >= 0)
                 v1 = atoms[anga][1] - atoms[bonda][1]
                 if not numpy.allclose(v1[:2], 0):
                     vecn = numpy.cross(v1, numpy.array((0.,0.,1.)))
@@ -2654,6 +2655,7 @@ def from_zmatrix(atomstr):
                 bond  = float(rawd[2])
                 anga  = int(rawd[3]) - 1
                 ang   = float(rawd[4])/180*numpy.pi
+                assert(ang >= 0)
                 diha  = int(rawd[5]) - 1
                 dih   = float(rawd[6])/180*numpy.pi
                 v1 = atoms[anga][1] - atoms[bonda][1]

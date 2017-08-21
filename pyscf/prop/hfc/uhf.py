@@ -133,7 +133,7 @@ def make_h1_soc(gobj, dm0):
     '''
 # JCP, 122, 034107 Eq (2) = 1/4c^2 hso1e
     mol = gobj.mol
-    if gobj.with_so_eff_charge:
+    if gobj.so_eff_charge:
         hso1e = 0
         for ia in range(mol.natm):
             mol.set_rinv_origin(mol.atom_coord(ia))
@@ -145,7 +145,7 @@ def make_h1_soc(gobj, dm0):
     hso = numpy.asarray((hso1e,-hso1e))
 
 # TODO: test SOMF and the treatments in JCP, 122, 034107
-    if gobj.with_sso or gobj.with_soo:
+    if gobj.sso or gobj.soo:
         hso2e = make_h1_soc2e(gobj, dm0)
         hso += hso2e
 
@@ -159,7 +159,7 @@ def make_h1_soc2e(gobj, dm0):
     hso2e = mol.intor('int2e_p1vxp1', 3).reshape(3,nao,nao,nao,nao)
     vj = numpy.zeros((2,3,nao,nao))
     vk = numpy.zeros((2,3,nao,nao))
-    if gobj.with_sso:
+    if gobj.sso:
         vj[:] += numpy.einsum('yijkl,ji->ykl', hso2e, dma-dmb)
         vj[0] += numpy.einsum('yijkl,lk->yij', hso2e, dma+dmb)
         vj[1] -= numpy.einsum('yijkl,lk->yij', hso2e, dma+dmb)
@@ -167,7 +167,7 @@ def make_h1_soc2e(gobj, dm0):
         vk[1] -= numpy.einsum('yijkl,jk->yil', hso2e, dmb)
         vk[0] += numpy.einsum('yijkl,li->ykj', hso2e, dma)
         vk[1] -= numpy.einsum('yijkl,li->ykj', hso2e, dmb)
-    if gobj.with_soo:
+    if gobj.soo:
         vj[0] += 2 * numpy.einsum('yijkl,ji->ykl', hso2e, dma+dmb)
         vj[1] -= 2 * numpy.einsum('yijkl,ji->ykl', hso2e, dma+dmb)
         vj[:] += 2 * numpy.einsum('yijkl,lk->yij', hso2e, dma-dmb)
@@ -189,18 +189,18 @@ def _write(rec, msc3x3, title):
 class HyperfineCoupling(uhf_ssc.SSC):
     '''dE = I dot gtensor dot s'''
     def __init__(self, scf_method):
-        self.with_sso = False  # Two-electron spin-same-orbit coupling
-        self.with_soo = False  # Two-electron spin-other-orbit coupling
-        self.with_so_eff_charge = True
+        self.sso = False  # Two-electron spin-same-orbit coupling
+        self.soo = False  # Two-electron spin-other-orbit coupling
+        self.so_eff_charge = True
         self.hfc_nuc = range(scf_method.mol.natm)
         uhf_nmr.NMR.__init__(self, scf_method)
 
     def dump_flags(self):
         uhf_nmr.NMR.dump_flags(self)
-        logger.info(self, 'with_sso = %s (2e spin-same-orbit coupling)', self.with_sso)
-        logger.info(self, 'with_soo = %s (2e spin-other-orbit coupling)', self.with_soo)
-        logger.info(self, 'with_so_eff_charge = %s (1e SO effective charge)',
-                    self.with_so_eff_charge)
+        logger.info(self, 'sso = %s (2e spin-same-orbit coupling)', self.sso)
+        logger.info(self, 'soo = %s (2e spin-other-orbit coupling)', self.soo)
+        logger.info(self, 'so_eff_charge = %s (1e SO effective charge)',
+                    self.so_eff_charge)
         return self
 
     def kernel(self, mo1=None):
@@ -235,9 +235,9 @@ if __name__ == '__main__':
     mf = scf.UHF(mol)
     mf.kernel()
     hfc = HFC(mf)
-    hfc.with_sso = True
-    hfc.with_soo = True
-    hfc.with_so_eff_charge = False
+    hfc.sso = True
+    hfc.soo = True
+    hfc.so_eff_charge = False
     print(lib.finger(hfc.kernel()))
 
     mol = gto.M(atom='H 0 0 0; H 0 0 1.',

@@ -7,7 +7,7 @@ from pyscf import scf
 from pyscf.prop import nmr
 
 mol = gto.Mole()
-mol.verbose = 5
+mol.verbose = 7
 mol.output = '/dev/null'
 
 mol.atom = [
@@ -123,4 +123,3 @@ class KnowValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests of RHF-MSC DHF-MSC for HF")
     unittest.main()
-    import sys; sys.exit()

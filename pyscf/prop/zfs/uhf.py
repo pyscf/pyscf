@@ -122,7 +122,7 @@ def make_h1_soc(zfsobj, mol, mo_coeff, mo_occ):
     orbvb = mo_coeff[1][:,~occidxb]
 # hso1e is the imaginary part of [i sigma dot pV x p]
 # JCP, 122, 034107 Eq (2) = 1/4c^2 hso1e
-    if zfsobj.with_so_eff_charge:
+    if zfsobj.so_eff_charge:
         hso1e = 0
         for ia in range(mol.natm):
             mol.set_rinv_origin(mol.atom_coord(ia))
@@ -136,7 +136,7 @@ def make_h1_soc(zfsobj, mol, mo_coeff, mo_occ):
     h1ab = numpy.asarray([reduce(numpy.dot, (orbva.T, x, orbob)) for x in hso1e])
     h1ba = numpy.asarray([reduce(numpy.dot, (orbvb.T, x, orboa)) for x in hso1e])
 
-    if zfsobj.with_sso or zfsobj.with_soo:
+    if zfsobj.sso or zfsobj.soo:
         hso2e = make_soc2e(zfsobj, mo_coeff, mo_occ)
     else:
         hso2e = (0, 0, 0, 0)
@@ -270,9 +270,9 @@ class ZeroFieldSplitting(lib.StreamObject):
         self.cphf = True
         self.max_cycle_cphf = 20
         self.conv_tol = 1e-9
-        self.with_sso = False  # Two-electron spin-same-orbit coupling
-        self.with_soo = False  # Two-electron spin-other-orbit coupling
-        self.with_so_eff_charge = True
+        self.sso = False  # Two-electron spin-same-orbit coupling
+        self.soo = False  # Two-electron spin-other-orbit coupling
+        self.so_eff_charge = True
 
         self.mo10 = None
         self.mo_e10 = None
@@ -287,10 +287,10 @@ class ZeroFieldSplitting(lib.StreamObject):
         if self.cphf:
             log.info('CPHF conv_tol = %g', self.conv_tol)
             log.info('CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
-        logger.info(self, 'with_sso = %s (2e spin-same-orbit coupling)', self.with_sso)
-        logger.info(self, 'with_soo = %s (2e spin-other-orbit coupling)', self.with_soo)
-        logger.info(self, 'with_so_eff_charge = %s (1e SO effective charge)',
-                    self.with_so_eff_charge)
+        logger.info(self, 'sso = %s (2e spin-same-orbit coupling)', self.sso)
+        logger.info(self, 'soo = %s (2e spin-other-orbit coupling)', self.soo)
+        logger.info(self, 'so_eff_charge = %s (1e SO effective charge)',
+                    self.so_eff_charge)
         return self
 
     def kernel(self, mo1=None):
@@ -337,7 +337,7 @@ if __name__ == '__main__':
     mf.kernel()
     zfsobj = ZFS(mf)
     #zfsobj.cphf = False
-    #zfsobj.with_sso = True
-    #zfsobj.with_soo = True
-    #zfsobj.with_so_eff_charge = False
+    #zfsobj.sso = True
+    #zfsobj.soo = True
+    #zfsobj.so_eff_charge = False
     print(zfsobj.kernel())

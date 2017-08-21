@@ -87,10 +87,11 @@ def solve_mo1(mo_energy, mo_occ, h1, s1):
     nvirb = nmob - noccb
     eai_a = mo_energy[0][viridxa,None] - mo_energy[0][occidxa]
     eai_b = mo_energy[1][viridxb,None] - mo_energy[1][occidxb]
-    s1_a = s1[0].reshape(-1,nmoa,nocca)
-    s1_b = s1[1].reshape(-1,nmob,noccb)
-    hs_a = mo1_a = h1[0].reshape(-1,nmoa,nocca) - s1_a * mo_energy[0][occidxa]
-    hs_b = mo1_b = h1[1].reshape(-1,nmob,noccb) - s1_b * mo_energy[1][occidxb]
+    dim0 = len(s1[0])
+    s1_a = s1[0].reshape(dim0,nmoa,nocca)
+    s1_b = s1[1].reshape(dim0,nmob,noccb)
+    hs_a = mo1_a = h1[0].reshape(dim0,nmoa,nocca) - s1_a * mo_energy[0][occidxa]
+    hs_b = mo1_b = h1[1].reshape(dim0,nmob,noccb) - s1_b * mo_energy[1][occidxb]
     mo_e1_a = hs_a[:,occidxa].copy()
     mo_e1_b = hs_b[:,occidxb].copy()
 

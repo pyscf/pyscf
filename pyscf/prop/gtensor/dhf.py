@@ -5,6 +5,7 @@
 
 '''
 Unrestricted Dirac Hartree-Fock g-tensor
+(In testing)
 
 Refs: TCA, 129, 715
 '''
@@ -39,11 +40,11 @@ def kernel(gobj, gauge_orig=None, mb='RKB', with_gaunt=False, verbose=None):
     h10 = dhf_nmr.make_h10(mol, dm0, gauge_orig, mb, with_gaunt, log)
     s10 = dhf_nmr.make_s10(mol, gauge_orig, mb)
 
-    g = (numpy.einsum('xij,ji->x', h10, dm0) -
-         numpy.einsum('xij,ji->x', s10, dme))
-# Intrinsic mu_B = eh/2mc
+# Intrinsic muB = eh/2mc
 # First order Dirac operator is 1/c * h10 => g ~ Tr(h10,DM)/c / mu_B = 2 Tr(h10,DM)
-    g *= 2
+    muB = .5  # Bohr magneton
+    g = (numpy.einsum('xij,ji->x', h10, dm0) -
+         numpy.einsum('xij,ji->x', s10, dme)) / muB
     c = lib.param.LIGHT_SPEED
     n4c = dm0.shape[0]
     n2c = n4c // 2
