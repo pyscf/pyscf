@@ -5,15 +5,8 @@ from timeit import default_timer as timer
 import sys
 
 try:
-    import pycuda.autoinit
-    import pycuda.driver as drv
-    import skcuda.linalg as culinalg
-    import pycuda.gpuarray as gpuarray
-    import skcuda.misc as cumisc
-    from m_iter_div_eigenenergy_cuda import div_eigenenergy_cuda
-
-    culinalg.init()
-    print("Device compute capability: ", cumisc.get_compute_capability(pycuda.autoinit.device))
+    from pyscf.nao.m_libnao import libnao_gpu
+    from ctypes import POINTER, c_double, c_int64, c_float, c_int
     GPU_import = True
 except:
     GPU_import = False
@@ -80,37 +73,25 @@ class tddft_iter_c():
     
     if GPU and GPU_import:
         self.GPU=True
-        print("GPU initialization")
-        self.xvrt_gpu = gpuarray.to_gpu(self.xvrt)
-        self.xvrt_gpu_tr = gpuarray.to_gpu(np.transpose(self.xvrt))
-        self.ksn2e_gpu = gpuarray.to_gpu(self.ksn2e[0, 0, :])
-        self.ksn2f_gpu = gpuarray.to_gpu(self.ksn2f[0, 0, :])
 
-        self.block_size = np.array([32, 32], dtype=int) # threads by block
-        self.grid_size = np.array([0, 0], dtype=int) # number of blocks
+        self.block_size = np.array([32, 32], dtype=np.int32) # threads by block
+        self.grid_size = np.array([0, 0], dtype=np.int32) # number of blocks
         dimensions = [self.nfermi, self.ksn2f.shape[2]]
-        print("self.ksn2f.shape = ", self.ksn2f.shape)
         for i in range(2):
             if dimensions[i] <= self.block_size[i]:
                 self.block_size[i] = dimensions[i]
                 self.grid_size[i] = 1
             else:
                 self.grid_size[i] = dimensions[i]/self.block_size[i] + 1
-        print("Python: block_size = ", self.block_size, " grid_size = ", self.grid_size, "nfermi = ", self.nfermi)
+
+        libnao_gpu.init_iter_gpu(self.x[0, 0, :, :, 0].ctypes.data_as(POINTER(c_float)), c_int64(self.norbs),
+                self.ksn2e[0, 0, :].ctypes.data_as(POINTER(c_float)), c_int64(self.ksn2e[0, 0, :].size),
+                self.ksn2f[0, 0, :].ctypes.data_as(POINTER(c_float)), c_int64(self.ksn2f[0, 0, :].size),
+                c_int64(self.nfermi), c_int64(self.vstart))
     elif GPU and not GPU_import:
         raise ValueError("GPU lib failed to initialize!")
     else:
         self.GPU = False
-
-
-  def finalize_gpu(self):
-    self.xvrt_gpu.gpudata.free()
-    self.ksn2e_gpu.gpudata.free()
-    self.ksn2f_gpu.gpudata.free()
-
-    self.nb2v_gpu.gpudata.free()
-    self.nm2v_gpu_real.gpudata.free()
-    self.nm2v_gpu_imag.gpudata.free()
 
 
   def apply_rf0(self, v, comega=1j*0.0):
@@ -120,45 +101,49 @@ class tddft_iter_c():
     vdp = self.cc_da * np.require(v, dtype=np.complex64)
     no = self.norbs
     sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
-    nb2v = self.xocc*sab
-    #nm2v = np.zeros([self.nfermi,len(self.xvrt)], dtype=np.complex64)
 
     if self.GPU:
-        self.nb2v_gpu = gpuarray.to_gpu(nb2v.real)
+        #  reference
 
-        self.nm2v_gpu_real = culinalg.dot(self.nb2v_gpu, self.xvrt_gpu_tr)
-        self.nb2v_gpu = gpuarray.to_gpu(nb2v.imag)
-        self.nm2v_gpu_imag = culinalg.dot(self.nb2v_gpu, self.xvrt_gpu_tr)
-        nm2v_bis = np.dot(nb2v, np.transpose(self.xvrt))
-        div_eigenenergy_cuda(self.ksn2e_gpu, self.ksn2f_gpu, self.nfermi, self.vstart,
-                comega, self.nm2v_gpu_real, self.nm2v_gpu_imag, self.block_size, self.grid_size)
+        nb2v_real = self.xocc*sab.real
+        nb2v_imag = self.xocc*sab.imag
 
-        for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
-            for j,[em,fm] in enumerate(zip(self.ksn2e[0,0,n+1:],self.ksn2f[0,0,n+1:])):
-                m = j+n+1-self.vstart
-                if m >0:
-                    nm2v_bis[n,m] = nm2v_bis[n,m] * (fn - fm) * (( 1.0 / (comega - (em - en))) - (1.0 / (comega + (em - en)) ))
-        print("nm2v.flags: ", nm2v_bis.flags)
-        print("xvrt.flags: ", self.xvrt.flags)
-        print("nm2v_gpu.flags: ", self.nm2v_gpu_real.flags)
-        print("xvrt_gpu.flags: ", self.xvrt_gpu.flags)
-        self.nb2v_gpu = culinalg.dot(self.nm2v_gpu_real, self.xvrt_gpu)
-        self.nm2v_gpu_real = self.nb2v_gpu
+        ab2v_real = np.zeros([self.norbs*self.norbs], dtype=np.float32)
+        ab2v_imag = np.zeros([self.norbs*self.norbs], dtype=np.float32)
 
-        self.nb2v_gpu = culinalg.dot(self.nm2v_gpu_imag, self.xvrt_gpu)
-        self.nm2v_gpu_imag = self.nb2v_gpu
+        libnao_gpu.apply_rf0_gpu(nb2v_real.ctypes.data_as(POINTER(c_float)),
+                nb2v_imag.ctypes.data_as(POINTER(c_float)), ab2v_real.ctypes.data_as(POINTER(c_float)),
+                ab2v_imag.ctypes.data_as(POINTER(c_float)), c_double(comega.real), c_double(comega.imag),
+                self.block_size.ctypes.data_as(POINTER(c_int)), self.grid_size.ctypes.data_as(POINTER(c_int)))
 
-        nm2v = 1j*self.nm2v_gpu_imag.get()
-        nm2v += self.nm2v_gpu_real.get()
+        ab2v = 1j*ab2v_imag
+        ab2v += ab2v_real
 
-        nb2v = np.dot(nm2v_bis,self.xvrt)
-        print("sum(nm2v_gpu): = ", np.sum(abs(nm2v.real)), np.sum(abs(nm2v.imag)))
-        print("sum(nm2v_cpu): = ", np.sum(abs(nb2v.real)), np.sum(abs(nb2v.imag)))
-        print("error: ", np.sum(abs(nb2v-nm2v)))
-        sys.exit()
-
-        ab2v = np.dot(np.transpose(self.xocc),nb2v).reshape(no*no)
+        # Reference!!
+        #nb2v = self.xocc*sab
+        #nm2v_ref = np.dot(nb2v, np.transpose(self.xvrt))
+        #print("check nm2v1: sum_gpu = {0}, sum_cpu = {1}, error =  {2}".format(np.sum(abs(nm2v_real)), np.sum(abs(nm2v_ref.real)), np.sum(abs(nm2v_ref.real - nm2v_real ))))
+        #for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
+        #    for j,[em,fm] in enumerate(zip(self.ksn2e[0,0,n+1:],self.ksn2f[0,0,n+1:])):
+        #        m = j+n+1-self.vstart
+        #        if m >0:
+        #            nm2v_ref[n,m] = nm2v_ref[n,m] * (fn - fm) * (( 1.0 / (comega - (em - en))) - (1.0 / (comega + (em - en)) ))
+        #print("check nm2v2: sum_gpu = {0}, sum_cpu = {1}, error =  {2}".format(np.sum(abs(nm2v_real2)), np.sum(abs(nm2v_ref.real)), np.sum(abs(nm2v_ref.real - nm2v_real2 ))))
+        #np.savetxt("nm2v_ref.txt", nm2v_ref.real)
+        #nb2v = np.dot(nm2v_ref,self.xvrt)
+        #ab2v_ref = np.dot(np.transpose(self.xocc),nb2v).reshape(no*no)
+        ##np.savetxt("nb2v_output_cpu.txt", nb2v_real, fmt = "%10.6f")
+        ##np.savetxt("nb2v_output_cpu_ref.txt", nb2v.real, fmt = "%10.6f")
+        #print("final: sum(ab2_gpu): = ", np.sum(abs(ab2v.real)), np.sum(abs(ab2v.imag)))
+        #print("final :sum(ab2v_cpu): = ", np.sum(abs(ab2v_ref.real)), np.sum(abs(ab2v_ref.imag)))
+        #print("sum_gpu = {0}, sum_cpu = {1}, error =  {2}".format(np.sum(abs(ab2v.real)), np.sum(abs(ab2v_ref.real)), np.sum(abs(ab2v_ref.real - ab2v.real ))))
+        #print("error: ", np.sum(abs(ab2v_ref.reshape([self.norbs, self.norbs]) - ab2v.reshape([self.norbs, self.norbs]) )))
     else:
+        #
+        # WARNING!!!!
+        # nb2v is column major, while self.xvrt is row major
+        #       What a mess!!
+        nb2v = self.xocc*sab
         nm2v = np.dot(nb2v, np.transpose(self.xvrt))
         
         if use_numba:
@@ -202,6 +187,6 @@ class tddft_iter_c():
       polariz[iw] = np.dot(self.moms1[:,0], self.apply_rf0( veff, comega ))
 
     if self.GPU:
-        self.finalize_gpu()
+        libnao_gpu.clean_gpu()
 
     return polariz
