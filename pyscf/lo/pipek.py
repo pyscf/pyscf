@@ -30,7 +30,13 @@ def atomic_pops(mol, mo_coeff, method='meta_lowdin'):
             proj[i] = (csc + csc.T) * .5
 
     elif method.lower() in ('lowdin', 'meta_lowdin'):
-        csc = reduce(lib.dot, (mo_coeff.T, s, orth.orth_ao(mol, method, s=s)))
+        if mol.has_ecp():
+# Rereference AO basis in the environment of ECP is not available
+# TODO: warning message?
+            c = numpy.eye(s.shape[0])
+        else:
+            c = orth.pre_orth_ao(mol, 'ANO')
+        csc = reduce(lib.dot, (mo_coeff.T, s, orth.orth_ao(mol, method, c, s=s)))
         for i, (b0, b1, p0, p1) in enumerate(mol.offset_nr_by_atom()):
             proj[i] = numpy.dot(csc[:,p0:p1], csc[:,p0:p1].T)
     else:
