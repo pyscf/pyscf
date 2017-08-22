@@ -30,7 +30,7 @@ def make_h1_soc2e(hfcobj, dm0):
     v1 = get_vxc_soc(ni, mol, mf.grids, mf.xc, dm0,
                      max_memory=max_memory, verbose=hfcobj.verbose)
     if abs(hyb) > 1e-10:
-        vj, vk = uhf_hfc.get_jk_soc(mol, dm0)
+        vj, vk = uhf_hfc.get_jk(mol, dm0)
         v1 += vj[0] + vj[1]
         v1 -= vk * hyb
     else:

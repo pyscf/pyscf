@@ -16,6 +16,7 @@ In some literature, muB is not explicitly presented in the perturbation formula
 
 import time
 from functools import reduce
+import copy
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -45,7 +46,6 @@ def dia(gobj, dm0, gauge_orig=None):
     logger.info(gobj, 'RMC = %s', rmc)
 
     assert(not mol.has_ecp())
-    #assert(not ((gobj.sso or gobj.soo) and gobj.so_eff_charge))
 # GC(1e)
     if gauge_orig is not None:
         mol.set_common_origin(gauge_orig)
@@ -69,7 +69,7 @@ def dia(gobj, dm0, gauge_orig=None):
         for ia in range(mol.natm):
             mol.set_rinv_origin(mol.atom_coord(ia))
             Z = mol.atom_charge(ia)
-            if gobj.so_eff_charge:
+            if gobj.so_eff_charge or not gobj.dia_soc2e:
                 Z = koseki_charge(Z)
             h11 += Z * mol.intor('int1e_a01gp', 9)
     gc1e = numpy.einsum('xij,ji->x', h11, spindm).reshape(3,3)
@@ -80,7 +80,7 @@ def dia(gobj, dm0, gauge_orig=None):
     if gobj.verbose >= logger.INFO:
         _write(gobj, align(gc1e)[0], 'GC(1e)')
 
-    if gobj.dia_soc2e and (gobj.sso or gobj.soo):
+    if gobj.dia_soc2e:
         gc2e = gobj.make_dia_gc2e(dm0, gauge_orig, qed_fac)
         if gobj.verbose >= logger.INFO:
             _write(gobj, align(gc2e)[0], 'GC(2e)')
@@ -91,6 +91,15 @@ def dia(gobj, dm0, gauge_orig=None):
     return gdia
 
 def make_dia_gc2e(gobj, dm0, gauge_orig, sso_qed_fac=1):
+    if (isinstance(gobj.dia_soc2e, str) and
+        ('SOMF' in gobj.dia_soc2e.upper() or 'AMFI' in gobj.dia_soc2e.upper())):
+        raise NotImplementedError(gobj.dia_soc2e)
+    if isinstance(gobj.dia_soc2e, str):
+        with_sso = 'SSO' in gobj.dia_soc2e.upper()
+        with_soo = 'SOO' in gobj.dia_soc2e.upper()
+    else:
+        with_sso = with_soo = True
+
     mol = gobj.mol
     dma, dmb = dm0
     effspin = mol.spin * .5
@@ -112,11 +121,11 @@ def make_dia_gc2e(gobj, dm0, gauge_orig, sso_qed_fac=1):
     ek-= numpy.einsum('xil,li->x', vk[1], dmb)
     ek = ek.reshape(3,3)
     gc2e = 0
-    if gobj.sso:
+    if with_sso:
         # spin-density should be contracted to electron 1 (associated to operator r1)
         ej = numpy.einsum('xij,ji->x', vj[0]+vj[1], dma-dmb).reshape(3,3)
         gc2e += sso_qed_fac * (ej - ek)
-    if gobj.soo:
+    if with_soo:
         # spin-density should be contracted to electron 2
         ej = numpy.einsum('xij,ji->x', vj[0]-vj[1], dma+dmb).reshape(3,3)
         gc2e += 2 * (ej - ek)
@@ -141,10 +150,10 @@ def make_dia_gc2e(gobj, dm0, gauge_orig, sso_qed_fac=1):
         ek = numpy.einsum('xyij,ji->xy', vk[0], dma)
         ek-= numpy.einsum('xyij,ji->xy', vk[1], dmb)
         dia_giao = 0
-        if gobj.sso:
+        if with_sso:
             ej = numpy.einsum('xyij,ji->xy', vj[0]+vj[1], dma-dmb)
             dia_giao += sso_qed_fac * (ej - ek)
-        if gobj.soo:
+        if with_soo:
             ej = numpy.einsum('xyij,ji->xy', vj[0]-vj[1], dma+dmb)
             dia_giao += 2 * (ej - ek)
         gc2e -= dia_giao * (alpha2/4) / effspin / muB
@@ -161,7 +170,6 @@ def make_dia_gc2e(gobj, dm0, gauge_orig, sso_qed_fac=1):
 
 # Note mo10 is the imaginary part of MO^1
 def para(gobj, mo10, mo_coeff, mo_occ, qed_fac=1):
-    #assert(not ((gobj.sso or gobj.soo) and gobj.so_eff_charge))
     mol = gobj.mol
     effspin = mol.spin * .5
     muB = .5  # Bohr magneton
@@ -184,17 +192,23 @@ def para(gobj, mo10, mo_coeff, mo_occ, qed_fac=1):
     if gobj.verbose >= logger.INFO:
         _write(gobj, align(gpara1e)[0], 'SOC(1e)/OZ')
 
-    if gobj.para_soc2e and (gobj.sso or gobj.soo):
-        gpara2e = gobj.make_para_soc2e((dm0a,dm0b), (dm10a,dm10b), qed_fac)
-        if gobj.verbose >= logger.INFO:
-            _write(gobj, align(gpara2e)[0], 'SOC(2e)/OZ')
-    else:
-        gpara2e = 0
-
+    gpara2e = gobj.make_para_soc2e((dm0a,dm0b), (dm10a,dm10b), qed_fac)
     gpara = gpara1e + gpara2e
     return gpara
 
 def make_para_soc2e(gobj, dm0, dm10, sso_qed_fac=1):
+    if isinstance(gobj.para_soc2e, str):
+        with_sso = 'SSO' in gobj.para_soc2e.upper()
+        with_soo = 'SOO' in gobj.para_soc2e.upper()
+        with_somf = 'SOMF' in gobj.para_soc2e.upper()
+        with_amfi = 'AMFI' in gobj.para_soc2e.upper()
+        assert(not (with_somf and (with_sso or with_soo)))
+    elif gobj.para_soc2e:
+        with_sso = with_soo = True
+        with_somf = with_amfi = False
+    else:
+        return 0
+
     mol = gobj.mol
     alpha2 = lib.param.ALPHA ** 2
     effspin = mol.spin * .5
@@ -202,52 +216,34 @@ def make_para_soc2e(gobj, dm0, dm10, sso_qed_fac=1):
     #sso_qed_fac = (lib.param.G_ELECTRON - 1)
     #sso_qed_fac = lib.param.G_ELECTRON / 2
 
-    mol = gobj.mol
-    vj, vk = get_jk_soc(mol, dm0)
-
     dm10a, dm10b = dm10
-    ek  = numpy.einsum('yil,xli->xy', vk[0], dm10a)
-    ek -= numpy.einsum('yil,xli->xy', vk[1], dm10b)
-# Different approximations for the spin operator part are used in
-# JCP, 122, 034107 Eq (15) and JCP, 115, 11080 Eq (34).  The spin-averaging
-# approximation in JCP, 122, 034107 Eq (15) is not well documented and its
-# effects are not fully tested.  Approximation of JCP, 115, 11080 Eq (34) is
-# used here.
+    if with_amfi:
+        vj, vk = get_jk_amfi(mol, dm0)
+    else:
+        vj, vk = get_jk(mol, dm0)
+
     gpara2e = 0
-    if gobj.sso:
-        ej = numpy.einsum('yij,xji->xy', vj[0]+vj[1], dm10a-dm10b)
+    if with_sso or with_soo:
+        ek  = numpy.einsum('yil,xli->xy', vk[0], dm10a)
+        ek -= numpy.einsum('yil,xli->xy', vk[1], dm10b)
+        if with_sso:
+            ej = numpy.einsum('yij,xji->xy', vj[0]+vj[1], dm10a-dm10b)
 # ~ <H^{01},MO^1> = - Tr(Im[H^{01}],Im[MO^1])
-        gpara2e -= sso_qed_fac * (ej - ek)
-    if gobj.soo:
-        ej = numpy.einsum('yij,xji->xy', vj[0]-vj[1], dm10a+dm10b)
-        gpara2e -= 2 * (ej - ek)
+            gpara2e -= sso_qed_fac * (ej - ek)
+        if with_soo:
+            ej = numpy.einsum('yij,xji->xy', vj[0]-vj[1], dm10a+dm10b)
+            gpara2e -= 2 * (ej - ek)
+    else:  # SOMF, see JCP 122, 034107 Eq (19)
+        ej = numpy.einsum('yij,xji->xy', vj[0]+vj[1], dm10a-dm10b)
+        ek = numpy.einsum('yil,xli->xy', vk[0]+vk[1], dm10a-dm10b)
+        gpara2e -= ej - 1.5 * ek
     gpara2e *= (alpha2/4) / effspin / muB
-    return gpara2e
-
-# SOMF of JCP 122, 034107 (in testing)
-def make_para_soc2e_Neese(gobj, dm0, dm10, sso_qed_fac=1):
-    mol = gobj.mol
-    alpha2 = lib.param.ALPHA ** 2
-    effspin = mol.spin * .5
-    muB = .5  # Bohr magneton
-    sso_qed_fac = lib.param.G_ELECTRON / 2
-
-    mol = gobj.mol
-    vj, vk = get_jk_soc(mol, dm0)
-
-    dm10a, dm10b = dm10
-    ek  = numpy.einsum('yil,xli->xy', vk[0], dm10a)
-    ek -= numpy.einsum('yil,xli->xy', vk[1], dm10b)
-    ej = numpy.einsum('yij,xji->xy', vj[0]+vj[1], dm10a-dm10b)
-    gpara2e = 0
-    gpara2e -= ej
-    gpara2e += ek * 3
-    gpara2e *= (alpha2/4) / effspin / muB
+    if gobj.verbose >= logger.INFO:
+        _write(gobj, align(gpara2e)[0], 'SOC(2e)/OZ')
     return gpara2e
 
 
 def para_for_debug(gobj, mo10, mo_coeff, mo_occ, qed_fac=1):
-    #assert(not ((gobj.sso or gobj.soo) and gobj.so_eff_charge))
     mol = gobj.mol
     effspin = mol.spin * .5
     muB = .5  # Bohr magneton
@@ -266,7 +262,7 @@ def para_for_debug(gobj, mo10, mo_coeff, mo_occ, qed_fac=1):
     if gobj.verbose >= logger.INFO:
         _write(gobj, align(gpara1e)[0], 'SOC(1e)/OZ')
 
-    if gobj.para_soc2e and (gobj.sso or gobj.soo):
+    if gobj.para_soc2e:
         h1aa, h1bb = make_h01_soc2e(gobj, mo_coeff, mo_occ, qed_fac)
         gpara2e =-numpy.einsum('xji,yij->xy', dm10a, h1aa)
         gpara2e-= numpy.einsum('xji,yij->xy', dm10b, h1bb)
@@ -287,7 +283,7 @@ def make_h01_soc1e(gobj, mo_coeff, mo_occ, qed_fac=1):
 
 # hso1e is the imaginary part of [i sigma dot pV x p]
 # JCP, 122, 034107 Eq (2) = 1/4c^2 hso1e
-    if gobj.so_eff_charge or not gobj.para_soc2e:
+    if gobj.so_eff_charge:
         hso1e = 0
         for ia in range(mol.natm):
             Z = koseki_charge(mol.atom_charge(ia))
@@ -298,7 +294,8 @@ def make_h01_soc1e(gobj, mo_coeff, mo_occ, qed_fac=1):
     hso1e *= qed_fac * (alpha2/4)
     return hso1e
 
-def get_jk_soc(mol, dm0):
+def get_jk(mol, dm0):
+    # K_{pq} = (pi|iq) + (iq|pi)
     vj, vk, vk1 = _vhf.direct_mapdm(mol._add_suffix('int2e_p1vxp1'),
                                     'a4ij', ('lk->s2ij', 'jk->s1il', 'li->s1kj'),
                                     dm0, 3, mol._atm, mol._bas, mol._env)
@@ -308,6 +305,38 @@ def get_jk_soc(mol, dm0):
     vk += vk1
     return vj, vk
 
+def get_jk_amfi(mol, dm0):
+    '''Atomic-mean-field approximation'''
+    dma, dmb = dm0
+    ao_loc = mol.ao_loc_nr()
+    nao = ao_loc[-1]
+    vj = numpy.zeros((2,3,nao,nao))
+    vk = numpy.zeros((2,3,nao,nao))
+    atom = copy.copy(mol)
+    aoslice = mol.aoslice_by_atom(ao_loc)
+    for ia in range(mol.natm):
+        symb = mol.atom_symbol(ia)
+        b0, b1, p0, p1 = aoslice[ia]
+        atom._bas = mol._bas[b0:b1]
+        vj1, vk1 = get_jk(atom, (dma[p0:p1,p0:p1],dmb[p0:p1,p0:p1]))
+        vj[:,:,p0:p1,p0:p1] = vj1
+        vk[:,:,p0:p1,p0:p1] = vk1
+    return vj, vk
+
+def get_j(mol, dm0):
+    vj = _vhf.direct_mapdm(mol._add_suffix('int2e_p1vxp1'),
+                           'a4ij', 'lk->s2ij',
+                           dm0, 3, mol._atm, mol._bas, mol._env)
+    for i in range(3):
+        lib.hermi_triu(vj[0,i], hermi=2, inplace=True)
+        lib.hermi_triu(vj[1,i], hermi=2, inplace=True)
+    return vj
+
+def get_j_amfi(mol, dm0):
+    '''Atomic-mean-field approximation'''
+    return get_jk_amfi(mol, dm0)[0]
+
+
 # hso2e is the imaginary part of SSO
 # SSO term of JCP, 122, 034107 Eq (3) = 1/4c^2 hso2e
 def make_h01_soc2e(gobj, mo_coeff, mo_occ, sso_qed_fac=1):
@@ -316,19 +345,19 @@ def make_h01_soc2e(gobj, mo_coeff, mo_occ, sso_qed_fac=1):
     #sso_qed_fac = (lib.param.G_ELECTRON - 1)
 
     dm0 = gobj._scf.make_rdm1(mo_coeff, mo_occ)
-    vj, vk = get_jk_soc(mol, dm0)
+    vj, vk = get_jk(mol, dm0)
 
     vjaa = 0
     vjbb = 0
     vkaa = 0
     vkbb = 0
-    if gobj.sso:
+    if 'SSO' in gobj.para_soc2e.upper():
         vj1 = vj[0] + vj[1]
         vjaa += vj1 * sso_qed_fac
         vjbb -= vj1 * sso_qed_fac
         vkaa += vk[0] * sso_qed_fac
         vkbb -= vk[1] * sso_qed_fac
-    if gobj.soo:
+    if 'SOO' in gobj.para_soc2e.upper():
         vj1 = vj[0] - vj[1]
         vjaa += vj1 * 2
         vjbb += vj1 * 2
@@ -377,13 +406,33 @@ def _write(gobj, gtensor, title):
 
 
 class GTensor(uhf_nmr.NMR):
-    '''dE = B dot gtensor dot s'''
+    '''dE = B dot gtensor dot s
+
+    Attributes:
+        dia_soc2e : str or bool
+            2-electron spin-orbit coupling for diamagnetic term. Its value can
+            be 'SSO', 'SOO', 'SSO+SOO', None/False or True (='SSO+SOO').
+            Default is False.
+        para_soc2e : str or bool
+            2-electron spin-orbit coupling for paramagnetic term.  Its value
+            can be 'SSO', 'SOO', 'SSO+SOO', None/False, True (='SSO+SOO')
+            'SOMF', 'AMFI' (='AMFI+SSO+SOO'), 'SOMF+AMFI', 'AMFI+SSO',
+            'AMFI+SOO', 'AMFI+SSO+SOO'.  Default is 'SSO+SOO'.
+        koseki_charge : bool
+            Whether to use Koseki effective SOC charge in 1-electron
+            diamagnetic term and paramagnetic term.  Default is False.
+    '''
     def __init__(self, scf_method):
-        self.dia_soc2e = False  # Two-electron spin-orbit coupling
-        self.para_soc2e = True  # Two-electron spin-orbit coupling
-        self.sso = True  # Two-electron spin-same-orbit coupling
-        self.soo = True  # Two-electron spin-other-orbit coupling
-        self.so_eff_charge = False  # Koseki effective SOC charge
+        # dia_soc2e is 2-electron spin-orbit coupling for diamagnetic term
+        # dia_soc2e can be 'SSO', 'SOO', 'SSO+SOO', None/False, True (='SSO+SOO')
+        self.dia_soc2e = False
+        # para_soc2e is 2-electron spin-orbit coupling for paramagnetic term
+        # para_soc2e can be 'SSO', 'SOO', 'SSO+SOO', None/False, True (='SSO+SOO')
+        # 'SOMF', 'AMFI' (='AMFI+SSO+SOO'), 'SOMF+AMFI', 'AMFI+SSO',
+        # 'AMFI+SOO', 'AMFI+SSO+SOO'
+        self.para_soc2e = 'SSO+SOO'
+        # Koseki effective SOC charge
+        self.so_eff_charge = False
         self.mb = False   # corresponding to RMB basis (DO NOT use, in testing)
         uhf_nmr.NMR.__init__(self, scf_method)
 
@@ -402,8 +451,6 @@ class GTensor(uhf_nmr.NMR):
             log.info('CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
         logger.info(self, 'dia_soc2e = %s', self.dia_soc2e)
         logger.info(self, 'para_soc2e = %s', self.para_soc2e)
-        logger.info(self, 'sso = %s (2e spin-same-orbit coupling)', self.sso)
-        logger.info(self, 'soo = %s (2e spin-other-orbit coupling)', self.soo)
         logger.info(self, 'so_eff_charge = %s (1e SO effective charge)',
                     self.so_eff_charge)
         return self
@@ -458,8 +505,8 @@ if __name__ == '__main__':
                 basis='ccpvdz', spin=1, charge=1, verbose=3)
     mf = scf.newton(scf.UHF(mol)).run()
     gobj = GTensor(mf)
-    gobj.sso = True
-    gobj.soo = True
+    gobj.para_soc2e = 'SSO+SOO'
+    gobj.dia_soc2e = None
     gobj.so_eff_charge = False
     gobj.gauge_orig = (0,0,0)
     print(gobj.align(gobj.kernel())[0])
@@ -482,8 +529,8 @@ if __name__ == '__main__':
     mf = scf.UHF(mol).run()
     gobj = GTensor(mf)
     #print(gobj.kernel())
-    gobj.sso = True
-    gobj.soo = True
+    gobj.para_soc2e = 'SSO+SOO'
+    gobj.dia_soc2e = None
     gobj.so_eff_charge = False
     nao, nmo = mf.mo_coeff[0].shape
     nelec = mol.nelec

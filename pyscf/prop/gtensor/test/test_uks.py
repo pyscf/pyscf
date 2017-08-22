@@ -35,6 +35,7 @@ class KnowValues(unittest.TestCase):
         mf1 = copy.copy(mf)
         mf1.xc = 'lda,vwn'
         g = gtensor.uks.GTensor(mf1)
+        g.para_soc2e = 'SSO'
         dat = g.make_para_soc2e(dm0, dm1, 1)
         self.assertAlmostEqual(lib.finger(dat), -0.008807083583654644, 9)
 
@@ -42,6 +43,7 @@ class KnowValues(unittest.TestCase):
         mf1 = copy.copy(mf)
         mf1.xc = 'bp86'
         g = gtensor.uks.GTensor(mf1)
+        g.para_soc2e = 'SSO'
         dat = g.make_para_soc2e(dm0, dm1, 1)
         self.assertAlmostEqual(lib.finger(dat), -0.0088539747015796387, 9)
 
@@ -49,17 +51,18 @@ class KnowValues(unittest.TestCase):
         mf1 = copy.copy(mf)
         mf1.xc = 'b3lyp'
         g = gtensor.uks.GTensor(mf1)
+        g.para_soc2e = 'SSO'
         dat = g.make_para_soc2e(dm0, dm1, 1)
         self.assertAlmostEqual(lib.finger(dat), -0.103162219789111, 9)
 
     def test_nr_uks(self):
         g = gtensor.uhf.GTensor(mf)
-        g.dia_soc2e = False
-        g.para_soc2e = True
+        g.dia_soc2e = None
+        g.para_soc2e = 'SSO+SOO'
         g.so_eff_charge = True
         g.cphf = False
-        dat = g.kernel()
-        self.assertAlmostEqual(lib.finger(dat), 0.40013028270603912, 7)
+        dat = g.align(g.kernel())[0]
+        self.assertAlmostEqual(lib.finger(dat), 0.39806613807209507, 7)
 
 
 if __name__ == "__main__":

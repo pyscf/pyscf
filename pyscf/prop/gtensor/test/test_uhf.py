@@ -22,12 +22,12 @@ def make_dia_gc2e(gobj, dm0, gauge_orig, sso_qed_fac=1):
         gc2e_ri = mol.intor('int2e_ip1v_rc1', comp=9, aosym='s1').reshape(3,3,nao,nao,nao,nao)
     ej = numpy.zeros((3,3))
     ek = numpy.zeros((3,3))
-    if gobj.sso:
+    if isinstance(gobj.para_soc2e, str) and 'SSO' in gobj.dia_soc2e.upper():
         # spin-density should be contracted to electron 1 (associated to operator r_i)
         ej += sso_qed_fac * numpy.einsum('xyijkl,ji,lk->xy', gc2e_ri, dma-dmb, dma+dmb)
         ek += sso_qed_fac * numpy.einsum('xyijkl,jk,li->xy', gc2e_ri, dma, dma)
         ek -= sso_qed_fac * numpy.einsum('xyijkl,jk,li->xy', gc2e_ri, dmb, dmb)
-    if gobj.soo:
+    if isinstance(gobj.para_soc2e, str) and 'SOO' in gobj.dia_soc2e.upper():
         # spin-density should be contracted to electron 2
         ej += 2 * numpy.einsum('xyijkl,ji,lk->xy', gc2e_ri, dma+dmb, dma-dmb)
         ek += 2 * numpy.einsum('xyijkl,jk,li->xy', gc2e_ri, dma, dma)
@@ -44,11 +44,11 @@ def make_dia_gc2e(gobj, dm0, gauge_orig, sso_qed_fac=1):
         giao2e = giao2e1 + giao2e2.transpose(1,0,2,3,4,5)
         ej = numpy.zeros((3,3))
         ek = numpy.zeros((3,3))
-        if gobj.sso:
+        if isinstance(gobj.para_soc2e, str) and 'SSO' in gobj.dia_soc2e.upper():
             ej += sso_qed_fac * numpy.einsum('xyijkl,ji,lk->xy', giao2e, dma-dmb, dma+dmb)
             ek += sso_qed_fac * numpy.einsum('xyijkl,jk,li->xy', giao2e, dma, dma)
             ek -= sso_qed_fac * numpy.einsum('xyijkl,jk,li->xy', giao2e, dmb, dmb)
-        if gobj.soo:
+        if isinstance(gobj.para_soc2e, str) and 'SOO' in gobj.dia_soc2e.upper():
             ej += 2 * numpy.einsum('xyijkl,ji,lk->xy', giao2e, dma+dmb, dma-dmb)
             ek += 2 * numpy.einsum('xyijkl,jk,li->xy', giao2e, dma, dma)
             ek -= 2 * numpy.einsum('xyijkl,jk,li->xy', giao2e, dmb, dmb)
@@ -85,14 +85,14 @@ def make_para_soc2e(gobj, dm0, dm10, sso_qed_fac=1):
     hso2e = mol.intor('int2e_p1vxp1', 3).reshape(3,nao,nao,nao,nao)
     ej = numpy.zeros((3,3))
     ek = numpy.zeros((3,3))
-    if gobj.sso:
+    if isinstance(gobj.para_soc2e, str) and 'SSO' in gobj.para_soc2e.upper():
         ej += sso_qed_fac * numpy.einsum('yijkl,ji,xlk->xy', hso2e, dm0a-dm0b, dm10a+dm10b)
         ej += sso_qed_fac * numpy.einsum('yijkl,xji,lk->xy', hso2e, dm10a-dm10b, dm0a+dm0b)
         ek += sso_qed_fac * numpy.einsum('yijkl,jk,xli->xy', hso2e, dm0a, dm10a)
         ek -= sso_qed_fac * numpy.einsum('yijkl,jk,xli->xy', hso2e, dm0b, dm10b)
         ek += sso_qed_fac * numpy.einsum('yijkl,xjk,li->xy', hso2e, dm10a, dm0a)
         ek -= sso_qed_fac * numpy.einsum('yijkl,xjk,li->xy', hso2e, dm10b, dm0b)
-    if gobj.soo:
+    if isinstance(gobj.para_soc2e, str) and 'SOO' in gobj.para_soc2e.upper():
         ej += 2 * numpy.einsum('yijkl,ji,xlk->xy', hso2e, dm0a+dm0b, dm10a-dm10b)
         ej += 2 * numpy.einsum('yijkl,xji,lk->xy', hso2e, dm10a+dm10b, dm0a-dm0b)
         ek += 2 * numpy.einsum('yijkl,jk,xli->xy', hso2e, dm0a, dm10a)
@@ -131,8 +131,8 @@ dm1 = dm1 - dm1.transpose(0,1,3,2)
 class KnowValues(unittest.TestCase):
     def test_nr_common_gauge_dia_gc2e(self):
         g = gtensor.uhf.GTensor(nrhf)
-        g.sso = True
-        g.soo = True
+        g.dia_soc2e = 'SSO+SOO'
+        g.para_soc2e = 'SSO+SOO'
         g.mb = True
         ref = make_dia_gc2e(g, dm0, (1.2, .3, .5), 1)
         dat = g.make_dia_gc2e(dm0, (1.2, .3, .5), 1)
@@ -140,8 +140,8 @@ class KnowValues(unittest.TestCase):
 
     def test_nr_giao_dia_gc2e(self):
         g = gtensor.uhf.GTensor(nrhf)
-        g.sso = True
-        g.soo = True
+        g.dia_soc2e = 'SSO+SOO'
+        g.para_soc2e = 'SSO+SOO'
         g.mb = True
         ref = make_dia_gc2e(g, dm0, None, 1)
         dat = g.make_dia_gc2e(dm0, None, 1)
@@ -155,15 +155,13 @@ class KnowValues(unittest.TestCase):
 
     def test_nr_uhf(self):
         g = gtensor.uhf.GTensor(nrhf)
-        g.dia_soc2e = False
-        g.para_soc2e = True
-        g.sso = True
-        g.soo = True
+        g.dia_soc2e = 'SSO+SOO'
+        g.para_soc2e = 'SSO+SOO'
         g.so_eff_charge = True
         g.cphf = False
         g.mb = True
-        dat = g.kernel()
-        self.assertAlmostEqual(lib.finger(dat), 0.40259534874549269, 7)
+        dat = g.align(g.kernel())[0]
+        self.assertAlmostEqual(lib.finger(dat), 0.40262374347785462, 7)
 
 
 if __name__ == "__main__":

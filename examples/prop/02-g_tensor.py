@@ -13,18 +13,28 @@ gobj.kernel()
 
 #
 # 2-electron SOC (SSO+SOO) is enabled for para-magnetic term by default.  Its
-# contributions can be controlled by attributes dia_soc2e, para_soc2e, sso, soo
+# contributions can be controlled by attributes dia_soc2e, para_soc2e
 #
-gobj.dia_soc2e = True
-gobj.para_soc2e = True
+gobj.dia_soc2e = 'SSO+SOO'
+gobj.para_soc2e = 'SSO+SOO'
 gobj.so_eff_charge = True
 gobj.kernel()
 
 
-gobj.dia_soc2e = True
-gobj.para_soc2e = True
-gobj.sso = True
-gobj.soo = False
+gobj.dia_soc2e = None
+gobj.para_soc2e = 'SSO'
+gobj.so_eff_charge = True
+gobj.kernel()
+
+
+gobj.dia_soc2e = None
+gobj.para_soc2e = 'SOMF'
+gobj.so_eff_charge = True
+gobj.kernel()
+
+
+gobj.dia_soc2e = None
+gobj.para_soc2e = 'AMFI+SOMF'
 gobj.so_eff_charge = True
 gobj.kernel()
 
@@ -34,20 +44,9 @@ gobj.kernel()
 # 1-electron SOC integrals.  By default effective charge is used in
 # diamagnetic term but not in paramagnetic term.
 #
-gobj.dia_soc2e = False
-gobj.para_soc2e = False
+gobj.dia_soc2e = None
+gobj.para_soc2e = None
 gobj.so_eff_charge = True
-gobj.kernel()
-
-
-#
-# When 2e SOC is switched off (dia_soc2e, para_so2e), the effective charge
-# will be used in 1e SOC integrals automatically.  The following calculation
-# is the same to the previous one.
-#
-gobj.dia_soc2e = False
-gobj.para_soc2e = False
-gobj.so_eff_charge = False
 gobj.kernel()
 
 

@@ -16,7 +16,7 @@ Refs:
 from functools import reduce
 import numpy
 from pyscf import lib
-from pyscf.scf import _vhf
+from pyscf.lib import logger
 from pyscf.dft import numint
 from pyscf.prop.gtensor import uhf as uhf_g
 from pyscf.prop.gtensor.uhf import _write, align
@@ -24,7 +24,6 @@ from pyscf.prop.gtensor.uhf import _write, align
 
 # Note mo10 is the imaginary part of MO^1
 def para(gobj, mo10, mo_coeff, mo_occ, qed_fac=1):
-    #assert(not ((gobj.sso or gobj.soo) and gobj.so_eff_charge))
     mol = gobj.mol
     effspin = mol.spin * .5
     muB = .5  # Bohr magneton
@@ -56,6 +55,19 @@ def para(gobj, mo10, mo_coeff, mo_occ, qed_fac=1):
 
 
 def make_para_soc2e(gobj, dm0, dm10, sso_qed_fac=1):
+    if isinstance(gobj.para_soc2e, str):
+        with_sso = 'SSO' in gobj.para_soc2e.upper()
+        with_soo = 'SOO' in gobj.para_soc2e.upper()
+        with_somf = 'SOMF' in gobj.para_soc2e.upper()
+        with_amfi = 'AMFI' in gobj.para_soc2e.upper()
+        assert(not (with_somf and (with_sso or with_soo)))
+    elif gobj.para_soc2e:
+        with_sso = with_soo = True
+        with_somf = with_amfi = False
+    else:
+        with_sso = with_soo = with_somf = False
+        with_amfi = True
+
     mol = gobj.mol
     alpha2 = lib.param.ALPHA ** 2
     effspin = mol.spin * .5
@@ -70,32 +82,51 @@ def make_para_soc2e(gobj, dm0, dm10, sso_qed_fac=1):
     v1 = get_vxc_soc(ni, mol, mf.grids, mf.xc, dm0,
                      max_memory=max_memory, verbose=gobj.verbose)
     dm10a, dm10b = dm10
-    ej  = numpy.einsum('yil,xli->xy', v1[0], dm10a)
-    ej -= numpy.einsum('yil,xli->xy', v1[1], dm10b)
-    #ej *= -2  #Veff(-2X) approximation of JCP 122 034107
-    if abs(hyb) > 1e-10:
-        vj, vk = uhf_g.get_jk_soc(mol, dm0)
-        ek  = numpy.einsum('yil,xli->xy', vk[0], dm10a)
-        ek -= numpy.einsum('yil,xli->xy', vk[1], dm10b)
-        ej += numpy.einsum('yij,xji->xy', vj[0]+vj[1], dm10a-dm10b)
+    if with_somf:
+        ej = numpy.einsum('yil,xli->xy', v1[0]+v1[1], dm10a-dm10b)
     else:
-        vj = _vhf.direct_mapdm(mol._add_suffix('int2e_p1vxp1'),
-                               'a4ij', 'lk->s2ij',
-                               dm0, 3, mol._atm, mol._bas, mol._env)
-        for i in range(3):
-            lib.hermi_triu(vj[0,i], hermi=2, inplace=True)
-            lib.hermi_triu(vj[1,i], hermi=2, inplace=True)
-        ej += numpy.einsum('yij,xji->xy', vj[0]+vj[1], dm10a-dm10b)
-        ek = 0
+        ej  = numpy.einsum('yil,xli->xy', v1[0], dm10a)
+        ej -= numpy.einsum('yil,xli->xy', v1[1], dm10b)
+    #ej *= -2  #Veff(-2X) approximation of JCP 122 034107
 
-# Different approximations for the spin operator part are used in
-# JCP, 122, 034107 Eq (15) and JCP, 115, 11080 Eq (34).  The spin-averaging
-# approximation in JCP, 122, 034107 Eq (15) is not well documented and its
-# effects are not fully tested.  Approximation of JCP, 115, 11080 Eq (34) is
-# used here.
-# ~ <H^{01},MO^1> = - Tr(Im[H^{01}],Im[MO^1])
-    gpara2e = -sso_qed_fac * (ej - ek * hyb)
+    gpara2e = 0
+    if abs(hyb) > 1e-10:
+        if with_amfi:
+            vj, vk = uhf_g.get_jk_amfi(mol, dm0)
+        else:
+            vj, vk = uhf_g.get_jk(mol, dm0)
+        if with_sso or with_soo:
+            ek  = numpy.einsum('yil,xli->xy', vk[0], dm10a)
+            ek -= numpy.einsum('yil,xli->xy', vk[1], dm10b)
+            if with_sso:
+                ej += numpy.einsum('yij,xji->xy', vj[0]+vj[1], dm10a-dm10b)
+                gpara2e -= sso_qed_fac * (ej - hyb * ek)
+            if with_soo:
+                ej += numpy.einsum('yij,xji->xy', vj[0]-vj[1], dm10a+dm10b)
+                gpara2e -= 2 * (ej - hyb * ek)
+        else:  # SOMF, see JCP 122, 034107 Eq (19)
+            ej += numpy.einsum('yij,xji->xy', vj[0]+vj[1], dm10a-dm10b)
+            ek  = numpy.einsum('yil,xli->xy', vk[0]+vk[1], dm10a-dm10b)
+            gpara2e -= ej - 1.5 * hyb * ek
+    else:
+        if with_amfi:
+            vj = uhf_g.get_j_amfi(mol, dm0)
+        else:
+            vj = uhf_g.get_j(mol, dm0)
+        if with_sso or with_soo:
+            if with_sso:
+                ej += numpy.einsum('yij,xji->xy', vj[0]+vj[1], dm10a-dm10b)
+                gpara2e -= sso_qed_fac * ej
+            if with_soo:
+                ej += numpy.einsum('yij,xji->xy', vj[0]-vj[1], dm10a+dm10b)
+                gpara2e -= 2 * ej
+        else:  # SOMF, see JCP 122, 034107 Eq (19)
+            ej += numpy.einsum('yij,xji->xy', vj[0]+vj[1], dm10a-dm10b)
+            gpara2e -= ej
+
     gpara2e *= (alpha2/4) / effspin / muB
+    if gobj.verbose >= logger.INFO:
+        _write(gobj, align(gpara2e)[0], 'SOC(2e)/OZ')
     return gpara2e
 
 
@@ -193,7 +224,7 @@ class GTensor(uhf_g.GTensor):
     def __init__(self, scf_method):
         uhf_g.GTensor.__init__(self, scf_method)
         self.dia_soc2e = False
-        self.para_soc2e = True
+        self.para_soc2e = 'AMFI+SSO+SOO'
 
     def para(self, mo10=None, mo_coeff=None, mo_occ=None):
         if mo_coeff is None: mo_coeff = self._scf.mo_coeff
@@ -227,8 +258,8 @@ if __name__ == '__main__':
     mf = scf.UKS(mol).set(xc='bp86').run()
     gobj = GTensor(mf)
     #print(gobj.kernel())
-    gobj.sso = True
-    gobj.soo = True
+    gobj.para_soc2e = 'SSO'
+    gobj.dia_soc2e = None
     gobj.so_eff_charge = False
     nao, nmo = mf.mo_coeff[0].shape
     nelec = mol.nelec

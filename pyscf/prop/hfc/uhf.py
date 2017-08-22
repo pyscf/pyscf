@@ -22,7 +22,7 @@ from pyscf.prop.ssc import uhf as uhf_ssc
 from pyscf.prop.ssc.parameters import get_nuc_g_factor
 from pyscf.prop.ssc.rhf import _dm1_mo2ao
 from pyscf.prop.zfs.uhf import koseki_charge
-from pyscf.prop.gtensor.uhf import align, get_jk_soc
+from pyscf.prop.gtensor.uhf import align, get_jk
 
 def make_fcsd(hfcobj, dm0, hfc_nuc=None, verbose=None):
     log = logger.new_logger(hfcobj, verbose)
@@ -136,18 +136,18 @@ def make_h1_soc(hfcobj, dm0):
     '''
 # JCP, 122, 034107 Eq (2) = 1/4c^2 hso1e
     mol = hfcobj.mol
-    if hfcobj.so_eff_charge or not hfcobj.para_soc2e:
+    assert(not mol.has_ecp())
+    if hfcobj.so_eff_charge:
         hso1e = 0
         for ia in range(mol.natm):
             mol.set_rinv_origin(mol.atom_coord(ia))
-            #FIXME: when ECP is enabled
             Z = koseki_charge(mol.atom_charge(ia))
             hso1e += -Z * mol.intor('int1e_prinvxp', 3)
     else:
         hso1e = mol.intor('int1e_pnucxp', 3)
     hso = [hso1e, -hso1e]
 
-    if hfcobj.para_soc2e and (hfcobj.sso or hfcobj.soo):
+    if hfcobj.para_soc2e:
         hso2e = hfcobj.make_h1_soc2e(dm0)
         hso[0] += hso2e[0]
         hso[1] += hso2e[1]
@@ -157,18 +157,18 @@ def make_h1_soc(hfcobj, dm0):
 # Note the (-) sign of beta-beta block is included in the integral
 def make_h1_soc2e(hfcobj, dm0):
     mol = hfcobj.mol
-    vj, vk = get_jk_soc(mol, dm0)
+    vj, vk = get_jk(mol, dm0)
     vjaa = 0
     vjbb = 0
     vkaa = 0
     vkbb = 0
-    if hfcobj.sso:
+    if 'SSO' in hfcobj.para_soc2e.upper():
         vj1 = vj[0] + vj[1]
         vjaa += vj1
         vjbb -= vj1
         vkaa += vk[0]
         vkbb -= vk[1]
-    if hfcobj.soo:
+    if 'SOO' in hfcobj.para_soc2e.upper():
         vj1 = vj[0] - vj[1]
         vjaa += vj1 * 2
         vjbb += vj1 * 2
@@ -190,9 +190,10 @@ def _write(hfcobj, tensor, title):
 class HyperfineCoupling(uhf_ssc.SSC):
     '''dE = I dot gtensor dot s'''
     def __init__(self, scf_method):
-        self.para_soc2e = True  # Two-electron spin-orbit coupling
-        self.sso = True  # Two-electron spin-same-orbit coupling
-        self.soo = True  # Two-electron spin-other-orbit coupling
+        # para_soc2e can be 'SSO', 'SOO', 'SSO+SOO', None/False, True (='SSO+SOO')
+        # 'SOMF', 'AMFI' (='AMFI+SSO+SOO'), 'SOMF+AMFI', 'AMFI+SSO',
+        # 'AMFI+SOO', 'AMFI+SSO+SOO'
+        self.para_soc2e = 'SSO+SOO'
         self.so_eff_charge = False  # Koseki effective SOC charge
         self.hfc_nuc = range(scf_method.mol.natm)
         uhf_nmr.NMR.__init__(self, scf_method)
@@ -206,8 +207,6 @@ class HyperfineCoupling(uhf_ssc.SSC):
             logger.info(self, 'CPHF conv_tol = %g', self.conv_tol)
             logger.info(self, 'CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
         logger.info(self, 'para_soc2e = %s', self.para_soc2e)
-        logger.info(self, 'sso = %s (2e spin-same-orbit coupling)', self.sso)
-        logger.info(self, 'soo = %s (2e spin-other-orbit coupling)', self.soo)
         logger.info(self, 'so_eff_charge = %s (1e SO effective charge)',
                     self.so_eff_charge)
         if not self._scf.converged:
@@ -247,18 +246,16 @@ if __name__ == '__main__':
     mf = scf.UHF(mol).run()
     hfc = HFC(mf)
     #hfc.verbose = 4
-    hfc.sso = True
-    hfc.soo = True
+    hfc.para_soc2e = 'SSO+SOO'
     hfc.so_eff_charge = False
-    print(lib.finger(hfc.kernel()),)
+    print(lib.finger(hfc.kernel()) - 1230.8972071813887)
 
     mol = gto.M(atom='C 0 0 0; O 0 0 1.12',
                 basis='ccpvdz', spin=1, charge=1, verbose=3)
     mf = scf.UHF(mol).run()
     hfc = HFC(mf)
     #hfc.verbose = 4
-    hfc.sso = True
-    hfc.soo = True
+    hfc.para_soc2e = 'SSO+SOO'
     hfc.so_eff_charge = False
     print(lib.finger(hfc.kernel()) - 323.96293610190781)
 
@@ -293,8 +290,7 @@ if __name__ == '__main__':
     numpy.random.seed(1)
     dm0 = numpy.random.random((2,nao,nao))
     dm0 = dm0 + dm0.transpose(0,2,1)
-    hfc.sso = True
-    hfc.soo = True
+    hfc.para_soc2e = 'SSO+SOO'
     hfc.so_eff_charge = False
     h1a, h1b = make_h1_soc(hfc, dm0)
     print(lib.finger(h1a) - -13.574938902220254)
