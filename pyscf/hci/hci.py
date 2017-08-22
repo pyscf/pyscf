@@ -591,12 +591,12 @@ def fix_spin(myci, shift=.2, ss=None, **kwargs):
             tmp = ci2.copy()
             tmp -= ss * civec
             ci2 = -ss * tmp
-            ci2 += myci.contract_ss(tmp, norb, nelec)
+            ci2 += myci.contract_ss(as_SCIvector_if_not(tmp, strs), norb, nelec)
             tmp = None
         ci2 *= shift
         ci1 += ci2
 
-        return ci1
+        return as_SCIvector_if_not(ci1, strs)
 
     myci.contract_2e = contract_2e
     return myci
@@ -737,7 +737,7 @@ class SelectedCI(direct_spin1.FCISolver):
 
     def make_hdiag(self, h1e, eri, strs, norb, nelec):
         return make_hdiag(h1e, eri, strs, norb, nelec)
- 
+
     def to_fci(self, civec, norb, nelec):
 
         if hasattr(civec, '_strs'):
@@ -761,6 +761,8 @@ class SelectedCI(direct_spin1.FCISolver):
     enlarge_space = enlarge_space
     kernel = kernel_float_space
 
+SCI = SelectedCI
+
 
 class _SCIvector(numpy.ndarray):
     def __array_finalize__(self, obj):
@@ -780,8 +782,8 @@ def as_SCIvector_if_not(civec, ci_strs):
 if __name__ == '__main__':
     numpy.random.seed(3)
     strs = (numpy.random.random((14,3)) * 4).astype(numpy.uint64)
-    print strs
-    print argunique(strs)
+    print(strs)
+    print(argunique(strs))
 
     norb = 6
     nelec = 3,3
@@ -806,7 +808,7 @@ if __name__ == '__main__':
     myci.ci_coeff_cutoff = .001
 
     ci2 = enlarge_space(myci, ci1, h1, eri, jk, eri_sorted, jk_sorted, norb, nelec)
-    print len(ci2[0])
+    print(len(ci2[0]))
 
     ci2 = enlarge_space(myci, ci1, h1, eri, jk, eri_sorted, jk_sorted, norb, nelec)
     numpy.random.seed(1)
@@ -823,7 +825,7 @@ if __name__ == '__main__':
     h2e = direct_spin1.absorb_h1e(h1, eri, norb, nelec, .5)
     fci4 = direct_spin1.contract_2e(h2e, fci3, norb, nelec)
     fci4 = from_fci(fci4, ci3[0]._strs, norb, nelec)
-    print abs(ci4-fci4).sum()
+    print(abs(ci4-fci4).sum())
 
     e = myci.kernel(h1, eri, norb, nelec, verbose=5)[0]
-    print e, efci
+    print(e, efci)

@@ -21,6 +21,13 @@ def to_berny_geom(mol):
 def geom_to_atom(geom):
     return list(geom)
 
+def to_berny_log(pyscf_log):
+    class BernyLogger(Logger):
+        def __call__(self, msg, level=0):
+            if level >= -self.verbosity:
+                pyscf_log.info('%d %s', self.n, msg)
+    return BernyLogger()
+
 def as_berny_solver(method):
     '''Generate a solver for berny optimize function.
     '''
@@ -37,7 +44,14 @@ def optimize(method, **kwargs):
     '''Optimize the geometry with the given method.
     '''
     mol = copy.copy(method.mol)
-    geom = optimize_berny(as_berny_solver(method), to_berny_geom(mol), **kwargs)
+    if 'log' in kwargs:
+        log = lib.logger.new_logger(method, kwargs['log'])
+    elif 'verbose' in kwargs:
+        log = lib.logger.new_logger(method, kwargs['verbose'])
+    else:
+        log = lib.logger.new_logger(method)
+    geom = optimize_berny(as_berny_solver(method), to_berny_geom(mol),
+                          log=to_berny_log(log), **kwargs)
     mol.set_geom_(geom_to_atom(geom))
     return mol
 kernel = optimize

@@ -574,7 +574,7 @@ class FCISolver(lib.StreamObject):
         return make_hdiag(h1e, eri, norb, nelec)
 
     @lib.with_doc(pspace.__doc__)
-    def pspace(self, h1e, eri, norb, nelec, hdiag, np=400):
+    def pspace(self, h1e, eri, norb, nelec, hdiag=None, np=400):
         return pspace(h1e, eri, norb, nelec, hdiag, np)
 
     @lib.with_doc(contract_1e.__doc__)

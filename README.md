@@ -5,10 +5,10 @@
 Python-based Simulations of Chemistry Framework
 ===============================================
 
-2017-07-24
+2017-08-22
 
-* [1.4 alpha](https://github.com/sunqm/pyscf/tree/dev)
-* [Stable release 1.3.3](https://github.com/sunqm/pyscf/releases/tag/v1.3.3)
+* [1.4 beta](https://github.com/sunqm/pyscf/tree/master)
+* [Stable release 1.3.5](https://github.com/sunqm/pyscf/releases/tag/v1.3.5)
 * [Changelog](../master/CHANGELOG)
 * [Documentation](http://www.pyscf.org) ([PDF](http://www.sunqm.net/pyscf/files/pdf/PySCF-1.1.pdf))
 * [Installation](#installation)
@@ -34,8 +34,8 @@ Installation
 
   Note during the compilation, external libraries (libcint, libxc, xcfun) will
   be downloaded and installed.  If you want to disable the automatic
-  downloading, the [document](http://sunqm.github.io/pyscf/install.html#installation-without-network)
-  shows an instruction to manually build these packages.
+  downloading, this [document](http://sunqm.github.io/pyscf/install.html#installation-without-network)
+  is an instruction for manually building these packages.
 
 * To make python find pyscf, edit environment variable `PYTHONPATH`,
   e.g.  if pyscf is installed in /opt, your `PYTHONPATH` should be
@@ -75,6 +75,15 @@ Installation
         ExternalProject_Add(libcint
           GIT_REPOSITORY https://github.com/sunqm/qcint.git
           ...
+
+* Using pyberny (https://github.com/azag0/pyberny) as geometry optimizer.
+  After downloading pyberny
+
+      git clone https://github.com/azag0/pyberny /path/to/pyberny
+
+  edit the environment variable to make pyscf find pyberny
+
+      export PYTHONPATH=/path/to/pyberny:$PYTHONPATH
 
 
 Known problems

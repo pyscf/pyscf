@@ -392,11 +392,11 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         time1 = log.timer('grad of atom %d'%ia, *time1)
 
     de += rhf_grad.grad_nuc(mol)
-    log.note('CCSD gradinets')
-    log.note('==============')
+    log.note('--------------- CCSD gradients ---------------')
     log.note('           x                y                z')
     for k, ia in enumerate(atmlst):
         log.note('%d %s  %15.9f  %15.9f  %15.9f', ia, mol.atom_symbol(ia), *de[k])
+    log.note('----------------------------------------------')
     log.timer('CCSD gradients', *time0)
     fdm2 = None
     return de

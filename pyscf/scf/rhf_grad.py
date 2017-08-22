@@ -231,12 +231,12 @@ class Gradients(lib.StreamObject):
 
         de = self.grad_elec(mo_energy, mo_coeff, mo_occ, atmlst)
         self.de = de = de + self.grad_nuc(atmlst=atmlst)
-        logger.note(self, '--------------')
+        logger.note(self, '--------------- SCF gradients ----------------')
         logger.note(self, '           x                y                z')
         for k, ia in enumerate(atmlst):
             logger.note(self, '%d %s  %15.9f  %15.9f  %15.9f', ia,
                         self.mol.atom_symbol(ia), de[k,0], de[k,1], de[k,2])
-        logger.note(self, '--------------')
+        logger.note(self, '----------------------------------------------')
         logger.timer(self, 'SCF gradients', *cput0)
         return self.de
 

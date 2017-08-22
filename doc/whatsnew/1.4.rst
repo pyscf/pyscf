@@ -30,11 +30,25 @@ New features:
 * Many-body dispersion
 * MP2-F12 and F12 basis and F12 RI basis
 * Cartesian GTO (6d 10f) basis in molecular calculations
-* CP2K's HF pseudopotentials
+* CP2K's HF pseudopotential data
 * Frozen core MP2
 * Molecular electrostatic potential (MEP)
 * CPHF and UCPHF solver
 * Non-relativistic RHF, UHF 4-component UHF spin-spin coupling
+* Generalized Hartree-Fock (GHF)
+* Second order SCF solver for GHF
+* non-relativistic UHF, UKS g-tensor
+* non-relativistic UHF, UKS hyperfine coupling
+* SHCI interface to Dice program
+* spin-orbital CISD
+* UCISD and UCISD 1- and 2-RDM
+* Restricted CC2 method
+* Density-fitting CCSD
+* Heat-bath selected CI (HCI) spin-orbital 1- and 2-RDM
+* "scanner" function for HF, DFT and CCSD to simplify energy or gradients
+  scanning for systems of different geometry.
+* Interface to pyberny geometry optimizer (geometry optimization for RHF, RKS
+  and RCCSD are supported).
 
 Improvements:
 
@@ -49,13 +63,54 @@ Improvements:
 * Symmetry labels in orbital coefficients
 * Disk usage of integral transformation in MP2
 * Performance of J/K contractions in molecular density fitting code
-* Input gemoertry parser for ghost atoms
+* Input geometry parser for ghost atoms
+* U-CCSD(T) performance
+* ECP basis localization in Mulliken pop analysis
+* Changing the CASCI/CASSCF default FCI solver (the default solver will not
+  use spin symmetry for singlet state)
+* Supporting remove_linear_dep function to handle basis linear dependence in
+  k-point SCF
+* cell.rcut estimation for better integral accuracy
+* Convergence rates of PM localization
+* MP2 and RCISD integral transformation performance
+* Disk usage of CCSD-DIIS
+* Input basis parser to support union basis set (eg mol.basis=(bas1,bas2))
+* SCF initial guess for systems with pseudopotential (or ECP)
+* SCF initial guess for low-dimension PBC systems
+
+Bugfix:
+
+* PBC super cell function.  Atoms was missing on the super cell boundary
+* PBC dft atomic grids for low-dimension systems
+* The missing occ-vir blocks of Fock matrix in UCCSD
+* MGGA integration error
+* wfnsym of FCI solver for Dooh symmetry
+* In CIAH newton solver, the special treatment of negative hessian has been revised.
+* import lock which freezes threads for functions running in background
+* The undefined += operation (numpy issue #5241) in CISD and CCSD methods
+* Handle zero beta electrons in UCCSD.
+* Fix bug in KUHF gradients which affects newton SCF convergence.
+* Fix "hcore" initial guess for KHF.
+* Fix bug in Mulliken pop analysis caused by wrong overlap matrix for PBC calculations.
+* GIAO contributions to the off diagonal part of NMR shielding tensor.
+* Handle zero core electrons in ECP parser.
+* Handle 1-electron system in UHF.
+* Fix orbital ordering in SCF canonicalization when point group symmetry is used.
+* Fix pbc atomic grids for low-dimension system.
+* Fix eval_rho for GGA functional for non-hermitian density matrix
+* CCSD frozen core when using AO-driven algorithm
+* DFT UKS orbital hessian
+* PBC gamma-point UHF exxdiv=ewald correction
+* CISD output message for multiple roots
+* UHF hessian function in the second order SCF solver
+* Integer overflow in npdot and GTO basis evaluator
 
 
-API changes
-===========
+Package strucutre changes
+=========================
 
-* numint.non0tab -> grids.non0tab.
+The package was restructured following the suggestions of
+[The Hitchhiker's Guide to Python](http://docs.python-guide.org/en/latest/writing/structure/)
 
 
 
@@ -65,6 +120,12 @@ Features
 
 Heat-bath Selected CI
 ---------------------
+Two versions of heat-bath selected CI are available.  One is through Sharma's
+Dice program (https://sanshar.github.io/Dice/).  Another is the built-in
+module hci.  For system over million determinants, Dice program has better
+scaling than the built-in hci module.  The :class:`SelectedCI` method in hci
+module is fully compatible to the :class:`FCISolver` in fci module.  It can be
+used the same way as fci module.
 
 
 UCCSD density matrices
@@ -87,12 +148,40 @@ Second order SCF solver for PBC systems
 
 TDHF and TDDFT for PBC systems
 ------------------------------
-High energy cutoff for FFT should be used.  DF and MDF methods work better.
+High energy cutoff for FFT should be used.  Using DF and MDF methods in
+pbc TDDFT is often the better choice.
 
 
 Cartesian GTO (6d 10f) basis in molecular calculations
 ------------------------------------------------------
-``mol.cart = True`` to switch on cartesian GTO basis.  AO is not normalized.
+``mol.cart = True`` to switch on Cartesian GTO basis.  AO is not normalized.
+
+
+Geometry optimizer
+------------------
+Interface to pyberny geometry optimizer was implemented.  Molecule geometry can
+be optimized at RHF, RKS or RCCSD level using berny optimizer::
+
+    from pyscf import gto, scf, cc
+    from pyscf.geomopt import berny_solver
+    mol = gto.M(atom='O 0 0 0; H 0 1. 0.8; H 0 1. -0.8', basis='6-31g')
+    mycc = cc.CCSD(scf.RHF(mol))
+    mol1 = berny_solver.optimize(mycc)
+    print(mol1.atom_coords())
+
+
+g-tensor
+--------
+g-tensor can be calculated with non-relativistic UHF and UKS methods.  The
+spin-orbit coupling can be approximated at different level::
+
+    from pyscf import gto, dft
+    from pyscf.prop import gtensor
+    mol = gto.M(atom='C 0 0 0; N 0 0 1.1747', basis='ccpvdz', spin=1)
+    mf = dft.UKS(mol).set(xc='b3lyp').run()
+    gt = gtensor.uks.GTensor(mf).set(verbose=4)
+    gt.para_soc2e = 'AMFI'
+    gt.kernel()
 
 
 
@@ -112,7 +201,7 @@ implementations.
 Basis parser for Pople style basis sets
 ---------------------------------------
 In PySCF-1.3, Pople basis was not parsed following Gaussian's convention,
-especially the polarized functions in hydrogen basis.  Polarized functins were
+especially the polarized functions in hydrogen basis.  Polarized functions were
 assigned to hydrogen atom for 6-31G* basis and 6-311G* basis.  In PySCF-1.4,
 this problem has been corrected.  More polarization functions and diffuse
 functions were also added in the new release.  Basis input such as "6-31g(d,p)",
@@ -124,7 +213,8 @@ functions were also added in the new release.  Basis input such as "6-31g(d,p)",
 
 Problem size in FCI solver
 --------------------------
-Support more than 64 orbitals in the FCI solver.
+Support more than 64 orbitals in the FCI solver.  Note although large system is
+supported, the program may take long time to solve the large system.
 
 
 Ghost atoms in geometry parser
