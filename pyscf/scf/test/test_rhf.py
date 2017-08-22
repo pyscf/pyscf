@@ -67,18 +67,15 @@ class KnowValues(unittest.TestCase):
         pop, chg = mf.mulliken_pop(mol, dm)
         self.assertAlmostEqual(abs(pop).sum(), 22.941032799355845, 7)
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='ano')
-        self.assertAlmostEqual(abs(pop).sum(), 22.056441149586863, 7)
+        self.assertAlmostEqual(abs(pop).sum(), 22.048073484937646, 7)
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='minao')
-        self.assertAlmostEqual(abs(pop).sum(), 22.118254161380747, 7)
+        self.assertAlmostEqual(abs(pop).sum(), 22.098274261783196, 7)
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='scf')
         self.assertAlmostEqual(abs(pop).sum(), 22.117869619510266, 7)
 
     def test_analyze(self):
-        numpy.random.seed(1)
-        nao = mol.nao_nr()
-        mo = numpy.random.random((nao,nao))
         popandchg, dip = mf.analyze()
-        self.assertAlmostEqual(numpy.linalg.norm(popandchg[0]), 4.0048449691540391, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(popandchg[0]), 4.0049440587033116, 6)
         self.assertAlmostEqual(numpy.linalg.norm(dip), 2.05844441822, 8)
 
     def test_scf(self):
@@ -132,7 +129,7 @@ class KnowValues(unittest.TestCase):
         mf = scf.hf_symm.RHF(pmol)
         self.assertAlmostEqual(mf.scf(), -76.026765673119627, 9)
         pop, chg = mf.analyze()
-        self.assertAlmostEqual(numpy.linalg.norm(pop), 4.0048449691540391, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 4.0049439389172425, 6)
 
     def test_hf_symm_fixnocc(self):
         pmol = mol.copy()
@@ -142,7 +139,7 @@ class KnowValues(unittest.TestCase):
         mf.irrep_nelec = {'B1':4}
         self.assertAlmostEqual(mf.scf(), -75.074736446470723, 9)
         pop, chg = mf.analyze()
-        self.assertAlmostEqual(numpy.linalg.norm(pop), 3.9778759898704612, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 3.9779576643902912, 6)
 
     def test_hf_symm_rohf(self):
         pmol = mol.copy()
@@ -153,7 +150,7 @@ class KnowValues(unittest.TestCase):
         mf = scf.hf_symm.ROHF(pmol)
         self.assertAlmostEqual(mf.scf(), -75.627354109594179, 9)
         pop, chg = mf.analyze()
-        self.assertAlmostEqual(numpy.linalg.norm(pop), 3.6782452972117743, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 3.6783793407635832, 6)
 
     def test_hf_symm_rohf_fixnocc(self):
         pmol = mol.copy()
@@ -165,7 +162,7 @@ class KnowValues(unittest.TestCase):
         mf.irrep_nelec = {'B1':(2,1)}
         self.assertAlmostEqual(mf.scf(), -75.008317646307404, 9)
         pop, chg = mf.analyze()
-        self.assertAlmostEqual(numpy.linalg.norm(pop), 3.7873076011029529, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 3.7873920690764575, 6)
 
     def test_n2_symm(self):
         mf = scf.hf_symm.RHF(n2sym)

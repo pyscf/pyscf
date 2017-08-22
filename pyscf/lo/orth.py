@@ -108,9 +108,10 @@ def project_to_atomic_orbitals(mol, basname):
         atm._atm, atm._bas, atm._env = \
                 atm.make_env([[stdsymb,(0,0,0)]], {stdsymb:mol._basis[symb]}, [])
         atm.cart = mol.cart
+        s0 = atm.intor_symmetric('int1e_ovlp')
 
         if 'GHOST' in symb.upper():
-            aos[symb] = numpy.eye(atm.nao_nr())
+            aos[symb] = numpy.diag(1./numpy.sqrt(s0.diagonal()))
             continue
 
         basis_add = gto.basis.load(basname, stdsymb)
@@ -127,10 +128,9 @@ def project_to_atomic_orbitals(mol, basname):
 # reasonable AO-character contraction.  The ANO valence AO should have
 # significant overlap to ECP basis if the ECP basis has AO-character.
                 if abs(ecp_ano_det_ovlp(atm, atmp, ecpcore)) > .1:
-                    aos[symb] = numpy.eye(atm.nao_nr())
+                    aos[symb] = numpy.diag(1./numpy.sqrt(s0.diagonal()))
                     continue
 
-        s0 = atm.intor_symmetric('int1e_ovlp')
         ano = project_mo_nr2nr(atmp, 1, atm)
         rm_ano = numpy.eye(ano.shape[0]) - reduce(numpy.dot, (ano, ano.T, s0))
         c = rm_ano.copy()
