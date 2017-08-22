@@ -2,6 +2,7 @@
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 
+import copy
 from functools import reduce
 import numpy
 import scipy.linalg
@@ -41,18 +42,20 @@ def weight_orth(s, weight):
 
 
 def pre_orth_ao(mol, method='ANO'):
-    '''Localized GTOs for each atom.  Possible localized methods include
-    the ANO/MINAO projected basis or fraction-averaged RHF'''
+    '''Restore AO characters.  Possible methods include the ANO/MINAO
+    projection or fraction-averaged atomic RHF calculation'''
     if method.upper() in ('ANO', 'MINAO'):
 # Use ANO/MINAO basis to define the strongly occupied set
         return project_to_atomic_orbitals(mol, method)
     else:
         return pre_orth_ao_atm_scf(mol)
+restore_ao_character = pre_orth_ao
 
 def project_to_atomic_orbitals(mol, basname):
     '''projected AO = |bas><bas|ANO>
     '''
     from pyscf.scf.addons import project_mo_nr2nr
+    from pyscf.scf import atom_hf
     from pyscf.gto.ecp import core_configuration
     def search_atm_l(atm, l):
         bas_ang = atm._bas[:,gto.ANG_OF]
@@ -61,6 +64,41 @@ def project_to_atomic_orbitals(mol, basname):
         for ib in numpy.where(bas_ang == l)[0]:
             idx.extend(range(ao_loc[ib], ao_loc[ib+1]))
         return idx
+
+    # Overlap of ANO and ECP basis
+    def ecp_ano_det_ovlp(atm_ecp, atm_ano, ecpcore):
+        ecp_ao_loc = atm_ecp.ao_loc_nr()
+        ano_ao_loc = atm_ano.ao_loc_nr()
+        ecp_ao_dim = ecp_ao_loc[1:] - ecp_ao_loc[:-1]
+        ano_ao_dim = ano_ao_loc[1:] - ano_ao_loc[:-1]
+        ecp_bas_l = [[atm_ecp.bas_angular(i)]*d for i,d in enumerate(ecp_ao_dim)]
+        ano_bas_l = [[atm_ano.bas_angular(i)]*d for i,d in enumerate(ano_ao_dim)]
+        ecp_bas_l = numpy.hstack(ecp_bas_l)
+        ano_bas_l = numpy.hstack(ano_bas_l)
+
+        ecp_idx = []
+        ano_idx = []
+        for l in range(4):
+            nocc, nfrac = atom_hf.frac_occ(stdsymb, l)
+            if nfrac > 1e-15:
+                nocc += 1
+            if nocc == 0:
+                break
+            i0 = ecpcore[l] * (2*l+1)
+            i1 = nocc * (2*l+1)
+            ecp_idx.append(numpy.where(ecp_bas_l==l)[0][:i1-i0])
+            ano_idx.append(numpy.where(ano_bas_l==l)[0][i0:i1])
+        ecp_idx = numpy.hstack(ecp_idx)
+        ano_idx = numpy.hstack(ano_idx)
+        s12 = gto.intor_cross('int1e_ovlp', atm_ecp, atm_ano)[ecp_idx][:,ano_idx]
+        return numpy.linalg.det(s12)
+
+    if mol.has_ecp():
+        nelec_ecp_dic = {}
+        for ia in range(mol.natm):
+            symb = mol.atom_symbol(ia)
+            if symb not in nelec_ecp_dic:
+                nelec_ecp_dic[symb] = mol.atom_nelec_core(ia)
 
     aos = {}
     atm = gto.Mole()
@@ -75,63 +113,71 @@ def project_to_atomic_orbitals(mol, basname):
             aos[symb] = numpy.eye(atm.nao_nr())
             continue
 
-        s0 = atm.intor_symmetric('int1e_ovlp')
-
         basis_add = gto.basis.load(basname, stdsymb)
         atmp._atm, atmp._bas, atmp._env = \
                 atmp.make_env([[stdsymb,(0,0,0)]], {stdsymb:basis_add}, [])
         atmp.cart = mol.cart
+
+        ecpcore = [0] * 4
+        if mol.has_ecp():
+            nelec_ecp = nelec_ecp_dic[symb]
+            if nelec_ecp > 0:
+                ecpcore = core_configuration(nelec_ecp)
+# Comparing to ANO valence basis, to check whether the ECP basis set has
+# reasonable AO-character contraction.  The ANO valence AO should have
+# significant overlap to ECP basis if the ECP basis has AO-character.
+                if abs(ecp_ano_det_ovlp(atm, atmp, ecpcore)) > .1:
+                    aos[symb] = numpy.eye(atm.nao_nr())
+                    continue
+
+        s0 = atm.intor_symmetric('int1e_ovlp')
         ano = project_mo_nr2nr(atmp, 1, atm)
         rm_ano = numpy.eye(ano.shape[0]) - reduce(numpy.dot, (ano, ano.T, s0))
-        if mol.has_ecp():
-            if symb in mol._ecp:
-                nelec_ecp = mol._ecp[symb][0]
-            elif stdsymb in mol._ecp:
-                nelec_ecp = mol._ecp[stdsymb][0]
-            ecpcore = core_configuration(nelec_ecp)
-        else:
-            ecpcore = [0] * 4
         c = rm_ano.copy()
         for l in range(param.L_MAX):
-            idx  = numpy.asarray(search_atm_l(atm, l))
-            if len(idx) == 0:
+            idx = numpy.asarray(search_atm_l(atm, l))
+            nbf_atm_l = len(idx)
+            if nbf_atm_l == 0:
                 break
 
             idxp = numpy.asarray(search_atm_l(atmp, l))
             if l < 4:
                 idxp = idxp[ecpcore[l]:]
+            nbf_ano_l = len(idxp)
+
             if mol.cart:
                 degen = (l + 1) * (l + 2) // 2
             else:
                 degen = l * 2 + 1
-            if len(idx) > len(idxp) > 0:
+
+            if nbf_atm_l > nbf_ano_l > 0:
 # For angular l, first place the projected ANO, then the rest AOs.
                 sdiag = reduce(numpy.dot, (rm_ano[:,idx].T, s0, rm_ano[:,idx])).diagonal()
-                nleft = (len(idx) - len(idxp)) // degen
+                nleft = (nbf_atm_l - nbf_ano_l) // degen
                 shell_average = numpy.einsum('ij->i', sdiag.reshape(-1,degen))
                 shell_rest = numpy.argsort(-shell_average)[:nleft]
                 idx_rest = []
                 for k in shell_rest:
                     idx_rest.extend(idx[k*degen:(k+1)*degen])
-                c[:,idx[:len(idxp)]] = ano[:,idxp]
-                c[:,idx[len(idxp):]] = rm_ano[:,idx_rest]
-            elif len(idxp) >= len(idx) > 0:  # More ANOs than the mol basis functions
-                c[:,idx] = ano[:,idxp[:len(idx)]]
+                c[:,idx[:nbf_ano_l]] = ano[:,idxp]
+                c[:,idx[nbf_ano_l:]] = rm_ano[:,idx_rest]
+            elif nbf_ano_l >= nbf_atm_l > 0:  # More ANOs than the mol basis functions
+                c[:,idx] = ano[:,idxp[:nbf_atm_l]]
+        sdiag = numpy.einsum('pi,pq,qi->i', c, s0, c)
+        c *= 1./numpy.sqrt(sdiag)
         aos[symb] = c
 
     nao = mol.nao_nr()
     c = numpy.zeros((nao,nao))
-    p0 = 0
+    p1 = 0
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
         if symb in mol._basis:
             ano = aos[symb]
         else:
-            symb = mol.atom_pure_symbol(ia)
-            ano = aos[symb]
-        p1 = p0 + ano.shape[1]
+            ano = aos[mol.atom_pure_symbol(ia)]
+        p0, p1 = p1, p1 + ano.shape[1]
         c[p0:p1,p0:p1] = ano
-        p0 = p1
     return c
 pre_orth_project_ano = project_to_atomic_orbitals
 

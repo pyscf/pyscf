@@ -87,6 +87,15 @@ class KnowValues(unittest.TestCase):
         c = orth.orth_ao(mol, method='meta_lowdin')
         self.assertAlmostEqual(numpy.linalg.norm(c), 7.9067188905237256, 9)
 
+    def test_pre_orth_ao_with_ecp(self):
+        mol = gto.M(atom='Cu 0. 0. 0.; H  0.  0. -1.56; H  0.  0.  1.56',
+                    basis={'Cu':'lanl2dz', 'H':'ccpvdz'},
+                    ecp = {'cu':'lanl2dz'},
+                    charge=-1,
+                    verbose=0)
+        c0 = orth.pre_orth_ao(mol, method='ano')
+        self.assertAlmostEqual(numpy.linalg.norm(c0), 5.9621174285790959, 9)
+
 
 if __name__ == "__main__":
     print("Test orth")

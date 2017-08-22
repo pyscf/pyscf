@@ -149,11 +149,7 @@ def mulliken_meta(cell, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
     log.note("KUHF mulliken_meta")
     dm_ao_gamma = dm_ao[:,0,:,:].real
     s_gamma = s[0,:,:].real
-    if cell.has_ecp():
-# Rereference AO basis in the environment of ECP is not available
-        c = np.eye(s_gamma.shape[0])
-    else:
-        c = orth.pre_orth_ao(cell, pre_orth_method)
+    c = orth.restore_ao_character(cell, pre_orth_method)
     orth_coeff = orth.orth_ao(cell, 'meta_lowdin', pre_orth_ao=c, s=s_gamma)
     c_inv = np.dot(orth_coeff.T, s_gamma)
     dm_a = reduce(np.dot, (c_inv, dm_ao_gamma[0], c_inv.T.conj()))

@@ -810,11 +810,7 @@ def mulliken_meta(mol, dm, verbose=logger.DEBUG, pre_orth_method='ANO',
     if s is None:
         s = get_ovlp(mol)
     log = logger.new_logger(mol, verbose)
-    if mol.has_ecp():
-# Rereference AO basis in the environment of ECP is not available
-        c = numpy.eye(s.shape[0])
-    else:
-        c = orth.pre_orth_ao(mol, pre_orth_method)
+    c = orth.restore_ao_character(mol, pre_orth_method)
     orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c, s=s)
     c_inv = numpy.dot(orth_coeff.T, s)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
