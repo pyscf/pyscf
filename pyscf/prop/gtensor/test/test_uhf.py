@@ -160,8 +160,8 @@ class KnowValues(unittest.TestCase):
         g.so_eff_charge = True
         g.cphf = False
         g.mb = True
-        dat = g.align(g.kernel())[0]
-        self.assertAlmostEqual(lib.finger(dat), 0.40262374347785462, 7)
+        dat = g.kernel()
+        self.assertAlmostEqual(numpy.linalg.norm(dat), 3.46802309158, 7)
 
 
 if __name__ == "__main__":

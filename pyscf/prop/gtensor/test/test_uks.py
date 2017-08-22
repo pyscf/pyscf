@@ -61,8 +61,8 @@ class KnowValues(unittest.TestCase):
         g.para_soc2e = 'SSO+SOO'
         g.so_eff_charge = True
         g.cphf = False
-        dat = g.align(g.kernel())[0]
-        self.assertAlmostEqual(lib.finger(dat), 0.39806613807209507, 7)
+        dat = g.kernel()
+        self.assertAlmostEqual(numpy.linalg.norm(dat), 3.47479197036, 7)
 
 
 if __name__ == "__main__":
