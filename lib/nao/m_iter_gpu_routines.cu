@@ -11,6 +11,8 @@
 
 #include <cblas.h>
 
+#include <omp.h>
+
 float *X4_d, *ksn2e_d, *ksn2f_d, *nm2v_real_d, *nm2v_imag_d, *nb2v_d;
 float *ab2v_d, *nb2v_tr;
 int nfermi, vstart, nvirt, norbs, ksn2e_dim, ksn2f_dim;
@@ -132,14 +134,11 @@ float calc_sum(float *mat, int dim1, int dim2)
   return sum;
 }
 
-extern "C" void apply_rf0_gpu(float *nb2v_real, float *nb2v_imag, float *ab2v_real, float *ab2v_imag,
-    double omega_re, double omega_im, int *blocks, int *grids)
-{
-  float alpha = 1.0, beta = 0.0;
-  int i, j;
-  dim3 dimBlock(blocks[0], blocks[1]);
-  dim3 dimGrid(grids[0], grids[1]);
 
+extern "C" void calc_nm2v_real(float *nb2v)
+{
+  int i, j;
+  float alpha = 1.0, beta = 0.0;
   /*
      Warnings!!!
         nb2v : col major
@@ -151,42 +150,88 @@ extern "C" void apply_rf0_gpu(float *nb2v_real, float *nb2v_imag, float *ab2v_re
 
   // Real part
   // transpose nb2v !!!
-  for (i = 0; i < nfermi; i++)
+  #pragma omp parallel shared(nfermi, norbs, nb2v_tr, nb2v) \
+    private(i, j)
   {
-    for (j = 0; j < norbs; j++)
+    #pragma omp for
+    for (i = 0; i < nfermi; i++)
     {
-      nb2v_tr[ j + i*norbs] = nb2v_real[j*nfermi + i];
+      for (j = 0; j < norbs; j++)
+      {
+        nb2v_tr[ j + i*norbs] = nb2v[j*nfermi + i];
+      }
     }
   }
+
   checkCudaErrors(cudaMemcpy( nb2v_d, nb2v_tr, sizeof(float) * nfermi*norbs, cudaMemcpyHostToDevice));
   checkCudaErrors(cublasSgemm(handle_mat, CUBLAS_OP_T, CUBLAS_OP_N, nvirt, nfermi, norbs, &alpha,
       &X4_d[vstart*norbs], norbs, nb2v_d, norbs, &beta, nm2v_real_d, nvirt));
 
-  // Imaginary part
+
+}
+
+extern "C" void calc_nm2v_imag(float *nb2v)
+{
+  int i, j;
+  float alpha = 1.0, beta = 0.0;
+  /*
+     Warnings!!!
+        nb2v : col major
+        x4: row major
+        nb2v need to be in row major, transpose necessary??
+
+        Maybe better to transpose X4, and use everything in column major??
+  */
+
+  // Real part
   // transpose nb2v !!!
-  for (i = 0; i < nfermi; i++)
+  #pragma omp parallel shared(nfermi, norbs, nb2v_tr, nb2v) \
+    private(i, j)
   {
-    for (j = 0; j < norbs; j++)
+    #pragma omp for
+    for (i = 0; i < nfermi; i++)
     {
-      nb2v_tr[ j + i*norbs] = nb2v_imag[j*nfermi + i];
+      for (j = 0; j < norbs; j++)
+      {
+        nb2v_tr[ j + i*norbs] = nb2v[j*nfermi + i];
+      }
     }
   }
+
   checkCudaErrors(cudaMemcpy( nb2v_d, nb2v_tr, sizeof(float) * nfermi*norbs, cudaMemcpyHostToDevice));
   checkCudaErrors(cublasSgemm(handle_mat, CUBLAS_OP_T, CUBLAS_OP_N, nvirt, nfermi, norbs, &alpha,
       &X4_d[vstart*norbs], norbs, nb2v_d, norbs, &beta, nm2v_imag_d, nvirt));
+}
+
+
+extern "C" void calc_XXVV(double omega_re, double omega_im, int *blocks, int *grids)
+{
+  dim3 dimBlock(blocks[0], blocks[1]);
+  dim3 dimGrid(grids[0], grids[1]);
+
 
   calc_XXVV_gpu<<< dimGrid, dimBlock >>>(nm2v_real_d, nm2v_imag_d, nfermi, nvirt,
     ksn2e_d, ksn2f_d, nfermi, vstart, ksn2e_dim, omega_re, omega_im);
+}
+
+extern "C" void calc_ab2v_real(float *ab2v)
+{
+  float alpha = 1.0, beta = 0.0;
 
   checkCudaErrors(cublasSgemm(handle_mat, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, nvirt, &alpha,
       &X4_d[vstart*norbs], norbs, nm2v_real_d, nvirt, &beta, nb2v_d, norbs));
   checkCudaErrors(cublasSgemm(handle_mat, CUBLAS_OP_N, CUBLAS_OP_T, norbs, norbs, nfermi, &alpha,
       nb2v_d, norbs, X4_d, norbs, &beta, ab2v_d, norbs));
-  checkCudaErrors(cudaMemcpy( ab2v_real, ab2v_d, sizeof(float) * norbs*norbs, cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy( ab2v, ab2v_d, sizeof(float) * norbs*norbs, cudaMemcpyDeviceToHost));
+}
+
+extern "C" void calc_ab2v_imag(float *ab2v)
+{
+  float alpha = 1.0, beta = 0.0;
 
   checkCudaErrors(cublasSgemm(handle_mat, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, nvirt, &alpha,
       &X4_d[vstart*norbs], norbs, nm2v_imag_d, nvirt, &beta, nb2v_d, norbs));
   checkCudaErrors(cublasSgemm(handle_mat, CUBLAS_OP_N, CUBLAS_OP_T, norbs, norbs, nfermi, &alpha,
       nb2v_d, norbs, X4_d, norbs, &beta, ab2v_d, norbs));
-  checkCudaErrors(cudaMemcpy( ab2v_imag, ab2v_d, sizeof(float) * norbs*norbs, cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy( ab2v, ab2v_d, sizeof(float) * norbs*norbs, cudaMemcpyDeviceToHost));
 }

@@ -105,19 +105,21 @@ class tddft_iter_c():
     if self.GPU:
         #  reference
 
-        nb2v_real = self.xocc*sab.real
-        nb2v_imag = self.xocc*sab.imag
+        nb2v = self.xocc*sab.real
+        libnao_gpu.calc_nm2v_real(nb2v.ctypes.data_as(POINTER(c_float)))
+        nb2v = self.xocc*sab.imag
+        libnao_gpu.calc_nm2v_imag(nb2v.ctypes.data_as(POINTER(c_float)))
 
-        ab2v_real = np.zeros([self.norbs*self.norbs], dtype=np.float32)
-        ab2v_imag = np.zeros([self.norbs*self.norbs], dtype=np.float32)
-
-        libnao_gpu.apply_rf0_gpu(nb2v_real.ctypes.data_as(POINTER(c_float)),
-                nb2v_imag.ctypes.data_as(POINTER(c_float)), ab2v_real.ctypes.data_as(POINTER(c_float)),
-                ab2v_imag.ctypes.data_as(POINTER(c_float)), c_double(comega.real), c_double(comega.imag),
+        libnao_gpu.calc_XXVV(c_double(comega.real), c_double(comega.imag),
                 self.block_size.ctypes.data_as(POINTER(c_int)), self.grid_size.ctypes.data_as(POINTER(c_int)))
 
-        ab2v = 1j*ab2v_imag
-        ab2v += ab2v_real
+        ab2v = np.zeros([self.norbs*self.norbs], dtype=np.float32)
+
+        libnao_gpu.calc_ab2v_imag(ab2v.ctypes.data_as(POINTER(c_float)))
+        vdp = 1j*self.v_dab*ab2v
+
+        libnao_gpu.calc_ab2v_real(ab2v.ctypes.data_as(POINTER(c_float)))
+        vdp += self.v_dab*ab2v
 
         # Reference!!
         #nb2v = self.xocc*sab
@@ -160,7 +162,7 @@ class tddft_iter_c():
         nb2v = np.dot(nm2v,self.xvrt)
         ab2v = np.dot(np.transpose(self.xocc),nb2v).reshape(no*no)
 
-    vdp = self.v_dab*ab2v
+        vdp = self.v_dab*ab2v
     res = vdp*self.cc_da
     return res
 

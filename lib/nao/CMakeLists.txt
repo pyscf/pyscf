@@ -12,11 +12,6 @@ if(CUDA_FOUND)
     m_iter_gpu_routines.cu
     )
 
-  set(Cuda_LIB "-L/usr/local/cuda/lib64 -lcuda -lcudart -lcufft -lcublas -lcublas_device -lcudadevrt -lstdc++")
-  set(CUDA_LINK_FLAGS "${OpenMP_C_FLAGS}")
-  set(ARCH_CUDA "-gencode arch=compute_35,code=sm_35 -gencode arch=compute_37,code=sm_37 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60 -gencode arch=compute_60,code=compute_60")
-  set(CUDA_NVCC_FLAGS "-O3 -m64 -dc ${ARCH_CUDA} -Xcompiler -fopenmp -lgomp -lm")
-
   set_target_properties(nao PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}
     COMPILE_FLAGS ${OpenMP_C_FLAGS}
     LINK_FLAGS ${OpenMP_C_FLAGS}
