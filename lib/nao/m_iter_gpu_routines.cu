@@ -33,7 +33,7 @@ __global__ void print_array_gpu(float *arr, long dim1, long dim2)
 }
 
 __global__ void calc_XXVV_gpu(float *nm2v_re, float *nm2v_im, int nm2v_dim1, int nm2v_dim2,
-    float *ksn2e, float *ksn2f, int nf, int vs, int kn_dim, double omega_re,
+    float *ksn2e, float *ksn2f, int nf, int vs, int nv, int kn_dim, double omega_re,
     double omega_im)
 {
   int i = blockIdx.x * blockDim.x + threadIdx.x; //nocc
@@ -49,22 +49,24 @@ __global__ void calc_XXVV_gpu(float *nm2v_re, float *nm2v_im, int nm2v_dim1, int
     if ( (j < kn_dim - i -1))
     {
       m = j + i + 1 - vs;
-      if (m > 0)
+      if (m < 0)
       {
-        em = ksn2e[i+1+j];
-        fm = ksn2f[i+1+j];
-        a = (omega_re - (em-en))*(omega_re - (em-en)) + omega_im*omega_im;
-        b = (omega_re + (em-en))*(omega_re + (em-en)) + omega_im*omega_im;
-
-        alpha =  (b*(omega_re - (em-en)) - a*(omega_re + (em-en)))/(a*b);
-        beta = omega_im*(a-b)/(a*b);
-
-        index = i*nm2v_dim2 + m;
-        old_re = nm2v_re[index];
-        old_im = nm2v_im[index];
-        nm2v_re[index] = (fn - fm) * (old_re*alpha - old_im*beta);
-        nm2v_im[index] = (fn - fm) * (old_re*beta + old_im*alpha);
+        m = nv - m;
+        //printf("i = %d, j = %d, m = %d\n", i, j, m);
       }
+      em = ksn2e[i+1+j];
+      fm = ksn2f[i+1+j];
+      a = (omega_re - (em-en))*(omega_re - (em-en)) + omega_im*omega_im;
+      b = (omega_re + (em-en))*(omega_re + (em-en)) + omega_im*omega_im;
+
+      alpha =  (b*(omega_re - (em-en)) - a*(omega_re + (em-en)))/(a*b);
+      beta = omega_im*(a-b)/(a*b);
+
+      index = i*nm2v_dim2 + m;
+      old_re = nm2v_re[index];
+      old_im = nm2v_im[index];
+      nm2v_re[index] = (fn - fm) * (old_re*alpha - old_im*beta);
+      nm2v_im[index] = (fn - fm) * (old_re*beta + old_im*alpha);
     }
   }
 }
@@ -139,6 +141,7 @@ extern "C" void calc_nm2v_real(float *nb2v)
 {
   int i, j;
   float alpha = 1.0, beta = 0.0;
+
   /*
      Warnings!!!
         nb2v : col major
@@ -166,14 +169,13 @@ extern "C" void calc_nm2v_real(float *nb2v)
   checkCudaErrors(cudaMemcpy( nb2v_d, nb2v_tr, sizeof(float) * nfermi*norbs, cudaMemcpyHostToDevice));
   checkCudaErrors(cublasSgemm(handle_mat, CUBLAS_OP_T, CUBLAS_OP_N, nvirt, nfermi, norbs, &alpha,
       &X4_d[vstart*norbs], norbs, nb2v_d, norbs, &beta, nm2v_real_d, nvirt));
-
-
 }
 
 extern "C" void calc_nm2v_imag(float *nb2v)
 {
   int i, j;
   float alpha = 1.0, beta = 0.0;
+
   /*
      Warnings!!!
         nb2v : col major
@@ -211,7 +213,7 @@ extern "C" void calc_XXVV(double omega_re, double omega_im, int *blocks, int *gr
 
 
   calc_XXVV_gpu<<< dimGrid, dimBlock >>>(nm2v_real_d, nm2v_imag_d, nfermi, nvirt,
-    ksn2e_d, ksn2f_d, nfermi, vstart, ksn2e_dim, omega_re, omega_im);
+    ksn2e_d, ksn2f_d, nfermi, vstart, nvirt, ksn2e_dim, omega_re, omega_im);
 }
 
 extern "C" void calc_ab2v_real(float *ab2v)

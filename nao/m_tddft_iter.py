@@ -103,7 +103,6 @@ class tddft_iter_c():
     sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
 
     if self.GPU:
-        #  reference
 
         nb2v = self.xocc*sab.real
         libnao_gpu.calc_nm2v_real(nb2v.ctypes.data_as(POINTER(c_float)))
@@ -116,30 +115,38 @@ class tddft_iter_c():
         ab2v = np.zeros([self.norbs*self.norbs], dtype=np.float32)
 
         libnao_gpu.calc_ab2v_imag(ab2v.ctypes.data_as(POINTER(c_float)))
+        #ab2v_imag = np.sum(abs(ab2v))
         vdp = 1j*self.v_dab*ab2v
 
         libnao_gpu.calc_ab2v_real(ab2v.ctypes.data_as(POINTER(c_float)))
+        #print("ab2v = ", np.sum(abs(ab2v)), ab2v_imag)
         vdp += self.v_dab*ab2v
 
         # Reference!!
+        #print("Python Ref: ")
         #nb2v = self.xocc*sab
         #nm2v_ref = np.dot(nb2v, np.transpose(self.xvrt))
+        #print("sum(nm2v) = ", np.sum(abs(nm2v_ref.real)), np.sum(abs(nm2v_ref.imag)))
         #print("check nm2v1: sum_gpu = {0}, sum_cpu = {1}, error =  {2}".format(np.sum(abs(nm2v_real)), np.sum(abs(nm2v_ref.real)), np.sum(abs(nm2v_ref.real - nm2v_real ))))
         #for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
         #    for j,[em,fm] in enumerate(zip(self.ksn2e[0,0,n+1:],self.ksn2f[0,0,n+1:])):
         #        m = j+n+1-self.vstart
-        #        if m >0:
-        #            nm2v_ref[n,m] = nm2v_ref[n,m] * (fn - fm) * (( 1.0 / (comega - (em - en))) - (1.0 / (comega + (em - en)) ))
+        #        nm2v_ref[n,m] = nm2v_ref[n,m] * (fn - fm) * (( 1.0 / (comega - (em - en))) - (1.0 / (comega + (em - en)) ))
+        #print("after calc_XXVV: ")
+        #print("sum(nm2v) = ", np.sum(abs(nm2v_ref.real)), np.sum(abs(nm2v_ref.imag)))
         #print("check nm2v2: sum_gpu = {0}, sum_cpu = {1}, error =  {2}".format(np.sum(abs(nm2v_real2)), np.sum(abs(nm2v_ref.real)), np.sum(abs(nm2v_ref.real - nm2v_real2 ))))
         #np.savetxt("nm2v_ref.txt", nm2v_ref.real)
         #nb2v = np.dot(nm2v_ref,self.xvrt)
         #ab2v_ref = np.dot(np.transpose(self.xocc),nb2v).reshape(no*no)
+        #print("sum(ab2v) = ", np.sum(abs(ab2v_ref.real)), np.sum(abs(ab2v_ref.imag)))
         ##np.savetxt("nb2v_output_cpu.txt", nb2v_real, fmt = "%10.6f")
         ##np.savetxt("nb2v_output_cpu_ref.txt", nb2v.real, fmt = "%10.6f")
         #print("final: sum(ab2_gpu): = ", np.sum(abs(ab2v.real)), np.sum(abs(ab2v.imag)))
         #print("final :sum(ab2v_cpu): = ", np.sum(abs(ab2v_ref.real)), np.sum(abs(ab2v_ref.imag)))
         #print("sum_gpu = {0}, sum_cpu = {1}, error =  {2}".format(np.sum(abs(ab2v.real)), np.sum(abs(ab2v_ref.real)), np.sum(abs(ab2v_ref.real - ab2v.real ))))
         #print("error: ", np.sum(abs(ab2v_ref.reshape([self.norbs, self.norbs]) - ab2v.reshape([self.norbs, self.norbs]) )))
+
+        #sys.exit()
     else:
         #
         # WARNING!!!!
@@ -154,10 +161,8 @@ class tddft_iter_c():
             for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
               for j,[em,fm] in enumerate(zip(self.ksn2e[0,0,n+1:],self.ksn2f[0,0,n+1:])):
                 m = j+n+1-self.vstart
-                # m can be negative, I think we should drop the value if m < 0??
-                if m > 0:
-                    nm2v[n,m] = nm2v[n,m] * (fn-fm) *\
-                      ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
+                nm2v[n,m] = nm2v[n,m] * (fn-fm) *\
+                  ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
 
         nb2v = np.dot(nm2v,self.xvrt)
         ab2v = np.dot(np.transpose(self.xocc),nb2v).reshape(no*no)
