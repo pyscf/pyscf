@@ -131,9 +131,11 @@ mol.basis = {'H': [[0,
                     (0.1776000, 1.0000000),],
                    [1,
                     (1.0000000, 1.0000000),]],
-            }
+}
+mol.build()
+
 #
-# Functions gto.basis.load and got.basis.parse  convert the input to the
+# Functions gto.basis.load and gto.basis.parse  convert the input to the
 # internal format
 #
 mol.basis = {'H': gto.basis.load('sto3g', 'H'),
@@ -147,9 +149,28 @@ C    SP
       0.6834831              0.39951283             0.60768372       
       0.2222899              0.70011547             0.39195739       
 ''')}
+mol.build()
 
 #
-# Multiple basis set can be combined into one basis set
+# If a string of basis set was input, basis parser can make a guess and call
+# gto.basis.parse automatically.  The following basis input is equivalent to
+# the one above.
+#
+mol.basis = {'H': gto.basis.load('sto3g', 'H'),
+             'O': '''
+C    S
+     71.6168370              0.15432897       
+     13.0450960              0.53532814       
+      3.5305122              0.44463454       
+C    SP
+      2.9412494             -0.09996723             0.15591627       
+      0.6834831              0.39951283             0.60768372       
+      0.2222899              0.70011547             0.39195739       
+'''}
+mol.build()
+
+#
+# Multiple basis set can be combined and used as a union basis set
 #
 mol = gto.M(
     atom = '''O 0 0 0; H1 0 1 0; H2 0 0 1''',

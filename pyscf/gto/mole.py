@@ -637,8 +637,10 @@ def make_env(atoms, basis, pre_env=[], nucmod={}):
                 b = _basdic[puresymb].copy()
             else:
                 sys.stderr.write('Warn: Basis not found for atom %d %s\n' % (ia, symb))
+                continue
         else:
             sys.stderr.write('Warn: Basis not found for atom %d %s\n' % (ia, symb))
+            continue
         b[:,ATOM_OF] = ia
         _bas.append(b)
 

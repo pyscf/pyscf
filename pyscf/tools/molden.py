@@ -108,9 +108,9 @@ def from_chkfile(filename, chkfile, key='scf/mo_coeff', ignore_h=False):
             occ = dat['mo_occ']
             mo = dat['mo_coeff']
 
-        if ene == 'None':
+        if isinstance(ene, str) and ene == 'None':
             ene = None
-        if occ == 'None':
+        if isinstance(ene, str) and occ == 'None':
             occ = None
         if occ.ndim == 2:
             orbital_coeff(mol, f, mo[0], spin='Alpha', ene=ene[0], occ=occ[0],
@@ -210,6 +210,7 @@ def load(moldenfile):
         spins = []
         mo_occ = []
         mo_coeff = []
+        norb_alpha = -1
         for rawd in data:
             lines = rawd.split('\n')
             irrep_labels.append(lines[0].split('=')[1].strip())
@@ -223,6 +224,8 @@ def load(moldenfile):
                     spins.append(line.split('=')[1].strip())
                 elif 'Occ' in line:
                     mo_occ.append(float(_d2e(line.split('=')[1].strip())))
+                elif '[MO]' in line:
+                    norb_alpha = len(mo_energy)
                 else:
                     orb.append(float(_d2e(line.split()[1])))
             mo_coeff.append(orb)
@@ -237,6 +240,12 @@ def load(moldenfile):
         else:
             aoidx = numpy.argsort(order_ao_index(mol))
             mo_coeff = (numpy.array(mo_coeff).T)[aoidx]
+        if norb_alpha > 0:
+            irrep_labels = (irrep_labels[:norb_alpha], irrep_labels[norb_alpha:])
+            spins = (spins[:norb_alpha], spins[norb_alpha:])
+            mo_energy = (mo_energy[:norb_alpha], mo_energy[norb_alpha:])
+            mo_occ = (mo_occ[:norb_alpha], mo_occ[norb_alpha:])
+            mo_coeff = (mo_coeff[:,:norb_alpha], mo_coeff[:,norb_alpha:])
         return mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins
 
 def first_token(stream, key):

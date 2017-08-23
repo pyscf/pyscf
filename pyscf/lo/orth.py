@@ -93,12 +93,11 @@ def project_to_atomic_orbitals(mol, basname):
         s12 = gto.intor_cross('int1e_ovlp', atm_ecp, atm_ano)[ecp_idx][:,ano_idx]
         return numpy.linalg.det(s12)
 
-    if mol.has_ecp():
-        nelec_ecp_dic = {}
-        for ia in range(mol.natm):
-            symb = mol.atom_symbol(ia)
-            if symb not in nelec_ecp_dic:
-                nelec_ecp_dic[symb] = mol.atom_nelec_core(ia)
+    nelec_ecp_dic = {}
+    for ia in range(mol.natm):
+        symb = mol.atom_symbol(ia)
+        if symb not in nelec_ecp_dic:
+            nelec_ecp_dic[symb] = mol.atom_nelec_core(ia)
 
     aos = {}
     atm = gto.Mole()
@@ -119,17 +118,17 @@ def project_to_atomic_orbitals(mol, basname):
                 atmp.make_env([[stdsymb,(0,0,0)]], {stdsymb:basis_add}, [])
         atmp.cart = mol.cart
 
-        ecpcore = [0] * 4
-        if mol.has_ecp():
-            nelec_ecp = nelec_ecp_dic[symb]
-            if nelec_ecp > 0:
-                ecpcore = core_configuration(nelec_ecp)
+        nelec_ecp = nelec_ecp_dic[symb]
+        if nelec_ecp > 0:
+            ecpcore = core_configuration(nelec_ecp)
 # Comparing to ANO valence basis, to check whether the ECP basis set has
 # reasonable AO-character contraction.  The ANO valence AO should have
 # significant overlap to ECP basis if the ECP basis has AO-character.
-                if abs(ecp_ano_det_ovlp(atm, atmp, ecpcore)) > .1:
-                    aos[symb] = numpy.diag(1./numpy.sqrt(s0.diagonal()))
-                    continue
+            if abs(ecp_ano_det_ovlp(atm, atmp, ecpcore)) > .1:
+                aos[symb] = numpy.diag(1./numpy.sqrt(s0.diagonal()))
+                continue
+        else:
+            ecpcore = [0] * 4
 
         ano = project_mo_nr2nr(atmp, 1, atm)
         rm_ano = numpy.eye(ano.shape[0]) - reduce(numpy.dot, (ano, ano.T, s0))
