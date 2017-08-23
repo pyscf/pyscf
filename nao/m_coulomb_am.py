@@ -11,31 +11,7 @@ except:
     warnings.warn("numba not installed, using python routines")
     use_numba = False
 
-#from pyscf.nao.m_libnao import libnao
-#from ctypes import POINTER, c_double, c_int64, byref
 import sys
-
-#libnao.coulomb_am.argtypes = (
-#        POINTER(c_int64), # gaunt_iptr
-#        POINTER(c_int64), # n_iptr,
-#        POINTER(c_double), # gaunt_data,
-#        POINTER(c_int64), # n_data,
-#        POINTER(c_int64), # jind
-#        POINTER(c_int64), # l1
-#        POINTER(c_int64), # l2
-#        POINTER(c_int64), # njm
-#        POINTER(c_int64), # lrange
-#        POINTER(c_int64), # n_lrange
-#        POINTER(c_double), # l2S
-#        POINTER(c_int64), # n_l2S
-#        POINTER(c_double), # ylm_re
-#        POINTER(c_double), # ylm_im
-#        POINTER(c_int64), # n_ylm
-#        POINTER(c_double), # cs_re
-#        POINTER(c_double), # cs_im
-#        POINTER(c_int64), # n1_cs,
-#        POINTER(c_int64) # n2_cs,
-#)
 
 #
 #
@@ -65,12 +41,12 @@ def coulomb_am(self, sp1, R1, sp2, R2):
   l2S = np.zeros((2*self.jmx+1), dtype = np.float64)
   _j = self.jmx
   
-  use_numba = False
   if use_numba:
     bessel_pp = get_bessel_xjl_numba(self.kk, dist, _j, self.nr)
   else:
     bessel_pp = np.zeros((_j*2+1, self.nr))
     for ip,p in enumerate(self.kk): bessel_pp[:,ip]=xjl(p*dist, _j*2)*p
+
 
 #
 # We need to improve the performance of this loops.

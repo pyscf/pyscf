@@ -9,8 +9,6 @@
 #include <helper_functions.h>
 #include <helper_cuda.h>
 
-#include <cblas.h>
-
 #include <omp.h>
 
 float *X4_d, *ksn2e_d, *ksn2f_d, *nm2v_real_d, *nm2v_imag_d, *nb2v_d;

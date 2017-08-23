@@ -3,7 +3,7 @@ import warnings
 
 import numba as nb
 
-@nb.jit
+@nb.njit(parallel=True)
 def get_bessel_xjl_numba(kk, dist, j, nr):
     '''
     Calculate spherical bessel functions in all k space
@@ -19,8 +19,9 @@ def get_bessel_xjl_numba(kk, dist, j, nr):
     bessel_pp = np.zeros((j*2+1, nr), dtype=np.float64)
 
     lc = 2*j
-    for ip, p in enumerate(kk):
+    for ip in nb.prange(nr):
         # Computes a table of j_l(x) for fixed xx, Eq. (39)
+        p = kk[ip]
         xx = p*dist
         if (lc<-1): raise ValueError("lc < -1")
       
