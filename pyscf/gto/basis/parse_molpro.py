@@ -15,7 +15,7 @@ MAPSPDF = {'S': 0,
            'G': 4,
            'H': 5,
            'I': 6,
-           'J': 7}
+           'K': 7}
 COMMENT_KEYWORDS = '!*#'
 
 # parse the basis text which is in Molpro format, return an internal basis

@@ -6,7 +6,7 @@
 #
 
 MAXL = 8
-SPDF = ('S', 'P', 'D', 'F', 'G', 'H', 'I', 'J')
+SPDF = ('S', 'P', 'D', 'F', 'G', 'H', 'I', 'K')
 MAPSPDF = {'S': 0,
            'P': 1,
            'D': 2,
@@ -14,7 +14,7 @@ MAPSPDF = {'S': 0,
            'G': 4,
            'H': 5,
            'I': 6,
-           'J': 7}
+           'K': 7}
 
 def parse(string):
     '''Parse the basis text which is in NWChem format, return an internal

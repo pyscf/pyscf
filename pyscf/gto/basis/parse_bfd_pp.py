@@ -14,7 +14,7 @@ MAPSPDF = {'S': 0,
            'G': 4,
            'H': 5,
            'I': 6,
-           'J': 7}
+           'K': 7}
 
 # basistype is one of 'vdz', 'vtz', 'vqz', 'v5z'
 def parse(symb, basistype):
