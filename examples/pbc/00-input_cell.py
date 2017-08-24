@@ -20,11 +20,10 @@ cell.atom = '''C     0.      0.      0.
 cell.basis = 'gth-szv'
 cell.pseudo = 'gth-pade'
 #
-# Note two extra attributes ".a", ".gs" for in the "cell" initialization.
+# Note the extra attribute ".a" in the "cell" initialization.
 # .a is a matrix for lattice vectors.  Each row of .a is a primitive vector.
 #
 cell.a = numpy.eye(3)*3.5668
-cell.gs = [10]*3  # 10 grids on postive x direction, => 21^3 grids in total
 cell.build()
 
 #
@@ -42,6 +41,5 @@ cell = gto.M(
               C     0.8917  2.6751  2.6751''',
     basis = 'gth-szv',
     pseudo = 'gth-pade',
-    a = numpy.eye(3)*3.5668,
-    gs = [10]*3)
+    a = numpy.eye(3)*3.5668)
 

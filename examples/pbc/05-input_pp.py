@@ -20,7 +20,6 @@ Si2 1 1 1''',
              a = '''3    0    0
                     0    3    0
                     0    0    3''',
-             gs = [5,5,5],
              basis = {'Si1': 'gth-szv',  # Goedecker, Teter and Hutter single zeta basis
                       'Si2': 'lanl2dz'},
              pseudo = {'Si1': gto.pseudo.parse('''
@@ -43,7 +42,6 @@ cell = gto.M(
     a = '''4    0    0
            0    4    0
            0    0    4''',
-    gs = [5,5,5],
     atom = 'Cl 0 0 1; Na 0 1 0',
     basis = {'na': 'gth-szv', 'Cl': 'bfd-vdz'},
     ecp = {'Cl': 'bfd-pp'},
@@ -56,7 +54,6 @@ cell = gto.M(
     a = '''4    0    0
            0    4    0
            0    0    4''',
-    gs = [5,5,5],
     atom = 'Cl 0 0 1; Na 0 1 0',
     basis = {'na': 'gth-szv', 'Cl': 'bfd-vdz'},
     pseudo = {'Na': 'gthbp', 'Cl': 'bfd-pp'})

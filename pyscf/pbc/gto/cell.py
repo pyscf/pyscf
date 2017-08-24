@@ -338,8 +338,8 @@ def get_nimgs(cell, precision=None):
 def _estimate_rcut(alpha, l, c, precision=1e-8):
     C = (c**2+1e-200)*(2*l+1)*alpha / precision
     r0 = 20
-    r0 = np.sqrt(max(0, 2*np.log(C*(r0**2*alpha)**(l+1)).max())) / alpha
-    rcut = np.sqrt(max(0, 2*np.log(C*(r0**2*alpha)**(l+1)).max())) / alpha
+    r0 = np.sqrt(max(0, 2*np.log(C*(r0**2*alpha)**(l+1)).max()) / alpha)
+    rcut = np.sqrt(max(0, 2*np.log(C*(r0**2*alpha)**(l+1)).max()) / alpha)
     return rcut
 
 def bas_rcut(cell, bas_id, precision=1e-8):

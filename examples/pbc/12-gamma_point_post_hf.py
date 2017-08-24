@@ -20,11 +20,11 @@ cell = gto.M(
               C     0.      1.7834  1.7834
               C     0.8917  2.6751  2.6751''',
     basis = '6-31g',
-    gs = [10]*3,
     verbose = 4,
 )
 
 mf = scf.RHF(cell).mix_density_fit(auxbasis='weigend')
+mf.with_df.gs = [5]*3
 mf.kernel()
 
 #

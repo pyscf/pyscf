@@ -105,7 +105,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(cell.ewald(1  , 100), -0.468640671931, 9)
 
         def check(precision, eta_ref, ewald_ref):
-            ew_eta0, ew_cut0 = cell.get_ewald_params(precision)
+            ew_eta0, ew_cut0 = cell.get_ewald_params(precision, gs=[20,20,20])
             self.assertAlmostEqual(ew_eta0, eta_ref)
             self.assertAlmostEqual(cell.ewald(ew_eta0, ew_cut0), ewald_ref, 9)
         check(0.001, 3.15273336976, -0.468640679947)

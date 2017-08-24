@@ -7,6 +7,7 @@ numpy.random.seed(1)
 kband = numpy.random.random((2,3))
 
 def finger(a):
+    a = numpy.asarray(a)
     return numpy.cos(numpy.arange(a.size)).dot(a.ravel())
 
 class KnowValues(unittest.TestCase):
@@ -33,7 +34,7 @@ class KnowValues(unittest.TestCase):
         mf.with_df = df.MDF(cell)
         mf.with_df.kpts_band = kband[0]
         mf.kernel()
-        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), -0.09370365951217785, 6)
+        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), -0.093705179423150875, 6)
 
     def test_fft_bands(self):
         mf = scf.KRHF(cell)
@@ -65,8 +66,8 @@ class KnowValues(unittest.TestCase):
         mf.with_df.kpts_band = kband
         mf.kpts = cell.make_kpts([2]*3)
         mf.kernel()
-        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), -0.32205954835271078, 8)
-        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), -0.64209375063268592, 8)
+        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), -0.32205949082575414, 7)
+        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), -0.6420939191777898, 8)
 
 
 if __name__ == '__main__':

@@ -27,11 +27,15 @@ cell = gto.M(
               C     0.      1.7834  1.7834
               C     0.8917  2.6751  2.6751''',
     basis = '6-31g',
-    gs = [10]*3,
     verbose = 4,
 )
 
-mf = scf.RHF(cell).mix_density_fit(auxbasis='weigend')
+mf = scf.RHF(cell).density_fit(auxbasis='weigend')
+mf.kernel()
+
+# Mixed density fitting is another option for all-electron calculations
+mf = scf.RHF(cell).density_fit(auxbasis='weigend')
+mf.with_df.gs = [5]*3  # Tune #PWs in MDF for performance/accuracy balance
 mf.kernel()
 
 # Or use even-tempered Gaussian basis as auxiliary fitting functions.
@@ -40,7 +44,7 @@ mf.kernel()
 # where a and N are determined by the smallest and largest exponets of AO basis.
 import pyscf.df
 auxbasis = pyscf.df.aug_etb(cell, beta=1.7)
-mf = dft.RKS(cell).mix_density_fit(auxbasis=auxbasis)
+mf = dft.RKS(cell).density_fit(auxbasis=auxbasis)
 mf.xc = 'bp86'
 mf.kernel()
 
@@ -48,7 +52,7 @@ mf.kernel()
 # Second order SCF solver can be used in the PBC SCF code the same way in the
 # molecular calculation
 #
-mf = scf.RHF(cell).mix_density_fit(auxbasis='weigend')
+mf = scf.RHF(cell).density_fit(auxbasis='weigend')
 mf = scf.newton(mf)
 mf.kernel()
 

@@ -20,7 +20,6 @@ cell = gto.M(
               C     0.8917  2.6751  2.6751''',
     basis = 'gth-szv',
     pseudo = 'gth-pade',
-    gs = [10]*3,
     verbose = 4,
 )
 
