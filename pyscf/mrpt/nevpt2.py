@@ -648,6 +648,13 @@ class NEVPT(lib.StreamObject):
 
 
     def kernel(self):
+        from pyscf.mcscf.addons import StateAverageFCISolver
+        if isinstance(self.fcisolver, StateAverageFCISolver):
+            raise RuntimeError('State-average FCI solver object cannot be used '
+                               'in NEVPT2 calculation.\nA separated multi-root '
+                               'CASCI calculation is required for NEVPT2 method. '
+                               'See examples/mrpt/41-for_state_average.py.')
+
         if isinstance(self.verbose, logger.Logger):
             log = self.verbose
         else:
