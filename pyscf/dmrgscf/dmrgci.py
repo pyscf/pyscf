@@ -786,7 +786,6 @@ def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
     pyscf.tools.fcidump.from_integrals(integralFile, h1eff, eri_cas, ncas,
                                        neleca+nelecb, ecore, ms=abs(neleca-nelecb),
                                        orbsym=orbsym)
-    exit()
 
 
 def executeBLOCK(DMRGCI):
