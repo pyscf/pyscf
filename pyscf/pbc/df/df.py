@@ -78,7 +78,7 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
         if np > 0:
 # int1 is the multipole value. l*2+2 is due to the radial part integral
 # \int (r^l e^{-ar^2} * Y_{lm}) (r^l Y_{lm}) r^2 dr d\Omega
-            int1 = gto.mole._gaussian_int(l+2, es)
+            int1 = gto.mole._gaussian_int(l*2+2, es)
             s = numpy.einsum('pi,p->i', cs, int1)
 # The auxiliary basis normalization factor is not a must for density expansion.
 # half_sph_norm here to normalize the monopole (charge).  This convention can
@@ -109,7 +109,9 @@ def make_modchg_basis(auxcell, smooth_eta, l_max=3):
     chg_env = [smooth_eta]
     ptr_eta = auxcell._env.size
     ptr = ptr_eta + 1
-    norms = [half_sph_norm/gto.mole._gaussian_int(l+2, smooth_eta)
+# _gaussian_int(l*2+2) for multipole integral:
+# \int (r^l e^{-ar^2} * Y_{lm}) (r^l Y_{lm}) r^2 dr d\Omega
+    norms = [half_sph_norm/gto.mole._gaussian_int(l*2+2, smooth_eta)
              for l in range(l_max+1)]
     for ia in range(auxcell.natm):
         for l in set(auxcell._bas[auxcell._bas[:,gto.ATOM_OF]==ia, gto.ANG_OF]):
