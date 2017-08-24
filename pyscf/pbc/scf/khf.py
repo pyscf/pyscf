@@ -384,7 +384,7 @@ class KRHF(hf.RHF):
             dm_kpts = lib.asarray([dm]*len(self.kpts))
 
         if cell.dimension < 3:
-            ne = np.einsum('kij,kji->k', dm_kpts, self.get_ovlp(cell))
+            ne = np.einsum('kij,kji->k', dm_kpts, self.get_ovlp(cell)).real
             if np.any(abs(ne - cell.nelectron).sum() > 1e-7):
                 logger.warn(self, 'Big error detected in the electron number '
                             'of initial guess density matrix (Ne/cell = %g)!\n'

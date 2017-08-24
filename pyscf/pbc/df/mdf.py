@@ -15,6 +15,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.df.outcore import _guess_shell_ranges
+from pyscf.pbc import tools
 from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import df
@@ -205,6 +206,26 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 class MDF(df.DF):
     '''Gaussian and planewaves mixed density fitting
     '''
+    def __init__(self, cell, kpts=numpy.zeros((1,3))):
+        df.DF.__init__(self, cell, kpts)
+        self.gs = cell.gs
+        self._eta = None
+
+    @property
+    def eta(self):
+        if self._eta is not None:
+            return self._eta
+        else:
+            cell = self.cell
+            if cell.dimension == 0:
+                return 0.2
+            ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), self.gs)
+            ke_cutoff = ke_cutoff[:cell.dimension].min()
+            return aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision)
+    @eta.setter
+    def eta(self, x):
+        self._eta = x
+
     _make_j3c = _make_j3c
 
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,

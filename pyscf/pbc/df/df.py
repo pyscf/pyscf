@@ -28,6 +28,7 @@ from pyscf.lib import logger
 from pyscf.df import addons
 from pyscf.df.outcore import _guess_shell_ranges
 from pyscf.pbc.gto.cell import _estimate_rcut
+from pyscf.pbc import tools
 from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import aft
@@ -86,7 +87,8 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
             auxcell._env[ptr:ptr+np*nc] = cs.T.reshape(-1)
             steep_shls.append(ib)
 
-            rcut.append(_estimate_rcut(es.min(), l, 1., 20, cell.precision))
+            r = _estimate_rcut(es, l, abs(cs).max(axis=1), cell.precision)
+            rcut.append(r.max())
 
     auxcell.rcut = max(rcut)
 
@@ -107,6 +109,8 @@ def make_modchg_basis(auxcell, smooth_eta, l_max=3):
     chg_env = [smooth_eta]
     ptr_eta = auxcell._env.size
     ptr = ptr_eta + 1
+# _gaussian_int(l*2+2) for multipole integral:
+# \int (r^l e^{-ar^2} * Y_{lm}) (r^l Y_{lm}) r^2 dr d\Omega
     norms = [half_sph_norm/gto.mole._gaussian_int(l*2+2, smooth_eta)
              for l in range(l_max+1)]
     for ia in range(auxcell.natm):
@@ -119,7 +123,7 @@ def make_modchg_basis(auxcell, smooth_eta, l_max=3):
     chgcell._atm = auxcell._atm
     chgcell._bas = numpy.asarray(chg_bas, dtype=numpy.int32).reshape(-1,gto.BAS_SLOTS)
     chgcell._env = numpy.hstack((auxcell._env, chg_env))
-    chgcell.rcut = _estimate_rcut(smooth_eta, l_max, 1., 20, auxcell.precision)
+    chgcell.rcut = _estimate_rcut(smooth_eta, l_max, 1., auxcell.precision)
     chgcell._built = True
     logger.debug1(auxcell, 'make smooth basis, num shells = %d, num cGTOs = %d',
                   chgcell.nbas, chgcell.nao_nr())
@@ -335,9 +339,18 @@ class DF(aft.AFTDF):
 
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
-        self.gs = cell.gs
         self.auxbasis = None
-        self.eta = estimate_eta(cell, cell.precision)
+        if cell.dimension == 0:
+            self.eta = 0.2
+            self.gs = cell.gs
+        else:
+            ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), cell.gs)
+            ke_cutoff = ke_cutoff[:cell.dimension].min()
+            self.eta = min(aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision),
+                           estimate_eta(cell, cell.precision))
+            ke_cutoff = aft.estimate_ke_cutoff_for_eta(cell, self.eta, cell.precision)
+            self.gs = tools.cutoff_to_gs(cell.lattice_vectors(), ke_cutoff)
+            self.gs[cell.dimension:] = cell.gs[cell.dimension:]
 
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
@@ -369,6 +382,10 @@ class DF(aft.AFTDF):
         if self.kpts_band is not None:
             log.info('len(kpts_band) = %d', len(self.kpts_band))
             log.debug1('    kpts_band = %s', self.kpts_band)
+        return self
+
+    def check_sanity(self):
+        return lib.StreamObject.check_sanity(self)
 
     def build(self, j_only=None, with_j3c=True, kpts_band=None):
         if self.kpts_band is not None:
@@ -380,6 +397,7 @@ class DF(aft.AFTDF):
             else:
                 self.kpts_band = unique(numpy.vstack((self.kpts_band,kpts_band)))[0]
 
+        self.check_sanity()
         self.dump_flags()
 
         self.auxcell = make_modrho_basis(self.cell, self.auxbasis, self.eta)

@@ -19,7 +19,6 @@ He 1 0 1
 '''
 cell.basis = 'ccpvdz'
 cell.a = numpy.eye(3) * 4
-cell.gs = [8] * 3
 cell.verbose = 4
 cell.build()
 

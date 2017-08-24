@@ -610,8 +610,8 @@ class KnowValues(unittest.TestCase):
 
         ej1 = numpy.einsum('ij,ji->', vj1, dm)
         ek1 = numpy.einsum('ij,ji->', vk1, dm)
-        self.assertAlmostEqual(ej1, 2.2642719646779832, 9)
-        self.assertAlmostEqual(ek1, 3.2581479552187513, 9)
+        self.assertAlmostEqual(ej1, 2.3002596914518700, 9)
+        self.assertAlmostEqual(ek1, 3.3165691757797346, 9)
 
         dm = mf0.get_init_guess()
         vj0, vk0 = get_jk(mf0, cell, dm)
@@ -623,8 +623,8 @@ class KnowValues(unittest.TestCase):
 
         ej1 = numpy.einsum('ij,ji->', vj1, dm)
         ek1 = numpy.einsum('ij,ji->', vk1, dm)
-        self.assertAlmostEqual(ej1, 2.4216815457582102, 9)
-        self.assertAlmostEqual(ek1, 3.6061858403253977, 9)
+        self.assertAlmostEqual(ej1, 2.4673139106639925, 9)
+        self.assertAlmostEqual(ek1, 3.6886674521354221, 9)
 
     def test_get_jk_kpts(self):
         df = fft.FFTDF(cell)
@@ -639,8 +639,8 @@ class KnowValues(unittest.TestCase):
 
         ej1 = numpy.einsum('xij,xji->', vj1, dms) / len(kpts)
         ek1 = numpy.einsum('xij,xji->', vk1, dms) / len(kpts)
-        self.assertAlmostEqual(ej1, 2.2785994326264971, 9)
-        self.assertAlmostEqual(ek1, 7.5122832961825941, 9)
+        self.assertAlmostEqual(ej1, 2.3163352969873445, 9)
+        self.assertAlmostEqual(ek1, 7.7311228144548600, 9)
 
     def test_get_ao_eri(self):
         df = fft.FFTDF(cell)

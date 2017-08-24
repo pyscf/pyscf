@@ -922,6 +922,7 @@ class _ERIS:
         log = logger.Logger(cc.stdout, cc.verbose)
         if (method == 'incore' and cc._scf._eri is not None and
             (mem_incore+mem_now < cc.max_memory) or cc.mol.incore_anyway):
+            logger.info(self, 'Build MO integrals with incore ao2mo')
             eri1 = ao2mo.incore.full(cc._scf._eri, mo_coeff)
             #:eri1 = ao2mo.restore(1, eri1, nmo)
             #:self.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
@@ -1012,6 +1013,7 @@ class _ERIS:
             self.vvvv = self.feri1['vvvv']
 
         else:
+            logger.info(self, 'Build MO integrals with outcore ao2mo')
             cput1 = time.clock(), time.time()
             self.feri1 = lib.H5TmpFile()
             orbo = mo_coeff[:,:nocc]

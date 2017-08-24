@@ -13,7 +13,7 @@ from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
 from pyscf.pbc import tools
-from pyscf.pbc.gto import pseudo
+from pyscf.pbc.gto import pseudo, estimate_ke_cutoff, error_for_ke_cutoff
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import incore
 from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
@@ -28,6 +28,34 @@ def estimate_eta(cell, cutoff=1e-12):
     # r^5 to guarantee at least up to f shell converging at boundary
     eta = max(numpy.log(4*numpy.pi*cell.rcut**5/cutoff)/cell.rcut**2*2, .2)
     return eta
+
+def estimate_eta_for_ke_cutoff(cell, ke_cutoff, precision=1e-8):
+    b = cell.reciprocal_vectors()
+    if cell.dimension == 0:
+        w = 1
+    elif cell.dimension == 1:
+        w = numpy.linalg.norm(b[0]) / (2*numpy.pi)
+    elif cell.dimension == 2:
+        w = numpy.linalg.norm(numpy.cross(b[0], b[1])) / (2*numpy.pi)**2
+    else:
+        w = abs(numpy.linalg.det(b)) / (2*numpy.pi)**3
+    alpha = 20
+    eta = ke_cutoff / (2*numpy.log(32*numpy.pi**2*w*ke_cutoff**2/(precision*alpha)))
+    return eta
+
+def estimate_ke_cutoff_for_eta(cell, eta, precision=1e-8):
+    b = cell.reciprocal_vectors()
+    if cell.dimension == 0:
+        w = 1
+    elif cell.dimension == 1:
+        w = numpy.linalg.norm(b[0]) / (2*numpy.pi)
+    elif cell.dimension == 2:
+        w = numpy.linalg.norm(numpy.cross(b[0], b[1])) / (2*numpy.pi)**2
+    else:
+        w = abs(numpy.linalg.det(b)) / (2*numpy.pi)**3
+    alpha = 20
+    Ecut = 2 * eta * (8 - numpy.log(precision*alpha/(8*numpy.pi**2*w*eta)))
+    return Ecut
 
 def get_nuc(mydf, kpts=None):
     cell = mydf.cell
@@ -159,13 +187,18 @@ class AFTDF(lib.StreamObject):
         self.stdout = cell.stdout
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
-# For nuclear attraction integrals using Ewald-like technique.
-# Set to 0 to use the regular reciprocal space Poisson-equation method.
-        self.eta = estimate_eta(cell, cell.precision)
-
-        self.kpts = kpts
         self.gs = cell.gs
-
+# For nuclear attraction integrals using Ewald-like technique.
+# Set to 0 to swith off Ewald tech and use the regular reciprocal space
+# method (solving Poisson equation of nuclear charges in reciprocal space).
+        if cell.dimension == 0:
+            self.eta = 0.2
+        else:
+            ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), self.gs)
+            ke_cutoff = ke_cutoff[:cell.dimension].min()
+            self.eta = max(estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision),
+                           estimate_eta(cell, cell.precision))
+        self.kpts = kpts
         self.blockdim = 240 # to mimic molecular DF object
 
 # Not input options
@@ -180,6 +213,29 @@ class AFTDF(lib.StreamObject):
         logger.info(self, 'eta = %s', self.eta)
         logger.info(self, 'len(kpts) = %d', len(self.kpts))
         logger.debug1(self, '    kpts = %s', self.kpts)
+        self.check_sanity()
+        return self
+
+    def check_sanity(self):
+        lib.StreamObject.check_sanity(self)
+        cell = self.cell
+        if cell.dimension == 0:
+            return self
+
+        if cell.ke_cutoff is None:
+            ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), self.gs)
+            ke_cutoff = ke_cutoff[:cell.dimension].min()
+        else:
+            ke_cutoff = numpy.min(cell.ke_cutoff)
+        ke_guess = estimate_ke_cutoff(cell, cell.precision)
+        if ke_cutoff < ke_guess*.8:
+            gs_guess = tools.cutoff_to_gs(cell.lattice_vectors(), ke_guess)
+            logger.warn(self, 'ke_cutoff/gs (%g / %s) is not enough for FFTDF '
+                        'to get integral accuracy %g.\nCoulomb integral error '
+                        'is ~ %.2g Eh.\nRecomended ke_cutoff/gs are %g / %s.',
+                        ke_cutoff, self.gs, cell.precision,
+                        error_for_ke_cutoff(cell, ke_cutoff), ke_guess, gs_guess)
+        return self
 
     def pw_loop(self, gs=None, kpti_kptj=None, q=None, shls_slice=None,
                 max_memory=2000, aosym='s1', blksize=None):
