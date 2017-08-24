@@ -118,7 +118,7 @@ class KnowValues(unittest.TestCase):
         np.random.seed(1)
         kpts_bands = np.random.random((2,3))
         e = kmf1.get_bands(kpts_bands)[0]
-        self.assertAlmostEqual(finger(np.array(e)), -0.045541292730566063, 8)
+        self.assertAlmostEqual(finger(np.array(e)), -0.045547555445877741, 6)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.scf.khf")

@@ -26,6 +26,7 @@ from pyscf.pbc.gto import ecp
 from pyscf.pbc.gto.pseudo import get_pp
 from pyscf.pbc.scf import chkfile
 from pyscf.pbc.scf import addons
+from pyscf.pbc import df
 
 
 def get_ovlp(cell, kpt=np.zeros(3)):
@@ -71,7 +72,6 @@ def get_nuc(cell, kpt=np.zeros(3)):
 
     See Martin (12.16)-(12.21).
     '''
-    from pyscf.pbc import df
     return df.FFTDF(cell).get_nuc(kpt)
 
 
@@ -101,7 +101,6 @@ def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
         The function returns one J matrix, corresponding to the input
         density matrix (both order and shape).
     '''
-    from pyscf.pbc import df
     return df.FFTDF(cell).get_jk(dm, hermi, kpt, kpt_band, with_k=False)[0]
 
 
@@ -131,7 +130,6 @@ def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
         The function returns one J and one K matrix, corresponding to the input
         density matrix (both order and shape).
     '''
-    from pyscf.pbc import df
     return df.FFTDF(cell).get_jk(dm, hermi, kpt, kpt_band, exxdiv=mf.exxdiv)
 
 
@@ -232,7 +230,6 @@ class RHF(hf.RHF):
             MDF model is favored for better accuracy.  See also :mod:`pyscf.pbc.df`.
     '''
     def __init__(self, cell, kpt=np.zeros(3), exxdiv='ewald'):
-        from pyscf.pbc import df
         if not cell._built:
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()
@@ -266,6 +263,20 @@ class RHF(hf.RHF):
                         madelung*self.cell.nelectron * -.5)
         logger.info(self, 'DF object = %s', self.with_df)
         self.with_df.dump_flags()
+        return self
+
+    def check_sanity(self):
+        hf.RHF.check_sanity(self)
+        if not self.cell.has_ecp() and not isinstance(self.with_df, df.df.DF):
+            logger.warn(self, 'FFTDF integrals are found in all-electron '
+                        'calculation.  It often causes huge error.\n'
+                        'Recommended integral methods are DF or MDF.\n'
+                        '        mf = mf.density_fit()\nor\n'
+                        '        mf = mf.mix_density_fit()')
+        if (isinstance(self.exxdiv, str) and self.exxdiv.lower() != 'ewald' and
+            isinstance(self.with_df, df.df.DF)):
+            logger.warn(self, 'exxdiv %s is not supported in DF or MDF',
+                        self.exxdiv)
         return self
 
     def get_hcore(self, cell=None, kpt=None):
