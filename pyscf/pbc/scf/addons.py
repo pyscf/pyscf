@@ -84,6 +84,15 @@ def smearing_(mf, sigma=None, method='fermi'):
         entropy = numpy.exp(-((mo_energy_kpts-mu)/sigma)**2).sum() / numpy.sqrt(numpy.pi)
         return mo_occ_kpts, mu, entropy
 
+    def partition_occ(mo_occ, mo_energy_kpts):
+        mo_occ_kpts = []
+        p1 = 0
+        for e in mo_energy_kpts:
+            p0, p1 = p1, p1 + e.size
+            occ = mo_occ[p0:p1]
+            mo_occ_kpts.append(occ)
+        return mo_occ_kpts
+
     def get_occ(mo_energy_kpts=None, mo_coeff_kpts=None):
         '''Label the occupancies for each orbital for sampled k-points.
 
@@ -99,26 +108,30 @@ def smearing_(mf, sigma=None, method='fermi'):
             nkpts = 1
         if is_uhf:
             nocc = cell_nelec * nkpts
+            mo_es = numpy.append(numpy.hstack(mo_energy_kpts[0]),
+                                 numpy.hstack(mo_energy_kpts[1]))
         else:
             nocc = cell_nelec * nkpts // 2
-        mo_es = numpy.hstack(mo_energy_kpts)
-        mo_energy = numpy.sort(numpy.hstack(mo_energy_kpts))
+            mo_es = numpy.hstack(mo_energy_kpts)
+        mo_energy = numpy.sort(mo_es.ravel())
         fermi = mo_energy[nocc-1]
 
         if mf.smearing_method.lower() == 'fermi':  # Fermi-Dirac smearing
             mo_occs, mu, mf.entropy = fermi_smearing(mo_es, fermi, nkpts)
-
         else:  # Gaussian smearing
             mo_occs, mu, mf.entropy = gaussian_smearing(mo_es, fermi, nkpts)
-        if isinstance(mo_energy_kpts, numpy.ndarray):
-            mo_occ_kpts = mo_occs.reshape(mo_energy_kpts.shape)
+
+        if is_uhf:
+            if is_khf:
+                mo_occ_kpts =(partition_occ(mo_occs, mo_energy_kpts[0]),
+                              partition_occ(mo_occs, mo_energy_kpts[1]))
+            else:
+                mo_occ_kpts = partition_occ(mo_occs, mo_energy_kpts)
         else:
-            mo_occ_kpts = []
-            p1 = 0
-            for e in mo_energy_kpts:
-                p0, p1 = p1, p1 + e.size
-                occ = mo_occs[p0:p1]
-                mo_occ_kpts.append(occ)
+            if is_khf:
+                mo_occ_kpts = partition_occ(mo_occs, mo_energy_kpts)
+            else:
+                mo_occ_kpts = mo_occs
 
         logger.debug(mf, '    Fermi level %g  Sum mo_occ_kpts = %s  should equal nelec = %s',
                      fermi, mo_occs.sum()/nkpts, cell_nelec)
