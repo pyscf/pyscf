@@ -34,9 +34,9 @@ def TestTDHF():
     mol.atom = geom
     mol.basis = 'sto-3g'
     mol.build()
-    the_scf = pyscf.dft.RKS(mol)
-    the_scf.xc='HF'
-    print "Inital SCF finished. E=", the_scf.kernel()
-    aprop = tdscf.tdscf(the_scf,prm,output)
+    ks = pyscf.dft.RKS(mol)
+    ks.xc='HF'
+    ks.kernel()
+    aprop = pyscf.tdscf.tdscf.RTTDSCF(ks,prm,output)
     return
 TestTDHF()
