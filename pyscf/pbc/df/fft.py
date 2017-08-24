@@ -165,10 +165,14 @@ class FFTDF(lib.StreamObject):
         logger.info(self, 'len(kpts) = %d', len(self.kpts))
         logger.debug1(self, '    kpts = %s', self.kpts)
         self.check_sanity()
+        return self
 
     def check_sanity(self):
         lib.StreamObject.check_sanity(self)
         cell = self.cell
+        if cell.dimension == 0:
+            return self
+
         if cell.ke_cutoff is None:
             ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), self.gs)
             ke_cutoff = ke_cutoff[:cell.dimension].min()
@@ -182,6 +186,7 @@ class FFTDF(lib.StreamObject):
                         'is ~ %.2g Eh.\nRecomended ke_cutoff/gs are %g / %s.',
                         ke_cutoff, self.gs, cell.precision,
                         error_for_ke_cutoff(cell, ke_cutoff), ke_guess, gs_guess)
+        return self
 
     def aoR_loop(self, gs=None, kpts=None, kpts_band=None):
         cell = self.cell

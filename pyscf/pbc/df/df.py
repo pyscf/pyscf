@@ -338,12 +338,17 @@ class DF(aft.AFTDF):
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
         self.auxbasis = None
-        ke_cutoff = tools.gs_to_cutoff(self.lattice_vectors(), cell.gs)
-        ke_cutoff = ke_cutoff[:cell.dimension].min()
-        eta = aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision)
-        self.eta = min(eta, estimate_eta(cell, cell.precision))
-        ke_cutoff = aft.estimate_ke_cutoff_for_eta(cell, self.eta, cell.precision)
-        self.gs = tools.cutoff_to_gs(cell.lattice_vectors(), ke_cutoff)
+        if cell.dimension == 0:
+            self.eta = 0.2
+            self.gs = cell.gs
+        else:
+            ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), cell.gs)
+            ke_cutoff = ke_cutoff[:cell.dimension].min()
+            self.eta = min(aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision),
+                           estimate_eta(cell, cell.precision))
+            ke_cutoff = aft.estimate_ke_cutoff_for_eta(cell, self.eta, cell.precision)
+            self.gs = tools.cutoff_to_gs(cell.lattice_vectors(), ke_cutoff)
+            self.gs[cell.dimension:] = cell.gs[cell.dimension:]
 
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
@@ -375,12 +380,12 @@ class DF(aft.AFTDF):
         if self.kpts_band is not None:
             log.info('len(kpts_band) = %d', len(self.kpts_band))
             log.debug1('    kpts_band = %s', self.kpts_band)
+        return self
 
     def check_sanity(self):
-        lib.StreamObject.check_sanity(self)
+        return lib.StreamObject.check_sanity(self)
 
     def build(self, j_only=None, with_j3c=True, kpts_band=None):
-        self.check_sanity()
         if self.kpts_band is not None:
             self.kpts_band = numpy.reshape(self.kpts_band, (-1,3))
         if kpts_band is not None:
@@ -390,6 +395,7 @@ class DF(aft.AFTDF):
             else:
                 self.kpts_band = unique(numpy.vstack((self.kpts_band,kpts_band)))[0]
 
+        self.check_sanity()
         self.dump_flags()
 
         self.auxcell = make_modrho_basis(self.cell, self.auxbasis, self.eta)

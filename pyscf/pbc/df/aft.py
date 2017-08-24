@@ -191,10 +191,13 @@ class AFTDF(lib.StreamObject):
 # For nuclear attraction integrals using Ewald-like technique.
 # Set to 0 to swith off Ewald tech and use the regular reciprocal space
 # method (solving Poisson equation of nuclear charges in reciprocal space).
-        ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), self.gs)
-        ke_cutoff = ke_cutoff[:cell.dimension].min()
-        self.eta = max(estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision),
-                       estimate_eta(cell, cell.precision))
+        if cell.dimension == 0:
+            self.eta = 0.2
+        else:
+            ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), self.gs)
+            ke_cutoff = ke_cutoff[:cell.dimension].min()
+            self.eta = max(estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision),
+                           estimate_eta(cell, cell.precision))
         self.kpts = kpts
         self.blockdim = 240 # to mimic molecular DF object
 
@@ -211,10 +214,14 @@ class AFTDF(lib.StreamObject):
         logger.info(self, 'len(kpts) = %d', len(self.kpts))
         logger.debug1(self, '    kpts = %s', self.kpts)
         self.check_sanity()
+        return self
 
     def check_sanity(self):
         lib.StreamObject.check_sanity(self)
         cell = self.cell
+        if cell.dimension == 0:
+            return self
+
         if cell.ke_cutoff is None:
             ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), self.gs)
             ke_cutoff = ke_cutoff[:cell.dimension].min()
@@ -228,6 +235,7 @@ class AFTDF(lib.StreamObject):
                         'is ~ %.2g Eh.\nRecomended ke_cutoff/gs are %g / %s.',
                         ke_cutoff, self.gs, cell.precision,
                         error_for_ke_cutoff(cell, ke_cutoff), ke_guess, gs_guess)
+        return self
 
     def pw_loop(self, gs=None, kpti_kptj=None, q=None, shls_slice=None,
                 max_memory=2000, aosym='s1', blksize=None):
