@@ -205,6 +205,12 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 class MDF(df.DF):
     '''Gaussian and planewaves mixed density fitting
     '''
+    def __init__(self, cell, kpts=numpy.zeros((1,3))):
+        df.DF.__init__(self, cell, kpts)
+        self.eta = estimate_eta(cell, cell.precision)
+        ke_cutoff = aft.estimate_ke_cutoff_for_eta(cell, self.eta, cell.precision)
+        self.gs = tools.cutoff_to_gs(cell.lattice_vectors(), ke_cutoff)
+
     _make_j3c = _make_j3c
 
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,

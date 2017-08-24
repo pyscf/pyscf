@@ -14,7 +14,7 @@ from pyscf import gto
 from pyscf import dft
 from pyscf.lib import logger
 from pyscf.pbc import tools
-from pyscf.pbc.gto import pseudo
+from pyscf.pbc.gto import pseudo, estimate_ke_cutoff, error_for_ke_cutoff
 from pyscf.pbc.dft import numint
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import fft_ao2mo
@@ -164,6 +164,24 @@ class FFTDF(lib.StreamObject):
         logger.info(self, 'gs = %s', self.gs)
         logger.info(self, 'len(kpts) = %d', len(self.kpts))
         logger.debug1(self, '    kpts = %s', self.kpts)
+        self.check_sanity()
+
+    def check_sanity(self):
+        lib.StreamObject.check_sanity(self)
+        cell = self.cell
+        if cell.ke_cutoff is None:
+            ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), self.gs)
+            ke_cutoff = ke_cutoff[:cell.dimension].min()
+        else:
+            ke_cutoff = numpy.min(cell.ke_cutoff)
+        ke_guess = estimate_ke_cutoff(cell, cell.precision)
+        if ke_cutoff < ke_guess*.8:
+            gs_guess = tools.cutoff_to_gs(cell.lattice_vectors(), ke_guess)
+            logger.warn(self, 'ke_cutoff/gs (%g / %s) is not enough for FFTDF '
+                        'to get integral accuracy %g.\nCoulomb integral error '
+                        'is ~ %.2g Eh.\nRecomended ke_cutoff/gs are %g / %s.',
+                        ke_cutoff, self.gs, cell.precision,
+                        error_for_ke_cutoff(cell, ke_cutoff), ke_guess, gs_guess)
 
     def aoR_loop(self, gs=None, kpts=None, kpts_band=None):
         cell = self.cell

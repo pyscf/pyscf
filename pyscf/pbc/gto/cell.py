@@ -11,6 +11,7 @@ import ctypes
 import warnings
 import numpy as np
 import scipy.linalg
+import scipy.misc
 import scipy.optimize
 import pyscf.lib.parameters as param
 from pyscf import lib
@@ -334,9 +335,11 @@ def get_nimgs(cell, precision=None):
     nimgs = cell.get_bounding_sphere(rcut)
     return nimgs
 
-def _estimate_rcut(alpha, l, cc, r0, precision=1e-8):
-    tmp = 2*np.log((cc+1e-200)*(2*l+1)*alpha*(r0**2*alpha)**(l+1)/precision)
-    rcut = np.sqrt(max(0, tmp.max())/alpha)
+def _estimate_rcut(alpha, l, c, precision=1e-8):
+    C = (c**2+1e-200)*(2*l+1)*alpha / precision
+    r0 = 20
+    r0 = np.sqrt(max(0, 2*np.log(C*(r0**2*alpha)**(l+1)).max())) / alpha
+    rcut = np.sqrt(max(0, 2*np.log(C*(r0**2*alpha)**(l+1)).max())) / alpha
     return rcut
 
 def bas_rcut(cell, bas_id, precision=1e-8):
@@ -347,11 +350,62 @@ def bas_rcut(cell, bas_id, precision=1e-8):
     '''
     l = cell.bas_angular(bas_id)
     es = cell.bas_exp(bas_id)
-    cs = cell.bas_ctr_coeff(bas_id)
-    cs = np.max(cs**2,axis=1)
-    rcut = _estimate_rcut(es, l, cs, 20, precision)
-    rcut = _estimate_rcut(es, l, cs, rcut, precision)
+    cs = abs(cell.bas_ctr_coeff(bas_id)).max(axis=1)
+    rcut = _estimate_rcut(es, l, cs, precision)
     return rcut.max()
+
+def _estimate_ke_cutoff(alpha, l, c, precision=1e-8, weight=1.):
+    '''Energy cutoff estimation'''
+    log_k0 = 2.5 + np.log(alpha) / 2
+    l2fac2 = scipy.misc.factorial2(l*2+1)
+    log_rest = np.log(precision*l2fac2**2*(4*alpha)**(l*2+1) / (32*np.pi**2*c**4*weight))
+    Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
+    log_k0 = .5 * np.log(Ecut*2)
+    Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
+    return Ecut.max()
+
+def estimate_ke_cutoff(cell, precision=1e-8):
+    '''Energy cutoff estimation'''
+    b = cell.reciprocal_vectors()
+    if cell.dimension == 0:
+        w = 1
+    elif cell.dimension == 1:
+        w = np.linalg.norm(b[0]) / (2*np.pi)
+    elif cell.dimension == 2:
+        w = np.linalg.norm(np.cross(b[0], b[1])) / (2*np.pi)**2
+    else:
+        w = abs(np.linalg.det(b)) / (2*np.pi)**3
+
+    Ecut_max = 0
+    for i in range(cell.nbas):
+        l = cell.bas_angular(i)
+        es = cell.bas_exp(i)
+        cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
+        Ecut_max = max(Ecut_max, _estimate_ke_cutoff(es, l, cs, precision, w))
+    return Ecut_max
+
+def error_for_ke_cutoff(cell, ke_cutoff):
+    b = cell.reciprocal_vectors()
+    if cell.dimension == 0:
+        w = 1
+    elif cell.dimension == 1:
+        w = np.linalg.norm(b[0]) / (2*np.pi)
+    elif cell.dimension == 2:
+        w = np.linalg.norm(np.cross(b[0], b[1])) / (2*np.pi)**2
+    else:
+        w = abs(np.linalg.det(b)) / (2*np.pi)**3
+
+    kmax = np.sqrt(ke_cutoff*2)
+    err = 0
+    for i in range(cell.nbas):
+        l = cell.bas_angular(i)
+        es = cell.bas_exp(i)
+        cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
+        l2fac2 = scipy.misc.factorial2(l*2+1)
+        e = (32*np.pi**2*cs**4*w/(l2fac2**2*(4*es)**(l*2+1))
+             * kmax**(l*4+3) * np.exp(-kmax**2/(4*es)))
+        err = max(err, e.max())
+    return err
 
 def get_bounding_sphere(cell, rcut):
     '''Finds all the lattice points within a sphere of radius rcut.  
@@ -493,14 +547,13 @@ def get_ewald_params(cell, precision=1e-8, gs=None):
         ew_eta, ew_cut : float
             The Ewald 'eta' and 'cut' parameters.
     '''
-    if gs is None:
-        gs = cell.gs
-
     if cell.dimension == 3:
-        Gmax = min(np.asarray(cell.gs) * lib.norm(cell.reciprocal_vectors(), axis=1))
+        if gs is None:
+            gs = 5
+        Gmax = min(np.asarray(gs) * lib.norm(cell.reciprocal_vectors(), axis=1))
         log_precision = np.log(precision/(4*np.pi*Gmax**2))
         ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
-        ew_cut = _estimate_rcut(ew_eta**2, 0, 1., 20, precision)
+        ew_cut = _estimate_rcut(ew_eta**2, 0, 1., precision)
     else:
 # Non-uniform PW grids are used for low-dimensional ewald summation.  The cutoff
 # estimation for long range part based on exp(G^2/(4*eta^2)) does not work for
@@ -683,15 +736,17 @@ class Cell(mole.Mole):
             Reciprocal lattice vectors are given by  b1,b2,b3 = 2 pi inv(a).T
         gs : (3,) list of ints
             The number of *positive* G-vectors along each direction.
+            The default value is estimated based on :attr:`precision`
         pseudo : dict or str
             To define pseudopotential.
         precision : float
             To control Ewald sums and lattice sums accuracy
         rcut : float
-            Cutoff radius (unit Bohr) in lattice summation. By default is
-            estimated based on the required :attr:`precision`.
+            Cutoff radius (unit Bohr) in lattice summation. The default value
+            is estimated based on the required :attr:`precision`.
         ke_cutoff : float
-            If set, defines a spherical cutoff of fourier components, with .5 * G**2 < ke_cutoff
+            If set, defines a spherical cutoff of planewaves, with .5 * G**2 < ke_cutoff
+            The default value is estimated based on :attr:`precision`
         dimension : int
             Default is 3
 
@@ -765,7 +820,6 @@ class Cell(mole.Mole):
         if ke_cutoff is not None: self.ke_cutoff = ke_cutoff
 
         assert(self.a is not None)
-        assert(self.gs is not None or self.ke_cutoff is not None)
 
         if 'unit' in kwargs:
             self.unit = kwargs['unit']
@@ -801,9 +855,18 @@ class Cell(mole.Mole):
             sys.stderr.write('''WARNING!
   Lattice are not in right-handed coordinate system. This can cause wrong value for some integrals.
   It's recommended to resort the lattice vectors to\na = %s\n\n''' % _a[[0,2,1]])
+
+        ke_cutoff is None
         if self.gs is None:
-            assert(self.ke_cutoff is not None)
-            self.gs = pbctools.cutoff_to_gs(_a, self.ke_cutoff)
+            if self.ke_cutoff is None:
+                ke_cutoff = estimate_ke_cutoff(self, self.precision)
+            else:
+                ke_cutoff = self.ke_cutoff
+            self.gs = pbctools.cutoff_to_gs(_a, ke_cutoff)
+            if self.dimension < 3:
+                #prec ~ exp(-0.87278467*gs -2.99944305)*nelec
+                gz = np.log(self.nelectron/self.precision)/0.8727847-3.4366358
+                self.gs[self.dimension:] = int(gz)
 
         if self.ew_eta is None or self.ew_cut is None:
             self.ew_eta, self.ew_cut = self.get_ewald_params(self.precision, self.gs)
@@ -819,14 +882,13 @@ class Cell(mole.Mole):
             logger.info(self, 'lattice sum = %d cells', len(self.get_lattice_Ls()))
             logger.info(self, 'precision = %g', self.precision)
             logger.info(self, 'pseudo = %s', self.pseudo)
-            if self.ke_cutoff is not None:
-                logger.info(self, 'ke_cutoff = %s', self.ke_cutoff)
+            if ke_cutoff is not None:
+                logger.info(self, 'ke_cutoff = %s', ke_cutoff)
                 logger.info(self, '    = gs (FFT-mesh) %s', self.gs)
             else:
                 logger.info(self, 'gs (FFT-mesh) = %s', self.gs)
-                b = self.reciprocal_vectors()
-                kmax = lib.norm(b, axis=1) * np.asarray(self.gs)
-                logger.info(self, '    = ke_cutoff %s', kmax**2/2)
+                Ecut = pbctools.gs_to_cutoff(self.lattice_vectors(), self.gs)
+                logger.info(self, '    = ke_cutoff %s', Ecut[:self.dimension])
             logger.info(self, 'ew_eta = %g', self.ew_eta)
             logger.info(self, 'ew_cut = %s (nimgs = %s)', self.ew_cut,
                         self.get_bounding_sphere(self.ew_cut))
@@ -876,7 +938,7 @@ class Cell(mole.Mole):
         self.rcut = max(np.asarray(x) / heights_inv)
 
         if self.nbas == 0:
-            rcut_guess = _estimate_rcut(.05, 0, 1, 20, 1e-8)
+            rcut_guess = _estimate_rcut(.05, 0, 1, 1e-8)
         else:
             rcut_guess = max([self.bas_rcut(ib, self.precision)
                               for ib in range(self.nbas)])

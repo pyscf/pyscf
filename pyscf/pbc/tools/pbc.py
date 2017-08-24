@@ -440,3 +440,10 @@ def cutoff_to_gs(a, cutoff):
     gs = np.ceil(np.sqrt(2*cutoff)/lib.norm(b, axis=1)).astype(int)
     return gs
 
+def gs_to_cutoff(a, gs):
+    '''
+    Convert #grid points to KE cutoff
+    '''
+    b = 2 * np.pi * np.linalg.inv(a.T)
+    Gmax = lib.norm(b, axis=1) * np.asarray(gs)
+    return Gmax**2/2

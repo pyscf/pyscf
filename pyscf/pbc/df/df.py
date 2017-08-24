@@ -28,6 +28,7 @@ from pyscf.lib import logger
 from pyscf.df import addons
 from pyscf.df.outcore import _guess_shell_ranges
 from pyscf.pbc.gto.cell import _estimate_rcut
+from pyscf.pbc import tools
 from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import aft
@@ -77,7 +78,7 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
         if np > 0:
 # int1 is the multipole value. l*2+2 is due to the radial part integral
 # \int (r^l e^{-ar^2} * Y_{lm}) (r^l Y_{lm}) r^2 dr d\Omega
-            int1 = gto.mole._gaussian_int(l*2+2, es)
+            int1 = gto.mole._gaussian_int(l+2, es)
             s = numpy.einsum('pi,p->i', cs, int1)
 # The auxiliary basis normalization factor is not a must for density expansion.
 # half_sph_norm here to normalize the monopole (charge).  This convention can
@@ -86,7 +87,8 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
             auxcell._env[ptr:ptr+np*nc] = cs.T.reshape(-1)
             steep_shls.append(ib)
 
-            rcut.append(_estimate_rcut(es.min(), l, 1., 20, cell.precision))
+            r = _estimate_rcut(es, l, abs(cs).max(axis=1), cell.precision)
+            rcut.append(r.max())
 
     auxcell.rcut = max(rcut)
 
@@ -107,7 +109,7 @@ def make_modchg_basis(auxcell, smooth_eta, l_max=3):
     chg_env = [smooth_eta]
     ptr_eta = auxcell._env.size
     ptr = ptr_eta + 1
-    norms = [half_sph_norm/gto.mole._gaussian_int(l*2+2, smooth_eta)
+    norms = [half_sph_norm/gto.mole._gaussian_int(l+2, smooth_eta)
              for l in range(l_max+1)]
     for ia in range(auxcell.natm):
         for l in set(auxcell._bas[auxcell._bas[:,gto.ATOM_OF]==ia, gto.ANG_OF]):
@@ -119,7 +121,7 @@ def make_modchg_basis(auxcell, smooth_eta, l_max=3):
     chgcell._atm = auxcell._atm
     chgcell._bas = numpy.asarray(chg_bas, dtype=numpy.int32).reshape(-1,gto.BAS_SLOTS)
     chgcell._env = numpy.hstack((auxcell._env, chg_env))
-    chgcell.rcut = _estimate_rcut(smooth_eta, l_max, 1., 20, auxcell.precision)
+    chgcell.rcut = _estimate_rcut(smooth_eta, l_max, 1., auxcell.precision)
     chgcell._built = True
     logger.debug1(auxcell, 'make smooth basis, num shells = %d, num cGTOs = %d',
                   chgcell.nbas, chgcell.nao_nr())
@@ -335,9 +337,13 @@ class DF(aft.AFTDF):
 
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
-        self.gs = cell.gs
         self.auxbasis = None
-        self.eta = estimate_eta(cell, cell.precision)
+        ke_cutoff = tools.gs_to_cutoff(self.lattice_vectors(), cell.gs)
+        ke_cutoff = ke_cutoff[:cell.dimension].min()
+        eta = aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision)
+        self.eta = min(eta, estimate_eta(cell, cell.precision))
+        ke_cutoff = aft.estimate_ke_cutoff_for_eta(cell, self.eta, cell.precision)
+        self.gs = tools.cutoff_to_gs(cell.lattice_vectors(), ke_cutoff)
 
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
@@ -370,7 +376,11 @@ class DF(aft.AFTDF):
             log.info('len(kpts_band) = %d', len(self.kpts_band))
             log.debug1('    kpts_band = %s', self.kpts_band)
 
+    def check_sanity(self):
+        lib.StreamObject.check_sanity(self)
+
     def build(self, j_only=None, with_j3c=True, kpts_band=None):
+        self.check_sanity()
         if self.kpts_band is not None:
             self.kpts_band = numpy.reshape(self.kpts_band, (-1,3))
         if kpts_band is not None:
