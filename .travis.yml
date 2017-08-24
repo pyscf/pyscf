@@ -37,17 +37,24 @@ install:
       cd pyscf/lib &&
       mkdir build &&
       cd build &&
-      cmake .. &&
+      cmake -DBUILD_XCFUN=0 .. &&
       make &&
       cd ../..
 
 before_script:
-      export PYTHONPATH=$(pwd):$PYTHONPATH
+    - export PYTHONPATH=$(pwd):$PYTHONPATH
+    - rm -r $TRAVIS_BUILD_DIR/pyscf/pbc/tests
 
 script:
     - >
-      nosetests -v -e pbc -e pyscf -e geomopt -e dmrgscf -e fciqmcscf -e icmpspt -e examples
+      nosetests -v -e pyscf -e geomopt -e dmrgscf -e fciqmcscf -e icmpspt -e examples
       -e test_bz
       -e test_tdrks_grad
       -e test_mc2step_4o4e
       -e test_contract_ss
+      -e test_ks_noimport
+      -e test_ecp_pseudo
+      -e test_jk_single_kpt
+      -e test_jk_hermi0
+      -e test_j_kpts
+      -e test_k_kpts

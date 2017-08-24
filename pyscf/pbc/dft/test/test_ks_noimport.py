@@ -121,6 +121,7 @@ class BN(unittest.TestCase):
         model.xc = 'lda'
         model.kernel()
         e,w = model.get_bands(self.k_points_cartesian_bohr)
+        e = numpy.asarray(e)
         avg = numpy.mean(e-self.bands_hartree)
         delta = e-self.bands_hartree-avg
         dev_max = numpy.abs(delta).max()

@@ -33,7 +33,7 @@ def finger(a):
     return numpy.dot(a.ravel(), w)
 
 class KnowValues(unittest.TestCase):
-    def test_jk(self):
+    def test_jk_single_kpt(self):
         mf = df_jk.density_fit(mf0, auxbasis='weigend', gs=(5,)*3)
         mf.with_df.gs = cell.gs
         mf.with_df.eta = 0.3
