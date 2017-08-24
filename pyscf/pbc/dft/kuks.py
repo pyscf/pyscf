@@ -19,7 +19,6 @@ from pyscf.lib import logger
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.pbc.dft import rks
-from pyscf.scf import uhf as moluhf
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
              kpts=None, kpts_band=None):
@@ -52,10 +51,11 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     hyb = ks._numint.hybrid_coeff(ks.xc, spin=cell.spin)
     if abs(hyb) < 1e-10:
         vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
-        vhf = lib.asarray([vj[0]+vj[1]] * 2)
+        vhf = vj[0] + vj[1]
+        vhf = lib.asarray((vhf,vhf))
     else:
         vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
-        vhf=moluhf._makevhf(vj,vk*hyb)
+        vhf = vj[0] + vj[1] - vk * hyb
 
         if ground_state:
             ks._exc -= (np.einsum('Kij,Kji', dm[0], vk[0]) +

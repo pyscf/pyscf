@@ -69,7 +69,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vk += ks._vk_last
             ks._dm_last = dm
             ks._vj_last, ks._vk_last = vj, vk
-        vhf = uhf._makevhf(vj, vk*hyb)
+        vhf = vj[0] + vj[1] - vk * hyb
 
         if ground_state:
             ks._exc -=(numpy.einsum('ij,ji', dm[0], vk[0]) +

@@ -92,7 +92,6 @@ class UHF(mol_uhf.UHF, pbchf.RHF):
     def dump_flags(self):
         mol_uhf.UHF.dump_flags(self)
         pbchf.RHF.dump_flags(self)
-        self.with_df.dump_flags()
         return self
 
     def check_sanity(self):
