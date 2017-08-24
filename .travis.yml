@@ -37,7 +37,7 @@ install:
       cd pyscf/lib &&
       mkdir build &&
       cd build &&
-      cmake -DBUILD_XCFUN=0 .. &&
+      cmake .. &&
       make &&
       cd ../..
 
