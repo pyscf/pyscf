@@ -3,10 +3,10 @@ import numpy as np
 from pyscf.nao.m_ao_log import ao_log_c
 from pyscf.nao.m_sbt import sbt_c
 from pyscf.nao.m_c2r import c2r_c
-from pyscf.nao.m_gaunt import gaunt_c
 from pyscf.nao.m_log_interp import log_interp_c
 from pyscf.nao.m_ao_log_hartree import ao_log_hartree
 from timeit import default_timer as timer
+from pyscf.nao.m_gaunt import gaunt_c
 
 #
 #
@@ -68,7 +68,7 @@ def build_3dgrid3c(me, sp1, sp2, R1, R2, sp3, R3, level=3):
   return grids
 
 #
-#
+
 #
 class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
   '''
