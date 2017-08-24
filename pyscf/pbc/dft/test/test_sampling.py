@@ -9,19 +9,14 @@ import numpy as np
 import pyscf.pbc.gto as pbcgto
 import pyscf.pbc.dft as pbcdft
 import pyscf.pbc.tools
-import pyscf.pbc.tools.pyscf_ase as pyscf_ase
-
-import ase
-import ase.dft.kpoints
-from ase.lattice import bulk
 
 def make_primitive_cell(ngs):
-    ase_atom = bulk('C', 'diamond', a=3.5668)
-
     cell = pbcgto.Cell()
     cell.unit = 'A'
-    cell.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
-    cell.a = ase_atom.cell
+    cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
+    cell.a = '''0.      1.7834  1.7834
+                1.7834  0.      1.7834
+                1.7834  1.7834  0.    '''
 
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
@@ -43,8 +38,7 @@ class KnowValues(unittest.TestCase):
 
     def xtest_kpt_222(self):
         cell = make_primitive_cell(8)
-        scaled_kpts = ase.dft.kpoints.monkhorst_pack((2,2,2))
-        abs_kpts = cell.get_abs_kpts(scaled_kpts)
+        abs_kpts = cell.make_kpts([2,2,2], wrap_around=True)
         kmf = pbcdft.KRKS(cell, abs_kpts)
         kmf.xc = 'lda,vwn'
         #kmf.analytic_int = False
@@ -58,8 +52,7 @@ class KnowValues(unittest.TestCase):
         # Comparison is only perfect for odd-numbered supercells and kpt sampling
         assert all(np.array(nk) % 2 == np.array([1,1,1]))
         cell = make_primitive_cell(ngs)
-        scaled_kpts = ase.dft.kpoints.monkhorst_pack(nk)
-        abs_kpts = cell.get_abs_kpts(scaled_kpts)
+        abs_kpts = cell.make_kpts(nk, wrap_around=True)
         kmf = pbcdft.KRKS(cell, abs_kpts)
         kmf.xc = 'lda,vwn'
         #kmf.analytic_int = False

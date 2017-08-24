@@ -12,23 +12,17 @@ from pyscf.pbc import scf as pbchf
 from pyscf.pbc.scf import khf
 from pyscf.pbc.scf import kuhf
 import pyscf.pbc.tools
-import pyscf.pbc.tools.pyscf_ase as pyscf_ase
-
-import ase
-import ase.lattice
-import ase.dft.kpoints
 
 def finger(a):
     return np.dot(np.cos(np.arange(a.size)), a.ravel())
 
 def make_primitive_cell(ngs):
-    from ase.lattice import bulk
-    ase_atom = ase.build.bulk('C', 'diamond', a=3.5668)
-
     cell = pbcgto.Cell()
     cell.unit = 'A'
-    cell.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
-    cell.a = ase_atom.cell
+    cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
+    cell.a = '''0.      1.7834  1.7834
+                1.7834  0.      1.7834
+                1.7834  1.7834  0.    '''
 
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
@@ -48,15 +42,13 @@ class KnowValues(unittest.TestCase):
         nk = (3, 1, 1)
         cell = make_primitive_cell(ngs)
 
-        scaled_kpts = ase.dft.kpoints.monkhorst_pack(nk)
-        abs_kpts = cell.get_abs_kpts(scaled_kpts)
+        abs_kpts = cell.make_kpts(nk, wrap_around=True)
         kmf = khf.KRHF(cell, abs_kpts, exxdiv='vcut_sph')
         ekpt = kmf.scf()
         self.assertAlmostEqual(ekpt, -11.221426249047617, 8)
 
         nk = (5, 1, 1)
-        scaled_kpts = ase.dft.kpoints.monkhorst_pack(nk)
-        abs_kpts = cell.get_abs_kpts(scaled_kpts)
+        abs_kpts = cell.make_kpts(nk, wrap_around=True)
         kmf = khf.KRHF(cell, abs_kpts, exxdiv='vcut_sph')
         ekpt = kmf.scf()
         self.assertAlmostEqual(ekpt, -12.337299166550796, 8)
@@ -68,8 +60,7 @@ class KnowValues(unittest.TestCase):
         #print "supcell gs =", supcell.gs
         supcell.build()
 
-        scaled_gamma = ase.dft.kpoints.monkhorst_pack((1,1,1))
-        gamma = supcell.get_abs_kpts(scaled_gamma)
+        gamma = [0,0,0]
         mf = khf.KRHF(supcell, gamma, exxdiv='vcut_sph')
         esup = mf.scf()/np.prod(nk)
 
