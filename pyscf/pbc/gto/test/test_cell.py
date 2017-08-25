@@ -237,6 +237,21 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(cell.ecp, {'na': 'lanl2dz', 'Cu': 'stuttgartrsc'})
         self.assertEqual(cell.pseudo, {'S': 'gthbp', 'O': 'gthbp'})
 
+    def test_pseudo_suffix(self):
+        cell = pgto.M(
+            a = np.eye(3)*5,
+            gs = [4]*3,
+            atom = 'Mg 0 0 1',
+            pseudo = {'Mg': 'gth-lda'})
+        self.assertEqual(cell.atom_nelec_core(0), 2)
+
+        cell = pgto.M(
+            a = np.eye(3)*5,
+            gs = [4]*3,
+            atom = 'Mg 0 0 1',
+            pseudo = {'Mg': 'gth-lda q2'})
+        self.assertEqual(cell.atom_nelec_core(0), 10)
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.cell")

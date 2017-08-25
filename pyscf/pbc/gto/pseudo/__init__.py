@@ -4,6 +4,7 @@
 #         Timothy Berkelbach <tim.berkelbach@gmail.com>
 
 import os
+import re
 from pyscf.pbc.gto.pseudo import parse_cp2k
 from pyscf.pbc.gto.pseudo.pp import *
 from pyscf.pbc.gto.pseudo import pp_int
@@ -61,14 +62,19 @@ def load(pseudo_name, symb):
     if os.path.isfile(pseudo_name):
         return parse_cp2k.load(pseudo_name, symb)
 
-    name_suffix = pseudo_name.lower().replace('-', '').replace('_', '')
-    name = name_suffix.split()[0]
+    name, suffix = _format_pseudo_name(pseudo_name)
     pseudomod = ALIAS[name]
-    if ' ' in name_suffix:
-        suffix = name_suffix.split()[1]
-    else:
-        suffix = None
     symb = ''.join(i for i in symb if i.isalpha())
     p = parse_cp2k.load(os.path.join(os.path.dirname(__file__), pseudomod), symb, suffix)
     return p
 
+SUFFIX_PATTERN = re.compile('q\d+$')
+def _format_pseudo_name(pseudo_name):
+    name_suffix = pseudo_name.lower().replace('-', '').replace('_', '').replace(' ', '')
+    match = re.search(SUFFIX_PATTERN, name_suffix)
+    if match:
+        name = name_suffix[:match.start()]
+        suffix = name_suffix[match.start():]
+    else:
+        name, suffix = name_suffix, None
+    return name, suffix

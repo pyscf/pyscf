@@ -3,10 +3,7 @@ import numpy
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import tools
 from pyscf.pbc.scf import khf
-import pyscf.pbc.tools.pyscf_ase as pyscf_ase
 from pyscf import lib
-
-from ase.build import bulk
 
 def finger(a):
     w = numpy.cos(numpy.arange(a.size))
@@ -15,11 +12,12 @@ def finger(a):
 
 class KnowValues(unittest.TestCase):
     def test_coulG_ws(self):
-        ase_atom = bulk('C', 'diamond', a=3.5668)
         cell = pbcgto.Cell()
         cell.unit = 'A'
-        cell.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
-        cell.a = ase_atom.cell
+        cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
+        cell.a = '''0.      1.7834  1.7834
+                    1.7834  0.      1.7834
+                    1.7834  1.7834  0.    '''
         cell.basis = 'gth-szv'
         cell.pseudo = 'gth-pade'
         cell.gs = [5]*3
@@ -34,11 +32,12 @@ class KnowValues(unittest.TestCase):
     def test_coulG(self):
         numpy.random.seed(19)
         kpt = numpy.random.random(3)
-        ase_atom = bulk('C', 'diamond', a=3.5668)
         cell = pbcgto.Cell()
         cell.unit = 'A'
-        cell.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
-        cell.a = ase_atom.cell + numpy.random.random((3,3)).T
+        cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
+        cell.a = numpy.array(((0.    , 1.7834, 1.7834),
+                              (1.7834, 0.    , 1.7834),
+                              (1.7834, 1.7834, 0.    ),)) + numpy.random.random((3,3)).T
         cell.basis = 'gth-szv'
         cell.pseudo = 'gth-pade'
         cell.gs = [5,4,3]
@@ -80,7 +79,7 @@ class KnowValues(unittest.TestCase):
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
         Ls = tools.get_lattice_Ls(cl1)
-        self.assertEqual(Ls.shape, (1509,3))
+        self.assertEqual(Ls.shape, (1725,3))
 
     def test_super_cell(self):
         numpy.random.seed(2)
@@ -98,7 +97,7 @@ class KnowValues(unittest.TestCase):
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
         cl2 = tools.cell_plus_imgs(cl1, cl1.nimgs)
-        self.assertAlmostEqual(finger(cl2.atom_coords()), 22.233540464902909, 9)
+        self.assertAlmostEqual(finger(cl2.atom_coords()), 465.86333525744129, 9)
 
 
 if __name__ == '__main__':

@@ -360,6 +360,7 @@ def _estimate_ke_cutoff(alpha, l, c, precision=1e-8, weight=1.):
     l2fac2 = scipy.misc.factorial2(l*2+1)
     log_rest = np.log(precision*l2fac2**2*(4*alpha)**(l*2+1) / (32*np.pi**2*c**4*weight))
     Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
+    Ecut[Ecut<0] = 1e-10
     log_k0 = .5 * np.log(Ecut*2)
     Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
     return Ecut.max()
@@ -686,17 +687,16 @@ def gen_uniform_grids(cell, gs=None):
 # defined in ecp, the misplaced ecp atom found in pp does NOT replace the
 # definition in ecp, and versa vise.
 def classify_ecp_pseudo(cell, ecp, pp):
-    def convert(name):
-        return str(name.lower().replace(' ', '').replace('-', '').replace('_', ''))
     def classify(ecp, pp_alias):
         if isinstance(ecp, (str, unicode)):
-            if convert(ecp) in pp_alias:
+            if pseudo._format_pseudo_name(ecp)[0] in pp_alias:
                 return {}, str(ecp)
         elif isinstance(ecp, dict):
             ecp_as_pp = {}
             for atom in ecp:
                 key = ecp[atom]
-                if isinstance(key, (str, unicode)) and convert(key) in pp_alias:
+                if (isinstance(key, (str, unicode)) and
+                    pseudo._format_pseudo_name(key)[0] in pp_alias):
                     ecp_as_pp[atom] = str(key)
             if ecp_as_pp:
                 ecp_left = dict(ecp)
@@ -953,10 +953,8 @@ class Cell(mole.Mole):
         if _ecp and self._pseudo:
             conflicts = set(self._pseudo.keys()).intersection(set(_ecp.keys()))
             if conflicts:
-                logger.warn(self, 'Pseudo potential for atoms %s are defined '
-                            'in both .ecp and .pseudo.  Definitions in .pseudo '
-                            'are taken.', list(conflicts))
-                _ecp = dict((k,_ecp[k]) for k in _ecp if k not in self._pseudo)
+                raise RuntimeError('Pseudo potential for atoms %s are defined '
+                                   'in both .ecp and .pseudo.' % list(conflicts))
 
         _ecpbas, _env = np.zeros((0,8)), pre_env
         if _ecp:
