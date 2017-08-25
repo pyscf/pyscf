@@ -41,7 +41,7 @@ def test_cell_n0( L = 5.0, ngs = 4):
     cell.a[1,0] = 5.0
 
     cell.basis = 'gth-szv'
-    cell.pseudo = 'gth-pade'
+    cell.pseudo = 'gth-pade-q2'
     cell.gs = np.array([ngs,ngs,ngs])
 
     cell.output = '/dev/null'
@@ -55,7 +55,7 @@ def test_cell_n1( L = 5.0, ngs = 4):
     cell.a = L * np.identity(3)
 
     cell.basis = 'sto-3g'
-    cell.pseudo = 'gth-pade'
+    cell.pseudo = 'gth-pade-q2'
     cell.gs = np.array([ngs,ngs,ngs])
 
     cell.output = '/dev/null'

@@ -2136,8 +2136,8 @@ class _ERIS:
             self.ovov = eri_aa[:nocca,nocca:,:nocca,nocca:].copy()
             self.oovv = eri_aa[:nocca,:nocca,nocca:,nocca:].copy()
             self.ovvo = eri_aa[:nocca,nocca:,nocca:,:nocca].copy()
-            ovvv = eri_aa[:nocca,nocca:,nocca:,nocca:].reshape(-1,nvira,nvira)
-            self.ovvv = lib.pack_tril(ovvv).reshape(nocca,nvira,-1)
+            ovvv = eri_aa[:nocca,nocca:,nocca:,nocca:].reshape(nocca*nvira,nvira,nvira)
+            self.ovvv = lib.pack_tril(ovvv).reshape(nocca,nvira,nvira*(nvira+1)//2)
             ovvv = None
             self.vvvv = ao2mo.restore(4, eri_aa[nocca:,nocca:,nocca:,nocca:].copy(), nvira)
             self.OOOO = eri_bb[:noccb,:noccb,:noccb,:noccb].copy()

@@ -643,19 +643,6 @@ class DMRGCI(pyscf.lib.StreamObject):
                 self._restart = False
         return callback
 
-    def spin_square(self, civec, norb, nelec):
-        if isinstance(nelec, (int, numpy.integer)):
-            nelecb = nelec//2
-            neleca = nelec - nelecb
-        else :
-            neleca, nelecb = nelec
-        s = (neleca - nelecb) * .5
-        ss = s * (s+1)
-        if isinstance(civec, int):
-            return ss, s*2+1
-        else:
-            return [ss]*len(civec), [s*2+1]*len(civec)
-
 
 def make_schedule(sweeps, Ms, tols, noises, twodot_to_onedot):
     if len(sweeps) == len(Ms) == len(tols) == len(noises):

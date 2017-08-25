@@ -109,11 +109,11 @@ class KnowValues(unittest.TestCase):
 
         numpy.random.seed(1)
         x1 = numpy.random.random(hdiag1.size)
-        self.assertAlmostEqual(numpy.linalg.norm(hop1(x1) - hop1ref(x1)), 0, 7)
+        self.assertAlmostEqual(abs(hop1(x1) - hop1ref(x1)).max(), 0, 8)
 
         numpy.random.seed(1)
         x1 = numpy.random.random(hdiag2.size)
-        self.assertAlmostEqual(numpy.linalg.norm(hop2(x1) - hop2ref(x1)), 0, 7)
+        self.assertAlmostEqual(abs(hop2(x1) - hop2ref(x1)).max(), 0, 8)
 
         mol = gto.M(atom='N 0 0 0; N 0 0 1.2222', basis='631g*', symmetry=1)
         mf = scf.RHF(mol).run(conv_tol=1e-14)
@@ -125,14 +125,14 @@ class KnowValues(unittest.TestCase):
         x1[hdiag1==0] = 0
         xref = hop1ref(x1)
         xref[hdiag1==0] = 0
-        self.assertAlmostEqual(numpy.linalg.norm(hop1(x1) - xref), 0, 7)
+        self.assertAlmostEqual(abs(hop1(x1) - xref).max(), 0, 8)
 
         numpy.random.seed(1)
         x1 = numpy.random.random(hdiag2.size)
         x1[hdiag2==0] = 0
         xref = hop2ref(x1)
         xref[hdiag2==0] = 0
-        self.assertAlmostEqual(numpy.linalg.norm(hop2(x1) - xref), 0, 7)
+        self.assertAlmostEqual(abs(hop2(x1) - xref).max(), 0, 8)
 
     def test_uhf_external_hop(self):
         mol = gto.M(atom='O 0 0 0; O 0 0 1.2222', basis='631g*', spin=2)
@@ -142,11 +142,11 @@ class KnowValues(unittest.TestCase):
 
         numpy.random.seed(1)
         x1 = numpy.random.random(hdiag1.size)
-        self.assertAlmostEqual(numpy.linalg.norm(hop1(x1) - hop1ref(x1)), 0, 7)
+        self.assertAlmostEqual(abs(hop1(x1) - hop1ref(x1)).max(), 0, 8)
 
         numpy.random.seed(1)
         x1 = numpy.random.random(hdiag2.size)
-        self.assertAlmostEqual(numpy.linalg.norm(hop2(x1) - hop2ref(x1)), 0, 7)
+        self.assertAlmostEqual(abs(hop2(x1) - hop2ref(x1)).max(), 0, 8)
 
         mol = gto.M(atom='O 0 0 0; O 0 0 1.2222', basis='631g*', symmetry=1, spin=2)
         mf = scf.UHF(mol).run(conv_tol=1e-14)
@@ -158,14 +158,14 @@ class KnowValues(unittest.TestCase):
         x1[hdiag1==0] = 0
         xref = hop1ref(x1)
         xref[hdiag1==0] = 0
-        self.assertAlmostEqual(numpy.linalg.norm(hop1(x1) - xref), 0, 7)
+        self.assertAlmostEqual(abs(hop1(x1) - xref).max(), 0, 8)
 
         numpy.random.seed(1)
         x1 = numpy.random.random(hdiag2.size)
         x1[hdiag2==0] = 0
         xref = hop2ref(x1)
         xref[hdiag2==0] = 0
-        self.assertAlmostEqual(numpy.linalg.norm(hop2(x1) - xref), 0, 7)
+        self.assertAlmostEqual(abs(hop2(x1) - xref).max(), 0, 8)
 
 if __name__ == "__main__":
     print("Full Tests for stability")
