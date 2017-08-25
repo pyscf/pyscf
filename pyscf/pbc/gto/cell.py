@@ -12,6 +12,7 @@ import warnings
 import numpy as np
 import scipy.linalg
 import scipy.misc
+import scipy.special
 import scipy.optimize
 import pyscf.lib.parameters as param
 from pyscf import lib
@@ -397,16 +398,31 @@ def error_for_ke_cutoff(cell, ke_cutoff):
         w = abs(np.linalg.det(b)) / (2*np.pi)**3
 
     kmax = np.sqrt(ke_cutoff*2)
-    err = 0
+    errmax = 0
     for i in range(cell.nbas):
         l = cell.bas_angular(i)
         es = cell.bas_exp(i)
         cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
         l2fac2 = scipy.misc.factorial2(l*2+1)
-        e = (32*np.pi**2*cs**4*w/(l2fac2**2*(4*es)**(l*2+1))
-             * kmax**(l*4+3) * np.exp(-kmax**2/(4*es)))
-        err = max(err, e.max())
-    return err
+        fac = np.pi**2*cs**4*w/l2fac2**2
+        efac = np.exp(-ke_cutoff/(2*es))
+        if 0:
+            ka = scipy.misc.factorial2(l*4+3) * es**(2*l+2)
+            err0 = np.sqrt(np.pi*es)*scipy.special.erfc(kmax/np.sqrt(4*es)) * ka
+            ka *= efac * kmax
+            for m in range(l*2+2):
+                err0 += ka
+                ka *= ke_cutoff / (es * (2*m+3))
+            errmax = max(errmax, (fac*err0).max())
+        else:
+            err1 = 32*fac/(4*es)**(2*l+1) * kmax**(4*l+3) * efac
+            errmax = max(errmax, err1.max())
+            if np.any(ke_cutoff < 5*es):
+                z = np.sqrt(2*es)
+                z[ke_cutoff>es] = kmax
+                err2 = (1.41*efac+2.51)*64*fac/2**(2*l+2) * z
+                errmax = max(errmax, err2[ke_cutoff<5*es].max())
+    return errmax
 
 def get_bounding_sphere(cell, rcut):
     '''Finds all the lattice points within a sphere of radius rcut.  
