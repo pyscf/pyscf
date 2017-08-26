@@ -63,7 +63,8 @@ def search_seg(pseudofile, symb, suffix=None):
     fdata = fin.read().split('#PSEUDOPOTENTIAL')
     fin.close()
     for dat in fdata[1:]:
-        if dat[:20].split()[0] == symb:
+        dat0 = dat[:20].split()
+        if dat0 and dat0[0] == symb:
             dat = [x.strip() for x in dat.splitlines()
                    if x.strip() and 'END' not in x]
             if suffix is None:  # use default PP

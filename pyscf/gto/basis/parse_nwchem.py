@@ -48,7 +48,7 @@ BASIS_SET_DELIMITER = re.compile('# *BASIS SET.*\n')
 def search_seg(basisfile, symb):
     with open(basisfile, 'r') as fin:
         fdata = re.split(BASIS_SET_DELIMITER, fin.read())
-    for dat in fdata:
+    for dat in fdata[1:]:
         dat0 = dat[:20].split()
         if dat0 and dat0[0].upper() == symb.upper():
             return [x for x in dat.splitlines() if x and 'END' not in x]
@@ -58,7 +58,7 @@ ECP_DELIMITER = re.compile('# *ECP.*\n')
 def search_ecp(basisfile, symb):
     with open(basisfile, 'r') as fin:
         fdata = re.split(ECP_DELIMITER, fin.read())
-    for dat in fdata:
+    for dat in fdata[1:]:
         dat0 = dat[:20].split()
         if dat0 and dat0[0].upper() == symb.upper():
             return [x for x in dat.splitlines() if x and 'END' not in x]

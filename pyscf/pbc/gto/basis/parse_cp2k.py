@@ -44,12 +44,13 @@ def _parse(blines):
         bsort.extend([b for b in basis if b[0] == l])
     return bsort
 
+BASIS_SET_DELIMITER = re.compile('# *BASIS SET.*\n')
 def search_seg(basisfile, symb):
-    fin = open(basisfile, 'r')
-    fdata = fin.read().split('#BASIS SET')
-    fin.close()
+    with open(basisfile, 'r') as fin:
+        fdata = re.split(BASIS_SET_DELIMITER, fin.read())
     for dat in fdata[1:]:
-        if symb+' ' in dat:
+        dat0 = dat[:20].split()
+        if dat0 and dat0[0] == symb:
             # remove blank lines
             return [x.strip() for x in dat.splitlines()[1:]
                     if x.strip() and 'END' not in x]
