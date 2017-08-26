@@ -4,6 +4,7 @@ import numpy as np
 import scipy
 import scipy.linalg
 import math
+from pyscf.rt import tdscf
 
 class FIELDS(lib.StreamObject):
     """
@@ -99,7 +100,7 @@ class FIELDS(lib.StreamObject):
         amp, ison = self.impulseamp(tnow)
         mpol = self.pert_xyz * amp
         if (ison):
-            a_mat_field = a_mat + 2.0*pyscf.tdscf.tdscf.transmat(\
+            a_mat_field = a_mat + 2.0*tdscf.transmat(\
             np.einsum("kij,k->ij",self.dip_ints,mpol),c_am)
             return a_mat_field, True
         else:
@@ -117,7 +118,7 @@ class FIELDS(lib.StreamObject):
             mu: float or complex
                 dipole moment in |x y z| direction
         """
-        rhoAO = pyscf.tdscf.tdscf.transmat(rho,c_am,-1)
+        rhoAO = tdscf.transmat(rho,c_am,-1)
         mol_dip = np.einsum('xij,ji->x', self.dip_ints, rhoAO)
         if (np.any(self.dip0) != None):
             mu = mol_dip - self.dip0

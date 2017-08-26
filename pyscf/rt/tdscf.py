@@ -13,7 +13,6 @@ from pyscf import gto, dft, df
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import diis
-import pyscf.tdscf.tdfields
 import sys
 
 FSPERAU = 0.0241888
@@ -259,6 +258,7 @@ class RTTDSCF(lib.StreamObject):
                 Initial MO density matrix.
 
         """
+        from pyscf.rt import tdfields
         self.auxmol_set(self.ks.mol, auxbas = self.auxbas)
         self.params = dict()
 
@@ -280,7 +280,7 @@ class RTTDSCF(lib.StreamObject):
         self.readparams(prm)
         fmat, c_am, v_lm = self.initfockbuild() # updates self.C
         rho = 0.5*np.diag(self.ks.mo_occ).astype(complex)
-        self.field = pyscf.tdscf.tdfields.FIELDS(self, self.params)
+        self.field = tdfields.FIELDS(self, self.params)
         self.field.initializeexpectation(rho, c_am)
         return fmat, c_am, v_lm, rho
 

@@ -2,7 +2,8 @@ import numpy as np
 import sys, re
 import pyscf
 import pyscf.dft
-from  pyscf import gto, tdscf
+from  pyscf import gto
+from pyscf.rt import tdscf
 np.set_printoptions(linewidth=220, suppress = True,precision = 7)
 
 def TestTDDFT():
@@ -37,6 +38,6 @@ def TestTDDFT():
     ks = pyscf.dft.RKS(mol)
     ks.xc='PBE,PBE'
     ks.kernel()
-    aprop = pyscf.tdscf.tdscf.RTTDSCF(ks,prm,output)
+    aprop = tdscf.RTTDSCF(ks,prm,output)
     return
 TestTDDFT()
