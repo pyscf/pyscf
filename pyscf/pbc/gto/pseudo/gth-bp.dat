@@ -2,16 +2,18 @@
 #
 # Potential data base file for CP2K (Quickstep)
 #
-# History: - Creation (12.12.1999, Matthias Krack)
-#          - Electronic configurations added (11.05.2000,MK)
-#          - GTH-PP for first-row transition metal added (18.03.2003,MK)
-#          - Automatic update (16.12.2003,MK)
-#          - Last update (20.08.13,MK)
-#
 ################################################################################
 #
 # Pseudopotentials of Goedecker, Teter and Hutter (GTH)
 # -----------------------------------------------------
+#
+# History:    - Creation (12.12.1999, Matthias Krack)
+#             - Electronic configurations added (11.05.2000,MK)
+#             - GTH-PP for first-row transition metal added (18.03.2003,MK)
+#             - Automatic update (16.12.2003,MK)
+#             - PBE GTH-PPs for the Lanthanides added (30.11.2012,MK)
+#             - Set default GTH PPs (12.08.2016,MK)
+#             - Last update (12.08.2016,MK)
 #
 # Literature: - S. Goedecker, M. Teter, and J. Hutter,
 #               Phys. Rev. B 54, 1703 (1996)
@@ -53,62 +55,62 @@
 #
 ################################################################################
 #PSEUDOPOTENTIAL
-H GTH-BP-q1
+H GTH-BP-q1 GTH-BP
     1
      0.20000000    2    -4.18576872     0.72693955
     0
 #PSEUDOPOTENTIAL
-He GTH-BP-q2
+He GTH-BP-q2 GTH-BP
     2
      0.20000000    2    -9.13007508     1.70547521
     0
 #PSEUDOPOTENTIAL
-Li GTH-BP-q3
+Li GTH-BP-q3 GTH-BP
     3
      0.40000000    4   -14.06056862     9.58589939    -1.77248513     0.08455183
     0
 #PSEUDOPOTENTIAL
-Be GTH-BP-q4
+Be GTH-BP-q4 GTH-BP
     4
      0.32500000    4   -24.05179710    17.25001598    -3.33397632     0.16556913
     0
 #PSEUDOPOTENTIAL
-B GTH-BP-q3
+B GTH-BP-q3 GTH-BP
     2    1
      0.41689069    2    -5.92229378     0.92456157
     2
      0.37107711    1     6.29599634
      0.35853552    0
 #PSEUDOPOTENTIAL
-C GTH-BP-q4
+C GTH-BP-q4 GTH-BP
     2    2
      0.33679692    2    -8.86848685     1.35447596
     2
      0.30241022    1     9.62271161
      0.28961690    0
 #PSEUDOPOTENTIAL
-N GTH-BP-q5
+N GTH-BP-q5 GTH-BP
     2    3
      0.28309178    2   -12.45088915     1.87519554
     2
      0.25528977    1    13.63656889
      0.24443710    0
 #PSEUDOPOTENTIAL
-O GTH-BP-q6
+O GTH-BP-q6 GTH-BP
     2    4
      0.24401839    2   -16.70590802     2.49292672
     2
      0.22086487    1    18.34759371
      0.21290362    0
 #PSEUDOPOTENTIAL
-F GTH-BP-q7
+F GTH-BP-q7 GTH-BP
     2    5
      0.21448854    2   -21.61832219     3.20543202
     2
      0.19461036    1    23.75712327
      0.18640875    0
 #PSEUDOPOTENTIAL
-Ne GTH-BP-q8
+Ne GTH-BP-q8 GTH-BP
     2    6
      0.19000000    2   -27.05603079     4.33563519
     2
@@ -124,21 +126,21 @@ Na GTH-BP-q1
                                         0.43753317
      0.87531990    1     0.49722485
 #PSEUDOPOTENTIAL
-Na GTH-BP-q9
+Na GTH-BP-q9 GTH-BP
     3    6
      0.21033221    2     1.69258850     0.50357981
     2
      0.13173054    1    40.12933608
      0.14067337    1   -12.69190352
 #PSEUDOPOTENTIAL
-Mg GTH-BP-q10
+Mg GTH-BP-q10 GTH-BP
     4    6
      0.20344528    2   -19.14863290     2.82311627
     2
      0.14101308    1    40.61528144
      0.10485644    1   -10.81236006
 #PSEUDOPOTENTIAL
-Al GTH-BP-q3
+Al GTH-BP-q3 GTH-BP
     2    1
      0.45000000    1    -7.51792352
     2
@@ -146,7 +148,7 @@ Al GTH-BP-q3
                                         2.47313545
      0.56192765    1     1.85584177
 #PSEUDOPOTENTIAL
-Si GTH-BP-q4
+Si GTH-BP-q4 GTH-BP
     2    2
      0.44000000    1    -6.31784112
     2
@@ -154,7 +156,7 @@ Si GTH-BP-q4
                                         3.47802049
      0.49841919    1     2.41937486
 #PSEUDOPOTENTIAL
-P GTH-BP-q5
+P GTH-BP-q5 GTH-BP
     2    3
      0.43000000    1    -5.89229627
     2
@@ -162,7 +164,7 @@ P GTH-BP-q5
                                         4.46430080
      0.44912129    1     3.03004831
 #PSEUDOPOTENTIAL
-S GTH-BP-q6
+S GTH-BP-q6 GTH-BP
     2    4
      0.42000000    1    -6.03304243
     2
@@ -170,7 +172,7 @@ S GTH-BP-q6
                                         5.44421051
      0.41024550    1     3.67822896
 #PSEUDOPOTENTIAL
-Cl GTH-BP-q7
+Cl GTH-BP-q7 GTH-BP
     2    5
      0.41000000    1    -6.39460178
     2
@@ -178,7 +180,7 @@ Cl GTH-BP-q7
                                         6.33634940
      0.37914105    1     4.30633607
 #PSEUDOPOTENTIAL
-Ar GTH-BP-q8
+Ar GTH-BP-q8 GTH-BP
     2    6
      0.40000000    1    -7.10000000
     2
@@ -186,7 +188,7 @@ Ar GTH-BP-q8
                                         7.16930851
      0.35391145    1     4.94347383
 #PSEUDOPOTENTIAL
-K GTH-BP-q9
+K GTH-BP-q9 GTH-BP
     3    6
      0.40000000    2    -3.20803677    -1.13958016
     2
@@ -195,7 +197,7 @@ K GTH-BP-q9
      0.31728644    2     7.27073764    -2.45836276
                                         2.90877405
 #PSEUDOPOTENTIAL
-Ca GTH-BP-q10
+Ca GTH-BP-q10 GTH-BP
     4    6
      0.39000000    2    -5.15066460    -1.27635919
     3
@@ -205,7 +207,7 @@ Ca GTH-BP-q10
                                         2.78286199
      0.69084590    1     0.05057463
 #PSEUDOPOTENTIAL
-Sc GTH-BP-q11
+Sc GTH-BP-q11 GTH-BP
     4    6    1
      0.38500000    2     8.15113811    -0.54578786
     3
@@ -215,7 +217,7 @@ Sc GTH-BP-q11
                                        -9.43952457
      0.25316272    1    -8.16168667
 #PSEUDOPOTENTIAL
-Ti GTH-BP-q12
+Ti GTH-BP-q12 GTH-BP
     4    6    2
      0.38000000    2     8.75240544    -0.72051287
     3
@@ -225,7 +227,7 @@ Ti GTH-BP-q12
                                       -10.46792049
      0.24327738    1    -9.40815808
 #PSEUDOPOTENTIAL
-V GTH-BP-q13
+V GTH-BP-q13 GTH-BP
     4    6    3
      0.37500000    2     7.15179161    -0.34356487
     3
@@ -235,7 +237,7 @@ V GTH-BP-q13
                                       -10.40864444
      0.24115908    1    -9.44742960
 #PSEUDOPOTENTIAL
-Cr GTH-BP-q14
+Cr GTH-BP-q14 GTH-BP
     3    6    5
      0.37000000    2     5.65864275    -0.68098927
     3
@@ -245,7 +247,7 @@ Cr GTH-BP-q14
                                        -8.58148945
      0.22035720    1   -11.18549799
 #PSEUDOPOTENTIAL
-Mn GTH-BP-q15
+Mn GTH-BP-q15 GTH-BP
     4    6    5
      0.36500000    2     6.08697327    -0.45767880
     3
@@ -255,7 +257,7 @@ Mn GTH-BP-q15
                                        -9.35984202
      0.22235797    1   -11.61828411
 #PSEUDOPOTENTIAL
-Fe GTH-BP-q16
+Fe GTH-BP-q16 GTH-BP
     4    6    6
      0.36000000    2     6.76627078    -0.22960467
     3
@@ -265,7 +267,7 @@ Fe GTH-BP-q16
                                        -9.07069285
      0.22286543    1   -12.38774903
 #PSEUDOPOTENTIAL
-Co GTH-BP-q17
+Co GTH-BP-q17 GTH-BP
     4    6    7
      0.35500000    2     3.11870813     0.60978675
     3
@@ -275,7 +277,7 @@ Co GTH-BP-q17
                                       -10.87898254
      0.22321373    1   -11.65940289
 #PSEUDOPOTENTIAL
-Ni GTH-BP-q18
+Ni GTH-BP-q18 GTH-BP
     4    6    8
      0.35000000    2     1.98092026     0.67873534
     3
@@ -285,7 +287,7 @@ Ni GTH-BP-q18
                                       -14.58214136
      0.21531615    1   -12.60737765
 #PSEUDOPOTENTIAL
-Cu GTH-BP-q11
+Cu GTH-BP-q11 GTH-BP
     1    0   10
      0.53000000    0
     3
@@ -296,7 +298,7 @@ Cu GTH-BP-q11
                                         0.89955911
      0.26481830    1   -12.79028986
 #PSEUDOPOTENTIAL
-Zn GTH-BP-q12
+Zn GTH-BP-q12 GTH-BP
     2    0   10
      0.51000000    0
     3
@@ -307,7 +309,7 @@ Zn GTH-BP-q12
                                         0.66746275
      0.25119891    1   -14.42369639
 #PSEUDOPOTENTIAL
-Ga GTH-BP-q13
+Ga GTH-BP-q13 GTH-BP
     2    1   10
      0.49000000    0
     3
@@ -318,7 +320,7 @@ Ga GTH-BP-q13
                                        -0.32251709
      0.23837295    1   -16.19719645
 #PSEUDOPOTENTIAL
-Ge GTH-BP-q4
+Ge GTH-BP-q4 GTH-BP
     2    2
      0.54000000    0
     3
@@ -329,7 +331,7 @@ Ge GTH-BP-q4
                                        -0.79517793
      0.80229340    1     0.20140599
 #PSEUDOPOTENTIAL
-As GTH-BP-q5
+As GTH-BP-q5 GTH-BP
     2    3
      0.52000000    0
     3
@@ -340,7 +342,7 @@ As GTH-BP-q5
                                        -0.81939868
      0.70085191    1     0.31310326
 #PSEUDOPOTENTIAL
-Se GTH-BP-q6
+Se GTH-BP-q6 GTH-BP
     2    4
      0.51000000    0
     3
@@ -351,7 +353,7 @@ Se GTH-BP-q6
                                        -0.54847679
      0.61779280    1     0.45787624
 #PSEUDOPOTENTIAL
-Br GTH-BP-q7
+Br GTH-BP-q7 GTH-BP
     2    5
      0.50000000    0
     3
@@ -362,7 +364,7 @@ Br GTH-BP-q7
                                        -0.65463128
      0.57270080    1     0.53453193
 #PSEUDOPOTENTIAL
-Kr GTH-BP-q8
+Kr GTH-BP-q8 GTH-BP
     2    6
      0.50000000    0
     3
@@ -373,7 +375,7 @@ Kr GTH-BP-q8
                                        -0.85344324
      0.54760510    1     0.52878835
 #PSEUDOPOTENTIAL
-Zr GTH-BP-q12
+Zr GTH-BP-q12 GTH-BP
     4    6    2
      0.47000000    2     7.71710396    -1.87349588
     3
@@ -384,7 +386,7 @@ Zr GTH-BP-q12
      0.57923104    2     0.03180631     0.27415481
                                        -0.31086233
 #PSEUDOPOTENTIAL
-Ru GTH-BP-q16
+Ru GTH-BP-q16 GTH-BP
     3    6    7
      0.43000000    2    14.95348689    -0.02426473
     3
@@ -395,7 +397,7 @@ Ru GTH-BP-q16
      0.47093469    2     0.51873585    -2.29176040
                                         2.59861204
 #PSEUDOPOTENTIAL
-Te GTH-BP-q6
+Te GTH-BP-q6 GTH-BP
     2    4
      0.57500000    1     8.45045608
     3
@@ -417,7 +419,7 @@ Cs GTH-BP-q1
                                         0.51014161
      1.01147944    1    -0.69777439
 #PSEUDOPOTENTIAL
-Cs GTH-BP-q9
+Cs GTH-BP-q9 GTH-BP
     3    6
      0.54000000    2    33.18925821    -2.80669630
     4

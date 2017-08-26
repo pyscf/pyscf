@@ -12,6 +12,7 @@ import warnings
 import numpy as np
 import scipy.linalg
 import scipy.misc
+import scipy.special
 import scipy.optimize
 import pyscf.lib.parameters as param
 from pyscf import lib
@@ -360,6 +361,7 @@ def _estimate_ke_cutoff(alpha, l, c, precision=1e-8, weight=1.):
     l2fac2 = scipy.misc.factorial2(l*2+1)
     log_rest = np.log(precision*l2fac2**2*(4*alpha)**(l*2+1) / (32*np.pi**2*c**4*weight))
     Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
+    Ecut[Ecut<0] = 1e-10
     log_k0 = .5 * np.log(Ecut*2)
     Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
     return Ecut.max()
@@ -396,16 +398,31 @@ def error_for_ke_cutoff(cell, ke_cutoff):
         w = abs(np.linalg.det(b)) / (2*np.pi)**3
 
     kmax = np.sqrt(ke_cutoff*2)
-    err = 0
+    errmax = 0
     for i in range(cell.nbas):
         l = cell.bas_angular(i)
         es = cell.bas_exp(i)
         cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
-        l2fac2 = scipy.misc.factorial2(l*2+1)
-        e = (32*np.pi**2*cs**4*w/(l2fac2**2*(4*es)**(l*2+1))
-             * kmax**(l*4+3) * np.exp(-kmax**2/(4*es)))
-        err = max(err, e.max())
-    return err
+        fac = 64*np.pi**2*cs**4*w / scipy.misc.factorial2(l*2+1)**2
+        efac = np.exp(-ke_cutoff/(2*es))
+        if 0:
+            ka = scipy.misc.factorial2(l*4+3) * (2*es)**(2*l+2)
+            err0 = np.sqrt(np.pi*es)*scipy.special.erfc(kmax/np.sqrt(4*es)) * ka
+            ka *= efac * kmax
+            for m in range(l*2+2):
+                err0 += ka
+                ka *= ke_cutoff / (es * (2*m+3))
+            errmax = max(errmax, (fac/(4*es)**(2*l+2)*err0).max())
+        else:
+            err1 = .5*fac/(4*es)**(2*l+1) * kmax**(4*l+3) * efac
+            errmax = max(errmax, err1.max())
+            if np.any(ke_cutoff < 5*es):
+                err2 = (1.41*efac+2.51)*fac/(4*es)**(2*l+2) * kmax**(4*l+5)
+                errmax = max(errmax, err2[ke_cutoff<5*es].max())
+            if np.any(ke_cutoff < es):
+                err2 = (1.41*efac+2.51)*fac/2**(2*l+2) * np.sqrt(2*es)
+                errmax = max(errmax, err2[ke_cutoff<es].max())
+    return errmax
 
 def get_bounding_sphere(cell, rcut):
     '''Finds all the lattice points within a sphere of radius rcut.  
@@ -686,17 +703,16 @@ def gen_uniform_grids(cell, gs=None):
 # defined in ecp, the misplaced ecp atom found in pp does NOT replace the
 # definition in ecp, and versa vise.
 def classify_ecp_pseudo(cell, ecp, pp):
-    def convert(name):
-        return str(name.lower().replace(' ', '').replace('-', '').replace('_', ''))
     def classify(ecp, pp_alias):
         if isinstance(ecp, (str, unicode)):
-            if convert(ecp) in pp_alias:
+            if pseudo._format_pseudo_name(ecp)[0] in pp_alias:
                 return {}, str(ecp)
         elif isinstance(ecp, dict):
             ecp_as_pp = {}
             for atom in ecp:
                 key = ecp[atom]
-                if isinstance(key, (str, unicode)) and convert(key) in pp_alias:
+                if (isinstance(key, (str, unicode)) and
+                    pseudo._format_pseudo_name(key)[0] in pp_alias):
                     ecp_as_pp[atom] = str(key)
             if ecp_as_pp:
                 ecp_left = dict(ecp)
@@ -953,10 +969,8 @@ class Cell(mole.Mole):
         if _ecp and self._pseudo:
             conflicts = set(self._pseudo.keys()).intersection(set(_ecp.keys()))
             if conflicts:
-                logger.warn(self, 'Pseudo potential for atoms %s are defined '
-                            'in both .ecp and .pseudo.  Definitions in .pseudo '
-                            'are taken.', list(conflicts))
-                _ecp = dict((k,_ecp[k]) for k in _ecp if k not in self._pseudo)
+                raise RuntimeError('Pseudo potential for atoms %s are defined '
+                                   'in both .ecp and .pseudo.' % list(conflicts))
 
         _ecpbas, _env = np.zeros((0,8)), pre_env
         if _ecp:

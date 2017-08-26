@@ -26,6 +26,7 @@ from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile
 from pyscf.pbc import tools
 from functools import reduce
+from pyscf.pbc import df
 
 
 def get_ovlp(mf, cell=None, kpts=None):
@@ -86,7 +87,6 @@ def get_j(mf, cell, dm_kpts, kpts, kpts_band=None):
         vj : (nkpts, nao, nao) ndarray
         or list of vj if the input dm_kpts is a list of DMs
     '''
-    from pyscf.pbc import df
     return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpts_band, with_k=False)[0]
 
 
@@ -106,7 +106,6 @@ def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None):
         vk : (nkpts, nao, nao) ndarray
         or list of vj and vk if the input dm_kpts is a list of DMs
     '''
-    from pyscf.pbc import df
     return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpts_band, exxdiv=mf.exxdiv)
 
 def get_fock(mf, h1e_kpts, s_kpts, vhf_kpts, dm_kpts, cycle=-1, diis=None,
@@ -299,7 +298,6 @@ class KRHF(hf.RHF):
             The sampling k-points in Cartesian coordinates, in units of 1/Bohr.
     '''
     def __init__(self, cell, kpts=np.zeros((1,3)), exxdiv='ewald'):
-        from pyscf.pbc import df
         if not cell._built:
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()
@@ -352,6 +350,20 @@ class KRHF(hf.RHF):
                         madelung*self.cell.nelectron * -.5)
         logger.info(self, 'DF object = %s', self.with_df)
         self.with_df.dump_flags()
+        return self
+
+    def check_sanity(self):
+        hf.RHF.check_sanity(self)
+        if not self.cell.has_ecp() and not isinstance(self.with_df, df.df.DF):
+            logger.warn(self, 'FFTDF integrals are found in all-electron '
+                        'calculation.  It often causes huge error.\n'
+                        'Recommended integral methods are DF or MDF.\n'
+                        '        mf = mf.density_fit()\nor\n'
+                        '        mf = mf.mix_density_fit()')
+        if (isinstance(self.exxdiv, str) and self.exxdiv.lower() != 'ewald' and
+            isinstance(self.with_df, df.df.DF)):
+            logger.warn(self, 'exxdiv %s is not supported in DF or MDF',
+                        self.exxdiv)
         return self
 
     def build(self, cell=None):

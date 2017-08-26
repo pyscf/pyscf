@@ -13,14 +13,7 @@ from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pbchf
 from pyscf.pbc.ao2mo import eris
 import pyscf.pbc.tools
-
 import pyscf.pbc.cc
-
-import ase
-import ase.lattice
-import ase.dft.kpoints
-
-ANG2BOHR = 1.889725989
 
 def make_cell(L, ngs):
     cell = pbcgto.Cell()
@@ -48,7 +41,7 @@ def test_cell_n0( L = 5.0, ngs = 4):
     cell.a[1,0] = 5.0
 
     cell.basis = 'gth-szv'
-    cell.pseudo = 'gth-pade'
+    cell.pseudo = 'gth-pade-q2'
     cell.gs = np.array([ngs,ngs,ngs])
 
     cell.output = '/dev/null'
@@ -62,7 +55,7 @@ def test_cell_n1( L = 5.0, ngs = 4):
     cell.a = L * np.identity(3)
 
     cell.basis = 'sto-3g'
-    cell.pseudo = 'gth-pade'
+    cell.pseudo = 'gth-pade-q2'
     cell.gs = np.array([ngs,ngs,ngs])
 
     cell.output = '/dev/null'
@@ -91,16 +84,12 @@ def test_cell_n3(ngs=4):
     """
     Take ASE Diamond structure, input into PySCF and run
     """
-    import ase
-    import pyscf.pbc.tools.pyscf_ase as pyscf_ase
-    import ase.lattice
-    from ase.lattice import bulk
-    ase_atom = bulk('C', 'diamond', a=3.5668)
-
     cell = pbcgto.Cell()
     cell.unit = 'A'
-    cell.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
-    cell.a = ase_atom.cell
+    cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
+    cell.a = '''0.      1.7834  1.7834
+                1.7834  0.      1.7834
+                1.7834  1.7834  0.    '''
     #cell.basis = "gth-dzvp"
     cell.basis = "gth-szv"
     cell.pseudo = "gth-pade"

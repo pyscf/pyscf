@@ -10,7 +10,6 @@ from pyscf.pbc import gto
 from pyscf.pbc import scf
 from pyscf.pbc import df
 
-lib.param.LIGHT_SPEED = 2
 cell = gto.Cell()
 cell.build(unit = 'B',
            a = numpy.eye(3)*4,
@@ -21,6 +20,7 @@ cell.build(unit = 'B',
 
 class KnowValues(unittest.TestCase):
     def test_hf(self):
+        lib.param.LIGHT_SPEED, c = 2, lib.param.LIGHT_SPEED
         mf = scf.sfx2c1e(scf.RHF(cell))
         mf.with_df = df.PWDF(cell)
         dm = mf.get_init_guess()
@@ -29,8 +29,10 @@ class KnowValues(unittest.TestCase):
         kpts = cell.make_kpts([3,1,1])
         h1 = mf.get_hcore(kpt=kpts[1])
         self.assertAlmostEqual(numpy.einsum('ij,ji', dm, h1), -0.167141476114+0j, 9)
+        lib.param.LIGHT_SPEED = c
 
     def test_khf(self):
+        lib.param.LIGHT_SPEED, c = 2, lib.param.LIGHT_SPEED
         mf = scf.sfx2c1e(scf.KRHF(cell))
         mf.with_df = df.PWDF(cell)
         mf.kpts = cell.make_kpts([3,1,1])
@@ -39,6 +41,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.einsum('ij,ji', dm[0], h1[0]),-0.547189217727+0j, 9)
         self.assertAlmostEqual(numpy.einsum('ij,ji', dm[1], h1[1]),-0.167141476114+0j, 9)
         self.assertAlmostEqual(numpy.einsum('ij,ji', dm[2], h1[2]),-0.167141476114+0j, 9)
+        lib.param.LIGHT_SPEED = c
 
 
 if __name__ == '__main__':

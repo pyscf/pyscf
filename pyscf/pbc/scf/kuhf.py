@@ -11,6 +11,7 @@ See Also:
 '''
 
 import time
+from functools import reduce
 import numpy as np
 import scipy.linalg
 import h5py
@@ -21,7 +22,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile
-from functools import reduce
+from pyscf.pbc import df
 
 
 canonical_occ = canonical_occ_ = addons.canonical_occ_
@@ -270,7 +271,6 @@ class KUHF(uhf.UHF, khf.KRHF):
     '''UHF class with k-point sampling.
     '''
     def __init__(self, cell, kpts=np.zeros((1,3)), exxdiv='ewald'):
-        from pyscf.pbc import df
         self.cell = cell
         uhf.UHF.__init__(self, cell)
 
@@ -293,6 +293,9 @@ class KUHF(uhf.UHF, khf.KRHF):
         uhf.UHF.dump_flags(self)
         khf.KRHF.dump_flags(self)
         return self
+
+    def check_sanity(self):
+        return khf.KRHF.check_sanity(self)
 
     def build(self, cell=None):
         uhf.UHF.build(self, cell)
@@ -362,7 +365,7 @@ class KUHF(uhf.UHF, khf.KRHF):
     def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
                  kpts=None, kpts_band=None):
         vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
-        vhf = uhf._makevhf(vj, vk)
+        vhf = vj[0] + vj[1] - vk
         return vhf
 
 

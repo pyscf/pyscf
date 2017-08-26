@@ -44,7 +44,6 @@ install:
 before_script:
     - export PYTHONPATH=$(pwd):$PYTHONPATH
     - rm -r $TRAVIS_BUILD_DIR/pyscf/pbc/tests
-    - rm -r $TRAVIS_BUILD_DIR/pyscf/pbc/cc/tests
     - rm $TRAVIS_BUILD_DIR/pyscf/pbc/tools/pyscf_ase.py
 
 script:

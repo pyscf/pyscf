@@ -28,7 +28,7 @@ class KnowValues(unittest.TestCase):
     def test_rhf_vcut_sph(self):
         mf = pbchf.RHF(cell, exxdiv='vcut_sph')
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -4.29190260870812, 9)
+        self.assertAlmostEqual(e1, -4.29190260870812, 8)
         self.assertTrue(mf.mo_coeff.dtype == numpy.double)
 
         mf = pscf.KRHF(cell, [[0,0,0]], exxdiv='vcut_sph')
@@ -39,7 +39,7 @@ class KnowValues(unittest.TestCase):
         k = numpy.random.random(3)
         mf = pbchf.RHF(cell, k, exxdiv='vcut_sph')
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -4.1379172088570595, 9)
+        self.assertAlmostEqual(e1, -4.1379172088570595, 8)
         self.assertTrue(mf.mo_coeff.dtype == numpy.complex128)
 
         mf = pscf.KRHF(cell, k, exxdiv='vcut_sph')
@@ -49,7 +49,7 @@ class KnowValues(unittest.TestCase):
     def test_rhf_exx_ewald(self):
         mf = pbchf.RHF(cell, exxdiv='ewald')
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -4.3511582284698633, 9)
+        self.assertAlmostEqual(e1, -4.3511582284698633, 8)
         self.assertTrue(mf.mo_coeff.dtype == numpy.double)
 
         mf = pscf.KRHF(cell, [[0,0,0]], exxdiv='ewald')
@@ -60,7 +60,7 @@ class KnowValues(unittest.TestCase):
         k = numpy.random.random(3)
         mf = pbchf.RHF(cell, k, exxdiv='ewald')
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -4.2048655827967139, 9)
+        self.assertAlmostEqual(e1, -4.2048655827967139, 8)
         self.assertTrue(mf.mo_coeff.dtype == numpy.complex128)
 
         mf = pscf.KRHF(cell, k, exxdiv='ewald')
@@ -70,7 +70,7 @@ class KnowValues(unittest.TestCase):
     def test_rhf_exx_None(self):
         mf = pbchf.RHF(cell, exxdiv=None)
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -2.9325094887283196, 9)
+        self.assertAlmostEqual(e1, -2.9325094887283196, 8)
         self.assertTrue(mf.mo_coeff.dtype == numpy.double)
 
         mf = pscf.KRHF(cell, [[0,0,0]], exxdiv=None)
@@ -81,7 +81,7 @@ class KnowValues(unittest.TestCase):
         k = numpy.random.random(3)
         mf = pbchf.RHF(cell, k, exxdiv=None)
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -2.7862168430230341, 9)
+        self.assertAlmostEqual(e1, -2.7862168430230341, 8)
         self.assertTrue(mf.mo_coeff.dtype == numpy.complex128)
 
         mf = pscf.KRHF(cell, k, exxdiv=None)
@@ -99,25 +99,25 @@ class KnowValues(unittest.TestCase):
         mf1.chkfile = mf.chkfile
         mf1.init_guess = 'chkfile'
         e1 = mf1.kernel()
-        self.assertAlmostEqual(e1, -4.29190260870812, 9)
+        self.assertAlmostEqual(e1, -4.29190260870812, 8)
         self.assertTrue(mf1.mo_coeff.dtype == numpy.double)
 
     def test_uhf_exx_ewald(self):
         mf = pscf.UHF(cell, exxdiv=None)
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -2.9325094887283196, 9)
+        self.assertAlmostEqual(e1, -2.9325094887283196, 8)
         self.assertTrue(mf.mo_coeff[0].dtype == numpy.double)
 
         numpy.random.seed(1)
         k = numpy.random.random(3)
         mf = pbchf.RHF(cell, k, exxdiv=None)
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -2.7862168430230341, 9)
+        self.assertAlmostEqual(e1, -2.7862168430230341, 8)
         self.assertTrue(mf.mo_coeff[0].dtype == numpy.complex128)
 
         mf = pscf.UHF(cell, exxdiv='ewald')
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -4.3511582287379111, 9)
+        self.assertAlmostEqual(e1, -4.3511582287379111, 8)
         self.assertTrue(mf.mo_coeff[0].dtype == numpy.double)
 
 #    def test_rhf_0d(self):
@@ -165,8 +165,10 @@ class KnowValues(unittest.TestCase):
                                    ]})
         mf = pbchf.RHF(cell)
         mf.with_df = pdf.AFTDF(cell)
+        mf.with_df.eta = 0.3
+        mf.with_df.gs = cell.gs
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.2455039593257098, 5)
+        self.assertAlmostEqual(e1, -3.24497234871167, 5)
 
     def test_rhf_2d(self):
         L = 4
@@ -183,8 +185,10 @@ class KnowValues(unittest.TestCase):
                                    ]})
         mf = pbchf.RHF(cell)
         mf.with_df = pdf.AFTDF(cell)
+        mf.with_df.eta = 0.3
+        mf.with_df.gs = cell.gs
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.2684257145738229, 5)
+        self.assertAlmostEqual(e1, -3.2681555164454039, 5)
 
 
 if __name__ == '__main__':

@@ -18,21 +18,13 @@ import pyscf.pbc.tools
 import pyscf.pbc.cc
 import pyscf.pbc.cc.kccsd_rhf
 
-import ase
-import ase.lattice
-import ase.dft.kpoints
 import make_test_cell
 
 def run_kcell(cell, ngs, nk):
     #############################################
     # Do a k-point calculation                  #
     #############################################
-    scaled_kpts = ase.dft.kpoints.monkhorst_pack(nk)
-#    print "scaled kpts"
-#    print scaled_kpts
-    abs_kpts = cell.get_abs_kpts(scaled_kpts)
-#    print "abs kpts"
-#    print abs_kpts
+    abs_kpts = cell.make_kpts(nk, wrap_around=True)
 
     #############################################
     # Running HF                                #

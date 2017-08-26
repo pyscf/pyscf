@@ -20,8 +20,7 @@ mol = gto.M(
     basis = 'ccpvdz')
 
 #
-# Function define_xc can parse the user defined XC functional, following the
-# rules:
+# DFT can parse the user defined XC functional, following the rules:
 # * The given functional description must be a one-line string.
 # * The functional description is case-insensitive.
 # * The functional description string has two parts, separated by ",".  The
@@ -31,13 +30,13 @@ mol = gto.M(
 #     X functional.
 #   - To neglect X functional (just apply C functional), leave blank in the
 #     first part, eg description=',vwn' for pure VWN functional
-# * The functional name can be placed in arbitrary order.  Two name needs to
+# * The functional name can be placed in arbitrary order.  Two names needs to
 #   be separated by operators + or -.  Blank spaces are ignored.
-#   NOTE the parser only reads operators + - *.  / is not in support.
+#   NOTE the parser only reads operators + - *.  / is not supported.
 # * A functional name is associated with one factor.  If the factor is not
 #   given, it is assumed equaling 1.
 # * String "HF" stands for exact exchange (HF K matrix).  It is allowed to
-#   put in C functional part.
+#   put "HF" in C (correlation) functional part.
 # * Be careful with the libxc convention on GGA functional, in which the LDA
 #   contribution is included.
 #

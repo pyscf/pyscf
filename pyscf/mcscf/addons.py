@@ -520,6 +520,8 @@ def spin_square(casscf, mo_coeff=None, ci=None, ovlp=None):
         s = numpy.sqrt(ss+.25) - .5
         return ss, s*2+1
 
+class StateAverageFCISolver:
+    pass
 
 def state_average_(casscf, weights=(0.5,0.5)):
     ''' State average over the energy.  The energy funcitonal is
@@ -542,7 +544,7 @@ def state_average_(casscf, weights=(0.5,0.5)):
                          (casscf.fcisolver, fcibase_class.__base__.__module__,
                           fcibase_class.__base__.__name__))
         raise TypeError('mc.fcisolver is not base FCI solver')
-    class FakeCISolver(fcibase_class):
+    class FakeCISolver(fcibase_class, StateAverageFCISolver):
         def __init__(self, mol=None):
             self.nroots = len(weights)
         def kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
@@ -611,7 +613,7 @@ def state_specific_(casscf, state=1):
                          (casscf.fcisolver, fcibase_class.__base__.__module__,
                           fcibase_class.__base__.__name__))
         raise TypeError('mc.fcisolver is not base FCI solver')
-    class FakeCISolver(fcibase_class):
+    class FakeCISolver(fcibase_class, StateAverageFCISolver):
         def __init__(self):
             self.nroots = state+1
             self._civec = None
@@ -688,7 +690,7 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
             nelec = (nelec+solver.spin)//2, (nelec-solver.spin)//2
         return nelec
 
-    class FakeCISolver(fcibase_class):
+    class FakeCISolver(fcibase_class, StateAverageFCISolver):
         def kernel(self, h1, h2, norb, nelec, ci0=None, verbose=0, **kwargs):
 # Note self.orbsym is initialized lazily in mc1step_symm.kernel function
             if isinstance(verbose, logger.Logger):
