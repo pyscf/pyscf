@@ -20,12 +20,13 @@ cell = gto.M(
               C     0.8917  2.6751  2.6751''',
     basis = '6-31g',
     verbose = 4,
+    gs = [5,5,5],
 )
 
 nk = [4,4,4]  # 4 k-poins for each axis, 4^3=64 kpts in total
 kpts = cell.make_kpts(nk)
 
-kmf = scf.KRHF(cell, kpts).mix_density_fit(auxbasis='weigend')
+kmf = scf.KRHF(cell, kpts).mix_density_fit()
 kmf.kernel()
 
 kmf = dft.KRKS(cell, kpts).mix_density_fit(auxbasis='weigend')
@@ -36,7 +37,7 @@ kmf.kernel()
 # Second order SCF solver can be used in the PBC SCF code the same way in the
 # molecular calculation
 #
-mf = scf.KRHF(cell, kpts).mix_density_fit(auxbasis='weigend')
+mf = scf.KRHF(cell, kpts).mix_density_fit()
 mf = scf.newton(mf)
 mf.kernel()
 

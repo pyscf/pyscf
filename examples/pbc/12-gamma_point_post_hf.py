@@ -23,7 +23,7 @@ cell = gto.M(
     verbose = 4,
 )
 
-mf = scf.RHF(cell).mix_density_fit(auxbasis='weigend')
+mf = scf.RHF(cell).density_fit()
 mf.with_df.gs = [5]*3
 mf.kernel()
 

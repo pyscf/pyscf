@@ -5,6 +5,8 @@
 # parse NWChem format
 #
 
+import re
+
 MAXL = 8
 SPDF = ('S', 'P', 'D', 'F', 'G', 'H', 'I', 'K')
 MAPSPDF = {'S': 0,
@@ -42,58 +44,24 @@ def parse_ecp(string):
 def load_ecp(basisfile, symb):
     return _parse_ecp(search_ecp(basisfile, symb))
 
+BASIS_SET_DELIMITER = re.compile('# *BASIS SET.*\n')
 def search_seg(basisfile, symb):
     with open(basisfile, 'r') as fin:
-        # ignore head
-        dat = fin.readline().upper()
-        while dat and not dat.strip()[1:].lstrip().startswith('BASIS'):
-            dat = fin.readline().upper()
-
-        # searching
-        dat = fin.readline().upper()
-        while dat and not dat.lstrip().startswith('END'):
-            dat = dat.strip()
-            if dat.split(' ', 1)[0] == symb.upper():
-                seg = []
-                while dat:
-                    dat = dat.strip()
-                    if (dat[1:].lstrip().startswith('BASIS') or
-                        dat.startswith('END')):
-                        break
-                    seg.append(dat)
-                    dat = fin.readline().upper()
-                return seg
-            else:
-                while dat and not dat.strip()[1:].lstrip().startswith('BASIS'):
-                    dat = fin.readline().upper()
-            dat = fin.readline().upper()
+        fdata = re.split(BASIS_SET_DELIMITER, fin.read())
+    for dat in fdata:
+        dat0 = dat[:20].split()
+        if dat0 and dat0[0].upper() == symb.upper():
+            return [x for x in dat.splitlines() if x and 'END' not in x]
     return []
 
+ECP_DELIMITER = re.compile('# *ECP.*\n')
 def search_ecp(basisfile, symb):
     with open(basisfile, 'r') as fin:
-        # ignore head
-        dat = fin.readline().upper()
-        while dat and not dat.lstrip().startswith('ECP'):
-            dat = fin.readline().upper()
-
-        dat = fin.readline().upper()
-        # searching
-        while dat:
-            dat = dat.strip()
-            if (dat.split(' ', 1)[0] == symb.upper() or
-                dat.startswith('END')):
-                break
-            dat = fin.readline().upper()
-
-        seg = []
-        while dat:
-            dat = dat.strip()
-            if ((dat[0].isalpha() and dat.split(' ', 1)[0] != symb.upper()) or
-                dat.startswith('END')):
-                return seg
-            elif dat: # remove blank lines
-                seg.append(dat)
-            dat = fin.readline().upper()
+        fdata = re.split(ECP_DELIMITER, fin.read())
+    for dat in fdata:
+        dat0 = dat[:20].split()
+        if dat0 and dat0[0].upper() == symb.upper():
+            return [x for x in dat.splitlines() if x and 'END' not in x]
     return []
 
 def convert_basis_to_nwchem(symb, basis):
@@ -148,7 +116,7 @@ def _parse(raw_basis):
     basis_add = []
     for line in raw_basis:
         dat = line.strip()
-        if dat.startswith('#'):
+        if not dat or dat.startswith('#'):
             continue
         elif dat[0].isalpha():
             key = dat.split()[1]

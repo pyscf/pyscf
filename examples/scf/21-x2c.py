@@ -32,7 +32,7 @@ mol.spin = 1
 mol.charge = 1
 mol.build(0, 0)
 
-mf = scf.sfx2c(scf.UKS(mol))
+mf = scf.UKS(mol).x2c()  # Using stream style
 energy = mf.kernel()
 print('E = %.12f, ref = -75.439160951099' % energy)
 

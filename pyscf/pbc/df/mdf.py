@@ -11,6 +11,7 @@ Ref:
 import time
 import numpy
 import h5py
+import tempfile
 import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger

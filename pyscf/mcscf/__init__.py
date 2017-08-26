@@ -182,11 +182,10 @@ In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
 Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
 of API conventions''')
 
-    if hasattr(mf, 'with_df') and 'pbc' in str(mf.__module__):
-        mf = _convert_to_rhf(mf, False)
+    mf = _convert_to_rhf(mf, False)
+    if hasattr(mf, 'with_df'):
         return DFCASSCF(mf, ncas, nelecas, **kwargs)
 
-    mf = _convert_to_rhf(mf)
     if mf.mol.symmetry:
         mc = mc1step_symm.CASSCF(mf, ncas, nelecas, **kwargs)
     else:
@@ -206,11 +205,10 @@ In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
 Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
 of API conventions''')
 
-    if hasattr(mf, 'with_df') and 'pbc' in str(mf.__module__):
-        mf = _convert_to_rhf(mf, False)
+    mf = _convert_to_rhf(mf, False)
+    if hasattr(mf, 'with_df'):
         return DFCASCI(mf, ncas, nelecas, **kwargs)
 
-    mf = _convert_to_rhf(mf)
     if mf.mol.symmetry:
         mc = casci_symm.CASCI(mf, ncas, nelecas, **kwargs)
     else:
@@ -247,7 +245,6 @@ def newton(mc):
 
 def _convert_to_rhf(mf, convert_df=True):
     import copy
-    import numpy
     from pyscf.lib import logger
     import pyscf.df
     if isinstance(mf, scf.uhf.UHF):
@@ -291,18 +288,7 @@ try:
     approx_hessian = df.approx_hessian
 
     def density_fit(mc, auxbasis=None, with_df=None):
-        if hasattr(mc._scf, 'with_df') and mc._scf.with_df:
-            return df.density_fit(mc, auxbasis, with_df)
-        else:
-            from pyscf.lib import logger
-            logger.warn(mc, 'NOTE: approx_hessian function is available for DF orbital hessian!\n'
-                        'The CASSCF object is built on normal SCF object %s '
-                        '(without density fitting).  Currently, this density_fit '
-                        'function will call approx_hessian to approximate orbital '
-                        'hessian for backward compatibility.\n'
-                        'In the future release, it will be removed and the '
-                        'density_fit function will only generate DF-CASSCF method.',
-                        mc._scf.__class__)
-            return approx_hessian(mc, auxbasis, with_df)
+        return mc.density_fit(auxbasis, with_df)
+
 except ImportError:
     pass

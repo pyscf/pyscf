@@ -82,7 +82,7 @@ mf = scf.fast_newton(mf)
 idx3d4d = [i for i,s in enumerate(mol.spheric_labels(1))
            if 'Fe 3d' in s or 'Fe 4d' in s]
 ncas, nelecas, mo = dmet_cas.guess_cas(mf, mf.make_rdm1(), idx3d)
-mc = mcscf.density_fit(mcscf.CASSCF(mf, ncas, nelecas)
+mc = mcscf.approx_hessian(mcscf.CASSCF(mf, ncas, nelecas)
 mc.kernel(mo)
 e_q = mc.e_tot  # -2244.82910509839
 
@@ -112,7 +112,7 @@ mf = scf.fast_newton(mf)
 idx3d4d = [i for i,s in enumerate(mol.spheric_labels(1))
            if 'Fe 3d' in s or 'Fe 4d' in s]
 ncas, nelecas, mo = dmet_cas.guess_cas(mf, mf.make_rdm1(), idx3d)
-mc = mcscf.density_fit(mcscf.CASSCF(mf, ncas, nelecas)
+mc = mcscf.approx_hessian(mcscf.CASSCF(mf, ncas, nelecas)
 mc.kernel(mo)
 e_t = mc.e_tot  # -2244.81493852189
 

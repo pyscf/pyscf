@@ -27,7 +27,7 @@ class KnowValues(unittest.TestCase):
     def test_eri1111(self):
         kpts = numpy.random.random((4,3)) * .25
         kpts[3] = -numpy.einsum('ij->j', kpts[:3])
-        with_df = mdf.MDF(cell)
+        with_df = mdf.MDF(cell).set(auxbasis='weigend')
         with_df.kpts = kpts
         mo =(numpy.random.random((nao,nao)) +
              numpy.random.random((nao,nao))*1j)
@@ -43,7 +43,7 @@ class KnowValues(unittest.TestCase):
         kpts = numpy.random.random((4,3)) * .25
         kpts[3] = kpts[0]
         kpts[2] = kpts[1]
-        with_df = mdf.MDF(cell)
+        with_df = mdf.MDF(cell).set(auxbasis='weigend')
         with_df.kpts = kpts
         mo =(numpy.random.random((nao,nao)) +
              numpy.random.random((nao,nao))*1j)
@@ -56,7 +56,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(abs(eri1.reshape(eri0.shape)-eri0).sum(), 0, 8)
 
     def test_eri0000(self):
-        with_df = mdf.MDF(cell)
+        with_df = mdf.MDF(cell).set(auxbasis='weigend')
         with_df.kpts = numpy.zeros((4,3))
         mo =(numpy.random.random((nao,nao)) +
              numpy.random.random((nao,nao))*1j)

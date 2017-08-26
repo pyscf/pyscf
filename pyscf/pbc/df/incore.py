@@ -29,14 +29,17 @@ libpbc = lib.load_library('libpbc')
 #except:
 #    memory_cache = lambda f: f
 
-def format_aux_basis(cell, auxbasis='weigend+etb'):
+def make_auxmol(cell, auxbasis=None):
     '''
-    See pyscf.df.incore.format_aux_basis
+    See pyscf.df.addons.make_auxmol
     '''
-    auxcell = pyscf.df.incore.format_aux_basis(cell, auxbasis)
+    auxcell = pyscf.df.addons.make_auxmol(cell, auxbasis)
     auxcell.rcut = max([auxcell.bas_rcut(ib, cell.precision)
                         for ib in range(auxcell.nbas)])
     return auxcell
+def format_aux_basis(cell, auxbasis='weigend+etb'):
+    '''For backward compatibility'''
+    return make_auxmol(cell, auxbasis)
 
 #@memory_cache
 def aux_e2(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=1,

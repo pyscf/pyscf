@@ -14,6 +14,15 @@ import tempfile
 from pyscf import gto, scf, df
 
 #
+# If auxbasis is not specified, default optimal auxiliary basis (if possible)
+# or even-tempered gaussian functions will be generated as auxbasis
+#
+mol = gto.M(atom='N1 0 0 0; N2 0 0 1.2', basis='ccpvdz')
+mf = scf.RHF(mol).density_fit()
+mf.kernel()
+print('Default auxbasis', mf.with_df.auxmol.basis)
+
+#
 # Input with key argument auxbasis='xxx' in .density_fit function
 # This auxbasis will be used for all elements in the system.
 #

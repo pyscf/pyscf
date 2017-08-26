@@ -145,10 +145,10 @@ mf = scf.fast_newton(mf)
 #
 # CAS(8e, 11o)
 #
-# mcscf.density_fit approximates the orbital hessian.  It does not affect
+# mcscf.approx_hessian approximates the orbital hessian.  It does not affect
 # CASSCF results.
 #
-mc = mcscf.density_fit(mcscf.CASSCF(mf, 11, 8))
+mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 11, 8))
 idx = [i for i,s in enumerate(mol.spheric_labels(1)) if 'Fe 3d' in s or 'Fe 4d' in s]
 mo = dmet_cas(mc, mf.make_rdm1(), idx)
 
@@ -187,7 +187,7 @@ mf = scf.fast_newton(mf)
 #
 # CAS(8e, 11o)
 #
-mc = mcscf.density_fit(mcscf.CASSCF(mf, 11, 8))
+mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 11, 8))
 idx3d = [i for i,s in enumerate(mol.spheric_labels(1)) if 'Fe 3d' in s]
 idx4d = [i for i,s in enumerate(mol.spheric_labels(1)) if 'Fe 4d' in s]
 mo = dmet_cas(mc, mf.make_rdm1(), idx3d+idx4d)
@@ -215,7 +215,7 @@ mo = mc.mo_coeff
 # Using the frozen-4d wfn as the initial guess,  we can converge the triplet
 # to the correct active space
 #
-mc = mcscf.density_fit(mcscf.CASSCF(mf, 11, 8))
+mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 11, 8))
 fci.addons.fix_spin_(mc.fcisolver, ss=2)
 mc.fcisolver.wfnsym = 'B1g'
 mc.kernel(mo)

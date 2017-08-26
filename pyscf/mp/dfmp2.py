@@ -11,6 +11,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
+from pyscf import df
 #from pyscf.mp.mp2 import make_rdm1, make_rdm2, make_rdm1_ao
 
 
@@ -47,13 +48,12 @@ class MP2(lib.StreamObject):
         self.verbose = self.mol.verbose
         self.stdout = self.mol.stdout
         self.max_memory = mf.max_memory
+        self._scf = mf
         if hasattr(mf, 'with_df') and mf.with_df:
-            self._scf = mf
+            self.with_df = None
         else:
-            self._scf = scf.density_fit(mf)
-            logger.warn(self, 'The input "mf" object is not DF object. '
-                        'DF-MP2 converts it to DF object with  %s  basis',
-                        self._scf.auxbasis)
+            self.with_df = df.DF(mol)
+            self.with_df.auxbasis = df.make_auxbasis(mol, mp2fit=True)
 
         self.emp2 = None
         self.t2 = None
@@ -68,7 +68,7 @@ class MP2(lib.StreamObject):
 
         self.emp2, self.t2 = \
                 kernel(self, mo_energy, mo_coeff, nocc, verbose=self.verbose)
-        logger.log(self, 'RMP2 energy = %.15g', self.emp2)
+        logger.log(self, 'DF-RMP2 energy = %.15g', self.emp2)
         return self.emp2, self.t2
 
     def loop_ao2mo(self, mo_coeff, nocc):
@@ -76,7 +76,11 @@ class MP2(lib.StreamObject):
         nmo = mo.shape[1]
         ijslice = (0, nocc, nocc, nmo)
         Lov = None
-        for eri1 in self._scf.with_df.loop():
+        if self.with_df is None:
+            with_df = self._scf.with_df
+        else:
+            with_df = self.with_df
+        for eri1 in with_df.loop():
             Lov = _ao2mo.nr_e2(eri1, mo, ijslice, aosym='s2', out=Lov)
             yield Lov
 
@@ -101,18 +105,23 @@ if __name__ == '__main__':
 
     mol.basis = 'cc-pvdz'
     mol.build()
-    mf = scf.RHF(mol)
-    mf.scf()
+    mf = scf.RHF(mol).run()
     pt = MP2(mf)
-    pt.max_memory = .05
     emp2, t2 = pt.kernel()
-    print(emp2 - -0.204254491987)
+    print(emp2 - -0.204004830285)
 
-    mf = scf.density_fit(scf.RHF(mol))
-    mf.scf()
+    pt.with_df = df.DF(mol)
+    pt.with_df.auxbasis = 'weigend'
+    emp2, t2 = pt.kernel()
+    print(emp2 - -0.204254500453)
+
+    mf = scf.density_fit(scf.RHF(mol), 'weigend')
+    mf.kernel()
     pt = MP2(mf)
-    pt.max_memory = .05
-    pt.ioblk = .05
-    pt.verbose = 5
     emp2, t2 = pt.kernel()
     print(emp2 - -0.203986171133)
+
+    pt.with_df = df.DF(mol)
+    pt.with_df.auxbasis = df.make_auxbasis(mol, mp2fit=True)
+    emp2, t2 = pt.kernel()
+    print(emp2 - -0.203738031827)

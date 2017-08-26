@@ -46,7 +46,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(uhf.scf(), -76.026765673119598, 9)
 
     def test_nr_df_rhf(self):
-        rhf = scf.density_fit(scf.RHF(mol))
+        rhf = scf.density_fit(scf.RHF(mol), 'weigend')
         rhf.conv_tol = 1e-11
         self.assertAlmostEqual(rhf.scf(), -76.025936299701982, 9)
 
@@ -62,12 +62,12 @@ class KnowValues(unittest.TestCase):
             charge = 1,
             spin = 1,
         )
-        mf = scf.density_fit(scf.ROHF(mol))
+        mf = scf.density_fit(scf.ROHF(mol), 'weigend')
         mf.conv_tol = 1e-11
         self.assertAlmostEqual(mf.scf(), -75.626515724371899, 9)
 
     def test_nr_df_uhf(self):
-        uhf = scf.density_fit(scf.UHF(mol))
+        uhf = scf.density_fit(scf.UHF(mol), 'weigend')
         uhf.conv_tol = 1e-11
         self.assertAlmostEqual(uhf.scf(), -76.025936299702096, 9)
 

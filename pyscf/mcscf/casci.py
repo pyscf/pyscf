@@ -690,6 +690,14 @@ class CASCI(lib.StreamObject):
         '''
         fci.addons.fix_spin_(self.fcisolver, shift, ss)
 
+    def density_fit(self, auxbasis=None, with_df=None):
+        from pyscf.mcscf import df
+        return df.density_fit(self, auxbasis, with_df)
+
+    def approx_hessian(self, auxbasis=None, with_df=None):
+        from pyscf.mcscf import df
+        return df.approx_hessian(self, auxbasis, with_df)
+
 
 if __name__ == '__main__':
     from pyscf import gto

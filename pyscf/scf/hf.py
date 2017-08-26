@@ -984,8 +984,8 @@ def as_scanner(mf):
                 mf_obj._eri = None
                 if hasattr(mf_obj, 'with_df') and mf_obj.with_df:
                     mf_obj.with_df.mol = mol
-                    mf_obj.auxmol = None
-                    mf_obj._cderi = None
+                    mf_obj.with_df.auxmol = None
+                    mf_obj.with_df._cderi = None
                 if hasattr(mf_obj, 'with_x2c') and mf_obj.with_x2c:
                     mf_obj.with_x2c.mol = mol
                 if hasattr(mf_obj, 'grids'):  # DFT
@@ -1396,9 +1396,15 @@ class SCF(lib.StreamObject):
         import pyscf.df.df_jk
         return pyscf.df.df_jk.density_fit(self, auxbasis, with_df)
 
-    def x2c(self):
+    def x2c1e(self):
         import pyscf.scf.x2c
         return pyscf.scf.x2c.sfx2c1e(self)
+    def x2c(self):
+        return self.x2c1e()
+
+    def newton(self):
+        import pyscf.scf.newton_ah
+        return pyscf.scf.newton_ah.newton(self)
 
     def update(self, chkfile=None):
         '''Read attributes from the chkfile then replace the attributes of

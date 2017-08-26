@@ -425,7 +425,7 @@ def project_mol(mol, projectbasis={}):
     elif isinstance(projectbasis, str):
         for k in newbasis:
             newbasis[k] = projectbasis
-    return df.format_aux_basis(mol, newbasis)
+    return df.make_auxmol(mol, newbasis)
 
 
 # TODO: check whether high order terms in (g_orb, h_op) affects optimization
@@ -1018,18 +1018,18 @@ if __name__ == '__main__':
     m.max_cycle = 1
     #m.verbose = 5
     m.scf()
-    nrmf = scf.density_fit(newton(m))
+    nrmf = scf.density_fit(newton(m), 'weigend')
     nrmf.max_cycle = 50
     nrmf.conv_tol = 1e-8
     nrmf.conv_tol_grad = 1e-5
     #nrmf.verbose = 5
     e4 = nrmf.kernel()
 
-    m = scf.density_fit(scf.UHF(mol))
+    m = scf.density_fit(scf.UHF(mol), 'weigend')
     m.max_cycle = 1
     #m.verbose = 5
     m.scf()
-    nrmf = scf.density_fit(newton(m))
+    nrmf = scf.density_fit(newton(m), 'weigend')
     nrmf.max_cycle = 50
     nrmf.conv_tol_grad = 1e-5
     e5 = nrmf.kernel()

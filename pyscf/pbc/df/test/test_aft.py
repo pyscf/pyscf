@@ -310,6 +310,7 @@ cell1.a = np.eye(3) * 2.5
 cell1.gs = [10] * 3
 cell1.build()
 kdf0 = mdf.MDF(cell1)
+kdf0.auxbasis = 'weigend'
 kdf0.kpts = kpts
 
 

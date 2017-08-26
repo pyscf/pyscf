@@ -15,7 +15,7 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.scf import _vhf
-from pyscf.df.incore import format_aux_basis
+from pyscf.df.addons import make_auxmol
 
 #
 # for auxe1 (P|ij)
@@ -34,7 +34,7 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir
     else:
         log = logger.Logger(mol.stdout, verbose)
     if auxmol is None:
-        auxmol = format_aux_basis(mol, auxbasis)
+        auxmol = make_auxmol(mol, auxbasis)
 
     if tmpdir is None:
         tmpdir = lib.param.TMPDIR
@@ -110,7 +110,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo',
     else:
         log = logger.Logger(mol.stdout, verbose)
     if auxmol is None:
-        auxmol = format_aux_basis(mol, auxbasis)
+        auxmol = make_auxmol(mol, auxbasis)
     j2c = auxmol.intor(int2c, hermi=1)
     log.debug('size of aux basis %d', j2c.shape[0])
     time1 = log.timer('2c2e', *time0)
@@ -203,7 +203,7 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', 
     nmoi = mo_coeffs[0].shape[1]
     nmoj = mo_coeffs[1].shape[1]
     nao = mo_coeffs[0].shape[0]
-    auxmol = format_aux_basis(mol, auxbasis)
+    auxmol = make_auxmol(mol, auxbasis)
     naoaux = auxmol.nao_nr()
     aosym = _stand_sym_code(aosym)
     if aosym == 's1':

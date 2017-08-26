@@ -12,7 +12,12 @@ from pyscf import gto
 from pyscf.df import addons
 
 
-format_aux_basis = addons.make_auxmol
+def format_aux_basis(mol, auxbasis='weigend+etb'):
+    '''See also pyscf.df.addons.make_auxmol.
+
+    This funciton is defined for backward compatibility.
+    '''
+    return addons.make_auxmol(mol, auxbasis)
 
 
 # (ij|L)
@@ -53,7 +58,7 @@ def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
     t0 = (time.clock(), time.time())
     log = logger.new_logger(mol, verbose)
     if auxmol is None:
-        auxmol = format_aux_basis(mol, auxbasis)
+        auxmol = addons.make_auxmol(mol, auxbasis)
 
     j2c = auxmol.intor(int2c, hermi=1)
     naux = j2c.shape[0]

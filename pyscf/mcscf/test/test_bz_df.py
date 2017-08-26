@@ -35,14 +35,25 @@ mo[:,[15,16,17,18]] = mf.mo_coeff[:,[17,18,15,16]]
 
 class KnowValues(unittest.TestCase):
     def test_mc2step_4o4e(self):
-        mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 4, 4))
+        mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 4, 4), auxbasis='weigend')
         mc.conv_tol = 1e-8
         emc = mc.mc2step()[0]
-        #?self.assertAlmostEqual(emc, -230.6627383822, 7)
-        self.assertAlmostEqual(emc, -230.6640782865, 7)
+        self.assertAlmostEqual(emc, -230.6627383822, 7)
+
+    def test_mc2step_4o4e_df(self):
+        mc = mcscf.CASSCF(mf, 4, 4).density_fit(auxbasis='weigend')
+        mc.conv_tol = 1e-8
+        emc = mc.mc2step()[0]
+        self.assertAlmostEqual(emc, -230.6617475545396, 7)
+
+        mf1 = mf.density_fit(auxbasis='weigend')
+        mc = mcscf.CASSCF(mf1, 4, 4).density_fit(auxbasis='weigend')
+        mc.conv_tol = 1e-8
+        emc = mc.mc2step()[0]
+        self.assertAlmostEqual(emc, -230.6617475545396, 7)
 
     def test_mc2step_9o8e(self):
-        mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 9, 8))
+        mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 9, 8), auxbasis='weigend')
         mc.conv_tol = 1e-8
         mo = mf.mo_coeff.copy()
         mo[:,[15,16,17,18]] = mf.mo_coeff[:,[17,18,15,16]]
@@ -50,20 +61,32 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(emc, -230.72211519779304, 5)
 
     def test_mc1step_4o4e(self):
-        mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 4, 4))
+        mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 4, 4), auxbasis='weigend')
         mc.conv_tol = 1e-8
         emc = mc.mc1step()[0]
-        #?self.assertAlmostEqual(emc, -230.6627383823, 7)
-        self.assertAlmostEqual(emc, -230.6640782865, 7)
+        self.assertAlmostEqual(emc, -230.6627383823, 7)
+        #?self.assertAlmostEqual(emc, -230.6640782865, 7)
+
+    def test_mc1step_4o4e_df(self):
+        mc = mcscf.CASSCF(mf, 4, 4).density_fit(auxbasis='weigend')
+        mc.conv_tol = 1e-8
+        emc = mc.mc1step()[0]
+        self.assertAlmostEqual(emc, -230.6617475545396, 7)
+
+        mf1 = mf.density_fit(auxbasis='weigend')
+        mc = mcscf.CASSCF(mf1, 4, 4).density_fit(auxbasis='weigend')
+        mc.conv_tol = 1e-8
+        emc = mc.mc1step()[0]
+        self.assertAlmostEqual(emc, -230.6617475545396, 7)
 
     def test_mc1step_9o8e(self):
-        mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 9, 8))
+        mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 9, 8), auxbasis='weigend')
         mc.conv_tol = 1e-8
         mo = mf.mo_coeff.copy()
         mo[:,[15,16,17,18]] = mf.mo_coeff[:,[17,18,15,16]]
         emc = mc.mc1step(mo)[0]
-        #?self.assertAlmostEqual(emc, -230.72211519779304, 6)
-        self.assertAlmostEqual(emc, -230.72681659920534, 6)
+        self.assertAlmostEqual(emc, -230.72211519779304, 6)
+        #?self.assertAlmostEqual(emc, -230.72681659920534, 6)
 
 
 if __name__ == "__main__":

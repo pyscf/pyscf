@@ -27,7 +27,7 @@ def density_fit(mf, auxbasis=None, with_df=None):
     Kwargs:
         auxbasis : str or basis dict
             Same format to the input attribute mol.basis.  If auxbasis is
-            None, auxiliary basis based on AO basis (if possible) or
+            None, optimal auxiliary basis based on AO basis (if possible) or
             even-tempered Gaussian basis will be used.
 
     Returns:
@@ -338,12 +338,12 @@ if __name__ == '__main__':
         basis = 'ccpvdz',
     )
 
-    method = density_fit(pyscf.scf.RHF(mol))
+    method = density_fit(pyscf.scf.RHF(mol), 'weigend')
     method.max_memory = 0
     energy = method.scf()
     print(energy, -76.0259362997)
 
-    method = density_fit(pyscf.scf.DHF(mol))
+    method = density_fit(pyscf.scf.DHF(mol), 'weigend')
     energy = method.scf()
     print(energy, -76.0807386770) # normal DHF energy is -76.0815679438127
 
@@ -357,10 +357,10 @@ if __name__ == '__main__':
         charge = 1,
     )
 
-    method = density_fit(pyscf.scf.UHF(mol))
+    method = density_fit(pyscf.scf.UHF(mol), 'weigend')
     energy = method.scf()
     print(energy, -75.6310072359)
 
-    method = density_fit(pyscf.scf.RHF(mol))
+    method = density_fit(pyscf.scf.RHF(mol), 'weigend')
     energy = method.scf()
     print(energy, -75.6265157244)

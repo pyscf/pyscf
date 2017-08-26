@@ -12,35 +12,35 @@ from pyscf import ao2mo
 # Obtained from http://www.psicode.org/psi4manual/master/basissets_byfamily.html
 DEFAULT_AUXBASIS = {
 # AO basis JK-fit MP2-fit
-'ccpvdz'      : ('ccpvdzjkfit'        , 'ccpvdzri'     ),
-'ccpvdpdz'    : ('ccpvdzjkfit'        , 'ccpvdzri'     ),
-'augccpvdz'   : ('augccpvdzjkfit'     , 'augccpvdzri'  ),
-'augccpvdpdz' : ('augccpvdzjkfit'     , 'augccpvdzri'  ),
-'ccpvtz'      : ('ccpvtzjkfit'        , 'ccpvtzri'     ),
-'augccpvtz'   : ('augccpvtzjkfit'     , 'augccpvtzri'  ),
-'ccpvqz'      : ('ccpvqzjkfit'        , 'ccpvqzri'     ),
-'augccpvqz'   : ('augccpvqzjkfit'     , 'augccpvqzri'  ),
-'ccpv5z'      : ('ccpv5zjkfit'        , 'ccpv5zri'     ),
-'augccpv5z'   : ('augccpv5zjkfit'     , 'augccpv5zri'  ),
-'def2svp'     : ('def2svpjkfit'       , 'def2svpri'    ),
-'def2svp'     : ('def2svpjkfit'       , 'def2svpri'    ),
-'def2svpd'    : ('def2svpjkfit'       , 'def2svpdri'   ),
-'def2tzvp'    : ('def2tzvpjkfit'      , 'def2tzvpri'   ),
-'def2tzvpd'   : ('def2tzvpjkfit'      , 'def2tzvpdri'  ),
-'def2tzvpp'   : ('def2tzvppjkfit'     , 'def2tzvppri'  ),
-'def2tzvppd'  : ('def2tzvppjkfit'     , 'def2tzvppdri' ),
-'def2qzvp'    : ('def2qzvpjkfit'      , 'def2qzvpri'   ),
-'def2qzvpd'   : ('def2qzvpjkfit'      , None           ),
-'def2qzvpp'   : ('def2qzvppjkfit'     , 'def2qzvppri'  ),
-'def2qzvppd'  : ('def2qzvppjkfit'     , 'def2qzvppdri' ),
-'sto3g'       : ('def2svpjkfit'       , 'def2svprifit'     ),
-'321g'        : ('def2svpjkfit'       , 'def2svprifit'     ),
-'631g'        : ('ccpvdzjkfit'        , 'ccpvdzri'         ),
-'631+g'       : ('heavyaugccpvdzjkfit', 'heavyaugccpvdzri' ),
-'631++g'      : ('augccpvdzjkfit'     , 'augccpvdzri'      ),
-'6311g'       : ('ccpvtzjkfit'        , 'ccpvtzri'         ),
-'6311+g'      : ('heavyaugccpvtzjkfit', 'heavyaugccpvtzri' ),
-'6311++g'     : ('augccpvtzjkfit'     , 'augccpvtzri'      ),
+'ccpvdz'      : ('cc-pvdz-jkfit'          , 'cc-pvdz-ri'         ),
+'ccpvdpdz'    : ('cc-pvdz-jkfit'          , 'cc-pvdz-ri'         ),
+'augccpvdz'   : ('aug-cc-pvdz-jkfit'      , 'aug-cc-pvdz-ri'     ),
+'augccpvdpdz' : ('aug-cc-pvdz-jkfit'      , 'aug-cc-pvdz-ri'     ),
+'ccpvtz'      : ('cc-pvtz-jkfit'          , 'cc-pvtz-ri'         ),
+'augccpvtz'   : ('aug-cc-pvtz-jkfit'      , 'aug-cc-pvtz-ri'     ),
+'ccpvqz'      : ('cc-pvqz-jkfit'          , 'cc-pvqz-ri'         ),
+'augccpvqz'   : ('aug-cc-pvqz-jkfit'      , 'aug-cc-pvqz-ri'     ),
+'ccpv5z'      : ('cc-pv5z-jkfit'          , 'cc-pv5z-ri'         ),
+'augccpv5z'   : ('aug-cc-pv5z-jkfit'      , 'aug-cc-pv5z-ri'     ),
+'def2svp'     : ('def2-svp-jkfit'         , 'def2-svp-ri'        ),
+'def2svp'     : ('def2-svp-jkfit'         , 'def2-svp-ri'        ),
+'def2svpd'    : ('def2-svp-jkfit'         , 'def2-svpd-ri'       ),
+'def2tzvp'    : ('def2-tzvp-jkfit'        , 'def2-tzvp-ri'       ),
+'def2tzvpd'   : ('def2-tzvp-jkfit'        , 'def2-tzvpd-ri'      ),
+'def2tzvpp'   : ('def2-tzvpp-jkfit'       , 'def2-tzvpp-ri'      ),
+'def2tzvppd'  : ('def2-tzvpp-jkfit'       , 'def2-tzvppd-ri'     ),
+'def2qzvp'    : ('def2-qzvp-jkfit'        , 'def2-qzvp-ri'       ),
+'def2qzvpd'   : ('def2-qzvp-jkfit'        , None                 ),
+'def2qzvpp'   : ('def2-qzvpp-jkfit'       , 'def2-qzvpp-ri'      ),
+'def2qzvppd'  : ('def2-qzvpp-jkfit'       , 'def2-qzvppd-ri'     ),
+'sto3g'       : ('def2-svp-jkfit'         , 'def2-svp-rifit'     ),
+'321g'        : ('def2-svp-jkfit'         , 'def2-svp-rifit'     ),
+'631g'        : ('cc-pvdz-jkfit'          , 'cc-pvdz-ri'         ),
+'631+g'       : ('heavy-aug-cc-pvdz-jkfit', 'heavyaug-cc-pvdz-ri'),
+'631++g'      : ('aug-cc-pvdz-jkfit'      , 'aug-cc-pvdz-ri'     ),
+'6311g'       : ('cc-pvtz-jkfit'          , 'cc-pvtz-ri'         ),
+'6311+g'      : ('heavy-aug-cc-pvtz-jkfit', 'heavyaug-cc-pvtz-ri'),
+'6311++g'     : ('aug-cc-pvtz-jkfit'      , 'aug-cc-pvtz-ri'     ),
 }
 
 class load(ao2mo.load):
@@ -133,15 +133,16 @@ def make_auxbasis(mol, mp2fit=False):
                     auxb = DEFAULT_AUXBASIS[balias][1]
                 else:
                     auxb = DEFAULT_AUXBASIS[balias][0]
-                if auxb is not None:
+                if auxb is not None and gto.basis.load(auxb, k):
                     auxbasis[k] = auxb
 
     if len(auxbasis) != len(_basis):
         # Some AO basis not found in DEFAULT_AUXBASIS
-        auxbasis = aug_etb(mol).update(auxbasis)
+        auxbasis, auxdefault = aug_etb(mol), auxbasis
+        auxbasis.update(auxdefault)
     return auxbasis
 
-def make_auxmol(mol, auxbasis='weigend+etb'):
+def make_auxmol(mol, auxbasis=None):
     '''Generate a fake Mole object which uses the density fitting auxbasis as
     the basis sets
     '''
@@ -169,6 +170,7 @@ def make_auxmol(mol, auxbasis='weigend+etb'):
     pmol._atm, pmol._bas, pmol._env = \
             pmol.make_env(mol._atom, pmol._basis, mol._env[:gto.PTR_ENV_START])
     pmol._built = True
-    logger.debug(mol, 'aux basis %s, num shells = %d, num cGTOs = %d',
-                 auxbasis, pmol.nbas, pmol.nao_nr())
+    lib.logger.debug(mol, 'auxbasis %s', auxbasis)
+    lib.logger.debug(mol, 'num shells = %d, num cGTOs = %d',
+                     pmol.nbas, pmol.nao_nr())
     return pmol

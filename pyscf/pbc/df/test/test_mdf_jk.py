@@ -56,7 +56,7 @@ class KnowValues(unittest.TestCase):
 
         numpy.random.seed(1)
         kpt = numpy.random.random(3)
-        mydf = mdf.MDF(cell, [kpt])
+        mydf = mdf.MDF(cell, [kpt]).set(auxbasis='weigend')
         mydf.gs = [5]*3
         mydf.eta = 0.3
         vj, vk = mydf.get_jk(dm, 1, kpt)
@@ -71,8 +71,7 @@ class KnowValues(unittest.TestCase):
         dm = numpy.random.random((nao,nao))
         dm = dm + dm.T
         dm[:2,-3:] *= .5
-        jkdf = mdf.MDF(cell)
-        jkdf.auxbasis = 'weigend'
+        jkdf = mdf.MDF(cell).set(auxbasis='weigend')
         jkdf.gs = (5,)*3
         jkdf.eta = 0.3
         vj0, vk0 = jkdf.get_jk(dm, hermi=0, exxdiv=None)
@@ -86,7 +85,7 @@ class KnowValues(unittest.TestCase):
         nao = cell.nao_nr()
         dm = numpy.random.random((4,nao,nao))
         dm = dm + dm.transpose(0,2,1)
-        mydf = mdf.MDF(cell)
+        mydf = mdf.MDF(cell).set(auxbasis='weigend')
         mydf.kpts = numpy.random.random((4,3))
         mydf.gs = numpy.asarray((5,)*3)
         mydf.eta = 0.3
@@ -102,7 +101,7 @@ class KnowValues(unittest.TestCase):
         nao = cell.nao_nr()
         dm = numpy.random.random((4,nao,nao))
         dm = dm + dm.transpose(0,2,1)
-        mydf = mdf.MDF(cell)
+        mydf = mdf.MDF(cell).set(auxbasis='weigend')
         mydf.kpts = numpy.random.random((4,3))
         mydf.gs = numpy.asarray((5,)*3)
         mydf.eta = 0.3
@@ -133,7 +132,7 @@ class KnowValues(unittest.TestCase):
         numpy.random.seed(1)
         nao = cell.nao_nr()
         dm = numpy.random.random((8,nao,nao))
-        mydf = mdf.MDF(cell)
+        mydf = mdf.MDF(cell).set(auxbasis='weigend')
         mydf.kpts = kpts
         mydf.auxbasis = 'weigend'
         mydf.exxdiv = None
@@ -164,7 +163,7 @@ class KnowValues(unittest.TestCase):
                                   [ .25,-.25, .25],
                                   [ .25, .25,-.25],
                                   [ .25, .25, .25]])
-        mydf = mdf.MDF(cell)
+        mydf = mdf.MDF(cell).set(auxbasis='weigend')
         mydf.kpts = kpts
         mydf.auxbasis = 'weigend'
         mydf.exxdiv = None

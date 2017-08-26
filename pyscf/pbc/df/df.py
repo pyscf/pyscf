@@ -113,7 +113,7 @@ def make_modchg_basis(auxcell, smooth_eta, l_max=3):
     chgcell._bas = numpy.asarray(chg_bas, dtype=numpy.int32).reshape(-1,gto.BAS_SLOTS)
     chgcell._env = numpy.hstack((auxcell._env, chg_env))
     chgcell.rcut = _estimate_rcut(smooth_eta, l_max, 1., auxcell.precision)
-    logger.debug1(auxcell, 'make smooth basis, num shells = %d, num cGTOs = %d',
+    logger.debug1(auxcell, 'make compensating basis, num shells = %d, num cGTOs = %d',
                   chgcell.nbas, chgcell.nao_nr())
     logger.debug1(auxcell, 'chgcell.rcut %s', chgcell.rcut)
     return chgcell

@@ -96,8 +96,12 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(pt.make_rdm2(), dm2ref))
 
     def test_mp2_with_df(self):
-        pt = mp.mp2.MP2(mf.density_fit())
+        pt = mp.mp2.MP2(mf.density_fit('weigend'))
         e = pt.kernel(with_t2=False)[0]
+        self.assertAlmostEqual(e, -0.20425449198401671, 9)
+
+        pt = mp.dfmp2.MP2(mf.density_fit('weigend'))
+        e = pt.kernel()[0]
         self.assertAlmostEqual(e, -0.20425449198401671, 9)
 
     def test_mp2_frozen(self):

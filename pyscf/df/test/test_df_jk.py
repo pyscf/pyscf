@@ -33,17 +33,17 @@ symol = gto.M(
 
 class KnowValues(unittest.TestCase):
     def test_rhf(self):
-        mf = scf.density_fit(scf.RHF(mol))
+        mf = scf.density_fit(scf.RHF(mol), auxbasis='weigend')
         self.assertAlmostEqual(mf.scf(), -76.025936299702536, 9)
 
     def test_uhf(self):
-        mf = scf.density_fit(scf.UHF(mol))
+        mf = scf.density_fit(scf.UHF(mol), auxbasis='weigend')
         self.assertAlmostEqual(mf.scf(), -76.025936299702536, 9)
 
     def test_uhf_cart(self):
         pmol = mol.copy()
         pmol.cart = True
-        mf = scf.density_fit(scf.UHF(pmol))
+        mf = scf.density_fit(scf.UHF(pmol), auxbasis='weigend')
         self.assertAlmostEqual(mf.scf(), -76.026760700636046, 9)
 
     def test_rohf(self):
@@ -51,22 +51,22 @@ class KnowValues(unittest.TestCase):
         pmol.charge = 1
         pmol.spin = 1
         pmol.build(False, False)
-        mf = scf.density_fit(scf.ROHF(pmol))
+        mf = scf.density_fit(scf.ROHF(pmol), auxbasis='weigend')
         self.assertAlmostEqual(mf.scf(), -75.626515724371814, 9)
 
     def test_dhf(self):
         pmol = mol.copy()
         pmol.build(False, False)
-        mf = scf.density_fit(scf.DHF(pmol))
+        mf = scf.density_fit(scf.DHF(pmol), auxbasis='weigend')
         mf.conv_tol_grad = 1e-5
         self.assertAlmostEqual(mf.scf(), -76.080738677021458, 8)
 
     def test_rhf_symm(self):
-        mf = scf.density_fit(scf.RHF(symol))
+        mf = scf.density_fit(scf.RHF(symol), auxbasis='weigend')
         self.assertAlmostEqual(mf.scf(), -76.025936299702536, 9)
 
     def test_uhf_symm(self):
-        mf = scf.density_fit(scf.UHF(symol))
+        mf = scf.density_fit(scf.UHF(symol), auxbasis='weigend')
         self.assertAlmostEqual(mf.scf(), -76.025936299702536, 9)
 
     def test_rohf_symm(self):
@@ -75,14 +75,14 @@ class KnowValues(unittest.TestCase):
         pmol.spin = 1
         pmol.symmetry = 1
         pmol.build(False, False)
-        mf = scf.density_fit(scf.ROHF(pmol))
+        mf = scf.density_fit(scf.ROHF(pmol), auxbasis='weigend')
         self.assertAlmostEqual(mf.scf(), -75.626515724371814, 9)
 
     def test_rhf_veff(self):
         nao = mol.nao_nr()
         numpy.random.seed(1)
         dm = numpy.random.random((2,nao,nao))
-        mf = scf.density_fit(scf.RHF(mol))
+        mf = scf.density_fit(scf.RHF(mol), auxbasis='weigend')
         vhf1 = mf.get_veff(mol, dm, hermi=0)
         naux = mf._cderi.shape[0]
         cderi = numpy.empty((naux,nao,nao))
@@ -102,7 +102,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(vhf0, vhf1))
 
     def test_uhf_veff(self):
-        mf = scf.density_fit(scf.UHF(mol))
+        mf = scf.density_fit(scf.UHF(mol), auxbasis='weigend')
         nao = mol.nao_nr()
         numpy.random.seed(1)
         dm = numpy.random.random((2,4,nao,nao))
@@ -114,7 +114,7 @@ class KnowValues(unittest.TestCase):
         w, u = scipy.linalg.eigh(mol.intor('int2e_sph', aosym='s4'))
         idx = w > 1e-9
 
-        mf = scf.density_fit(scf.UHF(mol))
+        mf = scf.density_fit(scf.UHF(mol), auxbasis='weigend')
         mf._cderi = (u[:,idx] * numpy.sqrt(w[idx])).T.copy()
         self.assertAlmostEqual(mf.kernel(), -76.026765673110447, 9)
 

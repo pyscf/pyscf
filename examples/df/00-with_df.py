@@ -22,14 +22,14 @@ from pyscf.pbc import df as pdf
 # holds all methods and informations of the DF integrals.
 #
 mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='ccpvdz')
-mf = df.density_fit(scf.RHF(mol))
+mf = df.density_fit(scf.RHF(mol), auxbasis='weigend')
 print(mf.with_df)
 mf.kernel()
 
 #
 # Method 2: SCF object has density_fit method.
 #
-mf = scf.RHF(mol).density_fit()
+mf = scf.RHF(mol).density_fit(auxbasis='weigend')
 mf.kernel()
 
 

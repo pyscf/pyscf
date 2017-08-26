@@ -22,7 +22,7 @@ mol.build(
     basis = 'cc-pvdz',
 )
 
-auxmol = df.incore.format_aux_basis(mol)
+auxmol = df.addons.make_auxmol(mol, 'weigend')
 atm, bas, env = gto.conc_env(mol._atm, mol._bas, mol._env,
                              auxmol._atm, auxmol._bas, auxmol._env)
 
@@ -201,6 +201,12 @@ class KnowValues(unittest.TestCase):
 
         mo_eri1 = dfobj.ao2mo(mos)
         self.assertTrue(numpy.allclose(mo_eri0, mo_eri1))
+
+    def test_default_auxbasis(self):
+        mol = gto.M(atom='He 0 0 0; O 0 0 1', basis='ccpvdz')
+        auxbasis = df.addons.make_auxbasis(mol)
+        self.assertTrue(auxbasis['O'] == 'cc-pvdz-jkfit')
+        self.assertTrue(isinstance(auxbasis['He'], list))
 
 
 if __name__ == "__main__":
