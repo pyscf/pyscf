@@ -41,17 +41,7 @@ from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, member, unique
 LINEAR_DEP_THR = 1e-7
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
-    auxcell = copy.copy(cell)
-    if auxbasis is None:
-        auxbasis = 'weigend+etb'
-    if isinstance(auxbasis, str):
-        uniq_atoms = set([a[0] for a in cell._atom])
-        _basis = auxcell.format_basis(dict([(a, auxbasis) for a in uniq_atoms]))
-    else:
-        _basis = auxcell.format_basis(auxbasis)
-    auxcell._basis = _basis
-    auxcell._atm, auxcell._bas, auxcell._env = \
-            auxcell.make_env(cell._atom, auxcell._basis, cell._env[:gto.PTR_ENV_START])
+    auxcell = addons.make_auxmol(cell, auxbasis)
 
 # Note libcint library will multiply the norm of the integration over spheric
 # part sqrt(4pi) to the basis.
@@ -93,7 +83,6 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
     auxcell.rcut = max(rcut)
 
     auxcell._bas = numpy.asarray(auxcell._bas[steep_shls], order='C')
-    auxcell._built = True
     logger.debug(cell, 'Drop %d primitive fitting functions', ndrop)
     logger.debug(cell, 'make aux basis, num shells = %d, num cGTOs = %d',
                  auxcell.nbas, auxcell.nao_nr())
@@ -124,7 +113,6 @@ def make_modchg_basis(auxcell, smooth_eta, l_max=3):
     chgcell._bas = numpy.asarray(chg_bas, dtype=numpy.int32).reshape(-1,gto.BAS_SLOTS)
     chgcell._env = numpy.hstack((auxcell._env, chg_env))
     chgcell.rcut = _estimate_rcut(smooth_eta, l_max, 1., auxcell.precision)
-    chgcell._built = True
     logger.debug1(auxcell, 'make smooth basis, num shells = %d, num cGTOs = %d',
                   chgcell.nbas, chgcell.nao_nr())
     logger.debug1(auxcell, 'chgcell.rcut %s', chgcell.rcut)
@@ -355,7 +343,7 @@ class DF(aft.AFTDF):
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
         self.auxcell = None
-        self.blockdim = 256
+        self.blockdim = 240
         self._j_only = False
 # If _cderi_to_save is specified, the 3C-integral tensor will be saved in this file.
         self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
@@ -368,7 +356,10 @@ class DF(aft.AFTDF):
         log.info('\n')
         log.info('******** %s flags ********', self.__class__)
         log.info('gs = %s', self.gs)
-        log.info('auxbasis = %s', self.auxbasis)
+        if self.auxcell is None:
+            log.info('auxbasis = %s', self.auxbasis)
+        else:
+            log.info('auxbasis = %s', self.auxbasis.basis)
         log.info('eta = %s', self.eta)
         if isinstance(self._cderi, str):
             log.info('_cderi = %s  where DF integrals are loaded (readonly).',

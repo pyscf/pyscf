@@ -1,5 +1,3 @@
-# Obtained from Psi4 basis library
-
 #
 # Basis sets obtained from http://www.cosmologic.de/basis-sets/basissets.php  03/17/14
 #
@@ -17,7 +15,7 @@
 # 
 #
 
-#BASIS SET: (3s,3p,2d,1f) -> [1s,1p,1d,1f]
+#BASIS SET: (3s,3p,2d,1f) -> [3s,3p,2d,1f]
 H    S
     9.33521609            1.00000000                                            
 H    S
@@ -44,7 +42,7 @@ H    P
  0.194691  1.0
 H    D
  0.416309  1.0
-#BASIS SET: (4s,4p,3d) -> [1s,1p,1d]
+#BASIS SET: (4s,4p,3d) -> [4s,4p,3d]
 He    S
    24.71889717            1.00000000 
 He    S
@@ -69,7 +67,7 @@ He    P
  0.464581  1.0
 He    D
  0.25054   1.0
-#BASIS SET: (10s,7p,4d,1f) -> [1s,1p,1d,1f]
+#BASIS SET: (10s,7p,4d,1f) -> [10s,7p,4d,1f]
 Li    S
  85.451    1.0
 Li    S
@@ -114,7 +112,7 @@ Li    P
  0.0458355  1.0
 Li    D
  0.0503427  1.0
-#BASIS SET: (10s,7p,4d,1f) -> [1s,1p,1d,1f]
+#BASIS SET: (10s,7p,4d,1f) -> [10s,7p,4d,1f]
 Be    S
  86.811    1.0
 Be    S
@@ -159,7 +157,7 @@ Be    P
  0.0558677  1.0
 Be    D
  0.150925  1.0
-#BASIS SET: (6s,4p,3d,2f) -> [1s,1p,1d,1f]
+#BASIS SET: (6s,4p,3d,2f) -> [6s,4p,2d,2f]
 B    S
   146.41098372             .75852308                                            
 B    S
@@ -213,7 +211,7 @@ B    D
  0.0837404  1.0
 B    F
  0.13618   1.0
-#BASIS SET: (7s,5p,4d,3f,1g) -> [1s,1p,1d,1f,1g]
+#BASIS SET: (7s,5p,4d,3f,1g) -> [7s,5p,3d,3f,1g]
 C    S
   281.47693316             .48911748                                            
 C    S
@@ -267,7 +265,7 @@ C    D
  0.12669   1.0
 C    F
  0.211591  1.0
-#BASIS SET: (7s,5p,4d,3f,1g) -> [1s,1p,1d,1f,1g]
+#BASIS SET: (7s,5p,4d,3f,1g) -> [7s,5p,3d,3f,1g]
 N    S
   291.18394257             .56533084                                            
 N    S
@@ -321,7 +319,7 @@ N    D
  0.139219  1.0
 N    F
  0.290095  1.0
-#BASIS SET: (7s,6p,5d,4f,1g) -> [1s,1p,1d,1f,1g]
+#BASIS SET: (7s,6p,5d,4f,1g) -> [7s,6p,4d,4f,1g]
 O    S
   364.91291000             .58060340                                            
 O    S
@@ -375,7 +373,7 @@ O    D
  0.150934  1.0
 O    F
  0.309925  1.0
-#BASIS SET: (7s,6p,5d,4f,1g) -> [1s,1p,1d,1f,1g]
+#BASIS SET: (7s,6p,5d,4f,1g) -> [7s,6p,4d,4f,1g]
 F    S
   423.09461295             .76390649                                            
 F    S
@@ -429,7 +427,7 @@ F    D
  0.207514  1.0
 F    F
  0.408409  1.0
-#BASIS SET: (9s,7p,6d,4f,1g) -> [1s,1p,1d,1f,1g]
+#BASIS SET: (9s,7p,6d,4f,1g) -> [9s,7p,5d,4f,1g]
 Ne    S
  626.227   1.0
 Ne    S
@@ -483,7 +481,7 @@ Ne    D
  0.328397  1.0
 Ne    F
  0.580591  1.0
-#BASIS SET: (11s,9p,7d,5f) -> [1s,1p,1d,1f]
+#BASIS SET: (11s,9p,7d,5f) -> [11s,9p,7d,5f]
 Na    S
  217.13    1.0
 Na    S
@@ -548,7 +546,7 @@ Na    P
  0.0286975  1.0
 Na    D
  0.123627  1.0
-#BASIS SET: (11s,9p,7d,4f) -> [1s,1p,1d,1f]
+#BASIS SET: (11s,9p,7d,4f) -> [11s,9p,7d,4f]
 Mg    S
  217.78    1.0
 Mg    S
@@ -611,7 +609,7 @@ Mg    P
  0.045095  1.0
 Mg    D
  0.025223  1.0
-#BASIS SET: (8s,5p,5d,6f,2g) -> [1s,1p,1d,1f,1g]
+#BASIS SET: (8s,5p,5d,6f,2g) -> [8s,5p,5d,6f,2g]
 Al    S
   300.70420000            1.18256078                                            
 Al    S
@@ -686,7 +684,7 @@ Al    D
  0.0919423  1.0
 Al    F
  0.097324  1.0
-#BASIS SET: (8s,5p,5d,6f,2g) -> [1s,1p,1d,1f,1g]
+#BASIS SET: (8s,5p,5d,6f,2g) -> [8s,5p,5d,6f,2g]
 Si    S
   252.95316000            1.51090391                                            
 Si    S
@@ -761,7 +759,7 @@ Si    D
  0.0220576  1.0
 Si    F
  0.124375  1.0
-#BASIS SET: (8s,5p,5d,6f,2g) -> [1s,1p,1d,1f,1g]
+#BASIS SET: (8s,5p,5d,6f,2g) -> [8s,5p,5d,6f,2g]
 P    S
   299.02239127            1.18280040                                            
 P    S
@@ -836,7 +834,7 @@ P    D
  0.160908  1.0
 P    F
  0.177534  1.0
-#BASIS SET: (8s,6p,6d,6f,2g) -> [1s,1p,1d,1f,1g]
+#BASIS SET: (8s,6p,6d,6f,2g) -> [8s,6p,6d,6f,2g]
 S    S
   345.09162253            1.48919937                                            
 S    S
@@ -911,7 +909,7 @@ S    D
  0.0857841  1.0
 S    F
  0.171249  1.0
-#BASIS SET: (9s,6p,6d,6f,2g) -> [1s,1p,1d,1f,1g]
+#BASIS SET: (9s,6p,6d,6f,2g) -> [9s,6p,6d,6f,2g]
 Cl    S
   385.89005709            1.48825989                                            
 Cl    S
@@ -986,7 +984,7 @@ Cl    D
  0.111195  1.0
 Cl    F
  0.213989  1.0
-#BASIS SET: (12s,9p,8d,6f,2g) -> [1s,1p,1d,1f,1g]
+#BASIS SET: (12s,9p,8d,6f,2g) -> [12s,9p,8d,6f,2g]
 Ar    S
  581.184   1.0
 Ar    S
@@ -1061,7 +1059,7 @@ Ar    D
  0.188391  1.0
 Ar    F
  0.284566  1.0
-#BASIS SET: (12s,9p,8d,4f) -> [1s,1p,1d,1f]
+#BASIS SET: (12s,9p,8d,4f) -> [12s,9p,8d,4f]
 K    S
  81.1062   1.0
 K    S
@@ -1128,7 +1126,7 @@ K    P
  0.0290007  1.0
 K    D
  0.0540244  1.0
-#BASIS SET: (11s,8p,7d,5f) -> [1s,1p,1d,1f]
+#BASIS SET: (11s,8p,7d,5f) -> [11s,8p,7d,5f]
 Ca    S
  84.4903   1.0
 Ca    S
@@ -1191,7 +1189,7 @@ Ca    F
  0.775054  1.0
 Ca    F
  0.357715  1.0
-#BASIS SET: (10s,10p,9d,7f,5g,3h,1i) -> [1s,1p,1d,1f,1g,1h,1i]
+#BASIS SET: (10s,10p,9d,7f,5g,3h,1i) -> [10s,10p,9d,7f,5g,3h,1i]
 Sc    S
  24.7599   1.0
 Sc    S
@@ -1282,7 +1280,7 @@ Sc    P
  0.0212259  1.0
 Sc    D
  0.00822652  1.0
-#BASIS SET: (10s,10p,9d,7f,5g,3h,1i) -> [1s,1p,1d,1f,1g,1h,1i]
+#BASIS SET: (10s,10p,9d,7f,5g,3h,1i) -> [10s,10p,9d,7f,5g,3h,1i]
 Ti    S
  15.7753   1.0
 Ti    S
@@ -1373,7 +1371,7 @@ Ti    P
  0.0814122  1.0
 Ti    D
  0.0228631  1.0
-#BASIS SET: (10s,10p,9d,7f,5g,3h,1i) -> [1s,1p,1d,1f,1g,1h,1i]
+#BASIS SET: (10s,10p,9d,7f,5g,3h,1i) -> [10s,10p,9d,7f,5g,3h,1i]
 V    S
  17.337    1.0
 V    S
@@ -1464,7 +1462,7 @@ V    P
  0.0262478  1.0
 V    D
  0.0415404  1.0
-#BASIS SET: (10s,10p,9d,7f,5g,3h,1i) -> [1s,1p,1d,1f,1g,1h,1i]
+#BASIS SET: (10s,10p,9d,7f,5g,3h,1i) -> [10s,10p,9d,7f,5g,3h,1i]
 Cr    S
  21.0395   1.0
 Cr    S
@@ -1555,7 +1553,7 @@ Cr    P
  0.027937  1.0
 Cr    D
  0.068949  1.0
-#BASIS SET: (10s,10p,9d,7f,5g,3h,1i) -> [1s,1p,1d,1f,1g,1h,1i]
+#BASIS SET: (10s,10p,9d,7f,5g,3h,1i) -> [10s,10p,9d,7f,5g,3h,1i]
 Mn    S
  19.5427   1.0
 Mn    S
@@ -1646,7 +1644,7 @@ Mn    P
  0.0232398  1.0
 Mn    D
  0.0418547  1.0
-#BASIS SET: (10s,10p,9d,7f,5g,3h,1i) -> [1s,1p,1d,1f,1g,1h,1i]
+#BASIS SET: (10s,10p,9d,7f,5g,3h,1i) -> [10s,10p,9d,7f,5g,3h,1i]
 Fe    S
  20.5644   1.0
 Fe    S
@@ -1737,7 +1735,7 @@ Fe    P
  0.0368405  1.0
 Fe    D
  0.0897688  1.0
-#BASIS SET: (10s,10p,9d,7f,5g,3h,1i) -> [1s,1p,1d,1f,1g,1h,1i]
+#BASIS SET: (10s,10p,9d,7f,5g,3h,1i) -> [10s,10p,9d,7f,5g,3h,1i]
 Co    S
  28.7412   1.0
 Co    S
@@ -1828,7 +1826,7 @@ Co    P
  0.0210276  1.0
 Co    D
  0.10137   1.0
-#BASIS SET: (10s,10p,9d,7f,5g,3h,1i) -> [1s,1p,1d,1f,1g,1h,1i]
+#BASIS SET: (10s,10p,9d,7f,5g,3h,1i) -> [10s,10p,9d,7f,5g,3h,1i]
 Ni    S
  29.8215   1.0
 Ni    S
@@ -1919,7 +1917,7 @@ Ni    P
  0.0206308  1.0
 Ni    D
  0.121812  1.0
-#BASIS SET: (10s,10p,9d,7f,5g,3h,1i) -> [1s,1p,1d,1f,1g,1h,1i]
+#BASIS SET: (10s,10p,9d,7f,5g,3h,1i) -> [10s,10p,9d,7f,5g,3h,1i]
 Cu    S
  36.032    1.0
 Cu    S
@@ -2010,7 +2008,7 @@ Cu    P
  0.0218053  1.0
 Cu    D
  0.0890713  1.0
-#BASIS SET: (10s,11p,9d,7f,5g,3h,1i) -> [1s,1p,1d,1f,1g,1h,1i]
+#BASIS SET: (10s,11p,9d,7f,5g,3h,1i) -> [10s,11p,9d,7f,5g,3h,1i]
 Zn    S
  41.4647   1.0
 Zn    S
@@ -2103,7 +2101,7 @@ Zn    P
  0.0403686  1.0
 Zn    D
  0.154704  1.0
-#BASIS SET: (7s,7p,6d,5f,3g,1h) -> [1s,1p,1d,1f,1g,1h]
+#BASIS SET: (7s,7p,6d,5f,3g,1h) -> [7s,7p,6d,4f,3g,1h]
 Ga    S
    55.38833600            1.00000000                                            
 Ga    S
@@ -2187,7 +2185,7 @@ Ga    D
  0.0790499  1.0
 Ga    F
  0.148961  1.0
-#BASIS SET: (7s,7p,6d,5f,3g,1h) -> [1s,1p,1d,1f,1g,1h]
+#BASIS SET: (7s,7p,6d,5f,3g,1h) -> [7s,7p,6d,4f,3g,1h]
 Ge    S
    63.52744568            1.00000000                                            
 Ge    S
@@ -2271,7 +2269,7 @@ Ge    D
  0.117984  1.0
 Ge    F
  0.127188  1.0
-#BASIS SET: (7s,7p,6d,5f,3g,1h) -> [1s,1p,1d,1f,1g,1h]
+#BASIS SET: (7s,7p,6d,5f,3g,1h) -> [7s,7p,6d,4f,3g,1h]
 As    S
    83.55947554            1.00000000                                            
 As    S
@@ -2355,7 +2353,7 @@ As    D
  0.15457   1.0
 As    F
  0.153513  1.0
-#BASIS SET: (7s,7p,6d,5f,3g,1h) -> [1s,1p,1d,1f,1g,1h]
+#BASIS SET: (7s,7p,6d,5f,3g,1h) -> [7s,7p,6d,4f,3g,1h]
 Se    S
    88.95366100            1.00000000                                            
 Se    S
@@ -2439,7 +2437,7 @@ Se    D
  0.0787265  1.0
 Se    F
  0.129564  1.0
-#BASIS SET: (7s,7p,6d,5f,3g,1h) -> [1s,1p,1d,1f,1g,1h]
+#BASIS SET: (7s,7p,6d,5f,3g,1h) -> [7s,7p,6d,4f,3g,1h]
 Br    S
    95.83565078            1.00000000                                            
 Br    S
@@ -2523,7 +2521,7 @@ Br    D
  0.091609  1.0
 Br    F
  0.159811  1.0
-#BASIS SET: (11s,10p,9d,7f,4g,1h) -> [1s,1p,1d,1f,1g,1h]
+#BASIS SET: (11s,10p,9d,7f,4g,1h) -> [11s,10p,9d,6f,4g,1h]
 Kr    S
   82.1068       1.00000
 Kr    S

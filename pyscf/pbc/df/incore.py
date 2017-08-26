@@ -31,7 +31,7 @@ libpbc = lib.load_library('libpbc')
 
 def format_aux_basis(cell, auxbasis='weigend+etb'):
     '''
-    See df.incore.format_aux_basis
+    See pyscf.df.incore.format_aux_basis
     '''
     auxcell = pyscf.df.incore.format_aux_basis(cell, auxbasis)
     auxcell.rcut = max([auxcell.bas_rcut(ib, cell.precision)

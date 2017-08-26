@@ -48,11 +48,13 @@ ALIAS = {
     'ccpvtzri'    : 'cc-pvtz-ri.dat'    ,
     'ccpvqzri'    : 'cc-pvqz-ri.dat'    ,
     'ccpv5zri'    : 'cc-pv5z-ri.dat'    ,
-    'augccpv5zjkfit' : 'aug-cc-pv5z-jkfit.dat' ,
     'augccpvdzjkfit' : 'aug-cc-pvdz-jkfit.dat' ,
     'augccpvdzpjkfit': 'aug-cc-pvdzp-jkfit.dat',
-    'augccpvqzjkfit' : 'aug-cc-pvqz-jkfit.dat' ,
     'augccpvtzjkfit' : 'aug-cc-pvtz-jkfit.dat' ,
+    'augccpvqzjkfit' : 'aug-cc-pvqz-jkfit.dat' ,
+    'augccpv5zjkfit' : 'aug-cc-pv5z-jkfit.dat' ,
+    'heavyaugccpvdzjkfit' : 'heavy-aug-cc-pvdz-jkfit.dat',
+    'heavyaugccpvtzjkfit' : 'heavy-aug-cc-pvtz-jkfit.dat',
     'augccpvdzri'    : 'aug-cc-pvdz-ri.dat'    ,
     'augccpvdzpri'   : 'aug-cc-pvdzp-ri.dat'   ,
     'augccpvqzri'    : 'aug-cc-pvqz-ri.dat'    ,
@@ -227,8 +229,8 @@ ALIAS = {
 
 def _is_pople_basis(basis):
     return (basis.startswith('631') or
-            basis.startswith('321g') or
-            basis.startswith('431g'))
+            basis.startswith('321') or
+            basis.startswith('431'))
 
 def _parse_pople_basis(basis, symb):
     mbas = basis[:basis.find('(')]

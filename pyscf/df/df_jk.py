@@ -17,7 +17,7 @@ libri = lib.load_library('libri')
 
 OCCDROP = 1e-12
 
-def density_fit(mf, auxbasis='weigend+etb', with_df=None):
+def density_fit(mf, auxbasis=None, with_df=None):
     '''For the given SCF object, update the J, K matrix constructor with
     corresponding density fitting integrals.
 
@@ -26,9 +26,9 @@ def density_fit(mf, auxbasis='weigend+etb', with_df=None):
 
     Kwargs:
         auxbasis : str or basis dict
-            Same format to the input attribute mol.basis.
-            The default basis 'weigend+etb' means weigend-coulomb-fit basis
-            for light elements and even-tempered basis for heavy elements.
+            Same format to the input attribute mol.basis.  If auxbasis is
+            None, auxiliary basis based on AO basis (if possible) or
+            even-tempered Gaussian basis will be used.
 
     Returns:
         An SCF object with a modified J, K matrix constructor which uses density

@@ -3,7 +3,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import copy
 import time
 import numpy
 import scipy.linalg
@@ -12,32 +11,8 @@ from pyscf.lib import logger
 from pyscf import gto
 from pyscf.df import addons
 
-def format_aux_basis(mol, auxbasis='weigend+etb'):
-    '''Generate a fake Mole object which uses the density fitting auxbasis as
-    the basis sets
-    '''
-    pmol = copy.copy(mol)  # just need shallow copy
 
-    if auxbasis == 'weigend+etb':
-        _basis = addons.aug_etb_for_dfbasis(mol)
-    elif isinstance(auxbasis, (str, unicode, list, tuple)):
-        uniq_atoms = set([a[0] for a in mol._atom])
-        _basis = dict([(a, auxbasis) for a in uniq_atoms])
-    elif 'default' in auxbasis:
-        uniq_atoms = set([a[0] for a in mol._atom])
-        _basis = dict(((a, auxbasis['default']) for a in uniq_atoms))
-        _basis.update(auxbasis)
-        del(_basis['default'])
-    else:
-        _basis = auxbasis
-    pmol._basis = pmol.format_basis(_basis)
-
-    pmol._atm, pmol._bas, pmol._env = \
-            pmol.make_env(mol._atom, pmol._basis, mol._env[:gto.PTR_ENV_START])
-    pmol._built = True
-    logger.debug(mol, 'aux basis %s, num shells = %d, num cGTOs = %d',
-                 auxbasis, pmol.nbas, pmol.nao_nr())
-    return pmol
+format_aux_basis = addons.make_auxmol
 
 
 # (ij|L)
@@ -164,18 +139,21 @@ if __name__ == '__main__':
     eri1 = numpy.einsum('ik,kl->il', j3c, numpy.linalg.inv(j2c))
     eri1 = numpy.einsum('ip,kp->ik', eri1, j3c)
     print(numpy.allclose(eri1, eri0))
-    eri0 = pyscf.ao2mo.restore(1, eri0, nao)
+    eri0 = ao2mo.restore(1, eri0, nao)
 
     mf = scf.RHF(mol)
     ehf0 = mf.scf()
 
     nao = mf.mo_energy.size
     eri1 = ao2mo.restore(1, mf._eri, nao)
-    print(numpy.linalg.norm(eri1-eri0))
+    print(abs(eri1-eri0).max())
 
     mf._eri = ao2mo.restore(8, eri0, nao)
     ehf1 = mf.scf()
 
-    mf = scf.density_fit(scf.RHF(mol))
+    mf = scf.RHF(mol).density_fit(auxbasis='weigend')
     ehf2 = mf.scf()
-    print(ehf0, ehf1, ehf2)
+
+    mf = mf.density_fit()
+    ehf3 = mf.scf()
+    print(ehf0, ehf1, ehf2, ehf3)

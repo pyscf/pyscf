@@ -3,10 +3,45 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import copy
 import numpy
 from pyscf import lib
 from pyscf import gto
 from pyscf import ao2mo
+
+# Obtained from http://www.psicode.org/psi4manual/master/basissets_byfamily.html
+DEFAULT_AUXBASIS = {
+# AO basis JK-fit MP2-fit
+'ccpvdz'      : ('ccpvdzjkfit'        , 'ccpvdzri'     ),
+'ccpvdpdz'    : ('ccpvdzjkfit'        , 'ccpvdzri'     ),
+'augccpvdz'   : ('augccpvdzjkfit'     , 'augccpvdzri'  ),
+'augccpvdpdz' : ('augccpvdzjkfit'     , 'augccpvdzri'  ),
+'ccpvtz'      : ('ccpvtzjkfit'        , 'ccpvtzri'     ),
+'augccpvtz'   : ('augccpvtzjkfit'     , 'augccpvtzri'  ),
+'ccpvqz'      : ('ccpvqzjkfit'        , 'ccpvqzri'     ),
+'augccpvqz'   : ('augccpvqzjkfit'     , 'augccpvqzri'  ),
+'ccpv5z'      : ('ccpv5zjkfit'        , 'ccpv5zri'     ),
+'augccpv5z'   : ('augccpv5zjkfit'     , 'augccpv5zri'  ),
+'def2svp'     : ('def2svpjkfit'       , 'def2svpri'    ),
+'def2svp'     : ('def2svpjkfit'       , 'def2svpri'    ),
+'def2svpd'    : ('def2svpjkfit'       , 'def2svpdri'   ),
+'def2tzvp'    : ('def2tzvpjkfit'      , 'def2tzvpri'   ),
+'def2tzvpd'   : ('def2tzvpjkfit'      , 'def2tzvpdri'  ),
+'def2tzvpp'   : ('def2tzvppjkfit'     , 'def2tzvppri'  ),
+'def2tzvppd'  : ('def2tzvppjkfit'     , 'def2tzvppdri' ),
+'def2qzvp'    : ('def2qzvpjkfit'      , 'def2qzvpri'   ),
+'def2qzvpd'   : ('def2qzvpjkfit'      , None           ),
+'def2qzvpp'   : ('def2qzvppjkfit'     , 'def2qzvppri'  ),
+'def2qzvppd'  : ('def2qzvppjkfit'     , 'def2qzvppdri' ),
+'sto3g'       : ('def2svpjkfit'       , 'def2svprifit'     ),
+'321g'        : ('def2svpjkfit'       , 'def2svprifit'     ),
+'631g'        : ('ccpvdzjkfit'        , 'ccpvdzri'         ),
+'631+g'       : ('heavyaugccpvdzjkfit', 'heavyaugccpvdzri' ),
+'631++g'      : ('augccpvdzjkfit'     , 'augccpvdzri'      ),
+'6311g'       : ('ccpvtzjkfit'        , 'ccpvtzri'         ),
+'6311+g'      : ('heavyaugccpvtzjkfit', 'heavyaugccpvtzri' ),
+'6311++g'     : ('augccpvtzjkfit'     , 'augccpvtzri'      ),
+}
 
 class load(ao2mo.load):
     '''load 3c2e integrals from hdf5 file
@@ -73,3 +108,67 @@ def aug_etb_for_dfbasis(mol, dfbasis='weigend', beta=2.3, start_at='Rb'):
 
 def aug_etb(mol, beta=2.3):
     return aug_etb_for_dfbasis(mol, beta=beta, start_at=0)
+
+def make_auxbasis(mol, mp2fit=False):
+    '''Even-tempered Gaussians or the DF basis in DEFAULT_AUXBASIS'''
+    uniq_atoms = set([a[0] for a in mol._atom])
+    if isinstance(mol.basis, str):
+        _basis = dict(((a, mol.basis) for a in uniq_atoms))
+    elif 'default' in mol.basis:
+        default_basis = mol.basis['default']
+        _basis = dict(((a, default_basis) for a in uniq_atoms))
+        _basis.update(mol.basis)
+        del(_basis['default'])
+    else:
+        _basis = mol.basis
+
+    auxbasis = {}
+    for k in _basis:
+        if isinstance(_basis[k], str):
+            balias = gto.basis._format_basis_name(_basis[k])
+            if gto.basis._is_pople_basis(balias):
+                balias = balias.split('g')[0] + 'g'
+            if balias in DEFAULT_AUXBASIS:
+                if mp2fit:
+                    auxb = DEFAULT_AUXBASIS[balias][1]
+                else:
+                    auxb = DEFAULT_AUXBASIS[balias][0]
+                if auxb is not None:
+                    auxbasis[k] = auxb
+
+    if len(auxbasis) != len(_basis):
+        # Some AO basis not found in DEFAULT_AUXBASIS
+        auxbasis = aug_etb(mol).update(auxbasis)
+    return auxbasis
+
+def make_auxmol(mol, auxbasis='weigend+etb'):
+    '''Generate a fake Mole object which uses the density fitting auxbasis as
+    the basis sets
+    '''
+    pmol = copy.copy(mol)  # just need shallow copy
+
+    if auxbasis is None:
+        auxbasis = make_auxbasis(mol)
+    elif '+etb' in auxbasis:
+        dfbasis = auxbasis[:-4]
+        auxbasis = aug_etb_for_dfbasis(mol, dfbasis)
+    pmol.basis = auxbasis
+
+    if isinstance(auxbasis, (str, unicode, list, tuple)):
+        uniq_atoms = set([a[0] for a in mol._atom])
+        _basis = dict([(a, auxbasis) for a in uniq_atoms])
+    elif 'default' in auxbasis:
+        uniq_atoms = set([a[0] for a in mol._atom])
+        _basis = dict(((a, auxbasis['default']) for a in uniq_atoms))
+        _basis.update(auxbasis)
+        del(_basis['default'])
+    else:
+        _basis = auxbasis
+    pmol._basis = pmol.format_basis(_basis)
+
+    pmol._atm, pmol._bas, pmol._env = \
+            pmol.make_env(mol._atom, pmol._basis, mol._env[:gto.PTR_ENV_START])
+    pmol._built = True
+    logger.debug(mol, 'aux basis %s, num shells = %d, num cGTOs = %d',
+                 auxbasis, pmol.nbas, pmol.nao_nr())
+    return pmol

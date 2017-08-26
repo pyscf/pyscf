@@ -28,9 +28,9 @@ def density_fit(casscf, auxbasis=None, with_df=None):
 
     Kwargs:
         auxbasis : str or basis dict
-            Same format to the input attribute mol.basis.
-            The default basis 'weigend+etb' means weigend-coulomb-fit basis
-            for light elements and even-tempered basis for heavy elements.
+            Same format to the input attribute mol.basis.  If auxbasis is
+            None, auxiliary basis based on AO basis (if possible) or
+            even-tempered Gaussian basis will be used.
 
     Returns:
         An CASSCF object with a modified J, K matrix constructor which uses density
@@ -55,8 +55,7 @@ def density_fit(casscf, auxbasis=None, with_df=None):
             with_df.max_memory = casscf.max_memory
             with_df.stdout = casscf.stdout
             with_df.verbose = casscf.verbose
-            if auxbasis is not None:
-                with_df.auxbasis = auxbasis
+            with_df.auxbasis = auxbasis
 
     class CASSCF(casscf_class):
         def __init__(self):

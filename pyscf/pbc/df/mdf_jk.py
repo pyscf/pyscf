@@ -23,9 +23,9 @@ def density_fit(mf, auxbasis=None, gs=None, with_df=None):
 
     Args:
         auxbasis : str or basis dict
-            Same format to the input attribute mol.basis.
-            The default basis 'weigend+etb' means weigend-coulomb-fit basis
-            for light elements and even-tempered basis for heavy elements.
+            Same format to the input attribute mol.basis.  If auxbasis is
+            None, auxiliary basis based on AO basis (if possible) or
+            even-tempered Gaussian basis will be used.
         gs : tuple
             number of grids in each (+)direction
         with_df : MDF object

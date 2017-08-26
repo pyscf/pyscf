@@ -207,9 +207,27 @@ class MDF(df.DF):
     '''Gaussian and planewaves mixed density fitting
     '''
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
-        df.DF.__init__(self, cell, kpts)
+        self.cell = cell
+        self.stdout = cell.stdout
+        self.verbose = cell.verbose
+        self.max_memory = cell.max_memory
+
+        self.kpts = kpts  # default is gamma point
+        self.kpts_band = None
+        self.auxbasis = None
         self.gs = cell.gs
-        self._eta = None
+        self.eta = None
+
+# Not input options
+        self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
+        self.auxcell = None
+        self.blockdim = 240
+        self._j_only = False
+# If _cderi_to_save is specified, the 3C-integral tensor will be saved in this file.
+        self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+# If _cderi is specified, the 3C-integral tensor will be read from this file
+        self._cderi = None
+        self._keys = set(self.__dict__.keys())
 
     @property
     def eta(self):

@@ -60,10 +60,56 @@
 #
 # merged from cc-pvdz-jkfit.gbs and molpro-diffuse-aug-cc-pvdz-jkfit.gbs at Wed, 02:16 Aug 25, 2010
 #
+#
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#
+#              CORRELATION CONSISTENT J&K-FIT DENSITY FITTING BASIS SETS
+#                         CONSISTENT WITH MOLPRO 2009
+#
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#
+#                       CC-PVXZ-JKFIT
+#          
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#  from MOLPRO weigend_jkfit.libmol 11 February 2010
+#  F. Weigend, A fully direct RI-HF algorithm: implementation, optimised 
+#     auxiliary basis sets, demonstration of accuracy and efficiency,
+#     Physical Chemistry Chemical Physics 4, 4285 (2002)
+#  note that Ne, Ar, & Kr are extrapolated, not published coefficients
+#  note that double-zeta basis sets were not published but are here formed by
+#     truncating the highest angular momentum functions from triple-zeta sets
+#  for H B C N O F Ne Al Si P S Cl Ar Ga Ge As Se Br Kr 
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#
+#              CORRELATION CONSISTENT J&K-FIT DENSITY FITTING BASIS SETS
+#                         CONSISTENT WITH MOLPRO 2009
+#
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#
+#                       CC-PVDZ-JKFIT
+#          
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#  from MOLPRO weigend_jkfit.libmol 11 February 2010
+#  F. Weigend, A fully direct RI-HF algorithm: implementation, optimised 
+#     auxiliary basis sets, demonstration of accuracy and efficiency,
+#     Physical Chemistry Chemical Physics 4, 4285 (2002)
+#  note that Ne, Ar, & Kr are extrapolated, not published coefficients
+#  note that double-zeta basis sets were not published but are here formed by
+#     truncating the highest angular momentum functions from triple-zeta sets
+#  for H B C N O F Ne Al Si P S Cl Ar Ga Ge As Se Br Kr 
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#
+# merged from pbasis-base.gbs and pbasis-d.gbs at Sun, 21:46 Aug 22, 2010
+#
+#
+# merged from aug-cc-pvdz-jkfit.gbs and cc-pvdz-jkfit.gbs at Wed, 02:16 Aug 25, 2010
+#
 
 
 
-#BASIS SET: (5s,4p,3d) -> [5s,4p,3d]
+#BASIS SET: (4s,3p,2d) -> [4s,3p,2d]
 H    S
       9.5302493300           1.0000000000
 H    S
@@ -82,12 +128,6 @@ H    D
       2.3135329100           1.0000000000
 H    D
       0.7129072400           1.0000000000
-H    S
-      0.1179867500           1.0000000000
-H    P
-      0.1996653600           1.0000000000
-H    D
-      0.2196799200           1.0000000000
 #BASIS SET: (11s,8p,6d,3f) -> [11s,8p,6d,3f]
 B    S
     441.8891315700           1.0000000000

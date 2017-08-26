@@ -421,14 +421,10 @@ class RHF(hf.RHF):
     def density_fit(self, auxbasis=None, with_df=None):
         from pyscf.df.addons import aug_etb
         from pyscf.pbc.df import df_jk
-        if auxbasis is None:
-            auxbasis = aug_etb(self.cell, beta=1.8)
         return df_jk.density_fit(self, auxbasis, with_df)
 
     def mix_density_fit(self, auxbasis=None, with_df=None):
         from pyscf.df.addons import aug_etb
         from pyscf.pbc.df import mdf_jk
-        if auxbasis is None:
-            auxbasis = aug_etb(self.cell, beta=1.8)
         return mdf_jk.density_fit(self, auxbasis, with_df)
 

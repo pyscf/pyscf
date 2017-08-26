@@ -1392,7 +1392,7 @@ class SCF(lib.StreamObject):
         nbf = self.mol.nao_nr()
         return nbf**4/1e6+lib.current_memory()[0] < self.max_memory*.95
 
-    def density_fit(self, auxbasis='weigend+etb', with_df=None):
+    def density_fit(self, auxbasis=None, with_df=None):
         import pyscf.df.df_jk
         return pyscf.df.df_jk.density_fit(self, auxbasis, with_df)
 

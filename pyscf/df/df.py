@@ -29,10 +29,14 @@ class DF(lib.StreamObject):
         self.stdout = mol.stdout
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
+        self.auxbasis = None
 
-        self.auxbasis = 'weigend+etb'
+##################################################
+# Following are not input options
         self.auxmol = None
+# If _cderi_to_save is specified, the 3C-integral tensor will be saved in this file.
         self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+# If _cderi is specified, the 3C-integral tensor will be read from this file
         self._cderi = None
         self._call_count = 0
         self.blockdim = 240
@@ -42,7 +46,10 @@ class DF(lib.StreamObject):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
         log.info('******** %s flags ********', self.__class__)
-        log.info('auxbasis = %s', self.auxbasis)
+        if self.auxmol is None:
+            log.info('auxbasis = %s', self.auxbasis)
+        else:
+            log.info('auxbasis = %s', self.auxmol.basis)
         log.info('max_memory = %s', self.max_memory)
         if isinstance(self._cderi, str):
             log.info('_cderi = %s  where DF integrals are loaded (readonly).',
@@ -56,7 +63,7 @@ class DF(lib.StreamObject):
         t0 = (time.clock(), time.time())
         log = logger.Logger(self.stdout, self.verbose)
         mol = self.mol
-        auxmol = self.auxmol = incore.format_aux_basis(self.mol, self.auxbasis)
+        auxmol = self.auxmol = addons.make_auxmol(self.mol, self.auxbasis)
         nao = mol.nao_nr()
         naux = auxmol.nao_nr()
         nao_pair = nao*(nao+1)//2
@@ -163,7 +170,7 @@ class DF4C(DF):
         t0 = (time.clock(), time.time())
         log = logger.Logger(self.stdout, self.verbose)
         mol = self.mol
-        auxmol = self.auxmol = incore.format_aux_basis(self.mol, self.auxbasis)
+        auxmol = self.auxmol = addons.make_auxmol(self.mol, self.auxbasis)
         n2c = mol.nao_2c()
         naux = auxmol.nao_nr()
         nao_pair = n2c*(n2c+1)//2

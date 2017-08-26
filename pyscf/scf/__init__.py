@@ -58,8 +58,7 @@ to control the SCF method.
         It is effective when :attr:`Mole.symmetry` is set ``True``.
 
     auxbasis : str, for density fitting SCF only
-        Auxiliary basis for density fitting.  Default is 'Weigend' fitting basis.
-        It is effective when the SCF class is decoreated by :func:`density_fit`::
+        Auxiliary basis for density fitting.
 
         >>> mf = scf.density_fit(scf.UHF(mol))
         >>> mf.scf()
@@ -169,7 +168,7 @@ def DHF(mol, *args):
 def X2C(mol, *args):
     return x2c.UHF(mol, *args)
 
-def density_fit(mf, auxbasis='weigend+etb', with_df=None):
+def density_fit(mf, auxbasis=None, with_df=None):
     return mf.density_fit(auxbasis, with_df)
 
 newton = newton_ah.newton

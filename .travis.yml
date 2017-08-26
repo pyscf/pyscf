@@ -53,7 +53,6 @@ script:
       -e test_bz
       -e test_tdrks_grad
       -e test_mc2step_4o4e
-      -e test_contract_ss
       -e test_ks_noimport
       -e test_ecp_pseudo
       -e test_jk_single_kpt
