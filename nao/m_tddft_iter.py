@@ -155,7 +155,9 @@ class tddft_iter_c():
         #       What a mess!!
         nb2v = self.xocc*sab
         #nm2v_ref = np.dot(nb2v, np.transpose(self.xvrt))
-        nm2v = blas.cgemm(1.0, nb2v, np.transpose(self.xvrt))
+        nm2v = 1.0j*blas.sgemm(1.0, nb2v.imag, np.transpose(self.xvrt))
+        nm2v += blas.sgemm(1.0, nb2v.real, np.transpose(self.xvrt))
+        #print("error nm2v = ", np.sum(abs(nm2v_ref.real-nm2v.real)), np.sum(abs(nm2v_ref.imag-nm2v.imag)))
         
         if use_numba:
             div_eigenenergy_numba(self.ksn2e, self.ksn2f, self.nfermi,
@@ -168,11 +170,15 @@ class tddft_iter_c():
                   ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
 
         #nb2v_ref = np.dot(nm2v,self.xvrt)
-        nb2v = blas.cgemm(1.0, nm2v,self.xvrt)
-        #ab2v_ref = np.dot(np.transpose(self.xocc),nb2v).reshape(no*no)
-        ab2v = blas.cgemm(1.0, np.transpose(self.xocc),nb2v).reshape(no*no)
+        nb2v = 1.0j*blas.sgemm(1.0, nm2v.imag, self.xvrt)
+        nb2v += blas.sgemm(1.0, nm2v.real, self.xvrt)
 
-        #print("error = ", np.sum(abs(ab2v_ref-ab2v)))
+        #ab2v_ref = np.dot(np.transpose(self.xocc),nb2v).reshape(no*no)
+        ab2v = 1.0j*blas.sgemm(1.0, np.transpose(self.xocc), nb2v.imag).reshape(no*no)
+        ab2v += blas.sgemm(1.0, np.transpose(self.xocc), nb2v.real).reshape(no*no)
+
+        #print("error nb2v = ", np.sum(abs(nb2v_ref-nb2v)))
+        #print("error ab2v = ", np.sum(abs(ab2v_ref-ab2v)))
         #sys.exit()
         vdp = self.v_dab*ab2v
     res = vdp*self.cc_da
