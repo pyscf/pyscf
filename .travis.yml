@@ -44,10 +44,11 @@ install:
 before_script:
     - export PYTHONPATH=$(pwd):$PYTHONPATH
     - rm -r $TRAVIS_BUILD_DIR/pyscf/pbc/tests
+    - rm $TRAVIS_BUILD_DIR/pyscf/pbc/tools/pyscf_ase.py
 
 script:
     - >
-      nosetests -v -e pyscf -e geomopt -e dmrgscf -e fciqmcscf -e icmpspt -e examples
+      nosetests -v -e geomopt -e dmrgscf -e fciqmcscf -e icmpspt -e examples
       -e test_bz
       -e test_tdrks_grad
       -e test_mc2step_4o4e
@@ -58,3 +59,5 @@ script:
       -e test_jk_hermi0
       -e test_j_kpts
       -e test_k_kpts
+      -e test_krks
+      -e test_kuks

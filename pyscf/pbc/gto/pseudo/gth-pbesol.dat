@@ -2,16 +2,18 @@
 #
 # Potential data base file for CP2K (Quickstep)
 #
-# History: - Creation (12.12.1999, Matthias Krack)
-#          - Electronic configurations added (11.05.2000,MK)
-#          - GTH-PP for first-row transition metal added (18.03.2003,MK)
-#          - Automatic update (16.12.2003,MK)
-#          - Last update (20.08.13,MK)
-#
 ################################################################################
 #
 # Pseudopotentials of Goedecker, Teter and Hutter (GTH)
 # -----------------------------------------------------
+#
+# History:    - Creation (12.12.1999, Matthias Krack)
+#             - Electronic configurations added (11.05.2000,MK)
+#             - GTH-PP for first-row transition metal added (18.03.2003,MK)
+#             - Automatic update (16.12.2003,MK)
+#             - PBE GTH-PPs for the Lanthanides added (30.11.2012,MK)
+#             - Set default GTH PPs (12.08.2016,MK)
+#             - Last update (12.08.2016,MK)
 #
 # Literature: - S. Goedecker, M. Teter, and J. Hutter,
 #               Phys. Rev. B 54, 1703 (1996)
@@ -53,7 +55,7 @@
 #
 ################################################################################
 #PSEUDOPOTENTIAL
-B GTH-PBESol-q3
+B GTH-PBESol-q3 GTH-PBESol
     2    1
      0.42188166    2    -5.99194495     0.94658199
     2

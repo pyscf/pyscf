@@ -2,16 +2,18 @@
 #
 # Potential data base file for CP2K (Quickstep)
 #
-# History: - Creation (12.12.1999, Matthias Krack)
-#          - Electronic configurations added (11.05.2000,MK)
-#          - GTH-PP for first-row transition metal added (18.03.2003,MK)
-#          - Automatic update (16.12.2003,MK)
-#          - Last update (20.08.13,MK)
-#
 ################################################################################
 #
 # Pseudopotentials of Goedecker, Teter and Hutter (GTH)
 # -----------------------------------------------------
+#
+# History:    - Creation (12.12.1999, Matthias Krack)
+#             - Electronic configurations added (11.05.2000,MK)
+#             - GTH-PP for first-row transition metal added (18.03.2003,MK)
+#             - Automatic update (16.12.2003,MK)
+#             - PBE GTH-PPs for the Lanthanides added (30.11.2012,MK)
+#             - Set default GTH PPs (12.08.2016,MK)
+#             - Last update (12.08.2016,MK)
 #
 # Literature: - S. Goedecker, M. Teter, and J. Hutter,
 #               Phys. Rev. B 54, 1703 (1996)
@@ -53,62 +55,62 @@
 #
 ################################################################################
 #
-H GTH-BLYP-q1
+H GTH-BLYP-q1 GTH-BLYP
     1
      0.20000000    2    -4.19596147     0.73049821
     0
 #
-He GTH-BLYP-q2
+He GTH-BLYP-q2 GTH-BLYP
     2
      0.20000000    2    -9.14737128     1.71197792
     0
 #
-Li GTH-BLYP-q3
+Li GTH-BLYP-q3 GTH-BLYP
     3
      0.40000000    4   -14.11679756     9.67724760    -1.79886461     0.08624957
     0
 #
-Be GTH-BLYP-q4
+Be GTH-BLYP-q4 GTH-BLYP
     4
      0.32500000    4   -24.08977105    17.30275720    -3.34561015     0.16601474
     0
 #
-B GTH-BLYP-q3
+B GTH-BLYP-q3 GTH-BLYP
     2    1
      0.42407181    2    -6.10890761     0.98586957
     2
      0.37086003    1     6.34339578
      0.34936716    0
 #
-C GTH-BLYP-q4
+C GTH-BLYP-q4 GTH-BLYP
     2    2
      0.33806609    2    -9.13626871     1.42925956
     2
      0.30232223    1     9.66551228
      0.28637912    0
 #
-N GTH-BLYP-q5
+N GTH-BLYP-q5 GTH-BLYP
     2    3
      0.28287094    2   -12.73646720     1.95107926
     2
      0.25523449    1    13.67893172
      0.24313253    0
 #
-O GTH-BLYP-q6
+O GTH-BLYP-q6 GTH-BLYP
     2    4
      0.24342026    2   -16.99189235     2.56614206
     2
      0.22083140    1    18.38885102
      0.21720070    0
 #
-F GTH-BLYP-q7
+F GTH-BLYP-q7 GTH-BLYP
     2    5
      0.21384014    2   -21.90241518     3.27597572
     2
      0.19459028    1    23.79658295
      0.18786326    0
 #
-Ne GTH-BLYP-q8
+Ne GTH-BLYP-q8 GTH-BLYP
     2    6
      0.19000000    2   -28.61959769     4.15549516
     2
@@ -116,14 +118,14 @@ Ne GTH-BLYP-q8
                                        -1.07624528
      0.15276372    1     0.33116999
 #
-Na GTH-BLYP-q9
+Na GTH-BLYP-q9 GTH-BLYP
     3    6
      0.23396502    2    -2.68948346    -0.50947770
     2
      0.14977690    1    32.85715860
      0.12319901    1   -13.99900802
 #
-Mg GTH-BLYP-q10
+Mg GTH-BLYP-q10 GTH-BLYP
     4    6
      0.20098403    2   -19.33029317     2.86005812
     2
@@ -138,7 +140,7 @@ Mg GTH-BLYP-q2
                                         0.98633664
      0.70217751    1     0.94952736
 #
-Al GTH-BLYP-q3
+Al GTH-BLYP-q3 GTH-BLYP
     2    1
      0.45000000    1    -7.66683204
     2
@@ -146,7 +148,7 @@ Al GTH-BLYP-q3
                                         2.04476682
      0.56545785    1     1.81826715
 #
-Si GTH-BLYP-q4
+Si GTH-BLYP-q4 GTH-BLYP
     2    2
      0.44000000    1    -6.25958674
     2
@@ -154,7 +156,7 @@ Si GTH-BLYP-q4
                                         3.01160535
      0.50279207    1     2.33241791
 #
-P GTH-BLYP-q5
+P GTH-BLYP-q5 GTH-BLYP
     2    3
      0.43000000    1    -5.92953335
     2
@@ -162,7 +164,7 @@ P GTH-BLYP-q5
                                         4.04299126
      0.45245811    1     2.95358263
 #
-S GTH-BLYP-q6
+S GTH-BLYP-q6 GTH-BLYP
     2    4
      0.42000000    1    -5.98880045
     2
@@ -170,7 +172,7 @@ S GTH-BLYP-q6
                                         5.05153810
      0.41287571    1     3.58772114
 #
-Cl GTH-BLYP-q7
+Cl GTH-BLYP-q7 GTH-BLYP
     2    5
      0.41000000    1    -6.35705212
     2
@@ -178,7 +180,7 @@ Cl GTH-BLYP-q7
                                         5.99065720
      0.38113517    1     4.22292428
 #
-Ar GTH-BLYP-q8
+Ar GTH-BLYP-q8 GTH-BLYP
     2    6
      0.40000000    1    -7.10000000
     2
@@ -186,7 +188,7 @@ Ar GTH-BLYP-q8
                                         6.87933576
      0.35544413    1     4.87719604
 #
-K GTH-BLYP-q9
+K GTH-BLYP-q9 GTH-BLYP
     3    6
      0.40000000    2    -2.88013377    -1.21143500
     2
@@ -195,7 +197,7 @@ K GTH-BLYP-q9
      0.32105825    2     6.90321066    -2.19925814
                                         2.60219733
 #
-Ca GTH-BLYP-q10
+Ca GTH-BLYP-q10 GTH-BLYP
     4    6
      0.39000000    2    -4.03561119    -1.61257448
     3
@@ -205,7 +207,7 @@ Ca GTH-BLYP-q10
                                         2.46745122
      0.69141876    1     0.05522276
 #
-Sc GTH-BLYP-q11
+Sc GTH-BLYP-q11 GTH-BLYP
     4    6    1
      0.37687548    2     9.84009747    -1.16586015
     3
@@ -215,7 +217,7 @@ Sc GTH-BLYP-q11
                                        -7.64861350
      0.23338021    1   -10.13403863
 #
-Ti GTH-BLYP-q12
+Ti GTH-BLYP-q12 GTH-BLYP
     4    6    2
      0.38000000    2     8.71144218    -0.70028677
     3
@@ -225,7 +227,7 @@ Ti GTH-BLYP-q12
                                       -10.49616087
      0.24331694    1    -9.40665268
 #
-V GTH-BLYP-q13
+V GTH-BLYP-q13 GTH-BLYP
     4    6    3
      0.37500000    2     7.09567441    -0.32225919
     3
@@ -235,7 +237,7 @@ V GTH-BLYP-q13
                                       -10.36994343
      0.24115328    1    -9.44436162
 #
-Cr GTH-BLYP-q14
+Cr GTH-BLYP-q14 GTH-BLYP
     3    6    5
      0.37000000    2     5.81498098    -0.67571792
     3
@@ -245,7 +247,7 @@ Cr GTH-BLYP-q14
                                        -8.96037883
      0.22092939    1   -11.18989241
 #
-Mn GTH-BLYP-q15
+Mn GTH-BLYP-q15 GTH-BLYP
     4    6    5
      0.36500000    2     6.17870291    -0.44450988
     3
@@ -255,7 +257,7 @@ Mn GTH-BLYP-q15
                                        -9.28340782
      0.22244655    1   -11.66961579
 #
-Fe GTH-BLYP-q16
+Fe GTH-BLYP-q16 GTH-BLYP
     4    6    6
      0.36000000    2     7.01102510    -0.22274667
     3
@@ -265,7 +267,7 @@ Fe GTH-BLYP-q16
                                       -10.27524761
      0.22353398    1   -12.41150401
 #
-Co GTH-BLYP-q17
+Co GTH-BLYP-q17 GTH-BLYP
     4    6    7
      0.35500000    2     3.43297847     0.61491331
     3
@@ -275,7 +277,7 @@ Co GTH-BLYP-q17
                                       -10.92419570
      0.22362456    1   -11.75878279
 #
-Ni GTH-BLYP-q18
+Ni GTH-BLYP-q18 GTH-BLYP
     4    6    8
      0.35000000    2     4.07602942     0.23312841
     3
@@ -285,7 +287,7 @@ Ni GTH-BLYP-q18
                                        -8.59815964
      0.21247761    1   -13.67293293
 #
-Cu GTH-BLYP-q11
+Cu GTH-BLYP-q11 GTH-BLYP
     1    0   10
      0.53000000    0
     3
@@ -306,7 +308,7 @@ Cu GTH-BLYP-q19
                                       -17.59208548
      0.21548515    1   -12.45211713
 #
-Zn GTH-BLYP-q12
+Zn GTH-BLYP-q12 GTH-BLYP
     2    0   10
      0.51000000    0
     3
@@ -327,7 +329,7 @@ Zn GTH-BLYP-q20
                                       -11.29234178
      0.20860634    1   -14.24182139
 #
-Ga GTH-BLYP-q13
+Ga GTH-BLYP-q13 GTH-BLYP
     2    1   10
      0.49000000    0
     3
@@ -349,7 +351,7 @@ Ga GTH-BLYP-q3
                                        -0.85240496
      0.94154174    1     0.10030959
 #
-Ge GTH-BLYP-q4
+Ge GTH-BLYP-q4 GTH-BLYP
     2    2
      0.54000000    0
     3
@@ -360,7 +362,7 @@ Ge GTH-BLYP-q4
                                        -0.84372063
      0.78547258    1     0.21870790
 #
-As GTH-BLYP-q5
+As GTH-BLYP-q5 GTH-BLYP
     2    3
      0.52000000    0
     3
@@ -371,7 +373,7 @@ As GTH-BLYP-q5
                                        -0.80843328
      0.68498074    1     0.34818137
 #
-Se GTH-BLYP-q6
+Se GTH-BLYP-q6 GTH-BLYP
     2    4
      0.51000000    0
     3
@@ -382,7 +384,7 @@ Se GTH-BLYP-q6
                                        -0.47555647
      0.60911821    1     0.49494679
 #
-Br GTH-BLYP-q7
+Br GTH-BLYP-q7 GTH-BLYP
     2    5
      0.50000000    0
     3
@@ -393,7 +395,7 @@ Br GTH-BLYP-q7
                                        -0.58731075
      0.53315603    1     0.74724056
 #
-Kr GTH-BLYP-q8
+Kr GTH-BLYP-q8 GTH-BLYP
     2    6
      0.50000000    0
     3
@@ -404,7 +406,7 @@ Kr GTH-BLYP-q8
                                        -0.76338386
      0.51315369    1     0.70954468
 #
-Sr GTH-BLYP-q10
+Sr GTH-BLYP-q10 GTH-BLYP
     4    6
      0.48000000    2     6.75494554    -1.12140847
     3
@@ -414,7 +416,7 @@ Sr GTH-BLYP-q10
                                        13.18143819
      0.53145306    1     0.32212393
 #
-Y GTH-BLYP-q11
+Y GTH-BLYP-q11 GTH-BLYP
     4    6    1
      0.47500000    2    12.12173196    -2.23590662
     3
@@ -425,7 +427,7 @@ Y GTH-BLYP-q11
      0.45213814    2     1.12663777    -1.27929123
                                         1.45057990
 #
-Zr GTH-BLYP-q12
+Zr GTH-BLYP-q12 GTH-BLYP
     4    6    2
      0.47000000    2     7.68287419    -1.83482397
     3
@@ -436,7 +438,7 @@ Zr GTH-BLYP-q12
      0.57680903    2     0.04082300     0.26426022
                                        -0.29964293
 #
-Mo GTH-BLYP-q14
+Mo GTH-BLYP-q14 GTH-BLYP
     3    6    5
      0.43000000    2    28.10289595    -4.36588317
     3
@@ -447,7 +449,7 @@ Mo GTH-BLYP-q14
      0.42539061    2     1.13742343    -2.64549690
                                         2.99971152
 #
-Ru GTH-BLYP-q16
+Ru GTH-BLYP-q16 GTH-BLYP
     3    6    7
      0.43000000    2    26.85974124    -5.05749455
     3
@@ -458,7 +460,7 @@ Ru GTH-BLYP-q16
      0.43752832    2     1.52972881    -2.96335285
                                         3.36012630
 #
-Rh GTH-BLYP-q17
+Rh GTH-BLYP-q17 GTH-BLYP
     3    6    8
      0.42000000    2    27.21859006    -5.26666561
     3
@@ -469,7 +471,7 @@ Rh GTH-BLYP-q17
      0.43219447    2     1.68856873    -3.13689837
                                         3.55690842
 #
-Pd GTH-BLYP-q18
+Pd GTH-BLYP-q18 GTH-BLYP
     2    6   10
      0.41000000    2    26.65379780    -4.86862194
     3
@@ -480,7 +482,7 @@ Pd GTH-BLYP-q18
      0.44038158    2     1.64374463    -3.09751466
                                         3.51225149
 #
-Ag GTH-BLYP-q11
+Ag GTH-BLYP-q11 GTH-BLYP
     1    0   10
      0.57000000    1     0.27329871
     3
@@ -503,7 +505,7 @@ Ag GTH-BLYP-q19
      0.45569543    2     1.75618266    -3.09368795
                                         3.50791241
 #
-In GTH-BLYP-q13
+In GTH-BLYP-q13 GTH-BLYP
     2    1   10
      0.53000000    1     3.57797710
     3
@@ -526,7 +528,7 @@ In GTH-BLYP-q3
                                        -0.57591849
      1.06121328    1     0.15160282
 #
-Sb GTH-BLYP-q5
+Sb GTH-BLYP-q5 GTH-BLYP
     2    3
      0.59000000    1     7.71520811
     3
@@ -537,7 +539,7 @@ Sb GTH-BLYP-q5
                                        -0.51892416
      0.85920174    1     0.31255771
 #
-Te GTH-BLYP-q6
+Te GTH-BLYP-q6 GTH-BLYP
     2    4
      0.57500000    1     8.54112001
     3
@@ -548,7 +550,7 @@ Te GTH-BLYP-q6
                                        -0.47553423
      0.79625711    1     0.38178821
 #
-I GTH-BLYP-q7
+I GTH-BLYP-q7 GTH-BLYP
     2    5
      0.56000000    1    13.73638610
     3
@@ -559,7 +561,7 @@ I GTH-BLYP-q7
                                        -0.55531485
      0.77040507    1     0.30709615
 #
-Ba GTH-BLYP-q10
+Ba GTH-BLYP-q10 GTH-BLYP
     4    6
      0.54000000    2    24.53545105    -2.47807384
     4
@@ -581,7 +583,30 @@ Ba GTH-BLYP-q2
                                         0.34563165
      0.87881774    1    -0.85472852
 #
-W GTH-BLYP-q14
+Ce GTH-BLYP-q12 GTH-BLYP
+    4    6    1    1
+     0.52864798    2    19.13548995    -0.59690386
+    4
+     0.52094620    2    -0.55473220     1.70057992
+                                       -2.19543924
+     0.45984533    2    -0.92453341     1.99827739
+                                       -2.36439369
+     0.67639660    1     0.10451755
+     0.30436847    1   -17.54504586
+#
+Gd GTH-BLYP-q18 GTH-BLYP
+    4    6    1    7
+     0.52166157    2    18.16996137    -0.54313383
+    4
+     0.45763555    2    -2.89847533     3.94756205
+                                       -5.09628069
+     0.45903313    3    -3.22259659     2.93618073    -0.30453227
+                                       -3.98113568     0.72065489
+                                                      -0.51217326
+     0.48380572    1    -0.84857548
+     0.27560057    1   -22.19038178
+#
+W GTH-BLYP-q14 GTH-BLYP
     4    6    4
      0.54000000    2     6.68380890    -0.31709158
     3
@@ -593,7 +618,7 @@ W GTH-BLYP-q14
      0.37281208    2    -6.46250589     7.70934709
                                        -8.74157793
 #
-Au GTH-BLYP-q11
+Au GTH-BLYP-q11 GTH-BLYP
     1    0   10
      0.59000000    1    10.81589381
     3
@@ -627,7 +652,7 @@ Bi GTH-BLYP-q15
      0.39904006    2    -5.95513083     0.85300728
                                        -0.96721934
 #
-Bi GTH-BLYP-q5
+Bi GTH-BLYP-q5 GTH-BLYP
     2    3
      0.60500000    1     8.13212850
     3
@@ -644,62 +669,62 @@ Bi GTH-BLYP-q5
 #
 ################################################################################
 #
-H GTH-BP-q1
+H GTH-BP-q1 GTH-BP
     1
      0.20000000    2    -4.18576872     0.72693955
     0
 #
-He GTH-BP-q2
+He GTH-BP-q2 GTH-BP
     2
      0.20000000    2    -9.13007508     1.70547521
     0
 #
-Li GTH-BP-q3
+Li GTH-BP-q3 GTH-BP
     3
      0.40000000    4   -14.06056862     9.58589939    -1.77248513     0.08455183
     0
 #
-Be GTH-BP-q4
+Be GTH-BP-q4 GTH-BP
     4
      0.32500000    4   -24.05179710    17.25001598    -3.33397632     0.16556913
     0
 #
-B GTH-BP-q3
+B GTH-BP-q3 GTH-BP
     2    1
      0.41689069    2    -5.92229378     0.92456157
     2
      0.37107711    1     6.29599634
      0.35853552    0
 #
-C GTH-BP-q4
+C GTH-BP-q4 GTH-BP
     2    2
      0.33679692    2    -8.86848685     1.35447596
     2
      0.30241022    1     9.62271161
      0.28961690    0
 #
-N GTH-BP-q5
+N GTH-BP-q5 GTH-BP
     2    3
      0.28309178    2   -12.45088915     1.87519554
     2
      0.25528977    1    13.63656889
      0.24443710    0
 #
-O GTH-BP-q6
+O GTH-BP-q6 GTH-BP
     2    4
      0.24401839    2   -16.70590802     2.49292672
     2
      0.22086487    1    18.34759371
      0.21290362    0
 #
-F GTH-BP-q7
+F GTH-BP-q7 GTH-BP
     2    5
      0.21448854    2   -21.61832219     3.20543202
     2
      0.19461036    1    23.75712327
      0.18640875    0
 #
-Ne GTH-BP-q8
+Ne GTH-BP-q8 GTH-BP
     2    6
      0.19000000    2   -27.05603079     4.33563519
     2
@@ -715,21 +740,21 @@ Na GTH-BP-q1
                                         0.43753317
      0.87531990    1     0.49722485
 #
-Na GTH-BP-q9
+Na GTH-BP-q9 GTH-BP
     3    6
      0.21033221    2     1.69258850     0.50357981
     2
      0.13173054    1    40.12933608
      0.14067337    1   -12.69190352
 #
-Mg GTH-BP-q10
+Mg GTH-BP-q10 GTH-BP
     4    6
      0.20344528    2   -19.14863290     2.82311627
     2
      0.14101308    1    40.61528144
      0.10485644    1   -10.81236006
 #
-Al GTH-BP-q3
+Al GTH-BP-q3 GTH-BP
     2    1
      0.45000000    1    -7.51792352
     2
@@ -737,7 +762,7 @@ Al GTH-BP-q3
                                         2.47313545
      0.56192765    1     1.85584177
 #
-Si GTH-BP-q4
+Si GTH-BP-q4 GTH-BP
     2    2
      0.44000000    1    -6.31784112
     2
@@ -745,7 +770,7 @@ Si GTH-BP-q4
                                         3.47802049
      0.49841919    1     2.41937486
 #
-P GTH-BP-q5
+P GTH-BP-q5 GTH-BP
     2    3
      0.43000000    1    -5.89229627
     2
@@ -753,7 +778,7 @@ P GTH-BP-q5
                                         4.46430080
      0.44912129    1     3.03004831
 #
-S GTH-BP-q6
+S GTH-BP-q6 GTH-BP
     2    4
      0.42000000    1    -6.03304243
     2
@@ -761,7 +786,7 @@ S GTH-BP-q6
                                         5.44421051
      0.41024550    1     3.67822896
 #
-Cl GTH-BP-q7
+Cl GTH-BP-q7 GTH-BP
     2    5
      0.41000000    1    -6.39460178
     2
@@ -769,7 +794,7 @@ Cl GTH-BP-q7
                                         6.33634940
      0.37914105    1     4.30633607
 #
-Ar GTH-BP-q8
+Ar GTH-BP-q8 GTH-BP
     2    6
      0.40000000    1    -7.10000000
     2
@@ -777,7 +802,7 @@ Ar GTH-BP-q8
                                         7.16930851
      0.35391145    1     4.94347383
 #
-K GTH-BP-q9
+K GTH-BP-q9 GTH-BP
     3    6
      0.40000000    2    -3.20803677    -1.13958016
     2
@@ -786,7 +811,7 @@ K GTH-BP-q9
      0.31728644    2     7.27073764    -2.45836276
                                         2.90877405
 #
-Ca GTH-BP-q10
+Ca GTH-BP-q10 GTH-BP
     4    6
      0.39000000    2    -5.15066460    -1.27635919
     3
@@ -796,7 +821,7 @@ Ca GTH-BP-q10
                                         2.78286199
      0.69084590    1     0.05057463
 #
-Sc GTH-BP-q11
+Sc GTH-BP-q11 GTH-BP
     4    6    1
      0.38500000    2     8.15113811    -0.54578786
     3
@@ -806,7 +831,7 @@ Sc GTH-BP-q11
                                        -9.43952457
      0.25316272    1    -8.16168667
 #
-Ti GTH-BP-q12
+Ti GTH-BP-q12 GTH-BP
     4    6    2
      0.38000000    2     8.75240544    -0.72051287
     3
@@ -816,7 +841,7 @@ Ti GTH-BP-q12
                                       -10.46792049
      0.24327738    1    -9.40815808
 #
-V GTH-BP-q13
+V GTH-BP-q13 GTH-BP
     4    6    3
      0.37500000    2     7.15179161    -0.34356487
     3
@@ -826,7 +851,7 @@ V GTH-BP-q13
                                       -10.40864444
      0.24115908    1    -9.44742960
 #
-Cr GTH-BP-q14
+Cr GTH-BP-q14 GTH-BP
     3    6    5
      0.37000000    2     5.65864275    -0.68098927
     3
@@ -836,7 +861,7 @@ Cr GTH-BP-q14
                                        -8.58148945
      0.22035720    1   -11.18549799
 #
-Mn GTH-BP-q15
+Mn GTH-BP-q15 GTH-BP
     4    6    5
      0.36500000    2     6.08697327    -0.45767880
     3
@@ -846,7 +871,7 @@ Mn GTH-BP-q15
                                        -9.35984202
      0.22235797    1   -11.61828411
 #
-Fe GTH-BP-q16
+Fe GTH-BP-q16 GTH-BP
     4    6    6
      0.36000000    2     6.76627078    -0.22960467
     3
@@ -856,7 +881,7 @@ Fe GTH-BP-q16
                                        -9.07069285
      0.22286543    1   -12.38774903
 #
-Co GTH-BP-q17
+Co GTH-BP-q17 GTH-BP
     4    6    7
      0.35500000    2     3.11870813     0.60978675
     3
@@ -866,7 +891,7 @@ Co GTH-BP-q17
                                       -10.87898254
      0.22321373    1   -11.65940289
 #
-Ni GTH-BP-q18
+Ni GTH-BP-q18 GTH-BP
     4    6    8
      0.35000000    2     1.98092026     0.67873534
     3
@@ -876,7 +901,7 @@ Ni GTH-BP-q18
                                       -14.58214136
      0.21531615    1   -12.60737765
 #
-Cu GTH-BP-q11
+Cu GTH-BP-q11 GTH-BP
     1    0   10
      0.53000000    0
     3
@@ -887,7 +912,7 @@ Cu GTH-BP-q11
                                         0.89955911
      0.26481830    1   -12.79028986
 #
-Zn GTH-BP-q12
+Zn GTH-BP-q12 GTH-BP
     2    0   10
      0.51000000    0
     3
@@ -898,7 +923,7 @@ Zn GTH-BP-q12
                                         0.66746275
      0.25119891    1   -14.42369639
 #
-Ga GTH-BP-q13
+Ga GTH-BP-q13 GTH-BP
     2    1   10
      0.49000000    0
     3
@@ -909,7 +934,7 @@ Ga GTH-BP-q13
                                        -0.32251709
      0.23837295    1   -16.19719645
 #
-Ge GTH-BP-q4
+Ge GTH-BP-q4 GTH-BP
     2    2
      0.54000000    0
     3
@@ -920,7 +945,7 @@ Ge GTH-BP-q4
                                        -0.79517793
      0.80229340    1     0.20140599
 #
-As GTH-BP-q5
+As GTH-BP-q5 GTH-BP
     2    3
      0.52000000    0
     3
@@ -931,7 +956,7 @@ As GTH-BP-q5
                                        -0.81939868
      0.70085191    1     0.31310326
 #
-Se GTH-BP-q6
+Se GTH-BP-q6 GTH-BP
     2    4
      0.51000000    0
     3
@@ -942,7 +967,7 @@ Se GTH-BP-q6
                                        -0.54847679
      0.61779280    1     0.45787624
 #
-Br GTH-BP-q7
+Br GTH-BP-q7 GTH-BP
     2    5
      0.50000000    0
     3
@@ -953,7 +978,7 @@ Br GTH-BP-q7
                                        -0.65463128
      0.57270080    1     0.53453193
 #
-Kr GTH-BP-q8
+Kr GTH-BP-q8 GTH-BP
     2    6
      0.50000000    0
     3
@@ -964,7 +989,7 @@ Kr GTH-BP-q8
                                        -0.85344324
      0.54760510    1     0.52878835
 #
-Zr GTH-BP-q12
+Zr GTH-BP-q12 GTH-BP
     4    6    2
      0.47000000    2     7.71710396    -1.87349588
     3
@@ -975,7 +1000,7 @@ Zr GTH-BP-q12
      0.57923104    2     0.03180631     0.27415481
                                        -0.31086233
 #
-Ru GTH-BP-q16
+Ru GTH-BP-q16 GTH-BP
     3    6    7
      0.43000000    2    14.95348689    -0.02426473
     3
@@ -986,7 +1011,7 @@ Ru GTH-BP-q16
      0.47093469    2     0.51873585    -2.29176040
                                         2.59861204
 #
-Te GTH-BP-q6
+Te GTH-BP-q6 GTH-BP
     2    4
      0.57500000    1     8.45045608
     3
@@ -1008,7 +1033,7 @@ Cs GTH-BP-q1
                                         0.51014161
      1.01147944    1    -0.69777439
 #
-Cs GTH-BP-q9
+Cs GTH-BP-q9 GTH-BP
     3    6
      0.54000000    2    33.18925821    -2.80669630
     4
@@ -1025,40 +1050,40 @@ Cs GTH-BP-q9
 #
 ################################################################################
 #
-H GTH-HCTH120-q1
+H GTH-HCTH120-q1 GTH-HCTH120
     1
      0.20000000    2    -4.17956174     0.72571934
     0
 #
-C GTH-HCTH120-q4
+C GTH-HCTH120-q4 GTH-HCTH120
     2    2
      0.33476327    2    -8.73799634     1.35592059
     2
      0.30224259    1     9.60562026
      0.29150776    0
 #
-N GTH-HCTH120-q5
+N GTH-HCTH120-q5 GTH-HCTH120
     2    3
      0.28289705    2   -12.19488993     1.83989918
     2
      0.25526540    1    13.60420273
      0.24618482    0
 #
-O GTH-HCTH120-q6
+O GTH-HCTH120-q6 GTH-HCTH120
     2    4
      0.24476117    2   -16.35853832     2.42680904
     2
      0.22092765    1    18.29885210
      0.21259318    0
 #
-F GTH-HCTH120-q7
+F GTH-HCTH120-q7 GTH-HCTH120
     2    5
      0.21555878    2   -21.21402136     3.11524496
     2
      0.19472662    1    23.68789289
      0.18667491    0
 #
-P GTH-HCTH120-q5
+P GTH-HCTH120-q5 GTH-HCTH120
     2    3
      0.43000000    1    -5.55967117
     2
@@ -1066,7 +1091,7 @@ P GTH-HCTH120-q5
                                         4.22023493
      0.45131904    1     2.95015425
 #
-Ar GTH-HCTH120-q8
+Ar GTH-HCTH120-q8 GTH-HCTH120
     2    6
      0.40000000    1    -7.01660399
     2
@@ -1080,26 +1105,26 @@ Ar GTH-HCTH120-q8
 #
 ################################################################################
 #
-H GTH-HCTH407-q1
+H GTH-HCTH407-q1 GTH-HCTH407
     1
      0.20000000    2    -4.17855435     0.72595112
     0
 #
-C GTH-HCTH407-q4
+C GTH-HCTH407-q4 GTH-HCTH407
     2    2
      0.33895449    2    -8.64070432     1.35762517
     2
      0.30236220    1     9.59681173
      0.29159277    0
 #
-N GTH-HCTH407-q5
+N GTH-HCTH407-q5 GTH-HCTH407
     2    3
      0.28580927    2   -12.16723704     1.85814414
     2
      0.25533910    1    13.60665370
      0.24645801    0
 #
-O GTH-HCTH407-q6
+O GTH-HCTH407-q6 GTH-HCTH407
     2    4
      0.24634413    2   -16.39807931     2.45634724
     2
@@ -1112,12 +1137,12 @@ O GTH-HCTH407-q6
 #
 ################################################################################
 #
-H GTH-PADE-q1 GTH-LDA-q1
+H GTH-PADE-q1 GTH-LDA-q1 GTH-PADE GTH-LDA
     1
      0.20000000    2    -4.18023680     0.72507482
     0
 #
-He GTH-PADE-q2 GTH-LDA-q2
+He GTH-PADE-q2 GTH-LDA-q2 GTH-PADE GTH-LDA
     2
      0.20000000    2    -9.11202340     1.69836797
     0
@@ -1129,7 +1154,7 @@ Li GTH-PADE-q1 GTH-LDA-q1
      0.66637518    1     1.85881111
      1.07930561    1    -0.00589504
 #
-Li GTH-PADE-q3 GTH-LDA-q3
+Li GTH-PADE-q3 GTH-LDA-q3 GTH-PADE GTH-LDA
     3
      0.40000000    4   -14.03486849     9.55347627    -1.76648817     0.08436998
     0
@@ -1141,47 +1166,47 @@ Be GTH-PADE-q2 GTH-LDA-q2
      0.52879656    1     3.06166591
      0.65815348    1     0.09246196
 #
-Be GTH-PADE-q4 GTH-LDA-q4
+Be GTH-PADE-q4 GTH-LDA-q4 GTH-PADE GTH-LDA
     4
      0.32500000    4   -24.01504092    17.20401444    -3.32639018     0.16541943
     0
 #
-B GTH-PADE-q3 GTH-LDA-q3
+B GTH-PADE-q3 GTH-LDA-q3 GTH-PADE GTH-LDA
     2    1
      0.43392956    2    -5.57864173     0.80425145
     2
      0.37384326    1     6.23392822
      0.36039317    0
 #
-C GTH-PADE-q4 GTH-LDA-q4
+C GTH-PADE-q4 GTH-LDA-q4 GTH-PADE GTH-LDA
     2    2
      0.34883045    2    -8.51377110     1.22843203
     2
      0.30455321    1     9.52284179
      0.23267730    0
 #
-N GTH-PADE-q5 GTH-LDA-q5
+N GTH-PADE-q5 GTH-LDA-q5 GTH-PADE GTH-LDA
     2    3
      0.28917923    2   -12.23481988     1.76640728
     2
      0.25660487    1    13.55224272
      0.27013369    0
 #
-O GTH-PADE-q6 GTH-LDA-q6
+O GTH-PADE-q6 GTH-LDA-q6 GTH-PADE GTH-LDA
     2    4
      0.24762086    2   -16.58031797     2.39570092
     2
      0.22178614    1    18.26691718
      0.25682890    0
 #
-F GTH-PADE-q7 GTH-LDA-q7
+F GTH-PADE-q7 GTH-LDA-q7 GTH-PADE GTH-LDA
     2    5
      0.21852465    2   -21.30736112     3.07286942
     2
      0.19556721    1    23.58494211
      0.17426832    0
 #
-Ne GTH-PADE-q8 GTH-LDA-q8
+Ne GTH-PADE-q8 GTH-LDA-q8 GTH-PADE GTH-LDA
     2    6
      0.19000000    2   -27.69285182     4.00590585
     2
@@ -1197,14 +1222,14 @@ Na GTH-PADE-q1 GTH-LDA-q1
                                         0.58200362
      0.85711928    1     0.47113258
 #
-Na GTH-PADE-q9 GTH-LDA-q9
+Na GTH-PADE-q9 GTH-LDA-q9 GTH-PADE GTH-LDA
     3    6
      0.24631780    2    -7.54559253     1.12599671
     2
      0.14125125    1    36.55698653
      0.13966840    1   -10.39208332
 #
-Mg GTH-PADE-q10 GTH-LDA-q10
+Mg GTH-PADE-q10 GTH-LDA-q10 GTH-PADE GTH-LDA
     4    6
      0.21094954    2   -19.41900751     2.87133099
     2
@@ -1219,7 +1244,7 @@ Mg GTH-PADE-q2 GTH-LDA-q2
                                         1.32994091
      0.67756881    1     1.04988101
 #
-Al GTH-PADE-q3 GTH-LDA-q3
+Al GTH-PADE-q3 GTH-LDA-q3 GTH-PADE GTH-LDA
     2    1
      0.45000000    1    -8.49135116
     2
@@ -1227,7 +1252,7 @@ Al GTH-PADE-q3 GTH-LDA-q3
                                         2.67969975
      0.53674439    1     2.19343827
 #
-Si GTH-PADE-q4 GTH-LDA-q4
+Si GTH-PADE-q4 GTH-LDA-q4 GTH-PADE GTH-LDA
     2    2
      0.44000000    1    -7.33610297
     2
@@ -1235,7 +1260,7 @@ Si GTH-PADE-q4 GTH-LDA-q4
                                         3.25819622
      0.48427842    1     2.72701346
 #
-P GTH-PADE-q5 GTH-LDA-q5
+P GTH-PADE-q5 GTH-LDA-q5 GTH-PADE GTH-LDA
     2    3
      0.43000000    1    -6.65421981
     2
@@ -1243,7 +1268,7 @@ P GTH-PADE-q5 GTH-LDA-q5
                                         3.85669332
      0.44079585    1     3.28260592
 #
-S GTH-PADE-q6 GTH-LDA-q6
+S GTH-PADE-q6 GTH-LDA-q6 GTH-PADE GTH-LDA
     2    4
      0.42000000    1    -6.55449184
     2
@@ -1251,7 +1276,7 @@ S GTH-PADE-q6 GTH-LDA-q6
                                         4.47169830
      0.40528502    1     3.86657900
 #
-Cl GTH-PADE-q7 GTH-LDA-q7
+Cl GTH-PADE-q7 GTH-LDA-q7 GTH-PADE GTH-LDA
     2    5
      0.41000000    1    -6.86475431
     2
@@ -1259,7 +1284,7 @@ Cl GTH-PADE-q7 GTH-LDA-q7
                                         5.06568240
      0.37613709    1     4.46587640
 #
-Ar GTH-PADE-q8 GTH-LDA-q8
+Ar GTH-PADE-q8 GTH-LDA-q8 GTH-PADE GTH-LDA
     2    6
      0.40000000    1    -7.10000000
     2
@@ -1278,7 +1303,7 @@ K GTH-PADE-q1 GTH-LDA-q1
                                         0.06819410
      0.72060608    1    -1.52951361
 #
-K GTH-PADE-q9 GTH-LDA-q9
+K GTH-PADE-q9 GTH-LDA-q9 GTH-PADE GTH-LDA
     3    6
      0.40000000    2    -4.98934751    -0.75604821
     2
@@ -1287,7 +1312,7 @@ K GTH-PADE-q9 GTH-LDA-q9
      0.32235865    2     5.25670239    -0.39677748
                                         0.93894690
 #
-Ca GTH-PADE-q10 GTH-LDA-q10
+Ca GTH-PADE-q10 GTH-LDA-q10 GTH-PADE GTH-LDA
     4    6
      0.39000000    2    -4.92814602    -1.23285409
     3
@@ -1308,7 +1333,7 @@ Ca GTH-PADE-q2 GTH-LDA-q2
                                         0.12632878
      0.52654998    1    -3.03232095
 #
-Sc GTH-PADE-q11 GTH-LDA-q11
+Sc GTH-PADE-q11 GTH-LDA-q11 GTH-PADE GTH-LDA
     4    6    1
      0.38500000    2     7.42503638    -0.48985155
     3
@@ -1329,7 +1354,7 @@ Sc GTH-PADE-q3 GTH-LDA-q3
                                         0.24673297
      0.45465318    1    -3.85924078
 #
-Ti GTH-PADE-q12 GTH-LDA-q12
+Ti GTH-PADE-q12 GTH-LDA-q12 GTH-PADE GTH-LDA
     4    6    2
      0.38000000    2     7.54878947    -0.58837666
     3
@@ -1350,7 +1375,7 @@ Ti GTH-PADE-q4 GTH-LDA-q4
                                         0.26068669
      0.40871178    1    -4.82645635
 #
-V GTH-PADE-q13 GTH-LDA-q13
+V GTH-PADE-q13 GTH-LDA-q13 GTH-PADE GTH-LDA
     4    6    3
      0.37500000    2     4.94129058    -0.09644336
     3
@@ -1371,7 +1396,7 @@ V GTH-PADE-q5 GTH-LDA-q5
                                         0.28664887
      0.37488959    1    -5.84163317
 #
-Cr GTH-PADE-q14 GTH-LDA-q14
+Cr GTH-PADE-q14 GTH-LDA-q14 GTH-PADE GTH-LDA
     3    6    5
      0.37000000    2     5.11336166    -0.64681932
     3
@@ -1392,7 +1417,7 @@ Cr GTH-PADE-q6 GTH-LDA-q6
                                         0.27823604
      0.35434060    1    -6.61587832
 #
-Mn GTH-PADE-q15 GTH-LDA-q15
+Mn GTH-PADE-q15 GTH-LDA-q15 GTH-PADE GTH-LDA
     4    6    5
      0.36500000    2     6.74868332    -0.57656900
     3
@@ -1413,7 +1438,7 @@ Mn GTH-PADE-q7 GTH-LDA-q7
                                         0.31676337
      0.32776314    1    -7.99541784
 #
-Fe GTH-PADE-q16 GTH-LDA-q16
+Fe GTH-PADE-q16 GTH-LDA-q16 GTH-PADE GTH-LDA
     4    6    6
      0.36000000    2     5.39250667    -0.03006638
     3
@@ -1434,7 +1459,7 @@ Fe GTH-PADE-q8 GTH-LDA-q8
                                         0.32687369
      0.30873177    1    -9.14535371
 #
-Co GTH-PADE-q17 GTH-LDA-q17
+Co GTH-PADE-q17 GTH-LDA-q17 GTH-PADE GTH-LDA
     4    6    7
      0.35500000    2     3.41839094     0.48207820
     3
@@ -1466,7 +1491,7 @@ Ni GTH-PADE-q10 GTH-LDA-q10
                                         0.38634067
      0.27811348    1   -11.60842823
 #
-Ni GTH-PADE-q18 GTH-LDA-q18
+Ni GTH-PADE-q18 GTH-LDA-q18 GTH-PADE GTH-LDA
     4    6    8
      0.35000000    2     3.61031072     0.44963832
     3
@@ -1487,7 +1512,7 @@ Cu GTH-PADE-q1 GTH-LDA-q1
                                        -0.24900093
      1.29160225    1    -0.06529209
 #
-Cu GTH-PADE-q11 GTH-LDA-q11
+Cu GTH-PADE-q11 GTH-LDA-q11 GTH-PADE GTH-LDA
     1    0   10
      0.53000000    0
     3
@@ -1508,7 +1533,7 @@ Cu GTH-PADE-q19 GTH-LDA-q19
                                       -18.98355830
      0.21773897    1   -12.50830997
 #
-Zn GTH-PADE-q12 GTH-LDA-q12
+Zn GTH-PADE-q12 GTH-LDA-q12 GTH-PADE GTH-LDA
     2    0   10
      0.51000000    0
     3
@@ -1540,7 +1565,7 @@ Zn GTH-PADE-q20 GTH-LDA-q20
                                        -9.93423822
      0.20656246    1   -14.03217427
 #
-Ga GTH-PADE-q13 GTH-LDA-q13
+Ga GTH-PADE-q13 GTH-LDA-q13 GTH-PADE GTH-LDA
     2    1   10
      0.49000000    0
     3
@@ -1562,7 +1587,7 @@ Ga GTH-PADE-q3 GTH-LDA-q3
                                        -0.51313234
      0.98257967    1     0.07543656
 #
-Ge GTH-PADE-q4 GTH-LDA-q4
+Ge GTH-PADE-q4 GTH-LDA-q4 GTH-PADE GTH-LDA
     2    2
      0.54000000    0
     3
@@ -1573,7 +1598,7 @@ Ge GTH-PADE-q4 GTH-LDA-q4
                                        -0.62736987
      0.78836851    1     0.19120485
 #
-As GTH-PADE-q5 GTH-LDA-q5
+As GTH-PADE-q5 GTH-LDA-q5 GTH-PADE GTH-LDA
     2    3
      0.52000000    0
     3
@@ -1584,7 +1609,7 @@ As GTH-PADE-q5 GTH-LDA-q5
                                        -0.64672658
      0.68528272    1     0.31237276
 #
-Se GTH-PADE-q6 GTH-LDA-q6
+Se GTH-PADE-q6 GTH-LDA-q6 GTH-PADE GTH-LDA
     2    4
      0.51000000    0
     3
@@ -1595,7 +1620,7 @@ Se GTH-PADE-q6 GTH-LDA-q6
                                        -0.59067050
      0.61342013    1     0.43482888
 #
-Br GTH-PADE-q7 GTH-LDA-q7
+Br GTH-PADE-q7 GTH-LDA-q7 GTH-PADE GTH-LDA
     2    5
      0.50000000    0
     3
@@ -1606,7 +1631,7 @@ Br GTH-PADE-q7 GTH-LDA-q7
                                        -0.63220188
      0.55784727    1     0.55590294
 #
-Kr GTH-PADE-q8 GTH-LDA-q8
+Kr GTH-PADE-q8 GTH-LDA-q8 GTH-PADE GTH-LDA
     2    6
      0.50000000    0
     3
@@ -1628,7 +1653,7 @@ Rb GTH-PADE-q1 GTH-LDA-q1
                                         0.33611273
      0.66432256    1    -1.36293829
 #
-Rb GTH-PADE-q9 GTH-LDA-q9
+Rb GTH-PADE-q9 GTH-LDA-q9 GTH-PADE GTH-LDA
     3    6
      0.49000000    2     4.50415106    -0.74101810
     3
@@ -1638,7 +1663,7 @@ Rb GTH-PADE-q9 GTH-LDA-q9
                                         5.47524928
      0.51489528    1     0.44937574
 #
-Sr GTH-PADE-q10 GTH-LDA-q10
+Sr GTH-PADE-q10 GTH-LDA-q10 GTH-PADE GTH-LDA
     4    6
      0.48000000    2     5.57145509    -1.07996304
     3
@@ -1659,7 +1684,7 @@ Sr GTH-PADE-q2 GTH-LDA-q2
                                         0.01826685
      0.74317548    1    -1.38699026
 #
-Y GTH-PADE-q11 GTH-LDA-q11
+Y GTH-PADE-q11 GTH-LDA-q11 GTH-PADE GTH-LDA
     4    6    1
      0.47500000    2     6.89262113    -1.44841137
     3
@@ -1682,7 +1707,7 @@ Y GTH-PADE-q3 GTH-LDA-q3
      0.65385060    2    -1.25692979     0.03323415
                                        -0.07536797
 #
-Zr GTH-PADE-q12 GTH-LDA-q12
+Zr GTH-PADE-q12 GTH-LDA-q12 GTH-PADE GTH-LDA
     4    6    2
      0.47000000    2     6.34261837    -1.73217100
     3
@@ -1705,7 +1730,7 @@ Zr GTH-PADE-q4 GTH-LDA-q4
      0.63066761    2    -1.17391057    -0.09356197
                                         0.21217861
 #
-Nb GTH-PADE-q13 GTH-LDA-q13
+Nb GTH-PADE-q13 GTH-LDA-q13 GTH-PADE GTH-LDA
     3    6    4
      0.46000000    2    13.50539360     0.75243372
     3
@@ -1727,7 +1752,7 @@ Nb GTH-PADE-q5 GTH-LDA-q5
      0.51607226    2    -2.69682993     0.74741000
                                        -1.69496657
 #
-Mo GTH-PADE-q14 GTH-LDA-q14
+Mo GTH-PADE-q14 GTH-LDA-q14 GTH-PADE GTH-LDA
     3    6    5
      0.43000000    2    16.23745228     1.49653613
     3
@@ -1749,7 +1774,7 @@ Mo GTH-PADE-q6 GTH-LDA-q6
      0.45338393    2    -2.80970771     3.00775463
                                        -6.82094635
 #
-Tc GTH-PADE-q15 GTH-LDA-q15
+Tc GTH-PADE-q15 GTH-LDA-q15 GTH-PADE GTH-LDA
     3    6    6
      0.43000001    2    14.91001129     1.04638147
     3
@@ -1771,7 +1796,7 @@ Tc GTH-PADE-q7 GTH-LDA-q7
      0.51988975    2    -5.98422427    -0.31829379
                                         0.72182246
 #
-Ru GTH-PADE-q16 GTH-LDA-q16
+Ru GTH-PADE-q16 GTH-LDA-q16 GTH-PADE GTH-LDA
     3    6    7
      0.43000000    2    13.58257130     0.59622675
     3
@@ -1793,7 +1818,7 @@ Ru GTH-PADE-q8 GTH-LDA-q8
      0.44035802    2    -4.88336495     1.35098513
                                        -3.06374629
 #
-Rh GTH-PADE-q17 GTH-LDA-q17
+Rh GTH-PADE-q17 GTH-LDA-q17 GTH-PADE GTH-LDA
     3    6    8
      0.42000000    2    15.22501231     0.41591145
     3
@@ -1826,7 +1851,7 @@ Pd GTH-PADE-q10 GTH-LDA-q10
      0.44283523    2    -4.37713124    -0.18223540
                                         0.41327105
 #
-Pd GTH-PADE-q18 GTH-LDA-q18
+Pd GTH-PADE-q18 GTH-LDA-q18 GTH-PADE GTH-LDA
     2    6   10
      0.41000000    2    15.72025922     0.14076508
     3
@@ -1848,7 +1873,7 @@ Ag GTH-PADE-q1 GTH-LDA-q1
                                        -0.27749548
      1.01615913    1    -0.03884235
 #
-Ag GTH-PADE-q11 GTH-LDA-q11
+Ag GTH-PADE-q11 GTH-LDA-q11 GTH-PADE GTH-LDA
     1    0   10
      0.57000000    1     1.01705324
     3
@@ -1871,7 +1896,7 @@ Ag GTH-PADE-q19 GTH-LDA-q19
      0.44722234    2     1.87011922    -3.09368795
                                         3.50791241
 #
-Cd GTH-PADE-q12 GTH-LDA-q12
+Cd GTH-PADE-q12 GTH-LDA-q12 GTH-PADE GTH-LDA
     2    0   10
      0.55000000    1     2.38271306
     3
@@ -1894,7 +1919,7 @@ Cd GTH-PADE-q2 GTH-LDA-q2
                                        -0.44811107
      1.24094900    1     0.06541164
 #
-In GTH-PADE-q13 GTH-LDA-q13
+In GTH-PADE-q13 GTH-LDA-q13 GTH-PADE GTH-LDA
     2    1   10
      0.53000000    1     2.39540385
     3
@@ -1917,7 +1942,7 @@ In GTH-PADE-q3 GTH-LDA-q3
                                        -0.38078878
      1.08869090    1     0.12920778
 #
-Sn GTH-PADE-q4 GTH-LDA-q4
+Sn GTH-PADE-q4 GTH-LDA-q4 GTH-PADE GTH-LDA
     2    2
      0.60500000    1     4.61091234
     3
@@ -1928,7 +1953,7 @@ Sn GTH-PADE-q4 GTH-LDA-q4
                                        -0.44507028
      0.94445897    1     0.22511508
 #
-Sb GTH-PADE-q5 GTH-LDA-q5
+Sb GTH-PADE-q5 GTH-LDA-q5 GTH-PADE GTH-LDA
     2    3
      0.59000000    1     6.68022783
     3
@@ -1939,7 +1964,7 @@ Sb GTH-PADE-q5 GTH-LDA-q5
                                        -0.46673132
      0.85655729    1     0.30010262
 #
-Te GTH-PADE-q6 GTH-LDA-q6
+Te GTH-PADE-q6 GTH-LDA-q6 GTH-PADE GTH-LDA
     2    4
      0.57500000    1     9.38708481
     3
@@ -1950,7 +1975,7 @@ Te GTH-PADE-q6 GTH-LDA-q6
                                        -0.48117240
      0.80510072    1     0.31741073
 #
-I GTH-PADE-q7 GTH-LDA-q7
+I GTH-PADE-q7 GTH-LDA-q7 GTH-PADE GTH-LDA
     2    5
      0.56000000    1    14.66182521
     3
@@ -1961,7 +1986,7 @@ I GTH-PADE-q7 GTH-LDA-q7
                                        -0.57778676
      0.79432495    1     0.22434543
 #
-Xe GTH-PADE-q8 GTH-LDA-q8
+Xe GTH-PADE-q8 GTH-LDA-q8 GTH-PADE GTH-LDA
     2    6
      0.56000000    1    12.73427972
     3
@@ -1983,7 +2008,7 @@ Cs GTH-PADE-q1 GTH-LDA-q1
                                         0.22727863
      1.10752212    1    -0.54216260
 #
-Cs GTH-PADE-q9 GTH-LDA-q9
+Cs GTH-PADE-q9 GTH-LDA-q9 GTH-PADE GTH-LDA
     3    6
      0.54000000    2    35.23443810    -3.31807009
     4
@@ -1994,7 +2019,7 @@ Cs GTH-PADE-q9 GTH-LDA-q9
      0.76146205    1     0.18375440
      0.33350703    1   -17.94825944
 #
-Ba GTH-PADE-q10 GTH-LDA-q10
+Ba GTH-PADE-q10 GTH-LDA-q10 GTH-PADE GTH-LDA
     4    6
      0.54000000    2    24.47865325    -2.50084994
     4
@@ -2016,7 +2041,7 @@ Ba GTH-PADE-q2 GTH-LDA-q2
                                         0.15108073
      0.93715823    1    -0.71893382
 #
-La GTH-PADE-q11 GTH-LDA-q11
+La GTH-PADE-q11 GTH-LDA-q11 GTH-PADE GTH-LDA
     4    6    1
      0.53500000    2    19.90930823    -1.47483023
     4
@@ -2028,7 +2053,7 @@ La GTH-PADE-q11 GTH-LDA-q11
      0.62667220    1     0.32837704
      0.29931017    1   -18.26943896
 #
-Ce GTH-PADE-q12 GTH-LDA-q12
+Ce GTH-PADE-q12 GTH-LDA-q12 GTH-PADE GTH-LDA
     4    6    1    1
      0.53500000    2    18.26801534    -0.63048034
     4
@@ -2039,7 +2064,7 @@ Ce GTH-PADE-q12 GTH-LDA-q12
      0.69222809    1     0.06340682
      0.30390134    1   -17.54564801
 #
-Pr GTH-PADE-q13 GTH-LDA-q13
+Pr GTH-PADE-q13 GTH-LDA-q13 GTH-PADE GTH-LDA
     4    6    0    3
      0.53208333    2    18.42473909    -0.65766893
     4
@@ -2050,7 +2075,7 @@ Pr GTH-PADE-q13 GTH-LDA-q13
      0.74760989    1     0.01757109
      0.30077296    1   -17.89711891
 #
-Nd GTH-PADE-q14 GTH-LDA-q14
+Nd GTH-PADE-q14 GTH-LDA-q14 GTH-PADE GTH-LDA
     4    6    0    4
      0.52916670    2    17.81503043    -0.59479767
     4
@@ -2061,7 +2086,7 @@ Nd GTH-PADE-q14 GTH-LDA-q14
      0.32528958    1    -0.54324017
      0.29474281    1   -18.52022760
 #
-Pm GTH-PADE-q15 GTH-LDA-q15
+Pm GTH-PADE-q15 GTH-LDA-q15 GTH-PADE GTH-LDA
     4    6    0    5
      0.52625000    2    18.25172292    -0.49210744
     4
@@ -2072,7 +2097,7 @@ Pm GTH-PADE-q15 GTH-LDA-q15
      0.47370914    1    -0.42995241
      0.29152653    1   -19.30505668
 #
-Sm GTH-PADE-q16 GTH-LDA-q16
+Sm GTH-PADE-q16 GTH-LDA-q16 GTH-PADE GTH-LDA
     4    6    0    6
      0.52333337    2    17.20679172    -0.53280292
     4
@@ -2083,7 +2108,7 @@ Sm GTH-PADE-q16 GTH-LDA-q16
      0.47084026    1    -0.41063034
      0.28404049    1   -19.98429201
 #
-Eu GTH-PADE-q17 GTH-LDA-q17
+Eu GTH-PADE-q17 GTH-LDA-q17 GTH-PADE GTH-LDA
     4    6    0    7
      0.52041668    2    17.37351625    -0.64846778
     4
@@ -2094,7 +2119,7 @@ Eu GTH-PADE-q17 GTH-LDA-q17
      0.49003840    1    -0.42611996
      0.27840129    1   -20.94652763
 #
-Gd GTH-PADE-q18 GTH-LDA-q18
+Gd GTH-PADE-q18 GTH-LDA-q18 GTH-PADE GTH-LDA
     4    6    0    8
      0.51750004    2    17.51255640    -0.71953420
     4
@@ -2105,7 +2130,7 @@ Gd GTH-PADE-q18 GTH-LDA-q18
      0.48236813    1    -0.56260077
      0.27338980    1   -21.92349011
 #
-Tb GTH-PADE-q19 GTH-LDA-q19
+Tb GTH-PADE-q19 GTH-LDA-q19 GTH-PADE GTH-LDA
     4    6    0    9
      0.51458335    2    17.60361623    -0.82808004
     4
@@ -2116,7 +2141,7 @@ Tb GTH-PADE-q19 GTH-LDA-q19
      0.48280866    1    -0.62580219
      0.26825995    1   -22.91169709
 #
-Dy GTH-PADE-q20 GTH-LDA-q20
+Dy GTH-PADE-q20 GTH-LDA-q20 GTH-PADE GTH-LDA
     4    6    0   10
      0.51166666    2    16.99433138    -0.95529792
     4
@@ -2127,7 +2152,7 @@ Dy GTH-PADE-q20 GTH-LDA-q20
      0.46722880    1    -0.66892417
      0.26167045    1   -23.92235817
 #
-Ho GTH-PADE-q21 GTH-LDA-q21
+Ho GTH-PADE-q21 GTH-LDA-q21 GTH-PADE GTH-LDA
     4    6    0   11
      0.50875002    2    16.78157003    -1.17351448
     4
@@ -2138,7 +2163,7 @@ Ho GTH-PADE-q21 GTH-LDA-q21
      0.44713057    1    -0.74286267
      0.25499226    1   -25.19721081
 #
-Er GTH-PADE-q22 GTH-LDA-q22
+Er GTH-PADE-q22 GTH-LDA-q22 GTH-PADE GTH-LDA
     4    6    0   12
      0.50583333    2    17.10529281    -1.43095318
     4
@@ -2149,7 +2174,7 @@ Er GTH-PADE-q22 GTH-LDA-q22
      0.41838497    1    -0.99900632
      0.24912591    1   -26.69680936
 #
-Tm GTH-PADE-q23 GTH-LDA-q23
+Tm GTH-PADE-q23 GTH-LDA-q23 GTH-PADE GTH-LDA
     4    6    0   13
      0.50291669    2    17.24729254    -1.62769708
     4
@@ -2160,7 +2185,7 @@ Tm GTH-PADE-q23 GTH-LDA-q23
      0.39287009    1    -1.35330770
      0.24391696    1   -28.10415875
 #
-Yb GTH-PADE-q24 GTH-LDA-q24
+Yb GTH-PADE-q24 GTH-LDA-q24 GTH-PADE GTH-LDA
     4    6    0   14
      0.50000000    2    17.35714421    -1.77391642
     4
@@ -2171,7 +2196,7 @@ Yb GTH-PADE-q24 GTH-LDA-q24
      0.44402468    1    -0.88996733
      0.23829829    1   -29.93285367
 #
-Lu GTH-PADE-q25 GTH-LDA-q25
+Lu GTH-PADE-q25 GTH-LDA-q25 GTH-PADE GTH-LDA
     4    6    1   14
      0.49700000    2    17.03705292    -1.66161023
     4
@@ -2182,7 +2207,7 @@ Lu GTH-PADE-q25 GTH-LDA-q25
      0.43651827    1    -1.17324513
      0.23262926    1   -31.85226177
 #
-Hf GTH-PADE-q12 GTH-LDA-q12
+Hf GTH-PADE-q12 GTH-LDA-q12 GTH-PADE GTH-LDA
     4    6    2
      0.56000000    2     5.13480056     0.52919062
     3
@@ -2194,7 +2219,7 @@ Hf GTH-PADE-q12 GTH-LDA-q12
      0.42638752    2     1.45936326     2.32948018
                                        -5.28276448
 #
-Ta GTH-PADE-q13 GTH-LDA-q13
+Ta GTH-PADE-q13 GTH-LDA-q13 GTH-PADE GTH-LDA
     4    6    3
      0.55000000    2     4.54623627     0.77942234
     3
@@ -2217,7 +2242,7 @@ Ta GTH-PADE-q5 GTH-LDA-q5
      0.53436996    2    -2.20220040     0.73493457
                                        -1.66667495
 #
-W GTH-PADE-q14 GTH-LDA-q14
+W GTH-PADE-q14 GTH-LDA-q14 GTH-PADE GTH-LDA
     4    6    4
      0.54000000    2     4.80025094     0.90154434
     3
@@ -2240,7 +2265,7 @@ W GTH-PADE-q6 GTH-LDA-q6
      0.53495887    2    -2.51706347     0.34797654
                                        -0.78913661
 #
-Re GTH-PADE-q15 GTH-LDA-q15
+Re GTH-PADE-q15 GTH-LDA-q15 GTH-PADE GTH-LDA
     4    6    5
      0.53000000    2     5.59266028     0.94395680
     3
@@ -2263,7 +2288,7 @@ Re GTH-PADE-q7 GTH-LDA-q7
      0.50095420    2    -3.68962967     0.83544051
                                        -1.89460099
 #
-Os GTH-PADE-q16 GTH-LDA-q16
+Os GTH-PADE-q16 GTH-LDA-q16 GTH-PADE GTH-LDA
     4    6    6
      0.52000000    2     5.61307299     0.92195476
     3
@@ -2286,7 +2311,7 @@ Os GTH-PADE-q8 GTH-LDA-q8
      0.48758605    2    -4.14203471     0.73468110
                                        -1.66610013
 #
-Ir GTH-PADE-q17 GTH-LDA-q17
+Ir GTH-PADE-q17 GTH-LDA-q17 GTH-PADE GTH-LDA
     4    6    7
      0.51000000    2     4.90450946     1.31378645
     3
@@ -2320,7 +2345,7 @@ Pt GTH-PADE-q10 GTH-LDA-q10
      0.45124318    2    -4.55229454     0.92706936
                                        -2.10239568
 #
-Pt GTH-PADE-q18 GTH-LDA-q18
+Pt GTH-PADE-q18 GTH-LDA-q18 GTH-PADE GTH-LDA
     3    6    9
      0.50000000    2     5.44583159     1.15638204
     3
@@ -2343,7 +2368,7 @@ Au GTH-PADE-q1 GTH-LDA-q1
                                        -0.49753827     0.14757016
                                                       -0.20975780
 #
-Au GTH-PADE-q11 GTH-LDA-q11
+Au GTH-PADE-q11 GTH-LDA-q11 GTH-PADE GTH-LDA
     1    0   10
      0.59000000    1    11.60442790
     3
@@ -2366,7 +2391,7 @@ Au GTH-PADE-q19 GTH-LDA-q19
      0.33386175    2    -8.82572349     9.56535285
                                       -10.84609065
 #
-Hg GTH-PADE-q12 GTH-LDA-q12
+Hg GTH-PADE-q12 GTH-LDA-q12 GTH-PADE GTH-LDA
     2    0   10
      0.57000000    1     2.13457183
     3
@@ -2388,7 +2413,7 @@ Hg GTH-PADE-q2 GTH-LDA-q2
                                        -0.53181582
      1.10000000    1     0.12063831
 #
-Tl GTH-PADE-q13 GTH-LDA-q13
+Tl GTH-PADE-q13 GTH-LDA-q13 GTH-PADE GTH-LDA
     2    1   10
      0.55000000    1     7.30188582
     3
@@ -2410,7 +2435,7 @@ Tl GTH-PADE-q3 GTH-LDA-q3
                                        -0.58672051
      1.06351212    1     0.24761396
 #
-Pb GTH-PADE-q4 GTH-LDA-q4
+Pb GTH-PADE-q4 GTH-LDA-q4 GTH-PADE GTH-LDA
     2    2
      0.61750000    1     0.75314257
     3
@@ -2421,7 +2446,7 @@ Pb GTH-PADE-q4 GTH-LDA-q4
                                        -0.54096885
      0.97193857    1     0.37496708
 #
-Bi GTH-PADE-q5 GTH-LDA-q5
+Bi GTH-PADE-q5 GTH-LDA-q5 GTH-PADE GTH-LDA
     2    3
      0.60500000    1     6.67943714
     3
@@ -2432,7 +2457,7 @@ Bi GTH-PADE-q5 GTH-LDA-q5
                                        -0.40293219
      0.93468255    1     0.37847579
 #
-Po GTH-PADE-q6 GTH-LDA-q6
+Po GTH-PADE-q6 GTH-LDA-q6 GTH-PADE GTH-LDA
     2    4
      0.59250000    1    10.41173070
     3
@@ -2443,7 +2468,7 @@ Po GTH-PADE-q6 GTH-LDA-q6
                                        -0.35359482
      0.88046840    1     0.43323228
 #
-At GTH-PADE-q7 GTH-LDA-q7
+At GTH-PADE-q7 GTH-LDA-q7 GTH-PADE GTH-LDA
     2    5
      0.58000000    1    13.52041116
     3
@@ -2454,7 +2479,7 @@ At GTH-PADE-q7 GTH-LDA-q7
                                        -0.31882073
      0.83836499    1     0.46894787
 #
-Rn GTH-PADE-q8 GTH-LDA-q8
+Rn GTH-PADE-q8 GTH-LDA-q8 GTH-PADE GTH-LDA
     2    6
      0.57000000    1    14.62918461
     3
@@ -2471,62 +2496,62 @@ Rn GTH-PADE-q8 GTH-LDA-q8
 #
 ################################################################################
 #
-H GTH-PBE-q1
+H GTH-PBE-q1 GTH-PBE
     1
      0.20000000    2    -4.17890044     0.72446331
     0
 #
-He GTH-PBE-q2
+He GTH-PBE-q2 GTH-PBE
     2
      0.20000000    2    -9.12214383     1.70270770
     0
 #
-Li GTH-PBE-q3
+Li GTH-PBE-q3 GTH-PBE
     3
      0.40000000    4   -14.08115455     9.62621962    -1.78361605     0.08515207
     0
 #
-Be GTH-PBE-q4
+Be GTH-PBE-q4 GTH-PBE
     4
      0.32500000    4   -24.06746684    17.27902186    -3.33910629     0.16554912
     0
 #
-B GTH-PBE-q3
+B GTH-PBE-q3 GTH-PBE
     2    1
      0.41899145    2    -5.85946171     0.90375643
     2
      0.37132046    1     6.29728018
      0.36456308    0
 #
-C GTH-PBE-q4
+C GTH-PBE-q4 GTH-PBE
     2    2
      0.33847124    2    -8.80367398     1.33921085
     2
      0.30257575    1     9.62248665
      0.29150694    0
 #
-N GTH-PBE-q5
+N GTH-PBE-q5 GTH-PBE
     2    3
      0.28379051    2   -12.41522559     1.86809592
     2
      0.25540500    1    13.63026257
      0.24549453    0
 #
-O GTH-PBE-q6
+O GTH-PBE-q6 GTH-PBE
     2    4
      0.24455430    2   -16.66721480     2.48731132
     2
      0.22095592    1    18.33745811
      0.21133247    0
 #
-F GTH-PBE-q7
+F GTH-PBE-q7 GTH-PBE
     2    5
      0.21492959    2   -21.57302836     3.19977615
     2
      0.19468402    1    23.74354045
      0.18615608    0
 #
-Ne GTH-PBE-q8
+Ne GTH-PBE-q8 GTH-PBE
     2    6
      0.19000000    2   -27.12015973     4.36044962
     2
@@ -2534,14 +2559,14 @@ Ne GTH-PBE-q8
                                        -1.07624528
      0.19547452    1    -0.23629360
 #
-Na GTH-PBE-q9
+Na GTH-PBE-q9 GTH-PBE
     3    6
      0.23652322    2     0.29510499    -0.91388488
     2
      0.14356046    1    34.60149228
      0.12993224    1   -14.27746168
 #
-Mg GTH-PBE-q10
+Mg GTH-PBE-q10 GTH-PBE
     4    6
      0.19275787    2   -20.57539077     3.04016732
     2
@@ -2556,7 +2581,7 @@ Mg GTH-PBE-q2
                                         0.92534825
      0.70715728    1     0.83115848
 #
-Al GTH-PBE-q3
+Al GTH-PBE-q3 GTH-PBE
     2    1
      0.45000000    1    -7.55476126
     2
@@ -2564,7 +2589,7 @@ Al GTH-PBE-q3
                                         2.43847659
      0.56218949    1     1.86529857
 #
-Si GTH-PBE-q4
+Si GTH-PBE-q4 GTH-PBE
     2    2
      0.44000000    1    -6.26928833
     2
@@ -2572,7 +2597,7 @@ Si GTH-PBE-q4
                                         3.49378060
      0.49794218    1     2.43127673
 #
-P GTH-PBE-q5
+P GTH-PBE-q5 GTH-PBE
     2    3
      0.43000000    1    -5.87594327
     2
@@ -2580,7 +2605,7 @@ P GTH-PBE-q5
                                         4.48021042
      0.44829838    1     3.05606416
 #
-S GTH-PBE-q6
+S GTH-PBE-q6 GTH-PBE
     2    4
      0.42000000    1    -5.98626038
     2
@@ -2588,7 +2613,7 @@ S GTH-PBE-q6
                                         5.47617957
      0.40948048    1     3.70089057
 #
-Cl GTH-PBE-q7
+Cl GTH-PBE-q7 GTH-PBE
     2    5
      0.41000000    1    -6.39208181
     2
@@ -2596,7 +2621,7 @@ Cl GTH-PBE-q7
                                         6.37044208
      0.37847416    1     4.33877527
 #
-Ar GTH-PBE-q8
+Ar GTH-PBE-q8 GTH-PBE
     2    6
      0.40000000    1    -7.10000000
     2
@@ -2604,7 +2629,7 @@ Ar GTH-PBE-q8
                                         7.21083447
      0.35337019    1     4.97421551
 #
-K GTH-PBE-q9
+K GTH-PBE-q9 GTH-PBE
     3    6
      0.40000000    2    -3.36355184    -1.08652975
     2
@@ -2613,7 +2638,7 @@ K GTH-PBE-q9
      0.31648432    2     7.33378021    -2.46094505
                                         2.91182945
 #
-Ca GTH-PBE-q10
+Ca GTH-PBE-q10 GTH-PBE
     4    6
      0.39000000    2    -4.16707222    -1.58379781
     3
@@ -2623,7 +2648,7 @@ Ca GTH-PBE-q10
                                         0.50730782
      0.67961713    1     0.05806826
 #
-Sc GTH-PBE-q11
+Sc GTH-PBE-q11 GTH-PBE
     4    6    1
      0.38500000    2     8.21490030    -0.55705910
     3
@@ -2633,7 +2658,7 @@ Sc GTH-PBE-q11
                                        -9.45642421
      0.25320575    1    -8.16594769
 #
-Ti GTH-PBE-q12
+Ti GTH-PBE-q12 GTH-PBE
     4    6    2
      0.38000000    2     8.71144218    -0.70028677
     3
@@ -2643,7 +2668,7 @@ Ti GTH-PBE-q12
                                       -10.49616087
      0.24331694    1    -9.40665268
 #
-V GTH-PBE-q13
+V GTH-PBE-q13 GTH-PBE
     4    6    3
      0.37500000    2     7.47470354    -0.37026363
     3
@@ -2653,7 +2678,7 @@ V GTH-PBE-q13
                                       -11.07329118
      0.24173879    1    -9.49989110
 #
-Cr GTH-PBE-q14
+Cr GTH-PBE-q14 GTH-PBE
     3    6    5
      0.37000000    2     5.69965764    -0.69548599
     3
@@ -2663,7 +2688,7 @@ Cr GTH-PBE-q14
                                        -8.67464650
      0.22028633    1   -11.19711641
 #
-Mn GTH-PBE-q15
+Mn GTH-PBE-q15 GTH-PBE
     4    6    5
      0.36500000    2     6.09304649    -0.44646948
     3
@@ -2673,7 +2698,7 @@ Mn GTH-PBE-q15
                                        -9.44603874
      0.22252279    1   -11.61205092
 #
-Fe GTH-PBE-q16
+Fe GTH-PBE-q16 GTH-PBE
     4    6    6
      0.36000000    2     6.75678916    -0.22883251
     3
@@ -2683,7 +2708,7 @@ Fe GTH-PBE-q16
                                        -9.10730654
      0.22285578    1   -12.38579937
 #
-Co GTH-PBE-q17
+Co GTH-PBE-q17 GTH-PBE
     4    6    7
      0.35500000    2     4.82819736     0.36814301
     3
@@ -2693,7 +2718,7 @@ Co GTH-PBE-q17
                                        -6.72082376
      0.22258414    1   -12.33315019
 #
-Ni GTH-PBE-q18
+Ni GTH-PBE-q18 GTH-PBE
     4    6    8
      0.35000000    2     2.10216598     0.64848387
     3
@@ -2703,7 +2728,7 @@ Ni GTH-PBE-q18
                                       -14.70686134
      0.21534825    1   -12.62814550
 #
-Cu GTH-PBE-q11
+Cu GTH-PBE-q11 GTH-PBE
     1    0   10
      0.53000000    0
     3
@@ -2724,7 +2749,7 @@ Cu GTH-PBE-q19
                                       -17.44964096
      0.21556837    1   -12.45672374
 #
-Zn GTH-PBE-q12
+Zn GTH-PBE-q12 GTH-PBE
     2    0   10
      0.51000000    0
     3
@@ -2745,7 +2770,7 @@ Zn GTH-PBE-q20
                                        -9.54990586
      0.20855195    1   -14.19380873
 #
-Ga GTH-PBE-q13
+Ga GTH-PBE-q13 GTH-PBE
     2    1   10
      0.49000000    0
     3
@@ -2767,7 +2792,7 @@ Ga GTH-PBE-q3
                                        -0.72580366
      0.99942484    1     0.08951951
 #
-Ge GTH-PBE-q4
+Ge GTH-PBE-q4 GTH-PBE
     2    2
      0.54000000    0
     3
@@ -2778,7 +2803,7 @@ Ge GTH-PBE-q4
                                        -0.64707163
      0.81391394    1     0.19717731
 #
-As GTH-PBE-q5
+As GTH-PBE-q5 GTH-PBE
     2    3
      0.52000000    0
     3
@@ -2789,7 +2814,7 @@ As GTH-PBE-q5
                                        -0.74448925
      0.70368872    1     0.31479504
 #
-Se GTH-PBE-q6
+Se GTH-PBE-q6 GTH-PBE
     2    4
      0.51000000    0
     3
@@ -2800,7 +2825,7 @@ Se GTH-PBE-q6
                                        -0.43227055
      0.62560034    1     0.43979948
 #
-Br GTH-PBE-q7
+Br GTH-PBE-q7 GTH-PBE
     2    5
      0.50000000    0
     3
@@ -2811,7 +2836,7 @@ Br GTH-PBE-q7
                                        -0.61852985
      0.56771383    1     0.55926645
 #
-Kr GTH-PBE-q8
+Kr GTH-PBE-q8 GTH-PBE
     2    6
      0.50000000    0
     3
@@ -2822,7 +2847,7 @@ Kr GTH-PBE-q8
                                        -0.83429715
      0.52469073    1     0.63559472
 #
-Rb GTH-PBE-q9
+Rb GTH-PBE-q9 GTH-PBE
     3    6
      0.49000000    2     5.66908644    -0.81162703
     3
@@ -2832,7 +2857,7 @@ Rb GTH-PBE-q9
                                        14.43350807
      0.54179651    1     0.34566626
 #
-Sr GTH-PBE-q10
+Sr GTH-PBE-q10 GTH-PBE
     4    6
      0.48000000    2     6.81095035    -1.19610979
     3
@@ -2842,7 +2867,7 @@ Sr GTH-PBE-q10
                                        12.97488200
      0.52108911    1     0.36053906
 #
-Y GTH-PBE-q11
+Y GTH-PBE-q11 GTH-PBE
     4    6    1
      0.47500000    2    12.16776904    -2.32855103
     3
@@ -2853,7 +2878,7 @@ Y GTH-PBE-q11
      0.45045569    2     1.18749048    -1.31867331
                                         1.49523499
 #
-Zr GTH-PBE-q12
+Zr GTH-PBE-q12 GTH-PBE
     4    6    2
      0.47000000    2     7.79605677    -1.89321030
     3
@@ -2864,7 +2889,7 @@ Zr GTH-PBE-q12
      0.58124504    2     0.02781064     0.27686186
                                        -0.31393184
 #
-Nb GTH-PBE-q13
+Nb GTH-PBE-q13 GTH-PBE
     3    6    4
      0.46000000    2    26.27526252    -4.57803146
     3
@@ -2875,7 +2900,7 @@ Nb GTH-PBE-q13
      0.42212155    2     1.49409323    -3.43003953
                                         3.88929925
 #
-Mo GTH-PBE-q14
+Mo GTH-PBE-q14 GTH-PBE
     3    6    5
      0.43000000    2    28.60936832    -4.72180336
     3
@@ -2886,7 +2911,7 @@ Mo GTH-PBE-q14
      0.42050785    2     1.21681419    -2.68646267
                                         3.04616234
 #
-Tc GTH-PBE-q15
+Tc GTH-PBE-q15 GTH-PBE
     3    6    6
      0.43000000    2    27.30199947    -4.64715709
     3
@@ -2897,7 +2922,7 @@ Tc GTH-PBE-q15
      0.43186468    2     1.21878473    -2.67400954
                                         3.03204182
 #
-Ru GTH-PBE-q16
+Ru GTH-PBE-q16 GTH-PBE
     3    6    7
      0.43000000    2    26.83239104    -5.05049720
     3
@@ -2919,7 +2944,7 @@ Ru GTH-PBE-q8
      0.38059720    2   -15.53165455    13.58045054
                                       -15.39878349
 #
-Rh GTH-PBE-q17
+Rh GTH-PBE-q17 GTH-PBE
     3    6    8
      0.42000000    2    26.20679340    -4.93738335
     3
@@ -2952,7 +2977,7 @@ Pd GTH-PBE-q10
      0.43851839    2    -3.71978832    -0.80738825
                                         0.91549223
 #
-Pd GTH-PBE-q18
+Pd GTH-PBE-q18 GTH-PBE
     2    6   10
      0.41000000    2    26.78365917    -4.93130594
     3
@@ -2963,7 +2988,7 @@ Pd GTH-PBE-q18
      0.44027049    2     1.63916358    -3.09368795
                                         3.50791241
 #
-Ag GTH-PBE-q11
+Ag GTH-PBE-q11 GTH-PBE
     1    0   10
      0.57000000    1     0.03341912
     3
@@ -2986,7 +3011,7 @@ Ag GTH-PBE-q19
      0.45640092    2     1.75125916    -3.09368795
                                         3.50791241
 #
-Cd GTH-PBE-q12
+Cd GTH-PBE-q12 GTH-PBE
     2    0   10
      0.55000000    1     3.63395858
     3
@@ -2998,7 +3023,7 @@ Cd GTH-PBE-q12
      0.37787256    2    -6.13703223     1.53571055
                                        -1.74133209
 #
-In GTH-PBE-q13
+In GTH-PBE-q13 GTH-PBE
     2    1   10
      0.53000000    1     3.32478546
     3
@@ -3021,7 +3046,7 @@ In GTH-PBE-q3
                                        -0.50082970
      1.14391192    1     0.11683948
 #
-Sn GTH-PBE-q4
+Sn GTH-PBE-q4 GTH-PBE
     2    2
      0.60500000    1     6.26678230
     3
@@ -3032,7 +3057,7 @@ Sn GTH-PBE-q4
                                        -0.47714107
      0.99087302    1     0.19876639
 #
-Sb GTH-PBE-q5
+Sb GTH-PBE-q5 GTH-PBE
     2    3
      0.59000000    1     7.92852084
     3
@@ -3043,7 +3068,7 @@ Sb GTH-PBE-q5
                                        -0.36069773
      0.88948576    1     0.27086864
 #
-Te GTH-PBE-q6
+Te GTH-PBE-q6 GTH-PBE
     2    4
      0.57500000    1     8.71364868
     3
@@ -3054,7 +3079,7 @@ Te GTH-PBE-q6
                                        -0.38334568
      0.81338925    1     0.34485820
 #
-I GTH-PBE-q7
+I GTH-PBE-q7 GTH-PBE
     2    5
      0.56000000    1     8.20710157
     3
@@ -3065,7 +3090,7 @@ I GTH-PBE-q7
                                        -0.50295032
      0.73972147    1     0.47919458
 #
-Xe GTH-PBE-q8
+Xe GTH-PBE-q8 GTH-PBE
     2    6
      0.56000000    1     8.03636262
     3
@@ -3076,7 +3101,7 @@ Xe GTH-PBE-q8
                                        -0.69955590
      0.68554509    1     0.56018900
 #
-Cs GTH-PBE-q9
+Cs GTH-PBE-q9 GTH-PBE
     3    6
      0.54000000    2    33.31331676    -2.92121670
     4
@@ -3087,7 +3112,7 @@ Cs GTH-PBE-q9
      0.76150193    1     0.19840723
      0.59701503    1    -1.55056693
 #
-Ba GTH-PBE-q10
+Ba GTH-PBE-q10 GTH-PBE
     4    6
      0.54000000    2    24.52678070    -2.46867001
     4
@@ -3098,7 +3123,7 @@ Ba GTH-PBE-q10
      0.67217348    1     0.38853100
      0.30049773    1   -19.65379452
 #
-La GTH-PBE-q11
+La GTH-PBE-q11 GTH-PBE
     4    6    1
      0.53500000    2    20.68980469    -1.70327035
     4
@@ -3109,7 +3134,173 @@ La GTH-PBE-q11
      0.62908399    1     0.38022718
      0.29911708    1   -18.44354886
 #
-Hf GTH-PBE-q12
+Ce GTH-PBE-q12 GTH-PBE
+    4    6    1    1
+     0.52480035    2    18.46313266    -0.35928475
+    4
+     0.52899318    2    -0.46945550     1.68519941
+                                       -2.17558308
+     0.47758674    2    -0.85915259     1.49893178
+                                       -1.77356000
+     0.65909303    1     0.10742047
+     0.30186583    1   -17.66735258
+#
+Ce GTH-PBE-q30
+    6   12   11    1
+     0.20000000    2   148.23700910     3.91725495
+    4
+     0.24060899    2     2.21770923     4.21351645
+                                       -5.43962635
+     0.16613857    3    -4.53697472    11.78843522     0.01475880
+                                      -13.92369350    -0.03492570
+                                                       0.02482188
+     0.17161109    1   -15.00199037
+     0.26526997    1    -4.75946878
+#
+Pr GTH-PBE-q13 GTH-PBE
+    4    6    0    3
+     0.53188976    2    16.83551414    -0.43235649
+    4
+     0.52415103    2    -0.50975406     1.84037783
+                                       -2.37591756
+     0.48546735    2    -0.98189616     1.60445908
+                                       -1.89842158
+     0.71653344    1     0.05575046
+     0.29937329    1   -17.49550069
+#
+Nd GTH-PBE-q14 GTH-PBE
+    4    6    0    4
+     0.52991298    2    17.80646346    -0.32095543
+    4
+     0.50114025    2    -1.36443892     2.46474917
+                                       -3.18197749
+     0.50039105    2    -1.55942619     1.53939247
+                                       -1.82143373
+     0.33431765    1    -1.70064367
+     0.29567529    1   -18.64327128
+#
+Pm GTH-PBE-q15 GTH-PBE
+    4    6    0    5
+     0.52793919    2    17.84482075    -0.36133182
+    4
+     0.48944396    2    -1.72725500     2.81006693
+                                       -3.62778081
+     0.49132954    2    -1.87193192     1.65260118
+                                       -1.95538409
+     0.47893079    1    -0.44781450
+     0.29022183    1   -19.51693564
+#
+Sm GTH-PBE-q16 GTH-PBE
+    4    6    0    6
+     0.52466086    2    16.51148828    -0.24504217
+    4
+     0.48687809    2    -1.59045606     2.90667135
+                                       -3.75249657
+     0.49648709    2    -1.75047341     1.54491665
+                                       -1.82797004
+     0.49241328    1    -0.41980527
+     0.28444353    1   -19.88144667
+#
+Eu GTH-PBE-q17 GTH-PBE
+    4    6    0    7
+     0.52072219    2    17.93467530    -0.57606530
+    4
+     0.46955990    2    -2.07710390     3.25447577
+                                       -4.20151015
+     0.46644592    2    -2.34175427     2.29907112
+                                       -2.72029763
+     0.47357383    1    -0.59831876
+     0.27831058    1   -21.30605878
+#
+Gd GTH-PBE-q18 GTH-PBE
+    4    6    1    7
+     0.52126799    2    18.10313196    -0.51440770
+    4
+     0.45805877    2    -2.87481761     3.91661136
+                                       -5.05632353
+     0.46124964    2    -3.05406750     2.55197375
+                                       -3.01953606
+     0.48332992    1    -0.84348188
+     0.27559144    1   -22.18390606
+#
+Tb GTH-PBE-q19 GTH-PBE
+    4    6    0    9
+     0.51588228    2    17.15783725    -0.66955170
+    4
+     0.45376626    2    -2.42821095     3.74357813
+                                       -4.83293859
+     0.45360450    2    -2.68351507     2.30311187
+                                       -2.72507871
+     0.47258283    1    -0.72646091
+     0.26876196    1   -22.75147607
+#
+Dy GTH-PBE-q20 GTH-PBE
+    4    6    0   10
+     0.51029687    2    17.67093508    -0.86787770
+    4
+     0.44212348    2    -2.71573384     4.01788426
+                                       -5.18706627
+     0.45017230    2    -2.77347535     2.20115245
+                                       -2.60443870
+     0.47116514    1    -0.75227561
+     0.26180741    1   -24.24856414
+#
+Ho GTH-PBE-q21 GTH-PBE
+    4    6    0   11
+     0.51034519    2    17.00694728    -1.14166376
+    4
+     0.43408065    2    -2.64595349     4.10374692
+                                       -5.29791449
+     0.43159817    2    -3.06100899     2.73161511
+                                       -3.23209058
+     0.45020006    1    -0.82014316
+     0.25514026    1   -25.40966658
+#
+Er GTH-PBE-q22 GTH-PBE
+    4    6    0   12
+     0.50173422    2    17.22416099    -1.23324605
+    4
+     0.42576787    2    -2.61580658     4.19913757
+                                       -5.42106329
+     0.41793960    2    -3.15341814     3.17618553
+                                       -3.75811340
+     0.43046826    1    -0.89805056
+     0.24914231    1   -26.58720599
+#
+Tm GTH-PBE-q23 GTH-PBE
+    4    6    0   13
+     0.50234443    2    17.68675860    -1.59907075
+    4
+     0.41312714    2    -3.20033933     4.64501695
+                                       -5.99669110
+     0.41759033    2    -3.17289513     2.80513657
+                                       -3.31908235
+     0.39281519    1    -1.44965467
+     0.24385920    1   -28.31696046
+#
+Yb GTH-PBE-q24 GTH-PBE
+    4    6    0   14
+     0.49808783    2    17.08328394    -1.56295270
+    4
+     0.40553079    2    -3.55061134     5.03314458
+                                       -6.49776171
+     0.42489671    2    -3.13538311     2.14082491
+                                       -2.53305819
+     0.44507157    1    -0.91407703
+     0.23857822    1   -29.66528314
+#
+Lu GTH-PBE-q25 GTH-PBE
+    4    6    1   14
+     0.49611621    2    18.63208417    -1.51663710
+    4
+     0.39319895    2    -5.65573977     6.47885270
+                                       -8.36416287
+     0.41028936    2    -4.66078088     2.84645630
+                                       -3.36797252
+     0.43890201    1    -1.52277808
+     0.23494399    1   -32.20596727
+#
+Hf GTH-PBE-q12 GTH-PBE
     4    6    2
      0.56000000    2    15.52236567    -2.43356678
     3
@@ -3121,7 +3312,7 @@ Hf GTH-PBE-q12
      0.41579070    2    -2.74891464     0.48133335
                                        -0.54578072
 #
-Ta GTH-PBE-q13
+Ta GTH-PBE-q13 GTH-PBE
     4    6    3
      0.55000000    2    13.38520167    -2.25392008
     3
@@ -3144,7 +3335,7 @@ Ta GTH-PBE-q5
      0.50114181    2   -12.42334477     9.01473381
                                       -10.22174735
 #
-W GTH-PBE-q14
+W GTH-PBE-q14 GTH-PBE
     4    6    4
      0.54000000    2    13.41481123    -2.21345603
     3
@@ -3167,7 +3358,7 @@ W GTH-PBE-q6
      0.49929065    2   -10.59832562     6.44789319
                                        -7.31122365
 #
-Re GTH-PBE-q15
+Re GTH-PBE-q15 GTH-PBE
     4    6    5
      0.53000000    2    13.46263143    -2.23492240
     3
@@ -3190,7 +3381,7 @@ Re GTH-PBE-q7
      0.47606454    2   -12.39371002     8.00629664
                                        -9.07828707
 #
-Os GTH-PBE-q16
+Os GTH-PBE-q16 GTH-PBE
     4    6    6
      0.52000000    2    13.46303008    -2.24116983
     3
@@ -3213,7 +3404,7 @@ Os GTH-PBE-q8
      0.47117333    2   -10.99598697     5.97918090
                                        -6.77975387
 #
-Ir GTH-PBE-q17
+Ir GTH-PBE-q17 GTH-PBE
     4    6    7
      0.51000000    2    13.41080576    -2.34194822
     3
@@ -3247,7 +3438,7 @@ Pt GTH-PBE-q10
      0.45739243    2    -7.26401101     2.55866480
                                        -2.90125318
 #
-Pt GTH-PBE-q18
+Pt GTH-PBE-q18 GTH-PBE
     3    6    9
      0.50000000    2     8.81432324    -0.29250943
     3
@@ -3260,7 +3451,7 @@ Pt GTH-PBE-q18
      0.34053206    2    -8.58990455     9.41012200
                                       -10.67007542
 #
-Au GTH-PBE-q11
+Au GTH-PBE-q11 GTH-PBE
     1    0   10
      0.59000000    1    10.51717881
     3
@@ -3284,7 +3475,7 @@ Au GTH-PBE-q19
      0.34037313    2    -8.80458432     9.49191532
                                       -10.76282032
 #
-Hg GTH-PBE-q12
+Hg GTH-PBE-q12 GTH-PBE
     2    0   10
      0.57000000    1     8.46784734
     3
@@ -3295,7 +3486,7 @@ Hg GTH-PBE-q12
      0.40798543    2    -8.61398015     5.00756120
                                        -5.67804069
 #
-Tl GTH-PBE-q13
+Tl GTH-PBE-q13 GTH-PBE
     2    1   10
      0.55000000    1    12.29058515
     3
@@ -3328,7 +3519,7 @@ Pb GTH-PBE-q14
      0.40422413    2    -6.81491262     1.83782673
                                        -2.08389964
 #
-Pb GTH-PBE-q4
+Pb GTH-PBE-q4 GTH-PBE
     2    2
      0.61750000    1     4.67238428
     3
@@ -3350,7 +3541,7 @@ Bi GTH-PBE-q15
      0.39730251    2    -6.03753705     0.92523553
                                        -1.04911848
 #
-Bi GTH-PBE-q5
+Bi GTH-PBE-q5 GTH-PBE
     2    3
      0.60500000    1     7.94575692
     3
@@ -3361,7 +3552,7 @@ Bi GTH-PBE-q5
                                        -0.44942585
      0.96565479    1     0.34729822
 #
-Po GTH-PBE-q6
+Po GTH-PBE-q6 GTH-PBE
     2    4
      0.59250000    1     8.13432566
     3
@@ -3372,7 +3563,7 @@ Po GTH-PBE-q6
                                        -0.44406387
      0.89014943    1     0.46253238
 #
-At GTH-PBE-q7
+At GTH-PBE-q7 GTH-PBE
     2    5
      0.58000000    1    14.21716853
     3
@@ -3383,7 +3574,7 @@ At GTH-PBE-q7
                                        -0.38599845
      0.85406059    1     0.45259467
 #
-Rn GTH-PBE-q8
+Rn GTH-PBE-q8 GTH-PBE
     2    6
      0.57000000    1    16.20061781
     3
@@ -3400,7 +3591,7 @@ Rn GTH-PBE-q8
 #
 ################################################################################
 #
-B GTH-PBESol-q3
+B GTH-PBESol-q3 GTH-PBESol
     2    1
      0.42188166    2    -5.99194495     0.94658199
     2
@@ -3413,12 +3604,12 @@ B GTH-PBESol-q3
 #
 ################################################################################
 #
-H GTH-OLYP-q1
+H GTH-OLYP-q1 GTH-OLYP
     1
      0.20000000    2    -4.16025705     0.71696182
     0
 #
-O GTH-OLYP-q6
+O GTH-OLYP-q6 GTH-OLYP
     2    4
      0.24340006    2   -16.34721549     2.41772603
     2

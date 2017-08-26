@@ -1,5 +1,3 @@
-import scipy
-import numpy
 #!/usr/bin/env python
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>

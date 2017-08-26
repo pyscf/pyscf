@@ -123,5 +123,5 @@ mps_nevpt_e1 = mrpt.NEVPT(mc,root=0).compress_approx(maxM=100).kernel()
 #
 mps_nevpt_e2 = mrpt.NEVPT(mc,root=1).compress_approx(maxM=100).kernel()
 
-print('MPS NEVPT = %.15g %.15g' % (mps_nevpt_e1, mps_nevpt_e2,))
+print('MPS NEVPT correlation E = %.15g %.15g' % (mps_nevpt_e1, mps_nevpt_e2,))
 

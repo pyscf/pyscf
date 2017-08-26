@@ -17,9 +17,6 @@ import pyscf.pbc.tools
 
 import pyscf.pbc.cc
 
-import ase
-import ase.lattice
-import ase.dft.kpoints
 import make_test_cell
 
 def run_cell(cell, ngs, nk):
@@ -34,8 +31,7 @@ def run_cell(cell, ngs, nk):
     supcell.build()
 
 
-    scaled_gamma = ase.dft.kpoints.monkhorst_pack((1,1,1))
-    gamma = supcell.get_abs_kpts(scaled_gamma)
+    gamma = [0,0,0]
 
     #############################################
     # Running HF                                #

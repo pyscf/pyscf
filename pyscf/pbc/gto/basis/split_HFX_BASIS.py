@@ -12,7 +12,9 @@ def main():
     basis_sets = OrderedDict()
     with open(file_GTH,'r') as searchfile:
         for line in searchfile:
-            if 'GTH' in line:
+            if line.startswith('#'):
+                continue
+            elif 'GTH' in line:
                 bas_type = line.split()[1]
                 if bas_type not in basis_sets:
                     basis_sets[bas_type] = []

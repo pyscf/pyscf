@@ -12,7 +12,7 @@ def parse(string):
     basis format which can be assigned to :attr:`Cell.pseudo`
     Lines started with # are ignored.
     '''
-    pseudotxt = [x.strip() for x in string.split('\n')
+    pseudotxt = [x.strip() for x in string.splitlines()
                  if x.strip() and 'END' not in x and '#PSEUDOPOTENTIAL' not in x]
     return _parse(pseudotxt)
 
@@ -63,10 +63,16 @@ def search_seg(pseudofile, symb, suffix=None):
     fdata = fin.read().split('#PSEUDOPOTENTIAL')
     fin.close()
     for dat in fdata[1:]:
-        if symb+' ' in dat:
-            # remove blank lines
-            return [x.strip() for x in dat.split('\n')[1:]
-                    if x.strip() and 'END' not in x]
+        if dat[:20].split()[0] == symb:
+            dat = [x.strip() for x in dat.splitlines()
+                   if x.strip() and 'END' not in x]
+            if suffix is None:  # use default PP
+                qsuffix = dat[0].split()[-1].split('-')[-1]
+                if not (qsuffix.startswith('q') and qsuffix[1:].isdigit()):
+                    return dat
+            else:
+                if any(suffix == x.split('-')[-1] for x in dat[0].split()):
+                    return dat
     raise RuntimeError('Pseudopotential not found for  %s  in  %s' % (symb, pseudofile))
 
 if __name__ == '__main__':
@@ -85,7 +91,7 @@ if __name__ == '__main__':
     load(ppfile,atom)
 
     print("Testing parse():")
-    parse("""
+    print parse("""
     #PSEUDOPOTENTIAL
     C GTH-BLYP-q4
         2    2

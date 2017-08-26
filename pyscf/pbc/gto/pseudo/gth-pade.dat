@@ -2,16 +2,18 @@
 #
 # Potential data base file for CP2K (Quickstep)
 #
-# History: - Creation (12.12.1999, Matthias Krack)
-#          - Electronic configurations added (11.05.2000,MK)
-#          - GTH-PP for first-row transition metal added (18.03.2003,MK)
-#          - Automatic update (16.12.2003,MK)
-#          - Last update (20.08.13,MK)
-#
 ################################################################################
 #
 # Pseudopotentials of Goedecker, Teter and Hutter (GTH)
 # -----------------------------------------------------
+#
+# History:    - Creation (12.12.1999, Matthias Krack)
+#             - Electronic configurations added (11.05.2000,MK)
+#             - GTH-PP for first-row transition metal added (18.03.2003,MK)
+#             - Automatic update (16.12.2003,MK)
+#             - PBE GTH-PPs for the Lanthanides added (30.11.2012,MK)
+#             - Set default GTH PPs (12.08.2016,MK)
+#             - Last update (12.08.2016,MK)
 #
 # Literature: - S. Goedecker, M. Teter, and J. Hutter,
 #               Phys. Rev. B 54, 1703 (1996)
@@ -53,12 +55,12 @@
 #
 ################################################################################
 #PSEUDOPOTENTIAL
-H GTH-PADE-q1 GTH-LDA-q1
+H GTH-PADE-q1 GTH-LDA-q1 GTH-PADE GTH-LDA
     1
      0.20000000    2    -4.18023680     0.72507482
     0
 #PSEUDOPOTENTIAL
-He GTH-PADE-q2 GTH-LDA-q2
+He GTH-PADE-q2 GTH-LDA-q2 GTH-PADE GTH-LDA
     2
      0.20000000    2    -9.11202340     1.69836797
     0
@@ -70,7 +72,7 @@ Li GTH-PADE-q1 GTH-LDA-q1
      0.66637518    1     1.85881111
      1.07930561    1    -0.00589504
 #PSEUDOPOTENTIAL
-Li GTH-PADE-q3 GTH-LDA-q3
+Li GTH-PADE-q3 GTH-LDA-q3 GTH-PADE GTH-LDA
     3
      0.40000000    4   -14.03486849     9.55347627    -1.76648817     0.08436998
     0
@@ -82,47 +84,47 @@ Be GTH-PADE-q2 GTH-LDA-q2
      0.52879656    1     3.06166591
      0.65815348    1     0.09246196
 #PSEUDOPOTENTIAL
-Be GTH-PADE-q4 GTH-LDA-q4
+Be GTH-PADE-q4 GTH-LDA-q4 GTH-PADE GTH-LDA
     4
      0.32500000    4   -24.01504092    17.20401444    -3.32639018     0.16541943
     0
 #PSEUDOPOTENTIAL
-B GTH-PADE-q3 GTH-LDA-q3
+B GTH-PADE-q3 GTH-LDA-q3 GTH-PADE GTH-LDA
     2    1
      0.43392956    2    -5.57864173     0.80425145
     2
      0.37384326    1     6.23392822
      0.36039317    0
 #PSEUDOPOTENTIAL
-C GTH-PADE-q4 GTH-LDA-q4
+C GTH-PADE-q4 GTH-LDA-q4 GTH-PADE GTH-LDA
     2    2
      0.34883045    2    -8.51377110     1.22843203
     2
      0.30455321    1     9.52284179
      0.23267730    0
 #PSEUDOPOTENTIAL
-N GTH-PADE-q5 GTH-LDA-q5
+N GTH-PADE-q5 GTH-LDA-q5 GTH-PADE GTH-LDA
     2    3
      0.28917923    2   -12.23481988     1.76640728
     2
      0.25660487    1    13.55224272
      0.27013369    0
 #PSEUDOPOTENTIAL
-O GTH-PADE-q6 GTH-LDA-q6
+O GTH-PADE-q6 GTH-LDA-q6 GTH-PADE GTH-LDA
     2    4
      0.24762086    2   -16.58031797     2.39570092
     2
      0.22178614    1    18.26691718
      0.25682890    0
 #PSEUDOPOTENTIAL
-F GTH-PADE-q7 GTH-LDA-q7
+F GTH-PADE-q7 GTH-LDA-q7 GTH-PADE GTH-LDA
     2    5
      0.21852465    2   -21.30736112     3.07286942
     2
      0.19556721    1    23.58494211
      0.17426832    0
 #PSEUDOPOTENTIAL
-Ne GTH-PADE-q8 GTH-LDA-q8
+Ne GTH-PADE-q8 GTH-LDA-q8 GTH-PADE GTH-LDA
     2    6
      0.19000000    2   -27.69285182     4.00590585
     2
@@ -138,14 +140,14 @@ Na GTH-PADE-q1 GTH-LDA-q1
                                         0.58200362
      0.85711928    1     0.47113258
 #PSEUDOPOTENTIAL
-Na GTH-PADE-q9 GTH-LDA-q9
+Na GTH-PADE-q9 GTH-LDA-q9 GTH-PADE GTH-LDA
     3    6
      0.24631780    2    -7.54559253     1.12599671
     2
      0.14125125    1    36.55698653
      0.13966840    1   -10.39208332
 #PSEUDOPOTENTIAL
-Mg GTH-PADE-q10 GTH-LDA-q10
+Mg GTH-PADE-q10 GTH-LDA-q10 GTH-PADE GTH-LDA
     4    6
      0.21094954    2   -19.41900751     2.87133099
     2
@@ -160,7 +162,7 @@ Mg GTH-PADE-q2 GTH-LDA-q2
                                         1.32994091
      0.67756881    1     1.04988101
 #PSEUDOPOTENTIAL
-Al GTH-PADE-q3 GTH-LDA-q3
+Al GTH-PADE-q3 GTH-LDA-q3 GTH-PADE GTH-LDA
     2    1
      0.45000000    1    -8.49135116
     2
@@ -168,7 +170,7 @@ Al GTH-PADE-q3 GTH-LDA-q3
                                         2.67969975
      0.53674439    1     2.19343827
 #PSEUDOPOTENTIAL
-Si GTH-PADE-q4 GTH-LDA-q4
+Si GTH-PADE-q4 GTH-LDA-q4 GTH-PADE GTH-LDA
     2    2
      0.44000000    1    -7.33610297
     2
@@ -176,7 +178,7 @@ Si GTH-PADE-q4 GTH-LDA-q4
                                         3.25819622
      0.48427842    1     2.72701346
 #PSEUDOPOTENTIAL
-P GTH-PADE-q5 GTH-LDA-q5
+P GTH-PADE-q5 GTH-LDA-q5 GTH-PADE GTH-LDA
     2    3
      0.43000000    1    -6.65421981
     2
@@ -184,7 +186,7 @@ P GTH-PADE-q5 GTH-LDA-q5
                                         3.85669332
      0.44079585    1     3.28260592
 #PSEUDOPOTENTIAL
-S GTH-PADE-q6 GTH-LDA-q6
+S GTH-PADE-q6 GTH-LDA-q6 GTH-PADE GTH-LDA
     2    4
      0.42000000    1    -6.55449184
     2
@@ -192,7 +194,7 @@ S GTH-PADE-q6 GTH-LDA-q6
                                         4.47169830
      0.40528502    1     3.86657900
 #PSEUDOPOTENTIAL
-Cl GTH-PADE-q7 GTH-LDA-q7
+Cl GTH-PADE-q7 GTH-LDA-q7 GTH-PADE GTH-LDA
     2    5
      0.41000000    1    -6.86475431
     2
@@ -200,7 +202,7 @@ Cl GTH-PADE-q7 GTH-LDA-q7
                                         5.06568240
      0.37613709    1     4.46587640
 #PSEUDOPOTENTIAL
-Ar GTH-PADE-q8 GTH-LDA-q8
+Ar GTH-PADE-q8 GTH-LDA-q8 GTH-PADE GTH-LDA
     2    6
      0.40000000    1    -7.10000000
     2
@@ -219,7 +221,7 @@ K GTH-PADE-q1 GTH-LDA-q1
                                         0.06819410
      0.72060608    1    -1.52951361
 #PSEUDOPOTENTIAL
-K GTH-PADE-q9 GTH-LDA-q9
+K GTH-PADE-q9 GTH-LDA-q9 GTH-PADE GTH-LDA
     3    6
      0.40000000    2    -4.98934751    -0.75604821
     2
@@ -228,7 +230,7 @@ K GTH-PADE-q9 GTH-LDA-q9
      0.32235865    2     5.25670239    -0.39677748
                                         0.93894690
 #PSEUDOPOTENTIAL
-Ca GTH-PADE-q10 GTH-LDA-q10
+Ca GTH-PADE-q10 GTH-LDA-q10 GTH-PADE GTH-LDA
     4    6
      0.39000000    2    -4.92814602    -1.23285409
     3
@@ -249,7 +251,7 @@ Ca GTH-PADE-q2 GTH-LDA-q2
                                         0.12632878
      0.52654998    1    -3.03232095
 #PSEUDOPOTENTIAL
-Sc GTH-PADE-q11 GTH-LDA-q11
+Sc GTH-PADE-q11 GTH-LDA-q11 GTH-PADE GTH-LDA
     4    6    1
      0.38500000    2     7.42503638    -0.48985155
     3
@@ -270,7 +272,7 @@ Sc GTH-PADE-q3 GTH-LDA-q3
                                         0.24673297
      0.45465318    1    -3.85924078
 #PSEUDOPOTENTIAL
-Ti GTH-PADE-q12 GTH-LDA-q12
+Ti GTH-PADE-q12 GTH-LDA-q12 GTH-PADE GTH-LDA
     4    6    2
      0.38000000    2     7.54878947    -0.58837666
     3
@@ -291,7 +293,7 @@ Ti GTH-PADE-q4 GTH-LDA-q4
                                         0.26068669
      0.40871178    1    -4.82645635
 #PSEUDOPOTENTIAL
-V GTH-PADE-q13 GTH-LDA-q13
+V GTH-PADE-q13 GTH-LDA-q13 GTH-PADE GTH-LDA
     4    6    3
      0.37500000    2     4.94129058    -0.09644336
     3
@@ -312,7 +314,7 @@ V GTH-PADE-q5 GTH-LDA-q5
                                         0.28664887
      0.37488959    1    -5.84163317
 #PSEUDOPOTENTIAL
-Cr GTH-PADE-q14 GTH-LDA-q14
+Cr GTH-PADE-q14 GTH-LDA-q14 GTH-PADE GTH-LDA
     3    6    5
      0.37000000    2     5.11336166    -0.64681932
     3
@@ -333,7 +335,7 @@ Cr GTH-PADE-q6 GTH-LDA-q6
                                         0.27823604
      0.35434060    1    -6.61587832
 #PSEUDOPOTENTIAL
-Mn GTH-PADE-q15 GTH-LDA-q15
+Mn GTH-PADE-q15 GTH-LDA-q15 GTH-PADE GTH-LDA
     4    6    5
      0.36500000    2     6.74868332    -0.57656900
     3
@@ -354,7 +356,7 @@ Mn GTH-PADE-q7 GTH-LDA-q7
                                         0.31676337
      0.32776314    1    -7.99541784
 #PSEUDOPOTENTIAL
-Fe GTH-PADE-q16 GTH-LDA-q16
+Fe GTH-PADE-q16 GTH-LDA-q16 GTH-PADE GTH-LDA
     4    6    6
      0.36000000    2     5.39250667    -0.03006638
     3
@@ -375,7 +377,7 @@ Fe GTH-PADE-q8 GTH-LDA-q8
                                         0.32687369
      0.30873177    1    -9.14535371
 #PSEUDOPOTENTIAL
-Co GTH-PADE-q17 GTH-LDA-q17
+Co GTH-PADE-q17 GTH-LDA-q17 GTH-PADE GTH-LDA
     4    6    7
      0.35500000    2     3.41839094     0.48207820
     3
@@ -407,7 +409,7 @@ Ni GTH-PADE-q10 GTH-LDA-q10
                                         0.38634067
      0.27811348    1   -11.60842823
 #PSEUDOPOTENTIAL
-Ni GTH-PADE-q18 GTH-LDA-q18
+Ni GTH-PADE-q18 GTH-LDA-q18 GTH-PADE GTH-LDA
     4    6    8
      0.35000000    2     3.61031072     0.44963832
     3
@@ -428,7 +430,7 @@ Cu GTH-PADE-q1 GTH-LDA-q1
                                        -0.24900093
      1.29160225    1    -0.06529209
 #PSEUDOPOTENTIAL
-Cu GTH-PADE-q11 GTH-LDA-q11
+Cu GTH-PADE-q11 GTH-LDA-q11 GTH-PADE GTH-LDA
     1    0   10
      0.53000000    0
     3
@@ -449,7 +451,7 @@ Cu GTH-PADE-q19 GTH-LDA-q19
                                       -18.98355830
      0.21773897    1   -12.50830997
 #PSEUDOPOTENTIAL
-Zn GTH-PADE-q12 GTH-LDA-q12
+Zn GTH-PADE-q12 GTH-LDA-q12 GTH-PADE GTH-LDA
     2    0   10
      0.51000000    0
     3
@@ -481,7 +483,7 @@ Zn GTH-PADE-q20 GTH-LDA-q20
                                        -9.93423822
      0.20656246    1   -14.03217427
 #PSEUDOPOTENTIAL
-Ga GTH-PADE-q13 GTH-LDA-q13
+Ga GTH-PADE-q13 GTH-LDA-q13 GTH-PADE GTH-LDA
     2    1   10
      0.49000000    0
     3
@@ -503,7 +505,7 @@ Ga GTH-PADE-q3 GTH-LDA-q3
                                        -0.51313234
      0.98257967    1     0.07543656
 #PSEUDOPOTENTIAL
-Ge GTH-PADE-q4 GTH-LDA-q4
+Ge GTH-PADE-q4 GTH-LDA-q4 GTH-PADE GTH-LDA
     2    2
      0.54000000    0
     3
@@ -514,7 +516,7 @@ Ge GTH-PADE-q4 GTH-LDA-q4
                                        -0.62736987
      0.78836851    1     0.19120485
 #PSEUDOPOTENTIAL
-As GTH-PADE-q5 GTH-LDA-q5
+As GTH-PADE-q5 GTH-LDA-q5 GTH-PADE GTH-LDA
     2    3
      0.52000000    0
     3
@@ -525,7 +527,7 @@ As GTH-PADE-q5 GTH-LDA-q5
                                        -0.64672658
      0.68528272    1     0.31237276
 #PSEUDOPOTENTIAL
-Se GTH-PADE-q6 GTH-LDA-q6
+Se GTH-PADE-q6 GTH-LDA-q6 GTH-PADE GTH-LDA
     2    4
      0.51000000    0
     3
@@ -536,7 +538,7 @@ Se GTH-PADE-q6 GTH-LDA-q6
                                        -0.59067050
      0.61342013    1     0.43482888
 #PSEUDOPOTENTIAL
-Br GTH-PADE-q7 GTH-LDA-q7
+Br GTH-PADE-q7 GTH-LDA-q7 GTH-PADE GTH-LDA
     2    5
      0.50000000    0
     3
@@ -547,7 +549,7 @@ Br GTH-PADE-q7 GTH-LDA-q7
                                        -0.63220188
      0.55784727    1     0.55590294
 #PSEUDOPOTENTIAL
-Kr GTH-PADE-q8 GTH-LDA-q8
+Kr GTH-PADE-q8 GTH-LDA-q8 GTH-PADE GTH-LDA
     2    6
      0.50000000    0
     3
@@ -569,7 +571,7 @@ Rb GTH-PADE-q1 GTH-LDA-q1
                                         0.33611273
      0.66432256    1    -1.36293829
 #PSEUDOPOTENTIAL
-Rb GTH-PADE-q9 GTH-LDA-q9
+Rb GTH-PADE-q9 GTH-LDA-q9 GTH-PADE GTH-LDA
     3    6
      0.49000000    2     4.50415106    -0.74101810
     3
@@ -579,7 +581,7 @@ Rb GTH-PADE-q9 GTH-LDA-q9
                                         5.47524928
      0.51489528    1     0.44937574
 #PSEUDOPOTENTIAL
-Sr GTH-PADE-q10 GTH-LDA-q10
+Sr GTH-PADE-q10 GTH-LDA-q10 GTH-PADE GTH-LDA
     4    6
      0.48000000    2     5.57145509    -1.07996304
     3
@@ -600,7 +602,7 @@ Sr GTH-PADE-q2 GTH-LDA-q2
                                         0.01826685
      0.74317548    1    -1.38699026
 #PSEUDOPOTENTIAL
-Y GTH-PADE-q11 GTH-LDA-q11
+Y GTH-PADE-q11 GTH-LDA-q11 GTH-PADE GTH-LDA
     4    6    1
      0.47500000    2     6.89262113    -1.44841137
     3
@@ -623,7 +625,7 @@ Y GTH-PADE-q3 GTH-LDA-q3
      0.65385060    2    -1.25692979     0.03323415
                                        -0.07536797
 #PSEUDOPOTENTIAL
-Zr GTH-PADE-q12 GTH-LDA-q12
+Zr GTH-PADE-q12 GTH-LDA-q12 GTH-PADE GTH-LDA
     4    6    2
      0.47000000    2     6.34261837    -1.73217100
     3
@@ -646,7 +648,7 @@ Zr GTH-PADE-q4 GTH-LDA-q4
      0.63066761    2    -1.17391057    -0.09356197
                                         0.21217861
 #PSEUDOPOTENTIAL
-Nb GTH-PADE-q13 GTH-LDA-q13
+Nb GTH-PADE-q13 GTH-LDA-q13 GTH-PADE GTH-LDA
     3    6    4
      0.46000000    2    13.50539360     0.75243372
     3
@@ -668,7 +670,7 @@ Nb GTH-PADE-q5 GTH-LDA-q5
      0.51607226    2    -2.69682993     0.74741000
                                        -1.69496657
 #PSEUDOPOTENTIAL
-Mo GTH-PADE-q14 GTH-LDA-q14
+Mo GTH-PADE-q14 GTH-LDA-q14 GTH-PADE GTH-LDA
     3    6    5
      0.43000000    2    16.23745228     1.49653613
     3
@@ -690,7 +692,7 @@ Mo GTH-PADE-q6 GTH-LDA-q6
      0.45338393    2    -2.80970771     3.00775463
                                        -6.82094635
 #PSEUDOPOTENTIAL
-Tc GTH-PADE-q15 GTH-LDA-q15
+Tc GTH-PADE-q15 GTH-LDA-q15 GTH-PADE GTH-LDA
     3    6    6
      0.43000001    2    14.91001129     1.04638147
     3
@@ -712,7 +714,7 @@ Tc GTH-PADE-q7 GTH-LDA-q7
      0.51988975    2    -5.98422427    -0.31829379
                                         0.72182246
 #PSEUDOPOTENTIAL
-Ru GTH-PADE-q16 GTH-LDA-q16
+Ru GTH-PADE-q16 GTH-LDA-q16 GTH-PADE GTH-LDA
     3    6    7
      0.43000000    2    13.58257130     0.59622675
     3
@@ -734,7 +736,7 @@ Ru GTH-PADE-q8 GTH-LDA-q8
      0.44035802    2    -4.88336495     1.35098513
                                        -3.06374629
 #PSEUDOPOTENTIAL
-Rh GTH-PADE-q17 GTH-LDA-q17
+Rh GTH-PADE-q17 GTH-LDA-q17 GTH-PADE GTH-LDA
     3    6    8
      0.42000000    2    15.22501231     0.41591145
     3
@@ -767,7 +769,7 @@ Pd GTH-PADE-q10 GTH-LDA-q10
      0.44283523    2    -4.37713124    -0.18223540
                                         0.41327105
 #PSEUDOPOTENTIAL
-Pd GTH-PADE-q18 GTH-LDA-q18
+Pd GTH-PADE-q18 GTH-LDA-q18 GTH-PADE GTH-LDA
     2    6   10
      0.41000000    2    15.72025922     0.14076508
     3
@@ -789,7 +791,7 @@ Ag GTH-PADE-q1 GTH-LDA-q1
                                        -0.27749548
      1.01615913    1    -0.03884235
 #PSEUDOPOTENTIAL
-Ag GTH-PADE-q11 GTH-LDA-q11
+Ag GTH-PADE-q11 GTH-LDA-q11 GTH-PADE GTH-LDA
     1    0   10
      0.57000000    1     1.01705324
     3
@@ -812,7 +814,7 @@ Ag GTH-PADE-q19 GTH-LDA-q19
      0.44722234    2     1.87011922    -3.09368795
                                         3.50791241
 #PSEUDOPOTENTIAL
-Cd GTH-PADE-q12 GTH-LDA-q12
+Cd GTH-PADE-q12 GTH-LDA-q12 GTH-PADE GTH-LDA
     2    0   10
      0.55000000    1     2.38271306
     3
@@ -835,7 +837,7 @@ Cd GTH-PADE-q2 GTH-LDA-q2
                                        -0.44811107
      1.24094900    1     0.06541164
 #PSEUDOPOTENTIAL
-In GTH-PADE-q13 GTH-LDA-q13
+In GTH-PADE-q13 GTH-LDA-q13 GTH-PADE GTH-LDA
     2    1   10
      0.53000000    1     2.39540385
     3
@@ -858,7 +860,7 @@ In GTH-PADE-q3 GTH-LDA-q3
                                        -0.38078878
      1.08869090    1     0.12920778
 #PSEUDOPOTENTIAL
-Sn GTH-PADE-q4 GTH-LDA-q4
+Sn GTH-PADE-q4 GTH-LDA-q4 GTH-PADE GTH-LDA
     2    2
      0.60500000    1     4.61091234
     3
@@ -869,7 +871,7 @@ Sn GTH-PADE-q4 GTH-LDA-q4
                                        -0.44507028
      0.94445897    1     0.22511508
 #PSEUDOPOTENTIAL
-Sb GTH-PADE-q5 GTH-LDA-q5
+Sb GTH-PADE-q5 GTH-LDA-q5 GTH-PADE GTH-LDA
     2    3
      0.59000000    1     6.68022783
     3
@@ -880,7 +882,7 @@ Sb GTH-PADE-q5 GTH-LDA-q5
                                        -0.46673132
      0.85655729    1     0.30010262
 #PSEUDOPOTENTIAL
-Te GTH-PADE-q6 GTH-LDA-q6
+Te GTH-PADE-q6 GTH-LDA-q6 GTH-PADE GTH-LDA
     2    4
      0.57500000    1     9.38708481
     3
@@ -891,7 +893,7 @@ Te GTH-PADE-q6 GTH-LDA-q6
                                        -0.48117240
      0.80510072    1     0.31741073
 #PSEUDOPOTENTIAL
-I GTH-PADE-q7 GTH-LDA-q7
+I GTH-PADE-q7 GTH-LDA-q7 GTH-PADE GTH-LDA
     2    5
      0.56000000    1    14.66182521
     3
@@ -902,7 +904,7 @@ I GTH-PADE-q7 GTH-LDA-q7
                                        -0.57778676
      0.79432495    1     0.22434543
 #PSEUDOPOTENTIAL
-Xe GTH-PADE-q8 GTH-LDA-q8
+Xe GTH-PADE-q8 GTH-LDA-q8 GTH-PADE GTH-LDA
     2    6
      0.56000000    1    12.73427972
     3
@@ -924,7 +926,7 @@ Cs GTH-PADE-q1 GTH-LDA-q1
                                         0.22727863
      1.10752212    1    -0.54216260
 #PSEUDOPOTENTIAL
-Cs GTH-PADE-q9 GTH-LDA-q9
+Cs GTH-PADE-q9 GTH-LDA-q9 GTH-PADE GTH-LDA
     3    6
      0.54000000    2    35.23443810    -3.31807009
     4
@@ -935,7 +937,7 @@ Cs GTH-PADE-q9 GTH-LDA-q9
      0.76146205    1     0.18375440
      0.33350703    1   -17.94825944
 #PSEUDOPOTENTIAL
-Ba GTH-PADE-q10 GTH-LDA-q10
+Ba GTH-PADE-q10 GTH-LDA-q10 GTH-PADE GTH-LDA
     4    6
      0.54000000    2    24.47865325    -2.50084994
     4
@@ -957,7 +959,7 @@ Ba GTH-PADE-q2 GTH-LDA-q2
                                         0.15108073
      0.93715823    1    -0.71893382
 #PSEUDOPOTENTIAL
-La GTH-PADE-q11 GTH-LDA-q11
+La GTH-PADE-q11 GTH-LDA-q11 GTH-PADE GTH-LDA
     4    6    1
      0.53500000    2    19.90930823    -1.47483023
     4
@@ -969,7 +971,7 @@ La GTH-PADE-q11 GTH-LDA-q11
      0.62667220    1     0.32837704
      0.29931017    1   -18.26943896
 #PSEUDOPOTENTIAL
-Ce GTH-PADE-q12 GTH-LDA-q12
+Ce GTH-PADE-q12 GTH-LDA-q12 GTH-PADE GTH-LDA
     4    6    1    1
      0.53500000    2    18.26801534    -0.63048034
     4
@@ -980,7 +982,7 @@ Ce GTH-PADE-q12 GTH-LDA-q12
      0.69222809    1     0.06340682
      0.30390134    1   -17.54564801
 #PSEUDOPOTENTIAL
-Pr GTH-PADE-q13 GTH-LDA-q13
+Pr GTH-PADE-q13 GTH-LDA-q13 GTH-PADE GTH-LDA
     4    6    0    3
      0.53208333    2    18.42473909    -0.65766893
     4
@@ -991,7 +993,7 @@ Pr GTH-PADE-q13 GTH-LDA-q13
      0.74760989    1     0.01757109
      0.30077296    1   -17.89711891
 #PSEUDOPOTENTIAL
-Nd GTH-PADE-q14 GTH-LDA-q14
+Nd GTH-PADE-q14 GTH-LDA-q14 GTH-PADE GTH-LDA
     4    6    0    4
      0.52916670    2    17.81503043    -0.59479767
     4
@@ -1002,7 +1004,7 @@ Nd GTH-PADE-q14 GTH-LDA-q14
      0.32528958    1    -0.54324017
      0.29474281    1   -18.52022760
 #PSEUDOPOTENTIAL
-Pm GTH-PADE-q15 GTH-LDA-q15
+Pm GTH-PADE-q15 GTH-LDA-q15 GTH-PADE GTH-LDA
     4    6    0    5
      0.52625000    2    18.25172292    -0.49210744
     4
@@ -1013,7 +1015,7 @@ Pm GTH-PADE-q15 GTH-LDA-q15
      0.47370914    1    -0.42995241
      0.29152653    1   -19.30505668
 #PSEUDOPOTENTIAL
-Sm GTH-PADE-q16 GTH-LDA-q16
+Sm GTH-PADE-q16 GTH-LDA-q16 GTH-PADE GTH-LDA
     4    6    0    6
      0.52333337    2    17.20679172    -0.53280292
     4
@@ -1024,7 +1026,7 @@ Sm GTH-PADE-q16 GTH-LDA-q16
      0.47084026    1    -0.41063034
      0.28404049    1   -19.98429201
 #PSEUDOPOTENTIAL
-Eu GTH-PADE-q17 GTH-LDA-q17
+Eu GTH-PADE-q17 GTH-LDA-q17 GTH-PADE GTH-LDA
     4    6    0    7
      0.52041668    2    17.37351625    -0.64846778
     4
@@ -1035,7 +1037,7 @@ Eu GTH-PADE-q17 GTH-LDA-q17
      0.49003840    1    -0.42611996
      0.27840129    1   -20.94652763
 #PSEUDOPOTENTIAL
-Gd GTH-PADE-q18 GTH-LDA-q18
+Gd GTH-PADE-q18 GTH-LDA-q18 GTH-PADE GTH-LDA
     4    6    0    8
      0.51750004    2    17.51255640    -0.71953420
     4
@@ -1046,7 +1048,7 @@ Gd GTH-PADE-q18 GTH-LDA-q18
      0.48236813    1    -0.56260077
      0.27338980    1   -21.92349011
 #PSEUDOPOTENTIAL
-Tb GTH-PADE-q19 GTH-LDA-q19
+Tb GTH-PADE-q19 GTH-LDA-q19 GTH-PADE GTH-LDA
     4    6    0    9
      0.51458335    2    17.60361623    -0.82808004
     4
@@ -1057,7 +1059,7 @@ Tb GTH-PADE-q19 GTH-LDA-q19
      0.48280866    1    -0.62580219
      0.26825995    1   -22.91169709
 #PSEUDOPOTENTIAL
-Dy GTH-PADE-q20 GTH-LDA-q20
+Dy GTH-PADE-q20 GTH-LDA-q20 GTH-PADE GTH-LDA
     4    6    0   10
      0.51166666    2    16.99433138    -0.95529792
     4
@@ -1068,7 +1070,7 @@ Dy GTH-PADE-q20 GTH-LDA-q20
      0.46722880    1    -0.66892417
      0.26167045    1   -23.92235817
 #PSEUDOPOTENTIAL
-Ho GTH-PADE-q21 GTH-LDA-q21
+Ho GTH-PADE-q21 GTH-LDA-q21 GTH-PADE GTH-LDA
     4    6    0   11
      0.50875002    2    16.78157003    -1.17351448
     4
@@ -1079,7 +1081,7 @@ Ho GTH-PADE-q21 GTH-LDA-q21
      0.44713057    1    -0.74286267
      0.25499226    1   -25.19721081
 #PSEUDOPOTENTIAL
-Er GTH-PADE-q22 GTH-LDA-q22
+Er GTH-PADE-q22 GTH-LDA-q22 GTH-PADE GTH-LDA
     4    6    0   12
      0.50583333    2    17.10529281    -1.43095318
     4
@@ -1090,7 +1092,7 @@ Er GTH-PADE-q22 GTH-LDA-q22
      0.41838497    1    -0.99900632
      0.24912591    1   -26.69680936
 #PSEUDOPOTENTIAL
-Tm GTH-PADE-q23 GTH-LDA-q23
+Tm GTH-PADE-q23 GTH-LDA-q23 GTH-PADE GTH-LDA
     4    6    0   13
      0.50291669    2    17.24729254    -1.62769708
     4
@@ -1101,7 +1103,7 @@ Tm GTH-PADE-q23 GTH-LDA-q23
      0.39287009    1    -1.35330770
      0.24391696    1   -28.10415875
 #PSEUDOPOTENTIAL
-Yb GTH-PADE-q24 GTH-LDA-q24
+Yb GTH-PADE-q24 GTH-LDA-q24 GTH-PADE GTH-LDA
     4    6    0   14
      0.50000000    2    17.35714421    -1.77391642
     4
@@ -1112,7 +1114,7 @@ Yb GTH-PADE-q24 GTH-LDA-q24
      0.44402468    1    -0.88996733
      0.23829829    1   -29.93285367
 #PSEUDOPOTENTIAL
-Lu GTH-PADE-q25 GTH-LDA-q25
+Lu GTH-PADE-q25 GTH-LDA-q25 GTH-PADE GTH-LDA
     4    6    1   14
      0.49700000    2    17.03705292    -1.66161023
     4
@@ -1123,7 +1125,7 @@ Lu GTH-PADE-q25 GTH-LDA-q25
      0.43651827    1    -1.17324513
      0.23262926    1   -31.85226177
 #PSEUDOPOTENTIAL
-Hf GTH-PADE-q12 GTH-LDA-q12
+Hf GTH-PADE-q12 GTH-LDA-q12 GTH-PADE GTH-LDA
     4    6    2
      0.56000000    2     5.13480056     0.52919062
     3
@@ -1135,7 +1137,7 @@ Hf GTH-PADE-q12 GTH-LDA-q12
      0.42638752    2     1.45936326     2.32948018
                                        -5.28276448
 #PSEUDOPOTENTIAL
-Ta GTH-PADE-q13 GTH-LDA-q13
+Ta GTH-PADE-q13 GTH-LDA-q13 GTH-PADE GTH-LDA
     4    6    3
      0.55000000    2     4.54623627     0.77942234
     3
@@ -1158,7 +1160,7 @@ Ta GTH-PADE-q5 GTH-LDA-q5
      0.53436996    2    -2.20220040     0.73493457
                                        -1.66667495
 #PSEUDOPOTENTIAL
-W GTH-PADE-q14 GTH-LDA-q14
+W GTH-PADE-q14 GTH-LDA-q14 GTH-PADE GTH-LDA
     4    6    4
      0.54000000    2     4.80025094     0.90154434
     3
@@ -1181,7 +1183,7 @@ W GTH-PADE-q6 GTH-LDA-q6
      0.53495887    2    -2.51706347     0.34797654
                                        -0.78913661
 #PSEUDOPOTENTIAL
-Re GTH-PADE-q15 GTH-LDA-q15
+Re GTH-PADE-q15 GTH-LDA-q15 GTH-PADE GTH-LDA
     4    6    5
      0.53000000    2     5.59266028     0.94395680
     3
@@ -1204,7 +1206,7 @@ Re GTH-PADE-q7 GTH-LDA-q7
      0.50095420    2    -3.68962967     0.83544051
                                        -1.89460099
 #PSEUDOPOTENTIAL
-Os GTH-PADE-q16 GTH-LDA-q16
+Os GTH-PADE-q16 GTH-LDA-q16 GTH-PADE GTH-LDA
     4    6    6
      0.52000000    2     5.61307299     0.92195476
     3
@@ -1227,7 +1229,7 @@ Os GTH-PADE-q8 GTH-LDA-q8
      0.48758605    2    -4.14203471     0.73468110
                                        -1.66610013
 #PSEUDOPOTENTIAL
-Ir GTH-PADE-q17 GTH-LDA-q17
+Ir GTH-PADE-q17 GTH-LDA-q17 GTH-PADE GTH-LDA
     4    6    7
      0.51000000    2     4.90450946     1.31378645
     3
@@ -1261,7 +1263,7 @@ Pt GTH-PADE-q10 GTH-LDA-q10
      0.45124318    2    -4.55229454     0.92706936
                                        -2.10239568
 #PSEUDOPOTENTIAL
-Pt GTH-PADE-q18 GTH-LDA-q18
+Pt GTH-PADE-q18 GTH-LDA-q18 GTH-PADE GTH-LDA
     3    6    9
      0.50000000    2     5.44583159     1.15638204
     3
@@ -1284,7 +1286,7 @@ Au GTH-PADE-q1 GTH-LDA-q1
                                        -0.49753827     0.14757016
                                                       -0.20975780
 #PSEUDOPOTENTIAL
-Au GTH-PADE-q11 GTH-LDA-q11
+Au GTH-PADE-q11 GTH-LDA-q11 GTH-PADE GTH-LDA
     1    0   10
      0.59000000    1    11.60442790
     3
@@ -1307,7 +1309,7 @@ Au GTH-PADE-q19 GTH-LDA-q19
      0.33386175    2    -8.82572349     9.56535285
                                       -10.84609065
 #PSEUDOPOTENTIAL
-Hg GTH-PADE-q12 GTH-LDA-q12
+Hg GTH-PADE-q12 GTH-LDA-q12 GTH-PADE GTH-LDA
     2    0   10
      0.57000000    1     2.13457183
     3
@@ -1329,7 +1331,7 @@ Hg GTH-PADE-q2 GTH-LDA-q2
                                        -0.53181582
      1.10000000    1     0.12063831
 #PSEUDOPOTENTIAL
-Tl GTH-PADE-q13 GTH-LDA-q13
+Tl GTH-PADE-q13 GTH-LDA-q13 GTH-PADE GTH-LDA
     2    1   10
      0.55000000    1     7.30188582
     3
@@ -1351,7 +1353,7 @@ Tl GTH-PADE-q3 GTH-LDA-q3
                                        -0.58672051
      1.06351212    1     0.24761396
 #PSEUDOPOTENTIAL
-Pb GTH-PADE-q4 GTH-LDA-q4
+Pb GTH-PADE-q4 GTH-LDA-q4 GTH-PADE GTH-LDA
     2    2
      0.61750000    1     0.75314257
     3
@@ -1362,7 +1364,7 @@ Pb GTH-PADE-q4 GTH-LDA-q4
                                        -0.54096885
      0.97193857    1     0.37496708
 #PSEUDOPOTENTIAL
-Bi GTH-PADE-q5 GTH-LDA-q5
+Bi GTH-PADE-q5 GTH-LDA-q5 GTH-PADE GTH-LDA
     2    3
      0.60500000    1     6.67943714
     3
@@ -1373,7 +1375,7 @@ Bi GTH-PADE-q5 GTH-LDA-q5
                                        -0.40293219
      0.93468255    1     0.37847579
 #PSEUDOPOTENTIAL
-Po GTH-PADE-q6 GTH-LDA-q6
+Po GTH-PADE-q6 GTH-LDA-q6 GTH-PADE GTH-LDA
     2    4
      0.59250000    1    10.41173070
     3
@@ -1384,7 +1386,7 @@ Po GTH-PADE-q6 GTH-LDA-q6
                                        -0.35359482
      0.88046840    1     0.43323228
 #PSEUDOPOTENTIAL
-At GTH-PADE-q7 GTH-LDA-q7
+At GTH-PADE-q7 GTH-LDA-q7 GTH-PADE GTH-LDA
     2    5
      0.58000000    1    13.52041116
     3
@@ -1395,7 +1397,7 @@ At GTH-PADE-q7 GTH-LDA-q7
                                        -0.31882073
      0.83836499    1     0.46894787
 #PSEUDOPOTENTIAL
-Rn GTH-PADE-q8 GTH-LDA-q8
+Rn GTH-PADE-q8 GTH-LDA-q8 GTH-PADE GTH-LDA
     2    6
      0.57000000    1    14.62918461
     3
