@@ -2,7 +2,7 @@ from __future__ import division
 import numba as nb
 import numpy as np
 
-@nb.njit(parallel=True)
+@nb.jit(nopython=True)
 def div_eigenenergy_numba(ksn2e, ksn2f, nfermi, vstart, comega, nm2v, ksn2e_dim):
     """
         multiply the temporary matrix by (fn - fm) (frac{1.0}{w - (Em-En) -1} -
@@ -16,7 +16,7 @@ def div_eigenenergy_numba(ksn2e, ksn2f, nfermi, vstart, comega, nm2v, ksn2e_dim)
     #        nm2v[n,m] = nm2v[n,m] * (fn-fm) * ( 1.0 / (comega - (em - en)) - 1.0 /\
     #                (comega + (em - en)) )
 
-    for n in nb.prange(nfermi):
+    for n in range(nfermi):
         en = ksn2e[0, 0, n]
         fn = ksn2f[0, 0, n]
         for j in range(n+1, ksn2e_dim, 1):

@@ -1,6 +1,7 @@
 from __future__ import print_function, division
 import numpy as np
 from scipy.sparse import csr_matrix
+from scipy.linalg import blas
 from timeit import default_timer as timer
 import sys
 
@@ -153,7 +154,8 @@ class tddft_iter_c():
         # nb2v is column major, while self.xvrt is row major
         #       What a mess!!
         nb2v = self.xocc*sab
-        nm2v = np.dot(nb2v, np.transpose(self.xvrt))
+        #nm2v_ref = np.dot(nb2v, np.transpose(self.xvrt))
+        nm2v = blas.cgemm(1.0, nb2v, np.transpose(self.xvrt))
         
         if use_numba:
             div_eigenenergy_numba(self.ksn2e, self.ksn2f, self.nfermi,
@@ -165,9 +167,13 @@ class tddft_iter_c():
                 nm2v[n,m] = nm2v[n,m] * (fn-fm) *\
                   ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
 
-        nb2v = np.dot(nm2v,self.xvrt)
-        ab2v = np.dot(np.transpose(self.xocc),nb2v).reshape(no*no)
+        #nb2v_ref = np.dot(nm2v,self.xvrt)
+        nb2v = blas.cgemm(1.0, nm2v,self.xvrt)
+        #ab2v_ref = np.dot(np.transpose(self.xocc),nb2v).reshape(no*no)
+        ab2v = blas.cgemm(1.0, np.transpose(self.xocc),nb2v).reshape(no*no)
 
+        #print("error = ", np.sum(abs(ab2v_ref-ab2v)))
+        #sys.exit()
         vdp = self.v_dab*ab2v
     res = vdp*self.cc_da
     return res
