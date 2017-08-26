@@ -149,18 +149,9 @@ def eval_mat(mol, ao, weight, rho, vxc,
         raise NotImplementedError
     return mat
 
-def nr_vxc(ni, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
-           max_memory=2000, verbose=None):
-    if ni.non0tab is None:
-        ni.non0tab = ni.make_mask(mol, grids.coords)
-
+def r_vxc(ni, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
+          max_memory=2000, verbose=None):
     xctype = ni._xc_type(xc_code)
-    ngrids = len(grids.weights)
-    if ni.non0tab is None:
-        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                             dtype=numpy.uint8)
-    else:
-        non0tab = ni.non0tab
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_2c()
     n2c = ao_loc[-1]
@@ -175,7 +166,7 @@ def nr_vxc(ni, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
     matSS = numpy.zeros((nset,n2c,n2c), dtype=numpy.complex128)
     if xctype == 'LDA':
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, 0, with_s, max_memory, non0tab):
+                in ni.block_loop(mol, grids, nao, 0, with_s, max_memory):
             for idm in range(nset):
                 rho = make_rho(idm, ao, mask, xctype)
                 exc, vxc = ni.eval_xc(xc_code, rho, 1, relativity, 1, verbose)[:2]
@@ -185,10 +176,10 @@ def nr_vxc(ni, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
                 excsum[idm] += (den*exc).sum()
 
                 matLL[idm] += _vxc2x2_to_mat(mol, ao[:2], weight, rho, vrho,
-                                             non0tab, shls_slice, ao_loc)
+                                             mask, shls_slice, ao_loc)
                 if with_s:
                     matSS[idm] += _vxc2x2_to_mat(mol, ao[2:], weight, rho, vrho,
-                                                 non0tab, shls_slice, ao_loc)
+                                                 mask, shls_slice, ao_loc)
                 rho = m = exc = vxc = vrho = None
     elif xctype == 'GGA':
         raise NotImplementedError
@@ -216,7 +207,7 @@ def large_rho_indices(ni, mol, dm, grids, cutoff=1e-10, max_memory=2000):
     idx = []
     cutoff = cutoff / grids.weights.size
     for ao, mask, weight, coords \
-            in ni.block_loop(mol, grids, nao, 0, with_s, max_memory, ni.non0tab):
+            in ni.block_loop(mol, grids, nao, 0, with_s, max_memory):
         rho = make_rho(0, ao, mask, 'LDA')
         idx.append(abs(rho[0]*weight) > cutoff)
     return numpy.hstack(idx)
@@ -224,7 +215,7 @@ def large_rho_indices(ni, mol, dm, grids, cutoff=1e-10, max_memory=2000):
 
 class _RNumInt(numint._NumInt):
 
-    nr_vxc = nr_vxc
+    r_vxc = nr_vxc = r_vxc
     large_rho_indices = large_rho_indices
 
     def eval_ao(self, mol, coords, deriv=0, with_s=True, shls_slice=None,
@@ -243,12 +234,16 @@ class _RNumInt(numint._NumInt):
                    non0tab=None, blksize=None, buf=None):
         '''Define this macro to loop over grids by blocks.
         '''
+        if grids.coords is None:
+            grids.build(with_non0tab=True)
         ngrids = grids.weights.size
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index ni.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:
             blksize = min(int(max_memory*1e6/((comp*4+4)*nao*16*BLKSIZE))*BLKSIZE, ngrids)
             blksize = max(blksize, BLKSIZE)
+        if non0tab is None:
+            non0tab = grids.non0tab
         if non0tab is None:
             non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
                                  dtype=numpy.uint8)
@@ -325,6 +320,6 @@ if __name__ == '__main__':
     dm = mf.get_init_guess(key='minao')
 
     print(time.clock())
-    res = mf._numint.nr_vxc(mol, mf.grids, mf.xc, dm, spin=0)
+    res = mf._numint.r_vxc(mol, mf.grids, mf.xc, dm, spin=0)
     print(res[1] - 0)
     print(time.clock())

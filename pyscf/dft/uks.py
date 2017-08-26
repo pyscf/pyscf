@@ -35,9 +35,9 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         dm = numpy.asarray((dm*.5,dm*.5))
 
     if hermi == 2:  # because rho = 0
-        n, ks._exc, vx = (0,0), 0, 0
+        n, exc, vxc = (0,0), 0, 0
     else:
-        n, ks._exc, vx = ks._numint.nr_uks(mol, ks.grids, ks.xc, dm)
+        n, exc, vxc = ks._numint.nr_uks(mol, ks.grids, ks.xc, dm)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
@@ -45,37 +45,35 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
 
     hyb = ks._numint.hybrid_coeff(ks.xc, spin=mol.spin)
     if abs(hyb) < 1e-10:
-        if (ks._eri is not None or not ks.direct_scf or
-            ks._dm_last is None or
-            not isinstance(vhf_last, numpy.ndarray)):
-            vj = ks.get_j(mol, dm, hermi)
-        else:
-            ddm = dm - numpy.asarray(ks._dm_last)
+        vk = None
+        if (ks._eri is None and ks.direct_scf and
+            getattr(vhf_last, 'vj', None) is not None):
+            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
             vj = ks.get_j(mol, ddm, hermi)
-            vj += ks._vj_last
-            ks._dm_last = dm
-            ks._vj_last = vj
-        vhf = vj[0] + vj[1]
-        vhf = numpy.asarray((vhf,vhf))
-    else:
-        if (ks._eri is not None or not ks.direct_scf or
-            ks._dm_last is None or
-            not isinstance(vhf_last, numpy.ndarray)):
-            vj, vk = ks.get_jk(mol, dm, hermi)
+            vj += vhf_last.vj
         else:
-            ddm = dm - numpy.asarray(ks._dm_last)
+            vj = ks.get_j(mol, dm, hermi)
+        vxc += vj[0] + vj[1]
+    else:
+        if (ks._eri is None and ks.direct_scf and
+            getattr(vhf_last, 'vk', None) is not None):
+            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
             vj, vk = ks.get_jk(mol, ddm, hermi)
-            vj += ks._vj_last
-            vk += ks._vk_last
-            ks._dm_last = dm
-            ks._vj_last, ks._vk_last = vj, vk
-        vhf = vj[0] + vj[1] - vk * hyb
+            vj += vhf_last.vj
+            vk += vhf_last.vk
+        else:
+            vj, vk = ks.get_jk(mol, dm, hermi)
+        vxc += vj[0] + vj[1] - vk * hyb
 
         if ground_state:
-            ks._exc -=(numpy.einsum('ij,ji', dm[0], vk[0]) +
-                       numpy.einsum('ij,ji', dm[1], vk[1])) * .5 * hyb
+            exc -=(numpy.einsum('ij,ji', dm[0], vk[0]) +
+                   numpy.einsum('ij,ji', dm[1], vk[1])) * hyb * .5
     if ground_state:
-        ks._ecoul = numpy.einsum('ij,ji', dm[0]+dm[1], vj[0]+vj[1]) * .5
+        ecoul = numpy.einsum('ij,ji', dm[0]+dm[1], vj[0]+vj[1]) * .5
+    else:
+        ecoul = None
+
+    vxc = rks._attach_xc(vxc, ecoul, exc, vj, vk)
 
     nelec = mol.nelec
     if (small_rho_cutoff > 1e-20 and ground_state and
@@ -87,18 +85,20 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         ks.grids.coords  = numpy.asarray(ks.grids.coords [idx], order='C')
         ks.grids.weights = numpy.asarray(ks.grids.weights[idx], order='C')
         ks.grids.non0tab = ks.grids.make_mask(mol, ks.grids.coords)
-    return vhf + vx
+    return vxc
 
 
 def energy_elec(ks, dm, h1e=None, vhf=None):
     if h1e is None:
         h1e = ks.get_hcore()
+    if vhf is None or getattr(vhf, 'ecoul', None) is None:
+        vhf = ks.get_veff(ks, ks.mol, dm)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = numpy.array((dm*.5, dm*.5))
     e1 = numpy.einsum('ij,ji', h1e, dm[0]) + numpy.einsum('ij,ji', h1e, dm[1])
-    tot_e = e1.real + ks._ecoul + ks._exc
-    logger.debug(ks, 'Ecoul = %s  Exc = %s', ks._ecoul, ks._exc)
-    return tot_e, ks._ecoul+ks._exc
+    tot_e = e1.real + vhf.ecoul + vhf.exc
+    logger.debug(ks, 'Ecoul = %s  Exc = %s', vhf.ecoul, vhf.exc)
+    return tot_e, vhf.ecoul+vhf.exc
 
 
 class UKS(uhf.UHF):

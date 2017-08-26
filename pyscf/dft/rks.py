@@ -24,9 +24,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     Args:
         ks : an instance of :class:`RKS`
             XC functional are controlled by ks.xc attribute.  Attribute
-            ks.grids might be initialized.  The ._exc and ._ecoul attributes
-            will be updated after return.  Attributes ._dm_last, ._vj_last and
-            ._vk_last might be changed if direct SCF method is applied.
+            ks.grids might be initialized.
         dm : ndarray or list of ndarrays
             A density matrix or a list of density matrices
 
@@ -35,9 +33,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             The density matrix baseline.  If not 0, this function computes the
             increment of HF potential w.r.t. the reference HF potential matrix.
         vhf_last : ndarray or a list of ndarrays or 0
-            The reference HF potential matrix.  If vhf_last is not given,
-            the function will not call direct_scf and attacalites ._dm_last,
-            ._vj_last and ._vk_last will not be updated.
+            The reference Vxc potential matrix.
         hermi : int
             Whether J, K matrix is hermitian
 
@@ -60,9 +56,9 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         small_rho_cutoff = 0
 
     if hermi == 2:  # because rho = 0
-        n, ks._exc, vx = 0, 0, 0
+        n, exc, vxc = 0, 0, 0
     else:
-        n, ks._exc, vx = ks._numint.nr_rks(mol, ks.grids, ks.xc, dm)
+        n, exc, vxc = ks._numint.nr_rks(mol, ks.grids, ks.xc, dm)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
@@ -70,35 +66,35 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
 
     hyb = ks._numint.hybrid_coeff(ks.xc, spin=mol.spin)
     if abs(hyb) < 1e-10:
-        if (ks._eri is not None or not ks.direct_scf or
-            ks._dm_last is None or
-            not isinstance(vhf_last, numpy.ndarray)):
-            vhf = vj = ks.get_j(mol, dm, hermi)
-        else:
-            ddm = numpy.asarray(dm) - numpy.asarray(ks._dm_last)
+        vk = None
+        if (ks._eri is None and ks.direct_scf and
+            getattr(vhf_last, 'vj', None) is not None):
+            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
             vj = ks.get_j(mol, ddm, hermi)
-            vj += ks._vj_last
-            ks._dm_last = dm
-            vhf = ks._vj_last = vj
-    else:
-        if (ks._eri is not None or not ks.direct_scf or
-            ks._dm_last is None or
-            not isinstance(vhf_last, numpy.ndarray)):
-            vj, vk = ks.get_jk(mol, dm, hermi)
+            vj += vhf_last.vj
         else:
-            ddm = numpy.asarray(dm) - numpy.asarray(ks._dm_last)
+            vj = ks.get_j(mol, dm, hermi)
+        vxc += vj
+    else:
+        if (ks._eri is None and ks.direct_scf and
+            getattr(vhf_last, 'vk', None) is not None):
+            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
             vj, vk = ks.get_jk(mol, ddm, hermi)
-            vj += ks._vj_last
-            vk += ks._vk_last
-            ks._dm_last = dm
-            ks._vj_last, ks._vk_last = vj, vk
-        vhf = vj - vk * (hyb * .5)
+            vj += vhf_last.vj
+            vk += vhf_last.vk
+        else:
+            vj, vk = ks.get_jk(mol, dm, hermi)
+        vxc += vj - vk * (hyb * .5)
 
         if ground_state:
-            ks._exc -= numpy.einsum('ij,ji', dm, vk) * .5 * hyb*.5
+            exc -= numpy.einsum('ij,ji', dm, vk) * .5 * hyb*.5
 
     if ground_state:
-        ks._ecoul = numpy.einsum('ij,ji', dm, vj) * .5
+        ecoul = numpy.einsum('ij,ji', dm, vj) * .5
+    else:
+        ecoul = None
+
+    vxc = _attach_xc(vxc, ecoul, exc, vj, vk)
 
     if (small_rho_cutoff > 1e-20 and ground_state and
         abs(n-mol.nelectron) < 0.01*n):
@@ -109,7 +105,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         ks.grids.coords  = numpy.asarray(ks.grids.coords [idx], order='C')
         ks.grids.weights = numpy.asarray(ks.grids.weights[idx], order='C')
         ks.grids.non0tab = ks.grids.make_mask(mol, ks.grids.coords)
-    return vhf + vx
+    return vxc
 
 
 def energy_elec(ks, dm, h1e=None, vhf=None):
@@ -128,10 +124,12 @@ def energy_elec(ks, dm, h1e=None, vhf=None):
     '''
     if h1e is None:
         h1e = ks.get_hcore()
+    if vhf is None or getattr(vhf, 'ecoul', None) is None:
+        vhf = ks.get_veff(ks, ks.mol, dm)
     e1 = numpy.einsum('ij,ji', h1e, dm).real
-    tot_e = e1 + ks._ecoul + ks._exc
-    logger.debug(ks, 'Ecoul = %s  Exc = %s', ks._ecoul, ks._exc)
-    return tot_e, ks._ecoul+ks._exc
+    tot_e = e1 + vhf.ecoul + vhf.exc
+    logger.debug(ks, 'Ecoul = %s  Exc = %s', vhf.ecoul, vhf.exc)
+    return tot_e, vhf.ecoul+vhf.exc
 
 
 class RKS(hf.RHF):
@@ -213,11 +211,18 @@ def _dft_common_init_(mf):
     mf.small_rho_cutoff = 1e-7  # Use rho to filter grids
 ##################################################
 # don't modify the following attributes, they are not input options
-    mf._ecoul = 0
-    mf._exc = 0
     mf._numint = numint._NumInt()
-    mf._dm_last = None
     mf._keys = mf._keys.union(['xc', 'grids', 'small_rho_cutoff'])
+
+class VxcArray(numpy.ndarray):
+    pass
+def _attach_xc(a, ecoul=None, exc=None, vj=None, vk=None):
+    a = numpy.asarray(a).view(VxcArray)
+    a.ecoul = ecoul
+    a.exc = exc
+    a.vj = vj
+    a.vk = vk
+    return a
 
 
 if __name__ == '__main__':

@@ -59,5 +59,3 @@ script:
       -e test_jk_hermi0
       -e test_j_kpts
       -e test_k_kpts
-      -e test_krks
-      -e test_kuks

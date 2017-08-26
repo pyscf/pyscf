@@ -19,6 +19,7 @@ from pyscf.lib import logger
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.pbc.dft import rks
+from pyscf.dft.rks import _attach_xc
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
              kpts=None, kpts_band=None):
@@ -37,32 +38,35 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         small_rho_cutoff = 0
 
     if hermi == 2:  # because rho = 0
-        n, ks._exc, vx = (0,0), 0, 0
+        n, exc, vxc = (0,0), 0, 0
     else:
-        n, ks._exc, vx = ks._numint.nr_uks(cell, ks.grids, ks.xc, dm, 0,
-                                           kpts, kpts_band)
+        n, exc, vxc = ks._numint.nr_uks(cell, ks.grids, ks.xc, dm, 0,
+                                        kpts, kpts_band)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
     # ndim = 4 : dm.shape = ([alpha,beta], nkpts, nao, nao)
     ground_state = (dm.ndim == 4 and dm.shape[0] == 2 and kpts_band is None)
-    nkpts = len(kpts)
+    weight = 1./len(kpts)
 
     hyb = ks._numint.hybrid_coeff(ks.xc, spin=cell.spin)
     if abs(hyb) < 1e-10:
         vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
-        vhf = vj[0] + vj[1]
-        vhf = lib.asarray((vhf,vhf))
+        vxc += vj[0] + vj[1]
     else:
         vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
-        vhf = vj[0] + vj[1] - vk * hyb
+        vxc += vj[0] + vj[1] - vk * hyb
 
         if ground_state:
-            ks._exc -= (np.einsum('Kij,Kji', dm[0], vk[0]) +
-                        np.einsum('Kij,Kji', dm[1], vk[1])).real * .5 * hyb * (1./nkpts)
+            exc -= (np.einsum('Kij,Kji', dm[0], vk[0]) +
+                    np.einsum('Kij,Kji', dm[1], vk[1])).real * hyb * .5 * weight
 
     if ground_state:
-        ks._ecoul = np.einsum('Kij,Kji', dm[0]+dm[1], vj[0]+vj[1]).real * .5 * (1./nkpts)
+        ecoul = np.einsum('Kij,Kji', dm[0]+dm[1], vj[0]+vj[1]).real * .5 * weight
+    else:
+        ecoul = None
+
+    vxc = _attach_xc(vxc, ecoul, exc, vj=None, vk=None)
 
     nelec = cell.nelec
     if (small_rho_cutoff > 1e-20 and ground_state and
@@ -75,7 +79,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         ks.grids.coords  = np.asarray(ks.grids.coords [idx], order='C')
         ks.grids.weights = np.asarray(ks.grids.weights[idx], order='C')
         ks.grids.non0tab = ks.grids.make_mask(cell, ks.grids.coords)
-    return vhf + vx
+    return vxc
 
 
 class KUKS(kuhf.KUHF):
@@ -88,8 +92,6 @@ class KUKS(kuhf.KUHF):
         self.small_rho_cutoff = 1e-7  # Use rho to filter grids
 ##################################################
 # don't modify the following attributes, they are not input options
-        self._ecoul = 0
-        self._exc = 0
         # Note Do not refer to .with_df._numint because gs/coords may be different
         self._numint = numint._KNumInt(kpts)
         self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
@@ -104,14 +106,15 @@ class KUKS(kuhf.KUHF):
     def energy_elec(self, dm_kpts=None, h1e_kpts=None, vhf=None):
         if h1e_kpts is None: h1e_kpts = self.get_hcore(self.cell, self.kpts)
         if dm_kpts is None: dm_kpts = self.make_rdm1()
+        if vhf is None or getattr(vhf, 'ecoul', None) is None:
+            vhf = self.get_veff(ks, ks.cell, dm_kpts)
 
-        nkpts = len(h1e_kpts)
-        e1 = 1./nkpts *(np.einsum('kij,kji', h1e_kpts, dm_kpts[0]) +
-                        np.einsum('kij,kji', h1e_kpts, dm_kpts[1])).real
-
-        tot_e = e1 + self._ecoul + self._exc
-        logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, self._ecoul, self._exc)
-        return tot_e, self._ecoul + self._exc
+        weight = 1./len(h1e_kpts)
+        e1 = weight *(np.einsum('kij,kji', h1e_kpts, dm_kpts[0]) +
+                      np.einsum('kij,kji', h1e_kpts, dm_kpts[1])).real
+        tot_e = e1 + vhf.ecoul + vhf.exc
+        logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
+        return tot_e, vhf.ecoul + vhf.exc
 
     density_fit = rks._patch_df_beckegrids(kuhf.KUHF.density_fit)
     mix_density_fit = rks._patch_df_beckegrids(kuhf.KUHF.mix_density_fit)
