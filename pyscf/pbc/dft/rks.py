@@ -19,6 +19,7 @@ from pyscf.pbc.scf import hf as pbchf
 from pyscf.lib import logger
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
+from pyscf.dft.rks import _attach_xc
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -31,8 +32,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     Args:
         ks : an instance of :class:`RKS`
             XC functional are controlled by ks.xc attribute.  Attribute
-            ks.grids might be initialized.  The ._exc and ._ecoul attributes
-            will be updated after return.
+            ks.grids might be initialized.
         dm : ndarray or list of ndarrays
             A density matrix or a list of density matrices
 
@@ -52,10 +52,10 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         small_rho_cutoff = 0
 
     if hermi == 2:  # because rho = 0
-        n, ks._exc, vx = 0, 0, 0
+        n, exc, vxc = 0, 0, 0
     else:
-        n, ks._exc, vx = ks._numint.nr_rks(cell, ks.grids, ks.xc, dm, 0,
-                                           kpt, kpt_band)
+        n, exc, vxc = ks._numint.nr_rks(cell, ks.grids, ks.xc, dm, 0,
+                                        kpt, kpt_band)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
@@ -63,16 +63,21 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 
     hyb = ks._numint.hybrid_coeff(ks.xc, spin=cell.spin)
     if abs(hyb) < 1e-10:
-        vhf = vj = ks.get_j(cell, dm, hermi, kpt, kpt_band)
+        vj = ks.get_j(cell, dm, hermi, kpt, kpt_band)
+        vxc += vj
     else:
         vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpt_band)
-        vhf = vj - vk * (hyb * .5)
+        vxc += vj - vk * (hyb * .5)
 
         if ground_state:
-            ks._exc -= numpy.einsum('ij,ji', dm, vk).real * .5 * hyb*.5
+            exc -= numpy.einsum('ij,ji', dm, vk).real * .5 * hyb*.5
 
     if ground_state:
-        ks._ecoul = numpy.einsum('ij,ji', dm, vj).real * .5
+        ecoul = numpy.einsum('ij,ji', dm, vj).real * .5
+    else:
+        ecoul = None
+
+    vxc = _attach_xc(vxc, ecoul, exc, vj=None, vk=None)
 
     if (small_rho_cutoff > 1e-20 and ground_state and
         abs(n-cell.nelectron) < 0.01*n):
@@ -84,7 +89,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         ks.grids.coords  = numpy.asarray(ks.grids.coords [idx], order='C')
         ks.grids.weights = numpy.asarray(ks.grids.weights[idx], order='C')
         ks.grids.non0tab = ks.grids.make_mask(cell, ks.grids.coords)
-    return vhf + vx
+    return vxc
 
 
 def _patch_df_beckegrids(density_fit):
@@ -110,8 +115,6 @@ class RKS(pbchf.RHF):
         self.small_rho_cutoff = 1e-7  # Use rho to filter grids
 ##################################################
 # don't modify the following attributes, they are not input options
-        self._ecoul = 0
-        self._exc = 0
         self._numint = numint._NumInt()
         self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
 

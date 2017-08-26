@@ -9,7 +9,7 @@ else:
 
 
 CLASSIFIERS = [
-'Development Status :: 1.3 stable',
+'Development Status :: 1.4 stable',
 'Intended Audience :: Science/Research',
 'Intended Audience :: Developers',
 'License :: OSI Approved',
@@ -51,7 +51,7 @@ setup(
     package_data={'': ['*.so', '*.dat']}, # any package contains *.so *.dat files
     include_package_data=True,  # include everything in source control
     packages=find_packages(exclude=['*dmrgscf*', '*fciqmcscf*', '*icmpspt*',
-                                    '*shciscf*', '*xianci*', '*tdscf*',
+                                    '*shciscf*', '*xianci*',
                                     '*future*', '*test*', '*examples*',
                                     '*setup.py']),
     cmdclass={'build_py': build_py},

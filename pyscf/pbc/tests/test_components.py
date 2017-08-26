@@ -100,7 +100,6 @@ def test_components(pseudo=None):
     mf.xc = 'LDA,VWN_RPA'
 
     rks.get_veff(mf, cell, dm)
-    print "Exc", mf._exc # -1.05967570089
 
 if __name__ == '__main__':
     test_components()

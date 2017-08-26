@@ -7,20 +7,24 @@ import unittest
 import numpy as np
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import dft as pbcdft
-import pyscf.pbc.tools.pyscf_ase as pyscf_ase
-import ase.lattice
-from ase.lattice.cubic import Diamond
-
-LATTICE_CONST = 3.5668
 
 class KnowValues(unittest.TestCase):
     def test_klda8_cubic_kpt_222(self):
-        ase_atom = Diamond(symbol='C', latticeconstant=LATTICE_CONST)
         cell = pbcgto.Cell()
         cell.unit = 'A'
-        cell.a = ase_atom.cell
+        cell.a = '''3.5668  0.      0.
+                    0.      3.5668  0.
+                    0.      0.      3.5668'''
         cell.gs = np.array([8]*3)
-        cell.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
+        cell.atom ='''
+C, 0.,  0.,  0.
+C, 0.8917,  0.8917,  0.8917
+C, 1.7834,  1.7834,  0.
+C, 2.6751,  2.6751,  0.8917
+C, 1.7834,  0.    ,  1.7834
+C, 2.6751,  0.8917,  2.6751
+C, 0.    ,  1.7834,  1.7834
+C, 0.8917,  2.6751,  2.6751'''
         cell.basis = 'gth-szv'
         cell.pseudo = 'gth-pade'
         cell.verbose = 5
@@ -32,8 +36,6 @@ class KnowValues(unittest.TestCase):
         mf.xc = 'lda,vwn'
         e1 = mf.scf()
         self.assertAlmostEqual(e1, -45.42583489512954, 8)
-        self.assertAlmostEqual(mf._ecoul, 3.2519161200384685, 6)
-        self.assertAlmostEqual(mf._exc, -13.937886385300949, 6)
 
 
 if __name__ == '__main__':

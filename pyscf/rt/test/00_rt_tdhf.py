@@ -2,7 +2,7 @@ import numpy as np
 import sys, re
 import pyscf
 import pyscf.dft
-from  pyscf import gto, tdscf
+from  pyscf import gto, rt
 np.set_printoptions(linewidth=220, suppress = True,precision = 7)
 
 def TestTDHF():
@@ -34,9 +34,9 @@ def TestTDHF():
     mol.atom = geom
     mol.basis = 'sto-3g'
     mol.build()
-    the_scf = pyscf.dft.RKS(mol)
-    the_scf.xc='HF'
-    print "Inital SCF finished. E=", the_scf.kernel()
-    aprop = tdscf.tdscf(the_scf,prm,output)
+    ks = pyscf.dft.RKS(mol)
+    ks.xc='HF'
+    ks.kernel()
+    aprop = rt.tdscf.RTTDSCF(ks,prm,output)
     return
 TestTDHF()

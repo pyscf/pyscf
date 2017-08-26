@@ -20,6 +20,7 @@ from pyscf.lib import logger
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.pbc.dft import rks
+from pyscf.dft.rks import _attach_xc
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -44,10 +45,10 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         dm = numpy.asarray((dm*.5,dm*.5))
 
     if hermi == 2:  # because rho = 0
-        n, ks._exc, vx = (0,0), 0, 0
+        n, exc, vxc = (0,0), 0, 0
     else:
-        n, ks._exc, vx = ks._numint.nr_uks(cell, ks.grids, ks.xc, dm, 0,
-                                           kpt, kpt_band)
+        n, exc, vxc = ks._numint.nr_uks(cell, ks.grids, ks.xc, dm, 0,
+                                        kpt, kpt_band)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
@@ -57,18 +58,21 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     hyb = ks._numint.hybrid_coeff(ks.xc, spin=cell.spin)
     if abs(hyb) < 1e-10:
         vj = ks.get_j(cell, dm, hermi, kpt, kpt_band)
-        vhf = vj[0] + vj[1]
-        vhf = lib.asarray((vhf,vhf))
+        vxc += vj[0] + vj[1]
     else:
         vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpt_band)
-        vhf = vj[0] + vj[1] - vk * hyb
+        vxc += vj[0] + vj[1] - vk * hyb
 
         if ground_state:
-            ks._exc -=(numpy.einsum('ij,ji', dm[0], vk[0]) +
-                       numpy.einsum('ij,ji', dm[1], vk[1])).real * .5 * hyb
+            exc -=(numpy.einsum('ij,ji', dm[0], vk[0]) +
+                   numpy.einsum('ij,ji', dm[1], vk[1])).real * hyb * .5
 
     if ground_state:
-        ks._ecoul = numpy.einsum('ij,ji', dm[0]+dm[1], vj[0]+vj[1]).real * .5
+        ecoul = numpy.einsum('ij,ji', dm[0]+dm[1], vj[0]+vj[1]).real * .5
+    else:
+        ecoul = None
+
+    vxc = _attach_xc(vxc, ecoul, exc, vj=None, vk=None)
 
     nelec = cell.nelec
     if (small_rho_cutoff > 1e-20 and ground_state and
@@ -81,7 +85,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         ks.grids.coords  = numpy.asarray(ks.grids.coords [idx], order='C')
         ks.grids.weights = numpy.asarray(ks.grids.weights[idx], order='C')
         ks.grids.non0tab = ks.grids.make_mask(cell, ks.grids.coords)
-    return vhf + vx
+    return vxc
 
 
 class UKS(pbcuhf.UHF):
@@ -98,8 +102,6 @@ class UKS(pbcuhf.UHF):
         self.small_rho_cutoff = 1e-7  # Use rho to filter grids
 ##################################################
 # don't modify the following attributes, they are not input options
-        self._ecoul = 0
-        self._exc = 0
         self._numint = numint._NumInt()
         self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
 

@@ -9,78 +9,82 @@ import numpy as np
 
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import dft as pbcdft
-import pyscf.pbc.tools.pyscf_ase as pyscf_ase
 
-import ase
-import ase.lattice
-import ase.dft.kpoints
-from ase.lattice.cubic import Diamond
-from ase.lattice import bulk
-
-LATTICE_CONST = 3.5668
-
-def build_cell(ase_atom, ngs):
+def build_cell(ngs):
     cell = pbcgto.Cell()
     cell.unit = 'A'
-    cell.a = ase_atom.cell
+    cell.a = '''3.5668  0.      0.
+                0.      3.5668  0.
+                0.      0.      3.5668'''
     cell.gs = np.array([ngs,ngs,ngs])
-
-    cell.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
+    cell.atom ='''
+C, 0.,  0.,  0.
+C, 0.8917,  0.8917,  0.8917
+C, 1.7834,  1.7834,  0.
+C, 2.6751,  2.6751,  0.8917
+C, 1.7834,  0.    ,  1.7834
+C, 2.6751,  0.8917,  2.6751
+C, 0.    ,  1.7834,  1.7834
+C, 0.8917,  2.6751,  2.6751'''
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
-    cell.verbose = 0
+    cell.verbose = 7
+    cell.output = '/dev/null'
     cell.build()
     return cell
 
+def make_primitive_cell(ngs):
+    cell = pbcgto.Cell()
+    cell.unit = 'A'
+    cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
+    cell.a = '''0.      1.7834  1.7834
+                1.7834  0.      1.7834
+                1.7834  1.7834  0.    '''
+
+    cell.basis = 'gth-szv'
+    cell.pseudo = 'gth-pade'
+    cell.gs = np.array([ngs,ngs,ngs])
+    cell.verbose = 7
+    cell.output = '/dev/null'
+    cell.build()
+    return cell
+
+
 class KnowValues(unittest.TestCase):
     def test_klda8_cubic_gamma(self):
-        ase_atom = Diamond(symbol='C', latticeconstant=LATTICE_CONST)
-        cell = build_cell(ase_atom, 8)
+        cell = build_cell(8)
         mf = pbcdft.RKS(cell)
         mf.xc = 'lda,vwn'
         #kmf.verbose = 7
         e1 = mf.scf()
-        #print "mf._ecoul =", mf._ecoul
-        #print "mf._exc =", mf._exc
         self.assertAlmostEqual(e1, -44.892502703975893, 8)
 
     def test_klda8_cubic_kpt_222(self):
-        ase_atom = Diamond(symbol='C', latticeconstant=LATTICE_CONST)
-        scaled_kpts = ase.dft.kpoints.monkhorst_pack((2,2,2))
-        cell = build_cell(ase_atom, 8)
-        abs_kpts = cell.get_abs_kpts(scaled_kpts)
+        cell = build_cell(8)
+        abs_kpts = cell.make_kpts([2]*3, with_gamma_point=False)
         mf = pbcdft.KRKS(cell, abs_kpts)
         #mf.analytic_int = False
         mf.xc = 'lda,vwn'
         #mf.verbose = 7
         e1 = mf.scf()
-        #print "mf._ecoul =", mf._ecoul
-        #print "mf._exc =", mf._exc
         self.assertAlmostEqual(e1, -45.425834895129569, 8)
 
     def test_klda8_primitive_gamma(self):
-        ase_atom = ase.build.bulk('C', 'diamond', a=LATTICE_CONST)
-        cell = build_cell(ase_atom, 8)
+        cell = make_primitive_cell(8)
         mf = pbcdft.RKS(cell)
         mf.xc = 'lda,vwn'
         #kmf.verbose = 7
         e1 = mf.scf()
-        #print "mf._ecoul =", mf._ecoul
-        #print "mf._exc =", mf._exc
         self.assertAlmostEqual(e1, -10.221426445656439, 8)
 
     def test_klda8_primitive_kpt_222(self):
-        ase_atom = ase.build.bulk('C', 'diamond', a=LATTICE_CONST)
-        scaled_kpts = ase.dft.kpoints.monkhorst_pack((2,2,2))
-        cell = build_cell(ase_atom, 8)
-        abs_kpts = cell.get_abs_kpts(scaled_kpts)
+        cell = make_primitive_cell(8)
+        abs_kpts = cell.make_kpts([2]*3, with_gamma_point=False)
         mf = pbcdft.KRKS(cell, abs_kpts)
         #mf.analytic_int = False
         mf.xc = 'lda,vwn'
         #mf.verbose = 7
         e1 = mf.scf()
-        #print "mf._ecoul =", mf._ecoul
-        #print "mf._exc =", mf._exc
         self.assertAlmostEqual(e1, -11.353643583707452, 8)
 
 
