@@ -170,7 +170,7 @@ class FFTDF(lib.StreamObject):
         lib.StreamObject.check_sanity(self)
         cell = self.cell
         if cell.dimension < 3:
-            raise RuntimeError('FFTDF method does not support low-dimensional '
+            raise RuntimeError('FFTDF method does not support low-dimension '
                                'PBC system.  DF, MDF or AFTDF methods should '
                                'be used.\nSee also examples/pbc/31-low_dimensional_pbc.py')
 
@@ -183,8 +183,7 @@ class FFTDF(lib.StreamObject):
                         '        mf = mf.mix_density_fit()')
 
         if cell.ke_cutoff is None:
-            ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), self.gs)
-            ke_cutoff = ke_cutoff.min()
+            ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), self.gs).min()
         else:
             ke_cutoff = numpy.min(cell.ke_cutoff)
         ke_guess = estimate_ke_cutoff(cell, cell.precision)
@@ -200,7 +199,7 @@ class FFTDF(lib.StreamObject):
     def aoR_loop(self, gs=None, kpts=None, kpts_band=None):
         cell = self.cell
         if cell.dimension < 3:
-            raise RuntimeError('FFTDF method does not support low-dimensional '
+            raise RuntimeError('FFTDF method does not support low-dimension '
                                'PBC system.  DF, MDF or AFTDF methods should '
                                'be used.\nSee also examples/pbc/31-low_dimensional_pbc.py')
 
