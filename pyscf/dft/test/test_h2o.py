@@ -182,7 +182,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(method.scf(), -76.690247578608236, 9)
 
     def test_nr_symm_b88vwn_df(self):
-        method = dft.density_fit(dft.RKS(h2osym))
+        method = dft.density_fit(dft.RKS(h2osym), 'weigend')
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         method.xc = 'b88, vwn'

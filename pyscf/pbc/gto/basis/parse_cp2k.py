@@ -51,7 +51,7 @@ def search_seg(basisfile, symb):
     with open(basisfile, 'r') as fin:
         fdata = re.split(BASIS_SET_DELIMITER, fin.read())
     for dat in fdata[1:]:
-        dat0 = dat[:20].split()
+        dat0 = dat.split(None, 1)
         if dat0 and dat0[0] == symb:
             # remove blank lines
             return [x.strip() for x in dat.splitlines()

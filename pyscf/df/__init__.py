@@ -22,6 +22,6 @@ from .df import DF, DF4C
 
 from . import r_incore
 
-def density_fit(obj):
+def density_fit(obj, *args, **kwargs):
     '''Given object, apply density fitting to replace the default 2e integrals.'''
-    return obj.density_fit()
+    return obj.density_fit(*args, **kwargs)

@@ -46,23 +46,36 @@ def load_ecp(basisfile, symb):
 
 BASIS_SET_DELIMITER = re.compile('# *BASIS SET.*\n')
 def search_seg(basisfile, symb):
+    from pyscf.gto.mole import _std_symbol
+    symb = _std_symbol(symb)
     with open(basisfile, 'r') as fin:
         fdata = re.split(BASIS_SET_DELIMITER, fin.read())
     for dat in fdata[1:]:
-        dat0 = dat[:20].split()
-        if dat0 and dat0[0].upper() == symb.upper():
-            return [x for x in dat.splitlines() if x and 'END' not in x]
+        dat0 = dat.split(None, 1)
+        if dat0 and dat0[0] == symb:
+            return [x.upper() for x in dat.splitlines()
+                    if x and 'END' not in x]
     return []
 
-ECP_DELIMITER = re.compile('# *ECP.*\n')
+ECP_DELIMITER = re.compile('\n *ECP *\n')
 def search_ecp(basisfile, symb):
+    from pyscf.gto.mole import _std_symbol
+    symb = _std_symbol(symb)
     with open(basisfile, 'r') as fin:
         fdata = re.split(ECP_DELIMITER, fin.read())
-    for dat in fdata[1:]:
-        dat0 = dat[:20].split()
-        if dat0 and dat0[0].upper() == symb.upper():
-            return [x for x in dat.splitlines() if x and 'END' not in x]
+    fdata = fdata[1].splitlines()
+    for i, dat in enumerate(fdata):
+        if dat.split(None, 1)[0] == symb:
+            break
+    seg = []
+    for dat in fdata[i:]:
+        dat = dat.strip().upper()
+        if ((dat[0].isalpha() and dat.split(None, 1)[0] != symb.upper())):
+            return seg
+        elif dat: # remove blank lines
+            seg.append(dat)
     return []
+
 
 def convert_basis_to_nwchem(symb, basis):
     '''Convert the internal basis format to NWChem format string'''
@@ -142,7 +155,7 @@ def _parse_ecp(raw_ecp):
     nelec = None
     for line in raw_ecp:
         dat = line.strip()
-        if dat.startswith('#'): # comment line
+        if not dat or dat.startswith('#'): # comment line
             continue
         elif dat[0].isalpha():
             key = dat.split()[1]
