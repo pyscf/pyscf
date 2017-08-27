@@ -67,44 +67,28 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpt=None):
     return dm
 
 
-class UHF(mol_uhf.UHF, pbchf.RHF):
+class UHF(mol_uhf.UHF, pbchf.SCF):
     '''UHF class for PBCs.
     '''
     def __init__(self, cell, kpt=np.zeros(3), exxdiv='ewald'):
-        from pyscf.pbc import df
-        self.cell = cell
-        mol_uhf.UHF.__init__(self, cell)
-
-        self.with_df = df.FFTDF(cell)
-        self.exxdiv = exxdiv
-        self.kpt = kpt
-        self.direct_scf = False
-
-        self._keys = self._keys.union(['cell', 'exxdiv', 'with_df'])
-
-    @property
-    def kpt(self):
-        return self.with_df.kpts.reshape(3)
-    @kpt.setter
-    def kpt(self, x):
-        self.with_df.kpts = np.reshape(x, (-1,3))
+        pbchf.SCF.__init__(self, cell, kpt, exxdiv)
+        n_b = (cell.nelectron - cell.spin) // 2
+        self.nelec = (cell.nelectron-n_b, n_b)
+        self._keys = self._keys.union(['nelec'])
 
     def dump_flags(self):
-        mol_uhf.UHF.dump_flags(self)
-        pbchf.RHF.dump_flags(self)
+        pbchf.SCF.dump_flags(self)
+        logger.info(self, 'number electrons alpha = %d  beta = %d', *self.nelec)
         return self
 
-    def check_sanity(self):
-        return pbchf.RHF.check_sanity(self)
-
-    get_hcore = pbchf.RHF.get_hcore
-    get_ovlp = pbchf.RHF.get_ovlp
-    get_jk = pbchf.RHF.get_jk
-    get_j = pbchf.RHF.get_j
-    get_k = pbchf.RHF.get_k
-    get_jk_incore = pbchf.RHF.get_jk_incore
-    energy_tot = pbchf.RHF.energy_tot
-    get_bands = pbchf.get_bands
+    check_sanity = pbchf.SCF.check_sanity
+    get_hcore = pbchf.SCF.get_hcore
+    get_ovlp = pbchf.SCF.get_ovlp
+    get_jk = pbchf.SCF.get_jk
+    get_j = pbchf.SCF.get_j
+    get_k = pbchf.SCF.get_k
+    get_jk_incore = pbchf.SCF.get_jk_incore
+    energy_tot = pbchf.SCF.energy_tot
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell
@@ -135,18 +119,12 @@ class UHF(mol_uhf.UHF, pbchf.RHF):
         if chk is None: chk = self.chkfile
         if kpt is None: kpt = self.kpt
         return init_guess_by_chkfile(self.cell, chk, project, kpt)
-    def from_chk(self, chk=None, project=True, kpt=None):
-        return self.init_guess_by_chkfile(chk, project, kpt)
 
-    dump_chk = pbchf.RHF.dump_chk
-    _is_mem_enough = pbchf.RHF._is_mem_enough
+    dump_chk = pbchf.SCF.dump_chk
+    _is_mem_enough = pbchf.SCF._is_mem_enough
 
-    def density_fit(self, auxbasis=None, gs=None):
-        return pbchf.RHF.density_fit(self, auxbasis, gs)
-
+    density_fit = pbchf.SCF.density_fit
     # mix_density_fit inherits from hf.RHF.mix_density_fit
 
-    def stability(self, internal=True, external=False, verbose=None):
-        from pyscf.pbc.scf.stability import uhf_stability
-        return uhf_stability(self, internal, external, verbose)
+    x2c1e = pbchf.SCF.x2c1e
 

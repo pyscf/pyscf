@@ -164,18 +164,27 @@ class FFTDF(lib.StreamObject):
         logger.info(self, 'gs = %s', self.gs)
         logger.info(self, 'len(kpts) = %d', len(self.kpts))
         logger.debug1(self, '    kpts = %s', self.kpts)
-        self.check_sanity()
         return self
 
     def check_sanity(self):
         lib.StreamObject.check_sanity(self)
         cell = self.cell
-        if cell.dimension == 0:
-            return self
+        if cell.dimension < 3:
+            raise RuntimeError('FFTDF method does not support low-dimensional '
+                               'PBC system.  DF, MDF or AFTDF methods should '
+                               'be used.\nSee also examples/pbc/31-low_dimensional_pbc.py')
+
+        if not cell.has_ecp():
+            logger.warn(self, 'FFTDF integrals are found in all-electron '
+                        'calculation.  It often causes huge error.\n'
+                        'Recommended methods are DF or MDF. In SCF calculation, '
+                        'they can be initialized as\n'
+                        '        mf = mf.density_fit()\nor\n'
+                        '        mf = mf.mix_density_fit()')
 
         if cell.ke_cutoff is None:
             ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), self.gs)
-            ke_cutoff = ke_cutoff[:cell.dimension].min()
+            ke_cutoff = ke_cutoff.min()
         else:
             ke_cutoff = numpy.min(cell.ke_cutoff)
         ke_guess = estimate_ke_cutoff(cell, cell.precision)

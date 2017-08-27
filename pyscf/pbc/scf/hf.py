@@ -212,8 +212,8 @@ def dot_eri_dm(eri, dm, hermi=0):
     return vj, vk
 
 
-class RHF(hf.RHF):
-    '''RHF class adapted for PBCs.
+class SCF(hf.SCF):
+    '''SCF class adapted for PBCs.
 
     Attributes:
         kpt : (3,) ndarray
@@ -234,7 +234,7 @@ class RHF(hf.RHF):
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()
         self.cell = cell
-        hf.RHF.__init__(self, cell)
+        hf.SCF.__init__(self, cell)
 
         self.with_df = df.FFTDF(cell)
         self.exxdiv = exxdiv
@@ -251,7 +251,7 @@ class RHF(hf.RHF):
         self.with_df.kpts = np.reshape(x, (-1,3))
 
     def dump_flags(self):
-        hf.RHF.dump_flags(self)
+        hf.SCF.dump_flags(self)
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'kpt = %s', self.kpt)
         logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
@@ -266,13 +266,8 @@ class RHF(hf.RHF):
         return self
 
     def check_sanity(self):
-        hf.RHF.check_sanity(self)
-        if not self.cell.has_ecp() and not isinstance(self.with_df, df.df.DF):
-            logger.warn(self, 'FFTDF integrals are found in all-electron '
-                        'calculation.  It often causes huge error.\n'
-                        'Recommended integral methods are DF or MDF.\n'
-                        '        mf = mf.density_fit()\nor\n'
-                        '        mf = mf.mix_density_fit()')
+        hf.SCF.check_sanity(self)
+        self.with_df.check_sanity()
         if (isinstance(self.exxdiv, str) and self.exxdiv.lower() != 'ewald' and
             isinstance(self.with_df, df.df.DF)):
             logger.warn(self, 'exxdiv %s is not supported in DF or MDF',
@@ -387,7 +382,7 @@ class RHF(hf.RHF):
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell
-        dm = hf.RHF.get_init_guess(self, cell, key)
+        dm = hf.SCF.get_init_guess(self, cell, key)
         if cell.dimension < 3:
             ne = np.einsum('ij,ji', dm, self.get_ovlp(cell))
             if abs(ne - cell.nelectron).sum() > 1e-7:
@@ -405,7 +400,7 @@ class RHF(hf.RHF):
         if cell.dimension < 3:
             logger.warn(self, 'Hcore initial guess is not recommended in '
                         'the SCF of low-dimensional systems.')
-        return hf.RHF.init_guess_by_1e(cell)
+        return hf.SCF.init_guess_by_1e(cell)
 
     def init_guess_by_chkfile(self, chk=None, project=True, kpt=None):
         if chk is None: chk = self.chkfile
@@ -415,7 +410,7 @@ class RHF(hf.RHF):
         return self.init_guess_by_chkfile(chk, project, kpt)
 
     def dump_chk(self, envs):
-        hf.RHF.dump_chk(self, envs)
+        hf.SCF.dump_chk(self, envs)
         if self.chkfile:
             with h5py.File(self.chkfile) as fh5:
                 fh5['scf/kpt'] = self.kpt
@@ -430,12 +425,15 @@ class RHF(hf.RHF):
         return mem_need + lib.current_memory()[0] < self.max_memory*.95
 
     def density_fit(self, auxbasis=None, with_df=None):
-        from pyscf.df.addons import aug_etb
         from pyscf.pbc.df import df_jk
         return df_jk.density_fit(self, auxbasis, with_df)
 
     def mix_density_fit(self, auxbasis=None, with_df=None):
-        from pyscf.df.addons import aug_etb
         from pyscf.pbc.df import mdf_jk
         return mdf_jk.density_fit(self, auxbasis, with_df)
 
+    def x2c1e(self):
+        from pyscf.pbc.scf import x2c
+        return x2c.sfx2c1e(self)
+
+RHF = SCF

@@ -15,8 +15,8 @@ from functools import reduce
 import numpy as np
 import scipy.linalg
 import h5py
-from pyscf.scf import hf
-from pyscf.scf import uhf
+from pyscf.scf import hf as mol_hf
+from pyscf.scf import uhf as mol_uhf
 from pyscf.pbc.scf import khf
 from pyscf import lib
 from pyscf.lib import logger
@@ -60,9 +60,9 @@ def get_fock(mf, h1e_kpts, s_kpts, vhf_kpts, dm_kpts, cycle=-1, diis=None,
     if diis and cycle >= diis_start_cycle:
         f_kpts = diis.update(s_kpts, dm_kpts, f_kpts, mf, h1e_kpts, vhf_kpts)
     if abs(level_shift_factor) > 1e-4:
-        f_kpts =([hf.level_shift(s, dm_kpts[0,k], f_kpts[0,k], shifta)
+        f_kpts =([mol_hf.level_shift(s, dm_kpts[0,k], f_kpts[0,k], shifta)
                   for k, s in enumerate(s_kpts)],
-                 [hf.level_shift(s, dm_kpts[1,k], f_kpts[1,k], shiftb)
+                 [mol_hf.level_shift(s, dm_kpts[1,k], f_kpts[1,k], shiftb)
                   for k, s in enumerate(s_kpts)])
     return lib.asarray(f_kpts)
 
@@ -157,7 +157,7 @@ def mulliken_meta(cell, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
     dm_b = reduce(np.dot, (c_inv, dm_ao_gamma[1], c_inv.T.conj()))
 
     log.note(' ** Mulliken pop alpha/beta on meta-lowdin orthogonal AOs **')
-    return uhf.mulliken_pop(cell, (dm_a,dm_b), np.eye(orth_coeff.shape[0]), log)
+    return mol_uhf.mulliken_pop(cell, (dm_a,dm_b), np.eye(orth_coeff.shape[0]), log)
 
 
 def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
@@ -267,38 +267,24 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
     return dm
 
 
-class KUHF(uhf.UHF, khf.KRHF):
+class KUHF(mol_uhf.UHF, khf.KSCF):
     '''UHF class with k-point sampling.
     '''
     def __init__(self, cell, kpts=np.zeros((1,3)), exxdiv='ewald'):
-        self.cell = cell
-        uhf.UHF.__init__(self, cell)
-
-        self.with_df = df.FFTDF(cell)
-        self.exxdiv = exxdiv
-        self.kpts = kpts
-        self.direct_scf = False
-
-        self.exx_built = False
-        self._keys = self._keys.union(['cell', 'exx_built', 'exxdiv', 'with_df'])
-
-    @property
-    def kpts(self):
-        return self.with_df.kpts
-    @kpts.setter
-    def kpts(self, x):
-        self.with_df.kpts = np.reshape(x, (-1,3))
+        khf.KSCF.__init__(self, cell, kpts, exxdiv)
+        n_b = (cell.nelectron - cell.spin) // 2
+        self.nelec = (cell.nelectron-n_b, n_b)
+        self._keys = self._keys.union(['nelec'])
 
     def dump_flags(self):
-        uhf.UHF.dump_flags(self)
-        khf.KRHF.dump_flags(self)
+        khf.KSCF.dump_flags(self)
+        logger.info(self, 'number electrons alpha = %d  beta = %d', *self.nelec)
         return self
 
-    def check_sanity(self):
-        return khf.KRHF.check_sanity(self)
+    check_sanity = khf.KSCF.check_sanity
 
     def build(self, cell=None):
-        uhf.UHF.build(self, cell)
+        mol_uhf.UHF.build(self, cell)
         #if self.exxdiv == 'vcut_ws':
         #    self.precompute_exx()
 
@@ -350,14 +336,13 @@ class KUHF(uhf.UHF, khf.KRHF):
         if cell.dimension < 3:
             logger.warn(self, 'Hcore initial guess is not recommended in '
                         'the SCF of low-dimensional systems.')
-        return uhf.UHF.init_guess_by_1e(cell)
+        return mol_uhf.UHF.init_guess_by_1e(cell)
 
-    get_hcore = khf.KRHF.get_hcore
-    get_ovlp = khf.KRHF.get_ovlp
-    get_jk = khf.KRHF.get_jk
-    get_j = khf.KRHF.get_j
-    get_k = khf.KRHF.get_k
-
+    get_hcore = khf.KSCF.get_hcore
+    get_ovlp = khf.KSCF.get_ovlp
+    get_jk = khf.KSCF.get_jk
+    get_j = khf.KSCF.get_j
+    get_k = khf.KSCF.get_k
     get_fock = get_fock
     get_occ = get_occ
     energy_elec = energy_elec
@@ -393,8 +378,8 @@ class KUHF(uhf.UHF, khf.KRHF):
         return np.hstack(grad_kpts)
 
     def eig(self, h_kpts, s_kpts):
-        e_a, c_a = khf.KRHF.eig(self, h_kpts[0], s_kpts)
-        e_b, c_b = khf.KRHF.eig(self, h_kpts[1], s_kpts)
+        e_a, c_a = khf.KSCF.eig(self, h_kpts[0], s_kpts)
+        e_b, c_b = khf.KSCF.eig(self, h_kpts[1], s_kpts)
         return (e_a,e_b), (c_a,c_b)
 
     def make_rdm1(self, mo_coeff_kpts=None, mo_occ_kpts=None):
@@ -422,8 +407,8 @@ class KUHF(uhf.UHF, khf.KRHF):
         fock = self.get_hcore(cell, kpts_band)
         fock = fock + self.get_veff(cell, dm_kpts, kpts=kpts, kpts_band=kpts_band)
         s1e = self.get_ovlp(cell, kpts_band)
-        e_a, c_a = khf.KRHF.eig(self, fock[0], s1e)
-        e_b, c_b = khf.KRHF.eig(self, fock[1], s1e)
+        e_a, c_a = khf.KSCF.eig(self, fock[0], s1e)
+        e_b, c_b = khf.KSCF.eig(self, fock[1], s1e)
         if single_kpt_band:
             e_a = e_a[0]
             e_b = e_b[0]
@@ -435,15 +420,6 @@ class KUHF(uhf.UHF, khf.KRHF):
         if chk is None: chk = self.chkfile
         if kpts is None: kpts = self.kpts
         return init_guess_by_chkfile(self.cell, chk, project, kpts)
-    def from_chk(self, chk=None, project=True, kpts=None):
-        return self.init_guess_by_chkfile(chk, project, kpts)
-
-    def dump_chk(self, envs):
-        uhf.UHF.dump_chk(self, envs)
-        if self.chkfile:
-            with h5py.File(self.chkfile) as fh5:
-                fh5['scf/kpts'] = self.kpts
-        return self
 
     def mulliken_meta(self, cell=None, dm=None, verbose=logger.DEBUG,
                       pre_orth_method='ANO', s=None):
@@ -453,7 +429,7 @@ class KUHF(uhf.UHF, khf.KRHF):
         return mulliken_meta(cell, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
-    @lib.with_doc(uhf.spin_square.__doc__)
+    @lib.with_doc(mol_uhf.spin_square.__doc__)
     def spin_square(self, mo_coeff=None, s=None):
         '''Treating the k-point sampling wfn as a giant Slater determinant,
         the spin_square value is the <S^2> of the giant determinant.
@@ -480,10 +456,17 @@ class KUHF(uhf.UHF, khf.KRHF):
 
     canonicalize = canonicalize
 
-    def density_fit(self, auxbasis=None, gs=None):
-        return khf.KRHF.density_fit(self, auxbasis, gs)
+    dump_chk = khf.KSCF.dump_chk
 
-    # mix_density_fit inherits from khf.KRHF.mix_density_fit
+    density_fit = khf.KSCF.density_fit
+    # mix_density_fit inherits from khf.KSCF.mix_density_fit
+
+    newton = khf.KSCF.newton
+    x2c1e = khf.KSCF.x2c1e
+
+    def stability(self, internal=True, external=False, verbose=None):
+        from pyscf.pbc.scf.stability import uhf_stability
+        return uhf_stability(self, internal, external, verbose)
 
 
 if __name__ == '__main__':

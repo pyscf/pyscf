@@ -213,28 +213,47 @@ class AFTDF(lib.StreamObject):
         logger.info(self, 'eta = %s', self.eta)
         logger.info(self, 'len(kpts) = %d', len(self.kpts))
         logger.debug1(self, '    kpts = %s', self.kpts)
-        self.check_sanity()
         return self
 
     def check_sanity(self):
         lib.StreamObject.check_sanity(self)
         cell = self.cell
-        if cell.dimension == 0:
-            return self
+        if not cell.has_ecp():
+            logger.warn(self, 'FFTDF integrals are found in all-electron '
+                        'calculation.  It often causes huge error.\n'
+                        'Recommended methods are DF or MDF. In SCF calculation, '
+                        'they can be initialized as\n'
+                        '        mf = mf.density_fit()\nor\n'
+                        '        mf = mf.mix_density_fit()')
 
-        if cell.ke_cutoff is None:
-            ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), self.gs)
-            ke_cutoff = ke_cutoff[:cell.dimension].min()
+        if cell.dimension > 0:
+            if cell.ke_cutoff is None:
+                ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), self.gs)
+                ke_cutoff = ke_cutoff[:cell.dimension].min()
+            else:
+                ke_cutoff = numpy.min(cell.ke_cutoff)
+            ke_guess = estimate_ke_cutoff(cell, cell.precision)
+            if ke_cutoff < ke_guess*.8:
+                gs_guess = tools.cutoff_to_gs(cell.lattice_vectors(), ke_guess)
+                logger.warn(self, 'ke_cutoff/gs (%g / %s) is not enough for FFTDF '
+                            'to get integral accuracy %g.\nCoulomb integral error '
+                            'is ~ %.2g Eh.\nRecomended ke_cutoff/gs are %g / %s.',
+                            ke_cutoff, self.gs, cell.precision,
+                            error_for_ke_cutoff(cell, ke_cutoff), ke_guess, gs_guess)
         else:
-            ke_cutoff = numpy.min(cell.ke_cutoff)
-        ke_guess = estimate_ke_cutoff(cell, cell.precision)
-        if ke_cutoff < ke_guess*.8:
-            gs_guess = tools.cutoff_to_gs(cell.lattice_vectors(), ke_guess)
-            logger.warn(self, 'ke_cutoff/gs (%g / %s) is not enough for FFTDF '
-                        'to get integral accuracy %g.\nCoulomb integral error '
-                        'is ~ %.2g Eh.\nRecomended ke_cutoff/gs are %g / %s.',
-                        ke_cutoff, self.gs, cell.precision,
-                        error_for_ke_cutoff(cell, ke_cutoff), ke_guess, gs_guess)
+            gs_guess = numpy.copy(self.gs)
+
+        if cell.dimension < 3:
+            err = numpy.exp(-0.87278467*min(self.gs[cell.dimension:]) - 2.99944305)
+            err *= cell.nelectron
+            if err > cell.precision*10:
+                gz = numpy.log(cell.nelectron/cell.precision)/0.8727847-3.4366358
+                gs_guess[cell.dimension:] = int(gz)
+                logger.warn(self, 'gs %s of AFTDF may not be enough to get '
+                            'integral accuracy %g for %dD PBC system.\n'
+                            'Coulomb integral error is ~ %.2g Eh.\n'
+                            'Recomended gs is %s.',
+                            self.gs, cell.precision, cell.dimension, err, gs_guess)
         return self
 
     def pw_loop(self, gs=None, kpti_kptj=None, q=None, shls_slice=None,

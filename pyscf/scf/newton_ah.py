@@ -20,7 +20,7 @@ from pyscf.lib import logger
 from pyscf.scf import chkfile
 from pyscf.scf import addons
 from pyscf.scf import hf_symm, uhf_symm
-from pyscf.scf import hf, uhf
+from pyscf.scf import hf, rohf, uhf
 
 # http://scicomp.stackexchange.com/questions/1234/matrix-exponential-of-a-skew-hermitian-matrix-with-fortran-95-and-lapack
 def expmat(a):
@@ -244,7 +244,7 @@ def gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
 def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                       singlet=None, hermi=0, max_memory=None):
     from pyscf.dft import numint
-    assert(isinstance(mf, hf.RHF))
+    assert(not isinstance(mf, (uhf.UHF, rohf.ROHF)))
 
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
@@ -699,7 +699,6 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
 def newton_SCF_class(mf):
     '''Generate the CIAH base class
     '''
-    from pyscf import scf
     if mf.__class__.__doc__ is None:
         doc = ''
     else:
@@ -841,7 +840,7 @@ def newton_SCF_class(mf):
         gen_g_hop = gen_g_hop_rhf
 
         def update_rotate_matrix(self, dx, mo_occ, u0=1):
-            dr = scf.hf.unpack_uniq_var(dx, mo_occ)
+            dr = hf.unpack_uniq_var(dx, mo_occ)
             return numpy.dot(u0, expmat(dr))
 
         def rotate_mo(self, mo_coeff, u, log=None):
@@ -872,7 +871,7 @@ def newton(mf):
             return gen_g_hop_rhf(self, mo_coeff, mo_occ, fock_ao, h1e)
 
         def update_rotate_matrix(self, dx, mo_occ, u0=1):
-            dr = scf.hf.unpack_uniq_var(dx, mo_occ)
+            dr = hf.unpack_uniq_var(dx, mo_occ)
             return numpy.dot(u0, expmat(dr))
 
         def rotate_mo(self, mo_coeff, u, log=None):
@@ -887,7 +886,7 @@ def newton(mf):
                           _effective_svd(u[idx][:,idx], 1e-5))
             return mo
 
-    if isinstance(mf, scf.rohf.ROHF):
+    if isinstance(mf, rohf.ROHF):
         class ROHF(RHF):
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 return gen_g_hop_rohf(self, mo_coeff, mo_occ, fock_ao, h1e)
@@ -903,14 +902,14 @@ def newton(mf):
 
             def eig(self, fock, s1e):
                 f = (self._focka_ao, self._fockb_ao)
-                f = scf.rohf.get_roothaan_fock(f, self._dm_ao, s1e)
+                f = rohf.get_roothaan_fock(f, self._dm_ao, s1e)
                 return self._scf.eig(f, s1e)
                 #fc = numpy.dot(fock[0], mo_coeff)
                 #mo_energy = numpy.einsum('pk,pk->k', mo_coeff, fc)
                 #return mo_energy
         return ROHF()
 
-    elif isinstance(mf, scf.uhf.UHF):
+    elif isinstance(mf, uhf.UHF):
         class UHF(SCF):
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 return gen_g_hop_uhf(self, mo_coeff, mo_occ, fock_ao, h1e)

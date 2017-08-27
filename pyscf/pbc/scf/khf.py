@@ -286,8 +286,8 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
     return dm[0] + dm[1]
 
 
-class KRHF(hf.RHF):
-    '''RHF class with k-point sampling.
+class KSCF(hf.SCF):
+    '''SCF class with k-point sampling.
 
     Compared to molecular SCF, some members such as mo_coeff, mo_occ
     now have an additional first dimension for the k-points,
@@ -302,7 +302,7 @@ class KRHF(hf.RHF):
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()
         self.cell = cell
-        hf.RHF.__init__(self, cell)
+        hf.SCF.__init__(self, cell)
 
         self.with_df = df.FFTDF(cell)
         self.exxdiv = exxdiv
@@ -332,7 +332,7 @@ class KRHF(hf.RHF):
         return self.mo_occ
 
     def dump_flags(self):
-        hf.RHF.dump_flags(self)
+        hf.SCF.dump_flags(self)
         logger.info(self, '\n')
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'N kpts = %d', len(self.kpts))
@@ -353,13 +353,8 @@ class KRHF(hf.RHF):
         return self
 
     def check_sanity(self):
-        hf.RHF.check_sanity(self)
-        if not self.cell.has_ecp() and not isinstance(self.with_df, df.df.DF):
-            logger.warn(self, 'FFTDF integrals are found in all-electron '
-                        'calculation.  It often causes huge error.\n'
-                        'Recommended integral methods are DF or MDF.\n'
-                        '        mf = mf.density_fit()\nor\n'
-                        '        mf = mf.mix_density_fit()')
+        hf.SCF.check_sanity(self)
+        self.with_df.check_sanity()
         if (isinstance(self.exxdiv, str) and self.exxdiv.lower() != 'ewald' and
             isinstance(self.with_df, df.df.DF)):
             logger.warn(self, 'exxdiv %s is not supported in DF or MDF',
@@ -367,7 +362,7 @@ class KRHF(hf.RHF):
         return self
 
     def build(self, cell=None):
-        hf.RHF.build(self, cell)
+        hf.SCF.build(self, cell)
         #if self.exxdiv == 'vcut_ws':
         #    self.precompute_exx()
 
@@ -412,7 +407,7 @@ class KRHF(hf.RHF):
         if cell.dimension < 3:
             logger.warn(self, 'Hcore initial guess is not recommended in '
                         'the SCF of low-dimensional systems.')
-        return hf.RHF.init_guess_by_1e(cell)
+        return hf.SCF.init_guess_by_1e(cell)
 
     def get_hcore(self, cell=None, kpts=None):
         if cell is None: cell = self.cell
@@ -534,7 +529,7 @@ class KRHF(hf.RHF):
         return self.init_guess_by_chkfile(chk, project, kpts)
 
     def dump_chk(self, envs):
-        hf.RHF.dump_chk(self, envs)
+        hf.SCF.dump_chk(self, envs)
         if self.chkfile:
             with h5py.File(self.chkfile) as fh5:
                 fh5['scf/kpts'] = self.kpts
@@ -551,18 +546,26 @@ class KRHF(hf.RHF):
     canonicalize = canonicalize
 
     def density_fit(self, auxbasis=None, with_df=None):
-        from pyscf.df.addons import aug_etb
         from pyscf.pbc.df import df_jk
         return df_jk.density_fit(self, auxbasis, with_df)
 
     def mix_density_fit(self, auxbasis=None, with_df=None):
-        from pyscf.df.addons import aug_etb
         from pyscf.pbc.df import mdf_jk
         return mdf_jk.density_fit(self, auxbasis, with_df)
 
     def stability(self, internal=True, external=False, verbose=None):
         from pyscf.pbc.scf.stability import rhf_stability
         return rhf_stability(self, internal, external, verbose)
+
+    def newton(self):
+        from pyscf.pbc.scf import newton_ah
+        return newton_ah.newton(self)
+
+    def x2c1e(self):
+        from pyscf.pbc.scf import x2c
+        return x2c.sfx2c1e(self)
+
+KRHF = KSCF
 
 
 if __name__ == '__main__':

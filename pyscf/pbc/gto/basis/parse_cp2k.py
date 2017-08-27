@@ -5,6 +5,8 @@
 # parse CP2K format
 #
 
+import re
+
 MAXL = 8
 
 def parse(string):
@@ -52,7 +54,8 @@ def search_seg(basisfile, symb):
         dat0 = dat[:20].split()
         if dat0 and dat0[0] == symb:
             # remove blank lines
-            return [x.strip() for x in dat.splitlines()[1:]
+            return [x.strip() for x in dat.splitlines()
                     if x.strip() and 'END' not in x]
     raise RuntimeError('Basis not found for  %s  in  %s' % (symb, basisfile))
+
 
