@@ -25,3 +25,7 @@ def div_eigenenergy_numba(ksn2e, ksn2f, nfermi, vstart, comega, nm2v, ksn2e_dim)
             m = j - vstart
             nm2v[n,m] = nm2v[n,m] * (fn-fm) * ( 1.0 / (comega - (em - en)) - 1.0 /\
                     (comega + (em - en)) )
+
+@nb.jit(nopython=True)
+def mat_mul_numba(a, b):
+    return a*b

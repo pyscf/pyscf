@@ -40,24 +40,18 @@ class tddft_iter_c():
     self.tddft_iter_tol = tddft_iter_tol
     self.eps = tddft_iter_broadening
     self.sv, self.pb, self.norbs, self.nspin = sv, pb, sv.norbs, sv.nspin
-    #print('before vertex_coo')
     self.v_dab = pb.get_dp_vertex_coo(dtype=np.float32).tocsr()
-    #print('before conversion coefficients coo')
     self.cc_da = pb.get_da2cc_coo(dtype=np.float32).tocsr()
-    #print('before moments')
     self.moms0,self.moms1 = pb.comp_moments(dtype=np.float32)
     self.nprod = self.moms0.size
-    #print('before kernel')
     t1 = timer()
     self.kernel = pb.comp_coulomb_den(dtype=np.float32)
     t2 = timer()
-    print("Time Hartree kernel: ", t2-t1)
+    #print("Time Hartree kernel: ", t2-t1)
 
-    #print("en first part")
     if xc_code.upper()!='RPA' :
       dm = comp_dm(sv.wfsx.x, sv.get_occupations())
       self.kernel = self.kernel + pb.comp_fxc_lil(dm, xc_code, dtype=np.float32).todense()
-    #print("end kernel")
 
     self.telec = sv.hsx.telec if telec is None else telec
     self.nelec = sv.hsx.nelec if nelec is None else nelec
@@ -68,7 +62,6 @@ class tddft_iter_c():
     self.ksn2f = (3-self.nspin)*ksn2fd
     self.nfermi = np.argmax(ksn2fd[0,0,:]<nfermi_tol)
     self.vstart = np.argmax(1.0-ksn2fd[0,0,:]>nfermi_tol)
-    #print('before xocc, xvrt')
     self.xocc = self.x[0,0,0:self.nfermi,:,0]  # does python creates a copy at this point ?
     self.xvrt = self.x[0,0,self.vstart:,:,0]   # does python creates a copy at this point ?
     
@@ -99,6 +92,7 @@ class tddft_iter_c():
     """ This applies the non-interacting response function to a vector (a set of vectors?) """
     assert len(v)==len(self.moms0), "%r, %r "%(len(v), len(self.moms0))
     self.rf0_ncalls+=1
+    # np.require may perform a copy of v, is it really necessary??
     vdp = self.cc_da * np.require(v, dtype=np.complex64)
     no = self.norbs
     sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
@@ -116,47 +110,18 @@ class tddft_iter_c():
         ab2v = np.zeros([self.norbs*self.norbs], dtype=np.float32)
 
         libnao_gpu.calc_ab2v_imag(ab2v.ctypes.data_as(POINTER(c_float)))
-        #ab2v_imag = np.sum(abs(ab2v))
         vdp = 1j*self.v_dab*ab2v
 
         libnao_gpu.calc_ab2v_real(ab2v.ctypes.data_as(POINTER(c_float)))
-        #print("ab2v = ", np.sum(abs(ab2v)), ab2v_imag)
         vdp += self.v_dab*ab2v
 
-        # Reference!!
-        #print("Python Ref: ")
-        #nb2v = self.xocc*sab
-        #nm2v_ref = np.dot(nb2v, np.transpose(self.xvrt))
-        #print("sum(nm2v) = ", np.sum(abs(nm2v_ref.real)), np.sum(abs(nm2v_ref.imag)))
-        #print("check nm2v1: sum_gpu = {0}, sum_cpu = {1}, error =  {2}".format(np.sum(abs(nm2v_real)), np.sum(abs(nm2v_ref.real)), np.sum(abs(nm2v_ref.real - nm2v_real ))))
-        #for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
-        #    for j,[em,fm] in enumerate(zip(self.ksn2e[0,0,n+1:],self.ksn2f[0,0,n+1:])):
-        #        m = j+n+1-self.vstart
-        #        nm2v_ref[n,m] = nm2v_ref[n,m] * (fn - fm) * (( 1.0 / (comega - (em - en))) - (1.0 / (comega + (em - en)) ))
-        #print("after calc_XXVV: ")
-        #print("sum(nm2v) = ", np.sum(abs(nm2v_ref.real)), np.sum(abs(nm2v_ref.imag)))
-        #print("check nm2v2: sum_gpu = {0}, sum_cpu = {1}, error =  {2}".format(np.sum(abs(nm2v_real2)), np.sum(abs(nm2v_ref.real)), np.sum(abs(nm2v_ref.real - nm2v_real2 ))))
-        #np.savetxt("nm2v_ref.txt", nm2v_ref.real)
-        #nb2v = np.dot(nm2v_ref,self.xvrt)
-        #ab2v_ref = np.dot(np.transpose(self.xocc),nb2v).reshape(no*no)
-        #print("sum(ab2v) = ", np.sum(abs(ab2v_ref.real)), np.sum(abs(ab2v_ref.imag)))
-        ##np.savetxt("nb2v_output_cpu.txt", nb2v_real, fmt = "%10.6f")
-        ##np.savetxt("nb2v_output_cpu_ref.txt", nb2v.real, fmt = "%10.6f")
-        #print("final: sum(ab2_gpu): = ", np.sum(abs(ab2v.real)), np.sum(abs(ab2v.imag)))
-        #print("final :sum(ab2v_cpu): = ", np.sum(abs(ab2v_ref.real)), np.sum(abs(ab2v_ref.imag)))
-        #print("sum_gpu = {0}, sum_cpu = {1}, error =  {2}".format(np.sum(abs(ab2v.real)), np.sum(abs(ab2v_ref.real)), np.sum(abs(ab2v_ref.real - ab2v.real ))))
-        #print("error: ", np.sum(abs(ab2v_ref.reshape([self.norbs, self.norbs]) - ab2v.reshape([self.norbs, self.norbs]) )))
-
-        #sys.exit()
     else:
         #
         # WARNING!!!!
         # nb2v is column major, while self.xvrt is row major
         #       What a mess!!
         nb2v = self.xocc*sab
-        #nm2v_ref = np.dot(nb2v, np.transpose(self.xvrt))
         nm2v = blas.cgemm(1.0, nb2v, np.transpose(self.xvrt))
-        #print("error nm2v = ", np.sum(abs(nm2v_ref.real-nm2v.real)), np.sum(abs(nm2v_ref.imag-nm2v.imag)))
         
         if use_numba:
             div_eigenenergy_numba(self.ksn2e, self.ksn2f, self.nfermi,
@@ -168,15 +133,10 @@ class tddft_iter_c():
                 nm2v[n,m] = nm2v[n,m] * (fn-fm) *\
                   ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
 
-        #nb2v_ref = np.dot(nm2v,self.xvrt)
         nb2v = blas.cgemm(1.0, nm2v, self.xvrt)
 
-        #ab2v_ref = np.dot(np.transpose(self.xocc),nb2v).reshape(no*no)
         ab2v = blas.cgemm(1.0, np.transpose(self.xocc), nb2v).reshape(no*no)
 
-        #print("error nb2v = ", np.sum(abs(nb2v_ref-nb2v)))
-        #print("error ab2v = ", np.sum(abs(ab2v_ref-ab2v)))
-        #sys.exit()
         vdp = self.v_dab*ab2v
     res = vdp*self.cc_da
     return res
@@ -200,7 +160,6 @@ class tddft_iter_c():
     polariz = np.zeros_like(comegas, dtype=np.complex64)
     for iw,comega in enumerate(comegas):
       veff,info = self.comp_veff(self.moms1[:,0], comega)
-      #print(iw, info, veff.sum())
       polariz[iw] = np.dot(self.moms1[:,0], self.apply_rf0( veff, comega ))
 
     if self.GPU:

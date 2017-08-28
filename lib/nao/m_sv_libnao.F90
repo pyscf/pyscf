@@ -40,5 +40,4 @@ subroutine init_sv_libnao(dinp,ninp, size_x) bind(c, name='init_sv_libnao')
 
 end subroutine ! init_sv_libnao
 
-
 end module !m_sv_libnao

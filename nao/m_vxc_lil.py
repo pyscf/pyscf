@@ -23,7 +23,7 @@ def vxc_lil(sv, dm, xc_code, deriv, ao_log=None, dtype=float64, **kvargs):
   sp2rcut = array([max(mu2rcut) for mu2rcut in me.ao1.sp_mu2rcut])
   
   lil = lil_matrix((atom2s[-1],atom2s[-1]), dtype=dtype)
-  
+
   for atom1,[sp1,rv1,s1,f1] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
     for atom2,[sp2,rv2,s2,f2] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
       if (sp2rcut[sp1]+sp2rcut[sp2])**2<=sum((rv1-rv2)**2) : continue
