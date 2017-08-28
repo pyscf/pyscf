@@ -5,14 +5,16 @@ enable_language(Fortran)
 #include(arch.inc OPTIONAL)
 
 #set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
-IF( NOT CMAKE_BUILD_TYPE )
-  #SET( CMAKE_BUILD_TYPE Release ... FORCE )
-  set(CMAKE_C_FLAGS "-Wall -O2 -ffast-math")
-  set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS_RELEASE} ")
-  set(CMAKE_Fortran_FLAGS "-pedantic -O2 -Wall -ffree-line-length-0")
-ENDIF()
+if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
+  # using GCC
+  IF( NOT CMAKE_BUILD_TYPE )
+    #SET( CMAKE_BUILD_TYPE Release ... FORCE )
+    set(CMAKE_C_FLAGS "-Wall -O2 -ffast-math")
+    set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS_RELEASE} ")
+    set(CMAKE_Fortran_FLAGS "-pedantic -O2 -Wall -ffree-line-length-0")
+  ENDIF()
 
-if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
+
   set(CMAKE_C_FLAGS_DEBUG "-Wall -pg -O0")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} ")
   set(CMAKE_Fortran_FLAGS_DEBUG "-pedantic -pg -DDEBUG -O0 -fbounds-check -fbacktrace -Wall -ffree-line-length-0")
@@ -23,6 +25,24 @@ if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
   if(UNIX AND NOT APPLE)
     set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-as-needed")
   endif()
+
+elseif ("${CMAKE_C_COMPILER_ID}" STREQUAL "Intel")
+  # using Intel C++
+  IF( NOT CMAKE_BUILD_TYPE )
+    #SET( CMAKE_BUILD_TYPE Release ... FORCE )
+    set(CMAKE_C_FLAGS "-O3 ")
+    set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS_RELEASE} ")
+    set(CMAKE_Fortran_FLAGS "-O3 ")
+  ENDIF()
+
+
+  set(CMAKE_C_FLAGS_DEBUG "-Wall -pg -O0")
+  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} ")
+  set(CMAKE_Fortran_FLAGS_DEBUG "-warn all -O0 -pg -CB -debug --DDEBUG -traceback -check -ftrapuv")
+
+  set(CMAKE_C_FLAGS_RELEASE "-O3 ")
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} ")
+  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 ")
 endif()
 
 set(CMAKE_MACOSX_RPATH OFF)
@@ -38,19 +58,18 @@ else()
     if (${DISABLE_AVX})
       find_library(BLAS_mkl_def_LIBRARY
         NAMES mkl_def
-        PATHS ENV;LD_LIBRARY_PATH)
+          PATHS ENV;LD_LIBRARY_PATH)
       set(BLAS_LIBRARIES ${BLAS_LIBRARIES};${BLAS_mkl_def_LIBRARY})
     else()
       find_library(BLAS_mkl_avx_LIBRARY
-        NAMES mkl_avx
-        PATHS ENV;LD_LIBRARY_PATH)
-      set(BLAS_LIBRARIES ${BLAS_LIBRARIES};${BLAS_mkl_avx_LIBRARY})
+          NAMES mkl_avx
+                PATHS ENV;LD_LIBRARY_PATH)
+            set(BLAS_LIBRARIES ${BLAS_LIBRARIES};${BLAS_mkl_avx_LIBRARY})
     endif()
   endif()
 endif()
-message("BLAS libraries: ${BLAS_LIBRARIES}")
 # if unable to find mkl library, just create BLAS_LIBRARIES here, e.g.
-# set(BLAS_LIBRARIES "-L/path/to/mkl/lib -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lmkl_avx -lm")
+#set(BLAS_LIBRARIES "-L/opt/intel/mkl/lib/intel64/ -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lmkl_avx -lm")
 # or
 # set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_intel_lp64.so")
 # set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_sequential.so")
@@ -59,6 +78,7 @@ message("BLAS libraries: ${BLAS_LIBRARIES}")
 # set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_def.so")
 
 # set(BLAS_LIBRARIES "-Wl,-rpath=${MKLROOT}/lib/intel64/ ${BLAS_LIBRARIES}")
+message("BLAS libraries: ${BLAS_LIBRARIES}")
 
 include(FortranCInterface)
 FortranCInterface_HEADER(FC.h MACRO_NAMESPACE “FC_”)
@@ -87,6 +107,16 @@ if(OPENMP_FOUND)
   set(HAVE_OPENMP 1)
 else ()
   set(OpenMP_C_FLAGS " ")
+endif()
+
+find_package(CUDA)
+if(CUDA_FOUND)
+  set(Cuda_LIB "-L/usr/local/cuda/lib64 -lcuda -lcudart -lcufft -lcublas -lcublas_device -lcudadevrt -lstdc++")
+  set(CUDA_PROPAGATE_HOST_FLAGS OFF)
+  set(CUDA_LINK_FLAGS "${OpenMP_C_FLAGS}")
+  set(ARCH_CUDA "-gencode arch=compute_35,code=sm_35 -gencode arch=compute_37,code=sm_37 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60 -gencode arch=compute_60,code=compute_60")
+  list(APPEND CUDA_NVCC_FLAGS ${ARCH_CUDA} "-O3; -Xcompiler -fopenmp -lgomp -lm")
+  set(CUDA_HOST_COMPILER gcc)
 endif()
 
 message("OpenMP: ${OPENMP_FOUND}")

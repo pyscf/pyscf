@@ -388,6 +388,7 @@ class prod_basis_c():
       for c,ls,lf in zip(inf.cc2a, inf.cc2s, inf.cc2s[1:]): nnz = nnz + (fd-sd)*(lf-ls)
     return nnz
 
+  # should we not keep only the sparse matrix and get rid of the original data ??
   def get_da2cc_coo(self, dtype=np.float64):
     """ Returns Conversion Coefficients as sparse COO matrix """
 

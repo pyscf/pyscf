@@ -5,7 +5,7 @@ module m_sv_libnao
   use m_die, only : die
   use m_warn, only : warn
   use m_system_vars, only : system_vars_t
-  use iso_c_binding, only: c_double, c_double_complex, c_int64_t
+  use iso_c_binding, only: c_double, c_double_complex, c_int64_t, c_int
  
   !use m_timing, only : get_cdatetime
   
@@ -21,22 +21,23 @@ module m_sv_libnao
 !
 ! 
 !
-subroutine init_sv_libnao(dinp,ninp) bind(c, name='init_sv_libnao')
+subroutine init_sv_libnao(dinp,ninp, size_x) bind(c, name='init_sv_libnao')
 
   use m_fact, only : init_fact
   use m_sv_get, only : sv_get
-  use m_system_vars, only : get_nr
+  use m_system_vars, only : get_nr, init_size_dft_wf_X
   implicit none
   !! external
   integer(c_int64_t), intent(in) :: ninp
+  integer(c_int), intent(in) :: size_x(1:5)
   real(c_double), intent(in) :: dinp(ninp)
   !! internal
 
   !! executable statements
   call init_fact()  !! Initializations for product reduction/spherical harmonics/wigner3j in Talman's way
   call sv_get(dinp,ninp, sv)
+  call init_size_dft_wf_X(size_x, sv)
 
 end subroutine ! init_sv_libnao
-
 
 end module !m_sv_libnao

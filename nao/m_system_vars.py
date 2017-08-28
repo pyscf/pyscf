@@ -92,6 +92,7 @@ class system_vars_c():
     self.atom2sp = [self.sp2charge.index(charge) for charge in atom2charge]
     self.natm=self.natoms=len(self.atom2sp)
     self.atom2s = None
+    self.nspin = 1
     self.state = 'should be useful for something'
     return self
 
@@ -430,15 +431,28 @@ class system_vars_c():
     if init_dens_libnao()!=0 : raise RuntimeError('init_dens_libnao()!=0')
     return dens_libnao(coords, self.nspin)
 
-  def init_libnao(self):
+  def init_libnao(self, wfsx=None):
     """ Initialization of data on libnao site """
     from pyscf.nao.m_libnao import libnao
     from pyscf.nao.m_sv_chain_data import sv_chain_data
-    from ctypes import POINTER, c_double, c_int64
-    data = sv_chain_data(self)
-    libnao.init_sv_libnao.argtypes = (POINTER(c_double), POINTER(c_int64))
-    libnao.init_sv_libnao(data.ctypes.data_as(POINTER(c_double)), c_int64(len(data)))
-    self.init_sv_libnao = True
+    from ctypes import POINTER, c_double, c_int64, c_int32
+
+    if wfsx is None:
+        data = sv_chain_data(self)
+        # (nkpoints, nspin, norbs, norbs, nreim)
+        size_x = np.array([1, self.nspin, self.norbs, self.norbs, 1], dtype=np.int32)
+        libnao.init_sv_libnao.argtypes = (POINTER(c_double), POINTER(c_int64), POINTER(c_int32))
+        libnao.init_sv_libnao(data.ctypes.data_as(POINTER(c_double)), c_int64(len(data)), size_x.ctypes.data_as(POINTER(c_int32)))
+        self.init_sv_libnao = True
+    else:
+        size_x = np.zeros(len(self.wfsx.x.shape), dtype=np.int32)
+        for i, sh in enumerate(self.wfsx.x.shape):
+            size_x[i] = sh
+
+        data = sv_chain_data(self)
+        libnao.init_sv_libnao.argtypes = (POINTER(c_double), POINTER(c_int64), POINTER(c_int32))
+        libnao.init_sv_libnao(data.ctypes.data_as(POINTER(c_double)), c_int64(len(data)), size_x.ctypes.data_as(POINTER(c_int32)))
+        self.init_sv_libnao = True
     return self
 
   def dens_elec_vec(self, coords, dm):

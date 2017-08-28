@@ -48,7 +48,7 @@ subroutine dens_libnao(c2xyz, nc, sc2dens, nspin) bind(c, name='dens_libnao')
   enddo 
   !$OMP END DO
   !$OMP END PARALLEL
-  
+
 end subroutine ! dens_libnao
 
 
