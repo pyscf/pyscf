@@ -149,6 +149,17 @@ Known problems
   https://github.com/h5py/h5py/archive/2.3.1.tar.gz
 
 
+* If you are using Intel compiler (version 16, 17), compilation may be stuck at
+```
+[ 95%] Building C object CMakeFiles/cint.dir/src/stg_roots.c.o
+```
+
+  This code is used by F12 integrals only.  If you do not need to use F12 methods,
+  the relevant compilation can be disabled, by searching `DWITH_F12` in file
+  lib/CMakeLists.txt  and setting it to `-DWITH_F12=0`.
+
+
+
 Citing PySCF
 ------------
 
