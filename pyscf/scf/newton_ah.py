@@ -669,6 +669,8 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
     if mf.canonicalization:
         log.info('Canonicalize SCF orbitals')
         mo_coeff = mo_coeff1
+        if dump_chk:
+            mf.dump_chk(locals())
     log.info('macro X = %d  E=%.15g  |g|= %g  total %d KF %d JK',
              imacro+1, e_tot, norm_gorb, kftot, jktot)
     if (numpy.any(mo_occ==0) and
