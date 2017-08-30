@@ -8,11 +8,11 @@ import numba as nb
 @nb.jit(nopython=True)
 def get_bessel_xjl_numba(kk, dist, j, nr):
     '''
-    Calculate spherical bessel functions in all k space
+    Calculate spherical bessel functions j_l(k*r) for a given r and on a grid of momentas k given by the array kk
     Args:
     kk : 1D array (float): k grid
-    dist : (float) distance between pairs??
-    j : (integer) angular momentum
+    r : (float) radial coordinate
+    l : (integer) angular momentum
     nr: (integer) k grid dimension
     Result:
     xj[1:2*j+1, 1:nr] : 2D array (float)
