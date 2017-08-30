@@ -57,7 +57,7 @@ class PyscfClean(Command):
 
     def run(self):
         assert os.getcwd() == self.cwd, 'Must be in package root: %s' % self.cwd
-        cmd = "rm -r build lib/build"
+        cmd = "rm -r build lib/build lib/*.so"
         subprocess.call(cmd, shell=True)
 
 class PyscfInstall(install):
