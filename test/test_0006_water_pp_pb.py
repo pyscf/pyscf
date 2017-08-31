@@ -28,13 +28,13 @@ class KnowValues(unittest.TestCase):
     
     emean = (abs(oref-over).sum()/(oref.size))
     emax  = (abs(oref-over).max())
-    self.assertAlmostEqual(emean, 0.000102115844911)
-    self.assertAlmostEqual(emax, 0.00182562129245)
+    self.assertAlmostEqual(emean, 0.000102115844911, 4)
+    self.assertAlmostEqual(emax, 0.00182562129245, 4)
 
     emean = (abs(dref-dipo).sum()/(dref.size))
     emax = (abs(dref-dipo).max())
-    self.assertAlmostEqual(emean, 0.000618731257284)
-    self.assertAlmostEqual(emax, 0.0140744946617)
+    self.assertAlmostEqual(emean, 0.000618731257284, 4)
+    self.assertAlmostEqual(emax, 0.0140744946617, 4)
     
 #    print(vden.shape)
 #    print(ccden.shape)

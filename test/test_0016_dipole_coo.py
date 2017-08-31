@@ -18,9 +18,9 @@ class KnowValues(unittest.TestCase):
     from pyscf.nao import system_vars_c
     sv = system_vars_c().init_pyscf_gto(mol)
     dipme = sv.dipole_coo()
-    self.assertAlmostEqual(dipme[0].sum(), 23.8167121803)
-    self.assertAlmostEqual(dipme[1].sum(), 18.9577251654)    
-    self.assertAlmostEqual(dipme[2].sum(), 48.1243277097)
+    self.assertAlmostEqual(dipme[0].sum(), 23.816263714841725)
+    self.assertAlmostEqual(dipme[1].sum(), 18.958562546276568)    
+    self.assertAlmostEqual(dipme[2].sum(), 48.124023241543377)
 
 if __name__ == "__main__":
   unittest.main()
