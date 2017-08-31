@@ -6,6 +6,7 @@ from timeit import default_timer as timer
 import sys
 
 try:
+    # try import gpu library
     from pyscf.nao.m_libnao import libnao_gpu
     from ctypes import POINTER, c_double, c_int64, c_float, c_int
     GPU_import = True
