@@ -235,7 +235,7 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
                 n_rad = _default_rad(chg, level)
                 n_ang = _default_ang(chg, level)
             rcut = kvargs['atom2rcut'][ia] if 'atom2rcut' in kvargs else None
-            if radi_method.func_name=='leggauss_ab': 
+            if radi_method.__name__=='leggauss_ab': 
               rad, dr = radi_method(n_rad, a=0.0, b=rcut)
             else:
               rad, dr = radi_method(n_rad, chg)
