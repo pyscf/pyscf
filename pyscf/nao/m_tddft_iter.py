@@ -154,7 +154,7 @@ class tddft_iter_c():
   
   def vext2veff_matvec(self, v):
     self.matvec_ncalls+=1 
-    return v-np.dot(self.kernel, self.apply_rf0(v, self.comega_current))
+    return v - blas.cgemv(1.0, self.kernel, self.apply_rf0(v, self.comega_current))
 
   def comp_polariz_xx(self, comegas):
     """ Polarizability """
