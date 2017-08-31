@@ -28,8 +28,8 @@ def build_3dgrid(me, sp1, R1, sp2, R2, level=3):
   grids = dft.gen_grid.Grids(mol)
   grids.level = level # precision as implemented in pyscf
   grids.radi_method=leggauss_ab
-  #grids.build(atom2rcut=atom2rcut) not working anymore!!
-  grids.build()
+  grids.build(atom2rcut=atom2rcut)
+  #grids.build()
   return grids
 
 #
