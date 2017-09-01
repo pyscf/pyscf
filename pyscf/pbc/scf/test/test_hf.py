@@ -195,10 +195,12 @@ class KnowValues(unittest.TestCase):
         mf = pscf.RHF(cell)
         numpy.random.seed(1)
         nao = cell.nao_nr()
-        dm = numpy.random.random((nao,nao)) + numpy.random.random((nao,nao))
+        dm = numpy.random.random((nao,nao)) + numpy.random.random((nao,nao))*1j
         dm = dm + dm.conj().T
         v11 = mf.get_veff(cell, dm, kpt=cell.get_abs_kpts([.25,.25,.25]))
         v12 = mf.get_veff(cell, dm, kpt_band=cell.get_abs_kpts([.25,.25,.25]))
+        v13 = mf.get_veff(cell, dm, kpt=cell.get_abs_kpts([-1./3,1./3,.25]),
+                          kpt_band=cell.get_abs_kpts([.25,.25,.25]))
         self.assertTrue(v11.dtype == numpy.complex128)
         self.assertTrue(v12.dtype == numpy.complex128)
 
@@ -206,10 +208,13 @@ class KnowValues(unittest.TestCase):
         v21 = mf.get_veff(cell, dm, kpt=cell.get_abs_kpts([.25,.25,.25]))
         dm = [dm*.5,dm*.5]
         v22 = mf.get_veff(cell, dm, kpt_band=cell.get_abs_kpts([.25,.25,.25]))
+        v23 = mf.get_veff(cell, dm, kpt=cell.get_abs_kpts([-1./3,1./3,.25]),
+                          kpt_band=cell.get_abs_kpts([.25,.25,.25]))
         self.assertAlmostEqual(abs(v11-v21).max(), 0, 9)
         self.assertAlmostEqual(abs(v12-v22).max(), 0, 9)
-        self.assertAlmostEqual(lib.finger(v11), -1.2250949451514903-2.6300926199527961j, 9)
-        self.assertAlmostEqual(lib.finger(v12), -4.4828232598989937-21.777471838507743j, 9)
+        self.assertAlmostEqual(abs(v13-v23).max(), 0, 9)
+        self.assertAlmostEqual(lib.finger(v11), -0.30110964334164825+0.81409418199767414j, 9)
+        self.assertAlmostEqual(lib.finger(v12), -2.1601376488983997-9.4070613374115908j, 9)
 
 
 if __name__ == '__main__':
