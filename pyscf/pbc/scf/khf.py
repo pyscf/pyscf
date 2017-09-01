@@ -233,6 +233,9 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
 def mulliken_meta(cell, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
                   s=None):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
+
+    Note this function only computes the Mulliken population for the gamma
+    point density matrix.
     '''
     from pyscf.lo import orth
     if s is None:

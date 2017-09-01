@@ -141,6 +141,9 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
 def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG, pre_orth_method='ANO',
                   s=None):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
+
+    Note this function only computes the Mulliken population for the gamma
+    point density matrix.
     '''
     from pyscf.lo import orth
     if s is None:
