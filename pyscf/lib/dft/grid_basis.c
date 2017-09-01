@@ -63,35 +63,36 @@ next_blk:;
 void VXCgen_grid(double *out, double *coords, double *atm_coords,
                  double *radii_table, int natm, int ngrids)
 {
+        const size_t Ngrids = ngrids;
         int i, j, n;
         double dx, dy, dz, dist;
-        double *grid_dist = malloc(sizeof(double) * natm*ngrids);
+        double *grid_dist = malloc(sizeof(double) * natm*Ngrids);
         for (i = 0; i < natm; i++) {
-                for (n = 0; n < ngrids; n++) {
-                        dx = coords[0*ngrids+n] - atm_coords[i*3+0];
-                        dy = coords[1*ngrids+n] - atm_coords[i*3+1];
-                        dz = coords[2*ngrids+n] - atm_coords[i*3+2];
-                        grid_dist[i*ngrids+n] = sqrt(dx*dx + dy*dy + dz*dz);
+                for (n = 0; n < Ngrids; n++) {
+                        dx = coords[0*Ngrids+n] - atm_coords[i*3+0];
+                        dy = coords[1*Ngrids+n] - atm_coords[i*3+1];
+                        dz = coords[2*Ngrids+n] - atm_coords[i*3+2];
+                        grid_dist[i*Ngrids+n] = sqrt(dx*dx + dy*dy + dz*dz);
                 }
         }
 
         double *bufs[MAX_THREADS];
 #pragma omp parallel default(none) \
-        shared(out, grid_dist, atm_coords, radii_table, natm, ngrids, bufs) \
+        shared(out, grid_dist, atm_coords, radii_table, natm, bufs) \
         private(i, j, n, dx, dy, dz)
 {
         int thread_id = omp_get_thread_num();
         double *buf = out;
         if (thread_id != 0) {
-                buf = malloc(sizeof(double) * natm*ngrids);
+                buf = malloc(sizeof(double) * natm*Ngrids);
         }
         bufs[thread_id] = buf;
-        for (i = 0; i < natm*ngrids; i++) {
+        for (i = 0; i < natm*Ngrids; i++) {
                 buf[i] = 1;
         }
         int ij;
         double fac;
-        double g[ngrids];
+        double *g = malloc(sizeof(double)*Ngrids);
 #pragma omp for nowait schedule(static)
         for (ij = 0; ij < natm*natm; ij++) {
                 i = ij / natm;
@@ -105,35 +106,36 @@ void VXCgen_grid(double *out, double *coords, double *atm_coords,
                 dz = atm_coords[i*3+2] - atm_coords[j*3+2];
                 fac = 1 / sqrt(dx*dx + dy*dy + dz*dz);
 
-                for (n = 0; n < ngrids; n++) {
-                        g[n] = grid_dist[i*ngrids+n] - grid_dist[j*ngrids+n];
+                for (n = 0; n < Ngrids; n++) {
+                        g[n] = grid_dist[i*Ngrids+n] - grid_dist[j*Ngrids+n];
                         g[n] *= fac;
                 }
                 if (radii_table != NULL) {
                         fac = radii_table[i*natm+j];
-                        for (n = 0; n < ngrids; n++) {
+                        for (n = 0; n < Ngrids; n++) {
                                 g[n] += fac * (1 - g[n]*g[n]);
                         }
                 }
-                for (n = 0; n < ngrids; n++) {
+                for (n = 0; n < Ngrids; n++) {
                         g[n] = (3 - g[n]*g[n]) * g[n] * .5;
                 }
-                for (n = 0; n < ngrids; n++) {
+                for (n = 0; n < Ngrids; n++) {
                         g[n] = (3 - g[n]*g[n]) * g[n] * .5;
                 }
-                for (n = 0; n < ngrids; n++) {
+                for (n = 0; n < Ngrids; n++) {
                         g[n] = (3 - g[n]*g[n]) * g[n] * .5;
                         g[n] *= .5;
                 }
-                for (n = 0; n < ngrids; n++) {
-                        buf[i*ngrids+n] *= .5 - g[n];
-                        buf[j*ngrids+n] *= .5 + g[n];
+                for (n = 0; n < Ngrids; n++) {
+                        buf[i*Ngrids+n] *= .5 - g[n];
+                        buf[j*Ngrids+n] *= .5 + g[n];
                 }
         }
-        NPomp_dprod_reduce_inplace(bufs, natm*ngrids);
+        NPomp_dprod_reduce_inplace(bufs, natm*Ngrids);
         if (thread_id != 0) {
                 free(buf);
         }
+        free(g);
 }
         free(grid_dist);
 }
