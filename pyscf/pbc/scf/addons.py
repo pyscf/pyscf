@@ -4,11 +4,14 @@
 #         Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
+import sys
+import copy
 from functools import reduce
 import numpy
 import scipy.linalg
 import scipy.special
 import scipy.optimize
+from pyscf import lib
 from pyscf.pbc import gto as pbcgto
 from pyscf.lib import logger
 
@@ -208,10 +211,9 @@ def canonical_occ_(mf):
 
         for k in range(nkpts):
             for s in [0,1]:
-                occ=numpy.zeros_like(mo_energy_kpts[s,k])
-                e_idx=numpy.argsort(mo_energy_kpts[s,k])
-                e_sort=mo_energy_kpts[s,k][e_idx]
-                n=mf.nelec[s]
+                e_idx = numpy.argsort(mo_energy_kpts[s,k])
+                e_sort = mo_energy_kpts[s,k][e_idx]
+                n = mf.nelec[s]
                 mo_occ_kpts[s,k,e_idx[:n]]=1
                 homo[s]=max(homo[s],e_sort[n-1])
                 lumo[s]=min(lumo[s],e_sort[n])
@@ -278,7 +280,7 @@ def convert_to_uhf(mf, out=None):
             mronew = None
             for i, cls in enumerate(mro):
                 if cls in scf_class:
-                    mronew = mro[:i] + hf_class[cls].__mro__
+                    mronew = mro[:i] + scf_class[cls].__mro__
                     break
             if mronew is None:
                 raise RuntimeError('%s object is not SCF object')
@@ -290,8 +292,8 @@ def convert_to_rhf(mf, out=None):
     '''Convert the given mean-field object to the corresponding restricted
     HF/KS object
     '''
-    from pyscf import scf
-    from pyscf import dft
+    from pyscf.pbc import scf
+    from pyscf.pbc import dft
     def update_mo_(mf, mf1):
         _keys = mf._keys.union(mf1._keys)
         mf1.__dict__.update(mf.__dict__)
@@ -335,7 +337,7 @@ def convert_to_rhf(mf, out=None):
             mronew = None
             for i, cls in enumerate(mro):
                 if cls in scf_class:
-                    mronew = mro[:i] + hf_class[cls].__mro__
+                    mronew = mro[:i] + scf_class[cls].__mro__
                     break
             if mronew is None:
                 raise RuntimeError('%s object is not SCF object')
@@ -350,7 +352,6 @@ def convert_to_khf(mf, out=None):
 
 
 if __name__ == '__main__':
-    import pyscf.pbc.gto as pbcgto
     import pyscf.pbc.scf as pscf
     cell = pbcgto.Cell()
     cell.atom = '''

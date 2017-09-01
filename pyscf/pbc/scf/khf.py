@@ -14,6 +14,7 @@ See Also:
 
 import sys
 import time
+from functools import reduce
 import numpy as np
 import scipy.linalg
 import h5py
@@ -25,7 +26,6 @@ from pyscf.pbc.gto import ecp
 from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile
 from pyscf.pbc import tools
-from functools import reduce
 from pyscf.pbc import df
 
 
@@ -42,7 +42,6 @@ def get_ovlp(mf, cell=None, kpts=None):
     if kpts is None: kpts = mf.kpts
     s = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts)
     cond = max([np.linalg.cond(x) for x in s])
-    nkpts = len(s)
     if cond * cell.precision > 1e2:
         prec = 1e2 / cond
         rmin = max([cell.bas_rcut(ib, prec) for ib in range(cell.nbas)])
@@ -222,7 +221,6 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     '''
     from pyscf.lo import orth
     from pyscf.tools import dump_mat
-    mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
     ovlp_ao = mf.get_ovlp()

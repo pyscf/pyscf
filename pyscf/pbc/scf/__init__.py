@@ -6,10 +6,10 @@
 '''
 
 from pyscf.pbc.scf import hf
-from pyscf.pbc.scf import hf as rhf
+rhf = hf
 from pyscf.pbc.scf import uhf
 from pyscf.pbc.scf import khf
-from pyscf.pbc.scf import khf as krhf
+krhf = khf
 from pyscf.pbc.scf import kuhf
 from pyscf.pbc.scf import newton_ah
 from pyscf.pbc.scf import addons

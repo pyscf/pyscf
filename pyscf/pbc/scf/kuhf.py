@@ -10,11 +10,9 @@ See Also:
     hf.py : Hartree-Fock for periodic systems at a single k-point
 '''
 
-import time
 from functools import reduce
 import numpy as np
 import scipy.linalg
-import h5py
 from pyscf.scf import hf as mol_hf
 from pyscf.scf import uhf as mol_uhf
 from pyscf.pbc.scf import khf
@@ -22,7 +20,6 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile
-from pyscf.pbc import df
 
 
 canonical_occ = canonical_occ_ = addons.canonical_occ_
@@ -313,8 +310,7 @@ class KUHF(mol_uhf.UHF, khf.KSCF):
             dm = self.init_guess_by_minao(cell)
 
         if dm_kpts is None:
-            assert(dm.ndim == 3)
-            nao = dm.shape[-1]
+            nao = dm[0].shape[-1]
             nkpts = len(self.kpts)
             dm_kpts = lib.asarray([dm]*nkpts).reshape(nkpts,2,nao,nao)
             dm_kpts = dm_kpts.transpose(1,0,2,3)

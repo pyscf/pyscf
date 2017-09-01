@@ -50,7 +50,6 @@ def density_fit(mf, auxbasis=None, gs=None, with_df=None):
 
 
 def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
-    cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = (time.clock(), time.time())
     if mydf._cderi is None or not mydf.has_kpts(kpts_band):
@@ -140,7 +139,6 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
-    nao_pair = nao * (nao+1) // 2
 
     kpts_band, single_kpt_band = _format_kpts_band(kpts_band, kpts)
     nband = len(kpts_band)
@@ -312,7 +310,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
 
             thread_k = lib.background_thread(contract_k, pLqR, pLqI)
             t1 = log.timer_debug1('        with_k', *t1)
-        LpqR = LpqI = pLqR = pLqI = tmpR = tmpI = None
+        LpqR = LpqI = pLqR = pLqI = None
     if thread_k is not None:
         thread_k.join()
     thread_k = None
@@ -413,7 +411,6 @@ def _ewald_exxdiv_for_G0(cell, kpts, dms, vk, kpts_band=None):
 if __name__ == '__main__':
     import pyscf.pbc.gto as pgto
     import pyscf.pbc.scf as pscf
-    import pyscf.pbc.dft as pdft
 
     L = 5.
     n = 5

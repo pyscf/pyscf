@@ -8,7 +8,6 @@ import numpy
 from pyscf import lib
 from pyscf import gto
 import pyscf.df
-from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, unique, KPT_DIFF_TOL
 
@@ -44,7 +43,7 @@ def format_aux_basis(cell, auxbasis='weigend+etb'):
 #@memory_cache
 def aux_e2(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=1,
            kptij_lst=numpy.zeros((1,2,3)), shls_slice=None):
-    '''3-center AO integrals (ij|L) with double lattice sum:
+    r'''3-center AO integrals (ij|L) with double lattice sum:
     \sum_{lm} (i[l]j[m]|L[0]), where L is the auxiliary basis.
 
     Returns:
@@ -112,7 +111,7 @@ def wrap_int3c(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=1,
     elif is_zero(kpti-kptj):  # j_only
         kk_type = 'k'
         dtype = numpy.complex128
-        kpts = kptij_idx = kpti
+        kpts = kptij_idx = numpy.asarray(kpti, order='C')
         expkL = numpy.exp(1j * numpy.dot(kpts, Ls.T))
         nkpts = nkptij = len(kpts)
     else:

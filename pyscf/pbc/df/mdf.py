@@ -9,9 +9,9 @@ Ref:
 '''
 
 import time
+import tempfile
 import numpy
 import h5py
-import tempfile
 import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
@@ -217,7 +217,7 @@ class MDF(df.DF):
         self.kpts_band = None
         self.auxbasis = None
         self.gs = cell.gs
-        self.eta = None
+        self._eta = None # self.eta = None
 
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG

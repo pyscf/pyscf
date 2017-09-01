@@ -3,13 +3,10 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import ctypes
 import numpy
 import h5py
 from pyscf import lib
 from pyscf import gto
-from pyscf.lib import logger
-from pyscf.scf import _vhf
 from pyscf.ao2mo.outcore import balance_segs
 from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, unique, KPT_DIFF_TOL
 from pyscf.pbc.df.incore import wrap_int3c
@@ -20,7 +17,7 @@ libpbc = lib.load_library('libpbc')
 def aux_e2(cell, auxcell, erifile, intor='int3c2e_sph', aosym='s2ij', comp=1,
            kptij_lst=None, dataname='eri_mo', shls_slice=None, max_memory=2000,
            verbose=0):
-    '''3-center AO integrals (ij|L) with double lattice sum:
+    r'''3-center AO integrals (ij|L) with double lattice sum:
     \sum_{lm} (i[l]j[m]|L[0]), where L is the auxiliary basis.
     On diks, the integrals are stored as (kptij_idx, naux, nao_pair)
 

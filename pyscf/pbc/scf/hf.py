@@ -21,11 +21,9 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf.hf import make_rdm1
 from pyscf.pbc import tools
-from pyscf.pbc.gto import ewald
 from pyscf.pbc.gto import ecp
 from pyscf.pbc.gto.pseudo import get_pp
 from pyscf.pbc.scf import chkfile
-from pyscf.pbc.scf import addons
 from pyscf.pbc import df
 
 

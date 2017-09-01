@@ -3,7 +3,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-'''
+r'''
 Integral transformation with FFT
 
 (ij|kl) = \int dr1 dr2 i*(r1) j(r1) v(r12) k*(r2) l(r2)
@@ -19,13 +19,9 @@ i*(r) j(r) = 1/N \sum_G e^{iGr}  (G|ij)
            = conj[ \sum_r e^{-iGr} j*(r) i(r) ]
 '''
 
-import time
 import numpy
 from pyscf import lib
-from pyscf import ao2mo
 from pyscf.ao2mo.incore import iden_coeffs
-from pyscf.ao2mo import _ao2mo
-from pyscf.lib import logger
 from pyscf.pbc import tools
 from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
 
@@ -35,7 +31,6 @@ def get_eri(mydf, kpts=None, compact=False):
     kptijkl = _format_kpts(kpts)
     kpti, kptj, kptk, kptl = kptijkl
     nao = cell.nao_nr()
-    nao_pair = nao * (nao+1) // 2
     q = kptj - kpti
     coulG = tools.get_coulG(cell, q, gs=mydf.gs)
     ngs = len(coulG)
@@ -157,7 +152,6 @@ def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), q=None, shls_slice=None,
     cell = mydf.cell
     kpts = numpy.asarray(kpts)
     coords = cell.gen_uniform_grids(mydf.gs)
-    nao = cell.nao_nr()
     ngs = len(coords)
 
     if shls_slice is None:

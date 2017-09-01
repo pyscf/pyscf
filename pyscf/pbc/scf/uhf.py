@@ -10,9 +10,7 @@ See Also:
     pyscf.pbc.scf.khf.py : Hartree-Fock for periodic systems with k-point sampling
 '''
 
-import sys
 import numpy as np
-import pyscf.scf.hf as mol_hf
 import pyscf.scf.uhf as mol_uhf
 from pyscf import lib
 from pyscf.lib import logger

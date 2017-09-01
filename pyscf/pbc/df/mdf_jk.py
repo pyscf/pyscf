@@ -10,6 +10,7 @@ Ref:
 
 import copy
 import numpy
+from pyscf.lib import logger
 from pyscf.pbc.df import df_jk
 from pyscf.pbc.df import aft_jk
 
@@ -53,9 +54,9 @@ def density_fit(mf, auxbasis=None, gs=None, with_df=None):
 def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     if mydf._cderi is None or not mydf.has_kpts(kpts_band):
         if mydf._cderi is not None:
-            log.warn('DF integrals for band k-points were not found %s. '
-                     'DF integrals will be rebuilt to include band k-points.',
-                     mydf._cderi)
+            logger.warn(mydf, 'DF integrals for band k-points were not found %s. '
+                        'DF integrals will be rebuilt to include band k-points.',
+                        mydf._cderi)
         mydf.build(kpts_band=kpts_band)
     vj_kpts = aft_jk.get_j_kpts(mydf, dm_kpts, hermi, kpts, kpts_band)
     vj_kpts += df_jk.get_j_kpts(mydf, dm_kpts, hermi, kpts, kpts_band)
@@ -66,8 +67,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                exxdiv=None):
     if mydf._cderi is None or not mydf.has_kpts(kpts_band):
         if mydf._cderi is not None:
-            log.warn('DF integrals for band k-points were not found %s. '
-                     'DF integrals will be rebuilt to include band k-points.',
+            logger.warn(mydf, 'DF integrals for band k-points were not found %s. '
+                        'DF integrals will be rebuilt to include band k-points.',
                      mydf._cderi)
         mydf.build(kpts_band=kpts_band)
     vk_kpts = aft_jk.get_k_kpts(mydf, dm_kpts, hermi, kpts, kpts_band, exxdiv)
@@ -95,9 +96,9 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
 
     if mydf._cderi is None or not mydf.has_kpts(kpt_band):
         if mydf._cderi is not None:
-            log.warn('DF integrals for band k-points were not found %s. '
-                     'DF integrals will be rebuilt to include band k-points.',
-                     mydf._cderi)
+            logger.warn(mydf, 'DF integrals for band k-points were not found %s. '
+                        'DF integrals will be rebuilt to include band k-points.',
+                        mydf._cderi)
         mydf.build(kpts_band=kpt_band)
     vj1, vk1 = df_jk.get_jk(mydf, dm, hermi, kpt, kpt_band, with_j, with_k, None)
     vj, vk = aft_jk.get_jk(mydf, dm, hermi, kpt, kpt_band, with_j, with_k, exxdiv)
@@ -109,7 +110,6 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
 if __name__ == '__main__':
     import pyscf.pbc.gto as pgto
     import pyscf.pbc.scf as pscf
-    import pyscf.pbc.dft as pdft
 
     L = 5.
     n = 5

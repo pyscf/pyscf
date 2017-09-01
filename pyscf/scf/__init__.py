@@ -86,10 +86,10 @@ Saved results
 '''
 
 from pyscf.scf import hf
-from pyscf.scf import hf as rhf
+rhf = hf
 from pyscf.scf import rohf
 from pyscf.scf import hf_symm
-from pyscf.scf import hf_symm as rhf_symm
+rhf_symm = hf_symm
 from pyscf.scf import uhf
 from pyscf.scf import uhf_symm
 from pyscf.scf import ghf

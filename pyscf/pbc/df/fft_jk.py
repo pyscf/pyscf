@@ -9,7 +9,6 @@ JK with discrete Fourier transformation
 
 import numpy as np
 from pyscf import lib
-from pyscf.lib import logger
 from pyscf.pbc import tools
 from pyscf.pbc.dft import numint
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
