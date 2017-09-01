@@ -90,6 +90,17 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
     get_jk_incore = pbchf.SCF.get_jk_incore
     energy_tot = pbchf.SCF.energy_tot
 
+    def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+                 kpt=None, kpt_band=None):
+        if cell is None: cell = self.cell
+        if dm is None: dm = self.make_rdm1()
+        if kpt is None: kpt = self.kpt
+        if isinstance(dm, np.ndarray) and dm.ndim == 2:
+            dm = np.asarray((dm*.5,dm*.5))
+        vj, vk = self.get_jk(cell, dm, hermi, kpt, kpt_band)
+        vhf = vj[0] + vj[1] - vk
+        return vhf
+
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell
         dm = mol_uhf.UHF.get_init_guess(self, cell, key)
