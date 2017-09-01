@@ -138,7 +138,7 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     return e1+e_coul, e_coul
 
 
-def mulliken_meta(cell, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
+def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG, pre_orth_method='ANO',
                   s=None):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
     '''
@@ -148,7 +148,7 @@ def mulliken_meta(cell, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
     log = logger.new_logger(cell, verbose)
     log.note('Analyze output for the gamma point')
     log.note("KUHF mulliken_meta")
-    dm_ao_gamma = dm_ao[:,0,:,:].real
+    dm_ao_gamma = dm_ao_kpts[:,0,:,:].real
     s_gamma = s[0,:,:].real
     c = orth.restore_ao_character(cell, pre_orth_method)
     orth_coeff = orth.orth_ao(cell, 'meta_lowdin', pre_orth_ao=c, s=s_gamma)
@@ -254,7 +254,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
             occs = ([occa[i] for i in where], [occb[i] for i in where])
             return make_rdm1(mos, occs)
 
-    if mo[0].ndim == 2:  # KRHF
+    if hasattr(mo[0], 'ndim') and mo[0].ndim == 2:  # KRHF
         mo_occa = [(occ>1e-8).astype(np.double) for occ in mo_occ]
         mo_occb = [occ-mo_occa[k] for k,occ in enumerate(mo_occ)]
         dm = makedm((mo, mo), (mo_occa, mo_occb))
