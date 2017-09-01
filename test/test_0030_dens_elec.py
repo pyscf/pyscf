@@ -34,7 +34,7 @@ class KnowValues(unittest.TestCase):
     #t2 = timer(); print(t2-t1); t1 = timer()
     
     nelec = np.einsum("is,i", dens, grid.weights)
-    t2 = timer(); print(t2-t1, nelec, sv.hsx.nelec, dens.shape); t1 = timer()
+    #t2 = timer(); print(t2-t1, nelec, sv.hsx.nelec, dens.shape); t1 = timer()
 
     self.assertAlmostEqual(nelec, sv.hsx.nelec, 2)
       
