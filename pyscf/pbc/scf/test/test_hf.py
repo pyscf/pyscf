@@ -5,6 +5,7 @@
 
 import unittest
 import numpy
+from pyscf import lib
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.scf import hf as pbchf
 import pyscf.pbc.scf as pscf
@@ -189,6 +190,26 @@ class KnowValues(unittest.TestCase):
         mf.with_df.gs = cell.gs
         e1 = mf.kernel()
         self.assertAlmostEqual(e1, -3.2681555164454039, 5)
+
+    def test_get_veff(self):
+        mf = pscf.RHF(cell)
+        numpy.random.seed(1)
+        nao = cell.nao_nr()
+        dm = numpy.random.random((nao,nao)) + numpy.random.random((nao,nao))
+        dm = dm + dm.conj().T
+        v11 = mf.get_veff(cell, dm, kpt=cell.get_abs_kpts([.25,.25,.25]))
+        v12 = mf.get_veff(cell, dm, kpt_band=cell.get_abs_kpts([.25,.25,.25]))
+        self.assertTrue(v11.dtype == numpy.complex128)
+        self.assertTrue(v12.dtype == numpy.complex128)
+
+        mf = pscf.UHF(cell)
+        v21 = mf.get_veff(cell, dm, kpt=cell.get_abs_kpts([.25,.25,.25]))
+        dm = [dm*.5,dm*.5]
+        v22 = mf.get_veff(cell, dm, kpt_band=cell.get_abs_kpts([.25,.25,.25]))
+        self.assertAlmostEqual(abs(v11-v21).max(), 0, 9)
+        self.assertAlmostEqual(abs(v12-v22).max(), 0, 9)
+        self.assertAlmostEqual(lib.finger(v11), -1.2250949451514903-2.6300926199527961j, 9)
+        self.assertAlmostEqual(lib.finger(v12), -4.4828232598989937-21.777471838507743j, 9)
 
 
 if __name__ == '__main__':
