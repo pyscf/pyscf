@@ -204,7 +204,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
         eig_(fock[0], mo_coeff[0], viridxa, mo_e[0], mo[0])
         eig_(fock[1], mo_coeff[1], occidxb, mo_e[1], mo[1])
         eig_(fock[1], mo_coeff[1], viridxb, mo_e[1], mo[1])
-        orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo, s, False)
+        orbsyma, orbsymb = get_orbsym(mol, mo, s, False)
 
     mo = hf_symm.attach_orbsym(mo, (orbsyma,orbsymb))
     return mo_e, mo

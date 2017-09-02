@@ -5,7 +5,7 @@
 #
 
 '''
-Non-relativistic Restricted Kohn-Sham for periodic systems at a single k-point 
+Non-relativistic Restricted Kohn-Sham for periodic systems at a single k-point
 
 See Also:
     pyscf.pbc.dft.krks.py : Non-relativistic Restricted Kohn-Sham for periodic
@@ -102,11 +102,10 @@ def _patch_df_beckegrids(density_fit):
 
 
 class RKS(pbchf.RHF):
-    '''RKS class adapted for PBCs. 
-    
+    '''RKS class adapted for PBCs.
+
     This is a literal duplication of the molecular RKS class with some `mol`
     variables replaced by `cell`.
-
     '''
     def __init__(self, cell, kpt=numpy.zeros(3)):
         pbchf.RHF.__init__(self, cell, kpt)

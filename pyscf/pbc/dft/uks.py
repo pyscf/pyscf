@@ -4,7 +4,7 @@
 #
 
 '''
-Non-relativistic Restricted Kohn-Sham for periodic systems at a single k-point 
+Non-relativistic Restricted Kohn-Sham for periodic systems at a single k-point
 
 See Also:
     pyscf.pbc.dft.krks.py : Non-relativistic Restricted Kohn-Sham for periodic
@@ -89,11 +89,10 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 
 
 class UKS(pbcuhf.UHF):
-    '''UKS class adapted for PBCs. 
-    
+    '''UKS class adapted for PBCs.
+
     This is a literal duplication of the molecular UKS class with some `mol`
     variables replaced by `cell`.
-
     '''
     def __init__(self, cell, kpt=numpy.zeros(3)):
         pbcuhf.UHF.__init__(self, cell, kpt)

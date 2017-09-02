@@ -4,7 +4,6 @@
 #
 
 import h5py
-import pyscf.gto
 from pyscf.lib.chkfile import load_chkfile_key, load
 from pyscf.lib.chkfile import dump_chkfile_key, dump, save
 from pyscf.lib.chkfile import load_mol, save_mol

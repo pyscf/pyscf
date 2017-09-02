@@ -3,8 +3,8 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import numpy
 import ctypes
+import numpy
 from pyscf import lib
 
 libcgto = lib.load_library('libcgto')
@@ -224,8 +224,8 @@ def getints2c(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
         ao_loc = make_loc(bas, intor_name)
 
     i0, i1, j0, j1 = shls_slice[:4]
-    naoi = ao_loc[i1] - ao_loc[i0];
-    naoj = ao_loc[j1] - ao_loc[j0];
+    naoi = ao_loc[i1] - ao_loc[i0]
+    naoj = ao_loc[j1] - ao_loc[j0]
     if intor_name.endswith('_cart') or intor_name.endswith('_sph'):
         mat = numpy.ndarray((naoi,naoj,comp), numpy.double, out, order='F')
         drv_name = 'GTOint2c'
@@ -280,8 +280,8 @@ def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
     naok = ao_loc[k1] - ao_loc[k0]
 
     if aosym in ('s1',):
-        naoi = ao_loc[i1] - ao_loc[i0];
-        naoj = ao_loc[j1] - ao_loc[j0];
+        naoi = ao_loc[i1] - ao_loc[i0]
+        naoj = ao_loc[j1] - ao_loc[j0]
         shape = (naoi, naoj, naok, comp)
     else:
         aosym = 's2ij'
@@ -419,7 +419,6 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
     atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
     env = numpy.asarray(env, dtype=numpy.double, order='C')
-    c_bas = bas.ctypes.data_as(ctypes.c_void_p)
     natm = ctypes.c_int(atm.shape[0])
     nbas = ctypes.c_int(bas.shape[0])
     if intor_name.endswith('_cart'):

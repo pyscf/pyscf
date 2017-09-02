@@ -23,7 +23,6 @@ DEFAULT_AUXBASIS = {
 'ccpv5z'      : ('cc-pv5z-jkfit'          , 'cc-pv5z-ri'         ),
 'augccpv5z'   : ('aug-cc-pv5z-jkfit'      , 'aug-cc-pv5z-ri'     ),
 'def2svp'     : ('def2-svp-jkfit'         , 'def2-svp-ri'        ),
-'def2svp'     : ('def2-svp-jkfit'         , 'def2-svp-ri'        ),
 'def2svpd'    : ('def2-svp-jkfit'         , 'def2-svpd-ri'       ),
 'def2tzvp'    : ('def2-tzvp-jkfit'        , 'def2-tzvp-ri'       ),
 'def2tzvpd'   : ('def2-tzvp-jkfit'        , 'def2-tzvpd-ri'      ),

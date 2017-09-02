@@ -249,7 +249,6 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
-    nao = mo_coeff.shape[0]
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
@@ -425,7 +424,7 @@ def project_mol(mol, projectbasis={}):
     elif isinstance(projectbasis, str):
         for k in newbasis:
             newbasis[k] = projectbasis
-    return df.make_auxmol(mol, newbasis)
+    return df.addons.make_auxmol(mol, newbasis)
 
 
 # TODO: check whether high order terms in (g_orb, h_op) affects optimization
@@ -469,7 +468,6 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
         # increase the AH accuracy when approach convergence
         #ah_start_cycle = max(mf.ah_start_cycle, int(-numpy.log10(norm_gorb)))
         ah_start_cycle = mf.ah_start_cycle
-        g_orb0 = g_orb
         imic = 0
         dr = 0
         ukf = None

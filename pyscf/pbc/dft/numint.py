@@ -4,34 +4,32 @@
 #         Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import tempfile
+import sys
 import ctypes
 import numpy
-import h5py
 from pyscf import lib
 from pyscf.scf.hf import _attach_mo
 from pyscf.dft import numint
 from pyscf.dft.numint import eval_mat, _dot_ao_ao, _dot_ao_dm
 from pyscf.dft.numint import OCCDROP
 from pyscf.pbc.dft.gen_grid import libpbc, make_mask, BLKSIZE
-from pyscf.pbc import tools
 from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, member
 
-try:
-## Moderate speedup by caching eval_ao
-    from pyscf import pbc
-    from joblib import Memory
-    memory = Memory(cachedir='./tmp/', mmap_mode='r', verbose=0)
-    def memory_cache(f):
-        g = memory.cache(f)
-        def maybe_cache(*args, **kwargs):
-            if pbc.DEBUG:
-                return g(*args, **kwargs)
-            else:
-                return f(*args, **kwargs)
-        return maybe_cache
-except:
-    memory_cache = lambda f: f
+#try:
+### Moderate speedup by caching eval_ao
+#    from pyscf import pbc
+#    from joblib import Memory
+#    memory = Memory(cachedir='./tmp/', mmap_mode='r', verbose=0)
+#    def memory_cache(f):
+#        g = memory.cache(f)
+#        def maybe_cache(*args, **kwargs):
+#            if pbc.DEBUG:
+#                return g(*args, **kwargs)
+#            else:
+#                return f(*args, **kwargs)
+#        return maybe_cache
+#except:
+#    memory_cache = lambda f: f
 
 def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shl_slice=None,
             non0tab=None, out=None, verbose=None):
@@ -82,7 +80,7 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
         if 'kpt' in kwargs:
             sys.stderr.write('WARN: _KNumInt.eval_ao function finds keyword '
                              'argument "kpt" and converts it to "kpts"\n')
-            kpts = kpt
+            kpts = kwargs['kpt']
         else:
             kpts = numpy.zeros((1,3))
     kpts = numpy.reshape(kpts, (-1,3))
@@ -1106,7 +1104,7 @@ class _KNumInt(numint._NumInt):
             if 'kpt' in kwargs:
                 sys.stderr.write('WARN: _KNumInt.nr_rks function finds keyword '
                                  'argument "kpt" and converts it to "kpts"\n')
-                kpts = kpt
+                kpts = kwargs['kpt']
             else:
                 kpts = self.kpts
         kpts = kpts.reshape(-1,3)
@@ -1121,7 +1119,7 @@ class _KNumInt(numint._NumInt):
             if 'kpt' in kwargs:
                 sys.stderr.write('WARN: _KNumInt.nr_uks function finds keyword '
                                  'argument "kpt" and converts it to "kpts"\n')
-                kpts = kpt
+                kpts = kwargs['kpt']
             else:
                 kpts = self.kpts
         kpts = kpts.reshape(-1,3)

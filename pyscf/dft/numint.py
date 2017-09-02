@@ -1209,7 +1209,7 @@ def _uks_gga_wv(rho0, rho1, vxc, fxc, weight):
     wvb[0] *= .5  # v+v.T should be applied in the caller
     return wva, wvb
 
-def nr_fxc(mol, grids, xc_code, dm0, dms, spin0, relativity=0, hermi=0,
+def nr_fxc(mol, grids, xc_code, dm0, dms, spin=0, relativity=0, hermi=0,
            rho0=None, vxc=None, fxc=None, max_memory=2000, verbose=None):
     r'''Contract XC kernel matrix with given density matrices
 

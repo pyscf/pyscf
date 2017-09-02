@@ -3,8 +3,8 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import numpy
 import ctypes
+import numpy
 from pyscf import lib
 from pyscf.gto.moleintor import make_loc
 
@@ -21,7 +21,7 @@ libcgto = lib.load_library('libcgto')
 
 def eval_gto(mol, eval_name, coords,
              comp=1, shls_slice=None, non0tab=None, ao_loc=None, out=None):
-    '''Evaluate AO function value on the given grids,
+    r'''Evaluate AO function value on the given grids,
 
     Args:
         eval_name : str
@@ -94,7 +94,7 @@ def eval_gto(mol, eval_name, coords,
     if shls_slice is None:
         shls_slice = (0, nbas)
     sh0, sh1 = shls_slice
-    nao = ao_loc[sh1] - ao_loc[sh0];
+    nao = ao_loc[sh1] - ao_loc[sh0]
     if 'spinor' in eval_name:
         ao = numpy.ndarray((2,comp,nao,ngrids), dtype=numpy.complex128, buffer=out)
     else:

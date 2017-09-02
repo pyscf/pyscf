@@ -121,7 +121,7 @@ class KRKS(khf.KRHF):
         if h1e_kpts is None: h1e_kpts = self.get_hcore(self.cell, self.kpts)
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         if vhf is None or getattr(vhf, 'ecoul', None) is None:
-            vhf = self.get_veff(ks, ks.cell, dm_kpts)
+            vhf = self.get_veff(self, self.cell, dm_kpts)
 
         weight = 1./len(h1e_kpts)
         e1 = weight * np.einsum('kij,kji', h1e_kpts, dm_kpts).real

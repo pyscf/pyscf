@@ -57,7 +57,6 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         small_rho_cutoff = 0
 
     dm = numpy.asarray(dm)
-    nao = dm.shape[-1]
     ground_state = (dm.ndim == 2)
 
     if hermi == 2:  # because rho = 0
@@ -141,7 +140,6 @@ DKS = UKS
 
 if __name__ == '__main__':
     from pyscf import gto
-    from pyscf.dft import xcfun
     mol = gto.Mole()
     mol.verbose = 7
     mol.output = '/dev/null'#'out_rks'

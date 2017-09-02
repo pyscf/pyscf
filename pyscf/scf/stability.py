@@ -70,7 +70,6 @@ def rhf_internal(mf, with_symmetry=True, verbose=None):
     return mo
 
 def _rotate_mo(mo_coeff, mo_occ, dx):
-    nmo = mo_occ.size
     dr = hf.unpack_uniq_var(dx, mo_occ)
     u = newton_ah.expmat(dr)
     return numpy.dot(mo_coeff, u)
@@ -78,9 +77,7 @@ def _rotate_mo(mo_coeff, mo_occ, dx):
 def _gen_hop_rhf_external(mf, with_symmetry=True, verbose=None):
     mol = mf.mol
     mo_coeff = mf.mo_coeff
-    mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
-    nao, nmo = mo_coeff.shape
     occidx = numpy.where(mo_occ==2)[0]
     viridx = numpy.where(mo_occ==0)[0]
     nocc = len(occidx)
@@ -155,7 +152,7 @@ def rhf_external(mf, with_symmetry=True, verbose=None):
     x0 = numpy.zeros_like(hdiag1)
     x0[hdiag1>1e-5] = 1. / hdiag1[hdiag1>1e-5]
     if not with_symmetry:  # allow to break point group symmetry
-        x0[numpy.argmin(hdiag)] = 1
+        x0[numpy.argmin(hdiag1)] = 1
     e1, v1 = lib.davidson(hop1, x0, precond, tol=1e-4, verbose=log)
     if e1 < -1e-5:
         log.note('RHF/RKS wavefunction has a real -> complex instablity')
@@ -170,8 +167,6 @@ def rhf_external(mf, with_symmetry=True, verbose=None):
     e3, v3 = lib.davidson(hop2, x0, precond, tol=1e-4, verbose=log)
     if e3 < -1e-5:
         log.note('RHF/RKS wavefunction has a RHF/RKS -> UHF/UKS instablity.')
-        nocca = numpy.count_nonzero(mf.mo_occ[0]> 0)
-        nvira = numpy.count_nonzero(mf.mo_occ[0]==0)
         mo = (_rotate_mo(mf.mo_coeff, mf.mo_occ, v3), mf.mo_coeff)
     else:
         log.note('RHF/RKS wavefunction is stable in the RHF/RKS -> UHF/UKS stablity analysis')
@@ -344,7 +339,7 @@ def uhf_external(mf, with_symmetry=True, verbose=None):
     x0 = numpy.zeros_like(hdiag1)
     x0[hdiag1>1e-5] = 1. / hdiag1[hdiag1>1e-5]
     if not with_symmetry:  # allow to break point group symmetry
-        x0[numpy.argmin(hdiag)] = 1
+        x0[numpy.argmin(hdiag1)] = 1
     e1, v = lib.davidson(hop1, x0, precond, tol=1e-4, verbose=log)
     if e1 < -1e-5:
         log.note('UHF/UKS wavefunction has a real -> complex instablity')
@@ -358,7 +353,7 @@ def uhf_external(mf, with_symmetry=True, verbose=None):
     x0 = numpy.zeros_like(hdiag2)
     x0[hdiag2>1e-5] = 1. / hdiag2[hdiag2>1e-5]
     if not with_symmetry:  # allow to break point group symmetry
-        x0[numpy.argmin(hdiag)] = 1
+        x0[numpy.argmin(hdiag2)] = 1
     e3, v = lib.davidson(hop2, x0, precond, tol=1e-4, verbose=log)
     log.debug('uhf_external: lowest eigs of H = %s', e3)
     mo = scipy.linalg.block_diag(*mf.mo_coeff)
