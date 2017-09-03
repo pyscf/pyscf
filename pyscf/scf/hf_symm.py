@@ -151,7 +151,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
                 mo_e[idx] = e
         orbsym = get_orbsym(mol, mo, s, False)
 
-    mo = attach_orbsym(mo, orbsym)
+    mo = lib.tag_array(mo, orbsym=orbsym)
     return mo_e, mo
 
 def _symmetrize_canonicalization_(mf, mo_energy, mo_coeff, s):
@@ -274,7 +274,7 @@ def eig(mf, h, s):
         orbsym.append([mol.irrep_id[ir]] * e.size)
     e = numpy.hstack(es)
     c = so2ao_mo_coeff(mol.symm_orb, cs)
-    c = attach_orbsym(c, numpy.hstack(orbsym))
+    c = lib.tag_array(c, orbsym=numpy.hstack(orbsym))
     return e, c
 
 
@@ -392,7 +392,7 @@ class RHF(hf.RHF):
                                       self.mo_coeff[:,self.mo_occ==0].take(v_sort, axis=1)))
         orbsym = numpy.hstack((orbsym[self.mo_occ> 0][o_sort],
                                orbsym[self.mo_occ==0][v_sort]))
-        self.mo_coeff = attach_orbsym(self.mo_coeff, orbsym)
+        self.mo_coeff = lib.tag_array(self.mo_coeff, orbsym=orbsym)
         nocc = len(o_sort)
         self.mo_occ[:nocc] = 2
         self.mo_occ[nocc:] = 0
@@ -747,14 +747,6 @@ class HF1e(ROHF):
         self.e_tot = self.mo_energy[self.mo_occ>0][0] + self.mol.energy_nuc()
         self._finalize()
         return self.e_tot
-
-
-class SymmetrizedOrbitals(numpy.ndarray):
-    pass
-def attach_orbsym(mo, orbsym):
-    mo = numpy.asarray(mo).view(SymmetrizedOrbitals)
-    mo.orbsym = orbsym
-    return mo
 
 def get_orbsym(mol, mo_coeff, s=None, check=False):
     if mo_coeff is None:

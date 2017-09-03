@@ -4,6 +4,7 @@
 
 import numpy
 import unittest
+from pyscf import lib
 from pyscf import gto
 from pyscf import scf
 
@@ -224,7 +225,7 @@ class KnowValues(unittest.TestCase):
         mf = scf.RHF(n2sym).set(verbose = 0)
         orbsym = numpy.array([0 , 5, 0 , 5 , 6 , 7 , 0 , 2 , 3 , 5 , 0 , 6 , 7 , 0 , 2 , 3 , 5 , 10, 11, 5])
         energy = numpy.array([34, 2, 54, 43, 42, 33, 20, 61, 29, 26, 62, 52, 13, 51, 18, 78, 85, 49, 84, 7])
-        mo_coeff = scf.hf_symm.attach_orbsym(numpy.eye(energy.size), orbsym)
+        mo_coeff = lib.tag_array(numpy.eye(energy.size), orbsym=orbsym)
         mf.irrep_nelec = {'A1g':6, 'A1u':4, 'E1ux':2, 'E1uy':2}
         self.assertTrue(numpy.allclose(mf.get_occ(energy, mo_coeff),
                 [2, 2, 0, 0, 2, 0, 2, 0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 2]))
@@ -264,7 +265,7 @@ class KnowValues(unittest.TestCase):
         mf = scf.ROHF(pmol).set(verbose = 0)
         orbsym = numpy.array([0 , 5, 0 , 5 , 6 , 7 , 0 , 2 , 3 , 5 , 0 , 6 , 7 , 0 , 2 , 3 , 5 , 10, 11, 5])
         energy = numpy.array([34, 2, 54, 43, 42, 33, 20, 61, 29, 26, 62, 52, 13, 51, 18, 78, 85, 49, 84, 7])
-        mo_coeff = scf.hf_symm.attach_orbsym(numpy.eye(energy.size), orbsym)
+        mo_coeff = lib.tag_array(numpy.eye(energy.size), orbsym=orbsym)
         mf.irrep_nelec = {'A1g':7, 'A1u':3, 'E1ux':2, 'E1uy':2}
         self.assertTrue(numpy.allclose(mf.get_occ(energy, mo_coeff),
                 [2, 2, 1, 0, 2, 0, 2, 0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 1]))

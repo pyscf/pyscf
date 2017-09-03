@@ -138,7 +138,7 @@ class GHF(ghf.GHF):
             orbsym.append([mol.irrep_id[ir]] * e.size)
         e = numpy.hstack(es)
         c = hf_symm.so2ao_mo_coeff(symm_orb, cs)
-        c = hf_symm.attach_orbsym(c, numpy.hstack(orbsym))
+        c = lib.tag_array(c, orbsym=numpy.hstack(orbsym))
         return e, c
 
     def get_grad(self, mo_coeff, mo_occ, fock=None):
@@ -220,7 +220,7 @@ class GHF(ghf.GHF):
                                       self.mo_coeff[:,self.mo_occ==0].take(v_sort, axis=1)))
         orbsym = numpy.hstack((orbsym[self.mo_occ> 0][o_sort],
                                orbsym[self.mo_occ==0][v_sort]))
-        self.mo_coeff = hf_symm.attach_orbsym(self.mo_coeff, orbsym)
+        self.mo_coeff = lib.tag_array(self.mo_coeff, orbsym=orbsym)
         nocc = len(o_sort)
         self.mo_occ[:nocc] = 1
         self.mo_occ[nocc:] = 0

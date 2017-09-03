@@ -9,6 +9,7 @@ Non-relativistic restricted Kohn-Sham
 
 import time
 import numpy
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.dft import gen_grid
@@ -94,7 +95,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     else:
         ecoul = None
 
-    vxc = _attach_xc(vxc, ecoul, exc, vj, vk)
+    vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=vj, vk=vk)
 
     if (small_rho_cutoff > 1e-20 and ground_state and
         abs(n-mol.nelectron) < 0.01*n):
@@ -213,16 +214,6 @@ def _dft_common_init_(mf):
 # don't modify the following attributes, they are not input options
     mf._numint = numint._NumInt()
     mf._keys = mf._keys.union(['xc', 'grids', 'small_rho_cutoff'])
-
-class VxcArray(numpy.ndarray):
-    pass
-def _attach_xc(a, ecoul=None, exc=None, vj=None, vk=None):
-    a = numpy.asarray(a).view(VxcArray)
-    a.ecoul = ecoul
-    a.exc = exc
-    a.vj = vj
-    a.vk = vk
-    return a
 
 
 if __name__ == '__main__':

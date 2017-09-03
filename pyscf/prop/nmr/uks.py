@@ -8,7 +8,6 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
-from pyscf.scf.hf import _attach_mo
 from pyscf.dft import numint
 from pyscf.prop.nmr import rhf as rhf_nmr
 from pyscf.prop.nmr import rks as rks_nmr
@@ -104,7 +103,8 @@ class NMR(uhf_nmr.NMR):
 
             mem_now = lib.current_memory()[0]
             max_memory = max(2000, mf.max_memory*.9-mem_now)
-            dm0 = _attach_mo(dm0, mf.mo_coeff, mf.mo_occ)  # to improve get_vxc_giao efficiency
+            # Attach mo_coeff and mo_occ to improve get_vxc_giao efficiency
+            dm0 = lib.tag_array(dm0, mo_coeff=mf.mo_coeff, mo_occ=mf.mo_occ)
             h1 = -get_vxc_giao(ni, mol, mf.grids, mf.xc, dm0,
                                max_memory=max_memory, verbose=self.verbose)
 

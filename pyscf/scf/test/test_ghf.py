@@ -30,7 +30,7 @@ O     0    0        0
 H     0    -0.757   0.587
 H     0    0.757    0.587''',
     basis = 'cc-pvdz',
-    symmetry = True
+    symmetry = 'c2v'
 )
 mfsym = scf.GHF(molsym)
 
@@ -165,7 +165,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(occ), 1.3371797424932739, 9)
         mfsym.irrep_nelec['A2'] = 5
         occ = mfsym.get_occ(mf.mo_energy, mf.mo_coeff)
-        self.assertAlmostEqual(lib.finger(occ), -1.66561440026415, 9)
+        self.assertAlmostEqual(lib.finger(occ), -1.3108338866693456, 9)
 
 if __name__ == "__main__":
     print("Full Tests for GHF")

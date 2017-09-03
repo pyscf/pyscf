@@ -848,7 +848,7 @@ def newton_SCF_class(mf):
             mo = numpy.dot(mo_coeff, u)
             if self._scf.mol.symmetry:
                 orbsym = hf_symm.get_orbsym(self._scf.mol, mo_coeff)
-                mo = hf_symm.attach_orbsym(mo, orbsym)
+                mo = lib.tag_array(mo, orbsym=orbsym)
             return mo
     return CIAH_SCF
 
@@ -922,7 +922,7 @@ def newton(mf):
                                     numpy.dot(mo_coeff[1], u[1])))
                 if self._scf.mol.symmetry:
                     orbsym = uhf_symm.get_orbsym(self._scf.mol, mo_coeff)
-                    mo = hf_symm.attach_orbsym(mo, orbsym)
+                    mo = lib.tag_array(mo, orbsym=orbsym)
                 return mo
 
             def spin_square(self, mo_coeff=None, s=None):
@@ -943,7 +943,7 @@ def newton(mf):
                 mo = numpy.dot(mo_coeff, u)
                 if self._scf.mol.symmetry:
                     orbsym = scf.ghf_symm.get_orbsym(self._scf.mol, mo_coeff)
-                    mo = hf_symm.attach_orbsym(mo, orbsym)
+                    mo = lib.tag_array(mo, orbsym=orbsym)
                 return mo
         return GHF()
 

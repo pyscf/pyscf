@@ -93,7 +93,7 @@ def get_roothaan_fock(focka_fockb, dma_dmb, s):
     fock += reduce(numpy.dot, (po.T, focka, pv))
     fock += reduce(numpy.dot, (pv.T, fc, pc))
     fock = fock + fock.T
-    fock = _attach_attr(fock, focka=focka, fockb=fockb)
+    fock = lib.tag_array(fock, focka=focka, fockb=fockb)
     return fock
 
 
@@ -324,7 +324,7 @@ class ROHF(hf.RHF):
         if hasattr(fock, 'focka'):
             mo_ea = numpy.einsum('pi,pi->i', c, fock.focka.dot(c))
             mo_eb = numpy.einsum('pi,pi->i', c, fock.fockb.dot(c))
-            e = _attach_attr(e, mo_ea=mo_ea, mo_eb=mo_eb)
+            e = lib.tag_array(e, mo_ea=mo_ea, mo_eb=mo_eb)
         return e, c
 
     @lib.with_doc(get_grad.__doc__)
@@ -383,9 +383,3 @@ class HF1e(ROHF):
         self._finalize()
         return self.e_tot
 
-class ROFockArray(numpy.ndarray):
-    pass
-def _attach_attr(a, **kwargs):
-    a = numpy.asarray(a).view(ROFockArray)
-    a.__dict__.update(kwargs)
-    return a

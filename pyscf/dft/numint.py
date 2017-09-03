@@ -15,7 +15,6 @@ except (ImportError, OSError):
     libxc = xcfun
 
 from pyscf.dft.gen_grid import make_mask, BLKSIZE
-from pyscf.scf.hf import _attach_mo
 
 libdft = lib.load_library('libdft')
 OCCDROP = 1e-12
@@ -769,19 +768,19 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
 def _format_uks_dm(dms):
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:  # RHF DM
         dma = dmb = dms * .5
-        if hasattr(dms, 'mo_coeff'):
-            _attach_mo(dma, dms.mo_coeff, dms.mo_occ*.5)
     else:
         dma, dmb = dms
-        if hasattr(dms, 'mo_coeff'):
-            if dms.mo_coeff[0].ndim < dma.ndim: # handle ROKS
-                mo_occa = numpy.array(dms.mo_occ> 0, dtype=numpy.double)
-                mo_occb = numpy.array(dms.mo_occ==2, dtype=numpy.double)
-                dma = _attach_mo(dma, dms.mo_coeff, mo_occa)
-                dmb = _attach_mo(dmb, dms.mo_coeff, mo_occb)
-            else:
-                dma = _attach_mo(dma, dms.mo_coeff[0], dms.mo_occ[0])
-                dmb = _attach_mo(dmb, dms.mo_coeff[1], dms.mo_occ[1])
+    if hasattr(dms, 'mo_coeff'):
+        mo_coeff = dms.mo_coeff
+        mo_occ = dms.mo_occ
+        if mo_coeff[0].ndim < dma.ndim: # handle ROKS
+            mo_occa = numpy.array(mo_occ> 0, dtype=numpy.double)
+            mo_occb = numpy.array(mo_occ==2, dtype=numpy.double)
+            dma = lib.tag_array(dma, mo_coeff=mo_coeff, mo_occ=mo_occa)
+            dmb = lib.tag_array(dmb, mo_coeff=mo_coeff, mo_occ=mo_occb)
+        else:
+            dma = lib.tag_array(dma, mo_coeff=mo_coeff[0], mo_occ=mo_occ[0])
+            dmb = lib.tag_array(dmb, mo_coeff=mo_coeff[1], mo_occ=mo_occ[1])
     return dma, dmb
 
 nr_rks_vxc = nr_rks

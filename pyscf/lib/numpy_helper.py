@@ -893,6 +893,13 @@ def einsum(idx_str, *tensors):
     return numpy.dot(At,Bt).reshape(shapeCt).transpose(new_orderCt)
 
 
+class NPArrayWithTag(numpy.ndarray):
+    pass
+def tag_array(a, **kwargs):
+    a = numpy.asarray(a).view(NPArrayWithTag)
+    a.__dict__.update(kwargs)
+    return a
+
 if __name__ == '__main__':
     import scipy.linalg
     a = numpy.random.random((400,900))

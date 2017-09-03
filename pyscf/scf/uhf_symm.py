@@ -206,7 +206,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
         eig_(fock[1], mo_coeff[1], viridxb, mo_e[1], mo[1])
         orbsyma, orbsymb = get_orbsym(mol, mo, s, False)
 
-    mo = hf_symm.attach_orbsym(mo, (orbsyma,orbsymb))
+    mo = lib.tag_array(mo, orbsym=(orbsyma,orbsymb))
     return mo_e, mo
 
 
@@ -269,7 +269,7 @@ class UHF(uhf.UHF):
             orbsym.append([mol.irrep_id[ir]] * e.size)
         ea = numpy.hstack(es)
         ca = hf_symm.so2ao_mo_coeff(mol.symm_orb, cs)
-        ca = hf_symm.attach_orbsym(ca, numpy.hstack(orbsym))
+        ca = lib.tag_array(ca, orbsym=numpy.hstack(orbsym))
 
         hb = symm.symmetrize_matrix(h[1], mol.symm_orb)
         cs = []
@@ -282,7 +282,7 @@ class UHF(uhf.UHF):
             orbsym.append([mol.irrep_id[ir]] * e.size)
         eb = numpy.hstack(es)
         cb = hf_symm.so2ao_mo_coeff(mol.symm_orb, cs)
-        cb = hf_symm.attach_orbsym(cb, numpy.hstack(orbsym))
+        cb = lib.tag_array(cb, orbsym=numpy.hstack(orbsym))
         return numpy.array((ea,eb)), (ca,cb)
 
     def get_grad(self, mo_coeff, mo_occ, fock=None):

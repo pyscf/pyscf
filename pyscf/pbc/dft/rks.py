@@ -15,11 +15,11 @@ See Also:
 import time
 import numpy
 import pyscf.dft
-from pyscf.pbc.scf import hf as pbchf
+from pyscf import lib
 from pyscf.lib import logger
+from pyscf.pbc.scf import hf as pbchf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
-from pyscf.dft.rks import _attach_xc
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -77,7 +77,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     else:
         ecoul = None
 
-    vxc = _attach_xc(vxc, ecoul, exc, vj=None, vk=None)
+    vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
 
     if (small_rho_cutoff > 1e-20 and ground_state and
         abs(n-cell.nelectron) < 0.01*n):

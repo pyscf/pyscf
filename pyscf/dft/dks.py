@@ -9,6 +9,7 @@
 
 import time
 import numpy
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import dhf
 from pyscf.dft import rks
@@ -97,7 +98,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     else:
         ecoul = None
 
-    vxc = rks._attach_xc(vxc, ecoul, exc, vj, vk)
+    vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=vj, vk=vk)
 
     if (small_rho_cutoff > 1e-20 and ground_state and
         abs(n-mol.nelectron) < 0.01*n):

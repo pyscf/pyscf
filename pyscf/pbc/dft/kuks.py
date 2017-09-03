@@ -13,12 +13,12 @@ See Also:
 
 import time
 import numpy as np
-from pyscf.pbc.scf import kuhf
+from pyscf import lib
 from pyscf.lib import logger
+from pyscf.pbc.scf import kuhf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.pbc.dft import rks
-from pyscf.dft.rks import _attach_xc
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
              kpts=None, kpts_band=None):
@@ -65,7 +65,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     else:
         ecoul = None
 
-    vxc = _attach_xc(vxc, ecoul, exc, vj=None, vk=None)
+    vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
 
     nelec = cell.nelec
     if (small_rho_cutoff > 1e-20 and ground_state and

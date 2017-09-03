@@ -8,7 +8,6 @@ import sys
 import ctypes
 import numpy
 from pyscf import lib
-from pyscf.scf.hf import _attach_mo
 from pyscf.dft import numint
 from pyscf.dft.numint import eval_mat, _dot_ao_ao, _dot_ao_dm
 from pyscf.dft.numint import OCCDROP
@@ -535,15 +534,16 @@ def _format_uks_dm(dms):
     dma, dmb = dms
     if hasattr(dms, 'mo_coeff'):
         mo_coeff = dms.mo_coeff
+        mo_occ = dms.mo_occ
         if (isinstance(mo_coeff[0], numpy.ndarray) and
             mo_coeff[0].ndim < dma.ndim): # handle ROKS
-            mo_occa = numpy.array(dms.mo_occ> 0, dtype=numpy.double)
-            mo_occb = numpy.array(dms.mo_occ==2, dtype=numpy.double)
-            dma = _attach_mo(dma, mo_coeff, mo_occa)
-            dmb = _attach_mo(dmb, mo_coeff, mo_occb)
+            mo_occa = numpy.array(mo_occ> 0, dtype=numpy.double)
+            mo_occb = numpy.array(mo_occ==2, dtype=numpy.double)
+            dma = lib.tag_array(dma, mo_coeff=mo_coeff, mo_occ=mo_occa)
+            dmb = lib.tag_array(dmb, mo_coeff=mo_coeff, mo_occ=mo_occb)
         else:
-            dma = _attach_mo(dma, mo_coeff[0], dms.mo_occ[0])
-            dmb = _attach_mo(dmb, mo_coeff[1], dms.mo_occ[1])
+            dma = lib.tag_array(dma, mo_coeff=mo_coeff[0], mo_occ=mo_occ[0])
+            dmb = lib.tag_array(dmb, mo_coeff=mo_coeff[1], mo_occ=mo_occ[1])
     return dma, dmb
 
 nr_rks_vxc = nr_rks
