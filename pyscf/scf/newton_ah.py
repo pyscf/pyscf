@@ -86,6 +86,12 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
 
 def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
                    with_symmetry=True):
+    if not hasattr(fock_ao, 'focka'):
+        if h1e is None: h1e = mf.get_hcore()
+        dm0 = mf.make_rdm1(mo_coeff, mo_occ)
+        fock_ao = h1e + mf.get_veff(mol, dm0)
+    else:
+        fock_ao = fock_ao.focka, fock_ao.fockb
     mo_occa = occidxa = mo_occ > 0
     mo_occb = occidxb = mo_occ ==2
     ug, uh_op, uh_diag = gen_g_hop_uhf(mf, (mo_coeff,)*2, (mo_occa,mo_occb),
@@ -606,7 +612,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
     dm = mf.make_rdm1(mo_coeff, mo_occ)
 # call mf._scf.get_veff, to avoid density_fit module polluting get_veff function
     vhf = mf._scf.get_veff(mol, dm)
-    fock = mf.get_fock(h1e, s1e, vhf, dm, 0, None)
+    fock = mf.get_fock(h1e, s1e, vhf, dm)
     log.info('Initial guess |g|= %g',
              numpy.linalg.norm(mf._scf.get_grad(mo_coeff, mo_occ, fock)))
 # NOTE: DO NOT change the initial guess mo_occ, mo_coeff
@@ -629,7 +635,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         mo_coeff = mf.rotate_mo(mo_coeff, u, log)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         vhf = mf._scf.get_veff(mol, dm, dm_last=dm_last, vhf_last=vhf)
-        fock = mf.get_fock(h1e, s1e, vhf, dm, imacro, None)
+        fock = mf.get_fock(h1e, s1e, vhf, dm)
 # NOTE: DO NOT change the initial guess mo_occ, mo_coeff
         if mf.verbose >= logger.DEBUG:
             mo_energy, mo_tmp = mf.eig(fock, s1e)
@@ -771,11 +777,6 @@ def newton_SCF_class(mf):
                      self.max_memory, lib.current_memory()[0])
             return self
 
-        def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, diis=None,
-                     diis_start_cycle=None, level_shift_factor=None,
-                     damp_factor=None):
-            return h1e + vhf
-
         def build(self, mol=None):
             if mol is None: mol = self.mol
             if self.verbose >= logger.WARN:
@@ -832,7 +833,7 @@ def newton_SCF_class(mf):
             h1e = self._scf.get_hcore(mol)
             s1e = self._scf.get_ovlp(mol)
             vhf = self._scf.get_veff(mol, dm)
-            fock = self._scf.get_fock(h1e, s1e, vhf, dm, 0, None)
+            fock = self._scf.get_fock(h1e, s1e, vhf, dm)
             mo_energy, mo_coeff = self._scf.eig(fock, s1e)
             mo_occ = self._scf.get_occ(mo_energy, mo_coeff)
             return mo_coeff, mo_occ
@@ -890,23 +891,6 @@ def newton(mf):
         class ROHF(RHF):
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 return gen_g_hop_rohf(self, mo_coeff, mo_occ, fock_ao, h1e)
-
-            def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, diis=None,
-                         diis_start_cycle=None, level_shift_factor=None,
-                         damp_factor=None):
-                fock = h1e + vhf
-                self._focka_ao = self._scf._focka_ao = fock[0]  # needed by ._scf.eig
-                self._fockb_ao = self._scf._fockb_ao = fock[1]  # needed by ._scf.eig
-                self._dm_ao = dm  # needed by .eig
-                return fock
-
-            def eig(self, fock, s1e):
-                f = (self._focka_ao, self._fockb_ao)
-                f = rohf.get_roothaan_fock(f, self._dm_ao, s1e)
-                return self._scf.eig(f, s1e)
-                #fc = numpy.dot(fock[0], mo_coeff)
-                #mo_energy = numpy.einsum('pk,pk->k', mo_coeff, fc)
-                #return mo_energy
         return ROHF()
 
     elif isinstance(mf, uhf.UHF):

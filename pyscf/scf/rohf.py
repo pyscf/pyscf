@@ -27,34 +27,38 @@ def init_guess_by_atom(mol):
 
 init_guess_by_chkfile = uhf.init_guess_by_chkfile
 
-def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, diis=None,
-             diis_start_cycle=None, level_shift_factor=None,
-             damp_factor=None):
+def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
+             diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
     '''Build fock matrix based on Roothaan's effective fock.
     See also :func:`get_roothaan_fock`
     '''
+    if h1e is None: h1e = mf.get_hcore()
+    if vhf is None: vhf = mf.get_veff(dm=dm)
+    if dm is None: dm = mf.make_rdm1()
+    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+        dm = numpy.array((dm*.5, dm*.5))
+# To Get orbital energy in get_occ, we saved alpha and beta fock, because
+# Roothaan effective Fock cannot provide correct orbital energy with `eig`
+# TODO, check other treatment  J. Chem. Phys. 133, 141102
+    focka = h1e + vhf[0]
+    fockb = h1e + vhf[1]
+    f = get_roothaan_fock((focka,fockb), dm, s1e)
+    if cycle < 0 and diis is None:  # Not inside the SCF iteration
+        return f
+
     if diis_start_cycle is None:
         diis_start_cycle = mf.diis_start_cycle
     if level_shift_factor is None:
         level_shift_factor = mf.level_shift
     if damp_factor is None:
         damp_factor = mf.damp
-    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-        dm = numpy.array((dm*.5, dm*.5))
-# To Get orbital energy in get_occ, we saved alpha and beta fock, because
-# Roothaan effective Fock cannot provide correct orbital energy with `eig`
-# TODO, check other treatment  J. Chem. Phys. 133, 141102
-    mf._focka_ao = h1e + vhf[0]
-    mf._fockb_ao = h1e + vhf[1]
-    f = get_roothaan_fock((mf._focka_ao,mf._fockb_ao), dm, s1e)
 
-    if 0 <= cycle < diis_start_cycle-1:
-        f = hf.damping(s1e, dm[0], f, damp_factor)
+    dm_tot = dm[0] + dm[1]
+    if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4:
+        raise NotImplementedError('ROHF Fock-damping')
     if diis and cycle >= diis_start_cycle:
-        #f = diis.update(s1e, dmsf*.5, f, mf, h1e, vhf)
-        f = diis.update(s1e, dm[0], f, mf, h1e, vhf)
-    #f = level_shift(s1e, dmsf*.5, f, level_shift_factor)
-    f = hf.level_shift(s1e, dm[0], f, level_shift_factor)
+        f = diis.update(s1e, dm_tot, f, mf, h1e, vhf)
+    f = hf.level_shift(s1e, dm_tot*.5, f, level_shift_factor)
     return f
 
 def get_roothaan_fock(focka_fockb, dma_dmb, s):
@@ -69,7 +73,7 @@ def get_roothaan_fock(focka_fockb, dma_dmb, s):
     virtual     Fc      Fa     Fc
     ======== ======== ====== =========
 
-    where Fc stands for the Fa + Fb
+    where Fc = (Fa + Fb) / 2
 
     Returns:
         Roothaan effective Fock matrix
@@ -89,6 +93,7 @@ def get_roothaan_fock(focka_fockb, dma_dmb, s):
     fock += reduce(numpy.dot, (po.T, focka, pv))
     fock += reduce(numpy.dot, (pv.T, fc, pc))
     fock = fock + fock.T
+    fock = _attach_attr(fock, focka=focka, fockb=fockb)
     return fock
 
 
@@ -107,11 +112,11 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     '''
 
     if mo_energy is None: mo_energy = mf.mo_energy
-    if mo_coeff is None or mf._focka_ao is None:
-        mo_ea = mo_eb = mo_energy
+    if hasattr(mo_energy, 'mo_ea'):
+        mo_ea = mo_energy.mo_ea
+        mo_eb = mo_energy.mo_eb
     else:
-        mo_ea = numpy.einsum('ik,ik->k', mo_coeff, mf._focka_ao.dot(mo_coeff))
-        mo_eb = numpy.einsum('ik,ik->k', mo_coeff, mf._fockb_ao.dot(mo_coeff))
+        mo_ea = mo_eb = mo_energy
     nmo = mo_ea.size
     mo_occ = numpy.zeros(nmo)
     ncore = mf.nelec[1]
@@ -172,7 +177,7 @@ def _fill_rohf_occ(mo_energy, mo_energy_a, mo_energy_b, ncore, nopen):
     mo_occ[open_idx] = 1
     return mo_occ
 
-def get_grad(mo_coeff, mo_occ, fock=None):
+def get_grad(mo_coeff, mo_occ, fock):
     '''ROHF gradients is the off-diagonal block [co + cv + ov], where
     [ cc co cv ]
     [ oc oo ov ]
@@ -185,8 +190,15 @@ def get_grad(mo_coeff, mo_occ, fock=None):
     uniq_var_a = viridxa.reshape(-1,1) & occidxa
     uniq_var_b = viridxb.reshape(-1,1) & occidxb
 
-    focka = reduce(numpy.dot, (mo_coeff.T.conj(), fock[0], mo_coeff))
-    fockb = reduce(numpy.dot, (mo_coeff.T.conj(), fock[1], mo_coeff))
+    if hasattr(fock, 'focka'):
+        focka = fock.focka
+        fockb = fock.fockb
+    elif fock.ndim == 3:
+        focka, fockb = fock
+    else:
+        focka = fockb = fock
+    focka = reduce(numpy.dot, (mo_coeff.T.conj(), focka, mo_coeff))
+    fockb = reduce(numpy.dot, (mo_coeff.T.conj(), fockb, mo_coeff))
 
     g = numpy.zeros_like(focka)
     g[uniq_var_a]  = focka[uniq_var_a]
@@ -226,16 +238,16 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     log = logger.new_logger(mf, verbose)
     if log.verbose >= logger.NOTE:
         log.note('**** MO energy ****')
-        if mf._focka_ao is None:
-            for i,c in enumerate(mo_occ):
-                log.note('MO #%-3d energy= %-18.15g occ= %g', i+1, mo_energy[i], c)
-        else:
-            mo_ea = numpy.einsum('ik,ik->k', mo_coeff, mf._focka_ao.dot(mo_coeff))
-            mo_eb = numpy.einsum('ik,ik->k', mo_coeff, mf._fockb_ao.dot(mo_coeff))
+        if hasattr(mo_energy, 'mo_ea'):
+            mo_ea = mo_energy.mo_ea
+            mo_eb = mo_energy.mo_eb
             log.note('                Roothaan           | alpha              | beta')
             for i,c in enumerate(mo_occ):
                 log.note('MO #%-3d energy= %-18.15g | %-18.15g | %-18.15g occ= %g',
                          i+1, mo_energy[i], mo_ea[i], mo_eb[i], c)
+        else:
+            for i,c in enumerate(mo_occ):
+                log.note('MO #%-3d energy= %-18.15g occ= %g', i+1, mo_energy[i], c)
 
     ovlp_ao = mf.get_ovlp()
     if log.verbose >= logger.DEBUG:
@@ -268,8 +280,6 @@ class ROHF(hf.RHF):
         hf.SCF.__init__(self, mol)
         n_a = (mol.nelectron + mol.spin) // 2
         self.nelec = (n_a, mol.nelectron - n_a)
-        self._focka_ao = None
-        self._fockb_ao = None
         self._keys = self._keys.union(['nelec'])
 
     def dump_flags(self):
@@ -307,6 +317,15 @@ class ROHF(hf.RHF):
 
     get_fock = get_fock
     get_occ = get_occ
+
+    @lib.with_doc(hf.eig.__doc__)
+    def eig(self, fock, s):
+        e, c = self._eigh(fock, s)
+        if hasattr(fock, 'focka'):
+            mo_ea = numpy.einsum('pi,pi->i', c, fock.focka.dot(c))
+            mo_eb = numpy.einsum('pi,pi->i', c, fock.fockb.dot(c))
+            e = _attach_attr(e, mo_ea=mo_ea, mo_eb=mo_eb)
+        return e, c
 
     @lib.with_doc(get_grad.__doc__)
     def get_grad(self, mo_coeff, mo_occ, fock=None):
@@ -363,3 +382,10 @@ class HF1e(ROHF):
         self.e_tot = self.mo_energy[self.mo_occ>0][0] + self.mol.energy_nuc()
         self._finalize()
         return self.e_tot
+
+class ROFockArray(numpy.ndarray):
+    pass
+def _attach_attr(a, **kwargs):
+    a = numpy.asarray(a).view(ROFockArray)
+    a.__dict__.update(kwargs)
+    return a

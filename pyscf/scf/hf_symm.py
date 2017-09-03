@@ -484,11 +484,11 @@ class ROHF(rohf.ROHF):
         if not self.mol.symmetry:
             return rohf.ROHF.get_occ(self, mo_energy, mo_coeff)
 
-        if mo_coeff is None or self._focka_ao is None:
-            mo_ea = mo_eb = mo_energy
+        if hasattr(mo_energy, 'mo_ea'):
+            mo_ea = mo_energy.mo_ea
+            mo_eb = mo_energy.mo_eb
         else:
-            mo_ea = numpy.einsum('ik,ik->k', mo_coeff, self._focka_ao.dot(mo_coeff))
-            mo_eb = numpy.einsum('ik,ik->k', mo_coeff, self._fockb_ao.dot(mo_coeff))
+            mo_ea = mo_eb = mo_energy
         nmo = mo_ea.size
         mo_occ = numpy.zeros(nmo)
 
@@ -648,18 +648,9 @@ class ROHF(rohf.ROHF):
             for k,ir in enumerate(mol.irrep_id):
                 irname_full[ir] = mol.irrep_name[k]
             irorbcnt = {}
-            if self._focka_ao is None:
-                for k, j in enumerate(orbsym):
-                    if j in irorbcnt:
-                        irorbcnt[j] += 1
-                    else:
-                        irorbcnt[j] = 1
-                    log.note('MO #%-3d (%s #%-2d), energy= %-18.15g occ= %g',
-                             k+1, irname_full[j], irorbcnt[j],
-                             mo_energy[k], mo_occ[k])
-            else:
-                mo_ea = numpy.einsum('ik,ik->k', mo_coeff, self._focka_ao.dot(mo_coeff))
-                mo_eb = numpy.einsum('ik,ik->k', mo_coeff, self._fockb_ao.dot(mo_coeff))
+            if hasattr(mo_energy, 'mo_ea'):
+                mo_ea = mo_energy.mo_ea
+                mo_eb = mo_energy.mo_eb
                 log.note('                          Roothaan           | alpha              | beta')
                 for k, j in enumerate(orbsym):
                     if j in irorbcnt:
@@ -669,6 +660,15 @@ class ROHF(rohf.ROHF):
                     log.note('MO #%-4d(%-3s #%-2d) energy= %-18.15g | %-18.15g | %-18.15g occ= %g',
                              k+1, irname_full[j], irorbcnt[j],
                              mo_energy[k], mo_ea[k], mo_eb[k], mo_occ[k])
+            else:
+                for k, j in enumerate(orbsym):
+                    if j in irorbcnt:
+                        irorbcnt[j] += 1
+                    else:
+                        irorbcnt[j] = 1
+                    log.note('MO #%-3d (%s #%-2d), energy= %-18.15g occ= %g',
+                             k+1, irname_full[j], irorbcnt[j],
+                             mo_energy[k], mo_occ[k])
 
         if log.verbose >= logger.DEBUG:
             label = mol.ao_labels()

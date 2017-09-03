@@ -139,7 +139,8 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         vhf = mf.get_veff(mol, dm, dm_last, vhf)
         e_tot = mf.energy_tot(dm, h1e, vhf)
 
-        norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, h1e+vhf))
+        fock = mf.get_fock(h1e, s1e, vhf, dm)  # = h1e + vhf, no DIIS
+        norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, fock))
         norm_ddm = numpy.linalg.norm(dm-dm_last)
         logger.info(mf, 'cycle= %d E= %.15g  delta_E= %4.3g  |g|= %4.3g  |ddm|= %4.3g',
                     cycle+1, e_tot, e_tot-last_hf_e, norm_gorb, norm_ddm)
@@ -158,8 +159,8 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
     # An extra diagonalization, to remove level shift
     if scf_conv:
-        fock = mf.get_fock(h1e, s1e, vhf, dm, cycle, None, 0, 0, 0)
-        norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, h1e+vhf))
+        fock = mf.get_fock(h1e, s1e, vhf, dm)  # = h1e + vhf
+        norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, fock))
         mo_energy, mo_coeff = mf.eig(fock, s1e)
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
         dm, dm_last = mf.make_rdm1(mo_coeff, mo_occ), dm
@@ -617,9 +618,13 @@ def get_veff(mol, dm, dm_last=None, vhf_last=None, hermi=1, vhfopt=None):
         vj, vk = get_jk(mol, ddm, hermi, vhfopt)
         return vj - vk * .5 + numpy.asarray(vhf_last)
 
-def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, diis=None,
+def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
     '''F = h^{core} + V^{HF}
+
+    Special treatment (damping, DIIS, or level shift) will be applied to the
+    Fock matrix if diis and cycle is specified (The two parameters are passed
+    to get_fock function during the SCF iteration)
 
     Args:
         h1e : 2D ndarray
@@ -641,6 +646,12 @@ def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, diis=None,
         level_shift_factor : float or int
             Level shift (in AU) for virtual space.  Default is 0.
     '''
+    if h1e is None: h1e = mf.get_hcore()
+    if vhf is None: vhf = mf.get_veff(dm=dm)
+    f = h1e + vhf
+    if cycle < 0 and diis is None:  # Not inside the SCF iteration
+        return f
+
     if diis_start_cycle is None:
         diis_start_cycle = mf.diis_start_cycle
     if level_shift_factor is None:
@@ -648,10 +659,9 @@ def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, diis=None,
     if damp_factor is None:
         damp_factor = mf.damp
 
-    f = h1e + vhf
     if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4:
         f = damping(s1e, dm*.5, f, damp_factor)
-    if diis and cycle >= diis_start_cycle:
+    if diis is not None and cycle >= diis_start_cycle:
         f = diis.update(s1e, dm, f, mf, h1e, vhf)
     if abs(level_shift_factor) > 1e-4:
         f = level_shift(s1e, dm*.5, f, level_shift_factor)
