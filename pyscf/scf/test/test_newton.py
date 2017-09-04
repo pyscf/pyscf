@@ -24,6 +24,7 @@ class KnowValues(unittest.TestCase):
 
         mf = scf.RHF(mol)
         mf.max_cycle = 1
+        mf.conv_check = False
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 2
@@ -44,6 +45,7 @@ class KnowValues(unittest.TestCase):
         )
         mf = scf.RHF(mol)
         mf.max_cycle = 1
+        mf.conv_check = False
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 2
@@ -65,6 +67,7 @@ class KnowValues(unittest.TestCase):
         )
         mf = scf.UHF(mol)
         mf.max_cycle = 1
+        mf.conv_check = False
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 2
@@ -102,6 +105,7 @@ class KnowValues(unittest.TestCase):
 
         mf = scf.RHF(mol)
         mf.max_cycle = 1
+        mf.conv_check = False
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 2
@@ -124,6 +128,7 @@ class KnowValues(unittest.TestCase):
         mf = scf.RHF(mol)
         mf.irrep_nelec['B2'] = (1,0)
         mf.max_cycle = 1
+        mf.conv_check = False
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 2
@@ -146,6 +151,7 @@ class KnowValues(unittest.TestCase):
         )
         mf = scf.UHF(mol)
         mf.max_cycle = 1
+        mf.conv_check = False
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 2
@@ -166,6 +172,7 @@ class KnowValues(unittest.TestCase):
         mf = dft.RKS(mol)
         eref = mf.kernel()
         mf.max_cycle = 1
+        mf.conv_check = False
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 3
@@ -186,6 +193,7 @@ class KnowValues(unittest.TestCase):
         mf.xc = 'b3lyp'
         eref = mf.kernel()
         mf.max_cycle = 1
+        mf.conv_check = False
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 3
@@ -233,6 +241,7 @@ class KnowValues(unittest.TestCase):
         eref = mf.kernel()
 
         mf.max_cycle = 1
+        mf.conv_check = False
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 3
@@ -256,6 +265,7 @@ class KnowValues(unittest.TestCase):
         eref = mf.kernel()
 
         mf.max_cycle = 1
+        mf.conv_check = False
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 2
@@ -279,6 +289,7 @@ class KnowValues(unittest.TestCase):
         eref = mf.kernel()
 
         mf.max_cycle = 1
+        mf.conv_check = False
         mf.kernel()
         nr = scf.newton(mf)
         nr.max_cycle = 3
