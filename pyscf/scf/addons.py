@@ -85,12 +85,13 @@ def dynamic_level_shift_(mf, factor=1.):
     last_e = [None]
     def get_fock(h1e, s1e, vhf, dm, cycle=-1, diis=None,
                  diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
-        ehf =(numpy.einsum('ij,ji', h1e, dm) +
-              numpy.einsum('ij,ji', vhf, dm) * .5)
-        if last_e[0] is not None:
-            level_shift_factor = abs(ehf-last_e[0]) * factor
-            logger.info(mf, 'Set level shift to %g', level_shift_factor)
-        last_e[0] = ehf
+        if cycle >= 0 or diis is not None:
+            ehf =(numpy.einsum('ij,ji', h1e, dm) +
+                  numpy.einsum('ij,ji', vhf, dm) * .5)
+            if last_e[0] is not None:
+                level_shift_factor = abs(ehf-last_e[0]) * factor
+                logger.info(mf, 'Set level shift to %g', level_shift_factor)
+            last_e[0] = ehf
         return old_get_fock(h1e, s1e, vhf, dm, cycle, diis, diis_start_cycle,
                             level_shift_factor, damp_factor)
     mf.get_fock = get_fock

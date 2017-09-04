@@ -206,7 +206,8 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
         eig_(fock[1], mo_coeff[1], viridxb, mo_e[1], mo[1])
         orbsyma, orbsymb = get_orbsym(mol, mo, s, False)
 
-    mo = lib.tag_array(mo, orbsym=(orbsyma,orbsymb))
+    mo = (lib.tag_array(mo[0], orbsym=orbsyma),
+          lib.tag_array(mo[1], orbsym=orbsymb))
     return mo_e, mo
 
 
@@ -283,7 +284,7 @@ class UHF(uhf.UHF):
         eb = numpy.hstack(es)
         cb = hf_symm.so2ao_mo_coeff(mol.symm_orb, cs)
         cb = lib.tag_array(cb, orbsym=numpy.hstack(orbsym))
-        return numpy.array((ea,eb)), (ca,cb)
+        return (ea,eb), (ca,cb)
 
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         g = uhf.UHF.get_grad(self, mo_coeff, mo_occ, fock)
@@ -404,25 +405,20 @@ class UHF(uhf.UHF):
         va_sort = numpy.argsort(ea[self.mo_occ[0]==0].round(9))
         ob_sort = numpy.argsort(eb[self.mo_occ[1]>0 ].round(9))
         vb_sort = numpy.argsort(eb[self.mo_occ[1]==0].round(9))
-        self.mo_energy = (numpy.hstack((ea[self.mo_occ[0]>0 ][oa_sort],
-                                        ea[self.mo_occ[0]==0][va_sort])),
-                          numpy.hstack((eb[self.mo_occ[1]>0 ][ob_sort],
-                                        eb[self.mo_occ[1]==0][vb_sort])))
-        ca = self.mo_coeff[0]
-        cb = self.mo_coeff[1]
-        self.mo_coeff = (numpy.hstack((ca[:,self.mo_occ[0]>0 ].take(oa_sort, axis=1),
-                                       ca[:,self.mo_occ[0]==0].take(va_sort, axis=1))),
-                         numpy.hstack((cb[:,self.mo_occ[1]>0 ].take(ob_sort, axis=1),
-                                       cb[:,self.mo_occ[1]==0].take(vb_sort, axis=1))))
-        nocc_a = int(self.mo_occ[0].sum())
-        nocc_b = int(self.mo_occ[1].sum())
-        self.mo_occ[0][:nocc_a] = 1
-        self.mo_occ[0][nocc_a:] = 0
-        self.mo_occ[1][:nocc_b] = 1
-        self.mo_occ[1][nocc_b:] = 0
+        idxa = numpy.arange(ea.size)
+        idxa = numpy.hstack((idxa[self.mo_occ[0]> 0][oa_sort],
+                             idxa[self.mo_occ[0]==0][va_sort]))
+        idxb = numpy.arange(eb.size)
+        idxb = numpy.hstack((idxb[self.mo_occ[1]> 0][ob_sort],
+                             idxb[self.mo_occ[1]==0][vb_sort]))
+        self.mo_energy = (ea[idxa], eb[idxb])
+        orbsyma, orbsymb = get_orbsym(self.mol, self.mo_coeff)
+        self.mo_coeff = (lib.tag_array(self.mo_coeff[0][:,idxa], orbsym=orbsyma[idxa]),
+                         lib.tag_array(self.mo_coeff[1][:,idxb], orbsym=orbsymb[idxb]))
+        self.mo_occ = (self.mo_occ[0][idxa], self.mo_occ[1][idxb])
         if self.chkfile:
             chkfile.dump_scf(self.mol, self.chkfile, self.e_tot, self.mo_energy,
-                             self.mo_coeff, self.mo_occ, overwrite_mol=True)
+                             self.mo_coeff, self.mo_occ, overwrite_mol=False)
         return self
 
     def analyze(self, verbose=None, **kwargs):
@@ -441,11 +437,11 @@ class UHF(uhf.UHF):
 
 def get_orbsym(mol, mo_coeff, s=None, check=False):
     if hasattr(mo_coeff, 'orbsym'):
-        orbsym = mo_coeff.orbsym
+        orbsym = numpy.asarray(mo_coeff.orbsym)
     else:
         orbsym = (hf_symm.get_orbsym(mol, mo_coeff[0], s, check),
                   hf_symm.get_orbsym(mol, mo_coeff[1], s, check))
-    return numpy.asarray(orbsym)
+    return orbsym
 
 class HF1e(UHF):
     def scf(self, *args):

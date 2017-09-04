@@ -263,12 +263,14 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the Fock matrix within occupied, open,
     virtual subspaces separatedly (without change occupancy).
     '''
-    dm = mf.make_rdm1(mo_coeff, mo_occ)
-    if fock is None:
-        fock = mf.get_hcore() + mf.get_veff(mf.mol, dm)
-    if isinstance(fock, numpy.ndarray) and fock.ndim == 3:
-        fock = get_roothaan_fock(fock, dm, mf.get_ovlp())
-    return hf.canonicalize(mf, mo_coeff, mo_occ, fock)
+    if not hasattr(fock, 'focka'):
+        dm = mf.make_rdm1(mo_coeff, mo_occ)
+        fock = mf.get_fock(dm=dm)
+    mo_e, mo_coeff = hf.canonicalize(mf, mo_coeff, mo_occ, fock)
+    mo_ea = numpy.einsum('pi,pi->i', mo_coeff, fock.focka.dot(mo_coeff))
+    mo_eb = numpy.einsum('pi,pi->i', mo_coeff, fock.fockb.dot(mo_coeff))
+    mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
+    return mo_e, mo_coeff
 
 # use UHF init_guess, get_veff, diis, and intermediates such as fock, vhf, dm
 # keep mo_energy, mo_coeff, mo_occ as RHF structure

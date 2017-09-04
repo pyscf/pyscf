@@ -385,17 +385,13 @@ class RHF(hf.RHF):
         # sort MOs wrt orbital energies, it should be done last.
         o_sort = numpy.argsort(self.mo_energy[self.mo_occ> 0].round(9))
         v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9))
+        idx = numpy.arange(self.mo_energy.size)
+        idx = numpy.hstack((idx[self.mo_occ> 0][o_sort],
+                            idx[self.mo_occ==0][v_sort]))
+        self.mo_energy = self.mo_energy[idx]
         orbsym = get_orbsym(self.mol, self.mo_coeff)
-        self.mo_energy = numpy.hstack((self.mo_energy[self.mo_occ> 0][o_sort],
-                                       self.mo_energy[self.mo_occ==0][v_sort]))
-        self.mo_coeff = numpy.hstack((self.mo_coeff[:,self.mo_occ> 0].take(o_sort, axis=1),
-                                      self.mo_coeff[:,self.mo_occ==0].take(v_sort, axis=1)))
-        orbsym = numpy.hstack((orbsym[self.mo_occ> 0][o_sort],
-                               orbsym[self.mo_occ==0][v_sort]))
-        self.mo_coeff = lib.tag_array(self.mo_coeff, orbsym=orbsym)
-        nocc = len(o_sort)
-        self.mo_occ[:nocc] = 2
-        self.mo_occ[nocc:] = 0
+        self.mo_coeff = lib.tag_array(self.mo_coeff[:,idx], orbsym=orbsym[idx])
+        self.mo_occ = self.mo_occ[idx]
         if self.chkfile:
             chkfile.dump_scf(self.mol, self.chkfile, self.e_tot, self.mo_energy,
                              self.mo_coeff, self.mo_occ, overwrite_mol=False)
@@ -594,17 +590,20 @@ class ROHF(rohf.ROHF):
         c_sort = numpy.argsort(self.mo_energy[self.mo_occ==2].round(9))
         o_sort = numpy.argsort(self.mo_energy[self.mo_occ==1].round(9))
         v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9))
-        self.mo_energy = numpy.hstack((self.mo_energy[self.mo_occ==2][c_sort],
-                                       self.mo_energy[self.mo_occ==1][o_sort],
-                                       self.mo_energy[self.mo_occ==0][v_sort]))
-        self.mo_coeff = numpy.hstack((self.mo_coeff[:,self.mo_occ==2].take(c_sort, axis=1),
-                                      self.mo_coeff[:,self.mo_occ==1].take(o_sort, axis=1),
-                                      self.mo_coeff[:,self.mo_occ==0].take(v_sort, axis=1)))
-        ncore = len(c_sort)
-        nocc = ncore + len(o_sort)
-        self.mo_occ[:ncore] = 2
-        self.mo_occ[ncore:nocc] = 1
-        self.mo_occ[nocc:] = 0
+        idx = numpy.arange(self.mo_energy.size)
+        idx = numpy.hstack((idx[self.mo_occ==2][c_sort],
+                            idx[self.mo_occ==1][o_sort],
+                            idx[self.mo_occ==0][v_sort]))
+        if hasattr(self.mo_energy, 'mo_ea'):
+            mo_ea = self.mo_energy.mo_ea[idx]
+            mo_eb = self.mo_energy.mo_eb[idx]
+            self.mo_energy = lib.tag_array(self.mo_energy[idx],
+                                           mo_ea=mo_ea, mo_eb=mo_eb)
+        else:
+            self.mo_energy = self.mo_energy[idx]
+        orbsym = get_orbsym(self.mol, self.mo_coeff)
+        self.mo_coeff = lib.tag_array(self.mo_coeff[:,idx], orbsym=orbsym[idx])
+        self.mo_occ = self.mo_occ[idx]
         if self.chkfile:
             chkfile.dump_scf(self.mol, self.chkfile, self.e_tot, self.mo_energy,
                              self.mo_coeff, self.mo_occ, overwrite_mol=False)
@@ -697,12 +696,13 @@ class ROHF(rohf.ROHF):
 
     @lib.with_doc(canonicalize.__doc__)
     def canonicalize(self, mo_coeff, mo_occ, fock=None):
-        dm = self.make_rdm1(mo_coeff, mo_occ)
-        if fock is None:
-            fock = self.get_hcore() + self.get_veff(self.mol, dm)
-        if isinstance(fock, numpy.ndarray) and fock.ndim == 3:
-            fock = rohf.get_roothaan_fock(fock, dm, self.get_ovlp())
-        return canonicalize(self, mo_coeff, mo_occ, fock)
+        if not hasattr(fock, 'focka'):
+            fock = mf.get_fock(dm=dm)
+        mo_e, mo_coeff = canonicalize(self, mo_coeff, mo_occ, fock)
+        mo_ea = numpy.einsum('pi,pi->i', mo_coeff, fock.focka.dot(mo_coeff))
+        mo_eb = numpy.einsum('pi,pi->i', mo_coeff, fock.fockb.dot(mo_coeff))
+        mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
+        return mo_e, mo_coeff
 
 
 def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym, title='',
