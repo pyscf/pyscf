@@ -13,7 +13,6 @@
 
 import pyscf
 import os
-import ctypes
 import time
 import tempfile
 from functools import reduce
@@ -21,7 +20,6 @@ import numpy
 import h5py
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf import fci
 from pyscf import mcscf
 from pyscf import ao2mo
 from pyscf import scf
@@ -29,7 +27,6 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.dmrgscf import dmrgci
 from pyscf.dmrgscf import dmrg_sym
 from pyscf import tools
-from pyscf import lib
 import sys
 
 libmc = lib.load_library('libmcscf')
@@ -46,98 +43,189 @@ if not os.path.isfile(executable):
 NUMERICAL_ZERO = 1e-14
 
 
-#def readIntegrals(infile, dt=numpy.dtype('Float64')):
-#    startScaling = False
-#
-#    norb = -1 #need to read norb from infile
-#    nelec = -1
-#
-#    lines = []
-#    f = open(infile, 'r')
-#    lines = f.readlines()
-#    f.close()
-#
-#    index = 0
-#    for line in lines:
-#        linesplit = line.replace("="," ")
-#        linesplit = linesplit.replace(","," ")
-#        linesp = linesplit.split()
-#        if (startScaling == False and len(linesp) == 1 and (linesp[0] == "&END" or linesp[0] == "/")):
-#            startScaling = True
-#            index += 1
-#        elif(startScaling == False):
-#            if (len(linesp) > 4):
-#                if (linesp[1] == "NORB"):
-#                    norb = int(linesp[2])
-#                if (linesp[3] == "NELEC"):
-#                    nelec = int(linesp[4])
-#            index += 1
-#
-#    if (norb == -1 or nelec == -1):
-#        print "could not read the norbs or nelec"
-#        exit(0)
-#
-#    int2 = numpy.zeros(shape=(norb, norb, norb, norb), dtype=dt, order='F')
-#    int1 = numpy.zeros(shape=(norb, norb), dtype=dt, order='F')
-#    coreE = 0.0
-#
-#    totalIntegralLines = len(lines) - index
-#    for i in range(totalIntegralLines):
-#        linesp = lines[i+index].split()
-#        if (len(linesp) != 5) :
-#            continue
-#        integral, a, b, c, d = float(linesp[0]), int(linesp[1]), int(linesp[2]), int(linesp[3]), int(linesp[4])
-#
-#        if(a==b==c==d==0):
-#            coreE = integral
-#        elif (c==d==0):
-#            int1[a-1,b-1] = integral
-#            int1[b-1,a-1] = integral
-#            A,B = max(a,b), min(a,b)
-#        else:
-#            int2[a-1, c-1, b-1, d-1] = integral
-#            int2[b-1, c-1, a-1, d-1] = integral
-#            int2[a-1, d-1, b-1, c-1] = integral
-#            int2[b-1, d-1, a-1, c-1] = integral
-#
-#            int2[c-1, a-1, d-1, b-1] = integral
-#            int2[d-1, a-1, c-1, b-1] = integral
-#            int2[c-1, b-1, d-1, a-1] = integral
-#            int2[d-1, b-1, c-1, a-1] = integral
-#
-#    return norb, nelec, int2, int1, coreE
+#in state average calculationg dm1eff will be different than dm1
+#this means that the h1eff in the fock operator which is stored in eris_sp['h1eff'] will be
+#calculated using the dm1eff and will in general not result in diagonal matrices
+def writeNEVPTIntegrals(mc, E1, E2, E1eff, aaavsplit, nfro, fully_ic=False, third_order=False):
+    # Initializations
+    ncor = mc.ncore
+    nact = mc.ncas
+    norb = mc.mo_coeff.shape[1]
+    nvir = norb-ncor-nact
+    nocc = ncor+nact
+    mo   = mc.mo_coeff
 
 
-#def makeheff(int1, int2popo, int2ppoo, E1, ncor, nvir, nfro):
-#        nocc = int1.shape[0]-nvir
-#
-#        int1_eff = 1.*int1 + 2.0*numpy.einsum('mnii->mn', int2ppoo[:, :, nfro:ncor, nfro:ncor])\
-#                                -numpy.einsum('mini->mn', int2popo[:, nfro:ncor, :, nfro:ncor])
-#
-#        int1_eff[:ncor, :ncor] += numpy.einsum('lmjk,jk->lm',int2ppoo[:ncor,:ncor,ncor:nocc,ncor:nocc], E1)
-#                            - 0.5*numpy.einsum('ljmk,jk->lm',int2popo[:ncor,ncor:nocc,:ncor,ncor:nocc], E1)
-#        int1_eff[nocc:, nocc:] += numpy.einsum('lmjk,jk->lm',int2ppoo[nocc:,nocc:,ncor:nocc,ncor:nocc], E1)
-#                            - 0.5*numpy.einsum('ljmk,jk->lm',int2popo[nocc:,ncor:nocc,nocc:,ncor:nocc], E1)
-#       #int1_eff[nocc:, nocc:] += numpy.einsum('ljmk,jk->lm',int2[nocc:,ncor:nocc,nocc:,ncor:nocc], E1)
-#                            - 0.5*numpy.einsum('ljkm,jk->lm',int2[nocc:,ncor:nocc,ncor:nocc,nocc:], E1)
-#        return int1_eff
+    # eris_sp
+    # (Note: Integrals are in chemistry notation)
+    eris = _ERIS(mc, mo)
+    eris_sp={}
+    eris_sp['h1eff']= eris['h1eff']
+    eris_sp['h1eff'][:ncor,:ncor] += numpy.einsum('abcd,cd', eris['ppaa'][:ncor,:ncor,:,:], E1eff)
+    eris_sp['h1eff'][:ncor,:ncor] -= numpy.einsum('abcd,bd', eris['papa'][:ncor,:,:ncor,:], E1eff)*0.5
+    eris_sp['h1eff'][nocc:,nocc:] += numpy.einsum('abcd,cd', eris['ppaa'][nocc:,nocc:,:,:], E1eff)
+    eris_sp['h1eff'][nocc:,nocc:] -= numpy.einsum('abcd,bd', eris['papa'][nocc:,:,nocc:,:], E1eff)*0.5
+    eriscvcv = eris['cvcv']
+    if (not isinstance(eris['cvcv'], type(eris_sp['h1eff']))):
+        eriscvcv = lib.chkfile.load(eris['cvcv'].name, "eri_mo")#h5py.File(eris['cvcv'].name,'r')["eri_mo"]
+    eris_sp['cvcv'] = eriscvcv.reshape(ncor, norb-ncor-nact, ncor, norb-ncor-nact)
+
+    # energy_core
+    dmcore = numpy.dot(mo[:,:ncor], mo[:,:ncor].T)*2
+    vj, vk = mc._scf.get_jk(mc.mol, dmcore)
+    energy_core = numpy.einsum('ij,ji', dmcore, mc.get_hcore()) \
+                + numpy.einsum('ij,ji', dmcore, vj-0.5*vk) * .5
+
+    # energyE0
+    energyE0 = 1.0*numpy.einsum('ij,ij',     E1, eris_sp['h1eff'][ncor:nocc, ncor:nocc])\
+             + 0.5*numpy.einsum('ijkl,ijkl', E2, eris['ppaa'][ncor:nocc, ncor:nocc, :, :].transpose(0,2,1,3))
+    energyE0 += energy_core
+    energyE0 += mc.mol.energy_nuc()
+
+    print "Energy_core = ",energy_core
+    print "Energy      = ", energyE0
+    print ""
 
 
-#def makeheff(int1, int2, E1, ncor, nvir):
-#        nocc = int1.shape[0]-nvir
-#
-#        int1_eff = 1.*int1 + 2.0*numpy.einsum('mini->mn', int2[:,:ncor, :, :ncor])
-#                                -numpy.einsum('miin->mn', int2[:,:ncor, :ncor, :])
-#
-#        int1_eff[:ncor, :ncor] += numpy.einsum('ljmk,jk->lm',int2[:ncor,ncor:nocc,:ncor,ncor:nocc], E1)
-#                            - 0.5*numpy.einsum('ljkm,jk->lm',int2[:ncor,ncor:nocc,ncor:nocc,:ncor], E1)
-#        int1_eff[nocc:, nocc:] += numpy.einsum('ljmk,jk->lm',int2[nocc:,ncor:nocc,nocc:,ncor:nocc], E1)
-#                            - 0.5*numpy.einsum('ljkm,jk->lm',int2[nocc:,ncor:nocc,ncor:nocc,nocc:], E1)
-#        return int1_eff
-#'''
+    # offdiagonal
+    offdiagonal = 0.0
+    #zero out off diagonal core
+    for k in range(ncor):
+        for l in range(ncor):
+            if(k != l):
+                offdiagonal = max(abs(offdiagonal), abs(eris_sp['h1eff'][k,l] ))
+    #zero out off diagonal virtuals
+    for k in range(nocc, norb):
+        for l in range(nocc,norb):
+            if(k != l):
+                offdiagonal = max(abs(offdiagonal), abs(eris_sp['h1eff'][k,l] ))
+    # warning
+    if (abs(offdiagonal) > 1e-6):
+        print "WARNING: Have to use natural orbitals from CAASCF"
+        print "         offdiagonal elements:", offdiagonal
+        print ""
 
 
-def writeMRLCCIntegrals(mc, E1, E2, nfro, fully_ic=False, third_order=False) :
+    # Write out ingredients to intfolder
+    intfolder=mc.fcisolver.scratchDirectory+'/int/'
+    intfolder='int/'
+
+    numpy.save(intfolder+"W:caac", numpy.asfortranarray(eris['papa']   [nfro:ncor,     :    , nfro:ncor,:].transpose(0,3,1,2)))
+    numpy.save(intfolder+"W:aeca", numpy.asfortranarray(eris['papa']   [nfro:ncor,     :    , nocc:    ,:].transpose(1,2,0,3)))
+    numpy.save(intfolder+"W:ccaa", numpy.asfortranarray(eris['papa']   [nfro:ncor,     :    , nfro:ncor,:].transpose(0,2,1,3)))
+    numpy.save(intfolder+"W:eeaa", numpy.asfortranarray(eris['papa']   [nocc:    ,     :    , nocc:    ,:].transpose(0,2,1,3)))
+    numpy.save(intfolder+"W:caca", numpy.asfortranarray(eris['ppaa']   [nfro:ncor, nfro:ncor,     :    ,:].transpose(0,2,1,3)))
+    numpy.save(intfolder+"W:eaca", numpy.asfortranarray(eris['ppaa']   [nocc:    , nfro:ncor,     :    ,:].transpose(0,2,1,3)))
+    numpy.save(intfolder+"W:ccae", numpy.asfortranarray(eris['pacv']   [nfro:ncor,     :    , nfro:    ,:].transpose(0,2,1,3)))
+    numpy.save(intfolder+"W:aaaa", numpy.asfortranarray(eris['ppaa']   [ncor:nocc, ncor:nocc,     :    ,:].transpose(0,2,1,3)))
+    numpy.save(intfolder+"W:eeca", numpy.asfortranarray(eris['pacv']   [nocc:    ,     :    , nfro:    ,:].transpose(3,0,2,1)))
+    numpy.save(intfolder+"W:eecc", numpy.asfortranarray(eris_sp['cvcv'][nfro:    ,     :    , nfro:    ,:].transpose(1,3,0,2)))
+    if (fully_ic):
+      numpy.save(intfolder+"W:eaaa", numpy.asfortranarray(eris['ppaa'][nocc:    , ncor:nocc,     :    ,:].transpose(0,2,1,3)))
+      numpy.save(intfolder+"W:caaa", numpy.asfortranarray(eris['ppaa'][nfro:ncor, ncor:nocc,     :    ,:].transpose(0,2,1,3)))
+    numpy.save(intfolder+"int1eff",numpy.asfortranarray(eris_sp['h1eff'][nfro:,nfro:]))
+
+    if (third_order):
+      int2popo = ao2mo.outcore.general_iofree(mc.mol, (mo, mo[:,:nocc], mo, mo[:,:nocc]), compact=False)
+      int2ppoo = ao2mo.outcore.general_iofree(mc.mol, (mo, mo, mo[:,:nocc], mo[:,:nocc]), compact=False)
+      int2eeep = ao2mo.outcore.general_iofree(mc.mol, (mo[:,nocc:], mo[:,nocc:], mo[:,nocc:], mo), compact=False)
+      int2popo.shape=(norb, nocc, norb, nocc)
+      int2ppoo.shape=(norb, norb, nocc, nocc)
+      int2eeep.shape=(nvir, nvir, nvir, norb)
+      numpy.save(intfolder+"W:ccca", numpy.asfortranarray(int2ppoo[nfro:ncor, nfro:ncor, nfro:ncor, ncor:nocc].transpose(0,2,1,3)))
+      numpy.save(intfolder+"W:ccce", numpy.asfortranarray(int2ppoo[nocc:    , nfro:ncor, nfro:ncor, nfro:ncor].transpose(3,1,2,0)))
+      numpy.save(intfolder+"W:cace", numpy.asfortranarray(int2ppoo[nocc:    , ncor:nocc, nfro:ncor, nfro:ncor].transpose(3,1,2,0)))
+      numpy.save(intfolder+"W:eeec", numpy.asfortranarray(int2eeep[    :    ,     :    ,     :    , nfro:ncor].transpose(0,2,1,3)))
+      numpy.save(intfolder+"W:eeea", numpy.asfortranarray(int2eeep[    :    ,     :    ,     :    , ncor:nocc].transpose(0,2,1,3)))
+      numpy.save(intfolder+"W:eeee", numpy.asfortranarray(int2eeep[    :    ,     :    ,     :    , nocc:    ].transpose(0,2,1,3)))
+      numpy.save(intfolder+"W:cccc", numpy.asfortranarray(int2ppoo[nfro:ncor, nfro:ncor, nfro:ncor, nfro:ncor].transpose(0,2,1,3)))
+      numpy.save(intfolder+"W:aeae", numpy.asfortranarray(int2ppoo[nocc:    , nocc:    , ncor:nocc, ncor:nocc].transpose(2,0,3,1)))
+      numpy.save(intfolder+"W:aece", numpy.asfortranarray(int2ppoo[nocc:    , nocc:    , ncor:nocc, nfro:ncor].transpose(2,0,3,1)))
+      numpy.save(intfolder+"W:cece", numpy.asfortranarray(int2ppoo[nocc:    , nocc:    , nfro:ncor, nfro:ncor].transpose(2,0,3,1)))
+      numpy.save(intfolder+"W:ceec", numpy.asfortranarray(int2popo[nocc:    , nfro:ncor, nocc:    , nfro:ncor].transpose(1,2,0,3)))
+      numpy.save(intfolder+"W:aeea", numpy.asfortranarray(int2popo[nocc:    , ncor:nocc, nocc:    , ncor:nocc].transpose(1,2,0,3)))
+
+    print "Basic ingredients wrote to "+intfolder
+    print ""
+
+
+    # Write "FCIDUMP_aaav0" and "FCIDUMP_aaac"
+    if (not fully_ic):
+      # About symmetry...
+      from pyscf import symm
+      mol = mc.mol
+      orbsymout=[]
+      orbsym = []
+      if (mol.symmetry):
+          orbsym = symm.label_orb_symm(mol, mol.irrep_id,
+                                       mol.symm_orb, mo, s=mc._scf.get_ovlp())
+      if mol.symmetry and orbsym:
+          if mol.groupname.lower() == 'dooh':
+              orbsymout = [dmrg_sym.IRREP_MAP['D2h'][i % 10] for i in orbsym]
+          elif mol.groupname.lower() == 'coov':
+              orbsymout = [dmrg_sym.IRREP_MAP['C2v'][i % 10] for i in orbsym]
+          else:
+              orbsymout = [dmrg_sym.IRREP_MAP[mol.groupname][i] for i in orbsym]
+      else:
+          orbsymout = []
+
+      virtOrbs = range(nocc, eris_sp['h1eff'].shape[0])
+      chunks = len(virtOrbs)/aaavsplit
+      virtRange = [virtOrbs[i:i+chunks] for i in xrange(0, len(virtOrbs), chunks)]
+
+      for K in range(aaavsplit):
+          currentOrbs = range(ncor, nocc)+virtRange[K]
+          fout = open('FCIDUMP_aaav%d'%(K),'w')
+          #tools.fcidump.write_head(fout, eris_sp['h1eff'].shape[0]-ncor, mol.nelectron-2*ncor, orbsym= orbsymout[ncor:])
+
+          tools.fcidump.write_head(fout, nact+len(virtRange[K]), mol.nelectron-2*ncor, orbsym= (orbsymout[ncor:nocc]+orbsymout[virtRange[K][0]:virtRange[K][-1]+1]) )
+          for i in range(len(currentOrbs)):
+              for j in range(ncor, nocc):
+                  for k in range(nact):
+                      for l in range(k+1):
+                          I = currentOrbs[i]
+                          if abs(eris['ppaa'][I,j,k,l]) > 1.e-8 :
+                              fout.write(' %17.9e %4d %4d %4d %4d\n' \
+                                             % (eris['ppaa'][I,j,k,l], i+1, j+1-ncor, k+1, l+1))
+
+          h1eff = numpy.zeros(shape=(nact+len(virtRange[K]), nact+len(virtRange[K])))
+          h1eff[:nact, :nact] = eris_sp['h1eff'][ncor:nocc,ncor:nocc]
+          h1eff[nact:, nact:] = eris_sp['h1eff'][virtRange[K][0]:virtRange[K][-1]+1, virtRange[K][0]:virtRange[K][-1]+1]
+          h1eff[:nact, nact:] = eris_sp['h1eff'][ncor:nocc, virtRange[K][0]:virtRange[K][-1]+1]
+          h1eff[nact:, :nact] = eris_sp['h1eff'][virtRange[K][0]:virtRange[K][-1]+1, ncor:nocc]
+
+          tools.fcidump.write_hcore(fout, h1eff, nact+len(virtRange[K]), tol=1e-8)
+          #tools.fcidump.write_hcore(fout, eris_sp['h1eff'][virtRange[K][0]:virtRange[K][-1]+1, virtRange[K][0]:virtRange[K][-1]+1], len(virtRange[K]), tol=1e-8)
+          fout.write(' %17.9e  0  0  0  0\n' %( mol.energy_nuc()+energy_core-energyE0))
+          fout.close()
+          print "Wrote FCIDUMP_aaav%d file"%(K)
+
+      nocc = ncor+nact
+      fout = open('FCIDUMP_aaac','w')
+      tools.fcidump.write_head(fout, nocc-nfro, mol.nelectron-2*nfro, orbsym= orbsymout[nfro:nocc])
+      for i in range(nfro,nocc):
+          for j in range(ncor, nocc):
+              for k in range(ncor, nocc):
+                  for l in range(ncor,k+1):
+                      if abs(eris['ppaa'][i,j,k-ncor,l-ncor]) > 1.e-8 :
+                          fout.write(' %17.9e %4d %4d %4d %4d\n' \
+                                     % (eris['ppaa'][i,j,k-ncor,l-ncor], i+1-nfro, j+1-nfro, k+1-nfro, l+1-nfro))
+
+      dmrge = energyE0-mol.energy_nuc()-energy_core
+
+      ecore_aaac = 0.0;
+      for i in range(nfro,ncor):
+          ecore_aaac += 2.0*eris_sp['h1eff'][i,i]
+      tools.fcidump.write_hcore(fout, eris_sp['h1eff'][nfro:nocc,nfro:nocc], nocc-nfro, tol=1e-8)
+      fout.write(' %17.9e  0  0  0  0\n' %( -dmrge-ecore_aaac))
+      fout.close()
+      print "Wrote FCIDUMP_aaac  file"
+      print ""
+
+    return norb, energyE0
+
+
+def writeMRLCCIntegrals(mc, E1, E2, nfro, fully_ic=False, third_order=False):
     # Initializations
     ncor = mc.ncore
     nact = mc.ncas
@@ -182,55 +270,67 @@ def writeMRLCCIntegrals(mc, E1, E2, nfro, fully_ic=False, third_order=False) :
     print ""
 
 
-    # Write out ingredients to "int/"
-    import os
-    os.system("mkdir -p int")
+    # Write out ingredients to intfolder
+    intfolder=mc.fcisolver.scratchDirectory+'/int/'
+    intfolder='int/'
 
-    # no "e"
-    numpy.save(  "int/W:caca", numpy.asfortranarray(int2ppoo[nfro:ncor, nfro:ncor, ncor:nocc, ncor:nocc].transpose(0,2,1,3)))
-    numpy.save(  "int/W:caac", numpy.asfortranarray(int2popo[nfro:ncor, ncor:nocc, ncor:nocc, nfro:ncor].transpose(0,2,1,3)))
-    numpy.save(  "int/W:cccc", numpy.asfortranarray(int2ppoo[nfro:ncor, nfro:ncor, nfro:ncor, nfro:ncor].transpose(0,2,1,3)))
-    numpy.save(  "int/W:aaaa", numpy.asfortranarray(int2ppoo[ncor:nocc, ncor:nocc, ncor:nocc, ncor:nocc].transpose(0,2,1,3)))
-    numpy.save(  "int/W:ccaa", numpy.asfortranarray(int2popo[nfro:ncor, ncor:nocc, nfro:ncor, ncor:nocc].transpose(0,2,1,3)))
+    numpy.save(intfolder+"W:caac", numpy.asfortranarray(int2popo[nfro:ncor, ncor:nocc, ncor:nocc, nfro:ncor].transpose(0,2,1,3)))
+    numpy.save(intfolder+"W:aeca", numpy.asfortranarray(int2popo[ncor:nocc, nfro:ncor, nocc:    , ncor:nocc].transpose(0,2,1,3)))
+    numpy.save(intfolder+"W:ccaa", numpy.asfortranarray(int2popo[nfro:ncor, ncor:nocc, nfro:ncor, ncor:nocc].transpose(0,2,1,3)))
+    numpy.save(intfolder+"W:eeaa", numpy.asfortranarray(int2popo[nocc:    , ncor:nocc, nocc:    , ncor:nocc].transpose(0,2,1,3))) #doublon?
+    numpy.save(intfolder+"W:caca", numpy.asfortranarray(int2ppoo[nfro:ncor, nfro:ncor, ncor:nocc, ncor:nocc].transpose(0,2,1,3)))
+    numpy.save(intfolder+"W:eaca", numpy.asfortranarray(int2popo[nocc:    , nfro:ncor, ncor:nocc, ncor:nocc].transpose(0,2,1,3)))
+    numpy.save(intfolder+"W:ccae", numpy.asfortranarray(int2popo[nfro:ncor, ncor:nocc, nocc:    , nfro:ncor].transpose(0,3,1,2)))
+    numpy.save(intfolder+"W:aaaa", numpy.asfortranarray(int2ppoo[ncor:nocc, ncor:nocc, ncor:nocc, ncor:nocc].transpose(0,2,1,3)))
+    numpy.save(intfolder+"W:eeca", numpy.asfortranarray(int2popo[nocc:    , nfro:ncor, nocc:    , ncor:nocc].transpose(0,2,1,3)))
+    numpy.save(intfolder+"W:eecc", numpy.asfortranarray(int2popo[nocc:    , nfro:ncor, nocc:    , nfro:ncor].transpose(0,2,1,3))) #doublon?
+    numpy.save(intfolder+"W:cccc", numpy.asfortranarray(int2ppoo[nfro:ncor, nfro:ncor, nfro:ncor, nfro:ncor].transpose(0,2,1,3)))
+    numpy.save(intfolder+"W:aeae", numpy.asfortranarray(int2ppoo[nocc:    , nocc:    , ncor:nocc, ncor:nocc].transpose(2,0,3,1)))
+    numpy.save(intfolder+"W:aece", numpy.asfortranarray(int2ppoo[nocc:    , nocc:    , ncor:nocc, nfro:ncor].transpose(2,0,3,1)))
+    numpy.save(intfolder+"W:cece", numpy.asfortranarray(int2ppoo[nocc:    , nocc:    , nfro:ncor, nfro:ncor].transpose(2,0,3,1)))
+    numpy.save(intfolder+"W:ceec", numpy.asfortranarray(int2popo[nocc:    , nfro:ncor, nocc:    , nfro:ncor].transpose(1,2,0,3)))
+    numpy.save(intfolder+"W:aeea", numpy.asfortranarray(int2popo[nocc:    , ncor:nocc, nocc:    , ncor:nocc].transpose(1,2,0,3)))
     if (fully_ic):
-      numpy.save("int/W:caaa", numpy.asfortranarray(int2popo[nfro:ncor, ncor:nocc, ncor:nocc, ncor:nocc].transpose(0,2,1,3)))
-    if (third_order):
-      numpy.save("int/W:ccca", numpy.asfortranarray(int2ppoo[nfro:ncor, nfro:ncor, nfro:ncor, ncor:nocc].transpose(0,2,1,3)))
-    # e***
-    numpy.save(  "int/W:eaca", numpy.asfortranarray(int2popo[nocc:    , nfro:ncor, ncor:nocc, ncor:nocc].transpose(0,2,1,3)))
-    numpy.save(  "int/W:aeca", numpy.asfortranarray(int2popo[ncor:nocc, nfro:ncor, nocc:    , ncor:nocc].transpose(0,2,1,3)))
-    numpy.save(  "int/W:ccae", numpy.asfortranarray(int2popo[nfro:ncor, ncor:nocc, nocc:    , nfro:ncor].transpose(0,3,1,2)))
-    if (fully_ic):
-      numpy.save("int/W:eaaa", numpy.asfortranarray(int2popo[nocc:    , ncor:nocc, ncor:nocc, ncor:nocc].transpose(0,2,1,3)))
-    if (third_order):
-      numpy.save("int/W:cace", numpy.asfortranarray(int2ppoo[nocc:    , ncor:nocc, nfro:ncor, nfro:ncor].transpose(3,1,2,0)))
-      numpy.save("int/W:ccce", numpy.asfortranarray(int2ppoo[nocc:    , nfro:ncor, nfro:ncor, nfro:ncor].transpose(3,1,2,0)))
-    # ee**
-    numpy.save(  "int/W:cece", numpy.asfortranarray(int2ppoo[nocc:    , nocc:    , nfro:ncor, nfro:ncor].transpose(2,0,3,1)))
-    numpy.save(  "int/W:aeae", numpy.asfortranarray(int2ppoo[nocc:    , nocc:    , ncor:nocc, ncor:nocc].transpose(2,0,3,1)))
-    numpy.save(  "int/W:aece", numpy.asfortranarray(int2ppoo[nocc:    , nocc:    , ncor:nocc, nfro:ncor].transpose(2,0,3,1)))
-    # e*e*
-    numpy.save(  "int/W:ceec", numpy.asfortranarray(int2popo[nocc:    , nfro:ncor, nocc:    , nfro:ncor].transpose(1,2,0,3)))
-    numpy.save(  "int/W:eecc", numpy.asfortranarray(int2popo[nocc:    , nfro:ncor, nocc:    , nfro:ncor].transpose(0,2,1,3))) #doublon?
-    numpy.save(  "int/W:aeea", numpy.asfortranarray(int2popo[nocc:    , ncor:nocc, nocc:    , ncor:nocc].transpose(1,2,0,3)))
-    numpy.save(  "int/W:eeaa", numpy.asfortranarray(int2popo[nocc:    , ncor:nocc, nocc:    , ncor:nocc].transpose(0,2,1,3))) #doublon?
-    numpy.save(  "int/W:eeca", numpy.asfortranarray(int2popo[nocc:    , nfro:ncor, nocc:    , ncor:nocc].transpose(0,2,1,3)))
-    # eee*
-    if (third_order):
-      numpy.save("int/W:eeec", numpy.asfortranarray(int2eeep[    :    ,     :    ,     :    , nfro:ncor].transpose(0,2,1,3)))
-      numpy.save("int/W:eeea", numpy.asfortranarray(int2eeep[    :    ,     :    ,     :    , ncor:nocc].transpose(0,2,1,3)))
-      numpy.save("int/W:eeee", numpy.asfortranarray(int2eeep[    :    ,     :    ,     :    , nocc:    ].transpose(0,2,1,3)))
+      numpy.save(intfolder+"W:eaaa", numpy.asfortranarray(int2popo[nocc:    , ncor:nocc, ncor:nocc, ncor:nocc].transpose(0,2,1,3)))
+      numpy.save(intfolder+"W:caaa", numpy.asfortranarray(int2popo[nfro:ncor, ncor:nocc, ncor:nocc, ncor:nocc].transpose(0,2,1,3)))
+    numpy.save(intfolder+"int1eff",numpy.asfortranarray(int1_eff[nfro:,nfro:]))
+    numpy.save(intfolder+"int1",   numpy.asfortranarray(int1[nfro:,nfro:]))
 
-    numpy.save("int/int1",   numpy.asfortranarray(int1[nfro:,nfro:]))
-    numpy.save("int/int1eff",numpy.asfortranarray(int1_eff[nfro:,nfro:]))
+    if (third_order):
+      numpy.save(intfolder+"W:ccca", numpy.asfortranarray(int2ppoo[nfro:ncor, nfro:ncor, nfro:ncor, ncor:nocc].transpose(0,2,1,3)))
+      numpy.save(intfolder+"W:ccce", numpy.asfortranarray(int2ppoo[nocc:    , nfro:ncor, nfro:ncor, nfro:ncor].transpose(3,1,2,0)))
+      numpy.save(intfolder+"W:cace", numpy.asfortranarray(int2ppoo[nocc:    , ncor:nocc, nfro:ncor, nfro:ncor].transpose(3,1,2,0)))
+      numpy.save(intfolder+"W:eeec", numpy.asfortranarray(int2eeep[    :    ,     :    ,     :    , nfro:ncor].transpose(0,2,1,3)))
+      numpy.save(intfolder+"W:eeea", numpy.asfortranarray(int2eeep[    :    ,     :    ,     :    , ncor:nocc].transpose(0,2,1,3)))
+      numpy.save(intfolder+"W:eeee", numpy.asfortranarray(int2eeep[    :    ,     :    ,     :    , nocc:    ].transpose(0,2,1,3)))
 
-    feri = h5py.File("int/int2eeee.hdf5", 'w')
+    feri = h5py.File(intfolder+"int2eeee.hdf5", 'w')
     ao2mo.full(mc.mol, mo[:,nocc:], feri, compact=False)
     for o in range(nvir):
         int2eee = feri['eri_mo'][o*(norb-nocc):(o+1)*(norb-nocc),:]
-        numpy.asfortranarray(int2eee).tofile("int/W:eeee%04d"%(o))
+        numpy.asfortranarray(int2eee).tofile(intfolder+"W:eeee%04d"%(o))
 
-    print "Basic ingredients wrote to int/"
+    # OUTPUT EVERYTHING (for debug of PT3)
+    #int2=ao2mo.outcore.general_iofree(mc.mol, (mo, mo, mo, mo), compact=False)
+    #int2.shape=(norb,norb,norb,norb)
+    #dom=['c','a','e']
+    #inout={}
+    #inout['c']=[nfro,ncor]
+    #inout['a']=[ncor,nocc]
+    #inout['e']=[nocc,norb]
+    #for p in range(3):
+    #  for q in range(3):
+    #    for r in range(3):
+    #      for s in range(3):
+    #        name="W:"+dom[p]+dom[q]+dom[r]+dom[s]
+    #        test=int2[inout[dom[p]][0]:inout[dom[p]][1],\
+    #                  inout[dom[r]][0]:inout[dom[r]][1],\
+    #                  inout[dom[q]][0]:inout[dom[q]][1],\
+    #                  inout[dom[s]][0]:inout[dom[s]][1]].transpose(0,2,1,3)
+    #        print 'Output: '+name+' Shape:',test.shape
+    #        numpy.save(intfolder+name, numpy.asfortranarray(test))
+
+    print "Basic ingredients wrote to "+intfolder
     print ""
 
 
@@ -242,8 +342,8 @@ def writeMRLCCIntegrals(mc, E1, E2, nfro, fully_ic=False, third_order=False) :
       orbsymout=[]
       orbsym = []
       if (mol.symmetry):
-          orbsym = symm.label_orb_symm(mc.mol, mc.mol.irrep_id,
-                                       mc.mol.symm_orb, mo, s=mc._scf.get_ovlp())
+          orbsym = symm.label_orb_symm(mol, mol.irrep_id,
+                                       mol.symm_orb, mo, s=mc._scf.get_ovlp())
       if mol.symmetry and orbsym:
           if mol.groupname.lower() == 'dooh':
               orbsymout = [dmrg_sym.IRREP_MAP['D2h'][i % 10] for i in orbsym]
@@ -289,7 +389,6 @@ def writeNEVPTIntegralsDF(mc, dm1, dm2, dm1eff, nfro, fully_ic=False):
     ncor = mc.ncore
     nact = mc.ncas
     norb = mc.mo_coeff.shape[1]
-    nvir = norb-ncor-nact
     nocc = ncor+nact
     mo   = mc.mo_coeff
 
@@ -361,21 +460,21 @@ def writeNEVPTIntegralsDF(mc, dm1, dm2, dm1eff, nfro, fully_ic=False):
     print ""
 
 
-    # Write out ingredients to "int/"
-    import os
-    os.system("mkdir -p int")
-    numpy.save("int/W:Laa", numpy.asfortranarray(Lpq[:,ncor:nocc, ncor:nocc]))
-    numpy.save("int/W:Lcc", numpy.asfortranarray(Lpq[:,    :ncor,     :ncor]))
-    numpy.save("int/W:Lee", numpy.asfortranarray(Lpq[:,nocc:    , nocc:    ]))
-    numpy.save("int/W:Lca", numpy.asfortranarray(Lpq[:,    :ncor, ncor:nocc]))
-    numpy.save("int/W:Lac", numpy.asfortranarray(Lpq[:,ncor:nocc,     :ncor]))
-    numpy.save("int/W:Lce", numpy.asfortranarray(Lpq[:,    :ncor, nocc:    ]))
-    numpy.save("int/W:Lec", numpy.asfortranarray(Lpq[:,nocc:    ,     :ncor]))
-    numpy.save("int/W:Lea", numpy.asfortranarray(Lpq[:,nocc:    , ncor:nocc]))
-    numpy.save("int/W:Lae", numpy.asfortranarray(Lpq[:,ncor:nocc, nocc:    ]))
-    numpy.save("int/int1eff",numpy.asfortranarray(int1_eff[nfro:,nfro:]))
+    # Write out ingredients to intfolder
+    intfolder=mc.fcisolver.scratchDirectory+'/int/'
+    intfolder='int/'
+    numpy.save(intfolder+"W:Laa", numpy.asfortranarray(Lpq[:,ncor:nocc, ncor:nocc]))
+    numpy.save(intfolder+"W:Lcc", numpy.asfortranarray(Lpq[:,    :ncor,     :ncor]))
+    numpy.save(intfolder+"W:Lee", numpy.asfortranarray(Lpq[:,nocc:    , nocc:    ]))
+    numpy.save(intfolder+"W:Lca", numpy.asfortranarray(Lpq[:,    :ncor, ncor:nocc]))
+    numpy.save(intfolder+"W:Lac", numpy.asfortranarray(Lpq[:,ncor:nocc,     :ncor]))
+    numpy.save(intfolder+"W:Lce", numpy.asfortranarray(Lpq[:,    :ncor, nocc:    ]))
+    numpy.save(intfolder+"W:Lec", numpy.asfortranarray(Lpq[:,nocc:    ,     :ncor]))
+    numpy.save(intfolder+"W:Lea", numpy.asfortranarray(Lpq[:,nocc:    , ncor:nocc]))
+    numpy.save(intfolder+"W:Lae", numpy.asfortranarray(Lpq[:,ncor:nocc, nocc:    ]))
+    numpy.save(intfolder+"int1eff",numpy.asfortranarray(int1_eff[nfro:,nfro:]))
 
-    print "Basic ingredients wrote to int/"
+    print "Basic ingredients wrote to "+intfolder
     print ""
 
 
@@ -392,7 +491,6 @@ def writeMRLCCIntegralsDF(mc, E1, E2, nfro, fully_ic=False):
     ncor = mc.ncore
     nact = mc.ncas
     norb = mc.mo_coeff.shape[1]
-    nvir = norb-ncor-nact
     nocc = ncor+nact
     mo   = mc.mo_coeff
 
@@ -432,23 +530,23 @@ def writeMRLCCIntegralsDF(mc, E1, E2, nfro, fully_ic=False):
     print ""
 
 
-    # Write out ingredients to "int/"
-    import os
-    os.system("mkdir -p int")
-    numpy.save("int/W:Laa", numpy.asfortranarray(Lpq[:,ncor:nocc, ncor:nocc]))
-    numpy.save("int/W:Lcc", numpy.asfortranarray(Lpq[:,    :ncor,     :ncor]))
-    numpy.save("int/W:Lee", numpy.asfortranarray(Lpq[:,nocc:    , nocc:    ]))
-    numpy.save("int/W:Lca", numpy.asfortranarray(Lpq[:,    :ncor, ncor:nocc]))
-    numpy.save("int/W:Lac", numpy.asfortranarray(Lpq[:,ncor:nocc,     :ncor]))
-    numpy.save("int/W:Lce", numpy.asfortranarray(Lpq[:,    :ncor, nocc:    ]))
-    numpy.save("int/W:Lec", numpy.asfortranarray(Lpq[:,nocc:    ,     :ncor]))
-    numpy.save("int/W:Lea", numpy.asfortranarray(Lpq[:,nocc:    , ncor:nocc]))
-    numpy.save("int/W:Lae", numpy.asfortranarray(Lpq[:,ncor:nocc, nocc:    ]))
-    numpy.save("int/W:Lee", numpy.asfortranarray(Lpq[:,nocc:    , nocc:    ]))
-    numpy.save("int/int1",   numpy.asfortranarray(int1[nfro:,nfro:]))
-    numpy.save("int/int1eff",numpy.asfortranarray(int1_eff[nfro:,nfro:]))
+    # Write out ingredients to intfolder
+    intfolder=mc.fcisolver.scratchDirectory+'/int/'
+    intfolder='int/'
+    numpy.save(intfolder+"W:Laa", numpy.asfortranarray(Lpq[:,ncor:nocc, ncor:nocc]))
+    numpy.save(intfolder+"W:Lcc", numpy.asfortranarray(Lpq[:,    :ncor,     :ncor]))
+    numpy.save(intfolder+"W:Lee", numpy.asfortranarray(Lpq[:,nocc:    , nocc:    ]))
+    numpy.save(intfolder+"W:Lca", numpy.asfortranarray(Lpq[:,    :ncor, ncor:nocc]))
+    numpy.save(intfolder+"W:Lac", numpy.asfortranarray(Lpq[:,ncor:nocc,     :ncor]))
+    numpy.save(intfolder+"W:Lce", numpy.asfortranarray(Lpq[:,    :ncor, nocc:    ]))
+    numpy.save(intfolder+"W:Lec", numpy.asfortranarray(Lpq[:,nocc:    ,     :ncor]))
+    numpy.save(intfolder+"W:Lea", numpy.asfortranarray(Lpq[:,nocc:    , ncor:nocc]))
+    numpy.save(intfolder+"W:Lae", numpy.asfortranarray(Lpq[:,ncor:nocc, nocc:    ]))
+    numpy.save(intfolder+"W:Lee", numpy.asfortranarray(Lpq[:,nocc:    , nocc:    ]))
+    numpy.save(intfolder+"int1",   numpy.asfortranarray(int1[nfro:,nfro:]))
+    numpy.save(intfolder+"int1eff",numpy.asfortranarray(int1_eff[nfro:,nfro:]))
 
-    print "Basic ingredients wrote to int/"
+    print "Basic ingredients wrote to "+intfolder
     print ""
 
 
@@ -458,182 +556,6 @@ def writeMRLCCIntegralsDF(mc, E1, E2, nfro, fully_ic=False):
         exit(0)
 
     return energyE0, norb, naux
-
-
-#in state average calculationg dm1eff will be different than dm1
-#this means that the h1eff in the fock operator which is stored in eris_sp['h1eff'] will be
-#calculated using the dm1eff and will in general not result in diagonal matrices
-def writeNEVPTIntegrals(mc, dm1, dm2, dm1eff, aaavsplit, nfro, fully_ic=False):
-    # Initializations
-    ncor = mc.ncore
-    nact = mc.ncas
-    norb = mc.mo_coeff.shape[1]
-    nvir = norb-ncor-nact
-    nocc = ncor+nact
-    mo   = mc.mo_coeff
-
-
-    # eris_sp
-    # (Note: Integrals are in chemistry notation)
-    eris = _ERIS(mc, mo)
-    #for m in range(norb):
-    #  for n in range(norb):
-    #    for p in range(nact):
-    #      for q in range(nact):
-    #          print '{:5}{:5}{:5}{:5}{:13.6f}'.format(m,n,p,q,eris['ppaa'][m,n,p,q])
-    eris_sp={}
-    eris_sp['h1eff']= eris['h1eff']
-    eris_sp['h1eff'][:ncor,:ncor] += numpy.einsum('abcd,cd', eris['ppaa'][:ncor,:ncor,:,:], dm1eff)
-    eris_sp['h1eff'][:ncor,:ncor] -= numpy.einsum('abcd,bd', eris['papa'][:ncor,:,:ncor,:], dm1eff)*0.5
-    eris_sp['h1eff'][nocc:,nocc:] += numpy.einsum('abcd,cd', eris['ppaa'][nocc:,nocc:,:,:], dm1eff)
-    eris_sp['h1eff'][nocc:,nocc:] -= numpy.einsum('abcd,bd', eris['papa'][nocc:,:,nocc:,:], dm1eff)*0.5
-    eriscvcv = eris['cvcv']
-    if (not isinstance(eris['cvcv'], type(eris_sp['h1eff']))):
-        eriscvcv = lib.chkfile.load(eris['cvcv'].name, "eri_mo")#h5py.File(eris['cvcv'].name,'r')["eri_mo"]
-    eris_sp['cvcv'] = eriscvcv.reshape(ncor, norb-ncor-nact, ncor, norb-ncor-nact)
-
-    #int1 = reduce(numpy.dot, (mo.T, mc.get_hcore(), mo))
-
-    # energy_core
-    dmcore = numpy.dot(mo[:,:ncor], mo[:,:ncor].T)*2
-    vj, vk = mc._scf.get_jk(mc.mol, dmcore)
-    vhfcore = reduce(numpy.dot, (mo.T, vj-vk*0.5, mo))
-    energy_core = numpy.einsum('ij,ji', dmcore, mc.get_hcore()) \
-                + numpy.einsum('ij,ji', dmcore, vj-0.5*vk) * .5
-
-    # energyE0
-    energyE0 = 1.0*numpy.einsum('ij,ij',     dm1, eris_sp['h1eff'][ncor:nocc, ncor:nocc])\
-             + 0.5*numpy.einsum('ijkl,ijkl', dm2, eris['ppaa'][ncor:nocc, ncor:nocc, :, :].transpose(0,2,1,3))
-    energyE0 += energy_core
-    energyE0 += mc.mol.energy_nuc()
-
-    print "Energy_core = ",energy_core
-    print "Energy      = ", energyE0
-    print ""
-
-
-    # offdiagonal
-    offdiagonal = 0.0
-    #zero out off diagonal core
-    for k in range(ncor):
-        for l in range(ncor):
-            if(k != l):
-                offdiagonal = max(abs(offdiagonal), abs(eris_sp['h1eff'][k,l] ))
-    #zero out off diagonal virtuals
-    for k in range(nocc, norb):
-        for l in range(nocc,norb):
-            if(k != l):
-                offdiagonal = max(abs(offdiagonal), abs(eris_sp['h1eff'][k,l] ))
-    # warning
-    if (abs(offdiagonal) > 1e-6):
-        print "WARNING: Have to use natural orbitals from CAASCF"
-        print "         offdiagonal elements:", offdiagonal
-        print ""
-
-
-    # Write out ingredients to "int/"
-    import os
-    os.system("mkdir -p int")
-
-    numpy.save("int/W:caac", numpy.asfortranarray(eris['papa']   [nfro:ncor,     :    , nfro:ncor,:].transpose(0,3,1,2)))
-    numpy.save("int/W:aeca", numpy.asfortranarray(eris['papa']   [nfro:ncor,     :    , nocc:    ,:].transpose(1,2,0,3)))
-    numpy.save("int/W:ccaa", numpy.asfortranarray(eris['papa']   [nfro:ncor,     :    , nfro:ncor,:].transpose(0,2,1,3)))
-    numpy.save("int/W:eeaa", numpy.asfortranarray(eris['papa']   [nocc:    ,     :    , nocc:    ,:].transpose(0,2,1,3)))
-    numpy.save("int/W:caca", numpy.asfortranarray(eris['ppaa']   [nfro:ncor, nfro:ncor,     :    ,:].transpose(0,2,1,3)))
-    numpy.save("int/W:eaca", numpy.asfortranarray(eris['ppaa']   [nocc:    , nfro:ncor,     :    ,:].transpose(0,2,1,3)))
-    numpy.save("int/W:ccae", numpy.asfortranarray(eris['pacv']   [nfro:ncor,     :    , nfro:    ,:].transpose(0,2,1,3)))
-    numpy.save("int/W:aaaa", numpy.asfortranarray(eris['ppaa']   [ncor:nocc, ncor:nocc,     :    ,:].transpose(0,2,1,3)))
-    numpy.save("int/W:eeca", numpy.asfortranarray(eris['pacv']   [nocc:    ,     :    , nfro:    ,:].transpose(3,0,2,1)))
-    numpy.save("int/W:eecc", numpy.asfortranarray(eris_sp['cvcv'][nfro:    ,     :    , nfro:    ,:].transpose(1,3,0,2)))
-    if (fully_ic):
-       numpy.save("int/W:eaaa", numpy.asfortranarray(eris['ppaa'][nocc:    , ncor:nocc,     :    ,:].transpose(0,2,1,3)))
-       numpy.save("int/W:caaa", numpy.asfortranarray(eris['ppaa'][nfro:ncor, ncor:nocc,     :    ,:].transpose(0,2,1,3)))
-    numpy.save("int/int1eff",numpy.asfortranarray(eris_sp['h1eff'][nfro:,nfro:]))
-
-    print "Basic ingredients wrote to int/"
-    print ""
-    #for a in range(nvir):
-    #  for p in range(nact):
-    #    for q in range(nact):
-    #      for r in range(nact):
-    #        print '{:5}{:5}{:5}{:5}{:13.6f}'.format(a,p,q,r,eris['ppaa'][nocc+a,ncor+q,p,r])
-
-
-    #write FCIDUMP_aaav* and FCIDUMP_aaac
-    if (not fully_ic):
-      # About symmetry...
-      from pyscf import symm
-      mol = mc.mol
-      orbsymout=[]
-      orbsym = []
-      if (mol.symmetry):
-          orbsym = symm.label_orb_symm(mol, mol.irrep_id,
-                                       mol.symm_orb, mo, s=mc._scf.get_ovlp())
-      if mol.symmetry and orbsym:
-          if mol.groupname.lower() == 'dooh':
-              orbsymout = [dmrg_sym.IRREP_MAP['D2h'][i % 10] for i in orbsym]
-          elif mol.groupname.lower() == 'coov':
-              orbsymout = [dmrg_sym.IRREP_MAP['C2v'][i % 10] for i in orbsym]
-          else:
-              orbsymout = [dmrg_sym.IRREP_MAP[mol.groupname][i] for i in orbsym]
-      else:
-          orbsymout = []
-
-      virtOrbs = range(nocc, eris_sp['h1eff'].shape[0])
-      chunks = len(virtOrbs)/aaavsplit
-      virtRange = [virtOrbs[i:i+chunks] for i in xrange(0, len(virtOrbs), chunks)]
-
-      for K in range(aaavsplit):
-          currentOrbs = range(ncor, nocc)+virtRange[K]
-          fout = open('FCIDUMP_aaav%d'%(K),'w')
-          #tools.fcidump.write_head(fout, eris_sp['h1eff'].shape[0]-ncor, mol.nelectron-2*ncor, orbsym= orbsymout[ncor:])
-
-          tools.fcidump.write_head(fout, nact+len(virtRange[K]), mol.nelectron-2*ncor, orbsym= (orbsymout[ncor:nocc]+orbsymout[virtRange[K][0]:virtRange[K][-1]+1]) )
-          ij = ncor*(ncor+1)/2
-          for i in range(len(currentOrbs)):
-              for j in range(ncor, nocc):
-                  for k in range(nact):
-                      for l in range(k+1):
-                          I = currentOrbs[i]
-                          if abs(eris['ppaa'][I,j,k,l]) > 1.e-8 :
-                              fout.write(' %17.9e %4d %4d %4d %4d\n' \
-                                             % (eris['ppaa'][I,j,k,l], i+1, j+1-ncor, k+1, l+1))
-
-          h1eff = numpy.zeros(shape=(nact+len(virtRange[K]), nact+len(virtRange[K])))
-          h1eff[:nact, :nact] = eris_sp['h1eff'][ncor:nocc,ncor:nocc]
-          h1eff[nact:, nact:] = eris_sp['h1eff'][virtRange[K][0]:virtRange[K][-1]+1, virtRange[K][0]:virtRange[K][-1]+1]
-          h1eff[:nact, nact:] = eris_sp['h1eff'][ncor:nocc, virtRange[K][0]:virtRange[K][-1]+1]
-          h1eff[nact:, :nact] = eris_sp['h1eff'][virtRange[K][0]:virtRange[K][-1]+1, ncor:nocc]
-
-          tools.fcidump.write_hcore(fout, h1eff, nact+len(virtRange[K]), tol=1e-8)
-          #tools.fcidump.write_hcore(fout, eris_sp['h1eff'][virtRange[K][0]:virtRange[K][-1]+1, virtRange[K][0]:virtRange[K][-1]+1], len(virtRange[K]), tol=1e-8)
-          fout.write(' %17.9e  0  0  0  0\n' %( mol.energy_nuc()+energy_core-energyE0))
-          fout.close()
-          print "Wrote FCIDUMP_aaav%d file"%(K)
-
-      nocc = ncor+nact
-      fout = open('FCIDUMP_aaac','w')
-      tools.fcidump.write_head(fout, nocc-nfro, mol.nelectron-2*nfro, orbsym= orbsymout[nfro:nocc])
-      for i in range(nfro,nocc):
-          for j in range(ncor, nocc):
-              for k in range(ncor, nocc):
-                  for l in range(ncor,k+1):
-                      if abs(eris['ppaa'][i,j,k-ncor,l-ncor]) > 1.e-8 :
-                          fout.write(' %17.9e %4d %4d %4d %4d\n' \
-                                     % (eris['ppaa'][i,j,k-ncor,l-ncor], i+1-nfro, j+1-nfro, k+1-nfro, l+1-nfro))
-
-      dmrge = energyE0-mol.energy_nuc()-energy_core
-
-      ecore_aaac = 0.0;
-      for i in range(nfro,ncor):
-          ecore_aaac += 2.0*eris_sp['h1eff'][i,i]
-      tools.fcidump.write_hcore(fout, eris_sp['h1eff'][nfro:nocc,nfro:nocc], nocc-nfro, tol=1e-8)
-      fout.write(' %17.9e  0  0  0  0\n' %( -dmrge-ecore_aaac))
-      fout.close()
-      print "Wrote FCIDUMP_aaac  file"
-      print ""
-
-    return norb, energyE0
 
 
 def executeMRLCC(nelec, ncor, ncas, nfro, ms2, naux=0, memory=10, fully_ic=False, third_order=False, cumulantE4=False, df=False, no_handcoded_E3=False):
@@ -769,8 +691,6 @@ def executeNEVPT(nelec, ncor, ncas, nfro, ms2, naux=0, memory=10, fully_ic=False
         print "Third-order:       NA"
         print ""
     return totalE
-
-
 
 
 def ReadWriteEnergy(outfile,pattern):
@@ -1042,11 +962,103 @@ def writeAAAConfFile(neleca, nelecb, ncor, ncas, norb, DMRGCI, maxM, perturber, 
     f.close()
 
 
+#def readIntegrals(infile, dt=numpy.dtype('Float64')):
+#    startScaling = False
+#
+#    norb = -1 #need to read norb from infile
+#    nelec = -1
+#
+#    lines = []
+#    f = open(infile, 'r')
+#    lines = f.readlines()
+#    f.close()
+#
+#    index = 0
+#    for line in lines:
+#        linesplit = line.replace("="," ")
+#        linesplit = linesplit.replace(","," ")
+#        linesp = linesplit.split()
+#        if (startScaling == False and len(linesp) == 1 and (linesp[0] == "&END" or linesp[0] == "/")):
+#            startScaling = True
+#            index += 1
+#        elif(startScaling == False):
+#            if (len(linesp) > 4):
+#                if (linesp[1] == "NORB"):
+#                    norb = int(linesp[2])
+#                if (linesp[3] == "NELEC"):
+#                    nelec = int(linesp[4])
+#            index += 1
+#
+#    if (norb == -1 or nelec == -1):
+#        print "could not read the norbs or nelec"
+#        exit(0)
+#
+#    int2 = numpy.zeros(shape=(norb, norb, norb, norb), dtype=dt, order='F')
+#    int1 = numpy.zeros(shape=(norb, norb), dtype=dt, order='F')
+#    coreE = 0.0
+#
+#    totalIntegralLines = len(lines) - index
+#    for i in range(totalIntegralLines):
+#        linesp = lines[i+index].split()
+#        if (len(linesp) != 5) :
+#            continue
+#        integral, a, b, c, d = float(linesp[0]), int(linesp[1]), int(linesp[2]), int(linesp[3]), int(linesp[4])
+#
+#        if(a==b==c==d==0):
+#            coreE = integral
+#        elif (c==d==0):
+#            int1[a-1,b-1] = integral
+#            int1[b-1,a-1] = integral
+#            A,B = max(a,b), min(a,b)
+#        else:
+#            int2[a-1, c-1, b-1, d-1] = integral
+#            int2[b-1, c-1, a-1, d-1] = integral
+#            int2[a-1, d-1, b-1, c-1] = integral
+#            int2[b-1, d-1, a-1, c-1] = integral
+#
+#            int2[c-1, a-1, d-1, b-1] = integral
+#            int2[d-1, a-1, c-1, b-1] = integral
+#            int2[c-1, b-1, d-1, a-1] = integral
+#            int2[d-1, b-1, c-1, a-1] = integral
+#
+#    return norb, nelec, int2, int1, coreE
+
+
+#def makeheff(int1, int2popo, int2ppoo, E1, ncor, nvir, nfro):
+#        nocc = int1.shape[0]-nvir
+#
+#        int1_eff = 1.*int1 + 2.0*numpy.einsum('mnii->mn', int2ppoo[:, :, nfro:ncor, nfro:ncor])\
+#                                -numpy.einsum('mini->mn', int2popo[:, nfro:ncor, :, nfro:ncor])
+#
+#        int1_eff[:ncor, :ncor] += numpy.einsum('lmjk,jk->lm',int2ppoo[:ncor,:ncor,ncor:nocc,ncor:nocc], E1)
+#                            - 0.5*numpy.einsum('ljmk,jk->lm',int2popo[:ncor,ncor:nocc,:ncor,ncor:nocc], E1)
+#        int1_eff[nocc:, nocc:] += numpy.einsum('lmjk,jk->lm',int2ppoo[nocc:,nocc:,ncor:nocc,ncor:nocc], E1)
+#                            - 0.5*numpy.einsum('ljmk,jk->lm',int2popo[nocc:,ncor:nocc,nocc:,ncor:nocc], E1)
+#       #int1_eff[nocc:, nocc:] += numpy.einsum('ljmk,jk->lm',int2[nocc:,ncor:nocc,nocc:,ncor:nocc], E1)
+#                            - 0.5*numpy.einsum('ljkm,jk->lm',int2[nocc:,ncor:nocc,ncor:nocc,nocc:], E1)
+#        return int1_eff
+
+
+#def makeheff(int1, int2, E1, ncor, nvir):
+#        nocc = int1.shape[0]-nvir
+#
+#        int1_eff = 1.*int1 + 2.0*numpy.einsum('mini->mn', int2[:,:ncor, :, :ncor])
+#                                -numpy.einsum('miin->mn', int2[:,:ncor, :ncor, :])
+#
+#        int1_eff[:ncor, :ncor] += numpy.einsum('ljmk,jk->lm',int2[:ncor,ncor:nocc,:ncor,ncor:nocc], E1)
+#                            - 0.5*numpy.einsum('ljkm,jk->lm',int2[:ncor,ncor:nocc,ncor:nocc,:ncor], E1)
+#        int1_eff[nocc:, nocc:] += numpy.einsum('ljmk,jk->lm',int2[nocc:,ncor:nocc,nocc:,ncor:nocc], E1)
+#                            - 0.5*numpy.einsum('ljkm,jk->lm',int2[nocc:,ncor:nocc,ncor:nocc,nocc:], E1)
+#        return int1_eff
+#'''
+
+
 
 
 def icmpspt(mc, pttype="NEVPT2", energyE0=0.0, rdmM=0, frozen=0, PTM=1000, PTincore=False, fciExtraLine=[],\
             have3RDM=False, root=0, nroots=1, verbose=None, AAAVsplit=1,\
             do_dm3=True, do_dm4=False, fully_ic=False, third_order=False, cumulantE4=False, no_handcoded_E3=False):
+    sys.stdout.flush()
     print ""
     print ""
     print "--------------------------------------------------"
@@ -1118,10 +1130,16 @@ def icmpspt(mc, pttype="NEVPT2", energyE0=0.0, rdmM=0, frozen=0, PTM=1000, PTinc
       mc.fcisolver.has_threepdm = True
 
 
+    # Prepare directory
+    import os
+    intfolder=mc.fcisolver.scratchDirectory+'/int/'
+    intfolder='int/'
+    os.system("mkdir -p "+intfolder)
+    if intfolder!='int/':
+      os.system("ln -s "+intfolder+" int")
 
     # RDMs
-    import os
-    os.system("mkdir -p int")
+    print 'Preparing necessary RDMs'
     nelec = mc.nelecas[0]+mc.nelecas[1]
     dm1eff = numpy.zeros(shape=(mc.ncas, mc.ncas)) #this is the state average density which is needed in NEVPT2
     # loop over all states besides the current root
@@ -1130,28 +1148,57 @@ def icmpspt(mc, pttype="NEVPT2", energyE0=0.0, rdmM=0, frozen=0, PTM=1000, PTinc
         stateIter.remove(root)
         for istate in stateIter:
             dm3 = mc.fcisolver.make_rdm3(state=istate, norb=mc.ncas, nelec=mc.nelecas, dt=float_precision)
+            # This is coherent with statement about indexes made in "make_rdm3"
+            # This is done with SQA in mind.
             dm2 = numpy.einsum('ijklmk', dm3)/(nelec-2)
             dm1 = numpy.einsum('ijkj', dm2)/(nelec-1)
             dm1eff += dm1
     # now add the contributaion due to the current root
     if (do_dm3):
       dm3 = mc.fcisolver.make_rdm3(state=root, norb=mc.ncas, nelec=mc.nelecas, dt=float_precision, filetype="notbinary")
+      #print numpy.einsum('ijklmn',dm3)
     elif (do_dm4):
       dm4 = mc.fcisolver.make_rdm4(state=root, norb=mc.ncas, nelec=mc.nelecas, dt=float_precision, filetype="notbinary")
+      #print numpy.einsum('ijklmnop',dm4)
+      trace=numpy.einsum('ijklijkl->',dm4)
+      if abs(trace-nelec*(nelec-1)*(nelec-2)*(nelec-3))<0.000001:
+          print '(GOOD) Trace 4RDM: {:5} ={:5}*{:5}*{:5}*{:5}'.format(trace,nelec,nelec-1,nelec-2,nelec-3)
+      else:
+          print '(BAD)  Trace 4RDM: {:5}!={:5}*{:5}*{:5}*{:5}'.format(trace,nelec,nelec-1,nelec-2,nelec-3)
+      # This is coherent with statement about indexes made in "make_rdm4"
+      # This is done with SQA in mind
       dm3 = numpy.einsum('ijklmnol', dm4)/(nelec-3)
-      numpy.save("int/E4",dm4)
+      numpy.save(intfolder+"E4",dm4)
       del dm4
+    # This is coherent with statement about indexes made in "make_rdm4" and "make_rdm3"
+    # This is done with SQA in mind
     dm2 = numpy.einsum('ijklmk', dm3)/(nelec-2)
     dm1 = numpy.einsum('ijkj', dm2)/(nelec-1)
     dm1eff += dm1
     dm1eff = dm1eff/(1.0*nroots)
-    numpy.save("int/E3",dm3)
-    numpy.save("int/E3B.npy", dm3.transpose(0,3,1,4,2,5))
-    numpy.save("int/E3C.npy", dm3.transpose(5,0,2,4,1,3))
-    numpy.save("int/E2.npy", numpy.asfortranarray(dm2))
-    numpy.save("int/E1.npy", numpy.asfortranarray(dm1))
+    numpy.save(intfolder+"E3",dm3)
+    numpy.save(intfolder+"E3B.npy", dm3.transpose(0,3,1,4,2,5))
+    numpy.save(intfolder+"E3C.npy", dm3.transpose(5,0,2,4,1,3))
+    numpy.save(intfolder+"E2.npy", numpy.asfortranarray(dm2))
+    numpy.save(intfolder+"E1.npy", numpy.asfortranarray(dm1))
+    trace=numpy.einsum('ijkijk->',dm3)
+    if abs(trace-nelec*(nelec-1)*(nelec-2))<0.000001:
+        print '(GOOD) Trace 3RDM: {:5} ={:5}*{:5}*{:5}'.format(trace,nelec,nelec-1,nelec-2)
+    else:
+        print '(BAD)  Trace 3RDM: {:5}!={:5}*{:5}*{:5}'.format(trace,nelec,nelec-1,nelec-2)
+    trace=numpy.einsum('ijij->',dm2)
+    if abs(trace-nelec*(nelec-1))<0.000001:
+        print '(GOOD) Trace 2RDM: {:5} ={:5}*{:5}'.format(trace,nelec,nelec-1)
+    else:
+        print '(BAD)  Trace 2RDM: {:5}!={:5}*{:5}'.format(trace,nelec,nelec-1)
+    trace=numpy.einsum('ii->',dm1)
+    if abs(trace-nelec)<0.000001:
+        print '(GOOD) Trace 1RDM: {:5} ={:5}'.format(trace,nelec)
+    else:
+        print '(BAD)  Trace 1RDM: {:5}!={:5}'.format(trace,nelec)
     del dm3
-
+    print ''
+    sys.stdout.flush()
 
     #backup the restartreorder file to -1. this is because responseaaav and responseaaac both overwrite this file
     #this means that when we want to restart a calculation after lets say responseaaav didnt finish, the new calculaitons
@@ -1174,7 +1221,7 @@ def icmpspt(mc, pttype="NEVPT2", energyE0=0.0, rdmM=0, frozen=0, PTM=1000, PTinc
         if (df):
           norb, naux, energyE0 = writeNEVPTIntegralsDF(mc, dm1, dm2, dm1eff, frozen, fully_ic=fully_ic)
         else:
-          norb, energyE0 = writeNEVPTIntegrals(mc, dm1, dm2, dm1eff, AAAVsplit, frozen, fully_ic=fully_ic)
+          norb, energyE0 = writeNEVPTIntegrals(mc, dm1, dm2, dm1eff, AAAVsplit, frozen, fully_ic=fully_ic, third_order=third_order)
         sys.stdout.flush()
 
         totalE = 0.0;
@@ -1296,7 +1343,6 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     m.conv_tol = 1e-20
     ehf = m.scf()
-    from pyscf.dmrgscf import dmrgci
     mc = dmrgci.DMRGSCF(m, 6, 6)
     mc.fcisolver.conv_tol = 1e-14
     mc.fcisolver.mpiprefix=""
