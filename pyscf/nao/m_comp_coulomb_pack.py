@@ -17,7 +17,8 @@ def comp_coulomb_pack(sv, ao_log=None, funct=coulomb_am, dtype=np.float64, **kva
   from pyscf.nao.m_ao_matelem import ao_matelem_c
   from pyscf.nao.m_pack2den import ij2pack
   
-  me = ao_matelem_c(sv.ao_log) if ao_log is None else ao_matelem_c(ao_log)
+  aome = ao_matelem_c(sv.ao_log.rr, sv.ao_log.pp)
+  me = ao_matelem_c(sv.ao_log) if ao_log is None else aome.init_one_set(ao_log)
   atom2s = np.zeros((sv.natm+1), dtype=np.int64)
   for atom,sp in enumerate(sv.atom2sp): atom2s[atom+1]=atom2s[atom]+me.ao1.sp2norbs[sp]
   norbs = atom2s[-1]
@@ -32,4 +33,4 @@ def comp_coulomb_pack(sv, ao_log=None, funct=coulomb_am, dtype=np.float64, **kva
         for i2 in range(s2,f2):
           res[ij2pack(i1,i2)] = oo2f[i1-s1,i2-s2]
 
-  return res
+  return res, norbs
