@@ -401,10 +401,6 @@ class DMRGCI(pyscf.lib.StreamObject):
             self.has_threepdm = True
             self.extraline.pop()
 
-        # Remove everything
-        os.system("rm -f %s/node0/*twopdm*"%(self.scratchDirectory))
-        os.system("rm -f %s/node0/*tmp"%(self.scratchDirectory))
-
         # The binary files coming from STACKBLOCK and BLOCK are different
         # - STACKBLOCK uses the 6-fold symmetry, this must be unpacked
         #   using "libunpack.unpackE3" (see lib/icmpspt/icmpspt.c)
@@ -473,10 +469,6 @@ class DMRGCI(pyscf.lib.StreamObject):
             self.has_fourpdm = True
             self.has_threepdm = True
             self.extraline.pop()
-
-        # Remove everything
-        os.system("rm -f %s/node0/*twopdm*"%(self.scratchDirectory))
-        os.system("rm -f %s/node0/*tmp"%(self.scratchDirectory))
 
         # The binary files coming from STACKBLOCK and BLOCK are different:
         # - STACKBLOCK does not have 4RDM

@@ -56,15 +56,18 @@ def writeNEVPTIntegrals(mc, E1, E2, E1eff, aaavsplit, nfro, fully_ic=False, thir
     mo   = mc.mo_coeff
 
 
-    # eris_sp
     # (Note: Integrals are in chemistry notation)
     eris = _ERIS(mc, mo)
+
+    # eris_sp
     eris_sp={}
     eris_sp['h1eff']= eris['h1eff']
     eris_sp['h1eff'][:ncor,:ncor] += numpy.einsum('abcd,cd', eris['ppaa'][:ncor,:ncor,:,:], E1eff)
     eris_sp['h1eff'][:ncor,:ncor] -= numpy.einsum('abcd,bd', eris['papa'][:ncor,:,:ncor,:], E1eff)*0.5
     eris_sp['h1eff'][nocc:,nocc:] += numpy.einsum('abcd,cd', eris['ppaa'][nocc:,nocc:,:,:], E1eff)
     eris_sp['h1eff'][nocc:,nocc:] -= numpy.einsum('abcd,bd', eris['papa'][nocc:,:,nocc:,:], E1eff)*0.5
+
+    # eris_cvcv
     eriscvcv = eris['cvcv']
     if (not isinstance(eris['cvcv'], type(eris_sp['h1eff']))):
         eriscvcv = lib.chkfile.load(eris['cvcv'].name, "eri_mo")#h5py.File(eris['cvcv'].name,'r')["eri_mo"]
@@ -86,25 +89,20 @@ def writeNEVPTIntegrals(mc, E1, E2, E1eff, aaavsplit, nfro, fully_ic=False, thir
     print "Energy      = ", energyE0
     print ""
 
-
-    # offdiagonal
+    # offdiagonal warning
     offdiagonal = 0.0
-    #zero out off diagonal core
     for k in range(ncor):
-        for l in range(ncor):
-            if(k != l):
-                offdiagonal = max(abs(offdiagonal), abs(eris_sp['h1eff'][k,l] ))
-    #zero out off diagonal virtuals
+      for l in range(ncor):
+        if(k != l):
+          offdiagonal = max(abs(offdiagonal), abs(eris_sp['h1eff'][k,l] ))
     for k in range(nocc, norb):
-        for l in range(nocc,norb):
-            if(k != l):
-                offdiagonal = max(abs(offdiagonal), abs(eris_sp['h1eff'][k,l] ))
-    # warning
+      for l in range(nocc,norb):
+        if(k != l):
+          offdiagonal = max(abs(offdiagonal), abs(eris_sp['h1eff'][k,l] ))
     if (abs(offdiagonal) > 1e-6):
-        print "WARNING: Have to use natural orbitals from CAASCF"
-        print "         offdiagonal elements:", offdiagonal
-        print ""
-
+      print "WARNING: Have to use natural orbitals from CAASCF"
+      print "         offdiagonal elements:", offdiagonal
+      print ""
 
     # Write out ingredients to intfolder
     intfolder=mc.fcisolver.scratchDirectory+'/int/'
