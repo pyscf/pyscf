@@ -26,7 +26,7 @@ class tddft_iter_c():
 
   def __init__(self, sv, pb, tddft_iter_tol=1e-2, tddft_iter_broadening=0.00367493,
           nfermi_tol=1e-5, telec=None, nelec=None, fermi_energy=None, xc_code='LDA,PZ',
-          GPU=False):
+          GPU=False, **kvargs):
     """ Iterative TDDFT a la PK, DF, OC JCTC """
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
     from pyscf.nao.m_comp_dm import comp_dm
@@ -52,7 +52,7 @@ class tddft_iter_c():
 
     if xc_code.upper()!='RPA' :
       dm = comp_dm(sv.wfsx.x, sv.get_occupations())
-      self.kernel = self.kernel + pb.comp_fxc_lil(dm, xc_code, dtype=np.float32).todense()
+      self.kernel = self.kernel + pb.comp_fxc_lil(dm, xc_code, dtype=np.float32, **kvargs).todense()
 
     self.telec = sv.hsx.telec if telec is None else telec
     self.nelec = sv.hsx.nelec if nelec is None else nelec
