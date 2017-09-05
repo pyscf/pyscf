@@ -38,7 +38,8 @@ class tddft_iter_c():
         raise ValueError("precision can be only single or double")
 
 
-    self.rf0_ncalls,self.l0_ncalls = 0
+    self.rf0_ncalls = 0
+    self.l0_ncalls = 0
     self.matvec_ncalls = 0
     self.tddft_iter_tol = tddft_iter_tol
     self.eps = tddft_iter_broadening
@@ -111,38 +112,9 @@ class tddft_iter_c():
         ab2v = blas.cgemm(1.0, np.transpose(self.xocc), nb2v).reshape(no*no)
 
         vdp = self.v_dab*ab2v
-<<<<<<< HEAD
-    res = vdp*self.cc_da
-    return res
-    
-  def apply_l0(self, sab, comega=1j*0.0):
-    """ This applies the non-interacting, four-particle Green's function to a two-particle vector (in particular to the dipole matrix elements) """
-    assert sab.dim==2, "%r"%(dab.dim)
-    assert all(sab.shape==self.norbs), "%r, %r, %r "%(sab.shape, self.norbs)
-    self.l0_ncalls+=1
-    no = self.norbs
-    nb2v = self.xocc*sab
-    nm2v = blas.cgemm(1.0, nb2v, np.transpose(self.xvrt))
-        
-    if use_numba:
-      div_eigenenergy_numba(self.ksn2e, self.ksn2f, self.nfermi, self.vstart, comega, nm2v, self.ksn2e.shape[2])
-    else:
-      for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
-        for j,[em,fm] in enumerate(zip(self.ksn2e[0,0,n+1:],self.ksn2f[0,0,n+1:])):
-          m = j+n+1-self.vstart
-          nm2v[n,m] = nm2v[n,m] * (fn-fm) *\
-            ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
-
-    nb2v = blas.cgemm(1.0, nm2v, self.xvrt)
-
-    ab2v = blas.cgemm(1.0, np.transpose(self.xocc), nb2v).reshape(no*no)
-    return ab2v
-
-=======
     res_real = vdp.real*self.cc_da
     res_imag = vdp.imag*self.cc_da
     return res_real, res_imag
->>>>>>> 377935667eab8de85780a69c33c0de4db52794f1
 
   def comp_veff(self, vext, comega=1j*0.0):
     from scipy.sparse.linalg import gmres, lgmres as gmres_alias, LinearOperator

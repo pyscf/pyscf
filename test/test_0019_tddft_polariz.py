@@ -12,9 +12,10 @@ class KnowValues(unittest.TestCase):
   def test_non_inter_polariz(self):
     """ This is non-interacting polarizability TDDFT with SIESTA starting point """
     omegas = np.linspace(0.0,2.0,500)+1j*td.eps
-    pxx = np.zeros_like(omegas)
-    vext = np.transpose(td.moms1)
-    for iomega,omega in enumerate(omegas): pxx[iomega] = -np.dot(td.apply_rf0(vext[0,:], omega), vext[0,:]).imag
+    pxx = td.comp_nonin(omegas)
+    #pxx = np.zeros_like(omegas)
+    #vext = np.transpose(td.moms1)
+    #for iomega,omega in enumerate(omegas): pxx[iomega] = -np.dot(td.apply_rf0(vext[0,:], omega), vext[0,:]).imag
 
     data = np.array([omegas*21.2114, pxx])
     data_ref = np.loadtxt(dname+'/water.tddft_iter.omega.pxx.txt-ref')
