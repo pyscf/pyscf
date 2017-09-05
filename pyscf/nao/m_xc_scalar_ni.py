@@ -28,7 +28,6 @@ def xc_scalar_ni(me, sp1,R1, sp2,R2, xc_code, deriv, **kvargs):
     #print(' vxc[0].shape ', vxc[0].shape)
     ao1 = ao1 * grids.weights * vxc[0]
   elif deriv==2:
-    #print(' fxc[0].shape ', fxc[0].shape)
     ao1 = ao1 * grids.weights * fxc[0]
   else:
     print(' deriv ', deriv)
