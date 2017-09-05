@@ -4,16 +4,8 @@ from scipy.sparse import csr_matrix
 from scipy.linalg import blas
 from timeit import default_timer as timer
 from pyscf.nao.m_libnao import libnao
+from pyscf.nao.m_tddft_iter_gpu import tddft_iter_gpu_c
 from ctypes import POINTER, c_double, c_int, c_int64, c_float, c_int
-import sys
-
-try:
-    # try import gpu library
-    from pyscf.nao.m_libnao import libnao_gpu
-    GPU_import = True
-except:
-    GPU_import = False
-
 
 try:
     import numba
@@ -55,12 +47,10 @@ class tddft_iter_c():
     self.cc_da = pb.get_da2cc_coo(dtype=self.dtype).tocsr()
     self.moms0,self.moms1 = pb.comp_moments(dtype=self.dtype)
     self.nprod = self.moms0.size
-    t1 = timer()
+
     self.kernel_dens = pb.comp_coulomb_den(dtype=self.dtype)
     self.kernel_dim = self.kernel_dens.shape[0]
     #self.kernel, self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype)
-    t2 = timer()
-    #print("Time Hartree kernel: ", t2-t1)
 
     self.kernel = np.zeros(int(self.kernel_dim*(self.kernel_dim+1)/2), dtype=self.dtype)
 
@@ -72,16 +62,6 @@ class tddft_iter_c():
       for i in range(self.kernel.shape[0]):
         self.kernel[i] = self.kernel_dens[ui[0][i], ui[1][i]]
 
-      #self.kernel_back = np.zeros((self.kernel_dim, self.kernel_dim), dtype=self.dtype)
-
-      #count = 0
-      #for i in range(self.kernel_dim):
-      #  for j in range(i, self.kernel_dim):
-      #      self.kernel_back[i, j] = self.kernel[count]
-      #      count += 1
-      #  for j in range(0, i):
-      #      self.kernel_back[i, j] = self.kernel_back[j, i]
-      
     self.telec = sv.hsx.telec if telec is None else telec
     self.nelec = sv.hsx.nelec if nelec is None else nelec
     self.fermi_energy = sv.fermi_energy if fermi_energy is None else fermi_energy
@@ -93,30 +73,9 @@ class tddft_iter_c():
     self.vstart = np.argmax(1.0-ksn2fd[0,0,:]>nfermi_tol)
     self.xocc = self.x[0,0,0:self.nfermi,:,0]  # does python creates a copy at this point ?
     self.xvrt = self.x[0,0,self.vstart:,:,0]   # does python creates a copy at this point ?
-    
-    if GPU and GPU_import:
-        self.GPU=True
 
-        self.block_size = np.array([32, 32], dtype=np.int32) # threads by block
-        self.grid_size = np.array([0, 0], dtype=np.int32) # number of blocks
-        dimensions = [self.nfermi, self.ksn2f.shape[2]]
-        for i in range(2):
-            if dimensions[i] <= self.block_size[i]:
-                self.block_size[i] = dimensions[i]
-                self.grid_size[i] = 1
-            else:
-                self.grid_size[i] = dimensions[i]/self.block_size[i] + 1
-
-        libnao_gpu.init_iter_gpu(self.x[0, 0, :, :, 0].ctypes.data_as(POINTER(c_float)), c_int64(self.norbs),
-                self.ksn2e[0, 0, :].ctypes.data_as(POINTER(c_float)), c_int64(self.ksn2e[0, 0, :].size),
-                self.ksn2f[0, 0, :].ctypes.data_as(POINTER(c_float)), c_int64(self.ksn2f[0, 0, :].size),
-
-                c_int64(self.nfermi), c_int64(self.vstart))
-    elif GPU and not GPU_import:
-        raise ValueError("GPU lib failed to initialize!")
-    else:
-        self.GPU = False
-
+    self.tddft_iter_gpu = tddft_iter_gpu_c(GPU, self.v_dab, self.ksn2f, self.ksn2e, 
+            self.norbs, self.nfermi, self.vstart)
 
   def apply_rf0(self, v, comega=1j*0.0):
     """ This applies the non-interacting response function to a vector (a set of vectors?) """
@@ -127,24 +86,8 @@ class tddft_iter_c():
     no = self.norbs
     sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
 
-    if self.GPU:
-
-        nb2v = self.xocc*sab.real
-        libnao_gpu.calc_nm2v_real(nb2v.ctypes.data_as(POINTER(c_float)))
-        nb2v = self.xocc*sab.imag
-        libnao_gpu.calc_nm2v_imag(nb2v.ctypes.data_as(POINTER(c_float)))
-
-        libnao_gpu.calc_XXVV(c_double(comega.real), c_double(comega.imag),
-                self.block_size.ctypes.data_as(POINTER(c_int)), self.grid_size.ctypes.data_as(POINTER(c_int)))
-
-        ab2v = np.zeros([self.norbs*self.norbs], dtype=np.float32)
-
-        libnao_gpu.calc_ab2v_imag(ab2v.ctypes.data_as(POINTER(c_float)))
-        vdp = 1j*self.v_dab*ab2v
-
-        libnao_gpu.calc_ab2v_real(ab2v.ctypes.data_as(POINTER(c_float)))
-        vdp += self.v_dab*ab2v
-
+    if self.tddft_iter_gpu.GPU:
+        vdp = self.tddft_iter_gpu.apply_rf0_gpu(self.xocc, sab, comega)
     else:
         #
         # WARNING!!!!
@@ -233,7 +176,7 @@ class tddft_iter_c():
 
       polariz[iw] = np.dot(self.moms1[:,0], chi0_real + 1j*chi0_imag)
 
-    if self.GPU:
+    if self.tddft_iter_gpu.GPU:
         libnao_gpu.clean_gpu()
 
     return polariz
