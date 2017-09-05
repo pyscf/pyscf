@@ -66,7 +66,7 @@ class tddft_iter_c():
 
     if xc_code.upper()!='RPA' :
       dm = comp_dm(sv.wfsx.x, sv.get_occupations())
-      xc = pb.comp_fxc_lil(dm, xc_code, dtype=self.dtype).todense()
+      xc = pb.comp_fxc_lil(dm, xc_code, dtype=self.dtype, **kvargs).todense()
       ui = np.triu_indices(self.kernel_dim)
       self.kernel_dens = self.kernel_dens + xc
       for i in range(self.kernel.shape[0]):
