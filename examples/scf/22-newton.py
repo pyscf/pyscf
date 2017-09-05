@@ -33,7 +33,7 @@ mf = scf.newton(scf.RHF(mol))
 energy = mf.kernel(mo_init, mocc_init)
 print('E = %.12f, ref = -76.026765672992' % energy)
 
-mf = scf.newton(scf.UKS(mol))
+mf = scf.UKS(mol).newton()  # Using stream style
 energy = mf.kernel((mo_init,mo_init), (mocc_init*.5,mocc_init*.5))
 print('E = %.12f, ref = -75.854689662296' % energy)
 

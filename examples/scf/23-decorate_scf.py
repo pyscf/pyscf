@@ -44,26 +44,26 @@ mol.build(
 # 1. spin-free X2C-HF with density fitting approximation on 2E integrals
 #
 mf = scf.density_fit(scf.sfx2c(scf.RHF(mol)))
+mf = scf.RHF(mol).x2c().density_fit()  # Stream style
 energy = mf.kernel()
-print('E = %.12f, ref = -76.075115837941' % energy)
+print('E = %.12f, ref = -76.075408156180' % energy)
 
 #
 # 2. spin-free X2C correction for density-fitting HF.  Since X2C correction is
 # commutable with density fitting operation, it is fully equivalent to case 1.
 #
 mf = scf.sfx2c(scf.density_fit(scf.RHF(mol)))
+mf = scf.RHF(mol).density_fit().x2c()  # Stream style
 energy = mf.kernel()
-print('E = %.12f, ref = -76.075115837941' % energy)
+print('E = %.12f, ref = -76.075408156180' % energy)
 
 #
 # 3. Newton method for non-relativistic HF
 #
-mo_init = mf.eig(mf.get_hcore(), mf.get_ovlp())[1]
-mocc_init = numpy.zeros(mo_init.shape[1])
-mocc_init[:mol.nelectron//2] = 2
 mf = scf.newton(scf.RHF(mol))
-energy = mf.kernel(mo_init, mocc_init)
-print('E = %.12f, ref = -76.026765673091' % energy)
+mf = scf.RHF(mol).newton()  # Stream style
+energy = mf.kernel()
+print('E = %.12f, ref = -76.026765673120' % energy)
 
 #
 # 4. Newton method for non-relativistic HF with density fitting for orbital
@@ -71,8 +71,9 @@ print('E = %.12f, ref = -76.026765673091' % energy)
 # solver "mf" is different.
 #
 mf = scf.density_fit(scf.newton(scf.RHF(mol)))
-energy = mf.kernel(mo_init, mocc_init)
-print('E = %.12f, ref = -76.026765673091' % energy)
+mf = scf.RHF(mol).newton().density_fit()
+energy = mf.kernel()
+print('E = %.12f, ref = -76.026765673120' % energy)
 
 #
 # 5. Newton method to solve the density-fitting approximated HF object.  There
@@ -80,8 +81,9 @@ print('E = %.12f, ref = -76.026765673091' % energy)
 # fitting is applied on HF object only.  It does not affect the Newton solver.
 #
 mf = scf.newton(scf.density_fit(scf.RHF(mol)))
-energy = mf.kernel(mo_init, mocc_init)
-print('E = %.12f, ref = -76.025936299674' % energy)
+mf = scf.RHF(mol).density_fit().newton()
+energy = mf.kernel()
+print('E = %.12f, ref = -76.026744737357' % energy)
 
 #
 # 6. Newton method for density-fitting HF, and the hessian of Newton solver is
@@ -92,6 +94,7 @@ print('E = %.12f, ref = -76.025936299674' % energy)
 # Ahlrichs cfit basis.
 #
 mf = scf.density_fit(scf.newton(scf.density_fit(scf.RHF(mol))), 'ahlrichs')
-energy = mf.kernel(mo_init, mocc_init)
-print('E = %.12f, ref = -76.025936299674' % energy)
+mf = scf.RHF(mol).density_fit().newton().density_fit(auxbasis='ahlrichs')
+energy = mf.kernel()
+print('E = %.12f, ref = -76.026744737357' % energy)
 

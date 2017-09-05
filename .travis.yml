@@ -1,0 +1,60 @@
+# More syntax details at: https://docs.travis-ci.com/user/customizing-the-build
+# Workaround present for https://github.com/sunqm/pyscf/issues/71
+
+sudo: required
+language: python
+group: deprecated-2017Q2
+
+git:
+  depth: 3
+
+matrix:
+  include:
+    - dist: trusty
+
+virtualenv:
+    system_site_packages: true
+    
+before_install:
+    - >
+      sudo apt-get -qq install 
+      gcc 
+      gfortran
+      libblas-dev
+      liblapack-dev
+      libatlas-dev
+      libatlas-base-dev
+      python-h5py
+      python-nose
+      python-nose-exclude
+      python-numpy
+      python-scipy
+      cmake
+      doxygen
+    
+install:
+    - > 
+      cd pyscf/lib &&
+      mkdir build &&
+      cd build &&
+      cmake .. &&
+      make &&
+      cd ../..
+
+before_script:
+    - export PYTHONPATH=$(pwd):$PYTHONPATH
+    - rm -r $TRAVIS_BUILD_DIR/pyscf/pbc/tests
+    - rm $TRAVIS_BUILD_DIR/pyscf/pbc/tools/pyscf_ase.py
+
+script:
+    - >
+      nosetests -v -e geomopt -e dmrgscf -e fciqmcscf -e icmpspt -e examples
+      -e test_bz
+      -e test_tdrks_grad
+      -e test_mc2step_4o4e
+      -e test_ks_noimport
+      -e test_ecp_pseudo
+      -e test_jk_single_kpt
+      -e test_jk_hermi0
+      -e test_j_kpts
+      -e test_k_kpts

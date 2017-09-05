@@ -1,0 +1,83 @@
+#  3-21++G  EMSL  Basis Set Exchange Library  6/9/17 6:22 PM
+# Elements                             References
+# --------                             ----------
+# H - Ne: J.S. Binkley, J.A. Pople, W.J. Hehre, J. Am. Chem. Soc 102 939 (1980)
+# Na - Ar: M.S. Gordon, J.S. Binkley, J.A. Pople, W.J. Pietro and W.J. Hehre,
+# J. Am. Chem. Soc. 104, 2797 (1983).
+# K - Ca: K.D. Dobbs, W.J. Hehre, J. Comput. Chem. 7, 359 (1986).
+# Ga - Kr: K.D. Dobbs, W.J. Hehre, J. Comput. Chem. 7, 359 (1986).
+# Sc - Zn: K.D. Dobbs, W.J. Hehre, J. Comput. Chem. 8, 861 (1987).
+# Y - Cd: K.D. Dobbs, W.J. Hehre, J. Comput. Chem. 8, 880 (1987).
+# Cs     : A 3-21G quality set derived from the Huzinage MIDI basis sets.
+# E.D. Glendening and D. Feller, J. Phys. Chem. 99, 3060 (1995)
+# 
+
+
+# Elements                             Reference
+# --------                             ----------
+# H, Li-Cl: T. Clark, J. Chandrasekhar,  G.W. Spitznagel, P.V.R. Schleyer, 
+#           J. Comp. Chem. 4, 294 (1983).
+#   
+
+
+BASIS "ao basis" PRINT
+#BASIS SET: (4s) -> [3s]
+H    S
+      0.0360000              1.0000000        
+#BASIS SET: (7s,4p) -> [4s,3p]
+Li    SP
+      0.0074000              1.0000000              1.0000000        
+#BASIS SET: (7s,4p) -> [4s,3p]
+Be    SP
+      0.0207000              1.0000000              1.0000000        
+#BASIS SET: (7s,4p) -> [4s,3p]
+B    SP
+      0.0315000              1.0000000              1.0000000        
+#BASIS SET: (7s,4p) -> [4s,3p]
+C    SP
+      0.0438000              1.0000000              1.0000000        
+#BASIS SET: (7s,4p) -> [4s,3p]
+N    SP
+      0.0639000              1.0000000              1.0000000        
+#BASIS SET: (7s,4p) -> [4s,3p]
+O    SP
+      0.0845000              1.0000000              1.0000000        
+#BASIS SET: (7s,4p) -> [4s,3p]
+F    SP
+      0.1076000              1.0000000              1.0000000        
+#BASIS SET: (7s,4p) -> [4s,3p]
+Ne    SP
+      0.1300000              1.0000000              1.0000000        
+#BASIS SET: (10s,7p) -> [5s,4p]
+Na    SP
+      0.0076000              1.0000000              1.0000000        
+#BASIS SET: (10s,7p) -> [5s,4p]
+Mg    SP
+      0.0146000              1.0000000              1.0000000        
+#BASIS SET: (10s,7p) -> [5s,4p]
+Al    SP
+      0.0318000              1.0000000              1.0000000        
+#BASIS SET: (10s,7p) -> [5s,4p]
+Si    SP
+      0.0331000              1.0000000              1.0000000        
+#BASIS SET: (10s,7p) -> [5s,4p]
+P    SP
+      0.0348000              1.0000000              1.0000000        
+#BASIS SET: (10s,7p) -> [5s,4p]
+S    SP
+      0.0405000              1.0000000              1.0000000        
+#BASIS SET: (10s,7p) -> [5s,4p]
+Cl    SP
+      0.0483000              1.0000000              1.0000000        
+#BASIS SET: (10s,7p) -> [5s,4p]
+Ar    SP
+      0.0600000              1.0000000              1.0000000        
+#BASIS SET: (13s,10p) -> [6s,5p]
+K    SP
+      0.0047000              1.0000000              1.0000000        
+#BASIS SET: (13s,10p) -> [6s,5p]
+Ca    SP
+      0.0071000              1.0000000              1.0000000        
+END
+
+

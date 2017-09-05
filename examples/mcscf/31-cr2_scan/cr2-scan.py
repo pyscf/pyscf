@@ -44,7 +44,7 @@ def run(b, dm, mo, ci=None):
         mo = mcscf.sort_mo_by_irrep(mc, mf.mo_coeff, ncas, ncore)
     else:
         mo = mcscf.project_init_guess(mc, mo)
-    emc.append(mc.kernel(mo)[0])
+    emc.append(mc.kernel(mo, ci)[0])
     mc.analyze()
     return mf.make_rdm1(), mc.mo_coeff, mc.ci
 

@@ -30,10 +30,10 @@ mol.atom = [
  ["H",  (-0.634414, -1.530889, 0.000000)],
  ["H",  (-1.921071, -0.362247, 0.000000)]
 ]
-mol.basis = {"H": '6-311gsp',
-             "O": '6-311gsp',
-             "N": '6-311gsp',
-             "C": '6-311gsp',
+mol.basis = {"H": '6-311++g**',
+             "O": '6-311++g**',
+             "N": '6-311++g**',
+             "C": '6-311++g**',
              }
 mol.build()
 
@@ -57,7 +57,7 @@ b.xc='b3lyp'
 b.chkfile='nh2cho_s1.chkfile'
 dm = b.make_rdm1(mo0, occ0)
 # Use mom method to determine occupation number
-b.get_occ = scf.addons.mom_occ(b, mo0, occ0)
+scf.addons.mom_occ_(b, mo0, occ0)
 b.scf(dm)
 
 # Read the MO coefficients and occupation numbers from chkfile.

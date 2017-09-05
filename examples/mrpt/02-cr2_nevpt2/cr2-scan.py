@@ -32,7 +32,7 @@ def run(b, dm, mo, ci=None):
         mo = mcscf.project_init_guess(mc, mo)
     emc.append(mc.kernel(mo)[0])
     mc.analyze()
-    ept.append(mrpt.nevpt2.kernel(mc))
+    ept.append(mrpt.NEVPT(mc).kernel())
     return m.make_rdm1(), mc.mo_coeff, mc.ci
 
 dm = mo = ci = None

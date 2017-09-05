@@ -29,7 +29,7 @@ mol.atom = [('C', c) for c in c60struct.make60(1.46,1.38)]
 mol.basis = {'C': 'ccpvtz',}
 mol.build()
 
-mf = scf.density_fit(scf.RHF(mol))
+mf = scf.RHF(mol).density_fit(auxbasis='weigend')
 mf.verbose = 5
 # Save resutls in chkfile
 mf.chkfile = 'c60tz.chkfile'

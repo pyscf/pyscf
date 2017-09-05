@@ -1,0 +1,106 @@
+#  6-311G**  EMSL  Basis Set Exchange Library  6/9/17 6:22 PM
+# Elements                             References
+# --------                             ----------
+# H, Li - Ne: R. Krishnan, J.S. Binkley, R. Seeger and J.A. Pople,
+#             J. Chem. Phys. 72, 650 (1980)
+# Na - Ar:    A.D. McLean and G.S. Chandler J. Chem. Phys. 72, 5639, (1980).
+# K  - Ca:    J-P. Blaudeau, M. P. McGrath, L.A. Curtiss and L. Radom,
+#             J. Chem. Phys. 107, 5016 (1997).
+# Ga - Kr:    L. A. Curtiss, M. P. McGrath, J-P. Blandeau, N. E. Davis, 
+#             R. C. Binning, Jr. L. Radom, J. Chem. Phys. 103, 6104 (1995).
+# I      :    M.N. Glukhovstev, A. pross, M.P. McGrath, L. Radom, J. Chem. Phys.
+#             103, 1878 (1995)
+#   
+
+# Elements                             References
+# --------                             ----------
+# H - Ar:  R. Krishnan, J.S. Binkley, R. Seeger, J.A. Pople, J. Chem. Phys. 72,
+#          650 (1980)
+#   
+
+
+BASIS "ao basis" PRINT
+#BASIS SET: (5s,1p) -> [3s,1p]
+H    D
+      1.0000000              1.0000000        
+#BASIS SET: (5s,1p) -> [3s,1p]
+He    D
+      2.0000000              1.0000000        
+#BASIS SET: (11s,5p,1d) -> [4s,3p,1d]
+Li    D
+      0.2000000              1.0000000        
+#BASIS SET: (11s,5p,1d) -> [4s,3p,1d]
+Be    D
+      0.2550000              1.0000000        
+#BASIS SET: (11s,5p,1d) -> [4s,3p,1d]
+B    D
+      0.4010000              1.0000000        
+#BASIS SET: (11s,5p,1d) -> [4s,3p,1d]
+C    D
+      0.6260000              1.0000000        
+#BASIS SET: (11s,5p,1d) -> [4s,3p,1d]
+N    D
+      0.9130000              1.0000000        
+#BASIS SET: (11s,5p,1d) -> [4s,3p,1d]
+O    D
+      1.2920000              1.0000000        
+#BASIS SET: (11s,5p,1d) -> [4s,3p,1d]
+F    D
+      1.7500000              1.0000000        
+#BASIS SET: (11s,5p,1d) -> [4s,3p,1d]
+Ne    D
+      2.3040000              1.0000000        
+#BASIS SET: (13s,9p,1d) -> [6s,5p,1d]
+Na    D
+      0.1750000              1.0000000        
+#BASIS SET: (13s,9p,1d) -> [6s,5p,1d]
+Mg    D
+      0.1750000              1.0000000        
+#BASIS SET: (13s,9p,1d) -> [6s,5p,1d]
+Al    D
+      0.3250000              1.0000000        
+#BASIS SET: (13s,9p,1d) -> [6s,5p,1d]
+Si    D
+      0.4500000              1.0000000        
+#BASIS SET: (13s,9p,1d) -> [6s,5p,1d]
+P    D
+      0.5500000              1.0000000        
+#BASIS SET: (13s,9p,1d) -> [6s,5p,1d]
+S    D
+      0.6500000              1.0000000        
+#BASIS SET: (13s,10p,1d) -> [6s,5p,1d]
+Cl    D
+      0.7500000              1.0000000        
+#BASIS SET: (13s,10p,1d) -> [6s,5p,1d]
+Ar    D
+      0.8500000              1.0000000        
+#BASIS SET: (14s,11p,4d) -> [8s,7p,2d]
+K    D
+      0.2290000              1.0000000        
+#BASIS SET: (14s,11p,4d) -> [8s,7p,2d]
+Ca    D
+      0.2600000              1.0000000        
+#BASIS SET: (15s,13p,6d) -> [8s,7p,3d]
+Ga    D
+      0.1690000              1.0000000        
+#BASIS SET: (15s,13p,6d) -> [8s,7p,3d]
+Ge    D
+      0.2280000              1.0000000        
+#BASIS SET: (15s,13p,6d) -> [8s,7p,3d]
+As    D
+      0.2640000              1.0000000        
+#BASIS SET: (15s,13p,6d) -> [8s,7p,3d]
+Se    D
+      0.3050000              1.0000000        
+#BASIS SET: (15s,13p,6d) -> [8s,7p,3d]
+Br    D
+      0.4510000              1.0000000        
+#BASIS SET: (15s,13p,6d) -> [8s,7p,3d]
+Kr    D
+      0.3950000              1.0000000        
+#BASIS SET: (15s,12p,7d) -> [10s,9p,5d]
+I    D
+      0.3020000              1.0000000        
+END
+
+

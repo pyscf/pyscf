@@ -27,7 +27,6 @@ cell.atom = '''C     0.      0.      0.
               C     0.8917  2.6751  2.6751'''
 cell.basis = 'gth-szv'
 cell.pseudo = 'gth-pade'
-cell.gs = [10]*3  # 10 grids on postive x direction, => 21^3 grids in total
 cell.verbose = 4
 cell.build()
 

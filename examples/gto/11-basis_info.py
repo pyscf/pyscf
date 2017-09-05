@@ -28,12 +28,12 @@ print('total number of shells %d, total number of AO functions %d' %
       (mol.nbas, mol.nao_nr()))
 
 # Filter AO functions using AO labels, in tuple
-for label in mol.spheric_labels():
+for label in mol.ao_labels(None):
     if label[2] == '2p' and label[3] == 'z':
         print(label)
 
 # Filter AO functions using formated AO labels
-for label in mol.spheric_labels(1):
+for label in mol.ao_labels():
     if '2pz' in label:
         print(label)
 
