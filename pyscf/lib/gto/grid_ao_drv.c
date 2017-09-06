@@ -283,7 +283,7 @@ void GTOeval_spinor_iter(void (*feval)(), int (*fexp)(), void (*c2s)(), double f
                                 pcart = cart_gto + i * nc*dcart*bgrids*ncomp_e1;
                                 off = (i*nao+ao_id)*Ngrids;
                                 (*c2s)(aoa+off, aob+off, pcart,
-                                       ngrids, bgrids, nc, l, kappa);
+                                       ngrids, bgrids, nc, kappa, l);
                         }
                 } else {
                         for (i = 0; i < ncomp; i++) {

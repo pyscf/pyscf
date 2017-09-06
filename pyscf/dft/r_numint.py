@@ -156,7 +156,6 @@ def r_vxc(ni, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
     ao_loc = mol.ao_loc_2c()
     n2c = ao_loc[-1]
 
-    dms = numpy.asarray(dms)
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi)
     with_s = (nao == n2c*2)  # 4C DM
 

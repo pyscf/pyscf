@@ -57,15 +57,14 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     else:
         small_rho_cutoff = 0
 
-    dm = numpy.asarray(dm)
-    ground_state = (dm.ndim == 2)
-
     if hermi == 2:  # because rho = 0
         n, exc, vxc = 0, 0, 0
     else:
         n, exc, vxc = ks._numint.r_vxc(mol, ks.grids, ks.xc, dm, hermi=hermi)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
+
+    ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2)
 
     hyb = ks._numint.hybrid_coeff(ks.xc, spin=mol.spin)
     if abs(hyb) < 1e-10:
