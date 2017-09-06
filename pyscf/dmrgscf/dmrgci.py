@@ -218,8 +218,17 @@ class DMRGCI(pyscf.lib.StreamObject):
         log.info('memory = %s', self.memory)
         return self
 
+    # ABOUT RDMs AND INDEXES: -----------------------------------------------------------------------
+    #   There is two ways to stored an RDM
+    #   (the numbers help keep track of creation/annihilation that go together):
+    #     E3[i1,j2,k3,l3,m2,n1] is the way BLOCK and STACKBLOCK outputs text and bin files
+    #     E3[i1,j2,k3,l1,m2,n3] is the way the tensors need to be written for SQA and ICPT
+    #
+    #   --> See various remarks in the pertinent functions below.
+    # -----------------------------------------------------------------------------------------------
+
     def make_rdm1s(self, state, norb, nelec, link_index=None, **kwargs):
-# Ref: IJQC, 109, 3552 Eq (3)
+        # Ref: IJQC, 109, 3552 Eq (3)
         if isinstance(nelec, (int, numpy.integer)):
             nelecb = (nelec-self.spin) // 2
             neleca = nelec - nelecb
@@ -232,7 +241,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         return dm1a, dm1b
 
     def make_rdm1(self, state, norb, nelec, link_index=None, **kwargs):
-# Avoid calling self.make_rdm12 because it may be overloaded
+        # Avoid calling self.make_rdm12 because it may be overloaded
         return DMRGCI.make_rdm12(self, state, norb, nelec, link_index, **kwargs)[0]
 
     def make_rdm12(self, state, norb, nelec, link_index=None, **kwargs):
@@ -244,6 +253,10 @@ class DMRGCI(pyscf.lib.StreamObject):
 
         twopdm = numpy.zeros( (norb, norb, norb, norb) )
         file2pdm = "spatial_twopdm.%d.%d.txt" %(state, state)
+        # The 2RDMs written by "save_spatial_twopdm_text" in BLOCK and STACKBLOCK
+        # are written as E2[i1,j2,k2,l1] (right?)
+        # and stored here as E2[i1,l1,j2,k2] (weird?)
+        # This is NOT done with SQA in mind.
         with open(os.path.join(self.scratchDirectory, "node0", file2pdm), "r") as f:
             norb_read = int(f.readline().split()[0])
             assert(norb_read == norb)
@@ -253,12 +266,13 @@ class DMRGCI(pyscf.lib.StreamObject):
                 i, k, l, j = [int(x) for x in linesp[:4]]
                 twopdm[i,j,k,l] = 2.0 * float(linesp[4])
 
+        # (this is coherent with previous statement about indexes) (right?)
         onepdm = numpy.einsum('ikjj->ik', twopdm)
         onepdm /= (nelectrons-1)
         return onepdm, twopdm
 
     def trans_rdm1s(self, statebra, stateket, norb, nelec, link_index=None, **kwargs):
-# Ref: IJQC, 109, 3552 Eq (3)
+        # Ref: IJQC, 109, 3552 Eq (3)
         if isinstance(nelec, (int, numpy.integer)):
             nelecb = (nelec-self.spin) // 2
             neleca = nelec - nelecb
@@ -287,6 +301,10 @@ class DMRGCI(pyscf.lib.StreamObject):
 
         twopdm = numpy.zeros( (norb, norb, norb, norb) )
         file2pdm = "spatial_twopdm.%d.%d.txt" %(statebra, stateket)
+        # The 2RDMs written by "save_spatial_twopdm_text" in BLOCK and STACKBLOCK
+        # are written as E2[i1,j2,k2,l1] (right?)
+        # and stored here as E2[i1,l1,j2,k2] (weird?)
+        # This is NOT done with SQA in mind.
         with open(os.path.join(self.scratchDirectory, "node0", file2pdm), "r") as f:
             norb_read = int(f.readline().split()[0])
             assert(norb_read == norb)
@@ -296,6 +314,7 @@ class DMRGCI(pyscf.lib.StreamObject):
                 i, k, l, j = [int(x) for x in linesp[:4]]
                 twopdm[i,j,k,l] = 2.0 * float(linesp[4])
 
+        # (this is coherent with previous statement about indexes) (right?)
         onepdm = numpy.einsum('ikjj->ik', twopdm)
         onepdm /= (nelectrons-1)
         return onepdm, twopdm
@@ -322,6 +341,10 @@ class DMRGCI(pyscf.lib.StreamObject):
 
         threepdm = numpy.zeros( (norb, norb, norb, norb, norb, norb) )
         file3pdm = "spatial_threepdm.%d.%d.txt" %(state, state)
+        # The 3RDMs written by "Threepdm_container::save_spatial_npdm_text" in BLOCK and STACKBLOCK
+        # are written as E3[i1,j2,k3,l3,m2,n1]
+        # and are also stored here as E3[i1,j2,k3,l3,m2,n1]
+        # This is NOT done with SQA in mind.
         with open(os.path.join(self.scratchDirectory, "node0", file3pdm), "r") as f:
             norb_read = int(f.readline().split()[0])
             assert(norb_read == norb)
@@ -331,6 +354,7 @@ class DMRGCI(pyscf.lib.StreamObject):
                 i, j, k, l, m, n = [int(x) for x in linesp[:6]]
                 threepdm[i,j,k,l,m,n] = float(linesp[6])
 
+        # (this is coherent with previous statement about indexes)
         twopdm = numpy.einsum('ijkklm->ijlm',threepdm)
         twopdm /= (nelectrons-2)
         onepdm = numpy.einsum('ijjk->ik', twopdm)
@@ -377,13 +401,11 @@ class DMRGCI(pyscf.lib.StreamObject):
             self.has_threepdm = True
             self.extraline.pop()
 
-        # Remove everything
-        os.system("rm -f %s/node0/*twopdm*"%(self.scratchDirectory))
-        os.system("rm -f %s/node0/*tmp"%(self.scratchDirectory))
-
         # The binary files coming from STACKBLOCK and BLOCK are different
-        # - STACKBLOCK uses the 6-fold symmetry, this must unpacked using "libunpack.unpackE3" (see lib/icmpspt/icmpspt.c)
-        # - BLOCK just writes a list of all values, this is directly read by "unpackE3_BLOCK"
+        # - STACKBLOCK uses the 6-fold symmetry, this must be unpacked
+        #   using "libunpack.unpackE3" (see lib/icmpspt/icmpspt.c)
+        # - BLOCK just writes a list of all values, this is directly read
+        #   using "unpackE3_BLOCK" (see below)
         if (filetype == "binary") :
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin" %(state, state))
             if 'stackblock' in settings.BLOCKEXE:
@@ -396,34 +418,31 @@ class DMRGCI(pyscf.lib.StreamObject):
               print 'Reading binary 3RDM from BLOCK'
               E3 = DMRGCI.unpackE3_BLOCK(self,fname,norb)
 
-
-        # Both text files are the same: a list of "a,b,c,d,e,f,E3[a,b,c,f,e,d]"
+        # The 3RDMs written by "Threepdm_container::save_spatial_npdm_text" in BLOCK and STACKBLOCK
+        # are written as E3[i1,j2,k3,l3,m2,n1]
+        # and are stored here as E3[i1,j2,k3,n1,m2,l3]
+        # This is done with SQA in mind.
         else:
             print 'Reading text-file 3RDM'
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.txt" %(state, state))
             f = open(fname, 'r')
             lines = f.readlines()
             E3 = numpy.zeros(shape=(norb, norb, norb, norb, norb, norb), dtype=dt, order='F')
+            assert(int(lines[0])==norb)
             for line in lines[1:]:
-                linesp = line.split()
-                if (len(linesp) != 7) :
-                    continue
-                a, b, c, d, e, f, integral = int(linesp[0]), int(linesp[1]), int(linesp[2]), int(linesp[3]), int(linesp[4]), int(linesp[5]), float(linesp[6])
+              linesp = line.split()
+              if (len(linesp) != 7) :
+                  continue
+              a, b, c, d, e, f, integral = int(linesp[0]), int(linesp[1]), int(linesp[2]), int(linesp[3]), int(linesp[4]), int(linesp[5]), float(linesp[6])
+              if (False):
                 E3[a,b,c, f,e,d] = integral
                 E3[a,c,b, f,d,e] = integral
                 E3[b,a,c, e,f,d] = integral
                 E3[b,c,a, e,d,f] = integral
                 E3[c,a,b, d,f,e] = integral
                 E3[c,b,a, d,e,f] = integral
-
-        #for i1 in range(norb):
-        #  for i2 in range(norb):
-        #    for i3 in range(norb):
-        #      for i4 in range(norb):
-        #        for i5 in range(norb):
-        #          for i6 in range(norb):
-        #            if (abs(E3[i1,i2,i3,i4,i5,i6])>0.0001):
-        #              print "[BM] ({:5} {:5} {:5}|{:5} {:5} {:5}) {:20.4f}".format(i1,i2,i3,i4,i5,i6,E3[i1,i2,i3,i4,i5,i6])
+              else:
+                self.populate(E3, [a,b,c,  f,e,d], integral)
         print ''
         return E3
 
@@ -451,14 +470,12 @@ class DMRGCI(pyscf.lib.StreamObject):
             self.has_threepdm = True
             self.extraline.pop()
 
-        # Remove everything
-        os.system("rm -f %s/node0/*twopdm*"%(self.scratchDirectory))
-        os.system("rm -f %s/node0/*tmp"%(self.scratchDirectory))
-
         # The binary files coming from STACKBLOCK and BLOCK are different:
         # - STACKBLOCK does not have 4RDM
-        #   if it had, it's probably gonna come in a 8-fold symmetry, which must unpacked using "libunpack.unpackE4" (see lib/icmpspt/icmpspt.c)
-        # - BLOCK just writes a list of all values, this is directly read by "unpackE4_BLOCK"
+        #   If it had, it would probably come in a 8-fold symmetr which must unpacked
+        #   using "libunpack.unpackE4" (see lib/icmpspt/icmpspt.c)
+        # - BLOCK just writes a list of all values, this is directly read
+        #   using "unpackE4_BLOCK" (see below)
         if (filetype == "binary") :
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin" %(state, state))
             if 'stackblock' in settings.BLOCKEXE:
@@ -471,46 +488,56 @@ class DMRGCI(pyscf.lib.StreamObject):
               print 'Reading binary 4RDM from BLOCK'
               E4 = DMRGCI.unpackE4_BLOCK(self,fname,norb)
 
-        # Both text files are the same: a list of "a,b,c,d,e,f,g,h,E4[a,b,c,d,h,g,f,e]"
+        # The 4RDMs written by "Fourpdm_container::save_spatial_npdm_text" in BLOCK and STACKBLOCK
+        # are written as E4[i1,j2,k3,l4,m4,n3,o2,p1]
+        # and are stored here as E4[i1,j2,k3,l4,p1,o2,n3,m4]
+        # This is done with SQA in mind.
         else:
             print 'Reading text-file 4RDM'
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.txt" %(state, state))
             f = open(fname, 'r')
             lines = f.readlines()
             E4 = numpy.zeros(shape=(norb, norb, norb, norb, norb, norb, norb, norb), dtype=dt, order='F')
+            assert(int(lines[0])==norb)
             for line in lines[1:]:
               linesp = line.split()
               if (len(linesp) != 9) :
                   continue
               a, b, c, d, e, f, g, h, integral = int(linesp[0]), int(linesp[1]), int(linesp[2]), int(linesp[3]), int(linesp[4]), int(linesp[5]), int(linesp[6]), int(linesp[7]), float(linesp[8])
-              up_indexes=[a,b,c,d]
-              dn_indexes=[h,g,f,e]
-              for i in range(4):
-                for j in range(4):
-                  if (i==j):
-                    continue
-                  for k in range(4):
-                    if ((i==k)or(j==k)):
+              if (False):
+                up_indexes=[a,b,c,d]
+                dn_indexes=[h,g,f,e]
+                for i in range(4):
+                  for j in range(4):
+                    if (i==j):
                       continue
-                    for l in range(4):
-                      if ((i==l)or(j==l)or(k==l)):
+                    for k in range(4):
+                      if ((i==k)or(j==k)):
                         continue
-                      E4[up_indexes[i],up_indexes[j],up_indexes[k],up_indexes[l],\
-                         dn_indexes[i],dn_indexes[j],dn_indexes[k],dn_indexes[l]] = integral
-        #for i1 in range(norb):
-        #  for i2 in range(norb):
-        #    for i3 in range(norb):
-        #      for i4 in range(norb):
-        #        for i5 in range(norb):
-        #          for i6 in range(norb):
-        #            for i7 in range(norb):
-        #              for i8 in range(norb):
-        #                if abs(E4[i1,i2,i3,i4,i5,i6,i7,i8]>0.0001):
-        #                  print "[BM] ({:5} {:5} {:5} {:5}|{:5} {:5} {:5} {:5}) {:20.4f}".format(i1,i2,i3,i4,i5,i6,i7,i8,E4[i1,i2,i3,i4,i5,i6,i7,i8])
+                      for l in range(4):
+                        if ((i==l)or(j==l)or(k==l)):
+                          continue
+                        E4[up_indexes[i],up_indexes[j],up_indexes[k],up_indexes[l],\
+                           dn_indexes[i],dn_indexes[j],dn_indexes[k],dn_indexes[l]] = integral
+              else:
+                self.populate(E4, [a,b,c,d,  h,g,f,e], integral)
         print ''
         return E4
 
+    def populate(self, array, list, value):
+        dim=len(list)/2
+        up=list[:dim]
+        dn=list[dim:]
+        import itertools
+        for t in itertools.permutations(range(dim), dim):
+          updn=[up[i] for i in t]+[dn[i] for i in t]
+          array[tuple(updn)] = value
+
     def unpackE3_BLOCK(self,fname,norb):
+        # The 3RDMs written by "Threepdm_container::save_spatial_npdm_binary" in BLOCK
+        # are written as E3[i1,j2,k3,l3,m2,n1]
+        # and are stored here as E3[i1,j2,k3,n1,m2,l3]
+        # This is done with SQA in mind.
         E3=numpy.zeros((norb,norb,norb,norb,norb,norb), order='F')
         fil=open(fname,"rb")
         fil.seek(93)
@@ -526,6 +553,10 @@ class DMRGCI(pyscf.lib.StreamObject):
         return E3
 
     def unpackE4_BLOCK(self,fname,norb):
+        # The 4RDMs written by "Fourpdm_container::save_spatial_npdm_binary" in BLOCK
+        # are written as E4[i1,j2,k3,l4,m4,n3,o2,p1]
+        # and are stored here as E4[i1,j2,k3,l4,p1,o2,n3,m4]
+        # This is done with SQA in mind.
         E4=numpy.zeros((norb,norb,norb,norb,norb,norb,norb,norb), order='F')
         fil=open(fname,"rb")
         fil.seek(109)
@@ -752,13 +783,15 @@ def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
         neleca, nelecb = nelec
     integralFile = os.path.join(DMRGCI.runtimeDir, DMRGCI.integralFile)
     if DMRGCI.groupname is not None and DMRGCI.orbsym is not []:
-# First removing the symmetry forbidden integrals. This has been done using
-# the pyscf internal irrep-IDs (stored in DMRGCI.orbsym)
-        orbsym = numpy.asarray(DMRGCI.orbsym) % 10
-        pair_irrep = (orbsym.reshape(-1,1) ^ orbsym)[numpy.tril_indices(ncas)]
-        sym_forbid = pair_irrep.reshape(-1,1) != pair_irrep.ravel()
-        eri_cas = pyscf.ao2mo.restore(4, eri_cas, ncas)
-        eri_cas[sym_forbid] = 0
+## First removing the symmetry forbidden integrals. This has been done using
+## the pyscf internal irrep-IDs (stored in DMRGCI.orbsym)
+#        orbsym = numpy.asarray(DMRGCI.orbsym) % 10
+#        pair_irrep = (orbsym.reshape(-1,1) ^ orbsym)[numpy.tril_indices(ncas)]
+#        sym_forbid = pair_irrep.reshape(-1,1) != pair_irrep.ravel()
+#        eri_cas = pyscf.ao2mo.restore(4, eri_cas, ncas)
+#        eri_cas[sym_forbid] = 0
+#        eri_cas = pyscf.ao2mo.restore(8, eri_cas, ncas)
+        orbsym = numpy.asarray(dmrg_sym.convert_orbsym(DMRGCI.groupname, DMRGCI.orbsym))
         eri_cas = pyscf.ao2mo.restore(8, eri_cas, ncas)
 # Then convert the pyscf internal irrep-ID to molpro irrep-ID
         orbsym = numpy.asarray(dmrg_sym.convert_orbsym(DMRGCI.groupname, orbsym))
