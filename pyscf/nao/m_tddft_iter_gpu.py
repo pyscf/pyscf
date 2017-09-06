@@ -61,3 +61,6 @@ class tddft_iter_gpu_c():
         vdp += self.v_dab*ab2v
 
         return vdp
+
+    def clean_gpu(self):
+        libnao_gpu.clean_gpu()
