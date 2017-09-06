@@ -1,4 +1,10 @@
+from __future__ import division
 import numpy as np
+try:
+    import numba
+    use_numba = True
+except:
+    use_numba = False
 
 #
 #
@@ -42,10 +48,14 @@ def triu_indices(dim):
     ind = np.zeros((dim, dim), dtype=np.int)
     ind.fill(-1)
 
-    count = 0
-    for i in range(dim):
-        for j in range(i, dim):
-            ind[i, j] = count
-            count += 1
+    if use_numba:
+        from pyscf.nao.m_numba_utils import triu_indices_numba
+        triu_indices_numba(ind, dim)
+    else:
+        count = 0
+        for i in range(dim):
+            for j in range(i, dim):
+                ind[i, j] = count
+                count += 1
 
     return ind

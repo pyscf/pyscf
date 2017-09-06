@@ -3,9 +3,8 @@ import numpy as np
 from scipy.sparse import csr_matrix
 from scipy.linalg import blas
 from timeit import default_timer as timer
-from pyscf.nao.m_libnao import libnao
+from pyscf.nao.m_blas_wrapper import spmv_wrapper
 from pyscf.nao.m_tddft_iter_gpu import tddft_iter_gpu_c
-from ctypes import POINTER, c_double, c_int, c_int64, c_float, c_int
 
 try:
     import numba
@@ -106,9 +105,8 @@ class tddft_iter_c():
         ab2v = blas.cgemm(1.0, np.transpose(self.xocc), nb2v).reshape(no*no)
 
         vdp = self.v_dab*ab2v
-    res_real = vdp.real*self.cc_da
-    res_imag = vdp.imag*self.cc_da
-    return res_real, res_imag
+
+    return vdp*self.cc_da 
 
   def comp_veff(self, vext, comega=1j*0.0):
     from scipy.sparse.linalg import gmres, lgmres as gmres_alias, LinearOperator
@@ -124,42 +122,21 @@ class tddft_iter_c():
   def vext2veff_matvec(self, v):
     self.matvec_ncalls+=1 
     
-    chi0_real, chi0_imag = self.apply_rf0(v, self.comega_current)
-    uplo = 1 # need to use lower triangular even if we kept the upper part
-             # since python is row major and fortran colum major
-    alpha = 1.0
-    beta = 0.0
-    incx = 1
-    incy = 1
+    chi0 = self.apply_rf0(v, self.comega_current)
     
     # For some reason it is very difficult to pass only one dimension
     # of an array to the fortran routines?? matvec[0, :].ctypes.data_as(POINTER(c_float))
     # is not working!!!
-    matvec_real = np.zeros((self.kernel_dim), dtype=self.dtype) 
-    matvec_imag = np.zeros((self.kernel_dim), dtype=self.dtype) 
 
-    if self.dtype == np.float32:
-        libnao.SSPMV_wrapper(c_int(uplo), c_int(self.kernel_dim), c_float(alpha), 
-            self.kernel.ctypes.data_as(POINTER(c_float)),
-            chi0_real.ctypes.data_as(POINTER(c_float)), c_int(incx), c_float(beta),
-            matvec_real.ctypes.data_as(POINTER(c_float)), c_int(incy))
-
-        libnao.SSPMV_wrapper(c_int(uplo), c_int(self.kernel_dim), c_float(alpha), 
-            self.kernel.ctypes.data_as(POINTER(c_float)),
-            chi0_imag.ctypes.data_as(POINTER(c_float)), c_int(incx), c_float(beta),
-            matvec_imag.ctypes.data_as(POINTER(c_float)), c_int(incy))
-    else:
-        libnao.DSPMV_wrapper(c_int(uplo), c_int(self.kernel_dim), c_double(alpha), 
-            self.kernel.ctypes.data_as(POINTER(c_double)),
-            chi0_real.ctypes.data_as(POINTER(c_double)), c_int(incx), c_double(beta),
-            matvec_real.ctypes.data_as(POINTER(c_double)), c_int(incy))
-
-        libnao.DSPMV_wrapper(c_int(uplo), c_int(self.kernel_dim), c_double(alpha), 
-            self.kernel.ctypes.data_as(POINTER(c_double)),
-            chi0_imag.ctypes.data_as(POINTER(c_double)), c_int(incx), c_double(beta),
-            matvec_imag.ctypes.data_as(POINTER(c_double)), c_int(incy))
+    # real part
+    chi0_reim = np.require(chi0.real, dtype=self.dtype, requirements=["A", "O"])
+    matvec_real = spmv_wrapper(1.0, self.kernel, chi0_reim)
     
-    return v - (matvec_real + 1j*matvec_imag)
+    # imaginary part
+    chi0_reim = np.require(chi0.imag, dtype=self.dtype, requirements=["A", "O"])
+    matvec_imag = spmv_wrapper(1.0, self.kernel, chi0_reim)
+
+    return v - (matvec_real + 1.0j*matvec_imag)
 
   def comp_polariz_xx(self, comegas):
     """ Polarizability """
@@ -167,21 +144,23 @@ class tddft_iter_c():
     
     for iw,comega in enumerate(comegas):
       veff,info = self.comp_veff(self.moms1[:,0], comega)
-      chi0_real, chi0_imag = self.apply_rf0( veff, comega )
+      chi0 = self.apply_rf0( veff, comega )
 
-      polariz[iw] = np.dot(self.moms1[:,0], chi0_real + 1j*chi0_imag)
+      polariz[iw] = np.dot(self.moms1[:,0], chi0)
 
     if self.tddft_iter_gpu.GPU:
-        libnao_gpu.clean_gpu()
+        self.tddft_iter_gpu.clean_gpu()
 
     return polariz
 
   def comp_nonin(self, comegas):
+    """
+        Non interacting polarizability
+    """
     vext = np.transpose(self.moms1)
     pxx = np.zeros(comegas.shape, dtype=np.complex64)
 
     for iomega, omega in enumerate(comegas):
-      chi0_real, chi0_imag = self.apply_rf0(vext[0,:], omega)
-      pxx[iomega] = -np.dot(chi0_real + 1j*chi0_imag, vext[0,:])
-
+      chi0 = self.apply_rf0(vext[0,:], omega)
+      pxx[iomega] =-np.dot(chi0, vext[0,:])
     return pxx

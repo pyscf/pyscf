@@ -2,7 +2,7 @@ from __future__ import division, print_function
 from pyscf.nao.m_ao_matelem import build_3dgrid
 from pyscf.nao.m_dens_libnao import dens_libnao
 from pyscf.nao.m_ao_eval_libnao import ao_eval_libnao as ao_eval
-from numpy import einsum
+import scipy.linalg.blas as blas
 from pyscf.dft import libxc
 
 #
@@ -34,6 +34,7 @@ def xc_scalar_ni(me, sp1,R1, sp2,R2, xc_code, deriv, **kvargs):
     raise RuntimeError('!deriv!')
 
   ao2 = ao_eval(me.ao2, R2, sp2, grids.coords)
-  overlaps = einsum("ij,kj->ik", ao1, ao2)
+  #overlaps = np.einsum("ij,kj->ik", ao1, ao2)
+  overlaps = blas.dgemm(1.0, ao1, ao2.T)
 
   return overlaps
