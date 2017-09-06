@@ -3,9 +3,8 @@ import numpy as np
 from scipy.sparse import csr_matrix
 from scipy.linalg import blas
 from timeit import default_timer as timer
-from pyscf.nao.m_libnao import libnao
+from pyscf.nao.m_blas_wrapper import spmv_wrapper
 from pyscf.nao.m_tddft_iter_gpu import tddft_iter_gpu_c
-from ctypes import POINTER, c_double, c_int, c_int64, c_float, c_int
 
 try:
     import numba
@@ -125,40 +124,14 @@ class tddft_iter_c():
     self.matvec_ncalls+=1 
     
     chi0_real, chi0_imag = self.apply_rf0(v, self.comega_current)
-    uplo = 1 # need to use lower triangular even if we kept the upper part
-             # since python is row major and fortran colum major
-    alpha = 1.0
-    beta = 0.0
-    incx = 1
-    incy = 1
     
     # For some reason it is very difficult to pass only one dimension
     # of an array to the fortran routines?? matvec[0, :].ctypes.data_as(POINTER(c_float))
     # is not working!!!
-    matvec_real = np.zeros((self.kernel_dim), dtype=self.dtype) 
-    matvec_imag = np.zeros((self.kernel_dim), dtype=self.dtype) 
 
-    if self.dtype == np.float32:
-        libnao.SSPMV_wrapper(c_int(uplo), c_int(self.kernel_dim), c_float(alpha), 
-            self.kernel.ctypes.data_as(POINTER(c_float)),
-            chi0_real.ctypes.data_as(POINTER(c_float)), c_int(incx), c_float(beta),
-            matvec_real.ctypes.data_as(POINTER(c_float)), c_int(incy))
+    matvec_real = spmv_wrapper(1.0, self.kernel, chi0_real)
+    matvec_imag = spmv_wrapper(1.0, self.kernel, chi0_imag)
 
-        libnao.SSPMV_wrapper(c_int(uplo), c_int(self.kernel_dim), c_float(alpha), 
-            self.kernel.ctypes.data_as(POINTER(c_float)),
-            chi0_imag.ctypes.data_as(POINTER(c_float)), c_int(incx), c_float(beta),
-            matvec_imag.ctypes.data_as(POINTER(c_float)), c_int(incy))
-    else:
-        libnao.DSPMV_wrapper(c_int(uplo), c_int(self.kernel_dim), c_double(alpha), 
-            self.kernel.ctypes.data_as(POINTER(c_double)),
-            chi0_real.ctypes.data_as(POINTER(c_double)), c_int(incx), c_double(beta),
-            matvec_real.ctypes.data_as(POINTER(c_double)), c_int(incy))
-
-        libnao.DSPMV_wrapper(c_int(uplo), c_int(self.kernel_dim), c_double(alpha), 
-            self.kernel.ctypes.data_as(POINTER(c_double)),
-            chi0_imag.ctypes.data_as(POINTER(c_double)), c_int(incx), c_double(beta),
-            matvec_imag.ctypes.data_as(POINTER(c_double)), c_int(incy))
-    
     return v - (matvec_real + 1j*matvec_imag)
 
   def comp_polariz_xx(self, comegas):
