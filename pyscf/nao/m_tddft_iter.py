@@ -23,6 +23,7 @@ class tddft_iter_c():
     """ Iterative TDDFT a la PK, DF, OC JCTC """
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
     from pyscf.nao.m_comp_dm import comp_dm
+    import sys
 
     assert tddft_iter_tol>1e-6
     assert type(tddft_iter_broadening)==float
@@ -48,21 +49,14 @@ class tddft_iter_c():
     self.cc_da = pb.get_da2cc_coo(dtype=self.dtype).tocsr()
     self.moms0,self.moms1 = pb.comp_moments(dtype=self.dtype)
     self.nprod = self.moms0.size
-
-    self.kernel_dens = pb.comp_coulomb_den(dtype=self.dtype)
-    self.kernel_dim = self.kernel_dens.shape[0]
-    #self.kernel, self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype)
-
-    self.kernel = np.zeros(int(self.kernel_dim*(self.kernel_dim+1)/2), dtype=self.dtype)
+    self.kernel, self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype)
 
     if xc_code.upper()!='RPA' :
       dm = comp_dm(sv.wfsx.x, sv.get_occupations())
-      xc = pb.comp_fxc_lil(dm, xc_code, dtype=self.dtype, **kvargs).todense()
-      ui = np.triu_indices(self.kernel_dim)
-      self.kernel_dens = self.kernel_dens + xc
-      for i in range(self.kernel.shape[0]):
-        self.kernel[i] = self.kernel_dens[ui[0][i], ui[1][i]]
-
+      
+      xc_pack = pb.comp_fxc_pack(dm, xc_code, dtype=self.dtype, **kvargs)
+      self.kernel = self.kernel + xc_pack
+      
     self.telec = sv.hsx.telec if telec is None else telec
     self.nelec = sv.hsx.nelec if nelec is None else nelec
     self.fermi_energy = sv.fermi_energy if fermi_energy is None else fermi_energy

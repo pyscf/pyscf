@@ -34,3 +34,18 @@ def size2dim(pack_size):
 def ij2pack(i,j):
   ma = max(i,j)
   return ma*(ma+1)//2+min(i,j)
+
+#
+#
+#
+def triu_indices(dim):
+    ind = np.zeros((dim, dim), dtype=np.int)
+    ind.fill(-1)
+
+    count = 0
+    for i in range(dim):
+        for j in range(i, dim):
+            ind[i, j] = count
+            count += 1
+
+    return ind
