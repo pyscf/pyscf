@@ -182,7 +182,6 @@ class tddft_iter_c():
 
     for iomega, omega in enumerate(comegas):
       chi0_real, chi0_imag = self.apply_rf0(vext[0,:], omega)
-      pxx[iomega] =\
-        -np.dot(chi0_real + 1j*chi0_imag, vext[0,:])
+      pxx[iomega] = -np.dot(chi0_real + 1j*chi0_imag, vext[0,:])
 
     return pxx

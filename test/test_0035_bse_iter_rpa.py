@@ -6,28 +6,26 @@ class KnowValues(unittest.TestCase):
   def test_bse_iter_rpa(self):
     """ Compute polarization with LDA TDDFT  """
     from timeit import default_timer as timer
-
-    from pyscf.nao import system_vars_c, prod_basis_c, tddft_iter_c
-    from pyscf.nao.m_comp_dm import comp_dm
+    from pyscf.nao import system_vars_c, prod_basis_c, bse_iter_c
     from timeit import default_timer as timer
     
     dname = os.path.dirname(os.path.abspath(__file__))
     sv = system_vars_c().init_siesta_xml(label='water', cd=dname)
     pb = prod_basis_c().init_prod_basis_pp(sv)
-    td = tddft_iter_c(pb.sv, pb, tddft_iter_broadening=1e-2, xc_code='RPA', level=0)
-    omegas = np.linspace(0.0,2.0,150)+1j*td.eps
-    dab = sv.dipole_coo().toarray()
+    bse = bse_iter_c(pb.sv, pb, iter_broadening=1e-2)
+    omegas = np.linspace(0.0,2.0,500)+1j*bse.eps
+    dab = [d.toarray() for d in sv.dipole_coo()]
+    
     pxx = np.zeros(len(omegas))
     for iw,omega in enumerate(omegas):
       for ixyz in range(1):
-        vab = td.apply_l0(dab[ixyz], omega)
-        pxx[iw] = pxx[iw] + vab.imag*dab[ixyz]
+        vab = bse.apply_l0(dab[ixyz], omega)
+        pxx[iw] = pxx[iw] - (vab.imag*dab[ixyz]).sum()
         
     data = np.array([omegas.real*27.2114, pxx])
-    np.savetxt('water.bse_iter_rpa.omega.inter.pxx.txt', data.T, fmt=['%f','%f'])
-    data_ref = np.loadtxt(dname+'/water.bse_iter_rpa.omega.inter.pxx.txt-ref')
-    #print('    td.rf0_ncalls ', td.rf0_ncalls)
-    #print(' td.matvec_ncalls ', td.matvec_ncalls)
+    #np.savetxt('water.bse_iter.omega.nonin.pxx.txt', data.T, fmt=['%f','%f'])
+    data_ref = np.loadtxt(dname+'/water.bse_iter_rpa.omega.nonin.pxx.txt-ref')
+    #print('    bse.l0_ncalls ', bse.l0_ncalls)
     self.assertTrue(np.allclose(data_ref,data.T, rtol=1.0, atol=1e-05))
 
 

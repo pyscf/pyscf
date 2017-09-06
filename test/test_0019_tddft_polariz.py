@@ -17,10 +17,10 @@ class KnowValues(unittest.TestCase):
     #vext = np.transpose(td.moms1)
     #for iomega,omega in enumerate(omegas): pxx[iomega] = -np.dot(td.apply_rf0(vext[0,:], omega), vext[0,:]).imag
 
-    data = np.array([omegas*21.2114, pxx])
+    data = np.array([27.2114*omegas.real, pxx])
     data_ref = np.loadtxt(dname+'/water.tddft_iter.omega.pxx.txt-ref')
     self.assertTrue(np.allclose(data_ref,data.T, rtol=1.0, atol=1e-05))
-    #np.savetxt('water.tddft_iter.omega.pxx.txt', data.T, fmt=['%f','%f'])
+    np.savetxt('water.tddft_iter.omega.nonin.pxx.txt', data.T, fmt=['%f','%f'])
 
   def test_inter_polariz(self):
     """ This is interacting polarizability with SIESTA starting point """
