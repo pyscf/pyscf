@@ -225,7 +225,7 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
         symb = mol.atom_symbol(ia)
 
         if symb not in atom_grids_tab:
-            chg = mol.atom_charge(ia)
+            chg = gto.mole._charge(symb)
             if symb in atom_grid:
                 n_rad, n_ang = atom_grid[symb]
                 if n_ang not in LEBEDEV_NGRID:
@@ -276,7 +276,7 @@ def gen_partition(mol, atom_grids_tab,
         grid_coord and grid_weight arrays.  grid_coord array has shape (N,3);
         weight 1D array has N elements.
     '''
-    if radii_adjust is not None and atomic_radii is not None:
+    if callable(radii_adjust) and atomic_radii is not None:
         f_radii_adjust = radii_adjust(mol, atomic_radii)
     else:
         f_radii_adjust = None
