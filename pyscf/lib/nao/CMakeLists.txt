@@ -33,7 +33,7 @@ set_target_properties(nao PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_D
   COMPILE_FLAGS ${OpenMP_C_FLAGS}
   LINK_FLAGS ${OpenMP_C_FLAGS}
   )
-target_link_libraries(nao ${FFTW_LIBRARIES} ${LAPACK_LIBRARIES})
+target_link_libraries(nao ${FFTW_LIBRARIES} ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
   #endif()
 
 #target_compile_options(nao PRIVATE -pedantic -g -DTIMING -DDEBUG -O0 -fbounds-check -fbacktrace -Wall -ffree-line-length-0)

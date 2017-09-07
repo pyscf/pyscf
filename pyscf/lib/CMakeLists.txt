@@ -18,8 +18,11 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 #find_package(BLAS REQUIRED)
 #check_function_exists(ffsll HAVE_FFS)
-set(BLAS_LIBRARIES "-L${MKLROOT}/lib/intel64/ -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lmkl_avx -lm")
+set(BLAS_LIBRARIES "-L${MKLROOT}/lib/intel64/ -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lmkl_def -lpthread -lm -ldl")
 message("BLAS libraries: ${BLAS_LIBRARIES}")
+
+set(LAPACK_LIBRARIES "-L${MKLROOT}/lib/intel64/ -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lmkl_def -lpthread -lm -ldl")
+message("LAPACK libraries: ${LAPACK_LIBRARIES}")
 
 find_package(OpenMP)
 if(OPENMP_FOUND)
