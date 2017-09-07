@@ -13,7 +13,7 @@ class KnowValues(unittest.TestCase):
     
     dname = os.path.dirname(os.path.abspath(__file__))
     sv = system_vars_c().init_siesta_xml(label='water', cd=dname)
-    pb = prod_basis_c().init_prod_basis_pp(sv)
+    pb = prod_basis_c().init_prod_basis_pp(sv, jcutoff=7)
     td = tddft_iter_c(pb.sv, pb, tddft_iter_broadening=1e-2, xc_code='LDA,PZ', level=0)
     omegas = np.linspace(0.0,2.0,150)+1j*td.eps
     pxx = -td.comp_polariz_xx(omegas).imag
