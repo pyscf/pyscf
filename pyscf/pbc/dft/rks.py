@@ -44,12 +44,14 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if dm is None: dm = ks.make_rdm1()
     if kpt is None: kpt = ks.kpt
     t0 = (time.clock(), time.time())
+
+    ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2)
+
     if ks.grids.coords is None:
         ks.grids.build(with_non0tab=True)
-        small_rho_cutoff = ks.small_rho_cutoff
+        if ks.small_rho_cutoff > 1e-20 and ground_state:
+            ks.grids = prune_small_rho_grids_(ks, cell, dm, ks.grids, kpt)
         t0 = logger.timer(ks, 'setting up grids', *t0)
-    else:
-        small_rho_cutoff = 0
 
     if hermi == 2:  # because rho = 0
         n, exc, vxc = 0, 0, 0
@@ -58,8 +60,6 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                                         kpt, kpt_band)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
-
-    ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2)
 
     hyb = ks._numint.hybrid_coeff(ks.xc, spin=cell.spin)
     if abs(hyb) < 1e-10:
@@ -78,17 +78,6 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         ecoul = None
 
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
-
-    if (small_rho_cutoff > 1e-20 and ground_state and
-        abs(n-cell.nelectron) < 0.01*n):
-        # Filter grids the first time setup grids
-        idx = ks._numint.large_rho_indices(cell, dm, ks.grids,
-                                           small_rho_cutoff, kpt)
-        logger.debug(ks, 'Drop grids %d',
-                     ks.grids.weights.size - numpy.count_nonzero(idx))
-        ks.grids.coords  = numpy.asarray(ks.grids.coords [idx], order='C')
-        ks.grids.weights = numpy.asarray(ks.grids.weights[idx], order='C')
-        ks.grids.non0tab = ks.grids.make_mask(cell, ks.grids.coords)
     return vxc
 
 
@@ -99,6 +88,18 @@ def _patch_df_beckegrids(density_fit):
         mf.grids = gen_grid.BeckeGrids(self.cell)
         return mf
     return new_df
+
+NELEC_ERROR_TOL = 0.01
+def prune_small_rho_grids_(ks, mol, dm, grids, kpts):
+    n, idx = ks._numint.large_rho_indices(mol, dm, grids,
+                                          ks.small_rho_cutoff, kpts)
+    if abs(n-mol.nelectron) < NELEC_ERROR_TOL*n:
+        logger.debug(ks, 'Drop grids %d',
+                     grids.weights.size - numpy.count_nonzero(idx))
+        grids.coords  = numpy.asarray(grids.coords [idx], order='C')
+        grids.weights = numpy.asarray(grids.weights[idx], order='C')
+        grids.non0tab = grids.make_mask(mol, grids.coords)
+    return grids
 
 
 class RKS(pbchf.RHF):
@@ -127,3 +128,21 @@ class RKS(pbchf.RHF):
 
     density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
     mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)
+
+
+if __name__ == '__main__':
+    from pyscf.pbc import gto
+    cell = gto.Cell()
+    cell.unit = 'A'
+    cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
+    cell.a = '''0.      1.7834  1.7834
+                1.7834  0.      1.7834
+                1.7834  1.7834  0.    '''
+
+    cell.basis = 'gth-szv'
+    cell.pseudo = 'gth-pade'
+    cell.verbose = 7
+    cell.output = '/dev/null'
+    cell.build()
+    mf = RKS(cell)
+    print mf.kernel()

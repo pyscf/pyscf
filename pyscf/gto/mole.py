@@ -1467,7 +1467,9 @@ class Mole(lib.StreamObject):
         basis : dict or str
             To define basis set.
         nucmod : dict or str
-            Nuclear model
+            Nuclear model.  Set it to 0, None or False for point nuclear model.
+            Any other values will enable Gaussian nuclear model.  Default is
+            point nuclear model.
         cart : boolean
             Using Cartesian GTO basis and integrals (6d,10f,15g)
 

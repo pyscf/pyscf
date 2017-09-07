@@ -1265,11 +1265,14 @@ def large_rho_indices(ni, mol, dm, grids, cutoff=1e-10, max_memory=2000):
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, 1)
     idx = []
     cutoff = cutoff / grids.weights.size
+    nelec = 0
     for ao, mask, weight, coords \
             in ni.block_loop(mol, grids, nao, 0, max_memory):
         rho = make_rho(0, ao, mask, 'LDA')
-        idx.append(abs(rho*weight) > cutoff)
-    return numpy.hstack(idx)
+        kept = abs(rho*weight) > cutoff
+        nelec += numpy.einsum('i,i', rho[kept], weight[kept])
+        idx.append(kept)
+    return nelec, numpy.hstack(idx)
 
 
 class _NumInt(object):

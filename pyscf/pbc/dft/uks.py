@@ -31,12 +31,16 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if dm is None: dm = ks.make_rdm1()
     if kpt is None: kpt = ks.kpt
     t0 = (time.clock(), time.time())
+
+    # ndim = 3 : dm.shape = ([alpha,beta], nao, nao)
+    ground_state = (dm.ndim == 3 and dm.shape[0] == 2)
+
     if ks.grids.coords is None:
         ks.grids.build(with_non0tab=True)
-        small_rho_cutoff = ks.small_rho_cutoff
+        if ks.small_rho_cutoff > 1e-20 and ground_state:
+            ks.grids = rks.prune_small_rho_grids_(ks, cell, dm[0]+dm[1],
+                                                  ks.grids, kpt)
         t0 = logger.timer(ks, 'setting up grids', *t0)
-    else:
-        small_rho_cutoff = 0
 
     if not isinstance(dm, numpy.ndarray):
         dm = numpy.asarray(dm)
@@ -50,9 +54,6 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                                         kpt, kpt_band)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
-
-    # ndim = 3 : dm.shape = ([alpha,beta], nao, nao)
-    ground_state = (dm.ndim == 3 and dm.shape[0] == 2)
 
     hyb = ks._numint.hybrid_coeff(ks.xc, spin=cell.spin)
     if abs(hyb) < 1e-10:
@@ -72,18 +73,6 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         ecoul = None
 
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
-
-    nelec = cell.nelec
-    if (small_rho_cutoff > 1e-20 and ground_state and
-        abs(n[0]-nelec[0]) < 0.01*n[0] and abs(n[1]-nelec[1]) < 0.01*n[1]):
-        # Filter grids the first time setup grids
-        idx = ks._numint.large_rho_indices(cell, dm, ks.grids,
-                                           small_rho_cutoff, kpt)
-        logger.debug(ks, 'Drop grids %d',
-                     ks.grids.weights.size - numpy.count_nonzero(idx))
-        ks.grids.coords  = numpy.asarray(ks.grids.coords [idx], order='C')
-        ks.grids.weights = numpy.asarray(ks.grids.weights[idx], order='C')
-        ks.grids.non0tab = ks.grids.make_mask(cell, ks.grids.coords)
     return vxc
 
 
@@ -113,3 +102,21 @@ class UKS(pbcuhf.UHF):
 
     density_fit = rks._patch_df_beckegrids(pbcuhf.UHF.density_fit)
     mix_density_fit = rks._patch_df_beckegrids(pbcuhf.UHF.mix_density_fit)
+
+
+if __name__ == '__main__':
+    from pyscf.pbc import gto
+    cell = gto.Cell()
+    cell.unit = 'A'
+    cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
+    cell.a = '''0.      1.7834  1.7834
+                1.7834  0.      1.7834
+                1.7834  1.7834  0.    '''
+
+    cell.basis = 'gth-szv'
+    cell.pseudo = 'gth-pade'
+    cell.verbose = 7
+    cell.output = '/dev/null'
+    cell.build()
+    mf = UKS(cell)
+    print mf.kernel()

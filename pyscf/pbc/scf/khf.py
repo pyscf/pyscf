@@ -393,7 +393,7 @@ class KSCF(hf.SCF):
 
         if cell.dimension < 3:
             ne = np.einsum('kij,kji->k', dm_kpts, self.get_ovlp(cell)).real
-            if np.any(abs(ne - cell.nelectron).sum() > 1e-7):
+            if np.any(abs(ne - cell.nelectron) > 1e-7):
                 logger.warn(self, 'Big error detected in the electron number '
                             'of initial guess density matrix (Ne/cell = %g)!\n'
                             '  This can cause huge error in Fock matrix and '
