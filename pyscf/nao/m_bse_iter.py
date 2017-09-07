@@ -3,6 +3,8 @@ import numpy as np
 from timeit import default_timer as timer
 from pyscf.nao.m_tddft_iter import tddft_iter_c
 from scipy.linalg import blas
+from pyscf.nao.m_tddft_iter import use_numba
+if use_numba: from pyscf.nao.m_iter_div_eigenenergy_numba import div_eigenenergy_numba
 
 class bse_iter_c(tddft_iter_c):
 
@@ -17,7 +19,6 @@ class bse_iter_c(tddft_iter_c):
 
   def apply_l0(self, sab, comega=1j*0.0):
     """ This applies the non-interacting four point Green's function to a suitable vector (e.g. dipole matrix elements)"""
-    from pyscf.nao.m_tddft_iter import use_numba
     self.l0_ncalls+=1
     nb2v = np.dot(self.xocc, sab)
     nm2v = blas.cgemm(1.0, nb2v, np.transpose(self.xvrt))
