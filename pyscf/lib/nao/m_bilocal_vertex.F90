@@ -4,7 +4,6 @@ module m_bilocal_vertex
   use m_die, only : die
   use iso_c_binding, only: c_double, c_int64_t, c_int, c_double_complex
   use m_precision, only : blas_int
-  use m_die, only : die
   use m_warn, only : warn
   use m_sph_bes_trans, only : Talman_plan_t
   use m_pair_info, only : pair_info_t
