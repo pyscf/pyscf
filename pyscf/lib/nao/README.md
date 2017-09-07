@@ -9,9 +9,10 @@ Installation
 * Compile core module with NAO support
 
         cd pyscf/lib
-        cp nao/cmakelists_examples/CMakeLists.txt.gnu .        
-        mkdir build; cd build
-        cmake ..        
+        cp nao/cmakelists_examples/CMakeLists.txt.gnu CMakeLists.txt
+        mkdir build
+        cd build
+        cmake ..
         make
 
   Note during the compilation, external libraries (libcint, libxc, xcfun) will
