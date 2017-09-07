@@ -1,4 +1,4 @@
-module blas_wrapper
+module m_blas_wrapper
   contains
 
 !
@@ -134,4 +134,4 @@ subroutine DGEMV_wrapper(trans, m, n, alpha, ap, lda, x, incx, beta, y, incy) bi
 end subroutine !SSPMV_wrapper
 
 
-end module !blas_wrapper.f90
+end module !m_blas_wrapper.f90

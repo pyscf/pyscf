@@ -104,7 +104,7 @@ subroutine make_bilocal_vertex_rf(a, pair_info, &
 
 _t1
   rhotb = 0
-  call comp_expansion(a, pair_info, lready, center, rcut, oo2num, m2nf, rf_ls2so, ff2, rhotb) !, tt1)
+  call comp_expansion(a, pair_info, lready, center, rcut, oo2num, m2nf, rf_ls2so, ff2,rhotb) !, tt1)
 _t2(tthr(1))  
   if(lready) return;  
 !  write(6,*) __FILE__, __LINE__, sum(rhotb)
@@ -114,7 +114,7 @@ _t2(tthr(2))
   call diag_metric(a, m2nf, ff2, evals)
 _t2(tthr(3))  
 
-  call comp_domiprod_expansions(a, m2nf, evals, ff2)
+  call comp_domiprod_expansions_blas(a, m2nf, evals, ff2)
 _t2(tthr(4))
 
   call comp_vertex_rot_coord_sys(a, pair_info, oo2num, m2nf, rf_ls2so, evals, vertex_real2)
@@ -492,15 +492,47 @@ subroutine comp_domiprod_expansions(au, m2nf, evecs, ff2)
     n = m2nf(m)
     do lbd=1,n
       do a=1,n
-        ff2(1:nr,0:jcutoff,lbd,m,2)= ff2(1:nr,0:jcutoff,lbd,m,2)+ &
-          & evecs(a,lbd,m)*ff2(1:nr,0:jcutoff,a,m,1)
+        ff2(:,0:jcutoff,lbd,m,2)= ff2(:,0:jcutoff,lbd,m,2)+ &
+          & evecs(a,lbd,m)*ff2(:,0:jcutoff,a,m,1)
       enddo ! nummer
     enddo ! dominant
 
-    if(m>0)ff2(1:nr,:,1:n,-m,2) = ff2(1:nr,:,1:n,m,2)
+    if(m>0)ff2(:,:,1:n,-m,2) = ff2(:,:,1:n,m,2)
   enddo ! m
 
 end subroutine ! comp_domiprod_expansions
+
+!
+!
+!
+subroutine comp_domiprod_expansions_blas(au, m2nf, evecs, ff2)
+  use m_biloc_aux, only : biloc_aux_t
+  implicit none
+  !! external
+  type(biloc_aux_t), intent(in) :: au
+  integer, intent(in), allocatable :: m2nf(:)
+  real(8), intent(in), allocatable :: evecs(:,:,:)
+  real(8), intent(inout), allocatable :: ff2(:,:,:,:,:)
+  !! internal
+  integer :: m_mi, m_mx, jcutoff, nr, mm
+  integer(blas_int) :: M,N,K, lde
+  nr = au%nr
+  jcutoff = ubound(ff2,2)
+  m_mi = lbound(m2nf,1)
+  m_mx = ubound(m2nf,1)
+
+  !ff2(:,:,:,:,2) = 0
+  lde = size(evecs,1)
+  do mm=m_mi,m_mx
+    M = nr*(jcutoff+1)
+    N = m2nf(mm)
+    K = N
+    call DGEMM('N', 'N', M,N,K, 1d0, ff2(:,:,:,mm,1),M, evecs(:,:,mm),lde, 0d0, ff2(:,:,:,mm,2), M)
+    if(mm>0)ff2(:,:,1:n,-mm,2) = ff2(:,:,1:n,mm,2)
+  enddo ! m
+
+end subroutine ! comp_domiprod_expansions_blas
+
 
 !
 !
@@ -619,7 +651,7 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
   !! internal
   integer :: sp(2), mu1, mu2, j1, j2, jcutoff, nr, ix, j, c1, c2, jmx12, no(2), mu!, k
   integer :: clbd, lbd, nterm, o1, o2, m1, m2, m, num, irc, nrf(2), jmax(2)
-  integer :: rf1, rf2
+  integer :: rf1, rf2, ir, nrmx
   integer :: ls ! L[ocal] S[pecie] : i.e. 1 or 2
   integer :: rf ! R[adial] F[unction] : i.e. a pointer in the list of radial functions (multipletts)
   real(8) :: rc2_new, trans_vec(3), d12, rcuts(2), wghts(2)
@@ -628,7 +660,7 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
   real(8), allocatable :: FFr(:,:), ixrj2ck(:,:,:,:), fval(:,:), yz(:)
   real(8), allocatable :: xrjm2f1(:,:,:,:), xrjm2f2(:,:,:,:)
   real(8), allocatable :: xrm2f1(:,:,:), xrm2f2(:,:,:)
-  integer, allocatable :: jtb(:), clbdtb(:), lbdtb(:)
+  integer, allocatable :: jtb(:), clbdtb(:), lbdtb(:), m2nrmx1(:), m2nrmx2(:)
   real(8), parameter :: zerovec(3) = (/0.0D0, 0.0D0, 0.0D0/);
   
   if(.not. allocated(inf%rf_ls2mu))_die('!rf_ls2mu')
@@ -729,6 +761,30 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
   call all_interp_values1(a%psi_log_rl(:,1:nrf(1),sp(1)),nr,nrf(1), ixrj2ck(:,:,:,2), a%ord, xrm2f1)
   call all_interp_values1(a%psi_log_rl(:,1:nrf(2),sp(2)),nr,nrf(2), ixrj2ck(:,:,:,1), a%ord, xrm2f2)
 
+  allocate(m2nrmx1(nrf(1)))
+  m2nrmx1 = a%nr
+  do mu=1,nrf(1)
+    do ir=a%nr,1,-1; 
+      if(any(xrm2f1(:,ir,mu)/=0)) then
+        m2nrmx1(mu)=ir
+        exit
+      endif
+    enddo
+  enddo
+  
+  allocate(m2nrmx2(nrf(2)))
+  m2nrmx2 = a%nr
+  do mu=1,nrf(2)
+    do ir=a%nr,1,-1; 
+      if(any(xrm2f2(:,ir,mu)/=0)) then
+        m2nrmx2(mu)=ir
+        exit 
+      endif
+    enddo
+  enddo
+
+!  write(6,*) m2nrmx1
+!  write(6,*) m2nrmx2
   
   allocate(fval(a%nr,0:2*(a%jcutoff+jmx12)))
   allocate(yz(a%ord))
@@ -760,7 +816,7 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
 !      call prdred( &
 !        a%psi_log(1:nr,mu2,sp(2)),j2,Rb,  a%psi_log(1:nr,mu1,sp(1)),j1,Ra, &
 !        zerovec, jcutoff, rhotb, a%rr, nr, jtb, clbdtb, lbdtb, nterm, &
-!        xgla, wgla, ord, rho_min_jt, dr_jt);
+!        a%xgla, a%wgla, a%ord, rho_min_jt, dr_jt);
 
 !      call prdred_all_interp_coeffs( &
 !        a%psi_log_rl(1:nr,mu2,sp(2)),j2,Rb,  a%psi_log_rl(1:nr,mu1,sp(1)),j1,Ra, &
@@ -773,7 +829,8 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
 !        a%ord, a%plval, a%jmax_pl, fval, yz)
 !      _t2(tt(2))  
 
-      call prdred_all_interp_values1(xrm2f2(:,:,mu2),j2,Rb, xrm2f1(:,:,mu1),j1,Ra, &
+      nrmx = min(m2nrmx1(mu1),m2nrmx2(mu2))
+      call prdred_all_interp_values1(xrm2f2(:,:,mu2),j2,Rb,nrmx, xrm2f1(:,:,mu1),j1,Ra, &
         zerovec, jcutoff, rhotb, a%rr, nr, jtb, clbdtb, lbdtb, nterm, &
         a%ord, a%plval, a%jmax_pl, fval, yz)
 
@@ -875,6 +932,8 @@ subroutine comp_expansion(a,inf, lready,center,rcut, oo2num,m2nf,rf_ls2so,ff2, r
   _dealloc(xrjm2f2)
   _dealloc(fval)
   _dealloc(yz)
+  _dealloc(m2nrmx1)
+  _dealloc(m2nrmx2)
 
   
 end subroutine !comp_expansion 

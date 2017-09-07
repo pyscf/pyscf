@@ -38,6 +38,7 @@ subroutine vrtx_cc_batch(npairs,p2srncc,ld,p2ndp) bind(c, name='vrtx_cc_batch')
   type(pair_info_t), allocatable :: bp2info(:)
   integer :: natoms, nbp_node, top, spp, n, iv
   integer(c_int64_t) :: p
+  real(c_double) :: t1, t2, tt(10)
   
   if( ld < 10 ) then; write(6,*) __FILE__, __LINE__; stop '!ld<10'; endif
   if( npairs < 1 ) then; write(6,*) __FILE__, __LINE__; stop '!npairs<1'; endif
@@ -45,18 +46,24 @@ subroutine vrtx_cc_batch(npairs,p2srncc,ld,p2ndp) bind(c, name='vrtx_cc_batch')
   if(.not. associated(a%sv)) then; write(6,*) __FILE__, __LINE__; stop '!a%sv'; endif
   natoms = get_natoms(pb%sv)
   iv = 0
-  
+  tt = 0
+
+  _t1
   call init_pair_info_array(p2srncc, a%sv, bp2info)
   nbp_node = size(bp2info)
-
+  !_t2(tt(1))
+  
   call make_book_dp_longer(nbp_node, pb)
   n = size(pb%book_dp)
   if(n<1) _die('!n')
   _dealloc(pb%coeffs)
   allocate(pb%coeffs(n))
-
+  !_t2(tt(2))
+  
   call make_vrtx_cc(a, nbp_node, bp2info, dp_a, pb, iv)
+  _t2(tt(3))
 
+   
   if(size(pb%book_dp)/=npairs+natoms) _die(' size(pb%book_dp)/=npairs+natoms ')
 
   p2ndp = 0
@@ -72,6 +79,11 @@ subroutine vrtx_cc_batch(npairs,p2srncc,ld,p2ndp) bind(c, name='vrtx_cc_batch')
       p2ndp(p)=0; cycle
     endif
   enddo
+
+  !_t2(tt(4))
+  
+  !write(6,'(a,4f10.4)') ' timing vrtx_cc_batch ', tt(1:4)
+  
   
 end subroutine !vrtx_cc_batch
 

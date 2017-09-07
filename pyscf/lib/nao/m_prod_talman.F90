@@ -483,12 +483,12 @@ end subroutine ! all_interp_values1
 !
 ! Do product reduction with all needed values of radial orbitals precomputed
 !
-pure subroutine prdred_all_interp_values1(xr2f1,la,ra,xr2f2,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb,nterm,ord,plval,jmax,fval,yz) &
+pure subroutine prdred_all_interp_values1(xr2f1,la,ra,nrmx,xr2f2,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb,nterm,ord,plval,jmax,fval,yz) &
   bind(c, name='prdred_all_interp_values1')
   use m_fact, only : fac, sgn
   implicit none
   !! external
-  integer(c_int), intent(in)  :: nr, nterm,la,lb,ord,jmax
+  integer(c_int), intent(in)  :: nr, nterm,la,lb,ord,jmax,nrmx
   real(c_double), intent(in)  :: xr2f1(ord,nr) ! values of first radial orbital / rr^l as needed (ord,nr,2)
   real(c_double), intent(in)  :: xr2f2(ord,nr) ! values of second radial orbital / rr^l as needed
   real(c_double), intent(in)  :: rr(nr),ra(3),rb(3),rcen(3)
@@ -512,7 +512,7 @@ pure subroutine prdred_all_interp_values1(xr2f1,la,ra,xr2f2,lb,rb,rcen,lbdmxa,rh
   if (raa+rbb .gt. 1.0d-5) kpmax=2*lbdmxa+la+lb
   
   fval(1:nr,1:kpmax+1)=0
-  do ir=1,nr
+  do ir=1,nrmx
     yz(1:ord)=xr2f1(:,ir)*xr2f2(:,ir)
     do k=1,kpmax+1; fval(ir,k)=0.5d0*dot_product(plval(:,k), yz); enddo
   enddo
@@ -558,8 +558,8 @@ pure subroutine prdred_all_interp_values1(xr2f1,la,ra,xr2f2,lb,rb,rcen,lbdmxa,rh
                    *(2*clbd+1)*(2*clbdp+1)*bb*sumb
               if (cc .ne. 0.0D0) then
                 lbd1_p_lbd2 = lbd1 + lbd2
-                rhotb(:,ix)=rhotb(:,ix)+cc*rr(1:nr)**(lbd1_p_lbd2) &
-                      * dpowi(raa, lbdp1) * dpowi(rbb, lbdp2)*fval(:,kappa+1)
+                rhotb(1:nrmx,ix)=rhotb(1:nrmx,ix)+cc*rr(1:nrmx)**(lbd1_p_lbd2) &
+                      * dpowi(raa, lbdp1) * dpowi(rbb, lbdp2)*fval(1:nrmx,kappa+1)
               endif
            enddo
         enddo
@@ -579,6 +579,7 @@ subroutine prdred(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb
   bind(c, name='prdred_checkit')
   use m_fact, only : fac, sgn
   use m_interp_coeffs, only : interp_coeffs
+  use m_interpolation, only : get_fval
 !  use m_timing, only : get_cdatetime
   implicit none
   !! external
@@ -604,7 +605,6 @@ subroutine prdred(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb
   !_t1
   !tt = 0
   nr8 = int(nr, c_int64_t)
-  
   allocate(plval(ord,0:2*lbdmxa+la+lb))
   allocate(fval(nr,0:2*lbdmxa+la+lb))
   
@@ -629,14 +629,14 @@ subroutine prdred(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb
     
     do igla=1,ord
       a1=(r2aa-2.0d0*raa*rr(i)*xgla(igla))
-      call interp_coeffs(sqrt(a1), nr8, rho_min_jt, dr_jt, k, coeff1)
-      f1 = sum(ya(k:k+5)*coeff1)
-      !f1 = get_fval(ya, sqrt(a1), rho_min_jt, dr_jt, nr);
+      !call interp_coeffs(sqrt(a1), nr8, rho_min_jt, dr_jt, k, coeff1)
+      !f1 = sum(ya(k:k+5)*coeff1)
+      f1 = get_fval(ya, sqrt(a1), rho_min_jt, dr_jt, nr);
 
       a2=(r2bb+2.0d0*rbb*rr(i)*xgla(igla))
-      call interp_coeffs(sqrt(a2), nr8, rho_min_jt, dr_jt, k, coeff2)
-      f2 = sum(yb(k:k+5)*coeff2)
-      !f2 = get_fval(yb, sqrt(a2), rho_min_jt, dr_jt, nr);
+      !call interp_coeffs(sqrt(a2), nr8, rho_min_jt, dr_jt, k, coeff2)
+      !f2 = sum(yb(k:k+5)*coeff2)
+      f2 = get_fval(yb, sqrt(a2), rho_min_jt, dr_jt, nr);
 
       yz(igla)=f1*f2
     enddo

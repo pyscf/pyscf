@@ -96,6 +96,7 @@ class prod_basis_c():
 
     t1 = timer()
     self.init_inp_param_prod_log_dp(sv, **kvargs)
+    #t2 = timer(); print(' after init_inp_param_prod_log_dp ', t2-t1); t1=timer()
     data = self.chain_data()
     libnao.init_vrtx_cc_batch(data.ctypes.data_as(POINTER(c_double)), c_int64(len(data)))
     self.sv_pbloc_data = True
