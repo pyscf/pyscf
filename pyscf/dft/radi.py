@@ -153,7 +153,7 @@ def becke_atomic_radii_adjust(mol, atomic_radii):
 # fac(j,i) = -fac(i,j)
 
     charges = mol.atom_charges()
-    rad = atomic_radii[charges]
+    rad = atomic_radii[charges] + 1e-200
     rr = rad.reshape(-1,1) * (1./rad)
     a = .25 * (rr.T - rr)
     a[a<-.5] = -.5
@@ -174,7 +174,7 @@ def treutler_atomic_radii_adjust(mol, atomic_radii):
 # fac(i,j) = \frac{1}{4} ( \frac{ra(j)}{ra(i)} - \frac{ra(i)}{ra(j)}
 # fac(j,i) = -fac(i,j)
     charges = mol.atom_charges()
-    rad = numpy.sqrt(atomic_radii[charges])
+    rad = numpy.sqrt(atomic_radii[charges]) + 1e-200
     rr = rad.reshape(-1,1) * (1./rad)
     a = .25 * (rr.T - rr)
     a[a<-.5] = -.5
