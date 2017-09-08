@@ -128,9 +128,11 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
 
     max_memory = mydf.max_memory - lib.current_memory()[0]
     blksize = int(max(max_memory*1e6/16/2/ngs/nao, 1))
-    buf = np.empty((blksize,naoj,ngs), dtype=vk_kpts.dtype)
+    ao1_dtype = np.result_type(*ao1_kpts)
+    ao2_dtype = np.result_type(*ao2_kpts)
+    buf = np.empty((blksize,naoj,ngs), dtype=np.result_type(ao1_dtype, ao2_dtype))
     vR_dm = np.empty((nset,nao,ngs), dtype=vk_kpts.dtype)
-    ao_dms = np.empty((nset,naoj,ngs), dtype=vk_kpts.dtype)
+    ao_dms = np.empty((nset,naoj,ngs), dtype=np.result_type(dms, ao2_dtype))
 
     for k2, ao2T in enumerate(ao2_kpts):
         kpt2 = kpts[k2]
@@ -156,12 +158,12 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
                 vG *= coulG
                 vR = tools.ifft(vG, gs).reshape(p1-p0,naoj,ngs)
                 vG = None
-                vR *= expmikr.conj()
-                if vk_kpts.dtype == np.double:
+                if vR_dm.dtype == np.double:
                     vR = vR.real
                 for i in range(nset):
-                    vR_dm[i,p0:p1] = np.einsum('ijg,jg->ig', vR, ao_dms[i])
+                    np.einsum('ijg,jg->ig', vR, ao_dms[i], out=vR_dm[i,p0:p1])
                 vR = None
+            vR_dm *= expmikr.conj()
 
             for i in range(nset):
                 vk_kpts[i,k1] += weight * lib.dot(vR_dm[i], ao1T.T)

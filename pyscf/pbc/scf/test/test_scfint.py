@@ -94,19 +94,6 @@ class KnowValues(unittest.TestCase):
         t1 = scfint.get_t(cell, kpt=k)
         self.assertAlmostEqual(numpy.linalg.norm(t0-t1), 0, 8)
 
-    def test_vkR(self):
-        cell = make_cell1(4, 20)
-        mf = phf.RHF(cell)
-        numpy.random.seed(1)
-        kpt1, kpt2 = numpy.random.random((2,3))
-        coords = pdft.gen_grid.gen_uniform_grids(cell)
-        aoR_k1 = pdft.numint.eval_ao(cell, coords, kpt1)
-        aoR_k2 = pdft.numint.eval_ao(cell, coords, kpt2)
-        gs = cell.gs
-        coords = pdft.gen_grid.gen_uniform_grids(cell, gs)
-        vkR = fft_jk.get_vkR(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2, coords, gs, None)
-        self.assertAlmostEqual(finger(vkR), -0.24716036343105258+0.078117253956143579j, 9)
-
 if __name__ == '__main__':
     print("Full Tests for scfint")
     unittest.main()
