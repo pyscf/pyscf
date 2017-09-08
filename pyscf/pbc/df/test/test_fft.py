@@ -369,6 +369,9 @@ def get_vjR(cell, dm, aoR):
 
 
 def get_vkR(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2):
+    '''Get the real-space 2-index "exchange" potential V_{i,k1; j,k2}(r)
+    where {i,k1} = exp^{i k1 r) |i> , {j,k2} = exp^{-i k2 r) <j|
+    '''
     coords = gen_grid.gen_uniform_grids(cell)
     ngs, nao = aoR_k1.shape
 
@@ -629,7 +632,8 @@ class KnowValues(unittest.TestCase):
     def test_get_jk_kpts(self):
         df = fft.FFTDF(cell)
         dm = mf0.get_init_guess()
-        dms = [dm] * len(kpts)
+        nkpts = len(kpts)
+        dms = [dm] * nkpts
         vj0, vk0 = get_jk_kpts(mf0, cell, dms, kpts=kpts)
         vj1, vk1 = df.get_jk(dms, kpts=kpts, exxdiv=None)
         self.assertTrue(vj1.dtype == numpy.complex128)
@@ -641,6 +645,20 @@ class KnowValues(unittest.TestCase):
         ek1 = numpy.einsum('xij,xji->', vk1, dms) / len(kpts)
         self.assertAlmostEqual(ej1, 2.3163352969873445, 9)
         self.assertAlmostEqual(ek1, 7.7311228144548600, 9)
+
+        numpy.random.seed(1)
+        kpts_band = numpy.random.random((2,3))
+        vj1, vk1 = df.get_jk(dms, kpts=kpts, kpts_band=kpts_band, exxdiv=None)
+        self.assertAlmostEqual(lib.finger(vj1), 3.437188138446714+0.1360466492092307j, 9)
+        self.assertAlmostEqual(lib.finger(vk1), 7.479986541097368+1.1980593415201204j, 9)
+
+        nao = dm.shape[0]
+        mo_coeff = numpy.random.random((nkpts,nao,nao))
+        mo_occ = numpy.array(numpy.random.random((nkpts,nao))>.6, dtype=numpy.double)
+        dms = numpy.einsum('kpi,ki,kqi->kpq', mo_coeff, mo_occ, mo_coeff)
+        dms = lib.tag_array(lib.asarray(dms), mo_coeff=mo_coeff, mo_occ=mo_occ)
+        vk1 = df.get_jk(dms, kpts=kpts, kpts_band=kpts_band, exxdiv=None)[1]
+        self.assertAlmostEqual(lib.finger(vk1), 10.239828255099447+2.1190549216896182j, 9)
 
     def test_get_ao_eri(self):
         df = fft.FFTDF(cell)

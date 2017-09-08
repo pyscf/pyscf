@@ -89,6 +89,12 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     coords = cell.gen_uniform_grids(gs)
     ngs = coords.shape[0]
 
+    if hasattr(dm_kpts, 'mo_coeff'):
+        mo_coeff = dm_kpts.mo_coeff
+        mo_occ   = dm_kpts.mo_occ
+    else:
+        mo_coeff = None
+
     kpts = np.asarray(kpts)
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
@@ -105,31 +111,59 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     else:
         vk_kpts = np.zeros((nset,nband,nao,nao), dtype=np.complex128)
 
+    ao2_kpts = mydf._numint.eval_ao(cell, coords, kpts, non0tab=mydf.non0tab)
+    ao2_kpts = [np.asarray(ao.T, order='C') for ao in ao2_kpts]
     if input_band is None:
-        ao_kpts = mydf._numint.eval_ao(cell, coords, kpts, non0tab=mydf.non0tab)
-        for k2, ao_k2 in enumerate(ao_kpts):
-            kpt2 = kpts[k2]
-            aoR_dms = [lib.dot(ao_k2, dms[i,k2]) for i in range(nset)]
-            for k1, ao_k1 in enumerate(ao_kpts):
-                kpt1 = kpts_band[k1]
-                vkR_k1k2 = get_vkR(mydf, cell, ao_k1, ao_k2, kpt1, kpt2,
-                                   coords, gs, exxdiv)
-                for i in range(nset):
-                    tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dms[i])
-                    vk_kpts[i,k1] += weight * lib.dot(ao_k1.T.conj(), tmp_Rq)
-            vkR_k1k2 = aoR_dms = tmp_Rq = None
+        ao1_kpts = ao2_kpts
     else:
-        for k2, ao_k2 in mydf.aoR_loop(gs, kpts):
-            kpt2 = kpts[k2]
-            aoR_dms = [lib.dot(ao_k2, dms[i,k2]) for i in range(nset)]
-            for k1, ao_k1 in mydf.aoR_loop(gs, kpts_band):
-                kpt1 = kpts_band[k1]
-                vkR_k1k2 = get_vkR(mydf, cell, ao_k1, ao_k2, kpt1, kpt2,
-                                   coords, gs, exxdiv)
+        ao1_kpts = mydf._numint.eval_ao(cell, coords, kpts_band, non0tab=mydf.non0tab)
+        ao1_kpts = [np.asarray(ao.T, order='C') for ao in ao1_kpts]
+    if mo_coeff is not None:
+        assert(nset == 1)
+        mo_coeff = [mo_coeff[k][:,mo_occ[k]>0] * np.sqrt(mo_occ[k][mo_occ[k]>0])
+                    for k, occ in enumerate(mo_occ)]
+        ao2_kpts = [np.dot(mo_coeff[k].T, ao) for k, ao in enumerate(ao2_kpts)]
+
+    max_memory = mydf.max_memory - lib.current_memory()[0]
+    blksize = int(max(max_memory*1e6/16/2/ngs/nao, 1))
+    nao2 = ao2_kpts[0].shape[0]
+    buf = np.empty((blksize,nao2,ngs), dtype=vk_kpts.dtype)
+    vR_dm = np.empty((nset,nao,ngs), dtype=vk_kpts.dtype)
+    ao_dms = np.empty((nset,nao2,ngs), dtype=vk_kpts.dtype)
+
+    for k2, ao2T in enumerate(ao2_kpts):
+        kpt2 = kpts[k2]
+        if mo_coeff is None:
+            for i in range(nset):
+                lib.dot(dms[i,k2], ao2T.conj(), c=ao_dms[i])
+        else:
+            ao_dms = [ao2T.conj()]
+
+        for k1, ao1T in enumerate(ao1_kpts):
+            kpt1 = kpts_band[k1]
+            mydf.exxdiv = exxdiv
+            coulG = tools.get_coulG(cell, kpt2-kpt1, True, mydf, gs)
+            if is_zero(kpt1-kpt2):
+                expmikr = np.array(1.)
+            else:
+                expmikr = np.exp(-1j * np.dot(coords, kpt2-kpt1))
+
+            for p0, p1 in lib.prange(0, nao, blksize):
+                rho1 = np.einsum('ig,jg->ijg', ao1T[p0:p1].conj()*expmikr,
+                                 ao2T, out=buf[:p1-p0])
+                vG = tools.fft(rho1.reshape(-1,ngs), gs)
+                vG *= coulG
+                vR = tools.ifft(vG, gs).reshape(p1-p0,nao2,ngs)
+                vG = None
+                vR *= expmikr.conj()
+                if vk_kpts.dtype == np.double:
+                    vR = vR.real
                 for i in range(nset):
-                    tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dms[i])
-                    vk_kpts[i,k1] += weight * lib.dot(ao_k1.T.conj(), tmp_Rq)
-            vkR_k1k2 = aoR_dms = tmp_Rq = None
+                    vR_dm[i,p0:p1] = np.einsum('ijg,jg->ig', vR, ao_dms[i])
+                vR = None
+
+            for i in range(nset):
+                vk_kpts[i,k1] += weight * lib.dot(vR_dm[i], ao1T.T)
 
     return _format_jks(vk_kpts, dm_kpts, kpts_band, kpts, single_kpt_band)
 
@@ -223,42 +257,4 @@ def get_k(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None, exxdiv=None):
     dm_kpts = dm.reshape(-1,1,nao,nao)
     vk = get_k_kpts(mydf, dm_kpts, hermi, kpt.reshape(1,3), kpt_band, exxdiv)
     return vk.reshape(dm.shape)
-
-
-def get_vkR(mydf, cell, aoR_k1, aoR_k2, kpt1, kpt2, coords, gs, exxdiv):
-    '''Get the real-space 2-index "exchange" potential V_{i,k1; j,k2}(r)
-    where {i,k1} = exp^{i k1 r) |i> , {j,k2} = exp^{-i k2 r) <j|
-
-    Kwargs:
-        kpt1, kpt2 : (3,) ndarray
-            The sampled k-points; may be required for G=0 correction.
-
-    Returns:
-        vR : (ngs, nao, nao) ndarray
-            The real-space "exchange" potential at every grid point, for all
-            AO pairs.
-
-    Note:
-        This is essentially a density-fitting or resolution-of-the-identity.
-        The returned object is of size ngs*nao**2
-    '''
-    ngs, nao = aoR_k1.shape
-    expmikr = np.exp(-1j*np.dot(kpt1-kpt2,coords.T))
-    mydf.exxdiv = exxdiv
-    coulG = tools.get_coulG(cell, kpt1-kpt2, True, mydf, gs)
-
-    aoR_k1 = np.asarray(aoR_k1.T, order='C')
-    aoR_k2 = np.asarray(aoR_k2.T, order='C')
-    vR = np.empty((nao,nao,ngs), dtype=np.complex128)
-    for i in range(nao):
-        rhoR = aoR_k1 * aoR_k2[i].conj()
-        rhoG = tools.fftk(rhoR, gs, expmikr)
-        vG = rhoG * coulG
-        vR[:,i] = tools.ifftk(vG, gs, expmikr.conj())
-    vR = vR.transpose(2,0,1)
-
-    if aoR_k1.dtype == np.double and aoR_k2.dtype == np.double:
-        return vR.real
-    else:
-        return vR
 
