@@ -1,0 +1,33 @@
+#
+#   SET compiler and flags
+#
+#
+# Libxc must be compiled with the same version of fortran compiler 
+# that is going to be used during compilation/linking of the "client" package.
+# Adjust CPATH or FPATH or INCLUDE variables of your shell to 
+# point the directory where LibXC's include files (fortran .mod files actually)
+# were installed. 
+#
+
+CC=gcc 
+FORTRAN=gfortran -DBLAS_INT=4 -DTIMING -DnoREADSIGMA -DLIBXC -DDEBUG -DUSE_MEMORY_NOTE
+
+FLAGS=-fPIC -ffree-line-length-0 -I$(LIBXCROOT)/include -Ofast -g #-CB
+CFLAGS=-fPIC 
+
+OMP_FLAGS = -fopenmp
+
+MPIFORTRAN=$(FORTRAN)
+OMPFORTRAN=$(FORTRAN)
+FORTRAN77=$(FORTRAN)
+
+FFTW_LIB=
+LAPACK_LIB= -Wl,--no-as-needed -L${MKLROOT}/lib/intel64 -L/opt/intel/lib/intel64_lin -lmkl_gf_lp64 -lmkl_core -lmkl_intel_thread -liomp5 -lpthread -lm -ldl
+LIBXC = $(LIBXCROOT)/lib/libxcf90.a $(LIBXCROOT)/lib/libxc.a
+
+USER_LIBS= $(FFTW_LIB) $(LAPACK_LIB) $(LIBXC)
+INSTALL_DIR=$(HOME)/bin
+TIME=
+
+LINK=$(FORTRAN)
+LFLAGS=$(FLAGS) $(OMP_FLAGS)
