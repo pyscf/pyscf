@@ -33,7 +33,7 @@ class KnowValues(unittest.TestCase):
     dens = sv.dens_elec(grid.coords, dm)
     #t2 = timer(); print(t2-t1); t1 = timer()
     
-    nelec = np.einsum("is,i", dens, grid.weights)
+    nelec = np.einsum("is,i", dens, grid.weights)[0]
     #t2 = timer(); print(t2-t1, nelec, sv.hsx.nelec, dens.shape); t1 = timer()
 
     self.assertAlmostEqual(nelec, sv.hsx.nelec, 2)
