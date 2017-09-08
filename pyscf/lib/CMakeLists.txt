@@ -116,7 +116,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
-          --enable-shared --disable-fortran LIBS=-lm
+          --enable-shared --disable-static --disable-fortran LIBS=-lm
           CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
   )
 endif() # ENABLE_LIBXC

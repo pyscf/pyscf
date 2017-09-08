@@ -118,22 +118,23 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     else:
         ao1_kpts = mydf._numint.eval_ao(cell, coords, kpts_band, non0tab=mydf.non0tab)
         ao1_kpts = [np.asarray(ao.T, order='C') for ao in ao1_kpts]
-    if mo_coeff is not None:
-        assert(nset == 1)
-        mo_coeff = [mo_coeff[k][:,mo_occ[k]>0] * np.sqrt(mo_occ[k][mo_occ[k]>0])
+    if mo_coeff is not None and nset == 1:
+        mo_coeff = [mo_coeff[k][:,occ>0] * np.sqrt(occ[occ>0])
                     for k, occ in enumerate(mo_occ)]
         ao2_kpts = [np.dot(mo_coeff[k].T, ao) for k, ao in enumerate(ao2_kpts)]
+        naoj = ao2_kpts[0].shape[0]
+    else:
+        naoj = nao
 
     max_memory = mydf.max_memory - lib.current_memory()[0]
     blksize = int(max(max_memory*1e6/16/2/ngs/nao, 1))
-    nao2 = ao2_kpts[0].shape[0]
-    buf = np.empty((blksize,nao2,ngs), dtype=vk_kpts.dtype)
+    buf = np.empty((blksize,naoj,ngs), dtype=vk_kpts.dtype)
     vR_dm = np.empty((nset,nao,ngs), dtype=vk_kpts.dtype)
-    ao_dms = np.empty((nset,nao2,ngs), dtype=vk_kpts.dtype)
+    ao_dms = np.empty((nset,naoj,ngs), dtype=vk_kpts.dtype)
 
     for k2, ao2T in enumerate(ao2_kpts):
         kpt2 = kpts[k2]
-        if mo_coeff is None:
+        if mo_coeff is None or nset > 1:
             for i in range(nset):
                 lib.dot(dms[i,k2], ao2T.conj(), c=ao_dms[i])
         else:
@@ -153,7 +154,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
                                  ao2T, out=buf[:p1-p0])
                 vG = tools.fft(rho1.reshape(-1,ngs), gs)
                 vG *= coulG
-                vR = tools.ifft(vG, gs).reshape(p1-p0,nao2,ngs)
+                vR = tools.ifft(vG, gs).reshape(p1-p0,naoj,ngs)
                 vG = None
                 vR *= expmikr.conj()
                 if vk_kpts.dtype == np.double:

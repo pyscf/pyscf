@@ -24,7 +24,7 @@ nrhf.conv_tol = 1e-12
 nrhf.scf()
 
 rhf = scf.dhf.RHF(mol)
-rhf.conv_tol_grad = 1e-6
+rhf.conv_tol_grad = 1e-7
 rhf.conv_tol = 1e-12
 rhf.scf()
 
