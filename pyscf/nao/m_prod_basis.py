@@ -543,10 +543,14 @@ class prod_basis_c():
     from pyscf.nao.m_vxc_lil import vxc_lil
     return vxc_lil(self.sv, dm, xc_code, deriv=2, ao_log=self.prod_log, **kvargs)
   
-  def comp_fxc_pack(self, dm, xc_code, **kvargs):
+  def comp_fxc_pack(self, dm, xc_code, kernel = None, **kvargs):
     """ Computes the packed version of the Hartree kernel """
     from pyscf.nao.m_vxc_pack import vxc_pack
-    return vxc_pack(self.sv, dm, xc_code, deriv=2, ao_log=self.prod_log, **kvargs)
+
+    if kernel is None:
+        return vxc_pack(self.sv, dm, xc_code, deriv=2, kernel=kernel, ao_log=self.prod_log, **kvargs)
+    else:
+        vxc_pack(self.sv, dm, xc_code, deriv=2, kernel=kernel, ao_log=self.prod_log, **kvargs)
 
 
 #

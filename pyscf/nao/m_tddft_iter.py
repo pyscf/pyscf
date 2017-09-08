@@ -53,8 +53,7 @@ class tddft_iter_c():
     if xc_code.upper()!='RPA' :
       dm = comp_dm(sv.wfsx.x, sv.get_occupations())
       
-      xc_pack = pb.comp_fxc_pack(dm, xc_code, dtype=self.dtype, **kvargs)
-      self.kernel = self.kernel + xc_pack
+      pb.comp_fxc_pack(dm, xc_code, kernel = self.kernel, dtype=self.dtype, **kvargs)
       
     self.telec = sv.hsx.telec if telec is None else telec
     self.nelec = sv.hsx.nelec if nelec is None else nelec

@@ -17,13 +17,19 @@ def triu_indices_numba(ind, dim):
             count += 1
 
 @nb.jit(nopython=True)
-def fill_triu(mat, ind, triu, s1, f1, s2, f2):
+def fill_triu(mat, ind, triu, s1, f1, s2, f2, add = False):
     
-    for i1 in range(s1,f1):
-        for i2 in range(s2,f2):
-            if ind[i1, i2] >= 0:
-                triu[ind[i1, i2]] = mat[i1-s1,i2-s2]
-
+    if add:
+        for i1 in range(s1,f1):
+            for i2 in range(s2,f2):
+                if ind[i1, i2] >= 0:
+                    triu[ind[i1, i2]] += mat[i1-s1,i2-s2]
+    else:
+        for i1 in range(s1,f1):
+            for i2 in range(s2,f2):
+                if ind[i1, i2] >= 0:
+                    triu[ind[i1, i2]] = mat[i1-s1,i2-s2]
+ 
 #
 #
 #
