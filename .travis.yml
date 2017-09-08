@@ -48,7 +48,7 @@ before_script:
 
 script:
     - >
-      nosetests -v -e geomopt -e dmrgscf -e fciqmcscf -e icmpspt -e examples
+      nosetests -v -e geomopt -e dmrgscf -e fciqmcscf -e icmpspt -e examples -e nao
       -e test_bz
       -e test_tdrks_grad
       -e test_mc2step_4o4e
