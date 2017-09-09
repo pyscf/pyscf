@@ -16,8 +16,9 @@ from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.scf import cphf
 from pyscf.scf.newton_ah import _gen_rhf_response
+from pyscf.data import nist
 
-UNIT_PPM = lib.param.ALPHA**2 * 1e6
+UNIT_PPM = nist.ALPHA**2 * 1e6
 
 # flatten([[XX, XY, XZ],
 #          [YX, YY, YZ],

@@ -4,8 +4,11 @@ NIST physical constants
 https://physics.nist.gov/cuu/Constants/
 '''
 
-from pyscf.lib.parameters import BOHR, LIGHT_SPEED, ALPHA
+LIGHT_SPEED = 137.03599967994   #http://physics.nist.gov/cgi-bin/cuu/Value?alph
+# BOHR = .529 177 210 92(17) e-10m  #http://physics.nist.gov/cgi-bin/cuu/Value?bohrrada0
+BOHR = 0.52917721092  # Angstroms
 
+ALPHA = 7.2973525664e-3         #http://physics.nist.gov/cgi-bin/cuu/Value?alph
 G_ELECTRON = 2.00231930436182   # http://physics.nist.gov/cgi-bin/cuu/Value?gem
 E_MASS = 9.10938356e-31         # kg https://physics.nist.gov/cgi-bin/cuu/Value?me
 PROTON_MASS = 1.672621898e-27   # kg https://physics.nist.gov/cgi-bin/cuu/Value?mp

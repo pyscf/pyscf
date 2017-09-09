@@ -8,6 +8,7 @@ from pyscf.prop.ssc.parameters import get_nuc_g_factor
 from pyscf.ao2mo import _ao2mo
 from pyscf.prop.ssc.rhf import _dm1_mo2ao
 from pyscf.scf.newton_ah import _gen_uhf_response
+from pyscf.data import nist
 
 # Test pso_soc function
 # solve MO1 associated to a01 operator, then call contract to soc integral
@@ -23,10 +24,10 @@ def make_pso_soc(hfcobj, hfc_nuc=None):
     mo_coeff = mf.mo_coeff
     mo_occ = mf.mo_occ
     effspin = mol.spin * .5
-    e_gyro = .5 * lib.param.G_ELECTRON
-    nuc_mag = .5 * (lib.param.E_MASS/lib.param.PROTON_MASS)  # e*hbar/2m
-    au2MHz = lib.param.HARTREE2J / lib.param.PLANCK * 1e-6
-    fac = lib.param.ALPHA**4 / 4 / effspin * e_gyro * au2MHz
+    e_gyro = .5 * nist.G_ELECTRON
+    nuc_mag = .5 * (nist.E_MASS/nist.PROTON_MASS)  # e*hbar/2m
+    au2MHz = nist.HARTREE2J / nist.PLANCK * 1e-6
+    fac = nist.ALPHA**4 / 4 / effspin * e_gyro * au2MHz
 
     occidxa = mo_occ[0] > 0
     occidxb = mo_occ[1] > 0
