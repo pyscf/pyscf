@@ -4,11 +4,11 @@ from pyscf import gto, scf
 from pyscf.scf import ucphf
 from pyscf.prop.hfc import uhf as uhf_hfc
 from pyscf.prop.ssc import uhf as uhf_ssc
-from pyscf.prop.ssc.parameters import get_nuc_g_factor
 from pyscf.ao2mo import _ao2mo
 from pyscf.prop.ssc.rhf import _dm1_mo2ao
 from pyscf.scf.newton_ah import _gen_uhf_response
 from pyscf.data import nist
+from pyscf.data.gyro import get_nuc_g_factor
 
 # Test pso_soc function
 # solve MO1 associated to a01 operator, then call contract to soc integral

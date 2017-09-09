@@ -22,8 +22,8 @@ from pyscf.scf import cphf
 from pyscf.prop.nmr import dhf as dhf_nmr
 from pyscf.prop.ssc import rhf as rhf_ssc
 from pyscf.prop.ssc.rhf import _write
-from pyscf.prop.ssc.parameters import get_nuc_g_factor
 from pyscf.data import nist
+from pyscf.data.gyro import get_nuc_g_factor
 
 NUMINT_GRIDS = 30
 

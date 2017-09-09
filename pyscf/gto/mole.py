@@ -2547,7 +2547,7 @@ def _charge(symb_or_chg):
         if 'GHOST' in symb_or_chg.upper():
             return 0
         else:
-            return param.ELEMENTS_PROTON[str(_rm_digit(symb_or_chg))]
+            return elements.ELEMENTS_PROTON[str(_rm_digit(symb_or_chg))]
     else:
         return symb_or_chg
 

@@ -14,8 +14,8 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.prop.ssc import dhf as dhf_ssc
-from pyscf.prop.ssc.parameters import get_nuc_g_factor
 from pyscf.data import nist
+from pyscf.data.gyro import get_nuc_g_factor
 
 # TODO: 3 SCF for sx, sy, sz
 

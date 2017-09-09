@@ -1,10 +1,9 @@
-import numpy
 from pyscf.gto import mole
 from pyscf.data import nist
 
 # nuclear magneton are taken from http://easyspin.org/documentation/isotopetable.html
 # isotope-mass, spin, nuclear-g-factor
-ISOTOPE = (
+ISOTOPE_GYRO = (
     (0  , 0.  ,         0.0),
     (1  , 1./2,  5.58569468),  # H
     (3  , 1./2, -4.25499544),  # He
@@ -111,6 +110,6 @@ def g_factor_to_gyromagnetic_ratio(g):
 def get_nuc_g_factor(symb, mass=None):
     Z = mole._charge(symb)
 # g factor of other isotopes can be found in file nuclear_g_factor.dat
-    nuc_spin, g_nuc = ISOTOPE[Z][1:3]
+    nuc_spin, g_nuc = ISOTOPE_GYRO[Z][1:3]
     #gyromag = g_factor_to_gyromagnetic_ratio(g_nuc)
     return g_nuc

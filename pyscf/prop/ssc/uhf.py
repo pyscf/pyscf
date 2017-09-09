@@ -22,8 +22,8 @@ from pyscf.scf.newton_ah import _gen_uhf_response
 from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.ssc import rhf as rhf_ssc
 from pyscf.prop.ssc.rhf import _uniq_atoms, _dm1_mo2ao, _write
-from pyscf.prop.ssc.parameters import get_nuc_g_factor
 from pyscf.data import nist
+from pyscf.data.gyro import get_nuc_g_factor
 
 NUMINT_GRIDS = 30
 

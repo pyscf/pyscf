@@ -10,6 +10,7 @@ MAX_MEMORY = int(os.environ.get('PYSCF_MAX_MEMORY', 4000)) # MB
 TMPDIR = os.environ.get('TMPDIR', '.')
 TMPDIR = os.environ.get('PYSCF_TMPDIR', TMPDIR)
 
+BOHR = float(os.environ.get('PYSCF_BOHR', BOHR))
 LIGHT_SPEED = float(os.environ.get('PYSCF_LIGHT_SPEED', LIGHT_SPEED))
 OUTPUT_DIGITS = int(os.environ.get('PYSCF_OUTPUT_DIGITS', 5))
 OUTPUT_COLS   = int(os.environ.get('PYSCF_OUTPUT_COLS', 5))

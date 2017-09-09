@@ -6,7 +6,6 @@
 '''radii grids'''
 
 import numpy
-from pyscf.lib.parameters import BOHR
 from pyscf.data import elements
 
 BRAGG_RADII = elements.BRAGG_RADII

@@ -19,11 +19,11 @@ from pyscf.lib import logger
 from pyscf.dft import numint
 from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.ssc import uhf as uhf_ssc
-from pyscf.prop.ssc.parameters import get_nuc_g_factor
 from pyscf.prop.ssc.rhf import _dm1_mo2ao
 from pyscf.prop.zfs.uhf import koseki_charge
 from pyscf.prop.gtensor.uhf import align, get_jk
 from pyscf.data import nist
+from pyscf.data.gyro import get_nuc_g_factor
 
 def make_fcsd(hfcobj, dm0, hfc_nuc=None, verbose=None):
     log = logger.new_logger(hfcobj, verbose)

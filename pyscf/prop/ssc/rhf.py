@@ -25,8 +25,8 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.dft import numint
 from pyscf.scf.newton_ah import _gen_rhf_response
 from pyscf.prop.nmr import rhf as rhf_nmr
-from pyscf.prop.ssc.parameters import get_nuc_g_factor
 from pyscf.data import nist
+from pyscf.data.gyro import get_nuc_g_factor
 
 NUMINT_GRIDS = 30
 
