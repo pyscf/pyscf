@@ -100,10 +100,10 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
         vindxc = numint.nr_rks_fxc_st(ni, mol, mf.grids, mf.xc, dm0, dm, 0,
                                       singlet, rho0, vxc, fxc, max_memory)
         if abs(hyb) > 1e-10:
-            vj, vk = mf.get_jk(mol, (dm+dm.T))
+            vj, vk = mf.get_jk(mol, dm)
             veff = vj * 2 - hyb * vk + vindxc
         else:
-            vj = mf.get_j(mol, (dm+dm.T))
+            vj = mf.get_j(mol, dm)
             veff = vj * 2 + vindxc
         return reduce(numpy.dot, (orbv.T, veff, orbo)).ravel()
     z1 = cphf.solve(fvind, mo_energy, mo_occ, wvo,

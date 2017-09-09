@@ -49,7 +49,6 @@ script:
     - >
       nosetests -v -e geomopt -e dmrgscf -e fciqmcscf -e icmpspt -e examples
       -e test_bz
-      -e test_tdrks_grad
       -e test_mc2step_4o4e
       -e test_ks_noimport
       -e test_ecp_pseudo
