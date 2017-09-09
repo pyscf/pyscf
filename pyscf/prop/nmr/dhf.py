@@ -16,6 +16,7 @@ from pyscf.lib import logger
 from pyscf import scf
 from pyscf.scf import _vhf
 from pyscf.prop.nmr import rhf as rhf_nmr
+from pyscf.data import nist
 
 def dia(mol, dm0, gauge_orig=None, shielding_nuc=None, mb='RMB'):
     if shielding_nuc is None:
@@ -227,10 +228,11 @@ class NMR(rhf_nmr.NMR):
             self.check_sanity()
 
         t0 = (time.clock(), time.time())
-        msc_dia = self.dia() * rhf_nmr.UNIT_PPM
+        unit_ppm = nist.ALPHA**2 * 1e6
+        msc_dia = self.dia() * unit_ppm
         t0 = logger.timer(self, 'h11', *t0)
         msc_para, para_pos, para_neg, para_occ = \
-                [x*rhf_nmr.UNIT_PPM for x in self.para(mo10=mo1)]
+                [x*unit_ppm for x in self.para(mo10=mo1)]
         e11 = msc_para + msc_dia
 
         logger.timer(self, 'NMR shielding', *cput0)

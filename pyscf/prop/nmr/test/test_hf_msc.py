@@ -5,6 +5,8 @@ import numpy
 from pyscf import gto, lib
 from pyscf import scf
 from pyscf.prop import nmr
+from pyscf.data import nist
+nist.ALPHA = 1./lib.param.LIGHT_SPEED
 
 mol = gto.Mole()
 mol.verbose = 7

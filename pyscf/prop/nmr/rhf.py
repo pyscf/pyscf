@@ -18,7 +18,6 @@ from pyscf.scf import cphf
 from pyscf.scf.newton_ah import _gen_rhf_response
 from pyscf.data import nist
 
-UNIT_PPM = nist.ALPHA**2 * 1e6
 
 # flatten([[XX, XY, XZ],
 #          [YX, YY, YZ],
@@ -181,11 +180,12 @@ class NMR(lib.StreamObject):
         self.check_sanity()
         self.dump_flags()
 
-        msc_dia = self.dia() * UNIT_PPM
+        unit_ppm = nist.ALPHA**2 * 1e6
+        msc_dia = self.dia() * unit_ppm
         msc_para, para_vir, para_occ = self.para(mo10=mo1)
-        msc_para *= UNIT_PPM
-        para_vir *= UNIT_PPM
-        para_occ *= UNIT_PPM
+        msc_para *= unit_ppm
+        para_vir *= unit_ppm
+        para_occ *= unit_ppm
         e11 = msc_para + msc_dia
 
         logger.timer(self, 'NMR shielding', *cput0)
