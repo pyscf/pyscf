@@ -689,3 +689,138 @@ COVALENT_RADII = 1/BOHR * numpy.array((0,  # Ghost atom
                     1.45, 1.46, 1.48, 1.40, 1.50, 1.50,             # 6p
         2.60, 2.21,                                                 # 7s
         2.15, 2.06, 2.00, 1.96, 1.90, 1.87, 1.80, 1.69))
+
+
+#
+# vdw from ASE
+#
+# Van der Waals radii in [A] taken from
+# http://www.webelements.com/periodicity/van_der_waals_radius/
+# and the references given there.
+# Additional source 5 from http://de.wikipedia.org/wiki/Van-der-Waals-Radius
+# 
+# 1. A. Bondi, J. Phys. Chem., 1964, 68, 441.
+# 
+# 2. L. Pauling, The Nature of the Chemical Bond,
+#    Cornell University Press, USA, 1945.
+# 
+# 3. J.E. Huheey, E.A. Keiter, and R.L. Keiter in Inorganic Chemistry
+#    Principles of Structure and Reactivity, 4th edition, HarperCollins,
+#    New York, USA, 1993.W.W. Porterfield in Inorganic chemistry,
+#    a unified approach, Addison Wesley Publishing Co.,
+#    Reading Massachusetts, USA, 1984.
+# 
+# 4. A.M. James and M.P. Lord in Macmillan's Chemical and Physical Data,
+#    Macmillan, London, UK, 1992.
+# 
+# 5. Manjeera Mantina, Adam C. Chamberlin, Rosendo Valero,
+#    Christopher J. Cramer, Donald G. Truhlar Consistent van der Waals Radii
+#    for the Whole Main Group. In J. Phys. Chem. A. 2009, 113, 5806–5812,
+#    doi:10.1021/jp8111556
+unknown = 2.0
+VDW_RADII = 1/BOHR * numpy.array((0,  # Ghost atom
+    1.20,  # H
+    1.40,  # He [1]
+    1.82,  # Li [1]
+    1.53,  # Be [5]
+    1.92,  # B  [5]
+    1.70,  # C  [1]
+    1.55,  # N  [1]
+    1.52,  # O  [1]
+    1.47,  # F  [1]
+    1.54,  # Ne [1]
+    2.27,  # Na [1]
+    1.73,  # Mg [1]
+    1.84,  # Al [5]
+    2.10,  # Si [1]
+    1.80,  # P  [1]
+    1.80,  # S  [1]
+    1.75,  # Cl [1]
+    1.88,  # Ar [1]
+    2.75,  # K  [1]
+    2.31,  # Ca [5]
+    unknown,  # Sc
+    unknown,  # Ti
+    unknown,  # V
+    unknown,  # Cr
+    unknown,  # Mn
+    unknown,  # Fe
+    unknown,  # Co
+    1.63,  # Ni [1]
+    1.40,  # Cu [1]
+    1.39,  # Zn [1]
+    1.87,  # Ga [1]
+    2.11,  # Ge [5]
+    1.85,  # As [1]
+    1.90,  # Se [1]
+    1.85,  # Br [1]
+    2.02,  # Kr [1]
+    3.03,  # Rb [5]
+    2.49,  # Sr [5]
+    unknown,  # Y
+    unknown,  # Zr
+    unknown,  # Nb
+    unknown,  # Mo
+    unknown,  # Tc
+    unknown,  # Ru
+    unknown,  # Rh
+    1.63,  # Pd [1]
+    1.72,  # Ag [1]
+    1.58,  # Cd [1]
+    1.93,  # In [1]
+    2.17,  # Sn [1]
+    2.06,  # Sb [5]
+    2.06,  # Te [1]
+    1.98,  # I  [1]
+    2.16,  # Xe [1]
+    3.43,  # Cs [5]
+    2.49,  # Ba [5]
+    unknown,  # La
+    unknown,  # Ce
+    unknown,  # Pr
+    unknown,  # Nd
+    unknown,  # Pm
+    unknown,  # Sm
+    unknown,  # Eu
+    unknown,  # Gd
+    unknown,  # Tb
+    unknown,  # Dy
+    unknown,  # Ho
+    unknown,  # Er
+    unknown,  # Tm
+    unknown,  # Yb
+    unknown,  # Lu
+    unknown,  # Hf
+    unknown,  # Ta
+    unknown,  # W
+    unknown,  # Re
+    unknown,  # Os
+    unknown,  # Ir
+    1.75,  # Pt [1]
+    1.66,  # Au [1]
+    1.55,  # Hg [1]
+    1.96,  # Tl [1]
+    2.02,  # Pb [1]
+    2.07,  # Bi [5]
+    1.97,  # Po [5]
+    2.02,  # At [5]
+    2.20,  # Rn [5]
+    3.48,  # Fr [5]
+    2.83,  # Ra [5]
+    unknown,  # Ac
+    unknown,  # Th
+    unknown,  # Pa
+    1.86,  # U [1]
+    unknown,  # Np
+    unknown,  # Pu
+    unknown,  # Am
+    unknown,  # Cm
+    unknown,  # Bk
+    unknown,  # Cf
+    unknown,  # Es
+    unknown,  # Fm
+    unknown,  # Md
+    unknown,  # No
+    unknown,  # Lr
+))
+del unknown
