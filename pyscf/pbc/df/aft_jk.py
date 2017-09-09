@@ -207,15 +207,15 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
 ##################################################
 
 def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
-           kpt_band=None, with_j=True, with_k=True, exxdiv=None):
+           kpts_band=None, with_j=True, with_k=True, exxdiv=None):
     '''JK for given k-point'''
     vj = vk = None
-    if kpt_band is not None and abs(kpt-kpt_band).sum() > 1e-9:
+    if kpts_band is not None and abs(kpt-kpts_band).sum() > 1e-9:
         kpt = numpy.reshape(kpt, (1,3))
         if with_k:
-            vk = get_k_kpts(mydf, dm, hermi, kpt, kpt_band, exxdiv)
+            vk = get_k_kpts(mydf, dm, hermi, kpt, kpts_band, exxdiv)
         if with_j:
-            vj = get_j_kpts(mydf, dm, hermi, kpt, kpt_band)
+            vj = get_j_kpts(mydf, dm, hermi, kpt, kpts_band)
         return vj, vk
 
     cell = mydf.cell

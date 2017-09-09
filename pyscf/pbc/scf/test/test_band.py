@@ -26,7 +26,7 @@ class KnowValues(unittest.TestCase):
         kpts = cell.make_kpts([10,1,1])
         bands = []
         for kpt in kpts:
-            fock = mf.get_hcore(kpt=kpt) + mf.get_veff(kpt_band=kpt)
+            fock = mf.get_hcore(kpt=kpt) + mf.get_veff(kpts_band=kpt)
             ovlp = mf.get_ovlp(kpt=kpt)
             bands.append(mf.eig(fock, ovlp)[0])
         self.assertAlmostEqual(finger(bands), 6.7327210318311597, 8)

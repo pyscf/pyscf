@@ -198,18 +198,18 @@ class KnowValues(unittest.TestCase):
         dm = numpy.random.random((nao,nao)) + numpy.random.random((nao,nao))*1j
         dm = dm + dm.conj().T
         v11 = mf.get_veff(cell, dm, kpt=cell.get_abs_kpts([.25,.25,.25]))
-        v12 = mf.get_veff(cell, dm, kpt_band=cell.get_abs_kpts([.25,.25,.25]))
+        v12 = mf.get_veff(cell, dm, kpts_band=cell.get_abs_kpts([.25,.25,.25]))
         v13 = mf.get_veff(cell, dm, kpt=cell.get_abs_kpts([-1./3,1./3,.25]),
-                          kpt_band=cell.get_abs_kpts([.25,.25,.25]))
+                          kpts_band=cell.get_abs_kpts([.25,.25,.25]))
         self.assertTrue(v11.dtype == numpy.complex128)
         self.assertTrue(v12.dtype == numpy.complex128)
 
         mf = pscf.UHF(cell)
         v21 = mf.get_veff(cell, dm, kpt=cell.get_abs_kpts([.25,.25,.25]))
         dm = [dm*.5,dm*.5]
-        v22 = mf.get_veff(cell, dm, kpt_band=cell.get_abs_kpts([.25,.25,.25]))
+        v22 = mf.get_veff(cell, dm, kpts_band=cell.get_abs_kpts([.25,.25,.25]))
         v23 = mf.get_veff(cell, dm, kpt=cell.get_abs_kpts([-1./3,1./3,.25]),
-                          kpt_band=cell.get_abs_kpts([.25,.25,.25]))
+                          kpts_band=cell.get_abs_kpts([.25,.25,.25]))
         self.assertAlmostEqual(abs(v11-v21).max(), 0, 9)
         self.assertAlmostEqual(abs(v12-v22).max(), 0, 9)
         self.assertAlmostEqual(abs(v13-v23).max(), 0, 9)

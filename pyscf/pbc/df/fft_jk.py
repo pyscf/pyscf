@@ -170,7 +170,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
 
 
-def get_jk(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None,
+def get_jk(mydf, dm, hermi=1, kpt=np.zeros(3), kpts_band=None,
            with_j=True, with_k=True, exxdiv=None):
     '''Get the Coulomb (J) and exchange (K) AO matrices for the given density matrix.
 
@@ -187,7 +187,7 @@ def get_jk(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None,
         kpt : (3,) ndarray
             The "inner" dummy k-point at which the DM was evaluated (or
             sampled).
-        kpt_band : (3,) ndarray
+        kpts_band : (3,) ndarray or (*,3) ndarray
             The "outer" primary k-point at which J and K are evaluated.
 
     Returns:
@@ -197,12 +197,12 @@ def get_jk(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None,
     dm = np.asarray(dm, order='C')
     vj = vk = None
     if with_j:
-        vj = get_j(mydf, dm, hermi, kpt, kpt_band)
+        vj = get_j(mydf, dm, hermi, kpt, kpts_band)
     if with_k:
-        vk = get_k(mydf, dm, hermi, kpt, kpt_band, exxdiv)
+        vk = get_k(mydf, dm, hermi, kpt, kpts_band, exxdiv)
     return vj, vk
 
-def get_j(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None):
+def get_j(mydf, dm, hermi=1, kpt=np.zeros(3), kpts_band=None):
     '''Get the Coulomb (J) AO matrix for the given density matrix.
 
     Args:
@@ -218,7 +218,7 @@ def get_j(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None):
         kpt : (3,) ndarray
             The "inner" dummy k-point at which the DM was evaluated (or
             sampled).
-        kpt_band : (3,) ndarray
+        kpts_band : (3,) ndarray or (*,3) ndarray
             The "outer" primary k-point at which J and K are evaluated.
 
     Returns:
@@ -228,10 +228,15 @@ def get_j(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None):
     dm = np.asarray(dm, order='C')
     nao = dm.shape[-1]
     dm_kpts = dm.reshape(-1,1,nao,nao)
-    vj_kpts = get_j_kpts(mydf, dm_kpts, hermi, kpt.reshape(1,3), kpt_band)
-    return vj_kpts[...,0,:,:]
+    vj = get_j_kpts(mydf, dm_kpts, hermi, kpt.reshape(1,3), kpts_band)
+    if kpts_band is None:
+        vj = vj[:,0,:,:]
+    if dm.ndim == 2:
+        vj = vj[0]
+    return vj
 
-def get_k(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None, exxdiv=None):
+
+def get_k(mydf, dm, hermi=1, kpt=np.zeros(3), kpts_band=None, exxdiv=None):
     '''Get the Coulomb (J) and exchange (K) AO matrices for the given density matrix.
 
     Args:
@@ -247,7 +252,7 @@ def get_k(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None, exxdiv=None):
         kpt : (3,) ndarray
             The "inner" dummy k-point at which the DM was evaluated (or
             sampled).
-        kpt_band : (3,) ndarray
+        kpts_band : (3,) ndarray or (*,3) ndarray
             The "outer" primary k-point at which J and K are evaluated.
 
     Returns:
@@ -257,6 +262,10 @@ def get_k(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None, exxdiv=None):
     dm = np.asarray(dm, order='C')
     nao = dm.shape[-1]
     dm_kpts = dm.reshape(-1,1,nao,nao)
-    vk_kpts = get_k_kpts(mydf, dm_kpts, hermi, kpt.reshape(1,3), kpt_band, exxdiv)
-    return vk_kpts[...,0,:,:]
+    vk = get_k_kpts(mydf, dm_kpts, hermi, kpt.reshape(1,3), kpts_band, exxdiv)
+    if kpts_band is None:
+        vk = vk[:,0,:,:]
+    if dm.ndim == 2:
+        vk = vk[0]
+    return vk
 

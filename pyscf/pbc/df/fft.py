@@ -40,7 +40,7 @@ def get_nuc(mydf, kpts=None):
 
     if kpts is None or numpy.shape(kpts) == (3,):
         vne = vne[0]
-    return vne
+    return numpy.asarray(vne)
 
 def get_pp(mydf, kpts=None):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
@@ -130,7 +130,7 @@ def get_pp(mydf, kpts=None):
 
     if kpts is None or numpy.shape(kpts) == (3,):
         vpp = vpp[0]
-    return vpp
+    return numpy.asarray(vpp)
 
 
 class FFTDF(lib.StreamObject):
