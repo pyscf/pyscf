@@ -89,15 +89,26 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
     energy_tot = pbchf.SCF.energy_tot
 
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
-                 kpt=None, kpt_band=None):
+                 kpt=None, kpts_band=None):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
         if kpt is None: kpt = self.kpt
         if isinstance(dm, np.ndarray) and dm.ndim == 2:
             dm = np.asarray((dm*.5,dm*.5))
-        vj, vk = self.get_jk(cell, dm, hermi, kpt, kpt_band)
+        vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
         vhf = vj[0] + vj[1] - vk
         return vhf
+
+    def get_bands(self, kpts_band, cell=None, dm=None, kpt=None):
+        '''Get energy bands at the given (arbitrary) 'band' k-points.
+
+        Returns:
+            mo_energy : (nmo,) ndarray or a list of (nmo,) ndarray
+                Bands energies E_n(k)
+            mo_coeff : (nao, nmo) ndarray or a list of (nao,nmo) ndarray
+                Band orbitals psi_n(k)
+        '''
+        raise NotImplementedError
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell

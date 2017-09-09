@@ -955,39 +955,49 @@ class _NumInt(numint._NumInt):
         return eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab, xctype, verbose)
 
     def nr_vxc(self, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
-               kpt=None, kpt_band=None, max_memory=2000, verbose=None):
+               kpt=None, kpts_band=None, max_memory=2000, verbose=None):
         '''Evaluate RKS/UKS XC functional and potential matrix.
         See :func:`nr_rks` and :func:`nr_uks` for more details.
         '''
         if spin == 0:
             return self.nr_rks(cell, grids, xc_code, dms, hermi,
-                               kpt, kpt_band, max_memory, verbose)
+                               kpt, kpts_band, max_memory, verbose)
         else:
             return self.nr_uks(cell, grids, xc_code, dms, hermi,
-                               kpt, kpt_band, max_memory, verbose)
+                               kpt, kpts_band, max_memory, verbose)
 
     @lib.with_doc(nr_rks.__doc__)
     def nr_rks(self, cell, grids, xc_code, dms, hermi=0,
-               kpt=numpy.zeros(3), kpt_band=None, max_memory=2000, verbose=None):
+               kpt=numpy.zeros(3), kpts_band=None, max_memory=2000, verbose=None):
         return nr_rks(self, cell, grids, xc_code, dms,
-                      0, 0, hermi, kpt, kpt_band, max_memory, verbose)
+                      0, 0, hermi, kpt, kpts_band, max_memory, verbose)
 
     @lib.with_doc(nr_uks.__doc__)
     def nr_uks(self, cell, grids, xc_code, dms, hermi=0,
-               kpt=numpy.zeros(3), kpt_band=None, max_memory=2000, verbose=None):
+               kpt=numpy.zeros(3), kpts_band=None, max_memory=2000, verbose=None):
         return nr_uks(self, cell, grids, xc_code, dms,
-                      1, 0, hermi, kpt, kpt_band, max_memory, verbose)
+                      1, 0, hermi, kpt, kpts_band, max_memory, verbose)
 
     def eval_mat(self, cell, ao, weight, rho, vxc,
                  non0tab=None, xctype='LDA', spin=0, verbose=None):
-        # use local function for complex eval_mat
-        return eval_mat(cell, ao, weight, rho, vxc, non0tab, xctype, spin, verbose)
+# Guess whether ao is evaluated for kpts_band.  When xctype is LDA, ao on grids
+# should be a 2D array.  For other xc functional, ao should be a 3D array.
+        if ao.ndim == 2 or (xctype != 'LDA' and ao.ndim == 3):
+            mat = eval_mat(cell, ao, weight, rho, vxc, non0tab, xctype, spin, verbose)
+        else:
+            nkpts = len(ao)
+            nao = ao[0].shape[-1]
+            mat = numpy.empty((nkpts,nao,nao), dtype=numpy.complex128)
+            for k in range(nkpts):
+                mat[k] = eval_mat(cell, ao[k], weight, rho, vxc,
+                                  non0tab, xctype, spin, verbose)
+        return mat
 
     def _fxc_mat(self, cell, ao, wv, non0tab, xctype, ao_loc):
         return _fxc_mat(cell, ao, wv, non0tab, xctype, ao_loc)
 
     def block_loop(self, cell, grids, nao, deriv=0, kpt=numpy.zeros(3),
-                   kpt_band=None, max_memory=2000, non0tab=None, blksize=None):
+                   kpts_band=None, max_memory=2000, non0tab=None, blksize=None):
         '''Define this macro to loop over grids by blocks.
         '''
         if grids.coords is None:
@@ -1005,10 +1015,10 @@ class _NumInt(numint._NumInt):
                                   dtype=numpy.uint8)
             non0tab[:] = 0xff
         kpt = numpy.reshape(kpt, 3)
-        if kpt_band is None:
+        if kpts_band is None:
             kpt1 = kpt2 = kpt
         else:
-            kpt1 = kpt_band
+            kpt1 = kpts_band
             kpt2 = kpt
 
         for ip0 in range(0, ngrids, blksize):

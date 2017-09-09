@@ -53,7 +53,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
         vG = coulG * rhoG
         vR[i] = tools.ifft(vG, gs).real
 
-    kpts_band, single_kpt_band = _format_kpts_band(kpts_band, kpts)
+    kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     nband = len(kpts_band)
     weight = cell.vol / ngs
     if gamma_point(kpts_band):
@@ -64,7 +64,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
         for i in range(nset):
             vj_kpts[i,k] = weight * lib.dot(aoR.T.conj()*vR[i], aoR)
 
-    return _format_jks(vj_kpts, dm_kpts, kpts_band, kpts, single_kpt_band)
+    return _format_jks(vj_kpts, dm_kpts, input_band, kpts)
 
 def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
                exxdiv=None):
@@ -102,8 +102,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
 
     weight = 1./nkpts * (cell.vol/ngs)
 
-    input_band = kpts_band
-    kpts_band, single_kpt_band = _format_kpts_band(kpts_band, kpts)
+    kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     nband = len(kpts_band)
 
     if gamma_point(kpts_band) and gamma_point(kpts):
@@ -168,7 +167,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
             for i in range(nset):
                 vk_kpts[i,k1] += weight * lib.dot(vR_dm[i], ao1T.T)
 
-    return _format_jks(vk_kpts, dm_kpts, kpts_band, kpts, single_kpt_band)
+    return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
 
 
 def get_jk(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None,
@@ -229,8 +228,8 @@ def get_j(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None):
     dm = np.asarray(dm, order='C')
     nao = dm.shape[-1]
     dm_kpts = dm.reshape(-1,1,nao,nao)
-    vj = get_j_kpts(mydf, dm_kpts, hermi, kpt.reshape(1,3), kpt_band)
-    return vj.reshape(dm.shape)
+    vj_kpts = get_j_kpts(mydf, dm_kpts, hermi, kpt.reshape(1,3), kpt_band)
+    return vj_kpts[...,0,:,:]
 
 def get_k(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None, exxdiv=None):
     '''Get the Coulomb (J) and exchange (K) AO matrices for the given density matrix.
@@ -258,6 +257,6 @@ def get_k(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None, exxdiv=None):
     dm = np.asarray(dm, order='C')
     nao = dm.shape[-1]
     dm_kpts = dm.reshape(-1,1,nao,nao)
-    vk = get_k_kpts(mydf, dm_kpts, hermi, kpt.reshape(1,3), kpt_band, exxdiv)
-    return vk.reshape(dm.shape)
+    vk_kpts = get_k_kpts(mydf, dm_kpts, hermi, kpt.reshape(1,3), kpt_band, exxdiv)
+    return vk_kpts[...,0,:,:]
 
