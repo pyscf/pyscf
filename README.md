@@ -149,6 +149,17 @@ Known problems
   https://github.com/h5py/h5py/archive/2.3.1.tar.gz
 
 
+* If you are using Intel compiler (version 16, 17), compilation may be stuck at
+```
+[ 95%] Building C object CMakeFiles/cint.dir/src/stg_roots.c.o
+```
+
+  This code is used by F12 integrals only.  If you do not need to use F12 methods,
+  the relevant compilation can be disabled, by searching `DWITH_F12` in file
+  lib/CMakeLists.txt  and setting it to `-DWITH_F12=0`.
+
+
+
 Citing PySCF
 ------------
 
@@ -157,7 +168,8 @@ The following paper should be cited in publications utilizing the PySCF program 
 * The Python-based Simulations of Chemistry Framework (PySCF),
   Q. Sun, T. C. Berkelbach, N. S. Blunt, G. H. Booth, S.  Guo, Z. Li, J. Liu,
   J. McClain, E. R. Sayfutyarova, S. Sharma, S. Wouters, G. K.-L. Chan,
-  arXiv:1701.08223v2 [physics.chem-ph]
+  WIREs Comput Mol Sci 2017 (in press),
+  DOI: 10.1002/wcms.1340
 
 
 Bug report

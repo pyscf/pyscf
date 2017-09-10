@@ -142,11 +142,11 @@ class KnowValues(unittest.TestCase):
 
         numpy.random.seed(1)
         x1 = numpy.random.random(hdiag1.size)
-        self.assertAlmostEqual(abs(hop1(x1) - hop1ref(x1)).max(), 0, 8)
+        self.assertAlmostEqual(abs(hop1(x1) - hop1ref(x1)).max(), 0, 7)
 
         numpy.random.seed(1)
         x1 = numpy.random.random(hdiag2.size)
-        self.assertAlmostEqual(abs(hop2(x1) - hop2ref(x1)).max(), 0, 8)
+        self.assertAlmostEqual(abs(hop2(x1) - hop2ref(x1)).max(), 0, 7)
 
         mol = gto.M(atom='O 0 0 0; O 0 0 1.2222', basis='631g*', symmetry=1, spin=2)
         mf = scf.UHF(mol).run(conv_tol=1e-14)

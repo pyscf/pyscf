@@ -262,7 +262,7 @@ def response_dm1(mycc, t1, t2, l1, l2, eris=None, IX=None):
                 v[p0:p1] += numpy.einsum('iajb,bj->ia', eris_ovov, x) * 4
                 v[p0:p1] -= numpy.einsum('ibja,bj->ia', eris_ovov, x)
                 eris_ovov = None
-                v[p0:p1] -= numpy.einsum('ijba,bj->ia', _cp(eris.oovv[p0:p1]), x[:,p0:p1])
+                v[p0:p1] -= numpy.einsum('ijba,bj->ia', _cp(eris.oovv[p0:p1]), x)
         return v.T
     mo_energy = eris.fock.diagonal()
     mo_occ = numpy.zeros_like(mo_energy)
@@ -595,8 +595,6 @@ def _load_block_tril(dat, row0, row1, out=None):
     nd = int(numpy.sqrt(shape[0]*2))
     if out is None:
         out = numpy.empty((row1-row0,nd)+shape[1:])
-    else:
-        out = numpy.ndarray((row1-row0,nd)+shape[1:], buffer=out)
     p0 = row0*(row0+1)//2
     for i in range(row0, row1):
         out[i-row0,:i+1] = _cp(dat[p0:p0+i+1])
@@ -695,6 +693,7 @@ if __name__ == '__main__':
     ehf = mf.scf()
 
     mycc = ccsd.CCSD(mf)
+    mycc.max_memory = 10
     mycc.conv_tol = 1e-10
     mycc.conv_tol_normt = 1e-10
     ecc, t1, t2 = mycc.kernel()

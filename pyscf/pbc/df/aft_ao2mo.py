@@ -95,7 +95,6 @@ def get_eri(mydf, kpts=None, compact=True):
 
 
 def general(mydf, mo_coeffs, kpts=None, compact=True):
-    cell = mydf.cell
     kptijkl = _format_kpts(kpts)
     kpti, kptj, kptk, kptl = kptijkl
     if isinstance(mo_coeffs, numpy.ndarray) and mo_coeffs.ndim == 2:

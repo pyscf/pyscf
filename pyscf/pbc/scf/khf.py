@@ -14,6 +14,7 @@ See Also:
 
 import sys
 import time
+from functools import reduce
 import numpy as np
 import scipy.linalg
 import h5py
@@ -25,7 +26,6 @@ from pyscf.pbc.gto import ecp
 from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile
 from pyscf.pbc import tools
-from functools import reduce
 from pyscf.pbc import df
 
 
@@ -41,8 +41,7 @@ def get_ovlp(mf, cell=None, kpts=None):
     if cell is None: cell = mf.cell
     if kpts is None: kpts = mf.kpts
     s = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts)
-    cond = max([np.linalg.cond(x) for x in s])
-    nkpts = len(s)
+    cond = np.max(lib.cond(s))
     if cond * cell.precision > 1e2:
         prec = 1e2 / cond
         rmin = max([cell.bas_rcut(ib, prec) for ib in range(cell.nbas)])
@@ -222,7 +221,6 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     '''
     from pyscf.lo import orth
     from pyscf.tools import dump_mat
-    mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
     ovlp_ao = mf.get_ovlp()
@@ -233,6 +231,9 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
 def mulliken_meta(cell, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
                   s=None):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
+
+    Note this function only computes the Mulliken population for the gamma
+    point density matrix.
     '''
     from pyscf.lo import orth
     if s is None:
@@ -392,7 +393,7 @@ class KSCF(hf.SCF):
 
         if cell.dimension < 3:
             ne = np.einsum('kij,kji->k', dm_kpts, self.get_ovlp(cell)).real
-            if np.any(abs(ne - cell.nelectron).sum() > 1e-7):
+            if np.any(abs(ne - cell.nelectron) > 1e-7):
                 logger.warn(self, 'Big error detected in the electron number '
                             'of initial guess density matrix (Ne/cell = %g)!\n'
                             '  This can cause huge error in Fock matrix and '
@@ -496,12 +497,12 @@ class KSCF(hf.SCF):
         return make_rdm1(mo_coeff_kpts, mo_occ_kpts)
 
     def get_bands(self, kpts_band, cell=None, dm_kpts=None, kpts=None):
-        '''Get energy bands at a given (arbitrary) 'band' k-point.
+        '''Get energy bands at the given (arbitrary) 'band' k-points.
 
         Returns:
-            mo_energy : (nao,) ndarray
+            mo_energy : (nmo,) ndarray or a list of (nmo,) ndarray
                 Bands energies E_n(k)
-            mo_coeff : (nao, nao) ndarray
+            mo_coeff : (nao, nmo) ndarray or a list of (nao,nmo) ndarray
                 Band orbitals psi_n(k)
         '''
         if cell is None: cell = self.cell

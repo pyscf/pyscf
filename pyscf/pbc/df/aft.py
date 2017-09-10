@@ -6,9 +6,8 @@
 '''Density expansion on plane waves'''
 
 import time
-import ctypes
-import numpy
 import copy
+import numpy
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
@@ -65,7 +64,7 @@ def get_nuc(mydf, kpts=None):
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
     log = logger.Logger(mydf.stdout, mydf.verbose)
-    t1 = t0 = (time.clock(), time.time())
+    t1 = (time.clock(), time.time())
 
     nkpts = len(kpts_lst)
     nao = cell.nao_nr()
@@ -123,7 +122,7 @@ def get_nuc(mydf, kpts=None):
 
     if kpts is None or numpy.shape(kpts) == (3,):
         vj_kpts = vj_kpts[0]
-    return vj_kpts
+    return numpy.asarray(vj_kpts)
 
 def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e_sph'):
     '''Vnuc - Vloc'''
@@ -206,7 +205,6 @@ class AFTDF(lib.StreamObject):
         self._keys = set(self.__dict__.keys())
 
     def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
         logger.info(self, '\n')
         logger.info(self, '******** %s flags ********', self.__class__)
         logger.info(self, 'gs = %s', self.gs)
@@ -448,8 +446,6 @@ def _fake_nuc(cell):
 
 if __name__ == '__main__':
     from pyscf.pbc import gto as pbcgto
-    import pyscf.pbc.scf.hf as phf
-    from pyscf.pbc import df
     cell = pbcgto.Cell()
     cell.verbose = 0
     cell.atom = 'C 0 0 0; C 1 1 1'

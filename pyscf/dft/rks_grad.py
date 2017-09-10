@@ -25,7 +25,6 @@ def get_veff(ks_grad, mol=None, dm=None):
     mf = ks_grad._scf
     if mf.grids.coords is None:
         mf.grids.build(with_non0tab=True)
-    grids = mf.grids
     hyb = mf._numint.libxc.hybrid_coeff(mf.xc, spin=mol.spin)
 
     mem_now = pyscf.lib.current_memory()[0]

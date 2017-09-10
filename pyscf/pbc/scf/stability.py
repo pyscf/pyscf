@@ -12,6 +12,7 @@ JCP, 104, 9047
 See also tddft/rhf.py and scf/newton_ah.py
 '''
 
+from functools import reduce
 import numpy
 import scipy.linalg
 from pyscf import lib
@@ -55,7 +56,6 @@ def rhf_internal(mf, verbose=None):
     return mo
 
 def _rotate_mo(mo_coeff, mo_occ, dx):
-    nkpts = len(mo_occ)
     nmo = mo_occ[0].size
     nocc = numpy.sum(mo_occ > 0, axis=1)
     mo = []
@@ -78,7 +78,6 @@ def _gen_hop_rhf_external(mf, verbose=None):
     kpts = mf.kpts
 
     mo_coeff = mf.mo_coeff
-    mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     nkpts = len(mo_occ)
     occidx = [numpy.where(mo_occ[k]==2)[0] for k in range(nkpts)]
@@ -163,10 +162,8 @@ def uhf_internal(mf, verbose=None):
 
 def _gen_hop_uhf_external(mf, verbose=None):
     cell = mf.cell
-    kpts = mf.kpts
 
     mo_coeff = mf.mo_coeff
-    mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     nkpts = len(mo_occ[0])
     occidxa = [numpy.where(mo_occ[0][k]>0)[0] for k in range(nkpts)]
@@ -194,9 +191,6 @@ def _gen_hop_uhf_external(mf, verbose=None):
     fvva = [focka[k][viridxa[k][:,None],viridxa[k]] for k in range(nkpts)]
     foob = [fockb[k][occidxb[k][:,None],occidxb[k]] for k in range(nkpts)]
     fvvb = [fockb[k][viridxb[k][:,None],viridxb[k]] for k in range(nkpts)]
-
-    h_diag = ([fvva[k].diagonal().reshape(-1,1)-fooa[k].diagonal() for k in range(nkpts)] +
-              [fvvb[k].diagonal().reshape(-1,1)-foob[k].diagonal() for k in range(nkpts)])
 
     hdiagab = [fvva[k].diagonal().reshape(-1,1) - foob[k].diagonal() for k in range(nkpts)]
     hdiagba = [fvvb[k].diagonal().reshape(-1,1) - fooa[k].diagonal() for k in range(nkpts)]

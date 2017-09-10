@@ -11,7 +11,6 @@ import time
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.pbc import tools
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC, _ewald_exxdiv_for_G0
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
 from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
@@ -20,10 +19,6 @@ from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
 def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     if kpts_band is not None:
         return get_j_for_bands(mydf, dm_kpts, hermi, kpts, kpts_band)
-
-    cell = mydf.cell
-    log = logger.Logger(mydf.stdout, mydf.verbose)
-    t1 = (time.clock(), time.time())
 
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
@@ -53,7 +48,6 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     return _format_jks(vj_kpts, dm_kpts, kpts_band, kpts)
 
 def get_j_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
-    cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = (time.clock(), time.time())
 
@@ -81,7 +75,7 @@ def get_j_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=N
     vG *= weight
     t1 = log.timer_debug1('get_j pass 1 to compute J(G)', *t1)
 
-    kpts_band, single_kpt_band = _format_kpts_band(kpts_band, kpts)
+    kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     nband = len(kpts_band)
     vj_kpts = numpy.zeros((nset,nband,nao,nao), dtype=numpy.complex128)
     for aoaoks, p0, p1 in mydf.ft_loop(mydf.gs, kpt_allow, kpts_band,
@@ -94,20 +88,19 @@ def get_j_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=N
     if gamma_point(kpts_band):
         vj_kpts = vj_kpts.real.copy()
     t1 = log.timer_debug1('get_j pass 2', *t1)
-    return _format_jks(vj_kpts, dm_kpts, kpts_band, kpts, single_kpt_band)
+    return _format_jks(vj_kpts, dm_kpts, input_band, kpts)
 
 def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                exxdiv=None):
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
-    t1 = (time.clock(), time.time())
 
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
 
     swap_2e = (kpts_band is None)
-    kpts_band, single_kpt_band = _format_kpts_band(kpts_band, kpts)
+    kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     nband = len(kpts_band)
     kk_table = kpts_band.reshape(-1,1,3) - kpts.reshape(1,-1,3)
     kk_todo = numpy.ones(kk_table.shape[:2], dtype=bool)
@@ -133,7 +126,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
             kk_todo[kptj_idx,kpti_idx] = False
 
         max_memory1 = max_memory * (nkptj+1)/(nkptj+5)
-        blksize = max(int(max_memory1*4e6/(nkptj+5)/16/nao**2), 16)
+        #blksize = max(int(max_memory1*4e6/(nkptj+5)/16/nao**2), 16)
 
         #bufR = numpy.empty((blksize*nao**2))
         #bufI = numpy.empty((blksize*nao**2))
@@ -151,7 +144,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
             bufI = numpy.empty((nG*nao**2))
             buf1R = numpy.empty((nG*nao**2))
             buf1I = numpy.empty((nG*nao**2))
-            
+
             for k, aoao in enumerate(aoaoks):
                 ki = kpti_idx[k]
                 kj = kptj_idx[k]
@@ -204,7 +197,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         assert(exxdiv.lower() == 'ewald')
         _ewald_exxdiv_for_G0(cell, kpts_band, dms, vk_kpts, kpts_band)
 
-    return _format_jks(vk_kpts, dm_kpts, kpts_band, kpts, single_kpt_band)
+    return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
 
 
 ##################################################
@@ -214,16 +207,15 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
 ##################################################
 
 def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
-           kpt_band=None, with_j=True, with_k=True, exxdiv=None):
+           kpts_band=None, with_j=True, with_k=True, exxdiv=None):
     '''JK for given k-point'''
-    from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0
     vj = vk = None
-    if kpt_band is not None and abs(kpt-kpt_band).sum() > 1e-9:
+    if kpts_band is not None and abs(kpt-kpts_band).sum() > 1e-9:
         kpt = numpy.reshape(kpt, (1,3))
         if with_k:
-            vk = get_k_kpts(mydf, dm, hermi, kpt, kpt_band, exxdiv)
+            vk = get_k_kpts(mydf, dm, hermi, kpt, kpts_band, exxdiv)
         if with_j:
-            vj = get_j_kpts(mydf, dm, hermi, kpt, kpt_band)
+            vj = get_j_kpts(mydf, dm, hermi, kpt, kpts_band)
         return vj, vk
 
     cell = mydf.cell

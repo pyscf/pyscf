@@ -9,6 +9,7 @@
 
 import time
 import numpy
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import dhf
 from pyscf.dft import rks
@@ -49,16 +50,14 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     if mol is None: mol = ks.mol
     if dm is None: dm = ks.make_rdm1()
     t0 = (time.clock(), time.time())
+
+    ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2)
+
     if ks.grids.coords is None:
         ks.grids.build(with_non0tab=True)
-        small_rho_cutoff = ks.small_rho_cutoff
+        if ks.small_rho_cutoff > 1e-20 and ground_state:
+            ks.grids = rks.prune_small_rho_grids_(ks, mol, dm, ks.grids)
         t0 = logger.timer(ks, 'setting up grids', *t0)
-    else:
-        small_rho_cutoff = 0
-
-    dm = numpy.asarray(dm)
-    nao = dm.shape[-1]
-    ground_state = (dm.ndim == 2)
 
     if hermi == 2:  # because rho = 0
         n, exc, vxc = 0, 0, 0
@@ -98,17 +97,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     else:
         ecoul = None
 
-    vxc = rks._attach_xc(vxc, ecoul, exc, vj, vk)
-
-    if (small_rho_cutoff > 1e-20 and ground_state and
-        abs(n-mol.nelectron) < 0.01*n):
-        # Filter grids the first time setup grids
-        idx = ks._numint.large_rho_indices(mol, dm, ks.grids, small_rho_cutoff)
-        logger.debug(ks, 'Drop grids %d',
-                     ks.grids.weights.size - numpy.count_nonzero(idx))
-        ks.grids.coords  = numpy.asarray(ks.grids.coords [idx], order='C')
-        ks.grids.weights = numpy.asarray(ks.grids.weights[idx], order='C')
-        ks.grids.non0tab = ks.grids.make_mask(mol, ks.grids.coords)
+    vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=vj, vk=vk)
     return vxc
 
 
@@ -141,7 +130,6 @@ DKS = UKS
 
 if __name__ == '__main__':
     from pyscf import gto
-    from pyscf.dft import xcfun
     mol = gto.Mole()
     mol.verbose = 7
     mol.output = '/dev/null'#'out_rks'

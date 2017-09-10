@@ -38,10 +38,10 @@ class KnowValues(unittest.TestCase):
         z = numpy.einsum('xii,xii->', dip, dip)
         self.assertAlmostEqual(z, 98.670988758151907, 4)
 
-        mo = loc.kernel(mf.mo_coeff[:,idx+1])
-        dip = boys.dipole_integral(mol, mo)
-        z = numpy.einsum('xii,xii->', dip, dip)
-        self.assertAlmostEqual(z, 27.481320331665497, 4)
+#        mo = loc.kernel(mf.mo_coeff[:,idx+1])
+#        dip = boys.dipole_integral(mol, mo)
+#        z = numpy.einsum('xii,xii->', dip, dip)
+#        self.assertAlmostEqual(z, 27.481320331665497, 4)
 
     #def test_edmiston(self):
     #    idx = numpy.array([17,20,21,22,23,30,36,41,42,47,48,49])-1

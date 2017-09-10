@@ -21,11 +21,9 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf.hf import make_rdm1
 from pyscf.pbc import tools
-from pyscf.pbc.gto import ewald
 from pyscf.pbc.gto import ecp
 from pyscf.pbc.gto.pseudo import get_pp
 from pyscf.pbc.scf import chkfile
-from pyscf.pbc.scf import addons
 from pyscf.pbc import df
 
 
@@ -33,7 +31,7 @@ def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
     '''
     s = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpt)
-    cond = np.linalg.cond(s)
+    cond = np.max(lib.cond(s))
     if cond * cell.precision > 1e2:
         prec = 1e2 / cond
         rmin = max([cell.bas_rcut(ib, prec) for ib in range(cell.nbas)])
@@ -75,7 +73,7 @@ def get_nuc(cell, kpt=np.zeros(3)):
     return df.FFTDF(cell).get_nuc(kpt)
 
 
-def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
+def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpts_band=None):
     '''Get the Coulomb (J) AO matrix for the given density matrix.
 
     Args:
@@ -94,17 +92,17 @@ def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
         kpt : (3,) ndarray
             The "inner" dummy k-point at which the DM was evaluated (or
             sampled).
-        kpt_band : (3,) ndarray
+        kpts_band : (3,) ndarray or (*,3) ndarray
             An arbitrary "band" k-point at which J is evaluated.
 
     Returns:
         The function returns one J matrix, corresponding to the input
         density matrix (both order and shape).
     '''
-    return df.FFTDF(cell).get_jk(dm, hermi, kpt, kpt_band, with_k=False)[0]
+    return df.FFTDF(cell).get_jk(dm, hermi, kpt, kpts_band, with_k=False)[0]
 
 
-def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
+def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpts_band=None):
     '''Get the Coulomb (J) and exchange (K) AO matrices for the given density matrix.
 
     Args:
@@ -123,33 +121,47 @@ def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
         kpt : (3,) ndarray
             The "inner" dummy k-point at which the DM was evaluated (or
             sampled).
-        kpt_band : (3,) ndarray
+        kpts_band : (3,) ndarray or (*,3) ndarray
             An arbitrary "band" k-point at which J and K are evaluated.
 
     Returns:
         The function returns one J and one K matrix, corresponding to the input
         density matrix (both order and shape).
     '''
-    return df.FFTDF(cell).get_jk(dm, hermi, kpt, kpt_band, exxdiv=mf.exxdiv)
+    return df.FFTDF(cell).get_jk(dm, hermi, kpt, kpts_band, exxdiv=mf.exxdiv)
 
 
-def get_bands(mf, kpt_band, cell=None, dm=None, kpt=None):
-    '''Get energy bands at a given (arbitrary) 'band' k-point.
+def get_bands(mf, kpts_band, cell=None, dm=None, kpt=None):
+    '''Get energy bands at the given (arbitrary) 'band' k-points.
 
     Returns:
-        mo_energy : (nao,) ndarray
+        mo_energy : (nmo,) ndarray or a list of (nmo,) ndarray
             Bands energies E_n(k)
-        mo_coeff : (nao, nao) ndarray
+        mo_coeff : (nao, nmo) ndarray or a list of (nao,nmo) ndarray
             Band orbitals psi_n(k)
     '''
     if cell is None: cell = mf.cell
     if dm is None: dm = mf.make_rdm1()
     if kpt is None: kpt = mf.kpt
 
-    fock = (mf.get_hcore(kpt=kpt_band) +
-            mf.get_veff(cell, dm, kpt=kpt, kpt_band=kpt_band))
-    s1e = mf.get_ovlp(kpt=kpt_band)
-    mo_energy, mo_coeff = mf.eig(fock, s1e)
+    kpts_band = np.asarray(kpts_band)
+    single_kpt_band = (hasattr(kpts_band, 'ndim') and kpts_band.ndim == 1)
+    kpts_band = kpts_band.reshape(-1,3)
+
+    fock = mf.get_hcore(cell, kpts_band)
+    fock = fock + mf.get_veff(cell, dm, kpt=kpt, kpts_band=kpts_band)
+    s1e = mf.get_ovlp(cell, kpts_band)
+    nkpts = len(kpts_band)
+    mo_energy = []
+    mo_coeff = []
+    for k in range(nkpts):
+        e, c = mf._eigh(fock[k], s1e[k])
+        mo_energy.append(e)
+        mo_coeff.append(c)
+
+    if single_kpt_band:
+        mo_energy = mo_energy[0]
+        mo_coeff = mo_coeff[0]
     return mo_energy, mo_coeff
 
 
@@ -228,6 +240,12 @@ class SCF(hf.SCF):
         with_df : density fitting object
             Default is the FFT based DF model. For all-electron calculation,
             MDF model is favored for better accuracy.  See also :mod:`pyscf.pbc.df`.
+
+        direct_scf : bool
+            When this flag is set to true, the J/K matrices will be computed
+            directly through the underlying with_df methods.  Otherwise,
+            depending the available memory, the 4-index integrals may be cached
+            and J/K matrices are computed based on the 4-index integrals.
     '''
     def __init__(self, cell, kpt=np.zeros(3), exxdiv='ewald'):
         if not cell._built:
@@ -290,7 +308,7 @@ class SCF(hf.SCF):
         if kpt is None: kpt = self.kpt
         return get_ovlp(cell, kpt)
 
-    def get_jk(self, cell=None, dm=None, hermi=1, kpt=None, kpt_band=None):
+    def get_jk(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None):
         '''Get Coulomb (J) and exchange (K) following :func:`scf.hf.RHF.get_jk_`.
 
         Note the incore version, which initializes an _eri array in memory.
@@ -301,9 +319,10 @@ class SCF(hf.SCF):
 
         cpu0 = (time.clock(), time.time())
 
-        if (kpt_band is None and  # 4 indices of ._eri should have same kpt
+        if (kpts_band is None and
             (self.exxdiv == 'ewald' or not self.exxdiv) and
-            (self._eri is not None or cell.incore_anyway or self._is_mem_enough())):
+            (self._eri is not None or cell.incore_anyway or
+             (not self.direct_scf and self._is_mem_enough()))):
             if self._eri is None:
                 logger.debug(self, 'Building PBC AO integrals incore')
                 self._eri = self.with_df.get_ao_eri(kpt, compact=True)
@@ -316,16 +335,16 @@ class SCF(hf.SCF):
                 _ewald_exxdiv_for_G0(self.cell, kpt, dm.reshape(-1,nao,nao),
                                      vk.reshape(-1,nao,nao))
         else:
-            vj, vk = self.with_df.get_jk(dm, hermi, kpt, kpt_band,
+            vj, vk = self.with_df.get_jk(dm, hermi, kpt, kpts_band,
                                          exxdiv=self.exxdiv)
 
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
-    def get_j(self, cell=None, dm=None, hermi=1, kpt=None, kpt_band=None):
+    def get_j(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None):
         '''Compute J matrix for the given density matrix.
         '''
-        #return self.get_jk(cell, dm, hermi, kpt, kpt_band)[0]
+        #return self.get_jk(cell, dm, hermi, kpt, kpts_band)[0]
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
         if kpt is None: kpt = self.kpt
@@ -334,32 +353,33 @@ class SCF(hf.SCF):
         dm = np.asarray(dm)
         nao = dm.shape[-1]
 
-        if (kpt_band is None and
-            (self._eri is not None or cell.incore_anyway or self._is_mem_enough())):
+        if (kpts_band is None and
+            (self._eri is not None or cell.incore_anyway or
+             (not self.direct_scf and self._is_mem_enough()))):
             if self._eri is None:
                 logger.debug(self, 'Building PBC AO integrals incore')
                 self._eri = self.with_df.get_ao_eri(kpt, compact=True)
             vj, vk = dot_eri_dm(self._eri, dm.reshape(-1,nao,nao), hermi)
         else:
             vj = self.with_df.get_jk(dm.reshape(-1,nao,nao), hermi,
-                                     kpt, kpt_band, with_k=False)[0]
+                                     kpt, kpts_band, with_k=False)[0]
         logger.timer(self, 'vj', *cpu0)
         return vj.reshape(dm.shape)
 
-    def get_k(self, cell=None, dm=None, hermi=1, kpt=None, kpt_band=None):
+    def get_k(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None):
         '''Compute K matrix for the given density matrix.
         '''
-        return self.get_jk(cell, dm, hermi, kpt, kpt_band)[1]
+        return self.get_jk(cell, dm, hermi, kpt, kpts_band)[1]
 
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
-                 kpt=None, kpt_band=None):
+                 kpt=None, kpts_band=None):
         '''Hartree-Fock potential matrix for the given density matrix.
         See :func:`scf.hf.get_veff` and :func:`scf.hf.RHF.get_veff`
         '''
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
         if kpt is None: kpt = self.kpt
-        vj, vk = self.get_jk(cell, dm, hermi, kpt, kpt_band)
+        vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
         return vj - vk * .5
 
     def get_jk_incore(self, cell=None, dm=None, hermi=1, verbose=logger.DEBUG, kpt=None):

@@ -2,7 +2,7 @@
 
 import unittest
 import numpy
-from pyscf import gto
+from pyscf import gto, lib
 from pyscf import scf
 from pyscf.prop import nmr
 
@@ -24,8 +24,8 @@ nrhf.conv_tol = 1e-12
 nrhf.scf()
 
 rhf = scf.dhf.RHF(mol)
-nrhf.conv_tol_grad = 1e-6
-nrhf.conv_tol = 1e-12
+rhf.conv_tol_grad = 1e-7
+rhf.conv_tol = 1e-12
 rhf.scf()
 
 def finger(mat):
@@ -65,28 +65,28 @@ class KnowValues(unittest.TestCase):
         m.cphf = False
         m.gauge_orig = (1,1,1)
         msc = m.shielding()
-        self.assertAlmostEqual(finger(msc), 1642.1878944169432, 5)
+        self.assertAlmostEqual(finger(msc), 1642.1872658333457, 4)
 
     def test_rmb_common_gauge_cpscf(self):
         m = nmr.DHF(rhf)
         m.cphf = True
         m.gauge_orig = (1,1,1)
         msc = m.shielding()
-        self.assertAlmostEqual(finger(msc), 1569.0431469270311, 5)
+        self.assertAlmostEqual(finger(msc), 1569.0400642905215, 4)
 
     def test_rmb_giao_ucpscf(self):
         m = nmr.DHF(rhf)
         m.cphf = False
         m.gauge_orig = None
         msc = m.shielding()
-        self.assertAlmostEqual(finger(msc), 1493.7243596881835, 5)
+        self.assertAlmostEqual(finger(msc), 1493.7229929087348, 4)
 
     def test_rmb_giao_cpscf(self):
         m = nmr.DHF(rhf)
         m.cphf = True
         m.gauge_orig = None
         msc = m.shielding()
-        self.assertAlmostEqual(finger(msc), 1365.4713349881783, 5)
+        self.assertAlmostEqual(finger(msc), 1365.4679007423506, 4)
 
     def test_rkb_giao_cpscf(self):
         m = nmr.DHF(rhf)
@@ -94,7 +94,7 @@ class KnowValues(unittest.TestCase):
         m.cphf = True
         m.gauge_orig = None
         msc = m.shielding()
-        self.assertAlmostEqual(finger(msc), 1923.9127246223129, 5)
+        self.assertAlmostEqual(finger(msc), 1923.9092803444623, 4)
 
     def test_rkb_common_gauge_cpscf(self):
         m = nmr.DHF(rhf)
@@ -102,20 +102,24 @@ class KnowValues(unittest.TestCase):
         m.cphf = True
         m.gauge_orig = (1,1,1)
         msc = m.shielding()
-        self.assertAlmostEqual(finger(msc), 1980.1211286797848, 5)
+        self.assertAlmostEqual(finger(msc), 1980.1179936444073, 4)
 
     def test_make_h10(self):
-        numpy.random.seed(1)
         nao = mol.nao_nr()
+        numpy.random.seed(1)
         dm0 = numpy.random.random((nao,nao))
         dm0 = dm0 + dm0.T
         h1 = nmr.rhf.make_h10(mol, dm0)
         self.assertAlmostEqual(numpy.linalg.norm(h1), 21.255203821714673, 8)
         h1 = nmr.rhf.make_h10(mol, dm0, gauge_orig=(0,0,0))
         self.assertAlmostEqual(numpy.linalg.norm(h1), 4.020198783142229, 8)
-        h1 = nmr.dhf.make_h10(mol, rhf.make_rdm1())
-        self.assertAlmostEqual(numpy.linalg.norm(h1), 15.041326056582273, 8)
-        h1 = nmr.dhf.make_h10(mol, rhf.make_rdm1(), gauge_orig=(0,0,0), mb='RKB')
+        n4c = mol.nao_2c()*2
+        numpy.random.seed(1)
+        dm0 = numpy.random.random((n4c,n4c))
+        dm0 = dm0 + dm0.T.conj()
+        h1 = nmr.dhf.make_h10(mol, dm0)
+        self.assertAlmostEqual(numpy.linalg.norm(h1), 73.452535645731714, 8)
+        h1 = nmr.dhf.make_h10(mol, dm0, gauge_orig=(0,0,0), mb='RKB')
         self.assertAlmostEqual(numpy.linalg.norm(h1), 7.3636964305440609, 8)
 
 

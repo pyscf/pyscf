@@ -18,7 +18,6 @@ Ref:
 import time
 import copy
 import tempfile
-import ctypes
 import numpy
 import h5py
 import scipy.linalg
@@ -169,7 +168,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 #            j2caux[naux:,naux:] -= j2cR + j2cI * 1j
 #            j2c[k] = j2c[k][:naux,:naux] - fuse(fuse(j2caux.T).T)
 #        feri['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
-#        aoaux = LkR = LkI = kLR = kLI = coulG = None
+#        aoaux = LkR = LkI = coulG = None
 
     for k, kpt in enumerate(uniq_kpts):
         aoaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
@@ -186,7 +185,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             j2c[k][naux:] -= j2cR + j2cI * 1j
             j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T.conj()
         feri['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
-        aoaux = LkR = LkI = kLR = kLI = coulG = None
+        aoaux = LkR = LkI = coulG = None
     j2c = None
 
     def make_kpt(uniq_kptji_id):  # kpt = kptj - kpti
@@ -359,7 +358,7 @@ class DF(aft.AFTDF):
         if self.auxcell is None:
             log.info('auxbasis = %s', self.auxbasis)
         else:
-            log.info('auxbasis = %s', self.auxbasis.basis)
+            log.info('auxbasis = %s', self.auxcell.basis)
         log.info('eta = %s', self.eta)
         if isinstance(self._cderi, str):
             log.info('_cderi = %s  where DF integrals are loaded (readonly).',
@@ -413,11 +412,11 @@ class DF(aft.AFTDF):
         if with_j3c:
             if isinstance(self._cderi_to_save, str):
                 cderi = self._cderi_to_save
+                if isinstance(self._cderi, str):
+                    logger.warn(self, 'Value of _cderi is ignored. DF '
+                                'integrals will be saved in file %s .', cderi)
             else:
                 cderi = self._cderi_to_save.name
-            if isinstance(self._cderi, str):
-                log.warn('Value of _cderi is ignored. DF integrals will be '
-                         'saved in file %s .', cderi)
             self._cderi = cderi
             t1 = (time.clock(), time.time())
             self._make_j3c(self.cell, self.auxcell, kptij_lst, cderi)
@@ -438,7 +437,7 @@ class DF(aft.AFTDF):
                             len(member(kpt, self.kpts_band))>0) for kpt in kpts)
 
     def auxbar(self, fused_cell=None):
-        '''
+        r'''
         Potential average = \sum_L V_L*Lpq
 
         The coulomb energy is computed with chargeless density

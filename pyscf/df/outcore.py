@@ -4,7 +4,6 @@
 #
 
 import time
-import ctypes
 import tempfile
 import numpy
 import scipy.linalg
@@ -14,7 +13,6 @@ from pyscf import gto
 from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
-from pyscf.scf import _vhf
 from pyscf.df.addons import make_auxmol
 
 #

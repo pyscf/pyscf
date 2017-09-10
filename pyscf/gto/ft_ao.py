@@ -22,7 +22,7 @@ from pyscf.gto.moleintor import libcgto
 # gxyz is the index for Gvbase
 def ft_aopair(mol, Gv, shls_slice=None, aosym='s1', b=numpy.eye(3),
               gxyz=None, Gvbase=None, buf=None, verbose=None):
-    ''' FT transform AO pair
+    r''' FT transform AO pair
     \int i(r) j(r) exp(-ikr) dr^3
     '''
     if shls_slice is None:

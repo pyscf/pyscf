@@ -5,10 +5,8 @@
 
 '''Density expansion on plane waves'''
 
-import sys
 import copy
 import numpy
-import h5py
 from pyscf import lib
 from pyscf import gto
 from pyscf import dft
@@ -42,7 +40,7 @@ def get_nuc(mydf, kpts=None):
 
     if kpts is None or numpy.shape(kpts) == (3,):
         vne = vne[0]
-    return vne
+    return numpy.asarray(vne)
 
 def get_pp(mydf, kpts=None):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
@@ -60,7 +58,6 @@ def get_pp(mydf, kpts=None):
     vpplocG = -numpy.einsum('ij,ij->j', SI, vpplocG)
     vpplocG[0] = numpy.sum(pseudo.get_alphas(cell)) # from get_jvloc_G0 function
     ngs = len(vpplocG)
-    nao = cell.nao_nr()
 
     # vpploc evaluated in real-space
     vpplocR = tools.ifft(vpplocG, cell.gs).real
@@ -133,7 +130,7 @@ def get_pp(mydf, kpts=None):
 
     if kpts is None or numpy.shape(kpts) == (3,):
         vpp = vpp[0]
-    return vpp
+    return numpy.asarray(vpp)
 
 
 class FFTDF(lib.StreamObject):
@@ -158,7 +155,6 @@ class FFTDF(lib.StreamObject):
         self._keys = set(self.__dict__.keys())
 
     def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
         logger.info(self, '\n')
         logger.info(self, '******** %s flags ********', self.__class__)
         logger.info(self, 'gs = %s', self.gs)
@@ -170,7 +166,7 @@ class FFTDF(lib.StreamObject):
         lib.StreamObject.check_sanity(self)
         cell = self.cell
         if cell.dimension < 3:
-            raise RuntimeError('FFTDF method does not support low-dimensional '
+            raise RuntimeError('FFTDF method does not support low-dimension '
                                'PBC system.  DF, MDF or AFTDF methods should '
                                'be used.\nSee also examples/pbc/31-low_dimensional_pbc.py')
 
@@ -183,8 +179,7 @@ class FFTDF(lib.StreamObject):
                         '        mf = mf.mix_density_fit()')
 
         if cell.ke_cutoff is None:
-            ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), self.gs)
-            ke_cutoff = ke_cutoff.min()
+            ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), self.gs).min()
         else:
             ke_cutoff = numpy.min(cell.ke_cutoff)
         ke_guess = estimate_ke_cutoff(cell, cell.precision)
@@ -200,7 +195,7 @@ class FFTDF(lib.StreamObject):
     def aoR_loop(self, gs=None, kpts=None, kpts_band=None):
         cell = self.cell
         if cell.dimension < 3:
-            raise RuntimeError('FFTDF method does not support low-dimensional '
+            raise RuntimeError('FFTDF method does not support low-dimension '
                                'PBC system.  DF, MDF or AFTDF methods should '
                                'be used.\nSee also examples/pbc/31-low_dimensional_pbc.py')
 
@@ -214,7 +209,6 @@ class FFTDF(lib.StreamObject):
             if any(gs != self.gs):
                 self.non0tab = None
             self.gs = gs
-        ngrids = numpy.prod(gs*2+1)
 
         ni = self._numint
         coords = cell.gen_uniform_grids(gs)
@@ -293,7 +287,6 @@ class FFTDF(lib.StreamObject):
 
 if __name__ == '__main__':
     from pyscf.pbc import gto as pbcgto
-    import pyscf.pbc.scf.hf as phf
     cell = pbcgto.Cell()
     cell.verbose = 0
     cell.atom = 'C 0 0 0; C 1 1 1; C 0 2 2; C 2 0 2'
@@ -303,6 +296,6 @@ if __name__ == '__main__':
     cell.gs = [10, 10, 10]
     cell.build()
     k = numpy.ones(3)*.25
-    df = PWDF(cell)
+    df = FFTDF(cell)
     v1 = get_pp(df, k)
 

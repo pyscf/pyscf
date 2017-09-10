@@ -3,13 +3,11 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import time
 import numpy
 from pyscf import lib
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo.incore import iden_coeffs, _conc_mos
-from pyscf.pbc import tools
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
 from pyscf.pbc.df.fft_ao2mo import _format_kpts
 from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
@@ -87,7 +85,6 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
     if mydf._cderi is None:
         mydf.build()
 
-    cell = mydf.cell
     kptijkl = _format_kpts(kpts)
     kpti, kptj, kptk, kptl = kptijkl
     if isinstance(mo_coeffs, numpy.ndarray) and mo_coeffs.ndim == 2:

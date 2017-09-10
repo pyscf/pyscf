@@ -8,7 +8,6 @@ import time
 import ctypes
 from functools import reduce
 import numpy
-import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
@@ -237,7 +236,7 @@ def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
 
 def r_get_jk(dfobj, dms, hermi=1):
     '''Relativistic density fitting JK'''
-    t0 = t1 = (time.clock(), time.time())
+    t0 = (time.clock(), time.time())
     mol = dfobj.mol
     c1 = .5 / lib.param.LIGHT_SPEED
     tao = mol.tmap()
@@ -304,7 +303,7 @@ def r_get_jk(dfobj, dms, hermi=1):
             vk[n2c:,n2c:] += numpy.dot(buf1.reshape(-1,n2c).T,
                                        buf.reshape(-1,n2c)) * c1**2
 
-            if not hermi == 1:
+            if hermi != 1:
                 fdrv(ftrans, fmmm,
                      buf.ctypes.data_as(ctypes.c_void_p),
                      erill.ctypes.data_as(ctypes.c_void_p),

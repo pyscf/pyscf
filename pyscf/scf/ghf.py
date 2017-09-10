@@ -7,7 +7,6 @@
 Non-relativistic generalized Hartree-Fock
 '''
 
-import time
 from functools import reduce
 import numpy
 import scipy.linalg
@@ -277,6 +276,8 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
     dmb = dm[nao:,nao:]
     return hf.dip_moment(mol, dma+dmb, unit_symbol, verbose)
 
+canonicalize = hf.canonicalize
+
 class GHF(hf.SCF):
     __doc__ = hf.SCF.__doc__ + '''
 
@@ -315,7 +316,6 @@ class GHF(hf.SCF):
         return _from_rhf_init_dm(hf.SCF.init_guess_by_atom(self, mol))
 
     def init_guess_by_chkfile(self, chkfile=None, project=True):
-        from pyscf.scf import uhf
         dma, dmb = uhf.init_guess_by_chkfile(mol, chkfile, project)
         return scipy.linalg.block_diag(dma, dmb)
 

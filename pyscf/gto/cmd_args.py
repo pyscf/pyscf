@@ -15,16 +15,16 @@ if sys.version_info >= (2,7):
         '''
         parser = argparse.ArgumentParser()
         parser.add_argument('-v', '--verbose',
-                          action='store_false', dest='verbose', default=0,
-                          help='make lots of noise')
+                            action='store_false', dest='verbose', default=0,
+                            help='make lots of noise')
         parser.add_argument('-q', '--quiet',
-                          action='store_false', dest='quite', default=False,
-                          help='be very quiet')
+                            action='store_false', dest='quite', default=False,
+                            help='be very quiet')
         parser.add_argument('-o', '--output',
-                          dest='output', metavar='FILE', help='write output to FILE')
+                            dest='output', metavar='FILE', help='write output to FILE')
         parser.add_argument('-m', '--max-memory',
-                          action='store', dest='max_memory', metavar='NUM',
-                          help='maximum memory to use (in MB)')
+                            action='store', dest='max_memory', metavar='NUM',
+                            help='maximum memory to use (in MB)')
 
         (opts, args_left) = parser.parse_known_args()
 

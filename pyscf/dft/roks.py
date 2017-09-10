@@ -9,8 +9,6 @@ Non-relativistic restricted open-shell Kohn-Sham
 
 from pyscf.lib import logger
 from pyscf.scf import rohf
-from pyscf.dft import gen_grid
-from pyscf.dft import numint
 from pyscf.dft.uks import get_veff, energy_elec
 from pyscf.dft import rks
 

@@ -7,8 +7,6 @@
 Short range part of ECP under PBC
 '''
 
-import copy
-import ctypes
 import numpy
 from pyscf import lib
 from pyscf import gto

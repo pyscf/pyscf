@@ -9,7 +9,6 @@ Analytic Fourier transformation AO-pair value for PBC
 
 import ctypes
 import numpy
-import scipy.linalg
 from pyscf import lib
 from pyscf import gto
 from pyscf.gto.ft_ao import ft_ao as mol_ft_ao
@@ -23,7 +22,7 @@ libpbc = lib.load_library('libpbc')
 def ft_aopair(cell, Gv, shls_slice=None, aosym='s1',
               b=None, gxyz=None, Gvbase=None,
               kpti_kptj=numpy.zeros((2,3)), q=None, verbose=None):
-    ''' FT transform AO pair
+    r''' FT transform AO pair
     \int exp(-i(G+q)r) i(r) j(r) exp(-ikr) dr^3
     '''
     kpti, kptj = kpti_kptj
@@ -39,7 +38,7 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
                     b=None, gxyz=None, Gvbase=None,
                     q=numpy.zeros(3), kptjs=numpy.zeros((1,3)),
                     out=None):
-    ''' FT transform AO pair
+    r''' FT transform AO pair
     \int exp(-i(G+q)r) i(r) j(r) exp(-ikr) dr^3
     The return list holds the AO pair array
     corresponding to the kpoints given by kptjs
@@ -64,7 +63,6 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
             eval_gz = 'GTO_Gv_nonorth'
         gxyzT = numpy.asarray(gxyz.T, order='C', dtype=numpy.int32)
         p_gxyzT = gxyzT.ctypes.data_as(ctypes.c_void_p)
-        Gvx = lib.cartesian_prod(Gvbase)
         b = numpy.hstack((b.ravel(), q) + Gvbase)
         p_b = b.ctypes.data_as(ctypes.c_void_p)
         p_gs = (ctypes.c_int*3)(*[len(x) for x in Gvbase])
@@ -79,7 +77,6 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                  cell._atm, cell._bas, cell._env)
     ao_loc = gto.moleintor.make_loc(bas, 'GTO_ft_ovlp_sph')
-    nao = ao_loc[cell.nbas]
     if shls_slice is None:
         shls_slice = (0, cell.nbas, cell.nbas, cell.nbas*2)
     else:

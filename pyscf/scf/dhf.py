@@ -19,7 +19,7 @@ from pyscf.scf import chkfile
 
 
 def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
-           dump_chk=True, dm0=None, callback=None):
+           dump_chk=True, dm0=None, callback=None, conv_check=True):
     '''the modified SCF kernel for Dirac-Hartree-Fock.  In this kernel, the
     SCF is carried out in three steps.  First the 2-electron part is
     approximated by large component integrals (LL|LL); Next, (SS|LL) the
@@ -38,7 +38,8 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
     if dm0 is None and mf._coulomb_now.upper() == 'LLLL':
         scf_conv, e_tot, mo_energy, mo_coeff, mo_occ \
                 = hf.kernel(mf, 1e-2, 1e-1,
-                            dump_chk, dm0=dm, callback=callback)
+                            dump_chk, dm0=dm, callback=callback,
+                            conv_check=False)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         mf._coulomb_now = 'SSLL'
 
@@ -46,7 +47,8 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
                         mf._coulomb_now.upper() == 'LLSS'):
         scf_conv, e_tot, mo_energy, mo_coeff, mo_occ \
                 = hf.kernel(mf, 1e-3, 1e-1,
-                            dump_chk, dm0=dm, callback=callback)
+                            dump_chk, dm0=dm, callback=callback,
+                            conv_check=False)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         mf._coulomb_now = 'SSSS'
 
@@ -56,7 +58,7 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
         mf._coulomb_now = 'SSLL'
 
     return hf.kernel(mf, conv_tol, conv_tol_grad, dump_chk, dm0=dm,
-                     callback=callback)
+                     callback=callback, conv_check=conv_check)
 
 def get_jk_coulomb(mol, dm, hermi=1, coulomb_allow='SSSS',
                    opt_llll=None, opt_ssll=None, opt_ssss=None):
@@ -407,7 +409,8 @@ class UHF(hf.SCF):
         self.converged, self.e_tot, \
                 self.mo_energy, self.mo_coeff, self.mo_occ \
                 = kernel(self, self.conv_tol, self.conv_tol_grad,
-                         dm0=dm0, callback=self.callback)
+                         dm0=dm0, callback=self.callback,
+                         conv_check=self.conv_check)
 
         logger.timer(self, 'SCF', *cput0)
         self._finalize()

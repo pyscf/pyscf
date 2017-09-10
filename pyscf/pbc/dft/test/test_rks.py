@@ -95,6 +95,7 @@ class KnowValues(unittest.TestCase):
         mf.kpt = np.random.random(3)
         mf.max_cycle = 1
         dm = mf.from_chk(mf1.chkfile)
+        mf.conv_check = False
         self.assertAlmostEqual(mf.scf(dm), -4.7088482564143845, 8)
 
 if __name__ == '__main__':

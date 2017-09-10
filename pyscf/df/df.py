@@ -10,10 +10,9 @@ J-metric density fitting
 import time
 import tempfile
 import numpy
-import scipy.linalg
 import h5py
 from pyscf import lib
-from pyscf import gto
+from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.df import incore
 from pyscf.df import outcore
@@ -167,7 +166,6 @@ class DF(lib.StreamObject):
 class DF4C(DF):
     '''Relativistic 4-component'''
     def build(self):
-        t0 = (time.clock(), time.time())
         log = logger.Logger(self.stdout, self.verbose)
         mol = self.mol
         auxmol = self.auxmol = addons.make_auxmol(self.mol, self.auxbasis)

@@ -10,11 +10,9 @@ See Also:
     hf.py : Hartree-Fock for periodic systems at a single k-point
 '''
 
-import time
 from functools import reduce
 import numpy as np
 import scipy.linalg
-import h5py
 from pyscf.scf import hf as mol_hf
 from pyscf.scf import uhf as mol_uhf
 from pyscf.pbc.scf import khf
@@ -22,7 +20,6 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile
-from pyscf.pbc import df
 
 
 canonical_occ = canonical_occ_ = addons.canonical_occ_
@@ -138,9 +135,12 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     return e1+e_coul, e_coul
 
 
-def mulliken_meta(cell, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
+def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG, pre_orth_method='ANO',
                   s=None):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
+
+    Note this function only computes the Mulliken population for the gamma
+    point density matrix.
     '''
     from pyscf.lo import orth
     if s is None:
@@ -148,7 +148,7 @@ def mulliken_meta(cell, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
     log = logger.new_logger(cell, verbose)
     log.note('Analyze output for the gamma point')
     log.note("KUHF mulliken_meta")
-    dm_ao_gamma = dm_ao[:,0,:,:].real
+    dm_ao_gamma = dm_ao_kpts[:,0,:,:].real
     s_gamma = s[0,:,:].real
     c = orth.restore_ao_character(cell, pre_orth_method)
     orth_coeff = orth.orth_ao(cell, 'meta_lowdin', pre_orth_ao=c, s=s_gamma)
@@ -254,7 +254,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
             occs = ([occa[i] for i in where], [occb[i] for i in where])
             return make_rdm1(mos, occs)
 
-    if mo[0].ndim == 2:  # KRHF
+    if hasattr(mo[0], 'ndim') and mo[0].ndim == 2:  # KRHF
         mo_occa = [(occ>1e-8).astype(np.double) for occ in mo_occ]
         mo_occb = [occ-mo_occa[k] for k,occ in enumerate(mo_occ)]
         dm = makedm((mo, mo), (mo_occa, mo_occb))
@@ -310,8 +310,7 @@ class KUHF(mol_uhf.UHF, khf.KSCF):
             dm = self.init_guess_by_minao(cell)
 
         if dm_kpts is None:
-            assert(dm.ndim == 3)
-            nao = dm.shape[-1]
+            nao = dm[0].shape[-1]
             nkpts = len(self.kpts)
             dm_kpts = lib.asarray([dm]*nkpts).reshape(nkpts,2,nao,nao)
             dm_kpts = dm_kpts.transpose(1,0,2,3)
@@ -320,15 +319,16 @@ class KUHF(mol_uhf.UHF, khf.KSCF):
             assert dm_kpts.shape[0]==2
 
         if cell.dimension < 3:
-            ne = np.einsum('xkij,kji->k', dm_kpts, self.get_ovlp(cell))
-            if np.any(abs(ne - cell.nelectron).sum() > 1e-7):
+            ne = np.einsum('xkij,kji->xk', dm_kpts, self.get_ovlp(cell))
+            nelec = np.asarray(cell.nelec).reshape(2,1)
+            if np.any(abs(ne - nelec) > 1e-7):
                 logger.warn(self, 'Big error detected in the electron number '
                             'of initial guess density matrix (Ne/cell = %g)!\n'
                             '  This can cause huge error in Fock matrix and '
                             'lead to instability in SCF for low-dimensional '
                             'systems.\n  DM is normalized to correct number '
                             'of electrons', ne.mean())
-                dm_kpts *= cell.nelectron / ne.reshape(2,-1,1,1)
+                dm_kpts *= (nelec/ne).reshape(2,-1,1,1)
         return dm_kpts
 
     def init_guess_by_1e(self, cell=None):
@@ -388,12 +388,12 @@ class KUHF(mol_uhf.UHF, khf.KSCF):
         return make_rdm1(mo_coeff_kpts, mo_occ_kpts)
 
     def get_bands(self, kpts_band, cell=None, dm_kpts=None, kpts=None):
-        '''Get energy bands at a given (arbitrary) 'band' k-point.
+        '''Get energy bands at the given (arbitrary) 'band' k-points.
 
         Returns:
-            mo_energy : (nao,) ndarray
+            mo_energy : (nmo,) ndarray or a list of (nmo,) ndarray
                 Bands energies E_n(k)
-            mo_coeff : (nao, nao) ndarray
+            mo_coeff : (nao, nmo) ndarray or a list of (nao,nmo) ndarray
                 Band orbitals psi_n(k)
         '''
         if cell is None: cell = self.cell

@@ -11,7 +11,6 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.gto import mole
-from pyscf.gto import moleintor
 from pyscf.lib import logger
 from pyscf import symm
 from pyscf.scf import hf
@@ -86,12 +85,13 @@ def dynamic_level_shift_(mf, factor=1.):
     last_e = [None]
     def get_fock(h1e, s1e, vhf, dm, cycle=-1, diis=None,
                  diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
-        ehf =(numpy.einsum('ij,ji', h1e, dm) +
-              numpy.einsum('ij,ji', vhf, dm) * .5)
-        if last_e[0] is not None:
-            level_shift_factor = abs(ehf-last_e[0]) * factor
-            logger.info(mf, 'Set level shift to %g', level_shift_factor)
-        last_e[0] = ehf
+        if cycle >= 0 or diis is not None:
+            ehf =(numpy.einsum('ij,ji', h1e, dm) +
+                  numpy.einsum('ij,ji', vhf, dm) * .5)
+            if last_e[0] is not None:
+                level_shift_factor = abs(ehf-last_e[0]) * factor
+                logger.info(mf, 'Set level shift to %g', level_shift_factor)
+            last_e[0] = ehf
         return old_get_fock(h1e, s1e, vhf, dm, cycle, diis, diis_start_cycle,
                             level_shift_factor, damp_factor)
     mf.get_fock = get_fock
@@ -187,6 +187,7 @@ def mom_occ_(mf, occorb, setocc):
         coef_occ_b = occorb[:, setocc[1]>0]
     else:
         raise AssertionError('Can not support this class of instance.')
+    log = logger.Logger(mf.stdout, mf.verbose)
     def get_occ(mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = mf.mo_energy
         if mo_coeff is None: mo_coeff = mf.mo_coeff
@@ -202,21 +203,21 @@ def mom_occ_(mf, occorb, setocc):
         mo_occ[0][idx_a[-nocc_a:]] = 1.
         mo_occ[1][idx_b[-nocc_b:]] = 1.
 
-        if mf.verbose >= logger.DEBUG: 
-            logger.info(mf, ' New alpha occ pattern: %s', mo_occ[0]) 
-            logger.info(mf, ' New beta occ pattern: %s', mo_occ[1]) 
+        if mf.verbose >= logger.DEBUG:
+            log.info(' New alpha occ pattern: %s', mo_occ[0])
+            log.info(' New beta occ pattern: %s', mo_occ[1])
         if mf.verbose >= logger.DEBUG1:
-            if mo_energy.ndim == 2: 
-                logger.info(mf, ' Current alpha mo_energy(sorted) = %s', mo_energy[0]) 
-                logger.info(mf, ' Current beta mo_energy(sorted) = %s', mo_energy[1])
+            if mo_energy.ndim == 2:
+                log.info(' Current alpha mo_energy(sorted) = %s', mo_energy[0])
+                log.info(' Current beta mo_energy(sorted) = %s', mo_energy[1])
             elif mo_energy.ndim == 1:
-                logger.info(mf, ' Current mo_energy(sorted) = %s', mo_energy)
+                log.info(' Current mo_energy(sorted) = %s', mo_energy)
 
         if (int(numpy.sum(mo_occ[0])) != nocc_a):
-            log.error(self, 'mom alpha electron occupation numbers do not match: %d, %d', 
+            log.error('mom alpha electron occupation numbers do not match: %d, %d',
                       nocc_a, int(numpy.sum(mo_occ[0])))
         if (int(numpy.sum(mo_occ[1])) != nocc_b):
-            log.error(self, 'mom alpha electron occupation numbers do not match: %d, %d', 
+            log.error('mom alpha electron occupation numbers do not match: %d, %d',
                       nocc_b, int(numpy.sum(mo_occ[1])))
 
         #output 1-dimension occupation number for restricted open-shell
@@ -266,7 +267,6 @@ def project_mo_r2r(mol1, mo1, mol2):
 
 
 def remove_linear_dep_(mf, threshold=1e-8):
-    mol = mf.mol
     def eigh(h, s):
         d, t = numpy.linalg.eigh(s)
         x = t[:,d>threshold] / numpy.sqrt(d[d>threshold])

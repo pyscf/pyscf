@@ -88,6 +88,7 @@ class KnowValues(unittest.TestCase):
         dm1 = mf.from_chk(kmf.chkfile)
         mf.max_cycle = 1
         e1 = mf.kernel(dm1)
+        mf.conv_check = False
         self.assertAlmostEqual(e1, ekpt, 9)
 
         nk = (3, 1, 1)
@@ -96,7 +97,8 @@ class KnowValues(unittest.TestCase):
         dm = kmf1.from_chk(mf.chkfile)
         kmf1.max_cycle = 1
         ekpt = kmf1.scf(dm)
-        self.assertAlmostEqual(ekpt, -11.17814699669376, 8)
+        kmf1.conv_check = False
+        self.assertAlmostEqual(ekpt, -11.215218432275057, 8)
 
     def test_kuhf(self):
         ngs = 4

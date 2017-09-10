@@ -9,6 +9,7 @@ Non-relativistic restricted Kohn-Sham
 
 import time
 import numpy
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.dft import gen_grid
@@ -48,12 +49,15 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     if mol is None: mol = ks.mol
     if dm is None: dm = ks.make_rdm1()
     t0 = (time.clock(), time.time())
+
+    ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2)
+
     if ks.grids.coords is None:
         ks.grids.build(with_non0tab=True)
-        small_rho_cutoff = ks.small_rho_cutoff
+        if ks.small_rho_cutoff > 1e-20 and ground_state:
+            # Filter grids the first time setup grids
+            ks.grids = prune_small_rho_grids_(ks, mol, dm, ks.grids)
         t0 = logger.timer(ks, 'setting up grids', *t0)
-    else:
-        small_rho_cutoff = 0
 
     if hermi == 2:  # because rho = 0
         n, exc, vxc = 0, 0, 0
@@ -61,8 +65,6 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         n, exc, vxc = ks._numint.nr_rks(mol, ks.grids, ks.xc, dm)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
-
-    ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2)
 
     hyb = ks._numint.hybrid_coeff(ks.xc, spin=mol.spin)
     if abs(hyb) < 1e-10:
@@ -94,17 +96,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     else:
         ecoul = None
 
-    vxc = _attach_xc(vxc, ecoul, exc, vj, vk)
-
-    if (small_rho_cutoff > 1e-20 and ground_state and
-        abs(n-mol.nelectron) < 0.01*n):
-        # Filter grids the first time setup grids
-        idx = ks._numint.large_rho_indices(mol, dm, ks.grids, small_rho_cutoff)
-        logger.debug(ks, 'Drop grids %d',
-                     ks.grids.weights.size - numpy.count_nonzero(idx))
-        ks.grids.coords  = numpy.asarray(ks.grids.coords [idx], order='C')
-        ks.grids.weights = numpy.asarray(ks.grids.weights[idx], order='C')
-        ks.grids.non0tab = ks.grids.make_mask(mol, ks.grids.coords)
+    vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=vj, vk=vk)
     return vxc
 
 
@@ -130,6 +122,18 @@ def energy_elec(ks, dm, h1e=None, vhf=None):
     tot_e = e1 + vhf.ecoul + vhf.exc
     logger.debug(ks, 'Ecoul = %s  Exc = %s', vhf.ecoul, vhf.exc)
     return tot_e, vhf.ecoul+vhf.exc
+
+
+NELEC_ERROR_TOL = 0.01
+def prune_small_rho_grids_(ks, mol, dm, grids):
+    n, idx = ks._numint.large_rho_indices(mol, dm, grids, ks.small_rho_cutoff)
+    if abs(n-mol.nelectron) < NELEC_ERROR_TOL*n:
+        logger.debug(ks, 'Drop grids %d',
+                     grids.weights.size - numpy.count_nonzero(idx))
+        grids.coords  = numpy.asarray(grids.coords [idx], order='C')
+        grids.weights = numpy.asarray(grids.weights[idx], order='C')
+        grids.non0tab = grids.make_mask(mol, grids.coords)
+    return grids
 
 
 class RKS(hf.RHF):
@@ -213,16 +217,6 @@ def _dft_common_init_(mf):
 # don't modify the following attributes, they are not input options
     mf._numint = numint._NumInt()
     mf._keys = mf._keys.union(['xc', 'grids', 'small_rho_cutoff'])
-
-class VxcArray(numpy.ndarray):
-    pass
-def _attach_xc(a, ecoul=None, exc=None, vj=None, vk=None):
-    a = numpy.asarray(a).view(VxcArray)
-    a.ecoul = ecoul
-    a.exc = exc
-    a.vj = vj
-    a.vk = vk
-    return a
 
 
 if __name__ == '__main__':

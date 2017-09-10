@@ -86,6 +86,12 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
 
 def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
                    with_symmetry=True):
+    if not hasattr(fock_ao, 'focka'):
+        if h1e is None: h1e = mf.get_hcore()
+        dm0 = mf.make_rdm1(mo_coeff, mo_occ)
+        fock_ao = h1e + mf.get_veff(mol, dm0)
+    else:
+        fock_ao = fock_ao.focka, fock_ao.fockb
     mo_occa = occidxa = mo_occ > 0
     mo_occb = occidxb = mo_occ ==2
     ug, uh_op, uh_diag = gen_g_hop_uhf(mf, (mo_coeff,)*2, (mo_occa,mo_occb),
@@ -249,7 +255,6 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
-    nao = mo_coeff.shape[0]
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
@@ -425,7 +430,7 @@ def project_mol(mol, projectbasis={}):
     elif isinstance(projectbasis, str):
         for k in newbasis:
             newbasis[k] = projectbasis
-    return df.make_auxmol(mol, newbasis)
+    return df.addons.make_auxmol(mol, newbasis)
 
 
 # TODO: check whether high order terms in (g_orb, h_op) affects optimization
@@ -469,7 +474,6 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
         # increase the AH accuracy when approach convergence
         #ah_start_cycle = max(mf.ah_start_cycle, int(-numpy.log10(norm_gorb)))
         ah_start_cycle = mf.ah_start_cycle
-        g_orb0 = g_orb
         imic = 0
         dr = 0
         ukf = None
@@ -608,7 +612,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
     dm = mf.make_rdm1(mo_coeff, mo_occ)
 # call mf._scf.get_veff, to avoid density_fit module polluting get_veff function
     vhf = mf._scf.get_veff(mol, dm)
-    fock = mf.get_fock(h1e, s1e, vhf, dm, 0, None)
+    fock = mf.get_fock(h1e, s1e, vhf, dm)
     log.info('Initial guess |g|= %g',
              numpy.linalg.norm(mf._scf.get_grad(mo_coeff, mo_occ, fock)))
 # NOTE: DO NOT change the initial guess mo_occ, mo_coeff
@@ -631,7 +635,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         mo_coeff = mf.rotate_mo(mo_coeff, u, log)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         vhf = mf._scf.get_veff(mol, dm, dm_last=dm_last, vhf_last=vhf)
-        fock = mf.get_fock(h1e, s1e, vhf, dm, imacro, None)
+        fock = mf.get_fock(h1e, s1e, vhf, dm)
 # NOTE: DO NOT change the initial guess mo_occ, mo_coeff
         if mf.verbose >= logger.DEBUG:
             mo_energy, mo_tmp = mf.eig(fock, s1e)
@@ -669,6 +673,8 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
     if mf.canonicalization:
         log.info('Canonicalize SCF orbitals')
         mo_coeff = mo_coeff1
+        if dump_chk:
+            mf.dump_chk(locals())
     log.info('macro X = %d  E=%.15g  |g|= %g  total %d KF %d JK',
              imacro+1, e_tot, norm_gorb, kftot, jktot)
     if (numpy.any(mo_occ==0) and
@@ -771,11 +777,6 @@ def newton_SCF_class(mf):
                      self.max_memory, lib.current_memory()[0])
             return self
 
-        def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, diis=None,
-                     diis_start_cycle=None, level_shift_factor=None,
-                     damp_factor=None):
-            return h1e + vhf
-
         def build(self, mol=None):
             if mol is None: mol = self.mol
             if self.verbose >= logger.WARN:
@@ -832,7 +833,7 @@ def newton_SCF_class(mf):
             h1e = self._scf.get_hcore(mol)
             s1e = self._scf.get_ovlp(mol)
             vhf = self._scf.get_veff(mol, dm)
-            fock = self._scf.get_fock(h1e, s1e, vhf, dm, 0, None)
+            fock = self._scf.get_fock(h1e, s1e, vhf, dm)
             mo_energy, mo_coeff = self._scf.eig(fock, s1e)
             mo_occ = self._scf.get_occ(mo_energy, mo_coeff)
             return mo_coeff, mo_occ
@@ -847,7 +848,7 @@ def newton_SCF_class(mf):
             mo = numpy.dot(mo_coeff, u)
             if self._scf.mol.symmetry:
                 orbsym = hf_symm.get_orbsym(self._scf.mol, mo_coeff)
-                mo = hf_symm.attach_orbsym(mo, orbsym)
+                mo = lib.tag_array(mo, orbsym=orbsym)
             return mo
     return CIAH_SCF
 
@@ -890,23 +891,6 @@ def newton(mf):
         class ROHF(RHF):
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 return gen_g_hop_rohf(self, mo_coeff, mo_occ, fock_ao, h1e)
-
-            def get_fock(self, h1e, s1e, vhf, dm, cycle=-1, diis=None,
-                         diis_start_cycle=None, level_shift_factor=None,
-                         damp_factor=None):
-                fock = h1e + vhf
-                self._focka_ao = self._scf._focka_ao = fock[0]  # needed by ._scf.eig
-                self._fockb_ao = self._scf._fockb_ao = fock[1]  # needed by ._scf.eig
-                self._dm_ao = dm  # needed by .eig
-                return fock
-
-            def eig(self, fock, s1e):
-                f = (self._focka_ao, self._fockb_ao)
-                f = rohf.get_roothaan_fock(f, self._dm_ao, s1e)
-                return self._scf.eig(f, s1e)
-                #fc = numpy.dot(fock[0], mo_coeff)
-                #mo_energy = numpy.einsum('pk,pk->k', mo_coeff, fc)
-                #return mo_energy
         return ROHF()
 
     elif isinstance(mf, uhf.UHF):
@@ -938,7 +922,7 @@ def newton(mf):
                                     numpy.dot(mo_coeff[1], u[1])))
                 if self._scf.mol.symmetry:
                     orbsym = uhf_symm.get_orbsym(self._scf.mol, mo_coeff)
-                    mo = hf_symm.attach_orbsym(mo, orbsym)
+                    mo = lib.tag_array(mo, orbsym=orbsym)
                 return mo
 
             def spin_square(self, mo_coeff=None, s=None):
@@ -959,7 +943,7 @@ def newton(mf):
                 mo = numpy.dot(mo_coeff, u)
                 if self._scf.mol.symmetry:
                     orbsym = scf.ghf_symm.get_orbsym(self._scf.mol, mo_coeff)
-                    mo = hf_symm.attach_orbsym(mo, orbsym)
+                    mo = lib.tag_array(mo, orbsym=orbsym)
                 return mo
         return GHF()
 

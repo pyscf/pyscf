@@ -14,12 +14,11 @@ See Also:
 import time
 import numpy as np
 from pyscf import lib
-from pyscf.pbc.scf import kuhf
 from pyscf.lib import logger
+from pyscf.pbc.scf import kuhf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.pbc.dft import rks
-from pyscf.dft.rks import _attach_xc
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
              kpts=None, kpts_band=None):
@@ -30,12 +29,16 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if dm is None: dm = ks.make_rdm1()
     if kpts is None: kpts = ks.kpts
     t0 = (time.clock(), time.time())
+
+    # ndim = 4 : dm.shape = ([alpha,beta], nkpts, nao, nao)
+    ground_state = (dm.ndim == 4 and dm.shape[0] == 2 and kpts_band is None)
+
     if ks.grids.coords is None:
         ks.grids.build(with_non0tab=True)
-        small_rho_cutoff = ks.small_rho_cutoff
+        if ks.small_rho_cutoff > 1e-20 and ground_state:
+            ks.grids = rks.prune_small_rho_grids_(ks, cell, dm[0]+dm[1],
+                                                  ks.grids, kpts)
         t0 = logger.timer(ks, 'setting up grids', *t0)
-    else:
-        small_rho_cutoff = 0
 
     if hermi == 2:  # because rho = 0
         n, exc, vxc = (0,0), 0, 0
@@ -45,8 +48,6 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    # ndim = 4 : dm.shape = ([alpha,beta], nkpts, nao, nao)
-    ground_state = (dm.ndim == 4 and dm.shape[0] == 2 and kpts_band is None)
     weight = 1./len(kpts)
 
     hyb = ks._numint.hybrid_coeff(ks.xc, spin=cell.spin)
@@ -66,19 +67,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     else:
         ecoul = None
 
-    vxc = _attach_xc(vxc, ecoul, exc, vj=None, vk=None)
-
-    nelec = cell.nelec
-    if (small_rho_cutoff > 1e-20 and ground_state and
-        abs(n[0]-nelec[0]) < 0.01*n[0] and abs(n[1]-nelec[1]) < 0.01*n[1]):
-        # Filter grids the first time setup grids
-        idx = ks._numint.large_rho_indices(cell, dm, ks.grids,
-                                           small_rho_cutoff, kpts)
-        logger.debug(ks, 'Drop grids %d',
-                     ks.grids.weights.size - np.count_nonzero(idx))
-        ks.grids.coords  = np.asarray(ks.grids.coords [idx], order='C')
-        ks.grids.weights = np.asarray(ks.grids.weights[idx], order='C')
-        ks.grids.non0tab = ks.grids.make_mask(cell, ks.grids.coords)
+    vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
     return vxc
 
 
@@ -107,7 +96,7 @@ class KUKS(kuhf.KUHF):
         if h1e_kpts is None: h1e_kpts = self.get_hcore(self.cell, self.kpts)
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         if vhf is None or getattr(vhf, 'ecoul', None) is None:
-            vhf = self.get_veff(ks, ks.cell, dm_kpts)
+            vhf = self.get_veff(self, self.cell, dm_kpts)
 
         weight = 1./len(h1e_kpts)
         e1 = weight *(np.einsum('kij,kji', h1e_kpts, dm_kpts[0]) +
@@ -118,3 +107,21 @@ class KUKS(kuhf.KUHF):
 
     density_fit = rks._patch_df_beckegrids(kuhf.KUHF.density_fit)
     mix_density_fit = rks._patch_df_beckegrids(kuhf.KUHF.mix_density_fit)
+
+
+if __name__ == '__main__':
+    from pyscf.pbc import gto
+    cell = gto.Cell()
+    cell.unit = 'A'
+    cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
+    cell.a = '''0.      1.7834  1.7834
+                1.7834  0.      1.7834
+                1.7834  1.7834  0.    '''
+
+    cell.basis = 'gth-szv'
+    cell.pseudo = 'gth-pade'
+    cell.verbose = 7
+    cell.output = '/dev/null'
+    cell.build()
+    mf = KUKS(cell, cell.make_kpts([2,1,1]))
+    print mf.kernel()

@@ -8,12 +8,11 @@ import os, sys
 import platform
 import gc
 import time
-import math
 import json
+import ctypes
 import numpy
 import scipy.special
 import scipy.linalg
-import ctypes
 from pyscf import lib
 from pyscf.lib import param
 from pyscf.lib import logger
@@ -990,7 +989,7 @@ def time_reversal_map(mol):
     tao = []
     i = 0
     for b in mol._bas:
-        l = b[ANG_OF];
+        l = b[ANG_OF]
         if b[KAPPA_OF] == 0:
             djs = (l * 2, l * 2 + 2)
         elif b[KAPPA_OF] > 0:
@@ -1468,7 +1467,9 @@ class Mole(lib.StreamObject):
         basis : dict or str
             To define basis set.
         nucmod : dict or str
-            Nuclear model
+            Nuclear model.  Set it to 0, None or False for point nuclear model.
+            Any other values will enable Gaussian nuclear model.  Default is
+            point nuclear model.
         cart : boolean
             Using Cartesian GTO basis and integrals (6d,10f,15g)
 

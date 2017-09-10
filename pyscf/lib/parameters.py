@@ -29,7 +29,7 @@ LIGHT_SPEED_SI = 299792458      # https://physics.nist.gov/cgi-bin/cuu/Value?c
 OUTPUT_DIGITS = int(os.environ.get('PYSCF_OUTPUT_DIGITS', 5))
 OUTPUT_COLS   = int(os.environ.get('PYSCF_OUTPUT_COLS', 5))
 
-ANGULAR = 'spdfghij'
+ANGULAR = 'spdfghik'
 ANGULARMAP = {'s': 0,
               'p': 1,
               'd': 2,
@@ -37,7 +37,7 @@ ANGULARMAP = {'s': 0,
               'g': 4,
               'h': 5,
               'i': 6,
-              'j': 7}
+              'k': 7}
 
 REAL_SPHERIC = (
     ('',), \
