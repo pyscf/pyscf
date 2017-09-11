@@ -10,7 +10,6 @@ from pyscf.pbc import tools as pbctools
 import pyscf.pbc.tools.pyscf_ase as pyscf_ase
 from pyscf.pbc.tools.pbc import super_cell
 from mpi4py import MPI
-A2B = 1.889725989
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -21,8 +20,9 @@ from pyscf.pbc.examples.scf import run_hf, run_khf
 from pyscf.pbc.examples.cc import run_rccsd
 from pyscf.pbc.mpicc import KRCCSD
 
-a = 3.5668
 from ase.lattice import bulk
+a = 3.5668
+A2B = 1.889725989
 ase_atom = bulk('C', 'diamond', a=a*A2B)
 basis = 'gth-szv'
 nmp = [1,1,3]

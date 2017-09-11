@@ -813,11 +813,11 @@ class RCCSD(ccsd.CCSD):
             lijabc = lijabc + lijabc.transpose(1,0,3,2,4)
 
             rijabc = -einsum('bcef,ijae,f->ijabc',vvvv,t2,r1)
-            rijabc = einsum('mcje,imab,e->ijabc',ovov,t2,r1)
-            rijabc = einsum('bmje,imac,e->ijabc',voov,t2,r1)
-            rijabc = einsum('amij,mbc->ijabc',vooo,r2)
-            rijabc = -einsum('bcje,iae->ijabc',vvov,r2)
-            rijabc = -einsum('abie,jec->ijabc',vvov,r2)
+            rijabc += einsum('mcje,imab,e->ijabc',ovov,t2,r1)
+            rijabc += einsum('bmje,imac,e->ijabc',voov,t2,r1)
+            rijabc += einsum('amij,mbc->ijabc',vooo,r2)
+            rijabc += -einsum('bcje,iae->ijabc',vvov,r2)
+            rijabc += -einsum('abie,jec->ijabc',vvov,r2)
             rijabc = rijabc + rijabc.transpose(1,0,3,2,4)
 
             lijabc =  4.*lijabc \
@@ -2048,6 +2048,9 @@ def _mem_usage(nocc, nvir):
     outcore = basic = incore
     return incore*8/1e9, outcore*8/1e9, basic*8/1e9
 
+def _cp(a):
+    return numpy.array(a, copy=False, order='C')
+
 
 if __name__ == '__main__':
     from pyscf import scf
@@ -2077,11 +2080,13 @@ if __name__ == '__main__':
     print(e[2] - 0.6782876002229172)
 
     print "IP energies... (left eigenvector)"
-    e,v = mycc.ipccsd(nroots=3,left=True,partition=part)
+    e,lv = mycc.ipccsd(nroots=3,left=True,partition=part)
     print e
     print(e[0] - 0.4335604332073799)
     print(e[1] - 0.5187659896045407)
     print(e[2] - 0.6782876002229172)
+
+    mycc.ipccsd_star(e,v,lv)
 
     print "EA energies... (right eigenvector)"
     e,v = mycc.eaccsd(nroots=3,partition=part)
@@ -2091,9 +2096,10 @@ if __name__ == '__main__':
     print(e[2] - 0.51006797826488071)
 
     print "EA energies... (left eigenvector)"
-    e,v = mycc.eaccsd(nroots=3,left=True,partition=part)
+    e,lv = mycc.eaccsd(nroots=3,left=True,partition=part)
     print e
     print(e[0] - 0.16737886338859731)
     print(e[1] - 0.24027613852009164)
     print(e[2] - 0.51006797826488071)
 
+    mycc.eaccsd_star(e,v,lv)
