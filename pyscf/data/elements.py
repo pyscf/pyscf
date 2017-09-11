@@ -715,7 +715,7 @@ COVALENT_RADII = 1/BOHR * numpy.array((0,  # Ghost atom
 # 
 # 5. Manjeera Mantina, Adam C. Chamberlin, Rosendo Valero,
 #    Christopher J. Cramer, Donald G. Truhlar Consistent van der Waals Radii
-#    for the Whole Main Group. In J. Phys. Chem. A. 2009, 113, 5806–5812,
+#    for the Whole Main Group. In J. Phys. Chem. A. 2009, 113, 5806-5812,
 #    doi:10.1021/jp8111556
 unknown = 2.0
 VDW_RADII = 1/BOHR * numpy.array((0,  # Ghost atom
