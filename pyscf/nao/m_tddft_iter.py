@@ -5,7 +5,7 @@ from scipy.linalg import blas
 from timeit import default_timer as timer
 from pyscf.nao.m_blas_wrapper import spmv_wrapper
 from pyscf.nao.m_tddft_iter_gpu import tddft_iter_gpu_c
-from pyscf.nao.m_sparse_blas import csrgemv
+from pyscf.nao.m_sparse_blas import csrgemv # not working!
 
 try:
     import numba
