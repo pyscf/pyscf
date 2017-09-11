@@ -226,6 +226,12 @@ class SCF(hf.SCF):
         with_df : density fitting object
             Default is the FFT based DF model. For all-electron calculation,
             MDF model is favored for better accuracy.  See also :mod:`pyscf.pbc.df`.
+
+        direct_scf : bool
+            When this flag is set to true, the J/K matrices will be computed
+            directly through the underlying with_df methods.  Otherwise,
+            depending the available memory, the 4-index integrals may be cached
+            and J/K matrices are computed based on the 4-index integrals.
     '''
     def __init__(self, cell, kpt=np.zeros(3), exxdiv='ewald'):
         if not cell._built:
@@ -299,9 +305,10 @@ class SCF(hf.SCF):
 
         cpu0 = (time.clock(), time.time())
 
-        if (kpt_band is None and  # 4 indices of ._eri should have same kpt
+        if (kpt_band is None and
             (self.exxdiv == 'ewald' or not self.exxdiv) and
-            (self._eri is not None or cell.incore_anyway or self._is_mem_enough())):
+            (self._eri is not None or cell.incore_anyway or
+             (not self.direct_scf and self._is_mem_enough()))):
             if self._eri is None:
                 logger.debug(self, 'Building PBC AO integrals incore')
                 self._eri = self.with_df.get_ao_eri(kpt, compact=True)
@@ -333,7 +340,8 @@ class SCF(hf.SCF):
         nao = dm.shape[-1]
 
         if (kpt_band is None and
-            (self._eri is not None or cell.incore_anyway or self._is_mem_enough())):
+            (self._eri is not None or cell.incore_anyway or
+             (not self.direct_scf and self._is_mem_enough()))):
             if self._eri is None:
                 logger.debug(self, 'Building PBC AO integrals incore')
                 self._eri = self.with_df.get_ao_eri(kpt, compact=True)

@@ -96,10 +96,9 @@ add_subdirectory(shciscf)
 add_subdirectory(ri)
 add_subdirectory(localizer)
 add_subdirectory(hci)
-
 add_subdirectory(pbc)
-
 add_subdirectory(extras/mbd)
+
 
 option(ENABLE_LIBXC "Using libxc for XC functional library" ON)
 option(ENABLE_XCFUN "Using xcfun for XC functional library" ON)
@@ -136,3 +135,9 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xcfun.h" AND
 endif() # ENABLE_XCFUN
 add_subdirectory(dft)
 endif() # DISABLE_DFT
+
+option(ENABLE_NAO "Build numerical atomic orbital module" OFF)
+if(ENABLE_NAO)
+enable_language(Fortran)
+add_subdirectory(nao)
+endif(ENABLE_NAO)

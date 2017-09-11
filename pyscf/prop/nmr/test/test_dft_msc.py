@@ -5,6 +5,8 @@ import numpy
 from pyscf import gto
 from pyscf import dft
 from pyscf.prop import nmr
+from pyscf.data import nist
+nist.ALPHA = 1./137.03599967994
 
 mol = gto.Mole()
 mol.verbose = 5

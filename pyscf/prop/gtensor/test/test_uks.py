@@ -5,6 +5,8 @@ import numpy
 import copy
 from pyscf import gto, lib, scf, dft
 from pyscf.prop import gtensor
+from pyscf.data import nist
+nist.ALPHA = 1./137.03599967994
 
 mol = gto.Mole()
 mol.verbose = 7
