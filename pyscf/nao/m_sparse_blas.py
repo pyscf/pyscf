@@ -7,7 +7,7 @@ try:
   libspblas = misc.load_library("libsparse_blas")
   use_sparse_blas = True
 except:
-  raise UserWarning("Using scipy version")
+  #raise UserWarning("Using scipy version")
   libspblas = None
   use_sparse_blas = False 
  
