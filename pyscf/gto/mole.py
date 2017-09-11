@@ -78,20 +78,24 @@ def gto_norm(l, expnt):
     else:
         raise ValueError('l should be > 0')
 
-def cart2sph(l):
+def cart2sph(l, c_tensor=None):
     '''Cartesian to real spherical transformation matrix'''
     nf = (l+1)*(l+2)//2
-    cmat = numpy.eye(nf)
+    if c_tensor is None:
+        c_tensor = numpy.eye(nf)
+    else:
+        c_tensor = numpy.asarray(c_tensor, order='F').reshape(-1,nf)
     if l == 0:
-        return cmat * 0.282094791773878143
+        return c_tensor * 0.282094791773878143
     elif l == 1:
-        return cmat * 0.488602511902919921
+        return c_tensor * 0.488602511902919921
     else:
         nd = l * 2 + 1
-        c2sph = numpy.zeros((nf,nd), order='F')
+        ngrid = c_tensor.shape[0]
+        c2sph = numpy.zeros((ngrid,nd), order='F')
         fn = moleintor.libcgto.CINTc2s_ket_sph
-        fn(c2sph.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nf),
-           cmat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l))
+        fn(c2sph.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(ngrid),
+           c_tensor.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l))
         return c2sph
 
 def cart2j_kappa(kappa, l=None, normalized=None):
