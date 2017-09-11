@@ -5,6 +5,7 @@ from scipy.linalg import blas
 from timeit import default_timer as timer
 from pyscf.nao.m_blas_wrapper import spmv_wrapper
 from pyscf.nao.m_tddft_iter_gpu import tddft_iter_gpu_c
+from pyscf.nao.m_sparse_blas import csrgemv
 
 try:
     import numba
@@ -44,8 +45,11 @@ class tddft_iter_c():
     self.tddft_iter_tol = tddft_iter_tol
     self.eps = tddft_iter_broadening
     self.sv, self.pb, self.norbs, self.nspin = sv, pb, sv.norbs, sv.nspin
+
+
     self.v_dab = pb.get_dp_vertex_coo(dtype=self.dtype).tocsr()
     self.cc_da = pb.get_da2cc_coo(dtype=self.dtype).tocsr()
+    
     self.moms0,self.moms1 = pb.comp_moments(dtype=self.dtype)
     self.nprod = self.moms0.size
     self.kernel, self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype)
@@ -74,38 +78,45 @@ class tddft_iter_c():
     """ This applies the non-interacting response function to a vector (a set of vectors?) """
     assert len(v)==len(self.moms0), "%r, %r "%(len(v), len(self.moms0))
     self.rf0_ncalls+=1
-    # np.require may perform a copy of v, is it really necessary??
-    vdp = self.cc_da * np.require(v, dtype=np.complex64)
     no = self.norbs
-    sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
 
-    if self.tddft_iter_gpu.GPU:
-        vdp = self.tddft_iter_gpu.apply_rf0_gpu(self.xocc, sab, comega)
+    vext = np.require(v, dtype=np.complex64)
+    vdp = csrgemv(self.cc_da, vext) # np.require(v, dtype=np.complex64)
+    
+    #sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
+    sab = (np.transpose(vdp)*self.v_dab).reshape([no,no])
+
+    #nb2v = self.xocc*sab
+    nb2v = blas.cgemm(1.0, self.xocc, sab)
+    
+    #print("error: ", np.sum(abs(vdp-ref)))
+
+    #if self.tddft_iter_gpu.GPU:
+    #    vdp = self.tddft_iter_gpu.apply_rf0_gpu(self.xocc, sab, comega)
+    #else:
+    #
+    # WARNING!!!!
+    # nb2v is column major, while self.xvrt is row major
+    #       What a mess!!
+    nm2v = blas.cgemm(1.0, nb2v, np.transpose(self.xvrt))
+    
+    if use_numba:
+        div_eigenenergy_numba(self.ksn2e, self.ksn2f, self.nfermi,
+                self.vstart, comega, nm2v, self.ksn2e.shape[2])
     else:
-        #
-        # WARNING!!!!
-        # nb2v is column major, while self.xvrt is row major
-        #       What a mess!!
-        nb2v = self.xocc*sab
-        nm2v = blas.cgemm(1.0, nb2v, np.transpose(self.xvrt))
-        
-        if use_numba:
-            div_eigenenergy_numba(self.ksn2e, self.ksn2f, self.nfermi,
-                    self.vstart, comega, nm2v, self.ksn2e.shape[2])
-        else:
-            for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
-              for j,[em,fm] in enumerate(zip(self.ksn2e[0,0,n+1:],self.ksn2f[0,0,n+1:])):
-                m = j+n+1-self.vstart
-                nm2v[n,m] = nm2v[n,m] * (fn-fm) *\
-                  ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
+        for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
+          for j,[em,fm] in enumerate(zip(self.ksn2e[0,0,n+1:],self.ksn2f[0,0,n+1:])):
+            m = j+n+1-self.vstart
+            nm2v[n,m] = nm2v[n,m] * (fn-fm) *\
+              ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
 
-        nb2v = blas.cgemm(1.0, nm2v, self.xvrt)
+    nb2v = blas.cgemm(1.0, nm2v, self.xvrt)
+    ab2v = blas.cgemm(1.0, np.transpose(self.xocc), nb2v).reshape(no*no)
+    
+    vdp = self.v_dab*ab2v
 
-        ab2v = blas.cgemm(1.0, np.transpose(self.xocc), nb2v).reshape(no*no)
+    return vdp*self.cc_da
 
-        vdp = self.v_dab*ab2v
-
-    return vdp*self.cc_da 
 
   def comp_veff(self, vext, comega=1j*0.0):
     from scipy.sparse.linalg import gmres, lgmres as gmres_alias, LinearOperator
