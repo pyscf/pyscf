@@ -28,7 +28,7 @@ def run(b, dm, mo, ci=None):
     mol.symmetry = 1
     mol.build()
     mf = scf.RHF(mol)
-    mf.level_shift_factor = .4
+    mf.level_shift = .4
     mf.max_cycle = 100
     mf.conv_tol = 1e-9
     ehf.append(mf.scf(dm))
@@ -44,7 +44,7 @@ def run(b, dm, mo, ci=None):
         mo = mcscf.sort_mo_by_irrep(mc, mf.mo_coeff, ncas, ncore)
     else:
         mo = mcscf.project_init_guess(mc, mo)
-    emc.append(mc.kernel(mo)[0])
+    emc.append(mc.kernel(mo, ci)[0])
     mc.analyze()
     return mf.make_rdm1(), mc.mo_coeff, mc.ci
 

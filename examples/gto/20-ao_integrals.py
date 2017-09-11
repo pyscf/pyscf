@@ -68,10 +68,8 @@ eri = mol.intor('cint2e_ip1_sph', aosym='s2kl')
 # 2e integral gradients on certain atom
 #
 atm_id = 1  # second atom
-tot_bra = 0
-for i in mol.spheric_labels():
-    if i[0] == atm_id:
-        tot_bra += 1
+bas_start, bas_end, ao_start, ao_end = mol.aoslice_by_atom()[atm_id]
+tot_bra = ao_end - ao_start
 nao = mol.nao_nr()
 eri1 = numpy.empty((3,tot_bra,nao,nao,nao))
 pi = 0

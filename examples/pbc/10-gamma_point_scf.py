@@ -27,7 +27,6 @@ cell.atom = '''C     0.      0.      0.
               C     0.8917  2.6751  2.6751'''
 cell.basis = 'gth-szv'
 cell.pseudo = 'gth-pade'
-cell.gs = [10]*3  # 10 grids on postive x direction, => 21^3 grids in total
 cell.verbose = 4
 cell.build()
 
@@ -47,3 +46,11 @@ mf = dft.RKS(cell)
 mf.grids = dft.gen_grid.BeckeGrids(cell)
 mf.xc = 'bp86'
 mf.kernel()
+
+#
+# Second order SCF solver can be used in the PBC SCF code the same way in the
+# molecular calculation
+#
+mf = scf.newton(scf.RHF(cell))
+mf.kernel()
+

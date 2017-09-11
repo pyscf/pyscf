@@ -22,7 +22,6 @@ cell = gto.M(
               C     0.8917  2.6751  2.6751''',
     basis = 'gth-szv',
     pseudo = 'gth-pade',
-    gs = [10]*3,
     verbose = 4,
 )
 
@@ -37,4 +36,12 @@ kmf = dft.KRKS(cell, kpts)
 kmf.grids = dft.gen_grid.BeckeGrids(cell)
 kmf.xc = 'm06'
 kmf.kernel()
+
+
+#
+# Second order SCF solver can be used in the PBC SCF code the same way in the
+# molecular calculation
+#
+mf = scf.newton(scf.KRHF(cell, kpts))
+mf.kernel()
 

@@ -21,7 +21,6 @@ cell.atom=pyscf_ase.ase_atoms_to_pyscf(ase_atom)
 cell.a=ase_atom.cell
 cell.basis = 'gth-szv'
 cell.pseudo = 'gth-pade'
-cell.gs=np.array([10,10,10])
 cell.build()
 
 mf=pbcdft.RKS(cell)

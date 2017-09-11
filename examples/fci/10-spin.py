@@ -27,17 +27,17 @@ norb = m.mo_energy.size
 fs = fci.FCI(mol, m.mo_coeff)
 e, c = fs.kernel()
 print('E = %.12f  2S+1 = %.7f' %
-      (e, fci.spin_op.spin_square0(c, norb, (6,4))[1]))
+      (e, fs.spin_square(c, norb, (6,4))[1]))
 
 e, c = fs.kernel(nelec=(5,5))
 print('E = %.12f  2S+1 = %.7f' %
-      (e, fci.spin_op.spin_square0(c, norb, (5,5))[1]))
+      (e, fs.spin_square(c, norb, (5,5))[1]))
 
 
 fs = fci.addons.fix_spin_(fci.FCI(mol, m.mo_coeff), shift=.5)
 e, c = fs.kernel()
 print('E = %.12f  2S+1 = %.7f' %
-      (e, fci.spin_op.spin_square0(c, norb, (6,4))[1]))
+      (e, fs.spin_square(c, norb, (6,4))[1]))
 
 
 #

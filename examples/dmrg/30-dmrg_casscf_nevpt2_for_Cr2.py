@@ -55,5 +55,4 @@ mrpt.NEVPT(mc).kernel()
 #
 # The compressed-MPS-perturber DMRG-NEVPT2 is more efficient.
 #
-from pyscf.dmrgscf import compress_approx
 mrpt.NEVPT(mc).compress_approx()

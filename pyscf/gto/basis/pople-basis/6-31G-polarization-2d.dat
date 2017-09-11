@@ -1,0 +1,92 @@
+#  6-31G(2df,p)  EMSL  Basis Set Exchange Library  6/9/17 6:23 PM
+# Elements                             References
+# --------                             ----------
+# H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar: Larry A. Curtiss, Krishnan Raghavachari, Paul C. Redfern, Vitaly Rassolov, and John A. Pople, Gaussian-3 (G3) theory for molecules containing first and second-row atoms, The Journal of Chemical Physics 109, 7764 (1998).
+# 
+
+
+
+BASIS "ao basis" PRINT
+#BASIS SET: (10s,4p,2d,1f) -> [3s,2p,2d,1f]
+Li    D
+      0.4000000              1.0000000        
+Li    D
+      0.1000000              1.0000000        
+#BASIS SET: (10s,4p,2d,1f) -> [3s,2p,2d,1f]
+Be    D
+      0.5100000              1.0000000        
+Be    D
+      0.1275000              1.0000000        
+#BASIS SET: (10s,4p,2d,1f) -> [3s,2p,2d,1f]
+B    D
+      0.8020000              1.0000000        
+B    D
+      0.2005000              1.0000000        
+#BASIS SET: (10s,4p,2d,1f) -> [3s,2p,2d,1f]
+C    D
+      1.2520000              1.0000000        
+C    D
+      0.3130000              1.0000000        
+#BASIS SET: (10s,4p,2d,1f) -> [3s,2p,2d,1f]
+N    D
+      1.8260000              1.0000000        
+N    D
+      0.4565000              1.0000000        
+#BASIS SET: (10s,4p,2d,1f) -> [3s,2p,2d,1f]
+O    D
+      2.5840000              1.0000000        
+O    D
+      0.6460000              1.0000000        
+#BASIS SET: (10s,4p,2d,1f) -> [3s,2p,2d,1f]
+F    D
+      3.5000000              1.0000000        
+F    D
+      0.8750000              1.0000000        
+#BASIS SET: (10s,4p,2d,1f) -> [3s,2p,2d,1f]
+Ne    D
+      4.6080000              1.0000000        
+Ne    D
+      1.1520000              1.0000000        
+#BASIS SET: (16s,10p,2d,1f) -> [4s,3p,2d,1f]
+Na    D
+      0.3500000              1.0000000        
+Na    D
+      0.0875000              1.0000000        
+#BASIS SET: (16s,10p,2d,1f) -> [4s,3p,2d,1f]
+Mg    D
+      0.3500000              1.0000000        
+Mg    D
+      0.0875000              1.0000000        
+#BASIS SET: (16s,10p,2d,1f) -> [4s,3p,2d,1f]
+Al    D
+      0.6500000              1.0000000        
+Al    D
+      0.1625000              1.0000000        
+#BASIS SET: (16s,10p,2d,1f) -> [4s,3p,2d,1f]
+Si    D
+      0.9000000              1.0000000        
+Si    D
+      0.2250000              1.0000000        
+#BASIS SET: (16s,10p,2d,1f) -> [4s,3p,2d,1f]
+P    D
+      1.1000000              1.0000000        
+P    D
+      0.2750000              1.0000000        
+#BASIS SET: (16s,10p,2d,1f) -> [4s,3p,2d,1f]
+S    D
+      1.3000000              1.0000000        
+S    D
+      0.3250000              1.0000000        
+#BASIS SET: (16s,10p,2d,1f) -> [4s,3p,2d,1f]
+Cl    D
+      1.5000000              1.0000000        
+Cl    D
+      0.3750000              1.0000000        
+#BASIS SET: (16s,10p,2d,1f) -> [4s,3p,2d,1f]
+Ar    D
+      1.7000000              1.0000000        
+Ar    D
+      0.4250000              1.0000000        
+END
+
+

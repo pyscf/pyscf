@@ -60,7 +60,7 @@ dmrgsolver1.scratchDirectory = '/scratch/dmrg1'
 dmrgsolver2.scratchDirectory = '/scratch/dmrg2'
 
 mc = mcscf.CASSCF(m, 8, 8)
-mcscf.state_average_mix_(mc, [solver1, solver2], weights)
+mcscf.state_average_mix_(mc, [dmrgsolver1, dmrgsolver2], weights)
 mc.kernel()
 print(mc.e_tot)
 
@@ -86,6 +86,6 @@ dmrgsolver3.wfnsym = 'B1u'
 dmrgsolver3.scratchDirectory = '/scratch/dmrg3'
 
 mc = mcscf.CASSCF(m, 8, 8)
-mcscf.state_average_mix_(mc, [solver1, solver2, solver3], weights)
+mcscf.state_average_mix_(mc, [dmrgsolver1, dmrgsolver2, dmrgsolver3], weights)
 mc.kernel()
 print(mc.e_tot)

@@ -1,0 +1,60 @@
+#  6-31G(2df,p)  EMSL  Basis Set Exchange Library  6/9/17 6:23 PM
+# Elements                             References
+# --------                             ----------
+# H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar: Larry A. Curtiss, Krishnan Raghavachari, Paul C. Redfern, Vitaly Rassolov, and John A. Pople, Gaussian-3 (G3) theory for molecules containing first and second-row atoms, The Journal of Chemical Physics 109, 7764 (1998).
+# 
+
+
+
+BASIS "ao basis" PRINT
+#BASIS SET: (10s,4p,2d,1f) -> [3s,2p,2d,1f]
+Li    F
+      0.1500000              1.0000000        
+#BASIS SET: (10s,4p,2d,1f) -> [3s,2p,2d,1f]
+Be    F
+      0.2600000              1.0000000        
+#BASIS SET: (10s,4p,2d,1f) -> [3s,2p,2d,1f]
+B    F
+      0.5000000              1.0000000        
+#BASIS SET: (10s,4p,2d,1f) -> [3s,2p,2d,1f]
+C    F
+      0.8000000              1.0000000        
+#BASIS SET: (10s,4p,2d,1f) -> [3s,2p,2d,1f]
+N    F
+      1.0000000              1.0000000        
+#BASIS SET: (10s,4p,2d,1f) -> [3s,2p,2d,1f]
+O    F
+      1.4000000              1.0000000        
+#BASIS SET: (10s,4p,2d,1f) -> [3s,2p,2d,1f]
+F    F
+      1.8500000              1.0000000        
+#BASIS SET: (10s,4p,2d,1f) -> [3s,2p,2d,1f]
+Ne    F
+      2.5000000              1.0000000        
+#BASIS SET: (16s,10p,2d,1f) -> [4s,3p,2d,1f]
+Na    F
+      0.1500000              1.0000000        
+#BASIS SET: (16s,10p,2d,1f) -> [4s,3p,2d,1f]
+Mg    F
+      0.2000000              1.0000000        
+#BASIS SET: (16s,10p,2d,1f) -> [4s,3p,2d,1f]
+Al    F
+      0.2500000              1.0000000        
+#BASIS SET: (16s,10p,2d,1f) -> [4s,3p,2d,1f]
+Si    F
+      0.3200000              1.0000000        
+#BASIS SET: (16s,10p,2d,1f) -> [4s,3p,2d,1f]
+P    F
+      0.4500000              1.0000000        
+#BASIS SET: (16s,10p,2d,1f) -> [4s,3p,2d,1f]
+S    F
+      0.5500000              1.0000000        
+#BASIS SET: (16s,10p,2d,1f) -> [4s,3p,2d,1f]
+Cl    F
+      0.7000000              1.0000000        
+#BASIS SET: (16s,10p,2d,1f) -> [4s,3p,2d,1f]
+Ar    F
+      0.8500000              1.0000000        
+END
+
+

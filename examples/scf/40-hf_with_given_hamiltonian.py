@@ -26,12 +26,12 @@ Note you will see warning message on the screen:
 '''
 
 mol = gto.M()
-mol.nelectron = 6
+mol.nelectron = 10
 
 #
 # 1D anti-PBC Hubbard model at half filling
 #
-n = 12
+n = 10
 
 mf = scf.RHF(mol)
 h1 = numpy.zeros((n,n))
