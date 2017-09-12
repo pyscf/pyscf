@@ -2694,6 +2694,31 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
         return np.array(e)
 
+    def diis(self, t1, t2, istep, normt, de, adiis):
+        return self.diis_(t1, t2, istep, normt, de, adiis)
+    def diis_(self, t1, t2, istep, normt, de, adiis):
+        print t1.shape, t2.shape
+        if (istep > self.diis_start_cycle and
+            abs(de) < self.diis_start_energy_diff):
+            vec = self.amplitudes_to_vector(t1, t2)
+            t1, t2 = self.vector_to_amplitudes(adiis.update(vec))
+            logger.debug1(self, 'DIIS for step %d', istep)
+        return t1, t2
+
+    def amplitudes_to_vector(self, t1, t2):
+        return np.hstack((t1.ravel(), t2.ravel()))
+
+    def vector_to_amplitudes(self, vec, nmo=None, nocc=None):
+        if nocc is None: nocc = self.nocc()
+        if nmo is None: nmo = self.nmo()
+        nvir = nmo - nocc
+        nkpts = self.nkpts
+        nov = nkpts*nocc*nvir
+        print nmo, nkpts, nocc, nvir, vec.shape
+        t1 = vec[:nov].reshape(nkpts,nocc,nvir)
+        t2 = vec[nov:].reshape(nkpts*(nkpts+1)/2,nkpts,nocc,nocc,nvir,nvir)
+        return t1, t2
+
 
 #class _ERIS:
 #    #@profile
@@ -2847,22 +2872,23 @@ class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore',
                  ao2mofn=pyscf.ao2mo.outcore.general_iofree):
         cput0 = (time.clock(), time.time())
-        moidx = numpy.ones(cc.mo_occ.shape, dtype=numpy.bool)
+        moidx = numpy.ones(np.array(cc.mo_occ).shape, dtype=numpy.bool)
         nkpts = cc.nkpts
         nmo = cc.nmo()
+        mo_dtype = np.array(cc.mo_coeff).dtype
         #TODO check that this and kccsd work for frozen...
         if isinstance(cc.frozen, (int, numpy.integer)):
             moidx[:,:cc.frozen] = False
         elif len(cc.frozen) > 0:
             moidx[:,numpy.asarray(cc.frozen)] = False
         if mo_coeff is None:
-            self.mo_coeff = numpy.zeros((nkpts,nmo,nmo),dtype=cc.mo_coeff.dtype)
+            self.mo_coeff = numpy.zeros((nkpts,nmo,nmo),dtype=mo_dtype)
             for kp in range(nkpts):
                 self.mo_coeff[kp] = cc.mo_coeff[kp][:,moidx[kp]]
             mo_coeff = self.mo_coeff
-            self.fock = numpy.zeros((nkpts,nmo,nmo),dtype=cc.mo_coeff.dtype)
+            self.fock = numpy.zeros((nkpts,nmo,nmo),dtype=mo_dtype)
             for kp in range(nkpts):
-                self.fock[kp] = numpy.diag(cc.mo_energy[kp][moidx[kp]]).astype(mo_coeff.dtype)
+                self.fock[kp] = numpy.diag(cc.mo_energy[kp][moidx[kp]]).astype(mo_dtype)
         else:  # If mo_coeff is not canonical orbital
             self.mo_coeff = mo_coeff = mo_coeff[:,:,moidx]
             dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
