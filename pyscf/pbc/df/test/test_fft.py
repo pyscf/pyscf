@@ -291,16 +291,16 @@ def get_ao_eri(cell, kpt=np.zeros(3)):
 ##################################################
 from pyscf.pbc import scf as pbcscf
 
-def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
+def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpts_band=None):
     dm = np.asarray(dm)
     nao = dm.shape[-1]
 
     coords = gen_grid.gen_uniform_grids(cell)
-    if kpt_band is None:
+    if kpts_band is None:
         kpt1 = kpt2 = kpt
         aoR_k1 = aoR_k2 = numint.eval_ao(cell, coords, kpt)
     else:
-        kpt1 = kpt_band
+        kpt1 = kpts_band
         kpt2 = kpt
         aoR_k1 = numint.eval_ao(cell, coords, kpt1)
         aoR_k2 = numint.eval_ao(cell, coords, kpt2)
@@ -318,16 +318,16 @@ def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
     return vj.reshape(dm.shape)
 
 
-def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpt_band=None):
+def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpts_band=None):
     dm = np.asarray(dm)
     nao = dm.shape[-1]
 
     coords = gen_grid.gen_uniform_grids(cell)
-    if kpt_band is None:
+    if kpts_band is None:
         kpt1 = kpt2 = kpt
         aoR_k1 = aoR_k2 = numint.eval_ao(cell, coords, kpt)
     else:
-        kpt1 = kpt_band
+        kpt1 = kpts_band
         kpt2 = kpt
         aoR_k1 = numint.eval_ao(cell, coords, kpt1)
         aoR_k2 = numint.eval_ao(cell, coords, kpt2)
@@ -392,7 +392,7 @@ def get_vkR(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2):
     return vR.reshape(nao,nao,-1).transpose(2,0,1)
 
 
-def get_j_kpts(mf, cell, dm_kpts, kpts, kpt_band=None):
+def get_j_kpts(mf, cell, dm_kpts, kpts, kpts_band=None):
     coords = gen_grid.gen_uniform_grids(cell)
     nkpts = len(kpts)
     ngs = len(coords)
@@ -401,14 +401,14 @@ def get_j_kpts(mf, cell, dm_kpts, kpts, kpt_band=None):
 
     ni = numint._KNumInt(kpts)
     aoR_kpts = ni.eval_ao(cell, coords, kpts)
-    if kpt_band is not None:
-        aoR_kband = numint.eval_ao(cell, coords, kpt_band)
+    if kpts_band is not None:
+        aoR_kband = numint.eval_ao(cell, coords, kpts_band)
 
     dms = dm_kpts.reshape(-1,nkpts,nao,nao)
     nset = dms.shape[0]
 
     vjR = [get_vjR(cell, dms[i], aoR_kpts) for i in range(nset)]
-    if kpt_band is not None:
+    if kpts_band is not None:
         vj_kpts = [cell.vol/ngs * lib.dot(aoR_kband.T.conj()*vjR[i], aoR_kband)
                    for i in range(nset)]
         if dm_kpts.ndim == 3:  # One set of dm_kpts for KRHF
@@ -423,7 +423,7 @@ def get_j_kpts(mf, cell, dm_kpts, kpts, kpt_band=None):
         return lib.asarray(vj_kpts).reshape(dm_kpts.shape)
 
 
-def get_jk_kpts(mf, cell, dm_kpts, kpts, kpt_band=None):
+def get_jk_kpts(mf, cell, dm_kpts, kpts, kpts_band=None):
     coords = gen_grid.gen_uniform_grids(cell)
     nkpts = len(kpts)
     ngs = len(coords)
@@ -435,12 +435,12 @@ def get_jk_kpts(mf, cell, dm_kpts, kpts, kpt_band=None):
 
     ni = numint._KNumInt(kpts)
     aoR_kpts = ni.eval_ao(cell, coords, kpts)
-    if kpt_band is not None:
-        aoR_kband = numint.eval_ao(cell, coords, kpt_band)
+    if kpts_band is not None:
+        aoR_kband = numint.eval_ao(cell, coords, kpts_band)
 
 # J
     vjR = [get_vjR_kpts(cell, dms[i], aoR_kpts) for i in range(nset)]
-    if kpt_band is not None:
+    if kpts_band is not None:
         vj_kpts = [cell.vol/ngs * lib.dot(aoR_kband.T.conj()*vjR[i], aoR_kband)
                    for i in range(nset)]
     else:
@@ -455,11 +455,11 @@ def get_jk_kpts(mf, cell, dm_kpts, kpts, kpt_band=None):
 # K
     weight = 1./nkpts * (cell.vol/ngs)
     vk_kpts = np.zeros_like(vj_kpts)
-    if kpt_band is not None:
+    if kpts_band is not None:
         for k2, kpt2 in enumerate(kpts):
             aoR_dms = [lib.dot(aoR_kpts[k2], dms[i,k2]) for i in range(nset)]
             vkR_k1k2 = get_vkR(mf, cell, aoR_kband, aoR_kpts[k2],
-                               kpt_band, kpt2)
+                               kpts_band, kpt2)
             #:vk_kpts = 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq',
             #:            dm_kpts[k2], aoR_kband.conj(),
             #:            vkR_k1k2, aoR_kpts[k2])

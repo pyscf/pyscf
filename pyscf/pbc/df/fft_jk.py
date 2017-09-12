@@ -53,7 +53,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
         vG = coulG * rhoG
         vR[i] = tools.ifft(vG, gs).real
 
-    kpts_band, single_kpt_band = _format_kpts_band(kpts_band, kpts)
+    kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     nband = len(kpts_band)
     weight = cell.vol / ngs
     if gamma_point(kpts_band):
@@ -64,7 +64,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
         for i in range(nset):
             vj_kpts[i,k] = weight * lib.dot(aoR.T.conj()*vR[i], aoR)
 
-    return _format_jks(vj_kpts, dm_kpts, kpts_band, kpts, single_kpt_band)
+    return _format_jks(vj_kpts, dm_kpts, input_band, kpts)
 
 def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
                exxdiv=None):
@@ -102,8 +102,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
 
     weight = 1./nkpts * (cell.vol/ngs)
 
-    input_band = kpts_band
-    kpts_band, single_kpt_band = _format_kpts_band(kpts_band, kpts)
+    kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     nband = len(kpts_band)
 
     if gamma_point(kpts_band) and gamma_point(kpts):
@@ -168,10 +167,10 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
             for i in range(nset):
                 vk_kpts[i,k1] += weight * lib.dot(vR_dm[i], ao1T.T)
 
-    return _format_jks(vk_kpts, dm_kpts, kpts_band, kpts, single_kpt_band)
+    return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
 
 
-def get_jk(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None,
+def get_jk(mydf, dm, hermi=1, kpt=np.zeros(3), kpts_band=None,
            with_j=True, with_k=True, exxdiv=None):
     '''Get the Coulomb (J) and exchange (K) AO matrices for the given density matrix.
 
@@ -188,7 +187,7 @@ def get_jk(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None,
         kpt : (3,) ndarray
             The "inner" dummy k-point at which the DM was evaluated (or
             sampled).
-        kpt_band : (3,) ndarray
+        kpts_band : (3,) ndarray or (*,3) ndarray
             The "outer" primary k-point at which J and K are evaluated.
 
     Returns:
@@ -198,12 +197,12 @@ def get_jk(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None,
     dm = np.asarray(dm, order='C')
     vj = vk = None
     if with_j:
-        vj = get_j(mydf, dm, hermi, kpt, kpt_band)
+        vj = get_j(mydf, dm, hermi, kpt, kpts_band)
     if with_k:
-        vk = get_k(mydf, dm, hermi, kpt, kpt_band, exxdiv)
+        vk = get_k(mydf, dm, hermi, kpt, kpts_band, exxdiv)
     return vj, vk
 
-def get_j(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None):
+def get_j(mydf, dm, hermi=1, kpt=np.zeros(3), kpts_band=None):
     '''Get the Coulomb (J) AO matrix for the given density matrix.
 
     Args:
@@ -219,7 +218,7 @@ def get_j(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None):
         kpt : (3,) ndarray
             The "inner" dummy k-point at which the DM was evaluated (or
             sampled).
-        kpt_band : (3,) ndarray
+        kpts_band : (3,) ndarray or (*,3) ndarray
             The "outer" primary k-point at which J and K are evaluated.
 
     Returns:
@@ -229,10 +228,15 @@ def get_j(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None):
     dm = np.asarray(dm, order='C')
     nao = dm.shape[-1]
     dm_kpts = dm.reshape(-1,1,nao,nao)
-    vj = get_j_kpts(mydf, dm_kpts, hermi, kpt.reshape(1,3), kpt_band)
-    return vj.reshape(dm.shape)
+    vj = get_j_kpts(mydf, dm_kpts, hermi, kpt.reshape(1,3), kpts_band)
+    if kpts_band is None:
+        vj = vj[:,0,:,:]
+    if dm.ndim == 2:
+        vj = vj[0]
+    return vj
 
-def get_k(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None, exxdiv=None):
+
+def get_k(mydf, dm, hermi=1, kpt=np.zeros(3), kpts_band=None, exxdiv=None):
     '''Get the Coulomb (J) and exchange (K) AO matrices for the given density matrix.
 
     Args:
@@ -248,7 +252,7 @@ def get_k(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None, exxdiv=None):
         kpt : (3,) ndarray
             The "inner" dummy k-point at which the DM was evaluated (or
             sampled).
-        kpt_band : (3,) ndarray
+        kpts_band : (3,) ndarray or (*,3) ndarray
             The "outer" primary k-point at which J and K are evaluated.
 
     Returns:
@@ -258,6 +262,10 @@ def get_k(mydf, dm, hermi=1, kpt=np.zeros(3), kpt_band=None, exxdiv=None):
     dm = np.asarray(dm, order='C')
     nao = dm.shape[-1]
     dm_kpts = dm.reshape(-1,1,nao,nao)
-    vk = get_k_kpts(mydf, dm_kpts, hermi, kpt.reshape(1,3), kpt_band, exxdiv)
-    return vk.reshape(dm.shape)
+    vk = get_k_kpts(mydf, dm_kpts, hermi, kpt.reshape(1,3), kpts_band, exxdiv)
+    if kpts_band is None:
+        vk = vk[:,0,:,:]
+    if dm.ndim == 2:
+        vk = vk[0]
+    return vk
 

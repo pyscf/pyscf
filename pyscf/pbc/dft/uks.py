@@ -23,7 +23,7 @@ from pyscf.pbc.dft import rks
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
-             kpt=None, kpt_band=None):
+             kpt=None, kpts_band=None):
     '''Coulomb + XC functional for UKS.  See pyscf/pbc/dft/uks.py
     :func:`get_veff` fore more details.
     '''
@@ -51,16 +51,16 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         n, exc, vxc = (0,0), 0, 0
     else:
         n, exc, vxc = ks._numint.nr_uks(cell, ks.grids, ks.xc, dm, 0,
-                                        kpt, kpt_band)
+                                        kpt, kpts_band)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
     hyb = ks._numint.hybrid_coeff(ks.xc, spin=cell.spin)
     if abs(hyb) < 1e-10:
-        vj = ks.get_j(cell, dm, hermi, kpt, kpt_band)
+        vj = ks.get_j(cell, dm, hermi, kpt, kpts_band)
         vxc += vj[0] + vj[1]
     else:
-        vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpt_band)
+        vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpts_band)
         vxc += vj[0] + vj[1] - vk * hyb
 
         if ground_state:

@@ -116,7 +116,7 @@ def get_pp_nl(cell, kpts=None):
 
     if kpts is None or numpy.shape(kpts) == (3,):
         ppnl = ppnl[0]
-    return ppnl
+    return lib.asarray(ppnl)
 
 
 def fake_cell_vloc(cell, cn=0):

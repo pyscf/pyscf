@@ -66,7 +66,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     naux = mydf.auxcell.nao_nr()
     nao_pair = nao * (nao+1) // 2
 
-    kpts_band, single_kpt_band = _format_kpts_band(kpts_band, kpts)
+    kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     nband = len(kpts_band)
     j_real = gamma_point(kpts_band)
 
@@ -120,7 +120,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     vj_kpts = lib.unpack_tril(vj_kpts.reshape(-1,nao_pair))
     vj_kpts = vj_kpts.reshape(nset,nband,nao,nao)
 
-    return _format_jks(vj_kpts, dm_kpts, kpts_band, kpts, single_kpt_band)
+    return _format_jks(vj_kpts, dm_kpts, input_band, kpts)
 
 
 def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
@@ -140,7 +140,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
 
-    kpts_band, single_kpt_band = _format_kpts_band(kpts_band, kpts)
+    kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     nband = len(kpts_band)
     vkR = numpy.zeros((nset,nband,nao,nao))
     vkI = numpy.zeros((nset,nband,nao,nao))
@@ -202,7 +202,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         assert(exxdiv.lower() == 'ewald')
         _ewald_exxdiv_for_G0(cell, kpts, dms, vk_kpts, kpts_band)
 
-    return _format_jks(vk_kpts, dm_kpts, kpts_band, kpts, single_kpt_band)
+    return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
 
 
 ##################################################
@@ -212,26 +212,26 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
 ##################################################
 
 def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
-           kpt_band=None, with_j=True, with_k=True, exxdiv=None):
+           kpts_band=None, with_j=True, with_k=True, exxdiv=None):
     '''JK for given k-point'''
     vj = vk = None
-    if kpt_band is not None and abs(kpt-kpt_band).sum() > 1e-9:
+    if kpts_band is not None and abs(kpt-kpts_band).sum() > 1e-9:
         kpt = numpy.reshape(kpt, (1,3))
         if with_k:
-            vk = get_k_kpts(mydf, dm, hermi, kpt, kpt_band, exxdiv)
+            vk = get_k_kpts(mydf, dm, hermi, kpt, kpts_band, exxdiv)
         if with_j:
-            vj = get_j_kpts(mydf, dm, hermi, kpt, kpt_band)
+            vj = get_j_kpts(mydf, dm, hermi, kpt, kpts_band)
         return vj, vk
 
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = (time.clock(), time.time())
-    if mydf._cderi is None or not mydf.has_kpts(kpt_band):
+    if mydf._cderi is None or not mydf.has_kpts(kpts_band):
         if mydf._cderi is not None:
             log.warn('DF integrals for band k-points were not found %s. '
                      'DF integrals will be rebuilt to include band k-points.',
                      mydf._cderi)
-        mydf.build(kpts_band=kpt_band)
+        mydf.build(kpts_band=kpts_band)
         t1 = log.timer_debug1('Init get_jk', *t1)
 
     dm = numpy.asarray(dm, order='C')
@@ -343,18 +343,16 @@ def _format_dms(dm_kpts, kpts):
 
 def _format_kpts_band(kpts_band, kpts):
     if kpts_band is None:
-        single_kpt_band = False
         kpts_band = kpts
     else:
-        single_kpt_band = (kpts_band.ndim == 1)
         kpts_band = numpy.reshape(kpts_band, (-1,3))
-    return kpts_band, single_kpt_band
+    return kpts_band
 
-def _format_jks(v_kpts, dm_kpts, kpts_band, kpts, single_kpt_band=None):
-    if kpts_band is kpts:
+def _format_jks(v_kpts, dm_kpts, kpts_band, kpts):
+    if kpts_band is kpts or kpts_band is None:
         return v_kpts.reshape(dm_kpts.shape)
     else:
-        if single_kpt_band:
+        if hasattr(kpts_band, 'ndim') and kpts_band.ndim == 1:
             v_kpts = v_kpts[:,0]
         if dm_kpts.ndim <= 3:  # nset=1
             return v_kpts[0]

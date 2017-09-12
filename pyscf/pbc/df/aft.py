@@ -122,7 +122,7 @@ def get_nuc(mydf, kpts=None):
 
     if kpts is None or numpy.shape(kpts) == (3,):
         vj_kpts = vj_kpts[0]
-    return vj_kpts
+    return numpy.asarray(vj_kpts)
 
 def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e_sph'):
     '''Vnuc - Vloc'''

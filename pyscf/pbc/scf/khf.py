@@ -41,7 +41,7 @@ def get_ovlp(mf, cell=None, kpts=None):
     if cell is None: cell = mf.cell
     if kpts is None: kpts = mf.kpts
     s = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts)
-    cond = max([np.linalg.cond(x) for x in s])
+    cond = np.max(lib.cond(s))
     if cond * cell.precision > 1e2:
         prec = 1e2 / cond
         rmin = max([cell.bas_rcut(ib, prec) for ib in range(cell.nbas)])
@@ -497,12 +497,12 @@ class KSCF(hf.SCF):
         return make_rdm1(mo_coeff_kpts, mo_occ_kpts)
 
     def get_bands(self, kpts_band, cell=None, dm_kpts=None, kpts=None):
-        '''Get energy bands at a given (arbitrary) 'band' k-point.
+        '''Get energy bands at the given (arbitrary) 'band' k-points.
 
         Returns:
-            mo_energy : (nao,) ndarray
+            mo_energy : (nmo,) ndarray or a list of (nmo,) ndarray
                 Bands energies E_n(k)
-            mo_coeff : (nao, nao) ndarray
+            mo_coeff : (nao, nmo) ndarray or a list of (nao,nmo) ndarray
                 Band orbitals psi_n(k)
         '''
         if cell is None: cell = self.cell
