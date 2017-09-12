@@ -18,10 +18,10 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 #find_package(BLAS REQUIRED)
 #check_function_exists(ffsll HAVE_FFS)
-set(BLAS_LIBRARIES "-L/opt/intel/intelpython2/pkgs/mkl-2017.0.3-intel_5/ -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lmkl_def -lpthread -lm -ldl")
+set(BLAS_LIBRARIES "-L/opt/intel/intelpython2/pkgs/mkl-2017.0.3-intel_5/lib -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lmkl_def -lpthread -lm -ldl")
 message("BLAS libraries: ${BLAS_LIBRARIES}")
 
-set(LAPACK_LIBRARIES "-L/opt/intel/intelpython2/pkgs/mkl-2017.0.3-intel_5/ -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lmkl_def -lpthread -lm -ldl")
+set(LAPACK_LIBRARIES "-L/opt/intel/intelpython2/pkgs/mkl-2017.0.3-intel_5/lib -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lmkl_def -lpthread -lm -ldl")
 message("LAPACK libraries: ${LAPACK_LIBRARIES}")
 
 find_package(OpenMP)

@@ -24,7 +24,7 @@ class bse_iter_c(tddft_iter_c):
     nm2v = blas.cgemm(1.0, nb2v, np.transpose(self.xvrt))
     if use_numba:
       div_eigenenergy_numba(self.ksn2e, self.ksn2f, self.nfermi,
-        self.vstart, comega, nm2v, self.ksn2e.shape[2])
+        self.vstart, comega, nm2v.real, nm2v.imag, self.ksn2e.shape[2])
     else:
       for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
         for j,[em,fm] in enumerate(zip(self.ksn2e[0,0,n+1:],self.ksn2f[0,0,n+1:])):

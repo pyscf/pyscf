@@ -87,13 +87,13 @@ class tddft_iter_c():
 
         # real part
         vdp = self.cc_da*vext[:, 0]
-        sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
+        sab = csr_matrix((vdp.T*self.v_dab).reshape([no,no]))
         nb2v = self.xocc*sab
         nm2v_re = blas.sgemm(1.0, nb2v, np.transpose(self.xvrt))
         
         # imaginary part
         vdp = self.cc_da*vext[:, 1]
-        sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
+        sab = csr_matrix((vdp.T*self.v_dab).reshape([no,no]))
         nb2v = self.xocc*sab
         nm2v_im = blas.sgemm(1.0, nb2v, np.transpose(self.xvrt))
     else:
@@ -102,7 +102,7 @@ class tddft_iter_c():
 
         # real part
         vdp = self.cc_da*vext[:, 0]
-        sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
+        sab = csr_matrix((vdp.T*self.v_dab).reshape([no,no]))
         nb2v = self.xocc*sab
         nm2v_re = blas.sgemm(1.0, nb2v, np.transpose(self.xvrt))
  

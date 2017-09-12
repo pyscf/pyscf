@@ -18,20 +18,14 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 #find_package(BLAS REQUIRED)
 #check_function_exists(ffsll HAVE_FFS)
-set(BLAS_LIBRARIES "-L/opt/intel/intelpython2/pkgs/mkl-2017.0.3-intel_5/lib  -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lmkl_def -lgomp -lpthread -lm -ldl")
+set(BLAS_LIBRARIES "-L/opt/intel/intelpython2/pkgs/mkl-2017.0.3-intel_5/lib  -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lmkl_def -lpthread -lm -ldl")
 message("BLAS libraries: ${BLAS_LIBRARIES}")
 
-set(LAPACK_LIBRARIES "-L/opt/intel/intelpython2/pkgs/mkl-2017.0.3-intel_5/lib -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lmkl_def -lgomp -lpthread -lm -ldl")
+set(LAPACK_LIBRARIES "-L/opt/intel/intelpython2/pkgs/mkl-2017.0.3-intel_5/lib -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lmkl_def -lpthread -lm -ldl")
 message("LAPACK libraries: ${LAPACK_LIBRARIES}")
 
-#find_package(OpenMP)
-#if(OPENMP_FOUND)
-  set(HAVE_OPENMP 1)
-  set(OpenMP_C_FLAGS " ")
-  message("OpenMP_C_FLAGS   ${OpenMP_C_FLAGS}")
-#else ()
-#endif()
-
+set(HAVE_OPENMP 0)
+set(OpenMP_C_FLAGS " ")
 
 find_package(PythonInterp REQUIRED)
 #find_package(PythonLibs REQUIRED)
