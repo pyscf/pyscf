@@ -98,6 +98,7 @@ class tddft_iter_c():
     # WARNING!!!!
     # nb2v is column major, while self.xvrt is row major
     #       What a mess!!
+# test!!
     nm2v = blas.cgemm(1.0, nb2v, np.transpose(self.xvrt))
     
     if use_numba:
