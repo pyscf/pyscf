@@ -80,43 +80,62 @@ class tddft_iter_c():
     self.rf0_ncalls+=1
     no = self.norbs
 
-    vext = np.require(v, dtype=np.complex64)
-    vdp = csrgemv(self.cc_da, vext) # np.require(v, dtype=np.complex64)
-    
-    #sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
-    sab = (np.transpose(vdp)*self.v_dab).reshape([no,no])
+    if v.dtype == self.dtypeComplex:
+        vext = np.zeros((v.shape[0], 2), dtype = self.dtype)
+        vext[:, 0] = v.real
+        vext[:, 1] = v.imag
 
-    #nb2v = self.xocc*sab
-    nb2v = blas.cgemm(1.0, self.xocc, sab)
-    
-    #print("error: ", np.sum(abs(vdp-ref)))
+        # real part
+        vdp = self.cc_da*vext[:, 0]
+        sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
+        nb2v = self.xocc*sab
+        nm2v_re = blas.sgemm(1.0, nb2v, np.transpose(self.xvrt))
+        
+        # imaginary part
+        vdp = self.cc_da*vext[:, 1]
+        sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
+        nb2v = self.xocc*sab
+        nm2v_im = blas.sgemm(1.0, nb2v, np.transpose(self.xvrt))
+    else:
+        vext = np.zeros((v.shape[0], 2), dtype = self.dtype)
+        vext[:, 0] = v
 
-    #if self.tddft_iter_gpu.GPU:
-    #    vdp = self.tddft_iter_gpu.apply_rf0_gpu(self.xocc, sab, comega)
-    #else:
-    #
-    # WARNING!!!!
-    # nb2v is column major, while self.xvrt is row major
-    #       What a mess!!
-# test!!
-    nm2v = blas.cgemm(1.0, nb2v, np.transpose(self.xvrt))
-    
+        # real part
+        vdp = self.cc_da*vext[:, 0]
+        sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
+        nb2v = self.xocc*sab
+        nm2v_re = blas.sgemm(1.0, nb2v, np.transpose(self.xvrt))
+ 
+        # imaginary part
+        nm2v_im = np.zeros(nm2v_re.shape, dtype=self.dtype) 
+   
+    #vdp = csrgemv(self.cc_da, vext) # np.require(v, dtype=np.complex64)
+
     if use_numba:
-        div_eigenenergy_numba(self.ksn2e, self.ksn2f, self.nfermi,
-                self.vstart, comega, nm2v, self.ksn2e.shape[2])
+        div_eigenenergy_numba(self.ksn2e, self.ksn2f, self.nfermi, self.vstart, comega, nm2v_re, nm2v_im, self.ksn2e.shape[2])
     else:
         for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
           for j,[em,fm] in enumerate(zip(self.ksn2e[0,0,n+1:],self.ksn2f[0,0,n+1:])):
             m = j+n+1-self.vstart
-            nm2v[n,m] = nm2v[n,m] * (fn-fm) *\
+            nm2v = nm2v_re[n, m] + 1.0j*nm2v_im[n, m]
+            nm2v = nm2v * (fn-fm) *\
               ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
+            nm2v_re[n, m] = nm2v.real
+            nm2v_im[n, m] = nm2v.imag
 
-    nb2v = blas.cgemm(1.0, nm2v, self.xvrt)
-    ab2v = blas.cgemm(1.0, np.transpose(self.xocc), nb2v).reshape(no*no)
-    
+    nb2v = blas.sgemm(1.0, nm2v_re, self.xvrt)
+    ab2v = blas.sgemm(1.0, np.transpose(self.xocc), nb2v).reshape(no*no)
     vdp = self.v_dab*ab2v
 
-    return vdp*self.cc_da
+    chi0_re = vdp*self.cc_da
+
+    nb2v = blas.sgemm(1.0, nm2v_im, self.xvrt)
+    ab2v = blas.sgemm(1.0, np.transpose(self.xocc), nb2v).reshape(no*no)
+    vdp = self.v_dab*ab2v
+
+    chi0_im = vdp*self.cc_da
+
+    return chi0_re + 1.0j*chi0_im
 
 
   def comp_veff(self, vext, comega=1j*0.0):
