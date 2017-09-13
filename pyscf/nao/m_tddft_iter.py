@@ -3,9 +3,10 @@ import numpy as np
 from scipy.sparse import csr_matrix
 from scipy.linalg import blas
 from timeit import default_timer as timer
-from pyscf.nao.m_blas_wrapper import spmv_wrapper
 from pyscf.nao.m_tddft_iter_gpu import tddft_iter_gpu_c
-from pyscf.nao.m_sparse_blas import csrgemv # not working!
+#from pyscf.nao.m_sparse_blas import csrgemv # not working!
+from pyscf.nao.m_blas_wrapper import spmv_wrapper
+from pyscf.nao.m_sparsetools import csr_matvec
 
 try:
     import numba
@@ -46,9 +47,12 @@ class tddft_iter_c():
     self.eps = tddft_iter_broadening
     self.sv, self.pb, self.norbs, self.nspin = sv, pb, sv.norbs, sv.nspin
 
-
     self.v_dab = pb.get_dp_vertex_coo(dtype=self.dtype).tocsr()
     self.cc_da = pb.get_da2cc_coo(dtype=self.dtype).tocsr()
+    self.v_dab_csc = pb.get_dp_vertex_coo(dtype=self.dtype).T.tocsc()
+    self.cc_da_csc = pb.get_da2cc_coo(dtype=self.dtype).T.tocsc()
+
+    #print(self.v_dab.shape, self.cc_da.shape)
    
     self.moms0,self.moms1 = pb.comp_moments(dtype=self.dtype)
     self.nprod = self.moms0.size
@@ -81,28 +85,36 @@ class tddft_iter_c():
     no = self.norbs
 
     if v.dtype == self.dtypeComplex:
-        vext = np.zeros((v.shape[0], 2), dtype = self.dtype)
+        vext = np.zeros((v.shape[0], 2), dtype = self.dtype, order="F")
         vext[:, 0] = v.real
         vext[:, 1] = v.imag
 
         # real part
         vdp = self.cc_da*vext[:, 0]
-        sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
+        #vdp = csr_matvec(self.cc_da, vext[:, 0])
+        
+        #sab = csr_matvec(self.v_dab_csc, vdp)
+
+        sab = csr_matrix((self.v_dab_csc*vdp).reshape([no,no]))
         nb2v = self.xocc*sab
         nm2v_re = blas.sgemm(1.0, nb2v, np.transpose(self.xvrt))
         
         # imaginary part
         vdp = self.cc_da*vext[:, 1]
-        sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
+        #vdp = csr_matvec(self.cc_da, vext[:, 1])
+        #sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
+        sab = csr_matrix((self.v_dab_csc*vdp).reshape([no,no]))
         nb2v = self.xocc*sab
         nm2v_im = blas.sgemm(1.0, nb2v, np.transpose(self.xvrt))
     else:
-        vext = np.zeros((v.shape[0], 2), dtype = self.dtype)
+        vext = np.zeros((v.shape[0], 2), dtype = self.dtype, order="F")
         vext[:, 0] = v
 
         # real part
         vdp = self.cc_da*vext[:, 0]
-        sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
+        #vdp = csr_matvec(self.cc_da, vext[:, 0])
+        #sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
+        sab = csr_matrix((self.v_dab_csc*vdp).reshape([no,no]))
         nb2v = self.xocc*sab
         nm2v_re = blas.sgemm(1.0, nb2v, np.transpose(self.xvrt))
  
@@ -126,14 +138,18 @@ class tddft_iter_c():
     nb2v = blas.sgemm(1.0, nm2v_re, self.xvrt)
     ab2v = blas.sgemm(1.0, np.transpose(self.xocc), nb2v).reshape(no*no)
     vdp = self.v_dab*ab2v
+    #vdp = csr_matvec(self.v_dab, ab2v)
 
-    chi0_re = vdp*self.cc_da
+    #chi0_re = vdp*self.cc_da
+    chi0_re = self.cc_da_csc*vdp
 
     nb2v = blas.sgemm(1.0, nm2v_im, self.xvrt)
     ab2v = blas.sgemm(1.0, np.transpose(self.xocc), nb2v).reshape(no*no)
     vdp = self.v_dab*ab2v
+    #vdp = csr_matvec(self.v_dab, ab2v)
 
-    chi0_im = vdp*self.cc_da
+    #chi0_im = vdp*self.cc_da
+    chi0_im = self.cc_da_csc*vdp
 
     return chi0_re + 1.0j*chi0_im
 
