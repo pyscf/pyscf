@@ -83,6 +83,7 @@ class system_vars_c():
     self.stdout = sys.stdout
     self.symmetry = False
     self.symmetry_subgroup = None
+    self.cart = False
 
     self.label = label
     atom2charge = [atm[0] for atm in atom]
@@ -93,6 +94,7 @@ class system_vars_c():
     self.natm=self.natoms=len(self.atom2sp)
     self.atom2s = None
     self.nspin = 1
+    self.nbas  = self.natm
     self.state = 'should be useful for something'
     return self
 
@@ -107,6 +109,7 @@ class system_vars_c():
     self.stdout = sys.stdout
     self.symmetry = False
     self.symmetry_subgroup = None
+    self.cart = False
 
     self.label = label
     self.mol=gto # Only some data must be copied, not the whole object. Otherwise, an eventual deepcopy(...) may fail.
@@ -132,6 +135,10 @@ class system_vars_c():
     self._atom = gto._atom
     self.basis = gto.basis
     self.init_libnao()
+    self.nbas = self.atom2mu_s[-1] # total number of radial orbitals
+    self.mu2orb_s = np.zeros((self.nbas+1), dtype=np.int64)
+    for sp,mu_s in zip(self.atom2sp,self.atom2mu_s):
+      for mu,j in enumerate(self.ao_log.sp_mu2j[sp]): self.mu2orb_s[mu_s+mu+1] = self.mu2orb_s[mu_s+mu] + 2*j+1
     self.state = 'should be useful for something'
     return self
     
@@ -202,6 +209,10 @@ class system_vars_c():
 
     self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
     self.sp2charge = self.ao_log.sp2charge
+    self.nbas = self.atom2mu_s[-1] # total number of radial orbitals
+    self.mu2orb_s = np.zeros((self.nbas+1), dtype=np.int64)
+    for sp,mu_s in zip(self.atom2sp,self.atom2mu_s):
+      for mu,j in enumerate(self.ao_log.sp_mu2j[sp]): self.mu2orb_s[mu_s+mu+1] = self.mu2orb_s[mu_s+mu] + 2*j+1
     self.state = 'should be useful for something'
     return self
 
@@ -277,8 +288,7 @@ class system_vars_c():
     for atom,sp in enumerate(self.atom2sp):
         self.atom2s[atom+1]=self.atom2s[atom]+self.ao_log.sp2norbs[sp]
 
-    # atom2mu_s list of atom associated to them mu number (defenition of mu??)
-    # mu number of orbitals by atoms ??
+    # atom2mu_s list of atom associated to them multipletts (radial orbitals)
     self.atom2mu_s = np.zeros((self.natm+1), dtype=np.int64)
     for atom,sp in enumerate(self.atom2sp):
         self.atom2mu_s[atom+1]=self.atom2mu_s[atom]+self.ao_log.sp2nmult[sp]
@@ -304,6 +314,7 @@ class system_vars_c():
 
     # Trying to be similar to mole object from pySCF 
     self.nelectron = self.hsx.nelec
+    self.cart = False
     self.spin = self.nspin
     self.verbose = 1 
     self.stdout = sys.stdout
@@ -312,6 +323,11 @@ class system_vars_c():
     self._built = True 
     self.max_memory = 20000
     self.incore_anyway = False
+    self.nbas = self.atom2mu_s[-1] # total number of radial orbitals
+    self.mu2orb_s = np.zeros((self.nbas+1), dtype=np.int64)
+    for sp,mu_s in zip(self.atom2sp,self.atom2mu_s):
+      for mu,j in enumerate(self.ao_log.sp_mu2j[sp]): self.mu2orb_s[mu_s+mu+1] = self.mu2orb_s[mu_s+mu] + 2*j+1
+        
     self._atom = [(self.sp2symbol[sp], list(self.atom2coord[ia,:])) for ia,sp in enumerate(self.atom2sp)]
     return self
 
@@ -369,6 +385,7 @@ class system_vars_c():
   def atom_coords(self): return self.atom2coord
   def nao_nr(self): return self.norbs
   def atom_nelec_core(self, ia): return self.sp2charge[self.atom2sp[ia]]-self.ao_log.sp2valence[self.atom2sp[ia]]
+  def ao_loc_nr(self): return self.mu2orb_s[0:self.natm]
   def intor_symmetric(self, type_str):
     """ Uff ... """
     if type_str.lower()=='cint1e_ovlp_sph':
@@ -420,7 +437,25 @@ class system_vars_c():
     for ia,sp in enumerate(self.atom2sp): atom2rcut[ia] = self.ao_log.sp2rcut[sp]
     grid.build(atom2rcut=atom2rcut)
     return grid
+  
+  def comp_dm(self):
+    """ Computes the density matrix """
+    from pyscf.nao.m_comp_dm import comp_dm
+    return comp_dm(self.wfsx.x, self.get_occupations())
 
+  def eval_ao(self, feval, coords, comp, shls_slice=None, non0tab=None, out=None):
+    """ Computes the values of all atomic orbitals for a set of given Cartesian coordinates """
+    from pyscf.nao.m_ao_eval_libnao import ao_eval_libnao as ao_eval
+    assert feval=="GTOval_sph_deriv0"
+    assert shls_slice is None
+    assert non0tab is None
+    assert comp==1
+    aos = ao_eval(self.ao_log, np.zeros(3), 0, coords)
+    return aos
+
+  eval_gto = eval_ao
+  eval_nao = eval_ao
+ 
   def dens_elec(self, coords, dm):
     """ Compute electronic density for a given density matrix and on a given set of coordinates """
     from pyscf.nao.m_dens_libnao import dens_libnao
