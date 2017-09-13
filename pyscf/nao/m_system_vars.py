@@ -94,7 +94,7 @@ class system_vars_c():
     self.natm=self.natoms=len(self.atom2sp)
     self.atom2s = None
     self.nspin = 1
-    self.nbas  = natm
+    self.nbas  = self.natm
     self.state = 'should be useful for something'
     return self
 
