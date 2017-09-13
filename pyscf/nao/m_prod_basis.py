@@ -520,7 +520,7 @@ class prod_basis_c():
 
   def comp_moments(self, dtype=np.float64):
     """ Computes the scalar and dipole moments for the all functions in the product basis """
-    sp2mom0,sp2mom1 = self.prod_log.comp_moments()
+    sp2mom0, sp2mom1 = self.prod_log.comp_moments()
     n = self.c2s[-1]
     mom0 = np.require(np.zeros(n, dtype=dtype), requirements='CW')
     mom1 = np.require(np.zeros((n,3), dtype=dtype), requirements='CW')

@@ -49,7 +49,7 @@ class tddft_iter_c():
 
     self.v_dab = pb.get_dp_vertex_coo(dtype=self.dtype).tocsr()
     self.cc_da = pb.get_da2cc_coo(dtype=self.dtype).tocsr()
-    
+   
     self.moms0,self.moms1 = pb.comp_moments(dtype=self.dtype)
     self.nprod = self.moms0.size
     self.kernel, self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype)
