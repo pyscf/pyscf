@@ -69,3 +69,58 @@ extern "C" void dcsr_matvec(int nrow, int ncol, int nnz, int *Ap, int *Aj,
     }
   }
 }
+
+
+/*
+ * Compute Y += A*X for CSC matrix A and dense vectors X,Y
+ * From scipy/sparse/sparsetools/csc.h
+ *
+ *
+ * Input Arguments:
+ *   I  n_row         - number of rows in A
+ *   I  n_col         - number of columns in A
+ *   I  Ap[n_row+1]   - column pointer
+ *   I  Ai[nnz(A)]    - row indices
+ *   T  Ax[n_col]     - nonzeros
+ *   T  Xx[n_col]     - input vector
+ *
+ * Output Arguments:
+ *   T  Yx[n_row]     - output vector
+ *
+ * Note:
+ *   Output array Yx must be preallocated
+ *
+ *   Complexity: Linear.  Specifically O(nnz(A) + n_col)
+ *
+ */
+extern "C" void scsc_matvec(int n_row, int n_col, int nnz,
+            int *Ap, int *Ai, float *Ax, float *Xx, float *Yx)
+{
+    int col_start, col_end, j, ii, i;
+
+    for( j = 0; j < n_col; j++){
+        col_start = Ap[j];
+        col_end   = Ap[j+1];
+
+        for( ii = col_start; ii < col_end; ii++){
+            i    = Ai[ii];
+            Yx[i] += Ax[ii] * Xx[j];
+        }
+    }
+}
+
+extern "C" void dcsc_matvec(int n_row, int n_col, int nnz,
+            int *Ap, int *Ai, double *Ax, double *Xx, double *Yx)
+{
+    int col_start, col_end, j, ii, i;
+
+    for( j = 0; j < n_col; j++){
+        col_start = Ap[j];
+        col_end   = Ap[j+1];
+
+        for( ii = col_start; ii < col_end; ii++){
+            i    = Ai[ii];
+            Yx[i] += Ax[ii] * Xx[j];
+        }
+    }
+}
