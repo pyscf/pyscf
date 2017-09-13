@@ -119,4 +119,4 @@ if __name__ == '__main__':
     cell.output = '/dev/null'
     cell.build()
     mf = UKS(cell)
-    print mf.kernel()
+    print(mf.kernel())

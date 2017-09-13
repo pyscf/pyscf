@@ -8,7 +8,7 @@ import numpy
 from pyscf import lib
 from pyscf import gto
 from pyscf import ao2mo
-
+import six
 # Obtained from http://www.psicode.org/psi4manual/master/basissets_byfamily.html
 DEFAULT_AUXBASIS = {
 # AO basis JK-fit MP2-fit
@@ -154,7 +154,7 @@ def make_auxmol(mol, auxbasis=None):
         auxbasis = aug_etb_for_dfbasis(mol, dfbasis)
     pmol.basis = auxbasis
 
-    if isinstance(auxbasis, (str, unicode, list, tuple)):
+    if isinstance(auxbasis,six.string_types) or isinstance(auxbasis,(list, tuple)):
         uniq_atoms = set([a[0] for a in mol._atom])
         _basis = dict([(a, auxbasis) for a in uniq_atoms])
     elif 'default' in auxbasis:
