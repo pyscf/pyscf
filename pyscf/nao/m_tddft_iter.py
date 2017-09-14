@@ -47,8 +47,8 @@ class tddft_iter_c():
     self.eps = tddft_iter_broadening
     self.sv, self.pb, self.norbs, self.nspin = sv, pb, sv.norbs, sv.nspin
 
-    self.v_dab = pb.get_dp_vertex_sparse(dtype=self.dtype, sparseformat=csr_matrix)
-    self.cc_da = pb.get_da2cc_sparse(dtype=self.dtype, sparseformat=csr_matrix)
+    self.v_dab = pb.get_dp_vertex_sparse(dtype=self.dtype, sparseformat=coo_matrix).tocsr()
+    self.cc_da = pb.get_da2cc_sparse(dtype=self.dtype, sparseformat=coo_matrix).tocsr()
 
     self.moms0,self.moms1 = pb.comp_moments(dtype=self.dtype)
     self.nprod = self.moms0.size

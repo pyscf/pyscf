@@ -5,6 +5,7 @@ from numpy import array, einsum, zeros, int64, sqrt
 from ctypes import POINTER, c_double, c_int64, byref
 from pyscf.nao.m_libnao import libnao
 from timeit import default_timer as timer
+#from memory_profiler import profile
 
 libnao.init_vrtx_cc_apair.argtypes = (POINTER(c_double), POINTER(c_int64))
 
@@ -401,13 +402,13 @@ class prod_basis_c():
     irow,icol,data = zeros(nnz, dtype=int64),zeros(nnz, dtype=int64), zeros(nnz, dtype=dtype) # Start to construct coo matrix
 
     inz = 0
-    for sd,fd,pt in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t):
+    for atom, [sd,fd,pt] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t)):
       if pt!=1: continue
       for d in range(sd,fd): 
         irow[inz],icol[inz],data[inz] = d,d,1.0
         inz+=1
 
-    for sd,fd,pt,spp in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp):
+    for atom, [sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
       if pt==1: continue
       inf = self.bp2info[spp]
       for c,ls,lf in zip(inf.cc2a, inf.cc2s, inf.cc2s[1:]): 
@@ -493,7 +494,7 @@ class prod_basis_c():
             irow[inz],icol[inz],data[inz] = p,a+b*n,self.prod_log.sp2vertex[spp][p-sd,a-s,b-s]
             inz+=1
 
-    for sd,fd,pt,spp in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp):
+    for atom, [sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
       if pt!=2: continue
       inf= self.bp2info[spp]
       a,b = inf.atoms
