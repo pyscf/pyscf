@@ -47,6 +47,9 @@ class tddft_iter_c():
     self.eps = tddft_iter_broadening
     self.sv, self.pb, self.norbs, self.nspin = sv, pb, sv.norbs, sv.nspin
 
+    self.v_dab = pb.get_dp_vertex_coo(dtype=self.dtype).tocsr()
+    self.cc_da = pb.get_da2cc_coo(dtype=self.dtype).tocsr()
+
     self.moms0,self.moms1 = pb.comp_moments(dtype=self.dtype)
     self.nprod = self.moms0.size
     self.kernel, self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype)
@@ -56,9 +59,6 @@ class tddft_iter_c():
       
       pb.comp_fxc_pack(dm, xc_code, kernel = self.kernel, dtype=self.dtype, **kvargs)
 
-    self.v_dab, self.v_abd_csc = self.get_sparse_vertex(pb)
-    self.cc_da, self.cc_ad_csc = self.get_sparse_da2cc(pb)
-     
     self.telec = sv.hsx.telec if telec is None else telec
     self.nelec = sv.hsx.nelec if nelec is None else nelec
     self.fermi_energy = sv.fermi_energy if fermi_energy is None else fermi_energy
@@ -73,7 +73,7 @@ class tddft_iter_c():
     self.nfermi = np.argmax(ksn2fd[0,0,:]<nfermi_tol)
     self.vstart = np.argmax(1.0-ksn2fd[0,0,:]>nfermi_tol)
 
-    self.xocc_tr = sv.wfsx.x[0,0,0:self.nfermi,:,0].T  # does python creates a copy at this point ?
+    self.xocc = sv.wfsx.x[0,0,0:self.nfermi,:,0]  # does python creates a copy at this point ?
     self.xvrt = sv.wfsx.x[0,0,self.vstart:,:,0]   # does python creates a copy at this point ?
 
     self.tddft_iter_gpu = tddft_iter_gpu_c(GPU, self.v_dab, self.ksn2f, self.ksn2e, 
@@ -102,25 +102,15 @@ class tddft_iter_c():
         # real part
         #vdp = self.cc_da*vext[:, 0]
         vdp = csr_matvec(self.cc_da, vext[:, 0])
-        
-        #sab = csr_matrix((self.v_abd_csc*vdp).reshape([no,no]))
-        #ref = self.xocc*sab
-        
-        #print((self.v_abd_csc*vdp).flags)
-        sab = coo_matrix((self.v_abd_csc*vdp).reshape([no,no]))
-        #test = (sab.T.tocsc()*self.xocc.T).T
-        #test2 = csc_matvecs(sab.T.tocsc(), self.xocc, transB = True, order="C").T
-        #print("Error: ", np.sum(abs(ref-test)), np.sum(abs(ref-test2))/np.sum(abs(ref)))
-        
-        nb2v = (sab.T.tocsc()*self.xocc_tr).T #csc_matvecs(sab.T.tocsc(), self.xocc, transB = True).T
+        sab = (vdp*self.v_dab).reshape([no,no])
+        nb2v = blas.sgemm(1.0, self.xocc, sab) 
+        #csc_matvecs(sab.T.tocsc(), self.xocc, transB = True).T
         nm2v_re = blas.sgemm(1.0, nb2v, np.transpose(self.xvrt))
         
         # imaginary part
-        #vdp = self.cc_da*vext[:, 1]
         vdp = csr_matvec(self.cc_da, vext[:, 1])
-
-        sab = coo_matrix((self.v_abd_csc*vdp).reshape([no,no]))
-        nb2v = (sab.T.tocsc()*self.xocc_tr).T
+        sab = (vdp*self.v_dab).reshape([no,no])
+        nb2v = blas.sgemm(1.0, self.xocc, sab) 
         nm2v_im = blas.sgemm(1.0, nb2v, np.transpose(self.xvrt))
     else:
         vext = np.zeros((v.shape[0], 2), dtype = self.dtype, order="F")
@@ -129,9 +119,8 @@ class tddft_iter_c():
         # real part
         #vdp = self.cc_da*vext[:, 0]
         vdp = csr_matvec(self.cc_da, vext[:, 0])
-        
-        sab = coo_matrix((self.v_abd_csc*vdp).reshape([no,no]))
-        nb2v = (sab.T.tocsc()*self.xocc_tr).T
+        sab = (vdp*self.v_dab).reshape([no,no])
+        nb2v = blas.sgemm(1.0, self.xocc, sab) 
         nm2v_re = blas.sgemm(1.0, nb2v, np.transpose(self.xvrt))
  
         # imaginary part
@@ -152,20 +141,17 @@ class tddft_iter_c():
             nm2v_im[n, m] = nm2v.imag
 
     nb2v = blas.sgemm(1.0, nm2v_re, self.xvrt)
-    ab2v = blas.sgemm(1.0, self.xocc_tr, nb2v).reshape(no*no)
-    #vdp = self.v_dab*ab2v
+    ab2v = blas.sgemm(1.0, self.xocc.T, nb2v).reshape(no*no)
     vdp = csr_matvec(self.v_dab, ab2v)
 
-    #chi0_re = vdp*self.cc_da
-    chi0_re = self.cc_ad_csc*vdp
+    chi0_re = vdp*self.cc_da
 
     nb2v = blas.sgemm(1.0, nm2v_im, self.xvrt)
-    ab2v = blas.sgemm(1.0, self.xocc_tr, nb2v).reshape(no*no)
-    #vdp = self.v_dab*ab2v
+    ab2v = blas.sgemm(1.0, self.xocc.T, nb2v).reshape(no*no)
     vdp = csr_matvec(self.v_dab, ab2v)
 
-    #chi0_im = vdp*self.cc_da
-    chi0_im = self.cc_ad_csc*vdp
+    chi0_im = vdp*self.cc_da
+    #chi0_im = self.cc_ad_csc*vdp
 
     return chi0_re + 1.0j*chi0_im
 

@@ -152,11 +152,13 @@ extern "C" void scsc_matvecs(int n_row, int n_col, int n_vecs,
       int *Ap, int *Ai, float *Ax, float *Xx, float *Yx)
 {
   int i, j, ii;
+  /*
   # pragma omp parallel \
   shared (n_row, n_col, n_vecs, Ap, Ai, Ax, Xx, Yx) \
   private (i, ii, j)
   {
     #pragma omp for
+    */
     for( j = 0; j < n_col; j++){
       for( ii = Ap[j]; ii < Ap[j+1]; ii++){
         i = Ai[ii];
@@ -164,7 +166,7 @@ extern "C" void scsc_matvecs(int n_row, int n_col, int n_vecs,
         cblas_saxpy (n_vecs, Ax[ii], &Xx[n_vecs*j], 1, &Yx[n_vecs*i], 1);
       }
     }
-  }
+  //}
 }
 
 extern "C" void dcsc_matvecs(int n_row, int n_col, int n_vecs, 
