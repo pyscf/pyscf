@@ -463,9 +463,15 @@ def is_gga(xc_code):
         return all((is_gga(x) for x in xc_code))
 
 def max_deriv_order(xc_code):
-    hyb, fn_facs = parse_xc(xc_code)
-    deriv = [_itrf.LIBXC_max_deriv_order[xc_id[0]] for xc_id in fn_facs]
-    return min(deriv)
+    if isinstance(xc_code, str):
+        if xc_code.isdigit():
+            return  _itrf.LIBXC_max_deriv_order(ctypes.c_int(xc_code))
+        else:
+            return min((max_deriv_order(xid) for xid, val in parse_xc(xc_code)[1]))
+    elif isinstance(xc_code, int):
+        return  _itrf.LIBXC_max_deriv_order(ctypes.c_int(xc_code))
+    else:
+        return min((_itrf.LIBXC_max_deriv_order(x) for x in xc_code))
 
 def test_deriv_order(xc_code, deriv, raise_error=False):
     support = deriv <= max_deriv_order(xc_code)
