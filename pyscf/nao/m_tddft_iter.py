@@ -1,12 +1,12 @@
 from __future__ import print_function, division
 import numpy as np
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, coo_matrix
 from scipy.linalg import blas
 from timeit import default_timer as timer
 from pyscf.nao.m_tddft_iter_gpu import tddft_iter_gpu_c
 #from pyscf.nao.m_sparse_blas import csrgemv # not working!
 from pyscf.nao.m_blas_wrapper import spmv_wrapper
-from pyscf.nao.m_sparsetools import csr_matvec, csc_matvec
+from pyscf.nao.m_sparsetools import csr_matvec, csc_matvec, csc_matvecs
 
 try:
     import numba
@@ -47,8 +47,6 @@ class tddft_iter_c():
     self.eps = tddft_iter_broadening
     self.sv, self.pb, self.norbs, self.nspin = sv, pb, sv.norbs, sv.nspin
 
-    #print(self.v_dab.shape, self.cc_da.shape)
-   
     self.moms0,self.moms1 = pb.comp_moments(dtype=self.dtype)
     self.nprod = self.moms0.size
     self.kernel, self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype)
@@ -58,26 +56,37 @@ class tddft_iter_c():
       
       pb.comp_fxc_pack(dm, xc_code, kernel = self.kernel, dtype=self.dtype, **kvargs)
 
-    self.v_dab = pb.get_dp_vertex_coo(dtype=self.dtype).tocsr()
-    self.cc_da = pb.get_da2cc_coo(dtype=self.dtype).tocsr()
-    self.v_abd_csc = pb.get_dp_vertex_coo(dtype=self.dtype).T.tocsc()
-    self.cc_ad_csc = pb.get_da2cc_coo(dtype=self.dtype).T.tocsc()
-
+    self.v_dab, self.v_abd_csc = self.get_sparse_vertex(pb)
+    self.cc_da, self.cc_ad_csc = self.get_sparse_da2cc(pb)
      
     self.telec = sv.hsx.telec if telec is None else telec
     self.nelec = sv.hsx.nelec if nelec is None else nelec
     self.fermi_energy = sv.fermi_energy if fermi_energy is None else fermi_energy
-    self.x  = np.require(sv.wfsx.x, dtype=self.dtype, requirements='CW')
+
+    # probably unnecessary, require probably does a copy
+    # problematic for the dtype, must there should be another option 
+    #self.x  = np.require(sv.wfsx.x, dtype=self.dtype, requirements='CW')
+
     self.ksn2e = np.require(sv.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
     ksn2fd = fermi_dirac_occupations(self.telec, self.ksn2e, self.fermi_energy)
     self.ksn2f = (3-self.nspin)*ksn2fd
     self.nfermi = np.argmax(ksn2fd[0,0,:]<nfermi_tol)
     self.vstart = np.argmax(1.0-ksn2fd[0,0,:]>nfermi_tol)
-    self.xocc = self.x[0,0,0:self.nfermi,:,0]  # does python creates a copy at this point ?
-    self.xvrt = self.x[0,0,self.vstart:,:,0]   # does python creates a copy at this point ?
+
+    self.xocc_tr = sv.wfsx.x[0,0,0:self.nfermi,:,0].T  # does python creates a copy at this point ?
+    self.xvrt = sv.wfsx.x[0,0,self.vstart:,:,0]   # does python creates a copy at this point ?
 
     self.tddft_iter_gpu = tddft_iter_gpu_c(GPU, self.v_dab, self.ksn2f, self.ksn2e, 
             self.norbs, self.nfermi, self.vstart)
+
+  def get_sparse_vertex(self, pb):
+    v_dab_coo =  pb.get_dp_vertex_coo(dtype=self.dtype)
+    return v_dab_coo.tocsr(), v_dab_coo.T.tocsc()
+
+  def get_sparse_da2cc(self, pb):
+    cc_da_coo =  pb.get_da2cc_coo(dtype=self.dtype)
+    return cc_da_coo.tocsr(), cc_da_coo.T.tocsc()
+
 
   def apply_rf0(self, v, comega=1j*0.0):
     """ This applies the non-interacting response function to a vector (a set of vectors?) """
@@ -94,17 +103,24 @@ class tddft_iter_c():
         #vdp = self.cc_da*vext[:, 0]
         vdp = csr_matvec(self.cc_da, vext[:, 0])
         
-        #sab = csr_matvec(self.v_dab_csc, vdp)
-        sab = csr_matrix((self.v_abd_csc*vdp).reshape([no,no]))
-        nb2v = self.xocc*sab
+        #sab = csr_matrix((self.v_abd_csc*vdp).reshape([no,no]))
+        #ref = self.xocc*sab
+        
+        #print((self.v_abd_csc*vdp).flags)
+        sab = coo_matrix((self.v_abd_csc*vdp).reshape([no,no]))
+        #test = (sab.T.tocsc()*self.xocc.T).T
+        #test2 = csc_matvecs(sab.T.tocsc(), self.xocc, transB = True, order="C").T
+        #print("Error: ", np.sum(abs(ref-test)), np.sum(abs(ref-test2))/np.sum(abs(ref)))
+        
+        nb2v = (sab.T.tocsc()*self.xocc_tr).T #csc_matvecs(sab.T.tocsc(), self.xocc, transB = True).T
         nm2v_re = blas.sgemm(1.0, nb2v, np.transpose(self.xvrt))
         
         # imaginary part
         #vdp = self.cc_da*vext[:, 1]
         vdp = csr_matvec(self.cc_da, vext[:, 1])
-        #sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
-        sab = csr_matrix((self.v_abd_csc*vdp).reshape([no,no]))
-        nb2v = self.xocc*sab
+
+        sab = coo_matrix((self.v_abd_csc*vdp).reshape([no,no]))
+        nb2v = (sab.T.tocsc()*self.xocc_tr).T
         nm2v_im = blas.sgemm(1.0, nb2v, np.transpose(self.xvrt))
     else:
         vext = np.zeros((v.shape[0], 2), dtype = self.dtype, order="F")
@@ -113,9 +129,9 @@ class tddft_iter_c():
         # real part
         #vdp = self.cc_da*vext[:, 0]
         vdp = csr_matvec(self.cc_da, vext[:, 0])
-        #sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
-        sab = csr_matrix((self.v_abd_csc*vdp).reshape([no,no]))
-        nb2v = self.xocc*sab
+        
+        sab = coo_matrix((self.v_abd_csc*vdp).reshape([no,no]))
+        nb2v = (sab.T.tocsc()*self.xocc_tr).T
         nm2v_re = blas.sgemm(1.0, nb2v, np.transpose(self.xvrt))
  
         # imaginary part
@@ -136,7 +152,7 @@ class tddft_iter_c():
             nm2v_im[n, m] = nm2v.imag
 
     nb2v = blas.sgemm(1.0, nm2v_re, self.xvrt)
-    ab2v = blas.sgemm(1.0, np.transpose(self.xocc), nb2v).reshape(no*no)
+    ab2v = blas.sgemm(1.0, self.xocc_tr, nb2v).reshape(no*no)
     #vdp = self.v_dab*ab2v
     vdp = csr_matvec(self.v_dab, ab2v)
 
@@ -144,7 +160,7 @@ class tddft_iter_c():
     chi0_re = self.cc_ad_csc*vdp
 
     nb2v = blas.sgemm(1.0, nm2v_im, self.xvrt)
-    ab2v = blas.sgemm(1.0, np.transpose(self.xocc), nb2v).reshape(no*no)
+    ab2v = blas.sgemm(1.0, self.xocc_tr, nb2v).reshape(no*no)
     #vdp = self.v_dab*ab2v
     vdp = csr_matvec(self.v_dab, ab2v)
 

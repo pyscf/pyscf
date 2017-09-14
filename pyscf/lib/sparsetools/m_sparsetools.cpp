@@ -1,6 +1,7 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include <omp.h>
+#include <cblas.h>
 
 /*
 !
@@ -123,4 +124,66 @@ extern "C" void dcsc_matvec(int n_row, int n_col, int nnz,
             Yx[i] += Ax[ii] * Xx[j];
         }
     }
+}
+
+
+/*
+ * Compute Y += A*X for CSC matrix A and dense block vectors X,Y
+ * From scipy/sparse/sparsetools/csc.h
+ *
+ *
+ * Input Arguments:
+ *   I  n_row            - number of rows in A
+ *   I  n_col            - number of columns in A
+ *   I  n_vecs           - number of column vectors in X and Y
+ *   I  Ap[n_row+1]      - row pointer
+ *   I  Aj[nnz(A)]       - column indices
+ *   T  Ax[nnz(A)]       - nonzeros
+ *   T  Xx[n_col,n_vecs] - input vector
+ *
+ * Output Arguments:
+ *   T  Yx[n_row,n_vecs] - output vector
+ *
+ * Note:
+ *   Output array Yx must be preallocated
+ *
+*/
+extern "C" void scsc_matvecs(int n_row, int n_col, int n_vecs, 
+      int *Ap, int *Ai, float *Ax, float *Xx, float *Yx)
+{
+  int i, j, ii;
+  # pragma omp parallel \
+  shared (n_row, n_col, n_vecs, Ap, Ai, Ax, Xx, Yx) \
+  private (i, ii, j)
+  {
+    #pragma omp for
+    for( j = 0; j < n_col; j++){
+      for( ii = Ap[j]; ii < Ap[j+1]; ii++){
+        i = Ai[ii];
+        //axpy(n_vecs, Ax[ii], Xx + (int)n_vecs * j, Yx + (int)n_vecs * i);
+        cblas_saxpy (n_vecs, Ax[ii], &Xx[n_vecs*j], 1, &Yx[n_vecs*i], 1);
+      }
+    }
+  }
+}
+
+extern "C" void dcsc_matvecs(int n_row, int n_col, int n_vecs, 
+      int *Ap, int *Ai, double *Ax, double *Xx, double *Yx)
+{
+  int i, j, ii;
+  /*
+  # pragma omp parallel \
+  shared (n_row, n_col, n_vecs, Ap, Ai, Ax, Xx, Yx) \
+  private (i, ii, j)
+  {
+    #pragma omp for
+    */
+    for( j = 0; j < n_col; j++){
+      for( ii = Ap[j]; ii < Ap[j+1]; ii++){
+        i = Ai[ii];
+        //axpy(n_vecs, Ax[ii], Xx + (int)n_vecs * j, Yx + (int)n_vecs * i);
+        cblas_daxpy (n_vecs, Ax[ii], &Xx[n_vecs*j], 1, &Yx[n_vecs*i], 1);
+      }
+    }
+  //}
 }

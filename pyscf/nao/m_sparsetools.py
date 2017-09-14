@@ -42,6 +42,10 @@ def csr_matvec(csr, x):
 
 
 def csc_matvec(csc, x):
+    """
+        Matrix vector multiplication
+        using csc format
+    """
 
     if not sparse.isspmatrix_csc(csc):
         raise Exception("Matrix must be in csc format")
@@ -72,3 +76,46 @@ def csc_matvec(csc, x):
         raise ValueError("Not implemented")
 
     return y
+
+def csc_matvecs(csc, B, transB = False, order="C"):
+    """
+        Matrix matrix multiplication
+        using csc format
+    """
+
+    if not sparse.isspmatrix_csc(csc):
+        raise Exception("Matrix must be in csc format")
+
+    if transB:
+        # Here need to be careful, since using the transpose of B
+        # will change from row major to col major and vice-versa
+        mat = np.require(B.T, dtype=B.dtype, requirements=["A", "O", order])
+    else:
+        mat = np.require(B, dtype=B.dtype, requirements=["A", "O", order])
+
+    nrow, ncol = csc.shape
+    nvecs = mat.shape[1]
+
+    if csc.dtype == np.float32:
+        C = np.zeros((nrow, nvecs), dtype=np.float32, order=order)
+        libsparsetools.scsc_matvecs(c_int(nrow), c_int(ncol), c_int(nvecs), 
+                csc.indptr.ctypes.data_as(POINTER(c_int)),
+                csc.indices.ctypes.data_as(POINTER(c_int)), 
+                csc.data.ctypes.data_as(POINTER(c_float)),
+                mat.ctypes.data_as(POINTER(c_float)), 
+                C.ctypes.data_as(POINTER(c_float)))
+
+    elif csc.dtype == np.float64:
+        C = np.zeros((nrow, nvecs), dtype=np.float64, order=order)
+        libsparsetools.dcsc_matvecs(c_int(nrow), c_int(ncol), c_int(nvecs), 
+                csc.indptr.ctypes.data_as(POINTER(c_int)),
+                csc.indices.ctypes.data_as(POINTER(c_int)), 
+                csc.data.ctypes.data_as(POINTER(c_double)),
+                mat.ctypes.data_as(POINTER(c_double)), 
+                C.ctypes.data_as(POINTER(c_double)))
+    else:
+        raise ValueError("Not implemented")
+
+    return C
+
+
