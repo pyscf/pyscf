@@ -47,8 +47,8 @@ class tddft_iter_c():
     self.eps = tddft_iter_broadening
     self.sv, self.pb, self.norbs, self.nspin = sv, pb, sv.norbs, sv.nspin
 
-    self.v_dab = pb.get_dp_vertex_coo(dtype=self.dtype).tocsr()
-    self.cc_da = pb.get_da2cc_coo(dtype=self.dtype).tocsr()
+    self.v_dab = pb.get_dp_vertex_sparse(dtype=self.dtype, sparseformat=csr_matrix)
+    self.cc_da = pb.get_da2cc_sparse(dtype=self.dtype, sparseformat=csr_matrix)
 
     self.moms0,self.moms1 = pb.comp_moments(dtype=self.dtype)
     self.nprod = self.moms0.size
@@ -78,15 +78,6 @@ class tddft_iter_c():
 
     self.tddft_iter_gpu = tddft_iter_gpu_c(GPU, self.v_dab, self.ksn2f, self.ksn2e, 
             self.norbs, self.nfermi, self.vstart)
-
-  def get_sparse_vertex(self, pb):
-    v_dab_coo =  pb.get_dp_vertex_coo(dtype=self.dtype)
-    return v_dab_coo.tocsr(), v_dab_coo.T.tocsc()
-
-  def get_sparse_da2cc(self, pb):
-    cc_da_coo =  pb.get_da2cc_coo(dtype=self.dtype)
-    return cc_da_coo.tocsr(), cc_da_coo.T.tocsc()
-
 
   def apply_rf0(self, v, comega=1j*0.0):
     """ This applies the non-interacting response function to a vector (a set of vectors?) """
