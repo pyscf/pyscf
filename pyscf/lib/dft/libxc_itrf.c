@@ -1,5 +1,6 @@
 /*
- * Author: Qiming Sun <osirpt.sun@gmail.com>
+ * Authors: Qiming Sun <osirpt.sun@gmail.com>
+ *          Susi Lehtola <susi.lehtola@gmail.com>
  *
  * libxc from
  * http://www.tddft.org/programs/octopus/wiki/index.php/Libxc:manual
@@ -13,30 +14,30 @@
 #define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
 
 /* Extracted from comments of libxc:gga.c
- 
+
     sigma_st          = grad rho_s . grad rho_t
     zk                = energy density per unit particle
- 
+
     vrho_s            = d n*zk / d rho_s
     vsigma_st         = d n*zk / d sigma_st
-    
+
     v2rho2_st         = d^2 n*zk / d rho_s d rho_t
     v2rhosigma_svx    = d^2 n*zk / d rho_s d sigma_tv
     v2sigma2_stvx     = d^2 n*zk / d sigma_st d sigma_vx
- 
+
     v3rho3_stv        = d^3 n*zk / d rho_s d rho_t d rho_v
     v3rho2sigma_stvx  = d^3 n*zk / d rho_s d rho_t d sigma_vx
     v3rhosigma2_svxyz = d^3 n*zk / d rho_s d sigma_vx d sigma_yz
     v3sigma3_stvxyz   = d^3 n*zk / d sigma_st d sigma_vx d sigma_yz
- 
+
  if nspin == 2
     rho(2)          = (u, d)
     sigma(3)        = (uu, ud, dd)
- 
+
  * vxc(N*5):
     vrho(2)         = (u, d)
     vsigma(3)       = (uu, ud, dd)
- 
+
  * fxc(N*45):
     v2rho2(3)       = (u_u, u_d, d_d)
     v2rhosigma(6)   = (u_uu, u_ud, u_dd, d_uu, d_ud, d_dd)
@@ -271,6 +272,93 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
                         func_x->info->number, func_x->info->name);
                 exit(1);
         }
+}
+
+int LIBXC_is_lda(int xc_id)
+{
+  xc_func_type func;
+  int lda;
+  if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
+    fprintf(stderr, "XC functional %d not found\n", xc_id);
+    exit(1);
+  }
+  switch(func.info->family)
+    {
+    case XC_FAMILY_LDA:
+      lda = 1;
+      break;
+    default:
+      lda = 0;
+    }
+
+  xc_func_end(&func);
+  return lda;
+}
+
+int LIBXC_is_gga(int xc_id)
+{
+  xc_func_type func;
+  int gga;
+  if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
+    fprintf(stderr, "XC functional %d not found\n", xc_id);
+    exit(1);
+  }
+  switch(func.info->family)
+    {
+    case XC_FAMILY_GGA:
+    case XC_FAMILY_HYB_GGA:
+      gga = 1;
+      break;
+    default:
+      gga = 0;
+    }
+
+  xc_func_end(&func);
+  return gga;
+}
+
+int LIBXC_is_mgga(int xc_id)
+{
+  xc_func_type func;
+  int mgga;
+  if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
+    fprintf(stderr, "XC functional %d not found\n", xc_id);
+    exit(1);
+  }
+  switch(func.info->family)
+    {
+    case XC_FAMILY_MGGA:
+    case XC_FAMILY_HYB_MGGA:
+      mgga = 1;
+      break;
+    default:
+      mgga = 0;
+    }
+
+  xc_func_end(&func);
+  return mgga;
+}
+
+int LIBXC_is_hybrid(int xc_id)
+{
+  xc_func_type func;
+  int hyb;
+  if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
+    fprintf(stderr, "XC functional %d not found\n", xc_id);
+    exit(1);
+  }
+  switch(func.info->family)
+    {
+    case XC_FAMILY_HYB_GGA:
+    case XC_FAMILY_HYB_MGGA:
+      hyb = 1;
+      break;
+    default:
+      hyb = 0;
+    }
+
+  xc_func_end(&func);
+  return hyb;
 }
 
 double LIBXC_hybrid_coeff(int xc_id, int spin)
@@ -512,3 +600,28 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac,
         }
 }
 
+int LIBXC_max_deriv_order(int xc_id)
+{
+  xc_func_type func;
+  int ord;
+  if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
+    fprintf(stderr, "XC functional %d not found\n", xc_id);
+    exit(1);
+  }
+
+  if(func.info->flags & XC_FLAGS_HAVE_LXC)
+    ord = 4;
+  else if(func.info->flags & XC_FLAGS_HAVE_KXC)
+    ord = 3;
+  else if(func.info->flags & XC_FLAGS_HAVE_FXC)
+    ord = 2;
+  else if(func.info->flags & XC_FLAGS_HAVE_VXC)
+    ord = 1;
+  else if(func.info->flags & XC_FLAGS_HAVE_EXC)
+    ord = 0;
+  else
+    ord = -1;
+
+  xc_func_end(&func);
+  return ord;
+}
