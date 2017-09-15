@@ -444,7 +444,8 @@ class system_vars_c():
     return comp_dm(self.wfsx.x, self.get_occupations())
 
   def eval_ao(self, feval, coords, comp, shls_slice=None, non0tab=None, out=None):
-    """ Computes the values of all atomic orbitals for a set of given Cartesian coordinates """
+    """ Computes the values of all atomic orbitals for a set of given Cartesian coordinates.
+       This function should be similar to the pyscf's function eval_gto()... """
     from pyscf.nao.m_ao_eval_libnao import ao_eval_libnao as ao_eval
     assert feval=="GTOval_sph_deriv0"
     assert shls_slice is None
@@ -466,11 +467,17 @@ class system_vars_c():
     if init_dens_libnao()!=0 : raise RuntimeError('init_dens_libnao()!=0')
     return dens_libnao(coords, self.nspin)
 
+  def comp_aos_den(self, coords):
+    """ Compute the atomic orbitals for a given set of (Cartesian) coordinates. """
+    from pyscf.nao.m_aos_libnao import aos_libnao
+    if not self.init_sv_libnao : raise RuntimeError('not self.init_sv_libnao')
+    return aos_libnao(coords, self.norbs)
+
   def init_libnao(self, wfsx=None):
     """ Initialization of data on libnao site """
     from pyscf.nao.m_libnao import libnao
     from pyscf.nao.m_sv_chain_data import sv_chain_data
-    from ctypes import POINTER, c_double, c_int64, c_int32
+    from ctypes import POINTER, c_double, c_int64, c_int32, byref
 
     if wfsx is None:
         data = sv_chain_data(self)
@@ -488,6 +495,11 @@ class system_vars_c():
         libnao.init_sv_libnao.argtypes = (POINTER(c_double), POINTER(c_int64), POINTER(c_int32))
         libnao.init_sv_libnao(data.ctypes.data_as(POINTER(c_double)), c_int64(len(data)), size_x.ctypes.data_as(POINTER(c_int32)))
         self.init_sv_libnao = True
+
+    libnao.init_aos_libnao.argtypes = (POINTER(c_int64), POINTER(c_int64))
+    info = c_int64(-999)
+    libnao.init_aos_libnao(c_int64(self.norbs), byref(info))
+    if info.value!=0: raise RuntimeError("info!=0")
     return self
 
   def dens_elec_vec(self, coords, dm):
