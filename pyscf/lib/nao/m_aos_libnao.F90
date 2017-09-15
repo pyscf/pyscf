@@ -8,13 +8,14 @@ module m_aos_libnao
   type(system_vars_t), pointer :: sv => null()
   type(spin_dens_aux_t) :: sda
   real(c_double), allocatable :: rsh(:)
+  !$OMP THREADPRIVATE(rsh)
 
   contains
 
 !
 ! Compute values of atomic orbitals for the whole molecule and a given set of coordinates
 !
-subroutine aos_libnao(ncoords, coords, norbs, oc2val, ldc ) bind(c, name='aos_libnao')
+subroutine aos_libnao(ncoords, coords, norbs, oc2val, ldo ) bind(c, name='aos_libnao')
   use m_rsphar, only : rsphar
   use m_die, only : die
   implicit none
@@ -22,14 +23,14 @@ subroutine aos_libnao(ncoords, coords, norbs, oc2val, ldc ) bind(c, name='aos_li
   integer(c_int64_t), intent(in)  :: ncoords
   real(c_double), intent(in)  :: coords(3,ncoords)
   integer(c_int64_t), intent(in)  :: norbs
-  integer(c_int64_t), intent(in)  :: ldc
-  real(c_double), intent(inout)  :: oc2val(ldc,ncoords)
+  integer(c_int64_t), intent(in)  :: ldo
+  real(c_double), intent(inout)  :: oc2val(ldo,ncoords)
 
   ! Interne Variable:
   real(8) :: br0(3), rho, br(3)
   real(8) :: fr_val
-  integer(c_int64_t) :: jmx_sp
-  integer  :: atm, spa, mu, j, m, jjp1,k,so,start_ao,icoord
+  integer(c_int64_t) :: jmx_sp, icoord
+  integer  :: atm, spa, mu, j, jjp1,k,so,start_ao
   real(8)  :: coeff(-2:3)
 
   !! values of localized orbitals
@@ -38,6 +39,10 @@ subroutine aos_libnao(ncoords, coords, norbs, oc2val, ldc ) bind(c, name='aos_li
     _die('norbs/=sda%norbs')
   endif
   
+  !$OMP PARALLEL DEFAULT(NONE)
+  !$OMP SHARED(ncoords, sda)
+  !$OMP PRIVATE(fr_val, atm, spa, jmx_sp, rho, br0, k, coeff, so, mu, start_ao, j, jjp1, icoord)
+  !$OMP DO
   do icoord=1,ncoords
     br = coords(1:3,icoord)
     do atm=1,sda%natoms;
@@ -57,10 +62,12 @@ subroutine aos_libnao(ncoords, coords, norbs, oc2val, ldc ) bind(c, name='aos_li
         fr_val = sum(coeff*sda%psi_log(k-2:k+3,mu,spa));
         j = sda%mu_sp2j(mu,spa);
         jjp1 = j*(j+1);
-        do m =-j,j; oc2val(start_ao + j + m + so - 1, icoord)= fr_val*rsh(start_ao + j + m + so - 1); end do ! m
-      enddo; ! mu
-    enddo; ! atom
+        oc2val(start_ao+so-1:start_ao+2*j+so-1, icoord)= fr_val*rsh(jjp1-j:jjp1+j)
+      enddo ! mu
+    enddo ! atom
   enddo ! icoord
+  !$OMP ENDDO
+  !$OMP ENDPARALLEL
  
 end subroutine ! aos_libnao
 
@@ -100,8 +107,12 @@ subroutine init_aos_libnao(norbs, info) bind(c, name='init_aos_libnao')
   call init_spin_dens_withoutdm(sv, sda)
   jmx = get_jmx(sv)
   call init_rsphar(jmx)
+  !$OMP PARALLEL DEFAULT(NONE) SHARED(jmx)
+  !$OMP CRITICAL
   _dealloc(rsh)
   allocate(rsh(0:(jmx+1)**2-1))
+  !$OMP END CRITICAL
+  !$OMP END PARALLEL
   info = 0
  
 end subroutine !init_dens_libnao

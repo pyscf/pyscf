@@ -9,9 +9,10 @@ class KnowValues(unittest.TestCase):
     from pyscf.tools.m_cube import cube_c
    
     sv = system_vars_c().init_siesta_xml(label='water', cd=os.path.dirname(os.path.abspath(__file__)))
-    cc = cube_c(sv, nx=20, ny=20, nz=20)
+    cc = cube_c(sv, nx=40, ny=40, nz=40)
     co2val = sv.comp_aos_den(cc.get_coords())
-    c2orb =  np.dot(co2val, sv.wfsx.x[0,0,0,:,0]).reshape((cc.nx, cc.ny, cc.nz))
-    cc.write(c2orb, "water_mo.cube", comment='Molecular orbital')
+    nocc_0t = int(sv.nelectron / 2)
+    c2orb =  np.dot(co2val, sv.wfsx.x[0,0,nocc_0t,:,0]).reshape((cc.nx, cc.ny, cc.nz))
+    cc.write(c2orb, "water_mo.cube", comment='HOMO')
     
 if __name__ == "__main__": unittest.main()

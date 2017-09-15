@@ -60,6 +60,10 @@ def overlap_check(sv, tol=1e-5, **kvargs):
   if not ac: print(diff, summ)
   return ac
 
+
+def tot_electrons(sv):
+  return sv.hsx.nelec 
+
 #
 #
 #
@@ -516,6 +520,14 @@ class system_vars_c():
     ksn2fd = fermi_dirac_occupations(Telec, ksn2E, Fermi)
     ksn2fd = (3.0-self.nspin)*ksn2fd
     return ksn2fd
+  
+  @property
+  def nelectron(self):
+    if self._nelectron is None:
+      return tot_electrons(self)
+    else:
+      return self._nelectron
+
 
 #
 # Example of reading pySCF orbitals.
