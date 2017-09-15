@@ -13,6 +13,8 @@
 #define MAX(I,J)        ((I) > (J) ? (I) : (J))
 
 int int2e_sph();
+int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
+                      int *atm, int natm, int *bas, int nbas, double *env);
 
 void CVHFinit_optimizer(CVHFOpt **opt, int *atm, int natm,
                         int *bas, int nbas, double *env)
