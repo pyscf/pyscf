@@ -35,6 +35,9 @@ class cube_c():
     
   def write(self, field, fname, comment='Generic field? Supply the optional argument "comment" to define this line'):
     """  Result: .cube file with the field in the file fname.  """
+    assert len(field.shape)==3
+    assert field.shape==(self.nx,self.ny,self.nz)
+    
     mol = self.mol
     coord = mol.atom_coords()
     with open(fname, 'w') as f:
