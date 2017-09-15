@@ -24,7 +24,6 @@ class tddft_iter_c():
     """ Iterative TDDFT a la PK, DF, OC JCTC """
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
     from pyscf.nao.m_comp_dm import comp_dm
-    import sys
 
     assert tddft_iter_tol>1e-6
     assert type(tddft_iter_broadening)==float

@@ -5,7 +5,6 @@ from numpy import array, einsum, zeros, int64, sqrt
 from ctypes import POINTER, c_double, c_int64, byref
 from pyscf.nao.m_libnao import libnao
 from timeit import default_timer as timer
-#from memory_profiler import profile
 
 libnao.init_vrtx_cc_apair.argtypes = (POINTER(c_double), POINTER(c_int64))
 
@@ -399,7 +398,7 @@ class prod_basis_c():
 
     nfdp,nfap = self.dpc2s[-1],self.c2s[-1]
     nnz = self.get_da2cc_nnz()
-    irow,icol,data = zeros(nnz, dtype=int64),zeros(nnz, dtype=int64), zeros(nnz, dtype=dtype) # Start to construct coo matrix
+    irow,icol,data = zeros(nnz, dtype=np.int32),zeros(nnz, dtype=np.int32), zeros(nnz, dtype=dtype) # Start to construct coo matrix
 
     inz = 0
     for atom, [sd,fd,pt] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t)):
@@ -479,7 +478,7 @@ class prod_basis_c():
   def get_dp_vertex_sparse(self, dtype=np.float64, sparseformat=coo_matrix):
     """ Returns the product vertex coefficients as 3d array for dominant products, in a sparse format coo(p,ab)"""
     nnz = self.get_dp_vertex_nnz()
-    irow,icol,data = zeros(nnz, dtype=int64),zeros(nnz, dtype=int64), zeros(nnz, dtype=dtype) # Start to construct coo matrix
+    irow,icol,data = zeros(nnz, dtype=np.int32), zeros(nnz, dtype=np.int32), zeros(nnz, dtype=dtype) # Start to construct coo matrix
 
     atom2so = self.sv.atom2s
     nfdp = self.dpc2s[-1]
