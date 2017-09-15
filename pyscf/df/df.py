@@ -48,7 +48,7 @@ class DF(lib.StreamObject):
         if self.auxmol is None:
             log.info('auxbasis = %s', self.auxbasis)
         else:
-            log.info('auxbasis = %s', self.auxmol.basis)
+            log.info('auxbasis = auxmol.basis = %s', self.auxmol.basis)
         log.info('max_memory = %s', self.max_memory)
         if isinstance(self._cderi, str):
             log.info('_cderi = %s  where DF integrals are loaded (readonly).',
@@ -61,6 +61,10 @@ class DF(lib.StreamObject):
     def build(self):
         t0 = (time.clock(), time.time())
         log = logger.Logger(self.stdout, self.verbose)
+
+        self.check_sanity()
+        self.dump_flags()
+
         mol = self.mol
         auxmol = self.auxmol = addons.make_auxmol(self.mol, self.auxbasis)
         nao = mol.nao_nr()
