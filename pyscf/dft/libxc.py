@@ -581,13 +581,13 @@ def parse_xc(description):
         return list(zip(fn_ids, facs))
 
     if ',' in description:
-        x_code, c_code = description.replace(' ','').replace('_','').upper().split(',')
+        x_code, c_code = description.replace(' ','').upper().split(',')
         for token in x_code.replace('-', '+-').split('+'):
             parse_token(token, possible_x_for)
         for token in c_code.replace('-', '+-').split('+'):
             parse_token(token, possible_c_for)
     else:
-        x_code = description.replace(' ','').replace('_','').upper()
+        x_code = description.replace(' ','').upper()
         try:
             for token in x_code.replace('-', '+-').split('+'):
                 parse_token(token, possible_xc_for)
