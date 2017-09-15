@@ -1,6 +1,6 @@
 .. _mol_df:
 
-df --- density fitting
+df --- Density fitting
 **********************
  
 This module provides methods to generate 3-center 2-electron AO
