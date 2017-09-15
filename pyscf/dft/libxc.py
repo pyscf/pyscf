@@ -413,6 +413,8 @@ XC = XC_CODES = {
 'X3LYP'         : 'X3LYP5',  # VWN5 version
 'X3LYP5'        : '.218*HF + .073*LDA + .478575*B88 + .166615*PW91, .871*LYP + .129*VWN',
 'X3LYPG'        : 411,  # VWN3, used by Gaussian
+'XC_MGGA_X_M06L'              :  203,
+'XC_MGGA_C_M06L'              :  233,
 }
 
 XC_KEYS = set(XC_CODES.keys())
