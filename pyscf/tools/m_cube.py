@@ -1,8 +1,8 @@
+from __future__ import print_function, division
 import numpy
 import time
 import pyscf
 from pyscf import lib
-
 
 #
 #
@@ -16,7 +16,7 @@ class cube_c():
     self.mol = mol
     coord = mol.atom_coords()
     self.box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + 6.0
-    self.boxorig = numpy.min(coord,axis=0) - 3
+    self.boxorig = numpy.min(coord,axis=0) - 3.0
     self.xs = numpy.arange(nx) * (self.box[0]/nx)
     self.ys = numpy.arange(ny) * (self.box[1]/ny)
     self.zs = numpy.arange(nz) * (self.box[2]/nz)
@@ -34,7 +34,7 @@ class cube_c():
     return (self.xs[1]-self.xs[0])*(self.ys[1]-self.ys[0])*(self.zs[1]-self.zs[0])
     
   def write(self, field, fname, comment='Generic field? Supply the optional argument "comment" to define this line'):
-    """  Result: .cube file with the field the file fname.  """
+    """  Result: .cube file with the field in the file fname.  """
     mol = self.mol
     coord = mol.atom_coords()
     with open(fname, 'w') as f:
@@ -61,3 +61,32 @@ class cube_c():
               fmt = '%13.5E' * remainder + '\n'
               f.write(fmt % tuple(field[ix,iy,iz:iz+remainder].tolist()))
               break
+
+if __name__ == '__main__':
+    from pyscf import gto, scf
+    from pyscf.tools.m_cube import cube_c
+    from pyscf.dft import numint, gen_grid
+    
+    import numpy
+    mol = gto.M(atom='O 0.00000000,  0.000000,  0.000000; H 0.761561, 0.478993, 0.00000000,; H -0.761561, 0.478993, 0.00000000,', basis='6-31g*')
+
+    mf = scf.RHF(mol)
+    mf.scf()
+    dm = mf.make_rdm1()
+
+    cc = cube_c(mol, nx=20, ny=20, nz=20)  # Initialize the class cube_c
+    
+    # Compute density on the .cube grid
+    coords = cc.get_coords()
+    ngrids = cc.get_ngrids()
+    blksize = min(8000, ngrids)
+    rho = numpy.empty(ngrids)
+    ao = None
+    for ip0, ip1 in gen_grid.prange(0, ngrids, blksize):
+      ao = numint.eval_ao(mol, coords[ip0:ip1], out=ao)
+      rho[ip0:ip1] = numint.eval_rho(mol, ao, dm)
+    rho = rho.reshape(cc.nx,cc.ny,cc.nz)
+    
+    fname = "h2o_den_cube_c.cube"
+    cc.write(rho, fname, comment='Electron density in real space (e/Bohr^3)') # Write out density to the .cube file
+    print(fname, ' is written.')

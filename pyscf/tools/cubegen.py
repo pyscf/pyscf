@@ -27,8 +27,8 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80):
         ny (int): Number of grid point divisions in y direction.
         nz (int): Number of grid point divisions in z direction.
   """
-  # Initialize the class cube_c
-  cc = cube_c(mol, nx=nx, ny=ny, nz=nz)
+  
+  cc = cube_c(mol, nx=nx, ny=ny, nz=nz) # Initialize the class cube_c
     
   # Compute density on the .cube grid
   coords = cc.get_coords()
@@ -41,8 +41,7 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80):
     rho[ip0:ip1] = numint.eval_rho(mol, ao, dm)
   rho = rho.reshape(cc.nx,cc.ny,cc.nz)
     
-  # Write out density to the .cube file
-  cc.write(rho, outfile, comment='Electron density in real space (e/Bohr^3)')
+  cc.write(rho, outfile, comment='Electron density in real space (e/Bohr^3)')   # Write out density to the .cube file
 
 
 def mep(mol, outfile, dm, nx=80, ny=80, nz=80):
@@ -78,14 +77,12 @@ def mep(mol, outfile, dm, nx=80, ny=80, nz=80):
         mol.set_rinv_orig_(p)
         Vele.append(numpy.einsum('ij,ij', mol.intor('cint1e_rinv_sph'), dm))
 
-    # MEP at each point
-    MEP = Vnuc - Vele
+    MEP = Vnuc - Vele     # MEP at each point
 
     MEP = numpy.asarray(MEP)
     MEP = MEP.reshape(nx,ny,nz)
 
-    # Write the potential
-    cc.write(MEP, outfile, 'Molecular electrostatic potential in real space')
+    cc.write(MEP, outfile, 'Molecular electrostatic potential in real space')     # Write the potential
     
 if __name__ == '__main__':
     from pyscf import gto, scf
