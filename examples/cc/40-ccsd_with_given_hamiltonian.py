@@ -6,12 +6,13 @@ from pyscf import scf
 from pyscf import ao2mo
 from pyscf import cc
 
-#
-# 1D anti-PBC Hubbard model at half filling
-#
+
+# Six-site 1D U/t=2 Hubbard model at half filling
+# PBCs are enforced and the model is gapped at the mean-field level
+
 mol = gto.M(verbose=4)
-mol.nelectron = 6
-n = 12
+n = 6
+mol.nelectron = n
 
 h1 = numpy.zeros((n,n))
 for i in range(n-1):
@@ -27,11 +28,11 @@ mf.get_ovlp = lambda *args: numpy.eye(n)
 mf._eri = ao2mo.restore(8, eri, n)
 mf.kernel()
 
-#
+
 # In PySCF, the faked Hamiltonians just need to be created once in mf object,
-# and can be used with mf object everywhere.  Here, the Hubbard model is
-# passed to CCSD object with the mf object.
-#
+# and can be used with mf object everywhere.  Here, the Hubbard model
+# Hamiltonian is passed to CCSD object via the mf object.
+
 mycc = cc.CCSD(mf)
 mycc.kernel()
 

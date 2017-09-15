@@ -71,7 +71,7 @@ def kernel(mf, dm, aolabels_or_baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
     if (not isinstance(mf, scf.hf.SCF)) and hasattr(mf, '_scf'):
         mf = mf._scf
 
-    baslst = mo_mapping._aolabels2baslst(mol, aolabels_or_baslst, base)
+    baslst = gto.mole._aolabels2baslst(mol, aolabels_or_baslst, base)
 
     nao = dm.shape[0]
     nimp = len(baslst)

@@ -31,9 +31,9 @@ mf = scf.RHF(mol).run()
 class KnowValues(unittest.TestCase):
     def test_boys(self):
         idx = numpy.array([17,20,21,22,23,30,36,41,42,47,48,49])-1
-        loc = boys.Boys(mol)
+        loc = boys.Boys(mol, mf.mo_coeff[:,idx])
         loc.max_cycle = 100
-        mo = loc.kernel(mf.mo_coeff[:,idx])
+        mo = loc.kernel()
         dip = boys.dipole_integral(mol, mo)
         z = numpy.einsum('xii,xii->', dip, dip)
         self.assertAlmostEqual(z, 98.670988758151907, 4)
@@ -53,9 +53,9 @@ class KnowValues(unittest.TestCase):
 
     def test_pipek(self):
         idx = numpy.array([17,20,21,22,23,30,36,41,42,47,48,49])-1
-        loc = pipek.PipekMezey(mol)
+        loc = pipek.PipekMezey(mol, mf.mo_coeff[:,idx])
         loc.max_cycle = 100
-        mo = loc.kernel(mf.mo_coeff[:,idx])
+        mo = loc.kernel()
         pop = pipek.atomic_pops(mol, mo)
         z = numpy.einsum('xii,xii->', pop, pop)
         self.assertAlmostEqual(z, 12, 4)

@@ -1,5 +1,5 @@
-lib
-***
+lib --- Helper functions, parameters, and C functions
+*****************************************************
 
 .. automodule:: pyscf.lib
  

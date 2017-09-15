@@ -41,3 +41,8 @@ for i in range(mol.nbas):
     print('shell %d on atom %d l = %s has %d contracted GTOs' %
           (i, mol.bas_atom(i), mol.bas_angular(i), mol.bas_nctr(i)))
 
+print('\nAOs that contains oxygen p orbitals and hydrogen s orbitals')
+ao_labels = mol.ao_labels()
+idx = mol.search_ao_label(['O.*p', 'H.*s'])
+for i in idx:
+    print(i, ao_labels[i])

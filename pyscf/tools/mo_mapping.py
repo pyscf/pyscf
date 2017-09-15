@@ -89,27 +89,10 @@ def mo_comps(aolabels_or_baslst, mol, mo_coeff, cart=False, orth_method='meta_lo
     s = mol.intor_symmetric('int1e_ovlp')
     lao = lo.orth.orth_ao(mol, orth_method, s=s)
 
-    idx = _aolabels2baslst(mol, aolabels_or_baslst)
+    idx = gto.mole._aolabels2baslst(mol, aolabels_or_baslst)
     if len(idx) == 0:
         logger.warn(mol, 'Required orbitals are not found')
     mo1 = reduce(numpy.dot, (lao[:,idx].T, s, mo_coeff))
     s1 = numpy.einsum('ki,ki->i', mo1, mo1)
     return s1
 
-def _aolabels2baslst(mol, aolabels_or_baslst, base=0):
-    if callable(aolabels_or_baslst):
-        baslst = [i for i,x in enumerate(mol.ao_labels())
-                  if aolabels_or_baslst(x)]
-    elif isinstance(aolabels_or_baslst, str):
-        aolabels = re.sub(' +', ' ', aolabels_or_baslst.strip(), count=1)
-        aolabels = re.compile(aolabels)
-        baslst = [i for i,s in enumerate(mol.ao_labels())
-                  if re.search(aolabels, s)]
-    elif len(aolabels_or_baslst) > 0 and isinstance(aolabels_or_baslst[0], str):
-        aolabels = [re.compile(re.sub(' +', ' ', x.strip(), count=1))
-                    for x in aolabels_or_baslst]
-        baslst = [i for i,t in enumerate(mol.ao_labels())
-                  if any(re.search(x, t) for x in aolabels)]
-    else:
-        baslst = [i-base for i in aolabels_or_baslst]
-    return numpy.asarray(baslst, dtype=int)
