@@ -317,7 +317,7 @@ int LIBXC_is_gga(int xc_id)
   return gga;
 }
 
-int LIBXC_is_mgga(int xc_id)
+int LIBXC_is_meta_gga(int xc_id)
 {
   xc_func_type func;
   int mgga;
@@ -361,11 +361,11 @@ int LIBXC_is_hybrid(int xc_id)
   return hyb;
 }
 
-double LIBXC_hybrid_coeff(int xc_id, int spin)
+double LIBXC_hybrid_coeff(int xc_id)
 {
         xc_func_type func;
         double factor;
-        if(xc_func_init(&func, xc_id, spin) != 0){
+        if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
                 exit(1);
         }

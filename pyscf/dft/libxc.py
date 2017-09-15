@@ -388,8 +388,9 @@ XC = XC_CODES = {
 #
 'LDA'           : 1 ,
 'SLATER'        : 1 ,
-'VWN3'          : 'VWNRPA' ,
-'VWN5'          : 'VWN' ,
+'VWN3'          : 8,
+'VWNRPA'        : 8,
+'VWN5'          : 7,
 'BLYP'          : 'B88,LYP',
 'BP86'          : 'B88,P86',
 'PBE0'          : 406,
@@ -417,15 +418,9 @@ XC = XC_CODES = {
 XC_KEYS = set(XC_CODES.keys())
 
 def is_lda(xc_code):
-    if isinstance(xc_code, str):
-        if xc_code.isdigit():
-            return  _itrf.LIBXC_is_lda(ctypes.c_int(xc_code))
-        else:
-            return all((is_lda(xid) for xid, val in parse_xc(xc_code)[1]))
-    elif isinstance(xc_code, int):
-        return  _itrf.LIBXC_is_lda(ctypes.c_int(xc_code))
-    else:
-        return all((is_lda(x) for x in xc_code))
+    hyb, fn_facs = parse_xc(xc_code)
+    _itrf.LIBXC_is_lda.restype = ctypes.c_int
+    return all((_itrf.LIBXC_is_lda(ctypes.c_int(xid))==1) for xid, fac in fn_facs)
 
 def is_hybrid_xc(xc_code):
     if isinstance(xc_code, str):
@@ -441,37 +436,19 @@ def is_hybrid_xc(xc_code):
         return any((is_hybrid_xc(x) for x in xc_code))
 
 def is_meta_gga(xc_code):
-    if isinstance(xc_code, str):
-        if xc_code.isdigit():
-            return  _itrf.LIBXC_is_mgga(ctypes.c_int(xc_code))
-        else:
-            return all((is_meta_gga(xid) for xid, val in parse_xc(xc_code)[1]))
-    elif isinstance(xc_code, int):
-        return  _itrf.LIBXC_is_mgga(ctypes.c_int(xc_code))
-    else:
-        return all((is_meta_gga(x) for x in xc_code))
+    hyb, fn_facs = parse_xc(xc_code)
+    _itrf.LIBXC_is_meta_gga.restype = ctypes.c_int
+    return all((_itrf.LIBXC_is_meta_gga(ctypes.c_int(xid))==1) for xid, fac in fn_facs)
 
 def is_gga(xc_code):
-    if isinstance(xc_code, str):
-        if xc_code.isdigit():
-            return  _itrf.LIBXC_is_gga(ctypes.c_int(xc_code))
-        else:
-            return all((is_gga(xid) for xid, val in parse_xc(xc_code)[1]))
-    elif isinstance(xc_code, int):
-        return  _itrf.LIBXC_is_gga(ctypes.c_int(xc_code))
-    else:
-        return all((is_gga(x) for x in xc_code))
+    hyb, fn_facs = parse_xc(xc_code)
+    _itrf.LIBXC_is_gga.restype = ctypes.c_int
+    return all((_itrf.LIBXC_is_gga(ctypes.c_int(xid))==1) for xid, fac in fn_facs)
 
 def max_deriv_order(xc_code):
-    if isinstance(xc_code, str):
-        if xc_code.isdigit():
-            return  _itrf.LIBXC_max_deriv_order(ctypes.c_int(xc_code))
-        else:
-            return min((max_deriv_order(xid) for xid, val in parse_xc(xc_code)[1]))
-    elif isinstance(xc_code, int):
-        return  _itrf.LIBXC_max_deriv_order(ctypes.c_int(xc_code))
-    else:
-        return min((_itrf.LIBXC_max_deriv_order(x) for x in xc_code))
+    hyb, fn_facs = parse_xc(xc_code)
+    _itrf.LIBXC_max_deriv_order.restype = ctypes.c_int
+    return min((_itrf.LIBXC_max_deriv_order(ctypes.c_int(xid))) for xid, fac in fn_facs)
 
 def test_deriv_order(xc_code, deriv, raise_error=False):
     support = deriv <= max_deriv_order(xc_code)
@@ -496,12 +473,11 @@ def test_deriv_order(xc_code, deriv, raise_error=False):
 def hybrid_coeff(xc_code, spin=0):
     '''Support recursively defining hybrid functional
     '''
-    spin = spin + 1  # convert to libxc convention
     hyb, fn_facs = parse_xc(xc_code)
     for xid, fac in fn_facs:
         if _itrf.LIBXC_is_hybrid(ctypes.c_int(xid)):
             _itrf.LIBXC_hybrid_coeff.restype = ctypes.c_double
-            hyb += _itrf.LIBXC_hybrid_coeff(ctypes.c_int(xid), ctypes.c_int(spin))
+            hyb += _itrf.LIBXC_hybrid_coeff(ctypes.c_int(xid))
     return hyb
 
 def parse_xc_name(xc_name='LDA,VWN'):
@@ -523,13 +499,13 @@ def parse_xc(description):
       - To neglect X functional (just apply C functional), leave blank in the
         first part, eg description=',vwn' for pure VWN functional
 
-    * The functional name can be placed in arbitrary order.  Two name needs to
+    * The functional name can be placed in arbitrary order.  Two names need to
       be separated by operators "+" or "-".  Blank spaces are ignored.
-      NOTE the parser only reads operators "+" "-" "*".  / is not in support.
+      NOTE the parser only reads operators "+" "-" "*".  "/" is not supported.
     * A functional name is associated with one factor.  If the factor is not
-      given, it is assumed equaling 1.
+      given, it is assumed to equal 1.
     * String "HF" stands for exact exchange (HF K matrix).  It is allowed to
-      put in C functional part.
+      in the C functional part.
     * Be careful with the libxc convention on GGA functional, in which the LDA
       contribution is included.
     '''
@@ -577,17 +553,17 @@ def parse_xc(description):
                 else:
                     fn_facs.append((x_id, fac))
     def possible_x_for(key):
-        return set(('XC_'+key,
+        return set((key, 'XC_'+key,
                     'XC_LDA_X_'+key, 'XC_GGA_X_'+key, 'XC_MGGA_X_'+key,
                     'XC_HYB_GGA_X_'+key, 'XC_HYB_MGGA_X_'+key))
     def possible_xc_for(key):
-        return set(('XC_LDA_XC_'+key, 'XC_GGA_XC_'+key, 'XC_MGGA_XC_'+key,
+        return set((key, 'XC_LDA_XC_'+key, 'XC_GGA_XC_'+key, 'XC_MGGA_XC_'+key,
                     'XC_HYB_GGA_XC_'+key, 'XC_HYB_MGGA_XC_'+key))
     def possible_k_for(key):
-        return set(('XC_'+key,
+        return set((key, 'XC_'+key,
                     'XC_LDA_K_'+key, 'XC_GGA_K_'+key,))
     def possible_c_for(key):
-        return set(('XC_'+key,
+        return set((key, 'XC_'+key,
                     'XC_LDA_C_'+key, 'XC_GGA_C_'+key, 'XC_MGGA_C_'+key))
     def remove_dup(fn_facs):
         fn_ids = []
