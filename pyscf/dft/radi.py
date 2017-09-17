@@ -6,11 +6,10 @@
 '''radii grids'''
 
 import numpy
-from pyscf.data import elements
+from pyscf.data import radii
 
-BRAGG_RADII = elements.BRAGG_RADII
-
-COVALENT_RADII = elements.COVALENT_RADII
+BRAGG_RADII = radii.BRAGG
+COVALENT_RADII = radii.COVALENT
 
 # P.M.W. Gill, B.G. Johnson, J.A. Pople, Chem. Phys. Letters 209 (1993) 506-512
 SG1RADII = numpy.array((
