@@ -12,7 +12,7 @@ integrated science platform `Anaconda <https://www.continuum.io/downloads#linux>
 (with `conda-cmake <https://anaconda.org/anaconda/cmake>`_).
 
 You can download the latest PySCF release version
-`1.2 <https://github.com/sunqm/pyscf/releases/tag/v1.2>`_ or the
+`1.4 <https://github.com/sunqm/pyscf/releases/tag/v1.4>`_ or the
 develment branch from github
 
   $ git clone https://github.com/sunqm/pyscf
@@ -69,6 +69,10 @@ It can be fixed by running the script ``pyscf/lib/_runme_to_fix_dylib_osx10.11.s
   When the RPATH was removed, you need to add ``pyscf/lib`` and
   ``pyscf/lib/deps/lib`` in ``LD_LIBRARY_PATH``.
 
+Last step is to set the scratch directory.  The default scratch of pyscf is
+controlled by environment variable :code:`PYSCF_TMPDIR`.  If it's not specified,
+the system wide temporary directory :code:`TMPDIR` will be used as the scratch.
+
 
 Installation without network
 ============================
@@ -77,7 +81,7 @@ If you get problem to download the external libraries on your computer, you can
 manually build the libraries, as shown in the following instructions.  First,
 you need to install libcint, libxc or xcfun libraries.
 `libcint cint3 branch <https://github.com/sunqm/libcint/tree/cint3>`_
-and `xcfun stable-1.x branch <https://github.com/dftlibs/xcfun/tree/stable-1.x`_
+and `xcfun stable-1.x branch <https://github.com/dftlibs/xcfun/tree/stable-1.x>`_
 are required by PySCF.  They can be downloaded from github::
 
     $ git clone https://github.com/sunqm/libcint.git
@@ -184,51 +188,20 @@ of the integral library in lib/CMakeLists.txt file::
      ...
 
 
-Offline installation
-====================
-
-Compiling PySCF will automatically download and compile
-`libcint <https://github.com/sunqm/libcint.git>`_,
-`libxc <http://www.tddft.org/programs/Libxc>`_
-and `xcfun <https://github.com/dftlibs/xcfun.git>`_.   If the
-compilation breaks due to the failure of download or compilation of
-these packages, you can manually download and install them then install
-PySCF offline.  ``pyscf/lib/deps`` is the directory where PySCF places
-the external libraries.  PySCF will bypass the compilation of the
-external libraries if they were existed in that directory.  In the PySCF
-offline compilcation mode, you need install these external libraries to
-this directory.  Followings are the relevant compiling flags for these
-libraries.
-
-Libcint::
-
-    cd /path/to/libcint
-    mkdir build
-    cd build
-    cmake -DWITH_RANGE_COULOMB=1 -DCMAKE_INSTALL_PREFIX:PATH=/path/to/pyscf/lib/deps -DCMAKE_INSTALL_LIBDIR:PATH=lib ..
-    make && make install
-
-XcFun::
-
-    cd /path/to/xcfun
-    mkdir build
-    cd build
-    cmake -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1 -DXC_MAX_ORDER=3 -DXCFUN_ENABLE_TESTS=0 -DCMAKE_INSTALL_PREFIX:PATH=/path/to/pyscf/lib/deps -DCMAKE_INSTALL_LIBDIR:PATH=lib ..
-    make && make install
-
-LibXC::
-
-    cd /path/to/libxc
-    mkdir build
-    cd build
-    ../configure --prefix=/path/to/pyscf/lib/deps --libdir=/path/to/pyscf/lib/deps/lib --enable-shared --disable-fortran LIBS=-lm
-    make && make install
-
-
 .. _installing_plugin:
 
 Plugins
 =======
+
+nao
+---
+:mod:`pyscf/nao` module includes the basic functions of numerical atomic orbitals
+(NAO) and the (nao based) TDDFT methods.  This module was contributed by Marc
+Barbry and Peter Koval.  You can enable this module with a cmake flag::
+
+    $ cmake -DENABLE_NAO=1 ..
+
+More information of the compilcation can be found in :file:`pyscf/lib/nao/README.md`.
 
 DMRG solver
 -----------
