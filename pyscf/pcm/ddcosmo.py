@@ -7,10 +7,26 @@
 domain decomposition COSMO
 (In testing)
 
-See also
+See also the code on github
+
 https://github.com/filippolipparini/ddPCM
-JCP, 141, 184108
-JCTC, 9, 3637
+
+and the papers
+
+[1] Domain decomposition for implicit solvation models.
+E. Cances, Y. Maday, B. Stamm
+J. Chem. Phys., 139, 054111 (2013)
+http://dx.doi.org/10.1063/1.4816767
+
+[2] Fast Domain Decomposition Algorithm for Continuum Solvation Models: Energy and First Derivatives.
+F. Lipparini, B. Stamm, E. Cances, Y. Maday, B. Mennucci
+J. Chem. Theory Comput., 9, 3637-3648 (2013)
+http://dx.doi.org/10.1021/ct400280b
+
+[3] Quantum, classical, and hybrid QM/MM calculations in solution: General implementation of the ddCOSMO linear scaling strategy.
+F. Lipparini, G. Scalmani, L. Lagardere, B. Stamm, E. Cances, Y. Maday, J.-P.Piquemal, M. J. Frisch, B. Mennucci
+J. Chem. Phys., 141, 184108 (2014)
+http://dx.doi.org/10.1063/1.4901304
 '''
 
 import ctypes
@@ -20,7 +36,7 @@ from pyscf.lib import logger
 from pyscf import gto
 from pyscf import df
 from pyscf.dft import gen_grid, numint
-from pyscf.data import elements
+from pyscf.data import radii
 
 def ddcosmo_for_scf(mf, pcmobj):
     oldMF = mf.__class__
@@ -32,6 +48,7 @@ def ddcosmo_for_scf(mf, pcmobj):
 
         def dump_flags(self):
             oldMF.dump_flags(self)
+            pcmobj.check_sanity()
             pcmobj.dump_flags()
             return self
 
@@ -66,33 +83,52 @@ def gen_ddcosmo_solver(pcmobj, grids=None, verbose=None):
 
     natm = mol.natm
     lmax = pcmobj.lmax
-    atomic_radii = pcmobj.atomic_radii
 
-    r_vdw = numpy.asarray([atomic_radii[gto.mole._charge(mol.atom_symbol(i))]
-                           for i in range(natm)])
+    r_vdw = get_atomic_radii(pcmobj)
     coords_1sph, weights_1sph = make_grids_one_sphere(pcmobj.lebedev_order)
     ylm_1sph = numpy.vstack(make_ylm(coords_1sph, lmax))
 
     fi = make_fi(pcmobj, r_vdw)
     ui = 1 - fi
     ui[ui<0] = 0
+    nexposed = numpy.count_nonzero(ui==1)
+    nbury = numpy.count_nonzero(ui==0)
+    on_shell = numpy.count_nonzero(ui>0) - nexposed
+    logger.debug(pcmobj, 'Num points exposed %d', nexposed)
+    logger.debug(pcmobj, 'Num points buried %d', nbury)
+    logger.debug(pcmobj, 'Num points on shell %d', on_shell)
 
     nlm = (lmax+1)**2
     Lmat = make_L(pcmobj, r_vdw, ylm_1sph, fi)
     Lmat = Lmat.reshape(natm*nlm,-1)
 
+    cached_pol = cache_fake_multipoler(grids, r_vdw, lmax)
+
     def gen_vind(dm):
-        v_phi = make_phi(pcmobj, dm, r_vdw, ui)
+        v_phi = make_phi(pcmobj, dm, r_vdw, ui, grids)
         phi = -numpy.einsum('n,xn,jn,jn->jx', weights_1sph, ylm_1sph,
                             ui, v_phi)
         L_X = numpy.linalg.solve(Lmat, phi.ravel()).reshape(natm,-1)
-        psi, vmat = make_psi_vmat(pcmobj, dm, r_vdw, ylm_1sph,
-                                  grids, L_X, Lmat, ui)
+        psi, vmat = make_psi_vmat(pcmobj, dm, r_vdw, ui, grids, ylm_1sph,
+                                  cached_pol, L_X, Lmat)
         dielectric = pcmobj.eps
         f_epsilon = (dielectric-1.)/dielectric
         epcm = .5 * f_epsilon * numpy.einsum('jx,jx', psi, L_X)
         return epcm, vmat
     return gen_vind
+
+def get_atomic_radii(pcmobj):
+    mol = pcmobj.mol
+    vdw_radii = pcmobj.radii_table
+    atom_radii = pcmobj.atom_radii
+
+    atom_symb = [mol.atom_symbol(i) for i in range(mol.natm)]
+    r_vdw = [vdw_radii[gto.mole._charge(x)] for x in atom_symb]
+    if atom_radii is not None:
+        for i in range(mol.natm):
+            if atom_symb[i] in atom_radii:
+                r_vdw[i] = atom_radii[atom_symb[i]]
+    return numpy.asarray(r_vdw)
 
 
 def make_ylm(r, lmax):
@@ -151,7 +187,6 @@ def make_ylm(r, lmax):
     return ylms
 
 def make_multipoler(r, lmax):
-    # Stand
     #:rad = lib.norm(r, axis=1)
     #:ylms = make_ylm(r/rad.reshape(-1,1), lmax)
     #:pol = [rad**l*y for l, y in enumerate(ylms)]
@@ -168,7 +203,7 @@ def regularize_xt(t, eta):
     xt[on_shell] = 1./eta**5 * (1-ti)**3 * (6*ti**2 + (15*eta-12)*ti
                                             + 10*eta**2 - 15*eta + 6)
 # JCP, 139, 054111
-#        xt[on_shell] = 1./eta**4 * (1-ti)**2 * (ti-1+2*eta)**2
+#    xt[on_shell] = 1./eta**4 * (1-ti)**2 * (ti-1+2*eta)**2
     return xt
 
 def make_grids_one_sphere(lebedev_order):
@@ -210,7 +245,7 @@ def make_L(pcmobj, r_vdw, ylm_1sph, fi):
         for ka in atoms_with_vdw_overlap(ja, atom_coords, r_vdw):
             vjk = r_vdw[ja] * coords_1sph + atom_coords[ja] - atom_coords[ka]
             tjk = lib.norm(vjk, axis=1) / r_vdw[ka]
-            wjk = regularize_xt(tjk, eta)
+            wjk = pcmobj.regularize_xt(tjk, eta, r_vdw[ka])
             wjk *= part_weights
             pol = make_multipoler(vjk, lmax)
             p1 = 0
@@ -234,18 +269,18 @@ def make_fi(pcmobj, r_vdw):
             v = r_vdw[ia]*coords_1sph + atom_coords[ia] - atom_coords[ja]
             rv = lib.norm(v, axis=1)
             t = rv / r_vdw[ja]
-            xt = regularize_xt(t, eta)
+            xt = pcmobj.regularize_xt(t, eta, r_vdw[ja])
             fi[ia] += xt
     fi[fi < 1e-20] = 0
     return fi
 
-def make_phi(pcmobj, dm, r_vdw, ui):
+def make_phi(pcmobj, dm, r_vdw, ui, grids):
     mol = pcmobj.mol
     natm = mol.natm
     coords_1sph, weights_1sph = make_grids_one_sphere(pcmobj.lebedev_order)
     ngrid_1sph = coords_1sph.shape[0]
 
-    tril_dm = lib.pack_tril(dm) * 2
+    tril_dm = lib.pack_tril(dm+dm.T)
     nao = dm.shape[0]
     diagidx = numpy.arange(nao)
     diagidx = diagidx*(diagidx+1)//2 + diagidx
@@ -268,6 +303,7 @@ def make_phi(pcmobj, dm, r_vdw, ui):
     max_memory = pcmobj.max_memory - lib.current_memory()[0]
     blksize = int(max(max_memory*1e6/8/nao**2, 400))
 
+    cav_coords1 = cav_coords.copy()
     cav_coords = cav_coords[extern_point_idx]
     v_phi_e = numpy.empty(cav_coords.shape[0])
     for i0, i1 in lib.prange(0, cav_coords.shape[0], blksize):
@@ -277,14 +313,12 @@ def make_phi(pcmobj, dm, r_vdw, ui):
     v_phi[extern_point_idx] -= v_phi_e
     return v_phi
 
-def make_psi_vmat(pcmobj, dm, r_vdw, ylm_1sph,
-                  grids, L_X, L, ui):
+def make_psi_vmat(pcmobj, dm, r_vdw, ui, grids, ylm_1sph, cached_pol, L_X, L):
     mol = pcmobj.mol
     natm = mol.natm
     lmax = pcmobj.lmax
     nlm = (lmax+1)**2
 
-    cached_pol = cache_fake_multipoler(grids, r_vdw, lmax)
     i1 = 0
     scaled_weights = numpy.zeros(grids.weights.size)
     for ia in range(natm):
@@ -328,6 +362,8 @@ def make_psi_vmat(pcmobj, dm, r_vdw, ylm_1sph,
             fac = 4*numpy.pi/(l*2+1)
             p0, p1 = p1, p1 + (l*2+1)
             psi[ia,p0:p1] = fac * numpy.einsum('n,mn->m', den[i0:i1], fak_pol[l])
+# Contribution of nuclear charge to the total density
+        psi[ia,0] -= 4*numpy.pi/r_vdw[ia] * mol.atom_charge(ia)
     logger.debug(pcmobj, 'electron leak %f', nelec_leak)
 
     L_S = numpy.linalg.solve(L.reshape(natm*nlm,-1), psi.ravel()).reshape(natm,-1)
@@ -376,8 +412,8 @@ def cache_fake_multipoler(grids, r_vdw, lmax):
             #:rr[r<=r_vdw[ia]] = r[r<=r_vdw[ia]]**l / r_vdw[ia]**(l+1)
             #:rr[r> r_vdw[ia]] = r_vdw[ia]**l / r[r>r_vdw[ia]]**(l+1)
             #:xx_ylm = numpy.einsum('n,mn->mn', rr, Ys[l])
-            xx_ylm = pol[l] * (1./r_vdw[ia]**(l+1))
-            xx_ylm[:,leak_idx] *= (r_vdw[ia]/r[leak_idx])**(2*l+1)
+            xx_ylm = pol[l] * (1./r_vdw_type[symb]**(l+1))
+            xx_ylm[:,leak_idx] *= (r_vdw_type[symb]/r[leak_idx])**(2*l+1)
             fak_pol.append(xx_ylm)
         cached_pol[symb] = (fak_pol, leak_idx)
     return cached_pol
@@ -397,12 +433,19 @@ class DDCOSMO(lib.StreamObject):
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
 
+        self.radii_table = radii.VDW
+        #self.radii_table = radii.UFF*1.1
+        #self.radii_table = radii.MM3
+        self.atom_radii = None
         self.lebedev_order = 17
         self.lmax = 6  # max angular momentum of spherical harmonics basis
         self.eta = .1  # regularization parameter
-        self.atomic_radii = elements.VDW_RADII
         self.eps = 78.3553
         self.becke_grids_level = 3
+
+##################################################
+# don't modify the following attributes, they are not input options
+        self._keys = set(self.__dict__.keys())
 
     def kernel(self, dm, grids=None):
         '''A single shot solvent effects for given density matrix.
@@ -413,13 +456,20 @@ class DDCOSMO(lib.StreamObject):
 
     def dump_flags(self):
         logger.info(self, '******** %s flags ********', self.__class__)
-        logger.info(self, 'lebedev_order = %s', self.lebedev_order)
+        logger.info(self, 'lebedev_order = %s (%d grids per sphere)',
+                    self.lebedev_order, gen_grid.LEBEDEV_ORDER[self.lebedev_order])
         logger.info(self, 'lmax = %s'         , self.lmax)
         logger.info(self, 'eta = %s'          , self.eta)
         logger.info(self, 'eps = %s'          , self.eps)
+        logger.debug2(self, 'radii_table %s', self.radii_table)
+        if self.atom_radii:
+            logger.info(self, 'User specified atomic radii %s', str(self.atom_radii))
         return self
 
     gen_solver = as_solver = gen_ddcosmo_solver
+
+    def regularize_xt(self, t, eta, scale=1):
+        return regularize_xt(t, eta*scale)
 
 
 def _make_fakemol(coords):
@@ -452,10 +502,11 @@ if __name__ == '__main__':
     from pyscf import scf
     mol = gto.M(atom='H 0 0 0; H 0 1 1.2; H 1. .1 0; H .5 .5 1')
     natm = mol.natm
-    r_vdw = [elements.VDW_RADII[gto.mole._charge(mol.atom_symbol(i))]
+    r_vdw = [radii.VDW[gto.mole._charge(mol.atom_symbol(i))]
              for i in range(natm)]
     r_vdw = numpy.asarray(r_vdw)
     pcmobj = DDCOSMO(mol)
+    pcmobj.regularize_xt = lambda t, eta, scale: regularize_xt(t, eta)
     pcmobj.lebedev_order = 7
     pcmobj.lmax = 6
     pcmobj.eta = 0.1
@@ -470,10 +521,11 @@ if __name__ == '__main__':
     nao = mol.nao_nr()
     dm = numpy.random.random((nao,nao))
     dm = dm + dm.T
-    #dm = scf.RHF(mol).run().make_rdm1()
-    e, vmat = DDCOSMO(mol).kernel(dm)
-    print(e - 0.421535205256)
-    print(lib.finger(vmat) - 0.098566328942023718)
+    pcmobj = DDCOSMO(mol)
+    pcmobj.regularize_xt = lambda t, eta, scale: regularize_xt(t, eta)
+    e, vmat = pcmobj.kernel(dm)
+    print(e + 0.44428498981007486)
+    print(lib.finger(vmat) - 0.0184398781712444)
 
     mol = gto.Mole()
     mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
@@ -486,3 +538,18 @@ if __name__ == '__main__':
     mf = ddcosmo_for_scf(scf.RHF(mol), cm)#.newton()
     mf.verbose = 4
     mf.kernel()
+
+    #mol = gto.Mole()
+    #mol.atom = ''' Fe                  0.00000000    0.00000000   -0.11081188
+    #               H                 -0.00000000   -0.84695236    0.59109389
+    #               H                 -0.00000000    0.89830571    0.52404783 '''
+    #mol.basis = '3-21g' #cc-pvdz'
+    #mol.verbose = 4
+    #mol.build()
+    #cm = DDCOSMO(mol)
+    #cm.eps = -1
+    #cm.verbose = 4
+    #mf = ddcosmo_for_scf(scf.RHF(mol), cm).newton()
+    #mf.init_guess = 'atom'
+    #mf.verbose = 4
+    #mf.kernel()
