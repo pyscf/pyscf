@@ -43,7 +43,6 @@ class DF(lib.StreamObject):
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
-        log.info('\n')
         log.info('******** %s flags ********', self.__class__)
         if self.auxmol is None:
             log.info('auxbasis = %s', self.auxbasis)
@@ -57,6 +56,7 @@ class DF(lib.StreamObject):
             log.info('_cderi_to_save = %s', self._cderi_to_save)
         else:
             log.info('_cderi_to_save = %s', self._cderi_to_save.name)
+        return self
 
     def build(self):
         t0 = (time.clock(), time.time())
@@ -95,6 +95,9 @@ class DF(lib.StreamObject):
             self._cderi = cderi
             log.timer_debug1('Generate density fitting integrals', *t0)
         return self
+
+    def kernel(self, *args, **kwargs):
+        return self.build(*args, **kwargs)
 
     def loop(self):
         if self._cderi is None:
