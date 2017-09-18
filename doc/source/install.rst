@@ -6,14 +6,14 @@ Installation
 You may already have `cmake <http://www.cmake.org>`_,
 `numpy <http://www.numpy.org/>`_, `scipy <http://www.scipy.org/>`_
 and `h5py <http://www.h5py.org/>`_ installed.  If not, you can install
-them from any Python package managers (`Pypi <https://pypi.python.org/>`_,
-`conda <http://conda.pydata.org/>`_).  Here we recommend to use the
-integrated science platform `Anaconda <https://www.continuum.io/downloads#linux>`_.
+them from any Python package manager (`Pypi <https://pypi.python.org/>`_,
+`conda <http://conda.pydata.org/>`_).  We recommend using the
+integrated science platform `Anaconda <https://www.continuum.io/downloads#linux>`_
 (with `conda-cmake <https://anaconda.org/anaconda/cmake>`_).
 
-You can download the latest PySCF release version
-`1.4 <https://github.com/sunqm/pyscf/releases/tag/v1.4>`_ or the
-develment branch from github
+The current stable PySCF release is `v1.3.5
+<https://github.com/sunqm/pyscf/releases/tag/v1.3.5>`_.  You can download the
+latest PySCF release v1.4 beta (or its development branch) from github::
 
   $ git clone https://github.com/sunqm/pyscf
 
@@ -25,36 +25,30 @@ Build the C extensions in :file:`pyscf/lib`::
   $ cmake ..
   $ make
 
-It will automatically download the analytical GTO integral library
-`libcint <https://github.com/sunqm/libcint.git>`_ and the DFT exchange
-correlation functional library `libxc <http://www.tddft.org/programs/Libxc>`_
-and `xcfun <https://github.com/dftlibs/xcfun.git>`_.  Finally, to make Python
-be able to find pyscf package, add the **parent directory** of pyscf to
-:code:`PYTHONPATH`, e.g. assuming pyscf is put in ``/home/abc``::
+This will automatically download the analytical GTO integral library `libcint
+<https://github.com/sunqm/libcint.git>`_ and the DFT exchange correlation
+functional libraries `libxc <http://www.tddft.org/programs/Libxc>`_ and `xcfun
+<https://github.com/dftlibs/xcfun.git>`_.  Finally, to make Python able to find
+the :code:`pyscf` package, add the top-level :code:`pyscf` directory (and not
+the :code:`pyscf/pyscf` subdirectory) to :code:`PYTHONPATH`.  For example, assuming
+:code:`pyscf` is put in ``/opt``::
 
-  export PYTHONPATH=/home/abc:$PYTHONPATH
+  export PYTHONPATH=/opt/pyscf:$PYTHONPATH
 
-To ensure the installation is successed, start a Python shell, and type::
+To ensure the installation is successful, start a Python shell, and type::
 
   >>> import pyscf
 
-If you got errors like::
-
-  ImportError: No module named pyscf
-
-It's very possible that you put ``/home/abc/pyscf`` in the :code:`PYTHONPATH`.
-You need to remove the ``/pyscf`` in that string and try import
-``pyscf`` in the python shell again.
-
-For Mac OsX user, you may get an import error if your OsX version is
+For Mac OS X/macOS, you may get an import error if your OS X/macOS version is
 10.11 or later::
 
-    OSError: dlopen(xxx/pyscf/lib/libcgto.dylib, 6): Library not loaded: libcint.2.8.dylib
-    Referenced from: xxx/pyscf/lib/libcgto.dylib
-    Reason: unsafe use of relative rpath libcint.2.8.dylib in xxx/pyscf/lib/libao2mo.dylib with restricted binary
+    OSError: dlopen(xxx/pyscf/pyscf/lib/libcgto.dylib, 6): Library not loaded: libcint.3.0.dylib
+    Referenced from: xxx/pyscf/pyscf/lib/libcgto.dylib
+    Reason: unsafe use of relative rpath libcint.3.0.dylib in xxx/pyscf/pyscf/lib/libcgto.dylib with restricted binary
 
-This is caused by the RPATH 
-It can be fixed by running the script ``pyscf/lib/_runme_to_fix_dylib_osx10.11.sh`` in ``pyscf/lib``::
+This is caused by the RPATH. 
+It can be fixed by running the script ``pyscf/lib/_runme_to_fix_dylib_osx10.11.sh`` in ``pyscf/lib``
+after compiling::
  
     cd pyscf/lib
     sh _runme_to_fix_dylib_osx10.11.sh
@@ -69,15 +63,16 @@ It can be fixed by running the script ``pyscf/lib/_runme_to_fix_dylib_osx10.11.s
   When the RPATH was removed, you need to add ``pyscf/lib`` and
   ``pyscf/lib/deps/lib`` in ``LD_LIBRARY_PATH``.
 
-Last step is to set the scratch directory.  The default scratch of pyscf is
-controlled by environment variable :code:`PYSCF_TMPDIR`.  If it's not specified,
-the system wide temporary directory :code:`TMPDIR` will be used as the scratch.
+A useful last step is to set the scratch directory.  The default scratch
+directory of PySCF is controlled by environment variable :code:`PYSCF_TMPDIR`.
+If it's not specified, the system wide temporary directory :code:`TMPDIR` will
+be used as the scratch directory.
 
 
 Installation without network
 ============================
 
-If you get problem to download the external libraries on your computer, you can
+If you have problems downloading the external libraries on your computer, you can
 manually build the libraries, as shown in the following instructions.  First,
 you need to install libcint, libxc or xcfun libraries.
 `libcint cint3 branch <https://github.com/sunqm/libcint/tree/cint3>`_
@@ -133,11 +128,12 @@ Finally update the ``PYTHONPATH`` environment for Python interpreter.
 Using optimized BLAS
 ====================
 
-The default installation does not need to provide external linear
-algebra libraries.  It's possible that the setup script only find and
-link to the slow BLAS/LAPACK libraries.  You can install the package
-with other BLAS venders instead of the default one to improve the
-performance,  eg MKL (it can provide 10 times speedup in many modules)::
+The default installation does not require the user to identify external linear
+algebra libraries, but instead tries to find them automatically. This automated
+setup script may only find and link to slow BLAS/LAPACK libraries.  To improve
+performance, users can install the package with other BLAS vendors,
+such as the Intel Math Kernel Library (MKL), which can provide 10x speedup in many
+modules::
 
   $ cd pyscf/lib/build
   $ cmake -DBLA_VENDOR=Intel10_64lp_seq ..
