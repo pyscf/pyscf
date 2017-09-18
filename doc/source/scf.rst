@@ -1,4 +1,4 @@
-:mod:`scf` --- Mean-field methods
+scf --- Mean-field methods
 *********************************
 
 .. module:: scf

@@ -5,6 +5,7 @@
 #
 
 import os, sys
+import re
 import platform
 import gc
 import time
@@ -1160,6 +1161,47 @@ def ao_labels(mol, fmt=True):
 
 def spinor_labels(mol):
     raise RuntimeError('TODO')
+
+def search_ao_label(mol, label):
+    '''Find the index of the AO basis function based on the given ao_label
+
+    Args:
+        ao_label : string or a list of strings
+            The regular expression pattern to match the orbital labels
+            returned by mol.ao_labels()
+
+    Returns:
+        A list of index for the AOs that matches the given ao_label RE pattern
+
+    Examples:
+
+    >>> mol = gto.M(atom='H 0 0 0; Cl 0 0 1', basis='ccpvtz')
+    >>> mol.parse_aolabel('Cl.*p')
+    [19 20 21 22 23 24 25 26 27 28 29 30]
+    >>> mol.parse_aolabel('Cl 2p')
+    [19 20 21]
+    >>> mol.parse_aolabel(['Cl.*d', 'Cl 4p'])
+    [25 26 27 31 32 33 34 35 36 37 38 39 40]
+    '''
+    return _aolabels2baslst(mol, label)
+
+def _aolabels2baslst(mol, aolabels_or_baslst, base=0):
+    if callable(aolabels_or_baslst):
+        baslst = [i for i,x in enumerate(mol.ao_labels())
+                  if aolabels_or_baslst(x)]
+    elif isinstance(aolabels_or_baslst, str):
+        aolabels = re.sub(' +', ' ', aolabels_or_baslst.strip(), count=1)
+        aolabels = re.compile(aolabels)
+        baslst = [i for i,s in enumerate(mol.ao_labels())
+                  if re.search(aolabels, s)]
+    elif len(aolabels_or_baslst) > 0 and isinstance(aolabels_or_baslst[0], str):
+        aolabels = [re.compile(re.sub(' +', ' ', x.strip(), count=1))
+                    for x in aolabels_or_baslst]
+        baslst = [i for i,t in enumerate(mol.ao_labels())
+                  if any(re.search(x, t) for x in aolabels)]
+    else:
+        baslst = [i-base for i in aolabels_or_baslst]
+    return numpy.asarray(baslst, dtype=int)
 
 def search_shell_id(mol, atm_id, l):
     '''Search the first basis/shell id (**not** the basis function id) which
@@ -2468,6 +2510,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         return spheric_labels(self, fmt)
     spherical_labels = spheric_labels
     ao_labels = ao_labels
+
+    search_ao_label = search_ao_label
 
     def search_shell_id(self, atm_id, l):
         return search_shell_id(self, atm_id, l)

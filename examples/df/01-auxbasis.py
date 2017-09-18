@@ -17,10 +17,20 @@ from pyscf import gto, scf, df
 # If auxbasis is not specified, default optimal auxiliary basis (if possible)
 # or even-tempered gaussian functions will be generated as auxbasis
 #
-mol = gto.M(atom='N1 0 0 0; N2 0 0 1.2', basis='ccpvdz')
+mol = gto.M(atom='N1 0 0 0; N2 0 0 1.2', basis={'N1':'ccpvdz', 'N2':'tzp'})
 mf = scf.RHF(mol).density_fit()
 mf.kernel()
 print('Default auxbasis', mf.with_df.auxmol.basis)
+#
+# The default basis is generated in the function df.make_auxbasis.  It returns
+# a basis dict for the DF auxiliary basis. In the real calculations, you can
+# first generate the default basis then make modification.
+#
+auxbasis = df.make_auxbasis(mol)
+print(mf.with_df.auxmol.basis == auxbasis)
+auxbasis['N2'] = 'ccpvdz jkfit'
+mf = scf.RHF(mol).density_fit(auxbasis=auxbasis)
+mf.kernel()
 
 #
 # Input with key argument auxbasis='xxx' in .density_fit function

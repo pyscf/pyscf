@@ -44,6 +44,7 @@ class PipekMezey(boys.Boys):
     def __init__(self, mol, mo_coeff=None):
         boys.Boys.__init__(self, mol, mo_coeff)
         self.pop_method = 'meta_lowdin'
+        self.conv_tol = 1e-6
         self._keys = self._keys.union(['pop_method'])
 
     def dump_flags(self):

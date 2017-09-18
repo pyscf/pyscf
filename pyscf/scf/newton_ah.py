@@ -803,7 +803,7 @@ def newton_SCF_class(mf):
                     logger.debug(self, 'Initial guess orbitals not given. '
                                  'Generating initial guess from %s density matrix',
                                  self.init_guess)
-                    dm = mf.get_init_guess(self.mol, self.init_guess)
+                    dm = self.get_init_guess(self.mol, self.init_guess)
                     mo_coeff, mo_occ = self.from_dm(dm)
 
             self.build(self.mol)
