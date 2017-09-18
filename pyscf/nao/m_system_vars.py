@@ -317,6 +317,7 @@ class system_vars_c():
     self.state = 'should be useful for something'
 
     # Trying to be similar to mole object from pySCF 
+    self._nelectron = self.hsx.nelec
     self.cart = False
     self.spin = self.nspin
     self.verbose = 1 
