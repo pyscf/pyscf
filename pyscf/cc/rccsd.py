@@ -507,9 +507,6 @@ class RCCSD(ccsd.CCSD):
             ldotr = np.dot(l1,r1) + np.dot(l2.ravel(),r2.ravel())
             l1 /= ldotr
             l2 /= ldotr
-            print "ldotr = ", ldotr
-            print "normalized l1 ", l1
-            print "normalized r1 ", r1
             l2 = 1./3*(l2 + 2.*l2.transpose(1,0,2))
 
             _eijkab = eijkab + _eval
@@ -808,9 +805,6 @@ class RCCSD(ccsd.CCSD):
             ldotr = np.dot(l1,r1) + np.dot(l2.ravel(),r2.ravel())
             l1 /= ldotr
             l2 /= ldotr
-            print "ldotr = ", ldotr
-            print "normalized l1 ", l1
-            print "normalized r1 ", r1
             l2 = 1./3*(1.*l2 + 2.*l2.transpose(0,2,1))
             r2 = r2.transpose(0,2,1)
 
