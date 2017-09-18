@@ -39,9 +39,9 @@ subroutine aos_libnao(ncoords, coords, norbs, oc2val, ldo ) bind(c, name='aos_li
     _die('norbs/=sda%norbs')
   endif
   
-  !$OMP PARALLEL DEFAULT(NONE)
-  !$OMP SHARED(ncoords, sda)
-  !$OMP PRIVATE(fr_val, atm, spa, jmx_sp, rho, br0, k, coeff, so, mu, start_ao, j, jjp1, icoord)
+  !$OMP PARALLEL DEFAULT(NONE) &
+  !$OMP SHARED(ncoords, sda, oc2val, coords) &
+  !$OMP PRIVATE(fr_val, atm, spa, jmx_sp, rho, br0, k, coeff, so, mu, start_ao, j, jjp1, icoord, br)
   !$OMP DO
   do icoord=1,ncoords
     br = coords(1:3,icoord)
