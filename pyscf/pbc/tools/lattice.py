@@ -1,9 +1,3 @@
-import numpy as np
-
-from pyscf.pbc import gto as pbcgto
-from pyscf.pbc import tools as pbctools
-import pyscf.pbc.tools.pyscf_ase as pyscf_ase
-
 A2B = 1.889725989
 
 def get_ase_atom(formula):
@@ -116,7 +110,6 @@ def get_ase_diamond_cubic(atom='C'):
         ase_atom = Diamond(symbol='Si', latticeconstant=5.431*A2B)
     return ase_atom
 
-
 def get_ase_graphene(vacuum=5.0):
     """Get the ASE atoms for primitive (2-atom) graphene unit cell."""
     from ase.lattice.hexagonal import Graphene
@@ -129,25 +122,3 @@ def get_ase_graphene_xxx(vacuum=5.0):
     ase_atom = bulk('C', 'hcp', a=2.46*A2B, c=vacuum*A2B)
     ase_atom.positions[1,2] = 0.0
     return ase_atom
-
-def build_cell(ase_atom, unit='B', ke=20.0, gsmax=None, basis='gth-szv', 
-               pseudo='gth-pade', dimension=3, incore_anyway=False):
-    cell = pbcgto.Cell()
-    cell.unit = unit
-    cell.atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom)
-    cell.a = ase_atom.cell
-
-    cell.basis = basis
-    cell.pseudo = pseudo
-    cell.dimension = dimension
-
-    cell.incore_anyway = incore_anyway
-
-    if gsmax is not None:
-        cell.gs = np.array([gsmax,gsmax,gsmax])
-    else:
-        cell.ke_cutoff = ke
-
-    cell.build()
-    return cell
-

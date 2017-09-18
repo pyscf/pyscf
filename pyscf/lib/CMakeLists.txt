@@ -97,9 +97,7 @@ add_subdirectory(shciscf)
 add_subdirectory(ri)
 add_subdirectory(localizer)
 add_subdirectory(hci)
-
 add_subdirectory(pbc)
-
 add_subdirectory(extras/mbd)
 
 option(ENABLE_LIBXC "Using libxc for XC functional library" ON)
@@ -111,14 +109,21 @@ if(NOT DISABLE_DFT)
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND
     ENABLE_LIBXC AND BUILD_LIBXC)
   ExternalProject_Add(libxc
-    URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.2.2.tar.gz
-    #URL https://launchpad.net/libxc/2.2/2.2.0/+download/libxc-2.2.0.tar.gz
-    #URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.0.0.tar.gz
+    #GIT_REPOSITORY https://gitlab.com/libxc/libxc/
+    #GIT_TAG master
+    URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-3.0.0.tar.gz
+    #URL http://www.sunqm.net/pyscf/files/src/libxc-3.0.0.tar.gz
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
+    BUILD_IN_SOURCE 1
+    CONFIGURE_COMMAND ./configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
           --enable-shared --disable-static --disable-fortran LIBS=-lm
           CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
+
+## For git checkout
+#    CONFIGURE_COMMAND autoreconf -i || autoreconf && ./configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
+#          --enable-shared --disable-static --disable-fortran LIBS=-lm
+#          CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
   )
 endif() # ENABLE_LIBXC
 

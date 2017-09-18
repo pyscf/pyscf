@@ -7,18 +7,18 @@ Welcome to PySCF documentation!
 ===============================
 
 PySCF is a collection of electronic structure programs powered by Python.
-The package aims to provide a simple, light-weight and efficient platform for
-quantum chemistry code developing and calculation.  The program is developed in
-the principle of
+The package aims to provide a simple, light-weight, and efficient platform for
+quantum chemistry calculations and code development.  The program is developed
+with the following principles:
 
 * Easy to install, to use, to extend and to be embedded;
 
-* Minimal requirements on libraries (No Boost, MPI) and computing
-  resources (perhaps losing efficiency to reduce I/O);
+* Minimal requirements on libraries (no Boost or MPI) and computing
+  resources (perhaps sacrificing efficiency to reduce I/O);
 
-* 90/10 Python/C, only computational hot spots were written in C;
+* 90/10 Python/C (only computational hot spots are written in C);
 
-* 90/10 functional/OOP, unless performance critical, functions are pure.
+* 90/10 functional/OOP (unless performance critical, functions are pure).
 
 Contents
 --------

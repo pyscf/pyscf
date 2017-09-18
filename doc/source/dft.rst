@@ -1,5 +1,5 @@
-dft
-***
+dft --- Density functional theory
+*********************************
 
 Kohn-Sham DFT
 =============

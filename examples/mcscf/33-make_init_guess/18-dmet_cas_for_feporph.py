@@ -28,6 +28,10 @@ In this example, we use density matrix embedding theory
 #
 # Define DMET active space
 #
+# This function is defined here as a simplified implementation of dmet_cas
+# active space function.  It's recommended to use the mcscf.dmet_cas module to
+# generate the DMET active space.  See also 43-dmet_cas.py
+#
 ##################################################
 def dmet_cas(mc, dm, implst):
     from pyscf import lo
