@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+#
+# Author: Paul J. Robinson <pjrobinson@ucla.edu>
+#
 
 '''
 IBO generation, cube generation, and population analysis of benzene
@@ -35,7 +38,7 @@ a = lo.vec_lowdin(a, mf.get_ovlp())
 Generate IBOS from orthogonal IAOs
 '''
 
-ibo = lo.ibo.ibo(mol, mo_occ, a, mf)
+ibo = lo.ibo.ibo(mol, mo_occ, a)
 
 '''
 Print the IBOS into Gausian Cube files
@@ -54,6 +57,6 @@ mo_occ = reduce(numpy.dot, (a.T, mf.get_ovlp(), mo_occ))
 dm = numpy.dot(mo_occ, mo_occ.T) * 2
 
 #mullikan population analysis based on IAOs
-pmol = mol.copy()
-pmol.build(False, False, basis='minao')
-mf.mulliken_pop(pmol, dm, s=numpy.eye(pmol.nao_nr()))
+iao_mol = mol.copy()
+iao_mol.build(False, False, basis='minao')
+mf.mulliken_pop(iao_mol, dm, s=numpy.eye(iao_mol.nao_nr()))

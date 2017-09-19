@@ -1,10 +1,14 @@
 #!/usr/bin/env python
+#
+# Author: Paul J. Robinson <pjrobinson@ucla.edu>
+#
 
 import numpy
 from pyscf import lo, tools
 from pyscf.pbc import gto, scf
 '''
-This Benchmark show how to use the Cubegen command to make VASP chgcars for visualizing periodic IBOs for example in diamond 
+This Benchmark show how to use the Cubegen command to make VASP chgcars for
+visualizing periodic IBOs for example in diamond 
 '''
 cell = gto.Cell()
 cell.a = '''
@@ -36,7 +40,7 @@ a = lo.iao.iao(cell, mo_occ)
 # Orthogonalize IAO
 a = lo.vec_lowdin(a, mf.get_ovlp())
 #ibo must take the orthonormalized IAOs
-ibo = lo.ibo.ibo(cell, mo_occ, a, mf)
+ibo = lo.ibo.ibo(cell, mo_occ, a)
 
 
 '''
@@ -53,7 +57,7 @@ Makes Population Analysis with IAOs
 mo_occ = reduce(numpy.dot, (a.T, mf.get_ovlp(), mo_occ))
 
 dm = numpy.dot(mo_occ, mo_occ.T) * 2
-pmol = cell.copy()
-pmol.build(False, False, basis='minao')
-mullic = mf.mulliken_pop(pmol, dm, s=numpy.eye(pmol.nao_nr()))
-    
+iao_mol = cell.copy()
+iao_mol.build(False, False, basis='minao')
+mullic = mf.mulliken_pop(iao_mol, dm, s=numpy.eye(iao_mol.nao_nr()))
+
