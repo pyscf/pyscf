@@ -25,7 +25,6 @@ class simulation_c():
 if __name__=="__main__":
   from pyscf import gto
   from pyscf.nao import system_vars_c, simulation_c
-  import matplotlib.pyplot as plt
   """ Interpreting small Gaussian calculation """
   mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0;', basis='ccpvdz') # coordinates in Angstrom!
   sv = system_vars_c(gto=mol, tol=1e-8, nr=512, rmin=1e-5)
