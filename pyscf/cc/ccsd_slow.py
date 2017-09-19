@@ -61,19 +61,22 @@ def make_inter_F(cc, t1, t2, eris):
     foo = fock[:nocc,:nocc].copy()
     foo[range(nocc),range(nocc)] = 0
     foo += .5 * numpy.einsum('ia,ja->ij', fock[:nocc,nocc:], t1)
-    g2 = 2 * eris.ovoo - eris.ovoo.transpose(2,1,0,3)
+    g2 = 2 * numpy.asarray(eris.ovoo)
+    g2 -= numpy.asarray(eris.ovoo).transpose(2,1,0,3)
     foo += numpy.einsum('kc,kcij', t1, g2)
     foo += numpy.einsum('iakb,jakb->ij', eris.ovov, theta)
     g2 = None
 
-    g2 = 2 * eris.ovov - eris.ovov.transpose(2,1,0,3)
+    g2 = 2 * numpy.asarray(eris.ovov)
+    g2 -= numpy.asarray(eris.ovov).transpose(2,1,0,3)
     fov = fock[:nocc,nocc:] + numpy.einsum('kc,iakc->ia', t1, g2)
     g2 = None
 
     fvv = fock[nocc:,nocc:].copy()
     fvv[range(nvir),range(nvir)] = 0
     fvv -= .5 * numpy.einsum('ia,ib->ab', t1, fock[:nocc,nocc:])
-    g2 = 2 * eris.ovvv - eris.ovvv.transpose(0,3,2,1)
+    g2 = 2 * numpy.asarray(eris.ovvv)
+    g2 -= numpy.asarray(eris.ovvv).transpose(0,3,2,1)
     fvv += numpy.einsum('kc,kcab->ab', t1, g2)
     fvv -= numpy.einsum('icja,icjb->ab', theta, eris.ovov)
     return foo, fov, fvv
@@ -82,12 +85,14 @@ def update_amp_t1(cc, t1, t2, eris, foo, fov, fvv):
     nocc, nvir = t1.shape
     fock = eris.fock
 
-    g2 = 2 * eris.ovov - eris.oovv.transpose(1,2,0,3)
+    g2 = 2 * numpy.asarray(eris.ovov)
+    g2 -= numpy.asarray(eris.oovv).transpose(1,2,0,3)
     t1new = fock[:nocc,nocc:] \
           + numpy.einsum('ib,ab->ia', t1, fvv) \
           - numpy.einsum('ja,ji->ia', t1, foo) \
           + numpy.einsum('jb,iajb->ia', t1, g2)
-    theta = t2 * 2 - t2.transpose(2,1,0,3)
+    theta = numpy.asarray(t2) * 2
+    theta -= numpy.asarray(t2).transpose(2,1,0,3)
     t1new += numpy.einsum('jb,iajb->ia', fov, theta)
     t1new += numpy.einsum('ibjc,jcba->ia', theta, eris.ovvv)
     t1new -= numpy.einsum('jbki,jbka->ia', eris.ovoo, theta)
@@ -99,7 +104,7 @@ def update_amp_t1(cc, t1, t2, eris, foo, fov, fvv):
 def update_amp_t2(cc, t1, t2, eris, foo, fov, fvv):
     nocc, nvir = t1.shape
     fock = eris.fock
-    t2new = eris.ovov.copy()
+    t2new = numpy.copy(eris.ovov)
 
     ft_ij = foo + numpy.einsum('ja,ia->ij', .5*t1, fov)
     ft_ab = fvv - numpy.einsum('ia,ib->ab', .5*t1, fov)
@@ -116,14 +121,14 @@ def update_amp_t2(cc, t1, t2, eris, foo, fov, fvv):
     theta = t2 * 2 - t2.transpose(2,1,0,3)
     tau = theta - numpy.einsum('jc,ka->jakc', t1, t1*2)
 
-    wovOV = eris.ovov.copy()
+    wovOV = numpy.copy(eris.ovov)
     wovOV += .5 * numpy.einsum('jakc,ibkc->ibja', tau, eris.ovov)
     wovOV -= .5 * numpy.einsum('jakc,ickb->ibja', t2, eris.ovov)
     wovOV += numpy.einsum('jc,ibac->ibja', t1, eris.ovvv)
     wovOV -= numpy.einsum('ka,ibkj->ibja', t1, eris.ovoo)
 
     tau = .5*t2 + numpy.einsum('ia,jb->iajb', t1, t1)
-    woVoV = -eris.oovv.transpose(1,2,0,3)
+    woVoV = -numpy.asarray(eris.oovv).transpose(1,2,0,3)
     woVoV += numpy.einsum('jcka,ickb->ibja', tau, eris.ovov)
     woVoV -= numpy.einsum('jc,icab->ibja', t1, eris.ovvv)
     woVoV += numpy.einsum('ka,kbij->ibja', t1, eris.ovoo)
