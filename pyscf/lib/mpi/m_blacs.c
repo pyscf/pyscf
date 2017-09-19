@@ -6,7 +6,7 @@
 #ifdef PARALLEL
 #include <Python.h>
 #ifdef GPAW_WITH_SL
-#define PY_ARRAY_UNIQUE_SYMBOL GPAW_ARRAY_API
+//#define PY_ARRAY_UNIQUE_SYMBOL GPAW_ARRAY_API
 #define NO_IMPORT_ARRAY
 #include <numpy/arrayobject.h>
 #include <stdlib.h>
