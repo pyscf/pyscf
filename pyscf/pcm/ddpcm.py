@@ -112,7 +112,7 @@ def make_A(pcmobj, r_vdw, ylm_1sph, ui):
         for ka in ddcosmo.atoms_with_vdw_overlap(ja, atom_coords, r_vdw):
             vjk = r_vdw[ja] * coords_1sph + atom_coords[ja] - atom_coords[ka]
             rjk = lib.norm(vjk, axis=1)
-            pol = ddcosmo.make_multipoler(vjk, lmax)
+            pol = ddcosmo.make_multipole(vjk, lmax)
             p1 = 0
             weights = w_u / rjk**(l*2+1)
             for l in range(lmax+1):
@@ -139,8 +139,8 @@ if __name__ == '__main__':
     dm = dm + dm.T
     #dm = scf.RHF(mol).run().make_rdm1()
     e, vmat = DDPCM(mol).kernel(dm)
-    print(e + 0.39755290826494277)
-    print(lib.finger(vmat) - 0.014805447945446568)
+    print(e + 1.2446306643473923)
+    print(lib.finger(vmat) - 0.77873361914445294)
 
     mol = gto.Mole()
     mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188

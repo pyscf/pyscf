@@ -132,17 +132,22 @@ def get_atomic_radii(pcmobj):
 
 
 def make_ylm(r, lmax):
-    # spherical harmonics, the standard computation method is
+    # spherical harmonics, the standard computing method is
     #:import scipy.special
+    #:ngrid = r.shape[0]
     #:cosphi = r[:,2]
     #:sinphi = (1-cosphi**2)**.5
-    #:costheta = r[:,0] / sinphi
-    #:sintheta = r[:,1] / sinphi
+    #:costheta = numpy.ones(ngrid)
+    #:sintheta = numpy.zeros(ngrid)
+    #:costheta[sinphi!=0] = r[sinphi!=0,0] / sinphi[sinphi!=0]
+    #:sintheta[sinphi!=0] = r[sinphi!=0,1] / sinphi[sinphi!=0]
+    #:costheta[costheta> 1] = 1
+    #:costheta[costheta<-1] =-1
+    #:sintheta[sintheta> 1] = 1
+    #:sintheta[sintheta<-1] =-1
     #:varphi = numpy.arccos(cosphi)
     #:theta = numpy.arccos(costheta)
-    #:if sintheta < 0:
-    #:    theta = 2*numpy.pi - theta
-    #:ngrid = r.shape[0]
+    #:theta[sintheta<0] = 2*numpy.pi - theta[sintheta<0]
     #:ylms = []
     #:for l in range(lmax+1):
     #:    ylm = numpy.empty((l*2+1,ngrid))
@@ -159,7 +164,18 @@ def make_ylm(r, lmax):
     #:            ylm[l+m] = ( f1.real + f2.real) / numpy.sqrt(2)
     #:    ylms.append(ylm)
 
-# libcint has a fast cart2sph transformation for low angular moment
+    # When r is a normalized vector:
+    return make_multipole(r, lmax)
+
+
+def make_multipole(r, lmax):
+    # multipole is defined in the following way.
+    #:rad = lib.norm(r, axis=1)
+    #:ylms = make_ylm(r/rad.reshape(-1,1), lmax)
+    #:pol = [rad**l*y for l, y in enumerate(ylms)]
+
+# libcint cart2sph transformation provide the capability to compute
+# multipole directly.  cart2sph function is fast for low angular moment.
     ngrid = r.shape[0]
     xs = numpy.ones((lmax+1,ngrid))
     ys = numpy.ones((lmax+1,ngrid))
@@ -186,12 +202,6 @@ def make_ylm(r, lmax):
         ylms.append(ylm)
     return ylms
 
-def make_multipoler(r, lmax):
-    #:rad = lib.norm(r, axis=1)
-    #:ylms = make_ylm(r/rad.reshape(-1,1), lmax)
-    #:pol = [rad**l*y for l, y in enumerate(ylms)]
-    pol = make_ylm(r, lmax)
-    return pol
 
 def regularize_xt(t, eta):
     xt = numpy.zeros_like(t)
@@ -229,12 +239,16 @@ def make_L(pcmobj, r_vdw, ylm_1sph, fi):
     atom_coords = mol.atom_coords()
     ylm_1sph = ylm_1sph.reshape(nlm,ngrid_1sph)
 
+# JCP, 141, 184108 Eq (9), (12) is incorrect
+# L_diag = <lm|(1/|s-s'|)|l'm'>
+# Using Laplace expansion for electrostatic potential 1/r
+# L_diag = 4pi/(2l+1)/|s| <lm|l'm'>
     L_diag = numpy.zeros((natm,nlm))
     p1 = 0
     for l in range(lmax+1):
         p0, p1 = p1, p1 + (l*2+1)
         L_diag[:,p0:p1] = 4*numpy.pi/(l*2+1)
-    L_diag *= r_vdw.reshape(-1,1)
+    L_diag *= 1./r_vdw.reshape(-1,1)
     Lmat = numpy.diag(L_diag.ravel()).reshape(natm,nlm,natm,nlm)
 
     for ja in range(natm):
@@ -247,10 +261,10 @@ def make_L(pcmobj, r_vdw, ylm_1sph, fi):
             tjk = lib.norm(vjk, axis=1) / r_vdw[ka]
             wjk = pcmobj.regularize_xt(tjk, eta, r_vdw[ka])
             wjk *= part_weights
-            pol = make_multipoler(vjk, lmax)
+            pol = make_multipole(vjk, lmax)
             p1 = 0
             for l in range(lmax+1):
-                fac = 4*numpy.pi/(l*2+1) / r_vdw[ka]**l
+                fac = 4*numpy.pi/(l*2+1) / r_vdw[ka]**(l+1)
                 p0, p1 = p1, p1 + (l*2+1)
                 a = numpy.einsum('xn,n,mn->xm', ylm_1sph, wjk, pol[l])
                 Lmat[ja,:,ka,p0:p1] += -fac * a
@@ -280,6 +294,8 @@ def make_phi(pcmobj, dm, r_vdw, ui, grids):
     coords_1sph, weights_1sph = make_grids_one_sphere(pcmobj.lebedev_order)
     ngrid_1sph = coords_1sph.shape[0]
 
+    if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+        dm = dm[0] + dm[1]
     tril_dm = lib.pack_tril(dm+dm.T)
     nao = dm.shape[0]
     diagidx = numpy.arange(nao)
@@ -332,9 +348,11 @@ def make_psi_vmat(pcmobj, dm, r_vdw, ui, grids, ylm_1sph, cached_pol, L_X, L):
             eta_nj = fac * numpy.einsum('mn,m->n', fak_pol[l], L_X[ia,p0:p1])
             scaled_weights[i0:i1] += eta_nj * becke_weights
 
+    if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+        dm = dm[0] + dm[1]
     ni = numint._NumInt()
     max_memory = pcmobj.max_memory - lib.current_memory()[0]
-    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, 1)
+    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm)
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
     den = numpy.empty(grids.weights.size)
@@ -361,9 +379,10 @@ def make_psi_vmat(pcmobj, dm, r_vdw, ui, grids, ylm_1sph, cached_pol, L_X, L):
         for l in range(lmax+1):
             fac = 4*numpy.pi/(l*2+1)
             p0, p1 = p1, p1 + (l*2+1)
-            psi[ia,p0:p1] = fac * numpy.einsum('n,mn->m', den[i0:i1], fak_pol[l])
+            psi[ia,p0:p1] = -fac * numpy.einsum('n,mn->m', den[i0:i1], fak_pol[l])
 # Contribution of nuclear charge to the total density
-        psi[ia,0] -= 4*numpy.pi/r_vdw[ia] * mol.atom_charge(ia)
+# The factor numpy.sqrt(4*numpy.pi) is due to the product of 4*pi * Y_0^0
+        psi[ia,0] += numpy.sqrt(4*numpy.pi)/r_vdw[ia] * mol.atom_charge(ia)
     logger.debug(pcmobj, 'electron leak %f', nelec_leak)
 
     L_S = numpy.linalg.solve(L.reshape(natm*nlm,-1), psi.ravel()).reshape(natm,-1)
@@ -389,7 +408,8 @@ def make_psi_vmat(pcmobj, dm, r_vdw, ui, grids, ylm_1sph, cached_pol, L_X, L):
 
 def cache_fake_multipoler(grids, r_vdw, lmax):
 # For each type of atoms, cache the product of last two terms in
-# JCP, 141, 184108, Eq (31) x_{<}^{l} / x_{>}^{l+1} Y_l^m
+# JCP, 141, 184108, Eq (31):
+# x_{<}^{l} / x_{>}^{l+1} Y_l^m
     mol = grids.mol
     atom_grids_tab = grids.gen_atomic_grids(mol)
     r_vdw_type = {}
@@ -403,7 +423,7 @@ def cache_fake_multipoler(grids, r_vdw, lmax):
         x_nj, w = atom_grids_tab[symb]
         r = lib.norm(x_nj, axis=1)
         leak_idx = r > r_vdw_type[symb]
-        pol = make_multipoler(x_nj, lmax)
+        pol = make_multipole(x_nj, lmax)
         fak_pol = []
         for l in range(lmax+1):
             # x_{<}^{l} / x_{>}^{l+1} Y_l^m  in JCP, 141, 184108, Eq (31)
@@ -515,7 +535,7 @@ if __name__ == '__main__':
     fi = make_fi(pcmobj, r_vdw)
     ylm_1sph = numpy.vstack(make_ylm(coords_1sph, pcmobj.lmax))
     L = make_L(pcmobj, r_vdw, ylm_1sph, fi)
-    print(lib.finger(L) - 28.106385308171649)
+    print(lib.finger(L) - 6.2823493771037473)
 
     numpy.random.seed(1)
     nao = mol.nao_nr()
@@ -524,8 +544,8 @@ if __name__ == '__main__':
     pcmobj = DDCOSMO(mol)
     pcmobj.regularize_xt = lambda t, eta, scale: regularize_xt(t, eta)
     e, vmat = pcmobj.kernel(dm)
-    print(e + 0.44428498981007486)
-    print(lib.finger(vmat) - 0.0184398781712444)
+    print(e + 1.3328527024431132)
+    print(lib.finger(vmat) - 0.79558953448887193)
 
     mol = gto.Mole()
     mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
@@ -537,7 +557,7 @@ if __name__ == '__main__':
     cm.verbose = 4
     mf = ddcosmo_for_scf(scf.RHF(mol), cm)#.newton()
     mf.verbose = 4
-    mf.kernel()
+    mf.kernel()  # -75.5755510824106
 
     #mol = gto.Mole()
     #mol.atom = ''' Fe                  0.00000000    0.00000000   -0.11081188
