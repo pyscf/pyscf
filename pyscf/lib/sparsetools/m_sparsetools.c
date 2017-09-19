@@ -26,7 +26,7 @@
 !
 !   Complexity: Linear.  Specifically O(nnz(A) + n_row)
 */
-extern "C" void scsr_matvec(int nrow, int ncol, int nnz, int *Ap, int *Aj, 
+void scsr_matvec(int nrow, int ncol, int nnz, int *Ap, int *Aj, 
     float *Ax, float *Xx, float *Yx)
 {
 
@@ -49,7 +49,7 @@ extern "C" void scsr_matvec(int nrow, int ncol, int nnz, int *Ap, int *Aj,
 }
 
 
-extern "C" void dcsr_matvec(int nrow, int ncol, int nnz, int *Ap, int *Aj, 
+void dcsr_matvec(int nrow, int ncol, int nnz, int *Ap, int *Aj, 
     double *Ax, double *Xx, double *Yx)
 {
 
@@ -94,7 +94,7 @@ extern "C" void dcsr_matvec(int nrow, int ncol, int nnz, int *Ap, int *Aj,
  *   Complexity: Linear.  Specifically O(nnz(A) + n_col)
  *
  */
-extern "C" void scsc_matvec(int n_row, int n_col, int nnz,
+void scsc_matvec(int n_row, int n_col, int nnz,
             int *Ap, int *Ai, float *Ax, float *Xx, float *Yx)
 {
     int col_start, col_end, j, ii, i;
@@ -110,7 +110,7 @@ extern "C" void scsc_matvec(int n_row, int n_col, int nnz,
     }
 }
 
-extern "C" void dcsc_matvec(int n_row, int n_col, int nnz,
+void dcsc_matvec(int n_row, int n_col, int nnz,
             int *Ap, int *Ai, double *Ax, double *Xx, double *Yx)
 {
     int col_start, col_end, j, ii, i;
@@ -148,7 +148,7 @@ extern "C" void dcsc_matvec(int n_row, int n_col, int nnz,
  *   Output array Yx must be preallocated
  *
 */
-extern "C" void scsc_matvecs(int n_row, int n_col, int n_vecs, 
+void scsc_matvecs(int n_row, int n_col, int n_vecs, 
       int *Ap, int *Ai, float *Ax, float *Xx, float *Yx)
 {
   int i, j, ii;
@@ -169,7 +169,7 @@ extern "C" void scsc_matvecs(int n_row, int n_col, int n_vecs,
   //}
 }
 
-extern "C" void dcsc_matvecs(int n_row, int n_col, int n_vecs, 
+void dcsc_matvecs(int n_row, int n_col, int n_vecs, 
       int *Ap, int *Ai, double *Ax, double *Xx, double *Yx)
 {
   int i, j, ii;
