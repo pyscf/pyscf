@@ -1534,11 +1534,11 @@ class Mole(lib.StreamObject):
             Each element is one irreducible representation id associated with the basis
             stored in symm_orb.  One irrep id stands for one irreducible representation
             symbol.  The irrep symbol and the relevant id are defined in
-            :attr:`symm.parameters.IRREP_ID_TABLE`
+            :attr:`symm.param.IRREP_ID_TABLE`
         irrep_name : a list of str
             Each element is one irreducible representation symbol associated with the basis
             stored in symm_orb.  The irrep symbols are defined in
-            :attr:`symm.parameters.IRREP_ID_TABLE`
+            :attr:`symm.param.IRREP_ID_TABLE`
         _built : bool
             To label whether :func:`Mole.build` has been called.  It ensures some functions
             being initialized once.
