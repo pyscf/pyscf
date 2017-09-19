@@ -416,10 +416,13 @@ def get_kconserv(cell, kpts):
 
 def get_kconserv3(cell, kpts, kijkab):
     '''Get the momentum conservation array for a set of k-points.
-    Similar to get_kconserv but for 5 kpoint indices
-    kijkab = (ki,kj,kk,ka,kb)
-    Finds from kpts the index that conserves momentum for each kpt
-    in kijkab (which can be a list!)
+
+    This function is similar to get_kconserv, but instead finds the 'kc'
+    that satisfies momentum conservation for 5 k-points,
+
+    kc = ki + kj + kk - ka - kb (mod G),
+
+    where these kpoints are stored in kijkab[ki,kj,kk,ka,kb].
     '''
     nkpts = kpts.shape[0]
     KLMN = np.zeros([nkpts,nkpts,nkpts], np.int)
@@ -427,7 +430,7 @@ def get_kconserv3(cell, kpts, kijkab):
     kijkab = np.array(kijkab)
 
     # Finds which indices in ijkab are integers and which are lists
-    # TODO: try to see if it works for more than 1 list and/or 2 lists
+    # TODO: try to see if it works for more than 1 list
     idx_sum = np.array([not(isinstance(x,int) or isinstance(x,np.int)) for x in kijkab])
     idx_range = kijkab[idx_sum]
     min_idx_range = np.zeros(5,dtype=int)
@@ -461,7 +464,7 @@ def get_kconserv3(cell, kpts, kijkab):
                 break
 
         if found == 0:
-            print "** ERROR: Problem in get_kconserv. Quitting."
+            print "** ERROR: Problem in get_kconserv3. Quitting."
             print kijkab
             sys.exit()
     return out_array

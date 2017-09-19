@@ -450,6 +450,8 @@ dsyev = eigh
 
 
 def pick_real_eigs(w, v, nroots, x0):
+    # Here we pick the eigenvalues with smallest imaginary component,
+    # where we are forced to choose at least one eigenvalue.
     abs_imag = abs(w.imag)
     max_imag_tol = max(1e-5,min(abs_imag)*1.1)
     realidx = numpy.where((abs_imag < max_imag_tol))[0]

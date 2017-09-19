@@ -10,7 +10,7 @@ import os
 import numpy as np
 import h5py
 
-from pyscf.pbc.tools import kpoint_helper
+from pyscf.pbc.cc import kpoint_helper
 import pyscf.pbc.tools.pbc as tools
 from pyscf import lib
 import pyscf.ao2mo
