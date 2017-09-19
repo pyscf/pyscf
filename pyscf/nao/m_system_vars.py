@@ -520,6 +520,22 @@ class system_vars_c():
     ksn2fd = fermi_dirac_occupations(Telec, ksn2E, Fermi)
     ksn2fd = (3.0-self.nspin)*ksn2fd
     return ksn2fd
+
+  def read_wfsx(self, fname, **kvargs):
+    """ An occasional reading of the SIESTA's .WFSX file """
+    from pyscf.nao.m_siesta_wfsx import siesta_wfsx_c
+    self.wfsx = siesta_wfsx_c(fname=fname, **kvargs)
+    
+    assert self.nkpoints == self.wfsx.nkpoints
+    assert self.norbs == self.wfsx.norbs 
+    assert self.nspin == self.wfsx.nspin
+    orb2m = self.get_orb2m()
+    for k in range(self.nkpoints):
+      for s in range(self.nspin):
+        for n in range(self.norbs):
+          _siesta2blanko_denvec(orb2m, self.wfsx.x[k,s,n,:,:])
+    
+    return self
   
   @property
   def nelectron(self):
