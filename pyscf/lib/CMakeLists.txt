@@ -146,6 +146,5 @@ if(ENABLE_NAO)
   message("CMAKE_Fortran_FLAGS: ${CMAKE_Fortran_FLAGS}")
   add_subdirectory(nao)
   add_subdirectory(sparsetools)
-  add_subdirectory(openmx)  
 endif(ENABLE_NAO)
 

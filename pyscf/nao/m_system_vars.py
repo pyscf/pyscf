@@ -252,8 +252,8 @@ class system_vars_c():
         atom2sp (list): atom to specie, list associating the atoms to their specie number
         atom2s: atom -> first atomic orbital in a global orbital counting
         atom2mu_s: atom -> first multiplett (radial orbital) in a global counting of radial orbitals
-        sp2symbol (list): list soociating the species to them symbol
-        sp2charge (list): list associating the species to them charge
+        sp2symbol (list): list soociating the species to their symbol
+        sp2charge (list): list associating the species to their charge
         state (string): this is an internal information on the current status of the class
     """
 
@@ -380,6 +380,42 @@ class system_vars_c():
     from pyscf.nao.m_system_vars_gpaw import system_vars_gpaw
     return system_vars_gpaw(self, calc, label="gpaw", chdir='.', **kvargs)
     
+  #
+  #
+  #
+  def init_openmx(self, label='openmx', cd='.', **kvargs):
+    from pyscf.nao.m_openmx_import_scfout import openmx_import_scfout
+    from timeit import default_timer as timer
+    """
+      Initialise system var using only the OpenMX output (label.scfout in particular is needed)
+
+      System variables:
+      -----------------
+        label (string): calculation label
+        chdir (string): calculation directory
+        xml_dict (dict): information extracted from the xml siesta output, see m_siesta_xml
+        wfsx: class use to extract the information about wavefunctions, see m_siesta_wfsx
+        hsx: class to store a sparse representation of hamiltonian and overlap, see m_siesta_hsx
+        norbs_sc (integer): number of orbital
+        ucell (array, float): unit cell
+        sp2ion (list): species to ions, list of the species associated to the information from the pao files
+        ao_log: Atomic orbital on an logarithmic grid, see m_ao_log
+        atom2coord (array, float): array containing the coordinates of each atom.
+        natm, natoms (integer): number of atoms
+        norbs (integer): number of orbitals
+        nspin (integer): number of spin
+        nkpoints (integer): number of kpoints
+        fermi_energy (float): Fermi energy
+        atom2sp (list): atom to specie, list associating the atoms to their specie number
+        atom2s: atom -> first atomic orbital in a global orbital counting
+        atom2mu_s: atom -> first multiplett (radial orbital) in a global counting of radial orbitals
+        sp2symbol (list): list soociating the species to their symbol
+        sp2charge (list): list associating the species to their charge
+        state (string): this is an internal information on the current status of the class
+    """
+    openmx_import_scfout(self, label, cd)
+    self.state = 'must be useful for something already'
+    return self
     
   # More functions for similarity with Mole
   def atom_symbol(self, ia): return self.sp2symbol[self.atom2sp[ia]]

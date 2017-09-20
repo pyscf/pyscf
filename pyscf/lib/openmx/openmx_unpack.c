@@ -35,7 +35,7 @@
 #include <string.h>
 #include "read_scfout.h"
 
-int main(int argc, char *argv[]) 
+int openmx_read_unpack(int argc, char *argv[]) 
 {
 
   static int ct_AN,h_AN,Gh_AN,i,j,TNO1,TNO2;  
