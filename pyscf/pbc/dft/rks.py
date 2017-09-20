@@ -78,21 +78,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         ecoul = None
 
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
+    return vxc
 
-    ##PJ MAKING CHANGES BELOW HERE
-    if not ks.constrained_dft:
-        #if not shift_hamiltonian is not set then the code excecutes exactly as before
-        return vxc
-    else:
-        if not numpy.array_equal(ks.shift_hamiltonian.shape,numpy.asarray(vhf+vx).shape):
-            print "WARNING: shifted hamiltonian not of correct shape"
-            print "WARNING: hamiltonian has shape: "+str(numpy.asarray(vhf+vx).shape)
-            print "WARNING: offset matrix has shape: "+str(numpy.asarray(ks.shift_hamiltonian).shape)
-            print "WARNING: TURNING OFF CONSTRAINED DFT"
-            ks.constrained_dft = False
-            return vxc
-        return vxc+ks.shift_hamiltonian
-    #PJ DONE MAKING CHANGES
 
 def _patch_df_beckegrids(density_fit):
     def new_df(self, auxbasis=None, gs=None):
@@ -126,10 +113,6 @@ class RKS(pbchf.RHF):
         self.xc = 'LDA,VWN'
         self.grids = gen_grid.UniformGrids(cell)
         self.small_rho_cutoff = 1e-7  # Use rho to filter grids
-        ###CONSTRAINED DFT BELOW HERE
-        self.constrained_dft = False
-        self.shift_hamiltonian = numpy.zeros(1)
-        ##OKAY...WE'RE DONE WITH CONSTRAINED DFT NOW...CARRY ON
 ##################################################
 # don't modify the following attributes, they are not input options
         self._numint = numint._NumInt()

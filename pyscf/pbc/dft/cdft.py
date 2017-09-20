@@ -1,12 +1,17 @@
+#!/usr/bin/env python
+#
 #Author: Paul J. Robinson <pjrobinson@ucla.edu>
 #
+
+'''
+This is a purpose built constrained dft implementation which allows the
+shifting of an orbital (or a linear combination of orbitals) by an arbitrary
+constant.  Allows the freedom to select thine own basis
+'''
+
 import numpy
 from pyscf import lo, tools
 from pyscf.pbc import gto, scf, dft
-'''
-This is a purpose built constrained dft implementation which allows the shifting of an orbital (or a linear combination of orbitals) by an arbitrary constant. 
-Allows the freedom to select thine own basis 
-'''
 
 def cdft(mf,cell,offset,orbital,basis=None):
     '''
@@ -15,17 +20,17 @@ def cdft(mf,cell,offset,orbital,basis=None):
         shift -- float -- a semi aribitrary energy which displaces the selected orbitals by the diagonal
         orbital -- int -- indicating which orbital are shifted in the selected basis
         basis -- 2D numpy array -- the working basis in the basis of AOs from 'cell' (Defaults to AO basis)
-    
+
     Returns:
         mf -- converged mean field object (with AO basis)
-    
+
     '''
-    if not basis is None: 
+    if not basis is None:
         a = basis
     else:
         a = numpy.eye(cell._bas.shape[1])
     results = numpy.asarray([])
-    
+
     '''
      Here we run the calculation using each IAO as an offset parameter
     '''
@@ -34,21 +39,15 @@ def cdft(mf,cell,offset,orbital,basis=None):
     ##gonna try nomrlaizing to see if that makes life better
     ##iaoi = iaoi / numpy.linalg.norm(iaoi)
     mf.shift_hamiltonian= numpy.diag(iaoi) * offset
-    mf.constrained_dft=True 
-    
-    '''
-     the immidiatly produced energy does not have a proper meaning
-    '''
-    _meaninglessEnergy = mf.kernel()
-    
-    '''
-    this gets the energy of the unconstrained hamiltonian optimized with contstraints
-    '''
-    mf.shift_hamiltonian= numpy.zeros(iaoi.shape)
-    mf.constrained_dft=False
-    
-    readjustedEnergy = mf.energy_tot(dm=mf.make_rdm1(), vhf=mf.get_veff(cell,mf.make_rdm1()),h1e=mf.get_hcore(cell))
-    mf.e_tot = readjustedEnergy
+    mf.constrained_dft=True
+    def get_veff(*args, **kwargs):
+        vxc = dft.rks.get_veff(mf, *args, **kwargs)
+        # Make a shift to the Veff matrix, while ecoul and exc are kept unchanged.
+        # The total energy is computed with the correct ecoul and exc.
+        vxc = lib.tag_array(vxc+mf.shift_hamiltonian,
+                            ecoul=vxc.ecoul, exc=vxc.exc, vj=None, vk=None)
+        return vxc
+    mf.get_veff = get_veff
     return mf
 
 def fast_iao_mullikan_pop(mf,cell,a=None):
@@ -56,7 +55,7 @@ def fast_iao_mullikan_pop(mf,cell,a=None):
     Input: mf -- a preconverged mean fild object
     Returns: mullikan populaion analysis in the basisIAO a
     '''
-    
+
     '''
     here we convert the density matrix to the IAO basis
     '''
@@ -65,7 +64,7 @@ def fast_iao_mullikan_pop(mf,cell,a=None):
     #converts the occupied MOs to the IAO basis
     ovlpS = mf.get_ovlp()
     CIb = reduce(numpy.dot, (a.T, ovlpS , mf.make_rdm1()))
-    
+
     '''
     This is the mullikan population below here
     '''
@@ -76,7 +75,7 @@ def fast_iao_mullikan_pop(mf,cell,a=None):
     pmol = cell.copy()
     pmol.build(False, False, basis='minao')
     return mf.mulliken_pop(pmol, dm, s=numpy.eye(pmol.nao_nr()))
-    
+
 
 
 
@@ -93,7 +92,7 @@ if __name__ == '__main__':
         C  0.000000000         0.000000000         4.999999702
         C  1.227999862         0.708986051         4.999999702
        '''
-    
+
     cell.ke_cutoff = 50
     cell.basis = 'gth-tzvp'
     cell.pseudo = 'gth-pbe'
@@ -102,33 +101,33 @@ if __name__ == '__main__':
     cell.unit="Angstrom"
     cell.build()
     cell.rcut*=2
-    
-    print "running intial DFT calc to generate IAOs" 
-    mf = dft.RKS(cell)    
+
+    print "running intial DFT calc to generate IAOs"
+    mf = dft.RKS(cell)
     mf.chkfile = 'graphene.chk'
     mf.init_guess = 'chkfile'
     mf.xc = 'pbe,pbe'
     mf.kernel()
-    
+
     #we need to makVe the IAOs out of a converged calculation
-    print "generating IAOs" 
+    print "generating IAOs"
     mo_occ = mf.mo_coeff[:,mf.mo_occ>0]
     a = lo.iao.iao(cell, mo_occ)
     # Orthogonalize IAO
     a = lo.vec_lowdin(a, mf.get_ovlp())
-    
+
     #arbitrary parameters
     offset = 0.0001
     orbital =4
-    
-    print "running constrained dft" 
+
+    print "running constrained dft"
 
     mf  = cdft(mf,mf.cell,offset,orbital,basis=a)
-    population = fast_iao_mullikan_pop(mf,a=a)    
+    population = fast_iao_mullikan_pop(mf,a=a)
     result = numpy.zeros(3)
-    
+
     result[0] = offset
-    result[1] = mf.e_tot  
+    result[1] = mf.e_tot
     result[2] = population[0][4]
-    
+
     print result
