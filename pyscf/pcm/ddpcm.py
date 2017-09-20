@@ -29,7 +29,7 @@ def gen_ddpcm_solver(pcmobj, grids=None, verbose=None):
     if grids is None:
         grids = gen_grid.Grids(mol)
         grids.level = pcmobj.becke_grids_level
-        grids.coords, grids.weights = grids.build(with_non0tab=True)
+        grids.build(with_non0tab=True)
 
     natm = mol.natm
     lmax = pcmobj.lmax

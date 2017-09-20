@@ -79,7 +79,7 @@ def gen_ddcosmo_solver(pcmobj, grids=None, verbose=None):
     if grids is None:
         grids = gen_grid.Grids(mol)
         grids.level = pcmobj.becke_grids_level
-        grids.coords, grids.weights = grids.build(with_non0tab=True)
+        grids.build(with_non0tab=True)
 
     natm = mol.natm
     lmax = pcmobj.lmax
@@ -105,7 +105,7 @@ def gen_ddcosmo_solver(pcmobj, grids=None, verbose=None):
     cached_pol = cache_fake_multipoler(grids, r_vdw, lmax)
 
     def gen_vind(dm):
-        v_phi = make_phi(pcmobj, dm, r_vdw, ui, grids)
+        v_phi = make_phi(pcmobj, dm, r_vdw, ui)
         phi = -numpy.einsum('n,xn,jn,jn->jx', weights_1sph, ylm_1sph,
                             ui, v_phi)
         L_X = numpy.linalg.solve(Lmat, phi.ravel()).reshape(natm,-1)
@@ -288,7 +288,7 @@ def make_fi(pcmobj, r_vdw):
     fi[fi < 1e-20] = 0
     return fi
 
-def make_phi(pcmobj, dm, r_vdw, ui, grids):
+def make_phi(pcmobj, dm, r_vdw, ui):
     mol = pcmobj.mol
     natm = mol.natm
     coords_1sph, weights_1sph = make_grids_one_sphere(pcmobj.lebedev_order)
@@ -319,7 +319,6 @@ def make_phi(pcmobj, dm, r_vdw, ui, grids):
     max_memory = pcmobj.max_memory - lib.current_memory()[0]
     blksize = int(max(max_memory*1e6/8/nao**2, 400))
 
-    cav_coords1 = cav_coords.copy()
     cav_coords = cav_coords[extern_point_idx]
     v_phi_e = numpy.empty(cav_coords.shape[0])
     for i0, i1 in lib.prange(0, cav_coords.shape[0], blksize):
@@ -453,8 +452,8 @@ class DDCOSMO(lib.StreamObject):
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
 
-        self.radii_table = radii.VDW
-        #self.radii_table = radii.UFF*1.1
+        #self.radii_table = radii.VDW
+        self.radii_table = radii.UFF*1.1
         #self.radii_table = radii.MM3
         self.atom_radii = None
         self.lebedev_order = 17
