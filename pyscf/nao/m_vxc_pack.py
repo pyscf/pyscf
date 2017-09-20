@@ -2,7 +2,7 @@ from __future__ import print_function, division
 from numpy import array, int64, zeros, float64
 try:
     import numba as nb
-    from pyscf.nao.m_numba_utils import fill_triu
+    from pyscf.nao.m_numba_utils import fill_triu_v2
     use_numba = True
 except:
     use_numba = False
@@ -21,7 +21,6 @@ def vxc_pack(sv, dm, xc_code, deriv, kernel=None, ao_log=None, dtype=float64, **
   """
   from pyscf.nao.m_xc_scalar_ni import xc_scalar_ni
   from pyscf.nao.m_ao_matelem import ao_matelem_c
-  from pyscf.nao.m_pack2den import triu_indices
 
 
   aome = ao_matelem_c(sv.ao_log.rr, sv.ao_log.pp, sv, dm)
@@ -31,20 +30,28 @@ def vxc_pack(sv, dm, xc_code, deriv, kernel=None, ao_log=None, dtype=float64, **
   sp2rcut = array([max(mu2rcut) for mu2rcut in me.ao1.sp_mu2rcut])
   norbs = atom2s[-1]
 
-  ind = triu_indices(norbs)
+  #ind = triu_indices(norbs)
   if kernel is None:
     kernel = zeros(norbs*(norbs+1)//2, dtype=dtype)
+
     for atom1,[sp1,rv1,s1,f1] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
       for atom2,[sp2,rv2,s2,f2] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
+        if atom2>atom1: continue
         if (sp2rcut[sp1]+sp2rcut[sp2])**2<=sum((rv1-rv2)**2) : continue
+        
         xc = xc_scalar_ni(me,sp1,rv1,sp2,rv2,xc_code,deriv,**kvargs)
+        
         if use_numba:
-          fill_triu(xc, ind, kernel, s1, f1, s2, f2)
+          fill_triu_v2(xc, kernel, s1, f1, s2, f2, norbs)
         else:
           for i1 in range(s1,f1):
-            for i2 in range(s2,f2):
-              if ind[i1, i2] >= 0:
-                kernel[ind[i1, i2]] = xc[i1-s1,i2-s2] 
+            for i2 in range(s2, min(i1+1, f2)):
+                ind = 0
+                if i2 > 0:
+                    for beta in range(1, i2+1):
+                        ind += norbs -beta
+                ind += i1
+                kernel[ind] = xc[i1-s1,i2-s2] 
     return kernel
 
   else:
@@ -53,12 +60,18 @@ def vxc_pack(sv, dm, xc_code, deriv, kernel=None, ao_log=None, dtype=float64, **
 
     for atom1,[sp1,rv1,s1,f1] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
       for atom2,[sp2,rv2,s2,f2] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
+        if atom2>atom1: continue
         if (sp2rcut[sp1]+sp2rcut[sp2])**2<=sum((rv1-rv2)**2) : continue
+        
         xc = xc_scalar_ni(me,sp1,rv1,sp2,rv2,xc_code,deriv,**kvargs)
         if use_numba:
-          fill_triu(xc, ind, kernel, s1, f1, s2, f2, add=True)
+          fill_triu_v2(xc, kernel, s1, f1, s2, f2, norbs, add=True)
         else:
           for i1 in range(s1,f1):
-            for i2 in range(s2,f2):
-              if ind[i1, i2] >= 0:
-                kernel[ind[i1, i2]] += xc[i1-s1,i2-s2]
+            for i2 in range(s2, min(i1+1, f2)):
+                ind = 0
+                if i2 > 0:
+                    for beta in range(1, i2+1):
+                        ind += norbs -beta
+                ind += i1
+                kernel[ind] += xc[i1-s1,i2-s2] 

@@ -1,6 +1,5 @@
 cmake_minimum_required (VERSION 2.8)
 project (pyscf)
-enable_language(Fortran)
 
 set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
 #set(CMAKE_BUILD_TYPE DEBUG)
@@ -11,8 +10,6 @@ if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
     set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-as-needed")
   endif()
 endif()
-
-set(CMAKE_Fortran_FLAGS "-O2 -warn all")
 
 set(CMAKE_MACOSX_RPATH OFF)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -34,7 +31,7 @@ if(BLA_VENDOR MATCHES "Intel*")
 endif()
 message("BLAS libraries: ${BLAS_LIBRARIES}")
 # if unable to find mkl library, just create BLAS_LIBRARIES here, e.g.
-#set(BLAS_LIBRARIES "-L/opt/intel/mkl/lib/intel64/ -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lmkl_avx -lm")
+# set(BLAS_LIBRARIES "-L/path/to/mkl/lib -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lmkl_avx -lm")
 # or
 # set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_intel_lp64.so")
 # set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_sequential.so")
@@ -53,22 +50,6 @@ else ()
   set(OpenMP_C_FLAGS " ")
 endif()
 
-if (DEFINED LAPACK_LIBRARIES)
-  message("LAPACK libraries are defined (in arch.inc):")
-else()
-  message("Looking for LAPACK libraries...")
-  find_package(LAPACK REQUIRED)
-endif()
-message("LAPACK libraries: ${LAPACK_LIBRARIES}")
-
-if (DEFINED FFTW_LIBRARIES)
-  message("FFTW libraries are defined (in arch.inc):")
-else()
-  message("Looking for FFTW libraries...")
-  find_library(FFTW_LIBRARIES NAMES fftw3 libfftw3)
-endif()
-message("FFTW libraries: ${FFTW_LIBRARIES}")
-
 find_package(PythonInterp REQUIRED)
 #find_package(PythonLibs REQUIRED)
 #execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import numpy; print(numpy.get_include())"
@@ -77,6 +58,7 @@ find_package(PythonInterp REQUIRED)
 
 include(ExternalProject)
 option(BUILD_LIBCINT "Using libcint for analytical gaussian integral" ON)
+option(WITH_F12 "Compling F12 integrals" ON)
 if(BUILD_LIBCINT)
 #if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
   ExternalProject_Add(libcint
@@ -84,7 +66,7 @@ if(BUILD_LIBCINT)
     GIT_TAG cint3
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    CMAKE_ARGS -DWITH_F12=1 -DWITH_RANGE_COULOMB=1 -DWITH_COULOMB_ERF=1
+    CMAKE_ARGS -DWITH_F12=${WITH_F12} -DWITH_RANGE_COULOMB=1 -DWITH_COULOMB_ERF=1
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
             -DCMAKE_INSTALL_LIBDIR:PATH=lib -DBLA_VENDOR=${BLA_VENDOR}
             -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
@@ -115,13 +97,9 @@ add_subdirectory(shciscf)
 add_subdirectory(ri)
 add_subdirectory(localizer)
 add_subdirectory(hci)
-
 add_subdirectory(pbc)
-
 add_subdirectory(extras/mbd)
 
-add_subdirectory(nao)
-add_subdirectory(sparsetools)
 
 option(ENABLE_LIBXC "Using libxc for XC functional library" ON)
 option(ENABLE_XCFUN "Using xcfun for XC functional library" ON)
@@ -138,7 +116,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
-          --enable-shared --disable-fortran LIBS=-lm
+          --enable-shared --disable-static --disable-fortran LIBS=-lm
           CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
   )
 endif() # ENABLE_LIBXC
@@ -158,3 +136,11 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xcfun.h" AND
 endif() # ENABLE_XCFUN
 add_subdirectory(dft)
 endif() # DISABLE_DFT
+
+option(ENABLE_NAO "Build numerical atomic orbital module" OFF)
+if(ENABLE_NAO)
+enable_language(Fortran)
+add_subdirectory(nao)
+add_subdirectory(sparsetools)
+endif(ENABLE_NAO)
+

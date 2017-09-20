@@ -32,6 +32,69 @@ Installation
   For example:
         python test/test_0001_system_vars.py
 
+Peak performance builds/runs
+------------
+
+* Anaconda
+  
+  Anaconda's scipy/numpy installations use it's own MKL library (by Intel, provides high-speed subroutines for BLAS/LAPACK/FFTW)
+  The (fortran) library libnao also profits from these low-level libraries. Moreover, we found it mandatory to link against 
+  the same MKL library if OpenMP parallelization is to be used. In order to link against Anaconda's MKL we have to modify
+  CMakeLists.txt file entering the path for BLAS and LAPACK libraries. One can spare finding FFTW library. An example of such
+  CMakeLists.txt file can be found at nao/cmakelists_examples/ directory. Moreover, we have found that only Intel compiler 
+  could be used to link against OpenMP-enabled compilations. In the Anaconda's MKL subdirectory (anaconda2/pkgs/mkl-2017.0.3-0/lib/)
+  there are only libmkl_intel_thread.so and libmkl_sequential.so files, i.e. a library supporting GNU threads is not provided.
+  Therefore, unfortunately, the top-speed runs can be only achieved with Intel Fortran compiler installed.
+  In order to use Intel Fortran compiler (ifort) during compilation of libnao, please "export" the shell variable FC before 
+  doing first cmake in the build directory. With this in mind, and provided that the Intel Fortran compiler is working and 
+  findable as "ifort", the sequence of commands to build the library would be as following:
+  
+        cd pyscf/lib
+        cp nao/cmakelists_examples/CMakeLists.txt.anaconda.mkl CMakeLists.txt
+        rm *.so (just to be sure)
+        mkdir anaconda_build
+        cd anaconda_build
+        export FC=ifort
+        cmake ..
+        make
+        
+  Before starting the interpreter, you might want to activate it
+        
+        source /path/to/anaconda2/bin/activate
+
+* IntelPython
+
+  The statements above related to Anaconda's usage apply to a similar extend also in the case of IntelPython.
+  In case of IntelPython, the MKL subdirectory contains also a file for GNU treating libmkl_intel_thread.so, but 
+  in fact we failed to run the libraries compiled/linked with gfortran and called from intelpython.
+  Be sure also to "activate" the IntelPython before starting the interpreter. Activation is done by "sourcing"
+  the script activate in the IntelPython's bin subdirectory. There is an example of CMakeLists.txt file. 
+
+        cd pyscf/lib
+        cp nao/cmakelists_examples/CMakeLists.txt.intelpython.mkl CMakeLists.txt
+        rm *.so (just to be sure)
+        mkdir mkl_intelpython_build
+        cd mkl_intelpython_build
+        export FC=ifort
+        cmake ..
+        make
+  
+  Before starting the interpreter, you might want to activate it
+        
+        source /path/to/intelpython2/bin/activate
+
+Known problems
+--------------
+
+* Some tests are not verified with small differences when using Anaconda/IntelPython while everything passes when using a system's python installation:
+
+  Probable different BLAS/LAPACK libraries are used by libnao and numpy. See installation instructions and Peak performance builds/runs.
+  
+* Most of the tests are failing. 
+
+  Probable BLAS/LAPACK/FFTW calls could not be resolved from libnao. See installation instructions and Peak performance builds/runs.
+  
+
 Citing PySCF/NAO
 ------------
 

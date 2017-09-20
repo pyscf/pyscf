@@ -50,23 +50,27 @@ def siesta_wfsx_sread(w, sdata, nreim):
 
 
 class siesta_wfsx_c():
-  def __init__(self, label='siesta', chdir='.', force_gamma=None):
+  def __init__(self, label='siesta', chdir='.', fname=None, force_gamma=None):
 
     nreim = -999
     if force_gamma is not None:
       if force_gamma : nreim = 1
     
-    self.label = label
-    ends = ['fullBZ.WFSX', 'WFSX']
-    for end in ends:
-      fname = chdir+'/'+label+'.'+end
-      idat = siesta_wfsx_book_read_py(fname, nreim)
-      if idat is None :
-        print(fname, ' skip') 
-        continue
+    if fname is None :
+      self.label = label
+      ends = ['fullBZ.WFSX', 'WFSX']
+      for end in ends:
+        fname = chdir+'/'+label+'.'+end
+        idat = siesta_wfsx_book_read_py(fname, nreim)
+        if idat is None :
+          print(fname, ' skip') 
+          continue
+        self.fname = fname
+        break
+    else:
       self.fname = fname
-      break
-        
+      idat = siesta_wfsx_book_read_py(fname, nreim)
+                
     if idat is None :  raise RuntimeError('No .WFSX file found')
     
     i = 0

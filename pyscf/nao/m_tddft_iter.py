@@ -1,10 +1,12 @@
 from __future__ import print_function, division
 import numpy as np
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, coo_matrix
 from scipy.linalg import blas
 from timeit import default_timer as timer
-from pyscf.nao.m_blas_wrapper import spmv_wrapper
 from pyscf.nao.m_tddft_iter_gpu import tddft_iter_gpu_c
+#from pyscf.nao.m_sparse_blas import csrgemv # not working!
+from pyscf.nao.m_blas_wrapper import spmv_wrapper
+from pyscf.nao.m_sparsetools import csr_matvec, csc_matvec, csc_matvecs
 
 try:
     import numba
@@ -22,7 +24,6 @@ class tddft_iter_c():
     """ Iterative TDDFT a la PK, DF, OC JCTC """
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
     from pyscf.nao.m_comp_dm import comp_dm
-    import sys
 
     assert tddft_iter_tol>1e-6
     assert type(tddft_iter_broadening)==float
@@ -44,8 +45,10 @@ class tddft_iter_c():
     self.tddft_iter_tol = tddft_iter_tol
     self.eps = tddft_iter_broadening
     self.sv, self.pb, self.norbs, self.nspin = sv, pb, sv.norbs, sv.nspin
-    self.v_dab = pb.get_dp_vertex_coo(dtype=self.dtype).tocsr()
-    self.cc_da = pb.get_da2cc_coo(dtype=self.dtype).tocsr()
+
+    self.v_dab = pb.get_dp_vertex_sparse(dtype=self.dtype, sparseformat=coo_matrix).tocsr()
+    self.cc_da = pb.get_da2cc_sparse(dtype=self.dtype, sparseformat=coo_matrix).tocsr()
+
     self.moms0,self.moms1 = pb.comp_moments(dtype=self.dtype)
     self.nprod = self.moms0.size
     self.kernel, self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype)
@@ -54,18 +57,23 @@ class tddft_iter_c():
       dm = comp_dm(sv.wfsx.x, sv.get_occupations())
       
       pb.comp_fxc_pack(dm, xc_code, kernel = self.kernel, dtype=self.dtype, **kvargs)
-      
+
     self.telec = sv.hsx.telec if telec is None else telec
     self.nelec = sv.hsx.nelec if nelec is None else nelec
     self.fermi_energy = sv.fermi_energy if fermi_energy is None else fermi_energy
-    self.x  = np.require(sv.wfsx.x, dtype=self.dtype, requirements='CW')
+
+    # probably unnecessary, require probably does a copy
+    # problematic for the dtype, must there should be another option 
+    #self.x  = np.require(sv.wfsx.x, dtype=self.dtype, requirements='CW')
+
     self.ksn2e = np.require(sv.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
     ksn2fd = fermi_dirac_occupations(self.telec, self.ksn2e, self.fermi_energy)
     self.ksn2f = (3-self.nspin)*ksn2fd
     self.nfermi = np.argmax(ksn2fd[0,0,:]<nfermi_tol)
     self.vstart = np.argmax(1.0-ksn2fd[0,0,:]>nfermi_tol)
-    self.xocc = self.x[0,0,0:self.nfermi,:,0]  # does python creates a copy at this point ?
-    self.xvrt = self.x[0,0,self.vstart:,:,0]   # does python creates a copy at this point ?
+
+    self.xocc = sv.wfsx.x[0,0,0:self.nfermi,:,0]  # does python creates a copy at this point ?
+    self.xvrt = sv.wfsx.x[0,0,self.vstart:,:,0]   # does python creates a copy at this point ?
 
     self.tddft_iter_gpu = tddft_iter_gpu_c(GPU, self.v_dab, self.ksn2f, self.ksn2e, 
             self.norbs, self.nfermi, self.vstart)
@@ -74,38 +82,69 @@ class tddft_iter_c():
     """ This applies the non-interacting response function to a vector (a set of vectors?) """
     assert len(v)==len(self.moms0), "%r, %r "%(len(v), len(self.moms0))
     self.rf0_ncalls+=1
-    # np.require may perform a copy of v, is it really necessary??
-    vdp = self.cc_da * np.require(v, dtype=np.complex64)
     no = self.norbs
-    sab = csr_matrix((np.transpose(vdp)*self.v_dab).reshape([no,no]))
 
-    if self.tddft_iter_gpu.GPU:
-        vdp = self.tddft_iter_gpu.apply_rf0_gpu(self.xocc, sab, comega)
-    else:
-        #
-        # WARNING!!!!
-        # nb2v is column major, while self.xvrt is row major
-        #       What a mess!!
-        nb2v = self.xocc*sab
-        nm2v = blas.cgemm(1.0, nb2v, np.transpose(self.xvrt))
+    if v.dtype == self.dtypeComplex:
+        vext = np.zeros((v.shape[0], 2), dtype = self.dtype, order="F")
+        vext[:, 0] = v.real
+        vext[:, 1] = v.imag
+
+        # real part
+        #vdp = self.cc_da*vext[:, 0]
+        vdp = csr_matvec(self.cc_da, vext[:, 0])
+        sab = (vdp*self.v_dab).reshape([no,no])
+        nb2v = blas.sgemm(1.0, self.xocc, sab) 
+        #csc_matvecs(sab.T.tocsc(), self.xocc, transB = True).T
+        nm2v_re = blas.sgemm(1.0, nb2v, np.transpose(self.xvrt))
         
-        if use_numba:
-            div_eigenenergy_numba(self.ksn2e, self.ksn2f, self.nfermi,
-                    self.vstart, comega, nm2v, self.ksn2e.shape[2])
-        else:
-            for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
-              for j,[em,fm] in enumerate(zip(self.ksn2e[0,0,n+1:],self.ksn2f[0,0,n+1:])):
-                m = j+n+1-self.vstart
-                nm2v[n,m] = nm2v[n,m] * (fn-fm) *\
-                  ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
+        # imaginary part
+        vdp = csr_matvec(self.cc_da, vext[:, 1])
+        sab = (vdp*self.v_dab).reshape([no,no])
+        nb2v = blas.sgemm(1.0, self.xocc, sab) 
+        nm2v_im = blas.sgemm(1.0, nb2v, np.transpose(self.xvrt))
+    else:
+        vext = np.zeros((v.shape[0], 2), dtype = self.dtype, order="F")
+        vext[:, 0] = v
 
-        nb2v = blas.cgemm(1.0, nm2v, self.xvrt)
+        # real part
+        #vdp = self.cc_da*vext[:, 0]
+        vdp = csr_matvec(self.cc_da, vext[:, 0])
+        sab = (vdp*self.v_dab).reshape([no,no])
+        nb2v = blas.sgemm(1.0, self.xocc, sab) 
+        nm2v_re = blas.sgemm(1.0, nb2v, np.transpose(self.xvrt))
+ 
+        # imaginary part
+        nm2v_im = np.zeros(nm2v_re.shape, dtype=self.dtype) 
+   
+    #vdp = csrgemv(self.cc_da, vext) # np.require(v, dtype=np.complex64)
 
-        ab2v = blas.cgemm(1.0, np.transpose(self.xocc), nb2v).reshape(no*no)
+    if use_numba:
+        div_eigenenergy_numba(self.ksn2e, self.ksn2f, self.nfermi, self.vstart, comega, nm2v_re, nm2v_im, self.ksn2e.shape[2])
+    else:
+        for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
+          for j,[em,fm] in enumerate(zip(self.ksn2e[0,0,n+1:],self.ksn2f[0,0,n+1:])):
+            m = j+n+1-self.vstart
+            nm2v = nm2v_re[n, m] + 1.0j*nm2v_im[n, m]
+            nm2v = nm2v * (fn-fm) *\
+              ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
+            nm2v_re[n, m] = nm2v.real
+            nm2v_im[n, m] = nm2v.imag
 
-        vdp = self.v_dab*ab2v
+    nb2v = blas.sgemm(1.0, nm2v_re, self.xvrt)
+    ab2v = blas.sgemm(1.0, self.xocc.T, nb2v).reshape(no*no)
+    vdp = csr_matvec(self.v_dab, ab2v)
 
-    return vdp*self.cc_da 
+    chi0_re = vdp*self.cc_da
+
+    nb2v = blas.sgemm(1.0, nm2v_im, self.xvrt)
+    ab2v = blas.sgemm(1.0, self.xocc.T, nb2v).reshape(no*no)
+    vdp = csr_matvec(self.v_dab, ab2v)
+
+    chi0_im = vdp*self.cc_da
+    #chi0_im = self.cc_ad_csc*vdp
+
+    return chi0_re + 1.0j*chi0_im
+
 
   def comp_veff(self, vext, comega=1j*0.0):
     from scipy.sparse.linalg import gmres, lgmres as gmres_alias, LinearOperator

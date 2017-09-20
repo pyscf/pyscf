@@ -148,4 +148,6 @@ option(ENABLE_NAO "Build numerical atomic orbital module" OFF)
 if(ENABLE_NAO)
 enable_language(Fortran)
 add_subdirectory(nao)
+add_subdirectory(sparsetools)
 endif(ENABLE_NAO)
+
