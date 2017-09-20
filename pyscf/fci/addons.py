@@ -12,6 +12,10 @@ def large_ci(ci, norb, nelec, tol=.1, return_strs=True):
     '''
     neleca, nelecb = _unpack(nelec)
     addra, addrb = numpy.where(abs(ci) > tol)
+    if addra.size == 0: # No large CI coefficient > tol
+        addra, addrb = numpy.unravel_index(numpy.argmax(abs(ci)), ci.shape)
+        addra = numpy.asarray([addra])
+        addrb = numpy.asarray([addrb])
     strsa = cistring.addrs2str(norb, neleca, addra)
     strsb = cistring.addrs2str(norb, nelecb, addrb)
     if return_strs:
