@@ -5,8 +5,6 @@ class KnowValues(unittest.TestCase):
 
   def test_tddft_iter_lda(self):
     """ Compute polarization with LDA TDDFT  """
-    from timeit import default_timer as timer
-
     from pyscf.nao import system_vars_c, prod_basis_c, tddft_iter_c
     from pyscf.nao.m_comp_dm import comp_dm
     from timeit import default_timer as timer

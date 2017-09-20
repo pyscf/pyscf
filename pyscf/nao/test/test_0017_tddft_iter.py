@@ -12,12 +12,12 @@ class KnowValues(unittest.TestCase):
   def test_vrtx_coo(self):
     """ This is to test the vertex in the sparse format """
     va = pb.get_dp_vertex_array()
-    vc = pb.get_dp_vertex_coo().toarray().reshape([pb.npdp,pb.norbs,pb.norbs])
+    vc = pb.get_dp_vertex_sparse().toarray().reshape([pb.npdp,pb.norbs,pb.norbs])
     self.assertTrue(abs(va).sum()>0.0)
     self.assertTrue(allclose(vc, va))
 
     va = pb.get_dp_vertex_array(dtype=float32)
-    vc = pb.get_dp_vertex_coo(dtype=float32).toarray().reshape([pb.npdp,pb.norbs,pb.norbs])
+    vc = pb.get_dp_vertex_sparse(dtype=float32).toarray().reshape([pb.npdp,pb.norbs,pb.norbs])
     self.assertTrue(abs(va).sum()>0.0)
     self.assertTrue(allclose(vc, va))
 
@@ -31,17 +31,18 @@ class KnowValues(unittest.TestCase):
 
   def test_cc_coo(self):
     """ This is to test the gathering of conversion coefficients into a sparse format """
-    cc_coo = pb.get_da2cc_coo().toarray()
+    cc_coo = pb.get_da2cc_sparse().toarray()
     cc_den = pb.get_da2cc_den()
     self.assertTrue(allclose(cc_coo, cc_den) )
-    cc_coo = pb.get_da2cc_coo(float32).toarray()
+    cc_coo = pb.get_da2cc_sparse(float32).toarray()
     cc_den = pb.get_da2cc_den(float32)
     self.assertTrue(allclose(cc_coo, cc_den) )
 
   def test_tddft_iter(self):
     """ This is iterative TDDFT with SIESTA starting point """
     td = tddft_iter_c(pb.sv, pb)
-    self.assertTrue(hasattr(td, 'x'))
+    self.assertTrue(hasattr(td, 'xocc'))
+    self.assertTrue(hasattr(td, 'xvrt'))
     self.assertTrue(td.ksn2f.sum()==8.0) # water: O -- 6 electrons in the valence + H2 -- 2 electrons
     self.assertEqual(td.xocc.shape[0], 4)
     self.assertEqual(td.xvrt.shape[0], 19)

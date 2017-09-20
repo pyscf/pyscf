@@ -21,7 +21,7 @@ class KnowValues(unittest.TestCase):
       self.assertTrue(allclose(a.vrtx, b.vrtx))
       self.assertTrue(allclose(a.cc, b.cc))
 
-    self.assertLess(abs(pbb.get_da2cc_coo().tocsr()-pba.get_da2cc_coo().tocsr()).sum(), 1e-9)
-    self.assertLess(abs(pbb.get_dp_vertex_coo().tocsr()-pba.get_dp_vertex_coo().tocsr()).sum(), 1e-10)
+    self.assertLess(abs(pbb.get_da2cc_sparse().tocsr()-pba.get_da2cc_sparse().tocsr()).sum(), 1e-9)
+    self.assertLess(abs(pbb.get_dp_vertex_sparse().tocsr()-pba.get_dp_vertex_sparse().tocsr()).sum(), 1e-10)
     
 if __name__ == "__main__": unittest.main()

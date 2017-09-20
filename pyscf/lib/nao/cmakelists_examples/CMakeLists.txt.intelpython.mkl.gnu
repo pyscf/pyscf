@@ -7,44 +7,22 @@ set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffast-math")
+  set(CMAKE_Fortran_FLAGS "-pedantic -O2 -Wall -ffree-line-length-0")
   if(UNIX AND NOT APPLE)
     set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-as-needed")
   endif()
 endif()
 
-set(CMAKE_Fortran_FLAGS "-O2 -warn all")
-
 set(CMAKE_MACOSX_RPATH OFF)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-#enable_language(Fortran)
-find_package(BLAS REQUIRED)
-if(BLA_VENDOR MATCHES "Intel*")
-  if (${DISABLE_AVX})
-    find_library(BLAS_mkl_def_LIBRARY
-      NAMES mkl_def
-      PATHS ENV;LD_LIBRARY_PATH)
-    set(BLAS_LIBRARIES ${BLAS_LIBRARIES};${BLAS_mkl_def_LIBRARY})
-  else()
-    find_library(BLAS_mkl_avx_LIBRARY
-      NAMES mkl_avx
-      PATHS ENV;LD_LIBRARY_PATH)
-    set(BLAS_LIBRARIES ${BLAS_LIBRARIES};${BLAS_mkl_avx_LIBRARY})
-  endif()
-endif()
+#find_package(BLAS REQUIRED)
+#check_function_exists(ffsll HAVE_FFS)
+set(BLAS_LIBRARIES "-L/opt/intel/intelpython2/pkgs/mkl-2017.0.3-intel_5/lib -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lmkl_def -lpthread -lm -ldl")
 message("BLAS libraries: ${BLAS_LIBRARIES}")
-# if unable to find mkl library, just create BLAS_LIBRARIES here, e.g.
-#set(BLAS_LIBRARIES "-L/opt/intel/mkl/lib/intel64/ -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lmkl_avx -lm")
-# or
-# set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_intel_lp64.so")
-# set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_sequential.so")
-# set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_core.so")
-# set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_avx.so")
-# set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_def.so")
 
-# set(BLAS_LIBRARIES "-Wl,-rpath=${MKLROOT}/lib/intel64/ ${BLAS_LIBRARIES}")
-
-check_function_exists(ffsll HAVE_FFS)
+set(LAPACK_LIBRARIES "-L/opt/intel/intelpython2/pkgs/mkl-2017.0.3-intel_5/lib -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lmkl_def -lpthread -lm -ldl")
+message("LAPACK libraries: ${LAPACK_LIBRARIES}")
 
 find_package(OpenMP)
 if(OPENMP_FOUND)
@@ -52,22 +30,6 @@ if(OPENMP_FOUND)
 else ()
   set(OpenMP_C_FLAGS " ")
 endif()
-
-if (DEFINED LAPACK_LIBRARIES)
-  message("LAPACK libraries are defined (in arch.inc):")
-else()
-  message("Looking for LAPACK libraries...")
-  find_package(LAPACK REQUIRED)
-endif()
-message("LAPACK libraries: ${LAPACK_LIBRARIES}")
-
-if (DEFINED FFTW_LIBRARIES)
-  message("FFTW libraries are defined (in arch.inc):")
-else()
-  message("Looking for FFTW libraries...")
-  find_library(FFTW_LIBRARIES NAMES fftw3 libfftw3)
-endif()
-message("FFTW libraries: ${FFTW_LIBRARIES}")
 
 find_package(PythonInterp REQUIRED)
 #find_package(PythonLibs REQUIRED)

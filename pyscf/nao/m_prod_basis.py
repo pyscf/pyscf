@@ -393,21 +393,21 @@ class prod_basis_c():
     return nnz
 
   # should we not keep only the sparse matrix and get rid of the original data ??
-  def get_da2cc_coo(self, dtype=np.float64):
+  def get_da2cc_sparse(self, dtype=np.float64, sparseformat=coo_matrix):
     """ Returns Conversion Coefficients as sparse COO matrix """
 
     nfdp,nfap = self.dpc2s[-1],self.c2s[-1]
     nnz = self.get_da2cc_nnz()
-    irow,icol,data = zeros(nnz, dtype=int64),zeros(nnz, dtype=int64), zeros(nnz, dtype=dtype) # Start to construct coo matrix
+    irow,icol,data = zeros(nnz, dtype=np.int32),zeros(nnz, dtype=np.int32), zeros(nnz, dtype=dtype) # Start to construct coo matrix
 
     inz = 0
-    for sd,fd,pt in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t):
+    for atom, [sd,fd,pt] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t)):
       if pt!=1: continue
       for d in range(sd,fd): 
         irow[inz],icol[inz],data[inz] = d,d,1.0
         inz+=1
 
-    for sd,fd,pt,spp in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp):
+    for atom, [sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
       if pt==1: continue
       inf = self.bp2info[spp]
       for c,ls,lf in zip(inf.cc2a, inf.cc2s, inf.cc2s[1:]): 
@@ -415,7 +415,7 @@ class prod_basis_c():
           for a in range(self.c2s[c],self.c2s[c+1]):
             irow[inz],icol[inz],data[inz] = d,a,inf.cc[d-sd,a-self.c2s[c]+ls]
             inz+=1
-    return coo_matrix((data,(irow,icol)), dtype=dtype, shape=(nfdp, nfap))
+    return sparseformat((data,(irow,icol)), dtype=dtype, shape=(nfdp, nfap))
     
   def get_ac_vertex_array(self, dtype=np.float64):
     """ Returns the product vertex coefficients as 3d array (dense table) """
@@ -475,10 +475,10 @@ class prod_basis_c():
       nnz = nnz + 2*(fd-sd)*(fb-sb)*(fa-sa)
     return nnz
 
-  def get_dp_vertex_coo(self, dtype=np.float64):
+  def get_dp_vertex_sparse(self, dtype=np.float64, sparseformat=coo_matrix):
     """ Returns the product vertex coefficients as 3d array for dominant products, in a sparse format coo(p,ab)"""
     nnz = self.get_dp_vertex_nnz()
-    irow,icol,data = zeros(nnz, dtype=int64),zeros(nnz, dtype=int64), zeros(nnz, dtype=dtype) # Start to construct coo matrix
+    irow,icol,data = zeros(nnz, dtype=np.int32), zeros(nnz, dtype=np.int32), zeros(nnz, dtype=dtype) # Start to construct coo matrix
 
     atom2so = self.sv.atom2s
     nfdp = self.dpc2s[-1]
@@ -493,7 +493,7 @@ class prod_basis_c():
             irow[inz],icol[inz],data[inz] = p,a+b*n,self.prod_log.sp2vertex[spp][p-sd,a-s,b-s]
             inz+=1
 
-    for sd,fd,pt,spp in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp):
+    for atom, [sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
       if pt!=2: continue
       inf= self.bp2info[spp]
       a,b = inf.atoms
@@ -503,7 +503,7 @@ class prod_basis_c():
           for b in range(sb,fb):
             irow[inz],icol[inz],data[inz] = p,a+b*n,inf.vrtx[p-sd,a-sa,b-sb]; inz+=1;
             irow[inz],icol[inz],data[inz] = p,b+a*n,inf.vrtx[p-sd,a-sa,b-sb]; inz+=1;
-    return coo_matrix((data, (irow, icol)), dtype=dtype, shape=(nfdp,n*n))
+    return sparseformat((data, (irow, icol)), dtype=dtype, shape=(nfdp,n*n))
 
   def init_c2s_domiprod(self):
     """Compute the array of start indices for dominant product basis set """
@@ -520,7 +520,7 @@ class prod_basis_c():
 
   def comp_moments(self, dtype=np.float64):
     """ Computes the scalar and dipole moments for the all functions in the product basis """
-    sp2mom0,sp2mom1 = self.prod_log.comp_moments()
+    sp2mom0, sp2mom1 = self.prod_log.comp_moments()
     n = self.c2s[-1]
     mom0 = np.require(np.zeros(n, dtype=dtype), requirements='CW')
     mom1 = np.require(np.zeros((n,3), dtype=dtype), requirements='CW')

@@ -5,7 +5,7 @@ module m_dens_libnao
   use m_die, only : die
   use m_warn, only : warn
   use m_system_vars, only : system_vars_t
-  use m_spin_dens_fini8, only : spin_dens_aux_t
+  use m_spin_dens_aux, only : spin_dens_aux_t
   use iso_c_binding, only: c_double, c_double_complex, c_int64_t
  
   !use m_timing, only : get_cdatetime
@@ -59,7 +59,7 @@ subroutine init_dens_libnao(info) bind(c, name='init_dens_libnao')
   use m_system_vars, only : get_norbs, get_nspin
   use m_sv_libnao, only : sv_libnao=>sv
   use m_dm_libnao, only : cbask2dm_libnao=>cbask2dm
-  use m_spin_dens_fini8, only : init_spin_dens
+  use m_spin_dens_aux, only : init_spin_dens_aux
   implicit none
   ! external
   integer(c_int64_t), intent(inout) :: info
@@ -80,7 +80,7 @@ subroutine init_dens_libnao(info) bind(c, name='init_dens_libnao')
   cbask2dm => cbask2dm_libnao
   sv => sv_libnao
   
-  call init_spin_dens(sv, cbask2dm(1,:,:,:,1), sda)
+  call init_spin_dens_aux(sv, cbask2dm(1,:,:,:,1), sda)
   info = 0
 end subroutine !init_dens_libnao
 
