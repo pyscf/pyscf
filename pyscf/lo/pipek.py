@@ -18,9 +18,16 @@ from pyscf.lo import orth
 from pyscf.lo import boys
 
 def atomic_pops(mol, mo_coeff, method='meta_lowdin'):
-    '''kwarg method can be one of mulliken, lowdin, meta_lowdin
     '''
-    s = mol.intor_symmetric('int1e_ovlp')
+    Kwargs:
+        method : string
+            one of mulliken, lowdin, meta_lowdin
+    '''
+    from pyscf.pbc import gto as pbcgto
+    if isinstance(mol, pbcgto.Cell):
+        s = mol.pbc_intor('int1e_ovlp_sph')
+    else:
+        s = mol.intor_symmetric('int1e_ovlp')
     nmo = mo_coeff.shape[1]
     proj = numpy.empty((mol.natm,nmo,nmo))
 
@@ -53,7 +60,7 @@ class PipekMezey(boys.Boys):
 
     def gen_g_hop(self, u):
         mo_coeff = lib.dot(self.mo_coeff, u)
-        pop = atomic_pops(self.mol, mo_coeff, self.pop_method)
+        pop = self.atomic_pops(self.mol, mo_coeff, self.pop_method)
         g0 = numpy.einsum('xii,xip->pi', pop, pop)
         g = -self.pack_uniq_var(g0-g0.T) * 2
 
@@ -80,7 +87,7 @@ class PipekMezey(boys.Boys):
     def get_grad(self, u=None):
         if u is None: u = numpy.eye(self.mo_coeff.shape[1])
         mo_coeff = lib.dot(self.mo_coeff, u)
-        pop = atomic_pops(self.mol, mo_coeff, self.pop_method)
+        pop = self.atomic_pops(self.mol, mo_coeff, self.pop_method)
         g0 = numpy.einsum('xii,xip->pi', pop, pop)
         g = -self.pack_uniq_var(g0-g0.T) * 2
         return g
@@ -88,8 +95,14 @@ class PipekMezey(boys.Boys):
     def cost_function(self, u=None):
         if u is None: u = numpy.eye(self.mo_coeff.shape[1])
         mo_coeff = lib.dot(self.mo_coeff, u)
-        pop = atomic_pops(self.mol, mo_coeff, self.pop_method)
+        pop = self.atomic_pops(self.mol, mo_coeff, self.pop_method)
         return numpy.einsum('xii,xii->', pop, pop)
+
+    @lib.with_doc(atomic_pops.__doc__)
+    def atomic_pops(self, mol, mo_coeff, method=None):
+        if method is None:
+            method = self.pop_method
+        return atomic_pops(mol, mo_coeff, method)
 
 PM = Pipek = PipekMezey
 

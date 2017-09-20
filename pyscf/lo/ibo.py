@@ -19,7 +19,7 @@ import numpy
 import scipy.linalg
 from pyscf.lib import logger
 from pyscf.lo import iao
-from pyscf.lo import orth
+from pyscf.lo import orth, pipek
 
 def ibo(mol, orbocc, iaos=None, exponent=4, grad_tol=1e-8, max_iter=200,
         verbose=logger.NOTE):
@@ -33,7 +33,7 @@ def ibo(mol, orbocc, iaos=None, exponent=4, grad_tol=1e-8, max_iter=200,
 
     Kwargs:
         iaos : 2D array
-            the array of orthonormalized IAOs
+            the array of IAOs
         exponent : integer
             Localization power in PM scheme
         grad_tol : float
@@ -42,10 +42,9 @@ def ibo(mol, orbocc, iaos=None, exponent=4, grad_tol=1e-8, max_iter=200,
     Returns:
         IBOs in the big basis (the basis defined in mol object).
     '''
+    from pyscf.pbc import gto as pbcgto
     log = logger.new_logger(mol, verbose)
     assert(exponent in (2, 4))
-    if exponent == 2:
-        raise NotImplementedError('exponent = 2')
 
     if isinstance(mol, pbcgto.Cell):
         if isinstance(orbocc, numpy.ndarray) and orbocc.ndim == 2:
@@ -56,7 +55,36 @@ def ibo(mol, orbocc, iaos=None, exponent=4, grad_tol=1e-8, max_iter=200,
         ovlpS = mol.intor_symmetric('int1e_ovlp')
 
     if iaos is None:
-        iaos = orth.vec_lowdin(iao.iao(mol, orbocc), ovlpS)
+        iaos = iao.iao(mol, orbocc)
+
+    if exponent == 2:
+        # Note this localization is slightly different to Knizia's implementation.
+        # The resultant IBO orbitals here are orthogonormal. During the
+        # localization, orbitals are projected to IAO basis first and the
+        # Mulliken pop is calculated based on IAO basis (in function atomic_pops).
+        # A series of unitary matrices are generated and applied on the input
+        # orbitals. Thus the finally localized orbitals are orthogonormal.
+        cs = numpy.dot(iaos.T.conj(), ovlpS)
+        s_iao = numpy.dot(cs, iaos)
+        iao_inv = numpy.linalg.solve(s_iao, cs)
+        iao_mol = iao.reference_mol(mol)
+        # Define the mulliken population of each atom based on IAO basis.
+        # proj[i].trace is the mulliken population of atom i.
+        def atomic_pops(mol, mo_coeff, method=None):
+            nmo = mo_coeff.shape[1]
+            proj = numpy.empty((mol.natm,nmo,nmo))
+            orb_in_iao = reduce(numpy.dot, (iao_inv, orbocc))
+            for i, (b0, b1, p0, p1) in enumerate(iao_mol.offset_nr_by_atom()):
+                csc = reduce(numpy.dot, (orb_in_iao[p0:p1].T, s_iao[p0:p1],
+                                         orb_in_iao))
+                proj[i] = (csc + csc.T) * .5
+            return proj
+        pm = pipek.PM(mol, orbocc)
+        return pm.kernel()
+
+    # Symmetrically orthogonalization of the IAO orbitals as Knizia's
+    # implementation.  The IAO returned by iao.iao function is not orthogonal.
+    iaos = orth.vec_lowdin(iaos, ovlpS)
 
     #static variables
     StartTime = time()
@@ -78,10 +106,8 @@ def ibo(mol, orbocc, iaos=None, exponent=4, grad_tol=1e-8, max_iter=200,
     CIb = reduce(numpy.dot, (iaos.T, ovlpS , orbocc))
     numOccOrbitals = CIb.shape[1]
 
-
     log.debug("   {0:^5s} {1:^14s} {2:^11s} {3:^8s}"
               .format("ITER.","LOC(Orbital)","GRADIENT", "TIME"))
-
 
     for it in range(max_iter):
         fGrad = 0.00
@@ -106,8 +132,8 @@ def ibo(mol, orbocc, iaos=None, exponent=4, grad_tol=1e-8, max_iter=200,
                     Cjj  = numpy.dot(CIbA[:,j], CIbA[:,j])
                     #now I calculate Aij and Bij for the gradient search
                     Bij += 4.*Cij*(Cii**3-Cjj**3)
-                    Aij +=(-Cii**4 - Cjj**4 + 6*(Cii**2 + Cjj**2)*Cij**2
-                           + Cii**3 * Cjj + Cii*Cjj**3)
+                    Aij += -Cii**4 - Cjj**4 + 6*(Cii**2 + Cjj**2)*Cij**2 + Cii**3 * Cjj + Cii*Cjj**3
+
                 if (Aij**2 + Bij**2 < swapGradTolerance) and False:
                     continue
                     #this saves us from replacing already fine orbitals
@@ -143,13 +169,15 @@ def ibo(mol, orbocc, iaos=None, exponent=4, grad_tol=1e-8, max_iter=200,
         log.note(" Iterative localization: %s", Note)
     log.debug(" Localized orbitals deviation from orthogonality: %8.2e",
               numpy.linalg.norm(numpy.dot(CIb.T, CIb) - numpy.eye(numOccOrbitals)))
-    return numpy.dot(iaos,CIb)
+    # Note CIb is not unitary matrix (although very close to unitary matrix)
+    # because the projection <IAO|OccOrb> does not give unitary matrix.
+    return numpy.dot(iaos, (orth.vec_lowdin(CIb)))
 
 
 
 '''
-These are parameters for selecting the valence space correctly
-See also the parameters defined in G. Knizia's implementation.
+These are parameters for selecting the valence space correctly.
+The parameters are taken from in G. Knizia's free code
 https://sites.psu.edu/knizia/software/
 '''
 def MakeAtomInfos():
