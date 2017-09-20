@@ -2002,7 +2002,7 @@ class _IMDS:
                 tmpab = tmpab + tmpab.transpose(0,1,3,2) * .5
                 ovvv = ovvv*2 - ovvv.transpose(0,3,2,1)
                 tmpab-= lib.einsum('mfbe,mifa->eiba', ovvv, theta[p0:p1,i0:i1]) * .5
-                wvOv -= tmpab
+                wvOvV -= tmpab
                 self.wvOvV[:,i0:i1] = wvOvV
                 ovvv = tmpab = None
 
