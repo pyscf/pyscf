@@ -450,6 +450,8 @@ class Grids(lib.StreamObject):
         #self.radii_adjust = None # to switch off atomic radii adjustment
         self.radi_method = radi.treutler
         #self.radi_method = radi.gauss_chebyshev
+        #self.radi_method = radi.mura_knowles
+        #self.radi_method = radi.delley
         #self.becke_scheme = stratmann
         self.becke_scheme = original_becke
         self.level = 3
@@ -494,7 +496,8 @@ class Grids(lib.StreamObject):
         else:
             self.non0tab = None
         logger.info(self, 'tot grids = %d', len(self.weights))
-        return self.coords, self.weights
+        return self
+
     def setup_grids(self, mol=None):
         import warnings
         with warnings.catch_warnings():
