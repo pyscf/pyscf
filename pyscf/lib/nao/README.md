@@ -6,7 +6,20 @@ Library of tools for Managing the numerical atomic orbitals (NAO)
 Installation
 ------------
 
-* Compile core module with NAO support
+* Default compilation of pySCF's low-level libraries with NAO support
+
+        cd pyscf/lib
+        mkdir build
+        cd build
+        cmake -DENABLE_NAO=ON ..
+        make
+
+  Note during the compilation, external libraries (libcint, libxc, xcfun) will
+  be downloaded and installed.  If you want to disable the automatic
+  downloading, this [document](http://sunqm.github.io/pyscf/install.html#installation-without-network)
+  is an instruction for manually building these packages.
+
+* Custom compilation of pySCF's low-level libraries with NAO support
 
         cd pyscf/lib
         cp nao/cmakelists_examples/CMakeLists.txt.gnu CMakeLists.txt
@@ -15,10 +28,16 @@ Installation
         cmake ..
         make
 
-  Note during the compilation, external libraries (libcint, libxc, xcfun) will
-  be downloaded and installed.  If you want to disable the automatic
-  downloading, this [document](http://sunqm.github.io/pyscf/install.html#installation-without-network)
-  is an instruction for manually building these packages.
+* Using the same build directory for repetitive compilation
+  
+  Usually there is no problem to recompile the libraries after an update,
+  however, if one intents to use different compilers/interpreters/linked libraries
+  the file CMakeCache.txt must be deleted and cmake started again. 
+        
+        cd build
+        rm CMakeCache.txt
+        cmake -DENABLE_NAO=ON ..
+        make 
 
 * Testing of NAO support 
 

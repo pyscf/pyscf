@@ -14,7 +14,6 @@ endif()
 set(CMAKE_MACOSX_RPATH OFF)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-#enable_language(Fortran)
 find_package(BLAS REQUIRED)
 if(BLA_VENDOR MATCHES "Intel*")
   if (${DISABLE_AVX})
@@ -55,6 +54,7 @@ find_package(PythonInterp REQUIRED)
 #execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import numpy; print(numpy.get_include())"
 #  OUTPUT_VARIABLE NUMPY_INCLUDE)
 #include_directories(${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE})
+
 
 include(ExternalProject)
 option(BUILD_LIBCINT "Using libcint for analytical gaussian integral" ON)
@@ -100,11 +100,11 @@ add_subdirectory(hci)
 add_subdirectory(pbc)
 add_subdirectory(extras/mbd)
 
-
 option(ENABLE_LIBXC "Using libxc for XC functional library" ON)
 option(ENABLE_XCFUN "Using xcfun for XC functional library" ON)
 option(BUILD_LIBXC "Download and build libxc library" ON)
 option(BUILD_XCFUN "Download and build xcfun library" ON)
+option(ENABLE_NAO "Build numerical atomic orbital module" OFF)
 
 if(NOT DISABLE_DFT)
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND
@@ -137,10 +137,14 @@ endif() # ENABLE_XCFUN
 add_subdirectory(dft)
 endif() # DISABLE_DFT
 
-option(ENABLE_NAO "Build numerical atomic orbital module" OFF)
 if(ENABLE_NAO)
-enable_language(Fortran)
-add_subdirectory(nao)
-add_subdirectory(sparsetools)
+  enable_language(Fortran)
+  message("CMAKE_Fortran_COMPILER: ${CMAKE_Fortran_COMPILER}")
+  if (CMAKE_Fortran_COMPILER MATCHES "gfortran")
+    set(CMAKE_Fortran_FLAGS "-pedantic -O2 -Wall -ffree-line-length-0")
+  endif()
+  message("CMAKE_Fortran_FLAGS: ${CMAKE_Fortran_FLAGS}")
+  add_subdirectory(nao)
+  add_subdirectory(sparsetools)
 endif(ENABLE_NAO)
 
