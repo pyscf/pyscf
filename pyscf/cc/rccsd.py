@@ -413,7 +413,7 @@ class RCCSD(ccsd.CCSD):
             Hr2 += -einsum('kbdj,ljb->kld',imds.Wovvo,r2)
             Hr2 += einsum('klij,ijd->kld',imds.Woooo,r2)
             Hr2 += -einsum('kbid,ilb->kld',imds.Wovov,r2)
-            tmp = einsum('ijcb,ijb->c',t2,r2)
+            tmp = einsum('ijcb,ijb->c',self.t2,r2)
             Hr2 += -einsum('lkdc,c->kld',2.*imds.Woovv-imds.Woovv.transpose(1,0,2,3),tmp)
 
         vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
@@ -708,7 +708,7 @@ class RCCSD(ccsd.CCSD):
             nvir = self.nmo-self.nocc
             for a in range(nvir):
                 Hr2 += einsum('lb,bcd->lcd',r2[:,a,:],imds.Wvvvv[a])
-            tmp = einsum('ijcb,ibc->j',t2,r2)
+            tmp = einsum('ijcb,ibc->j',self.t2,r2)
             Hr2 += -einsum('kjfe,j->kef',2.*imds.Woovv-imds.Woovv.transpose(0,1,3,2),tmp)
 
         vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
@@ -2002,7 +2002,7 @@ class _IMDS:
                 tmpab = tmpab + tmpab.transpose(0,1,3,2) * .5
                 ovvv = ovvv*2 - ovvv.transpose(0,3,2,1)
                 tmpab-= lib.einsum('mfbe,mifa->eiba', ovvv, theta[p0:p1,i0:i1]) * .5
-                wvOvV -= tmpab
+                wvOv -= tmpab
                 self.wvOvV[:,i0:i1] = wvOvV
                 ovvv = tmpab = None
 

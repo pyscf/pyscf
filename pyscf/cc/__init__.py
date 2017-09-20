@@ -70,7 +70,7 @@ def CCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
 
     if hasattr(mf, 'with_df') and 'pbc' in str(mf.__module__):
         from pyscf.cc import dfccsd
-        return dfccsd.CCSD(mf, frozen, mo_coeff, mo_occ)
+        raise NotImplementedError('DF-CCSD not implemented, use DF-RCCSD instead?')
     else:
         return ccsd.CCSD(mf, frozen, mo_coeff, mo_occ)
 
@@ -89,7 +89,7 @@ def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
 
     elif hasattr(mf, 'with_df') and 'pbc' in str(mf.__module__):
         from pyscf.cc import dfccsd
-        return dfccsd.CCSD(mf, frozen, mo_coeff, mo_occ)
+        return dfccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)
 
     else:
         return rccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)

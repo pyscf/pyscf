@@ -1666,17 +1666,14 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             #                                        #
             ##########################################
 
-            print "Transposing the l2 operators..."
             l2_t = numpy.zeros_like(l2)
             for ki in range(nkpts):
                 for kj in range(nkpts):
                     ka = kconserv[ki,kshift,kj]
                     l2_t[ki,kj] = l2[kj,ki].transpose(1,0,2)
-            print "Transpose completed."
 
             # Normalization constant for left-hand eigenvector
             ldotr = numpy.dot(l1.ravel(),r1.ravel()) + numpy.dot(l2.ravel(),r2.ravel())
-            print "ldotr = ", ldotr
             l2 = (l2 + 2.*l2_t)/3.
             l2_t = None
 
@@ -1692,7 +1689,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             array_size = [nkpts,nkpts]
             # TODO: figure out a good chunk size
             #task_list = generate_max_task_list(array_size,priority_list=[1,1])
-            task_list = generate_max_task_list(array_size,blk_mem_size=100000*2.*mem_usage_oovvk(nocc,nvir,nkpts),priority_list=[1,1])
+            task_list = generate_max_task_list(array_size,blk_mem_size=1e9*2.*mem_usage_ovvvkk(nocc,nvir,nkpts),priority_list=[1,1])
 
             star_energy = numpy.array(0.0 + 1j*0.0)
             for kirange, kjrange in mpi.work_stealing_partition(task_list):
@@ -1932,7 +1929,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                                 star_energy += fac*0.5*einsum('ijkab,ijkab,ijkab',lijkab_tmp,rijkab_tmp,eijkab)
 
             comm.Allreduce(MPI.IN_PLACE, star_energy, op=MPI.SUM)
-            print "EOM-IPCCSD* delta energy = ", star_energy
+            if rank == 0:
+                logger.info(self, 'EOM-IPCCSD* delta energy = %.15g (Imag = %.15g)' % (star_energy.real,star_energy.imag))
             e.append(star_energy+_eval)
 
         return np.array(e)
@@ -2390,7 +2388,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             #       transpose of these operators!)   #
             ##########################################
 
-            print "Transposing the l2 operators..."
             l2_t = numpy.zeros_like(l2)
             r2_t = numpy.zeros_like(r2)
             for kj in range(nkpts):
@@ -2398,11 +2395,9 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                     kb = kconserv[kshift,ka,kj]
                     l2_t[kj,kb] = l2[kj,ka].transpose(0,2,1)
                     r2_t[kj,kb] = r2[kj,ka].transpose(0,2,1)
-            print "Transpose completed."
 
             # Normalization for the left eigenvector
             ldotr = numpy.dot(l1.ravel(),r1.ravel()) + numpy.dot(l2.ravel(),r2.ravel())
-            print "ldotr = ", ldotr
             l2 = (l2 + 2.*l2_t)/3.
             r2 = r2_t.copy()
             r2_t = None
@@ -2689,7 +2684,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                                 star_energy += fac*0.5*einsum('ijabc,ijabc,ijabc',lijabc_tmp,rijabc_tmp,eijabc)
 
             comm.Allreduce(MPI.IN_PLACE, star_energy, op=MPI.SUM)
-            print "EOM-EACCSD* delta energy = ", star_energy
+            if rank == 0:
+                logger.info(self, 'EOM-EACCSD* delta energy = %.15g (Imag = %.15g)' % (star_energy.real,star_energy.imag))
             e.append(star_energy+_eval)
 
         return np.array(e)
@@ -2697,7 +2693,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def diis(self, t1, t2, istep, normt, de, adiis):
         return self.diis_(t1, t2, istep, normt, de, adiis)
     def diis_(self, t1, t2, istep, normt, de, adiis):
-        print t1.shape, t2.shape
         if (istep > self.diis_start_cycle and
             abs(de) < self.diis_start_energy_diff):
             vec = self.amplitudes_to_vector(t1, t2)
@@ -2714,158 +2709,9 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         nvir = nmo - nocc
         nkpts = self.nkpts
         nov = nkpts*nocc*nvir
-        print nmo, nkpts, nocc, nvir, vec.shape
         t1 = vec[:nov].reshape(nkpts,nocc,nvir)
         t2 = vec[nov:].reshape(nkpts*(nkpts+1)/2,nkpts,nocc,nocc,nvir,nvir)
         return t1, t2
-
-
-#class _ERIS:
-#    #@profile
-#    def __init__(self, cc, mo_coeff=None, method='incore',
-#                 ao2mofn=pyscf.ao2mo.outcore.general_iofree):
-#        cput0 = (time.clock(), time.time())
-#        moidx = numpy.ones(cc.mo_occ.shape, dtype=numpy.bool)
-#        nkpts = cc.nkpts
-#        nmo = cc.nmo()
-#        #TODO check that this and kccsd work for frozen...
-#        if isinstance(cc.frozen, (int, numpy.integer)):
-#            moidx[:,:cc.frozen] = False
-#        elif len(cc.frozen) > 0:
-#            moidx[:,numpy.asarray(cc.frozen)] = False
-#        if mo_coeff is None:
-#            self.mo_coeff = numpy.zeros((nkpts,nmo,nmo),dtype=cc.mo_coeff.dtype)
-#            for kp in range(nkpts):
-#                self.mo_coeff[kp] = cc.mo_coeff[kp][:,moidx[kp]]
-#            mo_coeff = self.mo_coeff
-#            self.fock = numpy.zeros((nkpts,nmo,nmo),dtype=cc.mo_coeff.dtype)
-#            for kp in range(nkpts):
-#                self.fock[kp] = numpy.diag(cc.mo_energy[kp][moidx[kp]]).astype(mo_coeff.dtype)
-#        else:  # If mo_coeff is not canonical orbital
-#            self.mo_coeff = mo_coeff = mo_coeff[:,:,moidx]
-#            dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
-#            fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
-#            self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
-#
-#        nocc = cc.nocc()
-#        nmo = cc.nmo()
-#        nvir = nmo - nocc
-#        mem_incore, mem_outcore, mem_basic = pyscf.cc.ccsd._mem_usage(nocc, nvir)
-#        mem_now = lib.current_memory()[0]
-#
-#        log = logger.Logger(cc.stdout, cc.verbose)
-#        if (method == 'incore' and (mem_incore+mem_now < cc.max_memory)
-#            or cc.mol.incore_anyway):
-#            kconserv = cc.kconserv
-#            khelper = cc.khelper #kpoint_helper.unique_pqr_list(cc._scf.cell,cc.kpts)
-#            unique_klist = khelper.get_uniqueList()
-#            nUnique_klist = khelper.nUnique
-#
-#            eri = numpy.zeros((nkpts,nkpts,nkpts,nmo,nmo,nmo,nmo), dtype=numpy.complex128)
-#
-#            #
-#            #
-#            # Looping over unique list of k-vectors
-#            #
-#            #
-#            for pqr in range(nUnique_klist):
-#                kp, kq, kr = unique_klist[pqr]
-#                ks = kconserv[kp,kq,kr]
-#                eri_kpt = pyscf.pbc.ao2mo.general(cc._scf.cell,
-#                            (mo_coeff[kp,:,:],mo_coeff[kq,:,:],mo_coeff[kr,:,:],mo_coeff[ks,:,:]),
-#                            (cc.kpts[kp],cc.kpts[kq],cc.kpts[kr],cc.kpts[ks]))
-#                eri_kpt = eri_kpt.reshape(nmo,nmo,nmo,nmo)
-#                eri[kp,kq,kr] = eri_kpt.copy()
-#
-#            for kp in range(nkpts):
-#                for kq in range(nkpts):
-#                    for kr in range(nkpts):
-#                        ikp, ikq, ikr = khelper.get_irrVec(kp,kq,kr)
-#                        irr_eri = eri[ikp,ikq,ikr]
-#                        eri[kp,kq,kr] = khelper.transform_irr2full(irr_eri,kp,kq,kr)
-#
-#            # Checking some things...
-#            maxdiff = 0.0
-#            for kp in range(nkpts):
-#                for kq in range(nkpts):
-#                    for kr in range(nkpts):
-#                        ks = kconserv[kp,kq,kr]
-#                        for p in range(nmo):
-#                            for q in range(nmo):
-#                                for r in range(nmo):
-#                                    for s in range(nmo):
-#                                        pqrs = eri[kp,kq,kr,p,q,r,s]
-#                                        rspq = eri[kr,ks,kp,r,s,p,q]
-#                                        diff = numpy.linalg.norm(pqrs - rspq).real
-#                                        if diff > 1e-5:
-#                                            print "** Warning: ERI diff at ",
-#                                            print "kp,kq,kr,ks,p,q,r,s =", kp, kq, kr, ks, p, q, r, s
-#                                        maxdiff = max(maxdiff,diff)
-#            print "Max difference in (pq|rs) - (rs|pq) = %.15g" % maxdiff
-#            #print "ERI ="
-#            #print eri
-#
-#            # Chemist -> physics notation
-#            eri = eri.transpose(0,2,1,3,5,4,6)
-#
-#            self.dtype = eri.dtype
-#            self.oooo = eri[:,:,:,:nocc,:nocc,:nocc,:nocc].copy() / nkpts
-#            self.ooov = eri[:,:,:,:nocc,:nocc,:nocc,nocc:].copy() / nkpts
-#            self.ovoo = eri[:,:,:,:nocc,nocc:,:nocc,:nocc].copy() / nkpts
-#            self.oovv = eri[:,:,:,:nocc,:nocc,nocc:,nocc:].copy() / nkpts
-#            self.ovov = eri[:,:,:,:nocc,nocc:,:nocc,nocc:].copy() / nkpts
-#            self.ovvv = eri[:,:,:,:nocc,nocc:,nocc:,nocc:].copy() / nkpts
-#            self.vvvv = eri[:,:,:,nocc:,nocc:,nocc:,nocc:].copy() / nkpts
-#            #ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
-#            #self.ovvv = numpy.empty((nocc,nvir,nvir*(nvir+1)//2))
-#            #for i in range(nocc):
-#            #    for j in range(nvir):
-#            #        self.ovvv[i,j] = lib.pack_tril(ovvv[i,j])
-#            #self.vvvv = pyscf.ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:], nvir)
-#
-#            # TODO: Avoid this.
-#            # Store all for now, while DEBUGGING
-#            self.voov = eri[:,:,:,nocc:,:nocc,:nocc,nocc:].copy() / nkpts
-#            self.vovo = eri[:,:,:,nocc:,:nocc,nocc:,:nocc].copy() / nkpts
-#            self.vovv = eri[:,:,:,nocc:,:nocc,nocc:,nocc:].copy() / nkpts
-#            self.oovo = eri[:,:,:,:nocc,:nocc,nocc:,:nocc].copy() / nkpts
-#            self.vvov = eri[:,:,:,nocc:,nocc:,:nocc,nocc:].copy() / nkpts
-#            self.vooo = eri[:,:,:,nocc:,:nocc,:nocc,:nocc].copy() / nkpts
-#
-#        log.timer('CCSD integral transformation', *cput0)
-#
-#
-#class _IMDS:
-#    def __init__(self):
-#        pass
-#
-#    def make_ip(self, cc):
-#        #cc = self.cc
-#        t1,t2,eris = cc.t1, cc.t2, cc.eris
-#
-#        self.Lvv = imdk.Lvv(cc,t1,t2,eris)
-#        self.Loo = imdk.Loo(cc,t1,t2,eris)
-#        self.Fov = imdk.cc_Fov(cc,t1,t2,eris)
-#        self.Wooov = imdk.Wooov(cc,t1,t2,eris)
-#        self.Wovvo = imdk.Wovvo(cc,t1,t2,eris)
-#        self.Wovoo = imdk.Wovoo(cc,t1,t2,eris)
-#        self.Woooo = imdk.Woooo(cc,t1,t2,eris)
-#        self.Wovov = imdk.Wovov(cc,t1,t2,eris)
-#        self.Woovv = eris.oovv
-#
-#    def make_ea(self, cc):
-#        #cc = self.cc
-#        t1,t2,eris = cc.t1, cc.t2, cc.eris
-#
-#        self.Lvv = imdk.Lvv(cc,t1,t2,eris)
-#        self.Loo = imdk.Loo(cc,t1,t2,eris)
-#        self.Fov = imdk.cc_Fov(cc,t1,t2,eris)
-#        self.Wvovv = imdk.Wvovv(cc,t1,t2,eris)
-#        self.Wvvvo = imdk.Wvvvo(cc,t1,t2,eris)
-#        self.Wovvo = imdk.Wovvo(cc,t1,t2,eris)
-#        self.Wvvvv = imdk.Wvvvv(cc,t1,t2,eris)
-#        self.Woovv = eris.oovv
-#        self.Wovov = imdk.Wovov(cc,t1,t2,eris)
 
 class _ERIS:
     ##@profile
@@ -2971,12 +2817,10 @@ class _ERIS:
             self.vvov = eri[:,:,:,nocc:,nocc:,:nocc,nocc:].copy() / nkpts
             self.vooo = eri[:,:,:,nocc:,:nocc,:nocc,:nocc].copy() / nkpts
         else:
-            #print "*** Using HDF5 ERI storage***"
             _tmpfile1_name = None
             if rank == 0:
                 _tmpfile1_name = "eris1.hdf5"
             _tmpfile1_name = comm.bcast(_tmpfile1_name, root=0)
-            print _tmpfile1_name, rank
 ######
             read_feri=False
             if rank == 0:
@@ -3008,7 +2852,7 @@ class _ERIS:
                 self.ooovRev  = self.feri1['ooovRev']
                 self.ovvvRev  = self.feri1['ovvvRev']
 
-                print "........WARNING : using oovv in memory......."
+                log.warn("Using oovv integrals in memory!")
                 new_oovv = numpy.empty( (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=mo_coeff.dtype)
                 for kp in range(nkpts):
                     for kq in range(nkpts):
@@ -3058,7 +2902,6 @@ class _ERIS:
             khelper = cc.khelper #kpoint_helper.unique_pqr_list(cc._scf.cell,cc.kpts)
             unique_klist = khelper.get_uniqueList()
             nUnique_klist = khelper.nUnique
-            print "ints = ", nUnique_klist
 
 ####
             mem = 0.5e9
@@ -3067,7 +2910,7 @@ class _ERIS:
 ####
             BLKSIZE = (1,nkpts_blksize,nkpts,)
             if rank == 0:
-                print "ERI oopq blksize = (%3d %3d %3d)" % BLKSIZE
+                log.info("ERI oopq blksize = (%3d %3d %3d)" % BLKSIZE)
             loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
             loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
 
@@ -3075,7 +2918,6 @@ class _ERIS:
             tmp_block = numpy.empty(shape=tmp_block_shape,dtype=ds_type)
             cput1 = time.clock(), time.time()
             good2go = True
-            print "performing oopq transformation"
             while(good2go):
                 good2go, data = loader.slave_set()
                 if good2go is False:
@@ -3120,7 +2962,7 @@ class _ERIS:
 ####
             BLKSIZE = (1,nkpts_blksize,nkpts,)
             if rank == 0:
-                print "ERI ovpq blksize = (%3d %3d %3d)" % BLKSIZE
+                log.info("ERI ovpq blksize = (%3d %3d %3d)" % BLKSIZE)
             loader1 = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
             loader1.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
 
@@ -3185,7 +3027,7 @@ class _ERIS:
 ####
             BLKSIZE = (nkpts_blksize,)
             if rank == 0:
-                print "ERI vvvv blksize = %3d" % nkpts_blksize
+                log.info("ERI vvvv blksize = %3d" % nkpts_blksize)
             loader2 = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
             loader2.set_ranges((range(nUnique_klist),))
 
@@ -3201,7 +3043,7 @@ class _ERIS:
                 chkpts = [int(numpy.ceil(nUnique_klist/10))*i for i in range(10)]
                 for indices in ranges:
                     if indices in chkpts:
-                        print ":: %4.2f percent complete" % (1.*indices/nUnique_klist*100)
+                        log.info(":: %4.2f percent complete" % (1.*indices/nUnique_klist*100))
                     kp, kq, kr = unique_klist[indices]
                     ks = kconserv[kp,kq,kr]
                     orbva_p = mo_coeff[kp,:,nocc:]
@@ -3251,7 +3093,7 @@ class _ERIS:
             self.ooovRev  = self.feri1['ooovRev']
             self.ovvvRev  = self.feri1['ovvvRev']
 
-            print "........WARNING : using oovv in memory......."
+            log.warn("Using oovv integrals in memory!")
             new_oovv = numpy.empty( (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=mo_coeff.dtype)
             for kp in range(nkpts):
                 for kq in range(nkpts):
@@ -3279,7 +3121,6 @@ class _IMDS:
         if not hasattr(self, 'fint1'):
             self.fint1 = None
 
-        print "*** Using HDF5 ERI storage ***"
         tmpfile1_name = "eom_intermediates_IP.hdf5"
         self.fint1 = h5py.File(tmpfile1_name, 'w', driver='mpio', comm=MPI.COMM_WORLD)
 
@@ -3362,7 +3203,6 @@ class _IMDS:
         if not hasattr(self, 'fint2'):
             self.fint2 = None
 
-        print "*** Using HDF5 ERI storage ***"
         tmpfile1_name = "eom_intermediates_EA.hdf5"
         self.fint2 = h5py.File(tmpfile1_name, 'w', driver='mpio', comm=MPI.COMM_WORLD)
 
@@ -3410,10 +3250,8 @@ class _IMDS:
         #self.W2ovvo = imdk.W2ovvo(cc,t1,t2,eris,self.fint2)
         #self.Wovvo = imdk.Wovvo(cc,t1,t2,eris,self.fint2)
 
-        print "making Wvvvv"
         self.Wvvvv = imdk.Wvvvv(cc,t1,t2,eris,self.fint2)
 
-        print "making Woovv"
         self.Woovv = eris.oovv
 
         self.W1ovov = imdk.W1ovov(cc,t1,t2,eris,self.fint2)
@@ -3423,7 +3261,6 @@ class _IMDS:
         self.WovovRev  = imdk.WovovRev(cc,t1,t2,eris,self.fint2)
 
 #
-        print "making Wvvvo"
         #self.Wvvvo = imdk.Wvvvo(cc,t1,t2,eris,self.fint2)
         self.WvvvoR1 = imdk.WvvvoR1(cc,t1,t2,eris,self.fint2)
 

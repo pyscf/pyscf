@@ -1,40 +1,39 @@
 #!/usr/bin/env python
 
 '''
-CCSD with K-point sampling
+Showing equivalence between the K-point CCSD and
+the gamma-point CCSD for a diamond lattice.
 '''
 
 from pyscf.pbc import gto, scf, mpicc
-from pyscf.pbc.examples.scf import run_khf
-from pyscf.pbc.tools import pyscf_ase
 from mpi4py import MPI
-
-from ase.lattice import bulk
-A2B = 1.889725989
-ase_atom = bulk('C', 'diamond', a=3.5668*A2B)
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 
 cell = gto.M(
-    h = ase_atom.cell,
-    unit='B',
-    atom = pyscf_ase.ase_atoms_to_pyscf(ase_atom),
+    unit = 'B',
+    a = [[ 0.,          3.37013733,  3.37013733],
+         [ 3.37013733,  0.,          3.37013733],
+         [ 3.37013733,  3.37013733,  0.        ]],
+    gs = [12,]*3,
+    atom = '''C 0 0 0
+              C 1.68506866 1.68506866 1.68506866''',
     basis = 'gth-szv',
     pseudo = 'gth-pade',
-    gs = [12]*3,
-    verbose = 6,
+    verbose = 4,
 )
 
 nk = [2,2,2]
 kpts = cell.make_kpts(nk)
-print "Grid size",
-print cell.gs
 
 #
 # Running HF
 #
-kmf = run_khf(cell, nk, gamma=True, exxdiv=None, conv_tol=1e-12)
+kpts -= kpts[0]
+if rank == 0:
+    kmf = scf.KRHF(cell, kpts)
+    kmf.kernel()
 
 comm.Barrier()
 mo_coeff  = comm.bcast(kmf.mo_coeff,root=0)
@@ -59,7 +58,7 @@ lew, lev = kcc.leaccsd(nroots=1, kptlist=[0])
 ew, ev   = kcc.eaccsd(nroots=1,  kptlist=[0])
 kcc.eaccsd_star(ew, ev, lev)
 
-## Running IPCCSD and IPCCSD*
-#lew, lev = kcc.lipccsd(nroots=1, kptlist=[0])
-#ew, ev   = kcc.ipccsd(nroots=1,  kptlist=[0])
-#kcc.ipccsd_star(ew, ev, lev)
+# Running IPCCSD and IPCCSD*
+lew, lev = kcc.lipccsd(nroots=1, kptlist=[0])
+ew, ev   = kcc.ipccsd(nroots=1,  kptlist=[0])
+kcc.ipccsd_star(ew, ev, lev)
