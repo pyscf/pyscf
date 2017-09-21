@@ -60,10 +60,10 @@ include(ExternalProject)
 option(BUILD_LIBCINT "Using libcint for analytical gaussian integral" ON)
 option(WITH_F12 "Compling F12 integrals" ON)
 if(BUILD_LIBCINT)
-#if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
   ExternalProject_Add(libcint
     GIT_REPOSITORY https://github.com/sunqm/libcint.git
-    GIT_TAG cint3
+    GIT_TAG v3.0.0
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DWITH_F12=${WITH_F12} -DWITH_RANGE_COULOMB=1 -DWITH_COULOMB_ERF=1
@@ -72,7 +72,7 @@ if(BUILD_LIBCINT)
             -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
             -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
   )
-#endif()
+endif()
 endif()
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/deps/include)
@@ -95,7 +95,7 @@ add_subdirectory(cc)
 add_subdirectory(icmpspt)
 add_subdirectory(shciscf)
 add_subdirectory(ri)
-add_subdirectory(localizer)
+#add_subdirectory(localizer)
 add_subdirectory(hci)
 add_subdirectory(pbc)
 add_subdirectory(extras/mbd)
