@@ -30,7 +30,7 @@ def safeNormDiff(in_array1, in_array2):
     norm = 0.0
     for block in task_list:
         which_slice = [slice(*x) for x in block]
-	norm += numpy.linalg.norm(in_array1[tuple(which_slice)] - in_array2[tuple(which_slice)])
+        norm += numpy.linalg.norm(in_array1[tuple(which_slice)] - in_array2[tuple(which_slice)])
     return norm
 
 def safeAllreduceInPlace(comm, in_array):
@@ -41,9 +41,9 @@ def safeAllreduceInPlace(comm, in_array):
     task_list = generate_task_list(chunk_size,shape)
     for block in task_list:
         which_slice = [slice(*x) for x in block]
-	tmp = in_array[tuple(which_slice)].copy()
+        tmp = in_array[tuple(which_slice)].copy()
         comm.Allreduce(MPI.IN_PLACE, tmp, op=MPI.SUM)
-	in_array[tuple(which_slice)] = tmp
+        in_array[tuple(which_slice)] = tmp
 
 def safeBcastInPlace(comm, in_array, root=0):
     shape = in_array.shape
@@ -53,6 +53,6 @@ def safeBcastInPlace(comm, in_array, root=0):
     task_list = generate_task_list(chunk_size,shape)
     for block in task_list:
         which_slice = [slice(*x) for x in block]
-	tmp = in_array[tuple(which_slice)].copy()
+        tmp = in_array[tuple(which_slice)].copy()
         tmp = comm.bcast(tmp,root=0)
-	in_array[tuple(which_slice)] = tmp
+        in_array[tuple(which_slice)] = tmp

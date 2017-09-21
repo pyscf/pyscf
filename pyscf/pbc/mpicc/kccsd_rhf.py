@@ -47,14 +47,14 @@ def read_amplitudes(t1_shape, t2_shape, t1=None, t2=None, filename="t_amplitudes
         feri = h5py.File(filename, 'r', driver='mpio', comm=MPI.COMM_WORLD)
         saved_t1 = feri['t1']
         saved_t2 = feri['t2']
-	assert(saved_t1.shape == t1_shape)
-	assert(saved_t2.shape == t2_shape)
+        assert(saved_t1.shape == t1_shape)
+        assert(saved_t2.shape == t2_shape)
 
-	task_list = generate_max_task_list(t1.shape)
+        task_list = generate_max_task_list(t1.shape)
         for block in task_list:
             which_slice = [slice(*x) for x in block]
             t1[tuple(which_slice)] = saved_t1[tuple(which_slice)]
-	task_list = generate_max_task_list(t2.shape)
+        task_list = generate_max_task_list(t2.shape)
         for block in task_list:
             which_slice = [slice(*x) for x in block]
             t2[tuple(which_slice)] = saved_t2[tuple(which_slice)]
@@ -71,11 +71,11 @@ def write_amplitudes(t1, t2, filename="t_amplitudes.hdf5"):
         out_t1  = feri.create_dataset('t1', t1.shape, dtype=ds_type)
         out_t2  = feri.create_dataset('t2', t2.shape, dtype=ds_type)
 
-	task_list = generate_max_task_list(t1.shape)
+        task_list = generate_max_task_list(t1.shape)
         for block in task_list:
             which_slice = [slice(*x) for x in block]
             out_t1[tuple(which_slice)] = t1[tuple(which_slice)]
-	task_list = generate_max_task_list(t2.shape)
+        task_list = generate_max_task_list(t2.shape)
         for block in task_list:
             which_slice = [slice(*x) for x in block]
             out_t2[tuple(which_slice)] = t2[tuple(which_slice)]
@@ -111,7 +111,7 @@ def write_eom_amplitudes(vec, filename="reom_amplitudes.hdf5"):
         ds_type = vec.dtype
         out_v  = feri.create_dataset('v', vec.shape, dtype=ds_type)
 
-	task_list = generate_max_task_list(vec.shape)
+        task_list = generate_max_task_list(vec.shape)
         for block in task_list:
             which_slice = [slice(*x) for x in block]
             out_v[tuple(which_slice)] = vec[tuple(which_slice)]
@@ -230,7 +230,8 @@ def update_t1(cc,t1,t2,eris,ints1e):
                 tau_term[kk] -= unpack_tril(t2,nkpts,ki,kk,kk,kconserv[ki,kk,kk]).transpose(1,0,2,3)
             tau_term[ka] += einsum('ic,ka->kica',t1[ki],t1[ka])
 
-            t1new[ka] += einsum('kc,kica->ia',Fov[:].reshape(nocc*nkpts,nvir),tau_term[:].reshape(nocc*nkpts,nocc,nvir,nvir))
+            t1new[ka] += einsum('kc,kica->ia',Fov[:].reshape(nocc*nkpts,nvir),
+                                              tau_term[:].reshape(nocc*nkpts,nocc,nvir,nvir))
 
             t1new[ka] += einsum('akic,kc->ia',eris_voov_aXi[iterka,:,iterki].transpose(1,0,2,3,4).reshape(nvir,nocc*nkpts,nocc,nvir),
                                               2*t1[:].reshape(nocc*nkpts,nvir))
@@ -267,7 +268,8 @@ def update_t1(cc,t1,t2,eris,ints1e):
             for iterkk,kk in enumerate(ranges1):
                 kd_list = _cp(kconserv[ka,range(nkpts),kk])
                 kc_list = _cp(range(nkpts))
-                Svovv = 2*eris_ovvv_kaX[iterkk,iterka,kd_list].transpose(0,2,1,4,3) - eris_ovvv_kaX[iterkk,iterka,kc_list].transpose(0,2,1,3,4)
+                Svovv = (2*eris_ovvv_kaX[iterkk,iterka,kd_list].transpose(0,2,1,4,3)
+                         - eris_ovvv_kaX[iterkk,iterka,kc_list].transpose(0,2,1,3,4))
 #                tau_term_1 = t2[ki,kk,:].copy()
                 tau_term_1 = unpack_tril(t2,nkpts,ki,kk,range(nkpts),kconserv[ki,range(nkpts),kk]).copy()
                 tau_term_1[ki] += einsum('ic,kd->ikcd',t1[ki],t1[kk])
@@ -275,7 +277,8 @@ def update_t1(cc,t1,t2,eris,ints1e):
                                                 tau_term_1.transpose(1,2,0,3,4).reshape(nocc,-1))
 
                 kl_list = _cp(kconserv[ki,kk,range(nkpts)])
-                Sooov = 2*eris_ooov_kXi[iterkk,kl_list,iterki] - eris_ooov_Xki[kl_list,iterkk,iterki].transpose(0,2,1,3,4)
+                Sooov = (2*eris_ooov_kXi[iterkk,kl_list,iterki]
+                         - eris_ooov_Xki[kl_list,iterkk,iterki].transpose(0,2,1,3,4))
 #                tau_term_1 = t2[kk,kl_list,ka].copy()
                 tau_term_1 = unpack_tril(t2,nkpts,kk,kl_list,ka,kconserv[kk,ka,kl_list]).copy()
                 if kk == ka:
@@ -324,7 +327,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     Lvv = imdk.Lvv(cc,t1,t2,eris)
 
     if rank == 0:
-    	print "done making intermediates..."
+        print "done making intermediates..."
     # Move energy terms to the other side
     Foo -= foo
     Fvv -= fvv
@@ -334,14 +337,14 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     kconserv = cc.kconserv
 
     if rank == 0:
-    	print "t1 equation..."
+        print "t1 equation..."
     # T1 equation
     # TODO: Check this conj(). Hirata and Bartlett has
     # f_{vo}(a,i), which should be equal to f_{ov}^*(i,a)
     t1new = update_t1(cc,t1,t2,eris,[Foo,Fvv,Fov,Loo,Lvv])
 
     if rank == 0:
-    	print "t2 equation..."
+        print "t2 equation..."
     # T2 equation
     # For conj(), see Hirata and Bartlett, Eq. (36)
     #t2new = numpy.array(eris.oovv, copy=True).conj()
@@ -363,7 +366,8 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     pre = 1.*nkpts*nkpts*nocc*nocc*nvir*nvir*16
     nkpts_blksize = max(int(numpy.floor(mem/pre)),1)
     BLKSIZE2 = min(nkpts,nkpts_blksize)
-    BLKSIZE2_ranges = [(BLKSIZE2*i,min(nkpts,BLKSIZE2*(i+1))) for i in range(int(numpy.ceil(1.*nkpts/BLKSIZE2)))]
+    BLKSIZE2_ranges = [(BLKSIZE2*i,min(nkpts,BLKSIZE2*(i+1)))
+                       for i in range(int(numpy.ceil(1.*nkpts/BLKSIZE2)))]
 
     #######################################################
     # Making Woooo terms...
@@ -462,7 +466,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     pre = 1.*nvir*nvir*nvir*nvir*nkpts*16
     nkpts_blksize = min(max(int(numpy.floor(mem/pre)),1),nkpts)
     if rank == 0:
-    	print "vvvv blocksize = ", nkpts_blksize
+        print "vvvv blocksize = ", nkpts_blksize
     loader = mpi_load_balancer.load_balancer(BLKSIZE=(nkpts,1,nkpts_blksize,))
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
 ####
@@ -555,7 +559,8 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
             continue
 
         s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
-        # TODO this can sometimes not be optimal for ooov, calls for all kb, but in most block set-ups you only need 1 index
+        # TODO this can sometimes not be optimal for ooov, calls for all kb,
+        # but in most block set-ups you only need 1 index
         eris_ooov_ji = _cp(eris.ooov[s1,s0])
 
         eris_voovR1_aXi = _cp(eris.voovR1[s0,s2,:])
@@ -1035,10 +1040,12 @@ def energy_tril(cc, t1, t2, eris):
             for ka in range(nkpts):
                 if ki <= kj:
                    kb = kconserv[ki,ka,kj]
-                   e += einsum('ijab,ijab', tau[tril_index(ki,kj),ka], (2.*eris.oovv[ki,kj,ka]-eris.oovv[ki,kj,kb].transpose(0,1,3,2)))
+                   e += einsum('ijab,ijab', tau[tril_index(ki,kj),ka],
+                               (2.*eris.oovv[ki,kj,ka]-eris.oovv[ki,kj,kb].transpose(0,1,3,2)))
                 if kj < ki:
                    kb = kconserv[ki,ka,kj]
-                   e += einsum('ijab,ijab', tau[tril_index(kj,ki),kb].transpose(1,0,3,2), (2.*eris.oovv[ki,kj,ka]-eris.oovv[ki,kj,kb].transpose(0,1,3,2)))
+                   e += einsum('ijab,ijab', tau[tril_index(kj,ki),kb].transpose(1,0,3,2),
+                               (2.*eris.oovv[ki,kj,ka]-eris.oovv[ki,kj,kb].transpose(0,1,3,2)))
     comm.Barrier()
     e /= nkpts
     return e.real
@@ -1163,7 +1170,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         return self.emp2, t1, t2
 
     def init_amps(self, eris):
-	return self._init_amps_tril(eris)
+        return self._init_amps_tril(eris)
 
     def nocc(self):
         # Spin orbitals
@@ -1302,11 +1309,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 x0 = np.zeros_like(diag)
                 x0[np.argmin(diag)] = 1.0
             if nroots == 1:
-            	#evals[k], evecs[k,:,0] = eig(self.ipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-            	conv, evals[k], evecs[k,:] = eigs(self.ipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
+                #evals[k], evecs[k,:,0] = eig(self.ipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+                conv, evals[k], evecs[k,:] = eigs(self.ipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
             else:
-            	#evals[k], evecs[k] = eig(self.ipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-            	conv, evals[k], evecs[k,:] = eigs(self.ipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
+                #evals[k], evecs[k] = eig(self.ipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+                conv, evals[k], evecs[k,:] = eigs(self.ipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
             write_eom_amplitudes(evecs[k],filename=amplitude_filename)
         time0 = log.timer_debug1('converge ip-ccsd', *time0)
         comm.Barrier()
@@ -1445,11 +1452,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 x0 = np.zeros_like(diag)
                 x0[np.argmin(diag)] = 1.0
             if nroots == 1:
-            	#evals[k], evecs[k,:,0] = eig(self.lipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-            	conv, evals[k], evecs[k,:] = eigs(self.lipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
+                #evals[k], evecs[k,:,0] = eig(self.lipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+                conv, evals[k], evecs[k,:] = eigs(self.lipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
             else:
-            	#evals[k], evecs[k] = eig(self.lipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-            	conv, evals[k], evecs[k,:] = eigs(self.lipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
+                #evals[k], evecs[k] = eig(self.lipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+                conv, evals[k], evecs[k,:] = eigs(self.lipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
             write_eom_amplitudes(evecs[k],amplitude_filename)
         time0 = log.timer_debug1('converge ip-ccsd', *time0)
         comm.Barrier()
@@ -2027,11 +2034,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 x0 = np.zeros_like(diag)
                 x0[np.argmin(diag)] = 1.0
             if nroots == 1:
-            	#evals[k], evecs[k,:,0] = eig(self.eaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-            	conv, evals[k], evecs[k,:] = eigs(self.eaccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
+                #evals[k], evecs[k,:,0] = eig(self.eaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+                conv, evals[k], evecs[k,:] = eigs(self.eaccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
             else:
-            	#evals[k], evecs[k] = eig(self.eaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-            	conv, evals[k], evecs[k,:] = eigs(self.eaccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
+                #evals[k], evecs[k] = eig(self.eaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+                conv, evals[k], evecs[k,:] = eigs(self.eaccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
             write_eom_amplitudes(evecs[k],amplitude_filename)
         time0 = log.timer_debug1('converge ea-ccsd', *time0)
         comm.Barrier()
@@ -2191,11 +2198,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 x0 = np.zeros_like(diag)
                 x0[np.argmin(diag)] = 1.0
             if nroots == 1:
-            	#evals[k], evecs[k,:,0] = eig(self.leaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-            	conv, evals[k], evecs[k,:] = eigs(self.leaccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
+                #evals[k], evecs[k,:,0] = eig(self.leaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+                conv, evals[k], evecs[k,:] = eigs(self.leaccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
             else:
-            	#evals[k], evecs[k] = eig(self.leaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-            	conv, evals[k], evecs[k,:] = eigs(self.leaccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
+                #evals[k], evecs[k] = eig(self.leaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
+                conv, evals[k], evecs[k,:] = eigs(self.leaccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
             write_eom_amplitudes(evecs[k],amplitude_filename)
         time0 = log.timer_debug1('converge lea-ccsd', *time0)
         comm.Barrier()

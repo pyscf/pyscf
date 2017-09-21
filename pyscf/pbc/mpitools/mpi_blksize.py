@@ -14,13 +14,13 @@ nproc = comm.Get_size()
 
 def get_max_blocksize_from_mem(array_size, mem_per_block, mem, priority_list=None):
     '''
-	Args:
-		priority_list : list of importance of indices for the blocksizes,
-				i.e. an index with priority 1 will be made to be the
-				maximum it can be (according to array_size and mem),
-				afterwhich an index with priority 2 will be made the maximum size
-				it can be.  If two priorities are the same, the block size
-				for those indices will be forced to be equal.
+    Args:
+        priority_list : list of importance of indices for the blocksizes,
+            i.e. an index with priority 1 will be made to be the
+            maximum it can be (according to array_size and mem),
+            afterwhich an index with priority 2 will be made the maximum size
+            it can be.  If two priorities are the same, the block size
+            for those indices will be forced to be equal.
     '''
     #assert((priority_list is not None and hasattr(priority_list, '__iter__')) and
     #        "nchunks (int) or priority_list (iterable) must be specified.")
