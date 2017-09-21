@@ -55,14 +55,14 @@ Code standard
     To write code that works for both Python 2 and Python 3, you have to choose
     the common set of Python 2 and Python 3.  Please watch out the following
     Python language features which may be regularly used in the program but
-    behave different in Python 2 and 3:
+    behave differently in Python 2 and 3:
     + Avoiding relative import.
-    + Use the % format for print function or "from future import print_function".
+    + Use the % format for print function or `from future import print_function`.
     + Distinguish / and // in python 2.
     + map, zip and filter functions return generator in python 3. Changing the
-      return value of map, zip and filter to list, eg list(zip(a,b)), to make
+      return value of map, zip and filter to list, eg `list(zip(a,b))`, to make
       them work in the same way in python 2 and 3.
-    + Always import "from functools import reduce" before using reduce function.
+    + Always import `from functools import reduce` before using reduce function.
     + Avoid dict.items() method.
     + Avoid xrange function.
     + String should contain only ASCII character
@@ -77,10 +77,10 @@ Name convention
 ===============
 
 * The prefix or suffix underscore in the function names have special meanings.
-  - functions with prefix-underscore like ``_fn`` are private functions. They
+  - functions with prefix-underscore like `_fn` are private functions. They
     are typically not documented, and not recommended to be used outside the
     file where it is defined.
-  - functions with suffix-underscore like ``fn_`` means that they have side
+  - functions with suffix-underscore like `fn_` means that they have side
     effects.  The side effects include the change of the input argument, the
     runtime modification of the class definitions (attributes or members), or
     module definitions (global variables or functions) etc.
@@ -96,20 +96,20 @@ API convention
 * Method class.
 
   - Most QC method classes (like HF, CASSCF, FCI, ...) directly take three
-    attributes ``verbose``, ``stdout`` and ``max_memory`` from
+    attributes `verbose`, `stdout` and `max_memory` from
     :class:`gto.Mole`.  Overwriting them only affects the behavior of the local
-    instance for that method class.  In the following example, ``mf.verbose``
+    instance for that method class.  In the following example, `mf.verbose`
     mutes the output produced by :class:`RHF` method, and the output of
-    :class:`MP2` is written in the log file ``example.log``::
+    :class:`MP2` is written in the log file `example.log`::
 
-    >>> from pyscf import gto, scf, mp
-    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1', verbose=5)
-    >>> mf = scf.RHF(mol)
-    >>> mf.verbose = 0
-    >>> mf.kernel()
-    >>> mp2 = mp.MP2(mf)
-    >>> mp2.stdout = open('example.log', 'w')
-    >>> mp2.kernel()
+        >>> from pyscf import gto, scf, mp
+        >>> mol = gto.M(atom='H 0 0 0; H 0 0 1', verbose=5)
+        >>> mf = scf.RHF(mol)
+        >>> mf.verbose = 0
+        >>> mf.kernel()
+        >>> mp2 = mp.MP2(mf)
+        >>> mp2.stdout = open('example.log', 'w')
+        >>> mp2.kernel()
 
   - Method class are only to hold the options or environments (like convergence
     threshold, max iterations, ...) to control the behavior/convergence of the
@@ -121,15 +121,15 @@ API convention
     results as the default arguments if the caller did not provide enough
     arguments.
 
-  - In __init__ function, initialize/define the problem size.  The problem size
+  - In `__init__` function, initialize/define the problem size.  The problem size
     (like num orbitals etc) can be considered as environment parameter.  The
     environment parameters are not supposed to be changed by other functions.
     It is recommended to inherit the class from the :class:`pyscf.lib.StreamObj`,
-    and initialize attribute ._keys in the __init__ function.  Attribute ._keys
+    and initialize attribute ._keys in the `__init__` function.  Attribute ._keys
     is used for sanity check.
 
   - Kernel functions
-    It is recommended to provide an entrance method called ``kernel`` for the
+    It is recommended to provide an entrance method called `kernel` for the
     method class.  The kernel function should be able to guide the program flow
     to the right driver function.
 
