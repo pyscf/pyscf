@@ -6,14 +6,14 @@ Installation
 You may already have `cmake <http://www.cmake.org>`_,
 `numpy <http://www.numpy.org/>`_, `scipy <http://www.scipy.org/>`_
 and `h5py <http://www.h5py.org/>`_ installed.  If not, you can install
-them from any Python package managers (`Pypi <https://pypi.python.org/>`_,
-`conda <http://conda.pydata.org/>`_).  Here we recommend to use the
-integrated science platform `Anaconda <https://www.continuum.io/downloads#linux>`_.
+them from any Python package manager (`Pypi <https://pypi.python.org/>`_,
+`conda <http://conda.pydata.org/>`_).  We recommend using the
+integrated science platform `Anaconda <https://www.continuum.io/downloads#linux>`_
 (with `conda-cmake <https://anaconda.org/anaconda/cmake>`_).
 
-You can download the latest PySCF release version
-`1.2 <https://github.com/sunqm/pyscf/releases/tag/v1.2>`_ or the
-develment branch from github
+The current stable PySCF release is `v1.3.5
+<https://github.com/sunqm/pyscf/releases/tag/v1.3.5>`_.  You can download the
+latest PySCF release v1.4 beta (or its development branch) from github::
 
   $ git clone https://github.com/sunqm/pyscf
 
@@ -25,38 +25,102 @@ Build the C extensions in :file:`pyscf/lib`::
   $ cmake ..
   $ make
 
-It will automatically download the analytical GTO integral library
-`libcint <https://github.com/sunqm/libcint.git>`_ and the DFT exchange
-correlation functional library `libxc <http://www.tddft.org/programs/Libxc>`_
-and `xcfun <https://github.com/dftlibs/xcfun.git>`_.  Finally, to make Python
-be able to find pyscf package, add the **parent directory** of pyscf to
-:code:`PYTHONPATH`, e.g. assuming pyscf is put in ``/home/abc``::
+This will automatically download the analytical GTO integral library `libcint
+<https://github.com/sunqm/libcint.git>`_ and the DFT exchange correlation
+functional libraries `libxc <http://www.tddft.org/programs/Libxc>`_ and `xcfun
+<https://github.com/dftlibs/xcfun.git>`_.  Finally, to make Python able to find
+the :code:`pyscf` package, add the top-level :code:`pyscf` directory (and not
+the :code:`pyscf/pyscf` subdirectory) to :code:`PYTHONPATH`.  For example, assuming
+:code:`pyscf` is put in ``/opt``::
 
-  export PYTHONPATH=/home/abc:$PYTHONPATH
+  export PYTHONPATH=/opt/pyscf:$PYTHONPATH
 
-To ensure the installation is successed, start a Python shell, and type::
+To ensure the installation is successful, start a Python shell, and type::
 
   >>> import pyscf
 
-If you got errors like::
-
-  ImportError: No module named pyscf
-
-It's very possible that you put ``/home/abc/pyscf`` in the :code:`PYTHONPATH`.
-You need to remove the ``/pyscf`` in that string and try import
-``pyscf`` in the python shell again.
-
-For Mac OsX user, you may get an import error if your OsX version is
+For Mac OS X/macOS, you may get an import error if your OS X/macOS version is
 10.11 or later::
 
-    OSError: dlopen(xxx/pyscf/lib/libcgto.dylib, 6): Library not loaded: libcint.2.8.dylib
-    Referenced from: xxx/pyscf/lib/libcgto.dylib
-    Reason: unsafe use of relative rpath libcint.2.8.dylib in xxx/pyscf/lib/libao2mo.dylib with restricted binary
+    OSError: dlopen(xxx/pyscf/pyscf/lib/libcgto.dylib, 6): Library not loaded: libcint.3.0.dylib
+    Referenced from: xxx/pyscf/pyscf/lib/libcgto.dylib
+    Reason: unsafe use of relative rpath libcint.3.0.dylib in xxx/pyscf/pyscf/lib/libcgto.dylib with restricted binary
 
-It can be fixed by running the script ``pyscf/lib/_runme_to_fix_dylib_osx10.11.sh`` in ``pyscf/lib``::
+This is caused by the RPATH. 
+It can be fixed by running the script ``pyscf/lib/_runme_to_fix_dylib_osx10.11.sh`` in ``pyscf/lib``
+after compiling::
  
     cd pyscf/lib
     sh _runme_to_fix_dylib_osx10.11.sh
+
+
+.. note::
+
+  RPATH has been built in the dynamic library.  This may cause library loading
+  error on some systems.  You can run ``pyscf/lib/_runme_to_remove_rpath.sh`` to
+  remove the rpath code from the library head.  Another workaround is to set
+  ``-DCMAKE_SKIP_RPATH=1`` and ``-DCMAKE_MACOSX_RPATH=0`` in cmake command line.
+  When the RPATH was removed, you need to add ``pyscf/lib`` and
+  ``pyscf/lib/deps/lib`` in ``LD_LIBRARY_PATH``.
+
+A useful last step is to set the scratch directory.  The default scratch
+directory of PySCF is controlled by environment variable :code:`PYSCF_TMPDIR`.
+If it's not specified, the system wide temporary directory :code:`TMPDIR` will
+be used as the scratch directory.
+
+
+Installation without network
+============================
+
+If you have problems downloading the external libraries on your computer, you can
+manually build the libraries, as shown in the following instructions.  First,
+you need to install libcint, libxc or xcfun libraries.
+`libcint cint3 branch <https://github.com/sunqm/libcint/tree/cint3>`_
+and `xcfun stable-1.x branch <https://github.com/dftlibs/xcfun/tree/stable-1.x>`_
+are required by PySCF.  They can be downloaded from github::
+
+    $ git clone https://github.com/sunqm/libcint.git
+    $ cd libcint
+    $ git checkout origin/cint3
+    $ cd .. && tar czf libcint.tar.gz libcint
+
+    $ git clone https://github.com/sunqm/xcfun.git
+    $ cd xcfun
+    $ git checkout origin/stable-1.x
+    $ cd .. && tar czf xcfun.tar.gz xcfun
+
+libxc-2.2.* can be found in http://octopus-code.org/wiki/Main_Page .
+Assuming ``/opt`` is the place where these libraries will be installed, these
+packages should be compiled with the flags::
+
+    $ tar xvzf libcint.tar.gz
+    $ cd libcint
+    $ mkdir build && cd build
+    $ cmake -DWITH_F12=1 -DWITH_RANGE_COULOMB=1 -DWITH_COULOMB_ERF=1 \
+        -DCMAKE_INSTALL_PREFIX:PATH=/opt -DCMAKE_INSTALL_LIBDIR:PATH=lib ..
+    $ make && make install
+
+    $ tar xvzf libxc-2.2.2.tar.gz
+    $ cd libxc-2.2.2
+    $ mkdir build && cd build
+    $ ../configure --prefix=/opt --libdir=/opt/lib --enable-shared --disable-fortran LIBS=-lm
+    $ make && make install
+
+    $ tar xvzf xcfun.tar.gz
+    $ cd xcfun
+    $ mkdir build && cd build
+    $ cmake -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1 -DXC_MAX_ORDER=3 -DXCFUN_ENABLE_TESTS=0 \
+        -DCMAKE_INSTALL_PREFIX:PATH=/opt -DCMAKE_INSTALL_LIBDIR:PATH=lib ..
+    $ make && make install
+
+Next compile PySCF::
+
+    $ cd pyscf/pyscf/lib
+    $ mkdir build && cd build
+    $ cmake -DBUILD_LIBCINT=0 -DBUILD_LIBXC=0 -DBUILD_XCFUN=0 -DCMAKE_INSTALL_PREFIX:PATH=/opt ..
+    $ make
+
+Finally update the ``PYTHONPATH`` environment for Python interpreter.
 
 
 .. _installing_blas:
@@ -64,11 +128,12 @@ It can be fixed by running the script ``pyscf/lib/_runme_to_fix_dylib_osx10.11.s
 Using optimized BLAS
 ====================
 
-The default installation does not need to provide external linear
-algebra libraries.  It's possible that the setup script only find and
-link to the slow BLAS/LAPACK libraries.  You can install the package
-with other BLAS venders instead of the default one to improve the
-performance,  eg MKL (it can provide 10 times speedup in many modules)::
+The default installation does not require the user to identify external linear
+algebra libraries, but instead tries to find them automatically. This automated
+setup script may only find and link to slow BLAS/LAPACK libraries.  To improve
+performance, users can install the package with other BLAS vendors,
+such as the Intel Math Kernel Library (MKL), which can provide 10x speedup in many
+modules::
 
   $ cd pyscf/lib/build
   $ cmake -DBLA_VENDOR=Intel10_64lp_seq ..
@@ -119,51 +184,20 @@ of the integral library in lib/CMakeLists.txt file::
      ...
 
 
-Offline installation
-====================
-
-Compiling PySCF will automatically download and compile
-`libcint <https://github.com/sunqm/libcint.git>`_,
-`libxc <http://www.tddft.org/programs/Libxc>`_
-and `xcfun <https://github.com/dftlibs/xcfun.git>`_.   If the
-compilation breaks due to the failure of download or compilation of
-these packages, you can manually download and install them then install
-PySCF offline.  ``pyscf/lib/deps`` is the directory where PySCF places
-the external libraries.  PySCF will bypass the compilation of the
-external libraries if they were existed in that directory.  In the PySCF
-offline compilcation mode, you need install these external libraries to
-this directory.  Followings are the relevant compiling flags for these
-libraries.
-
-Libcint::
-
-    cd /path/to/libcint
-    mkdir build
-    cd build
-    cmake -DWITH_RANGE_COULOMB=1 -DCMAKE_INSTALL_PREFIX:PATH=/path/to/pyscf/lib/deps -DCMAKE_INSTALL_LIBDIR:PATH=lib ..
-    make && make install
-
-XcFun::
-
-    cd /path/to/xcfun
-    mkdir build
-    cd build
-    cmake -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1 -DXC_MAX_ORDER=3 -DXCFUN_ENABLE_TESTS=0 -DCMAKE_INSTALL_PREFIX:PATH=/path/to/pyscf/lib/deps -DCMAKE_INSTALL_LIBDIR:PATH=lib ..
-    make && make install
-
-LibXC::
-
-    cd /path/to/libxc
-    mkdir build
-    cd build
-    ../configure --prefix=/path/to/pyscf/lib/deps --libdir=/path/to/pyscf/lib/deps/lib --enable-shared --disable-fortran LIBS=-lm
-    make && make install
-
-
 .. _installing_plugin:
 
 Plugins
 =======
+
+nao
+---
+:mod:`pyscf/nao` module includes the basic functions of numerical atomic orbitals
+(NAO) and the (nao based) TDDFT methods.  This module was contributed by Marc
+Barbry and Peter Koval.  You can enable this module with a cmake flag::
+
+    $ cmake -DENABLE_NAO=1 ..
+
+More information of the compilcation can be found in :file:`pyscf/lib/nao/README.md`.
 
 DMRG solver
 -----------

@@ -14,7 +14,10 @@ mol = gto.M(
     basis = 'ccpvdz')
 
 mf = scf.RHF(mol).run()
-
 mycc = ci.CISD(mf).run()
-print('CISD correlation energy', mycc.e_corr)
+print('RCISD correlation energy', mycc.e_corr)
+
+mf = scf.UHF(mol).run()
+mycc = ci.CISD(mf).run()
+print('UCISD correlation energy', mycc.e_corr)
 

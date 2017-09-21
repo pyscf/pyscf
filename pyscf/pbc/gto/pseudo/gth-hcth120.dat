@@ -1,0 +1,107 @@
+################################################################################
+#
+# Potential data base file for CP2K (Quickstep)
+#
+################################################################################
+#
+# Pseudopotentials of Goedecker, Teter and Hutter (GTH)
+# -----------------------------------------------------
+#
+# History:    - Creation (12.12.1999, Matthias Krack)
+#             - Electronic configurations added (11.05.2000,MK)
+#             - GTH-PP for first-row transition metal added (18.03.2003,MK)
+#             - Automatic update (16.12.2003,MK)
+#             - PBE GTH-PPs for the Lanthanides added (30.11.2012,MK)
+#             - Set default GTH PPs (12.08.2016,MK)
+#             - Last update (12.08.2016,MK)
+#
+# Literature: - S. Goedecker, M. Teter, and J. Hutter,
+#               Phys. Rev. B 54, 1703 (1996)
+#             - C. Hartwigsen, S. Goedecker, and J. Hutter,
+#               Phys. Rev. B 58, 3641 (1998)
+#             - M. Krack,
+#               Theor. Chem. Acc. 114, 145 (2005)
+#
+# GTH-potential format:
+#
+# Element symbol  Name of the potential  Alias names
+# n_elec(s)  n_elec(p)  n_elec(d)  ...
+# r_loc   nexp_ppl        cexp_ppl(1) ... cexp_ppl(nexp_ppl)
+# nprj
+# r(1)    nprj_ppnl(1)    ((hprj_ppnl(1,i,j),j=i,nprj_ppnl(1)),i=1,nprj_ppnl(1))
+# r(2)    nprj_ppnl(2)    ((hprj_ppnl(2,i,j),j=i,nprj_ppnl(2)),i=1,nprj_ppnl(2))
+#  .       .               .
+#  .       .               .
+#  .       .               .
+# r(nprj) nprj_ppnl(nprj) ((hprj_ppnl(nprj,i,j),j=i,nprj_ppnl(nprj)),
+#                                               i=1,nprj_ppnl(nprj))
+#
+# n_elec   : Number of electrons for each angular momentum quantum number
+#            (electronic configuration -> s p d ...)
+# r_loc    : Radius for the local part defined by the Gaussian function
+#            exponent alpha_erf
+# nexp_ppl : Number of the local pseudopotential functions
+# cexp_ppl : Coefficients of the local pseudopotential functions
+# nprj     : Number of the non-local projectors => nprj = SIZE(nprj_ppnl(:))
+# r        : Radius of the non-local part for angular momentum quantum number l
+#            defined by the Gaussian function exponents alpha_prj_ppnl
+# nprj_ppnl: Number of the non-local projectors for the angular momentum
+#            quantum number l
+# hprj_ppnl: Coefficients of the non-local projector functions
+#
+################################################################################
+#
+# HCTH120 functional
+#
+################################################################################
+#PSEUDOPOTENTIAL
+H GTH-HCTH120-q1 GTH-HCTH120
+    1
+     0.20000000    2    -4.17956174     0.72571934
+    0
+#PSEUDOPOTENTIAL
+C GTH-HCTH120-q4 GTH-HCTH120
+    2    2
+     0.33476327    2    -8.73799634     1.35592059
+    2
+     0.30224259    1     9.60562026
+     0.29150776    0
+#PSEUDOPOTENTIAL
+N GTH-HCTH120-q5 GTH-HCTH120
+    2    3
+     0.28289705    2   -12.19488993     1.83989918
+    2
+     0.25526540    1    13.60420273
+     0.24618482    0
+#PSEUDOPOTENTIAL
+O GTH-HCTH120-q6 GTH-HCTH120
+    2    4
+     0.24476117    2   -16.35853832     2.42680904
+    2
+     0.22092765    1    18.29885210
+     0.21259318    0
+#PSEUDOPOTENTIAL
+F GTH-HCTH120-q7 GTH-HCTH120
+    2    5
+     0.21555878    2   -21.21402136     3.11524496
+    2
+     0.19472662    1    23.68789289
+     0.18667491    0
+#PSEUDOPOTENTIAL
+P GTH-HCTH120-q5 GTH-HCTH120
+    2    3
+     0.43000000    1    -5.55967117
+    2
+     0.39982658    2    10.60103244    -3.26897992
+                                        4.22023493
+     0.45131904    1     2.95015425
+#PSEUDOPOTENTIAL
+Ar GTH-HCTH120-q8 GTH-HCTH120
+    2    6
+     0.40000000    1    -7.01660399
+    2
+     0.31726372    2    17.43470209    -5.68655497
+                                        7.34131090
+     0.35199759    1     4.99753699
+################################################################################
+#

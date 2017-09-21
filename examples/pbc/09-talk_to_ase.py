@@ -26,7 +26,6 @@ cell = pbcgto.Cell()
 cell.a=ase_atom.cell
 cell.basis = 'gth-szv'
 cell.pseudo = 'gth-pade'
-cell.gs=np.array([8,8,8])
 cell.verbose = 0
 
 # Set up the kind of calculation to be done

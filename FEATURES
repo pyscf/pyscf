@@ -1,27 +1,30 @@
 * Hartree-Fock (up to ~5000 basis)
 
   - Non-relativistic restricted open-shell, unrestricted HF
-  - scalar relativistic HF
+  - Scalar relativistic HF
   - 2-component relativistic HF
   - 4-component relativistic Dirac-Hartree-Fock
-  - density fitting HF
+  - Density fitting HF
   - Second order SCF
   - General JK contraction function
+  - DIIS, EDIIS, ADIIS and second order solver
+  - SCF wavefunction stability analysis
+  - Generalized Hartree-Fock (GHF)
 
 
 * DFT (up to ~5000 basis)
 
   - Non-relativistic restricted, restricted open-shell, unrestricted Kohn-Sham
-  - scalar relativistic DFT
-  - density fitting DFT
+  - Scalar relativistic DFT
+  - Density fitting DFT
   - General XC functional evaluator (for Libxc or XcFun)
   - General AO evaluator
 
 
 * TDDFT
 
-  - TDHF
-  - TDDFT
+  - TDHF (and density-fitting TDHF)
+  - TDDFT (and density-fitting TDDFT)
   - TDHF gradients
   - TDDFT gradients
 
@@ -38,31 +41,35 @@
   - DMET-CAS and AVAS active space constructor
 
 
-* MP2 (up to ~200 occupied, ~1500 virtual orbitals)
+* MP2 (up to ~200 occupied, ~2000 virtual orbitals)
 
-  - RHF-based MP2
-  - RI-MP2
+  - Canonical MP2
+  - Density-fitting MP2
+  - MP2-F12
 
 
 * CCSD (up to ~100 occupied, ~1500 virtual orbitals)
 
   - canonical RCCSD, UCCSD
-  - canonical RCCSD lambda solver
-  - CCSD 1-particle and 2-particle density matrices
+  - canonical RCCSD, UCCSD lambda solver
+  - RCCSD and UCCSD 1-particle and 2-particle density matrices
   - CCSD gradients
   - EOM-IP/EA/EE-CCSD
+  - RCC2
+  - Density-fitting CCSD
 
 
 * CCSD(T)
 
-  - canonical CCSD(T)
-  - canonical density matrices
-  - canonical gradients
+  - Canonical RCCSD(T) and UCCSD(T)
+  - Canonical RCCSD(T) 1- and 2-particle density matrices
+  - Canonical RCCSD(T) gradients
 
 
 * CI
 
-  - CISD 1, 2-particle density matrices
+  - RCISD and UCISD
+  - RCISD and UCISD 1, 2-particle density matrices
   - Selected-CI
   - Selected-CI 1, 2-particle density matrices
 
@@ -78,23 +85,30 @@
 
 * Gradients
 
-  - non-relativistic RHF gradients
+  - Non-relativistic RHF gradients
   - 4-component DHF gradients
-  - non-relativistic DFT gradients
-  - non-relativistic CCSD gradients
-  - non-relativistic TDHF and TDDFT gradients
+  - Non-relativistic DFT gradients
+  - Non-relativistic CCSD gradients
+  - Non-relativistic TDHF and TDDFT gradients
 
 
 * Hessian
 
-  - non-relativistic RHF hessian
-  - non-relativistic RKS hessian
+  - Non-relativistic RHF hessian
+  - Non-relativistic RKS hessian
 
-* NMR
+* Properties
 
-  - non-relativistic RHF NMR shielding
+  - Non-relativistic RHF, UHF, RKS, UKS NMR shielding
   - 4-component DHF NMR shielding
-  - non-relativistic DFT NMR shielding
+  - Non-relativistic RHF, UHF spin-spin coupling
+  - 4-component DHF spin-spin coupling
+  - Non-relativistic UHF, UKS hyperfine coupling
+  - 4-component DHF hyperfine coupling
+  - Non-relativistic UHF, UKS g-tensor
+  - 4-component DHF g-tensor
+  - Non-relativistic UHF zero-field splitting
+  - Molecular electrostatic potential (MEP)
 
 * MRPT
 
@@ -108,26 +122,27 @@
   - gamma point RHF, UHF, RKS, UKS
   - gamma point TDDFT, MP2, CCSD
   - PBC RHF, UHF, RKS, UKS with k-point sampling
-  - PBC CCSD with k-point sampling
+  - PBC RCCSD and UCCSD with k-point sampling
+  - PBC k-point EOM-IP/EA-CCSD
   - PBC AO integrals
   - PBC MO integral transformation
   - PBC density fitting
   - Smearing for mean-field calculation
   - Low-dimensional (0D, 1D, 2D) PBC systems
+  - TDHF and TDDFT with k-point sampling
 
 
 * AO integrals
 
   - Interface to call Libcint library
-  - 41 types of 1-electron real-GTO integrals
-  - 29 types of 1-electron spinor-GTO integrals
-  - 9 types of 2-electron real-GTO integrals
-  - 33 types of 2-electron spinor-GTO integrals
-  - 4 types of 3-center 2-electron real-GTO integrals
-  - 6 types of 3-center 2-electron spinor-GTO integrals
+  - 1-electron real-GTO and spinor-GTO integrals
+  - 2-electron real-GTO and spinor-GTO integrals
+  - 3-center 1-electron real-GTO and spinor-GTO integrals
+  - 3-center 2-electron real-GTO and spinor-GTO integrals
   - General basis value evaluator (for numeric integration)
   - PBC 1-electron integrals
   - PBC 2-electron integrals
+  - F12 integrals
 
 
 * MO integrals
@@ -146,6 +161,11 @@
   - Natural atomic orbital (NAO)
   - Intrinsic atomic orbital (IAO)
   - Pipek-Mezey
+
+
+* Geometry optimization
+
+  - RHF, RKS, RCCSD with pyberny geometry optimizer
 
 
 * D2h symmetry and linear molecule symmetry

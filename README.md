@@ -5,9 +5,10 @@
 Python-based Simulations of Chemistry Framework
 ===============================================
 
-2017-04-25
+2017-08-22
 
-* [Stable release 1.3](https://github.com/sunqm/pyscf/releases/tag/v1.3) ([Release notes](https://github.com/sunqm/pyscf/blob/master/doc/whatsnew/1.3.rst))
+* [1.4 beta](https://github.com/sunqm/pyscf/tree/master)
+* [Stable release 1.3.5](https://github.com/sunqm/pyscf/releases/tag/v1.3.5)
 * [Changelog](../master/CHANGELOG)
 * [Documentation](http://www.pyscf.org) ([PDF](http://www.sunqm.net/pyscf/files/pdf/PySCF-1.1.pdf))
 * [Installation](#installation)
@@ -26,18 +27,18 @@ Installation
 
 * Compile core module
 
-        cd lib
+        cd pyscf/lib
         mkdir build; cd build
         cmake ..
         make
 
   Note during the compilation, external libraries (libcint, libxc, xcfun) will
   be downloaded and installed.  If you want to disable the automatic
-  downloading, the [document] (http://sunqm.github.io/pyscf/install.html#installation-without-network)
-  shows an instruction to manually build these packages.
+  downloading, this [document](http://sunqm.github.io/pyscf/install.html#installation-without-network)
+  is an instruction for manually building these packages.
 
-* To make python be able to find pyscf, edit environment variable
-  `PYTHONPATH`, e.g.  if pyscf is installed in /opt/pyscf
+* To make python find pyscf, edit environment variable `PYTHONPATH`,
+  e.g.  if pyscf is installed in /opt, your `PYTHONPATH` should be
 
         export PYTHONPATH=/opt/pyscf:$PYTHONPATH
 
@@ -75,26 +76,35 @@ Installation
           GIT_REPOSITORY https://github.com/sunqm/qcint.git
           ...
 
+* Using pyberny (https://github.com/azag0/pyberny) as geometry optimizer.
+  After downloading pyberny
+
+      git clone https://github.com/azag0/pyberny /path/to/pyberny
+
+  edit the environment variable to make pyscf find pyberny
+
+      export PYTHONPATH=/path/to/pyberny:$PYTHONPATH
+
 
 Known problems
 --------------
 
-* Error message "Library not loaded: libcint.2.9.dylib" On OS X.
+* Error message "Library not loaded: libcint.3.0.dylib" On OS X.
   libcint.dylib is installed in  pyscf/lib/deps/lib  by default.  Add
   "/path/to/pyscf/lib/deps/lib"  to  `DYLD_LIBRARY_PATH`
 
 * On Mac OSX, error message of "import pyscf"
 ```
-  OSError: dlopen(xxx/pyscf/lib/libcgto.dylib, 6): Library not loaded: libcint.2.8.dylib
+  OSError: dlopen(xxx/pyscf/lib/libcgto.dylib, 6): Library not loaded: libcint.3.0.dylib
   Referenced from: xxx/pyscf/lib/libcgto.dylib
-  Reason: unsafe use of relative rpath libcint.2.8.dylib in xxx/pyscf/lib/libao2mo.dylib with restricted binary
+  Reason: unsafe use of relative rpath libcint.3.0.dylib in xxx/pyscf/lib/libao2mo.dylib with restricted binary
 ```
 
   It is only observed on OSX 10.11.  One solution is to manually modify the relative path to absolute path
 
-        $ install_name_tool -change libcint.2.8.dylib xxx/pyscf/lib/deps/lib/libcint.2.8.dylib xxx/pyscf/lib/libcgto.dylib
-        $ install_name_tool -change libcint.2.8.dylib xxx/pyscf/lib/deps/lib/libcint.2.8.dylib xxx/pyscf/lib/libcvhf.dylib
-        $ install_name_tool -change libcint.2.8.dylib xxx/pyscf/lib/deps/lib/libcint.2.8.dylib xxx/pyscf/lib/libao2mo.dylib
+        $ install_name_tool -change libcint.3.0.dylib xxx/pyscf/lib/deps/lib/libcint.3.0.dylib xxx/pyscf/lib/libcgto.dylib
+        $ install_name_tool -change libcint.3.0.dylib xxx/pyscf/lib/deps/lib/libcint.3.0.dylib xxx/pyscf/lib/libcvhf.dylib
+        $ install_name_tool -change libcint.3.0.dylib xxx/pyscf/lib/deps/lib/libcint.3.0.dylib xxx/pyscf/lib/libao2mo.dylib
         ...
 
   Running script pyscf/lib/_runme_to_fix_dylib_osx10.11.sh  can patch
@@ -139,6 +149,17 @@ Known problems
   https://github.com/h5py/h5py/archive/2.3.1.tar.gz
 
 
+* If you are using Intel compiler (version 16, 17), compilation may be stuck at
+```
+[ 95%] Building C object CMakeFiles/cint.dir/src/stg_roots.c.o
+```
+
+  This code is used by F12 integrals only.  If you do not need to use F12 methods,
+  the relevant compilation can be disabled, by searching `DWITH_F12` in file
+  lib/CMakeLists.txt  and setting it to `-DWITH_F12=0`.
+
+
+
 Citing PySCF
 ------------
 
@@ -147,7 +168,8 @@ The following paper should be cited in publications utilizing the PySCF program 
 * The Python-based Simulations of Chemistry Framework (PySCF),
   Q. Sun, T. C. Berkelbach, N. S. Blunt, G. H. Booth, S.  Guo, Z. Li, J. Liu,
   J. McClain, E. R. Sayfutyarova, S. Sharma, S. Wouters, G. K.-L. Chan,
-  arXiv:1701.08223v2 [physics.chem-ph]
+  WIREs Comput Mol Sci 2017 (in press),
+  DOI: 10.1002/wcms.1340
 
 
 Bug report

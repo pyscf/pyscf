@@ -20,7 +20,6 @@ cell = gto.M(
               C     0.8917  2.6751  2.6751''',
     basis = 'gth-szv',
     pseudo = 'gth-pade',
-    gs = [10]*3,
     verbose = 4,
 )
 
@@ -37,7 +36,6 @@ kinetic = cell.pbc_intor('cint1e_kin_sph')
 # 2e-integrals.  Permutation symmetry is not considered
 #
 mydf = df.FFTDF(cell)
-mydf.gs = [7] * 3
 eri = mydf.get_eri()
 print('ERI shape (%d,%d)' % eri.shape)
 
@@ -63,7 +61,6 @@ print('ERI shape (%d,%d)' % eri.shape)
 #
 mydf = df.MDF(cell, kpts)
 mydf.auxbasis = 'weigend'
-mydf.gs = [7] * 3
 eri = mydf.get_eri((ki,kj,kk,kl))
 print('ERI shape (%d,%d)' % eri.shape)
 
