@@ -448,7 +448,7 @@ def is_gga(xc_code):
     return all((_itrf.LIBXC_is_gga(ctypes.c_int(xid))==1) for xid, fac in fn_facs)
 
 def is_nlc(xc_code):
-    return xc_code[-6:]=='__VV10'
+    return '__VV10' in xc_code.upper()
 
 def max_deriv_order(xc_code):
     hyb, fn_facs = parse_xc(xc_code)

@@ -142,7 +142,7 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
     if xctype == 'LDA':
         c0 = _dot_ao_dm(mol, ao, dm, non0tab, shls_slice, ao_loc)
         rho = numpy.einsum('pi,pi->p', ao, c0)
-    elif xctype == 'GGA':
+    elif xctype in ('GGA', 'NLC'):
         rho = numpy.empty((4,ngrids))
         c0 = _dot_ao_dm(mol, ao[0], dm, non0tab, shls_slice, ao_loc)
         rho[0] = numpy.einsum('pi,pi->p', c0, ao[0])
@@ -220,7 +220,7 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
         if xctype == 'LDA':
             c0 = _dot_ao_dm(mol, ao, cpos, non0tab, shls_slice, ao_loc)
             rho = numpy.einsum('pi,pi->p', c0, c0)
-        elif xctype == 'GGA':
+        elif xctype in ('GGA', 'NLC'):
             rho = numpy.empty((4,ngrids))
             c0 = _dot_ao_dm(mol, ao[0], cpos, non0tab, shls_slice, ao_loc)
             rho[0] = numpy.einsum('pi,pi->p', c0, c0)
@@ -248,7 +248,7 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
     else:
         if xctype == 'LDA':
             rho = numpy.zeros(ngrids)
-        elif xctype == 'GGA':
+        elif xctype in ('GGA', 'NLC'):
             rho = numpy.zeros((4,ngrids))
         else:
             rho = numpy.zeros((6,ngrids))
@@ -762,6 +762,14 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                           'and will be removed in future release.\n')
 
     xctype = ni._xc_type(xc_code)
+    if xctype == 'NLC':
+        dms_sf = dms[0] + dms[1]
+        if hasattr(dms, 'mo_coeff'):
+            dms_sf = lib.tag_array(dms_sf, mo_coeff=dms.mo_coeff, mo_occ=dms.mo_occ)
+        nelec, excsum, vmat = nr_rks(ni, mol, grids, xc_code, dms_sf, relativity, hermi,
+                                     max_memory, verbose)
+        return [nelec,nelec], excsum, numpy.asarray([vmat,vmat])
+
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
 
@@ -1004,6 +1012,8 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
             vmat[i] = vmat[i] + vmat[i].T.conj()
 
+    elif xctype == 'NLC':
+        raise NotImplementedError('NLC')
     else:
         raise NotImplementedError('meta-GGA')
 
@@ -1110,6 +1120,8 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
             vmat[i] = vmat[i] + vmat[i].T.conj()
 
+    elif xctype == 'NLC':
+        raise NotImplementedError('NLC')
     else:
         raise NotImplementedError('meta-GGA')
 
@@ -1250,6 +1262,9 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
             vmat[0,i] = vmat[0,i] + vmat[0,i].T.conj()
             vmat[1,i] = vmat[1,i] + vmat[1,i].T.conj()
+
+    elif xctype == 'NLC':
+        raise NotImplementedError('NLC')
     else:
         raise NotImplementedError('meta-GGA')
 
@@ -1354,6 +1369,8 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
         ao_deriv = 0
     elif xctype == 'GGA':
         ao_deriv = 1
+    elif xctype == 'NLC':
+        raise NotImplementedError('NLC')
     else:
         raise NotImplementedError('meta-GGA')
 

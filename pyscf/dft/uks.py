@@ -47,18 +47,19 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     else:
         n, exc, vxc = ks._numint.nr_uks(mol, ks.grids, ks.xc, dm)
         if ks.nlc!='':
+            assert('VV10' in ks.nlc.upper())
             _, enlc, vnlc = ks._numint.nr_rks(mol, ks.nlcgrids, ks.xc+'__'+ks.nlc, dm[0]+dm[1])
             exc += enlc
             vxc += vnlc
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    hyb = ks._numint.hybrid_coeff(ks.xc, spin=mol.spin)
-
     #enabling range-separated hybrids
     omega, alpha, beta = ks._numint.rsh_coeff(ks.xc)
     if abs(omega) > 1e-10:
         hyb = alpha + beta
+    else:
+        hyb = ks._numint.hybrid_coeff(ks.xc, spin=mol.spin)
 
     if abs(hyb) < 1e-10 and abs(alpha) < 1e-10:
         vk = None
@@ -77,22 +78,18 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj, vk = ks.get_jk(mol, ddm, hermi)
             vk *= hyb
             if abs(omega) > 1e-10:
-                mol.set_range_coulomb(omega)
-                vklr = numpy.stack((jk.get_jk(mol, ddm[0], 'ijkl,jk->il'),jk.get_jk(mol, ddm[1], 'ijkl,jk->il')))
+                vklr = rks._get_k_lr(mol, ddm, omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
-                mol.set_range_coulomb(0)
             vj += vhf_last.vj
             vk += vhf_last.vk
         else:
             vj, vk = ks.get_jk(mol, dm, hermi)
             vk *= hyb
             if abs(omega) > 1e-10:
-                mol.set_range_coulomb(omega)
-                vklr = numpy.stack((jk.get_jk(mol, dm[0], 'ijkl,jk->il'),jk.get_jk(mol, dm[1], 'ijkl,jk->il')))
+                vklr = rks._get_k_lr(mol, dm, omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
-                mol.set_range_coulomb(0)
         vxc += vj[0] + vj[1] - vk
 
         if ground_state:

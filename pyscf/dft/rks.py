@@ -10,6 +10,7 @@ Non-relativistic restricted Kohn-Sham
 import time
 import numpy
 from pyscf import lib
+from pyscf import gto
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import jk
@@ -72,18 +73,19 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     else:
         n, exc, vxc = ks._numint.nr_rks(mol, ks.grids, ks.xc, dm)
         if ks.nlc!='':
+            assert('VV10' in ks.nlc.upper())
             _, enlc, vnlc = ks._numint.nr_rks(mol, ks.nlcgrids, ks.xc+'__'+ks.nlc, dm)
             exc += enlc
             vxc += vnlc
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    hyb = ks._numint.hybrid_coeff(ks.xc, spin=mol.spin)
-
     #enabling range-separated hybrids
     omega, alpha, beta = ks._numint.rsh_coeff(ks.xc)
     if abs(omega) > 1e-10:
         hyb = alpha + beta
+    else:
+        hyb = ks._numint.hybrid_coeff(ks.xc, spin=mol.spin)
 
     if abs(hyb) < 1e-10 and abs(alpha) < 1e-10:
         vk = None
@@ -101,23 +103,19 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
             vj, vk = ks.get_jk(mol, ddm, hermi)
             vk *= hyb
-            if abs(omega) > 1e-10:
-                mol.set_range_coulomb(omega)
-                vklr = jk.get_jk(mol, ddm, 'ijkl,jk->il')
+            if abs(omega) > 1e-10:  # For range separated Coulomb operator
+                vklr = _get_k_lr(mol, ddm, omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
-                mol.set_range_coulomb(0)
             vj += vhf_last.vj
             vk += vhf_last.vk
         else:
             vj, vk = ks.get_jk(mol, dm, hermi)
             vk *= hyb
             if abs(omega) > 1e-10:
-                mol.set_range_coulomb(omega)
-                vklr = jk.get_jk(mol, dm, 'ijkl,jk->il')
+                vklr = _get_k_lr(mol, dm, omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
-                mol.set_range_coulomb(0)
         vxc += vj - vk * .5
 
         if ground_state:
@@ -130,6 +128,26 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
 
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=vj, vk=vk)
     return vxc
+
+def _get_k_lr(mol, dm, omega=0):
+    omega_bak = mol._env[gto.PTR_RANGE_OMEGA]
+    mol.set_range_coulomb(omega)
+
+    dm = numpy.asarray(dm)
+# Note, ks object caches the ERIs for small systems. The cached eris are
+# computed with regular Coulomb operator. ks.get_jk or ks.get_k do not evalute
+# the K matrix with the range separated Coulomb operator.  Here jk.get_jk
+# function computes the K matrix with the modified Coulomb operator.
+    if dm.ndim == 2:
+        vklr = jk.get_jk(mol, dm, 'ijkl,jk->il')
+    else:
+        nao = dm.shape[-1]
+        dms = dm.reshape(-1,nao,nao)
+        vklr = jk.get_jk(mol, dm, ['ijkl,jk->il']*len(dms))
+        vklr = numpy.asarray(vklr).reshape(dm.shape)
+
+    mol.set_range_coulomb(omega_bak)
+    return vklr
 
 
 def energy_elec(ks, dm, h1e=None, vhf=None):

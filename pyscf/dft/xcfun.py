@@ -140,6 +140,19 @@ def is_gga(xc_code):
         return (all((is_gga(x) or is_lda(x) for x in xc_code)) and
                 not is_lda(xc_code))
 
+def is_nlc(xc_code):
+    return False
+
+def nlc_coeff(xc_code):
+    '''Get NLC coefficients
+    '''
+    return 0, 0
+
+def rsh_coeff(xc_code):
+    '''Get RSH coefficients
+    '''
+    return 0, 0, 0
+
 def max_deriv_order(xc_code):
     hyb, fn_facs = parse_xc(xc_code)
     return MAX_DERIV_ORDER
