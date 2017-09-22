@@ -437,7 +437,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 
 
 def eigh(a, *args, **kwargs):
-    nroots = kwargs.get('nroots', default=1) 
+    nroots = kwargs.get('nroots', default=1)
     if isinstance(a, numpy.ndarray) and a.ndim == 2:
         e, v = scipy.linalg.eigh(a)
         if nroots == 1:
@@ -450,7 +450,11 @@ dsyev = eigh
 
 
 def pick_real_eigs(w, v, nroots, x0):
-    realidx = numpy.where((w.imag < 1e-9))[0]
+    # Here we pick the eigenvalues with smallest imaginary component,
+    # where we are forced to choose at least one eigenvalue.
+    abs_imag = abs(w.imag)
+    max_imag_tol = max(1e-5,min(abs_imag)*1.1)
+    realidx = numpy.where((abs_imag < max_imag_tol))[0]
     idx = realidx[w[realidx].real.argsort()]
     return w[idx].real, v[:,idx].real, idx
 
