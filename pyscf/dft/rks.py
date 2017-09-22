@@ -12,6 +12,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import hf
+from pyscf.scf import jk
 from pyscf.dft import gen_grid
 from pyscf.dft import numint
 
@@ -58,16 +59,33 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             # Filter grids the first time setup grids
             ks.grids = prune_small_rho_grids_(ks, mol, dm, ks.grids)
         t0 = logger.timer(ks, 'setting up grids', *t0)
+    if ks.nlc!='':
+        if ks.nlcgrids.coords is None:
+            ks.nlcgrids.build(with_non0tab=True)
+            if ks.small_rho_cutoff > 1e-20 and ground_state:
+                # Filter grids the first time setup grids
+                ks.nlcgrids = prune_small_rho_grids_(ks, mol, dm, ks.nlcgrids)
+            t0 = logger.timer(ks, 'setting up nlc grids', *t0)
 
     if hermi == 2:  # because rho = 0
         n, exc, vxc = 0, 0, 0
     else:
         n, exc, vxc = ks._numint.nr_rks(mol, ks.grids, ks.xc, dm)
+        if ks.nlc!='':
+            _, enlc, vnlc = ks._numint.nr_rks(mol, ks.nlcgrids, ks.xc+'__'+ks.nlc, dm)
+            exc += enlc
+            vxc += vnlc
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
     hyb = ks._numint.hybrid_coeff(ks.xc, spin=mol.spin)
-    if abs(hyb) < 1e-10:
+
+    #enabling range-separated hybrids
+    omega, alpha, beta = ks._numint.rsh_coeff(ks.xc)
+    if abs(omega) > 1e-10:
+        hyb = alpha + beta
+
+    if abs(hyb) < 1e-10 and abs(alpha) < 1e-10:
         vk = None
         if (ks._eri is None and ks.direct_scf and
             getattr(vhf_last, 'vj', None) is not None):
@@ -82,14 +100,28 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             getattr(vhf_last, 'vk', None) is not None):
             ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
             vj, vk = ks.get_jk(mol, ddm, hermi)
+            vk *= hyb
+            if abs(omega) > 1e-10:
+                mol.set_range_coulomb(omega)
+                vklr = jk.get_jk(mol, ddm, 'ijkl,jk->il')
+                vklr *= (alpha - hyb)
+                vk += vklr
+                mol.set_range_coulomb(0)
             vj += vhf_last.vj
             vk += vhf_last.vk
         else:
             vj, vk = ks.get_jk(mol, dm, hermi)
-        vxc += vj - vk * (hyb * .5)
+            vk *= hyb
+            if abs(omega) > 1e-10:
+                mol.set_range_coulomb(omega)
+                vklr = jk.get_jk(mol, dm, 'ijkl,jk->il')
+                vklr *= (alpha - hyb)
+                vk += vklr
+                mol.set_range_coulomb(0)
+        vxc += vj - vk * .5
 
         if ground_state:
-            exc -= numpy.einsum('ij,ji', dm, vk) * .5 * hyb*.5
+            exc -= numpy.einsum('ij,ji', dm, vk) * .5 * .5
 
     if ground_state:
         ecoul = numpy.einsum('ij,ji', dm, vj) * .5
@@ -141,6 +173,8 @@ class RKS(hf.RHF):
     Attributes for RKS:
         xc : str
             'X_name,C_name' for the XC functional.  Default is 'lda,vwn'
+        nlc : str
+            'NLC_name' for the NLC functional.  Default is '' (i.e., None)
         grids : Grids object
             grids.level (0 - 9)  big number for large mesh grids. Default is 3
 
@@ -195,8 +229,12 @@ class RKS(hf.RHF):
     def dump_flags(self):
         hf.RHF.dump_flags(self)
         logger.info(self, 'XC functionals = %s', self.xc)
+        if self.nlc!='':
+            logger.info(self, 'NLC functional = %s', self.nlc)
         logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
         self.grids.dump_flags()
+        if self.nlc!='':
+            self.nlcgrids.dump_flags()
 
     get_veff = get_veff
     energy_elec = energy_elec
@@ -211,12 +249,14 @@ class RKS(hf.RHF):
 
 def _dft_common_init_(mf):
     mf.xc = 'LDA,VWN'
+    mf.nlc = ''
     mf.grids = gen_grid.Grids(mf.mol)
+    mf.nlcgrids = gen_grid.Grids(mf.mol)
     mf.small_rho_cutoff = 1e-7  # Use rho to filter grids
 ##################################################
 # don't modify the following attributes, they are not input options
     mf._numint = numint._NumInt()
-    mf._keys = mf._keys.union(['xc', 'grids', 'small_rho_cutoff'])
+    mf._keys = mf._keys.union(['xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'])
 
 
 if __name__ == '__main__':
