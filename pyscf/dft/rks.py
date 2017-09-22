@@ -117,7 +117,7 @@ def energy_elec(ks, dm, h1e=None, vhf=None):
     if h1e is None:
         h1e = ks.get_hcore()
     if vhf is None or getattr(vhf, 'ecoul', None) is None:
-        vhf = ks.get_veff(ks, ks.mol, dm)
+        vhf = ks.get_veff(ks.mol, dm)
     e1 = numpy.einsum('ij,ji', h1e, dm).real
     tot_e = e1 + vhf.ecoul + vhf.exc
     logger.debug(ks, 'Ecoul = %s  Exc = %s', vhf.ecoul, vhf.exc)

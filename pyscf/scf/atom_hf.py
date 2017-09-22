@@ -6,7 +6,8 @@
 import numpy
 from pyscf import gto
 from pyscf.lib import logger
-import pyscf.lib.parameters as param
+from pyscf.lib import param
+from pyscf.data import elements
 from pyscf.scf import hf
 
 
@@ -106,8 +107,8 @@ class AtomSphericAverageRHF(hf.RHF):
 
 def frac_occ(symb, l):
     nuc = gto.mole._charge(symb)
-    if l < 4 and param.ELEMENTS[nuc][2][l] > 0:
-        ne = param.ELEMENTS[nuc][2][l]
+    if l < 4 and elements.CONFIGURATION[nuc][l] > 0:
+        ne = elements.CONFIGURATION[nuc][l]
         nd = (l * 2 + 1) * 2
         ndocc = ne.__floordiv__(nd)
         frac = (float(ne) / nd - ndocc) * 2

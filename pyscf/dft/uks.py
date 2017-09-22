@@ -80,7 +80,7 @@ def energy_elec(ks, dm, h1e=None, vhf=None):
     if h1e is None:
         h1e = ks.get_hcore()
     if vhf is None or getattr(vhf, 'ecoul', None) is None:
-        vhf = ks.get_veff(ks, ks.mol, dm)
+        vhf = ks.get_veff(ks.mol, dm)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = numpy.array((dm*.5, dm*.5))
     e1 = numpy.einsum('ij,ji', h1e, dm[0]) + numpy.einsum('ij,ji', h1e, dm[1])

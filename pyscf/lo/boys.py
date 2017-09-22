@@ -16,29 +16,29 @@ from pyscf.scf import ciah
 from pyscf.lo import orth
 
 
-def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
-    if mo_coeff is None:
-        mo_coeff = numpy.asarray(localizer.mo_coeff, order='C')
-    else:
-        mo_coeff = numpy.asarray(mo_coeff, order='C')
-        localizer.mo_coeff = mo_coeff
-
+def kernel(localizer, mo_coeff=None, callback=None, verbose=None):
+    from pyscf.tools import mo_mapping
     if localizer.verbose >= logger.WARN:
         localizer.check_sanity()
     localizer.dump_flags()
 
     cput0 = (time.clock(), time.time())
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(localizer.stdout, verbose)
+    log = logger.new_logger(localizer, verbose=verbose)
+
     if localizer.conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(localizer.conv_tol*.1)
         log.info('Set conv_tol_grad to %g', conv_tol_grad)
     else:
         conv_tol_grad = localizer.conv_tol_grad
 
-    u0 = localizer.get_init_guess(localizer.init_guess)
+    if mo_coeff is None:
+        mo_coeff = numpy.asarray(localizer.mo_coeff, order='C')
+        u0 = localizer.get_init_guess(localizer.init_guess)
+    else:
+        mo_coeff = numpy.asarray(mo_coeff, order='C')
+        localizer.mo_coeff = mo_coeff
+        u0 = localizer.get_init_guess(False)
+
     rotaiter = ciah.rotate_orb_cc(localizer, u0, conv_tol_grad, verbose=log)
     u, g_orb, stat = next(rotaiter)
     cput1 = log.timer('initializing CIAH', *cput0)
@@ -74,7 +74,10 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
     log.info('macro X = %d  f(x)= %.14g  |g|= %g  %d intor %d KF %d Hx',
              imacro+1, e, norm_gorb,
              (imacro+1)*2, tot_kf+imacro+1, tot_hop)
-    localizer.mo_coeff = lib.dot(mo_coeff, u0)
+# Sort the localized orbitals, to make each localized orbitals as close as
+# possible to the corresponding input orbitals
+    sorted_idx = mo_mapping.mo_1to1map(u0)
+    localizer.mo_coeff = lib.dot(mo_coeff, u0[:,sorted_idx])
     return localizer.mo_coeff
 
 
@@ -105,7 +108,7 @@ class Boys(ciah.CIAHOptimizer):
         self.mol = mol
         self.stdout = mol.stdout
         self.verbose = mol.verbose
-        self.conv_tol = 1e-7
+        self.conv_tol = 1e-6
         self.conv_tol_grad = None
         self.max_cycle = 100
         self.max_iters = 20
@@ -122,20 +125,21 @@ class Boys(ciah.CIAHOptimizer):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
         log.info('******** %s flags ********', self.__class__)
-        log.info('conv_tol = %s'       ,self.conv_tol       )
-        log.info('conv_tol_grad = %s'  ,self.conv_tol_grad  )
-        log.info('max_cycle = %s'      ,self.max_cycle      )
-        log.info('max_stepsize = %s'   ,self.max_stepsize   )
-        log.info('max_iters = %s'      ,self.max_iters      )
-        log.info('kf_interval = %s'    ,self.kf_interval    )
-        log.info('kf_trust_region = %s',self.kf_trust_region)
-        log.info('ah_start_tol = %s'   ,self.ah_start_tol   )
-        log.info('ah_start_cycle = %s' ,self.ah_start_cycle )
-        log.info('ah_level_shift = %s' ,self.ah_level_shift )
-        log.info('ah_conv_tol = %s'    ,self.ah_conv_tol    )
-        log.info('ah_lindep = %s'      ,self.ah_lindep      )
-        log.info('ah_max_cycle = %s'   ,self.ah_max_cycle   )
-        log.info('ah_trust_region = %s',self.ah_trust_region)
+        log.info('conv_tol = %s'       , self.conv_tol       )
+        log.info('conv_tol_grad = %s'  , self.conv_tol_grad  )
+        log.info('max_cycle = %s'      , self.max_cycle      )
+        log.info('max_stepsize = %s'   , self.max_stepsize   )
+        log.info('max_iters = %s'      , self.max_iters      )
+        log.info('kf_interval = %s'    , self.kf_interval    )
+        log.info('kf_trust_region = %s', self.kf_trust_region)
+        log.info('ah_start_tol = %s'   , self.ah_start_tol   )
+        log.info('ah_start_cycle = %s' , self.ah_start_cycle )
+        log.info('ah_level_shift = %s' , self.ah_level_shift )
+        log.info('ah_conv_tol = %s'    , self.ah_conv_tol    )
+        log.info('ah_lindep = %s'      , self.ah_lindep      )
+        log.info('ah_max_cycle = %s'   , self.ah_max_cycle   )
+        log.info('ah_trust_region = %s', self.ah_trust_region)
+        log.info('init_guess = %s'     , self.init_guess     )
 
     def gen_g_hop(self, u):
         mo_coeff = lib.dot(self.mo_coeff, u)
@@ -212,12 +216,20 @@ class Boys(ciah.CIAHOptimizer):
         return val * 2
 
     def get_init_guess(self, key='atomic'):
+        '''Generate initial guess for localization.
+
+        Kwargs:
+            key : str or bool
+                If key is 'atomic', initial guess is based on the projected
+                atomic orbitals. False
+        '''
         if isinstance(key, str) and key.lower() == 'atomic':
             return atomic_init_guess(self.mol, self.mo_coeff)
         else:
             nmo = self.mo_coeff.shape[1]
             u0 = numpy.eye(nmo)
-            if numpy.linalg.norm(self.get_grad(u0)) < 1e-5:
+            if (isinstance(key, str) and key.lower().startswith('rand')
+                or numpy.linalg.norm(self.get_grad(u0)) < 1e-5):
                 # Add noise to kick initial guess out of saddle point
                 dr = numpy.cos(numpy.arange((nmo-1)*nmo//2)) * 1e-3
                 u0 = self.extract_rotation(dr)

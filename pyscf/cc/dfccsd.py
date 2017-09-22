@@ -5,14 +5,17 @@ from functools import reduce
 import ctypes
 import numpy
 from pyscf import lib
+from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.ao2mo import outcore
 from pyscf.ao2mo import _ao2mo
+from pyscf.cc import rccsd
 from pyscf.cc import ccsd
+from pyscf.cc.ccsd import _cp
 from pyscf.cc import _ccsd
 _dgemm = lib.numpy_helper._dgemm
 
-class CCSD(ccsd.CCSD):
+class RCCSD(rccsd.RCCSD):
     def ao2mo(self, mo_coeff=None):
         return _make_eris_df(self, mo_coeff)
 
@@ -131,6 +134,7 @@ class _RCCSD_ERIs:
         self.vooo = None
         self.voov = None
         self.vvoo = None
+        self.ovvo = None # TODO: remove this; needed for EOM-CCSD
         self.vovv = None
         self.vvvv = None
 
@@ -148,6 +152,8 @@ def _make_eris_df(cc, mo_coeff=None):
     eris.oovv = eris.feri.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8')
     eris.ovvv = eris.feri.create_dataset('ovvv', (nocc,nvir,nvir_pair), 'f8')
     eris.vvL = eris.feri.create_dataset('vvL', (nvir_pair,naux), 'f8')
+    # TODO: remove this below; needed for EOM-CCSD
+    eris.vvvv = eris.feri.create_dataset('vvvv', (nvir_pair,nvir_pair), 'f8')
 
     Loo = numpy.empty((naux,nocc,nocc))
     Lov = numpy.empty((naux,nocc,nvir))
@@ -174,10 +180,12 @@ def _make_eris_df(cc, mo_coeff=None):
     eris.feri['ooov'] = lib.ddot(Loo.T, Lov).reshape(nocc,nocc,nocc,nvir)
     eris.feri['ovoo'] = lib.ddot(Lov.T, Loo).reshape(nocc,nvir,nocc,nocc)
     eris.feri['ovov'] = lib.ddot(Lov.T, Lov).reshape(nocc,nvir,nocc,nvir)
+    eris.feri['ovvo'] = lib.ddot(Lov.T, Lov).reshape(nocc,nvir,nocc,nvir).transpose(0,1,3,2)
     eris.oooo = eris.feri['oooo']
     eris.ooov = eris.feri['ooov']
     eris.ovoo = eris.feri['ovoo']
     eris.ovov = eris.feri['ovov']
+    eris.ovvo = eris.feri['ovvo']
 
     mem_now = lib.current_memory()[0]
     max_memory = cc.max_memory - mem_now
@@ -191,6 +199,9 @@ def _make_eris_df(cc, mo_coeff=None):
     oovv = lib.unpack_tril(oovv.reshape(nocc**2,nvir_pair))
     eris.oovv[:] = oovv.reshape(nocc,nocc,nvir,nvir)
     oovv = vvL = Loo = None
+
+    eris.vvvv = numpy.dot(_cp(eris.vvL), _cp(eris.vvL).T)
+    eris.vvvv = numpy.reshape(eris.vvvv, (nvir_pair, nvir_pair))
 
     Lov = Lov.reshape(naux,nocc,nvir)
     vblk = max(nocc, int((max_memory*.8e6/8)/(nocc*nvir_pair)))

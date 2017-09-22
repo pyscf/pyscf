@@ -93,7 +93,7 @@ def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
     pmol.basis = minao
     pmol.build(False, False)
 
-    baslst = mo_mapping._aolabels2baslst(pmol, aolabels)
+    baslst = pmol.search_ao_label(aolabels)
     log.info('reference AO indices for %s %s: %s', minao, aolabels, baslst)
 
     if with_iao:

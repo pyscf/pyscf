@@ -6,8 +6,10 @@
 import copy
 import numpy
 from pyscf import lib
+from pyscf.lib import logger
 from pyscf import gto
 from pyscf import ao2mo
+from pyscf.data import elements
 
 # Obtained from http://www.psicode.org/psi4manual/master/basissets_byfamily.html
 DEFAULT_AUXBASIS = {
@@ -66,7 +68,7 @@ def aug_etb_for_dfbasis(mol, dfbasis='weigend', beta=2.3, start_at='Rb'):
             newbasis[symb] = dfbasis
         #?elif symb in mol._ecp:
         else:
-            conf = lib.parameters.ELEMENTS[nuc_charge][2]
+            conf = elements.CONFIGURATION[nuc_charge]
             max_shells = 4 - conf.count(0)
             emin_by_l = [1e99] * 8
             emax_by_l = [0] * 8
@@ -134,11 +136,19 @@ def make_auxbasis(mol, mp2fit=False):
                     auxb = DEFAULT_AUXBASIS[balias][0]
                 if auxb is not None and gto.basis.load(auxb, k):
                     auxbasis[k] = auxb
+                    logger.debug(mol, 'Default auxbasis %s is used for %s %s',
+                                 auxb, k, _basis[k])
 
     if len(auxbasis) != len(_basis):
         # Some AO basis not found in DEFAULT_AUXBASIS
         auxbasis, auxdefault = aug_etb(mol), auxbasis
         auxbasis.update(auxdefault)
+        aux_etb = set(auxbasis) - set(auxdefault)
+        if aux_etb:
+            logger.info(mol, 'Even tempered Gaussians are generated as '
+                        'DF auxbasis for  %s', ' '.join(aux_etb))
+            for k in aux_etb:
+                logger.debug(mol, '  ETB auxbasis for %s  %s', k, auxbasis[k])
     return auxbasis
 
 def make_auxmol(mol, auxbasis=None):
@@ -169,7 +179,6 @@ def make_auxmol(mol, auxbasis=None):
     pmol._atm, pmol._bas, pmol._env = \
             pmol.make_env(mol._atom, pmol._basis, mol._env[:gto.PTR_ENV_START])
     pmol._built = True
-    lib.logger.debug(mol, 'auxbasis %s', auxbasis)
-    lib.logger.debug(mol, 'num shells = %d, num cGTOs = %d',
-                     pmol.nbas, pmol.nao_nr())
+    logger.debug(mol, 'num shells = %d, num cGTOs = %d',
+                 pmol.nbas, pmol.nao_nr())
     return pmol

@@ -395,7 +395,7 @@ Next, we compute the correlation energy with :mod:`mp.mp2`::
 
   >>> from pyscf import mp
   >>> mp2 = mp.MP2(m)
-  >>> print('E(MP2) = %.9g' % m.kernel()[0])
+  >>> print('E(MP2) = %.9g' % mp2.kernel()[0])
   E(MP2) = -0.379359288
 
 This is the correlation energy of singlet ground state.  For the triplet

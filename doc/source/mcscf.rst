@@ -1,5 +1,5 @@
-mcscf
-*****
+mcscf --- Multi-configurational self-consistent field
+*****************************************************
 
 .. automodule:: pyscf.mcscf
  
