@@ -88,7 +88,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         self.outputlevel = 2
 
         self.executable = settings.BLOCKEXE
-        self.scratchDirectory = settings.BLOCKSCRATCHDIR
+        self.scratchDirectory = os.path.abspath(settings.BLOCKSCRATCHDIR)
         self.mpiprefix = settings.MPIPREFIX
         self.memory = memory
 
