@@ -10,7 +10,7 @@ IBO generation, cube generation, and population analysis of benzene
 import numpy
 from pyscf import gto, scf, lo, tools
 
-benzene = [[ 'C'  , ( 4.673795 ,   6.280948 , 0.00  ) ], 
+benzene = [[ 'C'  , ( 4.673795 ,   6.280948 , 0.00  ) ],
            [ 'C'  , ( 5.901190 ,   5.572311 , 0.00  ) ],
            [ 'C'  , ( 5.901190 ,   4.155037 , 0.00  ) ],
            [ 'C'  , ( 4.673795 ,   3.446400 , 0.00  ) ],
@@ -33,7 +33,9 @@ a = lo.iao.iao(mol, mo_occ)
 # Orthogonalize IAO
 a = lo.vec_lowdin(a, mf.get_ovlp())
 
-
+#
+# Method 1, using Knizia's alogrithm to localize IAO orbitals
+#
 '''
 Generate IBOS from orthogonal IAOs
 '''
@@ -45,10 +47,10 @@ Print the IBOS into Gausian Cube files
 '''
 
 for i in range(ibo.shape[1]):
-     tools.cubegen.density(mol, 'benzene_ibo_'+str(i+1)+'.cube', ibo ,moN=i+1)
+    tools.cubegen.density(mol, 'benzene_ibo1_'+str(i+1)+'.cube', ibo ,moN=i+1)
 
 '''
-Population Analysis with IAOS 
+Population Analysis with IAOS
 '''
 # transform mo_occ to IAO representation. Note the AO dimension is reduced
 mo_occ = reduce(numpy.dot, (a.T, mf.get_ovlp(), mo_occ))
@@ -60,3 +62,13 @@ dm = numpy.dot(mo_occ, mo_occ.T) * 2
 iao_mol = mol.copy()
 iao_mol.build(False, False, basis='minao')
 mf.mulliken_pop(iao_mol, dm, s=numpy.eye(iao_mol.nao_nr()))
+
+#
+# Method 2, using the modified Pipek-Mezey localization module.
+# Orthogonalization for IAOs is not required.
+#
+iaos = lo.iao.iao(mol, mo_occ)
+ibo = lo.ibo.PM(mol, mo_occ, iaos).kernel()
+for i in range(ibo.shape[1]):
+    tools.cubegen.density(mol, 'benzene_ibo2_'+str(i+1)+'.cube', ibo ,moN=i+1)
+

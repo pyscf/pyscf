@@ -6,7 +6,7 @@ import numpy
 from pyscf import gto
 from pyscf import lib
 from pyscf import scf
-from pyscf.lo import iao, ibo, orth
+from pyscf.lo import iao, ibo, orth, pipek
 
 mol = gto.Mole()
 mol.atom = '''
@@ -23,17 +23,37 @@ class KnownValues(unittest.TestCase):
         mf = scf.RHF(mol).run()
         b = ibo.ibo(mol, mf.mo_coeff[:,mf.mo_occ>0], exponent=4)
         s_b = reduce(numpy.dot, (b.T, mf.get_ovlp(), b))
-        self.assertAlmostEqual(lib.finger(b), -0.059680435404993903, 5)
         self.assertTrue(abs(s_b.diagonal() - 1).max() < 1e-9)
+        pop = pipek.atomic_pops(mol, b)
+        z = numpy.einsum('xii,xii->', pop, pop)
+        self.assertAlmostEqual(z, 4.0663610846219127, 6)
+        self.assertAlmostEqual(lib.finger(b), 0.50200322891732885, 6)
 
         b = ibo.ibo(mol, mf.mo_coeff[:,mf.mo_occ>0], exponent=2)
         s_b = reduce(numpy.dot, (b.T, mf.get_ovlp(), b))
-        self.assertAlmostEqual(lib.finger(b), -0.47003453325391631, 5)
         self.assertTrue(abs(s_b.diagonal() - 1).max() < 1e-9)
+        pop = pipek.atomic_pops(mol, b)
+        z = numpy.einsum('xii,xii->', pop, pop)
+        self.assertAlmostEqual(z, 4.0663609732471571, 6)
+        self.assertAlmostEqual(lib.finger(b), 0.50200217429285976, 6)
+
+    def test_ibo_PM(self):
+        mf = scf.RHF(mol).run()
+        b = ibo.PM(mol, mf.mo_coeff[:,mf.mo_occ>0], exponent=4).kernel()
+        pop = pipek.atomic_pops(mol, b)
+        z = numpy.einsum('xii,xii->', pop, pop)
+        self.assertAlmostEqual(z, 3.9206879872618576, 6)
+        self.assertAlmostEqual(lib.finger(b), -1.5634357606843325, 6)
+
+        b = ibo.PM(mol, mf.mo_coeff[:,mf.mo_occ>0], exponent=2).kernel()
+        pop = pipek.atomic_pops(mol, b)
+        z = numpy.einsum('xii,xii->', pop, pop)
+        self.assertAlmostEqual(z, 3.9206882147236133, 6)
+        self.assertAlmostEqual(lib.finger(b), -1.5634350790965224, 6)
 
 
 if __name__ == "__main__":
-    print("TODO: Test ibo")
+    print("Full tests for ibo")
     unittest.main()
 
 

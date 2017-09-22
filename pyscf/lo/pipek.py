@@ -52,7 +52,8 @@ class PipekMezey(boys.Boys):
         boys.Boys.__init__(self, mol, mo_coeff)
         self.pop_method = 'meta_lowdin'
         self.conv_tol = 1e-6
-        self._keys = self._keys.union(['pop_method'])
+        self.exponent = 2  # should be 2 or 4
+        self._keys = self._keys.union(['pop_method', 'exponent'])
 
     def dump_flags(self):
         boys.Boys.dump_flags(self)
@@ -61,8 +62,15 @@ class PipekMezey(boys.Boys):
     def gen_g_hop(self, u):
         mo_coeff = lib.dot(self.mo_coeff, u)
         pop = self.atomic_pops(self.mol, mo_coeff, self.pop_method)
-        g0 = numpy.einsum('xii,xip->pi', pop, pop)
-        g = -self.pack_uniq_var(g0-g0.T) * 2
+        if self.exponent == 2:
+            g0 = numpy.einsum('xii,xip->pi', pop, pop)
+            g = -self.pack_uniq_var(g0-g0.T) * 2
+        elif self.exponent == 4:
+            pop3 = numpy.einsum('xii->xi', pop)**3
+            g0 = numpy.einsum('xi,xip->pi', pop3, pop)
+            g = -self.pack_uniq_var(g0-g0.T) * 4
+        else:
+            raise NotImplementedError('exponent %s' % self.exponent)
 
         h_diag = numpy.einsum('xii,xpp->pi', pop, pop) * 2
         g_diag = g0.diagonal()
@@ -72,15 +80,30 @@ class PipekMezey(boys.Boys):
         h_diag = -self.pack_uniq_var(h_diag) * 2
 
         g0 = g0 + g0.T
-        def h_op(x):
-            x = self.unpack_uniq_var(x)
-            norb = x.shape[0]
-            hx = lib.dot(x.T, g0.T)
-            hx+= numpy.einsum('xip,xi->pi', pop, numpy.einsum('qi,xiq->xi', x, pop)) * 2
-            hx-= numpy.einsum('xpp,xip->pi', pop,
-                              lib.dot(pop.reshape(-1,norb), x).reshape(-1,norb,norb)) * 2
-            hx-= numpy.einsum('xip,xp->pi', pop, numpy.einsum('qp,xpq->xp', x, pop)) * 2
-            return -self.pack_uniq_var(hx-hx.T)
+        if self.exponent == 2:
+            def h_op(x):
+                x = self.unpack_uniq_var(x)
+                norb = x.shape[0]
+                hx = lib.dot(x.T, g0.T)
+                hx+= numpy.einsum('xip,xi->pi', pop, numpy.einsum('qi,xiq->xi', x, pop)) * 2
+                hx-= numpy.einsum('xpp,xip->pi', pop,
+                                  lib.dot(pop.reshape(-1,norb), x).reshape(-1,norb,norb)) * 2
+                hx-= numpy.einsum('xip,xp->pi', pop, numpy.einsum('qp,xpq->xp', x, pop)) * 2
+                return -self.pack_uniq_var(hx-hx.T)
+        else:
+            def h_op(x):
+                x = self.unpack_uniq_var(x)
+                norb = x.shape[0]
+                hx = lib.dot(x.T, g0.T) * 2
+                pop2 = numpy.einsum('xii->xi', pop)**2
+                pop3 = numpy.einsum('xii->xi', pop)**3
+                tmp = numpy.einsum('qi,xiq->xi', x, pop) * pop2
+                hx+= numpy.einsum('xip,xi->pi', pop, tmp) * 12
+                hx-= numpy.einsum('xp,xip->pi', pop3,
+                                  lib.dot(pop.reshape(-1,norb), x).reshape(-1,norb,norb)) * 4
+                tmp = numpy.einsum('qp,xpq->xp', x, pop) * pop2
+                hx-= numpy.einsum('xip,xp->pi', pop, tmp) * 12
+                return -self.pack_uniq_var(hx-hx.T)
 
         return g, h_op, h_diag
 
@@ -88,15 +111,24 @@ class PipekMezey(boys.Boys):
         if u is None: u = numpy.eye(self.mo_coeff.shape[1])
         mo_coeff = lib.dot(self.mo_coeff, u)
         pop = self.atomic_pops(self.mol, mo_coeff, self.pop_method)
-        g0 = numpy.einsum('xii,xip->pi', pop, pop)
-        g = -self.pack_uniq_var(g0-g0.T) * 2
+        if self.exponent == 2:
+            g0 = numpy.einsum('xii,xip->pi', pop, pop)
+            g = -self.pack_uniq_var(g0-g0.T) * 2
+        else:
+            pop3 = numpy.einsum('xii->xi', pop)**3
+            g0 = numpy.einsum('xi,xip->pi', pop3, pop)
+            g = -self.pack_uniq_var(g0-g0.T) * 4
         return g
 
     def cost_function(self, u=None):
         if u is None: u = numpy.eye(self.mo_coeff.shape[1])
         mo_coeff = lib.dot(self.mo_coeff, u)
         pop = self.atomic_pops(self.mol, mo_coeff, self.pop_method)
-        return numpy.einsum('xii,xii->', pop, pop)
+        if self.exponent == 2:
+            return numpy.einsum('xii,xii->', pop, pop)
+        else:
+            pop2 = numpy.einsum('xii->xi', pop)**2
+            return numpy.einsum('xi,xi', pop2, pop2)
 
     @lib.with_doc(atomic_pops.__doc__)
     def atomic_pops(self, mol, mo_coeff, method=None):

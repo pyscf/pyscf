@@ -16,16 +16,15 @@ from pyscf.scf import ciah
 from pyscf.lo import orth
 
 
-def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
+def kernel(localizer, mo_coeff=None, callback=None, verbose=None):
+    from pyscf.tools import mo_mapping
     if localizer.verbose >= logger.WARN:
         localizer.check_sanity()
     localizer.dump_flags()
 
     cput0 = (time.clock(), time.time())
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(localizer.stdout, verbose)
+    log = logger.new_logger(localizer, verbose=verbose)
+
     if localizer.conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(localizer.conv_tol*.1)
         log.info('Set conv_tol_grad to %g', conv_tol_grad)
@@ -75,7 +74,10 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
     log.info('macro X = %d  f(x)= %.14g  |g|= %g  %d intor %d KF %d Hx',
              imacro+1, e, norm_gorb,
              (imacro+1)*2, tot_kf+imacro+1, tot_hop)
-    localizer.mo_coeff = lib.dot(mo_coeff, u0)
+# Sort the localized orbitals, to make each localized orbitals as close as
+# possible to the corresponding input orbitals
+    sorted_idx = mo_mapping.mo_1to1map(u0)
+    localizer.mo_coeff = lib.dot(mo_coeff, u0[:,sorted_idx])
     return localizer.mo_coeff
 
 
