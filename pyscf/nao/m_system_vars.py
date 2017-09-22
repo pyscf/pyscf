@@ -82,7 +82,8 @@ class system_vars_c():
   def init_xyzlike(self, atom, label='pyscf'):
     """ This is simple constructor which only initializes geometry info """
     from pyscf.lib import logger
-    from pyscf.data import chemical_symbols
+    #from pyscf.data.elements import chemical_symbols
+    from pyscf.lib.parameters import ELEMENTS as chemical_symbols
     self.verbose = logger.NOTE  # To be similar to Mole object...
     self.stdout = sys.stdout
     self.symmetry = False
