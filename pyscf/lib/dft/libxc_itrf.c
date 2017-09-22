@@ -383,6 +383,27 @@ double LIBXC_hybrid_coeff(int xc_id)
         return factor;
 }
 
+void LIBXC_nlc_coeff(int xc_id, double *nlc_pars) {
+
+        xc_func_type func;
+        if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
+                fprintf(stderr, "XC functional %d not found\n", xc_id);
+                exit(1);
+        }
+        XC(nlc_coef)(&func, &nlc_pars[0], &nlc_pars[1]);
+        xc_func_end(&func);
+}
+
+void LIBXC_rsh_coeff(int xc_id, double *rsh_pars) {
+
+        xc_func_type func;
+        if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
+                fprintf(stderr, "XC functional %d not found\n", xc_id);
+                exit(1);
+        }
+        XC(hyb_cam_coef)(&func, &rsh_pars[0], &rsh_pars[1], &rsh_pars[2]);
+        xc_func_end(&func);
+}
 
 /*
  * XC_FAMILY_LDA           1

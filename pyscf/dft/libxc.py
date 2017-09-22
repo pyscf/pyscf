@@ -447,6 +447,9 @@ def is_gga(xc_code):
     _itrf.LIBXC_is_gga.restype = ctypes.c_int
     return all((_itrf.LIBXC_is_gga(ctypes.c_int(xid))==1) for xid, fac in fn_facs)
 
+def is_nlc(xc_code):
+    return xc_code[-6:]=='__VV10'
+
 def max_deriv_order(xc_code):
     hyb, fn_facs = parse_xc(xc_code)
     _itrf.LIBXC_max_deriv_order.restype = ctypes.c_int
@@ -481,6 +484,28 @@ def hybrid_coeff(xc_code, spin=0):
             _itrf.LIBXC_hybrid_coeff.restype = ctypes.c_double
             hyb += _itrf.LIBXC_hybrid_coeff(ctypes.c_int(xid))
     return hyb
+
+def nlc_coeff(xc_code):
+    '''Get NLC coefficients
+    '''
+    xid=parse_xc(xc_code)[1][0][0]
+    _itrf.LIBXC_nlc_coeff.argtypes=[ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
+    _itrf.LIBXC_nlc_coeff.restype=None
+    nlc_pars=(ctypes.c_double*2)()
+    _itrf.LIBXC_nlc_coeff(xid,nlc_pars)
+
+    return nlc_pars[0], nlc_pars[1]
+
+def rsh_coeff(xc_code):
+    '''Get RSH coefficients
+    '''
+    xid=parse_xc(xc_code)[1][0][0]
+    _itrf.LIBXC_rsh_coeff.argtypes=[ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
+    _itrf.LIBXC_rsh_coeff.restype=None
+    rsh_pars=(ctypes.c_double*3)()
+    _itrf.LIBXC_rsh_coeff(xid,rsh_pars)
+
+    return rsh_pars[0], rsh_pars[1], rsh_pars[2]
 
 def parse_xc_name(xc_name='LDA,VWN'):
     '''Convert the XC functional name to libxc library internal ID.

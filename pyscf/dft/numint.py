@@ -282,6 +282,83 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
             rho[5] -= rho5 * .5
     return rho
 
+def _vv10nlc(rho,coords,vvrho,vvweight,vvcoords,nlc_pars):
+    thresh=1e-8
+
+    #output
+    exc=numpy.zeros(rho[0,:].size)
+    vxc=numpy.zeros([2,rho[0,:].size])
+
+    #outer grid needs threshing
+    threshind=rho[0,:]>=thresh
+    coords=coords[threshind]
+    R=rho[0,:][threshind]
+    Gx=rho[1,:][threshind]
+    Gy=rho[2,:][threshind]
+    Gz=rho[3,:][threshind]
+    G=Gx**2.+Gy**2.+Gz**2.
+
+    #threshed output
+    excthresh=numpy.zeros(R.size)
+    vxcthresh=numpy.zeros([2,R.size])
+
+    #inner grid needs threshing
+    innerthreshind=vvrho[0,:]>=thresh
+    vvcoords=vvcoords[innerthreshind]
+    vvweight=vvweight[innerthreshind]
+    Rp=vvrho[0,:][innerthreshind]
+    RpW=Rp*vvweight
+    Gxp=vvrho[1,:][innerthreshind]
+    Gyp=vvrho[2,:][innerthreshind]
+    Gzp=vvrho[3,:][innerthreshind]
+    Gp=Gxp**2.+Gyp**2.+Gzp**2.
+
+    #constants and parameters
+    Pi=numpy.pi
+    Pi43=4.*Pi/3.
+    Bvv, Cvv = nlc_pars
+    Kvv=Bvv*1.5*Pi*((9.*Pi)**(-1./6.))
+    Beta=((3./(Bvv*Bvv))**(0.75))/32.
+
+    #inner grid
+    W0p=Gp/(Rp*Rp)
+    W0p=Cvv*W0p*W0p
+    W0p=(W0p+Pi43*Rp)**0.5
+    Kp=Kvv*(Rp**(1./6.))
+
+    #outer grid
+    W0tmp=G/(R**2)
+    W0tmp=Cvv*W0tmp*W0tmp
+    W0=(W0tmp+Pi43*R)**0.5
+    dW0dR=(0.5*Pi43*R-2.*W0tmp)/W0
+    dW0dG=W0tmp*R/(G*W0)
+    K=Kvv*(R**(1./6.))
+    dKdR=(1./6.)*K
+
+    for i in range(R.size):
+        DX=vvcoords[:,0]-coords[i,0]
+        DY=vvcoords[:,1]-coords[i,1]
+        DZ=vvcoords[:,2]-coords[i,2]
+        R2=DX*DX+DY*DY+DZ*DZ
+        gp=R2*W0p+Kp
+        g=R2*W0[i]+K[i]
+        gt=g+gp
+        T=RpW/(g*gp*gt)
+        F=numpy.sum(T)
+        T*=(1./g+1./gt)
+        U=numpy.sum(T)
+        W=numpy.sum(T*R2)
+        F*=-1.5
+        #excthresh is multiplied by Rho later
+        excthresh[i]=Beta+0.5*F
+        vxcthresh[0,i]=Beta+F+1.5*(U*dKdR[i]+W*dW0dR[i])
+        vxcthresh[1,i]=1.5*W*dW0dG[i]
+    exc[threshind]=excthresh
+    vxc[0,threshind]=vxcthresh[0,:]
+    vxc[1,threshind]=vxcthresh[1,:]
+
+    return exc,vxc
+
 def eval_mat(mol, ao, weight, rho, vxc,
              non0tab=None, xctype='LDA', spin=0, verbose=None):
     r'''Calculate XC potential matrix.
@@ -567,6 +644,47 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 aow = numpy.einsum('npi,np->pi', ao, wv, out=aow)
                 vmat[idm] += _dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
                 rho = exc = vxc = vrho = vsigma = wv = None
+    elif xctype == 'NLC':
+        nlc_pars=ni.nlc_coeff(xc_code[:-6])
+        ao_deriv = 1
+        vvrho=numpy.empty([nset,4,0])
+        vvweight=numpy.empty([nset,0])
+        vvcoords=numpy.empty([nset,0,3])
+        for ao, mask, weight, coords \
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+            rhotmp = numpy.empty([0,4,weight.size])
+            weighttmp = numpy.empty([0,weight.size])
+            coordstmp = numpy.empty([0,weight.size,3])
+            for idm in range(nset):
+                rho = make_rho(idm, ao, mask, 'GGA')
+                rho = numpy.expand_dims(rho,axis=0)
+                rhotmp = numpy.concatenate((rhotmp,rho),axis=0)
+                weighttmp = numpy.concatenate((weighttmp,numpy.expand_dims(weight,axis=0)),axis=0)
+                coordstmp = numpy.concatenate((coordstmp,numpy.expand_dims(coords,axis=0)),axis=0)
+                rho = None
+            vvrho=numpy.concatenate((vvrho,rhotmp),axis=2)
+            vvweight=numpy.concatenate((vvweight,weighttmp),axis=1)
+            vvcoords=numpy.concatenate((vvcoords,coordstmp),axis=1)
+            rhotmp = weighttmp = coordstmp = None
+        for ao, mask, weight, coords \
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+            ngrid = weight.size
+            aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
+            for idm in range(nset):
+                rho = make_rho(idm, ao, mask, 'GGA')
+                exc, vxc = _vv10nlc(rho,coords,vvrho[idm],vvweight[idm],vvcoords[idm],nlc_pars)
+                vrho, vsigma = vxc[:2]
+                den = rho[0] * weight
+                nelec[idm] += den.sum()
+                excsum[idm] += (den * exc).sum()
+# ref eval_mat function
+                wv = numpy.empty((4,ngrid))
+                wv[0]  = weight * vrho * .5
+                wv[1:] = rho[1:] * (weight * vsigma * 2)
+                aow = numpy.einsum('npi,np->pi', ao, wv, out=aow)
+                vmat[idm] += _dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
+                rho = exc = vxc = vrho = vsigma = wv = None
+        vvrho = vvweight = vvcoords = None
     else:
         if (any(x in xc_code.upper() for x in ('CC06', 'CS', 'BR89', 'MK00'))):
             raise NotImplementedError('laplacian in meta-GGA method')
@@ -1376,13 +1494,21 @@ class _NumInt(object):
     def hybrid_coeff(self, xc_code, spin=0):
         return self.libxc.hybrid_coeff(xc_code, spin)
 
+    def nlc_coeff(self, xc_code):
+        return self.libxc.nlc_coeff(xc_code)
+
+    def rsh_coeff(self, xc_code):
+        return self.libxc.rsh_coeff(xc_code)
+
     def eval_xc(self, xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
         return self.libxc.eval_xc(xc_code, rho, spin, relativity, deriv, verbose)
     eval_xc.__doc__ = libxc.eval_xc.__doc__
 
     def _xc_type(self, xc_code):
         libxc = self.libxc
-        if libxc.is_lda(xc_code):
+        if libxc.is_nlc(xc_code):
+            xctype = 'NLC'
+        elif libxc.is_lda(xc_code):
             xctype = 'LDA'
         elif libxc.is_meta_gga(xc_code):
             xctype = 'MGGA'
