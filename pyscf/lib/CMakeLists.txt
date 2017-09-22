@@ -7,7 +7,7 @@ set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffast-math")
-  set(CMAKE_Fortran_FLAGS "-O2")
+  set(CMAKE_Fortran_FLAGS "-pedantic -O2 -Wall -ffree-line-length-0")
   if(UNIX AND NOT APPLE)
     set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-as-needed")
   endif()
@@ -18,18 +18,20 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 #find_package(BLAS REQUIRED)
 #check_function_exists(ffsll HAVE_FFS)
-set(BLAS_LIBRARIES "-L/opt/intel/intelpython2/pkgs/mkl-2017.0.3-intel_5/lib -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -lmkl_def -liomp5 -lpthread -lm -ldl")
+set(BLAS_LIBRARIES "-L/opt/intel/intelpython2/pkgs/mkl-2017.0.3-intel_5/lib  -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lmkl_def -lgomp -lpthread -lm -ldl")
 message("BLAS libraries: ${BLAS_LIBRARIES}")
 
-set(LAPACK_LIBRARIES "-L/opt/intel/intelpython2/pkgs/mkl-2017.0.3-intel_5/lib -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -lmkl_def -liomp5 -lpthread -lm -ldl")
+set(LAPACK_LIBRARIES "-L/opt/intel/intelpython2/pkgs/mkl-2017.0.3-intel_5/lib -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lmkl_def -lgomp -lpthread -lm -ldl")
 message("LAPACK libraries: ${LAPACK_LIBRARIES}")
 
-find_package(OpenMP)
-if(OPENMP_FOUND)
+#find_package(OpenMP)
+#if(OPENMP_FOUND)
   set(HAVE_OPENMP 1)
-else ()
   set(OpenMP_C_FLAGS " ")
-endif()
+  message("OpenMP_C_FLAGS   ${OpenMP_C_FLAGS}")
+#else ()
+#endif()
+
 
 find_package(PythonInterp REQUIRED)
 #find_package(PythonLibs REQUIRED)
@@ -84,6 +86,7 @@ add_subdirectory(extras/mbd)
 
 add_subdirectory(nao)
 add_subdirectory(sparsetools)
+add_subdirectory(openmx)  
 
 option(ENABLE_LIBXC "Using libxc for XC functional library" ON)
 option(ENABLE_XCFUN "Using xcfun for XC functional library" ON)
