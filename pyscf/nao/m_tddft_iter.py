@@ -51,11 +51,11 @@ class tddft_iter_c():
 
     self.moms0,self.moms1 = pb.comp_moments(dtype=self.dtype)
     self.nprod = self.moms0.size
-    self.kernel, self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype)
-
+    self.kernel,self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype) # Lower Triangular Part of the kernel
+    assert self.nprod==self.kernel_dim, "%r %r "%(self.nprod, self.kernel_dim)
+    
     if xc_code.upper()!='RPA' :
       dm = comp_dm(sv.wfsx.x, sv.get_occupations())
-      
       pb.comp_fxc_pack(dm, xc_code, kernel = self.kernel, dtype=self.dtype, **kvargs)
 
     self.telec = sv.hsx.telec if telec is None else telec

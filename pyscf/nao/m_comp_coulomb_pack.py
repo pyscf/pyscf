@@ -18,9 +18,10 @@ def comp_coulomb_pack(sv, ao_log=None, funct=coulomb_am, dtype=np.float64, **kva
       sv : (System Variables), this must have arrays of coordinates and species, etc
       ao_log : description of functions (either orbitals or product basis functions)
     Returns:
-      matrix elements (real-space overlap) for the whole system
+      matrix elements for the whole system in packed form (lower triangular part)
   """
   from pyscf.nao.m_ao_matelem import ao_matelem_c
+  from pyscf.nao.m_pack2den import ij2pack_l
   
   aome = ao_matelem_c(sv.ao_log.rr, sv.ao_log.pp)
   me = ao_matelem_c(sv.ao_log) if ao_log is None else aome.init_one_set(ao_log)
@@ -39,11 +40,6 @@ def comp_coulomb_pack(sv, ao_log=None, funct=coulomb_am, dtype=np.float64, **kva
       else:
           for i1 in range(s1,f1):
             for i2 in range(s2, min(i1+1, f2)):
-              ind = 0
-              if i2 > 0:
-                for beta in range(1, i2+1):
-                  ind += norbs -beta
-              ind += i1
-              res[ind] = oo2f[i1-s1,i2-s2]
+              res[ij2pack_l(i1,i2,norbs)] = oo2f[i1-s1,i2-s2]
 
   return res, norbs

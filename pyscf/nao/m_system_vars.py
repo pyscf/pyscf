@@ -252,7 +252,7 @@ class system_vars_c():
         atom2sp (list): atom to specie, list associating the atoms to their specie number
         atom2s: atom -> first atomic orbital in a global orbital counting
         atom2mu_s: atom -> first multiplett (radial orbital) in a global counting of radial orbitals
-        sp2symbol (list): list soociating the species to their symbol
+        sp2symbol (list): list associating the species to their symbol
         sp2charge (list): list associating the species to their charge
         state (string): this is an internal information on the current status of the class
     """
