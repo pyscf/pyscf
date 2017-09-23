@@ -145,8 +145,15 @@ class UCCSD(rccsd.RCCSD):
         # Spin-orbital CCSD needs a stricter tolerance than spatial-orbital
         self.conv_tol_normt = 1e-6
 
-    nocc = property(uccsd.get_nocc)
-    nmo = property(uccsd.get_nmo)
+    @property
+    def nocc(self):
+        nocca, noccb = self.get_nocc()
+        return nocca + noccb
+
+    @property
+    def nmo(self):
+        nmoa, nmob = self.get_nmo()
+        return nmoa + nmob
 
     get_nocc = uccsd.get_nocc
     get_nmo = uccsd.get_nmo
