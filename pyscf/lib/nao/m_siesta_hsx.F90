@@ -62,7 +62,7 @@ module m_siesta_hsx
 !!
 !!
 !!
-subroutine siesta_hsx_size(fname_in, force_basis_type, isize) & !, force_basis_type, isize) 
+subroutine siesta_hsx_size(fname_in, force_basis_type, isize, row_ptr_size, col_ind_size) & !, force_basis_type, isize) 
   bind(c, name='siesta_hsx_size')
   
   use m_precision, only : siesta_int
@@ -71,7 +71,7 @@ subroutine siesta_hsx_size(fname_in, force_basis_type, isize) & !, force_basis_t
   !! external
   character(kind=c_char), intent(in) :: fname_in(*)
   integer(c_int64_t), intent(in) :: force_basis_type
-  integer(c_int64_t), intent(inout) :: isize 
+  integer(c_int64_t), intent(inout) :: isize, row_ptr_size, col_ind_size 
   !! internal
   integer(c_int) :: ios
   type(hsx_t) :: hsx
@@ -81,13 +81,11 @@ subroutine siesta_hsx_size(fname_in, force_basis_type, isize) & !, force_basis_t
   call null2char(fname_in, fname)
   call read_siesta_hsx(fname, force_basis_type, hsx, ios)
   isize = -1
+  row_ptr_size = -1
+  col_ind_size = -1
   if(ios/=0) return
 
-  isize = 1 ! norbs
-  isize = isize + 1 ! norbs_sc
-  isize = isize + 1 ! nspin
-  isize = isize + 1 ! nnz
-  isize = isize + 1 ! is_gamma
+  isize = 1 ! is_gamma
   isize = isize + 1 ! Ne
   isize = isize + 1 ! Te
   _assert(hsx%H4)
@@ -96,11 +94,13 @@ subroutine siesta_hsx_size(fname_in, force_basis_type, isize) & !, force_basis_t
   _assert(hsx%row_ptr)
   _assert(hsx%col_ind)
 
-  isize = isize + size(hsx%row_ptr)
-  isize = isize + size(hsx%col_ind)
+
   isize = isize + size(hsx%H4)
   isize = isize + size(hsx%S4)
   isize = isize + size(hsx%X4)
+
+  row_ptr_size = size(hsx%row_ptr)
+  col_ind_size = size(hsx%col_ind)
 
   if(allocated(hsx%orb_sc2orb_uc))isize = isize + size(hsx%orb_sc2orb_uc)
   
@@ -109,14 +109,16 @@ end subroutine ! siesta_hsx_size
 !!
 !!
 !!
-subroutine siesta_hsx_read(fname_in, force_basis_type, dat) bind(c, name='siesta_hsx_read')
+subroutine siesta_hsx_read(fname_in, force_basis_type, dat, &
+    row_ptr, row_ptr_size, col_ind, col_ind_size, dimensions) bind(c, name='siesta_hsx_read')
   use m_precision, only : siesta_int
   use m_io, only : get_free_handle
   use m_null2char, only : null2char
   !! external
   character(kind=c_char), intent(in) :: fname_in(*)
-  integer(c_int64_t), intent(in)    :: force_basis_type
+  integer(c_int64_t), intent(in)    :: force_basis_type, row_ptr_size, col_ind_size
   real(c_float), intent(inout) :: dat(*)
+  integer(c_int64_t), intent(inout) :: row_ptr(1:row_ptr_size), col_ind(1:col_ind_size), dimensions(*)
 
   integer :: i
   integer(c_int) :: ios
@@ -126,11 +128,16 @@ subroutine siesta_hsx_read(fname_in, force_basis_type, dat) bind(c, name='siesta
   call null2char(fname_in, fname)
   call read_siesta_hsx(fname, force_basis_type, hsx, ios)
 
+  ! better to keep the dimension in a separate variable to avoid
+  ! conversion troubles
+  ! It is probably also a good idea to separate row_ptr and col_ind
+  ! from the dat variable
+  dimensions(1) = hsx%norbs
+  dimensions(2) = hsx%norbs_sc
+  dimensions(3) = hsx%nspin
+  dimensions(4) = hsx%nnz
+
   i = 1;
-  dat(i) = hsx%norbs; i=i+1;
-  dat(i) = hsx%norbs_sc; i=i+1;
-  dat(i) = hsx%nspin; i=i+1;
-  dat(i) = hsx%nnz; i=i+1;
   dat(i) = l2s(hsx%is_gamma); i=i+1;
   dat(i) = real(hsx%Ne, c_float); i=i+1;
   dat(i) = real(hsx%Te, c_float); i=i+1;
@@ -138,11 +145,13 @@ subroutine siesta_hsx_read(fname_in, force_basis_type, dat) bind(c, name='siesta
   call scopy(size(hsx%H4), hsx%H4,1, dat(i),1); i=i+size(hsx%H4)
   call scopy(size(hsx%S4), hsx%S4,1, dat(i),1); i=i+size(hsx%S4)
   call scopy(size(hsx%X4), hsx%X4,1, dat(i),1); i=i+size(hsx%X4)
-  dat(i:i+size(hsx%row_ptr)-1) = hsx%row_ptr; i=i+size(hsx%row_ptr);
-  dat(i:i+size(hsx%col_ind)-1) = hsx%col_ind; i=i+size(hsx%col_ind);
   if(allocated(hsx%orb_sc2orb_uc)) then
     dat(i:i+size(hsx%orb_sc2orb_uc)-1) = hsx%orb_sc2orb_uc; i=i+size(hsx%orb_sc2orb_uc);
   endif
+  
+  ! -1 because python start from 0
+  row_ptr = hsx%row_ptr-1;
+  col_ind = hsx%col_ind-1;
 
 end subroutine ! siesta_hsx_read
 

@@ -101,6 +101,8 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 wv[0]  = weight * vrho
                 wv[1:] = rho[1:] * (weight * vsigma * 2)
                 vmat[idm] += _gga_grad_sum(mol, ao, wv, mask, shls_slice, ao_loc)
+    elif xctype == 'NLC':
+        raise NotImplementedError('NLC')
     else:
         raise NotImplementedError('meta-GGA')
 

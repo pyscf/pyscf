@@ -8,6 +8,7 @@ This example shows how to create a density fitting calculation.
 
 See also
 examples/scf/20-density_fitting.py
+examples/pbc/11-gamma_point_all_electron_scf.py
 '''
 
 from pyscf import gto, scf, df

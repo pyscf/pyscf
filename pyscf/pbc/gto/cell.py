@@ -255,6 +255,7 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
 
         \langle \mu | intor | \nu \rangle, \mu \in cell1, \nu \in cell2
     '''
+    intor = cell1._add_suffix(intor)
     intor = moleintor.ascint3(intor)
     if kpts is None:
         if kpt is not None:

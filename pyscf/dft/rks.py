@@ -10,8 +10,10 @@ Non-relativistic restricted Kohn-Sham
 import time
 import numpy
 from pyscf import lib
+from pyscf import gto
 from pyscf.lib import logger
 from pyscf.scf import hf
+from pyscf.scf import jk
 from pyscf.dft import gen_grid
 from pyscf.dft import numint
 
@@ -58,16 +60,34 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             # Filter grids the first time setup grids
             ks.grids = prune_small_rho_grids_(ks, mol, dm, ks.grids)
         t0 = logger.timer(ks, 'setting up grids', *t0)
+    if ks.nlc!='':
+        if ks.nlcgrids.coords is None:
+            ks.nlcgrids.build(with_non0tab=True)
+            if ks.small_rho_cutoff > 1e-20 and ground_state:
+                # Filter grids the first time setup grids
+                ks.nlcgrids = prune_small_rho_grids_(ks, mol, dm, ks.nlcgrids)
+            t0 = logger.timer(ks, 'setting up nlc grids', *t0)
 
     if hermi == 2:  # because rho = 0
         n, exc, vxc = 0, 0, 0
     else:
         n, exc, vxc = ks._numint.nr_rks(mol, ks.grids, ks.xc, dm)
+        if ks.nlc!='':
+            assert('VV10' in ks.nlc.upper())
+            _, enlc, vnlc = ks._numint.nr_rks(mol, ks.nlcgrids, ks.xc+'__'+ks.nlc, dm)
+            exc += enlc
+            vxc += vnlc
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    hyb = ks._numint.hybrid_coeff(ks.xc, spin=mol.spin)
-    if abs(hyb) < 1e-10:
+    #enabling range-separated hybrids
+    omega, alpha, beta = ks._numint.rsh_coeff(ks.xc)
+    if abs(omega) > 1e-10:
+        hyb = alpha + beta
+    else:
+        hyb = ks._numint.hybrid_coeff(ks.xc, spin=mol.spin)
+
+    if abs(hyb) < 1e-10 and abs(alpha) < 1e-10:
         vk = None
         if (ks._eri is None and ks.direct_scf and
             getattr(vhf_last, 'vj', None) is not None):
@@ -82,14 +102,24 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             getattr(vhf_last, 'vk', None) is not None):
             ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
             vj, vk = ks.get_jk(mol, ddm, hermi)
+            vk *= hyb
+            if abs(omega) > 1e-10:  # For range separated Coulomb operator
+                vklr = _get_k_lr(mol, ddm, omega)
+                vklr *= (alpha - hyb)
+                vk += vklr
             vj += vhf_last.vj
             vk += vhf_last.vk
         else:
             vj, vk = ks.get_jk(mol, dm, hermi)
-        vxc += vj - vk * (hyb * .5)
+            vk *= hyb
+            if abs(omega) > 1e-10:
+                vklr = _get_k_lr(mol, dm, omega)
+                vklr *= (alpha - hyb)
+                vk += vklr
+        vxc += vj - vk * .5
 
         if ground_state:
-            exc -= numpy.einsum('ij,ji', dm, vk) * .5 * hyb*.5
+            exc -= numpy.einsum('ij,ji', dm, vk) * .5 * .5
 
     if ground_state:
         ecoul = numpy.einsum('ij,ji', dm, vj) * .5
@@ -98,6 +128,26 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
 
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=vj, vk=vk)
     return vxc
+
+def _get_k_lr(mol, dm, omega=0):
+    omega_bak = mol._env[gto.PTR_RANGE_OMEGA]
+    mol.set_range_coulomb(omega)
+
+    dm = numpy.asarray(dm)
+# Note, ks object caches the ERIs for small systems. The cached eris are
+# computed with regular Coulomb operator. ks.get_jk or ks.get_k do not evalute
+# the K matrix with the range separated Coulomb operator.  Here jk.get_jk
+# function computes the K matrix with the modified Coulomb operator.
+    if dm.ndim == 2:
+        vklr = jk.get_jk(mol, dm, 'ijkl,jk->il')
+    else:
+        nao = dm.shape[-1]
+        dms = dm.reshape(-1,nao,nao)
+        vklr = jk.get_jk(mol, dm, ['ijkl,jk->il']*len(dms))
+        vklr = numpy.asarray(vklr).reshape(dm.shape)
+
+    mol.set_range_coulomb(omega_bak)
+    return vklr
 
 
 def energy_elec(ks, dm, h1e=None, vhf=None):
@@ -117,7 +167,7 @@ def energy_elec(ks, dm, h1e=None, vhf=None):
     if h1e is None:
         h1e = ks.get_hcore()
     if vhf is None or getattr(vhf, 'ecoul', None) is None:
-        vhf = ks.get_veff(ks, ks.mol, dm)
+        vhf = ks.get_veff(ks.mol, dm)
     e1 = numpy.einsum('ij,ji', h1e, dm).real
     tot_e = e1 + vhf.ecoul + vhf.exc
     logger.debug(ks, 'Ecoul = %s  Exc = %s', vhf.ecoul, vhf.exc)
@@ -141,6 +191,8 @@ class RKS(hf.RHF):
     Attributes for RKS:
         xc : str
             'X_name,C_name' for the XC functional.  Default is 'lda,vwn'
+        nlc : str
+            'NLC_name' for the NLC functional.  Default is '' (i.e., None)
         grids : Grids object
             grids.level (0 - 9)  big number for large mesh grids. Default is 3
 
@@ -195,8 +247,12 @@ class RKS(hf.RHF):
     def dump_flags(self):
         hf.RHF.dump_flags(self)
         logger.info(self, 'XC functionals = %s', self.xc)
+        if self.nlc!='':
+            logger.info(self, 'NLC functional = %s', self.nlc)
         logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
         self.grids.dump_flags()
+        if self.nlc!='':
+            self.nlcgrids.dump_flags()
 
     get_veff = get_veff
     energy_elec = energy_elec
@@ -211,12 +267,14 @@ class RKS(hf.RHF):
 
 def _dft_common_init_(mf):
     mf.xc = 'LDA,VWN'
+    mf.nlc = ''
     mf.grids = gen_grid.Grids(mf.mol)
+    mf.nlcgrids = gen_grid.Grids(mf.mol)
     mf.small_rho_cutoff = 1e-7  # Use rho to filter grids
 ##################################################
 # don't modify the following attributes, they are not input options
     mf._numint = numint._NumInt()
-    mf._keys = mf._keys.union(['xc', 'grids', 'small_rho_cutoff'])
+    mf._keys = mf._keys.union(['xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'])
 
 
 if __name__ == '__main__':

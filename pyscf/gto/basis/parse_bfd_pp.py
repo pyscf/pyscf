@@ -109,14 +109,14 @@ def search_seg(basisfile, symb):
 if __name__ == '__main__':
     #print(parse('Li', 'vtz'))
     #print(parse_ecp('Ga'))
-    from pyscf.lib import parameters as param
+    from pyscf.data import elements
     from pyscf.gto.basis import parse_nwchem
 
 #    for bastype in 'vdz', 'vtz', 'vqz', 'v5z':
 #        dat = []
-#        for atom in param.ELEMENTS[1:]:
+#        for atom in elements.ELEMENTS[1:]:
 #            try:
-#                bas = parse(atom[0], bastype)
+#                bas = parse(atom, bastype)
 #                dat.append(parse_nwchem.convert_basis_to_nwchem(atom[0], bas))
 #            except RuntimeError:
 #                pass
@@ -128,9 +128,9 @@ if __name__ == '__main__':
 #            f.write('END\n')
 
     dat = []
-    for atom in param.ELEMENTS[1:]:
+    for atom in elements.ELEMENTS[1:]:
         try:
-            ecp = parse_ecp(atom[0])
+            ecp = parse_ecp(atom)
             dat.append(parse_nwchem.convert_ecp_to_nwchem(atom[0], ecp))
         except RuntimeError:
             pass

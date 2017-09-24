@@ -26,14 +26,25 @@ mol.verbose = 0
 mol.build()
 mf = scf.RHF(mol).run()
 
+h2o = gto.Mole()
+h2o.atom = '''
+     O    0.   0.       0
+     h    0.   -0.757   0.587
+     h    0.   0.757    0.587'''
+h2o.basis = 'unc-sto3g'
+h2o.verbose = 5
+h2o.output = '/dev/null'
+h2o.build()
+mf_h2o = scf.RHF(h2o).run()
+
 # note tests may fail due to initial guess problem
 
 class KnowValues(unittest.TestCase):
     def test_boys(self):
         idx = numpy.array([17,20,21,22,23,30,36,41,42,47,48,49])-1
-        loc = boys.Boys(mol)
+        loc = boys.Boys(mol, mf.mo_coeff[:,idx])
         loc.max_cycle = 100
-        mo = loc.kernel(mf.mo_coeff[:,idx])
+        mo = loc.kernel()
         dip = boys.dipole_integral(mol, mo)
         z = numpy.einsum('xii,xii->', dip, dip)
         self.assertAlmostEqual(z, 98.670988758151907, 4)
@@ -53,12 +64,34 @@ class KnowValues(unittest.TestCase):
 
     def test_pipek(self):
         idx = numpy.array([17,20,21,22,23,30,36,41,42,47,48,49])-1
-        loc = pipek.PipekMezey(mol)
+        loc = pipek.PipekMezey(mol, mf.mo_coeff[:,idx])
         loc.max_cycle = 100
-        mo = loc.kernel(mf.mo_coeff[:,idx])
+        mo = loc.kernel()
         pop = pipek.atomic_pops(mol, mo)
         z = numpy.einsum('xii,xii->', pop, pop)
         self.assertAlmostEqual(z, 12, 4)
+
+    def test_pipek_atomic_pops(self):
+        pop = pipek.atomic_pops(h2o, mf_h2o.mo_coeff[:,3:8], method='meta_lowdin')
+        z = numpy.einsum('xii,xii->', pop, pop)
+        self.assertAlmostEqual(z, 2.8858772271976187, 6)
+
+        pop = pipek.atomic_pops(h2o, mf_h2o.mo_coeff[:,3:8], method='lowdin')
+        z = numpy.einsum('xii,xii->', pop, pop)
+        self.assertAlmostEqual(z, 2.8271629470491471, 6)
+
+        pop = pipek.atomic_pops(h2o, mf_h2o.mo_coeff[:,3:8], method='mulliken')
+        z = numpy.einsum('xii,xii->', pop, pop)
+        self.assertAlmostEqual(z, 2.9542028242581448, 6)
+
+    def test_pipek_exp4(self):
+        loc = pipek.PipekMezey(h2o, mf_h2o.mo_coeff[:,3:8])
+        loc.exponent = 4
+        loc.max_cycle = 100
+        mo = loc.kernel()
+        pop = pipek.atomic_pops(h2o, mo)
+        z = numpy.einsum('xii,xii->', pop, pop)
+        self.assertAlmostEqual(z, 3.5368940222128247, 6)
 
 
 if __name__ == "__main__":

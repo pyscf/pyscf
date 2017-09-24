@@ -4,14 +4,15 @@ import unittest
 import numpy
 from pyscf import gto, lib, scf
 from pyscf.prop import gtensor
+from pyscf.data import nist
 
 def make_dia_gc2e(gobj, dm0, gauge_orig, sso_qed_fac=1):
     mol = gobj.mol
     dma, dmb = dm0
     effspin = mol.spin * .5
     muB = .5  # Bohr magneton
-    alpha2 = lib.param.ALPHA ** 2
-    #sso_qed_fac = (lib.param.G_ELECTRON - 1)
+    alpha2 = nist.ALPHA ** 2
+    #sso_qed_fac = (nist.G_ELECTRON - 1)
     nao = dma.shape[0]
 
     # int2e_ip1v_r1 = (ij|\frac{\vec{r}_{12}}{r_{12}^3} \vec{r}_1|kl)
@@ -65,10 +66,10 @@ def make_dia_gc2e(gobj, dm0, gauge_orig, sso_qed_fac=1):
 
 def make_para_soc2e(gobj, dm0, dm10, sso_qed_fac=1):
     mol = gobj.mol
-    alpha2 = lib.param.ALPHA ** 2
+    alpha2 = nist.ALPHA ** 2
     effspin = mol.spin * .5
     muB = .5  # Bohr magneton
-    #sso_qed_fac = (lib.param.G_ELECTRON - 1)
+    #sso_qed_fac = (nist.G_ELECTRON - 1)
 
     dm0a, dm0b = dm0
     dm10a, dm10b = dm10

@@ -1,5 +1,5 @@
-fci
-***
+fci --- Full configuration interaction
+**************************************
 
 .. automodule:: pyscf.fci
  

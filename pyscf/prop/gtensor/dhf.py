@@ -14,6 +14,7 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.prop.nmr import dhf as dhf_nmr
+from pyscf.data import nist
 
 
 # TODO: 3 SCF for sx, sy, sz
@@ -56,7 +57,7 @@ def kernel(gobj, gauge_orig=None, mb='RKB', with_gaunt=False, verbose=None):
     g = (g / effspin).real
 
     facppt = 1e3
-    gshift = (g - lib.param.G_ELECTRON) * facppt
+    gshift = (g - nist.G_ELECTRON) * facppt
     log.note('G shift (ppt) %s', gshift)
     return g
 

@@ -6,7 +6,8 @@ from pyscf import lib
 from pyscf import dft
 
 h2o = gto.Mole()
-h2o.verbose = 0
+h2o.verbose = 5
+h2o.output = '/dev/null'
 h2o.atom = [
     ["O" , (0. , 0.     , 0.)],
     [1   , (0. , -0.757 , 0.587)],
@@ -16,7 +17,8 @@ h2o.basis = {"H": '6-31g', "O": '6-31g',}
 h2o.build()
 
 h2osym = gto.Mole()
-h2osym.verbose = 0
+h2o.verbose = 5
+h2o.output = '/dev/null'
 h2osym.atom = [
     ["O" , (0. , 0.     , 0.)],
     [1   , (0. , -0.757 , 0.587)],
@@ -291,6 +293,26 @@ class KnowValues(unittest.TestCase):
         method.grids.prune = None
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         self.assertAlmostEqual(method.scf(), -76.3772366, 6)
+
+    def test_nr_rks_vv10(self):
+        method = dft.RKS(h2o)
+        method.xc = 'wB97M_V'
+        method.nlc = 'vv10'
+        method.grids.prune = None
+        method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
+        method.nlcgrids.prune = None
+        method.nlcgrids.atom_grid = {"H": (40, 110), "O": (40, 110),}
+        self.assertAlmostEqual(method.scf(), -76.352381513158718, 8)
+
+    def test_nr_uks_vv10(self):
+        method = dft.UKS(h2o)
+        method.xc = 'wB97M_V'
+        method.nlc = 'vv10'
+        method.grids.prune = None
+        method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
+        method.nlcgrids.prune = None
+        method.nlcgrids.atom_grid = {"H": (40, 110), "O": (40, 110),}
+        self.assertAlmostEqual(method.scf(), -76.352381513158718, 8)
 
 
 if __name__ == "__main__":

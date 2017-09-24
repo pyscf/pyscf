@@ -60,10 +60,10 @@ include(ExternalProject)
 option(BUILD_LIBCINT "Using libcint for analytical gaussian integral" ON)
 option(WITH_F12 "Compling F12 integrals" ON)
 if(BUILD_LIBCINT)
-#if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
   ExternalProject_Add(libcint
     GIT_REPOSITORY https://github.com/sunqm/libcint.git
-    GIT_TAG cint3
+    GIT_TAG v3.0.0
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DWITH_F12=${WITH_F12} -DWITH_RANGE_COULOMB=1 -DWITH_COULOMB_ERF=1
@@ -72,7 +72,7 @@ if(BUILD_LIBCINT)
             -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
             -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
   )
-#endif()
+endif()
 endif()
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/deps/include)
@@ -95,7 +95,7 @@ add_subdirectory(cc)
 add_subdirectory(icmpspt)
 add_subdirectory(shciscf)
 add_subdirectory(ri)
-add_subdirectory(localizer)
+#add_subdirectory(localizer)
 add_subdirectory(hci)
 add_subdirectory(pbc)
 add_subdirectory(extras/mbd)
@@ -110,14 +110,21 @@ if(NOT DISABLE_DFT)
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND
     ENABLE_LIBXC AND BUILD_LIBXC)
   ExternalProject_Add(libxc
-    URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.2.2.tar.gz
-    #URL https://launchpad.net/libxc/2.2/2.2.0/+download/libxc-2.2.0.tar.gz
-    #URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-2.0.0.tar.gz
+    #GIT_REPOSITORY https://gitlab.com/libxc/libxc/
+    #GIT_TAG master
+    URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-3.0.0.tar.gz
+    #URL http://www.sunqm.net/pyscf/files/src/libxc-3.0.0.tar.gz
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
+    BUILD_IN_SOURCE 1
+    CONFIGURE_COMMAND ./configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
           --enable-shared --disable-static --disable-fortran LIBS=-lm
           CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
+
+## For git checkout
+#    CONFIGURE_COMMAND autoreconf -i || autoreconf && ./configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
+#          --enable-shared --disable-static --disable-fortran LIBS=-lm
+#          CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
   )
 endif() # ENABLE_LIBXC
 
@@ -141,4 +148,6 @@ option(ENABLE_NAO "Build numerical atomic orbital module" OFF)
 if(ENABLE_NAO)
 enable_language(Fortran)
 add_subdirectory(nao)
+add_subdirectory(sparsetools)
 endif(ENABLE_NAO)
+

@@ -104,7 +104,7 @@ Eg
 
 '''
 
-__version__ = '1.4b'
+__version__ = '1.4'
 
 import os
 from distutils.version import LooseVersion
@@ -125,3 +125,4 @@ __path__.append(os.path.join(os.path.dirname(__file__), 'tools'))
 
 DEBUG = False
 
+del(os, LooseVersion, numpy)

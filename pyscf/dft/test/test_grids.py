@@ -29,19 +29,19 @@ class KnowValues(unittest.TestCase):
         grid.radii_adjust = radi.becke_atomic_radii_adjust
         grid.atomic_radii = radi.BRAGG_RADII
         grid.atom_grid = {"H": (10, 50), "O": (10, 50),}
-        coord, weight = grid.build(with_non0tab=False)
-        self.assertAlmostEqual(numpy.linalg.norm(coord), 185.91245945279027, 9)
-        self.assertAlmostEqual(numpy.linalg.norm(weight), 1720.1317185648893, 8)
+        grid.build(with_non0tab=False)
+        self.assertAlmostEqual(numpy.linalg.norm(grid.coords), 185.91245945279027, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(grid.weights), 1720.1317185648893, 8)
 
         grid.becke_scheme = gen_grid.stratmann
-        coord, weight = grid.build(with_non0tab=False)
-        self.assertAlmostEqual(numpy.linalg.norm(weight), 1730.3692983091271, 8)
+        grid.build(with_non0tab=False)
+        self.assertAlmostEqual(numpy.linalg.norm(grid.weights), 1730.3692983091271, 8)
 
         grid.atom_grid = {"O": (10, 50),}
         grid.radii_adjust = None
         grid.becke_scheme = gen_grid.stratmann
-        coord, weight = grid.build(with_non0tab=False)
-        self.assertAlmostEqual(numpy.linalg.norm(weight), 2559.0064040257907, 8)
+        grid.build(with_non0tab=False)
+        self.assertAlmostEqual(numpy.linalg.norm(grid.weights), 2559.0064040257907, 8)
 
     def test_radi(self):
         grid = gen_grid.Grids(h2o)
@@ -50,25 +50,25 @@ class KnowValues(unittest.TestCase):
         grid.atomic_radii = radi.COVALENT_RADII
         grid.radi_method = radi.mura_knowles
         grid.atom_grid = {"H": (10, 50), "O": (10, 50),}
-        coord, weight = grid.build(with_non0tab=False)
-        self.assertAlmostEqual(numpy.linalg.norm(weight), 1804.5437331817291, 9)
+        grid.build(with_non0tab=False)
+        self.assertAlmostEqual(numpy.linalg.norm(grid.weights), 1804.5437331817291, 9)
 
         grid.radi_method = radi.delley
-        coord, weight = grid.build(with_non0tab=False)
-        self.assertAlmostEqual(numpy.linalg.norm(weight), 1686.3482864673697, 9)
+        grid.build(with_non0tab=False)
+        self.assertAlmostEqual(numpy.linalg.norm(grid.weights), 1686.3482864673697, 9)
 
     def test_prune(self):
         grid = gen_grid.Grids(h2o)
         grid.prune = gen_grid.sg1_prune
         grid.atom_grid = {"H": (10, 50), "O": (10, 50),}
-        coord, weight = grid.build(with_non0tab=False)
-        self.assertAlmostEqual(numpy.linalg.norm(coord), 202.17732600266302, 9)
-        self.assertAlmostEqual(numpy.linalg.norm(weight), 442.54536463517167, 9)
+        grid.build(with_non0tab=False)
+        self.assertAlmostEqual(numpy.linalg.norm(grid.coords), 202.17732600266302, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(grid.weights), 442.54536463517167, 9)
 
         grid.prune = gen_grid.nwchem_prune
-        coord, weight = grid.build(with_non0tab=False)
-        self.assertAlmostEqual(numpy.linalg.norm(coord), 149.55023044392638, 9)
-        self.assertAlmostEqual(numpy.linalg.norm(weight), 586.36841824004455, 9)
+        grid.build(with_non0tab=False)
+        self.assertAlmostEqual(numpy.linalg.norm(grid.coords), 149.55023044392638, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(grid.weights), 586.36841824004455, 9)
 
     def test_gen_atomic_grids(self):
         grid = gen_grid.Grids(h2o)

@@ -155,6 +155,8 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
                 pyscf.lib.hermi_triu(v, hermi, inplace=True)
     return vs
 
+jk_build = get_jk
+
 
 if __name__ == '__main__':
     mol = gto.M(atom='H 0 -.5 0; H 0 .5 0', basis='cc-pvdz')

@@ -43,12 +43,11 @@ class DF(lib.StreamObject):
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
-        log.info('\n')
         log.info('******** %s flags ********', self.__class__)
         if self.auxmol is None:
             log.info('auxbasis = %s', self.auxbasis)
         else:
-            log.info('auxbasis = %s', self.auxmol.basis)
+            log.info('auxbasis = auxmol.basis = %s', self.auxmol.basis)
         log.info('max_memory = %s', self.max_memory)
         if isinstance(self._cderi, str):
             log.info('_cderi = %s  where DF integrals are loaded (readonly).',
@@ -57,10 +56,15 @@ class DF(lib.StreamObject):
             log.info('_cderi_to_save = %s', self._cderi_to_save)
         else:
             log.info('_cderi_to_save = %s', self._cderi_to_save.name)
+        return self
 
     def build(self):
         t0 = (time.clock(), time.time())
         log = logger.Logger(self.stdout, self.verbose)
+
+        self.check_sanity()
+        self.dump_flags()
+
         mol = self.mol
         auxmol = self.auxmol = addons.make_auxmol(self.mol, self.auxbasis)
         nao = mol.nao_nr()
@@ -91,6 +95,9 @@ class DF(lib.StreamObject):
             self._cderi = cderi
             log.timer_debug1('Generate density fitting integrals', *t0)
         return self
+
+    def kernel(self, *args, **kwargs):
+        return self.build(*args, **kwargs)
 
     def loop(self):
         if self._cderi is None:

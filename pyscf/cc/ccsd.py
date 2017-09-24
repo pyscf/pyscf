@@ -51,7 +51,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
         t1new = t2new = None
         if mycc.diis:
             t1, t2 = mycc.diis(t1, t2, istep, normt, eccsd-eold, adiis)
-        eold, eccsd = eccsd, energy(mycc, t1, t2, eris)
+        eold, eccsd = eccsd, mycc.energy(t1, t2, eris)
         log.info('cycle = %d  E(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
                  istep+1, eccsd, eccsd - eold, normt)
         cput1 = log.timer('CCSD iter', *cput1)
@@ -756,6 +756,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
+
+    energy = energy
 
 
     def kernel(self, t1=None, t2=None, eris=None):
