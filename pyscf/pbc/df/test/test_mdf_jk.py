@@ -51,8 +51,8 @@ class KnowValues(unittest.TestCase):
         vj1, vk1 = mf.get_jk(cell, dm, hermi=0)
         ej1 = numpy.einsum('ij,ji->', vj1, dm)
         ek1 = numpy.einsum('ij,ji->', vk1, dm)
-        self.assertAlmostEqual(ej1, 242.18855706416096, 8)
-        self.assertAlmostEqual(ek1, 280.70982164657647, 8)
+        self.assertAlmostEqual(ej1, 242.19379703364774, 8)
+        self.assertAlmostEqual(ek1, 280.28450527230103, 8)
 
         numpy.random.seed(1)
         kpt = numpy.random.random(3)
@@ -77,8 +77,8 @@ class KnowValues(unittest.TestCase):
         vj0, vk0 = jkdf.get_jk(dm, hermi=0, exxdiv=None)
         ej0 = numpy.einsum('ij,ji->', vj0, dm)
         ek0 = numpy.einsum('ij,ji->', vk0, dm)
-        self.assertAlmostEqual(ej0, 242.19379703364774, 8)
-        self.assertAlmostEqual(ek0, 280.28450527230103, 8)
+        self.assertAlmostEqual(ej0, 242.18855706416096, 8)
+        self.assertAlmostEqual(ek0, 280.70982164657647, 8)
 
     def test_j_kpts(self):
         numpy.random.seed(1)

@@ -41,7 +41,7 @@ class KnowValues(unittest.TestCase):
         vj, vk = mf.get_jk(cell, dm)
         ej1 = numpy.einsum('ij,ji->', vj, dm)
         ek1 = numpy.einsum('ij,ji->', vk, dm)
-        self.assertAlmostEqual(ej1, 46.69888588854387, 8)
+        self.assertAlmostEqual(ej1, 46.69888588120217, 8)
         self.assertAlmostEqual(ek1, 31.72349032270801, 8)
 
         numpy.random.seed(12)
