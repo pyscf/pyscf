@@ -28,7 +28,11 @@ class bse_iter_c(tddft_iter_c):
     n = self.norbs
     self.kernel_4p = (((self.v_dab.T*(self.cc_da*kernel_den))*self.cc_da.T)*self.v_dab).reshape([n*n,n*n])
     #print(type(self.kernel_4p), self.kernel_4p.shape, 'this is just a reference kernel, must be removed later for sure')
-    
+
+    if xc_code=='CIS' or xc_code=='HF':
+      self.kernel_4p = self.kernel_4p - 0.5*np.einsum('(abcd->acbd)', self.kernel_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
+
+
   def apply_l0(self, sab, comega=1j*0.0):
     """ This applies the non-interacting four point Green's function to a suitable vector (e.g. dipole matrix elements)"""
     assert sab.size==(self.norbs2), "%r,%r"%(sab.size,self.norbs2)
@@ -76,12 +80,10 @@ class bse_iter_c(tddft_iter_c):
     
     l0 = self.apply_l0(sab, self.comega_current).reshape(self.norbs2)
     
-    # real part
-    l0_reim = np.require(l0.real, dtype=self.dtype, requirements=["A", "O"])
+    l0_reim = np.require(l0.real, dtype=self.dtype, requirements=["A", "O"])     # real part
     mv_real = np.dot(self.kernel_4p, l0_reim)
     
-    # imaginary part
-    l0_reim = np.require(l0.imag, dtype=self.dtype, requirements=["A", "O"])
+    l0_reim = np.require(l0.imag, dtype=self.dtype, requirements=["A", "O"])     # imaginary part
     mv_imag = np.dot(self.kernel_4p, l0_reim)
 
     return sab - (mv_real + 1.0j*mv_imag)
