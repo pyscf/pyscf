@@ -20,6 +20,7 @@ from pyscf.lib import logger
 from pyscf.dft import numint
 from pyscf.prop.gtensor import uhf as uhf_g
 from pyscf.prop.gtensor.uhf import _write, align
+from pyscf.data import nist
 
 
 # Note mo10 is the imaginary part of MO^1
@@ -27,7 +28,7 @@ def para(gobj, mo10, mo_coeff, mo_occ, qed_fac=1):
     mol = gobj.mol
     effspin = mol.spin * .5
     muB = .5  # Bohr magneton
-    #qed_fac = (lib.param.G_ELECTRON - 1)
+    #qed_fac = (nist.G_ELECTRON - 1)
 
     orboa = mo_coeff[0][:,mo_occ[0]>0]
     orbob = mo_coeff[1][:,mo_occ[1]>0]
@@ -69,10 +70,10 @@ def make_para_soc2e(gobj, dm0, dm10, sso_qed_fac=1):
         with_amfi = True
 
     mol = gobj.mol
-    alpha2 = lib.param.ALPHA ** 2
+    alpha2 = nist.ALPHA ** 2
     effspin = mol.spin * .5
     muB = .5  # Bohr magneton
-    #sso_qed_fac = (lib.param.G_ELECTRON - 1)
+    #sso_qed_fac = (nist.G_ELECTRON - 1)
 
     mf = gobj._scf
     ni = mf._numint

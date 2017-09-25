@@ -16,12 +16,15 @@ import scipy.special
 import scipy.linalg
 from pyscf import lib
 from pyscf.lib import param
+from pyscf.data import elements
 from pyscf.lib import logger
 from pyscf.gto import cmd_args
 from pyscf.gto import basis
 from pyscf.gto import moleintor
 from pyscf.gto.eval_gto import eval_gto
 import pyscf.gto.ecp
+
+ELEMENTS = elements.ELEMENTS
 
 # For code compatiblity in python-2 and python-3
 if sys.version_info >= (3,):
@@ -79,20 +82,24 @@ def gto_norm(l, expnt):
     else:
         raise ValueError('l should be > 0')
 
-def cart2sph(l):
+def cart2sph(l, c_tensor=None):
     '''Cartesian to real spherical transformation matrix'''
     nf = (l+1)*(l+2)//2
-    cmat = numpy.eye(nf)
+    if c_tensor is None:
+        c_tensor = numpy.eye(nf)
+    else:
+        c_tensor = numpy.asarray(c_tensor, order='F').reshape(-1,nf)
     if l == 0:
-        return cmat * 0.282094791773878143
+        return c_tensor * 0.282094791773878143
     elif l == 1:
-        return cmat * 0.488602511902919921
+        return c_tensor * 0.488602511902919921
     else:
         nd = l * 2 + 1
-        c2sph = numpy.zeros((nf,nd), order='F')
+        ngrid = c_tensor.shape[0]
+        c2sph = numpy.zeros((ngrid,nd), order='F')
         fn = moleintor.libcgto.CINTc2s_ket_sph
-        fn(c2sph.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nf),
-           cmat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l))
+        fn(c2sph.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(ngrid),
+           c_tensor.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l))
         return c2sph
 
 def cart2j_kappa(kappa, l=None, normalized=None):
@@ -535,7 +542,7 @@ def make_atm_env(atom, ptr=0):
     by ``libcint`` integrals
     '''
     nuc_charge = _charge(atom[0])
-    _env = numpy.hstack((atom[1], dyall_nuc_mod(param.ELEMENTS[nuc_charge][1])))
+    _env = numpy.hstack((atom[1], dyall_nuc_mod(elements.ISOTOPE_MAIN[nuc_charge])))
     _atm = numpy.zeros(6, dtype=numpy.int32)
     _atm[CHARGE_OF] = nuc_charge
     _atm[PTR_COORD] = ptr
@@ -1411,7 +1418,7 @@ def charge_center(atoms, charges=None, coords=None):
     return rbar
 
 def mass_center(atoms):
-    mass = numpy.array([param.ELEMENTS[_charge(a[0])][1] for a in atoms])
+    mass = numpy.array([elements.MASSES[_charge(a[0])] for a in atoms])
     return charge_center(atoms, mass)
 
 def condense_to_shell(mol, mat, compressor=numpy.max):
@@ -2566,7 +2573,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                 c2s.append(c2s_l[l])
         return scipy.linalg.block_diag(*c2s)
 
-_ELEMENTDIC = dict((k.upper(),v) for k,v in param.ELEMENTS_PROTON.items())
+_ELEMENTDIC = dict((x.upper(),i) for i,x in enumerate(ELEMENTS))
 
 def _rm_digit(symb):
     if symb.isalpha():
@@ -2588,7 +2595,7 @@ def _charge(symb_or_chg):
         if 'GHOST' in symb_or_chg.upper():
             return 0
         else:
-            return param.ELEMENTS_PROTON[str(_rm_digit(symb_or_chg))]
+            return elements.ELEMENTS_PROTON[str(_rm_digit(symb_or_chg))]
     else:
         return symb_or_chg
 
@@ -2596,30 +2603,30 @@ def _symbol(symb_or_chg):
     if isinstance(symb_or_chg, (str, unicode)):
         return str(symb_or_chg)
     else:
-        return param.ELEMENTS[symb_or_chg][0]
+        return ELEMENTS[symb_or_chg]
 
 def _std_symbol(symb_or_chg):
     if isinstance(symb_or_chg, (str, unicode)):
         rawsymb = str(_rm_digit(symb_or_chg)).upper()
         if len(rawsymb) > 5 and rawsymb.startswith('GHOST'):
             rawsymb = _remove_prefix_ghost(rawsymb)
-            return 'GHOST-' + param.ELEMENTS[_ELEMENTDIC[rawsymb]][0]
+            return 'GHOST-' + ELEMENTS[_ELEMENTDIC[rawsymb]]
         else:
-            return param.ELEMENTS[_ELEMENTDIC[rawsymb]][0]
+            return ELEMENTS[_ELEMENTDIC[rawsymb]]
     else:
-        return param.ELEMENTS[symb_or_chg][0]
+        return ELEMENTS[symb_or_chg]
 
 def _atom_symbol(symb_or_chg):
     if isinstance(symb_or_chg, int):
-        symb = param.ELEMENTS[symb_or_chg][0]
+        symb = ELEMENTS[symb_or_chg]
     else:
         a = symb_or_chg.strip()
         if a.isdigit():
-            symb = param.ELEMENTS[int(a)][0]
+            symb = ELEMENTS[int(a)]
         else:
             rawsymb = _rm_digit(a)
             rawsymb = _remove_prefix_ghost(rawsymb)
-            stdsymb = param.ELEMENTS[_ELEMENTDIC[rawsymb.upper()]][0]
+            stdsymb = ELEMENTS[_ELEMENTDIC[rawsymb.upper()]]
             symb = a.replace(rawsymb, stdsymb)
     return symb
 

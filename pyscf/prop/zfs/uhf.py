@@ -23,6 +23,7 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.scf.newton_ah import _gen_uhf_response
 from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.ssc.rhf import _dm1_mo2ao
+from pyscf.data import nist
 
 
 def koseki_charge(z):
@@ -55,9 +56,9 @@ def direct_spin_spin(zfsobj, mol, dm0, verbose=None):
     nao = dma.shape[0]
 
     # Use QED g-factor or Dirac g-factor
-    #g_fac = lib.param.G_ELECTRON**2/4  # QED
+    #g_fac = nist.G_ELECTRON**2/4  # QED
     g_fac = 1
-    fac = g_fac * lib.param.ALPHA**2 / 8 / (effspin * (effspin - .5))
+    fac = g_fac * nist.ALPHA**2 / 8 / (effspin * (effspin - .5))
 
     hss = mol.intor('int2e_ip1ip2', comp=9).reshape(3,3,nao,nao,nao,nao)
     hss = hss + hss.transpose(0,1,3,2,4,5)
@@ -110,7 +111,7 @@ def make_soc(zfsobj, mol, mo_coeff, mo_occ):
         dso -= fac * numpy.einsum('xij,yij->xy', h1ab, mo1ab)
         dso -= fac * numpy.einsum('xij,yij->xy', h1ba, mo1ba)
 
-    dso *= lib.param.ALPHA ** 4 / 4
+    dso *= nist.ALPHA ** 4 / 4
     return dso
 
 def make_h1_soc(zfsobj, mol, mo_coeff, mo_occ):
@@ -312,7 +313,7 @@ class ZeroFieldSplitting(lib.StreamObject):
         tmp = zfs_diag + dvalue/3
         tmp[zidx] = 0
         evalue = abs(tmp).max()
-        au2cm = lib.param.HARTREE2J / lib.param.PLANCK / lib.param.LIGHT_SPEED_SI * 1e-2
+        au2cm = nist.HARTREE2J / nist.PLANCK / nist.LIGHT_SPEED_SI * 1e-2
         logger.debug(self, 'D trace = %s', dtrace)
         logger.note(self, 'Axial   parameter D = %s (cm^{-1})', dvalue*au2cm)
         logger.note(self, 'Rhombic parameter E = %s (cm^{-1})', evalue*au2cm)

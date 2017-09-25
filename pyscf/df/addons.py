@@ -9,6 +9,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf import ao2mo
+from pyscf.data import elements
 
 # Obtained from http://www.psicode.org/psi4manual/master/basissets_byfamily.html
 DEFAULT_AUXBASIS = {
@@ -67,7 +68,7 @@ def aug_etb_for_dfbasis(mol, dfbasis='weigend', beta=2.3, start_at='Rb'):
             newbasis[symb] = dfbasis
         #?elif symb in mol._ecp:
         else:
-            conf = lib.parameters.ELEMENTS[nuc_charge][2]
+            conf = elements.CONFIGURATION[nuc_charge]
             max_shells = 4 - conf.count(0)
             emin_by_l = [1e99] * 8
             emax_by_l = [0] * 8
