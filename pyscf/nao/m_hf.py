@@ -1233,7 +1233,10 @@ class SCF(lib.StreamObject):
     def get_init_guess(self, mol=None, key='minao'):
         if mol is None:
             mol = self.mol
-        if key.lower() == '1e':
+        
+        if hasattr(mol, 'get_init_guess'):
+          dm = mol.get_init_guess(key=key)
+        elif key.lower() == '1e':
             dm = self.init_guess_by_1e(mol)
         elif getattr(mol, 'natm', 0) == 0:
             logger.info(self, 'No atom found in mol. Use 1e initial guess')

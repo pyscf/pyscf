@@ -430,7 +430,10 @@ class system_vars_c():
     """ Uff ... """
     if type_str.lower()=='cint1e_ovlp_sph':
       mat = self.overlap_coo().todense()
+    elif type_str.lower()=='int1e_kin':
+      mat = self.tkin_coo().todense()
     else:
+      print(' type_str ', type_str)
       raise RuntimeError('not implemented...')
     return mat
 
@@ -512,6 +515,10 @@ class system_vars_c():
     from pyscf.nao.m_aos_libnao import aos_libnao
     if not self.init_sv_libnao : raise RuntimeError('not self.init_sv_libnao')
     return aos_libnao(coords, self.norbs)
+
+  def get_init_guess(self, key=None):
+    """ Compute an initial guess for the density matrix. """
+    dm = self.comp_dm()
 
   def init_libnao(self, wfsx=None):
     """ Initialization of data on libnao site """

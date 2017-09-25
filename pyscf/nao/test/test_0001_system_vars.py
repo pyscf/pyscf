@@ -47,11 +47,21 @@ class KnowValues(unittest.TestCase):
     
   def test_overlap_gto_vs_nao(self):
     """ Test computation of overlaps computed between NAOs against overlaps computed between GTOs"""
-    from pyscf.nao import conv_yzx2xyz_c, overlap_am
+    from pyscf.nao import conv_yzx2xyz_c
+    from pyscf.nao.m_overlap_am import overlap_am
     sv = system_vars_c().init_pyscf_gto(mol)
     oref = conv_yzx2xyz_c(mol).conv_yzx2xyz_2d(mol.intor_symmetric('cint1e_ovlp_sph'), direction='pyscf2nao')
     over = sv.overlap_coo(funct=overlap_am).toarray()
     self.assertTrue(abs(over-oref).sum()<5e-9)
+
+  def test_laplace_gto_vs_nao(self):
+    """ Test computation of kinetic energy between NAOs against those computed between GTOs"""
+    from pyscf.nao import conv_yzx2xyz_c
+    from pyscf.nao.m_laplace_am import laplace_am
+    sv = system_vars_c().init_pyscf_gto(mol)
+    tref = conv_yzx2xyz_c(mol).conv_yzx2xyz_2d(mol.intor_symmetric('int1e_kin'), direction='pyscf2nao')
+    tkin = (-0.5*sv.overlap_coo(funct=laplace_am)).toarray()
+    self.assertTrue(abs(tref-tkin).sum()<5e-9)
 
 
 if __name__ == "__main__":
