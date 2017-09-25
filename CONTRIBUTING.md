@@ -36,10 +36,9 @@ Code standard
   These are libraries to be compiled and linked in the PySCF C libraries.  Their
   compiling/linking flags are resolved in the cmake config system.
   - BLAS, FFTW: Yes.
-  - LAPACK, Scalapack, ARPACK: Yes but not recommended.  These libraries can be
-    used in the PySCF C level library. But we recommend to restructure your code
-    and move the relevant linear algebra and sparse matrix operations to Python
-    code.
+  - LAPACK, ARPACK: Yes but not recommended.  These libraries can be used in the
+    PySCF C level library. But we recommend to restructure your code and move
+    the relevant linear algebra and sparse matrix operations to Python code.
   - MPI and other parallel libraries: No.  MPI is the only library that can be
     used in the code. The MPI communications should be implemented at python
     level through MPI4py library.
