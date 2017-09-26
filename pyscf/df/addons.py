@@ -3,12 +3,17 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import sys
 import copy
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf import ao2mo
+
+# For code compatiblity in python-2 and python-3
+if sys.version_info >= (3,):
+    unicode = str
 
 # Obtained from http://www.psicode.org/psi4manual/master/basissets_byfamily.html
 DEFAULT_AUXBASIS = {
