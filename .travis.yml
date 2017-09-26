@@ -19,6 +19,7 @@ before_install:
     - >
       sudo apt-get -qq install 
       gcc 
+      gfortran
       libblas-dev
       python-h5py
       python-nose
