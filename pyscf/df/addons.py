@@ -16,11 +16,6 @@ from pyscf.data import elements
 if sys.version_info >= (3,):
     unicode = str
 
-
-# For code compatiblity in python-2 and python-3
-if sys.version_info >= (3,):
-    unicode = str
-
 # Obtained from http://www.psicode.org/psi4manual/master/basissets_byfamily.html
 DEFAULT_AUXBASIS = {
 # AO basis JK-fit MP2-fit
