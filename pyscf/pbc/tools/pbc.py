@@ -464,8 +464,8 @@ def get_kconserv3(cell, kpts, kijkab):
                 break
 
         if found == 0:
-            print "** ERROR: Problem in get_kconserv3. Quitting."
-            print kijkab
+            print("** ERROR: Problem in get_kconserv3. Quitting.")
+            print(kijkab)
             sys.exit()
     return out_array
 
