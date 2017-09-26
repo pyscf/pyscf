@@ -92,7 +92,7 @@ if __name__ == '__main__':
     load(ppfile,atom)
 
     print("Testing parse():")
-    print parse("""
+    print(parse("""
     #PSEUDOPOTENTIAL
     C GTH-BLYP-q4
         2    2
@@ -101,4 +101,4 @@ if __name__ == '__main__':
          0.30232223    1     9.66551228
          0.28637912    0
     """
-    )
+    ))
