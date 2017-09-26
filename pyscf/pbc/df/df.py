@@ -88,7 +88,7 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
     logger.debug(cell, 'auxcell.rcut %s', auxcell.rcut)
     return auxcell
 
-def make_modchg_basis(auxcell, smooth_eta, l_max=3):
+def make_modchg_basis(auxcell, smooth_eta):
 # * chgcell defines smooth gaussian functions for each angular momentum for
 #   auxcell. The smooth functions may be used to carry the charge
     chgcell = copy.copy(auxcell)  # smooth model density for coulomb integral to carry charge
@@ -97,16 +97,16 @@ def make_modchg_basis(auxcell, smooth_eta, l_max=3):
     chg_env = [smooth_eta]
     ptr_eta = auxcell._env.size
     ptr = ptr_eta + 1
+    l_max = auxcell._bas[:,gto.ANG_OF].max()
 # _gaussian_int(l*2+2) for multipole integral:
 # \int (r^l e^{-ar^2} * Y_{lm}) (r^l Y_{lm}) r^2 dr d\Omega
     norms = [half_sph_norm/gto.mole._gaussian_int(l*2+2, smooth_eta)
              for l in range(l_max+1)]
     for ia in range(auxcell.natm):
         for l in set(auxcell._bas[auxcell._bas[:,gto.ATOM_OF]==ia, gto.ANG_OF]):
-            if l <= l_max:
-                chg_bas.append([ia, l, 1, 1, 0, ptr_eta, ptr, 0])
-                chg_env.append(norms[l])
-                ptr += 1
+            chg_bas.append([ia, l, 1, 1, 0, ptr_eta, ptr, 0])
+            chg_env.append(norms[l])
+            ptr += 1
 
     chgcell._atm = auxcell._atm
     chgcell._bas = numpy.asarray(chg_bas, dtype=numpy.int32).reshape(-1,gto.BAS_SLOTS)
@@ -123,7 +123,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     t1 = (time.clock(), time.time())
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
-    fused_cell, fuse = fuse_auxcell(mydf, auxcell)#, 0)
+    fused_cell, fuse = fuse_auxcell(mydf, auxcell)
     outcore.aux_e2(cell, fused_cell, cderi_file, 'int3c2e_sph', aosym='s2',
                    kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
     t1 = log.timer_debug1('3c2e', *t1)
@@ -147,7 +147,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     feri = h5py.File(cderi_file)
 
 # An alternative method to evalute j2c. This method might have larger numerical error?
-#    chgcell = make_modchg_basis(auxcell, mydf.eta, 0)
+#    chgcell = make_modchg_basis(auxcell, mydf.eta)
 #    for k, kpt in enumerate(uniq_kpts):
 #        aoaux = ft_ao.ft_ao(chgcell, Gv, None, b, gxyz, Gvbase, kpt).T
 #        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, gs))
@@ -570,8 +570,8 @@ class DF(aft.AFTDF):
             return feri.shape[0]
 
 
-def fuse_auxcell(mydf, auxcell, l_max=3):
-    chgcell = make_modchg_basis(auxcell, mydf.eta, l_max)
+def fuse_auxcell(mydf, auxcell):
+    chgcell = make_modchg_basis(auxcell, mydf.eta)
     fused_cell = copy.copy(auxcell)
     fused_cell._atm, fused_cell._bas, fused_cell._env = \
             gto.conc_env(auxcell._atm, auxcell._bas, auxcell._env,

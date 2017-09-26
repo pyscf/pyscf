@@ -5,13 +5,11 @@ from functools import reduce
 import ctypes
 import numpy
 from pyscf import lib
-from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.ao2mo import outcore
 from pyscf.ao2mo import _ao2mo
 from pyscf.cc import rccsd
 from pyscf.cc import ccsd
-from pyscf.cc.ccsd import _cp
 from pyscf.cc import _ccsd
 _dgemm = lib.numpy_helper._dgemm
 
@@ -136,7 +134,21 @@ class _RCCSD_ERIs:
         self.vvoo = None
         self.ovvo = None # TODO: remove this; needed for EOM-CCSD
         self.vovv = None
-        self.vvvv = None
+        #self.vvvv = None
+        self._vvvv = None  # TODO: remove this
+
+    # TODO: remove this below; needed for EOM-CCSD
+    @property
+    def vvvv(self):
+        if self._vvvv is None:
+            nocc = self.nocc
+            nmo = self.fock.shape[0]
+            nvir = nmo - nocc
+            nvir_pair = nvir*(nvir+1)//2
+            self._vvvv = self.feri.create_dataset('vvvv', (nvir_pair,nvir_pair), 'f8')
+            vvL = numpy.asarray(self.vvL)
+            self._vvvv[:] = numpy.dot(vvL, vvL.T)
+        return self._vvvv
 
 def _make_eris_df(cc, mo_coeff=None):
     eris = _RCCSD_ERIs(cc, mo_coeff)
@@ -152,8 +164,6 @@ def _make_eris_df(cc, mo_coeff=None):
     eris.oovv = eris.feri.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8')
     eris.ovvv = eris.feri.create_dataset('ovvv', (nocc,nvir,nvir_pair), 'f8')
     eris.vvL = eris.feri.create_dataset('vvL', (nvir_pair,naux), 'f8')
-    # TODO: remove this below; needed for EOM-CCSD
-    eris.vvvv = eris.feri.create_dataset('vvvv', (nvir_pair,nvir_pair), 'f8')
 
     Loo = numpy.empty((naux,nocc,nocc))
     Lov = numpy.empty((naux,nocc,nvir))
@@ -200,9 +210,6 @@ def _make_eris_df(cc, mo_coeff=None):
     eris.oovv[:] = oovv.reshape(nocc,nocc,nvir,nvir)
     oovv = vvL = Loo = None
 
-    eris.vvvv = numpy.dot(_cp(eris.vvL), _cp(eris.vvL).T)
-    eris.vvvv = numpy.reshape(eris.vvvv, (nvir_pair, nvir_pair))
-
     Lov = Lov.reshape(naux,nocc,nvir)
     vblk = max(nocc, int((max_memory*.8e6/8)/(nocc*nvir_pair)))
     vvblk = max(4, int((max_memory*.15e6/8)/(vblk*nocc+naux)))
@@ -229,7 +236,39 @@ if __name__ == '__main__':
 
     mol.basis = 'cc-pvdz'
     mol.build()
-    mf = scf.RHF(mol).density_fit().run()
-    mcc = CCSD(mf).run()
-    print(mcc.e_corr - -0.21337100025961622)
+    mf = scf.RHF(mol).density_fit('weigend').run()
+    mycc = RCCSD(mf).run()
+    print(mycc.e_corr - -0.21337100025961622)
 
+    print("IP energies... (right eigenvector)")
+    part = None
+    e,v = mycc.ipccsd(nroots=3,partition=part)
+    print(e)
+    print(e[0] - 0.43364287418576897)
+    print(e[1] - 0.5188001071775572 )
+    print(e[2] - 0.67851590275796392)
+
+    print("IP energies... (left eigenvector)")
+    e,lv = mycc.ipccsd(nroots=3,left=True,partition=part)
+    print(e)
+    print(e[0] - 0.43364286531878882)
+    print(e[1] - 0.51879999865136994)
+    print(e[2] - 0.67851587320495355)
+
+    mycc.ipccsd_star(e,v,lv)
+
+    print("EA energies... (right eigenvector)")
+    e,v = mycc.eaccsd(nroots=3,partition=part)
+    print(e)
+    print(e[0] - 0.16730125785810035)
+    print(e[1] - 0.23999823045518162)
+    print(e[2] - 0.50960183439619933)
+
+    print("EA energies... (left eigenvector)")
+    e,lv = mycc.eaccsd(nroots=3,left=True,partition=part)
+    print(e)
+    print(e[0] - 0.16730137808538076)
+    print(e[1] - 0.23999845448276602)
+    print(e[2] - 0.50960182130968001)
+
+    mycc.eaccsd_star(e,v,lv)

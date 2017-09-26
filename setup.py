@@ -134,7 +134,7 @@ extensions = [
              'CxLebedevGrid.c grid_basis.c nr_numint.c r_numint.c',
              ['cvhf', 'cgto', 'cint']),
     make_ext('pyscf.lib.libxc_itrf', 'dft', 'libxc_itrf.c', ['xc']),
-    make_ext('pyscf.lib.xcfun_itrf', 'dft', 'xcfun_itrf.c', ['xcfun']),
+    #make_ext('pyscf.lib.xcfun_itrf', 'dft', 'xcfun_itrf.c', ['xcfun']),
 ]
 extensions = [x for x in extensions if x is not None]
 
