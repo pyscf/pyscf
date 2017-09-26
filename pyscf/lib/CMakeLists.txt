@@ -115,7 +115,7 @@ option(BUILD_LIBXC "Download and build libxc library" ON)
 option(BUILD_XCFUN "Download and build xcfun library" ON)
 
 if(NOT DISABLE_DFT)
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/lib/libxc.so.4" AND
     ENABLE_LIBXC AND BUILD_LIBXC)
   ExternalProject_Add(libxc
     #GIT_REPOSITORY https://gitlab.com/libxc/libxc/
