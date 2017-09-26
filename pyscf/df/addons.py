@@ -3,14 +3,19 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import sys
 import copy
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf import ao2mo
-import six
 from pyscf.data import elements
+
+# For code compatiblity in python-2 and python-3
+if sys.version_info >= (3,):
+    unicode = str
+
 
 # Obtained from http://www.psicode.org/psi4manual/master/basissets_byfamily.html
 DEFAULT_AUXBASIS = {
@@ -165,7 +170,7 @@ def make_auxmol(mol, auxbasis=None):
         auxbasis = aug_etb_for_dfbasis(mol, dfbasis)
     pmol.basis = auxbasis
 
-    if isinstance(auxbasis,six.string_types) or isinstance(auxbasis,(list, tuple)):
+    if isinstance(auxbasis, (str, unicode, list, tuple)):
         uniq_atoms = set([a[0] for a in mol._atom])
         _basis = dict([(a, auxbasis) for a in uniq_atoms])
     elif 'default' in auxbasis:
