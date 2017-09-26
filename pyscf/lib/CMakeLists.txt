@@ -5,7 +5,6 @@ set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
 #set(CMAKE_BUILD_TYPE DEBUG)
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffast-math")
   if(UNIX AND NOT APPLE)
     set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-as-needed")
   endif()
@@ -38,8 +37,11 @@ message("BLAS libraries: ${BLAS_LIBRARIES}")
 # set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_core.so")
 # set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_avx.so")
 # set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_def.so")
-
 # set(BLAS_LIBRARIES "-Wl,-rpath=${MKLROOT}/lib/intel64/ ${BLAS_LIBRARIES}")
+#
+# These settings can be written in the cmake.arch.inc file. This config file
+# will automatically load all settings specified in cmake.arch.inc
+#
 
 check_function_exists(ffsll HAVE_FFS)
 
@@ -50,11 +52,18 @@ else ()
   set(OpenMP_C_FLAGS " ")
 endif()
 
-find_package(PythonInterp REQUIRED)
+#find_package(PythonInterp REQUIRED)
 #find_package(PythonLibs REQUIRED)
 #execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import numpy; print(numpy.get_include())"
 #  OUTPUT_VARIABLE NUMPY_INCLUDE)
 #include_directories(${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE})
+
+# Architecture specified cmake flags.  See also the templates in
+# pyscf/lib/cmake_arch_config
+if(EXISTS "${PROJECT_SOURCE_DIR}/cmake.arch.inc")
+  include("${PROJECT_SOURCE_DIR}/cmake.arch.inc")
+endif()
+
 
 include(ExternalProject)
 option(BUILD_LIBCINT "Using libcint for analytical gaussian integral" ON)
@@ -100,7 +109,6 @@ add_subdirectory(hci)
 add_subdirectory(pbc)
 add_subdirectory(extras/mbd)
 
-
 option(ENABLE_LIBXC "Using libxc for XC functional library" ON)
 option(ENABLE_XCFUN "Using xcfun for XC functional library" ON)
 option(BUILD_LIBXC "Download and build libxc library" ON)
@@ -144,10 +152,7 @@ endif() # ENABLE_XCFUN
 add_subdirectory(dft)
 endif() # DISABLE_DFT
 
-option(ENABLE_NAO "Build numerical atomic orbital module" OFF)
-if(ENABLE_NAO)
-enable_language(Fortran)
-add_subdirectory(nao)
-add_subdirectory(sparsetools)
-endif(ENABLE_NAO)
 
+if(EXISTS "${PROJECT_SOURCE_DIR}/cmake.user.inc")
+  include("${PROJECT_SOURCE_DIR}/cmake.user.inc")
+endif()
