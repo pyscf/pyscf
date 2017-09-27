@@ -515,6 +515,11 @@ class call_in_background(object):
             self.handler.join()
 
 
+# A tag to label the derived Scanner class
+class SinglePointScanner: pass
+class GradScanner: pass
+
+
 if __name__ == '__main__':
     for i,j in prange_tril(0, 90, 300):
         print(i, j, j*(j+1)//2-i*(i+1)//2)

@@ -964,7 +964,7 @@ def as_scanner(mf):
     import copy
     logger.info(mf, 'Create scanner for %s', mf.__class__)
 
-    class SCF_Scanner(mf.__class__):
+    class SCF_Scanner(mf.__class__, lib.SinglePointScanner):
         def __init__(self, mf_obj):
             self.__dict__.update(mf_obj.__dict__)
             mf_obj = self

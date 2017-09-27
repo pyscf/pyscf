@@ -182,8 +182,8 @@ In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
 Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
 of API conventions''')
 
-    mf = _convert_to_rhf(mf, False)
-    if hasattr(mf, 'with_df'):
+    mf = _convert_to_rhf(mf)
+    if hasattr(mf, 'with_df') and mf.with_df:
         return DFCASSCF(mf, ncas, nelecas, **kwargs)
 
     if mf.mol.symmetry:
@@ -205,8 +205,8 @@ In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
 Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
 of API conventions''')
 
-    mf = _convert_to_rhf(mf, False)
-    if hasattr(mf, 'with_df'):
+    mf = _convert_to_rhf(mf)
+    if hasattr(mf, 'with_df') and mf.with_df:
         return DFCASCI(mf, ncas, nelecas, **kwargs)
 
     if mf.mol.symmetry:
@@ -243,10 +243,11 @@ def newton(mc):
     return mc1
 
 
-def _convert_to_rhf(mf, convert_df=True):
+def _convert_to_rhf(mf, convert_df=None):
     import copy
     from pyscf.lib import logger
-    import pyscf.df
+    from pyscf.scf import newton_ah
+    from pyscf.df import df
     if isinstance(mf, scf.uhf.UHF):
         # convert to RHF
         mf = copy.copy(mf)
@@ -254,15 +255,27 @@ def _convert_to_rhf(mf, convert_df=True):
         if mf.mo_coeff is not None:  mf.mo_coeff  = mf.mo_coeff[0]
         if mf.mo_occ is not None:    mf.mo_occ    = mf.mo_occ[0]
 
+    if convert_df is None:
+        if isinstance(mf, newton_ah._CIAH_SCF):
+# To handle the case that mf is newton scf with approximate orbital hessian
+            if hasattr(mf._scf, 'with_df') and mf._scf.with_df:
+                convert_df = False
+            else:
+                # The mf should not be treated as DFHF since the underlying
+                # scf object is regular SCF object
+                convert_df = True
+        else:
+            convert_df = False
     # Avoid doing density fitting
     if (convert_df and hasattr(mf, 'with_df') and
-        isinstance(mf.with_df, pyscf.df.DF)):
+        isinstance(mf.with_df, df.DF)):
         mf = copy.copy(mf)
         logger.warn(mf, 'CASSCF: The first argument is a density-fitting SCF object. '
                     'Its orbitals are taken as the initial guess of CASSCF.\n'
-                    'The CASSCF object is the normal solver (no approximated integrals). '
-                    'mcscf.DFCASSCF is the function to create density fitting CASSCF '
-                    '(with approximate 2e integrals).')
+                    'The returned CASSCF object is a normal CASSCF solver (no '
+                    'approximate integrals).\nmcscf.DFCASSCF is the function '
+                    'to create density fitting CASSCF (with approximate 2e '
+                    'integrals).')
         mf.with_df = False
     return mf
 

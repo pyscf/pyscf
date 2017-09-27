@@ -74,6 +74,15 @@ class DF(lib.StreamObject):
         self.blockdim = 240
         self._keys = set(self.__dict__.keys())
 
+    @property
+    def auxbasis(self):
+        return self._auxbasis
+    @auxbasis.setter
+    def auxbasis(self, x):
+        self._auxbasis = x
+        self.auxmol = None
+        self._cderi = None
+
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('******** %s flags ********', self.__class__)
