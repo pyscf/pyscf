@@ -315,8 +315,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     feri.close()
 
 
-class DF(aft.AFTDF):
-    '''Gaussian and planewaves mixed density fitting
+class GDF(aft.AFTDF):
+    '''Gaussian density fitting
     '''
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
         self.cell = cell
@@ -349,6 +349,15 @@ class DF(aft.AFTDF):
 # If _cderi is specified, the 3C-integral tensor will be read from this file
         self._cderi = None
         self._keys = set(self.__dict__.keys())
+
+    @property
+    def auxbasis(self):
+        return self._auxbasis
+    @auxbasis.setter
+    def auxbasis(self, x):
+        self._auxbasis = x
+        self.auxcell = None
+        self._cderi = None
 
     def dump_flags(self, log=None):
         log = logger.new_logger(self, log)
@@ -568,6 +577,8 @@ class DF(aft.AFTDF):
             self.build()
         with addons.load(self._cderi, 'j3c/0') as feri:
             return feri.shape[0]
+
+DF = GDF
 
 
 def fuse_auxcell(mydf, auxcell):

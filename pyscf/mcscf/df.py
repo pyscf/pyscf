@@ -57,7 +57,7 @@ def density_fit(casscf, auxbasis=None, with_df=None):
             with_df.verbose = casscf.verbose
             with_df.auxbasis = auxbasis
 
-    class CASSCF(casscf_class):
+    class DFCASSCF(casscf_class, _DFCASSCF):
         def __init__(self):
             self.__dict__.update(casscf.__dict__)
             #self.grad_update_dep = 0
@@ -114,7 +114,11 @@ def density_fit(casscf, auxbasis=None, with_df=None):
             else:
                 return casscf_class._exact_paaa(self, mol, u, out)
 
-    return CASSCF()
+    return DFCASSCF()
+
+# A tag to label the derived MCSCF class
+class _DFCASSCF:
+    pass
 
 
 def approx_hessian(casscf, auxbasis=None, with_df=None):
