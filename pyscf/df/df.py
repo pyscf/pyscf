@@ -23,6 +23,39 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo.incore import _conc_mos, iden_coeffs
 
 class DF(lib.StreamObject):
+    r'''
+    Object to hold 3-index tensor
+
+    Attributes:
+        auxbasis : str or dict
+            Same input format as :attr:`Mole.basis`
+
+        auxmol : Mole object
+            Read only Mole object to hold the auxiliary basis.  auxmol is
+            generated automatically in the initialization step based on the
+            given auxbasis.  It is used in the rest part of the code to
+            determine the problem size, the integral batches etc.  This object
+            should NOT be modified.
+        _cderi_to_save : str
+            If _cderi_to_save is specified, the DF integral tensor will be
+            saved in this file.
+        _cderi : str or numpy array
+            If _cderi is specified, the DF integral tensor will be read from
+            this HDF5 file (or numpy array). When the DF integral tensor is
+            provided from the HDF5 file, it has to be stored under the dataset
+            'j3c'.
+            The DF integral tensor :math:`V_{x,ij}` should be a 2D array in C
+            (row-major) convention, where x corresponds to index of auxiliary
+            basis, and the combined index ij is the orbital pair index. The
+            hermitian symmetry is assumed for the combined ij index, ie
+            the elements of :math:`V_{x,i,j}` with :math:`i\geq j` are existed
+            in the DF integral tensor.  Thus the shape of DF integral tensor
+            is (M,N*(N+1)/2), where M is the number of auxbasis functions and
+            N is the number of basis functions of the orbital basis.
+        blockdim : int
+            When reading DF integrals from disk the chunk size to load.  It is
+            used to improve the IO performance.
+    '''
     def __init__(self, mol):
         self.mol = mol
         self.stdout = mol.stdout

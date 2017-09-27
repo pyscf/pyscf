@@ -1,4 +1,16 @@
-import sys
+'''
+Density functional theory
+=========================
+
+Simple usage::
+
+    >>> from pyscf import gto, dft
+    >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='def2-tzvp')
+    >>> mf = dft.RKS(mol)
+    >>> mf.xc = 'pbe,pbe'
+    >>> mf.run()
+'''
+
 try:
     from pyscf.dft import libxc
 except (ImportError, OSError):

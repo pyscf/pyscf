@@ -43,7 +43,7 @@ You need to remove the ``/pyscf`` in that string and try
 ``import pyscf`` in the python shell again.
 
 .. note::  The quick setup does not provide the best performance.
-  Please see :ref:`installing` for the optimized libraries.
+  Please see :ref:`installing` for the installation with optimized libraries.
 
 
 A simple example

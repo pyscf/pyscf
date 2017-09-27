@@ -45,6 +45,8 @@ moleintor
    :members:
 
 
+.. _gto_basis:
+
 basis
 =====
 
