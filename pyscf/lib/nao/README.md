@@ -1,51 +1,48 @@
 Library of tools for Managing the numerical atomic orbitals (NAO)
 ===============================================
 
-2017-08-07
+2017-08-27
 
 Installation
 ------------
 
-* Default compilation of pySCF's low-level libraries with NAO support
-
+* Default compilation of pySCF's low-level libraries with NAO support is possible with custom
+  architecture file.
+  
         cd pyscf/lib
+        cp cmake_arch_config/cmake.arch.inc-gnu cmake.arch.inc
         mkdir build
         cd build
-        cmake -DENABLE_NAO=ON ..
+        export FC=gfortran   # (just to be sure)
+        cmake ..
         make
 
   Note during the compilation, external libraries (libcint, libxc, xcfun) will
   be downloaded and installed.  If you want to disable the automatic
   downloading, this [document](http://sunqm.github.io/pyscf/install.html#installation-without-network)
   is an instruction for manually building these packages.
-
-* Custom compilation of pySCF's low-level libraries with NAO support
-
-        cd pyscf/lib
-        cp nao/cmakelists_examples/CMakeLists.txt.gnu CMakeLists.txt
-        mkdir build
-        cd build
-        cmake ..
-        make
+  The shared object files are put in the directory   pyscf/lib.
 
 * Using the same build directory for repetitive compilation
   
   Usually there is no problem to recompile the libraries after an update,
   however, if one intents to use different compilers/interpreters/linked libraries
-  the file CMakeCache.txt must be deleted and cmake started again. 
+  the file CMakeCache.txt must be deleted and cmake started again.
         
         cd build
         rm CMakeCache.txt
-        cmake -DENABLE_NAO=ON ..
+        cmake ..
         make 
 
+  If some linkage problem with LibXC or xcfun libraries arises, then maybe the version of these libraries is now changed to a higher one. Delete the directory pyscf/lib/deps to start downloading/compilation from scratch.
+  
 * Testing of NAO support 
 
   After a succesful compilation, you may want to reproduce the test results. 
   A batch testing is possible by commanding
 
-        cd pyscf
-        python -m unittest discover test
+        cd pyscf/nao                                # (directory with python code for NAO)
+        python -m unittest discover test            # (pyscf/nao/test contains examples)
 
   Tests are also executable on one-by-one basis.
   For example:
@@ -69,14 +66,15 @@ Peak performance builds/runs
   findable as "ifort", the sequence of commands to build the library would be as following:
   
         cd pyscf/lib
-        cp nao/cmakelists_examples/CMakeLists.txt.anaconda.mkl CMakeLists.txt
-        rm *.so (just to be sure)
+        cp cmake_arch_config/cmake.arch.inc-anaconda-gnu cmake.arch.inc
+        rm *.so                # (just to be sure)
         mkdir anaconda_build
         cd anaconda_build
         export FC=ifort
         cmake ..
         make
-        
+  
+  The shared object files are put in the directory   pyscf/lib.      
   Before starting the interpreter, you might want to activate it
         
         source /path/to/anaconda2/bin/activate
@@ -90,14 +88,15 @@ Peak performance builds/runs
   the script activate in the IntelPython's bin subdirectory. There is an example of CMakeLists.txt file. 
 
         cd pyscf/lib
-        cp nao/cmakelists_examples/CMakeLists.txt.intelpython.mkl CMakeLists.txt
-        rm *.so (just to be sure)
-        mkdir mkl_intelpython_build
-        cd mkl_intelpython_build
+        cp cmake_arch_config/cmake.arch.inc-intelpython-ifort cmake.arch.inc
+        rm *.so                              # (just to be sure)
+        mkdir intelpython_ifort
+        cd mkl_intelpython_ifort
         export FC=ifort
         cmake ..
         make
   
+  The shared object files are put in the directory   pyscf/lib.
   Before starting the interpreter, you might want to activate it
         
         source /path/to/intelpython2/bin/activate
@@ -112,7 +111,11 @@ Known problems
 * Most of the tests are failing. 
 
   Probable BLAS/LAPACK/FFTW calls could not be resolved from libnao. See installation instructions and Peak performance builds/runs.
-  
+
+* Some linkage problem with libxc or xcfun arises
+
+  Maybe the optimal version of these libraries is now changed to a higher one. Delete the directory pyscf/lib/deps to start downloading/compilation from scratch.
+
 
 Citing PySCF/NAO
 ------------
