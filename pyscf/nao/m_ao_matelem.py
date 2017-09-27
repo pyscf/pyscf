@@ -103,6 +103,7 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     self.ao1 = ao
     self.ao1._add_sp2info()
     self.ao1._add_psi_log_mom()
+    self.pp2 = self.ao1.pp**2
     
     self.ao2 = self.ao1
     self.ao2_hartree = ao_log_hartree(self.ao1, **kvargs)
@@ -119,6 +120,7 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     self.ao1 = ao1
     self.ao1._add_sp2info()
     self.ao1._add_psi_log_mom()
+    self.pp2 = self.ao1.pp**2
 
     self.ao2 = ao2
     self.ao2._add_sp2info()
