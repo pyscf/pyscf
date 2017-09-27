@@ -156,7 +156,7 @@ def approx_hessian(casscf, auxbasis=None, with_df=None):
         return casscf
 
     if with_df is None:
-        if (hasattr(casscf._scf, 'with_df') and
+        if (getattr(casscf._scf, 'with_df', None) and
             (auxbasis is None or auxbasis == casscf._scf.with_df.auxbasis)):
             with_df = casscf._scf.with_df
         else:
