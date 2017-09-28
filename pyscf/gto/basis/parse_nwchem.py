@@ -53,7 +53,6 @@ def parse_ecp(string, symb=None):
             if dat0 and dat0[0] == symb:
                 break
         if i+1 == len(raw_data):
-            print i, symb
             raise KeyError('ECP not found for %s' % symb)
         seg = []
         for dat in raw_data[i:]:
