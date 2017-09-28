@@ -585,7 +585,7 @@ def as_scanner(cc):
         >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
     logger.info(cc, 'Set %s as a scanner', cc.__class__)
-    class CCSD_Scanner(cc.__class__):
+    class CCSD_Scanner(cc.__class__, lib.SinglePointScanner):
         def __init__(self, cc):
             self.__dict__.update(cc.__dict__)
             self._scf = cc._scf.as_scanner()

@@ -174,6 +174,7 @@ from pyscf.mcscf import chkfile
 
 def CASSCF(mf, ncas, nelecas, **kwargs):
     from pyscf import gto
+    from pyscf import scf
     if isinstance(mf, gto.Mole):
         raise RuntimeError('''
 You see this error message because of the API updates in pyscf v0.10.
@@ -182,8 +183,8 @@ In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
 Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
 of API conventions''')
 
-    mf = _convert_to_rhf(mf, False)
-    if hasattr(mf, 'with_df'):
+    mf = scf.addons.convert_to_rhf(mf)
+    if hasattr(mf, 'with_df') and mf.with_df:
         return DFCASSCF(mf, ncas, nelecas, **kwargs)
 
     if mf.mol.symmetry:
@@ -197,6 +198,7 @@ RCASSCF = CASSCF
 
 def CASCI(mf, ncas, nelecas, **kwargs):
     from pyscf import gto
+    from pyscf import scf
     if isinstance(mf, gto.Mole):
         raise RuntimeError('''
 You see this error message because of the API updates in pyscf v0.10.
@@ -205,8 +207,8 @@ In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
 Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
 of API conventions''')
 
-    mf = _convert_to_rhf(mf, False)
-    if hasattr(mf, 'with_df'):
+    mf = scf.addons.convert_to_rhf(mf)
+    if hasattr(mf, 'with_df') and mf.with_df:
         return DFCASCI(mf, ncas, nelecas, **kwargs)
 
     if mf.mol.symmetry:
@@ -243,34 +245,11 @@ def newton(mc):
     return mc1
 
 
-def _convert_to_rhf(mf, convert_df=True):
-    import copy
-    from pyscf.lib import logger
-    import pyscf.df
-    if isinstance(mf, scf.uhf.UHF):
-        # convert to RHF
-        mf = copy.copy(mf)
-        if mf.mo_energy is not None: mf.mo_energy = mf.mo_energy[0]
-        if mf.mo_coeff is not None:  mf.mo_coeff  = mf.mo_coeff[0]
-        if mf.mo_occ is not None:    mf.mo_occ    = mf.mo_occ[0]
-
-    # Avoid doing density fitting
-    if (convert_df and hasattr(mf, 'with_df') and
-        isinstance(mf.with_df, pyscf.df.DF)):
-        mf = copy.copy(mf)
-        logger.warn(mf, 'CASSCF: The first argument is a density-fitting SCF object. '
-                    'Its orbitals are taken as the initial guess of CASSCF.\n'
-                    'The CASSCF object is the normal solver (no approximated integrals). '
-                    'mcscf.DFCASSCF is the function to create density fitting CASSCF '
-                    '(with approximate 2e integrals).')
-        mf.with_df = False
-    return mf
-
-
 try:
     from pyscf.mcscf import df
     def DFCASSCF(mf, ncas, nelecas, auxbasis=None, **kwargs):
-        mf = _convert_to_rhf(mf, False)
+        from pyscf import scf
+        mf = scf.addons.convert_to_rhf(mf, convert_df=False)
         if mf.mol.symmetry:
             mc = mc1step_symm.CASSCF(mf, ncas, nelecas, **kwargs)
         else:
@@ -278,7 +257,8 @@ try:
         return df.density_fit(mc, auxbasis)
 
     def DFCASCI(mf, ncas, nelecas, auxbasis=None, **kwargs):
-        mf = _convert_to_rhf(mf, False)
+        from pyscf import scf
+        mf = scf.addons.convert_to_rhf(mf, convert_df=False)
         if mf.mol.symmetry:
             mc = casci_symm.CASCI(mf, ncas, nelecas, **kwargs)
         else:

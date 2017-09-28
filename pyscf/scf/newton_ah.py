@@ -709,7 +709,7 @@ def newton_SCF_class(mf):
         doc = ''
     else:
         doc = mf.__class__.__doc__
-    class CIAH_SCF(mf.__class__):
+    class CIAH_SCF(mf.__class__, _CIAH_SCF):
         __doc__ = doc + \
         '''
         Attributes for Newton solver:
@@ -851,6 +851,10 @@ def newton_SCF_class(mf):
                 mo = lib.tag_array(mo, orbsym=orbsym)
             return mo
     return CIAH_SCF
+
+# A tag to label the derived SCF class
+class _CIAH_SCF:
+    pass
 
 def newton(mf):
     '''Co-iterative augmented hessian (CIAH) second order SCF solver

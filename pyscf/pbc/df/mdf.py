@@ -217,7 +217,7 @@ class MDF(df.DF):
         self.kpts_band = None
         self.auxbasis = None
         self.gs = cell.gs
-        self._eta = None # self.eta = None
+        self.eta = None
 
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
