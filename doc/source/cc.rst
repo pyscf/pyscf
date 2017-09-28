@@ -1,7 +1,7 @@
 .. _cc:
 
 cc --- Coupled cluster
-*****************************
+**********************
 
 .. module:: cc
    :synopsis: Computing coupled cluster energies and properties
@@ -95,8 +95,8 @@ by the CCSD, CCSD(T), density matrices, and EOM-CCSD modules, but not in
 the analytical CCSD gradient module.
 
 
-Data structure
-==============
+Program reference
+=================
 
 The :class:`CCSD` class is the object to hold the restricted CCSD environment
 attributes and results.  The environment attributes are the parameters to

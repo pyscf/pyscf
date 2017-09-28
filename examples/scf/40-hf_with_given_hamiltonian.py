@@ -4,13 +4,10 @@
 #
 
 import numpy
-import scipy.linalg
-from pyscf import gto
-from pyscf import scf
-from pyscf import ao2mo
+from pyscf import gto, scf, ao2mo
 
 '''
-User-defined Hamiltonian for SCF module.
+Customizing Hamiltonian for SCF module.
 
 Three steps to define Hamiltonian for SCF:
 1. Specify the number of electrons. (Note mole object must be "built" before doing this step)
@@ -26,12 +23,8 @@ Note you will see warning message on the screen:
 '''
 
 mol = gto.M()
-mol.nelectron = 10
-
-#
-# 1D anti-PBC Hubbard model at half filling
-#
 n = 10
+mol.nelectron = n
 
 mf = scf.RHF(mol)
 h1 = numpy.zeros((n,n))
@@ -44,7 +37,8 @@ for i in range(n):
 
 mf.get_hcore = lambda *args: h1
 mf.get_ovlp = lambda *args: numpy.eye(n)
-# ao2mo.restore(8, eri, n) to get 8-fold symmetry of the integrals
+# ao2mo.restore(8, eri, n) to get 8-fold permutation symmetry of the integrals
+# ._eri only supports the two-electron integrals in 4-fold or 8-fold symmetry.
 mf._eri = ao2mo.restore(8, eri, n)
 
-mf.scf()
+mf.kernel()

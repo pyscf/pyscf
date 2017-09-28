@@ -520,6 +520,7 @@ def spin_square(casscf, mo_coeff=None, ci=None, ovlp=None):
         s = numpy.sqrt(ss+.25) - .5
         return ss, s*2+1
 
+# A tag to label the derived FCI class
 class StateAverageFCISolver:
     pass
 
