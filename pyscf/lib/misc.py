@@ -373,9 +373,9 @@ def with_doc(doc):
         return fn
     return make_fn
 
-def import_function_as_method(fn, default_keys=None):
+def import_as_method(fn, default_keys=None):
     '''
-    The statement "fn1 = import_function_as_method(fn, default_keys=['a','b'])"
+    The statement "fn1 = import_as_method(fn, default_keys=['a','b'])"
     in a class is equivalent to define the following method in the class:
 
     .. code-block:: python
@@ -401,20 +401,23 @@ def import_function_as_method(fn, default_keys=None):
 #                                  code_obj.co_lnotab,
 #                                  code_obj.co_freevars,
 #                                  code_obj.co_cellvars)
-#    clsmethod = types.FunctionType(new_code_obj, function.__globals__)
+#    clsmethod = types.FunctionType(new_code_obj, fn.__globals__)
 #    clsmethod.__defaults__ = fn.__defaults__
 
     # exec is a bad solution here.  But I didn't find a better way to
     # implement this for now.
-    varnames = code_obj.co_varnames
+    nargs = code_obj.co_argcount
+    argnames = code_obj.co_varnames[:nargs]
     defaults = fn.__defaults__
-    new_code_str = 'def clsmethod(self, %s):\n' % (', '.join(varnames))
+    new_code_str = 'def clsmethod(self, %s):\n' % (', '.join(argnames))
     if default_keys is not None:
         for k in default_keys:
             new_code_str += '    if %s is None: %s = self.%s\n' % (k, k, k)
-        nargs = code_obj.co_argcount
-        defaults = (None,) * (nargs-len(defaults)) + defaults
-    new_code_str += '    return %s(%s)\n' % (fn.__name__, ', '.join(varnames))
+        if defaults is None:
+            defaults = (None,) * nargs
+        else:
+            defaults = (None,) * (nargs-len(defaults)) + defaults
+    new_code_str += '    return %s(%s)\n' % (fn.__name__, ', '.join(argnames))
     exec(new_code_str, fn.__globals__, locals())
 
     clsmethod.__name__ = fn.__name__
