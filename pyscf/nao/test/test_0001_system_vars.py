@@ -60,8 +60,12 @@ class KnowValues(unittest.TestCase):
     from pyscf.nao.m_laplace_am import laplace_am
     sv = system_vars_c().init_pyscf_gto(mol)
     tref = conv_yzx2xyz_c(mol).conv_yzx2xyz_2d(mol.intor_symmetric('int1e_kin'), direction='pyscf2nao')
-    tkin = (-0.5*sv.overlap_coo(funct=laplace_am)).toarray()
-    #self.assertTrue(abs(tref-tkin).sum()<5e-9)
+    tkin = (0.5*sv.overlap_coo(funct=laplace_am)).toarray()
+    #print()
+    #print(tkin[0,0], tref[0,0])
+    #print(tref[14,:]-tkin[14,:])
+    #print(type(tref[14,14]), tref.shape)
+    self.assertTrue(abs(tref-tkin).sum()/len(tkin)<5e-9)
 
 
 if __name__ == "__main__":

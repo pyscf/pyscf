@@ -28,24 +28,27 @@ def laplace_am(self, sp1, R1, sp2, R2):
   sp_mu2rcut = self.ao1.sp_mu2rcut
   sp2info = self.ao1.sp2info
   pp = self.ao1.pp
+  rr = self.ao1.rr
   ylm = csphar( R2mR1, 2*self.jmx+1 )
   dist = np.sqrt(sum(R2mR1*R2mR1))
   cS = np.zeros((self.jmx*2+1,self.jmx*2+1), dtype=np.complex128)
   cmat = np.zeros((self.jmx*2+1,self.jmx*2+1), dtype=np.complex128)
   rS = np.zeros((self.jmx*2+1,self.jmx*2+1))
-  _j = self.jmx
+  j = self.jmx
   
   if(dist<1.0e-5): 
     
     for [mu1,l1,s1,f1],ff1 in zip(sp2info[sp1],psi_log[sp1]):
+      ff1_diff = self.interp_rr.diff(ff1)
       for [mu2,l2,s2,f2],ff2 in zip(sp2info[sp2],psi_log[sp2]):
+        ff2_diff = self.interp_rr.diff(ff2)
         cS.fill(0.0); rS.fill(0.0);
         if l1==l2 : 
-          sum1 = sum(ff1 * ff2 *self.rr3_dr)
-          for m1 in range(-l1,l1+1): cS[m1+self.jmx,m1+self.jmx]=sum1
+          sum2 = sum(ff1_diff*ff2_diff*self.rr3_dr)+l1*(l1+1)*sum(ff1*ff2*rr)*self.dr_jt
+          for m1 in range(-l1,l1+1): cS[m1+self.jmx,m1+self.jmx]=sum2
           self.c2r_( l1,l2, self.jmx,cS,rS,cmat)
 
-        overlaps[s1:f1,s2:f2] = rS[-l1+_j:l1+1+_j,-l2+_j:l2+1+_j]
+        overlaps[s1:f1,s2:f2] = rS[-l1+j:l1+1+j,-l2+j:l2+1+j]
 
   else:
 
@@ -61,7 +64,7 @@ def laplace_am(self, sp1, R1, sp2, R2):
           f1f2_rea = self.sbt(f1f2_mom, l3, -1)
           l2S[l3] = (f1f2_rea[ir:ir+6]*coeffs).sum()
         
-        l2S = l2S*self.const
+        l2S = l2S*self.const*4*np.pi
           
         cS.fill(0.0) 
         for m1 in range(-l1,l1+1):
@@ -69,9 +72,9 @@ def laplace_am(self, sp1, R1, sp2, R2):
             gc, m3 = self.get_gaunt(l1,-m1,l2,m2), m2-m1
             for l3ind,l3 in enumerate(range(abs(l1-l2),l1+l2+1)):
               if abs(m3) > l3 : continue
-              cS[m1+_j,m2+_j] = cS[m1+_j,m2+_j] + l2S[l3]*ylm[ l3*(l3+1)+m3] * gc[l3ind] * (-1.0)**((3*l1+l2+l3)//2+m2)
-                  
+              cS[m1+j,m2+j] = cS[m1+j,m2+j] + l2S[l3]*ylm[ l3*(l3+1)+m3] * gc[l3ind] * (-1.0)**((3*l1+l2+l3)//2+m2)
+
         self.c2r_( l1,l2, self.jmx,cS,rS,cmat)
-        overlaps[s1:f1,s2:f2] = rS[-l1+_j:l1+_j+1,-l2+_j:l2+_j+1]
+        overlaps[s1:f1,s2:f2] = rS[-l1+j:l1+j+1,-l2+j:l2+j+1]
 
   return overlaps

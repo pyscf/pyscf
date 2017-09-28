@@ -103,17 +103,19 @@ class log_interp_c():
   comp_coeffs=comp_coeffs
   """ Interpolation right away """
   
-  def diff(self, am, za):
-    """ Return array with differential 
-      am :  angular momentum 
-      za :  input array to be differentiated """
-    assert am>-1
+  def diff(self, za):
+    """
+      Return array with differential 
+      za :  input array to be differentiated 
+    """
     ar = self.gg
     dr = self.dg_jt
     nr = self.nr
-    zb = np.zeros_like(ff)
-    
-    for i in range(3): zb[i]=am*za[i]/ar[i]
+    zb = np.zeros_like(za)
+        
+    zb[0]=(za[0]-za[1])/(ar[0]-ar[1]) # forward to improve
+    zb[1]=(za[2]-za[0])/(ar[2]-ar[0]) # central? to improve
+    zb[2]=(za[3]-za[1])/(ar[3]-ar[1]) # central? to improve 
     
     for i in range(3,nr-3):
       zb[i]=(45.0*(za[i+1]-za[i-1])-9.0*(za[i+2]-za[i-2])+za[i+3]-za[i-3])/(60.0*dr*ar[i])
