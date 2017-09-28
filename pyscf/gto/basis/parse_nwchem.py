@@ -18,11 +18,21 @@ MAPSPDF = {'S': 0,
            'I': 6,
            'K': 7}
 
-def parse(string):
+BASIS_SET_DELIMITER = re.compile('# *BASIS SET.*\n')
+ECP_DELIMITER = re.compile('\n *ECP *\n')
+
+def parse(string, symb=None):
     '''Parse the basis text which is in NWChem format, return an internal
     basis format which can be assigned to :attr:`Mole.basis`
     Lines started with # are ignored.
     '''
+    from pyscf.gto.mole import _std_symbol
+    if symb is not None:
+        symb = _std_symbol(symb)
+        string = _search_seg(re.split(BASIS_SET_DELIMITER, string), symb)
+        if string is None:
+            raise KeyError('Basis not found for %s' % symb)
+
     bastxt = []
     for dat in string.splitlines():
         x = dat.split('#')[0].strip().upper()  # Use # to start comments
@@ -33,9 +43,30 @@ def parse(string):
 def load(basisfile, symb):
     return _parse(search_seg(basisfile, symb))
 
-def parse_ecp(string):
+def parse_ecp(string, symb=None):
+    from pyscf.gto.mole import _std_symbol
+    if symb is not None:
+        symb = _std_symbol(symb)
+        raw_data = string.splitlines()
+        for i, dat in enumerate(raw_data):
+            dat0 = dat.split(None, 1)
+            if dat0 and dat0[0] == symb:
+                break
+        if i+1 == len(raw_data):
+            print i, symb
+            raise KeyError('ECP not found for %s' % symb)
+        seg = []
+        for dat in raw_data[i:]:
+            dat = dat.strip().upper()
+            if ((dat[0].isalpha() and dat.split(None, 1)[0] != symb.upper())):
+                break
+            elif dat: # remove blank lines
+                seg.append(dat)
+    else:
+        seg = string.splitlines()
+
     ecptxt = []
-    for dat in string.splitlines():
+    for dat in seg:
         x = dat.split('#')[0].strip().upper()
         if (x and not x.startswith('END') and not x.startswith('ECP')):
             ecptxt.append(x)
@@ -44,20 +75,23 @@ def parse_ecp(string):
 def load_ecp(basisfile, symb):
     return _parse_ecp(search_ecp(basisfile, symb))
 
-BASIS_SET_DELIMITER = re.compile('# *BASIS SET.*\n')
 def search_seg(basisfile, symb):
     from pyscf.gto.mole import _std_symbol
     symb = _std_symbol(symb)
     with open(basisfile, 'r') as fin:
         fdata = re.split(BASIS_SET_DELIMITER, fin.read())
-    for dat in fdata[1:]:
+    dat = _search_seg(fdata, symb)
+    if dat is None:
+        return []
+    else:
+        return [x.upper() for x in dat.splitlines() if x and 'END' not in x]
+
+def _search_seg(raw_data, symb):
+    for dat in raw_data[1:]:
         dat0 = dat.split(None, 1)
         if dat0 and dat0[0] == symb:
-            return [x.upper() for x in dat.splitlines()
-                    if x and 'END' not in x]
-    return []
+            return dat
 
-ECP_DELIMITER = re.compile('\n *ECP *\n')
 def search_ecp(basisfile, symb):
     from pyscf.gto.mole import _std_symbol
     symb = _std_symbol(symb)
@@ -65,7 +99,8 @@ def search_ecp(basisfile, symb):
         fdata = re.split(ECP_DELIMITER, fin.read())
     fdata = fdata[1].splitlines()
     for i, dat in enumerate(fdata):
-        if dat.split(None, 1)[0] == symb:
+        dat0 = dat.split(None, 1)
+        if dat0 and dat0[0] == symb:
             break
     seg = []
     for dat in fdata[i:]:
