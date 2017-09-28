@@ -538,7 +538,7 @@ class RCCSD(ccsd.CCSD):
 
             deltaE = 0.5*einsum('ijkab,ijkab,ijkab',lijkab,rijkab,_eijkab)
             deltaE = deltaE.real
-            print "Exc. energy, delta energy = %16.12f, %16.12f" % (_eval+deltaE,deltaE)
+            print("Exc. energy, delta energy = %16.12f, %16.12f" % (_eval+deltaE,deltaE))
             e.append(_eval+deltaE)
         return e
 
@@ -836,7 +836,7 @@ class RCCSD(ccsd.CCSD):
                     + 1.*lijabc.transpose(0,1,4,2,3)
             deltaE = 0.5*einsum('ijabc,ijabc,ijabc',lijabc,rijabc,_eijabc)
             deltaE = deltaE.real
-            print "Exc. energy, delta energy = %16.12f, %16.12f" % (_eval+deltaE,deltaE)
+            print("Exc. energy, delta energy = %16.12f, %16.12f" % (_eval+deltaE,deltaE))
             e.append(_eval+deltaE)
         return e
 
@@ -2085,33 +2085,33 @@ if __name__ == '__main__':
     ecc, t1, t2 = mycc.kernel()
     print(ecc - -0.2133432712431435)
 
-    print "IP energies... (right eigenvector)"
+    print("IP energies... (right eigenvector)")
     part = None
     e,v = mycc.ipccsd(nroots=3,partition=part)
-    print e
+    print(e)
     print(e[0] - 0.4335604332073799)
     print(e[1] - 0.5187659896045407)
     print(e[2] - 0.6782876002229172)
 
-    print "IP energies... (left eigenvector)"
+    print("IP energies... (left eigenvector)")
     e,lv = mycc.ipccsd(nroots=3,left=True,partition=part)
-    print e
+    print(e)
     print(e[0] - 0.4335604332073799)
     print(e[1] - 0.5187659896045407)
     print(e[2] - 0.6782876002229172)
 
     mycc.ipccsd_star(e,v,lv)
 
-    print "EA energies... (right eigenvector)"
+    print("EA energies... (right eigenvector)")
     e,v = mycc.eaccsd(nroots=3,partition=part)
-    print e
+    print(e)
     print(e[0] - 0.16737886338859731)
     print(e[1] - 0.24027613852009164)
     print(e[2] - 0.51006797826488071)
 
-    print "EA energies... (left eigenvector)"
+    print("EA energies... (left eigenvector)")
     e,lv = mycc.eaccsd(nroots=3,left=True,partition=part)
-    print e
+    print(e)
     print(e[0] - 0.16737886338859731)
     print(e[1] - 0.24027613852009164)
     print(e[2] - 0.51006797826488071)
