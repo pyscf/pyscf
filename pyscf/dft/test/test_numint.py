@@ -117,6 +117,18 @@ class KnowValues(unittest.TestCase):
         v = ni.nr_uks_fxc(mol, mf.grids, 'B88', dm0, dms)
         self.assertAlmostEqual(finger(v), 403.56257213149746, 8)
 
+    def test_vv10nlc(self):
+        numpy.random.seed(10)
+        rho = numpy.random.random((4,20))
+        coords = (numpy.random.random((20,3))-.5)*3
+        vvrho = numpy.random.random((4,60))
+        vvweight = numpy.random.random(60)
+        vvcoords = (numpy.random.random((60,3))-.5)*3
+        nlc_pars = .8, .3
+        v = dft.numint._vv10nlc(rho, coords, vvrho, vvweight, vvcoords, nlc_pars)
+        self.assertAlmostEqual(finger(v[0]), 0.15894647203764295, 9)
+        self.assertAlmostEqual(finger(v[1]), 0.20500922537924576, 9)
+
 if __name__ == "__main__":
     print("Test numint")
     unittest.main()

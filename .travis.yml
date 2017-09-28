@@ -21,16 +21,12 @@ before_install:
       gcc 
       gfortran
       libblas-dev
-      liblapack-dev
-      libatlas-dev
-      libatlas-base-dev
       python-h5py
       python-nose
       python-nose-exclude
       python-numpy
       python-scipy
       cmake
-      doxygen
     
 install:
     - > 

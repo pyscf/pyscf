@@ -538,7 +538,8 @@ class RCCSD(ccsd.CCSD):
 
             deltaE = 0.5*einsum('ijkab,ijkab,ijkab',lijkab,rijkab,_eijkab)
             deltaE = deltaE.real
-            print("Exc. energy, delta energy = %16.12f, %16.12f" % (_eval+deltaE,deltaE))
+            logger.info(self, "Exc. energy, delta energy = %16.12f, %16.12f",
+                        _eval+deltaE, deltaE)
             e.append(_eval+deltaE)
         return e
 
@@ -836,7 +837,8 @@ class RCCSD(ccsd.CCSD):
                     + 1.*lijabc.transpose(0,1,4,2,3)
             deltaE = 0.5*einsum('ijabc,ijabc,ijabc',lijabc,rijabc,_eijabc)
             deltaE = deltaE.real
-            print("Exc. energy, delta energy = %16.12f, %16.12f" % (_eval+deltaE,deltaE))
+            logger.info(self, "Exc. energy, delta energy = %16.12f, %16.12f",
+                        _eval+deltaE, deltaE)
             e.append(_eval+deltaE)
         return e
 
