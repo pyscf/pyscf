@@ -1235,7 +1235,7 @@ class SCF(lib.StreamObject):
             mol = self.mol
         
         if hasattr(mol, 'get_init_guess'):
-          dm = mol.get_init_guess(key=key)
+            dm = mol.get_init_guess(key=key)
         elif key.lower() == '1e':
             dm = self.init_guess_by_1e(mol)
         elif getattr(mol, 'natm', 0) == 0:

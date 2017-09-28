@@ -317,6 +317,7 @@ class system_vars_c():
     self.state = 'should be useful for something'
 
     # Trying to be similar to mole object from pySCF 
+    self._xc_code   = 'LDA,PZ' # estimate how ? 
     self._nelectron = self.hsx.nelec
     self.cart = False
     self.spin = self.nspin
@@ -428,14 +429,15 @@ class system_vars_c():
   def ao_loc_nr(self): return self.mu2orb_s[0:self.natm]
   def intor_symmetric(self, type_str):
     """ Uff ... """
-    if type_str.lower()=='cint1e_ovlp_sph' or type_str.lower()=='int1e_ovlp':
+    s = type_str.lower() 
+    if s=='cint1e_ovlp_sph' or s=='int1e_ovlp':
       mat = self.overlap_coo().todense()
-    elif type_str.lower()=='int1e_kin':
+    elif s=='int1e_kin':
       mat = (0.5*self.laplace_coo()).todense()
-    elif type_str.lower()=='int1e_nuc':
+    elif s=='int1e_nuc':
       mat = (self.vnucele_coo()).todense()
     else:
-      print(' type_str ', type_str)
+      print(' type_str ', s)
       raise RuntimeError('not implemented...')
     return mat
 
@@ -449,25 +451,26 @@ class system_vars_c():
     from pyscf.nao.m_overlap_coo import overlap_coo
     return overlap_coo(self, **kvargs)
 
-  def laplace_coo(self, **kvargs):   # Compute matrix of Laplace brakets for the whole molecule
+  def laplace_coo(self):   # Compute matrix of Laplace brakets for the whole molecule
     from pyscf.nao.m_overlap_coo import overlap_coo
     from pyscf.nao.m_laplace_am import laplace_am
     return overlap_coo(self, funct=laplace_am)
   
   def vnucele_coo(self, **kvargs): # Compute matrix elements of nuclear-electron interaction (attraction)
-    """ 
-      These are tricky to define. In case of all-electron calculations it is well known, but 
-      in case of pseudo-potential calculations we need some a specification of pseudo-potential
-      and a specification of (Kleinman-Bulander) projectors to compute explicitly. Practically,
-      we will subtract the computed matrix elements from the total Hamiltonian to find out the 
-      nuclear-electron interaction in case of SIESTA import. This means that Vne is defined by 
-        Vne = H_KS - T - V_H - V_xc
-    """
-    from scipy.sparse import coo_matrix
-    vne = coo_matrix((self.norbs, self.norbs))
-    vne.setdiag(0.1)
-    return vne
+    from pyscf.nao.m_vnucele_coo import vnucele_coo
+    return vnucele_coo(self, **kvargs)
 
+  def vnucele_coo_subtract(self, **kvargs): # Compute matrix elements of H-T-VH-Vxc
+    from pyscf.nao.m_vnucele_coo_subtract import vnucele_coo_subtract
+    return vnucele_coo_subtract(self, **kvargs)
+
+  def vhartree_coo(self, **kvargs): # Compute matrix elements of nuclear-electron interaction (attraction)
+    from pyscf.nao.m_vhartree_coo import vhartree_coo
+    return vhartree_coo(self, **kvargs)
+
+  def get_hamiltonian(self): # Returns the stored matrix elements of current hamiltonian 
+    return self.hsx.spin2h4_csr
+    
   def has_ecp(self): return False # if there is effective core potential in the Hamiltonian?
     
   def overlap_lil(self, **kvargs):   # Compute overlap matrix in list of lists format
@@ -484,9 +487,18 @@ class system_vars_c():
   def diag_check(self, atol=1e-5, rtol=1e-4, **kvargs): # Works only after init_siesta_xml(), extend ?
     return diag_check(self, atol, rtol, **kvargs)
 
-  def vxc_lil(self, dm, xc_code, **kvargs):   # Compute exchange-correlation potentials
+  def vxc_lil(self, dm=None, xc_code=None, **kvargs):   # Compute exchange-correlation potentials
     from pyscf.nao.m_vxc_lil import vxc_lil
-    return vxc_lil(self, dm, xc_code, deriv=1, **kvargs)
+    dm1 = self.comp_dm() if dm is None else dm
+    xc_code1 = self.xc_code if xc_code is None else xc_code
+    return vxc_lil(self, dm1, xc_code1, deriv=1, **kvargs)
+
+  @property
+  def xc_code(self):
+    if self._xc_code is None:
+      return 'LDA,PZ' # just an estimate...
+    else:
+      return self._xc_code
 
   def exc(self, dm, xc_code, **kvargs):   # Compute exchange-correlation energies
     from pyscf.nao.m_exc import exc

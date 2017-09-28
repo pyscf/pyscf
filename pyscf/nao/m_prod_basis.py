@@ -161,7 +161,7 @@ class prod_basis_c():
     return self
   
   def init_inp_param_prod_log_dp(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0, ac_npc_max=8, jcutoff=14, metric_type=2, optimize_centers=0, ngl=96):
-    """ Talman's procedure should be working well with Pseudo-Potential starting point...
+    """ Talman's procedure should be working well with a pseudo-potential hamiltonians.
         This subroutine prepares the class for a later atom pair by atom pair generation 
         of the dominant product vertices and the conversion coefficients by calling 
         subroutines from the library libnao.
