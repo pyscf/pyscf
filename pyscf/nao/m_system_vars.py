@@ -428,10 +428,12 @@ class system_vars_c():
   def ao_loc_nr(self): return self.mu2orb_s[0:self.natm]
   def intor_symmetric(self, type_str):
     """ Uff ... """
-    if type_str.lower()=='cint1e_ovlp_sph':
+    if type_str.lower()=='cint1e_ovlp_sph' or type_str.lower()=='int1e_ovlp':
       mat = self.overlap_coo().todense()
     elif type_str.lower()=='int1e_kin':
-      mat = self.tkin_coo().todense()
+      mat = (0.5*self.laplace_coo()).todense()
+    elif type_str.lower()=='int1e_nuc':
+      mat = (self.vnucele_coo()).todense()
     else:
       print(' type_str ', type_str)
       raise RuntimeError('not implemented...')
@@ -443,10 +445,31 @@ class system_vars_c():
   def dos(self, zomegas): return system_vars_dos(self, zomegas)
   def pdos(self, zomegas): return system_vars_pdos(self, zomegas)
 
-  def overlap_coo(self, **kvargs):   # Compute overlap matrix for the given system
-    from pyscf.nao import overlap_coo
+  def overlap_coo(self, **kvargs):   # Compute overlap matrix for the molecule
+    from pyscf.nao.m_overlap_coo import overlap_coo
     return overlap_coo(self, **kvargs)
 
+  def laplace_coo(self, **kvargs):   # Compute matrix of Laplace brakets for the whole molecule
+    from pyscf.nao.m_overlap_coo import overlap_coo
+    from pyscf.nao.m_laplace_am import laplace_am
+    return overlap_coo(self, funct=laplace_am)
+  
+  def vnucele_coo(self, **kvargs): # Compute matrix elements of nuclear-electron interaction (attraction)
+    """ 
+      These are tricky to define. In case of all-electron calculations it is well known, but 
+      in case of pseudo-potential calculations we need some a specification of pseudo-potential
+      and a specification of (Kleinman-Bulander) projectors to compute explicitly. Practically,
+      we will subtract the computed matrix elements from the total Hamiltonian to find out the 
+      nuclear-electron interaction in case of SIESTA import. This means that Vne is defined by 
+        Vne = H_KS - T - V_H - V_xc
+    """
+    from scipy.sparse import coo_matrix
+    vne = coo_matrix((self.norbs, self.norbs))
+    vne.setdiag(0.1)
+    return vne
+
+  def has_ecp(self): return False # if there is effective core potential in the Hamiltonian?
+    
   def overlap_lil(self, **kvargs):   # Compute overlap matrix in list of lists format
     from pyscf.nao.m_overlap_lil import overlap_lil
     return overlap_lil(self, **kvargs)
