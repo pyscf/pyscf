@@ -13,6 +13,6 @@ class KnowValues(unittest.TestCase):
     pb = prod_basis_c().init_prod_basis_pp(sv, jcutoff=7)
 
     myhf = RHF(sv)
-    #myhf.kernel()
+    myhf.kernel()
 
 if __name__ == "__main__": unittest.main()

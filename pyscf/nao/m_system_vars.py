@@ -441,6 +441,10 @@ class system_vars_c():
       raise RuntimeError('not implemented...')
     return mat
 
+  def intor(self, type_str, **kvargs):
+    """ to initialize ERI which are approx equivalent to a product basis """
+    return None
+
   # More functions for convenience (see PDoS)
   def get_orb2j(self): return get_orb2j(self)
   def get_orb2m(self): return get_orb2m(self)
@@ -553,7 +557,7 @@ class system_vars_c():
 
   def get_init_guess(self, key=None):
     """ Compute an initial guess for the density matrix. """
-    dm = self.comp_dm()
+    return self.comp_dm() # indeed, use the loaded ks orbitals
 
   def init_libnao(self, wfsx=None):
     """ Initialization of data on libnao site """
