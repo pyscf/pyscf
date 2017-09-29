@@ -10,7 +10,6 @@ class KnowValues(unittest.TestCase):
 
     dname = os.path.dirname(os.path.abspath(__file__))
     sv = system_vars_c().init_siesta_xml(label='water', cd=dname)
-    pb = prod_basis_c().init_prod_basis_pp(sv, jcutoff=7)
 
     myhf = RHF(sv)
     #myhf.kernel()

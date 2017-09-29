@@ -528,7 +528,7 @@ def dot_eri_dm(eri, dm, hermi=0):
     return vj, vk
 
 
-def get_jk(mol, dm, hermi=1, vhfopt=None):
+def get_jk(mol, dm, hermi=1, vhfopt=None, **kvargs):
     '''Compute J, K matrices for the given density matrix
 
     Args:
@@ -564,10 +564,14 @@ def get_jk(mol, dm, hermi=1, vhfopt=None):
     >>> print(j.shape)
     (3, 2, 2)
     '''
-    dm = numpy.asarray(dm, order='C')
-    nao = dm.shape[-1]
-    vj, vk = _vhf.direct(dm.reshape(-1,nao,nao), mol._atm, mol._bas, mol._env,
+    if hasattr(mol, 'get_jk'): 
+      vj, vk = mol.get_jk(dm=dm, hermi=1, vhfopt=None, **kvargs)
+    else :
+      dm = numpy.asarray(dm, order='C')
+      nao = dm.shape[-1]
+      vj, vk = _vhf.direct(dm.reshape(-1,nao,nao), mol._atm, mol._bas, mol._env,
                          vhfopt=vhfopt, hermi=hermi, cart=mol.cart)
+    
     return vj.reshape(dm.shape), vk.reshape(dm.shape)
 
 
@@ -1080,7 +1084,7 @@ class SCF(lib.StreamObject):
     >>> mf.scf()
     -1.0811707843775884
     '''
-    def __init__(self, mol):
+    def __init__(self, mol, direct_scf=None, use_scf_get_jk=None):
         if not mol._built:
             sys.stderr.write('Warning: mol.build() is not called in input\n')
             mol.build()
@@ -1107,7 +1111,9 @@ class SCF(lib.StreamObject):
         self.diis_space_rollback = False
         self.damp = 0
         self.level_shift = 0
-        self.direct_scf = True
+        mol_has_get_jk = hasattr(mol, 'get_jk')
+        self.direct_scf = (not mol_has_get_jk) if direct_scf is None else direct_scf
+        self.use_scf_get_jk = mol_has_get_jk if use_scf_get_jk is None else use_scf_get_jk
         self.direct_scf_tol = 1e-13
         self.conv_check = True
 ##################################################
@@ -1473,23 +1479,27 @@ class SCF(lib.StreamObject):
 class RHF(SCF):
     __doc__ = SCF.__doc__
 
-    def __init__(self, mol):
+    def __init__(self, mol, **kvargs):
         if mol.nelectron != 1 and (mol.nelectron % 2) != 0:
             raise ValueError('Invalid electron number %i.' % mol.nelectron)
 # Note: self._eri requires large amount of memory
-        SCF.__init__(self, mol)
+        SCF.__init__(self, mol, **kvargs)
 
     @lib.with_doc(get_jk.__doc__)
     def get_jk(self, mol=None, dm=None, hermi=1):
 # Note the incore version, which initializes an _eri array in memory.
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
-            if self._eri is None:
-                self._eri = mol.intor('int2e', aosym='s8')
+        
+        if self.use_scf_get_jk: # overriding original heuristic
+          vj, vk = SCF.get_jk(self, mol, dm, hermi)
+        else : # original heuristic
+          if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
+            if self._eri is None: self._eri = mol.intor('int2e', aosym='s8')
             vj, vk = dot_eri_dm(self._eri, dm, hermi)
-        else:
+          else:
             vj, vk = SCF.get_jk(self, mol, dm, hermi)
+        
         return vj, vk
 
     def convert_from_(self, mf):

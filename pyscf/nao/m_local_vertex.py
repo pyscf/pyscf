@@ -43,7 +43,7 @@ class local_vertex_c(ao_matelem_c):
     nmu = self.ao1.sp2nmult[sp]
     
     jmx_sp = np.amax(mu2j)
-    j2nf=np.zeros((2*jmx_sp+1), dtype=np.int32) # count number of radial functions products per angular momentum
+    j2nf=np.zeros((2*jmx_sp+1), dtype=int) # count number of radial functions products per angular momentum
     for mu1,j1,s1,f1 in info:
       for mu2,j2,s2,f2 in info:
         if mu2<mu1: continue
@@ -52,7 +52,7 @@ class local_vertex_c(ao_matelem_c):
     
     j_p2mus = [ [p for p in range(j2nf[j]) ] for j in range(2*jmx_sp+1)]
     j_p2js  = [ [p for p in range(j2nf[j]) ] for j in range(2*jmx_sp+1)]
-    j2p = np.zeros((2*jmx_sp+1), dtype=np.int32)
+    j2p = np.zeros((2*jmx_sp+1), dtype=int)
     for mu1,j1,s1,f1 in info:
       for mu2,j2,s2,f2 in info:
         if mu2<mu1: continue
@@ -67,7 +67,7 @@ class local_vertex_c(ao_matelem_c):
     
     j2xff     = [] # Storage for dominant product's functions (list of numpy arrays: x*f(r)*f(r))
     j2xww     = [] # Storage for dominant product's vertex (angular part of: x*wigner*wigner)
-    j2eva     = [] # Storage for eigenvalues in each angular momentum "sektor"
+    j2eva     = [] # Storage for eigenvalues in each angular momentum "sector"
     t1 = 0
     tstart = timer()
     for j,dim in enumerate(j2nf): # Metrik ist dim * dim in diesem Sektor

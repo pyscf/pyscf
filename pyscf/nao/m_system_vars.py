@@ -472,6 +472,10 @@ class system_vars_c():
     from pyscf.nao.m_vhartree_coo import vhartree_coo
     return vhartree_coo(self, **kvargs)
 
+  def get_jk(self, **kvargs): # Compute matrix elements of Hartree potential and Fock exchange
+    from pyscf.nao.m_vhartree_exop_den import vhartree_exop_den
+    return vhartree_exop_den(self, **kvargs)
+
   def get_hamiltonian(self): # Returns the stored matrix elements of current hamiltonian 
     return self.hsx.spin2h4_csr
     
@@ -557,7 +561,9 @@ class system_vars_c():
 
   def get_init_guess(self, key=None):
     """ Compute an initial guess for the density matrix. """
-    return self.comp_dm() # indeed, use the loaded ks orbitals
+    dm = self.comp_dm()  # the loaded ks orbitals will be used
+    if dm.shape[0:2]==(1,1) and dm.shape[4]==1 : dm = dm.reshape((self.norbs,self.norbs))
+    return dm
 
   def init_libnao(self, wfsx=None):
     """ Initialization of data on libnao site """
