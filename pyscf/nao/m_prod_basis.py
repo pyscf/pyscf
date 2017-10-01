@@ -1,6 +1,7 @@
 from __future__ import print_function, division
 import numpy as np
 from scipy.sparse import coo_matrix
+from pyscf.nao.lsofcsr import lsofcsr_c
 from numpy import array, einsum, zeros, int64, sqrt
 from ctypes import POINTER, c_double, c_int64, byref
 from pyscf.nao.m_libnao import libnao
@@ -504,6 +505,33 @@ class prod_basis_c():
             irow[inz],icol[inz],data[inz] = p,a+b*n,inf.vrtx[p-sd,a-sa,b-sb]; inz+=1;
             irow[inz],icol[inz],data[inz] = p,b+a*n,inf.vrtx[p-sd,a-sa,b-sb]; inz+=1;
     return sparseformat((data, (irow, icol)), dtype=dtype, shape=(nfdp,n*n))
+
+  def get_dp_vertex_doubly_sparse(self, dtype=np.float64, sparseformat=lsofcsr_c, axis=0):
+    """ Returns the product vertex coefficients for dominant products as an one-dimensional array of sparse matrices """
+    nnz = self.get_dp_vertex_nnz()
+    i1,i2,i3,data = zeros(nnz, dtype=int), zeros(nnz, dtype=int), zeros(nnz, dtype=int), zeros(nnz, dtype=dtype)
+    a2s,n,nfdp,lv = self.sv.atom2s,self.sv.atom2s[-1],self.dpc2s[-1],self.prod_log.sp2vertex # local "aliases"
+    inz = 0
+    for atom,[sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
+      if pt!=1: continue
+      s,f = a2s[atom:atom+2]
+      for p in range(sd,fd):
+        for a in range(s,f):
+          for b in range(s,f):
+            i1[inz],i2[inz],i3[inz],data[inz] = p,a,b,lv[spp][p-sd,a-s,b-s]
+            inz+=1
+
+    for atom, [sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
+      if pt!=2: continue
+      inf= self.bp2info[spp]
+      a,b = inf.atoms
+      sa,fa,sb,fb = a2s[a],a2s[a+1],a2s[b],a2s[b+1]
+      for p in range(sd,fd):
+        for a in range(sa,fa):
+          for b in range(sb,fb):
+            i1[inz],i2[inz],i3[inz],data[inz] = p,a,b,inf.vrtx[p-sd,a-sa,b-sb]; inz+=1;
+            i1[inz],i2[inz],i3[inz],data[inz] = p,b,a,inf.vrtx[p-sd,a-sa,b-sb]; inz+=1;
+    return sparseformat((data, (i1, i2, i3)), dtype=dtype, shape=(nfdp,n,n), axis=axis)
 
   def init_c2s_domiprod(self):
     """Compute the array of start indices for dominant product basis set """

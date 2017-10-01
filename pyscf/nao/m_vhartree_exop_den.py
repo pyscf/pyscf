@@ -9,7 +9,9 @@ def vhartree_exop_den(sv, dm=None, **kvargs):
     matrix elements
   """
   from pyscf.nao.m_prod_basis import prod_basis_c
+  from scipy.sparse import csr_matrix
   import numpy as np
+  
 
   if hasattr(sv, 'pb'):
     pb = sv.pb
@@ -18,11 +20,12 @@ def vhartree_exop_den(sv, dm=None, **kvargs):
     sv.hkernel_den = pb.comp_coulomb_den()
     
   dm = sv.comp_dm() if dm is None else dm
-  v_dab = pb.get_dp_vertex_sparse()
-  da2cc = pb.get_da2cc_sparse()
-  
   n = sv.norbs
-  vh = (v_dab.T*(da2cc*np.dot(sv.hkernel_den, (da2cc.T*(v_dab*dm.reshape(n*n))))) ).reshape((n,n))
+  vh = sv.vhartree_coo(dm=dm).todense()
+
+  v_dab = pb.get_dp_vertex_sparse(sparseformat=csr_matrix)
+  da2cc = pb.get_da2cc_sparse(sparseformat=csr_matrix)
+  
   ex = (v_dab.T*(da2cc*np.dot(sv.hkernel_den, (da2cc.T*(v_dab*dm.reshape(n*n))))) ).reshape((n,n)) # nonsense, correct here to get the actual Fock operator (j matrix)
   return vh,ex
 
