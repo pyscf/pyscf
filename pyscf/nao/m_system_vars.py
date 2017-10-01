@@ -427,6 +427,14 @@ class system_vars_c():
   def nao_nr(self): return self.norbs
   def atom_nelec_core(self, ia): return self.sp2charge[self.atom2sp[ia]]-self.ao_log.sp2valence[self.atom2sp[ia]]
   def ao_loc_nr(self): return self.mu2orb_s[0:self.natm]
+  def add_pb_hk(self, **kvargs):
+    if hasattr(self, 'pb'):
+      return sv.pb, sv.hkernel_den
+    else:
+      pb = sv.pb = prod_basis_c().init_prod_basis_pp(sv, **kvargs)
+      hk = sv.hkernel_den = pb.comp_coulomb_den(**kvargs)
+    return pb,hk
+
   def intor_symmetric(self, type_str):
     """ Uff ... """
     s = type_str.lower() 
@@ -472,9 +480,11 @@ class system_vars_c():
     from pyscf.nao.m_vhartree_coo import vhartree_coo
     return vhartree_coo(self, **kvargs)
 
-  def get_jk(self, **kvargs): # Compute matrix elements of Hartree potential and Fock exchange
-    from pyscf.nao.m_vhartree_exop_den import vhartree_exop_den
-    return vhartree_exop_den(self, **kvargs)
+  def get_jk(self, dm=None, **kvargs): # Compute matrix elements of Hartree potential and Fock exchange
+    dm = sv.comp_dm() if dm is None else dm
+    vh = sv.vhartree_coo(dm=dm, **kvargs).todense()
+    jmat = sv.jmat_den(dm=dm, **kvargs)
+    return vh,jmat
 
   def get_hamiltonian(self): # Returns the stored matrix elements of current hamiltonian 
     return self.hsx.spin2h4_csr

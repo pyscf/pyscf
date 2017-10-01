@@ -67,8 +67,7 @@ class KnowValues(unittest.TestCase):
     #print(type(tref[14,14]), tref.shape)
     self.assertTrue(abs(tref-tkin).sum()/len(tkin)<5e-9)
 
-
 if __name__ == "__main__":
-  print("Full Tests for system_vars_c")
+  print("Tests for system_vars_c")
   unittest.main()
 
