@@ -535,7 +535,7 @@ class prod_basis_c():
 
   def comp_fci_den(self, hk, dtype=np.float64):
     """ Compute the four-center integrals and return it in a dense storage """
-    pab2v = self.get_ac_vertex_array()
+    pab2v = self.get_ac_vertex_array(dtype=dtype)
     pcd = np.einsum('pq,qcd->pcd', hk, pab2v)
     abcd = np.einsum('pab,pcd->abcd', pab2v, pcd)
     return abcd
