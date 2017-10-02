@@ -119,7 +119,7 @@ class ao_log_c(log_mesh_c):
       for mu,j in enumerate(mu2j): mu2s[mu+1] = mu2s[mu]+2*j+1
       self.sp_mu2s.append(mu2s)
     
-    self.sp2norbs = [mu2s[-1] for mu2s in self.sp_mu2s]
+    self.sp2norbs = np.array([mu2s[-1] for mu2s in self.sp_mu2s])
     self.sp2charge = sv.sp2charge
     self.sp_mu2rcut = []
     for sp, mu2ff in enumerate(self.psi_log):

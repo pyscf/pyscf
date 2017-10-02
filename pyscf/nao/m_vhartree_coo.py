@@ -8,8 +8,7 @@ def vhartree_coo(sv, dm=None, **kvargs):
   Returns:
     matrix elements
   """
-  from pyscf.nao.m_prod_basis import prod_basis_c
-  from scipy.sparse import csr_matrix
+  from scipy.sparse import coo_matrix, csr_matrix
   import numpy as np
 
   pb,hk = sv.add_pb_hk(**kvargs)    

@@ -16,7 +16,7 @@ import sys
 #
 #
 #
-def coulomb_am(self, sp1, R1, sp2, R2):
+def coulomb_am(self, sp1, R1, sp2, R2, **kvargs):
   """
     Computes Coulomb overlap for an atom pair. The atom pair is given by a pair of species indices and the coordinates of the atoms.
     <a|r^-1|b> = \iint a(r)|r-r'|b(r')  dr dr'

@@ -533,6 +533,13 @@ class prod_basis_c():
             i1[inz],i2[inz],i3[inz],data[inz] = p,b,a,inf.vrtx[p-sd,a-sa,b-sb]; inz+=1;
     return sparseformat((data, (i1, i2, i3)), dtype=dtype, shape=(nfdp,n,n), axis=axis)
 
+  def comp_fci_den(self, hk, dtype=np.float64):
+    """ Compute the four-center integrals and return it in a dense storage """
+    pab2v = self.get_ac_vertex_array()
+    pcd = np.einsum('pq,qcd->pcd', hk, pab2v)
+    abcd = np.einsum('pab,pcd->abcd', pab2v, pcd)
+    return abcd
+    
   def init_c2s_domiprod(self):
     """Compute the array of start indices for dominant product basis set """
     c2n,c2t,c2sp = [],[],[] #  product Center -> list of the size of the basis set in this center,of center's types,of product species

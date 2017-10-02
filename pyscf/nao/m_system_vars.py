@@ -417,6 +417,17 @@ class system_vars_c():
     openmx_import_scfout(self, label, cd)
     self.state = 'must be useful for something already'
     return self
+
+  def add_pb_hk(self, **kvargs):
+    """ This is adding a product basis attribute to the class and making possible then to compute the matrix elements of Hartree potential or Fock exchange."""
+    from pyscf.nao.m_prod_basis import prod_basis_c
+    if hasattr(self, 'pb'):
+      pb = self.pb
+      hk = self.hkernel_den
+    else:
+      pb = self.pb = prod_basis_c().init_prod_basis_pp(self, **kvargs)
+      hk = self.hkernel_den = pb.comp_coulomb_den(**kvargs)
+    return pb,hk
     
   # More functions for similarity with Mole
   def atom_symbol(self, ia): return self.sp2symbol[self.atom2sp[ia]]
@@ -427,13 +438,6 @@ class system_vars_c():
   def nao_nr(self): return self.norbs
   def atom_nelec_core(self, ia): return self.sp2charge[self.atom2sp[ia]]-self.ao_log.sp2valence[self.atom2sp[ia]]
   def ao_loc_nr(self): return self.mu2orb_s[0:self.natm]
-  def add_pb_hk(self, **kvargs):
-    if hasattr(self, 'pb'):
-      return sv.pb, sv.hkernel_den
-    else:
-      pb = sv.pb = prod_basis_c().init_prod_basis_pp(sv, **kvargs)
-      hk = sv.hkernel_den = pb.comp_coulomb_den(**kvargs)
-    return pb,hk
 
   def intor_symmetric(self, type_str):
     """ Uff ... """
@@ -476,15 +480,19 @@ class system_vars_c():
     from pyscf.nao.m_vnucele_coo_subtract import vnucele_coo_subtract
     return vnucele_coo_subtract(self, **kvargs)
 
-  def vhartree_coo(self, **kvargs): # Compute matrix elements of nuclear-electron interaction (attraction)
+  def vhartree_coo(self, **kvargs): # Compute matrix elements of Hartree potential 
     from pyscf.nao.m_vhartree_coo import vhartree_coo
     return vhartree_coo(self, **kvargs)
+
+  def kmat_den(self, **kvargs): # Compute matrix elements of Fock exchange
+    from pyscf.nao.m_kmat_den import kmat_den
+    return kmat_den(self, **kvargs)
 
   def get_jk(self, dm=None, **kvargs): # Compute matrix elements of Hartree potential and Fock exchange
     dm = sv.comp_dm() if dm is None else dm
     vh = sv.vhartree_coo(dm=dm, **kvargs).todense()
-    jmat = sv.jmat_den(dm=dm, **kvargs)
-    return vh,jmat
+    kmat = sv.kmat_den(dm=dm, **kvargs)
+    return vh,kmat
 
   def get_hamiltonian(self): # Returns the stored matrix elements of current hamiltonian 
     return self.hsx.spin2h4_csr

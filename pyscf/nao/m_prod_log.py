@@ -106,7 +106,7 @@ class prod_log_c(ao_log_c):
     self.sp2lambda     = [] # list of numpy arrays containing the inverse vertex coefficients <p,a,b> L^p_ab defined by F^p(r) = L^p_ab f^a(r) f^b(r)
     self.sp2vertex_csr = [] # going to be list of sparse matrices with dimension (nprod,norbs**2) or <mu,ab> . This is a derivative of the sp2vertex
     self.sp2inv_vv     = [] # this is a future list of matrices (<mu|ab><ab|nu>)^-1. This is a derivative of the sp2vertex
-    self.sp2norbs      = [] # number of orbitals per specie
+    self.sp2norbs      = np.zeros(self.nspecies, dtype=int) # number of orbitals per specie
     self.sp2charge     = ao_log.sp2charge # copy of nuclear charges from atomic orbitals
     
     for sp,no in enumerate(lvc.ao1.sp2norbs):
@@ -126,7 +126,7 @@ class prod_log_c(ao_log_c):
       self.sp_mu2j.append(mu2j)
       self.sp_mu2rcut.append(mu2rcut)
       self.sp_mu2s.append(mu2s)
-      self.sp2norbs.append(mu2s[-1])
+      self.sp2norbs[sp] = mu2s[-1]
 
       mu2ff = np.zeros((nmult, lvc.nr))
       for mu,[j,domi] in enumerate(mu2jd): mu2ff[mu,:] = ldp['j2xff'][j][domi,:]
