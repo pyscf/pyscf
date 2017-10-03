@@ -11,39 +11,81 @@ Introduction
 ============
 
 The :mod:`pbc.df` module provides the fundamental functions to handle the
-DF integral tensors required by the gamma-point k-point PBC calculations.
+density fitting (DF) integral tensors required by the gamma-point and k-point
+PBC calculations.  There are four types of DF methods available for PBC
+systems.  They are FFTDF (plane-wave density fitting with fast Fourier
+transformation), AFTDF (plane-wave density fitting with analytical Fourier
+transformation), GDF (Gaussian density fitting) and MDF (mixed density fitting).
+The Coulomb integrals and nuclear attraction integrals in the PBC calculations
+are all computed with DF technique.  The default scheme is FFTDF.
 
 
-FFTDF --- density fitting with FFT integrals
---------------------------------------------
+FFTDF --- FFT-based density fitting
+-----------------------------------
+
+FFTDF represents the method to compute electron repulsion integrals in
+reciprocal space with the Fourier transformed Coulomb kernel
+
+.. math::
+    (ij|kl) = \rho_{ij}(\mathbf{G}) \frac{4\pi}{G^2} \rho_{kl}(-\mathbf{G})
+
+:math:`\mathbf{G}` is the plane wave vector.
+:math:`\rho_{ij}(\mathbf{G})` is the Fourier transformed orbital pair
+
+.. math::
+    \rho_{ij}(\mathbf{G}) = \sum_{r} e^{-\mathbf{G}\cdot\mathbf{r}} \phi_i(\mathbf{r})\phi_j(\mathbf{r}))
+
+As the default integral scheme of PBC calculations, FFTDF can be accessed
+through :attr:`with_df` of mean-field object::
+
+    >>> import numpy as np
+    >>> from pyscf.pbc import gto, scf
+    >>> cell = gto.M(atom='He 1 1 1', a=np.eye(3)*2, basis='3-21g')
+    >>> mf = scf.RHF(cell)
+    >>> print(mf.with_df)
+    <pyscf.pbc.df.fft.FFTDF>
+
+* Nuclear-electron interaction integrals and PP integrals are also computed by this FFT technique
+
+* get_eri and get_jk and ao2mo
 
 * When gs is not enough, this module will produce warning message.
+
+* Specify :attr:`kpts`
 
 * Low-dimension system is not supported.
 
 
-AFTDF --- density fitting with AFT integrals
---------------------------------------------
+AFTDF --- AFT-based density fitting
+-----------------------------------
 
 
 .. _pbc_gdf:
 
-Gaussian density fitting
-------------------------
+GDF --- Gaussian density fitting
+--------------------------------
 
+GDF represents the method to compute electron repulsion integrals in
 * Saving/loading DF integrals the same way as in the
+
+GDF can be::
+    from pyscf import gto, scf, mcscf
+    mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='def2-tzvp')
+    mf = scf.RHF(mol).density_fit().run()
+    mc = mcscf.CASSCF(mf, 8, 10).density_fit().run()
 
 
 .. _pbc_mdf:
 
-Mixed density fitting
----------------------
+MDF --- mixed density fitting
+-----------------------------
 
-In principle, the accuracy of MDF method can be improved by adding more and more
+In principle, the accuracy of MDF method can be increased by adding more and more
 plane waves in the auxiliary basis set.  In practice, large number of plane
-waves may lead to strong linear dependence which has strong effects to the
-numerical stability.  The optimal accuracy requires a reasonable plan wave basis
-size with a reasonable linear dependence threshold.
+waves may lead to strong linear dependency which may lead to numerical stability
+issue.  The optimal accuracy requires a reasonable number of plan wave basis
+with a reasonable linear dependence threshold.  Big threshold would remove
+more auxiliary functions while small threshold would cause numerical error.
 
 
 Low-dimension system
