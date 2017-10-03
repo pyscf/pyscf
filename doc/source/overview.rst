@@ -1,19 +1,19 @@
 An overview of PySCF
 ********************
 
-PySCF is an ab initio computational chemistry program implemented in
-Python program language.  The package aims to provide a simple,
-light-weight and efficient platform for electronic structure theory
-developing and simulation.   The package offers a wide range of
-functions to support the electronic structure mean-field and
-post-mean-field calculations of finite size systems and periodic systems.
-Users can run simulations with input script as the regular quantum
-chemistry package offers, or investigate new features by combining
-primitive functions, or modifying source code to
-rapidly achieve certain requirements as they want.  Although most
-functions are written in Python, the computation critical modules are
-intensively optimized in C.  The package works as efficient as other
-C/Fortran based quantum chemistry program.
+Python-based simulations of chemistry framework (PYSCF) is a general-purpose
+electronic structure platform designed from the ground up to emphasize code
+simplicity, so as to facilitate new method development and enable flexible
+computational workflows. The package provides a wide range of tools to support
+simulations of finite-size systems, extended systems with periodic boundary
+conditions, low-dimensional periodic systems, and custom Hamiltonians, using
+mean-field and post-mean-field methods with standard Gaussian basis functions.
+To ensure ease of extensibility, PYSCF uses the Python language to implement
+almost all of its features, while computationally critical paths are
+implemented with heavily optimized C routines. Using this combined Python/C
+implementation, the package is as efficient as the best existing C or Fortran-
+based quantum chemistry programs.
+
 
 
 Features

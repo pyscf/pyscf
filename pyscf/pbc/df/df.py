@@ -632,7 +632,7 @@ class _load3c(object):
             k_id = member(kptji, kptij_lst)
             if len(k_id) == 0:
                 raise RuntimeError('%s for kpts %s is not initialized.\n'
-                                   'Reset attribute .kpts then call '
+                                   'You need to update the attribute .kpts then call '
                                    '.build() to initialize %s.'
                                    % (self.label, kpti_kptj, self.label))
             dat = self.feri['%s/%d' % (self.label, k_id[0])]

@@ -17,8 +17,8 @@ PBC calculations performed at the gamma point.  For example, one can perform a g
 Hartree-Fock calculation in a supercell, followed by a CCSD(T) calculation, which is
 implemented in the molecular code.
 
-In PBC calculations that sample the Brillouin zone beyond the gamma point (i.e. with
-k-point sampling), we make small changes to the gamma-point data structures and export KHF
+In the PBC k-point calculations,
+we make small changes to the gamma-point data structures and export KHF
 and KDFT methods.  On top of these KSCF methods, we have implemented k-point CCSD and
 k-point EOM-CCSD methods.  Other post-mean-field methods can be analogously written to
 explicitly enforce translational symmetry through k-point sampling.
