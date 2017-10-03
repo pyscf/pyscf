@@ -134,7 +134,8 @@ class system_vars_c():
     self.atom2s = np.zeros((self.natm+1), dtype=np.int64)
     for atom,sp in enumerate(self.atom2sp): self.atom2s[atom+1]=self.atom2s[atom]+self.ao_log.sp2norbs[sp]
     self.norbs = self.norbs_sc = self.atom2s[-1]
-    self.nspin = 1
+    self.spin = gto.spin if hasattr(gto, 'spin') else 0
+    self.nspin = self.spin + 1
     self.ucell = 20.0*np.eye(3)
     self.atom2mu_s = np.zeros((self.natm+1), dtype=np.int64)
     for atom,sp in enumerate(self.atom2sp): self.atom2mu_s[atom+1]=self.atom2mu_s[atom]+self.ao_log.sp2nmult[sp]
@@ -322,7 +323,7 @@ class system_vars_c():
     self._xc_code   = 'LDA,PZ' # estimate how ? 
     self._nelectron = self.hsx.nelec
     self.cart = False
-    self.spin = self.nspin
+    self.spin = self.nspin-1
     self.verbose = verbose
     self.stdout = sys.stdout
     self.symmetry = False
@@ -662,6 +663,10 @@ class system_vars_c():
     ksn2fd = fermi_dirac_occupations(Telec, ksn2E, Fermi)
     ksn2fd = (3.0-self.nspin)*ksn2fd
     return ksn2fd
+
+  def get_eigenvalues(self):
+    """ Returns mean-field eigenvalues """
+    return self.wfsx.ksn2e
 
   def read_wfsx(self, fname, **kvargs):
     """ An occasional reading of the SIESTA's .WFSX file """

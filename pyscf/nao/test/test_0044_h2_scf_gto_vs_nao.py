@@ -12,13 +12,13 @@ class KnowValues(unittest.TestCase):
     
   def test_scf_gto_vs_nao(self):
     """ Test computation of overlaps between NAOs against overlaps computed between GTOs"""
-    from pyscf.nao.m_hf import RHF
     gto_hf = scf.RHF(mol)
     gto_hf.kernel()
     
     sv = system_vars_c().init_pyscf_gto(mol, verbose=0)
-    nao_hf = RHF(sv)
-    nao_hf.kernel(dump_chk=False)
+    nao_hf = scf.RHF(sv)
+    nao_hf.dump_chkfile=False
+    nao_hf.kernel()
     self.assertAlmostEqual(gto_hf.e_tot, nao_hf.e_tot, 4)
     for e1,e2 in zip(nao_hf.mo_energy,gto_hf.mo_energy): self.assertAlmostEqual(e1, e2, 3)
     for o1,o2 in zip(nao_hf.mo_occ,gto_hf.mo_occ): self.assertAlmostEqual(o1, o2)
