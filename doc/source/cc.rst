@@ -95,6 +95,9 @@ by the CCSD, CCSD(T), density matrices, and EOM-CCSD modules, but not in
 the analytical CCSD gradient module.
 
 
+.. Add Memory requirements
+
+
 Examples
 ========
 
