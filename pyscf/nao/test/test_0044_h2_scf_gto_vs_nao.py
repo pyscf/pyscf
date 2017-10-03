@@ -18,7 +18,7 @@ class KnowValues(unittest.TestCase):
     """ Test computation of overlaps between NAOs against overlaps computed between GTOs"""
     from pyscf.nao.m_hf import RHF
     nao_hf = RHF(sv)
-    #nao_hf.kernel()
+    #nao_hf.kernel(dump_chk=False)
     #print(dir(nao_hf), nao_hf.mo_energy)
     #print(dir(gto_hf), gto_hf.mo_energy)
     

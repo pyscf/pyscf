@@ -53,6 +53,13 @@ class KnowValues(unittest.TestCase):
     vne_nao = sv.vnucele_coo_coulomb(level=1)
     #print('a,b,c', (vne_nao).sum(), (vne_gto).sum(), abs(vne_nao-vne_gto).sum()/vne_gto.size)
     self.assertTrue(abs(vne_nao-vne_gto).sum()/vne_gto.size<5e-6)
+
+  def test_energy_nuc_gto_vs_nao(self):
+    """ Test computation of matrix elements of nuclear-electron attraction """
+    sv = system_vars_c().init_pyscf_gto(mol)
+    e_nao = sv.energy_nuc()
+    e_gto = mol.energy_nuc()
+    self.assertAlmostEqual(e_nao, e_gto)
     
 if __name__ == "__main__":
   print("Test of computation of Hartree potential, Fock exchange and Kinetic energy and the nuclear-electron attr integrals")

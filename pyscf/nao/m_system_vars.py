@@ -537,6 +537,14 @@ class system_vars_c():
     from pyscf.nao.m_exc import exc
     return exc(self, dm, xc_code, **kvargs)
 
+  def energy_nuc(self, charges=None, coords=None):
+    """ Potential energy of electrostatic repulsion of point nuclei """
+    from scipy.spatial.distance import cdist
+    chrg = self.atom_charges() if charges is None else charges
+    crds = self.atom_coords() if coords is None else coords
+    identity = np.identity(len(chrg))
+    return ((chrg[:,None]*chrg[None,:])*(1.0/(cdist(crds, crds)+identity)-identity)).sum()*0.5
+
   def build_3dgrid_pp(self, level=3):
     """ Build a global grid and weights for a molecular integration (integration in 3-dimensional coordinate space) """
     from pyscf import dft
