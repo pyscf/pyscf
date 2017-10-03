@@ -86,6 +86,8 @@ available in the periodic code.  By assigning different DF object to
 :attr:`with_df`, different DF schemes can be applied in the PBC calculations.
 
 
+.. _df_auxbasis:
+
 DF auxiliary basis
 ------------------
 
@@ -123,6 +125,8 @@ example::
 More examples for inputing auxiliary basis in the DF calculation can be found
 in ``examples/df/01-auxbasis.py``.
 
+
+.. _df_etb_auxbasis:
 
 Even-tempered auxiliary Gaussian basis
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -185,7 +189,7 @@ an alternative way, different to the attribute :attr:`_eri` of mean-field object
 
 In the DF-SCF method, the 3-index tensor is held in the :attr:`with_df` object.
 The :attr:`with_df` object (see :class:`pyscf.df.df.DF` class) provides
-two attributes :attr:`_cderi_to_save` :attr:`_cderi` to access the DF 3-index
+two attributes :attr:`_cderi_to_save` and :attr:`_cderi` to access the DF 3-index
 integrals.
 
 If a DF integral tensor is assigned to :attr:`_cderi`, the integrals will be
