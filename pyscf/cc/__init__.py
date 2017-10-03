@@ -53,42 +53,37 @@ from pyscf.cc import addons
 
 def CCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = ccsd.CCSD.__doc__
+    import sys
     from pyscf import scf
+    from pyscf.cc import dfccsd
 
     if isinstance(mf, scf.uhf.UHF) or mf.mol.spin != 0:
         return UCCSD(mf, frozen, mo_coeff, mo_occ)
 
-    try:
-        import sys
-        from pyscf import dft
-        if isinstance(mf, (dft.rks.RKS, dft.uks.UKS, dft.roks.ROKS,
-                           dft.rks_symm.RKS, dft.uks_symm.UKS, dft.rks_symm.ROKS)):
-            sys.stderr.write('CCSD Warning: The first argument mf is a DFT object. '
-                             'CCSD calculation should be used with HF object')
-    except:
-        pass
+    if 'dft' in str(mf.__module__):
+        sys.stderr.write('CCSD Warning: The first argument mf is a DFT object. '
+                         'CCSD calculation should be used with HF object')
 
-    if hasattr(mf, 'with_df') and 'pbc' in str(mf.__module__):
-        from pyscf.cc import dfccsd
-        raise NotImplementedError('DF-CCSD not implemented, use DF-RCCSD instead?')
+    mf = scf.addons.convert_to_rhf(mf)
+    if hasattr(mf, 'with_df') and mf.with_df:
+        return dfccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)
     else:
         return ccsd.CCSD(mf, frozen, mo_coeff, mo_occ)
 
 def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
-    import numpy
-    from pyscf.cc import rccsd
     from pyscf import lib
     from pyscf import scf
+    from pyscf.cc import rccsd
+    from pyscf.cc import dfccsd
     if isinstance(mf, scf.uhf.UHF):
         raise RuntimeError('RCCSD cannot be used with UHF method.')
     elif isinstance(mf, scf.rohf.ROHF):
         lib.logger.warn(mf, 'RCCSD method does not support ROHF method. ROHF object '
                         'is converted to UHF object and UCCSD method is called.')
-        mf = scf.addons.convert_to_uhf(mf)
         return UCCSD(mf, frozen, mo_coeff, mo_occ)
 
-    elif hasattr(mf, 'with_df') and 'pbc' in str(mf.__module__):
-        from pyscf.cc import dfccsd
+    mf = scf.addons.convert_to_rhf(mf)
+    if hasattr(mf, 'with_df') and mf.with_df:
         return dfccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)
 
     else:
@@ -96,12 +91,16 @@ def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
 
 
 def UCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
-    from pyscf.cc import uccsd
+    import sys
     from pyscf import scf
-    if not isinstance(mf, scf.uhf.UHF):
-        mf = scf.addons.convert_to_uhf(mf)
+    from pyscf.cc import uccsd
 
-    if hasattr(mf, 'with_df') and 'pbc' in str(mf.__module__):
+    if 'dft' in str(mf.__module__):
+        sys.stderr.write('CCSD Warning: The first argument mf is a DFT object. '
+                         'CCSD calculation should be used with HF object')
+
+    mf = scf.addons.convert_to_uhf(mf)
+    if hasattr(mf, 'with_df') and mf.with_df:
         raise NotImplementedError('DF-UCCSD')
     else:
         return uccsd.UCCSD(mf, frozen, mo_coeff, mo_occ)

@@ -115,11 +115,11 @@ class KnowValues(unittest.TestCase):
         cderi0 = df.incore.cholesky_eri(mol)
         df.outcore.cholesky_eri(mol, ftmp.name)
         with h5py.File(ftmp.name) as feri:
-            self.assertTrue(numpy.allclose(feri['eri_mo'], cderi0))
+            self.assertTrue(numpy.allclose(feri['j3c'], cderi0))
 
         df.outcore.cholesky_eri(mol, ftmp.name, ioblk_size=.05)
         with h5py.File(ftmp.name) as feri:
-            self.assertTrue(numpy.allclose(feri['eri_mo'], cderi0))
+            self.assertTrue(numpy.allclose(feri['j3c'], cderi0))
 
         nao = mol.nao_nr()
         naux = cderi0.shape[0]
@@ -136,7 +136,7 @@ class KnowValues(unittest.TestCase):
         cderi0 = buf
         df.outcore.cholesky_eri(mol, ftmp.name, aosym='s1', ioblk_size=.05)
         with h5py.File(ftmp.name) as feri:
-            self.assertTrue(numpy.allclose(feri['eri_mo'], cderi0.reshape(naux,-1)))
+            self.assertTrue(numpy.allclose(feri['j3c'], cderi0.reshape(naux,-1)))
 
         numpy.random.seed(1)
         co = numpy.random.random((nao,4))
