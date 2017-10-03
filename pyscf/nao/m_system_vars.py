@@ -114,7 +114,7 @@ class system_vars_c():
     self.symmetry = False
     self.symmetry_subgroup = None
     self.cart = False
-    self.nelectron = gto.nelectron
+    self._nelectron = gto.nelectron
     self._built = True
     self.max_memory = 20000
 
