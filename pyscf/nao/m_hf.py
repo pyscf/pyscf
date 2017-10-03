@@ -99,7 +99,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
     h1e = mf.get_hcore(mol)
     s1e = mf.get_ovlp(mol)
-
+    
     cond = lib.cond(s1e)
     logger.debug(mf, 'cond(S) = %s', cond)
     if numpy.max(cond)*1e-17 > conv_tol:
@@ -671,7 +671,7 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4:
         f = damping(s1e, dm*.5, f, damp_factor)
     if diis is not None and cycle >= diis_start_cycle:
-        f = diis.update(s1e, dm, f, mf, h1e, vhf)
+      f = diis.update(s1e, dm, f, mf, h1e, vhf)
     if abs(level_shift_factor) > 1e-4:
         f = level_shift(s1e, dm*.5, f, level_shift_factor)
     return f
@@ -1084,7 +1084,7 @@ class SCF(lib.StreamObject):
     >>> mf.scf()
     -1.0811707843775884
     '''
-    def __init__(self, mol, direct_scf=None, use_scf_get_jk=None):
+    def __init__(self, mol, direct_scf=None, use_scf_get_jk=None, **kvargs):
         if not mol._built:
             sys.stderr.write('Warning: mol.build() is not called in input\n')
             mol.build()

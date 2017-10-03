@@ -21,6 +21,6 @@ def kmat_den(sv, dm=None, algo='fci', **kvargs):
   else:
     print('algo=', algo)
     raise RuntimeError('unknown algoright')
-  
+
   return kmat
 

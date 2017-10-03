@@ -105,11 +105,11 @@ class system_vars_c():
   #
   #
   #
-  def init_pyscf_gto(self, gto, label='pyscf', **kvargs):
+  def init_pyscf_gto(self, gto, label='pyscf', verbose=0, **kvargs):
     """Interpret previous pySCF calculation"""
     from pyscf.lib import logger
 
-    self.verbose = logger.NOTE  # To be similar to Mole object...
+    self.verbose = verbose
     self.stdout = sys.stdout
     self.symmetry = False
     self.symmetry_subgroup = None
@@ -226,7 +226,7 @@ class system_vars_c():
   #
   #
   #
-  def init_siesta_xml(self, label='siesta', cd='.', **kvargs):
+  def init_siesta_xml(self, label='siesta', cd='.', verbose=0, **kvargs):
     from pyscf.nao.m_siesta_xml import siesta_xml
     from pyscf.nao.m_siesta_wfsx import siesta_wfsx_c
     from pyscf.nao.m_siesta_ion_xml import siesta_ion_xml
@@ -324,7 +324,7 @@ class system_vars_c():
     self._nelectron = self.hsx.nelec
     self.cart = False
     self.spin = self.nspin
-    self.verbose = 1 
+    self.verbose = verbose
     self.stdout = sys.stdout
     self.symmetry = False
     self.symmetry_subgroup = None
@@ -446,11 +446,11 @@ class system_vars_c():
     """ Uff ... """
     s = type_str.lower() 
     if s=='cint1e_ovlp_sph' or s=='int1e_ovlp':
-      mat = self.overlap_coo().todense()
+      mat = self.overlap_coo().toarray()
     elif s=='int1e_kin':
-      mat = (0.5*self.laplace_coo()).todense()
+      mat = (0.5*self.laplace_coo()).toarray()
     elif s=='int1e_nuc':
-      mat = (self.vnucele_coo()).todense()
+      mat = (self.vnucele_coo()).toarray()
     else:
       print(' type_str ', s)
       raise RuntimeError('not implemented...')
@@ -497,7 +497,7 @@ class system_vars_c():
 
   def get_jk(self, dm=None, **kvargs): # Compute matrix elements of Hartree potential and Fock exchange
     dm = self.comp_dm() if dm is None else dm
-    vh = self.vhartree_coo(dm=dm, **kvargs).todense()
+    vh = self.vhartree_coo(dm=dm, **kvargs).toarray()
     kmat = self.kmat_den(dm=dm, **kvargs)
     return vh,kmat
 
