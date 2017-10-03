@@ -14,12 +14,13 @@ sv = system_vars_c().init_pyscf_gto(mol)
 
 class KnowValues(unittest.TestCase):
     
-  def test_overlap_gto_vs_nao(self):
+  def test_scf_gto_vs_nao(self):
     """ Test computation of overlaps between NAOs against overlaps computed between GTOs"""
-    from pyscf.nao.m_overlap_am import overlap_am
-    oref = conv.conv_yzx2xyz_2d(mol.intor_symmetric('cint1e_ovlp_sph'))
-    over = sv.overlap_coo(funct=overlap_am).toarray()
-    self.assertTrue(abs(over-oref).sum()<5e-9)
+    from pyscf.nao.m_hf import RHF
+    nao_hf = RHF(sv)
+    #nao_hf.kernel()
+    #print(dir(nao_hf), nao_hf.mo_energy)
+    #print(dir(gto_hf), gto_hf.mo_energy)
     
 if __name__ == "__main__":
   print("Test of SCF done via NAOs")

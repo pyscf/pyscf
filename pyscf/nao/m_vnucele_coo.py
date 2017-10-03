@@ -20,7 +20,7 @@ def vnucele_coo(sv, algo=None, **kvargs):
     if hasattr(sv, 'xml_dict'): 
       vne_coo = sv.vnucele_coo_subtract(**kvargs) # try to subtract if data is coming from SIESTA
     else:
-      vne_coo = sv.vnucele_coo_coulomb(**kvargs)  # try to compute the Coulomb attarction matrix elements
+      vne_coo = sv.vnucele_coo_coulomb(**kvargs)  # try to compute the Coulomb attraction matrix elements
   else:
     vne_coo = sv.algo(**kvargs)
 

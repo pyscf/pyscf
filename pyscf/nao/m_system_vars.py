@@ -114,6 +114,9 @@ class system_vars_c():
     self.symmetry = False
     self.symmetry_subgroup = None
     self.cart = False
+    self.nelectron = gto.nelectron
+    self._built = True
+    self.max_memory = 20000
 
     self.label = label
     self.mol=gto # Only some data must be copied, not the whole object. Otherwise, an eventual deepcopy(...) may fail.
@@ -480,6 +483,10 @@ class system_vars_c():
     from pyscf.nao.m_vnucele_coo_subtract import vnucele_coo_subtract
     return vnucele_coo_subtract(self, **kvargs)
 
+  def vnucele_coo_coulomb(self, **kvargs): # Compute matrix elements of attraction by Coulomb forces from point nuclei
+    from pyscf.nao.m_vnucele_coo_coulomb import vnucele_coo_coulomb
+    return vnucele_coo_coulomb(self, **kvargs)
+
   def vhartree_coo(self, **kvargs): # Compute matrix elements of Hartree potential 
     from pyscf.nao.m_vhartree_coo import vhartree_coo
     return vhartree_coo(self, **kvargs)
@@ -489,9 +496,9 @@ class system_vars_c():
     return kmat_den(self, **kvargs)
 
   def get_jk(self, dm=None, **kvargs): # Compute matrix elements of Hartree potential and Fock exchange
-    dm = sv.comp_dm() if dm is None else dm
-    vh = sv.vhartree_coo(dm=dm, **kvargs).todense()
-    kmat = sv.kmat_den(dm=dm, **kvargs)
+    dm = self.comp_dm() if dm is None else dm
+    vh = self.vhartree_coo(dm=dm, **kvargs).todense()
+    kmat = self.kmat_den(dm=dm, **kvargs)
     return vh,kmat
 
   def get_hamiltonian(self): # Returns the stored matrix elements of current hamiltonian 
@@ -530,7 +537,7 @@ class system_vars_c():
     from pyscf.nao.m_exc import exc
     return exc(self, dm, xc_code, **kvargs)
 
-  def build_3dgrid(self, level=3):
+  def build_3dgrid_pp(self, level=3):
     """ Build a global grid and weights for a molecular integration (integration in 3-dimensional coordinate space) """
     from pyscf import dft
     from pyscf.nao.m_gauleg import leggauss_ab
@@ -540,6 +547,14 @@ class system_vars_c():
     atom2rcut=np.zeros(self.natoms)
     for ia,sp in enumerate(self.atom2sp): atom2rcut[ia] = self.ao_log.sp2rcut[sp]
     grid.build(atom2rcut=atom2rcut)
+    return grid
+
+  def build_3dgrid_ae(self, level=3):
+    """ Build a global grid and weights for a molecular integration (integration in 3-dimensional coordinate space) """
+    from pyscf import dft
+    grid = dft.gen_grid.Grids(self)
+    grid.level = level # precision as implemented in pyscf
+    grid.build()
     return grid
   
   def comp_dm(self):
@@ -577,10 +592,23 @@ class system_vars_c():
     if not self.init_sv_libnao : raise RuntimeError('not self.init_sv_libnao')
     return aos_libnao(coords, self.norbs)
 
+  def comp_vnuc_coulomb(self, coords):
+    from scipy.spatial.distance import cdist
+    ncoo = coords.shape[0]
+    vnuc = np.zeros(ncoo)
+    for R,sp in zip(self.atom2coord, self.atom2sp):
+      dd, Z = cdist(R.reshape((1,3)), coords).reshape(ncoo), self.sp2charge[sp]
+      vnuc = vnuc - Z / dd # minus to comply with pySCF convention?
+    return vnuc
+    
   def get_init_guess(self, key=None):
     """ Compute an initial guess for the density matrix. """
-    dm = self.comp_dm()  # the loaded ks orbitals will be used
-    if dm.shape[0:2]==(1,1) and dm.shape[4]==1 : dm = dm.reshape((self.norbs,self.norbs))
+    from pyscf.nao.m_hf import init_guess_by_minao
+    if hasattr(self, 'mol'):
+      dm = init_guess_by_minao(self.mol)
+    else:
+      dm = self.comp_dm()  # the loaded ks orbitals will be used
+      if dm.shape[0:2]==(1,1) and dm.shape[4]==1 : dm = dm.reshape((self.norbs,self.norbs))
     return dm
 
   def init_libnao(self, wfsx=None):
@@ -592,9 +620,10 @@ class system_vars_c():
     if wfsx is None:
         data = sv_chain_data(self)
         # (nkpoints, nspin, norbs, norbs, nreim)
+        #print(' data ', sum(data))
         size_x = np.array([1, self.nspin, self.norbs, self.norbs, 1], dtype=np.int32)
-        libnao.init_sv_libnao.argtypes = (POINTER(c_double), POINTER(c_int64), POINTER(c_int32))
-        libnao.init_sv_libnao(data.ctypes.data_as(POINTER(c_double)), c_int64(len(data)), size_x.ctypes.data_as(POINTER(c_int32)))
+        libnao.init_sv_libnao_orbs.argtypes = (POINTER(c_double), POINTER(c_int64), POINTER(c_int32))
+        libnao.init_sv_libnao_orbs(data.ctypes.data_as(POINTER(c_double)), c_int64(len(data)), size_x.ctypes.data_as(POINTER(c_int32)))
         self.init_sv_libnao = True
     else:
         size_x = np.zeros(len(self.wfsx.x.shape), dtype=np.int32)
@@ -602,8 +631,8 @@ class system_vars_c():
             size_x[i] = sh
 
         data = sv_chain_data(self)
-        libnao.init_sv_libnao.argtypes = (POINTER(c_double), POINTER(c_int64), POINTER(c_int32))
-        libnao.init_sv_libnao(data.ctypes.data_as(POINTER(c_double)), c_int64(len(data)), size_x.ctypes.data_as(POINTER(c_int32)))
+        libnao.init_sv_libnao_orbs.argtypes = (POINTER(c_double), POINTER(c_int64), POINTER(c_int32))
+        libnao.init_sv_libnao_orbs(data.ctypes.data_as(POINTER(c_double)), c_int64(len(data)), size_x.ctypes.data_as(POINTER(c_int32)))
         self.init_sv_libnao = True
 
     libnao.init_aos_libnao.argtypes = (POINTER(c_int64), POINTER(c_int64))

@@ -31,7 +31,7 @@ module m_init_vrtx_cc_apair
 subroutine init_vrtx_cc_apair(dinp,ninp) bind(c, name='init_vrtx_cc_apair')
 
   use m_fact, only : init_fact
-  use m_sv_libnao, only : sv
+  use m_sv_libnao_prds, only : sv=>sv_prds
   use m_pb_libnao, only : pb
   use m_para_libnao, only : para
   use m_orb_rspace_aux_libnao, only : orb_a
