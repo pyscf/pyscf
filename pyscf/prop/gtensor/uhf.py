@@ -78,12 +78,12 @@ def dia(gobj, dm0, gauge_orig=None):
 
     gc1e *= (alpha2/4) / effspin / muB
     if gobj.verbose >= logger.INFO:
-        _write(gobj, self.align(gc1e)[0], 'GC(1e)')
+        _write(gobj, gobj.align(gc1e)[0], 'GC(1e)')
 
     if gobj.dia_soc2e:
         gc2e = gobj.make_dia_gc2e(dm0, gauge_orig, qed_fac)
         if gobj.verbose >= logger.INFO:
-            _write(gobj, self.align(gc2e)[0], 'GC(2e)')
+            _write(gobj, gobj.align(gc2e)[0], 'GC(2e)')
     else:
         gc2e = 0
 
@@ -190,7 +190,7 @@ def para(gobj, mo10, mo_coeff, mo_occ, qed_fac=1):
     gpara1e+= numpy.einsum('xji,yij->xy', dm10b, hso1e)
     gpara1e *= 1. / effspin / muB
     if gobj.verbose >= logger.INFO:
-        _write(gobj, self.align(gpara1e)[0], 'SOC(1e)/OZ')
+        _write(gobj, gobj.align(gpara1e)[0], 'SOC(1e)/OZ')
 
     gpara2e = gobj.make_para_soc2e((dm0a,dm0b), (dm10a,dm10b), qed_fac)
     gpara = gpara1e + gpara2e
@@ -239,7 +239,7 @@ def make_para_soc2e(gobj, dm0, dm10, sso_qed_fac=1):
         gpara2e -= ej - 1.5 * ek
     gpara2e *= (alpha2/4) / effspin / muB
     if gobj.verbose >= logger.INFO:
-        _write(gobj, self.align(gpara2e)[0], 'SOC(2e)/OZ')
+        _write(gobj, gobj.align(gpara2e)[0], 'SOC(2e)/OZ')
     return gpara2e
 
 
@@ -260,7 +260,7 @@ def para_for_debug(gobj, mo10, mo_coeff, mo_occ, qed_fac=1):
     gpara1e+= numpy.einsum('xji,yij->xy', dm10b, hso1e)
     gpara1e *= 1./effspin / muB
     if gobj.verbose >= logger.INFO:
-        _write(gobj, self.align(gpara1e)[0], 'SOC(1e)/OZ')
+        _write(gobj, gobj.align(gpara1e)[0], 'SOC(1e)/OZ')
 
     if gobj.para_soc2e:
         h1aa, h1bb = make_h01_soc2e(gobj, mo_coeff, mo_occ, qed_fac)
@@ -268,7 +268,7 @@ def para_for_debug(gobj, mo10, mo_coeff, mo_occ, qed_fac=1):
         gpara2e-= numpy.einsum('xji,yij->xy', dm10b, h1bb)
         gpara2e *= 1./effspin / muB
         if gobj.verbose >= logger.INFO:
-            _write(gobj, self.align(gpara2e)[0], 'SOC(2e)/OZ')
+            _write(gobj, gobj.align(gpara2e)[0], 'SOC(2e)/OZ')
     else:
         gpara2e = 0
     gpara = gpara1e + gpara2e
