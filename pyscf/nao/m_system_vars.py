@@ -1,6 +1,5 @@
 from __future__ import print_function, division
-import numpy as np
-import sys
+import sys, numpy as np
 
 from pyscf.nao.m_color import color as bc
 from pyscf.nao.m_system_vars_dos import system_vars_dos, system_vars_pdos
@@ -124,7 +123,7 @@ class system_vars_c():
     a2s = [gto.atom_symbol(ia) for ia in range(gto.natm) ]
     self.sp2symbol = sorted(list(set(a2s)))
     self.nspecies = len(self.sp2symbol)
-    self.atom2sp = np.empty((gto.natm), dtype='int64')
+    self.atom2sp = np.empty((gto.natm), dtype=np.int64)
     for ia,sym in enumerate(a2s): self.atom2sp[ia] = self.sp2symbol.index(sym)
 
     self.sp2charge = [-999]*self.nspecies
