@@ -1,6 +1,5 @@
 from __future__ import print_function, division
-import numpy as np
-import sys
+import sys, numpy as np
 
 from pyscf.nao.m_color import color as bc
 from pyscf.nao.m_system_vars_dos import system_vars_dos, system_vars_pdos
@@ -105,11 +104,11 @@ class system_vars_c():
   #
   #
   #
-  def init_pyscf_gto(self, gto, label='pyscf', **kvargs):
+  def init_pyscf_gto(self, gto, label='pyscf', verbose=0, **kvargs):
     """Interpret previous pySCF calculation"""
     from pyscf.lib import logger
 
-    self.verbose = logger.NOTE  # To be similar to Mole object...
+    self.verbose = verbose
     self.stdout = sys.stdout
     self.symmetry = False
     self.symmetry_subgroup = None
@@ -124,7 +123,7 @@ class system_vars_c():
     a2s = [gto.atom_symbol(ia) for ia in range(gto.natm) ]
     self.sp2symbol = sorted(list(set(a2s)))
     self.nspecies = len(self.sp2symbol)
-    self.atom2sp = np.empty((gto.natm), dtype='int64')
+    self.atom2sp = np.empty((gto.natm), dtype=np.int64)
     for ia,sym in enumerate(a2s): self.atom2sp[ia] = self.sp2symbol.index(sym)
 
     self.sp2charge = [-999]*self.nspecies
@@ -135,7 +134,8 @@ class system_vars_c():
     self.atom2s = np.zeros((self.natm+1), dtype=np.int64)
     for atom,sp in enumerate(self.atom2sp): self.atom2s[atom+1]=self.atom2s[atom]+self.ao_log.sp2norbs[sp]
     self.norbs = self.norbs_sc = self.atom2s[-1]
-    self.nspin = 1
+    self.spin = gto.spin if hasattr(gto, 'spin') else 0
+    self.nspin = self.spin + 1
     self.ucell = 20.0*np.eye(3)
     self.atom2mu_s = np.zeros((self.natm+1), dtype=np.int64)
     for atom,sp in enumerate(self.atom2sp): self.atom2mu_s[atom+1]=self.atom2mu_s[atom]+self.ao_log.sp2nmult[sp]
@@ -226,7 +226,7 @@ class system_vars_c():
   #
   #
   #
-  def init_siesta_xml(self, label='siesta', cd='.', **kvargs):
+  def init_siesta_xml(self, label='siesta', cd='.', verbose=0, **kvargs):
     from pyscf.nao.m_siesta_xml import siesta_xml
     from pyscf.nao.m_siesta_wfsx import siesta_wfsx_c
     from pyscf.nao.m_siesta_ion_xml import siesta_ion_xml
@@ -323,8 +323,8 @@ class system_vars_c():
     self._xc_code   = 'LDA,PZ' # estimate how ? 
     self._nelectron = self.hsx.nelec
     self.cart = False
-    self.spin = self.nspin
-    self.verbose = 1 
+    self.spin = self.nspin-1
+    self.verbose = verbose
     self.stdout = sys.stdout
     self.symmetry = False
     self.symmetry_subgroup = None
@@ -446,11 +446,11 @@ class system_vars_c():
     """ Uff ... """
     s = type_str.lower() 
     if s=='cint1e_ovlp_sph' or s=='int1e_ovlp':
-      mat = self.overlap_coo().todense()
+      mat = self.overlap_coo().toarray()
     elif s=='int1e_kin':
-      mat = (0.5*self.laplace_coo()).todense()
+      mat = (0.5*self.laplace_coo()).toarray()
     elif s=='int1e_nuc':
-      mat = (self.vnucele_coo()).todense()
+      mat = (self.vnucele_coo()).toarray()
     else:
       print(' type_str ', s)
       raise RuntimeError('not implemented...')
@@ -497,7 +497,7 @@ class system_vars_c():
 
   def get_jk(self, dm=None, **kvargs): # Compute matrix elements of Hartree potential and Fock exchange
     dm = self.comp_dm() if dm is None else dm
-    vh = self.vhartree_coo(dm=dm, **kvargs).todense()
+    vh = self.vhartree_coo(dm=dm, **kvargs).toarray()
     kmat = self.kmat_den(dm=dm, **kvargs)
     return vh,kmat
 
@@ -536,6 +536,14 @@ class system_vars_c():
   def exc(self, dm, xc_code, **kvargs):   # Compute exchange-correlation energies
     from pyscf.nao.m_exc import exc
     return exc(self, dm, xc_code, **kvargs)
+
+  def energy_nuc(self, charges=None, coords=None):
+    """ Potential energy of electrostatic repulsion of point nuclei """
+    from scipy.spatial.distance import cdist
+    chrg = self.atom_charges() if charges is None else charges
+    crds = self.atom_coords() if coords is None else coords
+    identity = np.identity(len(chrg))
+    return ((chrg[:,None]*chrg[None,:])*(1.0/(cdist(crds, crds)+identity)-identity)).sum()*0.5
 
   def build_3dgrid_pp(self, level=3):
     """ Build a global grid and weights for a molecular integration (integration in 3-dimensional coordinate space) """
@@ -655,6 +663,10 @@ class system_vars_c():
     ksn2fd = fermi_dirac_occupations(Telec, ksn2E, Fermi)
     ksn2fd = (3.0-self.nspin)*ksn2fd
     return ksn2fd
+
+  def get_eigenvalues(self):
+    """ Returns mean-field eigenvalues """
+    return self.wfsx.ksn2e
 
   def read_wfsx(self, fname, **kvargs):
     """ An occasional reading of the SIESTA's .WFSX file """

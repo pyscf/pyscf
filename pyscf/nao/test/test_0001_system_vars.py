@@ -49,6 +49,13 @@ class KnowValues(unittest.TestCase):
     tkin = (0.5*sv.overlap_coo(funct=laplace_am)).toarray()
     self.assertTrue(abs(tref-tkin).sum()/len(tkin)<5e-9)
 
+  def test_energy_nuc_gto_vs_nao(self):
+    """ Test computation of matrix elements of nuclear-electron attraction """
+    sv = system_vars_c().init_pyscf_gto(mol)
+    e_nao = sv.energy_nuc()
+    e_gto = mol.energy_nuc()
+    self.assertAlmostEqual(e_nao, e_gto)
+
 if __name__ == "__main__":
   print("Tests for system_vars_c")
   unittest.main()
