@@ -249,7 +249,11 @@ class UHF(uhf.UHF):
     def build(self, mol=None):
         if mol is None: mol = self.mol
         if mol.symmetry:
-            hf_symm.check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
+            if self.nelec is None:
+                nelec = self.mol.nelec
+            else:
+                nelec = self.nelec
+            hf_symm.check_irrep_nelec(mol, self.irrep_nelec, nelec)
         return uhf.UHF.build(self, mol)
 
     def eig(self, h, s):
@@ -336,8 +340,12 @@ class UHF(uhf.UHF):
                 idx_ea_left.append(ir_idxa)
                 idx_eb_left.append(ir_idxb)
 
-        neleca_float = self.nelec[0] - neleca_fix
-        nelecb_float = self.nelec[1] - nelecb_fix
+        if self.nelec is None:
+            nelec = self.mol.nelec
+        else:
+            nelec = self.nelec
+        neleca_float = nelec[0] - neleca_fix
+        nelecb_float = nelec[1] - nelecb_fix
         assert(neleca_float >= 0)
         assert(nelecb_float >= 0)
         if len(idx_ea_left) > 0:

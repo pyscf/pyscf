@@ -193,7 +193,10 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     e_sort_a = mo_energy[0][e_idx_a]
     e_sort_b = mo_energy[1][e_idx_b]
     nmo = mo_energy[0].size
-    n_a, n_b = mf.nelec
+    if mf.nelec is None:
+        n_a, n_b = mf.mol.nelec
+    else:
+        n_a, n_b = mf.nelec
     mo_occ = numpy.zeros_like(mo_energy)
     mo_occ[0][e_idx_a[:n_a]] = 1
     mo_occ[1][e_idx_b[:n_b]] = 1
@@ -612,8 +615,7 @@ class UHF(hf.SCF):
         # self.mo_occ => [mo_occ_a, mo_occ_b]
         # self.mo_energy => [mo_energy_a, mo_energy_b]
 
-        n_b = (mol.nelectron - mol.spin) // 2
-        self.nelec = (mol.nelectron-n_b, n_b)
+        self.nelec = None
         self._keys = self._keys.union(['nelec'])
 
     def dump_flags(self):
@@ -623,8 +625,12 @@ class UHF(hf.SCF):
             self.nelec = (self.nelectron_alpha,
                           self.mol.nelectron-self.nelectron_alpha)
             delattr(self, 'nelectron_alpha')
+        if self.nelec is None:
+            nelec = self.mol.nelec
+        else:
+            nelec = self.nelec
         hf.SCF.dump_flags(self)
-        logger.info(self, 'number electrons alpha = %d  beta = %d', *self.nelec)
+        logger.info(self, 'number electrons alpha = %d  beta = %d', *nelec)
 
     def eig(self, fock, s):
         e_a, c_a = self._eigh(fock[0], s)

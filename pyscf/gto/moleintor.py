@@ -331,7 +331,7 @@ def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
         cintopt = make_cintopt(atm, bas, env, intor_name)
 
     if aosym == 's8':
-        #assert(intor_name in ('int2e_sph', 'int2e_cart'))
+        assert('_spinor' not in intor_name)
         assert(shls_slice is None)
         from pyscf.scf import _vhf
         nao = ao_loc[-1]
