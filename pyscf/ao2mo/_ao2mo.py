@@ -35,6 +35,7 @@ class AO2MOpt(object):
             # for int2e_sph, qcondname is 'CVHFsetnr_direct_scf'
             fsetqcond = getattr(libao2mo, qcondname)
             fsetqcond(self._this,
+                      getattr(libao2mo, intor), self._cintopt,
                       c_atm.ctypes.data_as(ctypes.c_void_p), natm,
                       c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
                       c_env.ctypes.data_as(ctypes.c_void_p))

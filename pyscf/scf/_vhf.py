@@ -31,10 +31,6 @@ class VHFOpt(object):
         nbas = ctypes.c_int(c_bas.shape[0])
         self._cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
 
-#        libcvhf.CVHFnr_optimizer(ctypes.byref(self._this),
-#                                 c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-#                                 c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-#                                 c_env.ctypes.data_as(ctypes.c_void_p))
         libcvhf.CVHFinit_optimizer(ctypes.byref(self._this),
                                    c_atm.ctypes.data_as(ctypes.c_void_p), natm,
                                    c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
@@ -44,6 +40,7 @@ class VHFOpt(object):
         if prescreen != 'CVHFnoscreen':
             fsetqcond = getattr(libcvhf, qcondname)
             fsetqcond(self._this,
+                      getattr(libcvhf, intor), self._cintopt,
                       c_atm.ctypes.data_as(ctypes.c_void_p), natm,
                       c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
                       c_env.ctypes.data_as(ctypes.c_void_p))

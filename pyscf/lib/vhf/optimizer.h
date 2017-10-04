@@ -34,10 +34,10 @@ int CVHFr_vknoscreen(int *shls, CVHFOpt *opt,
                      double **dms_cond, int n_dm, double *dm_atleast,
                      int *atm, int *bas, double *env);
 
-void CVHFsetnr_direct_scf(CVHFOpt *opt, int *atm, int natm,
-                          int *bas, int nbas, double *env);
+void CVHFsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
+                          int *atm, int natm, int *bas, int nbas, double *env);
 void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
                              int *atm, int natm, int *bas, int nbas, double *env);
 
-void CVHFnr_optimizer(CVHFOpt **vhfopt, int *atm, int natm,
-                      int *bas, int nbas, double *env);
+void CVHFnr_optimizer(CVHFOpt **vhfopt, int (*intor)(), CINTOpt *cintopt,
+                      int *atm, int natm, int *bas, int nbas, double *env);
