@@ -7,10 +7,12 @@ from pyscf.nao.m_sparsetools import libsparsetools
 Implemented small blas wrapper that are missing in scipy.linalg.blas
 """
 
-def spmv_wrapper(alpha, ap, x, beta = 0.0, incx = 1, incy = 1, uplo="U"):
+def spmv_wrapper(n, alpha, ap, x, beta = 0.0, incx = 1, incy = 1, uplo="U", lower=0):
+    """
+    lower is a dummy variable to correspond to the scipy wrapper
+    """
 
-    n = x.size
-    if ap.size != int(n*(n+1)/2):
+    if ap.size != n*(n+1)//2:
         raise ValueError("simple wrapper, you MUST provide x.size = n, ap.size = n*(n+1)/2")
     
     if uplo not in ["L", "U"]:

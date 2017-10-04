@@ -40,7 +40,7 @@ def coulomb_am(self, sp1, R1, sp2, R2, **kvargs):
   f1f2_mom = np.zeros((self.nr))
   l2S = np.zeros((2*self.jmx+1), dtype = np.float64)
   _j = self.jmx
-  
+
   if use_numba:
     bessel_pp = get_bessel_xjl_numba(self.kk, dist, _j, self.nr)
     calc_oo2co(bessel_pp, self.interp_pp.dg_jt, np.array(self.ao1.sp2info[sp1]),

@@ -5,8 +5,14 @@ from scipy.linalg import blas
 from timeit import default_timer as timer
 from pyscf.nao.m_tddft_iter_gpu import tddft_iter_gpu_c
 #from pyscf.nao.m_sparse_blas import csrgemv # not working!
-from pyscf.nao.m_blas_wrapper import spmv_wrapper
 from pyscf.nao.m_sparsetools import csr_matvec, csc_matvec, csc_matvecs
+import scipy
+if int(scipy.__version__[0]) > 0:
+    scipy_ver = 1
+    from scipy.linalg.blas import sspmv, dspmv
+else:
+    scipy_ver = 0
+    from pyscf.nao.m_blas_wrapper import spmv_wrapper
 
 try:
     import numba
@@ -32,9 +38,19 @@ class tddft_iter_c():
     if precision == "single":
         self.dtype = np.float32
         self.dtypeComplex = np.complex64
+        self.gemm = blas.sgemm
+        if scipy_ver > 0:
+            self.spmv = sspmv
+        else: 
+            self.spmv = spmv_wrapper
     elif precision == "double":
         self.dtype = np.float64
         self.dtypeComplex = np.complex128
+        self.gemm = blas.dgemm
+        if scipy_ver > 0:
+            self.spmv = dspmv
+        else: 
+            self.spmv = spmv_wrapper
     else:
         raise ValueError("precision can be only single or double")
 
@@ -93,15 +109,15 @@ class tddft_iter_c():
         #vdp = self.cc_da*vext[:, 0]
         vdp = csr_matvec(self.cc_da, vext[:, 0])
         sab = (vdp*self.v_dab).reshape([no,no])
-        nb2v = blas.sgemm(1.0, self.xocc, sab) 
+        nb2v = self.gemm(1.0, self.xocc, sab) 
         #csc_matvecs(sab.T.tocsc(), self.xocc, transB = True).T
-        nm2v_re = blas.sgemm(1.0, nb2v, np.transpose(self.xvrt))
+        nm2v_re = self.gemm(1.0, nb2v, np.transpose(self.xvrt))
         
         # imaginary part
         vdp = csr_matvec(self.cc_da, vext[:, 1])
         sab = (vdp*self.v_dab).reshape([no,no])
-        nb2v = blas.sgemm(1.0, self.xocc, sab) 
-        nm2v_im = blas.sgemm(1.0, nb2v, np.transpose(self.xvrt))
+        nb2v = self.gemm(1.0, self.xocc, sab) 
+        nm2v_im = self.gemm(1.0, nb2v, np.transpose(self.xvrt))
     else:
         vext = np.zeros((v.shape[0], 2), dtype = self.dtype, order="F")
         vext[:, 0] = v
@@ -110,8 +126,8 @@ class tddft_iter_c():
         #vdp = self.cc_da*vext[:, 0]
         vdp = csr_matvec(self.cc_da, vext[:, 0])
         sab = (vdp*self.v_dab).reshape([no,no])
-        nb2v = blas.sgemm(1.0, self.xocc, sab) 
-        nm2v_re = blas.sgemm(1.0, nb2v, np.transpose(self.xvrt))
+        nb2v = self.gemm(1.0, self.xocc, sab) 
+        nm2v_re = self.gemm(1.0, nb2v, np.transpose(self.xvrt))
  
         # imaginary part
         nm2v_im = np.zeros(nm2v_re.shape, dtype=self.dtype) 
@@ -130,14 +146,14 @@ class tddft_iter_c():
             nm2v_re[n, m] = nm2v.real
             nm2v_im[n, m] = nm2v.imag
 
-    nb2v = blas.sgemm(1.0, nm2v_re, self.xvrt)
-    ab2v = blas.sgemm(1.0, self.xocc.T, nb2v).reshape(no*no)
+    nb2v = self.gemm(1.0, nm2v_re, self.xvrt)
+    ab2v = self.gemm(1.0, self.xocc.T, nb2v).reshape(no*no)
     vdp = csr_matvec(self.v_dab, ab2v)
 
     chi0_re = vdp*self.cc_da
 
-    nb2v = blas.sgemm(1.0, nm2v_im, self.xvrt)
-    ab2v = blas.sgemm(1.0, self.xocc.T, nb2v).reshape(no*no)
+    nb2v = self.gemm(1.0, nm2v_im, self.xvrt)
+    ab2v = self.gemm(1.0, self.xocc.T, nb2v).reshape(no*no)
     vdp = csr_matvec(self.v_dab, ab2v)
 
     chi0_im = vdp*self.cc_da
@@ -168,11 +184,11 @@ class tddft_iter_c():
 
     # real part
     chi0_reim = np.require(chi0.real, dtype=self.dtype, requirements=["A", "O"])
-    matvec_real = spmv_wrapper(1.0, self.kernel, chi0_reim)
+    matvec_real = self.spmv(self.nprod, 1.0, self.kernel, chi0_reim, lower=1)
     
     # imaginary part
     chi0_reim = np.require(chi0.imag, dtype=self.dtype, requirements=["A", "O"])
-    matvec_imag = spmv_wrapper(1.0, self.kernel, chi0_reim)
+    matvec_imag = self.spmv(self.nprod, 1.0, self.kernel, chi0_reim, lower=1)
 
     return v - (matvec_real + 1.0j*matvec_imag)
 

@@ -3,7 +3,7 @@ from pyscf.nao.m_coulomb_am import coulomb_am
 import numpy as np
 try:
     import numba as nb
-    from pyscf.nao.m_numba_utils import fill_triu_v2
+    from pyscf.nao.m_numba_utils import fill_triu_v2, fill_tril
     use_numba = True
 except:
     use_numba = False
