@@ -122,7 +122,7 @@ def as_scanner(grad_mf):
         >>> e_tot, grad = hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
     logger.info(grad_mf, 'Create scanner for %s', grad_mf.__class__)
-    class SCF_GradScanner(grad_mf.__class__):
+    class SCF_GradScanner(grad_mf.__class__, lib.GradScanner):
         def __init__(self, g):
             self.__dict__.update(g.__dict__)
             self._scf = g._scf.as_scanner()

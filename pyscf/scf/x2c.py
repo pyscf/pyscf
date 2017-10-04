@@ -41,7 +41,7 @@ def sfx2c1e(mf):
         doc = ''
     else:
         doc = mf_class.__doc__
-    class X2C_HF(mf_class):
+    class X2C_HF(mf_class, _X2C_HF):
         __doc__ = doc + \
         '''
         Attributes for spin-free X2C:
@@ -67,6 +67,10 @@ def sfx2c1e(mf):
     return X2C_HF()
 
 sfx2c = sfx2c1e
+
+# A tag to label the derived SCF class
+class _X2C_HF:
+    pass
 
 
 class X2C(lib.StreamObject):

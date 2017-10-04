@@ -19,7 +19,7 @@ from pyscf.df.addons import make_auxmol
 # for auxe1 (P|ij)
 #
 
-def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir=None,
+def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='j3c', tmpdir=None,
                  int3c='int3c2e_sph', aosym='s2ij', int2c='int2c2e_sph', comp=1,
                  max_memory=2000, ioblk_size=256, auxmol=None, verbose=0):
     '''3-center 2-electron AO integrals
@@ -96,7 +96,7 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir
     return erifile
 
 # store cderi in blocks
-def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='eri_mo',
+def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
                    int3c='int3c2e_sph', aosym='s2ij', int2c='int2c2e_sph',
                    comp=1, ioblk_size=256, auxmol=None, verbose=logger.NOTE):
     '''3-center 2-electron AO integrals
@@ -309,14 +309,14 @@ if __name__ == '__main__':
     cderi0 = incore.cholesky_eri(mol)
     cholesky_eri(mol, 'cderi.dat')
     with h5py.File('cderi.dat') as feri:
-        print(numpy.allclose(feri['eri_mo'], cderi0))
+        print(numpy.allclose(feri['j3c'], cderi0))
 
     cholesky_eri(mol, 'cderi.dat', ioblk_size=.5)
     with h5py.File('cderi.dat') as feri:
-        print(numpy.allclose(feri['eri_mo'], cderi0))
+        print(numpy.allclose(feri['j3c'], cderi0))
 
     general(mol, (numpy.eye(mol.nao_nr()),)*2, 'cderi.dat',
             max_memory=.5, ioblk_size=.2, verbose=6)
     with h5py.File('cderi.dat') as feri:
-        print(numpy.allclose(feri['eri_mo'], cderi0))
+        print(numpy.allclose(feri['j3c'], cderi0))
 

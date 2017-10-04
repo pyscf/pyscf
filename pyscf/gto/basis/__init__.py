@@ -232,6 +232,8 @@ def _is_pople_basis(basis):
             basis.startswith('321') or
             basis.startswith('431'))
 
+_BASIS_DIR = os.path.dirname(__file__)
+
 def _parse_pople_basis(basis, symb):
     mbas = basis[:basis.find('(')]
     pbas = basis[basis.find('(')+1:basis.find(')')]
@@ -254,7 +256,7 @@ def _parse_pople_basis(basis, symb):
     else:
         return tuple([ALIAS[mbas]] + convert(pbas.split(',')[0]))
 
-def parse(string):
+def parse(string, symb=None):
     '''Parse the NWChem format basis or ECP text, return an internal basis (ECP)
     format which can be assigned to :attr:`Mole.basis` or :attr:`Mole.ecp`
 
@@ -277,12 +279,12 @@ def parse(string):
     ... """)}
     '''
     if 'ECP' in string:
-        return parse_nwchem.parse_ecp(string)
+        return parse_nwchem.parse_ecp(string, symb)
     else:
-        return parse_nwchem.parse(string)
+        return parse_nwchem.parse(string, symb)
 
-def parse_ecp(string):
-    return parse_nwchem.parse_ecp(string)
+def parse_ecp(string, symb=None):
+    return parse_nwchem.parse_ecp(string, symb)
 
 def load(filename_or_basisname, symb):
     '''Convert the basis of the given symbol to internal format
@@ -300,22 +302,24 @@ def load(filename_or_basisname, symb):
     >>> mol = gto.Mole()
     >>> mol.basis = {'O': load('sto-3g', 'C')}
     '''
+    symb = ''.join([i for i in symb if i.isalpha()])
     if os.path.isfile(filename_or_basisname):
         # read basis from given file
         try:
             return parse_nwchem.load(filename_or_basisname, symb)
         except RuntimeError:
             with open(filename_or_basisname, 'r') as fin:
-                return parse_nwchem.parse(fin.read())
+                return parse_nwchem.parse(fin.read(), symb)
 
     name = _format_basis_name(filename_or_basisname)
     if not (name in ALIAS or _is_pople_basis(name)):
         try:
-            return parse(filename_or_basisname)
+            return parse_nwchem.parse(filename_or_basisname, symb)
+        except KeyError:
+            return parse_nwchem.parse(filename_or_basisname)
         except IndexError:
             raise RuntimeError('Basis %s not found' % filename_or_basisname)
 
-    symb = ''.join([i for i in symb if i.isalpha()])
     if name in ALIAS:
         basmod = ALIAS[name]
     elif _is_pople_basis(name):
@@ -324,11 +328,11 @@ def load(filename_or_basisname, symb):
         raise RuntimeError('Basis %s not found' % filename_or_basisname)
 
     if 'dat' in basmod:
-        b = parse_nwchem.load(os.path.join(os.path.dirname(__file__), basmod), symb)
+        b = parse_nwchem.load(os.path.join(_BASIS_DIR, basmod), symb)
     elif isinstance(basmod, (tuple, list)) and isinstance(basmod[0], str):
         b = []
         for f in basmod:
-            b += parse_nwchem.load(os.path.join(os.path.dirname(__file__), f), symb)
+            b += parse_nwchem.load(os.path.join(_BASIS_DIR, f), symb)
     else:
         if sys.version_info < (2,7):
             fp, pathname, description = imp.find_module(basmod, __path__)
@@ -343,20 +347,21 @@ def load(filename_or_basisname, symb):
 def load_ecp(filename_or_basisname, symb):
     '''Convert the basis of the given symbol to internal format
     '''
+    symb = ''.join([i for i in symb if i.isalpha()])
     if os.path.isfile(filename_or_basisname):
         # read basis from given file
         try:
             return parse_nwchem.load_ecp(filename_or_basisname, symb)
         except RuntimeError:
             with open(filename_or_basisname, 'r') as fin:
-                return parse_nwchem.parse_ecp(fin.read())
+                return parse_ecp(fin.read(), symb)
 
     name = _format_basis_name(filename_or_basisname)
-    if name not in ALIAS:
-        return parse_ecp(filename_or_basisname)
-    basmod = ALIAS[name]
-    symb = ''.join([i for i in symb if i.isalpha()])
-    return parse_nwchem.load_ecp(os.path.join(os.path.dirname(__file__), basmod), symb)
+    if name in ALIAS:
+        basmod = ALIAS[name]
+        return parse_nwchem.load_ecp(os.path.join(_BASIS_DIR, basmod), symb)
+    else:
+        return parse_ecp(filename_or_basisname, symb)
 
 def _format_basis_name(basisname):
     return basisname.lower().replace('-', '').replace('_', '').replace(' ', '')
