@@ -127,7 +127,8 @@ double CVHFget_direct_scf_cutoff(CVHFOpt *opt)
 
 
 void CVHFsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
-                          int *atm, int natm, int *bas, int nbas, double *env)
+                          int *ao_loc, int *atm, int natm,
+                          int *bas, int nbas, double *env)
 {
         /* This memory is released in void CVHFdel_optimizer, Don't know
          * why valgrind raises memory leak here */
@@ -139,7 +140,7 @@ void CVHFsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
                                                  atm, natm, bas, nbas, env);
 #pragma omp parallel default(none) \
-        shared(opt, intor, cintopt, atm, natm, bas, nbas, env)
+        shared(opt, intor, cintopt, ao_loc, atm, natm, bas, nbas, env)
 {
         double qtmp, tmp;
         int ij, i, j, di, dj, ish, jsh;
@@ -147,7 +148,7 @@ void CVHFsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
         double *cache = malloc(sizeof(double) * cache_size);
         di = 0;
         for (ish = 0; ish < nbas; ish++) {
-                dj = CINTcgto_spheric(ish, bas);
+                dj = ao_loc[ish+1] - ao_loc[ish];
                 di = MAX(di, dj);
         }
         double *buf = malloc(sizeof(double) * di*di*di*di);
@@ -155,8 +156,8 @@ void CVHFsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
         for (ij = 0; ij < nbas*(nbas+1)/2; ij++) {
                 ish = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
                 jsh = ij - ish*(ish+1)/2;
-                di = CINTcgto_spheric(ish, bas);
-                dj = CINTcgto_spheric(jsh, bas);
+                di = ao_loc[ish+1] - ao_loc[ish];
+                dj = ao_loc[jsh+1] - ao_loc[jsh];
                 shls[0] = ish;
                 shls[1] = jsh;
                 shls[2] = ish;
@@ -214,9 +215,11 @@ void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
  *************************************************
  */
 void CVHFnr_optimizer(CVHFOpt **vhfopt, int (*intor)(), CINTOpt *cintopt,
-                      int *atm, int natm, int *bas, int nbas, double *env)
+                      int *ao_loc, int *atm, int natm,
+                      int *bas, int nbas, double *env)
 {
         CVHFinit_optimizer(vhfopt, atm, natm, bas, nbas, env);
         (*vhfopt)->fprescreen = &CVHFnrs8_prescreen;
-        CVHFsetnr_direct_scf(*vhfopt, intor, cintopt, atm, natm, bas, nbas, env);
+        CVHFsetnr_direct_scf(*vhfopt, intor, cintopt, ao_loc,
+                             atm, natm, bas, nbas, env);
 }

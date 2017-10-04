@@ -33,9 +33,11 @@ class AO2MOpt(object):
 
         if prescreen != 'CVHFnoscreen' and intor in ('int2e_sph', 'int2e_cart'):
             # for int2e_sph, qcondname is 'CVHFsetnr_direct_scf'
+            ao_loc = make_loc(c_bas, self._intor)
             fsetqcond = getattr(libao2mo, qcondname)
             fsetqcond(self._this,
                       getattr(libao2mo, intor), self._cintopt,
+                      ao_loc.ctypes.data_as(ctypes.c_void_p),
                       c_atm.ctypes.data_as(ctypes.c_void_p), natm,
                       c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
                       c_env.ctypes.data_as(ctypes.c_void_p))

@@ -338,9 +338,9 @@ def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
         nao_pair = nao*(nao+1)//2
         out = numpy.ndarray((nao_pair*(nao_pair+1)//2), buffer=out)
         drv = _vhf.libcvhf.GTO2e_cart_or_sph
-        drv(getattr(libcgto, intor_name),
+        drv(getattr(libcgto, intor_name), cintopt,
             out.ctypes.data_as(ctypes.c_void_p),
-            ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
+            ao_loc.ctypes.data_as(ctypes.c_void_p),
             c_atm, ctypes.c_int(natm), c_bas, ctypes.c_int(nbas), c_env)
         return out
 
