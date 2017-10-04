@@ -3,11 +3,11 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-from pyscf import gto, scf, mcscf
-
 '''
 Active space can be adjusted by specifing the number of orbitals for each irrep.
 '''
+
+from pyscf import gto, scf, mcscf
 
 mol = gto.Mole()
 mol.build(
