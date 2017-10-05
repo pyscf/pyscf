@@ -876,7 +876,6 @@ class Cell(mole.Mole):
   Lattice are not in right-handed coordinate system. This can cause wrong value for some integrals.
   It's recommended to resort the lattice vectors to\na = %s\n\n''' % _a[[0,2,1]])
 
-        ke_cutoff is None
         if self.gs is None:
             if self.ke_cutoff is None:
                 ke_cutoff = estimate_ke_cutoff(self, self.precision)

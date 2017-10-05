@@ -37,7 +37,7 @@ from pyscf.pbc.df.aft import estimate_eta, get_nuc
 from pyscf.pbc.df.df_jk import zdotCN, zdotNN, zdotNC
 from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, member, unique
 
-LINEAR_DEP_THR = 1e-7
+LINEAR_DEP_THR = 1e-9
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
     auxcell = addons.make_auxmol(cell, auxbasis)
@@ -343,7 +343,7 @@ class GDF(aft.AFTDF):
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
         self.auxcell = None
         self.blockdim = 240
-        self.linear_dep_threshold = df.LINEAR_DEP_THR
+        self.linear_dep_threshold = LINEAR_DEP_THR
         self._j_only = False
 # If _cderi_to_save is specified, the 3C-integral tensor will be saved in this file.
         self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
