@@ -1899,13 +1899,16 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         self.stdout.write('numpy %s  scipy %s\n' %
                           (numpy.__version__, scipy.__version__))
         self.stdout.write('Date: %s\n' % time.ctime())
+        import pyscf
+        pyscfdir = os.path.abspath(os.path.join(__file__, '..', '..'))
+        self.stdout.write('PySCF version %s\n' % pyscf.__version__)
+        self.stdout.write('PySCF path  %s\n' % pyscfdir)
         try:
-            import pyscf
-            pyscfdir = os.path.abspath(os.path.join(__file__, '..', '..'))
-            self.stdout.write('PySCF version %s\n' % pyscf.__version__)
-            self.stdout.write('PySCF path  %s\n' % pyscfdir)
-            with open(os.path.join(pyscfdir, '..', '.git', 'ORIG_HEAD')) as f:
+            with open(os.path.join(pyscfdir, '..', '.git', 'ORIG_HEAD'), 'r') as f:
                 self.stdout.write('GIT ORIG_HEAD %s' % f.read())
+        except IOError:
+            pass
+        try:
             head = os.path.join(pyscfdir, '..', '.git', 'HEAD')
             with open(head, 'r') as f:
                 head = f.read().splitlines()[0]
@@ -1915,13 +1918,13 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                 branch = os.path.basename(head)
                 head = os.path.join(pyscfdir, '..', '.git', head.split(' ')[1])
                 with open(head, 'r') as f:
-                    self.stdout.write('GIT %s branch  %s' % (branch, f.readline()))
-            for key in os.environ:
-                if 'PYSCF' in key:
-                    self.stdout.write('%s %s\n' % (key, os.environ[key]))
-            self.stdout.write('\n')
+                    self.stdout.write('GIT %s branch  %s' % (branch, f.read()))
         except IOError:
             pass
+        for key in os.environ:
+            if 'PYSCF' in key:
+                self.stdout.write('%s %s\n' % (key, os.environ[key]))
+        self.stdout.write('\n')
 
         self.stdout.write('[INPUT] VERBOSE %d\n' % self.verbose)
         self.stdout.write('[INPUT] num atoms = %d\n' % self.natm)
