@@ -64,6 +64,8 @@ default_lib_dir = [os.path.join(pyscf_lib_dir,'deps','lib'), build_lib_dir] + bl
 default_include = ['.', 'build', pyscf_lib_dir,
                    os.path.join(pyscf_lib_dir,'deps','include')] + blas_include
 
+if not os.path.exists(os.path.join(topdir, 'build')):
+    os.mkdir(os.path.join(topdir, 'build'))
 with open(os.path.join(topdir, 'build', 'config.h'), 'w') as f:
     f.write('''
 #if defined _OPENMP
