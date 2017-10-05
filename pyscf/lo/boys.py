@@ -17,6 +17,11 @@ from pyscf.lo import orth
 
 
 def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
+    if mo_coeff is not None:
+        localizer.mo_coeff = numpy.asarray(mo_coeff, order='C')
+    if localizer.mo_coeff.shape[1] <= 1:
+        return localizer.mo_coeff
+
     if localizer.verbose >= logger.WARN:
         localizer.check_sanity()
     localizer.dump_flags()
@@ -33,12 +38,9 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
         conv_tol_grad = localizer.conv_tol_grad
 
     if mo_coeff is None:
-        mo_coeff = numpy.asarray(localizer.mo_coeff, order='C')
         u0 = localizer.get_init_guess(localizer.init_guess)
     else:
-        mo_coeff = numpy.asarray(mo_coeff, order='C')
-        localizer.mo_coeff = mo_coeff
-        u0 = localizer.get_init_guess(False)
+        u0 = localizer.get_init_guess(None)
 
     rotaiter = ciah.rotate_orb_cc(localizer, u0, conv_tol_grad, verbose=log)
     u, g_orb, stat = next(rotaiter)
@@ -75,7 +77,7 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
     log.info('macro X = %d  f(x)= %.14g  |g|= %g  %d intor %d KF %d Hx',
              imacro+1, e, norm_gorb,
              (imacro+1)*2, tot_kf+imacro+1, tot_hop)
-    localizer.mo_coeff = lib.dot(mo_coeff, u0)
+    localizer.mo_coeff = lib.dot(localizer.mo_coeff, u0)
     return localizer.mo_coeff
 
 
@@ -221,17 +223,17 @@ class Boys(ciah.CIAHOptimizer):
                 If key is 'atomic', initial guess is based on the projected
                 atomic orbitals. False
         '''
+        nmo = self.mo_coeff.shape[1]
         if isinstance(key, str) and key.lower() == 'atomic':
-            return atomic_init_guess(self.mol, self.mo_coeff)
+            u0 = atomic_init_guess(self.mol, self.mo_coeff)
         else:
-            nmo = self.mo_coeff.shape[1]
             u0 = numpy.eye(nmo)
-            if (isinstance(key, str) and key.lower().startswith('rand')
-                or numpy.linalg.norm(self.get_grad(u0)) < 1e-5):
-                # Add noise to kick initial guess out of saddle point
-                dr = numpy.cos(numpy.arange((nmo-1)*nmo//2)) * 1e-3
-                u0 = self.extract_rotation(dr)
-            return u0
+        if (isinstance(key, str) and key.lower().startswith('rand')
+            or numpy.linalg.norm(self.get_grad(u0)) < 1e-5):
+            # Add noise to kick initial guess out of saddle point
+            dr = numpy.cos(numpy.arange((nmo-1)*nmo//2)) * 1e-3
+            u0 = self.extract_rotation(dr)
+        return u0
 
     kernel = kernel
 
