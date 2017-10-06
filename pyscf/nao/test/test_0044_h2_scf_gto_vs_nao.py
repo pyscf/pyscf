@@ -2,6 +2,7 @@ from __future__ import print_function, division
 import unittest, numpy as np
 from pyscf import gto, scf
 from pyscf.nao import system_vars_c
+from pyscf.nao.hf import RHF
 
 mol = gto.M( verbose = 1,
     atom = '''
@@ -16,7 +17,7 @@ class KnowValues(unittest.TestCase):
     gto_hf.kernel()
     
     sv = system_vars_c().init_pyscf_gto(mol, verbose=0)
-    nao_hf = scf.RHF(sv)
+    nao_hf = RHF(sv)
     nao_hf.dump_chkfile=False
     nao_hf.kernel()
     self.assertAlmostEqual(gto_hf.e_tot, nao_hf.e_tot, 4)

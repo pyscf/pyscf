@@ -2,6 +2,7 @@ from __future__ import print_function, division
 import unittest, numpy as np
 from pyscf import gto, scf
 from pyscf.nao import system_vars_c, conv_yzx2xyz_c
+from pyscf.nao.hf import RHF
 
 mol = gto.M( verbose = 1,
     atom = '''
@@ -33,17 +34,17 @@ class KnowValues(unittest.TestCase):
   def test_vhartree_gto_vs_nao(self):
     """ Test computation of Hartree potential between NAOs against this computed between GTOs"""
     vh_gto = conv.conv_yzx2xyz_2d(gto_hf.get_j())
-    sv = system_vars_c().init_pyscf_gto(mol)
-    vh_nao = sv.vhartree_coo(dm=rdm1)
+    mf = RHF(system_vars_c().init_pyscf_gto(mol))
+    vh_nao = mf.vhartree_coo(dm=rdm1)
     self.assertTrue(abs(vh_nao-vh_gto).sum()/vh_gto.size<1e-5)
 
   def test_kmat_gto_vs_nao(self):
     """ Test computation of Fock exchange between NAOs against this computed between GTOs"""
     vh_gto,k_gto = gto_hf.get_jk()
     k_gto = conv.conv_yzx2xyz_2d(k_gto)
-    sv = system_vars_c().init_pyscf_gto(mol)
-    k_nao = sv.kmat_den(dm=rdm1)
-    self.assertTrue(abs(k_nao-k_gto).sum()/k_gto.size<5e-5)
+    mf = RHF(system_vars_c().init_pyscf_gto(mol))    
+    k_nao = mf.get_k(dm=rdm1)
+    self.assertTrue(abs(k_nao-k_gto).sum()/k_gto.size<2.5e-5)
 
   def test_vne_gto_vs_nao(self):
     """ Test computation of matrix elements of nuclear-electron attraction """

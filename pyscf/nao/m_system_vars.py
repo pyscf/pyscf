@@ -442,24 +442,6 @@ class system_vars_c():
   def atom_nelec_core(self, ia): return self.sp2charge[self.atom2sp[ia]]-self.ao_log.sp2valence[self.atom2sp[ia]]
   def ao_loc_nr(self): return self.mu2orb_s[0:self.natm]
 
-  def intor_symmetric(self, type_str):
-    """ Uff ... """
-    s = type_str.lower() 
-    if s=='cint1e_ovlp_sph' or s=='int1e_ovlp':
-      mat = self.overlap_coo().toarray()
-    elif s=='int1e_kin':
-      mat = (0.5*self.laplace_coo()).toarray()
-    elif s=='int1e_nuc':
-      mat = (self.vnucele_coo()).toarray()
-    else:
-      print(' type_str ', s)
-      raise RuntimeError('not implemented...')
-    return mat
-
-  def intor(self, type_str, **kvargs):
-    """ to initialize ERI which are approx equivalent to a product basis """
-    return None
-
   # More functions for convenience (see PDoS)
   def get_orb2j(self): return get_orb2j(self)
   def get_orb2m(self): return get_orb2m(self)
@@ -470,45 +452,21 @@ class system_vars_c():
     from pyscf.nao.m_overlap_coo import overlap_coo
     return overlap_coo(self, **kvargs)
 
+  def overlap_lil(self, **kvargs):   # Compute overlap matrix in list of lists format
+    from pyscf.nao.m_overlap_lil import overlap_lil
+    return overlap_lil(self, **kvargs)
+
   def laplace_coo(self):   # Compute matrix of Laplace brakets for the whole molecule
     from pyscf.nao.m_overlap_coo import overlap_coo
     from pyscf.nao.m_laplace_am import laplace_am
     return overlap_coo(self, funct=laplace_am)
   
-  def vnucele_coo(self, **kvargs): # Compute matrix elements of nuclear-electron interaction (attraction)
-    from pyscf.nao.m_vnucele_coo import vnucele_coo
-    return vnucele_coo(self, **kvargs)
-
-  def vnucele_coo_subtract(self, **kvargs): # Compute matrix elements of H-T-VH-Vxc
-    from pyscf.nao.m_vnucele_coo_subtract import vnucele_coo_subtract
-    return vnucele_coo_subtract(self, **kvargs)
-
   def vnucele_coo_coulomb(self, **kvargs): # Compute matrix elements of attraction by Coulomb forces from point nuclei
     from pyscf.nao.m_vnucele_coo_coulomb import vnucele_coo_coulomb
     return vnucele_coo_coulomb(self, **kvargs)
 
-  def vhartree_coo(self, **kvargs): # Compute matrix elements of Hartree potential 
-    from pyscf.nao.m_vhartree_coo import vhartree_coo
-    return vhartree_coo(self, **kvargs)
-
-  def kmat_den(self, **kvargs): # Compute matrix elements of Fock exchange
-    from pyscf.nao.m_kmat_den import kmat_den
-    return kmat_den(self, **kvargs)
-
-  def get_jk(self, dm=None, **kvargs): # Compute matrix elements of Hartree potential and Fock exchange
-    dm = self.comp_dm() if dm is None else dm
-    vh = self.vhartree_coo(dm=dm, **kvargs).toarray()
-    kmat = self.kmat_den(dm=dm, **kvargs)
-    return vh,kmat
-
   def get_hamiltonian(self): # Returns the stored matrix elements of current hamiltonian 
     return self.hsx.spin2h4_csr
-    
-  def has_ecp(self): return False # if there is effective core potential in the Hamiltonian?
-    
-  def overlap_lil(self, **kvargs):   # Compute overlap matrix in list of lists format
-    from pyscf.nao.m_overlap_lil import overlap_lil
-    return overlap_lil(self, **kvargs)
 
   def dipole_coo(self, **kvargs):   # Compute dipole matrix elements for the given system
     from pyscf.nao.m_dipole_coo import dipole_coo
@@ -606,7 +564,7 @@ class system_vars_c():
     vnuc = np.zeros(ncoo)
     for R,sp in zip(self.atom2coord, self.atom2sp):
       dd, Z = cdist(R.reshape((1,3)), coords).reshape(ncoo), self.sp2charge[sp]
-      vnuc = vnuc - Z / dd # minus to comply with pySCF convention?
+      vnuc = vnuc - Z / dd 
     return vnuc
     
   def get_init_guess(self, key=None):

@@ -528,7 +528,7 @@ def dot_eri_dm(eri, dm, hermi=0):
     return vj, vk
 
 
-def get_jk(mol, dm, hermi=1, vhfopt=None, **kvargs):
+def get_jk(mol, dm, hermi=1, vhfopt=None):
     '''Compute J, K matrices for the given density matrix
 
     Args:
@@ -566,11 +566,7 @@ def get_jk(mol, dm, hermi=1, vhfopt=None, **kvargs):
     '''
     dm = numpy.asarray(dm, order='C')
     nao = dm.shape[-1]
-
-    if hasattr(mol, 'get_jk'): 
-      vj, vk = mol.get_jk(dm=dm, hermi=1, vhfopt=None, **kvargs)
-    else :
-      vj, vk = _vhf.direct(dm.reshape(-1,nao,nao), mol._atm, mol._bas, mol._env,
+    vj, vk = _vhf.direct(dm.reshape(-1,nao,nao), mol._atm, mol._bas, mol._env,
                          vhfopt=vhfopt, hermi=hermi, cart=mol.cart)
     return vj.reshape(dm.shape), vk.reshape(dm.shape)
 
@@ -721,7 +717,7 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
 
     Args:
         mo_coeff : 2D ndarray
-            Orbital coefficients
+            Obital coefficients
         mo_occ : 1D ndarray
             Orbital occupancy
         fock_ao : 2D ndarray
@@ -1111,10 +1107,7 @@ class SCF(lib.StreamObject):
         self.diis_space_rollback = False
         self.damp = 0
         self.level_shift = 0
-        mol_has_get_jk = hasattr(mol, 'get_jk')
-        self.direct_scf = not mol_has_get_jk
-        self.use_scf_get_jk = mol_has_get_jk
-        self.dump_chkfile = not mol_has_get_jk
+        self.direct_scf = True
         self.direct_scf_tol = 1e-13
         self.conv_check = True
 ##################################################
@@ -1240,9 +1233,7 @@ class SCF(lib.StreamObject):
     def get_init_guess(self, mol=None, key='minao'):
         if mol is None:
             mol = self.mol
-        if hasattr(mol, 'get_init_guess'):
-            dm = mol.get_init_guess(key=key)
-        elif key.lower() == '1e':
+        if key.lower() == '1e':
             dm = self.init_guess_by_1e(mol)
         elif getattr(mol, 'natm', 0) == 0:
             logger.info(self, 'No atom found in mol. Use 1e initial guess')
@@ -1281,7 +1272,7 @@ class SCF(lib.StreamObject):
     def energy_nuc(self):
         return self.mol.energy_nuc()
 
-    def scf(self, dm0=None):
+    def scf(self, dm0=None, **kwargs):
         '''main routine for SCF
 
         Kwargs:
@@ -1306,14 +1297,14 @@ class SCF(lib.StreamObject):
         self.converged, self.e_tot, \
                 self.mo_energy, self.mo_coeff, self.mo_occ = \
                 kernel(self, self.conv_tol, self.conv_tol_grad,
-                       dump_chk=self.dump_chkfile, dm0=dm0, callback=self.callback,
-                       conv_check=self.conv_check)
+                       dm0=dm0, callback=self.callback,
+                       conv_check=self.conv_check, **kwargs)
 
         logger.timer(self, 'SCF', *cput0)
         self._finalize()
         return self.e_tot
-    def kernel(self, dm0=None):
-        return self.scf(dm0)
+    def kernel(self, dm0=None, **kwargs):
+        return self.scf(dm0, **kwargs)
     kernel.__doc__ = scf.__doc__
 
     def _finalize(self):
@@ -1490,17 +1481,12 @@ class RHF(SCF):
 # Note the incore version, which initializes an _eri array in memory.
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-
-        if self.use_scf_get_jk: # overriding original heuristic
-          vj, vk = SCF.get_jk(self, mol, dm, hermi)
-        else : # original heuristic
-          if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
+        if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
             if self._eri is None:
-              self._eri = mol.intor('int2e', aosym='s8')
+                self._eri = mol.intor('int2e', aosym='s8')
             vj, vk = dot_eri_dm(self._eri, dm, hermi)
-          else:
+        else:
             vj, vk = SCF.get_jk(self, mol, dm, hermi)
-        
         return vj, vk
 
     def convert_from_(self, mf):
