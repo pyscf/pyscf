@@ -11,14 +11,14 @@ from pyscf.lib import logger
   
 class SCF(hf.SCF):
   '''SCF class adapted for NAOs.'''
-  def __init__(self, sv, pseudo=None, **kvargs):
+  def __init__(self, sv, pb=None, pseudo=None, **kvargs):
     from pyscf.nao.m_prod_basis import prod_basis_c
     self.sv = sv
     hf.SCF.__init__(self, sv)
     self.direct_scf = False # overriding the attribute from hf.SCF ...
-    self.pb = prod_basis_c().init_prod_basis_pp(sv, **kvargs)
+    self.pb = prod_basis_c().init_prod_basis_pp(sv, **kvargs) if pb is None else pb
     self.hkernel_den = self.pb.comp_coulomb_den(**kvargs)
-    self.pseudo = hasattr(sv, 'xml_dict') if pseudo is None else pseudo 
+    self.pseudo = hasattr(sv, 'sp2ion') if pseudo is None else pseudo 
 
   def add_pb_hk(self, **kvargs):
     """ This is adding a product basis attribute to the class and making possible then to compute the matrix elements of Hartree potential or Fock exchange."""
@@ -46,7 +46,7 @@ class SCF(hf.SCF):
       dm = self.sv.comp_dm()
       vhar = self.vhartree_coo(dm=dm, **kvargs).tocsr()
       vxc  = self.sv.vxc_lil(dm=dm, **kvargs).tocsr()
-      vne  = self.sv.get_hamiltonian(**kvargs)[0].tocsr()-tkin-vhar-vxc
+      vne  = self.sv.get_hamiltonian()[0].tocsr()-tkin-vhar-vxc
     else :
       vne  = self.sv.vnucele_coo_coulomb(**kvargs)
     return vne.tocoo()
