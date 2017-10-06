@@ -568,6 +568,9 @@ def get_ewald_params(cell, precision=1e-8, gs=None):
     if cell.dimension == 3:
         if gs is None:
             gs = 5
+        else:
+            gs = np.copy(gs)
+            gs[gs>40] = 40
         Gmax = min(np.asarray(gs) * lib.norm(cell.reciprocal_vectors(), axis=1))
         log_precision = np.log(precision/(4*np.pi*Gmax**2))
         ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
@@ -628,7 +631,8 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     # See also Eq. (32) of ewald.pdf at
     #   http://www.fisica.uniud.it/~giannozz/public/ewald.pdf
 
-    gs = cell.gs
+    gs = np.copy(cell.gs)
+    gs[gs>40] = 40
     Gv, Gvbase, weights = cell.get_Gv_weights(gs)
     absG2 = np.einsum('gi,gi->g', Gv, Gv)
     absG2[absG2==0] = 1e200
@@ -873,7 +877,6 @@ class Cell(mole.Mole):
   Lattice are not in right-handed coordinate system. This can cause wrong value for some integrals.
   It's recommended to resort the lattice vectors to\na = %s\n\n''' % _a[[0,2,1]])
 
-        ke_cutoff is None
         if self.gs is None:
             if self.ke_cutoff is None:
                 ke_cutoff = estimate_ke_cutoff(self, self.precision)
