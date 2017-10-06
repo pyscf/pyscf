@@ -3,6 +3,7 @@ import numpy as np
 from pyscf.nao.m_csphar import csphar
 from pyscf.nao.m_xjl import xjl
 import warnings
+import scipy
 try:
   import numba
   from pyscf.nao.m_xjl_numba import get_bessel_xjl_numba, calc_oo2co
@@ -41,15 +42,20 @@ def coulomb_am(self, sp1, R1, sp2, R2, **kvargs):
   l2S = np.zeros((2*self.jmx+1), dtype = np.float64)
   _j = self.jmx
 
+  use_numba = False
+
   if use_numba:
-    bessel_pp = get_bessel_xjl_numba(self.kk, dist, _j, self.nr)
+    bessel_pp = np.zeros((_j*2+1, self.nr))
+    for L in range(2*_j+1):
+        bessel_pp[L, :] = scipy.special.spherical_jn(L, dist*self.kk)*self.kk
     calc_oo2co(bessel_pp, self.interp_pp.dg_jt, np.array(self.ao1.sp2info[sp1]),
       np.array(self.ao1.sp2info[sp2]), self.ao1.psi_log_mom[sp1], self.ao1.psi_log_mom[sp2],
       self.njm, self._gaunt_iptr, self._gaunt_data, ylm, _j, self.jmx, self._tr_c2r,
       self._conj_c2r, l2S, cS, rS, cmat, oo2co)
   else:
     bessel_pp = np.zeros((_j*2+1, self.nr))
-    for ip,p in enumerate(self.kk): bessel_pp[:,ip]=xjl(p*dist, _j*2)*p
+    for L in range(2*_j+1):
+        bessel_pp[L, :] = scipy.special.spherical_jn(L, dist*self.kk)*self.kk
 
     for mu2,l2,s2,f2 in self.ao1.sp2info[sp2]:
       for mu1,l1,s1,f1 in self.ao1.sp2info[sp1]:
