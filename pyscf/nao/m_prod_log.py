@@ -35,7 +35,8 @@ def dipole_check(sv, prod_log, dipole_funct=dipole_ni, **kvargs):
   """ Computes the allclose(), mean absolute error and maximal error of the dipoles reproduced by the (local) vertex. """
   from pyscf.nao.m_ao_matelem import ao_matelem_c
   from pyscf.nao.m_ao_log import comp_moments
-  me = ao_matelem_c(prod_log.ao_log)
+  me = ao_matelem_c(prod_log.ao_log.rr, prod_log.ao_log.pp)
+  me.init_one_set(prod_log.ao_log)
   sp2mom0,sp2mom1 = comp_moments(prod_log)
   mael,mxel,acl=[],[],[]
   for atm,[sp,coord] in enumerate(zip(sv.atom2sp,sv.atom2coord)):
@@ -118,6 +119,7 @@ class prod_log_c(ao_log_c):
           if ev>tol_loc: mu2jd.append([j,domi])
       
       nmult=len(mu2jd)
+
       mu2j = np.array([jd[0] for jd in mu2jd], dtype=np.int32)
       mu2s = np.array([0]+[sum(2*mu2j[0:mu+1]+1) for mu in range(nmult)], dtype=np.int64)
       mu2rcut = np.array([ao_log.sp2rcut[sp]]*nmult, dtype=np.float64)
@@ -129,7 +131,8 @@ class prod_log_c(ao_log_c):
       self.sp2norbs[sp] = mu2s[-1]
 
       mu2ff = np.zeros((nmult, lvc.nr))
-      for mu,[j,domi] in enumerate(mu2jd): mu2ff[mu,:] = ldp['j2xff'][j][domi,:]
+      for mu,[j,domi] in enumerate(mu2jd): 
+          mu2ff[mu,:] = ldp['j2xff'][j][domi,:]
       self.psi_log.append(mu2ff)
       
       mu2ff = np.zeros((nmult, lvc.nr))
