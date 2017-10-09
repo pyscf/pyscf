@@ -9,7 +9,6 @@ from pyscf.nao.m_sparsetools import csr_matvec, csc_matvec, csc_matvecs
 import scipy
 if int(scipy.__version__[0]) > 0:
     scipy_ver = 1
-    from scipy.linalg.blas import sspmv, dspmv
 else:
     scipy_ver = 0
     from pyscf.nao.m_blas_wrapper import spmv_wrapper
@@ -26,7 +25,7 @@ class tddft_iter_c():
 
   def __init__(self, sv, pb, tddft_iter_tol=1e-2, tddft_iter_broadening=0.00367493,
           nfermi_tol=1e-5, telec=None, nelec=None, fermi_energy=None, xc_code='LDA,PZ',
-          GPU=False, precision="single", **kvargs):
+          GPU=False, precision="single", load_kernel=False, **kvargs):
     """ Iterative TDDFT a la PK, DF, OC JCTC """
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
     from pyscf.nao.m_comp_dm import comp_dm
@@ -40,7 +39,7 @@ class tddft_iter_c():
         self.dtypeComplex = np.complex64
         self.gemm = blas.sgemm
         if scipy_ver > 0:
-            self.spmv = sspmv
+            self.spmv = blas.sspmv
         else: 
             self.spmv = spmv_wrapper
     elif precision == "double":
@@ -48,7 +47,7 @@ class tddft_iter_c():
         self.dtypeComplex = np.complex128
         self.gemm = blas.dgemm
         if scipy_ver > 0:
-            self.spmv = dspmv
+            self.spmv = blas.dspmv
         else: 
             self.spmv = spmv_wrapper
     else:
@@ -67,12 +66,16 @@ class tddft_iter_c():
 
     self.moms0,self.moms1 = pb.comp_moments(dtype=self.dtype)
     self.nprod = self.moms0.size
-    self.kernel,self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype) # Lower Triangular Part of the kernel
-    assert self.nprod==self.kernel_dim, "%r %r "%(self.nprod, self.kernel_dim)
-    
-    if xc_code.upper()!='RPA' :
-      dm = comp_dm(sv.wfsx.x, sv.get_occupations())
-      pb.comp_fxc_pack(dm, xc_code, kernel = self.kernel, dtype=self.dtype, **kvargs)
+
+    if load_kernel:
+        self.load_kernel(**kvargs)
+    else:
+        self.kernel,self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype) # Lower Triangular Part of the kernel
+        assert self.nprod==self.kernel_dim, "%r %r "%(self.nprod, self.kernel_dim)
+        
+        if xc_code.upper()!='RPA' :
+          dm = comp_dm(sv.wfsx.x, sv.get_occupations())
+          pb.comp_fxc_pack(dm, xc_code, kernel = self.kernel, dtype=self.dtype, **kvargs)
 
     self.telec = sv.hsx.telec if telec is None else telec
     self.nelec = sv.hsx.nelec if nelec is None else nelec
@@ -93,6 +96,26 @@ class tddft_iter_c():
 
     self.tddft_iter_gpu = tddft_iter_gpu_c(GPU, self.v_dab, self.ksn2f, self.ksn2e, 
             self.norbs, self.nfermi, self.vstart)
+
+  def load_kernel(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None, **kwargs):
+
+      if kernel_format == "npy":
+          self.kernel = np.load(kernel_fname)
+      elif kernel_format == "txt":
+          self.kernel = np.loadtxt(kernel_fname)
+      elif kernel_format == "hdf5":
+          import h5py
+          if kernel_path_hdf5 is None:
+              raise ValueError("kernel_path_hdf5 not set while trying to read kernel from hdf5 file.")
+          self.kernel = h5py.File(kernel_fname, "r")[kernel_path_hdf5].value
+      else:
+          raise ValueError("Wrong format for loading kernel, must be: npy, txt or hdf5, got " + kernel_format)
+
+      if len(self.kernel.shape) > 1:
+          raise ValueError("The kernel must be saved in packed format in order to be loaded!")
+      
+      assert self.nprod*(self.nprod+1)//2 == self.kernel.size, "wrong size for loaded kernel: %r %r "%(self.nprod*(self.nprod+1)//2, self.kernel.size)
+      self.kernel_dim = self.nprod
 
   def apply_rf0(self, v, comega=1j*0.0):
     """ This applies the non-interacting response function to a vector (a set of vectors?) """
