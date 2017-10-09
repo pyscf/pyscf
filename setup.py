@@ -303,6 +303,6 @@ setup(
     cmdclass={'build_py': build_py,
               'install': PostInstallCommand,
              },
-    install_require=['numpy', 'scipy', 'h5py'],
+    install_requires=['numpy', 'scipy', 'h5py'],
 )
 
