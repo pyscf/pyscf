@@ -252,6 +252,7 @@ class RKS(hf.RHF):
         logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
         self.grids.dump_flags()
         if self.nlc!='':
+            logger.info(self, '** Following is NLC Grids **')
             self.nlcgrids.dump_flags()
 
     get_veff = get_veff

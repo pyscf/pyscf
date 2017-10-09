@@ -74,12 +74,10 @@ def ddcosmo_for_scf(mf, pcmobj):
 
 
 # Generate ddcosmo function to compute energy and potential matrix
-def gen_ddcosmo_solver(pcmobj, grids=None, verbose=None):
+def gen_ddcosmo_solver(pcmobj, verbose=None):
     mol = pcmobj.mol
-    if grids is None:
-        grids = gen_grid.Grids(mol)
-        grids.level = pcmobj.becke_grids_level
-        grids.build(with_non0tab=True)
+    if pcmobj.grids.coords is None:
+        pcmobj.grids.build(with_non0tab=True)
 
     natm = mol.natm
     lmax = pcmobj.lmax
@@ -102,14 +100,14 @@ def gen_ddcosmo_solver(pcmobj, grids=None, verbose=None):
     Lmat = make_L(pcmobj, r_vdw, ylm_1sph, fi)
     Lmat = Lmat.reshape(natm*nlm,-1)
 
-    cached_pol = cache_fake_multipoler(grids, r_vdw, lmax)
+    cached_pol = cache_fake_multipoler(pcmobj.grids, r_vdw, lmax)
 
     def gen_vind(dm):
         v_phi = make_phi(pcmobj, dm, r_vdw, ui)
         phi = -numpy.einsum('n,xn,jn,jn->jx', weights_1sph, ylm_1sph,
                             ui, v_phi)
         L_X = numpy.linalg.solve(Lmat, phi.ravel()).reshape(natm,-1)
-        psi, vmat = make_psi_vmat(pcmobj, dm, r_vdw, ui, grids, ylm_1sph,
+        psi, vmat = make_psi_vmat(pcmobj, dm, r_vdw, ui, pcmobj.grids, ylm_1sph,
                                   cached_pol, L_X, Lmat)
         dielectric = pcmobj.eps
         f_epsilon = (dielectric-1.)/dielectric
@@ -460,18 +458,11 @@ class DDCOSMO(lib.StreamObject):
         self.lmax = 6  # max angular momentum of spherical harmonics basis
         self.eta = .1  # regularization parameter
         self.eps = 78.3553
-        self.becke_grids_level = 3
+        self.grids = gen_grid.Grids(mol)
 
 ##################################################
 # don't modify the following attributes, they are not input options
         self._keys = set(self.__dict__.keys())
-
-    def kernel(self, dm, grids=None):
-        '''A single shot solvent effects for given density matrix.
-        '''
-        solver = self.as_solver(grids)
-        e, vmat = solver(dm)
-        return e, vmat
 
     def dump_flags(self):
         logger.info(self, '******** %s flags ********', self.__class__)
@@ -483,7 +474,15 @@ class DDCOSMO(lib.StreamObject):
         logger.debug2(self, 'radii_table %s', self.radii_table)
         if self.atom_radii:
             logger.info(self, 'User specified atomic radii %s', str(self.atom_radii))
+        self.grids.dump_flags()
         return self
+
+    def kernel(self, dm, grids=None):
+        '''A single shot solvent effects for given density matrix.
+        '''
+        solver = self.as_solver(grids)
+        e, vmat = solver(dm)
+        return e, vmat
 
     gen_solver = as_solver = gen_ddcosmo_solver
 
