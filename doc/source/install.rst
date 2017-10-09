@@ -15,7 +15,11 @@ environment, PySCF package can be installed with::
 
 Installation with pip
 =====================
-Install from PyPI::
+To install from PyPI, you need to first install the dependent libraries::
+
+  $ pip install numpy scipy h5py
+
+Then install PySCF::
 
   $ pip install pyscf
 

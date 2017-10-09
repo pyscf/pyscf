@@ -74,9 +74,8 @@ else:
 
 pyscf_lib_dir = os.path.join(topdir, 'pyscf', 'lib')
 build_lib_dir = os.path.join('build', distutils_lib_dir, 'pyscf', 'lib')
-default_lib_dir = [os.path.join(pyscf_lib_dir,'deps','lib'), build_lib_dir] + blas_lib_dir
-default_include = ['.', 'build', pyscf_lib_dir,
-                   os.path.join(pyscf_lib_dir,'deps','include')] + blas_include
+default_lib_dir = [build_lib_dir] + blas_lib_dir
+default_include = ['.', 'build', pyscf_lib_dir] + blas_include
 
 if not os.path.exists(os.path.join(topdir, 'build')):
     os.mkdir(os.path.join(topdir, 'build'))
@@ -183,6 +182,7 @@ autocode/hess.c autocode/intor1.c autocode/grad2.c '''
             extensions.append(
                 make_ext('pyscf.lib.libcint', 'libcint/src', srcs, blas_library)
             )
+            default_include.append(os.path.join(pyscf_lib_dir, 'libcint','src'))
         else:
             print("****************************************************************")
             print("*** WARNING: libcint library not found.")
