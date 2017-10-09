@@ -2,6 +2,18 @@ mcscf --- Multi-configurational self-consistent field
 *****************************************************
 
 .. automodule:: pyscf.mcscf
+
+.. CASSCF solver
+.. =============
+.. 
+.. Initial guess
+.. -------------
+.. 
+.. Symmetry broken
+.. ---------------
+.. 
+.. DMRG solver
+.. -----------
  
 
 CASCI
