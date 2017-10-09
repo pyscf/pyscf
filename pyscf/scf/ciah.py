@@ -202,6 +202,7 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
     ax = list(ax)
     nx = len(xs)
 
+    max_cycle = min(max_cycle, x0.size)
     heff = numpy.zeros((max_cycle+nx+1,max_cycle+nx+1), dtype=x0.dtype)
     ovlp = numpy.eye(max_cycle+nx+1, dtype=x0.dtype)
     if nx == 0:

@@ -107,10 +107,14 @@ def float_occ_(mf):
         ee = numpy.sort(numpy.hstack(mo_energy))
         n_a = numpy.count_nonzero(mo_energy[0]<(ee[mol.nelectron-1]+1e-3))
         n_b = mol.nelectron - n_a
-        if n_a != mf.nelec[0]:
+        if mf.nelec is None:
+            nelec = mf.mol.nelec
+        else:
+            nelec = mf.nelec
+        if n_a != nelec[0]:
             logger.info(mf, 'change num. alpha/beta electrons '
                         ' %d / %d -> %d / %d',
-                        mf.nelec[0], mf.nelec[1], n_a, n_b)
+                        nelec[0], nelec[1], n_a, n_b)
             mf.nelec = (n_a, n_b)
         return uhf.UHF.get_occ(mf, mo_energy, mo_coeff)
     mf.get_occ = get_occ

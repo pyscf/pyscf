@@ -104,7 +104,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 # Abandon CD treatment for better numerical stablity
         w, v = scipy.linalg.eigh(j2c)
         log.debug('MDF metric for kpt %s cond = %.4g, drop %d bfns',
-                  uniq_kptji_id, w[0]/w[-1], numpy.count_nonzero(w<mydf.linear_dep_threshold))
+                  uniq_kptji_id, w[-1]/w[0], numpy.count_nonzero(w<mydf.linear_dep_threshold))
         v = v[:,w>mydf.linear_dep_threshold].T.conj()
         v /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)
         j2c = v

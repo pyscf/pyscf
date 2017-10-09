@@ -3,6 +3,7 @@ import numpy
 from pyscf.pbc.df import mdf
 import pyscf.pbc.gto as pgto
 from pyscf import ao2mo
+mdf.df.LINEAR_DEP_THR = 1e-7
 
 L = 5.
 n = 1
