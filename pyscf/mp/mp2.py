@@ -261,9 +261,9 @@ class _ERIS:
         if hasattr(mp._scf, 'with_df') and mp._scf.with_df:
             # To handle the PBC or custom 2-electron with 3-index tensor.
             # Call dfmp2.MP2 for efficient DF-MP2 implementation.
-            log.warn('MP2 detected DF being bound to the HF object. '
-                     '(ia|jb) is computed based on the DF 3-tensor integrals.\n'
-                     'You can switch to dfmp2.MP2 for better efficiency')
+            log.warn('DF-HF is found. (ia|jb) is computed based on the DF '
+                     '3-tensor integrals.\n'
+                     'You can switch to dfmp2.MP2 for better performance')
             log.debug('transform (ia|jb) with_df')
             self.ovov = mp._scf.with_df.ao2mo((co,cv,co,cv))
 
@@ -357,7 +357,7 @@ def _ao2mo_ovov(mp, orbo, orbv, feri, max_memory=2000, verbose=None):
     jk_where = numpy.argsort(numpy.hstack(jk_where)).astype(numpy.int32)
     orbv = numpy.asarray(orbv, order='F')
 
-    occblk = int(min(nocc, max(4, 250/nocc, max_memory*.9e6/8/(nao**2*nocc)/4)))
+    occblk = int(min(nocc, max(4, 250/nocc, max_memory*.9e6/8/(nao**2*nocc)/5)))
     def load(i0, eri):
         if i0 >= nocc:
             return
@@ -380,20 +380,22 @@ def _ao2mo_ovov(mp, orbo, orbv, feri, max_memory=2000, verbose=None):
 
     buf_prefecth = numpy.empty((occblk*nocc,nao**2))
     buf = numpy.empty_like(buf_prefecth)
-    bufw = numpy.empty_like(buf_prefecth)
     buf1 = numpy.empty_like(buf_prefecth)
+    bufw = numpy.empty((occblk*nocc,nvir**2))
+    bufw1 = numpy.empty_like(bufw)
     with lib.call_in_background(load) as prefetch:
         with lib.call_in_background(save) as bsave:
             load(0, buf_prefecth)
             for i0, i1 in lib.prange(0, nocc, occblk):
-                buf, buf_prefecth, bufw = buf_prefecth, bufw, buf
+                buf, buf_prefecth = buf_prefecth, buf
                 eri = buf[:(i1-i0)*nocc]
                 prefetch(i1, buf_prefecth)
 
                 idx = numpy.arange(eri.shape[0], dtype=numpy.int32)
                 dat = lib.take_2d(eri, idx, jk_where, out=buf1)
-                dat = _ao2mo.nr_e2(dat, orbv, (0,nvir,0,nvir), 's1', 's1', out=eri)
+                dat = _ao2mo.nr_e2(dat, orbv, (0,nvir,0,nvir), 's1', 's1', out=bufw)
                 bsave(i0, i1, dat.reshape(i1-i0,nocc,nvir,nvir).transpose(0,2,1,3))
+                bufw, bufw1 = bufw1, bufw
                 time1 = log.timer_debug1('pass2 ao2mo [%d:%d]' % (i0,i1), *time1)
 
     time0 = log.timer('mp2 ao2mo_ovov pass2', *time0)
@@ -445,5 +447,5 @@ if __name__ == '__main__':
     e2 = .5 * numpy.dot(eri.flatten(), rdm2.flatten())
     print(e1+e2+mf.energy_nuc()-mf.e_tot - -0.204019976381)
 
-    pt = MP2(scf.density_fit(mf))
+    pt = MP2(scf.density_fit(mf, 'weigend'))
     print(pt.kernel()[0] - -0.204254500454)
