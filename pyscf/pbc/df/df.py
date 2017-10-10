@@ -82,10 +82,10 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
     auxcell.rcut = max(rcut)
 
     auxcell._bas = numpy.asarray(auxcell._bas[steep_shls], order='C')
-    logger.debug(cell, 'Drop %d primitive fitting functions', ndrop)
-    logger.debug(cell, 'make aux basis, num shells = %d, num cGTOs = %d',
-                 auxcell.nbas, auxcell.nao_nr())
-    logger.debug(cell, 'auxcell.rcut %s', auxcell.rcut)
+    logger.info(cell, 'Drop %d primitive fitting functions', ndrop)
+    logger.info(cell, 'make aux basis, num shells = %d, num cGTOs = %d',
+                auxcell.nbas, auxcell.nao_nr())
+    logger.info(cell, 'auxcell.rcut %s', auxcell.rcut)
     return auxcell
 
 def make_modchg_basis(auxcell, smooth_eta):
