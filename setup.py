@@ -2,13 +2,21 @@ import os
 import sys
 import sysconfig
 from setuptools import setup, find_packages, Extension
-import numpy
 
 if sys.version_info[0] >= 3: # from Cython 0.14
     from distutils.command.build_py import build_py_2to3 as build_py
 else:
     from distutils.command.build_py import build_py
 from distutils.command.install import install
+try:
+    from numpy.distutils.system_info import get_info
+except ImportError as e:
+    print('**************************************************')
+    print('* numpy was not installed in your system.  Please run')
+    print('*     pip install numpy')
+    print('* before installing pyscf.')
+    print('**************************************************')
+    raise e
 
 topdir = os.path.abspath(os.path.join(__file__, '..'))
 
@@ -53,8 +61,8 @@ VERSION = get_version()
 #
 # default include and library path
 #
-np_blas = numpy.__config__.blas_opt_info
-blas_include = []#np_blas['include_dirs']
+np_blas = get_info('blas_opt', 0)
+blas_include = np_blas.get('include_dirs')
 blas_lib_dir = np_blas['library_dirs']
 blas_library = np_blas['libraries']
 
@@ -124,7 +132,7 @@ def make_src(relpath, srcs):
 
 
 def search_lib_path(libname, extra_paths=None, version=None):
-    paths = os.environ["LD_LIBRARY_PATH"].split(os.pathsep)
+    paths = os.environ['LD_LIBRARY_PATH'].split(os.pathsep)
     if 'PYSCF_INC_DIR' in os.environ:
         PYSCF_INC_DIR = os.environ['PYSCF_INC_DIR']
         paths = [PYSCF_INC_DIR,
@@ -141,7 +149,9 @@ def search_lib_path(libname, extra_paths=None, version=None):
             return os.path.abspath(path)
 
 def search_inc_path(incname, extra_paths=None):
-    paths = os.environ["LD_LIBRARY_PATH"].split(os.pathsep)
+    paths = os.environ['LD_LIBRARY_PATH'].split(os.pathsep)
+    if os.environ.get('INCLUDE_PATH'):
+        paths += os.environ['INCLUDE_PATH'].split(os.pathsep)
     if 'PYSCF_INC_DIR' in os.environ:
         paths = [PYSCF_INC_DIR,
                  os.path.join(PYSCF_INC_DIR, 'include'),
@@ -149,9 +159,10 @@ def search_inc_path(incname, extra_paths=None):
     if extra_paths is not None:
         paths += extra_paths
     for path in paths:
+        if os.path.exists(os.path.join(path, incname)):
+            return os.path.abspath(path)
         inc_path = os.path.join(os.path.dirname(path), 'include')
-        full_incname = os.path.join(path, incname)
-        if os.path.exists(full_incname):
+        if os.path.exists(os.path.join(inc_path, incname)):
             return os.path.abspath(path)
 
 #
@@ -159,8 +170,8 @@ def search_inc_path(incname, extra_paths=None):
 #
 extensions = []
 if 1:
-    print pyscf_lib_dir
-    libcint_lib_path = search_lib_path('libcint'+so_ext, [os.path.join(pyscf_lib_dir, 'deps', 'lib'),
+    libcint_lib_path = search_lib_path('libcint'+so_ext, [pyscf_lib_dir,
+                                                          os.path.join(pyscf_lib_dir, 'deps', 'lib'),
                                                           os.path.join(pyscf_lib_dir, 'deps', 'lib64')],
                                        version='3.0')
     libcint_inc_path = search_inc_path('cint.h', [os.path.join(pyscf_lib_dir, 'deps', 'include')])
@@ -229,7 +240,8 @@ extensions += [
 #
 DFT_AVAILABLE = 0
 if 1:
-    libxc_lib_path = search_lib_path('libxc'+so_ext, [os.path.join(pyscf_lib_dir, 'deps', 'lib'),
+    libxc_lib_path = search_lib_path('libxc'+so_ext, [pyscf_lib_dir,
+                                                      os.path.join(pyscf_lib_dir, 'deps', 'lib'),
                                                       os.path.join(pyscf_lib_dir, 'deps', 'lib64')],
                                      version='4.0.0')
     libxc_inc_path = search_inc_path('xc.h', [os.path.join(pyscf_lib_dir, 'deps', 'include')])
@@ -256,7 +268,8 @@ if 1:
 # Check xcfun
 #
 if 1:
-    xcfun_lib_path = search_lib_path('xcfun'+so_ext, [os.path.join(pyscf_lib_dir, 'deps', 'lib'),
+    xcfun_lib_path = search_lib_path('libxcfun'+so_ext, [pyscf_lib_dir,
+                                                         os.path.join(pyscf_lib_dir, 'deps', 'lib'),
                                                       os.path.join(pyscf_lib_dir, 'deps', 'lib64')])
     xcfun_inc_path = search_inc_path('xcfun.h', [os.path.join(pyscf_lib_dir, 'deps', 'include')])
     if xcfun_lib_path and xcfun_inc_path:
@@ -266,7 +279,7 @@ if 1:
         default_lib_dir += [xcfun_lib_path]
         default_include += [xcfun_inc_path]
         extensions += [
-            make_ext('pyscf.lib.xcfun_itrf', 'dft', 'xcfun_itrf.c', ['xcfun']),
+            make_ext('pyscf.lib.libxcfun_itrf', 'dft', 'xcfun_itrf.c', ['xcfun']),
         ]
         DFT_AVAILABLE = 1
 
@@ -304,5 +317,6 @@ setup(
               'install': PostInstallCommand,
              },
     install_requires=['numpy', 'scipy', 'h5py'],
+    setup_requires = ['numpy'],
 )
 

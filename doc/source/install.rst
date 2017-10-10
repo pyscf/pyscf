@@ -15,13 +15,25 @@ environment, PySCF package can be installed with::
 
 Installation with pip
 =====================
-To install from PyPI, you need to first install the dependent libraries::
 
+You have to first install the dependent libraries (due to the missing of
+build-time dependency in pip `PEP 518 <https://www.python.org/dev/peps/pep-0518/>`_)::
+ 
   $ pip install numpy scipy h5py
 
 Then install PySCF::
 
   $ pip install pyscf
+
+.. note::
+
+  libxc library is not available in the PyPI repository.  pyscf.dft module is
+  not working unless the libxc library was installed in the system.  You can
+  download libxc library from http://octopus-code.org/wiki/Libxc:download.
+  You need to add --enable-shared when compiling the libxc library.  Before
+  calling pip, the path where the libxc library is installed needs to be added
+  to the environment variable ``PYSCF_INC_DIR`` 
+
 
 Manual installation from github repo
 ====================================
