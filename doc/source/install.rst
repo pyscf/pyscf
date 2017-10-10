@@ -3,19 +3,38 @@
 Installation
 ************
 
-You may already have `cmake <http://www.cmake.org>`_,
-`numpy <http://www.numpy.org/>`_, `scipy <http://www.scipy.org/>`_
-and `h5py <http://www.h5py.org/>`_ installed.  If not, you can install
-them from any Python package manager (`Pypi <https://pypi.python.org/>`_,
-`conda <http://conda.pydata.org/>`_).  We recommend using the
-integrated science platform `Anaconda <https://www.continuum.io/downloads#linux>`_
-(with `conda-cmake <https://anaconda.org/anaconda/cmake>`_).
+We provide three ways to install PySCF package.
 
-The current stable PySCF release is `v1.3.5
-<https://github.com/sunqm/pyscf/releases/tag/v1.3.5>`_.  You can download the
-latest PySCF release v1.4 beta (or its development branch) from github::
+Installation with conda
+=======================
+
+If you have `Anaconda <https://www.continuum.io/downloads#linux>`_
+environment, PySCF package can be installed with::
+
+  $ conda install -c pyscf pyscf
+
+Installation with pip
+=====================
+To install from PyPI, you need to first install the dependent libraries::
+
+  $ pip install numpy scipy h5py
+
+Then install PySCF::
+
+  $ pip install pyscf
+
+Manual installation from github repo
+====================================
+
+You can manually install PySCF from the PySCF github repo.
+Manual installation requires `cmake <http://www.cmake.org>`_,
+`numpy <http://www.numpy.org/>`_, `scipy <http://www.scipy.org/>`_
+and `h5py <http://www.h5py.org/>`_ libraries.
+You can download the latest PySCF version (or the development branch) from github::
 
   $ git clone https://github.com/sunqm/pyscf
+  $ cd pyscf
+  $ git checkout dev  # optional if you'd like to try out the development branch
 
 Build the C extensions in :file:`pyscf/lib`::
 
@@ -29,9 +48,9 @@ This will automatically download the analytical GTO integral library `libcint
 <https://github.com/sunqm/libcint.git>`_ and the DFT exchange correlation
 functional libraries `libxc <http://www.tddft.org/programs/Libxc>`_ and `xcfun
 <https://github.com/dftlibs/xcfun.git>`_.  Finally, to make Python able to find
-the :code:`pyscf` package, add the top-level :code:`pyscf` directory (and not
-the :code:`pyscf/pyscf` subdirectory) to :code:`PYTHONPATH`.  For example, assuming
-:code:`pyscf` is put in ``/opt``::
+the :code:`pyscf` package, add the top-level :code:`pyscf` directory (not
+the :code:`pyscf/pyscf` subdirectory) to :code:`PYTHONPATH`.  For example, if
+:code:`pyscf` is installed in ``/opt``, :code:`PYTHONPATH` should be like::
 
   export PYTHONPATH=/opt/pyscf:$PYTHONPATH
 
@@ -46,9 +65,9 @@ For Mac OS X/macOS, you may get an import error if your OS X/macOS version is
     Referenced from: xxx/pyscf/pyscf/lib/libcgto.dylib
     Reason: unsafe use of relative rpath libcint.3.0.dylib in xxx/pyscf/pyscf/lib/libcgto.dylib with restricted binary
 
-This is caused by the RPATH. 
+This is caused by the RPATH.
 It can be fixed by running the script ``pyscf/lib/_runme_to_fix_dylib_osx10.11.sh`` in ``pyscf/lib``
-after compiling::
+directory::
  
     cd pyscf/lib
     sh _runme_to_fix_dylib_osx10.11.sh
@@ -89,7 +108,8 @@ are required by PySCF.  They can be downloaded from github::
     $ git checkout origin/stable-1.x
     $ cd .. && tar czf xcfun.tar.gz xcfun
 
-libxc-2.2.* can be found in http://octopus-code.org/wiki/Main_Page .
+libxc-3.* can be found in http://octopus-code.org/wiki/Main_Page or
+`here <http://sunqm.net/pyscf/files/src/libxc-3.0.0.tar.gz>`_.
 Assuming ``/opt`` is the place where these libraries will be installed, these
 packages should be compiled with the flags::
 
@@ -100,8 +120,8 @@ packages should be compiled with the flags::
         -DCMAKE_INSTALL_PREFIX:PATH=/opt -DCMAKE_INSTALL_LIBDIR:PATH=lib ..
     $ make && make install
 
-    $ tar xvzf libxc-2.2.2.tar.gz
-    $ cd libxc-2.2.2
+    $ tar xvzf libxc-3.0.0.tar.gz
+    $ cd libxc-0.0.0
     $ mkdir build && cd build
     $ ../configure --prefix=/opt --libdir=/opt/lib --enable-shared --disable-fortran LIBS=-lm
     $ make && make install

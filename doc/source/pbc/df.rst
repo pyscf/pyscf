@@ -353,15 +353,15 @@ planewaves.  The number of planewaves can also be controlled by through
 attribute :attr:`MDF.gs`.
 
 In principle, the accuracy of MDF method can be increased by adding
-more plane waves in the auxiliary basis.  In practice, large number of plane
-waves may lead to numerical stability issue because of the linear dependency
-between plane waves and Gaussians.  The optimal accuracy (with reasonable
-computational cost) requires a reasonable size of plan wave basis with a
-reasonable linear dependency threshold.  A big threshold would remove too many
-auxiliary functions while a small threshold would cause numerical error.
+more plane waves in the auxiliary basis.  In practice, the linear dependency
+between plane waves and Gaussians may lead to numerical stability issue.
+The optimal accuracy (with reasonable computational cost) requires a reasonable
+size of plan wave basis with a reasonable linear dependency threshold.  A
+threshold too large would remove many auxiliary functions while a threshold too
+small would cause numerical instability.
 .. In our preliminary test, ``ke_cutoff=10`` is able to produce 0.1 mEh accuracy in
 .. total energy.
-The default linear dependency threshold is 1e-7.  The threshold can be adjusted
+The default linear dependency threshold is 1e-10.  The threshold can be adjusted
 through the attribute :attr:`MDF.linear_dep_threshold`.
 
 Like the GDF method, it is also very demanding to initialize the 3-center
