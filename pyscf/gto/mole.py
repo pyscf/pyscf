@@ -24,7 +24,7 @@ from pyscf.gto import moleintor
 from pyscf.gto.eval_gto import eval_gto
 import pyscf.gto.ecp
 
-ELEMENTS = elements.ELEMENTS
+from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON
 
 # For code compatiblity in python-2 and python-3
 if sys.version_info >= (3,):
@@ -295,7 +295,9 @@ def format_basis(basis_tab):
     for atom in basis_tab:
         symb = _atom_symbol(atom)
         stdsymb = _std_symbol(symb)
-        if stdsymb.startswith('GHOST-'):
+        if stdsymb[:2] == 'X-':
+            stdsymb = stdsymb[2:]
+        if stdsymb[:6] == 'GHOST-':
             stdsymb = stdsymb[6:]
         atom_basis = basis_tab[atom]
         if isinstance(atom_basis, (str, unicode)):
@@ -635,8 +637,11 @@ def make_env(atoms, basis, pre_env=[], nucmod={}):
             b = _basdic[symb].copy()
         elif puresymb in _basdic:
             b = _basdic[puresymb].copy()
-        elif symb.upper().startswith('GHOST'):
-            symb = _remove_prefix_ghost(symb)
+        else:
+            if symb[:2] == 'X-':
+                symb = symb[2:]
+            elif symb[:6] == 'GHOST-':
+                symb = symb[6:]
             puresymb = _rm_digit(symb)
             if symb in _basdic:
                 b = _basdic[symb].copy()
@@ -645,9 +650,6 @@ def make_env(atoms, basis, pre_env=[], nucmod={}):
             else:
                 sys.stderr.write('Warn: Basis not found for atom %d %s\n' % (ia, symb))
                 continue
-        else:
-            sys.stderr.write('Warn: Basis not found for atom %d %s\n' % (ia, symb))
-            continue
         b[:,ATOM_OF] = ia
         _bas.append(b)
 
@@ -1049,7 +1051,7 @@ def energy_nuc(mol, charges=None, coords=None):
     e = (qq/r).sum() * .5
     return e
 
-def spherical_labels(mol, fmt=True):
+def sph_labels(mol, fmt=True):
     '''Labels for spherical GTO functions
 
     Kwargs:
@@ -1065,7 +1067,7 @@ def spherical_labels(mol, fmt=True):
     Examples:
 
     >>> mol = gto.M(atom='H 0 0 0; Cl 0 0 1', basis='sto-3g')
-    >>> gto.spherical_labels(mol)
+    >>> gto.sph_labels(mol)
     [(0, 'H', '1s', ''), (1, 'Cl', '1s', ''), (1, 'Cl', '2s', ''), (1, 'Cl', '3s', ''), (1, 'Cl', '2p', 'x'), (1, 'Cl', '2p', 'y'), (1, 'Cl', '2p', 'z'), (1, 'Cl', '3p', 'x'), (1, 'Cl', '3p', 'y'), (1, 'Cl', '3p', 'z')]
     '''
     count = numpy.zeros((mol.natm, 9), dtype=int)
@@ -1094,7 +1096,7 @@ def spherical_labels(mol, fmt=True):
         return ['%d %s %s%-4s' % x for x in label]
     else:
         return label
-spheric_labels = spherical_labels
+spheric_labels = spherical_labels = sph_labels
 
 def cart_labels(mol, fmt=True):
     '''Labels for Cartesian GTO functions
@@ -1161,7 +1163,7 @@ def ao_labels(mol, fmt=True):
     if mol.cart:
         return mol.cart_labels(fmt)
     else:
-        return mol.spherical_labels(fmt)
+        return mol.sph_labels(fmt)
 
 def spinor_labels(mol):
     raise RuntimeError('TODO')
@@ -2505,14 +2507,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def get_enuc(self):
         return self.energy_nuc()
 
-    @lib.with_doc(cart_labels.__doc__)
-    def cart_labels(self, fmt=False):
-        return cart_labels(self, fmt)
-
-    @lib.with_doc(spheric_labels.__doc__)
-    def spheric_labels(self, fmt=False):
-        return spheric_labels(self, fmt)
-    spherical_labels = spheric_labels
+    sph_labels = spheric_labels = sph_labels
+    cart_labels = cart_labels
     ao_labels = ao_labels
 
     search_ao_label = search_ao_label
@@ -2573,29 +2569,19 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                 c2s.append(c2s_l[l])
         return scipy.linalg.block_diag(*c2s)
 
-_ELEMENTDIC = dict((x.upper(),i) for i,x in enumerate(ELEMENTS))
-
 def _rm_digit(symb):
     if symb.isalpha():
         return symb
     else:
         return ''.join([i for i in symb if i.isalpha()])
 
-def _remove_prefix_ghost(symb):
-    if len(symb) < 6:
-        return symb
-    else:
-        for i, x in enumerate(symb[5:]):
-            if x.isalpha():
-                break
-        return symb[5+i:]
-
 def _charge(symb_or_chg):
     if isinstance(symb_or_chg, (str, unicode)):
-        if 'GHOST' in symb_or_chg.upper():
+        a = symb_or_chg.upper()
+        if ('GHOST' in a or ('X' in a and 'XE' not in a)):
             return 0
         else:
-            return elements.ELEMENTS_PROTON[str(_rm_digit(symb_or_chg))]
+            return elements.ELEMENTS_PROTON[str(_rm_digit(a))]
     else:
         return symb_or_chg
 
@@ -2608,11 +2594,14 @@ def _symbol(symb_or_chg):
 def _std_symbol(symb_or_chg):
     if isinstance(symb_or_chg, (str, unicode)):
         rawsymb = str(_rm_digit(symb_or_chg)).upper()
-        if len(rawsymb) > 5 and rawsymb.startswith('GHOST'):
-            rawsymb = _remove_prefix_ghost(rawsymb)
-            return 'GHOST-' + ELEMENTS[_ELEMENTDIC[rawsymb]]
+        if len(rawsymb) > 1 and symb_or_chg[0] == 'X' and symb_or_chg[:2].upper() != 'XE':
+            rawsymb = rawsymb[1:]
+            return 'X-' + ELEMENTS[ELEMENTS_PROTON[rawsymb]]
+        elif len(rawsymb) > 5 and rawsymb[:5] == 'GHOST':
+            rawsymb = rawsymb[5:]
+            return 'GHOST-' + ELEMENTS[ELEMENTS_PROTON[rawsymb]]
         else:
-            return ELEMENTS[_ELEMENTDIC[rawsymb]]
+            return ELEMENTS[ELEMENTS_PROTON[rawsymb]]
     else:
         return ELEMENTS[symb_or_chg]
 
@@ -2620,13 +2609,16 @@ def _atom_symbol(symb_or_chg):
     if isinstance(symb_or_chg, int):
         symb = ELEMENTS[symb_or_chg]
     else:
-        a = symb_or_chg.strip()
+        a = str(symb_or_chg.strip())
         if a.isdigit():
             symb = ELEMENTS[int(a)]
         else:
             rawsymb = _rm_digit(a)
-            rawsymb = _remove_prefix_ghost(rawsymb)
-            stdsymb = ELEMENTS[_ELEMENTDIC[rawsymb.upper()]]
+            if len(rawsymb) > 1 and a[0] == 'X' and a[:2].upper() != 'XE':
+                rawsymb = rawsymb[1:]
+            elif len(rawsymb) > 5 and rawsymb[:5].upper() == 'GHOST':
+                rawsymb = rawsymb[5:]
+            stdsymb = ELEMENTS[ELEMENTS_PROTON[rawsymb.upper()]]
             symb = a.replace(rawsymb, stdsymb)
     return symb
 
