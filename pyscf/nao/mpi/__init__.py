@@ -16,7 +16,7 @@ try:
 except ImportError:
   from fractions import gcd
 
-from pyscf.tools.m_utils import is_contiguous
+from pyscf.nao.mpi.m_utils import is_contiguous
 from pyscf.lib import misc
 libmpi = misc.load_library("libmpi_wp")
 
