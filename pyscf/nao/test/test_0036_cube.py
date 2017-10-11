@@ -16,11 +16,11 @@ class KnowValues(unittest.TestCase):
 
   def test_cube_c(self):
     """ Compute the density and store into a cube file  """
-    from pyscf.tools.m_cube import cube_c
+    from pyscf.tools.cubegen import Cube
     from pyscf.dft import numint, gen_grid
 
     # Initialize the class cube_c
-    cc = cube_c(mol, nx=20, ny=20, nz=20)
+    cc = Cube(mol, nx=20, ny=20, nz=20)
     
     # Compute density on the .cube grid
     coords = cc.get_coords()
@@ -41,10 +41,10 @@ class KnowValues(unittest.TestCase):
     """ Compute the density and store into a cube file  """
     from pyscf.nao import system_vars_c
     from pyscf.nao.m_comp_dm import comp_dm
-    from pyscf.tools.m_cube import cube_c
+    from pyscf.tools.cubegen import Cube
     
     sv = system_vars_c().init_siesta_xml(label='water', cd=os.path.dirname(os.path.abspath(__file__)))
-    cc = cube_c(sv, nx=50, ny=50, nz=50)
+    cc = Cube(sv, nx=50, ny=50, nz=50)
     dens = sv.dens_elec(cc.get_coords(), sv.comp_dm())
     dens = dens[:,0].reshape(cc.nx,cc.ny,cc.nz)
     cc.write(dens, "water.cube", comment='Valence electron density in real space (e/Bohr^3)')

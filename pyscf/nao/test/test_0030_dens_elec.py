@@ -23,7 +23,7 @@ class KnowValues(unittest.TestCase):
     #print((sv.ao_log.psi_log[1][1]**2 *sv.ao_log.rr**3 * np.log(sv.ao_log.rr[1]/sv.ao_log.rr[0])).sum())
     #print((sv.ao_log.psi_log[1][2]**2 *sv.ao_log.rr**3 * np.log(sv.ao_log.rr[1]/sv.ao_log.rr[0])).sum())
     
-    grid = sv.build_3dgrid(level=5)
+    grid = sv.build_3dgrid_pp(level=5)
     
     #t1 = timer()
     #dens1 = sv.dens_elec_vec(grid.coords, dm)

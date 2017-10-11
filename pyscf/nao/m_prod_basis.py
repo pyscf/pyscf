@@ -1,6 +1,7 @@
 from __future__ import print_function, division
 import numpy as np
 from scipy.sparse import coo_matrix
+from pyscf.nao.lsofcsr import lsofcsr_c
 from numpy import array, einsum, zeros, int64, sqrt
 from ctypes import POINTER, c_double, c_int64, byref
 from pyscf.nao.m_libnao import libnao
@@ -160,8 +161,8 @@ class prod_basis_c():
 
     return self
   
-  def init_inp_param_prod_log_dp(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0, ac_npc_max=8, jcutoff=14, metric_type=2, optimize_centers=0, ngl=96):
-    """ Talman's procedure should be working well with Pseudo-Potential starting point...
+  def init_inp_param_prod_log_dp(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0, ac_npc_max=8, jcutoff=14, metric_type=2, optimize_centers=0, ngl=96, **kvargs):
+    """ Talman's procedure should be working well with a pseudo-potential hamiltonians.
         This subroutine prepares the class for a later atom pair by atom pair generation 
         of the dominant product vertices and the conversion coefficients by calling 
         subroutines from the library libnao.
@@ -173,7 +174,11 @@ class prod_basis_c():
     self.tol_loc,self.tol_biloc,self.ac_rcut_ratio,self.ac_npc_max = tol_loc, tol_biloc, ac_rcut_ratio, ac_npc_max
     self.jcutoff,self.metric_type,self.optimize_centers,self.ngl = jcutoff, metric_type, optimize_centers, ngl
     self.ac_rcut = ac_rcut_ratio*max(sv.ao_log.sp2rcut)    
+    
     self.prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc) # local basis (for each specie)
+    # Checking routine: Load Fortran data
+    #self.prod_log = prod_log_c().load_prod_log_dp(sv.ao_log, sv.sp2charge, tol_loc) # tests Fortran input
+    
     self.c2s = zeros((sv.natm+1), dtype=int64) # global product Center (atom) -> start in case of atom-centered basis
     for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] #
     return self
@@ -505,6 +510,40 @@ class prod_basis_c():
             irow[inz],icol[inz],data[inz] = p,b+a*n,inf.vrtx[p-sd,a-sa,b-sb]; inz+=1;
     return sparseformat((data, (irow, icol)), dtype=dtype, shape=(nfdp,n*n))
 
+  def get_dp_vertex_doubly_sparse(self, dtype=np.float64, sparseformat=lsofcsr_c, axis=0):
+    """ Returns the product vertex coefficients for dominant products as an one-dimensional array of sparse matrices """
+    nnz = self.get_dp_vertex_nnz()
+    i1,i2,i3,data = zeros(nnz, dtype=int), zeros(nnz, dtype=int), zeros(nnz, dtype=int), zeros(nnz, dtype=dtype)
+    a2s,n,nfdp,lv = self.sv.atom2s,self.sv.atom2s[-1],self.dpc2s[-1],self.prod_log.sp2vertex # local "aliases"
+    inz = 0
+    for atom,[sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
+      if pt!=1: continue
+      s,f = a2s[atom:atom+2]
+      for p in range(sd,fd):
+        for a in range(s,f):
+          for b in range(s,f):
+            i1[inz],i2[inz],i3[inz],data[inz] = p,a,b,lv[spp][p-sd,a-s,b-s]
+            inz+=1
+
+    for atom, [sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
+      if pt!=2: continue
+      inf= self.bp2info[spp]
+      a,b = inf.atoms
+      sa,fa,sb,fb = a2s[a],a2s[a+1],a2s[b],a2s[b+1]
+      for p in range(sd,fd):
+        for a in range(sa,fa):
+          for b in range(sb,fb):
+            i1[inz],i2[inz],i3[inz],data[inz] = p,a,b,inf.vrtx[p-sd,a-sa,b-sb]; inz+=1;
+            i1[inz],i2[inz],i3[inz],data[inz] = p,b,a,inf.vrtx[p-sd,a-sa,b-sb]; inz+=1;
+    return sparseformat((data, (i1, i2, i3)), dtype=dtype, shape=(nfdp,n,n), axis=axis)
+
+  def comp_fci_den(self, hk, dtype=np.float64):
+    """ Compute the four-center integrals and return it in a dense storage """
+    pab2v = self.get_ac_vertex_array(dtype=dtype)
+    pcd = np.einsum('pq,qcd->pcd', hk, pab2v)
+    abcd = np.einsum('pab,pcd->abcd', pab2v, pcd)
+    return abcd
+    
   def init_c2s_domiprod(self):
     """Compute the array of start indices for dominant product basis set """
     c2n,c2t,c2sp = [],[],[] #  product Center -> list of the size of the basis set in this center,of center's types,of product species

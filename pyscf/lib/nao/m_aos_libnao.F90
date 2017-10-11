@@ -38,6 +38,12 @@ subroutine aos_libnao(ncoords, coords, norbs, oc2val, ldo ) bind(c, name='aos_li
     write(6,*) norbs, sda%norbs
     _die('norbs/=sda%norbs')
   endif
+
+  !write(6,*) ncoords
+  !write(6,*) norbs
+  !write(6,*) ldo
+  !write(6,*) __FILE__, __LINE__, sda%mu_sp2j
+  !write(6,*) sda%sp2nmult
   
   !$OMP PARALLEL DEFAULT(NONE) &
   !$OMP SHARED(ncoords, sda, oc2val, coords) &
@@ -76,7 +82,7 @@ end subroutine ! aos_libnao
 !
 subroutine init_aos_libnao(norbs, info) bind(c, name='init_aos_libnao') 
   use m_system_vars, only : get_norbs, get_nspin, get_jmx
-  use m_sv_libnao, only : sv_libnao=>sv
+  use m_sv_libnao_orbs, only : sv_libnao=>sv_orbs
   use m_spin_dens_aux, only : init_spin_dens_withoutdm
   use m_rsphar, only : rsphar, init_rsphar
   use m_die, only : die

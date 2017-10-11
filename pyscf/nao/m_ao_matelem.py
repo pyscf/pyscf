@@ -87,8 +87,10 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     self.interp_rr = log_interp_c(rr)
     self.interp_pp = log_interp_c(pp)
     self.rr3_dr = rr**3 * np.log(rr[1]/rr[0])
+    self.dr_jt  = np.log(rr[1]/rr[0])
     self.four_pi = 4*np.pi
     self.const = np.sqrt(np.pi/2.0)
+    self.pp2 = pp**2
     self.sv = None if sv is None else sv.init_libnao()
     self.dm = None if dm is None else init_dm_libnao(dm)
     if dm is not None and sv is not None : init_dens_libnao()
@@ -119,6 +121,7 @@ class ao_matelem_c(sbt_c, c2r_c, gaunt_c):
     self.ao1 = ao1
     self.ao1._add_sp2info()
     self.ao1._add_psi_log_mom()
+    self.pp2 = self.ao1.pp**2
 
     self.ao2 = ao2
     self.ao2._add_sp2info()

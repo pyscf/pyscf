@@ -38,7 +38,7 @@ class conv_yzx2xyz_c():
         ost = ost + 3
     return mat_xyz
 
-  def conv_yzx2xyz_2d(self, mat_yzx, direction='nao2pyscf', ss=None):
+  def conv_yzx2xyz_2d(self, mat_yzx, direction='pyscf2nao', ss=None):
     if direction.lower()=='nao2pyscf':
       m2m = self.m_yzx2m_xyz
     elif direction.lower()=='pyscf2nao':
@@ -53,7 +53,7 @@ class conv_yzx2xyz_c():
     o_xyz = self.conv_yzx2xyz_1d(o_xyz.transpose(), m2m, sh[1])
     return o_xyz
 
-  def conv_yzx2xyz_4d(self, mat_yzx, direction='nao2pyscf', ss=None):
+  def conv_yzx2xyz_4d(self, mat_yzx, direction='pyscf2nao', ss=None):
 
     if direction.lower()=='nao2pyscf':
       m2m = self.m_yzx2m_xyz

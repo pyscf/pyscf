@@ -72,3 +72,10 @@ class siesta_hsx_c():
       if(self.is_gamma): raise SystemError('i<len(dat) && gamma')
       self.orb_sc2orb_uc = np.array(dat[i:i+self.norbs_sc]-1, dtype='int'); i = i + self.norbs_sc
     if(i!=len(dat)): raise SystemError('i!=len(dat)')  
+
+  def deallocate(self):
+    del self.h4
+    del self.s4
+    del self.x4
+    del self.spin2h4_csr
+    del self.s4_csr

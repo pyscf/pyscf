@@ -80,23 +80,51 @@ def comp_coeffs(self, r):
 
 
 class log_interp_c():
-  """
-    Interpolation of radial orbitals given on a log grid (m_log_mesh)
-  """
+  """    Interpolation of radial orbitals given on a log grid (m_log_mesh)  """
   def __init__(self, gg):
+    """
+      gg: one-dimensional array defining a logarithmic grid
+    """
     #assert(type(rr)==np.ndarray)
     assert(len(gg)>2)
+    self.gg = gg
     self.nr = len(gg)
     self.gammin_jt = np.log(gg[0])
     self.dg_jt = np.log(gg[1]/gg[0])
 
   def __call__(self, ff, r):
+    """ Interpolation right away """
     assert ff.shape[-1]==self.nr
     k,cc = comp_coeffs(self, r)
     result = np.zeros(ff.shape[0:-2])
     for j,c in enumerate(cc): result = result + c*ff[...,j+k]
     return result
+    
+  comp_coeffs=comp_coeffs
+  """ Interpolation right away """
   
+  def diff(self, za):
+    """
+      Return array with differential 
+      za :  input array to be differentiated 
+    """
+    ar = self.gg
+    dr = self.dg_jt
+    nr = self.nr
+    zb = np.zeros_like(za)
+        
+    zb[0]=(za[0]-za[1])/(ar[0]-ar[1]) # forward to improve
+    zb[1]=(za[2]-za[0])/(ar[2]-ar[0]) # central? to improve
+    zb[2]=(za[3]-za[1])/(ar[3]-ar[1]) # central? to improve 
+    
+    for i in range(3,nr-3):
+      zb[i]=(45.0*(za[i+1]-za[i-1])-9.0*(za[i+2]-za[i-2])+za[i+3]-za[i-3])/(60.0*dr*ar[i])
+    
+    zb[nr-3]=(za[nr-1]-za[nr-5]+8.0*(za[nr-2]-za[nr-4]))/ ( 12.0*self.dg_jt*self.gg[nr-3] )
+    zb[nr-2]=(za[nr-1]-za[nr-3])/(2.0*dr*ar[nr-2])
+    zb[nr-1]=( 4.0*za[nr-1]-3.0*za[nr-2]+za[nr-3])/(2.0*dr*ar[nr-1] );
+    return zb
+    
 #    Example:
 #      loginterp =log_interp_c(rr)
 
