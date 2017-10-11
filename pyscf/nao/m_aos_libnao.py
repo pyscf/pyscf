@@ -18,9 +18,9 @@ def aos_libnao(coords, norbs):
   assert norbs>0
 
   ncoords = coords.shape[0]
-  co2val = np.require( np.zeros((ncoords,norbs)), dtype=c_double, requirements='C')
-  
+  co2val = np.require( np.zeros((ncoords,norbs)), dtype=c_double, requirements='CW')
   crd_copy = np.require(coords, dtype=c_double, requirements='C')
+
   libnao.aos_libnao(
     c_int64(ncoords),
     crd_copy.ctypes.data_as(POINTER(c_double)),

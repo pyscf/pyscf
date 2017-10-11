@@ -1,4 +1,4 @@
-from __future__ import division
+from __future__ import division, print_function
 import numpy as np
 try:
     import numba
@@ -6,21 +6,36 @@ try:
 except:
     use_numba = False
 
+"""
+well described here  http://www.netlib.org/lapack/lug/node123.html
+"""
+
 #
 #
 #
-def pack2den(pack):
-  """
-    Unpacks packed format to dense format 
-  """
+def pack2den_u(pack):
+  """ Unpacks a packed format to dense format """
   dim = size2dim(len(pack))
   den = np.zeros((dim,dim))
   for i in range(dim):
     for j in range(i+1):
-      den[i,j] = pack[i*(i+1)//2+j]
+      den[i,j] = pack[ij2pack_u(i,j)]
       den[j,i] = den[i,j]
   return den
-    
+
+#
+#
+#
+def pack2den_l(pack):
+  """ Unpacks a packed format to dense format """
+  dim = size2dim(len(pack))
+  den = np.zeros((dim,dim))
+  for j in range(dim):
+    for i in range(j,dim):
+      den[j,i] = pack[ij2pack_l(i,j,dim)]
+      den[i,j] = den[j,i]
+  return den
+
 #
 #
 #
@@ -34,12 +49,15 @@ def size2dim(pack_size):
   if ndim*(ndim+1)//2 != pack_size: SystemError('!pack_size')
   return ndim
 
-#
-#
-#
-def ij2pack(i,j):
+
+def ij2pack_u(i,j):
   ma = max(i,j)
   return ma*(ma+1)//2+min(i,j)
+
+
+def ij2pack_l(i,j,dim):
+  mi = min(i,j)
+  return max(i,j)+((2*dim-mi-1)*mi)//2
 
 #
 #

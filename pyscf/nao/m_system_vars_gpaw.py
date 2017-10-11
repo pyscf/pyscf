@@ -11,7 +11,7 @@ def system_vars_gpaw(self, calc, label="gpaw", chdir='.', **kvargs):
       kvargs: optional arguments, need a list of precise arguments somewhere
   """
   from pyscf.lib import logger
-  from pyscf.data import chemical_symbols
+  from pyscf.lib.parameters import ELEMENTS as chemical_symbols
   from pyscf.nao.m_gpaw_wfsx import gpaw_wfsx_c
   from pyscf.nao.m_gpaw_hsx import gpaw_hsx_c
   from pyscf.nao.m_ao_log import ao_log_c

@@ -1272,7 +1272,7 @@ class SCF(lib.StreamObject):
     def energy_nuc(self):
         return self.mol.energy_nuc()
 
-    def scf(self, dm0=None):
+    def scf(self, dm0=None, **kwargs):
         '''main routine for SCF
 
         Kwargs:
@@ -1298,13 +1298,13 @@ class SCF(lib.StreamObject):
                 self.mo_energy, self.mo_coeff, self.mo_occ = \
                 kernel(self, self.conv_tol, self.conv_tol_grad,
                        dm0=dm0, callback=self.callback,
-                       conv_check=self.conv_check)
+                       conv_check=self.conv_check, **kwargs)
 
         logger.timer(self, 'SCF', *cput0)
         self._finalize()
         return self.e_tot
-    def kernel(self, dm0=None):
-        return self.scf(dm0)
+    def kernel(self, dm0=None, **kwargs):
+        return self.scf(dm0, **kwargs)
     kernel.__doc__ = scf.__doc__
 
     def _finalize(self):

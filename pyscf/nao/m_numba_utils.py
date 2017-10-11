@@ -65,6 +65,34 @@ def fill_triu_v2(block, triu, s1, f1, s2, f2, N, add = False):
                 ind += i1
                 triu[ind] = block[i1-s1,i2-s2]
 
+@nb.jit(nopython=True)
+def fill_tril(block, tril, s1, f1, s2, f2, ind, add = False):
+    """
+    Fill lower triangular matrice block by block.
+    Input:
+    ------
+        block: a block of the full matrix
+        s1, s2: start indices of the block (row/col)
+        f1, f2: end indices of the block (row/col)
+        N: number of row (col) of the matrix, the matrix must be square => dim = NxN
+        add (optional): boollean, to add value to a already existing matrix
+    Output:
+    -------
+       triu: upper part of the square matrix, dim = Nx(N-1)//2
+    """
+
+    if add:
+        for i1 in range(s1,f1):
+            for i2 in range(s2, min(i1+1, f2)):
+                tril[ind] += block[i1-s1,i2-s2]
+                ind += 1
+    else:
+        for i1 in range(s1,f1):
+            for i2 in range(s2, min(i1+1, f2)):
+                tril[ind] = block[i1-s1,i2-s2]
+                ind += 1
+
+
 #
 #
 #

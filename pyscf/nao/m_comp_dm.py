@@ -5,12 +5,12 @@ def comp_dm(ksnac2x, ksn2occ):
   """
     Computes the density matrix 
     Args:
-      ksnar2x : eigenvectors
+      ksnac2x : eigenvectors
       ksn2occ : occupations
     Returns:
       ksabc2dm : 
   """
-  from numpy import einsum, zeros_like
+  from numpy import einsum
 
   if ksnac2x.shape[-1]==2 : raise RuntimeError('check, please.')
   ksnac2x_occ = einsum('ksnac,ksn->ksnac', ksnac2x, ksn2occ)

@@ -1,5 +1,5 @@
 from __future__ import print_function, division
-import unittest
+import unittest,os
 
 
 class KnowValues(unittest.TestCase):
@@ -8,7 +8,6 @@ class KnowValues(unittest.TestCase):
     """ This is to test a batch generation vertices for bilocal atomic pairs. """
     from pyscf.nao import system_vars_c, prod_basis_c
     from numpy import allclose
-    import os
 
     dname = os.path.dirname(os.path.abspath(__file__))
     sv = system_vars_c().init_siesta_xml(label='water', cd=dname)
