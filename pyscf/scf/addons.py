@@ -12,7 +12,7 @@ import numpy
 from pyscf import lib
 from pyscf.gto import mole
 from pyscf.lib import logger
-from pyscf import symm
+from pyscf.symm import sph
 from pyscf.scf import hf
 
 
@@ -251,7 +251,7 @@ def project_mo_nr2r(mol1, mo1, mol2):
     s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
     s21 = mole.intor_cross('int1e_ovlp_sph', mol2, mol1)
 
-    ua, ub = symm.cg.real2spinor_whole(mol2)
+    ua, ub = sph.real2spinor_whole(mol2)
     s21 = numpy.dot(ua.T.conj(), s21) + numpy.dot(ub.T.conj(), s21) # (*)
     # mo2: alpha, beta have been summed in Eq. (*)
     # so DM = mo2[:,:nocc] * 1 * mo2[:,:nocc].H
