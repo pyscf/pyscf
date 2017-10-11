@@ -220,6 +220,9 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
         the dict value has two items: one is the meshgrid coordinates wrt the
         atom center; the second is the volume of that grid.
     '''
+    if isinstance(atom_grid, (list, tuple)):
+        atom_grid = dict([(mol.atom_symbol(ia), atom_grid)
+                          for ia in range(mol.natm)])
     atom_grids_tab = {}
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)

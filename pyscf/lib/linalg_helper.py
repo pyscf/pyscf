@@ -43,9 +43,13 @@ def safe_eigh(h, s, lindep=1e-15):
     if seig[0] < lindep:
         idx = seig >= lindep
         t = t[:,idx] * (1/numpy.sqrt(seig[idx]))
-        heff = reduce(numpy.dot, (t.T.conj(), h, t))
-        w, v = scipy.linalg.eigh(heff)
-        v = numpy.dot(t, v)
+        if t.size > 0:
+            heff = reduce(numpy.dot, (t.T.conj(), h, t))
+            w, v = scipy.linalg.eigh(heff)
+            v = numpy.dot(t, v)
+        else:
+            w = numpy.zeros((0,))
+            v = t
     else:
         w, v = scipy.linalg.eigh(h, s)
     return w, v, seig

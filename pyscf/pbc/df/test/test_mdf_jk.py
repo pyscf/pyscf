@@ -9,6 +9,7 @@ from pyscf.pbc.df import mdf_jk
 #from mpi4pyscf.pbc.df import mdf
 #from mpi4pyscf.pbc.df import mdf_jk
 pyscf.pbc.DEBUG = False
+mdf.df.LINEAR_DEP_THR = 1e-7
 
 L = 5.
 n = 5

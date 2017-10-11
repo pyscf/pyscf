@@ -1,3 +1,33 @@
+PySCF 1.5 alpha (2018-03-??)
+----------------------------
+* Added
+  - ddCOSMO solvent model
+  - VV10 NLC functional for RKS and UKS
+  - range-separated hybrid feature for RKS and UKS
+  - IBO for molecular and PBC systems
+
+
+PySCF 1.4 (2017-10-07)
+----------------------
+* Improved
+  - Kinetic energy cutoff estimation
+  - Density fitting default auxiliary basis
+  - Memory usage for FFTDF module
+  - libxc interface
+* Bugfix
+  - KUHF dimension error in smearing function
+  - SCF results inconsistency in chkfile and SOSCF solver
+  - OMP stack overflow in GTO basis evaluator
+  - Default grids in DFT gen_grid function for system with ECP/PP
+  - mol.intor function to generate STG and YP integrals in 8-fold symmetry
+  - TDDFT analytical gradients
+  - DMRG-CI runtime scratch path
+  - PBC GDF integrals for auxiliary basis with g functions
+  - post-HF initialization function when mean-field object is DF-SOSCF method
+  - Single orbital localization
+  - Race condition in MP2 IO
+
+
 PySCF 1.4 beta (2017-08-22)
 ---------------------------
 * Added

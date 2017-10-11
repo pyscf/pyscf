@@ -93,6 +93,13 @@ class KnowValues(unittest.TestCase):
         z = numpy.einsum('xii,xii->', pop, pop)
         self.assertAlmostEqual(z, 3.5368940222128247, 6)
 
+    def test_1orbital(self):
+        lmo = boys.Boys(mol, mf.mo_coeff[:,:1]).kernel()
+        self.assertTrue(numpy.all(mf.mo_coeff[:,:1] == lmo))
+
+        lmo = boys.Boys(mol, mf.mo_coeff[:,:0]).kernel()
+        self.assertTrue(lmo.size == 0)
+
 
 if __name__ == "__main__":
     print("Full Tests for localizer")

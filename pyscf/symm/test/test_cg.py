@@ -5,6 +5,7 @@ import unittest
 import numpy
 from pyscf import gto
 from pyscf import symm
+from pyscf.symm import sph
 
 h2o = gto.Mole()
 h2o.verbose = 0
@@ -24,7 +25,7 @@ class KnowValues(unittest.TestCase):
         s0 = h2o.intor('int1e_ovlp_sph')
         s1 = h2o.intor('int1e_ovlp_spinor')
 
-        ua, ub = symm.cg.real2spinor_whole(h2o)
+        ua, ub = sph.real2spinor_whole(h2o)
 
         s2 = reduce(numpy.dot, (ua.T.conj(), s0, ua)) \
            + reduce(numpy.dot, (ub.T.conj(), s0, ub))

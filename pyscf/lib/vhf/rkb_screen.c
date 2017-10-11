@@ -131,14 +131,15 @@ int CVHFrkbssll_vkscreen(int *shls, CVHFOpt *opt,
 }
 
 
-static void set_qcond(int (*intor)(), double *qcond,
-                      int *atm, int natm, int *bas, int nbas, double *env)
+static void set_qcond(int (*intor)(), CINTOpt *cintopt, double *qcond,
+                      int *ao_loc, int *atm, int natm,
+                      int *bas, int nbas, double *env)
 {
         int shls_slice[] = {0, nbas};
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
                                                  atm, natm, bas, nbas, env);
 #pragma omp parallel default(none) \
-        shared(intor, qcond, atm, natm, bas, nbas, env)
+        shared(intor, cintopt, qcond, ao_loc, atm, natm, bas, nbas, env)
 {
         double qtmp, tmp;
         int i, j, ij, di, dj, ish, jsh;
@@ -146,7 +147,7 @@ static void set_qcond(int (*intor)(), double *qcond,
         double *cache = malloc(sizeof(double) * cache_size);
         di = 0;
         for (ish = 0; ish < nbas; ish++) {
-                dj = CINTcgto_spinor(ish, bas);
+                dj = ao_loc[ish+1] - ao_loc[ish];
                 di = MAX(di, dj);
         }
         double complex *buf = malloc(sizeof(double complex) * di*di*di*di);
@@ -154,14 +155,14 @@ static void set_qcond(int (*intor)(), double *qcond,
         for (ij = 0; ij < nbas*(nbas+1)/2; ij++) {
                 ish = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
                 jsh = ij - ish*(ish+1)/2;
-                di = CINTcgto_spinor(ish, bas);
-                dj = CINTcgto_spinor(jsh, bas);
+                di = ao_loc[ish+1] - ao_loc[ish];
+                dj = ao_loc[jsh+1] - ao_loc[jsh];
                 shls[0] = ish;
                 shls[1] = jsh;
                 shls[2] = ish;
                 shls[3] = jsh;
                 qtmp = 1e-100;
-                if (0 != (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, NULL, cache)) {
+                if (0 != (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, cintopt, cache)) {
                         for (i = 0; i < di; i++) {
                         for (j = 0; j < dj; j++) {
                                 tmp = cabs(buf[i+di*j+di*dj*i+di*dj*di*j]);
@@ -177,7 +178,8 @@ static void set_qcond(int (*intor)(), double *qcond,
 }
 }
 
-void CVHFrkbllll_direct_scf(CVHFOpt *opt, int *atm, int natm,
+void CVHFrkbllll_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
+                            int *ao_loc, int *atm, int natm,
                             int *bas, int nbas, double *env)
 {
         if (opt->q_cond) {
@@ -185,10 +187,12 @@ void CVHFrkbllll_direct_scf(CVHFOpt *opt, int *atm, int natm,
         }
         opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
 
-        set_qcond(&int2e_spinor, opt->q_cond, atm, natm, bas, nbas, env);
+        assert(intor == &int2e_spinor);
+        set_qcond(intor, cintopt, opt->q_cond, ao_loc, atm, natm, bas, nbas, env);
 }
 
-void CVHFrkbssss_direct_scf(CVHFOpt *opt, int *atm, int natm,
+void CVHFrkbssss_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
+                            int *ao_loc, int *atm, int natm,
                             int *bas, int nbas, double *env)
 {
         if (opt->q_cond) {
@@ -199,12 +203,14 @@ void CVHFrkbssss_direct_scf(CVHFOpt *opt, int *atm, int natm,
         const int INC1 = 1;
         int nn = nbas * nbas;
         double c1 = .25/(env[PTR_LIGHT_SPEED]*env[PTR_LIGHT_SPEED]);
-        set_qcond(&int2e_spsp1spsp2_spinor, opt->q_cond, atm, natm, bas, nbas, env);
+        assert(intor == &int2e_spsp1spsp2_spinor);
+        set_qcond(intor, cintopt, opt->q_cond, ao_loc, atm, natm, bas, nbas, env);
         dscal_(&nn, &c1, opt->q_cond, &INC1);
 }
 
 
-void CVHFrkbssll_direct_scf(CVHFOpt *opt, int *atm, int natm,
+void CVHFrkbssll_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
+                            int *ao_loc, int *atm, int natm,
                             int *bas, int nbas, double *env)
 {
         if (opt->q_cond) {
@@ -215,8 +221,8 @@ void CVHFrkbssll_direct_scf(CVHFOpt *opt, int *atm, int natm,
         const int INC1 = 1;
         int nn = nbas * nbas;
         double c1 = 1/(.25/(env[PTR_LIGHT_SPEED]*env[PTR_LIGHT_SPEED]));
-        set_qcond(&int2e_spinor, opt->q_cond, atm, natm, bas, nbas, env);
-        set_qcond(&int2e_spsp1spsp2_spinor, opt->q_cond+nbas*nbas,
+        set_qcond(&int2e_spinor, NULL, opt->q_cond, ao_loc, atm, natm, bas, nbas, env);
+        set_qcond(&int2e_spsp1spsp2_spinor, NULL, opt->q_cond+nbas*nbas, ao_loc,
                   atm, natm, bas, nbas, env);
         dscal_(&nn, &c1, opt->q_cond+nbas*nbas, &INC1);
 }
