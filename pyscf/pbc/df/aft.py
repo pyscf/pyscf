@@ -89,7 +89,7 @@ def get_nuc(mydf, kpts=None):
 
         nuccell = copy.copy(cell)
         half_sph_norm = .5/numpy.sqrt(numpy.pi)
-        norm = half_sph_norm/gto.mole._gaussian_int(2, mydf.eta)
+        norm = half_sph_norm/gto.gaussian_int(2, mydf.eta)
         chg_env = [mydf.eta, norm]
         ptr_eta = cell._env.size
         ptr_norm = ptr_eta + 1
@@ -442,7 +442,7 @@ def _fake_nuc(cell):
             eta = .5 / rloc**2
         else:
             eta = 1e16
-        norm = half_sph_norm/gto.mole._gaussian_int(2, eta)
+        norm = half_sph_norm/gto.gaussian_int(2, eta)
         _env.extend([eta, norm])
         _bas.append([ia, 0, 1, 1, 0, ptr, ptr+1, 0])
         ptr += 2

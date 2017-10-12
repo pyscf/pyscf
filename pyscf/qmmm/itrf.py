@@ -196,7 +196,7 @@ def _make_fakemol(coords):
     fakebas[:,gto.PTR_EXP] = ptr
     fakebas[:,gto.PTR_COEFF] = ptr+1
     expnt = 1e16
-    fakeenv.append([expnt, 1/(2*numpy.sqrt(numpy.pi)*gto.mole._gaussian_int(2,expnt))])
+    fakeenv.append([expnt, 1/(2*numpy.sqrt(numpy.pi)*gto.gaussian_int(2,expnt))])
     ptr += 2
     fakemol = gto.Mole()
     fakemol._atm = fakeatm

@@ -45,7 +45,7 @@ def M(**kwargs):
     mol.build(**kwargs)
     return mol
 
-def _gaussian_int(n, alpha):
+def gaussian_int(n, alpha):
     r'''int_0^inf x^n exp(-alpha x^2) dx'''
     n1 = (n + 1) * .5
     return scipy.special.gamma(n1) / (2. * alpha**n1)
@@ -78,7 +78,7 @@ def gto_norm(l, expnt):
         #f = 2**(2*l+3) * math.factorial(l+1) * (2*expnt)**(l+1.5) \
         #        / (math.factorial(2*l+2) * math.sqrt(math.pi))
         #return math.sqrt(f)
-        return 1/numpy.sqrt(_gaussian_int(l*2+2, 2*expnt))
+        return 1/numpy.sqrt(gaussian_int(l*2+2, 2*expnt))
     else:
         raise ValueError('l should be > 0')
 
@@ -579,10 +579,10 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         #ee = numpy.empty((nprim,nprim))
         #for i in range(nprim):
         #    for j in range(i+1):
-        #        ee[i,j] = ee[j,i] = _gaussian_int(angl*2+2, es[i]+es[j])
+        #        ee[i,j] = ee[j,i] = gaussian_int(angl*2+2, es[i]+es[j])
         #s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
         ee = es.reshape(-1,1) + es.reshape(1,-1)
-        ee = _gaussian_int(angl*2+2, ee)
+        ee = gaussian_int(angl*2+2, ee)
         s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
         cs = numpy.einsum('pi,i->pi', cs, s1)
 
