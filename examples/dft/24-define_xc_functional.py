@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 '''
-Input a XC functional which is not defined in the Libxc or XcFun library.
+Input a XC functional which is not available anywhere.
 
 See also
 * dft.libxc for API of function eval_xc;
@@ -32,8 +32,8 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
     # A fictitious XC functional to demonstrate the usage
     rho0, dx, dy, dz = rho[:4]
     gamma = (dx**2 + dy**2 + dz**2)
-    exc = .1 * rho0**2 + .02 * (gamma+.001)**.5
-    vrho = .1 * 2 * rho0
+    exc = .01 * rho0**2 + .02 * (gamma+.001)**.5
+    vrho = .01 * 2 * rho0
     vgamma = .02 * .5 * (gamma+.001)**(-.5)
     vlapl = None
     vtau = None
