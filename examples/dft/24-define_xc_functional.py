@@ -22,12 +22,8 @@ mol = gto.M(
     basis = 'ccpvdz')
 
 # half-half exact exchange and GGA functional
-def hybrid_coeff(xc_code, spin=1):
-    return 0.5
-def rsh_coeff(xc_code, spin=1):
-    return 0, 0, 0
-def _xc_type(xc_code):
-    return 'GGA'
+hybrid_coeff = 0.5
+
 def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
     # A fictitious XC functional to demonstrate the usage
     rho0, dx, dy, dz = rho[:4]
@@ -43,10 +39,15 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
     return exc, vxc, fxc, kxc
 
 mf = dft.RKS(mol)
-mf._numint.hybrid_coeff = hybrid_coeff
-mf._numint.rsh_coeff = rsh_coeff
-mf._numint.eval_xc = eval_xc
-mf._numint._xc_type = _xc_type
-mf.xc = 'My XC'  # optional, only affect the output message
+dft.libxc.define_xc_(mf._numint, eval_xc, 'GGA', hyb=hybrid_coeff)
 mf.verbose = 4
 mf.kernel()
+
+# half exact exchange in which 40% of the exchange is computed with short
+# range part of the range-separation Coulomb operator (omega = 0.8)
+rsh_coeff = (0.8, 0.5-0.2, 0.2)
+mf = dft.RKS(mol)
+dft.libxc.define_xc_(mf._numint, eval_xc, 'GGA', rsh=rsh_coeff)
+mf.verbose = 4
+mf.kernel()
+

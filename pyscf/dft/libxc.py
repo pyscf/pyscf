@@ -21,7 +21,10 @@ _itrf.LIBXC_is_gga.restype = ctypes.c_int
 _itrf.LIBXC_is_meta_gga.restype = ctypes.c_int
 _itrf.LIBXC_is_hybrid.restype = ctypes.c_int
 _itrf.LIBXC_max_deriv_order.restype = ctypes.c_int
+_itrf.LIBXC_hybrid_coeff.argtypes = [ctypes.c_int]
 _itrf.LIBXC_hybrid_coeff.restype = ctypes.c_double
+_itrf.LIBXC_nlc_coeff.argtypes = [ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
+_itrf.LIBXC_rsh_coeff.argtypes = [ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
 
 # xc_code from libxc
 #cat lib/deps/include/xc_funcs.h  | awk '{printf("'\''%s'\'' %3i",$2,$3); for(i=4;i<NF;i++) {printf(" %s",$i)}; printf("\n")}'  | sed "s|/\*|# |g" | awk '{printf("%-30s : %4i\,",$1,$2); for(i=4;i<NF;i++) {printf(" %s",$i)}; printf("\n")}'
@@ -821,7 +824,7 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     return exc, vxc, fxc, kxc
 
 
-def define_xc_(ni, description, xctype='LDA', hyb=0):
+def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     '''Define XC functional.  See also :func:`eval_xc` for the rules of input description.
 
     Args:
@@ -831,6 +834,14 @@ def define_xc_(ni, description, xctype='LDA', hyb=0):
             A string to describe the linear combination of different XC functionals.
             The X and C functional are separated by comma like '.8*LDA+.2*B86,VWN'.
             If "HF" was appeared in the string, it stands for the exact exchange.
+
+    Kwargs:
+        xctype : str
+            'LDA' or 'GGA' or 'MGGA'
+        hyb : float
+            hybrid functional coefficient
+        rsh : float
+            coefficients for range-separated hybrid functional
 
     Examples:
 
@@ -857,8 +868,10 @@ def define_xc_(ni, description, xctype='LDA', hyb=0):
         ni.eval_xc = lambda xc_code, rho, *args, **kwargs: \
                 eval_xc(description, rho, *args, **kwargs)
         ni.hybrid_coeff = lambda *args, **kwargs: hybrid_coeff(description)
-        def xc_type(*args):
-            if is_lda(description):
+        def xc_type(xc_code):
+            if is_nlc(xc_code):
+                return 'NLC'
+            elif is_lda(description):
                 return 'LDA'
             elif is_meta_gga(description):
                 return 'MGGA'
@@ -869,6 +882,7 @@ def define_xc_(ni, description, xctype='LDA', hyb=0):
     elif callable(description):
         ni.eval_xc = description
         ni.hybrid_coeff = lambda *args, **kwargs: hyb
+        ni.rsh_coeff = lambda *args, **kwargs: rsh
         ni._xc_type = lambda *args: xctype
     else:
         raise RuntimeError('Unknown description %s' % description)

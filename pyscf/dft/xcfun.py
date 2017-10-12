@@ -807,6 +807,14 @@ def define_xc_(ni, description, xctype='LDA', hyb=0):
             The X and C functional are separated by comma like '.8*LDA+.2*B86,VWN'.
             If "HF" was appeared in the string, it stands for the exact exchange.
 
+    Kwargs:
+        xctype : str
+            'LDA' or 'GGA' or 'MGGA'
+        hyb : float
+            hybrid functional coefficient
+        rsh : float
+            coefficients for range-separated hybrid functional
+
     Examples:
 
     >>> mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz')
