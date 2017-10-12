@@ -52,8 +52,8 @@ model system::
     
     t = numpy.zeros((n,n))
     for i in range(n-1):
-        t[i,i+1] = t[i+1,i] = 1.0
-    t[n-1,0] = t[0,n-1] = -1.0
+        t[i,i+1] = t[i+1,i] = -1.0
+    t[n-1,0] = t[0,n-1] = 1.0  # anti-PBC
     eri = numpy.zeros((n,n,n,n))
     for i in range(n):
         eri[i,i,i,i] = 4.0
