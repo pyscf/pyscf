@@ -167,7 +167,8 @@ def parse_xc(description):
       first part describes the exchange functional, the second is the correlation
       functional.
 
-      - If "," not appeared in string, the entire string is considered as X functional.
+      - If "," was not appeared in string, the entire string is considered as
+        X functional.
       - To neglect X functional (just apply C functional), leave blank in the
         first part, eg description=',vwn' for pure VWN functional
 
@@ -782,7 +783,7 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     return exc, vxc, fxc, kxc
 
 
-def define_xc_(ni, description):
+def define_xc_(ni, description, xctype='LDA', hyb=0):
     '''Define XC functional.  See also :func:`eval_xc` for the rules of input description.
 
     Args:
@@ -803,18 +804,36 @@ def define_xc_(ni, description):
     >>> define_xc_(mf._numint, 'LDA*.08 + .72*B88 + .2*HF, .81*LYP + .19*VWN')
     >>> mf.kernel()
     -76.3783361189611
+    >>> def eval_xc(xc_code, rho, *args, **kwargs):
+    ...     exc = 0.01 * rho**2
+    ...     vrho = 0.01 * 2 * rho
+    ...     vxc = (vrho, None, None, None)
+    ...     fxc = None  # 2nd order functional derivative
+    ...     kxc = None  # 3rd order functional derivative
+    ...     return exc, vxc, fxc, kxc
+    >>> define_xc_(mf._numint, eval_xc, xctype='LDA')
+    >>> mf.kernel()
+    48.8525211046668
     '''
-    ni.eval_xc = lambda xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None: \
-            eval_xc(description, rho, spin, relativity, deriv, verbose)
-    ni.hybrid_coeff = lambda *args, **kwargs: hybrid_coeff(description)
-    def xc_type(*args):
-        if is_lda(description):
-            return 'LDA'
-        elif is_meta_gga(description):
-            raise NotImplementedError('meta-GGA')
-        else:
-            return 'GGA'
-    ni._xc_type = xc_type
+    if isinstance(description, str):
+        ni.eval_xc = lambda xc_code, rho, *args, **kwargs: \
+                eval_xc(description, rho, *args, **kwargs)
+        ni.hybrid_coeff = lambda *args, **kwargs: hybrid_coeff(description)
+        def xc_type(*args):
+            if is_lda(description):
+                return 'LDA'
+            elif is_meta_gga(description):
+                return 'MGGA'
+            else:
+                return 'GGA'
+        ni._xc_type = xc_type
+
+    elif callable(description):
+        ni.eval_xc = description
+        ni.hybrid_coeff = lambda *args, **kwargs: hyb
+        ni._xc_type = lambda *args: xctype
+    else:
+        raise RuntimeError('Unknown description %s' % description)
     return ni
 
 def define_xc(ni, description):
