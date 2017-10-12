@@ -125,7 +125,7 @@ def get_atomic_radii(pcmobj):
     atom_radii = pcmobj.atom_radii
 
     atom_symb = [mol.atom_symbol(i) for i in range(mol.natm)]
-    r_vdw = [vdw_radii[gto.mole._charge(x)] for x in atom_symb]
+    r_vdw = [vdw_radii[gto.charge(x)] for x in atom_symb]
     if atom_radii is not None:
         for i in range(mol.natm):
             if atom_symb[i] in atom_radii:
@@ -456,7 +456,7 @@ if __name__ == '__main__':
     from pyscf import scf
     mol = gto.M(atom='H 0 0 0; H 0 1 1.2; H 1. .1 0; H .5 .5 1')
     natm = mol.natm
-    r_vdw = [radii.VDW[gto.mole._charge(mol.atom_symbol(i))]
+    r_vdw = [radii.VDW[gto.charge(mol.atom_symbol(i))]
              for i in range(natm)]
     r_vdw = numpy.asarray(r_vdw)
     pcmobj = DDCOSMO(mol)

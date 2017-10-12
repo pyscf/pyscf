@@ -228,7 +228,7 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
         symb = mol.atom_symbol(ia)
 
         if symb not in atom_grids_tab:
-            chg = gto.mole._charge(symb)
+            chg = gto.charge(symb)
             if symb in atom_grid:
                 n_rad, n_ang = atom_grid[symb]
                 if n_ang not in LEBEDEV_NGRID:

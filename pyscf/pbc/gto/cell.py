@@ -20,7 +20,7 @@ from pyscf import dft
 from pyscf.lib import logger
 from pyscf.gto import mole
 from pyscf.gto import moleintor
-from pyscf.gto.mole import _symbol, _rm_digit, _atom_symbol, _std_symbol, _charge
+from pyscf.gto.mole import _symbol, _rm_digit, _atom_symbol, _std_symbol, charge
 from pyscf.gto.mole import conc_env, uncontract
 from pyscf.pbc.gto import basis
 from pyscf.pbc.gto import pseudo
