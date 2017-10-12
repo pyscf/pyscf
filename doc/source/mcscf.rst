@@ -3,21 +3,36 @@ mcscf --- Multi-configurational self-consistent field
 
 .. automodule:: pyscf.mcscf
 
-.. CASSCF solver
-.. =============
-.. 
-.. Initial guess
-.. -------------
-.. 
-.. Symmetry broken
-.. ---------------
-.. 
-.. DMRG solver
-.. -----------
+CASSCF active space solver
+==========================
+
+DMRG solver
+-----------
+
+FCIQMC solver
+-------------
+
+State-average FCI solver
+------------------------
+
+State-average with mixed solver
+-------------------------------
+
+
+Symmetry broken
+===============
+.. note OMP threads cause numerical instability and break spin symmetry
+
+
+Initial guess
+=============
  
 
+Program reference
+=================
+
 CASCI
-=====
+-----
 
 .. automodule:: pyscf.mcscf.casci
    :members:
@@ -30,7 +45,7 @@ CASCI
 
 
 CASSCF
-======
+------
 
 .. automodule:: pyscf.mcscf.mc1step
    :members:
@@ -49,7 +64,7 @@ CASSCF
 
 
 addons
-======
+------
 
 .. automodule:: pyscf.mcscf.addons
    :members:

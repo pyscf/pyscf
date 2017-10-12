@@ -34,19 +34,20 @@ triplet state although we didn't specify spin state in the :attr:`mol` object.
   the underlying mean-field object.
 
 The `addons` mechanism increases the flexibility of PySCf program.  You can
-define various addons to affect the default behaviour of pyscf program.  For
-example, if you'd like to track the changes of the system density (the diagonal
-term of density matrix), you can write the following addon to output the
-density::
+define various addons to customize the default behaviour of pyscf program.  For
+example, if you'd like to track the changes of the density (the diagonal
+term of density matrix) of certain basis during the SCF iteration, you can write
+the following addon to output the required density::
 
-    def output_density(mf):
+    def output_density(mf, basis_label):
         ao_labels = mf.mol.ao_labels()
         old_make_rdm1 = mf.make_rdm1
         def make_rdm1(mo_coeff, mo_occ):
             dm = old_make_rdm1(mo_coeff, mo_occ)
             print('AO         alpha             beta')
             for i,s in enumerate(ao_labels):
-                print(s, dm[0][i,i], dm[1][i,i])
+                if basis_label in s:
+                    print(s, dm[0][i,i], dm[1][i,i])
             return dm
         mf.make_rdm1 = make_rdm1
         return mf
@@ -55,7 +56,7 @@ density::
     mf = scf.UHF(mol)
     mf.verbose=4
     mf = scf.addons.dynamic_sz_(mf)
-    mf = output_density(mf)
+    mf = output_density(mf, 'O 2p')
     mf.kernel()
 
 
