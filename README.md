@@ -5,12 +5,11 @@
 Python-based Simulations of Chemistry Framework
 ===============================================
 
-2017-08-22
+2017-10-05
 
-* [1.4 beta](https://github.com/sunqm/pyscf/tree/master)
-* [Stable release 1.3.5](https://github.com/sunqm/pyscf/releases/tag/v1.3.5)
+* [Stable release 1.4](https://github.com/sunqm/pyscf/releases/tag/v1.4.0)
 * [Changelog](../master/CHANGELOG)
-* [Documentation](http://www.pyscf.org) ([PDF](http://www.sunqm.net/pyscf/files/pdf/PySCF-1.1.pdf))
+* [Documentation](http://www.pyscf.org)
 * [Installation](#installation)
 * [Features](../master/FEATURES)
 
@@ -35,7 +34,7 @@ Installation
   Note during the compilation, external libraries (libcint, libxc, xcfun) will
   be downloaded and installed.  If you want to disable the automatic
   downloading, this [document](http://sunqm.github.io/pyscf/install.html#installation-without-network)
-  is an instruction for manually building these packages.
+  is an instruction about how to manually build these packages.
 
 * To make python find pyscf, edit environment variable `PYTHONPATH`,
   e.g.  if pyscf is installed in /opt, your `PYTHONPATH` should be
@@ -115,20 +114,11 @@ Known problems
 ```
   OSError: ... mkl/lib/intel64/libmkl_avx.so: undefined symbol: ownLastTriangle_64fc
 ```
-
-  This problem relates to MKL v11.1 on intel64 architecture.  Currently,
-  there is no solution for the combination of Python + MKL 11.1 + AVX.
-  You need either change to other MKL version (10.*, 11.0, 11.2) or
-  disable mkl_avx:
-
-        cmake -DBLA_VENDOR=Intel10_64lp_seq .. -DDISABLE_AVX=1
-
-
-* Runtime error message
+  or
 ```
   MKL FATAL ERROR: Cannot load libmkl_avx.so or libmkl_def.so.
 ```
-  This is MKL 11.* bug for "dlopen" function.  Preloading the two libraries
+  This is MKL 11.* bug for "dlopen" function.  Preloading MKL libraries
   works fine with most system:
 
 ```
@@ -138,7 +128,7 @@ Known problems
   or 
 
 ```
-  export LD_PRELOAD=$MKLROOT/lib/intel64/libmkl_avx.so:$MKLROOT/lib/intel64/libmkl_core.so:$MKLROOT/lib/intel64/libmkl_sequential.so
+  export LD_PRELOAD=$MKLROOT/lib/intel64/libmkl_avx.so:$MKLROOT/lib/intel64/libmkl_core.so
 ```
 
 
@@ -168,8 +158,7 @@ The following paper should be cited in publications utilizing the PySCF program 
 * The Python-based Simulations of Chemistry Framework (PySCF),
   Q. Sun, T. C. Berkelbach, N. S. Blunt, G. H. Booth, S.  Guo, Z. Li, J. Liu,
   J. McClain, E. R. Sayfutyarova, S. Sharma, S. Wouters, G. K.-L. Chan,
-  WIREs Comput Mol Sci 2017 (in press),
-  DOI: 10.1002/wcms.1340
+  WIREs Comput Mol Sci 2017, DOI: 10.1002/wcms.1340
 
 
 Bug report
