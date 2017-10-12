@@ -99,7 +99,10 @@ def dynamic_level_shift_(mf, factor=1.):
 dynamic_level_shift = dynamic_level_shift_
 
 def float_occ_(mf):
-    '''for UHF, do not fix the nelec_alpha. determine occupation based on energy spectrum'''
+    '''
+    For UHF, allowing the Sz value being changed during SCF iteration.
+    Determine occupation of alpha and beta electrons based on energy spectrum
+    '''
     from pyscf.scf import uhf
     assert(isinstance(mf, uhf.UHF))
     def get_occ(mo_energy, mo_coeff=None):
@@ -119,7 +122,7 @@ def float_occ_(mf):
         return uhf.UHF.get_occ(mf, mo_energy, mo_coeff)
     mf.get_occ = get_occ
     return mf
-float_occ = float_occ_
+dynamic_sz_ = float_occ = float_occ_
 
 def symm_allow_occ_(mf, tol=1e-3):
     '''search the unoccupied orbitals, choose the lowest sets which do not
