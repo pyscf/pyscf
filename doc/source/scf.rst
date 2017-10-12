@@ -9,6 +9,56 @@ Stability analysis
 ==================
 
 
+Addons
+======
+
+Special treatments may be required to the SCF methods in some situations.  These
+special treatments cannot be universally applied for all SCF models.  They were
+defined in the :mod:`scf.addons` module. For example, in an UHF calculation, we
+may want the :math:`S_z` value to be changed (the numbers of alpha and beta
+electrons not conserved) during SCF iteration while conserving the total number
+of electrons.  :func:`scf.addons.dynamic_sz_` can provide this functionality::
+
+    from pyscf import gto, scf
+    mol = gto.M(atom='O 0 0 0; O 0 0 1')
+    mf = scf.UHF(mol)
+    mf.verbose=4
+    mf = scf.addons.dynamic_sz_(mf)
+    mf.kernel()
+    print('S^2 = %s, 2S+1 = %s' % mf.spin_square())
+
+This function automatically converges the ground sate of oxygen molecule to
+triplet state although we didn't specify spin state in the :attr:`mol` object.
+
+.. note:: Function :func:`scf.addons.dynamic_sz_` has side effects.  It changes
+  the underlying mean-field object.
+
+The `addons` mechanism increases the flexibility of PySCf program.  You can
+define various addons to affect the default behaviour of pyscf program.  For
+example, if you'd like to track the changes of the system density (the diagonal
+term of density matrix), you can write the following addon to output the
+density::
+
+    def output_density(mf):
+        ao_labels = mf.mol.ao_labels()
+        old_make_rdm1 = mf.make_rdm1
+        def make_rdm1(mo_coeff, mo_occ):
+            dm = old_make_rdm1(mo_coeff, mo_occ)
+            print('AO         alpha             beta')
+            for i,s in enumerate(ao_labels):
+                print(s, dm[0][i,i], dm[1][i,i])
+            return dm
+        mf.make_rdm1 = make_rdm1
+        return mf
+    from pyscf import gto, scf
+    mol = gto.M(atom='O 0 0 0; O 0 0 1')
+    mf = scf.UHF(mol)
+    mf.verbose=4
+    mf = scf.addons.dynamic_sz_(mf)
+    mf = output_density(mf)
+    mf.kernel()
+
+
 Caching two-electron integrals
 ==============================
 
