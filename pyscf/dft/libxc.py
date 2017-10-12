@@ -16,6 +16,12 @@ import numpy
 from pyscf import lib
 
 _itrf = lib.load_library('libxc_itrf')
+_itrf.LIBXC_is_lda.restype = ctypes.c_int
+_itrf.LIBXC_is_gga.restype = ctypes.c_int
+_itrf.LIBXC_is_meta_gga.restype = ctypes.c_int
+_itrf.LIBXC_is_hybrid.restype = ctypes.c_int
+_itrf.LIBXC_max_deriv_order.restype = ctypes.c_int
+_itrf.LIBXC_hybrid_coeff.restype = ctypes.c_double
 
 # xc_code from libxc
 #cat lib/deps/include/xc_funcs.h  | awk '{printf("'\''%s'\'' %3i",$2,$3); for(i=4;i<NF;i++) {printf(" %s",$i)}; printf("\n")}'  | sed "s|/\*|# |g" | awk '{printf("%-30s : %4i\,",$1,$2); for(i=4;i<NF;i++) {printf(" %s",$i)}; printf("\n")}'
@@ -421,8 +427,7 @@ XC_KEYS = set(XC_CODES.keys())
 
 def is_lda(xc_code):
     hyb, fn_facs = parse_xc(xc_code)
-    _itrf.LIBXC_is_lda.restype = ctypes.c_int
-    return all((_itrf.LIBXC_is_lda(ctypes.c_int(xid))==1) for xid, fac in fn_facs)
+    return all(_itrf.LIBXC_is_lda(ctypes.c_int(xid)) for xid, fac in fn_facs)
 
 def is_hybrid_xc(xc_code):
     if isinstance(xc_code, str):
@@ -430,7 +435,8 @@ def is_hybrid_xc(xc_code):
             return _itrf.LIBXC_is_hybrid(ctypes.c_int(xc_code))
         else:
             return ('HF' in xc_code or
-                    any((_itrf.LIBXC_is_hybrid(ctypes.c_int(xid)) for xid, val in parse_xc(xc_code)[1])) or
+                    any((_itrf.LIBXC_is_hybrid(ctypes.c_int(xid))
+                         for xid, val in parse_xc(xc_code)[1])) or
                     abs(parse_xc(xc_code)[0]) > 1e-14)
     elif isinstance(xc_code, int):
         return _itrf.LIBXC_is_hybrid(ctypes.c_int(xc_code))
@@ -439,20 +445,17 @@ def is_hybrid_xc(xc_code):
 
 def is_meta_gga(xc_code):
     hyb, fn_facs = parse_xc(xc_code)
-    _itrf.LIBXC_is_meta_gga.restype = ctypes.c_int
-    return all((_itrf.LIBXC_is_meta_gga(ctypes.c_int(xid))==1) for xid, fac in fn_facs)
+    return all(_itrf.LIBXC_is_meta_gga(ctypes.c_int(xid)) for xid, fac in fn_facs)
 
 def is_gga(xc_code):
     hyb, fn_facs = parse_xc(xc_code)
-    _itrf.LIBXC_is_gga.restype = ctypes.c_int
-    return all((_itrf.LIBXC_is_gga(ctypes.c_int(xid))==1) for xid, fac in fn_facs)
+    return all(_itrf.LIBXC_is_gga(ctypes.c_int(xid)) for xid, fac in fn_facs)
 
 def is_nlc(xc_code):
     return '__VV10' in xc_code.upper()
 
 def max_deriv_order(xc_code):
     hyb, fn_facs = parse_xc(xc_code)
-    _itrf.LIBXC_max_deriv_order.restype = ctypes.c_int
     return min((_itrf.LIBXC_max_deriv_order(ctypes.c_int(xid))) for xid, fac in fn_facs)
 
 def test_deriv_order(xc_code, deriv, raise_error=False):
@@ -480,9 +483,7 @@ def hybrid_coeff(xc_code, spin=0):
     '''
     hyb, fn_facs = parse_xc(xc_code)
     for xid, fac in fn_facs:
-        if _itrf.LIBXC_is_hybrid(ctypes.c_int(xid)):
-            _itrf.LIBXC_hybrid_coeff.restype = ctypes.c_double
-            hyb += _itrf.LIBXC_hybrid_coeff(ctypes.c_int(xid))
+        hyb += _itrf.LIBXC_hybrid_coeff(ctypes.c_int(xid))
     return hyb
 
 def nlc_coeff(xc_code):
@@ -522,7 +523,8 @@ def parse_xc(description):
       first part describes the exchange functional, the second is the correlation
       functional.
 
-      - If "," not appeared in string, the entire string is considered as X functional.
+      - If "," was not appeared in string, the entire string is considered as
+        X functional.
       - To neglect X functional (just apply C functional), leave blank in the
         first part, eg description=',vwn' for pure VWN functional
 
