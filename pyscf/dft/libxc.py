@@ -489,23 +489,25 @@ def hybrid_coeff(xc_code, spin=0):
 def nlc_coeff(xc_code):
     '''Get NLC coefficients
     '''
-    xid=parse_xc(xc_code)[1][0][0]
-    _itrf.LIBXC_nlc_coeff.argtypes=[ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
-    _itrf.LIBXC_nlc_coeff.restype=None
-    nlc_pars=(ctypes.c_double*2)()
-    _itrf.LIBXC_nlc_coeff(xid,nlc_pars)
-
+    hyb, fn_facs = parse_xc(xc_code)
+    if fn_facs:
+        xid=parse_xc(xc_code)[1][0][0]
+        nlc_pars=(ctypes.c_double*2)()
+        _itrf.LIBXC_nlc_coeff(xid,nlc_pars)
+    else:
+        nlc_pars = (0, 0)
     return nlc_pars[0], nlc_pars[1]
 
 def rsh_coeff(xc_code):
     '''Get RSH coefficients
     '''
-    xid=parse_xc(xc_code)[1][0][0]
-    _itrf.LIBXC_rsh_coeff.argtypes=[ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
-    _itrf.LIBXC_rsh_coeff.restype=None
-    rsh_pars=(ctypes.c_double*3)()
-    _itrf.LIBXC_rsh_coeff(xid,rsh_pars)
-
+    hyb, fn_facs = parse_xc(xc_code)
+    if fn_facs:
+        xid=parse_xc(xc_code)[1][0][0]
+        rsh_pars=(ctypes.c_double*3)()
+        _itrf.LIBXC_rsh_coeff(xid,rsh_pars)
+    else:
+        rsh_pars = (0, 0, 0)
     return rsh_pars[0], rsh_pars[1], rsh_pars[2]
 
 def parse_xc_name(xc_name='LDA,VWN'):

@@ -91,7 +91,7 @@ class KnowValues(unittest.TestCase):
         mo = loc.kernel()
         pop = pipek.atomic_pops(h2o, mo)
         z = numpy.einsum('xii,xii->', pop, pop)
-        self.assertAlmostEqual(z, 3.5368940222128247, 6)
+        self.assertAlmostEqual(z, 3.5368940222128247, 4)
 
     def test_1orbital(self):
         lmo = boys.Boys(mol, mf.mo_coeff[:,:1]).kernel()
