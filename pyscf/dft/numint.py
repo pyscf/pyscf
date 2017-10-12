@@ -1393,21 +1393,17 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
     vxc, fxc = ni.eval_xc(xc_code, rho, spin, 0, 2, 0)[1:3]
     return rho, vxc, fxc
 
-
-def large_rho_indices(ni, mol, dm, grids, cutoff=1e-10, max_memory=2000):
-    '''Indices of density which are larger than given cutoff
+def get_rho(ni, mol, dm, grids, max_memory=2000):
+    '''Density in real space
     '''
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, 1)
-    idx = []
-    cutoff = cutoff / grids.weights.size
-    nelec = 0
+    rho = numpy.empty(grids.weights.size)
+    p1 = 0
     for ao, mask, weight, coords \
             in ni.block_loop(mol, grids, nao, 0, max_memory):
-        rho = make_rho(0, ao, mask, 'LDA')
-        kept = abs(rho*weight) > cutoff
-        nelec += numpy.einsum('i,i', rho[kept], weight[kept])
-        idx.append(kept)
-    return nelec, numpy.hstack(idx)
+        p0, p1 = p1, p1 + weight.size
+        rho[p0:p1] = make_rho(0, ao, mask, 'LDA')
+    return rho
 
 
 class _NumInt(object):
@@ -1434,7 +1430,7 @@ class _NumInt(object):
     nr_fxc = nr_fxc
     cache_xc_kernel  = cache_xc_kernel
 
-    large_rho_indices = large_rho_indices
+    get_rho = get_rho
 
     @lib.with_doc(eval_ao.__doc__)
     def eval_ao(self, mol, coords, deriv=0, shls_slice=None,
