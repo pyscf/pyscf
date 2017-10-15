@@ -2,7 +2,7 @@
 
 '''
 This example covers different ways to input basis
-1. One basis set for all elements.
+1. A universal basis set for all elements.
 2. Different basis for different elements.
 3. Different basis for same elements (different atoms).
 4. Default basis for all elements, except the given basis of specific element.

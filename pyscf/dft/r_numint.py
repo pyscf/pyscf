@@ -197,28 +197,23 @@ def r_vxc(ni, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
     return nelec, excsum, vmat.reshape(dms.shape)
 
 
-def large_rho_indices(ni, mol, dm, grids, cutoff=1e-10, max_memory=2000):
-    dm = numpy.asarray(dm)
+def get_rho(ni, mol, dm, grids, max_memory=2000):
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, hermi=1)
     n2c = mol.nao_2c()
     with_s = (nao == n2c*2)  # 4C DM
-
-    idx = []
-    cutoff = cutoff / grids.weights.size
-    nelec = 0
+    rho = numpy.empty(grids.weights.size)
+    p1 = 0
     for ao, mask, weight, coords \
             in ni.block_loop(mol, grids, nao, 0, with_s, max_memory):
-        rho = make_rho(0, ao, mask, 'LDA')
-        kept = abs(rho[0]*weight) > cutoff
-        nelec += numpy.einsum('i,i', rho[0][kept], weight[kept])
-        idx.append(kept)
-    return nelec, numpy.hstack(idx)
+        p0, p1 = p1, p1 + weight.size
+        rho[p0:p1] = make_rho(0, ao, mask, 'LDA')[0]
+    return rho
 
 
 class _RNumInt(numint._NumInt):
 
     r_vxc = nr_vxc = r_vxc
-    large_rho_indices = large_rho_indices
+    get_rho = get_rho
 
     def eval_ao(self, mol, coords, deriv=0, with_s=True, shls_slice=None,
                 non0tab=None, out=None, verbose=None):

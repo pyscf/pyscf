@@ -16,6 +16,15 @@ import numpy
 from pyscf import lib
 
 _itrf = lib.load_library('libxc_itrf')
+_itrf.LIBXC_is_lda.restype = ctypes.c_int
+_itrf.LIBXC_is_gga.restype = ctypes.c_int
+_itrf.LIBXC_is_meta_gga.restype = ctypes.c_int
+_itrf.LIBXC_is_hybrid.restype = ctypes.c_int
+_itrf.LIBXC_max_deriv_order.restype = ctypes.c_int
+_itrf.LIBXC_hybrid_coeff.argtypes = [ctypes.c_int]
+_itrf.LIBXC_hybrid_coeff.restype = ctypes.c_double
+_itrf.LIBXC_nlc_coeff.argtypes = [ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
+_itrf.LIBXC_rsh_coeff.argtypes = [ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
 
 # xc_code from libxc
 #cat lib/deps/include/xc_funcs.h  | awk '{printf("'\''%s'\'' %3i",$2,$3); for(i=4;i<NF;i++) {printf(" %s",$i)}; printf("\n")}'  | sed "s|/\*|# |g" | awk '{printf("%-30s : %4i\,",$1,$2); for(i=4;i<NF;i++) {printf(" %s",$i)}; printf("\n")}'
@@ -37,7 +46,7 @@ XC = XC_CODES = {
 'XC_LDA_C_OB_PW'               :   14, # Ortiz & Ballone (PW)
 'XC_LDA_C_2D_AMGB'             :   15, # Attaccalite et al
 'XC_LDA_C_2D_PRM'              :   16, # Pittalis, Rasanen & Marques correlation in 2D
-'XC_LDA_C_vBH'                 :   17, # von Barth & Hedin
+'XC_LDA_C_VBH'                 :   17, # von Barth & Hedin
 'XC_LDA_C_1D_CSC'              :   18, # Casula, Sorella, and Senatore 1D correlation
 'XC_LDA_X_2D'                  :   19, # Exchange in 2D
 'XC_LDA_XC_TETER93'            :   20, # Teter 93 parametrization
@@ -237,12 +246,12 @@ XC = XC_CODES = {
 'XC_GGA_X_ITYH'                :  529, # short-range recipe for exchange GGA functionals
 'XC_GGA_X_SFAT'                :  530, # short-range recipe for exchange GGA functionals
 'XC_HYB_GGA_X_N12_SX'          :   81, # N12-SX functional from Minnesota
-'XC_HYB_GGA_XC_B97_1p'         :  266, # version of B97 by Cohen and Handy
+'XC_HYB_GGA_XC_B97_1P'         :  266, # version of B97 by Cohen and Handy
 'XC_HYB_GGA_XC_B3PW91'         :  401, # The original (ACM) hybrid of Becke
 'XC_HYB_GGA_XC_B3LYP'          :  402, # The (in)famous B3LYP
 'XC_HYB_GGA_XC_B3P86'          :  403, # Perdew 86 hybrid similar to B3PW91
 'XC_HYB_GGA_XC_O3LYP'          :  404, # hybrid using the optx functional
-'XC_HYB_GGA_XC_mPW1K'          :  405, # mixture of mPW91 and PW91 optimized for kinetics
+'XC_HYB_GGA_XC_MPW1K'          :  405, # mixture of mPW91 and PW91 optimized for kinetics
 'XC_HYB_GGA_XC_PBEH'           :  406, # aka PBE0 or PBE1PBE
 'XC_HYB_GGA_XC_B97'            :  407, # Becke 97
 'XC_HYB_GGA_XC_B97_1'          :  408, # Becke 97-1
@@ -254,14 +263,14 @@ XC = XC_CODES = {
 'XC_HYB_GGA_XC_MPW3PW'         :  415, # mixture with the mPW functional
 'XC_HYB_GGA_XC_B1LYP'          :  416, # Becke 1-parameter mixture of B88 and LYP
 'XC_HYB_GGA_XC_B1PW91'         :  417, # Becke 1-parameter mixture of B88 and PW91
-'XC_HYB_GGA_XC_mPW1PW'         :  418, # Becke 1-parameter mixture of mPW91 and PW91
+'XC_HYB_GGA_XC_MPW1PW'         :  418, # Becke 1-parameter mixture of mPW91 and PW91
 'XC_HYB_GGA_XC_MPW3LYP'        :  419, # mixture of mPW and LYP
-'XC_HYB_GGA_XC_SB98_1a'        :  420, # Schmider-Becke 98 parameterization 1a
-'XC_HYB_GGA_XC_SB98_1b'        :  421, # Schmider-Becke 98 parameterization 1b
-'XC_HYB_GGA_XC_SB98_1c'        :  422, # Schmider-Becke 98 parameterization 1c
-'XC_HYB_GGA_XC_SB98_2a'        :  423, # Schmider-Becke 98 parameterization 2a
-'XC_HYB_GGA_XC_SB98_2b'        :  424, # Schmider-Becke 98 parameterization 2b
-'XC_HYB_GGA_XC_SB98_2c'        :  425, # Schmider-Becke 98 parameterization 2c
+'XC_HYB_GGA_XC_SB98_1A'        :  420, # Schmider-Becke 98 parameterization 1a
+'XC_HYB_GGA_XC_SB98_1B'        :  421, # Schmider-Becke 98 parameterization 1b
+'XC_HYB_GGA_XC_SB98_1C'        :  422, # Schmider-Becke 98 parameterization 1c
+'XC_HYB_GGA_XC_SB98_2A'        :  423, # Schmider-Becke 98 parameterization 2a
+'XC_HYB_GGA_XC_SB98_2B'        :  424, # Schmider-Becke 98 parameterization 2b
+'XC_HYB_GGA_XC_SB98_2C'        :  425, # Schmider-Becke 98 parameterization 2c
 'XC_HYB_GGA_X_SOGGA11_X'       :  426, # Hybrid based on SOGGA11 form
 'XC_HYB_GGA_XC_HSE03'          :  427, # the 2003 version of the screened hybrid HSE
 'XC_HYB_GGA_XC_HSE06'          :  428, # the 2006 version of the screened hybrid HSE
@@ -278,7 +287,7 @@ XC = XC_CODES = {
 'XC_HYB_GGA_XC_REVB3LYP'       :  454, # Revised B3LYP
 'XC_HYB_GGA_XC_CAMY_BLYP'      :  455, # BLYP with yukawa screening
 'XC_HYB_GGA_XC_PBE0_13'        :  456, # PBE0-1/3
-'XC_HYB_GGA_XC_B3LYPs'         :  459, # B3LYP* functional
+'XC_HYB_GGA_XC_B3LYPS'         :  459, # B3LYP* functional
 'XC_HYB_GGA_XC_WB97'           :  463, # Chai and Head-Gordon
 'XC_HYB_GGA_XC_WB97X'          :  464, # Chai and Head-Gordon
 'XC_HYB_GGA_XC_LRC_WPBEH'      :  465, # Long-range corrected functional by Rorhdanz et al
@@ -413,16 +422,15 @@ XC = XC_CODES = {
 'X3LYP'         : 'X3LYP5',  # VWN5 version
 'X3LYP5'        : '.218*HF + .073*LDA + .478575*B88 + .166615*PW91, .871*LYP + .129*VWN',
 'X3LYPG'        : 411,  # VWN3, used by Gaussian
-'XC_MGGA_X_M06L'              :  203,
-'XC_MGGA_C_M06L'              :  233,
+'XC_MGGA_X_M06L': 203,
+'XC_MGGA_C_M06L': 233,
 }
 
 XC_KEYS = set(XC_CODES.keys())
 
 def is_lda(xc_code):
     hyb, fn_facs = parse_xc(xc_code)
-    _itrf.LIBXC_is_lda.restype = ctypes.c_int
-    return all((_itrf.LIBXC_is_lda(ctypes.c_int(xid))==1) for xid, fac in fn_facs)
+    return all(_itrf.LIBXC_is_lda(ctypes.c_int(xid)) for xid, fac in fn_facs)
 
 def is_hybrid_xc(xc_code):
     if isinstance(xc_code, str):
@@ -430,7 +438,8 @@ def is_hybrid_xc(xc_code):
             return _itrf.LIBXC_is_hybrid(ctypes.c_int(xc_code))
         else:
             return ('HF' in xc_code or
-                    any((_itrf.LIBXC_is_hybrid(ctypes.c_int(xid)) for xid, val in parse_xc(xc_code)[1])) or
+                    any((_itrf.LIBXC_is_hybrid(ctypes.c_int(xid))
+                         for xid, val in parse_xc(xc_code)[1])) or
                     abs(parse_xc(xc_code)[0]) > 1e-14)
     elif isinstance(xc_code, int):
         return _itrf.LIBXC_is_hybrid(ctypes.c_int(xc_code))
@@ -439,20 +448,17 @@ def is_hybrid_xc(xc_code):
 
 def is_meta_gga(xc_code):
     hyb, fn_facs = parse_xc(xc_code)
-    _itrf.LIBXC_is_meta_gga.restype = ctypes.c_int
-    return all((_itrf.LIBXC_is_meta_gga(ctypes.c_int(xid))==1) for xid, fac in fn_facs)
+    return all(_itrf.LIBXC_is_meta_gga(ctypes.c_int(xid)) for xid, fac in fn_facs)
 
 def is_gga(xc_code):
     hyb, fn_facs = parse_xc(xc_code)
-    _itrf.LIBXC_is_gga.restype = ctypes.c_int
-    return all((_itrf.LIBXC_is_gga(ctypes.c_int(xid))==1) for xid, fac in fn_facs)
+    return all(_itrf.LIBXC_is_gga(ctypes.c_int(xid)) for xid, fac in fn_facs)
 
 def is_nlc(xc_code):
     return '__VV10' in xc_code.upper()
 
 def max_deriv_order(xc_code):
     hyb, fn_facs = parse_xc(xc_code)
-    _itrf.LIBXC_max_deriv_order.restype = ctypes.c_int
     return min((_itrf.LIBXC_max_deriv_order(ctypes.c_int(xid))) for xid, fac in fn_facs)
 
 def test_deriv_order(xc_code, deriv, raise_error=False):
@@ -480,31 +486,31 @@ def hybrid_coeff(xc_code, spin=0):
     '''
     hyb, fn_facs = parse_xc(xc_code)
     for xid, fac in fn_facs:
-        if _itrf.LIBXC_is_hybrid(ctypes.c_int(xid)):
-            _itrf.LIBXC_hybrid_coeff.restype = ctypes.c_double
-            hyb += _itrf.LIBXC_hybrid_coeff(ctypes.c_int(xid))
+        hyb += _itrf.LIBXC_hybrid_coeff(ctypes.c_int(xid))
     return hyb
 
 def nlc_coeff(xc_code):
     '''Get NLC coefficients
     '''
-    xid=parse_xc(xc_code)[1][0][0]
-    _itrf.LIBXC_nlc_coeff.argtypes=[ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
-    _itrf.LIBXC_nlc_coeff.restype=None
-    nlc_pars=(ctypes.c_double*2)()
-    _itrf.LIBXC_nlc_coeff(xid,nlc_pars)
-
+    hyb, fn_facs = parse_xc(xc_code)
+    if fn_facs:
+        xid=parse_xc(xc_code)[1][0][0]
+        nlc_pars=(ctypes.c_double*2)()
+        _itrf.LIBXC_nlc_coeff(xid,nlc_pars)
+    else:
+        nlc_pars = (0, 0)
     return nlc_pars[0], nlc_pars[1]
 
 def rsh_coeff(xc_code):
     '''Get RSH coefficients
     '''
-    xid=parse_xc(xc_code)[1][0][0]
-    _itrf.LIBXC_rsh_coeff.argtypes=[ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
-    _itrf.LIBXC_rsh_coeff.restype=None
-    rsh_pars=(ctypes.c_double*3)()
-    _itrf.LIBXC_rsh_coeff(xid,rsh_pars)
-
+    hyb, fn_facs = parse_xc(xc_code)
+    if fn_facs:
+        xid=parse_xc(xc_code)[1][0][0]
+        rsh_pars=(ctypes.c_double*3)()
+        _itrf.LIBXC_rsh_coeff(xid,rsh_pars)
+    else:
+        rsh_pars = (0, 0, 0)
     return rsh_pars[0], rsh_pars[1], rsh_pars[2]
 
 def parse_xc_name(xc_name='LDA,VWN'):
@@ -522,7 +528,8 @@ def parse_xc(description):
       first part describes the exchange functional, the second is the correlation
       functional.
 
-      - If "," not appeared in string, the entire string is considered as X functional.
+      - If "," was not appeared in string, the entire string is considered as
+        X functional.
       - To neglect X functional (just apply C functional), leave blank in the
         first part, eg description=',vwn' for pure VWN functional
 
@@ -817,7 +824,7 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     return exc, vxc, fxc, kxc
 
 
-def define_xc_(ni, description):
+def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     '''Define XC functional.  See also :func:`eval_xc` for the rules of input description.
 
     Args:
@@ -827,6 +834,14 @@ def define_xc_(ni, description):
             A string to describe the linear combination of different XC functionals.
             The X and C functional are separated by comma like '.8*LDA+.2*B86,VWN'.
             If "HF" was appeared in the string, it stands for the exact exchange.
+
+    Kwargs:
+        xctype : str
+            'LDA' or 'GGA' or 'MGGA'
+        hyb : float
+            hybrid functional coefficient
+        rsh : float
+            coefficients for range-separated hybrid functional
 
     Examples:
 
@@ -838,18 +853,39 @@ def define_xc_(ni, description):
     >>> define_xc_(mf._numint, 'LDA*.08 + .72*B88 + .2*HF, .81*LYP + .19*VWN')
     >>> mf.kernel()
     -76.3783361189611
+    >>> def eval_xc(xc_code, rho, *args, **kwargs):
+    ...     exc = 0.01 * rho**2
+    ...     vrho = 0.01 * 2 * rho
+    ...     vxc = (vrho, None, None, None)
+    ...     fxc = None  # 2nd order functional derivative
+    ...     kxc = None  # 3rd order functional derivative
+    ...     return exc, vxc, fxc, kxc
+    >>> define_xc_(mf._numint, eval_xc, xctype='LDA')
+    >>> mf.kernel()
+    48.8525211046668
     '''
-    ni.eval_xc = lambda xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None: \
-            eval_xc(description, rho, spin, relativity, deriv, verbose)
-    ni.hybrid_coeff = lambda *args, **kwargs: hybrid_coeff(description)
-    def xc_type(*args):
-        if is_lda(description):
-            return 'LDA'
-        elif is_meta_gga(description):
-            raise NotImplementedError('meta-GGA')
-        else:
-            return 'GGA'
-    ni._xc_type = xc_type
+    if isinstance(description, str):
+        ni.eval_xc = lambda xc_code, rho, *args, **kwargs: \
+                eval_xc(description, rho, *args, **kwargs)
+        ni.hybrid_coeff = lambda *args, **kwargs: hybrid_coeff(description)
+        def xc_type(xc_code):
+            if is_nlc(xc_code):
+                return 'NLC'
+            elif is_lda(description):
+                return 'LDA'
+            elif is_meta_gga(description):
+                return 'MGGA'
+            else:
+                return 'GGA'
+        ni._xc_type = xc_type
+
+    elif callable(description):
+        ni.eval_xc = description
+        ni.hybrid_coeff = lambda *args, **kwargs: hyb
+        ni.rsh_coeff = lambda *args, **kwargs: rsh
+        ni._xc_type = lambda *args: xctype
+    else:
+        raise RuntimeError('Unknown description %s' % description)
     return ni
 
 def define_xc(ni, description):

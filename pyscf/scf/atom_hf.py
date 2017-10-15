@@ -21,7 +21,7 @@ def get_atm_nrhf(mol):
         atm.stdout = mol.stdout
         atm.atom = atm._atom = [[a, (0, 0, 0)]]
         atm._basis = {a: b}
-        atm.nelectron = gto.mole._charge(a)
+        atm.nelectron = gto.charge(a)
         atm.spin = atm.nelectron % 2
         atm._atm, atm._bas, atm._env = \
                 atm.make_env(atm._atom, atm._basis, atm._env)
@@ -106,7 +106,7 @@ class AtomSphericAverageRHF(hf.RHF):
         return hf.kernel(self, *args, dump_chk=False, **kwargs)
 
 def frac_occ(symb, l):
-    nuc = gto.mole._charge(symb)
+    nuc = gto.charge(symb)
     if l < 4 and elements.CONFIGURATION[nuc][l] > 0:
         ne = elements.CONFIGURATION[nuc][l]
         nd = (l * 2 + 1) * 2

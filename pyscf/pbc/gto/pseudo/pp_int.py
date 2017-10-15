@@ -147,7 +147,7 @@ def fake_cell_vloc(cell, cn=0):
                 alpha = .5 / rloc**2
             else:
                 alpha = 1e16
-            norm = half_sph_norm / gto.mole._gaussian_int(2, alpha)
+            norm = half_sph_norm / gto.gaussian_int(2, alpha)
             fake_env.append([alpha, norm])
             fake_bas.append([ia, 0, 1, 1, 0, ptr, ptr+1, 0])
             ptr += 2

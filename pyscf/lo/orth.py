@@ -109,7 +109,7 @@ def project_to_atomic_orbitals(mol, basname):
         atm.cart = mol.cart
         s0 = atm.intor_symmetric('int1e_ovlp')
 
-        if 'GHOST' in symb.upper():
+        if gto.is_ghost_atom(symb):
             aos[symb] = numpy.diag(1./numpy.sqrt(s0.diagonal()))
             continue
 

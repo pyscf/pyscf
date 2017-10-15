@@ -916,21 +916,17 @@ def cache_xc_kernel(ni, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
     return rho, vxc, fxc
 
 
-def large_rho_indices(ni, cell, dm, grids, cutoff=1e-10, kpt=numpy.zeros(3),
-                      max_memory=2000):
+def get_rho(ni, cell, dm, grids, kpt=numpy.zeros(3), max_memory=2000):
     '''Indices of density which are larger than given cutoff
     '''
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dm)
-    idx = []
-    cutoff = cutoff / grids.weights.size
-    nelec = 0
+    rho = numpy.empty(grids.weights.size)
+    p1 = 0
     for ao_k1, ao_k2, mask, weight, coords \
             in ni.block_loop(cell, grids, nao, 0, kpt, None, max_memory):
-        rho = make_rho(0, ao_k1, mask, 'LDA')
-        kept = abs(rho*weight) > cutoff
-        nelec += numpy.einsum('i,i', rho[kept], weight[kept])
-        idx.append(kept)
-    return nelec, numpy.hstack(idx)
+        p0, p1 = p1, p1 + weight.size
+        rho[p0:p1] = make_rho(0, ao_k1, mask, 'LDA')
+    return rho
 
 
 class _NumInt(numint._NumInt):
@@ -1040,7 +1036,7 @@ class _NumInt(numint._NumInt):
     nr_rks_fxc = nr_rks_fxc
     nr_uks_fxc = nr_uks_fxc
     cache_xc_kernel  = cache_xc_kernel
-    large_rho_indices = large_rho_indices
+    get_rho = get_rho
 
 
 class _KNumInt(numint._NumInt):
@@ -1223,7 +1219,7 @@ class _KNumInt(numint._NumInt):
     nr_rks_fxc = nr_rks_fxc
     nr_uks_fxc = nr_uks_fxc
     cache_xc_kernel  = cache_xc_kernel
-    large_rho_indices = large_rho_indices
+    get_rho = get_rho
 
 
 def prange(start, end, step):

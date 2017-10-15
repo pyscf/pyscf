@@ -45,7 +45,7 @@ def M(**kwargs):
     mol.build(**kwargs)
     return mol
 
-def _gaussian_int(n, alpha):
+def gaussian_int(n, alpha):
     r'''int_0^inf x^n exp(-alpha x^2) dx'''
     n1 = (n + 1) * .5
     return scipy.special.gamma(n1) / (2. * alpha**n1)
@@ -78,7 +78,7 @@ def gto_norm(l, expnt):
         #f = 2**(2*l+3) * math.factorial(l+1) * (2*expnt)**(l+1.5) \
         #        / (math.factorial(2*l+2) * math.sqrt(math.pi))
         #return math.sqrt(f)
-        return 1/numpy.sqrt(_gaussian_int(l*2+2, 2*expnt))
+        return 1/numpy.sqrt(gaussian_int(l*2+2, 2*expnt))
     else:
         raise ValueError('l should be > 0')
 
@@ -543,7 +543,7 @@ def make_atm_env(atom, ptr=0):
     '''Convert the internal format :attr:`Mole._atom` to the format required
     by ``libcint`` integrals
     '''
-    nuc_charge = _charge(atom[0])
+    nuc_charge = charge(atom[0])
     _env = numpy.hstack((atom[1], dyall_nuc_mod(elements.ISOTOPE_MAIN[nuc_charge])))
     _atm = numpy.zeros(6, dtype=numpy.int32)
     _atm[CHARGE_OF] = nuc_charge
@@ -579,10 +579,10 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         #ee = numpy.empty((nprim,nprim))
         #for i in range(nprim):
         #    for j in range(i+1):
-        #        ee[i,j] = ee[j,i] = _gaussian_int(angl*2+2, es[i]+es[j])
+        #        ee[i,j] = ee[j,i] = gaussian_int(angl*2+2, es[i]+es[j])
         #s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
         ee = es.reshape(-1,1) + es.reshape(1,-1)
-        ee = _gaussian_int(angl*2+2, ee)
+        ee = gaussian_int(angl*2+2, ee)
         s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
         cs = numpy.einsum('pi,i->pi', cs, s1)
 
@@ -700,7 +700,7 @@ def make_ecp_env(mol, _atm, ecp, pre_env=[]):
             else:
                 ecp0 = None
             if ecp0 is not None:
-                _atm[ia,CHARGE_OF ] = _charge(symb) - ecp0[0]
+                _atm[ia,CHARGE_OF ] = charge(symb) - ecp0[0]
                 b = ecp0[1].copy().reshape(-1,BAS_SLOTS)
                 b[:,ATOM_OF] = ia
                 _ecpbas.append(b)
@@ -1403,7 +1403,7 @@ def chiral_mol(mol1, mol2=None):
 
 def inertia_momentum(atoms, charges=None, coords=None):
     if charges is None:
-        charges = numpy.array([_charge(a[0]) for a in atoms])
+        charges = numpy.array([charge(a[0]) for a in atoms])
     if coords is None:
         coords = numpy.array([a[1] for a in atoms], dtype=float)
     chgcenter = numpy.einsum('i,ij->j', charges, coords)/charges.sum()
@@ -1413,14 +1413,14 @@ def inertia_momentum(atoms, charges=None, coords=None):
 
 def charge_center(atoms, charges=None, coords=None):
     if charges is None:
-        charges = numpy.array([_charge(a[0]) for a in atoms])
+        charges = numpy.array([charge(a[0]) for a in atoms])
     if coords is None:
         coords = numpy.array([a[1] for a in atoms], dtype=float)
     rbar = numpy.einsum('i,ij->j', charges, coords)/charges.sum()
     return rbar
 
 def mass_center(atoms):
-    mass = numpy.array([elements.MASSES[_charge(a[0])] for a in atoms])
+    mass = numpy.array([elements.MASSES[charge(a[0])] for a in atoms])
     return charge_center(atoms, mass)
 
 def condense_to_shell(mol, mat, compressor=numpy.max):
@@ -2138,8 +2138,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     def atom_charge(self, atm_id):
         r'''Nuclear effective charge of the given atom id
-        Note "atom_charge /= _charge(atom_symbol)" when ECP is enabled.
-        Number of electrons screened by ECP can be obtained by _charge(atom_symbol)-atom_charge
+        Note "atom_charge /= charge(atom_symbol)" when ECP is enabled.
+        Number of electrons screened by ECP can be obtained by charge(atom_symbol)-atom_charge
 
         Args:
             atm_id : int
@@ -2160,7 +2160,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def atom_nelec_core(self, atm_id):
         '''Number of core electrons for pseudo potential.
         '''
-        return _charge(self.atom_symbol(atm_id)) - self.atom_charge(atm_id)
+        return charge(self.atom_symbol(atm_id)) - self.atom_charge(atm_id)
 
     def atom_coord(self, atm_id):
         r'''Coordinates (ndarray) of the given atom id
@@ -2578,7 +2578,10 @@ def _rm_digit(symb):
     else:
         return ''.join([i for i in symb if i.isalpha()])
 
-def _charge(symb_or_chg):
+_ELEMENTS_UPPER = dict((x.upper(),x) for x in ELEMENTS)
+_ELEMENTS_UPPER['GHOST'] = 'Ghost'
+
+def charge(symb_or_chg):
     if isinstance(symb_or_chg, (str, unicode)):
         a = symb_or_chg.upper()
         if ('GHOST' in a or ('X' in a and 'XE' not in a)):
@@ -2599,12 +2602,12 @@ def _std_symbol(symb_or_chg):
         rawsymb = str(_rm_digit(symb_or_chg)).upper()
         if len(rawsymb) > 1 and symb_or_chg[0] == 'X' and symb_or_chg[:2].upper() != 'XE':
             rawsymb = rawsymb[1:]
-            return 'X-' + ELEMENTS[ELEMENTS_PROTON[rawsymb]]
+            return 'X-' + _ELEMENTS_UPPER[rawsymb]
         elif len(rawsymb) > 5 and rawsymb[:5] == 'GHOST':
             rawsymb = rawsymb[5:]
-            return 'GHOST-' + ELEMENTS[ELEMENTS_PROTON[rawsymb]]
+            return 'GHOST-' + _ELEMENTS_UPPER[rawsymb]
         else:
-            return ELEMENTS[ELEMENTS_PROTON[rawsymb]]
+            return _ELEMENTS_UPPER[rawsymb]
     else:
         return ELEMENTS[symb_or_chg]
 
@@ -2621,9 +2624,17 @@ def _atom_symbol(symb_or_chg):
                 rawsymb = rawsymb[1:]
             elif len(rawsymb) > 5 and rawsymb[:5].upper() == 'GHOST':
                 rawsymb = rawsymb[5:]
-            stdsymb = ELEMENTS[ELEMENTS_PROTON[rawsymb.upper()]]
+            stdsymb = _ELEMENTS_UPPER[rawsymb.upper()]
             symb = a.replace(rawsymb, stdsymb)
     return symb
+
+def is_ghost_atom(symb_or_chg):
+    if isinstance(symb_or_chg, int):
+        return symb_or_chg == 0
+    elif 'GHOST' in symb_or_chg.upper():
+        return True
+    else:
+        return symb_or_chg[0] == 'X' and symb_or_chg[:2].upper() != 'XE'
 
 def _parse_nuc_mod(str_or_int):
     nucmod = NUC_POINT
@@ -2794,7 +2805,7 @@ def filatov_nuc_mod(nuc_charge, c=param.LIGHT_SPEED):
     Ref. M. Filatov and D. Cremer, Theor. Chem. Acc. 108, 168 (2002)
          M. Filatov and D. Cremer, Chem. Phys. Lett. 351, 259 (2002)
     '''
-    nuc_charge = _charge(nuc_charge)
+    nuc_charge = charge(nuc_charge)
     r = (-0.263188*nuc_charge + 106.016974 + 138.985999/nuc_charge) / c**2
     zeta = 1 / (r**2)
     return zeta
