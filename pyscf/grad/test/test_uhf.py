@@ -24,7 +24,7 @@ def make_mol(atom_id, coords):
     mol1.build(0, 0)
     return mol1
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_finite_diff_uhf_grad(self):
         mf = scf.UHF(mol)
         mf.conv_tol = 1e-14

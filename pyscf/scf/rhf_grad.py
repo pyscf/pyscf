@@ -46,9 +46,17 @@ def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
         de[k] += numpy.einsum('xij,ij->x', f1[:,p0:p1], dm0[p0:p1]) * 2
         de[k] += numpy.einsum('xij,ij->x', vrinv, dm0) * 2
         de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], dme0[p0:p1]) * 2
-    log.debug('gradients of electronic part')
-    log.debug(str(de))
+    if log.verbose >= logger.DEBUG:
+        log.debug('gradients of electronic part')
+        _write(log, mol, de, atmlst)
     return de
+
+def _write(dev, mol, de, atmlst):
+    dev.stdout.write('         x                y                z\n')
+    for k, ia in enumerate(atmlst):
+        dev.stdout.write('%d %s  %15.10f  %15.10f  %15.10f\n' %
+                         (ia, mol.atom_symbol(ia), de[k,0], de[k,1], de[k,2]))
+
 
 def grad_nuc(mol, atmlst=None):
     gs = numpy.zeros((mol.natm,3))
@@ -231,14 +239,12 @@ class Gradients(lib.StreamObject):
             self.dump_flags()
 
         de = self.grad_elec(mo_energy, mo_coeff, mo_occ, atmlst)
-        self.de = de = de + self.grad_nuc(atmlst=atmlst)
-        logger.note(self, '--------------- SCF gradients ----------------')
-        logger.note(self, '           x                y                z')
-        for k, ia in enumerate(atmlst):
-            logger.note(self, '%d %s  %15.9f  %15.9f  %15.9f', ia,
-                        self.mol.atom_symbol(ia), de[k,0], de[k,1], de[k,2])
-        logger.note(self, '----------------------------------------------')
-        logger.timer(self, 'SCF gradients', *cput0)
+        self.de = de + self.grad_nuc(atmlst=atmlst)
+        if self.verbose >= logger.NOTE:
+            logger.note(self, '--------------- SCF gradients ----------------')
+            _write(self, self.mol, self.de, atmlst)
+            logger.note(self, '----------------------------------------------')
+            logger.timer(self, 'SCF gradients', *cput0)
         return self.de
 
     as_scanner = as_scanner
@@ -251,7 +257,6 @@ if __name__ == '__main__':
     from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 0
-    mol.output = None
     mol.atom = [['He', (0.,0.,0.)], ]
     mol.basis = {'He': 'ccpvdz'}
     mol.build()
@@ -262,7 +267,6 @@ if __name__ == '__main__':
 
     h2o = gto.Mole()
     h2o.verbose = 0
-    h2o.output = None#'out_h2o'
     h2o.atom = [
         ['O' , (0. , 0.     , 0.)],
         [1   , (0. , -0.757 , 0.587)],

@@ -364,20 +364,20 @@ def make_mask(mol, coords, relativity=0, shls_slice=None, verbose=None):
         is the number of shells.
     '''
     coords = numpy.asarray(coords, order='F')
-    natm = ctypes.c_int(mol._atm.shape[0])
-    nbas = ctypes.c_int(mol.nbas)
     ngrids = len(coords)
     if shls_slice is None:
         shls_slice = (0, mol.nbas)
-    assert(shls_slice == (0, mol.nbas))
+    nbas = shls_slice[1] - shls_slice[0]
 
-    non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, mol.nbas),
+    non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, nbas),
                           dtype=numpy.uint8)
     libdft.VXCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
                            coords.ctypes.data_as(ctypes.c_void_p),
                            ctypes.c_int(ngrids),
-                           mol._atm.ctypes.data_as(ctypes.c_void_p), natm,
-                           mol._bas.ctypes.data_as(ctypes.c_void_p), nbas,
+                           mol._atm.ctypes.data_as(ctypes.c_void_p),
+                           ctypes.c_int(mol.natm),
+                           mol._bas[shls_slice[0]:].ctypes.data_as(ctypes.c_void_p),
+                           ctypes.c_int(nbas),
                            mol._env.ctypes.data_as(ctypes.c_void_p))
     return non0tab
 

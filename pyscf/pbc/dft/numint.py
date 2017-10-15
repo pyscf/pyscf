@@ -533,6 +533,7 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=0,
 def _format_uks_dm(dms):
     dma, dmb = dms
     if hasattr(dms, 'mo_coeff'):
+#TODO: test whether dm.mo_coeff matching dm
         mo_coeff = dms.mo_coeff
         mo_occ = dms.mo_occ
         if (isinstance(mo_coeff[0], numpy.ndarray) and

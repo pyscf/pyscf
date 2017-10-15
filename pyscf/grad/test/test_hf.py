@@ -19,7 +19,7 @@ mol.build()
 def finger(mat):
     return abs(mat).sum()
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_nr_rhf(self):
         rhf = scf.RHF(mol)
         rhf.conv_tol = 1e-14

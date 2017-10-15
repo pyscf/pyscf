@@ -170,7 +170,7 @@ class KnownValues(unittest.TestCase):
         coords = []
         w0 = []
         w1 = []
-        for c_a, w0_a, w1_a in rks.gen_grids_response(grids):
+        for c_a, w0_a, w1_a in rks.grids_response_cc(grids):
             coords.append(c_a)
             w0.append(w0_a)
             w1.append(w1_a)

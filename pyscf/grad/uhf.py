@@ -49,8 +49,9 @@ def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
         de[k] += numpy.einsum('sxij,sij->x', f1[:,:,p0:p1], dm0[:,p0:p1]) * 2
         de[k] += numpy.einsum('xij,ij->x', vrinv, dm0_sf) * 2
         de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], dme0_sf[p0:p1]) * 2
-    log.debug('gradients of electronic part')
-    log.debug(str(de))
+    if log.verbose >= logger.DEBUG:
+        log.debug('gradients of electronic part')
+        rhf_grad._write(log, mol, de, atmlst)
     return de
 
 def get_veff(mf_grad, mol, dm):

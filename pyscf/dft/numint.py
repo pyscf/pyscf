@@ -619,7 +619,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 vrho = vxc[0]
                 den = rho * weight
                 nelec[idm] += den.sum()
-                excsum[idm] += (den * exc).sum()
+                excsum[idm] += numpy.dot(den, exc)
                 # *.5 because vmat + vmat.T
                 aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho, out=aow)
                 vmat[idm] += _dot_ao_ao(mol, ao, aow, mask, shls_slice, ao_loc)
@@ -636,7 +636,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 vrho, vsigma = vxc[:2]
                 den = rho[0] * weight
                 nelec[idm] += den.sum()
-                excsum[idm] += (den * exc).sum()
+                excsum[idm] += numpy.dot(den, exc)
 # ref eval_mat function
                 wv = numpy.empty((4,ngrid))
                 wv[0]  = weight * vrho * .5
@@ -676,7 +676,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 vrho, vsigma = vxc[:2]
                 den = rho[0] * weight
                 nelec[idm] += den.sum()
-                excsum[idm] += (den * exc).sum()
+                excsum[idm] += numpy.dot(den, exc)
 # ref eval_mat function
                 wv = numpy.empty((4,ngrid))
                 wv[0]  = weight * vrho * .5
@@ -699,7 +699,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 vrho, vsigma, vlapl, vtau = vxc[:4]
                 den = rho[0] * weight
                 nelec[idm] += den.sum()
-                excsum[idm] += (den * exc).sum()
+                excsum[idm] += numpy.dot(den, exc)
 
                 wv = numpy.empty((4,ngrid))
                 wv[0]  = weight * vrho * .5
@@ -795,10 +795,10 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 vrho = vxc[0]
                 den = rho_a * weight
                 nelec[0,idm] += den.sum()
-                excsum[idm] += (den*exc).sum()
+                excsum[idm] += numpy.dot(den, exc)
                 den = rho_b * weight
                 nelec[1,idm] += den.sum()
-                excsum[idm] += (den*exc).sum()
+                excsum[idm] += numpy.dot(den, exc)
 
                 # *.5 due to +c.c. in the end
                 aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho[:,0], out=aow)
@@ -820,10 +820,10 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 vrho, vsigma = vxc[:2]
                 den = rho_a[0]*weight
                 nelec[0,idm] += den.sum()
-                excsum[idm] += (den*exc).sum()
+                excsum[idm] += numpy.dot(den, exc)
                 den = rho_b[0]*weight
                 nelec[1,idm] += den.sum()
-                excsum[idm] += (den*exc).sum()
+                excsum[idm] += numpy.dot(den, exc)
 
                 wv = numpy.empty((4,ngrid))
                 wv[0]  = weight * vrho[:,0] * .5  # *.5 due to +c.c. in the end
@@ -853,10 +853,10 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 vrho, vsigma, vlapl, vtau = vxc[:4]
                 den = rho_a[0]*weight
                 nelec[0,idm] += den.sum()
-                excsum[idm] += (den*exc).sum()
+                excsum[idm] += numpy.dot(den, exc)
                 den = rho_b[0]*weight
                 nelec[1,idm] += den.sum()
-                excsum[idm] += (den*exc).sum()
+                excsum[idm] += numpy.dot(den, exc)
 
                 wv = numpy.empty((4,ngrid))
                 wv[0]  = weight * vrho[:,0] * .5  # *.5 due to +c.c. in the end
@@ -1480,6 +1480,7 @@ class _NumInt(object):
 
     def _gen_rho_evaluator(self, mol, dms, hermi=0):
         if hasattr(dms, 'mo_coeff'):
+#TODO: test whether dm.mo_coeff matching dm
             mo_coeff = dms.mo_coeff
             mo_occ = dms.mo_occ
             if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
@@ -1494,6 +1495,7 @@ class _NumInt(object):
             if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
                 dms = [dms]
             if not hermi:
+# For eval_rho when xctype==GGA, which requires hermitian DMs
                 dms = [(dm+dm.conj().T)*.5 for dm in dms]
             nao = dms[0].shape[0]
             ndms = len(dms)
