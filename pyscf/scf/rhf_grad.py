@@ -161,7 +161,7 @@ class Gradients(lib.StreamObject):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
         if not self._scf.converged:
-            log.warn('Ground state SCF is not converged')
+            log.warn('Ground state SCF not converged')
         log.info('******** %s for %s ********',
                  self.__class__, self._scf.__class__)
         log.info('chkfile = %s', self.chkfile)

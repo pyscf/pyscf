@@ -11,7 +11,6 @@ import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import _vhf
 from pyscf.scf import rhf_grad
 from pyscf.dft import numint, radi, gen_grid
 

@@ -11,7 +11,6 @@ import time
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import _vhf
 from pyscf.scf import rhf_grad
 
 

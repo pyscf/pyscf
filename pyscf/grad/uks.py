@@ -10,7 +10,6 @@ import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import _vhf
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import uhf as uhf_grad
 from pyscf.grad import rks as rks_grad
@@ -250,7 +249,7 @@ class Gradients(uhf_grad.Gradients):
 
     def dump_flags(self):
         uhf_grad.Gradients.dump_flags(self)
-        logger.info('grid_response = %s', self.grid_response)
+        logger.info(self, 'grid_response = %s', self.grid_response)
         return self
 
     get_veff = get_veff
