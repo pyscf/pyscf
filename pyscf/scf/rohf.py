@@ -378,6 +378,10 @@ class ROHF(hf.RHF):
         from pyscf.scf.stability import rohf_stability
         return rohf_stability(self, internal, external, verbose)
 
+    def nuc_grad_method(self):
+        from pyscf.grad import rohf
+        return rohf.Gradients(self)
+
 
 class HF1e(ROHF):
     def scf(self, *args):
