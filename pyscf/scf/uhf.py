@@ -778,6 +778,10 @@ class UHF(hf.SCF):
         from pyscf.scf.stability import uhf_stability
         return uhf_stability(self, internal, external, verbose)
 
+    def nuc_grad_method(self):
+        from pyscf.grad import uhf
+        return uhf.Gradients(self)
+
 def _makevhf(vj, vk):
     assert(vj.ndim >= 3 and vj.shape[0] == 2 and vj.shape == vk.shape)
     vj = vj[0] + vj[1]

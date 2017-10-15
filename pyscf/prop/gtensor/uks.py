@@ -134,8 +134,7 @@ def make_para_soc2e(gobj, dm0, dm10, sso_qed_fac=1):
 # Treat Vxc as one-particle operator Vnuc
 def get_vxc_soc(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
     xctype = ni._xc_type(xc_code)
-    make_rhoa, nset, nao = ni._gen_rho_evaluator(mol, dms[0], hermi=1)
-    make_rhob            = ni._gen_rho_evaluator(mol, dms[1], hermi=1)[0]
+    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi=1)
     ngrids = len(grids.weights)
     BLKSIZE = numint.BLKSIZE
     blksize = min(int(max_memory/12*1e6/8/nao/BLKSIZE)*BLKSIZE, ngrids)
@@ -149,8 +148,8 @@ def get_vxc_soc(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory,
                                  blksize=blksize, buf=buf):
-            rho_a = make_rhoa(0, ao[0], mask, 'LDA')
-            rho_b = make_rhob(0, ao[0], mask, 'LDA')
+            rho_a = make_rho(0, ao[0], mask, 'LDA')
+            rho_b = make_rho(1, ao[0], mask, 'LDA')
             vxc = ni.eval_xc(xc_code, (rho_a, rho_b), 1, deriv=1)[1]
             vrho = vxc[0]
             aow = numpy.einsum('xpi,p->xpi', ao[1:], weight*vrho[:,0])
@@ -165,8 +164,8 @@ def get_vxc_soc(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory,
                                  blksize=blksize, buf=buf):
-            rho_a = make_rhoa(0, ao, mask, 'GGA')
-            rho_b = make_rhob(0, ao, mask, 'GGA')
+            rho_a = make_rho(0, ao, mask, 'GGA')
+            rho_b = make_rho(1, ao, mask, 'GGA')
             vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, deriv=1)[1]
             vrho, vsigma = vxc[:2]
 

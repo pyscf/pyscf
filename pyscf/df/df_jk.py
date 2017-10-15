@@ -162,6 +162,7 @@ def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
                 vj[k] += numpy.einsum('p,px->x', rho, eri1)
 
     elif hasattr(dm, 'mo_coeff'):
+#TODO: test whether dm.mo_coeff matching dm
         mo_coeff = numpy.asarray(dm.mo_coeff, order='F')
         mo_occ   = numpy.asarray(dm.mo_occ)
         nmo = mo_occ.shape[-1]

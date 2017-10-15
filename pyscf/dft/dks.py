@@ -124,6 +124,7 @@ class UKS(dhf.UHF):
 
     get_veff = get_veff
     energy_elec = energy_elec
+    define_xc_ = rks.define_xc_
 
 DKS = UKS
 
