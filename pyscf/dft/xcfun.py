@@ -167,6 +167,16 @@ def test_deriv_order(xc_code, deriv, raise_error=False):
 def hybrid_coeff(xc_code, spin=0):
     return parse_xc(xc_code)[0]
 
+def rsh_coeff(xc_code):
+    '''Get RSH coefficients
+    '''
+    hyb, fn_facs = parse_xc(xc_code)
+    if fn_facs:
+        raise NotImplementedError
+    else:
+        rsh_pars = (0, 0, 0)
+    return rsh_pars
+
 def parse_xc_name(xc_name):
     fn_facs = parse_xc(xc_name)[1]
     return fn_facs[0][0], fn_facs[1][0]
@@ -796,7 +806,7 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     return exc, vxc, fxc, kxc
 
 
-def define_xc_(ni, description, xctype='LDA', hyb=0):
+def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     '''Define XC functional.  See also :func:`eval_xc` for the rules of input description.
 
     Args:
@@ -852,6 +862,7 @@ def define_xc_(ni, description, xctype='LDA', hyb=0):
     elif callable(description):
         ni.eval_xc = description
         ni.hybrid_coeff = lambda *args, **kwargs: hyb
+        ni.rsh_coeff = lambda *args, **kwargs: rsh
         ni._xc_type = lambda *args: xctype
     else:
         raise RuntimeError('Unknown description %s' % description)

@@ -497,9 +497,10 @@ def nlc_coeff(xc_code):
         xid=parse_xc(xc_code)[1][0][0]
         nlc_pars=(ctypes.c_double*2)()
         _itrf.LIBXC_nlc_coeff(xid,nlc_pars)
+        nlc_pars = tuple(nlc_pars)
     else:
         nlc_pars = (0, 0)
-    return nlc_pars[0], nlc_pars[1]
+    return nlc_pars
 
 def rsh_coeff(xc_code):
     '''Get RSH coefficients
@@ -509,9 +510,10 @@ def rsh_coeff(xc_code):
         xid=parse_xc(xc_code)[1][0][0]
         rsh_pars=(ctypes.c_double*3)()
         _itrf.LIBXC_rsh_coeff(xid,rsh_pars)
+        rsh_pars = tuple(rsh_pars)
     else:
         rsh_pars = (0, 0, 0)
-    return rsh_pars[0], rsh_pars[1], rsh_pars[2]
+    return rsh_pars
 
 def parse_xc_name(xc_name='LDA,VWN'):
     '''Convert the XC functional name to libxc library internal ID.
