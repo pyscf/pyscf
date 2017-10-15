@@ -20,6 +20,7 @@ from pyscf.lib import logger
 from pyscf.pbc.scf import hf as pbchf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
+from pyscf.dft.rks import define_xc_
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -127,6 +128,7 @@ class RKS(pbchf.RHF):
 
     get_veff = get_veff
     energy_elec = pyscf.dft.rks.energy_elec
+    define_xc_ = define_xc_
 
     density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
     mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)

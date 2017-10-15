@@ -188,6 +188,11 @@ def prune_small_rho_grids_(ks, mol, dm, grids):
         grids.non0tab = grids.make_mask(mol, grids.coords)
     return grids
 
+def define_xc_(ks, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
+    libxc = ks._numint.libxc
+    ks._numint = libxc.define_xc_(ks._numint, description, xctype, hyb, rsh)
+    return ks
+
 
 class RKS(hf.RHF):
     __doc__ = '''Restricted Kohn-Sham\n''' + hf.SCF.__doc__ + '''
@@ -260,14 +265,11 @@ class RKS(hf.RHF):
 
     get_veff = get_veff
     energy_elec = energy_elec
+    define_xc_ = define_xc_
 
     def nuc_grad_method(self):
         from pyscf.grad import rks
         return rks.Gradients(self)
-
-    def define_xc_(self, description):
-        raise RuntimeError('define_xc_ method is depercated.  '
-                           'Set mf.xc = %s instead.' % description)
 
 def _dft_common_init_(mf):
     mf.xc = 'LDA,VWN'

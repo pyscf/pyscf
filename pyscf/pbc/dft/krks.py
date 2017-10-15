@@ -118,6 +118,8 @@ class KRKS(khf.KRHF):
         logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
         return tot_e, vhf.ecoul + vhf.exc
 
+    define_xc_ = rks.define_xc_
+
     density_fit = rks._patch_df_beckegrids(khf.KRHF.density_fit)
     mix_density_fit = rks._patch_df_beckegrids(khf.KRHF.mix_density_fit)
 

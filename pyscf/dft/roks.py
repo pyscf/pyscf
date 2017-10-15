@@ -27,14 +27,11 @@ class ROKS(rohf.ROHF):
 
     get_veff = get_veff
     energy_elec = energy_elec
+    define_xc_ = rks.define_xc_
 
     def nuc_grad_method(self):
         from pyscf.grad import roks
         return roks.Gradients(self)
-
-    def define_xc_(self, description):
-        self.xc = description
-        return self
 
 
 if __name__ == '__main__':

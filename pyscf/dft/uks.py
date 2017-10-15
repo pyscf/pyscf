@@ -134,14 +134,11 @@ class UKS(uhf.UHF):
 
     get_veff = get_veff
     energy_elec = energy_elec
+    define_xc_ = rks.define_xc_
 
     def nuc_grad_method(self):
         from pyscf.grad import uks
         return uks.Gradients(self)
-
-    def define_xc_(self, description):
-        raise RuntimeError('define_xc_ method is depercated.  '
-                           'Set mf.xc = %s instead.' % description)
 
 
 if __name__ == '__main__':
