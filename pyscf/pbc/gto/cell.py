@@ -565,7 +565,9 @@ def get_ewald_params(cell, precision=1e-8, gs=None):
         ew_eta, ew_cut : float
             The Ewald 'eta' and 'cut' parameters.
     '''
-    if cell.dimension == 3:
+    if cell.natm == 0:
+        return 0, 0
+    elif cell.dimension == 3:
         if gs is None:
             gs = 5
         else:
@@ -595,6 +597,8 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     See Also:
         pyscf.pbc.gto.get_ewald_params
     '''
+    if cell.natm == 0:
+        return 0
     if ew_eta is None: ew_eta = cell.ew_eta
     if ew_cut is None: ew_cut = cell.ew_cut
     chargs = cell.atom_charges()
@@ -869,7 +873,7 @@ class Cell(mole.Mole):
 
         if self.rcut is None:
             self.rcut = max([self.bas_rcut(ib, self.precision)
-                             for ib in range(self.nbas)])
+                             for ib in range(self.nbas)] + [0])
 
         _a = self.lattice_vectors()
         if np.linalg.det(_a) < 0 and self.dimension == 3:
