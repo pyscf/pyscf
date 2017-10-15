@@ -16,11 +16,12 @@ Simple usage::
 
 from pyscf.grad import rhf
 from pyscf.grad import dhf
-from pyscf.grad import rks
+#from pyscf.grad import rks
 from pyscf.grad import ccsd
-from pyscf.grad.rhf  import Gradients as RHF
-from pyscf.grad.dhf  import Gradients as DHF
-from pyscf.grad.rks  import Gradients as RKS
+from pyscf.grad.rhf import Gradients as RHF
+from pyscf.grad.uhf import Gradients as UHF
+from pyscf.grad.dhf import Gradients as DHF
+#from pyscf.grad.rks import Gradients as RKS
 #from pyscf.grad.ccsd import Gradients as CCSD
 
 from pyscf.grad.rhf import grad_nuc

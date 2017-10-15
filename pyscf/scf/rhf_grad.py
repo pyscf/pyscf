@@ -4,7 +4,7 @@
 #
 
 '''
-Non-relativistic analytical nuclear gradients
+Non-relativistic Hartree-Fock analytical nuclear gradients
 '''
 
 import time
@@ -27,7 +27,7 @@ def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
 
     t0 = (time.clock(), time.time())
-    log.debug('Compute Gradients of NR Hartree-Fock Coulomb repulsion')
+    log.debug('Computing Gradients of NR-HF Coulomb repulsion')
     vhf = grad_mf.get_veff(mol, dm0)
     log.timer('gradients of 2e part', *t0)
 
@@ -36,12 +36,13 @@ def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
 
     if atmlst is None:
         atmlst = range(mol.natm)
-    offsetdic = mol.offset_nr_by_atom()
+    atom_slices = mol.aoslice_by_atom()
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
-        shl0, shl1, p0, p1 = offsetdic[ia]
+        shl0, shl1, p0, p1 = atom_slices[ia]
 # h1, s1, vhf are \nabla <i|h|j>, the nuclear gradients = -\nabla
         vrinv = grad_mf._grad_rinv(mol, ia)
+# nabla was applied on bra in f1, *2 for the contributions of nabla|ket>
         de[k] += numpy.einsum('xij,ij->x', f1[:,p0:p1], dm0[p0:p1]) * 2
         de[k] += numpy.einsum('xij,ij->x', vrinv, dm0) * 2
         de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], dme0[p0:p1]) * 2
@@ -242,6 +243,8 @@ class Gradients(lib.StreamObject):
 
     as_scanner = as_scanner
 
+Grad = Gradients
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -275,13 +278,3 @@ if __name__ == '__main__':
 #[[ 0   0               -2.41134256e-02]
 # [ 0   4.39690522e-03   1.20567128e-02]
 # [ 0  -4.39690522e-03   1.20567128e-02]]
-
-    h2o.atom = [
-        ['O' , (0. , 0.     , 1e-5)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. ,  0.757 , 0.587)] ]
-    h2o.build()
-    mf = scf.RHF(h2o)
-    mf.conv_tol = 1e-15
-    e1 = mf.scf()
-    print (e1 - e0) / 1e-5 * lib.param.BOHR

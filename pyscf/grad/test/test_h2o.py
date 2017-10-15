@@ -4,6 +4,7 @@ import unittest
 import numpy
 from pyscf import gto, scf, dft
 from pyscf import grad
+from pyscf.grad import rks as rks_grad
 
 h2o = gto.Mole()
 h2o.verbose = 0
@@ -60,7 +61,7 @@ class KnowValues(unittest.TestCase):
         mf = dft.RKS(h2o)
         mf.grids.prune = None
         mf.run(conv_tol=1e-15, xc='lda,vwn')
-        g = grad.RKS(mf)
+        g = rks_grad.RKS(mf)
         g1 = g.grad()
         self.assertAlmostEqual(finger(g1), 0.098438461959390822, 7)
 
@@ -68,7 +69,7 @@ class KnowValues(unittest.TestCase):
         mf = dft.RKS(h2o)
         mf.grids.prune = None
         mf.run(conv_tol=1e-15, xc='b88,p86')
-        g = grad.RKS(mf)
+        g = rks_grad.RKS(mf)
         g1 = g.grad()
         self.assertAlmostEqual(finger(g1), 0.10362532283229957, 7)
 
@@ -76,7 +77,7 @@ class KnowValues(unittest.TestCase):
         mf = dft.RKS(h2o)
         mf.grids.prune = None
         mf.run(conv_tol=1e-15, xc='b3lypg')
-        g = grad.RKS(mf)
+        g = rks_grad.RKS(mf)
         g1 = g.grad()
         self.assertAlmostEqual(finger(g1), 0.066541921001296467, 7)
 

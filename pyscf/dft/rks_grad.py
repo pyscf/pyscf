@@ -73,10 +73,10 @@ def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
 
     if atmlst is None:
         atmlst = range(mol.natm)
-    offsetdic = mol.offset_nr_by_atom()
+    atom_slices = mol.aoslice_by_atom()
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
-        shl0, shl1, p0, p1 = offsetdic[ia]
+        shl0, shl1, p0, p1 = atom_slices[ia]
 # h1, s1, vhf are \nabla <i|h|j>, the nuclear gradients = -\nabla
         vrinv = grad_mf._grad_rinv(mol, ia)
         de[k] += numpy.einsum('xij,ij->x', f1[:,p0:p1], dm0[p0:p1]) * 2
@@ -386,6 +386,8 @@ class Gradients(rhf_grad.Gradients):
         logger.note(self, '----------------------------------------------')
         logger.timer(self, 'SCF gradients', *cput0)
         return self.de
+
+Grad = Gradients
 
 
 if __name__ == '__main__':
