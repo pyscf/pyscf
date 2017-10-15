@@ -290,10 +290,10 @@ def gen_partition(mol, atom_grids_tab,
         f_radii_adjust = None
     atm_coords = numpy.asarray(mol.atom_coords() , order='C')
     atm_dist = radi._inter_distance(mol)
-    if (becke_scheme == original_becke and
-        (f_radii_adjust is None or
-         radii_adjust in (radi.treutler_atomic_radii_adjust,
-                          radi.becke_atomic_radii_adjust))):
+    if (becke_scheme is original_becke and
+        (radii_adjust is radi.treutler_atomic_radii_adjust or
+         radii_adjust is radi.becke_atomic_radii_adjust or
+         f_radii_adjust is None)):
         if f_radii_adjust is None:
             p_radii_table = lib.c_null_ptr()
         else:

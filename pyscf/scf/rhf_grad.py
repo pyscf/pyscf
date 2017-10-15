@@ -214,9 +214,9 @@ class Gradients(lib.StreamObject):
         if mol is None: mol = self.mol
         return grad_nuc(mol, atmlst)
 
-    def kernel(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
-        return self.grad(mo_energy, mo_coeff, mo_occ, atmlst)
     def grad(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
+        return self.kernel(mo_energy, mo_coeff, mo_occ, atmlst)
+    def kernel(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
         cput0 = (time.clock(), time.time())
         if mo_energy is None: mo_energy = self._scf.mo_energy
         if mo_coeff is None: mo_coeff = self._scf.mo_coeff
@@ -269,10 +269,19 @@ if __name__ == '__main__':
     h2o.build()
     rhf = scf.RHF(h2o)
     rhf.conv_tol = 1e-14
-    rhf.scf()
+    e0 = rhf.scf()
     g = Gradients(rhf)
     print(g.grad())
 #[[ 0   0               -2.41134256e-02]
 # [ 0   4.39690522e-03   1.20567128e-02]
 # [ 0  -4.39690522e-03   1.20567128e-02]]
 
+    h2o.atom = [
+        ['O' , (0. , 0.     , 1e-5)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. ,  0.757 , 0.587)] ]
+    h2o.build()
+    mf = scf.RHF(h2o)
+    mf.conv_tol = 1e-15
+    e1 = mf.scf()
+    print (e1 - e0) / 1e-5 * lib.param.BOHR
