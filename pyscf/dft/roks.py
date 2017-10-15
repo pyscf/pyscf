@@ -27,10 +27,7 @@ class ROKS(rohf.ROHF):
 
     get_veff = get_veff
     energy_elec = energy_elec
-
-    def define_xc_(self, description):
-        self.xc = description
-        return self
+    define_xc_ = rks.define_xc_
 
 
 if __name__ == '__main__':
