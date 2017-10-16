@@ -567,7 +567,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 aow = numpy.einsum('npi,np->pi', ao, wv, out=aow)
                 vmat[idm] += _dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
                 rho = exc = vxc = vrho = vsigma = wv = None
-    else:
+    elif xctype == 'MGGA':
         if (any(x in xc_code.upper() for x in ('CC06', 'CS', 'BR89', 'MK00'))):
             raise NotImplementedError('laplacian in meta-GGA method')
         ao_deriv = 2
@@ -711,7 +711,7 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 aow = numpy.einsum('npi,np->pi', ao, wv, out=aow)
                 vmat[1,idm] += _dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
                 rho_a = rho_b = exc = vxc = vrho = vsigma = wv = None
-    else:
+    elif xctype == 'MGGA':
         if (any(x in xc_code.upper() for x in ('CC06', 'CS', 'BR89', 'MK00'))):
             raise NotImplementedError('laplacian in meta-GGA method')
         ao_deriv = 2
@@ -886,7 +886,7 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
             vmat[i] = vmat[i] + vmat[i].T.conj()
 
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
@@ -992,7 +992,7 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
             vmat[i] = vmat[i] + vmat[i].T.conj()
 
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 
     if isinstance(dms_alpha, numpy.ndarray) and dms_alpha.ndim == 2:
@@ -1132,7 +1132,7 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
             vmat[0,i] = vmat[0,i] + vmat[0,i].T.conj()
             vmat[1,i] = vmat[1,i] + vmat[1,i].T.conj()
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 
     if isinstance(dma, numpy.ndarray) and dma.ndim == 2:
@@ -1236,7 +1236,7 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
         ao_deriv = 0
     elif xctype == 'GGA':
         ao_deriv = 1
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 
     if spin == 0:
@@ -1386,8 +1386,10 @@ class _NumInt(object):
             xctype = 'LDA'
         elif libxc.is_meta_gga(xc_code):
             xctype = 'MGGA'
-        else:
+        elif libxc.is_gga(xc_code):
             xctype = 'GGA'
+        else:
+            xctype = None
         return xctype
 
 
