@@ -149,7 +149,10 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     ddm = dm - numpy.asarray(dm_last)
     # dm.reshape(-1,nao,nao) to remove first dim, compress (dma,dmb)
     vj, vk = hf.get_jk(mol, ddm.reshape(-1,nao,nao), hermi=hermi, vhfopt=vhfopt)
-    vhf = _makevhf(vj.reshape(dm.shape), vk.reshape(dm.shape))
+    vj = vj.reshape(dm.shape)
+    vk = vk.reshape(dm.shape)
+    assert(vj.ndim >= 3 and vj.shape[0] == 2)
+    vhf = vj[0] + vj[1] - vk
     vhf += numpy.asarray(vhf_last)
     return vhf
 
@@ -709,11 +712,12 @@ class UHF(hf.SCF):
         if (self._eri is not None or not self.direct_scf or
             mol.incore_anyway or self._is_mem_enough()):
             vj, vk = self.get_jk(mol, dm, hermi)
-            vhf = _makevhf(vj, vk)
+            vhf = vj[0] + vj[1] - vk
         else:
             ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
             vj, vk = self.get_jk(mol, ddm, hermi)
-            vhf = _makevhf(vj, vk) + numpy.asarray(vhf_last)
+            vhf = vj[0] + vj[1] - vk
+            vhf += numpy.asarray(vhf_last)
         return vhf
 
     def analyze(self, verbose=None, **kwargs):
@@ -781,11 +785,6 @@ class UHF(hf.SCF):
     def nuc_grad_method(self):
         from pyscf.grad import uhf
         return uhf.Gradients(self)
-
-def _makevhf(vj, vk):
-    assert(vj.ndim >= 3 and vj.shape[0] == 2 and vj.shape == vk.shape)
-    vj = vj[0] + vj[1]
-    return vj - vk
 
 
 class HF1e(UHF):
