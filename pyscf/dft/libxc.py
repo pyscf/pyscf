@@ -430,7 +430,8 @@ XC_KEYS = set(XC_CODES.keys())
 
 def is_lda(xc_code):
     hyb, fn_facs = parse_xc(xc_code)
-    return all(_itrf.LIBXC_is_lda(ctypes.c_int(xid)) for xid, fac in fn_facs)
+    return (fn_facs and
+            all(_itrf.LIBXC_is_lda(ctypes.c_int(xid)) for xid, fac in fn_facs))
 
 def is_hybrid_xc(xc_code):
     if isinstance(xc_code, str):
@@ -448,18 +449,23 @@ def is_hybrid_xc(xc_code):
 
 def is_meta_gga(xc_code):
     hyb, fn_facs = parse_xc(xc_code)
-    return all(_itrf.LIBXC_is_meta_gga(ctypes.c_int(xid)) for xid, fac in fn_facs)
+    return (fn_facs and
+            all(_itrf.LIBXC_is_meta_gga(ctypes.c_int(xid)) for xid, fac in fn_facs))
 
 def is_gga(xc_code):
     hyb, fn_facs = parse_xc(xc_code)
-    return all(_itrf.LIBXC_is_gga(ctypes.c_int(xid)) for xid, fac in fn_facs)
+    return (fn_facs and
+            all(_itrf.LIBXC_is_gga(ctypes.c_int(xid)) for xid, fac in fn_facs))
 
 def is_nlc(xc_code):
     return '__VV10' in xc_code.upper()
 
 def max_deriv_order(xc_code):
     hyb, fn_facs = parse_xc(xc_code)
-    return min((_itrf.LIBXC_max_deriv_order(ctypes.c_int(xid))) for xid, fac in fn_facs)
+    if fn_facs:
+        return min(_itrf.LIBXC_max_deriv_order(ctypes.c_int(xid)) for xid, fac in fn_facs)
+    else:
+        return 4
 
 def test_deriv_order(xc_code, deriv, raise_error=False):
     support = deriv <= max_deriv_order(xc_code)
