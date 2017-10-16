@@ -91,54 +91,39 @@ HYB_XC = set(('PBE0'    , 'PBE1PBE' , 'B3PW91'  , 'B3P86'   , 'B3LYP'   ,
               'B3LYPG'  , 'O3LYP'   , 'M062X'   , 'CAMB3LYP',))
 MAX_DERIV_ORDER = 3
 
-def is_lda(xc_code):
+def xc_type(xc_code):
     if isinstance(xc_code, str):
-        if xc_code.isdigit():
-            return int(xc_code) in LDA_IDS
-        else:
-            return all((xid in LDA_IDS for xid, val in parse_xc(xc_code)[1]))
-    elif isinstance(xc_code, int):
-        return xc_code in LDA_IDS
+        hyb, fn_facs = parse_xc(xc_code)
     else:
-        return all((is_lda(x) for x in xc_code))
+        fn_facs = [(xc_code, 1)]  # mimic fn_facs
+    if not fn_facs:
+        return 'HF'
+    elif all(xid in LDA_IDS for xid, val in fn_facs):
+        return 'LDA'
+    elif any(xid in MGGA_IDS or xid in MLGGA_IDS for xid, val in fn_facs):
+        return 'MGGA'
+    else:
+        # all((xid in GGA_IDS or xid in LDA_IDS for xid, val in fn_fns)):
+        # include hybrid_xc
+        return 'GGA'
+
+def is_lda(xc_code):
+    return xc_type(xc_code) == 'LDA'
 
 def is_hybrid_xc(xc_code):
     if isinstance(xc_code, str):
-        return ('HF' in xc_code or
-                xc_code in HYB_XC or
-                abs(parse_xc(xc_code)[0]) > 1e-14)
+        return ('HF' in xc_code or xc_code in HYB_XC or
+                hybrid_coeff(xc_code) != 0)
     elif isinstance(xc_code, int):
         return False
     else:
         return any((is_hybrid_xc(x) for x in xc_code))
 
 def is_meta_gga(xc_code):
-    if isinstance(xc_code, str):
-        if xc_code.isdigit():
-            xc_code = int(xc_code)
-            return xc_code in MGGA_IDS or xc_code in MLGGA_IDS
-        else:
-            return any((xid in MGGA_IDS or xid in MLGGA_IDS
-                        for xid, val in parse_xc(xc_code)[1]))
-    elif isinstance(xc_code, int):
-        return xc_code in MGGA_IDS or xc_code in MLGGA_IDS
-    else:
-        return any((is_meta_gga(x) for x in xc_code))
+    return xc_type(xc_code) == 'MGGA'
 
 def is_gga(xc_code):
-    if isinstance(xc_code, str):
-        if xc_code.isdigit():
-            xc_code = int(xc_code)
-            return xc_code in GGA_IDS
-        else:
-            xc_fns = parse_xc(xc_code)[1]
-            return (all((xid in GGA_IDS or xid in LDA_IDS for xid, val in xc_fns)) and
-                    not is_lda(xc_code))
-    elif isinstance(xc_code, int):
-        return xc_code in GGA_IDS
-    else:
-        return (all((is_gga(x) or is_lda(x) for x in xc_code)) and
-                not is_lda(xc_code))
+    return xc_type(xc_code) == 'GGA'
 
 def is_nlc(xc_code):
     return False
@@ -850,14 +835,7 @@ def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
         ni.eval_xc = lambda xc_code, rho, *args, **kwargs: \
                 eval_xc(description, rho, *args, **kwargs)
         ni.hybrid_coeff = lambda *args, **kwargs: hybrid_coeff(description)
-        def xc_type(*args):
-            if is_lda(description):
-                return 'LDA'
-            elif is_meta_gga(description):
-                return 'MGGA'
-            else:
-                return 'GGA'
-        ni._xc_type = xc_type
+        ni._xc_type = lambda *args: xc_type(description)
 
     elif callable(description):
         ni.eval_xc = description

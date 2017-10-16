@@ -1519,18 +1519,7 @@ class _NumInt(object):
     eval_xc.__doc__ = libxc.eval_xc.__doc__
 
     def _xc_type(self, xc_code):
-        libxc = self.libxc
-        if libxc.is_nlc(xc_code):
-            xctype = 'NLC'
-        elif libxc.is_lda(xc_code):
-            xctype = 'LDA'
-        elif libxc.is_meta_gga(xc_code):
-            xctype = 'MGGA'
-        elif libxc.is_gga(xc_code):
-            xctype = 'GGA'
-        else:
-            xctype = 'HF'
-        return xctype
+        return self.libxc.xc_type(xc_code)
 
 
 if __name__ == '__main__':
