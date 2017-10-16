@@ -843,14 +843,7 @@ def define_xc_(ni, description, xctype='LDA', hyb=0):
         ni.eval_xc = lambda xc_code, rho, *args, **kwargs: \
                 eval_xc(description, rho, *args, **kwargs)
         ni.hybrid_coeff = lambda *args, **kwargs: hybrid_coeff(description)
-        def xc_type(*args):
-            if is_lda(description):
-                return 'LDA'
-            elif is_meta_gga(description):
-                return 'MGGA'
-            else:
-                return 'GGA'
-        ni._xc_type = xc_type
+        ni._xc_type = lambda *args: xc_type(description)
 
     elif callable(description):
         ni.eval_xc = description
