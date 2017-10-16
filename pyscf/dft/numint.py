@@ -685,7 +685,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 vmat[idm] += _dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
                 rho = exc = vxc = vrho = vsigma = wv = None
         vvrho = vvweight = vvcoords = None
-    else:
+    elif xctype == 'MGGA':
         if (any(x in xc_code.upper() for x in ('CC06', 'CS', 'BR89', 'MK00'))):
             raise NotImplementedError('laplacian in meta-GGA method')
         ao_deriv = 2
@@ -837,7 +837,7 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 aow = numpy.einsum('npi,np->pi', ao, wv, out=aow)
                 vmat[1,idm] += _dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
                 rho_a = rho_b = exc = vxc = vrho = vsigma = wv = None
-    else:
+    elif xctype == 'MGGA':
         if (any(x in xc_code.upper() for x in ('CC06', 'CS', 'BR89', 'MK00'))):
             raise NotImplementedError('laplacian in meta-GGA method')
         ao_deriv = 2
@@ -1014,7 +1014,7 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
 
     elif xctype == 'NLC':
         raise NotImplementedError('NLC')
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
@@ -1122,7 +1122,7 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
 
     elif xctype == 'NLC':
         raise NotImplementedError('NLC')
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 
     if isinstance(dms_alpha, numpy.ndarray) and dms_alpha.ndim == 2:
@@ -1265,7 +1265,7 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
 
     elif xctype == 'NLC':
         raise NotImplementedError('NLC')
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 
     if isinstance(dma, numpy.ndarray) and dma.ndim == 2:
@@ -1371,7 +1371,7 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
         ao_deriv = 1
     elif xctype == 'NLC':
         raise NotImplementedError('NLC')
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 
     if spin == 0:
@@ -1527,8 +1527,10 @@ class _NumInt(object):
             xctype = 'LDA'
         elif libxc.is_meta_gga(xc_code):
             xctype = 'MGGA'
-        else:
+        elif libxc.is_gga(xc_code):
             xctype = 'GGA'
+        else:
+            xctype = None
         return xctype
 
 
@@ -1544,7 +1546,7 @@ if __name__ == '__main__':
         [1   , (0. , 0.757  , 0.587)] ],
         basis = '6311g**',)
     mf = dft.RKS(mol)
-    mf.grids.atom_grid = {"H": (30, 194), "O": (30, 194),},
+    mf.grids.atom_grid = {"H": (30, 194), "O": (30, 194),}
     mf.grids.prune = None
     mf.grids.build()
     dm = mf.get_init_guess(key='minao')
