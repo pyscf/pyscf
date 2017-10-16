@@ -30,7 +30,7 @@ def make_mask(cell, coords, relativity=0, shls_slice=None, verbose=None):
         shls_slice = (0, cell.nbas)
     assert(shls_slice == (0, cell.nbas))
 
-    Ls = cell.get_lattice_Ls()
+    Ls = cell.get_lattice_Ls(dimension=3)
     Ls = Ls[np.argsort(lib.norm(Ls, axis=1))]
 
     non0tab = np.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas),

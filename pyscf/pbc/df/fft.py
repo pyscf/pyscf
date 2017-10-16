@@ -25,13 +25,14 @@ def get_nuc(mydf, kpts=None):
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
+    low_dim_ft_type = mydf.low_dim_ft_type
     gs = mydf.gs
     charge = -cell.atom_charges()
     Gv = cell.get_Gv(gs)
     SI = cell.get_SI(Gv)
     rhoG = numpy.dot(charge, SI)
 
-    coulG = tools.get_coulG(cell, gs=gs, Gv=Gv)
+    coulG = tools.get_coulG(cell, gs=gs, Gv=Gv, low_dim_ft_type=low_dim_ft_type)
     vneG = rhoG * coulG
     vneR = tools.ifft(vneG, mydf.gs).real
 
@@ -51,12 +52,14 @@ def get_pp(mydf, kpts=None):
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
+    low_dim_ft_type = mydf.low_dim_ft_type
     gs = mydf.gs
     SI = cell.get_SI()
     Gv = cell.get_Gv(gs)
-    vpplocG = pseudo.get_vlocG(cell, Gv)
+    vpplocG = pseudo.get_vlocG(cell, Gv, low_dim_ft_type=low_dim_ft_type)
     vpplocG = -numpy.einsum('ij,ij->j', SI, vpplocG)
-    vpplocG[0] = numpy.sum(pseudo.get_alphas(cell)) # from get_jvloc_G0 function
+    vpplocG[0] = numpy.sum(pseudo.get_alphas(cell, 
+                           low_dim_ft_type=low_dim_ft_type)) # from get_jvloc_G0 function
     ngs = len(vpplocG)
 
     # vpploc evaluated in real-space
@@ -136,12 +139,17 @@ def get_pp(mydf, kpts=None):
 class FFTDF(lib.StreamObject):
     '''Density expansion on plane waves
     '''
-    def __init__(self, cell, kpts=numpy.zeros((1,3))):
+    def __init__(self, cell, kpts=numpy.zeros((1,3)), low_dim_ft_type=None):
         from pyscf.pbc.dft import numint
         self.cell = cell
         self.stdout = cell.stdout
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
+        self.low_dim_ft_type = low_dim_ft_type
+        if low_dim_ft_type is not None:
+            logger.warn(self, 'Setting low_dim_ft_type inside cell class.  Change me in '
+                              'future implementation \n')
+            cell.low_dim_ft_type = low_dim_ft_type
 
         self.kpts = kpts
         self.gs = cell.gs
@@ -165,10 +173,14 @@ class FFTDF(lib.StreamObject):
     def check_sanity(self):
         lib.StreamObject.check_sanity(self)
         cell = self.cell
-        if cell.dimension < 3:
+        if cell.dimension < 2:
             raise RuntimeError('FFTDF method does not support low-dimension '
                                'PBC system.  DF, MDF or AFTDF methods should '
                                'be used.\nSee also examples/pbc/31-low_dimensional_pbc.py')
+        if cell.dimension == 2 and self.low_dim_ft_type is None:
+            raise RuntimeError('FFTDF method only supports low_dim_ft_type of None '
+                               'for 2D systems.  Supported types include \'analytic_2d_1\'. '
+                               '\nSee also examples/pbc/32-graphene.py')
 
         if not cell.has_ecp():
             logger.warn(self, 'FFTDF integrals are found in all-electron '
@@ -194,10 +206,14 @@ class FFTDF(lib.StreamObject):
 
     def aoR_loop(self, gs=None, kpts=None, kpts_band=None):
         cell = self.cell
-        if cell.dimension < 3:
+        if cell.dimension < 2:
             raise RuntimeError('FFTDF method does not support low-dimension '
                                'PBC system.  DF, MDF or AFTDF methods should '
                                'be used.\nSee also examples/pbc/31-low_dimensional_pbc.py')
+        if cell.dimension == 2 and self.low_dim_ft_type is None:
+            raise RuntimeError('FFTDF method only supports low_dim_ft_type of None '
+                               'for 2D systems.  Supported types include \'analytic_2d_1\'. '
+                               '\nSee also examples/pbc/32-graphene.py')
 
         if kpts is None: kpts = self.kpts
         kpts = numpy.asarray(kpts)
@@ -267,7 +283,8 @@ class FFTDF(lib.StreamObject):
 # point DF object can be used in the molecular code
     def loop(self):
         kpts0 = numpy.zeros((2,3))
-        coulG = tools.get_coulG(self.cell, numpy.zeros(3), gs=self.gs)
+        coulG = tools.get_coulG(self.cell, numpy.zeros(3), gs=self.gs, 
+                                low_dim_ft_type=self.low_dim_ft_type)
         ngs = len(coulG)
         ao_pairs_G = self.get_ao_pairs_G(kpts0, compact=True)
         ao_pairs_G *= numpy.sqrt(coulG*(self.cell.vol/ngs**2)).reshape(-1,1)
