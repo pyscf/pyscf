@@ -1365,9 +1365,8 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
     DFT hessian module etc.
     '''
     xctype = ni._xc_type(xc_code)
-    if xctype == 'LDA':
-        ao_deriv = 0
-    elif xctype == 'GGA':
+    ao_deriv = 0
+    if xctype == 'GGA':
         ao_deriv = 1
     elif xctype == 'NLC':
         raise NotImplementedError('NLC')
@@ -1530,7 +1529,7 @@ class _NumInt(object):
         elif libxc.is_gga(xc_code):
             xctype = 'GGA'
         else:
-            xctype = None
+            xctype = 'HF'
         return xctype
 
 
@@ -1556,11 +1555,11 @@ if __name__ == '__main__':
     dm1 = lib.hermi_triu(dm1)
     print(time.clock())
     res = mf._numint.nr_vxc(mol, mf.grids, mf.xc, dm1, spin=0)
-    print(res[1] - -37.08079395351452)
+    print(res[1] - -37.084047825971282)
     res = mf._numint.nr_vxc(mol, mf.grids, mf.xc, (dm1,dm1), spin=1)
-    print(res[1] - -92.42828116583394)
+    print(res[1] - -92.436362308687094)
     res = mf._numint.nr_vxc(mol, mf.grids, mf.xc, dm, spin=0)
-    print(res[1] - -8.631329952248500)
+    print(res[1] - -8.6313329288394947)
     res = mf._numint.nr_vxc(mol, mf.grids, mf.xc, (dm,dm), spin=1)
-    print(res[1] - -21.52029393479996)
+    print(res[1] - -21.520301399504582)
     print(time.clock())
