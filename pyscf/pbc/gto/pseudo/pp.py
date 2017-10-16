@@ -15,7 +15,7 @@ import scipy.linalg
 import scipy.special
 from pyscf import lib
 
-def get_alphas(cell):
+def get_alphas(cell, low_dim_ft_type=None):
     '''alpha parameters from the non-divergent Hartree+Vloc G=0 term.
 
     See ewald.pdf
@@ -23,9 +23,9 @@ def get_alphas(cell):
     Returns:
         alphas : (natm,) ndarray
     '''
-    return get_alphas_gth(cell)
+    return get_alphas_gth(cell, low_dim_ft_type)
 
-def get_alphas_gth(cell):
+def get_alphas_gth(cell, low_dim_ft_type=None):
     '''alpha parameters for the local GTH pseudopotential.'''
 
     alphas = np.zeros(cell.natm)
@@ -41,9 +41,31 @@ def get_alphas_gth(cell):
         cfacs = [1., 3., 15., 105.]
         alphas[ia] = ( 2*np.pi*Zia*rloc**2
                      + (2*np.pi)**(3/2.)*rloc**3*np.dot(cexp,cfacs[:nexp]) )
+    if low_dim_ft_type is None or cell.dimension == 3:
+        # Do nothing
+        return alphas
+    elif low_dim_ft_type == 'analytic_2d_1' and cell.dimension == 2:
+        for ia in range(cell.natm):
+            symb = cell.atom_symbol(ia)
+            if symb not in cell._pseudo:
+                continue
+
+            Zia = cell.atom_charge(ia)
+            b = cell.reciprocal_vectors()
+            inv_area = np.linalg.norm(np.cross(b[0], b[1]))/(2*np.pi)**2
+            lzd2 = cell.vol * inv_area / 2
+            lz = lzd2*2.
+            ew_eta = 1./np.sqrt(2)/rloc
+            JexpG0 = ( - np.pi * lz**2 / 2. * scipy.special.erf( ew_eta * lzd2 ) + np.pi/ew_eta**2 * scipy.special.erfc(ew_eta*lzd2)
+                       - np.sqrt(np.pi)*lz/ew_eta * np.exp( - (ew_eta*lzd2)**2 ) )
+            alphas[ia] -= Zia*JexpG0
+    else:
+        raise NotImplementedError('Low dimension ft_type ',
+            low_dim_ft_type, ' not implemented for dimension ',
+            cell.dimension)
     return alphas
 
-def get_vlocG(cell, Gv=None):
+def get_vlocG(cell, Gv=None, low_dim_ft_type=None):
     '''Local PP kernel in G space: Vloc(G) for G!=0, 0 for G=0.
 
     Returns:
@@ -51,11 +73,11 @@ def get_vlocG(cell, Gv=None):
     '''
     if Gv is None: Gv = cell.Gv
     Gvnorm = lib.norm(Gv, axis=1)
-    vlocG = get_gth_vlocG(cell, Gvnorm)
+    vlocG = get_gth_vlocG(cell, Gvnorm, low_dim_ft_type)
     vlocG[:,0] = 0.
     return vlocG
 
-def get_gth_vlocG(cell, G):
+def get_gth_vlocG(cell, G, low_dim_ft_type=None):
     '''Local part of the GTH pseudopotential.
 
     See MH (4.79).
@@ -71,26 +93,91 @@ def get_gth_vlocG(cell, G):
         coulG[0] = 0
 
     vlocG = np.zeros((cell.natm,len(G)))
-    for ia in range(cell.natm):
-        Zia = cell.atom_charge(ia)
-        symb = cell.atom_symbol(ia)
-        if symb not in cell._pseudo:
-            vlocG[ia] = Zia * coulG
-            continue
-        pp = cell._pseudo[symb]
-        rloc, nexp, cexp = pp[1:3+1]
+    if low_dim_ft_type is None:
+        for ia in range(cell.natm):
+            Zia = cell.atom_charge(ia)
+            symb = cell.atom_symbol(ia)
+            if symb not in cell._pseudo:
+                vlocG[ia] = Zia * coulG
+                continue
+            pp = cell._pseudo[symb]
+            rloc, nexp, cexp = pp[1:3+1]
 
-        G_red = G*rloc
-        cfacs = np.array(
-                [1*G_red**0,
-                 3 - G_red**2,
-                 15 - 10*G_red**2 + G_red**4,
-                 105 - 105*G_red**2 + 21*G_red**4 - G_red**6])
+            G_red = G*rloc
+            cfacs = np.array(
+                    [1*G_red**0,
+                     3 - G_red**2,
+                     15 - 10*G_red**2 + G_red**4,
+                     105 - 105*G_red**2 + 21*G_red**4 - G_red**6])
 
-        # Note the signs -- potential here is positive
-        vlocG[ia,:] = ( Zia * coulG * np.exp(-0.5*G_red**2)
-                       - (2*np.pi)**(3/2.)*rloc**3*np.exp(-0.5*G_red**2)*(
-                            np.dot(cexp, cfacs[:nexp])) )
+            # Note the signs -- potential here is positive
+            vlocG[ia,:] = ( Zia * coulG * np.exp(-0.5*G_red**2)
+                           - (2*np.pi)**(3/2.)*rloc**3*np.exp(-0.5*G_red**2)*(
+                                np.dot(cexp, cfacs[:nexp])) )
+    elif low_dim_ft_type == 'analytic_2d_1' and cell.dimension == 2:
+        # The following 2D ewald summation is taken from:
+        # Minary, Tuckerman, Pihakari, Martyna J. Chem. Phys. 116, 5351 (2002)
+        gs = cell.gs
+        Gv, Gvbase, weights = cell.get_Gv_weights(gs)
+
+        vlocG = np.zeros((cell.natm,len(G)))
+        absG2 = G*G
+        b = cell.reciprocal_vectors()
+        inv_area = np.linalg.norm(np.cross(b[0], b[1]))/(2*np.pi)**2
+        lzd2 = cell.vol * inv_area / 2
+        lz = lzd2*2.
+
+        absG2[absG2==0] = 1e200
+        Gxy = np.linalg.norm(Gv[:,:2],axis=1)
+        Gz = abs(Gv[:,2])
+
+        for ia in range(cell.natm):
+            Zia = cell.atom_charge(ia)
+            symb = cell.atom_symbol(ia)
+            if symb not in cell._pseudo:
+                vlocG[ia] = Zia * coulG
+                continue
+            pp = cell._pseudo[symb]
+            rloc, nexp, cexp = pp[1:3+1]
+
+            G_red = G*rloc
+            cfacs = np.array(
+                    [1*G_red**0,
+                     3 - G_red**2,
+                     15 - 10*G_red**2 + G_red**4,
+                     105 - 105*G_red**2 + 21*G_red**4 - G_red**6])
+
+            gzero = (G == 0.0)
+            ew_eta = 1./np.sqrt(2)/rloc
+
+            JexpG2 = np.exp(-absG2/(4*ew_eta**2)) * coulG
+            fac = 4*np.pi / absG2 * np.cos(Gz*lzd2)
+            JexpG2 += ( - fac *
+                        (       np.exp(-Gxy*lzd2)
+                          - 0.5*np.exp(-Gxy*lzd2)*scipy.special.erfc( (ew_eta**2 * lz - Gxy) / (2.*ew_eta))
+                        )
+                        #+ np.exp(-absG2/(4*ew_eta**2)) * np.real(scipy.special.erfc((ew_eta**2 * lz - 1j*Gz) / (2.*ew_eta)))
+                      )
+
+            # Adding in contribution from the term, avoiding overflow from exponent
+            #    - 0.5*np.exp( Gxy*lzd2)*scipy.special.erfc( (ew_eta**2 * lz + Gxy) / (2.*ew_eta))
+            small_idx = Gxy*lzd2 < 20.0
+            large_idx = ~small_idx
+            JexpG2[small_idx] += ( 4*np.pi / absG2[small_idx] * np.cos(Gz[small_idx]*lzd2) *
+                                   0.5*np.exp( Gxy[small_idx]*lzd2)*scipy.special.erfc( (ew_eta**2 * lz + Gxy[small_idx]) / (2.*ew_eta)) )
+            if len(large_idx) > 0:
+                x = (ew_eta**2 * lz + Gxy[large_idx]) / (2.*ew_eta)
+                JexpG2[large_idx] += 0.5 * fac[large_idx] * (np.exp(Gxy[large_idx]*lzd2-x**2)/np.sqrt(np.pi)/x *
+                                      (1 - 0.5/x**2) )
+
+            # Note the signs -- potential here is positive
+            vlocG[ia,:] = ( Zia * JexpG2
+                           - (2*np.pi)**(3/2.)*rloc**3*np.exp(-0.5*G_red**2)*(
+                                np.dot(cexp, cfacs[:nexp])) )
+    else:
+        raise NotImplementedError('Low dimension ft_type ',
+            cell.low_dim_ft_type, ' not implemented for dimension ',
+            cell.dimension)
     return vlocG
 
 def get_projG(cell, kpt=np.zeros(3)):
@@ -221,9 +308,9 @@ def get_pp(cell, kpt=np.zeros(3)):
     nao = cell.nao_nr()
 
     SI = cell.get_SI()
-    vlocG = get_vlocG(cell)
+    vlocG = get_vlocG(cell, low_dim_ft_type)
     vpplocG = -np.sum(SI * vlocG, axis=0)
-    vpplocG[0] = np.sum(get_alphas(cell)) # from get_jvloc_G0 function
+    vpplocG[0] = np.sum(get_alphas(cell, low_dim_ft_type)) # from get_jvloc_G0 function
 
     # vpploc evaluated in real-space
     vpplocR = tools.ifft(vpplocG, cell.gs).real
@@ -278,8 +365,8 @@ def get_pp(cell, kpt=np.zeros(3)):
         return vpploc + vppnl
 
 
-def get_jvloc_G0(cell, kpt=np.zeros(3)):
+def get_jvloc_G0(cell, kpt=np.zeros(3), low_dim_ft_type=None):
     '''Get the (separately divergent) Hartree + Vloc G=0 contribution.
     '''
     ovlp = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpt)
-    return 1./cell.vol * np.sum(get_alphas(cell)) * ovlp
+    return 1./cell.vol * np.sum(get_alphas(cell, low_dim_ft_type)) * ovlp
