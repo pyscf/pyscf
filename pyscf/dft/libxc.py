@@ -428,34 +428,43 @@ XC = XC_CODES = {
 
 XC_KEYS = set(XC_CODES.keys())
 
+def xc_type(xc_code):
+    if isinstance(xc_code, str):
+        if is_nlc(xc_code):
+            return 'NLC'
+        hyb, fn_facs = parse_xc(xc_code)
+    else:
+        fn_facs = [(xc_code, 1)]  # mimic fn_facs
+    if not fn_facs:
+        return 'HF'
+    elif all(_itrf.LIBXC_is_lda(ctypes.c_int(xid)) for xid, fac in fn_facs):
+        return 'LDA'
+    elif any(_itrf.LIBXC_is_meta_gga(ctypes.c_int(xid)) for xid, fac in fn_facs):
+        return 'MGGA'
+    else:
+        # any(_itrf.LIBXC_is_gga(ctypes.c_int(xid)) for xid, fac in fn_facs)
+        # include hybrid_xc
+        return 'GGA'
+
 def is_lda(xc_code):
-    hyb, fn_facs = parse_xc(xc_code)
-    return (fn_facs and
-            all(_itrf.LIBXC_is_lda(ctypes.c_int(xid)) for xid, fac in fn_facs))
+    return xc_type(xc_code) == 'LDA'
 
 def is_hybrid_xc(xc_code):
     if isinstance(xc_code, str):
         if xc_code.isdigit():
             return _itrf.LIBXC_is_hybrid(ctypes.c_int(xc_code))
         else:
-            return ('HF' in xc_code or
-                    any((_itrf.LIBXC_is_hybrid(ctypes.c_int(xid))
-                         for xid, val in parse_xc(xc_code)[1])) or
-                    abs(parse_xc(xc_code)[0]) > 1e-14)
+            return ('HF' in xc_code or hybrid_coeff(xc_code) != 0)
     elif isinstance(xc_code, int):
         return _itrf.LIBXC_is_hybrid(ctypes.c_int(xc_code))
     else:
         return any((is_hybrid_xc(x) for x in xc_code))
 
 def is_meta_gga(xc_code):
-    hyb, fn_facs = parse_xc(xc_code)
-    return (fn_facs and
-            all(_itrf.LIBXC_is_meta_gga(ctypes.c_int(xid)) for xid, fac in fn_facs))
+    return xc_type(xc_code) == 'MGGA'
 
 def is_gga(xc_code):
-    hyb, fn_facs = parse_xc(xc_code)
-    return (fn_facs and
-            all(_itrf.LIBXC_is_gga(ctypes.c_int(xid)) for xid, fac in fn_facs))
+    return xc_type(xc_code) == 'GGA'
 
 def is_nlc(xc_code):
     return '__VV10' in xc_code.upper()
