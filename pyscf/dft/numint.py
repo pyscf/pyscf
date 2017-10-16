@@ -124,7 +124,7 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
     >>> rho, dx_rho, dy_rho, dz_rho = eval_rho(mol, ao, dm, xctype='LDA')
     '''
     xctype = xctype.upper()
-    if xctype == 'LDA':
+    if xctype == 'LDA' or xctype == 'HF':
         ngrids, nao = ao.shape
     else:
         ngrids, nao = ao[0].shape
@@ -139,7 +139,7 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
 
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
-    if xctype == 'LDA':
+    if xctype == 'LDA' or xctype == 'HF':
         c0 = _dot_ao_dm(mol, ao, dm, non0tab, shls_slice, ao_loc)
         rho = numpy.einsum('pi,pi->p', ao, c0)
     elif xctype in ('GGA', 'NLC'):
@@ -204,7 +204,7 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
         \nabla^2 rho and tau = 1/2(\nabla f)^2
     '''
     xctype = xctype.upper()
-    if xctype == 'LDA':
+    if xctype == 'LDA' or xctype == 'HF':
         ngrids, nao = ao.shape
     else:
         ngrids, nao = ao[0].shape
@@ -217,7 +217,7 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
     pos = mo_occ > OCCDROP
     if pos.sum() > 0:
         cpos = numpy.einsum('ij,j->ij', mo_coeff[:,pos], numpy.sqrt(mo_occ[pos]))
-        if xctype == 'LDA':
+        if xctype == 'LDA' or xctype == 'HF':
             c0 = _dot_ao_dm(mol, ao, cpos, non0tab, shls_slice, ao_loc)
             rho = numpy.einsum('pi,pi->p', c0, c0)
         elif xctype in ('GGA', 'NLC'):
@@ -246,7 +246,7 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
 
             rho[5] *= .5
     else:
-        if xctype == 'LDA':
+        if xctype == 'LDA' or xctype == 'HF':
             rho = numpy.zeros(ngrids)
         elif xctype in ('GGA', 'NLC'):
             rho = numpy.zeros((4,ngrids))
@@ -256,7 +256,7 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
     neg = mo_occ < -OCCDROP
     if neg.sum() > 0:
         cneg = numpy.einsum('ij,j->ij', mo_coeff[:,neg], numpy.sqrt(-mo_occ[neg]))
-        if xctype == 'LDA':
+        if xctype == 'LDA' or xctype == 'HF':
             c0 = _dot_ao_dm(mol, ao, cneg, non0tab, shls_slice, ao_loc)
             rho -= numpy.einsum('pi,pi->p', c0, c0)
         elif xctype == 'GGA':
@@ -405,7 +405,7 @@ def eval_mat(mol, ao, weight, rho, vxc,
         number of AO functions.
     '''
     xctype = xctype.upper()
-    if xctype == 'LDA':
+    if xctype == 'LDA' or xctype == 'HF':
         ngrids, nao = ao.shape
     else:
         ngrids, nao = ao[0].shape
@@ -415,7 +415,7 @@ def eval_mat(mol, ao, weight, rho, vxc,
                              dtype=numpy.uint8)
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
-    if xctype == 'LDA':
+    if xctype == 'LDA' or xctype == 'HF':
         if not isinstance(vxc, numpy.ndarray) or vxc.ndim == 2:
             vrho = vxc[0]
         else:
