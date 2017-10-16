@@ -508,27 +508,24 @@ def nlc_coeff(xc_code):
     '''Get NLC coefficients
     '''
     hyb, fn_facs = parse_xc(xc_code)
-    if fn_facs:
-        xid=parse_xc(xc_code)[1][0][0]
-        nlc_pars=(ctypes.c_double*2)()
-        _itrf.LIBXC_nlc_coeff(xid,nlc_pars)
-        nlc_pars = tuple(nlc_pars)
-    else:
-        nlc_pars = (0, 0)
+    nlc_pars = [0, 0]
+    nlc_tmp = (ctypes.c_double*2)()
+    for xid, fac in fn_facs:
+        _itrf.LIBXC_nlc_coeff(xid, nlc_tmp)
+        nlc_pars[0] += nlc_tmp[0]
+        nlc_pars[1] += nlc_tmp[1]
     return nlc_pars
 
 def rsh_coeff(xc_code):
     '''Get RSH coefficients
     '''
     hyb, fn_facs = parse_xc(xc_code)
-    if fn_facs:
-        xid=parse_xc(xc_code)[1][0][0]
-        rsh_pars=(ctypes.c_double*3)()
-        _itrf.LIBXC_rsh_coeff(xid,rsh_pars)
-        rsh_pars = tuple(rsh_pars)
-    else:
-        rsh_pars = (0, 0, 0)
-    return rsh_pars
+    rsh_pars = numpy.zeros(3)
+    rsh_tmp = (ctypes.c_double*3)()
+    for xid, fac in fn_facs:
+        _itrf.LIBXC_rsh_coeff(xid, rsh_tmp)
+        rsh_pars += rsh_tmp
+    return rsh_pars.tolist()
 
 def parse_xc_name(xc_name='LDA,VWN'):
     '''Convert the XC functional name to libxc library internal ID.
