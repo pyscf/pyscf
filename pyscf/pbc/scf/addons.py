@@ -182,7 +182,7 @@ def smearing_(mf, sigma=None, method='fermi'):
     mf.sigma = sigma
     mf.smearing_method = method
     mf.entropy = None
-    mf._keys.union(['sigma', 'smearing_method', 'entropy'])
+    mf._keys = mf._keys.union(['sigma', 'smearing_method', 'entropy'])
 
     mf.get_occ = get_occ
     mf.energy_tot = energy_tot
