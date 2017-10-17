@@ -46,46 +46,13 @@ def smearing_(mf, sigma=None, method='fermi'):
     is_khf = isinstance(mf, khf.KRHF)
     cell_nelec = mf.cell.nelectron
 
-    def fermi_smearing(mo_energy_kpts, fermi, nkpts):
-        # Optimize mu to give correct electron number
-        sigma = mf.sigma
-        def fermi_occ(m):
-            occ = numpy.zeros_like(mo_energy_kpts)
-            de = (mo_energy_kpts - m) / sigma
-            occ[de<40] = 1./(numpy.exp(de[de<40])+1.)
-            return occ
-        def nelec_cost_fn(m):
-            mo_occ_kpts = fermi_occ(m)
-            if not is_uhf:
-                mo_occ_kpts *= 2
-            return ( mo_occ_kpts.sum()/nkpts - cell_nelec )**2
-        res = scipy.optimize.minimize(nelec_cost_fn, fermi, method='Powell')
-        mu = res.x
-        mo_occ_kpts = f = fermi_occ(mu)
-        f = f[(f>0) & (f<1)]
-        entropy = -(f*numpy.log(f) + (1-f)*numpy.log(1-f)).sum()
-        if not is_uhf:
-            mo_occ_kpts *= 2
-            entropy *= 2
-        return mo_occ_kpts, mu, entropy
-
-    def gaussian_smearing(mo_energy_kpts, fermi, nkpts):
-        sigma = mf.sigma
-        def gauss_occ(m):
-            return 1 - scipy.special.erf((mo_energy_kpts-m)/sigma)
-        def nelec_cost_fn(m):
-            mo_occ_kpts = gauss_occ(m)
-            if is_uhf:
-                mo_occ_kpts *= .5
-            return ( mo_occ_kpts.sum()/nkpts - cell_nelec )**2
-        res = scipy.optimize.minimize(nelec_cost_fn, fermi, method='Powell')
-        mu = res.x
-        mo_occ_kpts = gauss_occ(mu)
-        if is_uhf:
-            mo_occ_kpts *= .5
-# Is the entropy correct for spin unrestricted case?
-        entropy = numpy.exp(-((mo_energy_kpts-mu)/sigma)**2).sum() / numpy.sqrt(numpy.pi)
-        return mo_occ_kpts, mu, entropy
+    def fermi_smearing_occ(m, mo_energy_kpts, sigma):
+        occ = numpy.zeros_like(mo_energy_kpts)
+        de = (mo_energy_kpts - m) / sigma
+        occ[de<40] = 1./(numpy.exp(de[de<40])+1.)
+        return occ
+    def gaussian_smearing_occ(m, mo_energy_kpts, sigma):
+        return .5 - .5*scipy.special.erf((mo_energy_kpts-m)/sigma)
 
     def partition_occ(mo_occ, mo_energy_kpts):
         mo_occ_kpts = []
@@ -116,13 +83,28 @@ def smearing_(mf, sigma=None, method='fermi'):
         else:
             nocc = cell_nelec * nkpts // 2
             mo_es = numpy.hstack(mo_energy_kpts)
-        mo_energy = numpy.sort(mo_es.ravel())
-        fermi = mo_energy[nocc-1]
 
         if mf.smearing_method.lower() == 'fermi':  # Fermi-Dirac smearing
-            mo_occs, mu, mf.entropy = fermi_smearing(mo_es, fermi, nkpts)
+            f_occ = fermi_smearing_occ
         else:  # Gaussian smearing
-            mo_occs, mu, mf.entropy = gaussian_smearing(mo_es, fermi, nkpts)
+            f_occ = gaussian_smearing_occ
+
+        mo_energy = numpy.sort(mo_es.ravel())
+        fermi = mo_energy[nocc-1]
+        sigma = mf.sigma
+        def nelec_cost_fn(m):
+            mo_occ_kpts = f_occ(m, mo_es, sigma)
+            if not is_uhf:
+                mo_occ_kpts *= 2
+            return ( mo_occ_kpts.sum()/nkpts - cell_nelec )**2
+        res = scipy.optimize.minimize(nelec_cost_fn, fermi, method='Powell')
+        mu = res.x
+        mo_occs = f = f_occ(mu, mo_es, sigma)
+        f = f[(f>0) & (f<1)]
+        mf.entropy = -(f*numpy.log(f) + (1-f)*numpy.log(1-f)).sum()
+        if not is_uhf:
+            mo_occs *= 2
+            mf.entropy *= 2
 
         # DO NOT use numpy.array for mo_occ_kpts and mo_energy_kpts, they may
         # have different dimensions for different k-points
@@ -176,16 +158,19 @@ def smearing_(mf, sigma=None, method='fermi'):
         e_tot = mf.energy_elec(dm_kpts, h1e_kpts, vhf_kpts)[0] + mf.energy_nuc()
         if (mf.sigma and mf.smearing_method and
             mf.entropy is not None and mf.verbose >= logger.INFO):
-            e_free = e_tot - mf.sigma * mf.entropy
-            e_zero = e_tot - mf.sigma * mf.entropy * .5
+            mf.e_free = e_tot - mf.sigma * mf.entropy
+            mf.e_zero = e_tot - mf.sigma * mf.entropy * .5
             logger.info(mf, '    Total E(T) = %.15g  Free energy = %.15g  E0 = %.15g',
-                        e_tot, e_free, e_zero)
+                        e_tot, mf.e_free, mf.e_zero)
         return e_tot
 
     mf.sigma = sigma
     mf.smearing_method = method
     mf.entropy = None
-    mf._keys = mf._keys.union(['sigma', 'smearing_method', 'entropy'])
+    mf.e_free = None
+    mf.e_zero = None
+    mf._keys = mf._keys.union(['sigma', 'smearing_method',
+                               'entropy', 'e_free', 'e_zero'])
 
     mf.get_occ = get_occ
     mf.energy_tot = energy_tot
@@ -368,5 +353,6 @@ if __name__ == '__main__':
     cell.build()
     nks = [2,1,1]
     mf = pscf.KUHF(cell, cell.make_kpts(nks))
-    mf = smearing_(mf, .1)
+    #mf = smearing_(mf, .1) # -5.86052594663696 
+    mf = smearing_(mf, .1, method='gauss') # -5.86078827192437
     mf.kernel()
