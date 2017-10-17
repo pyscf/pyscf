@@ -124,10 +124,13 @@ def smearing_(mf, sigma=None, method='fermi'):
         else:  # Gaussian smearing
             mo_occs, mu, mf.entropy = gaussian_smearing(mo_es, fermi, nkpts)
 
+        # DO NOT use numpy.array for mo_occ_kpts and mo_energy_kpts, they may
+        # have different dimensions for different k-points
         if is_uhf:
             if is_khf:
-                mo_occ_kpts =(partition_occ(mo_occs, mo_energy_kpts[0]),
-                              partition_occ(mo_occs, mo_energy_kpts[1]))
+                nao_tot = mo_occs.size//2
+                mo_occ_kpts =(partition_occ(mo_occs[:nao_tot], mo_energy_kpts[0]),
+                              partition_occ(mo_occs[nao_tot:], mo_energy_kpts[1]))
             else:
                 mo_occ_kpts = partition_occ(mo_occs, mo_energy_kpts)
         else:
@@ -182,7 +185,7 @@ def smearing_(mf, sigma=None, method='fermi'):
     mf.sigma = sigma
     mf.smearing_method = method
     mf.entropy = None
-    mf._keys.union(['sigma', 'smearing_method', 'entropy'])
+    mf._keys = mf._keys.union(['sigma', 'smearing_method', 'entropy'])
 
     mf.get_occ = get_occ
     mf.energy_tot = energy_tot
