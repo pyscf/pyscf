@@ -21,7 +21,7 @@ cell.build()
 nao = cell.nao_nr()
 
 class KnowValues(unittest.TestCase):
-    def test_krhf_fermi_smearing(self):
+    def test_krhf_smearing(self):
         mf = pscf.KRHF(cell, cell.make_kpts([2,1,1]))
         nkpts = len(mf.kpts)
         pscf.addons.smearing_(mf, 0.1, 'fermi')
@@ -32,9 +32,9 @@ class KnowValues(unittest.TestCase):
 
         mf.smearing_method = 'gauss'
         occ = mf.get_occ(mo_energy_kpts)
-        self.assertAlmostEqual(mf.entropy, 0.94924016074521311, 9)
+        self.assertAlmostEqual(mf.entropy, 2.4500185794942135, 9)
 
-    def test_kuhf_fermi_smearing(self):
+    def test_kuhf_smearing(self):
         mf = pscf.KUHF(cell, cell.make_kpts([2,1,1]))
         nkpts = len(mf.kpts)
         pscf.addons.smearing_(mf, 0.1, 'fermi')
@@ -47,9 +47,9 @@ class KnowValues(unittest.TestCase):
 
         mf.smearing_method = 'gauss'
         occ = mf.get_occ(mo_energy_kpts)
-        self.assertAlmostEqual(mf.entropy, 1.9109053727340934, 9)
+        self.assertAlmostEqual(mf.entropy, 2.4646236868793121, 9)
 
-    def test_rhf_fermi_smearing(self):
+    def test_rhf_smearing(self):
         mf = pscf.RHF(cell)
         pscf.addons.smearing_(mf, 0.1, 'fermi')
         mo_energy = numpy.arange(nao)*.2+numpy.cos(.5)*.1
@@ -58,9 +58,9 @@ class KnowValues(unittest.TestCase):
 
         mf.smearing_method = 'gauss'
         occ = mf.get_occ(mo_energy)
-        self.assertAlmostEqual(mf.entropy, 0.4152467504725415, 9)
+        self.assertAlmostEqual(mf.entropy, 1.1023835704293432, 9)
 
-    def test_uhf_fermi_smearing(self):
+    def test_uhf_smearing(self):
         mf = pscf.UHF(cell)
         pscf.addons.smearing_(mf, 0.1, 'fermi')
         mo_energy = numpy.arange(nao)*.2+numpy.cos(.5)*.1
@@ -70,7 +70,7 @@ class KnowValues(unittest.TestCase):
 
         mf.smearing_method = 'gauss'
         occ = mf.get_occ(mo_energy)
-        self.assertAlmostEqual(mf.entropy, 0.84378619889083462, 9)
+        self.assertAlmostEqual(mf.entropy, 1.1173540623523119, 9)
 
 
 if __name__ == '__main__':
