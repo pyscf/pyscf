@@ -79,10 +79,10 @@ def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
 
     if atmlst is None:
         atmlst = range(mol.natm)
-    atom_slices = mol.aoslice_by_atom()
+    aoslices = mol.aoslice_by_atom()
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
-        shl0, shl1, p0, p1 = atom_slices[ia]
+        shl0, shl1, p0, p1 = aoslices[ia]
 # h1, s1, vhf are \nabla <i|h|j>, the nuclear gradients = -\nabla
         vrinv = grad_mf._grad_rinv(mol, ia)
         de[k] += numpy.einsum('sxij,sij->x', f1[:,:,p0:p1], dm0[:,p0:p1]) * 2
@@ -165,7 +165,7 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi)
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
-    atom_slices = mol.aoslice_by_atom()
+    aoslices = mol.aoslice_by_atom()
 
     excsum = 0
     vmat = numpy.zeros((2,3,nao,nao))
@@ -175,7 +175,7 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
         for atm_id, (coords, weight, weight1) \
                 in enumerate(rks_grad.grids_response_cc(grids)):
             ngrids = weight.size
-            sh0, sh1 = atom_slices[atm_id][:2]
+            sh0, sh1 = aoslices[atm_id][:2]
             mask = gen_grid.make_mask(mol, coords)
             ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask)
             rho_a = make_rho(0, ao[0], mask, 'LDA')
@@ -204,7 +204,7 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
         for atm_id, (coords, weight, weight1) \
                 in enumerate(rks_grad.grids_response_cc(grids)):
             ngrids = weight.size
-            sh0, sh1 = atom_slices[atm_id][:2]
+            sh0, sh1 = aoslices[atm_id][:2]
             mask = gen_grid.make_mask(mol, coords)
             ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask)
             rho_a = make_rho(0, ao[:4], mask, 'GGA')

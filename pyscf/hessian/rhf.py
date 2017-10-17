@@ -15,16 +15,15 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.scf import cphf
+from pyscf.scf.newton_ah import _gen_rhf_response
+from pyscf.grad import rhf as rhf_grad
 
 
 def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
+              mo1=None, mo_e1=None, h1ao=None,
               atmlst=None, max_memory=4000, verbose=None):
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(hess_mf.stdout, hess_mf.verbose)
-
-    time0 = (time.clock(), time.time())
+    log = logger.new_logger(hess_mf, verbose)
+    time0 = t1 = (time.clock(), time.time())
 
     mf = hess_mf._scf
     mol = hess_mf.mol
@@ -33,113 +32,97 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
     if atmlst is None: atmlst = range(mol.natm)
 
+    if h1ao is None:
+        h1ao = hess_mf.make_h1(mo_coeff, mo_occ, hess_mf.chkfile, atmlst, log)
+        t1 = log.timer_debug1('making H1', *time0)
+    if mo1 is None or mo_e1 is None:
+        mo1, mo_e1 = hess_mf.solve_mo1(mo_energy, mo_coeff, mo_occ, h1ao,
+                                       None, atmlst, max_memory, log)
+        t1 = log.timer_debug1('solving MO1', *t1)
+
+    if isinstance(h1ao, str):
+        h1ao = lib.chkfile.load(h1ao, 'scf_f1ao')
+        h1ao = dict([(int(k), h1ao[k]) for k in h1ao])
+    if isinstance(mo1, str):
+        mo1 = lib.chkfile.load(mo1, 'scf_mo1')
+        mo1 = dict([(int(k), mo1[k]) for k in mo1])
+
     nao, nmo = mo_coeff.shape
     mocc = mo_coeff[:,mo_occ>0]
     nocc = mocc.shape[1]
     dm0 = numpy.dot(mocc, mocc.T) * 2
-
-    h1aos = hess_mf.make_h1(mo_coeff, mo_occ, hess_mf.chkfile, atmlst, log)
-    t1 = log.timer('making H1', *time0)
-    mo1s, e1s = hess_mf.solve_mo1(mo_energy, mo_coeff, mo_occ, h1aos,
-                                  None, atmlst, max_memory, log)
-    t1 = log.timer('solving MO1', *t1)
-
-    tmpf = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-    with h5py.File(tmpf.name, 'w') as f:
-        for i0, ia in enumerate(atmlst):
-            mol.set_rinv_origin(mol.atom_coord(ia))
-            f['rinv2aa/%d'%ia] = (mol.atom_charge(ia) *
-                                  mol.intor('int1e_ipiprinv', comp=9))
-            f['rinv2ab/%d'%ia] = (mol.atom_charge(ia) *
-                                  mol.intor('int1e_iprinvip', comp=9))
-
-    h1aa =(mol.intor('int1e_ipipkin', comp=9) +
-           mol.intor('int1e_ipipnuc', comp=9))
-    h1ab =(mol.intor('int1e_ipkinip', comp=9) +
-           mol.intor('int1e_ipnucip', comp=9))
-    s1aa = mol.intor('int1e_ipipovlp', comp=9)
-    s1ab = mol.intor('int1e_ipovlpip', comp=9)
-    s1a =-mol.intor('int1e_ipovlp', comp=3)
-
     # Energy weighted density matrix
     dme0 = numpy.einsum('pi,qi,i->pq', mocc, mocc, mo_energy[:nocc]) * 2
 
-    int2e_ipip1 = mol._add_suffix('int2e_ipip1')
-    vj1, vk1 = _vhf.direct_mapdm(int2e_ipip1, 's2kl',
-                                 ('lk->s1ij', 'jk->s1il'), dm0, 9,
-                                 mol._atm, mol._bas, mol._env)
-    vhf1ii = vj1 - vk1*.5
+    h1aa, h1ab = get_hcore(mol)
+    s1aa, s1ab, s1a = get_ovlp(mol)
+
+    vj1, vk1 = _get_jk(mol, 'int2e_ipip1', 9, 's2kl',
+                       ('lk->s1ij', dm0,   # vj1
+                        'jk->s1il', dm0))  # vk1
+    vhf_diag = vj1 - vk1*.5
     vj1 = vk1 = None
     t1 = log.timer('contracting int2e_ipip1', *t1)
 
-    offsetdic = mol.offset_nr_by_atom()
-    frinv = h5py.File(tmpf.name, 'r')
-    rinv2aa = frinv['rinv2aa']
-    rinv2ab = frinv['rinv2ab']
-
+    aoslices = mol.aoslice_by_atom()
     de2 = numpy.zeros((mol.natm,mol.natm,3,3))
-    int2e_ip1ip2 = mol._add_suffix('int2e_ip1ip2')
-    int2e_ipvip1 = mol._add_suffix('int2e_ipvip1')
     for i0, ia in enumerate(atmlst):
-        shl0, shl1, p0, p1 = offsetdic[ia]
+        shl0, shl1, p0, p1 = aoslices[ia]
 
-        h_2 = rinv2ab[str(ia)] + rinv2aa[str(ia)].value.transpose(0,2,1)
-        h_2[:,p0:p1] += h1ab[:,p0:p1]
+        shls_slice = (shl0, shl1) + (0, mol.nbas)*3
+        vj1, vk1, vk2 = _get_jk(mol, 'int2e_ip1ip2', 9, 's1',
+                                ('ji->s1kl', dm0[:,p0:p1],  # vj1
+                                 'li->s1kj', dm0[:,p0:p1],  # vk1
+                                 'lj->s1ki', dm0         ), # vk2
+                                shls_slice=shls_slice)
+        vhf = vj1 * 2 - vk1 * .5
+        vhf[:,:,p0:p1] -= vk2 * .5
+        t1 = log.timer_debug1('contracting int2e_ip1ip2 for atom %d'%ia, *t1)
+        vj1, vk1 = _get_jk(mol, 'int2e_ipvip1', 9, 's2kl',
+                           ('lk->s1ij', dm0,           # vj1
+                            'li->s1kj', dm0[:,p0:p1]), # vk1
+                           shls_slice=shls_slice)
+        vhf[:,:,p0:p1] += vj1.transpose(0,2,1)
+        vhf -= vk1.transpose(0,2,1) * .5
+        vj1 = vk1 = vk2 = None
+        t1 = log.timer_debug1('contracting int2e_ipvip1 for atom %d'%ia, *t1)
+
+        rinv2aa, rinv2ab = _hess_rinv(mol, ia)
+        hcore = rinv2ab + rinv2aa.transpose(0,2,1)
+        hcore[:,p0:p1] += h1ab[:,p0:p1]
         s1ao = numpy.zeros((3,nao,nao))
         s1ao[:,p0:p1] += s1a[:,p0:p1]
         s1ao[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
         s1oo = numpy.einsum('xpq,pi,qj->xij', s1ao, mocc, mocc)
 
-        shls_slice = (shl0, shl1) + (0, mol.nbas)*3
-        vj1, vk1, vk2 = _vhf.direct_bindm(int2e_ip1ip2, 's1',
-                                          ('ji->s1kl', 'li->s1kj', 'lj->s1ki'),
-                                          (dm0[:,p0:p1], dm0[:,p0:p1], dm0), 9,
-                                          mol._atm, mol._bas, mol._env,
-                                          shls_slice=shls_slice)
-        vhf2 = vj1 * 2 - vk1 * .5
-        vhf2[:,:,p0:p1] -= vk2 * .5
-        t1 = log.timer('contracting int2e_ip1ip2 for atom %d'%ia, *t1)
-
-        vj1, vk1 = _vhf.direct_bindm(int2e_ipvip1, 's2kl',
-                                     ('lk->s1ij', 'li->s1kj'),
-                                     (dm0, dm0[:,p0:p1]), 9,
-                                     mol._atm, mol._bas, mol._env,
-                                     shls_slice=shls_slice)
-        vhf2[:,:,p0:p1] += vj1.transpose(0,2,1)
-        vhf2 -= vk1.transpose(0,2,1) * .5
-        vj1 = vk1 = vk2 = None
-        t1 = log.timer('contracting int2e_ipvip1 for atom %d'%ia, *t1)
-
-        for j0, ja in enumerate(atmlst):
-            q0, q1 = offsetdic[ja][2:]
+        for j0 in range(ia+1):
+            ja = atmlst[j0]
+            q0, q1 = aoslices[ja][2:]
 # *2 for double occupancy, *2 for +c.c.
-            mo1  = lib.chkfile.load(hess_mf.chkfile, 'scf_mo1/%d'%ja)
-            h1ao = lib.chkfile.load(hess_mf.chkfile, 'scf_h1ao/%d'%ia)
-            dm1 = numpy.einsum('ypi,qi->ypq', mo1, mocc)
-            de  = numpy.einsum('xpq,ypq->xy', h1ao, dm1) * 4
-            dm1 = numpy.einsum('ypi,qi,i->ypq', mo1, mocc, mo_energy[:nocc])
+            dm1 = numpy.einsum('ypi,qi->ypq', mo1[ja], mocc)
+            de  = numpy.einsum('xpq,ypq->xy', h1ao[ia], dm1) * 4
+            dm1 = numpy.einsum('ypi,qi,i->ypq', mo1[ja], mocc, mo_energy[:nocc])
             de -= numpy.einsum('xpq,ypq->xy', s1ao, dm1) * 4
-            de -= numpy.einsum('xpq,ypq->xy', s1oo, e1s[j0]) * 2
+            de -= numpy.einsum('xpq,ypq->xy', s1oo, mo_e1[ja]) * 2
 
             de = de.reshape(-1)
-            v2aa = rinv2aa[str(ja)].value
-            v2ab = rinv2ab[str(ja)].value
+            v2aa, v2ab = _hess_rinv(mol, ja)
             de += numpy.einsum('xpq,pq->x', v2aa[:,p0:p1], dm0[p0:p1])*2
             de += numpy.einsum('xpq,pq->x', v2ab[:,p0:p1], dm0[p0:p1])*2
-            de += numpy.einsum('xpq,pq->x', h_2[:,:,q0:q1], dm0[:,q0:q1])*2
-            de += numpy.einsum('xpq,pq->x', vhf2[:,q0:q1], dm0[q0:q1])*2
+            de += numpy.einsum('xpq,pq->x', hcore[:,:,q0:q1], dm0[:,q0:q1])*2
+            de += numpy.einsum('xpq,pq->x', vhf[:,q0:q1], dm0[q0:q1])*2
             de -= numpy.einsum('xpq,pq->x', s1ab[:,p0:p1,q0:q1], dme0[p0:p1,q0:q1])*2
 
             if ia == ja:
                 de += numpy.einsum('xpq,pq->x', h1aa[:,p0:p1], dm0[p0:p1])*2
                 de -= numpy.einsum('xpq,pq->x', v2aa, dm0)*2
                 de -= numpy.einsum('xpq,pq->x', v2ab, dm0)*2
-                de += numpy.einsum('xpq,pq->x', vhf1ii[:,p0:p1], dm0[p0:p1])*2
+                de += numpy.einsum('xpq,pq->x', vhf_diag[:,p0:p1], dm0[p0:p1])*2
                 de -= numpy.einsum('xpq,pq->x', s1aa[:,p0:p1], dme0[p0:p1])*2
 
             de2[i0,j0] = de.reshape(3,3)
+            de2[j0,i0] = de.reshape(3,3).T
 
-    frinv.close()
     log.timer('RHF hessian', *time0)
     return de2
 
@@ -155,15 +138,13 @@ def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN
     nao, nmo = mo_coeff.shape
     mocc = mo_coeff[:,mo_occ>0]
     dm0 = numpy.dot(mocc, mocc.T) * 2
+    h1a = rhf_grad.get_hcore(mol)
 
-    h1a =-(mol.intor('int1e_ipkin', comp=3) +
-           mol.intor('int1e_ipnuc', comp=3))
-
-    offsetdic = mol.offset_nr_by_atom()
-    h1aos = []
+    aoslices = mol.aoslice_by_atom()
     int2e_ip1 = mol._add_suffix('int2e_ip1')
+    h1s = [None] * mol.natm
     for i0, ia in enumerate(atmlst):
-        shl0, shl1, p0, p1 = offsetdic[ia]
+        shl0, shl1, p0, p1 = aoslices[ia]
 
         mol.set_rinv_origin(mol.atom_coord(ia))
         h1ao = -mol.atom_charge(ia) * mol.intor('int1e_iprinv', comp=3)
@@ -171,27 +152,73 @@ def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN
         h1ao = h1ao + h1ao.transpose(0,2,1)
 
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
-        vj1, vj2, vk1, vk2 = \
-                _vhf.direct_bindm(int2e_ip1, 's2kl',
-                                  ('ji->s2kl', 'lk->s1ij', 'li->s1kj', 'jk->s1il'),
-                                  (-dm0[:,p0:p1], -dm0, -dm0[:,p0:p1], -dm0),
-                                  3, mol._atm, mol._bas, mol._env,
-                                  shls_slice=shls_slice)
-        for i in range(3):
-            lib.hermi_triu(vj1[i], 1)
+        vj1, vj2, vk1, vk2 = _get_jk(mol, 'int2e_ip1', 3, 's2kl',
+                                     ('ji->s2kl', -dm0[:,p0:p1],  # vj1
+                                      'lk->s1ij', -dm0         ,  # vj2
+                                      'li->s1kj', -dm0[:,p0:p1],  # vk1
+                                      'jk->s1il', -dm0         ), # vk2
+                                     shls_slice=shls_slice)
         vhf = vj1 - vk1*.5
         vhf[:,p0:p1] += vj2 - vk2*.5
         vhf = vhf + vhf.transpose(0,2,1)
 
         if chkfile is None:
-            h1aos.append(h1ao+vhf)
+            h1s[ia] = h1ao+vhf
         else:
-            key = 'scf_h1ao/%d' % ia
+            key = 'scf_f1ao/%d' % ia
             lib.chkfile.save(chkfile, key, h1ao+vhf)
     if chkfile is None:
-        return h1aos
+        return h1s
     else:
         return chkfile
+
+def get_hcore(mol):
+    h1aa = mol.intor('int1e_ipipkin', comp=9)
+    h1aa+= mol.intor('int1e_ipipnuc', comp=9)
+    h1ab = mol.intor('int1e_ipkinip', comp=9)
+    h1ab+= mol.intor('int1e_ipnucip', comp=9)
+    return h1aa, h1ab
+
+def _hess_rinv(mol, atom_id):
+    mol.set_rinv_origin(mol.atom_coord(atom_id))
+    rinv2aa = mol.intor('int1e_ipiprinv', comp=9)
+    rinv2ab = mol.intor('int1e_iprinvip', comp=9)
+    #mol.set_rinv_origin((0,0,0))
+    Z = mol.atom_charge(atom_id)
+    rinv2aa *= Z
+    rinv2ab *= Z
+    return rinv2aa, rinv2ab
+
+def get_ovlp(mol):
+    s1aa = mol.intor('int1e_ipipovlp', comp=9)
+    s1ab = mol.intor('int1e_ipovlpip', comp=9)
+    s1a =-mol.intor('int1e_ipovlp', comp=3)
+    return s1aa, s1ab, s1a
+
+def _get_jk(mol, intor, comp, aosym, script_dms,
+            shls_slice=None, cintopt=None):
+    intor = mol._add_suffix(intor)
+    scripts = script_dms[::2]
+    dms = script_dms[1::2]
+    vs = _vhf.direct_bindm(intor, aosym, scripts, dms, comp,
+                           mol._atm, mol._bas, mol._env,
+                           cintopt=cintopt, shls_slice=shls_slice)
+    for k, script in enumerate(scripts):
+        shape = vs[k].shape
+        if shape[-2] == shape[-1]:
+            if 's2' in script:
+                hermi = 1
+            elif 'a2' in script:
+                hermi = 2
+            else:
+                continue
+
+            if comp > 1:
+                for i in range(comp):
+                    lib.hermi_triu(vs[k][i], hermi=hermi, inplace=True)
+            else:
+                lib.hermi_triu(vs[k], hermi=hermi, inplace=True)
+    return vs
 
 def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
               fx=None, atmlst=None, max_memory=4000, verbose=None):
@@ -207,53 +234,69 @@ def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
     nocc = mocc.shape[1]
 
     if fx is None:
-        def fx(mo1):
-            dm1 = numpy.einsum('xai,pa,qi->xpq', mo1, mo_coeff, mocc*2)
-            dm1 = dm1 + dm1.transpose(0,2,1)
-            v1 = mf.get_veff(mol, dm1)
-            return numpy.einsum('xpq,pa,qi->xai', v1, mo_coeff, mocc)
+        fx = gen_vind(mf, mo_coeff, mo_occ)
 
-    offsetdic = mol.offset_nr_by_atom()
+    aoslices = mol.aoslice_by_atom()
     mem_now = lib.current_memory()[0]
     max_memory = max(4000, max_memory*.9-mem_now)
     blksize = max(2, int(max_memory*1e6/8 / (nmo*nocc*3*6)))
     s1a =-mol.intor('int1e_ipovlp', comp=3)
-    mo1s = []
-    e1s = []
-    for ia0, ia1 in prange(0, len(atmlst), blksize):
+    mo1s = [None] * mol.natm
+    e1s = [None] * mol.natm
+    for ia0, ia1 in lib.prange(0, len(atmlst), blksize):
         s1vo = []
         h1vo = []
         for i0 in range(ia0, ia1):
             ia = atmlst[i0]
-            shl0, shl1, p0, p1 = offsetdic[ia]
+            shl0, shl1, p0, p1 = aoslices[ia]
             s1ao = numpy.zeros((3,nao,nao))
             s1ao[:,p0:p1] += s1a[:,p0:p1]
             s1ao[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
             s1vo.append(numpy.einsum('xpq,pi,qj->xij', s1ao, mo_coeff, mocc))
             if isinstance(h1ao_or_chkfile, str):
-                key = 'scf_h1ao/%d' % ia
+                key = 'scf_f1ao/%d' % ia
                 h1ao = lib.chkfile.load(h1ao_or_chkfile, key)
             else:
-                h1ao = h1ao_or_chkfile[i0]
+                h1ao = h1ao_or_chkfile[ia]
             h1vo.append(numpy.einsum('xpq,pi,qj->xij', h1ao, mo_coeff, mocc))
+
         h1vo = numpy.vstack(h1vo)
         s1vo = numpy.vstack(s1vo)
         mo1, e1 = cphf.solve(fx, mo_energy, mo_occ, h1vo, s1vo)
         mo1 = numpy.einsum('pq,xqi->xpi', mo_coeff, mo1).reshape(-1,3,nmo,nocc)
-        if isinstance(h1ao_or_chkfile, str):
-            for k in range(ia1-ia0):
-                key = 'scf_mo1/%d' % atmlst[k+ia0]
-                lib.chkfile.save(h1ao_or_chkfile, key, mo1[k])
-                mo1s.append(key)
-        else:
-            mo1s.append(mo1)
-        e1s.append(e1.reshape(-1,3,nocc,nocc))
+        e1 = e1.reshape(-1,3,nocc,nocc)
 
-    e1s = numpy.vstack(e1s)
+        for k in range(ia1-ia0):
+            ia = atmlst[k+ia0]
+            if isinstance(h1ao_or_chkfile, str):
+                key = 'scf_mo1/%d' % ia
+                lib.chkfile.save(h1ao_or_chkfile, key, mo1[k])
+            else:
+                mo1s[ia] = mo1[k]
+            e1s[ia] = e1[k].reshape(3,nocc,nocc)
+        mo1 = e1 = None
+
     if isinstance(h1ao_or_chkfile, str):
         return h1ao_or_chkfile, e1s
     else:
-        return numpy.vstack(mo1s), e1s
+        return mo1s, e1s
+
+def gen_vind(mf, mo_coeff, mo_occ):
+    nao, nmo = mo_coeff.shape
+    mocc = mo_coeff[:,mo_occ>0]
+    vresp = _gen_rhf_response(mf, hermi=1)
+    def fx(mo1):
+        nset = len(mo1)
+        dm1 = numpy.empty((nset,nao,nao))
+        for i, x in enumerate(mo1):
+            dm = reduce(numpy.dot, (mo_coeff, x*2, mocc.T)) # *2 for double occupancy
+            dm1[i] = dm + dm.T
+        v1 = vresp(dm1)
+        v1vo = numpy.empty_like(mo1)
+        for i, x in enumerate(v1):
+            v1vo[i] = reduce(numpy.dot, (mo_coeff.T, x, mocc))
+        return v1vo
+    return fx
 
 def hess_nuc(mol, atmlst=None):
     gs = numpy.zeros((mol.natm,mol.natm,3,3))
@@ -313,20 +356,15 @@ class Hessian(lib.StreamObject):
         if mo_occ is None: mo_occ = self._scf.mo_occ
         if atmlst is None: atmlst = range(self.mol.natm)
 
-        de = self.hess_elec(mo_energy, mo_coeff, mo_occ, atmlst)
-        self.de = de = de + self.hess_nuc(self.mol, atmlst=atmlst)
+        de = self.hess_elec(mo_energy, mo_coeff, mo_occ, atmlst=atmlst)
+        self.de = de + self.hess_nuc(self.mol, atmlst=atmlst)
         return self.de
 
-
-def prange(start, end, step):
-    for i in range(start, end, step):
-        yield i, min(i+step, end)
 
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     from pyscf.scf import rhf_grad
-    from pyscf.hessian import rhf_o0
 
     mol = gto.Mole()
     mol.verbose = 0
@@ -343,30 +381,83 @@ if __name__ == '__main__':
     mf.conv_tol = 1e-14
     mf.scf()
     n3 = mol.natm * 3
-    h = Hessian(mf)
-    e2 = h.kernel().transpose(0,2,1,3).reshape(n3,n3)
-    e2ref = rhf_o0.Hessian(mf).kernel().transpose(0,2,1,3).reshape(n3,n3)
-    print numpy.linalg.norm(e2-e2ref)
-    print numpy.allclose(e2,e2ref)
+    hobj = Hessian(mf)
+    e2 = hobj.kernel().transpose(0,2,1,3).reshape(n3,n3)
+    print(lib.finger(e2) - -0.50693144355876429)
+    #from hessian import rhf_o0
+    #e2ref = rhf_o0.Hessian(mf).kernel().transpose(0,2,1,3).reshape(n3,n3)
+    #print numpy.linalg.norm(e2-e2ref)
+    #print numpy.allclose(e2,e2ref)
 
-#    def grad1(coord, ptr, x, inc):
-#        coord = coord.copy()
-#        mol._env[ptr:ptr+3] = coord + numpy.asarray(x)*inc
-#        e1a = scf.RHF(mol).run(conv_tol=1e-14).apply(rhf_grad.Gradients).kernel()
-#        mol._env[ptr:ptr+3] = coord - numpy.asarray(x)*inc
-#        e1b = scf.RHF(mol).run(conv_tol=1e-14).apply(rhf_grad.Gradients).kernel()
-#        mol._env[ptr:ptr+3] = coord
-#        return (e1a-e1b)/(2*inc)
-#    e2ref = []
-#    for ia in range(mol.natm):
-#        coord = mol.atom_coord(ia)
+    def grad_full(ia, inc):
+        coord = mol.atom_coord(ia).copy()
+        ptr = mol._atm[ia,gto.PTR_COORD]
+        de = []
+        for i in range(3):
+            mol._env[ptr+i] = coord[i] + inc
+            mf = scf.RHF(mol).run(conv_tol=1e-14)
+            e1a = mf.nuc_grad_method().kernel()
+            mol._env[ptr+i] = coord[i] - inc
+            mf = scf.RHF(mol).run(conv_tol=1e-14)
+            e1b = mf.nuc_grad_method().kernel()
+            mol._env[ptr+i] = coord[i]
+            de.append((e1a-e1b)/(2*inc))
+        return de
+    e2ref = [grad_full(ia, .5e-4) for ia in range(mol.natm)]
+    e2ref = numpy.asarray(e2ref).reshape(n3,n3)
+    print(numpy.linalg.norm(e2-e2ref))
+    print(abs(e2-e2ref).max())
+    print(numpy.allclose(e2,e2ref,atol=1e-6))
+
+# \partial^2 E / \partial R \partial R'
+    h1ao = hobj.make_h1(mf.mo_coeff, mf.mo_occ)
+    mo1, mo_e1 = hobj.solve_mo1(mf.mo_energy, mf.mo_coeff, mf.mo_occ, h1ao)
+    e2 = hobj.hess_elec(mf.mo_energy, mf.mo_coeff, mf.mo_occ,
+                        numpy.zeros_like(mo1), numpy.zeros_like(mo_e1),
+                        numpy.zeros_like(h1ao))
+    e2 += hobj.hess_nuc(mol)
+    e2 = e2.transpose(0,2,1,3).reshape(n3,n3)
+    def grad_partial_R(ia, inc):
+        coord = mol.atom_coord(ia).copy()
+        ptr = mol._atm[ia,gto.PTR_COORD]
+        de = []
+        for i in range(3):
+            mol._env[ptr+i] = coord[i] + inc
+            e1a = mf.nuc_grad_method().kernel()
+            mol._env[ptr+i] = coord[i] - inc
+            e1b = mf.nuc_grad_method().kernel()
+            mol._env[ptr+i] = coord[i]
+            de.append((e1a-e1b)/(2*inc))
+        return de
+    e2ref = [grad_partial_R(ia, .5e-4) for ia in range(mol.natm)]
+    e2ref = numpy.asarray(e2ref).reshape(n3,n3)
+    print(numpy.linalg.norm(e2-e2ref))
+    print(abs(e2-e2ref).max())
+    print(numpy.allclose(e2,e2ref,atol=1e-6))
+
+## \partial^2 E / \partial R \partial C (dC/dR)
+#    e2 = hobj.hess_elec(mf.mo_energy, mf.mo_coeff*0, mf.mo_occ,
+#                        numpy.zeros_like(mo1), numpy.zeros_like(mo_e1),
+#                        numpy.zeros_like(h1ao))
+#    e2 += hobj.hess_nuc(mol)
+#    e2 = e2.transpose(0,2,1,3).reshape(n3,n3)
+#    def grad_partial_C(ia, inc):
+#        coord = mol.atom_coord(ia).copy()
 #        ptr = mol._atm[ia,gto.PTR_COORD]
-#        e2ref.append(grad1(coord, ptr, (1,0,0), .5e-4))
-#        e2ref.append(grad1(coord, ptr, (0,1,0), .5e-4))
-#        e2ref.append(grad1(coord, ptr, (0,0,1), .5e-4))
+#        de = []
+#        for i in range(3):
+#            mol._env[ptr+i] = coord[i] + inc
+#            mf = scf.RHF(mol).run(conv_tol=1e-14)
+#            mol._env[ptr+i] = coord[i]
+#            e1a = mf.nuc_grad_method().kernel()
+#            mol._env[ptr+i] = coord[i] - inc
+#            mf = scf.RHF(mol).run(conv_tol=1e-14)
+#            mol._env[ptr+i] = coord[i]
+#            e1b = mf.nuc_grad_method().kernel()
+#            de.append((e1a-e1b)/(2*inc))
+#        return de
+#    e2ref = [grad_partial_C(ia, .5e-4) for ia in range(mol.natm)]
 #    e2ref = numpy.asarray(e2ref).reshape(n3,n3)
-#    numpy.set_printoptions(2,linewidth=100)
-#    print numpy.linalg.norm(e2-e2ref)
-#    print numpy.allclose(e2,e2ref,atol=1e-6)
-#    #for i in range(n3):
-#    #    print e2ref[i]-e2[i], abs(e2ref[i]-e2[i]).max()
+#    print(numpy.linalg.norm(e2-e2ref))
+#    print(abs(e2-e2ref).max())
+#    print(numpy.allclose(e2,e2ref,atol=1e-6))
