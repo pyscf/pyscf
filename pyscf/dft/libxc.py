@@ -520,12 +520,14 @@ def rsh_coeff(xc_code):
     '''Get RSH coefficients
     '''
     hyb, fn_facs = parse_xc(xc_code)
-    rsh_pars = numpy.zeros(3)
+    rsh_pars = [0, 0, 0]
     rsh_tmp = (ctypes.c_double*3)()
     for xid, fac in fn_facs:
         _itrf.LIBXC_rsh_coeff(xid, rsh_tmp)
-        rsh_pars += rsh_tmp
-    return rsh_pars.tolist()
+        rsh_pars[0] += rsh_tmp[0]
+        rsh_pars[1] += rsh_tmp[1]
+        rsh_pars[2] += rsh_tmp[2]
+    return rsh_pars
 
 def parse_xc_name(xc_name='LDA,VWN'):
     '''Convert the XC functional name to libxc library internal ID.

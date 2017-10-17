@@ -152,16 +152,6 @@ def test_deriv_order(xc_code, deriv, raise_error=False):
 def hybrid_coeff(xc_code, spin=0):
     return parse_xc(xc_code)[0]
 
-def rsh_coeff(xc_code):
-    '''Get RSH coefficients
-    '''
-    hyb, fn_facs = parse_xc(xc_code)
-    if fn_facs:
-        raise NotImplementedError
-    else:
-        rsh_pars = (0, 0, 0)
-    return rsh_pars
-
 def parse_xc_name(xc_name):
     fn_facs = parse_xc(xc_name)[1]
     return fn_facs[0][0], fn_facs[1][0]

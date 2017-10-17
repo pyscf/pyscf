@@ -101,7 +101,7 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
     out_ptrs = (ctypes.c_void_p*nkpts)(
             *[x.ctypes.data_as(ctypes.c_void_p) for x in ao_kpts])
     coords = numpy.asarray(coords, order='F')
-    Ls = cell.get_lattice_Ls()
+    Ls = cell.get_lattice_Ls(dimension=3)
     Ls = Ls[numpy.argsort(lib.norm(Ls, axis=1))]
     expLk = numpy.exp(1j * numpy.asarray(numpy.dot(Ls, kpts.T), order='C'))
 

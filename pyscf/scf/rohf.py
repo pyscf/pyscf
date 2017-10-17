@@ -360,11 +360,12 @@ class ROHF(hf.RHF):
         if (self._eri is not None or not self.direct_scf or
             mol.incore_anyway or self._is_mem_enough()):
             vj, vk = self.get_jk(mol, dm, hermi)
-            vhf = uhf._makevhf(vj, vk)
+            vhf = vj[0] + vj[1] - vk
         else:
             ddm = dm - numpy.asarray(dm_last)
             vj, vk = self.get_jk(mol, ddm, hermi)
-            vhf = uhf._makevhf(vj, vk) + numpy.asarray(vhf_last)
+            vhf = vj[0] + vj[1] - vk
+            vhf += numpy.asarray(vhf_last)
         return vhf
 
     @lib.with_doc(analyze.__doc__)
