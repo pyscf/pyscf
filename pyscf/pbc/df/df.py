@@ -37,7 +37,7 @@ from pyscf.pbc.df.aft import estimate_eta, get_nuc
 from pyscf.pbc.df.df_jk import zdotCN, zdotNN, zdotNC
 from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, member, unique
 
-LINEAR_DEP_THR = 1e-7
+LINEAR_DEP_THR = 1e-9
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
     auxcell = addons.make_auxmol(cell, auxbasis)
@@ -67,7 +67,7 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
         if np > 0:
 # int1 is the multipole value. l*2+2 is due to the radial part integral
 # \int (r^l e^{-ar^2} * Y_{lm}) (r^l Y_{lm}) r^2 dr d\Omega
-            int1 = gto.mole._gaussian_int(l*2+2, es)
+            int1 = gto.gaussian_int(l*2+2, es)
             s = numpy.einsum('pi,p->i', cs, int1)
 # The auxiliary basis normalization factor is not a must for density expansion.
 # half_sph_norm here to normalize the monopole (charge).  This convention can
@@ -82,10 +82,10 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
     auxcell.rcut = max(rcut)
 
     auxcell._bas = numpy.asarray(auxcell._bas[steep_shls], order='C')
-    logger.debug(cell, 'Drop %d primitive fitting functions', ndrop)
-    logger.debug(cell, 'make aux basis, num shells = %d, num cGTOs = %d',
-                 auxcell.nbas, auxcell.nao_nr())
-    logger.debug(cell, 'auxcell.rcut %s', auxcell.rcut)
+    logger.info(cell, 'Drop %d primitive fitting functions', ndrop)
+    logger.info(cell, 'make aux basis, num shells = %d, num cGTOs = %d',
+                auxcell.nbas, auxcell.nao_nr())
+    logger.info(cell, 'auxcell.rcut %s', auxcell.rcut)
     return auxcell
 
 def make_modchg_basis(auxcell, smooth_eta):
@@ -98,9 +98,9 @@ def make_modchg_basis(auxcell, smooth_eta):
     ptr_eta = auxcell._env.size
     ptr = ptr_eta + 1
     l_max = auxcell._bas[:,gto.ANG_OF].max()
-# _gaussian_int(l*2+2) for multipole integral:
+# gaussian_int(l*2+2) for multipole integral:
 # \int (r^l e^{-ar^2} * Y_{lm}) (r^l Y_{lm}) r^2 dr d\Omega
-    norms = [half_sph_norm/gto.mole._gaussian_int(l*2+2, smooth_eta)
+    norms = [half_sph_norm/gto.gaussian_int(l*2+2, smooth_eta)
              for l in range(l_max+1)]
     for ia in range(auxcell.natm):
         for l in set(auxcell._bas[auxcell._bas[:,gto.ATOM_OF]==ia, gto.ANG_OF]):
@@ -215,9 +215,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             w, v = scipy.linalg.eigh(j2c)
             log.debug('DF metric linear dependency for kpt %s', uniq_kptji_id)
             log.debug('cond = %.4g, drop %d bfns',
-                      w[0]/w[-1], numpy.count_nonzero(w<LINEAR_DEP_THR))
-            v = v[:,w>LINEAR_DEP_THR].T.conj()
-            v /= numpy.sqrt(w[w>LINEAR_DEP_THR]).reshape(-1,1)
+                      w[-1]/w[0], numpy.count_nonzero(w<mydf.linear_dep_threshold))
+            v = v[:,w>mydf.linear_dep_threshold].T.conj()
+            v /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)
             j2c = v
             j2ctag = 'eig'
         naux0 = j2c.shape[0]
@@ -343,6 +343,7 @@ class GDF(aft.AFTDF):
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
         self.auxcell = None
         self.blockdim = 240
+        self.linear_dep_threshold = LINEAR_DEP_THR
         self._j_only = False
 # If _cderi_to_save is specified, the 3C-integral tensor will be saved in this file.
         self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
@@ -470,7 +471,7 @@ class GDF(aft.AFTDF):
                     vbar[aux_loc[i]] = -1/es[0]
                 else:
 # Remove the normalization to get the primitive contraction coeffcients
-                    norms = half_sph_norm/gto.mole._gaussian_int(2, es)
+                    norms = half_sph_norm/gto.gaussian_int(2, es)
                     cs = numpy.einsum('i,ij->ij', 1/norms, fused_cell._libcint_ctr_coeff(i))
                     vbar[aux_loc[i]:aux_loc[i+1]] = numpy.einsum('in,i->n', cs, -1/es)
         vbar *= numpy.pi/fused_cell.vol
@@ -632,7 +633,7 @@ class _load3c(object):
             k_id = member(kptji, kptij_lst)
             if len(k_id) == 0:
                 raise RuntimeError('%s for kpts %s is not initialized.\n'
-                                   'Reset attribute .kpts then call '
+                                   'You need to update the attribute .kpts then call '
                                    '.build() to initialize %s.'
                                    % (self.label, kpti_kptj, self.label))
             dat = self.feri['%s/%d' % (self.label, k_id[0])]

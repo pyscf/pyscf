@@ -104,9 +104,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 # Abandon CD treatment for better numerical stablity
         w, v = scipy.linalg.eigh(j2c)
         log.debug('MDF metric for kpt %s cond = %.4g, drop %d bfns',
-                  uniq_kptji_id, w[0]/w[-1], numpy.count_nonzero(w<df.LINEAR_DEP_THR))
-        v = v[:,w>df.LINEAR_DEP_THR].T.conj()
-        v /= numpy.sqrt(w[w>df.LINEAR_DEP_THR]).reshape(-1,1)
+                  uniq_kptji_id, w[-1]/w[0], numpy.count_nonzero(w<mydf.linear_dep_threshold))
+        v = v[:,w>mydf.linear_dep_threshold].T.conj()
+        v /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)
         j2c = v
         j2ctag = 'eig'
         naux0 = j2c.shape[0]
@@ -223,6 +223,7 @@ class MDF(df.DF):
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
         self.auxcell = None
         self.blockdim = 240
+        self.linear_dep_threshold = df.LINEAR_DEP_THR
         self._j_only = False
 # If _cderi_to_save is specified, the 3C-integral tensor will be saved in this file.
         self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)

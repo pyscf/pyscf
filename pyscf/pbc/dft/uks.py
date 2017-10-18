@@ -99,6 +99,7 @@ class UKS(pbcuhf.UHF):
 
     get_veff = get_veff
     energy_elec = pyscf.dft.uks.energy_elec
+    define_xc_ = rks.define_xc_
 
     density_fit = rks._patch_df_beckegrids(pbcuhf.UHF.density_fit)
     mix_density_fit = rks._patch_df_beckegrids(pbcuhf.UHF.mix_density_fit)

@@ -101,7 +101,7 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
     out_ptrs = (ctypes.c_void_p*nkpts)(
             *[x.ctypes.data_as(ctypes.c_void_p) for x in ao_kpts])
     coords = numpy.asarray(coords, order='F')
-    Ls = cell.get_lattice_Ls()
+    Ls = cell.get_lattice_Ls(dimension=3)
     Ls = Ls[numpy.argsort(lib.norm(Ls, axis=1))]
     expLk = numpy.exp(1j * numpy.asarray(numpy.dot(Ls, kpts.T), order='C'))
 
@@ -147,7 +147,7 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
 
     '''
 
-    if xctype == 'LDA':
+    if xctype == 'LDA' or xctype == 'HF':
         ngrids, nao = ao.shape
     else:
         ngrids, nao = ao[0].shape
@@ -170,7 +170,7 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
             rho += numpy.einsum('pi,pi->p', bra.imag, aodm.imag)
             return rho
 
-        if xctype == 'LDA':
+        if xctype == 'LDA' or xctype == 'HF':
             c0 = _dot_ao_dm(cell, ao, dm, non0tab, shls_slice, ao_loc)
             rho = dot_bra(ao, c0)
 
@@ -207,7 +207,7 @@ def eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
     '''Refer to `pyscf.dft.numint.eval_rho2` for full documentation.
     '''
     xctype = xctype.upper()
-    if xctype == 'LDA':
+    if xctype == 'LDA' or xctype == 'HF':
         ngrids, nao = ao.shape
     else:
         ngrids, nao = ao[0].shape
@@ -230,7 +230,7 @@ def eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
         cpos = numpy.einsum('ij,j->ij', mo_coeff[:,pos], numpy.sqrt(mo_occ[pos]))
 
         if pos.sum() > 0:
-            if xctype == 'LDA':
+            if xctype == 'LDA' or xctype == 'HF':
                 c0 = _dot_ao_dm(cell, ao, cpos, non0tab, shls_slice, ao_loc)
                 rho = dot(c0, c0)
             elif xctype == 'GGA':
@@ -258,7 +258,7 @@ def eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
                 rho[4]*= 2
                 rho[5]*= .5
         else:
-            if xctype == 'LDA':
+            if xctype == 'LDA' or xctype == 'HF':
                 rho = numpy.zeros(ngrids)
             elif xctype == 'GGA':
                 rho = numpy.zeros((4,ngrids))
@@ -268,7 +268,7 @@ def eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
         neg = mo_occ < -OCCDROP
         if neg.sum() > 0:
             cneg = numpy.einsum('ij,j->ij', mo_coeff[:,neg], numpy.sqrt(-mo_occ[neg]))
-            if xctype == 'LDA':
+            if xctype == 'LDA' or xctype == 'HF':
                 c0 = _dot_ao_dm(cell, ao, cneg, non0tab, shls_slice, ao_loc)
                 rho -= dot(c0, c0)
             elif xctype == 'GGA':
@@ -374,7 +374,7 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
                 excsum[i] += (den*exc).sum()
                 vmat[i] += ni.eval_mat(cell, ao_k1, weight, rho, vxc,
                                        mask, xctype, 0, verbose)
-    else:
+    elif xctype == 'MGGA':
         if (any(x in xc_code.upper() for x in ('CC06', 'CS', 'BR89', 'MK00'))):
             raise NotImplementedError('laplacian in meta-GGA method')
         ao_deriv = 2
@@ -496,7 +496,7 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=0,
                 vmatb[i] += ni.eval_mat(cell, ao_k1, weight, (rho_b,rho_a),
                                         (vrho[:,1], (vsigma[:,2],vsigma[:,1])),
                                         mask, xctype, 1, verbose)
-    else:
+    elif xctype == 'MGGA':
         assert(all(x not in xc_code.upper() for x in ('CC06', 'CS', 'BR89', 'MK00')))
         ao_deriv = 2
         for ao_k1, ao_k2, mask, weight, coords \
@@ -533,6 +533,7 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=0,
 def _format_uks_dm(dms):
     dma, dmb = dms
     if hasattr(dms, 'mo_coeff'):
+#TODO: test whether dm.mo_coeff matching dm
         mo_coeff = dms.mo_coeff
         mo_occ = dms.mo_occ
         if (isinstance(mo_coeff[0], numpy.ndarray) and
@@ -643,7 +644,7 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
             vmat[i] = vmat[i] + vmat[i].swapaxes(-2,-1).conj()
 
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 
     if isinstance(dms, numpy.ndarray) and dms.ndim == vmat[0].ndim:
@@ -738,7 +739,7 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, single
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
             vmat[i] = vmat[i] + vmat[i].swapaxes(-2,-1).conj()
 
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 
     if isinstance(dms_alpha, numpy.ndarray) and dms_alpha.ndim == vmat[0].ndim:
@@ -861,7 +862,7 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
             vmata[i] = vmata[i] + vmata[i].swapaxes(-1,-2).conj()
             vmatb[i] = vmatb[i] + vmatb[i].swapaxes(-1,-2).conj()
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 
     if dma.ndim == vmata[0].ndim:  # One set of DMs in the input
@@ -872,7 +873,7 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
 def _fxc_mat(cell, ao, wv, non0tab, xctype, ao_loc):
     shls_slice = (0, cell.nbas)
 
-    if xctype == 'LDA':
+    if xctype == 'LDA' or xctype == 'HF':
         ngrids, nao = ao.shape
         aow = numpy.einsum('pi,p->pi', ao, wv)
         mat = _dot_ao_ao(cell, ao, aow, non0tab, shls_slice, ao_loc)
@@ -890,11 +891,10 @@ def cache_xc_kernel(ni, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
     if kpts is None:
         kpts = numpy.zeros((1,3))
     xctype = ni._xc_type(xc_code)
-    if xctype == 'LDA':
-        ao_deriv = 0
-    elif xctype == 'GGA':
+    ao_deriv = 0
+    if xctype == 'GGA':
         ao_deriv = 1
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 
     nao = cell.nao_nr()
@@ -916,21 +916,17 @@ def cache_xc_kernel(ni, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
     return rho, vxc, fxc
 
 
-def large_rho_indices(ni, cell, dm, grids, cutoff=1e-10, kpt=numpy.zeros(3),
-                      max_memory=2000):
+def get_rho(ni, cell, dm, grids, kpt=numpy.zeros(3), max_memory=2000):
     '''Indices of density which are larger than given cutoff
     '''
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dm)
-    idx = []
-    cutoff = cutoff / grids.weights.size
-    nelec = 0
+    rho = numpy.empty(grids.weights.size)
+    p1 = 0
     for ao_k1, ao_k2, mask, weight, coords \
             in ni.block_loop(cell, grids, nao, 0, kpt, None, max_memory):
-        rho = make_rho(0, ao_k1, mask, 'LDA')
-        kept = abs(rho*weight) > cutoff
-        nelec += numpy.einsum('i,i', rho[kept], weight[kept])
-        idx.append(kept)
-    return nelec, numpy.hstack(idx)
+        p0, p1 = p1, p1 + weight.size
+        rho[p0:p1] = make_rho(0, ao_k1, mask, 'LDA')
+    return rho
 
 
 class _NumInt(numint._NumInt):
@@ -1040,7 +1036,7 @@ class _NumInt(numint._NumInt):
     nr_rks_fxc = nr_rks_fxc
     nr_uks_fxc = nr_uks_fxc
     cache_xc_kernel  = cache_xc_kernel
-    large_rho_indices = large_rho_indices
+    get_rho = get_rho
 
 
 class _KNumInt(numint._NumInt):
@@ -1223,9 +1219,5 @@ class _KNumInt(numint._NumInt):
     nr_rks_fxc = nr_rks_fxc
     nr_uks_fxc = nr_uks_fxc
     cache_xc_kernel  = cache_xc_kernel
-    large_rho_indices = large_rho_indices
+    get_rho = get_rho
 
-
-def prange(start, end, step):
-    for i in range(start, end, step):
-        yield i, min(i+step, end)

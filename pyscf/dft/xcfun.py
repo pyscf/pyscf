@@ -91,54 +91,39 @@ HYB_XC = set(('PBE0'    , 'PBE1PBE' , 'B3PW91'  , 'B3P86'   , 'B3LYP'   ,
               'B3LYPG'  , 'O3LYP'   , 'M062X'   , 'CAMB3LYP',))
 MAX_DERIV_ORDER = 3
 
-def is_lda(xc_code):
+def xc_type(xc_code):
     if isinstance(xc_code, str):
-        if xc_code.isdigit():
-            return int(xc_code) in LDA_IDS
-        else:
-            return all((xid in LDA_IDS for xid, val in parse_xc(xc_code)[1]))
-    elif isinstance(xc_code, int):
-        return xc_code in LDA_IDS
+        hyb, fn_facs = parse_xc(xc_code)
     else:
-        return all((is_lda(x) for x in xc_code))
+        fn_facs = [(xc_code, 1)]  # mimic fn_facs
+    if not fn_facs:
+        return 'HF'
+    elif all(xid in LDA_IDS for xid, val in fn_facs):
+        return 'LDA'
+    elif any(xid in MGGA_IDS or xid in MLGGA_IDS for xid, val in fn_facs):
+        return 'MGGA'
+    else:
+        # all((xid in GGA_IDS or xid in LDA_IDS for xid, val in fn_fns)):
+        # include hybrid_xc
+        return 'GGA'
+
+def is_lda(xc_code):
+    return xc_type(xc_code) == 'LDA'
 
 def is_hybrid_xc(xc_code):
     if isinstance(xc_code, str):
-        return ('HF' in xc_code or
-                xc_code in HYB_XC or
-                abs(parse_xc(xc_code)[0]) > 1e-14)
+        return ('HF' in xc_code or xc_code in HYB_XC or
+                hybrid_coeff(xc_code) != 0)
     elif isinstance(xc_code, int):
         return False
     else:
         return any((is_hybrid_xc(x) for x in xc_code))
 
 def is_meta_gga(xc_code):
-    if isinstance(xc_code, str):
-        if xc_code.isdigit():
-            xc_code = int(xc_code)
-            return xc_code in MGGA_IDS or xc_code in MLGGA_IDS
-        else:
-            return any((xid in MGGA_IDS or xid in MLGGA_IDS
-                        for xid, val in parse_xc(xc_code)[1]))
-    elif isinstance(xc_code, int):
-        return xc_code in MGGA_IDS or xc_code in MLGGA_IDS
-    else:
-        return any((is_meta_gga(x) for x in xc_code))
+    return xc_type(xc_code) == 'MGGA'
 
 def is_gga(xc_code):
-    if isinstance(xc_code, str):
-        if xc_code.isdigit():
-            xc_code = int(xc_code)
-            return xc_code in GGA_IDS
-        else:
-            xc_fns = parse_xc(xc_code)[1]
-            return (all((xid in GGA_IDS or xid in LDA_IDS for xid, val in xc_fns)) and
-                    not is_lda(xc_code))
-    elif isinstance(xc_code, int):
-        return xc_code in GGA_IDS
-    else:
-        return (all((is_gga(x) or is_lda(x) for x in xc_code)) and
-                not is_lda(xc_code))
+    return xc_type(xc_code) == 'GGA'
 
 def is_nlc(xc_code):
     return False
@@ -180,7 +165,8 @@ def parse_xc(description):
       first part describes the exchange functional, the second is the correlation
       functional.
 
-      - If "," not appeared in string, the entire string is considered as X functional.
+      - If "," was not appeared in string, the entire string is considered as
+        X functional.
       - To neglect X functional (just apply C functional), leave blank in the
         first part, eg description=',vwn' for pure VWN functional
 
@@ -795,7 +781,7 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     return exc, vxc, fxc, kxc
 
 
-def define_xc_(ni, description):
+def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     '''Define XC functional.  See also :func:`eval_xc` for the rules of input description.
 
     Args:
@@ -805,6 +791,14 @@ def define_xc_(ni, description):
             A string to describe the linear combination of different XC functionals.
             The X and C functional are separated by comma like '.8*LDA+.2*B86,VWN'.
             If "HF" was appeared in the string, it stands for the exact exchange.
+
+    Kwargs:
+        xctype : str
+            'LDA' or 'GGA' or 'MGGA'
+        hyb : float
+            hybrid functional coefficient
+        rsh : float
+            coefficients for range-separated hybrid functional
 
     Examples:
 
@@ -816,18 +810,30 @@ def define_xc_(ni, description):
     >>> define_xc_(mf._numint, 'LDA*.08 + .72*B88 + .2*HF, .81*LYP + .19*VWN')
     >>> mf.kernel()
     -76.3783361189611
+    >>> def eval_xc(xc_code, rho, *args, **kwargs):
+    ...     exc = 0.01 * rho**2
+    ...     vrho = 0.01 * 2 * rho
+    ...     vxc = (vrho, None, None, None)
+    ...     fxc = None  # 2nd order functional derivative
+    ...     kxc = None  # 3rd order functional derivative
+    ...     return exc, vxc, fxc, kxc
+    >>> define_xc_(mf._numint, eval_xc, xctype='LDA')
+    >>> mf.kernel()
+    48.8525211046668
     '''
-    ni.eval_xc = lambda xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None: \
-            eval_xc(description, rho, spin, relativity, deriv, verbose)
-    ni.hybrid_coeff = lambda *args, **kwargs: hybrid_coeff(description)
-    def xc_type(*args):
-        if is_lda(description):
-            return 'LDA'
-        elif is_meta_gga(description):
-            raise NotImplementedError('meta-GGA')
-        else:
-            return 'GGA'
-    ni._xc_type = xc_type
+    if isinstance(description, str):
+        ni.eval_xc = lambda xc_code, rho, *args, **kwargs: \
+                eval_xc(description, rho, *args, **kwargs)
+        ni.hybrid_coeff = lambda *args, **kwargs: hybrid_coeff(description)
+        ni._xc_type = lambda *args: xc_type(description)
+
+    elif callable(description):
+        ni.eval_xc = description
+        ni.hybrid_coeff = lambda *args, **kwargs: hyb
+        ni.rsh_coeff = lambda *args, **kwargs: rsh
+        ni._xc_type = lambda *args: xctype
+    else:
+        raise RuntimeError('Unknown description %s' % description)
     return ni
 
 def define_xc(ni, description):

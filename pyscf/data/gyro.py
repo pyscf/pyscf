@@ -108,7 +108,7 @@ def g_factor_to_gyromagnetic_ratio(g):
     return nist.NUC_MAGNETON/nist.PLANCK * g
 
 def get_nuc_g_factor(symb, mass=None):
-    Z = mole._charge(symb)
+    Z = mole.charge(symb)
 # g factor of other isotopes can be found in file nuclear_g_factor.dat
     nuc_spin, g_nuc = ISOTOPE_GYRO[Z][1:3]
     #gyromag = g_factor_to_gyromagnetic_ratio(g_nuc)

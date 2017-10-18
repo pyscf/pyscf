@@ -450,11 +450,15 @@ class SymmSys(object):
                 # Put random charges on the decorated atoms
                 fake_chgs.append([chg1] * len(lst))
                 chg1 *= numpy.pi-2
-            elif 'GHOST' in ksymb:
-                ksymb = mole._remove_prefix_ghost(ksymb)
-                fake_chgs.append([mole._charge(ksymb)+.3] * len(lst))
+            elif mole.is_ghost_atom(k):
+                if ksymb == 'X' or ksymb.upper() == 'GHOST':
+                    fake_chgs.append([.3] * len(lst))
+                elif k[:2] == 'X-':
+                    fake_chgs.append([mole.charge(ksymb[1:])+.3] * len(lst))
+                elif ksymb[:5] == 'GHOST':
+                    fake_chgs.append([mole.charge(ksymb[5:])+.3] * len(lst))
             else:
-                fake_chgs.append([mole._charge(ksymb)] * len(lst))
+                fake_chgs.append([mole.charge(ksymb)] * len(lst))
         coords = numpy.array(numpy.vstack(coords), dtype=float)
         fake_chgs = numpy.hstack(fake_chgs)
         self.charge_center = numpy.einsum('i,ij->j', fake_chgs, coords)/fake_chgs.sum()

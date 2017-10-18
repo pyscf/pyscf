@@ -219,38 +219,42 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     na = link_index.shape[0]
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
 
-    addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, max(pspace_size,nroots))
-    if pspace_size > 0:
-        pw, pv = fci.eig(h0)
-    else:
-        pw = pv = None
+    try:
+        addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, max(pspace_size,nroots))
+        if pspace_size > 0:
+            pw, pv = fci.eig(h0)
+        else:
+            pw = pv = None
 
-    if pspace_size >= na*na and ci0 is None and not davidson_only:
+        if pspace_size >= na*na and ci0 is None and not davidson_only:
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
-        if na*na == 1:
-            return pw[0]+ecore, pv[:,0].reshape(1,1)
-        elif nroots > 1:
-            civec = numpy.empty((nroots,na*na))
-            civec[:,addr] = pv[:,:nroots].T
-            civec = civec.reshape(nroots,na,na)
-            try:
-                return pw[:nroots]+ecore, [_check_(ci) for ci in civec]
-            except ValueError:
-                pass
-        elif abs(pw[0]-pw[1]) > 1e-12:
-            civec = numpy.empty((na*na))
-            civec[addr] = pv[:,0]
-            civec = civec.reshape(na,na)
-            civec = lib.transpose_sum(civec) * .5
-            # direct diagonalization may lead to triplet ground state
+            if na*na == 1:
+                return pw[0]+ecore, pv[:,0].reshape(1,1)
+            elif nroots > 1:
+                civec = numpy.empty((nroots,na*na))
+                civec[:,addr] = pv[:,:nroots].T
+                civec = civec.reshape(nroots,na,na)
+                try:
+                    return pw[:nroots]+ecore, [_check_(ci) for ci in civec]
+                except ValueError:
+                    pass
+            elif abs(pw[0]-pw[1]) > 1e-12:
+                civec = numpy.empty((na*na))
+                civec[addr] = pv[:,0]
+                civec = civec.reshape(na,na)
+                civec = lib.transpose_sum(civec) * .5
+                # direct diagonalization may lead to triplet ground state
 ##TODO: optimize initial guess.  Using pspace vector as initial guess may have
 ## spin problems.  The 'ground state' of psapce vector may have different spin
 ## state to the true ground state.
-            try:
-                return pw[0]+ecore, _check_(civec.reshape(na,na))
-            except ValueError:
-                pass
+                try:
+                    return pw[0]+ecore, _check_(civec.reshape(na,na))
+                except ValueError:
+                    pass
+    except NotImplementedError:
+        addr = [0]
+        pw = pv = None
 
     precond = fci.make_precond(hdiag, pw, pv, addr)
 

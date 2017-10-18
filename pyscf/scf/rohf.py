@@ -119,8 +119,12 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
         mo_ea = mo_eb = mo_energy
     nmo = mo_ea.size
     mo_occ = numpy.zeros(nmo)
-    ncore = mf.nelec[1]
-    nocc  = mf.nelec[0]
+    if mf.nelec is None:
+        nelec = mf.mol.nelec
+    else:
+        nelec = mf.nelec
+    ncore = nelec[1]
+    nocc  = nelec[0]
     nopen = nocc - ncore
     mo_occ = _fill_rohf_occ(mo_energy, mo_ea, mo_eb, ncore, nopen)
 
@@ -280,8 +284,7 @@ class ROHF(hf.RHF):
 
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
-        n_a = (mol.nelectron + mol.spin) // 2
-        self.nelec = (n_a, mol.nelectron - n_a)
+        self.nelec = None
         self._keys = self._keys.union(['nelec'])
 
     def dump_flags(self):
@@ -292,8 +295,12 @@ class ROHF(hf.RHF):
             self.nelec = (self.nelectron_alpha,
                           self.mol.nelectron-self.nelectron_alpha)
             delattr(self, 'nelectron_alpha')
+        if self.nelec is None:
+            nelec = self.mol.nelec
+        else:
+            nelec = self.nelec
         logger.info(self, 'num. doubly occ = %d  num. singly occ = %d',
-                    self.nelec[1], self.nelec[0]-self.nelec[1])
+                    nelec[1], nelec[0]-nelec[1])
 
     def init_guess_by_minao(self, mol=None):
         if mol is None: mol = self.mol
@@ -353,11 +360,12 @@ class ROHF(hf.RHF):
         if (self._eri is not None or not self.direct_scf or
             mol.incore_anyway or self._is_mem_enough()):
             vj, vk = self.get_jk(mol, dm, hermi)
-            vhf = uhf._makevhf(vj, vk)
+            vhf = vj[0] + vj[1] - vk
         else:
             ddm = dm - numpy.asarray(dm_last)
             vj, vk = self.get_jk(mol, ddm, hermi)
-            vhf = uhf._makevhf(vj, vk) + numpy.asarray(vhf_last)
+            vhf = vj[0] + vj[1] - vk
+            vhf += numpy.asarray(vhf_last)
         return vhf
 
     @lib.with_doc(analyze.__doc__)
@@ -370,6 +378,10 @@ class ROHF(hf.RHF):
     def stability(self, internal=True, external=False, verbose=None):
         from pyscf.scf.stability import rohf_stability
         return rohf_stability(self, internal, external, verbose)
+
+    def nuc_grad_method(self):
+        from pyscf.grad import rohf
+        return rohf.Gradients(self)
 
 
 class HF1e(ROHF):

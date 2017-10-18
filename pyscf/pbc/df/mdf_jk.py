@@ -10,7 +10,6 @@ Ref:
 
 import copy
 import numpy
-from pyscf.lib import logger
 from pyscf.pbc.df import df_jk
 from pyscf.pbc.df import aft_jk
 
