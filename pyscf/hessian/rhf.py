@@ -19,24 +19,24 @@ from pyscf.scf.newton_ah import _gen_rhf_response
 from pyscf.grad import rhf as rhf_grad
 
 
-def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
+def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
               mo1=None, mo_e1=None, h1ao=None,
               atmlst=None, max_memory=4000, verbose=None):
-    log = logger.new_logger(hess_mf, verbose)
+    log = logger.new_logger(hessobj, verbose)
     time0 = t1 = (time.clock(), time.time())
 
-    mf = hess_mf._scf
-    mol = hess_mf.mol
+    mol = hessobj.mol
+    mf = hessobj._scf
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
     if atmlst is None: atmlst = range(mol.natm)
 
     if h1ao is None:
-        h1ao = hess_mf.make_h1(mo_coeff, mo_occ, hess_mf.chkfile, atmlst, log)
+        h1ao = hessobj.make_h1(mo_coeff, mo_occ, hessobj.chkfile, atmlst, log)
         t1 = log.timer_debug1('making H1', *time0)
     if mo1 is None or mo_e1 is None:
-        mo1, mo_e1 = hess_mf.solve_mo1(mo_energy, mo_coeff, mo_occ, h1ao,
+        mo1, mo_e1 = hessobj.solve_mo1(mo_energy, mo_coeff, mo_occ, h1ao,
                                        None, atmlst, max_memory, log)
         t1 = log.timer_debug1('solving MO1', *t1)
 
@@ -58,38 +58,40 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
     s1aa, s1ab, s1a = get_ovlp(mol)
 
     vj1, vk1 = _get_jk(mol, 'int2e_ipip1', 9, 's2kl',
-                       ('lk->s1ij', dm0,   # vj1
-                        'jk->s1il', dm0))  # vk1
+                       ['lk->s1ij', dm0,   # vj1
+                        'jk->s1il', dm0])  # vk1
     vhf_diag = vj1 - vk1*.5
+    vhf_diag = vhf_diag.reshape(3,3,nao,nao)
     vj1 = vk1 = None
-    t1 = log.timer('contracting int2e_ipip1', *t1)
+    t1 = log.timer_debug1('contracting int2e_ipip1', *t1)
 
     aoslices = mol.aoslice_by_atom()
-    de2 = numpy.zeros((mol.natm,mol.natm,3,3))
+    de2 = numpy.zeros((mol.natm,mol.natm,3,3))  # (A,B,dR_A,dR_B)
     for i0, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
 
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
         vj1, vk1, vk2 = _get_jk(mol, 'int2e_ip1ip2', 9, 's1',
-                                ('ji->s1kl', dm0[:,p0:p1],  # vj1
+                                ['ji->s1kl', dm0[:,p0:p1],  # vj1
                                  'li->s1kj', dm0[:,p0:p1],  # vk1
-                                 'lj->s1ki', dm0         ), # vk2
+                                 'lj->s1ki', dm0         ], # vk2
                                 shls_slice=shls_slice)
         vhf = vj1 * 2 - vk1 * .5
         vhf[:,:,p0:p1] -= vk2 * .5
         t1 = log.timer_debug1('contracting int2e_ip1ip2 for atom %d'%ia, *t1)
         vj1, vk1 = _get_jk(mol, 'int2e_ipvip1', 9, 's2kl',
-                           ('lk->s1ij', dm0,           # vj1
-                            'li->s1kj', dm0[:,p0:p1]), # vk1
+                           ['lk->s1ij', dm0,           # vj1
+                            'li->s1kj', dm0[:,p0:p1]], # vk1
                            shls_slice=shls_slice)
         vhf[:,:,p0:p1] += vj1.transpose(0,2,1)
         vhf -= vk1.transpose(0,2,1) * .5
         vj1 = vk1 = vk2 = None
         t1 = log.timer_debug1('contracting int2e_ipvip1 for atom %d'%ia, *t1)
+        vhf = vhf.reshape(3,3,nao,nao)
 
         rinv2aa, rinv2ab = _hess_rinv(mol, ia)
-        hcore = rinv2ab + rinv2aa.transpose(0,2,1)
-        hcore[:,p0:p1] += h1ab[:,p0:p1]
+        hcore = rinv2ab + rinv2aa.transpose(0,1,3,2)
+        hcore[:,:,p0:p1] += h1ab[:,:,p0:p1]
         s1ao = numpy.zeros((3,nao,nao))
         s1ao[:,p0:p1] += s1a[:,p0:p1]
         s1ao[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
@@ -105,33 +107,29 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
             de -= numpy.einsum('xpq,ypq->xy', s1ao, dm1) * 4
             de -= numpy.einsum('xpq,ypq->xy', s1oo, mo_e1[ja]) * 2
 
-            de = de.reshape(-1)
             v2aa, v2ab = _hess_rinv(mol, ja)
-            de += numpy.einsum('xpq,pq->x', v2aa[:,p0:p1], dm0[p0:p1])*2
-            de += numpy.einsum('xpq,pq->x', v2ab[:,p0:p1], dm0[p0:p1])*2
-            de += numpy.einsum('xpq,pq->x', hcore[:,:,q0:q1], dm0[:,q0:q1])*2
-            de += numpy.einsum('xpq,pq->x', vhf[:,q0:q1], dm0[q0:q1])*2
-            de -= numpy.einsum('xpq,pq->x', s1ab[:,p0:p1,q0:q1], dme0[p0:p1,q0:q1])*2
+            de += numpy.einsum('xypq,pq->xy', v2aa[:,:,p0:p1], dm0[p0:p1])*2
+            de += numpy.einsum('xypq,pq->xy', v2ab[:,:,p0:p1], dm0[p0:p1])*2
+            de += numpy.einsum('xypq,pq->xy', hcore[:,:,:,q0:q1], dm0[:,q0:q1])*2
+            de += numpy.einsum('xypq,pq->xy', vhf[:,:,q0:q1], dm0[q0:q1])*2
+            de -= numpy.einsum('xypq,pq->xy', s1ab[:,:,p0:p1,q0:q1], dme0[p0:p1,q0:q1])*2
 
             if ia == ja:
-                de += numpy.einsum('xpq,pq->x', h1aa[:,p0:p1], dm0[p0:p1])*2
-                de -= numpy.einsum('xpq,pq->x', v2aa, dm0)*2
-                de -= numpy.einsum('xpq,pq->x', v2ab, dm0)*2
-                de += numpy.einsum('xpq,pq->x', vhf_diag[:,p0:p1], dm0[p0:p1])*2
-                de -= numpy.einsum('xpq,pq->x', s1aa[:,p0:p1], dme0[p0:p1])*2
+                de += numpy.einsum('xypq,pq->xy', h1aa[:,:,p0:p1], dm0[p0:p1])*2
+                de -= numpy.einsum('xypq,pq->xy', v2aa, dm0)*2
+                de -= numpy.einsum('xypq,pq->xy', v2ab, dm0)*2
+                de += numpy.einsum('xypq,pq->xy', vhf_diag[:,:,p0:p1], dm0[p0:p1])*2
+                de -= numpy.einsum('xypq,pq->xy', s1aa[:,:,p0:p1], dme0[p0:p1])*2
 
-            de2[i0,j0] = de.reshape(3,3)
-            de2[j0,i0] = de.reshape(3,3).T
+            de2[i0,j0] = de
+            de2[j0,i0] = de.T
 
     log.timer('RHF hessian', *time0)
     return de2
 
-def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN):
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mf.stdout, mf.verbose)
-    mol = mf.mol
+def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
+    time0 = t1 = (time.clock(), time.time())
+    mol = hessobj.mol
     if atmlst is None:
         atmlst = range(mol.natm)
 
@@ -142,33 +140,32 @@ def make_h1(mf, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=logger.WARN
 
     aoslices = mol.aoslice_by_atom()
     int2e_ip1 = mol._add_suffix('int2e_ip1')
-    h1s = [None] * mol.natm
+    h1ao = [None] * mol.natm
     for i0, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
 
         mol.set_rinv_origin(mol.atom_coord(ia))
-        h1ao = -mol.atom_charge(ia) * mol.intor('int1e_iprinv', comp=3)
-        h1ao[:,p0:p1] += h1a[:,p0:p1]
-        h1ao = h1ao + h1ao.transpose(0,2,1)
+        h1 = -mol.atom_charge(ia) * mol.intor('int1e_iprinv', comp=3)
+        h1[:,p0:p1] += h1a[:,p0:p1]
 
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
         vj1, vj2, vk1, vk2 = _get_jk(mol, 'int2e_ip1', 3, 's2kl',
-                                     ('ji->s2kl', -dm0[:,p0:p1],  # vj1
+                                     ['ji->s2kl', -dm0[:,p0:p1],  # vj1
                                       'lk->s1ij', -dm0         ,  # vj2
                                       'li->s1kj', -dm0[:,p0:p1],  # vk1
-                                      'jk->s1il', -dm0         ), # vk2
+                                      'jk->s1il', -dm0         ], # vk2
                                      shls_slice=shls_slice)
-        vhf = vj1 - vk1*.5
-        vhf[:,p0:p1] += vj2 - vk2*.5
-        vhf = vhf + vhf.transpose(0,2,1)
+        h1 += vj1 - vk1*.5
+        h1[:,p0:p1] += vj2 - vk2*.5
+        h1 = h1 + h1.transpose(0,2,1)
 
         if chkfile is None:
-            h1s[ia] = h1ao+vhf
+            h1ao[ia] = h1
         else:
             key = 'scf_f1ao/%d' % ia
-            lib.chkfile.save(chkfile, key, h1ao+vhf)
+            lib.chkfile.save(chkfile, key, h1)
     if chkfile is None:
-        return h1s
+        return h1ao
     else:
         return chkfile
 
@@ -177,7 +174,8 @@ def get_hcore(mol):
     h1aa+= mol.intor('int1e_ipipnuc', comp=9)
     h1ab = mol.intor('int1e_ipkinip', comp=9)
     h1ab+= mol.intor('int1e_ipnucip', comp=9)
-    return h1aa, h1ab
+    nao = h1aa.shape[-1]
+    return h1aa.reshape(3,3,nao,nao), h1ab.reshape(3,3,nao,nao)
 
 def _hess_rinv(mol, atom_id):
     mol.set_rinv_origin(mol.atom_coord(atom_id))
@@ -187,12 +185,14 @@ def _hess_rinv(mol, atom_id):
     Z = mol.atom_charge(atom_id)
     rinv2aa *= Z
     rinv2ab *= Z
-    return rinv2aa, rinv2ab
+    nao = rinv2aa.shape[-1]
+    return rinv2aa.reshape(3,3,nao,nao), rinv2ab.reshape(3,3,nao,nao)
 
 def get_ovlp(mol):
-    s1aa = mol.intor('int1e_ipipovlp', comp=9)
-    s1ab = mol.intor('int1e_ipovlpip', comp=9)
     s1a =-mol.intor('int1e_ipovlp', comp=3)
+    nao = s1a.shape[-1]
+    s1aa = mol.intor('int1e_ipipovlp', comp=9).reshape(3,3,nao,nao)
+    s1ab = mol.intor('int1e_ipovlpip', comp=9).reshape(3,3,nao,nao)
     return s1aa, s1ab, s1a
 
 def _get_jk(mol, intor, comp, aosym, script_dms,
@@ -204,15 +204,15 @@ def _get_jk(mol, intor, comp, aosym, script_dms,
                            mol._atm, mol._bas, mol._env,
                            cintopt=cintopt, shls_slice=shls_slice)
     for k, script in enumerate(scripts):
+        if 's2' in script:
+            hermi = 1
+        elif 'a2' in script:
+            hermi = 2
+        else:
+            continue
+
         shape = vs[k].shape
         if shape[-2] == shape[-1]:
-            if 's2' in script:
-                hermi = 1
-            elif 'a2' in script:
-                hermi = 2
-            else:
-                continue
-
             if comp > 1:
                 for i in range(comp):
                     lib.hermi_triu(vs[k][i], hermi=hermi, inplace=True)
@@ -222,10 +222,6 @@ def _get_jk(mol, intor, comp, aosym, script_dms,
 
 def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
               fx=None, atmlst=None, max_memory=4000, verbose=None):
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mf.stdout, mf.verbose)
     mol = mf.mol
     if atmlst is None: atmlst = range(mol.natm)
 
@@ -235,14 +231,14 @@ def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
 
     if fx is None:
         fx = gen_vind(mf, mo_coeff, mo_occ)
-
-    aoslices = mol.aoslice_by_atom()
-    mem_now = lib.current_memory()[0]
-    max_memory = max(4000, max_memory*.9-mem_now)
-    blksize = max(2, int(max_memory*1e6/8 / (nmo*nocc*3*6)))
     s1a =-mol.intor('int1e_ipovlp', comp=3)
+
+    mem_now = lib.current_memory()[0]
+    max_memory = max(2000, max_memory*.9-mem_now)
+    blksize = max(2, int(max_memory*1e6/8 / (nmo*nocc*3*6)))
     mo1s = [None] * mol.natm
     e1s = [None] * mol.natm
+    aoslices = mol.aoslice_by_atom()
     for ia0, ia1 in lib.prange(0, len(atmlst), blksize):
         s1vo = []
         h1vo = []
@@ -433,7 +429,7 @@ if __name__ == '__main__':
     e2ref = numpy.asarray(e2ref).reshape(n3,n3)
     print(numpy.linalg.norm(e2-e2ref))
     print(abs(e2-e2ref).max())
-    print(numpy.allclose(e2,e2ref,atol=1e-6))
+    print(numpy.allclose(e2,e2ref,atol=1e-8))
 
 ## \partial^2 E / \partial R \partial C (dC/dR)
 #    e2 = hobj.hess_elec(mf.mo_energy, mf.mo_coeff*0, mf.mo_occ,
