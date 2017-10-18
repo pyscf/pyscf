@@ -417,7 +417,7 @@ def _uncontract_mol(mol, xuncontract=False, exp_drop=0.2):
                 idx = numpy.hstack((contracted, numpy.arange(nkept,np)))
                 exps = mol._env[pexp:pexp+np][idx]
                 cs = mol._libcint_ctr_coeff(ib)[idx]
-                ee = mole._gaussian_int(l*2+2, exps[:,None] + exps)
+                ee = mole.gaussian_int(l*2+2, exps[:,None] + exps)
                 s1 = numpy.einsum('pi,pq,qi->i', cs, ee, cs)
                 s1 = numpy.sqrt(s1)
                 cs = numpy.einsum('pi,i->pi', cs, 1/s1)

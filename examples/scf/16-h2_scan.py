@@ -2,6 +2,7 @@
 
 '''
 Scan H2 molecule dissociation curve.
+See also 30-scan_pes.py
 '''
 
 import numpy

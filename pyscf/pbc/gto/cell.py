@@ -20,7 +20,7 @@ from pyscf import dft
 from pyscf.lib import logger
 from pyscf.gto import mole
 from pyscf.gto import moleintor
-from pyscf.gto.mole import _symbol, _rm_digit, _atom_symbol, _std_symbol, _charge
+from pyscf.gto.mole import _symbol, _rm_digit, _atom_symbol, _std_symbol, charge
 from pyscf.gto.mole import conc_env, uncontract
 from pyscf.pbc.gto import basis
 from pyscf.pbc.gto import pseudo
@@ -492,12 +492,12 @@ def get_Gv_weights(cell, gs=None):
         #return np.hstack((0,rs,-rs[::-1])), np.hstack((0,ws,ws[::-1]))
         return np.hstack((rs,-rs[::-1])), np.hstack((ws,ws[::-1]))
 
+    low_dim_ft_type = cell.low_dim_ft_type
     # Default, the 3D uniform grids
     b = cell.reciprocal_vectors()
     rx = np.append(np.arange(gs[0]+1.), np.arange(-gs[0],0.))
     ry = np.append(np.arange(gs[1]+1.), np.arange(-gs[1],0.))
     rz = np.append(np.arange(gs[2]+1.), np.arange(-gs[2],0.))
-
     ngs = [i*2+1 for i in gs]
     if cell.dimension == 0:
         rx, wx = plus_minus(gs[0])
@@ -515,17 +515,23 @@ def get_Gv_weights(cell, gs=None):
         rz /= np.linalg.norm(b[2])
         weights = np.einsum('i,j,k->ijk', wx, wy, wz).reshape(-1)
     elif cell.dimension == 2:
-        area = np.linalg.norm(np.cross(b[0], b[1]))
-        wxy = np.repeat(area, ngs[0]*ngs[1])
-        rz, wz = plus_minus(gs[2])
-        rz /= np.linalg.norm(b[2])
-        weights = np.einsum('i,k->ik', wxy, wz).reshape(-1)
+        # Don't redefine the grids
+        if low_dim_ft_type is None:
+            area = np.linalg.norm(np.cross(b[0], b[1]))
+            wxy = np.repeat(area, ngs[0]*ngs[1])
+            rz, wz = plus_minus(gs[2])
+            rz /= np.linalg.norm(b[2])
+            weights = np.einsum('i,k->ik', wxy, wz).reshape(-1)
     else:
         weights = abs(np.linalg.det(b))
     Gvbase = (rx, ry, rz)
     Gv = np.dot(lib.cartesian_prod(Gvbase), b)
-    # 1/cell.vol == det(b)/(2pi)^3
-    weights *= 1/(2*np.pi)**3
+    # This could be appropriate to catch any bugs
+    if low_dim_ft_type is not None:
+        weights = None
+    else:
+        # 1/cell.vol == det(b)/(2pi)^3
+        weights *= 1/(2*np.pi)**3
     return Gv, Gvbase, weights
 
 def get_SI(cell, Gv=None):
@@ -565,9 +571,14 @@ def get_ewald_params(cell, precision=1e-8, gs=None):
         ew_eta, ew_cut : float
             The Ewald 'eta' and 'cut' parameters.
     '''
-    if cell.dimension == 3:
+    if cell.natm == 0:
+        return 0, 0
+    elif cell.dimension == 3:
         if gs is None:
             gs = 5
+        else:
+            gs = np.copy(gs)
+            gs[gs>40] = 40
         Gmax = min(np.asarray(gs) * lib.norm(cell.reciprocal_vectors(), axis=1))
         log_precision = np.log(precision/(4*np.pi*Gmax**2))
         ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
@@ -592,11 +603,13 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     See Also:
         pyscf.pbc.gto.get_ewald_params
     '''
+    if cell.natm == 0:
+        return 0
     if ew_eta is None: ew_eta = cell.ew_eta
     if ew_cut is None: ew_cut = cell.ew_cut
     chargs = cell.atom_charges()
     coords = cell.atom_coords()
-
+    low_dim_ft_type = cell.low_dim_ft_type
     Lall = cell.get_lattice_Ls(rcut=ew_cut)
     ewovrl = 0.
     for i, qi in enumerate(chargs):
@@ -627,18 +640,68 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     #   ZS_I(G) = \sum_a Z_a exp (i G.R_a)
     # See also Eq. (32) of ewald.pdf at
     #   http://www.fisica.uniud.it/~giannozz/public/ewald.pdf
-
-    gs = cell.gs
+    gs = np.copy(cell.gs)
+    gs[gs>40] = 40
     Gv, Gvbase, weights = cell.get_Gv_weights(gs)
     absG2 = np.einsum('gi,gi->g', Gv, Gv)
     absG2[absG2==0] = 1e200
-    coulG = 4*np.pi / absG2
-    coulG *= weights
-    JexpG2 = np.exp(-absG2/(4*ew_eta**2)) * coulG
+    if low_dim_ft_type is None or cell.dimension == 3:
+        coulG = 4*np.pi / absG2
+        coulG *= weights
+        JexpG2 = np.exp(-absG2/(4*ew_eta**2)) * coulG
 
-    ZSI = np.einsum("i,ij->j", chargs, cell.get_SI(Gv))
-    ZSIG2 = np.abs(ZSI)**2
-    ewg = .5 * np.dot(ZSIG2, JexpG2)
+        ZSI = np.einsum("i,ij->j", chargs, cell.get_SI(Gv))
+        ZSIG2 = np.abs(ZSI)**2
+        ewg = .5 * np.dot(ZSIG2, JexpG2)
+    elif low_dim_ft_type == 'analytic_2d_1' and cell.dimension == 2:
+        # The following 2D ewald summation is taken from:
+        # R. Sundararaman and T. Arias PRB 87, 2013
+        def fn(eta,Gnorm,z):
+            with np.errstate(over='ignore'):
+                ret = np.exp(Gnorm*z)*scipy.special.erfc(Gnorm/2./eta + eta*z)
+            large_idx = Gnorm*z > 20.0
+            if len(large_idx) > 0:
+                x = Gnorm[large_idx]/2./eta + eta*z
+                ret[large_idx] = (np.exp(Gnorm[large_idx]*z-x**2)/np.sqrt(np.pi)/x *
+                                      (1 - 0.5/x**2) )
+            return ret
+        def gn(eta,Gnorm,z):
+            return np.pi/Gnorm*(fn(eta,Gnorm,z) + fn(eta,Gnorm,-z))
+        def gn0(eta,z):
+            return -2*np.pi*(z*scipy.special.erf(eta*z) + np.exp(-(eta*z)**2)/eta/np.sqrt(np.pi))
+        ewg = 0.0
+        b = cell.reciprocal_vectors()
+        inv_area = np.linalg.norm(np.cross(b[0], b[1]))/(2*np.pi)**2
+        # Perform the reciprocal space summation over  all reciprocal vectors
+        # within the x,y plane.
+        planarG2_idx = np.logical_and(Gv[:,2] == 0, absG2 > 0.0)
+        Gv = Gv[planarG2_idx]
+        absG2 = absG2[planarG2_idx]
+        absG = absG2**(0.5)
+        # Performing the G != 0 summation.
+        for i,ri in enumerate(coords):
+            qi = chargs[i]
+            for j,rj in enumerate(coords):
+                rij = rj - ri
+                qij = qi*chargs[j]
+
+                Gdotr = np.dot(Gv,rij.T)
+                val = qij*np.cos(Gdotr)*gn(ew_eta,absG,rij[2])
+                ewg += val.sum()
+        # Performing the G == 0 summation.
+        for i,vi in enumerate(coords):
+            qi = chargs[i]
+            for j,vj in enumerate(coords):
+                rij = vj - vi
+                qij = qi*chargs[j]
+
+                val = qij*gn0(ew_eta,rij[2])
+                ewg += val.sum()
+        ewg *= inv_area*0.5
+    else:
+        raise NotImplementedError('Low dimension ft_type ',
+            low_dim_ft_type, ' not implemented for dimension ',
+            cell.dimension)
 
     logger.debug(cell, 'Ewald components = %.15g, %.15g, %.15g', ewovrl, ewself, ewg)
     return ewovrl + ewself + ewg
@@ -791,6 +854,10 @@ class Cell(mole.Mole):
         self.precision = 1.e-8
         self.pseudo = None
         self.dimension = 3
+        # TODO: Simple hack for now; the implementation of ewald depends on the
+        #       density-fitting class.  This determines how the ewald produces
+        #       its energy.
+        self.low_dim_ft_type = None
 
 ##################################################
 # These attributes are initialized by build function if not given
@@ -865,7 +932,7 @@ class Cell(mole.Mole):
 
         if self.rcut is None:
             self.rcut = max([self.bas_rcut(ib, self.precision)
-                             for ib in range(self.nbas)])
+                             for ib in range(self.nbas)] + [0])
 
         _a = self.lattice_vectors()
         if np.linalg.det(_a) < 0 and self.dimension == 3:
@@ -873,17 +940,12 @@ class Cell(mole.Mole):
   Lattice are not in right-handed coordinate system. This can cause wrong value for some integrals.
   It's recommended to resort the lattice vectors to\na = %s\n\n''' % _a[[0,2,1]])
 
-        ke_cutoff is None
         if self.gs is None:
             if self.ke_cutoff is None:
                 ke_cutoff = estimate_ke_cutoff(self, self.precision)
             else:
                 ke_cutoff = self.ke_cutoff
             self.gs = pbctools.cutoff_to_gs(_a, ke_cutoff)
-            if self.dimension < 3:
-                #prec ~ exp(-0.87278467*gs -2.99944305)*nelec
-                gz = np.log(self.nelectron/self.precision)/0.8727847-3.4366358
-                self.gs[self.dimension:] = int(gz)
 
         if self.ew_eta is None or self.ew_cut is None:
             self.ew_eta, self.ew_cut = self.get_ewald_params(self.precision, self.gs)

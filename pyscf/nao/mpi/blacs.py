@@ -102,8 +102,8 @@ Notes After port to PYSCF:
 
 import numpy as np
 
-from pyscf.mpi import SerialCommunicator
-from pyscf.mpi.scalapack import scalapack_inverse_cholesky, \
+from pyscf.nao.mpi import SerialCommunicator
+from pyscf.nao.mpi.scalapack import scalapack_inverse_cholesky, \
     scalapack_diagonalize_ex, scalapack_general_diagonalize_ex, \
     scalapack_diagonalize_dc, scalapack_general_diagonalize_dc, \
     scalapack_diagonalize_mr3, scalapack_general_diagonalize_mr3

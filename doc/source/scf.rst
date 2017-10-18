@@ -4,11 +4,13 @@ scf --- Mean-field methods
 .. module:: scf
    :synopsis: restricted and unrestricted, closed shell and open shell Hartree-Fock methods
 
-Introduction
-============
+
+Stability analysis
+==================
+
 
 Caching two-electron integrals
-------------------------------
+==============================
 
 When memory is enough (specified by the :attr:`max_memory` of SCF object), the
 SCF object generates all two-electron integrals in memory and cache them in
@@ -31,7 +33,7 @@ For large system, the AO-driven direct SCF method is more favorable.
 .. _customize_h:
 
 Customizing Hamiltonian
------------------------
+=======================
 
 This integral object :attr:`_eri` is not merely used by the mean-field
 calculation.  Along with the :meth:`get_hcore` method, this two-electron
@@ -50,8 +52,8 @@ model system::
     
     t = numpy.zeros((n,n))
     for i in range(n-1):
-        t[i,i+1] = t[i+1,i] = 1.0
-    t[n-1,0] = t[0,n-1] = -1.0
+        t[i,i+1] = t[i+1,i] = -1.0
+    t[n-1,0] = t[0,n-1] = 1.0  # anti-PBC
     eri = numpy.zeros((n,n,n,n))
     for i in range(n):
         eri[i,i,i,i] = 4.0

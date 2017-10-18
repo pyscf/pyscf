@@ -333,7 +333,7 @@ def init_guess_by_minao(mol):
     basis = {}
     occdic = {}
     for symb in atmlst:
-        if 'GHOST' not in symb:
+        if not gto.is_ghost_atom(symb):
             nelec_ecp = nelec_ecp_dic[symb]
             occ_add, basis_add = minao_basis(symb, nelec_ecp)
             occdic[symb] = occ_add
@@ -342,7 +342,7 @@ def init_guess_by_minao(mol):
     new_atom = []
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
-        if 'GHOST' not in symb:
+        if not gto.is_ghost_atom(symb):
             occ.append(occdic[symb])
             new_atom.append(mol._atom[ia])
     occ = numpy.hstack(occ)
@@ -470,6 +470,10 @@ def make_rdm1(mo_coeff, mo_occ):
             Occupancy
     '''
     mocc = mo_coeff[:,mo_occ>0]
+# DO NOT make tag_array for dm1 here because this DM array may be modified and
+# passed to functions like get_jk, get_vxc.  These function may take the tag
+# (mo_coeff, mo_occ) to compute the potential if tags was found in the DM
+# matrix and modifications to DM matrix may be ignored.
     return numpy.dot(mocc*mo_occ[mo_occ>0], mocc.T.conj())
 
 
