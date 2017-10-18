@@ -185,15 +185,16 @@ class tddft_iter_c():
     return chi0_re + 1.0j*chi0_im
 
 
-  def comp_veff(self, vext, comega=1j*0.0):
-    from scipy.sparse.linalg import gmres, lgmres as gmres_alias, LinearOperator
+  def comp_veff(self, vext, comega=1j*0.0, x0=None):
+    #from scipy.sparse.linalg import gmres, lgmres as gmres_alias, LinearOperator
+    from scipy.sparse.linalg import lgmres, LinearOperator
     
     """ This computes an effective field (scalar potential) given the external scalar potential """
     assert len(vext)==len(self.moms0), "%r, %r "%(len(vext), len(self.moms0))
     self.comega_current = comega
     veff_op = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)
-    resgm = gmres_alias(veff_op, np.require(vext, dtype=self.dtypeComplex, 
-        requirements='C'), tol=self.tddft_iter_tol)
+    resgm = lgmres(veff_op, np.require(vext, dtype=self.dtypeComplex, 
+        requirements='C'), x0=x0, tol=self.tddft_iter_tol)
     return resgm
   
   def vext2veff_matvec(self, v):
@@ -215,15 +216,37 @@ class tddft_iter_c():
 
     return v - (matvec_real + 1.0j*matvec_imag)
 
-  def comp_polariz_xx(self, comegas):
-    """ Polarizability """
+  def comp_polariz_xx(self, comegas, x0=False):
+    """ 
+        Compute interacting polarizability
+
+        Inputs:
+        -------
+            comegas (complex 1D array): frequency range (in Hartree) for which the polarizability is computed.
+                                     The imaginary part control the width of the signal.
+                                     For example, 
+                                     td = tddft_iter_c(...)
+                                     comegas = np.arange(0.0, 10.05, 0.05) + 1j*td.eps
+            x0 (boolean, optional): determine if a starting guess array should be use to
+                                    guess the solution. if True, it will use the non-interacting 
+                                    polarizability as guess.
+        Output:
+        -------
+            polariz (complex 1D array): computed polarizability
+            self.dn (complex 2D array): computed density change in prod basis
+        
+    """
     polariz = np.zeros_like(comegas, dtype=np.complex64)
+    self.dn = np.zeros((comegas.shape[0], self.nprod), dtype=np.complex64)
     
     for iw,comega in enumerate(comegas):
-      veff,info = self.comp_veff(self.moms1[:,0], comega)
-      chi0 = self.apply_rf0( veff, comega )
+        if x0 == True:
+            veff,info = self.comp_veff(self.moms1[:,0], comega, x0=self.dn0[iw, :])
+        else:
+            veff,info = self.comp_veff(self.moms1[:,0], comega, x0=None)
+        self.dn[iw, :] = -self.apply_rf0( veff, comega )
 
-      polariz[iw] = np.dot(self.moms1[:,0], chi0)
+        polariz[iw] = np.dot(self.moms1[:,0], self.dn[iw, :])
 
     if self.tddft_iter_gpu.GPU:
         self.tddft_iter_gpu.clean_gpu()
@@ -231,13 +254,28 @@ class tddft_iter_c():
     return polariz
 
   def comp_nonin(self, comegas):
+    """ 
+        Compute non-interacting polarizability
+
+        Inputs:
+        -------
+            comegas (complex 1D array): frequency range (in Hartree) for which the polarizability is computed.
+                                     The imaginary part control the width of the signal.
+                                     For example, 
+                                     td = tddft_iter_c(...)
+                                     comegas = np.arange(0.0, 10.05, 0.05) + 1j*td.eps
+        Output:
+        -------
+            pxx (complex 1D array): computed non-interacting polarizability
+            self.dn0 (complex 2D array): computed non-interacting density change in prod basis
+        
     """
-        Non interacting polarizability
-    """
+
     vext = np.transpose(self.moms1)
     pxx = np.zeros(comegas.shape, dtype=np.complex64)
+    self.dn0 = np.zeros((comegas.shape[0], self.nprod), dtype=np.complex64)
 
     for iomega, omega in enumerate(comegas):
-      chi0 = self.apply_rf0(vext[0,:], omega)
-      pxx[iomega] =-np.dot(chi0, vext[0,:])
+        self.dn0[iomega, :] = -self.apply_rf0(vext[0,:], omega)
+        pxx[iomega] = np.dot(self.dn0[iomega, :], vext[0,:])
     return pxx
