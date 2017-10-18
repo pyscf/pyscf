@@ -362,7 +362,6 @@ class Hessian(lib.StreamObject):
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    from pyscf.scf import rhf_grad
 
     mol = gto.Mole()
     mol.verbose = 0

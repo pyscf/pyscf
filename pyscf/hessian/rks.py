@@ -537,15 +537,12 @@ if __name__ == '__main__':
     e2 = hobj.kernel().transpose(0,2,1,3).reshape(n3,n3)
     print(lib.finger(e2) - -0.42286447944621297)
     print(lib.finger(e2) - -0.41385249055285972)
-    exit()
 
     def grad_full(ia, inc):
         coord = mol.atom_coord(ia).copy()
         ptr = mol._atm[ia,gto.PTR_COORD]
         de = []
         for i in range(3):
-            coord = mol.atom_coord(ia).copy()
-            ptr = mol._atm[ia,gto.PTR_COORD]
             mol._env[ptr+i] = coord[i] + inc
             mf = dft.RKS(mol).set(conv_tol=1e-14, xc=xc_code).run()
             e1a = mf.nuc_grad_method().set(grid_response=True).kernel()
