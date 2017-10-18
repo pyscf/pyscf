@@ -28,11 +28,11 @@ class KnowValues(unittest.TestCase):
         mo_energy_kpts = numpy.array([numpy.arange(nao)*.2+numpy.cos(i+.5)*.1
                                       for i in range(nkpts)])
         occ = mf.get_occ(mo_energy_kpts)
-        self.assertAlmostEqual(mf.entropy, 6.1656394960533021, 9)
+        self.assertAlmostEqual(mf.entropy, 6.1656394960533021/2, 9)
 
         mf.smearing_method = 'gauss'
         occ = mf.get_occ(mo_energy_kpts)
-        self.assertAlmostEqual(mf.entropy, 2.4500185794942135, 9)
+        self.assertAlmostEqual(mf.entropy, 2.4500185794942135/2, 9)
 
     def test_kuhf_smearing(self):
         mf = pscf.KUHF(cell, cell.make_kpts([2,1,1]))
@@ -43,11 +43,11 @@ class KnowValues(unittest.TestCase):
         mo_energy_kpts = numpy.array([mo_energy_kpts,
                                       mo_energy_kpts+numpy.cos(mo_energy_kpts)*.02])
         occ = mf.get_occ(mo_energy_kpts)
-        self.assertAlmostEqual(mf.entropy, 6.1803390081500869, 9)
+        self.assertAlmostEqual(mf.entropy, 6.1803390081500869/2, 9)
 
         mf.smearing_method = 'gauss'
         occ = mf.get_occ(mo_energy_kpts)
-        self.assertAlmostEqual(mf.entropy, 2.4646236868793121, 9)
+        self.assertAlmostEqual(mf.entropy, 2.4646236868793121/2, 9)
 
     def test_rhf_smearing(self):
         mf = pscf.RHF(cell)
