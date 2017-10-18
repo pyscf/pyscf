@@ -5,6 +5,8 @@ PySCF 1.5 alpha (2018-03-??)
   - VV10 NLC functional for RKS and UKS
   - range-separated hybrid feature for RKS and UKS
   - IBO for molecular and PBC systems
+  - UHF analytical nuclear Hessian
+  - UKS analytical nuclear Hessian
 
 
 PySCF 1.4.1 (201?-?-?)
@@ -375,8 +377,8 @@ Version 1.1 alpha-2 (2016-3-8):
 * Added
   - CCSD(T) and CCSD(T) gradients
   - General JK contraction function
-  - HF Hessian
-  - DFT Hessian
+  - RHF analytical nuclear Hessian
+  - RKS analytical nuclear Hessian
   - Function to symmetrize given orbital space
   - General XC functional evaluator (using Libxc or Xcfun)
   - Intrinsic Atomic Orbital (IAO)

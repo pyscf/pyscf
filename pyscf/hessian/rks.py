@@ -13,6 +13,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.hessian import rhf as rhf_hess
 from pyscf.grad import rhf as rhf_grad
+from pyscf.grad import rks as rks_grad
 from pyscf.dft import numint
 
 
@@ -294,19 +295,6 @@ def _make_dR_rho1(ao, ao_dm0, atm_id, aoslices):
     # *2 for |mu> DM <d_X nu|
     return rho1 * 2
 
-def _make_dR_dao_w(ao, wv):
-    aow = numpy.einsum('npi,p->npi', ao[1:4], wv[0])
-    aow[0] += numpy.einsum('pi,p->pi', ao[XX], wv[1])  # dX
-    aow[0] += numpy.einsum('pi,p->pi', ao[XY], wv[2])  # dX
-    aow[0] += numpy.einsum('pi,p->pi', ao[XZ], wv[3])  # dX
-    aow[1] += numpy.einsum('pi,p->pi', ao[YX], wv[1])  # dY
-    aow[1] += numpy.einsum('pi,p->pi', ao[YY], wv[2])  # dY
-    aow[1] += numpy.einsum('pi,p->pi', ao[YZ], wv[3])  # dY
-    aow[2] += numpy.einsum('pi,p->pi', ao[ZX], wv[1])  # dZ
-    aow[2] += numpy.einsum('pi,p->pi', ao[ZY], wv[2])  # dZ
-    aow[2] += numpy.einsum('pi,p->pi', ao[ZZ], wv[3])  # dZ
-    return aow
-
 def _d1d2_dot_(vmat, mol, ao1, ao2, mask, ao_loc, dR1_on_bra=True):
     shls_slice = (0, mol.nbas)
     if dR1_on_bra:  # (d/dR1 bra) * (d/dR2 ket)
@@ -319,17 +307,6 @@ def _d1d2_dot_(vmat, mol, ao1, ao2, mask, ao_loc, dR1_on_bra=True):
             for d2 in range(3):
                 vmat[d1,d2] += numint._dot_ao_ao(mol, ao1[d2], ao2[d1], mask,
                                                  shls_slice, ao_loc)
-
-def _d1_dot_(vmat, mol, ao1, ao2, mask, ao_loc, dR1_on_bra=True):
-    shls_slice = (0, mol.nbas)
-    if dR1_on_bra:
-        vmat[0] += numint._dot_ao_ao(mol, ao1[0], ao2, mask, shls_slice, ao_loc)
-        vmat[1] += numint._dot_ao_ao(mol, ao1[1], ao2, mask, shls_slice, ao_loc)
-        vmat[2] += numint._dot_ao_ao(mol, ao1[2], ao2, mask, shls_slice, ao_loc)
-    else:
-        vmat[0] += numint._dot_ao_ao(mol, ao1, ao2[0], mask, shls_slice, ao_loc)
-        vmat[1] += numint._dot_ao_ao(mol, ao1, ao2[1], mask, shls_slice, ao_loc)
-        vmat[2] += numint._dot_ao_ao(mol, ao1, ao2[2], mask, shls_slice, ao_loc)
 
 def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
     mol = hessobj.mol
@@ -384,7 +361,7 @@ def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
             vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
 
             wv = numint._rks_gga_wv0(rho, vxc, weight)
-            aow = _make_dR_dao_w(ao, wv)
+            aow = rks_grad._make_dR_dao_w(ao, wv)
             _d1d2_dot_(ipip, mol, aow, ao[1:4], mask, ao_loc, False)
 
             ao_dm0 = [numint._dot_ao_dm(mol, ao[i], dm0, mask, shls_slice, ao_loc)
@@ -395,12 +372,12 @@ def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
                 wv[1] = numint._rks_gga_wv1(rho, dR_rho1[1], vxc, fxc, weight)
                 wv[2] = numint._rks_gga_wv1(rho, dR_rho1[2], vxc, fxc, weight)
 
-                aow = _make_dR_dao_w(ao, wv[0])
-                _d1_dot_(vmat[ia,0], mol, aow, ao[0], mask, ao_loc, True)
-                aow = _make_dR_dao_w(ao, wv[1])
-                _d1_dot_(vmat[ia,1], mol, aow, ao[0], mask, ao_loc, True)
-                aow = _make_dR_dao_w(ao, wv[2])
-                _d1_dot_(vmat[ia,2], mol, aow, ao[0], mask, ao_loc, True)
+                aow = rks_grad._make_dR_dao_w(ao, wv[0])
+                rks_grad._d1_dot_(vmat[ia,0], mol, aow, ao[0], mask, ao_loc, True)
+                aow = rks_grad._make_dR_dao_w(ao, wv[1])
+                rks_grad._d1_dot_(vmat[ia,1], mol, aow, ao[0], mask, ao_loc, True)
+                aow = rks_grad._make_dR_dao_w(ao, wv[2])
+                rks_grad._d1_dot_(vmat[ia,2], mol, aow, ao[0], mask, ao_loc, True)
 
                 aow = numpy.einsum('npi,Xnp->Xpi', ao[:4], wv)
                 _d1d2_dot_(vmat[ia], mol, ao[1:4], aow, mask, ao_loc, False)
@@ -452,7 +429,7 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
                 rho1 = numpy.einsum('xpi,pi->xp', ao[1:,:,p0:p1], ao_dm0[:,p0:p1])
                 aow = numpy.einsum('pi,xp->xpi', ao[0], weight*frr*rho1)
                 aow[:,:,p0:p1] += aow1[:,:,p0:p1]
-                _d1_dot_(vmat[ia], mol, aow, ao[0], mask, ao_loc, True)
+                rks_grad._d1_dot_(vmat[ia], mol, aow, ao[0], mask, ao_loc, True)
             ao_dm0 = aow = aow1 = None
 
         for ia in range(mol.natm):
@@ -467,10 +444,7 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
             vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
 
             wv = numint._rks_gga_wv0(rho, vxc, weight)
-            aow = numpy.einsum('npi,np->pi', ao[:4], wv)
-            _d1_dot_(v_ip, mol, ao[1:4], aow, mask, ao_loc, True)
-            aow = _make_dR_dao_w(ao, wv)
-            _d1_dot_(v_ip, mol, aow, ao[0], mask, ao_loc, True)
+            rks_grad._gga_grad_sum_(v_ip, mol, ao, wv, mask, ao_loc)
 
             ao_dm0 = [numint._dot_ao_dm(mol, ao[i], dm0, mask, shls_slice, ao_loc)
                       for i in range(4)]
@@ -480,7 +454,7 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
                 wv[1] = numint._rks_gga_wv1(rho, dR_rho1[1], vxc, fxc, weight)
                 wv[2] = numint._rks_gga_wv1(rho, dR_rho1[2], vxc, fxc, weight)
                 aow = numpy.einsum('npi,Xnp->Xpi', ao[:4], wv)
-                _d1_dot_(vmat[ia], mol, aow, ao[0], mask, ao_loc, True)
+                rks_grad._d1_dot_(vmat[ia], mol, aow, ao[0], mask, ao_loc, True)
             ao_dm0 = aow = None
 
         for ia in range(mol.natm):
