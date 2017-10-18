@@ -8,9 +8,7 @@ Non-relativistic RHF analytical Hessian
 '''
 
 import time
-import tempfile
 import numpy
-import h5py
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
@@ -52,7 +50,7 @@ def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     nocc = mocc.shape[1]
     dm0 = numpy.dot(mocc, mocc.T) * 2
     # Energy weighted density matrix
-    dme0 = numpy.einsum('pi,qi,i->pq', mocc, mocc, mo_energy[:nocc]) * 2
+    dme0 = numpy.einsum('pi,qi,i->pq', mocc, mocc, mo_energy[mo_occ>0]) * 2
 
     h1aa, h1ab = get_hcore(mol)
     s1aa, s1ab, s1a = get_ovlp(mol)
@@ -80,7 +78,7 @@ def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
         vhf[:,:,p0:p1] -= vk2 * .5
         t1 = log.timer_debug1('contracting int2e_ip1ip2 for atom %d'%ia, *t1)
         vj1, vk1 = _get_jk(mol, 'int2e_ipvip1', 9, 's2kl',
-                           ['lk->s1ij', dm0,           # vj1
+                           ['lk->s1ij', dm0         ,  # vj1
                             'li->s1kj', dm0[:,p0:p1]], # vk1
                            shls_slice=shls_slice)
         vhf[:,:,p0:p1] += vj1.transpose(0,2,1)
@@ -103,7 +101,7 @@ def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 # *2 for double occupancy, *2 for +c.c.
             dm1 = numpy.einsum('ypi,qi->ypq', mo1[ja], mocc)
             de  = numpy.einsum('xpq,ypq->xy', h1ao[ia], dm1) * 4
-            dm1 = numpy.einsum('ypi,qi,i->ypq', mo1[ja], mocc, mo_energy[:nocc])
+            dm1 = numpy.einsum('ypi,qi,i->ypq', mo1[ja], mocc, mo_energy[mo_occ>0])
             de -= numpy.einsum('xpq,ypq->xy', s1ao, dm1) * 4
             de -= numpy.einsum('xpq,ypq->xy', s1oo, mo_e1[ja]) * 2
 
@@ -139,7 +137,6 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     h1a = rhf_grad.get_hcore(mol)
 
     aoslices = mol.aoslice_by_atom()
-    int2e_ip1 = mol._add_suffix('int2e_ip1')
     h1ao = [None] * mol.natm
     for i0, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
@@ -233,6 +230,9 @@ def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
         fx = gen_vind(mf, mo_coeff, mo_occ)
     s1a =-mol.intor('int1e_ipovlp', comp=3)
 
+    def _ao2mo(mat):
+        return numpy.asarray([reduce(numpy.dot, (mo_coeff.T, x, mocc)) for x in mat])
+
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, max_memory*.9-mem_now)
     blksize = max(2, int(max_memory*1e6/8 / (nmo*nocc*3*6)))
@@ -248,18 +248,18 @@ def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
             s1ao = numpy.zeros((3,nao,nao))
             s1ao[:,p0:p1] += s1a[:,p0:p1]
             s1ao[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
-            s1vo.append(numpy.einsum('xpq,pi,qj->xij', s1ao, mo_coeff, mocc))
+            s1vo.append(_ao2mo(s1ao))
             if isinstance(h1ao_or_chkfile, str):
                 key = 'scf_f1ao/%d' % ia
                 h1ao = lib.chkfile.load(h1ao_or_chkfile, key)
             else:
                 h1ao = h1ao_or_chkfile[ia]
-            h1vo.append(numpy.einsum('xpq,pi,qj->xij', h1ao, mo_coeff, mocc))
+            h1vo.append(_ao2mo(h1ao))
 
         h1vo = numpy.vstack(h1vo)
         s1vo = numpy.vstack(s1vo)
         mo1, e1 = cphf.solve(fx, mo_energy, mo_occ, h1vo, s1vo)
-        mo1 = numpy.einsum('pq,xqi->xpi', mo_coeff, mo1).reshape(-1,3,nmo,nocc)
+        mo1 = numpy.einsum('pq,xqi->xpi', mo_coeff, mo1).reshape(-1,3,nao,nocc)
         e1 = e1.reshape(-1,3,nocc,nocc)
 
         for k in range(ia1-ia0):
@@ -280,8 +280,10 @@ def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
 def gen_vind(mf, mo_coeff, mo_occ):
     nao, nmo = mo_coeff.shape
     mocc = mo_coeff[:,mo_occ>0]
-    vresp = _gen_rhf_response(mf, hermi=1)
+    nocc = mocc.shape[1]
+    vresp = _gen_rhf_response(mf, mo_coeff, mo_occ, hermi=1)
     def fx(mo1):
+        mo1 = mo1.reshape(-1,nmo,nocc)
         nset = len(mo1)
         dm1 = numpy.empty((nset,nao,nao))
         for i, x in enumerate(mo1):
@@ -330,7 +332,7 @@ class Hessian(lib.StreamObject):
         self.chkfile = scf_method.chkfile
         self.max_memory = self.mol.max_memory
 
-        self.de = numpy.zeros((0,0,3,3))
+        self.de = numpy.zeros((0,0,3,3))  # (A,B,dR_A,dR_B)
         self._keys = set(self.__dict__.keys())
 
     hess_elec = hess_elec

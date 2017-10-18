@@ -635,7 +635,7 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             wv = numpy.empty((4,ngrid))
             for i in range(nset):
                 rho1 = make_rho(i, ao_k1, mask, xctype)
-                wv = numint._rks_gga_wv(rho, rho1, vxc0, fxc0, weight)
+                wv = numint._rks_gga_wv1(rho, rho1, vxc0, fxc0, weight)
                 vmat[i] += ni._fxc_mat(cell, ao_k1, wv, mask, xctype, ao_loc)
 
         # call swapaxes method to swap last two indices because vmat may be a 3D
@@ -732,8 +732,8 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, single
                 # rho1[0 ] = |b><j| z_{bj}
                 # rho1[1:] = \nabla(|b><j|) z_{bj}
                 rho1 = make_rho(i, ao_k1, mask, xctype)
-                wv = numint._rks_gga_wv(rho, rho1, (None,fgamma),
-                                        (frho,frhogamma,fgg), weight)
+                wv = numint._rks_gga_wv1(rho, rho1, (None,fgamma),
+                                         (frho,frhogamma,fgg), weight)
                 vmat[i] += ni._fxc_mat(cell, ao_k1, wv, mask, xctype, ao_loc)
 
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
@@ -854,8 +854,8 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             for i in range(nset):
                 rho1a = make_rhoa(i, ao_k1, mask, xctype)
                 rho1b = make_rhob(i, ao_k1, mask, xctype)
-                wva, wvb = numint._uks_gga_wv((rho0a,rho0b), (rho1a,rho1b),
-                                              vxc0, fxc0, weight)
+                wva, wvb = numint._uks_gga_wv1((rho0a,rho0b), (rho1a,rho1b),
+                                               vxc0, fxc0, weight)
                 vmata[i] += ni._fxc_mat(cell, ao_k1, wva, mask, xctype, ao_loc)
                 vmatb[i] += ni._fxc_mat(cell, ao_k1, wvb, mask, xctype, ao_loc)
 
