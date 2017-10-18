@@ -24,6 +24,8 @@ mf = scf.KRHF(cell, cell.make_kpts(nks))
 mf = scf.addons.smearing_(mf, sigma=.1, method='fermi')
 mf.kernel()
 print('Entropy = %s' % mf.entropy)
+print('Free energy = %s' % mf.e_free)
+print('Zero temperature energy = %s' % ((mf.e_tot+mf.e_free)/2))
 
 #
 # The smearing method and parameters can be modified at runtime

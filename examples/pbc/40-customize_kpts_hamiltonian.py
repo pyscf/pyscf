@@ -16,7 +16,7 @@ from pyscf import pbc
 #
 
 t=1.0
-U=5 # t/U=0.077 use for FM case
+U=12 # t/U=0.077 use for FM case
 
 Nx=2
 Ny=2
