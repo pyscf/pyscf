@@ -101,7 +101,7 @@ def smearing_(mf, sigma=None, method='fermi'):
         mu = res.x
         mo_occs = f = f_occ(mu, mo_es, sigma)
         f = f[(f>0) & (f<1)]
-        mf.entropy = -(f*numpy.log(f) + (1-f)*numpy.log(1-f)).sum()
+        mf.entropy = -(f*numpy.log(f) + (1-f)*numpy.log(1-f)).sum() / nkpts
         if not is_uhf:
             mo_occs *= 2
             mf.entropy *= 2
