@@ -175,14 +175,14 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     h1a =-(mol.intor('int1e_ipkin', comp=3) +
            mol.intor('int1e_ipnuc', comp=3))
 
-    h1ao = _get_vxc_deriv1_half(hessobj, mo_coeff, mo_occ, 4000)
+    h1ao = _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, 4000)
     aoslices = mol.aoslice_by_atom()
     for i0, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
 
         mol.set_rinv_origin(mol.atom_coord(ia))
-        h1ao[ia] -= mol.atom_charge(ia) * mol.intor('int1e_iprinv', comp=3)
-        h1ao[ia,:,p0:p1] += h1a[:,p0:p1]
+        h1 = -mol.atom_charge(ia) * mol.intor('int1e_iprinv', comp=3)
+        h1[:,p0:p1] += h1a[:,p0:p1]
 
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
         if abs(hyb) > 1e-10:
@@ -193,17 +193,17 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
                                       'li->s1kj', -dm0[:,p0:p1],  # vk1
                                       'jk->s1il', -dm0         ], # vk2
                                      shls_slice=shls_slice)
-            h1ao[ia] += vj1 - hyb*.5*vk1
-            h1ao[ia,:,p0:p1] += vj2 - hyb*.5*vk2
+            h1 += vj1 - hyb*.5*vk1
+            h1[:,p0:p1] += vj2 - hyb*.5*vk2
         else:
             vj1, vj2 = rhf_hess._get_jk(mol, 'int2e_ip1', 3, 's2kl',
                                         ['ji->s2kl', -dm0[:,p0:p1],  # vj1
                                          'lk->s1ij', -dm0         ], # vj2
                                         shls_slice=shls_slice)
-            h1ao[ia] += vj1
-            h1ao[ia,:,p0:p1] += vj2
+            h1 += vj1
+            h1[:,p0:p1] += vj2
 
-        h1ao[ia] = h1ao[ia] + h1ao[ia].transpose(0,2,1)
+        h1ao[ia] += h1 + h1.transpose(0,2,1)
 
     if chkfile is None:
         return h1ao
@@ -231,6 +231,8 @@ def _get_vxc_diag(hessobj, mo_coeff, mo_occ, max_memory):
     nao, nmo = mo_coeff.shape
     ni = mf._numint
     xctype = ni._xc_type(mf.xc)
+    shls_slice = (0, mol.nbas)
+    ao_loc = mol.ao_loc_nr()
 
     vmat = numpy.zeros((6,nao,nao))
     if xctype == 'LDA':
@@ -242,8 +244,7 @@ def _get_vxc_diag(hessobj, mo_coeff, mo_occ, max_memory):
             vrho = vxc[0]
             aow = numpy.einsum('pi,p->pi', ao[0], weight*vrho)
             for i in range(6):
-                vmat[i] += lib.dot(ao[i+4].T, aow)
-                     #numint._dot_ao_ao(mol, ao[i+4], aow, mask, shls_slice, ao_loc)
+                vmat[i] += numint._dot_ao_ao(mol, ao[i+4], aow, mask, shls_slice, ao_loc)
             aow = aow1 = None
     elif xctype == 'GGA':
         ao_deriv = 3
@@ -257,19 +258,19 @@ def _get_vxc_diag(hessobj, mo_coeff, mo_occ, max_memory):
             wv[1:] = rho[1:] * (weight * vgamma * 2)
             aow = numpy.einsum('npi,np->pi', ao[:4], wv)
             for i in range(6):
-                vmat[i] += lib.dot(ao[i+4].T, aow)
+                vmat[i] += numint._dot_ao_ao(mol, ao[i+4], aow, mask, shls_slice, ao_loc)
             aow = numpy.einsum('npi,np->pi', ao[[XXX,XXY,XXZ]], wv[1:4])
-            vmat[0] += lib.dot(aow.T, ao[0])
+            vmat[0] += numint._dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
             aow = numpy.einsum('npi,np->pi', ao[[XXY,XYY,XYZ]], wv[1:4])
-            vmat[1] += lib.dot(aow.T, ao[0])
+            vmat[1] += numint._dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
             aow = numpy.einsum('npi,np->pi', ao[[XXZ,XYZ,XZZ]], wv[1:4])
-            vmat[2] += lib.dot(aow.T, ao[0])
+            vmat[2] += numint._dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
             aow = numpy.einsum('npi,np->pi', ao[[XYY,YYY,YYZ]], wv[1:4])
-            vmat[3] += lib.dot(aow.T, ao[0])
+            vmat[3] += numint._dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
             aow = numpy.einsum('npi,np->pi', ao[[XYZ,YYZ,YZZ]], wv[1:4])
-            vmat[4] += lib.dot(aow.T, ao[0])
+            vmat[4] += numint._dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
             aow = numpy.einsum('npi,np->pi', ao[[XZZ,YZZ,ZZZ]], wv[1:4])
-            vmat[5] += lib.dot(aow.T, ao[0])
+            vmat[5] += numint._dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
             rho = vxc = vrho = vgamma = wv = aow = None
 
     elif xctype == 'MGGA':
@@ -302,8 +303,21 @@ def _make_dR_rho1(ao, ao_dm0, atm_id, aoslices):
     rho1[:,3] += numpy.einsum('xpi,pi->xp', ao[1:4,:,p0:p1], ao_dm0[3][:,p0:p1])
     return rho1
 
-def _make_dR_ao_w(ao, wv):
+def _make_dR_dao_w(ao, wv):
     aow = numpy.einsum('npi,p->npi', ao[1:4], wv[0])
+    aow[0] += numpy.einsum('pi,p->pi', ao[XX], wv[1])  # dX
+    aow[0] += numpy.einsum('pi,p->pi', ao[XY], wv[2])  # dX
+    aow[0] += numpy.einsum('pi,p->pi', ao[XZ], wv[3])  # dX
+    aow[1] += numpy.einsum('pi,p->pi', ao[YX], wv[1])  # dY
+    aow[1] += numpy.einsum('pi,p->pi', ao[YY], wv[2])  # dY
+    aow[1] += numpy.einsum('pi,p->pi', ao[YZ], wv[3])  # dY
+    aow[2] += numpy.einsum('pi,p->pi', ao[ZX], wv[1])  # dZ
+    aow[2] += numpy.einsum('pi,p->pi', ao[ZY], wv[2])  # dZ
+    aow[2] += numpy.einsum('pi,p->pi', ao[ZZ], wv[3])  # dZ
+    return aow
+
+def _make_dR_dao_w1(ao, wv):
+    aow = [0] * 3
     aow[0] += numpy.einsum('pi,p->pi', ao[XX], wv[1])  # dX
     aow[0] += numpy.einsum('pi,p->pi', ao[XY], wv[2])  # dX
     aow[0] += numpy.einsum('pi,p->pi', ao[XZ], wv[3])  # dX
@@ -327,6 +341,17 @@ def _d1d2_dot_(vmat, mol, ao1, ao2, mask, ao_loc, dR1_on_bra=True):
             for d2 in range(3):
                 vmat[d1,d2] += numint._dot_ao_ao(mol, ao1[d2], ao2[d1], mask,
                                                  shls_slice, ao_loc)
+
+def _d1_dot_(vmat, mol, ao1, ao2, mask, ao_loc, dR1_on_bra=True):
+    shls_slice = (0, mol.nbas)
+    if dR1_on_bra:
+        vmat[0] += numint._dot_ao_ao(mol, ao1[0], ao2, mask, shls_slice, ao_loc)
+        vmat[1] += numint._dot_ao_ao(mol, ao1[1], ao2, mask, shls_slice, ao_loc)
+        vmat[2] += numint._dot_ao_ao(mol, ao1[2], ao2, mask, shls_slice, ao_loc)
+    else:
+        vmat[0] += numint._dot_ao_ao(mol, ao1, ao2[0], mask, shls_slice, ao_loc)
+        vmat[1] += numint._dot_ao_ao(mol, ao1, ao2[1], mask, shls_slice, ao_loc)
+        vmat[2] += numint._dot_ao_ao(mol, ao1, ao2[2], mask, shls_slice, ao_loc)
 
 def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
     mol = hessobj.mol
@@ -384,29 +409,24 @@ def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
             wv = numpy.empty_like(rho)
             wv[0]  = weight * vrho * .5
             wv[1:] = rho[1:] * (weight * vgamma * 2)
-            aow = _make_dR_ao_w(ao, wv)
+            aow = _make_dR_dao_w(ao, wv)
             _d1d2_dot_(ipip, mol, aow, ao[1:4], mask, ao_loc, False)
 
             ao_dm0 = [numint._dot_ao_dm(mol, ao[i], dm0, mask, shls_slice, ao_loc)
                       for i in range(4)]
             for ia in range(mol.natm):
                 wv = dR_rho1 = _make_dR_rho1(ao, ao_dm0, ia, aoslices)
+                wv[0] = _get_wv(rho, dR_rho1[0], weight, vxc, fxc)
+                wv[1] = _get_wv(rho, dR_rho1[1], weight, vxc, fxc)
+                wv[2] = _get_wv(rho, dR_rho1[2], weight, vxc, fxc)
+                wv[:] *= 2
 
-                wv[0] = _get_wv(rho, dR_rho1[0], weight, vxc, fxc) * 2
-                aow = _make_dR_ao_w(ao, wv[0])
-                vmat[ia,0,0] += lib.dot(aow[0].T, ao[0])
-                vmat[ia,0,1] += lib.dot(aow[1].T, ao[0])
-                vmat[ia,0,2] += lib.dot(aow[2].T, ao[0])
-                wv[1] = _get_wv(rho, dR_rho1[1], weight, vxc, fxc) * 2
-                aow = _make_dR_ao_w(ao, wv[1])
-                vmat[ia,1,0] += lib.dot(aow[0].T, ao[0])
-                vmat[ia,1,1] += lib.dot(aow[1].T, ao[0])
-                vmat[ia,1,2] += lib.dot(aow[2].T, ao[0])
-                wv[2] = _get_wv(rho, dR_rho1[2], weight, vxc, fxc) * 2
-                aow = _make_dR_ao_w(ao, wv[2])
-                vmat[ia,2,0] += lib.dot(aow[0].T, ao[0])
-                vmat[ia,2,1] += lib.dot(aow[1].T, ao[0])
-                vmat[ia,2,2] += lib.dot(aow[2].T, ao[0])
+                aow = _make_dR_dao_w(ao, wv[0])
+                _d1_dot_(vmat[ia,0], mol, aow, ao[0], mask, ao_loc, True)
+                aow = _make_dR_dao_w(ao, wv[1])
+                _d1_dot_(vmat[ia,1], mol, aow, ao[0], mask, ao_loc, True)
+                aow = _make_dR_dao_w(ao, wv[2])
+                _d1_dot_(vmat[ia,2], mol, aow, ao[0], mask, ao_loc, True)
 
                 aow = numpy.einsum('npi,Xnp->Xpi', ao[1:4], wv[:,1:4])
                 _d1d2_dot_(vmat[ia], mol, ao[1:4], aow, mask, ao_loc, False)
@@ -421,7 +441,7 @@ def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
 
     return vmat
 
-def _get_vxc_deriv1_half(hessobj, mo_coeff, mo_occ, max_memory):
+def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
     mol = hessobj.mol
     mf = hessobj._scf
     if hessobj.grids is not None:
@@ -457,67 +477,43 @@ def _get_vxc_deriv1_half(hessobj, mo_coeff, mo_occ, max_memory):
                 rho1 = numpy.einsum('xpi,pi->xp', ao[1:,:,p0:p1], ao_dm0[:,p0:p1])
                 aow = numpy.einsum('pi,xp->xpi', ao[0], weight*frr*rho1)
                 aow[:,:,p0:p1] += aow1[:,:,p0:p1]
-                veff[ia,0] -= numint._dot_ao_ao(mol, aow[0], ao[0], mask, shls_slice, ao_loc)
-                veff[ia,1] -= numint._dot_ao_ao(mol, aow[1], ao[0], mask, shls_slice, ao_loc)
-                veff[ia,2] -= numint._dot_ao_ao(mol, aow[2], ao[0], mask, shls_slice, ao_loc)
+                _d1_dot_(veff[ia], mol, aow, ao[0], mask, ao_loc, True)
             ao_dm0 = aow = aow1 = None
+
+        for ia in range(mol.natm):
+            veff[ia] = -veff[ia] - veff[ia].transpose(0,2,1)
 
     elif xctype == 'GGA':
         ao_deriv = 2
+        v_ip = numpy.zeros((3,nao,nao))
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             rho = ni.eval_rho2(mol, ao[:4], mo_coeff, mo_occ, mask, 'GGA')
             vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
             vrho, vgamma = vxc[:2]
-            ao_dm0 = [numint._dot_ao_dm(mol, ao[i], dm0, mask, shls_slice, ao_loc)
-                      for i in range(4)]
             wv = numpy.empty_like(rho)
             wv[0]  = weight * vrho
             wv[1:] = rho[1:] * (weight * vgamma * 2)
             aow = numpy.einsum('npi,np->pi', ao[:4], wv)
-            vtmpx = numint._dot_ao_ao(mol, ao[1], aow, mask, shls_slice, ao_loc)
-            vtmpy = numint._dot_ao_ao(mol, ao[2], aow, mask, shls_slice, ao_loc)
-            vtmpz = numint._dot_ao_ao(mol, ao[3], aow, mask, shls_slice, ao_loc)
-            aow = numpy.einsum('npi,np->pi', ao[[XX,XY,XZ]], wv[1:4])
-            vtmpx += numint._dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
-            aow = numpy.einsum('npi,np->pi', ao[[YX,YY,YZ]], wv[1:4])
-            vtmpy += numint._dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
-            aow = numpy.einsum('npi,np->pi', ao[[ZX,ZY,ZZ]], wv[1:4])
-            vtmpz += numint._dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
+            _d1_dot_(v_ip, mol, ao[1:4], aow, mask, ao_loc, True)
+            aow = _make_dR_dao_w1(ao, wv)
+            _d1_dot_(v_ip, mol, aow, ao[0], mask, ao_loc, True)
 
+            ao_dm0 = [numint._dot_ao_dm(mol, ao[i], dm0, mask, shls_slice, ao_loc)
+                      for i in range(4)]
             for ia in range(mol.natm):
-                p0, p1 = aoslices[ia][2:]
-                # (d_X \nabla_x mu) nu DM_{mu,nu}
-                rho1X = numpy.einsum('xpi,pi->xp', ao[[1,XX,XY,XZ],:,p0:p1], ao_dm0[0][:,p0:p1])
-                rho1Y = numpy.einsum('xpi,pi->xp', ao[[2,YX,YY,YZ],:,p0:p1], ao_dm0[0][:,p0:p1])
-                rho1Z = numpy.einsum('xpi,pi->xp', ao[[3,ZX,ZY,ZZ],:,p0:p1], ao_dm0[0][:,p0:p1])
-                # (d_X mu) (\nabla_x nu) DM_{mu,nu}
-                rho1X[1] += numpy.einsum('pi,pi->p', ao[1,:,p0:p1], ao_dm0[1][:,p0:p1])
-                rho1Y[1] += numpy.einsum('pi,pi->p', ao[2,:,p0:p1], ao_dm0[1][:,p0:p1])
-                rho1Z[1] += numpy.einsum('pi,pi->p', ao[3,:,p0:p1], ao_dm0[1][:,p0:p1])
-                rho1X[2] += numpy.einsum('pi,pi->p', ao[1,:,p0:p1], ao_dm0[2][:,p0:p1])
-                rho1Y[2] += numpy.einsum('pi,pi->p', ao[2,:,p0:p1], ao_dm0[2][:,p0:p1])
-                rho1Z[2] += numpy.einsum('pi,pi->p', ao[3,:,p0:p1], ao_dm0[2][:,p0:p1])
-                rho1X[3] += numpy.einsum('pi,pi->p', ao[1,:,p0:p1], ao_dm0[3][:,p0:p1])
-                rho1Y[3] += numpy.einsum('pi,pi->p', ao[2,:,p0:p1], ao_dm0[3][:,p0:p1])
-                rho1Z[3] += numpy.einsum('pi,pi->p', ao[3,:,p0:p1], ao_dm0[3][:,p0:p1])
+                wv = dR_rho1 = _make_dR_rho1(ao, ao_dm0, ia, aoslices)
+                wv[0] = _get_wv(rho, dR_rho1[0], weight, vxc, fxc)
+                wv[1] = _get_wv(rho, dR_rho1[1], weight, vxc, fxc)
+                wv[2] = _get_wv(rho, dR_rho1[2], weight, vxc, fxc)
+                wv[:,1:] *= 2
+                aow = numpy.einsum('npi,Xnp->Xpi', ao[:4], wv)
+                _d1_dot_(veff[ia], mol, aow, ao[0], mask, ao_loc, True)
 
-                wv = _get_wv(rho, rho1X, weight, vxc, fxc)
-                wv[1:] *= 2
-                aow = numpy.einsum('npi,np->pi', ao[:4], wv)
-                veff[ia,0] -= numint._dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
-                wv = _get_wv(rho, rho1Y, weight, vxc, fxc)
-                wv[1:] *= 2
-                aow = numpy.einsum('npi,np->pi', ao[:4], wv)
-                veff[ia,1] -= numint._dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
-                wv = _get_wv(rho, rho1Z, weight, vxc, fxc)
-                wv[1:] *= 2
-                aow = numpy.einsum('npi,np->pi', ao[:4], wv)
-                veff[ia,2] -= numint._dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
-
-                veff[ia,0,p0:p1] -= vtmpx[p0:p1]
-                veff[ia,1,p0:p1] -= vtmpy[p0:p1]
-                veff[ia,2,p0:p1] -= vtmpz[p0:p1]
+        for ia in range(mol.natm):
+            p0, p1 = aoslices[ia][2:]
+            veff[ia,:,p0:p1] += v_ip[:,p0:p1]
+            veff[ia] = -veff[ia] - veff[ia].transpose(0,2,1)
 
     elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
@@ -554,9 +550,9 @@ if __name__ == '__main__':
     from pyscf import dft
     from pyscf.dft import rks_grad
     dft.numint._NumInt.libxc = dft.xcfun
-    xc_code = 'lda'
-    #xc_code = 'lda,vwn'
-    xc_code = 'blyp'
+    xc_code = 'lda,vwn'
+    #xc_code = 'blyp'
+    #xc_code = 'b3lyp'
 
     mol = gto.Mole()
     mol.verbose = 0
