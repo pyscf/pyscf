@@ -3,11 +3,11 @@ import sys
 import sysconfig
 from setuptools import setup, find_packages, Extension
 
-if sys.version_info[0] >= 3: # from Cython 0.14
-    from distutils.command.build_py import build_py_2to3 as build_py
-else:
-    from distutils.command.build_py import build_py
-from distutils.command.install import install
+#if sys.version_info[0] >= 3: # from Cython 0.14
+#    from setuptools.command.build_py import build_py_2to3 as build_py
+#else:
+#    from setuptools.command.build_py import build_py
+from setuptools.command.install import install
 try:
     import numpy
 except ImportError as e:
@@ -71,6 +71,13 @@ elif sys.platform.startswith('win'):
 else:
     raise OSError('Unknown platform')
 
+if 'CC' in os.environ:
+    compiler = os.environ['CC'].split()[0]
+else:
+    compiler = sysconfig.get_config_var("CC").split()[0]
+if 'gcc' in compiler or 'g++' in compiler:  # GNU compiler
+    so_ext = '.so'
+
 #
 # default include and library path
 #
@@ -117,8 +124,20 @@ else:
     blas_include = np_blas.get('include_dirs', [])
     blas_lib_dir = np_blas.get('library_dirs', [])
     blas_libraries = np_blas.get('libraries', [])
-    blas_found = all(search_lib_path('lib'+x+so_ext, blas_lib_dir) is not None
-                     for x in blas_libraries)
+    blas_path_guess = [search_lib_path('lib'+x+so_ext, blas_lib_dir)
+                       for x in blas_libraries]
+    if None not in blas_path_guess:
+        blas_found = True
+        blas_lib_dir = list(set(blas_path_guess))
+
+if not blas_found:  # for MKL
+    mkl_path_guess = search_lib_path('libmkl_core'+so_ext, blas_lib_dir)
+    if mkl_path_guess is not None:
+        blas_libraries = ['mkl_core', 'mkl_intel_lp64', 'mkl_intel_thread',
+                          'mkl_sequential']
+        blas_lib_dir = [mkl_path_guess]
+        blas_found = True
+        print("Using MKL library in %s" % mkl_path_guess)
 
 if not blas_found:
     possible_blas = ('blas', 'atlas', 'openblas')
@@ -127,15 +146,15 @@ if not blas_found:
         if blas_path_guess is not None:
             blas_libraries = [x]
             blas_lib_dir = [blas_path_guess]
-            print("Using BLAS library %s in %s" % (x, blas_path_guess))
             blas_found = True
+            print("Using BLAS library %s in %s" % (x, blas_path_guess))
             break
 
 if not blas_found:
     print("****************************************************************")
     print("*** WARNING: BLAS library not found.")
     print("* You can include the BLAS library in the global environment LDFLAGS, eg")
-    print("    export LDFLAGS='-L/path/to/blas/lib -lblas'")
+    print("*   export LDFLAGS='-L/path/to/blas/lib -lblas'")
     print("* or specify the BLAS library path in  PYSCF_INC_DIR")
     print("*   export PYSCF_INC_DIR=/path/to/blas/lib:/path/to/other/lib")
     print("****************************************************************")
@@ -194,9 +213,9 @@ def make_src(relpath, srcs):
     abs_srcs = []
     for src in srcs.split():
         if '/' in src:
-            abs_srcs.append(os.path.join(srcpath, *src.split('/')))
+            abs_srcs.append(os.path.relpath(os.path.join(srcpath, *src.split('/'))))
         else:
-            abs_srcs.append(os.path.join(srcpath, src))
+            abs_srcs.append(os.path.relpath(os.path.join(srcpath, src)))
     return abs_srcs
 
 #
@@ -291,9 +310,9 @@ if 1:
     else:
         print("****************************************************************")
         print("*** WARNING: libxc library not found.")
-        print(" You can download libxc library from http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-3.0.0.tar.gz")
-        print(" libxc library needs to be compiled with the flag --enable-shared")
-        print(" May need to set PYSCF_INC_DIR if libxc library was not installed in the")
+        print("* You can download libxc library from http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-3.0.0.tar.gz")
+        print("* libxc library needs to be compiled with the flag --enable-shared")
+        print("* May need to set PYSCF_INC_DIR if libxc library was not installed in the")
         print("* system standard install path (/usr, /usr/local, etc). Eg")
         print("*   export PYSCF_INC_DIR=/path/to/libxc:/path/to/other/lib")
         print("****************************************************************")
@@ -346,9 +365,7 @@ setup(
                                     '*future*', '*test*', '*examples*',
                                     '*setup.py']),
     ext_modules=extensions,
-    cmdclass={'build_py': build_py,
-              'install': PostInstallCommand,
-             },
+    cmdclass={'install': PostInstallCommand},
     install_requires=['numpy', 'scipy', 'h5py'],
 )
 
