@@ -2,13 +2,21 @@ import os
 import sys
 import sysconfig
 from setuptools import setup, find_packages, Extension
-import numpy
 
 if sys.version_info[0] >= 3: # from Cython 0.14
     from distutils.command.build_py import build_py_2to3 as build_py
 else:
     from distutils.command.build_py import build_py
 from distutils.command.install import install
+try:
+    import numpy
+except ImportError as e:
+    print('**************************************************')
+    print('* numpy was not installed in your system.  Please run')
+    print('*     pip install numpy')
+    print('* before installing pyscf.')
+    print('**************************************************')
+    raise e
 
 topdir = os.path.abspath(os.path.join(__file__, '..'))
 
@@ -50,27 +58,92 @@ def get_version():
 VERSION = get_version()
 
 
-#
-# default include and library path
-#
-np_blas = numpy.__config__.blas_opt_info
-blas_include = []#np_blas['include_dirs']
-blas_lib_dir = np_blas['library_dirs']
-blas_library = np_blas['libraries']
-
-distutils_lib_dir = 'lib.{platform}-{version[0]}.{version[1]}'.format(
-    platform=sysconfig.get_platform(),
-    version=sys.version_info)
-
 if (sys.platform.startswith('linux') or
+    sys.platform.startswith('cygwin') or
     sys.platform.startswith('gnukfreebsd')):
     so_ext = '.so'
+    LD_LIBRARY_PATH = 'LD_LIBRARY_PATH'
 elif sys.platform.startswith('darwin'):
     so_ext = '.dylib'
+    LD_LIBRARY_PATH = 'DYLD_LIBRARY_PATH'
 elif sys.platform.startswith('win'):
     so_ext = '.dll'
 else:
     raise OSError('Unknown platform')
+
+#
+# default include and library path
+#
+def search_lib_path(libname, extra_paths=None, version=None):
+    paths = os.environ.get(LD_LIBRARY_PATH, '').split(os.pathsep)
+    if 'PYSCF_INC_DIR' in os.environ:
+        PYSCF_INC_DIR = os.environ['PYSCF_INC_DIR'].split(os.pathsep)
+        for p in PYSCF_INC_DIR:
+            paths = [p, os.path.join(p, 'lib'), os.path.join(p, '..', 'lib')] + paths
+    if extra_paths is not None:
+        paths += extra_paths
+    for path in paths:
+        full_libname = os.path.join(path, libname)
+        if version is not None:
+            full_libname = full_libname + '.' + version
+        if os.path.exists(full_libname):
+            return os.path.abspath(path)
+
+def search_inc_path(incname, extra_paths=None):
+    paths = os.environ.get(LD_LIBRARY_PATH, '').split(os.pathsep)
+    if 'PYSCF_INC_DIR' in os.environ:
+        PYSCF_INC_DIR = os.environ['PYSCF_INC_DIR'].split(os.pathsep)
+        for p in PYSCF_INC_DIR:
+            paths = [p, os.path.join(p, 'lib'), os.path.join(p, '..', 'lib')] + paths
+    if extra_paths is not None:
+        paths += extra_paths
+    for path in paths:
+        inc_path = os.path.join(os.path.dirname(path), 'include')
+        full_incname = os.path.join(path, incname)
+        if os.path.exists(full_incname):
+            return os.path.abspath(path)
+
+if 'LDFLAGS' in os.environ:
+    blas_found = any(x in os.environ['LDFLAGS'] for x in ('blas', 'atlas', 'openblas', 'mkl'))
+else:
+    blas_found = False
+
+if blas_found:
+    blas_include = []
+    blas_lib_dir = []
+    blas_libraries = []
+else:
+    np_blas = numpy.__config__.get_info('blas_opt')
+    blas_include = np_blas.get('include_dirs', [])
+    blas_lib_dir = np_blas.get('library_dirs', [])
+    blas_libraries = np_blas.get('libraries', [])
+    blas_found = all(search_lib_path('lib'+x+so_ext, blas_lib_dir) is not None
+                     for x in blas_libraries)
+
+if not blas_found:
+    possible_blas = ('blas', 'atlas', 'openblas')
+    for x in possible_blas:
+        blas_path_guess = search_lib_path('libblas'+so_ext, blas_lib_dir)
+        if blas_path_guess is not None:
+            blas_libraries = [x]
+            blas_lib_dir = [blas_path_guess]
+            print("Using BLAS library %s in %s" % (x, blas_path_guess))
+            blas_found = True
+            break
+
+if not blas_found:
+    print("****************************************************************")
+    print("*** WARNING: BLAS library not found.")
+    print("* You can include the BLAS library in the global environment LDFLAGS, eg")
+    print("    export LDFLAGS='-L/path/to/blas/lib -lblas'")
+    print("* or specify the BLAS library path in  PYSCF_INC_DIR")
+    print("*   export PYSCF_INC_DIR=/path/to/blas/lib:/path/to/other/lib")
+    print("****************************************************************")
+    raise RuntimeError
+
+distutils_lib_dir = 'lib.{platform}-{version[0]}.{version[1]}'.format(
+    platform=sysconfig.get_platform(),
+    version=sys.version_info)
 
 pyscf_lib_dir = os.path.join(topdir, 'pyscf', 'lib')
 build_lib_dir = os.path.join('build', distutils_lib_dir, 'pyscf', 'lib')
@@ -99,13 +172,17 @@ def make_ext(pkg_name, relpath, srcs, libraries=[], library_dirs=default_lib_dir
         os.path.isfile(os.path.join(pyscf_lib_dir, *pkg_name.split('.')) + so_ext)):
         return None
     else:
+        if sys.platform.startswith('darwin'):
+            openmp_flag = []
+        else:
+            openmp_flag = ['-fopenmp']
         srcs = make_src(relpath, srcs)
         return Extension(pkg_name, srcs,
                          libraries = libraries,
                          library_dirs = library_dirs,
                          include_dirs = include_dirs + [os.path.join(pyscf_lib_dir,relpath)],
-                         extra_compile_args = ['-fopenmp'],
-                         extra_link_args = ['-fopenmp'],
+                         extra_compile_args = openmp_flag,
+                         extra_link_args = openmp_flag,
 # Be careful with the ld flag "-Wl,-R$ORIGIN" in the shell.
 # When numpy.distutils is imported, the default CCompiler of distutils will be
 # overwritten. Compilation is executed in shell and $ORIGIN will be converted to ''
@@ -122,44 +199,11 @@ def make_src(relpath, srcs):
             abs_srcs.append(os.path.join(srcpath, src))
     return abs_srcs
 
-
-def search_lib_path(libname, extra_paths=None, version=None):
-    paths = os.environ["LD_LIBRARY_PATH"].split(os.pathsep)
-    if 'PYSCF_INC_DIR' in os.environ:
-        PYSCF_INC_DIR = os.environ['PYSCF_INC_DIR']
-        paths = [PYSCF_INC_DIR,
-                 os.path.join(PYSCF_INC_DIR, 'lib'),
-                 os.path.join(PYSCF_INC_DIR, '..', 'lib'),
-                ] + paths
-    if extra_paths is not None:
-        paths += extra_paths
-    for path in paths:
-        full_libname = os.path.join(path, libname)
-        if version is not None:
-            full_libname = full_libname + '.' + version
-        if os.path.exists(full_libname):
-            return os.path.abspath(path)
-
-def search_inc_path(incname, extra_paths=None):
-    paths = os.environ["LD_LIBRARY_PATH"].split(os.pathsep)
-    if 'PYSCF_INC_DIR' in os.environ:
-        paths = [PYSCF_INC_DIR,
-                 os.path.join(PYSCF_INC_DIR, 'include'),
-                ] + paths
-    if extra_paths is not None:
-        paths += extra_paths
-    for path in paths:
-        inc_path = os.path.join(os.path.dirname(path), 'include')
-        full_incname = os.path.join(path, incname)
-        if os.path.exists(full_incname):
-            return os.path.abspath(path)
-
 #
 # Check libcint
 #
 extensions = []
 if 1:
-    print pyscf_lib_dir
     libcint_lib_path = search_lib_path('libcint'+so_ext, [os.path.join(pyscf_lib_dir, 'deps', 'lib'),
                                                           os.path.join(pyscf_lib_dir, 'deps', 'lib64')],
                                        version='3.0')
@@ -180,7 +224,7 @@ autocode/gaunt1.c autocode/grad1.c autocode/intor2.c autocode/intor3.c
 autocode/hess.c autocode/intor1.c autocode/grad2.c '''
         if os.path.exists(os.path.join(pyscf_lib_dir, 'libcint')):
             extensions.append(
-                make_ext('pyscf.lib.libcint', 'libcint/src', srcs, blas_library)
+                make_ext('pyscf.lib.libcint', 'libcint/src', srcs, blas_libraries)
             )
             default_include.append(os.path.join(pyscf_lib_dir, 'libcint','src'))
         else:
@@ -188,14 +232,15 @@ autocode/hess.c autocode/intor1.c autocode/grad2.c '''
             print("*** WARNING: libcint library not found.")
             print("* You can download libcint library from http://github.com/sunqm/libcint")
             print("* May need to set PYSCF_INC_DIR if libcint library was not installed in the")
-            print("* system standard install path (/usr, /usr/local, etc)")
+            print("* system standard install path (/usr, /usr/local, etc). Eg")
+            print("*   export PYSCF_INC_DIR=/path/to/libcint:/path/to/other/lib")
             print("****************************************************************")
             raise RuntimeError
 
 extensions += [
     make_ext('pyscf.lib.libnp_helper', 'np_helper',
              'condense.c npdot.c omp_reduce.c pack_tril.c transpose.c',
-             blas_library),
+             blas_libraries),
     make_ext('pyscf.lib.libcgto', 'gto',
              '''fill_int2c.c fill_nr_3c.c fill_r_3c.c fill_int2e.c ft_ao.c
              grid_ao_drv.c fastexp.c deriv1.c deriv2.c nr_ecp.c autocode/auto_eval1.c''',
@@ -246,10 +291,11 @@ if 1:
     else:
         print("****************************************************************")
         print("*** WARNING: libxc library not found.")
-        print("You can download libxc library from http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-3.0.0.tar.gz")
-        print("libxc library needs to be compiled with the flag --enable-shared")
-        print("May need to set PYSCF_INC_DIR if libxc library was not installed in the")
-        print("system standard install path (/usr, /usr/local, etc)")
+        print(" You can download libxc library from http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-3.0.0.tar.gz")
+        print(" libxc library needs to be compiled with the flag --enable-shared")
+        print(" May need to set PYSCF_INC_DIR if libxc library was not installed in the")
+        print("* system standard install path (/usr, /usr/local, etc). Eg")
+        print("*   export PYSCF_INC_DIR=/path/to/libxc:/path/to/other/lib")
         print("****************************************************************")
 
 #
