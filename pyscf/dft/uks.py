@@ -104,10 +104,7 @@ class UKS(uhf.UHF):
 
     get_veff = get_veff
     energy_elec = energy_elec
-
-    def define_xc_(self, description):
-        raise RuntimeError('define_xc_ method is depercated.  '
-                           'Set mf.xc = %s instead.' % description)
+    define_xc_ = rks.define_xc_
 
 
 if __name__ == '__main__':

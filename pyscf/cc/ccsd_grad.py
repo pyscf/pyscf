@@ -288,7 +288,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     if mf_grad is None:
         mf_grad = rhf_grad.Gradients(mycc._scf)
 
-    log = logger.new_logger(mycc.stdout, verbose)
+    log = logger.new_logger(mycc, verbose)
     time0 = time.clock(), time.time()
     mol = mycc.mol
     if mycc.frozen is not 0:

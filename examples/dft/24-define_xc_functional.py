@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 
 '''
-Input a XC functional which is not available anywhere.
+Input a XC functional which was not implemented in pyscf.
 
 See also
+* The definition of define_xc_ function in pyscf/dft/libxc.py
 * dft.libxc for API of function eval_xc;
 * dft.numint._NumInt class for its methods eval_xc, hybrid_coeff and _xc_type.
   These methods controls the XC functional evaluation;
@@ -37,6 +38,6 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
     return exc, vxc, fxc, kxc
 
 mf = dft.RKS(mol)
-dft.libxc.define_xc_(mf._numint, eval_xc, xctype='GGA')
+mf.define_xc_(eval_xc, xctype='GGA', hyb=0.1)
 mf.verbose = 4
 mf.kernel()

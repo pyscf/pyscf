@@ -425,35 +425,48 @@ XC = XC_CODES = {
 
 XC_KEYS = set(XC_CODES.keys())
 
+def xc_type(xc_code):
+    if isinstance(xc_code, str):
+        hyb, fn_facs = parse_xc(xc_code)
+    else:
+        fn_facs = [(xc_code, 1)]  # mimic fn_facs
+    if not fn_facs:
+        return 'HF'
+    elif all(_itrf.LIBXC_is_lda(ctypes.c_int(xid)) for xid, fac in fn_facs):
+        return 'LDA'
+    elif any(_itrf.LIBXC_is_meta_gga(ctypes.c_int(xid)) for xid, fac in fn_facs):
+        return 'MGGA'
+    else:
+        # any(_itrf.LIBXC_is_gga(ctypes.c_int(xid)) for xid, fac in fn_facs)
+        # include hybrid_xc
+        return 'GGA'
+
 def is_lda(xc_code):
-    hyb, fn_facs = parse_xc(xc_code)
-    return all(_itrf.LIBXC_is_lda(ctypes.c_int(xid)) for xid, fac in fn_facs)
+    return xc_type(xc_code) == 'LDA'
 
 def is_hybrid_xc(xc_code):
     if isinstance(xc_code, str):
         if xc_code.isdigit():
             return _itrf.LIBXC_is_hybrid(ctypes.c_int(xc_code))
         else:
-            return ('HF' in xc_code or
-                    any((_itrf.LIBXC_is_hybrid(ctypes.c_int(xid))
-                         for xid, val in parse_xc(xc_code)[1])) or
-                    abs(parse_xc(xc_code)[0]) > 1e-14)
+            return ('HF' in xc_code or hybrid_coeff(xc_code) != 0)
     elif isinstance(xc_code, int):
         return _itrf.LIBXC_is_hybrid(ctypes.c_int(xc_code))
     else:
         return any((is_hybrid_xc(x) for x in xc_code))
 
 def is_meta_gga(xc_code):
-    hyb, fn_facs = parse_xc(xc_code)
-    return all(_itrf.LIBXC_is_meta_gga(ctypes.c_int(xid)) for xid, fac in fn_facs)
+    return xc_type(xc_code) == 'MGGA'
 
 def is_gga(xc_code):
-    hyb, fn_facs = parse_xc(xc_code)
-    return all(_itrf.LIBXC_is_gga(ctypes.c_int(xid)) for xid, fac in fn_facs)
+    return xc_type(xc_code) == 'GGA'
 
 def max_deriv_order(xc_code):
     hyb, fn_facs = parse_xc(xc_code)
-    return min((_itrf.LIBXC_max_deriv_order(ctypes.c_int(xid))) for xid, fac in fn_facs)
+    if fn_facs:
+        return min(_itrf.LIBXC_max_deriv_order(ctypes.c_int(xid)) for xid, fac in fn_facs)
+    else:
+        return 4
 
 def test_deriv_order(xc_code, deriv, raise_error=False):
     support = deriv <= max_deriv_order(xc_code)
@@ -830,14 +843,7 @@ def define_xc_(ni, description, xctype='LDA', hyb=0):
         ni.eval_xc = lambda xc_code, rho, *args, **kwargs: \
                 eval_xc(description, rho, *args, **kwargs)
         ni.hybrid_coeff = lambda *args, **kwargs: hybrid_coeff(description)
-        def xc_type(*args):
-            if is_lda(description):
-                return 'LDA'
-            elif is_meta_gga(description):
-                return 'MGGA'
-            else:
-                return 'GGA'
-        ni._xc_type = xc_type
+        ni._xc_type = lambda *args: xc_type(description)
 
     elif callable(description):
         ni.eval_xc = description
