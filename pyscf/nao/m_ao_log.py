@@ -59,24 +59,27 @@ class ao_log_c(log_mesh_c):
     log_mesh_c.__init__(self)
     return
     
-  def init_ao_log_gto_suggest_mesh(self, gto, sv, rcut_tol=1e-7, **kvargs):
-    """ Get's radial orbitals and angular momenta from a previous pySCF calculation, intializes numerical orbitals from the Gaussian type of orbitals etc."""
-    self.init_log_mesh_gto(gto, rcut_tol, **kvargs)
-    self._init_ao_log_gto(gto, sv, rcut_tol)
+  def init_ao_log_gto_suggest_mesh(self, rcut_tol=1e-7, **kw):
+    """ Get's radial orbitals and angular momenta from a Mole object, intializes numerical orbitals from the Gaussian type of orbitals etc."""
+    self.init_log_mesh_gto(rcut_tol=rcut_tol, **kw)
+    self._init_ao_log_gto(rcut_tol=rcut_tol, **kw)
     return self
 
-  def init_ao_log_gto_lm(self, gto, sv, lm, rcut_tol=1e-7):
+  def init_ao_log_gto_lm(self, lm, rcut_tol=1e-7, **kw):
     """ Get's radial orbitals and angular momenta from a previous pySCF calculation, with a given log mesh (radial grid)"""
     self.init_log_mesh(lm.rr, lm.pp)
-    self._init_ao_log_gto(gto, sv, rcut_tol)
+    self._init_ao_log_gto(rcut_tol=1e-7, **kw)
     return self
 
-  def _init_ao_log_gto(self, gto, sv, rcut_tol):
+  def _init_ao_log_gto(self, **kw):
     """ supposed to be private """
     import numpy as np
     from pyscf.nao.m_log_interp import log_interp_c
 
     self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
+    sv = nao = kw['nao']
+    rcut_tol = kw['rcut_tol']
+    gto = kw['gto'] if kw.has_key('gto') else nao.gto
     self.sp_mu2j = [0]*sv.nspecies
     self.psi_log = [0]*sv.nspecies
     self.psi_log_rl = [0]*sv.nspecies

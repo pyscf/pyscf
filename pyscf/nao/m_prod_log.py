@@ -74,12 +74,12 @@ class prod_log_c(ao_log_c):
     self.init_log_mesh(sv.ao_log.rr, sv.ao_log.pp)
     self.auxmol = auxmol
     ao_log_c.__init__(self)
-    self.init_ao_log_gto_lm(auxmol, sv, sv.ao_log, rcut_tol)
-    j3c = aux_e2(sv.mol, auxmol, intor='cint3c2e_sph', aosym='s1')
-    nao = sv.mol.nao_nr()
-    naoaux = auxmol.nao_nr()
-    j3c = j3c.reshape(nao,nao,naoaux)
-    #print(nao, naoaux)
+    self.init_ao_log_gto_lm(gto=auxmol, nao=sv, lm=sv.ao_log, rcut_tol=1e-7)
+#    j3c = aux_e2(sv.mol, auxmol, intor='cint3c2e_sph', aosym='s1')
+#    nao = sv.mol.nao_nr()
+#    naoaux = auxmol.nao_nr()
+#    j3c = j3c.reshape(nao,nao,naoaux)
+#    print(nao, naoaux)
     return self
 
   

@@ -36,7 +36,7 @@ class KnowValues(unittest.TestCase):
     """ This is indeed for initializing with auxiliary basis set"""
     from pyscf.nao import ao_log_c, system_vars_c
     sv = system_vars_c().init_pyscf_gto(mol)
-    ao = ao_log_c().init_ao_log_gto_lm(mol, sv, sv.ao_log)
+    ao = ao_log_c().init_ao_log_gto_lm(gto=mol, nao=sv, lm=sv.ao_log)
     
 
 if __name__ == "__main__":

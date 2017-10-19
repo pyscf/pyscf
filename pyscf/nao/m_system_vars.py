@@ -104,7 +104,7 @@ class system_vars_c():
   #
   #
   #
-  def init_pyscf_gto(self, gto, label='pyscf', verbose=0, **kvargs):
+  def init_pyscf_gto(self, gto, label='pyscf', verbose=0, **kw):
     """Interpret previous pySCF calculation"""
     from pyscf.lib import logger
 
@@ -128,7 +128,7 @@ class system_vars_c():
 
     self.sp2charge = [-999]*self.nspecies
     for ia,sp in enumerate(self.atom2sp): self.sp2charge[sp]=gto.atom_charge(ia)
-    self.ao_log = ao_log_c().init_ao_log_gto_suggest_mesh(gto, self, **kvargs)
+    self.ao_log = ao_log_c().init_ao_log_gto_suggest_mesh(gto=gto, nao=self, **kw)
     self.atom2coord = np.zeros((self.natm, 3))
     for ia,coord in enumerate(gto.atom_coords()): self.atom2coord[ia,:]=coord # must be in Bohr already?
     self.atom2s = np.zeros((self.natm+1), dtype=np.int64)

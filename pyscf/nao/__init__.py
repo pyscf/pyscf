@@ -23,4 +23,5 @@ from .m_vertex_loop import vertex_loop_c
 from .m_simulation import simulation_c
 from .m_tddft_iter import tddft_iter_c
 from .m_bse_iter import bse_iter_c
-from .m_eri3c import eri3c
+from .nao import nao
+from .scf import scf
