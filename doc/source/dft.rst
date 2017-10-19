@@ -19,7 +19,7 @@ XC functional is to assigned a string expression to :attr:`mf.xc`::
     mf.xc = 'HF'
     mf.kernel()
 
-The XC functional string is parsed against the following rules.
+The XC functional string is parsed against the rules, as described below.
 
 * The given functional description must be a one-line string.
 * The functional description is case-insensitive.

@@ -46,7 +46,7 @@ Also, :attr:`~Mole.atom` can be a string of Cartesian format or Z-matrix format:
 
 There are a few requirements for the string format.  The string input
 takes ``;`` or ``\n`` to partition atoms. White space and ``,`` are used to
-divide items for each atom.  Blank lines or lines started with ``#`` will be
+split items for each atom.  Blank lines or lines started with ``#`` will be
 ignored::
 
   >>> mol = gto.M(
@@ -91,6 +91,7 @@ will convert :attr:`Mole.atom` to the internal format::
 
 
 .. _input_basis:
+
 Input Basis
 -----------
 There are various ways to input basis sets.  Besides the input of universal
@@ -120,7 +121,7 @@ the basis which does not match the element.
   mol.basis = {'H': gto.basis.load('sto3g', 'C')}
 
 Both :func:`basis.parse` and :func:`basis.load` return the basis set in the
-internal format (See the :ref:`basis_internal_format`).
+internal format (See the :ref:`gto_basis`).
 
 Basis parser supports "Ghost" atom::
 
@@ -202,7 +203,6 @@ moleintor
 basis
 -----
 
-.. _basis_internal_format:
 Internal format
 ^^^^^^^^^^^^^^^
 

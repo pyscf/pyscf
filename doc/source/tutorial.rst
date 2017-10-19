@@ -7,40 +7,31 @@ Tutorial
 Quick setup
 ===========
 
-The prerequisites of PySCF include `cmake <http://www.cmake.org>`_,
-`numpy <http://www.numpy.org/>`_, `scipy <http://www.scipy.org/>`_,
-and `h5py <http://www.h5py.org/>`_.  On the Ubuntu host, you can quickly
-install them::
+You can install PySCF from `Conda <https://conda.io/docs/>`_ cloud::
+
+  $ conda install -c pyscf pyscf
+
+or PyPI::
+ 
+  $ pip install numpy scipy h5py
+  $ pip install pyscf
+
+or github repo::
 
   $ sudo apt-get install python-h5py python-scipy cmake
-
-Then download the latest version of `pyscf <https://github.com/sunqm/pyscf.git/>`_
-and build C extensions in :file:`pyscf/lib`::
-
   $ git clone https://github.com/sunqm/pyscf
-  $ cd pyscf/lib
+  $ cd pyscf/pyscf/lib
   $ mkdir build
   $ cd build
   $ cmake ..
   $ make
 
-Finally, update the Python runtime path :code:`PYTHONPATH` (assuming pyscf
-is put in /home/abc, replace it with your own path)::
+You may need to update the Python runtime searching path :code:`PYTHONPATH`
+(assuming the pyscf source code is put in /home/abc, replacing it with your own
+path)::
 
-  $ echo 'export PYTHONPATH=/home/abc:$PYTHONPATH' >> ~/.bashrc
+  $ echo 'export PYTHONPATH=/home/abc/pyscf:$PYTHONPATH' >> ~/.bashrc
   $ source ~/.bashrc
-
-To ensure the installation is successed, start a Python shell, and type::
-
-  >>> import pyscf
-
-If you got errors like::
-
-  ImportError: No module named pyscf
-
-It's very possible that you put ``/home/abc/pyscf`` in :code:`PYTHONPATH`.
-You need to remove the ``/pyscf`` in that string and try
-``import pyscf`` in the python shell again.
 
 .. note::  The quick setup does not provide the best performance.
   Please see :ref:`installing` for the installation with optimized libraries.

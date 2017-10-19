@@ -130,7 +130,7 @@ post mean-field methods to use the :attr:`_eri` integrals no matter whether the
 actual memory usage is over the :attr:`max_memory` limite, you can set the flag
 :attr:`incore_anyway` in :class:`Mole` class to ``True`` before calling the
 :meth:`kernel` function of the post-SCF methods.  In the following example,
-without setting ``incore_anyway=True``, the CCSD calculations will crash::
+without setting ``incore_anyway=True``, the CCSD calculations may crash::
 
     import numpy
     from pyscf import gto, scf, ao2mo, ccsd
