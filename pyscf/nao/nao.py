@@ -74,6 +74,8 @@ class nao():
     self._built = True
     self.max_memory = 20000
 
+    self.spin = gto.spin
+    self.nspin = gto.spin+1
     self.label = kw['label'] if kw.has_key('label') else 'pyscf'
     self.mol=gto # Only some data must be copied, not the whole object. Otherwise, an eventual deepcopy(...) may fail.
     self.natm=self.natoms = gto.natm

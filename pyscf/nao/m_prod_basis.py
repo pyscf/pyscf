@@ -90,11 +90,12 @@ class prod_basis_c():
     self.norbs = self.sv.norbs
     return self
 
-  def init_prod_basis_pp_batch(self, sv, **kvargs):
+  def init_prod_basis_pp_batch(self, nao, **kvargs):
     """ Talman's procedure should be working well with Pseudo-Potential starting point."""
     from pyscf.nao import prod_log_c
     from pyscf.nao.m_prod_biloc import prod_biloc_c
 
+    sv = nao
     t1 = timer()
     self.init_inp_param_prod_log_dp(sv, **kvargs)
     #t2 = timer(); print(' after init_inp_param_prod_log_dp ', t2-t1); t1=timer()
