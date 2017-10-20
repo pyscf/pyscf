@@ -151,6 +151,13 @@ class DMRGCI(pyscf.lib.StreamObject):
         self._keys = set(self.__dict__.keys())
 
 
+    @property
+    def threads(self):
+        return self.num_thrds
+    @threads.setter
+    def threads(self, x):
+        self.num_thrds = x
+
     def generate_schedule(self):
 
         if self.startM is None:
