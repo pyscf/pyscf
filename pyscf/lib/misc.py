@@ -62,14 +62,11 @@ def num_threads(n=None):
     will return the total number of available OMP threads.'''
     from pyscf.lib.numpy_helper import _np_helper
     if n is not None:
-        _np_helper.omp_set_num_threads(ctypes.c_int(int(n)))
+        _np_helper.set_omp_threads(ctypes.c_int(int(n)))
         return n
-
-    if 'OMP_NUM_THREADS' in os.environ:
-        return int(os.environ['OMP_NUM_THREADS'])
     else:
-        _np_helper.omp_get_max_threads.restype = ctypes.c_int
-        return _np_helper.omp_get_max_threads()
+        _np_helper.get_omp_threads.restype = ctypes.c_int
+        return _np_helper.get_omp_threads()
 
 class with_omp_threads(object):
     '''
@@ -84,7 +81,7 @@ class with_omp_threads(object):
     def __enter__(self):
         if self.nthreads is not None:
             self.sys_threads = num_threads()
-            num_threads(nthreads)
+            num_threads(self.nthreads)
         return self
     def __exit__(self, type, value, traceback):
         if self.sys_threads is not None:
