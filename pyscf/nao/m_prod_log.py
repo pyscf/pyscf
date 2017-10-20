@@ -194,6 +194,7 @@ class prod_log_c(ao_log_c):
      
 
     fname = "local2functs_vertex.hdf5"
+    print("load prod log from: ", fname)
     File = h5py.File(fname, "r")
     for isp, atm_nb in enumerate(sp2charge):
         val = File["specie_{0}".format(atm_nb)]
