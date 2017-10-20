@@ -57,12 +57,37 @@ def current_memory():
     else:
         return 0, 0
 
-def num_threads():
+def num_threads(n=None):
+    '''Set the number of OMP threads.  If argument is not given, the function
+    will return the total number of available OMP threads.'''
+    from pyscf.lib.numpy_helper import _np_helper
+    if n is not None:
+        _np_helper.omp_set_num_threads(ctypes.c_int(int(n)))
+        return n
+
     if 'OMP_NUM_THREADS' in os.environ:
         return int(os.environ['OMP_NUM_THREADS'])
     else:
-        import multiprocessing
-        return multiprocessing.cpu_count()
+        _np_helper.omp_get_max_threads.restype = ctypes.c_int
+        return _np_helper.omp_get_max_threads()
+
+class with_omp_threads(object):
+    '''
+    Usage:
+        with lib.with_threads(2):
+            print(lib.num_threads())
+            ...
+    '''
+    def __enter__(self, nthreads=None):
+        if nthreads is None:
+            self.sys_threads = None
+        else:
+            self.sys_threads = num_threads()
+            num_threads(nthreads)
+        return self
+    def __exit__(self, type, value, traceback):
+        if self.sys_threads is not None:
+            num_threads(self.sys_threads)
 
 
 def c_int_arr(m):
@@ -164,7 +189,8 @@ class ctypes_stdout(object):
     Usage:
         with ctypes_stdout() as stdout:
             ...
-        print(stdout.read())'''
+        print(stdout.read())
+    '''
     def __enter__(self):
         sys.stdout.flush()
         self._contents = None

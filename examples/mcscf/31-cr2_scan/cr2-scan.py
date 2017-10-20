@@ -35,6 +35,8 @@ def run(b, dm, mo, ci=None):
 
     mc = mcscf.CASSCF(mf, 12, 12)
     mc.fcisolver.conv_tol = 1e-9
+    # FCI solver with multi-threads is not stable enough for this sytem
+    mc.fcisolver.threads = 1
     if mo is None:
         # the initial guess for b = 1.5
         ncore = {'A1g':5, 'A1u':5}  # Optional. Program will guess if not given
