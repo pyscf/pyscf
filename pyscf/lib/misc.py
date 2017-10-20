@@ -78,10 +78,11 @@ class with_omp_threads(object):
             print(lib.num_threads())
             ...
     '''
-    def __enter__(self, nthreads=None):
-        if nthreads is None:
-            self.sys_threads = None
-        else:
+    def __init__(self, nthreads=None):
+        self.nthreads = nthreads
+        self.sys_threads = None
+    def __enter__(self):
+        if self.nthreads is not None:
             self.sys_threads = num_threads()
             num_threads(nthreads)
         return self
