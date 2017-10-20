@@ -101,7 +101,7 @@ def coulomb_am(self, sp1, R1, sp2, R2, **kvargs):
         #print("mu1 = {0}, mu2 = {1}: sum(f1f2_mom) = ".format(mu1, mu2), np.sum(abs(f1f2_mom)))
         l2S.fill(0.0)
         for l3 in range( abs(l1-l2), l1+l2+1):
-          l2S[l3] = (f1f2_mom[:]*bessel_pp[l3,:]).sum() + f1f2_mom[0]*bessel_pp[l3,0]/dkappa
+          l2S[l3] = (f1f2_mom[:]*bessel_pp[l3,:]).sum() + f1f2_mom[0]*bessel_pp[l3,0]/dkappa*0.995
         #print("mu1 = {0}, mu2 = {1}: sum(S) = ".format(mu1, mu2), np.sum(abs(l2S)))
 
         cS.fill(0.0)
