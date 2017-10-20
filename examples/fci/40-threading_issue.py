@@ -34,3 +34,18 @@ e, ci = fci.direct_spin0.kernel(h1, h2, 10, 10, ecore=mol.energy_nuc(), ci0=ci,
                                 max_cycle=500, max_space=100, verbose=5)
 print(e)
 
+
+#
+# Reducing OMP threads can improve the numerical stability
+#
+import ctypes
+libgomp = ctypes.CDLL('libgomp.so')
+libgomp.omp_set_num_threads(1)
+
+e, ci = fci.direct_spin0.kernel(h1, h2, 10, 10, ecore=mol.energy_nuc(),
+                                max_cycle=500, max_space=100, verbose=5)
+print(e)
+
+e, ci = fci.direct_spin0.kernel(h1, h2, 10, 10, ecore=mol.energy_nuc(), ci0=ci,
+                                max_cycle=500, max_space=100, verbose=5)
+print(e)
