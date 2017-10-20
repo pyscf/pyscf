@@ -604,21 +604,16 @@ void CVHFnrs8_incore_drv(double *eri, double *dmj, double *vj,
                          int n, void (*const fvj)(), void (*const fvk)())
 {
         const int npair = n*(n+1)/2;
-        double *vj_priv, *vk_priv;
-        int i, j;
-        size_t ij, off;
-
         memset(vj, 0, sizeof(double)*n*n);
         memset(vk, 0, sizeof(double)*n*n);
 
 #pragma omp parallel default(none) \
-        shared(eri, dmj, dmk, vj, vk, n) \
-        private(ij, i, j, off, vj_priv, vk_priv)
+        shared(eri, dmj, dmk, vj, vk, n)
         {
-                vj_priv = malloc(sizeof(double)*n*n);
-                vk_priv = malloc(sizeof(double)*n*n);
-                memset(vj_priv, 0, sizeof(double)*n*n);
-                memset(vk_priv, 0, sizeof(double)*n*n);
+                int i, j;
+                size_t ij, off;
+                double *vj_priv = calloc(n*n+2, sizeof(double));
+                double *vk_priv = calloc(n*n+2, sizeof(double));
 #pragma omp for nowait schedule(dynamic, 4)
                 for (ij = 0; ij < npair; ij++) {
                         i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
@@ -644,21 +639,16 @@ void CVHFnrs4_incore_drv(double *eri, double *dmj, double *vj,
                          int n, void (*const fvj)(), void (*const fvk)())
 {
         const int npair = n*(n+1)/2;
-        double *vj_priv, *vk_priv;
-        int i, j;
-        size_t ij, off;
-
         memset(vj, 0, sizeof(double)*n*n);
         memset(vk, 0, sizeof(double)*n*n);
 
 #pragma omp parallel default(none) \
-        shared(eri, dmj, dmk, vj, vk, n) \
-        private(ij, i, j, off, vj_priv, vk_priv)
+        shared(eri, dmj, dmk, vj, vk, n)
         {
-                vj_priv = malloc(sizeof(double)*n*n);
-                vk_priv = malloc(sizeof(double)*n*n);
-                memset(vj_priv, 0, sizeof(double)*n*n);
-                memset(vk_priv, 0, sizeof(double)*n*n);
+                int i, j;
+                size_t ij, off;
+                double *vj_priv = calloc(n*n+2, sizeof(double));
+                double *vk_priv = calloc(n*n+2, sizeof(double));
 #pragma omp for nowait schedule(dynamic, 4)
                 for (ij = 0; ij < npair; ij++) {
                         i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
@@ -684,21 +674,16 @@ void CVHFnrs2ij_incore_drv(double *eri, double *dmj, double *vj,
                            int n, void (*const fvj)(), void (*const fvk)())
 {
         const int npair = n*(n+1)/2;
-        double *vj_priv, *vk_priv;
-        int i, j;
-        size_t ij, off;
-
         memset(vj, 0, sizeof(double)*n*n);
         memset(vk, 0, sizeof(double)*n*n);
 
 #pragma omp parallel default(none) \
-        shared(eri, dmj, dmk, vj, vk, n) \
-        private(ij, i, j, off, vj_priv, vk_priv)
+        shared(eri, dmj, dmk, vj, vk, n)
         {
-                vj_priv = malloc(sizeof(double)*n*n);
-                vk_priv = malloc(sizeof(double)*n*n);
-                memset(vj_priv, 0, sizeof(double)*n*n);
-                memset(vk_priv, 0, sizeof(double)*n*n);
+                int i, j;
+                size_t ij, off;
+                double *vj_priv = calloc(n*n+2, sizeof(double));
+                double *vk_priv = calloc(n*n+2, sizeof(double));
 #pragma omp for nowait schedule(dynamic, 4)
                 for (ij = 0; ij < npair; ij++) {
                         i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
@@ -724,21 +709,16 @@ void CVHFnrs2kl_incore_drv(double *eri, double *dmj, double *vj,
                            int n, void (*const fvj)(), void (*const fvk)())
 {
         const int npair = n*(n+1)/2;
-        double *vj_priv, *vk_priv;
-        int i, j;
-        size_t ij, off;
-
         memset(vj, 0, sizeof(double)*n*n);
         memset(vk, 0, sizeof(double)*n*n);
 
 #pragma omp parallel default(none) \
-        shared(eri, dmj, dmk, vj, vk, n) \
-        private(ij, i, j, off, vj_priv, vk_priv)
+        shared(eri, dmj, dmk, vj, vk, n)
         {
-                vj_priv = malloc(sizeof(double)*n*n);
-                vk_priv = malloc(sizeof(double)*n*n);
-                memset(vj_priv, 0, sizeof(double)*n*n);
-                memset(vk_priv, 0, sizeof(double)*n*n);
+                int i, j;
+                size_t ij, off;
+                double *vj_priv = calloc(n*n+2, sizeof(double));
+                double *vk_priv = calloc(n*n+2, sizeof(double));
 #pragma omp for nowait schedule(dynamic, 4)
                 for (ij = 0; ij < n*n; ij++) {
                         i = ij / n;
@@ -771,10 +751,8 @@ void CVHFnrs1_incore_drv(double *eri, double *dmj, double *vj,
         {
                 int i, j;
                 size_t ij, off;
-                double *vj_priv = malloc(sizeof(double)*n*n);
-                double *vk_priv = malloc(sizeof(double)*n*n);
-                memset(vj_priv, 0, sizeof(double)*n*n);
-                memset(vk_priv, 0, sizeof(double)*n*n);
+                double *vj_priv = calloc(n*n+2, sizeof(double));
+                double *vk_priv = calloc(n*n+2, sizeof(double));
 #pragma omp for nowait schedule(dynamic, 4)
                 for (ij = 0; ij < n*n; ij++) {
                         i = ij / n;

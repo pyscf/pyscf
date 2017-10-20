@@ -132,7 +132,7 @@ void VXCzdot_ao_ao(double complex *vv, double complex *ao1, double complex *ao2,
                non0table, shls_slice, ao_loc)
 {
         int ip, ib;
-        double complex *v_priv = calloc(nao*nao, sizeof(double complex));
+        double complex *v_priv = calloc(nao*nao+2, sizeof(double complex));
 #pragma omp for nowait schedule(static)
         for (ib = 0; ib < nblk; ib++) {
                 ip = ib * BLKSIZE;
