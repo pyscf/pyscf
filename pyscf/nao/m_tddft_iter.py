@@ -102,7 +102,7 @@ class tddft_iter_c():
       if kernel_format == "npy":
           self.kernel = np.load(kernel_fname)
       elif kernel_format == "txt":
-          self.kernel = np.loadtxt(kernel_fname)
+          self.kernel = np.float32(np.loadtxt(kernel_fname))
       elif kernel_format == "hdf5":
           import h5py
           if kernel_path_hdf5 is None:
@@ -142,7 +142,7 @@ class tddft_iter_c():
         sab = (vdp*self.v_dab).reshape([no,no])
         nb2v = self.gemm(1.0, self.xocc, sab) 
         nm2v_im = self.gemm(1.0, nb2v, np.transpose(self.xvrt))
-    else:
+    else: # it gets mistaken here when double-precision kernel is accidentally used  
         vext = np.zeros((v.shape[0], 2), dtype = self.dtype, order="F")
         vext[:, 0] = v
 
@@ -253,9 +253,9 @@ class tddft_iter_c():
             veff,info = self.comp_veff(self.moms1[:,0], comega, x0=None)
 
         if self.GPU:
-            self.dn[iw, :] = -self.tddft_iter_gpu.apply_rf0_gpu(veff, comega)
+            self.dn[iw, :] = self.tddft_iter_gpu.apply_rf0_gpu(veff, comega)
         else:
-            self.dn[iw, :] = -self.apply_rf0(veff, comega)
+            self.dn[iw, :] = self.apply_rf0(veff, comega)
      
         polariz[iw] = np.dot(self.moms1[:,0], self.dn[iw, :])
 

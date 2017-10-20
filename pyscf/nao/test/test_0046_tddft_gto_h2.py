@@ -13,7 +13,7 @@ class KnowValues(unittest.TestCase):
     
   def test_tddft_gto_vs_nao(self):
     """ """
-    gto_mf = scf.RKS(mol)
+    gto_mf = scf_gto.RKS(mol)
     gto_mf.kernel()
     print(dir(gto_mf))
     print(gto_mf.xc)
@@ -24,8 +24,8 @@ class KnowValues(unittest.TestCase):
     gto_td.kernel()
     print('Excitation energy (eV)', gto_td.e * 27.2114)
 
-    nao_mol = nao(gto=mol, verbose=0)
-    nao_mf  = scf
+    #nao_mol = nao(gto=mol, verbose=0)
+    nao_mf  = scf_nao(mf=gto_mf, gto=mol)
     
 
 if __name__ == "__main__":

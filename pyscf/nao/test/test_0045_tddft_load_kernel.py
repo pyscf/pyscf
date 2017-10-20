@@ -31,16 +31,16 @@ class KnowValues(unittest.TestCase):
     self.assertTrue(np.allclose(data_ref,data.T, rtol=1.0, atol=1e-05))
     #np.savetxt('water.tddft_iter.omega.nonin.pxx.txt', data.T, fmt=['%f','%f'])
 
-  def test_inter_polariz(self):
-    """ This is interacting polarizability with SIESTA starting point """
-    omegas = np.linspace(0.0,2.0,150)+1j*td.eps
-    pxx = td.comp_polariz_xx(omegas).imag
-    data = np.array([omegas.real*27.2114, pxx])
-    data_ref = np.loadtxt(dname+'/water.tddft_iter.omega.inter.pxx.txt-ref')
-    #print('    td.rf0_ncalls ', td.rf0_ncalls)
-    #print(' td.matvec_ncalls ', td.matvec_ncalls)
-    self.assertTrue(np.allclose(data_ref,data.T, rtol=1.0, atol=1e-05))
-    #np.savetxt('water.tddft_iter.omega.inter.pxx.txt', data.T, fmt=['%f','%f'])
+  #def test_inter_polariz(self):
+    #""" This is interacting polarizability with SIESTA starting point """
+    #omegas = np.linspace(0.0,2.0,150)+1j*td.eps
+    #pxx = -td.comp_polariz_xx(omegas).imag
+    #data = np.array([omegas.real*27.2114, pxx])
+    #np.savetxt(dname+'/water.tddft_iter.omega.inter.pxx.txt', data.T, fmt=['%f','%f'])
+    #data_ref = np.loadtxt(dname+'/water.tddft_iter.omega.inter.pxx.txt-ref')
+    ##print('    td.rf0_ncalls ', td.rf0_ncalls)
+    ##print(' td.matvec_ncalls ', td.matvec_ncalls)
+    #self.assertTrue(np.allclose(data_ref,data.T, rtol=1.0, atol=1e-05))
 
   def test_load_kernel(self):
     data_ref_nonin = np.loadtxt(dname+'/water.tddft_iter.omega.pxx.txt-ref')[:, 1]
@@ -55,9 +55,10 @@ class KnowValues(unittest.TestCase):
       pxx = td.comp_nonin(omegas).imag
       self.assertTrue(np.allclose(data_ref_nonin, pxx, rtol=1.0, atol=1e-05))
 
+      print('inter')
       # check inter
       omegas = np.linspace(0.0,2.0,150)+1j*td.eps
-      pxx = td.comp_polariz_xx(omegas).imag
+      pxx = -td.comp_polariz_xx(omegas).imag
       self.assertTrue(np.allclose(data_ref_inter, pxx, rtol=1.0, atol=1e-05))
 
 

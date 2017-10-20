@@ -569,7 +569,7 @@ class system_vars_c():
     
   def get_init_guess(self, key=None):
     """ Compute an initial guess for the density matrix. """
-    from pyscf.nao.m_hf import init_guess_by_minao
+    from pyscf.scf.hf import init_guess_by_minao
     if hasattr(self, 'mol'):
       dm = init_guess_by_minao(self.mol)
     else:
