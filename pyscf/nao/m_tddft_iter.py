@@ -53,13 +53,13 @@ class tddft_iter_c():
     else:
         raise ValueError("precision can be only single or double")
 
-
     self.rf0_ncalls = 0
     self.l0_ncalls = 0
     self.matvec_ncalls = 0
     self.tddft_iter_tol = tddft_iter_tol
     self.eps = tddft_iter_broadening
     self.sv, self.pb, self.norbs, self.nspin = sv, pb, sv.norbs, sv.nspin
+    self.GPU = GPU
 
     self.v_dab = pb.get_dp_vertex_sparse(dtype=self.dtype, sparseformat=coo_matrix).tocsr()
     self.cc_da = pb.get_da2cc_sparse(dtype=self.dtype, sparseformat=coo_matrix).tocsr()
@@ -94,8 +94,8 @@ class tddft_iter_c():
     self.xocc = sv.wfsx.x[0,0,0:self.nfermi,:,0]  # does python creates a copy at this point ?
     self.xvrt = sv.wfsx.x[0,0,self.vstart:,:,0]   # does python creates a copy at this point ?
 
-    self.tddft_iter_gpu = tddft_iter_gpu_c(GPU, self.v_dab, self.ksn2f, self.ksn2e, 
-            self.norbs, self.nfermi, self.vstart)
+    self.tddft_iter_gpu = tddft_iter_gpu_c(GPU, sv.wfsx.x, self.v_dab, self.ksn2f, self.ksn2e, 
+            self.cc_da, self.norbs, self.nfermi, self.nprod, self.vstart)
 
   def load_kernel(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None, **kwargs):
 
@@ -122,6 +122,7 @@ class tddft_iter_c():
     assert len(v)==len(self.moms0), "%r, %r "%(len(v), len(self.moms0))
     self.rf0_ncalls+=1
     no = self.norbs
+    #print("vKs = ", np.sum(abs(v)))
 
     if v.dtype == self.dtypeComplex:
         vext = np.zeros((v.shape[0], 2), dtype = self.dtype, order="F")
@@ -181,6 +182,9 @@ class tddft_iter_c():
 
     chi0_im = vdp*self.cc_da
     #chi0_im = self.cc_ad_csc*vdp
+    #print("chi0 = ", np.sum(abs(chi0_re)), np.sum(abs(chi0_im)))
+    #import sys
+    #sys.exit()
 
     return chi0_re + 1.0j*chi0_im
 
@@ -200,7 +204,10 @@ class tddft_iter_c():
   def vext2veff_matvec(self, v):
     self.matvec_ncalls+=1 
     
-    chi0 = self.apply_rf0(v, self.comega_current)
+    if self.GPU:
+        self.tddft_iter_gpu.apply_rf0_gpu(v, self.comega_current)
+    else:
+        chi0 = self.apply_rf0(v, self.comega_current)
     
     # For some reason it is very difficult to pass only one dimension
     # of an array to the fortran routines?? matvec[0, :].ctypes.data_as(POINTER(c_float))
@@ -244,8 +251,12 @@ class tddft_iter_c():
             veff,info = self.comp_veff(self.moms1[:,0], comega, x0=self.dn0[iw, :])
         else:
             veff,info = self.comp_veff(self.moms1[:,0], comega, x0=None)
-        self.dn[iw, :] = -self.apply_rf0( veff, comega )
 
+        if self.GPU:
+            self.dn[iw, :] = -self.tddft_iter_gpu.apply_rf0_gpu(veff, comega)
+        else:
+            self.dn[iw, :] = -self.apply_rf0(veff, comega)
+     
         polariz[iw] = np.dot(self.moms1[:,0], self.dn[iw, :])
 
     if self.tddft_iter_gpu.GPU:
@@ -275,7 +286,11 @@ class tddft_iter_c():
     pxx = np.zeros(comegas.shape, dtype=np.complex64)
     self.dn0 = np.zeros((comegas.shape[0], self.nprod), dtype=np.complex64)
 
-    for iomega, omega in enumerate(comegas):
-        self.dn0[iomega, :] = -self.apply_rf0(vext[0,:], omega)
-        pxx[iomega] = np.dot(self.dn0[iomega, :], vext[0,:])
+    for iw, omega in enumerate(comegas):
+        if self.GPU:
+            self.dn0[iw, :] = -self.tddft_iter_gpu.apply_rf0_gpu(vext[0, :], omega)
+        else:
+            self.dn0[iw, :] = -self.apply_rf0(vext[0, :], omega)
+ 
+        pxx[iw] = np.dot(self.dn0[iw, :], vext[0,:])
     return pxx

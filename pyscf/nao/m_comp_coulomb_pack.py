@@ -30,8 +30,10 @@ def comp_coulomb_pack(sv, ao_log=None, funct=coulomb_am, dtype=np.float64, **kva
   norbs = atom2s[-1]
 
   res = np.zeros(norbs*(norbs+1)//2, dtype=dtype)
+  use_numba = True 
 
   for atom1,[sp1,rv1,s1,f1] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
+    #print("atom1 = {0}, rv1 = {1}".format(atom1, rv1))
     for atom2,[sp2,rv2,s2,f2] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
       if atom2>atom1: continue # skip 
       oo2f = funct(me,sp1,rv1,sp2,rv2, **kvargs)
@@ -42,5 +44,9 @@ def comp_coulomb_pack(sv, ao_log=None, funct=coulomb_am, dtype=np.float64, **kva
             for i2 in range(s2, min(i1+1, f2)):
               res[ij2pack_l(i1,i2,norbs)] = oo2f[i1-s1,i2-s2]
 
-  #print("sum kernel: ", np.sum(abs(res)))
+  #print("number call = ", count)
+  #print("sum kernel: {0:.6f}".format(np.sum(abs(res))))
+  #np.savetxt("kernel_pyscf.txt", res)
+  #import sys
+  #sys.exit()
   return res, norbs
