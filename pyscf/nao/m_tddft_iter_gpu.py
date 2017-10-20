@@ -4,13 +4,13 @@ from ctypes import POINTER, c_double, c_int, c_int64, c_float, c_int, c_long
 from pyscf.nao.m_sparsetools import csr_matvec, csc_matvec, csc_matvecs
 import sys
 
-#try:
+try:
 # try import gpu library
-from pyscf.lib import misc
-libnao_gpu = misc.load_library("libnao_gpu")
-GPU_import = True
-#except:
-#    GPU_import = False 
+    from pyscf.lib import misc
+    libnao_gpu = misc.load_library("libnao_gpu")
+    GPU_import = True
+except:
+    GPU_import = False 
 
 
 
