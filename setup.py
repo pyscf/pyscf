@@ -193,8 +193,10 @@ def make_ext(pkg_name, relpath, srcs, libraries=[], library_dirs=default_lib_dir
     else:
         if sys.platform.startswith('darwin'):
             openmp_flag = []
+            runtime_library_dirs = []
         else:
             openmp_flag = ['-fopenmp']
+            runtime_library_dirs = ['$ORIGIN', '.']
         srcs = make_src(relpath, srcs)
         return Extension(pkg_name, srcs,
                          libraries = libraries,
@@ -205,7 +207,7 @@ def make_ext(pkg_name, relpath, srcs, libraries=[], library_dirs=default_lib_dir
 # Be careful with the ld flag "-Wl,-R$ORIGIN" in the shell.
 # When numpy.distutils is imported, the default CCompiler of distutils will be
 # overwritten. Compilation is executed in shell and $ORIGIN will be converted to ''
-                         runtime_library_dirs = ['$ORIGIN', '.'],
+                         runtime_library_dirs = runtime_library_dirs,
                          **kwargs)
 
 def make_src(relpath, srcs):
@@ -240,7 +242,7 @@ cart2sph.c cint2e_coulerf.c optimizer.c g2c2e.c c2f.c cint3c1e.c
 g3c1e.c cint3c2e.c g4c1e.c cint2e.c autocode/intor4.c
 autocode/int3c1e.c autocode/int3c2e.c autocode/dkb.c autocode/breit1.c
 autocode/gaunt1.c autocode/grad1.c autocode/intor2.c autocode/intor3.c
-autocode/hess.c autocode/intor1.c autocode/grad2.c '''
+autocode/hess.c autocode/intor1.c autocode/grad2.c'''
         if os.path.exists(os.path.join(pyscf_lib_dir, 'libcint')):
             extensions.append(
                 make_ext('pyscf.lib.libcint', 'libcint/src', srcs, blas_libraries)
