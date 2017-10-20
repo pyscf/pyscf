@@ -176,14 +176,22 @@ def energy_elec(ks, dm, h1e=None, vhf=None):
 
 NELEC_ERROR_TOL = 0.01
 def prune_small_rho_grids_(ks, mol, dm, grids):
-    n, idx = ks._numint.large_rho_indices(mol, dm, grids, ks.small_rho_cutoff)
+    rho = ks._numint.get_rho(mol, dm, grids, ks.max_memory)
+    n = numpy.dot(rho, grids.weights)
     if abs(n-mol.nelectron) < NELEC_ERROR_TOL*n:
+        rho *= grids.weights
+        idx = abs(rho) > ks.small_rho_cutoff / grids.weights.size
         logger.debug(ks, 'Drop grids %d',
                      grids.weights.size - numpy.count_nonzero(idx))
         grids.coords  = numpy.asarray(grids.coords [idx], order='C')
         grids.weights = numpy.asarray(grids.weights[idx], order='C')
         grids.non0tab = grids.make_mask(mol, grids.coords)
     return grids
+
+def define_xc_(ks, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
+    libxc = ks._numint.libxc
+    ks._numint = libxc.define_xc_(ks._numint, description, xctype, hyb, rsh)
+    return ks
 
 
 class RKS(hf.RHF):
@@ -252,18 +260,16 @@ class RKS(hf.RHF):
         logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
         self.grids.dump_flags()
         if self.nlc!='':
+            logger.info(self, '** Following is NLC Grids **')
             self.nlcgrids.dump_flags()
 
     get_veff = get_veff
     energy_elec = energy_elec
+    define_xc_ = define_xc_
 
     def nuc_grad_method(self):
         from pyscf.grad import rks
         return rks.Gradients(self)
-
-    def define_xc_(self, description):
-        raise RuntimeError('define_xc_ method is depercated.  '
-                           'Set mf.xc = %s instead.' % description)
 
 def _dft_common_init_(mf):
     mf.xc = 'LDA,VWN'

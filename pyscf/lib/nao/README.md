@@ -10,7 +10,7 @@ Installation
   architecture file.
   
         cd pyscf/lib
-        cp cmake_arch_config/cmake.arch.inc-gnu cmake.arch.inc
+        cp cmake_arch_config/cmake.arch.inc-nao-gnu cmake.arch.inc
         mkdir build
         cd build
         export FC=gfortran   # (just to be sure)

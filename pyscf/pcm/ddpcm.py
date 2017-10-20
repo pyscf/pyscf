@@ -21,6 +21,7 @@ from pyscf import df
 from pyscf.dft import gen_grid, numint
 from pyscf.data import radii
 from pyscf.pcm import ddcosmo
+from pyscf.symm import sph
 
 ddpcm_for_scf = ddcosmo.ddcosmo_for_scf
 
@@ -36,7 +37,7 @@ def gen_ddpcm_solver(pcmobj, grids=None, verbose=None):
 
     r_vdw = ddcosmo.get_atomic_radii(pcmobj)
     coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(pcmobj.lebedev_order)
-    ylm_1sph = numpy.vstack(ddcosmo.make_ylm(coords_1sph, lmax))
+    ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, lmax, True))
 
     fi = ddcosmo.make_fi(pcmobj, r_vdw)
     ui = 1 - fi
@@ -57,7 +58,7 @@ def gen_ddpcm_solver(pcmobj, grids=None, verbose=None):
     A_diele = Amat + fac * numpy.eye(natm*nlm)
     A_inf = Amat + 2*numpy.pi * numpy.eye(natm*nlm)
 
-    cached_pol = ddcosmo.cache_fake_multipoler(grids, r_vdw, lmax)
+    cached_pol = ddcosmo.cache_fake_multipoles(grids, r_vdw, lmax)
 
     def gen_vind(dm):
         v_phi = ddcosmo.make_phi(pcmobj, dm, r_vdw, ui, grids)
@@ -112,7 +113,7 @@ def make_A(pcmobj, r_vdw, ylm_1sph, ui):
         for ka in ddcosmo.atoms_with_vdw_overlap(ja, atom_coords, r_vdw):
             vjk = r_vdw[ja] * coords_1sph + atom_coords[ja] - atom_coords[ka]
             rjk = lib.norm(vjk, axis=1)
-            pol = ddcosmo.make_multipole(vjk, lmax)
+            pol = sph.multipoles(vjk, lmax)
             p1 = 0
             weights = w_u / rjk**(l*2+1)
             for l in range(lmax+1):

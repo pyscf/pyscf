@@ -35,12 +35,13 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
     '''
     cell = mydf.cell
     gs = mydf.gs
+    low_dim_ft_type = mydf.low_dim_ft_type
 
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
 
-    coulG = tools.get_coulG(cell, gs=gs)
+    coulG = tools.get_coulG(cell, gs=gs, low_dim_ft_type=low_dim_ft_type)
     ngs = len(coulG)
 
     vR = rhoR = np.zeros((nset,ngs))
@@ -86,6 +87,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     '''
     cell = mydf.cell
     gs = mydf.gs
+    low_dim_ft_type = mydf.low_dim_ft_type
     coords = cell.gen_uniform_grids(gs)
     ngs = coords.shape[0]
 
@@ -129,12 +131,12 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     blksize = int(max(max_memory*1e6/16/2/ngs/nao, 1))
     ao1_dtype = np.result_type(*ao1_kpts)
     ao2_dtype = np.result_type(*ao2_kpts)
-    buf = np.empty((blksize,naoj,ngs), dtype=np.result_type(ao1_dtype, ao2_dtype))
     vR_dm = np.empty((nset,nao,ngs), dtype=vk_kpts.dtype)
     ao_dms = np.empty((nset,naoj,ngs), dtype=np.result_type(dms, ao2_dtype))
 
     for k2, ao2T in enumerate(ao2_kpts):
         kpt2 = kpts[k2]
+        naoj = ao2T.shape[0]
         if mo_coeff is None or nset > 1:
             for i in range(nset):
                 lib.dot(dms[i,k2], ao2T.conj(), c=ao_dms[i])
@@ -144,7 +146,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
         for k1, ao1T in enumerate(ao1_kpts):
             kpt1 = kpts_band[k1]
             mydf.exxdiv = exxdiv
-            coulG = tools.get_coulG(cell, kpt2-kpt1, True, mydf, gs)
+            coulG = tools.get_coulG(cell, kpt2-kpt1, True, mydf, gs, 
+                                    low_dim_ft_type=low_dim_ft_type)
             if is_zero(kpt1-kpt2):
                 expmikr = np.array(1.)
             else:
@@ -152,7 +155,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
 
             for p0, p1 in lib.prange(0, nao, blksize):
                 rho1 = np.einsum('ig,jg->ijg', ao1T[p0:p1].conj()*expmikr,
-                                 ao2T, out=buf[:p1-p0])
+                                 ao2T)
                 vG = tools.fft(rho1.reshape(-1,ngs), gs)
                 vG *= coulG
                 vR = tools.ifft(vG, gs).reshape(p1-p0,naoj,ngs)

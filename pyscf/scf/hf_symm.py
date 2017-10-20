@@ -453,7 +453,11 @@ class ROHF(rohf.ROHF):
     def build(self, mol=None):
         if mol is None: mol = self.mol
         if mol.symmetry:
-            check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
+            if self.nelec is None:
+                nelec = self.mol.nelec
+            else:
+                nelec = self.nelec
+            check_irrep_nelec(mol, self.irrep_nelec, nelec)
         return hf.RHF.build(self, mol)
 
     eig = eig
@@ -519,8 +523,12 @@ class ROHF(rohf.ROHF):
                                                    mo_ea[rest_idx], mo_eb[rest_idx],
                                                    ncore, nopen)
 
-        ncore = self.nelec[1]
-        nocc  = self.nelec[0]
+        if self.nelec is None:
+            nelec = self.mol.nelec
+        else:
+            nelec = self.nelec
+        ncore = nelec[1]
+        nocc  = nelec[0]
         nopen = nocc - ncore
         vir_idx = (mo_occ==0)
         if self.verbose >= logger.INFO and nocc < nmo and ncore > 0:

@@ -2,7 +2,7 @@
 
 import unittest
 import numpy
-from pyscf import gto
+from pyscf import gto, lib
 
 mol = gto.Mole()
 mol.verbose = 0
@@ -235,6 +235,14 @@ class KnowValues(unittest.TestCase):
         eri1 = mol.intor('int3c2e_ip1_sph', comp=3, shls_slice=(2,5,4,9,0,mol.nbas))
         self.assertAlmostEqual(finger(eri1), 642.70512922279079, 11)
 
+    def test_nr_s8(self):
+        mol = gto.M(atom="He 0 0 0; Ne 3 0 0", basis='ccpvdz')
+        eri0 = mol.intor('int2e_sph', aosym='s8')
+        self.assertAlmostEqual(lib.finger(eri0), -10.685918926843847, 9)
+
+        eri1 = mol.intor('int2e_yp_sph', aosym='s8')
+        self.assertAlmostEqual(lib.finger(eri1), -10.685918926843847, 9)
+        self.assertAlmostEqual(abs(eri0-eri1).max(), 0, 9)
 
 
 if __name__ == "__main__":

@@ -34,7 +34,7 @@ def comp_coulomb_pack(sv, ao_log=None, funct=coulomb_am, dtype=np.float64, **kva
   for atom1,[sp1,rv1,s1,f1] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
     for atom2,[sp2,rv2,s2,f2] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
       if atom2>atom1: continue # skip 
-      oo2f = funct(me,sp1,rv1,sp2,rv2,**kvargs)
+      oo2f = funct(me,sp1,rv1,sp2,rv2, **kvargs)
       if use_numba:
           fill_triu_v2(oo2f, res, s1, f1, s2, f2, norbs)
       else:
@@ -42,4 +42,5 @@ def comp_coulomb_pack(sv, ao_log=None, funct=coulomb_am, dtype=np.float64, **kva
             for i2 in range(s2, min(i1+1, f2)):
               res[ij2pack_l(i1,i2,norbs)] = oo2f[i1-s1,i2-s2]
 
+  #print("sum kernel: ", np.sum(abs(res)))
   return res, norbs

@@ -12,7 +12,7 @@ import numpy
 from pyscf import lib
 from pyscf.gto import mole
 from pyscf.lib import logger
-from pyscf import symm
+from pyscf.symm import sph
 from pyscf.scf import hf
 
 
@@ -99,7 +99,10 @@ def dynamic_level_shift_(mf, factor=1.):
 dynamic_level_shift = dynamic_level_shift_
 
 def float_occ_(mf):
-    '''for UHF, do not fix the nelec_alpha. determine occupation based on energy spectrum'''
+    '''
+    For UHF, allowing the Sz value being changed during SCF iteration.
+    Determine occupation of alpha and beta electrons based on energy spectrum
+    '''
     from pyscf.scf import uhf
     assert(isinstance(mf, uhf.UHF))
     def get_occ(mo_energy, mo_coeff=None):
@@ -107,15 +110,19 @@ def float_occ_(mf):
         ee = numpy.sort(numpy.hstack(mo_energy))
         n_a = numpy.count_nonzero(mo_energy[0]<(ee[mol.nelectron-1]+1e-3))
         n_b = mol.nelectron - n_a
-        if n_a != mf.nelec[0]:
+        if mf.nelec is None:
+            nelec = mf.mol.nelec
+        else:
+            nelec = mf.nelec
+        if n_a != nelec[0]:
             logger.info(mf, 'change num. alpha/beta electrons '
                         ' %d / %d -> %d / %d',
-                        mf.nelec[0], mf.nelec[1], n_a, n_b)
+                        nelec[0], nelec[1], n_a, n_b)
             mf.nelec = (n_a, n_b)
         return uhf.UHF.get_occ(mf, mo_energy, mo_coeff)
     mf.get_occ = get_occ
     return mf
-float_occ = float_occ_
+dynamic_sz_ = float_occ = float_occ_
 
 def symm_allow_occ_(mf, tol=1e-3):
     '''search the unoccupied orbitals, choose the lowest sets which do not
@@ -247,7 +254,7 @@ def project_mo_nr2r(mol1, mo1, mol2):
     s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
     s21 = mole.intor_cross('int1e_ovlp_sph', mol2, mol1)
 
-    ua, ub = symm.cg.real2spinor_whole(mol2)
+    ua, ub = sph.real2spinor_whole(mol2)
     s21 = numpy.dot(ua.T.conj(), s21) + numpy.dot(ub.T.conj(), s21) # (*)
     # mo2: alpha, beta have been summed in Eq. (*)
     # so DM = mo2[:,:nocc] * 1 * mo2[:,:nocc].H

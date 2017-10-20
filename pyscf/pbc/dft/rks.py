@@ -20,6 +20,7 @@ from pyscf.lib import logger
 from pyscf.pbc.scf import hf as pbchf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
+from pyscf.dft.rks import define_xc_
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -91,9 +92,11 @@ def _patch_df_beckegrids(density_fit):
 
 NELEC_ERROR_TOL = 0.01
 def prune_small_rho_grids_(ks, mol, dm, grids, kpts):
-    n, idx = ks._numint.large_rho_indices(mol, dm, grids,
-                                          ks.small_rho_cutoff, kpts)
+    rho = ks._numint.get_rho(mol, dm, grids, kpts, ks.max_memory)
+    n = numpy.dot(rho, grids.weights)
     if abs(n-mol.nelectron) < NELEC_ERROR_TOL*n:
+        rho *= grids.weights
+        idx = abs(rho) > ks.small_rho_cutoff / grids.weights.size
         logger.debug(ks, 'Drop grids %d',
                      grids.weights.size - numpy.count_nonzero(idx))
         grids.coords  = numpy.asarray(grids.coords [idx], order='C')
@@ -125,6 +128,7 @@ class RKS(pbchf.RHF):
 
     get_veff = get_veff
     energy_elec = pyscf.dft.rks.energy_elec
+    define_xc_ = define_xc_
 
     density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
     mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)

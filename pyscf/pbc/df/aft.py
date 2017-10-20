@@ -79,9 +79,17 @@ def get_nuc(mydf, kpts=None):
         vG = vpplocG
         vj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
     else:
+        if cell.dimension > 0:
+            ke_guess = estimate_ke_cutoff_for_eta(cell, mydf.eta, cell.precision)
+            gs_guess = tools.cutoff_to_gs(cell.lattice_vectors(), ke_guess)
+            if numpy.any(mydf.gs < gs_guess*.8):
+                logger.warn(mydf, 'gs %s is not enough for AFTDF.get_nuc function '
+                            'to get integral accuracy %g.\nRecomended gs is %s.',
+                            mydf.gs, cell.precision, gs_guess)
+
         nuccell = copy.copy(cell)
         half_sph_norm = .5/numpy.sqrt(numpy.pi)
-        norm = half_sph_norm/gto.mole._gaussian_int(2, mydf.eta)
+        norm = half_sph_norm/gto.gaussian_int(2, mydf.eta)
         chg_env = [mydf.eta, norm]
         ptr_eta = cell._env.size
         ptr_norm = ptr_eta + 1
@@ -217,7 +225,7 @@ class AFTDF(lib.StreamObject):
         lib.StreamObject.check_sanity(self)
         cell = self.cell
         if not cell.has_ecp():
-            logger.warn(self, 'FFTDF integrals are found in all-electron '
+            logger.warn(self, 'AFTDF integrals are found in all-electron '
                         'calculation.  It often causes huge error.\n'
                         'Recommended methods are DF or MDF. In SCF calculation, '
                         'they can be initialized as\n'
@@ -231,9 +239,9 @@ class AFTDF(lib.StreamObject):
             else:
                 ke_cutoff = numpy.min(cell.ke_cutoff)
             ke_guess = estimate_ke_cutoff(cell, cell.precision)
+            gs_guess = tools.cutoff_to_gs(cell.lattice_vectors(), ke_guess)
             if ke_cutoff < ke_guess*.8:
-                gs_guess = tools.cutoff_to_gs(cell.lattice_vectors(), ke_guess)
-                logger.warn(self, 'ke_cutoff/gs (%g / %s) is not enough for FFTDF '
+                logger.warn(self, 'ke_cutoff/gs (%g / %s) is not enough for AFTDF '
                             'to get integral accuracy %g.\nCoulomb integral error '
                             'is ~ %.2g Eh.\nRecomended ke_cutoff/gs are %g / %s.',
                             ke_cutoff, self.gs, cell.precision,
@@ -244,14 +252,22 @@ class AFTDF(lib.StreamObject):
         if cell.dimension < 3:
             err = numpy.exp(-0.87278467*min(self.gs[cell.dimension:]) - 2.99944305)
             err *= cell.nelectron
+            gz = numpy.log(cell.nelectron/cell.precision)/0.8727847-3.4366358
+            gs_guess[cell.dimension:] = int(gz)
             if err > cell.precision*10:
-                gz = numpy.log(cell.nelectron/cell.precision)/0.8727847-3.4366358
-                gs_guess[cell.dimension:] = int(gz)
                 logger.warn(self, 'gs %s of AFTDF may not be enough to get '
                             'integral accuracy %g for %dD PBC system.\n'
                             'Coulomb integral error is ~ %.2g Eh.\n'
                             'Recomended gs is %s.',
                             self.gs, cell.precision, cell.dimension, err, gs_guess)
+            if (cell.gs[cell.dimension:]/(1.*gz) > 1.1).any():
+                gz = numpy.log(cell.nelectron/cell.precision)/0.8727847-3.4366358
+                logger.warn(self, 'setting gs %s of AFTDF too high in non-periodic direction '
+                            '(=%s) can result in an unneccesarily slow calculation.\n'
+                            'For coulomb integral error of ~ %.2g Eh in %dD PBC, \n'
+                            'a recommended gs for non-periodic direction is %s.',
+                            self.gs, self.gs[cell.dimension:], cell.precision, cell.dimension,
+                            gs_guess[cell.dimension:])
         return self
 
     def pw_loop(self, gs=None, kpti_kptj=None, q=None, shls_slice=None,
@@ -434,7 +450,7 @@ def _fake_nuc(cell):
             eta = .5 / rloc**2
         else:
             eta = 1e16
-        norm = half_sph_norm/gto.mole._gaussian_int(2, eta)
+        norm = half_sph_norm/gto.gaussian_int(2, eta)
         _env.extend([eta, norm])
         _bas.append([ia, 0, 1, 1, 0, ptr, ptr+1, 0])
         ptr += 2

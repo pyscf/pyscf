@@ -6,6 +6,7 @@ import numpy
 import scipy.special
 from pyscf import gto, scf, lib, dft
 from pyscf.pcm import ddcosmo
+from pyscf.symm import sph
 
 mol = gto.Mole()
 mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
@@ -43,7 +44,7 @@ def make_L(pcmobj, r_vdw, lebedev_order, lmax, eta=0.1):
     leb_coords, leb_weights = ddcosmo.make_grids_one_sphere(lebedev_order)
     nleb_grid = leb_weights.size
     atom_coords = mol.atom_coords()
-    Ylm_sphere = numpy.vstack(ddcosmo.make_ylm(leb_coords, lmax))
+    Ylm_sphere = numpy.vstack(sph.real_sph_vec(leb_coords, lmax, True))
     fi = ddcosmo.make_fi(pcmobj, r_vdw)
 
     L_diag = numpy.zeros((natm,nlm))
@@ -61,7 +62,7 @@ def make_L(pcmobj, r_vdw, lebedev_order, lmax, eta=0.1):
             v = lib.norm(vjk, axis=1)
             tjk = v / r_vdw[ka]
             sjk = vjk / v.reshape(-1,1)
-            Ys = ddcosmo.make_ylm(sjk, lmax)
+            Ys = sph.real_sph_vec(sjk, lmax, True)
             # scale the weight, see JCTC 9, 3637, Eq (16)
             wjk = pcmobj.regularize_xt(tjk, eta, r_vdw[ka])
             wjk[fi[ja]>1] /= fi[ja,fi[ja]>1]
@@ -92,7 +93,7 @@ def make_psi(mol, dm, r_vdw, lmax):
         i0, i1 = i1, i1 + w.size
         r = lib.norm(xnj, axis=1)
         snj = xnj/r.reshape(-1,1)
-        Ys = ddcosmo.make_ylm(snj, lmax)
+        Ys = sph.real_sph_vec(snj, lmax, True)
         p1 = 0
         for l in range(lmax+1):
             fac = 4*numpy.pi/(l*2+1)
@@ -118,7 +119,7 @@ def make_vmat(pcm, r_vdw, lebedev_order, lmax, LX, LS):
         xnj, w = atom_grids_tab[mol.atom_symbol(ia)]
         i0, i1 = i1, i1 + w.size
         r = lib.norm(xnj, axis=1)
-        Ys = ddcosmo.make_ylm(xnj/r.reshape(-1,1), lmax)
+        Ys = sph.real_sph_vec(xnj/r.reshape(-1,1), lmax, True)
         p1 = 0
         for l in range(lmax+1):
             fac = 4*numpy.pi/(l*2+1)
@@ -131,7 +132,7 @@ def make_vmat(pcm, r_vdw, lebedev_order, lmax, LX, LS):
                                  ao[i0:i1], ao[i0:i1])
 
     atom_coords = mol.atom_coords()
-    Ylm_sphere = numpy.vstack(ddcosmo.make_ylm(coords_1sph, lmax))
+    Ylm_sphere = numpy.vstack(sph.real_sph_vec(coords_1sph, lmax, True))
     fi = ddcosmo.make_fi(pcm, r_vdw)
     ui = 1 - fi
     ui[ui<0] = 0
@@ -169,7 +170,7 @@ class KnownValues(unittest.TestCase):
         pcm.lmax = 6
         pcm.lebedev_order = 17
         mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol), pcm).run()
-        self.assertAlmostEqual(mf.e_tot, -112.35423738427839, 9)
+        self.assertAlmostEqual(mf.e_tot, -112.35432135908066, 9)
 
     def test_make_ylm(self):
         numpy.random.seed(1)
@@ -209,7 +210,7 @@ class KnownValues(unittest.TestCase):
                 ylm = ylm[[2,0,1]]
             ylmref.append(ylm)
         ylmref = numpy.vstack(ylmref)
-        ylm = numpy.vstack(ddcosmo.make_ylm(r, lmax))
+        ylm = numpy.vstack(sph.real_sph_vec(r, lmax, True))
         self.assertTrue(abs(ylmref - ylm).max() < 1e-14)
 
     def test_L_x(self):
@@ -219,7 +220,7 @@ class KnownValues(unittest.TestCase):
         Lref = make_L(pcm, r_vdw, pcm.lebedev_order, pcm.lmax, pcm.eta).reshape(n,n)
 
         coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(pcm.lebedev_order)
-        ylm_1sph = numpy.vstack(ddcosmo.make_ylm(coords_1sph, pcm.lmax))
+        ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, pcm.lmax, True))
         fi = ddcosmo.make_fi(pcm, r_vdw)
         L = ddcosmo.make_L(pcm, r_vdw, ylm_1sph, fi).reshape(n,n)
 
@@ -252,8 +253,8 @@ class KnownValues(unittest.TestCase):
         ui[ui<0] = 0
         grids = dft.gen_grid.Grids(mol).build()
         coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(pcm.lebedev_order)
-        ylm_1sph = numpy.vstack(ddcosmo.make_ylm(coords_1sph, pcm.lmax))
-        cached_pol = ddcosmo.cache_fake_multipoler(grids, r_vdw, pcm.lmax)
+        ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, pcm.lmax, True))
+        cached_pol = ddcosmo.cache_fake_multipoles(grids, r_vdw, pcm.lmax)
 
         numpy.random.seed(1)
         nao = mol.nao_nr()
@@ -269,7 +270,7 @@ class KnownValues(unittest.TestCase):
         psi_ref = make_psi(pcm.mol, dm, r_vdw, pcm.lmax)
         self.assertTrue(abs(psi_ref - psi).max() < 1e-12)
 
-        LS = numpy.linalg.solve(L.reshape(natm*nlm,-1),
+        LS = numpy.linalg.solve(L.T.reshape(natm*nlm,-1),
                                 psi_ref.ravel()).reshape(natm,nlm)
         vmat_ref = make_vmat(pcm, r_vdw, pcm.lebedev_order, pcm.lmax, LX, LS)
         self.assertTrue(abs(vmat_ref - vmat).max() < 1e-12)

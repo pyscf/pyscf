@@ -175,7 +175,11 @@ class prod_basis_c():
     self.tol_loc,self.tol_biloc,self.ac_rcut_ratio,self.ac_npc_max = tol_loc, tol_biloc, ac_rcut_ratio, ac_npc_max
     self.jcutoff,self.metric_type,self.optimize_centers,self.ngl = jcutoff, metric_type, optimize_centers, ngl
     self.ac_rcut = ac_rcut_ratio*max(sv.ao_log.sp2rcut)    
+    
     self.prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc) # local basis (for each specie)
+    # Checking routine: Load Fortran data
+    # self.prod_log = prod_log_c().load_prod_log_dp(sv.ao_log, sv.sp2charge, tol_loc) # tests Fortran input
+    
     self.c2s = zeros((sv.natm+1), dtype=int64) # global product Center (atom) -> start in case of atom-centered basis
     for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] #
     return self

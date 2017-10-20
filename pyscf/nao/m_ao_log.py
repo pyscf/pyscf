@@ -252,7 +252,8 @@ class ao_log_c(log_mesh_c):
     
     sbt = sbt_c(self.rr, self.pp, lmax=self.jmx)
     self.psi_log_mom = []
-    for sp,[nmu,mu2ff,mu2j] in enumerate(zip(self.sp2nmult,self.psi_log,self.sp_mu2j)):
+
+    for sp,[nmu,mu2ff,mu2j] in enumerate(zip(self.sp2nmult, self.psi_log, self.sp_mu2j)):
       mu2ao = np.zeros((nmu,self.nr), dtype='float64')
       for mu,[am,ff] in enumerate(zip(mu2j,mu2ff)): mu2ao[mu,:] = sbt.sbt( ff, am, 1 )
       self.psi_log_mom.append(mu2ao)

@@ -28,7 +28,6 @@ Contents
 
    overview.rst
    tutorial.rst
-   advanced.rst
    install.rst
    gto.rst
    lib.rst
@@ -49,6 +48,7 @@ Contents
    hessian.rst
    pbc.rst
    lo.rst
+   advanced.rst
    qmmm.rst
    mrpt.rst
 

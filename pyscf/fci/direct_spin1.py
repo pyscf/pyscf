@@ -156,7 +156,7 @@ def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
     '''pspace Hamiltonian to improve Davidson preconditioner. See, CPL, 169, 463
     '''
     if norb > 63:
-        return [0], hdiag[0].reshape(1,1)
+        raise NotImplementedError('norb > 63')
 
     neleca, nelecb = _unpack_nelec(nelec)
     h1e = numpy.ascontiguousarray(h1e)
@@ -375,25 +375,29 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     nb = link_indexb.shape[0]
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
 
-    addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, max(pspace_size,nroots))
-    if pspace_size > 0:
-        pw, pv = fci.eig(h0)
-    else:
-        pw = pv = None
+    try:
+        addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, max(pspace_size,nroots))
+        if pspace_size > 0:
+            pw, pv = fci.eig(h0)
+        else:
+            pw = pv = None
 
-    if pspace_size >= na*nb and ci0 is None and not davidson_only:
+        if pspace_size >= na*nb and ci0 is None and not davidson_only:
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
-        if na*nb == 1:
-            return pw[0]+ecore, pv[:,0].reshape(1,1)
-        elif nroots > 1:
-            civec = numpy.empty((nroots,na*nb))
-            civec[:,addr] = pv[:,:nroots].T
-            return pw[:nroots]+ecore, [c.reshape(na,nb) for c in civec]
-        elif abs(pw[0]-pw[1]) > 1e-12:
-            civec = numpy.empty((na*nb))
-            civec[addr] = pv[:,0]
-            return pw[0]+ecore, civec.reshape(na,nb)
+            if na*nb == 1:
+                return pw[0]+ecore, pv[:,0].reshape(1,1)
+            elif nroots > 1:
+                civec = numpy.empty((nroots,na*nb))
+                civec[:,addr] = pv[:,:nroots].T
+                return pw[:nroots]+ecore, [c.reshape(na,nb) for c in civec]
+            elif abs(pw[0]-pw[1]) > 1e-12:
+                civec = numpy.empty((na*nb))
+                civec[addr] = pv[:,0]
+                return pw[0]+ecore, civec.reshape(na,nb)
+    except NotImplementedError:
+        addr = [0]
+        pw = pv = None
 
     precond = fci.make_precond(hdiag, pw, pv, addr)
 
