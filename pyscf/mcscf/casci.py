@@ -12,6 +12,7 @@ from pyscf import scf
 from pyscf import ao2mo
 from pyscf import fci
 from pyscf.mcscf import addons
+from pyscf import symm
 
 
 def extract_orbs(mo_coeff, ncas, nelecas, ncore):
@@ -181,9 +182,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
 
     Kwargs:
         sort : bool
-            Sort natural orbitals wrt the occupancy.  Be careful with this
-            option since the resultant natural orbitals might have the
-            different symmetry to the irreps indicated by CASSCF.orbsym
+            Sort natural orbitals wrt the occupancy.
 
     Returns:
         A tuple, the first item is natural orbitals, the second is updated CI
@@ -208,9 +207,9 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     # orbital symmetry is reserved in this _eig call
     occ, ucas = mc._eig(-casdm1, ncore, nocc)
     if sort:
-        idx = numpy.argsort(occ)
-        occ = occ[idx]
-        ucas = ucas[:,idx]
+        casorb_idx = numpy.argsort(occ)
+        occ = occ[casorb_idx]
+        ucas = ucas[:,casorb_idx]
 # restore phase
 # where_natorb gives the location of the natural orbital for the input cas
 # orbitals.  gen_strings4orblist map thes sorted strings (on CAS orbital) to
@@ -260,6 +259,12 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
 
     mo_coeff1 = mo_coeff.copy()
     mo_coeff1[:,ncore:nocc] = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
+    if hasattr(mo_coeff, 'orbsym'):
+        orbsym = numpy.copy(mo_coeff.orbsym)
+        if sort:
+            orbsym[ncore:nocc] = orbsym[ncore:nocc][casorb_idx]
+        mo_coeff1 = lib.tag_array(mo_coeff1, orbsym=orbsym)
+
     if log.verbose >= logger.INFO:
         ovlp_ao = mc._scf.get_ovlp()
         log.debug('where_natorb %s', str(where_natorb))
@@ -332,6 +337,15 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             c1 = c1[:,idx]
         mo_coeff1[:,nocc:] = numpy.dot(mo_coeff[:,nocc:], c1)
         mo_energy[nocc:] = w
+
+    if hasattr(mo_coeff, 'orbsym'):
+        if sort:
+            orbsym = symm.label_orb_symm(mc.mol, mc.mol.irrep_id,
+                                         mc.mol.symm_orb, mo_coeff1)
+        else:
+            orbsym = mo_coeff.orbsym
+        mo_coeff1 = lib.tag_array(mo_coeff1, orbsym=orbsym)
+
     if log.verbose >= logger.DEBUG:
         for i in range(nmo):
             log.debug('i = %d  <i|F|i> = %12.8f', i+1, mo_energy[i])
@@ -689,6 +703,8 @@ class CASCI(lib.StreamObject):
                 S^2 expection value == s*(s+1)
         '''
         fci.addons.fix_spin_(self.fcisolver, shift, ss)
+    def fix_spin(self, shift=0.2, ss=None):
+        return self.fix_spin_(self.fcisolver, shift, ss)
 
     def density_fit(self, auxbasis=None, with_df=None):
         from pyscf.mcscf import df

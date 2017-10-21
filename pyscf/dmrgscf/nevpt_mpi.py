@@ -73,13 +73,13 @@ def write_chk(mc,root,chkfile):
     fh5['mc/orbe']    =       mc.mo_energy
     fh5['mc/nroots']   =       mc.fcisolver.nroots
     fh5['mc/wfnsym']   =       mc.fcisolver.wfnsym
-    if hasattr(mc, 'orbsym'):
-        fh5.create_dataset('mc/orbsym',data=mc.orbsym)
+    if hasattr(mc.mo_coeff, 'orbsym'):
+        fh5.create_dataset('mc/orbsym',data=mc.mo_coeff.orbsym)
     else :
         fh5.create_dataset('mc/orbsym',data=[])
 
-    if mc.orbsym is not [] and mc.mol.symmetry:
-        orbsym = numpy.asarray(mc.orbsym)
+    if hasattr(mc.mo_coeff, 'orbsym') and mc.mol.symmetry:
+        orbsym = numpy.asarray(mc.mo_coeff.orbsym)
         pair_irrep = orbsym.reshape(-1,1) ^ orbsym
     else:
         pair_irrep = None

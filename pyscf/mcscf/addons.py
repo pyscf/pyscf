@@ -126,10 +126,7 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
     '''
     mol = casscf.mol
     log = logger.Logger(casscf.stdout, casscf.verbose)
-    if s is None:
-        s = casscf._scf.get_ovlp()
-    orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, mo_coeff, s)
-    orbsym = numpy.asarray(orbsym)
+    orbsym = numpy.asarray(scf.hf_symm.get_orbsym(mol, mo_coeff))
     ncore = casscf.ncore
 
     irreps = set(orbsym)
@@ -263,6 +260,7 @@ def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
     '''
     caslst = caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
                              cas_irrep_ncore, s, 0)
+    #FIXME: update mo_coeff.orbsym?
     return sort_mo(casscf, mo_coeff, caslst, 0)
 
 
@@ -760,7 +758,7 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
 state_average_mix = state_average_mix_
 
 def hot_tuning_(casscf, configfile=None):
-    '''Allow you to tune CASSCF parameters on the runtime
+    '''Allow you to tune CASSCF parameters at the runtime
     '''
     import traceback
     import tempfile
@@ -775,7 +773,7 @@ def hot_tuning_(casscf, configfile=None):
 
     exclude_keys = set(('stdout', 'verbose', 'ci', 'mo_coeff', 'mo_energy',
                         'e_cas', 'e_tot', 'ncore', 'ncas', 'nelecas', 'mol',
-                        'callback', 'fcisolver', 'orbsym'))
+                        'callback', 'fcisolver'))
 
     casscf_settings = {}
     for k, v in casscf.__dict__.items():
