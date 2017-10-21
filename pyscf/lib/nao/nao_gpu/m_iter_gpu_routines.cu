@@ -16,8 +16,8 @@
 
 float *X4_d, *ksn2e_d, *ksn2f_d;
 float *v_ext_d;
-float *vdp_d, *sab_d, *nb2v_d;
-int norbs, nfermi, vstart, nprod;
+float *vdp_d, *sab_d, *nb2v_d, *nm2v_re_d, *nm2v_im_d;
+int norbs, nfermi, vstart, nprod, nvirt;
 scsr_matrix cc_da_d, v_dab_d;
 cusparseHandle_t handle_cuparse=0;
 cublasHandle_t handle_cublas;
@@ -102,8 +102,9 @@ extern "C" void init_tddft_iter_gpu(float *X4, int norbs_in, float *ksn2e,
   nfermi = nfermi_in;
   nprod = nprod_in;
   vstart = vstart_in;
+  nvirt = norbs - vstart;
 
-  printf("v_dab_indptr_size = %d, norbs=%d\n", v_dab_indptr_size, norbs);
+  printf("v_dab_indptr_size = %d, norbs=%d, nvirt=%d\n", v_dab_indptr_size, norbs, nvirt);
   // init sparse matrices on GPU
   cc_da_d = init_sparse_matrix_csr_gpu_float(cc_da_vals, cc_da_rowPtr, 
                   cc_da_col_ind, cc_da_shape[0], cc_da_shape[1], cc_da_nnz, cc_da_indptr_size);
@@ -123,6 +124,8 @@ extern "C" void init_tddft_iter_gpu(float *X4, int norbs_in, float *ksn2e,
   checkCudaErrors(cudaMalloc( (void **)&vdp_d, sizeof(float) * cc_da_d.m));
   checkCudaErrors(cudaMalloc( (void **)&sab_d, sizeof(float) * v_dab_d.n));
   checkCudaErrors(cudaMalloc( (void **)&nb2v_d, sizeof(float) * nfermi*norbs));
+  checkCudaErrors(cudaMalloc( (void **)&nm2v_re_d, sizeof(float) * nfermi*nvirt));
+  checkCudaErrors(cudaMalloc( (void **)&nm2v_im_d, sizeof(float) * nfermi*nvirt));
 
   checkCudaErrors(cudaMemcpy( X4_d, X4, sizeof(float) * norbs*norbs, cudaMemcpyHostToDevice));
   checkCudaErrors(cudaMemcpy( ksn2e_d, ksn2e, sizeof(float) * norbs, cudaMemcpyHostToDevice));
@@ -141,6 +144,8 @@ extern "C" void free_device()
   checkCudaErrors(cudaFree(vdp_d));
   checkCudaErrors(cudaFree(sab_d));
   checkCudaErrors(cudaFree(nb2v_d));
+  checkCudaErrors(cudaFree(nm2v_re_d));
+  checkCudaErrors(cudaFree(nm2v_im_d));
 
   free_csr_matrix_gpu(cc_da_d);
   free_csr_matrix_gpu(v_dab_d);
@@ -149,12 +154,11 @@ extern "C" void free_device()
   checkCudaErrors(cublasDestroy(handle_cublas));
 }
 
-extern "C" void apply_rf0_device(float *v_ext_real, float *v_ext_imag, float *temp)
+extern "C" void apply_rf0_device(float *v_ext_real, float *v_ext_imag, float *temp_re, float *temp_im)
 {
   float alpha = 1.0, beta = 0.0;
 
   // real part first
-
 
   checkCudaErrors(cudaMemcpy( v_ext_d, v_ext_real, sizeof(float) * nprod, cudaMemcpyHostToDevice));
 
@@ -177,66 +181,32 @@ extern "C" void apply_rf0_device(float *v_ext_real, float *v_ext_imag, float *te
         v_dab_d.descr, v_dab_d.data, v_dab_d.RowPtr, v_dab_d.ColInd, 
         vdp_d, &beta, sab_d));
 
-  float *X4, *xocc, *xocc_d;
-  X4 = (float*) malloc(sizeof(float)*norbs*norbs);
-  xocc = (float*) malloc(sizeof(float)*nfermi*norbs);
+  checkCudaErrors(cublasSgemm(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, norbs, &alpha, sab_d, norbs,
+        X4_d, norbs, &beta, nb2v_d, norbs));
+  checkCudaErrors(cublasSgemm(handle_cublas, CUBLAS_OP_T, CUBLAS_OP_N, nvirt, nfermi, norbs, &alpha, &X4_d[vstart*norbs], norbs, nb2v_d,
+       norbs, &beta, nm2v_re_d, nvirt));
 
-  checkCudaErrors(cudaMemcpy( X4, X4_d, sizeof(float) * norbs*norbs, cudaMemcpyDeviceToHost));
-  int i, j;
-  printf("xocc = \n");
-  for (i=0; i<nfermi; i++)
-  {
-    for (j=0; j< norbs; j++)
-    {
-      //printf("  %f", X4[i*norbs + j]);
-      xocc[i*norbs + j] = X4[i*norbs + j];
-    }
-    printf("\n");
-  }
-  free(X4);
+  checkCudaErrors(cudaMemcpy( temp_re, nm2v_re_d, sizeof(float) * nfermi*nvirt, cudaMemcpyDeviceToHost));
+
+
+   // imaginary part
+  checkCudaErrors(cudaMemcpy( v_ext_d, v_ext_imag, sizeof(float) * nprod, cudaMemcpyHostToDevice));
+
+  checkCudaErrors(cusparseScsrmv(handle_cuparse, CUSPARSE_OPERATION_NON_TRANSPOSE,
+        cc_da_d.m, cc_da_d.n, cc_da_d.nnz, &alpha,
+        cc_da_d.descr, cc_da_d.data, cc_da_d.RowPtr, cc_da_d.ColInd, 
+        v_ext_d, &beta, vdp_d));
+
+  checkCudaErrors(cusparseScsrmv(handle_cuparse, CUSPARSE_OPERATION_TRANSPOSE,
+        v_dab_d.m, v_dab_d.n, v_dab_d.nnz, &alpha,
+        v_dab_d.descr, v_dab_d.data, v_dab_d.RowPtr, v_dab_d.ColInd, 
+        vdp_d, &beta, sab_d));
+
+  checkCudaErrors(cublasSgemm(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, norbs, &alpha, sab_d, norbs,
+        X4_d, norbs, &beta, nb2v_d, norbs));
+  checkCudaErrors(cublasSgemm(handle_cublas, CUBLAS_OP_T, CUBLAS_OP_N, nvirt, nfermi, norbs, &alpha, &X4_d[vstart*norbs], norbs, nb2v_d,
+       norbs, &beta, nm2v_im_d, nvirt));
+
+  checkCudaErrors(cudaMemcpy( temp_im, nm2v_im_d, sizeof(float) * nfermi*nvirt, cudaMemcpyDeviceToHost));
   
-  checkCudaErrors(cudaMalloc( (void **)&xocc_d, sizeof(float) * nfermi*norbs));
-  checkCudaErrors(cudaMemcpy( xocc_d, xocc, sizeof(float) * nfermi*norbs, cudaMemcpyHostToDevice));
-
-  free(xocc);
-
-
-  checkCudaErrors(cublasSgemm(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_N, nfermi, norbs, norbs, &alpha, xocc_d, nfermi,
-        sab_d, norbs, &beta, nb2v_d, nfermi));
-  //checkCudaErrors(cublasSgemm(handle_cublas, CUBLAS_OP_T, CUBLAS_OP_N, nvirt, nocc, norb, &alpha, &aux_X4_mat_d[(Fmin-1)*norb], norb, XVV_mat_d,
-  //     norb, &beta, XXVV_mat_im_d, nvirt));
-
-  checkCudaErrors(cudaMemcpy( temp, nb2v_d, sizeof(float) * nfermi*norbs, cudaMemcpyDeviceToHost));
-  
-  checkCudaErrors(cudaFree(xocc_d));
-
-  /*
-  int *RowPtr, *ColInd;
-  float *data;
-
-  RowPtr = (int *) malloc(sizeof(int)*cc_da_d.RowPtrSize);
-  ColInd = (int *) malloc(sizeof(int)*cc_da_d.nnz);
-  data = (float *) malloc(sizeof(float)*cc_da_d.nnz);
-  
-  checkCudaErrors(cudaMemcpy( RowPtr, cc_da_d.RowPtr, sizeof(int) * cc_da_d.RowPtrSize, cudaMemcpyDeviceToHost));
-  int sum_rowPtr = sum_int_vec(RowPtr, cc_da_d.RowPtrSize);
-  
-  checkCudaErrors(cudaMemcpy( ColInd, cc_da_d.ColInd, sizeof(int) * cc_da_d.nnz, cudaMemcpyDeviceToHost));
-  int sum_colInd = sum_int_vec(ColInd, cc_da_d.nnz);
-  
-  checkCudaErrors(cudaMemcpy( data, cc_da_d.data, sizeof(float) * cc_da_d.nnz, cudaMemcpyDeviceToHost));
-  float sum_data = sum_float_vec(data, cc_da_d.nnz);
-*/
-
-  /*
-  printf("cc_da : gpu\n");
-  printf("m = %d, n = %d, nnz = %d\n", cc_da_d.m, cc_da_d.n, cc_da_d.nnz);
-  printf("sum_ind : %d, %d\n", sum_rowPtr, sum_colInd);
-  printf("sum data: %f\n", sum_data);
-
-  free(data);
-  free(RowPtr);
-  free(ColInd);
-  */
-
 }

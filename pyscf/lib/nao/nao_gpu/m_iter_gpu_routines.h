@@ -24,4 +24,4 @@ extern "C" void init_tddft_iter_gpu(float *X4, int norbs_in, float *ksn2e,
     int *v_dab_shape, int v_dab_nnz, int v_dab_indptr_size);
 
 extern "C" void free_device();
-extern "C" void apply_rf0_device(float *v_ext_real, float *v_ext_imag, float *temp);
+extern "C" void apply_rf0_device(float *v_ext_real, float *v_ext_imag, float *temp_re, float *temp_im);

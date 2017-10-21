@@ -23,6 +23,7 @@ class tddft_iter_gpu_c():
             self.nfermi = nfermi
             self.nprod = nprod
             self.vstart = vstart
+            self.nvirt = norbs-vstart
             self.v_dab = v_dab
             self.cc_da = cc_da
             self.x = x[0, 0, :, :, 0]
@@ -59,29 +60,36 @@ class tddft_iter_gpu_c():
         vext_imag = np.copy(v.imag)
 
         
-        nb2v = np.zeros((self.nfermi*self.norbs), dtype=np.float32)
+        nm2v_re = np.zeros((self.nfermi*self.nvirt), dtype=np.float32)
+        nm2v_im = np.zeros((self.nfermi*self.nvirt), dtype=np.float32)
 
-        print("Aqui??")
+        print("Aqui??", self.nvirt, self.vstart)
         libnao_gpu.apply_rf0_device(vext_real.ctypes.data_as(POINTER(c_float)),
                 vext_imag.ctypes.data_as(POINTER(c_float)),
-                nb2v.ctypes.data_as(POINTER(c_float)))
-        #libnao_gpu.apply_rf0_device(vext_real.ctypes.data_as(POINTER(c_float)),
-        #        vext_imag.ctypes.data_as(POINTER(c_float)),
-        #        sab.ctypes.data_as(POINTER(c_float)))
+                nm2v_re.ctypes.data_as(POINTER(c_float)), 
+                nm2v_im.ctypes.data_as(POINTER(c_float)))
 
-        #print("cc_da cpu:")
-        #print("m, n, nnz = ", self.cc_da.shape, self.cc_da.nnz)
-        #print("sum_ind : ", np.sum(abs(self.cc_da.indptr)), np.sum(abs(self.cc_da.indices)))
-        #print("sum data: ", np.sum(abs(self.cc_da.data)))
+
+        # ref real part
         vdp = csr_matvec(self.cc_da, vext_real)
         sab_ref = (vdp*self.v_dab)#.reshape([no,no])
         
         xocc = self.x[0:self.nfermi, :]
-        print(xocc[:, 0:3])
+        xvrt = self.x[self.vstart:, :]
         nb2v_ref = blas.sgemm(1.0, xocc, sab_ref.reshape([self.norbs, self.norbs]))
-        print(nb2v_ref.shape, self.nfermi)
+        nm2v_re_ref = blas.sgemm(1.0, nb2v_ref, xvrt.T)
+
+        # imag
+        vdp = csr_matvec(self.cc_da, vext_imag)
+        sab_ref = (vdp*self.v_dab)#.reshape([no,no])
         
-        print("check: ", np.sum(abs(nb2v)), np.sum(abs(nb2v_ref)), "Error: ", np.sum(abs(nb2v.reshape([5, 40]) - nb2v_ref)))
+        xocc = self.x[0:self.nfermi, :]
+        xvrt = self.x[self.vstart:, :]
+        nb2v_ref = blas.sgemm(1.0, xocc, sab_ref.reshape([self.norbs, self.norbs]))
+        nm2v_im_ref = blas.sgemm(1.0, nb2v_ref, xvrt.T)
+        
+        print("check real: ", np.sum(abs(nm2v_re)), np.sum(abs(nm2v_re_ref)), "Error: ", np.sum(abs(nm2v_re.reshape([self.nfermi, self.nvirt]) - nm2v_re_ref)))
+        print("check imag: ", np.sum(abs(nm2v_im)), np.sum(abs(nm2v_im_ref)), "Error: ", np.sum(abs(nm2v_im.reshape([self.nfermi, self.nvirt]) - nm2v_im_ref)))
         
 
         import sys
