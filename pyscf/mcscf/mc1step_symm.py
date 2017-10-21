@@ -40,7 +40,7 @@ class CASSCF(mc1step.CASSCF):
         self.dump_flags()
         log = logger.Logger(self.stdout, self.verbose)
 
-        casci_symm.label_symmetry_(self, self.mo_coeff)
+        mo_coeff = casci_symm.label_symmetry_(self, self.mo_coeff)
 
         if (hasattr(self.fcisolver, 'wfnsym') and
             self.fcisolver.wfnsym is None and
@@ -75,7 +75,7 @@ class CASSCF(mc1step.CASSCF):
         self.mo_coeff, self.ci, occ = self.cas_natorb(mo_coeff, ci, eris,
                                                       sort, casdm1, verbose)
         if sort:
-            casci_symm.label_symmetry_(self, self.mo_coeff)
+            self.mo_coeff = casci_symm.label_symmetry_(self, self.mo_coeff)
         return self.mo_coeff, self.ci, occ
 
     def canonicalize_(self, mo_coeff=None, ci=None, eris=None, sort=False,
@@ -84,7 +84,7 @@ class CASSCF(mc1step.CASSCF):
                 self.canonicalize(mo_coeff, ci, eris,
                                   sort, cas_natorb, casdm1, verbose)
         if sort:
-            casci_symm.label_symmetry_(self, self.mo_coeff)
+            self.mo_coeff = casci_symm.label_symmetry_(self, self.mo_coeff)
         if cas_natorb:  # When active space is changed, the ci solution needs to be updated
             self.ci = ci
         return self.mo_coeff, ci, self.mo_energy
