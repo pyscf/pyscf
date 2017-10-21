@@ -100,9 +100,9 @@ class tddft_iter_c():
   def load_kernel(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None, **kwargs):
 
       if kernel_format == "npy":
-          self.kernel = np.load(kernel_fname)
+          self.kernel = self.dtype(np.load(kernel_fname))
       elif kernel_format == "txt":
-          self.kernel = np.float32(np.loadtxt(kernel_fname))
+          self.kernel = np.loadtxt(kernel_fname, dtype=self.dtype)
       elif kernel_format == "hdf5":
           import h5py
           if kernel_path_hdf5 is None:

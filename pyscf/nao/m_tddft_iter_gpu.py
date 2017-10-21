@@ -1,6 +1,7 @@
 from __future__ import print_function, division
 import numpy as np
 from ctypes import POINTER, c_double, c_int, c_int64, c_float, c_int, c_long
+from scipy.linalg import blas
 from pyscf.nao.m_sparsetools import csr_matvec, csc_matvec, csc_matvecs
 import sys
 
@@ -24,8 +25,8 @@ class tddft_iter_gpu_c():
             self.vstart = vstart
             self.v_dab = v_dab
             self.cc_da = cc_da
+            self.x = x[0, 0, :, :, 0]
             
-            print(self.norbs, type(self.norbs))
             self.block_size = np.array([32, 32], dtype=np.int32) # threads by block
             self.grid_size = np.array([0, 0], dtype=np.int32) # number of blocks
             dimensions = [self.nfermi, ksn2f.shape[2]]
@@ -37,14 +38,7 @@ class tddft_iter_gpu_c():
                 else:
                     self.grid_size[i] = dimensions[i]/self.block_size[i] + 1
 
-            print(cc_da.shape)
-            print(cc_da.nnz)
-            print(cc_da.data.shape)
-            print(cc_da.indices.shape)
-            print(cc_da.indptr.shape)
-
-            
-            libnao_gpu.init_tddft_iter_gpu(x[0, 0, :, :, 0].ctypes.data_as(POINTER(c_float)), c_int(self.norbs),
+            libnao_gpu.init_tddft_iter_gpu(self.x.ctypes.data_as(POINTER(c_float)), c_int(self.norbs),
                 ksn2e[0, 0, :].ctypes.data_as(POINTER(c_float)), ksn2f[0, 0, :].ctypes.data_as(POINTER(c_float)),
                 c_int(self.nfermi), c_int(self.nprod), c_int(self.vstart), 
                 cc_da.data.ctypes.data_as(POINTER(c_float)), cc_da.indptr.ctypes.data_as(POINTER(c_int)),
@@ -64,12 +58,13 @@ class tddft_iter_gpu_c():
         vext_real = np.copy(v.real)
         vext_imag = np.copy(v.imag)
 
-        sab = np.zeros((self.norbs*self.norbs), dtype=np.float32)
+        
+        nb2v = np.zeros((self.nfermi*self.norbs), dtype=np.float32)
 
-        print("Aqui??", sab.size)
+        print("Aqui??")
         libnao_gpu.apply_rf0_device(vext_real.ctypes.data_as(POINTER(c_float)),
                 vext_imag.ctypes.data_as(POINTER(c_float)),
-                sab.ctypes.data_as(POINTER(c_float)))
+                nb2v.ctypes.data_as(POINTER(c_float)))
         #libnao_gpu.apply_rf0_device(vext_real.ctypes.data_as(POINTER(c_float)),
         #        vext_imag.ctypes.data_as(POINTER(c_float)),
         #        sab.ctypes.data_as(POINTER(c_float)))
@@ -81,7 +76,13 @@ class tddft_iter_gpu_c():
         vdp = csr_matvec(self.cc_da, vext_real)
         sab_ref = (vdp*self.v_dab)#.reshape([no,no])
         
-        print("check: ", np.sum(abs(sab)), np.sum(abs(sab_ref)), "Error: ", np.sum(abs(sab-sab_ref)))
+        xocc = self.x[0:self.nfermi, :]
+        print(xocc[:, 0:3])
+        nb2v_ref = blas.sgemm(1.0, xocc, sab_ref.reshape([self.norbs, self.norbs]))
+        print(nb2v_ref.shape, self.nfermi)
+        
+        print("check: ", np.sum(abs(nb2v)), np.sum(abs(nb2v_ref)), "Error: ", np.sum(abs(nb2v.reshape([5, 40]) - nb2v_ref)))
+        
 
         import sys
         sys.exit()

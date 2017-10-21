@@ -25,7 +25,7 @@ def system_vars_gpaw(self, calc, label="gpaw", chdir='.', **kvargs):
   self.atom2coord = calc.get_atoms().get_positions()/units.Bohr
   self.natm = self.natoms = len(self.atom2coord)
   
-  self.atom2sp = np.array([self.ao_log.sp2key.index(key) for key in calc.setups.id_a], dtype=np.int64)
+  self.atom2sp = np.array([list(self.ao_log.sp2key).index(key) for key in calc.setups.id_a], dtype=np.int64)
   self.ucell = calc.atoms.get_cell()/units.Bohr
   self.norbs = calc.setups.nao
   self.norbs_sc = self.norbs

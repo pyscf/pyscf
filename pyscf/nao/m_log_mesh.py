@@ -94,12 +94,12 @@ class log_mesh_c():
     """ Initialize an optimal logarithmic mesh based on Gaussian orbitals from pySCF"""
     #self.gto = gto cannot copy GTO object here... because python3 + deepcopy in m_ao_log_hartree fails
     gto = kw['gto']
-    self.rcut_tol = kw['rcut_tol'] if kw.has_key('rcut_tol') else 1e-7
+    self.rcut_tol = kw['rcut_tol'] if 'rcut_tol' in kw else 1e-7
     nr_def,rmin_def,rmax_def,kmax_def = get_default_log_mesh_param4gto(gto, self.rcut_tol)
-    self.nr   = kw['nr'] if kw.has_key('nr') else nr_def
-    self.rmin = kw['rmin'] if kw.has_key('rmin') else rmin_def
-    self.rmax = kw['rmax'] if kw.has_key('rmax') else rmax_def
-    self.kmax = kw['kmax'] if kw.has_key('kmax') else kmax_def
+    self.nr   = kw['nr'] if "nr" in kw else nr_def
+    self.rmin = kw['rmin'] if "rmin" in kw else rmin_def
+    self.rmax = kw['rmax'] if "rmax" in kw else rmax_def
+    self.kmax = kw['kmax'] if "kmax" in kw else kmax_def
     assert(self.rmin>0.0); assert(self.kmax>0.0); assert(self.nr>2); assert(self.rmax>self.rmin);
     self.rr,self.pp = log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
     self.state = 'can be useful for something'

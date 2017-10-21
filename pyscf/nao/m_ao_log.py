@@ -79,7 +79,7 @@ class ao_log_c(log_mesh_c):
     self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
     sv = nao = kw['nao']
     rcut_tol = kw['rcut_tol']
-    gto = kw['gto'] if kw.has_key('gto') else nao.gto
+    gto = kw['gto'] if 'gto' in kw else nao.gto
     self.sp_mu2j = [0]*sv.nspecies
     self.psi_log = [0]*sv.nspecies
     self.psi_log_rl = [0]*sv.nspecies

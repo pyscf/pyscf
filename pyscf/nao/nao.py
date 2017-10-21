@@ -50,7 +50,7 @@ class nao():
     """ 
       Constructor of NAO class
     """
-    if kw.has_key('gto'):
+    if 'gto' in kw:
       self.init_pyscf_gto(**kw)
     else:
       raise RuntimeError('unknown init method')
@@ -65,7 +65,7 @@ class nao():
     from pyscf.lib import logger
 
     gto = kw['gto']
-    self.verbose = kw['verbose'] if kw.has_key('verbose') else 0
+    self.verbose = kw['verbose'] if 'verbose' in kw else 0
     self.stdout = sys.stdout
     self.symmetry = False
     self.symmetry_subgroup = None
@@ -76,7 +76,7 @@ class nao():
 
     self.spin = gto.spin
     self.nspin = gto.spin+1
-    self.label = kw['label'] if kw.has_key('label') else 'pyscf'
+    self.label = kw['label'] if 'label' in kw else 'pyscf'
     self.mol=gto # Only some data must be copied, not the whole object. Otherwise, an eventual deepcopy(...) may fail.
     self.natm=self.natoms = gto.natm
     a2s = [gto.atom_symbol(ia) for ia in range(gto.natm) ]
