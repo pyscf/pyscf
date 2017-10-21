@@ -30,7 +30,7 @@ class CASCI(casci.CASCI):
         if ci0 is None:
             ci0 = self.ci
 
-        label_symmetry_(self, self.mo_coeff)
+        mo_coeff = label_symmetry_(self, self.mo_coeff)
         return casci.CASCI.kernel(self, mo_coeff, ci0)
 
     def _eig(self, mat, b0, b1):
@@ -41,7 +41,7 @@ class CASCI(casci.CASCI):
         self.mo_coeff, self.ci, occ = cas_natorb(self, mo_coeff, ci, eris,
                                                  sort, casdm1, verbose)
         if sort:
-            casci_symm.label_symmetry_(self, self.mo_coeff)
+            self.mo_coeff = casci_symm.label_symmetry_(self, self.mo_coeff)
         return self.mo_coeff, self.ci, occ
 
     def canonicalize_(self, mo_coeff=None, ci=None, eris=None, sort=False,
@@ -50,7 +50,7 @@ class CASCI(casci.CASCI):
                 self.canonicalize(mo_coeff, ci, eris,
                                   sort, cas_natorb, casdm1, verbose)
         if sort:
-            casci_symm.label_symmetry_(self, self.mo_coeff)
+            self.mo_coeff = casci_symm.label_symmetry_(self, self.mo_coeff)
         if cas_natorb:  # When active space is changed, the ci solution needs to be updated
             self.ci = ci
         return self.mo_coeff, ci, self.mo_energy
@@ -82,7 +82,7 @@ def label_symmetry_(mc, mo_coeff):
     irrep_name = mc.mol.irrep_id
     s = mc._scf.get_ovlp()
     try:
-        mc.orbsym = scf.hf_symm.get_orbsym(mc._scf.mol, mo_coeff, s)
+        mc.orbsym = scf.hf_symm.get_orbsym(mc._scf.mol, mo_coeff, s, True)
     except ValueError:
         logger.warn(mc, 'mc1step_symm symmetrizes input orbitals')
         ncore = mc.ncore
@@ -101,6 +101,7 @@ def label_symmetry_(mc, mo_coeff):
         nocc = mc.ncore + mc.ncas
         mc.fcisolver.orbsym = mc.orbsym[ncore:nocc]
     logger.debug(mc, 'Active space irreps %s', str(mc.fcisolver.orbsym))
+    return mo_coeff
 
 
 
