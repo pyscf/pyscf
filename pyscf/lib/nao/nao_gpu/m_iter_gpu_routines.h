@@ -16,6 +16,8 @@ extern "C" scsr_matrix init_sparse_matrix_csr_gpu_float(float *csrValA, int *csr
     int *csrColIndA, int m, int n, int nnz, int RowPtrSize);
 extern "C" void free_csr_matrix_gpu(scsr_matrix csr);
 
+__global__ void normalize_energy_gpu(float *ksn2e, float *ksn2f, double omega_re, double omega_im, 
+    float *nm2v_re, float *nm2v_im, int nfermi, int nprod, int nvirt, int vstart);
 extern "C" void init_tddft_iter_gpu(float *X4, int norbs_in, float *ksn2e,
     float *ksn2f, int nfermi_in, int nprod_in, int vstart_in,
     float *cc_da_vals, int *cc_da_rowPtr, int *cc_da_col_ind,
@@ -24,4 +26,5 @@ extern "C" void init_tddft_iter_gpu(float *X4, int norbs_in, float *ksn2e,
     int *v_dab_shape, int v_dab_nnz, int v_dab_indptr_size);
 
 extern "C" void free_device();
-extern "C" void apply_rf0_device(float *v_ext_real, float *v_ext_imag, float *temp_re, float *temp_im);
+extern "C" void apply_rf0_device(float *v_ext_real, float *v_ext_imag, double comega_re, 
+    double comega_im, float *temp_re, float *temp_im, int *block_size, int *grid_size);

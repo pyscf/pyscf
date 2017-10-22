@@ -14,7 +14,9 @@ except:
 
 class tddft_iter_gpu_c():
 
-    def __init__(self, GPU, x, v_dab, ksn2f, ksn2e, cc_da, norbs, nfermi, nprod, vstart):
+    def __init__(self, GPU, x, v_dab, ksn2f, ksn2e, cc_da, moms0, norbs, nfermi, nprod, vstart):
+        self.rf0_ncalls = 0
+        self.l0_ncalls = 0
         
         if GPU and GPU_import:
             self.GPU=True
@@ -24,13 +26,12 @@ class tddft_iter_gpu_c():
             self.nprod = nprod
             self.vstart = vstart
             self.nvirt = norbs-vstart
-            self.v_dab = v_dab
-            self.cc_da = cc_da
             self.x = x[0, 0, :, :, 0]
+            self.moms0 = moms0
             
             self.block_size = np.array([32, 32], dtype=np.int32) # threads by block
             self.grid_size = np.array([0, 0], dtype=np.int32) # number of blocks
-            dimensions = [self.nfermi, ksn2f.shape[2]]
+            dimensions = [nfermi, nprod]
 
             for i in range(2):
                 if dimensions[i] <= self.block_size[i]:
@@ -55,47 +56,24 @@ class tddft_iter_gpu_c():
             self.GPU = False
 
     def apply_rf0_gpu(self, v, comega=1j*0.0):
+        assert len(v)==len(self.moms0), "%r, %r "%(len(v), len(self.moms0))
+        self.rf0_ncalls+=1
 
         vext_real = np.copy(v.real)
         vext_imag = np.copy(v.imag)
 
-        
-        nm2v_re = np.zeros((self.nfermi*self.nvirt), dtype=np.float32)
-        nm2v_im = np.zeros((self.nfermi*self.nvirt), dtype=np.float32)
+        chi0_re = np.zeros((self.nprod), dtype=np.float32)
+        chi0_im = np.zeros((self.nprod), dtype=np.float32)
 
-        print("Aqui??", self.nvirt, self.vstart)
         libnao_gpu.apply_rf0_device(vext_real.ctypes.data_as(POINTER(c_float)),
                 vext_imag.ctypes.data_as(POINTER(c_float)),
-                nm2v_re.ctypes.data_as(POINTER(c_float)), 
-                nm2v_im.ctypes.data_as(POINTER(c_float)))
+                c_double(comega.real), c_double(comega.imag),
+                chi0_re.ctypes.data_as(POINTER(c_float)),
+                chi0_im.ctypes.data_as(POINTER(c_float)),
+                self.block_size.ctypes.data_as(POINTER(c_int)), 
+                self.grid_size.ctypes.data_as(POINTER(c_int)))
 
-
-        # ref real part
-        vdp = csr_matvec(self.cc_da, vext_real)
-        sab_ref = (vdp*self.v_dab)#.reshape([no,no])
-        
-        xocc = self.x[0:self.nfermi, :]
-        xvrt = self.x[self.vstart:, :]
-        nb2v_ref = blas.sgemm(1.0, xocc, sab_ref.reshape([self.norbs, self.norbs]))
-        nm2v_re_ref = blas.sgemm(1.0, nb2v_ref, xvrt.T)
-
-        # imag
-        vdp = csr_matvec(self.cc_da, vext_imag)
-        sab_ref = (vdp*self.v_dab)#.reshape([no,no])
-        
-        xocc = self.x[0:self.nfermi, :]
-        xvrt = self.x[self.vstart:, :]
-        nb2v_ref = blas.sgemm(1.0, xocc, sab_ref.reshape([self.norbs, self.norbs]))
-        nm2v_im_ref = blas.sgemm(1.0, nb2v_ref, xvrt.T)
-        
-        print("check real: ", np.sum(abs(nm2v_re)), np.sum(abs(nm2v_re_ref)), "Error: ", np.sum(abs(nm2v_re.reshape([self.nfermi, self.nvirt]) - nm2v_re_ref)))
-        print("check imag: ", np.sum(abs(nm2v_im)), np.sum(abs(nm2v_im_ref)), "Error: ", np.sum(abs(nm2v_im.reshape([self.nfermi, self.nvirt]) - nm2v_im_ref)))
-        
-
-        import sys
-        sys.exit()
-
-        return vdp
+        return chi0_re + 1.0j*chi0_im
 
     def clean_gpu(self):
         libnao_gpu.free_device()
