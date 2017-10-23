@@ -16,7 +16,7 @@ mol = gto.M(atom=[['C', (0, 0, 0)],
             basis='ccpvtz')
 mf = scf.RHF(mol).run()
 
-c = lo.orth_ao(mol, 'nao', scf_method=mf)
+c = lo.orth_ao(mf, 'nao')
 mo = numpy.linalg.solve(c, mf.mo_coeff)
 dm = mf.make_rdm1(mo, mf.mo_occ)
 mf.mulliken_pop(mol, dm, numpy.eye(mol.nao_nr()))
