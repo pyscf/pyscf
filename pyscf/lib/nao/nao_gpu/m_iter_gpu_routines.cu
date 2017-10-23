@@ -138,7 +138,7 @@ void normalize_energy_cpu(float *ksn2e, float *ksn2f, double omega_re, double om
 
       nm2v_re[index] = (fn - fm)*(old_re*alpha - old_im*beta);
       nm2v_im[index] = (fn - fm)*(old_re*beta + old_im*alpha);
-      fprintf(f, "%d %d %d %d %f %f %f %f %f %f %f %f %f\n", count, i, j, m, 
+      fprintf(f, "%d %d %d %d %d %f %f %f %f %f %f %f %f %f\n", count, i, j, m, index,
           en, em, fn, fm, old_re, old_im, nm2v_re[index], omega_re, omega_im);
       count += 1;
     }
@@ -156,7 +156,7 @@ __global__ void normalize_energy_gpu(float *ksn2e, float *ksn2f, double omega_re
   int j = blockIdx.y * blockDim.y + threadIdx.y; //nvirt
   float en=0.0, fn=0.0, em=0.0, fm=0.0, old_re, old_im;
   double d1p, d1pp, d2p, d2pp, alpha, beta;
-  int m, index;
+  int m;
 
   if (i < nfermi)
   {
@@ -168,19 +168,19 @@ __global__ void normalize_energy_gpu(float *ksn2e, float *ksn2f, double omega_re
       fm = ksn2f[j];
 
       m = j - vstart;
-      index = i*nvirt + m;
 
       d1p = omega_re - (em-en); d1pp = omega_im;
       d2p = omega_re + (em-en); d2pp = omega_im;
       
       alpha = d1p/(d1p*d1p + d1pp*d1pp) - d2p/(d2p*d2p + d2pp*d2pp);
       beta = -d1pp/(d1p*d1p + d1pp*d1pp) + d2pp/(d2p*d2p + d2pp*d2pp);
-      //printf("i = %d, j = %d, alpha = %f, beta = %f\n", i, j, alpha, beta);
-      old_re = nm2v_re[index];
-      old_im = nm2v_im[index];
+      old_re = nm2v_re[i*nvirt + m];
+      old_im = nm2v_im[i*nvirt + m];
 
-      nm2v_re[index] = (fn - fm)*(old_re*alpha - old_im*beta);
-      nm2v_im[index] = (fn - fm)*(old_re*beta + old_im*alpha);
+      nm2v_re[i*nvirt + m] = (fn - fm)*(old_re*alpha - old_im*beta);
+      nm2v_im[i*nvirt + m] = (fn - fm)*(old_re*beta + old_im*alpha);
+      //printf("i = %d, j = %d, m = %d, alpha = %f, beta = %f, old_re = %f, old_im = %f, nm2v_re = %f, nm2v_im = %f\n", 
+      //    i, j, m, alpha, beta, old_re, old_im, nm2v_re[index], nm2v_im[index]);
 
       //nm2v = nm2v * (fn-fm) * ( 1.0 / (comega - (em - en)) - 1.0 /(comega + (em - en)) );
     }
@@ -208,6 +208,8 @@ extern "C" void init_tddft_iter_gpu(float *X4, int norbs_in, float *ksn2e,
   v_dab_d = init_sparse_matrix_csr_gpu_float(v_dab_vals, v_dab_rowPtr, 
                   v_dab_col_ind, v_dab_shape[0], v_dab_shape[1], v_dab_nnz, v_dab_indptr_size);
 
+  // For pascal GPU, the cudaMallocManaged() could probably allow to run larger systems.
+  // Need to llok for more informations about this!!
   checkCudaErrors(cusparseCreate(&handle_cuparse));
   checkCudaErrors(cublasCreate(&handle_cublas));
 
@@ -260,7 +262,6 @@ extern "C" void apply_rf0_device(float *v_ext_real, float *v_ext_imag, double om
   dim3 dimBlock(block_size[0], block_size[1]);
   dim3 dimGrid(grid_size[0], grid_size[1]);
   
-
   // real part first
   checkCudaErrors(cudaMemcpy( v_ext_d, v_ext_real, sizeof(float) * nprod, cudaMemcpyHostToDevice));
 
@@ -277,7 +278,7 @@ extern "C" void apply_rf0_device(float *v_ext_real, float *v_ext_imag, double om
         cc_da_d.m, cc_da_d.n, cc_da_d.nnz, &alpha,
         cc_da_d.descr, cc_da_d.data, cc_da_d.RowPtr, cc_da_d.ColInd, 
         v_ext_d, &beta, vdp_d));
-
+  
   checkCudaErrors(cusparseScsrmv(handle_cuparse, CUSPARSE_OPERATION_TRANSPOSE,
         v_dab_d.m, v_dab_d.n, v_dab_d.nnz, &alpha,
         v_dab_d.descr, v_dab_d.data, v_dab_d.RowPtr, v_dab_d.ColInd, 
@@ -290,7 +291,6 @@ extern "C" void apply_rf0_device(float *v_ext_real, float *v_ext_imag, double om
         X4_d, norbs, &beta, nb2v_d, norbs));
   checkCudaErrors(cublasSgemm(handle_cublas, CUBLAS_OP_T, CUBLAS_OP_N, nvirt, nfermi, norbs, &alpha, &X4_d[vstart*norbs], norbs, nb2v_d,
        norbs, &beta, nm2v_re_d, nvirt));
-
 
    // imaginary part
   checkCudaErrors(cusparseScsrmv(handle_cuparse, CUSPARSE_OPERATION_NON_TRANSPOSE,
@@ -308,8 +308,10 @@ extern "C" void apply_rf0_device(float *v_ext_real, float *v_ext_imag, double om
   checkCudaErrors(cublasSgemm(handle_cublas, CUBLAS_OP_T, CUBLAS_OP_N, nvirt, nfermi, norbs, &alpha, &X4_d[vstart*norbs], norbs, nb2v_d,
         norbs, &beta, nm2v_im_d, nvirt));
 
+
   // Normalization!!
-  normalize_energy_gpu<<<dimGrid, dimBlock>>>(ksn2e_d, ksn2f_d, omega_re, omega_im, nm2v_re_d, nm2v_im_d, nfermi, norbs, nvirt, vstart);
+  normalize_energy_gpu<<<dimGrid, dimBlock>>>(ksn2e_d, ksn2f_d, omega_re, omega_im, 
+      nm2v_re_d, nm2v_im_d, nfermi, norbs, nvirt, vstart);
 
   // Going back: real part first
   checkCudaErrors(cublasSgemm(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, nvirt, &alpha, &X4_d[vstart*norbs], norbs, nm2v_re_d,
