@@ -410,6 +410,9 @@ class CASCI(lib.StreamObject):
             which DMRG relies on.
         canonicalization : bool
             Whether to canonicalize orbitals.  Default is True.
+        sorting_mo_energy : bool
+            Whether to sort the orbitals based on the diagonal elements of the
+            general Fock matrix.  Default is False.
         fcisolver : an instance of :class:`FCISolver`
             The pyscf.fci module provides several FCISolver for different scenario.  Generally,
             fci.direct_spin1.FCISolver can be used for all RHF-CASSCF.  However, a proper FCISolver
@@ -475,6 +478,7 @@ class CASCI(lib.StreamObject):
         self.fcisolver.conv_tol = 1e-8
         self.natorb = False
         self.canonicalization = True
+        self.sorting_mo_energy = False
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -496,6 +500,7 @@ class CASCI(lib.StreamObject):
         assert(self.ncas > 0)
         log.info('natorb = %s', self.natorb)
         log.info('canonicalization = %s', self.canonicalization)
+        log.info('sorting_mo_energy = %s', self.sorting_mo_energy)
         log.info('max_memory %d (MB)', self.max_memory)
         if self.mo_coeff is None:
             log.warn('Orbital initial guess is not given.\n'
@@ -575,9 +580,11 @@ class CASCI(lib.StreamObject):
         if self.canonicalization:
             if isinstance(self.e_cas, (float, numpy.number)):
                 self.canonicalize_(mo_coeff, self.ci,
+                                   sort=self.sorting_mo_energy,
                                    cas_natorb=self.natorb, verbose=log)
             else:
                 self.canonicalize_(mo_coeff, self.ci[0],
+                                   sort=self.sorting_mo_energy,
                                    cas_natorb=self.natorb, verbose=log)
 
         if hasattr(self.fcisolver, 'converged'):
