@@ -36,6 +36,7 @@ mol.build(False,False)
 
 mf = scf.RHF(mol)
 mf.chkfile = 'cr_atom.chk'
+# 'Ag':(6,3) means to assign 6 alpha electrons and 3 beta electrons to irrep Ag
 mf.irrep_nelec = {'Ag': (6,3), 'B1g': (1,0), 'B2g': (1,0), 'B3g': (1,0)}
 mf.scf(dm0=rdm1)
 

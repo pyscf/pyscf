@@ -33,7 +33,7 @@ def iao(mol, orbocc, minao='minao'):
         eg using :func:`orth.lowdin`
 
         >>> orbocc = mf.mo_coeff[:,mf.mo_occ>0]
-        >>> c = iao(mol, orcc)
+        >>> c = iao(mol, orbocc)
         >>> numpy.dot(c, orth.lowdin(reduce(numpy.dot, (c.T,s,c))))
     '''
     from pyscf.pbc import gto as pbcgto

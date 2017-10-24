@@ -218,8 +218,8 @@ void FCIrdm12_drv(void (*dm12kernel)(),
                nlinkb, clinka, clinkb, rdm1, rdm2, symm), \
         private(strk, i, ib, blen, pdm1, pdm2)
 {
-        pdm1 = calloc(nnorb, sizeof(double));
-        pdm2 = calloc(nnorb*nnorb, sizeof(double));
+        pdm1 = calloc(nnorb+2, sizeof(double));
+        pdm2 = calloc(nnorb*nnorb+2, sizeof(double));
 #pragma omp for schedule(dynamic, 40)
         for (strk = 0; strk < na; strk++) {
                 for (ib = 0; ib < nb; ib += BUFBASE) {

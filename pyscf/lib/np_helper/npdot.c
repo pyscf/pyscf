@@ -55,7 +55,7 @@ void NPdgemm(const char trans_a, const char trans_b,
                 int nthread = omp_get_num_threads();
                 int nblk = MAX((k+nthread-1) / nthread, 1);
                 double D0 = 0;
-                double *cpriv = malloc(sizeof(double) * m * n);
+                double *cpriv = malloc(sizeof(double) * (m*n+2));
                 int di;
                 size_t ij;
                 size_t astride = nblk;
@@ -181,7 +181,7 @@ void NPzgemm(const char trans_a, const char trans_b,
                 int nthread = omp_get_num_threads();
                 int nblk = MAX((k+nthread-1) / nthread, 1);
                 double complex Z0 = 0;
-                double complex *cpriv = malloc(sizeof(double complex) * m * n);
+                double complex *cpriv = malloc(sizeof(double complex) * (m*n+2));
                 int di;
                 size_t ij;
                 size_t astride = nblk;
