@@ -407,7 +407,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             conv = [False] * nroots
             for k, ek in enumerate(e):
                 xt.append(ax0[k] - ek * x0[k])
-                dx_norm.append(numpy.linalg.norm(xt[k]))
+                dx_norm.append(numpy.sqrt(dot(xt[k].conj(), xt[k]).real))
                 conv[k] = abs(de[k]) < tol and dx_norm[k] < toloose
                 if conv[k] and not conv_last[k]:
                     log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
@@ -437,14 +437,17 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             for k, ek in enumerate(e):
                 if (not conv[k]) and dx_norm[k]**2 > lindep:
                     xt[k] = precond(xt[k], e[0], x0[k])
-                    xt[k] *= 1/numpy.linalg.norm(xt[k])
+                    xt[k] *= 1/numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
                 else:
                     xt[k] = None
-            xt = [xi for xi in xt if xi is not None]
         else:
             for k, ek in enumerate(e):
-                xt[k] = precond(xt[k], e[0], x0[k])
-                xt[k] *= 1/numpy.linalg.norm(xt[k])
+                if dx_norm[k]**2 > lindep:
+                    xt[k] = precond(xt[k], e[0], x0[k])
+                    xt[k] *= 1/numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
+                else:
+                    xt[k] = None
+        xt = [xi for xi in xt if xi is not None]
 
         for i in range(space):
             xsi = xs[i]
@@ -452,7 +455,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                 xi -= xsi * dot(xsi.conj(), xi)
         norm_min = 1
         for i,xi in enumerate(xt):
-            norm = numpy.linalg.norm(xi)
+            norm = numpy.sqrt(dot(xi.conj(), xi).real)
             if norm**2 > lindep:
                 xt[i] *= 1/norm
                 norm_min = min(norm_min, norm)
@@ -697,7 +700,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             for k, ek in enumerate(e):
                 if not conv[k]:
                     xt[k] = ax0[k] - ek * x0[k]
-                    dx_norm[k] = numpy.linalg.norm(xt[k])
+                    dx_norm[k] = numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
                     if abs(de[k]) < tol and dx_norm[k] < toloose:
                         log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
                                   k, dx_norm[k], ek, de[k])
@@ -709,7 +712,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             xt = []
             for k, ek in enumerate(e):
                 xt.append(ax0[k] - ek * x0[k])
-                dx_norm.append(numpy.linalg.norm(xt[k]))
+                dx_norm.append(numpy.sqrt(dot(xt[k].conj(), xt[k]).real))
                 if not conv_last[k] and abs(de[k]) < tol and dx_norm[k] < toloose:
                     log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
                               k, dx_norm[k], ek, de[k])
@@ -740,14 +743,14 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             for k, ek in enumerate(e):
                 if (not conv[k]) and dx_norm[k]**2 > lindep:
                     xt[k] = precond(xt[k], e[0], x0[k])
-                    xt[k] *= 1/numpy.linalg.norm(xt[k])
+                    xt[k] *= 1/numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
                 else:
                     xt[k] = None
             xt = [xi for xi in xt if xi is not None]
         else:
             for k, ek in enumerate(e):
                 xt[k] = precond(xt[k], e[0], x0[k])
-                xt[k] *= 1/numpy.linalg.norm(xt[k])
+                xt[k] *= 1/numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
 
         for i in range(space):
             xsi = xs[i]
@@ -755,7 +758,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                 xi -= xsi * dot(xsi.conj(), xi)
         norm_min = 1
         for i,xi in enumerate(xt):
-            norm = numpy.linalg.norm(xi)
+            norm = numpy.sqrt(dot(xi.conj(), xi).real)
             if norm**2 > lindep:
                 xt[i] *= 1/norm
                 norm_min = min(norm_min, norm)
