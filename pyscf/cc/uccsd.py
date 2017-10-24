@@ -4,6 +4,7 @@ UCCSD with spatial integrals
 
 import time
 import tempfile
+from functools import reduce
 import numpy
 import numpy as np
 import h5py
@@ -438,7 +439,7 @@ class UCCSD(rccsd.RCCSD):
         rccsd.RCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         # Spin-orbital CCSD needs a stricter tolerance than spatial-orbital
         self.conv_tol_normt = 1e-6
-        if hasattr(mf, 'mo_energy'):
+        if getattr(mf, 'mo_energy', None) is not None:
             self.orbspin = orbspin_of_sorted_mo_energy(mf.mo_energy, self.mo_occ)
         else:
             self.orbspin = None
