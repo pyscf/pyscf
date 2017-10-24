@@ -1173,8 +1173,8 @@ def _sort_by_similarity(w, v, nroots, conv, vlast, emin=None, heff=None):
     if not any(conv) or vlast is None:
         return w[:nroots], v[:,:nroots]
 
-    conv = numpy.asarray(conv)
-    head = vlast.shape[0]
+    head, nroots = vlast.shape
+    conv = numpy.asarray(conv[:nroots])
     ovlp = vlast[:,conv].T.conj().dot(v[:head])
     ovlp = numpy.einsum('ij,ij->j', ovlp, ovlp)
     nconv = numpy.count_nonzero(conv)
