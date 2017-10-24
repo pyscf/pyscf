@@ -746,11 +746,14 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                     xt[k] *= 1/numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
                 else:
                     xt[k] = None
-            xt = [xi for xi in xt if xi is not None]
         else:
             for k, ek in enumerate(e):
-                xt[k] = precond(xt[k], e[0], x0[k])
-                xt[k] *= 1/numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
+                if dx_norm[k]**2 > lindep:
+                    xt[k] = precond(xt[k], e[0], x0[k])
+                    xt[k] *= 1/numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
+                else:
+                    xt[k] = None
+        xt = [xi for xi in xt if xi is not None]
 
         for i in range(space):
             xsi = xs[i]
