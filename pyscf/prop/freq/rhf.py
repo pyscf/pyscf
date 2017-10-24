@@ -17,7 +17,6 @@ from pyscf.hessian import rhf as rhf_hess
 
 def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
     log = logger.new_logger(hobj, verbose)
-    time0 = t1 = (time.clock(), time.time())
     mol = hobj.mol
     mf = hobj._scf
 
@@ -34,6 +33,9 @@ def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
     de2 = hobj.partial_hess_elec(mo_energy, mo_coeff, mo_occ, range(natm),
                                  max_memory, log)
     de2 += hobj.hess_nuc()
+
+    # Compute H1 integrals and store in hobj.chkfile
+    hobj.make_h1(mo_coeff, mo_occ, hobj.chkfile, range(natm), log)
 
     aoslices = mol.aoslice_by_atom()
     s1a = -mol.intor('int1e_ipovlp', comp=3)
@@ -81,7 +83,7 @@ def kernel(hobj):
         hdiagd[abs(hdiagd)<1e-8] = 1e-8
         return x/hdiagd
 
-    e, c = lib.davidson(hop, hdiag, precond, tol=hobj.conv_tol,
+    e, c = lib.davidson(h_op, hdiag, precond, tol=hobj.conv_tol,
                         nroots=hobj.nroots, verbose=5)
     return e, c
 
@@ -103,7 +105,6 @@ Freq = Frequency
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    from pyscf.hessian import rhf
 
     mol = gto.Mole()
     mol.verbose = 0
@@ -120,13 +121,13 @@ if __name__ == '__main__':
     mf.conv_tol = 1e-14
     mf.scf()
     n3 = mol.natm * 3
-    hobj = rhf.Hessian(mf)
+    hobj = rhf_hess.Hessian(mf)
     e2 = hobj.kernel()
     numpy.random.seed(1)
     x = numpy.random.random((mol.natm,3))
     e2x = numpy.einsum('abxy,ax->by', e2, x)
     print(lib.finger(e2x) - -0.19160804881270971)
-    hop = gen_hop(hobj)[0]
+    hop = gen_hop(Freq(mf))[0]
     print(lib.finger(hop(x)) - -0.19160804881270971)
     print(abs(e2x-hop(x).reshape(mol.natm,3)).sum())
     print Freq(mf).kernel()[0]

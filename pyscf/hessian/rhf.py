@@ -112,8 +112,23 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     de2 = numpy.zeros((mol.natm,mol.natm,3,3))  # (A,B,dR_A,dR_B)
     for i0, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
-        vhf = _make_h2_part(hessobj, dm0, aoslices[ia])
-        t1 = log.timer_debug1('contracting int2e_ip1ip2, int2e_ipvip1 for atom %d'%ia, *t1)
+        shls_slice = (shl0, shl1) + (0, mol.nbas)*3
+        vj1, vk1, vk2 = _get_jk(mol, 'int2e_ip1ip2', 9, 's1',
+                                ['ji->s1kl', dm0[:,p0:p1],  # vj1
+                                 'li->s1kj', dm0[:,p0:p1],  # vk1
+                                 'lj->s1ki', dm0         ], # vk2
+                                shls_slice=shls_slice)
+        vhf = vj1 * 2 - vk1 * .5
+        vhf[:,:,p0:p1] -= vk2 * .5
+        t1 = log.timer_debug1('contracting int2e_ip1ip2 for atom %d'%ia, *t1)
+        vj1, vk1 = _get_jk(mol, 'int2e_ipvip1', 9, 's2kl',
+                           ['lk->s1ij', dm0         ,  # vj1
+                            'li->s1kj', dm0[:,p0:p1]], # vk1
+                           shls_slice=shls_slice)
+        vhf[:,:,p0:p1] += vj1.transpose(0,2,1)
+        vhf -= vk1.transpose(0,2,1) * .5
+        vhf = vhf.reshape(3,3,nao,nao)
+        t1 = log.timer_debug1('contracting int2e_ipvip1 for atom %d'%ia, *t1)
 
         rinv2aa, rinv2ab = _hess_rinv(mol, ia)
         hcore = rinv2ab + rinv2aa.transpose(0,1,3,2)
@@ -135,8 +150,7 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
             de2[j0,i0] += numpy.einsum('xypq,pq->xy', rinv2aa[:,:,q0:q1], dm0[q0:q1])*2
             de2[j0,i0] += numpy.einsum('xypq,pq->xy', rinv2ab[:,:,q0:q1], dm0[q0:q1])*2
 
-        for j0 in range(i0+1):
-            ja = atmlst[j0]
+        for j0, ja in enumerate(atmlst[:i0+1]):
             q0, q1 = aoslices[ja][2:]
             # *2 for +c.c.
             de2[i0,j0] += numpy.einsum('xypq,pq->xy', hcore[:,:,:,q0:q1], dm0[:,q0:q1])*2
@@ -190,26 +204,6 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
         return h1ao
     else:
         return chkfile
-
-def _make_h2_part(hobj, dm0, aoslice):
-    mol = hobj.mol
-    shl0, shl1, p0, p1 = aoslice
-    shls_slice = (shl0, shl1) + (0, mol.nbas)*3
-    vj1, vk1, vk2 = _get_jk(mol, 'int2e_ip1ip2', 9, 's1',
-                            ['ji->s1kl', dm0[:,p0:p1],  # vj1
-                             'li->s1kj', dm0[:,p0:p1],  # vk1
-                             'lj->s1ki', dm0         ], # vk2
-                            shls_slice=shls_slice)
-    vhf = vj1 * 2 - vk1 * .5
-    vhf[:,:,p0:p1] -= vk2 * .5
-    vj1, vk1 = _get_jk(mol, 'int2e_ipvip1', 9, 's2kl',
-                       ['lk->s1ij', dm0         ,  # vj1
-                        'li->s1kj', dm0[:,p0:p1]], # vk1
-                       shls_slice=shls_slice)
-    vhf[:,:,p0:p1] += vj1.transpose(0,2,1)
-    vhf -= vk1.transpose(0,2,1) * .5
-    nao = dm0.shape[0]
-    return vhf.reshape(3,3,nao,nao)
 
 def get_hcore(mol):
     h1aa = mol.intor('int1e_ipipkin', comp=9)
