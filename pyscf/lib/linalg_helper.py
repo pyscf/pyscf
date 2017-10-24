@@ -322,8 +322,8 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     heff = None
     fresh_start = True
     e = 0
-    conv_last = numpy.asarray([False]*nroots)
-    vlast = None
+    v = None
+    conv = [False] * nroots
     emin = None
 
     for icyc in range(max_cycle):
@@ -359,6 +359,8 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             heff = numpy.asarray(heff, dtype=ax[0].dtype)
 
         elast = e
+        vlast = v
+        conv_last = conv
         for i in range(space):
             if head <= i < head+rnow:
                 for k in range(i-head+1):
@@ -402,14 +404,14 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             de = e - elast
             dx_norm = []
             xt = []
+            conv = [False] * nroots
             for k, ek in enumerate(e):
                 xt.append(ax0[k] - ek * x0[k])
                 dx_norm.append(numpy.linalg.norm(xt[k]))
-                if not conv_last[k] and abs(de[k]) < tol and dx_norm[k] < toloose:
+                conv[k] = abs(de[k]) < tol and dx_norm[k] < toloose
+                if conv[k] and not conv_last[k]:
                     log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
                               k, dx_norm[k], ek, de[k])
-            dx_norm = numpy.asarray(dx_norm)
-            conv = (abs(de) < tol) & (dx_norm < toloose)
         ax0 = None
         max_dx_norm = max(dx_norm)
         ide = numpy.argmax(abs(de))
@@ -429,8 +431,6 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         if SORT_EIG_BY_SIMILARITY:
             if any(conv) and e.dtype == numpy.double:
                 emin = min(e)
-        vlast = v
-        conv_last = conv
 
         # remove subspace linear dependency
         for k, ek in enumerate(e):
@@ -617,8 +617,8 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     heff = None
     fresh_start = True
     e = 0
-    conv_last = numpy.asarray([False]*nroots)
-    vlast = None
+    v = None
+    conv = [False] * nroots
     emin = None
 
     for icyc in range(max_cycle):
@@ -654,6 +654,8 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             heff = numpy.asarray(heff, dtype=axt[0].dtype)
 
         elast = e
+        vlast = v
+        conv_last = conv
         for i in range(rnow):
             for k in range(rnow):
                 heff[head+k,head+i] = dot(xt[k].conj(), axt[i])
@@ -726,8 +728,6 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         if SORT_EIG_BY_SIMILARITY:
             if any(conv) and e.dtype == numpy.double:
                 emin = min(e)
-        vlast = v
-        conv_last = conv
 
         # remove subspace linear dependency
         for k, ek in enumerate(e):
@@ -1247,7 +1247,7 @@ def _sort_elast(elast, conv_last, vlast, v, fresh_start):
     head, nroots = vlast.shape
     ovlp = abs(numpy.dot(v[:head].conj().T, vlast))
     idx = numpy.argmax(ovlp, axis=1)
-    return elast[idx], conv_last[idx]
+    return [elast[i] for i in idx], [conv_last[i] for i in idx]
 
 
 class _Xlist(list):
