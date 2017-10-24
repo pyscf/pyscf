@@ -200,7 +200,7 @@ def pre_orth_ao_atm_scf(mol):
     return c
 
 
-def orth_ao(mol, method='meta_lowdin', pre_orth_ao=None, scf_method=None,
+def orth_ao(mf_or_mol, method='meta_lowdin', pre_orth_ao=None, scf_method=None,
             s=None):
     '''Orthogonalize AOs
 
@@ -212,6 +212,14 @@ def orth_ao(mol, method='meta_lowdin', pre_orth_ao=None, scf_method=None,
             | NAO
     '''
     from pyscf.lo import nao
+    mf = scf_method
+    if isinstance(mf_or_mol, gto.Mole):
+        mol = mf_or_mol
+    else:
+        mol = mf_or_mol.mol
+        if mf is None:
+            mf = mf_or_mol
+
     if s is None:
         s = mol.intor_symmetric('int1e_ovlp')
 
@@ -223,6 +231,7 @@ def orth_ao(mol, method='meta_lowdin', pre_orth_ao=None, scf_method=None,
         s1 = reduce(numpy.dot, (pre_orth_ao.T, s, pre_orth_ao))
         c_orth = numpy.dot(pre_orth_ao, lowdin(s1))
     elif method.lower() == 'nao':
+        assert(mf is not None)
         c_orth = nao.nao(mol, scf_method, s)
     else: # meta_lowdin: divide ao into core, valence and Rydberg sets,
           # orthogonalizing within each set
