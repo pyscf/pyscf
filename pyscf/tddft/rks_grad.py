@@ -275,64 +275,32 @@ def _contract_xc_kernel(td_grad, xc_code, xai, oovv=None, with_vxc=True,
     elif xctype == 'GGA':
         if singlet:
             def gga_sum_(vmat, ao, wv, mask):
-                aow  = numpy.einsum('pi,p->pi', ao[0], wv[0]*.5)
+                aow  = numpy.einsum('pi,p->pi', ao[0], wv[0])
                 aow += numpy.einsum('npi,np->pi', ao[1:4], wv[1:])
                 tmp = numint._dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
                 vmat[0] += tmp + tmp.T
-                vmat[1:] += rks_grad._gga_grad_sum(mol, ao, wv, mask,
-                                                   shls_slice, ao_loc)
+                rks_grad._gga_grad_sum_(vmat[1:], mol, ao, wv, mask, ao_loc)
             ao_deriv = 2
             for ao, mask, weight, coords \
                     in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
                 rho = ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, 'GGA')
                 vxc, fxc, kxc = ni.eval_xc(xc_code, rho, 0, deriv=deriv)[1:]
 
-                vrho, vgamma = vxc[:2]
-                frr, frg, fgg = fxc[:3]
-
                 rho1 = ni.eval_rho(mol, ao, dmvo, mask, 'GGA') * 2  # *2 for alpha + beta
-                sigma1 = numpy.einsum('xi,xi->i', rho[1:], rho1[1:])
-                wv = numpy.empty_like((rho))
-                wv[0]  = frr * rho1[0]
-                wv[0] += frg * sigma1 * 2
-                wv[1:]  = (fgg * sigma1 * 4 + frg * rho1[0] * 2) * rho[1:]
-                wv[1:] += vgamma * rho1[1:] * 2
-                wv *= weight
+                wv = numint._rks_gga_wv1(rho, rho1, vxc, fxc, weight)
                 gga_sum_(f1vo, ao, wv, mask)
 
                 if oovv is not None:
                     rho2 = ni.eval_rho(mol, ao, oovv, mask, 'GGA') * 2
-                    sigma2 = numpy.einsum('xi,xi->i', rho[1:], rho2[1:])
-                    wv[0]  = frr * rho2[0]
-                    wv[0] += frg * sigma2 * 2
-                    wv[1:]  = (fgg * sigma2 * 4 + frg * rho2[0] * 2) * rho[1:]
-                    wv[1:] += vgamma * rho2[1:] * 2
-                    wv *= weight
+                    wv = numint._rks_gga_wv1(rho, rho2, vxc, fxc, weight)
                     gga_sum_(f1oo, ao, wv, mask)
                 if with_vxc:
-                    wv[0]  = vrho
-                    wv[1:] = 2 * vgamma * rho[1:]
-                    wv *= weight
+                    wv = numint._rks_gga_wv0(rho, vxc, weight)
                     gga_sum_(v1ao, ao, wv, mask)
                 if with_kxc:
-                    frrr, frrg, frgg, fggg = kxc
-                    r1r1 = rho1[0]**2
-                    s1s1 = sigma1**2
-                    r1s1 = rho1[0] * sigma1
-                    sigma2 = numpy.einsum('xi,xi->i', rho1[1:], rho1[1:])
-                    wv[0]  = frrr * r1r1
-                    wv[0] += 4 * frrg * r1s1
-                    wv[0] += 4 * frgg * s1s1
-                    wv[0] += 2 * frg * sigma2
-                    wv[1:]  = 2 * frrg * r1r1 * rho[1:]
-                    wv[1:] += 8 * frgg * r1s1 * rho[1:]
-                    wv[1:] += 4 * frg * rho1[0] * rho1[1:]
-                    wv[1:] += 4 * fgg * sigma2 * rho[1:]
-                    wv[1:] += 8 * fgg * sigma1 * rho1[1:]
-                    wv[1:] += 8 * fggg * s1s1 * rho[1:]
-                    wv *= weight
+                    wv = numint._rks_gga_wv2(rho, rho1, fxc, kxc, weight)
                     gga_sum_(k1ao, ao, wv, mask)
-                vxc = fxc = kxc = rho = rho1 = rho2 = sigma1 = sigma2 = None
+                vxc = fxc = kxc = rho = rho1 = None
 
         else:
             raise NotImplementedError('GGA triplet')
