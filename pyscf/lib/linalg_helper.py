@@ -433,20 +433,26 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                 emin = min(e)
 
         # remove subspace linear dependency
-        for k, ek in enumerate(e):
-            if (not conv[k]) and dx_norm[k]**2 > lindep:
+        if any(((not conv[k]) and n**2>lindep) for k, n in enumerate(dx_norm)):
+            for k, ek in enumerate(e):
+                if (not conv[k]) and dx_norm[k]**2 > lindep:
+                    xt[k] = precond(xt[k], e[0], x0[k])
+                    xt[k] *= 1/numpy.linalg.norm(xt[k])
+                else:
+                    xt[k] = None
+            xt = [xi for xi in xt if xi is not None]
+        else:
+            for k, ek in enumerate(e):
                 xt[k] = precond(xt[k], e[0], x0[k])
-                xt[k] *= 1/numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
-            else:
-                xt[k] = None
-        xt = [xi for xi in xt if xi is not None]
+                xt[k] *= 1/numpy.linalg.norm(xt[k])
+
         for i in range(space):
             xsi = xs[i]
             for xi in xt:
                 xi -= xsi * dot(xsi.conj(), xi)
         norm_min = 1
         for i,xi in enumerate(xt):
-            norm = numpy.sqrt(dot(xi.conj(), xi).real)
+            norm = numpy.linalg.norm(xi)
             if norm**2 > lindep:
                 xt[i] *= 1/norm
                 norm_min = min(norm_min, norm)
@@ -730,20 +736,26 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                 emin = min(e)
 
         # remove subspace linear dependency
-        for k, ek in enumerate(e):
-            if (not conv[k]) and dx_norm[k]**2 > lindep:
-                xt[k] = precond(xt[k], ek, x0[k])
-                xt[k] *= 1/numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
-            else:
-                xt[k] = None
-        xt = [xi for xi in xt if xi is not None]
+        if any(((not conv[k]) and n**2>lindep) for k, n in enumerate(dx_norm)):
+            for k, ek in enumerate(e):
+                if (not conv[k]) and dx_norm[k]**2 > lindep:
+                    xt[k] = precond(xt[k], e[0], x0[k])
+                    xt[k] *= 1/numpy.linalg.norm(xt[k])
+                else:
+                    xt[k] = None
+            xt = [xi for xi in xt if xi is not None]
+        else:
+            for k, ek in enumerate(e):
+                xt[k] = precond(xt[k], e[0], x0[k])
+                xt[k] *= 1/numpy.linalg.norm(xt[k])
+
         for i in range(space):
             xsi = xs[i]
             for xi in xt:
                 xi -= xsi * dot(xsi.conj(), xi)
         norm_min = 1
         for i,xi in enumerate(xt):
-            norm = numpy.sqrt(dot(xi.conj(), xi).real)
+            norm = numpy.linalg.norm(xi)
             if norm**2 > lindep:
                 xt[i] *= 1/norm
                 norm_min = min(norm_min, norm)
