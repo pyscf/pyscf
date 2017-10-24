@@ -7,6 +7,8 @@ PySCF 1.5 alpha (2018-03-??)
   - IBO for molecular and PBC systems
   - UHF analytical nuclear Hessian
   - UKS analytical nuclear Hessian
+* Improved
+  - Support of setting omp threads in FCI solver
 
 
 PySCF 1.4.1 (201?-?-?)

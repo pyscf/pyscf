@@ -29,6 +29,8 @@ def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     if mo_occ is None:    mo_occ = mf.mo_occ
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
     if atmlst is None: atmlst = range(mol.natm)
+    de2 = hessobj.partial_hess_elec(mo_energy, mo_coeff, mo_occ, atmlst,
+                                    max_memory, log)
 
     if h1ao is None:
         h1ao = hessobj.make_h1(mo_coeff, mo_occ, hessobj.chkfile, atmlst, log)
@@ -44,6 +46,49 @@ def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     if isinstance(mo1, str):
         mo1 = lib.chkfile.load(mo1, 'scf_mo1')
         mo1 = dict([(int(k), mo1[k]) for k in mo1])
+
+    nao, nmo = mo_coeff.shape
+    mocc = mo_coeff[:,mo_occ>0]
+    s1a = -mol.intor('int1e_ipovlp', comp=3)
+
+    aoslices = mol.aoslice_by_atom()
+    for i0, ia in enumerate(atmlst):
+        shl0, shl1, p0, p1 = aoslices[ia]
+        s1ao = numpy.zeros((3,nao,nao))
+        s1ao[:,p0:p1] += s1a[:,p0:p1]
+        s1ao[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
+        s1oo = numpy.einsum('xpq,pi,qj->xij', s1ao, mocc, mocc)
+
+        for j0 in range(i0+1):
+            ja = atmlst[j0]
+            q0, q1 = aoslices[ja][2:]
+# *2 for double occupancy, *2 for +c.c.
+            dm1 = numpy.einsum('ypi,qi->ypq', mo1[ja], mocc)
+            de2[i0,j0] += numpy.einsum('xpq,ypq->xy', h1ao[ia], dm1) * 4
+            dm1 = numpy.einsum('ypi,qi,i->ypq', mo1[ja], mocc, mo_energy[mo_occ>0])
+            de2[i0,j0] -= numpy.einsum('xpq,ypq->xy', s1ao, dm1) * 4
+            de2[i0,j0] -= numpy.einsum('xpq,ypq->xy', s1oo, mo_e1[ja]) * 2
+
+    for i0, ia in enumerate(atmlst):
+        for j0 in range(i0):
+            de2[j0,i0] = de2[i0,j0].T
+
+    log.timer('RHF hessian', *time0)
+    return de2
+
+def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
+                      atmlst=None, max_memory=4000, verbose=None):
+    '''Partial derivative
+    '''
+    log = logger.new_logger(hessobj, verbose)
+    time0 = t1 = (time.clock(), time.time())
+
+    mol = hessobj.mol
+    mf = hessobj._scf
+    if mo_energy is None: mo_energy = mf.mo_energy
+    if mo_occ is None:    mo_occ = mf.mo_occ
+    if mo_coeff is None:  mo_coeff = mf.mo_coeff
+    if atmlst is None: atmlst = range(mol.natm)
 
     nao, nmo = mo_coeff.shape
     mocc = mo_coeff[:,mo_occ>0]
@@ -67,25 +112,8 @@ def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     de2 = numpy.zeros((mol.natm,mol.natm,3,3))  # (A,B,dR_A,dR_B)
     for i0, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
-
-        shls_slice = (shl0, shl1) + (0, mol.nbas)*3
-        vj1, vk1, vk2 = _get_jk(mol, 'int2e_ip1ip2', 9, 's1',
-                                ['ji->s1kl', dm0[:,p0:p1],  # vj1
-                                 'li->s1kj', dm0[:,p0:p1],  # vk1
-                                 'lj->s1ki', dm0         ], # vk2
-                                shls_slice=shls_slice)
-        vhf = vj1 * 2 - vk1 * .5
-        vhf[:,:,p0:p1] -= vk2 * .5
-        t1 = log.timer_debug1('contracting int2e_ip1ip2 for atom %d'%ia, *t1)
-        vj1, vk1 = _get_jk(mol, 'int2e_ipvip1', 9, 's2kl',
-                           ['lk->s1ij', dm0         ,  # vj1
-                            'li->s1kj', dm0[:,p0:p1]], # vk1
-                           shls_slice=shls_slice)
-        vhf[:,:,p0:p1] += vj1.transpose(0,2,1)
-        vhf -= vk1.transpose(0,2,1) * .5
-        vj1 = vk1 = vk2 = None
-        t1 = log.timer_debug1('contracting int2e_ipvip1 for atom %d'%ia, *t1)
-        vhf = vhf.reshape(3,3,nao,nao)
+        vhf = _make_h2_part(hessobj, dm0, aoslices[ia])
+        t1 = log.timer_debug1('contracting int2e_ip1ip2, int2e_ipvip1 for atom %d'%ia, *t1)
 
         rinv2aa, rinv2ab = _hess_rinv(mol, ia)
         hcore = rinv2ab + rinv2aa.transpose(0,1,3,2)
@@ -95,34 +123,31 @@ def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
         s1ao[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
         s1oo = numpy.einsum('xpq,pi,qj->xij', s1ao, mocc, mocc)
 
-        for j0 in range(ia+1):
+        de2[i0,i0] -= numpy.einsum('xypq,pq->xy', rinv2aa, dm0)*2
+        de2[i0,i0] -= numpy.einsum('xypq,pq->xy', rinv2ab, dm0)*2
+        de2[i0,i0] += numpy.einsum('xypq,pq->xy', h1aa[:,:,p0:p1], dm0[p0:p1])*2
+        de2[i0,i0] += numpy.einsum('xypq,pq->xy', vhf_diag[:,:,p0:p1], dm0[p0:p1])*2
+        de2[i0,i0] -= numpy.einsum('xypq,pq->xy', s1aa[:,:,p0:p1], dme0[p0:p1])*2
+
+        for j0 in range(i0, len(atmlst)):
             ja = atmlst[j0]
             q0, q1 = aoslices[ja][2:]
-# *2 for double occupancy, *2 for +c.c.
-            dm1 = numpy.einsum('ypi,qi->ypq', mo1[ja], mocc)
-            de  = numpy.einsum('xpq,ypq->xy', h1ao[ia], dm1) * 4
-            dm1 = numpy.einsum('ypi,qi,i->ypq', mo1[ja], mocc, mo_energy[mo_occ>0])
-            de -= numpy.einsum('xpq,ypq->xy', s1ao, dm1) * 4
-            de -= numpy.einsum('xpq,ypq->xy', s1oo, mo_e1[ja]) * 2
+            de2[j0,i0] += numpy.einsum('xypq,pq->xy', rinv2aa[:,:,q0:q1], dm0[q0:q1])*2
+            de2[j0,i0] += numpy.einsum('xypq,pq->xy', rinv2ab[:,:,q0:q1], dm0[q0:q1])*2
 
-            v2aa, v2ab = _hess_rinv(mol, ja)
-            de += numpy.einsum('xypq,pq->xy', v2aa[:,:,p0:p1], dm0[p0:p1])*2
-            de += numpy.einsum('xypq,pq->xy', v2ab[:,:,p0:p1], dm0[p0:p1])*2
-            de += numpy.einsum('xypq,pq->xy', hcore[:,:,:,q0:q1], dm0[:,q0:q1])*2
-            de += numpy.einsum('xypq,pq->xy', vhf[:,:,q0:q1], dm0[q0:q1])*2
-            de -= numpy.einsum('xypq,pq->xy', s1ab[:,:,p0:p1,q0:q1], dme0[p0:p1,q0:q1])*2
+        for j0 in range(i0+1):
+            ja = atmlst[j0]
+            q0, q1 = aoslices[ja][2:]
+            # *2 for +c.c.
+            de2[i0,j0] += numpy.einsum('xypq,pq->xy', hcore[:,:,:,q0:q1], dm0[:,q0:q1])*2
+            de2[i0,j0] += numpy.einsum('xypq,pq->xy', vhf[:,:,q0:q1], dm0[q0:q1])*2
+            de2[i0,j0] -= numpy.einsum('xypq,pq->xy', s1ab[:,:,p0:p1,q0:q1], dme0[p0:p1,q0:q1])*2
 
-            if ia == ja:
-                de += numpy.einsum('xypq,pq->xy', h1aa[:,:,p0:p1], dm0[p0:p1])*2
-                de -= numpy.einsum('xypq,pq->xy', v2aa, dm0)*2
-                de -= numpy.einsum('xypq,pq->xy', v2ab, dm0)*2
-                de += numpy.einsum('xypq,pq->xy', vhf_diag[:,:,p0:p1], dm0[p0:p1])*2
-                de -= numpy.einsum('xypq,pq->xy', s1aa[:,:,p0:p1], dme0[p0:p1])*2
+    for i0, ia in enumerate(atmlst):
+        for j0 in range(i0):
+            de2[j0,i0] = de2[i0,j0].T
 
-            de2[i0,j0] = de
-            de2[j0,i0] = de.T
-
-    log.timer('RHF hessian', *time0)
+    log.timer('RHF partial hessian', *time0)
     return de2
 
 def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
@@ -165,6 +190,26 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
         return h1ao
     else:
         return chkfile
+
+def _make_h2_part(hobj, dm0, aoslice):
+    mol = hobj.mol
+    shl0, shl1, p0, p1 = aoslice
+    shls_slice = (shl0, shl1) + (0, mol.nbas)*3
+    vj1, vk1, vk2 = _get_jk(mol, 'int2e_ip1ip2', 9, 's1',
+                            ['ji->s1kl', dm0[:,p0:p1],  # vj1
+                             'li->s1kj', dm0[:,p0:p1],  # vk1
+                             'lj->s1ki', dm0         ], # vk2
+                            shls_slice=shls_slice)
+    vhf = vj1 * 2 - vk1 * .5
+    vhf[:,:,p0:p1] -= vk2 * .5
+    vj1, vk1 = _get_jk(mol, 'int2e_ipvip1', 9, 's2kl',
+                       ['lk->s1ij', dm0         ,  # vj1
+                        'li->s1kj', dm0[:,p0:p1]], # vk1
+                       shls_slice=shls_slice)
+    vhf[:,:,p0:p1] += vj1.transpose(0,2,1)
+    vhf -= vk1.transpose(0,2,1) * .5
+    nao = dm0.shape[0]
+    return vhf.reshape(3,3,nao,nao)
 
 def get_hcore(mol):
     h1aa = mol.intor('int1e_ipipkin', comp=9)
@@ -228,7 +273,7 @@ def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
 
     if fx is None:
         fx = gen_vind(mf, mo_coeff, mo_occ)
-    s1a =-mol.intor('int1e_ipovlp', comp=3)
+    s1a = -mol.intor('int1e_ipovlp', comp=3)
 
     def _ao2mo(mat):
         return numpy.asarray([reduce(numpy.dot, (mo_coeff.T, x, mocc)) for x in mat])
@@ -297,7 +342,7 @@ def gen_vind(mf, mo_coeff, mo_occ):
     return fx
 
 def hess_nuc(mol, atmlst=None):
-    gs = numpy.zeros((mol.natm,mol.natm,3,3))
+    h = numpy.zeros((mol.natm,mol.natm,3,3))
     qs = numpy.asarray([mol.atom_charge(i) for i in range(mol.natm)])
     rs = numpy.asarray([mol.atom_coord(i) for i in range(mol.natm)])
     for i in range(mol.natm):
@@ -307,19 +352,19 @@ def hess_nuc(mol, atmlst=None):
         tmp1 = qs[i] * qs / s12**3
         tmp2 = numpy.einsum('k, ki,kj->kij',-3*qs[i]*qs/s12**5, r12, r12)
 
-        gs[i,i,0,0] = \
-        gs[i,i,1,1] = \
-        gs[i,i,2,2] = -tmp1.sum()
-        gs[i,i] -= numpy.einsum('kij->ij', tmp2)
+        h[i,i,0,0] = \
+        h[i,i,1,1] = \
+        h[i,i,2,2] = -tmp1.sum()
+        h[i,i] -= numpy.einsum('kij->ij', tmp2)
 
-        gs[i,:,0,0] += tmp1
-        gs[i,:,1,1] += tmp1
-        gs[i,:,2,2] += tmp1
-        gs[i,:] += tmp2
+        h[i,:,0,0] += tmp1
+        h[i,:,1,1] += tmp1
+        h[i,:,2,2] += tmp1
+        h[i,:] += tmp2
 
     if atmlst is not None:
-        gs = gs[atmlst][:,atmlst]
-    return gs
+        h = h[atmlst][:,atmlst]
+    return h
 
 
 class Hessian(lib.StreamObject):
@@ -335,6 +380,7 @@ class Hessian(lib.StreamObject):
         self.de = numpy.zeros((0,0,3,3))  # (A,B,dR_A,dR_B)
         self._keys = set(self.__dict__.keys())
 
+    partial_hess_elec = partial_hess_elec
     hess_elec = hess_elec
     make_h1 = make_h1
 
@@ -407,11 +453,7 @@ if __name__ == '__main__':
     print(numpy.allclose(e2,e2ref,atol=1e-6))
 
 # \partial^2 E / \partial R \partial R'
-    h1ao = hobj.make_h1(mf.mo_coeff, mf.mo_occ)
-    mo1, mo_e1 = hobj.solve_mo1(mf.mo_energy, mf.mo_coeff, mf.mo_occ, h1ao)
-    e2 = hobj.hess_elec(mf.mo_energy, mf.mo_coeff, mf.mo_occ,
-                        numpy.zeros_like(mo1), numpy.zeros_like(mo_e1),
-                        numpy.zeros_like(h1ao))
+    e2 = hobj.partial_hess_elec(mf.mo_energy, mf.mo_coeff, mf.mo_occ)
     e2 += hobj.hess_nuc(mol)
     e2 = e2.transpose(0,2,1,3).reshape(n3,n3)
     def grad_partial_R(ia, inc):
@@ -431,30 +473,3 @@ if __name__ == '__main__':
     print(numpy.linalg.norm(e2-e2ref))
     print(abs(e2-e2ref).max())
     print(numpy.allclose(e2,e2ref,atol=1e-8))
-
-## \partial^2 E / \partial R \partial C (dC/dR)
-#    e2 = hobj.hess_elec(mf.mo_energy, mf.mo_coeff*0, mf.mo_occ,
-#                        numpy.zeros_like(mo1), numpy.zeros_like(mo_e1),
-#                        numpy.zeros_like(h1ao))
-#    e2 += hobj.hess_nuc(mol)
-#    e2 = e2.transpose(0,2,1,3).reshape(n3,n3)
-#    def grad_partial_C(ia, inc):
-#        coord = mol.atom_coord(ia).copy()
-#        ptr = mol._atm[ia,gto.PTR_COORD]
-#        de = []
-#        for i in range(3):
-#            mol._env[ptr+i] = coord[i] + inc
-#            mf = scf.RHF(mol).run(conv_tol=1e-14)
-#            mol._env[ptr+i] = coord[i]
-#            e1a = mf.nuc_grad_method().kernel()
-#            mol._env[ptr+i] = coord[i] - inc
-#            mf = scf.RHF(mol).run(conv_tol=1e-14)
-#            mol._env[ptr+i] = coord[i]
-#            e1b = mf.nuc_grad_method().kernel()
-#            de.append((e1a-e1b)/(2*inc))
-#        return de
-#    e2ref = [grad_partial_C(ia, .5e-4) for ia in range(mol.natm)]
-#    e2ref = numpy.asarray(e2ref).reshape(n3,n3)
-#    print(numpy.linalg.norm(e2-e2ref))
-#    print(abs(e2-e2ref).max())
-#    print(numpy.allclose(e2,e2ref,atol=1e-6))

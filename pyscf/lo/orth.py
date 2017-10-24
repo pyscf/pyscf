@@ -223,6 +223,7 @@ def orth_ao(mol, method='meta_lowdin', pre_orth_ao=None, scf_method=None,
         s1 = reduce(numpy.dot, (pre_orth_ao.T, s, pre_orth_ao))
         c_orth = numpy.dot(pre_orth_ao, lowdin(s1))
     elif method.lower() == 'nao':
+        assert(scf_method is not None)
         c_orth = nao.nao(mol, scf_method, s)
     else: # meta_lowdin: divide ao into core, valence and Rydberg sets,
           # orthogonalizing within each set
