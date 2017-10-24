@@ -21,6 +21,7 @@ from pyscf.dft import numint
 from pyscf.prop.gtensor import uhf as uhf_g
 from pyscf.prop.gtensor.uhf import _write, align
 from pyscf.data import nist
+from pyscf.grad import rks as rks_grad
 
 
 # Note mo10 is the imaginary part of MO^1
@@ -167,22 +168,13 @@ def get_vxc_soc(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
             rho_a = make_rho(0, ao, mask, 'GGA')
             rho_b = make_rho(1, ao, mask, 'GGA')
             vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, deriv=1)[1]
-            vrho, vsigma = vxc[:2]
-
-            wva = numpy.empty_like(rho_a)
-            wva[0]  = weight * vrho[:,0] * .5  # *.5 for symmetrization in the end
-            wva[1:] = rho_a[1:] * (weight * vsigma[:,0] * 2)  # sigma_uu
-            wva[1:]+= rho_b[1:] * (weight * vsigma[:,1])      # sigma_ud
-            wvb = numpy.empty_like(rho_b)
-            wvb[0]  = weight * vrho[:,1] * .5
-            wvb[1:] = rho_b[1:] * (weight * vsigma[:,2] * 2)  # sigma_dd
-            wvb[1:]+= rho_a[1:] * (weight * vsigma[:,1])      # sigma_ud
+            wva, wvb = numint._uks_gga_wv0((rho_a, rho_b), vxc, weight)
 
             ip_ao = ao[1:4]
             ipip_ao = ao[4:]
-            aow = _half_contract(ip_ao, ipip_ao, wva)
+            aow = rks_grad._make_dR_dao_w(ao, wva)
             _cross3x3_(vmat[0], mol, aow, ip_ao, mask, shls_slice, ao_loc)
-            aow = _half_contract(ip_ao, ipip_ao, wvb)
+            aow = rks_grad._make_dR_dao_w(ao, wvb)
             _cross3x3_(vmat[1], mol, aow, ip_ao, mask, shls_slice, ao_loc)
             rho = vxc = vrho = vsigma = wv = aow = None
         vmat = vmat - vmat.transpose(0,1,3,2)
@@ -201,22 +193,6 @@ def _cross3x3_(out, mol, ao1, ao2, mask, shls_slice, ao_loc):
     out[2] += numint._dot_ao_ao(mol, ao1[0], ao2[1], mask, shls_slice, ao_loc)
     out[2] -= numint._dot_ao_ao(mol, ao1[1], ao2[0], mask, shls_slice, ao_loc)
     return out
-
-def _half_contract(ip_ao, ipip_ao, wv):
-    # XX, XY, XZ = 0, 1, 2
-    # YX, YY, YZ = 1, 3, 4
-    # ZX, ZY, ZZ = 2, 4, 5
-    aow = numpy.einsum('xpi,p->xpi', ip_ao, wv[0])
-    aow[0] += numpy.einsum('pi,p->pi', ipip_ao[0], wv[1])
-    aow[0] += numpy.einsum('pi,p->pi', ipip_ao[1], wv[2])
-    aow[0] += numpy.einsum('pi,p->pi', ipip_ao[2], wv[3])
-    aow[1] += numpy.einsum('pi,p->pi', ipip_ao[1], wv[1])
-    aow[1] += numpy.einsum('pi,p->pi', ipip_ao[3], wv[2])
-    aow[1] += numpy.einsum('pi,p->pi', ipip_ao[4], wv[3])
-    aow[2] += numpy.einsum('pi,p->pi', ipip_ao[2], wv[1])
-    aow[2] += numpy.einsum('pi,p->pi', ipip_ao[4], wv[2])
-    aow[2] += numpy.einsum('pi,p->pi', ipip_ao[5], wv[3])
-    return aow
 
 
 class GTensor(uhf_g.GTensor):

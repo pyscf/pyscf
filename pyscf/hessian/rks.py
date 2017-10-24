@@ -13,12 +13,12 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.hessian import rhf as rhf_hess
 from pyscf.grad import rhf as rhf_grad
+from pyscf.grad import rks as rks_grad
 from pyscf.dft import numint
 
 
-def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
-              mo1=None, mo_e1=None, h1ao=None,
-              atmlst=None, max_memory=4000, verbose=None):
+def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
+                      atmlst=None, max_memory=4000, verbose=None):
     log = logger.new_logger(hessobj, verbose)
     time0 = t1 = (time.clock(), time.time())
 
@@ -28,22 +28,6 @@ def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     if mo_occ is None:    mo_occ = mf.mo_occ
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
     if atmlst is None: atmlst = range(mol.natm)
-
-    if h1ao is None:
-        h1ao = hessobj.make_h1(mo_coeff, mo_occ, hessobj.chkfile, atmlst, log)
-        t1 = log.timer_debug1('making H1', *time0)
-    if mo1 is None or mo_e1 is None:
-        fx = rhf_hess.gen_vind(mf, mo_coeff, mo_occ)
-        mo1, mo_e1 = hessobj.solve_mo1(mo_energy, mo_coeff, mo_occ, h1ao,
-                                       fx, atmlst, max_memory, log)
-        t1 = log.timer_debug1('solving MO1', *t1)
-
-    if isinstance(h1ao, str):
-        h1ao = lib.chkfile.load(h1ao, 'scf_f1ao')
-        h1ao = dict([(int(k), h1ao[k]) for k in h1ao])
-    if isinstance(mo1, str):
-        mo1 = lib.chkfile.load(mo1, 'scf_mo1')
-        mo1 = dict([(int(k), mo1[k]) for k in mo1])
 
     nao, nmo = mo_coeff.shape
     mocc = mo_coeff[:,mo_occ>0]
@@ -117,34 +101,28 @@ def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
         s1ao[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
         s1oo = numpy.einsum('xpq,pi,qj->xij', s1ao, mocc, mocc)
 
-        for j0 in range(ia+1):
+        de2[i0,i0] -= numpy.einsum('xypq,pq->xy', rinv2aa, dm0)*2
+        de2[i0,i0] -= numpy.einsum('xypq,pq->xy', rinv2ab, dm0)*2
+        de2[i0,i0] += numpy.einsum('xypq,pq->xy', h1aa[:,:,p0:p1], dm0[p0:p1])*2
+        de2[i0,i0] += numpy.einsum('xypq,pq->xy', veff_diag[:,:,p0:p1], dm0[p0:p1])*2
+        de2[i0,i0] -= numpy.einsum('xypq,pq->xy', s1aa[:,:,p0:p1], dme0[p0:p1])*2
+
+        for j0 in range(i0, len(atmlst)):
             ja = atmlst[j0]
             q0, q1 = aoslices[ja][2:]
-# *2 for double occupancy, *2 for +c.c.
-            dm1 = numpy.einsum('ypi,qi->ypq', mo1[ja], mocc)
-            de  = numpy.einsum('xpq,ypq->xy', h1ao[ia], dm1) * 4
-            dm1 = numpy.einsum('ypi,qi,i->ypq', mo1[ja], mocc, mo_energy[mo_occ>0])
-            de -= numpy.einsum('xpq,ypq->xy', s1ao, dm1) * 4
-            de -= numpy.einsum('xpq,ypq->xy', s1oo, mo_e1[ja]) * 2
+            de2[j0,i0] += numpy.einsum('xypq,pq->xy', rinv2aa[:,:,q0:q1], dm0[q0:q1])*2
+            de2[j0,i0] += numpy.einsum('xypq,pq->xy', rinv2ab[:,:,q0:q1], dm0[q0:q1])*2
 
-            v2aa, v2ab = rhf_hess._hess_rinv(mol, ja)
-            de += numpy.einsum('xypq,pq->xy', v2aa[:,:,p0:p1], dm0[p0:p1])*2
-            de += numpy.einsum('xypq,pq->xy', v2ab[:,:,p0:p1], dm0[p0:p1])*2
-            de += numpy.einsum('xypq,pq->xy', hcore[:,:,:,q0:q1], dm0[:,q0:q1])*2
-            de += numpy.einsum('xypq,pq->xy', veff[:,:,q0:q1], dm0[q0:q1])*2
-            de -= numpy.einsum('xypq,pq->xy', s1ab[:,:,p0:p1,q0:q1], dme0[p0:p1,q0:q1])*2
+        for j0, ja in enumerate(atmlst[:i0+1]):
+            q0, q1 = aoslices[ja][2:]
+            de2[i0,j0] += numpy.einsum('xypq,pq->xy', hcore[:,:,:,q0:q1], dm0[:,q0:q1])*2
+            de2[i0,j0] += numpy.einsum('xypq,pq->xy', veff[:,:,q0:q1], dm0[q0:q1])*2
+            de2[i0,j0] -= numpy.einsum('xypq,pq->xy', s1ab[:,:,p0:p1,q0:q1], dme0[p0:p1,q0:q1])*2
 
-            if ia == ja:
-                de += numpy.einsum('xypq,pq->xy', h1aa[:,:,p0:p1], dm0[p0:p1])*2
-                de -= numpy.einsum('xypq,pq->xy', v2aa, dm0)*2
-                de -= numpy.einsum('xypq,pq->xy', v2ab, dm0)*2
-                de += numpy.einsum('xypq,pq->xy', veff_diag[:,:,p0:p1], dm0[p0:p1])*2
-                de -= numpy.einsum('xypq,pq->xy', s1aa[:,:,p0:p1], dme0[p0:p1])*2
+        for j0 in range(i0):
+            de2[j0,i0] = de2[i0,j0].T
 
-            de2[i0,j0] = de
-            de2[j0,i0] = de.T
-
-    log.timer('RKS hessian', *time0)
+    log.timer('RKS partial hessian', *time0)
     return de2
 
 def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
@@ -157,6 +135,7 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     dm0 = numpy.dot(mocc, mocc.T) * 2
     h1a = rhf_grad.get_hcore(mol)
 
+    mf = hessobj._scf
     ni = mf._numint
     ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
     hyb = ni.hybrid_coeff(mf.xc)
@@ -294,19 +273,6 @@ def _make_dR_rho1(ao, ao_dm0, atm_id, aoslices):
     # *2 for |mu> DM <d_X nu|
     return rho1 * 2
 
-def _make_dR_dao_w(ao, wv):
-    aow = numpy.einsum('npi,p->npi', ao[1:4], wv[0])
-    aow[0] += numpy.einsum('pi,p->pi', ao[XX], wv[1])  # dX
-    aow[0] += numpy.einsum('pi,p->pi', ao[XY], wv[2])  # dX
-    aow[0] += numpy.einsum('pi,p->pi', ao[XZ], wv[3])  # dX
-    aow[1] += numpy.einsum('pi,p->pi', ao[YX], wv[1])  # dY
-    aow[1] += numpy.einsum('pi,p->pi', ao[YY], wv[2])  # dY
-    aow[1] += numpy.einsum('pi,p->pi', ao[YZ], wv[3])  # dY
-    aow[2] += numpy.einsum('pi,p->pi', ao[ZX], wv[1])  # dZ
-    aow[2] += numpy.einsum('pi,p->pi', ao[ZY], wv[2])  # dZ
-    aow[2] += numpy.einsum('pi,p->pi', ao[ZZ], wv[3])  # dZ
-    return aow
-
 def _d1d2_dot_(vmat, mol, ao1, ao2, mask, ao_loc, dR1_on_bra=True):
     shls_slice = (0, mol.nbas)
     if dR1_on_bra:  # (d/dR1 bra) * (d/dR2 ket)
@@ -319,17 +285,6 @@ def _d1d2_dot_(vmat, mol, ao1, ao2, mask, ao_loc, dR1_on_bra=True):
             for d2 in range(3):
                 vmat[d1,d2] += numint._dot_ao_ao(mol, ao1[d2], ao2[d1], mask,
                                                  shls_slice, ao_loc)
-
-def _d1_dot_(vmat, mol, ao1, ao2, mask, ao_loc, dR1_on_bra=True):
-    shls_slice = (0, mol.nbas)
-    if dR1_on_bra:
-        vmat[0] += numint._dot_ao_ao(mol, ao1[0], ao2, mask, shls_slice, ao_loc)
-        vmat[1] += numint._dot_ao_ao(mol, ao1[1], ao2, mask, shls_slice, ao_loc)
-        vmat[2] += numint._dot_ao_ao(mol, ao1[2], ao2, mask, shls_slice, ao_loc)
-    else:
-        vmat[0] += numint._dot_ao_ao(mol, ao1, ao2[0], mask, shls_slice, ao_loc)
-        vmat[1] += numint._dot_ao_ao(mol, ao1, ao2[1], mask, shls_slice, ao_loc)
-        vmat[2] += numint._dot_ao_ao(mol, ao1, ao2[2], mask, shls_slice, ao_loc)
 
 def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
     mol = hessobj.mol
@@ -384,7 +339,7 @@ def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
             vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
 
             wv = numint._rks_gga_wv0(rho, vxc, weight)
-            aow = _make_dR_dao_w(ao, wv)
+            aow = rks_grad._make_dR_dao_w(ao, wv)
             _d1d2_dot_(ipip, mol, aow, ao[1:4], mask, ao_loc, False)
 
             ao_dm0 = [numint._dot_ao_dm(mol, ao[i], dm0, mask, shls_slice, ao_loc)
@@ -395,12 +350,12 @@ def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
                 wv[1] = numint._rks_gga_wv1(rho, dR_rho1[1], vxc, fxc, weight)
                 wv[2] = numint._rks_gga_wv1(rho, dR_rho1[2], vxc, fxc, weight)
 
-                aow = _make_dR_dao_w(ao, wv[0])
-                _d1_dot_(vmat[ia,0], mol, aow, ao[0], mask, ao_loc, True)
-                aow = _make_dR_dao_w(ao, wv[1])
-                _d1_dot_(vmat[ia,1], mol, aow, ao[0], mask, ao_loc, True)
-                aow = _make_dR_dao_w(ao, wv[2])
-                _d1_dot_(vmat[ia,2], mol, aow, ao[0], mask, ao_loc, True)
+                aow = rks_grad._make_dR_dao_w(ao, wv[0])
+                rks_grad._d1_dot_(vmat[ia,0], mol, aow, ao[0], mask, ao_loc, True)
+                aow = rks_grad._make_dR_dao_w(ao, wv[1])
+                rks_grad._d1_dot_(vmat[ia,1], mol, aow, ao[0], mask, ao_loc, True)
+                aow = rks_grad._make_dR_dao_w(ao, wv[2])
+                rks_grad._d1_dot_(vmat[ia,2], mol, aow, ao[0], mask, ao_loc, True)
 
                 aow = numpy.einsum('npi,Xnp->Xpi', ao[:4], wv)
                 _d1d2_dot_(vmat[ia], mol, ao[1:4], aow, mask, ao_loc, False)
@@ -452,7 +407,7 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
                 rho1 = numpy.einsum('xpi,pi->xp', ao[1:,:,p0:p1], ao_dm0[:,p0:p1])
                 aow = numpy.einsum('pi,xp->xpi', ao[0], weight*frr*rho1)
                 aow[:,:,p0:p1] += aow1[:,:,p0:p1]
-                _d1_dot_(vmat[ia], mol, aow, ao[0], mask, ao_loc, True)
+                rks_grad._d1_dot_(vmat[ia], mol, aow, ao[0], mask, ao_loc, True)
             ao_dm0 = aow = aow1 = None
 
         for ia in range(mol.natm):
@@ -467,10 +422,7 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
             vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
 
             wv = numint._rks_gga_wv0(rho, vxc, weight)
-            aow = numpy.einsum('npi,np->pi', ao[:4], wv)
-            _d1_dot_(v_ip, mol, ao[1:4], aow, mask, ao_loc, True)
-            aow = _make_dR_dao_w(ao, wv)
-            _d1_dot_(v_ip, mol, aow, ao[0], mask, ao_loc, True)
+            rks_grad._gga_grad_sum_(v_ip, mol, ao, wv, mask, ao_loc)
 
             ao_dm0 = [numint._dot_ao_dm(mol, ao[i], dm0, mask, shls_slice, ao_loc)
                       for i in range(4)]
@@ -480,7 +432,7 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
                 wv[1] = numint._rks_gga_wv1(rho, dR_rho1[1], vxc, fxc, weight)
                 wv[2] = numint._rks_gga_wv1(rho, dR_rho1[2], vxc, fxc, weight)
                 aow = numpy.einsum('npi,Xnp->Xpi', ao[:4], wv)
-                _d1_dot_(vmat[ia], mol, aow, ao[0], mask, ao_loc, True)
+                rks_grad._d1_dot_(vmat[ia], mol, aow, ao[0], mask, ao_loc, True)
             ao_dm0 = aow = None
 
         for ia in range(mol.natm):
@@ -501,7 +453,7 @@ class Hessian(rhf_hess.Hessian):
         self.grids = None
         self._keys = self._keys.union(['grids'])
 
-    hess_elec = hess_elec
+    partial_hess_elec = partial_hess_elec
     make_h1 = make_h1
 
 
@@ -511,7 +463,6 @@ if __name__ == '__main__':
     from pyscf.dft import rks_grad
     #dft.numint._NumInt.libxc = dft.xcfun
     #xc_code = 'lda,vwn'
-    #xc_code = 'blyp'
     xc_code = 'b3lyp'
 
     mol = gto.Mole()
@@ -559,11 +510,7 @@ if __name__ == '__main__':
     print(numpy.allclose(e2,e2ref,atol=1e-4))
 
 # \partial^2 E / \partial R \partial R'
-    h1ao = hobj.make_h1(mf.mo_coeff, mf.mo_occ)
-    mo1, mo_e1 = hobj.solve_mo1(mf.mo_energy, mf.mo_coeff, mf.mo_occ, h1ao)
-    e2 = hobj.hess_elec(mf.mo_energy, mf.mo_coeff, mf.mo_occ,
-                        numpy.zeros_like(mo1), numpy.zeros_like(mo_e1),
-                        numpy.zeros_like(h1ao))
+    e2 = hobj.partial_hess_elec(mf.mo_energy, mf.mo_coeff, mf.mo_occ)
     e2 += hobj.hess_nuc(mol)
     e2 = e2.transpose(0,2,1,3).reshape(n3,n3)
     def grad_partial_R(ia, inc):
