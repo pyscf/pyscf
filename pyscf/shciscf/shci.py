@@ -25,7 +25,7 @@ ndpointer = numpy.ctypeslib.ndpointer
 
 # Settings
 try:
-   from pyscf.shciscf import settings
+   from pyscf.future.shciscf import settings
 except ImportError:
     import sys
     sys.stderr.write('''settings.py not found.  Please create %s
@@ -34,6 +34,7 @@ except ImportError:
 
 # Libraries
 libE3unpack = load_library('libicmpspt')
+# TODO: Organize this better.
 shciLib = load_library('libshciscf')
 
 transformDinfh = shciLib.transformDinfh
@@ -61,7 +62,7 @@ fcidumpFromIntegral.argtypes = [ctypes.c_char_p,
                                 ctypes.c_size_t,
                                 ctypes.c_double,
                                 ndpointer(ctypes.c_int32, flags="C_CONTIGUOUS"),
-                                ctypes.c_size_t
+                                ctypes.c_size_t,
 ]
 
 r2RDM = shciLib.r2RDM
@@ -97,6 +98,7 @@ class SHCI(pyscf.lib.StreamObject):
         DoRDM: bool
         sweep_iter: [int]
         sweep_epsilon: [float]
+        initialStates: [[int]]
         groupname : str
             groupname, orbsym together can control whether to employ symmetry in
             the calculation.  "groupname = None and orbsym = []" requires the
@@ -175,6 +177,8 @@ class SHCI(pyscf.lib.StreamObject):
         self._keys = set(self.__dict__.keys())
         self.irrep_nelec = None
         self.useExtraSymm = False
+        self.initialStates = None
+        self.extraline = ""
 
     def dump_flags(self, verbose=None):
         if verbose is None:
@@ -226,6 +230,7 @@ class SHCI(pyscf.lib.StreamObject):
 
         onepdm = numpy.einsum('ikjj->ik', twopdm)
         onepdm /= (nelectrons-1)
+
         return onepdm, twopdm
 
     def trans_rdm1(self, statebra, stateket, norb, nelec, link_index=None, **kwargs):
@@ -434,30 +439,47 @@ class SHCI(pyscf.lib.StreamObject):
                 self._restart = False
         return callback
 
+    def spin_square(self, civec, norb, nelec):
+        if isinstance(nelec, (int, numpy.integer)):
+            nelecb = nelec//2
+            neleca = nelec - nelecb
+        else :
+            neleca, nelecb = nelec
+        s = (neleca - nelecb) * .5
+        ss = s * (s+1)
+        if isinstance(civec, int):
+            return ss, s*2+1
+        else:
+            return [ss]*len(civec), [s*2+1]*len(civec)
+
 
 def print1Int(h1,name):
  with open('%s.X'%(name), 'w') as fout:
     fout.write('%d\n'%h1[0].shape[0])
     for i in range(h1[0].shape[0]):
         for j in range(h1[0].shape[0]):
+           if (abs(h1[0,i,j]) > 1.e-8):
             fout.write('%16.10g %4d %4d\n'%(h1[0,i,j], i+1, j+1))
 
  with open('%s.Y'%(name), 'w') as fout:
     fout.write('%d\n'%h1[1].shape[0])
     for i in range(h1[1].shape[0]):
         for j in range(h1[1].shape[0]):
+           if (abs(h1[1,i,j]) > 1.e-8):
             fout.write('%16.10g %4d %4d\n'%(h1[1,i,j], i+1, j+1))
 
  with open('%s.Z'%(name), 'w') as fout:
     fout.write('%d\n'%h1[2].shape[0])
     for i in range(h1[2].shape[0]):
         for j in range(h1[2].shape[0]):
+           if (abs(h1[2,i,j]) > 1.e-8):
             fout.write('%16.10g %4d %4d\n'%(h1[2,i,j], i+1, j+1))
 
  with open('%sZ'%(name), 'w') as fout:
     fout.write('%d\n'%h1[2].shape[0])
     for i in range(h1[2].shape[0]):
         for j in range(h1[2].shape[0]):
+           if (abs(h1[2,i,j]) > 1.e-8):
             fout.write('%16.10g %4d %4d\n'%(h1[2,i,j], i+1, j+1))
 
 
@@ -492,7 +514,13 @@ def writeSHCIConfFile( SHCI, nelec, Restart ):
        for i in range(nelec[1]):
           f.write('%i '%(2*i+1))
     else:
-       if SHCI.irrep_nelec is None:
+       if SHCI.initialStates is not None:
+          for i in range(len(SHCI.initialStates)):
+             for j in SHCI.initialStates[i]:
+                f.write('%i '%(j))
+             if (i != len(SHCI.initialStates)-1):
+                f.write('\n')
+       elif SHCI.irrep_nelec is None:
           for i in range(nelec[0]):
              f.write('%i '%(2*i))
           for i in range(nelec[1]):
@@ -505,17 +533,19 @@ def writeSHCIConfFile( SHCI, nelec, Restart ):
              orbsym = dmrg_sym.convert_orbsym(SHCI.groupname, SHCI.orbsym)
           else:
              orbsym = [1]*norb
-
+          done=[]
           for k,v in SHCI.irrep_nelec.items():
 
              irrep, nalpha, nbeta = [dmrg_sym.irrep_name2id(SHCI.groupname, k)],\
                                     v[0], v[1]
 
              for i in range(len(orbsym)):  #loop over alpha electrons
-                if (orbsym[i] == irrep[0] and nalpha != 0):
+                if (orbsym[i] == irrep[0] and nalpha != 0 and i*2 not in done):
+                   done.append(i*2)
                    f.write('%i '%(i*2))
                    nalpha -= 1
-                if (orbsym[i] == irrep[0] and nbeta != 0):
+                if (orbsym[i] == irrep[0] and nbeta != 0 and i*2+1 not in done):
+                   done.append(i*2+1)
                    f.write('%i '%(i*2+1))
                    nbeta -= 1
              if (nalpha != 0):
@@ -568,7 +598,7 @@ def writeSHCIConfFile( SHCI, nelec, Restart ):
        f.write('fullrestart\n')
 
     f.write('\n') # SHCI requires that there is an extra line.
-
+    f.write('%s\n'%(SHCI.extraline))
     f.close()
 
 
@@ -735,7 +765,7 @@ def writeIntegralFile(SHCI, h1eff, eri_cas, norb, nelec, ecore=0):
        fcidumpFromIntegral( integralFile, h1eff, eri_cas, norb, neleca+nelecb,
                             ecore, numpy.asarray(orbsym, dtype=numpy.int32),
                             abs(neleca-nelecb) )
-       print "ECORE: ",ecore
+
 
 def executeSHCI(SHCI):
     file1 = os.path.join(SHCI.runtimeDir, "%s/shci.e"%(SHCI.prefix))
@@ -789,28 +819,185 @@ def SHCISCF(mf, norb, nelec, maxM=1000, tol=1.e-8, *args, **kwargs):
     return mc
 
 
+def get_hso1e(wso,x,rp):
+   nb = x.shape[0]
+   hso1e = numpy.zeros((3,nb,nb))
+   for ic in range(3):
+      hso1e[ic] = reduce(numpy.dot,(rp.T,x.T,wso[ic],x,rp))
+   return hso1e
 
-def writeSOCIntegrals(mc):
+def get_wso(mol):
+   nb = mol.nao_nr()
+   wso = numpy.zeros((3,nb,nb))
+   for iatom in range(mol.natm):
+      zA  = mol.atom_charge(iatom)
+      xyz = mol.atom_coord(iatom)
+      mol.set_rinv_orig(xyz)
+      wso += zA*mol.intor('cint1e_prinvxp_sph', 3) # sign due to integration by part                                                                            
+   return wso
+
+def get_p(dm,x,rp):
+   pLL = rp.dot(dm.dot(rp.T))
+   pLS = pLL.dot(x.T)
+   pSS = x.dot(pLL.dot(x.T))
+   return pLL,pLS,pSS
+
+def get_fso2e_withkint(kint,x,rp,pLL,pLS,pSS):
+   nb = x.shape[0]
+   fso2e = numpy.zeros((3,nb,nb))
+   for ic in range(3):
+      gsoLL = -2.0*numpy.einsum('lmkn,lk->mn',kint[ic],pSS)
+      gsoLS = -numpy.einsum('mlkn,lk->mn',kint[ic],pLS) \
+              -numpy.einsum('lmkn,lk->mn',kint[ic],pLS)
+      gsoSS = -2.0*numpy.einsum('mnkl,lk',kint[ic],pLL) \
+              -2.0*numpy.einsum('mnlk,lk',kint[ic],pLL) \
+              +2.0*numpy.einsum('mlnk,lk',kint[ic],pLL)
+      fso2e[ic] = gsoLL + gsoLS.dot(x) + x.T.dot(-gsoLS.T) \
+             + x.T.dot(gsoSS.dot(x))
+      fso2e[ic] = reduce(numpy.dot,(rp.T,fso2e[ic],rp))
+   return fso2e
+
+def get_kint2(mol):
+   nb = mol.nao_nr()
+   kint= mol.intor('int2e_spv1spv2_spinor', comp=3)
+   return kint.reshape(3,nb, nb, nb, nb)
+
+def get_fso2e(mol, x, rp, pLL, pLS, pSS):
+   nb = mol.nao_nr()
+   np = nb*nb
+   nq = np*np
+   ddint = mol.intor('int2e_ip1ip2_sph',9).reshape(3,3,nq)
+   fso2e = numpy.zeros((3,nb,nb))
+
+   ddint[0,0] = ddint[1,2]-ddint[2,1]
+   kint = ddint[0,0].reshape(nb,nb,nb,nb)
+   gsoLL = -2.0*numpy.einsum('lmkn,lk->mn',kint,pSS)
+   gsoLS = -numpy.einsum('mlkn,lk->mn',kint,pLS) \
+           -numpy.einsum('lmkn,lk->mn',kint,pLS)
+   gsoSS = -2.0*numpy.einsum('mnkl,lk',kint,pLL) \
+           -2.0*numpy.einsum('mnlk,lk',kint,pLL) \
+           +2.0*numpy.einsum('mlnk,lk',kint,pLL)
+   fso2e[0] = gsoLL + gsoLS.dot(x) + x.T.dot(-gsoLS.T) \
+               + x.T.dot(gsoSS.dot(x))
+   fso2e[0] = reduce(numpy.dot,(rp.T,fso2e[0],rp))
+
+
+   ddint[0,0] = ddint[2,0]-ddint[2,1]
+   kint = ddint[0,0].reshape(nb,nb,nb,nb)
+   gsoLL = -2.0*numpy.einsum('lmkn,lk->mn',kint,pSS)
+   gsoLS = -numpy.einsum('mlkn,lk->mn',kint,pLS) \
+           -numpy.einsum('lmkn,lk->mn',kint,pLS)
+   gsoSS = -2.0*numpy.einsum('mnkl,lk',kint,pLL) \
+           -2.0*numpy.einsum('mnlk,lk',kint,pLL) \
+           +2.0*numpy.einsum('mlnk,lk',kint,pLL)
+   fso2e[1] = gsoLL + gsoLS.dot(x) + x.T.dot(-gsoLS.T) \
+               + x.T.dot(gsoSS.dot(x))
+   fso2e[1] = reduce(numpy.dot,(rp.T,fso2e[1],rp))
+
+   ddint[0,0] = ddint[0,1]-ddint[1,0]
+   kint = ddint[0,0].reshape(nb,nb,nb,nb)
+   gsoLL = -2.0*numpy.einsum('lmkn,lk->mn',kint,pSS)
+   gsoLS = -numpy.einsum('mlkn,lk->mn',kint,pLS) \
+           -numpy.einsum('lmkn,lk->mn',kint,pLS)
+   gsoSS = -2.0*numpy.einsum('mnkl,lk',kint,pLL) \
+           -2.0*numpy.einsum('mnlk,lk',kint,pLL) \
+           +2.0*numpy.einsum('mlnk,lk',kint,pLL)
+   fso2e[2] = gsoLL + gsoLS.dot(x) + x.T.dot(-gsoLS.T) \
+               + x.T.dot(gsoSS.dot(x))
+   fso2e[2] = reduce(numpy.dot,(rp.T,fso2e[2],rp))
+   return fso2e
+
+def get_kint(mol):
+   nb = mol.nao_nr()
+   np = nb*nb
+   nq = np*np
+   ddint = mol.intor('int2e_ip1ip2_sph',9).reshape(3,3,nq)
+
+   kint = numpy.zeros((3,nq))
+   kint[0] = ddint[1,2]-ddint[2,1]# x = yz - zy                                                                                                                 
+   kint[1] = ddint[2,0]-ddint[0,2]# y = zx - xz                                                                                                                 
+   kint[2] = ddint[0,1]-ddint[1,0]# z = xy - yx                                                                                                              
+   return kint.reshape(3,nb,nb,nb,nb)
+
+def writeSOCIntegrals(mc, ncasorbs=None, rdm1=None, pictureChange1e="bp", pictureChange2e="bp", uncontract=True):
+       from pyscf import scf
        from pyscf.lib.parameters import LIGHT_SPEED
+       LIGHT_SPEED = 137.0359895000
        alpha = 1.0/LIGHT_SPEED
-       rdm1ao = mc.make_rdm1()
+
+       if (uncontract):
+          xmol, contr_coeff = scf.x2c.X2C().get_xmol(mc.mol)
+       else:
+          xmol, contr_coeff = mc.mol, numpy.eye(mc.mo_coeff.shape[0])
+
+
+       rdm1ao = rdm1
+       if (rdm1 is None):
+          rdm1ao = 1.*mc.make_rdm1()
+       if len(rdm1ao.shape) > 2 : rdm1ao = (rdm1ao[0]+rdm1ao[1])
+
+       if (uncontract):
+          dm = reduce(numpy.dot, (contr_coeff, rdm1ao, contr_coeff.T))
+       else:
+          dm = 1.*rdm1ao
+       np, nc = contr_coeff.shape[0], contr_coeff.shape[1]
+
+       hso1e = numpy.zeros((3, np, np))
+       h1e_1c, x, rp = scf.x2c.SpinFreeX2C(mc.mol).get_hxr(mc.mol, uncontract=uncontract)
+
+       #two electron terms       
+       if (pictureChange2e == "bp") :
+          h2ao = -(alpha)**2*0.5*xmol.intor('cint2e_p1vxp1_sph', comp=3, aosym='s1')
+          h2ao = h2ao.reshape(3, np, np, np, np)
+          hso1e += 1.*(numpy.einsum('ijklm,lm->ijk', h2ao, dm) 
+                      - 1.5*(numpy.einsum('ijklm, kl->ijm', h2ao, dm)
+                             +numpy.einsum('ijklm,mj->ilk', h2ao, dm) ) )
+       elif (pictureChange2e == "x2c"):
+          dm1 = dm/2.
+          pLL,pLS,pSS = get_p(dm1,x,rp)
+          #kint = get_kint(xmol)
+          #hso1e += -(alpha)**2*0.5*get_fso2e_withkint(kint,x,rp,pLL,pLS,pSS)
+          hso1e += -(alpha)**2*0.5*get_fso2e(xmol,x,rp,pLL,pLS,pSS)
+       elif (pictureChange2e == "none"):
+          hso1e *= 0.0
+       else:
+          print pictureChane2e, "not a valid option"
+          exit(0)
+
+       #MF 1 electron term
+       if (pictureChange1e == "bp") :
+          hso1e += (alpha)**2*0.5*get_wso(xmol)
+       elif (pictureChange1e == "x2c1"):
+          dm /= 2.
+          pLL,pLS,pSS = get_p(dm,x,rp)
+          wso = (alpha)**2*0.5*get_wso(xmol)
+          hso1e += get_hso1e(wso, x, rp)
+       elif (pictureChange1e == "x2cn") :
+          h1e_2c = scf.x2c.get_hcore(xmol)
+
+          for i in range(np):
+             for j in range(np):
+                if ( abs(h1e_2c[2*i, 2*j+1].imag) > 1.e-8) :
+                   hso1e[0][i,j] -= h1e_2c[2*i, 2*j+1].imag*2.
+                if ( abs(h1e_2c[2*i, 2*j+1].real) > 1.e-8) :
+                   hso1e[1][i,j] -= h1e_2c[2*i, 2*j+1].real*2.
+                if ( abs(h1e_2c[2*i, 2*j].imag) > 1.e-8) :
+                   hso1e[2][i,j] -= h1e_2c[2*i, 2*j].imag*2.
+       else:
+          print pictureChane1e, "not a valid option"
+          exit(0)
+
+       h1ao = numpy.zeros((3, nc, nc))
+       if (uncontract):
+          for ic in range(3):
+             h1ao[ic] = reduce(numpy.dot,(contr_coeff.T,hso1e[ic],contr_coeff))
+       else:
+          h1ao = 1.* hso1e
 
        ncore, ncas = mc.ncore, mc.ncas
+       if (ncasorbs is not None):
+          ncas = ncasorbs
        mo_coeff = mc.mo_coeff
-       # CAS space orbitals
-       cas_orb = mc.mo_coeff[:,ncore:ncore+ncas]
-
-       h2ao = -(alpha)**2*0.5*mc.mol.intor('cint2e_p1vxp1_sph', comp=3, aosym='s1')
-       h2ao = h2ao.reshape(3,rdm1ao.shape[0],rdm1ao.shape[0],rdm1ao.shape[0],rdm1ao.shape[0])
-
-       h1ao = 1.*(numpy.einsum('ijklm,lm->ijk', h2ao, rdm1ao) - 1.5*(numpy.einsum('ijklm, kl->ijm', h2ao, rdm1ao)+numpy.einsum('ijklm,mj->ilk', h2ao, rdm1ao) ) )
-
-       for i in range(mc.mol.natm):
-          r = mc.mol.atom_coord(i)
-          Z = mc.mol.atom_charge(i)
-          mc.mol.set_rinv_origin(r)  # set the gauge origin on second atom
-          h1ao += (alpha)**2*0.5*Z*mc.mol.intor('cint1e_prinvxp_sph', comp=3)
-
        h1 = numpy.einsum('xpq,pi,qj->xij', h1ao,
                          mo_coeff, mo_coeff)[:, ncore:ncore+ncas, ncore:ncore+ncas]
        print1Int(h1, 'SOC')
@@ -819,7 +1006,7 @@ def dryrun(mc, mo_coeff=None):
     '''Generate FCIDUMP and SHCI config file'''
     if mo_coeff is None:
         mo_coeff = mc.mo_coeff
-    #mc.fcisolver.onlywriteIntegral, bak = True, mc.fcisolver.onlywriteIntegral
+    #bak, mc.fcisolver.onlywriteIntegral = mc.fcisolver.onlywriteIntegral, True
     mc.casci(mo_coeff)
     #mc.fcisolver.onlywriteIntegral = bak
 
@@ -864,8 +1051,8 @@ def runQDPT(mc, gtensor):
           logger.error(mc.fcisolver, cmd)
           raise err
 
-def doSOC(mc, gtensor=False):
-   writeSOCIntegrals(mc)
+def doSOC(mc, gtensor=False, pictureChange="bp"):
+   writeSOCIntegrals(mc, pictureChange=pictureChange)
    dryrun(mc)
    if (gtensor or True):
       ncore, ncas = mc.ncore, mc.ncas
@@ -879,7 +1066,7 @@ def doSOC(mc, gtensor=False):
 
 if __name__ == '__main__':
     from pyscf import gto, scf, mcscf, dmrgscf
-    from pyscf.shciscf import shci
+    from pyscf.future.shciscf import shci
 
     # Initialize N2 molecule
     b = 1.098
@@ -928,9 +1115,9 @@ if __name__ == '__main__':
     with open( mch.fcisolver.outputFile, 'r' ) as f:
     	lines = f.readlines()
 
-    #e_PT = float( lines[ len(lines) - 1 ].split()[2] )
+    e_PT = float( lines[ len(lines) - 1 ].split()[2] )
 
-    e_PT = shci.readEnergy( mch.fcisolver )
+    # e_PT = shci.readEnergy( mch.fcisolver )
 
     # Comparison Calculations
     del_PT = e_PT - e_noPT
