@@ -29,13 +29,14 @@ def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
     mocc = mo_coeff[:,mo_occ>0]
     nocc = mocc.shape[1]
 
+    atmlst = range(natm)
     max_memory = max(2000, hobj.max_memory - lib.current_memory()[0])
-    de2 = hobj.partial_hess_elec(mo_energy, mo_coeff, mo_occ, range(natm),
+    de2 = hobj.partial_hess_elec(mo_energy, mo_coeff, mo_occ, atmlst,
                                  max_memory, log)
     de2 += hobj.hess_nuc()
 
     # Compute H1 integrals and store in hobj.chkfile
-    hobj.make_h1(mo_coeff, mo_occ, hobj.chkfile, range(natm), log)
+    hobj.make_h1(mo_coeff, mo_occ, hobj.chkfile, atmlst, log)
 
     aoslices = mol.aoslice_by_atom()
     s1a = -mol.intor('int1e_ipovlp', comp=3)
@@ -48,12 +49,12 @@ def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
         s1ao = 0
         for ia in range(natm):
             shl0, shl1, p0, p1 = aoslices[ia]
-            h1ao_a = lib.chkfile.load(hobj.chkfile, 'scf_f1ao/%d' % ia)
-            h1ao += numpy.einsum('x,xij->ij', x[ia], h1ao_a)
-            s1ao_a = numpy.zeros((3,nao,nao))
-            s1ao_a[:,p0:p1] += s1a[:,p0:p1]
-            s1ao_a[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
-            s1ao += numpy.einsum('x,xij->ij', x[ia], s1ao_a)
+            h1ao_i = lib.chkfile.load(hobj.chkfile, 'scf_f1ao/%d' % ia)
+            h1ao += numpy.einsum('x,xij->ij', x[ia], h1ao_i)
+            s1ao_i = numpy.zeros((3,nao,nao))
+            s1ao_i[:,p0:p1] += s1a[:,p0:p1]
+            s1ao_i[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
+            s1ao += numpy.einsum('x,xij->ij', x[ia], s1ao_i)
 
         s1vo = reduce(numpy.dot, (mo_coeff.T, s1ao, mocc))
         h1vo = reduce(numpy.dot, (mo_coeff.T, h1ao, mocc))
@@ -76,7 +77,7 @@ def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
     return h_op, hdiag
 
 def kernel(hobj):
-    h_op, hdiag = gen_hop(hobj)
+    h_op, hdiag = hobj.gen_hop()
 
     def precond(x, e, *args):
         hdiagd = hdiag-e
@@ -98,6 +99,8 @@ class Frequency(rhf_hess.Hessian):
     def kernel(self):
         self.freq, self.mode = kernel(self)
         return self.freq, self.mode
+
+    gen_hop = gen_hop
 
 Freq = Frequency
 
@@ -127,8 +130,8 @@ if __name__ == '__main__':
     x = numpy.random.random((mol.natm,3))
     e2x = numpy.einsum('abxy,ax->by', e2, x)
     print(lib.finger(e2x) - -0.19160804881270971)
-    hop = gen_hop(Freq(mf))[0]
+    hop = Freq(mf).gen_hop()[0]
     print(lib.finger(hop(x)) - -0.19160804881270971)
     print(abs(e2x-hop(x).reshape(mol.natm,3)).sum())
-    print Freq(mf).kernel()[0]
-    print numpy.linalg.eigh(e2.transpose(0,2,1,3).reshape(n3,n3))[0]
+    print(Freq(mf).kernel()[0])
+    print(numpy.linalg.eigh(e2.transpose(0,2,1,3).reshape(n3,n3))[0])

@@ -29,6 +29,7 @@ def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     if mo_occ is None:    mo_occ = mf.mo_occ
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
     if atmlst is None: atmlst = range(mol.natm)
+
     de2 = hessobj.partial_hess_elec(mo_energy, mo_coeff, mo_occ, atmlst,
                                     max_memory, log)
 
@@ -69,7 +70,6 @@ def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
             de2[i0,j0] -= numpy.einsum('xpq,ypq->xy', s1ao, dm1) * 4
             de2[i0,j0] -= numpy.einsum('xpq,ypq->xy', s1oo, mo_e1[ja]) * 2
 
-    for i0, ia in enumerate(atmlst):
         for j0 in range(i0):
             de2[j0,i0] = de2[i0,j0].T
 
@@ -157,7 +157,6 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
             de2[i0,j0] += numpy.einsum('xypq,pq->xy', vhf[:,:,q0:q1], dm0[q0:q1])*2
             de2[i0,j0] -= numpy.einsum('xypq,pq->xy', s1ab[:,:,p0:p1,q0:q1], dme0[p0:p1,q0:q1])*2
 
-    for i0, ia in enumerate(atmlst):
         for j0 in range(i0):
             de2[j0,i0] = de2[i0,j0].T
 
