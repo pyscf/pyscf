@@ -248,9 +248,6 @@ O    SP
 ''')
         self.assertTrue(mol.nao_nr() == 22)
 
-    def test_remove_prefix_ghost(self):
-        self.assertEqual(gto.mole._remove_prefix_ghost('ghost---ho'), 'ho')
-
     def test_ghost(self):
         mol = gto.M(
             atom = 'C 0 0 0; ghost 0 0 2',
@@ -260,7 +257,7 @@ O    SP
 
         mol = gto.M(atom='''
         ghost-O     0.000000000     0.000000000     2.500000000
-        ghost_H    -0.663641000    -0.383071000     3.095377000
+        X_H        -0.663641000    -0.383071000     3.095377000
         ghost.H     0.663588000     0.383072000     3.095377000
         O     1.000000000     0.000000000     2.500000000
         H    -1.663641000    -0.383071000     3.095377000

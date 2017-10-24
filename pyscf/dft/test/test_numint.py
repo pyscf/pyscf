@@ -97,6 +97,22 @@ class KnowValues(unittest.TestCase):
         mat1 = dft.numint.eval_mat(mol, ao, weight, rho, vxc, xctype='GGA')
         self.assertTrue(numpy.allclose(mat0, mat1))
 
+    def test_rks_vxc(self):
+        numpy.random.seed(10)
+        nao = mol.nao_nr()
+        dms = numpy.random.random((2,nao,nao))
+        ni = dft.numint._NumInt()
+        v = ni.nr_rks(mol, mf.grids, 'B88', dms, hermi=0)[2]
+        self.assertAlmostEqual(finger(v), -0.70124686853021512, 8)
+
+    def test_uks_vxc(self):
+        numpy.random.seed(10)
+        nao = mol.nao_nr()
+        dms = numpy.random.random((2,nao,nao))
+        ni = dft.numint._NumInt()
+        v = ni.nr_uks(mol, mf.grids, 'B88', dms)[2]
+        self.assertAlmostEqual(finger(v), -0.73803886056633594, 8)
+
     def test_rks_fxc(self):
         numpy.random.seed(10)
         nao = mol.nao_nr()

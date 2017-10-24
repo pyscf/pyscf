@@ -415,13 +415,13 @@ def project_mol(mol, projectbasis={}):
     uniq_atoms = set([a[0] for a in mol._atom])
     newbasis = {}
     for symb in uniq_atoms:
-        if gto.mole._charge(symb) <= 10:
+        if gto.charge(symb) <= 10:
             newbasis[symb] = '321g'
-        elif gto.mole._charge(symb) <= 12:
+        elif gto.charge(symb) <= 12:
             newbasis[symb] = 'dzp'
-        elif gto.mole._charge(symb) <= 18:
+        elif gto.charge(symb) <= 18:
             newbasis[symb] = 'dz'
-        elif gto.mole._charge(symb) <= 86:
+        elif gto.charge(symb) <= 86:
             newbasis[symb] = 'dzp'
         else:
             newbasis[symb] = 'sto3g'

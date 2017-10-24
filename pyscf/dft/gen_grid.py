@@ -220,12 +220,15 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
         the dict value has two items: one is the meshgrid coordinates wrt the
         atom center; the second is the volume of that grid.
     '''
+    if isinstance(atom_grid, (list, tuple)):
+        atom_grid = dict([(mol.atom_symbol(ia), atom_grid)
+                          for ia in range(mol.natm)])
     atom_grids_tab = {}
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
 
         if symb not in atom_grids_tab:
-            chg = gto.mole._charge(symb)
+            chg = gto.charge(symb)
             if symb in atom_grid:
                 n_rad, n_ang = atom_grid[symb]
                 if n_ang not in LEBEDEV_NGRID:
@@ -287,10 +290,10 @@ def gen_partition(mol, atom_grids_tab,
         f_radii_adjust = None
     atm_coords = numpy.asarray(mol.atom_coords() , order='C')
     atm_dist = radi._inter_distance(mol)
-    if (becke_scheme == original_becke and
-        (f_radii_adjust is None or
-         radii_adjust in (radi.treutler_atomic_radii_adjust,
-                          radi.becke_atomic_radii_adjust))):
+    if (becke_scheme is original_becke and
+        (radii_adjust is radi.treutler_atomic_radii_adjust or
+         radii_adjust is radi.becke_atomic_radii_adjust or
+         f_radii_adjust is None)):
         if f_radii_adjust is None:
             p_radii_table = lib.c_null_ptr()
         else:
@@ -361,20 +364,20 @@ def make_mask(mol, coords, relativity=0, shls_slice=None, verbose=None):
         is the number of shells.
     '''
     coords = numpy.asarray(coords, order='F')
-    natm = ctypes.c_int(mol._atm.shape[0])
-    nbas = ctypes.c_int(mol.nbas)
     ngrids = len(coords)
     if shls_slice is None:
         shls_slice = (0, mol.nbas)
-    assert(shls_slice == (0, mol.nbas))
+    nbas = shls_slice[1] - shls_slice[0]
 
-    non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, mol.nbas),
+    non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, nbas),
                           dtype=numpy.uint8)
     libdft.VXCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
                            coords.ctypes.data_as(ctypes.c_void_p),
                            ctypes.c_int(ngrids),
-                           mol._atm.ctypes.data_as(ctypes.c_void_p), natm,
-                           mol._bas.ctypes.data_as(ctypes.c_void_p), nbas,
+                           mol._atm.ctypes.data_as(ctypes.c_void_p),
+                           ctypes.c_int(mol.natm),
+                           mol._bas[shls_slice[0]:].ctypes.data_as(ctypes.c_void_p),
+                           ctypes.c_int(nbas),
                            mol._env.ctypes.data_as(ctypes.c_void_p))
     return non0tab
 

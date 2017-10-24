@@ -57,7 +57,7 @@ end subroutine ! dens_libnao
 !
 subroutine init_dens_libnao(info) bind(c, name='init_dens_libnao') 
   use m_system_vars, only : get_norbs, get_nspin
-  use m_sv_libnao, only : sv_libnao=>sv
+  use m_sv_libnao_orbs, only : sv_libnao=>sv_orbs
   use m_dm_libnao, only : cbask2dm_libnao=>cbask2dm
   use m_spin_dens_aux, only : init_spin_dens_aux
   implicit none

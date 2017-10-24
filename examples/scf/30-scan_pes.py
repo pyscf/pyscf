@@ -1,11 +1,12 @@
 #!/usr/bin/env python
-import numpy
-from pyscf import gto
-from pyscf import scf, dft
 
 '''
 Scan HF/DFT PES.
 '''
+
+import numpy
+from pyscf import gto
+from pyscf import scf, dft
 
 #
 # A scanner can take the initial guess from previous calculation

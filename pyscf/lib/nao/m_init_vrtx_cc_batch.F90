@@ -21,7 +21,7 @@ module m_init_vrtx_cc_batch
 subroutine init_vrtx_cc_batch(dinp,ninp) bind(c, name='init_vrtx_cc_batch')
 
   use m_fact, only : init_fact
-  use m_sv_libnao, only : sv
+  use m_sv_libnao_prds, only : sv=>sv_prds
   use m_pb_libnao, only : pb
   use m_para_libnao, only : para
   use m_biloc_aux_libnao, only : a

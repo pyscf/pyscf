@@ -64,12 +64,12 @@ def aug_etb_for_dfbasis(mol, dfbasis='weigend', beta=2.3, start_at='Rb'):
     '''augment weigend basis with even-tempered gaussian basis
     exps = alpha*beta^i for i = 1..N
     '''
-    nuc_start = gto.mole._charge(start_at)
+    nuc_start = gto.charge(start_at)
     uniq_atoms = set([a[0] for a in mol._atom])
 
     newbasis = {}
     for symb in uniq_atoms:
-        nuc_charge = gto.mole._charge(symb)
+        nuc_charge = gto.charge(symb)
         if nuc_charge < nuc_start:
             newbasis[symb] = dfbasis
         #?elif symb in mol._ecp:

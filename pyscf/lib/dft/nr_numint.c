@@ -161,7 +161,7 @@ void VXCdot_ao_ao(double *vv, double *ao1, double *ao2,
                non0table, shls_slice, ao_loc)
 {
         int ip, ib;
-        double *v_priv = calloc(nao*nao, sizeof(double));
+        double *v_priv = calloc(nao*nao+2, sizeof(double));
 #pragma omp for nowait schedule(static)
         for (ib = 0; ib < nblk; ib++) {
                 ip = ib * BLKSIZE;

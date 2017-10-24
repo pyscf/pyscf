@@ -1,4 +1,4 @@
-module m_sv_libnao
+module m_sv_libnao_orbs
 
 #include "m_define_macro.F90" 
   use m_precision, only : blas_int
@@ -14,14 +14,14 @@ module m_sv_libnao
   private warn
   !private get_cdatetime
   
-  type(system_vars_t), target :: sv
+  type(system_vars_t), target :: sv_orbs
   
   contains
 
 !
 ! 
 !
-subroutine init_sv_libnao(dinp,ninp, size_x) bind(c, name='init_sv_libnao')
+subroutine init_sv_libnao_orbs(dinp,ninp, size_x) bind(c, name='init_sv_libnao_orbs')
 
   use m_fact, only : init_fact
   use m_sv_get, only : sv_get
@@ -35,9 +35,9 @@ subroutine init_sv_libnao(dinp,ninp, size_x) bind(c, name='init_sv_libnao')
 
   !! executable statements
   call init_fact()  !! Initializations for product reduction/spherical harmonics/wigner3j in Talman's way
-  call sv_get(dinp,ninp, sv)
-  call init_size_dft_wf_X(size_x, sv)
+  call sv_get(dinp,ninp, sv_orbs)
+  call init_size_dft_wf_X(size_x, sv_orbs)
 
-end subroutine ! init_sv_libnao
+end subroutine ! init_sv_libnao_orbs
 
-end module !m_sv_libnao
+end module !m_sv_libnao_orbs

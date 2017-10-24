@@ -16,10 +16,7 @@ from .m_ao_matelem import ao_matelem_c
 from .m_prod_basis import prod_basis_c
 from .m_prod_log import prod_log_c
 from .m_system_vars import system_vars_c
-from .m_overlap_am import overlap_am
-from .m_overlap_ni import overlap_ni
 from .m_comp_coulomb_den import comp_coulomb_den
-from .m_overlap_coo import overlap_coo
 from .m_get_atom2bas_s import get_atom2bas_s
 from .m_conv_yzx2xyz import conv_yzx2xyz_c
 from .m_vertex_loop import vertex_loop_c

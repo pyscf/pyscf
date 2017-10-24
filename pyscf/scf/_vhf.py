@@ -31,10 +31,6 @@ class VHFOpt(object):
         nbas = ctypes.c_int(c_bas.shape[0])
         self._cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
 
-#        libcvhf.CVHFnr_optimizer(ctypes.byref(self._this),
-#                                 c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-#                                 c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-#                                 c_env.ctypes.data_as(ctypes.c_void_p))
         libcvhf.CVHFinit_optimizer(ctypes.byref(self._this),
                                    c_atm.ctypes.data_as(ctypes.c_void_p), natm,
                                    c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
@@ -42,8 +38,11 @@ class VHFOpt(object):
         self._this.contents.fprescreen = _fpointer(prescreen)
 
         if prescreen != 'CVHFnoscreen':
+            ao_loc = make_loc(c_bas, self._intor)
             fsetqcond = getattr(libcvhf, qcondname)
             fsetqcond(self._this,
+                      getattr(libcvhf, intor), self._cintopt,
+                      ao_loc.ctypes.data_as(ctypes.c_void_p),
                       c_atm.ctypes.data_as(ctypes.c_void_p), natm,
                       c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
                       c_env.ctypes.data_as(ctypes.c_void_p))
@@ -161,7 +160,7 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0, cart=False):
             intor = 'int2e_cart'
         else:
             intor = 'int2e_sph'
-        cintopt = make_cintopt(c_atm, c_bas, c_env, 'int2e_sph')
+        cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
         cvhfopt = pyscf.lib.c_null_ptr()
     else:
         vhfopt.set_dm(dms, atm, bas, env)
@@ -212,7 +211,8 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0, cart=False):
 # call all fjk for each dm, the return array has len(dms)*len(jkdescript)*ncomp components
 # jkdescript: 'ij->s1kl', 'kl->s2ij', ...
 def direct_mapdm(intor, aosym, jkdescript,
-                 dms, ncomp, atm, bas, env, vhfopt=None, shls_slice=None):
+                 dms, ncomp, atm, bas, env, vhfopt=None, cintopt=None,
+                 shls_slice=None):
     assert(aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
                      'aa4', 'a4ij', 'a4kl', 'a2ij', 'a2kl'))
     intor = ascint3(intor)
@@ -238,13 +238,14 @@ def direct_mapdm(intor, aosym, jkdescript,
 
     if vhfopt is None:
         cintor = _fpointer(intor)
-        cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
         cvhfopt = pyscf.lib.c_null_ptr()
     else:
         vhfopt.set_dm(dms, atm, bas, env)
         cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
         cintor = getattr(libcvhf, vhfopt._intor)
+    if cintopt is None:
+        cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
 
     fdrv = getattr(libcvhf, 'CVHFnr_direct_drv')
     dotsym = _INTSYMAP[aosym]
@@ -295,7 +296,8 @@ def direct_mapdm(intor, aosym, jkdescript,
 # for density matrices in dms, bind each dm to a jk operator
 # jkdescript: 'ij->s1kl', 'kl->s2ij', ...
 def direct_bindm(intor, aosym, jkdescript,
-                 dms, ncomp, atm, bas, env, vhfopt=None, shls_slice=None):
+                 dms, ncomp, atm, bas, env, vhfopt=None, cintopt=None,
+                 shls_slice=None):
     assert(aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
                      'aa4', 'a4ij', 'a4kl', 'a2ij', 'a2kl'))
     intor = ascint3(intor)
@@ -322,13 +324,14 @@ def direct_bindm(intor, aosym, jkdescript,
 
     if vhfopt is None:
         cintor = _fpointer(intor)
-        cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
         cvhfopt = pyscf.lib.c_null_ptr()
     else:
         vhfopt.set_dm(dms, atm, bas, env)
         cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
         cintor = getattr(libcvhf, vhfopt._intor)
+    if cintopt is None:
+        cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
 
     fdrv = getattr(libcvhf, 'CVHFnr_direct_drv')
     dotsym = _INTSYMAP[aosym]
@@ -384,7 +387,8 @@ def int2e_sph(atm, bas, env, cart=False):
 ################################################################
 # relativistic
 def rdirect_mapdm(intor, aosym, jkdescript,
-                  dms, ncomp, atm, bas, env, vhfopt=None, shls_slice=None):
+                  dms, ncomp, atm, bas, env, vhfopt=None, cintopt=None,
+                  shls_slice=None):
     assert(aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
                      'a4ij', 'a4kl', 'a2ij', 'a2kl'))
     intor = ascint3(intor)
@@ -410,13 +414,14 @@ def rdirect_mapdm(intor, aosym, jkdescript,
 
     if vhfopt is None:
         cintor = _fpointer(intor)
-        cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
         cvhfopt = pyscf.lib.c_null_ptr()
     else:
         vhfopt.set_dm(dms, atm, bas, env)
         cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
         cintor = getattr(libcvhf, vhfopt._intor)
+    if cintopt is None:
+        cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
 
     fdrv = getattr(libcvhf, 'CVHFr_direct_drv')
     dotsym = _INTSYMAP[aosym]
@@ -456,7 +461,8 @@ def rdirect_mapdm(intor, aosym, jkdescript,
 
 # for density matrices in dms, bind each dm to a jk operator
 def rdirect_bindm(intor, aosym, jkdescript,
-                  dms, ncomp, atm, bas, env, vhfopt=None, shls_slice=None):
+                  dms, ncomp, atm, bas, env, vhfopt=None, cintopt=None,
+                  shls_slice=None):
     assert(aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
                      'a4ij', 'a4kl', 'a2ij', 'a2kl'))
     intor = ascint3(intor)
@@ -483,13 +489,14 @@ def rdirect_bindm(intor, aosym, jkdescript,
 
     if vhfopt is None:
         cintor = _fpointer(intor)
-        cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
         cvhfopt = pyscf.lib.c_null_ptr()
     else:
         vhfopt.set_dm(dms, atm, bas, env)
         cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
         cintor = getattr(libcvhf, vhfopt._intor)
+    if cintopt is None:
+        cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
 
     fdrv = getattr(libcvhf, 'CVHFr_direct_drv')
     dotsym = _INTSYMAP[aosym]

@@ -20,50 +20,6 @@ to try out the package::
     -1.06111199786
 
 
-Submodules
-----------
-In pyscf, most submodules requires explict import::
-
-    >>> from pyscf import gto, scf
-
-:mod:`gto`
-    Molecular structure and basis sets.
-scf
-    Non-relativistic and relativistic Hartree-Fock.
-mcscf
-    CASCI, 1-step and 2-step CASSCF
-ao2mo
-    General 2-electron AO to MO integral transformation
-dft
-    Non-relativistic DFT
-df
-    Density fitting
-fci
-    Full CI
-cc
-    Coupled Cluster
-dmrgscf
-    DMRGCI, 1-step and 2-step DMRG-CASSCF
-fciqmcscf
-    2-step FCIQMC-CASSCF
-grad
-    Gradients
-lo
-    Localization and orbital orthogonalization
-lib
-    Basic functions and C extensions
-nmr
-    NMR
-mp
-    Moller-Plesset perturbation theory
-symm
-    Symmetry
-pbc
-    A complete tool sets for periodic boundary condition.
-tools
-    fcidump, molden etc
-
-
 Pure function and Class
 -----------------------
 Class are designed to hold only the final results and the control parameters
@@ -73,7 +29,7 @@ is finished without any errors,  the solution will be saved in the class (see
 documentation).
 
 Most useful functions are implemented at module level, and can be accessed in
-both class or module,  e.g.  ``scf.hf.get_jk(mol, dm)`` and
+both class and module,  e.g.  ``scf.hf.get_jk(mol, dm)`` and
 ``SCF(mol).get_jk(mol, dm)`` have the same functionality.  As a result, most
 functions and class are **pure**, i.e. no status are saved, and the argument
 are not changed inplace.  Exceptions (destructive functions and methods) are
@@ -104,7 +60,7 @@ Eg
 
 '''
 
-__version__ = '1.4'
+__version__ = '1.4.0'
 
 import os
 from distutils.version import LooseVersion

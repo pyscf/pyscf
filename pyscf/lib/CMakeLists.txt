@@ -15,19 +15,6 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 #enable_language(Fortran)
 find_package(BLAS REQUIRED)
-if(BLA_VENDOR MATCHES "Intel*")
-  if (${DISABLE_AVX})
-    find_library(BLAS_mkl_def_LIBRARY
-      NAMES mkl_def
-      PATHS ENV;LD_LIBRARY_PATH)
-    set(BLAS_LIBRARIES ${BLAS_LIBRARIES};${BLAS_mkl_def_LIBRARY})
-  else()
-    find_library(BLAS_mkl_avx_LIBRARY
-      NAMES mkl_avx
-      PATHS ENV;LD_LIBRARY_PATH)
-    set(BLAS_LIBRARIES ${BLAS_LIBRARIES};${BLAS_mkl_avx_LIBRARY})
-  endif()
-endif()
 message("BLAS libraries: ${BLAS_LIBRARIES}")
 # if unable to find mkl library, just create BLAS_LIBRARIES here, e.g.
 # set(BLAS_LIBRARIES "-L/path/to/mkl/lib -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lmkl_avx -lm")
@@ -79,7 +66,6 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
             -DCMAKE_INSTALL_LIBDIR:PATH=lib -DBLA_VENDOR=${BLA_VENDOR}
             -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-            -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
   )
 endif()
 endif()

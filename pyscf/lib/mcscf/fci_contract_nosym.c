@@ -187,8 +187,8 @@ void FCIcontract_2es1(double *eri, double *ci0, double *ci1,
                clinka, clinkb)
 {
         int strk, ib, blen;
-        double *t1buf = malloc(sizeof(double) * STRB_BLKSIZE*norb*norb*2);
-        double *ci1buf = malloc(sizeof(double) * na*STRB_BLKSIZE);
+        double *t1buf = malloc(sizeof(double) * (STRB_BLKSIZE*norb*norb*2+2));
+        double *ci1buf = malloc(sizeof(double) * (na*STRB_BLKSIZE+2));
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
                 memset(ci1buf, 0, sizeof(double) * na*blen);

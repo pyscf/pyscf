@@ -77,6 +77,10 @@ Improvements:
 * Input basis parser to support union basis set (eg mol.basis=(bas1,bas2))
 * SCF initial guess for systems with pseudopotential (or ECP)
 * SCF initial guess for low-dimension PBC systems
+* Kinetic energy cutoff estimation
+* Density fitting default auxiliary basis
+* Memory usage for FFTDF module
+* libxc interface
 
 Bugfix:
 
@@ -104,6 +108,16 @@ Bugfix:
 * CISD output message for multiple roots
 * UHF hessian function in the second order SCF solver
 * Integer overflow in npdot and GTO basis evaluator
+* OMP stack overflow in GTO basis evaluator
+* KUHF dimension error in smearing function
+* SCF results inconsistency in chkfile and SOSCF solver
+* Default grids in DFT gen_grid function for system with ECP/PP
+* mol.intor function to generate STG and YP integrals in 8-fold symmetry
+* DMRG-CI runtime scratch path
+* PBC GDF integrals for auxiliary basis with g functions
+* post-HF initialization function when mean-field object is DF-SOSCF method
+* Single orbital localization
+* Race condition in MP2 asynchronized IO
 
 
 Package strucutre changes
@@ -143,7 +157,7 @@ stability analysis involves the real to complex and UHF to GHF transformation.
 
 Second order SCF solver for PBC systems
 ---------------------------------------
-``pbc.scf.newton`` method should be used for k-point PBC SCF calculations.
+``pbc.scf.newton`` method can be used for k-point PBC SCF calculations.
 
 
 TDHF and TDDFT for PBC systems
@@ -256,4 +270,21 @@ This input will create exactly the same system as the one before.  The STO-3G
 basis of oxygen atom will be assigned to ``ghost_O`` atom and 6-31G basis of
 hydrogen will be assigned to ``ghost_H`` atom.  See more examples in
 examples/gto/03-ghost_atom.py.
+
+
+DF auxiliary basis
+------------------
+The optimal auxiliary basis sets for SCF calculations are generated based on the
+rules defined in
+http://www.psicode.org/psi4manual/master/basissets_byfamily.html.
+If the optimal auxiliary basis is not available, even-tempered Gaussian
+functions will be generated.
+
+
+Kinetic energy cutoff estimation
+--------------------------------
+In the PBC calculation, kinetic energy cutoff can be estimated automatically
+based on the orbital basis, the lattice parameter and the required precision.
+If kinetic energy cutoff is specified in the input, a warning message will be
+issued when the kinetic energy cutoff is not enough to converge the integrals.
 

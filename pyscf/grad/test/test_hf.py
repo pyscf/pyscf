@@ -4,6 +4,7 @@ import unittest
 from pyscf import scf
 from pyscf import gto
 from pyscf import grad
+from pyscf.grad import rks, uks, roks
 
 mol = gto.Mole()
 mol.verbose = 7
@@ -19,7 +20,7 @@ mol.build()
 def finger(mat):
     return abs(mat).sum()
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_nr_rhf(self):
         rhf = scf.RHF(mol)
         rhf.conv_tol = 1e-14
@@ -69,7 +70,7 @@ class KnowValues(unittest.TestCase):
         mol1.set_geom_('''
         H   0.   0.   0.9
         F   0.   0.1  0.''')
-        mf_scanner = grad.RKS(scf.RKS(mol).set(conv_tol=1e-14)).as_scanner()
+        mf_scanner = rks.Grad(scf.RKS(mol).set(conv_tol=1e-14)).as_scanner()
         e, de = mf_scanner(mol)
         self.assertAlmostEqual(finger(de), 0.458572523892797, 7)
         e, de = mf_scanner(mol1)

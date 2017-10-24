@@ -169,7 +169,7 @@ def get_pnucp(mydf, kpts=None):
     else:
         nuccell = copy.copy(cell)
         half_sph_norm = .5/numpy.sqrt(numpy.pi)
-        norm = half_sph_norm/mole._gaussian_int(2, mydf.eta)
+        norm = half_sph_norm/mole.gaussian_int(2, mydf.eta)
         chg_env = [mydf.eta, norm]
         ptr_eta = cell._env.size
         ptr_norm = ptr_eta + 1

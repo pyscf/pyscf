@@ -296,7 +296,7 @@ double CCuccsd_t_aaa(double *mo_energy, double *t1T, double *t2T, double *vooo,
 {
         int a, b, c;
         size_t k;
-        double *cache1 = malloc(sizeof(double) * nocc*nocc*nocc*19);
+        double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*19+2));
         double e = 0;
 #pragma omp for schedule (dynamic, 32)
         for (k = 0; k < njobs; k++) {
@@ -538,7 +538,7 @@ double CCuccsd_t_baa(double *mo_ea, double *mo_eb,
 {
         int a, b, c;
         size_t k;
-        double *cache1 = malloc(sizeof(double) * noccb*nocca*nocca*7);
+        double *cache1 = malloc(sizeof(double) * (noccb*nocca*nocca*7+2));
         double e = 0;
 #pragma omp for schedule (dynamic, 32)
         for (k = 0; k < njobs; k++) {

@@ -61,8 +61,13 @@ method = dft.RKS(mol)
 method.grids.atom_grid = {'O': (100, 770)}
 print('Dense grids for O atom.  E = %.12f' % method.kernel())
 
+# Specify mesh grid for all atoms
+method = dft.RKS(mol)
+method.grids.atom_grid = (100, 770)
+print('Dense grids for all atoms.  E = %.12f' % method.kernel())
 
-# Do not prune grids near core region
+
+# Disable pruning grids near core region
 #grids.prune = dft.sg1_prune
 method = dft.RKS(mol)
 method.grids.prune = None

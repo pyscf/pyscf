@@ -35,7 +35,8 @@ def dipole_check(sv, prod_log, dipole_funct=dipole_ni, **kvargs):
   """ Computes the allclose(), mean absolute error and maximal error of the dipoles reproduced by the (local) vertex. """
   from pyscf.nao.m_ao_matelem import ao_matelem_c
   from pyscf.nao.m_ao_log import comp_moments
-  me = ao_matelem_c(prod_log.ao_log)
+  me = ao_matelem_c(prod_log.ao_log.rr, prod_log.ao_log.pp)
+  me.init_one_set(prod_log.ao_log)
   sp2mom0,sp2mom1 = comp_moments(prod_log)
   mael,mxel,acl=[],[],[]
   for atm,[sp,coord] in enumerate(zip(sv.atom2sp,sv.atom2coord)):
@@ -82,7 +83,6 @@ class prod_log_c(ao_log_c):
     #print(nao, naoaux)
     return self
 
-  
   def init_prod_log_dp(self, ao_log, tol_loc=1e-5):
     """ Builds linear combinations of the original orbital products """
     from scipy.sparse import csr_matrix
@@ -106,9 +106,9 @@ class prod_log_c(ao_log_c):
     self.sp2lambda     = [] # list of numpy arrays containing the inverse vertex coefficients <p,a,b> L^p_ab defined by F^p(r) = L^p_ab f^a(r) f^b(r)
     self.sp2vertex_csr = [] # going to be list of sparse matrices with dimension (nprod,norbs**2) or <mu,ab> . This is a derivative of the sp2vertex
     self.sp2inv_vv     = [] # this is a future list of matrices (<mu|ab><ab|nu>)^-1. This is a derivative of the sp2vertex
-    self.sp2norbs      = [] # number of orbitals per specie
+    self.sp2norbs      = np.zeros(self.nspecies, dtype=int) # number of orbitals per specie
     self.sp2charge     = ao_log.sp2charge # copy of nuclear charges from atomic orbitals
-    
+     
     for sp,no in enumerate(lvc.ao1.sp2norbs):
       ldp = lvc.get_local_vertex(sp)
 
@@ -118,6 +118,7 @@ class prod_log_c(ao_log_c):
           if ev>tol_loc: mu2jd.append([j,domi])
       
       nmult=len(mu2jd)
+
       mu2j = np.array([jd[0] for jd in mu2jd], dtype=np.int32)
       mu2s = np.array([0]+[sum(2*mu2j[0:mu+1]+1) for mu in range(nmult)], dtype=np.int64)
       mu2rcut = np.array([ao_log.sp2rcut[sp]]*nmult, dtype=np.float64)
@@ -126,10 +127,11 @@ class prod_log_c(ao_log_c):
       self.sp_mu2j.append(mu2j)
       self.sp_mu2rcut.append(mu2rcut)
       self.sp_mu2s.append(mu2s)
-      self.sp2norbs.append(mu2s[-1])
+      self.sp2norbs[sp] = mu2s[-1]
 
       mu2ff = np.zeros((nmult, lvc.nr))
-      for mu,[j,domi] in enumerate(mu2jd): mu2ff[mu,:] = ldp['j2xff'][j][domi,:]
+      for mu,[j,domi] in enumerate(mu2jd): 
+          mu2ff[mu,:] = ldp['j2xff'][j][domi,:]
       self.psi_log.append(mu2ff)
       
       mu2ff = np.zeros((nmult, lvc.nr))
@@ -152,10 +154,81 @@ class prod_log_c(ao_log_c):
       mu2iww = np.array(self.sp2inv_vv[sp]*self.sp2vertex_csr[sp]).reshape([npf,no,no]) # lazy way of finding lambda
       self.sp2lambda.append(mu2iww)
 
+
     self.jmx = np.amax(np.array( [max(mu2j) for mu2j in self.sp_mu2j], dtype=np.int32))
     self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut])
-    
+        
     del v_csr, mu2iww, mu2ww, mu2ff # maybe unnecessary
+
+    return self
+ 
+  def load_prod_log_dp(self, ao_log, sp2charge, tol_loc=1e-5):
+    """ 
+        Builds linear combinations of the original orbital products 
+        Testing the calculations using same kernel than from fortran
+    """
+    from scipy.sparse import csr_matrix
+    from pyscf.nao.m_local_vertex import local_vertex_c
+    import h5py
+    
+    self.ao_log = ao_log
+    self.init_log_mesh(ao_log.rr, ao_log.pp)
+    self.nspecies = ao_log.nspecies
+    self.tol_loc = tol_loc
+    self.rr,self.pp,self.nr = ao_log.rr,ao_log.pp,ao_log.nr
+    self.interp_rr = ao_log.interp_rr
+    self.sp2nmult = np.zeros((ao_log.nspecies), dtype=np.int64)
+    
+    lvc = local_vertex_c(ao_log) # constructor of local vertices
+    self.psi_log       = [] # radial orbitals: list of numpy arrays
+    self.psi_log_rl    = [] # radial orbitals times r**j: list of numpy arrays
+    self.sp_mu2rcut    = [] # list of numpy arrays containing the maximal radii
+    self.sp_mu2j       = [] # list of numpy arrays containing the angular momentum of the radial function
+    self.sp_mu2s       = [] # list of numpy arrays containing the starting index for each radial multiplett
+    self.sp2vertex     = [] # list of numpy arrays containing the vertex coefficients <mu,a,b>
+    self.sp2lambda     = [] # list of numpy arrays containing the inverse vertex coefficients <p,a,b> L^p_ab defined by F^p(r) = L^p_ab f^a(r) f^b(r)
+    self.sp2vertex_csr = [] # going to be list of sparse matrices with dimension (nprod,norbs**2) or <mu,ab> . This is a derivative of the sp2vertex
+    self.sp2inv_vv     = [] # this is a future list of matrices (<mu|ab><ab|nu>)^-1. This is a derivative of the sp2vertex
+    self.sp2norbs      = np.zeros(self.nspecies, dtype=int) # number of orbitals per specie
+    self.sp2charge     = ao_log.sp2charge # copy of nuclear charges from atomic orbitals
+     
+
+    fname = "local2functs_vertex.hdf5"
+    File = h5py.File(fname, "r")
+    for isp, atm_nb in enumerate(sp2charge):
+        val = File["specie_{0}".format(atm_nb)]
+        mu2j = val["sp_local2functs/mu2j"].value
+        nmult = mu2j.shape[0]
+        mu2s = np.array([0]+[sum(2*mu2j[0:mu+1]+1) for mu in range(nmult)], dtype=np.int64)
+
+        mu2rcut = np.array([val["sp_local2functs/rcut"].value[0]]*nmult, dtype=np.float64)
+
+        self.sp2nmult[isp]=nmult
+        self.sp_mu2j.append(mu2j)
+        self.sp_mu2rcut.append(mu2rcut)
+        self.sp_mu2s.append(mu2s)
+        self.sp2norbs[isp] = mu2s[-1]
+      
+        self.psi_log.append(val["sp_local2functs/ir_mu2v"].value)
+        self.psi_log_rl.append(val["sp_local2functs_mom/ir_mu2v"].value)
+      
+        mu2ww = val["vertex"].value
+        no = mu2ww.shape[1]
+        npf= sum(2*mu2j+1)  # count number of product functions
+        if npf != mu2ww.shape[0]:
+            raise ValueError("mismatch npf and mu2ww.shape[0]")
+        self.sp2vertex.append(mu2ww)
+      
+        self.sp2vertex_csr.append(csr_matrix(mu2ww.reshape([npf,no**2])))
+        v_csr = self.sp2vertex_csr[isp]
+        self.sp2inv_vv.append( np.linalg.inv( (v_csr * v_csr.transpose() ).todense() ))
+      
+        mu2iww = np.array(self.sp2inv_vv[isp]*self.sp2vertex_csr[isp]).reshape([npf,no,no]) # lazy way of finding lambda
+        self.sp2lambda.append(mu2iww)
+
+    self.jmx = np.amax(np.array( [max(mu2j) for mu2j in self.sp_mu2j], dtype=np.int32))
+    self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut])
+
     return self
   ###
 

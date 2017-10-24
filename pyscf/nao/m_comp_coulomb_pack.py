@@ -3,7 +3,7 @@ from pyscf.nao.m_coulomb_am import coulomb_am
 import numpy as np
 try:
     import numba as nb
-    from pyscf.nao.m_numba_utils import fill_triu_v2
+    from pyscf.nao.m_numba_utils import fill_triu_v2, fill_tril
     use_numba = True
 except:
     use_numba = False
@@ -18,9 +18,10 @@ def comp_coulomb_pack(sv, ao_log=None, funct=coulomb_am, dtype=np.float64, **kva
       sv : (System Variables), this must have arrays of coordinates and species, etc
       ao_log : description of functions (either orbitals or product basis functions)
     Returns:
-      matrix elements (real-space overlap) for the whole system
+      matrix elements for the whole system in packed form (lower triangular part)
   """
   from pyscf.nao.m_ao_matelem import ao_matelem_c
+  from pyscf.nao.m_pack2den import ij2pack_l
   
   aome = ao_matelem_c(sv.ao_log.rr, sv.ao_log.pp)
   me = ao_matelem_c(sv.ao_log) if ao_log is None else aome.init_one_set(ao_log)
@@ -33,17 +34,13 @@ def comp_coulomb_pack(sv, ao_log=None, funct=coulomb_am, dtype=np.float64, **kva
   for atom1,[sp1,rv1,s1,f1] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
     for atom2,[sp2,rv2,s2,f2] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
       if atom2>atom1: continue # skip 
-      oo2f = funct(me,sp1,rv1,sp2,rv2,**kvargs)
+      oo2f = funct(me,sp1,rv1,sp2,rv2, **kvargs)
       if use_numba:
           fill_triu_v2(oo2f, res, s1, f1, s2, f2, norbs)
       else:
           for i1 in range(s1,f1):
             for i2 in range(s2, min(i1+1, f2)):
-              ind = 0
-              if i2 > 0:
-                for beta in range(1, i2+1):
-                  ind += norbs -beta
-              ind += i1
-              res[ind] = oo2f[i1-s1,i2-s2]
+              res[ij2pack_l(i1,i2,norbs)] = oo2f[i1-s1,i2-s2]
 
+  #print("sum kernel: ", np.sum(abs(res)))
   return res, norbs

@@ -293,10 +293,10 @@ class KUHF(mol_uhf.UHF, khf.KSCF):
             cell = self.cell
         dm_kpts = None
         if key.lower() == '1e':
-            dm = self.init_guess_by_1e(cell)
+            dm_kpts = self.init_guess_by_1e(cell)
         elif getattr(cell, 'natm', 0) == 0:
             logger.info(self, 'No atom found in cell. Use 1e initial guess')
-            dm = self.init_guess_by_1e(cell)
+            dm_kpts = self.init_guess_by_1e(cell)
         elif key.lower() == 'atom':
             dm = self.init_guess_by_atom(cell)
         elif key.lower().startswith('chk'):
@@ -336,7 +336,7 @@ class KUHF(mol_uhf.UHF, khf.KSCF):
         if cell.dimension < 3:
             logger.warn(self, 'Hcore initial guess is not recommended in '
                         'the SCF of low-dimensional systems.')
-        return mol_uhf.UHF.init_guess_by_1e(cell)
+        return mol_uhf.UHF.init_guess_by_1e(self, cell)
 
     get_hcore = khf.KSCF.get_hcore
     get_ovlp = khf.KSCF.get_ovlp

@@ -43,9 +43,13 @@ def safe_eigh(h, s, lindep=1e-15):
     if seig[0] < lindep:
         idx = seig >= lindep
         t = t[:,idx] * (1/numpy.sqrt(seig[idx]))
-        heff = reduce(numpy.dot, (t.T.conj(), h, t))
-        w, v = scipy.linalg.eigh(heff)
-        v = numpy.dot(t, v)
+        if t.size > 0:
+            heff = reduce(numpy.dot, (t.T.conj(), h, t))
+            w, v = scipy.linalg.eigh(heff)
+            v = numpy.dot(t, v)
+        else:
+            w = numpy.zeros((0,))
+            v = t
     else:
         w, v = scipy.linalg.eigh(h, s)
     return w, v, seig
@@ -1169,8 +1173,8 @@ def _sort_by_similarity(w, v, nroots, conv, vlast, emin=None, heff=None):
     if not any(conv) or vlast is None:
         return w[:nroots], v[:,:nroots]
 
-    conv = numpy.asarray(conv)
-    head = vlast.shape[0]
+    head, nroots = vlast.shape
+    conv = numpy.asarray(conv[:nroots])
     ovlp = vlast[:,conv].T.conj().dot(v[:head])
     ovlp = numpy.einsum('ij,ij->j', ovlp, ovlp)
     nconv = numpy.count_nonzero(conv)

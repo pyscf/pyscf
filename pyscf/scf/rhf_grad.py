@@ -4,7 +4,7 @@
 #
 
 '''
-Non-relativistic analytical nuclear gradients
+Non-relativistic Hartree-Fock analytical nuclear gradients
 '''
 
 import time
@@ -27,7 +27,7 @@ def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
 
     t0 = (time.clock(), time.time())
-    log.debug('Compute Gradients of NR Hartree-Fock Coulomb repulsion')
+    log.debug('Computing Gradients of NR-HF Coulomb repulsion')
     vhf = grad_mf.get_veff(mol, dm0)
     log.timer('gradients of 2e part', *t0)
 
@@ -36,18 +36,27 @@ def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
 
     if atmlst is None:
         atmlst = range(mol.natm)
-    offsetdic = mol.offset_nr_by_atom()
+    aoslices = mol.aoslice_by_atom()
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
-        shl0, shl1, p0, p1 = offsetdic[ia]
+        shl0, shl1, p0, p1 = aoslices[ia]
 # h1, s1, vhf are \nabla <i|h|j>, the nuclear gradients = -\nabla
         vrinv = grad_mf._grad_rinv(mol, ia)
+# nabla was applied on bra in f1, *2 for the contributions of nabla|ket>
         de[k] += numpy.einsum('xij,ij->x', f1[:,p0:p1], dm0[p0:p1]) * 2
         de[k] += numpy.einsum('xij,ij->x', vrinv, dm0) * 2
         de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], dme0[p0:p1]) * 2
-    log.debug('gradients of electronic part')
-    log.debug(str(de))
+    if log.verbose >= logger.DEBUG:
+        log.debug('gradients of electronic part')
+        _write(log, mol, de, atmlst)
     return de
+
+def _write(dev, mol, de, atmlst):
+    dev.stdout.write('         x                y                z\n')
+    for k, ia in enumerate(atmlst):
+        dev.stdout.write('%d %s  %15.10f  %15.10f  %15.10f\n' %
+                         (ia, mol.atom_symbol(ia), de[k,0], de[k,1], de[k,2]))
+
 
 def grad_nuc(mol, atmlst=None):
     gs = numpy.zeros((mol.natm,3))
@@ -152,7 +161,7 @@ class Gradients(lib.StreamObject):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
         if not self._scf.converged:
-            log.warn('Ground state SCF is not converged')
+            log.warn('Ground state SCF not converged')
         log.info('******** %s for %s ********',
                  self.__class__, self._scf.__class__)
         log.info('chkfile = %s', self.chkfile)
@@ -214,9 +223,9 @@ class Gradients(lib.StreamObject):
         if mol is None: mol = self.mol
         return grad_nuc(mol, atmlst)
 
-    def kernel(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
-        return self.grad(mo_energy, mo_coeff, mo_occ, atmlst)
     def grad(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
+        return self.kernel(mo_energy, mo_coeff, mo_occ, atmlst)
+    def kernel(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
         cput0 = (time.clock(), time.time())
         if mo_energy is None: mo_energy = self._scf.mo_energy
         if mo_coeff is None: mo_coeff = self._scf.mo_coeff
@@ -230,17 +239,17 @@ class Gradients(lib.StreamObject):
             self.dump_flags()
 
         de = self.grad_elec(mo_energy, mo_coeff, mo_occ, atmlst)
-        self.de = de = de + self.grad_nuc(atmlst=atmlst)
-        logger.note(self, '--------------- SCF gradients ----------------')
-        logger.note(self, '           x                y                z')
-        for k, ia in enumerate(atmlst):
-            logger.note(self, '%d %s  %15.9f  %15.9f  %15.9f', ia,
-                        self.mol.atom_symbol(ia), de[k,0], de[k,1], de[k,2])
-        logger.note(self, '----------------------------------------------')
-        logger.timer(self, 'SCF gradients', *cput0)
+        self.de = de + self.grad_nuc(atmlst=atmlst)
+        if self.verbose >= logger.NOTE:
+            logger.note(self, '--------------- SCF gradients ----------------')
+            _write(self, self.mol, self.de, atmlst)
+            logger.note(self, '----------------------------------------------')
+            logger.timer(self, 'SCF gradients', *cput0)
         return self.de
 
     as_scanner = as_scanner
+
+Grad = Gradients
 
 
 if __name__ == '__main__':
@@ -248,7 +257,6 @@ if __name__ == '__main__':
     from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 0
-    mol.output = None
     mol.atom = [['He', (0.,0.,0.)], ]
     mol.basis = {'He': 'ccpvdz'}
     mol.build()
@@ -259,7 +267,6 @@ if __name__ == '__main__':
 
     h2o = gto.Mole()
     h2o.verbose = 0
-    h2o.output = None#'out_h2o'
     h2o.atom = [
         ['O' , (0. , 0.     , 0.)],
         [1   , (0. , -0.757 , 0.587)],
@@ -269,10 +276,9 @@ if __name__ == '__main__':
     h2o.build()
     rhf = scf.RHF(h2o)
     rhf.conv_tol = 1e-14
-    rhf.scf()
+    e0 = rhf.scf()
     g = Gradients(rhf)
     print(g.grad())
 #[[ 0   0               -2.41134256e-02]
 # [ 0   4.39690522e-03   1.20567128e-02]
 # [ 0  -4.39690522e-03   1.20567128e-02]]
-

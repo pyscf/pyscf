@@ -24,7 +24,7 @@ from pyscf.gto import moleintor
 from pyscf.gto.eval_gto import eval_gto
 import pyscf.gto.ecp
 
-ELEMENTS = elements.ELEMENTS
+from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON
 
 # For code compatiblity in python-2 and python-3
 if sys.version_info >= (3,):
@@ -45,7 +45,7 @@ def M(**kwargs):
     mol.build(**kwargs)
     return mol
 
-def _gaussian_int(n, alpha):
+def gaussian_int(n, alpha):
     r'''int_0^inf x^n exp(-alpha x^2) dx'''
     n1 = (n + 1) * .5
     return scipy.special.gamma(n1) / (2. * alpha**n1)
@@ -78,7 +78,7 @@ def gto_norm(l, expnt):
         #f = 2**(2*l+3) * math.factorial(l+1) * (2*expnt)**(l+1.5) \
         #        / (math.factorial(2*l+2) * math.sqrt(math.pi))
         #return math.sqrt(f)
-        return 1/numpy.sqrt(_gaussian_int(l*2+2, 2*expnt))
+        return 1/numpy.sqrt(gaussian_int(l*2+2, 2*expnt))
     else:
         raise ValueError('l should be > 0')
 
@@ -295,7 +295,9 @@ def format_basis(basis_tab):
     for atom in basis_tab:
         symb = _atom_symbol(atom)
         stdsymb = _std_symbol(symb)
-        if stdsymb.startswith('GHOST-'):
+        if stdsymb[:2] == 'X-':
+            stdsymb = stdsymb[2:]
+        if stdsymb[:6] == 'GHOST-':
             stdsymb = stdsymb[6:]
         atom_basis = basis_tab[atom]
         if isinstance(atom_basis, (str, unicode)):
@@ -541,7 +543,7 @@ def make_atm_env(atom, ptr=0):
     '''Convert the internal format :attr:`Mole._atom` to the format required
     by ``libcint`` integrals
     '''
-    nuc_charge = _charge(atom[0])
+    nuc_charge = charge(atom[0])
     _env = numpy.hstack((atom[1], dyall_nuc_mod(elements.ISOTOPE_MAIN[nuc_charge])))
     _atm = numpy.zeros(6, dtype=numpy.int32)
     _atm[CHARGE_OF] = nuc_charge
@@ -577,10 +579,10 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         #ee = numpy.empty((nprim,nprim))
         #for i in range(nprim):
         #    for j in range(i+1):
-        #        ee[i,j] = ee[j,i] = _gaussian_int(angl*2+2, es[i]+es[j])
+        #        ee[i,j] = ee[j,i] = gaussian_int(angl*2+2, es[i]+es[j])
         #s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
         ee = es.reshape(-1,1) + es.reshape(1,-1)
-        ee = _gaussian_int(angl*2+2, ee)
+        ee = gaussian_int(angl*2+2, ee)
         s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
         cs = numpy.einsum('pi,i->pi', cs, s1)
 
@@ -635,8 +637,11 @@ def make_env(atoms, basis, pre_env=[], nucmod={}):
             b = _basdic[symb].copy()
         elif puresymb in _basdic:
             b = _basdic[puresymb].copy()
-        elif symb.upper().startswith('GHOST'):
-            symb = _remove_prefix_ghost(symb)
+        else:
+            if symb[:2] == 'X-':
+                symb = symb[2:]
+            elif symb[:6] == 'GHOST-':
+                symb = symb[6:]
             puresymb = _rm_digit(symb)
             if symb in _basdic:
                 b = _basdic[symb].copy()
@@ -645,9 +650,6 @@ def make_env(atoms, basis, pre_env=[], nucmod={}):
             else:
                 sys.stderr.write('Warn: Basis not found for atom %d %s\n' % (ia, symb))
                 continue
-        else:
-            sys.stderr.write('Warn: Basis not found for atom %d %s\n' % (ia, symb))
-            continue
         b[:,ATOM_OF] = ia
         _bas.append(b)
 
@@ -698,7 +700,7 @@ def make_ecp_env(mol, _atm, ecp, pre_env=[]):
             else:
                 ecp0 = None
             if ecp0 is not None:
-                _atm[ia,CHARGE_OF ] = _charge(symb) - ecp0[0]
+                _atm[ia,CHARGE_OF ] = charge(symb) - ecp0[0]
                 b = ecp0[1].copy().reshape(-1,BAS_SLOTS)
                 b[:,ATOM_OF] = ia
                 _ecpbas.append(b)
@@ -1049,7 +1051,7 @@ def energy_nuc(mol, charges=None, coords=None):
     e = (qq/r).sum() * .5
     return e
 
-def spherical_labels(mol, fmt=True):
+def sph_labels(mol, fmt=True):
     '''Labels for spherical GTO functions
 
     Kwargs:
@@ -1065,7 +1067,7 @@ def spherical_labels(mol, fmt=True):
     Examples:
 
     >>> mol = gto.M(atom='H 0 0 0; Cl 0 0 1', basis='sto-3g')
-    >>> gto.spherical_labels(mol)
+    >>> gto.sph_labels(mol)
     [(0, 'H', '1s', ''), (1, 'Cl', '1s', ''), (1, 'Cl', '2s', ''), (1, 'Cl', '3s', ''), (1, 'Cl', '2p', 'x'), (1, 'Cl', '2p', 'y'), (1, 'Cl', '2p', 'z'), (1, 'Cl', '3p', 'x'), (1, 'Cl', '3p', 'y'), (1, 'Cl', '3p', 'z')]
     '''
     count = numpy.zeros((mol.natm, 9), dtype=int)
@@ -1094,7 +1096,7 @@ def spherical_labels(mol, fmt=True):
         return ['%d %s %s%-4s' % x for x in label]
     else:
         return label
-spheric_labels = spherical_labels
+spheric_labels = spherical_labels = sph_labels
 
 def cart_labels(mol, fmt=True):
     '''Labels for Cartesian GTO functions
@@ -1161,7 +1163,7 @@ def ao_labels(mol, fmt=True):
     if mol.cart:
         return mol.cart_labels(fmt)
     else:
-        return mol.spherical_labels(fmt)
+        return mol.sph_labels(fmt)
 
 def spinor_labels(mol):
     raise RuntimeError('TODO')
@@ -1401,7 +1403,7 @@ def chiral_mol(mol1, mol2=None):
 
 def inertia_momentum(atoms, charges=None, coords=None):
     if charges is None:
-        charges = numpy.array([_charge(a[0]) for a in atoms])
+        charges = numpy.array([charge(a[0]) for a in atoms])
     if coords is None:
         coords = numpy.array([a[1] for a in atoms], dtype=float)
     chgcenter = numpy.einsum('i,ij->j', charges, coords)/charges.sum()
@@ -1411,14 +1413,14 @@ def inertia_momentum(atoms, charges=None, coords=None):
 
 def charge_center(atoms, charges=None, coords=None):
     if charges is None:
-        charges = numpy.array([_charge(a[0]) for a in atoms])
+        charges = numpy.array([charge(a[0]) for a in atoms])
     if coords is None:
         coords = numpy.array([a[1] for a in atoms], dtype=float)
     rbar = numpy.einsum('i,ij->j', charges, coords)/charges.sum()
     return rbar
 
 def mass_center(atoms):
-    mass = numpy.array([elements.MASSES[_charge(a[0])] for a in atoms])
+    mass = numpy.array([elements.MASSES[charge(a[0])] for a in atoms])
     return charge_center(atoms, mass)
 
 def condense_to_shell(mol, mat, compressor=numpy.max):
@@ -1906,13 +1908,16 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         self.stdout.write('numpy %s  scipy %s\n' %
                           (numpy.__version__, scipy.__version__))
         self.stdout.write('Date: %s\n' % time.ctime())
+        import pyscf
+        pyscfdir = os.path.abspath(os.path.join(__file__, '..', '..'))
+        self.stdout.write('PySCF version %s\n' % pyscf.__version__)
+        self.stdout.write('PySCF path  %s\n' % pyscfdir)
         try:
-            import pyscf
-            pyscfdir = os.path.abspath(os.path.join(__file__, '..', '..'))
-            self.stdout.write('PySCF version %s\n' % pyscf.__version__)
-            self.stdout.write('PySCF path  %s\n' % pyscfdir)
-            with open(os.path.join(pyscfdir, '..', '.git', 'ORIG_HEAD')) as f:
+            with open(os.path.join(pyscfdir, '..', '.git', 'ORIG_HEAD'), 'r') as f:
                 self.stdout.write('GIT ORIG_HEAD %s' % f.read())
+        except IOError:
+            pass
+        try:
             head = os.path.join(pyscfdir, '..', '.git', 'HEAD')
             with open(head, 'r') as f:
                 head = f.read().splitlines()[0]
@@ -1922,13 +1927,13 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                 branch = os.path.basename(head)
                 head = os.path.join(pyscfdir, '..', '.git', head.split(' ')[1])
                 with open(head, 'r') as f:
-                    self.stdout.write('GIT %s branch  %s' % (branch, f.readline()))
-            for key in os.environ:
-                if 'PYSCF' in key:
-                    self.stdout.write('%s %s\n' % (key, os.environ[key]))
-            self.stdout.write('\n')
+                    self.stdout.write('GIT %s branch  %s' % (branch, f.read()))
         except IOError:
             pass
+        for key in os.environ:
+            if 'PYSCF' in key:
+                self.stdout.write('%s %s\n' % (key, os.environ[key]))
+        self.stdout.write('\n')
 
         self.stdout.write('[INPUT] VERBOSE %d\n' % self.verbose)
         self.stdout.write('[INPUT] num atoms = %d\n' % self.natm)
@@ -2133,8 +2138,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     def atom_charge(self, atm_id):
         r'''Nuclear effective charge of the given atom id
-        Note "atom_charge /= _charge(atom_symbol)" when ECP is enabled.
-        Number of electrons screened by ECP can be obtained by _charge(atom_symbol)-atom_charge
+        Note "atom_charge /= charge(atom_symbol)" when ECP is enabled.
+        Number of electrons screened by ECP can be obtained by charge(atom_symbol)-atom_charge
 
         Args:
             atm_id : int
@@ -2155,7 +2160,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def atom_nelec_core(self, atm_id):
         '''Number of core electrons for pseudo potential.
         '''
-        return _charge(self.atom_symbol(atm_id)) - self.atom_charge(atm_id)
+        return charge(self.atom_symbol(atm_id)) - self.atom_charge(atm_id)
 
     def atom_coord(self, atm_id):
         r'''Coordinates (ndarray) of the given atom id
@@ -2505,14 +2510,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def get_enuc(self):
         return self.energy_nuc()
 
-    @lib.with_doc(cart_labels.__doc__)
-    def cart_labels(self, fmt=False):
-        return cart_labels(self, fmt)
-
-    @lib.with_doc(spheric_labels.__doc__)
-    def spheric_labels(self, fmt=False):
-        return spheric_labels(self, fmt)
-    spherical_labels = spheric_labels
+    sph_labels = spheric_labels = sph_labels
+    cart_labels = cart_labels
     ao_labels = ao_labels
 
     search_ao_label = search_ao_label
@@ -2573,29 +2572,22 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                 c2s.append(c2s_l[l])
         return scipy.linalg.block_diag(*c2s)
 
-_ELEMENTDIC = dict((x.upper(),i) for i,x in enumerate(ELEMENTS))
-
 def _rm_digit(symb):
     if symb.isalpha():
         return symb
     else:
         return ''.join([i for i in symb if i.isalpha()])
 
-def _remove_prefix_ghost(symb):
-    if len(symb) < 6:
-        return symb
-    else:
-        for i, x in enumerate(symb[5:]):
-            if x.isalpha():
-                break
-        return symb[5+i:]
+_ELEMENTS_UPPER = dict((x.upper(),x) for x in ELEMENTS)
+_ELEMENTS_UPPER['GHOST'] = 'Ghost'
 
-def _charge(symb_or_chg):
+def charge(symb_or_chg):
     if isinstance(symb_or_chg, (str, unicode)):
-        if 'GHOST' in symb_or_chg.upper():
+        a = symb_or_chg.upper()
+        if ('GHOST' in a or ('X' in a and 'XE' not in a)):
             return 0
         else:
-            return elements.ELEMENTS_PROTON[str(_rm_digit(symb_or_chg))]
+            return elements.ELEMENTS_PROTON[str(_rm_digit(a))]
     else:
         return symb_or_chg
 
@@ -2608,11 +2600,14 @@ def _symbol(symb_or_chg):
 def _std_symbol(symb_or_chg):
     if isinstance(symb_or_chg, (str, unicode)):
         rawsymb = str(_rm_digit(symb_or_chg)).upper()
-        if len(rawsymb) > 5 and rawsymb.startswith('GHOST'):
-            rawsymb = _remove_prefix_ghost(rawsymb)
-            return 'GHOST-' + ELEMENTS[_ELEMENTDIC[rawsymb]]
+        if len(rawsymb) > 1 and symb_or_chg[0] == 'X' and symb_or_chg[:2].upper() != 'XE':
+            rawsymb = rawsymb[1:]
+            return 'X-' + _ELEMENTS_UPPER[rawsymb]
+        elif len(rawsymb) > 5 and rawsymb[:5] == 'GHOST':
+            rawsymb = rawsymb[5:]
+            return 'GHOST-' + _ELEMENTS_UPPER[rawsymb]
         else:
-            return ELEMENTS[_ELEMENTDIC[rawsymb]]
+            return _ELEMENTS_UPPER[rawsymb]
     else:
         return ELEMENTS[symb_or_chg]
 
@@ -2620,15 +2615,26 @@ def _atom_symbol(symb_or_chg):
     if isinstance(symb_or_chg, int):
         symb = ELEMENTS[symb_or_chg]
     else:
-        a = symb_or_chg.strip()
+        a = str(symb_or_chg.strip())
         if a.isdigit():
             symb = ELEMENTS[int(a)]
         else:
             rawsymb = _rm_digit(a)
-            rawsymb = _remove_prefix_ghost(rawsymb)
-            stdsymb = ELEMENTS[_ELEMENTDIC[rawsymb.upper()]]
+            if len(rawsymb) > 1 and a[0] == 'X' and a[:2].upper() != 'XE':
+                rawsymb = rawsymb[1:]
+            elif len(rawsymb) > 5 and rawsymb[:5].upper() == 'GHOST':
+                rawsymb = rawsymb[5:]
+            stdsymb = _ELEMENTS_UPPER[rawsymb.upper()]
             symb = a.replace(rawsymb, stdsymb)
     return symb
+
+def is_ghost_atom(symb_or_chg):
+    if isinstance(symb_or_chg, int):
+        return symb_or_chg == 0
+    elif 'GHOST' in symb_or_chg.upper():
+        return True
+    else:
+        return symb_or_chg[0] == 'X' and symb_or_chg[:2].upper() != 'XE'
 
 def _parse_nuc_mod(str_or_int):
     nucmod = NUC_POINT
@@ -2799,7 +2805,7 @@ def filatov_nuc_mod(nuc_charge, c=param.LIGHT_SPEED):
     Ref. M. Filatov and D. Cremer, Theor. Chem. Acc. 108, 168 (2002)
          M. Filatov and D. Cremer, Chem. Phys. Lett. 351, 259 (2002)
     '''
-    nuc_charge = _charge(nuc_charge)
+    nuc_charge = charge(nuc_charge)
     r = (-0.263188*nuc_charge + 106.016974 + 138.985999/nuc_charge) / c**2
     zeta = 1 / (r**2)
     return zeta

@@ -3,7 +3,7 @@ import numpy as np
 import sys
 from pyscf.nao.m_c2r import c2r_c
 from pyscf.nao.m_ao_matelem import ao_matelem_c
-from pyscf.nao.m_pack2den import ij2pack
+from pyscf.nao.m_pack2den import ij2pack_u
 from scipy.linalg import eigh
 from timeit import default_timer as timer
 
@@ -43,7 +43,7 @@ class local_vertex_c(ao_matelem_c):
     nmu = self.ao1.sp2nmult[sp]
     
     jmx_sp = np.amax(mu2j)
-    j2nf=np.zeros((2*jmx_sp+1), dtype=np.int32) # count number of radial functions products per angular momentum
+    j2nf=np.zeros((2*jmx_sp+1), dtype=int) # count number of radial functions products per angular momentum
     for mu1,j1,s1,f1 in info:
       for mu2,j2,s2,f2 in info:
         if mu2<mu1: continue
@@ -52,7 +52,7 @@ class local_vertex_c(ao_matelem_c):
     
     j_p2mus = [ [p for p in range(j2nf[j]) ] for j in range(2*jmx_sp+1)]
     j_p2js  = [ [p for p in range(j2nf[j]) ] for j in range(2*jmx_sp+1)]
-    j2p = np.zeros((2*jmx_sp+1), dtype=np.int32)
+    j2p = np.zeros((2*jmx_sp+1), dtype=int)
     for mu1,j1,s1,f1 in info:
       for mu2,j2,s2,f2 in info:
         if mu2<mu1: continue
@@ -63,16 +63,16 @@ class local_vertex_c(ao_matelem_c):
     
     pack2ff = np.zeros((nmu*(nmu+1)//2,self.nr)) # storage for original products
     for mu2 in range(nmu):
-      for mu1 in range(mu2+1): pack2ff[ij2pack(mu1,mu2),:] = mu2ff[mu1,:]*mu2ff[mu2,:]
+      for mu1 in range(mu2+1): pack2ff[ij2pack_u(mu1,mu2),:] = mu2ff[mu1,:]*mu2ff[mu2,:]
     
     j2xff     = [] # Storage for dominant product's functions (list of numpy arrays: x*f(r)*f(r))
     j2xww     = [] # Storage for dominant product's vertex (angular part of: x*wigner*wigner)
-    j2eva     = [] # Storage for eigenvalues in each angular momentum "sektor"
+    j2eva     = [] # Storage for eigenvalues in each angular momentum "sector"
     t1 = 0
     tstart = timer()
     for j,dim in enumerate(j2nf): # Metrik ist dim * dim in diesem Sektor
       lev2ff = np.zeros((dim,self.nr))
-      for lev in range(dim): lev2ff[lev,:] = self.sbt(pack2ff[ ij2pack( *j_p2mus[j][lev] ),:], j, 1)
+      for lev in range(dim): lev2ff[lev,:] = self.sbt(pack2ff[ ij2pack_u( *j_p2mus[j][lev] ),:], j, 1)
       metric = np.zeros((dim,dim))
       for lev_1 in range(dim):
         for lev_2 in range(lev_1+1):
@@ -84,7 +84,7 @@ class local_vertex_c(ao_matelem_c):
       xff = np.zeros((dim,self.nr))   #!!!! Jetzt dominante Orbitale bilden
       for domi in range(dim):
         for n in range(dim):
-          xff[domi,:] = xff[domi,:] + x[n,domi]*pack2ff[ij2pack(*j_p2mus[j][n]),:]
+          xff[domi,:] = xff[domi,:] + x[n,domi]*pack2ff[ij2pack_u(*j_p2mus[j][n]),:]
       j2xff.append(xff)
       
       kinematical_vertex = np.zeros((dim, 2*j+1, no, no)) # Build expansion coefficients V^ab_mu defined by f^a(r) f^b(r) = V^ab_mu F^mu(r) 

@@ -95,17 +95,7 @@ by the CCSD, CCSD(T), density matrices, and EOM-CCSD modules, but not in
 the analytical CCSD gradient module.
 
 
-Program reference
-=================
-
-The :class:`CCSD` class is the object to hold the restricted CCSD environment
-attributes and results.  The environment attributes are the parameters to
-control the runtime behavior of the CCSD module, e.g. the convergence criteria, DIIS
-parameters, and so on.
-
-.. autoclass:: pyscf.cc.ccsd.CCSD
-
-CCSD 1- and 2-particle density matrices and ``T3`` amplitudes of CCSD(T) are not stored. 
+.. Add Memory requirements
 
 
 Examples
@@ -116,8 +106,8 @@ module, and how to incorporate the CCSD solver with other PySCF functions to
 perform advanced simulations.  For a complete list of CC examples, see
 ``pyscf/examples/cc``.
 
-A general solver for given Hamiltonian
---------------------------------------
+A general solver for customized Hamiltonian
+-------------------------------------------
 The CC module is not limited to molecular systems.  The program is implemented as
 a general solver for arbitrary Hamiltonians.  It allows users to overwrite the
 default molecular Hamiltonian with their own effective Hamiltonians.  In this
@@ -189,28 +179,66 @@ Restart CCSD
 ------------
 
 
-Attributes and methods
-======================
+Program reference
+=================
 
-CCSD
-----
+cc.ccsd module and CCSD class
+-----------------------------
+
+The :class:`pyscf.cc.ccsd.CCSD` class is the object to hold the restricted CCSD environment
+attributes and results.  The environment attributes are the parameters to
+control the runtime behavior of the CCSD module, e.g. the convergence criteria, DIIS
+parameters, and so on.  After the ground state CCSD calculation, correlation
+energy, ``T1`` and ``T2`` amplitudes are stored in the CCSD object.
+This class supports the calculation of CCSD 1- and 2-particle density matrices.
+
+.. autoclass:: pyscf.cc.ccsd.CCSD
 
 .. automodule:: pyscf.cc.ccsd
    :members:
+
+cc.rccsd and RCCSD class
+------------------------
+
+:class:`pyscf.cc.rccsd.RCCSD` is also a class for restricted CCSD calculations, but
+different to the :class:`pyscf.cc.ccsd.CCSD` class.  It uses different formula
+to compute the ground state CCSD solution.  Although slower than the
+implmentation in the :class:`pyscf.cc.ccsd.CCSD` class, it supports the system
+with complex integrals.  Another difference is that this class supports EOM-CCSD
+methods, including EOM-IP-CCSD, EOM-EA-CCSD, EOM-EE-CCSD, EOM-SF-CCSD.
+
+.. autoclass:: pyscf.cc.rccsd.RCCSD
+
+.. automodule:: pyscf.cc.rccsd
+   :members:
+
+cc.uccsd and UCCSD class
+------------------------
+
+:class:`pyscf.cc.uccsd.UCCSD` class supports the CCSD calculation based on UHF
+wavefunction as well as the ROHF wavefunction.  Besides the ground state UCCSD calculation,
+UCCSD lambda equation, 1-particle and 2-particle density matrices, EOM-IP-CCSD,
+EOM-EA-CCSD, EOM-EE-CCSD are all available in this class.  Note this class does
+not support complex integrals.
+
+.. autoclass:: pyscf.cc.uccsd.UCCSD
+
+.. automodule:: pyscf.cc.uccsd
+   :members:
+
+cc.addons
+---------
+Helper functions for CCSD, RCCSD and UCCSD modules are implemented in
+:mod:`cc.addons`
 
 .. automodule:: pyscf.cc.addons
    :members:
 
 CCSD(T)
 -------
+.. Note ``T3`` amplitudes of CCSD(T) is not stored
 
 .. automodule:: pyscf.cc.ccsd_t
-   :members:
-
-UCCSD
------
-
-.. automodule:: pyscf.cc.uccsd
    :members:
 
 CCSD gradients
@@ -218,4 +246,3 @@ CCSD gradients
 
 .. automodule:: pyscf.cc.ccsd_grad
    :members:
-
