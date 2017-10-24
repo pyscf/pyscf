@@ -8,6 +8,7 @@ Extension to scipy.linalg module
 '''
 
 import sys
+import warnings
 import tempfile
 from functools import reduce
 import numpy
@@ -130,6 +131,16 @@ def eigh_by_blocks(h, s=None, labels=None):
     idx = numpy.argsort(es)
     return es[idx], cs[:,idx]
 
+# sort by similarity has problem which flips the ordering of eigenvalues when
+# the initial guess is closed to excited state.  In this situation, function
+# _sort_by_similarity may mark the excited state as the first eigenvalue and
+# freeze the first eigenvalue.
+SORT_EIG_BY_SIMILARITY = False
+# Projecting out converged eigenvectors has problems when conv_tol is loose.
+# In this situation, the converged eigenvectors may be updated in the
+# following iterations.  Projecting out the converged eigenvectors may lead to
+# large errors to the yet converged eigenvectors.
+PROJECT_OUT_CONV_EIGS = False
 # default max_memory 2000 MB
 def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
              lindep=1e-14, max_memory=2000, dot=numpy.dot, callback=None,
@@ -310,8 +321,10 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                max_cycle, max_space, max_memory, _incore)
     heff = None
     fresh_start = True
-    emin = None
+    e = 0
+    conv_last = numpy.asarray([False]*nroots)
     vlast = None
+    emin = None
 
     for icyc in range(max_cycle):
         if fresh_start:
@@ -326,10 +339,9 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 # but the eigenvectors x0 might not be strictly orthogonal
             xt = None
             xt, x0 = _qr(x0, dot), None
-            e = numpy.zeros(nroots)
             max_dx_last = 1e9
-            fresh_start = False
-            conv = numpy.array([False] * nroots)
+            if SORT_EIG_BY_SIMILARITY:
+                conv = numpy.array([False] * nroots)
         elif len(xt) > 1:
             xt = _qr(xt, dot)
             xt = xt[:40]  # 40 trial vectors at most
@@ -358,29 +370,46 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                     heff[i,head+k] = heff[head+k,i].conj()
 
         w, v = scipy.linalg.eigh(heff[:space,:space])
-        e, v = _sort_by_similarity(w, v, nroots, conv, vlast, emin)
-        if elast.size != e.size:
-            de = e
+        if SORT_EIG_BY_SIMILARITY:
+            e, v = _sort_by_similarity(w, v, nroots, conv, vlast, emin)
+            if elast.size != e.size:
+                de = e
+            else:
+                de = e - elast
         else:
-            de = e - elast
+            e = w[:nroots]
+            v = v[:,:nroots]
 
         x0 = _gen_x0(v, xs)
         if lessio:
             ax0 = aop(x0)
         else:
             ax0 = _gen_x0(v, ax)
-        ide = numpy.argmax(abs(de))
 
-        dx_norm = [0] * nroots
-        xt = [None] * nroots
-        for k, ek in enumerate(e):
-            if not conv[k]:
-                xt[k] = ax0[k] - ek * x0[k]
-                dx_norm[k] = numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
-                if abs(de[k]) < tol and dx_norm[k] < toloose:
+        if SORT_EIG_BY_SIMILARITY:
+            dx_norm = [0] * nroots
+            xt = [None] * nroots
+            for k, ek in enumerate(e):
+                if not conv[k]:
+                    xt[k] = ax0[k] - ek * x0[k]
+                    dx_norm[k] = numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
+                    if abs(de[k]) < tol and dx_norm[k] < toloose:
+                        log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
+                                  k, dx_norm[k], ek, de[k])
+                        conv[k] = True
+        else:
+            elast, conv_last = _sort_elast(elast, conv_last, vlast, v, fresh_start)
+            de = e - elast
+            dx_norm = []
+            xt = []
+            for k, ek in enumerate(e):
+                xt.append(ax0[k] - ek * x0[k])
+                dx_norm.append(numpy.linalg.norm(xt[k]))
+                if not conv_last[k] and abs(de[k]) < tol and dx_norm[k] < toloose:
                     log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
                               k, dx_norm[k], ek, de[k])
-                    conv[k] = True
+            dx_norm = numpy.asarray(dx_norm)
+            conv = (abs(de) < tol) & (dx_norm < toloose)
         ax0 = None
         max_dx_norm = max(dx_norm)
         ide = numpy.argmax(abs(de))
@@ -397,9 +426,11 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             fresh_start = True
             continue
 
-        if any(conv) and e.dtype == numpy.double:
-            emin = min(e)
+        if SORT_EIG_BY_SIMILARITY:
+            if any(conv) and e.dtype == numpy.double:
+                emin = min(e)
         vlast = v
+        conv_last = conv
 
         # remove subspace linear dependency
         for k, ek in enumerate(e):
@@ -432,7 +463,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             break
 
         max_dx_last = max_dx_norm
-        fresh_start = fresh_start or space+nroots > max_space
+        fresh_start = space+nroots > max_space
 
         if callable(callback):
             callback(locals())
@@ -441,7 +472,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 
 
 def eigh(a, *args, **kwargs):
-    nroots = kwargs.get('nroots', default=1)
+    nroots = kwargs.get('nroots', 1)
     if isinstance(a, numpy.ndarray) and a.ndim == 2:
         e, v = scipy.linalg.eigh(a)
         if nroots == 1:
@@ -585,9 +616,10 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                max_cycle, max_space, max_memory, _incore)
     heff = None
     fresh_start = True
-    e = numpy.zeros(nroots)
-    emin = None
+    e = 0
+    conv_last = numpy.asarray([False]*nroots)
     vlast = None
+    emin = None
 
     for icyc in range(max_cycle):
         if fresh_start:
@@ -603,8 +635,8 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             xt = None
             xt, x0 = _qr(x0, dot), None
             max_dx_last = 1e9
-            fresh_start = False
-            conv = numpy.array([False] * nroots)
+            if SORT_EIG_BY_SIMILARITY:
+                conv = numpy.array([False] * nroots)
         elif len(xt) > 1:
             xt = _qr(xt, dot)
             xt = xt[:40]  # 40 trial vectors at most
@@ -634,12 +666,16 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 
         w, v = scipy.linalg.eig(heff[:space,:space])
         e, v, idx = pick(w, v, nroots, locals())
-        e, v = _sort_by_similarity(e, v, nroots, conv, vlast, emin,
-                                   heff[:space,:space])
-        if e.size != elast.size:
-            de = e
+        if SORT_EIG_BY_SIMILARITY:
+            e, v = _sort_by_similarity(e, v, nroots, conv, vlast, emin,
+                                       heff[:space,:space])
+            if e.size != elast.size:
+                de = e
+            else:
+                de = e - elast
         else:
-            de = e - elast
+            e = e[:nroots]
+            v = v[:,:nroots]
 
         x0 = _gen_x0(v, xs)
         if lessio:
@@ -647,16 +683,30 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         else:
             ax0 = _gen_x0(v, ax)
 
-        dx_norm = [0] * nroots
-        xt = [None] * nroots
-        for k, ek in enumerate(e):
-            if not conv[k]:
-                xt[k] = ax0[k] - ek * x0[k]
-                dx_norm[k] = numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
-                if abs(de[k]) < tol and dx_norm[k] < toloose:
+        if SORT_EIG_BY_SIMILARITY:
+            dx_norm = [0] * nroots
+            xt = [None] * nroots
+            for k, ek in enumerate(e):
+                if not conv[k]:
+                    xt[k] = ax0[k] - ek * x0[k]
+                    dx_norm[k] = numpy.linalg.norm(xt[k])
+                    if abs(de[k]) < tol and dx_norm[k] < toloose:
+                        log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
+                                  k, dx_norm[k], ek, de[k])
+                        conv[k] = True
+        else:
+            elast, conv_last = _sort_elast(elast, conv_last, vlast, v, fresh_start)
+            de = e - elast
+            dx_norm = []
+            xt = []
+            for k, ek in enumerate(e):
+                xt.append(ax0[k] - ek * x0[k])
+                dx_norm.append(numpy.linalg.norm(xt[k]))
+                if not conv_last[k] and abs(de[k]) < tol and dx_norm[k] < toloose:
                     log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
                               k, dx_norm[k], ek, de[k])
-                    conv[k] = True
+            dx_norm = numpy.asarray(dx_norm)
+            conv = (abs(de) < tol) & (dx_norm < toloose)
         ax0 = None
         max_dx_norm = max(dx_norm)
         ide = numpy.argmax(abs(de))
@@ -673,9 +723,11 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             fresh_start = True
             continue
 
-        if any(conv) and e.dtype == numpy.double:
-            emin = min(e)
+        if SORT_EIG_BY_SIMILARITY:
+            if any(conv) and e.dtype == numpy.double:
+                emin = min(e)
         vlast = v
+        conv_last = conv
 
         # remove subspace linear dependency
         for k, ek in enumerate(e):
@@ -708,17 +760,18 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             break
 
         max_dx_last = max_dx_norm
-        fresh_start = fresh_start or space+nroots > max_space
+        fresh_start = space+nroots > max_space
 
         if callable(callback):
             callback(locals())
 
     if left:
+        warnings.warn('Left eigenvectors from subspace diagonalization method may not be converged')
         w, vl, v = scipy.linalg.eig(heff[:space,:space], left=True)
         e, v, idx = pick(w, v, nroots, x0)
-        vl = vl[:,idx].astype(v.dtype)
-        xl = _gen_x0(vl[:nroots], xs)
-        return all(conv), e, xl, x0
+        xl = _gen_x0(vl[:,idx[:nroots]].conj(), xs)
+        x0 = _gen_x0(v[:,:nroots], xs)
+        return all(conv), e[:nroots], xl, x0
     else:
         return all(conv), e, x0
 
@@ -1188,6 +1241,14 @@ def _sort_by_similarity(w, v, nroots, conv, vlast, emin=None, heff=None):
     c = v[:,sorted_idx]
     return e, c
 
+def _sort_elast(elast, conv_last, vlast, v, fresh_start):
+    if fresh_start:
+        return elast, conv_last
+    head, nroots = vlast.shape
+    ovlp = abs(numpy.dot(v[:head].conj().T, vlast))
+    idx = numpy.argmax(ovlp, axis=1)
+    return elast[idx], conv_last[idx]
+
 
 class _Xlist(list):
     def __init__(self):
@@ -1357,10 +1418,10 @@ if __name__ == '__main__':
     print((abs(vr[1]) - abs(u[:,1])).sum())
     print((abs(vr[2]) - abs(u[:,2])).sum())
     print((abs(vr[3]) - abs(u[:,3])).sum())
-    print((abs(vl[0]) - abs(ul[:,0])).sum())
-    print((abs(vl[1]) - abs(ul[:,1])).sum())
-    print((abs(vl[2]) - abs(ul[:,2])).sum())
-    print((abs(vl[3]) - abs(ul[:,3])).sum())
+#    print((abs(vl[0]) - abs(ul[:,0])).max())
+#    print((abs(vl[1]) - abs(ul[:,1])).max())
+#    print((abs(vl[2]) - abs(ul[:,2])).max())
+#    print((abs(vl[3]) - abs(ul[:,3])).max())
 
 ##########
     N = 200
@@ -1383,6 +1444,6 @@ if __name__ == '__main__':
         #return (r+e0*x0) / (A.diagonal()-e0)  # Does not converge
         #return r / (A.diagonal()-e0)  # Does not converge
     e, c = eig(matvec, A[:,0], precond, nroots=4, verbose=5,
-                   max_cycle=200,max_space=40, tol=1e-9)
+                   max_cycle=200,max_space=40, tol=1e-5)
     print("# davidson evals =", e)
 
