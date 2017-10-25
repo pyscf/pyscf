@@ -11,13 +11,16 @@
 #include <helper_functions.h>
 #include <helper_cuda.h>
 
+#include <cuda_profiler_api.h>
+
 #include "m_iter_gpu_routines.h"
 
 float *X4_d, *ksn2e_d, *ksn2f_d;
 float *sab_d;
 float *nb2v_d, *nm2v_re_d, *nm2v_im_d;
 int norbs, nfermi, vstart, nprod, nvirt;
-cublasHandle_t handle_cublas;
+cublasHandle_t handle_cublas_real, handle_cublas_imag;
+cudaStream_t stream_mem, stream_real, stream_imag;
 
 
 int sum_int_vec(int *mat, int N)
@@ -172,6 +175,7 @@ extern "C" void init_tddft_iter_gpu(float *X4, int norbs_in, float *ksn2e,
                   float *ksn2f,  int nfermi_in, int nprod_in, int vstart_in)
 {
 
+  cudaProfilerStart();
   norbs = norbs_in;
   nfermi = nfermi_in;
   nprod = nprod_in;
@@ -180,7 +184,15 @@ extern "C" void init_tddft_iter_gpu(float *X4, int norbs_in, float *ksn2e,
 
   // For pascal GPU, the cudaMallocManaged() could probably allow to run larger systems.
   // Need to look for more informations about this!!
-  checkCudaErrors(cublasCreate(&handle_cublas));
+  checkCudaErrors(cublasCreate(&handle_cublas_real));
+  checkCudaErrors(cublasCreate(&handle_cublas_imag));
+
+  checkCudaErrors(cudaStreamCreate(&stream_mem));
+  checkCudaErrors(cudaStreamCreate(&stream_real));
+  checkCudaErrors(cudaStreamCreate(&stream_imag));
+
+  checkCudaErrors(cublasSetStream(handle_cublas_real, stream_real));
+  checkCudaErrors(cublasSetStream(handle_cublas_imag, stream_imag));
 
   checkCudaErrors(cudaMalloc( (void **)&ksn2e_d, sizeof(float) * norbs));
   checkCudaErrors(cudaMalloc( (void **)&ksn2f_d, sizeof(float) * norbs));
@@ -211,7 +223,12 @@ extern "C" void free_device()
   checkCudaErrors(cudaFree(nm2v_re_d));
   checkCudaErrors(cudaFree(nm2v_im_d));
 
-  checkCudaErrors(cublasDestroy(handle_cublas));
+  checkCudaErrors(cublasDestroy(handle_cublas_real));
+  checkCudaErrors(cublasDestroy(handle_cublas_imag));
+  checkCudaErrors(cudaStreamDestroy(stream_mem));
+  checkCudaErrors(cudaStreamDestroy(stream_real));
+  checkCudaErrors(cudaStreamDestroy(stream_imag));
+  cudaProfilerStop();
 }
 
 extern "C" void apply_rf0_device(float *sab_real, float *sab_imag, 
@@ -225,17 +242,17 @@ extern "C" void apply_rf0_device(float *sab_real, float *sab_imag,
   // real part first
   checkCudaErrors(cudaMemcpy( sab_d, sab_real, sizeof(float) * norbs*norbs, cudaMemcpyHostToDevice));
 
-  checkCudaErrors(cublasSgemm(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, norbs, &alpha, sab_d, norbs,
+  checkCudaErrors(cublasSgemm(handle_cublas_real, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, norbs, &alpha, sab_d, norbs,
         X4_d, norbs, &beta, nb2v_d, norbs));
-  checkCudaErrors(cublasSgemm(handle_cublas, CUBLAS_OP_T, CUBLAS_OP_N, nvirt, nfermi, norbs, &alpha, &X4_d[vstart*norbs], norbs, nb2v_d,
+  checkCudaErrors(cublasSgemm(handle_cublas_real, CUBLAS_OP_T, CUBLAS_OP_N, nvirt, nfermi, norbs, &alpha, &X4_d[vstart*norbs], norbs, nb2v_d,
        norbs, &beta, nm2v_re_d, nvirt));
 
   // imaginary part
   checkCudaErrors(cudaMemcpy( sab_d, sab_imag, sizeof(float) * norbs*norbs, cudaMemcpyHostToDevice));
   
-  checkCudaErrors(cublasSgemm(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, norbs, &alpha, sab_d, norbs,
+  checkCudaErrors(cublasSgemm(handle_cublas_real, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, norbs, &alpha, sab_d, norbs,
         X4_d, norbs, &beta, nb2v_d, norbs));
-  checkCudaErrors(cublasSgemm(handle_cublas, CUBLAS_OP_T, CUBLAS_OP_N, nvirt, nfermi, norbs, &alpha, &X4_d[vstart*norbs], norbs, nb2v_d,
+  checkCudaErrors(cublasSgemm(handle_cublas_real, CUBLAS_OP_T, CUBLAS_OP_N, nvirt, nfermi, norbs, &alpha, &X4_d[vstart*norbs], norbs, nb2v_d,
         norbs, &beta, nm2v_im_d, nvirt));
 
   // Normalization!!
@@ -243,31 +260,45 @@ extern "C" void apply_rf0_device(float *sab_real, float *sab_imag,
       nm2v_re_d, nm2v_im_d, nfermi, norbs, nvirt, vstart);
 
   // Going back: real part first
-  checkCudaErrors(cublasSgemm(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, nvirt, &alpha, &X4_d[vstart*norbs], norbs, nm2v_re_d,
+  checkCudaErrors(cublasSgemm(handle_cublas_real, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, nvirt, &alpha, &X4_d[vstart*norbs], norbs, nm2v_re_d,
         nvirt, &beta, nb2v_d, norbs));
 
-  cublasSgemm(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_T, norbs, norbs, nfermi, &alpha, nb2v_d, norbs, X4_d,
+  cublasSgemm(handle_cublas_real, CUBLAS_OP_N, CUBLAS_OP_T, norbs, norbs, nfermi, &alpha, nb2v_d, norbs, X4_d,
         norbs, &beta, sab_d, norbs);
   checkCudaErrors(cudaMemcpy( sab_real, sab_d, sizeof(float) * norbs*norbs, cudaMemcpyDeviceToHost));
 
   //imaginary part
-  checkCudaErrors(cublasSgemm(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, nvirt, &alpha, 
+  checkCudaErrors(cublasSgemm(handle_cublas_real, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, nvirt, &alpha, 
         &X4_d[vstart*norbs], norbs, nm2v_im_d, nvirt, &beta, nb2v_d, norbs));
 
-  checkCudaErrors(cublasSgemm(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_T, norbs, norbs, nfermi, &alpha, 
+  checkCudaErrors(cublasSgemm(handle_cublas_real, CUBLAS_OP_N, CUBLAS_OP_T, norbs, norbs, nfermi, &alpha, 
         nb2v_d, norbs, X4_d, norbs, &beta, sab_d, norbs));
   checkCudaErrors(cudaMemcpy( sab_imag, sab_d, sizeof(float) * norbs*norbs, cudaMemcpyDeviceToHost));
 
+}
+
+extern "C" void calc_nb2v_from_sab(int reim)
+{
+  float alpha = 1.0, beta = 0.0;
+
+  if (reim == 0)
+  {
+    cublasSgemm(handle_cublas_real, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, norbs, &alpha, sab_d, norbs,
+          X4_d, norbs, &beta, nb2v_d, norbs);
+  }
+  else
+  {
+    cublasSgemm(handle_cublas_imag, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, norbs, &alpha, sab_d, norbs,
+          X4_d, norbs, &beta, nb2v_d, norbs);
+  }
 }
 
 extern "C" void get_nm2v_real()
 {
   float alpha = 1.0, beta = 0.0;
   
-  checkCudaErrors(cublasSgemm(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, norbs, &alpha, sab_d, norbs,
-        X4_d, norbs, &beta, nb2v_d, norbs));
-  checkCudaErrors(cublasSgemm(handle_cublas, CUBLAS_OP_T, CUBLAS_OP_N, nvirt, nfermi, norbs, &alpha, &X4_d[vstart*norbs], norbs, nb2v_d,
-       norbs, &beta, nm2v_re_d, nvirt));
+  cublasSgemm(handle_cublas_real, CUBLAS_OP_T, CUBLAS_OP_N, nvirt, nfermi, norbs, &alpha, &X4_d[vstart*norbs], norbs, nb2v_d,
+       norbs, &beta, nm2v_re_d, nvirt);
 
 }
 
@@ -275,34 +306,42 @@ extern "C" void get_nm2v_imag()
 {
   float alpha = 1.0, beta = 0.0;
   
-  checkCudaErrors(cublasSgemm(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, norbs, &alpha, sab_d, norbs,
-        X4_d, norbs, &beta, nb2v_d, norbs));
-  checkCudaErrors(cublasSgemm(handle_cublas, CUBLAS_OP_T, CUBLAS_OP_N, nvirt, nfermi, norbs, &alpha, &X4_d[vstart*norbs], norbs, nb2v_d,
-       norbs, &beta, nm2v_im_d, nvirt));
+  cublasSgemm(handle_cublas_imag, CUBLAS_OP_T, CUBLAS_OP_N, nvirt, nfermi, norbs, &alpha, &X4_d[vstart*norbs], norbs, nb2v_d,
+       norbs, &beta, nm2v_im_d, nvirt);
 
 }
 
-extern "C" void get_sab_real()
+extern "C" void calc_nb2v_from_nm2v_real()
 {
   float alpha = 1.0, beta = 0.0;
   
-  checkCudaErrors(cublasSgemm(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, nvirt, &alpha, &X4_d[vstart*norbs], norbs, nm2v_re_d,
-        nvirt, &beta, nb2v_d, norbs));
-
-  cublasSgemm(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_T, norbs, norbs, nfermi, &alpha, nb2v_d, norbs, X4_d,
-        norbs, &beta, sab_d, norbs);
- 
+  cublasSgemm(handle_cublas_real, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, nvirt, &alpha, &X4_d[vstart*norbs], norbs, nm2v_re_d,
+        nvirt, &beta, nb2v_d, norbs);
 }
 
-extern "C" void get_sab_imag()
+extern "C" void calc_nb2v_from_nm2v_imag()
 {
   float alpha = 1.0, beta = 0.0;
 
-  checkCudaErrors(cublasSgemm(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, nvirt, &alpha, &X4_d[vstart*norbs], norbs, nm2v_im_d,
-        nvirt, &beta, nb2v_d, norbs));
+  cublasSgemm(handle_cublas_imag, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, nvirt, &alpha, &X4_d[vstart*norbs], norbs, nm2v_im_d,
+        nvirt, &beta, nb2v_d, norbs);
 
-  cublasSgemm(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_T, norbs, norbs, nfermi, &alpha, nb2v_d, norbs, X4_d,
-        norbs, &beta, sab_d, norbs);
+}
+
+extern "C" void get_sab(int reim)
+{
+  float alpha = 1.0, beta = 0.0;
+
+  if (reim == 0)
+  {
+    cublasSgemm(handle_cublas_real, CUBLAS_OP_N, CUBLAS_OP_T, norbs, norbs, nfermi, &alpha, nb2v_d, norbs, X4_d,
+          norbs, &beta, sab_d, norbs);
+  }
+  else
+  {
+    cublasSgemm(handle_cublas_imag, CUBLAS_OP_N, CUBLAS_OP_T, norbs, norbs, nfermi, &alpha, nb2v_d, norbs, X4_d,
+          norbs, &beta, sab_d, norbs);
+  }
 }
 
 extern "C" void div_eigenenergy_gpu(double omega_re, double omega_im, int *block_size, int *grid_size)
@@ -311,6 +350,7 @@ extern "C" void div_eigenenergy_gpu(double omega_re, double omega_im, int *block
   dim3 dimBlock(block_size[0], block_size[1]);
   dim3 dimGrid(grid_size[0], grid_size[1]);
 
+  cudaDeviceSynchronize();
   normalize_energy_gpu<<<dimGrid, dimBlock>>>(ksn2e_d, ksn2f_d, omega_re, omega_im, 
       nm2v_re_d, nm2v_im_d, nfermi, norbs, nvirt, vstart);
 }
@@ -319,11 +359,11 @@ extern "C" void memcpy_sab_host2device(float *sab, int Async)
 {
   if (Async == 0)
   {
-    checkCudaErrors(cudaMemcpy( sab_d, sab, sizeof(float) * norbs*norbs, cudaMemcpyHostToDevice));
+    cudaMemcpy( sab_d, sab, sizeof(float) * norbs*norbs, cudaMemcpyHostToDevice);
   }
   else
   {
-    checkCudaErrors(cudaMemcpyAsync( sab_d, sab, sizeof(float) * norbs*norbs, cudaMemcpyHostToDevice, 0));
+    cudaMemcpyAsync( sab_d, sab, sizeof(float) * norbs*norbs, cudaMemcpyHostToDevice, 0);
   }
 }
 
@@ -331,10 +371,10 @@ extern "C" void memcpy_sab_device2host(float *sab, int Async)
 {
   if (Async == 0)
   {
-    checkCudaErrors(cudaMemcpy( sab, sab_d, sizeof(float) * norbs*norbs, cudaMemcpyDeviceToHost));
+    cudaMemcpy( sab, sab_d, sizeof(float) * norbs*norbs, cudaMemcpyDeviceToHost);
   }
   else
   {
-    checkCudaErrors(cudaMemcpyAsync( sab, sab_d, sizeof(float) * norbs*norbs, cudaMemcpyDeviceToHost, 0));
+    cudaMemcpyAsync( sab, sab_d, sizeof(float) * norbs*norbs, cudaMemcpyDeviceToHost, 0);
   }
 }

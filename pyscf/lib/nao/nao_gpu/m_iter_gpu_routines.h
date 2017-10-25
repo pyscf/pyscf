@@ -12,9 +12,11 @@ extern "C" void free_device();
 extern "C" void memcpy_sab_host2device(float *sab, int Async);
 extern "C" void memcpy_sab_device2host(float *sab, int Async);
 
+extern "C" void calc_nb2v_from_sab(int reim);
 extern "C" void get_nm2v_real();
 extern "C" void get_nm2v_imag();
-extern "C" void get_sab_real();
-extern "C" void get_sab_imag();
+extern "C" void calc_nb2v_from_nm2v_real();
+extern "C" void calc_nb2v_from_nm2v_imag();
+extern "C" void get_sab(int reim);
 extern "C" void div_eigenenergy_gpu(double omega_re, double omega_im, 
     int *block_size, int *grid_size);

@@ -53,17 +53,23 @@ class tddft_iter_gpu_c():
     def cpy_sab_to_host(self, sab, Async=0):
         libnao_gpu.memcpy_sab_device2host(sab.ctypes.data_as(POINTER(c_float)), c_int(Async))
 
+    def calc_nb2v_from_sab(self, reim):
+        libnao_gpu.calc_nb2v_from_sab(c_int(reim))
+
     def calc_nm2v_real(self):
         libnao_gpu.get_nm2v_real()
     
     def calc_nm2v_imag(self):
         libnao_gpu.get_nm2v_imag()
 
-    def calc_sab_real(self):
-        libnao_gpu.get_sab_real()
+    def calc_nb2v_from_nm2v_real(self):
+        libnao_gpu.calc_nb2v_from_nm2v_real()
 
-    def calc_sab_imag(self):
-        libnao_gpu.get_sab_imag()
+    def calc_nb2v_from_nm2v_imag(self):
+        libnao_gpu.calc_nb2v_from_nm2v_imag()
+
+    def calc_sab(self, reim):
+        libnao_gpu.get_sab(c_int(reim))
 
     def div_eigenenergy_gpu(self, comega):
         libnao_gpu.div_eigenenergy_gpu(c_double(comega.real), c_double(comega.imag),
