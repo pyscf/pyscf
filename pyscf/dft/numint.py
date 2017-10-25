@@ -1120,9 +1120,9 @@ def _rks_gga_wv0(rho, vxc, weight):
 def _rks_gga_wv1(rho0, rho1, vxc, fxc, weight):
     vgamma = vxc[1]
     frho, frhogamma, fgg = fxc[:3]
-    ngrid = vgamma.size
     # sigma1 ~ \nabla(\rho_\alpha+\rho_\beta) dot \nabla(|b><j|) z_{bj}
     sigma1 = numpy.einsum('xi,xi->i', rho0[1:4], rho1[1:4])
+    ngrid = vgamma.size
     wv = numpy.empty((4,ngrid))
     wv[0]  = frho * rho1[0]
     wv[0] += frhogamma * sigma1 * 2
@@ -1130,6 +1130,30 @@ def _rks_gga_wv1(rho0, rho1, vxc, fxc, weight):
     wv[1:]+= vgamma * rho1[1:4] * 2
     wv *= weight
     wv[0] *= .5  # v+v.T should be applied in the caller
+    return wv
+
+def _rks_gga_wv2(rho0, rho1, fxc, kxc, weight):
+    frr, frg, fgg = fxc[:3]
+    frrr, frrg, frgg, fggg = kxc
+    sigma1 = numpy.einsum('xi,xi->i', rho0[1:], rho1[1:])
+    r1r1 = rho1[0]**2
+    s1s1 = sigma1**2
+    r1s1 = rho1[0] * sigma1
+    sigma2 = numpy.einsum('xi,xi->i', rho1[1:], rho1[1:])
+    ngrid = frrr.size
+    wv = numpy.empty((4,ngrid))
+    wv[0]  = frrr * r1r1
+    wv[0] += 4 * frrg * r1s1
+    wv[0] += 4 * frgg * s1s1
+    wv[0] += 2 * frg * sigma2
+    wv[1:]  = 2 * frrg * r1r1 * rho0[1:]
+    wv[1:] += 8 * frgg * r1s1 * rho0[1:]
+    wv[1:] += 4 * frg * rho1[0] * rho1[1:]
+    wv[1:] += 4 * fgg * sigma2 * rho0[1:]
+    wv[1:] += 8 * fgg * sigma1 * rho1[1:]
+    wv[1:] += 8 * fggg * s1s1 * rho0[1:]
+    wv *= weight
+    wv[0]*=.5  # v+v.T should be applied in the caller
     return wv
 
 def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
