@@ -91,7 +91,7 @@ class tddft_iter_c():
     self.xocc = sv.wfsx.x[0,0,0:self.nfermi,:,0]  # does python creates a copy at this point ?
     self.xvrt = sv.wfsx.x[0,0,self.vstart:,:,0]   # does python creates a copy at this point ?
 
-    self.tddft_iter_gpu = tddft_iter_gpu_c(GPU, sv.wfsx.x, self.ksn2f, self.ksn2e, 
+    self.tddft_iter_gpu = tddft_iter_gpu_c(GPU, sv.wfsx.x[0, 0, :, :, 0], self.ksn2f, self.ksn2e, 
             self.norbs, self.nfermi, self.nprod, self.vstart)
 
   def load_kernel(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None, **kwargs):
