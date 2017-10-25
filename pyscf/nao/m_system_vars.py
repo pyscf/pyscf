@@ -226,7 +226,7 @@ class system_vars_c():
   #
   #
   #
-  def init_siesta_xml(self, label='siesta', cd='.', verbose=0, **kvargs):
+  def init_siesta_xml(self, **kw):
     from pyscf.nao.m_siesta_xml import siesta_xml
     from pyscf.nao.m_siesta_wfsx import siesta_wfsx_c
     from pyscf.nao.m_siesta_ion_xml import siesta_ion_xml
@@ -259,12 +259,14 @@ class system_vars_c():
         sp2charge (list): list associating the species to their charge
         state (string): this is an internal information on the current status of the class
     """
+    #label='siesta', cd='.', verbose=0, 
 
-    self.label = label
-    self.cd = cd
+    self.label = label = kw['label'] if 'label' in kw else 'siesta'
+    self.cd = cd = kw['cd'] if 'cd' in kw else '.'
+    self.verbose = verbose = kw['verbose'] if 'verbose' in kw else 0
     self.xml_dict = siesta_xml(cd+'/'+self.label+'.xml')
-    self.wfsx = siesta_wfsx_c(label, cd, **kvargs)
-    self.hsx = siesta_hsx_c(cd+'/'+self.label+'.HSX', **kvargs)
+    self.wfsx = siesta_wfsx_c(**kw)
+    self.hsx = siesta_hsx_c(fname=cd+'/'+self.label+'.HSX', **kw)
     self.norbs_sc = self.wfsx.norbs if self.hsx.orb_sc2orb_uc is None else len(self.hsx.orb_sc2orb_uc)
     self.ucell = self.xml_dict["ucell"]
     ##### The parameters as fields     
@@ -324,7 +326,6 @@ class system_vars_c():
     self._nelectron = self.hsx.nelec
     self.cart = False
     self.spin = self.nspin-1
-    self.verbose = verbose
     self.stdout = sys.stdout
     self.symmetry = False
     self.symmetry_subgroup = None
@@ -339,7 +340,7 @@ class system_vars_c():
     self._atom = [(self.sp2symbol[sp], list(self.atom2coord[ia,:])) for ia,sp in enumerate(self.atom2sp)]
     return self
 
-  def init_gpaw(self, calc, label="gpaw", cd='.', **kvargs):
+  def init_gpaw(self, calc, **kw):
     """
         use the data from a GPAW LCAO calculations as input to
         initialize system variables.
@@ -350,7 +351,7 @@ class system_vars_c():
             label (optional, string): label used for the calculations
             chdir (optional, string): path to the directory in which are stored the
                 data from gpaw
-            kvargs (optional, dict): dictionary of optional arguments
+            kw (optional, dict): dictionary of optional arguments
                 We may need a list of optional arguments!
 
         Example:
@@ -382,7 +383,7 @@ class system_vars_c():
     except:
         raise ValueError("ASE and GPAW must be installed for using system_vars_gpaw")
     from pyscf.nao.m_system_vars_gpaw import system_vars_gpaw
-    return system_vars_gpaw(self, calc, label="gpaw", chdir='.', **kvargs)
+    return system_vars_gpaw(self, gpaw=calc, **kw)
     
   #
   #

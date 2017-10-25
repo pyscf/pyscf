@@ -48,6 +48,4 @@ class KnowValues(unittest.TestCase):
     self.assertAlmostEqual(lm.pp[-1], 318.3098861837907)
     self.assertAlmostEqual(lm.pp[0], 0.021220659078919384)
 
-    
-if __name__ == "__main__":
-  unittest.main()
+if __name__ == "__main__": unittest.main()

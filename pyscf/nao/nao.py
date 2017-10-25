@@ -51,7 +51,13 @@ class nao():
       Constructor of NAO class
     """
     if 'gto' in kw:
-      self.init_pyscf_gto(**kw)
+      self.init_gto(**kw)
+    elif 'xyz_list' in kw:
+      self.init_xyz_list(**kw)
+    elif 'label' in kw:
+      self.init_label(**kw)
+    elif 'gpaw' in kw:
+      self.init_gpaw(**kw)
     else:
       raise RuntimeError('unknown init method')
     #print(kw)
@@ -60,7 +66,7 @@ class nao():
   #
   #
   #
-  def init_pyscf_gto(self, **kw):
+  def init_gto(self, **kw):
     """Interpret previous pySCF calculation"""
     from pyscf.lib import logger
 
@@ -104,6 +110,163 @@ class nao():
     for sp,mu_s in zip(self.atom2sp,self.atom2mu_s):
       for mu,j in enumerate(self.ao_log.sp_mu2j[sp]): self.mu2orb_s[mu_s+mu+1] = self.mu2orb_s[mu_s+mu] + 2*j+1
     return self
+
+  #
+  #
+  #
+  def init_xyz_list(self, **kw):
+    """ This is simple constructor which only initializes geometry info """
+    from pyscf.lib import logger
+    from pyscf.lib.parameters import ELEMENTS as chemical_symbols
+    self.verbose = logger.NOTE  # To be similar to Mole object...
+    self.stdout = sys.stdout
+    self.symmetry = False
+    self.symmetry_subgroup = None
+    self.cart = False
+
+    self.label = kw['label'] if 'label' in kw else 'pyscf'
+    atom = kw['xyz_list']
+    atom2charge = [atm[0] for atm in atom]
+    self.atom2coord = np.array([atm[1] for atm in atom])
+    self.sp2charge = list(set(atom2charge))
+    self.sp2symbol = [chemical_symbols[z] for z in self.sp2charge]
+    self.atom2sp = [self.sp2charge.index(charge) for charge in atom2charge]
+    self.natm=self.natoms=len(self.atom2sp)
+    self.atom2s = None
+    self.nspin = 1
+    self.nbas  = self.natm
+    self.state = 'should be useful for something'
+    return self
+
+  #
+  #
+  #
+  def init_label(self, **kw):
+    from pyscf.nao.m_siesta_xml import siesta_xml
+    from pyscf.nao.m_siesta_wfsx import siesta_wfsx_c
+    from pyscf.nao.m_siesta_ion_xml import siesta_ion_xml
+    from pyscf.nao.m_siesta_hsx import siesta_hsx_c
+    from timeit import default_timer as timer
+    """
+      Initialise system var using only the siesta files (siesta.xml in particular is needed)
+
+      System variables:
+      -----------------
+        label (string): calculation label
+        chdir (string): calculation directory
+        xml_dict (dict): information extracted from the xml siesta output, see m_siesta_xml
+        wfsx: class use to extract the information about wavefunctions, see m_siesta_wfsx
+        hsx: class to store a sparse representation of hamiltonian and overlap, see m_siesta_hsx
+        norbs_sc (integer): number of orbital
+        ucell (array, float): unit cell
+        sp2ion (list): species to ions, list of the species associated to the information from the ion files, see m_siesta_ion_xml
+        ao_log: Atomic orbital on an logarithmic grid, see m_ao_log
+        atom2coord (array, float): array containing the coordinates of each atom.
+        natm, natoms (integer): number of atoms
+        norbs (integer): number of orbitals
+        nspin (integer): number of spin
+        nkpoints (integer): number of kpoints
+        fermi_energy (float): Fermi energy
+        atom2sp (list): atom to specie, list associating the atoms to their specie number
+        atom2s: atom -> first atomic orbital in a global orbital counting
+        atom2mu_s: atom -> first multiplett (radial orbital) in a global counting of radial orbitals
+        sp2symbol (list): list associating the species to their symbol
+        sp2charge (list): list associating the species to their charge
+        state (string): this is an internal information on the current status of the class
+    """
+
+    #label='siesta', cd='.', verbose=0, **kvargs
+
+    self.label = label = kw['label'] if 'label' in kw else 'siesta'
+    self.cd = cd = kw['cd'] if 'cd' in kw else '.'
+    self.verbose = kw['verbose'] if 'verbose' in kw else 0
+    self.xml_dict = siesta_xml(cd+'/'+self.label+'.xml')
+    self.wfsx = siesta_wfsx_c(**kw)
+    self.hsx = siesta_hsx_c(fname=cd+'/'+self.label+'.HSX', **kw)
+    self.norbs_sc = self.wfsx.norbs if self.hsx.orb_sc2orb_uc is None else len(self.hsx.orb_sc2orb_uc)
+    self.ucell = self.xml_dict["ucell"]
+    ##### The parameters as fields     
+    self.sp2ion = []
+    for sp in self.wfsx.sp2strspecie: self.sp2ion.append(siesta_ion_xml(cd+'/'+sp+'.ion.xml'))
+
+    _siesta_ion_add_sp2(self, self.sp2ion)
+    self.ao_log = ao_log_c().init_ao_log_ion(self.sp2ion)
+
+    self.atom2coord = self.xml_dict['atom2coord']
+    self.natm=self.natoms=len(self.xml_dict['atom2sp'])
+    self.norbs  = self.wfsx.norbs 
+    self.nspin  = self.wfsx.nspin
+    self.nkpoints  = self.wfsx.nkpoints
+    self.fermi_energy = self.xml_dict['fermi_energy']
+
+    strspecie2sp = {}
+    # initialise a dictionary with species string as key
+    # associated to the specie number
+    for sp,strsp in enumerate(self.wfsx.sp2strspecie): strspecie2sp[strsp] = sp
+    
+    # list of atoms associated to them specie number
+    self.atom2sp = np.empty((self.natm), dtype=np.int64)
+    for o,atom in enumerate(self.wfsx.orb2atm):
+      self.atom2sp[atom-1] = strspecie2sp[self.wfsx.orb2strspecie[o]]
+
+    self.atom2s = np.zeros((self.natm+1), dtype=np.int64)
+    for atom,sp in enumerate(self.atom2sp):
+        self.atom2s[atom+1]=self.atom2s[atom]+self.ao_log.sp2norbs[sp]
+
+    # atom2mu_s list of atom associated to them multipletts (radial orbitals)
+    self.atom2mu_s = np.zeros((self.natm+1), dtype=np.int64)
+    for atom,sp in enumerate(self.atom2sp):
+        self.atom2mu_s[atom+1]=self.atom2mu_s[atom]+self.ao_log.sp2nmult[sp]
+    
+    orb2m = self.get_orb2m()
+    _siesta2blanko_csr(orb2m, self.hsx.s4_csr, self.hsx.orb_sc2orb_uc)
+
+    for s in range(self.nspin):
+      _siesta2blanko_csr(orb2m, self.hsx.spin2h4_csr[s], self.hsx.orb_sc2orb_uc)
+    
+    #t1 = timer()
+    for k in range(self.nkpoints):
+      for s in range(self.nspin):
+        for n in range(self.norbs):
+          _siesta2blanko_denvec(orb2m, self.wfsx.x[k,s,n,:,:])
+    #t2 = timer(); print(t2-t1, 'rsh wfsx'); t1 = timer()
+
+    
+    self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
+    self.sp2charge = self.ao_log.sp2charge
+    self.init_libnao()
+    self.state = 'should be useful for something'
+
+    # Trying to be similar to mole object from pySCF 
+    self._xc_code   = 'LDA,PZ' # estimate how ? 
+    self._nelectron = self.hsx.nelec
+    self.cart = False
+    self.spin = self.nspin-1
+    self.stdout = sys.stdout
+    self.symmetry = False
+    self.symmetry_subgroup = None
+    self._built = True 
+    self.max_memory = 20000
+    self.incore_anyway = False
+    self.nbas = self.atom2mu_s[-1] # total number of radial orbitals
+    self.mu2orb_s = np.zeros((self.nbas+1), dtype=np.int64)
+    for sp,mu_s in zip(self.atom2sp,self.atom2mu_s):
+      for mu,j in enumerate(self.ao_log.sp_mu2j[sp]): self.mu2orb_s[mu_s+mu+1] = self.mu2orb_s[mu_s+mu] + 2*j+1
+        
+    self._atom = [(self.sp2symbol[sp], list(self.atom2coord[ia,:])) for ia,sp in enumerate(self.atom2sp)]
+    return self
+
+  def init_gpaw(self, **kw):
+    """ Use the data from a GPAW LCAO calculations as input to initialize system variables. """
+    try:
+        import ase
+        import gpaw
+    except:
+        raise ValueError("ASE and GPAW must be installed for using system_vars_gpaw")
+    from pyscf.nao.m_system_vars_gpaw import system_vars_gpaw
+    return system_vars_gpaw(self, **kw)
+    
+
 
   # More functions for similarity with Mole
   def atom_symbol(self, ia): return self.sp2symbol[self.atom2sp[ia]]
@@ -189,14 +352,13 @@ class nao():
   def init_libnao(self):
     """ Initialization of data on libnao site """
     from pyscf.nao.m_libnao import libnao
-    from pyscf.nao.m_sv_chain_data import sv_chain_data
     from ctypes import POINTER, c_double, c_int64, c_int32, byref
 
-    #libnao.init_aos_libnao.argtypes = (POINTER(c_int64), POINTER(c_int64))
-    #info = c_int64(-999)
+    libnao.init_aos_libnao.argtypes = (POINTER(c_int64), POINTER(c_int64))
+    info = c_int64(-999)
     #libnao.init_aos_libnao(c_int64(self.norbs), byref(info))
     #if info.value!=0: raise RuntimeError("info!=0")
-    raise RuntimeError('not implemented!')
+    #raise RuntimeWarning('not implemented!')
     return self
   
   @property

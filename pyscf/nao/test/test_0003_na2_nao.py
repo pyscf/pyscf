@@ -5,7 +5,6 @@ import unittest
 class KnowValues(unittest.TestCase):
   
   def test_siesta2sv_df(self):
-    from pyscf import scf
     from pyscf.nao.m_siesta_utils import get_siesta_command, get_pseudo
     import subprocess
     import os
@@ -47,8 +46,8 @@ class KnowValues(unittest.TestCase):
     if errorcode: raise RuntimeError('siesta returned an error: {0}'.format(errorcode))
 
     # run test system_vars
-    from pyscf.nao.m_system_vars import system_vars_c, diag_check, overlap_check
-    sv  = system_vars_c().init_siesta_xml(label=label)
+    from pyscf.nao import scf
+    sv  = scf(label=label)
     self.assertEqual(sv.norbs, 10)
     self.assertTrue( sv.diag_check() )
     self.assertTrue( sv.overlap_check())
