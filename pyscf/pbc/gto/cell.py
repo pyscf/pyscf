@@ -451,7 +451,7 @@ def get_bounding_sphere(cell, rcut):
         nimgs[i] = 1
     return nimgs
 
-def get_Gv(cell, mesh=None):
+def get_Gv(cell, mesh=None, **kwargs):
     '''Calculate three-dimensional G-vectors for the cell; see MH (3.8).
 
     Indices along each direction go as [0...N-1, -N...-1] to follow FFT convention.
@@ -465,6 +465,11 @@ def get_Gv(cell, mesh=None):
     '''
     if mesh is None:
         mesh = cell.mesh
+    if 'gs' in kwargs:
+        warnings.warn('cell.gs is deprecated.  It is replaced by cell.mesh,'
+                      'the number of PWs (=2*gs+1) along each direction.')
+        mesh = [2*n+1 for n in gs]
+
     gx = np.fft.fftfreq(mesh[0], 1./mesh[0])
     gy = np.fft.fftfreq(mesh[1], 1./mesh[1])
     gz = np.fft.fftfreq(mesh[2], 1./mesh[2])
@@ -474,7 +479,7 @@ def get_Gv(cell, mesh=None):
     Gv = np.dot(gxyz, b)
     return Gv
 
-def get_Gv_weights(cell, mesh=None):
+def get_Gv_weights(cell, mesh=None, **kwargs):
     '''Calculate G-vectors and weights.
 
     Returns:
@@ -483,6 +488,11 @@ def get_Gv_weights(cell, mesh=None):
     '''
     if mesh is None:
         mesh = cell.mesh
+    if 'gs' in kwargs:
+        warnings.warn('cell.gs is deprecated.  It is replaced by cell.mesh,'
+                      'the number of PWs (=2*gs+1) along each direction.')
+        mesh = [2*n+1 for n in gs]
+
     def plus_minus(n):
         #rs, ws = dft.delley(n)
         #rs, ws = dft.treutler_ahlrichs(n)
@@ -740,7 +750,7 @@ def make_kpts(cell, nks, wrap_around=False, with_gamma_point=True):
     kpts = cell.get_abs_kpts(scaled_kpts)
     return kpts
 
-def gen_uniform_grids(cell, mesh=None):
+def gen_uniform_grids(cell, mesh=None, **kwargs):
     '''Generate a uniform real-space grid consistent w/ samp thm; see MH (3.19).
 
     Args:
@@ -752,6 +762,10 @@ def gen_uniform_grids(cell, mesh=None):
 
     '''
     if mesh is None: mesh = cell.mesh
+    if 'gs' in kwargs:
+        warnings.warn('cell.gs is deprecated.  It is replaced by cell.mesh,'
+                      'the number of PWs (=2*gs+1) along each direction.')
+        mesh = [2*n+1 for n in gs]
     qv = lib.cartesian_prod([np.arange(x) for x in mesh])
     a_frac = np.einsum('i,ij->ij', 1./np.asarray(mesh), cell.lattice_vectors())
     coords = np.dot(qv, a_frac)
@@ -980,8 +994,8 @@ class Cell(mole.Mole):
         return np.asarray(self.a).T
     @h.setter
     def h(self, x):
-        sys.stderr.write('cell.h is deprecated.  It is replaced by the '
-                         '(row-based) lattice vectors cell.a:  cell.a = cell.h.T\n')
+        warnings.warn('cell.h is deprecated.  It is replaced by the '
+                      '(row-based) lattice vectors cell.a:  cell.a = cell.h.T\n')
         if isinstance(x, (str, unicode)):
             x = x.replace(';',' ').replace(',',' ').replace('\n',' ')
             self.a = np.asarray([float(z) for z in x.split()]).reshape(3,3).T
@@ -1013,8 +1027,8 @@ class Cell(mole.Mole):
         return [n//2 for n in self.mesh]
     @gs.setter
     def gs(self, x):
-        sys.stderr.write('cell.h is deprecated.  It is replaced by cell.mesh,'
-                         'the number of PWs (=2*gs+1) along each direction.')
+        warnings.warn('cell.gs is deprecated.  It is replaced by cell.mesh,'
+                      'the number of PWs (=2*gs+1) along each direction.')
         self.mesh = [2*n+1 for n in x]
 
     @property

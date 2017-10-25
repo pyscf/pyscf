@@ -195,13 +195,13 @@ class FFTDF(lib.StreamObject):
         else:
             ke_cutoff = numpy.min(cell.ke_cutoff)
         ke_guess = estimate_ke_cutoff(cell, cell.precision)
-        if ke_cutoff < ke_guess*.8:
-            gs_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
+        if ke_cutoff < ke_guess*.7:
+            mesh_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
             logger.warn(self, 'ke_cutoff/mesh (%g / %s) is not enough for FFTDF '
                         'to get integral accuracy %g.\nCoulomb integral error '
                         'is ~ %.2g Eh.\nRecommended ke_cutoff/mesh are %g / %s.',
                         ke_cutoff, self.mesh, cell.precision,
-                        error_for_ke_cutoff(cell, ke_cutoff), ke_guess, gs_guess)
+                        error_for_ke_cutoff(cell, ke_cutoff), ke_guess, mesh_guess)
         return self
 
     def aoR_loop(self, mesh=None, kpts=None, kpts_band=None):

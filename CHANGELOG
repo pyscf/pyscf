@@ -9,6 +9,7 @@ PySCF 1.5 alpha (2018-03-??)
   - UKS analytical nuclear Hessian
 * Improved
   - Support of setting omp threads in FCI solver
+  - Supported even number of grids in pbc calculations
 
 
 PySCF 1.4.1 (201?-?-?)

@@ -66,7 +66,7 @@ def get_nuc(mydf, kpts=None):
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = (time.clock(), time.time())
 
-    mesh = mydf.mesh
+    mesh = numpy.asarray(mydf.mesh)
     nkpts = len(kpts_lst)
     nao = cell.nao_nr()
     nao_pair = nao * (nao+1) // 2
@@ -79,14 +79,14 @@ def get_nuc(mydf, kpts=None):
         vpplocG *= kws
         vG = vpplocG
         vj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
-#    else:
-#        if cell.dimension > 0:
-#            ke_guess = estimate_ke_cutoff_for_eta(cell, mydf.eta, cell.precision)
-#            gs_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
-#            if numpy.any(mesh < gs_guess*.8):
-#                logger.warn(mydf, 'mesh %s is not enough for AFTDF.get_nuc function '
-#                            'to get integral accuracy %g.\nRecommended mesh is %s.',
-#                            mesh, cell.precision, gs_guess)
+    else:
+        if cell.dimension > 0:
+            ke_guess = estimate_ke_cutoff_for_eta(cell, mydf.eta, cell.precision)
+            mesh_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
+            if numpy.any(mesh < mesh_guess*.8):
+                logger.warn(mydf, 'mesh %s is not enough for AFTDF.get_nuc function '
+                            'to get integral accuracy %g.\nRecommended mesh is %s.',
+                            mesh, cell.precision, mesh_guess)
 
         nuccell = copy.copy(cell)
         half_sph_norm = .5/numpy.sqrt(numpy.pi)
@@ -240,27 +240,27 @@ class AFTDF(lib.StreamObject):
             else:
                 ke_cutoff = numpy.min(cell.ke_cutoff)
             ke_guess = estimate_ke_cutoff(cell, cell.precision)
-            gs_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
-            if ke_cutoff < ke_guess*.8:
+            mesh_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
+            if ke_cutoff < ke_guess*.7:
                 logger.warn(self, 'ke_cutoff/mesh (%g / %s) is not enough for AFTDF '
                             'to get integral accuracy %g.\nCoulomb integral error '
                             'is ~ %.2g Eh.\nRecommended ke_cutoff/mesh are %g / %s.',
                             ke_cutoff, self.mesh, cell.precision,
-                            error_for_ke_cutoff(cell, ke_cutoff), ke_guess, gs_guess)
+                            error_for_ke_cutoff(cell, ke_cutoff), ke_guess, mesh_guess)
         else:
-            gs_guess = numpy.copy(self.mesh)
+            mesh_guess = numpy.copy(self.mesh)
 
         if cell.dimension < 3:
             err = numpy.exp(-0.436392335*min(self.mesh[cell.dimension:]) - 2.99944305)
             err *= cell.nelectron
             gz = numpy.log(cell.nelectron/cell.precision)/0.8727847-3.4366358
-            gs_guess[cell.dimension:] = int(gz)
+            mesh_guess[cell.dimension:] = int(gz)
             if err > cell.precision*10:
                 logger.warn(self, 'mesh %s of AFTDF may not be enough to get '
                             'integral accuracy %g for %dD PBC system.\n'
                             'Coulomb integral error is ~ %.2g Eh.\n'
                             'Recommended mesh is %s.',
-                            self.mesh, cell.precision, cell.dimension, err, gs_guess)
+                            self.mesh, cell.precision, cell.dimension, err, mesh_guess)
             if (cell.mesh[cell.dimension:]/(1.*gz) > 1.1).any():
                 gz = numpy.log(cell.nelectron/cell.precision)/0.8727847-3.4366358
                 logger.warn(self, 'setting mesh %s of AFTDF too high in non-periodic direction '
@@ -268,7 +268,7 @@ class AFTDF(lib.StreamObject):
                             'For coulomb integral error of ~ %.2g Eh in %dD PBC, \n'
                             'a recommended mesh for non-periodic direction is %s.',
                             self.mesh, self.mesh[cell.dimension:], cell.precision,
-                            cell.dimension, gs_guess[cell.dimension:])
+                            cell.dimension, mesh_guess[cell.dimension:])
         return self
 
     def pw_loop(self, mesh=None, kpti_kptj=None, q=None, shls_slice=None,

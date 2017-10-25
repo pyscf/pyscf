@@ -10,7 +10,7 @@ def finger(a):
     return numpy.dot(w, a.ravel())
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_coulG_ws(self):
         cell = pbcgto.Cell()
         cell.unit = 'A'
@@ -27,7 +27,7 @@ class KnowValues(unittest.TestCase):
         mf = khf.KRHF(cell, exxdiv='vcut_ws')
         mf.kpts = cell.make_kpts([2,2,2])
         coulG = tools.get_coulG(cell, mf.kpts[2], True, mf)
-        self.assertAlmostEqual(finger(coulG), 1.3245117871351604, 9)
+        self.assertAlmostEqual(finger(coulG), 1.3245365170998518+0j, 9)
 
     def test_coulG(self):
         numpy.random.seed(19)

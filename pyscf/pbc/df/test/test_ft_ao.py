@@ -167,7 +167,7 @@ class KnowValues(unittest.TestCase):
     def test_ft_aoao_with_kpts1(self):
         numpy.random.seed(1)
         kpti, kptj = kpts = numpy.random.random((2,3))
-        Gv = cell.get_Gv([5]*3)
+        Gv = cell.get_Gv([11]*3)
         q = numpy.random.random(3)
         dat = ft_ao._ft_aopair_kpts(cell, Gv, q=q, kptjs=kpts)
         self.assertAlmostEqual(finger(dat[0]), (2.3753953914129382-2.5365192689115088j), 9)

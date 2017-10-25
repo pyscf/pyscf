@@ -54,11 +54,8 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(ekpt, -12.337299166550796, 8)
 
         supcell = pyscf.pbc.tools.super_cell(cell, nk)
-        supcell.mesh = np.array([nk[0]*n + (nk[0]-1)//2,
-                                 nk[1]*n + (nk[1]-1)//2,
-                                 nk[2]*n + (nk[2]-1)//2])
-        #print "supcell mesh =", supcell.mesh
         supcell.build()
+        #print "supcell mesh =", supcell.mesh
 
         gamma = [0,0,0]
         mf = khf.KRHF(supcell, gamma, exxdiv='vcut_sph')

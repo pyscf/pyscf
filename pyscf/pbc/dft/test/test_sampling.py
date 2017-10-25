@@ -60,10 +60,6 @@ class KnowValues(unittest.TestCase):
         ekpt = kmf.scf()
 
         supcell = pyscf.pbc.tools.super_cell(cell, nk)
-        supcell.mesh = np.array([nk[0]*n + (nk[0]-1)//2,
-                                 nk[1]*n + (nk[1]-1)//2,
-                                 nk[2]*n + (nk[2]-1)//2])
-        #supcell.verbose = 7
         supcell.build()
 
         mf = pbcdft.RKS(supcell)

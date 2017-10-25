@@ -24,10 +24,6 @@ def run_cell(cell, n, nk):
     # Do a supercell Gamma-pt calculation       #
     #############################################
     supcell = pyscf.pbc.tools.super_cell(cell, nk)
-    supcell.mesh = np.array([nk[0]*n + 1*(nk[0]-1)//2,
-                             nk[1]*n + 1*(nk[1]-1)//2,
-                             nk[2]*n + 1*(nk[2]-1)//2])
-#    print "supcell mesh =", supcell.mesh
     supcell.build()
 
 

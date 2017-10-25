@@ -1,4 +1,4 @@
-import sys
+import warnings
 import copy
 import numpy as np
 import scipy.linalg
@@ -90,7 +90,7 @@ def ifftk(g, mesh, expikr):
 
 
 def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
-              wrap_around=True, low_dim_ft_type=None):
+              wrap_around=True, low_dim_ft_type=None, **kwargs):
     '''Calculate the Coulomb kernel for all G-vectors, handling G=0 and exchange.
 
     Args:
@@ -116,6 +116,10 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
 
     if mesh is None:
         mesh = cell.mesh
+    if 'gs' in kwargs:
+        warnings.warn('cell.gs is deprecated.  It is replaced by cell.mesh,'
+                      'the number of PWs (=2*gs+1) along each direction.')
+        mesh = [2*n+1 for n in gs]
     if Gv is None:
         Gv = cell.get_Gv(mesh)
 
@@ -126,7 +130,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         # frequency counterparts.  Important if you want the gamma point and k-point
         # answers to agree
         b = cell.reciprocal_vectors()
-        box_edge = np.einsum('i,ij->ij', np.asarray(mesh)+0.5, b)
+        box_edge = np.einsum('i,ij->ij', np.asarray(mesh)//2+0.5, b)
         assert(all(np.linalg.solve(box_edge.T, k).round(9).astype(int)==0))
         reduced_coords = np.linalg.solve(box_edge.T, kG.T).T.round(9)
         on_edge = reduced_coords.astype(int)
@@ -217,7 +221,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         # Index k+Gv into the precomputed vq and add on
         gxyz = np.dot(kG, exx_kcell.lattice_vectors().T)/(2*np.pi)
         gxyz = gxyz.round(decimals=6).astype(int)
-        mesh = numpy.asarray(mesh)
+        mesh = np.asarray(exx_kcell.mesh)
         gxyz = (gxyz + mesh)%mesh
         qidx = (gxyz[:,0]*mesh[1] + gxyz[:,1])*mesh[2] + gxyz[:,2]
         #qidx = [np.linalg.norm(exx_q-kGi,axis=1).argmin() for kGi in kG]
@@ -251,7 +255,7 @@ def precompute_exx(cell, kpts):
     # ASE:
     alpha = 5./Rin # sqrt(-ln eps) / Rc, eps ~ 10^{-11}
     log.info("WS alpha = %s", alpha)
-    kcell.mesh = np.array([2*int(L*alpha*3.0) for L in Lc])  # ~ [60,60,60]
+    kcell.mesh = np.array([4*int(L*alpha*3.0) for L in Lc])  # ~ [60,60,60]
     # QE:
     #alpha = 3./Rin * np.sqrt(0.5)
     #kcell.mesh = (4*alpha*np.linalg.norm(kcell.a,axis=1)).astype(int)
@@ -370,9 +374,9 @@ def super_cell(cell, ncopy):
     supcell.atom = list(zip(symbs, coords.reshape(-1,3)))
     supcell.unit = 'B'
     supcell.a = np.einsum('i,ij->ij', ncopy, a)
-    supcell.mesh = np.array([ncopy[0]*cell.mesh[0] + (ncopy[0]-1)//2,
-                             ncopy[1]*cell.mesh[1] + (ncopy[1]-1)//2,
-                             ncopy[2]*cell.mesh[2] + (ncopy[2]-1)//2])
+    supcell.mesh = np.array([ncopy[0]*cell.mesh[0],
+                             ncopy[1]*cell.mesh[1],
+                             ncopy[2]*cell.mesh[2]])
     supcell.build(False, False, verbose=0)
     supcell.verbose = cell.verbose
     return supcell
@@ -442,9 +446,8 @@ def get_kconserv(cell, kpts):
                         break
 
                 if found == 0:
-                    print("** ERROR: Problem in get_kconserv. Quitting.")
-                    print(kvMLK)
-                    sys.exit()
+                    print('kvMLK', kvMLK)
+                    raise RuntimeError("** ERROR: Problem in get_kconserv. Quitting.")
     return KLMN
 
 def get_kconserv3(cell, kpts, kijkab):
@@ -497,9 +500,8 @@ def get_kconserv3(cell, kpts, kijkab):
                 break
 
         if found == 0:
-            print("** ERROR: Problem in get_kconserv3. Quitting.")
-            print(kijkab)
-            sys.exit()
+            print('kijkab', kijkab)
+            raise RuntimeError("** ERROR: Problem in get_kconserv3. Quitting.")
     return out_array
 
 
