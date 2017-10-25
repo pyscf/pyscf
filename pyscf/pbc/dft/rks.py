@@ -83,8 +83,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 
 
 def _patch_df_beckegrids(density_fit):
-    def new_df(self, auxbasis=None, gs=None):
-        mf = density_fit(self, auxbasis, gs)
+    def new_df(self, auxbasis=None, mesh=None):
+        mf = density_fit(self, auxbasis, mesh)
         mf.with_df._j_only = True
         mf.grids = gen_grid.BeckeGrids(self.cell)
         return mf

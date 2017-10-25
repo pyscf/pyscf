@@ -348,7 +348,7 @@ if __name__ == '__main__':
     '''
     cell.basis = 'ccpvdz'
     cell.a = numpy.eye(3) * 4
-    cell.gs = [8] * 3
+    cell.mesh = [17] * 3
     cell.verbose = 4
     cell.build()
     nks = [2,1,1]

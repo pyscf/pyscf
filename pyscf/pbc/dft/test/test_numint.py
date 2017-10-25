@@ -36,14 +36,14 @@ def finger(a):
     w = np.cos(np.arange(a.size))
     return np.dot(w, a.ravel())
 
-def make_grids(n):
+def make_grids(mesh):
     L = 60
     cell = pbcgto.Cell()
     cell.verbose = 0
     cell.output = '/dev/null'
     cell.unit = 'B'
     cell.a = ((L,0,0),(0,L,0),(0,0,L))
-    cell.gs = [n,n,n]
+    cell.mesh = mesh
 
     cell.atom = [['He', (L/2.,L/2.,L/2.)], ]
     cell.basis = {'He': [[0, (0.8, 1.0)],
@@ -62,7 +62,7 @@ class KnowValues(unittest.TestCase):
         cell.verbose = 5
         cell.output = '/dev/null'
         cell.a = np.eye(3) * 2.5
-        cell.gs = [10]*3
+        cell.mesh = [21]*3
         cell.atom = [['C', (1., .8, 1.9)],
                      ['C', (.1, .2,  .3)],]
         cell.basis = 'ccpvdz'
@@ -92,7 +92,7 @@ class KnowValues(unittest.TestCase):
 
 
     def test_eval_mat(self):
-        cell, grids = make_grids(30)
+        cell, grids = make_grids([61]*3)
         ng = grids.weights.size
         np.random.seed(1)
         rho = np.random.random(ng)
@@ -108,7 +108,7 @@ class KnowValues(unittest.TestCase):
         cell.verbose = 5
         cell.output = '/dev/null'
         cell.a = np.eye(3) * 2.5
-        cell.gs = [10]*3
+        cell.mesh = [21]*3
         cell.atom = [['He', (1., .8, 1.9)],
                      ['He', (.1, .2,  .3)],]
         cell.basis = 'ccpvdz'
@@ -130,7 +130,7 @@ class KnowValues(unittest.TestCase):
         cell.verbose = 5
         cell.output = '/dev/null'
         cell.a = np.eye(3) * 2.5
-        cell.gs = [10]*3
+        cell.mesh = [21]*3
         cell.atom = [['He', (1., .8, 1.9)],
                      ['He', (.1, .2,  .3)],]
         cell.basis = 'ccpvdz'
@@ -151,7 +151,7 @@ class KnowValues(unittest.TestCase):
         cell.verbose = 5
         cell.output = '/dev/null'
         cell.a = np.eye(3) * 2.5
-        cell.gs = [10]*3
+        cell.mesh = [21]*3
         cell.atom = [['He', (1., .8, 1.9)],
                      ['He', (.1, .2,  .3)],]
         cell.basis = 'ccpvdz'
@@ -184,7 +184,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(vmat[1][1]), -2353.0350086740673-117.74811536967495j, 7)
 
     def test_eval_rho(self):
-        cell, grids = make_grids(30)
+        cell, grids = make_grids([61]*3)
         numpy.random.seed(10)
         nao = 10
         ngrids = 500
@@ -218,7 +218,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(rho1), -17.198879910245601, 7)
 
     def test_eval_mat(self):
-        cell, grids = make_grids(30)
+        cell, grids = make_grids([61]*3)
         numpy.random.seed(10)
         nao = 10
         ngrids = 500

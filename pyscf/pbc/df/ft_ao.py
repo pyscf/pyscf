@@ -53,7 +53,7 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
 # backward compatibility for pyscf-1.2, in which the argument Gvbase is gs
         or (Gvbase is not None and isinstance(Gvbase[0], (int, numpy.integer)))):
         p_gxyzT = lib.c_null_ptr()
-        p_gs = (ctypes.c_int*3)(0,0,0)
+        p_mesh = (ctypes.c_int*3)(0,0,0)
         p_b = (ctypes.c_double*1)(0)
         eval_gz = 'GTO_Gv_general'
     else:
@@ -65,7 +65,7 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
         p_gxyzT = gxyzT.ctypes.data_as(ctypes.c_void_p)
         b = numpy.hstack((b.ravel(), q) + Gvbase)
         p_b = b.ctypes.data_as(ctypes.c_void_p)
-        p_gs = (ctypes.c_int*3)(*[len(x) for x in Gvbase])
+        p_mesh = (ctypes.c_int*3)(*[len(x) for x in Gvbase])
 
     drv = libpbc.PBC_ft_latsum_drv
     intor = getattr(libpbc, 'GTO_ft_ovlp_sph')
@@ -110,7 +110,7 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
         ctypes.c_int(nkpts), ctypes.c_int(comp), ctypes.c_int(nimgs),
         Ls.ctypes.data_as(ctypes.c_void_p), expkL.ctypes.data_as(ctypes.c_void_p),
         (ctypes.c_int*4)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p),
-        GvT.ctypes.data_as(ctypes.c_void_p), p_b, p_gxyzT, p_gs, ctypes.c_int(nGv),
+        GvT.ctypes.data_as(ctypes.c_void_p), p_b, p_gxyzT, p_mesh, ctypes.c_int(nGv),
         atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
         bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.nbas),
         env.ctypes.data_as(ctypes.c_void_p))
@@ -137,10 +137,10 @@ if __name__ == '__main__':
     from pyscf.pbc import tools
 
     L = 5.
-    n = 10
+    n = 20
     cell = pgto.Cell()
     cell.a = numpy.diag([L,L,L])
-    cell.gs = numpy.array([n,n,n])
+    cell.mesh = numpy.array([n,n,n])
 
     cell.atom = '''C    1.3    .2       .3
                    C     .1    .1      1.1
@@ -158,15 +158,15 @@ if __name__ == '__main__':
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
     aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords)
     aoR2 = numpy.einsum('ki,kj->kij', aoR.conj(), aoR)
-    ngs = aoR.shape[0]
+    ngrids = aoR.shape[0]
 
     for i in range(nao):
         for j in range(nao):
-            ao2ref = tools.fft(aoR2[:,i,j], cell.gs) * cell.vol/ngs
+            ao2ref = tools.fft(aoR2[:,i,j], cell.mesh) * cell.vol/ngrids
             print(i, j, numpy.linalg.norm(ao2ref - ao2[:,i,j]))
 
     aoG = ft_ao(cell, cell.Gv)
     for i in range(nao):
-        aoref = tools.fft(aoR[:,i], cell.gs) * cell.vol/ngs
+        aoref = tools.fft(aoR[:,i], cell.mesh) * cell.vol/ngrids
         print(i, numpy.linalg.norm(aoref - aoG[:,i]))
 

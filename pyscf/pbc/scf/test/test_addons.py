@@ -14,7 +14,7 @@ He 1 0 1
 '''
 cell.basis = '3-21g'
 cell.a = numpy.eye(3) * 2
-cell.gs = [7] * 3
+cell.mesh = [15] * 3
 cell.verbose = 5
 cell.output = '/dev/null'
 cell.build()

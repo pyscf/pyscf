@@ -24,7 +24,7 @@ cell = gto.M(
 )
 
 mf = scf.RHF(cell).density_fit()
-mf.with_df.gs = [5]*3
+mf.with_df.mesh = [10]*3
 mf.kernel()
 
 #

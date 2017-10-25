@@ -17,7 +17,7 @@ from pyscf.lib import logger
 from pyscf.pbc import tools
 from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, member
 
-def density_fit(mf, auxbasis=None, gs=None, with_df=None):
+def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
     '''Generte density-fitting SCF object
 
     Args:
@@ -25,8 +25,8 @@ def density_fit(mf, auxbasis=None, gs=None, with_df=None):
             Same format to the input attribute mol.basis.  If auxbasis is
             None, auxiliary basis based on AO basis (if possible) or
             even-tempered Gaussian basis will be used.
-        gs : tuple
-            number of grids in each (+)direction
+        mesh : tuple
+            number of grids in each direction
         with_df : DF object
     '''
     from pyscf.pbc.df import df
@@ -41,8 +41,8 @@ def density_fit(mf, auxbasis=None, gs=None, with_df=None):
         with_df.stdout = mf.stdout
         with_df.verbose = mf.verbose
         with_df.auxbasis = auxbasis
-        if gs is not None:
-            with_df.gs = gs
+        if mesh is not None:
+            with_df.mesh = mesh
 
     mf = copy.copy(mf)
     mf.with_df = with_df
@@ -411,10 +411,10 @@ if __name__ == '__main__':
     import pyscf.pbc.scf as pscf
 
     L = 5.
-    n = 5
+    n = 11
     cell = pgto.Cell()
     cell.a = numpy.diag([L,L,L])
-    cell.gs = numpy.array([n,n,n])
+    cell.mesh = numpy.array([n,n,n])
 
     cell.atom = '''C    3.    2.       3.
                    C    1.    1.       1.'''
@@ -435,7 +435,7 @@ if __name__ == '__main__':
     #mf.with_df = mdf.MDF(cell)
     #mf.auxbasis = auxbasis
     mf = density_fit(mf, auxbasis)
-    mf.with_df.gs = (5,) * 3
+    mf.with_df.mesh = (n,) * 3
     vj = mf.with_df.get_jk(dm, exxdiv=mf.exxdiv, with_k=False)[0]
     print(numpy.einsum('ij,ji->', vj, dm), 'ref=46.698942480902062')
     vj, vk = mf.with_df.get_jk(dm, exxdiv=mf.exxdiv)
@@ -447,7 +447,7 @@ if __name__ == '__main__':
     from pyscf.pbc.df import DF
     with_df = DF(cell, kpts)
     with_df.auxbasis = 'weigend'
-    with_df.gs = [5] * 3
+    with_df.mesh = [n] * 3
     dms = numpy.array([dm]*len(kpts))
     vj, vk = with_df.get_jk(dms, exxdiv=mf.exxdiv, kpts=kpts)
     print(numpy.einsum('ij,ji->', vj[0], dms[0]) - 46.69784067248350)

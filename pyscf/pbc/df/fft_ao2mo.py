@@ -32,8 +32,8 @@ def get_eri(mydf, kpts=None, compact=False):
     kptijkl = _format_kpts(kpts)
     kpti, kptj, kptk, kptl = kptijkl
     q = kptj - kpti
-    coulG = tools.get_coulG(cell, q, gs=mydf.gs)
-    coords = cell.gen_uniform_grids(mydf.gs)
+    coulG = tools.get_coulG(cell, q, mesh=mydf.mesh)
+    coords = cell.gen_uniform_grids(mydf.mesh)
     max_memory = mydf.max_memory - lib.current_memory()[0]
 
 ####################
@@ -41,7 +41,7 @@ def get_eri(mydf, kpts=None, compact=False):
     if gamma_point(kptijkl):
         #:ao_pairs_G = get_ao_pairs_G(mydf, kptijkl[:2], q, compact=compact)
         #:ao_pairs_G *= numpy.sqrt(coulG).reshape(-1,1)
-        #:eri = lib.dot(ao_pairs_G.T, ao_pairs_G, cell.vol/ngs**2)
+        #:eri = lib.dot(ao_pairs_G.T, ao_pairs_G, cell.vol/ngrids**2)
         ao = mydf._numint.eval_ao(cell, coords, kpti)[0]
         ao = numpy.asarray(ao.T, order='C')
         eri = _contract_compact(mydf, (ao,ao), coulG, max_memory=max_memory)
@@ -58,7 +58,7 @@ def get_eri(mydf, kpts=None, compact=False):
         #:#=get_ao_pairs_G(mydf, [kptl,kptk], q, compact=False).transpose(0,2,1).conj()
         #:ao_pairs_invG = get_ao_pairs_G(mydf, -kptijkl[2:], q, compact=False).conj()
         #:ao_pairs_G *= coulG.reshape(-1,1)
-        #:eri = lib.dot(ao_pairs_G.T, ao_pairs_invG, cell.vol/ngs**2)
+        #:eri = lib.dot(ao_pairs_G.T, ao_pairs_invG, cell.vol/ngrids**2)
         if is_zero(kpti-kptl) and is_zero(kptj-kptk):
             if is_zero(kpti-kptj):
                 aoi = mydf._numint.eval_ao(cell, coords, kpti)[0]
@@ -87,8 +87,8 @@ def general(mydf, mo_coeffs, kpts=None, compact=False):
     mo_coeffs = [numpy.asarray(mo, order='F') for mo in mo_coeffs]
     allreal = not any(numpy.iscomplexobj(mo) for mo in mo_coeffs)
     q = kptj - kpti
-    coulG = tools.get_coulG(cell, q, gs=mydf.gs)
-    coords = cell.gen_uniform_grids(mydf.gs)
+    coulG = tools.get_coulG(cell, q, mesh=mydf.mesh)
+    coords = cell.gen_uniform_grids(mydf.mesh)
     max_memory = mydf.max_memory - lib.current_memory()[0]
 
     if gamma_point(kptijkl) and allreal:
@@ -124,13 +124,13 @@ def general(mydf, mo_coeffs, kpts=None, compact=False):
 def _contract_compact(mydf, mos, coulG, max_memory):
     cell = mydf.cell
     moiT, mokT = mos
-    nmoi, ngs = moiT.shape
+    nmoi, ngrids = moiT.shape
     nmok = mokT.shape[0]
-    wcoulG = coulG * (cell.vol/ngs)
+    wcoulG = coulG * (cell.vol/ngrids)
 
     def fill(moT, i0, i1, buf):
         npair = i1*(i1+1)//2 - i0*(i0+1)//2
-        out = numpy.ndarray((npair,ngs), dtype=buf.dtype, buffer=buf)
+        out = numpy.ndarray((npair,ngrids), dtype=buf.dtype, buffer=buf)
         ij = 0
         for i in range(i0, i1):
             numpy.einsum('p,jp->jp', moT[i], moT[:i+1], out=out[ij:ij+i+1])
@@ -138,12 +138,12 @@ def _contract_compact(mydf, mos, coulG, max_memory):
         return out
 
     eri = numpy.empty((nmoi*(nmoi+1)//2,nmok*(nmok+1)//2))
-    blksize = int(max((max_memory*1e6/8 - eri.size)/2/ngs, nmoi, nmok))
-    buf = numpy.empty((blksize,ngs))
+    blksize = int(max((max_memory*1e6/8 - eri.size)/2/ngrids, nmoi, nmok))
+    buf = numpy.empty((blksize,ngrids))
     for p0, p1 in lib.prange_tril(0, nmoi, blksize):
-        mo_pairs_G = tools.fft(fill(moiT, p0, p1, buf), mydf.gs)
+        mo_pairs_G = tools.fft(fill(moiT, p0, p1, buf), mydf.mesh)
         mo_pairs_G*= wcoulG
-        v = tools.ifft(mo_pairs_G, mydf.gs)
+        v = tools.ifft(mo_pairs_G, mydf.mesh)
         vR = numpy.asarray(v.real, order='C')
         for q0, q1 in lib.prange_tril(0, nmok, blksize):
             mo_pairs = numpy.asarray(fill(mokT, q0, q1, buf), order='C')
@@ -156,22 +156,22 @@ def _contract_plain(mydf, mos, coulG, phase, max_memory):
     cell = mydf.cell
     moiT, mojT, mokT, molT = mos
     nmoi, nmoj, nmok, nmol = [x.shape[0] for x in mos]
-    ngs = moiT.shape[1]
-    wcoulG = coulG * (cell.vol/ngs)
+    ngrids = moiT.shape[1]
+    wcoulG = coulG * (cell.vol/ngrids)
     dtype = numpy.result_type(phase, *mos)
     eri = numpy.empty((nmoi*nmoj,nmok*nmol), dtype=dtype)
 
-    blksize = int(max((max_memory*1e6/16 - eri.size)/2/ngs/max(nmoj,nmol), 1))
-    buf0 = numpy.empty((blksize,max(nmoj,nmol),ngs), dtype=dtype)
-    buf1 = numpy.ndarray((blksize,nmoj,ngs), dtype=dtype, buffer=buf0)
-    buf2 = numpy.ndarray((blksize,nmol,ngs), dtype=dtype, buffer=buf0)
+    blksize = int(max((max_memory*1e6/16 - eri.size)/2/ngrids/max(nmoj,nmol), 1))
+    buf0 = numpy.empty((blksize,max(nmoj,nmol),ngrids), dtype=dtype)
+    buf1 = numpy.ndarray((blksize,nmoj,ngrids), dtype=dtype, buffer=buf0)
+    buf2 = numpy.ndarray((blksize,nmol,ngrids), dtype=dtype, buffer=buf0)
     for p0, p1 in lib.prange(0, nmoi, blksize):
         mo_pairs = numpy.einsum('ig,jg->ijg', moiT[p0:p1].conj()*phase,
                                 mojT, out=buf1[:p1-p0])
-        mo_pairs_G = tools.fft(mo_pairs.reshape(-1,ngs), mydf.gs)
+        mo_pairs_G = tools.fft(mo_pairs.reshape(-1,ngrids), mydf.mesh)
         mo_pairs = None
         mo_pairs_G*= wcoulG
-        v = tools.ifft(mo_pairs_G, mydf.gs)
+        v = tools.ifft(mo_pairs_G, mydf.mesh)
         mo_pairs_G = None
         v *= phase.conj()
         if dtype == numpy.double:
@@ -179,7 +179,7 @@ def _contract_plain(mydf, mos, coulG, phase, max_memory):
         for q0, q1 in lib.prange(0, nmok, blksize):
             mo_pairs = numpy.einsum('ig,jg->ijg', mokT[q0:q1].conj(),
                                     molT, out=buf2[:q1-q0])
-            eri[p0*nmoj:p1*nmoj,q0*nmol:q1*nmol] = lib.dot(v, mo_pairs.reshape(-1,ngs).T)
+            eri[p0*nmoj:p1*nmoj,q0*nmol:q1*nmol] = lib.dot(v, mo_pairs.reshape(-1,ngrids).T)
         v = None
     return eri
 
@@ -190,14 +190,14 @@ def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), q=None, shls_slice=None,
 
     Returns:
         ao_pairs_G : 2D complex array
-            For gamma point, the shape is (ngs, nao*(nao+1)/2); otherwise the
-            shape is (ngs, nao*nao)
+            For gamma point, the shape is (ngrids, nao*(nao+1)/2); otherwise the
+            shape is (ngrids, nao*nao)
     '''
     if kpts is None: kpts = numpy.zeros((2,3))
     cell = mydf.cell
     kpts = numpy.asarray(kpts)
-    coords = cell.gen_uniform_grids(mydf.gs)
-    ngs = len(coords)
+    coords = cell.gen_uniform_grids(mydf.mesh)
+    ngrids = len(coords)
 
     if shls_slice is None:
         i0, i1 = j0, j1 = (0, cell.nao_nr())
@@ -217,20 +217,20 @@ def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), q=None, shls_slice=None,
             aoj = numpy.asarray(aoj.T, order='C')
         ni = aoi.shape[0]
         nj = aoj.shape[0]
-        ao_pairs_G = numpy.empty((ni,nj,ngs), dtype=numpy.complex128)
+        ao_pairs_G = numpy.empty((ni,nj,ngrids), dtype=numpy.complex128)
         for i in range(ni):
-            ao_pairs_G[i] = tools.fft(fac * aoi[i].conj() * aoj, mydf.gs)
-        ao_pairs_G = ao_pairs_G.reshape(-1,ngs).T
+            ao_pairs_G[i] = tools.fft(fac * aoi[i].conj() * aoj, mydf.mesh)
+        ao_pairs_G = ao_pairs_G.reshape(-1,ngrids).T
         return ao_pairs_G
 
     if compact and gamma_point(kpts):  # gamma point
         ao = mydf._numint.eval_ao(cell, coords, kpts[:1])[0]
         ao = numpy.asarray(ao.T, order='C')
         npair = i1*(i1+1)//2 - i0*(i0+1)//2
-        ao_pairs_G = numpy.empty((npair,ngs), dtype=numpy.complex128)
+        ao_pairs_G = numpy.empty((npair,ngrids), dtype=numpy.complex128)
         ij = 0
         for i in range(i0, i1):
-            ao_pairs_G[ij:ij+i+1] = tools.fft(ao[i] * ao[:i+1], mydf.gs)
+            ao_pairs_G[ij:ij+i+1] = tools.fft(ao[i] * ao[:i+1], mydf.mesh)
             ij += i + 1
         ao_pairs_G = ao_pairs_G.T
 
@@ -256,16 +256,16 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None, compact=Fal
             product |ij).
 
     Returns:
-        mo_pairs_G : (ngs, nmoi*nmoj) ndarray
+        mo_pairs_G : (ngrids, nmoi*nmoj) ndarray
             The FFT of the real-space MO pairs.
     '''
     if kpts is None: kpts = numpy.zeros((2,3))
     cell = mydf.cell
     kpts = numpy.asarray(kpts)
-    coords = cell.gen_uniform_grids(mydf.gs)
+    coords = cell.gen_uniform_grids(mydf.mesh)
     nmoi = mo_coeffs[0].shape[1]
     nmoj = mo_coeffs[1].shape[1]
-    ngs = len(coords)
+    ngrids = len(coords)
 
     def trans(aoi, aoj, fac=1):
         if id(aoi) == id(aoj) and iden_coeffs(mo_coeffs[0], mo_coeffs[1]):
@@ -273,10 +273,10 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None, compact=Fal
         else:
             moi = numpy.asarray(lib.dot(mo_coeffs[0].T, aoi.T), order='C')
             moj = numpy.asarray(lib.dot(mo_coeffs[1].T, aoj.T), order='C')
-        mo_pairs_G = numpy.empty((nmoi,nmoj,ngs), dtype=numpy.complex128)
+        mo_pairs_G = numpy.empty((nmoi,nmoj,ngrids), dtype=numpy.complex128)
         for i in range(nmoi):
-            mo_pairs_G[i] = tools.fft(fac * moi[i].conj() * moj, mydf.gs)
-        mo_pairs_G = mo_pairs_G.reshape(-1,ngs).T
+            mo_pairs_G[i] = tools.fft(fac * moi[i].conj() * moj, mydf.mesh)
+        mo_pairs_G = mo_pairs_G.reshape(-1,ngrids).T
         return mo_pairs_G
 
     if gamma_point(kpts):  # gamma point, real
@@ -284,10 +284,10 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None, compact=Fal
         if compact and iden_coeffs(mo_coeffs[0], mo_coeffs[1]):
             mo = numpy.asarray(lib.dot(mo_coeffs[0].T, ao.T), order='C')
             npair = nmoi*(nmoi+1)//2
-            mo_pairs_G = numpy.empty((npair,ngs), dtype=numpy.complex128)
+            mo_pairs_G = numpy.empty((npair,ngrids), dtype=numpy.complex128)
             ij = 0
             for i in range(nmoi):
-                mo_pairs_G[ij:ij+i+1] = tools.fft(mo[i].conj() * mo[:i+1], mydf.gs)
+                mo_pairs_G[ij:ij+i+1] = tools.fft(mo[i].conj() * mo[:i+1], mydf.mesh)
                 ij += i + 1
             mo_pairs_G = mo_pairs_G.T
         else:
@@ -323,10 +323,10 @@ if __name__ == '__main__':
     from pyscf.pbc import df
 
     L = 5.
-    n = 5
+    n = 11
     cell = pgto.Cell()
     cell.a = numpy.diag([L,L,L])
-    cell.gs = numpy.array([n,n,n])
+    cell.mesh = numpy.array([n,n,n])
 
     cell.atom = '''He    3.    2.       3.
                    He    1.    1.       1.'''

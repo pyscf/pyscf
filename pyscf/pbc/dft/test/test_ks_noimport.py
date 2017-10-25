@@ -112,7 +112,7 @@ class BN(unittest.TestCase):
             a = self.unit_cell_angstrom,
             basis = 'gth-szv',
             pseudo = 'gth-lda',
-            gs = [16,16,75],
+            mesh = [32,32,150],
             verbose = 4,
         )
 
@@ -135,7 +135,7 @@ class BN(unittest.TestCase):
 #            a = self.unit_cell_angstrom,
 #            dimension = 2,
 #            basis = 'ccpvdz',
-#            gs = [5,5,25],
+#            mesh = [11,11,51],
 #            verbose = 4,
 #        )
 #

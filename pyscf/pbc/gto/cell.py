@@ -39,7 +39,7 @@ def M(**kwargs):
     Examples:
 
     >>> from pyscf.pbc import gto
-    >>> cell = gto.M(a=numpy.eye(3)*4, atom='He 1 1 1', basis='6-31g', gs=[10]*3)
+    >>> cell = gto.M(a=numpy.eye(3)*4, atom='He 1 1 1', basis='6-31g')
     '''
     cell = Cell()
     cell.build(**kwargs)
@@ -161,7 +161,7 @@ def pack(cell):
     '''
     cldic = mole.pack(cell)
     cldic['a'] = cell.a
-    cldic['gs'] = cell.gs
+    cldic['mesh'] = cell.mesh
     cldic['precision'] = cell.precision
     cldic['pseudo'] = cell.pseudo
     cldic['ke_cutoff'] = cell.ke_cutoff
@@ -451,39 +451,38 @@ def get_bounding_sphere(cell, rcut):
         nimgs[i] = 1
     return nimgs
 
-def get_Gv(cell, gs=None):
+def get_Gv(cell, mesh=None):
     '''Calculate three-dimensional G-vectors for the cell; see MH (3.8).
 
-    Indices along each direction go as [0...cell.gs, -cell.gs...-1]
-    to follow FFT convention. Note that, for each direction, ngs = 2*cell.gs+1.
+    Indices along each direction go as [0...N-1, -N...-1] to follow FFT convention.
 
     Args:
         cell : instance of :class:`Cell`
 
     Returns:
-        Gv : (ngs, 3) ndarray of floats
+        Gv : (ngrids, 3) ndarray of floats
             The array of G-vectors.
     '''
-    if gs is None:
-        gs = cell.gs
-    gxrange = np.append(range(gs[0]+1), range(-gs[0],0))
-    gyrange = np.append(range(gs[1]+1), range(-gs[1],0))
-    gzrange = np.append(range(gs[2]+1), range(-gs[2],0))
-    gxyz = lib.cartesian_prod((gxrange, gyrange, gzrange))
+    if mesh is None:
+        mesh = cell.mesh
+    gx = np.fft.fftfreq(mesh[0], 1./mesh[0])
+    gy = np.fft.fftfreq(mesh[1], 1./mesh[1])
+    gz = np.fft.fftfreq(mesh[2], 1./mesh[2])
+    gxyz = lib.cartesian_prod((gx, gy, gz))
 
     b = cell.reciprocal_vectors()
     Gv = np.dot(gxyz, b)
     return Gv
 
-def get_Gv_weights(cell, gs=None):
+def get_Gv_weights(cell, mesh=None):
     '''Calculate G-vectors and weights.
 
     Returns:
-        Gv : (ngs, 3) ndarray of floats
+        Gv : (ngris, 3) ndarray of floats
             The array of G-vectors.
     '''
-    if gs is None:
-        gs = cell.gs
+    if mesh is None:
+        mesh = cell.mesh
     def plus_minus(n):
         #rs, ws = dft.delley(n)
         #rs, ws = dft.treutler_ahlrichs(n)
@@ -495,22 +494,21 @@ def get_Gv_weights(cell, gs=None):
     low_dim_ft_type = cell.low_dim_ft_type
     # Default, the 3D uniform grids
     b = cell.reciprocal_vectors()
-    rx = np.append(np.arange(gs[0]+1.), np.arange(-gs[0],0.))
-    ry = np.append(np.arange(gs[1]+1.), np.arange(-gs[1],0.))
-    rz = np.append(np.arange(gs[2]+1.), np.arange(-gs[2],0.))
-    ngs = [i*2+1 for i in gs]
+    rx = np.fft.fftfreq(mesh[0], 1./mesh[0])
+    ry = np.fft.fftfreq(mesh[1], 1./mesh[1])
+    rz = np.fft.fftfreq(mesh[2], 1./mesh[2])
     if cell.dimension == 0:
-        rx, wx = plus_minus(gs[0])
-        ry, wy = plus_minus(gs[1])
-        rz, wz = plus_minus(gs[2])
+        rx, wx = plus_minus(mesh[0]//2)
+        ry, wy = plus_minus(mesh[1]//2)
+        rz, wz = plus_minus(mesh[2]//2)
         rx /= np.linalg.norm(b[0])
         ry /= np.linalg.norm(b[1])
         rz /= np.linalg.norm(b[2])
         weights = np.einsum('i,j,k->ijk', wx, wy, wz).reshape(-1)
     elif cell.dimension == 1:
-        wx = np.repeat(np.linalg.norm(b[0]), ngs[0])
-        ry, wy = plus_minus(gs[1])
-        rz, wz = plus_minus(gs[2])
+        wx = np.repeat(np.linalg.norm(b[0]), mesh[0])
+        ry, wy = plus_minus(mesh[1]//2)
+        rz, wz = plus_minus(mesh[2]//2)
         ry /= np.linalg.norm(b[1])
         rz /= np.linalg.norm(b[2])
         weights = np.einsum('i,j,k->ijk', wx, wy, wz).reshape(-1)
@@ -518,11 +516,11 @@ def get_Gv_weights(cell, gs=None):
         # Don't redefine the grids
         if low_dim_ft_type is None:
             area = np.linalg.norm(np.cross(b[0], b[1]))
-            wxy = np.repeat(area, ngs[0]*ngs[1])
-            rz, wz = plus_minus(gs[2])
+            wxy = np.repeat(area, mesh[0]*mesh[1])
+            rz, wz = plus_minus(mesh[2]//2)
             rz /= np.linalg.norm(b[2])
             weights = np.einsum('i,k->ik', wxy, wz).reshape(-1)
-    else:
+    else:  # dimension == 3
         weights = abs(np.linalg.det(b))
     Gvbase = (rx, ry, rz)
     Gv = np.dot(lib.cartesian_prod(Gvbase), b)
@@ -544,7 +542,7 @@ def get_SI(cell, Gv=None):
             G vectors
 
     Returns:
-        SI : (natm, ngs) ndarray, dtype=np.complex128
+        SI : (natm, ngrids) ndarray, dtype=np.complex128
             The structure factor for each atom at each G-vector.
     '''
     if Gv is None:
@@ -553,7 +551,7 @@ def get_SI(cell, Gv=None):
     SI = np.exp(-1j*np.dot(coords, Gv.T))
     return SI
 
-def get_ewald_params(cell, precision=1e-8, gs=None):
+def get_ewald_params(cell, precision=1e-8, mesh=None):
     r'''Choose a reasonable value of Ewald 'eta' and 'cut' parameters.
 
     Choice is based on largest G vector and desired relative precision.
@@ -574,12 +572,12 @@ def get_ewald_params(cell, precision=1e-8, gs=None):
     if cell.natm == 0:
         return 0, 0
     elif cell.dimension == 3:
-        if gs is None:
-            gs = 5
+        if mesh is None:
+            mesh = 10
         else:
-            gs = np.copy(gs)
-            gs[gs>40] = 40
-        Gmax = min(np.asarray(gs) * lib.norm(cell.reciprocal_vectors(), axis=1))
+            mesh = np.copy(mesh)
+            mesh[mesh>80] = 80
+        Gmax = min(np.asarray(mesh)/2 * lib.norm(cell.reciprocal_vectors(), axis=1))
         log_precision = np.log(precision/(4*np.pi*Gmax**2))
         ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
         ew_cut = _estimate_rcut(ew_eta**2, 0, 1., precision)
@@ -640,9 +638,9 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     #   ZS_I(G) = \sum_a Z_a exp (i G.R_a)
     # See also Eq. (32) of ewald.pdf at
     #   http://www.fisica.uniud.it/~giannozz/public/ewald.pdf
-    gs = np.copy(cell.gs)
-    gs[gs>40] = 40
-    Gv, Gvbase, weights = cell.get_Gv_weights(gs)
+    mesh = np.copy(cell.mesh)
+    mesh[mesh>80] = 80
+    Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
     absG2 = np.einsum('gi,gi->g', Gv, Gv)
     absG2[absG2==0] = 1e200
     if low_dim_ft_type is None or cell.dimension == 3:
@@ -742,7 +740,7 @@ def make_kpts(cell, nks, wrap_around=False, with_gamma_point=True):
     kpts = cell.get_abs_kpts(scaled_kpts)
     return kpts
 
-def gen_uniform_grids(cell, gs=None):
+def gen_uniform_grids(cell, mesh=None):
     '''Generate a uniform real-space grid consistent w/ samp thm; see MH (3.19).
 
     Args:
@@ -753,10 +751,9 @@ def gen_uniform_grids(cell, gs=None):
             The real-space grid point coordinates.
 
     '''
-    if gs is None: gs = cell.gs
-    ngs = 2*np.asarray(gs)+1
-    qv = lib.cartesian_prod([np.arange(x) for x in ngs])
-    a_frac = np.einsum('i,ij->ij', 1./ngs, cell.lattice_vectors())
+    if mesh is None: mesh = cell.mesh
+    qv = lib.cartesian_prod([np.arange(x) for x in mesh])
+    a_frac = np.einsum('i,ij->ij', 1./np.asarray(mesh), cell.lattice_vectors())
     coords = np.dot(qv, a_frac)
     return coords
 
@@ -814,8 +811,8 @@ class Cell(mole.Mole):
         a : (3,3) ndarray
             Lattice primitive vectors. Each row represents a lattice vector
             Reciprocal lattice vectors are given by  b1,b2,b3 = 2 pi inv(a).T
-        gs : (3,) list of ints
-            The number of *positive* G-vectors along each direction.
+        mesh : (3,) list of ints
+            The number G-vectors along each direction.
             The default value is estimated based on :attr:`precision`
         pseudo : dict or str
             To define pseudopotential.
@@ -841,14 +838,14 @@ class Cell(mole.Mole):
 
     >>> mol = Mole(atom='H^2 0 0 0; H 0 0 1.1', basis='sto3g')
     >>> cl = Cell()
-    >>> cl.build(a='3 0 0; 0 3 0; 0 0 3', gs=[8,8,8], atom='C 1 1 1', basis='sto3g')
+    >>> cl.build(a='3 0 0; 0 3 0; 0 0 3', atom='C 1 1 1', basis='sto3g')
     >>> print(cl.atom_symbol(0))
     C
     '''
     def __init__(self, **kwargs):
         mole.Mole.__init__(self, **kwargs)
         self.a = None # lattice vectors, (a1,a2,a3)
-        self.gs = None
+        self.mesh = None
         self.ke_cutoff = None # if set, defines a spherical cutoff
                               # of fourier components, with .5 * G**2 < ke_cutoff
         self.precision = 1.e-8
@@ -872,7 +869,7 @@ class Cell(mole.Mole):
 
 #Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
     def build(self, dump_input=True, parse_arg=True,
-              a=None, gs=None, ke_cutoff=None, precision=None, nimgs=None,
+              a=None, mesh=None, ke_cutoff=None, precision=None, nimgs=None,
               ew_eta=None, ew_cut=None, pseudo=None, basis=None, h=None,
               dimension=None, rcut= None, ecp=None,
               *args, **kwargs):
@@ -884,14 +881,14 @@ class Cell(mole.Mole):
             a : (3,3) ndarray
                 The real-space unit cell lattice vectors. Each row represents
                 a lattice vector.
-            gs : (3,) ndarray of ints
+            mesh : (3,) ndarray of ints
                 The number of *positive* G-vectors along each direction.
             pseudo : dict or str
                 To define pseudopotential.  If given, overwrite :attr:`Cell.pseudo`
         '''
         if h is not None: self.h = h
         if a is not None: self.a = a
-        if gs is not None: self.gs = gs
+        if mesh is not None: self.mesh = mesh
         if nimgs is not None: self.nimgs = nimgs
         if ew_eta is not None: self.ew_eta = ew_eta
         if ew_cut is not None: self.ew_cut = ew_cut
@@ -910,6 +907,9 @@ class Cell(mole.Mole):
 
         if 'atom' in kwargs:
             self.atom = kwargs['atom']
+
+        if 'gs' in kwargs:
+            self.gs = gs
 
         # Set-up pseudopotential if it exists
         # This must happen before build() because it affects
@@ -940,15 +940,15 @@ class Cell(mole.Mole):
   Lattice are not in right-handed coordinate system. This can cause wrong value for some integrals.
   It's recommended to resort the lattice vectors to\na = %s\n\n''' % _a[[0,2,1]])
 
-        if self.gs is None:
+        if self.mesh is None:
             if self.ke_cutoff is None:
                 ke_cutoff = estimate_ke_cutoff(self, self.precision)
             else:
                 ke_cutoff = self.ke_cutoff
-            self.gs = pbctools.cutoff_to_gs(_a, ke_cutoff)
+            self.mesh = pbctools.cutoff_to_mesh(_a, ke_cutoff)
 
         if self.ew_eta is None or self.ew_cut is None:
-            self.ew_eta, self.ew_cut = self.get_ewald_params(self.precision, self.gs)
+            self.ew_eta, self.ew_cut = self.get_ewald_params(self.precision, self.mesh)
 
         if dump_input and not _built and self.verbose > logger.NOTE:
             self.dump_input()
@@ -963,10 +963,11 @@ class Cell(mole.Mole):
             logger.info(self, 'pseudo = %s', self.pseudo)
             if ke_cutoff is not None:
                 logger.info(self, 'ke_cutoff = %s', ke_cutoff)
-                logger.info(self, '    = gs (FFT-mesh) %s', self.gs)
+                logger.info(self, '    = %s mesh = %d',
+                            self.mesh, np.prod(self.mesh))
             else:
-                logger.info(self, 'gs (FFT-mesh) = %s', self.gs)
-                Ecut = pbctools.gs_to_cutoff(self.lattice_vectors(), self.gs)
+                logger.info(self, 'mesh = %s', self.mesh)
+                Ecut = pbctools.mesh_to_cutoff(self.lattice_vectors(), self.mesh)
                 logger.info(self, '    = ke_cutoff %s', Ecut[:self.dimension])
             logger.info(self, 'ew_eta = %g', self.ew_eta)
             logger.info(self, 'ew_cut = %s (nimgs = %s)', self.ew_cut,
@@ -997,7 +998,7 @@ class Cell(mole.Mole):
 
     @property
     def Gv(self):
-        return self.get_Gv(self.gs)
+        return self.get_Gv()
 
     @lib.with_doc(format_pseudo.__doc__)
     def format_pseudo(self, pseudo_tab):
@@ -1006,6 +1007,15 @@ class Cell(mole.Mole):
     @lib.with_doc(format_basis.__doc__)
     def format_basis(self, basis_tab):
         return format_basis(basis_tab)
+
+    @property
+    def gs(self):
+        return [n//2 for n in self.mesh]
+    @gs.setter
+    def gs(self, x):
+        sys.stderr.write('cell.h is deprecated.  It is replaced by cell.mesh,'
+                         'the number of PWs (=2*gs+1) along each direction.')
+        self.mesh = [2*n+1 for n in x]
 
     @property
     def nimgs(self):

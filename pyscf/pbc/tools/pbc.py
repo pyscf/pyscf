@@ -16,10 +16,8 @@ except ImportError:
     def ifftn_wrapper(a, s=None, axes=None, norm=None, **kwargs):
         return np.fft.ifftn(a, s, axes)
 
-def fft(f, gs):
+def fft(f, mesh):
     '''Perform the 3D FFT from real (R) to reciprocal (G) space.
-
-    Re: MH (3.25), we assume Ns := ngs = 2*gs+1
 
     After FFT, (u, v, w) -> (j, k, l).
     (jkl) is in the index order of Gv.
@@ -30,8 +28,8 @@ def fft(f, gs):
         f : (nx*ny*nz,) ndarray
             The function to be FFT'd, flattened to a 1D array corresponding
             to the index order of :func:`cartesian_prod`.
-        gs : (3,) ndarray of ints
-            The number of *positive* G-vectors along each direction.
+        mesh : (3,) ndarray of ints (= nx,ny,nz)
+            The number G-vectors along each direction.
 
     Returns:
         (nx*ny*nz,) ndarray
@@ -39,7 +37,7 @@ def fft(f, gs):
             numpy.fft).
 
     '''
-    f3d = f.reshape([-1] + [2*x+1 for x in gs])
+    f3d = f.reshape(-1, *mesh)
     assert(f3d.shape[0] == 1 or f[0].size == f3d[0].size)
     g3d = fftn_wrapper(f3d, axes=(1,2,3), threads=nproc)
     if f.ndim == 1:
@@ -47,7 +45,7 @@ def fft(f, gs):
     else:
         return g3d.reshape(f.shape[0], -1)
 
-def ifft(g, gs):
+def ifft(g, mesh):
     '''Perform the 3D inverse FFT from reciprocal (G) space to real (R) space.
 
     Inverse FFT normalization factor is 1./N, same as in `numpy.fft` but
@@ -57,8 +55,8 @@ def ifft(g, gs):
         g : (nx*ny*nz,) ndarray
             The function to be inverse FFT'd, flattened to a 1D array
             corresponding to the index order of `span3`.
-        gs : (3,) ndarray of ints
-            The number of *positive* G-vectors along each direction.
+        mesh : (3,) ndarray of ints (= nx,ny,nz)
+            The number G-vectors along each direction.
 
     Returns:
         (nx*ny*nz,) ndarray
@@ -66,7 +64,7 @@ def ifft(g, gs):
             of numpy.fft).
 
     '''
-    g3d = g.reshape([-1] + [2*x+1 for x in gs])
+    g3d = g.reshape(-1, *mesh)
     assert(g3d.shape[0] == 1 or g[0].size == g3d[0].size)
     f3d = ifftn_wrapper(g3d, axes=(1,2,3), threads=nproc)
     if g.ndim == 1:
@@ -75,23 +73,23 @@ def ifft(g, gs):
         return f3d.reshape(g.shape[0], -1)
 
 
-def fftk(f, gs, expmikr):
+def fftk(f, mesh, expmikr):
     '''Perform the 3D FFT of a real-space function which is (periodic*e^{ikr}).
 
     fk(k+G) = \sum_r fk(r) e^{-i(k+G)r} = \sum_r [f(k)e^{-ikr}] e^{-iGr}
     '''
-    return fft(f*expmikr, gs)
+    return fft(f*expmikr, mesh)
 
 
-def ifftk(g, gs, expikr):
+def ifftk(g, mesh, expikr):
     '''Perform the 3D inverse FFT of f(k+G) into a function which is (periodic*e^{ikr}).
 
     fk(r) = (1/Ng) \sum_G fk(k+G) e^{i(k+G)r} = (1/Ng) \sum_G [fk(k+G)e^{iGr}] e^{ikr}
     '''
-    return ifft(g, gs) * expikr
+    return ifft(g, mesh) * expikr
 
 
-def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None,
+def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
               wrap_around=True, low_dim_ft_type=None):
     '''Calculate the Coulomb kernel for all G-vectors, handling G=0 and exchange.
 
@@ -103,8 +101,10 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None,
         mf : instance of :class:`SCF`
 
     Returns:
-        coulG : (ngs,) ndarray
+        coulG : (ngrids,) ndarray
             The Coulomb kernel.
+        mesh : (3,) ndarray of ints (= nx,ny,nz)
+            The number G-vectors along each direction.
 
     '''
     exxdiv = exx
@@ -114,10 +114,10 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None,
 # sys.stderr.write('pass exxdiv directly')
         exxdiv = mf.exxdiv
 
-    if gs is None:
-        gs = cell.gs
+    if mesh is None:
+        mesh = cell.mesh
     if Gv is None:
-        Gv = cell.get_Gv(gs)
+        Gv = cell.get_Gv(mesh)
 
     kG = k + Gv
     equal2boundary = np.zeros(Gv.shape[0], dtype=bool)
@@ -126,7 +126,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None,
         # frequency counterparts.  Important if you want the gamma point and k-point
         # answers to agree
         b = cell.reciprocal_vectors()
-        box_edge = np.einsum('i,ij->ij', np.asarray(gs)+0.5, b)
+        box_edge = np.einsum('i,ij->ij', np.asarray(mesh)+0.5, b)
         assert(all(np.linalg.solve(box_edge.T, k).round(9).astype(int)==0))
         reduced_coords = np.linalg.solve(box_edge.T, kG.T).T.round(9)
         on_edge = reduced_coords.astype(int)
@@ -181,7 +181,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None,
         coulG[absG2==0] = 4*np.pi*0.5*Rc**2
     elif exxdiv == 'ewald':
         G0_idx = np.where(absG2==0)[0]
-        if cell.dimension == 3 or low_dim_ft_type == None:
+        if cell.dimension == 3 or low_dim_ft_type is None:
             with np.errstate(divide='ignore'):
                 coulG = 4*np.pi/absG2
             if len(G0_idx) > 0:
@@ -217,9 +217,9 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, gs=None, Gv=None,
         # Index k+Gv into the precomputed vq and add on
         gxyz = np.dot(kG, exx_kcell.lattice_vectors().T)/(2*np.pi)
         gxyz = gxyz.round(decimals=6).astype(int)
-        ngs = 2*np.asarray(exx_kcell.gs)+1
-        gxyz = (gxyz + ngs)%(ngs)
-        qidx = (gxyz[:,0]*ngs[1] + gxyz[:,1])*ngs[2] + gxyz[:,2]
+        mesh = numpy.asarray(mesh)
+        gxyz = (gxyz + mesh)%mesh
+        qidx = (gxyz[:,0]*mesh[1] + gxyz[:,1])*mesh[2] + gxyz[:,2]
         #qidx = [np.linalg.norm(exx_q-kGi,axis=1).argmin() for kGi in kG]
         maxqv = abs(exx_q).max(axis=0)
         is_lt_maxqv = (abs(kG) <= maxqv).all(axis=1)
@@ -251,11 +251,11 @@ def precompute_exx(cell, kpts):
     # ASE:
     alpha = 5./Rin # sqrt(-ln eps) / Rc, eps ~ 10^{-11}
     log.info("WS alpha = %s", alpha)
-    kcell.gs = np.array([2*int(L*alpha*3.0) for L in Lc])  # ~ [60,60,60]
+    kcell.mesh = np.array([2*int(L*alpha*3.0) for L in Lc])  # ~ [60,60,60]
     # QE:
     #alpha = 3./Rin * np.sqrt(0.5)
-    #kcell.gs = (4*alpha*np.linalg.norm(kcell.a,axis=1)).astype(int)
-    log.debug("# kcell.gs FFT = %s", kcell.gs)
+    #kcell.mesh = (4*alpha*np.linalg.norm(kcell.a,axis=1)).astype(int)
+    log.debug("# kcell.mesh FFT = %s", kcell.mesh)
     kcell.build(False,False)
     rs = gen_grid.gen_uniform_grids(kcell)
     kngs = len(rs)
@@ -272,7 +272,7 @@ def precompute_exx(cell, kpts):
     r = np.min([lib.norm(rs-c, axis=1) for c in corners], axis=0)
     vR = scipy.special.erf(alpha*r) / (r+1e-200)
     vR[r<1e-9] = 2*alpha / np.sqrt(np.pi)
-    vG = (kcell.vol/kngs) * fft(vR, kcell.gs)
+    vG = (kcell.vol/kngs) * fft(vR, kcell.mesh)
     ws_exx = {'alpha': alpha,
               'kcell': kcell,
               'q'    : kcell.Gv,
@@ -289,7 +289,7 @@ def madelung(cell, kpts):
     ecell.unit = 'B'
     #ecell.verbose = 0
     ecell.a = cell.lattice_vectors() * Nk
-    ew_eta, ew_cut = ecell.get_ewald_params(cell.precision, ecell.gs)
+    ew_eta, ew_cut = ecell.get_ewald_params(cell.precision, ecell.mesh)
     lib.logger.debug1(cell, 'Monkhorst pack size %s ew_eta %s ew_cut %s',
                       Nk, ew_eta, ew_cut)
     return -2*ecell.ewald(ew_eta, ew_cut)
@@ -370,9 +370,9 @@ def super_cell(cell, ncopy):
     supcell.atom = list(zip(symbs, coords.reshape(-1,3)))
     supcell.unit = 'B'
     supcell.a = np.einsum('i,ij->ij', ncopy, a)
-    supcell.gs = np.array([ncopy[0]*cell.gs[0] + (ncopy[0]-1)//2,
-                           ncopy[1]*cell.gs[1] + (ncopy[1]-1)//2,
-                           ncopy[2]*cell.gs[2] + (ncopy[2]-1)//2])
+    supcell.mesh = np.array([ncopy[0]*cell.mesh[0] + (ncopy[0]-1)//2,
+                             ncopy[1]*cell.mesh[1] + (ncopy[1]-1)//2,
+                             ncopy[2]*cell.mesh[2] + (ncopy[2]-1)//2])
     supcell.build(False, False, verbose=0)
     supcell.verbose = cell.verbose
     return supcell
@@ -503,10 +503,9 @@ def get_kconserv3(cell, kpts, kijkab):
     return out_array
 
 
-
-def cutoff_to_gs(a, cutoff):
+def cutoff_to_mesh(a, cutoff):
     '''
-    Convert KE cutoff to #grid points (gs variable) for FFT-mesh
+    Convert KE cutoff to FFT-mesh
 
         uses KE = k^2 / 2, where k_max ~ \pi / grid_spacing
 
@@ -518,21 +517,24 @@ def cutoff_to_gs(a, cutoff):
             KE energy cutoff in a.u.
 
     Returns:
-        gs : (3,) array
+        mesh : (3,) array
     '''
-#    grid_spacing = np.pi / np.sqrt(2 * cutoff)
-#
-#    # number of grid points is 2gs+1 (~ 2 gs) along each direction
-#    gs = np.ceil(lib.norm(a, axis=1) / (2*grid_spacing)).astype(int)
-
     b = 2 * np.pi * np.linalg.inv(a.T)
-    gs = np.ceil(np.sqrt(2*cutoff)/lib.norm(b, axis=1)).astype(int)
-    return gs
+    mesh = np.ceil(np.sqrt(2*cutoff)/lib.norm(b, axis=1) * 2).astype(int)
+    return mesh
 
-def gs_to_cutoff(a, gs):
+def mesh_to_cutoff(a, mesh):
     '''
     Convert #grid points to KE cutoff
     '''
     b = 2 * np.pi * np.linalg.inv(a.T)
-    Gmax = lib.norm(b, axis=1) * np.asarray(gs)
+    Gmax = lib.norm(b, axis=1) * np.asarray(mesh) * .5
     return Gmax**2/2
+
+def cutoff_to_gs(a, cutoff):
+    '''Deprecated.  Replaced by function cutoff_to_mesh.'''
+    return [n//2 for n in cutoff_to_mesh(a, cutoff)]
+
+def gs_to_cutoff(a, gs):
+    '''Deprecated.  Replaced by function mesh_to_cutoff.'''
+    return mesh_to_cutoff(a, [2*n+1 for n in gs])

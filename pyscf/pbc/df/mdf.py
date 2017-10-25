@@ -41,8 +41,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 
     nao = cell.nao_nr()
     naux = auxcell.nao_nr()
-    gs = mydf.gs
-    Gv, Gvbase, kws = cell.get_Gv_weights(gs)
+    mesh = mydf.mesh
+    Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
     b = cell.reciprocal_vectors()
     gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
     ngs = gxyz.shape[0]
@@ -60,7 +60,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     for k, kpt in enumerate(uniq_kpts):
         aoaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
         aoaux = fuse(aoaux)
-        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, gs))
+        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, mesh))
         kLR = (aoaux.real * coulG).T
         kLI = (aoaux.imag * coulG).T
         if not kLR.flags.c_contiguous: kLR = lib.transpose(kLR.T)
@@ -88,7 +88,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 
         Gaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
         Gaux = fuse(Gaux)
-        Gaux *= mydf.weighted_coulG(kpt, False, gs)
+        Gaux *= mydf.weighted_coulG(kpt, False, mesh)
         kLR = Gaux.T.real.copy('C')
         kLI = Gaux.T.imag.copy('C')
         j2c = numpy.asarray(feri['j2c/%d'%uniq_kptji_id])
@@ -216,7 +216,7 @@ class MDF(df.DF):
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
         self.auxbasis = None
-        self.gs = cell.gs
+        self.mesh = cell.mesh
         self.eta = None
 
 # Not input options
@@ -239,7 +239,7 @@ class MDF(df.DF):
             cell = self.cell
             if cell.dimension == 0:
                 return 0.2
-            ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), self.gs)
+            ke_cutoff = tools.mesh_to_cutoff(cell.lattice_vectors(), self.mesh)
             ke_cutoff = ke_cutoff[:cell.dimension].min()
             return aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision)
     @eta.setter

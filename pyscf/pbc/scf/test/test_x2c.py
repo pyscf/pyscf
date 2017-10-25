@@ -13,7 +13,7 @@ from pyscf.pbc import df
 cell = gto.Cell()
 cell.build(unit = 'B',
            a = numpy.eye(3)*4,
-           gs = [5]*3,
+           mesh = [11]*3,
            atom = 'H 0 0 0; H 0 0 1.8',
            verbose = 0,
            basis='sto3g')

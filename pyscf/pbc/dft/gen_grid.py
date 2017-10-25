@@ -54,13 +54,13 @@ class UniformGrids(object):
         self.verbose = cell.verbose
         self.coords = None
         self.weights = None
-        self.gs = None
+        self.mesh = None
         self.non0tab = None
 
     def build(self, cell=None, with_non0tab=False):
         if cell is None: cell = self.cell
 
-        self.coords = gen_uniform_grids(self.cell, self.gs)
+        self.coords = gen_uniform_grids(self.cell, self.mesh)
         self.weights = np.empty(self.coords.shape[0])
         self.weights[:] = cell.vol/self.weights.shape[0]
 
@@ -71,10 +71,10 @@ class UniformGrids(object):
         return self.coords, self.weights
 
     def dump_flags(self):
-        if self.gs is None:
-            logger.info(self, 'Uniform grid, gs = %s', self.cell.gs)
+        if self.mesh is None:
+            logger.info(self, 'Uniform grid, mesh = %s', self.cell.mesh)
         else:
-            logger.info(self, 'Uniform grid, gs = %s', self.gs)
+            logger.info(self, 'Uniform grid, mesh = %s', self.mesh)
 
     def kernel(self, cell=None, with_non0tab=False):
         self.dump_flags()
@@ -198,14 +198,14 @@ AtomicGrids = BeckeGrids
 if __name__ == '__main__':
     import pyscf.pbc.gto as pgto
 
-    n = 3
+    n = 7
     cell = pgto.Cell()
     cell.a = '''
     4   0   0
     0   4   0
     0   0   4
     '''
-    cell.gs = [n,n,n]
+    cell.mesh = [n,n,n]
 
     cell.atom = '''He     0.    0.       1.
                    He     1.    0.       1.'''

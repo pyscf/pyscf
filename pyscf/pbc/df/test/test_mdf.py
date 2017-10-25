@@ -11,10 +11,10 @@ pyscf.pbc.DEBUG = False
 mdf.df.LINEAR_DEP_THR = 1e-7
 
 L = 5.
-n = 5
+n = 11
 cell = pgto.Cell()
 cell.a = numpy.diag([L,L,L])
-cell.gs = numpy.array([n,n,n])
+cell.mesh = numpy.array([n,n,n])
 
 cell.atom = '''C    3.    2.       3.
                C    1.    1.       1.'''
@@ -36,7 +36,7 @@ kpts[4] *= 1e-5
 kmdf = mdf.MDF(cell)
 kmdf.auxbasis = 'weigend'
 kmdf.kpts = kpts
-kmdf.gs = (5,)*3
+kmdf.mesh = (11,)*3
 kmdf.eta = 0.154728892598
 
 
@@ -53,7 +53,7 @@ class KnowValues(unittest.TestCase):
     def test_get_eri_gamma(self):
         odf = mdf.MDF(cell)
         odf.auxbasis = 'weigend'
-        odf.gs = (5,)*3
+        odf.mesh = (11,)*3
         odf.eta = 0.154728892598
         eri0000 = odf.get_eri()
         self.assertTrue(eri0000.dtype == numpy.double)

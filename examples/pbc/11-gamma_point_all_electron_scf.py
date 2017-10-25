@@ -35,7 +35,7 @@ mf.kernel()
 
 # Mixed density fitting is another option for all-electron calculations
 mf = scf.RHF(cell).mix_density_fit()
-mf.with_df.gs = [5]*3  # Tune #PWs in MDF for performance/accuracy balance
+mf.with_df.mesh = [10]*3  # Tune #PWs in MDF for performance/accuracy balance
 mf.kernel()
 
 # Or use even-tempered Gaussian basis as auxiliary fitting functions.

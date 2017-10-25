@@ -10,13 +10,13 @@ import numpy as np
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import dft as pbcdft
 
-def build_cell(ngs):
+def build_cell(mesh):
     cell = pbcgto.Cell()
     cell.unit = 'A'
     cell.a = '''3.5668  0.      0.
                 0.      3.5668  0.
                 0.      0.      3.5668'''
-    cell.gs = np.array([ngs,ngs,ngs])
+    cell.mesh = mesh
     cell.atom ='''
 C, 0.,  0.,  0.
 C, 0.8917,  0.8917,  0.8917
@@ -33,7 +33,7 @@ C, 0.8917,  2.6751,  2.6751'''
     cell.build()
     return cell
 
-def make_primitive_cell(ngs):
+def make_primitive_cell(mesh):
     cell = pbcgto.Cell()
     cell.unit = 'A'
     cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
@@ -43,7 +43,7 @@ def make_primitive_cell(ngs):
 
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
-    cell.gs = np.array([ngs,ngs,ngs])
+    cell.mesh = mesh
     cell.verbose = 7
     cell.output = '/dev/null'
     cell.build()
@@ -52,7 +52,7 @@ def make_primitive_cell(ngs):
 
 class KnowValues(unittest.TestCase):
     def test_klda8_cubic_gamma(self):
-        cell = build_cell(8)
+        cell = build_cell([17]*3)
         mf = pbcdft.RKS(cell)
         mf.xc = 'lda,vwn'
         #kmf.verbose = 7
@@ -60,7 +60,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(e1, -44.892502703975893, 8)
 
     def test_klda8_cubic_kpt_222(self):
-        cell = build_cell(8)
+        cell = build_cell([17]*3)
         abs_kpts = cell.make_kpts([2]*3, with_gamma_point=False)
         mf = pbcdft.KRKS(cell, abs_kpts)
         #mf.analytic_int = False
@@ -70,7 +70,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(e1, -45.425834895129569, 8)
 
     def test_klda8_primitive_gamma(self):
-        cell = make_primitive_cell(8)
+        cell = make_primitive_cell([17]*3)
         mf = pbcdft.RKS(cell)
         mf.xc = 'lda,vwn'
         #kmf.verbose = 7
@@ -78,7 +78,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(e1, -10.221426445656439, 8)
 
     def test_klda8_primitive_kpt_222(self):
-        cell = make_primitive_cell(8)
+        cell = make_primitive_cell([17]*3)
         abs_kpts = cell.make_kpts([2]*3, with_gamma_point=False)
         mf = pbcdft.KRKS(cell, abs_kpts)
         #mf.analytic_int = False

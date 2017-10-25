@@ -23,7 +23,7 @@ cell.a = '''
 
 cell.basis = 'gth-szv'
 cell.pseudo = 'gth-pade'
-cell.gs = [9]*3
+cell.mesh = [19]*3
 cell.verbose = 5
 cell.output = '/dev/null'
 cell.build()

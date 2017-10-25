@@ -24,11 +24,11 @@ def get_ovlp(cell, grids=None):
 class KnowValues(unittest.TestCase):
     def test_becke_grids(self):
         L = 4.
-        n = 30
+        n = 61
         cell = pgto.Cell()
         cell.a = numpy.eye(3)*L
         cell.a[1,0] = cell.a[2,1] = L / 2
-        cell.gs = numpy.array([n,n,n])
+        cell.mesh = numpy.array([n,n,n])
 
         cell.atom =[['He' , ( L/2+0., L/2+0. ,   L/2+1.)],
                     ['He' , ( L/2+1., L/2+0. ,   L/2+1.)]]

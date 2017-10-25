@@ -70,8 +70,8 @@ def _rotate_mo(mo_coeff, mo_occ, dx):
     return mo
 
 def _gen_hop_rhf_external(mf, verbose=None):
-#FIXME: numerically unstable with small gs?
-#TODO: Add a warning message for small gs.
+#FIXME: numerically unstable with small mesh?
+#TODO: Add a warning message for small mesh.
     from pyscf.pbc.dft import numint
     from pyscf.pbc.tddft.rhf import _unpack
     cell = mf.cell
@@ -273,7 +273,7 @@ if __name__ == '__main__':
 
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
-    cell.gs = [12]*3
+    cell.mesh = [25]*3
     cell.build()
     kpts = cell.make_kpts([2,1,1])
     mf = scf.KRHF(cell, kpts).set(exxdiv=None)

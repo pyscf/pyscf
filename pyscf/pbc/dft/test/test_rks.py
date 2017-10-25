@@ -18,7 +18,7 @@ class KnowValues(unittest.TestCase):
 #        cell.unit = 'B'
 #        L = 10
 #        cell.a = np.diag([L]*3)
-#        cell.gs = np.array([20]*3)
+#        cell.mesh = np.array([41]*3)
 #        cell.atom = [['He', (L/2.,L/2.,L/2.)], ]
 ## these are some exponents which are not hard to integrate
 #        cell.basis = { 'He': [[0, (0.8, 1.0)],
@@ -54,7 +54,7 @@ class KnowValues(unittest.TestCase):
 #
 #        Lx = Ly = Lz = 5.430697500
 #        cell.a = np.diag([Lx,Ly,Lz])
-#        cell.gs = np.array([10,10,10])
+#        cell.mesh = np.array([21]*3)
 #
 #        cell.verbose = 5
 #        cell.output = '/dev/null'
@@ -68,7 +68,7 @@ class KnowValues(unittest.TestCase):
     def test_chkfile_k_point(self):
         cell = pbcgto.Cell()
         cell.a = np.eye(3) * 6
-        cell.gs = [10,10,10]
+        cell.mesh = [21]*3
         cell.unit = 'B'
         cell.atom = '''He     2.    2.       3.
                       He     3.    2.       3.'''
@@ -81,7 +81,7 @@ class KnowValues(unittest.TestCase):
 
         cell = pbcgto.Cell()
         cell.a = np.eye(3) * 6
-        cell.gs = [20,20,20]
+        cell.mesh = [41]*3
         cell.unit = 'B'
         cell.atom = '''He     2.    2.       3.
                        He     3.    2.       3.'''

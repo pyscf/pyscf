@@ -17,7 +17,7 @@ class KnowValues(unittest.TestCase):
         cell = pgto.Cell()
         cell.unit = 'B'
         cell.a = numpy.eye(3) * 3.
-        cell.gs = numpy.array([20,20,20])
+        cell.mesh = numpy.array([41]*3)
         cell.atom = 'He 0 1 1; He 1 1 0'
         cell.basis = { 'He': [[0, (0.8, 1.0)],
                               [0, (1.2, 1.0)]] }

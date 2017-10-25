@@ -478,7 +478,7 @@ if __name__ == '__main__':
     '''
     cell.basis = '321g'
     cell.a = np.eye(3) * 3
-    cell.gs = [5] * 3
+    cell.mesh = [11] * 3
     cell.verbose = 5
     cell.build()
     mf = KUHF(cell, [2,1,1])

@@ -20,7 +20,7 @@ cell = gto.M(
               C     0.8917  2.6751  2.6751''',
     basis = '6-31g',
     verbose = 4,
-    gs = [5,5,5],
+    mesh = [10,10,10],
 )
 
 nk = [4,4,4]  # 4 k-poins for each axis, 4^3=64 kpts in total

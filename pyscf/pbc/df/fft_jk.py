@@ -34,34 +34,34 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
         or list of vj if the input dm_kpts is a list of DMs
     '''
     cell = mydf.cell
-    gs = mydf.gs
+    mesh = mydf.mesh
     low_dim_ft_type = mydf.low_dim_ft_type
 
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
 
-    coulG = tools.get_coulG(cell, gs=gs, low_dim_ft_type=low_dim_ft_type)
-    ngs = len(coulG)
+    coulG = tools.get_coulG(cell, mesh=mesh, low_dim_ft_type=low_dim_ft_type)
+    ngrids = len(coulG)
 
-    vR = rhoR = np.zeros((nset,ngs))
-    for k, aoR in mydf.aoR_loop(gs, kpts):
+    vR = rhoR = np.zeros((nset,ngrids))
+    for k, aoR in mydf.aoR_loop(mesh, kpts):
         for i in range(nset):
             rhoR[i] += numint.eval_rho(cell, aoR, dms[i,k])
     for i in range(nset):
         rhoR[i] *= 1./nkpts
-        rhoG = tools.fft(rhoR[i], gs)
+        rhoG = tools.fft(rhoR[i], mesh)
         vG = coulG * rhoG
-        vR[i] = tools.ifft(vG, gs).real
+        vR[i] = tools.ifft(vG, mesh).real
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     nband = len(kpts_band)
-    weight = cell.vol / ngs
+    weight = cell.vol / ngrids
     if gamma_point(kpts_band):
         vj_kpts = np.empty((nset,nband,nao,nao))
     else:
         vj_kpts = np.empty((nset,nband,nao,nao), dtype=np.complex128)
-    for k, aoR in mydf.aoR_loop(gs, kpts_band):
+    for k, aoR in mydf.aoR_loop(mesh, kpts_band):
         for i in range(nset):
             vj_kpts[i,k] = weight * lib.dot(aoR.T.conj()*vR[i], aoR)
 
@@ -86,10 +86,10 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
         or list of vj and vk if the input dm_kpts is a list of DMs
     '''
     cell = mydf.cell
-    gs = mydf.gs
+    mesh = mydf.mesh
     low_dim_ft_type = mydf.low_dim_ft_type
-    coords = cell.gen_uniform_grids(gs)
-    ngs = coords.shape[0]
+    coords = cell.gen_uniform_grids(mesh)
+    ngrids = coords.shape[0]
 
     if hasattr(dm_kpts, 'mo_coeff'):
         mo_coeff = dm_kpts.mo_coeff
@@ -102,7 +102,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
 
-    weight = 1./nkpts * (cell.vol/ngs)
+    weight = 1./nkpts * (cell.vol/ngrids)
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     nband = len(kpts_band)
@@ -128,11 +128,11 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
         naoj = nao
 
     max_memory = mydf.max_memory - lib.current_memory()[0]
-    blksize = int(max(max_memory*1e6/16/2/ngs/nao, 1))
+    blksize = int(max(max_memory*1e6/16/2/ngrids/nao, 1))
     ao1_dtype = np.result_type(*ao1_kpts)
     ao2_dtype = np.result_type(*ao2_kpts)
-    vR_dm = np.empty((nset,nao,ngs), dtype=vk_kpts.dtype)
-    ao_dms = np.empty((nset,naoj,ngs), dtype=np.result_type(dms, ao2_dtype))
+    vR_dm = np.empty((nset,nao,ngrids), dtype=vk_kpts.dtype)
+    ao_dms = np.empty((nset,naoj,ngrids), dtype=np.result_type(dms, ao2_dtype))
 
     for k2, ao2T in enumerate(ao2_kpts):
         kpt2 = kpts[k2]
@@ -146,7 +146,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
         for k1, ao1T in enumerate(ao1_kpts):
             kpt1 = kpts_band[k1]
             mydf.exxdiv = exxdiv
-            coulG = tools.get_coulG(cell, kpt2-kpt1, True, mydf, gs, 
+            coulG = tools.get_coulG(cell, kpt2-kpt1, True, mydf, mesh,
                                     low_dim_ft_type=low_dim_ft_type)
             if is_zero(kpt1-kpt2):
                 expmikr = np.array(1.)
@@ -156,9 +156,9 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
             for p0, p1 in lib.prange(0, nao, blksize):
                 rho1 = np.einsum('ig,jg->ijg', ao1T[p0:p1].conj()*expmikr,
                                  ao2T)
-                vG = tools.fft(rho1.reshape(-1,ngs), gs)
+                vG = tools.fft(rho1.reshape(-1,ngrids), mesh)
                 vG *= coulG
-                vR = tools.ifft(vG, gs).reshape(p1-p0,naoj,ngs)
+                vR = tools.ifft(vG, mesh).reshape(p1-p0,naoj,ngrids)
                 vG = None
                 if vR_dm.dtype == np.double:
                     vR = vR.real

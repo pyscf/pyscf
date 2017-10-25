@@ -26,18 +26,18 @@ def get_nuc(mydf, kpts=None):
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
     low_dim_ft_type = mydf.low_dim_ft_type
-    gs = mydf.gs
+    mesh = mydf.mesh
     charge = -cell.atom_charges()
-    Gv = cell.get_Gv(gs)
+    Gv = cell.get_Gv(mesh)
     SI = cell.get_SI(Gv)
     rhoG = numpy.dot(charge, SI)
 
-    coulG = tools.get_coulG(cell, gs=gs, Gv=Gv, low_dim_ft_type=low_dim_ft_type)
+    coulG = tools.get_coulG(cell, mesh=mesh, Gv=Gv, low_dim_ft_type=low_dim_ft_type)
     vneG = rhoG * coulG
-    vneR = tools.ifft(vneG, mydf.gs).real
+    vneR = tools.ifft(vneG, mydf.mesh).real
 
     vne = [lib.dot(aoR.T.conj()*vneR, aoR)
-           for k, aoR in mydf.aoR_loop(gs, kpts_lst)]
+           for k, aoR in mydf.aoR_loop(mesh, kpts_lst)]
 
     if kpts is None or numpy.shape(kpts) == (3,):
         vne = vne[0]
@@ -53,19 +53,19 @@ def get_pp(mydf, kpts=None):
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
     low_dim_ft_type = mydf.low_dim_ft_type
-    gs = mydf.gs
+    mesh = mydf.mesh
     SI = cell.get_SI()
-    Gv = cell.get_Gv(gs)
-    vpplocG = pseudo.get_vlocG(cell, Gv, low_dim_ft_type=low_dim_ft_type)
+    Gv = cell.get_Gv(mesh)
+    vpplocG = pseudo.get_vlocG(cell, Gv, low_dim_ft_type)
     vpplocG = -numpy.einsum('ij,ij->j', SI, vpplocG)
-    vpplocG[0] = numpy.sum(pseudo.get_alphas(cell, 
-                           low_dim_ft_type=low_dim_ft_type)) # from get_jvloc_G0 function
+    # from get_jvloc_G0 function
+    vpplocG[0] = numpy.sum(pseudo.get_alphas(cell, low_dim_ft_type))
     ngs = len(vpplocG)
 
     # vpploc evaluated in real-space
-    vpplocR = tools.ifft(vpplocG, cell.gs).real
+    vpplocR = tools.ifft(vpplocG, cell.mesh).real
     vpp = [lib.dot(aoR.T.conj()*vpplocR, aoR)
-           for k, aoR in mydf.aoR_loop(gs, kpts_lst)]
+           for k, aoR in mydf.aoR_loop(mesh, kpts_lst)]
 
     # vppnonloc evaluated in reciprocal space
     fakemol = gto.Mole()
@@ -152,7 +152,7 @@ class FFTDF(lib.StreamObject):
             cell.low_dim_ft_type = low_dim_ft_type
 
         self.kpts = kpts
-        self.gs = cell.gs
+        self.mesh = cell.mesh
 
         self.blockdim = 240 # to mimic molecular DF object
         self.non0tab = None
@@ -165,7 +165,7 @@ class FFTDF(lib.StreamObject):
     def dump_flags(self):
         logger.info(self, '\n')
         logger.info(self, '******** %s flags ********', self.__class__)
-        logger.info(self, 'gs = %s', self.gs)
+        logger.info(self, 'mesh = %s', self.mesh)
         logger.info(self, 'len(kpts) = %d', len(self.kpts))
         logger.debug1(self, '    kpts = %s', self.kpts)
         return self
@@ -191,20 +191,20 @@ class FFTDF(lib.StreamObject):
                         '        mf = mf.mix_density_fit()')
 
         if cell.ke_cutoff is None:
-            ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), self.gs).min()
+            ke_cutoff = tools.mesh_to_cutoff(cell.lattice_vectors(), self.mesh).min()
         else:
             ke_cutoff = numpy.min(cell.ke_cutoff)
         ke_guess = estimate_ke_cutoff(cell, cell.precision)
         if ke_cutoff < ke_guess*.8:
-            gs_guess = tools.cutoff_to_gs(cell.lattice_vectors(), ke_guess)
-            logger.warn(self, 'ke_cutoff/gs (%g / %s) is not enough for FFTDF '
+            gs_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
+            logger.warn(self, 'ke_cutoff/mesh (%g / %s) is not enough for FFTDF '
                         'to get integral accuracy %g.\nCoulomb integral error '
-                        'is ~ %.2g Eh.\nRecomended ke_cutoff/gs are %g / %s.',
-                        ke_cutoff, self.gs, cell.precision,
+                        'is ~ %.2g Eh.\nRecommended ke_cutoff/mesh are %g / %s.',
+                        ke_cutoff, self.mesh, cell.precision,
                         error_for_ke_cutoff(cell, ke_cutoff), ke_guess, gs_guess)
         return self
 
-    def aoR_loop(self, gs=None, kpts=None, kpts_band=None):
+    def aoR_loop(self, mesh=None, kpts=None, kpts_band=None):
         cell = self.cell
         if cell.dimension < 2:
             raise RuntimeError('FFTDF method does not support low-dimension '
@@ -218,16 +218,16 @@ class FFTDF(lib.StreamObject):
         if kpts is None: kpts = self.kpts
         kpts = numpy.asarray(kpts)
 
-        if gs is None:
-            gs = numpy.asarray(self.gs)
+        if mesh is None:
+            mesh = numpy.asarray(self.mesh)
         else:
-            gs = numpy.asarray(gs)
-            if any(gs != self.gs):
+            mesh = numpy.asarray(mesh)
+            if any(mesh != self.mesh):
                 self.non0tab = None
-            self.gs = gs
+            self.mesh = mesh
 
         ni = self._numint
-        coords = cell.gen_uniform_grids(gs)
+        coords = cell.gen_uniform_grids(mesh)
         if self.non0tab is None:
             self.non0tab = ni.make_mask(cell, coords)
         if kpts_band is None:
@@ -283,7 +283,7 @@ class FFTDF(lib.StreamObject):
 # point DF object can be used in the molecular code
     def loop(self):
         kpts0 = numpy.zeros((2,3))
-        coulG = tools.get_coulG(self.cell, numpy.zeros(3), gs=self.gs, 
+        coulG = tools.get_coulG(self.cell, numpy.zeros(3), mesh=self.mesh,
                                 low_dim_ft_type=self.low_dim_ft_type)
         ngs = len(coulG)
         ao_pairs_G = self.get_ao_pairs_G(kpts0, compact=True)
@@ -297,8 +297,8 @@ class FFTDF(lib.StreamObject):
             yield Lpq[:p1-p0]
 
     def get_naoaux(self):
-        gs = numpy.asarray(self.gs)
-        ngs = numpy.prod(gs*2+1)
+        mesh = numpy.asarray(self.mesh)
+        ngs = numpy.prod(mesh)
         return ngs * 2
 
 
@@ -310,7 +310,7 @@ if __name__ == '__main__':
     cell.a = numpy.diag([4, 4, 4])
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
-    cell.gs = [10, 10, 10]
+    cell.mesh = [20]*3
     cell.build()
     k = numpy.ones(3)*.25
     df = FFTDF(cell)

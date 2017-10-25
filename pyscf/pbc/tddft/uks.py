@@ -29,7 +29,7 @@ if __name__ == '__main__':
 
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
-    cell.gs = [18]*3
+    cell.mesh = [37]*3
     cell.build()
     mf = dft.KUKS(cell, cell.make_kpts([2,1,1])).set(exxdiv=None, xc='b88,p86')
     #mf.with_df = df.MDF(cell, cell.make_kpts([2,1,1]))

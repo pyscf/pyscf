@@ -15,7 +15,7 @@ class KnowValues(unittest.TestCase):
         cell.a = '''3.5668  0.      0.
                     0.      3.5668  0.
                     0.      0.      3.5668'''
-        cell.gs = np.array([8]*3)
+        cell.mesh = np.array([17]*3)
         cell.atom ='''
 C, 0.,  0.,  0.
 C, 0.8917,  0.8917,  0.8917
