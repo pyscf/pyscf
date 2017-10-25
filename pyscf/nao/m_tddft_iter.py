@@ -4,8 +4,7 @@ from scipy.sparse import csr_matrix, coo_matrix
 from scipy.linalg import blas
 from timeit import default_timer as timer
 from pyscf.nao.m_tddft_iter_gpu import tddft_iter_gpu_c
-#from pyscf.nao.m_sparse_blas import csrgemv # not working!
-from pyscf.nao.m_sparsetools import csr_matvec, csc_matvec, csc_matvecs
+from pyscf.nao.m_chi0_noxv import chi0_mv_gpu, chi0_mv
 import scipy
 if int(scipy.__version__[0]) > 0:
     scipy_ver = 1
@@ -37,7 +36,6 @@ class tddft_iter_c():
     if precision == "single":
         self.dtype = np.float32
         self.dtypeComplex = np.complex64
-        self.gemm = blas.sgemm
         if scipy_ver > 0:
             self.spmv = blas.sspmv
         else: 
@@ -45,7 +43,6 @@ class tddft_iter_c():
     elif precision == "double":
         self.dtype = np.float64
         self.dtypeComplex = np.complex128
-        self.gemm = blas.dgemm
         if scipy_ver > 0:
             self.spmv = blas.dspmv
         else: 
@@ -94,8 +91,8 @@ class tddft_iter_c():
     self.xocc = sv.wfsx.x[0,0,0:self.nfermi,:,0]  # does python creates a copy at this point ?
     self.xvrt = sv.wfsx.x[0,0,self.vstart:,:,0]   # does python creates a copy at this point ?
 
-    self.tddft_iter_gpu = tddft_iter_gpu_c(GPU, sv.wfsx.x, self.v_dab, self.ksn2f, self.ksn2e, 
-            self.cc_da, self.moms0, self.norbs, self.nfermi, self.nprod, self.vstart)
+    self.tddft_iter_gpu = tddft_iter_gpu_c(GPU, sv.wfsx.x, self.ksn2f, self.ksn2e, 
+            self.norbs, self.nfermi, self.nprod, self.vstart)
 
   def load_kernel(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None, **kwargs):
 
@@ -118,75 +115,21 @@ class tddft_iter_c():
       self.kernel_dim = self.nprod
 
   def apply_rf0(self, v, comega=1j*0.0):
-    """ This applies the non-interacting response function to a vector (a set of vectors?) """
+    """ 
+        This applies the non-interacting response function to a vector (a set of vectors?) 
+    """
+    
     assert len(v)==len(self.moms0), "%r, %r "%(len(v), len(self.moms0))
     self.rf0_ncalls+=1
     no = self.norbs
-    #print("vKs = ", np.sum(abs(v)))
 
-    if v.dtype == self.dtypeComplex:
-        vext = np.zeros((v.shape[0], 2), dtype = self.dtype, order="F")
-        vext[:, 0] = v.real
-        vext[:, 1] = v.imag
-
-        # real part
-        #vdp = self.cc_da*vext[:, 0]
-        vdp = csr_matvec(self.cc_da, vext[:, 0])
-        sab = (vdp*self.v_dab).reshape([no,no])
-        nb2v = self.gemm(1.0, self.xocc, sab) 
-        #csc_matvecs(sab.T.tocsc(), self.xocc, transB = True).T
-        nm2v_re = self.gemm(1.0, nb2v, np.transpose(self.xvrt))
-        
-        # imaginary part
-        vdp = csr_matvec(self.cc_da, vext[:, 1])
-        sab = (vdp*self.v_dab).reshape([no,no])
-        nb2v = self.gemm(1.0, self.xocc, sab) 
-        nm2v_im = self.gemm(1.0, nb2v, np.transpose(self.xvrt))
-    else: # it gets mistaken here when double-precision kernel is accidentally used  
-        vext = np.zeros((v.shape[0], 2), dtype = self.dtype, order="F")
-        vext[:, 0] = v
-
-        # real part
-        #vdp = self.cc_da*vext[:, 0]
-        vdp = csr_matvec(self.cc_da, vext[:, 0])
-        sab = (vdp*self.v_dab).reshape([no,no])
-        nb2v = self.gemm(1.0, self.xocc, sab) 
-        nm2v_re = self.gemm(1.0, nb2v, np.transpose(self.xvrt))
- 
-        # imaginary part
-        nm2v_im = np.zeros(nm2v_re.shape, dtype=self.dtype) 
-   
-    #vdp = csrgemv(self.cc_da, vext) # np.require(v, dtype=np.complex64)
-
-    if use_numba:
-        div_eigenenergy_numba(self.ksn2e, self.ksn2f, self.nfermi, self.vstart, comega, nm2v_re, nm2v_im, self.ksn2e.shape[2])
+    if self.GPU:
+        return chi0_mv_gpu(self.tddft_iter_gpu, v, self.cc_da, self.v_dab, no, comega, self.dtype, 
+                self.dtypeComplex)
     else:
-        for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
-          for j,[em,fm] in enumerate(zip(self.ksn2e[0,0,n+1:],self.ksn2f[0,0,n+1:])):
-            m = j+n+1-self.vstart
-            nm2v = nm2v_re[n, m] + 1.0j*nm2v_im[n, m]
-            nm2v = nm2v * (fn-fm) *\
-              ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
-            nm2v_re[n, m] = nm2v.real
-            nm2v_im[n, m] = nm2v.imag
-
-    nb2v = self.gemm(1.0, nm2v_re, self.xvrt)
-    ab2v = self.gemm(1.0, self.xocc.T, nb2v).reshape(no*no)
-    vdp = csr_matvec(self.v_dab, ab2v)
-
-    chi0_re = vdp*self.cc_da
-
-    nb2v = self.gemm(1.0, nm2v_im, self.xvrt)
-    ab2v = self.gemm(1.0, self.xocc.T, nb2v).reshape(no*no)
-    vdp = csr_matvec(self.v_dab, ab2v)
-
-    chi0_im = vdp*self.cc_da
-    #chi0_im = self.cc_ad_csc*vdp
-    #print("chi0 = ", np.sum(abs(chi0_re)), np.sum(abs(chi0_im)))
-    #import sys
-    #sys.exit()
-
-    return chi0_re + 1.0j*chi0_im
+        return chi0_mv(v, self.xocc, self.xvrt, self.ksn2e[0, 0, :], self.ksn2f[0, 0, :], 
+                self.cc_da, self.v_dab, no, self.nfermi, self.nprod, self.vstart, comega, self.dtype, 
+                self.dtypeComplex)
 
 
   def comp_veff(self, vext, comega=1j*0.0, x0=None):
@@ -203,11 +146,7 @@ class tddft_iter_c():
   
   def vext2veff_matvec(self, v):
     self.matvec_ncalls+=1 
-    
-    if self.GPU:
-        chi0 = self.tddft_iter_gpu.apply_rf0_gpu(v, self.comega_current)
-    else:
-        chi0 = self.apply_rf0(v, self.comega_current)
+    chi0 = self.apply_rf0(v, self.comega_current)
     
     # For some reason it is very difficult to pass only one dimension
     # of an array to the fortran routines?? matvec[0, :].ctypes.data_as(POINTER(c_float))
@@ -252,10 +191,7 @@ class tddft_iter_c():
         else:
             veff,info = self.comp_veff(self.moms1[:,0], comega, x0=None)
 
-        if self.GPU:
-            self.dn[iw, :] = self.tddft_iter_gpu.apply_rf0_gpu(veff, comega)
-        else:
-            self.dn[iw, :] = self.apply_rf0(veff, comega)
+        self.dn[iw, :] = self.apply_rf0(veff, comega)
      
         polariz[iw] = np.dot(self.moms1[:,0], self.dn[iw, :])
 
@@ -286,11 +222,8 @@ class tddft_iter_c():
     pxx = np.zeros(comegas.shape, dtype=np.complex64)
     self.dn0 = np.zeros((comegas.shape[0], self.nprod), dtype=np.complex64)
 
-    for iw, omega in enumerate(comegas):
-        if self.GPU:
-            self.dn0[iw, :] = -self.tddft_iter_gpu.apply_rf0_gpu(vext[0, :], omega)
-        else:
-            self.dn0[iw, :] = -self.apply_rf0(vext[0, :], omega)
+    for iw, comega in enumerate(comegas):
+        self.dn0[iw, :] = -self.apply_rf0(vext[0, :], comega)
  
         pxx[iw] = np.dot(self.dn0[iw, :], vext[0,:])
     return pxx

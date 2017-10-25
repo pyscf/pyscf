@@ -11,11 +11,11 @@ def div_eigenenergy_numba(ksn2e, ksn2f, nfermi, vstart, comega, nm2v_re, nm2v_im
     """
 
     for n in range(nfermi):
-        en = ksn2e[0, 0, n]
-        fn = ksn2f[0, 0, n]
+        en = ksn2e[n]
+        fn = ksn2f[n]
         for j in range(n+1, norbs, 1):
-            em = ksn2e[0, 0, j]
-            fm = ksn2f[0, 0, j]
+            em = ksn2e[j]
+            fm = ksn2f[j]
             m = j - vstart
 
             nm2v = nm2v_re[n, m] + 1.0j*nm2v_im[n, m]
