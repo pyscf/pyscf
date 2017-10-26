@@ -12,6 +12,7 @@ If you have `Conda <https://conda.io/docs/>`_
 (or `Anaconda <https://www.continuum.io/downloads#linux>`_)
 environment, PySCF package can be installed with the command as bellow::
 
+  $ conda install -c pyqc libxc
   $ conda install -c pyscf pyscf
 
 Installation with pip
@@ -230,6 +231,25 @@ of the integral library in lib/CMakeLists.txt file::
      GIT_REPOSITORY
      https://github.com/sunqm/qcint.git
      ...
+
+
+Cmake config file
+=================
+Cmake options can be saved in a config file ``pyscf/lib/cmake.arch.inc``.
+Settings in this config file will be automatically loaded and overwritten the
+default cmake options during compilation.  For example, you can put
+``CMAKE_C_FLAGS`` in this config file to include advanced compiler optimization
+flags::
+
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffast-math -mtune=native -march=native")
+
+Other settings and variables and flags can all be put in this config file::
+
+  set(ENABLE_XCFUN Off)
+  set(WITH_F12 Off)
+
+Some examples of platform specific configurations can be found in directory
+``pyscf/lib/cmake_arch_config``.
 
 
 .. _installing_plugin:
