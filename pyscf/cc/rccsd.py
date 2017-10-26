@@ -1,5 +1,6 @@
 import time
 import tempfile
+from functools import reduce
 import numpy
 import numpy as np
 import h5py
@@ -308,21 +309,21 @@ class RCCSD(ccsd.CCSD):
                 x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
                 idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
                 return w[idx].real, v[:,idx].real, idx
-            eip, evecs = eig(matvec, guess, precond, pick=pickeig,
-                             tol=self.conv_tol, max_cycle=self.max_cycle,
-                             max_space=self.max_space, nroots=nroots, verbose=self.verbose)
+            conv, eip, evecs = eig(matvec, guess, precond, pick=pickeig,
+                                   tol=self.conv_tol, max_cycle=self.max_cycle,
+                                   max_space=self.max_space, nroots=nroots, verbose=self.verbose)
         else:
-            eip, evecs = eig(matvec, guess, precond,
-                             tol=self.conv_tol, max_cycle=self.max_cycle,
-                             max_space=self.max_space, nroots=nroots, verbose=self.verbose)
+            conv, eip, evecs = eig(matvec, guess, precond,
+                                   tol=self.conv_tol, max_cycle=self.max_cycle,
+                                   max_space=self.max_space, nroots=nroots, verbose=self.verbose)
 
         self.eip = eip.real
 
         if nroots == 1:
-            eip, evecs = [self.eip], [evecs]
-        for n, en, vn in zip(range(nroots), eip, evecs):
-            logger.info(self, 'IP root %d E = %.16g  qpwt = %.6g',
-                        n, en, np.linalg.norm(vn[:self.nocc])**2)
+            conv, eip, evecs = [conv], [self.eip], [evecs]
+        for n, en, vn, convn in zip(range(nroots), eip, evecs, conv):
+            logger.info(self, 'IP root %d E = %.16g  qpwt = %.6g  conv = %s',
+                        n, en, np.linalg.norm(vn[:self.nocc])**2, convn)
         log.timer('IP-CCSD', *cput0)
         if nroots == 1:
             return eip[0], evecs[0]
@@ -594,24 +595,24 @@ class RCCSD(ccsd.CCSD):
                 x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
                 idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
                 return w[idx].real, v[:,idx].real, idx
-            eea, evecs = eig(matvec, guess, precond, pick=pickeig,
-                             tol=self.conv_tol, max_cycle=self.max_cycle,
-                             max_space=self.max_space, nroots=nroots,
-                             verbose=self.verbose)
+            conv, eea, evecs = eig(matvec, guess, precond, pick=pickeig,
+                                   tol=self.conv_tol, max_cycle=self.max_cycle,
+                                   max_space=self.max_space, nroots=nroots,
+                                   verbose=self.verbose)
         else:
-            eea, evecs = eig(matvec, guess, precond,
-                             tol=self.conv_tol, max_cycle=self.max_cycle,
-                             max_space=self.max_space, nroots=nroots,
-                             verbose=self.verbose)
+            conv, eea, evecs = eig(matvec, guess, precond,
+                                   tol=self.conv_tol, max_cycle=self.max_cycle,
+                                   max_space=self.max_space, nroots=nroots,
+                                   verbose=self.verbose)
 
         self.eea = eea.real
 
         if nroots == 1:
-            eea, evecs = [self.eea], [evecs]
+            conv, eea, evecs = [conv], [self.eea], [evecs]
         nvir = self.nmo - self.nocc
-        for n, en, vn in zip(range(nroots), eea, evecs):
-            logger.info(self, 'EA root %d E = %.16g  qpwt = %.6g',
-                        n, en, np.linalg.norm(vn[:nvir])**2)
+        for n, en, vn, convn in zip(range(nroots), eea, evecs, conv):
+            logger.info(self, 'EA root %d E = %.16g  qpwt = %.6g  conv = %s',
+                        n, en, np.linalg.norm(vn[:nvir])**2, convn)
         log.timer('EA-CCSD', *cput0)
         if nroots == 1:
             return eea[0], evecs[0]
@@ -958,24 +959,24 @@ class RCCSD(ccsd.CCSD):
                 x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
                 idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
                 return w[idx].real, v[:,idx].real, idx
-            eee, evecs = eig(self.eomee_ccsd_matvec_singlet, guess, precond, pick=pickeig,
-                             tol=self.conv_tol, max_cycle=self.max_cycle,
-                             max_space=self.max_space, nroots=nroots,
-                             verbose=self.verbose)
+            conv, eee, evecs = eig(self.eomee_ccsd_matvec_singlet, guess, precond, pick=pickeig,
+                                   tol=self.conv_tol, max_cycle=self.max_cycle,
+                                   max_space=self.max_space, nroots=nroots,
+                                   verbose=self.verbose)
         else:
-            eee, evecs = eig(self.eomee_ccsd_matvec_singlet, guess, precond,
-                             tol=self.conv_tol, max_cycle=self.max_cycle,
-                             max_space=self.max_space, nroots=nroots,
-                             verbose=self.verbose)
+            conv, eee, evecs = eig(self.eomee_ccsd_matvec_singlet, guess, precond,
+                                   tol=self.conv_tol, max_cycle=self.max_cycle,
+                                   max_space=self.max_space, nroots=nroots,
+                                   verbose=self.verbose)
 
         self.eee = eee.real
 
         if nroots == 1:
-            eee, evecs = [self.eee], [evecs]
-        for n, en, vn in zip(range(nroots), eee, evecs):
+            conv, eee, evecs = [conv], [self.eee], [evecs]
+        for n, en, vn, convn in zip(range(nroots), eee, evecs, conv):
             t1, t2 = self.vector_to_amplitudes(vn, nmo, nocc)
-            logger.info(self, 'EOM-EE singlet root %d E = %.16g  qpwt = %.6g',
-                        n, en, np.linalg.norm(t1)**2)
+            logger.info(self, 'EOM-EE singlet root %d E = %.16g  qpwt = %.6g  conv = %s',
+                        n, en, np.linalg.norm(t1)**2, convn)
         logger.timer(self, 'EOM-EE-CCSD singlet', *cput0)
         if nroots == 1:
             return eee[0], evecs[0]
@@ -1709,7 +1710,10 @@ class _ERIS:
         if (method == 'incore' and (mem_incore+mem_now < cc.max_memory)
             or cc.mol.incore_anyway):
             if ao2mofn == ao2mo.full:
-                eri = ao2mo.restore(1, ao2mofn(cc._scf._eri, mo_coeff), nmo)
+                if cc._scf._eri is not None:
+                    eri = ao2mo.restore(1, ao2mofn(cc._scf._eri, mo_coeff), nmo)
+                else:
+                    eri = ao2mo.restore(1, ao2mofn(cc._scf.mol, mo_coeff, compact=0), nmo)
             else:
                 eri = ao2mofn(cc._scf.mol, (mo_coeff,mo_coeff,mo_coeff,mo_coeff), compact=0)
                 if mo_coeff.dtype == np.float: eri = eri.real
