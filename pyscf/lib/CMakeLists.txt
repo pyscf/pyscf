@@ -15,19 +15,7 @@ set(CMAKE_MACOSX_RPATH OFF)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 #enable_language(Fortran)
-find_package(BLAS REQUIRED)
-message("BLAS libraries: ${BLAS_LIBRARIES}")
-# if unable to find mkl library, just create BLAS_LIBRARIES here, e.g.
-# set(BLAS_LIBRARIES "-L/path/to/mkl/lib -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lmkl_avx -lm")
-# or
-# set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_intel_lp64.so")
-# set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_sequential.so")
-# set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_core.so")
-# set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_avx.so")
-# set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_def.so")
-
-# set(BLAS_LIBRARIES "-Wl,-rpath=${MKLROOT}/lib/intel64/ ${BLAS_LIBRARIES}")
-
+find_package(BLAS)
 check_function_exists(ffsll HAVE_FFS)
 
 find_package(OpenMP)
@@ -37,11 +25,37 @@ else ()
   set(OpenMP_C_FLAGS " ")
 endif()
 
-find_package(PythonInterp REQUIRED)
+#find_package(PythonInterp REQUIRED)
 #find_package(PythonLibs REQUIRED)
 #execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import numpy; print(numpy.get_include())"
 #  OUTPUT_VARIABLE NUMPY_INCLUDE)
 #include_directories(${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE})
+
+# Architecture specified cmake flags.  See also the templates in
+# pyscf/lib/cmake_arch_config
+if(EXISTS "${PROJECT_SOURCE_DIR}/cmake.arch.inc")
+  include("${PROJECT_SOURCE_DIR}/cmake.arch.inc")
+endif()
+
+if (NOT BLAS_LIBRARIES)
+  message(FATAL_ERROR "A required library with BLAS API not found.")
+else()
+  message(STATUS "BLAS libraries: ${BLAS_LIBRARIES}")
+endif()
+# if unable to find mkl library, just create BLAS_LIBRARIES here, e.g.
+# set(BLAS_LIBRARIES "-L/path/to/mkl/lib -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lmkl_avx -lm")
+# or
+# set(BLAS_LIBRARIES "                  /path/to/mkl/lib/intel64/libmkl_intel_lp64.so")
+# set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_sequential.so")
+# set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_core.so")
+# set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_avx.so")
+# set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_def.so")
+# set(BLAS_LIBRARIES "-Wl,-rpath=${MKLROOT}/lib/intel64/ ${BLAS_LIBRARIES}")
+#
+# These settings can be written in the cmake.arch.inc file. This config file
+# will automatically load all settings specified in cmake.arch.inc
+#
+
 
 include(ExternalProject)
 option(BUILD_LIBCINT "Using libcint for analytical gaussian integral" ON)
@@ -128,3 +142,8 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xcfun.h" AND
 endif() # ENABLE_XCFUN
 add_subdirectory(dft)
 endif() # DISABLE_DFT
+
+
+if(EXISTS "${PROJECT_SOURCE_DIR}/cmake.user.inc")
+  include("${PROJECT_SOURCE_DIR}/cmake.user.inc")
+endif()
