@@ -134,7 +134,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
     b = cell.reciprocal_vectors()
     gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
-    ngs = gxyz.shape[0]
+    ngrids = gxyz.shape[0]
 
     kptis = kptij_lst[:,0]
     kptjs = kptij_lst[:,1]
@@ -246,7 +246,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             Gblksize = max(16, int(max_memory*.2*1e6/16/buflen/(nkptj+1)))
         else:
             Gblksize = max(16, int(max_memory*.4*1e6/16/buflen/(nkptj+1)))
-        Gblksize = min(Gblksize, ngs, 16384)
+        Gblksize = min(Gblksize, ngrids, 16384)
         pqkRbuf = numpy.empty(buflen*Gblksize)
         pqkIbuf = numpy.empty(buflen*Gblksize)
         # buf for ft_aopair
@@ -274,7 +274,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             v = None
 
             shls_slice = (bstart, bend, 0, bend)
-            for p0, p1 in lib.prange(0, ngs, Gblksize):
+            for p0, p1 in lib.prange(0, ngrids, Gblksize):
                 dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                             b, gxyz[p0:p1], Gvbase, kpt,
                                             adapted_kptjs, out=buf)

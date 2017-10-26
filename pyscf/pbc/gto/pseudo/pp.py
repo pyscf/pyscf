@@ -72,25 +72,26 @@ def get_vlocG(cell, Gv=None, low_dim_ft_type=None):
         (natm, ngrids) ndarray
     '''
     if Gv is None: Gv = cell.Gv
-    Gvnorm = lib.norm(Gv, axis=1)
-    vlocG = get_gth_vlocG(cell, Gvnorm, low_dim_ft_type)
+    vlocG = get_gth_vlocG(cell, Gv, low_dim_ft_type)
     vlocG[:,0] = 0.
     return vlocG
 
-def get_gth_vlocG(cell, G, low_dim_ft_type=None):
+def get_gth_vlocG(cell, Gv, low_dim_ft_type=None):
     '''Local part of the GTH pseudopotential.
 
     See MH (4.79).
 
     Args:
-        G : (ngrids,) ndarray
+        Gv : (ngrids,3) ndarray
 
     Returns:
          (natm, ngrids) ndarray
     '''
+    absG2 = np.einsum('xi,xi->x', Gv, Gv)
+    G = np.sqrt(absG2)
     with np.errstate(divide='ignore'):
-        coulG = 4*np.pi / G**2
-        coulG[G==0] = 0
+        coulG = 4*np.pi / absG2
+        coulG[absG2==0] = 0
 
     vlocG = np.zeros((cell.natm,len(G)))
     if low_dim_ft_type is None:
@@ -117,11 +118,8 @@ def get_gth_vlocG(cell, G, low_dim_ft_type=None):
     elif low_dim_ft_type == 'analytic_2d_1' and cell.dimension == 2:
         # The following 2D ewald summation is taken from:
         # Minary, Tuckerman, Pihakari, Martyna J. Chem. Phys. 116, 5351 (2002)
-        mesh = cell.mesh
-        Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
 
         vlocG = np.zeros((cell.natm,len(G)))
-        absG2 = G*G
         b = cell.reciprocal_vectors()
         inv_area = np.linalg.norm(np.cross(b[0], b[1]))/(2*np.pi)**2
         lzd2 = cell.vol * inv_area / 2

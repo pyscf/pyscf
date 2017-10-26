@@ -72,7 +72,7 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
                  shl_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
     '''
     Returns:
-        ao_kpts: (nkpts, [comp], ngs, nao) ndarray
+        ao_kpts: (nkpts, [comp], ngrids, nao) ndarray
             AO values at each k-point
     '''
     if kpts is None:
@@ -1062,13 +1062,13 @@ class _KNumInt(numint._NumInt):
         '''
         Args:
             cell : Mole or Cell object
-            ao_kpts : (nkpts, ngs, nao) ndarray
+            ao_kpts : (nkpts, ngrids, nao) ndarray
                 AO values at each k-point
             dm_kpts: (nkpts, nao, nao) ndarray
                 Density matrix at each k-point
 
         Returns:
-           rhoR : (ngs,) ndarray
+           rhoR : (ngrids,) ndarray
         '''
         nkpts = len(ao_kpts)
         rhoR = 0

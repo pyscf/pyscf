@@ -55,7 +55,7 @@ def get_pp_nl(cell, kpt=np.zeros(3)):
     SI = cell.get_SI()
     aokG = tools.fftk(np.asarray(aoR.T, order='C'),
                       cell.mesh, np.exp(-1j*np.dot(coords, kpt))).T
-    ngs = len(aokG)
+    ngrids = len(aokG)
 
     fakemol = pyscf.gto.Mole()
     fakemol._atm = np.zeros((1,pyscf.gto.ATM_SLOTS), dtype=np.int32)
@@ -84,7 +84,7 @@ def get_pp_nl(cell, kpt=np.zeros(3)):
                 fakemol._env[ptr+4] = rl**(l+1.5)*np.pi**1.25
                 pYlm_part = pyscf.dft.numint.eval_ao(fakemol, Gv, deriv=0)
 
-                pYlm = np.empty((nl,l*2+1,ngs))
+                pYlm = np.empty((nl,l*2+1,ngrids))
                 for k in range(nl):
                     qkl = pseudo.pp._qli(G_rad*rl, l, k)
                     pYlm[k] = pYlm_part.T * qkl
@@ -93,7 +93,7 @@ def get_pp_nl(cell, kpt=np.zeros(3)):
                 SPG_lm_aoG = np.einsum('nmg,gp->nmp', SPG_lmi, aokG)
                 tmp = np.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
                 vppnl += np.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
-    vppnl *= (1./ngs**2)
+    vppnl *= (1./ngrids**2)
 
     if aoR.dtype == np.double:
         return vppnl.real
@@ -121,7 +121,7 @@ def get_pp(cell, kpt=np.zeros(3)):
     expmikr = np.exp(-1j*np.dot(coords,kpt))
     for i in range(nao):
         aokG[:,i] = tools.fftk(aoR[:,i], cell.mesh, expmikr)
-    ngs = len(aokG)
+    ngrids = len(aokG)
 
     vppnl = np.zeros((nao,nao), dtype=np.complex128)
     hs, projGs = pseudo.get_projG(cell, kpt)
@@ -139,7 +139,7 @@ def get_pp(cell, kpt=np.zeros(3)):
                         vppnl += h[i,j]*np.einsum('p,q->pq',
                                                    SPG_lm_aoG[i,:].conj(),
                                                    SPG_lm_aoG[j,:])
-    vppnl *= (1./ngs**2)
+    vppnl *= (1./ngrids**2)
 
     ovlp = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpt)
     vpploc += 1./cell.vol * np.sum(pseudo.get_alphas(cell)) * ovlp

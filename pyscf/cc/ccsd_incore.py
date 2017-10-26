@@ -160,9 +160,8 @@ def update_amps(cc, t1, t2, eris):
 
 #: theta = t2.transpose(1,0,2,3) * 2 - t2
 #: t1new += numpy.einsum('jb,ijab->ia', fov, theta)
-#: t1new -= numpy.einsum('ikjb,kjab->ia', eris.ooov, theta)
+#: t1new -= numpy.einsum('ikjb,kjba->ia', eris.ooov, theta)
     t1new += numpy.einsum('jb,jiab->ia', fov, theta)
-    #: t1new -= numpy.einsum('kijb,kjab->ia', eris.ooov, theta)
     lib.dot(_cp(eris_ooov.transpose(1,0,2,3).reshape(nocc,-1)),
             theta.reshape(-1,nvir), -1, t1new, 1)
     eris_ooov = None

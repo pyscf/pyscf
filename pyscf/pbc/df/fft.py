@@ -60,10 +60,10 @@ def get_pp(mydf, kpts=None):
     vpplocG = -numpy.einsum('ij,ij->j', SI, vpplocG)
     # from get_jvloc_G0 function
     vpplocG[0] = numpy.sum(pseudo.get_alphas(cell, low_dim_ft_type))
-    ngs = len(vpplocG)
+    ngrids = len(vpplocG)
 
     # vpploc evaluated in real-space
-    vpplocR = tools.ifft(vpplocG, cell.mesh).real
+    vpplocR = tools.ifft(vpplocG, mesh).real
     vpp = [lib.dot(aoR.T.conj()*vpplocR, aoR)
            for k, aoR in mydf.aoR_loop(mesh, kpts_lst)]
 
@@ -79,11 +79,11 @@ def get_pp(mydf, kpts=None):
     fakemol._bas[0,gto.PTR_COEFF] = ptr+4
 
     # buf for SPG_lmi upto l=0..3 and nl=3
-    buf = numpy.empty((48,ngs), dtype=numpy.complex128)
+    buf = numpy.empty((48,ngrids), dtype=numpy.complex128)
     def vppnl_by_k(kpt):
         Gk = Gv + kpt
         G_rad = lib.norm(Gk, axis=1)
-        aokG = ft_ao.ft_ao(cell, Gv, kpt=kpt) * (ngs/cell.vol)
+        aokG = ft_ao.ft_ao(cell, Gv, kpt=kpt) * (ngrids/cell.vol)
         vppnl = 0
         for ia in range(cell.natm):
             symb = cell.atom_symbol(ia)
@@ -101,7 +101,7 @@ def get_pp(mydf, kpts=None):
 
                     p0, p1 = p1, p1+nl*(l*2+1)
                     # pYlm is real, SI[ia] is complex
-                    pYlm = numpy.ndarray((nl,l*2+1,ngs), dtype=numpy.complex128, buffer=buf[p0:p1])
+                    pYlm = numpy.ndarray((nl,l*2+1,ngrids), dtype=numpy.complex128, buffer=buf[p0:p1])
                     for k in range(nl):
                         qkl = pseudo.pp._qli(G_rad*rl, l, k)
                         pYlm[k] = pYlm_part.T * qkl
@@ -122,7 +122,7 @@ def get_pp(mydf, kpts=None):
                         SPG_lm_aoG = SPG_lm_aoGs[p0:p1].reshape(nl,l*2+1,-1)
                         tmp = numpy.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
                         vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
-        return vppnl * (1./ngs**2)
+        return vppnl * (1./ngrids**2)
 
     for k, kpt in enumerate(kpts_lst):
         vppnl = vppnl_by_k(kpt)
@@ -285,12 +285,12 @@ class FFTDF(lib.StreamObject):
         kpts0 = numpy.zeros((2,3))
         coulG = tools.get_coulG(self.cell, numpy.zeros(3), mesh=self.mesh,
                                 low_dim_ft_type=self.low_dim_ft_type)
-        ngs = len(coulG)
+        ngrids = len(coulG)
         ao_pairs_G = self.get_ao_pairs_G(kpts0, compact=True)
-        ao_pairs_G *= numpy.sqrt(coulG*(self.cell.vol/ngs**2)).reshape(-1,1)
+        ao_pairs_G *= numpy.sqrt(coulG*(self.cell.vol/ngrids**2)).reshape(-1,1)
 
         Lpq = numpy.empty((self.blockdim, ao_pairs_G.shape[1]))
-        for p0, p1 in lib.prange(0, ngs, self.blockdim):
+        for p0, p1 in lib.prange(0, ngrids, self.blockdim):
             Lpq[:p1-p0] = ao_pairs_G[p0:p1].real
             yield Lpq[:p1-p0]
             Lpq[:p1-p0] = ao_pairs_G[p0:p1].imag
@@ -298,8 +298,8 @@ class FFTDF(lib.StreamObject):
 
     def get_naoaux(self):
         mesh = numpy.asarray(self.mesh)
-        ngs = numpy.prod(mesh)
-        return ngs * 2
+        ngrids = numpy.prod(mesh)
+        return ngrids * 2
 
 
 if __name__ == '__main__':

@@ -288,7 +288,7 @@ class AFTDF(lib.StreamObject):
         Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
         b = cell.reciprocal_vectors()
         gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
-        ngs = gxyz.shape[0]
+        ngrids = gxyz.shape[0]
 
         if shls_slice is None:
             shls_slice = (0, cell.nbas, 0, cell.nbas)
@@ -311,7 +311,7 @@ class AFTDF(lib.StreamObject):
         pqkRbuf = numpy.empty(nij*sublk)
         pqkIbuf = numpy.empty(nij*sublk)
 
-        for p0, p1 in self.prange(0, ngs, blksize):
+        for p0, p1 in self.prange(0, ngrids, blksize):
             #aoao = ft_ao.ft_aopair(cell, Gv[p0:p1], shls_slice, aosym,
             #                       b, Gvbase, gxyz[p0:p1], mesh, (kpti, kptj), q)
             aoao = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
@@ -345,7 +345,7 @@ class AFTDF(lib.StreamObject):
         b = cell.reciprocal_vectors()
         Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
         gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
-        ngs = gxyz.shape[0]
+        ngrids = gxyz.shape[0]
 
         if shls_slice is None:
             shls_slice = (0, cell.nbas, 0, cell.nbas)
@@ -359,10 +359,10 @@ class AFTDF(lib.StreamObject):
             nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
             nij = ni*nj
         blksize = max(16, int(max_memory*.9e6/(nij*nkpts*16)))
-        blksize = min(blksize, ngs, 16384)
+        blksize = min(blksize, ngrids, 16384)
         buf = numpy.empty(nkpts*nij*blksize, dtype=numpy.complex128)
 
-        for p0, p1 in self.prange(0, ngs, blksize):
+        for p0, p1 in self.prange(0, ngrids, blksize):
             dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                         b, gxyz[p0:p1], Gvbase, q, kpts, out=buf)
             yield dat, p0, p1
@@ -428,8 +428,8 @@ class AFTDF(lib.StreamObject):
 
     def get_naoaux(self):
         mesh = numpy.asarray(self.mesh)
-        ngs = numpy.prod(mesh)
-        return ngs * 2
+        ngrids = numpy.prod(mesh)
+        return ngrids * 2
 
 
 # Since the real-space lattice-sum for nuclear attraction is not implemented,

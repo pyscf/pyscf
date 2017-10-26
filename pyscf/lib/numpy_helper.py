@@ -96,7 +96,18 @@ def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
         nd = int(numpy.sqrt(nd*2))
         shape = (count,nd,nd)
 
-    if tril.ndim == 1 or axis == -1 or axis == tril.ndim-1:
+    if (numpy.issubdtype(tril.dtype, numpy.integer) and
+        (filltriu == HERMITIAN or filltriu == SYMMETRIC)):
+        idx = numpy.tril_indices(nd)
+        idxy = numpy.empty((nd,nd), dtype=numpy.int)
+        idxy[idx[0],idx[1]] = idxy[idx[1],idx[0]] = numpy.arange(nd*(nd+1)//2)
+        out = numpy.take(tril, idxy.ravel(), axis=axis, out=out)
+        if axis == 0 and tril.ndim == 1:
+            return out.reshape(nd,nd,-1)
+        else:
+            return out.reshape(shape)
+
+    elif tril.ndim == 1 or axis == -1 or axis == tril.ndim-1:
         out = numpy.ndarray(shape, tril.dtype, buffer=out)
         if tril.dtype == numpy.double:
             fn = _np_helper.NPdunpack_tril_2d
@@ -121,8 +132,11 @@ def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
                 out[i,j] = tril[ij]
                 out[j,i] =-tril[ij].conj()
         elif filltriu == SYMMETRIC:
-            for ij,(i,j) in enumerate(zip(*idx)):
-                out[i,j] = out[j,i] = tril[ij]
+            #:for ij,(i,j) in enumerate(zip(*idx)):
+            #:    out[i,j] = out[j,i] = tril[ij]
+            idxy = numpy.empty((nd,nd), dtype=numpy.int)
+            idxy[idx[0],idx[1]] = idxy[idx[1],idx[0]] = numpy.arange(nd*(nd+1)//2)
+            numpy.take(tril, idxy, axis=0, out=out)
         else:
             out[idx] = tril
         return out
@@ -939,6 +953,9 @@ if __name__ == '__main__':
     print(abs(x-x.T.conj()).sum())
     xs = numpy.asarray((x,x,x))
     print(abs(xs - unpack_tril(pack_tril(xs))).sum())
+    numpy.random.seed(1)
+    a = numpy.random.random((5050,20))
+    print(misc.finger(unpack_tril(a, axis=0)) - -103.03970592075423)
 
     a = numpy.random.random((400,400))
     b = numpy.random.random((400,400))
