@@ -210,6 +210,8 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     nmok = mo_coeffs[2].shape[1]
     nmol = mo_coeffs[3].shape[1]
     nao = mo_coeffs[0].shape[0]
+    assert(nao == mol.nao_nr())
+
     aosym = _stand_sym_code(aosym)
     if aosym in ('s4', 's2kl'):
         nao_pair = nao * (nao+1) // 2
