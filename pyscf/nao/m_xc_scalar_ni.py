@@ -8,7 +8,7 @@ from pyscf.dft import libxc
 #
 #
 #
-def xc_scalar_ni(me, sp1,R1, sp2,R2, xc_code, deriv, **kvargs):
+def xc_scalar_ni(me, sp1,R1, sp2,R2, xc_code, deriv, **kw):
   from pyscf.dft.libxc import eval_xc
   """
     Computes overlap for an atom pair. The atom pair is given by a pair of species indices
@@ -20,7 +20,7 @@ def xc_scalar_ni(me, sp1,R1, sp2,R2, xc_code, deriv, **kvargs):
       matrix of orbital overlaps
     The procedure uses the numerical integration in coordinate space.
   """
-  grids = build_3dgrid(me, sp1, R1, sp2, R2, **kvargs)
+  grids = build_3dgrid(me, sp1, R1, sp2, R2, **kw)
   rho = dens_libnao(grids.coords, me.sv.nspin)
   exc, vxc, fxc, kxc = libxc.eval_xc(xc_code, rho.T, spin=me.sv.nspin-1, deriv=deriv)
   ao1 = ao_eval(me.ao1, R1, sp1, grids.coords)
