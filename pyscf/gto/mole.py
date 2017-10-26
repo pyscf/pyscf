@@ -88,6 +88,7 @@ def cart2sph(l):
     elif l == 1:
         return cmat * 0.488602511902919921
     else:
+        assert(l <= 12)
         nd = l * 2 + 1
         c2sph = numpy.zeros((nf,nd), order='F')
         fn = moleintor.libcgto.CINTc2s_ket_sph
@@ -111,6 +112,7 @@ def cart2j_kappa(kappa, l=None, normalized=None):
         nd = l * 2
     else:
         assert(l is not None)
+        assert(l <= 12)
         nd = l * 4 + 2
     nf = (l+1)*(l+2)//2
     c2smat = numpy.zeros((nf*2,nd), order='F', dtype=numpy.complex)
