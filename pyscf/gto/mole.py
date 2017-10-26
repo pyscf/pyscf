@@ -94,6 +94,7 @@ def cart2sph(l, c_tensor=None):
     elif l == 1:
         return c_tensor * 0.488602511902919921
     else:
+        assert(l <= 12)
         nd = l * 2 + 1
         ngrid = c_tensor.shape[0]
         c2sph = numpy.zeros((ngrid,nd), order='F')
@@ -118,6 +119,7 @@ def cart2j_kappa(kappa, l=None, normalized=None):
         nd = l * 2
     else:
         assert(l is not None)
+        assert(l <= 12)
         nd = l * 4 + 2
     nf = (l+1)*(l+2)//2
     c2smat = numpy.zeros((nf*2,nd), order='F', dtype=numpy.complex)

@@ -36,7 +36,7 @@ Customizing Hamiltonian
 
 PySCF supports user-defined Hamiltonian for many modules.  To customize
 Hamiltonian for Hartree-Fock, CASSCF, MP2, CCSD, etc, one need to replace the
-methods :py:method:`get_hcore`, :py:method:`get_ovlp` and attribute :attr:`_eri` of SCF class for
+methods :func:`get_hcore`, :func:`get_ovlp` and attribute :attr:`_eri` of SCF class for
 new Hamiltonian.  E.g. the user-defined
 Hamiltonian for Hartree-Fock
 

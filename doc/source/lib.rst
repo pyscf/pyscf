@@ -27,7 +27,7 @@ used in the calculation.  Its unit is MB.  The default value is 4000 MB.  It can
 be overwritten by the system environment variable ``PYSCF_MAX_MEMORY``.
 
 .. note:: Some calculations may exceed the max_memory limit, especially
-  when the :attr:`incore_anyway` of :class:`Mole` object was set.
+  when the attribute :attr:`Mole.incore_anyway` was set.
 
 .. automodule:: pyscf.lib.parameters
    :members:

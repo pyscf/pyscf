@@ -58,7 +58,7 @@ Contents
 
 
 You can also download the `PDF version
-<http://www.sunqm.net/pyscf/files/pdf/PySCF-1.3.pdf>`_ of this manual.
+<http://www.sunqm.net/pyscf/files/pdf/PySCF-1.4.pdf>`_ of this manual.
 
 
 .. Indices and tables

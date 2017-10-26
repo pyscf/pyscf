@@ -71,12 +71,12 @@ elif sys.platform.startswith('win'):
 else:
     raise OSError('Unknown platform')
 
-if 'CC' in os.environ:
-    compiler = os.environ['CC'].split()[0]
-else:
-    compiler = sysconfig.get_config_var("CC").split()[0]
-if 'gcc' in compiler or 'g++' in compiler:  # GNU compiler
-    so_ext = '.so'
+#if 'CC' in os.environ:
+#    compiler = os.environ['CC'].split()[0]
+#else:
+#    compiler = sysconfig.get_config_var("CC").split()[0]
+#if 'gcc' in compiler or 'g++' in compiler:  # GNU compiler
+#    so_ext = '.so'
 
 #
 # default include and library path
@@ -295,7 +295,8 @@ extensions += [
 #
 DFT_AVAILABLE = 0
 if 1:
-    libxc_lib_path = search_lib_path('libxc'+so_ext, [os.path.join(pyscf_lib_dir, 'deps', 'lib'),
+    libxc_lib_path = search_lib_path('libxc'+so_ext, [pyscf_lib_dir,
+                                                      os.path.join(pyscf_lib_dir, 'deps', 'lib'),
                                                       os.path.join(pyscf_lib_dir, 'deps', 'lib64')],
                                      version='4.0.0')
     libxc_inc_path = search_inc_path('xc.h', [os.path.join(pyscf_lib_dir, 'deps', 'include')])
@@ -323,7 +324,8 @@ if 1:
 # Check xcfun
 #
 if 1:
-    xcfun_lib_path = search_lib_path('xcfun'+so_ext, [os.path.join(pyscf_lib_dir, 'deps', 'lib'),
+    xcfun_lib_path = search_lib_path('libxcfun'+so_ext, [pyscf_lib_dir,
+                                                         os.path.join(pyscf_lib_dir, 'deps', 'lib'),
                                                       os.path.join(pyscf_lib_dir, 'deps', 'lib64')])
     xcfun_inc_path = search_inc_path('xcfun.h', [os.path.join(pyscf_lib_dir, 'deps', 'include')])
     if xcfun_lib_path and xcfun_inc_path:
@@ -333,7 +335,7 @@ if 1:
         default_lib_dir += [xcfun_lib_path]
         default_include += [xcfun_inc_path]
         extensions += [
-            make_ext('pyscf.lib.xcfun_itrf', 'dft', 'xcfun_itrf.c', ['xcfun']),
+            make_ext('pyscf.lib.libxcfun_itrf', 'dft', 'xcfun_itrf.c', ['xcfun']),
         ]
         DFT_AVAILABLE = 1
 
@@ -369,5 +371,6 @@ setup(
     ext_modules=extensions,
     cmdclass={'install': PostInstallCommand},
     install_requires=['numpy', 'scipy', 'h5py'],
+    setup_requires = ['numpy'],
 )
 

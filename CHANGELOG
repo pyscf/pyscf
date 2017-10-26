@@ -17,6 +17,7 @@ PySCF 1.4.1 (201?-?-?)
 * Bugfix
   - meta-GGA functional detection code in XC parser
   - Orbital symmetry label in mcscf initial guess projection
+  - Eigenvalue ordering for Davidson eigen solver
 
 PySCF 1.4 (2017-10-05)
 ----------------------
