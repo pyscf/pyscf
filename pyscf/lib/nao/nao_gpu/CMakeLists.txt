@@ -1,6 +1,6 @@
 
 cuda_add_library(nao_gpu SHARED
-    m_iter_gpu_routines.cu
+    m_iter_gpu_routines.cu m_utils.cu
     )
 
 set_target_properties(nao_gpu PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}

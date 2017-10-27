@@ -33,7 +33,7 @@ class tddft_iter(scf):
 
     self.tddft_iter_tol = kw['tddft_iter_tol'] if 'tddft_iter_tol' in kw else 1e-2
     self.eps = kw['tddft_iter_broadening'] if 'tddft_iter_broadening' in kw else 0.00367493
-    self.GPU = GPU = kw['GPU'] if 'GPU' in kw else False
+    self.GPU = GPU = kw['GPU'] if 'GPU' in kw else None
     self.xc_code = xc_code = kw['xc_code'] if 'xc_code' in kw else 'LDA,PZ'
     self.nfermi_tol = nfermi_tol = kw['nfermi_tol'] if 'nfermi_tol' in kw else 1e-5
     self.dtype = kw['dtype'] if 'dtype' in kw else np.float32
@@ -119,14 +119,13 @@ class tddft_iter(scf):
     self.rf0_ncalls+=1
     no = self.norbs
 
-    if self.GPU:
-        return chi0_mv_gpu(self.tddft_iter_gpu, v, self.cc_da, self.v_dab, no, comega, self.dtype, 
-                self.dtypeComplex)
-    else:
+    if self.GPU is None:
         return chi0_mv(v, self.xocc, self.xvrt, self.ksn2e[0, 0, :], self.ksn2f[0, 0, :], 
                 self.cc_da, self.v_dab, no, self.nfermi, self.nprod, self.vstart, comega, self.dtype, 
                 self.dtypeComplex)
-
+    else:
+        return chi0_mv_gpu(self.tddft_iter_gpu, v, self.cc_da, self.v_dab, no, comega, self.dtype, 
+                self.dtypeComplex)
 
   def comp_veff(self, vext, comega=1j*0.0, x0=None):
     #from scipy.sparse.linalg import gmres, lgmres as gmres_alias, LinearOperator
@@ -191,7 +190,7 @@ class tddft_iter(scf):
      
         polariz[iw] = np.dot(self.moms1[:,0], self.dn[iw, :])
 
-    if self.tddft_iter_gpu.GPU:
+    if self.tddft_iter_gpu.GPU is not None:
         self.tddft_iter_gpu.clean_gpu()
 
     return polariz

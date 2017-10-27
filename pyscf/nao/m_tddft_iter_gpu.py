@@ -15,37 +15,98 @@ except:
 class tddft_iter_gpu_c():
 
     def __init__(self, GPU, X4, ksn2f, ksn2e, norbs, nfermi, nprod, vstart):
+        """
+          Input Parameters:
+          -----------------
+            GPU: variable to set up GPU calculations. It can take several forms
+                * None : if GPU=None, no GPU will be use
+                * True : if GPU is True, then calculation will be using GPUs with 
+                      default setup
+                * dictionary: a dictionary containing the different parameters
+                    for the gpu setup, the keys are,
+                      * use, booleean to know if wew will use GPU calculations
+                      * device: integer to use a certain GPU if there is more than one
+        """
         
-        if GPU and GPU_import:
-            self.GPU=True
+        if GPU is not None and GPU_import:
 
-            self.norbs = norbs
-            self.nfermi = nfermi
-            self.nprod = nprod
-            self.vstart = vstart
-            self.nvirt = norbs-vstart
+            list_kw = ["use", "device", "gpu count"]
+            default = [True, 0, self.countGPUs()]
+            self.GPU = dict()
             
-            self.block_size = np.array([32, 32], dtype=np.int32) # threads by block
-            self.grid_size = np.array([0, 0], dtype=np.int32) # number of blocks
-            dimensions = [nfermi, nprod]
-
-            for i in range(2):
-                if dimensions[i] <= self.block_size[i]:
-                    self.block_size[i] = dimensions[i]
-                    self.grid_size[i] = 1
+            if isinstance(GPU, dict):
+              for key, val in zip(list_kw, default):
+                if key in GPU.keys():
+                  self.GPU[key] = GPU[key]
                 else:
-                    self.grid_size[i] = dimensions[i]/self.block_size[i] + 1
+                  self.GPU[key] = val 
+            elif GPU: # GPU is True
+              for key, val in zip(list_kw, default):
+                self.GPU[key] = val
+            else:
+              raise ValueError("wrong input for GPU")
 
-            libnao_gpu.init_tddft_iter_gpu(
-                        X4.ctypes.data_as(POINTER(c_float)), c_int(norbs),
-                        ksn2e.ctypes.data_as(POINTER(c_float)), 
-                        ksn2f.ctypes.data_as(POINTER(c_float)),
-                        c_int(nfermi), c_int(nprod), c_int(vstart))
+            if not self.GPU["use"]:
+              self.GPU = None # lets keep None for the next
+            else:
 
-        elif GPU and not GPU_import:
+              print(self.GPU)
+              if isinstance(self.GPU["device"], int):
+                if self.GPU["device"] < self.GPU["gpu count"] and \
+                    self.GPU["device"] >= 0:
+                  self.setDevice(self.GPU["device"])
+                else:
+                  mess = """
+                          GPU['device'] = {0}
+                          but there is only {1} gpus on this system.
+                         """.format(self.GPU["device"], self.GPU["gpu count"])
+                  raise ValueError(mess)
+              else:
+                raise ValueError("GPU['device'] must be an integer, no multi GPU support at the moment.")
+              
+              print("Get device: ", self.getDevice())
+              self.norbs = norbs
+              self.nfermi = nfermi
+              self.nprod = nprod
+              self.vstart = vstart
+              self.nvirt = norbs-vstart
+              
+              self.block_size = np.array([32, 32], dtype=np.int32) # threads by block
+              self.grid_size = np.array([0, 0], dtype=np.int32) # number of blocks
+              dimensions = [nfermi, nprod]
+
+              for i in range(2):
+                  if dimensions[i] <= self.block_size[i]:
+                      self.block_size[i] = dimensions[i]
+                      self.grid_size[i] = 1
+                  else:
+                      self.grid_size[i] = dimensions[i]/self.block_size[i] + 1
+
+              libnao_gpu.init_tddft_iter_gpu(
+                          X4.ctypes.data_as(POINTER(c_float)), c_int(norbs),
+                          ksn2e.ctypes.data_as(POINTER(c_float)), 
+                          ksn2f.ctypes.data_as(POINTER(c_float)),
+                          c_int(nfermi), c_int(nprod), c_int(vstart))
+
+        elif GPU is not None and not GPU_import:
             raise ValueError("GPU lib failed to initialize!")
         else:
-            self.GPU = False
+            self.GPU = None
+
+    def countGPUs(self):
+      """
+        Return the number of devices available for the calculations
+      """
+      return libnao_gpu.CountDevices()
+
+    def setDevice(self, gpu_id):
+      
+      libnao_gpu.SetDevice(c_int(gpu_id))
+
+    def getDevice(self):
+      
+      return libnao_gpu.GetDevice()
+
 
     def cpy_sab_to_device(self, sab, Async=-1):
         """

@@ -29,8 +29,8 @@ subroutine calculate_potential_pb_test(rr, rr_size) bind(c, name='calculate_pote
   use iso_c_binding
 
   implicit none
-  real(C_DOUBLE), intent(in) :: rr(rr_size)
   integer(C_INT), intent(in), value :: rr_size
+  real(C_DOUBLE), intent(in) :: rr(rr_size)
 
   print*, "Hola!! ", rr_size
 end subroutine
