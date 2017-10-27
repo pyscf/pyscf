@@ -47,10 +47,26 @@ class tddft_iter_gpu_c():
         else:
             self.GPU = False
 
-    def cpy_sab_to_device(self, sab, Async=0):
+    def cpy_sab_to_device(self, sab, Async=-1):
+        """
+            Async can take the following values:
+                * 0 default stream
+                * 1 real stream
+                * 2 imag stream
+                * -1 or any other value: Not using Async, just blocking memcpy
+        """
+
         libnao_gpu.memcpy_sab_host2device(sab.ctypes.data_as(POINTER(c_float)), c_int(Async))
 
-    def cpy_sab_to_host(self, sab, Async=0):
+    def cpy_sab_to_host(self, sab, Async=-1):
+        """
+            Async can take the following values:
+                * 0 default stream
+                * 1 real stream
+                * 2 imag stream
+                * -1 or any other value: Not using Async, just blocking memcpy
+        """
+ 
         libnao_gpu.memcpy_sab_device2host(sab.ctypes.data_as(POINTER(c_float)), c_int(Async))
 
     def calc_nb2v_from_sab(self, reim):

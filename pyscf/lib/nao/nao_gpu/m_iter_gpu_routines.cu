@@ -359,11 +359,20 @@ extern "C" void memcpy_sab_host2device(float *sab, int Async)
 {
   if (Async == 0)
   {
-    cudaMemcpy( sab_d, sab, sizeof(float) * norbs*norbs, cudaMemcpyHostToDevice);
+    cudaMemcpyAsync( sab_d, sab, sizeof(float) * norbs*norbs, cudaMemcpyHostToDevice, 0);
   }
+  else if (Async == 1)
+  {
+    cudaMemcpyAsync( sab_d, sab, sizeof(float) * norbs*norbs, cudaMemcpyHostToDevice, stream_real);
+  }
+  else if (Async == 2)
+  {
+    cudaMemcpyAsync( sab_d, sab, sizeof(float) * norbs*norbs, cudaMemcpyHostToDevice, stream_imag);
+  }
+
   else
   {
-    cudaMemcpyAsync( sab_d, sab, sizeof(float) * norbs*norbs, cudaMemcpyHostToDevice, 0);
+    cudaMemcpy( sab_d, sab, sizeof(float) * norbs*norbs, cudaMemcpyHostToDevice);
   }
 }
 
@@ -371,10 +380,24 @@ extern "C" void memcpy_sab_device2host(float *sab, int Async)
 {
   if (Async == 0)
   {
-    cudaMemcpy( sab, sab_d, sizeof(float) * norbs*norbs, cudaMemcpyDeviceToHost);
+    cudaMemcpyAsync( sab, sab_d, sizeof(float) * norbs*norbs, cudaMemcpyDeviceToHost, 0);
+  }
+  else if (Async == 1)
+  {
+    cudaMemcpyAsync( sab, sab_d, sizeof(float) * norbs*norbs, cudaMemcpyDeviceToHost, stream_real);
+  }
+  else if (Async == 2)
+  {
+    cudaMemcpyAsync( sab, sab_d, sizeof(float) * norbs*norbs, cudaMemcpyDeviceToHost, stream_imag);
+  }
+  else if (Async == 3)
+  {
+    cudaMemcpyAsync( sab, sab_d, sizeof(float) * norbs*norbs, cudaMemcpyDeviceToHost, stream_mem);
   }
   else
   {
-    cudaMemcpyAsync( sab, sab_d, sizeof(float) * norbs*norbs, cudaMemcpyDeviceToHost, 0);
+    cudaMemcpy( sab, sab_d, sizeof(float) * norbs*norbs, cudaMemcpyDeviceToHost);
   }
+
+
 }

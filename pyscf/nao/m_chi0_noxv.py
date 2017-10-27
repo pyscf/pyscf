@@ -100,14 +100,15 @@ def chi0_mv_gpu(tddft_iter_gpu, v, cc_da, v_dab, no,
 
     tddft_iter_gpu.cpy_sab_to_device(sab, Async = 1)
     tddft_iter_gpu.calc_nb2v_from_sab(reim=0)
+    # nm2v_real
+    tddft_iter_gpu.calc_nm2v_real()
+
 
     # start imaginary part
     vdp = csr_matvec(cc_da, vext[:, 1])
     sab = (vdp*v_dab).reshape([no,no])
-    tddft_iter_gpu.cpy_sab_to_device(sab, Async = 1)
+    tddft_iter_gpu.cpy_sab_to_device(sab, Async = 2)
 
-    # nm2v_real
-    tddft_iter_gpu.calc_nm2v_real()
 
     tddft_iter_gpu.calc_nb2v_from_sab(reim=1)
     # nm2v_imag
@@ -119,7 +120,7 @@ def chi0_mv_gpu(tddft_iter_gpu, v, cc_da, v_dab, no,
     tddft_iter_gpu.calc_nb2v_from_nm2v_real()
     tddft_iter_gpu.calc_sab(reim=0)
     tddft_iter_gpu.cpy_sab_to_host(sab, Async = 1)
-    
+
     # start calc_ imag to overlap with cpu calculations
     tddft_iter_gpu.calc_nb2v_from_nm2v_imag()
 

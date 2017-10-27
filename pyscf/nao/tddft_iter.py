@@ -6,12 +6,13 @@ from timeit import default_timer as timer
 from pyscf.nao import scf
 from pyscf.nao.m_tddft_iter_gpu import tddft_iter_gpu_c
 from pyscf.nao.m_chi0_noxv import chi0_mv_gpu, chi0_mv
+from pyscf.nao.m_blas_wrapper import spmv_wrapper
+
 import scipy
 if int(scipy.__version__[0]) > 0:
     scipy_ver = 1
 else:
     scipy_ver = 0
-    from pyscf.nao.m_blas_wrapper import spmv_wrapper
 
 try:
     import numba
@@ -36,6 +37,7 @@ class tddft_iter(scf):
     self.xc_code = xc_code = kw['xc_code'] if 'xc_code' in kw else 'LDA,PZ'
     self.nfermi_tol = nfermi_tol = kw['nfermi_tol'] if 'nfermi_tol' in kw else 1e-5
     self.dtype = kw['dtype'] if 'dtype' in kw else np.float32
+
     self.spmv = spmv_wrapper
     if self.dtype == np.float32:
       self.dtypeComplex = np.complex64
