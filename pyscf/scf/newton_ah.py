@@ -89,7 +89,7 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
     if not hasattr(fock_ao, 'focka'):
         if h1e is None: h1e = mf.get_hcore()
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-        fock_ao = h1e + mf.get_veff(mol, dm0)
+        fock_ao = h1e + mf.get_veff(mf.mol, dm0)
     else:
         fock_ao = fock_ao.focka, fock_ao.fockb
     mo_occa = occidxa = mo_occ > 0
