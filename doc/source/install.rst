@@ -199,9 +199,9 @@ to the MKL library coming with Anaconda package::
   $ make
 
 You can link to other BLAS libraries by setting ``BLA_VENDOR``, eg
-``BLA_VENDOR=ATLAS``, ``BLA_VENDOR=IBMESSL``.  Please refer to `cmake mannual
-<http://www.cmake.org/cmake/help/v3.0/module/FindBLAS.html>`_ for more details
-of the use of ``FindBLAS`` macro.
+``BLA_VENDOR=ATLAS``, ``BLA_VENDOR=IBMESSL``, ``BLA_VENDOR=OpenBLAS`` (requiring cmake-3.6).
+Please refer to `cmake mannual <http://www.cmake.org/cmake/help/v3.6/module/FindBLAS.html>`_
+for more details of the use of ``FindBLAS`` macro.
 
 If the cmake ``BLA_VENDOR`` cannot find the right BLAS library as you expected,
 you can assign the libraries to the variable ``BLAS_LIBRARIES`` in
@@ -211,6 +211,13 @@ you can assign the libraries to the variable ``BLAS_LIBRARIES`` in
   set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_sequential.so")
   set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_core.so")
   set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_avx.so")
+
+.. note::
+  MKL library may lead to an OSError at runtime:
+  ``OSError: ... mkl/lib/intel64/libmkl_avx.so: undefined symbol: ownLastTriangle_64fc``
+  or ``MKL FATAL ERROR: Cannot load libmkl_avx.so or libmkl_def.so.``.
+  It can be solved by preloading MKL core library with:
+  ``export LD_PRELOAD=$MKLROOT/lib/intel64/libmkl_avx.so:$MKLROOT/lib/intel64/libmkl_core.so``
 
 
 .. _installing_qcint:
