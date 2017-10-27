@@ -44,6 +44,7 @@ def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8,
                                     max_cycle=max_cycle, tol=tol,
                                     verbose=verbose)
     if myci.nroots == 1:
+        conv = conv[0]
         ecisd = ecisd[0]
         ci = ci[0]
     return conv, ecisd, ci

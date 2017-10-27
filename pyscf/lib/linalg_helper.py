@@ -477,7 +477,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         if callable(callback):
             callback(locals())
 
-    return all(conv), e, x0
+    return conv, e, x0
 
 
 def eigh(a, *args, **kwargs):
@@ -789,9 +789,9 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         e, v, idx = pick(w, v, nroots, x0)
         xl = _gen_x0(vl[:,idx[:nroots]].conj(), xs)
         x0 = _gen_x0(v[:,:nroots], xs)
-        return all(conv), e[:nroots], xl, x0
+        return conv, e[:nroots], xl, x0
     else:
-        return all(conv), e, x0
+        return conv, e, x0
 
 def dgeev(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
           lindep=1e-14, max_memory=2000, dot=numpy.dot, callback=None,
