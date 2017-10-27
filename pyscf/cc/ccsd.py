@@ -486,7 +486,7 @@ def add_wvvVV_(mycc, t1, t2, eris, t2new_tril, with_ovvv=True):
             tau[p0:p1] += t2[i,:i+1]
         time0 = logger.timer_debug1(mycc, 'vvvv-tau', *time0)
         max_memory = max(2000, mycc.max_memory - lib.current_memory()[0])
-        blksize = int(max(4, max_memory*.95e6/8/(nvir**3*2)))
+        blksize = int(min(nvir, max(4, max_memory*.95e6/8/(nvir**3*2))))
 
         def block_contract(buf, a0, a1):
             for a in range(a0, a1):

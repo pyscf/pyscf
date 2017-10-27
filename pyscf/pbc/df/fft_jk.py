@@ -125,7 +125,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
         ao2_kpts = [np.dot(mo_coeff[k].T, ao) for k, ao in enumerate(ao2_kpts)]
 
     max_memory = mydf.max_memory - lib.current_memory()[0]
-    blksize = int(min(max(max_memory*1e6/16/2/ngs/nao, 1), nao))
+    blksize = int(min(nao, max_memory*1e6/16/2/ngrids/nao+1))
     ao1_dtype = np.result_type(*ao1_kpts)
     ao2_dtype = np.result_type(*ao2_kpts)
     vR_dm = np.empty((nset,nao,ngrids), dtype=vk_kpts.dtype)
