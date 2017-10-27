@@ -24,7 +24,7 @@ class tddft_iter_c():
 
   def __init__(self, sv, pb, tddft_iter_tol=1e-2, tddft_iter_broadening=0.00367493,
           nfermi_tol=1e-5, telec=None, nelec=None, fermi_energy=None, xc_code='LDA,PZ',
-          GPU=False, precision="single", load_kernel=False, **kvargs):
+          GPU=None, precision="single", load_kernel=False, **kvargs):
     """ Iterative TDDFT a la PK, DF, OC JCTC """
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
     from pyscf.nao.m_comp_dm import comp_dm
@@ -36,6 +36,7 @@ class tddft_iter_c():
     if precision == "single":
         self.dtype = np.float32
         self.dtypeComplex = np.complex64
+        self.gemm = blas.sgemm
         if scipy_ver > 0:
             self.spmv = blas.sspmv
         else: 
@@ -43,6 +44,7 @@ class tddft_iter_c():
     elif precision == "double":
         self.dtype = np.float64
         self.dtypeComplex = np.complex128
+        self.gemm = blas.dgemm
         if scipy_ver > 0:
             self.spmv = blas.dspmv
         else: 
@@ -56,7 +58,6 @@ class tddft_iter_c():
     self.tddft_iter_tol = tddft_iter_tol
     self.eps = tddft_iter_broadening
     self.sv, self.pb, self.norbs, self.nspin = sv, pb, sv.norbs, sv.nspin
-    self.GPU = GPU
 
     self.v_dab = pb.get_dp_vertex_sparse(dtype=self.dtype, sparseformat=coo_matrix).tocsr()
     self.cc_da = pb.get_da2cc_sparse(dtype=self.dtype, sparseformat=coo_matrix).tocsr()
@@ -91,8 +92,9 @@ class tddft_iter_c():
     self.xocc = sv.wfsx.x[0,0,0:self.nfermi,:,0]  # does python creates a copy at this point ?
     self.xvrt = sv.wfsx.x[0,0,self.vstart:,:,0]   # does python creates a copy at this point ?
 
-    self.tddft_iter_gpu = tddft_iter_gpu_c(GPU, sv.wfsx.x[0, 0, :, :, 0], self.ksn2f, self.ksn2e, 
+    self.td_GPU = tddft_iter_gpu_c(GPU, sv.wfsx.x[0, 0, :, :, 0], self.ksn2f, self.ksn2e, 
             self.norbs, self.nfermi, self.nprod, self.vstart)
+    
 
   def load_kernel(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None, **kwargs):
 
@@ -123,14 +125,10 @@ class tddft_iter_c():
     self.rf0_ncalls+=1
     no = self.norbs
 
-    if self.GPU:
-        return chi0_mv_gpu(self.tddft_iter_gpu, v, self.cc_da, self.v_dab, no, comega, self.dtype, 
-                self.dtypeComplex)
+    if self.td_GPU.GPU is None:
+        return chi0_mv(self, v, comega)
     else:
-        return chi0_mv(v, self.xocc, self.xvrt, self.ksn2e[0, 0, :], self.ksn2f[0, 0, :], 
-                self.cc_da, self.v_dab, no, self.nfermi, self.nprod, self.vstart, comega, self.dtype, 
-                self.dtypeComplex)
-
+        return chi0_mv_gpu(self, v, comega)
 
   def comp_veff(self, vext, comega=1j*0.0, x0=None):
     #from scipy.sparse.linalg import gmres, lgmres as gmres_alias, LinearOperator
@@ -195,8 +193,8 @@ class tddft_iter_c():
      
         polariz[iw] = np.dot(self.moms1[:,0], self.dn[iw, :])
 
-    if self.tddft_iter_gpu.GPU:
-        self.tddft_iter_gpu.clean_gpu()
+    if self.td_GPU.GPU is not None:
+        self.td_GPU.clean_gpu()
 
     return polariz
 

@@ -5,6 +5,8 @@ from scipy.linalg import blas
 from pyscf.nao.m_sparsetools import csr_matvec, csc_matvec, csc_matvecs
 import sys
 
+from pyscf.lib import misc
+libnao_gpu = misc.load_library("libnao_gpu")
 try: # to import gpu library
   from pyscf.lib import misc
   libnao_gpu = misc.load_library("libnao_gpu")
@@ -28,7 +30,7 @@ class tddft_iter_gpu_c():
                       * device: integer to use a certain GPU if there is more than one
         """
         
-        if GPU is not None and GPU_import:
+        if (isinstance(GPU, dict) or GPU == True) and GPU_import:
 
             list_kw = ["use", "device", "gpu count"]
             default = [True, 0, self.countGPUs()]
@@ -64,7 +66,6 @@ class tddft_iter_gpu_c():
               else:
                 raise ValueError("GPU['device'] must be an integer, no multi GPU support at the moment.")
               
-              print("Get device: ", self.getDevice())
               self.norbs = norbs
               self.nfermi = nfermi
               self.nprod = nprod
@@ -88,7 +89,7 @@ class tddft_iter_gpu_c():
                           ksn2f.ctypes.data_as(POINTER(c_float)),
                           c_int(nfermi), c_int(nprod), c_int(vstart))
 
-        elif GPU is not None and not GPU_import:
+        elif (isinstance(GPU, dict) or GPU == True) and not GPU_import:
             raise ValueError("GPU lib failed to initialize!")
         else:
             self.GPU = None

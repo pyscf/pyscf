@@ -120,9 +120,7 @@ class tddft_iter(scf):
     no = self.norbs
 
     if self.GPU is None:
-        return chi0_mv(v, self.xocc, self.xvrt, self.ksn2e[0, 0, :], self.ksn2f[0, 0, :], 
-                self.cc_da, self.v_dab, no, self.nfermi, self.nprod, self.vstart, comega, self.dtype, 
-                self.dtypeComplex)
+        return chi0_mv(self, v, comega)
     else:
         return chi0_mv_gpu(self.tddft_iter_gpu, v, self.cc_da, self.v_dab, no, comega, self.dtype, 
                 self.dtypeComplex)
