@@ -122,8 +122,7 @@ class tddft_iter(scf):
     if self.GPU is None:
         return chi0_mv(self, v, comega)
     else:
-        return chi0_mv_gpu(self.tddft_iter_gpu, v, self.cc_da, self.v_dab, no, comega, self.dtype, 
-                self.dtypeComplex)
+        return chi0_mv_gpu(self, v, comega) 
 
   def comp_veff(self, vext, comega=1j*0.0, x0=None):
     #from scipy.sparse.linalg import gmres, lgmres as gmres_alias, LinearOperator
