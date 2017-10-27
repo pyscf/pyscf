@@ -117,15 +117,9 @@ class RCCSD(rccsd.RCCSD):
         return t2new_tril
 
 class _RCCSD_ERIs:
-    def __init__(self, cc, mo_coeff=None):
-        cput0 = (time.clock(), time.time())
-        if mo_coeff is None:
-            self.mo_coeff = mo_coeff = ccsd._mo_without_core(cc, cc.mo_coeff)
-        else:
-            self.mo_coeff = mo_coeff = ccsd._mo_without_core(cc, mo_coeff)
-        dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
-        fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
-        self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
+    def __init__(self, cc):
+        self.mo_coeff = None
+        self.fock = None
         self.nocc = cc.nocc
 
         self.oooo = None
@@ -151,7 +145,15 @@ class _RCCSD_ERIs:
         return self._vvvv
 
 def _make_eris_df(cc, mo_coeff=None):
-    eris = _RCCSD_ERIs(cc, mo_coeff)
+    eris = _RCCSD_ERIs(cc)
+    if mo_coeff is None:
+        eris.mo_coeff = mo_coeff = ccsd._mo_without_core(cc, cc.mo_coeff)
+    else:
+        eris.mo_coeff = mo_coeff = ccsd._mo_without_core(cc, mo_coeff)
+    dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
+    fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
+    eris.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
+
     nocc = eris.nocc
     nmo = eris.fock.shape[0]
     nvir = nmo - nocc

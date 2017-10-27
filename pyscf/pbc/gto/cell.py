@@ -923,7 +923,7 @@ class Cell(mole.Mole):
             self.atom = kwargs['atom']
 
         if 'gs' in kwargs:
-            self.gs = gs
+            self.gs = kwargs['gs']
 
         # Set-up pseudopotential if it exists
         # This must happen before build() because it affects
