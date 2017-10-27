@@ -857,15 +857,6 @@ def einsum(idx_str, *tensors):
         print("shared_idxAB =", shared_idxAB)
         print("inner_shape =", inner_shape)
 
-    if (not numpy.any(A)) or (not numpy.any(B)):
-        Cshape = list()
-        for idx in idxC:
-            if idx in idxA:
-                Cshape.append(rangeA[idx])
-            else:
-                Cshape.append(rangeB[idx])
-        return numpy.zeros(tuple(Cshape), dtype=numpy.result_type(A,B))
-
     # Transpose the tensors into the proper order and reshape into matrices
     new_orderA = list()
     for idx in idxAt:
