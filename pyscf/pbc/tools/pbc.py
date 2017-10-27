@@ -40,6 +40,9 @@ def fft(f, gs):
             numpy.fft).
 
     '''
+    if f.size == 0:
+        return np.zeros_like(f)
+
     f3d = f.reshape([-1] + [2*x+1 for x in gs])
     assert(f3d.shape[0] == 1 or f[0].size == f3d[0].size)
     g3d = fftn_wrapper(f3d, axes=(1,2,3), threads=nproc)
@@ -67,6 +70,9 @@ def ifft(g, gs):
             of numpy.fft).
 
     '''
+    if g.size == 0:
+        return np.zeros_like(g)
+
     g3d = g.reshape([-1] + [2*x+1 for x in gs])
     assert(g3d.shape[0] == 1 or g[0].size == g3d[0].size)
     f3d = ifftn_wrapper(g3d, axes=(1,2,3), threads=nproc)
