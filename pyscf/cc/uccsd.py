@@ -916,30 +916,30 @@ class UCCSD(rccsd.RCCSD):
         def precond(r, e0, x0):
             return r/(e0-diag+1e-12)
 
-        eig = linalg_helper.eig
+        eig = linalg_helper.davidson_nosym1
+        matvec = lambda xs: [self.eomee_ccsd_matvec(x) for x in xs]
         if user_guess or koopmans:
             def pickeig(w, v, nr, envs):
                 x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
                 idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
                 return w[idx].real, v[:,idx].real, idx
-            eee, evecs = eig(self.eomee_ccsd_matvec, guess, precond, pick=pickeig,
-                             tol=self.conv_tol, max_cycle=self.max_cycle,
-                             max_space=self.max_space, nroots=nroots,
-                             verbose=self.verbose)
+            conv, eee, evecs = eig(matvec, guess, precond, pick=pickeig,
+                                   tol=self.conv_tol, max_cycle=self.max_cycle,
+                                   max_space=self.max_space, nroots=nroots,
+                                   verbose=self.verbose)
         else:
-            eee, evecs = eig(self.eomee_ccsd_matvec, guess, precond,
-                             tol=self.conv_tol, max_cycle=self.max_cycle,
-                             max_space=self.max_space, nroots=nroots,
-                             verbose=self.verbose)
+            conv, eee, evecs = eig(matvec, guess, precond,
+                                   tol=self.conv_tol, max_cycle=self.max_cycle,
+                                   max_space=self.max_space, nroots=nroots,
+                                   verbose=self.verbose)
 
-        self.eee = eee.real
+        self.eee = np.array(eee).real
 
-        if nroots == 1:
-            eee, evecs = [self.eee], [evecs]
-        for n, en, vn in zip(range(nroots), eee, evecs):
+        for n, en, vn, convn in zip(range(nroots), eee, evecs, conv):
             t1, t2 = self.vector_to_amplitudes(vn, (nmoa,nmob), (nocca,noccb))
             qpwt = np.linalg.norm(t1[0])**2 + np.linalg.norm(t1[1])**2
-            logger.info(self, 'EOM-EE root %d E = %.16g  qpwt = %.6g', n, en, qpwt)
+            logger.info(self, 'EOM-EE root %d E = %.16g  qpwt = %.6  conv = %s',
+                        n, en, qpwt, convn)
         logger.timer(self, 'EOM-EE-CCSD', *cput0)
         if nroots == 1:
             return eee[0], evecs[0]
@@ -983,30 +983,30 @@ class UCCSD(rccsd.RCCSD):
         def precond(r, e0, x0):
             return r/(e0-diag+1e-12)
 
-        eig = linalg_helper.eig
+        eig = linalg_helper.davidson_nosym1
+        matvec = lambda xs: [self.eomsf_ccsd_matvec(x) for x in xs]
         if user_guess or koopmans:
             def pickeig(w, v, nr, envs):
                 x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
                 idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
                 return w[idx].real, v[:,idx].real, idx
-            eee, evecs = eig(self.eomsf_ccsd_matvec, guess, precond, pick=pickeig,
+            conv, eee, evecs = eig(matvec, guess, precond, pick=pickeig,
                              tol=self.conv_tol, max_cycle=self.max_cycle,
                              max_space=self.max_space, nroots=nroots,
                              verbose=self.verbose)
         else:
-            eee, evecs = eig(self.eomsf_ccsd_matvec, guess, precond,
+            conv, eee, evecs = eig(matvec, guess, precond,
                              tol=self.conv_tol, max_cycle=self.max_cycle,
                              max_space=self.max_space, nroots=nroots,
                              verbose=self.verbose)
 
-        self.eee = eee.real
+        self.eee = np.array(eee).real
 
-        if nroots == 1:
-            eee, evecs = [self.eee], [evecs]
-        for n, en, vn in zip(range(nroots), eee, evecs):
+        for n, en, vn, convn in zip(range(nroots), eee, evecs, conv):
             t1, t2 = self.vector_to_amplitudes_eomsf(vn, (nocca,noccb), (nvira,nvirb))
             qpwt = np.linalg.norm(t1[0])**2 + np.linalg.norm(t1[1])**2
-            logger.info(self, 'EOM-SF root %d E = %.16g  qpwt = %.6g', n, en, qpwt)
+            logger.info(self, 'EOM-SF root %d E = %.16g  qpwt = %.6g  conv = %s',
+                        n, en, qpwt, convn)
         logger.timer(self, 'EOM-SF-CCSD', *cput0)
         if nroots == 1:
             return eee[0], evecs[0]

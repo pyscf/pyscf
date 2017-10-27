@@ -588,7 +588,7 @@ class CASCI(lib.StreamObject):
                                    cas_natorb=self.natorb, verbose=log)
 
         if hasattr(self.fcisolver, 'converged'):
-            if self.fcisolver.converged:
+            if numpy.all(self.fcisolver.converged):
                 log.info('CASCI converged')
             else:
                 log.info('CASCI not converged')
