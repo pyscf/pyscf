@@ -5,13 +5,11 @@ class KnowValues(unittest.TestCase):
 
   def test_tddft_iter_lda(self):
     """ Compute polarization with LDA TDDFT  """
-    from pyscf.nao import system_vars_c, prod_basis_c, tddft_iter_c
+    from pyscf.nao import tddft_iter
     from timeit import default_timer as timer
     
     dname = os.path.dirname(os.path.abspath(__file__))
-    sv = system_vars_c().init_siesta_xml(label='water', cd=dname)
-    pb = prod_basis_c().init_prod_basis_pp(sv, jcutoff=7)
-    td = tddft_iter_c(pb.sv, pb, tddft_iter_broadening=1e-2, xc_code='LDA,PZ', level=0)
+    td = tddft_iter(label='water', cd=dname, jcutoff=7, iter_broadening=1e-2, xc_code='LDA,PZ', level=0)
     omegas = np.linspace(0.0,2.0,150)+1j*td.eps
     pxx = -td.comp_polariz_xx(omegas).imag
     data = np.array([omegas.real*27.2114, pxx])

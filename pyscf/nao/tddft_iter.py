@@ -32,7 +32,7 @@ class tddft_iter(scf):
     scf.__init__(self, **kw)
 
     self.tddft_iter_tol = kw['tddft_iter_tol'] if 'tddft_iter_tol' in kw else 1e-2
-    self.eps = kw['tddft_iter_broadening'] if 'tddft_iter_broadening' in kw else 0.00367493
+    self.eps = kw['iter_broadening'] if 'iter_broadening' in kw else 0.00367493
     self.GPU = GPU = kw['GPU'] if 'GPU' in kw else None
     self.xc_code = xc_code = kw['xc_code'] if 'xc_code' in kw else 'LDA,PZ'
     self.nfermi_tol = nfermi_tol = kw['nfermi_tol'] if 'nfermi_tol' in kw else 1e-5
@@ -74,7 +74,7 @@ class tddft_iter(scf):
         
         if xc_code.upper()!='RPA' :
           dm = comp_dm(self.wfsx.x, self.get_occupations())
-          pb.comp_fxc_pack(dm, xc_code, kernel = self.kernel, **kw)
+          self.comp_fxc_pack(dm=dm, kernel = self.kernel, **kw)
 
     # probably unnecessary, require probably does a copy
     # problematic for the dtype, must there should be another option 
@@ -111,6 +111,16 @@ class tddft_iter(scf):
       
       assert self.nprod*(self.nprod+1)//2 == self.kernel.size, "wrong size for loaded kernel: %r %r "%(self.nprod*(self.nprod+1)//2, self.kernel.size)
       self.kernel_dim = self.nprod
+
+  def comp_fxc_lil(self, **kw): 
+    """Computes the sparse version of the TDDFT interaction kernel"""
+    from pyscf.nao.m_vxc_lil import vxc_lil
+    return vxc_lil(self, deriv=2, ao_log=self.pb.prod_log, **kw)
+  
+  def comp_fxc_pack(self, **kw): 
+    """Computes the packed version of the TDDFT interaction kernel """
+    from pyscf.nao.m_vxc_pack import vxc_pack
+    vxc_pack(self, deriv=2, ao_log=self.pb.prod_log, **kw)
 
   def apply_rf0(self, v, comega=1j*0.0):
     """ 

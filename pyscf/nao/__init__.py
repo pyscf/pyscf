@@ -26,3 +26,4 @@ from .m_bse_iter import bse_iter_c
 from .nao import nao
 from .scf import scf
 from .tddft_iter import tddft_iter
+from .bse_iter import bse_iter

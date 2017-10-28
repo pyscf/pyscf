@@ -418,7 +418,7 @@ class system_vars_c():
         sp2charge (list): list associating the species to their charge
         state (string): this is an internal information on the current status of the class
     """
-    openmx_import_scfout(self, label, cd)
+    openmx_import_scfout(self, openmx=label, cd=cd)
     self.state = 'must be useful for something already'
     return self
 
@@ -473,17 +473,17 @@ class system_vars_c():
     from pyscf.nao.m_dipole_coo import dipole_coo
     return dipole_coo(self, **kvargs)
   
-  def overlap_check(self, tol=1e-5, **kvargs): # Works only after init_siesta_xml(), extend ?
-    return overlap_check(self, tol=1e-5, **kvargs)
+  def overlap_check(self, tol=1e-5, **kw): # Works only after init_siesta_xml(), extend ?
+    return overlap_check(self, tol=1e-5, **kw)
 
-  def diag_check(self, atol=1e-5, rtol=1e-4, **kvargs): # Works only after init_siesta_xml(), extend ?
-    return diag_check(self, atol, rtol, **kvargs)
+  def diag_check(self, atol=1e-5, rtol=1e-4, **kw): # Works only after init_siesta_xml(), extend ?
+    return diag_check(self, atol, rtol, **kw)
 
-  def vxc_lil(self, dm=None, xc_code=None, **kvargs):   # Compute exchange-correlation potentials
+  def vxc_lil(self, dm=None, xc_code=None, **kw):   # Compute exchange-correlation potentials
     from pyscf.nao.m_vxc_lil import vxc_lil
     dm1 = self.comp_dm() if dm is None else dm
     xc_code1 = self.xc_code if xc_code is None else xc_code
-    return vxc_lil(self, dm1, xc_code1, deriv=1, **kvargs)
+    return vxc_lil(self, dm=dm1, xc_code=xc_code1, deriv=1, **kw)
 
   @property
   def xc_code(self):

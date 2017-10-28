@@ -17,8 +17,11 @@ class scf(nao):
       self.init_mo_coeff_label(**kw)
     elif 'gpaw' in kw:
       self.init_mo_coeff_label(**kw)
+    elif 'openmx' in kw:
+      pass
     else:
       raise RuntimeError('unknown constructor')
+    self.xc_code = 'LDA,PZ' # just a guess...
     self.init_libnao()
     self.pb = prod_basis_c()
     self.pb.init_prod_basis_pp_batch(nao=self, **kw)
@@ -96,6 +99,40 @@ class scf(nao):
     libnao.init_aos_libnao(c_int64(self.norbs), byref(info))
     if info.value!=0: raise RuntimeError("info!=0")
     return self
+
+  def vxc_lil(self, **kw):   # Compute exchange-correlation potentials
+    from pyscf.nao.m_vxc_lil import vxc_lil
+    return vxc_lil(self, deriv=1, **kw)
+
+  def comp_dm(self):  # Computes the density matrix
+    from pyscf.nao.m_comp_dm import comp_dm
+    return comp_dm(self.wfsx.x, self.get_occupations())
+
+  def dens_elec(self, coords, dm): # Compute electronic density for a given density matrix and on a given set of coordinates
+    from pyscf.nao.m_dens_libnao import dens_libnao
+    from pyscf.nao.m_init_dm_libnao import init_dm_libnao
+    from pyscf.nao.m_init_dens_libnao import init_dens_libnao
+    if not self.init_sv_libnao : raise RuntimeError('not self.init_sv_libnao')
+    if init_dm_libnao(dm) is None : raise RuntimeError('init_dm_libnao(dm) is None')
+    if init_dens_libnao()!=0 : raise RuntimeError('init_dens_libnao()!=0')
+    return dens_libnao(coords, self.nspin)
+
+  def exc(self, dm, xc_code, **kvargs):   # Compute exchange-correlation energies
+    from pyscf.nao.m_exc import exc
+    return exc(self, dm, xc_code, **kvargs)
+
+  def get_init_guess(self, key=None):
+    """ Compute an initial guess for the density matrix. """
+    from pyscf.scf.hf import init_guess_by_minao
+    if hasattr(self, 'mol'):
+      dm = init_guess_by_minao(self.mol)
+    else:
+      dm = self.comp_dm()  # the loaded ks orbitals will be used
+      if dm.shape[0:2]==(1,1) and dm.shape[4]==1 : dm = dm.reshape((self.norbs,self.norbs))
+    return dm
+
+  def get_hamiltonian(self): # Returns the stored matrix elements of current hamiltonian 
+    return self.hsx.spin2h4_csr
 
 #
 # Example of reading pySCF mean-field calculation.

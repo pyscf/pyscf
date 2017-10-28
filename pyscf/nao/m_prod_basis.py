@@ -568,29 +568,25 @@ class prod_basis_c():
       mom0[s:f],mom1[s:f,:] = sp2mom0[sp], einsum('j,k->jk', sp2mom0[sp],coord)+sp2mom1[sp]
     return mom0,mom1
 
-  def comp_coulomb_pack(self, **kvargs):
+  def comp_coulomb_pack(self, **kw):
     """ Computes the packed version of the Hartree kernel """
     from pyscf.nao.m_comp_coulomb_pack import comp_coulomb_pack
-    return comp_coulomb_pack(self.sv, self.prod_log, **kvargs)
+    return comp_coulomb_pack(self.sv, self.prod_log, **kw)
 
-  def comp_coulomb_den(self, **kvargs):
-    """ Computes the packed version of the Hartree kernel """
+  def comp_coulomb_den(self, **kw):
+    """ Computes the dense (square) version of the Hartree kernel """
     from pyscf.nao.m_comp_coulomb_den import comp_coulomb_den
-    return comp_coulomb_den(self.sv, self.prod_log, **kvargs)
+    return comp_coulomb_den(self.sv, self.prod_log, **kw)
 
-  def comp_fxc_lil(self, dm, xc_code, **kvargs):
-    """ Computes the packed version of the Hartree kernel """
+  def comp_fxc_lil(self, **kw):
+    """ Computes the sparse version of the xc kernel """
     from pyscf.nao.m_vxc_lil import vxc_lil
-    return vxc_lil(self.sv, dm, xc_code, deriv=2, ao_log=self.prod_log, **kvargs)
+    return vxc_lil(self.sv, deriv=2, ao_log=self.prod_log, **kw)
   
-  def comp_fxc_pack(self, dm, xc_code, kernel = None, **kvargs):
-    """ Computes the packed version of the Hartree kernel """
+  def comp_fxc_pack(self, **kw):
+    """ Computes the packed version of the xc kernel """
     from pyscf.nao.m_vxc_pack import vxc_pack
-
-    if kernel is None:
-        return vxc_pack(self.sv, dm, xc_code, deriv=2, kernel=kernel, ao_log=self.prod_log, **kvargs)
-    else:
-        vxc_pack(self.sv, dm, xc_code, deriv=2, kernel=kernel, ao_log=self.prod_log, **kvargs)
+    return vxc_pack(self.sv, deriv=2, ao_log=self.prod_log, **kw)
 
 
 #

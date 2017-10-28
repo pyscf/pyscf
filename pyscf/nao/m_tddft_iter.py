@@ -24,7 +24,7 @@ class tddft_iter_c():
 
   def __init__(self, sv, pb, tddft_iter_tol=1e-2, tddft_iter_broadening=0.00367493,
           nfermi_tol=1e-5, telec=None, nelec=None, fermi_energy=None, xc_code='LDA,PZ',
-          GPU=None, precision="single", load_kernel=False, **kvargs):
+          GPU=None, precision="single", load_kernel=False, **kw):
     """ Iterative TDDFT a la PK, DF, OC JCTC """
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
     from pyscf.nao.m_comp_dm import comp_dm
@@ -66,14 +66,17 @@ class tddft_iter_c():
     self.nprod = self.moms0.size
 
     if load_kernel:
-        self.load_kernel(**kvargs)
+        self.load_kernel(**kw)
     else:
         self.kernel,self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype) # Lower Triangular Part of the kernel
         assert self.nprod==self.kernel_dim, "%r %r "%(self.nprod, self.kernel_dim)
         
         if xc_code.upper()!='RPA' :
           dm = comp_dm(sv.wfsx.x, sv.get_occupations())
-          pb.comp_fxc_pack(dm, xc_code, kernel = self.kernel, dtype=self.dtype, **kvargs)
+          pb.comp_fxc_pack(dm=dm, kernel = self.kernel, **kw)
+          
+#          dm = comp_dm(sv.wfsx.x, sv.get_occupations())
+#          pb.comp_fxc_pack(dm, xc_code, kernel = self.kernel, dtype=self.dtype, **kvargs)
 
     self.telec = sv.hsx.telec if telec is None else telec
     self.nelec = sv.hsx.nelec if nelec is None else nelec

@@ -1,10 +1,10 @@
 from __future__ import print_function, division
 from os.path import abspath, dirname
-from pyscf.nao import system_vars_c, prod_basis_c
+from pyscf.nao import scf
 import unittest, numpy as np
 
-sv = system_vars_c().init_siesta_xml(label='water', cd=dirname(abspath(__file__)))
-pb = prod_basis_c().init_prod_basis_pp_batch(sv)
+sv = scf(label='water', cd=dirname(abspath(__file__)))
+pb = sv.pb
 vab_arr_ref = pb.get_dp_vertex_array()
 
 class KnowValues(unittest.TestCase):
