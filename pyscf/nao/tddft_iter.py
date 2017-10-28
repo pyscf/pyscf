@@ -41,9 +41,11 @@ class tddft_iter(scf):
     self.spmv = spmv_wrapper
     if self.dtype == np.float32:
       self.dtypeComplex = np.complex64
+      self.gemm = blas.sgemm
       if scipy_ver > 0: self.spmv = blas.sspmv
     elif self.dtype == np.float64:
       self.dtypeComplex = np.complex128
+      self.gemm = blas.dgemm
       if scipy_ver > 0: self.spmv = blas.dspmv
     else:
       raise ValueError("dtype can be only float32 or float64")

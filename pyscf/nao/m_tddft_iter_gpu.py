@@ -6,7 +6,7 @@ from pyscf.nao.m_sparsetools import csr_matvec, csc_matvec, csc_matvecs
 import sys
 
 from pyscf.lib import misc
-libnao_gpu = misc.load_library("libnao_gpu")
+#libnao_gpu = misc.load_library("libnao_gpu")
 try: # to import gpu library
   from pyscf.lib import misc
   libnao_gpu = misc.load_library("libnao_gpu")
