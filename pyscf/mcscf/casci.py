@@ -313,7 +313,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         mo_coeff1, ci, occ = mc.cas_natorb(mo_coeff, ci, eris, sort, casdm1,
                                            verbose)
         ma = mo_coeff1[:,ncore:nocc]
-        mo_energy[ncore:nocc] = numpy.einsum('ji,ji->i', ma, fock.dot(ma))
+        mo_energy[ncore:nocc] = numpy.einsum('ji,ji->i', ma, fock_ao.dot(ma))
     else:
 # Keep the active space unchanged by default.  The rotation in active space
 # may cause problem for external CI solver eg DMRG.
