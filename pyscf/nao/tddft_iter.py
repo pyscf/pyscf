@@ -58,7 +58,7 @@ class tddft_iter(scf):
     pb = self.pb
 
     # deallocate hsx
-    self.hsx.deallocate()
+    if hasattr(self, 'hsx'): self.hsx.deallocate()
     
     self.rf0_ncalls = 0
     self.l0_ncalls = 0
