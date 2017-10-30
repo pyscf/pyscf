@@ -19,5 +19,6 @@ with a Geforce GTX 1050Ti, the speed up using the GPU for a silver cluster of 56
 Bug report
 ----------
 Koval Peter <koval.peter@gmail.com>
-Marc Barbey <marc.barbry@mailoo.org>
+
+Marc Barbry <marc.barbry@mailoo.org>
 
