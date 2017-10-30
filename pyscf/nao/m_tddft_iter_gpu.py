@@ -5,8 +5,6 @@ from scipy.linalg import blas
 from pyscf.nao.m_sparsetools import csr_matvec, csc_matvec, csc_matvecs
 import sys
 
-from pyscf.lib import misc
-#libnao_gpu = misc.load_library("libnao_gpu")
 try: # to import gpu library
   from pyscf.lib import misc
   libnao_gpu = misc.load_library("libnao_gpu")
@@ -24,6 +22,7 @@ class tddft_iter_gpu_c():
                 * None : if GPU=None, no GPU will be use
                 * True : if GPU is True, then calculation will be using GPUs with 
                       default setup
+                * False : Identic to None
                 * dictionary: a dictionary containing the different parameters
                     for the gpu setup, the keys are,
                       * use, booleean to know if wew will use GPU calculations
