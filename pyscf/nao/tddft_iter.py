@@ -55,6 +55,9 @@ class tddft_iter(scf):
     assert type(self.eps)==float
     
     pb = self.pb
+
+    # deallocate hsx
+    self.hsx.deallocate()
     
     self.rf0_ncalls = 0
     self.l0_ncalls = 0
@@ -89,7 +92,7 @@ class tddft_iter(scf):
     self.xocc = self.mo_coeff[0,0,0:self.nfermi,:,0]  # does python creates a copy at this point ?
     self.xvrt = self.mo_coeff[0,0,self.vstart:,:,0]   # does python creates a copy at this point ?
 
-    self.tddft_iter_gpu = tddft_iter_gpu_c(GPU, self.wfsx.x[0, 0, :, :, 0], self.ksn2f, self.ksn2e, 
+    self.td_GPU = tddft_iter_gpu_c(GPU, self.wfsx.x[0, 0, :, :, 0], self.ksn2f, self.ksn2e, 
             self.norbs, self.nfermi, self.nprod, self.vstart)
 
   def load_kernel_method(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None, **kwargs):
@@ -131,7 +134,7 @@ class tddft_iter(scf):
     self.rf0_ncalls+=1
     no = self.norbs
 
-    if self.GPU is None:
+    if self.td_GPU.GPU is None:
         return chi0_mv(self, v, comega)
     else:
         return chi0_mv_gpu(self, v, comega) 
@@ -199,8 +202,8 @@ class tddft_iter(scf):
      
         polariz[iw] = np.dot(self.moms1[:,0], self.dn[iw, :])
 
-    if self.tddft_iter_gpu.GPU is not None:
-        self.tddft_iter_gpu.clean_gpu()
+    if self.td_GPU.GPU is not None:
+        self.td_GPU.clean_gpu()
 
     return polariz
 
