@@ -4,8 +4,8 @@
 Scanning Cr2 molecule dissociation curve with regular CASSCF module (see
 examples/mcscf/31-cr2_scan) is not a difficult task.  The calculation becomes
 challenge when large active space is required in the DMRG-CASSCF (or
-FCIQMC-CASSCF, SHCI-CASSCF) type methods.  In this example, we demonstrated
-how to solve the following problems when running a CAS(12,35) curve scanning:
+FCIQMC-CASSCF, SHCI-CASSCF) methods.  In this example, we demonstrated
+how to solve the following problems when running a CAS(12,42) curve scanning:
 1. How to increase the size of active space from a small CASSCF calculation.
 2. How to project the active space from one point to another
 '''
@@ -62,11 +62,12 @@ def run(b, dm_guess, mo_guess, ci=None):
     mc.fcisolver.threads = 1
 # To avoid spin contamination
     mc.fix_spin_()
-# By default, canonicalization keep the symmetry blocks the same to the input
-# orbitals, which means the orbital symmetry labels are not changed after
-# CASSCF optimization. To use the lowest CASSCF orbitals as the core + active
-# orbitals for next step, we have to break the symmetry ordering and sort the
-# orbitals based on the "orbital energy".
+# By default, canonicalization as well as the CASSCF optimization do not
+# change the orbital symmetry labels. "Orbital energy" mc.mo_energy, the
+# diagonal elements of the general fock matrix, may have wrong ordering.
+# To use the lowest CASSCF orbitals as the core + active orbitals in the next
+# step, we have to sort the orbitals based on the "orbital energy". This
+# operation will change the orbital symmetry labels.
     mc.sorting_mo_energy = True
 # "mc.natorb = True" will transform the active space, to its natural orbital
 # representation.  By default, the active space orbitals are NOT reordered
