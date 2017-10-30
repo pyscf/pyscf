@@ -11,8 +11,8 @@ class KnowValues(unittest.TestCase):
     from timeit import default_timer as timer
     
     sv = scf(label='water', cd=os.path.dirname(os.path.abspath(__file__)))
-    dm = sv.comp_dm()
+    dm = sv.make_rdm1()
     exc = sv.exc(dm, xc_code='1.0*LDA,1.0*PZ', level=4)
-    self.assertAlmostEqual(exc, -4.14222392763)
+    self.assertAlmostEqual(exc, -4.1422238675357512)
 
 if __name__ == "__main__": unittest.main()

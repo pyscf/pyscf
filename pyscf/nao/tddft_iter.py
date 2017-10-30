@@ -27,7 +27,6 @@ class tddft_iter(scf):
   def __init__(self, **kw):
     """ Iterative TDDFT a la PK, DF, OC JCTC """
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
-    from pyscf.nao.m_comp_dm import comp_dm
 
     scf.__init__(self, **kw)
 
@@ -37,6 +36,8 @@ class tddft_iter(scf):
     self.xc_code = xc_code = kw['xc_code'] if 'xc_code' in kw else 'LDA,PZ'
     self.nfermi_tol = nfermi_tol = kw['nfermi_tol'] if 'nfermi_tol' in kw else 1e-5
     self.dtype = kw['dtype'] if 'dtype' in kw else np.float32
+    self.telec = kw['telec'] if 'telec' in kw else self.telec
+    self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
 
     self.spmv = spmv_wrapper
     if self.dtype == np.float32:
@@ -73,14 +74,14 @@ class tddft_iter(scf):
         assert self.nprod==self.kernel_dim, "%r %r "%(self.nprod, self.kernel_dim)
         
         if xc_code.upper()!='RPA' :
-          dm = comp_dm(self.wfsx.x, self.get_occupations())
-          self.comp_fxc_pack(dm=dm, kernel = self.kernel, **kw)
+          self.comp_fxc_pack(kernel=self.kernel, **kw)
 
     # probably unnecessary, require probably does a copy
     # problematic for the dtype, must there should be another option 
     #self.x  = np.require(sv.wfsx.x, dtype=self.dtype, requirements='CW')
 
-    self.ksn2e = np.require(self.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
+    self.ksn2e = np.require(np.zeros((1,self.nspin,self.norbs)), dtype=self.dtype, requirements='CW')
+    self.ksn2e[0,0,:] = self.mo_energy
     ksn2fd = fermi_dirac_occupations(self.telec, self.ksn2e, self.fermi_energy)
     self.ksn2f = (3-self.nspin)*ksn2fd
     self.nfermi = np.argmax(ksn2fd[0,0,:]<nfermi_tol)
@@ -89,7 +90,7 @@ class tddft_iter(scf):
     self.xocc = self.mo_coeff[0,0,0:self.nfermi,:,0]  # does python creates a copy at this point ?
     self.xvrt = self.mo_coeff[0,0,self.vstart:,:,0]   # does python creates a copy at this point ?
 
-    self.tddft_iter_gpu = tddft_iter_gpu_c(GPU, self.wfsx.x[0, 0, :, :, 0], self.ksn2f, self.ksn2e, 
+    self.tddft_iter_gpu = tddft_iter_gpu_c(GPU, self.mo_coeff[0, 0, :, :, 0], self.ksn2f, self.ksn2e, 
             self.norbs, self.nfermi, self.nprod, self.vstart)
 
   def load_kernel_method(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None, **kwargs):
@@ -227,7 +228,7 @@ class tddft_iter(scf):
     self.dn0 = np.zeros((comegas.shape[0], self.nprod), dtype=np.complex64)
 
     for iw, comega in enumerate(comegas):
-        self.dn0[iw, :] = -self.apply_rf0(vext[0, :], comega)
+        self.dn0[iw, :] = self.apply_rf0(vext[0, :], comega)
  
         pxx[iw] = np.dot(self.dn0[iw, :], vext[0,:])
     return pxx

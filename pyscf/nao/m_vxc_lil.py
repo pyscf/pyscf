@@ -4,7 +4,7 @@ from numpy import array, int64, zeros, float64
 #
 #
 #
-def vxc_lil(mf, **kw):
+def vxc_lil(self, **kw):
   """
     Computes the exchange-correlation matrix elements
     Args:
@@ -18,11 +18,11 @@ def vxc_lil(mf, **kw):
 
   #dm, xc_code, deriv, ao_log=None, dtype=float64, **kvargs
 
-  sv = mf
-  dm = kw['dm'] if 'dm' in kw else mf.comp_dm()
+  sv = self
+  dm = kw['dm'] if 'dm' in kw else self.make_rdm1()
   kernel = kw['kernel'] if 'kernel' in kw else None
-  ao_log = kw['ao_log'] if 'ao_log' in kw else mf.ao_log
-  (xc_code,iskw) = (kw['xc_code'],True) if 'xc_code' in kw else (mf.xc_code,False)
+  ao_log = kw['ao_log'] if 'ao_log' in kw else self.ao_log
+  (xc_code,iskw) = (kw['xc_code'],True) if 'xc_code' in kw else (self.xc_code,False)
   dtype = kw['dtype'] if 'dtype' in kw else float64
   
   aome = ao_matelem_c(sv.ao_log.rr, sv.ao_log.pp, sv, dm)

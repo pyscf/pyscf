@@ -11,7 +11,7 @@ except:
 #
 #
 #
-def vxc_pack(mf, **kw):
+def vxc_pack(self, **kw):
   """
     Computes the exchange-correlation matrix elements packed version (upper triangular)
     Args:
@@ -23,11 +23,11 @@ def vxc_pack(mf, **kw):
   from pyscf.nao.m_ao_matelem import ao_matelem_c
 
   #sv, dm, xc_code, deriv, kernel=None, ao_log=None, dtype=float64, **kvargs
-  sv = mf
-  dm = kw['dm'] if 'dm' in kw else mf.comp_dm()
+  sv = self
+  dm = kw['dm'] if 'dm' in kw else self.make_rdm1()
   kernel = kw['kernel'] if 'kernel' in kw else None
-  ao_log = kw['ao_log'] if 'ao_log' in kw else mf.ao_log
-  (xc_code,iskw) = (kw['xc_code'],True) if 'xc_code' in kw else (mf.xc_code,False)
+  ao_log = kw['ao_log'] if 'ao_log' in kw else self.ao_log
+  (xc_code,iskw) = (kw['xc_code'],True) if 'xc_code' in kw else (self.xc_code,False)
   dtype = kw['dtype'] if 'dtype' in kw else float64
 
   aome = ao_matelem_c(ao_log.rr, ao_log.pp, sv, dm)

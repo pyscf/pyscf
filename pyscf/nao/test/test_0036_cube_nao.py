@@ -44,7 +44,7 @@ class KnowValues(unittest.TestCase):
     
     sv = scf(label='water', cd=os.path.dirname(os.path.abspath(__file__)))
     cc = Cube(sv, nx=50, ny=50, nz=50)
-    dens = sv.dens_elec(cc.get_coords(), sv.comp_dm())
+    dens = sv.dens_elec(cc.get_coords(), sv.make_rdm1())
     dens = dens[:,0].reshape(cc.nx,cc.ny,cc.nz)
     cc.write(dens, "water.cube", comment='Valence electron density in real space (e/Bohr^3)')
 

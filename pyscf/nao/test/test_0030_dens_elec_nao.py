@@ -4,12 +4,13 @@ import os,unittest,numpy as np
 class KnowValues(unittest.TestCase):
 
   def test_dens_elec(self):
-    """ Compute density in coordinate space with system_vars_c, integrate and compare with number of electrons """
+    """ Compute density in coordinate space with scf, integrate and compare with number of electrons """
     from pyscf.nao import scf
     from timeit import default_timer as timer
     
     sv = scf(label='water', cd=os.path.dirname(os.path.abspath(__file__)))
-    dm = sv.comp_dm()
+    dm = sv.make_rdm1()
+    #dm = sv.comp_dm()
     #print(sv.get_occupations())
     #print(dir(sv.ao_log) )
     #print((sv.ao_log.psi_log[0][0]**2 *sv.ao_log.rr**3 * np.log(sv.ao_log.rr[1]/sv.ao_log.rr[0])).sum())

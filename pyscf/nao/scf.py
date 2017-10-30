@@ -29,15 +29,27 @@ class scf(nao):
 
   def init_mf(self, **kw):
     """ Constructor a self-consistent field calculation class """
+    from pyscf.nao import conv_yzx2xyz_c
     mf = self.mf = kw['mf']
-    self.mo_coeff = mf.mo_coeff
-    self.mo_energy = mf.mo_energy
-    self.mo_occ = mf.mo_occ
+    self.mo_coeff = np.require(np.zeros((1,self.nspin,self.norbs,self.norbs,1), dtype=self.dtype), requirements='CW')
+    conv = conv_yzx2xyz_c(kw['gto'])
+    self.mo_coeff[0,0,:,:,0] = conv.conv_yzx2xyz_1d(mf.mo_coeff, conv.m_xyz2m_yzx).T
+    
+    self.mo_energy = np.require(mf.mo_energy, dtype=self.dtype, requirements='CW')
+    self.mo_occ = np.require(np.zeros((1,self.nspin,self.norbs),dtype=self.dtype), requirements='CW')
+    self.mo_occ[0,0,:] = mf.mo_occ
+    np.require(mf.mo_occ, dtype=self.dtype, requirements='CW')
+    self.telec = kw['telec'] if 'telec' in kw else 0.0000317 # 10K
+    nelec = self.mo_occ.sum()
+    assert int(nelec) % 2 == 0
+    nocc = int(nelec/2)
+    fermi_energy = (self.mo_energy[nocc]+self.mo_energy[nocc-1])/2.0
+    self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else fermi_energy
 
   def init_mo_coeff_label(self, **kw):
     """ Constructor a self-consistent field calculation class """
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
-    self.mo_coeff = self.wfsx.x
+    self.mo_coeff = np.require(self.wfsx.x, dtype=self.dtype, requirements='CW')
     self.mo_energy = np.require(self.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
     self.telec = kw['telec'] if 'telec' in kw else self.hsx.telec
     self.nelec = kw['nelec'] if 'nelec' in kw else self.hsx.nelec
@@ -104,9 +116,19 @@ class scf(nao):
     from pyscf.nao.m_vxc_lil import vxc_lil
     return vxc_lil(self, deriv=1, **kw)
 
-  def comp_dm(self):  # Computes the density matrix
-    from pyscf.nao.m_comp_dm import comp_dm
-    return comp_dm(self.wfsx.x, self.get_occupations())
+  #def comp_dm(self):  # Computes the density matrix
+  #  from pyscf.nao.m_comp_dm import comp_dm
+  #  dm = comp_dm(self.wfsx.x, self.get_occupations())
+  #  return dm
+
+  def make_rdm1(self, mo_coeff=None, mo_occ=None):
+    # from pyscf.scf.hf import make_rdm1 -- different index order here
+    if mo_occ is None: mo_occ = self.mo_occ[0,0,:]
+    if mo_coeff is None: mo_coeff = self.mo_coeff[0,0,:,:,0]
+    mocc = mo_coeff[mo_occ>0,:]
+    dm = np.zeros((1,self.nspin,self.norbs,self.norbs,1))
+    dm[0,0,:,:,0] = np.dot(mocc.T.conj()*mo_occ[mo_occ>0], mocc)
+    return dm
 
   def dens_elec(self, coords, dm): # Compute electronic density for a given density matrix and on a given set of coordinates
     from pyscf.nao.m_dens_libnao import dens_libnao
@@ -127,7 +149,7 @@ class scf(nao):
     if hasattr(self, 'mol'):
       dm = init_guess_by_minao(self.mol)
     else:
-      dm = self.comp_dm()  # the loaded ks orbitals will be used
+      dm = self.make_rdm1()  # the loaded ks orbitals will be used
       if dm.shape[0:2]==(1,1) and dm.shape[4]==1 : dm = dm.reshape((self.norbs,self.norbs))
     return dm
 

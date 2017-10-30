@@ -43,7 +43,7 @@ class SCF(hf.SCF):
   def vnucele_coo(self, **kvargs): # Compute matrix elements of nuclear-electron interaction (attraction)
     if self.pseudo:
       tkin = (0.5*self.sv.laplace_coo()).tocsr()
-      dm = self.sv.comp_dm()
+      dm = self.sv.make_rdm1()
       vhar = self.vhartree_coo(dm=dm, **kvargs).tocsr()
       vxc  = self.sv.vxc_lil(dm=dm, **kvargs).tocsr()
       vne  = self.sv.get_hamiltonian()[0].tocsr()-tkin-vhar-vxc

@@ -18,7 +18,6 @@ def fermi_dirac(telec, e, fermi_energy):
 def fermi_dirac_occupations(telec, ksn2e, fermi_energy):
   """ Occupations according to the Fermi-Dirac distribution function. """
   assert telec>0.0
-  assert type(fermi_energy)==float
   
   ksn2f = np.copy(ksn2e)
   for e in np.nditer(ksn2f, op_flags=['readwrite']): e[...] = fermi_dirac(telec, e, fermi_energy)
