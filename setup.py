@@ -8,6 +8,8 @@ from setuptools import setup, find_packages, Extension
 #else:
 #    from setuptools.command.build_py import build_py
 from setuptools.command.install import install
+from setuptools.command.build_ext import build_ext
+
 try:
     import numpy
 except ImportError as e:
@@ -350,6 +352,16 @@ class PostInstallCommand(install):
             print("*** WARNING: DFT is not available.")
             print("****************************************************************")
 
+# Python ABI updates since 3.5
+# https://www.python.org/dev/peps/pep-3149/
+class BuildExtWithoutPlatformSuffix(build_ext):
+    def get_ext_filename(self, ext_name):
+        from distutils.sysconfig import get_config_var
+        ext_path = ext_name.split('.')
+        filename = build_ext.get_ext_filename(self, ext_name)
+        name, ext_suffix = os.path.splitext(filename)
+        return os.path.join(*ext_path) + ext_suffix
+
 setup(
     name=NAME,
     version=VERSION,
@@ -369,7 +381,8 @@ setup(
                                     '*future*', '*test*', '*examples*',
                                     '*setup.py']),
     ext_modules=extensions,
-    cmdclass={'install': PostInstallCommand},
+    cmdclass={'build_ext': BuildExtWithoutPlatformSuffix,
+              'install': PostInstallCommand},
     install_requires=['numpy', 'scipy', 'h5py'],
     setup_requires = ['numpy'],
 )
