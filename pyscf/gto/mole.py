@@ -763,6 +763,7 @@ def pack(mol):
             'cart'    : mol.cart,
             'nucmod'  : mol.nucmod,
             'ecp'     : mol.ecp,
+            '_nelectron': mol._nelectron,
             'verbose' : mol.verbose}
     if mol.symmetry and not isinstance(mol.symmetry, str):
         mdic['symmetry'] = mol.groupname
@@ -1530,8 +1531,11 @@ class Mole(lib.StreamObject):
 
         stdout : file object
             Default is sys.stdout if :attr:`Mole.output` is not set
+        topgroup : str
+            Point group of the system.
         groupname : str
-            One of D2h, C2h, C2v, D2, Cs, Ci, C2, C1
+            The supported subgroup of the point group. It can be one of Dooh,
+            Coov, D2h, C2h, C2v, D2, Cs, Ci, C2, C1
         nelectron : int
             sum of nuclear charges - :attr:`Mole.charge`
         symm_orb : a list of numpy.ndarray
