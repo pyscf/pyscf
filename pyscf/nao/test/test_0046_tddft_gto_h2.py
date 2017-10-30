@@ -1,8 +1,7 @@
 from __future__ import print_function, division
 import unittest, numpy as np
 from pyscf import gto, tddft, scf as scf_gto
-from pyscf.nao import nao
-from pyscf.nao import scf as scf_nao
+from pyscf.nao import tddft_iter
 
 mol = gto.M( verbose = 1,
     atom = '''
@@ -15,17 +14,16 @@ class KnowValues(unittest.TestCase):
     """ """
     gto_mf = scf_gto.RKS(mol)
     gto_mf.kernel()
-    print(dir(gto_mf))
-    print(gto_mf.xc)
-    print(gto_mf.pop())
+    #print(dir(gto_mf))
+    #print(gto_mf.xc)
+    #print(gto_mf.pop())
 
     gto_td = tddft.TDDFT(gto_mf)
     gto_td.nstates = 9
     gto_td.kernel()
-    print('Excitation energy (eV)', gto_td.e * 27.2114)
+    #print('Excitation energy (eV)', gto_td.e * 27.2114)
 
-    #nao_mol = nao(gto=mol, verbose=0)
-    nao_mf  = scf_nao(mf=gto_mf, gto=mol)
+    #nao_td  = tddft_iter(mf=gto_mf, gto=mol)
     
 
 if __name__ == "__main__":

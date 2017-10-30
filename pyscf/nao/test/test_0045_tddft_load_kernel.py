@@ -55,7 +55,6 @@ class KnowValues(unittest.TestCase):
       pxx = td.comp_nonin(omegas).imag
       self.assertTrue(np.allclose(data_ref_nonin, pxx, rtol=1.0, atol=1e-05))
 
-      print('inter')
       # check inter
       omegas = np.linspace(0.0,2.0,150)+1j*td.eps
       pxx = -td.comp_polariz_xx(omegas).imag

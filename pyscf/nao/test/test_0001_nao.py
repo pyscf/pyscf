@@ -57,6 +57,6 @@ class KnowValues(unittest.TestCase):
     self.assertAlmostEqual(e_nao, e_gto)
 
 if __name__ == "__main__":
-  print("Tests for system_vars_c")
+  print("Tests for the object NAO")
   unittest.main()
 

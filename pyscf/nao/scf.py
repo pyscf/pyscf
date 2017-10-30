@@ -10,7 +10,7 @@ class scf(nao):
   def __init__(self, **kw):
     """ Constructor a self-consistent field calculation class """
     nao.__init__(self, **kw)
-    self.dtype = kw['dtype'] if 'dtype' in kw else 'single'
+    self.dtype = kw['dtype'] if 'dtype' in kw else np.float32
     if 'mf' in kw:
       self.init_mf(**kw)
     elif 'label' in kw:

@@ -67,7 +67,7 @@ class tddft_iter(scf):
     self.nprod = self.moms0.size
 
     if load_kernel:
-        self.load_kernel(**kw)
+        self.load_kernel_method(**kw)
     else:
         self.kernel,self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype) # Lower Triangular Part of the kernel
         assert self.nprod==self.kernel_dim, "%r %r "%(self.nprod, self.kernel_dim)
@@ -92,7 +92,7 @@ class tddft_iter(scf):
     self.tddft_iter_gpu = tddft_iter_gpu_c(GPU, self.wfsx.x[0, 0, :, :, 0], self.ksn2f, self.ksn2e, 
             self.norbs, self.nfermi, self.nprod, self.vstart)
 
-  def load_kernel(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None, **kwargs):
+  def load_kernel_method(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None, **kwargs):
 
       if kernel_format == "npy":
           self.kernel = self.dtype(np.load(kernel_fname))

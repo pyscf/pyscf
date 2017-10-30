@@ -47,21 +47,24 @@ def overlap_check(sv, tol=1e-5, **kvargs):
 class nao():
 
   def __init__(self, **kw):
-    """ 
-      Constructor of NAO class
-    """
+    """  Constructor of NAO class """
     if 'gto' in kw:
       self.init_gto(**kw)
+      self.init_libnao_orbs()
     elif 'xyz_list' in kw:
       self.init_xyz_list(**kw)
     elif 'label' in kw:
       self.init_label(**kw)
+      self.init_libnao_orbs()
     elif 'gpaw' in kw:
       self.init_gpaw(**kw)
+      self.init_libnao_orbs()
     elif 'openmx' in kw:
       self.init_openmx(**kw)
+      #self.init_libnao_orbs()
     else:
       raise RuntimeError('unknown init method')
+    
     #print(kw)
     #print(dir(kw))
 
@@ -236,7 +239,6 @@ class nao():
     
     self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
     self.sp2charge = self.ao_log.sp2charge
-    self.init_libnao()
     self.state = 'should be useful for something'
 
     # Trying to be similar to mole object from pySCF 
@@ -375,7 +377,7 @@ class nao():
   def comp_aos_den(self, coords):
     """ Compute the atomic orbitals for a given set of (Cartesian) coordinates. """
     from pyscf.nao.m_aos_libnao import aos_libnao
-    if not self.init_sv_libnao : raise RuntimeError('not self.init_sv_libnao')
+    if not self.init_sv_libnao_orbs : raise RuntimeError('not self.init_sv_libnao')
     return aos_libnao(coords, self.norbs)
 
   def comp_vnuc_coulomb(self, coords):
@@ -386,19 +388,34 @@ class nao():
       dd, Z = cdist(R.reshape((1,3)), coords).reshape(ncoo), self.sp2charge[sp]
       vnuc = vnuc - Z / dd 
     return vnuc
-    
-  def init_libnao(self):
+
+  def init_libnao_orbs(self):
     """ Initialization of data on libnao site """
     from pyscf.nao.m_libnao import libnao
+    from pyscf.nao.m_sv_chain_data import sv_chain_data
     from ctypes import POINTER, c_double, c_int64, c_int32, byref
+    data = sv_chain_data(self)
+    size_x = np.array([1,self.nspin,self.norbs,self.norbs,1], dtype=np.int32)
+    libnao.init_sv_libnao_orbs.argtypes = (POINTER(c_double), POINTER(c_int64), POINTER(c_int32))
+    libnao.init_sv_libnao_orbs(data.ctypes.data_as(POINTER(c_double)), c_int64(len(data)), size_x.ctypes.data_as(POINTER(c_int32)))
+    self.init_sv_libnao_orbs = True
 
     libnao.init_aos_libnao.argtypes = (POINTER(c_int64), POINTER(c_int64))
     info = c_int64(-999)
-    #libnao.init_aos_libnao(c_int64(self.norbs), byref(info))
-    #if info.value!=0: raise RuntimeError("info!=0")
-    #raise RuntimeWarning('not implemented!')
+    libnao.init_aos_libnao(c_int64(self.norbs), byref(info))
+    if info.value!=0: raise RuntimeError("info!=0")
     return self
-  
+
+  def get_init_guess(self, key=None):
+    """ Compute an initial guess for the density matrix. ???? """
+    from pyscf.scf.hf import init_guess_by_minao
+    if hasattr(self, 'mol'):
+      dm = init_guess_by_minao(self.mol)
+    else:
+      dm = self.comp_dm()  # the loaded ks orbitals will be used
+      if dm.shape[0:2]==(1,1) and dm.shape[4]==1 : dm = dm.reshape((self.norbs,self.norbs))
+    return dm
+
   @property
   def nelectron(self):
     if self._nelectron is None:
