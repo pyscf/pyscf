@@ -681,6 +681,16 @@ class DMRGCI(pyscf.lib.StreamObject):
                 self._restart = False
         return callback
 
+    def spin_square(self, civec, norb, nelec):
+        if isinstance(nelec, (int, numpy.integer)):
+            nelecb = nelec//2
+            neleca = nelec - nelecb
+        else :
+            neleca, nelecb = nelec
+        s = (neleca - nelecb) * .5
+        ss = s * (s+1)
+        return ss, s*2+1
+
 
 def make_schedule(sweeps, Ms, tols, noises, twodot_to_onedot):
     if len(sweeps) == len(Ms) == len(tols) == len(noises):
@@ -823,6 +833,7 @@ def executeBLOCK(DMRGCI):
         check_call(cmd, cwd=DMRGCI.runtimeDir, shell=True)
     except CalledProcessError as err:
         logger.error(DMRGCI, cmd)
+        outFile = os.path.join(DMRGCI.runtimeDir, outFile)
         DMRGCI.stdout.write(check_output(['tail', '-100', outFile]))
         raise err
 
