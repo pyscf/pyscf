@@ -7,16 +7,7 @@ Tutorial
 Quick setup
 ===========
 
-You can install PySCF from `Conda <https://conda.io/docs/>`_ cloud::
-
-  $ conda install -c pyscf pyscf
-
-or PyPI::
- 
-  $ pip install numpy scipy h5py
-  $ pip install pyscf
-
-or github repo::
+You can install PySCF from github repo::
 
   $ sudo apt-get install python-h5py python-scipy cmake
   $ git clone https://github.com/sunqm/pyscf
@@ -142,7 +133,8 @@ You can assign more informations to the molecular object::
   mol.mass = {'O1': 18, 'H': 2} 
 
 .. note::
-  :attr:`Mole.spin` is *2S*, the alpha and beta electron number difference.
+  :attr:`Mole.spin` is *2S*, the unpaired electrons = the difference between the
+  numbers of alpha and beta electrons.
 
 :class:`Mole` also defines some global parameters.  You can control the
 print level globally with :attr:`~Mole.verbose`::

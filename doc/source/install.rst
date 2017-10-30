@@ -298,7 +298,7 @@ future/fciqmc/settings.py to store the path where NECI was installed.
 Libxc
 -----
 By default, building PySCF will automatically download and install
-`Libxc 2.2.2 <http://www.tddft.org/programs/octopus/wiki/index.php/Libxc:download>`_.
+`Libxc 3.0.0 <http://www.tddft.org/programs/octopus/wiki/index.php/Libxc:download>`_.
 :mod:`pyscf.dft.libxc` module provided a general interface to access Libxc functionals.
 
 Xcfun

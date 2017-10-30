@@ -89,6 +89,15 @@ will convert :attr:`Mole.atom` to the internal format::
   >>> print(mol.atom)
   [['O', [0.0, 0.0, 0.0]], ['H', [0.0, 1.0, 0.0]], ['H@2', [0.0, 0.0, 1.0]]]
 
+In the program, the molecular geometry is accessed with :meth:`Mole.atom_coords`
+function.  This function returns a (N,3) array for the coordinates (in Bohr) of
+each atom::
+
+  >>> print(mol.atom_coords())
+  [[ 0.          0.          0.        ]
+   [ 0.          1.88972612  0.        ]
+   [ 0.          0.          1.88972612]]
+
 
 .. _input_basis:
 
@@ -161,6 +170,150 @@ make the input parser ignore the command line arguments, you can call the
 
 The first 0 prevent :func:`~Mole.build` dumping the input file.  The
 second 0 prevent :func:`~Mole.build` parsing command line.
+
+
+Spin and charge
+---------------
+
+Charge and spin multiplicity can be assigned to :class:`Mole` object::
+
+  mol.charge = 1
+  mol.spin = 1
+
+Note :attr:`Mole.spin` is the number of unpaired electrons (difference between
+the numbers of alpha electrons and beta electrons).  These two attributes do not
+affect any other parameters in the :attr:`Mole.build` initialization function.
+They can be set or modified (although not recommended to do so) after the
+molecular object is initialized::
+
+  >>> mol = gto.Mole()
+  >>> mol.atom = 'O 0 0 0; h 0 1 0; h 0 0 1'
+  >>> mol.basis = 'sto-6g'
+  >>> mol.spin = 2
+  >>> mol.build()
+  >>> print(mol.nelec)
+  (6, 4)
+  >>> mol.spin = 0
+  >>> print(mol.nelec)
+  (5, 5)
+
+:attr:`Mole.charge` is the parameter to define the total number electrons of the
+system.  In a custom system such as the Hubbard lattice model, the total number
+of electrons needs to be defined directly::
+
+  >>> mol = gto.Mole()
+  >>> mol.nelectron = 10
+
+Symmetry
+--------
+
+Point group symmetry information is held in :class:`Mole` object.  The symmetry
+module (:ref:`symm`) of PySCF program can detect arbitrary point groups. In the
+SCF calculations, PySCF program supports linear molecular symmetry
+:math:`D_{\infty h}` (labelled as Dooh in the program), :math:`C_{\infty v}`
+(labelled as Coov) plus :math:`D_{2h}` and its subgroups.
+
+If the attribute :attr:`Mole.symmetry` is set, :meth:`Mole.build` function will
+detect the top point group and the supported subgroups.  The detected point
+groups are saved in :attr:`Mole.topgroup` and :attr:`Mole.groupname`::
+
+  >>> mol = gto.Mole()
+  >>> mol.atom = 'B 0 0 0; H 0 1 1; H 1 0 1; H 1 1 0'
+  >>> mol.symmetry = True
+  >>> mol.build()
+  >>> print(mol.topgroup)
+  C3v
+  >>> print(mol.groupname)
+  Cs
+
+Also, during the :class:`Mole` object initialization, the program will move the
+charge center of the system to the origin (0,0,0) and place the main rotation
+axis on z-axis (if available, see :ref:`symm` for more details about how the
+main axis is determined).  In the last example, the molecule is rotated to::
+
+  >>> print(mol.atom_charges())
+  [[  0.00000000e+00  -8.18275415e-01   0.00000000e+00]
+   [ -7.71477460e-01   1.36379236e+00  -1.33623816e+00]
+   [ -7.71477460e-01   1.36379236e+00   1.33623816e+00]
+   [  1.54295492e+00   1.36379236e+00  -2.22044605e-16]]
+
+Sometimes it is necessary to use a lower symmetry instead of the detected
+symmetry group.  The subgroup symmetry can be specified in
+:attr:`Mole.symmetry_subgroup` and the program will first detect the highest
+possible symmetry group and lower the point group symmetry to the specified
+subgroup::
+
+  >>> mol = gto.Mole()
+  >>> mol.atom = 'N 0 0 0; N 0 0 1'
+  >>> mol.symmetry = True
+  >>> mol.symmetry_subgroup = C2
+  >>> mol.build()
+  >>> print(mol.topgroup)
+  Dooh
+  >>> print(mol.groupname)
+  C2
+
+In many situations, you may requite the program to use the point group symmetry
+in different orientation.  This can be achieved by explicit specification of the
+symmetry elements::
+
+  >>> mol = gto.Mole()
+  >>> mol.atom = 'N 0 0 0; N 0 0 1'
+  >>> mol.symmetry = 'coov'
+  >>> mol.build()
+  >>> print(mol.topgroup)
+  coov
+  >>> print(mol.groupname)
+  coov
+  >>> print(mol.atom_coords())
+  [[ 0.          0.          0.        ]
+   [ 0.          0.          1.88972612]]
+
+When a particular symmetry was assigned to :attr:`Mole.symmetry`. The program
+will use the given symmetry group for the system and use the input orientation.
+The initialization function :meth:`Mole.build` will test whether the input
+symmetry matches the input orientation.  If the given symmetry group does not
+agree to the actual input symmetry, the initialization will stop and issue an
+error message::
+
+  >>> mol = gto.Mole()
+  >>> mol.atom = 'N 0 0 0; N 0 0 1'
+  >>> mol.symmetry = 'Dooh'
+  >>> mol.build()
+  RuntimeWarning: Unable to identify input symmetry Dooh.
+  Try symmetry="Dooh" with geometry (unit="Bohr")
+  ('N', [0.0, 0.0, -0.9448630622825309])
+  ('N', [0.0, 0.0, 0.9448630622825309])
+
+Note if Z-matrix is given in the input, the molecule may be placed in an
+arbitrary orientation.  Although still works, specifying :attr:`Mole.symmetry`
+often issue the above error message.
+
+.. note::
+  :attr:`Mole.symmetry_subgroup` does not have effects
+  when specific symmetry group is assigned to :attr:`Mole.symmetry`.
+
+When symmetry is enabled in the :class:`Mole` object, the point group symmetry
+information will be used to construct the symmetry adapted orbital basis (see
+also :ref:`symm`).  The symmetry adapted orbitals are held in
+:attr:`Mole.symm_orb` as a list of 2D arrays.  Each element of the list
+is an AO (atomic orbital) to SO (symmetry-adapted orbital) transformation matrix
+for an irreducible representation.  The name of the irreducible representations
+are stored in :attr:`Mole.irrep_name` and their internal IDs (see more details
+in :ref:`symm`) are stored in :attr:`Mole.irrep_id`::
+
+  >>> mol = gto.Mole()
+  >>> mol.atom = 'N 0 0 0; N 0 0 1'
+  >>> mol.symmetry = True
+  >>> mol.build()
+  >>> for s,i,c in zip(mol.irrep_name, mol.irrep_id, mol.symm_orb):
+  ...     print(s, i, c.shape)
+  A1g 0 (10, 3)
+  E1gx 2 (10, 1)
+  E1gy 3 (10, 1)
+  A1u 5 (10, 3)
+  E1uy 6 (10, 1)
+  E1ux 7 (10, 1)
 
  
 Program reference
