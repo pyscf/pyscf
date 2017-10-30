@@ -57,12 +57,10 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
             large_ci_tol=.1, **kwargs):
     from pyscf.lo import orth
     from pyscf.tools import dump_mat
+    log = logger.new_logger(casscf, verbose)
+
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
     if ci is None: ci = casscf.ci
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(casscf.stdout, verbose)
     nelecas = casscf.nelecas
     ncas = casscf.ncas
     ncore = casscf.ncore
@@ -91,7 +89,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
         dm1a = dm1b + reduce(numpy.dot, (mocas, casdm1a, mocas.T))
         dm1b += reduce(numpy.dot, (mocas, casdm1b, mocas.T))
         dm1 = dm1a + dm1b
-        if log.verbose >= logger.DEBUG1:
+        if log.verbose >= logger.DEBUG2:
             log.info('alpha density matrix (on AO)')
             dump_mat.dump_tri(log.stdout, dm1a, label, **kwargs)
             log.info('beta density matrix (on AO)')
@@ -117,6 +115,13 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
         mo_cas = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff[:,ncore:nocc], ucas))
         log.info('Natural orbital (expansion on meta-Lowdin AOs) in CAS space')
         dump_mat.dump_rec(log.stdout, mo_cas, label, start=1, **kwargs)
+        if log.verbose >= logger.DEBUG2:
+            if not casscf.natorb:
+                log.debug2('NOTE: mc.mo_coeff in active space is different to '
+                           'the natural orbital coefficients printed in above.')
+            log.debug2(' ** CASCI/CASSCF orbital coefficients (expansion on meta-Lowdin AOs) **')
+            c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
+            dump_mat.dump_rec(log.stdout, c, label, start=1, **kwargs)
 
         if casscf._scf.mo_coeff is not None:
             s = reduce(numpy.dot, (casscf.mo_coeff.T, ovlp_ao, casscf._scf.mo_coeff))
@@ -295,10 +300,10 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         A tuple, (natural orbitals, CI coefficients, orbital energies)
         The orbital energies are the diagonal terms of general Fock matrix.
     '''
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mc.stdout, mc.verbose)
+    from pyscf.lo import orth
+    from pyscf.tools import dump_mat
+    log = logger.new_logger(mc, verbose)
+
     if mo_coeff is None: mo_coeff = mc.mo_coeff
     if ci is None: ci = mc.ci
     if casdm1 is None:
@@ -642,7 +647,7 @@ class CASCI(lib.StreamObject):
         return self.mo_coeff, ci, self.mo_energy
 
     @lib.with_doc(analyze.__doc__)
-    def analyze(self, mo_coeff=None, ci=None, verbose=logger.INFO):
+    def analyze(self, mo_coeff=None, ci=None, verbose=None):
         return analyze(self, mo_coeff, ci, verbose)
 
     def sort_mo(self, caslst, mo_coeff=None, base=1):
