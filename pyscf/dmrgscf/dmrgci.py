@@ -681,15 +681,18 @@ class DMRGCI(pyscf.lib.StreamObject):
                 self._restart = False
         return callback
 
-    def spin_square(self, civec, norb, nelec):
-        if isinstance(nelec, (int, numpy.integer)):
-            nelecb = nelec//2
-            neleca = nelec - nelecb
-        else :
-            neleca, nelecb = nelec
-        s = (neleca - nelecb) * .5
-        ss = s * (s+1)
-        return ss, s*2+1
+# Block code also allows non-spin-adapted calculation. S^2 is not available in
+# this type of calculation
+    if 0 and 'spin_adapted' in settings.BLOCKEXE:
+        def spin_square(self, civec, norb, nelec):
+            if isinstance(nelec, (int, numpy.integer)):
+                nelecb = nelec//2
+                neleca = nelec - nelecb
+            else :
+                neleca, nelecb = nelec
+            s = (neleca - nelecb) * .5
+            ss = s * (s+1)
+            return ss, s*2+1
 
 
 def make_schedule(sweeps, Ms, tols, noises, twodot_to_onedot):
