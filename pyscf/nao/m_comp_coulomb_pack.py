@@ -30,7 +30,6 @@ def comp_coulomb_pack(sv, ao_log=None, funct=coulomb_am, dtype=np.float64, **kva
   norbs = atom2s[-1]
 
   res = np.zeros(norbs*(norbs+1)//2, dtype=dtype)
-  use_numba = True 
 
   for atom1,[sp1,rv1,s1,f1] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
     #print("atom1 = {0}, rv1 = {1}".format(atom1, rv1))

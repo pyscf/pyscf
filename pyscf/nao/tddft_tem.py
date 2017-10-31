@@ -155,7 +155,6 @@ class tddft_tem(scf):
                 impact parameter = {10:.9f} > 1e-6
                 """.format(atm, *self.velec, *self.beam_offset, 
                         *atom2coord[atm, :], np.sqrt(np.dot(vec, self.vdir)))
-            
                 raise ValueError(mess)
 
     def get_time_range(self):
@@ -197,25 +196,16 @@ class tddft_tem(scf):
         from ctypes import POINTER, c_double, c_int, c_int64, c_float, c_int
         from pyscf.nao.m_ao_matelem import ao_matelem_c
 
-        V_freq_real = np.zeros((self.nprod, self.freq.size), dtype=np.float32)
-        V_freq_imag = np.zeros((self.nprod, self.freq.size), dtype=np.float32)
+        V_freq = np.zeros((self.nprod, self.freq.size), dtype=np.complex64)
 
         aome = ao_matelem_c(self.ao_log.rr, self.ao_log.pp)
         nc = self.pb.npairs # sv.natm # ???
         nfmx = 2*self.ao_log.jmx + 1 # ???
         jcut_lmult = nfmx # ???
 
-#      libnao.calculate_potential_pb_test(sv.ao_log.rr.ctypes.data_as(POINTER(c_double)),
-#              c_int(sv.ao_log.rr.size))
-        libnao.calculate_potential_pb(self.ao_log.rr.ctypes.data_as(POINTER(c_double)), 
-              self.time.ctypes.data_as(POINTER(c_double)), self.freq.ctypes.data_as(POINTER(c_double)), 
-              self.freq_symm.ctypes.data_as(POINTER(c_double)), self.velec.ctypes.data_as(POINTER(c_double)), 
-              self.beam_offset.ctypes.data_as(POINTER(c_double)), 
-              V_freq_real.ctypes.data_as(POINTER(c_double)), V_freq_imag.ctypes.data_as(POINTER(c_double)), 
-              c_int(nfmx), c_int(self.ao_log.jmx), c_int(jcut_lmult), 
-              c_int(self.ao_log.rr.size), c_int(self.time.size), 
-              c_int(self.freq.size), c_int(self.nprod), c_int(nc))
-
+        for atm, sp in enumerate(self.atom2sp):
+            rcut = self.ao_log.sp2rcut[sp]
+            print(atm, sp, rcut)
         raise ValueError("Euh!!! check how to get nc, nfmx, jcut_lmult!!!")
 
     def load_kernel_method(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None, **kwargs):
