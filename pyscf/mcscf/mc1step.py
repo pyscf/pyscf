@@ -625,6 +625,7 @@ class CASSCF(casci.CASCI):
         log.info('with_dep4 %d', self.with_dep4)
         log.info('natorb = %s', self.natorb)
         log.info('canonicalization = %s', self.canonicalization)
+        log.info('sorting_mo_energy = %s', self.sorting_mo_energy)
         log.info('chkfile = %s', self.chkfile)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])

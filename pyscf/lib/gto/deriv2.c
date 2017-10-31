@@ -3,6 +3,7 @@
  */
 
 #include <math.h>
+#include <complex.h>
 #include "gto/grid_ao_drv.h"
 #include "vhf/fblas.h"
 

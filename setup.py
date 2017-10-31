@@ -8,6 +8,8 @@ from setuptools import setup, find_packages, Extension
 #else:
 #    from setuptools.command.build_py import build_py
 from setuptools.command.install import install
+from setuptools.command.build_ext import build_ext
+
 try:
     import numpy
 except ImportError as e:
@@ -66,6 +68,25 @@ if (sys.platform.startswith('linux') or
 elif sys.platform.startswith('darwin'):
     so_ext = '.dylib'
     LD_LIBRARY_PATH = 'DYLD_LIBRARY_PATH'
+    from distutils import sysconfig
+    conf_vars = sysconfig.get_config_vars()
+# setuptools/pip install by default generate "bundled" library.  Bundled
+# library cannot be linked at compile time
+# https://stackoverflow.com/questions/24519863/what-are-the-g-flags-to-build-a-true-so-mh-bundle-shared-library-on-mac-osx
+# configs LDSHARED and CCSHARED and SO are hard coded in lib/pythonX.X/_sysconfigdata.py
+# In some Python version, steuptools may correct these configs for OS X on the
+# fly by _customize_compiler_for_shlib function or setup_shlib_compiler function
+# in lib/pythonX.X/site-packages/setuptools/command/build_ext.py.
+# The hacks as below are to ensure that the OS X compiler does not generate
+# bundle libraries.  Relevant code:
+#    lib/pythonX.X/_sysconfigdata.py
+#    lib/pythonX.X/distutils/command/build_ext.py
+#    lib/pythonX.X/distutils/sysconfig.py,  get_config_vars()
+#    lib/pythonX.X/distutils/ccompiler.py,  link_shared_object()
+#    lib/pythonX.X/distutils/unixcompiler.py,  link()
+    conf_vars['LDSHARED'] = conf_vars['LDSHARED'].replace('-bundle', '-dynamiclib')
+    conf_vars['CCSHARED'] = " -dynamiclib"
+    conf_vars['SO'] = '.dylib'
 elif sys.platform.startswith('win'):
     so_ext = '.dll'
 else:
@@ -350,6 +371,16 @@ class PostInstallCommand(install):
             print("*** WARNING: DFT is not available.")
             print("****************************************************************")
 
+# Python ABI updates since 3.5
+# https://www.python.org/dev/peps/pep-3149/
+class BuildExtWithoutPlatformSuffix(build_ext):
+    def get_ext_filename(self, ext_name):
+        from distutils.sysconfig import get_config_var
+        ext_path = ext_name.split('.')
+        filename = build_ext.get_ext_filename(self, ext_name)
+        name, ext_suffix = os.path.splitext(filename)
+        return os.path.join(*ext_path) + ext_suffix
+
 setup(
     name=NAME,
     version=VERSION,
@@ -369,7 +400,8 @@ setup(
                                     '*future*', '*test*', '*examples*',
                                     '*setup.py']),
     ext_modules=extensions,
-    cmdclass={'install': PostInstallCommand},
+    cmdclass={'build_ext': BuildExtWithoutPlatformSuffix,
+              'install': PostInstallCommand},
     install_requires=['numpy', 'scipy', 'h5py'],
     setup_requires = ['numpy'],
 )
