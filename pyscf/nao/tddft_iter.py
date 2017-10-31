@@ -190,8 +190,8 @@ class tddft_iter(scf):
             self.dn (complex 2D array): computed density change in prod basis
         
     """
-    polariz = np.zeros_like(comegas, dtype=np.complex64)
-    self.dn = np.zeros((comegas.shape[0], self.nprod), dtype=np.complex64)
+    polariz = np.zeros_like(comegas, dtype=self.dtypeComplex)
+    self.dn = np.zeros((comegas.shape[0], self.nprod), dtype=self.dtypeComplex)
     
     for iw,comega in enumerate(comegas):
         if x0 == True:
@@ -208,7 +208,7 @@ class tddft_iter(scf):
 
     return polariz
 
-  def comp_nonin(self, comegas):
+  def comp_polariz_nonin_xx(self, comegas):
     """ 
         Compute non-interacting polarizability
 
@@ -227,11 +227,31 @@ class tddft_iter(scf):
     """
 
     vext = np.transpose(self.moms1)
-    pxx = np.zeros(comegas.shape, dtype=np.complex64)
-    self.dn0 = np.zeros((comegas.shape[0], self.nprod), dtype=np.complex64)
+    pxx = np.zeros(comegas.shape, dtype=self.dtypeComplex)
+    self.dn0 = np.zeros((comegas.shape[0], self.nprod), dtype=self.dtypeComplex)
 
     for iw, comega in enumerate(comegas):
-        self.dn0[iw, :] = self.apply_rf0(vext[0, :], comega)
- 
-        pxx[iw] = np.dot(self.dn0[iw, :], vext[0,:])
+      self.dn0[iw, :] = self.apply_rf0(vext[0, :], comega)
+      pxx[iw] = np.dot(self.dn0[iw, :], vext[0,:])
     return pxx
+
+  def comp_nonin_polariz_ave(self, comegas):
+    """ Non-interacting average polarizability """
+    vext = np.transpose(self.moms1)
+    p = np.zeros(comegas.shape, dtype=self.dtypeComplex)
+    for ixyz in range(3):
+      for iw, comega in enumerate(comegas):
+        dn0 = self.apply_rf0(vext[ixyz], comega)
+        p[iw] += np.dot(dn0, vext[ixyz])/3.0
+    return p
+
+  def comp_polariz_ave(self, comegas):
+    """ Compute a direction-averaged interacting polarizability  """
+    p = np.zeros_like(comegas, dtype=self.dtypeComplex)
+    vext = np.transpose(self.moms1)
+    for xyz in range(3):
+      for iw,comega in enumerate(comegas):
+        veff,info = self.comp_veff(vext[xyz], comega)
+        dn = self.apply_rf0(veff, comega)
+        p[iw] += np.dot(vext[xyz], dn)/3.0
+    return p
