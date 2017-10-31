@@ -1,6 +1,6 @@
 from __future__ import print_function, division
 import unittest, numpy as np
-from pyscf import gto, tddft, scf as scf_gto
+from pyscf import gto, tddft, scf
 from pyscf.nao import tddft_iter
 from pyscf.nao import polariz_inter_ave, polariz_nonin_ave
 
@@ -9,7 +9,7 @@ mol = gto.M( verbose = 1,
         H     0    0        0
         H     0.17    0.7    0.587''', basis = 'cc-pvdz',)
 
-gto_mf = scf_gto.RKS(mol)
+gto_mf = scf.RKS(mol)
 gto_mf.kernel()
 gto_td = tddft.TDDFT(gto_mf)
 gto_td.nstates = 9
