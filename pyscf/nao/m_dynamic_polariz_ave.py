@@ -12,7 +12,7 @@ def polariz_inter_ave(mf, gto, tddft, comega):
   orbv,orbo = mo_coeff[:,viridx], mo_coeff[:,occidx]
   vo_dip = np.einsum('cmb,bn->cmn', np.einsum('am,cab->cmb', orbv, ao_dip), orbo)
   vo_dip = vo_dip.reshape((3,int(vo_dip.size/3)))
-  p = np.zeros((comega.size), dtype=np.complex128)
+  p = np.zeros((len(comega)), dtype=np.complex128)
   for (x,y),e in zip(tddft.xy, tddft.e):
     dip = np.dot(vo_dip, np.sqrt(2.0)*(x+y)) # Normalization ?
     osc_strength = (2.0/3.0)*(dip*dip).sum()
@@ -30,7 +30,7 @@ def polariz_nonin_ave(mf, gto, comega):
   orbv,orbo = mo_coeff[:,viridx], mo_coeff[:,occidx]
   vo_dip = np.einsum('cmb,bn->cmn', np.einsum('am,cab->cmb', orbv, ao_dip), orbo)
   vo_dip = vo_dip.reshape((3,int(vo_dip.size/3)))
-  p = np.zeros((comega.size), dtype=np.complex128)
+  p = np.zeros((len(comega)), dtype=np.complex128)
   eai = lib.direct_sum('a-i->ai', mo_energy[viridx], mo_energy[occidx])
   for dip,e in zip(vo_dip.T,eai):
     osc_strength = (2.0/3.0)*(dip*dip).sum()

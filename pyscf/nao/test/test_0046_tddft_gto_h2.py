@@ -12,7 +12,7 @@ mol = gto.M( verbose = 1,
 gto_mf = scf_gto.RKS(mol)
 gto_mf.kernel()
 gto_td = tddft.TDDFT(gto_mf)
-gto_td.nstates = 90
+gto_td.nstates = 9
 gto_td.kernel()
 
 nao_td  = tddft_iter(mf=gto_mf, gto=mol)
