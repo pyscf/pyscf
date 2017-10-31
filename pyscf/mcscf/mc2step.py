@@ -119,7 +119,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
                                     casscf.natorb, casdm1, log)
         if casscf.natorb: # dump_chk may save casdm1
             nocc = casscf.ncore + casscf.ncas
-            occ, ucas = casscf._eig(-casdm1, casscf.ncore, nocc)[0]
+            occ, ucas = casscf._eig(-casdm1, casscf.ncore, nocc)
             casdm1 = numpy.diag(-occ)
 
     if dump_chk:
