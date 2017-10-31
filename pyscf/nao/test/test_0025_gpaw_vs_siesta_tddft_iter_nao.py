@@ -99,8 +99,8 @@ class KnowValues(unittest.TestCase):
 
     import ase.units as un
     for key, val in pxx.items():
-        freq_shift = abs(omegas[np.argmax(val["siesta"])] - omegas[np.argmax(val["gpaw"])])
-        self.assertLess(freq_shift*un.Ha, 5.0)
+      freq_shift = abs(omegas[np.argmax(val["siesta"])] - omegas[np.argmax(val["gpaw"])])
+      self.assertLess(freq_shift*un.Ha, 5.0)
 
 
 if __name__ == "__main__": unittest.main()

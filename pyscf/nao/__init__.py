@@ -24,3 +24,4 @@ from .scf import scf
 from .tddft_iter import tddft_iter
 from .tddft_tem import tddft_tem
 from .bse_iter import bse_iter
+from .m_dynamic_polariz_ave import polariz_inter_ave, polariz_nonin_ave
