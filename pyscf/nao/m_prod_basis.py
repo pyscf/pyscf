@@ -158,6 +158,7 @@ class prod_basis_c():
     self.dpc2s,self.dpc2t,self.dpc2sp = self.init_c2s_domiprod() # dominant product's counting
     self.npdp = self.dpc2s[-1]
     self.norbs = self.sv.norbs
+    self.npairs = npairs
     #t2 = timer(); print('after init_c2s_domiprod ', t2-t1); t1=timer()
 
     return self
