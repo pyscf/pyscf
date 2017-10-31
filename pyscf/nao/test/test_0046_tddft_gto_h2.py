@@ -2,78 +2,83 @@ from __future__ import print_function, division
 import unittest, numpy as np
 from pyscf import gto, tddft, scf as scf_gto
 from pyscf.nao import tddft_iter
+from pyscf import lib
+
+def comp_polariz_ave(mf, gto, tddft, comega):
+  gto.set_common_orig((0.0,0.0,0.0))
+  ao_dip = gto.intor_symmetric('int1e_r', comp=3)
+  occidx = np.where(mf.mo_occ==2)[0]
+  viridx = np.where(mf.mo_occ==0)[0]
+  mo_coeff = mf.mo_coeff
+  mo_energy = mf.mo_energy
+  orbv,orbo = mo_coeff[:,viridx], mo_coeff[:,occidx]
+  vo_dip = np.einsum('cmb,bn->cmn', np.einsum('am,cab->cmb', orbv, ao_dip), orbo)
+  vo_dip = vo_dip.reshape((3,int(vo_dip.size/3)))
+  p = np.zeros((comega.size), dtype=np.complex128)
+  for (x,y),e in zip(tddft.xy, tddft.e):
+    dip = np.dot(vo_dip, (x+y))
+    osc_strength = (2.0/3.0)*(dip*dip).sum()
+    for iw,w in enumerate(comega):
+      p[iw] += osc_strength*((1.0/(w-e))-(1.0/(w+e)))
+  return p
+
+def comp_polariz_nonin_ave(mf, gto, comega):
+  gto.set_common_orig((0.0,0.0,0.0))
+  ao_dip = gto.intor_symmetric('int1e_r', comp=3)
+  occidx = np.where(mf.mo_occ==2)[0]
+  viridx = np.where(mf.mo_occ==0)[0]
+  mo_coeff = mf.mo_coeff
+  mo_energy = mf.mo_energy
+  orbv,orbo = mo_coeff[:,viridx], mo_coeff[:,occidx]
+  vo_dip = np.einsum('cmb,bn->cmn', np.einsum('am,cab->cmb', orbv, ao_dip), orbo)
+  vo_dip = vo_dip.reshape((3,int(vo_dip.size/3)))
+  p = np.zeros((comega.size), dtype=np.complex128)
+  eai = lib.direct_sum('a-i->ai', mo_energy[viridx], mo_energy[occidx])
+  for dip,e in zip(vo_dip.T,eai):
+    osc_strength = (2.0/3.0)*(dip*dip).sum()
+    for iw,w in enumerate(comega):
+      p[iw] += osc_strength*((1.0/(w-e[0]))-(1.0/(w+e[0])))
+  return p
 
 mol = gto.M( verbose = 1,
     atom = '''
         H     0    0        0
-        H     0    0.757    0.587''', basis = 'cc-pvdz',)
+        H     0.17    0.7    0.587''', basis = 'cc-pvdz',)
 
-def comp_polariz_xx(mf, gto, tddft, comega):
-  mol.set_common_orig((0,0,0))
-  ao_dip = mol.intor_symmetric('int1e_r', comp=3)
-  occ_tol = 1e-15
-  occidx = np.where(mf.mo_occ>2-occ_tol)[0]
-  viridx = np.where(mf.mo_occ<occ_tol)[0]
-  mo_coeff = mf.mo_coeff
-  orbv,orbo = mo_coeff[:,viridx], mo_coeff[:,occidx]
-  vo_dip = np.einsum('cmb,bn->cmn', np.einsum('am,cab->cmb', orbv, ao_dip), orbo)
-  vo_dip = vo_dip.reshape((3,int(vo_dip.size/3)))
-  print(vo_dip.shape)
-  pxx = np.zeros((comega.size, 3,3), dtype=np.complex128)
-  for (x,y),e in zip(tddft.xy, tddft.e):
-    x_dip = np.dot(vo_dip,x)
-    y_dip = np.dot(vo_dip,y)
-    print(x_dip.sum(),y_dip.sum(),e)
-    for iw,w in enumerate(comega):
-      #print(x,y,e)
-      pxx[iw,:,:] = pxx[iw,:,:]
-  return pxx
-  
+gto_mf = scf_gto.RKS(mol)
+gto_mf.kernel()
+gto_td = tddft.TDDFT(gto_mf)
+gto_td.nstates = 90
+gto_td.kernel()
+
+nao_td  = tddft_iter(mf=gto_mf, gto=mol)
 
 class KnowValues(unittest.TestCase):
     
-  def test_tddft_gto_vs_nao(self):
-    """ """
-    gto_mf = scf_gto.RKS(mol)
-    gto_mf.kernel()
-    #print(dir(gto_mf))
-    #print(gto_mf.xc)
-    #print(gto_mf.pop())
-
-    gto_td = tddft.TDDFT(gto_mf)
-    gto_td.nstates = 9
-    gto_td.kernel()
-
-    omegas = np.linspace(0.0,2.0,1)+1j*0.0267
-    comp_polariz_xx(gto_mf, mol, gto_td, omegas)
+  def test_tddft_gto_vs_nao_inter(self):
+    """ Interacting case """
+    omegas = np.linspace(0.0,2.0,150)+1j*0.04
+    p_ave = -comp_polariz_ave(gto_mf, mol, gto_td, omegas).imag
+    data = np.array([omegas.real*27.2114, p_ave])
+    np.savetxt('hydrogen.tddft_lda.omega.inter.pav.txt', data.T, fmt=['%f','%f'])
+    p_iter = -nao_td.comp_polariz_ave(omegas).imag
+    data = np.array([omegas.real*27.2114, p_iter])
+    np.savetxt('hydrogen.tddft_iter_lda.omega.inter.pav.txt', data.T, fmt=['%f','%f'])
+    #print('inter', abs(p_ave-p_iter*0.5).sum()/omegas.size)
+    self.assertTrue(abs(p_ave-p_iter*0.5).sum()/omegas.size< 0.02)
     
-    print('Excitation energy (eV)', gto_td.e * 27.2114)
-    print(dir(gto_td))
-    a,b = gto_td.gen_vind(gto_mf)
-    print(a)
-    print(b)
+  def test_tddft_gto_vs_nao_nonin(self):
+    """ Non-interacting case """
+    omegas = np.linspace(0.0,2.0,150)+1j*0.04
+    p_ave = -comp_polariz_nonin_ave(gto_mf, mol, omegas).imag
+    data = np.array([omegas.real*27.2114, p_ave])
+    np.savetxt('hydrogen.tddft_lda.omega.nonin.pav.txt', data.T, fmt=['%f','%f'])
     
-    #print(' gto_td.xy.shape ', len(gto_td.xy))
-    #print(ao_dip.shape)
-    #for x,y in gto_td.xy:
-    #  print(x.shape, y.shape)
-
-
     nao_td  = tddft_iter(mf=gto_mf, gto=mol)
-    omegas = np.linspace(0.0,2.0,150)+1j*nao_td.eps
-    pxx = -nao_td.comp_nonin(omegas).imag
-    data = np.array([omegas.real*27.2114, pxx])
-    np.savetxt('hydrogen.tddft_iter_lda.omega.nonin.pxx.txt', data.T, fmt=['%f','%f'])
-    
-    pxx = -nao_td.comp_polariz_xx(omegas).imag
-    data = np.array([omegas.real*27.2114, pxx])
-    np.savetxt('hydrogen.tddft_iter_lda.omega.inter.pxx.txt', data.T, fmt=['%f','%f'])
+    p_iter = -nao_td.comp_nonin_polariz_ave(omegas).imag
+    data = np.array([omegas.real*27.2114, p_iter])
+    np.savetxt('hydrogen.tddft_iter_lda.omega.nonin.pav.txt', data.T, fmt=['%f','%f'])
+    #print('nonin', abs(p_ave-p_iter).sum()/omegas.size)
+    self.assertTrue(abs(p_ave-p_iter).sum()/omegas.size< 0.03)
 
-    #data_ref = np.loadtxt(dname+'/water.tddft_iter_lda.omega.inter.pxx.txt-ref')
-    #print('    td.rf0_ncalls ', td.rf0_ncalls)
-    #print(' td.matvec_ncalls ', td.matvec_ncalls)
-    #self.assertTrue(np.allclose(data_ref,data.T, rtol=1.0, atol=1e-05))
-
-if __name__ == "__main__":
-  print("Test of TDDFT GTO versus NAO")
-  unittest.main()
+if __name__ == "__main__": print("Test of TDDFT GTO versus NAO"); unittest.main()
