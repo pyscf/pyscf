@@ -153,8 +153,10 @@ class tddft_tem(scf):
                 beam_offset = [{4:.3f}, {5:.3f}, {6:.3f}]
                 atom coord = [{7:.3f}, {8:.3f}, {9:.3f}]
                 impact parameter = {10:.9f} > 1e-6
-                """.format(atm, *self.velec, *self.beam_offset, 
-                        *atom2coord[atm, :], np.sqrt(np.dot(vec, self.vdir)))
+                """.format(atm, self.velec[0], self.velec[1], self.velec[2],
+                        self.beam_offset[0], self.beam_offset[1], self.beam_offset[2],
+                        atom2coord[atm, 0],  atom2coord[atm, 1],  atom2coord[atm, 2],
+                        np.sqrt(np.dot(vec, self.vdir)))
                 raise ValueError(mess)
 
     def get_time_range(self):
