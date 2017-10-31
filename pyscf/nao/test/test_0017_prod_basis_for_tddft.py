@@ -1,6 +1,6 @@
 from __future__ import print_function, division
 import os,unittest
-from pyscf.nao import scf, prod_basis_c, tddft_iter_c
+from pyscf.nao import scf, prod_basis_c
 from numpy import allclose, float32, einsum
 
 dname = os.path.dirname(os.path.abspath(__file__))

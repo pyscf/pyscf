@@ -4,9 +4,9 @@ import os,unittest,numpy as np
 def run_tddft_iter(calculator, label, freq):
     from pyscf.nao import tddft_iter
     if label == "siesta":
-        sv = tddft_iter(label='siesta', tddft_iter_broadening=1e-2)
+        sv = tddft_iter(label='siesta', iter_broadening=1e-2)
     elif label == "gpaw":
-        sv = tddft_iter(gpaw=calculator, tddft_iter_broadening=1e-2)
+        sv = tddft_iter(gpaw=calculator, iter_broadening=1e-2)
     else:
         raise ValueError("Only siesta or gpaw calculator for the moment!")
 

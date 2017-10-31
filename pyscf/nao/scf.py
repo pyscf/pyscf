@@ -139,9 +139,9 @@ class scf(nao):
     if init_dens_libnao()!=0 : raise RuntimeError('init_dens_libnao()!=0')
     return dens_libnao(coords, self.nspin)
 
-  def exc(self, dm, xc_code, **kvargs):   # Compute exchange-correlation energies
+  def exc(self, dm, xc_code, **kw):   # Compute exchange-correlation energies
     from pyscf.nao.m_exc import exc
-    return exc(self, dm, xc_code, **kvargs)
+    return exc(self, dm, xc_code, **kw)
 
   def get_init_guess(self, key=None):
     """ Compute an initial guess for the density matrix. """
