@@ -16,7 +16,7 @@ def comp_polariz_ave(mf, gto, tddft, comega):
   vo_dip = vo_dip.reshape((3,int(vo_dip.size/3)))
   p = np.zeros((comega.size), dtype=np.complex128)
   for (x,y),e in zip(tddft.xy, tddft.e):
-    dip = np.dot(vo_dip, (x+y))
+    dip = np.dot(vo_dip, np.sqrt(2.0)*(x+y)) # Normalization ?
     osc_strength = (2.0/3.0)*(dip*dip).sum()
     for iw,w in enumerate(comega):
       p[iw] += osc_strength*((1.0/(w-e))-(1.0/(w+e)))
@@ -64,8 +64,8 @@ class KnowValues(unittest.TestCase):
     p_iter = -nao_td.comp_polariz_ave(omegas).imag
     data = np.array([omegas.real*27.2114, p_iter])
     np.savetxt('hydrogen.tddft_iter_lda.omega.inter.pav.txt', data.T, fmt=['%f','%f'])
-    #print('inter', abs(p_ave-p_iter*0.5).sum()/omegas.size)
-    self.assertTrue(abs(p_ave-p_iter*0.5).sum()/omegas.size< 0.02)
+    #print('inter', abs(p_ave-p_iter).sum()/omegas.size)
+    self.assertTrue(abs(p_ave-p_iter).sum()/omegas.size<0.03)
     
   def test_tddft_gto_vs_nao_nonin(self):
     """ Non-interacting case """
@@ -73,12 +73,11 @@ class KnowValues(unittest.TestCase):
     p_ave = -comp_polariz_nonin_ave(gto_mf, mol, omegas).imag
     data = np.array([omegas.real*27.2114, p_ave])
     np.savetxt('hydrogen.tddft_lda.omega.nonin.pav.txt', data.T, fmt=['%f','%f'])
-    
     nao_td  = tddft_iter(mf=gto_mf, gto=mol)
     p_iter = -nao_td.comp_nonin_polariz_ave(omegas).imag
     data = np.array([omegas.real*27.2114, p_iter])
     np.savetxt('hydrogen.tddft_iter_lda.omega.nonin.pav.txt', data.T, fmt=['%f','%f'])
     #print('nonin', abs(p_ave-p_iter).sum()/omegas.size)
-    self.assertTrue(abs(p_ave-p_iter).sum()/omegas.size< 0.03)
+    self.assertTrue(abs(p_ave-p_iter).sum()/omegas.size<0.03)
 
 if __name__ == "__main__": print("Test of TDDFT GTO versus NAO"); unittest.main()
