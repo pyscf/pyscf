@@ -4,17 +4,18 @@ import numpy as np
 import scipy.linalg
 from pyscf import lib
 
-nproc = lib.num_threads()
 try:
     import pyfftw
     pyfftw.interfaces.cache.enable()
     fftn_wrapper = pyfftw.interfaces.numpy_fft.fftn
     ifftn_wrapper = pyfftw.interfaces.numpy_fft.ifftn
+    nproc = lib.num_threads()
 except ImportError:
     def fftn_wrapper(a, s=None, axes=None, norm=None, **kwargs):
         return np.fft.fftn(a, s, axes)
     def ifftn_wrapper(a, s=None, axes=None, norm=None, **kwargs):
         return np.fft.ifftn(a, s, axes)
+    nproc = 1
 
 def fft(f, gs):
     '''Perform the 3D FFT from real (R) to reciprocal (G) space.
@@ -39,6 +40,9 @@ def fft(f, gs):
             numpy.fft).
 
     '''
+    if f.size == 0:
+        return np.zeros_like(f)
+
     f3d = f.reshape([-1] + [2*x+1 for x in gs])
     assert(f3d.shape[0] == 1 or f[0].size == f3d[0].size)
     g3d = fftn_wrapper(f3d, axes=(1,2,3), threads=nproc)
@@ -66,6 +70,9 @@ def ifft(g, gs):
             of numpy.fft).
 
     '''
+    if g.size == 0:
+        return np.zeros_like(g)
+
     g3d = g.reshape([-1] + [2*x+1 for x in gs])
     assert(g3d.shape[0] == 1 or g[0].size == g3d[0].size)
     f3d = ifftn_wrapper(g3d, axes=(1,2,3), threads=nproc)

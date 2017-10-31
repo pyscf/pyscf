@@ -51,7 +51,9 @@ weights = [.25, .25, .5]  # 0.25 singlet + 0.25 singlet + 0.5 triplet
 dmrgsolver1 = DMRGCI(mol)
 dmrgsolver1.nroots = 2
 dmrgsolver1.weights = [.5, .5]
+dmrgsolver1.mpiprefix = 'mpirun -np 4'
 dmrgsolver2 = DMRGCI(mol)
+dmrgsolver2.mpiprefix = 'mpirun -np 4'
 #
 # Note one must assign different scratches to the different DMRG solvers.
 # Mixing the scratch directories can cause DMRG program fail.

@@ -551,12 +551,15 @@ def state_average_(casscf, weights=(0.5,0.5)):
 # but undefined in fcibase object
             e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
                                         nroots=self.nroots, **kwargs)
-            if (casscf.verbose >= logger.DEBUG and
-                hasattr(fcibase_class, 'spin_square')):
-                for i, ei in enumerate(e):
-                    ss = fcibase_class.spin_square(self, c[i], norb, nelec)
-                    logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
-                                 i, ei, ss[0])
+            if casscf.verbose >= logger.DEBUG:
+                if hasattr(fcibase_class, 'spin_square'):
+                    for i, ei in enumerate(e):
+                        ss = fcibase_class.spin_square(self, c[i], norb, nelec)
+                        logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
+                                     i, ei, ss[0])
+                else:
+                    for i, ei in enumerate(e):
+                        logger.debug(casscf, 'state %d  E = %.15g', i, ei)
             return numpy.einsum('i,i->', e, weights), c
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
@@ -625,11 +628,13 @@ def state_specific_(casscf, state=1):
                 e = [e]
                 c = [c]
             self._civec = c
-            if (casscf.verbose >= logger.DEBUG and
-                hasattr(fcibase_class, 'spin_square')):
-                ss = fcibase_class.spin_square(self, c[state], norb, nelec)
-                logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
-                             state, e[state], ss[0])
+            if casscf.verbose >= logger.DEBUG:
+                if hasattr(fcibase_class, 'spin_square'):
+                    ss = fcibase_class.spin_square(self, c[state], norb, nelec)
+                    logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
+                                 state, e[state], ss[0])
+                else:
+                    logger.debug(casscf, 'state %d  E = %.15g', state, e[state])
             return e[state], c[state]
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             if self._civec is not None:
@@ -662,6 +667,8 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
 #        fcibase_class = fcibase_class.__base__
     nroots = sum(solver.nroots for solver in fcisolvers)
     assert(nroots == len(weights))
+    has_spin_square = all(hasattr(solver, 'spin_square')
+                          for solver in fcisolvers)
 
     def collect(items):
         items = list(items)
@@ -692,10 +699,7 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
     class FakeCISolver(fcibase_class, StateAverageFCISolver):
         def kernel(self, h1, h2, norb, nelec, ci0=None, verbose=0, **kwargs):
 # Note self.orbsym is initialized lazily in mc1step_symm.kernel function
-            if isinstance(verbose, logger.Logger):
-                log = verbose
-            else:
-                log = logger.Logger(sys.stdout, verbose)
+            log = logger.new_logger(sys, verbose)
             es = []
             cs = []
             for solver, c0 in loop_solver(fcisolvers, ci0):
@@ -707,10 +711,15 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
                 else:
                     es.extend(e)
                     cs.extend(c)
-            ss, multip = collect(solver.spin_square(c0, norb, get_nelec(solver, nelec))
-                                 for solver, c0 in loop_civecs(fcisolvers, cs))
-            for i, ei in enumerate(es):
-                log.info('state %d  E = %.15g S^2 = %.7f', i, ei, ss[i])
+            if log.verbose >= logger.DEBUG:
+                if has_spin_square:
+                    ss, multip = collect(solver.spin_square(c0, norb, get_nelec(solver, nelec))
+                                         for solver, c0 in loop_civecs(fcisolvers, cs))
+                    for i, ei in enumerate(es):
+                        log.debug('state %d  E = %.15g S^2 = %.7f', i, ei, ss[i])
+                else:
+                    for i, ei in enumerate(e):
+                        log.debug('state %d  E = %.15g', i, ei)
             return numpy.einsum('i,i', numpy.array(es), weights), cs
 
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
@@ -740,7 +749,7 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
                 rdm2 += weights[i] * dm2
             return rdm1, rdm2
 
-        if hasattr(fcibase_class, 'spin_square'):
+        if has_spin_square:
             def spin_square(self, ci0, norb, nelec):
                 ss = 0
                 multip = 0

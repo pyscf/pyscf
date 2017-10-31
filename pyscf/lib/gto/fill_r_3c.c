@@ -4,6 +4,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <complex.h>
 #include "config.h"
 #include "cint.h"
 

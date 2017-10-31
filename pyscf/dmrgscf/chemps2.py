@@ -68,7 +68,7 @@ class CheMPS2(object):
         log.info('dmrg_maxiter_noise = %d', self.dmrg_maxiter_noise)
         log.info('dmrg_maxiter_silent = %d', self.dmrg_maxiter_silent)
 
-    def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
+    def kernel(self, h1e, eri, norb, nelec, ci0=None, ecore=0, **kwargs):
         global PyCheMPS2
         if PyCheMPS2 is None:
             PyCheMPS2 = imp.load_dynamic('PyCheMPS2', settings.PYCHEMPS2BIN)
@@ -120,7 +120,7 @@ class CheMPS2(object):
 
         with pyscf.lib.capture_stdout() as stdout:
             theDMRG = PyCheMPS2.PyDMRG(Prob, OptScheme)
-            Energy = theDMRG.Solve()
+            Energy = theDMRG.Solve() + ecore
             theDMRG.calc2DMandCorrelations()
             pyscf.lib.logger.debug1(self.mol, stdout.read())
 
