@@ -188,26 +188,74 @@ class tddft_tem(scf):
 
         tmax = (N-1)*dt/2
         self.time = np.arange(-tmax, tmax+dt, dt)
-
-
+        
     def calc_external_potential(self):
         """
         Calculate the external potential created by a moving charge
         """
-        from pyscf.nao.m_libnao import libnao
-        from ctypes import POINTER, c_double, c_int, c_int64, c_float, c_int
+        from pyscf.nao.m_tools import find_nearrest_index
         from pyscf.nao.m_ao_matelem import ao_matelem_c
+        from pyscf.nao.m_csphar import csphar
 
-        V_freq = np.zeros((self.nprod, self.freq.size), dtype=np.complex64)
+        self.V_freq = np.zeros((self.nprod, self.freq.size), dtype=np.complex64)
+        V_time = np.zeros((self.time.size), dtype=np.complex64)
 
         aome = ao_matelem_c(self.ao_log.rr, self.ao_log.pp)
-        nc = self.pb.npairs # sv.natm # ???
-        nfmx = 2*self.ao_log.jmx + 1 # ???
-        jcut_lmult = nfmx # ???
+        aome.init_one_set(self.ao_log)
+        
+        R0 = self.vnorm*self.time[0]*self.vdir + self.beam_offset
+        rr = self.ao_log.rr
+        dr = (rr[-1]-rr[0])/(rr.size-1)
+        dt = self.time[1]-self.time[0]
+        dw = self.freq_symm[1] - self.freq_symm[0]
+        wmin = self.freq_symm[0]
+        tmin = self.time[0]
+        nff = self.freq.size
+        ub = self.freq_symm.size//2 - 1
 
         for atm, sp in enumerate(self.atom2sp):
             rcut = self.ao_log.sp2rcut[sp]
-            print(atm, sp, rcut)
+            center = self.atom2coord[atm, :]
+            rmax = find_nearrest_index(rr, rcut)
+            si = self.pb.c2s[sp]
+
+            print(atm, sp, self.nprod, self.pb.c2s[sp], self.pb.c2s[sp+1])
+            for mu,l,s,f in aome.ao1.sp2info[sp]:
+                inte1 = np.sum(self.ao_log.psi_log_rl[sp][mu, 0:rmax+1]*rr[0:rmax+1]**(l+2)*
+                        rr[0:rmax+1]*dr)
+                print(mu,l,s,f, "inte1 = ", inte1)
+
+                for k in range(s, f+1):
+                    V_time.fill(0.0)
+
+                    for it, t in enumerate(self.time):
+                        R_sub = R0 + self.vnorm*self.vdir*(t - self.time[0]) - center
+                        norm = np.sqrt(np.dot(R_sub, R_sub))
+
+                        if norm > rcut:
+                            I1 = inte1/(norm**(l+1))
+                            I2 = 0.0
+                        else:
+                            rsub_max = find_nearrest_index(rr, norm)
+
+                            I1 = np.sum(self.ao_log.psi_log_rl[sp][mu, 0:rsub_max+1]*
+                                    rr[0:rsub_max+1]**(l+2)*rr[0:rsub_max+1])
+                            I2 = np.sum(self.ao_log.psi_log_rl[sp][mu, rsub_max+1:]*
+                                    rr[rsub_max+1:]/(rr[rsub_max+1:]**(l-1)))
+
+                            I1 = I1*dr/(norm**(l+1))
+                            I2 = I2*(norm**l)*dr
+                        clm_tem = (4*np.pi/(2*l+1))*csphar(R_sub, 2*aome.jmx+1)*(I1 + I2)
+                        rlm_tem = aome.c2r_vector(clm_tem, l, s, f)
+                        V_time[it] = rlm_tem[k]
+
+                    V_time *= dt*np.exp(-1.0j*wmin*(self.time-tmin))
+                    FT = np.fft.fft(V_time)
+                    self.V_freq[si + k, :] = FT[ub+1:ub+nff+1]*np.exp(-1.0j*(wmin*tmin + \
+                            self.freq_symm[ub+1:ub+nff+1]-wmin)*tmin)
+
+        print("There is probably mistake!!", np.sum(abs(self.V_freq.real)), np.sum(abs(self.V_freq.imag)))
+
         raise ValueError("Euh!!! check how to get nc, nfmx, jcut_lmult!!!")
 
     def load_kernel_method(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None, **kwargs):
