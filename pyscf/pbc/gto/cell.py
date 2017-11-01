@@ -569,10 +569,8 @@ def get_ewald_params(cell, precision=1e-8, gs=None):
         return 0, 0
     elif cell.dimension == 3:
         if gs is None:
-            gs = 5
-        else:
-            gs = np.copy(gs)
-            gs[gs>40] = 40
+            gs = cell.gs
+        gs = _cut_gs_for_ewald(cell, gs)
         Gmax = min(np.asarray(gs) * lib.norm(cell.reciprocal_vectors(), axis=1))
         log_precision = np.log(precision/(4*np.pi*Gmax**2))
         ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
@@ -584,6 +582,16 @@ def get_ewald_params(cell, precision=1e-8, gs=None):
         ew_cut = cell.rcut
         ew_eta = np.sqrt(max(np.log(4*np.pi*ew_cut**2/precision)/ew_cut**2, .1))
     return ew_eta, ew_cut
+
+# roughly 4 grids per axis
+def _cut_gs_for_ewald(cell, gs):
+    gs = np.copy(gs)
+    gs_max = np.asarray(np.linalg.norm(cell.lattice_vectors(), axis=1) * 2,
+                        dtype=int)
+    gs_max[cell.dimension:] = gs[cell.dimension:]
+    gs_max[gs_max<40] = 40
+    gs[gs>gs_max] = gs_max[gs>gs_max]
+    return gs
 
 def ewald(cell, ew_eta=None, ew_cut=None):
     '''Perform real (R) and reciprocal (G) space Ewald sum for the energy.
@@ -635,8 +643,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     # See also Eq. (32) of ewald.pdf at
     #   http://www.fisica.uniud.it/~giannozz/public/ewald.pdf
 
-    gs = np.copy(cell.gs)
-    gs[gs>40] = 40
+    gs = _cut_gs_for_ewald(cell, cell.gs)
     Gv, Gvbase, weights = cell.get_Gv_weights(gs)
     absG2 = np.einsum('gi,gi->g', Gv, Gv)
     absG2[absG2==0] = 1e200
