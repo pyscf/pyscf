@@ -583,10 +583,8 @@ def get_ewald_params(cell, precision=1e-8, mesh=None):
         return 0, 0
     elif cell.dimension == 3:
         if mesh is None:
-            mesh = 10
-        else:
-            mesh = np.copy(mesh)
-            mesh[mesh>80] = 80
+            mesh = cell.mesh
+        mesh = _cut_mesh_for_ewald(cell, mesh)
         Gmax = min(np.asarray(mesh)/2 * lib.norm(cell.reciprocal_vectors(), axis=1))
         log_precision = np.log(precision/(4*np.pi*Gmax**2))
         ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
@@ -598,6 +596,16 @@ def get_ewald_params(cell, precision=1e-8, mesh=None):
         ew_cut = cell.rcut
         ew_eta = np.sqrt(max(np.log(4*np.pi*ew_cut**2/precision)/ew_cut**2, .1))
     return ew_eta, ew_cut
+
+# roughly 4 grids per axis
+def _cut_mesh_for_ewald(cell, mesh):
+    mesh = np.copy(mesh)
+    mesh_max = np.asarray(np.linalg.norm(cell.lattice_vectors(), axis=1) * 2,
+                          dtype=int)
+    mesh_max[cell.dimension:] = mesh[cell.dimension:]
+    mesh_max[mesh_max<80] = 80
+    mesh[mesh>mesh_max] = mesh_max[mesh>mesh_max]
+    return mesh
 
 def ewald(cell, ew_eta=None, ew_cut=None):
     '''Perform real (R) and reciprocal (G) space Ewald sum for the energy.
@@ -648,8 +656,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     #   ZS_I(G) = \sum_a Z_a exp (i G.R_a)
     # See also Eq. (32) of ewald.pdf at
     #   http://www.fisica.uniud.it/~giannozz/public/ewald.pdf
-    mesh = np.copy(cell.mesh)
-    mesh[mesh>80] = 80
+    mesh = _cut_mesh_for_ewald(cell, cell.mesh)
     Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
     absG2 = np.einsum('gi,gi->g', Gv, Gv)
     absG2[absG2==0] = 1e200

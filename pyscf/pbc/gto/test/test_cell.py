@@ -184,7 +184,7 @@ class KnownValues(unittest.TestCase):
             a = np.eye(3)*5,
             mesh = [9]*3,
             atom = 'Cu 0 0 1; Na 0 1 0',
-            ecp = 'lanl2dz',
+            ecp = {'Na':'lanl2dz'},
             pseudo = {'Cu': 'gthbp'})
         self.assertTrue(all(cell._ecpbas[:,0] == 1))
 
