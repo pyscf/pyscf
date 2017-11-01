@@ -255,15 +255,20 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     else:
         log.info('FCI vector not available, call CASCI for wavefunction')
         mocas = mo_coeff1[:,ncore:nocc]
-        h1eff = reduce(numpy.dot, (mocas.T, mc.get_hcore(), mocas))
+        hcore = mc.get_hcore()
+        dm_core = numpy.dot(mo_coeff1[:,:ncore]*2, mo_coeff1[:,:ncore].T)
+        ecore = mc._scf.energy_nuc()
+        ecore+= numpy.einsum('ij,ji', hcore, dm_core)
+        h1eff = reduce(numpy.dot, (mocas.T, hcore, mocas))
         if eris is not None and hasattr(eris, 'ppaa'):
+            ecore += eris.vhf_c[:ncore,:ncore].trace()
             h1eff += reduce(numpy.dot, (ucas.T, eris.vhf_c[ncore:nocc,ncore:nocc], ucas))
             aaaa = ao2mo.restore(4, eris.ppaa[ncore:nocc,ncore:nocc,:,:], ncas)
             aaaa = ao2mo.incore.full(aaaa, ucas)
         else:
-            dm_core = numpy.dot(mo_coeff1[:,:ncore]*2, mo_coeff1[:,:ncore].T)
-            vj, vk = mc._scf.get_jk(mc.mol, dm_core)
-            h1eff += reduce(numpy.dot, (mocas.T, vj-vk*.5, mocas))
+            corevhf = mc.get_veff(mc.mol, dm_core)
+            ecore += numpy.einsum('ij,ji', dm_core, corevhf) * .5
+            h1eff += reduce(numpy.dot, (mocas.T, corevhf, mocas))
             aaaa = ao2mo.kernel(mc.mol, mocas)
 
         # See label_symmetry_ function in casci_symm.py which initialize the
@@ -273,9 +278,9 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             mc.fcisolver.orbsym = mo_coeff1.orbsym[ncore:nocc]
 
         max_memory = max(400, mc.max_memory-lib.current_memory()[0])
-        e_cas, fcivec = mc.fcisolver.kernel(h1eff, aaaa, ncas, nelecas,
-                                            max_memory=max_memory, verbose=log)
-        log.debug('In Natural orbital, CI energy = %.12g', e_cas)
+        e, fcivec = mc.fcisolver.kernel(h1eff, aaaa, ncas, nelecas, ecore=ecore,
+                                        max_memory=max_memory, verbose=log)
+        log.debug('In Natural orbital, CASCI energy = %.12g', e)
 
     if log.verbose >= logger.INFO:
         ovlp_ao = mc._scf.get_ovlp()
