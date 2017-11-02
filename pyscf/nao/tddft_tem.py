@@ -113,8 +113,8 @@ class tddft_tem(scf):
 
 
         self.calc_external_potential()
-        import sys
-        sys.exit()
+        #import sys
+        #sys.exit()
 
         # probably unnecessary, require probably does a copy
         # problematic for the dtype, must there should be another option 
@@ -197,7 +197,7 @@ class tddft_tem(scf):
         from pyscf.nao.m_ao_matelem import ao_matelem_c
         from pyscf.nao.m_csphar import csphar
 
-        self.V_freq = np.zeros((self.nprod, self.freq.size), dtype=np.complex64)
+        self.V_freq = np.zeros((self.freq.size, self.nprod), dtype=np.complex64)
         V_time = np.zeros((self.time.size), dtype=np.complex64)
 
         aome = ao_matelem_c(self.ao_log.rr, self.ao_log.pp)
@@ -251,12 +251,12 @@ class tddft_tem(scf):
 
                     V_time *= dt*np.exp(-1.0j*wmin*(self.time-tmin))
                     FT = np.fft.fft(V_time)
-                    self.V_freq[si + k, :] = FT[ub+1:ub+nff+1]*np.exp(-1.0j*(wmin*tmin + \
+                    self.V_freq[:, si + k] = FT[ub+1:ub+nff+1]*np.exp(-1.0j*(wmin*tmin + \
                             self.freq_symm[ub+1:ub+nff+1]-wmin)*tmin)
 
         print("There is probably mistake!!", np.sum(abs(self.V_freq.real)), np.sum(abs(self.V_freq.imag)))
 
-        raise ValueError("Euh!!! check how to get nc, nfmx, jcut_lmult!!!")
+        #raise ValueError("Euh!!! check how to get nc, nfmx, jcut_lmult!!!")
 
     def load_kernel_method(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None, **kwargs):
 
@@ -334,7 +334,7 @@ class tddft_tem(scf):
 
         return v - (matvec_real + 1.0j*matvec_imag)
 
-    def comp_polariz_xx(self, comegas, x0=False):
+    def comp_polariz_xx(self, x0=False):
         """ 
         Compute interacting polarizability
 
@@ -354,24 +354,26 @@ class tddft_tem(scf):
             self.dn (complex 2D array): computed density change in prod basis
         
         """
+        comegas = self.freq + 1.0j*self.eps
         polariz = np.zeros_like(comegas, dtype=np.complex64)
         self.dn = np.zeros((comegas.shape[0], self.nprod), dtype=np.complex64)
     
         for iw,comega in enumerate(comegas):
+            print(iw)
             if x0 == True:
-                veff,info = self.comp_veff(self.moms1[:,0], comega, x0=self.dn0[iw, :])
+                veff,info = self.comp_veff(self.V_freq[iw, :], comega, x0=self.dn0[iw, :])
             else:
-                veff,info = self.comp_veff(self.moms1[:,0], comega, x0=None)
+                veff,info = self.comp_veff(self.V_freq[iw, :], comega, x0=None)
 
             self.dn[iw, :] = self.apply_rf0(veff, comega)
-            polariz[iw] = np.dot(self.moms1[:,0], self.dn[iw, :])
+            polariz[iw] = np.dot(np.conj(self.V_freq[iw, :]), self.dn[iw, :])
 
         if self.td_GPU.GPU is not None:
             self.td_GPU.clean_gpu()
 
-        return polariz
+        return -polariz/np.pi
 
-    def comp_nonin(self, comegas):
+    def comp_nonin(self):
         """ 
         Compute non-interacting polarizability
 
@@ -388,12 +390,12 @@ class tddft_tem(scf):
             self.dn0 (complex 2D array): computed non-interacting density change in prod basis
         
         """
+        comegas = self.freq + 1.0j*self.eps
 
-        vext = np.transpose(self.moms1)
         pxx = np.zeros(comegas.shape, dtype=np.complex64)
         self.dn0 = np.zeros((comegas.shape[0], self.nprod), dtype=np.complex64)
 
         for iw, comega in enumerate(comegas):
-            self.dn0[iw, :] = self.apply_rf0(vext[0, :], comega) 
-            pxx[iw] = np.dot(self.dn0[iw, :], vext[0,:])
-        return pxx
+            self.dn0[iw, :] = self.apply_rf0(self.V_freq[iw, :], comega) 
+            pxx[iw] = np.dot(self.dn0[iw, :], np.conj(self.V_freq[iw, :]))
+        return -pxx/np.pi
