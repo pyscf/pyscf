@@ -4,15 +4,13 @@ from pyscf import gto, tddft, scf
 from pyscf.nao import bse_iter
 from pyscf.nao import polariz_inter_ave, polariz_nonin_ave
 
-mol = gto.M( verbose = 1,
-    atom = '''
-        H     0    0        0
-        H     0.17    0.7    0.587''', basis = 'cc-pvdz',)
+mol = gto.M( verbose = 1, atom = '''H 0 0 0;  H 0.17 0.7 0.587''', basis = 'cc-pvdz',)
 
 gto_mf = scf.RHF(mol)
 gto_mf.kernel()
 gto_td = tddft.TDDFT(gto_mf)
 gto_td.nstates = 9
+gto_td.singlet = True # False
 gto_td.kernel()
 
 nao_td  = bse_iter(mf=gto_mf, gto=mol)
