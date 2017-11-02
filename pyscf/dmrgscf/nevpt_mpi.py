@@ -8,6 +8,7 @@ import os
 import sys
 import time
 import math
+import copy
 import subprocess
 from functools import reduce
 import numpy
@@ -18,8 +19,10 @@ from pyscf.lib import chkfile
 from pyscf.dmrgscf import dmrg_sym
 from pyscf.dmrgscf import dmrgci
 from pyscf import ao2mo
+from pyscf import gto
 from pyscf.mcscf import casci
-import pyscf.tools
+from pyscf.tools import fcidump
+from pyscf.dmrgscf import settings
 
 def writeh2e(h2e,f,tol,shift0 =1,shift1 =1,shift2 =1,shift3 =1):
     for i in range(0,h2e.shape[0]):
@@ -150,11 +153,12 @@ def default_nevpt_schedule(mol, maxM=500, tol=1e-7):
         nevptsolver.maxIter = 6
         return nevptsolver
 
-def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7):
-    if (isinstance(mc, str)):
-        mol = chkfile.load_mol(mc)
+def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
+                        nevpt_integral=None):
+    if nevpt_integral:
+        mol = chkfile.load_mol(nevpt_integral)
 
-        fh5 = h5py.File(mc, 'r')
+        fh5 = h5py.File(nevpt_integral, 'r')
         ncas = fh5['mc/ncas'].value
         ncore = fh5['mc/ncore'].value
         nvirt = fh5['mc/nvirt'].value
@@ -162,7 +166,6 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7):
         nroots = fh5['mc/nroots'].value
         wfnsym = fh5['mc/wfnsym'].value
         fh5.close()
-        mc_chk = mc
     else :
         mol = mc.mol
         ncas = mc.ncas
@@ -171,37 +174,41 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7):
         nelecas = mc.nelecas
         nroots = mc.fcisolver.nroots
         wfnsym = mc.fcisolver.wfnsym
-        mc_chk = 'nevpt_perturb_integral'
-        write_chk(mc, root, mc_chk)
+        nevpt_integral_file = 'nevpt_perturb_integral'
+        write_chk(mc, root, nevpt_integral_file)
 
     if nevptsolver is None:
         nevptsolver = default_nevpt_schedule(mol,maxM, tol)
+        nevptsolver.__dict__.update(mc.fcisolver.__dict__)
         nevptsolver.wfnsym = wfnsym
         nevptsolver.block_extra_keyword = mc.fcisolver.block_extra_keyword
     nevptsolver.nroots = nroots
-    from pyscf.dmrgscf import settings
     nevptsolver.executable = settings.BLOCKEXE_COMPRESS_NEVPT
-    scratch = nevptsolver.scratchDirectory
-    nevptsolver.scratchDirectory = ''
-
 
     dmrgci.writeDMRGConfFile(nevptsolver, nelecas, False, with_2pdm=False,
                              extraline=['fullrestart','nevpt_state_num %d'%root])
-    nevptsolver.scratchDirectory = scratch
+    inFile = os.path.join(nevptsolver.runtimeDir, nevptsolver.configFile)
+    with open(inFile, 'r') as f:
+        block_conf = f.readlines()
+        block_conf = [l for l in block_conf if 'prefix' not in l]
+        block_conf = '\n'.join(block_conf)
+
+    with h5py.File(nevpt_integral_file) as fh5:
+        if 'dmrg.conf' in fh5:
+            del(fh5['dmrg.conf'])
+        fh5['dmrg.conf'] = block_conf
 
     if nevptsolver.verbose >= logger.DEBUG1:
-        inFile = os.path.join(nevptsolver.runtimeDir, nevptsolver.configFile)
         logger.debug1(nevptsolver, 'Block Input conf')
-        logger.debug1(nevptsolver, open(inFile, 'r').read())
+        logger.debug1(nevptsolver, block_conf)
 
     t0 = (time.clock(), time.time())
 
     cmd = ' '.join((nevptsolver.mpiprefix,
-                    '%s/nevpt_mpi.py' % os.path.dirname(os.path.realpath(__file__)),
-                    mc_chk,
+                    os.path.realpath(os.path.join(__file__, '..', 'nevpt_mpi.py')),
+                    nevpt_integral_file,
                     nevptsolver.executable,
-                    os.path.join(nevptsolver.runtimeDir, nevptsolver.configFile),
-                    nevptsolver.outputFile,
+                    mc.fcisolver.scratchDirectory,
                     nevptsolver.scratchDirectory))
     logger.debug(nevptsolver, 'DMRG_COMPRESS_NEVPT cmd %s', cmd)
 
@@ -226,79 +233,114 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7):
 
 
 
-def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
+def nevpt_integral_mpi(mc_chkfile, blockfile, dmrg_scratch, nevpt_scratch):
     from mpi4py import MPI
     comm = MPI.COMM_WORLD
-    mpi_size = MPI.COMM_WORLD.Get_size()
+    rank = comm.Get_rank()
+
+    mc_chkfile = os.path.abspath(mc_chkfile)
+    dmrg_scratch = os.path.abspath(dmrg_scratch)
+    nevpt_scratch = os.path.abspath(os.path.join(nevpt_scratch, str(rank)))
+
+    nevpt_inp = os.path.join(nevpt_scratch, 'dmrg.conf')
+    nevpt_out = os.path.join(nevpt_scratch, 'dmrg.out')
+    if not os.path.exists(nevpt_scratch):
+        os.makedirs(os.path.join(nevpt_scratch, 'node0'))
+
+    ncas, partial_core, partial_virt = _write_integral_file(mc_chkfile, nevpt_scratch, comm)
+
+    nevpt_conf = _load(mc_chkfile, 'dmrg.conf', comm)
+    with open(nevpt_inp, 'w') as f:
+        f.write(nevpt_conf)
+        f.write('restart_mps_nevpt %d %d %d \n'%(ncas, partial_core, partial_virt))
+
+    _distribute_dmrg_files(dmrg_scratch, nevpt_scratch, comm)
+
+    root = _load(mc_chkfile, 'mc/root', comm)
+
+    env = copy.copy(os.environ)
+    for k in env.keys():
+        if 'MPI' in k or 'SLURM' in k:
+# remove PBS and SLURM environments to prevent Block running in MPI mode
+            del(env[k])
+
+    p = subprocess.Popen(['%s %s > %s'%(blockfile,nevpt_inp,nevpt_out)],
+                         env=env, shell=True, cwd=nevpt_scratch)
+    p.wait()
+
+    f = open(os.path.join(nevpt_scratch, 'node0', 'Va_%d'%root), 'r')
+    Vr_energy = float(f.readline())
+    Vr_norm = float(f.readline())
+    f.close()
+
+    f = open(os.path.join(nevpt_scratch, 'node0', 'Vi_%d'%root), 'r')
+    Vi_energy = float(f.readline())
+    Vi_norm = float(f.readline())
+    f.close()
+
+    #Vr_total = 0.0
+    #Vi_total = 0.0
+    Vi_total_e = comm.reduce(Vi_energy,root=0)
+    Vi_total_norm = comm.reduce(Vi_norm,root=0)
+    Vr_total_e = comm.reduce(Vr_energy,root=0)
+    Vr_total_norm = comm.reduce(Vr_norm,root=0)
+    #comm.Reduce(Vi_energy,Vi_total,op=MPI.SUM, root=0)
+    if rank == 0:
+
+        fh5 = h5py.File('Perturbation_%d'%root,'w')
+        fh5['Vi/energy']      =    Vi_total_e
+        fh5['Vi/norm']        =    Vi_total_norm
+        fh5['Vr/energy']      =    Vr_total_e
+        fh5['Vr/norm']        =    Vr_total_norm
+        fh5.close()
+        #return (sum(Vi_total), sum(Vr_total))
+        #print 'Vi total', sum(Vi_total)
+
+    #comm.Reduce(Vr_energy, Vr_total, op=MPI.SUM, root=0)
+#    if rank == 0:
+#        print 'Vr total', Vr_total
+#        print 'Vr total', sum(Vr_total)
+
+
+def _load(chkfile, key, comm):
+    rank = comm.Get_rank()
+    if rank == 0:
+        with h5py.File(chkfile, 'r') as fh5:
+            return comm.bcast(fh5[key].value)
+    else:
+        return comm.bcast(None)
+
+def _write_integral_file(mc_chkfile, nevpt_scratch, comm):
+    mpi_size = comm.Get_size()
     rank = comm.Get_rank()
 
     if rank == 0:
-        mol = chkfile.load_mol(mc_chkfile)
-
-        fh5 = h5py.File(mc_chkfile,'r')
-        mo_coeff  =     fh5['mc/mo'].value
-        ncore     =     fh5['mc/ncore'].value
-        ncas      =     fh5['mc/ncas'].value
-        nvirt     =     fh5['mc/nvirt'].value
-        orbe      =     fh5['mc/orbe'].value
-        root      =     fh5['mc/root'].value
-        orbsym    =     list(fh5['mc/orbsym'].value)
-        nelecas   =     fh5['mc/nelecas'].value
-        h1e_Si    =     fh5['h1e_Si'].value
-        h1e_Sr    =     fh5['h1e_Sr'].value
-        h1e       =     fh5['h1e'].value
-        e_core    =     fh5['e_core'].value
-        h2e       =     fh5['h2e'].value
-        h2e_Si    =     fh5['h2e_Si'].value
-        h2e_Sr    =     fh5['h2e_Sr'].value
-        fh5.close()
-        headnode = MPI.Get_processor_name()
+        fh5 = h5py.File(mc_chkfile, 'r')
+        def load(key):
+            return comm.bcast(fh5[key].value)
     else:
-        mol = None
-        mo_coeff  =  None
-        ncore     =  None
-        ncas      =  None
-        nvirt     =  None
-        orbe      =  None
-        root      =  None
-        orbsym    =  None
-        nelecas   =  None
-        h1e_Si    =  None
-        h1e_Sr    =  None
-        h1e       =  None
-        e_core    =  None
-        h2e       =  None
-        h2e_Si    =  None
-        h2e_Sr    =  None
-        headnode  =  None
-    comm.barrier()
-    mol = comm.bcast(mol,root=0)
-    mo_coeff = comm.bcast(mo_coeff,root=0)
-    ncas = comm.bcast(ncas,root=0)
-    ncore = comm.bcast(ncore,root=0)
-    nvirt = comm.bcast(nvirt,root=0)
-    root = comm.bcast(root,root=0)
-    orbsym = comm.bcast(orbsym,root=0)
-    nelecas = comm.bcast(nelecas,root=0)
-    orbe = comm.bcast(orbe,root=0)
-    h1e_Si = comm.bcast(h1e_Si,root=0)
-    h1e_Sr = comm.bcast(h1e_Sr,root=0)
-    h1e = comm.bcast(h1e,root=0)
-    h2e = comm.bcast(h2e,root=0)
-    h2e_Si = comm.bcast(h2e_Si,root=0)
-    h2e_Sr = comm.bcast(h2e_Sr,root=0)
-    headnode = comm.bcast(headnode,root=0)
-    e_core = comm.bcast(e_core,root=0)
+        def load(key):
+            return comm.bcast(None)
 
+    mol       = gto.loads(load('mol'))
+    ncore     = load('mc/ncore')
+    ncas      = load('mc/ncas')
+    nvirt     = load('mc/nvirt')
+    orbe      = load('mc/orbe')
+    orbsym    = list(load('mc/orbsym'))
+    nelecas   = load('mc/nelecas')
+    h1e_Si    = load('h1e_Si')
+    h1e_Sr    = load('h1e_Sr')
+    h1e       = load('h1e')
+    e_core    = load('e_core')
+    h2e       = load('h2e')
+    h2e_Si    = load('h2e_Si')
+    h2e_Sr    = load('h2e_Sr')
 
+    if rank == 0:
+        fh5.close()
 
-    mo_core = mo_coeff[:,:ncore]
-    mo_cas = mo_coeff[:,ncore:ncore+ncas]
-    mo_virt = mo_coeff[:,ncore+ncas:]
-
-    nelec = nelecas[0] + nelecas[1]
-
-    if mol.symmetry and len(orbsym):
+    if mol.symmetry and len(orbsym) > 0:
         orbsym = orbsym[ncore:ncore+ncas] + orbsym[:ncore] + orbsym[ncore+ncas:]
         orbsym = dmrg_sym.convert_orbsym(mol.groupname, orbsym)
     else:
@@ -363,69 +405,11 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
             partial_core = num_of_orb_end -num_of_orb_begin
             partial_virt = 0
 
-    newscratch = os.path.join(os.path.abspath(scratch), str(rank))
-    if not os.path.exists('%s'%newscratch):
-        os.makedirs('%s'%newscratch)
-        os.makedirs('%s/node0'%newscratch)
-    nevptinp = os.path.join(newscratch, os.path.basename(dmrginp))
-    subprocess.check_call('cp %s %s'%(dmrginp,nevptinp),shell=True)
-
-    f = open(nevptinp, 'a')
-    f.write('restart_mps_nevpt %d %d %d \n'%(ncas,partial_core, partial_virt))
-    f.close()
-
     tol = float(1e-15)
 
-    #from subprocess import Popen
-    #from subprocess import PIPE
-    #print 'scratch', scratch
-    ##p1 = Popen(['cp %s/* %d/'%(scratch, rank)],shell=True,stderr=PIPE)
-    #p1 = Popen(['cp','%s/*'%scratch, '%d/'%rank],shell=True,stderr=PIPE)
-    #print p1.communicate()
-    #p2 = Popen(['cp %s/node0/* %d'%(scratch, rank)],shell=True,stderr=PIPE)
-    ##p2 = Popen(['cp','%s/node0/*'%scratch, '%d/'%rank],shell=True,stderr=PIPE)
-    #print p2.communicate()
-    #call('cp %s/* %d/'%(scratch,rank),shell = True,stderr=os.devnull)
-    #call('cp %s/node0/* %d/'%(scratch,rank),shell = True,stderr=os.devnull)
-   # f1 =open(os.devnull,'w')
-   # if MPI.Get_processor_name() == headnode:
-   #     subprocess.call('cp %s/* %s/'%(scratch,newscratch),stderr=f1,shell = True)
-   #     subprocess.call('cp %s/node0/* %s/node0'%(scratch,newscratch),shell = True)
-   # else:
-   #     subprocess.call('scp %s:%s/* %s/'%(headnode,scratch,newscratch),stderr=f1,shell = True)
-   #     subprocess.call('scp %s:%s/node0/* %s/node0'%(headnode,scratch,newscratch),shell = True)
-   # f1.close()
-
-    #TODO
-    #Use mpi rather than scp to copy the file.
-    #To make the code robust.
-
-    if rank==0:
-        filenames = []
-        for fn in os.listdir('%s/node0'%scratch):
-            if fn== 'dmrg.e' or fn== 'statefile.0.tmp' or fn== 'RestartReorder.dat' or fn.startswith('wave') or fn.startswith('Rotation'):
-                filenames.append(fn)
-    else:
-        filenames = None
-
-    filenames = comm.bcast(filenames, root=0)
-
-    for i in range(len(filenames)):
-        if rank == 0:
-            with open('%s/node0/%s'%(scratch,filenames[i]),'rb') as f:
-                data = f.read()
-        else:
-            data = None
-        data = comm.bcast(data, root=0)
-        if data==None:
-            print 'empty file'
-        with open('%s/node0/%s'%(newscratch,filenames[i]),'wb') as f:
-            f.write(data)
-
-
-
-    f = open('%s/FCIDUMP'%newscratch,'w')
-    pyscf.tools.fcidump.write_head(f,norb, nelec, ms=abs(nelecas[0]-nelecas[1]), orbsym=orbsym)
+    f = open(os.path.join(nevpt_scratch, 'FCIDUMP'), 'w')
+    nelec = nelecas[0] + nelecas[1]
+    fcidump.write_head(f,norb, nelec, ms=abs(nelecas[0]-nelecas[1]), orbsym=orbsym)
     #h2e in active space
     writeh2e_sym(h2e,f,tol)
     #h1e in active space
@@ -452,57 +436,36 @@ def nevpt_integral_mpi(mc_chkfile,blockfile,dmrginp,dmrgout,scratch):
     f.write('% 4d  %4d  %4d  %4d  %4d\n'%(0,0,0,0,0))
     f.close()
 
-
-    current_path = os.getcwd()
-    os.chdir('%s'%newscratch)
-
-    env = os.environ
-    envnew = {}
-    for k in env:
-      if 'MPI' not in k and 'SLURM' not in k:
-# remove PBS and SLURM environments to prevent Block running in MPI mode
-        envnew[k] = os.environ[k]
+    return ncas, partial_core, partial_virt
 
 
-    p = subprocess.Popen(['%s %s > %s'%(blockfile,nevptinp,dmrgout)], env=envnew, shell=True)
-    p.wait()
-    f = open('node0/Va_%d'%root,'r')
-    Vr_energy = float(f.readline())
-    Vr_norm = float(f.readline())
-    f.close()
-    f = open('node0/Vi_%d'%root,'r')
-    Vi_energy = float(f.readline())
-    Vi_norm = float(f.readline())
-    f.close()
-    comm.barrier()
-    #Vr_total = 0.0
-    #Vi_total = 0.0
-    Vi_total_e = comm.gather(Vi_energy,root=0)
-    Vi_total_norm = comm.gather(Vi_norm,root=0)
-    Vr_total_e = comm.gather(Vr_energy,root=0)
-    Vr_total_norm = comm.gather(Vr_norm,root=0)
-    #comm.Reduce(Vi_energy,Vi_total,op=MPI.SUM, root=0)
-    os.chdir('%s'%current_path)
-    if rank == 0:
+def _distribute_dmrg_files(dmrg_scratch_dir, nevpt_scratch_dir, comm):
+    rank = comm.Get_rank()
+    if rank==0:
+        filenames = []
+        for fn in os.listdir(os.path.join(dmrg_scratch_dir, 'node0')):
+            if fn== 'dmrg.e' or fn== 'statefile.0.tmp' or fn== 'RestartReorder.dat' or fn.startswith('wave') or fn.startswith('Rotation'):
+                filenames.append(fn)
+    else:
+        filenames = None
 
-        fh5 = h5py.File('Perturbation_%d'%root,'w')
-        fh5['Vi/energy']      =    sum(Vi_total_e)
-        fh5['Vi/norm']        =    sum(Vi_total_norm)
-        fh5['Vr/energy']      =    sum(Vr_total_e)
-        fh5['Vr/norm']        =    sum(Vr_total_norm)
-        fh5.close()
-        #return (sum(Vi_total), sum(Vr_total))
-        #print 'Vi total', sum(Vi_total)
+    filenames = comm.bcast(filenames, root=0)
 
-    #comm.Reduce(Vr_energy, Vr_total, op=MPI.SUM, root=0)
-#    if rank == 0:
-#        print 'Vr total', Vr_total
-#        print 'Vr total', sum(Vr_total)
-
+    for i in range(len(filenames)):
+        if rank == 0:
+            with open(os.path.join(dmrg_scratch_dir, 'node0', filenames[i]),'rb') as f:
+                data = f.read()
+        else:
+            data = None
+        data = comm.bcast(data, root=0)
+        if data==None:
+            print('empty file')
+        with open(os.path.join(nevpt_scratch_dir, 'node0', filenames[i]),'wb') as f:
+            f.write(data)
 
 
 if __name__ == '__main__':
 
-    nevpt_integral_mpi(sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5])
+    nevpt_integral_mpi(sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4])
 
 
