@@ -144,14 +144,14 @@ def write_chk(mc,root,chkfile):
     logger.timer(mc,'Write MPS NEVPT integral', *t0)
 
 def default_nevpt_schedule(mol, maxM=500, tol=1e-7):
-        nevptsolver = dmrgci.DMRGCI(mol, maxM, tol)
-        nevptsolver.scheduleSweeps = [0, 4]
-        nevptsolver.scheduleMaxMs  = [maxM, maxM]
-        nevptsolver.scheduleTols   = [0.0001, tol]
-        nevptsolver.scheduleNoises = [0.0001, 0.0]
-        nevptsolver.twodot_to_onedot = 4
-        nevptsolver.maxIter = 6
-        return nevptsolver
+    nevptsolver = dmrgci.DMRGCI(mol, maxM, tol)
+    nevptsolver.scheduleSweeps = [0, 4]
+    nevptsolver.scheduleMaxMs  = [maxM, maxM]
+    nevptsolver.scheduleTols   = [0.0001, tol]
+    nevptsolver.scheduleNoises = [0.0001, 0.0]
+    nevptsolver.twodot_to_onedot = 4
+    nevptsolver.maxIter = 6
+    return nevptsolver
 
 def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
                         nevpt_integral=None):
@@ -185,10 +185,9 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
     nevptsolver.nroots = nroots
     nevptsolver.executable = settings.BLOCKEXE_COMPRESS_NEVPT
 
-    dmrgci.writeDMRGConfFile(nevptsolver, nelecas, False, with_2pdm=False,
-                             extraline=['fullrestart','nevpt_state_num %d'%root])
-    inFile = os.path.join(nevptsolver.runtimeDir, nevptsolver.configFile)
-    with open(inFile, 'r') as f:
+    conf = dmrgci.writeDMRGConfFile(nevptsolver, nelecas, False, with_2pdm=False,
+                                    extraline=['fullrestart','nevpt_state_num %d'%root])
+    with open(conf, 'r') as f:
         block_conf = f.readlines()
         block_conf = [l for l in block_conf if 'prefix' not in l]
         block_conf = '\n'.join(block_conf)

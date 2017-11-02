@@ -794,6 +794,7 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
     f.close()
     #no reorder
     #f.write('noreorder\n')
+    return configFile
 
 def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
     if isinstance(nelec, (int, numpy.integer)):
@@ -824,6 +825,7 @@ def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
     pyscf.tools.fcidump.from_integrals(integralFile, h1eff, eri_cas, ncas,
                                        neleca+nelecb, ecore, ms=abs(neleca-nelecb),
                                        orbsym=orbsym)
+    return integralFile
 
 
 def executeBLOCK(DMRGCI):
