@@ -11,7 +11,7 @@ class KnowValues(unittest.TestCase):
     dname = os.path.dirname(os.path.abspath(__file__))
     td = tddft_iter(label='water', cd=dname, jcutoff=7, iter_broadening=1e-2, xc_code='LDA,PZ', level=0)
     omegas = np.linspace(0.0,2.0,150)+1j*td.eps
-    pxx = -td.comp_polariz_xx(omegas).imag
+    pxx = -td.comp_polariz_inter_xx(omegas).imag
     data = np.array([omegas.real*27.2114, pxx])
     np.savetxt('water.tddft_iter_lda.omega.inter.pxx.txt', data.T, fmt=['%f','%f'])
     data_ref = np.loadtxt(dname+'/water.tddft_iter_lda.omega.inter.pxx.txt-ref')

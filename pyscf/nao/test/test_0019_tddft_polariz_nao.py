@@ -23,7 +23,7 @@ class KnowValues(unittest.TestCase):
   def test_inter_polariz(self):
     """ This is interacting polarizability with SIESTA starting point """
     omegas = np.linspace(0.0,2.0,150)+1j*td.eps
-    pxx = -td.comp_polariz_xx(omegas).imag
+    pxx = -td.comp_polariz_inter_xx(omegas).imag
     data = np.array([omegas.real*27.2114, pxx])
     np.savetxt(dname+'/water.tddft_iter.omega.inter.pxx.txt', data.T, fmt=['%f','%f'])
     data_ref = np.loadtxt(dname+'/water.tddft_iter.omega.inter.pxx.txt-ref')
