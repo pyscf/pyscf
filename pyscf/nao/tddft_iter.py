@@ -170,7 +170,7 @@ class tddft_iter(scf):
 
     return v - (matvec_real + 1.0j*matvec_imag)
 
-  def comp_polariz_xx(self, comegas, x0=False):
+  def comp_polariz_inter_xx(self, comegas, x0=False):
     """ 
         Compute interacting polarizability
 
@@ -235,7 +235,7 @@ class tddft_iter(scf):
       pxx[iw] = np.dot(self.dn0[iw, :], vext[0,:])
     return pxx
 
-  def comp_nonin_polariz_ave(self, comegas):
+  def comp_polariz_nonin_ave(self, comegas):
     """ Non-interacting average polarizability """
     vext = np.transpose(self.moms1)
     p = np.zeros(comegas.shape, dtype=self.dtypeComplex)
@@ -245,7 +245,7 @@ class tddft_iter(scf):
         p[iw] += np.dot(dn0, vext[ixyz])/3.0
     return p
 
-  def comp_polariz_ave(self, comegas):
+  def comp_polariz_inter_ave(self, comegas):
     """ Compute a direction-averaged interacting polarizability  """
     p = np.zeros_like(comegas, dtype=self.dtypeComplex)
     vext = np.transpose(self.moms1)

@@ -98,3 +98,6 @@ class gpaw_hsx_c():
           return -1
 
       return np.sum(abs(s4-pyscf_overlaps))
+
+  def deallocate(self):
+    del self.s4_csr
