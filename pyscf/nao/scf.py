@@ -15,13 +15,15 @@ class scf(nao):
       self.init_mf(**kw)
     elif 'label' in kw:
       self.init_mo_coeff_label(**kw)
+      self.xc_code = 'LDA,PZ' # just a guess...
     elif 'gpaw' in kw:
       self.init_mo_coeff_label(**kw)
+      self.xc_code = 'LDA,PZ' # just a guess, but in case of GPAW there is a field
     elif 'openmx' in kw:
+      self.xc_code = 'LDA,PZ' # just a guess...
       pass
     else:
       raise RuntimeError('unknown constructor')
-    self.xc_code = 'LDA,PZ' # just a guess...
     self.init_libnao()
     self.pb = prod_basis_c()
     self.pb.init_prod_basis_pp_batch(nao=self, **kw)
@@ -45,6 +47,7 @@ class scf(nao):
     nocc = int(nelec/2)
     fermi_energy = (self.mo_energy[nocc]+self.mo_energy[nocc-1])/2.0
     self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else fermi_energy
+    self.xc_code = mf.xc if hasattr(mf, 'xc') else 'HF'
 
   def init_mo_coeff_label(self, **kw):
     """ Constructor a self-consistent field calculation class """

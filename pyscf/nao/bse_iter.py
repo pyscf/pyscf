@@ -23,11 +23,18 @@ class bse_iter(tddft_iter):
     self.norbs2 = self.norbs**2
     kernel_den = pack2den_l(self.kernel)
     n = self.norbs
-    self.kernel_4p = (((self.v_dab.T*(self.cc_da*kernel_den))*self.cc_da.T)*self.v_dab).reshape([n*n,n*n])
+    v_dab = self.v_dab
+    cc_da = self.cc_da
+    self.kernel_4p = (((v_dab.T*(cc_da*kernel_den))*cc_da.T)*v_dab).reshape([n*n,n*n])
     #print(type(self.kernel_4p), self.kernel_4p.shape, 'this is just a reference kernel, must be removed later for sure')
 
     if self.xc_code=='CIS' or self.xc_code=='HF':
-      self.kernel_4p = self.kernel_4p - 0.5*np.einsum('(abcd->acbd)', self.kernel_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
+      self.kernel_4p -= 0.5*np.einsum('abcd->acbd', self.kernel_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
+    elif self.xc_code=='RPA':
+      pass
+    else :
+      print(' xc_code ', self.xc_code)
+      RuntimeError('unkn xc_code')
 
 
   def apply_l0(self, sab, comega=1j*0.0):
@@ -89,3 +96,21 @@ class bse_iter(tddft_iter):
     """ This applies the interacting four point Green's function to a suitable vector (e.g. dipole matrix elements)"""
     seff,info = self.seff(sab, comega)
     return self.apply_l0( seff, comega )
+
+  def comp_polariz_nonin_ave(self, comegas):
+    """ Non-interacting average polarizability """
+    p = np.zeros(len(comegas), dtype=self.dtypeComplex)
+    for ixyz in range(3):
+      for iw,omega in enumerate(comegas):
+        vab = self.apply_l0(self.dab[ixyz], omega)
+        p[iw] += (vab*self.dab[ixyz]).sum()/3.0
+    return p
+
+  def comp_polariz_inter_ave(self, comegas):
+    """ Compute a direction-averaged interacting polarizability  """
+    p = np.zeros(len(comegas), dtype=self.dtypeComplex)
+    for ixyz in range(3):
+      for iw,omega in enumerate(comegas):
+        vab = self.apply_l(self.dab[ixyz], omega)
+        p[iw] += (vab*self.dab[ixyz]).sum()/3.0
+    return p

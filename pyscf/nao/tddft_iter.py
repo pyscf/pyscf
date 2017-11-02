@@ -33,7 +33,7 @@ class tddft_iter(scf):
     self.tddft_iter_tol = kw['tddft_iter_tol'] if 'tddft_iter_tol' in kw else 1e-2
     self.eps = kw['iter_broadening'] if 'iter_broadening' in kw else 0.00367493
     self.GPU = GPU = kw['GPU'] if 'GPU' in kw else None
-    self.xc_code = xc_code = kw['xc_code'] if 'xc_code' in kw else 'LDA,PZ'
+    self.xc_code = xc_code = kw['xc_code'] if 'xc_code' in kw else self.xc_code
     self.nfermi_tol = nfermi_tol = kw['nfermi_tol'] if 'nfermi_tol' in kw else 1e-5
     self.dtype = kw['dtype'] if 'dtype' in kw else np.float32
     self.telec = kw['telec'] if 'telec' in kw else self.telec
@@ -75,10 +75,15 @@ class tddft_iter(scf):
     else:
         self.kernel,self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype) # Lower Triangular Part of the kernel
         assert self.nprod==self.kernel_dim, "%r %r "%(self.nprod, self.kernel_dim)
-        
-        if xc_code.upper()!='RPA' :
-          self.comp_fxc_pack(kernel=self.kernel, **kw)
 
+        if xc_code=='RPA' or xc_code=='HF':
+          pass
+        elif xc_code=='LDA,VWN' or 'LDA,PZ':
+          self.comp_fxc_pack(kernel=self.kernel, **kw)
+        else:
+          print(' xc_code ', xc_code)
+          raise RuntimeError('unkn xc_code')
+    
     # probably unnecessary, require probably does a copy
     # problematic for the dtype, must there should be another option 
     #self.x  = np.require(sv.wfsx.x, dtype=self.dtype, requirements='CW')
