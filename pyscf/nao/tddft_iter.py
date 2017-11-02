@@ -75,13 +75,12 @@ class tddft_iter(scf):
     else:
         self.kernel,self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype) # Lower Triangular Part of the kernel
         assert self.nprod==self.kernel_dim, "%r %r "%(self.nprod, self.kernel_dim)
-
-        if xc_code=='RPA' or xc_code=='HF':
-          pass
-        elif xc_code=='LDA,VWN' or 'LDA,PZ':
-          self.comp_fxc_pack(kernel=self.kernel, **kw)
+        
+        xc = xc_code.split(',')[0]
+        if xc=='RPA' or xc=='HF': pass
+        elif xc=='LDA' or xc=='GGA': self.comp_fxc_pack(kernel=self.kernel, **kw)
         else:
-          print(' xc_code ', xc_code)
+          print(' xc_code', xc_code, xc, xc_code.split(','))
           raise RuntimeError('unkn xc_code')
     
     # probably unnecessary, require probably does a copy

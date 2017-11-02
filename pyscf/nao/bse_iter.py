@@ -14,10 +14,6 @@ class bse_iter(tddft_iter):
       which is constructed as list of numpy arrays 
        $ d_i = \int f^a(r) r_i f^b(r) dr $
     """
-    #sv, pb, iter_tol=1e-2, iter_broadening=0.00367493,
-    # nfermi_tol=1e-5, telec=None, nelec=None, fermi_energy=None, xc_code='RPA',
-    #      GPU=False, precision="single", **kvargs
-          
     tddft_iter.__init__(self, **kw)
     self.dab = [d.toarray() for d in self.dipole_coo()]
     self.norbs2 = self.norbs**2
@@ -25,16 +21,18 @@ class bse_iter(tddft_iter):
     n = self.norbs
     v_dab = self.v_dab
     cc_da = self.cc_da
-    self.kernel_4p = (((v_dab.T*(cc_da*kernel_den))*cc_da.T)*v_dab).reshape([n*n,n*n])
+    self.kernel_4p = 1.0*(((v_dab.T*(cc_da*kernel_den))*cc_da.T)*v_dab).reshape([n*n,n*n])
     #print(type(self.kernel_4p), self.kernel_4p.shape, 'this is just a reference kernel, must be removed later for sure')
 
-    if self.xc_code=='CIS' or self.xc_code=='HF':
+    xc = self.xc_code.split(',')[0]
+    if xc=='CIS' or xc=='HF' or xc=='GW':
+      pass
       self.kernel_4p -= 0.5*np.einsum('abcd->acbd', self.kernel_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
-    elif self.xc_code=='RPA':
+    elif xc=='RPA' or xc=='LDA' or xc=='GGA':
       pass
     else :
-      print(' xc_code ', self.xc_code)
-      RuntimeError('unkn xc_code')
+      print(' ?? xc_code ', self.xc_code, xc)
+      raise RuntimeError('??? xc_code ???')
 
 
   def apply_l0(self, sab, comega=1j*0.0):
@@ -45,18 +43,15 @@ class bse_iter(tddft_iter):
     self.l0_ncalls+=1
     nb2v = np.dot(self.xocc, sab)
     nm2v = blas.cgemm(1.0, nb2v, np.transpose(self.xvrt))
-    if use_numba:
-      div_eigenenergy_numba(self.ksn2e[0,0,:], self.ksn2f[0,0,:], self.nfermi,
-        self.vstart, comega, nm2v.real, nm2v.imag, self.ksn2e.shape[2])
-    else:
-      for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
-        for j,[em,fm] in enumerate(zip(self.ksn2e[0,0,n+1:],self.ksn2f[0,0,n+1:])):
-          m = j+n+1-self.vstart
-          nm2v[n,m] = nm2v[n,m] * (fn-fm) *\
+    for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
+      for j,[em,fm] in enumerate(zip(self.ksn2e[0,0,n+1:],self.ksn2f[0,0,n+1:])):
+        m = j+n+1-self.vstart
+        nm2v[n,m] = nm2v[n,m] * (fn-fm) * \
           ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
 
     nb2v = blas.cgemm(1.0, nm2v, self.xvrt)
     ab2v = blas.cgemm(1.0, np.transpose(self.xocc), nb2v)
+    #ab2v = (ab2v + ab2v.T)/2.0
     return ab2v
 
   def seff(self, sext, comega=1j*0.0):
