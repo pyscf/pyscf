@@ -3,13 +3,7 @@ import os,unittest,numpy as np
 
 def run_tddft_iter(calculator, label, freq):
     from pyscf.nao import tddft_iter
-    if label == "siesta":
-        td = tddft_iter(label='water_sz', iter_broadening=1e-2)
-    elif label == "gpaw":
-        td = tddft_iter(gpaw=calculator, iter_broadening=1e-2)
-    else:
-        raise ValueError("Only siesta or gpaw calculator for the moment!")
-
+    td = tddft_iter(gpaw=calculator, iter_broadening=1e-2)
     omegas = np.linspace(freq[0], freq[freq.shape[0]-1], freq.shape[0]) + 1j*td.eps
 
     pxx_nonin = np.zeros(omegas.shape[0], dtype=float)
@@ -84,7 +78,9 @@ class KnowValues(unittest.TestCase):
   def test_gpaw_vs_siesta_tddft_iter(self):
     """ init ao_log_c with it radial orbitals from GPAW """
 
-    return # this feature is now impl in scf
+    print('00025   :  just do nothing...')
+    return 
+    
     if not dft: return
     omegas = np.linspace(0.0,2.0,500)
     pxx = {"nonin":
@@ -95,7 +91,7 @@ class KnowValues(unittest.TestCase):
              "gpaw": np.zeros(omegas.shape[0], dtype=float)}
             }
 
-    pxx["nonin"]["siesta"], pxx["inter"]["siesta"] = run_tddft_iter(None, "siesta", omegas)
+    pxx["nonin"]["siesta"], pxx["inter"]["siesta"] = run_tddft_iter(siesta_calc, "siesta", omegas)
     pxx["nonin"]["gpaw"], pxx["inter"]["gpaw"] = run_tddft_iter(gpaw_calc, "gpaw", omegas)
 
     import ase.units as un
