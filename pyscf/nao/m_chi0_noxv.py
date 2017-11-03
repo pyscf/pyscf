@@ -51,19 +51,38 @@ def chi0_mv(self, v, comega=1j*0.0):
 
         nm2v_im = np.zeros(nm2v_re.shape, dtype = self.dtype)
 
-    if use_numba:
-        div_eigenenergy_numba(self.ksn2e[0, 0, :], self.ksn2f[0, 0, :], self.nfermi, 
-                self.vstart, comega, nm2v_re, nm2v_im, self.norbs)
-    else:
-        for n,[en,fn] in enumerate(zip(self.ksn2e[0:self.nfermi], self.ksn2f[0, 0, 0:self.nfermi])):
-            for j,[em,fm] in enumerate(zip(self.ksn2e[0, 0, n+1:],self.ksn2f[0, 0, n+1:])):
-                m = j+n+1-self.vstart
-                nm2v = nm2v_re[n, m] + 1.0j*nm2v_im[n, m]
-                nm2v = nm2v * (fn-fm) *\
-                        ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
-                nm2v_re[n, m] = nm2v.real
-                nm2v_im[n, m] = nm2v.imag
+    #if use_numba:
+    #    div_eigenenergy_numba(self.ksn2e[0, 0, :], self.ksn2f[0, 0, :], self.nfermi, 
+    #            self.vstart, comega, nm2v_re, nm2v_im, self.norbs)
+    #else:
+    #    for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,0:self.nfermi], self.ksn2f[0, 0, 0:self.nfermi])):
+    #        for j,[em,fm] in enumerate(zip(self.ksn2e[0, 0, n+1:],self.ksn2f[0, 0, n+1:])):
+    #            m = j+n+1-self.vstart
+    #            nm2v = nm2v_re[n, m] + 1.0j*nm2v_im[n, m]
+    #            nm2v = nm2v * (fn-fm) *\
+    #                    ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
+    #            nm2v_re[n, m] = nm2v.real
+    #            nm2v_im[n, m] = nm2v.imag
 
+    #print('looping over n,m')
+    for n,(en,fn) in enumerate(zip(self.ksn2e[0,0,0:self.nfermi], self.ksn2f[0, 0, 0:self.nfermi])):
+      for m,(em,fm) in enumerate(zip(self.ksn2e[0,0,self.vstart:],self.ksn2f[0,0,self.vstart:])):
+        #print(n,m,fn-fm)
+        nm2v = nm2v_re[n, m] + 1.0j*nm2v_im[n, m]
+        nm2v = nm2v * (fn - fm) * \
+            ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
+        nm2v_re[n, m] = nm2v.real
+        nm2v_im[n, m] = nm2v.imag
+
+    #print('padding m<n, which can be also detected as negative occupation difference ')
+    for n,fn in enumerate(self.ksn2f[0, 0, 0:self.nfermi]):
+      for m,fm in enumerate(self.ksn2f[0,0,self.vstart:n]):
+        #print(n,m+self.vstart,fn-fm)
+        nm2v_re[n, m] = 0.0
+        nm2v_im[n, m] = 0.0
+
+    #raise RuntimeError('dbg')
+    
     # real part
     nb2v = self.gemm(1.0, nm2v_re, self.xvrt)
     ab2v = self.gemm(1.0, self.xocc.T, nb2v).reshape(self.norbs*self.norbs)

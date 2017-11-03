@@ -61,7 +61,6 @@ class tddft_iter(scf):
     if hasattr(self, 'hsx'): self.hsx.deallocate()
     
     self.rf0_ncalls = 0
-    self.l0_ncalls = 0
     self.matvec_ncalls = 0
 
     self.v_dab = pb.get_dp_vertex_sparse(dtype=self.dtype, sparseformat=coo_matrix).tocsr()
@@ -90,13 +89,31 @@ class tddft_iter(scf):
     self.ksn2e = np.require(np.zeros((1,self.nspin,self.norbs)), dtype=self.dtype, requirements='CW')
     self.ksn2e[0,0,:] = self.mo_energy
     ksn2fd = fermi_dirac_occupations(self.telec, self.ksn2e, self.fermi_energy)
+    if all(ksn2fd[0,0,:]>nfermi_tol):
+      print(self.telec, nfermi_tol, ksn2fd[0,0,:])
+      raise RuntimeError('telec is too high?')
+    
     self.ksn2f = (3-self.nspin)*ksn2fd
     self.nfermi = np.argmax(ksn2fd[0,0,:]<nfermi_tol)
     self.vstart = np.argmax(1.0-ksn2fd[0,0,:]>nfermi_tol)
+    
+    #print('tddft_iter.__init__')
+    #print(self.telec)
+    #print(self.ksn2f)
+    #print(self.ksn2e)
+    #print(self.fermi_energy)
+    #print(self.nfermi)
+    #print(self.vstart)
+    #print(ksn2fd[0,0,:], ksn2fd[0,0,:]<nfermi_tol)
+    #print(1.0-ksn2fd[0,0,:], 1.0-ksn2fd[0,0,:]<nfermi_tol)
+    #raise RuntimeError('tddft_iter nfermi?')
 
     self.xocc = self.mo_coeff[0,0,0:self.nfermi,:,0]  # does python creates a copy at this point ?
     self.xvrt = self.mo_coeff[0,0,self.vstart:,:,0]   # does python creates a copy at this point ?
 
+    #print(self.xocc.shape)
+    #print(self.xvrt.shape)
+        
     self.td_GPU = tddft_iter_gpu_c(GPU, self.mo_coeff[0, 0, :, :, 0], self.ksn2f, self.ksn2e, 
             self.norbs, self.nfermi, self.nprod, self.vstart)
 

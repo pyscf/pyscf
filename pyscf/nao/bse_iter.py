@@ -15,19 +15,20 @@ class bse_iter(tddft_iter):
        $ d_i = \int f^a(r) r_i f^b(r) dr $
     """
     tddft_iter.__init__(self, **kw)
+    self.l0_ncalls = 0
     self.dab = [d.toarray() for d in self.dipole_coo()]
     self.norbs2 = self.norbs**2
     kernel_den = pack2den_l(self.kernel)
     n = self.norbs
     v_dab = self.v_dab
     cc_da = self.cc_da
-    self.kernel_4p = 1.0*(((v_dab.T*(cc_da*kernel_den))*cc_da.T)*v_dab).reshape([n*n,n*n])
+    self.kernel_4p = (((v_dab.T*(cc_da*kernel_den))*cc_da.T)*v_dab).reshape([n*n,n*n])
     #print(type(self.kernel_4p), self.kernel_4p.shape, 'this is just a reference kernel, must be removed later for sure')
 
     xc = self.xc_code.split(',')[0]
     if xc=='CIS' or xc=='HF' or xc=='GW':
       pass
-      self.kernel_4p -= 0.5*np.einsum('abcd->acbd', self.kernel_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
+      self.kernel_4p -= 0.5*np.einsum('abcd->bcad', self.kernel_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
     elif xc=='RPA' or xc=='LDA' or xc=='GGA':
       pass
     else :
@@ -44,10 +45,16 @@ class bse_iter(tddft_iter):
     nb2v = np.dot(self.xocc, sab)
     nm2v = blas.cgemm(1.0, nb2v, np.transpose(self.xvrt))
     for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
-      for j,[em,fm] in enumerate(zip(self.ksn2e[0,0,n+1:],self.ksn2f[0,0,n+1:])):
-        m = j+n+1-self.vstart
+      for m,[em,fm] in enumerate(zip(self.ksn2e[0,0,self.vstart:],self.ksn2f[0,0,self.vstart:])):
         nm2v[n,m] = nm2v[n,m] * (fn-fm) * \
           ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
+
+    #print('padding m<n, which can be also detected as negative occupation difference ')
+    for n,fn in enumerate(self.ksn2f[0, 0, 0:self.nfermi]):
+      for m,fm in enumerate(self.ksn2f[0,0,self.vstart:n]):
+        #print(n,m+self.vstart,fn-fm)
+        nm2v[n, m] = 0.0
+
 
     nb2v = blas.cgemm(1.0, nm2v, self.xvrt)
     ab2v = blas.cgemm(1.0, np.transpose(self.xocc), nb2v)
