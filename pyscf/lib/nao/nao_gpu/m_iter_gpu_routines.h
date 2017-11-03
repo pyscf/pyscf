@@ -1,5 +1,6 @@
 __global__ void normalize_energy_gpu(float *ksn2e, float *ksn2f, double omega_re, double omega_im, 
     float *nm2v_re, float *nm2v_im, int nfermi, int nprod, int nvirt, int vstart);
+__global__ void padding_nm2v( float *nm2v_re, float *nm2v_im, int nfermi, int norbs, int nvirt, int vstart);
 
 extern "C" void init_tddft_iter_gpu(float *X4, int norbs_in, float *ksn2e,
     float *ksn2f, int nfermi_in, int nprod_in, int vstart_in);
