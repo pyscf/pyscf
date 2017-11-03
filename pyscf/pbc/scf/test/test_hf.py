@@ -201,6 +201,8 @@ class KnowValues(unittest.TestCase):
         v12 = mf.get_veff(cell, dm, kpts_band=cell.get_abs_kpts([.25,.25,.25]))
         v13 = mf.get_veff(cell, dm, kpt=cell.get_abs_kpts([-1./3,1./3,.25]),
                           kpts_band=cell.get_abs_kpts([.25,.25,.25]))
+        v14 = mf.get_veff(cell, dm, kpt=cell.get_abs_kpts([-1./3,1./3,.25]),
+                          kpts_band=cell.make_kpts([2,1,1]))
         self.assertTrue(v11.dtype == numpy.complex128)
         self.assertTrue(v12.dtype == numpy.complex128)
 
@@ -210,9 +212,12 @@ class KnowValues(unittest.TestCase):
         v22 = mf.get_veff(cell, dm, kpts_band=cell.get_abs_kpts([.25,.25,.25]))
         v23 = mf.get_veff(cell, dm, kpt=cell.get_abs_kpts([-1./3,1./3,.25]),
                           kpts_band=cell.get_abs_kpts([.25,.25,.25]))
+        v24 = mf.get_veff(cell, dm, kpt=cell.get_abs_kpts([-1./3,1./3,.25]),
+                          kpts_band=cell.make_kpts([2,1,1]))
         self.assertAlmostEqual(abs(v11-v21).max(), 0, 9)
         self.assertAlmostEqual(abs(v12-v22).max(), 0, 9)
         self.assertAlmostEqual(abs(v13-v23).max(), 0, 9)
+        self.assertAlmostEqual(abs(v14-v24).max(), 0, 9)
         self.assertAlmostEqual(lib.finger(v11), -0.30110964334164825+0.81409418199767414j, 9)
         self.assertAlmostEqual(lib.finger(v12), -2.1601376488983997-9.4070613374115908j, 9)
 

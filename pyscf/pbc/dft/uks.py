@@ -33,7 +33,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     t0 = (time.clock(), time.time())
 
     # ndim = 3 : dm.shape = ([alpha,beta], nao, nao)
-    ground_state = (dm.ndim == 3 and dm.shape[0] == 2)
+    ground_state = (dm.ndim == 3 and dm.shape[0] == 2 and kpts_band is None)
 
     if ks.grids.coords is None:
         ks.grids.build(with_non0tab=True)
