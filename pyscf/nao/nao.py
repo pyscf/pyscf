@@ -211,9 +211,7 @@ class nao():
     
     # list of atoms associated to them specie number
     self.atom2sp = np.empty((self.natm), dtype=np.int64)
-    print(self.atom2sp, self.natm, self.atom2coord, self.xml_dict['atom2sp'])
     for o,atom in enumerate(self.wfsx.orb2atm):
-      print(o, atom)
       self.atom2sp[atom-1] = strspecie2sp[self.wfsx.orb2strspecie[o]]
 
     self.atom2s = np.zeros((self.natm+1), dtype=np.int64)
