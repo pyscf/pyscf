@@ -341,14 +341,6 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
     '''
     if kpts is None:
         kpts = numpy.zeros((1,3))
-    if kpts_band is not None:
-# To compute Vxc on kpts_band, convert the NumInt object to KNumInt object.
-        ni_kpts = _KNumInt()
-        ni_kpts.__dict__.update(ni.__dict__)
-        ni = ni_kpts
-        kpts = kpts.reshape(1,3)
-        nao = dms.shape[-1]
-        dms = dms.reshape(-1,1,nao,nao)
 
     xctype = ni._xc_type(xc_code)
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms, hermi)
@@ -449,14 +441,6 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=0,
     '''
     if kpts is None:
         kpts = numpy.zeros((1,3))
-    if kpts_band is not None:
-# To compute Vxc on kpts_band, convert the NumInt object to KNumInt object.
-        ni_kpts = _KNumInt()
-        ni_kpts.__dict__.update(ni.__dict__)
-        ni = ni_kpts
-        kpts = kpts.reshape(1,3)
-        nao = dms[0].shape[-1]
-        dms = dms.reshape(-1,1,nao,nao)
 
     xctype = ni._xc_type(xc_code)
     dma, dmb = _format_uks_dm(dms)
@@ -986,12 +970,28 @@ class _NumInt(numint._NumInt):
     @lib.with_doc(nr_rks.__doc__)
     def nr_rks(self, cell, grids, xc_code, dms, hermi=0,
                kpt=numpy.zeros(3), kpts_band=None, max_memory=2000, verbose=None):
+        if kpts_band is not None:
+# To compute Vxc on kpts_band, convert the NumInt object to KNumInt object.
+            ni = _KNumInt()
+            ni.__dict__.update(self.__dict__)
+            nao = dms.shape[-1]
+            return ni.nr_rks(cell, grids, xc_code, dms.reshape(-1,1,nao,nao),
+                             hermi, kpt.reshape(1,3), kpts_band, max_memory,
+                             verbose)
         return nr_rks(self, cell, grids, xc_code, dms,
                       0, 0, hermi, kpt, kpts_band, max_memory, verbose)
 
     @lib.with_doc(nr_uks.__doc__)
     def nr_uks(self, cell, grids, xc_code, dms, hermi=0,
                kpt=numpy.zeros(3), kpts_band=None, max_memory=2000, verbose=None):
+        if kpts_band is not None:
+# To compute Vxc on kpts_band, convert the NumInt object to KNumInt object.
+            ni = _KNumInt()
+            ni.__dict__.update(self.__dict__)
+            nao = dms[0].shape[-1]
+            return ni.nr_uks(cell, grids, xc_code, dms.reshape(-1,1,nao,nao),
+                             hermi, kpt.reshape(1,3), kpts_band, max_memory,
+                             verbose)
         return nr_uks(self, cell, grids, xc_code, dms,
                       1, 0, hermi, kpt, kpts_band, max_memory, verbose)
 

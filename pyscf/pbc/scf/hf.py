@@ -325,6 +325,8 @@ class SCF(hf.SCF):
         if kpt is None: kpt = self.kpt
 
         cpu0 = (time.clock(), time.time())
+        dm = np.asarray(dm)
+        nao = dm.shape[-1]
 
         if (kpts_band is None and
             (self.exxdiv == 'ewald' or not self.exxdiv) and
@@ -338,12 +340,11 @@ class SCF(hf.SCF):
             if self.exxdiv == 'ewald':
                 from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0
                 # G=0 is not inculded in the ._eri integrals
-                nao = dm.shape[-1]
                 _ewald_exxdiv_for_G0(self.cell, kpt, dm.reshape(-1,nao,nao),
                                      vk.reshape(-1,nao,nao))
         else:
-            vj, vk = self.with_df.get_jk(dm, hermi, kpt, kpts_band,
-                                         exxdiv=self.exxdiv)
+            vj, vk = self.with_df.get_jk(dm.reshape(-1,nao,nao), hermi,
+                                         kpt, kpts_band, exxdiv=self.exxdiv)
 
         logger.timer(self, 'vj and vk', *cpu0)
         vj = _format_jks(vj, dm, kpts_band)
@@ -475,6 +476,8 @@ RHF = SCF
 
 def _format_jks(vj, dm, kpts_band):
     if kpts_band is None:
+        vj = vj.reshape(dm.shape)
+    elif kpts_band.ndim == 1:  # a single k-point on bands
         vj = vj.reshape(dm.shape)
     elif hasattr(dm, "ndim") and dm.ndim == 2:
         vj = vj[0]
