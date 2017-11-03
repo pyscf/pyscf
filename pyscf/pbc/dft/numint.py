@@ -341,6 +341,15 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
     '''
     if kpts is None:
         kpts = numpy.zeros((1,3))
+    if kpts_band is not None:
+# To compute Vxc on kpts_band, convert the NumInt object to KNumInt object.
+        ni_kpts = _KNumInt()
+        ni_kpts.__dict__.update(ni.__dict__)
+        ni = ni_kpts
+        kpts = kpts.reshape(1,3)
+        nao = dms.shape[-1]
+        dms = dms.reshape(-1,1,nao,nao)
+
     xctype = ni._xc_type(xc_code)
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms, hermi)
 
@@ -440,6 +449,15 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=0,
     '''
     if kpts is None:
         kpts = numpy.zeros((1,3))
+    if kpts_band is not None:
+# To compute Vxc on kpts_band, convert the NumInt object to KNumInt object.
+        ni_kpts = _KNumInt()
+        ni_kpts.__dict__.update(ni.__dict__)
+        ni = ni_kpts
+        kpts = kpts.reshape(1,3)
+        nao = dms[0].shape[-1]
+        dms = dms.reshape(-1,1,nao,nao)
+
     xctype = ni._xc_type(xc_code)
     dma, dmb = _format_uks_dm(dms)
     nao = dma.shape[-1]

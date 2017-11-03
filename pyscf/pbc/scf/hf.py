@@ -309,9 +309,16 @@ class SCF(hf.SCF):
         return get_ovlp(cell, kpt)
 
     def get_jk(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None):
-        '''Get Coulomb (J) and exchange (K) following :func:`scf.hf.RHF.get_jk_`.
+        r'''Get Coulomb (J) and exchange (K) following :func:`scf.hf.RHF.get_jk_`.
+        for particular k-point (kpt).
 
-        Note the incore version, which initializes an _eri array in memory.
+        When kpts_band is given, the J, K matrices on kpts_band are evaluated.
+
+            J_{pq} = \sum_{rs} (pq|rs) dm[s,r]
+            K_{pq} = \sum_{rs} (pr|sq) dm[r,s]
+
+        where r,s are orbitals on kpt. p and q are orbitals on kpts_band
+        if kpts_band is given otherwise p and q are orbitals on kpt.
         '''
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
@@ -339,10 +346,18 @@ class SCF(hf.SCF):
                                          exxdiv=self.exxdiv)
 
         logger.timer(self, 'vj and vk', *cpu0)
+        vj = _format_jks(vj, dm, kpts_band)
+        vk = _format_jks(vk, dm, kpts_band)
         return vj, vk
 
     def get_j(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None):
-        '''Compute J matrix for the given density matrix.
+        r'''Compute J matrix for the given density matrix and k-point (kpt).
+        When kpts_band is given, the J matrices on kpts_band are evaluated.
+
+            J_{pq} = \sum_{rs} (pq|rs) dm[s,r]
+
+        where r,s are orbitals on kpt. p and q are orbitals on kpts_band
+        if kpts_band is given otherwise p and q are orbitals on kpt.
         '''
         #return self.get_jk(cell, dm, hermi, kpt, kpts_band)[0]
         if cell is None: cell = self.cell
@@ -364,7 +379,7 @@ class SCF(hf.SCF):
             vj = self.with_df.get_jk(dm.reshape(-1,nao,nao), hermi,
                                      kpt, kpts_band, with_k=False)[0]
         logger.timer(self, 'vj', *cpu0)
-        return vj.reshape(dm.shape)
+        return _format_jks(vj, dm, kpts_band)
 
     def get_k(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None):
         '''Compute K matrix for the given density matrix.
@@ -457,3 +472,10 @@ class SCF(hf.SCF):
         return x2c.sfx2c1e(self)
 
 RHF = SCF
+
+def _format_jks(vj, dm, kpts_band):
+    if kpts_band is None:
+        vj = vj.reshape(dm.shape)
+    elif hasattr(dm, "ndim") and dm.ndim == 2:
+        vj = vj[0]
+    return vj
