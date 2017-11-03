@@ -21,68 +21,44 @@ def chi0_mv(self, v, comega=1j*0.0):
             comega: complex frequency
     """
 
-    if v.dtype == self.dtypeComplex:
-        vext = np.zeros((v.shape[0], 2), dtype = self.dtype, order="F")
-        vext[:, 0] = v.real
-        vext[:, 1] = v.imag
+    vext = np.zeros((v.shape[0], 2), dtype = self.dtype, order="F")
+    vext[:, 0] = v.real
+    vext[:, 1] = v.imag
 
-        # real part
-        vdp = csr_matvec(self.cc_da, vext[:, 0])
-        sab = (vdp*self.v_dab).reshape([self.norbs,self.norbs])
+    # real part
+    vdp = csr_matvec(self.cc_da, vext[:, 0])
+    sab = (vdp*self.v_dab).reshape([self.norbs,self.norbs])
 
-        nb2v = self.gemm(1.0, self.xocc, sab)
-        nm2v_re = self.gemm(1.0, nb2v, self.xvrt.T)
+    nb2v = self.gemm(1.0, self.xocc, sab)
+    nm2v_re = self.gemm(1.0, nb2v, self.xvrt.T)
 
-        # imaginary part
-        vdp = csr_matvec(self.cc_da, vext[:, 1])
-        sab = (vdp*self.v_dab).reshape([self.norbs, self.norbs])
+    # imaginary part
+    vdp = csr_matvec(self.cc_da, vext[:, 1])
+    sab = (vdp*self.v_dab).reshape([self.norbs, self.norbs])
 
-        nb2v = self.gemm(1.0, self.xocc, sab)
-        nm2v_im = self.gemm(1.0, nb2v, self.xvrt.T)
+    nb2v = self.gemm(1.0, self.xocc, sab)
+    nm2v_im = self.gemm(1.0, nb2v, self.xvrt.T)
+
+    if use_numba:
+        div_eigenenergy_numba(self.ksn2e[0, 0, :], self.ksn2f[0, 0, :], self.nfermi, 
+                self.vstart, comega, nm2v_re, nm2v_im, self.norbs)
     else:
-        vext = np.zeros((v.shape[0], 2), dtype = self.dtype, order="F")
-        vext[:, 0] = v.real
+        #print('looping over n,m')
+        for n,(en,fn) in enumerate(zip(self.ksn2e[0,0,0:self.nfermi], self.ksn2f[0, 0, 0:self.nfermi])):
+          for m,(em,fm) in enumerate(zip(self.ksn2e[0,0,self.vstart:],self.ksn2f[0,0,self.vstart:])):
+            #print(n,m,fn-fm)
+            nm2v = nm2v_re[n, m] + 1.0j*nm2v_im[n, m]
+            nm2v = nm2v * (fn - fm) * \
+                ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
+            nm2v_re[n, m] = nm2v.real
+            nm2v_im[n, m] = nm2v.imag
 
-        vdp = csr_matvec(self.cc_da, vext[:, 0])
-        sab = (vdp*self.v_dab).reshape([self.norbs, self.norbs])
+        #print('padding m<n, which can be also detected as negative occupation difference ')
+        for n in range(self.vstart+1, self.nfermi):
+            for m in range(n-self.vstart):
+                nm2v_re[n, m] = 0.0
+                nm2v_im[n, m] = 0.0
 
-        nb2v = self.gemm(1.0, self.xocc, sab)
-        nm2v_re = self.gemm(1.0, nb2v, self.xvrt.T)
-
-        nm2v_im = np.zeros(nm2v_re.shape, dtype = self.dtype)
-
-    #if use_numba:
-    #    div_eigenenergy_numba(self.ksn2e[0, 0, :], self.ksn2f[0, 0, :], self.nfermi, 
-    #            self.vstart, comega, nm2v_re, nm2v_im, self.norbs)
-    #else:
-    #    for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,0:self.nfermi], self.ksn2f[0, 0, 0:self.nfermi])):
-    #        for j,[em,fm] in enumerate(zip(self.ksn2e[0, 0, n+1:],self.ksn2f[0, 0, n+1:])):
-    #            m = j+n+1-self.vstart
-    #            nm2v = nm2v_re[n, m] + 1.0j*nm2v_im[n, m]
-    #            nm2v = nm2v * (fn-fm) *\
-    #                    ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
-    #            nm2v_re[n, m] = nm2v.real
-    #            nm2v_im[n, m] = nm2v.imag
-
-    #print('looping over n,m')
-    for n,(en,fn) in enumerate(zip(self.ksn2e[0,0,0:self.nfermi], self.ksn2f[0, 0, 0:self.nfermi])):
-      for m,(em,fm) in enumerate(zip(self.ksn2e[0,0,self.vstart:],self.ksn2f[0,0,self.vstart:])):
-        #print(n,m,fn-fm)
-        nm2v = nm2v_re[n, m] + 1.0j*nm2v_im[n, m]
-        nm2v = nm2v * (fn - fm) * \
-            ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
-        nm2v_re[n, m] = nm2v.real
-        nm2v_im[n, m] = nm2v.imag
-
-    #print('padding m<n, which can be also detected as negative occupation difference ')
-    for n,fn in enumerate(self.ksn2f[0, 0, 0:self.nfermi]):
-      for m,fm in enumerate(self.ksn2f[0,0,self.vstart:n]):
-        #print(n,m+self.vstart,fn-fm)
-        nm2v_re[n, m] = 0.0
-        nm2v_im[n, m] = 0.0
-
-    #raise RuntimeError('dbg')
-    
     # real part
     nb2v = self.gemm(1.0, nm2v_re, self.xvrt)
     ab2v = self.gemm(1.0, self.xocc.T, nb2v).reshape(self.norbs*self.norbs)
