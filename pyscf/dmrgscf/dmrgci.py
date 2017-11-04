@@ -794,7 +794,7 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
     f.close()
     #no reorder
     #f.write('noreorder\n')
-    return configFile
+    return confFile
 
 def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
     if isinstance(nelec, (int, numpy.integer)):
@@ -890,6 +890,10 @@ def dryrun(mc, mo_coeff=None):
     mc.fcisolver.onlywriteIntegral = bak
 
 def block_version(blockexe):
+    version = getattr(settings, 'BLOCKVERSION', None):
+    if isinstance(version, str):
+        return version
+
     try:
         msg = check_output([blockexe, '-v'], stderr=STDOUT)
         version = '1.1.0'
