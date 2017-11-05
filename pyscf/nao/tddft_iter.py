@@ -30,7 +30,7 @@ class tddft_iter(scf):
 
     scf.__init__(self, **kw)
 
-    self.tddft_iter_tol = kw['tddft_iter_tol'] if 'tddft_iter_tol' in kw else 1e-2
+    self.tddft_iter_tol = kw['tddft_iter_tol'] if 'tddft_iter_tol' in kw else 1e-3
     self.eps = kw['iter_broadening'] if 'iter_broadening' in kw else 0.00367493
     self.GPU = GPU = kw['GPU'] if 'GPU' in kw else None
     self.xc_code = xc_code = kw['xc_code'] if 'xc_code' in kw else self.xc_code

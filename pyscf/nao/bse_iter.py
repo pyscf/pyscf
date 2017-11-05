@@ -23,14 +23,13 @@ class bse_iter(tddft_iter):
     v_dab = self.v_dab
     cc_da = self.cc_da
     self.x = self.mo_coeff[0,0,:,:,0]
-    self.ksn2fd  = self.ksn2f/2.0
     self.kernel_4p = (((v_dab.T*(cc_da*kernel_den))*cc_da.T)*v_dab).reshape([n*n,n*n])
     #print(type(self.kernel_4p), self.kernel_4p.shape, 'this is just a reference kernel, must be removed later for sure')
 
     xc = self.xc_code.split(',')[0]
     if xc=='CIS' or xc=='HF' or xc=='GW':
       pass
-      self.kernel_4p -= 0.5*np.einsum('abcd->adbc', self.kernel_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
+      self.kernel_4p -= 0.5*np.einsum('abcd->bcad', self.kernel_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
     elif xc=='RPA' or xc=='LDA' or xc=='GGA':
       pass
     else :
@@ -47,14 +46,10 @@ class bse_iter(tddft_iter):
     nb2v = np.dot(self.x, sab)
     nm2v = blas.cgemm(1.0, nb2v, np.transpose(self.x))
     
-    for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:],self.ksn2fd[0,0,:])):
-      for m,[em,fm] in enumerate(zip(self.ksn2e[0,0,:],self.ksn2fd[0,0,:])):
-        #print(n,m+self.vstart,fn-fm)
-        nm2v[n,m] = nm2v[n,m] * (fn-fm) * \
-          ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
+    for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:],self.ksn2f[0,0,:])):
+      for m,[em,fm] in enumerate(zip(self.ksn2e[0,0,:],self.ksn2f[0,0,:])):
+        nm2v[n,m] = nm2v[n,m] * (fn-fm) * ( 1.0 / (comega - (em - en)))
 
-    #print(nm2v.shape)
-    #raise RuntimeError('debug')
     nb2v = blas.cgemm(1.0, nm2v, self.x)
     ab2v = blas.cgemm(1.0, np.transpose(self.x), nb2v)
     return ab2v
