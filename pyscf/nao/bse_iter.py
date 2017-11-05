@@ -16,7 +16,7 @@ class bse_iter(tddft_iter):
     """
     tddft_iter.__init__(self, **kw)
     self.l0_ncalls = 0
-    self.dab = [d.toarray() for d in self.dipole_coo()]
+    self.dip_ab = [d.toarray() for d in self.dipole_coo()]
     self.norbs2 = self.norbs**2
     kernel_den = pack2den_l(self.kernel)
     n = self.norbs
@@ -46,6 +46,7 @@ class bse_iter(tddft_iter):
     nm2v = blas.cgemm(1.0, nb2v, np.transpose(self.xvrt))
     for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
       for m,[em,fm] in enumerate(zip(self.ksn2e[0,0,self.vstart:],self.ksn2f[0,0,self.vstart:])):
+        #print(n,m+self.vstart,fn-fm)
         nm2v[n,m] = nm2v[n,m] * (fn-fm) * \
           ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
 
@@ -55,7 +56,7 @@ class bse_iter(tddft_iter):
         #print(n,m+self.vstart,fn-fm)
         nm2v[n, m] = 0.0
 
-
+    #raise RuntimeError('debug')
     nb2v = blas.cgemm(1.0, nm2v, self.xvrt)
     ab2v = blas.cgemm(1.0, np.transpose(self.xocc), nb2v)
     #ab2v = (ab2v + ab2v.T)/2.0
@@ -104,8 +105,8 @@ class bse_iter(tddft_iter):
     p = np.zeros(len(comegas), dtype=self.dtypeComplex)
     for ixyz in range(3):
       for iw,omega in enumerate(comegas):
-        vab = self.apply_l0(self.dab[ixyz], omega)
-        p[iw] += (vab*self.dab[ixyz]).sum()/3.0
+        vab = self.apply_l0(self.dip_ab[ixyz], omega)
+        p[iw] += (vab*self.dip_ab[ixyz]).sum()/3.0
     return p
 
   def comp_polariz_inter_ave(self, comegas):
@@ -113,6 +114,6 @@ class bse_iter(tddft_iter):
     p = np.zeros(len(comegas), dtype=self.dtypeComplex)
     for ixyz in range(3):
       for iw,omega in enumerate(comegas):
-        vab = self.apply_l(self.dab[ixyz], omega)
-        p[iw] += (vab*self.dab[ixyz]).sum()/3.0
+        vab = self.apply_l(self.dip_ab[ixyz], omega)
+        p[iw] += (vab*self.dip_ab[ixyz]).sum()/3.0
     return p
