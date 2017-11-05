@@ -45,7 +45,7 @@ class bse_iter(tddft_iter):
     sab = sab.reshape([self.norbs,self.norbs])
     self.l0_ncalls+=1
     nb2v = np.dot(self.x, sab)
-    nm2v = blas.cgemm(1.0, nb2v, self.x.T)
+    nm2v = blas.cgemm(1.0, nb2v, np.transpose(self.x))
     
     for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:],self.ksn2fd[0,0,:])):
       for m,[em,fm] in enumerate(zip(self.ksn2e[0,0,:],self.ksn2fd[0,0,:])):
@@ -56,7 +56,7 @@ class bse_iter(tddft_iter):
     #print(nm2v.shape)
     #raise RuntimeError('debug')
     nb2v = blas.cgemm(1.0, nm2v, self.x)
-    ab2v = blas.cgemm(1.0, self.x.T, nb2v)
+    ab2v = blas.cgemm(1.0, np.transpose(self.x), nb2v)
     return ab2v
 
   def apply_l0_occ_vrt(self, sab, comega=1j*0.0):
