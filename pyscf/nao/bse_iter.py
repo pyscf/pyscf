@@ -43,42 +43,82 @@ class bse_iter(tddft_iter):
 
     sab = sab.reshape([self.norbs,self.norbs])
     self.l0_ncalls+=1
-    nb2v = np.dot(self.x, sab)
-    nm2v = blas.cgemm(1.0, nb2v, np.transpose(self.x))
+
+    nm2v = np.zeros((self.norbs,self.norbs), self.dtypeComplex)
+    nm2v[self.vstart:, :self.nfermi] = blas.cgemm(1.0, np.dot(self.xvrt, sab), self.xocc.T)
+    nm2v[:self.nfermi, self.vstart:] = blas.cgemm(1.0, np.dot(self.xocc, sab), self.xvrt.T)
     
     for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:],self.ksn2f[0,0,:])):
       for m,[em,fm] in enumerate(zip(self.ksn2e[0,0,:],self.ksn2f[0,0,:])):
         nm2v[n,m] = nm2v[n,m] * (fn-fm) * ( 1.0 / (comega - (em - en)))
 
     nb2v = blas.cgemm(1.0, nm2v, self.x)
-    ab2v = blas.cgemm(1.0, np.transpose(self.x), nb2v)
+    ab2v = blas.cgemm(1.0, self.x.T, nb2v)
     return ab2v
 
-  def apply_l0_occ_vrt(self, sab, comega=1j*0.0):
+  def apply_l0_exp(self, sab, comega=1j*0.0):
     """ This applies the non-interacting four point Green's function to a suitable vector (e.g. dipole matrix elements)"""
     assert sab.size==(self.norbs2), "%r,%r"%(sab.size,self.norbs2)
 
     sab = sab.reshape([self.norbs,self.norbs])
     self.l0_ncalls+=1
-    nb2v = np.dot(self.xocc, sab)
-    nm2v = blas.cgemm(1.0, nb2v, np.transpose(self.xvrt))
-    for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
-      for m,[em,fm] in enumerate(zip(self.ksn2e[0,0,self.vstart:],self.ksn2f[0,0,self.vstart:])):
-        #print(n,m+self.vstart,fn-fm)
-        nm2v[n,m] = nm2v[n,m] * (fn-fm) * \
-          ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
+    nb2v = np.dot(self.x, sab)
+    nm2v = blas.cgemm(1.0, nb2v, self.x.T)
+    print(nm2v.dtype)
+    print(nm2v[self.vstart:, :self.nfermi])
+    print(nm2v[:self.nfermi, self.vstart:])
+    
+    nm2v = np.zeros((self.norbs,self.norbs), self.dtypeComplex)
+    nb2v1 = np.dot(self.xocc, sab)
+    nm2v1 = blas.cgemm(1.0, nb2v1, self.xvrt.T)
 
-    #print('padding m<n, which can be also detected as negative occupation difference ')
-    for n,fn in enumerate(self.ksn2f[0, 0, 0:self.nfermi]):
-      for m,fm in enumerate(self.ksn2f[0,0,self.vstart:n]):
-        #print(n,m+self.vstart,fn-fm)
-        nm2v[n, m] = 0.0
+    nb2v2 = np.dot(self.xvrt, sab)
+    nm2v2 = blas.cgemm(1.0, nb2v2, self.xocc.T)
 
-    #raise RuntimeError('debug')
-    nb2v = blas.cgemm(1.0, nm2v, self.xvrt)
-    ab2v = blas.cgemm(1.0, np.transpose(self.xocc), nb2v)
-    #ab2v = (ab2v + ab2v.T)/2.0
+    nm2v[self.vstart:, :self.nfermi] = nm2v2
+    nm2v[:self.nfermi, self.vstart:] = nm2v1
+    
+    print(nm2v.dtype, nm2v1.shape, nm2v1.dtype)
+    print(nm2v[self.vstart:, :self.nfermi])
+    print(nm2v[:self.nfermi, self.vstart:])
+    #raise RuntimeError('11')
+    
+    #nm2v2 = np.copy(nm2v1)
+    #for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
+      #for m,[em,fm] in enumerate(zip(self.ksn2e[0,0,self.vstart:],self.ksn2f[0,0,self.vstart:])):
+        #nm2v1[n,m] = nm2v1[n,m] * (fn-fm) * ( 1.0 / (comega - (em - en)))
+    
+    #for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
+      #for m,[em,fm] in enumerate(zip(self.ksn2e[0,0,self.vstart:],self.ksn2f[0,0,self.vstart:])):
+        #nm2v2[n,m] = nm2v2[n,m] * (fm-fn) * ( 1.0 / (comega - (en - em)))
+
+    for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:],self.ksn2f[0,0,:])):
+      for m,[em,fm] in enumerate(zip(self.ksn2e[0,0,:],self.ksn2f[0,0,:])):
+        nm2v[n,m] = nm2v[n,m] * (fn-fm) * ( 1.0 / (comega - (em - en)))
+    
+    
+
+    nb2v = blas.cgemm(1.0, nm2v, self.x)
+    ab2v = blas.cgemm(1.0, self.x.T, nb2v)
     return ab2v
+
+  def apply_l0_ref(self, sab, comega=1j*0.0):
+    """ This applies the non-interacting four point Green's function to a suitable vector (e.g. dipole matrix elements)"""
+    assert sab.size==(self.norbs2), "%r,%r"%(sab.size,self.norbs2)
+
+    sab = sab.reshape([self.norbs,self.norbs])
+    self.l0_ncalls+=1
+    nb2v = np.dot(self.x, sab)
+    nm2v = blas.cgemm(1.0, nb2v, self.x.T)
+    
+    for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:],self.ksn2f[0,0,:])):
+      for m,[em,fm] in enumerate(zip(self.ksn2e[0,0,:],self.ksn2f[0,0,:])):
+        nm2v[n,m] = nm2v[n,m] * (fn-fm) * ( 1.0 / (comega - (em - en)))
+
+    nb2v = blas.cgemm(1.0, nm2v, self.x)
+    ab2v = blas.cgemm(1.0, self.x.T, nb2v)
+    return ab2v
+
 
   def seff(self, sext, comega=1j*0.0):
     """ This computes an effective two point field (scalar non-local potential) given an external two point field.

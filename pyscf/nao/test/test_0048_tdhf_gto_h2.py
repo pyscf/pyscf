@@ -8,7 +8,7 @@ mol = gto.M( verbose = 1, atom = '''H 0 0 0;  H 0.17 0.7 0.587''', basis = 'cc-p
 
 gto_mf = scf.RHF(mol)
 gto_mf.kernel()
-print(gto_mf.mo_energy)
+#print(gto_mf.mo_energy)
 gto_td = tddft.TDDFT(gto_mf)
 gto_td.nstates = 9
 gto_td.singlet = True # False
@@ -17,6 +17,11 @@ gto_td.kernel()
 nao_td  = bse_iter(mf=gto_mf, gto=mol)
 
 class KnowValues(unittest.TestCase):
+
+  def test_bse_iter_vs_tdhf_pyscf(self):
+    """ Interacting case """
+    cdip = np.random.rand(nao_td.norbs,nao_td.norbs)+1j*np.random.rand(nao_td.norbs,nao_td.norbs)
+    nao_td.apply_l0_exp(cdip, comega=0.2+1j*0.01)
     
   def test_tddft_gto_vs_nao_inter(self):
     """ Interacting case """
@@ -27,8 +32,8 @@ class KnowValues(unittest.TestCase):
     p_iter = -nao_td.comp_polariz_inter_ave(omegas).imag
     data = np.array([omegas.real*27.2114, p_iter])
     np.savetxt('hydrogen.bse_iter_hf.omega.inter.pav.txt', data.T, fmt=['%f','%f'])
-    print('inter', abs(p_ave-p_iter).sum()/omegas.size, nao_td.l0_ncalls)
-    ##self.assertTrue(abs(p_ave-p_iter).sum()/omegas.size<0.03)
+    #print('inter', abs(p_ave-p_iter).sum()/omegas.size, nao_td.l0_ncalls)
+    self.assertTrue(abs(p_ave-p_iter).sum()/omegas.size<0.01)
     
   def test_tddft_gto_vs_nao_nonin(self):
     """ Non-interacting case """
