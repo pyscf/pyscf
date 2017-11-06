@@ -13,24 +13,24 @@ def lowdin(s):
     ''' new basis is |mu> c^{lowdin}_{mu i} '''
     e, v = scipy.linalg.eigh(s)
     idx = e > 1e-15
-    return numpy.dot(v[:,idx]/numpy.sqrt(e[idx]), v[:,idx].T.conj())
+    return numpy.dot(v[:,idx]/numpy.sqrt(e[idx]), v[:,idx].conj().T)
 
 def schmidt(s):
     c = numpy.linalg.cholesky(s)
     return scipy.linalg.solve_triangular(c, numpy.eye(c.shape[1]), lower=True,
-                                         overwrite_b=False).T.conj()
+                                         overwrite_b=False).conj().T
 
 def vec_lowdin(c, s=1):
     ''' lowdin orth for the metric c.T*s*c and get x, then c*x'''
     #u, w, vh = numpy.linalg.svd(c)
     #return numpy.dot(u, vh)
     # svd is slower than eigh
-    return numpy.dot(c, lowdin(reduce(numpy.dot, (c.T,s,c))))
+    return numpy.dot(c, lowdin(reduce(numpy.dot, (c.conj().T,s,c))))
 
 def vec_schmidt(c, s=1):
     ''' schmidt orth for the metric c.T*s*c and get x, then c*x'''
     if isinstance(s, numpy.ndarray):
-        return numpy.dot(c, schmidt(reduce(numpy.dot, (c.T,s,c))))
+        return numpy.dot(c, schmidt(reduce(numpy.dot, (c.conj().T,s,c))))
     else:
         return numpy.linalg.qr(c)[0]
 
@@ -228,7 +228,7 @@ def orth_ao(mf_or_mol, method='meta_lowdin', pre_orth_ao=None, scf_method=None,
         pre_orth_ao = project_to_atomic_orbitals(mol, 'ANO')
 
     if method.lower() == 'lowdin':
-        s1 = reduce(numpy.dot, (pre_orth_ao.T, s, pre_orth_ao))
+        s1 = reduce(numpy.dot, (pre_orth_ao.conj().T, s, pre_orth_ao))
         c_orth = numpy.dot(pre_orth_ao, lowdin(s1))
     elif method.lower() == 'nao':
         assert(mf is not None)
