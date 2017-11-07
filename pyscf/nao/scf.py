@@ -158,6 +158,37 @@ class scf(nao):
 
   def get_hamiltonian(self): # Returns the stored matrix elements of current hamiltonian 
     return self.hsx.spin2h4_csr
+  
+  def dos(self, comegas, **kw):
+    from pyscf.nao.scf_dos import scf_dos
+    return scf_dos(self, comegas, **kw)
+
+  def pdos(self, comegas, **kw):
+    from pyscf.nao.scf_dos import scf_pdos
+    return scf_pdos(self, comegas, **kw)
+
+  def read_wfsx(self, fname, **kw):
+    """ An occasional reading of the SIESTA's .WFSX file """
+    from pyscf.nao.m_siesta_wfsx import siesta_wfsx_c
+    self.wfsx = siesta_wfsx_c(fname=fname, **kw)
+    
+    assert self.nkpoints == self.wfsx.nkpoints
+    assert self.norbs == self.wfsx.norbs 
+    assert self.nspin == self.wfsx.nspin
+    orb2m = self.get_orb2m()
+    for k in range(self.nkpoints):
+      for s in range(self.nspin):
+        for n in range(self.norbs):
+          _siesta2blanko_denvec(orb2m, self.wfsx.x[k,s,n,:,:])
+
+    self.mo_coeff = np.require(self.wfsx.x, dtype=self.dtype, requirements='CW')
+    self.mo_energy = np.require(self.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
+    self.telec = kw['telec'] if 'telec' in kw else self.hsx.telec
+    self.nelec = kw['nelec'] if 'nelec' in kw else self.hsx.nelec
+    self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
+    ksn2fd = fermi_dirac_occupations(self.telec, self.mo_energy, self.fermi_energy)
+    self.mo_occ = (3-self.nspin)*ksn2fd
+    return self
 
 #
 # Example of reading pySCF mean-field calculation.
