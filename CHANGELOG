@@ -20,6 +20,7 @@ PySCF 1.4.1 (201?-?-?)
   - Eigenvalue ordering for Davidson eigen solver
   - Madelung constant of non-orthogonal lattice
   - Convergence of Madelung constant for huge number of k-points samples
+  - basis parser for pople-type basis
 
 PySCF 1.4 (2017-10-05)
 ----------------------
