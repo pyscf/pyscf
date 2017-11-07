@@ -205,6 +205,8 @@ C    SP
     def test_parse_pople_basis(self):
         self.assertEqual(len(gto.basis.load('6-31G(d)'      , 'H')), 2)
         self.assertEqual(len(gto.basis.load('6-31G(d)'      , 'C')), 6)
+        self.assertEqual(len(gto.basis.load('6-31Gs'        , 'C')), 6)
+        self.assertEqual(len(gto.basis.load('6-31G*'        , 'C')), 6)
         self.assertEqual(len(gto.basis.load('6-31G(d,p)'    , 'H')), 3)
         self.assertEqual(len(gto.basis.load('6-31G(d,p)'    , 'C')), 6)
         self.assertEqual(len(gto.basis.load('6-31G(2d,2p)'  , 'H')), 4)
