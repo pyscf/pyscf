@@ -23,9 +23,11 @@ except:
 
 
 class tddft_iter(scf):
+  """ 
+    Iterative TDDFT a la PK, DF, OC JCTC 
+  """
 
   def __init__(self, **kw):
-    """ Iterative TDDFT a la PK, DF, OC JCTC """
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
 
     scf.__init__(self, **kw)
