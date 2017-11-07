@@ -236,7 +236,10 @@ _BASIS_DIR = os.path.dirname(__file__)
 
 def _parse_pople_basis(basis, symb):
     mbas = basis[:basis.find('(')]
-    pbas = basis[basis.find('(')+1:basis.find(')')]
+    if '(' in basis:
+        extension = basis[basis.find('(')+1:basis.find(')')]
+    else:
+        extension = ''
 
     pathtmp = os.path.join('pople-basis',
                            mbas[0]+'-'+mbas[1:].upper() + '-polarization-%s.dat')
@@ -249,12 +252,12 @@ def _parse_pople_basis(basis, symb):
             return [pathtmp % s[:2]] + convert(s[2:])
 
     if symb in ('H', 'He'):
-        if ',' in pbas:
-            return tuple([ALIAS[mbas]] + convert(pbas.split(',')[1]))
+        if ',' in extension:
+            return tuple([ALIAS[mbas]] + convert(extension.split(',')[1]))
         else:
             return ALIAS[mbas]
     else:
-        return tuple([ALIAS[mbas]] + convert(pbas.split(',')[0]))
+        return tuple([ALIAS[mbas]] + convert(extension.split(',')[0]))
 
 def parse(string, symb=None):
     '''Parse the NWChem format basis or ECP text, return an internal basis (ECP)
