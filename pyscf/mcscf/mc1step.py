@@ -642,6 +642,18 @@ class CASSCF(casci.CASCI):
         return self
 
     def kernel(self, mo_coeff=None, ci0=None, callback=None, _kern=kernel):
+        '''
+        Returns:
+            Five elements, they are
+            total energy,
+            active space CI energy,
+            the active space FCI wavefunction coefficients or DMRG wavefunction ID,
+            the MCSCF canonical orbital coefficients,
+            the MCSCF canonical orbital coefficients.
+
+        They are attributes of mcscf object, which can be accessed by
+        .e_tot, .e_cas, .ci, .mo_coeff, .mo_energy
+        '''
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else: # overwrite self.mo_coeff because it is needed in many methods of this class

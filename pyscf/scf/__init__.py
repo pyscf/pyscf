@@ -168,6 +168,7 @@ def DHF(mol, *args):
 
 
 def X2C(mol, *args):
+    '''X2C UHF (in testing)'''
     return x2c.UHF(mol, *args)
 
 def density_fit(mf, auxbasis=None, with_df=None):

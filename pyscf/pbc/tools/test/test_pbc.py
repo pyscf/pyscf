@@ -99,6 +99,19 @@ class KnowValues(unittest.TestCase):
         cl2 = tools.cell_plus_imgs(cl1, cl1.nimgs)
         self.assertAlmostEqual(finger(cl2.atom_coords()), 465.86333525744129, 9)
 
+    def test_madelung(self):
+        cell = pbcgto.Cell()
+        cell.atom = 'He 0 0 0'
+        cell.a = '''0.      1.7834  1.7834
+                    1.7834  0.      1.7834
+                    1.7834  1.7834  0.    '''
+        cell.build()
+        scell = tools.super_cell(cell, [2,3,5])
+        mad0 = tools.madelung(scell, [0,0,0])
+        kpts = cell.make_kpts([2,3,5])
+        mad1 = tools.madelung(cell, kpts)
+        self.assertAlmostEqual(mad0-mad1, 0, 9)
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.tools")

@@ -683,7 +683,7 @@ class DMRGCI(pyscf.lib.StreamObject):
 
 # Block code also allows non-spin-adapted calculation. S^2 is not available in
 # this type of calculation
-    if 0 and 'spin_adapted' in settings.BLOCKEXE:
+    if 'spin_adapted' in settings.BLOCKEXE:
         def spin_square(self, civec, norb, nelec):
             if isinstance(nelec, (int, numpy.integer)):
                 nelecb = nelec//2
@@ -794,6 +794,7 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
     f.close()
     #no reorder
     #f.write('noreorder\n')
+    return confFile
 
 def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
     if isinstance(nelec, (int, numpy.integer)):
@@ -824,6 +825,7 @@ def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
     pyscf.tools.fcidump.from_integrals(integralFile, h1eff, eri_cas, ncas,
                                        neleca+nelecb, ecore, ms=abs(neleca-nelecb),
                                        orbsym=orbsym)
+    return integralFile
 
 
 def executeBLOCK(DMRGCI):
@@ -888,6 +890,10 @@ def dryrun(mc, mo_coeff=None):
     mc.fcisolver.onlywriteIntegral = bak
 
 def block_version(blockexe):
+    version = getattr(settings, 'BLOCKVERSION', None):
+    if isinstance(version, str):
+        return version
+
     try:
         msg = check_output([blockexe, '-v'], stderr=STDOUT)
         version = '1.1.0'

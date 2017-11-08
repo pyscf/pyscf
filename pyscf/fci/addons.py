@@ -480,8 +480,8 @@ def overlap(bra, ket, norb, nelec, s=None):
     return numpy.dot(bra.ravel(), ket.ravel())
 
 def fix_spin_(fciobj, shift=.2, ss=None, **kwargs):
-    r'''If FCI solver cannot stick on spin eigenfunction, modify the solver by
-    adding a shift on spin square operator
+    r'''If FCI solver cannot stay on spin eigenfunction, this function can
+    add a shift to the states which have wrong spin.
 
     .. math::
 

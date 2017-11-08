@@ -238,6 +238,14 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     mo_occ[:ncore] = 2
     mo_occ[ncore:nocc] = occ
 
+    mo_coeff1 = mo_coeff.copy()
+    mo_coeff1[:,ncore:nocc] = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
+    if hasattr(mo_coeff, 'orbsym'):
+        orbsym = numpy.copy(mo_coeff.orbsym)
+        if sort:
+            orbsym[ncore:nocc] = orbsym[ncore:nocc][casorb_idx]
+        mo_coeff1 = lib.tag_array(mo_coeff1, orbsym=orbsym)
+
     if isinstance(ci, numpy.ndarray):
         fcivec = fci.addons.transform_ci_for_orbital_rotation(ci, ncas, nelecas, ucas)
     elif isinstance(ci, (tuple, list)) and isinstance(ci[0], numpy.ndarray):
@@ -246,29 +254,33 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
                   for x in ci]
     else:
         log.info('FCI vector not available, call CASCI for wavefunction')
-        mocas = mo_coeff[:,ncore:nocc]
-        h1eff = reduce(numpy.dot, (mocas.T, mc.get_hcore(), mocas))
+        mocas = mo_coeff1[:,ncore:nocc]
+        hcore = mc.get_hcore()
+        dm_core = numpy.dot(mo_coeff1[:,:ncore]*2, mo_coeff1[:,:ncore].T)
+        ecore = mc._scf.energy_nuc()
+        ecore+= numpy.einsum('ij,ji', hcore, dm_core)
+        h1eff = reduce(numpy.dot, (mocas.T, hcore, mocas))
         if eris is not None and hasattr(eris, 'ppaa'):
+            ecore += eris.vhf_c[:ncore,:ncore].trace()
             h1eff += reduce(numpy.dot, (ucas.T, eris.vhf_c[ncore:nocc,ncore:nocc], ucas))
             aaaa = ao2mo.restore(4, eris.ppaa[ncore:nocc,ncore:nocc,:,:], ncas)
             aaaa = ao2mo.incore.full(aaaa, ucas)
         else:
-            dm_core = numpy.dot(mo_coeff[:,:ncore]*2, mo_coeff[:,:ncore].T)
-            vj, vk = mc._scf.get_jk(mc.mol, dm_core)
-            h1eff += reduce(numpy.dot, (mocas.T, vj-vk*.5, mocas))
+            corevhf = mc.get_veff(mc.mol, dm_core)
+            ecore += numpy.einsum('ij,ji', dm_core, corevhf) * .5
+            h1eff += reduce(numpy.dot, (mocas.T, corevhf, mocas))
             aaaa = ao2mo.kernel(mc.mol, mocas)
-        max_memory = max(400, mc.max_memory-lib.current_memory()[0])
-        e_cas, fcivec = mc.fcisolver.kernel(h1eff, aaaa, ncas, nelecas,
-                                            max_memory=max_memory, verbose=log)
-        log.debug('In Natural orbital, CI energy = %.12g', e_cas)
 
-    mo_coeff1 = mo_coeff.copy()
-    mo_coeff1[:,ncore:nocc] = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
-    if hasattr(mo_coeff, 'orbsym'):
-        orbsym = numpy.copy(mo_coeff.orbsym)
-        if sort:
-            orbsym[ncore:nocc] = orbsym[ncore:nocc][casorb_idx]
-        mo_coeff1 = lib.tag_array(mo_coeff1, orbsym=orbsym)
+        # See label_symmetry_ function in casci_symm.py which initialize the
+        # orbital symmetry information in fcisolver.  This orbital symmetry
+        # labels should be reordered to match the sorted active space orbitals.
+        if hasattr(mo_coeff1, 'orbsym') and sort:
+            mc.fcisolver.orbsym = mo_coeff1.orbsym[ncore:nocc]
+
+        max_memory = max(400, mc.max_memory-lib.current_memory()[0])
+        e, fcivec = mc.fcisolver.kernel(h1eff, aaaa, ncas, nelecas, ecore=ecore,
+                                        max_memory=max_memory, verbose=log)
+        log.debug('In Natural orbital, CASCI energy = %.12g', e)
 
     if log.verbose >= logger.INFO:
         ovlp_ao = mc._scf.get_ovlp()
@@ -566,6 +578,18 @@ class CASCI(lib.StreamObject):
     def casci(self, mo_coeff=None, ci0=None):
         return self.kernel(mo_coeff, ci0)
     def kernel(self, mo_coeff=None, ci0=None):
+        '''
+        Returns:
+            Five elements, they are
+            total energy,
+            active space CI energy,
+            the active space FCI wavefunction coefficients or DMRG wavefunction ID,
+            the MCSCF canonical orbital coefficients,
+            the MCSCF canonical orbital coefficients.
+
+        They are attributes of mcscf object, which can be accessed by
+        .e_tot, .e_cas, .ci, .mo_coeff, .mo_energy
+        '''
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else:

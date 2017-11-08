@@ -12,6 +12,7 @@ from pyscf.gto.basis import parse_nwchem
 
 ALIAS = {
     'ano'        : 'ano.dat'        ,
+    'anorcc'     : 'ano.dat'        ,
     'anoroosdz'  : 'roos-dz.dat'    ,
     'anoroostz'  : 'roos-tz.dat'    ,
     'roosdz'     : 'roos-dz.dat'    ,
@@ -71,27 +72,41 @@ ALIAS = {
     'iglo3'      : 'iglo3'          ,
     '321++g'     : os.path.join('pople-basis', '3-21++G.dat'   ),
     '321++g*'    : os.path.join('pople-basis', '3-21++Gs.dat'  ),
+    '321++gs'    : os.path.join('pople-basis', '3-21++Gs.dat'  ),
     '321g'       : os.path.join('pople-basis', '3-21G.dat'     ),
     '321g*'      : os.path.join('pople-basis', '3-21Gs.dat'    ),
+    '321gs'      : os.path.join('pople-basis', '3-21Gs.dat'    ),
     '431g'       : os.path.join('pople-basis', '4-31G.dat'     ),
     '631++g'     : os.path.join('pople-basis', '6-31++G.dat'   ),
     '631++g*'    : os.path.join('pople-basis', '6-31++Gs.dat'  ),
+    '631++gs'    : os.path.join('pople-basis', '6-31++Gs.dat'  ),
     '631++g**'   : os.path.join('pople-basis', '6-31++Gss.dat' ),
+    '631++gss'   : os.path.join('pople-basis', '6-31++Gss.dat' ),
     '631+g'      : os.path.join('pople-basis', '6-31+G.dat'    ),
     '631+g*'     : os.path.join('pople-basis', '6-31+Gs.dat'   ),
+    '631+gs'     : os.path.join('pople-basis', '6-31+Gs.dat'   ),
     '631+g**'    : os.path.join('pople-basis', '6-31+Gss.dat'  ),
+    '631+gss'    : os.path.join('pople-basis', '6-31+Gss.dat'  ),
     '6311++g'    : os.path.join('pople-basis', '6-311++G.dat'  ),
     '6311++g*'   : os.path.join('pople-basis', '6-311++Gs.dat' ),
+    '6311++gs'   : os.path.join('pople-basis', '6-311++Gs.dat' ),
     '6311++g**'  : os.path.join('pople-basis', '6-311++Gss.dat'),
+    '6311++gss'  : os.path.join('pople-basis', '6-311++Gss.dat'),
     '6311+g'     : os.path.join('pople-basis', '6-311+G.dat'   ),
     '6311+g*'    : os.path.join('pople-basis', '6-311+Gs.dat'  ),
+    '6311+gs'    : os.path.join('pople-basis', '6-311+Gs.dat'  ),
     '6311+g**'   : os.path.join('pople-basis', '6-311+Gss.dat' ),
+    '6311+gss'   : os.path.join('pople-basis', '6-311+Gss.dat' ),
     '6311g'      : os.path.join('pople-basis', '6-311G.dat'    ),
     '6311g*'     : os.path.join('pople-basis', '6-311Gs.dat'   ),
+    '6311gs'     : os.path.join('pople-basis', '6-311Gs.dat'   ),
     '6311g**'    : os.path.join('pople-basis', '6-311Gss.dat'  ),
+    '6311gss'    : os.path.join('pople-basis', '6-311Gss.dat'  ),
     '631g'       : os.path.join('pople-basis', '6-31G.dat'     ),
     '631g*'      : os.path.join('pople-basis', '6-31Gs.dat'    ),
+    '631gs'      : os.path.join('pople-basis', '6-31Gs.dat'    ),
     '631g**'     : os.path.join('pople-basis', '6-31Gss.dat'   ),
+    '631gss'     : os.path.join('pople-basis', '6-31Gss.dat'   ),
     'sto3g'      : 'sto-3g.dat'     ,
     'sto6g'      : 'sto-6g.dat'     ,
     'minao'      : 'minao'          ,
@@ -235,8 +250,12 @@ def _is_pople_basis(basis):
 _BASIS_DIR = os.path.dirname(__file__)
 
 def _parse_pople_basis(basis, symb):
-    mbas = basis[:basis.find('(')]
-    pbas = basis[basis.find('(')+1:basis.find(')')]
+    if '(' in basis:
+        mbas = basis[:basis.find('(')]
+        extension = basis[basis.find('(')+1:basis.find(')')]
+    else:
+        mbas = basis
+        extension = ''
 
     pathtmp = os.path.join('pople-basis',
                            mbas[0]+'-'+mbas[1:].upper() + '-polarization-%s.dat')
@@ -249,12 +268,12 @@ def _parse_pople_basis(basis, symb):
             return [pathtmp % s[:2]] + convert(s[2:])
 
     if symb in ('H', 'He'):
-        if ',' in pbas:
-            return tuple([ALIAS[mbas]] + convert(pbas.split(',')[1]))
+        if ',' in extension:
+            return tuple([ALIAS[mbas]] + convert(extension.split(',')[1]))
         else:
             return ALIAS[mbas]
     else:
-        return tuple([ALIAS[mbas]] + convert(pbas.split(',')[0]))
+        return tuple([ALIAS[mbas]] + convert(extension.split(',')[0]))
 
 def parse(string, symb=None):
     '''Parse the NWChem format basis or ECP text, return an internal basis (ECP)
