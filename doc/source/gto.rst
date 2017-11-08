@@ -287,7 +287,7 @@ error message::
 
 Note if Z-matrix is given in the input, the molecule may be placed in an
 arbitrary orientation.  Although still works, specifying :attr:`Mole.symmetry`
-often issue the above error message.
+often leads to the above error message.
 
 .. note::
   :attr:`Mole.symmetry_subgroup` does not have effects
