@@ -12,6 +12,7 @@ from pyscf.gto.basis import parse_nwchem
 
 ALIAS = {
     'ano'        : 'ano.dat'        ,
+    'anorcc'     : 'ano.dat'        ,
     'anoroosdz'  : 'roos-dz.dat'    ,
     'anoroostz'  : 'roos-tz.dat'    ,
     'roosdz'     : 'roos-dz.dat'    ,
