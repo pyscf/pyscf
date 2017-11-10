@@ -43,7 +43,9 @@ class gw(tddft_iter):
     rf0 = si0 = self.rf0(ww)
     for iw,w in enumerate(ww):
       k_c = dot(self.kernel_sq, rf0[iw,:,:])
-      si0[iw,:,:] = solve(np.eye(self.nprod)-k_c, dot(k_c, self.kernel_sq))
+      b = dot(k_c, self.kernel_sq)
+      k_c = np.eye(self.nprod)-k_c
+      si0[iw,:,:] = solve(k_c, b)
 
     return si0
 
