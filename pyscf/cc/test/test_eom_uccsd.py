@@ -20,7 +20,7 @@ mol.atom = [
 mol.basis = 'cc-pvdz'
 mol.spin = 0
 mol.build()
-mf = scf.UHF(mol).run()
+mf = scf.UHF(mol).run(conv_tol=1e-12)
 
 mol1 = gto.Mole()
 mol1.verbose = 0
@@ -29,7 +29,7 @@ mol1.atom = [['O', (0.,   0., 0.)],
 mol1.basis = 'cc-pvdz'
 mol1.spin = 2
 mol1.build()
-mf1 = scf.UHF(mol1).run()
+mf1 = scf.UHF(mol1).run(conv_tol=1e-12)
 
 no = mol1.nelectron
 n = mol1.nao_nr()
@@ -60,6 +60,10 @@ ucc1.eris = eris
 ucc1.t1 = [x*1e-5 for x in r1]
 ucc1.t2 = [x*1e-5 for x in r2]
 
+ucc = cc.UCCSD(mf)
+ucc.conv_tol = 1e-10
+ecc, t1, t2 = ucc.kernel()
+
 class KnowValues(unittest.TestCase):
     def test_frozen(self):
         mf1 = scf.UHF(mol1).run()
@@ -69,15 +73,52 @@ class KnowValues(unittest.TestCase):
         ecc, t1, t2 = ucc.kernel()
         self.assertAlmostEqual(ecc, -0.34869875247588372, 8)
 
+    def test_ipccsd(self):
+        e,v = ucc.ipccsd(nroots=1)
+        self.assertAlmostEqual(e, 0.4335604332073799, 6)
+        e,v = ucc.ipccsd(nroots=8)
+        self.assertAlmostEqual(e[0], 0.4335604332073799, 6)
+        self.assertAlmostEqual(e[2], 0.5187659896045407, 6)
+        self.assertAlmostEqual(e[4], 0.6782876002229172, 6)
+
+        e,v = ucc.ipccsd(nroots=4, guess=v[:4])
+        self.assertAlmostEqual(e[2], 0.5187659896045407, 6)
+
+    def test_ipccsd_koopmans(self):
+        e,v = ucc.ipccsd(nroots=8, koopmans=True)
+        self.assertAlmostEqual(e[0], 0.4335604332073799, 6)
+        self.assertAlmostEqual(e[2], 0.5187659896045407, 6)
+        self.assertAlmostEqual(e[4], 0.6782876002229172, 6)
+
+    def test_eaccsd(self):
+        e,v = ucc.eaccsd(nroots=1)
+        self.assertAlmostEqual(e, 0.16737886338859731, 6)
+        e,v = ucc.eaccsd(nroots=8)
+        self.assertAlmostEqual(e[0], 0.16737886338859731, 6)
+        self.assertAlmostEqual(e[2], 0.24027613852009164, 6)
+        self.assertAlmostEqual(e[4], 0.51006797826488071, 6)
+
+        e,v = ucc.eaccsd(nroots=4, guess=v[:4])
+        self.assertAlmostEqual(e[2], 0.24027613852009164, 6)
+
+    def test_eaccsd_koopmans(self):
+        e,v = ucc.eaccsd(nroots=8, koopmans=True)
+        self.assertAlmostEqual(e[0], 0.16737886338859731, 6)
+        self.assertAlmostEqual(e[2], 0.24027613852009164, 6)
+        self.assertAlmostEqual(e[4], 0.73171753944933049, 5)
+
+
     def test_eomee(self):
-        ucc = cc.UCCSD(mf)
-        ecc, t1, t2 = ucc.kernel()
         self.assertAlmostEqual(ecc, -0.2133432430989155, 6)
         e,v = ucc.eeccsd(nroots=4)
         self.assertAlmostEqual(e[0], 0.2757159395886167, 6)
         self.assertAlmostEqual(e[1], 0.2757159395886167, 6)
         self.assertAlmostEqual(e[2], 0.2757159395886167, 6)
         self.assertAlmostEqual(e[3], 0.3005716731825082, 6)
+
+        e,v = ucc.eeccsd(nroots=4, guess=v[:4])
+        self.assertAlmostEqual(e[3], 0.3005716731825082, 6)
+
 
     def test_ucc_eris(self):
         self.assertAlmostEqual(finger(numpy.asarray(eris.oooo)), -154.31628911898906, 9)

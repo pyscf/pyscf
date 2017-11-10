@@ -34,10 +34,10 @@ def gamma1_intermediates(mycc, t1, t2, l1, l2):
     #:dov -= numpy.einsum('ma,ie,me->ia', t1, t1, l1)
     #:dov -= numpy.einsum('mi,ma->ia', xt1, t1)
     #:dov -= numpy.einsum('ie,ae->ia', t1, xt2)
-    max_memory = mycc.max_memory - lib.current_memory()[0]
+    max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     unit = nocc*nvir**2
-    blksize = max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit))
-    for p0, p1 in prange(0, nocc, blksize):
+    blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit)))
+    for p0, p1 in lib.prange(0, nocc, blksize):
         theta = make_theta(t2[p0:p1])
         doo[p0:p1] -= lib.dot(theta.reshape(p1-p0,-1), l2.reshape(nocc,-1).T)
         dov[p0:p1] += numpy.einsum('imae,me->ia', theta, l1)
@@ -85,13 +85,13 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
     moo = numpy.empty((nocc,nocc))
     mvv = numpy.zeros((nvir,nvir))
 
-    max_memory = mycc.max_memory - lib.current_memory()[0]
+    max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     unit = nocc*nvir**2 * 5
-    blksize = max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit))
+    blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit)))
     log.debug1('rdm intermediates pass 1: block size = %d, nocc = %d in %d blocks',
                blksize, nocc, int((nocc+blksize-1)/blksize))
     time1 = time.clock(), time.time()
-    for istep, (p0, p1) in enumerate(prange(0, nocc, blksize)):
+    for istep, (p0, p1) in enumerate(lib.prange(0, nocc, blksize)):
         #:theta = make_theta(t2[p0:p1])
         #:pOvOv = numpy.einsum('ikca,jkcb->jbia', l2, t2[p0:p1])
         #:pOVov = -numpy.einsum('ikca,jkbc->jbia', l2, t2[p0:p1])
@@ -130,12 +130,12 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
     mij = numpy.einsum('kc,jc->jk', l1, t1) + moo*.5
 
     gooov = numpy.einsum('ji,ka->jkia', moo*-.5, t1)
-    max_memory = mycc.max_memory - lib.current_memory()[0]
+    max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     unit = nocc**3 + nocc**2*nvir + nocc*nvir**2*6
-    blksize = max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit))
+    blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit)))
     log.debug1('rdm intermediates pass 2: block size = %d, nocc = %d in %d blocks',
                blksize, nocc, int((nocc+blksize-1)/blksize))
-    for p0, p1 in prange(0, nocc, blksize):
+    for p0, p1 in lib.prange(0, nocc, blksize):
         tau = _ccsd.make_tau(t2[p0:p1], t1[p0:p1], t1)
         #:goooo = numpy.einsum('ijab,klab->klij', l2, tau)*.5
         goooo = lib.dot(tau.reshape(-1,nvir**2), l2.reshape(-1,nvir**2).T, .5)
@@ -195,7 +195,7 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
         doovv[p0:p1] = gOvvO.transpose(0,3,1,2)
         gOvvO = gOvVo = None
 
-        for j0, j1 in prange(0, nocc, blksize):
+        for j0, j1 in lib.prange(0, nocc, blksize):
             tau2 = _ccsd.make_tau(t2[j0:j1], t1[j0:j1], t1)
             #:goovv += numpy.einsum('ijkl,klab->ijab', goooo[:,:,j0:j1], tau2)
             lib.dot(goooo[:,:,j0:j1].copy().reshape((p1-p0)*nocc,-1),
@@ -225,14 +225,14 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
     h5fobj['dooov'][:] = gooov.transpose(0,2,1,3)*2 - gooov.transpose(1,2,0,3)
     gooov = None
 
-    max_memory = mycc.max_memory - lib.current_memory()[0]
+    max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     unit = max(nocc**2*nvir*2+nocc*nvir**2*2, nvir**3*2+nocc*nvir**2)
     blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit)))
     iobuflen = int(256e6/8/blksize)
     log.debug1('rdm intermediates pass 3: block size = %d, nvir = %d in %d blocks',
                blksize, nocc, int((nvir+blksize-1)/blksize))
     h5fobj.create_group('dovvv')
-    for istep, (p0, p1) in enumerate(prange(0, nvir, blksize)):
+    for istep, (p0, p1) in enumerate(lib.prange(0, nvir, blksize)):
         pvOvO = numpy.empty((p1-p0,nocc,nvir,nocc))
         pvOVo = numpy.empty((p1-p0,nocc,nvir,nocc))
         ao2mo.outcore._load_from_h5g(fswap['mvOvO'], p0, p1, pvOvO)
@@ -311,10 +311,8 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
             h5fobj['dovvo'], None, h5fobj['dovvv'], h5fobj['dooov'])
 
 def make_rdm1(mycc, t1, t2, l1, l2, d1=None):
-    if d1 is None:
-        doo, dov, dvo, dvv = gamma1_intermediates(mycc, t1, t2, l1, l2)
-    else:
-        doo, dov, dvo, dvv = d1
+    if d1 is None: d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
+    doo, dov, dvo, dvv = d1
     nocc, nvir = t1.shape
     nmo = nocc + nvir
     dm1 = numpy.empty((nmo,nmo))
@@ -328,15 +326,10 @@ def make_rdm1(mycc, t1, t2, l1, l2, d1=None):
 
 # rdm2 in Chemist's notation
 def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None):
-    if d1 is None:
-        doo, dov, dvo, dvv = gamma1_intermediates(mycc, t1, t2, l1, l2)
-    else:
-        doo, dov, dvo, dvv = d1
-    if d2 is None:
-        dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
-                gamma2_intermediates(mycc, t1, t2, l1, l2)
-    else:
-        dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
+    if d1 is None: d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
+    if d2 is None: d2 = gamma2_intermediates(mycc, t1, t2, l1, l2)
+    doo, dov, dvo, dvv = d1
+    dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
     nocc, nvir = t1.shape
     nmo = nocc + nvir
 
@@ -388,10 +381,6 @@ def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None):
             dm2[i,j,j,i] -= 2
 
     return dm2
-
-def prange(start, end, step):
-    for i in range(start, end, step):
-        yield i, min(i+step, end)
 
 def _cp(a):
     return numpy.array(a, copy=False, order='C')

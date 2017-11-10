@@ -18,53 +18,6 @@ einsum = lib.einsum
 # This is restricted (R)CCSD
 # Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004)
 
-def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
-           verbose=logger.INFO):
-    """Exactly the same as pyscf.cc.ccsd.kernel, which calls a
-    *local* energy() function."""
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(cc.stdout, verbose)
-
-    if t1 is None and t2 is None:
-        t1, t2 = cc.init_amps(eris)[1:]
-    elif t1 is None:
-        nocc = cc.nocc
-        nvir = cc.nmo - nocc
-        t1 = numpy.zeros((nocc,nvir), eris.dtype)
-    elif t2 is None:
-        t2 = cc.init_amps(eris)[2]
-
-    cput1 = cput0 = (time.clock(), time.time())
-    nocc, nvir = t1.shape
-    eold = 0
-    eccsd = 0
-    if cc.diis:
-        adiis = lib.diis.DIIS(cc, cc.diis_file)
-        adiis.space = cc.diis_space
-    else:
-        adiis = lambda t1,t2,*args: (t1,t2)
-
-    conv = False
-    for istep in range(max_cycle):
-        t1new, t2new = cc.update_amps(t1, t2, eris)
-        normt = numpy.linalg.norm(t1new-t1) + numpy.linalg.norm(t2new-t2)
-        t1, t2 = t1new, t2new
-        t1new = t2new = None
-        if cc.diis:
-            t1, t2 = cc.diis(t1, t2, istep, normt, eccsd-eold, adiis)
-        eold, eccsd = eccsd, cc.energy(t1, t2, eris)
-        log.info('istep = %d  E(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
-                 istep, eccsd, eccsd - eold, normt)
-        cput1 = log.timer('CCSD iter', *cput1)
-        if abs(eccsd-eold) < tol and normt < tolnormt:
-            conv = True
-            break
-    log.timer('CCSD', *cput0)
-    return conv, eccsd, t1, t2
-
-
 #def update_amps(cc, t1, t2, eris):
 #    # Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004) Eqs.(35)-(36)
 #    time0 = time.clock(), time.time()
@@ -210,9 +163,9 @@ class RCCSD(ccsd.CCSD):
         else:
             cctyp = 'CCSD'
             self.converged, self.e_corr, self.t1, self.t2 = \
-                    kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
-                           tol=self.conv_tol, tolnormt=self.conv_tol_normt,
-                           verbose=self.verbose)
+                    ccsd.kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
+                                tol=self.conv_tol, tolnormt=self.conv_tol_normt,
+                                verbose=self.verbose)
             if self.converged:
                 logger.info(self, 'CCSD converged')
             else:
@@ -223,6 +176,8 @@ class RCCSD(ccsd.CCSD):
             logger.note(self, 'E(%s) = %.16g  E_corr = %.16g',
                         cctyp, self.e_tot, self.e_corr)
         return self.e_corr, self.t1, self.t2
+
+    energy = energy
 
     def ao2mo(self, mo_coeff=None):
         return _ERIS(self, mo_coeff)
@@ -311,11 +266,11 @@ class RCCSD(ccsd.CCSD):
                 return w[idx].real, v[:,idx].real, idx
             conv, eip, evecs = eig(matvec, guess, precond, pick=pickeig,
                                    tol=self.conv_tol, max_cycle=self.max_cycle,
-                                   max_space=self.max_space, nroots=nroots, verbose=self.verbose)
+                                   max_space=self.max_space, nroots=nroots, verbose=log)
         else:
             conv, eip, evecs = eig(matvec, guess, precond,
                                    tol=self.conv_tol, max_cycle=self.max_cycle,
-                                   max_space=self.max_space, nroots=nroots, verbose=self.verbose)
+                                   max_space=self.max_space, nroots=nroots, verbose=log)
 
         self.eip = np.array(eip).real
 
@@ -596,12 +551,12 @@ class RCCSD(ccsd.CCSD):
             conv, eea, evecs = eig(matvec, guess, precond, pick=pickeig,
                                    tol=self.conv_tol, max_cycle=self.max_cycle,
                                    max_space=self.max_space, nroots=nroots,
-                                   verbose=self.verbose)
+                                   verbose=log)
         else:
             conv, eea, evecs = eig(matvec, guess, precond,
                                    tol=self.conv_tol, max_cycle=self.max_cycle,
                                    max_space=self.max_space, nroots=nroots,
-                                   verbose=self.verbose)
+                                   verbose=log)
 
         self.eea = np.array(eea).real
 
@@ -915,6 +870,7 @@ class RCCSD(ccsd.CCSD):
 
     def eomee_ccsd_singlet(self, nroots=1, koopmans=False, guess=None, diag=None):
         cput0 = (time.clock(), time.time())
+        log = logger.Logger(self.stdout, self.verbose)
         if diag is None:
             diag = self.eeccsd_diag()[0]
         nocc = self.nocc
@@ -959,12 +915,12 @@ class RCCSD(ccsd.CCSD):
             conv, eee, evecs = eig(matvec, guess, precond, pick=pickeig,
                                    tol=self.conv_tol, max_cycle=self.max_cycle,
                                    max_space=self.max_space, nroots=nroots,
-                                   verbose=self.verbose)
+                                   verbose=log)
         else:
             conv, eee, evecs = eig(matvec, guess, precond,
                                    tol=self.conv_tol, max_cycle=self.max_cycle,
                                    max_space=self.max_space, nroots=nroots,
-                                   verbose=self.verbose)
+                                   verbose=log)
 
         self.eee = np.array(eee).real
 
@@ -980,6 +936,7 @@ class RCCSD(ccsd.CCSD):
 
     def eomee_ccsd_triplet(self, nroots=1, koopmans=False, guess=None, diag=None):
         cput0 = (time.clock(), time.time())
+        log = logger.Logger(self.stdout, self.verbose)
         if diag is None:
             diag = self.eeccsd_diag()[1]
         nocc = self.nocc
@@ -1024,12 +981,12 @@ class RCCSD(ccsd.CCSD):
             conv, eee, evecs = eig(matvec, guess, precond, pick=pickeig,
                                    tol=self.conv_tol, max_cycle=self.max_cycle,
                                    max_space=self.max_space, nroots=nroots,
-                                   verbose=self.verbose)
+                                   verbose=log)
         else:
             conv, eee, evecs = eig(matvec, guess, precond,
                                    tol=self.conv_tol, max_cycle=self.max_cycle,
                                    max_space=self.max_space, nroots=nroots,
-                                   verbose=self.verbose)
+                                   verbose=log)
 
         self.eee = np.array(eee).real
 
@@ -1045,6 +1002,7 @@ class RCCSD(ccsd.CCSD):
 
     def eomsf_ccsd(self, nroots=1, koopmans=False, guess=None, diag=None):
         cput0 = (time.clock(), time.time())
+        log = logger.Logger(self.stdout, self.verbose)
         if diag is None:
             diag = self.eeccsd_diag()[2]
         nocc = self.nocc
@@ -1089,12 +1047,12 @@ class RCCSD(ccsd.CCSD):
             conv, eee, evecs = eig(matvec, guess, precond, pick=pickeig,
                                    tol=self.conv_tol, max_cycle=self.max_cycle,
                                    max_space=self.max_space, nroots=nroots,
-                                   verbose=self.verbose)
+                                   verbose=log)
         else:
             conv, eee, evecs = eig(matvec, guess, precond,
                                    tol=self.conv_tol, max_cycle=self.max_cycle,
                                    max_space=self.max_space, nroots=nroots,
-                                   verbose=self.verbose)
+                                   verbose=log)
 
         self.eee = np.array(eee).real
 
@@ -1140,8 +1098,8 @@ class RCCSD(ccsd.CCSD):
         #:tmp  = lib.einsum('meaf,me->af', eris_ovvv, r1) * 2
         #:tmp -= lib.einsum('mfae,me->af', eris_ovvv, r1)
         mem_now = lib.current_memory()[0]
-        max_memory = lib.param.MAX_MEMORY - mem_now
-        blksize = max(int(max_memory*1e6/8/(nvir**3*3)), 2)
+        max_memory = max(0, lib.param.MAX_MEMORY - mem_now)
+        blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvir**3*3))))
         for p0,p1 in lib.prange(0, nocc, blksize):
             ovvv = np.asarray(eris.ovvv[p0:p1]).reshape((p1-p0)*nvir,-1)
             ovvv = lib.unpack_tril(ovvv).reshape(-1,nvir,nvir,nvir)
@@ -1243,8 +1201,8 @@ class RCCSD(ccsd.CCSD):
         #:Hr2aa+= lib.einsum('mb,maij->ijab', t1*.5, tmpaa)
         #:Hr2ab-= lib.einsum('mb,mAiJ->iJbA', t1, tmpab)
         mem_now = lib.current_memory()[0]
-        max_memory = lib.param.MAX_MEMORY - mem_now
-        blksize = max(int(max_memory*1e6/8/(nvir**3*3)), 2)
+        max_memory = max(0, lib.param.MAX_MEMORY - mem_now)
+        blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvir**3*3))))
         tmp1 = np.zeros((nvir,nvir), dtype=r1.dtype)
         for p0,p1 in lib.prange(0, nocc, blksize):
             ovvv = np.asarray(eris.ovvv[p0:p1]).reshape((p1-p0)*nvir,-1)
@@ -1361,8 +1319,8 @@ class RCCSD(ccsd.CCSD):
         #:Hr2aaba -= tmp
         tmp1 = np.zeros((nvir,nvir), dtype=r1.dtype)
         mem_now = lib.current_memory()[0]
-        max_memory = lib.param.MAX_MEMORY - mem_now
-        blksize = max(int(max_memory*1e6/8/(nvir**3*3)), 2)
+        max_memory = max(0, lib.param.MAX_MEMORY - mem_now)
+        blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvir**3*3))))
         for p0,p1 in lib.prange(0, nocc, blksize):
             ovvv = np.asarray(eris.ovvv[p0:p1]).reshape((p1-p0)*nvir,-1)
             ovvv = lib.unpack_tril(ovvv).reshape(-1,nvir,nvir,nvir)
@@ -1514,8 +1472,8 @@ class RCCSD(ccsd.CCSD):
         #:tmp = np.einsum('mb,mbaa->ab', t1, eris_ovvv)
         #:Wvvaa += np.einsum('mb,maab->ab', t1, eris_ovvv)
         mem_now = lib.current_memory()[0]
-        max_memory = lib.param.MAX_MEMORY - mem_now
-        blksize = max(int(max_memory*1e6/8/(nvir**3*3)), 2)
+        max_memory = max(0, lib.param.MAX_MEMORY - mem_now)
+        blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvir**3*3))))
         tmp = np.zeros((nvir,nvir), dtype=t1.dtype)
         for p0,p1 in lib.prange(0, nocc, blksize):
             ovvv = np.asarray(eris.ovvv[p0:p1]).reshape((p1-p0)*nvir,-1)
@@ -1877,8 +1835,8 @@ class _IMDS:
         woVVo = np.empty((nocc,nvir,nvir,nocc), dtype=t1.dtype)
         tau = make_tau(t2, t1, t1)
         mem_now = lib.current_memory()[0]
-        max_memory = lib.param.MAX_MEMORY - mem_now
-        blksize = max(int(max_memory*1e6/8/(nvir**3*3)), 2)
+        max_memory = max(0, lib.param.MAX_MEMORY - mem_now)
+        blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvir**3*3))))
         for p0,p1 in lib.prange(0, nocc, blksize):
             ovvv = np.asarray(eris.ovvv[p0:p1]).reshape((p1-p0)*nvir,-1)
             ovvv = lib.unpack_tril(ovvv).reshape(-1,nvir,nvir,nvir)
@@ -1983,8 +1941,8 @@ class _IMDS:
         eris_ovvo = eris_oovv = None
         tau = make_tau(t2, t1, t1)
         mem_now = lib.current_memory()[0]
-        max_memory = lib.param.MAX_MEMORY - mem_now
-        blksize = max(int(max_memory*1e6/8/(nvir**3*6)), 2)
+        max_memory = max(0, lib.param.MAX_MEMORY - mem_now)
+        blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvir**3*6))))
         for i0,i1 in lib.prange(0, nocc, blksize):
             wvOvV = einsum('nime,mnab->eiab', eris_ooov[:,i0:i1], tau)
 

@@ -41,7 +41,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
         adiis = lib.diis.DIIS(mycc, mycc.diis_file)
         adiis.space = mycc.diis_space
     else:
-        adiis = lambda t1,t2,*args: (t1,t2)
+        adiis = None
 
     conv = False
     for istep in range(max_cycle):
@@ -106,7 +106,7 @@ def update_amps(mycc, t1, t2, eris):
     time1 = log.timer_debug1('woooo', *time1)
 
     unit = _memory_usage_inloop(nocc, nvir)
-    max_memory = max(2000, mycc.max_memory - lib.current_memory()[0])
+    max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     blksize = min(nocc, max(BLKMIN, int(max_memory/unit)))
     blknvir = int((max_memory*.9e6/8-blksize*nocc*nvir**2*6)/(blksize*nvir**2*2))
     blknvir = min(nvir, max(BLKMIN, blknvir))
@@ -425,7 +425,7 @@ def add_wvvVV_(mycc, t1, t2, eris, t2new_tril, with_ovvv=True):
         outbuf[:] = 0
         ao_loc = mol.ao_loc_nr()
         max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
-        dmax = max(4, numpy.sqrt(max_memory*.95e6/8/nao**2/2))
+        dmax = max(BLKMIN, numpy.sqrt(max_memory*.95e6/8/nao**2/2))
         sh_ranges = ao2mo.outcore.balance_partition(ao_loc, dmax)
         dmax = max(x[2] for x in sh_ranges)
         eribuf = numpy.empty((dmax,dmax,nao,nao))
@@ -485,8 +485,8 @@ def add_wvvVV_(mycc, t1, t2, eris, t2new_tril, with_ovvv=True):
             tau[p0:p1] = numpy.einsum('a,jb->jab', t1[i], t1[:i+1])
             tau[p0:p1] += t2[i,:i+1]
         time0 = logger.timer_debug1(mycc, 'vvvv-tau', *time0)
-        max_memory = max(2000, mycc.max_memory - lib.current_memory()[0])
-        blksize = int(min(nvir, max(4, max_memory*.95e6/8/(nvir**3*2))))
+        max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
+        blksize = int(min(nvir, max(BLKMIN, max_memory*.95e6/8/(nvir**3*2))))
 
         def block_contract(buf, a0, a1):
             for a in range(a0, a1):
@@ -881,23 +881,27 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if nmo is None: nmo = self.nmo
         return vector_to_amplitudes(vec, nmo, nocc)
 
-    def dump_chk(self, ci=None, frozen=None, mo_coeff=None, mo_occ=None):
-        if ci is None: ci = self.ci
+    def dump_chk(self, t1_t2=None, frozen=None, mo_coeff=None, mo_occ=None):
+        if t1_t2 is None:
+            t1, t2 = self.t1, self.t2
+        else:
+            t1, t2 = t1_t2
         if frozen is None: frozen = self.frozen
-        ci_chk = {'e_corr': self.e_corr,
-                  'ci': ci,
+        cc_chk = {'e_corr': self.e_corr,
+                  't1': t1,
+                  't2': t2,
                   'frozen': frozen}
 
-        if mo_coeff is not None: ci_chk['mo_coeff'] = mo_coeff
-        if mo_occ is not None: ci_chk['mo_occ'] = mo_occ
-        if self._nmo is not None: ci_chk['_nmo'] = self._nmo
-        if self._nocc is not None: ci_chk['_nocc'] = self._nocc
+        if mo_coeff is not None: cc_chk['mo_coeff'] = mo_coeff
+        if mo_occ is not None: cc_chk['mo_occ'] = mo_occ
+        if self._nmo is not None: cc_chk['_nmo'] = self._nmo
+        if self._nocc is not None: cc_chk['_nocc'] = self._nocc
 
         if self.chkfile is not None:
             chkfile = self.chkfile
         else:
             chkfile = self._scf.chkfile
-        lib.chkfile.save(chkfile, 'cisd', ci_chk)
+        lib.chkfile.save(chkfile, 'ccsd', cc_chk)
 
 CC = CCSD
 
@@ -1107,41 +1111,6 @@ def _mem_usage(nocc, nvir):
     outcore = basic
     return incore, outcore, basic
 
-def residual_as_diis_errvec(mycc):
-# Seems not quite useful
-# Cannot be used with non-conanical mf object
-    def fupdate(t1, t2, istep, normt, de, adiis):
-        nocc, nvir = t1.shape
-        nov = nocc*nvir
-        moidx = get_moidx(mycc)
-        mo_e = mycc._scf.mo_energy[moidx]
-        eia = mo_e[:nocc,None] - mo_e[None,nocc:]
-        if (istep > mycc.diis_start_cycle and
-            abs(de) < mycc.diis_start_energy_diff):
-            if mycc.t1 is None:
-                mycc.t1 = t1
-                mycc.t2 = t2
-            else:
-                tbuf = numpy.empty(nov*(nov+1))
-                tbuf[:nov] = ((t1-mycc.t1)*eia).ravel()
-                pbuf = tbuf[nov:].reshape(nocc,nocc,nvir,nvir)
-                for i in range(nocc):
-                    pbuf[i] = (t2[i]-mycc.t2[i]) * lib.direct_sum('jb,a->jba', eia, eia[i])
-                adiis.push_err_vec(tbuf)
-                tbuf = numpy.empty(nov*(nov+1))
-                tbuf[:nov] = t1.ravel()
-                tbuf[nov:] = t2.ravel()
-                t1.data = tbuf.data # release memory
-                t2.data = tbuf.data
-
-                tbuf = adiis.update(tbuf)
-                mycc.t1 = t1 = tbuf[:nov].reshape(nocc,nvir)
-                mycc.t2 = t2 = tbuf[nov:].reshape(nocc,nocc,nvir,nvir)
-            logger.debug(mycc, 'DIIS for step %d', istep)
-        return t1, t2
-    return fupdate
-
-
 def _fp(nocc, nvir):
     '''Total float points'''
     return (nocc**3*nvir**2*2 + nocc**2*nvir**3*2 +     # Ftilde
@@ -1161,10 +1130,6 @@ def _fp(nocc, nvir):
 # t2 + numpy.einsum('ia,jb->ijab', t1a, t1b)
 def make_tau(t2, t1a, t1b, fac=1, out=None):
     return _ccsd.make_tau(t2, t1a, t1b, fac, out)
-
-# t2.transpose(0,1,3,2)*2 - t2
-def make_theta(t2, out=None):
-    return _ccsd.make_0132(t2, t2, -1, 2, out)
 
 def _cp(a):
     return numpy.array(a, copy=False, order='C')

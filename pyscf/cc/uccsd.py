@@ -12,6 +12,7 @@ import h5py
 from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
+from pyscf.cc import ccsd
 from pyscf.cc import rccsd
 from pyscf.lib import linalg_helper
 from pyscf.cc import uintermediates as imd
@@ -102,8 +103,8 @@ def update_amps(cc, t1, t2, eris):
     wOvvO = np.zeros((noccb,nvira,nvira,noccb))
 
     mem_now = lib.current_memory()[0]
-    max_memory = lib.param.MAX_MEMORY - mem_now
-    blksize = max(int(max_memory*1e6/8/(nvira**3*3)), 2)
+    max_memory = max(0, lib.param.MAX_MEMORY - mem_now)
+    blksize = min(nocca, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira**3*3))))
     for p0,p1 in lib.prange(0, nocca, blksize):
         ovvv = np.asarray(eris.ovvv[p0:p1]).reshape((p1-p0)*nvira,-1)
         ovvv = lib.unpack_tril(ovvv).reshape(-1,nvira,nvira,nvira)
@@ -116,7 +117,7 @@ def update_amps(cc, t1, t2, eris):
         u2aa -= lib.einsum('ijmb,ma->ijab', tmp1aa, t1a[p0:p1]*.5)
         ovvv = tmp1aa = None
 
-    blksize = max(int(max_memory*1e6/8/(nvirb**3*3)), 2)
+    blksize = min(noccb, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb**3*3))))
     for p0,p1 in lib.prange(0, noccb, blksize):
         OVVV = np.asarray(eris.OVVV[p0:p1]).reshape((p1-p0)*nvirb,-1)
         OVVV = lib.unpack_tril(OVVV).reshape(-1,nvirb,nvirb,nvirb)
@@ -129,7 +130,7 @@ def update_amps(cc, t1, t2, eris):
         u2bb -= lib.einsum('ijmb,ma->ijab', tmp1bb, t1b[p0:p1]*.5)
         OVVV = tmp1bb = None
 
-    blksize = max(int(max_memory*1e6/8/(nvira*nvirb**2*3)), 2)
+    blksize = min(nocca, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira*nvirb**2*3))))
     for p0,p1 in lib.prange(0, nocca, blksize):
         ovVV = np.asarray(eris.ovVV[p0:p1]).reshape((p1-p0)*nvira,-1)
         ovVV = lib.unpack_tril(ovVV).reshape(-1,nvira,nvirb,nvirb)
@@ -142,7 +143,7 @@ def update_amps(cc, t1, t2, eris):
         u2ab -= lib.einsum('iJmB,ma->iJaB', tmp1ab, t1a[p0:p1])
         ovVV = tmp1ab = None
 
-    blksize = max(int(max_memory*1e6/8/(nvirb*nocca**2*3)), 2)
+    blksize = min(noccb, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb*nocca**2*3))))
     for p0,p1 in lib.prange(0, noccb, blksize):
         OVvv = np.asarray(eris.OVvv[p0:p1]).reshape((p1-p0)*nvirb,-1)
         OVvv = lib.unpack_tril(OVvv).reshape(-1,nvirb,nvira,nvira)
@@ -453,11 +454,19 @@ class UCCSD(rccsd.RCCSD):
     def nocc(self):
         nocca, noccb = self.get_nocc()
         return nocca + noccb
+    @nocc.setter
+    def nocc(self, n):
+        nocca, noccb = n
+        self._nocc = (nocca, noccb)
 
     @property
     def nmo(self):
         nmoa, nmob = self.get_nmo()
         return nmoa + nmob
+    @nmo.setter
+    def nmo(self, n):
+        nmoa, nmob = n
+        self._nmo = (nmoa, nmob)
 
     get_nocc = get_nocc
     get_nmo = get_nmo
@@ -1080,10 +1089,10 @@ class UCCSD(rccsd.RCCSD):
         #:tmpa-= lib.einsum('MEaf,ME->af', eris_OVvv, r1b)
         tau2aa = make_tau_aa(r2aa, r1a, t1a, 2)
         mem_now = lib.current_memory()[0]
-        max_memory = lib.param.MAX_MEMORY - mem_now
+        max_memory = max(0, lib.param.MAX_MEMORY - mem_now)
         tmpa = np.zeros((nvira,nvira))
         tmpb = np.zeros((nvirb,nvirb))
-        blksize = max(int(max_memory*1e6/8/(nvira**3*3)), 2)
+        blksize = min(nocca, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira**3*3))))
         for p0, p1 in lib.prange(0, nocca, blksize):
             ovvv = np.asarray(eris.ovvv[p0:p1]).reshape((p1-p0)*nvira,-1)
             ovvv = lib.unpack_tril(ovvv).reshape(-1,nvira,nvira,nvira)
@@ -1096,7 +1105,7 @@ class UCCSD(rccsd.RCCSD):
         tau2aa = None
 
         tau2bb = make_tau_aa(r2bb, r1b, t1b, 2)
-        blksize = max(int(max_memory*1e6/8/(nvirb**3*3)), 2)
+        blksize = min(noccb, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb**3*3))))
         for p0, p1 in lib.prange(0, noccb, blksize):
             OVVV = np.asarray(eris.OVVV[p0:p1]).reshape((p1-p0)*nvirb,-1)
             OVVV = lib.unpack_tril(OVVV).reshape(-1,nvirb,nvirb,nvirb)
@@ -1109,7 +1118,7 @@ class UCCSD(rccsd.RCCSD):
         tau2bb = None
 
         tau2ab = make_tau_ab(r2ab, r1 , t1 , 2)
-        blksize = max(int(max_memory*1e6/8/(nvira*nvirb**2*3)), 2)
+        blksize = min(nocca, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira*nvirb**2*3))))
         for p0, p1 in lib.prange(0, nocca, blksize):
             ovVV = np.asarray(eris.ovVV[p0:p1]).reshape((p1-p0)*nvira,-1)
             ovVV = lib.unpack_tril(ovVV).reshape(-1,nvira,nvirb,nvirb)
@@ -1119,7 +1128,7 @@ class UCCSD(rccsd.RCCSD):
             tmpb-= lib.einsum('meAF,me->AF', ovVV, r1a[p0:p1])
             ovVV = tmpab = None
 
-        blksize = max(int(max_memory*1e6/8/(nvirb*nvira**2*3)), 2)
+        blksize = min(noccb, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb*nvira**2*3))))
         for p0, p1 in lib.prange(0, noccb, blksize):
             OVvv = np.asarray(eris.OVvv[p0:p1]).reshape((p1-p0)*nvirb,-1)
             OVvv = lib.unpack_tril(OVvv).reshape(-1,nvirb,nvira,nvira)
@@ -1300,8 +1309,8 @@ class UCCSD(rccsd.RCCSD):
         #:tmp1aaba = lib.einsum('meaf,Ijef->maIj', eris_ovvv, tau2baaa)
         #:Hr2baaa += lib.einsum('mb,maIj->Ijab', t1a   , tmp1aaba)
         mem_now = lib.current_memory()[0]
-        max_memory = lib.param.MAX_MEMORY - mem_now
-        blksize = max(int(max_memory*1e6/8/(nvira**3*3)), 2)
+        max_memory = max(0, lib.param.MAX_MEMORY - mem_now)
+        blksize = min(nocca, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira**3*3))))
         for p0,p1 in lib.prange(0, nocca, blksize):
             ovvv = np.asarray(eris.ovvv[p0:p1]).reshape((p1-p0)*nvira,-1)
             ovvv = lib.unpack_tril(ovvv).reshape(-1,nvira,nvira,nvira)
@@ -1314,7 +1323,7 @@ class UCCSD(rccsd.RCCSD):
         #:Hr1ab += einsum('MFAE,iMEF->iA', eris_OVVV, r2abbb)
         #:tmp1bbab = lib.einsum('MEAF,iJEF->MAiJ', eris_OVVV, tau2abbb)
         #:Hr2abbb += lib.einsum('MB,MAiJ->iJAB', t1b   , tmp1bbab)
-        blksize = max(int(max_memory*1e6/8/(nvirb**3*3)), 2)
+        blksize = min(noccb, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb**3*3))))
         for p0, p1 in lib.prange(0, noccb, blksize):
             OVVV = np.asarray(eris.OVVV[p0:p1]).reshape((p1-p0)*nvirb,-1)
             OVVV = lib.unpack_tril(OVVV).reshape(-1,nvirb,nvirb,nvirb)
@@ -1331,7 +1340,7 @@ class UCCSD(rccsd.RCCSD):
         #:Hr2bbab -= lib.einsum('mb,mAIJ->IJbA', t1a*.5, tmp1abbb)
         #:Hr2aaba -= lib.einsum('mb,mAij->ijAb', t1a*.5, tmp1abaa)
         tmp1ba = np.zeros((nvirb,nvira))
-        blksize = max(int(max_memory*1e6/8/(nvira*nvirb**2*3)), 2)
+        blksize = min(nocca, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira*nvirb**2*3))))
         for p0,p1 in lib.prange(0, nocca, blksize):
             ovVV = np.asarray(eris.ovVV[p0:p1]).reshape((p1-p0)*nvira,-1)
             ovVV = lib.unpack_tril(ovVV).reshape(-1,nvira,nvirb,nvirb)
@@ -1350,7 +1359,7 @@ class UCCSD(rccsd.RCCSD):
         #:Hr2aaba -= lib.einsum('MB,Maij->ijBa', t1b*.5, tmp1baaa)
         #:Hr2bbab -= lib.einsum('MB,MaIJ->IJaB', t1b*.5, tmp1babb)
         tmp1ab = np.zeros((nvira,nvirb))
-        blksize = max(int(max_memory*1e6/8/(nvirb*nvira**2*3)), 2)
+        blksize = min(noccb, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb*nvira**2*3))))
         for p0, p1 in lib.prange(0, noccb, blksize):
             OVvv = np.asarray(eris.OVvv[p0:p1]).reshape((p1-p0)*nvirb,-1)
             OVvv = lib.unpack_tril(OVvv).reshape(-1,nvirb,nvira,nvira)
@@ -1605,8 +1614,8 @@ class UCCSD(rccsd.RCCSD):
         #:Wvvaa += np.einsum('mb,maab->ab', t1a, eris_ovvv)
         #:Wvvaa -= np.einsum('mb,mbaa->ab', t1a, eris_ovvv)
         mem_now = lib.current_memory()[0]
-        max_memory = lib.param.MAX_MEMORY - mem_now
-        blksize = max(int(max_memory*1e6/8/(nvira**3*3)), 2)
+        max_memory = max(0, lib.param.MAX_MEMORY - mem_now)
+        blksize = min(nocca, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira**3*3))))
         for p0,p1 in lib.prange(0, nocca, blksize):
             ovvv = np.asarray(eris.ovvv[p0:p1]).reshape((p1-p0)*nvira,-1)
             ovvv = lib.unpack_tril(ovvv).reshape(-1,nvira,nvira,nvira)
@@ -1616,7 +1625,7 @@ class UCCSD(rccsd.RCCSD):
         #:eris_OVVV = lib.unpack_tril(np.asarray(eris.OVVV).reshape(noccb*nvirb,-1)).reshape(noccb,nvirb,nvirb,nvirb)
         #:Wvvbb += np.einsum('mb,maab->ab', t1b, eris_OVVV)
         #:Wvvbb -= np.einsum('mb,mbaa->ab', t1b, eris_OVVV)
-        blksize = max(int(max_memory*1e6/8/(nvirb**3*3)), 2)
+        blksize = min(noccb, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb**3*3))))
         for p0, p1 in lib.prange(0, noccb, blksize):
             OVVV = np.asarray(eris.OVVV[p0:p1]).reshape((p1-p0)*nvirb,-1)
             OVVV = lib.unpack_tril(OVVV).reshape(-1,nvirb,nvirb,nvirb)
@@ -1625,13 +1634,13 @@ class UCCSD(rccsd.RCCSD):
             OVVV = None
         #:eris_ovVV = lib.unpack_tril(np.asarray(eris.ovVV).reshape(nocca*nvira,-1)).reshape(nocca,nvira,nvirb,nvirb)
         #:Wvvab -= np.einsum('mb,mbaa->ba', t1a, eris_ovVV)
-        blksize = max(int(max_memory*1e6/8/(nvira*nvirb**2*3)), 2)
+        blksize = min(nocca, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira*nvirb**2*3))))
         for p0,p1 in lib.prange(0, nocca, blksize):
             ovVV = np.asarray(eris.ovVV[p0:p1]).reshape((p1-p0)*nvira,-1)
             ovVV = lib.unpack_tril(ovVV).reshape(-1,nvira,nvirb,nvirb)
             Wvvab -= np.einsum('mb,mbaa->ba', t1a[p0:p1], ovVV)
             ovVV = None
-        blksize = max(int(max_memory*1e6/8/(nvirb*nvira**2*3)), 2)
+        blksize = min(noccb, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb*nvira**2*3))))
         #:eris_OVvv = lib.unpack_tril(np.asarray(eris.OVvv).reshape(noccb*nvirb,-1)).reshape(noccb,nvirb,nvira,nvira)
         #:Wvvab -= np.einsum('mb,mbaa->ab', t1b, eris_OVvv)
         idxa = np.arange(nvira)
@@ -2603,8 +2612,8 @@ class _IMDS:
         #:self.wovoo  = 0.5 * einsum('mebf,ijef->mbij', eris_ovvv, tauaa)
         #:self.wovoo -= 0.5 * einsum('mfbe,ijef->mbij', eris_ovvv, tauaa)
         mem_now = lib.current_memory()[0]
-        max_memory = lib.param.MAX_MEMORY - mem_now
-        blksize = max(int(max_memory*1e6/8/(nvira**3*3)), 2)
+        max_memory = max(0, lib.param.MAX_MEMORY - mem_now)
+        blksize = min(nocca, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira**3*3))))
         for p0,p1 in lib.prange(0, nocca, blksize):
             ovvv = np.asarray(eris.ovvv[p0:p1]).reshape((p1-p0)*nvira,-1)
             ovvv = lib.unpack_tril(ovvv).reshape(-1,nvira,nvira,nvira)
@@ -2619,7 +2628,7 @@ class _IMDS:
         #:self.Fvvb  = np.einsum('mf,mfae->ae', t1b, OVVV)
         #:self.wOVVO = lib.einsum('jf,mebf->mbej', t1b, OVVV)
         #:self.wOVOO  = 0.5 * einsum('mebf,ijef->mbij', OVVV, taubb)
-        blksize = max(int(max_memory*1e6/8/(nvirb**3*3)), 2)
+        blksize = min(noccb, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb**3*3))))
         for p0, p1 in lib.prange(0, noccb, blksize):
             OVVV = np.asarray(eris.OVVV[p0:p1]).reshape((p1-p0)*nvirb,-1)
             OVVV = lib.unpack_tril(OVVV).reshape(-1,nvirb,nvirb,nvirb)
@@ -2635,7 +2644,7 @@ class _IMDS:
         #:self.woVVo = lib.einsum('jf,mfBE->mBEj',-t1a, eris_ovVV)
         #:self.woVoO  = 0.5 * einsum('meBF,iJeF->mBiJ', eris_ovVV, tauab)
         #:self.woVoO += 0.5 * einsum('mfBE,iJfE->mBiJ', eris_ovVV, tauab)
-        blksize = max(int(max_memory*1e6/8/(nvira*nvirb**2*3)), 2)
+        blksize = min(nocca, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira*nvirb**2*3))))
         for p0,p1 in lib.prange(0, nocca, blksize):
             ovVV = np.asarray(eris.ovVV[p0:p1]).reshape((p1-p0)*nvira,-1)
             ovVV = lib.unpack_tril(ovVV).reshape(-1,nvira,nvirb,nvirb)
@@ -2652,7 +2661,7 @@ class _IMDS:
         #:self.wOvvO = lib.einsum('JF,MFbe->MbeJ',-t1b, eris_OVvv)
         #:self.wOvOo  = 0.5 * einsum('MEbf,jIfE->MbIj', eris_OVvv, tauab)
         #:self.wOvOo += 0.5 * einsum('MFbe,jIeF->MbIj', eris_OVvv, tauab)
-        blksize = max(int(max_memory*1e6/8/(nvirb*nvira**2*3)), 2)
+        blksize = min(noccb, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb*nvira**2*3))))
         for p0, p1 in lib.prange(0, noccb, blksize):
             OVvv = np.asarray(eris.OVvv[p0:p1]).reshape((p1-p0)*nvirb,-1)
             OVvv = lib.unpack_tril(OVvv).reshape(-1,nvirb,nvira,nvira)
@@ -2907,8 +2916,8 @@ class _IMDS:
         #:wvovv += eris_ovvv.transpose(2,0,3,1).conj()
         #:self.wvovv -= wvovv - wvovv.transpose(0,1,3,2)
         mem_now = lib.current_memory()[0]
-        max_memory = lib.param.MAX_MEMORY - mem_now
-        blksize = max(int(max_memory*1e6/8/(nvira**3*6)), 2)
+        max_memory = max(0, lib.param.MAX_MEMORY - mem_now)
+        blksize = min(nocca, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira**3*6))))
         for i0,i1 in lib.prange(0, nocca, blksize):
             wvovv = self.wvovv[:,i0:i1]
             for p0,p1 in lib.prange(0, noccb, blksize):
@@ -2960,7 +2969,7 @@ class _IMDS:
         #:wVOVV -= lib.einsum('mfBE,mIfA->EIAB', eris_ovVV, t2ab)
         #:wVOVV += eris_OVVV.transpose(2,0,3,1).conj()
         #:self.wVOVV += wVOVV - wVOVV.transpose(0,1,3,2)
-        blksize = max(int(max_memory*1e6/8/(nvirb**3*6)), 2)
+        blksize = min(noccb, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb**3*6))))
         for i0,i1 in lib.prange(0, noccb, blksize):
             wVOVV = self.wVOVV[:,i0:i1]
             for p0,p1 in lib.prange(0, nocca, blksize):
@@ -3016,7 +3025,7 @@ class _IMDS:
         #:eris_OVvv = lib.unpack_tril(np.asarray(eris.OVvv).reshape(noccb*nvirb,-1)).reshape(noccb,nvirb,nvira,nvira)
         #:self.wvOvV -= lib.einsum('MFbe,MIAF->eIbA', eris_OVvv, t2bb)
         #:self.wvOvV += eris_OVvv.transpose(2,0,3,1).conj()
-        blksize = max(int(max_memory*1e6/8/(nvira**3*6)), 2)
+        blksize = min(nocca, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira**3*6))))
         for i0,i1 in lib.prange(0, nocca, blksize):
             wvOvV = self.wvOvV[:,i0:i1]
             for p0,p1 in lib.prange(0, nocca, blksize):
@@ -3032,7 +3041,7 @@ class _IMDS:
                 ovvv = None
             self.wvOvV[:,i0:i1] = wvOvV
 
-        blksize = max(int(max_memory*1e6/8/(nvirb*nvira**2*3)), 2)
+        blksize = min(nocca, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb*nvira**2*3))))
         for i0,i1 in lib.prange(0, nocca, blksize):
             wvOvV = self.wvOvV[:,i0:i1]
             for p0,p1 in lib.prange(0, nocca, blksize):
@@ -3081,7 +3090,7 @@ class _IMDS:
         #:eris_ovVV = lib.unpack_tril(np.asarray(eris.ovVV).reshape(nocca*nvira,-1)).reshape(nocca,nvira,nvirb,nvirb)
         #:self.wVoVv -= lib.einsum('mfBE,miaf->EiBa', eris_ovVV, t2aa)
         #:self.wVoVv += eris_ovVV.transpose(2,0,3,1).conj()
-        blksize = max(int(max_memory*1e6/8/(nvirb**3*6)), 2)
+        blksize = min(noccb, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb**3*6))))
         for i0,i1 in lib.prange(0, noccb, blksize):
             wVoVv = self.wVoVv[:,i0:i1]
             for p0,p1 in lib.prange(0, noccb, blksize):
@@ -3097,7 +3106,7 @@ class _IMDS:
                 OVVV = None
             self.wVoVv[:,i0:i1] = wVoVv
 
-        blksize = max(int(max_memory*1e6/8/(nvira*nvirb**2*3)), 2)
+        blksize = min(noccb, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira*nvirb**2*3))))
         for i0,i1 in lib.prange(0, noccb, blksize):
             wVoVv = self.wVoVv[:,i0:i1]
             for p0,p1 in lib.prange(0, noccb, blksize):

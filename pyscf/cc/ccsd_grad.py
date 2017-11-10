@@ -91,7 +91,7 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
     fswap['dovvo'] = d_ovov.transpose(0,1,3,2)
     d_ovov = None
 
-    max_memory = mycc.max_memory - lib.current_memory()[0]
+    max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     unit = max(nvir**3*2.5, nvir**3*2+nocc*nvir**2)
     blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*1e6/8/unit)))
     iobuflen = int(256e6/8/(blksize*nvir))
@@ -183,7 +183,7 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
 
         d_ovvv = d_ovvo = eris_ovvv = None
 
-    max_memory = mycc.max_memory - lib.current_memory()[0]
+    max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     unit = nocc*nvir**2 + nvir**3*2.5
     blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/unit))
     log.debug1('IX_intermediates pass 2: block size = %d, nocc = %d in %d blocks',
@@ -245,7 +245,7 @@ def response_dm1(mycc, t1, t2, l1, l2, eris=None, IX=None):
         Ioo, Ivv, Ivo, Xvo = IX
     nocc, nvir = t1.shape
     nmo = nocc + nvir
-    max_memory = mycc.max_memory - lib.current_memory()[0]
+    max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/(nocc*nvir**2)))
     def fvind(x):
         x = x.reshape(Xvo.shape)
@@ -356,7 +356,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     if atmlst is None:
         atmlst = range(mol.natm)
     offsetdic = mol.offset_nr_by_atom()
-    max_memory = mycc.max_memory - lib.current_memory()[0]
+    max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     blksize = max(1, int(max_memory*1e6/8/(nao**3*2.5)))
     ioblksize = fdm2['dm2/0'].shape[-1]
     de = numpy.zeros((len(atmlst),3))
@@ -487,7 +487,7 @@ def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave=None):
 # transform dm2_ij to get lower triangular (dm2+dm2.transpose(0,1,3,2))
     _tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     fswap = h5py.File(_tmpfile.name)
-    max_memory = mycc.max_memory - lib.current_memory()[0]
+    max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     blksize = int(max_memory*1e6/8/(nmo*nao_pair+nmo**3+nvir**3))
     blksize = min(nocc, max(ccsd.BLKMIN, blksize))
     iobuflen = int(256e6/8/(blksize*nmo))
@@ -530,7 +530,7 @@ def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave=None):
     time1 = log.timer_debug1('_rdm2_mo2ao pass 2', *time1)
 
 # transform dm2_kl then dm2 + dm2.transpose(2,3,0,1)
-    max_memory = mycc.max_memory - lib.current_memory()[0]
+    max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     blksize = max(nao, int(max_memory*1e6/8/(nao_pair+nmo**2)))
     iobuflen = int(256e6/8/blksize)
     log.debug1('_rdm2_mo2ao pass 3: blksize = %d, iobuflen = %d', blksize, iobuflen)

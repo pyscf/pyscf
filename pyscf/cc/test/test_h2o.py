@@ -22,7 +22,7 @@ mf.conv_tol_grad = 1e-8
 ehf = mf.kernel()
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_ccsd(self):
         mcc = cc.ccsd.CC(mf)
         mcc.conv_tol = 1e-9
@@ -122,14 +122,15 @@ class KnowValues(unittest.TestCase):
 
     def test_ccsd_rdm(self):
         mcc = cc.ccsd.CC(mf)
+        mcc.max_memory = 0
         mcc.conv_tol = 1e-9
         mcc.conv_tol_normt = 1e-7
         mcc.kernel()
         mcc.solve_lambda()
         dm1 = mcc.make_rdm1()
         dm2 = mcc.make_rdm2()
-        self.assertAlmostEqual(numpy.linalg.norm(dm1), 4.4227836730016374, 7)
-        self.assertAlmostEqual(numpy.linalg.norm(dm2), 20.074629443311355, 7)
+        self.assertAlmostEqual(numpy.linalg.norm(dm1), 4.4227785269355078, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(dm2), 20.074587448789089, 6)
 
     def test_scanner(self):
         mol1 = mol.copy()

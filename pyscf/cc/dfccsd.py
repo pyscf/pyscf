@@ -64,9 +64,9 @@ class RCCSD(rccsd.RCCSD):
         time0 = logger.timer_debug1(self, 'vvvv-tau', *time0)
 
 #TODO: check if vvL can be entirely load into memory
-        max_memory = max(2000, self.max_memory - lib.current_memory()[0])
-        dmax = max(4, numpy.sqrt(max_memory*.9e6/8/nvir**2/2))
-        vvblk = max(4, (max_memory*1e6/8 - dmax**2*(nvir**2*1.5+naux))/naux)
+        max_memory = max(0, self.max_memory - lib.current_memory()[0])
+        dmax = min(nvir, max(ccsd.BLKMIN, numpy.sqrt(max_memory*.9e6/8/nvir**2/2)))
+        vvblk = min(nvir, max(ccsd.BLKMIN, (max_memory*1e6/8 - dmax**2*(nvir**2*1.5+naux))/naux))
         dmax = int(dmax)
         vvblk = int(vvblk)
         eribuf = numpy.empty((dmax,dmax,nvir_pair))
@@ -200,8 +200,8 @@ def _make_eris_df(cc, mo_coeff=None):
     eris.ovvo = eris.feri['ovvo']
 
     mem_now = lib.current_memory()[0]
-    max_memory = cc.max_memory - mem_now
-    blksize = max(4, int((max_memory*.9e6/8-nocc**2*nvir_pair)/(nocc**2+naux)))
+    max_memory = max(0, cc.max_memory - mem_now)
+    blksize = max(ccsd.BLKMIN, int((max_memory*.9e6/8-nocc**2*nvir_pair)/(nocc**2+naux)))
     oovv = numpy.empty((nocc,nocc,nvir_pair))
     vvL = numpy.empty((blksize,naux))
     for p0, p1 in lib.prange(0, nvir_pair, blksize):

@@ -20,10 +20,7 @@ from pyscf.cc import _ccsd
 def kernel(mycc, eris, t1=None, t2=None, l1=None, l2=None,
            max_cycle=50, tol=1e-8, verbose=logger.INFO):
     cput0 = (time.clock(), time.time())
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mycc.stdout, verbose)
+    log = logger.new_logger(mycc, verbose)
 
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
@@ -37,7 +34,7 @@ def kernel(mycc, eris, t1=None, t2=None, l1=None, l2=None,
         adiis = lib.diis.DIIS(mycc, mycc.diis_file)
         adiis.space = mycc.diis_space
     else:
-        adiis = lambda t1,t2,*args: (t1, t2)
+        adiis = None
     cput0 = log.timer('CCSD lambda initialization', *cput0)
 
     conv = False
@@ -90,8 +87,8 @@ def make_intermediates(mycc, t1, t2, eris):
     unit = max(nocc*nvir**2*4 + nvir**3*2,
                nvir**3*3 + nocc*nvir**2,
                nocc*nvir**2*6 + nocc**2*nvir + nocc**3 + nocc**2*nvir)
-    max_memory = mycc.max_memory - lib.current_memory()[0]
-    blksize = max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit))
+    max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
+    blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit)))
     log.debug1('ccsd lambda make_intermediates: block size = %d, nocc = %d in %d blocks',
                blksize, nocc, int((nocc+blksize-1)//blksize))
     for istep, (p0, p1) in enumerate(prange(0, nocc, blksize)):
@@ -341,8 +338,7 @@ def make_intermediates(mycc, t1, t2, eris):
 
 # update L1, L2
 def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None):
-    if saved is None:
-        saved = make_intermediates(mycc, t1, t2, eris)
+    if saved is None: saved = make_intermediates(mycc, t1, t2, eris)
     time1 = time0 = time.clock(), time.time()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
@@ -410,7 +406,7 @@ def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None):
     l2t1 = lib.dot(l2.reshape(-1,nvir), t1.T).reshape(nocc,nocc,nvir,nocc)
     l2t1 = _cp(l2t1.transpose(1,0,3,2))
 
-    max_memory = mycc.max_memory - lib.current_memory()[0]
+    max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     unit = max(nvir**3*2+nocc*nvir**2, nocc*nvir**2*5)
     blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit)))
     log.debug1('block size = %d, nocc = %d is divided into %d blocks',
