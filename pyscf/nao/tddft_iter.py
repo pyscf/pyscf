@@ -72,17 +72,17 @@ class tddft_iter(scf):
     self.nprod = self.moms0.size
 
     if load_kernel:
-        self.load_kernel_method(**kw)
+      self.load_kernel_method(**kw)
     else:
-        self.kernel,self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype) # Lower Triangular Part of the kernel
-        assert self.nprod==self.kernel_dim, "%r %r "%(self.nprod, self.kernel_dim)
+      self.kernel,self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype) # Lower Triangular Part of the kernel
+      assert self.nprod==self.kernel_dim, "%r %r "%(self.nprod, self.kernel_dim)
         
-        xc = xc_code.split(',')[0]
-        if xc=='RPA' or xc=='HF': pass
-        elif xc=='LDA' or xc=='GGA': self.comp_fxc_pack(kernel=self.kernel, **kw)
-        else:
-          print(' xc_code', xc_code, xc, xc_code.split(','))
-          raise RuntimeError('unkn xc_code')
+      xc = xc_code.split(',')[0]
+      if xc=='RPA' or xc=='HF': pass
+      elif xc=='LDA' or xc=='GGA': self.comp_fxc_pack(kernel=self.kernel, **kw)
+      else:
+        print(' xc_code', xc_code, xc, xc_code.split(','))
+        raise RuntimeError('unkn xc_code')
     
     # probably unnecessary, require probably does a copy
     # problematic for the dtype, must there should be another option 
