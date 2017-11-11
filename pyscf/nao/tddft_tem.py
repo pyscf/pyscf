@@ -76,7 +76,7 @@ class tddft_tem(scf):
         assert type(self.eps)==float
         assert abs(np.dot(self.velec, self.beam_offset)) < 1e-8 # check orthogonality between beam direction
                                                                 # and beam offset
-        assert self.freq[0] == 0.0
+        #assert self.freq[0] == 0.0
 
         
         # heavy calculations after checking !!
@@ -113,8 +113,14 @@ class tddft_tem(scf):
 
 
         self.calc_external_potential()
-        #import sys
-        #sys.exit()
+        #self.V_freq_ref = np.loadtxt("V_freq_real.txt") + 1.0j*np.loadtxt("V_freq_imag.txt")
+
+        #for iw in range(self.V_freq.shape[0]):
+        #    print("Python = {0}, {1}    Fortran = {2}, {3}".format(np.sum(np.abs(self.V_freq[iw, :].real)),
+        #                                                           np.sum(np.abs(self.V_freq[iw, :].imag)),
+        #                                                           np.sum(np.abs(self.V_freq_ref[iw, :].real)),
+        #                                                           np.sum(np.abs(self.V_freq_ref[iw, :].imag))))
+
 
         # probably unnecessary, require probably does a copy
         # problematic for the dtype, must there should be another option 
@@ -179,8 +185,9 @@ class tddft_tem(scf):
         dw = self.freq[1]-self.freq[0]
 
         N = int(2*np.pi/(dw*dt))
-        if N % 2 == 0:
-          N +=1
+        #if N % 2 == 0:
+        #  N +=1
+        N += 1
 
         wmax = 2.0*np.pi*(N-1)/(N*dt)/2.0
 
@@ -193,70 +200,11 @@ class tddft_tem(scf):
         """
         Calculate the external potential created by a moving charge
         """
-        from pyscf.nao.m_tools import find_nearrest_index
-        from pyscf.nao.m_ao_matelem import ao_matelem_c
-        from pyscf.nao.m_csphar import csphar
+        from pyscf.nao.m_comp_vext_tem import comp_vext_tem
 
         self.V_freq = np.zeros((self.freq.size, self.nprod), dtype=np.complex64)
-        V_time = np.zeros((self.time.size), dtype=np.complex64)
 
-        aome = ao_matelem_c(self.ao_log.rr, self.ao_log.pp)
-        aome.init_one_set(self.ao_log)
-        
-        R0 = self.vnorm*self.time[0]*self.vdir + self.beam_offset
-        rr = self.ao_log.rr
-        dr = (rr[-1]-rr[0])/(rr.size-1)
-        dt = self.time[1]-self.time[0]
-        dw = self.freq_symm[1] - self.freq_symm[0]
-        wmin = self.freq_symm[0]
-        tmin = self.time[0]
-        nff = self.freq.size
-        ub = self.freq_symm.size//2 - 1
-
-        for atm, sp in enumerate(self.atom2sp):
-            rcut = self.ao_log.sp2rcut[sp]
-            center = self.atom2coord[atm, :]
-            rmax = find_nearrest_index(rr, rcut)
-            si = self.pb.c2s[sp]
-
-            print(atm, sp, self.nprod, self.pb.c2s[sp], self.pb.c2s[sp+1])
-            for mu,l,s,f in aome.ao1.sp2info[sp]:
-                inte1 = np.sum(self.ao_log.psi_log_rl[sp][mu, 0:rmax+1]*rr[0:rmax+1]**(l+2)*
-                        rr[0:rmax+1]*dr)
-                print(mu,l,s,f, "inte1 = ", inte1)
-
-                for k in range(s, f+1):
-                    V_time.fill(0.0)
-
-                    for it, t in enumerate(self.time):
-                        R_sub = R0 + self.vnorm*self.vdir*(t - self.time[0]) - center
-                        norm = np.sqrt(np.dot(R_sub, R_sub))
-
-                        if norm > rcut:
-                            I1 = inte1/(norm**(l+1))
-                            I2 = 0.0
-                        else:
-                            rsub_max = find_nearrest_index(rr, norm)
-
-                            I1 = np.sum(self.ao_log.psi_log_rl[sp][mu, 0:rsub_max+1]*
-                                    rr[0:rsub_max+1]**(l+2)*rr[0:rsub_max+1])
-                            I2 = np.sum(self.ao_log.psi_log_rl[sp][mu, rsub_max+1:]*
-                                    rr[rsub_max+1:]/(rr[rsub_max+1:]**(l-1)))
-
-                            I1 = I1*dr/(norm**(l+1))
-                            I2 = I2*(norm**l)*dr
-                        clm_tem = (4*np.pi/(2*l+1))*csphar(R_sub, 2*aome.jmx+1)*(I1 + I2)
-                        rlm_tem = aome.c2r_vector(clm_tem, l, s, f)
-                        V_time[it] = rlm_tem[k]
-
-                    V_time *= dt*np.exp(-1.0j*wmin*(self.time-tmin))
-                    FT = np.fft.fft(V_time)
-                    self.V_freq[:, si + k] = FT[ub+1:ub+nff+1]*np.exp(-1.0j*(wmin*tmin + \
-                            self.freq_symm[ub+1:ub+nff+1]-wmin)*tmin)
-
-        print("There is probably mistake!!", np.sum(abs(self.V_freq.real)), np.sum(abs(self.V_freq.imag)))
-
-        #raise ValueError("Euh!!! check how to get nc, nfmx, jcut_lmult!!!")
+        comp_vext_tem(self, self.pb.prod_log)
 
     def load_kernel_method(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None, **kwargs):
 
@@ -334,7 +282,7 @@ class tddft_tem(scf):
 
         return v - (matvec_real + 1.0j*matvec_imag)
 
-    def comp_polariz_xx(self, x0=False):
+    def comp_tem_spectrum(self, x0=False):
         """ 
         Compute interacting polarizability
 
@@ -373,7 +321,7 @@ class tddft_tem(scf):
 
         return -polariz/np.pi
 
-    def comp_nonin(self):
+    def comp_tem_spectrum_nonin(self):
         """ 
         Compute non-interacting polarizability
 
