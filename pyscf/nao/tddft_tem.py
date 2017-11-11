@@ -113,13 +113,12 @@ class tddft_tem(scf):
 
 
         self.calc_external_potential()
-        #self.V_freq_ref = np.loadtxt("V_freq_real.txt") + 1.0j*np.loadtxt("V_freq_imag.txt")
+        self.V_freq_ref = np.loadtxt("V_freq_real.txt") + 1.0j*np.loadtxt("V_freq_imag.txt")
+        np.save("V_freq_python.npy", self.V_freq)
 
-        #for iw in range(self.V_freq.shape[0]):
-        #    print("Python = {0}, {1}    Fortran = {2}, {3}".format(np.sum(np.abs(self.V_freq[iw, :].real)),
-        #                                                           np.sum(np.abs(self.V_freq[iw, :].imag)),
-        #                                                           np.sum(np.abs(self.V_freq_ref[iw, :].real)),
-        #                                                           np.sum(np.abs(self.V_freq_ref[iw, :].imag))))
+        for iw in range(self.V_freq.shape[0]):
+            print("Error = {0}, {1}".format(np.sum(np.abs(self.V_freq[iw, :].real - self.V_freq_ref[iw, :].real)),
+                                        np.sum(np.abs(self.V_freq[iw, :].imag - self.V_freq_ref[iw, :].imag))))
 
 
         # probably unnecessary, require probably does a copy
@@ -182,16 +181,18 @@ class tddft_tem(scf):
         """
 
         dt = np.min(self.dr)/self.vnorm
-        dw = self.freq[1]-self.freq[0]
+        dw = self.freq[1] - self.freq[0]
 
         N = int(2*np.pi/(dw*dt))
         #if N % 2 == 0:
         #  N +=1
         N += 1
+        
+        dw_symm = 2.0*np.pi/(N*dt)
 
         wmax = 2.0*np.pi*(N-1)/(N*dt)/2.0
 
-        self.freq_symm = np.arange(-wmax, wmax+dw, dw)
+        self.freq_symm = np.arange(-wmax, wmax+dw_symm, dw_symm)
 
         tmax = (N-1)*dt/2
         self.time = np.arange(-tmax, tmax+dt, dt)
@@ -205,6 +206,7 @@ class tddft_tem(scf):
         self.V_freq = np.zeros((self.freq.size, self.nprod), dtype=np.complex64)
 
         comp_vext_tem(self, self.pb.prod_log)
+        print("sum(V_freq) = ", np.sum(abs(self.V_freq.real)), np.sum(abs(self.V_freq.imag)))
 
     def load_kernel_method(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None, **kwargs):
 
@@ -250,7 +252,7 @@ class tddft_tem(scf):
         else:
             return chi0_mv_gpu(self, v, comega) 
 
-    def comp_veff(self, vext, comega=1j*0.0, x0=None):
+    def comp_veff(self, vext, comega=1j*0.0, x0=None, maxiter=1000):
         """ 
             This computes an effective field (scalar potential) given the external scalar potential
         """
@@ -260,8 +262,11 @@ class tddft_tem(scf):
         assert len(vext)==len(self.moms0), "%r, %r "%(len(vext), len(self.moms0))
         self.comega_current = comega
         veff_op = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)
-        resgm = lgmres(veff_op, np.require(vext, dtype=self.dtypeComplex, 
-            requirements='C'), x0=x0, tol=self.tddft_iter_tol)
+        resgm, info = lgmres(veff_op, np.require(vext, dtype=self.dtypeComplex, 
+            requirements='C'), x0=x0, tol=self.tddft_iter_tol, maxiter=maxiter)
+
+        if info != 0:
+            print("problem lgmres, info = ", info)
         return resgm
   
     def vext2veff_matvec(self, v):
@@ -282,7 +287,7 @@ class tddft_tem(scf):
 
         return v - (matvec_real + 1.0j*matvec_imag)
 
-    def comp_tem_spectrum(self, x0=False):
+    def comp_tem_spectrum(self, x0=False, maxiter=1000):
         """ 
         Compute interacting polarizability
 
@@ -309,9 +314,9 @@ class tddft_tem(scf):
         for iw,comega in enumerate(comegas):
             print(iw)
             if x0 == True:
-                veff,info = self.comp_veff(self.V_freq[iw, :], comega, x0=self.dn0[iw, :])
+                veff = self.comp_veff(self.V_freq[iw, :], comega, x0=self.dn0[iw, :], maxiter=maxiter)
             else:
-                veff,info = self.comp_veff(self.V_freq[iw, :], comega, x0=None)
+                veff = self.comp_veff(self.V_freq[iw, :], comega, x0=None, maxiter=maxiter)
 
             self.dn[iw, :] = self.apply_rf0(veff, comega)
             polariz[iw] = np.dot(np.conj(self.V_freq[iw, :]), self.dn[iw, :])
