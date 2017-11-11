@@ -17,53 +17,6 @@ einsum = lib.einsum
 # This is restricted (R)CCSD
 # Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004)
 
-def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
-           verbose=logger.INFO):
-    """Exactly the same as pyscf.cc.ccsd.kernel, which calls a
-    *local* energy() function."""
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(cc.stdout, verbose)
-
-    if t1 is None and t2 is None:
-        t1, t2 = cc.init_amps(eris)[1:]
-    elif t1 is None:
-        nocc = cc.nocc
-        nvir = cc.nmo - nocc
-        t1 = numpy.zeros((nocc,nvir), eris.dtype)
-    elif t2 is None:
-        t2 = cc.init_amps(eris)[2]
-
-    cput1 = cput0 = (time.clock(), time.time())
-    nocc, nvir = t1.shape
-    eold = 0
-    eccsd = 0
-    if cc.diis:
-        adiis = lib.diis.DIIS(cc, cc.diis_file)
-        adiis.space = cc.diis_space
-    else:
-        adiis = lambda t1,t2,*args: (t1,t2)
-
-    conv = False
-    for istep in range(max_cycle):
-        t1new, t2new = cc.update_amps(t1, t2, eris)
-        normt = numpy.linalg.norm(t1new-t1) + numpy.linalg.norm(t2new-t2)
-        t1, t2 = t1new, t2new
-        t1new = t2new = None
-        if cc.diis:
-            t1, t2 = cc.diis(t1, t2, istep, normt, eccsd-eold, adiis)
-        eold, eccsd = eccsd, energy(cc, t1, t2, eris)
-        log.info('istep = %d  E(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
-                 istep, eccsd, eccsd - eold, normt)
-        cput1 = log.timer('CCSD iter', *cput1)
-        if abs(eccsd-eold) < tol and normt < tolnormt:
-            conv = True
-            break
-    log.timer('CCSD', *cput0)
-    return conv, eccsd, t1, t2
-
-
 def update_amps(cc, t1, t2, eris):
     # Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004) Eqs.(35)-(36)
     time0 = time.clock(), time.time()
@@ -176,10 +129,10 @@ def energy(cc, t1, t2, eris):
     nocc, nvir = t1.shape
     fock = eris.fock
     e = 2*einsum('ia,ia', fock[:nocc,nocc:], t1)
-    t1t1 = einsum('ia,jb->ijab',t1,t1)
-    tau = t2 + t1t1
-    e += einsum('ijab,ijab', 2*tau, eris.oovv)
-    e += einsum('ijab,ijba',  -tau, eris.oovv)
+    tau = einsum('ia,jb->ijab',t1,t1)
+    tau += t2
+    e += 2*einsum('ijab,ijab', tau, eris.oovv)
+    e +=  -einsum('ijab,ijba', tau, eris.oovv)
     return e.real
 
 
@@ -236,9 +189,9 @@ class RCCSD(ccsd.CCSD):
                 cctyp = 'CCSD'
                 self.cc2 = False
             self.converged, self.e_corr, self.t1, self.t2 = \
-                    kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
-                           tol=self.conv_tol, tolnormt=self.conv_tol_normt,
-                           verbose=self.verbose)
+                    ccsd.kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
+                                tol=self.conv_tol, tolnormt=self.conv_tol_normt,
+                                verbose=self.verbose)
             if self.converged:
                 logger.info(self, '%s converged', cctyp)
             else:
@@ -253,8 +206,8 @@ class RCCSD(ccsd.CCSD):
     def ao2mo(self, mo_coeff=None):
         return _ERIS(self, mo_coeff)
 
-    def update_amps(self, t1, t2, eris):
-        return update_amps(self, t1, t2, eris)
+    energy = energy
+    update_amps = update_amps
 
     def nip(self):
         nocc = self.nocc
@@ -529,6 +482,7 @@ class RCCSD(ccsd.CCSD):
 
         ipccsd_evecs  = np.array(ipccsd_evecs)
         lipccsd_evecs = np.array(lipccsd_evecs)
+        e = []
         for _eval, _evec, _levec in zip(ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
             l1,l2 = self.vector_to_amplitudes_ip(_levec)
             r1,r2 = self.vector_to_amplitudes_ip(_evec)
@@ -563,8 +517,10 @@ class RCCSD(ccsd.CCSD):
 
             deltaE = 0.5*einsum('ijkab,ijkab,ijkab',lijkab,rijkab,_eijkab)
             deltaE = deltaE.real
-            print "Exc. energy, delta energy = %16.12f, %16.12f" % (_eval+deltaE,deltaE)
-        return deltaE
+            logger.note(self, "Exc. energy, delta energy = %16.12f, %16.12f",
+                        _eval+deltaE, deltaE)
+            e.append(_eval+deltaE)
+        return e
 
     def eaccsd(self, nroots=1, left=False, koopmans=False, guess=None, partition=None):
         '''Calculate (N+1)-electron charged excitations via EA-EOM-CCSD.
@@ -826,6 +782,7 @@ class RCCSD(ccsd.CCSD):
 
         eaccsd_evecs  = np.array(eaccsd_evecs)
         leaccsd_evecs = np.array(leaccsd_evecs)
+        e = []
         for _eval, _evec, _levec in zip(eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
             l1,l2 = self.vector_to_amplitudes_ea(_levec)
             r1,r2 = self.vector_to_amplitudes_ea(_evec)
@@ -860,8 +817,10 @@ class RCCSD(ccsd.CCSD):
                     + 1.*lijabc.transpose(0,1,4,2,3)
             deltaE = 0.5*einsum('ijabc,ijabc,ijabc',lijabc,rijabc,_eijabc)
             deltaE = deltaE.real
-            print "Exc. energy, delta energy = %16.12f, %16.12f" % (_eval+deltaE,deltaE)
-        return deltaE
+            logger.note(self, "Exc. energy, delta energy = %16.12f, %16.12f",
+                        _eval+deltaE, deltaE)
+            e.append(_eval+deltaE)
+        return e
 
 
     def eeccsd(self, nroots=1, koopmans=False, guess=None, partition=None):
@@ -973,86 +932,29 @@ class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore',
                  ao2mofn=ao2mo.outcore.general_iofree):
         cput0 = (time.clock(), time.time())
-        moidx = ccsd.get_moidx(cc)
         if mo_coeff is None:
-            self.mo_coeff = mo_coeff = cc.mo_coeff[:,moidx]
-        else:  # If mo_coeff is not canonical orbital
-            self.mo_coeff = mo_coeff = mo_coeff[:,moidx]
+            self.mo_coeff = mo_coeff = ccsd._mo_without_core(cc, cc.mo_coeff)
+        else:
+            self.mo_coeff = mo_coeff = ccsd._mo_without_core(cc, mo_coeff)
         dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
         fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
         self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
 
         nocc = cc.nocc
         nmo = cc.nmo
-        nvir = nmo - nocc
-        mem_incore, mem_outcore, mem_basic = _mem_usage(nocc, nvir)
-        mem_now = lib.current_memory()[0]
+        eri1 = ao2mo.incore.full(cc._scf._eri, mo_coeff)
+        eri1 = ao2mo.restore(1, eri1, nmo).transpose(0,2,1,3)
+        self.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
+        self.ooov = eri1[:nocc,:nocc,:nocc,nocc:].copy()
+        self.ovoo = eri1[:nocc,nocc:,:nocc,:nocc].copy()
+        self.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
+        self.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
+        self.ovvo = eri1[:nocc,nocc:,nocc:,:nocc].copy()
+        self.ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
+        self.voov = eri1[nocc:,:nocc,:nocc,nocc:].copy()
+        self.vovv = eri1[nocc:,:nocc,nocc:,nocc:].copy()
+        self.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy()
 
-        log = logger.Logger(cc.stdout, cc.verbose)
-        if (method == 'incore' and (mem_incore+mem_now < cc.max_memory)
-            or cc.mol.incore_anyway):
-            eri = ao2mofn(cc._scf.mol, (mo_coeff,mo_coeff,mo_coeff,mo_coeff), compact=0)
-            if mo_coeff.dtype == np.float: eri = eri.real
-            eri = eri.reshape((nmo,)*4)
-            # <ij|kl> = (ik|jl)
-            eri = eri.transpose(0,2,1,3)
-
-            self.dtype = eri.dtype
-            self.oooo = eri[:nocc,:nocc,:nocc,:nocc].copy()
-            self.ooov = eri[:nocc,:nocc,:nocc,nocc:].copy()
-            self.oovv = eri[:nocc,:nocc,nocc:,nocc:].copy()
-            self.ovov = eri[:nocc,nocc:,:nocc,nocc:].copy()
-            self.voov = eri[nocc:,:nocc,:nocc,nocc:].copy()
-            self.vovv = eri[nocc:,:nocc,nocc:,nocc:].copy()
-            self.vvvv = eri[nocc:,nocc:,nocc:,nocc:].copy()
-        else:
-            _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-            self.feri1 = h5py.File(_tmpfile1.name)
-            orbo = mo_coeff[:,:nocc]
-            orbv = mo_coeff[:,nocc:]
-            if mo_coeff.dtype == np.complex: ds_type = 'c16'
-            else: ds_type = 'f8'
-            self.oooo = self.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), ds_type)
-            self.ooov = self.feri1.create_dataset('ooov', (nocc,nocc,nocc,nvir), ds_type)
-            self.oovv = self.feri1.create_dataset('oovv', (nocc,nocc,nvir,nvir), ds_type)
-            self.ovov = self.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), ds_type)
-            self.voov = self.feri1.create_dataset('voov', (nvir,nocc,nocc,nvir), ds_type)
-            self.vovv = self.feri1.create_dataset('vovv', (nvir,nocc,nvir,nvir), ds_type)
-            self.vvvv = self.feri1.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)
-
-            cput1 = time.clock(), time.time()
-            # <ij|pq>  = (ip|jq)
-            buf = ao2mofn(cc._scf.mol, (orbo,mo_coeff,orbo,mo_coeff), compact=0)
-            if mo_coeff.dtype == np.float: buf = buf.real
-            buf = buf.reshape((nocc,nmo,nocc,nmo)).transpose(0,2,1,3)
-            cput1 = log.timer_debug1('transforming oopq', *cput1)
-            self.dtype = buf.dtype
-            self.oooo[:,:,:,:] = buf[:,:,:nocc,:nocc]
-            self.ooov[:,:,:,:] = buf[:,:,:nocc,nocc:]
-            self.oovv[:,:,:,:] = buf[:,:,nocc:,nocc:]
-
-            cput1 = time.clock(), time.time()
-            # <ia|pq> = (ip|aq)
-            buf = ao2mofn(cc._scf.mol, (orbo,mo_coeff,orbv,mo_coeff), compact=0)
-            if mo_coeff.dtype == np.float: buf = buf.real
-            buf = buf.reshape((nocc,nmo,nvir,nmo)).transpose(0,2,1,3)
-            cput1 = log.timer_debug1('transforming ovpq', *cput1)
-            self.ovov[:,:,:,:] = buf[:,:,:nocc,nocc:]
-            self.vovv[:,:,:,:] = buf[:,:,nocc:,nocc:].transpose(1,0,3,2)
-            self.voov[:,:,:,:] = buf[:,:,nocc:,:nocc].transpose(1,0,3,2)
-
-            _tmpfile2 = tempfile.NamedTemporaryFile()
-            self.feri2 = h5py.File(_tmpfile2.name, 'w')
-            ao2mo.full(cc.mol, orbv, self.feri2, max_memory=cc.max_memory,
-                             verbose=log, compact=False)
-            vvvv_buf = self.feri2['eri_mo']
-            for a in range(nvir):
-                abrange = a*nvir + np.arange(nvir)
-                self.vvvv[a,:,:,:] = np.array(vvvv_buf[abrange,:]).reshape((nvir,nvir,nvir)).transpose(1,0,2)
-
-            cput1 = log.timer_debug1('transforming vvvv', *cput1)
-
-        log.timer('CCSD integral transformation', *cput0)
 
 class _IMDS:
     def __init__(self, cc):
@@ -1131,16 +1033,6 @@ class _IMDS:
     def make_ee(self):
         raise NotImplementedError
 
-
-def _mem_usage(nocc, nvir):
-    incore = (nocc+nvir)**4
-    # Roughly, factor of two for intermediates and factor of two
-    # for safety (temp arrays, copying, etc)
-    incore *= 4
-    # TODO: Improve incore estimate and add outcore estimate
-    outcore = basic = incore
-    return incore*8/1e6, outcore*8/1e6, basic*8/1e6
-
 def _cp(a):
     return numpy.array(a, copy=False, order='C')
 
@@ -1148,6 +1040,67 @@ def _cp(a):
 if __name__ == '__main__':
     from pyscf import scf
     from pyscf import gto
+
+    mol = gto.M()
+    nocc, nvir = 5, 12
+    nmo = nocc + nvir
+    nmo_pair = nmo*(nmo+1)//2
+    mf = scf.RHF(mol)
+    numpy.random.seed(12)
+    mf._eri = numpy.random.random(nmo_pair*(nmo_pair+1)//2)
+    mf.mo_coeff = numpy.random.random((nmo,nmo))
+    mf.mo_energy = numpy.arange(0., nmo)
+    mf.mo_occ = numpy.zeros(nmo)
+    mf.mo_occ[:nocc] = 2
+    vhf = mf.get_veff(mol, mf.make_rdm1())
+    cinv = numpy.linalg.inv(mf.mo_coeff)
+    mf.get_hcore = lambda *args: (reduce(numpy.dot, (cinv.T*mf.mo_energy, cinv)) - vhf)
+    mycc = RCCSD(mf)
+    eris = mycc.ao2mo()
+    a = numpy.random.random((nmo,nmo)) * .1
+    eris.fock += a + a.T.conj()
+    t1 = numpy.random.random((nocc,nvir)) * .1
+    t2 = numpy.random.random((nocc,nocc,nvir,nvir)) * .1
+    t2 = t2 + t2.transpose(1,0,3,2)
+
+    mycc.cc2 = False
+    t1a, t2a = update_amps(mycc, t1, t2, eris)
+    print(lib.finger(t1a) - -106360.5276951083)
+    print(lib.finger(t2a) - 66540.100267798145)
+    mycc.cc2 = True
+    t1a, t2a = update_amps(mycc, t1, t2, eris)
+    print(lib.finger(t1a) - -106360.5276951083)
+    print(lib.finger(t2a) - -1517.9391800662809)
+
+    eri1 = numpy.random.random((nmo,nmo,nmo,nmo)) + numpy.random.random((nmo,nmo,nmo,nmo))*1j
+    eri1 = eri1 + eri1.transpose(1,0,3,2)
+    eri1 = eri1 + eri1.transpose(2,3,0,1).conj()
+    eri1 *= .1
+    eris.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
+    eris.ooov = eri1[:nocc,:nocc,:nocc,nocc:].copy()
+    eris.ovoo = eri1[:nocc,nocc:,:nocc,:nocc].copy()
+    eris.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
+    eris.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
+    eris.ovvo = eri1[:nocc,nocc:,nocc:,:nocc].copy()
+    eris.ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
+    eris.voov = eri1[nocc:,:nocc,:nocc,nocc:].copy()
+    eris.vovv = eri1[nocc:,:nocc,nocc:,nocc:].copy()
+    eris.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy()
+    a = numpy.random.random((nmo,nmo)) * .1j
+    eris.fock = eris.fock + a + a.T.conj()
+
+    t1 = t1 + numpy.random.random((nocc,nvir)) * .1j
+    t2 = t2 + numpy.random.random((nocc,nocc,nvir,nvir)) * .1j
+    t2 = t2 + t2.transpose(1,0,3,2)
+    mycc.cc2 = False
+    t1a, t2a = update_amps(mycc, t1, t2, eris)
+    print(lib.finger(t1a) - (-13.32050019680894-1.8825765910430254j))
+    print(lib.finger(t2a) - (9.2521062044785189+29.999480274811873j))
+    mycc.cc2 = True
+    t1a, t2a = update_amps(mycc, t1, t2, eris)
+    print(lib.finger(t1a) - (-13.32050019680894-1.8825765910430254j))
+    print(lib.finger(t2a) - (-0.056223856104895858+0.025472249329733986j))
+
     mol = gto.Mole()
     mol.atom = [
         [8 , (0. , 0.     , 0.)],
@@ -1155,48 +1108,60 @@ if __name__ == '__main__':
         [1 , (0. , 0.757  , 0.587)]]
     mol.basis = 'cc-pvdz'
     #mol.basis = '3-21G'
+    mol.verbose = 0
     mol.spin = 0
     mol.build()
-    mf = scf.RHF(mol)
-    print(mf.scf())
+    mf = scf.RHF(mol).run(conv_tol=1e-14)
 
     mycc = RCCSD(mf)
+    eris = mycc.ao2mo()
+    emp2, t1, t2 = mycc.init_amps(eris)
+    print(lib.finger(t2) - 0.044540097905897198)
+    numpy.random.seed(1)
+    t1 = numpy.random.random(t1.shape)*.1
+    t2 = numpy.random.random(t2.shape)*.1
+    t2 = t2 + t2.transpose(1,0,3,2)
+    t1, t2 = update_amps(mycc, t1, t2, eris)
+    print(lib.finger(t1) - 0.25118555558133576)
+    print(lib.finger(t2) - 0.02352137419932243)
+
     ecc, t1, t2 = mycc.kernel()
-    print(ecc - -0.2133432712431435)
+    print(ecc - -0.21334326214236796)
 
     part = None
-    print "IP energies... (right eigenvector)"
+    print("IP energies... (right eigenvector)")
     e,v = mycc.ipccsd(nroots=3)
-    print e
-    print(e[0] - 0.4335604332073799)
-    print(e[1] - 0.5187659896045407)
-    print(e[2] - 0.6782876002229172)
+    print(e[0] - 0.43356041409195489)
+    print(e[1] - 0.51876598058509493)
+    print(e[2] - 0.6782879569941862 )
 
-    print "IP energies... (left eigenvector)"
+    print("IP energies... (left eigenvector)")
     le,lv = mycc.ipccsd(nroots=3,left=True)
-    print le
-    print(le[0] - 0.4335604332073799)
-    print(le[1] - 0.5187659896045407)
-    print(le[2] - 0.6782876002229172)
+    print(le[0] - 0.43356040428879794)
+    print(le[1] - 0.51876597800180335)
+    print(le[2] - 0.67828755013874864)
 
-    mycc.ipccsd_star(e,v,lv)
+    e = mycc.ipccsd_star(e,v,lv)
+    print(e[0] - 0.43793202073189047)
+    print(e[1] - 0.52287073446559729)
+    print(e[2] - 0.67994597948852287)
 
-    print "EA energies... (right eigenvector)"
+    print("EA energies... (right eigenvector)")
     e,v = mycc.eaccsd(nroots=3)
-    print e
-    print(e[0] - 0.16737886338859731)
-    print(e[1] - 0.24027613852009164)
-    print(e[2] - 0.51006797826488071)
+    print(e[0] - 0.16737886282063008)
+    print(e[1] - 0.24027622989542635)
+    print(e[2] - 0.51006796667905585)
 
-    print "EA energies... (left eigenvector)"
-    e,lv = mycc.eaccsd(nroots=3,left=True)
-    print e
-    print(e[0] - 0.16737886338859731)
-    print(e[1] - 0.24027613852009164)
-    print(e[2] - 0.51006797826488071)
+    print("EA energies... (left eigenvector)")
+    le,lv = mycc.eaccsd(nroots=3,left=True)
+    print(le[0] - 0.16737896537079733)
+    print(le[1] - 0.24027634198123343)
+    print(le[2] - 0.51006809015066612)
 
-    mycc.eaccsd_star(e,v,lv)
+    e = mycc.eaccsd_star(e,v,lv)
+    print(e[0] - 0.16656250953550664)
+    print(e[1] - 0.23944144521387614)
+    print(e[2] - 0.41399436888830721)
 
     # Note: Not implemented
     #e,v = mycc.eeccsd(nroots=4)
-
