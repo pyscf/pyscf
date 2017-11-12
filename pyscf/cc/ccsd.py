@@ -670,6 +670,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 # FIXME: Should we avoid DIIS starting early?
         self.diis_start_energy_diff = 1e9
         self.direct = False
+        self.cc2 = False
 
         self.frozen = frozen
 
@@ -718,6 +719,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         log.info('******** %s flags ********', self.__class__)
         nocc = self.nocc
         nvir = self.nmo - nocc
+        log.info('CC2 = %g', self.cc2)
         log.info('CCSD nocc = %d, nvir = %d', nocc, nvir)
         if self.frozen is not 0:
             log.info('frozen orbitals %s', str(self.frozen))
@@ -1164,11 +1166,9 @@ if __name__ == '__main__':
     print(abs(t1-r1).max())
     print(abs(t2-r2).max())
 
-    def finger(a):
-        return numpy.dot(a.ravel(), numpy.cos(numpy.arange(a.size)))
     t1a, t2a = update_amps(mycc, t1, t2, eris)
-    print(finger(t1a) - -106360.5276951083)
-    print(finger(t2a) - 66540.100267798145)
+    print(lib.finger(t1a) - -106360.5276951083)
+    print(lib.finger(t2a) - 66540.100267798145)
 
     mol = gto.Mole()
     mol.atom = [
@@ -1214,10 +1214,4 @@ if __name__ == '__main__':
     mcc.ccsd()
     print(mcc.ecc - -0.213343234198275)
     print(abs(mcc.t2).sum() - 5.63970304662375)
-
-    mcc.diis = residual_as_diis_errvec(mcc)
-    mcc.ccsd()
-    print(mcc.ecc - -0.213343234198275)
-    print(abs(mcc.t2).sum() - 5.63970304662375)
-    print(mcc.ccsd_t() - -0.003060021865720902)
 
