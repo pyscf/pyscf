@@ -129,6 +129,7 @@ def update_amps(mycc, t1, t2, eris):
     #: wOoVv -= numpy.einsum('jbik,ka->jiba', eris.ovoo, t1)
         wOoVv = numpy.ndarray((nocc,p1-p0,nvir,nvir), buffer=buf3)
         wooVV = numpy.ndarray((p1-p0,nocc,nvir,nvir), buffer=buf4)
+        wooVV[:] = 0
         readbuf = numpy.empty((p1-p0,blknvir,nvir_pair))
         prefetchbuf = numpy.empty((p1-p0,blknvir,nvir_pair))
         ovvvbuf = numpy.empty((p1-p0,blknvir,nvir,nvir))
@@ -167,7 +168,7 @@ def update_amps(mycc, t1, t2, eris):
                 tmp = t1[:,q0:q1].copy()
                 for i in range(eris_ovvv.shape[0]):
                     lib.ddot(tmp, eris_ovvv[i].reshape(q1-q0,-1), -1,
-                             wooVV[i].reshape(nocc,-1))
+                             wooVV[i].reshape(nocc,-1), 1)
 
                 #: wOoVv += numpy.einsum('ibac,jc->jiba', eris_ovvv, t1)
                 tmp = numpy.ndarray((nocc,p1-p0,q1-q0,nvir), buffer=buf1)

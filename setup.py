@@ -295,6 +295,9 @@ extensions += [
     make_ext('pyscf.lib.libao2mo', 'ao2mo',
              'restore_eri.c nr_ao2mo.c nr_incore.c r_ao2mo.c',
              ['cvhf', 'cint', 'np_helper']),
+    make_ext('pyscf.lib.libcc', 'cc',
+             'ccsd_pack.c ccsd_grad.c ccsd_t.c uccsd_t.c',
+             ['cvhf', 'ao2mo', 'np_helper'])
     make_ext('pyscf.lib.libfci', 'mcscf',
              '''fci_contract.c fci_contract_nosym.c fci_rdm.c fci_string.c
              fci_4pdm.c select_ci.c''',

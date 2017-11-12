@@ -692,7 +692,7 @@ class CASCI(lib.StreamObject):
 
     def make_rdm1s(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,
                    ncore=None):
-        '''One-particle density matrices for alpha and beta spin
+        '''One-particle density matrices for alpha and beta spin on AO basis
         '''
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if ci is None: ci = self.ci

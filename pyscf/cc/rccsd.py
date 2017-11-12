@@ -121,7 +121,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
 #    t2new += einsum('klij,klab->ijab',Woooo,t2)
 #    t2new += einsum('klij,ka,lb->ijab',Woooo,t1,t1)
 #    for a in range(nvir):
-#        Wvvvv_a = np.array(Wvvvv[a])
+#        Wvvvv_a = np.array(Wvvvv[a]).copy()
 #        t2new[:,:,a,:] += einsum('bcd,ijcd->ijb',Wvvvv_a,t2)
 #        t2new[:,:,a,:] += einsum('bcd,ic,jd->ijb',Wvvvv_a,t1,t1)
 #    tmp = einsum('ac,ijcb->ijab',Lvv,t2)
