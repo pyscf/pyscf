@@ -758,7 +758,7 @@ def expm(a):
         y, buf = buf, y
     return y
 
-def einsum(idx_str, *tensors):
+def einsum(idx_str, *tensors, **kwargs):
     '''Perform a more efficient einsum via reshaping to a matrix multiply.
 
     Current differences compared to numpy.einsum:
@@ -767,7 +767,7 @@ def einsum(idx_str, *tensors):
     be explicitly specified (i.e. 'ij,j->i' and not 'ij,j').
     '''
 
-    DEBUG = False
+    DEBUG = kwargs.get('DEBUG', False)
 
     idx_str = idx_str.replace(' ','')
     indices  = "".join(re.split(',|->',idx_str))
@@ -858,12 +858,8 @@ def einsum(idx_str, *tensors):
         print("inner_shape =", inner_shape)
 
     # Transpose the tensors into the proper order and reshape into matrices
-    new_orderA = list()
-    for idx in idxAt:
-        new_orderA.append(idxA.index(idx))
-    new_orderB = list()
-    for idx in idxBt:
-        new_orderB.append(idxB.index(idx))
+    new_orderA = [idxA.index(idx) for idx in idxAt]
+    new_orderB = [idxB.index(idx) for idx in idxBt]
 
     if DEBUG:
         print("Transposing A as", new_orderA)
@@ -872,11 +868,11 @@ def einsum(idx_str, *tensors):
         print("Reshaping B as (", inner_shape, ",-1)")
 
     # A or B might be HDF5 Datasets 
-    A = numpy.array(A, copy=False)
-    B = numpy.array(B, copy=False)
+    A = numpy.array(A, copy=False, order='A')
+    B = numpy.array(B, copy=False, order='A')
 
-    At = A.transpose(new_orderA).reshape(-1,inner_shape)
-    Bt = B.transpose(new_orderB).reshape(inner_shape,-1)
+    At = A.transpose(new_orderA).reshape((-1,inner_shape))
+    Bt = B.transpose(new_orderB).reshape((inner_shape,-1))
 
     shapeCt = list()
     idxCt = list()
@@ -891,11 +887,8 @@ def einsum(idx_str, *tensors):
         shapeCt.append(rangeB[idx])
         idxCt.append(idx)
 
-    new_orderCt = list()
-    for idx in idxC:
-        new_orderCt.append(idxCt.index(idx))
-
-    return numpy.dot(At,Bt).reshape(shapeCt).transpose(new_orderCt)
+    new_orderCt = [idxCt.index(idx) for idx in idxC]
+    return dot(At,Bt).reshape(shapeCt, order='A').transpose(new_orderCt)
 
 
 class NPArrayWithTag(numpy.ndarray):

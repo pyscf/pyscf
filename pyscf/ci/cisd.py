@@ -13,7 +13,6 @@ import tempfile
 from functools import reduce
 import numpy
 import h5py
-from pyscf import ao2mo
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
@@ -108,7 +107,7 @@ def contract(myci, civec, eris):
     t1 = cinew[1:nov+1].reshape(nocc,nvir)
     t2 = cinew[nov+1:].reshape(nocc,nocc,nvir,nvir)
     t2new_tril = numpy.zeros((nocc*(nocc+1)//2,nvir,nvir))
-    myci.add_wvvVV_(c2, eris, t2new_tril)
+    myci.add_wvvVV(c2, eris, t2new_tril)
     for i in range(nocc):
         for j in range(i+1):
             t2[i,j] = t2new_tril[i*(i+1)//2+j]
@@ -135,7 +134,7 @@ def contract(myci, civec, eris):
     for j in range(nocc):
         t2[:,j] += numpy.einsum('ia,b->iab', c1, fov[j])
 
-    unit = _memory_usage_inloop(nocc, nvir)
+    unit = nocc*nvir**2 + nocc**2*nvir*3
     max_memory = max(2000, myci.max_memory - lib.current_memory()[0])
     blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory/unit)))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
@@ -503,24 +502,30 @@ class CISD(lib.StreamObject):
     make_diagonal = make_diagonal
 
     def ao2mo(self, mo_coeff=None):
-        nocc = self.nocc
-        nvir = self.nmo - nocc
-        mem_incore, mem_outcore, mem_basic = ccsd._mem_usage(nocc, nvir)
+        nmo = self.nmo
+        nao = self.mo_coeff.shape[0]
+        nmo_pair = nmo * (nmo+1) // 2
+        nao_pair = nao * (nao+1) // 2
+        mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
         mem_now = lib.current_memory()[0]
         if (self._scf._eri is not None and
             (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
-            return _make_eris_incore(self, mo_coeff)
+            return ccsd._make_eris_incore(self, mo_coeff)
 
         elif hasattr(self._scf, 'with_df'):
-            raise NotImplementedError
+            logger.warn(self, 'CISD detected DF being used in the HF object. '
+                        'MO integrals are computed based on the DF 3-index tensors.\n'
+                        'It\'s recommended to use dfccsd.CCSD for the '
+                        'DF-CISD calculations')
+            return ccsd._make_df_eris_outcore(self, mo_coeff)
 
         else:
-            return _make_eris_outcore(self, mo_coeff)
+            return ccsd._make_eris_outcore(self, mo_coeff)
 
-    def add_wvvVV_(self, t2, eris, t2new_tril):
+    def add_wvvVV(self, t2, eris, out=None):
         nocc, nvir = t2.shape[1:3]
         t1 = numpy.zeros((nocc,nvir))
-        return ccsd.add_wvvVV_(self, t1, t2, eris, t2new_tril, with_ovvv=False)
+        return ccsd.add_wvvVV(self, t1, t2, eris, out, with_ovvv=False)
 
     def to_fci(self, cisdvec, norb, nelec):
         return to_fci(cisdvec, norb, nelec)
@@ -554,170 +559,8 @@ class CISD(lib.StreamObject):
             chkfile = self._scf.chkfile
         lib.chkfile.save(chkfile, 'cisd', ci_chk)
 
-
-class _RCISD_ERIs:
-    def __init__(self, myci, mo_coeff=None):
-        if mo_coeff is None:
-            mo_coeff = ccsd._mo_without_core(myci, myci.mo_coeff)
-        else:
-            mo_coeff = ccsd._mo_without_core(myci, mo_coeff)
-# Note: Recomputed fock matrix since SCF may not be fully converged.
-        dm = myci._scf.make_rdm1(myci.mo_coeff, myci.mo_occ)
-        fockao = myci._scf.get_hcore() + myci._scf.get_veff(myci.mol, dm)
-        self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
-        self.mo_coeff = mo_coeff
-        self.nocc = myci.nocc
-
-        self.oooo = None
-        self.vooo = None
-        self.vvoo = None
-        self.voov = None
-        self.vovv = None
-        self.vvvv = None
-
-def _make_eris_incore(myci, mo_coeff=None):
-    cput0 = (time.clock(), time.time())
-    eris = _RCISD_ERIs(myci, mo_coeff)
-    nocc = eris.nocc
-    nmo = eris.fock.shape[0]
-    nvir = nmo - nocc
-
-    eri1 = ao2mo.incore.full(myci._scf._eri, eris.mo_coeff)
-    #:eri1 = ao2mo.restore(1, eri1, nmo)
-    #:eris.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
-    #:eris.vooo = eri1[nocc:,:nocc,:nocc,:nocc].copy()
-    #:eris.voov = eri1[nocc:,:nocc,:nocc,nocc:].copy()
-    #:eris.vvoo = eri1[nocc:,nocc:,:nocc,:nocc].copy()
-    #:vovv = eri1[nocc:,:nocc,nocc:,nocc:].copy()
-    #:eris.vovv = lib.pack_tril(vovv.reshape(-1,nvir,nvir))
-    #:eris.vvvv = ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:], nvir)
-    nvir_pair = nvir * (nvir+1) // 2
-    eris.oooo = numpy.empty((nocc,nocc,nocc,nocc))
-    eris.vooo = numpy.empty((nvir,nocc,nocc,nocc))
-    eris.voov = numpy.empty((nvir,nocc,nocc,nvir))
-    eris.vovv = numpy.empty((nvir,nocc,nvir_pair))
-    eris.vvvv = numpy.empty((nvir_pair,nvir_pair))
-
-    ij = 0
-    outbuf = numpy.empty((nmo,nmo,nmo))
-    oovv = numpy.empty((nocc,nocc,nvir,nvir))
-    for i in range(nocc):
-        buf = lib.unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
-        for j in range(i+1):
-            eris.oooo[i,j] = eris.oooo[j,i] = buf[j,:nocc,:nocc]
-            oovv[i,j] = oovv[j,i] = buf[j,nocc:,nocc:]
-        ij += i + 1
-    eris.vvoo = lib.transpose(oovv.reshape(nocc**2,-1)).reshape(nvir,nvir,nocc,nocc)
-    oovv = None
-
-    ij1 = 0
-    for i in range(nocc,nmo):
-        buf = lib.unpack_tril(eri1[ij:ij+i+1], out=outbuf[:i+1])
-        eris.vooo[i-nocc] = buf[:nocc,:nocc,:nocc]
-        eris.voov[i-nocc] = buf[:nocc,:nocc,nocc:]
-        lib.pack_tril(_cp(buf[:nocc,nocc:,nocc:]), out=eris.vovv[i-nocc])
-        dij = i - nocc + 1
-        lib.pack_tril(_cp(buf[nocc:i+1,nocc:,nocc:]),
-                      out=eris.vvvv[ij1:ij1+dij])
-        ij += i + 1
-        ij1 += dij
-    logger.timer(myci, 'CISD integral transformation', *cput0)
-    return eris
-
-def _make_eris_outcore(myci, mo_coeff=None):
-    cput0 = (time.clock(), time.time())
-    log = logger.Logger(myci.stdout, myci.verbose)
-    eris = _RCISD_ERIs(myci, mo_coeff)
-
-    mol = myci.mol
-    mo_coeff = eris.mo_coeff
-    nocc = eris.nocc
-    nao, nmo = mo_coeff.shape
-    nvir = nmo - nocc
-    orbo = mo_coeff[:,:nocc]
-    orbv = mo_coeff[:,nocc:]
-    nvpair = nvir * (nvir+1) // 2
-    eris.feri1 = lib.H5TmpFile()
-    eris.oooo = eris.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), 'f8')
-    eris.vvoo = eris.feri1.create_dataset('vvoo', (nvir,nvir,nocc,nocc), 'f8')
-    eris.vooo = eris.feri1.create_dataset('vooo', (nvir,nocc,nocc,nocc), 'f8')
-    eris.voov = eris.feri1.create_dataset('voov', (nvir,nocc,nocc,nvir), 'f8')
-    eris.vovv = eris.feri1.create_dataset('vovv', (nvir,nocc,nvpair), 'f8')
-
-    nvir_pair = nvir*(nvir+1)//2
-    oovv = numpy.empty((nocc,nocc,nvir,nvir))
-    def save_occ_frac(p0, p1, eri):
-        eri = eri.reshape(p1-p0,nocc,nmo,nmo)
-        eris.oooo[p0:p1] = eri[:,:,:nocc,:nocc]
-        oovv[p0:p1] = eri[:,:,nocc:,nocc:]
-
-    def save_vir_frac(p0, p1, eri):
-        eri = eri.reshape(p1-p0,nocc,nmo,nmo)
-        eris.vooo[p0:p1] = eri[:,:,:nocc,:nocc]
-        eris.voov[p0:p1] = eri[:,:,:nocc,nocc:]
-        vv = _cp(eri[:,:,nocc:,nocc:].reshape((p1-p0)*nocc,nvir,nvir))
-        eris.vovv[p0:p1] = lib.pack_tril(vv).reshape(p1-p0,nocc,nvir_pair)
-
-    cput1 = time.clock(), time.time()
-    if not myci.direct:
-        max_memory = max(2000, myci.max_memory-lib.current_memory()[0])
-        eris.feri2 = lib.H5TmpFile()
-        ao2mo.full(mol, orbv, eris.feri2, max_memory=max_memory, verbose=log)
-        eris.vvvv = eris.feri2['eri_mo']
-        cput1 = log.timer_debug1('transforming vvvv', *cput1)
-
-    tmpfile3 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-    with h5py.File(tmpfile3.name, 'w') as fswap:
-        mo_coeff = numpy.asarray(mo_coeff, order='F')
-        max_memory = max(2000, myci.max_memory-lib.current_memory()[0])
-        int2e = mol._add_suffix('int2e')
-        ao2mo.outcore.half_e1(mol, (mo_coeff,mo_coeff[:,:nocc]), fswap, int2e,
-                              's4', 1, max_memory, verbose=log)
-
-        ao_loc = mol.ao_loc_nr()
-        nao_pair = nao * (nao+1) // 2
-        blksize = int(min(8e9,max_memory*.5e6)/8/(nao_pair+nmo**2)/nocc)
-        blksize = max(1, min(nmo*nocc, blksize))
-        fload = ao2mo.outcore._load_from_h5g
-        def prefetch(p0, p1, rowmax, buf):
-            p0, p1 = p1, min(rowmax, p1+blksize)
-            if p0 < p1:
-                fload(fswap['0'], p0*nocc, p1*nocc, buf)
-
-        buf = numpy.empty((blksize*nocc,nao_pair))
-        buf_prefetch = numpy.empty_like(buf)
-        outbuf = numpy.empty((blksize*nocc,nmo**2))
-        with lib.call_in_background(prefetch) as bprefetch:
-            fload(fswap['0'], 0, min(nocc,blksize)*nocc, buf_prefetch)
-            for p0, p1 in lib.prange(0, nocc, blksize):
-                nrow = (p1 - p0) * nocc
-                buf, buf_prefetch = buf_prefetch, buf
-                bprefetch(p0, p1, nocc, buf_prefetch)
-                dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),
-                                         's4', 's1', out=outbuf, ao_loc=ao_loc)
-                save_occ_frac(p0, p1, dat)
-
-            fload(fswap['0'], nocc**2, min(nmo,nocc+blksize)*nocc, buf_prefetch)
-            for p0, p1 in lib.prange(0, nvir, blksize):
-                nrow = (p1 - p0) * nocc
-                buf, buf_prefetch = buf_prefetch, buf
-                bprefetch(nocc+p0, nocc+p1, nmo, buf_prefetch)
-                dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),
-                                         's4', 's1', out=outbuf, ao_loc=ao_loc)
-                save_vir_frac(p0, p1, dat)
-
-        cput1 = log.timer_debug1('transforming oppp', *cput1)
-    eris.vvoo[:] = lib.transpose(oovv.reshape(nocc**2,-1)).reshape(nvir,nvir,nocc,nocc)
-    log.timer('CISD integral transformation', *cput0)
-    return eris
-
-
 def _cp(a):
     return numpy.array(a, copy=False, order='C')
-
-def _memory_usage_inloop(nocc, nvir):
-    v = nocc*nvir**2 + nocc**2*nvir*3
-    return v*8/1e6
 
 
 if __name__ == '__main__':
@@ -800,7 +643,8 @@ if __name__ == '__main__':
     mol.build()
     mf = scf.RHF(mol).run()
     myci = CISD(mf)
-    ecisd, civec = myci.kernel()
+    eris = ccsd._make_eris_outcore(myci, mf.mo_coeff)
+    ecisd, civec = myci.kernel(eris=eris)
     print(ecisd - -0.048878084082066106)
 
     nmo = myci.nmo
