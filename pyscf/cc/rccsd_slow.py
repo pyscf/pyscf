@@ -117,7 +117,7 @@ def update_amps(cc, t1, t2, eris):
         # avoid transpose inside loop
         ovvv = np.array(eris.vovv).transpose(1,0,3,2)
         for a in range(nvir):
-            Wvvvv2_a = eris.vvvv[a]
+            Wvvvv2_a = eris.vvvv[a].copy()
             Wvvvv2_a += -einsum('kcd,kb->bcd',eris.vovv[a],t1)
             Wvvvv2_a += -np.einsum('k,kbcd->bcd',t1[:,a],ovvv)
             t2new[:,:,a,:] += einsum('bcd,ic,jd->ijb',Wvvvv2_a,t1,t1)
@@ -141,7 +141,7 @@ def update_amps(cc, t1, t2, eris):
         t2new += einsum('klij,klab->ijab',Woooo,t2)
         t2new += einsum('klij,ka,lb->ijab',Woooo,t1,t1)
         for a in range(nvir):
-            Wvvvv_a = np.array(Wvvvv[a])
+            Wvvvv_a = np.array(Wvvvv[a]).copy()
             t2new[:,:,a,:] += einsum('bcd,ijcd->ijb',Wvvvv_a,t2)
             t2new[:,:,a,:] += einsum('bcd,ic,jd->ijb',Wvvvv_a,t1,t1)
         tmp = einsum('ac,ijcb->ijab',Lvv,t2)
