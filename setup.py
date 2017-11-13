@@ -154,7 +154,7 @@ else:
 if not blas_found:  # for MKL
     mkl_path_guess = search_lib_path('libmkl_core'+so_ext, blas_lib_dir)
     if mkl_path_guess is not None:
-        blas_libraries = ['mkl_core', 'mkl_intel_lp64', 'mkl_intel_thread',
+        blas_libraries = ['mkl_core', 'mkl_intel_lp64', 'mkl_gnu_thread',
                           'mkl_sequential']
         blas_lib_dir = [mkl_path_guess]
         blas_found = True
