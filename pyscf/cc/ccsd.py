@@ -76,15 +76,9 @@ def update_amps(mycc, t1, t2, eris):
     fock = eris.fock
 
     t1new = numpy.zeros_like(t1)
-    t2new = numpy.zeros_like(t2)
-    t2new_tril = numpy.zeros((nocc*(nocc+1)//2,nvir,nvir))
-    mycc.add_wvvVV(t1, t2, eris, t2new_tril)
-    # Fill up lower-triangle part. The upper-triangle part are filled at the end
-    idx = numpy.tril_indices(nocc)
-    lib.takebak_2d(t2new.reshape(nocc**2,nvir**2), t2new_tril.reshape(-1,nvir**2),
-                   idx[0]*nocc+idx[1], numpy.arange(nvir**2))
-    idxo = numpy.arange(nocc)
-    t2new[idxo,idxo] *= .5
+    t2new_tril = mycc.add_wvvVV(t1, t2, eris)
+    t2new = _unpack_t2_tril(t2new_tril, nocc, nvir)
+    t2new *= .5  # *.5 because t2+t2.transpose(1,0,3,2) in the end
     t2new_tril = None
     time1 = log.timer_debug1('vvvv', *time0)
 
@@ -106,14 +100,15 @@ def update_amps(mycc, t1, t2, eris):
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
 
-    _add_vovv_(mycc, t1, t2, eris, fvv, t1new, t2new)
+    fswap = lib.H5TmpFile()
+    fwVOov, fwVooV = _add_vovv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap)
     time1 = log.timer_debug1('vovv', *time1)
 
     woooo = _cp(eris.oooo).transpose(0,2,1,3).copy()
 
     for p0, p1 in lib.prange(0, nvir, blksize):
-        wVOov = _cp(eris.wVOov[p0:p1])
-        wVooV = _cp(eris.wVooV[p0:p1])
+        wVOov = _cp(fwVOov[p0:p1])
+        wVooV = _cp(fwVooV[p0:p1])
         eris_vooo = _cp(eris.vooo[p0:p1])
         foo += numpy.einsum('kc,ckji->ij', 2*t1[:,p0:p1], eris_vooo)
         foo += numpy.einsum('kc,cijk->ij',  -t1[:,p0:p1], eris_vooo)
@@ -178,6 +173,7 @@ def update_amps(mycc, t1, t2, eris):
             theta = None
         eris_VOov = wVOov = wVooV = None
         time1 = log.timer_debug1('voov [%d:%d]'%(p0, p1), *time1)
+    fwVOov = fwVooV = fswap = None
 
     for p0, p1 in lib.prange(0, nvir, blksize):
         eris_vooo = _cp(eris.vooo[p0:p1])
@@ -213,7 +209,7 @@ def update_amps(mycc, t1, t2, eris):
     return t1new, t2new
 
 
-def _add_vovv_(mycc, t1, t2, eris, fvv, t1new, t2new):
+def _add_vovv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
     time1 = time.clock(), time.time()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
@@ -228,8 +224,7 @@ def _add_vovv_(mycc, t1, t2, eris, fvv, t1new, t2new):
         if p0 < p1:
             buf[:p1-p0] = eri[p0:p1]
 
-    eris.feri2 = lib.H5TmpFile()
-    eris.wVOov = eris.feri2.create_dataset('wVOov', (nvir,nocc,nocc,nvir), 'f8')
+    wVOov = fswap.create_dataset('wVOov', (nvir,nocc,nocc,nvir), 'f8')
     fwooVV = numpy.zeros((nocc,nocc,nvir,nvir))
 
     buf = numpy.empty((blksize,nocc,nvir_pair))
@@ -259,7 +254,7 @@ def _add_vovv_(mycc, t1, t2, eris, fvv, t1new, t2new):
             lib.ddot(_cp(t1[:,p0:p1]), eris_vovv.reshape(p1-p0,-1), -1,
                      fwooVV.reshape(nocc,-1), 1)
 
-            eris.wVOov[p0:p1] += einsum('biac,jc->bija', eris_vovv, t1)
+            wVOov[p0:p1] += einsum('biac,jc->bija', eris_vovv, t1)
 
             theta = t2[:,:,p0:p1].transpose(1,2,0,3) * 2
             theta -= t2[:,:,p0:p1].transpose(0,2,1,3)
@@ -267,13 +262,14 @@ def _add_vovv_(mycc, t1, t2, eris, fvv, t1new, t2new):
             theta = None
             time1 = log.timer_debug1('vovv [%d:%d]'%(p0, p1), *time1)
 
-    eris.feri2['wVooV'] = fwooVV.transpose(2,1,0,3)
-    eris.wVooV = eris.feri2['wVooV']
+    fswap['wVooV'] = fwooVV.transpose(2,1,0,3)
+    return fswap['wVOov'], fswap['wVooV']
 
 def add_wvvVV(mycc, t1, t2, eris, out=None, with_ovvv=True):
     time0 = time.clock(), time.time()
     nocc, nvir = t1.shape
     t2new_tril = numpy.ndarray((nocc*(nocc+1)//2,nvir,nvir), buffer=out)
+    t2new_tril[:] = 0
 
     #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
     #: t2new += numpy.einsum('ijcd,acdb->ijab', tau, vvvv)
@@ -409,6 +405,28 @@ def add_wvvVV(mycc, t1, t2, eris, out=None, with_ovvv=True):
                 outbuf, outbuf1 = outbuf1, outbuf
                 time0 = logger.timer_debug1(mycc, 'vvvv [%d:%d]'%(a0,a1), *time0)
     return t2new_tril
+
+def _unpack_t2_tril(t2tril, nocc, nvir):
+    t2 = numpy.zeros((nocc,nocc,nvir,nvir))
+    #:ij = 0
+    #:for i in range(nocc):
+    #:    for j in range(i):
+    #:        tmp = t2tril[ij]
+    #:        t2[i,j] = tmp
+    #:        t2[j,i] = tmp.T
+    #:        ij += 1
+    #:    t2[i,i] = t2tril[ij]
+    #:    ij += 1
+    idx = numpy.tril_indices(nocc)
+    idxo = numpy.arange(nocc)
+    idxv = numpy.arange(nvir)
+    idxvv = idxv.reshape(-1,1)*nvir + idxv
+    lib.takebak_2d(t2.reshape(nocc**2,nvir**2), t2tril.reshape(-1,nvir**2),
+                   idx[0]+idx[1]*nocc, idxvv.T.ravel())
+    lib.takebak_2d(t2.reshape(nocc**2,nvir**2), t2tril.reshape(-1,nvir**2),
+                   idx[0]*nocc+idx[1], idxvv.ravel())
+    t2[idxo,idxo] *= .5  # added twice in takebak_2d
+    return t2
 
 
 def get_nocc(mycc):
@@ -916,7 +934,8 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     eris.vvoo = eris.feri1.create_dataset('vvoo', (nvir,nvir,nocc,nocc), 'f8')
     eris.vooo = eris.feri1.create_dataset('vooo', (nvir,nocc,nocc,nocc), 'f8')
     eris.voov = eris.feri1.create_dataset('voov', (nvir,nocc,nocc,nvir), 'f8')
-    eris.vovv = eris.feri1.create_dataset('vovv', (nvir,nocc,nvpair), 'f8')
+    chunks = (nvir, min(8,nocc), nvpair)
+    eris.vovv = eris.feri1.create_dataset('vovv', (nvir,nocc,nvpair), 'f8', chunks=chunks)
 
     nvir_pair = nvir*(nvir+1)//2
     oovv = numpy.empty((nocc,nocc,nvir,nvir))
