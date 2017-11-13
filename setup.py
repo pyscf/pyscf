@@ -122,11 +122,10 @@ def search_inc_path(incname, extra_paths=None):
     if 'PYSCF_INC_DIR' in os.environ:
         PYSCF_INC_DIR = os.environ['PYSCF_INC_DIR'].split(os.pathsep)
         for p in PYSCF_INC_DIR:
-            paths = [p, os.path.join(p, 'lib'), os.path.join(p, '..', 'lib')] + paths
+            paths = [p, os.path.join(p, 'include'), os.path.join(p, '..', 'include')] + paths
     if extra_paths is not None:
         paths += extra_paths
     for path in paths:
-        inc_path = os.path.join(os.path.dirname(path), 'include')
         full_incname = os.path.join(path, incname)
         if os.path.exists(full_incname):
             return os.path.abspath(path)
