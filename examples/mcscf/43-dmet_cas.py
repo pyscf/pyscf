@@ -113,8 +113,7 @@ mf = scf.fast_newton(mf)
 #
 mf = scf.ROHF(mol)
 mf = scf.fast_newton(mf)
-idx3d4d = [i for i,s in enumerate(mol.spheric_labels(1))
-           if 'Fe 3d' in s or 'Fe 4d' in s]
+idx3d4d = mol.search_ao_label(['Fe 3d', 'Fe 4d'])
 ncas, nelecas, mo = dmet_cas.guess_cas(mf, mf.make_rdm1(), idx3d)
 mc = mcscf.approx_hessian(mcscf.CASSCF(mf, ncas, nelecas)
 mc.kernel(mo)

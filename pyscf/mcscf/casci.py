@@ -578,6 +578,18 @@ class CASCI(lib.StreamObject):
     def casci(self, mo_coeff=None, ci0=None):
         return self.kernel(mo_coeff, ci0)
     def kernel(self, mo_coeff=None, ci0=None):
+        '''
+        Returns:
+            Five elements, they are
+            total energy,
+            active space CI energy,
+            the active space FCI wavefunction coefficients or DMRG wavefunction ID,
+            the MCSCF canonical orbital coefficients,
+            the MCSCF canonical orbital coefficients.
+
+        They are attributes of mcscf object, which can be accessed by
+        .e_tot, .e_cas, .ci, .mo_coeff, .mo_energy
+        '''
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else:
@@ -680,7 +692,7 @@ class CASCI(lib.StreamObject):
 
     def make_rdm1s(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,
                    ncore=None):
-        '''One-particle density matrices for alpha and beta spin
+        '''One-particle density matrices for alpha and beta spin on AO basis
         '''
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if ci is None: ci = self.ci

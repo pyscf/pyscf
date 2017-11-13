@@ -441,9 +441,11 @@ def _write_integral_file(mc_chkfile, nevpt_scratch, comm):
 def _distribute_dmrg_files(dmrg_scratch_dir, nevpt_scratch_dir, comm):
     rank = comm.Get_rank()
     if rank==0:
+        names = set(['dmrg.e', 'statefile.0.tmp', 'RestartReorder.dat', 'wave', 'Rotation'])
         filenames = []
         for fn in os.listdir(os.path.join(dmrg_scratch_dir, 'node0')):
-            if fn== 'dmrg.e' or fn== 'statefile.0.tmp' or fn== 'RestartReorder.dat' or fn.startswith('wave') or fn.startswith('Rotation'):
+            fnip = fn.split('-')[0]
+            if fnip in names:
                 filenames.append(fn)
     else:
         filenames = None

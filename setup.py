@@ -122,11 +122,10 @@ def search_inc_path(incname, extra_paths=None):
     if 'PYSCF_INC_DIR' in os.environ:
         PYSCF_INC_DIR = os.environ['PYSCF_INC_DIR'].split(os.pathsep)
         for p in PYSCF_INC_DIR:
-            paths = [p, os.path.join(p, 'lib'), os.path.join(p, '..', 'lib')] + paths
+            paths = [p, os.path.join(p, 'include'), os.path.join(p, '..', 'include')] + paths
     if extra_paths is not None:
         paths += extra_paths
     for path in paths:
-        inc_path = os.path.join(os.path.dirname(path), 'include')
         full_incname = os.path.join(path, incname)
         if os.path.exists(full_incname):
             return os.path.abspath(path)
@@ -154,7 +153,7 @@ else:
 if not blas_found:  # for MKL
     mkl_path_guess = search_lib_path('libmkl_core'+so_ext, blas_lib_dir)
     if mkl_path_guess is not None:
-        blas_libraries = ['mkl_core', 'mkl_intel_lp64', 'mkl_intel_thread',
+        blas_libraries = ['mkl_core', 'mkl_intel_lp64', 'mkl_gnu_thread',
                           'mkl_sequential']
         blas_lib_dir = [mkl_path_guess]
         blas_found = True
@@ -295,6 +294,9 @@ extensions += [
     make_ext('pyscf.lib.libao2mo', 'ao2mo',
              'restore_eri.c nr_ao2mo.c nr_incore.c r_ao2mo.c',
              ['cvhf', 'cint', 'np_helper']),
+    make_ext('pyscf.lib.libcc', 'cc',
+             'ccsd_pack.c ccsd_grad.c ccsd_t.c uccsd_t.c',
+             ['cvhf', 'ao2mo', 'np_helper']),
     make_ext('pyscf.lib.libfci', 'mcscf',
              '''fci_contract.c fci_contract_nosym.c fci_rdm.c fci_string.c
              fci_4pdm.c select_ci.c''',

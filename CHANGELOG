@@ -12,7 +12,13 @@ PySCF 1.5 alpha (2018-03-??)
   - Supported even number of grids in pbc calculations
 
 
-PySCF 1.4.1 (201?-?-?)
+PySCF 1.4.2 (201?-?-?)
+----------------------
+* Bugfix
+  - pyberny interface
+
+
+PySCF 1.4.1 (2017-11-12)
 ----------------------
 * Bugfix
   - meta-GGA functional detection code in XC parser
@@ -21,6 +27,7 @@ PySCF 1.4.1 (201?-?-?)
   - Madelung constant of non-orthogonal lattice
   - Convergence of Madelung constant for huge number of k-points samples
   - basis parser for pople-type basis
+  - RCCSD when running large number of virtual orbitals on small memory machine
 
 PySCF 1.4 (2017-10-05)
 ----------------------
