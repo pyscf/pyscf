@@ -113,12 +113,12 @@ class tddft_tem(scf):
 
 
         self.calc_external_potential()
-        self.V_freq_ref = np.loadtxt("V_freq_real.txt") + 1.0j*np.loadtxt("V_freq_imag.txt")
-        np.save("V_freq_python.npy", self.V_freq)
+        #self.V_freq_ref = np.loadtxt("V_freq_real.txt") + 1.0j*np.loadtxt("V_freq_imag.txt")
+        #np.save("V_freq_python.npy", self.V_freq)
 
-        for iw in range(self.V_freq.shape[0]):
-            print("Error = {0}, {1}".format(np.sum(np.abs(self.V_freq[iw, :].real - self.V_freq_ref[iw, :].real)),
-                                        np.sum(np.abs(self.V_freq[iw, :].imag - self.V_freq_ref[iw, :].imag))))
+        #for iw in range(self.V_freq.shape[0]):
+        #   print("Error = {0}, {1}".format(np.sum(np.abs(self.V_freq[iw, :].real - self.V_freq_ref[iw, :].real)),
+        #                                np.sum(np.abs(self.V_freq[iw, :].imag - self.V_freq_ref[iw, :].imag))))
 
 
         # probably unnecessary, require probably does a copy
