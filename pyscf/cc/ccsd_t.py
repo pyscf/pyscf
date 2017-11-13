@@ -129,11 +129,11 @@ def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
         buf1 = numpy.empty_like(bufopv)
         buf = numpy.empty((nocc,nvir,nvir))
         for j0, j1 in lib.prange(0, nvir, blksize):
-            ovov = numpy.asarray(eris.ovov[:,j0:j1])
-            ovvv = numpy.asarray(eris.ovvv[:,j0:j1])
+            voov = numpy.asarray(eris.voov[j0:j1])
+            vovv = numpy.asarray(eris.vovv[j0:j1])
             for j in range(j0,j1):
-                oov = ovov[o_sorted,j-j0]
-                ovv = lib.unpack_tril(ovvv[o_sorted,j-j0], out=buf)
+                oov = voov[j-j0,o_sorted]
+                ovv = lib.unpack_tril(vovv[j-j0,o_sorted], out=buf)
                 bufopv[:,:nocc,:] = oov[:,o_sorted][:,:,v_sorted]
                 bufopv[:,nocc:,:] = ovv[:,v_sorted][:,:,v_sorted]
                 save(vrank[j], bufopv.transpose(2,0,1))
@@ -143,7 +143,7 @@ def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
     return orbsym
 
 def _sort_t2_vooo_(mycc, orbsym, t1, t2, eris):
-    ovoo = numpy.asarray(eris.ovoo)
+    vooo = numpy.asarray(eris.vooo)
     nocc, nvir = t1.shape
     if mycc.mol.symmetry:
         orbsym = numpy.asarray(orbsym, dtype=numpy.int32)
@@ -157,13 +157,13 @@ def _sort_t2_vooo_(mycc, orbsym, t1, t2, eris):
         o_sym = orbsym[o_sorted]
         oo_sym = (o_sym[:,None] ^ o_sym).ravel()
         oo_sorted = _irrep_argsort(oo_sym)
-        #:vooo = eris.ovoo.transpose(1,0,2,3)
+        #:vooo = eris.vooo
         #:vooo = vooo[v_sorted][:,o_sorted][:,:,o_sorted][:,:,:,o_sorted]
         #:vooo = vooo.reshape(nvir,-1,nocc)[:,oo_sorted]
         oo_idx = numpy.arange(nocc**2).reshape(nocc,nocc)[o_sorted][:,o_sorted]
         oo_idx = oo_idx.ravel()[oo_sorted]
         oo_idx = (oo_idx[:,None]*nocc+o_sorted).ravel()
-        vooo = lib.take_2d(ovoo.transpose(1,0,2,3).reshape(nvir,-1), v_sorted, oo_idx)
+        vooo = lib.take_2d(vooo.reshape(nvir,-1), v_sorted, oo_idx)
 
         #:t2T = t2.transpose(2,3,1,0)
         #:t2T = ref_t2T[v_sorted][:,v_sorted][:,:,o_sorted][:,:,:,o_sorted]
@@ -178,7 +178,7 @@ def _sort_t2_vooo_(mycc, orbsym, t1, t2, eris):
         t1T = t1.T.copy()
         t2T = lib.transpose(t2.reshape(nocc**2,-1))
         t2T = lib.transpose(t2T.reshape(-1,nocc,nocc), axes=(0,2,1), out=t2)
-        vooo = ovoo.transpose(1,0,2,3).copy()
+        vooo = vooo.copy()
         mo_energy = numpy.asarray(eris.fock.diagonal(), order='C')
     vooo = vooo.reshape(nvir,nocc,nocc,nocc)
     t2T = t2T.reshape(nvir,nvir,nocc,nocc)
@@ -200,6 +200,9 @@ if __name__ == '__main__':
     eris.ovvv = numpy.random.random((nocc,nvir,nvir*(nvir+1)//2)) * .1
     eris.ovoo = numpy.random.random((nocc,nvir,nocc,nocc)) * .1
     eris.ovov = numpy.random.random((nocc,nvir,nocc,nvir)) * .1
+    eris.voov = eris.ovov.transpose(1,0,2,3)
+    eris.vovv = eris.ovvv.transpose(1,0,2)
+    eris.vooo = eris.ovoo.transpose(1,0,2,3)
     t1 = numpy.random.random((nocc,nvir)) * .1
     t2 = numpy.random.random((nocc,nocc,nvir,nvir)) * .1
     t2 = t2 + t2.transpose(1,0,3,2)
