@@ -6,6 +6,12 @@ PySCF 1.5 alpha (2018-03-??)
   - range-separated hybrid feature for RKS and UKS
 
 
+PySCF 1.4.2 (201?-?-?)
+----------------------
+* Bugfix
+  - pyberny interface
+
+
 PySCF 1.4.1 (2017-11-12)
 ----------------------
 * Bugfix
