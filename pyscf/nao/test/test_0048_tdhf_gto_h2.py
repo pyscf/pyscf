@@ -18,10 +18,10 @@ nao_td  = bse_iter(mf=gto_mf, gto=mol)
 
 class KnowValues(unittest.TestCase):
 
-  def test_bse_iter_vs_tdhf_pyscf(self):
-    """ Interacting case """
-    cdip = np.random.rand(nao_td.norbs,nao_td.norbs)+1j*np.random.rand(nao_td.norbs,nao_td.norbs)
-    nao_td.apply_l0_exp(cdip, comega=0.2+1j*0.01)
+  #def test_bse_iter_vs_tdhf_pyscf(self):
+  #  """ Interacting case test """
+  #  cdip = np.random.rand(nao_td.norbs,nao_td.norbs)+1j*np.random.rand(nao_td.norbs,nao_td.norbs)
+  #  nao_td.apply_l0_exp(cdip, comega=0.2+1j*0.01)
     
   def test_tddft_gto_vs_nao_inter(self):
     """ Interacting case """

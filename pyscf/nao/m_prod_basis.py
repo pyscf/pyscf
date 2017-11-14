@@ -97,6 +97,7 @@ class prod_basis_c():
 
     sv = nao
     t1 = timer()
+    self.norbs = sv.norbs
     self.init_inp_param_prod_log_dp(sv, **kvargs)
     #t2 = timer(); print(' after init_inp_param_prod_log_dp ', t2-t1); t1=timer()
     data = self.chain_data()
@@ -120,47 +121,42 @@ class prod_basis_c():
     p2ndp = np.require( zeros(len(p2srncc), dtype=np.int64), requirements='CW')
     p2srncc_cp = np.require(  np.asarray(p2srncc), requirements='C')
     npairs = p2srncc_cp.shape[0]
-    ld = p2srncc_cp.shape[1]
-    #t2 = timer(); print('call vrtx_cc_batch ', t2-t1, 'npairs ', npairs); t1=timer()
-    
-    libnao.vrtx_cc_batch( c_int64(npairs), p2srncc_cp.ctypes.data_as(POINTER(c_double)), 
-      c_int64(ld), p2ndp.ctypes.data_as(POINTER(c_int64)))
-
-    #t2 = timer(); print('after vrtx_cc_batch ', t2-t1); t1=timer()
-    
+    self.npairs = npairs
     self.bp2info = [] # going to be indices of atoms, list of contributing centres, conversion coefficients
-
-    nout = 0
-    sp2norbs = sv.ao_log.sp2norbs
-    for srncc,ndp,npac in zip(p2srncc,p2ndp,p2npac):
-      sp1,sp2 = srncc[0],srncc[1]
-      nout = nout + ndp*sp2norbs[sp1]*sp2norbs[sp2]+npac*ndp
+    if npairs>0 : # Conditional fill of the self.bp2info if there are bilocal pairs (natoms>1)
+      ld = p2srncc_cp.shape[1]
+      #print('npairs  p2srncc_cp.shape', npairs, p2srncc_cp.shape)
+      #t2 = timer(); print('call vrtx_cc_batch ', t2-t1, 'npairs ', npairs); t1=timer()
+      libnao.vrtx_cc_batch( c_int64(npairs), p2srncc_cp.ctypes.data_as(POINTER(c_double)), 
+        c_int64(ld), p2ndp.ctypes.data_as(POINTER(c_int64)))
+      #t2 = timer(); print('after vrtx_cc_batch ', t2-t1); t1=timer()
+      nout = 0
+      sp2norbs = sv.ao_log.sp2norbs
+      for srncc,ndp,npac in zip(p2srncc,p2ndp,p2npac):
+        sp1,sp2 = srncc[0],srncc[1]
+        nout = nout + ndp*sp2norbs[sp1]*sp2norbs[sp2]+npac*ndp
       
-    dout = np.require( zeros(nout), requirements='CW')
-    libnao.get_vrtx_cc_batch(c_int64(0),c_int64(npairs),dout.ctypes.data_as(POINTER(c_double)),c_int64(nout))
+      dout = np.require( zeros(nout), requirements='CW')
+      libnao.get_vrtx_cc_batch(c_int64(0),c_int64(npairs),dout.ctypes.data_as(POINTER(c_double)),c_int64(nout))
 
-    self.bp2info = []
-    f = 0
-    for srncc,ndp,npac,[a1,a2] in zip(p2srncc,p2ndp,p2npac,p2atoms):
-      if ndp<1 : continue
-      sp1,sp2,ncc = srncc[0],srncc[1],srncc[8]
-      icc2a = array(srncc[9:9+ncc], dtype=int64)
-      nnn = np.array((ndp,sp2norbs[sp2],sp2norbs[sp1]), dtype=int64)
-      nnc = np.array([ndp,npac], dtype=int64)
-      s = f;  f=s+np.prod(nnn); vrtx  = dout[s:f].reshape(nnn)
-      s = f;  f=s+np.prod(nnc); ccoe  = dout[s:f].reshape(nnc)
-      icc2s = np.zeros(len(icc2a)+1, dtype=int64)
-      for icc,a in enumerate(icc2a): icc2s[icc+1] = icc2s[icc] + self.prod_log.sp2norbs[sv.atom2sp[a]]
-      pbiloc = prod_biloc_c(atoms=array([a2,a1]),vrtx=vrtx,cc2a=icc2a,cc2s=icc2s,cc=ccoe)
-      self.bp2info.append(pbiloc)
+      f = 0
+      for srncc,ndp,npac,[a1,a2] in zip(p2srncc,p2ndp,p2npac,p2atoms):
+        if ndp<1 : continue
+        sp1,sp2,ncc = srncc[0],srncc[1],srncc[8]
+        icc2a = array(srncc[9:9+ncc], dtype=int64)
+        nnn = np.array((ndp,sp2norbs[sp2],sp2norbs[sp1]), dtype=int64)
+        nnc = np.array([ndp,npac], dtype=int64)
+        s = f;  f=s+np.prod(nnn); vrtx  = dout[s:f].reshape(nnn)
+        s = f;  f=s+np.prod(nnc); ccoe  = dout[s:f].reshape(nnc)
+        icc2s = np.zeros(len(icc2a)+1, dtype=int64)
+        for icc,a in enumerate(icc2a): icc2s[icc+1] = icc2s[icc] + self.prod_log.sp2norbs[sv.atom2sp[a]]
+        pbiloc = prod_biloc_c(atoms=array([a2,a1]),vrtx=vrtx,cc2a=icc2a,cc2s=icc2s,cc=ccoe)
+        self.bp2info.append(pbiloc)
 
     #t2 = timer(); print('after loop ', t2-t1); t1=timer()
     self.dpc2s,self.dpc2t,self.dpc2sp = self.init_c2s_domiprod() # dominant product's counting
     self.npdp = self.dpc2s[-1]
-    self.norbs = self.sv.norbs
-    self.npairs = npairs
     #t2 = timer(); print('after init_c2s_domiprod ', t2-t1); t1=timer()
-
     return self
   
   def init_inp_param_prod_log_dp(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0, ac_npc_max=8, jcutoff=14, metric_type=2, optimize_centers=0, ngl=96, **kvargs):
