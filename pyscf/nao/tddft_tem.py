@@ -62,40 +62,6 @@ class tddft_tem(tddft_iter):
         self.get_time_range()
         self.calc_external_potential()
 
-        #mbpt_recons = np.zeros((self.nprod, self.nprod), dtype=np.float32)
-        #pyscf_recons = np.zeros((self.nprod, self.nprod), dtype=np.float32)
-        #ind = np.triu_indices(self.nprod)
-        #indl = np.tril_indices(self.nprod)
-#
-#        for iu in range(self.nprod*(self.nprod+1)//2):
-#            i = ind[0][iu]
-#            j = ind[1][iu]
-#
-#            il = indl[0][iu]
-#            jl = indl[1][iu]
-#            
-#            pyscf_recons[i, j] = self.kernel_pyth[iu]
-#            mbpt_recons[il, jl] = self.kernel[iu]
-#            if i != j:
-#                pyscf_recons[j, i] = self.kernel_pyth[iu]
-#            if il != jl:
-#                mbpt_recons[jl, il] = self.kernel[iu]
-#
-#        np.savetxt("mbpt_kernel_xc.txt", mbpt_recons-rpa)
-#        np.savetxt("pyscf_kernel_xc.txt", pyscf_recons-rpa)
-#
-#        print("Error python: ", np.sum(abs(dens - pyscf_recons)))
-#        print("Error fortran: ", np.sum(abs(dens - mbpt_recons)))
-#        error = np.abs(self.kernel - self.kernel_pyth)
-#        print("kernel Error = ", np.sum(error))
-#        #N = np.arange(error.size)
-#        #import matplotlib.pyplot as plt
-#        #plt.plot(N, error)
-#        #plt.show()
-#        import sys
-#        sys.exit()
-
-
     def check_collision(self, atom2coord):
         """
             Check if the electron collide with an atom
