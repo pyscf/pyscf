@@ -24,7 +24,13 @@ except:
 
 class tddft_iter(scf):
   """ 
-    Iterative TDDFT a la PK, DF, OC JCTC 
+    Iterative TDDFT a la PK, DF, OC JCTC
+    
+    Input Parameters:
+    -----------------
+        kw: keywords arguments:
+            * tddft_iter_tol (real, default: 1e-3): tolerance to reach for 
+                            convergency in the iterative procedure.
   """
 
   def __init__(self, **kw):
