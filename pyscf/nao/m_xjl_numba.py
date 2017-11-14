@@ -63,8 +63,8 @@ def get_bessel_xjl_numba(kk, dist, j, nr):
         bessel_pp[:, ip] = xj*p
     return bessel_pp
 
-@nb.njit(parallel=True)
-#@nb.jit(nopython=True)
+#@nb.njit(parallel=True)
+@nb.jit(nopython=True)
 def calc_oo2co(bessel_pp, dg_jt, ao1_sp2info_sp1, ao1_sp2info_sp2,
         ao1_psi_log_mom_sp1, ao1_psi_log_mom_sp2,
         njm, gaunt_iptr, gaunt_data, ylm,
