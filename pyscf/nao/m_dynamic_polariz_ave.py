@@ -15,7 +15,7 @@ def polariz_inter_ave(mf, gto, tddft, comega):
   p = np.zeros((len(comega)), dtype=np.complex128)
   #print(vo_dip.shape)
   for (x,y),e in zip(tddft.xy, tddft.e):
-    print(x.shape, y.shape)
+    #print(x.shape, y.shape)
     dip = np.dot(vo_dip, np.sqrt(2.0)*(x+y)) # Normalization ?
     osc_strength = (2.0/3.0)*(dip*dip).sum()
     for iw,w in enumerate(comega):
