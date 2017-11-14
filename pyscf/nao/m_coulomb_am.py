@@ -61,7 +61,7 @@ def coulomb_am(self, sp1, R1, sp2, R2, **kvargs):
         f1f2_mom = self.ao1.psi_log_mom[sp2][mu2,:] * self.ao1.psi_log_mom[sp1][mu1,:]
         l2S.fill(0.0)
         for l3 in range( abs(l1-l2), l1+l2+1):
-          l2S[l3] = (f1f2_mom[:]*bessel_pp[l3,:]).sum() + f1f2_mom[0]*bessel_pp[l3,0]/dkappa*0.995
+          l2S[l3] = (f1f2_mom[:]*bessel_pp[l3,:]).sum() + f1f2_mom[0]*bessel_pp[l3,0]/dkappa
         cS.fill(0.0)
         for m1 in range(-l1,l1+1):
           for m2 in range(-l2,l2+1):

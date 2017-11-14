@@ -163,7 +163,7 @@ class tddft_iter(scf):
     else:
         return chi0_mv_gpu(self, v, comega) 
 
-  def comp_veff(self, vext, comega=1j*0.0, x0=None):
+  def comp_veff(self, vext, comega=1j*0.0, x0=None, maxiter=1000):
     #from scipy.sparse.linalg import gmres, lgmres as gmres_alias, LinearOperator
     from scipy.sparse.linalg import lgmres, LinearOperator
     
@@ -171,8 +171,10 @@ class tddft_iter(scf):
     assert len(vext)==len(self.moms0), "%r, %r "%(len(vext), len(self.moms0))
     self.comega_current = comega
     veff_op = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)
-    resgm = lgmres(veff_op, np.require(vext, dtype=self.dtypeComplex, 
-        requirements='C'), x0=x0, tol=self.tddft_iter_tol)
+    resgm, info = lgmres(veff_op, np.require(vext, dtype=self.dtypeComplex, 
+        requirements='C'), x0=x0, tol=self.tddft_iter_tol, maxiter=maxiter)
+    if info != 0:
+        print("LGMRES Warning: info = {0}".format(info))
     return resgm
   
   def vext2veff_matvec(self, v):
@@ -193,7 +195,7 @@ class tddft_iter(scf):
 
     return v - (matvec_real + 1.0j*matvec_imag)
 
-  def comp_polariz_inter_xx(self, comegas, x0=False):
+  def comp_polariz_inter_xx(self, comegas, x0=False, maxiter=1000):
     """ 
         Compute interacting polarizability
 
@@ -218,9 +220,9 @@ class tddft_iter(scf):
     
     for iw,comega in enumerate(comegas):
         if x0 == True:
-            veff,info = self.comp_veff(self.moms1[:,0], comega, x0=self.dn0[iw, :])
+            veff = self.comp_veff(self.moms1[:,0], comega, x0=self.dn0[iw, :], maxiter=maxiter)
         else:
-            veff,info = self.comp_veff(self.moms1[:,0], comega, x0=None)
+            veff = self.comp_veff(self.moms1[:,0], comega, x0=None, maxiter=maxiter)
 
         self.dn[iw, :] = self.apply_rf0(veff, comega)
      
