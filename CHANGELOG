@@ -10,6 +10,7 @@ PySCF 1.4.2 (201?-?-?)
 ----------------------
 * Bugfix
   - pyberny interface
+  - PBC GDF initialization for hybrid functional
 
 
 PySCF 1.4.1 (2017-11-12)

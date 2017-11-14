@@ -205,6 +205,7 @@ def _nao_sub(mol, pre_occ, pre_nao, s=None):
         s = mol.intor_symmetric('int1e_ovlp')
     core_lst, val_lst, rydbg_lst = _core_val_ryd_list(mol)
     nbf = mol.nao_nr()
+    pre_nao = pre_nao.astype(s.dtype)
     cnao = numpy.empty((nbf,nbf), dtype=s.dtype)
 
     if core_lst:
