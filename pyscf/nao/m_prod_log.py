@@ -211,7 +211,6 @@ class prod_log_c(ao_log_c):
         self.sp2norbs[isp] = mu2s[-1]
       
         self.psi_log.append(val["sp_local2functs/ir_mu2v"].value)
-        self.psi_log_rl.append(val["sp_local2functs_mom/ir_mu2v"].value)
       
         mu2ww = val["vertex"].value
         no = mu2ww.shape[1]
@@ -227,6 +226,13 @@ class prod_log_c(ao_log_c):
         mu2iww = np.array(self.sp2inv_vv[isp]*self.sp2vertex_csr[isp]).reshape([npf,no,no]) # lazy way of finding lambda
         self.sp2lambda.append(mu2iww)
 
+    self.psi_log_rl = []
+    for mu2ff,mu2j in zip(self.psi_log, self.sp_mu2j):
+      mu2ff_rl = np.zeros_like(mu2ff)
+      for mu,(ff,j) in enumerate(zip(mu2ff,mu2j)): 
+        mu2ff_rl[mu,:] = ff/self.rr**j
+      self.psi_log_rl.append(mu2ff_rl)
+      
     self.jmx = np.amax(np.array( [max(mu2j) for mu2j in self.sp_mu2j], dtype=np.int32))
     self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut])
 

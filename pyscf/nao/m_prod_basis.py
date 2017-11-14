@@ -90,7 +90,7 @@ class prod_basis_c():
     self.norbs = self.sv.norbs
     return self
 
-  def init_prod_basis_pp_batch(self, nao, **kvargs):
+  def init_prod_basis_pp_batch(self, nao, **kw):
     """ Talman's procedure should be working well with Pseudo-Potential starting point."""
     from pyscf.nao import prod_log_c
     from pyscf.nao.m_prod_biloc import prod_biloc_c
@@ -98,7 +98,7 @@ class prod_basis_c():
     sv = nao
     t1 = timer()
     self.norbs = sv.norbs
-    self.init_inp_param_prod_log_dp(sv, **kvargs)
+    self.init_inp_param_prod_log_dp(sv, **kw)
     #t2 = timer(); print(' after init_inp_param_prod_log_dp ', t2-t1); t1=timer()
     data = self.chain_data()
     libnao.init_vrtx_cc_batch(data.ctypes.data_as(POINTER(c_double)), c_int64(len(data)))
@@ -159,7 +159,7 @@ class prod_basis_c():
     #t2 = timer(); print('after init_c2s_domiprod ', t2-t1); t1=timer()
     return self
   
-  def init_inp_param_prod_log_dp(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0, ac_npc_max=8, jcutoff=14, metric_type=2, optimize_centers=0, ngl=96, **kvargs):
+  def init_inp_param_prod_log_dp(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0, ac_npc_max=8, jcutoff=14, metric_type=2, optimize_centers=0, ngl=96, **kw):
     """ Talman's procedure should be working well with a pseudo-potential hamiltonians.
         This subroutine prepares the class for a later atom pair by atom pair generation 
         of the dominant product vertices and the conversion coefficients by calling 
@@ -173,9 +173,12 @@ class prod_basis_c():
     self.jcutoff,self.metric_type,self.optimize_centers,self.ngl = jcutoff, metric_type, optimize_centers, ngl
     self.ac_rcut = ac_rcut_ratio*max(sv.ao_log.sp2rcut)    
     
-    self.prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc) # local basis (for each specie)
-    # Checking routine: Load Fortran data
-    # self.prod_log = prod_log_c().load_prod_log_dp(sv.ao_log, sv.sp2charge, tol_loc) # tests Fortran input
+    lload = kw['load_from_hdf5'] if 'load_from_hdf5' in kw else False 
+    if lload :
+      self.prod_log = prod_log_c().load_prod_log_dp(sv.ao_log, sv.sp2charge, tol_loc) # tests Fortran input
+      # Checking routine: Load Fortran data
+    else :
+      self.prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc) # local basis (for each specie)
     
     self.c2s = zeros((sv.natm+1), dtype=int64) # global product Center (atom) -> start in case of atom-centered basis
     for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] #
@@ -584,7 +587,26 @@ class prod_basis_c():
     """ Computes the packed version of the xc kernel """
     from pyscf.nao.m_vxc_pack import vxc_pack
     return vxc_pack(self.sv, deriv=2, ao_log=self.prod_log, **kw)
+  
+  def overlap_check(self, **kw):
+    """ Our standard minimal check comparing with overlaps """
+    sref = self.sv.overlap_coo(**kw).toarray()
+    mom0,mom1 = self.comp_moments()
+    vpab = self.get_ac_vertex_array()
+    sprd = np.einsum('p,pab->ab', mom0,vpab)
+    return [[abs(sref-sprd).sum()/sref.size, np.amax(abs(sref-sprd))]]
 
+  def dipole_check(self, **kw):
+    """ Our standard minimal check """
+    dipcoo = self.sv.dipole_coo(**kw)
+    mom0,mom1 = self.comp_moments()
+    vpab = self.get_ac_vertex_array()
+    xyz2err = []
+    for i,dref in enumerate(dipcoo):
+      dref = dref.toarray()
+      dprd = np.einsum('p,pab->ab', mom1[:,i],vpab)
+      xyz2err.append([abs(dprd-dref).sum()/dref.size, np.amax(abs(dref-dprd))])
+    return xyz2err
 
 #
 #

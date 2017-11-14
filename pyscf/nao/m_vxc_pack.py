@@ -52,7 +52,7 @@ def vxc_pack(self, **kw):
       if (sp2rcut[sp1]+sp2rcut[sp2])**2<=sum((rv1-rv2)**2) : continue
       
       xc = xc_scalar_ni(me,sp1,rv1,sp2,rv2,**kw) if iskw else xc_scalar_ni(me,sp1,rv1,sp2,rv2,xc_code=xc_code,**kw)
-        
+      
       if use_numba:
           fill_triu_v2(xc, kernel, s1, f1, s2, f2, norbs, add=True)
       else:
