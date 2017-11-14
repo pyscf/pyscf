@@ -276,7 +276,7 @@ class tddft_iter(scf):
     vext = np.transpose(self.moms1)
     for xyz in range(3):
       for iw,comega in enumerate(comegas):
-        veff,info = self.comp_veff(vext[xyz], comega)
+        veff = self.comp_veff(vext[xyz], comega)
         dn = self.apply_rf0(veff, comega)
         p[iw] += np.dot(vext[xyz], dn)/3.0
     return p

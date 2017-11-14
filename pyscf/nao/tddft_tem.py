@@ -47,7 +47,6 @@ class tddft_tem(tddft_iter):
         self.velec = kw["velec"] if "velec" in kw else np.array([1.0, 0.0, 0.0])
         self.beam_offset = kw["beam_offset"] if "beam_offset" in kw else np.array([0.0, 0.0, 0.0])
         self.dr = kw["dr"] if "dr" in kw else np.array([0.3, 0.3, 0.3])
-        self.freq = kw["freq"] if "freq" in kw else np.arange(0.0, 0.367, 1.5*self.eps)
 
         self.vnorm = np.sqrt(np.dot(self.velec, self.velec))
         self.vdir = self.velec/self.vnorm
@@ -57,6 +56,7 @@ class tddft_tem(tddft_iter):
         
         # heavy calculations after checking !!
         tddft_iter.__init__(self, **kw)
+        self.freq = kw["freq"] if "freq" in kw else np.arange(0.0, 0.367, 1.5*self.eps)
 
         self.check_collision(self.atom2coord)
         self.get_time_range()
