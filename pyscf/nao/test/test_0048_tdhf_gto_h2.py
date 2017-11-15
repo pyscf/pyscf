@@ -29,7 +29,7 @@ class KnowValues(unittest.TestCase):
     p_ave = -polariz_inter_ave(gto_mf, mol, gto_td, omegas).imag
     data = np.array([omegas.real*27.2114, p_ave])
     np.savetxt('hydrogen.tdhf.omega.inter.pav.txt', data.T, fmt=['%f','%f'])
-    p_iter = -nao_td.comp_polariz_inter(omegas, Efield=np.array([1.0, 1.0, 1.0])).imag
+    p_iter = -nao_td.comp_polariz_inter_ave(omegas).imag
     data = np.array([omegas.real*27.2114, p_iter])
     np.savetxt('hydrogen.bse_iter_hf.omega.inter.pav.txt', data.T, fmt=['%f','%f'])
     #print('inter', abs(p_ave-p_iter).sum()/omegas.size, nao_td.l0_ncalls)
