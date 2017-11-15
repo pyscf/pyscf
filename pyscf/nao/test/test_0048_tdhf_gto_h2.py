@@ -45,7 +45,7 @@ class KnowValues(unittest.TestCase):
     p_ave = -polariz_nonin_ave(gto_mf, mol, omegas).imag
     data = np.array([omegas.real*27.2114, p_ave])
     np.savetxt('hydrogen.tdhf.omega.nonin.pav.txt', data.T, fmt=['%f','%f'])
-    p_iter = -nao_td.comp_polariz_nonin(omegas, Efield=np.array([1.0, 1.0, 1.0])).imag
+    p_iter = -nao_td.comp_polariz_nonin_ave(omegas).imag
     data = np.array([omegas.real*27.2114, p_iter])
     np.savetxt('hydrogen.bse_iter.omega.nonin.pav.txt', data.T, fmt=['%f','%f'])
     #print('nonin', abs(p_ave-p_iter).sum()/omegas.size)

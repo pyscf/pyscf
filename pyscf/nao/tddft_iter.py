@@ -201,16 +201,41 @@ class tddft_iter(scf):
 
     return v - (matvec_real + 1.0j*matvec_imag)
 
-  def comp_polariz_nonin(self, comegas, Efield = np.array([1.0, 0.0, 0.0])):
+  def comp_polariz_nonin_xx(self, comegas):
+    """
+        Compute non interacting polarizability along the xx direction
+    """
+    pxx = np.zeros(comegas.shape, dtype=self.dtypeComplex)
+
+    vext = np.transpose(self.moms1)
+    for iw, comega in enumerate(comegas):
+      dn0 = self.apply_rf0(vext[0], comega)
+      pxx[iw] = np.dot(dn0, vext[0])
+    return pxx
+
+  def comp_polariz_inter_xx(self, comegas, maxiter=1000):
+    """
+        Compute non interacting polarizability along the xx direction
+    """
+    pxx = np.zeros(comegas.shape, dtype=self.dtypeComplex)
+
+    vext = np.transpose(self.moms1)
+    for iw, comega in enumerate(comegas):
+      veff = self.comp_veff(vext[0], comega, maxiter=maxiter)
+      dn = self.apply_rf0(veff, comega)
+      pxx[iw] = np.dot(vext[0], dn)
+    return pxx
+
+  def comp_polariz_nonin_Eext(self, comegas, Eext = np.array([1.0, 0.0, 0.0])):
     """ 
-        Compute a the average non-interacting polarizability along the Efield direction
+        Compute a the average non-interacting polarizability along the Eext direction
         for the frequencies comegas.
         
         Input Parameters:
         -----------------
             comegas (1D array, complex): the real part contains the frequencies at which the polarizability
                         should be computed. The imaginary part id the width of the polarizability define as self.eps
-            Efield (1D xyz array, real): direction of the external field
+            Eext (1D xyz array, real): direction of the external field
 
         Output Parameters:
         ------------------
@@ -225,13 +250,13 @@ class tddft_iter(scf):
             self.dn (complex array, dim: [3, comegas.size, self.nprod]): store the density change
     """
  
-    assert Efield.size == 3
+    assert Eext.size == 3
     
     self.p0_mat = np.zeros((3, 3, comegas.size), dtype=self.dtypeComplex)
     self.dn0 = np.zeros((3, comegas.size, self.nprod), dtype=self.dtypeComplex)
     p0_avg = np.zeros(comegas.shape, dtype=self.dtypeComplex)
 
-    Edir = Efield/np.dot(Efield, Efield)
+    Edir = Eext/np.dot(Eext, Eext)
 
     vext = np.transpose(self.moms1)
     for xyz, Exyz in enumerate(Edir):
@@ -248,16 +273,16 @@ class tddft_iter(scf):
 
     return p0_avg
 
-  def comp_polariz_inter(self, comegas, Efield = np.array([1.0, 0.0, 0.0]), maxiter=1000):
+  def comp_polariz_inter_Eext(self, comegas, Eext = np.array([1.0, 0.0, 0.0]), maxiter=1000):
     """ 
-        Compute a the average interacting polarizability along the Efield direction
+        Compute a the average interacting polarizability along the Eext direction
         for the frequencies comegas.
         
         Input Parameters:
         -----------------
             comegas (1D array, complex): the real part contains the frequencies at which the polarizability
                         should be computed. The imaginary part id the width of the polarizability define as self.eps
-            Efield (1D xyz array, real): direction of the external field
+            Eext (1D xyz array, real): direction of the external field
             maxiter (integer): max number of iteration before to exit iteration loop in GMRES
         
         Output Parameters:
@@ -273,13 +298,13 @@ class tddft_iter(scf):
             self.dn (complex array, dim: [3, comegas.size, self.nprod]): store the density change
     """
     
-    assert Efield.size == 3
+    assert Eext.size == 3
     
     self.p_mat = np.zeros((3, 3, comegas.size), dtype=self.dtypeComplex)
     self.dn = np.zeros((3, comegas.size, self.nprod), dtype=self.dtypeComplex)
     p_avg = np.zeros(comegas.shape, dtype=self.dtypeComplex)
 
-    Edir = Efield/np.dot(Efield, Efield)
+    Edir = Eext/np.dot(Eext, Eext)
     
     vext = np.transpose(self.moms1)
     for xyz, Exyz in enumerate(Edir):

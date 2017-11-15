@@ -25,7 +25,7 @@ class KnowValues(unittest.TestCase):
     p_ave = -polariz_inter_ave(gto_mf, mol, gto_td, omegas).imag
     data = np.array([omegas.real*27.2114, p_ave])
     np.savetxt('hydrogen.tddft_lda.omega.inter.pav.txt', data.T, fmt=['%f','%f'])
-    p_iter = -nao_td.comp_polariz_inter(omegas, Efield=np.array([1.0, 1.0, 1.0])).imag
+    p_iter = -nao_td.comp_polariz_inter_Eext(omegas, Eext=np.array([1.0, 1.0, 1.0])).imag
     data = np.array([omegas.real*27.2114, p_iter])
     np.savetxt('hydrogen.tddft_iter_lda.omega.inter.pav.txt', data.T, fmt=['%f','%f'])
     #print('inter', abs(p_ave-p_iter).sum()/omegas.size)
@@ -38,7 +38,7 @@ class KnowValues(unittest.TestCase):
     data = np.array([omegas.real*27.2114, p_ave])
     np.savetxt('hydrogen.tddft_lda.omega.nonin.pav.txt', data.T, fmt=['%f','%f'])
     nao_td  = tddft_iter(mf=gto_mf, gto=mol)
-    p_iter = -nao_td.comp_polariz_nonin(omegas, Efield=np.array([1.0, 1.0, 1.0])).imag
+    p_iter = -nao_td.comp_polariz_nonin_Eext(omegas, Eext=np.array([1.0, 1.0, 1.0])).imag
     data = np.array([omegas.real*27.2114, p_iter])
     np.savetxt('hydrogen.tddft_iter_lda.omega.nonin.pav.txt', data.T, fmt=['%f','%f'])
     #print('nonin', abs(p_ave-p_iter).sum()/omegas.size)
