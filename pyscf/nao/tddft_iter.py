@@ -226,6 +226,34 @@ class tddft_iter(scf):
       pxx[iw] = np.dot(vext[0], dn)
     return pxx
 
+  def comp_polariz_nonin_ave(self, comegas):
+    """
+        Compute the average non-interacting polarizability
+    """
+    p_avg = np.zeros(comegas.shape, dtype=self.dtypeComplex)
+
+    vext = np.transpose(self.moms1)
+    for xyz in range(3):
+        for iw, comega in enumerate(comegas):
+          dn0 = self.apply_rf0(vext[xyz], comega)
+          p_avg[iw] += np.dot(dn0, vext[xyz])
+    return p_avg/3.0
+
+  def comp_polariz_inter_ave(self, comegas, maxiter=1000):
+    """
+        Compute average interacting polarizability
+    """
+    p_avg = np.zeros(comegas.shape, dtype=self.dtypeComplex)
+
+    vext = np.transpose(self.moms1)
+    for xyz in range(3):
+        for iw, comega in enumerate(comegas):
+          veff = self.comp_veff(vext[xyz], comega, maxiter=maxiter)
+          dn = self.apply_rf0(veff, comega)
+          p_avg[iw] += np.dot(vext[xyz], dn)
+    return p_avg/3.0
+
+
   def comp_polariz_nonin_Eext(self, comegas, Eext = np.array([1.0, 0.0, 0.0])):
     """ 
         Compute a the average non-interacting polarizability along the Eext direction
@@ -239,7 +267,8 @@ class tddft_iter(scf):
 
         Output Parameters:
         ------------------
-            p_avg (1D array, complex): average polarizability
+            p_avg (1D array, complex): average polarizability along the Eext vector
+                <P> = Eext.P_mat.Eext, where P_mat is the polarizability tensor
 
         Other Calculated quantity:
         --------------------------
@@ -269,7 +298,8 @@ class tddft_iter(scf):
                         self.p0_mat[xyz, xyzp, iw] = np.dot(self.dn0[xyz, iw, :], 
                                                             vext[xyzp])
 
-            p0_avg += Edir[xyz]*self.p0_mat[xyz, xyz, :]
+    for iw, comega in enumerate(comegas):
+        p0_avg[iw] = np.dot(Edir, np.dot(self.p0_mat[:, :, iw], Edir))
 
     return p0_avg
 
@@ -288,6 +318,7 @@ class tddft_iter(scf):
         Output Parameters:
         ------------------
             p_avg (1D array, complex): average polarizability
+                <P> = Eext.P_mat.Eext, where P_mat is the polarizability tensor
 
         Other Calculated quantity:
         --------------------------
@@ -318,6 +349,7 @@ class tddft_iter(scf):
                         self.p_mat[xyz, xyzp, iw] = np.dot(vext[xyzp], 
                                                         self.dn[xyz, iw, :])
           
-            p_avg += Edir[xyz]*self.p_mat[xyz, xyz, :]
+    for iw, comega in enumerate(comegas):
+        p_avg[iw] = np.dot(Edir, np.dot(self.p_mat[:, :, iw], Edir))
 
     return p_avg
