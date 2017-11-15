@@ -185,7 +185,7 @@ def pre_orth_ao_atm_scf(mol):
     from pyscf.scf import atom_hf
     atm_scf = atom_hf.get_atm_nrhf(mol)
     nbf = mol.nao_nr()
-    c = numpy.zeros((nbf, nbf))
+    c = numpy.zeros((nbf,nbf))
     p0 = 0
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)

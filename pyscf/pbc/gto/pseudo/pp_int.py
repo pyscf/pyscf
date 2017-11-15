@@ -95,7 +95,9 @@ def get_pp_nl(cell, kpts=None):
     nao = cell.nao_nr()
     buf = numpy.empty((3*9*nao), dtype=numpy.complex128)
 
-    ppnl = [0] * nkpts
+    # We set this equal to zeros in case hl_blocks loop is skipped
+    # and ppnl is returned
+    ppnl = numpy.zeros((nkpts,nao,nao), dtype=numpy.complex128)
     for k, kpt in enumerate(kpts_lst):
         offset = [0] * 3
         for ib, hl in enumerate(hl_blocks):
