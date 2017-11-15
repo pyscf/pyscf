@@ -5,12 +5,11 @@
 Python-based Simulations of Chemistry Framework
 ===============================================
 
-2017-08-22
+2017-11-12
 
-* [1.4 beta](https://github.com/sunqm/pyscf/tree/master)
-* [Stable release 1.3.5](https://github.com/sunqm/pyscf/releases/tag/v1.3.5)
+* [Stable release 1.4.1](https://github.com/sunqm/pyscf/releases/tag/v1.4.1)
 * [Changelog](../master/CHANGELOG)
-* [Documentation](http://www.pyscf.org) ([PDF](http://www.sunqm.net/pyscf/files/pdf/PySCF-1.1.pdf))
+* [Documentation](http://www.pyscf.org)
 * [Installation](#installation)
 * [Features](../master/FEATURES)
 
@@ -35,15 +34,15 @@ Installation
   Note during the compilation, external libraries (libcint, libxc, xcfun) will
   be downloaded and installed.  If you want to disable the automatic
   downloading, this [document](http://sunqm.github.io/pyscf/install.html#installation-without-network)
-  is an instruction for manually building these packages.
+  shows how to manually build these packages and PySCF C libraries.
 
-* To make python find pyscf, edit environment variable `PYTHONPATH`,
-  e.g.  if pyscf is installed in /opt, your `PYTHONPATH` should be
+* To export PySCF to Python, you need to set environment variable `PYTHONPATH`.
+  E.g.  if PySCF is installed in /opt, your `PYTHONPATH` should be
 
         export PYTHONPATH=/opt/pyscf:$PYTHONPATH
 
-* Use Intel MKL as BLAS library.  cmake with options
-  `-DBLA_VENDOR=Intel10_64lp_seq`
+* Using Intel MKL as BLAS library.  Enabling the cmake options
+  `-DBLA_VENDOR=Intel10_64lp_seq` when executing cmake
 
         cmake -DBLA_VENDOR=Intel10_64lp_seq ..
 
@@ -90,6 +89,7 @@ Known problems
 --------------
 
 * Error message "Library not loaded: libcint.3.0.dylib" On OS X.
+
   libcint.dylib is installed in  pyscf/lib/deps/lib  by default.  Add
   "/path/to/pyscf/lib/deps/lib"  to  `DYLD_LIBRARY_PATH`
 
@@ -100,7 +100,7 @@ Known problems
   Reason: unsafe use of relative rpath libcint.3.0.dylib in xxx/pyscf/lib/libao2mo.dylib with restricted binary
 ```
 
-  It is only observed on OSX 10.11.  One solution is to manually modify the relative path to absolute path
+  It is only observed on OSX 10.11.  One solution is to manually modify the runtime path
 
         $ install_name_tool -change libcint.3.0.dylib xxx/pyscf/lib/deps/lib/libcint.3.0.dylib xxx/pyscf/lib/libcgto.dylib
         $ install_name_tool -change libcint.3.0.dylib xxx/pyscf/lib/deps/lib/libcint.3.0.dylib xxx/pyscf/lib/libcvhf.dylib
@@ -111,38 +111,31 @@ Known problems
   all required dylib files.
 
 
-* Fails at runtime with error message
+* runtime error message
 ```
   OSError: ... mkl/lib/intel64/libmkl_avx.so: undefined symbol: ownLastTriangle_64fc
 ```
-
-  This problem relates to MKL v11.1 on intel64 architecture.  Currently,
-  there is no solution for the combination of Python + MKL 11.1 + AVX.
-  You need either change to other MKL version (10.*, 11.0, 11.2) or
-  disable mkl_avx:
-
-        cmake -DBLA_VENDOR=Intel10_64lp_seq .. -DDISABLE_AVX=1
-
-
-* Runtime error message
+  or
 ```
   MKL FATAL ERROR: Cannot load libmkl_avx.so or libmkl_def.so.
 ```
-  This is MKL 11.* bug for "dlopen" function.  Preloading the two libraries
-  works fine with most system:
+
+  This is a MKL 11.* bug when MKL is used with "dlopen" function.
+  Preloading MKL libraries can solve this problem on most systems:
 
 ```
-  export LD_PRELOAD=$MKLROOT/lib/intel64/libmkl_def.so:$MKLROOT/lib/intel64/libmkl_core.so
+  export LD_PRELOAD=$MKLROOT/lib/intel64/libmkl_def.so:$MKLROOT/lib/intel64/libmkl_sequential.so:$MKLROOT/lib/intel64/libmkl_core.so
 ```
 
   or 
 
 ```
-  export LD_PRELOAD=$MKLROOT/lib/intel64/libmkl_avx.so:$MKLROOT/lib/intel64/libmkl_core.so:$MKLROOT/lib/intel64/libmkl_sequential.so
+  export LD_PRELOAD=$MKLROOT/lib/intel64/libmkl_avx.so:$MKLROOT/lib/intel64/libmkl_core.so
 ```
 
 
 * h5py installation.
+
   If you got problems to install the latest h5py package,  you can try
   the old releases:
   https://www.hdfgroup.org/ftp/HDF5/releases/hdf5-1.8.12/
@@ -154,7 +147,7 @@ Known problems
 [ 95%] Building C object CMakeFiles/cint.dir/src/stg_roots.c.o
 ```
 
-  This code is used by F12 integrals only.  If you do not need to use F12 methods,
+  This code is used by F12 integrals only.  If you do not need F12 methods,
   the relevant compilation can be disabled, by searching `DWITH_F12` in file
   lib/CMakeLists.txt  and setting it to `-DWITH_F12=0`.
 
@@ -165,11 +158,10 @@ Citing PySCF
 
 The following paper should be cited in publications utilizing the PySCF program package:
 
-* The Python-based Simulations of Chemistry Framework (PySCF),
+* PySCF: the Python-based Simulations of Chemistry Framework,
   Q. Sun, T. C. Berkelbach, N. S. Blunt, G. H. Booth, S.  Guo, Z. Li, J. Liu,
   J. McClain, E. R. Sayfutyarova, S. Sharma, S. Wouters, G. K.-L. Chan,
-  WIREs Comput Mol Sci 2017 (in press),
-  DOI: 10.1002/wcms.1340
+  WIREs Comput Mol Sci 2017, DOI: 10.1002/wcms.1340
 
 
 Bug report

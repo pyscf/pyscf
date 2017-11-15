@@ -89,7 +89,7 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
     if not hasattr(fock_ao, 'focka'):
         if h1e is None: h1e = mf.get_hcore()
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-        fock_ao = h1e + mf.get_veff(mol, dm0)
+        fock_ao = h1e + mf.get_veff(mf.mol, dm0)
     else:
         fock_ao = fock_ao.focka, fock_ao.fockb
     mo_occa = occidxa = mo_occ > 0
@@ -709,7 +709,7 @@ def newton_SCF_class(mf):
         doc = ''
     else:
         doc = mf.__class__.__doc__
-    class CIAH_SCF(mf.__class__):
+    class CIAH_SCF(mf.__class__, _CIAH_SCF):
         __doc__ = doc + \
         '''
         Attributes for Newton solver:
@@ -851,6 +851,10 @@ def newton_SCF_class(mf):
                 mo = lib.tag_array(mo, orbsym=orbsym)
             return mo
     return CIAH_SCF
+
+# A tag to label the derived SCF class
+class _CIAH_SCF:
+    pass
 
 def newton(mf):
     '''Co-iterative augmented hessian (CIAH) second order SCF solver

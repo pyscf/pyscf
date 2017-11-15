@@ -3,12 +3,17 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import sys
 import copy
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf import ao2mo
+
+# For code compatiblity in python-2 and python-3
+if sys.version_info >= (3,):
+    unicode = str
 
 # Obtained from http://www.psicode.org/psi4manual/master/basissets_byfamily.html
 DEFAULT_AUXBASIS = {
@@ -44,17 +49,18 @@ DEFAULT_AUXBASIS = {
 }
 
 class load(ao2mo.load):
-    '''load 3c2e integrals from hdf5 file
-    Usage:
-        with load(cderifile) as eri:
-            print eri.shape
+    '''load 3c2e integrals from hdf5 file. It can be used in the context
+    manager:
+
+    with load(cderifile) as eri:
+        print eri.shape
     '''
     def __init__(self, eri, dataname='j3c'):
         ao2mo.load.__init__(self, eri, dataname)
 
 
 def aug_etb_for_dfbasis(mol, dfbasis='weigend', beta=2.3, start_at='Rb'):
-    '''augment weigend basis with even tempered gaussian basis
+    '''augment weigend basis with even-tempered gaussian basis
     exps = alpha*beta^i for i = 1..N
     '''
     nuc_start = gto.mole._charge(start_at)
@@ -107,10 +113,13 @@ def aug_etb_for_dfbasis(mol, dfbasis='weigend', beta=2.3, start_at='Rb'):
     return newbasis
 
 def aug_etb(mol, beta=2.3):
+    '''To generate the even-tempered auxiliary Gaussian basis'''
     return aug_etb_for_dfbasis(mol, beta=beta, start_at=0)
 
 def make_auxbasis(mol, mp2fit=False):
-    '''Even-tempered Gaussians or the DF basis in DEFAULT_AUXBASIS'''
+    '''Depending on the orbital basis, generating even-tempered Gaussians or
+    the optimized auxiliary basis defined in DEFAULT_AUXBASIS
+    '''
     uniq_atoms = set([a[0] for a in mol._atom])
     if isinstance(mol.basis, str):
         _basis = dict(((a, mol.basis) for a in uniq_atoms))
@@ -120,7 +129,7 @@ def make_auxbasis(mol, mp2fit=False):
         _basis.update(mol.basis)
         del(_basis['default'])
     else:
-        _basis = mol.basis
+        _basis = mol._basis
 
     auxbasis = {}
     for k in _basis:
@@ -152,7 +161,14 @@ def make_auxbasis(mol, mp2fit=False):
 
 def make_auxmol(mol, auxbasis=None):
     '''Generate a fake Mole object which uses the density fitting auxbasis as
-    the basis sets
+    the basis sets.  If auxbasis is not specified, the optimized auxiliary fitting
+    basis set will be generated according to the rules recorded in
+    pyscf.df.addons.DEFAULT_AUXBASIS.  If the optimized auxiliary basis is not
+    available (either not specified in DEFAULT_AUXBASIS or the basis set of the
+    required elements not defined in the optimized auxiliary basis),
+    even-tempered Gaussian basis set will be generated.
+
+    See also the paper JCTC, 13, 554 about the generation of auxiliary fitting basis.
     '''
     pmol = copy.copy(mol)  # just need shallow copy
 

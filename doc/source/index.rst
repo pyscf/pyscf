@@ -28,7 +28,6 @@ Contents
 
    overview.rst
    tutorial.rst
-   advanced.rst
    install.rst
    gto.rst
    lib.rst
@@ -49,6 +48,7 @@ Contents
    hessian.rst
    pbc.rst
    lo.rst
+   advanced.rst
    qmmm.rst
    mrpt.rst
 
@@ -58,7 +58,7 @@ Contents
 
 
 You can also download the `PDF version
-<http://www.sunqm.net/pyscf/files/pdf/PySCF-1.3.pdf>`_ of this manual.
+<http://www.sunqm.net/pyscf/files/pdf/PySCF-1.4.pdf>`_ of this manual.
 
 
 .. Indices and tables

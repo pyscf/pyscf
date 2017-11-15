@@ -372,10 +372,10 @@ class KSCF(hf.SCF):
             cell = self.cell
         dm_kpts = None
         if key.lower() == '1e':
-            dm = self.init_guess_by_1e(cell)
+            dm_kpts = self.init_guess_by_1e(cell)
         elif getattr(cell, 'natm', 0) == 0:
             logger.info(self, 'No atom found in cell. Use 1e initial guess')
-            dm = self.init_guess_by_1e(cell)
+            dm_kpts = self.init_guess_by_1e(cell)
         elif key.lower() == 'atom':
             dm = self.init_guess_by_atom(cell)
         elif key.lower().startswith('chk'):
@@ -408,7 +408,7 @@ class KSCF(hf.SCF):
         if cell.dimension < 3:
             logger.warn(self, 'Hcore initial guess is not recommended in '
                         'the SCF of low-dimensional systems.')
-        return hf.SCF.init_guess_by_1e(cell)
+        return hf.SCF.init_guess_by_1e(self, cell)
 
     def get_hcore(self, cell=None, kpts=None):
         if cell is None: cell = self.cell

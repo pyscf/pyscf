@@ -12,6 +12,7 @@ from pyscf.gto.basis import parse_nwchem
 
 ALIAS = {
     'ano'        : 'ano.dat'        ,
+    'anorcc'     : 'ano.dat'        ,
     'anoroosdz'  : 'roos-dz.dat'    ,
     'anoroostz'  : 'roos-tz.dat'    ,
     'roosdz'     : 'roos-dz.dat'    ,
@@ -71,27 +72,41 @@ ALIAS = {
     'iglo3'      : 'iglo3'          ,
     '321++g'     : os.path.join('pople-basis', '3-21++G.dat'   ),
     '321++g*'    : os.path.join('pople-basis', '3-21++Gs.dat'  ),
+    '321++gs'    : os.path.join('pople-basis', '3-21++Gs.dat'  ),
     '321g'       : os.path.join('pople-basis', '3-21G.dat'     ),
     '321g*'      : os.path.join('pople-basis', '3-21Gs.dat'    ),
+    '321gs'      : os.path.join('pople-basis', '3-21Gs.dat'    ),
     '431g'       : os.path.join('pople-basis', '4-31G.dat'     ),
     '631++g'     : os.path.join('pople-basis', '6-31++G.dat'   ),
     '631++g*'    : os.path.join('pople-basis', '6-31++Gs.dat'  ),
+    '631++gs'    : os.path.join('pople-basis', '6-31++Gs.dat'  ),
     '631++g**'   : os.path.join('pople-basis', '6-31++Gss.dat' ),
+    '631++gss'   : os.path.join('pople-basis', '6-31++Gss.dat' ),
     '631+g'      : os.path.join('pople-basis', '6-31+G.dat'    ),
     '631+g*'     : os.path.join('pople-basis', '6-31+Gs.dat'   ),
+    '631+gs'     : os.path.join('pople-basis', '6-31+Gs.dat'   ),
     '631+g**'    : os.path.join('pople-basis', '6-31+Gss.dat'  ),
+    '631+gss'    : os.path.join('pople-basis', '6-31+Gss.dat'  ),
     '6311++g'    : os.path.join('pople-basis', '6-311++G.dat'  ),
     '6311++g*'   : os.path.join('pople-basis', '6-311++Gs.dat' ),
+    '6311++gs'   : os.path.join('pople-basis', '6-311++Gs.dat' ),
     '6311++g**'  : os.path.join('pople-basis', '6-311++Gss.dat'),
+    '6311++gss'  : os.path.join('pople-basis', '6-311++Gss.dat'),
     '6311+g'     : os.path.join('pople-basis', '6-311+G.dat'   ),
     '6311+g*'    : os.path.join('pople-basis', '6-311+Gs.dat'  ),
+    '6311+gs'    : os.path.join('pople-basis', '6-311+Gs.dat'  ),
     '6311+g**'   : os.path.join('pople-basis', '6-311+Gss.dat' ),
+    '6311+gss'   : os.path.join('pople-basis', '6-311+Gss.dat' ),
     '6311g'      : os.path.join('pople-basis', '6-311G.dat'    ),
     '6311g*'     : os.path.join('pople-basis', '6-311Gs.dat'   ),
+    '6311gs'     : os.path.join('pople-basis', '6-311Gs.dat'   ),
     '6311g**'    : os.path.join('pople-basis', '6-311Gss.dat'  ),
+    '6311gss'    : os.path.join('pople-basis', '6-311Gss.dat'  ),
     '631g'       : os.path.join('pople-basis', '6-31G.dat'     ),
     '631g*'      : os.path.join('pople-basis', '6-31Gs.dat'    ),
+    '631gs'      : os.path.join('pople-basis', '6-31Gs.dat'    ),
     '631g**'     : os.path.join('pople-basis', '6-31Gss.dat'   ),
+    '631gss'     : os.path.join('pople-basis', '6-31Gss.dat'   ),
     'sto3g'      : 'sto-3g.dat'     ,
     'sto6g'      : 'sto-6g.dat'     ,
     'minao'      : 'minao'          ,
@@ -232,9 +247,15 @@ def _is_pople_basis(basis):
             basis.startswith('321') or
             basis.startswith('431'))
 
+_BASIS_DIR = os.path.dirname(__file__)
+
 def _parse_pople_basis(basis, symb):
-    mbas = basis[:basis.find('(')]
-    pbas = basis[basis.find('(')+1:basis.find(')')]
+    if '(' in basis:
+        mbas = basis[:basis.find('(')]
+        extension = basis[basis.find('(')+1:basis.find(')')]
+    else:
+        mbas = basis
+        extension = ''
 
     pathtmp = os.path.join('pople-basis',
                            mbas[0]+'-'+mbas[1:].upper() + '-polarization-%s.dat')
@@ -247,14 +268,14 @@ def _parse_pople_basis(basis, symb):
             return [pathtmp % s[:2]] + convert(s[2:])
 
     if symb in ('H', 'He'):
-        if ',' in pbas:
-            return tuple([ALIAS[mbas]] + convert(pbas.split(',')[1]))
+        if ',' in extension:
+            return tuple([ALIAS[mbas]] + convert(extension.split(',')[1]))
         else:
             return ALIAS[mbas]
     else:
-        return tuple([ALIAS[mbas]] + convert(pbas.split(',')[0]))
+        return tuple([ALIAS[mbas]] + convert(extension.split(',')[0]))
 
-def parse(string):
+def parse(string, symb=None):
     '''Parse the NWChem format basis or ECP text, return an internal basis (ECP)
     format which can be assigned to :attr:`Mole.basis` or :attr:`Mole.ecp`
 
@@ -277,12 +298,12 @@ def parse(string):
     ... """)}
     '''
     if 'ECP' in string:
-        return parse_nwchem.parse_ecp(string)
+        return parse_nwchem.parse_ecp(string, symb)
     else:
-        return parse_nwchem.parse(string)
+        return parse_nwchem.parse(string, symb)
 
-def parse_ecp(string):
-    return parse_nwchem.parse_ecp(string)
+def parse_ecp(string, symb=None):
+    return parse_nwchem.parse_ecp(string, symb)
 
 def load(filename_or_basisname, symb):
     '''Convert the basis of the given symbol to internal format
@@ -300,22 +321,24 @@ def load(filename_or_basisname, symb):
     >>> mol = gto.Mole()
     >>> mol.basis = {'O': load('sto-3g', 'C')}
     '''
+    symb = ''.join([i for i in symb if i.isalpha()])
     if os.path.isfile(filename_or_basisname):
         # read basis from given file
         try:
             return parse_nwchem.load(filename_or_basisname, symb)
         except RuntimeError:
             with open(filename_or_basisname, 'r') as fin:
-                return parse_nwchem.parse(fin.read())
+                return parse_nwchem.parse(fin.read(), symb)
 
     name = _format_basis_name(filename_or_basisname)
     if not (name in ALIAS or _is_pople_basis(name)):
         try:
-            return parse(filename_or_basisname)
+            return parse_nwchem.parse(filename_or_basisname, symb)
+        except KeyError:
+            return parse_nwchem.parse(filename_or_basisname)
         except IndexError:
             raise RuntimeError('Basis %s not found' % filename_or_basisname)
 
-    symb = ''.join([i for i in symb if i.isalpha()])
     if name in ALIAS:
         basmod = ALIAS[name]
     elif _is_pople_basis(name):
@@ -324,11 +347,11 @@ def load(filename_or_basisname, symb):
         raise RuntimeError('Basis %s not found' % filename_or_basisname)
 
     if 'dat' in basmod:
-        b = parse_nwchem.load(os.path.join(os.path.dirname(__file__), basmod), symb)
+        b = parse_nwchem.load(os.path.join(_BASIS_DIR, basmod), symb)
     elif isinstance(basmod, (tuple, list)) and isinstance(basmod[0], str):
         b = []
         for f in basmod:
-            b += parse_nwchem.load(os.path.join(os.path.dirname(__file__), f), symb)
+            b += parse_nwchem.load(os.path.join(_BASIS_DIR, f), symb)
     else:
         if sys.version_info < (2,7):
             fp, pathname, description = imp.find_module(basmod, __path__)
@@ -343,20 +366,21 @@ def load(filename_or_basisname, symb):
 def load_ecp(filename_or_basisname, symb):
     '''Convert the basis of the given symbol to internal format
     '''
+    symb = ''.join([i for i in symb if i.isalpha()])
     if os.path.isfile(filename_or_basisname):
         # read basis from given file
         try:
             return parse_nwchem.load_ecp(filename_or_basisname, symb)
         except RuntimeError:
             with open(filename_or_basisname, 'r') as fin:
-                return parse_nwchem.parse_ecp(fin.read())
+                return parse_ecp(fin.read(), symb)
 
     name = _format_basis_name(filename_or_basisname)
-    if name not in ALIAS:
-        return parse_ecp(filename_or_basisname)
-    basmod = ALIAS[name]
-    symb = ''.join([i for i in symb if i.isalpha()])
-    return parse_nwchem.load_ecp(os.path.join(os.path.dirname(__file__), basmod), symb)
+    if name in ALIAS:
+        basmod = ALIAS[name]
+        return parse_nwchem.load_ecp(os.path.join(_BASIS_DIR, basmod), symb)
+    else:
+        return parse_ecp(filename_or_basisname, symb)
 
 def _format_basis_name(basisname):
     return basisname.lower().replace('-', '').replace('_', '').replace(' ', '')

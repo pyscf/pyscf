@@ -8,12 +8,14 @@ Some hacky functions
 '''
 
 import os, sys
+import warnings
 import imp
 import tempfile
 import shutil
 import functools
 import itertools
 import math
+import types
 import ctypes
 import numpy
 import h5py
@@ -56,12 +58,39 @@ def current_memory():
     else:
         return 0, 0
 
-def num_threads():
-    if 'OMP_NUM_THREADS' in os.environ:
-        return int(os.environ['OMP_NUM_THREADS'])
+def num_threads(n=None):
+    '''Set the number of OMP threads.  If argument is not given, the function
+    will return the total number of available OMP threads.'''
+    from pyscf.lib.numpy_helper import _np_helper
+    if n is not None:
+        _np_helper.set_omp_threads.restype = ctypes.c_int
+        threads = _np_helper.set_omp_threads(ctypes.c_int(int(n)))
+        if threads == 0:
+            warnings.warn('OpenMP is not available. '
+                          'Setting omp_threads to %s has no effects.' % n)
+        return threads
     else:
-        import multiprocessing
-        return multiprocessing.cpu_count()
+        _np_helper.get_omp_threads.restype = ctypes.c_int
+        return _np_helper.get_omp_threads()
+
+class with_omp_threads(object):
+    '''
+    Usage:
+        with lib.with_threads(2):
+            print(lib.num_threads())
+            ...
+    '''
+    def __init__(self, nthreads=None):
+        self.nthreads = nthreads
+        self.sys_threads = None
+    def __enter__(self):
+        if self.nthreads is not None and self.nthreads >= 1:
+            self.sys_threads = num_threads()
+            num_threads(self.nthreads)
+        return self
+    def __exit__(self, type, value, traceback):
+        if self.sys_threads is not None:
+            num_threads(self.sys_threads)
 
 
 def c_int_arr(m):
@@ -163,7 +192,8 @@ class ctypes_stdout(object):
     Usage:
         with ctypes_stdout() as stdout:
             ...
-        print(stdout.read())'''
+        print(stdout.read())
+    '''
     def __enter__(self):
         sys.stdout.flush()
         self._contents = None
@@ -338,7 +368,7 @@ def check_sanity(obj, keysref, stdout=sys.stdout):
         class_attr = set(dir(obj.__class__))
         keyin = keysub.intersection(class_attr)
         if keyin:
-            msg = ('Overwrite attributes  %s  of %s\n' %
+            msg = ('Overwritten attributes  %s  of %s\n' %
                    (' '.join(keyin), obj.__class__))
             if msg not in _warn_once_registry:
                 _warn_once_registry[msg] = 1
@@ -371,6 +401,57 @@ def with_doc(doc):
         fn.__doc__ = doc
         return fn
     return make_fn
+
+def import_as_method(fn, default_keys=None):
+    '''
+    The statement "fn1 = import_as_method(fn, default_keys=['a','b'])"
+    in a class is equivalent to define the following method in the class:
+
+    .. code-block:: python
+        def fn1(self, ..., a=None, b=None, ...):
+            if a is None: a = self.a
+            if b is None: b = self.b
+            return fn(..., a, b, ...)
+    '''
+    code_obj = fn.__code__
+# Add the default_keys as kwargs in CodeType is very complicated
+#    new_code_obj = types.CodeType(code_obj.co_argcount+1,
+#                                  code_obj.co_nlocals,
+#                                  code_obj.co_stacksize,
+#                                  code_obj.co_flags,
+#                                  code_obj.co_code,
+#                                  code_obj.co_consts,
+#                                  code_obj.co_names,
+## As a class method, the first argument should be self
+#                                  ('self',) + code_obj.co_varnames,
+#                                  code_obj.co_filename,
+#                                  code_obj.co_name,
+#                                  code_obj.co_firstlineno,
+#                                  code_obj.co_lnotab,
+#                                  code_obj.co_freevars,
+#                                  code_obj.co_cellvars)
+#    clsmethod = types.FunctionType(new_code_obj, fn.__globals__)
+#    clsmethod.__defaults__ = fn.__defaults__
+
+    # exec is a bad solution here.  But I didn't find a better way to
+    # implement this for now.
+    nargs = code_obj.co_argcount
+    argnames = code_obj.co_varnames[:nargs]
+    defaults = fn.__defaults__
+    new_code_str = 'def clsmethod(self, %s):\n' % (', '.join(argnames))
+    if default_keys is not None:
+        for k in default_keys:
+            new_code_str += '    if %s is None: %s = self.%s\n' % (k, k, k)
+        if defaults is None:
+            defaults = (None,) * nargs
+        else:
+            defaults = (None,) * (nargs-len(defaults)) + defaults
+    new_code_str += '    return %s(%s)\n' % (fn.__name__, ', '.join(argnames))
+    exec(new_code_str, fn.__globals__, locals())
+
+    clsmethod.__name__ = fn.__name__
+    clsmethod.__defaults__ = defaults
+    return clsmethod
 
 def overwrite_mro(obj, mro):
     '''A hacky function to overwrite the __mro__ attribute'''
@@ -513,6 +594,11 @@ class call_in_background(object):
     def __exit__(self, type, value, traceback):
         if self.handler is not None:
             self.handler.join()
+
+
+# A tag to label the derived Scanner class
+class SinglePointScanner: pass
+class GradScanner: pass
 
 
 if __name__ == '__main__':

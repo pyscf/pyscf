@@ -124,11 +124,12 @@ def update_amps(mycc, t1, t2, eris):
     buflen = max(nocc*nvir**2, nocc**3)
     bufs = numpy.empty((5,blksize*buflen))
     buf1, buf2, buf3, buf4, buf5 = bufs
-    for p0, p1 in prange(0, nocc, blksize):
+    for p0, p1 in lib.prange(0, nocc, blksize):
     #: wOoVv += numpy.einsum('iabc,jc->ijab', eris.ovvv, t1)
     #: wOoVv -= numpy.einsum('jbik,ka->jiba', eris.ovoo, t1)
         wOoVv = numpy.ndarray((nocc,p1-p0,nvir,nvir), buffer=buf3)
         wooVV = numpy.ndarray((p1-p0,nocc,nvir,nvir), buffer=buf4)
+        wooVV[:] = 0
         readbuf = numpy.empty((p1-p0,blknvir,nvir_pair))
         prefetchbuf = numpy.empty((p1-p0,blknvir,nvir_pair))
         ovvvbuf = numpy.empty((p1-p0,blknvir,nvir,nvir))
@@ -149,7 +150,7 @@ def update_amps(mycc, t1, t2, eris):
                     eris_vovv = lib.transpose(eris_ovvv.reshape(-1,nvir))
                     eris_vovv = eris_vovv.reshape(nvir*(p1-p0),-1)
                     tmp = numpy.ndarray((nocc,nocc,nvir,p1-p0), buffer=buf1)
-                    for j0, j1 in prange(0, nocc, blksize):
+                    for j0, j1 in lib.prange(0, nocc, blksize):
                         tau = numpy.ndarray((j1-j0,nocc,q1-q0,nvir), buffer=buf2)
                         tau = numpy.einsum('ia,jb->ijab', t1[j0:j1,q0:q1], t1, out=tau)
                         tau += t2[j0:j1,:,q0:q1]
@@ -167,7 +168,7 @@ def update_amps(mycc, t1, t2, eris):
                 tmp = t1[:,q0:q1].copy()
                 for i in range(eris_ovvv.shape[0]):
                     lib.ddot(tmp, eris_ovvv[i].reshape(q1-q0,-1), -1,
-                             wooVV[i].reshape(nocc,-1))
+                             wooVV[i].reshape(nocc,-1), 1)
 
                 #: wOoVv += numpy.einsum('ibac,jc->jiba', eris_ovvv, t1)
                 tmp = numpy.ndarray((nocc,p1-p0,q1-q0,nvir), buffer=buf1)
@@ -271,7 +272,7 @@ def update_amps(mycc, t1, t2, eris):
         theta = theta.reshape(-1,nov)
         for i in range(nocc):  # OVov-OVov.transpose(0,3,2,1)*.5
             eris_OVov[i] -= eris_OVov[i].transpose(2,1,0)*.5
-        for j0, j1 in prange(0, nocc, blksize):
+        for j0, j1 in lib.prange(0, nocc, blksize):
             tau = numpy.ndarray((j1-j0,nvir,nocc,nvir), buffer=buf2)
             for i in range(j1-j0):
                 tau[i]  = t2[j0+i].transpose(1,0,2) * 2
@@ -302,7 +303,7 @@ def update_amps(mycc, t1, t2, eris):
         eris_oVOv = lib.transpose(eris_oOvV.reshape(-1,nov,nvir), axes=(0,2,1), out=buf5)
         eris_oVOv = eris_oVOv.reshape(-1,nvir,nocc,nvir)
 
-        for j0, j1 in prange(0, nocc, blksize):
+        for j0, j1 in lib.prange(0, nocc, blksize):
             tau = make_tau(t2[j0:j1], t1[j0:j1], t1, 1, out=buf2)
             #: woooo[p0:p1,:,j0:j1] += numpy.einsum('ijab,klab->ijkl', eris_oOvV, tau)
             _dgemm('N', 'T', (p1-p0)*nocc, (j1-j0)*nocc, nvir*nvir,
@@ -325,7 +326,7 @@ def update_amps(mycc, t1, t2, eris):
         t2ibja = lib.transpose(_cp(t2[p0:p1]).reshape(-1,nov,nvir), axes=(0,2,1),
                                out=buf1).reshape(-1,nvir,nocc,nvir)
         tmp = numpy.ndarray((blksize,nvir,nocc,nvir), buffer=buf2)
-        for j0, j1 in prange(0, nocc, blksize):
+        for j0, j1 in lib.prange(0, nocc, blksize):
             #: t2new[j0:j1] += numpy.einsum('ibkc,kcja->ijab', woVoV[j0:j1], t2ibja)
             lib.ddot(woVoV[j0:j1].reshape((j1-j0)*nvir,-1),
                      t2ibja.reshape(-1,nov), 1, tmp[:j1-j0].reshape(-1,nov))
@@ -410,11 +411,11 @@ def add_wvvVV_(mycc, t1, t2, eris, t2new_tril, with_ovvv=True):
         nocc2 = nocc*(nocc+1)//2
         outbuf = numpy.empty((nocc2,nao,nao))
         tau = numpy.ndarray((nocc2,nvir,nvir), buffer=outbuf)
-        p0 = 0
+        p1 = 0
         for i in range(nocc):
-            tau[p0:p0+i+1] = numpy.einsum('a,jb->jab', t1[i], t1[:i+1])
-            tau[p0:p0+i+1] += t2[i,:i+1]
-            p0 += i + 1
+            p0, p1 = p1, p1 + i+1
+            tau[p0:p1] = numpy.einsum('a,jb->jab', t1[i], t1[:i+1])
+            tau[p0:p1] += t2[i,:i+1]
         tau = _ao2mo.nr_e2(tau.reshape(nocc2,nvir**2), aos, (0,nao,0,nao), 's1', 's1')
         tau = tau.reshape(nocc2,nao,nao)
         time0 = logger.timer_debug1(mycc, 'vvvv-tau', *time0)
@@ -479,27 +480,27 @@ def add_wvvVV_(mycc, t1, t2, eris, t2new_tril, with_ovvv=True):
         #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
         #: t2new += numpy.einsum('ijcd,acdb->ijab', tau, vvvv)
         tau = numpy.empty((nocc*(nocc+1)//2,nvir,nvir))
-        p0 = 0
+        p1 = 0
         for i in range(nocc):
-            tau[p0:p0+i+1] = numpy.einsum('a,jb->jab', t1[i], t1[:i+1])
-            tau[p0:p0+i+1] += t2[i,:i+1]
-            p0 += i + 1
+            p0, p1 = p1, p1 + i+1
+            tau[p0:p1] = numpy.einsum('a,jb->jab', t1[i], t1[:i+1])
+            tau[p0:p1] += t2[i,:i+1]
         time0 = logger.timer_debug1(mycc, 'vvvv-tau', *time0)
         max_memory = max(2000, mycc.max_memory - lib.current_memory()[0])
-        blksize = int(max(4, max_memory*.95e6/8/(nvir**3*2)))
+        blksize = int(min(nvir, max(4, max_memory*.95e6/8/(nvir**3*2))))
 
         def block_contract(buf, a0, a1):
             for a in range(a0, a1):
                 contract_tril_(t2new_tril, tau, buf[a-a0], 0, a)
 
         with lib.call_in_background(block_contract) as bcontract:
-            p0 = 0
+            p1 = 0
             outbuf = numpy.empty((blksize,nvir,nvir,nvir))
             outbuf1 = numpy.empty_like(outbuf)
             for a0, a1 in lib.prange(0, nvir, blksize):
                 for a in range(a0, a1):
-                    lib.unpack_tril(eris.vvvv[p0:p0+a+1], out=outbuf[a-a0])
-                    p0 += a+1
+                    p0, p1 = p1, p1 + a+1
+                    lib.unpack_tril(eris.vvvv[p0:p1], out=outbuf[a-a0])
                 bcontract(outbuf, a0, a1)
                 outbuf, outbuf1 = outbuf1, outbuf
                 time0 = logger.timer_debug1(mycc, 'vvvv [%d:%d]'%(a0,a1), *time0)
@@ -585,7 +586,7 @@ def as_scanner(cc):
         >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
     logger.info(cc, 'Set %s as a scanner', cc.__class__)
-    class CCSD_Scanner(cc.__class__):
+    class CCSD_Scanner(cc.__class__, lib.SinglePointScanner):
         def __init__(self, cc):
             self.__dict__.update(cc.__dict__)
             self._scf = cc._scf.as_scanner()
@@ -1166,10 +1167,6 @@ def make_tau(t2, t1a, t1b, fac=1, out=None):
 def make_theta(t2, out=None):
     return _ccsd.make_0132(t2, t2, -1, 2, out)
 
-def prange(start, end, step):
-    for i in range(start, end, step):
-        yield i, min(i+step, end)
-
 def _cp(a):
     return numpy.array(a, copy=False, order='C')
 
@@ -1221,7 +1218,7 @@ if __name__ == '__main__':
     rhf = scf.RHF(mol)
     rhf.scf() # -76.0267656731
 
-    mcc = CCSD(rhf.density_fit())
+    mcc = CCSD(rhf.density_fit(auxbasis='weigend'))
     eris = mcc.ao2mo()
     emp2, t1, t2 = mcc.init_amps(eris)
     print(abs(t2).sum() - 4.9497459404635027)

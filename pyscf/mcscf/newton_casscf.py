@@ -433,9 +433,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     if casscf.ncas == nmo and not casscf.internal_rotation:
         if casscf.canonicalization:
             log.debug('CASSCF canonicalization')
-            mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
+            mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris,
+                                                        casscf.sorting_mo_energy,
                                                         casscf.natorb, verbose=log)
-            return True, e_tot, e_ci, fcivec, mo, mo_energy
+        return True, e_tot, e_ci, fcivec, mo, mo_energy
 
     casdm1 = casscf.fcisolver.make_rdm1(fcivec, casscf.ncas, casscf.nelecas)
     if conv_tol_grad is None:
@@ -490,9 +491,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     if casscf.canonicalization:
         log.info('CASSCF canonicalization')
         mo, fcivec, mo_energy = \
-                casscf.canonicalize(mo, fcivec, eris, False, casscf.natorb, casdm1, log)
+                casscf.canonicalize(mo, fcivec, eris, casscf.sorting_mo_energy,
+                                    casscf.natorb, casdm1, log)
         if casscf.natorb: # dump_chk may save casdm1
-            occ, ucas = casscf._eig(-casdm1, ncore, nocc)[0]
+            occ, ucas = casscf._eig(-casdm1, ncore, nocc)
             casdm1 = -occ
 
     if dump_chk:

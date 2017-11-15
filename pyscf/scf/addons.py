@@ -99,7 +99,10 @@ def dynamic_level_shift_(mf, factor=1.):
 dynamic_level_shift = dynamic_level_shift_
 
 def float_occ_(mf):
-    '''for UHF, do not fix the nelec_alpha. determine occupation based on energy spectrum'''
+    '''
+    For UHF, allowing the Sz value being changed during SCF iteration.
+    Determine occupation of alpha and beta electrons based on energy spectrum
+    '''
     from pyscf.scf import uhf
     assert(isinstance(mf, uhf.UHF))
     def get_occ(mo_energy, mo_coeff=None):
@@ -107,15 +110,19 @@ def float_occ_(mf):
         ee = numpy.sort(numpy.hstack(mo_energy))
         n_a = numpy.count_nonzero(mo_energy[0]<(ee[mol.nelectron-1]+1e-3))
         n_b = mol.nelectron - n_a
-        if n_a != mf.nelec[0]:
+        if mf.nelec is None:
+            nelec = mf.mol.nelec
+        else:
+            nelec = mf.nelec
+        if n_a != nelec[0]:
             logger.info(mf, 'change num. alpha/beta electrons '
                         ' %d / %d -> %d / %d',
-                        mf.nelec[0], mf.nelec[1], n_a, n_b)
+                        nelec[0], nelec[1], n_a, n_b)
             mf.nelec = (n_a, n_b)
         return uhf.UHF.get_occ(mf, mo_energy, mo_coeff)
     mf.get_occ = get_occ
     return mf
-float_occ = float_occ_
+dynamic_sz_ = float_occ = float_occ_
 
 def symm_allow_occ_(mf, tol=1e-3):
     '''search the unoccupied orbitals, choose the lowest sets which do not
@@ -278,9 +285,20 @@ def remove_linear_dep_(mf, threshold=1e-8):
     return mf
 remove_linear_dep = remove_linear_dep_
 
-def convert_to_uhf(mf, out=None):
+def convert_to_uhf(mf, out=None, convert_df=None):
     '''Convert the given mean-field object to the corresponding unrestricted
     HF/KS object
+
+    Args:
+        mf : SCF object
+
+    Kwargs
+        convert_df : bool
+            Whether to convert the DF-SCF object to the normal SCF object.
+            This conversion is not applied by default.
+
+    Returns:
+        An unrestricted SCF object
     '''
     from pyscf import scf
     from pyscf import dft
@@ -300,7 +318,6 @@ def convert_to_uhf(mf, out=None):
             out.__dict.__update(mf)
         else:  # RHF
             out = update_mo_(mf, out)
-        return out
 
     else:
         hf_class = {scf.hf.RHF        : scf.uhf.UHF,
@@ -326,7 +343,7 @@ def convert_to_uhf(mf, out=None):
                   'UHF object is unsafe.\nIt is recommended to create a '
                   'decorated UHF object explicitly and pass it to '
                   'convert_to_uhf function eg:\n'
-                  '    convert_to_uhf(mf, out=density_fit(scf.UHF(mol)))\n')
+                  '    convert_to_uhf(mf, out=scf.UHF(mol).density_fit())\n')
             sys.stderr.write(msg)
 # Python resolve the subclass inheritance dynamically based on MRO.  We can
 # change the subclass inheritance order to substitute RHF/RKS with UHF/UKS.
@@ -343,11 +360,36 @@ def convert_to_uhf(mf, out=None):
                 raise RuntimeError('%s object is not SCF object')
             out = update_mo_(mf, lib.overwrite_mro(mf, mronew))
 
-        return out
+    if convert_df is None:
+        if isinstance(mf, scf.newton_ah._CIAH_SCF):
+# To handle the case that mf is newton scf with approximate orbital hessian
+            if hasattr(mf._scf, 'with_df') and mf._scf.with_df:
+                convert_df = False
+            else:
+                # The mf should not be treated as DFHF since the underlying
+                # scf object is regular SCF object
+                convert_df = True
+        else:
+            convert_df = False
+    if convert_df and getattr(out, 'with_df', None):
+        out.with_df = False
 
-def convert_to_rhf(mf, out=None):
+    return out
+
+def convert_to_rhf(mf, out=None, convert_df=None):
     '''Convert the given mean-field object to the corresponding restricted
     HF/KS object
+
+    Args:
+        mf : SCF object
+
+    Kwargs
+        convert_df : bool
+            Whether to convert the DF-SCF object to the normal SCF object.
+            This conversion is not applied by default.
+
+    Returns:
+        An unrestricted SCF object
     '''
     from pyscf import scf
     from pyscf import dft
@@ -367,7 +409,6 @@ def convert_to_rhf(mf, out=None):
             out.__dict.__update(mf)
         else:  # UHF
             out = update_mo_(mf, out)
-        return out
 
     else:
         hf_class = {scf.uhf.UHF      : scf.rohf.ROHF,
@@ -389,7 +430,7 @@ def convert_to_rhf(mf, out=None):
                   'RHF object is unsafe.\nIt is recommended to create a '
                   'decorated RHF object explicitly and pass it to '
                   'convert_to_rhf function eg:\n'
-                  '    convert_to_rhf(mf, out=density_fit(scf.RHF(mol)))\n')
+                  '    convert_to_rhf(mf, out=scf.RHF(mol).density_fit())\n')
             sys.stderr.write(msg)
 # Python resolve the subclass inheritance dynamically based on MRO.  We can
 # change the subclass inheritance order to substitute RHF/RKS with UHF/UKS.
@@ -406,5 +447,19 @@ def convert_to_rhf(mf, out=None):
                 raise RuntimeError('%s object is not SCF object')
             out = update_mo_(mf, lib.overwrite_mro(mf, mronew))
 
-        return out
+    if convert_df is None:
+        if isinstance(mf, scf.newton_ah._CIAH_SCF):
+# To handle the case that mf is newton scf with approximate orbital hessian
+            if hasattr(mf._scf, 'with_df') and mf._scf.with_df:
+                convert_df = False
+            else:
+                # The mf should not be treated as DFHF since the underlying
+                # scf object is regular SCF object
+                convert_df = True
+        else:
+            convert_df = False
+    if convert_df and getattr(out, 'with_df', None):
+        out.with_df = False
+
+    return out
 

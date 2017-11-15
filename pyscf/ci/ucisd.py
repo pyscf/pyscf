@@ -46,6 +46,7 @@ def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8,
                                     lindep=myci.lindep, nroots=myci.nroots,
                                     verbose=verbose)
     if myci.nroots == 1:
+        conv = conv[0]
         ecisd = ecisd[0]
         ci = ci[0]
     return conv, ecisd, ci
@@ -402,7 +403,7 @@ class UCISD(cisd.CISD):
         self.converged, self.e_corr, self.ci = \
                 kernel(self, eris, ci0, max_cycle=self.max_cycle,
                        tol=self.conv_tol, verbose=self.verbose)
-        if self.converged:
+        if numpy.all(self.converged):
             logger.info(self, 'UCISD converged')
         else:
             logger.info(self, 'UCISD not converged')

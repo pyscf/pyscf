@@ -255,6 +255,7 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
 
         \langle \mu | intor | \nu \rangle, \mu \in cell1, \nu \in cell2
     '''
+    intor = cell1._add_suffix(intor)
     intor = moleintor.ascint3(intor)
     if kpts is None:
         if kpt is not None:
@@ -564,9 +565,12 @@ def get_ewald_params(cell, precision=1e-8, gs=None):
         ew_eta, ew_cut : float
             The Ewald 'eta' and 'cut' parameters.
     '''
-    if cell.dimension == 3:
+    if cell.natm == 0:
+        return 0, 0
+    elif cell.dimension == 3:
         if gs is None:
-            gs = 5
+            gs = cell.gs
+        gs = _cut_gs_for_ewald(cell, gs)
         Gmax = min(np.asarray(gs) * lib.norm(cell.reciprocal_vectors(), axis=1))
         log_precision = np.log(precision/(4*np.pi*Gmax**2))
         ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
@@ -578,6 +582,16 @@ def get_ewald_params(cell, precision=1e-8, gs=None):
         ew_cut = cell.rcut
         ew_eta = np.sqrt(max(np.log(4*np.pi*ew_cut**2/precision)/ew_cut**2, .1))
     return ew_eta, ew_cut
+
+# roughly 4 grids per axis
+def _cut_gs_for_ewald(cell, gs):
+    gs = np.copy(gs)
+    gs_max = np.asarray(np.linalg.norm(cell.lattice_vectors(), axis=1) * 2,
+                        dtype=int)
+    gs_max[cell.dimension:] = gs[cell.dimension:]
+    gs_max[gs_max<40] = 40
+    gs[gs>gs_max] = gs_max[gs>gs_max]
+    return gs
 
 def ewald(cell, ew_eta=None, ew_cut=None):
     '''Perform real (R) and reciprocal (G) space Ewald sum for the energy.
@@ -591,6 +605,8 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     See Also:
         pyscf.pbc.gto.get_ewald_params
     '''
+    if cell.natm == 0:
+        return 0
     if ew_eta is None: ew_eta = cell.ew_eta
     if ew_cut is None: ew_cut = cell.ew_cut
     chargs = cell.atom_charges()
@@ -627,7 +643,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     # See also Eq. (32) of ewald.pdf at
     #   http://www.fisica.uniud.it/~giannozz/public/ewald.pdf
 
-    gs = cell.gs
+    gs = _cut_gs_for_ewald(cell, cell.gs)
     Gv, Gvbase, weights = cell.get_Gv_weights(gs)
     absG2 = np.einsum('gi,gi->g', Gv, Gv)
     absG2[absG2==0] = 1e200
@@ -644,8 +660,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
 
 energy_nuc = ewald
 
-
-def make_kpts(cell, nks, wrap_around=False, with_gamma_point=True):
+def make_kpts(cell, nks, wrap_around=False, with_gamma_point=True, scaled_center=None):
     '''Given number of kpoints along x,y,z , generate kpoints
 
     Args:
@@ -656,6 +671,11 @@ def make_kpts(cell, nks, wrap_around=False, with_gamma_point=True):
             To ensure all kpts are in first Brillouin zone.
         with_gamma_point : bool
             Whether to shift Monkhorst-pack grid to include gamma-point.
+        scaled_center : (3,) array
+            Shift all points in the Monkhorst-pack grid to be centered on
+            scaled_center, given as the zeroth index of the returned kpts.
+            Scaled meaning that the k-points are scaled to a grid from 
+            [-1,1] x [-1,1] x [-1,1]
 
     Returns:
         kpts in absolute value (unit 1/Bohr).  Gamma point is placed at the
@@ -667,14 +687,17 @@ def make_kpts(cell, nks, wrap_around=False, with_gamma_point=True):
     '''
     ks_each_axis = []
     for n in nks:
-        if with_gamma_point:
+        if with_gamma_point or scaled_center is not None:
             ks = np.arange(n, dtype=float) / n
         else:
             ks = (np.arange(n)+.5)/n-.5
         if wrap_around:
             ks[ks>=.5] -= 1
         ks_each_axis.append(ks)
+    if scaled_center is None:
+        scaled_center = [0.0,0.0,0.0]
     scaled_kpts = lib.cartesian_prod(ks_each_axis)
+    scaled_kpts += np.array(scaled_center)
     kpts = cell.get_abs_kpts(scaled_kpts)
     return kpts
 
@@ -864,7 +887,7 @@ class Cell(mole.Mole):
 
         if self.rcut is None:
             self.rcut = max([self.bas_rcut(ib, self.precision)
-                             for ib in range(self.nbas)])
+                             for ib in range(self.nbas)] + [0])
 
         _a = self.lattice_vectors()
         if np.linalg.det(_a) < 0 and self.dimension == 3:
@@ -872,7 +895,6 @@ class Cell(mole.Mole):
   Lattice are not in right-handed coordinate system. This can cause wrong value for some integrals.
   It's recommended to resort the lattice vectors to\na = %s\n\n''' % _a[[0,2,1]])
 
-        ke_cutoff is None
         if self.gs is None:
             if self.ke_cutoff is None:
                 ke_cutoff = estimate_ke_cutoff(self, self.precision)

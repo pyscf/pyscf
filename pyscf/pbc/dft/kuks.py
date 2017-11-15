@@ -55,6 +55,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
         vxc += vj[0] + vj[1]
     else:
+        if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
+            ks.with_df._j_only = False
         vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
         vxc += vj[0] + vj[1] - vk * hyb
 
@@ -104,6 +106,8 @@ class KUKS(kuhf.KUHF):
         tot_e = e1 + vhf.ecoul + vhf.exc
         logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
         return tot_e, vhf.ecoul + vhf.exc
+
+    define_xc_ = rks.define_xc_
 
     density_fit = rks._patch_df_beckegrids(kuhf.KUHF.density_fit)
     mix_density_fit = rks._patch_df_beckegrids(kuhf.KUHF.mix_density_fit)

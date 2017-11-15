@@ -121,23 +121,20 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
         mo_coeff = [mo_coeff[k][:,occ>0] * np.sqrt(occ[occ>0])
                     for k, occ in enumerate(mo_occ)]
         ao2_kpts = [np.dot(mo_coeff[k].T, ao) for k, ao in enumerate(ao2_kpts)]
-        naoj = ao2_kpts[0].shape[0]
-    else:
-        naoj = nao
 
     max_memory = mydf.max_memory - lib.current_memory()[0]
-    blksize = int(max(max_memory*1e6/16/2/ngs/nao, 1))
+    blksize = int(min(nao, max_memory*1e6/16/2/ngs/nao+1))
     ao1_dtype = np.result_type(*ao1_kpts)
     ao2_dtype = np.result_type(*ao2_kpts)
-    buf = np.empty((blksize,naoj,ngs), dtype=np.result_type(ao1_dtype, ao2_dtype))
     vR_dm = np.empty((nset,nao,ngs), dtype=vk_kpts.dtype)
-    ao_dms = np.empty((nset,naoj,ngs), dtype=np.result_type(dms, ao2_dtype))
 
     for k2, ao2T in enumerate(ao2_kpts):
+        if ao2T.size == 0:
+            continue
+
         kpt2 = kpts[k2]
         if mo_coeff is None or nset > 1:
-            for i in range(nset):
-                lib.dot(dms[i,k2], ao2T.conj(), c=ao_dms[i])
+            ao_dms = [lib.dot(dms[i,k2], ao2T.conj()) for i in range(nset)]
         else:
             ao_dms = [ao2T.conj()]
 
@@ -151,11 +148,10 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
                 expmikr = np.exp(-1j * np.dot(coords, kpt2-kpt1))
 
             for p0, p1 in lib.prange(0, nao, blksize):
-                rho1 = np.einsum('ig,jg->ijg', ao1T[p0:p1].conj()*expmikr,
-                                 ao2T, out=buf[:p1-p0])
+                rho1 = np.einsum('ig,jg->ijg', ao1T[p0:p1].conj()*expmikr, ao2T)
                 vG = tools.fft(rho1.reshape(-1,ngs), gs)
                 vG *= coulG
-                vR = tools.ifft(vG, gs).reshape(p1-p0,naoj,ngs)
+                vR = tools.ifft(vG, gs).reshape(p1-p0,-1,ngs)
                 vG = None
                 if vR_dm.dtype == np.double:
                     vR = vR.real

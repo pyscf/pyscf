@@ -167,6 +167,16 @@ class KnowValues(unittest.TestCase):
         mc.kernel()
         self.assertAlmostEqual(mc.e_tot, -108.98010545803884, 7)
 
+    def test_init(self):
+        from pyscf.mcscf import df
+        mf = scf.RHF(mol)
+        self.assertTrue(isinstance(mcscf.CASCI(mf, 2, 2), mcscf.casci.CASCI))
+        self.assertTrue(isinstance(mcscf.CASCI(mf.density_fit(), 2, 2), df._DFCASSCF))
+        self.assertTrue(isinstance(mcscf.CASCI(mf.newton(), 2, 2), mcscf.casci.CASCI))
+        self.assertTrue(isinstance(mcscf.CASCI(mf.density_fit().newton(), 2, 2), df._DFCASSCF))
+        self.assertTrue(isinstance(mcscf.CASCI(mf.newton().density_fit(), 2, 2), mcscf.casci.CASCI))
+        self.assertTrue(isinstance(mcscf.CASCI(mf.density_fit().newton().density_fit(), 2, 2), df._DFCASSCF))
+
 
 if __name__ == "__main__":
     print("Full Tests for density fitting N2")

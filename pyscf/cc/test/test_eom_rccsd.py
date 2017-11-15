@@ -46,21 +46,21 @@ mycc1.t1 = r1*1e-5
 mycc1.t2 = r2*1e-5
 
 class KnowValues(unittest.TestCase):
-#    def test_ipccsd(self):
-#        mycc = cc.RCCSD(mf)
-#        ecc, t1, t2 = mycc.kernel()
-#        e,v = mycc.ipccsd(nroots=3)
-#        self.assertAlmostEqual(e[0], 0.4335604332073799, 6)
-#        self.assertAlmostEqual(e[1], 0.5187659896045407, 6)
-#        self.assertAlmostEqual(e[2], 0.6782876002229172, 6)
-#
-#    def test_eaccsd(self):
-#        mycc = cc.RCCSD(mf)
-#        ecc, t1, t2 = mycc.kernel()
-#        e,v = mycc.eaccsd(nroots=3)
-#        self.assertAlmostEqual(e[0], 0.16737886338859731, 6)
-#        self.assertAlmostEqual(e[1], 0.24027613852009164, 6)
-#        self.assertAlmostEqual(e[2], 0.51006797826488071, 6)
+    def test_ipccsd(self):
+        mycc = cc.RCCSD(mf)
+        ecc, t1, t2 = mycc.kernel()
+        e,v = mycc.ipccsd(nroots=3)
+        self.assertAlmostEqual(e[0], 0.4335604332073799, 6)
+        self.assertAlmostEqual(e[1], 0.5187659896045407, 6)
+        self.assertAlmostEqual(e[2], 0.6782876002229172, 6)
+
+    def test_eaccsd(self):
+        mycc = cc.RCCSD(mf)
+        ecc, t1, t2 = mycc.kernel()
+        e,v = mycc.eaccsd(nroots=3)
+        self.assertAlmostEqual(e[0], 0.16737886338859731, 6)
+        self.assertAlmostEqual(e[1], 0.24027613852009164, 6)
+        self.assertAlmostEqual(e[2], 0.51006797826488071, 6)
 
     def test_eeccsd(self):
         mycc = cc.RCCSD(mf)

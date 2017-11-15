@@ -20,6 +20,7 @@ from pyscf.lib import logger
 from pyscf.pbc.scf import hf as pbchf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
+from pyscf.dft.rks import define_xc_
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -45,7 +46,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if kpt is None: kpt = ks.kpt
     t0 = (time.clock(), time.time())
 
-    ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2)
+    ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2
+                    and kpts_band is None)
 
     if ks.grids.coords is None:
         ks.grids.build(with_non0tab=True)
@@ -66,6 +68,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         vj = ks.get_j(cell, dm, hermi, kpt, kpts_band)
         vxc += vj
     else:
+        if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
+            ks.with_df._j_only = False
         vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpts_band)
         vxc += vj - vk * (hyb * .5)
 
@@ -125,6 +129,7 @@ class RKS(pbchf.RHF):
 
     get_veff = get_veff
     energy_elec = pyscf.dft.rks.energy_elec
+    define_xc_ = define_xc_
 
     density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
     mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)

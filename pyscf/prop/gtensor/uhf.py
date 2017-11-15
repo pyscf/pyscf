@@ -78,12 +78,12 @@ def dia(gobj, dm0, gauge_orig=None):
 
     gc1e *= (alpha2/4) / effspin / muB
     if gobj.verbose >= logger.INFO:
-        _write(gobj, align(gc1e)[0], 'GC(1e)')
+        _write(gobj, gobj.align(gc1e)[0], 'GC(1e)')
 
     if gobj.dia_soc2e:
         gc2e = gobj.make_dia_gc2e(dm0, gauge_orig, qed_fac)
         if gobj.verbose >= logger.INFO:
-            _write(gobj, align(gc2e)[0], 'GC(2e)')
+            _write(gobj, gobj.align(gc2e)[0], 'GC(2e)')
     else:
         gc2e = 0
 
@@ -190,7 +190,7 @@ def para(gobj, mo10, mo_coeff, mo_occ, qed_fac=1):
     gpara1e+= numpy.einsum('xji,yij->xy', dm10b, hso1e)
     gpara1e *= 1. / effspin / muB
     if gobj.verbose >= logger.INFO:
-        _write(gobj, align(gpara1e)[0], 'SOC(1e)/OZ')
+        _write(gobj, gobj.align(gpara1e)[0], 'SOC(1e)/OZ')
 
     gpara2e = gobj.make_para_soc2e((dm0a,dm0b), (dm10a,dm10b), qed_fac)
     gpara = gpara1e + gpara2e
@@ -239,7 +239,7 @@ def make_para_soc2e(gobj, dm0, dm10, sso_qed_fac=1):
         gpara2e -= ej - 1.5 * ek
     gpara2e *= (alpha2/4) / effspin / muB
     if gobj.verbose >= logger.INFO:
-        _write(gobj, align(gpara2e)[0], 'SOC(2e)/OZ')
+        _write(gobj, gobj.align(gpara2e)[0], 'SOC(2e)/OZ')
     return gpara2e
 
 
@@ -260,7 +260,7 @@ def para_for_debug(gobj, mo10, mo_coeff, mo_occ, qed_fac=1):
     gpara1e+= numpy.einsum('xji,yij->xy', dm10b, hso1e)
     gpara1e *= 1./effspin / muB
     if gobj.verbose >= logger.INFO:
-        _write(gobj, align(gpara1e)[0], 'SOC(1e)/OZ')
+        _write(gobj, gobj.align(gpara1e)[0], 'SOC(1e)/OZ')
 
     if gobj.para_soc2e:
         h1aa, h1bb = make_h01_soc2e(gobj, mo_coeff, mo_occ, qed_fac)
@@ -268,7 +268,7 @@ def para_for_debug(gobj, mo10, mo_coeff, mo_occ, qed_fac=1):
         gpara2e-= numpy.einsum('xji,yij->xy', dm10b, h1bb)
         gpara2e *= 1./effspin / muB
         if gobj.verbose >= logger.INFO:
-            _write(gobj, align(gpara2e)[0], 'SOC(2e)/OZ')
+            _write(gobj, gobj.align(gpara2e)[0], 'SOC(2e)/OZ')
     else:
         gpara2e = 0
     gpara = gpara1e + gpara2e
@@ -367,22 +367,6 @@ def make_h01_soc2e(gobj, mo_coeff, mo_occ, sso_qed_fac=1):
     hbb = (vjbb - vkbb) * (alpha2/4)
     return haa, hbb
 
-
-def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
-    log = logger.new_logger(mol, verbose=verbose)
-    if gauge_orig is None:
-        # A10_i dot p + p dot A10_i consistents with <p^2 g>
-        # A10_j dot p + p dot A10_j consistents with <g p^2>
-        # A10_j dot p + p dot A10_j => i/2 (rjxp - pxrj) = irjxp
-        log.debug('First-order GIAO Fock matrix')
-        h1 = -.5 * mol.intor('int1e_giao_irjxp', 3)
-        h1 += uhf_nmr.make_h10giao(mol, dm0)
-    else:
-        mol.set_common_origin(gauge_orig)
-        h1 = -.5 * mol.intor('int1e_cg_irxp', 3)
-        h1 = (h1, h1)
-    return h1
-
 def align(gtensor):
     '''Transform the orientation of g-tensor.
     The new orientations are the eigenvector of G matrix (G=g.gT)
@@ -460,15 +444,15 @@ class GTensor(uhf_nmr.NMR):
         self.check_sanity()
         self.dump_flags()
 
-        gdia = self.dia()
-        gpara = self.para(mo10=mo1)
+        gdia = self.dia(self._scf.make_rdm1(), self.gauge_orig)
+        gpara = self.para(mo1, self._scf.mo_coeff, self._scf.mo_occ)
         gshift = gpara + gdia
         gtensor = gshift + numpy.eye(3) * lib.param.G_ELECTRON
 
         logger.timer(self, 'g-tensor', *cput0)
         if self.verbose >= logger.NOTE:
             logger.note(self, 'free electron g %s', lib.param.G_ELECTRON)
-            gtot, v = align(gtensor)
+            gtot, v = self.align(gtensor)
             gdia = reduce(numpy.dot, (v.T, gdia, v))
             gpara = reduce(numpy.dot, (v.T, gpara, v))
             gshift = gtot - numpy.eye(3) * lib.param.G_ELECTRON

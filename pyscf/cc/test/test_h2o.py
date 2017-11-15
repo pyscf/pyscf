@@ -141,6 +141,34 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(cc_scanner(mol), -76.240108935038691, 7)
         self.assertAlmostEqual(cc_scanner(mol1), -76.228972886940639, 7)
 
+    def test_init(self):
+        from pyscf.cc import ccsd
+        from pyscf.cc import uccsd
+        from pyscf.cc import dfccsd
+        self.assertTrue(isinstance(cc.CCSD(mf), ccsd.CCSD))
+        self.assertTrue(isinstance(cc.CCSD(mf.density_fit()), dfccsd.RCCSD))
+        self.assertTrue(isinstance(cc.CCSD(mf.newton()), ccsd.CCSD))
+        self.assertTrue(isinstance(cc.CCSD(mf.density_fit().newton()), dfccsd.RCCSD))
+        self.assertTrue(isinstance(cc.CCSD(mf.newton().density_fit()), ccsd.CCSD))
+        self.assertTrue(not isinstance(cc.CCSD(mf.newton().density_fit()), dfccsd.RCCSD))
+        self.assertTrue(isinstance(cc.CCSD(mf.density_fit().newton().density_fit()), dfccsd.RCCSD))
+
+        self.assertTrue(isinstance(cc.UCCSD(mf), uccsd.UCCSD))
+#        self.assertTrue(isinstance(cc.UCCSD(mf.density_fit()), dfccsd.UCCSD))
+        self.assertTrue(isinstance(cc.UCCSD(mf.newton()), uccsd.UCCSD))
+#        self.assertTrue(isinstance(cc.UCCSD(mf.density_fit().newton()), dfccsd.UCCSD))
+        self.assertTrue(isinstance(cc.UCCSD(mf.newton().density_fit()), uccsd.UCCSD))
+#        self.assertTrue(not isinstance(cc.UCCSD(mf.newton().density_fit()), dfccsd.UCCSD))
+#        self.assertTrue(isinstance(cc.UCCSD(mf.density_fit().newton().density_fit()), dfccsd.UCCSD))
+
+        umf = scf.convert_to_uhf(mf, scf.UHF(mol))
+        self.assertTrue(isinstance(cc.CCSD(umf), uccsd.UCCSD))
+#        self.assertTrue(isinstance(cc.CCSD(umf.density_fit()), dfccsd.UCCSD))
+        self.assertTrue(isinstance(cc.CCSD(umf.newton()), uccsd.UCCSD))
+#        self.assertTrue(isinstance(cc.CCSD(umf.density_fit().newton()), dfccsd.UCCSD))
+        self.assertTrue(isinstance(cc.CCSD(umf.newton().density_fit()), uccsd.UCCSD))
+#        self.assertTrue(not isinstance(cc.CCSD(umf.newton().density_fit()), dfccsd.UCCSD))
+#        self.assertTrue(isinstance(cc.CCSD(umf.density_fit().newton().density_fit()), dfccsd.UCCSD))
 
 if __name__ == "__main__":
     print("Full Tests for H2O")

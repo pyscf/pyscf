@@ -1,11 +1,33 @@
-lib --- Helper functions, parameters, and C functions
-*****************************************************
+lib --- Helper functions, parameters, and C extensions
+******************************************************
 
 .. automodule:: pyscf.lib
  
 
 parameters
 ==========
+
+Some PySCF environment parameters are defined in this module.
+
+Scratch directory
+-----------------
+
+The PySCF scratch directory is specified by :data:`TMPDIR`.  Its default value
+is the same to the system environment variable ``TMPDIR``.  It can be
+overwritten by the system environment variable ``PYSCF_TMPDIR``.
+
+
+.. _max_mem:
+
+Maximum memory
+--------------
+
+The variable :data:`MAX_MEMORY` defines the maximum memory that PySCF can be
+used in the calculation.  Its unit is MB.  The default value is 4000 MB.  It can
+be overwritten by the system environment variable ``PYSCF_MAX_MEMORY``.
+
+.. note:: Some calculations may exceed the max_memory limit, especially
+  when the attribute :attr:`Mole.incore_anyway` was set.
 
 .. automodule:: pyscf.lib.parameters
    :members:

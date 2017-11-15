@@ -9,6 +9,7 @@ from pyscf.pbc.df import mdf_jk
 #from mpi4pyscf.pbc.df import mdf
 #from mpi4pyscf.pbc.df import mdf_jk
 pyscf.pbc.DEBUG = False
+mdf.df.LINEAR_DEP_THR = 1e-7
 
 L = 5.
 n = 5
@@ -41,8 +42,8 @@ class KnowValues(unittest.TestCase):
         vj, vk = mf.get_jk(cell, dm)
         ej1 = numpy.einsum('ij,ji->', vj, dm)
         ek1 = numpy.einsum('ij,ji->', vk, dm)
-        self.assertAlmostEqual(ej1, 46.698952864035398, 8)
-        self.assertAlmostEqual(ek1, 31.724297969652138, 8)
+        self.assertAlmostEqual(ej1, 46.698950904264514, 8)
+        self.assertAlmostEqual(ek1, 31.724297945923094, 8)
 
         numpy.random.seed(12)
         nao = cell.nao_nr()
@@ -51,8 +52,8 @@ class KnowValues(unittest.TestCase):
         vj1, vk1 = mf.get_jk(cell, dm, hermi=0)
         ej1 = numpy.einsum('ij,ji->', vj1, dm)
         ek1 = numpy.einsum('ij,ji->', vk1, dm)
-        self.assertAlmostEqual(ej1, 242.19367653513683, 8)
-        self.assertAlmostEqual(ek1, 280.28452000317401, 8)
+        self.assertAlmostEqual(ej1, 242.19379703364774, 8)
+        self.assertAlmostEqual(ek1, 280.28450527230103, 8)
 
         numpy.random.seed(1)
         kpt = numpy.random.random(3)
@@ -62,8 +63,8 @@ class KnowValues(unittest.TestCase):
         vj, vk = mydf.get_jk(dm, 1, kpt)
         ej1 = numpy.einsum('ij,ji->', vj, dm)
         ek1 = numpy.einsum('ij,ji->', vk, dm)
-        self.assertAlmostEqual(ej1, 241.29943526257165+0j, 8)
-        self.assertAlmostEqual(ek1, 691.76856392279456+0j, 8)
+        self.assertAlmostEqual(ej1, 241.29955504573206+0j, 8)
+        self.assertAlmostEqual(ek1, 691.76854602384913+0j, 8)
 
     def test_jk_hermi0(self):
         numpy.random.seed(12)
@@ -77,8 +78,8 @@ class KnowValues(unittest.TestCase):
         vj0, vk0 = jkdf.get_jk(dm, hermi=0, exxdiv=None)
         ej0 = numpy.einsum('ij,ji->', vj0, dm)
         ek0 = numpy.einsum('ij,ji->', vk0, dm)
-        self.assertAlmostEqual(ej0, 242.1884365696942 , 8)
-        self.assertAlmostEqual(ek0, 280.70983914362148, 8)
+        self.assertAlmostEqual(ej0, 242.18855706416096, 8)
+        self.assertAlmostEqual(ek0, 280.70982164657647, 8)
 
     def test_j_kpts(self):
         numpy.random.seed(1)
@@ -91,10 +92,10 @@ class KnowValues(unittest.TestCase):
         mydf.eta = 0.3
         mydf.auxbasis = 'weigend'
         vj = mdf_jk.get_j_kpts(mydf, dm, 1, mydf.kpts)
-        self.assertAlmostEqual(finger(vj[0]), (0.48230415575983976-0.11872598167125974j  ), 9)
-        self.assertAlmostEqual(finger(vj[1]), (0.5407644169168595 -0.046133570735630479j ), 9)
-        self.assertAlmostEqual(finger(vj[2]), (0.52809528766575564-0.083705362039349793j ), 9)
-        self.assertAlmostEqual(finger(vj[3]), (0.54354803346388358+0.0088438282782892438j), 9)
+        self.assertAlmostEqual(finger(vj[0]), (0.48227579581461733-0.11872579745444795j ), 9)
+        self.assertAlmostEqual(finger(vj[1]), (0.54073632897787327-0.046133464893148166j), 9)
+        self.assertAlmostEqual(finger(vj[2]), (0.52806708811400505-0.083705157508446218j), 9)
+        self.assertAlmostEqual(finger(vj[3]), (0.5435189277058412 +0.008843567739405876j), 9)
 
     def test_k_kpts(self):
         numpy.random.seed(1)
@@ -108,10 +109,10 @@ class KnowValues(unittest.TestCase):
         mydf.exxdiv = None
         mydf.auxbasis = 'weigend'
         vk = mdf_jk.get_k_kpts(mydf, dm, 0, mydf.kpts)
-        self.assertAlmostEqual(finger(vk[0]), (-2.8420690776723045-1.0520032225121236j ), 9)
-        self.assertAlmostEqual(finger(vk[1]), (-7.4484073115981797+0.10323612296501217j), 9)
-        self.assertAlmostEqual(finger(vk[2]), (-2.5801797461394251-1.4470142156560293j ), 9)
-        self.assertAlmostEqual(finger(vk[3]), (-0.7965970307738880+0.01197284205213897j), 9)
+        self.assertAlmostEqual(finger(vk[0]), (-2.8420706204318527 -1.0520028601696778j  ), 9)
+        self.assertAlmostEqual(finger(vk[1]), (-7.4484096949300751 +0.10323425122156138j ), 9)
+        self.assertAlmostEqual(finger(vk[2]), (-2.580181288621187  -1.4470150314314312j  ), 9)
+        self.assertAlmostEqual(finger(vk[3]), (-0.79660123464892396+0.011973030805184665j), 9)
 
     def test_k_kpts_1(self):
         cell = pgto.Cell()
@@ -139,14 +140,14 @@ class KnowValues(unittest.TestCase):
         mydf.gs = numpy.asarray((5,)*3)
         mydf.eta = 0.3
         vk = mdf_jk.get_k_kpts(mydf, dm, 0, mydf.kpts)
-        self.assertAlmostEqual(finger(vk[0]), (0.54208542933016868-0.007872205456027688j ), 9)
-        self.assertAlmostEqual(finger(vk[1]), (0.35976730327192064+0.0036055469686364274j), 9)
-        self.assertAlmostEqual(finger(vk[2]), (0.46276307618592205-0.0065043495239945522j), 9)
-        self.assertAlmostEqual(finger(vk[3]), (0.63667731843923825+0.0075118647005158069j), 9)
-        self.assertAlmostEqual(finger(vk[4]), (0.53670632359622705-0.0076423626406581808j), 9)
-        self.assertAlmostEqual(finger(vk[5]), (0.49604543618320496+0.0060590376596186381j), 9)
-        self.assertAlmostEqual(finger(vk[6]), (0.45421052168235398-0.006861624162215172j ), 9)
-        self.assertAlmostEqual(finger(vk[7]), (0.41848054629486886+0.00510967754830822j  ), 9)
+        self.assertAlmostEqual(finger(vk[0]), (0.54208542933016668-0.007872205456027636j ), 9)
+        self.assertAlmostEqual(finger(vk[1]), (0.35976730327192219+0.0036055469686362227j), 9)
+        self.assertAlmostEqual(finger(vk[2]), (0.46276307618592272-0.006504349523994527j ), 9)
+        self.assertAlmostEqual(finger(vk[3]), (0.63667731843923825+0.0075118647005158034j), 9)
+        self.assertAlmostEqual(finger(vk[4]), (0.53670632359622572-0.00764236264065816j  ), 9)
+        self.assertAlmostEqual(finger(vk[5]), (0.4960454361832054 +0.0060590376596187257j), 9)
+        self.assertAlmostEqual(finger(vk[6]), (0.45421052168235576-0.006861624162215218j ), 9)
+        self.assertAlmostEqual(finger(vk[7]), (0.41848054629487041+0.0051096775483082746j), 9)
 
     def test_k_kpts_2(self):
         cell = pgto.Cell()
@@ -174,14 +175,14 @@ class KnowValues(unittest.TestCase):
         dm = numpy.random.random((8,nao,nao))
         dm = dm + dm.transpose(0,2,1)
         vk = mdf_jk.get_k_kpts(mydf, dm, 1, mydf.kpts)
-        self.assertAlmostEqual(finger(vk[0]), (1.0938028454012594 -0.014742352047969667j), 9)
-        self.assertAlmostEqual(finger(vk[1]), (0.72086205228976086+0.008685417852198991j), 9)
-        self.assertAlmostEqual(finger(vk[2]), (0.89846608130483663-0.011091006902191652j), 9)
-        self.assertAlmostEqual(finger(vk[3]), (1.2603022679372518 +0.015976908047169988j), 9)
-        self.assertAlmostEqual(finger(vk[4]), (1.0490207113210683 -0.0124264368209042j  ), 9)
-        self.assertAlmostEqual(finger(vk[5]), (0.99252601243537519+0.012694645170333901j), 9)
-        self.assertAlmostEqual(finger(vk[6]), (0.92165252496655681-0.012036431811316016j), 9)
-        self.assertAlmostEqual(finger(vk[7]), (0.85167195537980778+0.010089165459944104j), 9)
+        self.assertAlmostEqual(finger(vk[0]), (1.0938028454012594 -0.014742352047969521j), 9)
+        self.assertAlmostEqual(finger(vk[1]), (0.72086205228975953+0.008685417852198867j), 9)
+        self.assertAlmostEqual(finger(vk[2]), (0.89846608130483796-0.011091006902191843j), 9)
+        self.assertAlmostEqual(finger(vk[3]), (1.260302267937254  +0.015976908047169756j), 9)
+        self.assertAlmostEqual(finger(vk[4]), (1.0490207113210688 -0.012426436820904021j), 9)
+        self.assertAlmostEqual(finger(vk[5]), (0.99252601243537697+0.012694645170334074j), 9)
+        self.assertAlmostEqual(finger(vk[6]), (0.92165252496655681-0.012036431811316108j), 9)
+        self.assertAlmostEqual(finger(vk[7]), (0.85167195537981   +0.010089165459944484j), 9)
 
 
 if __name__ == '__main__':

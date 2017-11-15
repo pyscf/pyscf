@@ -25,16 +25,13 @@ simplify the input.
 
 Beyond the basic parameters :attr:`atom` and :attr:`basis`, one needs to set the unit cell
 lattice vectors :attr:`a` (a 3x3 array, where each row is a real-space primitive vector)
-and the number of positive grid points in the FFT-mesh in each direction :attr:`gs` (a
-length-3 list or 1x3 array); the total number of grid points is 2 :attr:`gs` +1.  Many
-integrals in the PBC code are evaluated in reciprocal space, following collocation on a
-real-space grid and subsequent FFT.  The :attr:`gs` values thus serve as a convergence
-parameter in all calculations. 
+and the numbers of grid points in the FFT-mesh in each positive direction :attr:`gs` (a
+length-3 list or 1x3 array); the total number of grid points is 2 :attr:`gs` +1.
 
-In certain cases, it is convenient to choose the FFT-mesh density based on a kinetic
+In certain cases, it is convenient to choose the FFT-mesh density based on the kinetic
 energy cutoff.  The :class:`Cell` class offers an alternative attribute
 :attr:`ke_cutoff` that can be used to set the FFT-mesh.  If :attr:`ke_cutoff` is set and
-:attr:`gs` is blank, the :class:`Cell` initialization function will convert the
+:attr:`gs` is ``None``, the :class:`Cell` initialization function will convert the
 :attr:`ke_cutoff` to the equivalent FFT-mesh 
 according to the relation :math:`\mathbf{g} = \frac{\sqrt{2E_{\mathrm{cut}}}}{2\pi}\mathbf{a}^T`
 and will overwrite the :attr:`gs` attribute.

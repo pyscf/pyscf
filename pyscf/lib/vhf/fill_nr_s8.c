@@ -98,16 +98,14 @@ static void store_ij(int (*intor)(), double *eri, double *buf, int ish, int jsh,
         } }
 }
 
-void GTO2e_cart_or_sph(int (*intor)(), double *eri, int *ao_loc,
+void GTO2e_cart_or_sph(int (*intor)(), CINTOpt *cintopt, double *eri, int *ao_loc,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int nao = ao_loc[nbas];
-        CINTOpt *cintopt;
-        int2e_optimizer(&cintopt, atm, natm, bas, nbas, env);
         IntorEnvs envs = {natm, nbas, atm, bas, env, NULL, ao_loc, NULL,
                 cintopt, 1};
         CVHFOpt *vhfopt;
-        CVHFnr_optimizer(&vhfopt, atm, natm, bas, nbas, env);
+        CVHFnr_optimizer(&vhfopt, intor, cintopt, ao_loc, atm, natm, bas, nbas, env);
         vhfopt->fprescreen = CVHFnr_schwarz_cond;
         int shls_slice[] = {0, nbas};
         const int di = GTOmax_shell_dim(ao_loc, shls_slice, 1);
@@ -127,8 +125,6 @@ void GTO2e_cart_or_sph(int (*intor)(), double *eri, int *ao_loc,
         }
         free(buf);
 }
-
         CVHFdel_optimizer(&vhfopt);
-        CINTdel_optimizer(&cintopt);
 }
 

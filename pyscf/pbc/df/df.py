@@ -37,7 +37,7 @@ from pyscf.pbc.df.aft import estimate_eta, get_nuc
 from pyscf.pbc.df.df_jk import zdotCN, zdotNN, zdotNC
 from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, member, unique
 
-LINEAR_DEP_THR = 1e-7
+LINEAR_DEP_THR = 1e-9
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
     auxcell = addons.make_auxmol(cell, auxbasis)
@@ -82,13 +82,13 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
     auxcell.rcut = max(rcut)
 
     auxcell._bas = numpy.asarray(auxcell._bas[steep_shls], order='C')
-    logger.debug(cell, 'Drop %d primitive fitting functions', ndrop)
-    logger.debug(cell, 'make aux basis, num shells = %d, num cGTOs = %d',
-                 auxcell.nbas, auxcell.nao_nr())
-    logger.debug(cell, 'auxcell.rcut %s', auxcell.rcut)
+    logger.info(cell, 'Drop %d primitive fitting functions', ndrop)
+    logger.info(cell, 'make aux basis, num shells = %d, num cGTOs = %d',
+                auxcell.nbas, auxcell.nao_nr())
+    logger.info(cell, 'auxcell.rcut %s', auxcell.rcut)
     return auxcell
 
-def make_modchg_basis(auxcell, smooth_eta, l_max=3):
+def make_modchg_basis(auxcell, smooth_eta):
 # * chgcell defines smooth gaussian functions for each angular momentum for
 #   auxcell. The smooth functions may be used to carry the charge
     chgcell = copy.copy(auxcell)  # smooth model density for coulomb integral to carry charge
@@ -97,16 +97,16 @@ def make_modchg_basis(auxcell, smooth_eta, l_max=3):
     chg_env = [smooth_eta]
     ptr_eta = auxcell._env.size
     ptr = ptr_eta + 1
+    l_max = auxcell._bas[:,gto.ANG_OF].max()
 # _gaussian_int(l*2+2) for multipole integral:
 # \int (r^l e^{-ar^2} * Y_{lm}) (r^l Y_{lm}) r^2 dr d\Omega
     norms = [half_sph_norm/gto.mole._gaussian_int(l*2+2, smooth_eta)
              for l in range(l_max+1)]
     for ia in range(auxcell.natm):
         for l in set(auxcell._bas[auxcell._bas[:,gto.ATOM_OF]==ia, gto.ANG_OF]):
-            if l <= l_max:
-                chg_bas.append([ia, l, 1, 1, 0, ptr_eta, ptr, 0])
-                chg_env.append(norms[l])
-                ptr += 1
+            chg_bas.append([ia, l, 1, 1, 0, ptr_eta, ptr, 0])
+            chg_env.append(norms[l])
+            ptr += 1
 
     chgcell._atm = auxcell._atm
     chgcell._bas = numpy.asarray(chg_bas, dtype=numpy.int32).reshape(-1,gto.BAS_SLOTS)
@@ -123,7 +123,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     t1 = (time.clock(), time.time())
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
-    fused_cell, fuse = fuse_auxcell(mydf, auxcell)#, 0)
+    fused_cell, fuse = fuse_auxcell(mydf, auxcell)
     outcore.aux_e2(cell, fused_cell, cderi_file, 'int3c2e_sph', aosym='s2',
                    kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
     t1 = log.timer_debug1('3c2e', *t1)
@@ -147,7 +147,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     feri = h5py.File(cderi_file)
 
 # An alternative method to evalute j2c. This method might have larger numerical error?
-#    chgcell = make_modchg_basis(auxcell, mydf.eta, 0)
+#    chgcell = make_modchg_basis(auxcell, mydf.eta)
 #    for k, kpt in enumerate(uniq_kpts):
 #        aoaux = ft_ao.ft_ao(chgcell, Gv, None, b, gxyz, Gvbase, kpt).T
 #        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, gs))
@@ -215,9 +215,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             w, v = scipy.linalg.eigh(j2c)
             log.debug('DF metric linear dependency for kpt %s', uniq_kptji_id)
             log.debug('cond = %.4g, drop %d bfns',
-                      w[0]/w[-1], numpy.count_nonzero(w<LINEAR_DEP_THR))
-            v = v[:,w>LINEAR_DEP_THR].T.conj()
-            v /= numpy.sqrt(w[w>LINEAR_DEP_THR]).reshape(-1,1)
+                      w[-1]/w[0], numpy.count_nonzero(w<mydf.linear_dep_threshold))
+            v = v[:,w>mydf.linear_dep_threshold].T.conj()
+            v /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)
             j2c = v
             j2ctag = 'eig'
         naux0 = j2c.shape[0]
@@ -315,8 +315,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     feri.close()
 
 
-class DF(aft.AFTDF):
-    '''Gaussian and planewaves mixed density fitting
+class GDF(aft.AFTDF):
+    '''Gaussian density fitting
     '''
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
         self.cell = cell
@@ -343,12 +343,22 @@ class DF(aft.AFTDF):
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
         self.auxcell = None
         self.blockdim = 240
+        self.linear_dep_threshold = LINEAR_DEP_THR
         self._j_only = False
 # If _cderi_to_save is specified, the 3C-integral tensor will be saved in this file.
         self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
 # If _cderi is specified, the 3C-integral tensor will be read from this file
         self._cderi = None
         self._keys = set(self.__dict__.keys())
+
+    @property
+    def auxbasis(self):
+        return self._auxbasis
+    @auxbasis.setter
+    def auxbasis(self, x):
+        self._auxbasis = x
+        self.auxcell = None
+        self._cderi = None
 
     def dump_flags(self, log=None):
         log = logger.new_logger(self, log)
@@ -569,9 +579,11 @@ class DF(aft.AFTDF):
         with addons.load(self._cderi, 'j3c/0') as feri:
             return feri.shape[0]
 
+DF = GDF
 
-def fuse_auxcell(mydf, auxcell, l_max=3):
-    chgcell = make_modchg_basis(auxcell, mydf.eta, l_max)
+
+def fuse_auxcell(mydf, auxcell):
+    chgcell = make_modchg_basis(auxcell, mydf.eta)
     fused_cell = copy.copy(auxcell)
     fused_cell._atm, fused_cell._bas, fused_cell._env = \
             gto.conc_env(auxcell._atm, auxcell._bas, auxcell._env,
@@ -621,7 +633,7 @@ class _load3c(object):
             k_id = member(kptji, kptij_lst)
             if len(k_id) == 0:
                 raise RuntimeError('%s for kpts %s is not initialized.\n'
-                                   'Reset attribute .kpts then call '
+                                   'You need to update the attribute .kpts then call '
                                    '.build() to initialize %s.'
                                    % (self.label, kpti_kptj, self.label))
             dat = self.feri['%s/%d' % (self.label, k_id[0])]

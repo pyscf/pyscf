@@ -2,7 +2,7 @@
 
 '''
 This example covers different ways to input basis
-1. One basis set for all elements.
+1. A universal basis set for all elements.
 2. Different basis for different elements.
 3. Different basis for same elements (different atoms).
 4. Default basis for all elements, except the given basis of specific element.
@@ -67,13 +67,13 @@ mol = gto.M(
 # Comment lines are ignored
 #BASIS SET: (6s,3p) -> [2s,1p]
 O    S
-    130.7093200              0.15432897       
-     23.8088610              0.53532814       
-      6.4436083              0.44463454       
+    130.7093200              0.15432897
+     23.8088610              0.53532814
+      6.4436083              0.44463454
 O    SP
-      5.0331513             -0.09996723             0.15591627       
-      1.1695961              0.39951283             0.60768372       
-      0.3803890              0.70011547             0.39195739       
+      5.0331513             -0.09996723             0.15591627
+      1.1695961              0.39951283             0.60768372
+      0.3803890              0.70011547             0.39195739
                                 '''),
              'H1': basis_file_from_user,
              'H2': gto.load('sto-3g', 'He')  # or use basis of another atom
@@ -132,7 +132,7 @@ mol.basis = {'H': [[0,
                    [1,
                     (1.0000000, 1.0000000),]],
 }
-mol.build()
+mol.build()  # You should see a warning message here since basis set for O is not specified
 
 #
 # Functions gto.basis.load and gto.basis.parse  convert the input to the
@@ -141,13 +141,13 @@ mol.build()
 mol.basis = {'H': gto.basis.load('sto3g', 'H'),
              'O': gto.basis.parse('''
 C    S
-     71.6168370              0.15432897       
-     13.0450960              0.53532814       
-      3.5305122              0.44463454       
+     71.6168370              0.15432897
+     13.0450960              0.53532814
+      3.5305122              0.44463454
 C    SP
-      2.9412494             -0.09996723             0.15591627       
-      0.6834831              0.39951283             0.60768372       
-      0.2222899              0.70011547             0.39195739       
+      2.9412494             -0.09996723             0.15591627
+      0.6834831              0.39951283             0.60768372
+      0.2222899              0.70011547             0.39195739
 ''')}
 mol.build()
 
@@ -159,13 +159,28 @@ mol.build()
 mol.basis = {'H': gto.basis.load('sto3g', 'H'),
              'O': '''
 C    S
-     71.6168370              0.15432897       
-     13.0450960              0.53532814       
-      3.5305122              0.44463454       
+     71.6168370              0.15432897
+     13.0450960              0.53532814
+      3.5305122              0.44463454
 C    SP
-      2.9412494             -0.09996723             0.15591627       
-      0.6834831              0.39951283             0.60768372       
-      0.2222899              0.70011547             0.39195739       
+      2.9412494             -0.09996723             0.15591627
+      0.6834831              0.39951283             0.60768372
+      0.2222899              0.70011547             0.39195739
+'''}
+mol.build()
+
+# Note the rule to unctract basis also works here: If the basis string is
+# prefixed with unc, the basis set will be uncontracted.
+mol.basis = {'H': gto.basis.load('sto3g', 'H'),
+             'O': '''unc
+C    S
+     71.6168370              0.15432897
+     13.0450960              0.53532814
+      3.5305122              0.44463454
+C    SP
+      2.9412494             -0.09996723             0.15591627
+      0.6834831              0.39951283             0.60768372
+      0.2222899              0.70011547             0.39195739
 '''}
 mol.build()
 
@@ -188,13 +203,13 @@ mol = gto.M(
     basis = {'default': ('6-31g', [[0, [.05, 1.]]]),
              'H2': ['sto3g', gto.basis.parse('''
 C    S
-     71.6168370              0.15432897       
-     13.0450960              0.53532814       
-      3.5305122              0.44463454       
+     71.6168370              0.15432897
+     13.0450960              0.53532814
+      3.5305122              0.44463454
 C    SP
-      2.9412494             -0.09996723             0.15591627       
-      0.6834831              0.39951283             0.60768372       
-      0.2222899              0.70011547             0.39195739       
+      2.9412494             -0.09996723             0.15591627
+      0.6834831              0.39951283             0.60768372
+      0.2222899              0.70011547             0.39195739
 ''')]}
 )
 print('nao = ', mol.nao_nr())

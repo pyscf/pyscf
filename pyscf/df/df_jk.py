@@ -64,7 +64,7 @@ def density_fit(mf, auxbasis=None, with_df=None):
         with_df.verbose = mf.verbose
         with_df.auxbasis = auxbasis
 
-    class DFHF(mf_class):
+    class DFHF(mf_class, _DFHF):
         __doc__ = doc + \
         '''
         Attributes for density-fitting SCF:
@@ -125,6 +125,10 @@ def density_fit(mf, auxbasis=None, with_df=None):
                 return False
 
     return DFHF()
+
+# A tag to label the derived SCF class
+class _DFHF:
+    pass
 
 
 def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):

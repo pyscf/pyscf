@@ -205,12 +205,50 @@ C    SP
     def test_parse_pople_basis(self):
         self.assertEqual(len(gto.basis.load('6-31G(d)'      , 'H')), 2)
         self.assertEqual(len(gto.basis.load('6-31G(d)'      , 'C')), 6)
+        self.assertEqual(len(gto.basis.load('6-31Gs'        , 'C')), 6)
+        self.assertEqual(len(gto.basis.load('6-31G*'        , 'C')), 6)
         self.assertEqual(len(gto.basis.load('6-31G(d,p)'    , 'H')), 3)
         self.assertEqual(len(gto.basis.load('6-31G(d,p)'    , 'C')), 6)
         self.assertEqual(len(gto.basis.load('6-31G(2d,2p)'  , 'H')), 4)
         self.assertEqual(len(gto.basis.load('6-31G(2d,2p)'  , 'C')), 7)
         self.assertEqual(len(gto.basis.load('6-31G(3df,3pd)', 'H')), 6)
         self.assertEqual(len(gto.basis.load('6-31G(3df,3pd)', 'C')), 9)
+
+    def test_parse_basis(self):
+        mol = gto.M(atom='''
+                    6        0    0   -0.5
+                    8        0    0    0.5
+                    1        1    0   -1.0
+                    1       -1    0   -1.0''',
+                    basis='''
+#BASIS SET: (3s) -> [2s]
+H    S
+      5.4471780              0.1562849787        
+      0.82454724             0.9046908767        
+H    S
+      0.18319158             1.0000000        
+#BASIS SET: (6s,3p) -> [3s,2p]
+C    S
+    172.2560000              0.0617669        
+     25.9109000              0.3587940        
+      5.5333500              0.7007130        
+C    SP
+      3.6649800             -0.3958970              0.2364600        
+      0.7705450              1.2158400              0.8606190        
+C    SP
+      0.1958570              1.0000000              1.0000000        
+#BASIS SET: (6s,3p) -> [3s,2p]
+O    S
+    322.0370000              0.0592394        
+     48.4308000              0.3515000        
+     10.4206000              0.7076580        
+O    SP
+      7.4029400             -0.4044530              0.2445860        
+      1.5762000              1.2215600              0.8539550        
+O    SP
+      0.3736840              1.0000000              1.0000000        
+''')
+        self.assertTrue(mol.nao_nr() == 22)
 
     def test_remove_prefix_ghost(self):
         self.assertEqual(gto.mole._remove_prefix_ghost('ghost---ho'), 'ho')

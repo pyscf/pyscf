@@ -13,24 +13,24 @@ def lowdin(s):
     ''' new basis is |mu> c^{lowdin}_{mu i} '''
     e, v = scipy.linalg.eigh(s)
     idx = e > 1e-15
-    return numpy.dot(v[:,idx]/numpy.sqrt(e[idx]), v[:,idx].T.conj())
+    return numpy.dot(v[:,idx]/numpy.sqrt(e[idx]), v[:,idx].conj().T)
 
 def schmidt(s):
     c = numpy.linalg.cholesky(s)
     return scipy.linalg.solve_triangular(c, numpy.eye(c.shape[1]), lower=True,
-                                         overwrite_b=False).T.conj()
+                                         overwrite_b=False).conj().T
 
 def vec_lowdin(c, s=1):
     ''' lowdin orth for the metric c.T*s*c and get x, then c*x'''
     #u, w, vh = numpy.linalg.svd(c)
     #return numpy.dot(u, vh)
     # svd is slower than eigh
-    return numpy.dot(c, lowdin(reduce(numpy.dot, (c.T,s,c))))
+    return numpy.dot(c, lowdin(reduce(numpy.dot, (c.conj().T,s,c))))
 
 def vec_schmidt(c, s=1):
     ''' schmidt orth for the metric c.T*s*c and get x, then c*x'''
     if isinstance(s, numpy.ndarray):
-        return numpy.dot(c, schmidt(reduce(numpy.dot, (c.T,s,c))))
+        return numpy.dot(c, schmidt(reduce(numpy.dot, (c.conj().T,s,c))))
     else:
         return numpy.linalg.qr(c)[0]
 
@@ -185,7 +185,7 @@ def pre_orth_ao_atm_scf(mol):
     from pyscf.scf import atom_hf
     atm_scf = atom_hf.get_atm_nrhf(mol)
     nbf = mol.nao_nr()
-    c = numpy.zeros((nbf, nbf))
+    c = numpy.zeros((nbf,nbf))
     p0 = 0
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
@@ -200,7 +200,7 @@ def pre_orth_ao_atm_scf(mol):
     return c
 
 
-def orth_ao(mol, method='meta_lowdin', pre_orth_ao=None, scf_method=None,
+def orth_ao(mf_or_mol, method='meta_lowdin', pre_orth_ao=None, scf_method=None,
             s=None):
     '''Orthogonalize AOs
 
@@ -212,6 +212,14 @@ def orth_ao(mol, method='meta_lowdin', pre_orth_ao=None, scf_method=None,
             | NAO
     '''
     from pyscf.lo import nao
+    mf = scf_method
+    if isinstance(mf_or_mol, gto.Mole):
+        mol = mf_or_mol
+    else:
+        mol = mf_or_mol.mol
+        if mf is None:
+            mf = mf_or_mol
+
     if s is None:
         s = mol.intor_symmetric('int1e_ovlp')
 
@@ -220,10 +228,11 @@ def orth_ao(mol, method='meta_lowdin', pre_orth_ao=None, scf_method=None,
         pre_orth_ao = project_to_atomic_orbitals(mol, 'ANO')
 
     if method.lower() == 'lowdin':
-        s1 = reduce(numpy.dot, (pre_orth_ao.T, s, pre_orth_ao))
+        s1 = reduce(numpy.dot, (pre_orth_ao.conj().T, s, pre_orth_ao))
         c_orth = numpy.dot(pre_orth_ao, lowdin(s1))
     elif method.lower() == 'nao':
-        c_orth = nao.nao(mol, scf_method, s)
+        assert(mf is not None)
+        c_orth = nao.nao(mol, mf, s)
     else: # meta_lowdin: divide ao into core, valence and Rydberg sets,
           # orthogonalizing within each set
         weight = numpy.ones(pre_orth_ao.shape[0])

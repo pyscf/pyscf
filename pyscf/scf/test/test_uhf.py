@@ -181,8 +181,8 @@ class KnowValues(unittest.TestCase):
         mf.scf()
         s, x = mf.det_ovlp(mf.mo_coeff, mf.mo_coeff, mf.mo_occ, mf.mo_occ)
         self.assertAlmostEqual(s, 1.000000000, 9)
-        self.assertAlmostEqual(numpy.trace(x[0]), mf.nelec[0]*1.000000000, 9)
-        self.assertAlmostEqual(numpy.trace(x[0]), mf.nelec[1]*1.000000000, 9)
+        self.assertAlmostEqual(numpy.trace(x[0]), mol.nelec[0]*1.000000000, 9)
+        self.assertAlmostEqual(numpy.trace(x[0]), mol.nelec[1]*1.000000000, 9)
 
     def test_dip_moment(self):
         mf = scf.UHF(mol)

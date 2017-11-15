@@ -50,8 +50,17 @@ def optimize(method, **kwargs):
         log = lib.logger.new_logger(method, kwargs['verbose'])
     else:
         log = lib.logger.new_logger(method)
-    geom = optimize_berny(as_berny_solver(method), to_berny_geom(mol),
-                          log=to_berny_log(log), **kwargs)
+#    geom = optimize_berny(as_berny_solver(method), to_berny_geom(mol),
+#                          log=to_berny_log(log), **kwargs)
+# temporary interface, taken from berny.py optimize function
+    log = to_berny_log(log)
+    solver = as_berny_solver(method)
+    geom = to_berny_geom(mol)
+    next(solver)
+    optimizer = Berny(geom, log=log, **kwargs)
+    for geom in optimizer:
+        energy, gradients = solver.send(list(geom))
+        optimizer.send((energy, gradients))
     mol.set_geom_(geom_to_atom(geom))
     return mol
 kernel = optimize

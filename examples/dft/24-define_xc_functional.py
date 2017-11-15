@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 
 '''
-Input a XC functional which is not defined in the Libxc or XcFun library.
+Input a XC functional which was not implemented in pyscf.
 
 See also
+* The definition of define_xc_ function in pyscf/dft/libxc.py
 * dft.libxc for API of function eval_xc;
 * dft.numint._NumInt class for its methods eval_xc, hybrid_coeff and _xc_type.
   These methods controls the XC functional evaluation;
@@ -22,16 +23,12 @@ mol = gto.M(
     basis = 'ccpvdz')
 
 # half-half exact exchange and GGA functional
-def hybrid_coeff(xc_code, spin=1):
-    return 0.5
-def _xc_type(xc_code):
-    return 'GGA'
 def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
     # A fictitious XC functional to demonstrate the usage
-    rho0, dx, dy, dz = rho[1:4]
+    rho0, dx, dy, dz = rho
     gamma = (dx**2 + dy**2 + dz**2)
-    exc = .1 * rho0**2 + .02 * (gamma+.001)**.5
-    vrho = .1 * 2 * rho0
+    exc = .01 * rho0**2 + .02 * (gamma+.001)**.5
+    vrho = .01 * 2 * rho0
     vgamma = .02 * .5 * (gamma+.001)**(-.5)
     vlapl = None
     vtau = None
@@ -41,9 +38,6 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
     return exc, vxc, fxc, kxc
 
 mf = dft.RKS(mol)
-mf._numint.hybrid_coeff = hybrid_coeff
-mf._numint.eval_xc = eval_xc
-mf._numint._xc_type = _xc_type
-mf.xc = 'My XC'  # optional, only affect the output message
+mf.define_xc_(eval_xc, xctype='GGA', hyb=0.1)
 mf.verbose = 4
 mf.kernel()

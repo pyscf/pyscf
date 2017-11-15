@@ -8,6 +8,7 @@ from pyscf.pbc import scf as pscf
 from pyscf.pbc.df import df
 #from mpi4pyscf.pbc.df import df
 pyscf.pbc.DEBUG = False
+df.LINEAR_DEP_THR = 1e-7
 
 L = 5.
 n = 5
