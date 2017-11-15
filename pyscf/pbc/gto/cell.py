@@ -660,8 +660,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
 
 energy_nuc = ewald
 
-
-def make_kpts(cell, nks, wrap_around=False, with_gamma_point=True):
+def make_kpts(cell, nks, wrap_around=False, with_gamma_point=True, scaled_center=None):
     '''Given number of kpoints along x,y,z , generate kpoints
 
     Args:
@@ -672,6 +671,11 @@ def make_kpts(cell, nks, wrap_around=False, with_gamma_point=True):
             To ensure all kpts are in first Brillouin zone.
         with_gamma_point : bool
             Whether to shift Monkhorst-pack grid to include gamma-point.
+        scaled_center : (3,) array
+            Shift all points in the Monkhorst-pack grid to be centered on
+            scaled_center, given as the zeroth index of the returned kpts.
+            Scaled meaning that the k-points are scaled to a grid from 
+            [-1,1] x [-1,1] x [-1,1]
 
     Returns:
         kpts in absolute value (unit 1/Bohr).  Gamma point is placed at the
@@ -683,14 +687,17 @@ def make_kpts(cell, nks, wrap_around=False, with_gamma_point=True):
     '''
     ks_each_axis = []
     for n in nks:
-        if with_gamma_point:
+        if with_gamma_point or scaled_center is not None:
             ks = np.arange(n, dtype=float) / n
         else:
             ks = (np.arange(n)+.5)/n-.5
         if wrap_around:
             ks[ks>=.5] -= 1
         ks_each_axis.append(ks)
+    if scaled_center is None:
+        scaled_center = [0.0,0.0,0.0]
     scaled_kpts = lib.cartesian_prod(ks_each_axis)
+    scaled_kpts += np.array(scaled_center)
     kpts = cell.get_abs_kpts(scaled_kpts)
     return kpts
 
