@@ -1552,30 +1552,6 @@ class RCCSD(ccsd.CCSD):
         vec_sf = self.amplitudes_to_vector_eomsf(Hr1ab, (Hr2baaa,Hr2aaba))
         return vec_eeS, vec_eeT, vec_sf
 
-    def amplitudes_to_vector(self, t1, t2, out=None):
-        nocc, nvir = t1.shape
-        nov = nocc * nvir
-        size = nov + nocc**2*nvir*(nvir+1)//2
-        vector = np.ndarray(size, t1.dtype, buffer=out)
-        vector[:nov] = t1.ravel()
-        lib.pack_tril(t2.reshape(-1,nvir,nvir), out=vector[nov:])
-        return vector
-
-    def vector_to_amplitudes(self, vector, nmo=None, nocc=None):
-        if nocc is None: nocc = self.nocc
-        if nmo is None: nmo = self.nmo
-        nvir = nmo - nocc
-        nov = nocc * nvir
-        size = nov + nocc**2*nvir*(nvir+1)//2
-        t1 = vector[:nov].copy().reshape((nocc,nvir))
-        t2 = np.zeros((nocc,nocc,nvir,nvir), dtype=vector.dtype)
-        t2tril = vector[nov:size].reshape(nocc**2,nvir*(nvir+1)//2)
-        oidx = np.arange(nocc**2).reshape(nocc,nocc).T.ravel()
-        vtril = np.tril_indices(nvir)
-        lib.takebak_2d(t2.reshape(nocc**2,nvir**2), t2tril, oidx, vtril[1]*nvir+vtril[0])
-        lib.unpack_tril(t2tril, filltriu=0, out=t2)
-        return t1, t2
-
     def vector_to_amplitudes_ee(self, vector):
         return self.vector_to_amplitudes(vector)
 
@@ -2117,3 +2093,10 @@ if __name__ == '__main__':
     print(e[2] - 0.51006797826488071)
 
     mycc.eaccsd_star(e,v,lv)
+
+    print("EE energies... (right eigenvector)")
+    e,v = mycc.eeccsd(nroots=3)
+    print(e)
+    print(e[0] - 0.27571593258034133)
+    print(e[1] - 0.27571593258034133)
+    print(e[2] - 0.27571605072230598)

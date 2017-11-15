@@ -124,7 +124,7 @@ class KnowValues(unittest.TestCase):
 
     def test_eomee_diag(self):
         vec1S, vec1T, vec2 = mycc1.eeccsd_diag()
-        self.assertAlmostEqual(finger(vec1S), 62.028729797614801, 9)
+        self.assertAlmostEqual(finger(vec1S),-4714.9854130015719, 9)
         self.assertAlmostEqual(finger(vec1T), 2221.3155272953709, 9)
         self.assertAlmostEqual(finger(vec2) ,-5486.1611871545592, 9)
 
