@@ -211,8 +211,7 @@ class tddft_iter(scf):
             comegas (1D array, complex): the real part contains the frequencies at which the polarizability
                         should be computed. The imaginary part id the width of the polarizability define as self.eps
             Efield (1D xyz array, real): direction of the external field
-            maxiter (integer): max number of iteration before to exit iteration loop in GMRES
-        
+
         Output Parameters:
         ------------------
             p_avg (1D array, complex): average polarizability
