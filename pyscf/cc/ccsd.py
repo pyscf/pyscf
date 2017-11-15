@@ -542,7 +542,7 @@ def vector_to_amplitudes(vector, nmo, nocc):
     t1 = vector[:nov].copy().reshape((nocc,nvir))
     t2 = lib.unpack_tril(vector[nov:])
     t2 = t2.reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3)
-    return t1, t2
+    return t1, numpy.asarray(t2, order='C')
 
 
 def energy(mycc, t1, t2, eris):
