@@ -13,7 +13,7 @@ def run_tddft_iter(calculator, label, freq):
     for iomega,omega in enumerate(omegas):
         pxx_nonin[iomega] = -np.dot(td.apply_rf0(vext[0,:], omega), vext[0,:]).imag
 
-    pxx_inter = td.comp_polariz_inter_xx(omegas).imag
+    pxx_inter = td.comp_polariz_inter(omegas).imag
 
     return pxx_nonin, pxx_inter
 

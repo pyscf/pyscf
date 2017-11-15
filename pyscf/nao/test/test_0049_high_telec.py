@@ -10,7 +10,7 @@ class KnowValues(unittest.TestCase):
   def test_non_inter_polariz(self):
     """ This is non-interacting polarizability TDDFT with SIESTA starting point """
     omegas = np.linspace(0.0,2.0,500)+1j*td.eps
-    pave = -td.comp_polariz_nonin_ave(omegas).imag
+    pave = -td.comp_polariz_nonin(omegas, Efield=np.array([1.0, 1.0, 1.0])).imag
     data = np.array([27.2114*omegas.real, pave])
     np.savetxt('water.tddft_iter.telec-0.03.omega-nonin.pav.txt', data.T, fmt=['%f','%f'])
     data_ref = np.loadtxt(dname+'/water.tddft_iter.telec-0.03.omega-nonin.pav.txt-ref')
@@ -19,7 +19,7 @@ class KnowValues(unittest.TestCase):
   def test_inter_polariz(self):
     """ This is interacting polarizability with SIESTA starting point """
     omegas = np.linspace(0.0,2.0,150)+1j*td.eps
-    pxx = -td.comp_polariz_inter_ave(omegas).imag
+    pxx = -td.comp_polariz_inter(omegas, Efield=np.array([1.0, 1.0, 1.0])).imag
     data = np.array([omegas.real*27.2114, pxx])
     np.savetxt('water.tddft_iter_rpa.telec-0.03.omega.inter.pav.txt', data.T, fmt=['%f','%f'])
     data_ref = np.loadtxt(dname+'/water.tddft_iter_rpa.telec-0.03.omega.inter.pav.txt-ref')
