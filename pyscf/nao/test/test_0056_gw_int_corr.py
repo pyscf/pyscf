@@ -11,6 +11,8 @@ class KnowValues(unittest.TestCase):
     gto_mf = scf.RHF(mol)
     gto_mf.kernel()
     gw = gw_c(mf=gto_mf, gto=mol)
-    gw.correct_ev()
-        
+    sn2eval_gw = np.copy(gw.ksn2e[0,:,gw.nn]).T    
+    gw_corr_int = gw.gw_corr_int(sn2eval_gw)
+    print(gw_corr_int)
+
 if __name__ == "__main__": unittest.main()

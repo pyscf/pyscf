@@ -172,6 +172,7 @@ class bse_iter(tddft_iter):
     p = np.zeros(len(comegas), dtype=self.dtypeComplex)
     for ixyz in range(3):
       for iw,omega in enumerate(comegas):
+        print(ixyz, iw)
         vab = self.apply_l(self.dip_ab[ixyz], omega)
         p[iw] += (vab*self.dip_ab[ixyz]).sum()/3.0
     return p

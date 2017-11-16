@@ -11,6 +11,7 @@ class gw(tddft_iter):
     """ Constructor G0W0 class """
     # how to exclude from the input the dtype and xc_code ?
     tddft_iter.__init__(self, dtype=np.float64, xc_code='RPA', **kw)
+    self.ksn2e_fermi0 = self.ksn2e - self.fermi_energy
     self.xc_code = 'G0W0'
     self.niter_max_ev = kw['niter_max_ev'] if 'niter_max_ev' in kw else 5
     self.nocc_0t = nocc_0t = self.nelectron // (3 - self.nspin)
@@ -106,13 +107,13 @@ class gw(tddft_iter):
         snmw2sf[s,:,:,iw] = einsum('nmp,pq,nmq->nm', nmp2xvx, si0, nmp2xvx)
     return snmw2sf
 
-  def gw_corr_int(self, sn2w):
+  def gw_corr_int(self, sn2w, eps):
     """ This computes an integral part of the GW correction at energies sn2e[spin,len(self.nn)] """
     sn2int = np.zeros_like(sn2w, dtype=self.dtype)
     for s,ww in enumerate(sn2w):
       for n,w in enumerate(ww):
         for m in range(self.norbs):
-          if abs(w-self.ksn2e[0,s,m])<self.dw_excl : continue
+          if abs(w-self.ksn2e[0,s,m])<eps : continue
           sn2int[s,n] -= ((self.dw_ia*self.snmw2sf[s,n,m,:] / (w + 1j*self.ww_ia-self.ksn2e[0,s,m])).sum()/pi).real
     return sn2int
 
@@ -121,39 +122,59 @@ class gw(tddft_iter):
     sn2res = np.zeros_like(sn2w, dtype=self.dtype)
     for s,ww in enumerate(sn2w):
       for n,w in enumerate(ww):
-        lsos = self.lsofs_inside_contour(s,w)
-        
+        lsos = self.lsofs_inside_contour(self.ksn2e_fermi0[0,s,:],w,self.dw_excl)
     return sn2res
-  
-  def lsofs_inside_contour(self, s, w):
+
+  def lsofs_inside_contour(self, ee, w, eps):
     """ 
       Computes number of states the eigen energies of which are located inside an integration contour.
       The integration contour depends on w 
     """ 
     nGamma_pos = 0
     nGamma_neg = 0
-    E = self.ksn2e[0,s,:]
-    for i,e in enumerate(E):
+    for i,e in enumerate(ee):
       zr = e - w
       zi = -np.sign(e-self.fermi_energy)
-      if zr>=self.dw_excl and zi>0 : nGamma_pos = nGamma_pos + 1
-      if abs(zr)<self.dw_excl and zi>0 : nGamma_pos = nGamma_pos + 1
+      if zr>=eps and zi>0 : nGamma_pos +=1
+      if abs(zr)<eps and zi>0 : nGamma_pos +=1
     
-      if zr<=-self.dw_excl and zi<0 : nGamma_neg = nGamma_neg + 1
-      if abs(zr)<self.dw_excl and zi<0 : nGamma_neg = nGamma_neg + 1
-      print(s,w, i,zr,zi, nGamma_pos, nGamma_neg)
-    
-    return nGamma_pos
+      if zr<=-eps and zi<0 : nGamma_neg += 1
+      if abs(zr)<eps and zi<0 : nGamma_neg += 1
+
+    npol = max(nGamma_pos,nGamma_neg)
+    if npol<1: return []
+
+    i2zsc = []
+    ipol = 0
+    for i,e in enumerate(ee):
+      zr = e - w
+      zi = -eps*np.sign(e-self.fermi_energy)
+
+      if zr>=eps and zi>0:
+        ipol += 1
+        if ipol>npol: raise RuntimeError('ipol>npol')
+        i2zsc.append( [zr+1j*zi, i, -1.0] )
+      elif zr<=-eps and zi<0:
+        ipol += 1
+        if ipol>npol: raise RuntimeError('ipol>npol')
+        i2zsc.append( [zr+1j*zi, i, +1.0] )
+      elif abs(zr)<eps and zi>0:
+        ipol += 1
+        if ipol>npol: raise RuntimeError('ipol>npol')
+        i2zsc.append( [zr+1j*zi, i, -0.5] )
+      elif abs(zr)<eps and zi<0:
+        ipol +=1
+        if ipol>npol: raise RuntimeError('ipol>npol')
+        i2zsc.append( [zr+1j*zi, i, +0.5] )
+
+    if ipol!=npol: raise RuntimeError('loop logics incompat???')
+    return i2zsc
 
   
   def correct_ev(self):
     """ This computes the corrections to the eigenvalues """
-    sn2eval_gw = np.copy(self.ksn2e[0,:,self.nn]).T
+    sn2eval_gw = np.copy(self.ksn2e_fermi0[0,:,self.nn]).T
     
-    gw_corr_int = self.gw_corr_int(sn2eval_gw)
-    print(gw_corr_int)
+    gw_corr_int = self.gw_corr_int(sn2eval_gw, self.dw_excl)
     gw_corr_res = self.gw_corr_res(sn2eval_gw)
-    print(gw_corr_res)
     return 0
-    
-  

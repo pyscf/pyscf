@@ -29,6 +29,40 @@ class scf(nao):
     self.pb.init_prod_basis_pp_batch(nao=self, **kw)
     self.kernel = None # I am not initializing it here because different methods need different kernels...
 
+  def plot_contour(self, w=0.0):
+    """
+      Plot contour with poles of Green's function in the self-energy 
+      SelfEnergy(w) = G(w+w')W(w')
+      with respect to w' = Re(w')+Im(w')
+      Poles of G(w+w') are located: w+w'-(E_n-Fermi)+i*eps sign(E_n-Fermi)==0 ==> 
+      w'= (E_n-Fermi) - w -i eps sign(E_n-Fermi)
+    """
+    try :
+      import matplotlib.pyplot as plt
+      from matplotlib.patches import Arc, Arrow 
+    except:
+      print('no matplotlib?')
+      return
+
+    fig,ax = plt.subplots()
+    fe = self.fermi_energy
+    ee = self.mo_energy
+    iee = 0.5-np.array(ee>fe)
+    eew = ee-fe-w
+    ax.plot(eew, iee, 'r.', ms=10.0)
+    pp = list()
+    pp.append(Arc((0,0),4,4,angle=0, linewidth=2, theta1=0, theta2=90, zorder=2, color='b'))
+    pp.append(Arc((0,0),4,4,angle=0, linewidth=2, theta1=180, theta2=270, zorder=2, color='b'))
+    pp.append(Arrow(0,2,0,-4,width=0.2, color='b', hatch='o'))
+    pp.append(Arrow(-2,0,4,0,width=0.2, color='b', hatch='o'))
+    for p in pp: ax.add_patch(p)
+    ax.set_aspect('equal')
+    ax.grid(True, which='both')
+    ax.axhline(y=0, color='k')
+    ax.axvline(x=0, color='k')
+    plt.ylim(-3.0,3.0)
+    plt.show()
+
   def init_mf(self, **kw):
     """ Constructor a self-consistent field calculation class """
     from pyscf.nao import conv_yzx2xyz_c
