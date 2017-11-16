@@ -254,24 +254,18 @@ class tddft_iter(scf):
     return p_avg/3.0
 
 
-  def comp_polariz_nonin_Eext(self, comegas, Eext = np.array([1.0, 0.0, 0.0])):
+  def comp_dens_nonin_along_Eext(self, comegas, Eext = np.array([1.0, 0.0, 0.0])):
     """ 
         Compute a the average non-interacting polarizability along the Eext direction
         for the frequencies comegas.
         
         Input Parameters:
-        -----------------
             comegas (1D array, complex): the real part contains the frequencies at which the polarizability
                         should be computed. The imaginary part id the width of the polarizability define as self.eps
             Eext (1D xyz array, real): direction of the external field
 
-        Output Parameters:
-        ------------------
-            p_avg (1D array, complex): average polarizability along the Eext vector
-                <P> = Eext.P_mat.Eext, where P_mat is the polarizability tensor
 
-        Other Calculated quantity:
-        --------------------------
+        Calculated quantity:
             self.p_mat (complex array, dim: [3, 3, comega.size]): store the (3, 3) polarizability matrix 
                                 [[Pxx, Pxy, Pxz],
                                  [Pyx, Pyy, Pyz],
@@ -283,45 +277,29 @@ class tddft_iter(scf):
     
     self.p0_mat = np.zeros((3, 3, comegas.size), dtype=self.dtypeComplex)
     self.dn0 = np.zeros((3, comegas.size, self.nprod), dtype=self.dtypeComplex)
-    p0_avg = np.zeros(comegas.shape, dtype=self.dtypeComplex)
 
     Edir = Eext/np.dot(Eext, Eext)
 
     vext = np.transpose(self.moms1)
     for xyz, Exyz in enumerate(Edir):
-        if Exyz != 0.0:
-            for iw, comega in enumerate(comegas):
-                self.dn0[xyz, iw, :] = self.apply_rf0(vext[xyz], comega)
+        if Exyz == 0.0: continue
+        for iw, comega in enumerate(comegas):
+            self.dn0[xyz, iw, :] = self.apply_rf0(vext[xyz], comega)
 
-                for xyzp, Exyzp in enumerate(Edir):
-                    if Exyzp != 0.0:
-                        self.p0_mat[xyz, xyzp, iw] = np.dot(self.dn0[xyz, iw, :], 
-                                                            vext[xyzp])
+    self.p0_mat = np.einsum("iwp,jp->ijw", self.dn0, vext)
 
-    for iw, comega in enumerate(comegas):
-        p0_avg[iw] = np.dot(Edir, np.dot(self.p0_mat[:, :, iw], Edir))
-
-    return p0_avg
-
-  def comp_polariz_inter_Eext(self, comegas, Eext = np.array([1.0, 0.0, 0.0]), maxiter=1000):
+  def comp_dens_inter_along_Eext(self, comegas, Eext = np.array([1.0, 0.0, 0.0]), maxiter=1000):
     """ 
         Compute a the average interacting polarizability along the Eext direction
         for the frequencies comegas.
         
         Input Parameters:
-        -----------------
             comegas (1D array, complex): the real part contains the frequencies at which the polarizability
                         should be computed. The imaginary part id the width of the polarizability define as self.eps
             Eext (1D xyz array, real): direction of the external field
             maxiter (integer): max number of iteration before to exit iteration loop in GMRES
         
-        Output Parameters:
-        ------------------
-            p_avg (1D array, complex): average polarizability
-                <P> = Eext.P_mat.Eext, where P_mat is the polarizability tensor
-
         Other Calculated quantity:
-        --------------------------
             self.p_mat (complex array, dim: [3, 3, comega.size]): store the (3, 3) polarizability matrix 
                                 [[Pxx, Pxy, Pxz],
                                  [Pyx, Pyy, Pyz],
@@ -333,23 +311,15 @@ class tddft_iter(scf):
     
     self.p_mat = np.zeros((3, 3, comegas.size), dtype=self.dtypeComplex)
     self.dn = np.zeros((3, comegas.size, self.nprod), dtype=self.dtypeComplex)
-    p_avg = np.zeros(comegas.shape, dtype=self.dtypeComplex)
 
     Edir = Eext/np.dot(Eext, Eext)
     
     vext = np.transpose(self.moms1)
     for xyz, Exyz in enumerate(Edir):
-        if Exyz != 0.0:
-            for iw,comega in enumerate(comegas):
-                veff = self.comp_veff(vext[xyz], comega, maxiter=maxiter)
-                self.dn[xyz, iw, :] = self.apply_rf0(veff, comega)
-            
-                for xyzp, Exyzp in enumerate(Edir):
-                    if Exyzp != 0.0:
-                        self.p_mat[xyz, xyzp, iw] = np.dot(vext[xyzp], 
-                                                        self.dn[xyz, iw, :])
-          
-    for iw, comega in enumerate(comegas):
-        p_avg[iw] = np.dot(Edir, np.dot(self.p_mat[:, :, iw], Edir))
+        if Exyz == 0.0: continue
 
-    return p_avg
+        for iw,comega in enumerate(comegas):
+            veff = self.comp_veff(vext[xyz], comega, maxiter=maxiter)
+            self.dn[xyz, iw, :] = self.apply_rf0(veff, comega)
+            
+    self.p_mat = np.einsum("jp,iwp->ijw", vext, self.dn)
