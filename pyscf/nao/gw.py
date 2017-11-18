@@ -11,7 +11,6 @@ class gw(tddft_iter):
     """ Constructor G0W0 class """
     # how to exclude from the input the dtype and xc_code ?
     tddft_iter.__init__(self, dtype=np.float64, xc_code='RPA', **kw)
-    self.ksn2e_fermi0 = self.ksn2e - self.fermi_energy
     self.xc_code = 'G0W0'
     self.niter_max_ev = kw['niter_max_ev'] if 'niter_max_ev' in kw else 5
     self.nocc_0t = nocc_0t = self.nelectron // (3 - self.nspin)
@@ -21,7 +20,7 @@ class gw(tddft_iter):
     self.finish_st = self.nocc_0t+self.nvrt
     self.nn = range(self.start_st, self.finish_st) # list of states to correct?
     self.nff_ia = kw['nff_ia'] if 'nff_ia' in kw else 32
-    self.tol_ia = kw['tol_ia'] if 'tol_ia' in kw else 1e-3
+    self.tol_ia = kw['tol_ia'] if 'tol_ia' in kw else 1e-5
     (wmin_def,wmax_def,tmax_def) = self.get_wmin_wmax_tmax_ia_def(self.tol_ia)
     self.wmin_ia = kw['wmin_ia'] if 'wmin_ia' in kw else wmin_def
     self.wmax_ia = kw['wmax_ia'] if 'wmax_ia' in kw else wmax_def
@@ -122,7 +121,7 @@ class gw(tddft_iter):
     sn2res = np.zeros_like(sn2w, dtype=self.dtype)
     for s,ww in enumerate(sn2w):
       for n,w in enumerate(ww):
-        lsos = self.lsofs_inside_contour(self.ksn2e_fermi0[0,s,:],w,self.dw_excl)
+        lsos = self.lsofs_inside_contour(self.ksn2e[0,s,:],w,self.dw_excl)
     return sn2res
 
   def lsofs_inside_contour(self, ee, w, eps):
@@ -173,7 +172,7 @@ class gw(tddft_iter):
   
   def correct_ev(self):
     """ This computes the corrections to the eigenvalues """
-    sn2eval_gw = np.copy(self.ksn2e_fermi0[0,:,self.nn]).T
+    sn2eval_gw = np.copy(self.ksn2e[0,:,self.nn]).T
     
     gw_corr_int = self.gw_corr_int(sn2eval_gw, self.dw_excl)
     gw_corr_res = self.gw_corr_res(sn2eval_gw)

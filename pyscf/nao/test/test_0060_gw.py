@@ -10,7 +10,11 @@ class KnowValues(unittest.TestCase):
     mol = gto.M( verbose = 1, atom = '''H 0.0 0.0 -0.3707;  H 0.0 0.0 0.3707''', basis = 'cc-pvdz',)
     gto_mf = scf.RHF(mol)
     gto_mf.kernel()
+    print('gto_mf.mo_energy:', gto_mf.mo_energy)
     gw = gw_c(mf=gto_mf, gto=mol)
+    print('       gw.nff_ia:', gw.nff_ia)
+    print('      gw.wmin_ia:', gw.wmin_ia)
+    print('      gw.wmax_ia:', gw.wmax_ia)
     gw.correct_ev()
         
 if __name__ == "__main__": unittest.main()
