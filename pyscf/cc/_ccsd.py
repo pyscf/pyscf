@@ -32,6 +32,11 @@ def make_tau(t2, t1a, t1b, fac=1, out=None):
     return out
 
 def precontract(a, diag_fac=1, out=None):
+    #:n = a.shape[-1]
+    #:aa = a + a.transpose(0,2,1)
+    #:idx = numpy.arange(n)
+    #:aa[:,idx,idx] *= .5*diag_fac
+    #:return lib.pack_tril(aa)
     assert(a.flags.c_contiguous)
     assert(a.ndim == 3)
     count, m = a.shape[:2]

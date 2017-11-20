@@ -183,7 +183,7 @@ def update_amps(mycc, t1, t2, eris):
 
         tau = t2[:,:,p0:p1] + numpy.einsum('ia,jb->ijab', t1[:,p0:p1], t1)
         t2new[:,:,p0:p1] += .5 * einsum('ijkl,klab->ijab', woooo, tau)
-        theta = tau = eris_vovv = None
+        theta = tau = None
 
     ft_ij = foo + numpy.einsum('ja,ia->ij', .5*t1, fov)
     ft_ab = fvv - numpy.einsum('ia,ib->ab', .5*t1, fov)
