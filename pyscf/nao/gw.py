@@ -106,9 +106,10 @@ class gw(tddft_iter):
         snmw2sf[s,:,:,iw] = einsum('nmp,pq,nmq->nm', nmp2xvx, si0, nmp2xvx)
     return snmw2sf
 
-  def gw_corr_int(self, sn2w, eps):
+  def gw_corr_int(self, sn2w, eps=None):
     """ This computes an integral part of the GW correction at energies sn2e[spin,len(self.nn)] """
     sn2int = np.zeros_like(sn2w, dtype=self.dtype)
+    eps = self.dw_excl if eps is None else eps
     for s,ww in enumerate(sn2w):
       for n,w in enumerate(ww):
         for m in range(self.norbs):

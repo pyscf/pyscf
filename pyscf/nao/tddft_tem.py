@@ -132,7 +132,7 @@ class tddft_tem(tddft_iter):
         comp_vext_tem(self, self.pb.prod_log)
         print("sum(V_freq) = ", np.sum(abs(self.V_freq.real)), np.sum(abs(self.V_freq.imag)))
 
-    def comp_tem_spectrum(self, x0=False, maxiter=1000):
+    def comp_tem_spectrum(self, x0=False):
         """ 
         Compute interacting polarizability
 
@@ -160,9 +160,9 @@ class tddft_tem(tddft_iter):
             print("freq = ", iw)
 
             if x0 == True:
-                veff = self.comp_veff(self.V_freq[iw, :], comega, x0=self.dn0[iw, :], maxiter=maxiter)
+                veff = self.comp_veff(self.V_freq[iw, :], comega, x0=self.dn0[iw, :])
             else:
-                veff = self.comp_veff(self.V_freq[iw, :], comega, x0=None, maxiter=maxiter)
+                veff = self.comp_veff(self.V_freq[iw, :], comega, x0=None)
 
             self.dn[iw, :] = self.apply_rf0(veff, comega)
             polariz[iw] = np.dot(np.conj(self.V_freq[iw, :]), self.dn[iw, :])

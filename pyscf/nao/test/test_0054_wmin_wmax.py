@@ -10,7 +10,7 @@ class KnowValues(unittest.TestCase):
     mol = gto.M( verbose = 1, atom = '''H 0 0 0;  H 0.17 0.7 0.587''', basis = 'cc-pvdz',)
     gto_mf = scf.RHF(mol)
     gto_mf.kernel()
-    gw = gw_c(mf=gto_mf, gto=mol)
+    gw = gw_c(mf=gto_mf, gto=mol, tol_ia=1e-3)
     self.assertEqual(gw.nocc, 1)
     self.assertEqual(gw.nvrt, 6)
     self.assertEqual(gw.start_st, 0)
