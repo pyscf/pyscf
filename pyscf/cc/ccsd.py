@@ -1015,47 +1015,45 @@ def _make_df_eris_outcore(mycc, mo_coeff=None):
     nocc = eris.nocc
     nao, nmo = mo_coeff.shape
     nvir = nmo - nocc
+    nvir_pair = nvir*(nvir+1)//2
     orbo = mo_coeff[:,:nocc]
     orbv = mo_coeff[:,nocc:]
     nvpair = nvir * (nvir+1) // 2
     oooo = numpy.zeros((nocc*nocc,nocc*nocc))
-    ooov = numpy.zeros((nocc*nocc,nocc*nvir))
-    ovoo = numpy.zeros((nocc*nvir,nocc*nocc))
-    oovv = numpy.zeros((nocc*nocc,nvir*nvir))
-    ovov = numpy.zeros((nocc*nvir,nocc*nvir))
-    ovvv = numpy.zeros((nocc*nvir,nvpair))
+    vooo = numpy.zeros((nvir*nocc,nocc*nocc))
+    vvoo = numpy.zeros((nvir*nvir,nocc*nocc))
+    voov = numpy.zeros((nvir*nocc,nocc*nvir))
+    vovv = numpy.zeros((nvir*nocc,nvpair))
     vvvv = numpy.zeros((nvir_pair,nvpair))
 
     ijslice = (0, nmo, 0, nmo)
     Lpq = None
-    for eri1 in cc._scf.with_df.loop():
+    for eri1 in mycc._scf.with_df.loop():
         Lpq = _ao2mo.nr_e2(eri1, mo_coeff, ijslice, aosym='s2', out=Lpq).reshape(-1,nmo,nmo)
         Loo = Lpq[:,:nocc,:nocc].reshape(-1,nocc**2)
         Lov = Lpq[:,:nocc,nocc:].reshape(-1,nocc*nvir)
+        Lvo = Lpq[:,nocc:,:nocc].reshape(-1,nocc*nvir)
         Lvv = Lpq[:,nocc:,nocc:].reshape(-1,nvir**2)
         lib.ddot(Loo.T, Loo, 1, oooo, 1)
-        lib.ddot(Loo.T, Lov, 1, ooov, 1)
-        lib.ddot(Lov.T, Loo, 1, ovoo, 1)
-        lib.ddot(Loo.T, Lvv, 1, oovv, 1)
-        lib.ddot(Lov.T, Lov, 1, ovov, 1)
+        lib.ddot(Lvo.T, Loo, 1, vooo, 1)
+        lib.ddot(Lvv.T, Loo, 1, vvoo, 1)
+        lib.ddot(Lvo.T, Lov, 1, voov, 1)
         Lvv = lib.pack_tril(Lvv.reshape(-1,nvir,nvir))
-        lib.ddot(Lov.T, Lvv, 1, ovvv, 1)
+        lib.ddot(Lvo.T, Lvv, 1, vovv, 1)
         lib.ddot(Lvv.T, Lvv, 1, vvvv, 1)
 
     eris.feri1 = lib.H5TmpFile()
     eris.feri1['oooo'] = oooo.reshape(nocc,nocc,nocc,nocc)
-    eris.feri1['ooov'] = ooov.reshape(nocc,nocc,nocc,nvir)
-    eris.feri1['ovoo'] = ovoo.reshape(nocc,nvir,nocc,nocc)
-    eris.feri1['oovv'] = oovv.reshape(nocc,nocc,nvir,nvir)
-    eris.feri1['ovov'] = ovov.reshape(nocc,nvir,nocc,nvir)
-    eris.feri1['ovvv'] = ovvv.reshape(nocc,nvir,nvpair)
+    eris.feri1['vooo'] = vooo.reshape(nvir,nocc,nocc,nocc)
+    eris.feri1['vvoo'] = vvoo.reshape(nvir,nvir,nocc,nocc)
+    eris.feri1['voov'] = voov.reshape(nvir,nocc,nocc,nvir)
+    eris.feri1['vovv'] = vovv.reshape(nvir,nocc,nvpair)
     eris.feri1['vvvv'] = vvvv.reshape(nvir_pair,nvpair)
     eris.oooo = eris.feri1['oooo']
-    eris.ooov = eris.feri1['ooov']
-    eris.ovoo = eris.feri1['ovoo']
-    eris.oovv = eris.feri1['oovv']
-    eris.ovov = eris.feri1['ovov']
-    eris.ovvv = eris.feri1['ovvv']
+    eris.vooo = eris.feri1['vooo']
+    eris.vvoo = eris.feri1['vvoo']
+    eris.voov = eris.feri1['voov']
+    eris.vovv = eris.feri1['vovv']
     eris.vvvv = eris.feri1['vvvv']
     log.timer('CCSD integral transformation', *cput0)
     return eris
@@ -1162,14 +1160,16 @@ if __name__ == '__main__':
     rhf = scf.RHF(mol)
     rhf.scf() # -76.0267656731
 
-    mcc = CCSD(rhf.density_fit(auxbasis='weigend'))
+    mf = rhf.density_fit(auxbasis='weigend')
+    mf._eri = None
+    mcc = CCSD(mf)
     eris = mcc.ao2mo()
     emp2, t1, t2 = mcc.init_amps(eris)
-    print(abs(t2).sum() - 4.9497459404635027)
-    print(emp2 - -0.20378410853394652)
+    print(abs(t2).sum() - 4.9318753386922278)
+    print(emp2 - -0.20401737899811551)
     t1, t2 = update_amps(mcc, t1, t2, eris)
-    print(abs(t1).sum() - 0.04740146211751467)
-    print(abs(t2).sum() - 5.3943058907680506 )
+    print(abs(t1).sum() - 0.046961325647584914)
+    print(abs(t2).sum() - 5.378260578551683   )
 
     mcc = CCSD(rhf)
     eris = mcc.ao2mo()

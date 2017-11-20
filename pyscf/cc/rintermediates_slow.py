@@ -45,7 +45,7 @@ def cc_Fov(t1, t2, eris):
 
 def Loo(t1, t2, eris):
     nocc, nvir = t1.shape
-    fov = eris.fock[:nocc,nocc:]
+    fov = eris.fock[:nocc,nocc:].copy()
     Lki = cc_Foo(t1, t2, eris) + einsum('kc,ic->ki',fov, t1)
     Lki += 2*einsum('kilc,lc->ki', eris.ooov, t1)
     Lki -=   einsum('likc,lc->ki', eris.ooov, t1)
@@ -53,7 +53,7 @@ def Loo(t1, t2, eris):
 
 def Lvv(t1, t2, eris):
     nocc, nvir = t1.shape
-    fov = eris.fock[:nocc,nocc:]
+    fov = eris.fock[:nocc,nocc:].copy()
     Lac = cc_Fvv(t1, t2, eris) - einsum('kc,ka->ac',fov, t1)
     eris_ovvv = np.asarray(eris.vovv).conj().transpose(1,0,3,2)
     Lac += 2*einsum('kdac,kd->ac', eris_ovvv, t1)

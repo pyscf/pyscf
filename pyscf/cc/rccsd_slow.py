@@ -28,9 +28,9 @@ def update_amps(cc, t1, t2, eris):
     nocc, nvir = t1.shape
     fock = eris.fock
 
-    fov = fock[:nocc,nocc:]
-    foo = fock[:nocc,:nocc]
-    fvv = fock[nocc:,nocc:]
+    fov = fock[:nocc,nocc:].copy()
+    foo = fock[:nocc,:nocc].copy()
+    fvv = fock[nocc:,nocc:].copy()
 
     Foo = imd.cc_Foo(t1,t2,eris)
     Fvv = imd.cc_Fvv(t1,t2,eris)
@@ -202,7 +202,7 @@ class RCCSD(ccsd.CCSD):
         return self.e_corr, self.t1, self.t2
 
     def ao2mo(self, mo_coeff=None):
-        return _ERIS(self, mo_coeff)
+        return _ERIs(self, mo_coeff)
 
     energy = energy
     update_amps = update_amps
@@ -926,7 +926,7 @@ class RCCSD(ccsd.CCSD):
         return vector
 
 
-class _ERIS:
+class _ERIs:
     def __init__(self, cc, mo_coeff=None, method='incore',
                  ao2mofn=ao2mo.outcore.general_iofree):
         cput0 = (time.clock(), time.time())
@@ -947,7 +947,6 @@ class _ERIS:
         self.vovo = eri1[nocc:,:nocc,nocc:,:nocc].copy()
         self.vvoo = eri1[nocc:,nocc:,:nocc,:nocc].copy()
         self.voov = eri1[nocc:,:nocc,:nocc,nocc:].copy()
-        self.ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
         self.vovv = eri1[nocc:,:nocc,nocc:,nocc:].copy()
         self.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy()
 
@@ -1078,7 +1077,6 @@ if __name__ == '__main__':
     eris.vovo = eri1[nocc:,:nocc,nocc:,:nocc].copy()
     eris.vvoo = eri1[nocc:,nocc:,:nocc,:nocc].copy()
     eris.voov = eri1[nocc:,:nocc,:nocc,nocc:].copy()
-    eris.ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
     eris.vovv = eri1[nocc:,:nocc,nocc:,nocc:].copy()
     eris.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy()
     a = numpy.random.random((nmo,nmo)) * .1j
@@ -1095,6 +1093,7 @@ if __name__ == '__main__':
     t1a, t2a = update_amps(mycc, t1, t2, eris)
     print(lib.finger(t1a) - (-13.32050019680894-1.8825765910430254j))
     print(lib.finger(t2a) - (-0.056223856104895858+0.025472249329733986j))
+    exit()
 
     mol = gto.Mole()
     mol.atom = [
