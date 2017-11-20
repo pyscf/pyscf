@@ -38,6 +38,7 @@ class tddft_iter(scf):
 
     scf.__init__(self, **kw)
 
+    self.maxiter = kw['maxiter'] if 'maxiter' in kw else 1000
     self.tddft_iter_tol = kw['tddft_iter_tol'] if 'tddft_iter_tol' in kw else 1e-3
     self.eps = kw['iter_broadening'] if 'iter_broadening' in kw else 0.00367493
     self.GPU = GPU = kw['GPU'] if 'GPU' in kw else None
@@ -169,7 +170,7 @@ class tddft_iter(scf):
     else:
         return chi0_mv_gpu(self, v, comega) 
 
-  def comp_veff(self, vext, comega=1j*0.0, x0=None, maxiter=1000):
+  def comp_veff(self, vext, comega=1j*0.0, x0=None):
     #from scipy.sparse.linalg import gmres, lgmres as gmres_alias, LinearOperator
     from scipy.sparse.linalg import lgmres, LinearOperator
     
@@ -178,7 +179,7 @@ class tddft_iter(scf):
     self.comega_current = comega
     veff_op = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)
     resgm, info = lgmres(veff_op, np.require(vext, dtype=self.dtypeComplex, 
-        requirements='C'), x0=x0, tol=self.tddft_iter_tol, maxiter=maxiter)
+        requirements='C'), x0=x0, tol=self.tddft_iter_tol, maxiter=self.maxiter)
     if info != 0:
         print("LGMRES Warning: info = {0}".format(info))
     return resgm
@@ -201,10 +202,45 @@ class tddft_iter(scf):
 
     return v - (matvec_real + 1.0j*matvec_imag)
 
+
+  def kchi0_mv(self, v, comega=None):
+    """ Operator O = K chi0 """
+    self.matvec_ncalls+=1
+    w = self.comega_current if comega is None else comega
+    chi0 = self.apply_rf0(v, w)
+    
+    chi0_reim = np.require(chi0.real, dtype=self.dtype, requirements=["A", "O"])
+    matvec_real = self.spmv(self.nprod, 1.0, self.kernel, chi0_reim, lower=1)
+    
+    chi0_reim = np.require(chi0.imag, dtype=self.dtype, requirements=["A", "O"])
+    matvec_imag = self.spmv(self.nprod, 1.0, self.kernel, chi0_reim, lower=1)
+
+    return (matvec_real + 1.0j*matvec_imag)
+
+  def umkckc_mv(self, v):
+    """ Operator O = [1- K chi0 K chi0] """
+    return v - self.kchi0_mv(self.kchi0_mv(v))
+
+  def upkc_mv(self, v):
+    """ Operator O = [1 + K chi0] """
+    return v + self.kchi0_mv(v)
+
+  def solve_umkckc(self, vext, comega=1j*0.0, x0=None):
+    from scipy.sparse.linalg import lgmres, LinearOperator
+    """ This solves a system of linear equations 
+           (1 - K chi0 K chi0 ) X = vext 
+     or computes 
+           X = (1 - K chi0 K chi0 )^{-1} vext 
+    """
+    assert len(vext)==len(self.moms0), "%r, %r "%(len(vext), len(self.moms0))
+    self.comega_current = comega
+    veff2_op = LinearOperator((self.nprod,self.nprod), matvec=self.umkckc_mv, dtype=self.dtypeComplex)
+    resgm,info = lgmres(veff2_op, np.require(vext, dtype=self.dtypeComplex, requirements='C'), x0=x0, tol=self.tddft_iter_tol, maxiter=self.maxiter)
+    if info != 0:  print("LGMRES Warning: info = {0}".format(info))
+    return resgm
+
   def comp_polariz_nonin_xx(self, comegas):
-    """
-        Compute non interacting polarizability along the xx direction
-    """
+    """  Compute the non interacting polarizability along the xx direction """
     pxx = np.zeros(comegas.shape, dtype=self.dtypeComplex)
 
     vext = np.transpose(self.moms1)
@@ -213,17 +249,39 @@ class tddft_iter(scf):
       pxx[iw] = np.dot(dn0, vext[0])
     return pxx
 
-  def comp_polariz_inter_xx(self, comegas, maxiter=1000):
-    """
-        Compute non interacting polarizability along the xx direction
-    """
+  def comp_polariz_inter_xx(self, comegas):
+    """  Compute the interacting polarizability along the xx direction  """
     pxx = np.zeros(comegas.shape, dtype=self.dtypeComplex)
 
     vext = np.transpose(self.moms1)
     for iw, comega in enumerate(comegas):
-      veff = self.comp_veff(vext[0], comega, maxiter=maxiter)
+      veff = self.comp_veff(vext[0], comega)
       dn = self.apply_rf0(veff, comega)
       pxx[iw] = np.dot(vext[0], dn)
+    return pxx
+
+
+  def polariz_upkc(self, comegas):
+    """ Compute interacting polarizability along the xx direction using an alternative algorighm with chi = chi0 (1+K chi0) [1-K chi0 K chi0]^(-1) """
+    pxx = np.zeros((len(comegas),3), dtype=self.dtypeComplex)
+    vext = np.transpose(self.moms1)
+    for iw, comega in enumerate(comegas):
+      v1 = self.solve_umkckc(vext[0], comega)
+      dn1 = self.apply_rf0(v1, comega)
+      dn2 = self.apply_rf0(self.kchi0_mv(v1), comega)
+      pxx[iw,1] = np.dot(vext[0], dn1)
+      pxx[iw,2] = np.dot(vext[0], dn2)
+      pxx[iw,0] = np.dot(vext[0], dn1+dn2)
+    return pxx
+
+  def polariz_dckcd(self, comegas):
+    """ Compute a term <d chi0 K chi0 d> """
+    pxx = np.zeros(len(comegas), dtype=self.dtypeComplex)
+    vext = np.transpose(self.moms1)
+    for iw, w in enumerate(comegas):
+      v1 = self.kchi0_mv(vext[0], comega=w)
+      dn1 = self.apply_rf0(v1, w)
+      pxx[iw] = np.dot(vext[0], dn1)
     return pxx
 
   def comp_polariz_nonin_ave(self, comegas):
@@ -239,7 +297,7 @@ class tddft_iter(scf):
           p_avg[iw] += np.dot(dn0, vext[xyz])
     return p_avg/3.0
 
-  def comp_polariz_inter_ave(self, comegas, maxiter=1000):
+  def comp_polariz_inter_ave(self, comegas):
     """
         Compute average interacting polarizability
     """
@@ -247,12 +305,13 @@ class tddft_iter(scf):
 
     vext = np.transpose(self.moms1)
     for xyz in range(3):
-        for iw, comega in enumerate(comegas):
-          veff = self.comp_veff(vext[xyz], comega, maxiter=maxiter)
-          dn = self.apply_rf0(veff, comega)
-          p_avg[iw] += np.dot(vext[xyz], dn)
+      for iw, comega in enumerate(comegas):
+        veff = self.comp_veff(vext[xyz], comega)
+        dn = self.apply_rf0(veff, comega)
+        p_avg[iw] += np.dot(vext[xyz], dn)
     return p_avg/3.0
 
+  polariz_inter_ave = comp_polariz_inter_ave
 
   def comp_dens_nonin_along_Eext(self, comegas, Eext = np.array([1.0, 0.0, 0.0])):
     """ 
@@ -288,7 +347,7 @@ class tddft_iter(scf):
 
     self.p0_mat = np.einsum("iwp,jp->ijw", self.dn0, vext)
 
-  def comp_dens_inter_along_Eext(self, comegas, Eext = np.array([1.0, 0.0, 0.0]), maxiter=1000):
+  def comp_dens_inter_along_Eext(self, comegas, Eext = np.array([1.0, 0.0, 0.0])):
     """ 
         Compute a the average interacting polarizability along the Eext direction
         for the frequencies comegas.
@@ -308,7 +367,6 @@ class tddft_iter(scf):
     """
     
     assert Eext.size == 3
-    
     self.p_mat = np.zeros((3, 3, comegas.size), dtype=self.dtypeComplex)
     self.dn = np.zeros((3, comegas.size, self.nprod), dtype=self.dtypeComplex)
 
@@ -316,10 +374,10 @@ class tddft_iter(scf):
     
     vext = np.transpose(self.moms1)
     for xyz, Exyz in enumerate(Edir):
-        if Exyz == 0.0: continue
+      if Exyz == 0.0: continue
 
-        for iw,comega in enumerate(comegas):
-            veff = self.comp_veff(vext[xyz], comega, maxiter=maxiter)
-            self.dn[xyz, iw, :] = self.apply_rf0(veff, comega)
+      for iw,comega in enumerate(comegas):
+        veff = self.comp_veff(vext[xyz], comega)
+        self.dn[xyz, iw, :] = self.apply_rf0(veff, comega)
             
     self.p_mat = np.einsum("jp,iwp->ijw", vext, self.dn)
