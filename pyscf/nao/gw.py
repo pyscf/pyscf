@@ -1,6 +1,6 @@
 from __future__ import print_function, division
 import sys, numpy as np
-from numpy import dot, zeros, einsum, pi, log
+from numpy import dot, zeros, einsum, pi, log, array
 from pyscf.nao import tddft_iter
 from pyscf.nao.m_pack2den import pack2den_u, pack2den_l
 
@@ -14,18 +14,23 @@ class gw(tddft_iter):
     self.xc_code = 'G0W0'
     self.niter_max_ev = kw['niter_max_ev'] if 'niter_max_ev' in kw else 5
     self.nocc_0t = nocc_0t = self.nelectron // (3 - self.nspin)
-    self.nocc = kw['nocc'] if 'nocc' in kw else min(6,nocc_0t)
-    self.nvrt = kw['nvrt'] if 'nvrt' in kw else min(6,self.norbs-nocc_0t)
+    self.nocc = min(kw['nocc'],nocc_0t) if 'nocc' in kw else min(6,nocc_0t)
+    self.nvrt = min(kw['nvrt'],self.norbs-nocc_0t) if 'nvrt' in kw else min(6,self.norbs-nocc_0t)
     self.start_st = self.nocc_0t-self.nocc
     self.finish_st = self.nocc_0t+self.nvrt
     self.nn = range(self.start_st, self.finish_st) # list of states to correct?
+    #print('nocc_0t:', nocc_0t)
+    #print(self.nocc, self.nvrt)
+    #print(self.start_st, self.finish_st)
+    #print('     nn:', self.nn)
     self.nff_ia = kw['nff_ia'] if 'nff_ia' in kw else 32
     self.tol_ia = kw['tol_ia'] if 'tol_ia' in kw else 1e-5
-    (wmin_def,wmax_def,tmax_def) = self.get_wmin_wmax_tmax_ia_def(self.tol_ia)
+    (wmin_def,wmax_def,tmin_def,tmax_def) = self.get_wmin_wmax_tmax_ia_def(self.tol_ia)
     self.wmin_ia = kw['wmin_ia'] if 'wmin_ia' in kw else wmin_def
     self.wmax_ia = kw['wmax_ia'] if 'wmax_ia' in kw else wmax_def
+    self.tmin_ia = kw['tmin_ia'] if 'tmin_ia' in kw else tmin_def
     self.tmax_ia = kw['tmax_ia'] if 'tmax_ia' in kw else tmax_def
-    self.ww_ia,self.tt_ia = log_mesh(self.nff_ia, self.wmin_ia, self.wmax_ia, self.tmax_ia)
+    self.tt_ia,self.ww_ia = log_mesh(self.nff_ia, self.tmin_ia, self.tmax_ia, self.wmax_ia)
     self.dw_ia = self.ww_ia*(log(self.ww_ia[-1])-log(self.ww_ia[0]))/(len(self.ww_ia)-1)
     self.dw_excl = self.ww_ia[0]
     
@@ -50,7 +55,7 @@ class gw(tddft_iter):
     wmax_def = (E_maxdiff**2/tol)**(0.250)
     tmax_def = -log(tol)/ (E_gap)
     tmin_def = -100*log(1.0-tol)/E_maxdiff
-    return wmin_def, wmax_def, tmax_def
+    return wmin_def, wmax_def, tmin_def,tmax_def
 
   def rf0_cmplx_ref(self, ww):
     """ Full matrix response in the basis of atom-centered product functions """
@@ -119,10 +124,18 @@ class gw(tddft_iter):
 
   def gw_corr_res(self, sn2w):
     """ This computes a residue part of the GW correction at energies sn2w[spin,len(self.nn)] """
+    v_pab = self.pb.get_ac_vertex_array()
     sn2res = np.zeros_like(sn2w, dtype=self.dtype)
     for s,ww in enumerate(sn2w):
+      x = self.mo_coeff[0,s,:,:,0]
       for n,w in enumerate(ww):
         lsos = self.lsofs_inside_contour(self.ksn2e[0,s,:],w,self.dw_excl)
+        zww = array([pole[0] for pole in lsos])
+        si_ww = self.si_c(ww=zww)
+        for pole,si in zip(lsos, si_ww.real):
+          XVX_p = einsum('a,pab,b->p', x[pole[1]], v_pab, x[pole[1]])
+          sn2res[s,n] += pole[2]*dot(XVX_p, dot(si, XVX_p))
+        
     return sn2res
 
   def lsofs_inside_contour(self, ee, w, eps):
@@ -175,6 +188,6 @@ class gw(tddft_iter):
     """ This computes the corrections to the eigenvalues """
     sn2eval_gw = np.copy(self.ksn2e[0,:,self.nn]).T
     
-    gw_corr_int = self.gw_corr_int(sn2eval_gw, self.dw_excl)
+    gw_corr_int = self.gw_corr_int(sn2eval_gw)
     gw_corr_res = self.gw_corr_res(sn2eval_gw)
-    return 0
+    return sn2eval_gw + gw_corr_int + gw_corr_res
