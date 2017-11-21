@@ -290,8 +290,8 @@ extensions += [
     make_ext('pyscf.lib.libnp_helper', 'np_helper',
              'condense.c npdot.c omp_reduce.c pack_tril.c transpose.c',
              blas_libraries,
-	     extra_compile_flags=blas_extra_compile_flags,
-	     extra_link_flags=blas_extra_link_flags),
+             extra_compile_flags=blas_extra_compile_flags,
+             extra_link_flags=blas_extra_link_flags),
     make_ext('pyscf.lib.libcgto', 'gto',
              '''fill_int2c.c fill_nr_3c.c fill_r_3c.c fill_int2e.c ft_ao.c
              grid_ao_drv.c fastexp.c deriv1.c deriv2.c nr_ecp.c autocode/auto_eval1.c''',
