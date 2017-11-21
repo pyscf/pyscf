@@ -15,9 +15,9 @@ class KnowValues(unittest.TestCase):
     self.assertEqual(gw.nvrt, 6)
     self.assertEqual(gw.start_st, 0)
     self.assertEqual(gw.finish_st, 7)
-    self.assertAlmostEqual(gw.ww_ia.sum(), 52.365481650361268)
-    self.assertAlmostEqual(gw.tt_ia.sum(), 49.686829875592608)
     self.assertAlmostEqual(gw.wmin_ia, 0.010963536607965261)
     self.assertAlmostEqual(gw.wmax_ia, 10.396997096859502)
+    self.assertAlmostEqual(gw.ww_ia.sum(), 60.588528092301765)
+    self.assertAlmostEqual(gw.tt_ia.sum(), 57.489242777049725)
     
 if __name__ == "__main__": unittest.main()
