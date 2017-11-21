@@ -11,6 +11,7 @@ class gw(tddft_iter):
     """ Constructor G0W0 class """
     # how to exclude from the input the dtype and xc_code ?
     tddft_iter.__init__(self, dtype=np.float64, xc_code='RPA', **kw)
+    self.xc_code_tddft = np.copy(self.xc_code)
     self.xc_code = 'G0W0'
     self.niter_max_ev = kw['niter_max_ev'] if 'niter_max_ev' in kw else 5
     self.nocc_0t = nocc_0t = self.nelectron // (3 - self.nspin)
@@ -38,6 +39,10 @@ class gw(tddft_iter):
     self.kernel_sq = pack2den_l(self.kernel)
     self.v_dab_ds = self.pb.get_dp_vertex_doubly_sparse(axis=2)
     self.snmw2sf = self.sf_gw_corr()
+
+  def get_h0_vh_x_expval(self, tol):
+    lapl = self.laplace_coo()
+    raise RuntimeError('!impl')
     
   def get_wmin_wmax_tmax_ia_def(self, tol):
     from numpy import log, exp, sqrt, where, amin, amax
@@ -128,14 +133,17 @@ class gw(tddft_iter):
     sn2res = np.zeros_like(sn2w, dtype=self.dtype)
     for s,ww in enumerate(sn2w):
       x = self.mo_coeff[0,s,:,:,0]
-      for n,w in enumerate(ww):
+      for nl,(n,w) in enumerate(zip(self.nn,ww)):
         lsos = self.lsofs_inside_contour(self.ksn2e[0,s,:],w,self.dw_excl)
         zww = array([pole[0] for pole in lsos])
         si_ww = self.si_c(ww=zww)
+        xv = dot(v_pab,x[n])
+        #print(n,w)
         for pole,si in zip(lsos, si_ww.real):
-          XVX_p = einsum('a,pab,b->p', x[pole[1]], v_pab, x[pole[1]])
-          sn2res[s,n] += pole[2]*dot(XVX_p, dot(si, XVX_p))
-        
+          xvx = dot(xv, x[pole[1]])
+          contr = dot(xvx, dot(si, xvx))
+          #print(pole[0], pole[2], contr)
+          sn2res[s,nl] += pole[2]*contr
     return sn2res
 
   def lsofs_inside_contour(self, ee, w, eps):

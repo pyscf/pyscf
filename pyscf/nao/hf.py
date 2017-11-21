@@ -1,24 +1,25 @@
 #!/usr/bin/env python
 '''
-Hartree-Fock with numerical atomic orbitals
+Hartree-Fock with numerical atomic orbitals and SCF driver from pySCF
 '''
 
 import sys
 import numpy as np
+from pyscf.nao import scf
 from pyscf.scf import hf
 from pyscf.lib import logger
 
   
 class SCF(hf.SCF):
   '''SCF class adapted for NAOs.'''
-  def __init__(self, sv, pb=None, pseudo=None, **kvargs):
+  def __init__(self, **kw):
     from pyscf.nao.m_prod_basis import prod_basis_c
-    self.sv = sv
+    sv = self.sv = scf(**kw)
     hf.SCF.__init__(self, sv)
     self.direct_scf = False # overriding the attribute from hf.SCF ...
-    self.pb = prod_basis_c().init_prod_basis_pp(sv, **kvargs) if pb is None else pb
-    self.hkernel_den = self.pb.comp_coulomb_den(**kvargs)
-    self.pseudo = hasattr(sv, 'sp2ion') if pseudo is None else pseudo 
+    self.pb = sv.pb
+    self.pseudo = sv.pseudo
+    self.hkernel_den = self.pb.comp_coulomb_den(**kw)
 
   def add_pb_hk(self, **kvargs):
     """ This is adding a product basis attribute to the class and making possible then to compute the matrix elements of Hartree potential or Fock exchange."""

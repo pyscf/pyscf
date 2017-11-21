@@ -1,6 +1,8 @@
 from __future__ import print_function, division
 import sys, numpy as np
 from pyscf.nao import nao, prod_basis_c
+from pyscf.scf import hf
+from pyscf.lib import logger
 
 #
 #
@@ -11,6 +13,7 @@ class scf(nao):
     """ Constructor a self-consistent field calculation class """
     nao.__init__(self, **kw)
     self.dtype = kw['dtype'] if 'dtype' in kw else np.float32
+    self.pseudo = hasattr(self, 'sp2ion') 
     if 'mf' in kw:
       self.init_mf(**kw)
     elif 'label' in kw:
@@ -18,16 +21,16 @@ class scf(nao):
       self.xc_code = 'LDA,PZ' # just a guess...
     elif 'gpaw' in kw:
       self.init_mo_coeff_label(**kw)
-      self.xc_code = 'LDA,PZ' # just a guess, but in case of GPAW there is a field
+      self.xc_code = 'LDA,PZ' # just a guess, but in case of GPAW there is a field...
     elif 'openmx' in kw:
-      self.xc_code = 'LDA,PZ' # just a guess...
+      self.xc_code = 'GGA,PBE' # just a guess...
       pass
     else:
       raise RuntimeError('unknown constructor')
     self.init_libnao()
     self.pb = prod_basis_c()
     self.pb.init_prod_basis_pp_batch(nao=self, **kw)
-    self.kernel = None # I am not initializing it here because different methods need different kernels...
+    # I am not initializing it here because different methods need different kernels...
 
   def plot_contour(self, w=0.0):
     """
@@ -135,8 +138,7 @@ class scf(nao):
         self.init_sv_libnao = True
     else:
         size_x = np.zeros(len(self.wfsx.x.shape), dtype=np.int32)
-        for i, sh in enumerate(self.wfsx.x.shape):
-            size_x[i] = sh
+        for i, sh in enumerate(self.wfsx.x.shape): size_x[i] = sh
 
         data = sv_chain_data(self)
         libnao.init_sv_libnao_orbs.argtypes = (POINTER(c_double), POINTER(c_int64), POINTER(c_int32))
@@ -180,7 +182,7 @@ class scf(nao):
     from pyscf.nao.m_exc import exc
     return exc(self, dm, xc_code, **kw)
 
-  def get_init_guess(self, key=None):
+  def get_init_guess(self, mol=None, key=None):
     """ Compute an initial guess for the density matrix. """
     from pyscf.scf.hf import init_guess_by_minao
     if hasattr(self, 'mol'):

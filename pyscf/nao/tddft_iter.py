@@ -37,7 +37,7 @@ class tddft_iter(scf):
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
 
     scf.__init__(self, **kw)
-
+    self.xc_code_scf = np.copy(self.xc_code)
     self.maxiter = kw['maxiter'] if 'maxiter' in kw else 1000
     self.tddft_iter_tol = kw['tddft_iter_tol'] if 'tddft_iter_tol' in kw else 1e-3
     self.eps = kw['iter_broadening'] if 'iter_broadening' in kw else 0.00367493
