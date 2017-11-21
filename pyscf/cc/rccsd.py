@@ -864,7 +864,9 @@ class RCCSD(ccsd.CCSD):
             raise NotImplementedError
         elif guess:
             for g in guess:
-                if g.size == diag_eeS.size:
+                if g is None:
+                    pass
+                elif g.size == diag_eeS.size:
                     guess_eeS.append(g)
                 elif g.size == diag_eeT.size:
                     guess_eeT.append(g)
@@ -900,10 +902,8 @@ class RCCSD(ccsd.CCSD):
             # The associated solution
             nocc = self.nocc
             nvir = self.nmo - nocc
-            e1 = e1 + e1
-            for i in range(nroots_sf):
-                r1, r2 = self.vector_to_amplitudes_eomsf(v1[i], nocc, nvir)
-                v1.append(self.amplitudes_to_vector_eomsf(-r1, (-r2[0], r2[1])))
+            e1 = list(e1) + list(e1)
+            v1 = list(v1) + [None] * len(v1)
         e = np.hstack([e0,e2,e1])
         v = v0 + v2 + v1
         if nroots == 1:
