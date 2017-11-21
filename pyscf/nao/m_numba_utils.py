@@ -158,3 +158,36 @@ def csphar_numba(r,lmax):
         res[ll2-m]=sgn[m]*np.conj(res[ll2+m])
   
   return res
+
+
+#
+#
+#
+def comp_coeffs_numba(gammin_jt, dg_jt, nr, r, i2coeff):
+    """
+    Interpolation of a function given on the logarithmic mesh (see m_log_mesh how this is defined)
+        6-point interpolation on the exponential mesh (James Talman)
+    Args:
+        r  : radial coordinate for which we want the intepolated value
+    Result: 
+    Array of weights to sum with the functions values to obtain the interpolated value coeff
+    and the index k where summation starts sum(ff[k:k+6]*coeffs)
+    """
+    if r<=0.0:
+        i2coeff[:] = 0.0
+        i2coeff[0] = 1
+        return 0
+
+    lr = np.log(r)
+    k  = int((lr-gammin_jt)/dg_jt)
+    k  = min(max(k,2), nr-4)
+    dy = (lr-gammin_jt-k*dg_jt)/dg_jt
+    
+    i2coeff[0] =     -dy*(dy**2-1.0)*(dy-2.0)*(dy-3.0)/120.0
+    i2coeff[1] = +5.0*dy*(dy-1.0)*(dy**2-4.0)*(dy-3.0)/120.0
+    i2coeff[2] = -10.0*(dy**2-1.0)*(dy**2-4.0)*(dy-3.0)/120.0
+    i2coeff[3] = +10.0*dy*(dy+1.0)*(dy**2-4.0)*(dy-3.0)/120.0
+    i2coeff[4] = -5.0*dy*(dy**2-1.0)*(dy+2.0)*(dy-3.0)/120.0
+    i2coeff[5] =      dy*(dy**2-1.0)*(dy**2-4.0)/120.0
+    
+    return k-2
