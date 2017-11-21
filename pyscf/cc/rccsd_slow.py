@@ -7,7 +7,6 @@ Ref: Stanton et al., J. Chem. Phys. 94, 4334 (1990)
 # note MO integrals are treated in chemist's notation
 
 import time
-import numpy
 import numpy as np
 
 from pyscf import lib
@@ -936,7 +935,7 @@ class _ERIs:
             self.mo_coeff = mo_coeff = ccsd._mo_without_core(cc, mo_coeff)
         dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
         fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
-        self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
+        self.fock = reduce(np.dot, (mo_coeff.T, fockao, mo_coeff))
 
         nocc = cc.nocc
         nmo = cc.nmo
@@ -1029,7 +1028,7 @@ class _IMDS:
         raise NotImplementedError
 
 def _cp(a):
-    return numpy.array(a, copy=False, order='C')
+    return np.array(a, copy=False, order='C')
 
 
 if __name__ == '__main__':
@@ -1041,21 +1040,21 @@ if __name__ == '__main__':
     nmo = nocc + nvir
     nmo_pair = nmo*(nmo+1)//2
     mf = scf.RHF(mol)
-    numpy.random.seed(12)
-    mf._eri = numpy.random.random(nmo_pair*(nmo_pair+1)//2)
-    mf.mo_coeff = numpy.random.random((nmo,nmo))
-    mf.mo_energy = numpy.arange(0., nmo)
-    mf.mo_occ = numpy.zeros(nmo)
+    np.random.seed(12)
+    mf._eri = np.random.random(nmo_pair*(nmo_pair+1)//2)
+    mf.mo_coeff = np.random.random((nmo,nmo))
+    mf.mo_energy = np.arange(0., nmo)
+    mf.mo_occ = np.zeros(nmo)
     mf.mo_occ[:nocc] = 2
     vhf = mf.get_veff(mol, mf.make_rdm1())
-    cinv = numpy.linalg.inv(mf.mo_coeff)
-    mf.get_hcore = lambda *args: (reduce(numpy.dot, (cinv.T*mf.mo_energy, cinv)) - vhf)
+    cinv = np.linalg.inv(mf.mo_coeff)
+    mf.get_hcore = lambda *args: (reduce(np.dot, (cinv.T*mf.mo_energy, cinv)) - vhf)
     mycc = RCCSD(mf)
     eris = mycc.ao2mo()
-    a = numpy.random.random((nmo,nmo)) * .1
+    a = np.random.random((nmo,nmo)) * .1
     eris.fock += a + a.T.conj()
-    t1 = numpy.random.random((nocc,nvir)) * .1
-    t2 = numpy.random.random((nocc,nocc,nvir,nvir)) * .1
+    t1 = np.random.random((nocc,nvir)) * .1
+    t2 = np.random.random((nocc,nocc,nvir,nvir)) * .1
     t2 = t2 + t2.transpose(1,0,3,2)
 
     mycc.cc2 = False
@@ -1067,7 +1066,7 @@ if __name__ == '__main__':
     print(lib.finger(t1a) - -106360.5276951083)
     print(lib.finger(t2a) - -1517.9391800662809)
 
-    eri1 = numpy.random.random((nmo,nmo,nmo,nmo)) + numpy.random.random((nmo,nmo,nmo,nmo))*1j
+    eri1 = np.random.random((nmo,nmo,nmo,nmo)) + np.random.random((nmo,nmo,nmo,nmo))*1j
     eri1 = eri1.transpose(0,2,1,3)
     eri1 = eri1 + eri1.transpose(1,0,3,2).conj()
     eri1 = eri1 + eri1.transpose(2,3,0,1)
@@ -1079,11 +1078,11 @@ if __name__ == '__main__':
     eris.voov = eri1[nocc:,:nocc,:nocc,nocc:].copy()
     eris.vovv = eri1[nocc:,:nocc,nocc:,nocc:].copy()
     eris.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy()
-    a = numpy.random.random((nmo,nmo)) * .1j
+    a = np.random.random((nmo,nmo)) * .1j
     eris.fock = eris.fock + a + a.T.conj()
 
-    t1 = t1 + numpy.random.random((nocc,nvir)) * .1j
-    t2 = t2 + numpy.random.random((nocc,nocc,nvir,nvir)) * .1j
+    t1 = t1 + np.random.random((nocc,nvir)) * .1j
+    t2 = t2 + np.random.random((nocc,nocc,nvir,nvir)) * .1j
     t2 = t2 + t2.transpose(1,0,3,2)
     mycc.cc2 = False
     t1a, t2a = update_amps(mycc, t1, t2, eris)
@@ -1111,9 +1110,9 @@ if __name__ == '__main__':
     eris = mycc.ao2mo()
     emp2, t1, t2 = mycc.init_amps(eris)
     print(lib.finger(t2) - 0.044540097905897198)
-    numpy.random.seed(1)
-    t1 = numpy.random.random(t1.shape)*.1
-    t2 = numpy.random.random(t2.shape)*.1
+    np.random.seed(1)
+    t1 = np.random.random(t1.shape)*.1
+    t2 = np.random.random(t2.shape)*.1
     t2 = t2 + t2.transpose(1,0,3,2)
     t1, t2 = update_amps(mycc, t1, t2, eris)
     print(lib.finger(t1) - 0.25118555558133576)
