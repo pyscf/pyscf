@@ -1636,8 +1636,13 @@ class Mole(lib.StreamObject):
 
     @property
     def nelec(self):
-        nalpha = (self.nelectron+self.spin)//2
+        ne = self.nelectron
+        nalpha = (ne + self.spin) // 2
         nbeta = nalpha - self.spin
+        if nalpha + nbeta != ne:
+            raise RuntimeError('Electron number %d and spin %d are not consistent\n'
+                               'Note mol.spin = 2S = Nalpha - Nbeta, not 2S+1' %
+                               (ne, self.spin))
         return nalpha, nbeta
     @property
     def nelectron(self):
@@ -1805,7 +1810,7 @@ class Mole(lib.StreamObject):
                 self.make_ecp_env(self._atm, self._ecp, self._env)
         if (self.nelectron+self.spin) % 2 != 0:
             raise RuntimeError('Electron number %d and spin %d are not consistent\n'
-                               'Note spin = 2S = Nalpha-Nbeta, not the definition 2S+1' %
+                               'Note mol.spin = 2S = Nalpha - Nbeta, not 2S+1' %
                                (self.nelectron, self.spin))
 
         if self.symmetry:
