@@ -52,7 +52,7 @@ mol = lib.chkfile.load_mol('benzene-631g.chk')
 mo = lib.chkfile.load('benzene-631g.chk', 'scf/mo_coeff')
 comp = mo_mapping.mo_comps('C 2p', mol, mo)
 
-#label = mol.ao_labels(True)
+#label = mol.ao_labels()
 #tools.dump_mat.dump_rec(mol.stdout, mo_coeff, label, start=1)
 
 print('rank   MO-id    components')

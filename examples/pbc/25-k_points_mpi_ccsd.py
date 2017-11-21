@@ -31,8 +31,8 @@ kpts = cell.make_kpts(nk)
 # Running HF
 #
 kpts -= kpts[0]
+kmf = scf.KRHF(cell, kpts)
 if rank == 0:
-    kmf = scf.KRHF(cell, kpts)
     kmf.kernel()
 
 comm.Barrier()

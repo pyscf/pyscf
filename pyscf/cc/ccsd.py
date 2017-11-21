@@ -444,22 +444,19 @@ def get_nmo(mycc):
 def amplitudes_to_vector(t1, t2, out=None):
     nocc, nvir = t1.shape
     nov = nocc * nvir
-    size = nov + nocc*(nocc+1)//2*nvir**2
+    size = nov + nov*(nov+1)//2
     vector = numpy.ndarray(size, t1.dtype, buffer=out)
     vector[:nov] = t1.ravel()
-    vector[nov:] = t2[numpy.tril_indices(nocc)].ravel()
+    lib.pack_tril(t2.transpose(0,2,1,3).reshape(nov,nov), out=vector[nov:])
     return vector
 
 def vector_to_amplitudes(vector, nmo, nocc):
     nvir = nmo - nocc
     nov = nocc * nvir
     t1 = vector[:nov].copy().reshape((nocc,nvir))
-    t2 = numpy.empty((nocc,nocc,nvir,nvir), vector.dtype)
-    t2tril = vector[nov:].reshape(nocc*(nocc+1)//2,nvir,nvir)
-    idx = numpy.tril_indices(nocc)
-    t2[idx[0],idx[1]] = t2tril
-    t2[idx[1],idx[0]] = t2tril.transpose(0,2,1)
-    return t1, t2
+    t2 = lib.unpack_tril(vector[nov:])
+    t2 = t2.reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3)
+    return t1, numpy.asarray(t2, order='C')
 
 
 def energy(mycc, t1, t2, eris):
@@ -816,8 +813,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             logger.debug1(self, 'DIIS for step %d', istep)
         return t1, t2
 
-    def amplitudes_to_vector(self, t1, t2):
-        return amplitudes_to_vector(t1, t2)
+    def amplitudes_to_vector(self, t1, t2, out=None):
+        return amplitudes_to_vector(t1, t2, out)
 
     def vector_to_amplitudes(self, vec, nmo=None, nocc=None):
         if nocc is None: nocc = self.nocc

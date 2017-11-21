@@ -129,7 +129,7 @@
   - PBC density fitting
   - Smearing for mean-field calculation
   - Low-dimensional (0D, 1D, 2D) PBC systems
-  - TDHF and TDDFT with k-point sampling
+  - (restricted and unrestricted) TDHF and TDDFT with k-point sampling
 
 
 * AO integrals

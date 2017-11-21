@@ -51,7 +51,7 @@ def _prenao_sub(mol, p, s):
     ao_loc = mol.ao_loc_nr()
     nao = ao_loc[-1]
     occ = numpy.zeros(nao)
-    cao = numpy.zeros((nao,nao))
+    cao = numpy.zeros((nao,nao), dtype=s.dtype)
 
     bas_ang = mol._bas[:,mole.ANG_OF]
     for ia, (b0,b1,p0,p1) in enumerate(mol.aoslice_by_atom(ao_loc)):
@@ -87,7 +87,8 @@ def _nao_sub(mol, pre_occ, pre_nao, s=None):
         s = mol.intor_symmetric('int1e_ovlp')
     core_lst, val_lst, rydbg_lst = _core_val_ryd_list(mol)
     nbf = mol.nao_nr()
-    cnao = numpy.empty((nbf,nbf))
+    pre_nao = pre_nao.astype(s.dtype)
+    cnao = numpy.empty((nbf,nbf), dtype=s.dtype)
 
     if core_lst:
         c = pre_nao[:,core_lst].copy()

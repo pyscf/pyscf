@@ -99,9 +99,8 @@ for i in range (N_total):
 
 print 'Number of occupied HF MOs is equal to  ', N_occ
 
-labels = mol.spheric_labels(0)
-N_AO = len (labels)
-labels = mol2.spheric_labels(0)
+N_AO = mol.nao_nr()
+labels = mol2.ao_labels(0)
 print 'Number of occupied AOs is equal to  ', N_AO
 S_11=mol.intor_symmetric("cint1e_ovlp_sph")
 S_22=mol2.intor_symmetric("cint1e_ovlp_sph")

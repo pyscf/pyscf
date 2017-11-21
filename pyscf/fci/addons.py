@@ -283,11 +283,11 @@ def des_a(ci0, norb, neleca_nelecb, ap_id):
         has different number of rows to the input CI coefficients
     '''
     neleca, nelecb = neleca_nelecb
+    if neleca <= 0:
+        return numpy.zeros_like(ci0)
     if ci0.ndim == 1:
         ci0 = ci0.reshape(cistring.num_strings(norb, neleca),
                           cistring.num_strings(norb, nelecb))
-    if neleca <= 0:
-        return numpy.zeros((0, ci0.shape[1]))
     des_index = cistring.gen_des_str_index(range(norb), neleca)
     na_ci1 = cistring.num_strings(norb, neleca-1)
     ci1 = numpy.zeros((na_ci1, ci0.shape[1]))
@@ -320,11 +320,11 @@ def des_b(ci0, norb, neleca_nelecb, ap_id):
         has different number of columns to the input CI coefficients.
     '''
     neleca, nelecb = neleca_nelecb
+    if nelecb <= 0:
+        return numpy.zeros_like(ci0)
     if ci0.ndim == 1:
         ci0 = ci0.reshape(cistring.num_strings(norb, neleca),
                           cistring.num_strings(norb, nelecb))
-    if nelecb <= 0:
-        return numpy.zeros((ci0.shape[0], 0))
     des_index = cistring.gen_des_str_index(range(norb), nelecb)
     nb_ci1 = cistring.num_strings(norb, nelecb-1)
     ci1 = numpy.zeros((ci0.shape[0], nb_ci1))
@@ -362,11 +362,11 @@ def cre_a(ci0, norb, neleca_nelecb, ap_id):
         has different number of rows to the input CI coefficients.
     '''
     neleca, nelecb = neleca_nelecb
+    if neleca >= norb:
+        return numpy.zeros_like(ci0)
     if ci0.ndim == 1:
         ci0 = ci0.reshape(cistring.num_strings(norb, neleca),
                           cistring.num_strings(norb, nelecb))
-    if neleca >= norb:
-        return numpy.zeros((0, ci0.shape[1]))
     cre_index = cistring.gen_cre_str_index(range(norb), neleca)
     na_ci1 = cistring.num_strings(norb, neleca+1)
     ci1 = numpy.zeros((na_ci1, ci0.shape[1]))
@@ -399,11 +399,11 @@ def cre_b(ci0, norb, neleca_nelecb, ap_id):
         has different number of columns to the input CI coefficients.
     '''
     neleca, nelecb = neleca_nelecb
+    if nelecb >= norb:
+        return numpy.zeros_like(ci0)
     if ci0.ndim == 1:
         ci0 = ci0.reshape(cistring.num_strings(norb, neleca),
                           cistring.num_strings(norb, nelecb))
-    if nelecb >= norb:
-        return numpy.zeros((ci0.shape[0], 0))
     cre_index = cistring.gen_cre_str_index(range(norb), nelecb)
     nb_ci1 = cistring.num_strings(norb, nelecb+1)
     ci1 = numpy.zeros((ci0.shape[0], nb_ci1))
@@ -480,8 +480,8 @@ def overlap(bra, ket, norb, nelec, s=None):
     return numpy.dot(bra.ravel(), ket.ravel())
 
 def fix_spin_(fciobj, shift=.2, ss=None, **kwargs):
-    r'''If FCI solver cannot stick on spin eigenfunction, modify the solver by
-    adding a shift on spin square operator
+    r'''If FCI solver cannot stay on spin eigenfunction, this function can
+    add a shift to the states which have wrong spin.
 
     .. math::
 

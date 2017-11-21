@@ -7,12 +7,20 @@ PySCF 1.5 alpha (2018-03-??)
   - IBO for molecular and PBC systems
   - UHF analytical nuclear Hessian
   - UKS analytical nuclear Hessian
+  - FFT for low-dimension (2D) PBC systems
 * Improved
   - Support of setting omp threads in FCI solver
   - Supported even number of grids in pbc calculations
 
 
-PySCF 1.4.1 (201?-?-?)
+PySCF 1.4.2 (201?-?-?)
+----------------------
+* Bugfix
+  - pyberny interface
+  - PBC GDF initialization for hybrid functional
+
+
+PySCF 1.4.1 (2017-11-12)
 ----------------------
 * Bugfix
   - meta-GGA functional detection code in XC parser
@@ -20,6 +28,8 @@ PySCF 1.4.1 (201?-?-?)
   - Eigenvalue ordering for Davidson eigen solver
   - Madelung constant of non-orthogonal lattice
   - Convergence of Madelung constant for huge number of k-points samples
+  - basis parser for pople-type basis
+  - RCCSD when running large number of virtual orbitals on small memory machine
 
 PySCF 1.4 (2017-10-05)
 ----------------------
