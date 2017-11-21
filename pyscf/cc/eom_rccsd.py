@@ -390,13 +390,14 @@ class EOMIP(EOM):
 # EOM-EA-CCSD
 ########################################
 
-def eaccsd(eom, nroots=1, left=False, koopmans=False, guess=None, partition=None):
+def eaccsd(eom, nroots=1, left=False, koopmans=False, guess=None,
+           partition=None, eris=None, imds=None):
     '''Calculate (N+1)-electron charged excitations via EA-EOM-CCSD.
 
     Kwargs:
         See also ipccd()
     '''
-    return ipccsd(eom, nroots, left, koopmans, guess, partition)
+    return ipccsd(eom, nroots, left, koopmans, guess, partition, eris, imds)
 
 def vector_to_amplitudes_ea(vector, nmo, nocc):
     nvir = nmo - nocc
@@ -1689,7 +1690,55 @@ def _add_Vvvv(cc, t2, eris):
     nvir = t2.shape[2]
     t1 = np.zeros((nocc,nvir))
     if eris.vvvv is None and hasattr(eris, 'vvL'):  # DF eris
-        raise NotImplementedError
+        if eris.vvL.dtype != np.double:
+            raise NotImplementedError('complex DF integrals are not supported.')
+
+        time0 = time.clock(), time.time()
+        naux = eris.naux
+        nvir_pair = nvir*(nvir+1)//2
+        Ht2 = np.zeros_like(t2)
+
+        max_memory = max(0, cc.max_memory - lib.current_memory()[0])
+        dmax = min(nvir, max(ccsd.BLKMIN, np.sqrt(max_memory*.8e6/8/nvir**2/2)))
+        vvblk = min(nvir, max(ccsd.BLKMIN, (max_memory*1e6/8 - dmax**2*(nvir**2*1.5+naux))/naux))
+        dmax = int(dmax)
+        vvblk = int(vvblk)
+        eribuf = np.empty((dmax,dmax,nvir_pair))
+        loadbuf = np.empty((dmax,dmax,nvir,nvir))
+
+        for i0, i1 in lib.prange(0, nvir, dmax):
+            di = i1 - i0
+            for j0, j1 in lib.prange(0, i1, dmax):
+                dj = j1 - j0
+
+                ijL = np.empty((di,dj,naux))
+                for i in range(i0, i1):
+                    ioff = i*(i+1)//2
+                    ijL[i-i0] = eris.vvL[ioff+j0:ioff+j1]
+                if i0 == j0:
+                    idx, idy = np.tril_indices(di)
+                    ijL[idy,idx] = ijL[idx,idy]
+
+                ijL = ijL.reshape(-1,naux)
+                eri = np.ndarray(((i1-i0)*(j1-j0),nvir_pair), buffer=eribuf)
+                for p0, p1 in lib.prange(0, nvir_pair, vvblk):
+                    vvL = _cp(eris.vvL[p0:p1])
+                    eri[:,p0:p1] = lib.dot(ijL, vvL.T)
+                    vvL = None
+
+                tmp = np.ndarray((i1-i0,nvir,j1-j0,nvir), buffer=loadbuf)
+                _ccsd.libcc.CCload_eri(tmp.ctypes.data_as(ctypes.c_void_p),
+                                       eri.ctypes.data_as(ctypes.c_void_p),
+                                       (ctypes.c_int*4)(i0, i1, j0, j1),
+                                       ctypes.c_int(nvir))
+                Ht2[:,:,j0:j1] += lib.einsum('ijef,efab->ijab', t2[:,:,i0:i1], tmp)
+                if i0 > j0:
+                    Ht2[:,:,i0:i1] += lib.einsum('ijef,abef->ijab', t2[:,:,j0:j1], tmp)
+                time0 = logger.timer_debug1(cc, 'vvvv [%d:%d,%d:%d]' %
+                                            (i0,i1,j0,j1), *time0)
+        eribuf = loadbuf = eri = tmp = None
+        return Ht2
+
     elif eris.vvvv is None and cc.direct:  # AO direct CCSD
         time0 = time.clock(), time.time()
         mol = cc.mol
@@ -1708,7 +1757,7 @@ def _add_Vvvv(cc, t2, eris):
         Ht2 = np.zeros((nocc,nocc,nao,nao))
         ao_loc = mol.ao_loc_nr()
         max_memory = max(0, cc.max_memory - lib.current_memory()[0])
-        dmax = max(ccsd.BLKMIN, np.sqrt(max_memory*.95e6/8/nao**2/2))
+        dmax = max(ccsd.BLKMIN, np.sqrt(max_memory*.9e6/8/nao**2/2))
         sh_ranges = ao2mo.outcore.balance_partition(ao_loc, dmax)
         dmax = max(x[2] for x in sh_ranges)
         eribuf = np.empty((dmax,dmax,nao,nao))
@@ -1739,7 +1788,6 @@ def _add_Vvvv(cc, t2, eris):
     elif eris.vvvv.ndim == 4:
         return cc._add_vvvv(t1, t2, eris)
     else:
-        nvir = t2.shape[2]
         Ht2 = np.zeros_like(t2)
         for i in range(nvir):
             i0 = i*(i+1)//2
