@@ -13,7 +13,6 @@ from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.cc import ccsd
-from pyscf.cc import rccsd
 from pyscf.lib import linalg_helper
 from pyscf.cc import uintermediates as imd
 from pyscf.cc.addons import spatial2spin, spin2spatial
@@ -429,7 +428,7 @@ def energy(cc, t1, t2, eris):
 
 
 
-class UCCSD(rccsd.RCCSD):
+class UCCSD(ccsd.CCSD):
 
 # argument frozen can be
 # * An integer : The same number of inner-most alpha and beta orbitals are frozen
@@ -437,7 +436,7 @@ class UCCSD(rccsd.RCCSD):
 # * A pair of list : First list is the orbital indices to be frozen for alpha
 #       orbitals, second list is for beta orbitals
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
-        rccsd.RCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
+        ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         # Spin-orbital CCSD needs a stricter tolerance than spatial-orbital
         self.conv_tol_normt = 1e-6
         if getattr(mf, 'mo_energy', None) is not None:
@@ -1458,14 +1457,14 @@ class UCCSD(rccsd.RCCSD):
         #:Hr2bbab += .5*lib.einsum('IJeF,aeBF->IJaB', tau2bbab, eris_vvVV)
         #:Hr2aaba += .5*lib.einsum('ijEf,bfAE->ijAb', tau2aaba, eris_vvVV)
         tau2baaa *= .5
-        rccsd._add_vvvv1_(self, tau2baaa, eris, Hr2baaa)
+        _add_vvvv1_(self, tau2baaa, eris, Hr2baaa)
         fakeri = lambda:None
         fakeri.vvvv = eris.VVVV
         tau2abbb *= .5
-        rccsd._add_vvvv1_(self, tau2abbb, fakeri, Hr2abbb)
+        _add_vvvv1_(self, tau2abbb, fakeri, Hr2abbb)
         fakeri.vvvv = eris.vvVV
         tau2bbab *= .5
-        rccsd._add_vvvv1_(self, tau2bbab, fakeri, Hr2bbab)
+        _add_vvvv1_(self, tau2bbab, fakeri, Hr2bbab)
         fakeri = None
         for i in range(nvira):
             i0 = i*(i+1)//2
@@ -1691,10 +1690,12 @@ class UCCSD(rccsd.RCCSD):
         return vec_ee, vec_sf
 
     def amplitudes_to_vector_ee(self, t1, t2, out=None):
-        return self.amplitudes_to_vector_s4(t1, t2, out)
+        return ccsd.amplitudes_to_vector_s4(t1, t2, out)
 
-    def vector_to_amplitudes_ee(self, vector, nocc=None, nvir=None):
-        return self.vector_to_amplitudes_s4(vector, nocc, nvir)
+    def vector_to_amplitudes_ee(self, vector, nmo=None, nocc=None):
+        if nmo is None: nmo = self.nmo
+        if nocc is None: nocc = self.nocc
+        return ccsd.vector_to_amplitudes_s4(vector, nmo, nocc)
 
     def amplitudes_to_vector(self, t1, t2, out=None):
         nocca, nvira = t1[0].shape
@@ -1723,14 +1724,14 @@ class UCCSD(rccsd.RCCSD):
         nov = nocc * nvir
         size = nov + nocc*(nocc-1)//2*nvir*(nvir-1)//2
         if vector.size == size:
-            return self.vector_to_amplitudes_ee(vector, nocc, nvir)
+            return ccsd.vector_to_amplitudes_s4(vector, nmo, nocc)
         else:
             size = vector.size
             sizea = nocca * nvira + nocca*(nocca-1)//2*nvira*(nvira-1)//2
             sizeb = noccb * nvirb + noccb*(noccb-1)//2*nvirb*(nvirb-1)//2
             sizeab = nocca * noccb * nvira * nvirb
-            t1a, t2aa = self.vector_to_amplitudes_ee(vector[:sizea], nocca, nvira)
-            t1b, t2bb = self.vector_to_amplitudes_ee(vector[sizea:sizea+sizeb], noccb, nvirb)
+            t1a, t2aa = self.vector_to_amplitudes_ee(vector[:sizea], nmoa, nocca)
+            t1b, t2bb = self.vector_to_amplitudes_ee(vector[sizea:sizea+sizeb], nmob, noccb)
             t2ab = vector[size-sizeab:].copy().reshape(nocca,noccb,nvira,nvirb)
             return (t1a,t1b), (t2aa,t2ab,t2bb)
 
@@ -1934,7 +1935,10 @@ class _ERISspin:
         nocc = cc.nocc
         nmo = cc.nmo
         nvir = nmo - nocc
-        mem_incore, mem_outcore, mem_basic = rccsd._mem_usage(nocc, nvir)
+        nao = mo_coeff[0].shape[0]
+        nao_pair = nao * (nao+1) // 2
+        nmo_pair = nmo * (nmo+1) // 2
+        mem_incore = (max(nao_pair**2, nmo**4*3) + nmo_pair**2) * 8/1e6
         mem_now = lib.current_memory()[0]
 
         self.fock, so_coeff, self.orbspin = uspatial2spin(cc, moidx, mo_coeff)
@@ -2106,7 +2110,10 @@ class _ERIS:
         nocc = cc.nocc
         nmo = cc.nmo
         nvir = nmo - nocc
-        mem_incore, mem_outcore, mem_basic = rccsd._mem_usage(nocc, nvir)
+        nao = mo_coeff[0].shape[0]
+        nao_pair = nao * (nao+1) // 2
+        nmo_pair = nmo * (nmo+1) // 2
+        mem_incore = (max(nao_pair**2, nmo**4*3) + nmo_pair**2) * 8/1e6
         mem_now = lib.current_memory()[0]
 
         fock, so_coeff, self.orbspin = uspatial2spin(cc, moidx, mo_coeff)
@@ -3150,13 +3157,24 @@ def make_tau_ab(t2ab, t1, r1, fac=1, out=None):
 def _add_vvvv_(cc, t2, eris, Ht2):
     t2aa, t2ab, t2bb = t2
     u2aa, u2ab, u2bb = Ht2
-    rccsd._add_vvvv_(cc, t2aa, eris, u2aa)
+    nocca, nvira = t2aa.shape[1:3]
+    noccb, nvirb = t2bb.shape[1:3]
+    cc._add_vvvv(np.zeros((nocca,nvira)), t2aa, eris, u2aa)
     fakeri = lambda:None
     fakeri.vvvv = eris.VVVV
-    rccsd._add_vvvv_(cc, t2bb, fakeri, u2bb)
+    cc._add_vvvv(np.zeros((noccb,nvirb)), t2bb, fakeri, u2bb)
     fakeri.vvvv = eris.vvVV
-    rccsd._add_vvvv1_(cc, t2ab, fakeri, u2ab)
+    _add_vvvv1_(cc, t2ab, fakeri, u2ab)
     return (u2aa,u2ab,u2bb)
+
+def _add_vvvv1_(cc, t2, eris, Ht2):
+    nvir = t2.shape[2]
+    for i in range(nvir):
+        i0 = i*(i+1)//2
+        vvv = lib.unpack_tril(np.asarray(eris.vvvv[i0:i0+i+1]))
+        Ht2[:,:, i] += lib.einsum('ijef,ebf->ijb', t2[:,:,:i+1], vvv)
+        if i > 0:
+            Ht2[:,:,:i] += lib.einsum('ijf,abf->ijab', t2[:,:,i], vvv[:i])
 
 
 if __name__ == '__main__':

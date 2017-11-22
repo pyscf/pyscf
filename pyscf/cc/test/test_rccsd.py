@@ -6,6 +6,7 @@ import numpy
 from pyscf import gto, lib
 from pyscf import scf, dft
 from pyscf import cc
+from pyscf.cc import rccsd
 
 mol = gto.Mole()
 mol.verbose = 7
@@ -21,7 +22,7 @@ mf = scf.RHF(mol)
 mf.conv_tol_grad = 1e-8
 mf.kernel()
 
-mycc = cc.RCCSD(mf).run(conv_tol=1e-10)
+mycc = rccsd.RCCSD(mf).run(conv_tol=1e-10)
 
 
 class KnownValues(unittest.TestCase):
@@ -44,7 +45,7 @@ class KnownValues(unittest.TestCase):
         cc1.__dict__.update(lib.chkfile.load(cc1._scf.chkfile, 'ccsd'))
         eris = cc1.ao2mo()
         e = cc1.energy(cc1.t1, cc1.t2, eris)
-        self.assertAlmostEqual(e, -0.13539788638119823, 10)
+        self.assertAlmostEqual(e, -0.13539788638119823, 8)
 
     def test_ccsd_t(self):
         e = mycc.ccsd_t()
@@ -55,41 +56,39 @@ class KnownValues(unittest.TestCase):
         cc1.direct = True
         cc1.conv_tol = 1e-10
         cc1.kernel()
-        self.assertAlmostEqual(cc1.e_corr, -0.13539788638119823, 9)
+        self.assertAlmostEqual(cc1.e_corr, -0.13539788638119823, 8)
 
     def test_diis(self):
         cc1 = cc.CCSD(mf)
         cc1.diis = False
         cc1.max_cycle = 4
         cc1.kernel()
-        self.assertAlmostEqual(cc1.e_corr, -0.13516622806104395, 9)
+        self.assertAlmostEqual(cc1.e_corr, -0.13516622806104395, 8)
 
     def test_ERIS(self):
-        cc1 = cc.CCSD(mf)
+        cc1 = cc.RCCSD(mf)
         numpy.random.seed(1)
         mo_coeff = numpy.random.random(mf.mo_coeff.shape)
-        eris = cc.rccsd._ERIS(cc1, mo_coeff, method='outcore')
+        eris = cc.rccsd._make_eris_outcore(cc1, mo_coeff)
 
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.oooo)), 4.9638849382825754, 14)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.ooov)), 21.35362101033294 , 14)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.ovoo)),-1.3623681896983584, 14)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.ovov)), 125.81550684442163, 14)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.oovo)), 26.411461005316333, 14)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.oovv)), 55.123681017639598, 14)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.ovvo)), 133.48083527898248, 14)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.ovvv)), 59.421927525288183, 14)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.vvvv)), 43.556602622204778, 14)
+        self.assertAlmostEqual(lib.finger(numpy.array(eris.oooo)), 4.9638849382825754, 12)
+        self.assertAlmostEqual(lib.finger(numpy.array(eris.vooo)),-31.940476139498358, 12)
+        self.assertAlmostEqual(lib.finger(numpy.array(eris.vovo)), 37.288573620290705, 12)
+        self.assertAlmostEqual(lib.finger(numpy.array(eris.vvoo)),-15.749543083037139, 12)
+        self.assertAlmostEqual(lib.finger(numpy.array(eris.voov)), 26.151516680723446, 12)
+        self.assertAlmostEqual(lib.finger(numpy.array(eris.vovv)), 79.946678013880231, 12)
+        self.assertAlmostEqual(lib.finger(numpy.array(eris.vvvv)),-10.450387490987545, 12)
 
-    def test_amplitudes_to_vector_ee(self):
-        vec = mycc.amplitudes_to_vector_ee(mycc.t1, mycc.t2)
+    def test_amplitudes_to_vector(self):
+        vec = mycc.amplitudes_to_vector(mycc.t1, mycc.t2)
         #self.assertAlmostEqual(lib.finger(vec), -0.056992042448099592, 6)
-        r1, r2 = mycc.vector_to_amplitudes_ee(vec)
+        r1, r2 = mycc.vector_to_amplitudes(vec)
         self.assertAlmostEqual(abs(r1-mycc.t1).max(), 0, 14)
         self.assertAlmostEqual(abs(r2-mycc.t2).max(), 0, 14)
 
         vec = numpy.random.random(vec.size)
-        r1, r2 = mycc.vector_to_amplitudes_ee(vec)
-        vec1 = mycc.amplitudes_to_vector_ee(r1, r2)
+        r1, r2 = mycc.vector_to_amplitudes(vec)
+        vec1 = mycc.amplitudes_to_vector(r1, r2)
         self.assertAlmostEqual(abs(vec-vec1).max(), 0, 14)
 
     def test_rccsd_frozen(self):

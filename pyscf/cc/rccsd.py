@@ -209,6 +209,7 @@ class RCCSD(ccsd.CCSD):
         for p0,p1 in lib.prange(0, nvir, blksize):
             t2new[:,:,p0:p1] = lib.einsum('ijcd,acbd->ijab', tau, eris.vvvv[p0:p1])
         return t2new
+    _add_vvvv_full = _add_vvvv
 
 def _make_eris_incore(mycc, mo_coeff=None):
     cput0 = (time.clock(), time.time())
@@ -275,6 +276,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
 
     nocc_pair = nocc*(nocc+1)//2
     eris.feri1['oooo'] = ao2mo.restore(1, _cp(eri[:nocc_pair,:nocc_pair]), nocc)
+    eris.oooo = eris.feri1['oooo']
     p1 = nocc_pair
     for i in range(nocc, nmo):
         p0, p1 = p1, p1 + i+1

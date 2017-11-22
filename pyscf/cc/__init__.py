@@ -50,27 +50,19 @@ from pyscf.cc import ccsd
 from pyscf.cc import ccsd_lambda
 from pyscf.cc import ccsd_rdm
 from pyscf.cc import addons
+from pyscf.cc import rccsd
+from pyscf.cc import uccsd
 
 def CCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = ccsd.CCSD.__doc__
-    import sys
     from pyscf import scf
-    from pyscf.cc import dfccsd
-
-    if isinstance(mf, scf.uhf.UHF) or mf.mol.spin != 0:
+    if isinstance(mf, scf.uhf.UHF):
         return UCCSD(mf, frozen, mo_coeff, mo_occ)
-
-    if 'dft' in str(mf.__module__):
-        sys.stderr.write('CCSD Warning: The first argument mf is a DFT object. '
-                         'CCSD calculation should be used with HF object\n')
-
-    mf = scf.addons.convert_to_rhf(mf)
-    if hasattr(mf, 'with_df') and mf.with_df:
-        return dfccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)
     else:
-        return ccsd.CCSD(mf, frozen, mo_coeff, mo_occ)
+        return RCCSD(mf, frozen, mo_coeff, mo_occ)
 
 def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+    __doc__ = ccsd.CCSD.__doc__
     import sys
     from pyscf import lib
     from pyscf import scf
@@ -93,13 +85,13 @@ def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
         return dfccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)
 
     else:
-        return rccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)
+        return ccsd.CCSD(mf, frozen, mo_coeff, mo_occ)
 
 
 def UCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+    __doc__ = uccsd.UCCSD.__doc__
     import sys
     from pyscf import scf
-    from pyscf.cc import uccsd
 
     if 'dft' in str(mf.__module__):
         sys.stderr.write('UCCSD Warning: The first argument mf is a DFT object. '

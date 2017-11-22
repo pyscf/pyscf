@@ -7,10 +7,8 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
-from pyscf.cc import rccsd
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
-_dgemm = lib.numpy_helper._dgemm
 
 class RCCSD(ccsd.CCSD):
     def ao2mo(self, mo_coeff=None):
@@ -21,6 +19,7 @@ class RCCSD(ccsd.CCSD):
         #: t2new += numpy.einsum('ijcd,acdb->ijab', tau, vvvv)
         assert(not self.direct)
         time0 = time.clock(), time.time()
+        _dgemm = lib.numpy_helper._dgemm
         nocc, nvir = t1.shape
         t2new_tril = numpy.ndarray((nocc*(nocc+1)//2,nvir,nvir), buffer=out)
         t2new_tril[:] = 0
@@ -34,23 +33,11 @@ class RCCSD(ccsd.CCSD):
                    tau.reshape(-1,nao*nao), eri.reshape(-1,jc*nao),
                    t2new_tril.reshape(-1,nao*nao), 1, 1, i0*nao, 0, j0*nao)
 
-            #: t2tril[:,i0:i1] += numpy.einsum('xcd,abcd->xab', tau[:,j0:j1], eri)
-            _dgemm('N', 'T', nocc*(nocc+1)//2, ic*nao, jc*nao,
-                   tau.reshape(-1,nao*nao), eri.reshape(-1,jc*nao),
-                   t2new_tril.reshape(-1,nao*nao), 1, 1, j0*nao, 0, i0*nao)
-
-        def contract_tril_(t2new_tril, tau, eri, a0, a):
-            nvir = tau.shape[-1]
-            #: t2new[i,:i+1, a] += numpy.einsum('xcd,cdb->xb', tau[:,a0:a+1], eri)
-            _dgemm('N', 'N', nocc*(nocc+1)//2, nvir, (a+1-a0)*nvir,
-                   tau.reshape(-1,nvir*nvir), eri.reshape(-1,nvir),
-                   t2new_tril.reshape(-1,nvir*nvir), 1, 1, a0*nvir, 0, a*nvir)
-
-            #: t2new[i,:i+1,a0:a] += numpy.einsum('xd,abd->xab', tau[:,a], eri[:a])
-            if a > a0:
-                _dgemm('N', 'T', nocc*(nocc+1)//2, (a-a0)*nvir, nvir,
-                       tau.reshape(-1,nvir*nvir), eri.reshape(-1,nvir),
-                       t2new_tril.reshape(-1,nvir*nvir), 1, 1, a*nvir, 0, a0*nvir)
+            if i0 > j0:
+                #: t2tril[:,i0:i1] += numpy.einsum('xcd,abcd->xab', tau[:,j0:j1], eri)
+                _dgemm('N', 'T', nocc*(nocc+1)//2, ic*nao, jc*nao,
+                       tau.reshape(-1,nao*nao), eri.reshape(-1,jc*nao),
+                       t2new_tril.reshape(-1,nao*nao), 1, 1, j0*nao, 0, i0*nao)
 
         nvir_pair = nvir * (nvir+1) // 2
         #: tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
@@ -75,13 +62,16 @@ class RCCSD(ccsd.CCSD):
 
         for i0, i1 in lib.prange(0, nvir, dmax):
             di = i1 - i0
-            for j0, j1 in lib.prange(0, i0, dmax):
+            for j0, j1 in lib.prange(0, i1, dmax):
                 dj = j1 - j0
 
                 ijL = numpy.empty((di,dj,naux))
                 for i in range(i0, i1):
                     ioff = i*(i+1)//2
                     ijL[i-i0] = eris.vvL[ioff+j0:ioff+j1]
+                if i0 == j0:
+                    idx, idy = numpy.tril_indices(di)
+                    ijL[idy,idx] = ijL[idx,idy]
                 ijL = ijL.reshape(-1,naux)
                 eri = numpy.ndarray(((i1-i0)*(j1-j0),nvir_pair), buffer=eribuf)
                 for p0, p1 in lib.prange(0, nvir_pair, vvblk):
@@ -97,49 +87,60 @@ class RCCSD(ccsd.CCSD):
                 contract_rec_(t2new_tril, tau, tmp, i0, i1, j0, j1)
                 time0 = logger.timer_debug1(self, 'vvvv [%d:%d,%d:%d]' %
                                             (i0,i1,j0,j1), *time0)
-
-            ijL = []
-            for i in range(i0, i1):
-                ioff = i*(i+1)//2
-                ijL.append(eris.vvL[ioff+i0:ioff+i+1])
-            ijL = numpy.vstack(ijL).reshape(-1,naux)
-            eri = numpy.ndarray((di*(di+1)//2,nvir_pair), buffer=eribuf)
-            for p0, p1 in lib.prange(0, nvir_pair, vvblk):
-                vvL = _cp(eris.vvL[p0:p1])
-                eri[:,p0:p1] = lib.ddot(ijL, vvL.T)
-                vvL = None
-            for i in range(di):
-                p0, p1 = i*(i+1)//2, (i+1)*(i+2)//2
-                tmp = lib.unpack_tril(eri[p0:p1], out=loadbuf)
-                contract_tril_(t2new_tril, tau, tmp, i0, i0+i)
-            time0 = logger.timer_debug1(self, 'vvvv [%d:%d,%d:%d]' %
-                                        (i0,i1,i0,i1), *time0)
         eribuf = loadbuf = eri = tmp = None
         return t2new_tril
 
-class _ERIs:
-    def __init__(self, cc):
-        self.mo_coeff = None
-        self.fock = None
-        self.nocc = cc.nocc
+    def _add_vvvv_full(self, t1, t2, eris, out=None, with_ovvv=False):
+        time0 = time.clock(), time.time()
+        nocc, nvir = t1.shape
+        naux = eris.naux
+        nvir_pair = nvir*(nvir+1)//2
+        Ht2 = numpy.zeros_like(t2)
 
-        self.oooo = None
-        self.vooo = None
-        self.voov = None
-        self.vvoo = None
-        self.vovv = None
-        self.vvvv = None
+        max_memory = max(0, self.max_memory - lib.current_memory()[0])
+        dmax = min(nvir, max(ccsd.BLKMIN, numpy.sqrt(max_memory*.8e6/8/nvir**2/2)))
+        vvblk = min(nvir, max(ccsd.BLKMIN, (max_memory*1e6/8 - dmax**2*(nvir**2*1.5+naux))/naux))
+        dmax = int(dmax)
+        vvblk = int(vvblk)
+        eribuf = numpy.empty((dmax,dmax,nvir_pair))
+        loadbuf = numpy.empty((dmax,dmax,nvir,nvir))
+
+        for i0, i1 in lib.prange(0, nvir, dmax):
+            di = i1 - i0
+            for j0, j1 in lib.prange(0, i1, dmax):
+                dj = j1 - j0
+
+                ijL = numpy.empty((di,dj,naux))
+                for i in range(i0, i1):
+                    ioff = i*(i+1)//2
+                    ijL[i-i0] = eris.vvL[ioff+j0:ioff+j1]
+                if i0 == j0:
+                    idx, idy = numpy.tril_indices(di)
+                    ijL[idy,idx] = ijL[idx,idy]
+
+                ijL = ijL.reshape(-1,naux)
+                eri = numpy.ndarray(((i1-i0)*(j1-j0),nvir_pair), buffer=eribuf)
+                for p0, p1 in lib.prange(0, nvir_pair, vvblk):
+                    vvL = _cp(eris.vvL[p0:p1])
+                    eri[:,p0:p1] = lib.dot(ijL, vvL.T)
+                    vvL = None
+
+                tmp = numpy.ndarray((i1-i0,nvir,j1-j0,nvir), buffer=loadbuf)
+                _ccsd.libcc.CCload_eri(tmp.ctypes.data_as(ctypes.c_void_p),
+                                       eri.ctypes.data_as(ctypes.c_void_p),
+                                       (ctypes.c_int*4)(i0, i1, j0, j1),
+                                       ctypes.c_int(nvir))
+                Ht2[:,:,j0:j1] += lib.einsum('ijef,efab->ijab', t2[:,:,i0:i1], tmp)
+                if i0 > j0:
+                    Ht2[:,:,i0:i1] += lib.einsum('ijef,abef->ijab', t2[:,:,j0:j1], tmp)
+                time0 = logger.timer_debug1(self, 'vvvv [%d:%d,%d:%d]' %
+                                            (i0,i1,j0,j1), *time0)
+        return Ht2
 
 def _make_eris_df(cc, mo_coeff=None):
-    eris = _ERIs(cc)
-    if mo_coeff is None:
-        eris.mo_coeff = mo_coeff = ccsd._mo_without_core(cc, cc.mo_coeff)
-    else:
-        eris.mo_coeff = mo_coeff = ccsd._mo_without_core(cc, mo_coeff)
-    dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
-    fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
-    eris.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
-
+    cput0 = (time.clock(), time.time())
+    eris = ccsd._ERIs()
+    eris._common_init_(cc, mo_coeff)
     nocc = eris.nocc
     nmo = eris.fock.shape[0]
     nvir = nmo - nocc

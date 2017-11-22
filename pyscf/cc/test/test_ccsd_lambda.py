@@ -28,12 +28,11 @@ class KnowValues(unittest.TestCase):
 
         eris = lambda:None
         eris.oooo = eri0[:nocc,:nocc,:nocc,:nocc].copy()
-        eris.ooov = eri0[:nocc,:nocc,:nocc,nocc:].copy()
-        eris.ovoo = eri0[:nocc,nocc:,:nocc,:nocc].copy()
-        eris.oovv = eri0[:nocc,:nocc,nocc:,nocc:].copy()
-        eris.ovov = eri0[:nocc,nocc:,:nocc,nocc:].copy()
+        eris.vooo = eri0[nocc:,:nocc,:nocc,:nocc].copy()
+        eris.vvoo = eri0[nocc:,nocc:,:nocc,:nocc].copy()
+        eris.voov = eri0[nocc:,:nocc,:nocc,nocc:].copy()
         idx = numpy.tril_indices(nvir)
-        eris.ovvv = eri0[:nocc,nocc:,nocc:,nocc:][:,:,idx[0],idx[1]].copy()
+        eris.vovv = eri0[nocc:,:nocc,nocc:,nocc:][:,:,idx[0],idx[1]].copy()
         eris.vvvv = ao2mo.restore(4,eri0[nocc:,nocc:,nocc:,nocc:],nvir)
         eris.fock = fock0
 

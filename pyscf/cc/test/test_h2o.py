@@ -49,13 +49,13 @@ class KnownValues(unittest.TestCase):
 
         nocc, nvir = t1.shape
         tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
-        ovvv = lib.unpack_tril(eris.ovvv).reshape(nocc,nvir,nvir,nvir)
-        tmp = -numpy.einsum('ijcd,ka,kdcb->ijba', tau, t1, ovvv)
+        vovv = lib.unpack_tril(eris.vovv).reshape(nvir,nocc,nvir,nvir)
+        tmp = -numpy.einsum('ijcd,ka,dkcb->ijba', tau, t1, vovv)
         t2a = tmp + tmp.transpose(1,0,3,2)
         t2a = t2a[numpy.tril_indices(nocc)]
-        t2a += mcc.add_wvvVV(t1, t2, eris)
+        t2a += mcc._add_vvvv_tril(t1, t2, eris)
         mcc.direct = True
-        t2b = mcc.add_wvvVV(t1, t2, eris)
+        t2b = mcc._add_vvvv_tril(t1, t2, eris)
         self.assertTrue(numpy.allclose(t2a,t2b))
 
     def test_ccsd_frozen(self):
@@ -86,7 +86,7 @@ class KnownValues(unittest.TestCase):
         mycc = cc.ccsd.CCSD(mf)
         mycc.conv_tol = 1e-12
         mycc.diis_start_energy_diff = 1e2
-        mycc.max_cycle = 1000
+        mycc.max_cycle = 400
         mycc.mo_coeff = mo_coeff=numpy.dot(mf.mo_coeff,u)
         self.assertAlmostEqual(mycc.kernel()[0], -0.21334323320620596, 8)
 
@@ -129,8 +129,8 @@ class KnownValues(unittest.TestCase):
         mcc.solve_lambda()
         dm1 = mcc.make_rdm1()
         dm2 = mcc.make_rdm2()
-        self.assertAlmostEqual(numpy.linalg.norm(dm1), 4.4227785269355078, 6)
-        self.assertAlmostEqual(numpy.linalg.norm(dm2), 20.074587448789089, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(dm1), 4.4227785269355078, 4)
+        self.assertAlmostEqual(numpy.linalg.norm(dm2), 20.074587448789089, 4)
 
     def test_scanner(self):
         mol1 = mol.copy()

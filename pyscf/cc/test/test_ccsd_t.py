@@ -31,6 +31,9 @@ class KnowValues(unittest.TestCase):
         eris.ovvv = numpy.random.random((nocc,nvir,nvir*(nvir+1)//2)) * .1
         eris.ovoo = numpy.random.random((nocc,nvir,nocc,nocc)) * .1
         eris.ovov = numpy.random.random((nocc,nvir,nocc,nvir)) * .1
+        eris.vovv = eris.ovvv.transpose(1,0,2)
+        eris.vooo = eris.ovoo.transpose(1,0,2,3)
+        eris.voov = eris.ovov.transpose(1,0,2,3)
         t1 = numpy.random.random((nocc,nvir)) * .1
         t2 = numpy.random.random((nocc,nocc,nvir,nvir)) * .1
         t2 = t2 + t2.transpose(1,0,3,2)
@@ -61,13 +64,13 @@ class KnowValues(unittest.TestCase):
         o_sorted = numpy.hstack([numpy.where(orbsym[:nocc] == i)[0] for i in range(8)])
         v_sorted = numpy.hstack([numpy.where(orbsym[nocc:] == i)[0] for i in range(8)])
         eris_vvop = numpy.empty((nvir,nvir,nocc,nmo))
-        eris_ovov = numpy.asarray(eris.ovov).reshape(nocc,nvir,nocc,nvir)
-        eris_ovov = eris_ovov[o_sorted][:,v_sorted][:,:,o_sorted][:,:,:,v_sorted]
-        eris_vvop[:,:,:,:nocc] = eris_ovov.transpose(1,3,0,2)
-        eris_ovvv = lib.unpack_tril(numpy.asarray(eris.ovvv).reshape(nocc*nvir,-1))
-        eris_ovvv = eris_ovvv.reshape(nocc,nvir,nvir,nvir)
-        eris_ovvv = eris_ovvv[o_sorted][:,v_sorted][:,:,v_sorted][:,:,:,v_sorted]
-        eris_vvop[:,:,:,nocc:] = eris_ovvv.transpose(1,2,0,3)
+        eris_voov = numpy.asarray(eris.voov)
+        eris_voov = eris_voov[v_sorted][:,o_sorted][:,:,o_sorted][:,:,:,v_sorted]
+        eris_vvop[:,:,:,:nocc] = eris_voov.transpose(0,3,1,2)
+        eris_vovv = lib.unpack_tril(numpy.asarray(eris.vovv).reshape(nocc*nvir,-1))
+        eris_vovv = eris_vovv.reshape(nvir,nocc,nvir,nvir)
+        eris_vovv = eris_vovv[v_sorted][:,o_sorted][:,:,v_sorted][:,:,:,v_sorted]
+        eris_vvop[:,:,:,nocc:] = eris_vovv.transpose(0,2,1,3)
         self.assertAlmostEqual(abs(eris_vvop-vvop).sum(), 0, 9)
 
     def test_sort_t2_vooo(self):
@@ -91,7 +94,7 @@ class KnowValues(unittest.TestCase):
         ref_t2T = t2.transpose(2,3,1,0)
         ref_t2T = ref_t2T[v_sorted][:,v_sorted][:,:,o_sorted][:,:,:,o_sorted]
         ref_t2T = ref_t2T.reshape(nvir,nvir,-1)[:,:,oo_sorted].reshape(nvir,nvir,nocc,nocc)
-        ref_vooo = eris.ovoo.transpose(1,0,2,3)
+        ref_vooo = eris.vooo
         ref_vooo = ref_vooo[v_sorted][:,o_sorted][:,:,o_sorted][:,:,:,o_sorted]
         ref_vooo = ref_vooo.reshape(nvir,-1,nocc)[:,oo_sorted].reshape(nvir,nocc,nocc,nocc)
 

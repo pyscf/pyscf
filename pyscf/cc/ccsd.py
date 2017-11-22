@@ -266,6 +266,10 @@ def _add_vovv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
     return fswap['wVOov'], fswap['wVooV']
 
 def _add_vvvv_tril(mycc, t1, t2, eris, out=None, with_ovvv=True):
+    '''Ht2 = numpy.einsum('ijcd,acdb->ijab', t2, vvvv)
+    Using symmetry t2[ijab] = t2[jiba] and Ht2[ijab] = Ht2[jiba], compute the
+    lower triangular part of  Ht2
+    '''
     time0 = time.clock(), time.time()
     _dgemm = lib.numpy_helper._dgemm
     nocc, nvir = t1.shape
@@ -405,7 +409,69 @@ def _add_vvvv_tril(mycc, t1, t2, eris, out=None, with_ovvv=True):
                 outbuf, outbuf1 = outbuf1, outbuf
                 time0 = logger.timer_debug1(mycc, 'vvvv [%d:%d]'%(a0,a1), *time0)
     return t2new_tril
-add_wvvVV = _add_vvvv_tril
+
+def _add_vvvv_full(mycc, t1, t2, eris, out=None):
+    '''Ht2 = numpy.einsum('ijcd,acdb->ijab', t2, vvvv)
+    without using symmetry in t2 or Ht2
+    '''
+    time0 = time.clock(), time.time()
+    nocc, nvir = t1.shape
+    tau = numpy.einsum('ia,jb->ijab', t1, t1)
+    tau += t2
+
+    if mycc.direct:  # AO direct CCSD
+        mol = mycc.mol
+        if hasattr(eris, 'mo_coeff'):
+            mo = eris.mo_coeff
+        else:
+            mo = _mo_without_core(mycc, mycc.mo_coeff)
+        nao, nmo = mo.shape
+        aos = numpy.asarray(mo[:,nocc:].T, order='F')
+        tau = _ao2mo.nr_e2(tau.reshape(nocc**2,nvir,nvir), aos, (0,nao,0,nao), 's1', 's1')
+        tau = tau.reshape(nocc,nocc,nao,nao)
+        time0 = logger.timer_debug1(mycc, 'vvvv-tau mo2ao', *time0)
+
+        intor = mol._add_suffix('int2e')
+        ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFnr_schwarz_cond',
+                                 'CVHFsetnr_direct_scf')
+        Ht2 = numpy.zeros((nocc,nocc,nao,nao))
+        ao_loc = mol.ao_loc_nr()
+        max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
+        dmax = max(BLKMIN, numpy.sqrt(max_memory*.9e6/8/nao**2/2))
+        sh_ranges = ao2mo.outcore.balance_partition(ao_loc, dmax)
+        dmax = max(x[2] for x in sh_ranges)
+        eribuf = numpy.empty((dmax,dmax,nao,nao))
+        loadbuf = numpy.empty((dmax,dmax,nao,nao))
+        fint = gto.moleintor.getints4c
+
+        for ip, (ish0, ish1, ni) in enumerate(sh_ranges):
+            for jsh0, jsh1, nj in sh_ranges[:ip+1]:
+                eri = fint(intor, mol._atm, mol._bas, mol._env,
+                           shls_slice=(ish0,ish1,jsh0,jsh1), aosym='s2kl',
+                           ao_loc=ao_loc, cintopt=ao2mopt._cintopt, out=eribuf)
+                i0, i1 = ao_loc[ish0], ao_loc[ish1]
+                j0, j1 = ao_loc[jsh0], ao_loc[jsh1]
+                tmp = numpy.ndarray((i1-i0,nao,j1-j0,nao), buffer=loadbuf)
+                _ccsd.libcc.CCload_eri(tmp.ctypes.data_as(ctypes.c_void_p),
+                                       eri.ctypes.data_as(ctypes.c_void_p),
+                                       (ctypes.c_int*4)(i0, i1, j0, j1),
+                                       ctypes.c_int(nao))
+                Ht2[:,:,j0:j1] += lib.einsum('ijef,efab->ijab', tau[:,:,i0:i1], tmp)
+                if ish0 > jsh0:
+                    Ht2[:,:,i0:i1] += lib.einsum('ijef,abef->ijab', tau[:,:,j0:j1], tmp)
+                time0 = logger.timer_debug1(mycc, 'AO-vvvv [%d:%d,%d:%d]' %
+                                            (ish0,ish1,jsh0,jsh1), *time0)
+        eribuf = loadbuf = eri = tmp = None
+        Ht2 = _ao2mo.nr_e2(Ht2.reshape(nocc**2,-1), mo, (nocc,nmo,nocc,nmo), 's1', 's1')
+    else:
+        Ht2 = numpy.zeros_like(t2)
+        for i in range(nvir):
+            i0 = i*(i+1)//2
+            vvv = lib.unpack_tril(numpy.asarray(eris.vvvv[i0:i0+i+1]))
+            Ht2[:,:, i] += lib.einsum('ijef,ebf->ijb', tau[:,:,:i+1], vvv)
+            if i > 0:
+                Ht2[:,:,:i] += lib.einsum('ijf,abf->ijab', tau[:,:,i], vvv[:i])
+    return Ht2.reshape(nocc,nocc,nvir,nvir)
 
 def _unpack_t2_tril(t2tril, nocc, nvir, out=None):
     t2 = numpy.ndarray((nocc,nocc,nvir,nvir), buffer=out)
@@ -457,6 +523,27 @@ def vector_to_amplitudes(vector, nmo, nocc):
     t2 = lib.unpack_tril(vector[nov:])
     t2 = t2.reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3)
     return t1, numpy.asarray(t2, order='C')
+
+def amplitudes_to_vector_s4(t1, t2, out=None):
+    nocc, nvir = t1.shape
+    nov = nocc * nvir
+    size = nov + nocc*(nocc-1)//2*nvir*(nvir-1)//2
+    vector = numpy.ndarray(size, t1.dtype, buffer=out)
+    vector[:nov] = t1.ravel()
+    otril = numpy.tril_indices(nocc, k=-1)
+    vtril = numpy.tril_indices(nvir, k=-1)
+    lib.take_2d(t2.reshape(nocc**2,nvir**2), otril[0]*nocc+otril[1],
+                vtril[0]*nvir+vtril[1], out=vector[nov:])
+    return vector
+
+def vector_to_amplitudes_s4(vector, nmo, nocc):
+    nvir = nmo - nocc
+    nov = nocc * nvir
+    size = nov + nocc*(nocc-1)//2*nvir*(nvir-1)//2
+    t1 = vector[:nov].copy().reshape(nocc,nvir)
+    t2 = numpy.zeros((nocc,nocc,nvir,nvir), dtype=vector.dtype)
+    t2 = _unpack_4fold(vector[nov:size], nocc, nvir)
+    return t1, t2
 
 
 def energy(mycc, t1, t2, eris):
@@ -673,9 +760,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         return self.emp2, t1, t2
 
     energy = energy
-    add_wvvVV = add_wvvVV
     _add_vvvv = _add_vvvv
     _add_vvvv_tril = _add_vvvv_tril
+    _add_vvvv_full = _add_vvvv_full
     update_amps = update_amps
 
     def kernel(self, t1=None, t2=None, eris=None):
@@ -877,7 +964,6 @@ def _make_eris_incore(mycc, mo_coeff=None):
     cput0 = (time.clock(), time.time())
     eris = _ERIs()
     eris._common_init_(mycc, mo_coeff)
-    eris.dtype = numpy.double
     nocc = eris.nocc
     nmo = eris.fock.shape[0]
     nvir = nmo - nocc
@@ -1094,6 +1180,19 @@ def _fp(nocc, nvir):
 
 def _cp(a):
     return numpy.array(a, copy=False, order='C')
+
+def _unpack_4fold(c2vec, nocc, nvir):
+    t2 = numpy.zeros((nocc**2,nvir**2), dtype=c2vec.dtype)
+    if nocc > 1 and nvir > 1:
+        t2tril = c2vec.reshape(nocc*(nocc-1)//2,nvir*(nvir-1)//2)
+        otril = numpy.tril_indices(nocc, k=-1)
+        vtril = numpy.tril_indices(nvir, k=-1)
+        lib.takebak_2d(t2, t2tril, otril[0]*nocc+otril[1], vtril[0]*nvir+vtril[1])
+        lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[1]*nvir+vtril[0])
+        t2tril = -t2tril
+        lib.takebak_2d(t2, t2tril, otril[0]*nocc+otril[1], vtril[1]*nvir+vtril[0])
+        lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[0]*nvir+vtril[1])
+    return t2.reshape(nocc,nocc,nvir,nvir)
 
 
 if __name__ == '__main__':

@@ -7,9 +7,6 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.cc import ccsd
 from pyscf.cc import rintermediates as imd
-from pyscf import gto
-from pyscf.ao2mo import _ao2mo
-from pyscf.cc import _ccsd
 
 
 def kernel(eom, nroots=1, koopmans=False, guess=None, left=False, imds=None,
@@ -39,9 +36,10 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False, imds=None,
     if user_guess or koopmans:
         def pickeig(w, v, nr, envs):
             x0 = lib.linalg_helper._gen_x0(envs['v'], envs['xs'])
-            s = np.array([[np.dot(g.conj(), x) for x in x0] for g in guess])
+            s = np.dot(np.asarray(guess).conj(), np.asarray(x0).T)
             s = np.dot(s.conj().T, s).diagonal()
-            idx = np.sort(np.argsort(-s)[:nroots])
+            idx = np.argsort(-s)[:nroots]
+            idx = idx[np.argsort(w[idx])]  # sort eigenvalue w
             return w[idx].real, v[:,idx].real, idx
         conv, es, vs = eig(matvec, guess, precond, pick=pickeig,
                            tol=eom.conv_tol, max_cycle=eom.max_cycle,
@@ -136,8 +134,9 @@ def amplitudes_to_vector_ip(r1, r2):
     vector = np.hstack((r1, r2.ravel()))
     return vector
 
-def ipccsd_matvec(eom, vector, imds, diag=None):
+def ipccsd_matvec(eom, vector, imds=None, diag=None):
     # Ref: Nooijen and Snijders, J. Chem. Phys. 102, 1681 (1995) Eqs.(8)-(9)
+    if imds is None: imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
     nvir = nmo - nocc
@@ -180,12 +179,13 @@ def ipccsd_matvec(eom, vector, imds, diag=None):
     vector = amplitudes_to_vector_ip(Hr1, Hr2)
     return vector
 
-def lipccsd_matvec(eom, vector, imds, diag=None):
+def lipccsd_matvec(eom, vector, imds=None, diag=None):
     '''For left eigenvector'''
     # Note this is not the same left EA equations used by Nooijen and Bartlett.
     # Small changes were made so that the same type L2 basis was used for both the
     # left EA and left IP equations.  You will note more similarity for these
     # equations to the left IP equations than for the left EA equations by Nooijen.
+    if imds is None: imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
     nvir = nmo - nocc
@@ -225,7 +225,8 @@ def lipccsd_matvec(eom, vector, imds, diag=None):
     vector = amplitudes_to_vector_ip(Hr1, Hr2)
     return vector
 
-def ipccsd_diag(eom, imds):
+def ipccsd_diag(eom, imds=None):
+    if imds is None: imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
     nocc, nvir = t1.shape
     fock = imds.eris.fock
@@ -352,8 +353,7 @@ class EOMIP(EOM):
     ipccsd_star = ipccsd_star
 
     def gen_matvec(self, imds=None, left=False, **kwargs):
-        if imds is None:
-            imds = self.make_imds()
+        if imds is None: imds = self.make_imds()
         diag = self.get_diag(imds)
         if left:
             matvec = lambda xs: [self.l_matvec(x, imds, diag) for x in xs]
@@ -375,8 +375,7 @@ class EOMIP(EOM):
         return nocc + nocc*nocc*nvir
 
     def make_imds(self, eris=None):
-        if eris is None:
-            eris = self._cc.ao2mo()
+        if eris is None: eris = self._cc.ao2mo()
         imds = _IMDS(self._cc, eris)
         imds.make_ip(self.partition)
         return imds
@@ -409,8 +408,9 @@ def amplitudes_to_vector_ea(r1, r2):
     vector = np.hstack((r1, r2.ravel()))
     return vector
 
-def eaccsd_matvec(eom, vector, imds, diag=None):
+def eaccsd_matvec(eom, vector, imds=None, diag=None):
     # Ref: Nooijen and Bartlett, J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)
+    if imds is None: imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
     nvir = nmo - nocc
@@ -452,11 +452,12 @@ def eaccsd_matvec(eom, vector, imds, diag=None):
     vector = amplitudes_to_vector_ea(Hr1,Hr2)
     return vector
 
-def leaccsd_matvec(eom, vector, imds, diag=None):
+def leaccsd_matvec(eom, vector, imds=None, diag=None):
     # Note this is not the same left EA equations used by Nooijen and Bartlett.
     # Small changes were made so that the same type L2 basis was used for both the
     # left EA and left IP equations.  You will note more similarity for these
     # equations to the left IP equations than for the left EA equations by Nooijen.
+    if imds is None: imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
     nvir = nmo - nocc
@@ -498,7 +499,8 @@ def leaccsd_matvec(eom, vector, imds, diag=None):
     vector = amplitudes_to_vector_ea(Hr1,Hr2)
     return vector
 
-def eaccsd_diag(eom, imds):
+def eaccsd_diag(eom, imds=None):
+    if imds is None: imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
     nocc, nvir = t1.shape
 
@@ -629,8 +631,7 @@ class EOMEA(EOM):
     eaccsd_star = eaccsd_star
 
     def gen_matvec(self, imds=None, left=False, **kwargs):
-        if imds is None:
-            imds = self.make_imds()
+        if imds is None: imds = self.make_imds()
         diag = self.get_diag(imds)
         if left:
             matvec = lambda xs: [self.l_matvec(x, imds, diag) for x in xs]
@@ -652,8 +653,7 @@ class EOMEA(EOM):
         return nvir + nocc*nvir*nvir
 
     def make_imds(self, eris=None):
-        if eris is None:
-            eris = self._cc.ao2mo()
+        if eris is None: eris = self._cc.ao2mo()
         imds = _IMDS(self._cc, eris)
         imds.make_ea(self.partition)
         return imds
@@ -829,34 +829,13 @@ def vector_to_amplitudes_ee_sf(vector, nmo, nocc):
     t2aaba = t2aaba.reshape(nocc,nocc,nvir,nvir)
     return t1, (t2baaa, t2aaba)
 
-def amplitudes_to_vector_s4(t1, t2, out=None):
-    nocc, nvir = t1.shape
-    nov = nocc * nvir
-    size = nov + nocc*(nocc-1)//2*nvir*(nvir-1)//2
-    vector = np.ndarray(size, t1.dtype, buffer=out)
-    vector[:nov] = t1.ravel()
-    otril = np.tril_indices(nocc, k=-1)
-    vtril = np.tril_indices(nvir, k=-1)
-    lib.take_2d(t2.reshape(nocc**2,nvir**2), otril[0]*nocc+otril[1],
-                vtril[0]*nvir+vtril[1], out=vector[nov:])
-    return vector
-
-def vector_to_amplitudes_s4(vector, nmo, nocc):
-    nvir = nmo - nocc
-    nov = nocc * nvir
-    size = nov + nocc*(nocc-1)//2*nvir*(nvir-1)//2
-    t1 = vector[:nov].copy().reshape(nocc,nvir)
-    t2 = np.zeros((nocc,nocc,nvir,nvir), dtype=vector.dtype)
-    t2 = _unpack_4fold(vector[nov:size], nocc, nvir)
-    return t1, t2
-
 def amplitudes_to_vector_triplet(t1, t2, out=None):
     nocc, nvir = t1.shape
     nov = nocc * nvir
     size1 = nov + nocc*(nocc-1)//2*nvir*(nvir-1)//2
     size = size1 + nov*(nov+1)//2
     vector = np.ndarray(size, t1.dtype, buffer=out)
-    amplitudes_to_vector_s4(t1, t2[0], out=vector)
+    ccsd.amplitudes_to_vector_s4(t1, t2[0], out=vector)
     t2ab = t2[1].transpose(0,2,1,3).reshape(nov,nov)
     lib.pack_tril(t2ab, out=vector[size1:])
     return vector
@@ -866,12 +845,13 @@ def vector_to_amplitudes_triplet(vector, nmo, nocc):
     nov = nocc * nvir
     size1 = nov + nocc*(nocc-1)//2*nvir*(nvir-1)//2
     size = size1 + nov*(nov+1)//2
-    t1, t2aa = vector_to_amplitudes_s4(vector[:size1], nmo, nocc)
+    t1, t2aa = ccsd.vector_to_amplitudes_s4(vector[:size1], nmo, nocc)
     t2ab = lib.unpack_tril(vector[size1:size], filltriu=2)
     t2ab = t2ab.reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3).copy()
     return t1, (t2aa, t2ab)
 
-def eeccsd_matvec_singlet(eom, vector, imds, diag=None):
+def eeccsd_matvec_singlet(eom, vector, imds=None):
+    if imds is None: imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
     nvir = nmo - nocc
@@ -958,7 +938,8 @@ def eeccsd_matvec_singlet(eom, vector, imds, diag=None):
     vector = amplitudes_to_vector_ee(Hr1, Hr2)
     return vector
 
-def eeccsd_matvec_triplet(eom, vector, imds, diag=None):
+def eeccsd_matvec_triplet(eom, vector, imds=None):
+    if imds is None: imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
     nvir = nmo - nocc
@@ -1066,8 +1047,9 @@ def eeccsd_matvec_triplet(eom, vector, imds, diag=None):
     vector = amplitudes_to_vector_triplet(Hr1, (Hr2aa,Hr2ab))
     return vector
 
-def eeccsd_matvec_sf(eom, vector, imds, diag=None):
+def eeccsd_matvec_sf(eom, vector, imds=None):
     '''Spin flip EOM-CCSD'''
+    if imds is None: imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
     nvir = nmo - nocc
@@ -1192,7 +1174,7 @@ def eeccsd_matvec_sf(eom, vector, imds, diag=None):
     tau2aaba *= .5
     Hr2aaba += _add_vvvv(eom._cc, tau2aaba, eris)
     tau2baaa *= .5
-    Hr2baaa += _add_Vvvv(eom._cc, tau2baaa, eris)
+    Hr2baaa += eom._cc._add_vvvv_full(np.zeros_like(t1), tau2baaa, eris)
     tau2aaba = tau2baaa = None
 
     Hr2baaa = Hr2baaa - Hr2baaa.transpose(0,1,3,2)
@@ -1200,7 +1182,8 @@ def eeccsd_matvec_sf(eom, vector, imds, diag=None):
     vector = amplitudes_to_vector_ee_sf(Hr1, (Hr2baaa,Hr2aaba))
     return vector
 
-def eeccsd_diag(eom, imds):
+def eeccsd_diag(eom, imds=None):
+    if imds is None: imds = eom.make_imds()
     eris = imds.eris
     t1, t2 = imds.t1, imds.t2
     tau = _make_tau(t2, t1, t1)
@@ -1342,8 +1325,7 @@ class EOMEE(EOM):
         return nocc*nvir + nocc*nocc*nvir*nvir
 
     def make_imds(self, eris=None):
-        if eris is None:
-            eris = self._cc.ao2mo()
+        if eris is None: eris = self._cc.ao2mo()
         imds = _IMDS(self._cc, eris)
         imds.make_ee()
         return imds
@@ -1360,7 +1342,7 @@ class EOMEESinglet(EOMEE):
     def gen_matvec(self, imds=None, diag=None, **kwargs):
         if imds is None: imds = self.make_imds()
         if diag is None: diag = self.get_diag(imds)[0]
-        matvec = lambda xs: [self.matvec(x, imds, diag) for x in xs]
+        matvec = lambda xs: [self.matvec(x, imds) for x in xs]
         return matvec, diag
 
     def vector_to_amplitudes(self, vector, nmo=None, nocc=None):
@@ -1374,7 +1356,8 @@ class EOMEESinglet(EOMEE):
     def vector_size(self):
         nocc = self.nocc
         nvir = self.nmo - nocc
-        return nocc*nvir + nocc*(nocc+1)//2*nvir**2
+        nov = nocc * nvir
+        return nov + nov*(nov+1)//2
 
 
 class EOMEETriplet(EOMEE):
@@ -1384,7 +1367,7 @@ class EOMEETriplet(EOMEE):
     def gen_matvec(self, imds=None, diag=None, **kwargs):
         if imds is None: imds = self.make_imds()
         if diag is None: diag = self.get_diag(imds)[1]
-        matvec = lambda xs: [self.matvec(x, imds, diag) for x in xs]
+        matvec = lambda xs: [self.matvec(x, imds) for x in xs]
         return matvec, diag
 
     def vector_to_amplitudes(self, vector, nmo=None, nocc=None):
@@ -1409,7 +1392,7 @@ class EOMEESpinFlip(EOMEE):
     def gen_matvec(self, imds=None, diag=None, **kwargs):
         if imds is None: imds = self.make_imds()
         if diag is None: diag = self.get_diag(imds)[1]
-        matvec = lambda xs: [self.matvec(x, imds, diag) for x in xs]
+        matvec = lambda xs: [self.matvec(x, imds) for x in xs]
         return matvec, diag
 
     def vector_to_amplitudes(self, vector, nmo=None, nocc=None):
@@ -1684,132 +1667,6 @@ def _add_vvvv(cc, t2, eris):
         Ht2[np.tril_indices(nocc)] = t2tril * 2
         Ht2[np.diag_indices(nocc)] *= .5
         return Ht2
-
-def _add_Vvvv(cc, t2, eris):
-    nocc = t2.shape[0]
-    nvir = t2.shape[2]
-    t1 = np.zeros((nocc,nvir))
-    if eris.vvvv is None and hasattr(eris, 'vvL'):  # DF eris
-        if eris.vvL.dtype != np.double:
-            raise NotImplementedError('complex DF integrals are not supported.')
-
-        time0 = time.clock(), time.time()
-        naux = eris.naux
-        nvir_pair = nvir*(nvir+1)//2
-        Ht2 = np.zeros_like(t2)
-
-        max_memory = max(0, cc.max_memory - lib.current_memory()[0])
-        dmax = min(nvir, max(ccsd.BLKMIN, np.sqrt(max_memory*.8e6/8/nvir**2/2)))
-        vvblk = min(nvir, max(ccsd.BLKMIN, (max_memory*1e6/8 - dmax**2*(nvir**2*1.5+naux))/naux))
-        dmax = int(dmax)
-        vvblk = int(vvblk)
-        eribuf = np.empty((dmax,dmax,nvir_pair))
-        loadbuf = np.empty((dmax,dmax,nvir,nvir))
-
-        for i0, i1 in lib.prange(0, nvir, dmax):
-            di = i1 - i0
-            for j0, j1 in lib.prange(0, i1, dmax):
-                dj = j1 - j0
-
-                ijL = np.empty((di,dj,naux))
-                for i in range(i0, i1):
-                    ioff = i*(i+1)//2
-                    ijL[i-i0] = eris.vvL[ioff+j0:ioff+j1]
-                if i0 == j0:
-                    idx, idy = np.tril_indices(di)
-                    ijL[idy,idx] = ijL[idx,idy]
-
-                ijL = ijL.reshape(-1,naux)
-                eri = np.ndarray(((i1-i0)*(j1-j0),nvir_pair), buffer=eribuf)
-                for p0, p1 in lib.prange(0, nvir_pair, vvblk):
-                    vvL = _cp(eris.vvL[p0:p1])
-                    eri[:,p0:p1] = lib.dot(ijL, vvL.T)
-                    vvL = None
-
-                tmp = np.ndarray((i1-i0,nvir,j1-j0,nvir), buffer=loadbuf)
-                _ccsd.libcc.CCload_eri(tmp.ctypes.data_as(ctypes.c_void_p),
-                                       eri.ctypes.data_as(ctypes.c_void_p),
-                                       (ctypes.c_int*4)(i0, i1, j0, j1),
-                                       ctypes.c_int(nvir))
-                Ht2[:,:,j0:j1] += lib.einsum('ijef,efab->ijab', t2[:,:,i0:i1], tmp)
-                if i0 > j0:
-                    Ht2[:,:,i0:i1] += lib.einsum('ijef,abef->ijab', t2[:,:,j0:j1], tmp)
-                time0 = logger.timer_debug1(cc, 'vvvv [%d:%d,%d:%d]' %
-                                            (i0,i1,j0,j1), *time0)
-        eribuf = loadbuf = eri = tmp = None
-        return Ht2
-
-    elif eris.vvvv is None and cc.direct:  # AO direct CCSD
-        time0 = time.clock(), time.time()
-        mol = cc.mol
-        if hasattr(eris, 'mo_coeff'):
-            mo = eris.mo_coeff
-        else:
-            mo = ccsd._mo_without_core(mycc, mycc.mo_coeff)
-        nao, nmo = mo.shape
-        aos = np.asarray(mo[:,nocc:].T, order='F')
-        t2 = _ao2mo.nr_e2(t2.reshape(nocc**2,nvir,nvir), aos, (0,nao,0,nao), 's1', 's1')
-        t2 = t2.reshape(nocc,nocc,nao,nao)
-
-        intor = mol._add_suffix('int2e')
-        ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFnr_schwarz_cond',
-                                 'CVHFsetnr_direct_scf')
-        Ht2 = np.zeros((nocc,nocc,nao,nao))
-        ao_loc = mol.ao_loc_nr()
-        max_memory = max(0, cc.max_memory - lib.current_memory()[0])
-        dmax = max(ccsd.BLKMIN, np.sqrt(max_memory*.9e6/8/nao**2/2))
-        sh_ranges = ao2mo.outcore.balance_partition(ao_loc, dmax)
-        dmax = max(x[2] for x in sh_ranges)
-        eribuf = np.empty((dmax,dmax,nao,nao))
-        loadbuf = np.empty((dmax,dmax,nao,nao))
-        fint = gto.moleintor.getints4c
-
-        for ip, (ish0, ish1, ni) in enumerate(sh_ranges):
-            for jsh0, jsh1, nj in sh_ranges[:ip+1]:
-                eri = fint(intor, mol._atm, mol._bas, mol._env,
-                           shls_slice=(ish0,ish1,jsh0,jsh1), aosym='s2kl',
-                           ao_loc=ao_loc, cintopt=ao2mopt._cintopt, out=eribuf)
-                i0, i1 = ao_loc[ish0], ao_loc[ish1]
-                j0, j1 = ao_loc[jsh0], ao_loc[jsh1]
-                tmp = np.ndarray((i1-i0,nao,j1-j0,nao), buffer=loadbuf)
-                _ccsd.libcc.CCload_eri(tmp.ctypes.data_as(ctypes.c_void_p),
-                                       eri.ctypes.data_as(ctypes.c_void_p),
-                                       (ctypes.c_int*4)(i0, i1, j0, j1),
-                                       ctypes.c_int(nao))
-                Ht2[:,:,j0:j1] += lib.einsum('ijef,efab->ijab', t2[:,:,i0:i1], tmp)
-                if ish0 > jsh0:
-                    Ht2[:,:,i0:i1] += lib.einsum('ijef,abef->ijab', t2[:,:,j0:j1], tmp)
-                time0 = logger.timer_debug1(cc, 'AO-vvvv [%d:%d,%d:%d]' %
-                                            (ish0,ish1,jsh0,jsh1), *time0)
-        eribuf = loadbuf = eri = tmp = None
-        Ht2 = _ao2mo.nr_e2(Ht2.reshape(nocc**2,-1), mo, (nocc,nmo,nocc,nmo), 's1', 's1')
-        return Ht2.reshape(nocc,nocc,nvir,nvir)
-
-    elif eris.vvvv.ndim == 4:
-        return cc._add_vvvv(t1, t2, eris)
-    else:
-        Ht2 = np.zeros_like(t2)
-        for i in range(nvir):
-            i0 = i*(i+1)//2
-            vvv = lib.unpack_tril(np.asarray(eris.vvvv[i0:i0+i+1]))
-            Ht2[:,:, i] += lib.einsum('ijef,ebf->ijb', t2[:,:,:i+1], vvv)
-            if i > 0:
-                Ht2[:,:,:i] += lib.einsum('ijf,abf->ijab', t2[:,:,i], vvv[:i])
-            vvv = None
-        return Ht2
-
-def _unpack_4fold(c2vec, nocc, nvir):
-    t2 = np.zeros((nocc**2,nvir**2), dtype=c2vec.dtype)
-    if nocc > 1 and nvir > 1:
-        t2tril = c2vec.reshape(nocc*(nocc-1)//2,nvir*(nvir-1)//2)
-        otril = np.tril_indices(nocc, k=-1)
-        vtril = np.tril_indices(nvir, k=-1)
-        lib.takebak_2d(t2, t2tril, otril[0]*nocc+otril[1], vtril[0]*nvir+vtril[1])
-        lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[1]*nvir+vtril[0])
-        t2tril = -t2tril
-        lib.takebak_2d(t2, t2tril, otril[0]*nocc+otril[1], vtril[1]*nvir+vtril[0])
-        lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[0]*nvir+vtril[1])
-    return t2.reshape(nocc,nocc,nvir,nvir)
 
 def _cp(a):
     return np.array(a, copy=False, order='C')

@@ -10,8 +10,6 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.cc import ccsd
 
-einsum = lib.einsum
-
 #
 # JCP, 95, 2623
 # JCP, 95, 2639
@@ -25,10 +23,10 @@ def gamma1_intermediates(mycc, t1, t2, l1, l2):
     xtv = numpy.einsum('ie,me->im', t1, l1)
     dov = t1 - numpy.einsum('im,ma->ia', xtv, t1)
     theta = t2 * 2 - t2.transpose(0,1,3,2)
-    doo -= einsum('jkab,ikab->ij', l2, theta)
-    dvv += einsum('jica,jicb->ab', l2, theta)
-    xt1  = einsum('mnef,inef->mi', l2, theta)
-    xt2  = einsum('mnaf,mnef->ea', l2, theta)
+    doo -= lib.einsum('jkab,ikab->ij', l2, theta)
+    dvv += lib.einsum('jica,jicb->ab', l2, theta)
+    xt1  = lib.einsum('mnef,inef->mi', l2, theta)
+    xt2  = lib.einsum('mnaf,mnef->ea', l2, theta)
     dov += numpy.einsum('imae,me->ia', theta, l1)
     dov -= numpy.einsum('mi,ma->ia', xt1, t1)
     dov -= numpy.einsum('ie,ae->ia', t1, xt2)
@@ -60,19 +58,19 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
     fswap = lib.H5TmpFile()
 
     time1 = time.clock(), time.time()
-    pvOOv = einsum('ikca,jkcb->aijb', l2, t2)
+    pvOOv = lib.einsum('ikca,jkcb->aijb', l2, t2)
     moo = numpy.einsum('dljd->jl', pvOOv) * 2
     mvv = numpy.einsum('blld->db', pvOOv) * 2
-    gvooo = einsum('kc,cija->aikj', t1, pvOOv)
+    gvooo = lib.einsum('kc,cija->aikj', t1, pvOOv)
     fswap['mvOOv'] = pvOOv
     pvOOv = None
 
-    pvoOV = -einsum('ikca,jkbc->aijb', l2, t2)
+    pvoOV = -lib.einsum('ikca,jkbc->aijb', l2, t2)
     theta = t2 * 2 - t2.transpose(0,1,3,2)
-    pvoOV += einsum('ikac,jkbc->aijb', l2, theta)
+    pvoOV += lib.einsum('ikac,jkbc->aijb', l2, theta)
     moo += numpy.einsum('dljd->jl', pvoOV)
     mvv += numpy.einsum('blld->db', pvoOV)
-    gvooo -= einsum('jc,cika->aikj', t1, pvoOV)
+    gvooo -= lib.einsum('jc,cika->aikj', t1, pvoOV)
     fswap['mvoOV'] = pvoOV
     pvoOV = None
 
@@ -83,13 +81,13 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
 
     tau = numpy.einsum('ia,jb->ijab', t1, t1)
     tau += t2
-    goooo = einsum('ijab,klab->klij', l2, tau)*.5
+    goooo = lib.einsum('ijab,klab->klij', l2, tau)*.5
     h5fobj['doooo'] = goooo.transpose(0,2,1,3)*2 - goooo.transpose(0,3,1,2)
 
     gvooo += numpy.einsum('ji,ka->aikj', -.5*moo, t1)
-    gvooo += einsum('la,jkil->aikj', 2*t1, goooo)
-    gvooo -= einsum('ib,jkba->aikj', l1, tau)
-    gvooo -= einsum('jkba,ib->aikj', l2, t1)
+    gvooo += lib.einsum('la,jkil->aikj', 2*t1, goooo)
+    gvooo -= lib.einsum('ib,jkba->aikj', l1, tau)
+    gvooo -= lib.einsum('jkba,ib->aikj', l2, t1)
     h5fobj['dvooo'] = gvooo.transpose(0,2,1,3)*2 - gvooo.transpose(0,3,1,2)
     tau = gvooo = None
     time1 = log.timer_debug1('rdm intermediates pass1', *time1)
@@ -103,19 +101,19 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
     for p0, p1 in lib.prange(0, nvir, blksize):
         tau = numpy.einsum('ia,jb->ijab', t1[:,p0:p1], t1)
         tau += t2[:,:,p0:p1]
-        gvvoo[p0:p1] -= einsum('jk,ikab->abij', mij, tau)
+        gvvoo[p0:p1] -= lib.einsum('jk,ikab->abij', mij, tau)
         gvvoo[p0:p1] += .5 * l2[:,:,p0:p1].transpose(2,3,0,1)
         gvvoo[p0:p1] += .5 * tau.transpose(2,3,0,1)
-        gvvoo[p0:p1] -= einsum('cb,ijac->abij', mab, t2[:,:,p0:p1])
-        gvvoo[p0:p1] -= einsum('bd,ijad->abij', mvv*.5, tau)
-        gvvoo[p0:p1] += einsum('ijkl,klab->abij', goooo, tau)
+        gvvoo[p0:p1] -= lib.einsum('cb,ijac->abij', mab, t2[:,:,p0:p1])
+        gvvoo[p0:p1] -= lib.einsum('bd,ijad->abij', mvv*.5, tau)
+        gvvoo[p0:p1] += lib.einsum('ijkl,klab->abij', goooo, tau)
 
         pvOOv = _cp(fswap['mvOOv'][p0:p1])
         pvoOV = _cp(fswap['mvoOV'][p0:p1])
-        gvOOv = einsum('kiac,jc,kb->aijb', l2[:,:,p0:p1], t1, t1)
+        gvOOv = lib.einsum('kiac,jc,kb->aijb', l2[:,:,p0:p1], t1, t1)
         gvOOv += pvOOv
         gvoOV = numpy.einsum('ia,jb->aijb', l1[:,p0:p1], t1)
-        gvoOV -= einsum('ikac,jc,kb->aijb', l2[:,:,p0:p1], t1, t1)
+        gvoOV -= lib.einsum('ikac,jc,kb->aijb', l2[:,:,p0:p1], t1, t1)
         gvoOV += pvoOV
         dvoov[p0:p1] = ( 2*gvoOV + gvOOv)
         dvvoo[p0:p1] = (-2*gvOOv - gvoOV).transpose(0,3,2,1)
@@ -123,10 +121,10 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
 
         tau -= t2[:,:,p0:p1] * .5
         for q0, q1 in lib.prange(0, nvir, blksize):
-            gvvoo[q0:q1,:] += einsum('dlib,jlda->abij', pvOOv, tau[:,:,:,q0:q1])
-            gvvoo[:,q0:q1] -= einsum('dlia,jldb->abij', pvoOV, tau[:,:,:,q0:q1])
+            gvvoo[q0:q1,:] += lib.einsum('dlib,jlda->abij', pvOOv, tau[:,:,:,q0:q1])
+            gvvoo[:,q0:q1] -= lib.einsum('dlia,jldb->abij', pvoOV, tau[:,:,:,q0:q1])
             tmp = pvoOV[:,:,:,q0:q1] + pvOOv[:,:,:,q0:q1]*.5
-            gvvoo[q0:q1,:] += einsum('dlia,jlbd->abij', tmp, t2[:,:,:,p0:p1])
+            gvvoo[q0:q1,:] += lib.einsum('dlia,jlbd->abij', tmp, t2[:,:,:,p0:p1])
         pvOOv = pvoOV = tau = None
         time1 = log.timer_debug1('rdm intermediates pass2 [%d:%d]'%(p0, p1), *time1)
     h5fobj['dvovo'] = gvvoo.transpose(0,2,1,3) * 2 - gvvoo.transpose(0,3,1,2)
@@ -143,9 +141,9 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
     time1 = time.clock(), time.time()
     for istep, (p0, p1) in enumerate(lib.prange(0, nvir, blksize)):
         l2tmp = l2[:,:,p0:p1] * .5
-        gvvvv = einsum('ijab,ijcd->abcd', l2tmp, t2)
-        jabc = einsum('ijab,ic->jabc', l2tmp, t1)
-        gvvvv += einsum('jabc,jd->abcd', jabc, t1)
+        gvvvv = lib.einsum('ijab,ijcd->abcd', l2tmp, t2)
+        jabc = lib.einsum('ijab,ic->jabc', l2tmp, t1)
+        gvvvv += lib.einsum('jabc,jd->abcd', jabc, t1)
         l2tmp = jabc = None
 
 # symmetrize dvvvv because it is symmetrized in ccsd_grad and make_rdm2 anyway
@@ -172,15 +170,15 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
             dvvvv[off:off+i+1] = tmpvvvv[i-p0,:i+1] * .25
         tmp = tmpvvvv = None
 
-        gvovv = einsum('adbc,id->aibc', gvvvv, t1*-2)
+        gvovv = lib.einsum('adbc,id->aibc', gvvvv, t1*-2)
         gvvvv = None
 
-        gvovv += einsum('akic,kb->aibc', _cp(fswap['mvoOV'][p0:p1]), t1)
-        gvovv -= einsum('akib,kc->aibc', _cp(fswap['mvOOv'][p0:p1]), t1)
+        gvovv += lib.einsum('akic,kb->aibc', _cp(fswap['mvoOV'][p0:p1]), t1)
+        gvovv -= lib.einsum('akib,kc->aibc', _cp(fswap['mvOOv'][p0:p1]), t1)
 
-        gvovv += einsum('ja,jibc->aibc', l1[:,p0:p1], t2)
-        gvovv += einsum('jibc,ja->aibc', l2, t1[:,p0:p1])
-        gvovv += einsum('ja,jb,ic->aibc', l1[:,p0:p1], t1, t1)
+        gvovv += lib.einsum('ja,jibc->aibc', l1[:,p0:p1], t2)
+        gvovv += lib.einsum('jibc,ja->aibc', l2, t1[:,p0:p1])
+        gvovv += lib.einsum('ja,jb,ic->aibc', l1[:,p0:p1], t1, t1)
         gvovv += numpy.einsum('ba,ic->aibc', mvv[:,p0:p1]*.5, t1)
 
         gvvov = gvovv.transpose(0,2,1,3)*2 - gvovv.transpose(0,3,1,2)

@@ -16,8 +16,6 @@ from pyscf.cc import ccsd_rdm
 from pyscf.scf import rhf_grad
 from pyscf.scf import cphf
 
-einsum = lib.einsum
-
 
 def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
     if eris is None:
@@ -61,14 +59,14 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
     eris_vooo = _cp(eris.vooo)
     d_oooo = _cp(doooo)
     d_oooo = _cp(d_oooo + d_oooo.transpose(1,0,2,3))
-    Ioo += einsum('jmlk,imlk->ij', d_oooo, eris_oooo) * 2
-    Xvo += einsum('aklj,iklj->ai', eris_vooo, d_oooo) * 2
+    Ioo += lib.einsum('jmlk,imlk->ij', d_oooo, eris_oooo) * 2
+    Xvo += lib.einsum('aklj,iklj->ai', eris_vooo, d_oooo) * 2
     Xvo += numpy.einsum('kj,aikj->ai', doo, eris_vooo) * 4
     Xvo -= numpy.einsum('kj,ajik->ai', doo+doo.T, eris_vooo)
 
     d_vooo = _cp(dvooo)
-    Ivv += einsum('bkij,akij->ab', d_vooo, eris_vooo)
-    Ivo += einsum('akjl,ikjl->ai', d_vooo, eris_oooo)
+    Ivv += lib.einsum('bkij,akij->ab', d_vooo, eris_vooo)
+    Ivo += lib.einsum('akjl,ikjl->ai', d_vooo, eris_oooo)
     eris_oooo = eris_vooo = d_oooo = d_vooo = None
 
     max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
@@ -87,23 +85,23 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
         eris_vvoo = _cp(eris.vvoo[p0:p1])
 
         d_vooo = _cp(dvooo[p0:p1])
-        Ioo += einsum('ajkl,aikl->ij', d_vooo, eris_vooo)
-        Xvo += einsum('bikj,bakj->ai', d_vooo, eris_vvoo)
+        Ioo += lib.einsum('ajkl,aikl->ij', d_vooo, eris_vooo)
+        Xvo += lib.einsum('bikj,bakj->ai', d_vooo, eris_vvoo)
         d_vooo = d_vooo + d_vooo.transpose(0,1,3,2)
         eris_voov = _cp(eris.voov[p0:p1])
-        Ioo += einsum('aklj,akli->ij', d_vooo, eris_vooo)
-        Xvo += einsum('bkji,bkja->ai', d_vooo, eris_voov)
+        Ioo += lib.einsum('aklj,akli->ij', d_vooo, eris_vooo)
+        Xvo += lib.einsum('bkji,bkja->ai', d_vooo, eris_voov)
 
         d_vvoo = _cp(fswap['d_vvoo'][p0:p1])
-        Ioo += einsum('bakj,baki->ij', d_vvoo, eris_vvoo)
-        Ivv += einsum('cbij,caij->ab', d_vvoo, eris_vvoo)
-        Ivo += einsum('bakj,bikj->ai', d_vvoo, eris_vooo)
+        Ioo += lib.einsum('bakj,baki->ij', d_vvoo, eris_vvoo)
+        Ivv += lib.einsum('cbij,caij->ab', d_vvoo, eris_vvoo)
+        Ivo += lib.einsum('bakj,bikj->ai', d_vvoo, eris_vooo)
         d_vvoo = None
 
         d_voov = _cp(fswap['d_voov'][p0:p1])
-        Ivo += einsum('bjka,bjki->ai', d_voov, eris_vooo)
-        Ioo += einsum('ajkb,aikb->ij', d_voov, eris_voov)
-        Ivv += einsum('cjib,cjia->ab', d_voov, eris_voov)
+        Ivo += lib.einsum('bjka,bjki->ai', d_voov, eris_vooo)
+        Ioo += lib.einsum('ajkb,aikb->ij', d_voov, eris_voov)
+        Ivv += lib.einsum('cjib,cjia->ab', d_voov, eris_voov)
         eris_vvoo = eris_vooo = eris_voov = None
 
         # tril part of (d_vovv + d_vovv.transpose(0,1,3,2))
@@ -116,15 +114,15 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
         fswap['eris_wvo'][:,p0:p1] = eris_vox.reshape(p1-p0,nocc,nvir_pair).transpose(2,0,1)
 
         d_vovv = d_vovv + d_vovv.transpose(0,1,3,2)
-        Ivo += einsum('cjab,cjib->ai', d_vovv, _cp(eris.voov[p0:p1]))
+        Ivo += lib.einsum('cjab,cjib->ai', d_vovv, _cp(eris.voov[p0:p1]))
 
         eris_vovv = lib.unpack_tril(eris_vox.reshape(-1,nvir_pair))
         eris_vox = None
         eris_vovv = eris_vovv.reshape(p1-p0,nocc,nvir,nvir)
-        Ivv += einsum('cidb,cida->ab', d_vovv, eris_vovv)
+        Ivv += lib.einsum('cidb,cida->ab', d_vovv, eris_vovv)
         Xvo[p0:p1] += numpy.einsum('cb,aicb->ai', dvv, eris_vovv) * 4
         Xvo -= numpy.einsum('cb,ciba->ai', dvv1[p0:p1], eris_vovv)
-        Xvo += einsum('bjic,bjca->ai', d_voov, eris_vovv)
+        Xvo += lib.einsum('bjic,bjca->ai', d_voov, eris_vovv)
         d_vovv = d_voov = eris_vovv = None
 
     max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
@@ -140,10 +138,10 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
             d_vvvv[i*(i+1)//2+i-off0] *= .5
         d_vvvv = lib.unpack_tril(d_vvvv)
         eris_vvvv = lib.unpack_tril(_cp(eris.vvvv[off0:off1]))
-        Ivv += einsum('xcb,xca->ab', d_vvvv, eris_vvvv) * 2
+        Ivv += lib.einsum('xcb,xca->ab', d_vvvv, eris_vvvv) * 2
 
         d_vvvo = _cp(fswap['d_wvo'][off0:off1])
-        Xvo += einsum('xci,xca->ai', d_vvvo, eris_vvvv)
+        Xvo += lib.einsum('xci,xca->ai', d_vvvo, eris_vvvv)
         eris_vvvv = None
 
         buf = _cp(eris.vvoo[p0:p1,:p1])
@@ -152,17 +150,17 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
         for i in range(p1-p0):
             q0, q1 = q1, q1 + p0+i+1
             eris_vvoo[q0:q1] = buf[i,:p0+i+1]
-        Ivo += einsum('xaj,xji->ai', d_vvvo, eris_vvoo)
+        Ivo += lib.einsum('xaj,xji->ai', d_vvvo, eris_vvoo)
         buf = eris_vvoo = None
 
         eris_vvvo = _cp(fswap['eris_wvo'][off0:off1])
-        Ivo += einsum('xca,xci->ai', d_vvvv, eris_vvvo) * 2
+        Ivo += lib.einsum('xca,xci->ai', d_vvvv, eris_vvvo) * 2
         d_vvvv = None
-        Ioo += einsum('xcj,xci->ij', d_vvvo, eris_vvvo)
-        Ivv += einsum('xai,xbi->ab', d_vvvo, eris_vvvo)
+        Ioo += lib.einsum('xcj,xci->ij', d_vvvo, eris_vvvo)
+        Ivv += lib.einsum('xai,xbi->ab', d_vvvo, eris_vvvo)
 
         d_vvoo = _cp(fswap['d_woo'][off0:off1])
-        Xvo += einsum('xij,xaj->ai', d_vvoo, eris_vvvo)
+        Xvo += lib.einsum('xij,xaj->ai', d_vvoo, eris_vvvo)
         eris_vvvo = d_vvvo = d_vvoo = None
 
     Ioo *= -1
