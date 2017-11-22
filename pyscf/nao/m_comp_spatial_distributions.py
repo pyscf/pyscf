@@ -3,13 +3,15 @@ import numpy as np
 from pyscf.nao import scf
 from pyscf.nao.m_tools import find_nearrest_index
 import h5py
+from pyscf.nao.m_libnao import libnao
+from ctypes import POINTER, c_int, c_int32, c_int64, c_float, c_double
 
-try:
-    import numba as nb
-    from pyscf.nao.m_comp_spatial_numba import get_spatial_density_numba, get_spatial_density_numba_parallel
-    use_numba = True
-except:
-    use_numba = False
+#try:
+#    import numba as nb
+#    from pyscf.nao.m_comp_spatial_numba import get_spatial_density_numba, get_spatial_density_numba_parallel
+#    use_numba = True
+#except:
+#    use_numba = False
 
 
 class spatial_distribution(scf):
@@ -54,12 +56,17 @@ class spatial_distribution(scf):
         scf.__init__(self, **kw)
         iw = find_nearrest_index(freq, w0)
         self.nprod = dn.shape[2]
-        self.mu2dn = np.dot(self.Eext, dn[:, iw, :])
+        self.mu2dn_re = np.dot(self.Eext, dn[:, iw, :].real)
+        self.mu2dn_im = np.dot(self.Eext, dn[:, iw, :].imag)
 
-        self.get_spatial_density(self.pb.prod_log)
+        self.dn_spatial = self.get_spatial_density(self.pb.prod_log)
 
 
     def get_spatial_density(self, ao_log=None):
+        """
+            Convert the density change from product basis
+            to cartesian coordinates
+        """
 
         from pyscf.nao.m_ao_matelem import ao_matelem_c
         from pyscf.nao.m_csphar import csphar
@@ -73,49 +80,45 @@ class spatial_distribution(scf):
             atom2s[atom+1]= atom2s[atom] + me.ao1.sp2norbs[sp]
 
         rr = self.ao_log.rr
-        coeffs = np.zeros((6), dtype=np.float64)
-        res = np.zeros((self.nprod), dtype = np.float64)
-        self.dn_spatial = np.zeros((self.mesh[0].size, self.mesh[1].size, self.mesh[2].size),
-                                        dtype=np.complex64)
+        nr = self.pb.prod_log.interp_rr.nr
+        nj = np.array(self.pb.prod_log.sp_mu2j).shape[1]
+        gammin_jt = float(self.pb.prod_log.interp_rr.gammin_jt)
+        dg_jt = float(self.pb.prod_log.interp_rr.dg_jt)
+        Nx, Ny, Nz = self.mesh[0].size, self.mesh[1].size, self.mesh[2].size 
 
-        if use_numba:
-            if self.nb_parallel:
-                get_spatial = nb.jit(nopython=False, cache=self.nb_cache, parallel=self.nb_parallel)(get_spatial_density_numba_parallel)
-            else:
-                get_spatial = nb.jit(nopython=True, cache=self.nb_cache)(get_spatial_density_numba)
-            get_spatial(self.dn_spatial, self.mu2dn, self.mesh, self.atom2sp, self.atom2coord,
-                     atom2s, np.array(self.pb.prod_log.sp_mu2j), np.array(self.pb.prod_log.psi_log_rl), 
-                     np.array(self.pb.prod_log.sp_mu2s), np.array(self.ao_log.sp2rcut), rr, res, coeffs,
-                     self.pb.prod_log.interp_rr.gammin_jt, self.pb.prod_log.interp_rr.dg_jt,
-                     self.pb.prod_log.interp_rr.nr)
-        else:
-            for ix, x in enumerate(self.mesh[0]):
-                print(ix, self.mesh[0].shape)
-                for iy, y in enumerate(self.mesh[1]):
-                    for iz, z in enumerate(self.mesh[2]):
+        dn_spatial_re = np.zeros((Nx, Ny, Nz), dtype=np.float32)
+        dn_spatial_im = np.zeros((Nx, Ny, Nz), dtype=np.float32)
 
-                        br = np.array([x, y, z])
+        # Aligning the data is important to avoid troubles in the fortran side!
+        atoms2sp = np.require(self.atom2sp, dtype=self.atom2sp.dtype, requirements=["A", "O"])
+        atoms2sp = np.require(self.atom2sp, dtype=self.atom2sp.dtype, requirements=["A", "O"])
+        atoms2coord = np.require(self.atom2coord, dtype=self.atom2coord.dtype, requirements=["A", "O"])
+        sp_mu2j = np.require(np.array(self.pb.prod_log.sp_mu2j), dtype=self.pb.prod_log.sp_mu2j[0].dtype,
+                                requirements=["A", "O"])
+        psi_log_rl = np.require(np.array(self.pb.prod_log.psi_log_rl), dtype=self.pb.prod_log.psi_log_rl[0].dtype,
+                                requirements=["A", "O"])
+        sp_mu2s = np.require(np.array(self.pb.prod_log.sp_mu2s), dtype=self.pb.prod_log.sp_mu2s[0].dtype,
+                                requirements=["A", "O"])
+        sp2rcut = np.require(np.array(self.ao_log.sp2rcut), dtype=self.ao_log.sp2rcut[0].dtype,
+                                requirements=["A", "O"])
 
-                        for atm, sp in enumerate(self.atom2sp):
-                            brp = br - self.atom2coord[atm, :]
-                            r = np.sqrt(np.dot(brp, brp))
-                            rcut = self.ao_log.sp2rcut[sp]
+        libnao.get_spatial_density_parallel(dn_spatial_re.ctypes.data_as(POINTER(c_float)),
+                dn_spatial_im.ctypes.data_as(POINTER(c_float)),
+                self.mu2dn_re.ctypes.data_as(POINTER(c_double)),
+                self.mu2dn_im.ctypes.data_as(POINTER(c_double)),
+                self.mesh[0].ctypes.data_as(POINTER(c_double)), 
+                self.mesh[1].ctypes.data_as(POINTER(c_double)), 
+                self.mesh[2].ctypes.data_as(POINTER(c_double)), 
+                atoms2sp.ctypes.data_as(POINTER(c_int64)), 
+                atoms2coord.ctypes.data_as(POINTER(c_double)),
+                atom2s.ctypes.data_as(POINTER(c_int64)), 
+                sp_mu2j.ctypes.data_as(POINTER(c_int32)), 
+                psi_log_rl.ctypes.data_as(POINTER(c_double)), 
+                sp_mu2s.ctypes.data_as(POINTER(c_int64)), 
+                sp2rcut.ctypes.data_as(POINTER(c_double)), 
+                rr.ctypes.data_as(POINTER(c_double)), 
+                c_double(gammin_jt), c_double(dg_jt), c_int(Nx), 
+                c_int(Ny), c_int(Nz), c_int(self.nprod), c_int(self.natoms), 
+                c_int(nr), c_int(nj), c_int(self.nspecies))
 
-                            si = atom2s[atm]
-                            fi = atom2s[atm+1]
-
-                            if r>rcut: continue
-                            jmx_sp = self.pb.prod_log.sp_mu2j[sp].max()
-                            rsh = np.zeros((jmx_sp+1)**2)
-                            rsphar(brp, jmx_sp, rsh)
-
-                            ir = comp_coeffs_(self.pb.prod_log.interp_rr, r, coeffs)
-                            for j,ff,s,f in zip(self.pb.prod_log.sp_mu2j[sp],
-                                                self.pb.prod_log.psi_log_rl[sp],
-                                                self.pb.prod_log.sp_mu2s[sp],
-                                                self.pb.prod_log.sp_mu2s[sp][1:]):
-                                fval = (ff[ir:ir+6]*coeffs).sum() if j==0 else (ff[ir:ir+6]*coeffs).sum()*r**j
-                                res[si+s: si+f] = fval * rsh[j*(j+1)-j:j*(j+1)+j+1]
-
-                        self.dn_spatial[ix, iy, iz] += np.sum(res*self.mu2dn)
-
+        return dn_spatial_re + 1.0j*dn_spatial_im
