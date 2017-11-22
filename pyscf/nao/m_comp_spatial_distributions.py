@@ -79,9 +79,7 @@ class spatial_distribution(scf):
         for atom,sp in enumerate(self.atom2sp):
             atom2s[atom+1]= atom2s[atom] + me.ao1.sp2norbs[sp]
 
-        rr = self.ao_log.rr
-        nr = self.pb.prod_log.interp_rr.nr
-        nj = np.array(self.pb.prod_log.sp_mu2j).shape[1]
+        print(atom2s)
         gammin_jt = float(self.pb.prod_log.interp_rr.gammin_jt)
         dg_jt = float(self.pb.prod_log.interp_rr.dg_jt)
         Nx, Ny, Nz = self.mesh[0].size, self.mesh[1].size, self.mesh[2].size 
@@ -91,16 +89,6 @@ class spatial_distribution(scf):
 
         # Aligning the data is important to avoid troubles in the fortran side!
         atoms2sp = np.require(self.atom2sp, dtype=self.atom2sp.dtype, requirements=["A", "O"])
-        atoms2sp = np.require(self.atom2sp, dtype=self.atom2sp.dtype, requirements=["A", "O"])
-        atoms2coord = np.require(self.atom2coord, dtype=self.atom2coord.dtype, requirements=["A", "O"])
-        sp_mu2j = np.require(np.array(self.pb.prod_log.sp_mu2j), dtype=self.pb.prod_log.sp_mu2j[0].dtype,
-                                requirements=["A", "O"])
-        psi_log_rl = np.require(np.array(self.pb.prod_log.psi_log_rl), dtype=self.pb.prod_log.psi_log_rl[0].dtype,
-                                requirements=["A", "O"])
-        sp_mu2s = np.require(np.array(self.pb.prod_log.sp_mu2s), dtype=self.pb.prod_log.sp_mu2s[0].dtype,
-                                requirements=["A", "O"])
-        sp2rcut = np.require(np.array(self.ao_log.sp2rcut), dtype=self.ao_log.sp2rcut[0].dtype,
-                                requirements=["A", "O"])
 
         libnao.get_spatial_density_parallel(dn_spatial_re.ctypes.data_as(POINTER(c_float)),
                 dn_spatial_im.ctypes.data_as(POINTER(c_float)),
@@ -110,15 +98,11 @@ class spatial_distribution(scf):
                 self.mesh[1].ctypes.data_as(POINTER(c_double)), 
                 self.mesh[2].ctypes.data_as(POINTER(c_double)), 
                 atoms2sp.ctypes.data_as(POINTER(c_int64)), 
-                atoms2coord.ctypes.data_as(POINTER(c_double)),
                 atom2s.ctypes.data_as(POINTER(c_int64)), 
-                sp_mu2j.ctypes.data_as(POINTER(c_int32)), 
-                psi_log_rl.ctypes.data_as(POINTER(c_double)), 
-                sp_mu2s.ctypes.data_as(POINTER(c_int64)), 
-                sp2rcut.ctypes.data_as(POINTER(c_double)), 
-                rr.ctypes.data_as(POINTER(c_double)), 
                 c_double(gammin_jt), c_double(dg_jt), c_int(Nx), 
                 c_int(Ny), c_int(Nz), c_int(self.nprod), c_int(self.natoms), 
-                c_int(nr), c_int(nj), c_int(self.nspecies))
+                c_int(self.nspecies))
 
+        # sum(dn) =  77.8299 63.8207
+        # print(np.sum(abs(dn_spatial_re)), np.sum(abs(dn_spatial_im)))
         return dn_spatial_re + 1.0j*dn_spatial_im

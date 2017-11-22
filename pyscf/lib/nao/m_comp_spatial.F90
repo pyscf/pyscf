@@ -60,11 +60,10 @@ end subroutine !test_index_2D
 ! 
 !
 subroutine get_spatial_density_parallel(dn_spatial_re, dn_spatial_im, mu2dn_re, mu2dn_im, &
-            meshx, meshy, meshz, atom2sp, atom2coord, &
-            atom2s, sp_mu2j, psi_log_rl, sp_mu2s, sp2rcut, rr, gammin_jt, &
-            dg_jt, Nx, Ny, Nz, nprod, natoms, nr, nj, nspecies) bind(c, name='get_spatial_density_parallel')
-
+            meshx, meshy, meshz, atom2sp, atom2s, gammin_jt, &
+            dg_jt, Nx, Ny, Nz, nprod, natoms, nspecies) bind(c, name='get_spatial_density_parallel')
   use m_interp, only : interp_t, init_interp 
+  use m_pb_libnao, only : pb
 
   !
   ! Using 1D arrays to avoid colum-row major issues
@@ -72,7 +71,7 @@ subroutine get_spatial_density_parallel(dn_spatial_re, dn_spatial_im, mu2dn_re, 
 
   implicit none
   !! external
-  integer(c_int), intent(in), value :: Nx, Ny, Nz, nprod, natoms, nr, nj, nspecies
+  integer(c_int), intent(in), value :: Nx, Ny, Nz, nprod, natoms, nspecies
   real(c_double), intent(in), value :: gammin_jt, dg_jt
 
   ! complex variable
@@ -80,12 +79,10 @@ subroutine get_spatial_density_parallel(dn_spatial_re, dn_spatial_im, mu2dn_re, 
   real(c_double), intent(in) :: mu2dn_re(nprod), mu2dn_im(nprod)
 
   ! real variables
-  real(c_double), intent(in) :: meshx(Nx), meshy(Ny), meshz(Nz), atom2coord(3*natoms)
-  real(c_double), intent(in) :: sp2rcut(nspecies), rr(nr), psi_log_rl(nspecies*nj*nr)
+  real(c_double), intent(in) :: meshx(Nx), meshy(Ny), meshz(Nz)
   
   ! integer
-  integer(c_int64_t), intent(in) :: atom2sp(natoms), atom2s(natoms+1), sp_mu2s(nspecies*(nj+1))
-  integer(c_int32_t), intent(in) :: sp_mu2j(nspecies*nj)
+  integer(c_int64_t), intent(in) :: atom2sp(natoms), atom2s(natoms+1)
   
   !! internal
   type(interp_t) :: a
@@ -94,26 +91,25 @@ subroutine get_spatial_density_parallel(dn_spatial_re, dn_spatial_im, mu2dn_re, 
   integer :: ix, iy, iz, ind
   real(8) :: t1,t2,t=0
 
+  call init_interp(pb%rr, a)
 
-
-  call init_interp(rr, a)
   
-_t1
-  !$OMP PARALLEL DEFAULT(NONE) &
-  !$OMP PRIVATE (ix, iy, iz, br, res, ind) &
-  !$OMP SHARED(dn_spatial_re, mu2dn_re, dn_spatial_im, mu2dn_im, Nx, Ny, Nz) &
-  !$OMP SHARED(meshx, meshy, meshz, a, atom2sp, atom2s, atom2coord, sp2rcut) &
-  !$OMP SHARED(sp_mu2j, sp_mu2s, psi_log_rl, natoms, nspecies, nr, nj)
+!_t1
+!  !$OMP PARALLEL DEFAULT(NONE) &
+!  !$OMP PRIVATE (ix, iy, iz, br, res, ind) &
+!  !$OMP SHARED(dn_spatial_re, mu2dn_re, dn_spatial_im, mu2dn_im, Nx, Ny, Nz) &
+!  !$OMP SHARED(meshx, meshy, meshz, a, atom2sp, atom2s) &
+!  !$OMP SHARED(natoms, nspecies, pb)
   allocate(res(nprod))
   res = 0.0
 
   !$OMP DO
-  do ix = 1, Nx
   do iz = 1, Nz
   do iy = 1, Ny
+  do ix = 1, Nx
     br(1) = meshx(ix); br(2) = meshy(iy); br(3) = meshz(iz)
-    call comp_dn_xyz(a, atom2sp, atom2s, atom2coord, sp2rcut, sp_mu2j, sp_mu2s, psi_log_rl, &
-      br, res, natoms, nspecies, nr, nj)
+    call comp_dn_xyz(a, pb, atom2sp, atom2s, &
+      br, res, natoms, nspecies)
     
     ind = iz + (iy-1)*Nz + (ix-1)*Nz*Ny
     dn_spatial_re(ind) = sum(res*mu2dn_re)
@@ -122,12 +118,12 @@ _t1
   enddo
   enddo
   enddo
-  !$OMP END DO
+!  !$OMP END DO
   _dealloc(res)
-  !$OMP END PARALLEL
+!  !$OMP END PARALLEL
 
-_t2(t)
-  print*, "timing loop fortran: ", t
+!_t2(t)
+!  print*, "timing loop fortran: ", t
 
 
 end subroutine ! dens_libnao
@@ -135,81 +131,63 @@ end subroutine ! dens_libnao
 !
 ! compute density change at the point x, y, z
 !
-subroutine comp_dn_xyz(a, atom2sp, atom2s, atom2coord, sp2rcut, sp_mu2j, sp_mu2s, psi_log_rl, &
-    br, res, natoms, nspecies, nr, nj)
+subroutine comp_dn_xyz(a, pb, atom2sp, atom2s, br, res, natoms, nspecies)
   
+  use m_prod_basis_type, only : prod_basis_t
+  use m_functs_l_mult_type, only : get_nmult
   use m_rsphar, only : rsphar, init_rsphar
   use m_interp, only : interp_t, comp_coeff_m2p3_k, comp_coeff_m2p3
 
   implicit none
   type(interp_t), intent(in) :: a
+  type(prod_basis_t), intent(in) :: pb
   real(8), intent(in) :: br(3)
-  real(c_double), intent(in) :: atom2coord(natoms*3), sp2rcut(nspecies), psi_log_rl(nspecies*nj*nr)
-  integer(c_int64_t), intent(in) :: atom2sp(natoms), atom2s(natoms+1), sp_mu2s(nspecies*(nj+1))
-  integer(c_int32_t), intent(in) :: sp_mu2j(nspecies*nj)
+  integer(c_int64_t), intent(in) :: atom2sp(natoms), atom2s(natoms+1)
 
-  integer, intent(in) :: natoms, nspecies, nj, nr
+  integer, intent(in) :: natoms, nspecies
 
   real(8), allocatable, intent(inout) :: res(:)
 
 
-  integer :: atm, sp, si, fi, sp_prev, k, ij, ik, j, ind, coeff_ind, ixyz
+  integer :: atm, sp, si, fi, sp_prev, k, j, nmu, mu
   integer(8) :: jmx_sp, s, f
-  real(8) :: brp(3), r, rcut, coeffs(-2:3), fval, mu2j(nj), psi_log(-2:3)
+  real(8) :: brp(3), r, rcut, coeffs(-2:3), fval
   real(8), allocatable :: rsh(:)
 
   sp_prev = -1
   do atm = 1, natoms
     sp = atom2sp(atm) + 1 ! +1 for fortran count
-    do ixyz = 1, 3
-      ind = ixyz + (atm-1)*3
-      brp(ixyz) = br(ixyz) - atom2coord(ind)
-    enddo
+    brp = br - pb%atom2coord(:, atm)
 
     r = sqrt(sum(brp**2))
-    rcut = sp2rcut(sp)
+    rcut = pb%sp_local2functs(sp)%rcut
 
     if (r > rcut) cycle
 
-    si = atom2s(atm) + 1
+    si = atom2s(atm)
     fi = atom2s(atm+1)
     if (sp_prev /= sp) then
       _dealloc(rsh)
-
-      do ij=1, nj
-        mu2j(ij) = sp_mu2j(ij + (sp-1)*nj)
-      enddo
-
-      jmx_sp = maxval(mu2j)
+      
+      jmx_sp = maxval(pb%sp_local2functs(sp)%mu2j)
       call init_rsphar(jmx_sp)
       allocate(rsh((jmx_sp+1)**2))
       rsh = 0.0
     endif
     call rsphar(brp, jmx_sp, rsh)
 
-    call comp_coeff_m2p3(a, r, coeffs, k)
-    k = k-2
-
-    do ij =1, nj
-      j = sp_mu2j(ij + (sp-1)*nj)
-      s = sp_mu2s(ij + (sp-1)*nj)
-      f = sp_mu2s(ij+1 + (sp-1)*nj)-1
+    call comp_coeff_m2p3_k(r**2, a, coeffs, k)
+    nmu = get_nmult(pb%sp_local2functs(sp))
+    f = 0
+    do mu=1, nmu
+      j = pb%sp_local2functs(sp)%mu2j(mu)
+      s = f + 1; f = s + (2*j+1) - 1;
+      fval = sum(coeffs*pb%sp_local2functs(sp)%ir_mu2v(k-2:k+3,mu))
       
-      coeff_ind = -2
-      fval = 0.0
-      do ik = k, k+5
-        !ind = sp + (ij-1)*nspecies + (ik-1)*nspecies*nj
-        ind = ik + (ij-1)*nr + (sp-1)*nr*nj
-        psi_log(coeff_ind) =  psi_log_rl(ind)
-        fval = fval + psi_log_rl(ind)*coeffs(coeff_ind)
-        coeff_ind = coeff_ind + 1
-      enddo
-      if (j /= 0) fval = fval*r**j
-
-
+      print*, si, s, f, size(res)
       res(si+s: si+f) = rsh(j*(j+1)-j+1:j*(j+1)+j+1)*fval
-
     enddo
+
   enddo
 
 end subroutine !comp_dn_xyz
