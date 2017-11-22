@@ -239,8 +239,8 @@ def _eris_spatial2spin(cc, eris):
     if not hasattr(eris, 'ovOV'):
         return eris
 
-    class _ERIS: pass
-    eris1 = _ERIS()
+    class _ChemistsERIs: pass
+    eris1 = _ChemistsERIs()
     eris1.orbspin = eris.orbspin
 
     nocc = cc.nocc

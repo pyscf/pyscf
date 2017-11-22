@@ -53,26 +53,20 @@ class RCCSD(ccsd.CCSD):
 
 #TODO: check if vvL can be entirely load into memory
         max_memory = max(0, self.max_memory - lib.current_memory()[0])
-        dmax = min(nvir, max(ccsd.BLKMIN, numpy.sqrt(max_memory*.8e6/8/nvir**2/2)))
+        dmax = min(nvir, max(ccsd.BLKMIN, numpy.sqrt(max_memory*.7e6/8/nvir**2/2)))
         vvblk = min(nvir, max(ccsd.BLKMIN, (max_memory*1e6/8 - dmax**2*(nvir**2*1.5+naux))/naux))
         dmax = int(dmax)
         vvblk = int(vvblk)
         eribuf = numpy.empty((dmax,dmax,nvir_pair))
         loadbuf = numpy.empty((dmax,dmax,nvir,nvir))
+        tril2sq = lib.unpack_tril(numpy.arange(nvir_pair))
 
         for i0, i1 in lib.prange(0, nvir, dmax):
-            di = i1 - i0
+            off0 = i0*(i0+1)//2
+            off1 = i1*(i1+1)//2
+            vvL0 = _cp(eris.vvL[off0:off1])
             for j0, j1 in lib.prange(0, i1, dmax):
-                dj = j1 - j0
-
-                ijL = numpy.empty((di,dj,naux))
-                for i in range(i0, i1):
-                    ioff = i*(i+1)//2
-                    ijL[i-i0] = eris.vvL[ioff+j0:ioff+j1]
-                if i0 == j0:
-                    idx, idy = numpy.tril_indices(di)
-                    ijL[idy,idx] = ijL[idx,idy]
-                ijL = ijL.reshape(-1,naux)
+                ijL = vvL0[tril2sq[i0:i1,j0:j1] - off0].reshape(-1,naux)
                 eri = numpy.ndarray(((i1-i0)*(j1-j0),nvir_pair), buffer=eribuf)
                 for p0, p1 in lib.prange(0, nvir_pair, vvblk):
                     vvL = _cp(eris.vvL[p0:p1])
@@ -98,27 +92,20 @@ class RCCSD(ccsd.CCSD):
         Ht2 = numpy.zeros_like(t2)
 
         max_memory = max(0, self.max_memory - lib.current_memory()[0])
-        dmax = min(nvir, max(ccsd.BLKMIN, numpy.sqrt(max_memory*.8e6/8/nvir**2/2)))
+        dmax = min(nvir, max(ccsd.BLKMIN, numpy.sqrt(max_memory*.7e6/8/nvir**2/2)))
         vvblk = min(nvir, max(ccsd.BLKMIN, (max_memory*1e6/8 - dmax**2*(nvir**2*1.5+naux))/naux))
         dmax = int(dmax)
         vvblk = int(vvblk)
         eribuf = numpy.empty((dmax,dmax,nvir_pair))
         loadbuf = numpy.empty((dmax,dmax,nvir,nvir))
+        tril2sq = lib.unpack_tril(numpy.arange(nvir_pair))
 
         for i0, i1 in lib.prange(0, nvir, dmax):
-            di = i1 - i0
+            off0 = i0*(i0+1)//2
+            off1 = i1*(i1+1)//2
+            vvL0 = _cp(eris.vvL[off0:off1])
             for j0, j1 in lib.prange(0, i1, dmax):
-                dj = j1 - j0
-
-                ijL = numpy.empty((di,dj,naux))
-                for i in range(i0, i1):
-                    ioff = i*(i+1)//2
-                    ijL[i-i0] = eris.vvL[ioff+j0:ioff+j1]
-                if i0 == j0:
-                    idx, idy = numpy.tril_indices(di)
-                    ijL[idy,idx] = ijL[idx,idy]
-
-                ijL = ijL.reshape(-1,naux)
+                ijL = vvL0[tril2sq[i0:i1,j0:j1] - off0].reshape(-1,naux)
                 eri = numpy.ndarray(((i1-i0)*(j1-j0),nvir_pair), buffer=eribuf)
                 for p0, p1 in lib.prange(0, nvir_pair, vvblk):
                     vvL = _cp(eris.vvL[p0:p1])
@@ -139,7 +126,7 @@ class RCCSD(ccsd.CCSD):
 
 def _make_eris_df(cc, mo_coeff=None):
     cput0 = (time.clock(), time.time())
-    eris = ccsd._ERIs()
+    eris = ccsd._ChemistsERIs()
     eris._common_init_(cc, mo_coeff)
     nocc = eris.nocc
     nmo = eris.fock.shape[0]

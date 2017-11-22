@@ -89,7 +89,7 @@ def kernel(eris, t1, t2):
     return et
 
 
-class _ERIS:
+class _ChemistsERIs:
     def __init__(self, mycc, mo_coeff=None):
         moidx = uccsd.get_umoidx(mycc)
         if mo_coeff is None:
@@ -155,7 +155,7 @@ if __name__ == '__main__':
     t1a = t1b = mcc.t1
     t2ab = mcc.t2
     t2aa = t2bb = t2ab - t2ab.transpose(1,0,2,3)
-    e3a = kernel(_ERIS(uccsd.UCCSD(scf.addons.convert_to_uhf(rhf))),
+    e3a = kernel(_ChemistsERIs(uccsd.UCCSD(scf.addons.convert_to_uhf(rhf))),
                  (t1a,t1b), (t2aa,t2ab,t2bb))
     print(e3a - -0.00099642337843278096)
 
@@ -187,7 +187,7 @@ if __name__ == '__main__':
     t2ab = .1 * numpy.random.random((nocca,noccb,nvira,nvirb))
     t1 = t1a, t1b
     t2 = t2aa, t2ab, t2bb
-    e3a = kernel(_ERIS(uccsd.UCCSD(scf.addons.convert_to_uhf(mf)), mf.mo_coeff),
+    e3a = kernel(_ChemistsERIs(uccsd.UCCSD(scf.addons.convert_to_uhf(mf)), mf.mo_coeff),
                  [t1a,t1b], [t2aa, t2ab, t2bb])
     print(e3a - 8193.064821311109)
 

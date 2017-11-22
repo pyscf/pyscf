@@ -895,7 +895,8 @@ def einsum(idx_str, *tensors, **kwargs):
 class NPArrayWithTag(numpy.ndarray):
     pass
 def tag_array(a, **kwargs):
-    a = numpy.asarray(a).view(NPArrayWithTag)
+    if not isinstance(a, NPArrayWithTag):
+        a = numpy.asarray(a).view(NPArrayWithTag)
     a.__dict__.update(kwargs)
     return a
 

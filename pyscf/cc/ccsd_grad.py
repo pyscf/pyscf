@@ -472,8 +472,7 @@ def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave=None):
             gsave[:p0,p0:p1] = buf1
         lib.transpose_sum(buf2[:,p0:p1], inplace=True)
         buf2[:,idx] *= .5
-        for i0, i1 in lib.prange(0, nao_pair, blksize):
-            gsave[p0:p1,i0:i1] = buf2[:,i0:i1]
+        gsave[p0:p1] = buf2
     time1 = log.timer_debug1('_rdm2_mo2ao pass 3', *time1)
     if incore:
         return fsave['dm2'].value

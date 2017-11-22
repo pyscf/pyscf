@@ -24,7 +24,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
     else:
         log = logger.Logger(mycc.stdout, verbose)
 
-    if eris is None: eris = ccsd._ERIS(mycc)
+    if eris is None: eris = mycc.ao2mo()
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
     if l1 is None: l1 = t1
@@ -85,7 +85,7 @@ def make_intermediates(mycc, t1, t2, eris):
 
 
 def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None):
-    if eris is None: eris = ccsd._ERIS(mycc)
+    if eris is None: eris = mycc.ao2mo()
     if saved is None: saved = make_intermediates(mycc, t1, t2, eris)
 
     nocc, nvir = t1.shape

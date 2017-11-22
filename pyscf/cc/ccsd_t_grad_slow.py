@@ -117,7 +117,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     if t2 is None: t2 = mycc.t2
     if l1 is None: l1 = mycc.l1
     if l2 is None: l2 = mycc.l2
-    if eris is None: eris = ccsd._ERIS(mycc)
+    if eris is None: eris = mycc.ao2mo()
     if mf_grad is None:
         mf_grad = pyscf.grad.RHF(mycc._scf)
 

@@ -18,6 +18,7 @@ from pyscf.lib import linalg_helper
 
 def update_amps(cc, t1, t2, eris):
     # Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004) Eqs.(35)-(36)
+    assert(isinstance(eris, ccsd._ChemistsERIs))
     nocc, nvir = t1.shape
     fock = eris.fock
 
@@ -123,7 +124,7 @@ def energy(cc, t1, t2, eris):
     e = 2*np.einsum('ia,ia', fock[:nocc,nocc:], t1)
     tau = np.einsum('ia,jb->ijab',t1,t1)
     tau += t2
-    eris_ovov = eris.vovo.conj().transpose(1,0,3,2)
+    eris_ovov = np.asarray(eris.vovo).conj().transpose(1,0,3,2)
     e += 2*np.einsum('ijab,iajb', tau, eris_ovov)
     e +=  -np.einsum('ijab,ibja', tau, eris_ovov)
     return e.real
@@ -146,11 +147,12 @@ class RCCSD(ccsd.CCSD):
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
         eijab = lib.direct_sum('ia,jb->ijab', eia, eia)
         t1 = eris.fock[:nocc,nocc:].conj() / eia
-        t2 = np.asarray(eris.vovo).transpose(1,3,0,2) / eijab
-        eris_ovov = eris.vovo.conj().transpose(1,0,3,2)
+        eris_vovo = np.asarray(eris.vovo)
+        t2 = eris_vovo.transpose(1,3,0,2) / eijab
+        eris_ovov = eris_vovo.conj().transpose(1,0,3,2)
         self.emp2  = 2*np.einsum('ijab,iajb', t2, eris_ovov)
         self.emp2 -=   np.einsum('ijab,ibja', t2, eris_ovov)
-        lib.logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
+        logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
         return self.emp2, t1, t2
 
     def kernel(self, t1=None, t2=None, eris=None, mbpt2=False):
@@ -169,7 +171,6 @@ class RCCSD(ccsd.CCSD):
 
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
-        self.eris = eris
         return ccsd.CCSD.ccsd(self, t1, t2, eris)
 
     def ao2mo(self, mo_coeff=None):
@@ -213,7 +214,7 @@ class RCCSD(ccsd.CCSD):
 
 def _make_eris_incore(mycc, mo_coeff=None):
     cput0 = (time.clock(), time.time())
-    eris = ccsd._ERIs()
+    eris = ccsd._ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
     nocc = eris.nocc
     nmo = eris.fock.shape[0]
@@ -250,7 +251,7 @@ def _make_eris_incore(mycc, mo_coeff=None):
 def _make_eris_outcore(mycc, mo_coeff=None):
     cput0 = (time.clock(), time.time())
     log = logger.Logger(mycc.stdout, mycc.verbose)
-    eris = ccsd._ERIs()
+    eris = ccsd._ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
 
     mol = mycc.mol
@@ -262,6 +263,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     orbv = mo_coeff[:,nocc:]
     nvpair = nvir * (nvir+1) // 2
     eris.feri1 = lib.H5TmpFile()
+    eris.oooo = eris.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), 'f8')
     eris.vooo = eris.feri1.create_dataset('vooo', (nvir,nocc,nocc,nocc), 'f8')
     eris.voov = eris.feri1.create_dataset('voov', (nvir,nocc,nocc,nvir), 'f8')
     eris.vovo = eris.feri1.create_dataset('vovo', (nvir,nocc,nvir,nocc), 'f8')
@@ -275,21 +277,30 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     eri = ftmp['eri_mo']
 
     nocc_pair = nocc*(nocc+1)//2
-    eris.feri1['oooo'] = ao2mo.restore(1, _cp(eri[:nocc_pair,:nocc_pair]), nocc)
-    eris.oooo = eris.feri1['oooo']
-    p1 = nocc_pair
-    for i in range(nocc, nmo):
-        p0, p1 = p1, p1 + i+1
-        buf = lib.unpack_tril(_cp(eri[p0:p1]))
-        eris.vooo[i-nocc] = buf[:nocc,:nocc,:nocc]
-        eris.voov[i-nocc] = buf[:nocc,:nocc,nocc:]
-        eris.vovo[i-nocc] = buf[:nocc,nocc:,:nocc]
-        eris.vovv[i-nocc] = buf[:nocc,nocc:,nocc:]
-        eris.vvoo[i-nocc,:i+1-nocc] = buf[nocc:i+1,:nocc,:nocc]
-        eris.vvvv[i-nocc,:i+1-nocc] = buf[nocc:i+1,nocc:,nocc:]
-        if i > nocc:
-            eris.vvoo[:i-nocc,i-nocc] = buf[nocc:i,:nocc,:nocc]
-            eris.vvvv[:i-nocc,i-nocc] = buf[nocc:i,nocc:,nocc:]
+    eris.oooo[:] = ao2mo.restore(1, _cp(eri[:nocc_pair,:nocc_pair]), nocc)
+
+    nmo_pair = nmo * (nmo+1) // 2
+    tril2sq = lib.unpack_tril(np.arange(nmo_pair))
+    blksize = min(nvir, max(2, int(max_memory*1e6/8/nmo**3/2)))
+    for p0, p1 in lib.prange(0, nvir, blksize):
+        q0, q1 = p0+nocc, p1+nocc
+        off0 = q0*(q0+1)//2
+        off1 = q1*(q1+1)//2
+        buf = lib.unpack_tril(_cp(eri[off0:off1]))
+
+        tmp = buf[ tril2sq[q0:q1,:nocc] - off0 ]
+        eris.vooo[p0:p1] = tmp[:,:,:nocc,:nocc]
+        eris.voov[p0:p1] = tmp[:,:,:nocc,nocc:]
+        eris.vovo[p0:p1] = tmp[:,:,nocc:,:nocc]
+        eris.vovv[p0:p1] = tmp[:,:,nocc:,nocc:]
+
+        tmp = buf[ tril2sq[q0:q1,nocc:q1] - off0 ]
+        eris.vvoo[p0:p1,:p1] = tmp[:,:,:nocc,:nocc]
+        eris.vvvv[p0:p1,:p1] = tmp[:,:,nocc:,nocc:]
+        if p0 > 0:
+            eris.vvoo[:p0,p0:p1] = tmp[:,:p0,:nocc,:nocc].transpose(1,0,2,3)
+            eris.vvvv[:p0,p0:p1] = tmp[:,:p0,nocc:,nocc:].transpose(1,0,2,3)
+        buf = tmp = None
     log.timer('CCSD integral transformation', *cput0)
     return eris
 
@@ -374,6 +385,7 @@ if __name__ == '__main__':
     mf = scf.RHF(mol).run(conv_tol=1e-14)
 
     mycc = RCCSD(mf)
+    mycc.max_memory = 0
     eris = mycc.ao2mo()
     emp2, t1, t2 = mycc.init_amps(eris)
     print(lib.finger(t2) - 0.044540097905897198)

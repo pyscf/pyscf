@@ -19,7 +19,7 @@ from pyscf.cc import ccsd_rdm
 def gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None):
     doo, dov, dvo, dvv = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2)
 
-    if eris is None: eris = ccsd._ERIS(mycc)
+    if eris is None: eris = mycc.ao2mo()
     nocc, nvir = t1.shape
     eris_ovvv = _cp(eris.ovvv)
     eris_ovvv = lib.unpack_tril(eris_ovvv.reshape(nocc*nvir,-1))
@@ -46,7 +46,7 @@ def gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None):
 def gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None):
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
             ccsd_rdm.gamma2_intermediates(mycc, t1, t2, l1, l2)
-    if eris is None: eris = ccsd._ERIS(mycc)
+    if eris is None: eris = mycc.ao2mo()
 
     nocc, nvir = t1.shape
     eris_ovvv = _cp(eris.ovvv)

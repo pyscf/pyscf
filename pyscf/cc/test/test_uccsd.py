@@ -39,7 +39,7 @@ class KnowValues(unittest.TestCase):
         nao,nmo = mf.mo_coeff[0].shape
         numpy.random.seed(1)
         mo_coeff = numpy.random.random((2,nao,nmo))
-        eris = cc.uccsd._ERIS(ucc1, mo_coeff, method='outcore')
+        eris = cc.uccsd._ChemistsERIs(ucc1, mo_coeff, method='outcore')
 
         self.assertAlmostEqual(lib.finger(numpy.array(eris.oooo)), 4.9638849382825754, 14)
         self.assertAlmostEqual(lib.finger(numpy.array(eris.ooov)), 21.35362101033294 , 14)

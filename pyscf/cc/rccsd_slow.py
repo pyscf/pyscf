@@ -201,7 +201,7 @@ class RCCSD(ccsd.CCSD):
         return self.e_corr, self.t1, self.t2
 
     def ao2mo(self, mo_coeff=None):
-        return _ERIs(self, mo_coeff)
+        return _ChemistsERIs(self, mo_coeff)
 
     energy = energy
     update_amps = update_amps
@@ -925,7 +925,7 @@ class RCCSD(ccsd.CCSD):
         return vector
 
 
-class _ERIs:
+class _ChemistsERIs:
     def __init__(self, cc, mo_coeff=None, method='incore',
                  ao2mofn=ao2mo.outcore.general_iofree):
         cput0 = (time.clock(), time.time())

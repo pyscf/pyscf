@@ -11,10 +11,8 @@ RCCSD for real integrals
 
 import time
 import ctypes
-import tempfile
 from functools import reduce
 import numpy
-import h5py
 from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
@@ -31,12 +29,12 @@ def kernel(mycc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     log = logger.new_logger(mycc, verbose)
 
     if t1 is None and t2 is None:
-        t1, t2 = mycc.get_init_guess(eris)[1:]
+        t1, t2 = mycc.get_init_guess(eris)
     elif t1 is None:
         nocc, nvir = t2.shape[0], t2.shape[2]
         t1 = numpy.zeros((nocc,nvir))
     elif t2 is None:
-        t2 = mycc.get_init_guess(eris)[2]
+        t2 = mycc.get_init_guess(eris)[1]
 
     cput1 = cput0 = (time.clock(), time.time())
     nocc, nvir = t1.shape
@@ -70,6 +68,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
 def update_amps(mycc, t1, t2, eris):
     if mycc.cc2:
         raise NotImplementedError
+    assert(isinstance(eris, _ChemistsERIs))
 
     time0 = time.clock(), time.time()
     log = logger.Logger(mycc.stdout, mycc.verbose)
@@ -357,8 +356,9 @@ def _add_vvvv_tril(mycc, t1, t2, eris, out=None, with_ovvv=True):
                        shls_slice=(ish0,ish1,ish0,ish1), aosym='s4',
                        ao_loc=ao_loc, cintopt=ao2mopt._cintopt, out=eribuf)
             i0, i1 = ao_loc[ish0], ao_loc[ish1]
+            p1 = 0
             for i in range(i1-i0):
-                p0, p1 = i*(i+1)//2, (i+1)*(i+2)//2
+                p0, p1 = p1, p1 + i+1
                 tmp = lib.unpack_tril(eri[p0:p1], out=loadbuf)
                 contract_tril_(outbuf, tau, tmp, i0, i0+i)
             time0 = logger.timer_debug1(mycc, 'AO-vvvv [%d:%d,%d:%d]' %
@@ -480,6 +480,20 @@ def _unpack_t2_tril(t2tril, nocc, nvir, out=None):
     t2[idy,idx] = t2tril.transpose(0,2,1)
     return t2
 
+def _unpack_4fold(c2vec, nocc, nvir, anti_symm=True):
+    t2 = numpy.zeros((nocc**2,nvir**2), dtype=c2vec.dtype)
+    if nocc > 1 and nvir > 1:
+        t2tril = c2vec.reshape(nocc*(nocc-1)//2,nvir*(nvir-1)//2)
+        otril = numpy.tril_indices(nocc, k=-1)
+        vtril = numpy.tril_indices(nvir, k=-1)
+        lib.takebak_2d(t2, t2tril, otril[0]*nocc+otril[1], vtril[0]*nvir+vtril[1])
+        lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[1]*nvir+vtril[0])
+        if anti_symm:  # anti-symmetry when exchanging two particles
+            t2tril = -t2tril
+        lib.takebak_2d(t2, t2tril, otril[0]*nocc+otril[1], vtril[1]*nvir+vtril[0])
+        lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[0]*nvir+vtril[1])
+    return t2.reshape(nocc,nocc,nvir,nvir)
+
 def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=True):
     t2new_tril = mycc._add_vvvv_tril(t1, t2, eris, None, with_ovvv)
     nocc, nvir = t1.shape
@@ -491,7 +505,7 @@ def get_nocc(mycc):
     if mycc._nocc is not None:
         return mycc._nocc
     elif isinstance(mycc.frozen, (int, numpy.integer)):
-        nocc = int(mycc.mo_occ.sum()) // 2 - mycc.frozen
+        nocc = numpy.count_nonzero(mycc.mo_occ > 0) - mycc.frozen
         assert(nocc > 0)
         return nocc
     else:
@@ -699,12 +713,16 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def e_tot(self):
         return self.e_corr + self._scf.e_tot
 
-    nocc = property(get_nocc)
+    @property
+    def nocc(self):
+        return self.get_nocc()
     @nocc.setter
     def nocc(self, n):
         self._nocc = n
 
-    nmo = property(get_nmo)
+    @property
+    def nmo(self):
+        return self.get_nmo()
     @nmo.setter
     def nmo(self, n):
         self._nmo = n
@@ -736,7 +754,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
     def get_init_guess(self, eris=None):
         if eris is None: eris = self.ao2mo(self.mo_coeff)
-        return self.init_amps(eris)
+        return self.init_amps(eris)[1:]
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
         mo_e = eris.fock.diagonal()
@@ -853,7 +871,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2)
 
     def ao2mo(self, mo_coeff=None):
-        # Pseudo code how _ERIS are implemented:
+        # Pseudo code how eris are implemented:
         # nocc = self.nocc
         # nmo = self.nmo
         # nvir = nmo - nocc
@@ -933,7 +951,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 CC = CCSD
 
 
-class _ERIs:
+class _ChemistsERIs:
     def __init__(self):
         self.mo_coeff = None
         self.nocc = None
@@ -949,10 +967,8 @@ class _ERIs:
 
     def _common_init_(self, mycc, mo_coeff=None):
         if mo_coeff is None:
-            mo_coeff = _mo_without_core(mycc, mycc.mo_coeff)
-        else:
-            mo_coeff = _mo_without_core(mycc, mo_coeff)
-        self.mo_coeff = mo_coeff
+            mo_coeff = mycc.mo_coeff
+        self.mo_coeff = mo_coeff = _mo_without_core(mycc, mo_coeff)
 # Note: Recomputed fock matrix since SCF may not be fully converged.
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
         fockao = mycc._scf.get_hcore() + mycc._scf.get_veff(mycc.mol, dm)
@@ -962,7 +978,7 @@ class _ERIs:
 
 def _make_eris_incore(mycc, mo_coeff=None):
     cput0 = (time.clock(), time.time())
-    eris = _ERIs()
+    eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
     nocc = eris.nocc
     nmo = eris.fock.shape[0]
@@ -1013,7 +1029,7 @@ def _make_eris_incore(mycc, mo_coeff=None):
 def _make_eris_outcore(mycc, mo_coeff=None):
     cput0 = (time.clock(), time.time())
     log = logger.Logger(mycc.stdout, mycc.verbose)
-    eris = _ERIs()
+    eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
 
     mol = mycc.mol
@@ -1054,47 +1070,46 @@ def _make_eris_outcore(mycc, mo_coeff=None):
         eris.vvvv = eris.feri2['eri_mo']
         cput1 = log.timer_debug1('transforming vvvv', *cput1)
 
-    tmpfile3 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-    with h5py.File(tmpfile3.name, 'w') as fswap:
-        mo_coeff = numpy.asarray(mo_coeff, order='F')
-        max_memory = max(2000, mycc.max_memory-lib.current_memory()[0])
-        int2e = mol._add_suffix('int2e')
-        ao2mo.outcore.half_e1(mol, (mo_coeff,mo_coeff[:,:nocc]), fswap, int2e,
-                              's4', 1, max_memory, verbose=log)
+    fswap = lib.H5TmpFile()
+    mo_coeff = numpy.asarray(mo_coeff, order='F')
+    max_memory = max(2000, mycc.max_memory-lib.current_memory()[0])
+    int2e = mol._add_suffix('int2e')
+    ao2mo.outcore.half_e1(mol, (mo_coeff,mo_coeff[:,:nocc]), fswap, int2e,
+                          's4', 1, max_memory, verbose=log)
 
-        ao_loc = mol.ao_loc_nr()
-        nao_pair = nao * (nao+1) // 2
-        blksize = int(min(8e9,max_memory*.5e6)/8/(nao_pair+nmo**2)/nocc)
-        blksize = max(1, min(nmo*nocc, blksize))
-        fload = ao2mo.outcore._load_from_h5g
-        def prefetch(p0, p1, rowmax, buf):
-            p0, p1 = p1, min(rowmax, p1+blksize)
-            if p0 < p1:
-                fload(fswap['0'], p0*nocc, p1*nocc, buf)
+    ao_loc = mol.ao_loc_nr()
+    nao_pair = nao * (nao+1) // 2
+    blksize = int(min(8e9,max_memory*.5e6)/8/(nao_pair+nmo**2)/nocc)
+    blksize = max(1, min(nmo*nocc, blksize))
+    fload = ao2mo.outcore._load_from_h5g
+    def prefetch(p0, p1, rowmax, buf):
+        p0, p1 = p1, min(rowmax, p1+blksize)
+        if p0 < p1:
+            fload(fswap['0'], p0*nocc, p1*nocc, buf)
 
-        buf = numpy.empty((blksize*nocc,nao_pair))
-        buf_prefetch = numpy.empty_like(buf)
-        outbuf = numpy.empty((blksize*nocc,nmo**2))
-        with lib.call_in_background(prefetch) as bprefetch:
-            fload(fswap['0'], 0, min(nocc,blksize)*nocc, buf_prefetch)
-            for p0, p1 in lib.prange(0, nocc, blksize):
-                nrow = (p1 - p0) * nocc
-                buf, buf_prefetch = buf_prefetch, buf
-                bprefetch(p0, p1, nocc, buf_prefetch)
-                dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),
-                                         's4', 's1', out=outbuf, ao_loc=ao_loc)
-                save_occ_frac(p0, p1, dat)
+    buf = numpy.empty((blksize*nocc,nao_pair))
+    buf_prefetch = numpy.empty_like(buf)
+    outbuf = numpy.empty((blksize*nocc,nmo**2))
+    with lib.call_in_background(prefetch) as bprefetch:
+        fload(fswap['0'], 0, min(nocc,blksize)*nocc, buf_prefetch)
+        for p0, p1 in lib.prange(0, nocc, blksize):
+            nrow = (p1 - p0) * nocc
+            buf, buf_prefetch = buf_prefetch, buf
+            bprefetch(p0, p1, nocc, buf_prefetch)
+            dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),
+                                     's4', 's1', out=outbuf, ao_loc=ao_loc)
+            save_occ_frac(p0, p1, dat)
 
-            fload(fswap['0'], nocc**2, min(nmo,nocc+blksize)*nocc, buf_prefetch)
-            for p0, p1 in lib.prange(0, nvir, blksize):
-                nrow = (p1 - p0) * nocc
-                buf, buf_prefetch = buf_prefetch, buf
-                bprefetch(nocc+p0, nocc+p1, nmo, buf_prefetch)
-                dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),
-                                         's4', 's1', out=outbuf, ao_loc=ao_loc)
-                save_vir_frac(p0, p1, dat)
+        fload(fswap['0'], nocc**2, min(nmo,nocc+blksize)*nocc, buf_prefetch)
+        for p0, p1 in lib.prange(0, nvir, blksize):
+            nrow = (p1 - p0) * nocc
+            buf, buf_prefetch = buf_prefetch, buf
+            bprefetch(nocc+p0, nocc+p1, nmo, buf_prefetch)
+            dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),
+                                     's4', 's1', out=outbuf, ao_loc=ao_loc)
+            save_vir_frac(p0, p1, dat)
 
-        cput1 = log.timer_debug1('transforming oppp', *cput1)
+    cput1 = log.timer_debug1('transforming oppp', *cput1)
     eris.vvoo[:] = lib.transpose(oovv.reshape(nocc**2,-1)).reshape(nvir,nvir,nocc,nocc)
     log.timer('CCSD integral transformation', *cput0)
     return eris
@@ -1102,7 +1117,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
 def _make_df_eris_outcore(mycc, mo_coeff=None):
     cput0 = (time.clock(), time.time())
     log = logger.Logger(mycc.stdout, mycc.verbose)
-    eris = _ERIs()
+    eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
 
     mol = mycc.mol
@@ -1180,19 +1195,6 @@ def _fp(nocc, nvir):
 
 def _cp(a):
     return numpy.array(a, copy=False, order='C')
-
-def _unpack_4fold(c2vec, nocc, nvir):
-    t2 = numpy.zeros((nocc**2,nvir**2), dtype=c2vec.dtype)
-    if nocc > 1 and nvir > 1:
-        t2tril = c2vec.reshape(nocc*(nocc-1)//2,nvir*(nvir-1)//2)
-        otril = numpy.tril_indices(nocc, k=-1)
-        vtril = numpy.tril_indices(nvir, k=-1)
-        lib.takebak_2d(t2, t2tril, otril[0]*nocc+otril[1], vtril[0]*nvir+vtril[1])
-        lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[1]*nvir+vtril[0])
-        t2tril = -t2tril
-        lib.takebak_2d(t2, t2tril, otril[0]*nocc+otril[1], vtril[1]*nvir+vtril[0])
-        lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[0]*nvir+vtril[1])
-    return t2.reshape(nocc,nocc,nvir,nvir)
 
 
 if __name__ == '__main__':
