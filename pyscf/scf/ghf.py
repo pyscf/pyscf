@@ -278,6 +278,22 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
 
 canonicalize = hf.canonicalize
 
+def guess_orbspin(mo_coeff):
+    '''Guess the orbital spin (alpha 0, beta 1, unknown -1) based on the
+    orbital coefficients
+    '''
+    nao, nmo = mo_coeff.shape
+    mo_a = mo_coeff[:nao//2]
+    mo_b = mo_coeff[nao//2:]
+    # When all coefficients on alpha AOs are close to 0, it's a beta orbital
+    bidx = numpy.all(abs(mo_a) < 1e-14, axis=0)
+    aidx = numpy.all(abs(mo_b) < 1e-14, axis=0)
+    orbspin = numpy.empty(nmo, dtype=int)
+    orbspin[:] = -1
+    orbspin[aidx] = 0
+    orbspin[bidx] = 1
+    return orbspin
+
 class GHF(hf.SCF):
     __doc__ = hf.SCF.__doc__ + '''
 

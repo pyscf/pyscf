@@ -610,10 +610,13 @@ def get_ghf_orbspin(mo_energy, mo_occ, is_rhf=None):
         nvira = nmo - nocca
         noccb = numpy.count_nonzero(mo_occ[1]>0)
         nvirb = nmo - noccb
-        oidx = numpy.argsort(numpy.append(mo_energy[0][mo_occ[0] >0],
-                                          mo_energy[1][mo_occ[1] >0]))
-        vidx = numpy.argsort(numpy.append(mo_energy[0][mo_occ[0]==0],
-                                          mo_energy[1][mo_occ[1]==0]))
+        # round(6) to avoid numerical error in degeneracy
+        es = numpy.append(mo_energy[0][mo_occ[0] >0],
+                          mo_energy[1][mo_occ[1] >0])
+        oidx = numpy.argsort(es.round(6))
+        es = numpy.append(mo_energy[0][mo_occ[0]==0],
+                          mo_energy[1][mo_occ[1]==0])
+        vidx = numpy.argsort(es.round(6))
         orbspin = numpy.append(numpy.array([0]*nocca+[1]*noccb)[oidx],
                                numpy.array([0]*nvira+[1]*nvirb)[vidx])
     return orbspin
