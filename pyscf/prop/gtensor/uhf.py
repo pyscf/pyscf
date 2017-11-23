@@ -27,6 +27,8 @@ from pyscf.prop.zfs.uhf import koseki_charge
 from pyscf.data import nist
 
 def dia(gobj, dm0, gauge_orig=None):
+    '''Note the side effects of set_common_origin'''
+
     if isinstance(dm0, numpy.ndarray) and dm0.ndim == 2: # RHF DM
         return numpy.zeros((3,3))
     mol = gobj.mol
@@ -92,6 +94,8 @@ def dia(gobj, dm0, gauge_orig=None):
     return gdia
 
 def make_dia_gc2e(gobj, dm0, gauge_orig, sso_qed_fac=1):
+    '''Note the side effects of set_common_origin'''
+
     if (isinstance(gobj.dia_soc2e, str) and
         ('SOMF' in gobj.dia_soc2e.upper() or 'AMFI' in gobj.dia_soc2e.upper())):
         raise NotImplementedError(gobj.dia_soc2e)

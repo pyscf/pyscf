@@ -120,9 +120,9 @@ class NMR(uhf_nmr.NMR):
             h1 -= mol.intor_asymmetric('int1e_ignuc', 3)
             h1 -= mol.intor('int1e_igkin', 3)
         else:
-            mol.set_common_origin(gauge_orig)
-            h1 = -.5 * mol.intor('int1e_cg_irxp', 3)
-            h1 = (h1, h1)
+            with mol.with_common_origin(gauge_orig):
+                h1 = -.5 * mol.intor('int1e_cg_irxp', 3)
+                h1 = (h1, h1)
         lib.chkfile.dump(self.chkfile, 'nmr/h1', h1)
         return h1
 

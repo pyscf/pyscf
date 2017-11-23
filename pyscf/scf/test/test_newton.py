@@ -10,19 +10,75 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import dft
 
+h2o_z0 = gto.M(
+    verbose = 5,
+    output = '/dev/null',
+    atom = [
+    ["O" , (0. , 0.     , 0.)],
+    [1   , (0. , -0.757 , 0.587)],
+    [1   , (0. , 0.757  , 0.587)] ],
+    basis = '6-31g')
+
+h2o_z1 = gto.M(
+    verbose = 5,
+    output = '/dev/null',
+    atom = [
+    ["O" , (0. , 0.     , 0.)],
+    [1   , (0. , -0.757 , 0.587)],
+    [1   , (0. , 0.757  , 0.587)] ],
+    basis = '6-31g',
+    charge = 1,
+    spin = 1,)
+
+h2o_z0_s = gto.M(
+    verbose = 5,
+    output = '/dev/null',
+    atom = [
+    ["O" , (0. , 0.     , 0.)],
+    [1   , (0. , -0.757 , 0.587)],
+    [1   , (0. , 0.757  , 0.587)] ],
+    symmetry = 1,
+    basis = '6-31g')
+
+h2o_z1_s = gto.M(
+    verbose = 5,
+    output = '/dev/null',
+    atom = [
+    ["O" , (0. , 0.     , 0.)],
+    [1   , (0. , -0.757 , 0.587)],
+    [1   , (0. , 0.757  , 0.587)] ],
+    basis = '6-31g',
+    charge = 1,
+    spin = 1,
+    symmetry = 1,)
+
+h4_z0_s = gto.M(
+    verbose = 5,
+    output = '/dev/null',
+    atom = '''C 0 0 0
+    H  1  1  1
+    H -1 -1  1
+    H -1  1 -1
+    H  1 -1 -1''',
+    basis = '6-31g',
+    symmetry = 1,)
+
+h4_z1_s = gto.M(
+    verbose = 5,
+    output = '/dev/null',
+    atom = '''C 0 0 0
+    H  1  1  1
+    H -1 -1  1
+    H -1  1 -1
+    H  1 -1 -1''',
+    basis = '6-31g',
+    charge = 1,
+    spin = 1,
+    symmetry = 1,)
 
 class KnowValues(unittest.TestCase):
     def test_nr_rhf(self):
-        mol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. , -0.757 , 0.587)],
-            [1   , (0. , 0.757  , 0.587)] ],
-            basis = '6-31g')
-
-        mf = scf.RHF(mol)
+        mf = scf.RHF(h2o_z0)
         mf.max_cycle = 1
         mf.conv_check = False
         mf.kernel()
@@ -32,18 +88,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(nr.kernel(), -75.98394849812, 9)
 
     def test_nr_rohf(self):
-        mol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. , -0.757 , 0.587)],
-            [1   , (0. , 0.757  , 0.587)] ],
-            basis = '6-31g',
-            charge = 1,
-            spin = 1,
-        )
-        mf = scf.RHF(mol)
+        mf = scf.RHF(h2o_z1)
         mf.max_cycle = 1
         mf.conv_check = False
         mf.kernel()
@@ -54,18 +99,7 @@ class KnowValues(unittest.TestCase):
 
 
     def test_nr_uhf(self):
-        mol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. , -0.757 , 0.587)],
-            [1   , (0. , 0.757  , 0.587)] ],
-            basis = '6-31g',
-            charge = 1,
-            spin = 1,
-        )
-        mf = scf.UHF(mol)
+        mf = scf.UHF(h2o_z1)
         mf.max_cycle = 1
         mf.conv_check = False
         mf.kernel()
@@ -75,17 +109,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(nr.kernel(), -75.58051984397145, 9)
 
     def test_nr_uhf_cart(self):
-        mol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. , -0.757 , 0.587)],
-            [1   , (0. , 0.757  , 0.587)] ],
-            basis = '6-31g',
-            charge = 1,
-            spin = 1,
-        )
+        mol = h2o_z1.copy()
         mol.cart = True
         mf = scf.newton(scf.UHF(mol))
         mf.kernel()
@@ -93,17 +117,7 @@ class KnowValues(unittest.TestCase):
 
 
     def test_nr_rhf_symm(self):
-        mol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. , -0.757 , 0.587)],
-            [1   , (0. , 0.757  , 0.587)] ],
-            symmetry = 1,
-            basis = '6-31g')
-
-        mf = scf.RHF(mol)
+        mf = scf.RHF(h2o_z0_s)
         mf.max_cycle = 1
         mf.conv_check = False
         mf.kernel()
@@ -113,19 +127,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(nr.kernel(), -75.98394849812, 9)
 
     def test_nr_rohf_symm(self):
-        mol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. , -0.757 , 0.587)],
-            [1   , (0. , 0.757  , 0.587)] ],
-            basis = '6-31g',
-            charge = 1,
-            spin = 1,
-            symmetry = 1,
-        )
-        mf = scf.RHF(mol)
+        mf = scf.RHF(h2o_z1_s)
         mf.irrep_nelec['B2'] = (1,0)
         mf.max_cycle = 1
         mf.conv_check = False
@@ -137,19 +139,7 @@ class KnowValues(unittest.TestCase):
 
 
     def test_nr_uhf_symm(self):
-        mol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. , -0.757 , 0.587)],
-            [1   , (0. , 0.757  , 0.587)] ],
-            basis = '6-31g',
-            charge = 1,
-            spin = 1,
-            symmetry = 1,
-        )
-        mf = scf.UHF(mol)
+        mf = scf.UHF(h2o_z1_s)
         mf.max_cycle = 1
         mf.conv_check = False
         mf.kernel()
@@ -160,16 +150,20 @@ class KnowValues(unittest.TestCase):
 
 
     def test_nr_rks_lda(self):
-        mol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. , -0.757 , 0.587)],
-            [1   , (0. , 0.757  , 0.587)] ],
-            basis = '6-31g')
+        mf = dft.RKS(h2o_z0)
+        eref = mf.kernel()
+        mf.max_cycle = 1
+        mf.conv_check = False
+        mf.kernel()
+        nr = scf.newton(mf)
+        nr.max_cycle = 3
+        nr.conv_tol_grad = 1e-5
+        self.assertAlmostEqual(nr.kernel(), eref, 9)
 
-        mf = dft.RKS(mol)
+    def test_nr_rks_rsh(self):
+        '''test range-separated Coulomb'''
+        mf = dft.RKS(h2o_z0)
+        mf.xc = 'wb97x'
         eref = mf.kernel()
         mf.max_cycle = 1
         mf.conv_check = False
@@ -180,16 +174,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(nr.kernel(), eref, 9)
 
     def test_nr_rks(self):
-        mol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. , -0.757 , 0.587)],
-            [1   , (0. , 0.757  , 0.587)] ],
-            basis = '6-31g')
-
-        mf = dft.RKS(mol)
+        mf = dft.RKS(h2o_z0)
         mf.xc = 'b3lyp'
         eref = mf.kernel()
         mf.max_cycle = 1
@@ -201,19 +186,10 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(nr.kernel(), eref, 9)
 
     def test_rks_gen_g_hop(self):
-        mol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. , -0.757 , 0.587)],
-            [1   , (0. , 0.757  , 0.587)] ],
-            basis = '6-31g')
-
-        mf = dft.RKS(mol)
+        mf = dft.RKS(h2o_z0)
         mf.grids.build()
         mf.xc = 'b3lyp'
-        nao = mol.nao_nr()
+        nao = h2o_z0.nao_nr()
         numpy.random.seed(1)
         mo = numpy.random.random((nao,nao))
         mo_occ = numpy.zeros(nao)
@@ -225,18 +201,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.linalg.norm(hop(dm1)), 40669.392804071264, 7)
 
     def test_nr_roks(self):
-        mol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. , -0.757 , 0.587)],
-            [1   , (0. , 0.757  , 0.587)] ],
-            basis = '6-31g',
-            charge = 1,
-            spin = 1,
-        )
-        mf = dft.RKS(mol)
+        mf = dft.RKS(h2o_z1)
         mf.xc = 'b3lyp'
         eref = mf.kernel()
 
@@ -250,18 +215,7 @@ class KnowValues(unittest.TestCase):
 
 
     def test_nr_uks_lda(self):
-        mol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. , -0.757 , 0.587)],
-            [1   , (0. , 0.757  , 0.587)] ],
-            basis = '6-31g',
-            charge = 1,
-            spin = 1,
-        )
-        mf = dft.UKS(mol)
+        mf = dft.UKS(h2o_z1)
         eref = mf.kernel()
 
         mf.max_cycle = 1
@@ -272,19 +226,22 @@ class KnowValues(unittest.TestCase):
         nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), eref, 9)
 
+    def test_nr_uks_rsh(self):
+        '''test range-separated Coulomb'''
+        mf = dft.UKS(h2o_z1)
+        mf.xc = 'wb97x'
+        eref = mf.kernel()
+
+        mf.max_cycle = 1
+        mf.conv_check = False
+        mf.kernel()
+        nr = scf.newton(mf)
+        nr.max_cycle = 3
+        nr.conv_tol_grad = 1e-5
+        self.assertAlmostEqual(nr.kernel(), eref, 9)
+
     def test_nr_uks(self):
-        mol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. , -0.757 , 0.587)],
-            [1   , (0. , 0.757  , 0.587)] ],
-            basis = '6-31g',
-            charge = 1,
-            spin = 1,
-        )
-        mf = dft.UKS(mol)
+        mf = dft.UKS(h2o_z1)
         mf.xc = 'b3lyp'
         eref = mf.kernel()
 
@@ -297,76 +254,30 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(nr.kernel(), eref, 9)
 
     def test_nr_uks_fast_newton(self):
-        mol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = '''C 0 0 0
-            H  1  1  1
-            H -1 -1  1
-            H -1  1 -1
-            H  1 -1 -1''',
-            basis = '6-31g',
-            charge = 1,
-            spin = 1,
-            symmetry = 1,
-        )
-        mf = dft.UKS(mol)
+        mf = dft.UKS(h4_z1_s)
         mf.xc = 'b3lyp'
         mf1 = scf.fast_newton(mf)
         self.assertAlmostEqual(mf1.e_tot, -39.696083841107587, 9)
 
-        mf1 = scf.fast_newton(dft.UKS(mol))
+        mf1 = scf.fast_newton(dft.UKS(h4_z1_s))
         self.assertAlmostEqual(mf1.e_tot, -39.330377813428001, 9)
 
     def test_nr_rks_fast_newton(self):
-        mol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = '''C 0 0 0
-            H  1  1  1
-            H -1 -1  1
-            H -1  1 -1
-            H  1 -1 -1''',
-            basis = '6-31g',
-            symmetry = 1,
-        )
-        mf = dft.RKS(mol)
+        mf = dft.RKS(h4_z0_s)
         mf.xc = 'b3lyp'
         mf1 = scf.fast_newton(mf)
         self.assertAlmostEqual(mf1.e_tot, -40.10277421254213, 9)
 
     def test_nr_rohf_fast_newton(self):
-        mol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = '''C 0 0 0
-            H  1  1  1
-            H -1 -1  1
-            H -1  1 -1
-            H  1 -1 -1''',
-            basis = '6-31g',
-            charge = 1,
-            spin = 1,
-            symmetry = 1,
-        )
-        mf = scf.ROHF(mol)
+        mf = scf.ROHF(h4_z1_s)
         mf1 = scf.fast_newton(mf)
         self.assertAlmostEqual(mf1.e_tot, -39.365972147397649, 9)
 
     def test_uks_gen_g_hop(self):
-        mol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. , -0.757 , 0.587)],
-            [1   , (0. , 0.757  , 0.587)] ],
-            basis = '6-31g')
-
-        mf = dft.UKS(mol)
+        mf = dft.UKS(h2o_z0)
         mf.grids.build()
         mf.xc = 'b3p86'
-        nao = mol.nao_nr()
+        nao = h2o_z0.nao_nr()
         numpy.random.seed(1)
         mo =(numpy.random.random((nao,nao)),
              numpy.random.random((nao,nao)))

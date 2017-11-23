@@ -2072,7 +2072,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         >>> with mol.with_rinv_origin((1,0,0)):
         ...     mol.intor('int1e_rinv')
         '''
-        coord0 = mol._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3].copy()
+        coord0 = self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3].copy()
         return _TemporaryMoleContext(self.set_rinv_origin, (coord,), (coord0,))
     with_rinv_orig = with_rinv_origin
 
