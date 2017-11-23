@@ -22,7 +22,7 @@ mcc = cc.CCSD(rhf)
 mcc.conv_tol = 1e-14
 mcc.ccsd()
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_ccsd_t(self):
         mol = gto.M()
         numpy.random.seed(12)

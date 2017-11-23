@@ -952,6 +952,7 @@ CC = CCSD
 
 
 class _ChemistsERIs:
+    '''(pq|rs)'''
     def __init__(self):
         self.mo_coeff = None
         self.nocc = None

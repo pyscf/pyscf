@@ -139,7 +139,6 @@ def ipccsd_matvec(eom, vector, imds=None, diag=None):
     if imds is None: imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
-    nvir = nmo - nocc
     r1, r2 = vector_to_amplitudes_ip(vector, nmo, nocc)
 
     # 1h-1h block
@@ -188,7 +187,6 @@ def lipccsd_matvec(eom, vector, imds=None, diag=None):
     if imds is None: imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
-    nvir = nmo - nocc
     r1, r2 = vector_to_amplitudes_ip(vector, nmo, nocc)
 
     # 1h-1h block
@@ -331,17 +329,18 @@ def ipccsd_star(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, eris=None):
 class EOMIP(EOM):
     def get_init_guess(self, nroots=1, koopmans=True, diag=None):
         size = self.vector_size()
+        dtype = getattr(diag, 'dtype', np.double)
         nroots = min(nroots, size)
         guess = []
         if koopmans:
             for n in range(nroots):
-                g = np.zeros(size)
+                g = np.zeros(size, dtype)
                 g[self.nocc-n-1] = 1.0
                 guess.append(g)
         else:
             idx = diag.argsort()[:nroots]
             for i in idx:
-                g = np.zeros(size)
+                g = np.zeros(size, dtype)
                 g[i] = 1.0
                 guess.append(g)
         return guess
@@ -375,7 +374,6 @@ class EOMIP(EOM):
         return nocc + nocc*nocc*nvir
 
     def make_imds(self, eris=None):
-        if eris is None: eris = self._cc.ao2mo()
         imds = _IMDS(self._cc, eris)
         imds.make_ip(self.partition)
         return imds
@@ -609,17 +607,18 @@ def eaccsd_star(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, eris=None):
 class EOMEA(EOM):
     def get_init_guess(self, nroots=1, koopmans=True, diag=None):
         size = self.vector_size()
+        dtype = getattr(diag, 'dtype', np.double)
         nroots = min(nroots, size)
         guess = []
         if koopmans:
             for n in range(nroots):
-                g = np.zeros(size)
+                g = np.zeros(size, dtype)
                 g[n] = 1.0
                 guess.append(g)
         else:
             idx = diag.argsort()[:nroots]
             for i in idx:
-                g = np.zeros(size)
+                g = np.zeros(size, dtype)
                 g[i] = 1.0
                 guess.append(g)
         return guess
@@ -653,7 +652,6 @@ class EOMEA(EOM):
         return nvir + nocc*nvir*nvir
 
     def make_imds(self, eris=None):
-        if eris is None: eris = self._cc.ao2mo()
         imds = _IMDS(self._cc, eris)
         imds.make_ea(self.partition)
         return imds
@@ -1292,27 +1290,22 @@ def eeccsd_diag(eom, imds=None):
 
 
 class EOMEE(EOM):
-    def get_init_guess(eom, nroots=1, koopmans=True, diag=None):
-        size = eom.vector_size()
-        nroots = min(nroots, size)
-        idx = diag.argsort()
-        guess = []
+    def get_init_guess(self, nroots=1, koopmans=True, diag=None):
         if koopmans:
-            n = 0
-            for i in idx:
-                g = np.zeros_like(diag)
-                g[i] = 1.0
-                t1, t2 = eom.vector_to_amplitudes(g, eom.nmo, eom.nocc)
-                if np.linalg.norm(t1) > .9:
-                    guess.append(g)
-                    n += 1
-                    if n == nroots:
-                        break
+            nocc = self.nocc
+            nvir = self.nmo - nocc
+            idx = diag[:nocc*nvir].argsort()
         else:
-            for i in idx[:nroots]:
-                g = np.zeros_like(diag)
-                g[i] = 1.0
-                guess.append(g)
+            idx = diag.argsort()
+
+        size = self.vector_size()
+        dtype = getattr(diag, 'dtype', np.double)
+        nroots = min(nroots, size)
+        guess = []
+        for i in idx[:nroots]:
+            g = np.zeros(size, dtype)
+            g[i] = 1.0
+            guess.append(g)
         return guess
 
     eeccsd = kernel = eeccsd
@@ -1325,7 +1318,6 @@ class EOMEE(EOM):
         return nocc*nvir + nocc*nocc*nvir*nvir
 
     def make_imds(self, eris=None):
-        if eris is None: eris = self._cc.ao2mo()
         imds = _IMDS(self._cc, eris)
         imds.make_ee()
         return imds
@@ -1424,14 +1416,15 @@ class _IMDS:
 
     def _make_shared_1e(self):
         cput0 = (time.clock(), time.time())
-        log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
         self.Loo = imd.Loo(t1, t2, eris)
         self.Lvv = imd.Lvv(t1, t2, eris)
         self.Fov = imd.cc_Fov(t1, t2, eris)
 
-        log.timer_debug1('EOM-CCSD shared one-electron intermediates', *cput0)
+        logger.timer_debug1(self, 'EOM-CCSD shared one-electron '
+                            'intermediates', *cput0)
+        return self
 
     def _make_shared_2e(self):
         cput0 = (time.clock(), time.time())
@@ -1443,13 +1436,14 @@ class _IMDS:
         self.Wovvo = imd.Wovvo(t1, t2, eris)
         self.Woovv = imd._get_ovov(eris).transpose(0,2,1,3)
 
+        self._made_shared_2e = True
         log.timer_debug1('EOM-CCSD shared two-electron intermediates', *cput0)
+        return self
 
     def make_ip(self, ip_partition=None):
         self._make_shared_1e()
         if not self._made_shared_2e and ip_partition != 'mp':
             self._make_shared_2e()
-            self._made_shared_2e = True
 
         cput0 = (time.clock(), time.time())
         log = logger.Logger(self.stdout, self.verbose)
@@ -1462,12 +1456,12 @@ class _IMDS:
         self.Wooov = imd.Wooov(t1, t2, eris)
         self.Wovoo = imd.Wovoo(t1, t2, eris)
         log.timer_debug1('EOM-CCSD IP intermediates', *cput0)
+        return self
 
     def make_ea(self, ea_partition=None):
         self._make_shared_1e()
         if not self._made_shared_2e and ea_partition != 'mp':
             self._make_shared_2e()
-            self._made_shared_2e = True
 
         cput0 = (time.clock(), time.time())
         log = logger.Logger(self.stdout, self.verbose)
@@ -1482,6 +1476,7 @@ class _IMDS:
             self.Wvvvv = imd.Wvvvv(t1, t2, eris)
             self.Wvvvo = imd.Wvvvo(t1, t2, eris, self.Wvvvv)
         log.timer_debug1('EOM-CCSD EA intermediates', *cput0)
+        return self
 
 
     def make_ee(self):
@@ -1647,6 +1642,7 @@ class _IMDS:
 
         self.made_ee_imds = True
         log.timer('EOM-CCSD EE intermediates', *cput0)
+        return self
 
 def _make_tau(t2, t1, r1, fac=1, out=None):
     tau = np.einsum('ia,jb->ijab', t1, r1)

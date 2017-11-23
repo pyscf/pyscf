@@ -868,12 +868,18 @@ def einsum(idx_str, *tensors, **kwargs):
         print("Reshaping A as (-1,", inner_shape, ")")
         print("Reshaping B as (", inner_shape, ",-1)")
 
-    # A or B might be HDF5 Datasets 
-    A = numpy.array(A, copy=False, order='A')
-    B = numpy.array(B, copy=False, order='A')
+    # Call numpy.asarray because A or B may be HDF5 Datasets 
+    A = numpy.asarray(A, order='A').transpose(new_orderA)
+    B = numpy.asarray(B, order='A').transpose(new_orderB)
 
-    At = A.transpose(new_orderA).reshape((-1,inner_shape))
-    Bt = B.transpose(new_orderB).reshape((inner_shape,-1))
+    if A.flags.f_contiguous:
+        At = numpy.asarray(A.reshape((-1,inner_shape), order='F'), order='F')
+    else:
+        At = numpy.asarray(A.reshape((-1,inner_shape)), order='C')
+    if B.flags.c_contiguous:
+        Bt = numpy.asarray(B.reshape((inner_shape,-1), order='F'), order='F')
+    else:
+        Bt = numpy.asarray(B.reshape((inner_shape,-1)), order='C')
 
     shapeCt = list()
     idxCt = list()

@@ -6,7 +6,7 @@ from pyscf import cc
 from pyscf.cc import ccsd_lambda
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_ccsd(self):
         mol = gto.M()
         mf = scf.RHF(mol)

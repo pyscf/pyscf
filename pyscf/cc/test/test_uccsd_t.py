@@ -23,7 +23,7 @@ mcc = cc.UCCSD(mf)
 mcc.conv_tol = 1e-14
 mcc.kernel()
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_uccsd_t(self):
         mf1 = copy.copy(mf)
         nao, nmo = mf.mo_coeff[0].shape

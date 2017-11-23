@@ -203,7 +203,7 @@ def update_l1l2(mf, t1, t2, l1, l2, orbspin):
     return l1, l2
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_update_amps(self):
         mf = scf.UHF(mol).run()
         numpy.random.seed(21)

@@ -58,6 +58,8 @@ def CCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     from pyscf import scf
     if isinstance(mf, scf.uhf.UHF):
         return UCCSD(mf, frozen, mo_coeff, mo_occ)
+    elif isinstance(mf, scf.ghf.GHF):
+        return GCCSD(mf, frozen, mo_coeff, mo_occ)
     else:
         return RCCSD(mf, frozen, mo_coeff, mo_occ)
 
@@ -102,3 +104,20 @@ def UCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
         raise NotImplementedError('DF-UCCSD')
     else:
         return uccsd.UCCSD(mf, frozen, mo_coeff, mo_occ)
+
+
+def GCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+    __doc__ = uccsd.UCCSD.__doc__
+    import sys
+    from pyscf import scf
+    from pyscf.cc import gccsd
+
+    if 'dft' in str(mf.__module__):
+        sys.stderr.write('GCCSD Warning: The first argument mf is a DFT object. '
+                         'GCCSD calculation should be used with HF object')
+
+    mf = scf.addons.convert_to_ghf(mf)
+    if hasattr(mf, 'with_df') and mf.with_df:
+        raise NotImplementedError('DF-GCCSD')
+    else:
+        return gccsd.GCCSD(mf, frozen, mo_coeff, mo_occ)

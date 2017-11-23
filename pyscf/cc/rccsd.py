@@ -35,13 +35,13 @@ def update_amps(cc, t1, t2, eris):
     Fvv -= np.diag(np.diag(fvv))
 
     # T1 equation
-    t1new = np.asarray(fov).conj().copy()
-    t1new +=-2*np.einsum('kc,ka,ic->ia', fov, t1, t1)
+    t1new  =-2*np.einsum('kc,ka,ic->ia', fov, t1, t1)
     t1new +=   np.einsum('ac,ic->ia', Fvv, t1)
     t1new +=  -np.einsum('ki,ka->ia', Foo, t1)
     t1new += 2*np.einsum('kc,kica->ia', Fov, t2)
     t1new +=  -np.einsum('kc,ikca->ia', Fov, t2)
     t1new +=   np.einsum('kc,ic,ka->ia', Fov, t1, t1)
+    t1new += fov.conj()
     t1new += 2*np.einsum('aikc,kc->ia', eris.voov, t1)
     t1new +=  -np.einsum('acki,kc->ia', eris.vvoo, t1)
     eris_ovvv = np.asarray(eris.vovv).conj().transpose(1,0,3,2)
@@ -56,7 +56,15 @@ def update_amps(cc, t1, t2, eris):
     t1new +=   lib.einsum('likc,lc,ka->ia', eris_ooov, t1, t1)
 
     # T2 equation
-    t2new = np.asarray(eris.vovo).transpose(1,3,0,2).copy()
+    tmp2  = lib.einsum('bcki,ka->abic', eris.vvoo, -t1)
+    tmp2 += np.asarray(eris.vovv).transpose(0,2,1,3)
+    tmp = lib.einsum('abic,jc->ijab', tmp2, t1)
+    t2new = tmp + tmp.transpose(1,0,3,2)
+    tmp2  = lib.einsum('aikc,jc->akij', eris.voov, t1)
+    tmp2 += eris_ooov.transpose(3,1,2,0).conj()
+    tmp = lib.einsum('akij,kb->ijab', tmp2, t1)
+    t2new -= tmp + tmp.transpose(1,0,3,2)
+    t2new += np.asarray(eris.vovo).transpose(1,3,0,2)
     if cc.cc2:
         Woooo2 = np.asarray(eris.oooo).transpose(0,2,1,3).copy()
         Woooo2 += lib.einsum('kilc,jc->klij', eris_ooov, t1)
@@ -99,15 +107,6 @@ def update_amps(cc, t1, t2, eris):
         t2new -= (tmp + tmp.transpose(1,0,3,2))
         tmp = lib.einsum('bkci,kjac->ijab', Wvovo, t2)
         t2new -= (tmp + tmp.transpose(1,0,3,2))
-
-    tmp2  = lib.einsum('bcki,ka->abic', eris.vvoo, -t1)
-    tmp2 += np.asarray(eris.vovv).transpose(0,2,1,3)
-    tmp = lib.einsum('abic,jc->ijab', tmp2, t1)
-    t2new += (tmp + tmp.transpose(1,0,3,2))
-    tmp2  = lib.einsum('aikc,jc->akij', eris.voov, t1)
-    tmp2 += eris_ooov.transpose(3,1,2,0).conj()
-    tmp = lib.einsum('akij,kb->ijab', tmp2, t1)
-    t2new -= (tmp + tmp.transpose(1,0,3,2))
 
     mo_e = eris.fock.diagonal().real
     eia = mo_e[:nocc,None] - mo_e[None,nocc:]
@@ -279,8 +278,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     nocc_pair = nocc*(nocc+1)//2
     eris.oooo[:] = ao2mo.restore(1, _cp(eri[:nocc_pair,:nocc_pair]), nocc)
 
-    nmo_pair = nmo * (nmo+1) // 2
-    tril2sq = lib.unpack_tril(np.arange(nmo_pair))
+    tril2sq = lib.square_mat_in_trilu_indices(nmo)
     blksize = min(nvir, max(2, int(max_memory*1e6/8/nmo**3/2)))
     for p0, p1 in lib.prange(0, nvir, blksize):
         q0, q1 = p0+nocc, p1+nocc

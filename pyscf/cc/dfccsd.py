@@ -59,7 +59,7 @@ class RCCSD(ccsd.CCSD):
         vvblk = int(vvblk)
         eribuf = numpy.empty((dmax,dmax,nvir_pair))
         loadbuf = numpy.empty((dmax,dmax,nvir,nvir))
-        tril2sq = lib.unpack_tril(numpy.arange(nvir_pair))
+        tril2sq = lib.square_mat_in_trilu_indices(nvir)
 
         for i0, i1 in lib.prange(0, nvir, dmax):
             off0 = i0*(i0+1)//2
@@ -98,7 +98,7 @@ class RCCSD(ccsd.CCSD):
         vvblk = int(vvblk)
         eribuf = numpy.empty((dmax,dmax,nvir_pair))
         loadbuf = numpy.empty((dmax,dmax,nvir,nvir))
-        tril2sq = lib.unpack_tril(numpy.arange(nvir_pair))
+        tril2sq = lib.square_mat_in_trilu_indices(nvir)
 
         for i0, i1 in lib.prange(0, nvir, dmax):
             off0 = i0*(i0+1)//2

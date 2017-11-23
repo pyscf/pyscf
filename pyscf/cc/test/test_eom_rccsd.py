@@ -60,7 +60,7 @@ mycc3 = mycc3.set(max_memory=0, direct=True)
 mycc31 = mycc31.set(max_memory=0, direct=True)
 eris31 = mycc31.ao2mo()
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_ipccsd(self):
         e,v = mycc.ipccsd(nroots=1)
         self.assertAlmostEqual(e, 0.4335604332073799, 6)
@@ -215,10 +215,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(vec1T), 2221.3155272953709, 9)
         self.assertAlmostEqual(lib.finger(vec2) ,-5486.1611871545592, 9)
 
-
-########################################
-# With 4-fold symmetry in integrals
-    def test_ip_matvec2(self):
+    def test_ip_matvec(self):
         numpy.random.seed(12)
         r1 = numpy.random.random((no)) - .9
         r2 = numpy.random.random((no,no,nv)) - .9
@@ -240,7 +237,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(vec1), -3795.9122245246967, 9)
         self.assertAlmostEqual(lib.finger(diag), 1106.260154202434, 9)
 
-    def test_ea_matvec2(self):
+    def test_ea_matvec(self):
         numpy.random.seed(12)
         r1 = numpy.random.random((nv)) - .9
         r2 = numpy.random.random((no,nv,nv)) - .9
@@ -262,6 +259,58 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(vec1), -17030.363405297598, 9)
         self.assertAlmostEqual(lib.finger(diag), 4688.9122122011922, 9)
 
+
+########################################
+# Complex integrals
+    def test_ip_matvec1(self):
+        numpy.random.seed(12)
+        r1 = numpy.random.random((no))-.9 + numpy.random.random((no))*.2j
+        r2 = (numpy.random.random((no,no,nv))-.9 +
+              numpy.random.random((no,no,nv))*.2j)
+        myeom = eom_rccsd.EOMIP(mycc1)
+        vec = myeom.amplitudes_to_vector(r1,r2)
+        r1,r2 = myeom.vector_to_amplitudes(vec)
+        myeom.partition = 'mp'
+        self.assertAlmostEqual(lib.finger(r1), 0.37404344676857076, 12)
+        self.assertAlmostEqual(lib.finger(r2), -1.1568913404570922, 12)
+        imds = myeom.make_imds(eris1)
+        vec1 = myeom.matvec(vec, imds)
+        self.assertAlmostEqual(lib.finger(vec1), -14894.669606811192, 9)
+        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 1182.3095479451745, 9)
+
+        myeom.partition = 'full'
+        imds = myeom.make_imds(eris1)
+        diag = myeom.get_diag(imds)
+        vec1 = myeom.matvec(vec, imds, diag=diag)
+        self.assertAlmostEqual(lib.finger(vec1), -3795.9122245246967, 9)
+        self.assertAlmostEqual(lib.finger(diag), 1106.260154202434, 9)
+
+    def test_ea_matvec1(self):
+        numpy.random.seed(12)
+        r1 = numpy.random.random((nv))-.9 + numpy.random.random((nv))*.2j
+        r2 = (numpy.random.random((no,nv,nv))-.9 +
+              numpy.random.random((no,nv,nv))*.2j)
+        myeom = eom_rccsd.EOMEA(mycc1)
+        vec = myeom.amplitudes_to_vector(r1,r2)
+        r1,r2 = myeom.vector_to_amplitudes(vec)
+        myeom.partition = 'mp'
+        self.assertAlmostEqual(lib.finger(r1), 1.4488291275539353, 12)
+        self.assertAlmostEqual(lib.finger(r2), 0.97080165032287469, 12)
+        imds = myeom.make_imds(eris1)
+        vec1 = myeom.matvec(vec, imds)
+        self.assertAlmostEqual(lib.finger(vec1), -34426.363943760276, 9)
+        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 2724.8239646679217, 9)
+
+        myeom.partition = 'full'
+        imds = myeom.make_imds(eris1)
+        diag = myeom.get_diag(imds)
+        vec1 = myeom.matvec(vec, imds, diag=diag)
+        self.assertAlmostEqual(lib.finger(vec1), -17030.363405297598, 9)
+        self.assertAlmostEqual(lib.finger(diag), 4688.9122122011922, 9)
+
+
+########################################
+# With 4-fold symmetry in integrals
     def test_ipccsd2(self):
         e,v = mycc2.ipccsd(nroots=1)
         self.assertAlmostEqual(e, 0.4335604332073799, 6)

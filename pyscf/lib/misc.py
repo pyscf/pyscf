@@ -185,6 +185,18 @@ def prange_tril(start, stop, blocksize):
     displs = [x+start for x in _blocksize_partition(cum_costs, blocksize)]
     return zip(displs[:-1], displs[1:])
 
+def square_mat_in_trilu_indices(n):
+    '''Return a n x n symmetric index matrix, in which the elements are the
+    indices of the unique elements of a tril vector 
+    [0 1 3 ... ]
+    [1 2 4 ... ]
+    [3 4 5 ... ]
+    [...       ]
+    '''
+    idx = numpy.tril_indices(n)
+    tril2sq = numpy.zeros((n,n), dtype=int)
+    tril2sq[idx[0],idx[1]] = tril2sq[idx[1],idx[0]] = numpy.arange(n*(n+1)//2)
+    return tril2sq
 
 class ctypes_stdout(object):
     '''make c-printf output to string, but keep python print in /dev/pts/1.
@@ -531,6 +543,7 @@ class H5TmpFile(h5py.File):
         self.close()
 
 def finger(a):
+    a = numpy.asarray(a)
     return numpy.dot(numpy.cos(numpy.arange(a.size)), a.ravel())
 
 

@@ -64,7 +64,7 @@ ucc = cc.UCCSD(mf)
 ucc.conv_tol = 1e-10
 ecc, t1, t2 = ucc.kernel()
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_frozen(self):
         mf1 = scf.UHF(mol1).run()
         # Freeze 1s electrons

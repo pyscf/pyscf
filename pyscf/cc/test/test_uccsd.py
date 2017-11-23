@@ -24,7 +24,7 @@ mf = scf.addons.convert_to_uhf(rhf)
 
 myucc = cc.UCCSD(mf).run(conv_tol=1e-10)
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_uccsd_from_dft(self):
         mf = dft.UKS(mol)
         mycc = cc.UCCSD(mf)

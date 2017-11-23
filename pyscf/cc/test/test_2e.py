@@ -24,7 +24,7 @@ mf = scf.RHF(mol).run()
 def finger(a):
     return numpy.dot(a.ravel(), numpy.cos(numpy.arange(a.size)))
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_ccsd(self):
         mycc = cc.CCSD(mf)
         ecc = mycc.kernel()[0]
