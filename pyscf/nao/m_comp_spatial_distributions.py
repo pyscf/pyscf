@@ -51,6 +51,7 @@ class spatial_distribution(scf):
         assert box.shape == (3, 2)
 
         self.Eext = Eext/np.sqrt(np.dot(Eext, Eext))
+        self.box = box
         self.mesh = np.array([np.arange(box[0, 0], box[0, 1]+self.dr[0], self.dr[0]),
                               np.arange(box[1, 0], box[1, 1]+self.dr[1], self.dr[1]),
                               np.arange(box[2, 0], box[2, 1]+self.dr[2], self.dr[2])])
@@ -101,3 +102,40 @@ class spatial_distribution(scf):
         # sum(dn) =  77.8299 63.8207
         # print(np.sum(abs(dn_spatial_re)), np.sum(abs(dn_spatial_im)))
         return dn_spatial_re + 1.0j*dn_spatial_im
+
+    def comp_induce_field(self):
+
+        from scipy.signal import fftconvolve
+
+        Nx, Ny, Nz = self.mesh[0].size, self.mesh[1].size, self.mesh[2].size
+
+        # (2, 3) to be in same order than fortran
+        self.id = np.zeros((2, 3), dtype=np.int32)
+        self.ip = np.zeros((2, 3), dtype=np.int32)
+        for i in range(3):
+            self.id[:, i] = np.rint(self.box[i, :]/self.dr[i])
+            self.ip[:, i] = np.rint((self.box[i, :] - self.dr[i]/2)/self.dr[i])
+
+        nffr = np.zeros((3), dtype=np.int32)
+        nffc = np.zeros((3), dtype=np.int32)
+        n1 = np.zeros((3), dtype=np.int32)
+        libnao.initialize_fft(self.id.ctypes.data_as(POINTER(c_int)),
+                self.ip.ctypes.data_as(POINTER(c_int)),
+                nffr.ctypes.data_as(POINTER(c_int)),
+                nffc.ctypes.data_as(POINTER(c_int)),
+                n1.ctypes.data_as(POINTER(c_int)),
+                )
+        
+        Efield = []# np.zeros((3, Nx, Ny, Nz), dtype = np.complex64)
+        grid = np.zeros((nffr[0], nffr[1], nffr[2]), dtype = np.float64)
+
+        for xyz in range(3):
+            grid.fill(0.0)
+            libnao.comp_spatial_grid(
+                self.dr.ctypes.data_as(POINTER(c_double)), 
+                c_int(xyz+1), 
+                grid.ctypes.data_as(POINTER(c_double)))
+
+            Efield.append(fftconvolve(grid, self.dn_spatial, mode="valid")[0:Nx, 0:Ny, 0:Nz])
+
+        return np.array(Efield)

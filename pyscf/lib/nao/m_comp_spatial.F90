@@ -9,6 +9,13 @@ module m_comp_spatial
   implicit none
   private die
   private warn
+
+  type fft_vars_t
+    integer, dimension(1:3) :: n1, n2, ncaux, saux, salloc, falloc, nffc, nffr
+    integer :: ic(2,3)
+  end type fft_vars_t
+
+  type(fft_vars_t) :: fft_vars
   
   contains
 
@@ -95,11 +102,11 @@ subroutine get_spatial_density_parallel(dn_spatial_re, dn_spatial_im, mu2dn_re, 
 
   
 !_t1
-!  !$OMP PARALLEL DEFAULT(NONE) &
-!  !$OMP PRIVATE (ix, iy, iz, br, res, ind) &
-!  !$OMP SHARED(dn_spatial_re, mu2dn_re, dn_spatial_im, mu2dn_im, Nx, Ny, Nz) &
-!  !$OMP SHARED(meshx, meshy, meshz, a, atom2sp) &
-!  !$OMP SHARED(natoms, nspecies, pb)
+  !$OMP PARALLEL DEFAULT(NONE) &
+  !$OMP PRIVATE (ix, iy, iz, br, res, ind) &
+  !$OMP SHARED(dn_spatial_re, mu2dn_re, dn_spatial_im, mu2dn_im, Nx, Ny, Nz) &
+  !$OMP SHARED(meshx, meshy, meshz, a, atom2sp) &
+  !$OMP SHARED(natoms, nspecies, pb)
   allocate(res(nprod))
   res = 0.0
 
@@ -118,9 +125,9 @@ subroutine get_spatial_density_parallel(dn_spatial_re, dn_spatial_im, mu2dn_re, 
   enddo
   enddo
   enddo
-!  !$OMP END DO
+  !$OMP END DO
   _dealloc(res)
-!  !$OMP END PARALLEL
+  !$OMP END PARALLEL
 
 !_t2(t)
 !  print*, "timing loop fortran: ", t
@@ -195,6 +202,72 @@ subroutine comp_dn_xyz(a, pb, atom2sp, br, res, natoms, nspecies)
   !_die("look")
 
 end subroutine !comp_dn_xyz
+
+!
+!
+!
+subroutine comp_spatial_grid(dr, axis, grid) bind(c, name='comp_spatial_grid')
+
+  implicit none
+  integer(c_int), intent(in), value :: axis
+  real(c_double), intent(in) :: dr(3)
+  real(c_double), intent(inout) :: grid(fft_vars%nffr(1)*fft_vars%nffr(2)*fft_vars%nffr(3))
+
+  integer :: ix, iy, iz, i1, i2, i3, ind
+  real(8) :: br(3)
+
+
+  do i3 = fft_vars%ic(1, 3), fft_vars%ic(2, 3)
+  do i2 = fft_vars%ic(1, 2), fft_vars%ic(2, 2)
+  do i1 = fft_vars%ic(1, 1), fft_vars%ic(2, 1)
+    br = (/i1,i2,i3/)*dr + dr*0.5D0
+    
+    ix = i1 + fft_vars%n2(1)/2 +1
+    iy = i2 + fft_vars%n2(2)/2 +1
+    iz = i3 + fft_vars%n2(3)/2 +1
+    ind = iz + (iy-1)*fft_vars%nffr(3) + (ix-1)*fft_vars%nffr(3)*fft_vars%nffr(2)
+    grid(ind) = br(axis)/(sqrt(sum(br**2))**3)
+
+  enddo
+  enddo
+  enddo
+
+end subroutine !comp_spatial_grid
+
+!
+!
+!
+subroutine initialize_fft(id, ip, nffr, nffc, n1) bind(c, name="initialize_fft")
+  use m_conv_lims, only : conv_lims
+  use m_conv_dims, only : conv_dims
+
+  implicit none
+
+  integer(c_int32_t), intent(in) :: id(2*3), ip(2*3)
+  integer(c_int32_t), intent(inout) :: nffr(3), nffc(3), n1(3)
+
+  integer :: s1, f1, s2, f2, s3, f3, d
+
+  do d = 1, 3
+    fft_vars%ic(1,d) = min(ip(d)-id(d), ip(1*3+d)-id(d), ip(d)-id(1*3+d), ip(1*3+d)-id(1*3+d))
+    fft_vars%ic(2,d) = max(ip(d)-id(d), ip(1*3+d)-id(d), ip(d)-id(1*3+d), ip(1*3+d)-id(1*3+d))
+  enddo
+  
+
+  do d=1,3
+    s1 = id(d); f1 = id(3+d)
+    s2 = fft_vars%ic(1, d); f2 = fft_vars%ic(2, d)
+    s3 = ip(d); f3 = ip(3+d)
+
+    call conv_lims( s1,f1,s2,f2,s3,f3, fft_vars%n1(d), fft_vars%n2(d), &
+      fft_vars%ncaux(d),fft_vars%saux(d),fft_vars%salloc(d),fft_vars%falloc(d) )
+    call conv_dims(fft_vars%n1(d),fft_vars%n2(d),fft_vars%nffr(d),fft_vars%nffc(d))
+    nffr(d) = fft_vars%nffr(d)
+    nffc(d) = fft_vars%nffc(d)
+    n1(d) = fft_vars%n1(d)
+  enddo
+
+end subroutine !initialize_fft
 
 
 end module !m_comp_spatial
