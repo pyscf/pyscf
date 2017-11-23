@@ -7,6 +7,9 @@ PySCF 1.5 alpha (2018-03-??)
     > Analytical nuclear gradients
     > Second order SCF
     > Hessian and frequency
+    > TDDFT
+    > TDDFT gradients
+    > NMR
   - IBO for molecular and PBC systems
   - UHF analytical nuclear Hessian
   - UKS analytical nuclear Hessian

@@ -35,11 +35,7 @@ def get_veff(ks_grad, mol=None, dm=None):
     if mf.nlc != '':
         raise NotImplementedError
     #enabling range-separated hybrids
-    omega, alpha, beta = ni.rsh_coeff(mf.xc)
-    if abs(omega) > 1e-10:
-        hyb = alpha + beta
-    else:
-        hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
+    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, ks_grad.max_memory*.9-mem_now)

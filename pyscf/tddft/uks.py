@@ -10,6 +10,7 @@ from pyscf.dft import numint
 from pyscf import dft
 from pyscf.tddft import uhf
 from pyscf.ao2mo import _ao2mo
+from pyscf.scf.newton_ah import _gen_uhf_response
 
 
 TDA = uhf.TDA
@@ -58,16 +59,7 @@ class TDDFTNoHybrid(TDA):
         edai = e_ai.ravel() * dai
         hdiag = e_ai.ravel() ** 2
 
-        if mf.grids.coords is None:
-            mf.grids.build()
-        ni = mf._numint
-        hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
-        dm0 = None # mf.make_rdm1(mf.mo_coeff, mf.mo_occ)
-        rho0, vxc, fxc = ni.cache_xc_kernel(mf.mol, mf.grids, mf.xc,
-                                            mo_coeff, mo_occ, spin=1)
-
-        mem_now = lib.current_memory()[0]
-        max_memory = max(2000, self.max_memory*.8-mem_now)
+        vresp = _gen_uhf_response(mf, mo_coeff, mo_occ, hermi=1)
 
         def vind(zs):
             nz = len(zs)
@@ -83,12 +75,8 @@ class TDDFTNoHybrid(TDA):
                 dmvo[0,i] = dm + dm.T
                 dm = reduce(numpy.dot, (orbvb, zb, orbob.T))
                 dmvo[1,i] = dm + dm.T
-            v1ao = ni.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dmvo, 0, 1, rho0,
-                                 vxc, fxc, max_memory)
-            if self.singlet:
-                vj = mf.get_j(mf.mol, dmvo, hermi=1)
-                v1ao += vj[0] + vj[1]
 
+            v1ao = vresp(dmvo)
             v1a = _ao2mo.nr_e2(v1ao[0], mo_coeff[0], (nocca,nmo,0,nocca))
             v1b = _ao2mo.nr_e2(v1ao[1], mo_coeff[1], (noccb,nmo,0,noccb))
             hx = numpy.hstack((v1a.reshape(nz,-1), v1b.reshape(nz,-1)))

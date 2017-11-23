@@ -263,12 +263,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
             logger.warn(mf, 'NLC functional found in DFT object.  Its second '
                         'deriviative is not available. Its contribution is '
                         'not included in the response function.')
-
-        omega, alpha, beta = ni.rsh_coeff(mf.xc)
-        if abs(omega) > 1e-10:
-            hyb = alpha + beta
-        else:
-            hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
 
         if singlet is None:  # for newton solver
             rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
@@ -369,12 +364,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
             logger.warn(mf, 'NLC functional found in DFT object.  Its second '
                         'deriviative is not available. Its contribution is '
                         'not included in the response function.')
-
-        omega, alpha, beta = ni.rsh_coeff(mf.xc)
-        if abs(omega) > 1e-10:
-            hyb = alpha + beta
-        else:
-            hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
 
         rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
                                             mo_coeff, mo_occ, 1)

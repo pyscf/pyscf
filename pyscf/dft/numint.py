@@ -1546,6 +1546,16 @@ class _NumInt(object):
     def _xc_type(self, xc_code):
         return self.libxc.xc_type(xc_code)
 
+    def rsh_and_hybrid_coeff(self, xc_code, spin=0):
+        '''Range-separated parameter and HF exchange components
+        '''
+        omega, alpha, beta = self.rsh_coeff(xc_code)
+        if abs(omega) > 1e-10:
+            hyb = alpha + beta
+        else:
+            hyb = self.hybrid_coeff(xc_code, spin)
+        return omega, alpha, hyb
+
 
 if __name__ == '__main__':
     import time
