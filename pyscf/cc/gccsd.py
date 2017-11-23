@@ -141,9 +141,7 @@ class GCCSD(ccsd.CCSD):
             #self.e_corr, self.t1, self.t2 = self.init_amps(eris)
             raise NotImplementedError
 
-        if eris is None:
-            eris = self.ao2mo(self.mo_coeff)
-        self.eris = eris
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
         return ccsd.CCSD.ccsd(self, t1, t2, eris)
 
     def amplitudes_to_vector(self, t1, t2, out=None):
@@ -469,12 +467,10 @@ if __name__ == '__main__':
     print(e[2] - 0.5187659896045407)
     print(e[4] - 0.6782876002229172)
 
-    mycc.verbose = 5
     e,v = mycc.eaccsd(nroots=8)
     print(e[0] - 0.16737886338859731)
     print(e[2] - 0.24027613852009164)
     print(e[4] - 0.51006797826488071)
-    print "e=", e
 
     e,v = mycc.eeccsd(nroots=4)
     print(e[0] - 0.2757159395886167)

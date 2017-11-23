@@ -8,7 +8,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import cc
 from pyscf import ao2mo
-from pyscf.cc import eom_rccsd
+from pyscf.cc import ccsd, rccsd, eom_rccsd
 
 mol = gto.Mole()
 mol.atom = [
@@ -20,6 +20,7 @@ mol.verbose = 0
 mol.spin = 0
 mol.build()
 mf = scf.RHF(mol).run()
+mycc = rccsd.RCCSD(mf).run()
 
 mf1 = copy.copy(mf)
 no = mol.nelectron // 2
@@ -35,7 +36,7 @@ mf1.mo_energy = numpy.einsum('pi,pq,qi->i', mf1.mo_coeff, fockao, mf1.mo_coeff)
 idx = numpy.hstack([mf1.mo_energy[:no].argsort(), no+mf1.mo_energy[no:].argsort()])
 mf1.mo_coeff = mf1.mo_coeff[:,idx]
 
-mycc1 = cc.RCCSD(mf1)
+mycc1 = rccsd.RCCSD(mf1)
 eris1 = mycc1.ao2mo()
 numpy.random.seed(12)
 r1 = numpy.random.random((no,nv)) - .9
@@ -44,16 +45,27 @@ r2 = r2 + r2.transpose(1,0,3,2)
 mycc1.t1 = r1*1e-5
 mycc1.t2 = r2*1e-5
 
-mycc = cc.RCCSD(mf).run()
+mycci = copy.copy(mycc1)
+erisi = copy.copy(eris1)
+erisi.oooo = eris1.oooo + numpy.sin(eris1.oooo)*1j
+erisi.oooo = erisi.oooo + erisi.oooo.conj().transpose(1,0,3,2)
+erisi.vooo = eris1.vooo + numpy.sin(eris1.vooo)*1j
+erisi.voov = eris1.voov + numpy.sin(eris1.voov)*1j
+erisi.vvoo = eris1.vvoo + numpy.sin(eris1.vvoo)*1j
+erisi.vvoo = erisi.vvoo + erisi.vvoo.conj().transpose(1,0,3,2)
+erisi.vovo = eris1.vovo + numpy.sin(eris1.vovo)*1j
+erisi.vovv = eris1.vovv + numpy.sin(eris1.vovv)*1j
+erisi.vvvv = eris1.vvvv + numpy.sin(eris1.vvvv)*1j
+erisi.vvvv = erisi.vvvv + erisi.vvvv.conj().transpose(1,0,3,2)
 
-mycc2 = cc.CCSD(mf)
-mycc21 = cc.CCSD(mf1)
+mycc2 = ccsd.CCSD(mf)
+mycc21 = ccsd.CCSD(mf1)
 mycc2.__dict__.update(mycc.__dict__)
 mycc21.__dict__.update(mycc1.__dict__)
 eris21 = mycc21.ao2mo()
 
-mycc3 = cc.CCSD(mf)
-mycc31 = cc.CCSD(mf1)
+mycc3 = ccsd.CCSD(mf)
+mycc31 = ccsd.CCSD(mf1)
 mycc3.__dict__.update(mycc.__dict__)
 mycc31.__dict__.update(mycc1.__dict__)
 mycc3 = mycc3.set(max_memory=0, direct=True)
@@ -267,46 +279,27 @@ class KnownValues(unittest.TestCase):
         r1 = numpy.random.random((no))-.9 + numpy.random.random((no))*.2j
         r2 = (numpy.random.random((no,no,nv))-.9 +
               numpy.random.random((no,no,nv))*.2j)
-        myeom = eom_rccsd.EOMIP(mycc1)
+        myeom = eom_rccsd.EOMIP(mycci)
         vec = myeom.amplitudes_to_vector(r1,r2)
         r1,r2 = myeom.vector_to_amplitudes(vec)
-        myeom.partition = 'mp'
-        self.assertAlmostEqual(lib.finger(r1), 0.37404344676857076, 12)
-        self.assertAlmostEqual(lib.finger(r2), -1.1568913404570922, 12)
-        imds = myeom.make_imds(eris1)
+        eris1
+        imds = myeom.make_imds(erisi)
         vec1 = myeom.matvec(vec, imds)
-        self.assertAlmostEqual(lib.finger(vec1), -14894.669606811192, 9)
-        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 1182.3095479451745, 9)
-
-        myeom.partition = 'full'
-        imds = myeom.make_imds(eris1)
-        diag = myeom.get_diag(imds)
-        vec1 = myeom.matvec(vec, imds, diag=diag)
-        self.assertAlmostEqual(lib.finger(vec1), -3795.9122245246967, 9)
-        self.assertAlmostEqual(lib.finger(diag), 1106.260154202434, 9)
+        self.assertAlmostEqual(lib.finger(vec1), 25179.052084942181-4985.8301417050307j, 9)
+        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 1106.2601542024306, 9)
 
     def test_ea_matvec1(self):
         numpy.random.seed(12)
         r1 = numpy.random.random((nv))-.9 + numpy.random.random((nv))*.2j
         r2 = (numpy.random.random((no,nv,nv))-.9 +
               numpy.random.random((no,nv,nv))*.2j)
-        myeom = eom_rccsd.EOMEA(mycc1)
+        myeom = eom_rccsd.EOMEA(mycci)
         vec = myeom.amplitudes_to_vector(r1,r2)
         r1,r2 = myeom.vector_to_amplitudes(vec)
-        myeom.partition = 'mp'
-        self.assertAlmostEqual(lib.finger(r1), 1.4488291275539353, 12)
-        self.assertAlmostEqual(lib.finger(r2), 0.97080165032287469, 12)
-        imds = myeom.make_imds(eris1)
+        imds = myeom.make_imds(erisi)
         vec1 = myeom.matvec(vec, imds)
-        self.assertAlmostEqual(lib.finger(vec1), -34426.363943760276, 9)
-        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 2724.8239646679217, 9)
-
-        myeom.partition = 'full'
-        imds = myeom.make_imds(eris1)
-        diag = myeom.get_diag(imds)
-        vec1 = myeom.matvec(vec, imds, diag=diag)
-        self.assertAlmostEqual(lib.finger(vec1), -17030.363405297598, 9)
-        self.assertAlmostEqual(lib.finger(diag), 4688.9122122011922, 9)
+        self.assertAlmostEqual(lib.finger(vec1), -105119.42508060634+25055.068664422437j, 9)
+        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 4688.9122122011895, 9)
 
 
 ########################################

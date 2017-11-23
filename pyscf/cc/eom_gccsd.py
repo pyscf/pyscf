@@ -296,6 +296,14 @@ class EOMEE(eom_rccsd.EOMEE):
         matvec = lambda xs: [self.matvec(x, imds) for x in xs]
         return matvec, diag
 
+    def vector_to_amplitudes(self, vector, nmo=None, nocc=None):
+        if nmo is None: nmo = self.nmo
+        if nocc is None: nocc = self.nocc
+        return vector_to_amplitudes_ee(vector, nmo, nocc)
+
+    def amplitudes_to_vector(self, r1, r2):
+        return amplitudes_to_vector_ee(r1, r2)
+
     def vector_size(self):
         '''size of the vector based on spin-orbital basis'''
         nocc = self.nocc

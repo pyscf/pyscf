@@ -77,6 +77,7 @@ class KnownValues(unittest.TestCase):
         eris.ooov = eris.ooov + numpy.sin(eris.ooov)*1j
         eris.oovv = eris.oovv + numpy.sin(eris.oovv)*1j
         eris.ovov = eris.ovov + numpy.sin(eris.ovov)*1j
+        eris.ovov = eris.ovov + eris.ovov.conj().transpose(2,3,0,1)
         eris.ovvv = eris.ovvv + numpy.sin(eris.ovvv)*1j
         eris.vvvv = eris.vvvv + numpy.sin(eris.vvvv)*1j
         eris.vvvv = eris.vvvv + eris.vvvv.conj().transpose(2,3,0,1)
@@ -92,8 +93,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(t2-r2).max(), 0, 14)
 
         t1a, t2a = mycc.update_amps(t1, t2, eris)
-        self.assertAlmostEqual(lib.finger(t1a), 13.702125264620541-302.62463606608304j, 11)
-        self.assertAlmostEqual(lib.finger(t2a), -104.5636169484729+325.30707213752345j, 11)
+        self.assertAlmostEqual(lib.finger(t1a), 20.805393111419136-300.1138026015621j, 11)
+        self.assertAlmostEqual(lib.finger(t2a),-313.54117398035567+8.3700078645035205j, 11)
 
 
 if __name__ == "__main__":
