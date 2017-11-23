@@ -139,16 +139,12 @@ def _get_k_lr(mol, dm, omega=0):
 # computed with regular Coulomb operator. ks.get_jk or ks.get_k do not evalute
 # the K matrix with the range separated Coulomb operator.  Here jk.get_jk
 # function computes the K matrix with the modified Coulomb operator.
-    if dm.ndim == 2:
-        vklr = jk.get_jk(mol, dm, 'ijkl,jk->il')
-    else:
-        nao = dm.shape[-1]
-        dms = dm.reshape(-1,nao,nao)
-        vklr = jk.get_jk(mol, dm, ['ijkl,jk->il']*len(dms))
-        vklr = numpy.asarray(vklr).reshape(dm.shape)
+    nao = dm.shape[-1]
+    dms = dm.reshape(-1,nao,nao)
+    vklr = jk.get_jk(mol, dms, ['ijkl,jk->il']*len(dms))
 
     mol.set_range_coulomb(omega_bak)
-    return vklr
+    return numpy.asarray(vklr).reshape(dm.shape)
 
 
 def energy_elec(ks, dm, h1e=None, vhf=None):

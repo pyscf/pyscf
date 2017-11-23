@@ -354,11 +354,92 @@ def gen_vind(mf, mo_coeff, mo_occ):
     return fx
 
 
+def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
+    log = logger.new_logger(hobj, verbose)
+    mol = hobj.mol
+    mf = hobj._scf
+
+    if mo_energy is None: mo_energy = mf.mo_energy
+    if mo_occ is None:    mo_occ = mf.mo_occ
+    if mo_coeff is None:  mo_coeff = mf.mo_coeff
+
+    natm = mol.natm
+    nao, nmo = mo_coeff[0].shape
+    mocca = mo_coeff[0][:,mo_occ[0]>0]
+    moccb = mo_coeff[1][:,mo_occ[1]>0]
+    mo_ea = mo_energy[0][mo_occ[0]>0]
+    mo_eb = mo_energy[1][mo_occ[1]>0]
+    nocca = mocca.shape[1]
+    noccb = moccb.shape[1]
+
+    atmlst = range(natm)
+    max_memory = max(2000, hobj.max_memory - lib.current_memory()[0])
+    de2 = hobj.partial_hess_elec(mo_energy, mo_coeff, mo_occ, atmlst,
+                                 max_memory, log)
+    de2 += hobj.hess_nuc()
+
+    # Compute H1 integrals and store in hobj.chkfile
+    hobj.make_h1(mo_coeff, mo_occ, hobj.chkfile, atmlst, log)
+
+    aoslices = mol.aoslice_by_atom()
+    s1a = -mol.intor('int1e_ipovlp', comp=3)
+
+    fvind = gen_vind(mf, mo_coeff, mo_occ)
+    def h_op(x):
+        x = x.reshape(natm,3)
+        hx = numpy.einsum('abxy,ax->by', de2, x)
+        h1aoa = 0
+        h1aob = 0
+        s1ao = 0
+        for ia in range(natm):
+            shl0, shl1, p0, p1 = aoslices[ia]
+            h1ao_i = lib.chkfile.load(hobj.chkfile, 'scf_f1ao/0/%d' % ia)
+            h1aoa += numpy.einsum('x,xij->ij', x[ia], h1ao_i)
+            h1ao_i = lib.chkfile.load(hobj.chkfile, 'scf_f1ao/1/%d' % ia)
+            h1aob += numpy.einsum('x,xij->ij', x[ia], h1ao_i)
+            s1ao_i = numpy.zeros((3,nao,nao))
+            s1ao_i[:,p0:p1] += s1a[:,p0:p1]
+            s1ao_i[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
+            s1ao += numpy.einsum('x,xij->ij', x[ia], s1ao_i)
+
+        s1voa = reduce(numpy.dot, (mo_coeff[0].T, s1ao, mocca))
+        s1vob = reduce(numpy.dot, (mo_coeff[1].T, s1ao, moccb))
+        h1voa = reduce(numpy.dot, (mo_coeff[0].T, h1aoa, mocca))
+        h1vob = reduce(numpy.dot, (mo_coeff[1].T, h1aob, moccb))
+        mo1, mo_e1 = ucphf.solve(fvind, mo_energy, mo_occ,
+                                 (h1voa,h1vob), (s1voa,s1vob))
+        mo1a = numpy.dot(mo_coeff[0], mo1[0])
+        mo1b = numpy.dot(mo_coeff[1], mo1[1])
+        mo_e1a = mo_e1[0].reshape(nocca,nocca)
+        mo_e1b = mo_e1[1].reshape(noccb,noccb)
+        dm1a = numpy.einsum('pi,qi->pq', mo1a, mocca)
+        dm1b = numpy.einsum('pi,qi->pq', mo1b, moccb)
+        dme1a = numpy.einsum('pi,qi,i->pq', mo1a, mocca, mo_ea)
+        dme1a = dme1a + dme1a.T + reduce(numpy.dot, (mocca, mo_e1a, mocca.T))
+        dme1b = numpy.einsum('pi,qi,i->pq', mo1b, moccb, mo_eb)
+        dme1b = dme1b + dme1b.T + reduce(numpy.dot, (moccb, mo_e1b, moccb.T))
+        dme1 = dme1a + dme1b
+
+        for ja in range(natm):
+            q0, q1 = aoslices[ja][2:]
+            h1aoa = lib.chkfile.load(hobj.chkfile, 'scf_f1ao/0/%d' % ja)
+            h1aob = lib.chkfile.load(hobj.chkfile, 'scf_f1ao/1/%d' % ja)
+            hx[ja] += numpy.einsum('xpq,pq->x', h1aoa, dm1a) * 2
+            hx[ja] += numpy.einsum('xpq,pq->x', h1aob, dm1b) * 2
+            hx[ja] -= numpy.einsum('xpq,pq->x', s1a[:,q0:q1], dme1[q0:q1])
+            hx[ja] -= numpy.einsum('xpq,qp->x', s1a[:,q0:q1], dme1[:,q0:q1])
+        return hx.ravel()
+
+    hdiag = numpy.einsum('aaxx->ax', de2).ravel()
+    return h_op, hdiag
+
+
 class Hessian(rhf_hess.Hessian):
     '''Non-relativistic UHF hessian'''
     partial_hess_elec = partial_hess_elec
     hess_elec = hess_elec
     make_h1 = make_h1
+    gen_hop = gen_hop
 
     def solve_mo1(self, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
                   fx=None, atmlst=None, max_memory=4000, verbose=None):

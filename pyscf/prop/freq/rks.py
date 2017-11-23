@@ -8,21 +8,17 @@ See also pyscf/hessian/rks.py
 '''
 
 from pyscf.hessian import rks as rks_hess
-from pyscf.prop.freq import rhf as rhf_freq
+from pyscf.prop.freq.rhf import kernel
 
 class Frequency(rks_hess.Hessian):
     def __init__(self, mf):
-        self.nroots = 3
+        self.nroots = None
         self.freq = None
         self.mode = None
-        self.conv_tol = 1e-2
+        self.conv_tol = 1e-3
         rks_hess.Hessian.__init__(self, mf)
 
-    def kernel(self):
-        self.freq, self.mode = rhf_freq.kernel(self)
-        return self.freq, self.mode
-
-    gen_hop = rhf_freq.gen_hop
+    kernel = kernel
 
 Freq = Frequency
 
@@ -57,5 +53,5 @@ if __name__ == '__main__':
     hop = Freq(mf).gen_hop()[0]
     print(lib.finger(hop(x)) - -0.20252942721146411)
     print(abs(e2x-hop(x).reshape(mol.natm,3)).sum())
-    print(Freq(mf).kernel()[0])
+    print(Freq(mf).set(nroots=1).kernel()[0])
     print(numpy.linalg.eigh(e2.transpose(0,2,1,3).reshape(n3,n3))[0])

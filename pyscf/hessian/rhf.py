@@ -360,6 +360,68 @@ def hess_nuc(mol, atmlst=None):
     return h
 
 
+def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
+    log = logger.new_logger(hobj, verbose)
+    mol = hobj.mol
+    mf = hobj._scf
+
+    if mo_energy is None: mo_energy = mf.mo_energy
+    if mo_occ is None:    mo_occ = mf.mo_occ
+    if mo_coeff is None:  mo_coeff = mf.mo_coeff
+
+    natm = mol.natm
+    nao, nmo = mo_coeff.shape
+    mocc = mo_coeff[:,mo_occ>0]
+    nocc = mocc.shape[1]
+
+    atmlst = range(natm)
+    max_memory = max(2000, hobj.max_memory - lib.current_memory()[0])
+    de2 = hobj.partial_hess_elec(mo_energy, mo_coeff, mo_occ, atmlst,
+                                 max_memory, log)
+    de2 += hobj.hess_nuc()
+
+    # Compute H1 integrals and store in hobj.chkfile
+    hobj.make_h1(mo_coeff, mo_occ, hobj.chkfile, atmlst, log)
+
+    aoslices = mol.aoslice_by_atom()
+    s1a = -mol.intor('int1e_ipovlp', comp=3)
+
+    fvind = gen_vind(mf, mo_coeff, mo_occ)
+    def h_op(x):
+        x = x.reshape(natm,3)
+        hx = numpy.einsum('abxy,ax->by', de2, x)
+        h1ao = 0
+        s1ao = 0
+        for ia in range(natm):
+            shl0, shl1, p0, p1 = aoslices[ia]
+            h1ao_i = lib.chkfile.load(hobj.chkfile, 'scf_f1ao/%d' % ia)
+            h1ao += numpy.einsum('x,xij->ij', x[ia], h1ao_i)
+            s1ao_i = numpy.zeros((3,nao,nao))
+            s1ao_i[:,p0:p1] += s1a[:,p0:p1]
+            s1ao_i[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
+            s1ao += numpy.einsum('x,xij->ij', x[ia], s1ao_i)
+
+        s1vo = reduce(numpy.dot, (mo_coeff.T, s1ao, mocc))
+        h1vo = reduce(numpy.dot, (mo_coeff.T, h1ao, mocc))
+        mo1, mo_e1 = cphf.solve(fvind, mo_energy, mo_occ, h1vo, s1vo)
+        mo1 = numpy.dot(mo_coeff, mo1)
+        mo_e1 = mo_e1.reshape(nocc,nocc)
+        dm1 = numpy.einsum('pi,qi->pq', mo1, mocc)
+        dme1 = numpy.einsum('pi,qi,i->pq', mo1, mocc, mo_energy[mo_occ>0])
+        dme1 = dme1 + dme1.T + reduce(numpy.dot, (mocc, mo_e1, mocc.T))
+
+        for ja in range(natm):
+            q0, q1 = aoslices[ja][2:]
+            h1ao = lib.chkfile.load(hobj.chkfile, 'scf_f1ao/%s'%ja)
+            hx[ja] += numpy.einsum('xpq,pq->x', h1ao, dm1) * 4
+            hx[ja] -= numpy.einsum('xpq,pq->x', s1a[:,q0:q1], dme1[q0:q1]) * 2
+            hx[ja] -= numpy.einsum('xpq,qp->x', s1a[:,q0:q1], dme1[:,q0:q1]) * 2
+        return hx.ravel()
+
+    hdiag = numpy.einsum('aaxx->ax', de2).ravel()
+    return h_op, hdiag
+
+
 class Hessian(lib.StreamObject):
     '''Non-relativistic restricted Hartree-Fock hessian'''
     def __init__(self, scf_method):
@@ -396,6 +458,9 @@ class Hessian(lib.StreamObject):
         de = self.hess_elec(mo_energy, mo_coeff, mo_occ, atmlst=atmlst)
         self.de = de + self.hess_nuc(self.mol, atmlst=atmlst)
         return self.de
+    hess = kernel
+
+    gen_hop = gen_hop
 
 
 if __name__ == '__main__':
