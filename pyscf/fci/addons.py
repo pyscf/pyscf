@@ -222,7 +222,7 @@ def _guess_wfnsym(ci, strsa, strsb, orbsym):
     nb = len(strsb)
     if isinstance(ci, numpy.ndarray) and ci.ndim <= 2:
         assert(ci.size == na*nb)
-        idx = numpy.argmax(ci)
+        idx = numpy.argmax(abs(ci))
     else:
         assert(ci[0].size == na*nb)
         idx = ci[0].argmax()
