@@ -11,6 +11,7 @@ PySCF 1.4.2 (201?-?-?)
 * Bugfix
   - pyberny interface
   - PBC GDF initialization for hybrid functional
+  - guess of wfn symmetry for given fci wfn
 
 
 PySCF 1.4.1 (2017-11-12)
