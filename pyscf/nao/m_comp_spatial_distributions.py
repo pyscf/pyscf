@@ -30,6 +30,8 @@ class spatial_distribution(scf):
             necessary for the other quantities. All quantites must be given
             in a.u.
 
+            Warning: the same kw parameters used for the densit calculations must be used
+
             dn (complex array calculated from tddft_iter, dim: [3, nfreq, nprod]): the induce density
                     in the product basis.
             freq (real array, dim: [nfreq]): the frequency range for which dn was computed
@@ -54,6 +56,7 @@ class spatial_distribution(scf):
                               np.arange(box[2, 0], box[2, 1]+self.dr[2], self.dr[2])])
 
         scf.__init__(self, **kw)
+
         iw = find_nearrest_index(freq, w0)
         self.nprod = dn.shape[2]
         self.mu2dn_re = np.dot(self.Eext, dn[:, iw, :].real)
@@ -73,13 +76,6 @@ class spatial_distribution(scf):
         from pyscf.nao.m_rsphar_libnao import rsphar
         from pyscf.nao.m_log_interp import comp_coeffs_
 
-        aome = ao_matelem_c(self.ao_log.rr, self.ao_log.pp)
-        me = ao_matelem_c(self.ao_log) if ao_log is None else aome.init_one_set(ao_log)
-        atom2s = np.zeros((self.natm+1), dtype=np.int64)
-        for atom,sp in enumerate(self.atom2sp):
-            atom2s[atom+1]= atom2s[atom] + me.ao1.sp2norbs[sp]
-
-        print(atom2s)
         gammin_jt = float(self.pb.prod_log.interp_rr.gammin_jt)
         dg_jt = float(self.pb.prod_log.interp_rr.dg_jt)
         Nx, Ny, Nz = self.mesh[0].size, self.mesh[1].size, self.mesh[2].size 
@@ -98,7 +94,6 @@ class spatial_distribution(scf):
                 self.mesh[1].ctypes.data_as(POINTER(c_double)), 
                 self.mesh[2].ctypes.data_as(POINTER(c_double)), 
                 atoms2sp.ctypes.data_as(POINTER(c_int64)), 
-                atom2s.ctypes.data_as(POINTER(c_int64)), 
                 c_double(gammin_jt), c_double(dg_jt), c_int(Nx), 
                 c_int(Ny), c_int(Nz), c_int(self.nprod), c_int(self.natoms), 
                 c_int(self.nspecies))

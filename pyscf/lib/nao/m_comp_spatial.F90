@@ -60,7 +60,7 @@ end subroutine !test_index_2D
 ! 
 !
 subroutine get_spatial_density_parallel(dn_spatial_re, dn_spatial_im, mu2dn_re, mu2dn_im, &
-            meshx, meshy, meshz, atom2sp, atom2s, gammin_jt, &
+            meshx, meshy, meshz, atom2sp, gammin_jt, &
             dg_jt, Nx, Ny, Nz, nprod, natoms, nspecies) bind(c, name='get_spatial_density_parallel')
   use m_interp, only : interp_t, init_interp 
   use m_pb_libnao, only : pb
@@ -82,7 +82,7 @@ subroutine get_spatial_density_parallel(dn_spatial_re, dn_spatial_im, mu2dn_re, 
   real(c_double), intent(in) :: meshx(Nx), meshy(Ny), meshz(Nz)
   
   ! integer
-  integer(c_int64_t), intent(in) :: atom2sp(natoms), atom2s(natoms+1)
+  integer(c_int64_t), intent(in) :: atom2sp(natoms)
   
   !! internal
   type(interp_t) :: a
@@ -98,7 +98,7 @@ subroutine get_spatial_density_parallel(dn_spatial_re, dn_spatial_im, mu2dn_re, 
 !  !$OMP PARALLEL DEFAULT(NONE) &
 !  !$OMP PRIVATE (ix, iy, iz, br, res, ind) &
 !  !$OMP SHARED(dn_spatial_re, mu2dn_re, dn_spatial_im, mu2dn_im, Nx, Ny, Nz) &
-!  !$OMP SHARED(meshx, meshy, meshz, a, atom2sp, atom2s) &
+!  !$OMP SHARED(meshx, meshy, meshz, a, atom2sp) &
 !  !$OMP SHARED(natoms, nspecies, pb)
   allocate(res(nprod))
   res = 0.0
@@ -108,7 +108,7 @@ subroutine get_spatial_density_parallel(dn_spatial_re, dn_spatial_im, mu2dn_re, 
   do iy = 1, Ny
   do ix = 1, Nx
     br(1) = meshx(ix); br(2) = meshy(iy); br(3) = meshz(iz)
-    call comp_dn_xyz(a, pb, atom2sp, atom2s, &
+    call comp_dn_xyz(a, pb, atom2sp, &
       br, res, natoms, nspecies)
     
     ind = iz + (iy-1)*Nz + (ix-1)*Nz*Ny
@@ -131,10 +131,12 @@ end subroutine ! dens_libnao
 !
 ! compute density change at the point x, y, z
 !
-subroutine comp_dn_xyz(a, pb, atom2sp, atom2s, br, res, natoms, nspecies)
+subroutine comp_dn_xyz(a, pb, atom2sp, br, res, natoms, nspecies)
   
   use m_prod_basis_type, only : prod_basis_t
+  use m_prod_basis_gen, only : get_nbook, get_book
   use m_functs_l_mult_type, only : get_nmult
+  use m_book_pb, only : book_pb_t
   use m_rsphar, only : rsphar, init_rsphar
   use m_interp, only : interp_t, comp_coeff_m2p3_k, comp_coeff_m2p3
 
@@ -142,13 +144,13 @@ subroutine comp_dn_xyz(a, pb, atom2sp, atom2s, br, res, natoms, nspecies)
   type(interp_t), intent(in) :: a
   type(prod_basis_t), intent(in) :: pb
   real(8), intent(in) :: br(3)
-  integer(c_int64_t), intent(in) :: atom2sp(natoms), atom2s(natoms+1)
+  integer(c_int64_t), intent(in) :: atom2sp(natoms)
 
   integer, intent(in) :: natoms, nspecies
 
   real(8), allocatable, intent(inout) :: res(:)
 
-
+  type(book_pb_t) :: book
   integer :: atm, sp, si, fi, sp_prev, k, j, nmu, mu
   integer(8) :: jmx_sp, s, f
   real(8) :: brp(3), r, rcut, coeffs(-2:3), fval
@@ -162,10 +164,11 @@ subroutine comp_dn_xyz(a, pb, atom2sp, atom2s, br, res, natoms, nspecies)
     r = sqrt(sum(brp**2))
     rcut = pb%sp_local2functs(sp)%rcut
 
+    !print*, atm, book%si
     if (r > rcut) cycle
 
-    si = atom2s(atm)
-    fi = atom2s(atm+1)
+    book = get_book(pb, atm)
+    si = book%si(3) - 1 ! -1 because fortran count
     if (sp_prev /= sp) then
       _dealloc(rsh)
       
@@ -184,11 +187,12 @@ subroutine comp_dn_xyz(a, pb, atom2sp, atom2s, br, res, natoms, nspecies)
       s = f + 1; f = s + (2*j+1) - 1;
       fval = sum(coeffs*pb%sp_local2functs(sp)%ir_mu2v(k-2:k+3,mu))
       
-      print*, si, s, f, size(res)
+      !print*, si, s, f, size(res)
       res(si+s: si+f) = rsh(j*(j+1)-j+1:j*(j+1)+j+1)*fval
     enddo
 
   enddo
+  !_die("look")
 
 end subroutine !comp_dn_xyz
 
