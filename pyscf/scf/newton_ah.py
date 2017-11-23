@@ -259,7 +259,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
         from pyscf.dft import numint
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-        if mf.nlc != '':
+        if getattr(mf, 'nlc', '') != '':
             logger.warn(mf, 'NLC functional found in DFT object.  Its second '
                         'deriviative is not available. Its contribution is '
                         'not included in the response function.')
@@ -360,7 +360,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
         from pyscf.dft import numint
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-        if mf.nlc != '':
+        if getattr(mf, 'nlc', '') != '':
             logger.warn(mf, 'NLC functional found in DFT object.  Its second '
                         'deriviative is not available. Its contribution is '
                         'not included in the response function.')

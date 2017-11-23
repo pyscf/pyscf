@@ -2043,7 +2043,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         >>> with mol.with_common_origin((1,0,0)):
         ...     mol.intor('int1e_r', comp=3)
         '''
-        coord0 = mol._env[PTR_COMMON_ORIG:PTR_COMMON_ORIG+3].copy()
+        coord0 = self._env[PTR_COMMON_ORIG:PTR_COMMON_ORIG+3].copy()
         return _TemporaryMoleContext(self.set_common_origin, (coord,), (coord0,))
     with_common_orig = with_common_origin
 
