@@ -2018,33 +2018,63 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         logger.info(self, 'CPU time: %12.2f', time.clock())
         return self
 
-    def set_common_orig(self, coord):
-        '''Update common origin which held in :class`Mole`._env.  **Note** the unit is Bohr
+    def set_common_origin(self, coord):
+        '''Update common origin for integrals of dipole, rxp etc.
+        **Note** the unit is Bohr
 
         Examples:
 
-        >>> mol.set_common_orig(0)
-        >>> mol.set_common_orig((1,0,0))
+        >>> mol.set_common_origin(0)
+        >>> mol.set_common_origin((1,0,0))
         '''
         self._env[PTR_COMMON_ORIG:PTR_COMMON_ORIG+3] = coord
         return self
-    set_common_origin = set_common_orig
+    set_common_orig = set_common_origin
     set_common_orig_ = set_common_orig    # for backward compatibility
     set_common_origin_ = set_common_orig  # for backward compatibility
 
-    def set_rinv_orig(self, coord):
-        r'''Update origin for operator :math:`\frac{1}{|r-R_O|}`.  **Note** the unit is Bohr
+    def with_common_origin(self, coord):
+        '''Retuen a temporary mol context which has the rquired common origin.
+        The required common origin has no effects out of the temporary context.
+        See also :func:`mol.set_common_origin`
 
         Examples:
 
-        >>> mol.set_rinv_orig(0)
-        >>> mol.set_rinv_orig((0,1,0))
+        >>> with mol.with_common_origin((1,0,0)):
+        ...     mol.intor('int1e_r', comp=3)
+        '''
+        coord0 = mol._env[PTR_COMMON_ORIG:PTR_COMMON_ORIG+3].copy()
+        return _TemporaryMoleContext(self.set_common_origin, (coord,), (coord0,))
+    with_common_orig = with_common_origin
+
+    def set_rinv_origin(self, coord):
+        r'''Update origin for operator :math:`\frac{1}{|r-R_O|}`.
+        **Note** the unit is Bohr
+
+        Examples:
+
+        >>> mol.set_rinv_origin(0)
+        >>> mol.set_rinv_origin((0,1,0))
         '''
         self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = coord[:3]
         return self
-    set_rinv_origin = set_rinv_orig
+    set_rinv_orig = set_rinv_origin
     set_rinv_orig_ = set_rinv_orig    # for backward compatibility
     set_rinv_origin_ = set_rinv_orig  # for backward compatibility
+
+    def with_rinv_origin(self, coord):
+        '''Retuen a temporary mol context which has the rquired origin of 1/r
+        operator.  The required origin has no effects out of the temporary
+        context.  See also :func:`mol.set_rinv_origin`
+
+        Examples:
+
+        >>> with mol.with_rinv_origin((1,0,0)):
+        ...     mol.intor('int1e_rinv')
+        '''
+        coord0 = mol._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3].copy()
+        return _TemporaryMoleContext(self.set_rinv_origin, (coord,), (coord0,))
+    with_rinv_orig = with_rinv_origin
 
     def set_range_coulomb(self, omega):
         '''Apply the long range part of range-separated Coulomb operator for
@@ -2054,6 +2084,19 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         self._env[PTR_RANGE_OMEGA] = omega
     set_range_coulomb_ = set_range_coulomb  # for backward compatibility
+
+    def with_range_coulomb(self, omega):
+        '''Retuen a temporary mol context which has the rquired
+        range-separated Coulomb parameter omega.
+        See also :func:`mol.set_range_coulomb`
+
+        Examples:
+
+        >>> with mol.with_range_coulomb(omega=1.5):
+        ...     mol.intor('int2e')
+        '''
+        omega0 = self._env[PTR_RANGE_OMEGA].copy()
+        return _TemporaryMoleContext(self.set_range_coulomb, (omega,), (omega0,))
 
     def set_f12_zeta(self, zeta):
         '''Set zeta for YP exp(-zeta r12)/r12 or STG exp(-zeta r12) type integrals  
@@ -2077,7 +2120,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     set_nuc_mod_ = set_nuc_mod  # for backward compatibility
 
     def set_rinv_zeta(self, zeta):
-        '''Assume the charge distribution on the "rinv_orig".  zeta is the parameter
+        '''Assume the charge distribution on the "rinv_origin".  zeta is the parameter
         to control the charge distribution: rho(r) = Norm * exp(-zeta * r^2).
         **Be careful** when call this function. It affects the behavior of
         int1e_rinv_* functions.  Make sure to set it back to 0 after using it!
@@ -2085,6 +2128,19 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         self._env[PTR_RINV_ZETA] = zeta
         return self
     set_rinv_zeta_ = set_rinv_zeta  # for backward compatibility
+
+    def with_rinv_zeta(self, zeta):
+        '''Retuen a temporary mol context which has the rquired charge
+        distribution on the "rinv_origin": rho(r) = Norm * exp(-zeta * r^2).
+        See also :func:`mol.set_rinv_zeta`
+
+        Examples:
+
+        >>> with mol.with_rinv_zeta(zeta=1.5), mol.with_rinv_origin((1.,0,0)):
+        ...     mol.intor('int1e_rinv')
+        '''
+        zeta0 = self._env[PTR_RINV_ZETA].copy()
+        return _TemporaryMoleContext(self.set_rinv_zeta, (zeta,), (zeta0,))
 
     def set_geom_(self, atoms, unit='Angstrom', symmetry=None):
         '''Replace geometry
@@ -2821,3 +2877,13 @@ def filatov_nuc_mod(nuc_charge, c=param.LIGHT_SPEED):
     zeta = 1 / (r**2)
     return zeta
 
+class _TemporaryMoleContext(object):
+    import copy
+    def __init__(self, method, args, args_bak):
+        self.method = method
+        self.args = args
+        self.args_bak = args_bak
+    def __enter__(self):
+        self.method(*self.args)
+    def __exit__(self, type, value, traceback):
+        self.method(*self.args_bak)

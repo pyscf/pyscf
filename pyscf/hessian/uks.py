@@ -47,7 +47,16 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     h1aa, h1ab = rhf_hess.get_hcore(mol)
     s1aa, s1ab, s1a = rhf_hess.get_ovlp(mol)
 
-    hyb = mf._numint.hybrid_coeff(mf.xc)
+    if mf.nlc!='':
+        raise NotImplementedError
+    #enabling range-separated hybrids
+    omega, alpha, beta = mf._numint.rsh_coeff(mf.xc)
+    if abs(omega) > 1e-10:
+        raise NotImplementedError
+        hyb = alpha + beta
+    else:
+        hyb = mf._numint.hybrid_coeff(mf.xc, spin=mol.spin)
+
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
     veffa_diag, veffb_diag = _get_vxc_diag(hessobj, mo_coeff, mo_occ, max_memory)

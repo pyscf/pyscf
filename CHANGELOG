@@ -4,6 +4,7 @@ PySCF 1.5 alpha (2018-03-??)
   - ddCOSMO solvent model
   - VV10 NLC functional for RKS and UKS
   - range-separated hybrid feature for RKS and UKS
+  - Analytical nuclear gradients of range-separated hybrid DFT
   - IBO for molecular and PBC systems
   - UHF analytical nuclear Hessian
   - UKS analytical nuclear Hessian
