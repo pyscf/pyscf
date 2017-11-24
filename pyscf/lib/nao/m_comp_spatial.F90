@@ -214,7 +214,7 @@ subroutine comp_spatial_grid(dr, axis, grid) bind(c, name='comp_spatial_grid')
 
   !$OMP PARALLEL DEFAULT(NONE) &
   !$OMP PRIVATE (ix, iy, iz, br, i1,i2,i3, ind) &
-  !$OMP SHARED(axis, grid, fft_vars)
+  !$OMP SHARED(axis, grid, fft_vars, dr)
 
   !$OMP DO
   do i3 = fft_vars%ic(1, 3), fft_vars%ic(2, 3)
@@ -251,7 +251,7 @@ subroutine comp_spatial_grid_pot(dr, grid) bind(c, name='comp_spatial_grid_pot')
 
   !$OMP PARALLEL DEFAULT(NONE) &
   !$OMP PRIVATE (ix, iy, iz, br, i1,i2,i3, ind) &
-  !$OMP SHARED(grid, fft_vars)
+  !$OMP SHARED(grid, fft_vars, dr)
 
   !$OMP DO
   do i3 = fft_vars%ic(1, 3), fft_vars%ic(2, 3)
