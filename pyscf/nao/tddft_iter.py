@@ -47,7 +47,7 @@ class tddft_iter(scf):
     self.dtype = kw['dtype'] if 'dtype' in kw else np.float32
     self.telec = kw['telec'] if 'telec' in kw else self.telec
     self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
-
+    
     self.spmv = spmv_wrapper
     if self.dtype == np.float32:
       self.dtypeComplex = np.complex64
@@ -78,19 +78,23 @@ class tddft_iter(scf):
     self.moms0,self.moms1 = pb.comp_moments(dtype=self.dtype)
     self.nprod = self.moms0.size
 
+    if self.verbosity>0 : print('before pb.comp_coulomb_pack')
+
     if load_kernel:
       self.load_kernel_method(**kw)
     else:
       self.kernel,self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype) # Lower Triangular Part of the kernel
       assert self.nprod==self.kernel_dim, "%r %r "%(self.nprod, self.kernel_dim)
-        
+
       xc = xc_code.split(',')[0]
       if xc=='RPA' or xc=='HF': pass
       elif xc=='LDA' or xc=='GGA': self.comp_fxc_pack(kernel=self.kernel, **kw)
       else:
         print(' xc_code', xc_code, xc, xc_code.split(','))
         raise RuntimeError('unkn xc_code')
-    
+
+    if self.verbosity>0 : print('before self.ksn2e')
+        
     # probably unnecessary, require probably does a copy
     # problematic for the dtype, must there should be another option 
     #self.x  = np.require(sv.wfsx.x, dtype=self.dtype, requirements='CW')
@@ -122,7 +126,7 @@ class tddft_iter(scf):
 
     #print(self.xocc.shape)
     #print(self.xvrt.shape)
-        
+    
     self.td_GPU = tddft_iter_gpu_c(GPU, self.mo_coeff[0, 0, :, :, 0], self.ksn2f, self.ksn2e, 
             self.norbs, self.nfermi, self.nprod, self.vstart)
 
@@ -284,28 +288,30 @@ class tddft_iter(scf):
       pxx[iw] = np.dot(vext[0], dn1)
     return pxx
 
-  def comp_polariz_nonin_ave(self, comegas):
-    """
-        Compute the average non-interacting polarizability
-    """
+  def comp_polariz_nonin_ave(self, comegas , **kw):
+    """  Compute the average non-interacting polarizability """
     p_avg = np.zeros(comegas.shape, dtype=self.dtypeComplex)
 
+    verbosity = kw['verbosity'] if 'verbosity' in kw else self.verbosity
+    nww, eV = len(comegas), 27.2114
     vext = np.transpose(self.moms1)
     for xyz in range(3):
         for iw, comega in enumerate(comegas):
+          if verbosity>0: print(xyz, iw, nww, comega*eV)
           dn0 = self.apply_rf0(vext[xyz], comega)
           p_avg[iw] += np.dot(dn0, vext[xyz])
     return p_avg/3.0
 
-  def comp_polariz_inter_ave(self, comegas):
-    """
-        Compute average interacting polarizability
-    """
+  def comp_polariz_inter_ave(self, comegas, **kw):
+    """  Compute average interacting polarizability  """
     p_avg = np.zeros(comegas.shape, dtype=self.dtypeComplex)
 
+    verbosity = kw['verbosity'] if 'verbosity' in kw else self.verbosity
     vext = np.transpose(self.moms1)
+    nww, eV = len(comegas), 27.2114
     for xyz in range(3):
       for iw, comega in enumerate(comegas):
+        if verbosity>0: print(xyz, iw, nww, comega*eV)
         veff = self.comp_veff(vext[xyz], comega)
         dn = self.apply_rf0(veff, comega)
         p_avg[iw] += np.dot(vext[xyz], dn)

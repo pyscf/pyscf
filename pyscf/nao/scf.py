@@ -14,6 +14,8 @@ class scf(nao):
     nao.__init__(self, **kw)
     self.dtype = kw['dtype'] if 'dtype' in kw else np.float32
     self.pseudo = hasattr(self, 'sp2ion') 
+    self.verbosity = kw['verbosity'] if 'verbosity' in kw else 0
+    
     if 'mf' in kw:
       self.init_mf(**kw)
     elif 'label' in kw:
@@ -27,8 +29,10 @@ class scf(nao):
       pass
     else:
       raise RuntimeError('unknown constructor')
+    if self.verbosity>0: print('before self.init_libnao()')
     self.init_libnao()
     self.pb = prod_basis_c()
+    if self.verbosity>0: print('before self.pb.init_prod_basis_pp_batch(nao=self, **kw)')
     self.pb.init_prod_basis_pp_batch(nao=self, **kw)
     # I am not initializing it here because different methods need different kernels...
 
