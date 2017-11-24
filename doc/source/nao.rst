@@ -14,4 +14,6 @@ data from differents programs,
 .. toctree::
 
    nao/tddft_iter.rst
+   nao/tddft_tem.rst
+   nao/comp_spatial_dens.rst
    nao/examples.rst

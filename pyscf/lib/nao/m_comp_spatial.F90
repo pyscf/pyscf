@@ -67,10 +67,12 @@ end subroutine !test_index_2D
 ! 
 !
 subroutine get_spatial_density_parallel(dn_spatial_re, dn_spatial_im, mu2dn_re, mu2dn_im, &
-            meshx, meshy, meshz, atom2sp, gammin_jt, &
-            dg_jt, Nx, Ny, Nz, nprod, natoms, nspecies) bind(c, name='get_spatial_density_parallel')
+            meshx, meshy, meshz, atom2sp, &
+            Nx, Ny, Nz, nprod, natoms) bind(c, name='get_spatial_density_parallel')
   use m_interp, only : interp_t, init_interp 
   use m_pb_libnao, only : pb
+  use m_prod_basis_type, only : get_jcutoff, get_jcutoff_lmult
+  use m_rsphar, only : init_rsphar
 
   !
   ! Using 1D arrays to avoid colum-row major issues
@@ -78,8 +80,7 @@ subroutine get_spatial_density_parallel(dn_spatial_re, dn_spatial_im, mu2dn_re, 
 
   implicit none
   !! external
-  integer(c_int), intent(in), value :: Nx, Ny, Nz, nprod, natoms, nspecies
-  real(c_double), intent(in), value :: gammin_jt, dg_jt
+  integer(c_int), intent(in), value :: Nx, Ny, Nz, nprod, natoms
 
   ! complex variable
   real(c_float), intent(inout) :: dn_spatial_re(Nx*Ny*Nz), dn_spatial_im(Nx*Ny*Nz)
@@ -93,21 +94,28 @@ subroutine get_spatial_density_parallel(dn_spatial_re, dn_spatial_im, mu2dn_re, 
   
   !! internal
   type(interp_t) :: a
-  real(8), allocatable :: res(:)
+  real(8), allocatable :: res(:), rsh(:)
   real(8) :: br(3)
-  integer :: ix, iy, iz, ind
-  real(8) :: t1,t2,t=0
+  integer :: ix, iy, iz, ind, jcut_lmult, jcutoff
+  integer(8) :: jmx_pb
+  !real(8) :: t1,t2,t=0
 
   call init_interp(pb%rr, a)
+
+  jcutoff = get_jcutoff(pb)
+  jcut_lmult = get_jcutoff_lmult(pb)
+  jmx_pb = max(jcutoff, jcut_lmult)
+  call init_rsphar(jmx_pb)
 
   
 !_t1
   !$OMP PARALLEL DEFAULT(NONE) &
-  !$OMP PRIVATE (ix, iy, iz, br, res, ind) &
+  !$OMP PRIVATE (ix, iy, iz, br, res, ind, rsh) &
   !$OMP SHARED(dn_spatial_re, mu2dn_re, dn_spatial_im, mu2dn_im, Nx, Ny, Nz) &
   !$OMP SHARED(meshx, meshy, meshz, a, atom2sp) &
-  !$OMP SHARED(natoms, nspecies, pb, nprod)
+  !$OMP SHARED(natoms, pb, nprod, jmx_pb)
   allocate(res(nprod))
+  allocate(rsh((jmx_pb+1)**2))
   res = 0.0
 
   !$OMP DO
@@ -115,8 +123,7 @@ subroutine get_spatial_density_parallel(dn_spatial_re, dn_spatial_im, mu2dn_re, 
   do iy = 1, Ny
   do ix = 1, Nx
     br(1) = meshx(ix); br(2) = meshy(iy); br(3) = meshz(iz)
-    call comp_dn_xyz(a, pb, atom2sp, &
-      br, res, natoms, nspecies)
+    call comp_dn_xyz(a, pb, atom2sp, br, res, rsh, jmx_pb, natoms)
     
     ind = iz + (iy-1)*Nz + (ix-1)*Nz*Ny
     dn_spatial_re(ind) = sum(res*mu2dn_re)
@@ -126,7 +133,9 @@ subroutine get_spatial_density_parallel(dn_spatial_re, dn_spatial_im, mu2dn_re, 
   enddo
   enddo
   !$OMP END DO
+
   _dealloc(res)
+  _dealloc(rsh)
   !$OMP END PARALLEL
 
 !_t2(t)
@@ -138,7 +147,7 @@ end subroutine ! dens_libnao
 !
 ! compute density change at the point x, y, z
 !
-subroutine comp_dn_xyz(a, pb, atom2sp, br, res, natoms, nspecies)
+subroutine comp_dn_xyz(a, pb, atom2sp, br, res, rsh, jmx_pb, natoms)
   
   use m_prod_basis_type, only : prod_basis_t
   use m_prod_basis_gen, only : get_nbook, get_book
@@ -151,17 +160,16 @@ subroutine comp_dn_xyz(a, pb, atom2sp, br, res, natoms, nspecies)
   type(interp_t), intent(in) :: a
   type(prod_basis_t), intent(in) :: pb
   real(8), intent(in) :: br(3)
-  integer(c_int64_t), intent(in) :: atom2sp(natoms)
+  integer, intent(in) :: natoms
+  integer(c_int64_t), intent(in) :: atom2sp(natoms), jmx_pb
 
-  integer, intent(in) :: natoms, nspecies
 
-  real(8), allocatable, intent(inout) :: res(:)
+  real(8), allocatable, intent(inout) :: res(:), rsh(:)
 
   type(book_pb_t) :: book
-  integer :: atm, sp, si, fi, sp_prev, k, j, nmu, mu
-  integer(8) :: jmx_sp, s, f
+  integer :: atm, sp, si, sp_prev, k, j, nmu, mu
+  integer(8) :: s, f
   real(8) :: brp(3), r, rcut, coeffs(-2:3), fval
-  real(8), allocatable :: rsh(:)
 
   sp_prev = -1
   do atm = 1, natoms
@@ -176,15 +184,7 @@ subroutine comp_dn_xyz(a, pb, atom2sp, br, res, natoms, nspecies)
 
     book = get_book(pb, atm)
     si = book%si(3) - 1 ! -1 because fortran count
-    if (sp_prev /= sp) then
-      _dealloc(rsh)
-      
-      jmx_sp = maxval(pb%sp_local2functs(sp)%mu2j)
-      call init_rsphar(jmx_sp)
-      allocate(rsh((jmx_sp+1)**2))
-      rsh = 0.0
-    endif
-    call rsphar(brp, jmx_sp, rsh)
+    call rsphar(brp, jmx_pb, rsh)
 
     call comp_coeff_m2p3_k(r**2, a, coeffs, k)
     nmu = get_nmult(pb%sp_local2functs(sp))
@@ -194,12 +194,10 @@ subroutine comp_dn_xyz(a, pb, atom2sp, br, res, natoms, nspecies)
       s = f + 1; f = s + (2*j+1) - 1;
       fval = sum(coeffs*pb%sp_local2functs(sp)%ir_mu2v(k-2:k+3,mu))
       
-      !print*, si, s, f, size(res)
       res(si+s: si+f) = rsh(j*(j+1)-j+1:j*(j+1)+j+1)*fval
     enddo
 
   enddo
-  !_die("look")
 
 end subroutine !comp_dn_xyz
 
@@ -216,7 +214,11 @@ subroutine comp_spatial_grid(dr, axis, grid) bind(c, name='comp_spatial_grid')
   integer :: ix, iy, iz, i1, i2, i3, ind
   real(8) :: br(3)
 
+  !$OMP PARALLEL DEFAULT(NONE) &
+  !$OMP PRIVATE (ix, iy, iz, br, i1,i2,i3, ind) &
+  !$OMP SHARED(axis, grid, fft_vars, dr)
 
+  !$OMP DO
   do i3 = fft_vars%ic(1, 3), fft_vars%ic(2, 3)
   do i2 = fft_vars%ic(1, 2), fft_vars%ic(2, 2)
   do i1 = fft_vars%ic(1, 1), fft_vars%ic(2, 1)
@@ -231,6 +233,46 @@ subroutine comp_spatial_grid(dr, axis, grid) bind(c, name='comp_spatial_grid')
   enddo
   enddo
   enddo
+  !$OMP END DO
+  
+  !$OMP END PARALLEL
+
+end subroutine !comp_spatial_grid
+
+!
+!
+!
+subroutine comp_spatial_grid_pot(dr, grid) bind(c, name='comp_spatial_grid_pot')
+
+  implicit none
+  real(c_double), intent(in) :: dr(3)
+  real(c_double), intent(inout) :: grid(fft_vars%nffr(1)*fft_vars%nffr(2)*fft_vars%nffr(3))
+
+  integer :: ix, iy, iz, i1, i2, i3, ind
+  real(8) :: br(3)
+
+  !$OMP PARALLEL DEFAULT(NONE) &
+  !$OMP PRIVATE (ix, iy, iz, br, i1,i2,i3, ind) &
+  !$OMP SHARED(grid, fft_vars, dr)
+
+  !$OMP DO
+  do i3 = fft_vars%ic(1, 3), fft_vars%ic(2, 3)
+  do i2 = fft_vars%ic(1, 2), fft_vars%ic(2, 2)
+  do i1 = fft_vars%ic(1, 1), fft_vars%ic(2, 1)
+    br = (/i1,i2,i3/)*dr + dr*0.5D0
+    
+    ix = i1 + fft_vars%n2(1)/2 +1
+    iy = i2 + fft_vars%n2(2)/2 +1
+    iz = i3 + fft_vars%n2(3)/2 +1
+    ind = iz + (iy-1)*fft_vars%nffr(3) + (ix-1)*fft_vars%nffr(3)*fft_vars%nffr(2)
+    grid(ind) = 1.0/sqrt(sum(br**2))
+
+  enddo
+  enddo
+  enddo
+  !$OMP END DO
+  
+  !$OMP END PARALLEL
 
 end subroutine !comp_spatial_grid
 

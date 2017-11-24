@@ -26,19 +26,18 @@ class tddft_tem(tddft_iter):
 
     def __init__(self, **kw):
         """ 
-            Iterative TDDFT a la PK, DF, OC JCTC 
-            using moving charge as perturbation.
-            The unit of the input are in atomic untis !!!
+        Iterative TDDFT a la PK, DF, OC JCTC 
+        using moving charge as perturbation.
+        The unit of the input are in atomic untis !!!
 
-            Input Parameters:
-            -----------------
-                velec: xyz component of the electron velocity in atomic unit
-                beam_offset: xyz components of the beam offset, must be orthogonal
-                        to velec in atomic unit
-                dr: spatial resolution for the electron trajectory in atomic unit.
-                    Warning: This parameter influence the accuracy of the calculations.
-                        if it is taken too large the results will be wrong.
-                freq: Frequency range (in atomic unit), freq[0] must be 0.0!!
+        Input Parameters:
+            velec: xyz component of the electron velocity in atomic unit
+            beam_offset: xyz components of the beam offset, must be orthogonal
+                    to velec in atomic unit
+            dr: spatial resolution for the electron trajectory in atomic unit.
+                Warning: This parameter influence the accuracy of the calculations.
+                    if it is taken too large the results will be wrong.
+            freq: Frequency range (in atomic unit), freq[0] must be 0.0!!
 
         """
         from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
@@ -82,9 +81,9 @@ class tddft_tem(tddft_iter):
                 beam_offset = [{4:.3f}, {5:.3f}, {6:.3f}]
                 atom coord = [{7:.3f}, {8:.3f}, {9:.3f}]
                 impact parameter = {10:.9f} > 1e-6
-                """.format(atm, self.velec[0], self.velec[1], self.velec[2],
-                        self.beam_offset[0], self.beam_offset[1], self.beam_offset[2],
-                        atom2coord[atm, 0],  atom2coord[atm, 1],  atom2coord[atm, 2],
+                """.format(atm, *self.velec,
+                        *self.beam_offset[0],
+                        *atom2coord[atm, :],
                         np.sqrt(np.dot(vec, self.vdir)))
                 raise ValueError(mess)
 
