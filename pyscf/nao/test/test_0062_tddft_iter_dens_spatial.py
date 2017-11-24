@@ -50,8 +50,9 @@ class KnowValues(unittest.TestCase):
                     [-15.0, 15.0]])
     dr = np.array([0.5, 0.5, 0.5])
 
-    spd = spatial_distribution(dn, freq, 8.35/Ha, box, dr = dr, label="water",
-            Eext=np.array([1.0, 1.0, 1.0]), tol_loc=1e-4, tol_biloc=1e-6, cd=dname)
+    spd = spatial_distribution(dn, freq, box, dr = dr, label="water", 
+                               tol_loc=1e-4, tol_biloc=1e-6, cd=dname)
+    spd.get_spatial_density(8.35/Ha, Eext=np.array([1.0, 1.0, 1.0]))
 
     ref = h5py.File(dname+"/tddft_iter_output_water_ref.hdf5", "r")
     dn_mbpt = ref["field_spatial_dir_0.58_0.58_0.58_freq_8.35_inter/dens_re"].value +\
