@@ -29,9 +29,10 @@ mc.kernel()
 #
 # Starting from a singlet SCF calculation
 #
-# SCF calculation for singlet state does not converge if mol.symmetry is enabled.
-# Starting from a symmetry-broken SCF calculation, the CASSCF solver converges
-# to the solution with correct symmetry, with more iterations.
+# SCF calculation for singlet state does not converge if mol.symmetry is
+# enabled.  Starting from a symmetry-broken SCF initial guess, the CASSCF
+# solver can converge to the solution with correct symmetry, with more
+# iterations.
 mol = gto.M(atom='O; O 1 1.2', basis='ccpvdz', spin=0)
 mf = scf.RHF(mol).run()
 nalpha = 4
@@ -42,6 +43,6 @@ mc.kernel()
 #
 # Print out the largest CI coefficients
 #
-for c, deta, detb in fci.addons.large_ci(mc.ci, norb, (nalpha, nbeta), tol=.01,
-                                         return_strs=False):
+for c, deta, detb in fci.addons.large_ci(mc.ci, norb, (nalpha, nbeta),
+                                         tol=.01, return_strs=False):
     print(deta.tolist(), detb.tolist(), c)
