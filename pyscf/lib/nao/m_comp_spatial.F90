@@ -106,7 +106,7 @@ subroutine get_spatial_density_parallel(dn_spatial_re, dn_spatial_im, mu2dn_re, 
   !$OMP PRIVATE (ix, iy, iz, br, res, ind) &
   !$OMP SHARED(dn_spatial_re, mu2dn_re, dn_spatial_im, mu2dn_im, Nx, Ny, Nz) &
   !$OMP SHARED(meshx, meshy, meshz, a, atom2sp) &
-  !$OMP SHARED(natoms, nspecies, pb)
+  !$OMP SHARED(natoms, nspecies, pb, nprod)
   allocate(res(nprod))
   res = 0.0
 
