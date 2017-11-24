@@ -23,42 +23,43 @@ class spatial_distribution(scf):
             * intensity of the induce Efield
 
         Example:
-        from __future__ import print_function, division
-        import numpy as np
-        from pyscf.nao import tddft_iter
-        from pyscf.nao.m_comp_spatial_distributions import spatial_distribution
 
-        from ase.units import Ry, eV, Ha, Bohr
+            from __future__ import print_function, division
+            import numpy as np
+            from pyscf.nao import tddft_iter
+            from pyscf.nao.m_comp_spatial_distributions import spatial_distribution
+
+            from ase.units import Ry, eV, Ha, Bohr
 
 
-        # run tddft calculation
-        td = tddft_iter(label="siesta", iter_broadening=0.15/Ha, xc_code='LDA,PZ')
+            # run tddft calculation
+            td = tddft_iter(label="siesta", iter_broadening=0.15/Ha, xc_code='LDA,PZ')
 
-        omegas = np.linspace(0.0, 10.0, 200)/Ha + 1j*td.eps
-        td.comp_dens_inter_along_Eext(omegas, Eext=np.array([1.0, 0.0, 0.0]))
+            omegas = np.linspace(0.0, 10.0, 200)/Ha + 1j*td.eps
+            td.comp_dens_inter_along_Eext(omegas, Eext=np.array([1.0, 0.0, 0.0]))
 
-        box = np.array([[-10.0, 10.0],
-                        [-10.0, 10.0],
-                        [-10.0, 10.0]])/Bohr
-        dr = np.array([0.5, 0.5, 0.5])/Bohr
+            box = np.array([[-10.0, 10.0],
+                            [-10.0, 10.0],
+                            [-10.0, 10.0]])/Bohr
+            dr = np.array([0.5, 0.5, 0.5])/Bohr
 
-        # initialize spatial calculations
-        spd = spatial_distribution(td.dn, omegas, box, dr = dr, label="siesta")
+            # initialize spatial calculations
+            spd = spatial_distribution(td.dn, omegas, box, dr = dr, label="siesta")
 
-        # compute spatial density change distribution
-        spd.get_spatial_density(3.5/Ha, Eext=np.array([1.0, 0.0, 0.0]))
+            # compute spatial density change distribution
+            spd.get_spatial_density(3.5/Ha, Eext=np.array([1.0, 0.0, 0.0]))
 
-        # computer Efield
-        Efield = spd.comp_induce_field()
-        
-        # compute potential
-        pot = spd.comp_induce_potential()
-        
-        # coompute intensity
-        intensity = spd.comp_intensity_Efield(Efield)
+            # compute Efield
+            Efield = spd.comp_induce_field()
+            
+            # compute potential
+            pot = spd.comp_induce_potential()
+            
+            # compute intensity
+            intensity = spd.comp_intensity_Efield(Efield)
     """
 
-    def __init__(self, dn, freq, box, **kw):
+    def __init__(self, dn, freq, box, excitation = "light", **kw):
         """
             initialize the class aith scf.__init__, checking arguments
             All quantites must be given in a.u.
@@ -72,14 +73,23 @@ class spatial_distribution(scf):
             box (real array, dim: [3, 2]): spatial boundaries of the box in which you want
                         to compute the spatial quantities, first index run over x, y, z axis,
                         second index stand for lower and upper boundaries.
+            excitation (string): type of external perturbation, can be
+                * light: system is pertubated with a constant external electric field
+                        the density change has been computed with tddft_iter module
+                * electron: system has been perturbated by a moving charge (EELS)
+                        the density change has has been computed with the tddft_tem module
         """
+
 
         self.dr = kw['dr'] if 'dr' in kw else np.array([0.3, 0.3, 0.3])
 
         assert self.dr.size == 3
         assert box.shape == (3, 2)
+        assert excitation in ["light", "electron"]
 
+        
         self.box = box
+        self.excitation = excitation
         self.mesh = np.array([np.arange(box[0, 0], box[0, 1]+self.dr[0], self.dr[0]),
                               np.arange(box[1, 0], box[1, 1]+self.dr[1], self.dr[1]),
                               np.arange(box[2, 0], box[2, 1]+self.dr[2], self.dr[2])])
@@ -88,7 +98,16 @@ class spatial_distribution(scf):
 
         scf.__init__(self, **kw)
 
-        self.nprod = dn.shape[2]
+        if self.excitation == "light" and len(dn.shape) == 3:
+            self.nprod = dn.shape[2]
+        if self.excitation == "light" and len(dn.shape) != 3:
+            raise ValueError("Wrong dimension for the density change with light excitation")
+        elif self.excitation == "electron" and len(dn.shape) == 2:
+            self.nprod = dn.shape[1]
+        elif self.excitation == "electron" and len(dn.shape) != 2:
+            raise ValueError("Wrong dimension for the density change with electron excitation")
+        else:
+            raise ValueError("wrong excitation type??")
 
     def get_spatial_density(self, w0, ao_log=None, Eext = np.array([1.0, 1.0, 1.0])):
         """
@@ -98,17 +117,23 @@ class spatial_distribution(scf):
         """
 
         assert Eext.size == 3
-        self.Eext = Eext/np.sqrt(np.dot(Eext, Eext))
 
         from pyscf.nao.m_ao_matelem import ao_matelem_c
         from pyscf.nao.m_csphar import csphar
         from pyscf.nao.m_rsphar_libnao import rsphar
         from pyscf.nao.m_log_interp import comp_coeffs_
 
-
         iw = find_nearrest_index(self.freq, w0)
-        self.mu2dn_re = np.dot(self.Eext, self.dn[:, iw, :].real)
-        self.mu2dn_im = np.dot(self.Eext, self.dn[:, iw, :].imag)
+        if self.excitation == "light":
+            self.Eext = Eext/np.sqrt(np.dot(Eext, Eext))
+
+            self.mu2dn_re = np.dot(self.Eext, self.dn[:, iw, :].real)
+            self.mu2dn_im = np.dot(self.Eext, self.dn[:, iw, :].imag)
+        elif self.excitation == "electron":
+            self.Eext = None
+            self.mu2dn_re = self.dn[iw, :].real
+            self.mu2dn_im = self.dn[iw, :].imag
+
 
         Nx, Ny, Nz = self.mesh[0].size, self.mesh[1].size, self.mesh[2].size 
 
