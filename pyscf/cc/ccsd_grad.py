@@ -56,7 +56,7 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
     Xvo = numpy.zeros((nvir,nocc))
 
     eris_oooo = _cp(eris.oooo)
-    eris_vooo = _cp(eris.vooo)
+    eris_vooo = _cp(_cp(eris.ovoo).transpose(1,0,2,3))
     d_oooo = _cp(doooo)
     d_oooo = _cp(d_oooo + d_oooo.transpose(1,0,2,3))
     Ioo += lib.einsum('jmlk,imlk->ij', d_oooo, eris_oooo) * 2
@@ -69,9 +69,12 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
     Ivo += lib.einsum('akjl,ikjl->ai', d_vooo, eris_oooo)
     eris_oooo = eris_vooo = d_oooo = d_vooo = None
 
+    eris_oovv_tril = _cp(eris.oovv).reshape(nocc**2,nvir,nvir)
+    eris_oovv_tril = lib.pack_tril(eris_oovv_tril).reshape(nocc,nocc,-1)
     max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     unit = nocc*nvir**2 * 4
-    blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*1e6/8/unit)))
+    blksize = min(nocc, max(ccsd.BLKMIN,
+                            int((max_memory*1e6/8-eris_oovv_tril.size)/unit)))
     log.debug1('IX_intermediates pass 1: block size = %d, nvir = %d in %d blocks',
                blksize, nvir, int((nvir+blksize-1)/blksize))
     fswap.create_dataset('eris_wvo', (nvir_pair,nvir,nocc), 'f8',
@@ -81,40 +84,42 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
     dvv1 = dvv + dvv.T
 
     for p0, p1 in lib.prange(0, nvir, blksize):
-        eris_vooo = _cp(eris.vooo[p0:p1])
-        eris_vvoo = _cp(eris.vvoo[p0:p1])
+        eris_ovoo = _cp(eris.ovoo[:,p0:p1])
+        eris_vvoo = _cp(eris.oovv[:,:,p0:p1].transpose(2,3,0,1))
 
         d_vooo = _cp(dvooo[p0:p1])
-        Ioo += lib.einsum('ajkl,aikl->ij', d_vooo, eris_vooo)
+        Ioo += lib.einsum('ajkl,iakl->ij', d_vooo, eris_ovoo)
         Xvo += lib.einsum('bikj,bakj->ai', d_vooo, eris_vvoo)
         d_vooo = d_vooo + d_vooo.transpose(0,1,3,2)
-        eris_voov = _cp(eris.voov[p0:p1])
-        Ioo += lib.einsum('aklj,akli->ij', d_vooo, eris_vooo)
+        eris_voov = _cp(eris.ovvo[:,p0:p1].transpose(1,0,3,2))
+        Ioo += lib.einsum('aklj,kali->ij', d_vooo, eris_ovoo)
         Xvo += lib.einsum('bkji,bkja->ai', d_vooo, eris_voov)
 
         d_vvoo = _cp(fswap['d_vvoo'][p0:p1])
         Ioo += lib.einsum('bakj,baki->ij', d_vvoo, eris_vvoo)
         Ivv += lib.einsum('cbij,caij->ab', d_vvoo, eris_vvoo)
-        Ivo += lib.einsum('bakj,bikj->ai', d_vvoo, eris_vooo)
+        Ivo += lib.einsum('bakj,ibkj->ai', d_vvoo, eris_ovoo)
         d_vvoo = None
 
         d_voov = _cp(fswap['d_voov'][p0:p1])
-        Ivo += lib.einsum('bjka,bjki->ai', d_voov, eris_vooo)
+        Ivo += lib.einsum('bjka,jbki->ai', d_voov, eris_ovoo)
         Ioo += lib.einsum('ajkb,aikb->ij', d_voov, eris_voov)
         Ivv += lib.einsum('cjib,cjia->ab', d_voov, eris_voov)
-        eris_vvoo = eris_vooo = eris_voov = None
+        eris_vvoo = eris_ovoo = eris_voov = None
 
         # tril part of (d_vovv + d_vovv.transpose(0,1,3,2))
         d_vovv = _cp(dvovv[p0:p1])
         c_vovv = _ccsd.precontract(d_vovv.reshape(-1,nvir,nvir))
-        fswap['d_wvo'][:,p0:p1] = c_vovv.reshape(p1-p0,nocc,nvir_pair).transpose(2,0,1)
+        c_vovv = c_vovv.reshape(p1-p0,nocc,nvir_pair)
+        Ivo[p0:p1] += lib.einsum('ajx,ijx->ai', c_vovv, eris_oovv_tril)
+        fswap['d_wvo'][:,p0:p1] = c_vovv.transpose(2,0,1)
         c_vovv = None
 
-        eris_vox = _cp(eris.vovv[p0:p1])
+        eris_vox = _cp(eris.ovvv[:,p0:p1]).transpose(1,0,2)
         fswap['eris_wvo'][:,p0:p1] = eris_vox.reshape(p1-p0,nocc,nvir_pair).transpose(2,0,1)
 
         d_vovv = d_vovv + d_vovv.transpose(0,1,3,2)
-        Ivo += lib.einsum('cjab,cjib->ai', d_vovv, _cp(eris.voov[p0:p1]))
+        Ivo += lib.einsum('cjab,jcbi->ai', d_vovv, _cp(eris.ovvo[:,p0:p1]))
 
         eris_vovv = lib.unpack_tril(eris_vox.reshape(-1,nvir_pair))
         eris_vox = None
@@ -124,6 +129,7 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
         Xvo -= numpy.einsum('cb,ciba->ai', dvv1[p0:p1], eris_vovv)
         Xvo += lib.einsum('bjic,bjca->ai', d_voov, eris_vovv)
         d_vovv = d_voov = eris_vovv = None
+    eris_oovv = None
 
     max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     unit = nocc*nvir**2 + nvir**3*2.5
@@ -143,15 +149,6 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
         d_vvvo = _cp(fswap['d_wvo'][off0:off1])
         Xvo += lib.einsum('xci,xca->ai', d_vvvo, eris_vvvv)
         eris_vvvv = None
-
-        buf = _cp(eris.vvoo[p0:p1,:p1])
-        eris_vvoo = numpy.empty((off1-off0,nocc,nocc))
-        q1 = 0
-        for i in range(p1-p0):
-            q0, q1 = q1, q1 + p0+i+1
-            eris_vvoo[q0:q1] = buf[i,:p0+i+1]
-        Ivo += lib.einsum('xaj,xji->ai', d_vvvo, eris_vvoo)
-        buf = eris_vvoo = None
 
         eris_vvvo = _cp(fswap['eris_wvo'][off0:off1])
         Ivo += lib.einsum('xca,xci->ai', d_vvvv, eris_vvvo) * 2
@@ -192,11 +189,11 @@ def response_dm1(mycc, t1, t2, l1, l2, eris=None, IX=None):
         else:
             v = numpy.zeros((nvir,nocc))
             for p0, p1 in lib.prange(0, nvir, blksize):
-                eris_voov = _cp(eris.voov[p0:p1])
-                v[p0:p1] += numpy.einsum('aijb,bj->ai', eris_voov, x) * 4
-                v -= numpy.einsum('bija,bj->ai', eris_voov, x[p0:p1])
-                eris_voov = None
-                v -= numpy.einsum('baij,bj->ai', _cp(eris.vvoo[p0:p1]), x[p0:p1])
+                eris_ovvo = _cp(eris.ovvo[:,p0:p1])
+                v[p0:p1] += numpy.einsum('iabj,bj->ai', eris_ovvo, x) * 4
+                v -= numpy.einsum('ibaj,bj->ai', eris_ovvo, x[p0:p1])
+                eris_ovvo = None
+                v -= numpy.einsum('ijba,bj->ai', _cp(eris.oovv[:,:,p0:p1]), x[p0:p1])
         return v
     mo_energy = eris.fock.diagonal()
     mo_occ = numpy.zeros_like(mo_energy)
@@ -539,13 +536,11 @@ if __name__ == '__main__':
     eris = lambda:None
     idx = numpy.tril_indices(nvir)
     eris.oooo = eri0[:nocc,:nocc,:nocc,:nocc].copy()
-    eris.vooo = eri0[nocc:,:nocc,:nocc,:nocc].copy()
-    eris.voov = eri0[nocc:,:nocc,:nocc,nocc:].copy()
-    eris.vvoo = eri0[nocc:,nocc:,:nocc,:nocc].copy()
-    eris.vovv = eri0[nocc:,:nocc,nocc:,nocc:]
-    eris.vovv = eris.vovv[:,:,idx[0],idx[1]].copy()
-    eris.vvvv = eri0[nocc:,nocc:,nocc:,nocc:]
-    eris.vvvv = eris.vvvv[idx[0],idx[1]][:,idx[0],idx[1]].copy()
+    eris.ovoo = eri0[:nocc,nocc:,:nocc,:nocc].copy()
+    eris.ovvo = eri0[:nocc,nocc:,nocc:,:nocc].copy()
+    eris.oovv = eri0[:nocc,:nocc,nocc:,nocc:].copy()
+    eris.ovvv = eri0[:nocc,nocc:,nocc:,nocc:][:,:,idx[0],idx[1]].copy()
+    eris.vvvv = eri0[nocc:,nocc:,nocc:,nocc:][idx[0],idx[1]][:,idx[0],idx[1]].copy()
     eris.fock = fock0
 
     print('-----------------------------------')

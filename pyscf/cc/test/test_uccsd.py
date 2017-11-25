@@ -24,6 +24,15 @@ mf = scf.addons.convert_to_uhf(rhf)
 
 myucc = cc.UCCSD(mf).run(conv_tol=1e-10)
 
+def test_add_vvvv_full(t2, vvvv):
+    nvira, nvirb = t2.shape[2:4]
+    vvvv = np.zeros((nvira,nvira,nvirb,nvirb))
+    idx, idy = np.tril_indices(nvira)
+    vvvv[idx,idy] = lib.unpack_tril(vvvv)
+    vvvv[idy,idx] = vvvv[idx,idy]
+    Ht2 = lib.einsum('ijef,aebf->ijab', t2, vvvv)
+    return Ht2
+
 class KnownValues(unittest.TestCase):
     def test_uccsd_from_dft(self):
         mf = dft.UKS(mol)

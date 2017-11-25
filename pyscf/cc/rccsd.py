@@ -42,35 +42,34 @@ def update_amps(cc, t1, t2, eris):
     t1new +=  -np.einsum('kc,ikca->ia', Fov, t2)
     t1new +=   np.einsum('kc,ic,ka->ia', Fov, t1, t1)
     t1new += fov.conj()
-    t1new += 2*np.einsum('aikc,kc->ia', eris.voov, t1)
-    t1new +=  -np.einsum('acki,kc->ia', eris.vvoo, t1)
-    eris_ovvv = np.asarray(eris.vovv).conj().transpose(1,0,3,2)
+    t1new += 2*np.einsum('kcai,kc->ia', eris.ovvo, t1)
+    t1new +=  -np.einsum('kiac,kc->ia', eris.oovv, t1)
+    eris_ovvv = np.asarray(eris.ovvv)
     t1new += 2*lib.einsum('kdac,ikcd->ia', eris_ovvv, t2)
     t1new +=  -lib.einsum('kcad,ikcd->ia', eris_ovvv, t2)
     t1new += 2*lib.einsum('kdac,kd,ic->ia', eris_ovvv, t1, t1)
     t1new +=  -lib.einsum('kcad,kd,ic->ia', eris_ovvv, t1, t1)
-    eris_ooov = _cp(eris.vooo).conj().transpose(3,2,1,0)
-    t1new +=-2*lib.einsum('kilc,klac->ia', eris_ooov, t2)
-    t1new +=   lib.einsum('likc,klac->ia', eris_ooov, t2)
-    t1new +=-2*lib.einsum('kilc,lc,ka->ia', eris_ooov, t1, t1)
-    t1new +=   lib.einsum('likc,lc,ka->ia', eris_ooov, t1, t1)
+    eris_ovoo = _cp(eris.ovoo)
+    t1new +=-2*lib.einsum('lcki,klac->ia', eris_ovoo, t2)
+    t1new +=   lib.einsum('kcli,klac->ia', eris_ovoo, t2)
+    t1new +=-2*lib.einsum('lcki,lc,ka->ia', eris_ovoo, t1, t1)
+    t1new +=   lib.einsum('kcli,lc,ka->ia', eris_ovoo, t1, t1)
 
     # T2 equation
-    tmp2  = lib.einsum('bcki,ka->abic', eris.vvoo, -t1)
-    tmp2 += np.asarray(eris.vovv).transpose(0,2,1,3)
+    tmp2  = lib.einsum('kibc,ka->abic', eris.oovv, -t1)
+    tmp2 += np.asarray(eris.ovvv).conj().transpose(1,3,0,2)
     tmp = lib.einsum('abic,jc->ijab', tmp2, t1)
     t2new = tmp + tmp.transpose(1,0,3,2)
-    tmp2  = lib.einsum('aikc,jc->akij', eris.voov, t1)
-    tmp2 += eris_ooov.transpose(3,1,2,0).conj()
+    tmp2  = lib.einsum('kcai,jc->akij', eris.ovvo, t1)
+    tmp2 += eris_ovoo.transpose(1,3,0,2).conj()
     tmp = lib.einsum('akij,kb->ijab', tmp2, t1)
     t2new -= tmp + tmp.transpose(1,0,3,2)
-    t2new += np.asarray(eris.vovo).transpose(1,3,0,2)
+    t2new += np.asarray(eris.ovov).conj().transpose(0,2,1,3)
     if cc.cc2:
         Woooo2 = np.asarray(eris.oooo).transpose(0,2,1,3).copy()
-        Woooo2 += lib.einsum('kilc,jc->klij', eris_ooov, t1)
-        Woooo2 += lib.einsum('ljkc,ic->klij', eris_ooov, t1)
-        eris_ovov = eris.vovo.conj().transpose(1,0,3,2)
-        Woooo2 += lib.einsum('kcld,ic,jd->klij', eris_ovov, t1, t1)
+        Woooo2 += lib.einsum('lcki,jc->klij', eris_ovoo, t1)
+        Woooo2 += lib.einsum('kclj,ic->klij', eris_ovoo, t1)
+        Woooo2 += lib.einsum('kcld,ic,jd->klij', eris.ovov, t1, t1)
         t2new += lib.einsum('klij,ka,lb->ijab', Woooo2, t1, t1)
         Wvvvv = lib.einsum('kcbd,ka->abcd', eris_ovvv, -t1)
         Wvvvv = Wvvvv + Wvvvv.transpose(1,0,3,2)
@@ -123,7 +122,7 @@ def energy(cc, t1, t2, eris):
     e = 2*np.einsum('ia,ia', fock[:nocc,nocc:], t1)
     tau = np.einsum('ia,jb->ijab',t1,t1)
     tau += t2
-    eris_ovov = np.asarray(eris.vovo).conj().transpose(1,0,3,2)
+    eris_ovov = np.asarray(eris.ovov)
     e += 2*np.einsum('ijab,iajb', tau, eris_ovov)
     e +=  -np.einsum('ijab,ibja', tau, eris_ovov)
     return e.real
@@ -146,9 +145,8 @@ class RCCSD(ccsd.CCSD):
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
         eijab = lib.direct_sum('ia,jb->ijab', eia, eia)
         t1 = eris.fock[:nocc,nocc:].conj() / eia
-        eris_vovo = np.asarray(eris.vovo)
-        t2 = eris_vovo.transpose(1,3,0,2) / eijab
-        eris_ovov = eris_vovo.conj().transpose(1,0,3,2)
+        eris_ovov = np.asarray(eris.ovov)
+        t2 = eris_ovov.transpose(0,2,1,3).conj() / eijab
         self.emp2  = 2*np.einsum('ijab,iajb', t2, eris_ovov)
         self.emp2 -=   np.einsum('ijab,ibja', t2, eris_ovov)
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
@@ -199,50 +197,67 @@ class RCCSD(ccsd.CCSD):
 
     def _add_vvvv(self, t1, t2, eris, out=None):
         tau = t2 + np.einsum('ia,jb->ijab', t1, t1)
-        t2new = np.ndarray(t2.shape, t2.dtype, buffer=out)
-
-        nocc, nvir = t1.shape
-        max_memory = max(2000, self.max_memory-lib.current_memory()[0])
-        unit = nvir**3*2 + nocc**2*nvir
-        blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory*1e6/8/unit)))
-
-        for p0,p1 in lib.prange(0, nvir, blksize):
-            t2new[:,:,p0:p1] = lib.einsum('ijcd,acbd->ijab', tau, eris.vvvv[p0:p1])
-        return t2new
+        return eris._contract_vvvv_t2(self, eris.vvvv, tau, out)
     _add_vvvv_full = _add_vvvv
+
+def _contract_vvvv_t2(mycc, vvvv, t2, out=None):
+    '''Ht2 = numpy.einsum('ijcd,acbd->ijab', t2, vvvv)
+
+    Args:
+        vvvv : None or integral object
+            if vvvv is None, contract t2 to AO-integrals using AO-direct algorithm
+    '''
+    assert(vvvv is not None)
+    nvira, nvirb = t2.shape[-2:]
+    x2 = t2.reshape(-1,nvira,nvirb)
+    nocc2 = x2.shape[0]
+    Ht2 = np.ndarray(x2.shape, buffer=out)
+
+    max_memory = mycc.max_memory-lib.current_memory()[0]
+    unit = nvirb**2*nvira*2 + nocc2*nvirb
+    blksize = min(nvira, max(ccsd.BLKMIN, int(max_memory*1e6/8/unit)))
+
+    for p0,p1 in lib.prange(0, nvira, blksize):
+        Ht2[:,p0:p1] = lib.einsum('xcd,acbd->xab', x2, vvvv[p0:p1])
+    return Ht2.reshape(t2.shape)
+
+class _ChemistsERIs(ccsd._ChemistsERIs):
+    def _contract_vvvv_t2(self, mycc, vvvv, t2, out=None):
+        return _contract_vvvv_t2(mycc, vvvv, t2, out)
 
 def _make_eris_incore(mycc, mo_coeff=None):
     cput0 = (time.clock(), time.time())
-    eris = ccsd._ChemistsERIs()
+    eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
     nocc = eris.nocc
     nmo = eris.fock.shape[0]
     nvir = nmo - nocc
 
     eri1 = ao2mo.incore.full(mycc._scf._eri, eris.mo_coeff)
-    eris.vooo = np.empty((nvir,nocc,nocc,nocc))
-    eris.voov = np.empty((nvir,nocc,nocc,nvir))
-    eris.vovo = np.empty((nvir,nocc,nvir,nocc))
-    eris.vovv = np.empty((nvir,nocc,nvir,nvir))
-    eris.vvoo = np.empty((nvir,nvir,nocc,nocc))
+    eris.ovoo = np.empty((nocc,nvir,nocc,nocc))
+    eris.ovvo = np.empty((nocc,nvir,nvir,nocc))
+    eris.ovov = np.empty((nocc,nvir,nocc,nvir))
+    eris.ovvv = np.empty((nocc,nvir,nvir,nvir))
     eris.vvvv = np.empty((nvir,nvir,nvir,nvir))
+    tril2sq = lib.square_mat_in_trilu_indices(nmo)
 
     nocc_pair = nocc*(nocc+1)//2
     eris.oooo = ao2mo.restore(1, eri1[:nocc_pair,:nocc_pair], nocc)
+    oovv = lib.take_2d(eri1[:nocc_pair], tril2sq[:nocc,:nocc].ravel(),
+                       tril2sq[nocc:,nocc:].ravel())
+    eris.oovv = oovv.reshape(nocc,nocc,nvir,nvir)
 
     outbuf = np.empty((nmo,nmo,nmo))
     p1 = nocc*(nocc+1)//2
     for i in range(nocc,nmo):
         p0, p1 = p1, p1 + i + 1
         buf = lib.unpack_tril(eri1[p0:p1], out=outbuf)
-        eris.vooo[i-nocc] = buf[:nocc,:nocc,:nocc]
-        eris.voov[i-nocc] = buf[:nocc,:nocc,nocc:]
-        eris.vovo[i-nocc] = buf[:nocc,nocc:,:nocc]
-        eris.vovv[i-nocc] = buf[:nocc,nocc:,nocc:]
-        eris.vvoo[i-nocc,:i+1-nocc] = buf[nocc:i+1,:nocc,:nocc]
+        eris.ovoo[:,i-nocc] = buf[:nocc,:nocc,:nocc]
+        eris.ovvo[:,i-nocc] = buf[:nocc,nocc:,:nocc]
+        eris.ovov[:,i-nocc] = buf[:nocc,:nocc,nocc:]
+        eris.ovvv[:,i-nocc] = buf[:nocc,nocc:,nocc:]
         eris.vvvv[i-nocc,:i+1-nocc] = buf[nocc:i+1,nocc:,nocc:]
         if i > nocc:
-            eris.vvoo[:i-nocc,i-nocc] = buf[nocc:i,:nocc,:nocc]
             eris.vvvv[:i-nocc,i-nocc] = buf[nocc:i,nocc:,nocc:]
     logger.timer(mycc, 'CCSD integral transformation', *cput0)
     return eris
@@ -250,7 +265,7 @@ def _make_eris_incore(mycc, mo_coeff=None):
 def _make_eris_outcore(mycc, mo_coeff=None):
     cput0 = (time.clock(), time.time())
     log = logger.Logger(mycc.stdout, mycc.verbose)
-    eris = ccsd._ChemistsERIs()
+    eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
 
     mol = mycc.mol
@@ -263,11 +278,11 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     nvpair = nvir * (nvir+1) // 2
     eris.feri1 = lib.H5TmpFile()
     eris.oooo = eris.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), 'f8')
-    eris.vooo = eris.feri1.create_dataset('vooo', (nvir,nocc,nocc,nocc), 'f8')
-    eris.voov = eris.feri1.create_dataset('voov', (nvir,nocc,nocc,nvir), 'f8')
-    eris.vovo = eris.feri1.create_dataset('vovo', (nvir,nocc,nvir,nocc), 'f8')
-    eris.vovv = eris.feri1.create_dataset('vovv', (nvir,nocc,nvir,nvir), 'f8')
-    eris.vvoo = eris.feri1.create_dataset('vvoo', (nvir,nvir,nocc,nocc), 'f8')
+    eris.ovoo = eris.feri1.create_dataset('ovoo', (nocc,nvir,nocc,nocc), 'f8', chunks=(nocc,1,nocc,nocc))
+    eris.ovov = eris.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8', chunks=(nocc,1,nocc,nvir))
+    eris.ovvo = eris.feri1.create_dataset('ovvo', (nocc,nvir,nvir,nocc), 'f8', chunks=(nocc,1,nvir,nocc))
+    eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc,nvir,nvir,nvir), 'f8', chunks=(nocc,1,nvir,nvir))
+    eris.oovv = eris.feri1.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8', chunks=(nocc,nocc,1,nvir))
     eris.vvvv = eris.feri1.create_dataset('vvvv', (nvir,nvir,nvir,nvir), 'f8')
     max_memory = max(2000, mycc.max_memory-lib.current_memory()[0])
 
@@ -276,7 +291,12 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     eri = ftmp['eri_mo']
 
     nocc_pair = nocc*(nocc+1)//2
-    eris.oooo[:] = ao2mo.restore(1, _cp(eri[:nocc_pair,:nocc_pair]), nocc)
+    tril2sq = lib.square_mat_in_trilu_indices(nmo)
+    oo = _cp(eri[:nocc_pair])
+    eris.oooo[:] = ao2mo.restore(1, _cp(oo[:,:nocc_pair]), nocc)
+    oovv = lib.take_2d(oo, tril2sq[:nocc,:nocc].ravel(), tril2sq[nocc:,nocc:].ravel())
+    eris.oovv[:] = oovv.reshape(nocc,nocc,nvir,nvir)
+    oo = oovv = None
 
     tril2sq = lib.square_mat_in_trilu_indices(nmo)
     blksize = min(nvir, max(2, int(max_memory*1e6/8/nmo**3/2)))
@@ -287,16 +307,14 @@ def _make_eris_outcore(mycc, mo_coeff=None):
         buf = lib.unpack_tril(_cp(eri[off0:off1]))
 
         tmp = buf[ tril2sq[q0:q1,:nocc] - off0 ]
-        eris.vooo[p0:p1] = tmp[:,:,:nocc,:nocc]
-        eris.voov[p0:p1] = tmp[:,:,:nocc,nocc:]
-        eris.vovo[p0:p1] = tmp[:,:,nocc:,:nocc]
-        eris.vovv[p0:p1] = tmp[:,:,nocc:,nocc:]
+        eris.ovoo[:,p0:p1] = tmp[:,:,:nocc,:nocc].transpose(1,0,2,3)
+        eris.ovvo[:,p0:p1] = tmp[:,:,nocc:,:nocc].transpose(1,0,2,3)
+        eris.ovov[:,p0:p1] = tmp[:,:,:nocc,nocc:].transpose(1,0,2,3)
+        eris.ovvv[:,p0:p1] = tmp[:,:,nocc:,nocc:].transpose(1,0,2,3)
 
         tmp = buf[ tril2sq[q0:q1,nocc:q1] - off0 ]
-        eris.vvoo[p0:p1,:p1] = tmp[:,:,:nocc,:nocc]
         eris.vvvv[p0:p1,:p1] = tmp[:,:,nocc:,nocc:]
         if p0 > 0:
-            eris.vvoo[:p0,p0:p1] = tmp[:,:p0,:nocc,:nocc].transpose(1,0,2,3)
             eris.vvvv[:p0,p0:p1] = tmp[:,:p0,nocc:,nocc:].transpose(1,0,2,3)
         buf = tmp = None
     log.timer('CCSD integral transformation', *cput0)
@@ -349,11 +367,11 @@ if __name__ == '__main__':
     eri1 = eri1 + eri1.transpose(2,3,0,1)
     eri1 *= .1
     eris.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
-    eris.vooo = eri1[nocc:,:nocc,:nocc,:nocc].copy()
-    eris.vovo = eri1[nocc:,:nocc,nocc:,:nocc].copy()
-    eris.vvoo = eri1[nocc:,nocc:,:nocc,:nocc].copy()
-    eris.voov = eri1[nocc:,:nocc,:nocc,nocc:].copy()
-    eris.vovv = eri1[nocc:,:nocc,nocc:,nocc:].copy()
+    eris.ovoo = eri1[:nocc,nocc:,:nocc,:nocc].copy()
+    eris.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
+    eris.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
+    eris.ovvo = eri1[:nocc,nocc:,nocc:,:nocc].copy()
+    eris.ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
     eris.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy()
     a = np.random.random((nmo,nmo)) * .1j
     eris.fock = eris.fock + a + a.T.conj()

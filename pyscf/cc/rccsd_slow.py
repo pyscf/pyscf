@@ -47,9 +47,9 @@ def update_amps(cc, t1, t2, eris):
     t1new += 2*einsum('kc,kica->ia', Fov, t2)
     t1new +=  -einsum('kc,ikca->ia', Fov, t2)
     t1new +=   einsum('kc,ic,ka->ia', Fov, t1, t1)
-    t1new += 2*einsum('aikc,kc->ia', eris.voov, t1)
-    t1new +=  -einsum('acki,kc->ia', eris.vvoo, t1)
-    eris_ovvv = np.asarray(eris.vovv).conj().transpose(1,0,3,2)
+    t1new += 2*einsum('kcai,kc->ia', eris.ovvo, t1)
+    t1new +=  -einsum('kiac,kc->ia', eris.oovv, t1)
+    eris_ovvv = np.asarray(eris.ovvv)
     t1new += 2*einsum('kdac,ikcd->ia', eris_ovvv, t2)
     t1new +=  -einsum('kcad,ikcd->ia', eris_ovvv, t2)
     t1new += 2*einsum('kdac,kd,ic->ia', eris_ovvv, t1, t1)
@@ -60,13 +60,12 @@ def update_amps(cc, t1, t2, eris):
     t1new +=   einsum('likc,lc,ka->ia', eris.ooov, t1, t1)
 
     # T2 equation
-    t2new = np.asarray(eris.vovo).transpose(1,3,0,2).copy()
+    t2new = np.asarray(eris.ovov).transpose(0,2,1,3).copy()
     if cc.cc2:
         Woooo2 = np.asarray(eris.oooo).transpose(0,2,1,3).copy()
         Woooo2 += einsum('kilc,jc->klij', eris.ooov, t1)
         Woooo2 += einsum('ljkc,ic->klij', eris.ooov, t1)
-        eris_ovov = eris.vovo.conj().transpose(1,0,3,2)
-        Woooo2 += einsum('kcld,ic,jd->klij', eris_ovov, t1, t1)
+        Woooo2 += einsum('kcld,ic,jd->klij', eris.ovov, t1, t1)
         t2new += einsum('klij,ka,lb->ijab', Woooo2, t1, t1)
         Wvvvv = einsum('kcbd,ka->abcd', eris_ovvv, -t1)
         Wvvvv = Wvvvv + Wvvvv.transpose(1,0,3,2)
@@ -104,11 +103,11 @@ def update_amps(cc, t1, t2, eris):
         tmp = einsum('bkci,kjac->ijab', Wvovo, t2)
         t2new -= (tmp + tmp.transpose(1,0,3,2))
 
-    tmp2  = einsum('bcki,ka->abic', eris.vvoo, -t1)
-    tmp2 += np.asarray(eris.vovv).transpose(0,2,1,3)
+    tmp2  = einsum('kibc,ka->abic', eris.oovv, -t1)
+    tmp2 += np.asarray(eris.ovvv).conj().transpose(1,3,0,2)
     tmp = einsum('abic,jc->ijab', tmp2, t1)
     t2new += (tmp + tmp.transpose(1,0,3,2))
-    tmp2  = einsum('aikc,jc->akij', eris.voov, t1)
+    tmp2  = einsum('kcai,jc->akij', eris.ovvo, t1)
     tmp2 += np.asarray(eris.ooov).transpose(3,1,2,0).conj()
     tmp = einsum('akij,kb->ijab', tmp2, t1)
     t2new -= (tmp + tmp.transpose(1,0,3,2))
@@ -128,7 +127,7 @@ def energy(cc, t1, t2, eris):
     e = 2*einsum('ia,ia', fock[:nocc,nocc:], t1)
     tau = einsum('ia,jb->ijab',t1,t1)
     tau += t2
-    eris_ovov = eris.vovo.conj().transpose(1,0,3,2)
+    eris_ovov = np.asarray(eris.ovov)
     e += 2*einsum('ijab,iajb', tau, eris_ovov)
     e +=  -einsum('ijab,ibja', tau, eris_ovov)
     return e.real
@@ -151,8 +150,8 @@ class RCCSD(ccsd.CCSD):
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
         eijab = lib.direct_sum('ia,jb->ijab', eia, eia)
         t1 = eris.fock[:nocc,nocc:].conj() / eia
-        t2 = np.asarray(eris.vovo).transpose(1,3,0,2) / eijab
-        eris_ovov = eris.vovo.conj().transpose(1,0,3,2)
+        eris_ovov = np.asarray(eris.ovov)
+        t2 = eris_ovov.transpose(0,2,1,3).conj() / eijab
         self.emp2  = 2*einsum('ijab,iajb', t2, eris_ovov)
         self.emp2 -=   einsum('ijab,ibja', t2, eris_ovov)
         lib.logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
@@ -463,11 +462,11 @@ class RCCSD(ccsd.CCSD):
         foo = fock[:nocc,:nocc]
         fvv = fock[nocc:,nocc:]
 
-        ovov = _cp(eris.vovo).conj().transpose(1,0,3,2)
-        vovv = _cp(eris.vovv)
-        ovvv = vovv.conj().transpose(1,0,3,2)
-        vvoo = _cp(eris.vvoo)
-        voov = _cp(eris.voov)
+        ovov = _cp(eris.ovov)
+        ovvv = _cp(eris.ovvv)
+        vovv = ovvv.conj().transpose(1,0,3,2)
+        oovv = _cp(eris.oovv)
+        ovvo = _cp(eris.ovvo)
         ooov = _cp(eris.ooov)
         vooo = ooov.conj().transpose(3,2,1,0)
         oooo = _cp(eris.oooo)
@@ -491,18 +490,18 @@ class RCCSD(ccsd.CCSD):
             _eijkab = eijkab + _eval
             _eijkab = 1./_eijkab
 
-            lijkab = 0.5*einsum('iajb,k->ijkab',ovov,l1)
-            lijkab += einsum('iaeb,jke->ijkab',ovvv,l2)
-            lijkab += -einsum('kmjb,ima->ijkab',ooov,l2)
-            lijkab += -einsum('imjb,mka->ijkab',ooov,l2)
+            lijkab = 0.5*einsum('iajb,k->ijkab', ovov, l1)
+            lijkab += einsum('iaeb,jke->ijkab', ovvv, l2)
+            lijkab += -einsum('kmjb,ima->ijkab', ooov, l2)
+            lijkab += -einsum('imjb,mka->ijkab', ooov, l2)
             lijkab = lijkab + lijkab.transpose(1,0,2,4,3)
 
-            rijkab = -einsum('bemk,ijae,m->ijkab',vvoo,t2,r1)
-            rijkab += -einsum('bjme,ikae,m->ijkab',voov,t2,r1)
-            rijkab += einsum('mjnk,imab,n->ijkab',oooo,t2,r1)
-            rijkab += einsum('aibe,kje->ijkab',vovv,r2)
-            rijkab += -einsum('bjmk,mia->ijkab',vooo,r2)
-            rijkab += -einsum('bjmi,kma->ijkab',vooo,r2)
+            rijkab = -einsum('mkbe,m,ijae->ijkab', oovv, r1, t2)
+            rijkab -= einsum('mebj,m,ikae->ijkab', ovvo, r1, t2)
+            rijkab += einsum('mjnk,n,imab->ijkab', oooo, r1, t2)
+            rijkab +=  einsum('aibe,kje->ijkab', vovv, r2)
+            rijkab += -einsum('bjmk,mia->ijkab', vooo, r2)
+            rijkab += -einsum('bjmi,kma->ijkab', vooo, r2)
             rijkab = rijkab + rijkab.transpose(1,0,2,4,3)
 
             lijkab = 4.*lijkab \
@@ -762,15 +761,15 @@ class RCCSD(ccsd.CCSD):
         foo = fock[:nocc,:nocc]
         fvv = fock[nocc:,nocc:]
 
-        ovov = _cp(eris.vovo).conj().transpose(1,0,3,2)
-        vovv = _cp(eris.vovv)
-        ovvv = vovv.conj().transpose(1,0,3,2)
+        ovov = _cp(eris.ovov)
+        ovvv = _cp(eris.ovvv)
+        vovv = ovvv.conj().transpose(1,0,3,2)
         ooov = _cp(eris.ooov)
         vooo = ooov.conj().transpose(3,2,1,0)
-        vvoo = _cp(eris.vvoo)
+        oovv = _cp(eris.oovv)
         oooo = _cp(eris.oooo)
         vvvv = _cp(eris.vvvv)
-        voov = _cp(eris.voov)
+        ovvo = _cp(eris.ovvo)
 
         eijabc = np.zeros((nocc,nocc,nvir,nvir,nvir))
         for i,j in lib.cartesian_prod([range(nocc),range(nocc)]):
@@ -792,18 +791,18 @@ class RCCSD(ccsd.CCSD):
             _eijabc = eijabc + _eval
             _eijabc = 1./_eijabc
 
-            lijabc = -0.5*einsum('c,iajb->ijabc',l1,ovov)
-            lijabc += einsum('jmia,mbc->ijabc',ooov,l2)
-            lijabc -= einsum('iaeb,jec->ijabc',ovvv,l2)
-            lijabc -= einsum('jbec,iae->ijabc',ovvv,l2)
+            lijabc = -0.5*einsum('c,iajb->ijabc', l1, ovov)
+            lijabc += einsum('jmia,mbc->ijabc', ooov, l2)
+            lijabc -= einsum('iaeb,jec->ijabc', ovvv, l2)
+            lijabc -= einsum('jbec,iae->ijabc', ovvv, l2)
             lijabc = lijabc + lijabc.transpose(1,0,3,2,4)
 
-            rijabc = -einsum('becf,ijae,f->ijabc',vvvv,t2,r1)
-            rijabc += einsum('cemj,imab,e->ijabc',vvoo,t2,r1)
-            rijabc += einsum('bjme,imac,e->ijabc',voov,t2,r1)
-            rijabc += einsum('aimj,mbc->ijabc',vooo,r2)
-            rijabc += -einsum('bjce,iae->ijabc',vovv,r2)
-            rijabc += -einsum('aibe,jec->ijabc',vovv,r2)
+            rijabc = -einsum('becf,f,ijae->ijabc', vvvv, r1, t2)
+            rijabc += einsum('mjce,e,imab->ijabc', oovv, r1, t2)
+            rijabc += einsum('mebj,e,imac->ijabc', ovvo, r1, t2)
+            rijabc += einsum('aimj,mbc->ijabc', vooo, r2)
+            rijabc += -einsum('bjce,iae->ijabc', vovv, r2)
+            rijabc += -einsum('aibe,jec->ijabc', vovv, r2)
             rijabc = rijabc + rijabc.transpose(1,0,3,2,4)
 
             lijabc =  4.*lijabc \
@@ -943,10 +942,10 @@ class _ChemistsERIs:
         eri1 = ao2mo.restore(1, eri1, nmo)
         self.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
         self.ooov = eri1[:nocc,:nocc,:nocc,nocc:].copy()
-        self.vovo = eri1[nocc:,:nocc,nocc:,:nocc].copy()
-        self.vvoo = eri1[nocc:,nocc:,:nocc,:nocc].copy()
-        self.voov = eri1[nocc:,:nocc,:nocc,nocc:].copy()
-        self.vovv = eri1[nocc:,:nocc,nocc:,nocc:].copy()
+        self.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
+        self.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
+        self.ovvo = eri1[:nocc,nocc:,nocc:,:nocc].copy()
+        self.ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
         self.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy()
 
 
@@ -980,7 +979,7 @@ class _IMDS:
         # 2 virtuals
         self.Wovov = imd.Wovov(t1,t2,eris)
         self.Wovvo = imd.Wovvo(t1,t2,eris)
-        self.Woovv = eris.vovo.transpose(1,3,0,2).copy()
+        self.Woovv = np.asarray(eris.ovov).transpose(0,2,1,3)
 
         log.timer('EOM-CCSD shared two-electron intermediates', *cput0)
 
@@ -1073,10 +1072,10 @@ if __name__ == '__main__':
     eri1 *= .1
     eris.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
     eris.ooov = eri1[:nocc,:nocc,:nocc,nocc:].copy()
-    eris.vovo = eri1[nocc:,:nocc,nocc:,:nocc].copy()
-    eris.vvoo = eri1[nocc:,nocc:,:nocc,:nocc].copy()
-    eris.voov = eri1[nocc:,:nocc,:nocc,nocc:].copy()
-    eris.vovv = eri1[nocc:,:nocc,nocc:,nocc:].copy()
+    eris.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
+    eris.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
+    eris.ovvo = eri1[:nocc,nocc:,nocc:,:nocc].copy()
+    eris.ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
     eris.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy()
     a = np.random.random((nmo,nmo)) * .1j
     eris.fock = eris.fock + a + a.T.conj()

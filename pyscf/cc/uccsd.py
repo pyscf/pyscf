@@ -4,6 +4,7 @@ UCCSD with spatial integrals
 
 import time
 import tempfile
+import ctypes
 from functools import reduce
 import numpy
 import numpy as np
@@ -13,6 +14,8 @@ from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.cc import ccsd
+from pyscf.cc import _ccsd
+from pyscf.ao2mo import _ao2mo
 from pyscf.lib import linalg_helper
 from pyscf.cc import uintermediates as imd
 from pyscf.cc.addons import spatial2spin, spin2spatial
@@ -1457,14 +1460,19 @@ class UCCSD(ccsd.CCSD):
         #:Hr2bbab += .5*lib.einsum('IJeF,aeBF->IJaB', tau2bbab, eris_vvVV)
         #:Hr2aaba += .5*lib.einsum('ijEf,bfAE->ijAb', tau2aaba, eris_vvVV)
         tau2baaa *= .5
-        _add_vvvv1_(self, tau2baaa, eris, Hr2baaa)
+        Hr2baaa += _add_vvvv_full(self, np.zeros_like(t1a), np.zeros_like(t1b),
+                                  tau2baaa, eris)
         fakeri = lambda:None
+        fakeri.mo_coeff = eris.mo_coeff[1]
         fakeri.vvvv = eris.VVVV
         tau2abbb *= .5
-        _add_vvvv1_(self, tau2abbb, fakeri, Hr2abbb)
+        Hr2abbb += _add_vvvv_full(self, np.zeros_like(t1a), np.zeros_like(t1b),
+                                  tau2abbb, fakeri)
+        fakeri.mo_coeff = eris.mo_coeff
         fakeri.vvvv = eris.vvVV
         tau2bbab *= .5
-        _add_vvvv1_(self, tau2bbab, fakeri, Hr2bbab)
+        Hr2bbab += _add_vvvv_full(self, np.zeros_like(t1a), np.zeros_like(t1b),
+                                  tau2bbab, fakeri)
         fakeri = None
         for i in range(nvira):
             i0 = i*(i+1)//2
@@ -3155,27 +3163,168 @@ def _add_vvvv_(cc, t2, eris, Ht2):
     u2aa, u2ab, u2bb = Ht2
     nocca, nvira = t2aa.shape[1:3]
     noccb, nvirb = t2bb.shape[1:3]
-    cc._add_vvvv(np.zeros((nocca,nvira)), t2aa, eris, u2aa)
+    t1a = np.zeros((nocca,nvira))
+    t1b = np.zeros((noccb,nvirb))
+    u2aa += cc._add_vvvv(t1a, t2aa, eris) *.5
     fakeri = lambda:None
+    fakeri.mo_coeff = eris.mo_coeff[1]
     fakeri.vvvv = eris.VVVV
-    cc._add_vvvv(np.zeros((noccb,nvirb)), t2bb, fakeri, u2bb)
+    u2bb += cc._add_vvvv(t1b, t2bb, fakeri) * .5
     fakeri.vvvv = eris.vvVV
-    _add_vvvv1_(cc, t2ab, fakeri, u2ab)
+    u2ab += _add_vvvv_full(cc, t1a, t1b, t2ab, fakeri)
     return (u2aa,u2ab,u2bb)
 
-def _add_vvvv1_(cc, t2, eris, Ht2):
-    nvir = t2.shape[2]
-    for i in range(nvir):
-        i0 = i*(i+1)//2
-        vvv = lib.unpack_tril(np.asarray(eris.vvvv[i0:i0+i+1]))
-        Ht2[:,:, i] += lib.einsum('ijef,ebf->ijb', t2[:,:,:i+1], vvv)
-        if i > 0:
-            Ht2[:,:,:i] += lib.einsum('ijf,abf->ijab', t2[:,:,i], vvv[:i])
+def _add_vvvv_full(mycc, t1a, t1b, t2ab, eris, out=None):
+    '''Ht2 = np.einsum('ijcd,acdb->ijab', t2ab, vvvv)
+    without using symmetry in t2ab or Ht2
+    '''
+    time0 = time.clock(), time.time()
+    if t2ab.size == 0:
+        return np.zeros_like(t2ab)
+
+    nocc, noccb, nvira, nvirb = t2ab.shape
+    tau = t2ab + np.einsum('ia,jb->ijab', t1a, t1b)
+    max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
+
+    if mycc.direct:  # AO direct CCSD
+        mol = mycc.mol
+        if hasattr(eris, 'mo_coeff'):
+            mo_a, mo_b = eris.mo_coeff
+        else:
+            moidxa, moidxb = get_moidx(mycc)
+            mo_a = mycc.mo_coeff[0][:,moidxa]
+            mo_b = mycc.mo_coeff[1][:,moidxb]
+        nao, nmo_a = mo_a.shape
+        nmo_b = mo_b.shape[0]
+        tau = lib.einsum('ijab,pa->ijpb', tau, mo_a[:,nocca:])
+        tau = lib.einsum('ijab,pb->ijap', tau, mo_b[:,noccb:])
+        time0 = logger.timer_debug1(mycc, 'vvvv-tau mo2ao', *time0)
+
+        intor = mol._add_suffix('int2e')
+        ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFnr_schwarz_cond',
+                                 'CVHFsetnr_direct_scf')
+        Ht2 = np.zeros((nocca,noccb,nao,nao))
+        ao_loc = mol.ao_loc_nr()
+        dmax = max(ccsd.BLKMIN, np.sqrt(max_memory*.9e6/8/nao**2/2))
+        sh_ranges = ao2mo.outcore.balance_partition(ao_loc, dmax)
+        dmax = max(x[2] for x in sh_ranges)
+        eribuf = np.empty((dmax,dmax,nao,nao))
+        loadbuf = np.empty((dmax,dmax,nao,nao))
+        fint = gto.moleintor.getints4c
+
+        for ip, (ish0, ish1, ni) in enumerate(sh_ranges):
+            for jsh0, jsh1, nj in sh_ranges[:ip+1]:
+                eri = fint(intor, mol._atm, mol._bas, mol._env,
+                           shls_slice=(ish0,ish1,jsh0,jsh1), aosym='s2kl',
+                           ao_loc=ao_loc, cintopt=ao2mopt._cintopt, out=eribuf)
+                i0, i1 = ao_loc[ish0], ao_loc[ish1]
+                j0, j1 = ao_loc[jsh0], ao_loc[jsh1]
+                tmp = np.ndarray((i1-i0,nao,j1-j0,nao), buffer=loadbuf)
+                _ccsd.libcc.CCload_eri(tmp.ctypes.data_as(ctypes.c_void_p),
+                                       eri.ctypes.data_as(ctypes.c_void_p),
+                                       (ctypes.c_int*4)(i0, i1, j0, j1),
+                                       ctypes.c_int(nao))
+                Ht2[:,:,j0:j1] += lib.einsum('ijef,efab->ijab', tau[:,:,i0:i1], tmp)
+                if ish0 > jsh0:
+                    Ht2[:,:,i0:i1] += lib.einsum('ijef,abef->ijab', tau[:,:,j0:j1], tmp)
+                time0 = logger.timer_debug1(mycc, 'AO-vvvv [%d:%d,%d:%d]' %
+                                            (ish0,ish1,jsh0,jsh1), *time0)
+        eribuf = loadbuf = eri = tmp = None
+        mo = np.asarray(np.hstack((mo_a[:,nocca:], mo_b[:,noccb:])), order='F')
+        Ht2 = _ao2mo.nr_e2(Ht2.reshape(nocca*noccb,-1), mo,
+                           (0,nvira,nvira,nvira+nvirb), 's1', 's1', out=tau)
+    else:
+        Ht2 = np.zeros_like(tau)
+        unit = nvira*nvirb**2*2 + nocca*noccb*nvirb
+        blksize = min(nvira, max(ccsd.BLKMIN, int((max_memory*.9e6-2*tau.size)/8/unit)))
+        tril2sq = lib.square_mat_in_trilu_indices(nvira)
+        for p0, p1 in lib.prange(0, nvira, blksize):
+            off0 = p0*(p0+1)//2
+            off1 = p1*(p1+1)//2
+            vvvv = lib.unpack_tril(eris.vvvv[off0:off1])
+            Ht2[:,:,p0:p1] += lib.einsum('ijef,aebf->ijab', tau[:,:,:p1],
+                                         vvvv[tril2sq[p0:p1,:p1]-off0])
+            if p0 > 0:
+                Ht2[:,:,:p0] += lib.einsum('ijef,aebf->ijab', tau[:,:,p0:p1],
+                                           vvvv[tril2sq[:p0,p0:p1]-off0])
+    return Ht2.reshape(t2ab.shape)
+
+def _cp(a):
+    return np.array(a, copy=False, order='C')
 
 
 if __name__ == '__main__':
+    import copy
     from pyscf import scf
     from pyscf import gto
+
+    nocca, noccb, nvira, nvirb = 5, 4, 12, 13
+    nvira_pair = nvira*(nvira+1)//2
+    nvirb_pair = nvirb*(nvirb+1)//2
+    np.random.seed(9)
+    t2 = np.random.random((nocca,noccb,nvira,nvirb))
+    eris = lambda: None
+    eris.vvvv = np.random.random((nvira_pair,nvirb_pair))
+    mycc = lambda: None
+    mycc.direct = False
+    mycc.max_memory = 2
+    t1a = np.zeros((nocca,nvira))
+    t1b = np.zeros((noccb,nvirb))
+    print(lib.finger(_add_vvvv_full(mycc, t1a, t1b, t2, eris)) - 12.00904827896089)
+
+    mol = gto.Mole()
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+    mol.basis = {'O':'cc-pvdz', 'H':'631g'}
+    mol.spin = 2
+    mol.build()
+    mf = scf.UHF(mol).run()
+
+    mf1 = copy.copy(mf)
+    nmo = mol.nao_nr()
+    mf1.mo_occ = np.zeros((2,nmo))
+    mf1.mo_occ[0,:6] = 1
+    mf1.mo_occ[1,:5] = 1
+    mycc = UCCSD(mf1)
+    nocca, noccb, nvira, nvirb = 6, 5, 12, 13
+    nvira_pair = nvira*(nvira+1)//2
+    nvirb_pair = nvirb*(nvirb+1)//2
+    np.random.seed(9)
+    eris = mycc.ao2mo()
+    fakeris = lambda:None
+    fakeris.mo_coeff = eris.mo_coeff
+    fakeris.vvvv = eris.vvVV
+    t2ab = np.random.random((nocca,noccb,nvira,nvirb))
+    t1a = np.zeros((nocca,nvira))
+    t1b = np.zeros((noccb,nvirb))
+    print(lib.finger(_add_vvvv_full(mycc, t1a, t1b, t2ab, fakeris)) - 7.30721835320601)
+    mycc.direct = True
+    mycc.max_memory = 0
+    print(lib.finger(_add_vvvv_full(mycc, t1a, t1b, t2ab, fakeris)) - 7.30721835320601)
+
+    mycc = UCCSD(mf)
+    eris = mycc.ao2mo()
+#    ecc, t1, t2 = mycc.kernel(eris=eris)
+#    print(ecc - -0.17009326207891234)
+
+    np.random.seed(4)
+    mo_coeff = np.random.random((2,18,18))-.5
+    eris = mycc.ao2mo(mo_coeff)
+    nocca, noccb, nvira, nvirb = 6, 4, 12, 14
+    t1 = (np.random.random((nocca,nvira)), np.random.random((noccb,nvirb)))
+    t2 = (np.random.random((nocca,nocca,nvira,nvira)),
+          np.random.random((nocca,noccb,nvira,nvirb)),
+          np.random.random((noccb,noccb,nvirb,nvirb)))
+    t1, t2 = mycc.vector_to_amplitudes(mycc.amplitudes_to_vector(t1, t2))
+    t1, t2 = mycc.update_amps(t1, t2, eris)
+    print(lib.finger(t1[0]) - -19.334719600456154)
+    print(lib.finger(t1[1]) -  42.474343323800838)
+    print(lib.finger(t2[0]) - -16597.404526349430)
+    print(lib.finger(t2[1]) -  -2647.513550145824)
+    print(lib.finger(t2[2]) - -168.49532793110126)
+    print(lib.finger(mycc.amplitudes_to_vector(t1, t2)) - 2540.2934129361547)
 
     mol = gto.Mole()
     mol.atom = [['O', (0.,   0., 0.)],
@@ -3183,14 +3332,14 @@ if __name__ == '__main__':
     mol.basis = 'cc-pvdz'
     mol.spin = 2
     mol.build()
-    mf = scf.UHF(mol)
-    print(mf.scf())
+    mf = scf.UHF(mol).run()
     # Freeze 1s electrons
-    frozen = [[0,1], [0,1]]
     # also acceptable
     #frozen = 4
+    frozen = [[0,1], [0,1]]
     ucc = UCCSD(mf, frozen=frozen)
-    ecc, t1, t2 = ucc.kernel()
+    eris = ucc.ao2mo()
+    ecc, t1, t2 = ucc.kernel(eris=eris)
     print(ecc - -0.3486987472235819)
 
     mol = gto.Mole()

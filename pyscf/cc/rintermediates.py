@@ -44,9 +44,9 @@ def Loo(t1, t2, eris):
     nocc, nvir = t1.shape
     fov = eris.fock[:nocc,nocc:]
     Lki = cc_Foo(t1, t2, eris) + np.einsum('kc,ic->ki',fov, t1)
-    eris_ooov = np.asarray(eris.vooo).conj().transpose(3,2,1,0)
-    Lki += 2*np.einsum('kilc,lc->ki', eris_ooov, t1)
-    Lki -=   np.einsum('likc,lc->ki', eris_ooov, t1)
+    eris_ovoo = np.asarray(eris.ovoo)
+    Lki += 2*np.einsum('lcki,lc->ki', eris_ovoo, t1)
+    Lki -=   np.einsum('kcli,lc->ki', eris_ovoo, t1)
     return Lki
 
 def Lvv(t1, t2, eris):
@@ -61,9 +61,9 @@ def Lvv(t1, t2, eris):
 ### Eqs. (42)-(45) "chi"
 
 def cc_Woooo(t1, t2, eris):
-    eris_ooov = np.asarray(eris.vooo).conj().transpose(3,2,1,0)
-    Wklij  = lib.einsum('kilc,jc->klij', eris_ooov, t1)
-    Wklij += lib.einsum('ljkc,ic->klij', eris_ooov, t1)
+    eris_ovoo = np.asarray(eris.ovoo)
+    Wklij  = lib.einsum('lcki,jc->klij', eris_ovoo, t1)
+    Wklij += lib.einsum('kclj,ic->klij', eris_ovoo, t1)
     eris_ovov = _get_ovov(eris)
     Wklij += lib.einsum('kcld,ijcd->klij', eris_ovov, t2)
     Wklij += lib.einsum('kcld,ic,jd->klij', eris_ovov, t1, t1)
@@ -80,10 +80,10 @@ def cc_Wvvvv(t1, t2, eris):
 
 def cc_Wvoov(t1, t2, eris):
     eris_ovvv = _get_ovvv(eris)
-    eris_ooov = np.asarray(eris.vooo).conj().transpose(3,2,1,0)
+    eris_ovoo = np.asarray(eris.ovoo)
     Wakic  = lib.einsum('kcad,id->akic', eris_ovvv, t1)
-    Wakic -= lib.einsum('likc,la->akic', eris_ooov, t1)
-    Wakic += np.asarray(eris.voov).transpose(0,2,1,3)
+    Wakic -= lib.einsum('kcli,la->akic', eris_ovoo, t1)
+    Wakic += np.asarray(eris.ovvo).transpose(2,0,3,1)
     eris_ovov = _get_ovov(eris)
     Wakic -= 0.5*lib.einsum('ldkc,ilda->akic', eris_ovov, t2)
     Wakic -= 0.5*lib.einsum('lckd,ilad->akic', eris_ovov, t2)
@@ -93,10 +93,10 @@ def cc_Wvoov(t1, t2, eris):
 
 def cc_Wvovo(t1, t2, eris):
     eris_ovvv = _get_ovvv(eris)
-    eris_ooov = np.asarray(eris.vooo).conj().transpose(3,2,1,0)
+    eris_ovoo = np.asarray(eris.ovoo)
     Wakci  = lib.einsum('kdac,id->akci', eris_ovvv, t1)
-    Wakci -= lib.einsum('kilc,la->akci', eris_ooov, t1)
-    Wakci += np.asarray(eris.vvoo).transpose(0,2,1,3)
+    Wakci -= lib.einsum('lcki,la->akci', eris_ovoo, t1)
+    Wakci += np.asarray(eris.oovv).transpose(2,0,3,1)
     eris_ovov = _get_ovov(eris)
     Wakci -= 0.5*lib.einsum('lckd,ilda->akci', eris_ovov, t2)
     Wakci -= lib.einsum('lckd,id,la->akci', eris_ovov, t1, t1)
@@ -105,7 +105,7 @@ def cc_Wvovo(t1, t2, eris):
 def Wooov(t1, t2, eris):
     eris_ovov = _get_ovov(eris)
     Wklid  = lib.einsum('ic,kcld->klid', t1, eris_ovov)
-    Wklid += np.asarray(eris.vooo).conj().transpose(3,1,2,0)
+    Wklid += np.asarray(eris.ovoo).transpose(2,0,3,1)
     return Wklid
 
 def Wvovv(t1, t2, eris):
@@ -119,7 +119,7 @@ def W1ovvo(t1, t2, eris):
     Wkaci  = 2*lib.einsum('kcld,ilad->kaci', eris_ovov, t2)
     Wkaci +=  -lib.einsum('kcld,liad->kaci', eris_ovov, t2)
     Wkaci +=  -lib.einsum('kdlc,ilad->kaci', eris_ovov, t2)
-    Wkaci += np.asarray(eris.voov).transpose(2,0,3,1)
+    Wkaci += np.asarray(eris.ovvo).transpose(0,2,1,3)
     return Wkaci
 
 def W2ovvo(t1, t2, eris):
@@ -135,7 +135,7 @@ def Wovvo(t1, t2, eris):
 def W1ovov(t1, t2, eris):
     eris_ovov = _get_ovov(eris)
     Wkbid = -lib.einsum('kcld,ilcb->kbid', eris_ovov, t2)
-    Wkbid += np.asarray(eris.vvoo).transpose(2,0,3,1)
+    Wkbid += np.asarray(eris.oovv).transpose(0,2,1,3)
     return Wkbid
 
 def W2ovov(t1, t2, eris):
@@ -151,9 +151,9 @@ def Woooo(t1, t2, eris):
     eris_ovov = _get_ovov(eris)
     Wklij  = lib.einsum('kcld,ijcd->klij', eris_ovov, t2)
     Wklij += lib.einsum('kcld,ic,jd->klij', eris_ovov, t1, t1)
-    eris_ooov = np.asarray(eris.vooo).conj().transpose(3,2,1,0)
-    Wklij += lib.einsum('kild,jd->klij', eris_ooov, t1)
-    Wklij += lib.einsum('ljkc,ic->klij', eris_ooov, t1)
+    eris_ovoo = np.asarray(eris.ovoo)
+    Wklij += lib.einsum('ldki,jd->klij', eris_ovoo, t1)
+    Wklij += lib.einsum('kclj,ic->klij', eris_ovoo, t1)
     Wklij += np.asarray(eris.oooo).transpose(0,2,1,3)
     return Wklij
 
@@ -178,9 +178,9 @@ def Wvvvo(t1, t2, eris, _Wvvvv=None):
     Wabcj +=  -lib.einsum('ldac,ljbd->abcj', eris_ovvv, t2)
     Wabcj +=  -lib.einsum('lcad,ljdb->abcj', eris_ovvv, t2)
     Wabcj +=  -lib.einsum('kcbd,jkda->abcj', eris_ovvv, t2)
-    eris_ooov = np.asarray(eris.vooo).conj().transpose(3,2,1,0)
-    Wabcj +=   lib.einsum('ljkc,lkba->abcj', eris_ooov, t2)
-    Wabcj +=   lib.einsum('ljkc,lb,ka->abcj', eris_ooov, t1, t1)
+    eris_ovoo = np.asarray(eris.ovoo)
+    Wabcj +=   lib.einsum('kclj,lkba->abcj', eris_ovoo, t2)
+    Wabcj +=   lib.einsum('kclj,lb,ka->abcj', eris_ovoo, t1, t1)
     Wabcj +=  -lib.einsum('kc,kjab->abcj', cc_Fov(t1, t2, eris), t2)
     Wabcj += np.asarray(eris_ovvv).transpose(3,1,2,0).conj()
     if np.any(t1):
@@ -190,35 +190,35 @@ def Wvvvo(t1, t2, eris, _Wvvvv=None):
     return Wabcj
 
 def Wovoo(t1, t2, eris):
-    eris_ooov = np.asarray(eris.vooo).conj().transpose(3,2,1,0)
+    eris_ovoo = np.asarray(eris.ovoo)
     eris_ovvv = _get_ovvv(eris)
     Wkbij  =   lib.einsum('kbid,jd->kbij', W1ovov(t1, t2, eris), t1)
     Wkbij +=  -lib.einsum('klij,lb->kbij', Woooo(t1, t2, eris), t1)
     Wkbij +=   lib.einsum('kbcj,ic->kbij', W1ovvo(t1, t2, eris), t1)
-    Wkbij += 2*lib.einsum('kild,ljdb->kbij', eris_ooov, t2)
-    Wkbij +=  -lib.einsum('kild,jldb->kbij', eris_ooov, t2)
-    Wkbij +=  -lib.einsum('likd,ljdb->kbij', eris_ooov, t2)
+    Wkbij += 2*lib.einsum('ldki,ljdb->kbij', eris_ovoo, t2)
+    Wkbij +=  -lib.einsum('ldki,jldb->kbij', eris_ovoo, t2)
+    Wkbij +=  -lib.einsum('kdli,ljdb->kbij', eris_ovoo, t2)
     Wkbij +=   lib.einsum('kcbd,jidc->kbij', eris_ovvv, t2)
     Wkbij +=   lib.einsum('kcbd,jd,ic->kbij', eris_ovvv, t1, t1)
-    Wkbij +=  -lib.einsum('ljkc,libc->kbij', eris_ooov, t2)
+    Wkbij +=  -lib.einsum('kclj,libc->kbij', eris_ovoo, t2)
     Wkbij +=   lib.einsum('kc,ijcb->kbij', cc_Fov(t1, t2, eris), t2)
-    Wkbij += np.asarray(eris_ooov).transpose(1,3,0,2).conj()
+    Wkbij += np.asarray(eris_ovoo).transpose(3,1,2,0).conj()
     return Wkbij
 
 def _get_ovov(eris):
-    if hasattr(eris, 'vovo') and eris.vovo is not None:
-        return np.asarray(eris.vovo).conj().transpose(1,0,3,2)
+    if hasattr(eris, 'ovov') and eris.ovov is not None:
+        return np.asarray(eris.ovov)
     else:
-        return np.asarray(eris.voov).transpose(1,0,2,3)
+        return np.asarray(eris.ovvo).transpose(0,1,3,2)
 
 def _get_ovvv(eris, *slices):
-    if eris.vovv.ndim == 3:
-        vow = np.asarray(eris.vovv[slices])
-        nvir, nocc, nvir_pair = vow.shape
-        vovv = lib.unpack_tril(vow.reshape(nvir*nocc,nvir_pair))
-        return vovv.reshape(nvir,nocc,nvir,nvir).transpose(1,0,3,2)
+    if eris.ovvv.ndim == 3:
+        ovw = np.asarray(eris.ovvv[slices])
+        nocc, nvir, nvir_pair = ovw.shape
+        ovvv = lib.unpack_tril(ovw.reshape(nocc*nvir,nvir_pair))
+        return ovvv.reshape(nocc,nvir,nvir,nvir)
     else:
-        return np.asarray(eris.vovv[slices]).conj().transpose(1,0,3,2)
+        return np.asarray(eris.ovvv[slices])
 
 def _get_vvvv(eris):
     if eris.vvvv is None and hasattr(eris, 'vvL'):  # DF eris

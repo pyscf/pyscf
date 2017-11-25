@@ -89,7 +89,7 @@ def make_intermediates(mycc, t1, t2, eris):
 
     fswap = lib.H5TmpFile()
     for istep, (p0, p1) in enumerate(lib.prange(0, nvir, blksize)):
-        eris_vovv = _cp(eris.vovv[p0:p1])
+        eris_vovv = _cp(eris.ovvv[:,p0:p1]).transpose(1,0,2)
         eris_vovv = lib.unpack_tril(eris_vovv.reshape((p1-p0)*nocc,nvir_pair))
         eris_vovv = eris_vovv.reshape(p1-p0,nocc,nvir,nvir)
         fswap['vvov/%d'%istep] = eris_vovv.transpose(2,3,1,0)
@@ -97,7 +97,7 @@ def make_intermediates(mycc, t1, t2, eris):
     woooo = 0
     wvooo = numpy.zeros((nvir,nocc,nocc,nocc))
     for p0, p1 in lib.prange(0, nvir, blksize):
-        eris_vovv = _cp(eris.vovv[p0:p1])
+        eris_vovv = _cp(eris.ovvv[:,p0:p1]).transpose(1,0,2)
         eris_vovv = lib.unpack_tril(eris_vovv.reshape((p1-p0)*nocc,nvir_pair))
         eris_vovv = eris_vovv.reshape(p1-p0,nocc,nvir,nvir)
         eris_vvov = numpy.empty(((p1-p0),nvir,nocc,nvir))
@@ -130,31 +130,31 @@ def make_intermediates(mycc, t1, t2, eris):
             wvvov[:,:,i0:i1] -= vackb * .5
         g2vvov = eris_vovv = eris_vvov = theta = None
 
-        eris_vooo = _cp(eris.vooo[p0:p1])
-        w2 += numpy.einsum('bkij,kb->ij', eris_vooo, t1[:,p0:p1]) * 2
-        w2 -= numpy.einsum('bikj,kb->ij', eris_vooo, t1[:,p0:p1])
+        eris_ovoo = _cp(eris.ovoo[:,p0:p1])
+        w2 += numpy.einsum('kbij,kb->ij', eris_ovoo, t1[:,p0:p1]) * 2
+        w2 -= numpy.einsum('ibkj,kb->ij', eris_ovoo, t1[:,p0:p1])
         theta = t2[:,:,p0:p1].transpose(1,0,2,3) * 2 - t2[:,:,p0:p1]
-        w3 -= lib.einsum('clkj,klcb->bj', eris_vooo, theta)
+        w3 -= lib.einsum('lckj,klcb->bj', eris_ovoo, theta)
 
-        tmp = lib.einsum('lc,cjik->ijkl', t1[:,p0:p1], eris_vooo)
+        tmp = lib.einsum('lc,jcik->ijkl', t1[:,p0:p1], eris_ovoo)
         woooo += tmp
         woooo += tmp.transpose(1,0,3,2)
         theta = tmp = None
 
-        wvOOv += lib.einsum('bljk,lc->bjkc', eris_vooo, t1)
-        wVOov -= lib.einsum('bjkl,lc->bjkc', eris_vooo, t1)
-        wvooo[p0:p1] += eris_vooo.transpose(0,3,2,1) * 2
-        wvooo[p0:p1] -= eris_vooo
-        wvooo -= lib.einsum('klbc,bilj->ckij', t2[:,:,p0:p1], eris_vooo*1.5)
+        wvOOv += lib.einsum('lbjk,lc->bjkc', eris_ovoo, t1)
+        wVOov -= lib.einsum('jbkl,lc->bjkc', eris_ovoo, t1)
+        wvooo[p0:p1] += eris_ovoo.transpose(1,3,2,0) * 2
+        wvooo[p0:p1] -= eris_ovoo.transpose(1,0,2,3)
+        wvooo -= lib.einsum('klbc,iblj->ckij', t2[:,:,p0:p1], eris_ovoo*1.5)
 
-        g2vooo = eris_vooo * 2 - eris_vooo.transpose(0,3,2,1)
+        g2ovoo = eris_ovoo * 2 - eris_ovoo.transpose(2,1,0,3)
         theta = t2[:,:,:,p0:p1]*2 - t2[:,:,:,p0:p1].transpose(1,0,2,3)
-        vcjik = lib.einsum('jlcb,blki->cjik', theta, g2vooo)
+        vcjik = lib.einsum('jlcb,lbki->cjki', theta, g2ovoo)
         wvooo += vcjik.transpose(0,3,2,1)
         wvooo -= vcjik*.5
-        theta = g2vooo = None
+        theta = g2ovoo = None
 
-        eris_voov = _cp(eris.voov[p0:p1])
+        eris_voov = _cp(eris.ovvo[:,p0:p1]).transpose(1,0,3,2)
         tau = t2[:,:,p0:p1] + numpy.einsum('ia,jb->ijab', t1[:,p0:p1], t1)
         woooo += lib.einsum('cijd,klcd->ijkl', eris_voov, tau)
         tau = None
@@ -175,7 +175,7 @@ def make_intermediates(mycc, t1, t2, eris):
         VOov -= lib.einsum('bjld,kldc->bjkc', eris_voov, t2)
         VOov += eris_voov
         vOOv = lib.einsum('bljd,kldc->bjkc', eris_voov, t2)
-        vOOv -= _cp(eris.vvoo[p0:p1]).transpose(0,3,2,1)
+        vOOv -= _cp(eris.oovv[:,:,p0:p1]).transpose(2,1,0,3)
         wVOov += VOov
         wvOOv += vOOv
         saved.wVOov[p0:p1] = wVOov
@@ -192,12 +192,12 @@ def make_intermediates(mycc, t1, t2, eris):
         wvvov += lib.einsum('ajkc,jb->abkc', ov1, t1)
         wvvov -= lib.einsum('ajkb,jc->abkc', ov2, t1)
 
-        eris_vooo = _cp(eris.vooo[p0:p1])
-        g2vooo = eris_vooo * 2 - eris_vooo.transpose(0,2,1,3)
+        eris_ovoo = _cp(eris.ovoo[:,p0:p1])
+        g2ovoo = eris_ovoo * 2 - eris_ovoo.transpose(2,1,0,3)
         tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
-        wvvov += lib.einsum('alki,klbc->abic', g2vooo, tau)
+        wvvov += lib.einsum('laki,klbc->abic', g2ovoo, tau)
         saved.wvvov[p0:p1] = wvvov
-        wvvov = ov1 = ov2 = None
+        wvvov = ov1 = ov2 = g2ovoo = None
 
     woooo += _cp(eris.oooo).transpose(0,2,1,3)
     saved.woooo[:] = woooo
@@ -256,11 +256,11 @@ def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None):
     l2new += lib.einsum('jibc,ca->jiba', l2, saved.w1)
     l2new -= lib.einsum('jk,kiba->jiba', saved.w2, l2)
 
-    eris_vooo = _cp(eris.vooo)
-    l1new -= numpy.einsum('aijk,kj->ia', eris_vooo, mij1) * 2
-    l1new += numpy.einsum('ajik,kj->ia', eris_vooo, mij1)
-    l2new -= lib.einsum('bjki,ka->jiba', eris_vooo, l1)
-    eris_vooo = None
+    eris_ovoo = _cp(eris.ovoo)
+    l1new -= numpy.einsum('iajk,kj->ia', eris_ovoo, mij1) * 2
+    l1new += numpy.einsum('jaik,kj->ia', eris_ovoo, mij1)
+    l2new -= lib.einsum('jbki,ka->jiba', eris_ovoo, l1)
+    eris_ovoo = None
 
     tau = _ccsd.make_tau(t2, t1, t1)
     l2tau = lib.einsum('ijcd,klcd->ijkl', l2, tau)
@@ -273,8 +273,9 @@ def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None):
     log.debug1('block size = %d, nocc = %d is divided into %d blocks',
                blksize, nocc, int((nocc+blksize-1)/blksize))
 
+    l1new -= numpy.einsum('jb,jiab->ia', l1, _cp(eris.oovv))
     for p0, p1 in lib.prange(0, nvir, blksize):
-        eris_vovv = _cp(eris.vovv[p0:p1])
+        eris_vovv = _cp(eris.ovvv[:,p0:p1]).transpose(1,0,2)
         eris_vovv = lib.unpack_tril(eris_vovv.reshape((p1-p0)*nocc,-1))
         eris_vovv = eris_vovv.reshape(p1-p0,nocc,nvir,nvir)
 
@@ -289,7 +290,7 @@ def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None):
         l1new += numpy.einsum('jiab,ia->jb', m4, t1[:,p0:p1])
         eris_vovv = m4buf = m4 = None
 
-        eris_voov = _cp(eris.voov[p0:p1])
+        eris_voov = _cp(eris.ovvo[:,p0:p1].transpose(1,0,3,2))
         l1new[:,p0:p1] += numpy.einsum('jb,aijb->ia', l1, eris_voov) * 2
         l2new[:,:,p0:p1] += eris_voov.transpose(1,2,0,3) * .5
         l2new[:,:,p0:p1] -= lib.einsum('bjic,ca->jiba', eris_voov, mba1)
@@ -301,8 +302,6 @@ def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None):
         l1new[:,p0:p1] += numpy.einsum('ijab,jb->ia', m4, t1) * 2
         l1new -= numpy.einsum('ijba,jb->ia', m4, t1[:,p0:p1])
 
-        eris_vvoo = _cp(eris.vvoo[p0:p1])
-        l1new[:,p0:p1] -= numpy.einsum('jb,abji->ia', l1, eris_vvoo)
         saved_wvooo = _cp(saved.wvooo[p0:p1])
         l1new -= lib.einsum('ckij,jkca->ia', saved_wvooo, l2[:,:,p0:p1])
         saved_wvovv = _cp(saved.wvvov[p0:p1])
@@ -382,11 +381,11 @@ if __name__ == '__main__':
 
     eris = lambda:None
     eris.oooo = eri0[:nocc,:nocc,:nocc,:nocc].copy()
-    eris.vooo = eri0[nocc:,:nocc,:nocc,:nocc].copy()
-    eris.vvoo = eri0[nocc:,nocc:,:nocc,:nocc].copy()
-    eris.voov = eri0[nocc:,:nocc,:nocc,nocc:].copy()
+    eris.ovoo = eri0[:nocc,nocc:,:nocc,:nocc].copy()
+    eris.oovv = eri0[:nocc,:nocc,nocc:,nocc:].copy()
+    eris.ovvo = eri0[:nocc,nocc:,nocc:,:nocc].copy()
     idx = numpy.tril_indices(nvir)
-    eris.vovv = eri0[nocc:,:nocc,nocc:,nocc:][:,:,idx[0],idx[1]].copy()
+    eris.ovvv = eri0[:nocc,nocc:,nocc:,nocc:][:,:,idx[0],idx[1]].copy()
     eris.vvvv = ao2mo.restore(4,eri0[nocc:,nocc:,nocc:,nocc:],nvir)
     eris.fock = fock0
 
