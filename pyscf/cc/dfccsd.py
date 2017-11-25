@@ -49,6 +49,7 @@ def _contract_vvvv_t2(mycc, vvL, t2, out=None):
     nvira, nvirb = t2.shape[-2:]
     x2 = t2.reshape(-1,nvira,nvirb)
     nocc2 = x2.shape[0]
+    nvir2 = nvira * nvirb
     Ht2 = numpy.ndarray(x2.shape, buffer=out)
     Ht2[:] = 0
 
@@ -57,14 +58,14 @@ def _contract_vvvv_t2(mycc, vvL, t2, out=None):
         jc = j1 - j0
         #:Ht2[:,j0:j1] += numpy.einsum('xef,efab->xab', x2[:,i0:i1], eri)
         _dgemm('N', 'N', nocc2, jc*nvirb, ic*nvirb,
-               x2.reshape(-1,nvirb**2), eri.reshape(-1,jc*nvirb),
-               Ht2.reshape(-1,nvirb**2), 1, 1, i0*nvirb, 0, j0*nvirb)
+               x2.reshape(-1,nvir2), eri.reshape(-1,jc*nvirb),
+               Ht2.reshape(-1,nvir2), 1, 1, i0*nvirb, 0, j0*nvirb)
 
         if i0 > j0:
             #:Ht2[:,i0:i1] += numpy.einsum('xef,abef->xab', x2[:,j0:j1], eri)
             _dgemm('N', 'T', nocc2, ic*nvirb, jc*nvirb,
-                   x2.reshape(-1,nvirb**2), eri.reshape(-1,jc*nvirb),
-                   Ht2.reshape(-1,nvirb**2), 1, 1, j0*nvirb, 0, i0*nvirb)
+                   x2.reshape(-1,nvir2), eri.reshape(-1,jc*nvirb),
+                   Ht2.reshape(-1,nvir2), 1, 1, j0*nvirb, 0, i0*nvirb)
 
 #TODO: check if vvL can be entirely load into memory
     nvir_pair = nvirb * (nvirb+1) // 2

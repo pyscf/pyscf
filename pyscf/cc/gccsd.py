@@ -6,7 +6,9 @@ from pyscf import ao2mo
 from pyscf import scf
 from pyscf.lib import logger
 from pyscf.cc import ccsd
+from pyscf.cc import addons
 from pyscf.cc import gintermediates as imd
+from pyscf.cc.addons import spatial2spin, spin2spatial
 
 #einsum = np.einsum
 einsum = lib.einsum
@@ -104,6 +106,23 @@ def amplitudes_from_rccsd(t1, t2):
     t2s[nocc:,nocc:,nvir:,nvir:] = t2 - t2.transpose(0,1,3,2)
     return t1s, t2s
 
+def from_ccsd(cc):
+    mf = scf.addons.convert_to_ghf(cc._scf)
+    gcc = GCCSD(mf)
+    assert(cc._nocc is None)
+    assert(cc._nmo is None)
+    gcc.__dict__.update(cc.__dict__)
+    gcc._scf = mf
+    gcc.mo_coeff = mf.mo_coeff
+    gcc.mo_occ = mf.mo_occ
+    if isinstance(cc.frozen, (int, np.integer)):
+        gcc.frozen = cc.frozen * 2
+    else:
+        raise NotImplementedError
+    gcc.t1 = addons.spatial2spin(cc.t1, mf.mo_coeff.orbspin)
+    gcc.t2 = addons.spatial2spin(cc.t2, mf.mo_coeff.orbspin)
+    return gcc
+
 
 class GCCSD(ccsd.CCSD):
 
@@ -142,7 +161,16 @@ class GCCSD(ccsd.CCSD):
             raise NotImplementedError
 
         if eris is None: eris = self.ao2mo(self.mo_coeff)
-        return ccsd.CCSD.ccsd(self, t1, t2, eris)
+        # Initialize orbspin so that we can attach the 
+        if not hasattr(self.mo_coeff, 'orbspin'):
+            orbspin = scf.ghf.guess_orbspin(self.mo_coeff)
+            if not np.any(orbspin == -1):
+                self.mo_coeff = lib.tag_array(self.mo_coeff, orbspin=orbspin)
+        e_corr, self.t1, self.t2 = ccsd.CCSD.ccsd(self, t1, t2, eris)
+        if hasattr(self.mo_coeff, 'orbspin'):
+            self.t1 = lib.tag_array(t1, orbspin=self.mo_coeff.orbspin)
+            self.t2 = lib.tag_array(t2, orbspin=self.mo_coeff.orbspin)
+        return e_corr, self.t1, self.t2
 
     def amplitudes_to_vector(self, t1, t2, out=None):
         return amplitudes_to_vector(t1, t2, out)
@@ -199,6 +227,24 @@ class GCCSD(ccsd.CCSD):
             raise NotImplementedError
         else:
             return _make_eris_outcore(self, mo_coeff)
+
+    def amplitudes_from_ccsd(self, t1, t2):
+        '''Convert spatial orbital T1,T2 to spin-orbital T1,T2'''
+        return self.spatial2spin(t1), self.spatial2spin(t2)
+
+    def spatial2spin(self, tx, orbspin=None):
+        if orbspin is None:
+            orbspin = getattr(self.mo_coeff, 'orbspin', None)
+            if orbspin is not None:
+                orbspin = orbspin[ccsd.get_moidx(self)]
+        return spatial2spin(tx, orbspin)
+
+    def spin2spatial(self, tx, orbspin=None):
+        if orbspin is None:
+            orbspin = getattr(self.mo_coeff, 'orbspin', None)
+            if orbspin is not None:
+                orbspin = orbspin[ccsd.get_moidx(self)]
+        return spin2spatial(tx, orbspin)
 
 
 class _PhysicistsERIs:

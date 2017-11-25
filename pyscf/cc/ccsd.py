@@ -30,15 +30,12 @@ def kernel(mycc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
 
     if t1 is None and t2 is None:
         t1, t2 = mycc.get_init_guess(eris)
-    elif t1 is None:
-        nocc, nvir = t2.shape[0], t2.shape[2]
-        t1 = numpy.zeros((nocc,nvir))
     elif t2 is None:
         t2 = mycc.get_init_guess(eris)[1]
 
     cput1 = cput0 = (time.clock(), time.time())
-    nocc, nvir = t1.shape
     eold = 0
+    vec_old = 0
     eccsd = 0
     if mycc.diis:
         adiis = lib.diis.DIIS(mycc, mycc.diis_file)
@@ -49,7 +46,8 @@ def kernel(mycc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     conv = False
     for istep in range(max_cycle):
         t1new, t2new = mycc.update_amps(t1, t2, eris)
-        normt = numpy.linalg.norm(t1new-t1) + numpy.linalg.norm(t2new-t2)
+        normt = numpy.linalg.norm(mycc.amplitudes_to_vector(t1new, t2new) -
+                                  mycc.amplitudes_to_vector(t1, t2))
         t1, t2 = t1new, t2new
         t1new = t2new = None
         if mycc.diis:
@@ -370,6 +368,7 @@ def _contract_vvvv_t2(mycc, vvvv, t2, out=None):
     nvira, nvirb = t2.shape[-2:]
     x2 = t2.reshape(-1,nvira,nvirb)
     nocc2 = x2.shape[0]
+    nvir2 = nvira * nvirb
     Ht2 = numpy.ndarray(x2.shape, buffer=out)
     Ht2[:] = 0
 
@@ -378,14 +377,14 @@ def _contract_vvvv_t2(mycc, vvvv, t2, out=None):
         jc = j1 - j0
         #:Ht2[:,j0:j1] += numpy.einsum('xef,efab->xab', x2[:,i0:i1], eri)
         _dgemm('N', 'N', nocc2, jc*nvirb, ic*nvirb,
-               x2.reshape(-1,nvirb**2), eri.reshape(-1,jc*nvirb),
-               Ht2.reshape(-1,nvirb**2), 1, 1, i0*nvirb, 0, j0*nvirb)
+               x2.reshape(-1,nvir2), eri.reshape(-1,jc*nvirb),
+               Ht2.reshape(-1,nvir2), 1, 1, i0*nvirb, 0, j0*nvirb)
 
         if i0 > j0:
             #:Ht2[:,i0:i1] += numpy.einsum('xef,abef->xab', x2[:,j0:j1], eri)
             _dgemm('N', 'T', nocc2, ic*nvirb, jc*nvirb,
-                   x2.reshape(-1,nvirb**2), eri.reshape(-1,jc*nvirb),
-                   Ht2.reshape(-1,nvirb**2), 1, 1, j0*nvirb, 0, i0*nvirb)
+                   x2.reshape(-1,nvir2), eri.reshape(-1,jc*nvirb),
+                   Ht2.reshape(-1,nvir2), 1, 1, j0*nvirb, 0, i0*nvirb)
 
     if vvvv is None:   # AO-direct CCSD
         ao_loc = mol.ao_loc_nr()
@@ -782,14 +781,14 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                        tol=self.conv_tol, tolnormt=self.conv_tol_normt,
                        verbose=self.verbose)
         if self.converged:
-            logger.info(self, 'CCSD converged')
+            logger.info(self, '%s converged', self.__class__.__name__)
         else:
-            logger.note(self, 'CCSD not converged')
+            logger.note(self, '%s not converged', self.__class__.__name__)
         if self._scf.e_tot == 0:
             logger.note(self, 'E_corr = %.16g', self.e_corr)
         else:
-            logger.note(self, 'E(CCSD) = %.16g  E_corr = %.16g',
-                        self.e_tot, self.e_corr)
+            logger.note(self, 'E(%s) = %.16g  E_corr = %.16g',
+                        self.__class__.__name__, self.e_tot, self.e_corr)
         return self.e_corr, self.t1, self.t2
 
     as_scanner = as_scanner

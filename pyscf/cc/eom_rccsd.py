@@ -50,8 +50,7 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False, imds=None,
                            max_space=eom.max_space, nroots=nroots, verbose=log)
 
     for n, en, vn, convn in zip(range(nroots), es, vs, conv):
-        logger.info(eom, 'EOM-CCSD root %d E = %.16g  qpwt = %.6g  conv = %s',
-                    n, en, np.linalg.norm(vn[:eom.nocc])**2, convn)
+        logger.info(eom, 'EOM-CCSD root %d E = %.16g  conv = %s', n, en, convn)
     log.timer('EOM-CCSD', *cput0)
     if nroots == 1:
         return conv[0], es[0].real, vs[0]
@@ -76,8 +75,8 @@ class EOM(lib.StreamObject):
 # don't modify the following attributes, they are not input options
         self.e = None
         self.v = None
-        nocc, nvir = cc.t1.shape
-        self.nocc, self.nmo = nocc, nocc+nvir
+        self.nocc = cc.nocc
+        self.nmo = cc.nmo
         self._keys = set(self.__dict__.keys())
 
     def dump_flags(self):
@@ -740,8 +739,8 @@ def eeccsd(eom, nroots=1, koopmans=False, guess=None, eris=None, imds=None):
 # as below.  The EOMEESpinFlip class only handles alpha->beta excitations.
 # Setting beta->alpha to None to bypass the vectors in initial guess
         #for i in range(nroots_sf):
-        #    r1, r2 = vector_to_amplitudes_ee_sf(v1[i], eom.nmo, eom.nocc)
-        #    v1.append(amplitudes_to_vector_ee_sf(-r1, (-r2[0], r2[1])))
+        #    r1, r2 = vector_to_amplitudes_eomsf(v1[i], eom.nmo, eom.nocc)
+        #    v1.append(amplitudes_to_vector_eomsf(-r1, (-r2[0], r2[1])))
 
     e = np.hstack([e0,e2,e1])
     idx = e.argsort()
@@ -777,8 +776,8 @@ def eomee_ccsd_triplet(eom, nroots=1, koopmans=False, guess=None,
     '''
     return eomee_ccsd_singlet(eom, nroots, koopmans, guess, eris, imds, diag)
 
-def eomee_ccsd_sf(eom, nroots=1, koopmans=False, guess=None,
-                  eris=None, imds=None, diag=None):
+def eomsf_ccsd(eom, nroots=1, koopmans=False, guess=None,
+               eris=None, imds=None, diag=None):
     '''Spin flip EOM-EE-CCSD
     '''
     return eomee_ccsd_singlet(eom, nroots, koopmans, guess, eris, imds, diag)
@@ -786,24 +785,17 @@ def eomee_ccsd_sf(eom, nroots=1, koopmans=False, guess=None,
 vector_to_amplitudes_ee = vector_to_amplitudes_singlet = ccsd.vector_to_amplitudes
 amplitudes_to_vector_ee = amplitudes_to_vector_singlet = ccsd.amplitudes_to_vector
 
-def amplitudes_to_vector_ee_sf(t1, t2, out=None):
+def amplitudes_to_vector_eomsf(t1, t2, out=None):
     nocc, nvir = t1.shape
     t2baaa, t2aaba = t2
-    nbaaa = nocc*nocc*nvir*(nvir-1)//2
-    naaba = nocc*(nocc-1)//2*nvir*nvir
-    size = t1.size + nbaaa + naaba
-    vector = np.ndarray(size, t2baaa.dtype, buffer=out)
-    vector[:t1.size] = t1.ravel()
-    pvec = vector[t1.size:]
-
     otril = np.tril_indices(nocc, k=-1)
     vtril = np.tril_indices(nvir, k=-1)
-    pvec[:nbaaa] = np.take(t2baaa.reshape(nocc*nocc,nvir*nvir),
-                           vtril[0]*nvir+vtril[1], axis=1).ravel()
-    pvec[nbaaa:] = t2aaba[otril].ravel()
+    baaa = np.take(t2baaa.reshape(nocc*nocc,nvir*nvir),
+                   vtril[0]*nvir+vtril[1], axis=1)
+    vector = np.hstack((t1.ravel(), baaa.ravel(), t2aaba[otril].ravel()))
     return vector
 
-def vector_to_amplitudes_ee_sf(vector, nmo, nocc):
+def vector_to_amplitudes_eomsf(vector, nmo, nocc):
     nvir = nmo - nocc
     t1 = vector[:nocc*nvir].reshape(nocc,nvir).copy()
     pvec = vector[t1.size:]
@@ -1053,7 +1045,7 @@ def eeccsd_matvec_sf(eom, vector, imds=None):
     nvir = nmo - nocc
 
     t1, t2, eris = imds.t1, imds.t2, imds.eris
-    r1, r2 = vector_to_amplitudes_ee_sf(vector, nmo, nocc)
+    r1, r2 = vector_to_amplitudes_eomsf(vector, nmo, nocc)
     r2baaa, r2aaba = r2
     nocc, nvir = t1.shape
 
@@ -1177,7 +1169,7 @@ def eeccsd_matvec_sf(eom, vector, imds=None):
 
     Hr2baaa = Hr2baaa - Hr2baaa.transpose(0,1,3,2)
     Hr2aaba = Hr2aaba - Hr2aaba.transpose(1,0,2,3)
-    vector = amplitudes_to_vector_ee_sf(Hr1, (Hr2baaa,Hr2aaba))
+    vector = amplitudes_to_vector_eomsf(Hr1, (Hr2baaa,Hr2aaba))
     return vector
 
 def eeccsd_diag(eom, imds=None):
@@ -1285,7 +1277,7 @@ def eeccsd_diag(eom, imds=None):
 
     vec_eeS = amplitudes_to_vector_singlet(Hr1aa, Hr2ab)
     vec_eeT = amplitudes_to_vector_triplet(Hr1aa, (Hr2aa,Hr2ab))
-    vec_sf = amplitudes_to_vector_ee_sf(Hr1ab, (Hr2baaa,Hr2aaba))
+    vec_sf = amplitudes_to_vector_eomsf(Hr1ab, (Hr2baaa,Hr2aaba))
     return vec_eeS, vec_eeT, vec_sf
 
 
@@ -1378,7 +1370,7 @@ class EOMEETriplet(EOMEE):
 
 
 class EOMEESpinFlip(EOMEE):
-    kernel = eomee_ccsd_sf
+    kernel = eomsf_ccsd
     matvec = eeccsd_matvec_sf
 
     def gen_matvec(self, imds=None, diag=None, **kwargs):
@@ -1390,10 +1382,10 @@ class EOMEESpinFlip(EOMEE):
     def vector_to_amplitudes(self, vector, nmo=None, nocc=None):
         if nmo is None: nmo = self.nmo
         if nocc is None: nocc = self.nocc
-        return vector_to_amplitudes_ee_sf(vector, nmo, nocc)
+        return vector_to_amplitudes_eomsf(vector, nmo, nocc)
 
     def amplitudes_to_vector(self, r1, r2):
-        return amplitudes_to_vector_ee_sf(r1, r2)
+        return amplitudes_to_vector_eomsf(r1, r2)
 
     def vector_size(self):
         nocc = self.nocc
@@ -1717,11 +1709,11 @@ if __name__ == '__main__':
     myeom = EOMEESpinFlip(mycc)
     np.random.seed(1)
     v = np.random.random(myeom.vector_size())
-    r1, r2 = vector_to_amplitudes_ee_sf(v, myeom.nmo, myeom.nocc)
+    r1, r2 = vector_to_amplitudes_eomsf(v, myeom.nmo, myeom.nocc)
     print(lib.finger(r1)    - 0.017703197938757409)
     print(lib.finger(r2[0]) --21.605764517401415)
     print(lib.finger(r2[1]) - 6.5857056438834842)
-    print(abs(amplitudes_to_vector_ee_sf(r1, r2) - v).max())
+    print(abs(amplitudes_to_vector_eomsf(r1, r2) - v).max())
 
     myeom = EOMEE(mycc)
     e,v = myeom.eeccsd(nroots=1)
