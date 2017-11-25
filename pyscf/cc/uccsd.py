@@ -3,12 +3,10 @@ UCCSD with spatial integrals
 '''
 
 import time
-import tempfile
 import ctypes
 from functools import reduce
 import numpy
 import numpy as np
-import h5py
 
 from pyscf import lib
 from pyscf import ao2mo
@@ -295,17 +293,17 @@ def update_amps(cc, t1, t2, eris):
     tauaa, tauab, taubb = make_tau(t2, t1, t1)
     _add_vvvv_(cc, (tauaa,tauab,taubb), eris, (u2aa,u2ab,u2bb))
 
-    eris_oovo = numpy.asarray(eris.oovo)
-    eris_OOVO = numpy.asarray(eris.OOVO)
-    eris_ooVO = numpy.asarray(eris.ooVO)
-    eris_OOvo = numpy.asarray(eris.OOvo)
-    oovo = eris_oovo - eris_oovo.transpose(0,3,2,1)
-    OOVO = eris_OOVO - eris_OOVO.transpose(0,3,2,1)
-    u2aa -= lib.einsum('ma,mibj->ijab', t1a, oovo)
-    u2bb -= lib.einsum('ma,mibj->ijab', t1b, OOVO)
-    u2ab -= lib.einsum('ma,miBJ->iJaB', t1a, eris_ooVO)
-    u2ab -= lib.einsum('MA,MJbi->iJbA', t1b, eris_OOvo)
-    eris_oovo = eris_ooVO = eris_OOVO = eris_OOvo = None
+    eris_ovoo = numpy.asarray(eris.ovoo)
+    eris_OVOO = numpy.asarray(eris.OVOO)
+    eris_OVoo = numpy.asarray(eris.OVoo)
+    eris_ovOO = numpy.asarray(eris.ovOO)
+    ovoo = eris_ovoo - eris_ovoo.transpose(2,1,0,3)
+    OVOO = eris_OVOO - eris_OVOO.transpose(2,1,0,3)
+    u2aa -= lib.einsum('ma,jbim->ijab', t1a, ovoo)
+    u2bb -= lib.einsum('ma,jbim->ijab', t1b, OVOO)
+    u2ab -= lib.einsum('ma,JBim->iJaB', t1a, eris_OVoo)
+    u2ab -= lib.einsum('MA,ibJM->iJbA', t1b, eris_ovOO)
+    eris_ovoo = eris_OVoo = eris_OVOO = eris_ovOO = None
 
     u2aa *= .5
     u2bb *= .5
@@ -431,11 +429,6 @@ class UCCSD(ccsd.CCSD):
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         # Spin-orbital CCSD needs a stricter tolerance than spatial-orbital
         self.conv_tol_normt = 1e-6
-        if getattr(mf, 'mo_energy', None) is not None:
-            self.orbspin = orbspin_of_sorted_mo_energy(mf.mo_energy, self.mo_occ)
-        else:
-            self.orbspin = None
-        self._keys = self._keys.union(['orbspin'])
 
     def build(self):
         '''Initialize integrals and orbspin'''
@@ -563,7 +556,25 @@ class UCCSD(ccsd.CCSD):
         return uccsd_rdm.make_rdm2(self, t1, t2, l1, l2)
 
     def ao2mo(self, mo_coeff=None):
-        return _ChemistsERIs(self, mo_coeff)
+        nmoa, nmob = self.get_nmo()
+        nao = self.mo_coeff[0].shape[0]
+        nmo_pair = nmoa * (nmoa+1) // 2
+        nao_pair = nao * (nao+1) // 2
+        mem_incore = (max(nao_pair**2, nmoa**4) + nmo_pair**4) * 8/1e6
+        mem_now = lib.current_memory()[0]
+        if (self._scf._eri is not None and
+            (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
+            return _make_eris_incore(self, mo_coeff)
+
+        elif hasattr(self._scf, 'with_df'):
+            logger.warn(self, 'UCCSD detected DF being used in the HF object. '
+                        'MO integrals are computed based on the DF 3-index tensors.\n'
+                        'It\'s recommended to use dfccsd.CCSD for the '
+                        'DF-CCSD calculations')
+            raise NotImplementedError
+
+        else:
+            return _make_eris_outcore(self, mo_coeff)
 
     def ipccsd(self, nroots=1, left=False, koopmans=False, guess=None,
                partition=None, eris=None):
@@ -590,236 +601,196 @@ class UCCSD(ccsd.CCSD):
         return vector_to_amplitudes(vector, nmo, nocc)
 
 
+
 class _ChemistsERIs(ccsd._ChemistsERIs):
-    def __init__(self, cc, mo_coeff=None, method='incore',
-                 ao2mofn=ao2mo.outcore.general_iofree):
-        cput0 = (time.clock(), time.time())
-        log = logger.Logger(cc.stdout, cc.verbose)
-        moidx = get_umoidx(cc)
+    def _common_init_(self, mycc, mo_coeff=None):
         if mo_coeff is None:
-            mo_coeff = cc.mo_coeff
-        self.mo_coeff = mo_coeff = [mo_coeff[0][:,moidx[0]],
-                                    mo_coeff[1][:,moidx[1]]]
+            mo_coeff = mycc.mo_coeff
+        mo_idx = get_umoidx(mycc)
+        self.mo_coeff = mo_coeff = \
+                (mo_coeff[0][:,mo_idx[0]], mo_coeff[1][:,mo_idx[1]])
+# Note: Recomputed fock matrix since SCF may not be fully converged.
+        dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
+        fockao = mycc._scf.get_hcore() + mycc._scf.get_veff(mycc.mol, dm)
+        self.focka = reduce(numpy.dot, (mo_coeff[0].T, fockao[0], mo_coeff[0]))
+        self.fockb = reduce(numpy.dot, (mo_coeff[1].T, fockao[1], mo_coeff[1]))
+        self.fock = (self.focka, self.fockb)
+        self.nocc = mycc.get_nocc()
+        self.nocca, self.noccb = self.nocc
+        return self
 
-        nocc = cc.nocc
-        nmo = cc.nmo
-        nvir = nmo - nocc
-        nao = mo_coeff[0].shape[0]
-        nao_pair = nao * (nao+1) // 2
-        nmo_pair = nmo * (nmo+1) // 2
-        mem_incore = (max(nao_pair**2, nmo**4*3) + nmo_pair**2) * 8/1e6
-        mem_now = lib.current_memory()[0]
 
-        fock, so_coeff, self.orbspin = uspatial2spin(cc, moidx, mo_coeff)
-        idxa = self.orbspin == 0
-        idxb = self.orbspin == 1
-        self.focka = fock[idxa][:,idxa]
-        self.fockb = fock[idxb][:,idxb]
-        if (cc.orbspin is None or cc.orbspin.size != self.orbspin.size or
-            any(cc.orbspin != self.orbspin)):
-            log.warn('Overwrite cc.orbspin by _ChemistsERIs.')
-            cc.orbspin = self.orbspin
+def _make_eris_incore(mycc, mo_coeff=None):
+    cput0 = (time.clock(), time.time())
+    eris = _ChemistsERIs()
+    eris._common_init_(mycc, mo_coeff)
 
-        if (method == 'incore' and cc._scf._eri is not None and
-            (mem_incore+mem_now < cc.max_memory) or cc.mol.incore_anyway):
-            moa = so_coeff[:,idxa]
-            mob = so_coeff[:,idxb]
-            nmoa = moa.shape[1]
-            nmob = mob.shape[1]
+    nocca, noccb = mycc.get_nocc()
+    nmoa, nmob = mycc.get_nmo()
+    nvira, nvirb = nmoa-nocca, nmob-noccb
 
-            eri_aa = ao2mo.restore(1, ao2mo.full(cc._scf._eri, moa), nmoa)
-            eri_bb = ao2mo.restore(1, ao2mo.full(cc._scf._eri, mob), nmob)
-            eri_ab = ao2mo.general(cc._scf._eri, (moa,moa,mob,mob), compact=False)
-            eri_ba = lib.transpose(eri_ab)
+    moa = eris.mo_coeff[0]
+    mob = eris.mo_coeff[1]
+    nmoa = moa.shape[1]
+    nmob = mob.shape[1]
 
-            self.nocca = nocca = np.count_nonzero(self.orbspin[:nocc] == 0)
-            self.noccb = noccb = np.count_nonzero(self.orbspin[:nocc] == 1)
-            nvira = np.count_nonzero(self.orbspin[nocc:] == 0)
-            nvirb = np.count_nonzero(self.orbspin[nocc:] == 1)
-            nmoa = nocca + nvira
-            nmob = noccb + nvirb
-            eri_aa = eri_aa.reshape(nmoa,nmoa,nmoa,nmoa)
-            eri_ab = eri_ab.reshape(nmoa,nmoa,nmob,nmob)
-            eri_ba = eri_ba.reshape(nmob,nmob,nmoa,nmoa)
-            eri_bb = eri_bb.reshape(nmob,nmob,nmob,nmob)
-            self.oooo = eri_aa[:nocca,:nocca,:nocca,:nocca].copy()
-            self.ooov = eri_aa[:nocca,:nocca,:nocca,nocca:].copy()
-            self.ovoo = eri_aa[:nocca,nocca:,:nocca,:nocca].copy()
-            self.oovo = eri_aa[:nocca,:nocca,nocca:,:nocca].copy()
-            self.ovov = eri_aa[:nocca,nocca:,:nocca,nocca:].copy()
-            self.oovv = eri_aa[:nocca,:nocca,nocca:,nocca:].copy()
-            self.ovvo = eri_aa[:nocca,nocca:,nocca:,:nocca].copy()
-            ovvv = eri_aa[:nocca,nocca:,nocca:,nocca:].reshape(nocca*nvira,nvira,nvira)
-            self.ovvv = lib.pack_tril(ovvv).reshape(nocca,nvira,nvira*(nvira+1)//2)
-            ovvv = None
-            self.vvvv = ao2mo.restore(4, eri_aa[nocca:,nocca:,nocca:,nocca:].copy(), nvira)
-            self.OOOO = eri_bb[:noccb,:noccb,:noccb,:noccb].copy()
-            self.OOOV = eri_bb[:noccb,:noccb,:noccb,noccb:].copy()
-            self.OVOO = eri_bb[:noccb,noccb:,:noccb,:noccb].copy()
-            self.OOVO = eri_bb[:noccb,:noccb,noccb:,:noccb].copy()
-            self.OVOV = eri_bb[:noccb,noccb:,:noccb,noccb:].copy()
-            self.OOVV = eri_bb[:noccb,:noccb,noccb:,noccb:].copy()
-            self.OVVO = eri_bb[:noccb,noccb:,noccb:,:noccb].copy()
-            OVVV = eri_bb[:noccb,noccb:,noccb:,noccb:].reshape(noccb*nvirb,nvirb,nvirb)
-            self.OVVV = lib.pack_tril(OVVV).reshape(noccb,nvirb,nvirb*(nvirb+1)//2)
-            OVVV = None
-            self.VVVV = ao2mo.restore(4, eri_bb[noccb:,noccb:,noccb:,noccb:].copy(), nvirb)
-            self.ooOO = eri_ab[:nocca,:nocca,:noccb,:noccb].copy()
-            self.ooOV = eri_ab[:nocca,:nocca,:noccb,noccb:].copy()
-            self.ovOO = eri_ab[:nocca,nocca:,:noccb,:noccb].copy()
-            self.ooVO = eri_ab[:nocca,:nocca,noccb:,:noccb].copy()
-            self.ovOV = eri_ab[:nocca,nocca:,:noccb,noccb:].copy()
-            self.ooVV = eri_ab[:nocca,:nocca,noccb:,noccb:].copy()
-            self.ovVO = eri_ab[:nocca,nocca:,noccb:,:noccb].copy()
-            ovVV = eri_ab[:nocca,nocca:,noccb:,noccb:].reshape(nocca*nvira,nvirb,nvirb)
-            self.ovVV = lib.pack_tril(ovVV).reshape(nocca,nvira,nvirb*(nvirb+1)//2)
-            ovVV = None
-            vvVV = eri_ab[nocca:,nocca:,noccb:,noccb:].reshape(nvira**2,nvirb**2)
-            idxa = np.tril_indices(nvira)
-            idxb = np.tril_indices(nvirb)
-            self.vvVV = lib.take_2d(vvVV, idxa[0]*nvira+idxa[1], idxb[0]*nvirb+idxb[1])
-            #self.OOoo = eri_ba[:noccb,:noccb,:nocca,:nocca].copy()
-            self.OOov = eri_ba[:noccb,:noccb,:nocca,nocca:].copy()
-            self.OVoo = eri_ba[:noccb,noccb:,:nocca,:nocca].copy()
-            self.OOvo = eri_ba[:noccb,:noccb,nocca:,:nocca].copy()
-            #self.OVov = eri_ba[:noccb,noccb:,:nocca,nocca:].copy()
-            self.OOvv = eri_ba[:noccb,:noccb,nocca:,nocca:].copy()
-            self.OVvo = eri_ba[:noccb,noccb:,nocca:,:nocca].copy()
-            #self.OVvv = eri_ba[:noccb,noccb:,nocca:,nocca:].copy()
-            OVvv = eri_ba[:noccb,noccb:,nocca:,nocca:].reshape(noccb*nvirb,nvira,nvira)
-            self.OVvv = lib.pack_tril(OVvv).reshape(noccb,nvirb,nvira*(nvira+1)//2)
-            OVvv = None
-            #self.VVvv = eri_ba[noccb:,noccb:,nocca:,nocca:].copy()
-        elif hasattr(cc._scf, 'with_df') and cc._scf.with_df:
-            raise NotImplementedError
-        else:
-            moa = so_coeff[:,idxa]
-            mob = so_coeff[:,idxb]
-            nmoa = moa.shape[1]
-            nmob = mob.shape[1]
-            self.nocca = nocca = int(cc.mo_occ[0][moidx[0]].sum())
-            self.noccb = noccb = int(cc.mo_occ[1][moidx[1]].sum())
-            nvira = nmoa - nocca
-            nvirb = nmob - noccb
+    eri_aa = ao2mo.restore(1, ao2mo.full(mycc._scf._eri, moa), nmoa)
+    eri_bb = ao2mo.restore(1, ao2mo.full(mycc._scf._eri, mob), nmob)
+    eri_ab = ao2mo.general(mycc._scf._eri, (moa,moa,mob,mob), compact=False)
+    eri_ba = lib.transpose(eri_ab)
 
-            orboa = moa[:,:nocca]
-            orbob = mob[:,:noccb]
-            orbva = moa[:,nocca:]
-            orbvb = mob[:,noccb:]
-            self.dtype = so_coeff.dtype
-            ds_type = so_coeff.dtype.char
-            self.feri = lib.H5TmpFile()
-            self.oooo = self.feri.create_dataset('oooo', (nocca,nocca,nocca,nocca), ds_type)
-            self.ooov = self.feri.create_dataset('ooov', (nocca,nocca,nocca,nvira), ds_type)
-            self.ovoo = self.feri.create_dataset('ovoo', (nocca,nvira,nocca,nocca), ds_type)
-            self.oovo = self.feri.create_dataset('oovo', (nocca,nocca,nvira,nocca), ds_type)
-            self.ovov = self.feri.create_dataset('ovov', (nocca,nvira,nocca,nvira), ds_type)
-            self.oovv = self.feri.create_dataset('oovv', (nocca,nocca,nvira,nvira), ds_type)
-            self.ovvo = self.feri.create_dataset('ovvo', (nocca,nvira,nvira,nocca), ds_type)
-            self.ovvv = self.feri.create_dataset('ovvv', (nocca,nvira,nvira*(nvira+1)//2), ds_type)
-            #self.vvvv = self.feri.create_dataset('vvvv', (nvira,nvira,nvira,nvira), ds_type)
-            self.OOOO = self.feri.create_dataset('OOOO', (noccb,noccb,noccb,noccb), ds_type)
-            self.OOOV = self.feri.create_dataset('OOOV', (noccb,noccb,noccb,nvirb), ds_type)
-            self.OVOO = self.feri.create_dataset('OVOO', (noccb,nvirb,noccb,noccb), ds_type)
-            self.OOVO = self.feri.create_dataset('OOVO', (noccb,noccb,nvirb,noccb), ds_type)
-            self.OVOV = self.feri.create_dataset('OVOV', (noccb,nvirb,noccb,nvirb), ds_type)
-            self.OOVV = self.feri.create_dataset('OOVV', (noccb,noccb,nvirb,nvirb), ds_type)
-            self.OVVO = self.feri.create_dataset('OVVO', (noccb,nvirb,nvirb,noccb), ds_type)
-            self.OVVV = self.feri.create_dataset('OVVV', (noccb,nvirb,nvirb*(nvirb+1)//2), ds_type)
-            #self.VVVV = self.feri.create_dataset('VVVV', (nvirb,nvirb,nvirb,nvirb), ds_type)
-            self.ooOO = self.feri.create_dataset('ooOO', (nocca,nocca,noccb,noccb), ds_type)
-            self.ooOV = self.feri.create_dataset('ooOV', (nocca,nocca,noccb,nvirb), ds_type)
-            self.ovOO = self.feri.create_dataset('ovOO', (nocca,nvira,noccb,noccb), ds_type)
-            self.ooVO = self.feri.create_dataset('ooVO', (nocca,nocca,nvirb,noccb), ds_type)
-            self.ovOV = self.feri.create_dataset('ovOV', (nocca,nvira,noccb,nvirb), ds_type)
-            self.ooVV = self.feri.create_dataset('ooVV', (nocca,nocca,nvirb,nvirb), ds_type)
-            self.ovVO = self.feri.create_dataset('ovVO', (nocca,nvira,nvirb,noccb), ds_type)
-            self.ovVV = self.feri.create_dataset('ovVV', (nocca,nvira,nvirb*(nvirb+1)//2), ds_type)
-            #self.vvVV = self.feri.create_dataset('vvVV', (nvira,nvira,nvirb,nvirb), ds_type)
-            self.OOov = self.feri.create_dataset('OOov', (noccb,noccb,nocca,nvira), ds_type)
-            self.OVoo = self.feri.create_dataset('OVoo', (noccb,nvirb,nocca,nocca), ds_type)
-            self.OOvo = self.feri.create_dataset('OOvo', (noccb,noccb,nvira,nocca), ds_type)
-            self.OOvv = self.feri.create_dataset('OOvv', (noccb,noccb,nvira,nvira), ds_type)
-            self.OVvo = self.feri.create_dataset('OVvo', (noccb,nvirb,nvira,nocca), ds_type)
-            self.OVvv = self.feri.create_dataset('OVvv', (noccb,nvirb,nvira*(nvira+1)//2), ds_type)
+    eri_aa = eri_aa.reshape(nmoa,nmoa,nmoa,nmoa)
+    eri_ab = eri_ab.reshape(nmoa,nmoa,nmob,nmob)
+    eri_ba = eri_ba.reshape(nmob,nmob,nmoa,nmoa)
+    eri_bb = eri_bb.reshape(nmob,nmob,nmob,nmob)
+    eris.oooo = eri_aa[:nocca,:nocca,:nocca,:nocca].copy()
+    eris.ovoo = eri_aa[:nocca,nocca:,:nocca,:nocca].copy()
+    eris.ovov = eri_aa[:nocca,nocca:,:nocca,nocca:].copy()
+    eris.oovv = eri_aa[:nocca,:nocca,nocca:,nocca:].copy()
+    eris.ovvo = eri_aa[:nocca,nocca:,nocca:,:nocca].copy()
+    ovvv = eri_aa[:nocca,nocca:,nocca:,nocca:].reshape(nocca*nvira,nvira,nvira)
+    eris.ovvv = lib.pack_tril(ovvv).reshape(nocca,nvira,nvira*(nvira+1)//2)
+    ovvv = None
+    eris.vvvv = ao2mo.restore(4, eri_aa[nocca:,nocca:,nocca:,nocca:].copy(), nvira)
+    eris.OOOO = eri_bb[:noccb,:noccb,:noccb,:noccb].copy()
+    eris.OVOO = eri_bb[:noccb,noccb:,:noccb,:noccb].copy()
+    eris.OVOV = eri_bb[:noccb,noccb:,:noccb,noccb:].copy()
+    eris.OOVV = eri_bb[:noccb,:noccb,noccb:,noccb:].copy()
+    eris.OVVO = eri_bb[:noccb,noccb:,noccb:,:noccb].copy()
+    OVVV = eri_bb[:noccb,noccb:,noccb:,noccb:].reshape(noccb*nvirb,nvirb,nvirb)
+    eris.OVVV = lib.pack_tril(OVVV).reshape(noccb,nvirb,nvirb*(nvirb+1)//2)
+    OVVV = None
+    eris.VVVV = ao2mo.restore(4, eri_bb[noccb:,noccb:,noccb:,noccb:].copy(), nvirb)
+    eris.ooOO = eri_ab[:nocca,:nocca,:noccb,:noccb].copy()
+    eris.ovOO = eri_ab[:nocca,nocca:,:noccb,:noccb].copy()
+    eris.ovOV = eri_ab[:nocca,nocca:,:noccb,noccb:].copy()
+    eris.ooVV = eri_ab[:nocca,:nocca,noccb:,noccb:].copy()
+    eris.ovVO = eri_ab[:nocca,nocca:,noccb:,:noccb].copy()
+    ovVV = eri_ab[:nocca,nocca:,noccb:,noccb:].reshape(nocca*nvira,nvirb,nvirb)
+    eris.ovVV = lib.pack_tril(ovVV).reshape(nocca,nvira,nvirb*(nvirb+1)//2)
+    ovVV = None
+    vvVV = eri_ab[nocca:,nocca:,noccb:,noccb:].reshape(nvira**2,nvirb**2)
+    idxa = np.tril_indices(nvira)
+    idxb = np.tril_indices(nvirb)
+    eris.vvVV = lib.take_2d(vvVV, idxa[0]*nvira+idxa[1], idxb[0]*nvirb+idxb[1])
+    #eris.OOoo = eri_ba[:noccb,:noccb,:nocca,:nocca].copy()
+    eris.OVoo = eri_ba[:noccb,noccb:,:nocca,:nocca].copy()
+    #eris.OVov = eri_ba[:noccb,noccb:,:nocca,nocca:].copy()
+    eris.OOvv = eri_ba[:noccb,:noccb,nocca:,nocca:].copy()
+    eris.OVvo = eri_ba[:noccb,noccb:,nocca:,:nocca].copy()
+    #eris.OVvv = eri_ba[:noccb,noccb:,nocca:,nocca:].copy()
+    OVvv = eri_ba[:noccb,noccb:,nocca:,nocca:].reshape(noccb*nvirb,nvira,nvira)
+    eris.OVvv = lib.pack_tril(OVvv).reshape(noccb,nvirb,nvira*(nvira+1)//2)
+    OVvv = None
+    #eris.VVvv = eri_ba[noccb:,noccb:,nocca:,nocca:].copy()
+    return eris
 
-            cput1 = time.clock(), time.time()
-            # <ij||pq> = <ij|pq> - <ij|qp> = (ip|jq) - (iq|jp)
-            tmpfile2 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-            ao2mo.general(cc.mol, (orboa,moa,moa,moa), tmpfile2.name, 'aa')
-            with h5py.File(tmpfile2.name) as f:
-                buf = numpy.empty((nmoa,nmoa,nmoa))
-                for i in range(nocca):
-                    lib.unpack_tril(f['aa'][i*nmoa:(i+1)*nmoa], out=buf)
-                    self.oooo[i] = buf[:nocca,:nocca,:nocca]
-                    self.ooov[i] = buf[:nocca,:nocca,nocca:]
-                    self.ovoo[i] = buf[nocca:,:nocca,:nocca]
-                    self.ovov[i] = buf[nocca:,:nocca,nocca:]
-                    self.oovo[i] = buf[:nocca,nocca:,:nocca]
-                    self.oovv[i] = buf[:nocca,nocca:,nocca:]
-                    self.ovvo[i] = buf[nocca:,nocca:,:nocca]
-                    self.ovvv[i] = lib.pack_tril(buf[nocca:,nocca:,nocca:])
-                del(f['aa'])
-                buf = None
+def _make_eris_outcore(mycc, mo_coeff=None):
+    cput0 = (time.clock(), time.time())
+    eris = _ChemistsERIs()
+    eris._common_init_(mycc, mo_coeff)
 
-            ao2mo.general(cc.mol, (orbob,mob,mob,mob), tmpfile2.name, 'bb')
-            with h5py.File(tmpfile2.name) as f:
-                buf = numpy.empty((nmob,nmob,nmob))
-                for i in range(noccb):
-                    lib.unpack_tril(f['bb'][i*nmob:(i+1)*nmob], out=buf)
-                    self.OOOO[i] = buf[:noccb,:noccb,:noccb]
-                    self.OOOV[i] = buf[:noccb,:noccb,noccb:]
-                    self.OVOO[i] = buf[noccb:,:noccb,:noccb]
-                    self.OVOV[i] = buf[noccb:,:noccb,noccb:]
-                    self.OOVO[i] = buf[:noccb,noccb:,:noccb]
-                    self.OOVV[i] = buf[:noccb,noccb:,noccb:]
-                    self.OVVO[i] = buf[noccb:,noccb:,:noccb]
-                    self.OVVV[i] = lib.pack_tril(buf[noccb:,noccb:,noccb:])
-                del(f['bb'])
-                buf = None
+    nocca, noccb = mycc.get_nocc()
+    nmoa, nmob = mycc.get_nmo()
+    nvira, nvirb = nmoa-nocca, nmob-noccb
 
-            ao2mo.general(cc.mol, (orboa,moa,mob,mob), tmpfile2.name, 'ab')
-            with h5py.File(tmpfile2.name) as f:
-                buf = numpy.empty((nmoa,nmob,nmob))
-                for i in range(nocca):
-                    lib.unpack_tril(f['ab'][i*nmoa:(i+1)*nmoa], out=buf)
-                    self.ooOO[i] = buf[:nocca,:noccb,:noccb]
-                    self.ooOV[i] = buf[:nocca,:noccb,noccb:]
-                    self.ovOO[i] = buf[nocca:,:noccb,:noccb]
-                    self.ovOV[i] = buf[nocca:,:noccb,noccb:]
-                    self.ooVO[i] = buf[:nocca,noccb:,:noccb]
-                    self.ooVV[i] = buf[:nocca,noccb:,noccb:]
-                    self.ovVO[i] = buf[nocca:,noccb:,:noccb]
-                    self.ovVV[i] = lib.pack_tril(buf[nocca:,noccb:,noccb:])
-                del(f['ab'])
-                buf = None
+    moa = eris.mo_coeff[0]
+    mob = eris.mo_coeff[1]
+    nmoa = moa.shape[1]
+    nmob = mob.shape[1]
 
-            ao2mo.general(cc.mol, (orbob,mob,moa,moa), tmpfile2.name, 'ba')
-            with h5py.File(tmpfile2.name) as f:
-                buf = numpy.empty((nmob,nmoa,nmoa))
-                for i in range(noccb):
-                    lib.unpack_tril(f['ba'][i*nmob:(i+1)*nmob], out=buf)
-                    self.OOov[i] = buf[:noccb,:nocca,nocca:]
-                    self.OVoo[i] = buf[noccb:,:nocca,:nocca]
-                    self.OOvo[i] = buf[:noccb,nocca:,:nocca]
-                    self.OOvv[i] = buf[:noccb,nocca:,nocca:]
-                    self.OVvo[i] = buf[noccb:,nocca:,:nocca]
-                    self.OVvv[i] = lib.pack_tril(buf[noccb:,nocca:,nocca:])
-                del(f['ba'])
-                buf = None
+    orboa = moa[:,:nocca]
+    orbob = mob[:,:noccb]
+    orbva = moa[:,nocca:]
+    orbvb = mob[:,noccb:]
+    eris.feri = lib.H5TmpFile()
+    eris.oooo = eris.feri.create_dataset('oooo', (nocca,nocca,nocca,nocca), 'f8')
+    eris.ovoo = eris.feri.create_dataset('ovoo', (nocca,nvira,nocca,nocca), 'f8')
+    eris.ovov = eris.feri.create_dataset('ovov', (nocca,nvira,nocca,nvira), 'f8')
+    eris.oovv = eris.feri.create_dataset('oovv', (nocca,nocca,nvira,nvira), 'f8')
+    eris.ovvo = eris.feri.create_dataset('ovvo', (nocca,nvira,nvira,nocca), 'f8')
+    eris.ovvv = eris.feri.create_dataset('ovvv', (nocca,nvira,nvira*(nvira+1)//2), 'f8')
+    #eris.vvvv = eris.feri.create_dataset('vvvv', (nvira,nvira,nvira,nvira), 'f8')
+    eris.OOOO = eris.feri.create_dataset('OOOO', (noccb,noccb,noccb,noccb), 'f8')
+    eris.OVOO = eris.feri.create_dataset('OVOO', (noccb,nvirb,noccb,noccb), 'f8')
+    eris.OVOV = eris.feri.create_dataset('OVOV', (noccb,nvirb,noccb,nvirb), 'f8')
+    eris.OOVV = eris.feri.create_dataset('OOVV', (noccb,noccb,nvirb,nvirb), 'f8')
+    eris.OVVO = eris.feri.create_dataset('OVVO', (noccb,nvirb,nvirb,noccb), 'f8')
+    eris.OVVV = eris.feri.create_dataset('OVVV', (noccb,nvirb,nvirb*(nvirb+1)//2), 'f8')
+    #eris.VVVV = eris.feri.create_dataset('VVVV', (nvirb,nvirb,nvirb,nvirb), 'f8')
+    eris.ooOO = eris.feri.create_dataset('ooOO', (nocca,nocca,noccb,noccb), 'f8')
+    eris.ovOO = eris.feri.create_dataset('ovOO', (nocca,nvira,noccb,noccb), 'f8')
+    eris.ovOV = eris.feri.create_dataset('ovOV', (nocca,nvira,noccb,nvirb), 'f8')
+    eris.ooVV = eris.feri.create_dataset('ooVV', (nocca,nocca,nvirb,nvirb), 'f8')
+    eris.ovVO = eris.feri.create_dataset('ovVO', (nocca,nvira,nvirb,noccb), 'f8')
+    eris.ovVV = eris.feri.create_dataset('ovVV', (nocca,nvira,nvirb*(nvirb+1)//2), 'f8')
+    #eris.vvVV = eris.feri.create_dataset('vvVV', (nvira,nvira,nvirb,nvirb), 'f8')
+    eris.OVoo = eris.feri.create_dataset('OVoo', (noccb,nvirb,nocca,nocca), 'f8')
+    eris.OOvv = eris.feri.create_dataset('OOvv', (noccb,noccb,nvira,nvira), 'f8')
+    eris.OVvo = eris.feri.create_dataset('OVvo', (noccb,nvirb,nvira,nocca), 'f8')
+    eris.OVvv = eris.feri.create_dataset('OVvv', (noccb,nvirb,nvira*(nvira+1)//2), 'f8')
 
-            cput1 = log.timer_debug1('transforming oopq, ovpq', *cput1)
+    cput1 = time.clock(), time.time()
+    mol = mycc.mol
+    # <ij||pq> = <ij|pq> - <ij|qp> = (ip|jq) - (iq|jp)
+    tmpf = lib.H5TmpFile()
+    ao2mo.general(mol, (orboa,moa,moa,moa), tmpf, 'aa')
+    buf = numpy.empty((nmoa,nmoa,nmoa))
+    for i in range(nocca):
+        lib.unpack_tril(tmpf['aa'][i*nmoa:(i+1)*nmoa], out=buf)
+        eris.oooo[i] = buf[:nocca,:nocca,:nocca]
+        eris.ovoo[i] = buf[nocca:,:nocca,:nocca]
+        eris.ovov[i] = buf[nocca:,:nocca,nocca:]
+        eris.oovv[i] = buf[:nocca,nocca:,nocca:]
+        eris.ovvo[i] = buf[nocca:,nocca:,:nocca]
+        eris.ovvv[i] = lib.pack_tril(buf[nocca:,nocca:,nocca:])
+    del(tmpf['aa'])
 
-            ao2mo.full(cc.mol, orbva, self.feri, dataname='vvvv')
-            ao2mo.full(cc.mol, orbvb, self.feri, dataname='VVVV')
-            ao2mo.general(cc.mol, (orbva,orbva,orbvb,orbvb), self.feri, dataname='vvVV')
-            self.vvvv = self.feri['vvvv']
-            self.VVVV = self.feri['VVVV']
-            self.vvVV = self.feri['vvVV']
+    buf = numpy.empty((nmob,nmob,nmob))
+    ao2mo.general(mol, (orbob,mob,mob,mob), tmpf, 'bb')
+    for i in range(noccb):
+        lib.unpack_tril(tmpf['bb'][i*nmob:(i+1)*nmob], out=buf)
+        eris.OOOO[i] = buf[:noccb,:noccb,:noccb]
+        eris.OVOO[i] = buf[noccb:,:noccb,:noccb]
+        eris.OVOV[i] = buf[noccb:,:noccb,noccb:]
+        eris.OOVV[i] = buf[:noccb,noccb:,noccb:]
+        eris.OVVO[i] = buf[noccb:,noccb:,:noccb]
+        eris.OVVV[i] = lib.pack_tril(buf[noccb:,noccb:,noccb:])
+    del(tmpf['bb'])
 
-            cput1 = log.timer_debug1('transforming vvvv', *cput1)
+    buf = numpy.empty((nmoa,nmob,nmob))
+    ao2mo.general(mol, (orboa,moa,mob,mob), tmpf, 'ab')
+    for i in range(nocca):
+        lib.unpack_tril(tmpf['ab'][i*nmoa:(i+1)*nmoa], out=buf)
+        eris.ooOO[i] = buf[:nocca,:noccb,:noccb]
+        eris.ovOO[i] = buf[nocca:,:noccb,:noccb]
+        eris.ovOV[i] = buf[nocca:,:noccb,noccb:]
+        eris.ooVV[i] = buf[:nocca,noccb:,noccb:]
+        eris.ovVO[i] = buf[nocca:,noccb:,:noccb]
+        eris.ovVV[i] = lib.pack_tril(buf[nocca:,noccb:,noccb:])
+    del(tmpf['ab'])
 
-        log.timer('CCSD integral transformation', *cput0)
+    buf = numpy.empty((nmob,nmoa,nmoa))
+    ao2mo.general(mol, (orbob,mob,moa,moa), tmpf, 'ba')
+    for i in range(noccb):
+        lib.unpack_tril(tmpf['ba'][i*nmob:(i+1)*nmob], out=buf)
+        eris.OVoo[i] = buf[noccb:,:nocca,:nocca]
+        eris.OOvv[i] = buf[:noccb,nocca:,nocca:]
+        eris.OVvo[i] = buf[noccb:,nocca:,:nocca]
+        eris.OVvv[i] = lib.pack_tril(buf[noccb:,nocca:,nocca:])
+    del(tmpf['ba'])
+    buf = None
+    cput1 = logger.timer_debug1(mycc, 'transforming oopq, ovpq', *cput1)
+
+    ao2mo.full(mol, orbva, eris.feri, dataname='vvvv')
+    ao2mo.full(mol, orbvb, eris.feri, dataname='VVVV')
+    ao2mo.general(mol, (orbva,orbva,orbvb,orbvb), eris.feri, dataname='vvVV')
+    eris.vvvv = eris.feri['vvvv']
+    eris.VVVV = eris.feri['VVVV']
+    eris.vvVV = eris.feri['vvVV']
+    cput1 = logger.timer_debug1(mycc, 'transforming vvvv', *cput1)
+
+    return eris
 
 
 def get_umoidx(cc):
@@ -848,70 +819,6 @@ def get_umoidx(cc):
         moidxb[list(frozen[1])] = False
 
     return moidxa,moidxb
-
-def orbspin_of_sorted_mo_energy(mo_energy, mo_occ=None):
-    if isinstance(mo_energy, np.ndarray) and mo_energy.ndim == 1:
-        # RHF orbitals
-        orbspin = np.zeros(mo_energy.size*2, dtype=int)
-        orbspin[1::2] = 1
-    else:  # UHF orbitals
-        if mo_occ is None:
-            mo_occ = np.zeros_like(mo_energy)
-        idxo = np.hstack([mo_energy[0][mo_occ[0]==1],
-                          mo_energy[1][mo_occ[1]==1]]).argsort()
-        idxv = np.hstack([mo_energy[0][mo_occ[0]==0],
-                          mo_energy[1][mo_occ[1]==0]]).argsort()
-        nocca = np.count_nonzero(mo_occ[0]==1)
-        nvira = np.count_nonzero(mo_occ[0]==0)
-        occspin = np.zeros(idxo.size, dtype=int)
-        occspin[nocca:] = 1  # label beta orbitals
-        virspin = np.zeros(idxv.size, dtype=int)
-        virspin[nvira:] = 1
-        orbspin = np.hstack([occspin[idxo], virspin[idxv]])
-    return orbspin
-
-def uspatial2spin(cc, moidx, mo_coeff):
-    '''Convert the results of an unrestricted mean-field calculation to spin-orbital form.
-
-    Spin-orbital ordering is determined by orbital energy without regard for spin.
-
-    Returns:
-        fock : (nso,nso) ndarray
-            The Fock matrix in the basis of spin-orbitals
-        so_coeff : (nao, nso) ndarray
-            The matrix of spin-orbital coefficients in the AO basis
-        spin : (nso,) ndarary
-            The spin (0 or 1) of each spin-orbital
-    '''
-# Note: Always recompute the fock matrix in UCCSD because the mf object may be
-# converted from ROHF object in which orbital energies are eigenvalues of
-# Roothaan Fock rather than the true alpha, beta orbital energies.
-    dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
-    fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
-    fockab = [reduce(numpy.dot, (mo_coeff[0].T, fockao[0], mo_coeff[0])),
-              reduce(numpy.dot, (mo_coeff[1].T, fockao[1], mo_coeff[1]))]
-
-    mo_energy = [fockab[0].diagonal(), fockab[1].diagonal()]
-    mo_occa = cc.mo_occ[0][moidx[0]]
-    mo_occb = cc.mo_occ[1][moidx[1]]
-    spin = orbspin_of_sorted_mo_energy(mo_energy, (mo_occa,mo_occb))
-
-    sorta = np.hstack([np.where(mo_occa!=0)[0], np.where(mo_occa==0)[0]])
-    sortb = np.hstack([np.where(mo_occb!=0)[0], np.where(mo_occb==0)[0]])
-    idxa = np.where(spin == 0)[0]
-    idxb = np.where(spin == 1)[0]
-
-    nao = mo_coeff[0].shape[0]
-    nmo = mo_coeff[0].shape[1] + mo_coeff[1].shape[1]
-    fock = np.zeros((nmo,nmo), dtype=fockab[0].dtype)
-    lib.takebak_2d(fock, lib.take_2d(fockab[0], sorta, sorta), idxa, idxa)
-    lib.takebak_2d(fock, lib.take_2d(fockab[1], sortb, sortb), idxb, idxb)
-
-    so_coeff = np.zeros((nao, nmo), dtype=mo_coeff[0].dtype)
-    so_coeff[:,idxa] = mo_coeff[0][:,sorta]
-    so_coeff[:,idxb] = mo_coeff[1][:,sortb]
-
-    return fock, so_coeff, spin
 
 
 def make_tau(t2, t1, r1, fac=1, out=None):
