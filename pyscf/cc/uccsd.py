@@ -16,7 +16,6 @@ from pyscf.cc import _ccsd
 from pyscf.ao2mo import _ao2mo
 from pyscf.lib import linalg_helper
 from pyscf.cc import uintermediates as imd
-from pyscf.cc.addons import spatial2spin, spin2spatial
 
 #einsum = np.einsum
 einsum = lib.einsum
@@ -39,11 +38,16 @@ def update_amps(cc, t1, t2, eris):
 
     u1a = np.zeros_like(t1a)
     u1b = np.zeros_like(t1b)
-    u2aa = np.zeros_like(t2aa)
-    u2ab = np.zeros_like(t2ab)
-    u2bb = np.zeros_like(t2bb)
-
+    #:eris_vvvv = ao2mo.restore(1, np.asarray(eris.vvvv), nvirb)
+    #:eris_VVVV = ao2mo.restore(1, np.asarray(eris.VVVV), nvirb)
+    #:eris_vvVV = _restore(np.asarray(eris.vvVV), nvira, nvirb)
+    #:u2aa += lib.einsum('ijef,aebf->ijab', tauaa, eris_vvvv) * .5
+    #:u2bb += lib.einsum('ijef,aebf->ijab', taubb, eris_VVVV) * .5
+    #:u2ab += lib.einsum('iJeF,aeBF->iJaB', tauab, eris_vvVV)
     tauaa, tauab, taubb = make_tau(t2, t1, t1)
+    u2aa, u2ab, u2bb = _add_vvvv(cc, None, (tauaa,tauab,taubb), eris)
+    u2aa *= .5
+    u2bb *= .5
 
     Fooa  = fooa - np.diag(np.diag(fooa))
     Foob  = foob - np.diag(np.diag(foob))
@@ -284,15 +288,6 @@ def update_amps(cc, t1, t2, eris):
     u2ab -= lib.einsum('iMaB,MJ->iJaB', t2ab, Ftmpb)
     u2ab -= lib.einsum('mIaB,mj->jIaB', t2ab, Ftmpa)
 
-    #:eris_vvvv = ao2mo.restore(1, np.asarray(eris.vvvv), nvirb)
-    #:eris_VVVV = ao2mo.restore(1, np.asarray(eris.VVVV), nvirb)
-    #:eris_vvVV = _restore(np.asarray(eris.vvVV), nvira, nvirb)
-    #:u2aa += lib.einsum('ijef,aebf->ijab', tauaa, eris_vvvv) * .5
-    #:u2bb += lib.einsum('ijef,aebf->ijab', taubb, eris_VVVV) * .5
-    #:u2ab += lib.einsum('iJeF,aeBF->iJaB', tauab, eris_vvVV)
-    tauaa, tauab, taubb = make_tau(t2, t1, t1)
-    _add_vvvv_(cc, (tauaa,tauab,taubb), eris, (u2aa,u2ab,u2bb))
-
     eris_ovoo = numpy.asarray(eris.ovoo)
     eris_OVOO = numpy.asarray(eris.OVOO)
     eris_OVoo = numpy.asarray(eris.OVoo)
@@ -417,9 +412,135 @@ def vector_to_amplitudes(vector, nmo, nocc):
         t2ab = vector[size-sizeab:].copy().reshape(nocca,noccb,nvira,nvirb)
         return (t1a,t1b), (t2aa,t2ab,t2bb)
 
+def amplitudes_from_rccsd(t1, t2):
+    t2aa = t2 - t2.transpose(0,1,3,2)
+    return (t1,t1), (t2aa,t2,t2aa)
+
+def from_rccsd(rcc):
+    mf = scf.addons.convert_to_uhf(rcc._scf)
+    ucc = UCCSD(mf)
+    assert(rcc._nocc is None)
+    assert(rcc._nmo is None)
+    ucc.__dict__.update(rcc.__dict__)
+    ucc._scf = mf
+    ucc.mo_coeff = mf.mo_coeff
+    ucc.mo_occ = mf.mo_occ
+    if not isinstance(rcc.frozen, (int, np.integer)):
+        raise NotImplementedError
+    ucc.t1, ucc.t2 = amplitudes_from_rccsd(rcc.t1, rcc.t2)
+    return ucc
+
+
+def _add_vvVV(mycc, t1, t2ab, eris, out=None):
+    '''Ht2 = np.einsum('ijcd,acdb->ijab', t2ab, vvvv)
+    without using symmetry in t2ab or Ht2
+    '''
+    time0 = time.clock(), time.time()
+    if t2ab.size == 0:
+        return np.zeros_like(t2ab)
+    if t1 is not None:
+        t2ab = make_tau_ab(t2ab, t1, t1)
+
+    log = logger.Logger(mycc.stdout, mycc.verbose)
+    nocca, noccb, nvira, nvirb = t2ab.shape
+
+    if mycc.direct:  # AO direct CCSD
+        if hasattr(eris, 'mo_coeff'):
+            mo_a, mo_b = eris.mo_coeff
+        else:
+            moidxa, moidxb = get_moidx(mycc)
+            mo_a = mycc.mo_coeff[0][:,moidxa]
+            mo_b = mycc.mo_coeff[1][:,moidxb]
+        tau = lib.einsum('ijab,pa->ijpb', t2ab, mo_a[:,nocca:])
+        tau = lib.einsum('ijab,pb->ijap', tau, mo_b[:,noccb:])
+        time0 = logger.timer_debug1(mycc, 'vvvv-tau mo2ao', *time0)
+        max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
+        buf = eris._contract_vvvv_t2(tau, mycc.direct, out, max_memory, log)
+        mo = np.asarray(np.hstack((mo_a[:,nocca:], mo_b[:,noccb:])), order='F')
+        Ht2 = _ao2mo.nr_e2(buf.reshape(nocca*noccb,-1), mo,
+                           (0,nvira,nvira,nvira+nvirb), 's1', 's1')
+        return Ht2.reshape(t2ab.shape)
+    else:
+        max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
+        return eris._contract_vvvv_t2(t2ab, mycc.direct, out, max_memory, log)
+
+def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
+    time0 = time.clock(), time.time()
+    log = logger.Logger(mycc.stdout, mycc.verbose)
+    if t1 is None:
+        t2aa, t2ab, t2bb = t2
+    else:
+        t2aa, t2ab, t2bb = make_tau(t2, t1, t1)
+    nocca, nvira = t2aa.shape[1:3]
+    noccb, nvirb = t2bb.shape[1:3]
+
+    if mycc.direct:
+        assert(not with_ovvv)
+        if hasattr(eris, 'mo_coeff'):
+            mo_a, mo_b = eris.mo_coeff
+        else:
+            moidxa, moidxb = get_moidx(mycc)
+            mo_a = mycc.mo_coeff[0][:,moidxa]
+            mo_b = mycc.mo_coeff[1][:,moidxb]
+        nao = mo_a.shape[0]
+        otrila = numpy.tril_indices(nocca,-1)
+        otrilb = numpy.tril_indices(noccb,-1)
+        if nocca > 1:
+            tauaa = lib.einsum('xab,pa->xpb', t2aa[otrila], mo_a[:,nocca:])
+            tauaa = lib.einsum('xab,pb->xap', tauaa, mo_a[:,nocca:])
+        else:
+            tauaa = numpy.zeros((0,nao,nao))
+        if noccb > 1:
+            taubb = lib.einsum('xab,pa->xpb', t2bb[otrilb], mo_b[:,noccb:])
+            taubb = lib.einsum('xab,pb->xap', taubb, mo_b[:,noccb:])
+        else:
+            taubb = numpy.zeros((0,nao,nao))
+        tauab = lib.einsum('ijab,pa->ijpb', t2ab, mo_a[:,nocca:])
+        tauab = lib.einsum('ijab,pb->ijap', tauab, mo_b[:,noccb:])
+        tau = numpy.vstack((tauaa, taubb, tauab.reshape(nocca*noccb,nao,nao)))
+        tauaa = taubb = tauab = None
+        time0 = log.timer_debug1('vvvv-tau', *time0)
+
+        max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
+        buf = eris._contract_vvvv_t2(tau, mycc.direct, out, max_memory, log)
+
+        mo = np.asarray(np.hstack((mo_a[:,nocca:], mo_b[:,noccb:])), order='F')
+        u2aa = numpy.zeros_like(t2aa)
+        if nocca > 1:
+            u2tril = buf[:otrila[0].size]
+            u2tril = _ao2mo.nr_e2(u2tril.reshape(-1,nao**2), mo,
+                                  (0,nvira,0,nvira), 's1', 's1')
+            u2tril = u2tril.reshape(otrila[0].size,nvira,nvira)
+            u2aa[otrila[1],otrila[0]] = u2tril.transpose(0,2,1)
+            u2aa[otrila] = u2tril
+
+        u2bb = numpy.zeros_like(t2bb)
+        if noccb > 1:
+            u2tril = buf[otrila[0].size:otrila[0].size+otrilb[0].size]
+            u2tril = _ao2mo.nr_e2(u2tril.reshape(-1,nao**2), mo,
+                                  (nvira,nvira+nvirb,nvira,nvira+nvirb), 's1', 's1')
+            u2tril = u2tril.reshape(otrilb[0].size,nvirb,nvirb)
+            u2bb[otrilb[1],otrilb[0]] = u2tril.transpose(0,2,1)
+            u2bb[otrilb] = u2tril
+
+        u2ab = _ao2mo.nr_e2(buf[-nocca*noccb:].reshape(nocca*noccb,nao**2), mo,
+                            (0,nvira,nvira,nvira+nvirb), 's1', 's1')
+        u2ab = u2ab.reshape(t2ab.shape)
+
+    else:
+        u2aa = ccsd._add_vvvv(mycc, None, t2aa, eris, None, with_ovvv, 'jiba')
+        fakeri = ccsd._ChemistsERIs()
+        fakeri.mo_coeff = eris.mo_coeff[1]
+        fakeri.vvvv = eris.VVVV
+        u2bb = ccsd._add_vvvv(mycc, None, t2bb, fakeri, None, with_ovvv, 'jiba')
+        fakeri.vvvv = eris.vvVV
+        fakeri.mol = eris.mol
+        u2ab = ccsd._add_vvvv(mycc, None, t2ab, fakeri, None, with_ovvv, False)
+
+    return u2aa,u2ab,u2bb
+
 
 class UCCSD(ccsd.CCSD):
-
 # argument frozen can be
 # * An integer : The same number of inner-most alpha and beta orbitals are frozen
 # * One list : Same alpha and beta orbital indices to be frozen
@@ -430,27 +551,28 @@ class UCCSD(ccsd.CCSD):
         # Spin-orbital CCSD needs a stricter tolerance than spatial-orbital
         self.conv_tol_normt = 1e-6
 
-    def build(self):
-        '''Initialize integrals and orbspin'''
-        self.orbspin = None
-
-    @property
-    def nocc(self):
-        nocca, noccb = self.get_nocc()
-        return nocca + noccb
-    @nocc.setter
-    def nocc(self, n):
-        nocca, noccb = n
-        self._nocc = (nocca, noccb)
-
-    @property
-    def nmo(self):
-        nmoa, nmob = self.get_nmo()
-        return nmoa + nmob
-    @nmo.setter
-    def nmo(self, n):
-        nmoa, nmob = n
-        self._nmo = (nmoa, nmob)
+    def dump_flags(self):
+        log = logger.Logger(self.stdout, self.verbose)
+        log.info('')
+        log.info('******** %s flags ********', self.__class__)
+        nocc = self.nocc
+        nmo = self.nmo
+        nvir = (nmo[0]-nocc[0], nmo[1]-nocc[1])
+        log.info('CC2 = %g', self.cc2)
+        log.info('CCSD nocc = %s, nvir = %s', nocc, nvir)
+        if self.frozen is not 0:
+            log.info('frozen orbitals %s', self.frozen)
+        log.info('max_cycle = %d', self.max_cycle)
+        log.info('direct = %d', self.direct)
+        log.info('conv_tol = %g', self.conv_tol)
+        log.info('conv_tol_normt = %s', self.conv_tol_normt)
+        log.info('diis_space = %d', self.diis_space)
+        #log.info('diis_file = %s', self.diis_file)
+        log.info('diis_start_cycle = %d', self.diis_start_cycle)
+        log.info('diis_start_energy_diff = %g', self.diis_start_energy_diff)
+        log.info('max_memory %d MB (current use %d MB)',
+                 self.max_memory, lib.current_memory()[0])
+        return self
 
     get_nocc = get_nocc
     get_nmo = get_nmo
@@ -491,6 +613,8 @@ class UCCSD(ccsd.CCSD):
 
     energy = energy
     update_amps = update_amps
+    _add_vvvv = _add_vvvv
+    _add_vvVV = _add_vvVV
 
     def kernel(self, t1=None, t2=None, eris=None, mbpt2=False):
         return self.ccsd(t1, t2, eris, mbpt2)
@@ -560,7 +684,7 @@ class UCCSD(ccsd.CCSD):
         nao = self.mo_coeff[0].shape[0]
         nmo_pair = nmoa * (nmoa+1) // 2
         nao_pair = nao * (nao+1) // 2
-        mem_incore = (max(nao_pair**2, nmoa**4) + nmo_pair**4) * 8/1e6
+        mem_incore = (max(nao_pair**2, nmoa**4) + nmo_pair**2) * 8/1e6
         mem_now = lib.current_memory()[0]
         if (self._scf._eri is not None and
             (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
@@ -600,13 +724,39 @@ class UCCSD(ccsd.CCSD):
         if nmo is None: nmo = self.get_nmo()
         return vector_to_amplitudes(vector, nmo, nocc)
 
+    def amplitudes_from_rccsd(self, t1, t2):
+        return amplitudes_from_rccsd(t1, t2)
 
 
 class _ChemistsERIs(ccsd._ChemistsERIs):
+    def __init__(self):
+        ccsd._ChemistsERIs.__init__(self)
+
+        self.vvvv = None
+        self.OOOO = None
+        self.OVOO = None
+        self.OVOV = None
+        self.OOVV = None
+        self.OVVO = None
+        self.OVVV = None
+        self.VVVV = None
+
+        self.ooOO = None
+        self.ovOO = None
+        self.ovOV = None
+        self.ooVV = None
+        self.ovVO = None
+        self.ovVV = None
+        self.vvVV = None
+
+        self.OVoo = None
+        self.OOvv = None
+        self.OVvo = None
+
     def _common_init_(self, mycc, mo_coeff=None):
         if mo_coeff is None:
             mo_coeff = mycc.mo_coeff
-        mo_idx = get_umoidx(mycc)
+        mo_idx = get_moidx(mycc)
         self.mo_coeff = mo_coeff = \
                 (mo_coeff[0][:,mo_idx[0]], mo_coeff[1][:,mo_idx[1]])
 # Note: Recomputed fock matrix since SCF may not be fully converged.
@@ -617,6 +767,7 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
         self.fock = (self.focka, self.fockb)
         self.nocc = mycc.get_nocc()
         self.nocca, self.noccb = self.nocc
+        self.mol = mycc.mol
         return self
 
 
@@ -782,42 +933,31 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     buf = None
     cput1 = logger.timer_debug1(mycc, 'transforming oopq, ovpq', *cput1)
 
-    ao2mo.full(mol, orbva, eris.feri, dataname='vvvv')
-    ao2mo.full(mol, orbvb, eris.feri, dataname='VVVV')
-    ao2mo.general(mol, (orbva,orbva,orbvb,orbvb), eris.feri, dataname='vvVV')
-    eris.vvvv = eris.feri['vvvv']
-    eris.VVVV = eris.feri['VVVV']
-    eris.vvVV = eris.feri['vvVV']
-    cput1 = logger.timer_debug1(mycc, 'transforming vvvv', *cput1)
+    if not mycc.direct:
+        ao2mo.full(mol, orbva, eris.feri, dataname='vvvv')
+        ao2mo.full(mol, orbvb, eris.feri, dataname='VVVV')
+        ao2mo.general(mol, (orbva,orbva,orbvb,orbvb), eris.feri, dataname='vvVV')
+        eris.vvvv = eris.feri['vvvv']
+        eris.VVVV = eris.feri['VVVV']
+        eris.vvVV = eris.feri['vvVV']
+        cput1 = logger.timer_debug1(mycc, 'transforming vvvv', *cput1)
 
     return eris
 
 
-def get_umoidx(cc):
+def get_moidx(cc):
     '''Get MO boolean indices for unrestricted reference, accounting for frozen orbs.'''
     moidxa = numpy.ones(cc.mo_occ[0].size, dtype=bool)
     moidxb = numpy.ones(cc.mo_occ[1].size, dtype=bool)
     if isinstance(cc.frozen, (int, numpy.integer)):
         moidxa[:cc.frozen] = False
         moidxb[:cc.frozen] = False
-#        dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
-#        fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
-#        eab = list()
-#        for a in range(2):
-#            eab.append( np.diag(reduce(numpy.dot, (cc.mo_coeff[a].T, fockao[a], cc.mo_coeff[a]))) )
-#        eab = np.array(eab)
-#        #FIXME: if occ-energy > vir-energy, vir orbitals may be appeared in occ set and may be frozen
-#        idxs = np.column_stack(np.unravel_index(np.argsort(eab.ravel()), (2, eab.shape[1])))
-#        frozen = [[],[]]
-#        for n, idx in zip(range(cc.frozen), idxs):
-#            frozen[idx[0]].append(idx[1])
+    elif isinstance(cc.frozen[0], (int, numpy.integer)):
+        moidxa[list(cc.frozen)] = False
+        moidxb[list(cc.frozen)] = False
     else:
-        frozen = cc.frozen
-        if len(frozen) > 0 and isinstance(frozen[0], (int, numpy.integer)):
-            frozen = [frozen,frozen]
-        moidxa[list(frozen[0])] = False
-        moidxb[list(frozen[1])] = False
-
+        moidxa[list(cc.frozen[0])] = False
+        moidxb[list(cc.frozen[1])] = False
     return moidxa,moidxb
 
 
@@ -846,50 +986,6 @@ def make_tau_ab(t2ab, t1, r1, fac=1, out=None):
     tau1ab += t2ab
     return tau1ab
 
-def _add_vvvv_(cc, t2, eris, Ht2):
-    t2aa, t2ab, t2bb = t2
-    u2aa, u2ab, u2bb = Ht2
-    nocca, nvira = t2aa.shape[1:3]
-    noccb, nvirb = t2bb.shape[1:3]
-    t1a = np.zeros((nocca,nvira))
-    t1b = np.zeros((noccb,nvirb))
-    u2aa += cc._add_vvvv(t1a, t2aa, eris) *.5
-    fakeri = ccsd._ChemistsERIs()
-    fakeri.mo_coeff = eris.mo_coeff[1]
-    fakeri.vvvv = eris.VVVV
-    u2bb += cc._add_vvvv(t1b, t2bb, fakeri) * .5
-    fakeri.vvvv = eris.vvVV
-    u2ab += _add_vvVV(cc, t2ab, fakeri)
-    return (u2aa,u2ab,u2bb)
-
-def _add_vvVV(mycc, t2ab, eris, out=None):
-    '''Ht2 = np.einsum('ijcd,acdb->ijab', t2ab, vvvv)
-    without using symmetry in t2ab or Ht2
-    '''
-    time0 = time.clock(), time.time()
-    if t2ab.size == 0:
-        return np.zeros_like(t2ab)
-
-    nocc, noccb, nvira, nvirb = t2ab.shape
-
-    if mycc.direct:  # AO direct CCSD
-        mol = mycc.mol
-        if hasattr(eris, 'mo_coeff'):
-            mo_a, mo_b = eris.mo_coeff
-        else:
-            moidxa, moidxb = get_moidx(mycc)
-            mo_a = mycc.mo_coeff[0][:,moidxa]
-            mo_b = mycc.mo_coeff[1][:,moidxb]
-        tau = lib.einsum('ijab,pa->ijpb', t2ab, mo_a[:,nocca:])
-        tau = lib.einsum('ijab,pb->ijap', tau, mo_b[:,noccb:])
-        time0 = logger.timer_debug1(mycc, 'vvvv-tau mo2ao', *time0)
-        buf = eris._contract_vvvv_t2(mycc, None, tau, out)
-        mo = np.asarray(np.hstack((mo_a[:,nocca:], mo_b[:,noccb:])), order='F')
-        Ht2 = _ao2mo.nr_e2(buf.reshape(nocca*noccb,-1), mo,
-                           (0,nvira,nvira,nvira+nvirb), 's1', 's1')
-        return Ht2.reshape(t2ab.shape)
-    else:
-        return eris._contract_vvvv_t2(mycc, eris.vvvv, t2ab, out)
 
 def _cp(a):
     return np.array(a, copy=False, order='C')
@@ -908,13 +1004,8 @@ if __name__ == '__main__':
     t2 = np.random.random((nocca,noccb,nvira,nvirb))
     eris = ccsd._ChemistsERIs()
     eris.vvvv = np.random.random((nvira_pair,nvirb_pair))
-    mycc = lambda: None
-    mycc.stdout = mol.stdout
-    mycc.verbose = mol.verbose
-    mycc.direct = False
-    mycc.mol = mol
-    mycc.max_memory = 2
-    print(lib.finger(_add_vvVV(mycc, t2, eris)) - 12.00904827896089)
+    eris.mol = mol
+    print(lib.finger(eris._contract_vvvv_t2(t2)) - 12.00904827896089)
 
     mol = gto.Mole()
     mol.atom = [
@@ -940,18 +1031,20 @@ if __name__ == '__main__':
     fakeris = ccsd._ChemistsERIs()
     fakeris.mo_coeff = eris.mo_coeff
     fakeris.vvvv = eris.vvVV
+    fakeris.mol = mol
     t2ab = np.random.random((nocca,noccb,nvira,nvirb))
     t1a = np.zeros((nocca,nvira))
     t1b = np.zeros((noccb,nvirb))
-    print(lib.finger(_add_vvVV(mycc, t2ab, fakeris)) - 7.30721835320601)
+    print(lib.finger(mycc._add_vvVV(None, t2ab, fakeris)) - 7.30721835320601)
+    fakeris.vvvv = None
     mycc.direct = True
     mycc.max_memory = 0
-    print(lib.finger(_add_vvVV(mycc, t2ab, fakeris)) - 7.30721835320601)
+    print(lib.finger(mycc._add_vvVV(None, t2ab, fakeris)) - 7.30721835320601)
 
     mycc = UCCSD(mf)
     eris = mycc.ao2mo()
-#    ecc, t1, t2 = mycc.kernel(eris=eris)
-#    print(ecc - -0.17009326207891234)
+    ecc, t1, t2 = mycc.kernel(eris=eris)
+    print(ecc - -0.17009326207891234)
 
     np.random.seed(4)
     mo_coeff = np.random.random((2,18,18))-.5
@@ -979,7 +1072,7 @@ if __name__ == '__main__':
     mf = scf.UHF(mol).run()
     # Freeze 1s electrons
     # also acceptable
-    #frozen = 4
+    #frozen = 4 or [2,2]
     frozen = [[0,1], [0,1]]
     ucc = UCCSD(mf, frozen=frozen)
     eris = ucc.ao2mo()
@@ -994,10 +1087,10 @@ if __name__ == '__main__':
     mol.basis = 'cc-pvdz'
     mol.spin = 0
     mol.build()
-    mf = scf.UHF(mol)
-    print(mf.scf())
+    mf = scf.UHF(mol).run()
 
     mycc = UCCSD(mf)
+    mycc.direct = True
     ecc, t1, t2 = mycc.kernel()
     print(ecc - -0.2133432712431435)
     print(mycc.ccsd_t() - -0.003060021865720902)

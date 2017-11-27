@@ -308,6 +308,18 @@ def eomee_ccsd_matvec(eom, vector, imds=None):
     r1a, r1b = r1
     r2aa, r2ab, r2bb = r2
 
+    #:eris_vvvv = ao2mo.restore(1, np.asarray(eris.vvvv), nvirb)
+    #:eris_VVVV = ao2mo.restore(1, np.asarray(eris.VVVV), nvirb)
+    #:eris_vvVV = _restore(np.asarray(eris.vvVV), nvira, nvirb)
+    #:Hr2aa += lib.einsum('ijef,aebf->ijab', tau2aa, eris_vvvv) * .5
+    #:Hr2bb += lib.einsum('ijef,aebf->ijab', tau2bb, eris_VVVV) * .5
+    #:Hr2ab += lib.einsum('iJeF,aeBF->iJaB', tau2ab, eris_vvVV)
+    tau2aa, tau2ab, tau2bb = uccsd.make_tau(r2, r1, t1, 2)
+    Hr2aa, Hr2ab, Hr2bb = eom._cc._add_vvvv(None, (tau2aa,tau2ab,tau2bb), eris)
+    Hr2aa *= .5
+    Hr2bb *= .5
+    tau2aa = tau2ab = tau2bb = None
+
     Hr1a  = lib.einsum('ae,ie->ia', imds.Fvva, r1a)
     Hr1a -= lib.einsum('mi,ma->ia', imds.Fooa, r1a)
     Hr1a += np.einsum('me,imae->ia',imds.Fova, r2aa)
@@ -317,17 +329,17 @@ def eomee_ccsd_matvec(eom, vector, imds=None):
     Hr1b += np.einsum('me,imae->ia',imds.Fovb, r2bb)
     Hr1b += np.einsum('me,mIeA->IA',imds.Fova, r2ab)
 
-    Hr2aa = lib.einsum('mnij,mnab->ijab', imds.woooo, r2aa) * .25
-    Hr2bb = lib.einsum('mnij,mnab->ijab', imds.wOOOO, r2bb) * .25
-    Hr2ab = lib.einsum('mNiJ,mNaB->iJaB', imds.woOoO, r2ab)
-    Hr2aa+= lib.einsum('be,ijae->ijab', imds.Fvva, r2aa)
-    Hr2bb+= lib.einsum('be,ijae->ijab', imds.Fvvb, r2bb)
-    Hr2ab+= lib.einsum('BE,iJaE->iJaB', imds.Fvvb, r2ab)
-    Hr2ab+= lib.einsum('be,iJeA->iJbA', imds.Fvva, r2ab)
-    Hr2aa-= lib.einsum('mj,imab->ijab', imds.Fooa, r2aa)
-    Hr2bb-= lib.einsum('mj,imab->ijab', imds.Foob, r2bb)
-    Hr2ab-= lib.einsum('MJ,iMaB->iJaB', imds.Foob, r2ab)
-    Hr2ab-= lib.einsum('mj,mIaB->jIaB', imds.Fooa, r2ab)
+    Hr2aa += lib.einsum('mnij,mnab->ijab', imds.woooo, r2aa) * .25
+    Hr2bb += lib.einsum('mnij,mnab->ijab', imds.wOOOO, r2bb) * .25
+    Hr2ab += lib.einsum('mNiJ,mNaB->iJaB', imds.woOoO, r2ab)
+    Hr2aa += lib.einsum('be,ijae->ijab', imds.Fvva, r2aa)
+    Hr2bb += lib.einsum('be,ijae->ijab', imds.Fvvb, r2bb)
+    Hr2ab += lib.einsum('BE,iJaE->iJaB', imds.Fvvb, r2ab)
+    Hr2ab += lib.einsum('be,iJeA->iJbA', imds.Fvva, r2ab)
+    Hr2aa -= lib.einsum('mj,imab->ijab', imds.Fooa, r2aa)
+    Hr2bb -= lib.einsum('mj,imab->ijab', imds.Foob, r2bb)
+    Hr2ab -= lib.einsum('MJ,iMaB->iJaB', imds.Foob, r2ab)
+    Hr2ab -= lib.einsum('mj,mIaB->jIaB', imds.Fooa, r2ab)
 
     #:tau2aa, tau2ab, tau2bb = uccsd.make_tau(r2, r1, t1, 2)
     #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocca*nvira,-1)).reshape(nocca,nvira,nvira,nvira)
@@ -501,14 +513,6 @@ def eomee_ccsd_matvec(eom, vector, imds=None):
     Hr2ab+= lib.einsum('MbEj,IMAE->jIbA', imds.wOvVo, r2bb)
     Hr2ab+= lib.einsum('MbeJ,iMeA->iJbA', imds.wOvvO, r2ab)
 
-    #:eris_vvvv = ao2mo.restore(1, np.asarray(eris.vvvv), nvirb)
-    #:eris_VVVV = ao2mo.restore(1, np.asarray(eris.VVVV), nvirb)
-    #:eris_vvVV = _restore(np.asarray(eris.vvVV), nvira, nvirb)
-    #:Hr2aa += lib.einsum('ijef,aebf->ijab', tau2aa, eris_vvvv) * .5
-    #:Hr2bb += lib.einsum('ijef,aebf->ijab', tau2bb, eris_VVVV) * .5
-    #:Hr2ab += lib.einsum('iJeF,aeBF->iJaB', tau2ab, eris_vvVV)
-    tau2aa, tau2ab, tau2bb = uccsd.make_tau(r2, r1, t1, 2)
-    uccsd._add_vvvv_(eom._cc, (tau2aa,tau2ab,tau2bb), eris, (Hr2aa,Hr2ab,Hr2bb))
     Hr2aa *= .5
     Hr2bb *= .5
     Hr2aa = Hr2aa - Hr2aa.transpose(0,1,3,2)
@@ -722,25 +726,27 @@ def eomsf_ccsd_matvec(eom, vector, imds=None):
     #:Hr2abbb += .5*lib.einsum('iJEF,AEBF->iJAB', tau2abbb, eris_VVVV)
     #:Hr2bbab += .5*lib.einsum('IJeF,aeBF->IJaB', tau2bbab, eris_vvVV)
     #:Hr2aaba += .5*lib.einsum('ijEf,bfAE->ijAb', tau2aaba, eris_vvVV)
-    tau2baaa *= .5
-    Hr2baaa += uccsd._add_vvVV(eom._cc, tau2baaa, eris)
     fakeri = uccsd._ChemistsERIs()
-    fakeri.mo_coeff = eris.mo_coeff[1]
+    fakeri.mol = eris.mol
+
+    eom._cc.direct = False
+    fakeri.mo_coeff = (eris.mo_coeff[0], eris.mo_coeff[0])
+    fakeri.vvvv = eris.vvvv
+    tau2baaa *= .5
+    Hr2baaa += eom._cc._add_vvVV(None, tau2baaa, eris)
+
+    fakeri.mo_coeff = (eris.mo_coeff[1], eris.mo_coeff[1])
     fakeri.vvvv = eris.VVVV
     tau2abbb *= .5
-    Hr2abbb += uccsd._add_vvVV(eom._cc, tau2abbb, fakeri)
+    Hr2abbb += eom._cc._add_vvVV(None, tau2abbb, fakeri)
+
     fakeri.mo_coeff = eris.mo_coeff
     fakeri.vvvv = eris.vvVV
     tau2bbab *= .5
-    Hr2bbab += uccsd._add_vvVV(eom._cc, tau2bbab, fakeri)
+    Hr2bbab += eom._cc._add_vvVV(None, tau2bbab, fakeri)
+    tau2aaba = tau2aaba.transpose(0,1,3,2)*.5
+    Hr2aaba += eom._cc._add_vvVV(None, tau2aaba, fakeri).transpose(0,1,3,2)
     fakeri = None
-    for i in range(nvira):
-        i0 = i*(i+1)//2
-        vvv = lib.unpack_tril(np.asarray(eris.vvVV[i0:i0+i+1]))
-        Hr2aaba[:,:,:,i ] += .5*lib.einsum('ijef,fae->ija', tau2aaba[:,:,:,:i+1], vvv)
-        if i > 0:
-            Hr2aaba[:,:,:,:i] += .5*lib.einsum('ije,bae->ijab', tau2aaba[:,:,:,i], vvv[:i])
-        vvv = None
 
     Hr2baaa = Hr2baaa - Hr2baaa.transpose(0,1,3,2)
     Hr2bbab = Hr2bbab - Hr2bbab.transpose(1,0,2,3)
@@ -920,26 +926,27 @@ def eeccsd_diag(eom, imds=None):
     #:Wvvaa += np.einsum('aabb->ab', eris_vvvv) - np.einsum('abba->ab', eris_vvvv)
     #:Wvvbb += np.einsum('aabb->ab', eris_VVVV) - np.einsum('abba->ab', eris_VVVV)
     #:Wvvab += np.einsum('aabb->ab', eris_vvVV)
-    for i in range(nvira):
-        i0 = i*(i+1)//2
-        vvv = lib.unpack_tril(np.asarray(eris.vvvv[i0:i0+i+1]))
-        tmp = np.einsum('bb->b', vvv[i])
-        Wvvaa[i] += tmp
-        tmp = np.einsum('bb->b', vvv[:,:i+1,i])
-        Wvvaa[i,:i+1] -= tmp
-        Wvvaa[:i  ,i] -= tmp[:i]
-        vvv = lib.unpack_tril(np.asarray(eris.vvVV[i0:i0+i+1]))
-        Wvvab[i] += np.einsum('bb->b', vvv[i])
-        vvv = None
-    for i in range(nvirb):
-        i0 = i*(i+1)//2
-        vvv = lib.unpack_tril(np.asarray(eris.VVVV[i0:i0+i+1]))
-        tmp = np.einsum('bb->b', vvv[i])
-        Wvvbb[i] += tmp
-        tmp = np.einsum('bb->b', vvv[:,:i+1,i])
-        Wvvbb[i,:i+1] -= tmp
-        Wvvbb[:i  ,i] -= tmp[:i]
-        vvv = None
+    if eris.vvvv is not None:
+        for i in range(nvira):
+            i0 = i*(i+1)//2
+            vvv = lib.unpack_tril(np.asarray(eris.vvvv[i0:i0+i+1]))
+            tmp = np.einsum('bb->b', vvv[i])
+            Wvvaa[i] += tmp
+            tmp = np.einsum('bb->b', vvv[:,:i+1,i])
+            Wvvaa[i,:i+1] -= tmp
+            Wvvaa[:i  ,i] -= tmp[:i]
+            vvv = lib.unpack_tril(np.asarray(eris.vvVV[i0:i0+i+1]))
+            Wvvab[i] += np.einsum('bb->b', vvv[i])
+            vvv = None
+        for i in range(nvirb):
+            i0 = i*(i+1)//2
+            vvv = lib.unpack_tril(np.asarray(eris.VVVV[i0:i0+i+1]))
+            tmp = np.einsum('bb->b', vvv[i])
+            Wvvbb[i] += tmp
+            tmp = np.einsum('bb->b', vvv[:,:i+1,i])
+            Wvvbb[i,:i+1] -= tmp
+            Wvvbb[:i  ,i] -= tmp[:i]
+            vvv = None
     Wvvba = Wvvab.T
     Hr2aa += Wvvaa.reshape(1,1,nvira,nvira)
     Hr2ab += Wvvab.reshape(1,1,nvira,nvirb)
@@ -1706,7 +1713,7 @@ class _IMDS:
         blksize = min(nocca, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb*nvira**2*3))))
         for i0,i1 in lib.prange(0, nocca, blksize):
             wvOvV = self.wvOvV[:,i0:i1]
-            for p0,p1 in lib.prange(0, nocca, blksize):
+            for p0,p1 in lib.prange(0, noccb, blksize):
                 OVvv = np.asarray(eris.OVvv[p0:p1]).reshape((p1-p0)*nvirb,-1)
                 OVvv = lib.unpack_tril(OVvv).reshape(-1,nvirb,nvira,nvira)
                 if p0 == i0:

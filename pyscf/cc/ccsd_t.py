@@ -126,11 +126,11 @@ def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
         buf1 = numpy.empty_like(bufopv)
         buf = numpy.empty((nocc,nvir,nvir))
         for j0, j1 in lib.prange(0, nvir, blksize):
-            voov = numpy.asarray(eris.voov[j0:j1])
-            vovv = numpy.asarray(eris.vovv[j0:j1])
+            ovov = numpy.asarray(eris.ovvo[:,j0:j1])
+            ovvv = numpy.asarray(eris.ovvv[:,j0:j1])
             for j in range(j0,j1):
-                oov = voov[j-j0,o_sorted]
-                ovv = vovv[j-j0,o_sorted]
+                oov = ovov[o_sorted,j-j0].transpose(0,2,1)
+                ovv = ovvv[o_sorted,j-j0]
                 if ovv.ndim == 2:
                     ovv = lib.unpack_tril(ovv, out=buf)
                 bufopv[:,:nocc,:] = oov[:,o_sorted][:,:,v_sorted]
@@ -142,7 +142,7 @@ def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
     return orbsym
 
 def _sort_t2_vooo_(mycc, orbsym, t1, t2, eris):
-    vooo = numpy.asarray(eris.vooo)
+    vooo = numpy.asarray(eris.ovoo).transpose(1,0,2,3).copy()
     nocc, nvir = t1.shape
     if mycc.mol.symmetry:
         orbsym = numpy.asarray(orbsym, dtype=numpy.int32)
@@ -156,7 +156,7 @@ def _sort_t2_vooo_(mycc, orbsym, t1, t2, eris):
         o_sym = orbsym[o_sorted]
         oo_sym = (o_sym[:,None] ^ o_sym).ravel()
         oo_sorted = _irrep_argsort(oo_sym)
-        #:vooo = eris.vooo
+        #:vooo = eris.ovoo.transpose(1,0,2,3)
         #:vooo = vooo[v_sorted][:,o_sorted][:,:,o_sorted][:,:,:,o_sorted]
         #:vooo = vooo.reshape(nvir,-1,nocc)[:,oo_sorted]
         oo_idx = numpy.arange(nocc**2).reshape(nocc,nocc)[o_sorted][:,o_sorted]
@@ -179,7 +179,6 @@ def _sort_t2_vooo_(mycc, orbsym, t1, t2, eris):
         t2T = lib.transpose(t2.reshape(nocc**2,-1))
         t2T = lib.transpose(t2T.reshape(-1,nocc,nocc), axes=(0,2,1), out=t2)
         mo_energy = numpy.asarray(eris.fock.diagonal(), order='C')
-        vooo = vooo.copy()
     t2T = t2T.reshape(nvir,nvir,nocc,nocc)
     return mo_energy, t1T, t2T, vooo
 
@@ -198,10 +197,7 @@ if __name__ == '__main__':
     eris = lambda :None
     eris.ovvv = numpy.random.random((nocc,nvir,nvir*(nvir+1)//2)) * .1
     eris.ovoo = numpy.random.random((nocc,nvir,nocc,nocc)) * .1
-    eris.ovov = numpy.random.random((nocc,nvir,nocc,nvir)) * .1
-    eris.voov = eris.ovov.transpose(1,0,2,3)
-    eris.vovv = eris.ovvv.transpose(1,0,2)
-    eris.vooo = eris.ovoo.transpose(1,0,2,3)
+    eris.ovvo = numpy.random.random((nocc,nvir,nvir,nocc)) * .1
     t1 = numpy.random.random((nocc,nvir)) * .1
     t2 = numpy.random.random((nocc,nocc,nvir,nvir)) * .1
     t2 = t2 + t2.transpose(1,0,3,2)
@@ -209,7 +205,7 @@ if __name__ == '__main__':
     mcc = cc.CCSD(mf)
     mcc.mo_energy = mcc._scf.mo_energy = numpy.arange(0., nocc+nvir)
     eris.fock = numpy.diag(mcc.mo_energy)
-    print(kernel(mcc, eris, t1, t2) + 8.4953387936460398)
+    print(kernel(mcc, eris, t1, t2) - -8.501010390740708)
 
     mol = gto.Mole()
     mol.atom = [

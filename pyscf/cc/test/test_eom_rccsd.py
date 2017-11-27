@@ -49,12 +49,12 @@ mycci = copy.copy(mycc1)
 erisi = copy.copy(eris1)
 erisi.oooo = eris1.oooo + numpy.sin(eris1.oooo)*1j
 erisi.oooo = erisi.oooo + erisi.oooo.conj().transpose(1,0,3,2)
-erisi.vooo = eris1.vooo + numpy.sin(eris1.vooo)*1j
-erisi.voov = eris1.voov + numpy.sin(eris1.voov)*1j
-erisi.vvoo = eris1.vvoo + numpy.sin(eris1.vvoo)*1j
-erisi.vvoo = erisi.vvoo + erisi.vvoo.conj().transpose(1,0,3,2)
-erisi.vovo = eris1.vovo + numpy.sin(eris1.vovo)*1j
-erisi.vovv = eris1.vovv + numpy.sin(eris1.vovv)*1j
+erisi.ovoo = eris1.ovoo + numpy.sin(eris1.ovoo)*1j
+erisi.ovvo = eris1.ovvo + numpy.sin(eris1.ovvo)*1j
+erisi.oovv = eris1.oovv + numpy.sin(eris1.oovv)*1j
+erisi.oovv = erisi.oovv + erisi.oovv.conj().transpose(1,0,3,2)
+erisi.ovov = eris1.ovov + numpy.sin(eris1.ovov)*1j
+erisi.ovvv = eris1.ovvv + numpy.sin(eris1.ovvv)*1j
 erisi.vvvv = eris1.vvvv + numpy.sin(eris1.vvvv)*1j
 erisi.vvvv = erisi.vvvv + erisi.vvvv.conj().transpose(1,0,3,2)
 
@@ -285,7 +285,7 @@ class KnownValues(unittest.TestCase):
         eris1
         imds = myeom.make_imds(erisi)
         vec1 = myeom.matvec(vec, imds)
-        self.assertAlmostEqual(lib.finger(vec1), 25179.052084942181-4985.8301417050307j, 9)
+        self.assertAlmostEqual(lib.finger(vec1), 25176.428829164193-4955.5351324520125j, 9)
         self.assertAlmostEqual(lib.finger(myeom.get_diag()), 1106.2601542024306, 9)
 
     def test_ea_matvec1(self):
@@ -298,7 +298,7 @@ class KnownValues(unittest.TestCase):
         r1,r2 = myeom.vector_to_amplitudes(vec)
         imds = myeom.make_imds(erisi)
         vec1 = myeom.matvec(vec, imds)
-        self.assertAlmostEqual(lib.finger(vec1), -105119.42508060634+25055.068664422437j, 9)
+        self.assertAlmostEqual(lib.finger(vec1), -105083.60825558871+25155.909195554908j, 9)
         self.assertAlmostEqual(lib.finger(myeom.get_diag()), 4688.9122122011895, 9)
 
 

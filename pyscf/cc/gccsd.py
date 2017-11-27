@@ -168,8 +168,8 @@ class GCCSD(ccsd.CCSD):
                 self.mo_coeff = lib.tag_array(self.mo_coeff, orbspin=orbspin)
         e_corr, self.t1, self.t2 = ccsd.CCSD.ccsd(self, t1, t2, eris)
         if hasattr(self.mo_coeff, 'orbspin'):
-            self.t1 = lib.tag_array(t1, orbspin=self.mo_coeff.orbspin)
-            self.t2 = lib.tag_array(t2, orbspin=self.mo_coeff.orbspin)
+            self.t1 = lib.tag_array(self.t1, orbspin=self.mo_coeff.orbspin)
+            self.t2 = lib.tag_array(self.t2, orbspin=self.mo_coeff.orbspin)
         return e_corr, self.t1, self.t2
 
     def amplitudes_to_vector(self, t1, t2, out=None):
@@ -256,11 +256,11 @@ class _PhysicistsERIs:
         self.orbspin = None
 
         self.oooo = None
-        self.vooo = None
-        self.vvoo = None
-        self.voov = None
-        self.vovo = None
-        self.vovv = None
+        self.ooov = None
+        self.oovv = None
+        self.ovvo = None
+        self.ovov = None
+        self.ovvv = None
         self.vvvv = None
 
     def _common_init_(self, mycc, mo_coeff=None):
@@ -314,6 +314,7 @@ def _make_eris_incore(mycc, mo_coeff=None):
     eris.ooov = eri[:nocc,:nocc,:nocc,nocc:].copy()
     eris.oovv = eri[:nocc,:nocc,nocc:,nocc:].copy()
     eris.ovov = eri[:nocc,nocc:,:nocc,nocc:].copy()
+    eris.ovvo = eri[:nocc,nocc:,nocc:,:nocc].copy()
     eris.ovvv = eri[:nocc,nocc:,nocc:,nocc:].copy()
     eris.vvvv = eri[nocc:,nocc:,nocc:,nocc:].copy()
     return eris
@@ -337,6 +338,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     eris.ooov = feri.create_dataset('ooov', (nocc,nocc,nocc,nvir), 'f8')
     eris.oovv = feri.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8')
     eris.ovov = feri.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8')
+    eris.ovvo = feri.create_dataset('ovvo', (nocc,nvir,nvir,nocc), 'f8')
     eris.ovvv = feri.create_dataset('ovvv', (nocc,nvir,nvir,nvir), 'f8')
 
     if orbspin is None:
@@ -375,6 +377,8 @@ def _make_eris_outcore(mycc, mo_coeff=None):
                                 tmp[:,nocc:,:nocc,nocc:].transpose(0,2,3,1))
             eris.ovov[p0:p1] = (tmp[:,:nocc,nocc:,nocc:].transpose(0,2,1,3) -
                                 tmp[:,nocc:,nocc:,:nocc].transpose(0,2,3,1))
+            eris.ovvo[p0:p1] = (tmp[:,nocc:,nocc:,:nocc].transpose(0,2,1,3) -
+                                tmp[:,:nocc,nocc:,nocc:].transpose(0,2,3,1))
             tmp = None
         cput0 = log.timer_debug1('transforming ovvv', *cput0)
 
@@ -442,6 +446,8 @@ def _make_eris_outcore(mycc, mo_coeff=None):
                                 tmp[:,nocc:,:nocc,nocc:].transpose(0,2,3,1))
             eris.ovov[p0:p1] = (tmp[:,:nocc,nocc:,nocc:].transpose(0,2,1,3) -
                                 tmp[:,nocc:,nocc:,:nocc].transpose(0,2,3,1))
+            eris.ovvo[p0:p1] = (tmp[:,nocc:,nocc:,:nocc].transpose(0,2,1,3) -
+                                tmp[:,:nocc,nocc:,nocc:].transpose(0,2,3,1))
             tmp = None
         cput0 = log.timer_debug1('transforming ovvv', *cput0)
 

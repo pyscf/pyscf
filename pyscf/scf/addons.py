@@ -371,6 +371,7 @@ def convert_to_uhf(mf, out=None, convert_df=None):
     return out
 
 def _df_off(mf, convert_df):
+    from pyscf import scf
     if convert_df is None:
         if isinstance(mf, scf.newton_ah._CIAH_SCF):
 # To handle the case that mf is newton scf with approximate orbital hessian

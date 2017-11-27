@@ -195,35 +195,45 @@ class RCCSD(ccsd.CCSD):
     energy = energy
     update_amps = update_amps
 
-    def _add_vvvv(self, t1, t2, eris, out=None):
-        tau = t2 + np.einsum('ia,jb->ijab', t1, t1)
-        return eris._contract_vvvv_t2(self, eris.vvvv, tau, out)
-    _add_vvvv_full = _add_vvvv
+    def _add_vvvv(self, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
+        assert(not self.direct)
+        return ccsd.CCSD._add_vvvv(self, t1, t2, eris, out, with_ovvv, t2sym)
 
-def _contract_vvvv_t2(mycc, vvvv, t2, out=None):
+def _contract_vvvv_t2(mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
     '''Ht2 = numpy.einsum('ijcd,acbd->ijab', t2, vvvv)
 
     Args:
         vvvv : None or integral object
             if vvvv is None, contract t2 to AO-integrals using AO-direct algorithm
     '''
-    assert(vvvv is not None)
+    if vvvv is None:   # AO-direct CCSD
+        assert(t2.dtype == np.double)
+        return ccsd._contract_vvvv_t2(mol, vvvv, t2, out, max_memory, verbose)
+
+    time0 = time.clock(), time.time()
+    log = logger.new_logger(mol, verbose)
+
     nvira, nvirb = t2.shape[-2:]
     x2 = t2.reshape(-1,nvira,nvirb)
     nocc2 = x2.shape[0]
     Ht2 = np.ndarray(x2.shape, buffer=out)
 
-    max_memory = mycc.max_memory-lib.current_memory()[0]
     unit = nvirb**2*nvira*2 + nocc2*nvirb
     blksize = min(nvira, max(ccsd.BLKMIN, int(max_memory*1e6/8/unit)))
 
     for p0,p1 in lib.prange(0, nvira, blksize):
         Ht2[:,p0:p1] = lib.einsum('xcd,acbd->xab', x2, vvvv[p0:p1])
+        time0 = log.timer_debug1('vvvv [%d:%d]' % (p0,p1), *time0)
     return Ht2.reshape(t2.shape)
 
 class _ChemistsERIs(ccsd._ChemistsERIs):
-    def _contract_vvvv_t2(self, mycc, vvvv, t2, out=None):
-        return _contract_vvvv_t2(mycc, vvvv, t2, out)
+    def _contract_vvvv_t2(self, t2, direct=False, out=None, max_memory=2000,
+                          verbose=None):
+        if direct:
+            vvvv = None
+        else:
+            vvvv = self.vvvv
+        return _contract_vvvv_t2(self.mol, vvvv, t2, out, max_memory, verbose)
 
 def _make_eris_incore(mycc, mo_coeff=None):
     cput0 = (time.clock(), time.time())

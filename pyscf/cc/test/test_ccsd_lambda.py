@@ -26,13 +26,13 @@ class KnownValues(unittest.TestCase):
         l2 = numpy.random.random((nocc,nocc,nvir,nvir))
         l2 = l2 + l2.transpose(1,0,3,2)
 
-        eris = lambda:None
+        eris = cc.ccsd._ChemistsERIs()
         eris.oooo = eri0[:nocc,:nocc,:nocc,:nocc].copy()
-        eris.vooo = eri0[nocc:,:nocc,:nocc,:nocc].copy()
-        eris.vvoo = eri0[nocc:,nocc:,:nocc,:nocc].copy()
-        eris.voov = eri0[nocc:,:nocc,:nocc,nocc:].copy()
+        eris.ovoo = eri0[:nocc,nocc:,:nocc,:nocc].copy()
+        eris.oovv = eri0[:nocc,:nocc,nocc:,nocc:].copy()
+        eris.ovvo = eri0[:nocc,nocc:,nocc:,:nocc].copy()
         idx = numpy.tril_indices(nvir)
-        eris.vovv = eri0[nocc:,:nocc,nocc:,nocc:][:,:,idx[0],idx[1]].copy()
+        eris.ovvv = eri0[:nocc,nocc:,nocc:,nocc:][:,:,idx[0],idx[1]].copy()
         eris.vvvv = ao2mo.restore(4,eri0[nocc:,nocc:,nocc:,nocc:],nvir)
         eris.fock = fock0
 

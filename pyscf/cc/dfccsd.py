@@ -14,27 +14,12 @@ class RCCSD(ccsd.CCSD):
     def ao2mo(self, mo_coeff=None):
         return _make_eris_df(self, mo_coeff)
 
-    def _add_vvvv_tril(self, t1, t2, eris, out=None, with_ovvv=False):
+    def _add_vvvv(self, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
         assert(not self.direct)
-        time0 = time.clock(), time.time()
-        nocc, nvir = t1.shape
-        tau = numpy.empty((nocc*(nocc+1)//2,nvir,nvir))
-        p0 = 0
-        for i in range(nocc):
-            tau[p0:p0+i+1] = numpy.einsum('a,jb->jab', t1[i], t1[:i+1])
-            tau[p0:p0+i+1] += t2[i,:i+1]
-            p0 += i + 1
-        time0 = logger.timer_debug1(self, 'vvvv-tau', *time0)
-        return _contract_vvvv_t2(self, eris.vvL, tau, out)
-
-    def _add_vvvv_full(self, t1, t2, eris, out=None, with_ovvv=False):
-        assert(not self.direct)
-        tau = numpy.einsum('ia,jb->ijab', t1, t1)
-        tau += t2
-        return eris._contract_vvvv_t2(self, eris.vvL, tau, out)
+        return ccsd.CCSD._add_vvvv(self, t1, t2, eris, out, with_ovvv, t2sym)
 
 
-def _contract_vvvv_t2(mycc, vvL, t2, out=None):
+def _contract_vvvv_t2(mol, vvL, t2, out=None, max_memory=2000, verbose=None):
     '''Ht2 = numpy.einsum('ijcd,acdb->ijab', t2, vvvv)
 
     Args:
@@ -43,7 +28,7 @@ def _contract_vvvv_t2(mycc, vvL, t2, out=None):
     '''
     _dgemm = lib.numpy_helper._dgemm
     time0 = time.clock(), time.time()
-    mol = mycc.mol
+    log = logger.new_logger(mol, verbose)
 
     naux = vvL.shape[-1]
     nvira, nvirb = t2.shape[-2:]
@@ -69,7 +54,6 @@ def _contract_vvvv_t2(mycc, vvL, t2, out=None):
 
 #TODO: check if vvL can be entirely load into memory
     nvir_pair = nvirb * (nvirb+1) // 2
-    max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     dmax = numpy.sqrt(max_memory*.7e6/8/nvirb**2/2)
     dmax = int(min((nvira+3)//4, max(ccsd.BLKMIN, dmax)))
     vvblk = (max_memory*1e6/8 - dmax**2*(nvirb**2*1.5+naux))/naux
@@ -96,14 +80,15 @@ def _contract_vvvv_t2(mycc, vvL, t2, out=None):
                                    (ctypes.c_int*4)(i0, i1, j0, j1),
                                    ctypes.c_int(nvirb))
             contract_blk_(tmp, i0, i1, j0, j1)
-            time0 = logger.timer_debug1(mycc, 'vvvv [%d:%d,%d:%d]' %
-                                        (i0,i1,j0,j1), *time0)
+            time0 = log.timer_debug1('vvvv [%d:%d,%d:%d]'%(i0,i1,j0,j1), *time0)
     return Ht2.reshape(t2.shape)
 
 
 class _ChemistsERIs(ccsd._ChemistsERIs):
-    def _contract_vvvv_t2(self, mycc, vvL, t2, out=None):
-        return _contract_vvvv_t2(mycc, vvL, t2, out)
+    def _contract_vvvv_t2(self, t2, direct=False, out=None, max_memory=2000,
+                          verbose=None):
+        assert(not direct)
+        return _contract_vvvv_t2(self.mol, self.vvL, t2, out, max_memory, verbose)
 
 def _make_eris_df(cc, mo_coeff=None):
     cput0 = (time.clock(), time.time())

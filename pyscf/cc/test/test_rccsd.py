@@ -72,11 +72,11 @@ class KnownValues(unittest.TestCase):
         eris = cc.rccsd._make_eris_outcore(cc1, mo_coeff)
 
         self.assertAlmostEqual(lib.finger(numpy.array(eris.oooo)), 4.9638849382825754, 12)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.vooo)),-31.940476139498358, 12)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.vovo)), 37.288573620290705, 12)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.vvoo)),-15.749543083037139, 12)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.voov)), 26.151516680723446, 12)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.vovv)), 79.946678013880231, 12)
+        self.assertAlmostEqual(lib.finger(numpy.array(eris.ovoo)),-1.3623681896984081, 12)
+        self.assertAlmostEqual(lib.finger(numpy.array(eris.ovvo)), 133.4808352789826 , 12)
+        self.assertAlmostEqual(lib.finger(numpy.array(eris.oovv)), 55.123681017639655, 12)
+        self.assertAlmostEqual(lib.finger(numpy.array(eris.ovov)), 125.81550684442149, 12)
+        self.assertAlmostEqual(lib.finger(numpy.array(eris.ovvv)), 95.756230114113322, 12)
         self.assertAlmostEqual(lib.finger(numpy.array(eris.vvvv)),-10.450387490987545, 12)
 
     def test_amplitudes_to_vector(self):

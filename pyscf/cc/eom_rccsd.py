@@ -858,19 +858,13 @@ def eeccsd_matvec_singlet(eom, vector, imds=None):
     #:eris_vvvv = ao2mo.restore(1,np.asarray(eris.vvvv), t1.shape[1])
     #:Hr2 += lib.einsum('ijef,aebf->ijab', tau2, eris_vvvv) * .5
     tau2 = _make_tau(r2, r1, t1, fac=2)
-    Hr2 = eom._cc._add_vvvv(np.zeros_like(t1), tau2, eris)
+    Hr2 = eom._cc._add_vvvv(None, tau2, eris, with_ovvv=False, t2sym='jiba')
     Hr2 *= .5
 
     Hr2 += lib.einsum('mnij,mnab->ijab', imds.woOoO, r2) * .5
     Hr2 += lib.einsum('be,ijae->ijab', imds.Fvv   , r2)
     Hr2 -= lib.einsum('mj,imab->ijab', imds.Foo   , r2)
 
-    #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,nvir**2)).reshape(nocc,nvir,nvir,nvir)
-    #:Hr1 += lib.einsum('mfae,imef->ia', eris_ovvv, rho)
-    #:tmp = lib.einsum('meaf,ijef->maij', eris_ovvv, tau2)
-    #:Hr2 -= lib.einsum('ma,mbij->ijab', t1, tmp)
-    #:tmp  = lib.einsum('meaf,me->af', eris_ovvv, r1) * 2
-    #:tmp -= lib.einsum('mfae,me->af', eris_ovvv, r1)
     mem_now = lib.current_memory()[0]
     max_memory = max(0, lib.param.MAX_MEMORY - mem_now)
     blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvir**3*3))))
@@ -960,13 +954,7 @@ def eeccsd_matvec_triplet(eom, vector, imds=None):
     tau2aa-= np.einsum('ia,jb->jiab', r1, t1)
     tau2aa = tau2aa - tau2aa.transpose(0,1,3,2)
     tau2aa+= r2aa
-    #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,nvir**2)).reshape(nocc,nvir,nvir,nvir)
-    #:Hr1 += lib.einsum('mfae,imef->ia', eris_ovvv, theta)
-    #:tmpaa = lib.einsum('meaf,ijef->maij', eris_ovvv, tau2aa)
-    #:tmpab = lib.einsum('meAF,iJeF->mAiJ', eris_ovvv, tau2ab)
-    #:tmp1 = lib.einsum('mfae,me->af', eris_ovvv, r1)
-    #:Hr2aa+= lib.einsum('mb,maij->ijab', t1*.5, tmpaa)
-    #:Hr2ab-= lib.einsum('mb,mAiJ->iJbA', t1, tmpab)
+
     mem_now = lib.current_memory()[0]
     max_memory = max(0, lib.param.MAX_MEMORY - mem_now)
     blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvir**3*3))))
@@ -1025,10 +1013,8 @@ def eeccsd_matvec_triplet(eom, vector, imds=None):
     #:Hr2ab += lib.einsum('ijef,aebf->ijab', tau2ab, eris_vvvv) * .5
     tau2aa *= .25
     tau2ab *= .5
-#    Hr2aa += eom._cc._add_vvvv(np.zeros_like(t1), tau2aa, eris)
-#     Hr2ab += eom._cc._add_vvvv(np.zeros_like(t1), tau2ab, eris)
-    Hr2aa += _add_vvvv(eom._cc, tau2aa, eris)
-    Hr2ab += _add_vvvv(eom._cc, tau2ab, eris)
+    Hr2aa += eom._cc._add_vvvv(None, tau2aa, eris, with_ovvv=False, t2sym='jiba')
+    Hr2ab += eom._cc._add_vvvv(None, tau2ab, eris, with_ovvv=False, t2sym='-jiba')
     tau2aa = tau2ab = None
 
     Hr2aa = Hr2aa - Hr2aa.transpose(0,1,3,2)
@@ -1071,21 +1057,6 @@ def eeccsd_matvec_sf(eom, vector, imds=None):
     tau2aaba += r2aaba * .5
     tau2aaba = tau2aaba - tau2aaba.transpose(1,0,2,3)
 
-    #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocc*nvir,nvir**2)).reshape(nocc,nvir,nvir,nvir)
-    #:Hr1 += lib.einsum('mfae,imef->ia', eris_ovvv, r2baaa)
-    #:Hr1 += lib.einsum('mfae,imef->ia', eris_ovvv, r2aaba)
-    #:tmp1aaba = lib.einsum('meaf,ijef->maij', eris_ovvv, tau2baaa)
-    #:tmp1baaa = lib.einsum('meaf,ijef->maij', eris_ovvv, tau2aaba)
-    #:tmp1abaa = lib.einsum('meaf,ijfe->maij', eris_ovvv, tau2aaba)
-    #:tmp2aaba = lib.einsum('meaf,ijfe->maij', eris_ovvv, tau2baaa)
-    #:Hr2baaa -= lib.einsum('mb,maij->ijab', t1*.5, tmp2aaba)
-    #:Hr2aaba -= lib.einsum('mb,maij->ijab', t1*.5, tmp1abaa)
-    #:Hr2baaa -= lib.einsum('mb,maij->ijba', t1*.5, tmp1aaba)
-    #:Hr2aaba -= lib.einsum('mb,maij->ijba', t1*.5, tmp1baaa)
-    #:tmp = lib.einsum('mfae,me->af', eris_ovvv, r1)
-    #:tmp = lib.einsum('af,jibf->ijab', tmp, t2)
-    #:Hr2baaa -= tmp
-    #:Hr2aaba -= tmp
     tmp1 = np.zeros((nvir,nvir), dtype=r1.dtype)
     mem_now = lib.current_memory()[0]
     max_memory = max(0, lib.param.MAX_MEMORY - mem_now)
@@ -1162,9 +1133,9 @@ def eeccsd_matvec_sf(eom, vector, imds=None):
     #:Hr2baaa += .5*lib.einsum('ijef,aebf->ijab', tau2baaa, eris_vvvv)
     #:Hr2aaba += .5*lib.einsum('ijef,aebf->ijab', tau2aaba, eris_vvvv)
     tau2aaba *= .5
-    Hr2aaba += _add_vvvv(eom._cc, tau2aaba, eris)
+    Hr2aaba += eom._cc._add_vvvv(None, tau2aaba, eris, with_ovvv=False, t2sym='-jiab')
     tau2baaa *= .5
-    Hr2baaa += eom._cc._add_vvvv_full(np.zeros_like(t1), tau2baaa, eris)
+    Hr2baaa += eom._cc._add_vvvv(None, tau2baaa, eris, with_ovvv=False, t2sym=False)
     tau2aaba = tau2baaa = None
 
     Hr2baaa = Hr2baaa - Hr2baaa.transpose(0,1,3,2)
@@ -1632,19 +1603,6 @@ def _make_tau(t2, t1, r1, fac=1, out=None):
     tau *= fac * .5
     tau += t2
     return tau
-
-def _add_vvvv(cc, t2, eris):
-    nocc = t2.shape[0]
-    nvir = t2.shape[2]
-    t1 = np.zeros((nocc,nvir))
-    if eris.vvvv is not None and eris.vvvv.ndim == 4:
-        return cc._add_vvvv(t1, t2, eris)
-    else:
-        t2tril = cc._add_vvvv_tril(t1, t2, eris)
-        Ht2 = np.zeros_like(t2)
-        Ht2[np.tril_indices(nocc)] = t2tril * 2
-        Ht2[np.diag_indices(nocc)] *= .5
-        return Ht2
 
 def _cp(a):
     return np.array(a, copy=False, order='C')

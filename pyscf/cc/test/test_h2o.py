@@ -49,13 +49,13 @@ class KnownValues(unittest.TestCase):
 
         nocc, nvir = t1.shape
         tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
-        vovv = lib.unpack_tril(eris.vovv).reshape(nvir,nocc,nvir,nvir)
-        tmp = -numpy.einsum('ijcd,ka,dkcb->ijba', tau, t1, vovv)
+        ovvv = lib.unpack_tril(eris.ovvv).reshape(nocc,nvir,nvir,nvir)
+        tmp = -numpy.einsum('ijcd,ka,kdcb->ijba', tau, t1, ovvv)
         t2a = tmp + tmp.transpose(1,0,3,2)
-        t2a = t2a[numpy.tril_indices(nocc)]
-        t2a += mcc._add_vvvv_tril(t1, t2, eris)
+        t2a += mcc._add_vvvv(t1, t2, eris)
         mcc.direct = True
-        t2b = mcc._add_vvvv_tril(t1, t2, eris)
+        eris.vvvv = None
+        t2b = mcc._add_vvvv(t1, t2, eris)
         self.assertTrue(numpy.allclose(t2a,t2b))
 
     def test_ccsd_frozen(self):

@@ -21,6 +21,9 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     if t2 is None: t2 = mycc.t2
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
+    if numpy.iscomplexobj(t2):
+        raise NotImplementedError('Complex integrals are not supported in CCSD(T)')
+
     nocca = eris.nocca
     noccb = eris.noccb
     nmoa = eris.focka.shape[0]
