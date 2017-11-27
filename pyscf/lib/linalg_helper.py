@@ -617,7 +617,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
         x0 = [x0]
     #max_cycle = min(max_cycle, x0[0].size)
-    max_space = max_space + nroots * 3
+    max_space = max_space + nroots * 4
     # max_space*2 for holding ax and xs, nroots*2 for holding axt and xt
     _incore = max_memory*1e6/x0[0].nbytes > max_space*2+nroots * 3
     lessio = lessio and not _incore
@@ -919,7 +919,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
     if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
         x0 = [x0]
     #max_cycle = min(max_cycle, x0[0].size)
-    max_space = max_space + nroots * 2
+    max_space = max_space + nroots * 3
     # max_space*3 for holding ax, bx and xs, nroots*3 for holding axt, bxt and xt
     _incore = max_memory*1e6/x0[0].nbytes > max_space*3+nroots*3
     lessio = lessio and not _incore

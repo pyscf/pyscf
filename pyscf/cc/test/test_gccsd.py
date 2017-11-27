@@ -5,51 +5,60 @@ from pyscf import scf
 from pyscf import gto
 from pyscf.cc import gccsd
 mol = gto.Mole()
-mol.atom = [['O', (0.,   0., 0.)],
-            ['O', (1.21, 0., 0.)]]
+mol.atom = [
+    [8 , (0. , 0.     , 0.)],
+    [1 , (0. , -0.757 , 0.587)],
+    [1 , (0. , 0.757  , 0.587)]]
 mol.basis = 'cc-pvdz'
 mol.spin = 2
 mol.build()
 mf1 = scf.UHF(mol).run(conv_tol=1e-12)
 mf1 = scf.addons.convert_to_ghf(mf1)
 
+gcc1 = gccsd.GCCSD(mf1).run(conv_tol=1e-9)
+
 class KnownValues(unittest.TestCase):
+    def test_gccsd(self):
+        self.assertAlmostEqual(gcc1.e_corr, -0.18212844850615587, 7)
+
     def test_ERIS(self):
         gcc = gccsd.GCCSD(mf1, frozen=4)
-        mo_coeff = mf1.mo_coeff.copy()
-        mo_coeff[-1,0] = 1e-12
+        numpy.random.seed(9)
+        mo_coeff0 = numpy.random.random(mf1.mo_coeff.shape) - .9
+        mo_coeff1 = mo_coeff0.copy()
+        mo_coeff1[-1,0] = 1e-12
 
-        eris = gccsd._make_eris_incore(gcc, mf1.mo_coeff)
-        self.assertAlmostEqual(lib.finger(eris.oooo),  0.61860222543125865, 12)
-        self.assertAlmostEqual(lib.finger(eris.ooov), -0.57806300048513792, 12)
-        self.assertAlmostEqual(lib.finger(eris.oovv), -0.93740596142345689, 12)
-        self.assertAlmostEqual(lib.finger(eris.ovov), -1.3358817934823481 , 12)
-        self.assertAlmostEqual(lib.finger(eris.ovvv),  8.9212684468927055 , 12)
-        self.assertAlmostEqual(lib.finger(eris.vvvv),  9.3613744639720711 , 12)
+        eris = gccsd._make_eris_incore(gcc, mo_coeff0)
+        self.assertAlmostEqual(lib.finger(eris.oooo), -274.88757393088122, 9)
+        self.assertAlmostEqual(lib.finger(eris.ooov),  1058.7275352964637, 9)
+        self.assertAlmostEqual(lib.finger(eris.oovv), -160.01426275786184, 9)
+        self.assertAlmostEqual(lib.finger(eris.ovov), -8691.5932754980749, 9)
+        self.assertAlmostEqual(lib.finger(eris.ovvv), -549.93089259191584, 9)
+        self.assertAlmostEqual(lib.finger(eris.vvvv), -2171.9867436901673, 9)
 
-        eris = gccsd._make_eris_incore(gcc, mo_coeff)
-        self.assertAlmostEqual(lib.finger(eris.oooo),  0.61860222543125865, 12)
-        self.assertAlmostEqual(lib.finger(eris.ooov), -0.57806300048513792, 12)
-        self.assertAlmostEqual(lib.finger(eris.oovv), -0.93740596142345689, 12)
-        self.assertAlmostEqual(lib.finger(eris.ovov), -1.3358817934823481 , 12)
-        self.assertAlmostEqual(lib.finger(eris.ovvv),  8.9212684468927055 , 12)
-        self.assertAlmostEqual(lib.finger(eris.vvvv),  9.3613744639720711 , 12)
+        eris = gccsd._make_eris_incore(gcc, mo_coeff1)
+        self.assertAlmostEqual(lib.finger(eris.oooo), -274.88757393088122, 9)
+        self.assertAlmostEqual(lib.finger(eris.ooov),  1058.7275352964637, 9)
+        self.assertAlmostEqual(lib.finger(eris.oovv), -160.01426275786184, 9)
+        self.assertAlmostEqual(lib.finger(eris.ovov), -8691.5932754980749, 9)
+        self.assertAlmostEqual(lib.finger(eris.ovvv), -549.93089259191584, 9)
+        self.assertAlmostEqual(lib.finger(eris.vvvv), -2171.9867436901673, 9)
 
-        eris = gccsd._make_eris_outcore(gcc, mf1.mo_coeff)
-        self.assertAlmostEqual(lib.finger(eris.oooo),  0.61860222543125865, 12)
-        self.assertAlmostEqual(lib.finger(eris.ooov), -0.57806300048513792, 12)
-        self.assertAlmostEqual(lib.finger(eris.oovv), -0.93740596142345689, 12)
-        self.assertAlmostEqual(lib.finger(eris.ovov), -1.3358817934823481 , 12)
-        self.assertAlmostEqual(lib.finger(eris.ovvv),  8.9212684468927055 , 12)
-        self.assertAlmostEqual(lib.finger(eris.vvvv),  9.3613744639720711 , 12)
+        eris = gccsd._make_eris_outcore(gcc, mo_coeff0)
+        self.assertAlmostEqual(lib.finger(eris.oooo), -274.88757393088122, 9)
+        self.assertAlmostEqual(lib.finger(eris.ooov),  1058.7275352964637, 9)
+        self.assertAlmostEqual(lib.finger(eris.oovv), -160.01426275786184, 9)
+        self.assertAlmostEqual(lib.finger(eris.ovov), -8691.5932754980749, 9)
+        self.assertAlmostEqual(lib.finger(eris.ovvv), -549.93089259191584, 9)
+        self.assertAlmostEqual(lib.finger(eris.vvvv), -2171.9867436901673, 9)
 
-        eris = gccsd._make_eris_outcore(gcc, mo_coeff)
-        self.assertAlmostEqual(lib.finger(eris.oooo),  0.61860222543125865, 12)
-        self.assertAlmostEqual(lib.finger(eris.ooov), -0.57806300048513792, 12)
-        self.assertAlmostEqual(lib.finger(eris.oovv), -0.93740596142345689, 12)
-        self.assertAlmostEqual(lib.finger(eris.ovov), -1.3358817934823481 , 12)
-        self.assertAlmostEqual(lib.finger(eris.ovvv),  8.9212684468927055 , 12)
-        self.assertAlmostEqual(lib.finger(eris.vvvv),  9.3613744639720711 , 12)
+        eris = gccsd._make_eris_outcore(gcc, mo_coeff1)
+        self.assertAlmostEqual(lib.finger(eris.oooo), -274.88757393088122, 9)
+        self.assertAlmostEqual(lib.finger(eris.ooov),  1058.7275352964637, 9)
+        self.assertAlmostEqual(lib.finger(eris.oovv), -160.01426275786184, 9)
+        self.assertAlmostEqual(lib.finger(eris.ovov), -8691.5932754980749, 9)
+        self.assertAlmostEqual(lib.finger(eris.ovvv), -549.93089259191584, 9)
+        self.assertAlmostEqual(lib.finger(eris.vvvv), -2171.9867436901673, 9)
 
     def test_update_amps(self):
         mol = gto.M()

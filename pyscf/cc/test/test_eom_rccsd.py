@@ -298,7 +298,7 @@ class KnownValues(unittest.TestCase):
         r1,r2 = myeom.vector_to_amplitudes(vec)
         imds = myeom.make_imds(erisi)
         vec1 = myeom.matvec(vec, imds)
-        self.assertAlmostEqual(lib.finger(vec1), -105083.60825558871+25155.909195554908j, 9)
+        self.assertAlmostEqual(lib.finger(vec1), -105083.60825558871+25155.909195554908j, 8)
         self.assertAlmostEqual(lib.finger(myeom.get_diag()), 4688.9122122011895, 9)
 
 
