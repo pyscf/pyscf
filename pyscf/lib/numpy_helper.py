@@ -868,6 +868,24 @@ def einsum(idx_str, *tensors, **kwargs):
         print("Reshaping A as (-1,", inner_shape, ")")
         print("Reshaping B as (", inner_shape, ",-1)")
 
+    shapeCt = list()
+    idxCt = list()
+    for idx in idxAt:
+        if idx in shared_idxAB:
+            break
+        shapeCt.append(rangeA[idx])
+        idxCt.append(idx)
+    for idx in idxBt:
+        if idx in shared_idxAB:
+            continue
+        shapeCt.append(rangeB[idx])
+        idxCt.append(idx)
+    new_orderCt = [idxCt.index(idx) for idx in idxC]
+
+    if A.size == 0 or B.size == 0:
+        shapeCt = [shapeCt[i] for i in new_orderCt]
+        return numpy.zeros(shapeCt, dtype=numpy.result_type(A,B))
+
     # Call numpy.asarray because A or B may be HDF5 Datasets 
     At = numpy.asarray(A, order='A').transpose(new_orderA)
     Bt = numpy.asarray(B, order='A').transpose(new_orderB)
@@ -881,20 +899,6 @@ def einsum(idx_str, *tensors, **kwargs):
     else:
         Bt = numpy.asarray(Bt.reshape(inner_shape,-1), order='C')
 
-    shapeCt = list()
-    idxCt = list()
-    for idx in idxAt:
-        if idx in shared_idxAB:
-            break
-        shapeCt.append(rangeA[idx])
-        idxCt.append(idx)
-    for idx in idxBt:
-        if idx in shared_idxAB:
-            continue
-        shapeCt.append(rangeB[idx])
-        idxCt.append(idx)
-
-    new_orderCt = [idxCt.index(idx) for idx in idxC]
     return dot(At,Bt).reshape(shapeCt, order='A').transpose(new_orderCt)
 
 

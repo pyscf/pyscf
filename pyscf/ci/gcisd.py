@@ -10,49 +10,18 @@ General spin-orbital CISD
 import time
 from functools import reduce
 import numpy
-from pyscf import ao2mo
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf import ao2mo
-from pyscf.cc import uccsd
-from pyscf.ci.cisd_slow import t1strs, t2strs
+from pyscf.cc import ccsd
+from pyscf.cc import gccsd
+from pyscf.ci import cisd
 from pyscf.fci import cistring
-
-einsum = lib.einsum
-
-def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8,
-           verbose=logger.INFO):
-    mol = myci.mol
-    nmo = myci.nmo
-    nocc = myci.nocc
-    mo_energy = eris.fock.diagonal()
-    diag = make_diagonal(myci, eris)
-    ehf = diag[0]
-    diag -= ehf
-
-    if ci0 is None:
-        ci0 = myci.get_init_guess(eris)[1]
-
-    def op(x):
-        return contract(myci, x, eris)
-
-    def precond(x, e, *args):
-        return x / (diag - e)
-
-    conv, ecisd, ci = lib.davidson1(lambda xs: [op(x) for x in xs],
-                                    ci0, precond,
-                                    max_cycle=max_cycle, tol=tol,
-                                    verbose=verbose)
-    if myci.nroots == 1:
-        conv = conv[0]
-        ecisd = ecisd[0]
-        ci = ci[0]
-    return conv, ecisd, ci
 
 
 def make_diagonal(myci, eris):
-    nocc, nvir = eris.ovoo.shape[:2]
-    nmo = nocc + nvir
+    nocc = myci.nocc
+    nmo = myci.nmo
+    nvir = nmo - nocc
     jkdiag = numpy.zeros((nmo,nmo))
     jkdiag[:nocc,:nocc] = numpy.einsum('ijij->ij', eris.oooo)
     jkdiag[nocc:,nocc:] = numpy.einsum('ijij->ij', eris.vvvv)
@@ -78,9 +47,8 @@ def make_diagonal(myci, eris):
 def contract(myci, civec, eris):
     nocc = myci.nocc
     nmo = myci.nmo
-    nvir = nmo - nocc
 
-    c0, c1, c2 = cisdvec_to_amplitudes(civec, nocc, nvir)
+    c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
     c2 = c2
 
     fock = eris.fock
@@ -88,27 +56,27 @@ def contract(myci, civec, eris):
     foo = fock[:nocc,:nocc]
     fvv = fock[nocc:,nocc:]
 
-    t1  = einsum('ie,ae->ia', c1, fvv)
-    t1 -= einsum('ma,mi->ia', c1, foo)
-    t1 += einsum('imae,me->ia', c2, fov)
-    #:t1 -= einsum('nf,naif->ia', c1, eris.ovov)
-    t1 += einsum('nf,nafi->ia', c1, eris.ovvo)
-    t1 -= 0.5*einsum('imef,maef->ia', c2, eris.ovvv)
-    t1 -= 0.5*einsum('mnae,mnie->ia', c2, eris.ooov)
+    t1  = lib.einsum('ie,ae->ia', c1, fvv)
+    t1 -= lib.einsum('ma,mi->ia', c1, foo)
+    t1 += lib.einsum('imae,me->ia', c2, fov)
+    #:t1 -= lib.einsum('nf,naif->ia', c1, eris.ovov)
+    t1 += lib.einsum('nf,nafi->ia', c1, eris.ovvo)
+    t1 -= 0.5*lib.einsum('imef,maef->ia', c2, eris.ovvv)
+    t1 -= 0.5*lib.einsum('mnae,mnie->ia', c2, eris.ooov)
 
-    tmp = einsum('ijae,be->ijab', c2, fvv)
+    tmp = lib.einsum('ijae,be->ijab', c2, fvv)
     t2  = tmp - tmp.transpose(0,1,3,2)
-    tmp = einsum('imab,mj->ijab', c2, foo)
+    tmp = lib.einsum('imab,mj->ijab', c2, foo)
     t2 -= tmp - tmp.transpose(1,0,2,3)
-    t2 += 0.5*einsum('mnab,mnij->ijab', c2, eris.oooo)
-    t2 += 0.5*einsum('ijef,abef->ijab', c2, eris.vvvv)
-    tmp = einsum('imae,mbej->ijab', c2, eris.ovvo)
+    t2 += 0.5*lib.einsum('mnab,mnij->ijab', c2, eris.oooo)
+    t2 += 0.5*lib.einsum('ijef,abef->ijab', c2, eris.vvvv)
+    tmp = lib.einsum('imae,mbej->ijab', c2, eris.ovvo)
     tmp+= numpy.einsum('ia,jb->ijab', c1, fov)
     tmp = tmp - tmp.transpose(0,1,3,2)
     t2 += tmp - tmp.transpose(1,0,2,3)
-    tmp = einsum('ie,jeba->ijab', c1, numpy.asarray(eris.ovvv).conj())
+    tmp = lib.einsum('ie,jeba->ijab', c1, numpy.asarray(eris.ovvv).conj())
     t2 += tmp - tmp.transpose(1,0,2,3)
-    tmp = einsum('ma,mbij->ijab', c1, eris.ovoo)
+    tmp = lib.einsum('ma,ijmb->ijab', c1, numpy.asarray(eris.ooov).conj())
     t2 -= tmp - tmp.transpose(0,1,3,2)
 
     t1 += fov * c0
@@ -122,30 +90,60 @@ def amplitudes_to_cisdvec(c0, c1, c2):
     nocc, nvir = c1.shape
     ooidx = numpy.tril_indices(nocc, -1)
     vvidx = numpy.tril_indices(nvir, -1)
-    return numpy.hstack((c0, c1.ravel(), c2[ooidx][:,vvidx[0],vvidx[1]].ravel()))
+    c2tril = lib.take_2d(c2.reshape(nocc**2,nvir**2),
+                         ooidx[0]*nocc+ooidx[1], vvidx[0]*nvir+vvidx[1])
+    return numpy.hstack((c0, c1.ravel(), c2tril.ravel()))
 
-def cisdvec_to_amplitudes(civec, nocc, nvir):
+def cisdvec_to_amplitudes(civec, nmo, nocc):
+    nvir = nmo - nocc
     c0 = civec[0]
     c1 = civec[1:nocc*nvir+1].reshape(nocc,nvir)
-    c2 = _unpack_4fold(civec[nocc*nvir+1:], nocc, nvir)
+    c2 = ccsd._unpack_4fold(civec[nocc*nvir+1:], nocc, nvir)
     return c0, c1, c2
 
-def _unpack_4fold(c2vec, nocc, nvir):
-    ooidx = numpy.tril_indices(nocc, -1)
-    vvidx = numpy.tril_indices(nvir, -1)
-    c2tmp = numpy.zeros((nocc,nocc,nvir*(nvir-1)//2))
-    c2tmp[ooidx] = c2vec.reshape(nocc*(nocc-1)//2,-1)
-    c2tmp = c2tmp - c2tmp.transpose(1,0,2)
-    c2 = numpy.zeros((nocc,nocc,nvir,nvir))
-    c2[:,:,vvidx[0],vvidx[1]] = c2tmp
-    c2 = c2 - c2.transpose(0,1,3,2)
-    return c2
+def from_cisdvec(civec, nocc, orbspin):
+    from pyscf.cc import addons
+    from pyscf.ci import ucisd
+    nmoa = len(orbspin == 0)
+    nmob = len(orbspin == 1)
+    if isinstance(nocc, int):
+        nocca = noccb = nocc
+    else:
+        nocca, noccb = nocc
+    nvira, nvirb = nmoa-nocca, nmob-noccb
 
-def to_fci(cisdvec, nelec, orbspin):
+    if civec.size == nocca*nvira + (nocca*nvira)**2 + 1:  # RCISD
+        c0, c1, c2 = cisd.cisdvec_to_amplitudes(civec, nmoa, nocca)
+    else:  # UCISD
+        c0, c1, c2 = ucisd.cisdvec_to_amplitudes(civec, (nmoa,nmob), (nocca,noccb))
+    c1 = addons.spatial2spin(c1, orbspin)
+    c2 = addons.spatial2spin(c2, orbspin)
+    return amplitudes_to_cisdvec(c0, c1, c2)
+
+t1strs = cisd.t1strs
+
+def t2strs(norb, nelec):
+    nocc = nelec
+    hf_str = int('1'*nocc, 2)
+    addrs = []
+    signs = []
+    for a in range(nocc+1, norb):
+        for b in range(nocc, a):
+            for i in reversed(range(1,nocc)):
+                for j in reversed(range(i)):
+                    str1 = hf_str ^ (1 << j) | (1 << b)
+                    sign = cistring.cre_des_sign(b, j, hf_str)
+                    sign*= cistring.cre_des_sign(a, i, str1)
+                    str1^= (1 << i) | (1 << a)
+                    addrs.append(cistring.str2addr(norb, nelec, str1))
+                    signs.append(sign)
+    return numpy.asarray(addrs), numpy.asarray(signs)
+
+def to_fcivec(cisdvec, nelec, orbspin):
     from pyscf import fci
     nocc = nelec
     norb = len(orbspin)
-    c0, c1, c2 = cisdvec_to_amplitudes(cisdvec, nocc, norb-nocc)
+    c0, c1, c2 = cisdvec_to_amplitudes(cisdvec, norb, nocc)
     oidxa = orbspin[:nocc] == 0
     oidxb = orbspin[:nocc] == 1
     vidxa = orbspin[nocc:] == 0
@@ -188,7 +186,7 @@ def to_fci(cisdvec, nelec, orbspin):
         fcivec[0,t2addrb] = c2bb[::-1].T.ravel() * t2signb
     return fcivec
 
-def from_fci(ci0, nelec, orbspin):
+def from_fcivec(ci0, nelec, orbspin):
     from pyscf.cc.addons import spatial2spin
     nocc = nelec
     oidxa = orbspin[:nocc] == 0
@@ -217,10 +215,10 @@ def from_fci(ci0, nelec, orbspin):
     c2ab = c2ab[::-1,::-1]
     t2addra, t2signa = t2strs(norba, nocca)
     c2aa = (ci0[t2addra,0] * t2signa).reshape(nvira*(nvira-1)//2,-1).T
-    c2aa = _unpack_4fold(c2aa[::-1], nocca, nvira)
+    c2aa = ccsd._unpack_4fold(c2aa[::-1], nocca, nvira)
     t2addrb, t2signb = t2strs(norbb, noccb)
     c2bb = (ci0[0,t2addrb] * t2signb).reshape(nvirb*(nvirb-1)//2,-1).T
-    c2bb = _unpack_4fold(c2bb[::-1], noccb, nvirb)
+    c2bb = ccsd._unpack_4fold(c2bb[::-1], noccb, nvirb)
     c2 = spatial2spin((c2aa, c2ab, c2bb), orbspin)
 
     cisdvec = amplitudes_to_cisdvec(c0, c1, c2)
@@ -228,8 +226,7 @@ def from_fci(ci0, nelec, orbspin):
 
 
 def make_rdm1(ci, nmo, nocc):
-    nvir = nmo - nocc
-    c0, c1, c2 = cisdvec_to_amplitudes(ci, nocc, nvir)
+    c0, c1, c2 = cisdvec_to_amplitudes(ci, nmo, nocc)
     dov = c0 * c1
     dov += numpy.einsum('jb,ijab->ia', c1, c2)
     doo  =-numpy.einsum('ia,ka->ik', c1, c1)
@@ -252,8 +249,7 @@ def make_rdm1(ci, nmo, nocc):
 def make_rdm2(ci, nmo, nocc):
     '''spin-orbital 2pdm in physicist's notation
     '''
-    nvir = nmo - nocc
-    c0, c1, c2 = cisdvec_to_amplitudes(ci, nocc, nvir)
+    c0, c1, c2 = cisdvec_to_amplitudes(ci, nmo, nocc)
     doovv = c0 * c2 * .5
     dvvvo = numpy.einsum('ia,ikcd->cdak', c1, c2) * .5
     dovoo = numpy.einsum('ia,klac->ickl', c1, c2) *-.5
@@ -299,60 +295,7 @@ def make_rdm2(ci, nmo, nocc):
     return rdm2
 
 
-class CISD(lib.StreamObject):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
-        if mo_coeff is None: mo_coeff = mf.mo_coeff
-        if mo_occ   is None: mo_occ   = mf.mo_occ
-
-        self.mol = mf.mol
-        self._scf = mf
-        self.verbose = self.mol.verbose
-        self.stdout = self.mol.stdout
-        self.max_memory = mf.max_memory
-
-        self.conv_tol = 1e-9
-        self.max_cycle = 50
-        self.max_space = 12
-        self.frozen = frozen
-        self.nroots = 1
-
-##################################################
-# don't modify the following attributes, they are not input options
-        self.converged = False
-        self.mo_coeff = mo_coeff
-        self.mo_occ = mo_occ
-        self.e_corr = None
-        self.ci = None
-        self._nocc = None
-        self._nmo = None
-
-    @property
-    def e_tot(self):
-        return numpy.asarray(self.e_corr) + self._scf.e_tot
-
-    @property
-    def nocc(self):
-        nocca, noccb = uccsd.get_nocc(self)
-        return nocca + noccb
-
-    @property
-    def nmo(self):
-        nmoa, nmob = uccsd.get_nmo(self)
-        return nmoa + nmob
-
-    def kernel(self, ci0=None, mo_coeff=None, eris=None):
-        if eris is None:
-            eris = self.ao2mo(mo_coeff)
-        self.converged, self.e_corr, self.ci = \
-                kernel(self, eris, ci0, max_cycle=self.max_cycle,
-                       tol=self.conv_tol, verbose=self.verbose)
-        if self._scf.e_tot == 0:
-            logger.note(self, 'E_corr = %.16g', self.e_corr)
-        else:
-            logger.note(self, 'E(UCISD) = %.16g  E_corr = %.16g',
-                        self.e_tot, self.e_corr)
-        return self.e_corr, self.ci
-
+class GCISD(cisd.CISD):
     def get_init_guess(self, eris=None):
         # MP2 initial guess
         if eris is None:
@@ -365,19 +308,32 @@ class CISD(lib.StreamObject):
         t1 = eris.fock[:nocc,nocc:] / eia
         eris_oovv = numpy.array(eris.oovv)
         t2 = eris_oovv / eijab
-        self.emp2 = 0.25*einsum('ijab,ijab', t2.conj(), eris_oovv).real
+        self.emp2 = 0.25*numpy.einsum('ijab,ijab', t2.conj(), eris_oovv).real
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, amplitudes_to_cisdvec(1, t1, t2)
 
     def ao2mo(self, mo_coeff=None):
-        return _ERIS(self, mo_coeff)
+        nmo = self.nmo
+        mem_incore = nmo**4*2 * 8/1e6
+        mem_now = lib.current_memory()[0]
+        if (self._scf._eri is not None and
+            (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
+            return gccsd._make_eris_incore(self, mo_coeff)
+        elif hasattr(self._scf, 'with_df'):
+            raise NotImplementedError
+        else:
+            return gccsd._make_eris_outcore(self, mo_coeff)
 
-    def to_fci(self, cisdvec, nelec, orbspin):
-        return to_fci(cisdvec, nelec, orbspin)
+    contract = contract
+    make_diagonal = make_diagonal
+    _dot = None
 
-    def from_fci(self, fcivec, nelec, orbspin):
-        return from_fci(fcivec, nelec, orbspin)
+    def to_fcivec(self, cisdvec, nelec, orbspin):
+        return to_fcivec(cisdvec, nelec, orbspin)
+
+    def from_fcivec(self, fcivec, nelec, orbspin):
+        return from_fcivec(fcivec, nelec, orbspin)
 
     def make_rdm1(self, ci=None):
         if ci is None: ci = self.ci
@@ -387,43 +343,20 @@ class CISD(lib.StreamObject):
         if ci is None: ci = self.ci
         return make_rdm2(ci, self.nmo, self.nocc)
 
-class _ERIS(object):
-    def __init__(self, myci, mo_coeff=None):
-        if mo_coeff is None:
-            mo_coeff = myci._scf.mo_coeff
-        mol = myci.mol
-        nocc = myci.nocc
-        nmo = myci.nmo
-        nvir = nmo - nocc
-        moidx = uccsd.get_umoidx(myci)
-        self.fock, mo_coeff, orbspin = uccsd.uspatial2spin(myci, moidx, mo_coeff)
-        self.mo_coeff = mo_coeff
-        myci.orbspin = self.orbspin = orbspin
+    def amplitudes_to_cisdvec(self, c0, c1, c2):
+        return amplitudes_to_cisdvec(c0, c1, c2)
 
-        eri = ao2mo.kernel(myci._scf._eri, mo_coeff, compact=False)
-        eri = eri.reshape([nmo]*4)
-        for i in range(nmo):
-            for j in range(i):
-                if orbspin[i] != orbspin[j]:
-                    eri[i,j,:,:] = eri[j,i,:,:] = 0.
-                    eri[:,:,i,j] = eri[:,:,j,i] = 0.
-        eri = eri - eri.transpose(0,3,2,1)
-        eri = eri.transpose(0,2,1,3)
-
-        self.oooo = eri[:nocc,:nocc,:nocc,:nocc]
-        self.ovvo = eri[:nocc,nocc:,nocc:,:nocc]
-        self.ovov = eri[:nocc,nocc:,:nocc,nocc:]
-        self.ooov = eri[:nocc,:nocc,:nocc,nocc:]
-        self.ovoo = eri[:nocc,nocc:,:nocc,:nocc]
-        self.oovv = eri[:nocc,:nocc,nocc:,nocc:]
-        self.ovvv = eri[:nocc,nocc:,nocc:,nocc:]
-        self.vvvv = eri[nocc:,nocc:,nocc:,nocc:]
+    def cisdvec_to_amplitudes(self, civec, nmo=None, nocc=None):
+        if nmo is None: nmo = self.nmo
+        if nocc is None: nocc = self.nocc
+        return cisdvec_to_amplitudes(civec, nmo, nocc)
 
 
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     from pyscf import fci
+    from pyscf import ao2mo
     from pyscf.cc.addons import spatial2spin
     numpy.random.seed(12)
     nocc = 3
@@ -440,10 +373,10 @@ if __name__ == '__main__':
     c1 = spatial2spin((c1a, c1b), orbspin)
     c2 = spatial2spin((c2aa, c2ab, c2bb), orbspin)
     cisdvec = amplitudes_to_cisdvec(1., c1, c2)
-    fcivec = to_fci(cisdvec, nocc*2, orbspin)
-    cisdvec1 = from_fci(fcivec, nocc*2, orbspin)
+    fcivec = to_fcivec(cisdvec, nocc*2, orbspin)
+    cisdvec1 = from_fcivec(fcivec, nocc*2, orbspin)
     print(abs(cisdvec-cisdvec1).sum())
-    ci1 = to_fci(cisdvec1, nocc*2, orbspin)
+    ci1 = to_fcivec(cisdvec1, nocc*2, orbspin)
     print(abs(fcivec-ci1).sum())
 
     mol = gto.Mole()
@@ -460,12 +393,13 @@ if __name__ == '__main__':
     mol.build()
     mf = scf.UHF(mol).run(conv_tol=1e-14)
     ehf0 = mf.e_tot - mol.energy_nuc()
-    myci = CISD(mf)
+    gmf = scf.addons.convert_to_ghf(mf)
+    myci = GCISD(gmf)
     eris = myci.ao2mo()
 
     numpy.random.seed(12)
     nocca, noccb = mol.nelec
-    nmo = mf.mo_occ[0].size
+    nmo = mol.nao_nr()
     nvira = nmo - nocca
     nvirb = nmo - noccb
     #cisdvec = myci.get_init_guess(eris)[1]
@@ -487,22 +421,21 @@ if __name__ == '__main__':
     h1b = reduce(numpy.dot, (mf.mo_coeff[1].T, mf.get_hcore(), mf.mo_coeff[1]))
     h2e = fci.direct_uhf.absorb_h1e((h1a,h1b), (eri_aa,eri_ab,eri_bb),
                                     h1a.shape[0], mol.nelec, .5)
-    fcivec = to_fci(cisdvec, mol.nelectron, eris.orbspin)
+    fcivec = to_fcivec(cisdvec, mol.nelectron, eris.orbspin)
     hci1 = fci.direct_uhf.contract_2e(h2e, fcivec, h1a.shape[0], mol.nelec)
     hci1 -= ehf0 * fcivec
-    hcisd1 = from_fci(hci1, mol.nelectron, eris.orbspin)
+    hcisd1 = from_fcivec(hci1, mol.nelectron, eris.orbspin)
     print(numpy.linalg.norm(hcisd1-hcisd0) / numpy.linalg.norm(hcisd0))
 
     hdiag0 = make_diagonal(myci, eris)
-    hdiag0 = to_fci(hdiag0, mol.nelectron, eris.orbspin).ravel()
-    hdiag0 = from_fci(hdiag0, mol.nelectron, eris.orbspin).ravel()
+    hdiag0 = to_fcivec(hdiag0, mol.nelectron, eris.orbspin).ravel()
+    hdiag0 = from_fcivec(hdiag0, mol.nelectron, eris.orbspin).ravel()
     hdiag1 = fci.direct_uhf.make_hdiag((h1a,h1b), (eri_aa,eri_ab,eri_bb),
                                        h1a.shape[0], mol.nelec)
-    hdiag1 = from_fci(hdiag1, mol.nelectron, eris.orbspin).ravel()
+    hdiag1 = from_fcivec(hdiag1, mol.nelectron, eris.orbspin).ravel()
     print(numpy.linalg.norm(abs(hdiag0)-abs(hdiag1)))
 
     ecisd = myci.kernel()[0]
-    print ecisd, mf.e_tot
     efci = fci.direct_uhf.kernel((h1a,h1b), (eri_aa,eri_ab,eri_bb),
                                  h1a.shape[0], mol.nelec)[0]
     print(ecisd, ecisd - -0.037067274690894436, '> E(fci)', efci-ehf0)
@@ -520,8 +453,9 @@ if __name__ == '__main__':
     mol.basis = '6-31g'
     mol.build()
     mf = scf.UHF(mol).run(conv_tol=1e-14)
+    gmf = scf.addons.convert_to_ghf(mf)
     ehf0 = mf.e_tot - mol.energy_nuc()
-    myci = CISD(mf)
+    myci = GCISD(gmf)
     eris = myci.ao2mo()
     ecisd = myci.kernel(eris=eris)[0]
     eri_aa = ao2mo.kernel(mf._eri, mf.mo_coeff[0])
@@ -564,7 +498,8 @@ if __name__ == '__main__':
                  'O': 'sto-3g',}
     mol.build()
     mf = scf.UHF(mol).run(conv_tol=1e-14)
-    myci = CISD(mf)
+    gmf = scf.addons.convert_to_ghf(mf)
+    myci = GCISD(gmf)
     eris = myci.ao2mo()
     ecisd, civec = myci.kernel(eris=eris)
     print(ecisd - -0.048878084082066106)
@@ -573,7 +508,8 @@ if __name__ == '__main__':
     rdm1 = make_rdm1(civec, nmo, mol.nelectron)
     rdm2 = make_rdm2(civec, nmo, mol.nelectron)
 
-    eri = ao2mo.kernel(mf._eri, eris.mo_coeff, compact=False)
+    mo = eris.mo_coeff[:7] + eris.mo_coeff[7:]
+    eri = ao2mo.kernel(mf._eri, mo, compact=False)
     eri = eri.reshape([nmo]*4)
     for i in range(nmo):
         for j in range(i):

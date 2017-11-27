@@ -502,7 +502,7 @@ def _unpack_4fold(c2vec, nocc, nvir, anti_symm=True):
         vtril = numpy.tril_indices(nvir, k=-1)
         lib.takebak_2d(t2, t2tril, otril[0]*nocc+otril[1], vtril[0]*nvir+vtril[1])
         lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[1]*nvir+vtril[0])
-        if anti_symm:  # anti-symmetry when exchanging two particles
+        if anti_symm:  # anti-symmetry when exchanging two particle indices
             t2tril = -t2tril
         lib.takebak_2d(t2, t2tril, otril[0]*nocc+otril[1], vtril[1]*nvir+vtril[0])
         lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[0]*nvir+vtril[1])
@@ -742,10 +742,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         log = logger.Logger(self.stdout, self.verbose)
         log.info('')
         log.info('******** %s flags ********', self.__class__)
-        nocc = self.nocc
-        nvir = self.nmo - nocc
         log.info('CC2 = %g', self.cc2)
-        log.info('CCSD nocc = %d, nvir = %d', nocc, nvir)
+        log.info('CCSD nocc = %s, nmo = %s', self.nocc, self.nmo)
         if self.frozen is not 0:
             log.info('frozen orbitals %s', self.frozen)
         log.info('max_cycle = %d', self.max_cycle)

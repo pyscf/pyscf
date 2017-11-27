@@ -100,3 +100,46 @@ def spin2spatial(tx, orbspin):
         t2bb = t2bb.reshape(nocc_b,nocc_b,nvir_b,nvir_b)
         t2ab = t2ab.reshape(nocc_a,nocc_b,nvir_a,nvir_b)
         return t2aa,t2ab,t2bb
+
+def convert_to_uccsd(mycc):
+    from pyscf import scf
+    from pyscf.cc import uccsd, gccsd
+    if isinstance(mycc, uccsd.UCCSD):
+        return mycc
+    elif isinstance(mycc, gccsd.GCCSD):
+        raise NotImplementedError
+
+    mf = scf.addons.convert_to_uhf(mycc._scf)
+    ucc = uccsd.UCCSD(mf)
+    assert(mycc._nocc is None)
+    assert(mycc._nmo is None)
+    ucc.__dict__.update(mycc.__dict__)
+    ucc._scf = mf
+    ucc.mo_coeff = mf.mo_coeff
+    ucc.mo_occ = mf.mo_occ
+    if not isinstance(mycc.frozen, (int, numpy.integer)):
+        raise NotImplementedError
+    ucc.t1, ucc.t2 = uccsd.amplitudes_from_rccsd(mycc.t1, mycc.t2)
+    return ucc
+
+def convert_to_gccsd(mycc):
+    from pyscf import scf
+    from pyscf.cc import gccsd
+    if isinstance(mycc, gccsd.GCCSD):
+        return mycc
+
+    mf = scf.addons.convert_to_ghf(mycc._scf)
+    gcc = gccsd.GCCSD(mf)
+    assert(mycc._nocc is None)
+    assert(mycc._nmo is None)
+    gcc.__dict__.update(mycc.__dict__)
+    gcc._scf = mf
+    gcc.mo_coeff = mf.mo_coeff
+    gcc.mo_occ = mf.mo_occ
+    if isinstance(mycc.frozen, (int, numpy.integer)):
+        gcc.frozen = mycc.frozen * 2
+    else:
+        raise NotImplementedError
+    gcc.t1 = spatial2spin(mycc.t1, mf.mo_coeff.orbspin)
+    gcc.t2 = spatial2spin(mycc.t2, mf.mo_coeff.orbspin)
+    return gcc

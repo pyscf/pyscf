@@ -393,3 +393,5 @@ if __name__ == '__main__':
     eris = mycc.ao2mo()
     mycc.kernel(eris=eris)
     conv, l1, l2 = kernel(mycc, eris, mycc.t1, mycc.t2, tol=1e-8)
+    print(lib.finger(l1) - -0.010986661613398667)
+    print(lib.finger(l2) - -1.1821207755884895  )

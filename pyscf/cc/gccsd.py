@@ -90,38 +90,7 @@ amplitudes_to_vector = ccsd.amplitudes_to_vector_s4
 
 def amplitudes_from_rccsd(t1, t2):
     '''Convert spatial orbital T1,T2 to spin-orbital T1,T2'''
-    nocc, nvir = t1.shape
-    nocc2 = nocc * 2
-    nvir2 = nvir * 2
-    t1s = np.zeros((nocc2,nvir2))
-    t1s[:nocc,:nvir] = t1
-    t1s[nocc:,nvir:] = t1
-
-    t2s = np.zeros((nocc2,nocc2,nvir2,nvir2))
-    t2s[:nocc,nocc:,:nvir,nvir:] = t2
-    t2s[nocc:,:nocc,nvir:,:nvir] = t2
-    t2s[:nocc,nocc:,nvir:,:nvir] =-t2.transpose(0,1,3,2)
-    t2s[nocc:,:nocc,:nvir,nvir:] =-t2.transpose(0,1,3,2)
-    t2s[:nocc,:nocc,:nvir,:nvir] = t2 - t2.transpose(0,1,3,2)
-    t2s[nocc:,nocc:,nvir:,nvir:] = t2 - t2.transpose(0,1,3,2)
-    return t1s, t2s
-
-def from_ccsd(cc):
-    mf = scf.addons.convert_to_ghf(cc._scf)
-    gcc = GCCSD(mf)
-    assert(cc._nocc is None)
-    assert(cc._nmo is None)
-    gcc.__dict__.update(cc.__dict__)
-    gcc._scf = mf
-    gcc.mo_coeff = mf.mo_coeff
-    gcc.mo_occ = mf.mo_occ
-    if isinstance(cc.frozen, (int, np.integer)):
-        gcc.frozen = cc.frozen * 2
-    else:
-        raise NotImplementedError
-    gcc.t1 = addons.spatial2spin(cc.t1, mf.mo_coeff.orbspin)
-    gcc.t2 = addons.spatial2spin(cc.t2, mf.mo_coeff.orbspin)
-    return gcc
+    return spatial2spin(t1), spatial2spin(t2)
 
 
 class GCCSD(ccsd.CCSD):

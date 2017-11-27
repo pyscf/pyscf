@@ -31,7 +31,6 @@ def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8, verbose=logger.INFO):
     mol = myci.mol
     nmo = myci.nmo
     nocc = myci.nocc
-    nvir = nmo - nocc
     diag = myci.make_diagonal(eris)
     ehf = diag[0]
     diag -= ehf
@@ -47,8 +46,11 @@ def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8, verbose=logger.INFO):
         diagd[abs(diagd)<1e-8] = 1e-8
         return x / diagd
 
-    def cisd_dot(x1, x2):
-        return dot(x1, x2, nocc, nvir)
+    if myci._dot is not None:
+        def cisd_dot(x1, x2):
+            return myci._dot(x1, x2, nmo, nocc)
+    else:
+        cisd_dot = numpy.dot
 
     conv, ecisd, ci = lib.davidson1(op, ci0, precond, tol=tol,
                                     max_cycle=max_cycle, max_space=myci.max_space,
@@ -70,8 +72,8 @@ def make_diagonal(myci, eris):
     nvir = nmo - nocc
     jdiag[:nocc,:nocc] = numpy.einsum('iijj->ij', eris.oooo)
     kdiag[:nocc,:nocc] = numpy.einsum('jiij->ij', eris.oooo)
-    jdiag[:nocc,nocc:] = numpy.einsum('iijj->ji', eris.vvoo)
-    kdiag[:nocc,nocc:] = numpy.einsum('jiij->ij', eris.voov)
+    jdiag[:nocc,nocc:] = numpy.einsum('iijj->ij', eris.oovv)
+    kdiag[:nocc,nocc:] = numpy.einsum('ijji->ij', eris.ovvo)
     if eris.vvvv is not None:
         #:eris_vvvv = ao2mo.restore(1, eris.vvvv, nvir)
         #:jdiag1 = numpy.einsum('iijj->ij', eris_vvvv)
@@ -103,36 +105,22 @@ def contract(myci, civec, eris):
     noo = nocc**2
     c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
 
-    cinew = numpy.zeros_like(civec)
-    t1 = cinew[1:nov+1].reshape(nocc,nvir)
-    t2 = cinew[nov+1:].reshape(nocc,nocc,nvir,nvir)
-    t2new_tril = numpy.zeros((nocc*(nocc+1)//2,nvir,nvir))
-    myci.add_wvvVV(c2, eris, t2new_tril)
-    for i in range(nocc):
-        for j in range(i+1):
-            t2[i,j] = t2new_tril[i*(i+1)//2+j]
-        t2[i,i] *= .5
-    t2new_tril = None
+    t2 = myci._add_vvvv(c2, eris, t2sym='jiba')
+    t2 *= .5  # due to t2+t2.transpose(1,0,3,2) in the end
     time1 = log.timer_debug1('vvvv', *time0)
-    #:t2 += numpy.einsum('iklj,klab->ijab', _cp(eris.oooo)*.5, c2)
-    oooo = lib.transpose(_cp(eris.oooo).reshape(nocc,noo,nocc), axes=(0,2,1))
-    lib.ddot(oooo.reshape(noo,noo), c2.reshape(noo,-1), .5, t2.reshape(noo,-1), 1)
 
     foo = eris.fock[:nocc,:nocc].copy()
     fov = eris.fock[:nocc,nocc:].copy()
     fvv = eris.fock[nocc:,nocc:].copy()
 
-    t1+= fov * c0
-    t1+= numpy.einsum('ib,ab->ia', c1, fvv)
-    t1-= numpy.einsum('ja,ji->ia', c1, foo)
+    t1  = fov * c0
+    t1 += numpy.einsum('ib,ab->ia', c1, fvv)
+    t1 -= numpy.einsum('ja,ji->ia', c1, foo)
 
-    #:t2 += numpy.einsum('bc,ijac->ijab', fvv, c2)
-    #:t2 -= numpy.einsum('kj,kiba->ijab', foo, c2)
-    #:t2 += numpy.einsum('ia,jb->ijab', c1, fov)
-    lib.ddot(c2.reshape(-1,nvir), fvv, 1, t2.reshape(-1,nvir), 1)
-    lib.ddot(foo, c2.reshape(nocc,-1),-1, t2.reshape(nocc,-1), 1)
-    for j in range(nocc):
-        t2[:,j] += numpy.einsum('ia,b->iab', c1, fov[j])
+    t2 += lib.einsum('iklj,klab->ijab', _cp(eris.oooo)*.5, c2)
+    t2 += lib.einsum('ijac,bc->ijab', c2, fvv)
+    t2 -= lib.einsum('kj,kiba->jiba', foo, c2)
+    t2 += numpy.einsum('ia,jb->ijab', c1, fov)
 
     unit = nocc*nvir**2 + nocc**2*nvir*3
     max_memory = max(2000, myci.max_memory - lib.current_memory()[0])
@@ -140,67 +128,41 @@ def contract(myci, civec, eris):
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
     nvir_pair = nvir * (nvir+1) // 2
+    blksize = 3
     for p0, p1 in lib.prange(0, nvir, blksize):
-        eris_vvoo = _cp(eris.vvoo[p0:p1])
-        oovv = lib.transpose(eris_vvoo.reshape(-1,nocc**2))
-        #:eris_oVoV = eris_vvoo.transpose(2,0,3,1)
-        eris_oVoV = numpy.ndarray((nocc,p1-p0,nocc,nvir))
-        eris_oVoV[:] = oovv.reshape(nocc,nocc,p1-p0,nvir).transpose(0,2,1,3)
-        eris_vvoo = oovv = None
-        #:tmp = numpy.einsum('ikca,jbkc->jiba', c2, eris_oVoV)
-        #:t2[:,:,p0:p1] -= tmp*.5
-        #:t2[:,:,p0:p1] -= tmp.transpose(1,0,2,3)
-        for i in range(nocc):
-            tmp = lib.ddot(eris_oVoV.reshape(-1,nov), c2[i].reshape(nov,nvir))
-            tmp = tmp.reshape(nocc,p1-p0,nvir)
-            t2[:,i,p0:p1] -= tmp*.5
-            t2[i,:,p0:p1] -= tmp
+        eris_oVoV = _cp(_cp(eris.oovv[:,:,p0:p1]).transpose(0,2,1,3))
+        tmp = lib.einsum('jbkc,ikca->jiba', eris_oVoV, c2)
+        t2[:,:,p0:p1] -= tmp*.5
+        t2[:,:,p0:p1] -= tmp.transpose(1,0,2,3)
+        tmp = None
 
-        eris_voov = _cp(eris.voov[p0:p1])
-        for i in range(p0, p1):
-            t2[:,:,i] += eris_voov[i-p0] * (c0 * .5)
-        t1[:,p0:p1] += numpy.einsum('jb,aijb->ia', c1, eris_voov) * 2
+        eris_ovvo = _cp(eris.ovvo[:,p0:p1])
+        t2[:,:,p0:p1] += eris_ovvo.transpose(0,3,1,2) * (c0*.5)
+        t1[:,p0:p1] += numpy.einsum('jb,iabj->ia', c1, eris_ovvo) * 2
         t1[:,p0:p1] -= numpy.einsum('jb,iajb->ia', c1, eris_oVoV)
 
-        #:ovov = eris_voov.transpose(2,0,1,3) - eris_vvoo.transpose(2,0,3,1)
         ovov = eris_oVoV
         ovov *= -.5
-        for i in range(nocc):
-            ovov[i] += eris_voov[:,:,i]
-        eris_oVoV = eris_vvoo = None
-        #:theta = c2[:,:,p0:p1]
-        #:theta = theta * 2 - theta.transpose(1,0,2,3)
-        #:theta = theta.transpose(2,0,1,3)
-        theta = numpy.ndarray((p1-p0,nocc,nocc,nvir))
-        for i in range(p0, p1):
-            theta[i-p0] = c2[:,:,i] * 2
-            theta[i-p0]-= c2[:,:,i].transpose(1,0,2)
-        #:t2 += numpy.einsum('ckia,jckb->ijab', theta, ovov)
+        ovov += eris_ovvo.transpose(3,1,0,2)
+        eris_oVoV = eris_oovv = None
+        theta = c2[:,:,p0:p1].transpose(2,0,1,3) * 2
+        theta-= c2[:,:,p0:p1].transpose(2,1,0,3)
         for j in range(nocc):
-            tmp = lib.ddot(theta.reshape(-1,nov).T, ovov[j].reshape(-1,nvir))
-            t2[:,j] += tmp.reshape(nocc,nvir,nvir)
+            t2[:,j] += lib.einsum('ckb,ckia->iab', ovov[j], theta)
         tmp = ovov = None
 
         t1[:,p0:p1] += numpy.einsum('aijb,jb->ia', theta, fov)
 
-        eris_vooo = _cp(eris.vooo[p0:p1])
-        #:t1 -= numpy.einsum('bjka,bjki->ia', theta, eris_vooo)
-        #:t2[:,:,p0:p1] -= numpy.einsum('ka,bjik->jiba', c1, eris_vooo)
-        lib.ddot(eris_vooo.reshape(-1,nocc).T, theta.reshape(-1,nvir), -1, t1, 1)
-        for i in range(p0, p1):
-            t2[:,:,i] -= lib.ddot(eris_vooo[i-p0].reshape(noo,-1), c1).reshape(nocc,nocc,-1)
+        eris_ovoo = _cp(eris.ovoo[:,p0:p1])
+        t1 -= lib.einsum('bjka,jbki->ia', theta, eris_ovoo)
+        t2[:,:,p0:p1] -= lib.einsum('jbik,ka->jiba', eris_ovoo, c1)
         eris_vooo = None
 
-        eris_vovv = _cp(eris.vovv[p0:p1]).reshape(-1,nvir_pair)
-        eris_vovv = lib.unpack_tril(eris_vovv).reshape(p1-p0,nocc,nvir,nvir)
-        #:t1 += numpy.einsum('cjib,cjba->ia', theta, eris_vovv)
-        #:t2[:,:,p0:p1] += numpy.einsum('jc,aibc->ijab', c1, eris_vovv)
-        theta = lib.transpose(theta.reshape(-1,nocc,nvir), axes=(0,2,1))
-        lib.ddot(theta.reshape(-1,nocc).T, eris_vovv.reshape(-1,nvir), 1, t1, 1)
-        for i in range(p0, p1):
-            tmp = lib.ddot(c1, eris_vovv[i-p0].reshape(-1,nvir).T)
-            t2[:,:,i] += tmp.reshape(nocc,nocc,nvir).transpose(1,0,2)
-        tmp = eris_vovv = None
+        eris_ovvv = _cp(eris.ovvv[:,p0:p1]).reshape(-1,nvir_pair)
+        eris_ovvv = lib.unpack_tril(eris_ovvv).reshape(nocc,p1-p0,nvir,nvir)
+        t1 += lib.einsum('cjib,jcba->ia', theta, eris_ovvv)
+        t2[:,:,p0:p1] += lib.einsum('iabc,jc->ijab', eris_ovvv, c1)
+        tmp = eris_ovvv = None
 
     #:t2 + t2.transpose(1,0,3,2)
     for i in range(nocc):
@@ -209,9 +171,10 @@ def contract(myci, civec, eris):
             t2[:i,i] = t2[i,:i].transpose(0,2,1)
         t2[i,i] = t2[i,i] + t2[i,i].T
 
-    cinew[0] += numpy.einsum('ia,ia->', fov, c1) * 2
-    cinew[0] += numpy.einsum('aijb,ijab->', eris.voov, c2) * 2
-    cinew[0] -= numpy.einsum('aijb,jiab->', eris.voov, c2)
+    t0  = numpy.einsum('ia,ia->', fov, c1) * 2
+    t0 += numpy.einsum('iabj,ijab->', eris.ovvo, c2) * 2
+    t0 -= numpy.einsum('iabj,jiab->', eris.ovvo, c2)
+    cinew = numpy.hstack((t0, t1.ravel(), t2.ravel()))
     return cinew
 
 def amplitudes_to_cisdvec(c0, c1, c2):
@@ -224,7 +187,8 @@ def cisdvec_to_amplitudes(civec, nmo, nocc):
     c2 = civec[nocc*nvir+1:].reshape(nocc,nocc,nvir,nvir)
     return c0, c1, c2
 
-def dot(v1, v2, nocc, nvir):
+def dot(v1, v2, nmo, nocc):
+    nvir = nmo - nocc
     hijab = v2[1+nocc*nvir:].reshape(nocc,nocc,nvir,nvir)
     cijab = v1[1+nocc*nvir:].reshape(nocc,nocc,nvir,nvir)
     val = numpy.dot(v1, v2) * 2 - v1[0]*v2[0]
@@ -243,7 +207,7 @@ def t1strs(norb, nelec):
             signs.append(cistring.cre_des_sign(a, i, hf_str))
     return numpy.asarray(addrs), numpy.asarray(signs)
 
-def to_fci(cisdvec, norb, nelec):
+def to_fcivec(cisdvec, norb, nelec):
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -278,7 +242,7 @@ def to_fci(cisdvec, norb, nelec):
                         fcivec[0,addr] = fcivec[addr,0] = c2aa
     return fcivec
 
-def from_fci(ci0, norb, nelec):
+def from_fcivec(ci0, norb, nelec):
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -423,9 +387,7 @@ class CISD(lib.StreamObject):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('')
         log.info('******** %s flags ********', self.__class__)
-        nocc = self.nocc
-        nvir = self.nmo - nocc
-        log.info('CISD nocc = %d, nvir = %d', nocc, nvir)
+        log.info('CISD nocc = %s, nmo = %s', self.nocc, self.nmo)
         if self.frozen is not 0:
             log.info('frozen orbitals %s', str(self.frozen))
         log.info('max_cycle = %d', self.max_cycle)
@@ -443,12 +405,16 @@ class CISD(lib.StreamObject):
     def e_tot(self):
         return numpy.asarray(self.e_corr) + self._scf.e_tot
 
-    nocc = property(ccsd.get_nocc)
+    @property
+    def nocc(self):
+        return self.get_nocc()
     @nocc.setter
     def nocc(self, n):
         self._nocc = n
 
-    nmo = property(ccsd.get_nmo)
+    @property
+    def nmo(self):
+        return self.get_nmo()
     @nmo.setter
     def nmo(self, n):
         self._nmo = n
@@ -468,16 +434,17 @@ class CISD(lib.StreamObject):
         self.converged, self.e_corr, self.ci = \
                 kernel(self, eris, ci0, max_cycle=self.max_cycle,
                        tol=self.conv_tol, verbose=self.verbose)
+        citype = self.__class__.__name__
         if numpy.all(self.converged):
-            logger.info(self, 'CISD converged')
+            logger.info(self, '%s converged', citype)
         else:
-            logger.info(self, 'CISD not converged')
+            logger.info(self, '%s not converged', citype)
         if self.nroots > 1:
             for i,e in enumerate(self.e_tot):
-                logger.note(self, 'CISD root %d  E = %.16g', i, e)
+                logger.note(self, '%s root %d  E = %.16g', citype, i, e)
         else:
-            logger.note(self, 'E(CISD) = %.16g  E_corr = %.16g',
-                        self.e_tot, self.e_corr)
+            logger.note(self, 'E(%s) = %.16g  E_corr = %.16g',
+                        citype, self.e_tot, self.e_corr)
         return self.e_corr, self.ci
 
     def get_init_guess(self, eris=None):
@@ -489,17 +456,21 @@ class CISD(lib.StreamObject):
         e_ia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])
         ci0 = 1
         ci1 = numpy.zeros_like(e_ia)
-        eris_voov = _cp(eris.voov)
-        ci2 = 2 * eris_voov.transpose(1,2,0,3)
-        ci2-= eris_voov.transpose(1,2,3,0)
+        eris_ovvo = _cp(eris.ovvo)
+        ci2  = 2 * eris_ovvo.transpose(0,3,1,2)
+        ci2 -= eris_ovvo.transpose(0,3,2,1)
         ci2 /= lib.direct_sum('ia,jb->ijab', e_ia, e_ia)
-        self.emp2 = numpy.einsum('ijab,aijb', ci2, eris_voov)
-        eris_voov = None
+        self.emp2 = numpy.einsum('ijab,iabj', ci2, eris_ovvo)
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
         return self.emp2, amplitudes_to_cisdvec(ci0, ci1, ci2)
 
     contract = contract
     make_diagonal = make_diagonal
+
+    def _dot(self, x1, x2, nmo=None, nocc=None):
+        if nmo is None: nmo = self.nmo
+        if nocc is None: nocc = self.nocc
+        return dot(x1, x2, nmo, nocc)
 
     def ao2mo(self, mo_coeff=None):
         nmo = self.nmo
@@ -522,16 +493,14 @@ class CISD(lib.StreamObject):
         else:
             return ccsd._make_eris_outcore(self, mo_coeff)
 
-    def add_wvvVV(self, t2, eris, out=None):
-        nocc, nvir = t2.shape[1:3]
-        t1 = numpy.zeros((nocc,nvir))
-        return ccsd.add_wvvVV(self, t1, t2, eris, out, with_ovvv=False)
+    def _add_vvvv(self, c2, eris, out=None, t2sym=None):
+        return ccsd._add_vvvv(self, None, c2, eris, out, False, t2sym)
 
-    def to_fci(self, cisdvec, norb, nelec):
-        return to_fci(cisdvec, norb, nelec)
+    def to_fcivec(self, cisdvec, norb, nelec):
+        return to_fcivec(cisdvec, norb, nelec)
 
-    def from_fci(self, fcivec, norb, nelec):
-        return from_fci(fcivec, norb, nelec)
+    def from_fcivec(self, fcivec, norb, nelec):
+        return from_fcivec(fcivec, norb, nelec)
 
     def make_rdm1(self, ci=None):
         if ci is None: ci = self.ci
@@ -559,6 +528,14 @@ class CISD(lib.StreamObject):
             chkfile = self._scf.chkfile
         lib.chkfile.save(chkfile, 'cisd', ci_chk)
 
+    def amplitudes_to_cisdvec(self, c0, c1, c2):
+        return amplitudes_to_cisdvec(c0, c1, c2)
+
+    def cisdvec_to_amplitudes(self, civec, nmo=None, nocc=None):
+        if nmo is None: nmo = self.nmo
+        if nocc is None: nocc = self.nocc
+        return cisdvec_to_amplitudes(civec, nmo, nocc)
+
 def _cp(a):
     return numpy.array(a, copy=False, order='C')
 
@@ -567,8 +544,6 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     from pyscf import fci
-    def finger(a):
-        return numpy.dot(a.ravel(), numpy.cos(numpy.arange(a.size)))
     def fcicontract(h1, h2, norb, nelec, ci0):
         g2e = fci.direct_spin1.absorb_h1e(h1, h2, norb, nelec, .5)
         ci1 = fci.direct_spin1.contract_2e(g2e, ci0, norb, nelec)
@@ -600,16 +575,16 @@ if __name__ == '__main__':
     civec = numpy.hstack((numpy.random.random(nocc*nvir+1) * .1,
                           c2.ravel()))
     hcivec = contract(myci, civec, eris)
-    print(finger(hcivec) - 2059.5730673341673)
+    print(lib.finger(hcivec) - 2059.5730673341673)
 
-    ci0 = to_fci(civec, nmo, mol.nelectron)
-    print(abs(civec-from_fci(ci0, nmo, nocc*2)).sum())
+    ci0 = to_fcivec(civec, nmo, mol.nelectron)
+    print(abs(civec-from_fcivec(ci0, nmo, nocc*2)).sum())
     h2e = ao2mo.kernel(mf._eri, mf.mo_coeff)
     h1e = reduce(numpy.dot, (mf.mo_coeff.T, h1, mf.mo_coeff))
     ci1 = fcicontract(h1e, h2e, nmo, mol.nelectron, ci0)
-    ci2 = to_fci(hcivec, nmo, mol.nelectron)
+    ci2 = to_fcivec(hcivec, nmo, mol.nelectron)
     e1 = numpy.dot(ci1.ravel(), ci0.ravel())
-    e2 = dot(civec, hcivec+eris.ehf*civec, nocc, nvir)
+    e2 = dot(civec, hcivec+eris.ehf*civec, nmo, nocc)
     print(e1-e2)
 
     mol = gto.Mole()

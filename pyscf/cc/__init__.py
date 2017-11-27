@@ -107,7 +107,6 @@ def UCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
 
 
 def GCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
-    __doc__ = uccsd.UCCSD.__doc__
     import sys
     from pyscf import scf
     from pyscf.cc import gccsd

@@ -8,7 +8,6 @@ from pyscf import scf
 from pyscf.lib import logger
 from pyscf.cc import ccsd
 from pyscf.cc import uccsd
-from pyscf.cc import gccsd
 from pyscf.cc import eom_rccsd
 from pyscf.cc import eom_gccsd
 from pyscf.cc import addons
@@ -23,7 +22,7 @@ from pyscf.cc import uintermediates as imd
 
 class EOMIP(eom_gccsd.EOMIP):
     def __init__(self, cc):
-        gcc = gccsd.from_ccsd(cc)
+        gcc = addons.convert_to_gccsd(cc)
         eom_gccsd.EOMIP.__init__(self, gcc)
 
 ########################################
@@ -32,7 +31,7 @@ class EOMIP(eom_gccsd.EOMIP):
 
 class EOMEA(eom_gccsd.EOMEA):
     def __init__(self, cc):
-        gcc = gccsd.from_ccsd(cc)
+        gcc = addons.convert_to_gccsd(cc)
         eom_gccsd.EOMEA.__init__(self, gcc)
 
 ########################################
