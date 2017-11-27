@@ -47,7 +47,11 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     h1aa, h1ab = rhf_hess.get_hcore(mol)
     s1aa, s1ab, s1a = rhf_hess.get_ovlp(mol)
 
-    hyb = mf._numint.hybrid_coeff(mf.xc)
+    if mf.nlc != '':
+        raise NotImplementedError
+    #enabling range-separated hybrids
+    omega, alpha, hyb = mf._numint.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
+
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
     veffa_diag, veffb_diag = _get_vxc_diag(hessobj, mo_coeff, mo_occ, max_memory)
@@ -59,6 +63,13 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
         vj1 = vj1a + vj1b
         veffa_diag += (vj1 - hyb * vk1a).reshape(3,3,nao,nao)
         veffb_diag += (vj1 - hyb * vk1b).reshape(3,3,nao,nao)
+        if abs(omega) > 1e-10:
+            with mol.with_range_coulomb(omega):
+                vk1a, vk1b = \
+                        _get_jk(mol, 'int2e_ipip1', 9, 's2kl',
+                                ['jk->s1il', dm0a, 'jk->s1il', dm0b])
+            veffa_diag -= (alpha-hyb) * vk1a.reshape(3,3,nao,nao)
+            veffb_diag -= (alpha-hyb) * vk1b.reshape(3,3,nao,nao)
     else:
         vj1a, vj1b = \
                 _get_jk(mol, 'int2e_ipip1', 9, 's2kl',
@@ -90,6 +101,19 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
             veffb += (vj1 * 2 - hyb * vk1b).reshape(3,3,nao,nao)
             veffa[:,:,:,p0:p1] -= hyb * vk2a.reshape(3,3,nao,p1-p0)
             veffb[:,:,:,p0:p1] -= hyb * vk2b.reshape(3,3,nao,p1-p0)
+            if abs(omega) > 1e-10:
+                with mol.with_range_coulomb(omega):
+                    vk1a, vk1b, vk2a, vk2b = \
+                            _get_jk(mol, 'int2e_ip1ip2', 9, 's1',
+                                    ['li->s1kj', dm0a[:,p0:p1],
+                                     'li->s1kj', dm0b[:,p0:p1],
+                                     'lj->s1ki', dm0a         ,
+                                     'lj->s1ki', dm0b         ],
+                                    shls_slice=shls_slice)
+                veffa -= (alpha-hyb) * vk1a.reshape(3,3,nao,nao)
+                veffb -= (alpha-hyb) * vk1b.reshape(3,3,nao,nao)
+                veffa[:,:,:,p0:p1] -= (alpha-hyb) * vk2a.reshape(3,3,nao,p1-p0)
+                veffb[:,:,:,p0:p1] -= (alpha-hyb) * vk2b.reshape(3,3,nao,p1-p0)
             t1 = log.timer_debug1('contracting int2e_ip1ip2 for atom %d'%ia, *t1)
             vj1a, vj1b, vk1a, vk1b = \
                     _get_jk(mol, 'int2e_ipvip1', 9, 's2kl',
@@ -101,6 +125,14 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
             veffb[:,:,:,p0:p1] += vj1.transpose(0,2,1).reshape(3,3,nao,p1-p0)
             veffa -= hyb * vk1a.transpose(0,2,1).reshape(3,3,nao,nao)
             veffb -= hyb * vk1b.transpose(0,2,1).reshape(3,3,nao,nao)
+            if abs(omega) > 1e-10:
+                with mol.with_range_coulomb(omega):
+                    vk1a, vk1b = _get_jk(mol, 'int2e_ipvip1', 9, 's2kl',
+                                         ['li->s1kj', dm0a[:,p0:p1],
+                                          'li->s1kj', dm0b[:,p0:p1]],
+                                         shls_slice=shls_slice)
+                veffa -= (alpha-hyb) * vk1a.transpose(0,2,1).reshape(3,3,nao,nao)
+                veffb -= (alpha-hyb) * vk1b.transpose(0,2,1).reshape(3,3,nao,nao)
             t1 = log.timer_debug1('contracting int2e_ipvip1 for atom %d'%ia, *t1)
         else:
             vj1a, vj1b = \
@@ -172,7 +204,7 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     mf = hessobj._scf
     ni = mf._numint
     ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-    hyb = ni.hybrid_coeff(mf.xc)
+    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
@@ -200,6 +232,19 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
             h1b = h1 + vj1 - hyb * vk1b
             h1a[:,p0:p1] += vj2 - hyb * vk2a
             h1b[:,p0:p1] += vj2 - hyb * vk2b
+            if abs(omega) > 1e-10:
+                with mol.with_range_coulomb(omega):
+                    vk1a, vk1b, vk2a, vk2b = \
+                            _get_jk(mol, 'int2e_ip1', 3, 's2kl',
+                                    ['li->s1kj', -dm0a[:,p0:p1],
+                                     'li->s1kj', -dm0b[:,p0:p1],
+                                     'jk->s1il', -dm0a         ,
+                                     'jk->s1il', -dm0b         ],
+                                    shls_slice=shls_slice)
+                h1a -= (alpha-hyb) * vk1a
+                h1b -= (alpha-hyb) * vk1b
+                h1a[:,p0:p1] -= (alpha-hyb) * vk2a
+                h1b[:,p0:p1] -= (alpha-hyb) * vk2b
         else:
             vj1a, vj1b, vj2a, vj2b = \
                     _get_jk(mol, 'int2e_ip1', 3, 's2kl',
@@ -543,7 +588,8 @@ if __name__ == '__main__':
     from pyscf import dft
 
     #xc_code = 'lda,vwn'
-    xc_code = 'b3lyp'
+    xc_code = 'wb97x'
+    #xc_code = 'b3lyp'
 
     mol = gto.Mole()
     mol.verbose = 0
@@ -564,6 +610,7 @@ if __name__ == '__main__':
     hobj = Hessian(mf)
     e2 = hobj.kernel().transpose(0,2,1,3).reshape(n3,n3)
     print(lib.finger(e2) - -0.42286407986042956)
+    print(lib.finger(e2) - -0.45453541215680582)
     print(lib.finger(e2) - -0.41385170026016327)
 
     mol.spin = 2

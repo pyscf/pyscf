@@ -41,7 +41,9 @@ def safe_eigh(h, s, lindep=1e-15):
         seig is the eigenvalue vector of the metric s.
     '''
     seig, t = scipy.linalg.eigh(s)
-    if seig[0] < lindep:
+    try:
+        w, v = scipy.linalg.eigh(h, s)
+    except numpy.linalg.LinAlgError:
         idx = seig >= lindep
         t = t[:,idx] * (1/numpy.sqrt(seig[idx]))
         if t.size > 0:
@@ -51,8 +53,6 @@ def safe_eigh(h, s, lindep=1e-15):
         else:
             w = numpy.zeros((0,))
             v = t
-    else:
-        w, v = scipy.linalg.eigh(h, s)
     return w, v, seig
 
 def eigh_by_blocks(h, s=None, labels=None):

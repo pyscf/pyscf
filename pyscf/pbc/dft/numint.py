@@ -1056,6 +1056,12 @@ class _NumInt(numint._NumInt):
     cache_xc_kernel  = cache_xc_kernel
     get_rho = get_rho
 
+    def rsh_and_hybrid_coeff(self, xc_code, spin=0):
+        omega, alpha, hyb = numint._NumInt.rsh_and_hybrid_coeff(self, xc_code, spin)
+        if abs(omega) > 1e-10:
+            raise NotImplementedError
+        return omega, alpha, hyb
+
 
 class _KNumInt(numint._NumInt):
     '''Generalization of pyscf's _NumInt class for k-point sampling and
@@ -1238,4 +1244,10 @@ class _KNumInt(numint._NumInt):
     nr_uks_fxc = nr_uks_fxc
     cache_xc_kernel  = cache_xc_kernel
     get_rho = get_rho
+
+    def rsh_and_hybrid_coeff(self, xc_code, spin=0):
+        omega, alpha, hyb = numint._NumInt.rsh_and_hybrid_coeff(self, xc_code, spin)
+        if abs(omega) > 1e-10:
+            raise NotImplementedError
+        return omega, alpha, hyb
 

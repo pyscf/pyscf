@@ -890,7 +890,7 @@ def dryrun(mc, mo_coeff=None):
     mc.fcisolver.onlywriteIntegral = bak
 
 def block_version(blockexe):
-    version = getattr(settings, 'BLOCKVERSION', None):
+    version = getattr(settings, 'BLOCKVERSION', None)
     if isinstance(version, str):
         return version
 

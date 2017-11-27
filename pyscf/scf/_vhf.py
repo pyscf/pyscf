@@ -231,10 +231,10 @@ def direct_mapdm(intor, aosym, jkdescript,
         nao = dms[0].shape[0]
         dms = [numpy.asarray(dm, order='C') for dm in dms]
     if isinstance(jkdescript, str):
-        njk = 1
-        jkdescript = (jkdescript,)
+        jkdescripts = (jkdescript,)
     else:
-        njk = len(jkdescript)
+        jkdescripts = jkdescript
+    njk = len(jkdescripts)
 
     if vhfopt is None:
         cintor = _fpointer(intor)
@@ -256,7 +256,7 @@ def direct_mapdm(intor, aosym, jkdescript,
     ao_loc = make_loc(bas, intor)
 
     vjk = []
-    descr_sym = [x.split('->') for x in jkdescript]
+    descr_sym = [x.split('->') for x in jkdescripts]
     fjk = (ctypes.c_void_p*(njk*n_dm))()
     dmsptr = (ctypes.c_void_p*(njk*n_dm))()
     vjkptr = (ctypes.c_void_p*(njk*n_dm))()
@@ -289,7 +289,7 @@ def direct_mapdm(intor, aosym, jkdescript,
         vjk = [v.reshape((ncomp,)+v.shape[2:]) for v in vjk]
     elif ncomp == 1:
         vjk = [v.reshape((n_dm,)+v.shape[2:]) for v in vjk]
-    if njk == 1:
+    if isinstance(jkdescript, str):
         vjk = vjk[0]
     return vjk
 
@@ -316,10 +316,10 @@ def direct_bindm(intor, aosym, jkdescript,
         nao = dms[0].shape[0]
         dms = [numpy.asarray(dm, order='C') for dm in dms]
     if isinstance(jkdescript, str):
-        njk = 1
-        jkdescript = (jkdescript,)
+        jkdescripts = (jkdescript,)
     else:
-        njk = len(jkdescript)
+        jkdescripts = jkdescript
+    njk = len(jkdescripts)
     assert(njk == n_dm)
 
     if vhfopt is None:
@@ -342,7 +342,7 @@ def direct_bindm(intor, aosym, jkdescript,
     ao_loc = make_loc(bas, intor)
 
     vjk = []
-    descr_sym = [x.split('->') for x in jkdescript]
+    descr_sym = [x.split('->') for x in jkdescripts]
     fjk = (ctypes.c_void_p*(n_dm))()
     dmsptr = (ctypes.c_void_p*(n_dm))()
     vjkptr = (ctypes.c_void_p*(n_dm))()
@@ -370,7 +370,7 @@ def direct_bindm(intor, aosym, jkdescript,
 
     if ncomp == 1:
         vjk = [v.reshape(v.shape[1:]) for v in vjk]
-    if njk == 1:
+    if isinstance(jkdescript, str):
         vjk = vjk[0]
     return vjk
 

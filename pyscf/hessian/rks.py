@@ -39,7 +39,15 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     h1aa, h1ab = rhf_hess.get_hcore(mol)
     s1aa, s1ab, s1a = rhf_hess.get_ovlp(mol)
 
-    hyb = mf._numint.hybrid_coeff(mf.xc)
+    if mf.nlc != '':
+        raise NotImplementedError
+    #enabling range-separated hybrids
+    omega, alpha, beta = mf._numint.rsh_coeff(mf.xc)
+    if abs(omega) > 1e-10:
+        hyb = alpha + beta
+    else:
+        hyb = mf._numint.hybrid_coeff(mf.xc, spin=mol.spin)
+
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
     veff_diag = _get_vxc_diag(hessobj, mo_coeff, mo_occ, max_memory)
@@ -48,9 +56,14 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                                     ['lk->s1ij', dm0,   # vj1
                                      'jk->s1il', dm0])  # vk1
         veff_diag += (vj1 - hyb * .5 * vk1).reshape(3,3,nao,nao)
+        if abs(omega) > 1e-10:
+            with mol.with_range_coulomb(omega):
+                vk1 = rhf_hess._get_jk(mol, 'int2e_ipip1', 9, 's2kl',
+                                       ['jk->s1il', dm0])[0]
+            veff_diag -= (alpha-hyb)*.5 * vk1.reshape(3,3,nao,nao)
     else:
         vj1 = rhf_hess._get_jk(mol, 'int2e_ipip1', 9, 's2kl',
-                               ['lk->s1ij', dm0])
+                               ['lk->s1ij', dm0])[0]
         veff_diag += vj1.reshape(3,3,nao,nao)
     vj1 = vk1 = None
     t1 = log.timer_debug1('contracting int2e_ipip1', *t1)
@@ -71,6 +84,14 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                                              shls_slice=shls_slice)
             veff += (vj1 * 2 - hyb * .5 * vk1).reshape(3,3,nao,nao)
             veff[:,:,:,p0:p1] -= (hyb * .5 * vk2).reshape(3,3,nao,p1-p0)
+            if abs(omega) > 1e-10:
+                with mol.with_range_coulomb(omega):
+                    vk1, vk2 = rhf_hess._get_jk(mol, 'int2e_ip1ip2', 9, 's1',
+                                                ['li->s1kj', dm0[:,p0:p1],  # vk1
+                                                 'lj->s1ki', dm0         ], # vk2
+                                                shls_slice=shls_slice)
+                veff -= (alpha-hyb)*.5 * vk1.reshape(3,3,nao,nao)
+                veff[:,:,:,p0:p1] -= (alpha-hyb)*.5 * vk2.reshape(3,3,nao,p1-p0)
             t1 = log.timer_debug1('contracting int2e_ip1ip2 for atom %d'%ia, *t1)
 
             vj1, vk1 = rhf_hess._get_jk(mol, 'int2e_ipvip1', 9, 's2kl',
@@ -79,16 +100,22 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                                         shls_slice=shls_slice)
             veff[:,:,:,p0:p1] += vj1.transpose(0,2,1).reshape(3,3,nao,p1-p0)
             veff -= hyb * .5 * vk1.transpose(0,2,1).reshape(3,3,nao,nao)
+            if abs(omega) > 1e-10:
+                with mol.with_range_coulomb(omega):
+                    vk1 = rhf_hess._get_jk(mol, 'int2e_ipvip1', 9, 's2kl',
+                                           ['li->s1kj', dm0[:,p0:p1]], # vk1
+                                           shls_slice=shls_slice)[0]
+                veff -= (alpha-hyb)*.5 * vk1.transpose(0,2,1).reshape(3,3,nao,nao)
             t1 = log.timer_debug1('contracting int2e_ipvip1 for atom %d'%ia, *t1)
         else:
             vj1 = rhf_hess._get_jk(mol, 'int2e_ip1ip2', 9, 's1',
                                    ['ji->s1kl', dm0[:,p0:p1]],
-                                   shls_slice=shls_slice)
+                                   shls_slice=shls_slice)[0]
             veff += vj1.reshape(3,3,nao,nao) * 2
             t1 = log.timer_debug1('contracting int2e_ip1ip2 for atom %d'%ia, *t1)
 
             vj1 = rhf_hess._get_jk(mol, 'int2e_ipvip1', 9, 's2kl',
-                                   ['lk->s1ij', dm0], shls_slice=shls_slice)
+                                   ['lk->s1ij', dm0], shls_slice=shls_slice)[0]
             veff[:,:,:,p0:p1] += vj1.transpose(0,2,1).reshape(3,3,nao,p1-p0)
             t1 = log.timer_debug1('contracting int2e_ipvip1 for atom %d'%ia, *t1)
         vj1 = vk1 = vk2 = None
@@ -138,7 +165,7 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     mf = hessobj._scf
     ni = mf._numint
     ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-    hyb = ni.hybrid_coeff(mf.xc)
+    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
@@ -160,8 +187,17 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
                                       'li->s1kj', -dm0[:,p0:p1],  # vk1
                                       'jk->s1il', -dm0         ], # vk2
                                      shls_slice=shls_slice)
-            h1 += vj1 - hyb*.5*vk1
-            h1[:,p0:p1] += vj2 - hyb*.5*vk2
+            h1 += vj1 - hyb * .5 * vk1
+            h1[:,p0:p1] += vj2 - hyb * .5 * vk2
+            if abs(omega) > 1e-10:
+                with mol.with_range_coulomb(omega):
+                    vk1, vk2 = \
+                        rhf_hess._get_jk(mol, 'int2e_ip1', 3, 's2kl',
+                                         ['li->s1kj', -dm0[:,p0:p1],  # vk1
+                                          'jk->s1il', -dm0         ], # vk2
+                                         shls_slice=shls_slice)
+                h1 -= (alpha-hyb) * .5 * vk1
+                h1[:,p0:p1] -= (alpha-hyb) * .5 * vk2
         else:
             vj1, vj2 = rhf_hess._get_jk(mol, 'int2e_ip1', 3, 's2kl',
                                         ['ji->s2kl', -dm0[:,p0:p1],  # vj1
@@ -463,7 +499,8 @@ if __name__ == '__main__':
     from pyscf.dft import rks_grad
     #dft.numint._NumInt.libxc = dft.xcfun
     #xc_code = 'lda,vwn'
-    xc_code = 'b3lyp'
+    xc_code = 'wb97x'
+    #xc_code = 'b3lyp'
 
     mol = gto.Mole()
     mol.verbose = 0
@@ -487,6 +524,7 @@ if __name__ == '__main__':
     hobj = Hessian(mf)
     e2 = hobj.kernel().transpose(0,2,1,3).reshape(n3,n3)
     print(lib.finger(e2) - -0.42286447944621297)
+    print(lib.finger(e2) - -0.45453541215680582)
     print(lib.finger(e2) - -0.41385249055285972)
 
     def grad_full(ia, inc):

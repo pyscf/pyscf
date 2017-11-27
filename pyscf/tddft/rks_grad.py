@@ -13,10 +13,10 @@ import numpy
 import pyscf.lib
 from pyscf.lib import logger
 from pyscf import dft
+from pyscf.dft import rks
 from pyscf.dft import numint
 from pyscf.dft import rks_grad
 from pyscf.scf import cphf
-from pyscf.tddft import rks
 from pyscf.tddft import rhf_grad
 
 
@@ -26,10 +26,7 @@ from pyscf.tddft import rhf_grad
 def kernel(td_grad, x_y, singlet=True, atmlst=None,
            max_memory=2000, verbose=logger.INFO):
     x, y = x_y
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(td_grad.stdout, verbose)
+    log = logger.new_logger(td_grad, verbose)
     time0 = time.clock(), time.time()
 
     mol = td_grad.mol
@@ -56,7 +53,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     max_memory = max(2000, td_grad.max_memory*.9-mem_now)
 
     ni = mf._numint
-    hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
+    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
     dm0 = None # mf.make_rdm1(mo_coeff, mo_occ)
     rho0, vxc, fxc = ni.cache_xc_kernel(mf.mol, mf.grids, mf.xc,
                                         [mo_coeff]*2, [mo_occ*.5]*2, spin=1)
@@ -65,17 +62,21 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
                                 dmzoo, True, True, singlet, max_memory)
 
     if abs(hyb) > 1e-10:
-        vj, vk = mf.get_jk(mol, (dmzoo, dmzvop+dmzvop.T, dmzvom-dmzvom.T), hermi=0)
-        veff0doo = vj[0] * 2 - hyb * vk[0] + f1oo[0] + k1ao[0] * 2
+        dm = (dmzoo, dmzvop+dmzvop.T, dmzvom-dmzvom.T)
+        vj, vk = mf.get_jk(mol, dm, hermi=0)
+        vk *= hyb
+        if abs(omega) > 1e-10:
+            vk += rks._get_k_lr(mol, dm, omega) * (alpha-hyb)
+        veff0doo = vj[0] * 2 - vk[0] + f1oo[0] + k1ao[0] * 2
         wvo = reduce(numpy.dot, (orbv.T, veff0doo, orbo)) * 2
         if singlet:
-            veff = vj[1] * 2 - hyb * vk[1] + f1vo[0] * 2
+            veff = vj[1] * 2 - vk[1] + f1vo[0] * 2
         else:
-            veff = -hyb * vk[1] + f1vo[0] * 2
+            veff = -vk[1] + f1vo[0] * 2
         veff0mop = reduce(numpy.dot, (mo_coeff.T, veff, mo_coeff))
         wvo -= numpy.einsum('ki,ai->ak', veff0mop[:nocc,:nocc], xpy) * 2
         wvo += numpy.einsum('ac,ai->ci', veff0mop[nocc:,nocc:], xpy) * 2
-        veff = -hyb * vk[2]
+        veff = -vk[2]
         veff0mom = reduce(numpy.dot, (mo_coeff.T, veff, mo_coeff))
         wvo -= numpy.einsum('ki,ai->ak', veff0mom[:nocc,:nocc], xmy) * 2
         wvo += numpy.einsum('ac,ai->ci', veff0mom[nocc:,nocc:], xmy) * 2
@@ -102,6 +103,8 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
         if abs(hyb) > 1e-10:
             vj, vk = mf.get_jk(mol, dm)
             veff = vj * 2 - hyb * vk + vindxc
+            if abs(omega) > 1e-10:
+                veff -= rks._get_k_lr(mol, dm, omega) * (alpha-hyb)
         else:
             vj = mf.get_j(mol, dm)
             veff = vj * 2 + vindxc
@@ -118,6 +121,8 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     if abs(hyb) > 1e-10:
         vj, vk = mf.get_jk(mol, z1ao, hermi=0)
         veff = vj * 2 - hyb * vk + fxcz1[0]
+        if abs(omega) > 1e-10:
+            veff -= rks._get_k_lr(mol, z1ao, omega) * (alpha-hyb)
     else:
         vj = mf.get_j(mol, z1ao, hermi=1)
         veff = vj * 2 + fxcz1[0]
@@ -147,14 +152,18 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     dmz1doo = z1ao + dmzoo
     oo0 = reduce(numpy.dot, (orbo, orbo.T))
     if abs(hyb) > 1e-10:
-        vj, vk = td_grad.get_jk(mol, (oo0, dmz1doo+dmz1doo.T, dmzvop+dmzvop.T,
-                                      dmzvom-dmzvom.T))
+        dm = (oo0, dmz1doo+dmz1doo.T, dmzvop+dmzvop.T, dmzvom-dmzvom.T)
+        vj, vk = td_grad.get_jk(mol, dm)
+        vk *= hyb
+        if abs(omega) > 1e-10:
+            with mol.with_range_coulomb(omega):
+                vk += ks_grad.get_k(mol, dm) * (alpha-hyb)
         vj = vj.reshape(-1,3,nao,nao)
         vk = vk.reshape(-1,3,nao,nao)
         if singlet:
-            veff1 = vj * 2 - hyb * vk
+            veff1 = vj * 2 - vk
         else:
-            veff1 = numpy.vstack((vj[:2]*2-hyb*vk[:2], -hyb*vk[2:]))
+            veff1 = numpy.vstack((vj[:2]*2-vk[:2], -vk[2:]))
     else:
         vj = td_grad.get_j(mol, (oo0, dmz1doo+dmz1doo.T, dmzvop+dmzvop.T))
         vj = vj.reshape(-1,3,nao,nao)

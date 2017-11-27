@@ -118,9 +118,8 @@ def project_to_atomic_orbitals(mol, basname):
                 atmp.make_env([[stdsymb,(0,0,0)]], {stdsymb:basis_add}, [])
         atmp.cart = mol.cart
 
-        nelec_ecp = nelec_ecp_dic[symb]
-        if nelec_ecp > 0:
-            ecpcore = core_configuration(nelec_ecp)
+        if symb in nelec_ecp_dic and nelec_ecp_dic[symb] > 0:
+            ecpcore = core_configuration(nelec_ecp_dic[symb])
 # Comparing to ANO valence basis, to check whether the ECP basis set has
 # reasonable AO-character contraction.  The ANO valence AO should have
 # significant overlap to ECP basis if the ECP basis has AO-character.

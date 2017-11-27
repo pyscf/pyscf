@@ -3,7 +3,13 @@ PySCF 1.5 alpha (2018-03-??)
 * Added
   - ddCOSMO solvent model
   - VV10 NLC functional for RKS and UKS
-  - range-separated hybrid feature for RKS and UKS
+  - range-separated hybrid features for RKS and UKS, including
+    > Analytical nuclear gradients
+    > Second order SCF
+    > Hessian and frequency
+    > TDDFT
+    > TDDFT gradients
+    > NMR
   - IBO for molecular and PBC systems
   - UHF analytical nuclear Hessian
   - UKS analytical nuclear Hessian
@@ -18,6 +24,7 @@ PySCF 1.4.2 (201?-?-?)
 * Bugfix
   - pyberny interface
   - PBC GDF initialization for hybrid functional
+  - guess of wfn symmetry for given fci wfn
 
 
 PySCF 1.4.1 (2017-11-12)

@@ -19,6 +19,8 @@ from pyscf.prop.nmr import rhf as rhf_nmr
 from pyscf.data import nist
 
 def dia(mol, dm0, gauge_orig=None, shielding_nuc=None, mb='RMB'):
+    '''Note the side effects of set_common_origin'''
+
     if shielding_nuc is None:
         shielding_nuc = range(mol.natm)
     if gauge_orig is not None:
@@ -107,6 +109,8 @@ def make_h10giao(mol, dm0, with_gaunt=False, verbose=logger.WARN):
 
 def make_h10rkb(mol, dm0, gauge_orig=None, with_gaunt=False,
                 verbose=logger.WARN):
+    '''Note the side effects of set_common_origin'''
+
     if gauge_orig is not None:
         mol.set_common_origin(gauge_orig)
     if isinstance(verbose, logger.Logger):
@@ -131,6 +135,8 @@ def make_h10rkb(mol, dm0, gauge_orig=None, with_gaunt=False,
 #TODO the uncouupled force
 def make_h10rmb(mol, dm0, gauge_orig=None, with_gaunt=False,
                 verbose=logger.WARN):
+    '''Note the side effects of set_common_origin'''
+
     if gauge_orig is not None:
         mol.set_common_origin(gauge_orig)
     if isinstance(verbose, logger.Logger):
@@ -185,6 +191,8 @@ def make_h10(mol, dm0, gauge_orig=None, mb='RMB', with_gaunt=False,
     return h1
 
 def make_s10(mol, gauge_orig=None, mb='RMB'):
+    '''Note the side effects of set_common_origin'''
+
     if gauge_orig is not None:
         mol.set_common_origin(gauge_orig)
     n2c = mol.nao_2c()

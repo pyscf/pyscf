@@ -903,8 +903,8 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
     else:
         unit = 1.0
 
-    mol.set_common_orig((0,0,0))
-    ao_dip = mol.intor_symmetric('int1e_r', comp=3)
+    with mol.with_common_orig((0,0,0)):
+        ao_dip = mol.intor_symmetric('int1e_r', comp=3)
     el_dip = numpy.einsum('xij,ji->x', ao_dip, dm).real
 
     charges = mol.atom_charges()

@@ -214,6 +214,16 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(e1, e1ref, 9)
         self.assertAlmostEqual(abs(abs(ci1ref)-abs(ci1)).sum(), 0, 9)
 
+    def test_guess_wfnsym(self):
+        orbsym = [2,3,6,7]
+        wfnsym = fci.addons.guess_wfnsym(numpy.array([-.5,0,0,0,0,0]),
+                                         len(orbsym), (4,2), orbsym)
+        self.assertEqual(wfnsym, 1)
+        orbsym = [2,3,6,7]
+        wfnsym = fci.addons.guess_wfnsym(numpy.array([-.5,0,.5,0,0,0]),
+                                         len(orbsym), (4,2), orbsym)
+        self.assertEqual(wfnsym, 1)
+
 
 if __name__ == "__main__":
     print("Full Tests for fci.addons")
