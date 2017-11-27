@@ -177,54 +177,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpt=None):
     return dm[0] + dm[1]
 
 
-def dot_eri_dm(eri, dm, hermi=0):
-    '''Compute J, K matrices in terms of the given 2-electron integrals and
-    density matrix. eri or dm can be complex.
-
-    Args:
-        eri : ndarray
-            complex integral array with N^4 elements (N is the number of orbitals)
-        dm : ndarray or list of ndarrays
-            A density matrix or a list of density matrices
-
-    Kwargs:
-        hermi : int
-            Whether J, K matrix is hermitian
-
-            | 0 : no hermitian or symmetric
-            | 1 : hermitian
-            | 2 : anti-hermitian
-
-    Returns:
-        Depending on the given dm, the function returns one J and one K matrix,
-        or a list of J matrices and a list of K matrices, corresponding to the
-        input density matrices.
-    '''
-    dm = np.asarray(dm)
-    if eri.dtype == np.complex128:
-        nao = dm.shape[-1]
-        eri = eri.reshape((nao,)*4)
-        def contract(dm):
-            vj = np.einsum('ijkl,ji->kl', eri, dm)
-            vk = np.einsum('ijkl,jk->il', eri, dm)
-            return vj, vk
-        if isinstance(dm, np.ndarray) and dm.ndim == 2:
-            vj, vk = contract(dm)
-        else:
-            vjk = [contract(dmi) for dmi in dm]
-            vj = lib.asarray([v[0] for v in vjk]).reshape(dm.shape)
-            vk = lib.asarray([v[1] for v in vjk]).reshape(dm.shape)
-    elif dm.dtype == np.complex128:
-        vjR, vkR = hf.dot_eri_dm(eri, dm.real, hermi)
-        vjI, vkI = hf.dot_eri_dm(eri, dm.imag, hermi)
-        vj = vjR + vjI*1j
-        vk = vkR + vkI*1j
-    else:
-        vj, vk = hf.dot_eri_dm(eri, dm, hermi)
-    return vj, vk
-
-
-class SCF(hf.SCF):
+class RHF(hf.RHF):
     '''SCF class adapted for PBCs.
 
     Attributes:
@@ -335,7 +288,7 @@ class SCF(hf.SCF):
             if self._eri is None:
                 logger.debug(self, 'Building PBC AO integrals incore')
                 self._eri = self.with_df.get_ao_eri(kpt, compact=True)
-            vj, vk = dot_eri_dm(self._eri, dm, hermi)
+            vj, vk = hf.dot_eri_dm(self._eri, dm, hermi)
 
             if self.exxdiv == 'ewald':
                 from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0
@@ -375,7 +328,7 @@ class SCF(hf.SCF):
             if self._eri is None:
                 logger.debug(self, 'Building PBC AO integrals incore')
                 self._eri = self.with_df.get_ao_eri(kpt, compact=True)
-            vj, vk = dot_eri_dm(self._eri, dm.reshape(-1,nao,nao), hermi)
+            vj, vk = hf.dot_eri_dm(self._eri, dm.reshape(-1,nao,nao), hermi)
         else:
             vj = self.with_df.get_jk(dm.reshape(-1,nao,nao), hermi,
                                      kpt, kpts_band, with_k=False)[0]
@@ -472,7 +425,7 @@ class SCF(hf.SCF):
         from pyscf.pbc.scf import x2c
         return x2c.sfx2c1e(self)
 
-RHF = SCF
+SCF = RHF
 
 def _format_jks(vj, dm, kpts_band):
     if kpts_band is None:

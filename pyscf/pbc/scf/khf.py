@@ -287,7 +287,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
     return dm[0] + dm[1]
 
 
-class KSCF(hf.SCF):
+class KRHF(hf.RHF):
     '''SCF class with k-point sampling.
 
     Compared to molecular SCF, some members such as mo_coeff, mo_occ
@@ -566,7 +566,7 @@ class KSCF(hf.SCF):
         from pyscf.pbc.scf import x2c
         return x2c.sfx2c1e(self)
 
-KRHF = KSCF
+KSCF = KRHF
 
 
 if __name__ == '__main__':

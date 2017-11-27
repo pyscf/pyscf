@@ -496,7 +496,7 @@ def convert_to_ghf(mf, out=None, convert_df=None):
                 mf1.mo_occ[orbspin==0] = mf.mo_occ * .5
                 mf1.mo_occ[orbspin==1] = mf.mo_occ * .5
 
-                mo_coeff = numpy.zeros((nao*2,nmo*2))
+                mo_coeff = numpy.zeros((nao*2,nmo*2), dtype=mf.mo_coeff.dtype)
                 mo_coeff[:nao,orbspin==0] = mf.mo_coeff
                 mo_coeff[nao:,orbspin==1] = mf.mo_coeff
                 if hasattr(mf.mo_coeff[0], 'orbsym'):
@@ -517,7 +517,7 @@ def convert_to_ghf(mf, out=None, convert_df=None):
                 mf1.mo_occ[orbspin==0] = mf.mo_occ[0]
                 mf1.mo_occ[orbspin==1] = mf.mo_occ[1]
 
-                mo_coeff = numpy.zeros((nao*2,nmo*2))
+                mo_coeff = numpy.zeros((nao*2,nmo*2), dtype=mf.mo_coeff.dtype)
                 mo_coeff[:nao,orbspin==0] = mf.mo_coeff[0]
                 mo_coeff[nao:,orbspin==1] = mf.mo_coeff[1]
                 if hasattr(mf.mo_coeff[0], 'orbsym'):
@@ -544,9 +544,9 @@ def convert_to_ghf(mf, out=None, convert_df=None):
                     scf.uhf_symm.UHF  : scf.ghf_symm.GHF}
         dft_class = {dft.rks.RKS      : None,
                      dft.roks.ROKS    : None,
+                     dft.uks.UKS      : None,
                      dft.rks_symm.RKS : None,
                      dft.rks_symm.ROKS: None,
-                     dft.uks.UKS      : None,
                      dft.uks_symm.UKS : None}
 
         if isinstance(mf, scf.ghf.GHF):

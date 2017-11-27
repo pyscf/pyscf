@@ -333,6 +333,120 @@ def convert_to_rhf(mf, out=None):
 
         return out
 
+def convert_to_ghf(mf, out=None, convert_df=None):
+    '''Convert the given mean-field object to the generalized HF/KS object
+
+    Args:
+        mf : SCF object
+
+    Kwargs
+        convert_df : bool
+            Whether to convert the DF-SCF object to the normal SCF object.
+            This conversion is not applied by default.
+
+    Returns:
+        An generalized SCF object
+    '''
+    raise NotImplementedError
+    from pyscf.scf.addons import get_ghf_orbspin
+    from pyscf.pbc import scf
+    from pyscf.pbc import dft
+    def update_mo_(mf, mf1):
+        _keys = mf._keys.union(mf1._keys)
+        mf1.__dict__.update(mf.__dict__)
+        mf1._keys = _keys
+        if mf.mo_energy is not None:
+            if isinstance(mf, scf.hf.RHF):
+                nao, nmo = mf.mo_coeff.shape
+                orbspin = get_ghf_orbspin(mf.mo_energy, mf.mo_occ, True)
+
+                mf1.mo_energy = numpy.empty(nmo*2)
+                mf1.mo_energy[orbspin==0] = mf.mo_energy
+                mf1.mo_energy[orbspin==1] = mf.mo_energy
+                mf1.mo_occ = numpy.empty(nmo*2)
+                mf1.mo_occ[orbspin==0] = mf.mo_occ * .5
+                mf1.mo_occ[orbspin==1] = mf.mo_occ * .5
+
+                mo_coeff = numpy.zeros((nao*2,nmo*2))
+                mo_coeff[:nao,orbspin==0] = mf.mo_coeff
+                mo_coeff[nao:,orbspin==1] = mf.mo_coeff
+                if hasattr(mf.mo_coeff[0], 'orbsym'):
+                    orbsym = numpy.zeros_like(orbspin)
+                    orbsym[orbspin==0] = mf.mo_coeff.orbsym
+                    orbsym[orbspin==1] = mf.mo_coeff.orbsym
+                    mo_coeff = lib.tag_array(mo_coeff, orbsym=orbsym)
+                mf1.mo_coeff = lib.tag_array(mo_coeff, orbspin=orbspin)
+
+            else: # UHF
+                nao, nmo = mf.mo_coeff[0].shape
+                orbspin = get_ghf_orbspin(mf.mo_energy, mf.mo_occ, False)
+
+                mf1.mo_energy = numpy.empty(nmo*2)
+                mf1.mo_energy[orbspin==0] = mf.mo_energy[0]
+                mf1.mo_energy[orbspin==1] = mf.mo_energy[1]
+                mf1.mo_occ = numpy.empty(nmo*2)
+                mf1.mo_occ[orbspin==0] = mf.mo_occ[0]
+                mf1.mo_occ[orbspin==1] = mf.mo_occ[1]
+
+                mo_coeff = numpy.zeros((nao*2,nmo*2))
+                mo_coeff[:nao,orbspin==0] = mf.mo_coeff[0]
+                mo_coeff[nao:,orbspin==1] = mf.mo_coeff[1]
+                if hasattr(mf.mo_coeff[0], 'orbsym'):
+                    orbsym = numpy.zeros_like(orbspin)
+                    orbsym[orbspin==0] = mf.mo_coeff[0].orbsym
+                    orbsym[orbspin==1] = mf.mo_coeff[1].orbsym
+                    mo_coeff = lib.tag_array(mo_coeff, orbsym=orbsym)
+                mf1.mo_coeff = lib.tag_array(mo_coeff, orbspin=orbspin)
+        return mf1
+
+    if out is not None:
+        assert(isinstance(out, scf.ghf.GHF))
+        if isinstance(mf, scf.ghf.GHF):
+            out.__dict.__update(mf)
+        else:
+            out = update_mo_(mf, out)
+
+    else:
+        hf_class = {scf.hf.RHF        : scf.ghf.GHF,
+                    scf.uhf.UHF       : scf.ghf.GHF,
+                    scf.khf.KRHF      : None,
+                    scf.kuhf.KUHF     : None}
+        dft_class = {dft.rks.RKS      : None,
+                     dft.uks.UKS      : None}
+
+        if isinstance(mf, scf.ghf.GHF):
+            out = copy.copy(mf)
+
+        elif mf.__class__ in hf_class:
+            out = update_mo_(mf, scf.GHF(mf.mol))
+
+        elif mf.__class__ in dft_class:
+            raise NotImplementedError
+
+        else:
+            msg =('Warn: Converting a decorated SCF object to the decorated '
+                  'GHF object is unsafe.\nIt is recommended to create a '
+                  'decorated GHF object explicitly and pass it to '
+                  'convert_to_ghf function eg:\n'
+                  '    convert_to_ghf(mf, out=scf.GHF(mol).density_fit())\n')
+            sys.stderr.write(msg)
+            mro = mf.__class__.__mro__
+            mronew = None
+            for i, cls in enumerate(mro):
+                if cls in hf_class:
+                    mronew = mro[:i] + hf_class[cls].__mro__
+                    break
+                elif cls in dft_class:
+                    raise NotImplementedError
+                    break
+            if mronew is None:
+                raise RuntimeError('%s object is not SCF object')
+            out = update_mo_(mf, lib.overwrite_mro(mf, mronew))
+
+    if getattr(out, 'with_df', None) and _df_off(mf, convert_df):
+        out.with_df = False
+    return out
+
 def convert_to_khf(mf, out=None):
     '''Convert gamma point SCF object to k-point SCF object
     '''
