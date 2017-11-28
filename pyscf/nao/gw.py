@@ -42,8 +42,13 @@ class gw(scf):
     self.snmw2sf = self.sf_gw_corr()
 
   def get_h0_vh_x_expval(self, tol):
-    lapl = self.laplace_coo()
-    raise RuntimeError('!impl')
+    mat = -0.5*self.get_k()
+    mat[0,:,:] += 0.5*self.laplace_coo()
+    mat[0,:,:] += self.vnucele_coo()
+    mat[0,:,:] += self.get_j()
+    mat1 = np.dot(self.mo_coeff[0,:,:,:,0], mat)
+    expval = np.dot(mat1, self.mo_coeff[0,0,:,:,0].T)
+    return expval
     
   def get_wmin_wmax_tmax_ia_def(self, tol):
     from numpy import log, exp, sqrt, where, amin, amax
