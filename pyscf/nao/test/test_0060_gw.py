@@ -15,7 +15,10 @@ class KnowValues(unittest.TestCase):
     print('       gw.nff_ia:', gw.nff_ia)
     print('      gw.wmin_ia:', gw.wmin_ia)
     print('      gw.wmax_ia:', gw.wmax_ia)
-    gw.get_h0_vh_x_expval(0.0)
-    gw.correct_ev()
+    expv = gw.get_h0_vh_x_expval()
+    print(' expv ', expv)
+    gw_expv = gw.correct_ev()
+    print(' gw_expv ', gw_expv)
+    
         
 if __name__ == "__main__": unittest.main()

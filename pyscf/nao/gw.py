@@ -41,13 +41,14 @@ class gw(scf):
     self.v_dab_ds = self.pb.get_dp_vertex_doubly_sparse(axis=2)
     self.snmw2sf = self.sf_gw_corr()
 
-  def get_h0_vh_x_expval(self, tol):
+  def get_h0_vh_x_expval(self):
     mat = -0.5*self.get_k()
-    mat[0,:,:] += 0.5*self.laplace_coo()
-    mat[0,:,:] += self.vnucele_coo()
-    mat[0,:,:] += self.get_j()
-    mat1 = np.dot(self.mo_coeff[0,:,:,:,0], mat)
-    expval = np.dot(mat1, self.mo_coeff[0,0,:,:,0].T)
+    mat += 0.5*self.laplace_coo()
+    mat += self.vnucele_coo()
+    mat += self.get_j()
+    mat1 = np.dot(self.mo_coeff[0,0,:,:,0], mat)
+    expval = np.einsum('nb,nb->n', mat1, self.mo_coeff[0,0,:,:,0])
+    self.h0_vh_x_expval = expval
     return expval
     
   def get_wmin_wmax_tmax_ia_def(self, tol):
@@ -201,7 +202,7 @@ class gw(scf):
   def correct_ev(self):
     """ This computes the corrections to the eigenvalues """
     sn2eval_gw = np.copy(self.ksn2e[0,:,self.nn]).T
-    
     gw_corr_int = self.gw_corr_int(sn2eval_gw)
     gw_corr_res = self.gw_corr_res(sn2eval_gw)
-    return sn2eval_gw + gw_corr_int + gw_corr_res
+    gw_eigvals = self.h0_vh_x_expval[self.nn] + gw_corr_int + gw_corr_res
+    return gw_eigvals
