@@ -100,12 +100,12 @@ class spatial_distribution(mf):
 
         if self.excitation == "light" and len(dn.shape) == 3:
             self.nprod = dn.shape[2]
-        if self.excitation == "light" and len(dn.shape) != 3:
-            raise ValueError("Wrong dimension for the density change with light excitation")
+        elif self.excitation == "light" and len(dn.shape) != 3:
+            raise ValueError("Wrong dimension: len(dn.shape) = {0}, for the density change with light excitation".format(len(dn.shape)))
         elif self.excitation == "electron" and len(dn.shape) == 2:
             self.nprod = dn.shape[1]
         elif self.excitation == "electron" and len(dn.shape) != 2:
-            raise ValueError("Wrong dimension for the density change with electron excitation")
+            raise ValueError("Wrong dimension: len(dn.shape) = {0}, for the density change with electron excitation".format(len(dn.shape)))
         else:
             raise ValueError("wrong excitation type??")
 
