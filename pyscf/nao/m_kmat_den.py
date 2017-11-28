@@ -15,7 +15,6 @@ def kmat_den(mf, dm=None, algo='fci', **kvargs):
   pb,hk=mf.add_pb_hk(**kvargs)
   dm = mf.make_rdm1() if dm is None else dm
   algol = algo.lower()
-  dm = dm.reshape((mf.nspin,mf.norbs,mf.norbs))
   if algol=='fci':
     mf.fci_den = abcd2v = mf.fci_den if hasattr(mf, 'fci_den') else pb.comp_fci_den(hk)
     kmat = np.einsum('abcd,...bc->...ad', abcd2v, dm)
