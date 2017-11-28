@@ -75,17 +75,15 @@ class tddft_tem(tddft_iter):
             vec = abs(vec/np.sqrt(np.dot(vec, vec)))
 
             if np.sqrt(np.dot(vec-self.vdir, vec-self.vdir)) < 1e-6:
-                mess = """
-                Electron is collinding with atom {0}:
-                velec = [{1:.3f}, {2:.3f}, {3:.3f}]
-                beam_offset = [{4:.3f}, {5:.3f}, {6:.3f}]
-                atom coord = [{7:.3f}, {8:.3f}, {9:.3f}]
-                impact parameter = {10:.9f} > 1e-6
-                """.format(atm, *self.velec,
-                        *self.beam_offset[0],
-                        *atom2coord[atm, :],
-                        np.sqrt(np.dot(vec, self.vdir)))
-                raise ValueError(mess)
+              ######### fancy message does not work in python2
+              mess = 'np.sqrt(np.dot(vec-self.vdir, vec-self.vdir))<1e-6:'
+              #mess = """
+              #Electron is collinding with atom {0}:
+              #velec = [{1:.3f}, {2:.3f}, {3:.3f}]
+              #beam_offset = [{4:.3f}, {5:.3f}, {6:.3f}]
+              #atom coord = [{7:.3f}, {8:.3f}, {9:.3f}]
+              #impact parameter = {10:.9f} > 1e-6""".format(atm, *self.velec,*self.beam_offset[0],*atom2coord[atm, :],np.sqrt(np.dot(vec, self.vdir)))
+              raise ValueError(mess)
 
     def get_time_range(self):
         """
@@ -129,7 +127,7 @@ class tddft_tem(tddft_iter):
         self.V_freq = np.zeros((self.freq.size, self.nprod), dtype=np.complex64)
 
         comp_vext_tem(self, self.pb.prod_log)
-        print("sum(V_freq) = ", np.sum(abs(self.V_freq.real)), np.sum(abs(self.V_freq.imag)))
+        if self.verbosity>0: print("sum(V_freq) = ", np.sum(abs(self.V_freq.real)), np.sum(abs(self.V_freq.imag)))
 
     def comp_tem_spectrum(self, x0=False):
         """ 
@@ -156,7 +154,7 @@ class tddft_tem(tddft_iter):
         self.dn = np.zeros((comegas.shape[0], self.nprod), dtype=np.complex64)
     
         for iw,comega in enumerate(comegas):
-            print("freq = ", iw)
+            if self.verbosity>0: print("freq = ", iw)
 
             if x0 == True:
                 veff = self.comp_veff(self.V_freq[iw, :], comega, x0=self.dn0[iw, :])

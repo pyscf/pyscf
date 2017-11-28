@@ -1,8 +1,8 @@
 from __future__ import print_function, division
 import os,unittest
-from pyscf.nao import scf
+from pyscf.nao import mf
 
-sv = scf(label='water', cd=os.path.dirname(os.path.abspath(__file__)))
+sv = mf(label='water', cd=os.path.dirname(os.path.abspath(__file__)))
 
 class KnowValues(unittest.TestCase):
 

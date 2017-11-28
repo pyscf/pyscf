@@ -30,12 +30,12 @@ class KnowValues(unittest.TestCase):
 
   def test_sv_after_gpaw(self):
     """ init ao_log_c with it radial orbitals from GPAW """
-    from pyscf.nao import scf
+    from pyscf.nao import mf
 
     if calc is None: return
 
     self.assertTrue(hasattr(calc, 'setups'))
-    sv = scf(gpaw=calc)
+    sv = mf(gpaw=calc)
     self.assertEqual(sv.ao_log.nr, 1024)
 
 if __name__ == "__main__": unittest.main()

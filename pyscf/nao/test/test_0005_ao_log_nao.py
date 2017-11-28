@@ -39,5 +39,4 @@ class KnowValues(unittest.TestCase):
     ao = ao_log_c().init_ao_log_gto_lm(gto=mol, nao=sv, lm=sv.ao_log)
     
 
-if __name__ == "__main__":
-  unittest.main()
+if __name__ == "__main__": unittest.main()

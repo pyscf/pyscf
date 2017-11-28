@@ -1,17 +1,18 @@
 from __future__ import print_function, division
 import sys, numpy as np
 from numpy import dot, zeros, einsum, pi, log, array
-from pyscf.nao import tddft_iter
+from pyscf.nao import scf
+from copy import copy
 from pyscf.nao.m_pack2den import pack2den_u, pack2den_l
 
-class gw(tddft_iter):
+class gw(scf):
 
   def __init__(self, **kw):
     from pyscf.nao.m_log_mesh import log_mesh
     """ Constructor G0W0 class """
     # how to exclude from the input the dtype and xc_code ?
-    tddft_iter.__init__(self, dtype=np.float64, xc_code='RPA', **kw)
-    self.xc_code_tddft = np.copy(self.xc_code)
+    scf.__init__(self, **kw)
+    self.xc_code_scf = copy(self.xc_code)
     self.xc_code = 'G0W0'
     self.niter_max_ev = kw['niter_max_ev'] if 'niter_max_ev' in kw else 5
     self.nocc_0t = nocc_0t = self.nelectron // (3 - self.nspin)
@@ -36,7 +37,7 @@ class gw(tddft_iter):
     self.dw_excl = self.ww_ia[0]
     
     assert self.cc_da.shape[1]==self.nprod
-    self.kernel_sq = pack2den_l(self.kernel)
+    self.kernel_sq = self.hkernel_den
     self.v_dab_ds = self.pb.get_dp_vertex_doubly_sparse(axis=2)
     self.snmw2sf = self.sf_gw_corr()
 

@@ -80,5 +80,4 @@ class KnowValues(unittest.TestCase):
     self.assertTrue(serr/nval<1.0e-06)
     
 
-if __name__ == "__main__":
-  unittest.main()
+if __name__ == "__main__": unittest.main()

@@ -5,10 +5,10 @@ class KnowValues(unittest.TestCase):
 
   def test_aos_libnao(self):
     """ Computing of the atomic orbitals """
-    from pyscf.nao import scf
+    from pyscf.nao import mf
     from pyscf.tools.cubegen import Cube
    
-    sv = scf(label='water', cd=os.path.dirname(os.path.abspath(__file__)))
+    sv = mf(label='water', cd=os.path.dirname(os.path.abspath(__file__)))
     cc = Cube(sv, nx=20, ny=20, nz=20)
     aos = sv.comp_aos_den(cc.get_coords())
     self.assertEqual(aos.shape[0], cc.nx*cc.ny*cc.nz)

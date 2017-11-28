@@ -25,5 +25,4 @@ class KnowValues(unittest.TestCase):
        for y1,y2 in zip(ylm_py_ref, ylm_py):
          self.assertAlmostEqual(y1,y2)
 
-if __name__ == "__main__":
-  unittest.main()
+if __name__ == "__main__": unittest.main()

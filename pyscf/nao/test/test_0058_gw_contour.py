@@ -1,7 +1,7 @@
 from __future__ import print_function, division
 import unittest, numpy as np
 from pyscf import gto, scf
-from pyscf.nao import scf as scf_nao_c
+from pyscf.nao import mf
 
 class KnowValues(unittest.TestCase):
 
@@ -10,7 +10,7 @@ class KnowValues(unittest.TestCase):
     mol = gto.M( verbose = 1, atom = '''H 0 0 0;  H 0.17 0.7 0.587''', basis = 'cc-pvdz',)
     gto_mf = scf.RHF(mol)
     gto_mf.kernel()
-    s = scf_nao_c(mf=gto_mf, gto=mol)
+    s = mf(mf=gto_mf, gto=mol)
     #s.plot_contour(s.mo_energy[0])
     #s.plot_contour(s.mo_energy[1])
     

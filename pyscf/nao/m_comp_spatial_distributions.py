@@ -1,6 +1,6 @@
 from __future__ import division
 import numpy as np
-from pyscf.nao import scf
+from pyscf.nao import mf
 from pyscf.nao.m_tools import find_nearrest_index
 import h5py
 from pyscf.nao.m_libnao import libnao
@@ -14,7 +14,7 @@ from ctypes import POINTER, c_int, c_int32, c_int64, c_float, c_double
 #    use_numba = False
 
 
-class spatial_distribution(scf):
+class spatial_distribution(mf):
     """
         class to calculate spatial distribution of
             * density change
@@ -96,7 +96,7 @@ class spatial_distribution(scf):
         self.freq = freq
         self.dn = dn
 
-        scf.__init__(self, **kw)
+        mf.__init__(self, **kw)
 
         if self.excitation == "light" and len(dn.shape) == 3:
             self.nprod = dn.shape[2]

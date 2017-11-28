@@ -23,4 +23,4 @@ class KnowValues(unittest.TestCase):
     data = np.array([nao_td.freq.real*27.2114, p_iter])
     np.savetxt('hydrogen.tddft_tem_lda.omega.inter.pav.txt', data.T, fmt=['%f','%f'])
 
-if __name__ == "__main__": print("Test of TDDFT TEM"); unittest.main()
+if __name__ == "__main__": unittest.main()

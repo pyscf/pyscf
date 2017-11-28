@@ -51,4 +51,4 @@ class KnowValues(unittest.TestCase):
     #print('nonin', abs(p_ave-p_iter).sum()/omegas.size)
     self.assertTrue(abs(p_ave-p_iter).sum()/omegas.size<0.03)
 
-if __name__ == "__main__": print("Test of TDHF GTO versus NAO"); unittest.main()
+if __name__ == "__main__": unittest.main()

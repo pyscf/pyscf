@@ -56,7 +56,5 @@ class KnowValues(unittest.TestCase):
     e_gto = mol.energy_nuc()
     self.assertAlmostEqual(e_nao, e_gto)
 
-if __name__ == "__main__":
-  print("Tests for the object NAO")
-  unittest.main()
+if __name__ == "__main__": unittest.main()
 

@@ -44,7 +44,5 @@ class KnowValues(unittest.TestCase):
     self.assertEqual(prod_log.sp2norbs[0], 15)
     self.assertEqual(prod_log.sp2norbs[1], 70)
 
-if __name__ == "__main__":
-  print("Full Tests for prod_basis_c")
-  unittest.main()
+if __name__ == "__main__": unittest.main()
 

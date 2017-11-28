@@ -20,5 +20,4 @@ class KnowValues(unittest.TestCase):
                 self.assertAlmostEqual(w3j1, w3j2)
                 self.assertAlmostEqual(w3j2, w3j3)
           
-if __name__ == "__main__":
-  unittest.main()
+if __name__ == "__main__": unittest.main()

@@ -13,15 +13,15 @@ class KnowValues(unittest.TestCase):
     pxx1 = -td.comp_polariz_nonin_xx(omegas).imag
     data1 = np.array([omegas.real*27.2114, pxx1])
     np.savetxt('water.tddft_iter_nonin.txt', data1.T)
-    print('    td.rf0_ncalls ', td.rf0_ncalls)
-    print(' td.matvec_ncalls ', td.matvec_ncalls)
+    #print('    td.rf0_ncalls ', td.rf0_ncalls)
+    #print(' td.matvec_ncalls ', td.matvec_ncalls)
 
 
     pxx1 = -td.comp_polariz_inter_xx(omegas).imag
     data1 = np.array([omegas.real*27.2114, pxx1])
     np.savetxt('water.tddft_iter_unit.txt', data1.T)
-    print('    td.rf0_ncalls ', td.rf0_ncalls)
-    print(' td.matvec_ncalls ', td.matvec_ncalls)
+    #print('    td.rf0_ncalls ', td.rf0_ncalls)
+    #print(' td.matvec_ncalls ', td.matvec_ncalls)
 
     pxx2 = td.polariz_upkc(omegas)
     wp = np.zeros((2*pxx2.shape[1]+1,pxx2.shape[0]))
@@ -29,13 +29,13 @@ class KnowValues(unittest.TestCase):
     wp[1:pxx2.shape[1]+1,:] = pxx2.real.T
     wp[pxx2.shape[1]+1:,:] = pxx2.imag.T
     np.savetxt('water.tddft_iter_upkc.txt', wp.T)
-    print('    td.rf0_ncalls ', td.rf0_ncalls)
-    print(' td.matvec_ncalls ', td.matvec_ncalls)
+    #print('    td.rf0_ncalls ', td.rf0_ncalls)
+    #print(' td.matvec_ncalls ', td.matvec_ncalls)
 
     pxx3 = -td.polariz_dckcd(omegas).imag
     data1 = np.array([omegas.real*27.2114, pxx3])
     np.savetxt('water.tddft_iter_dckcd.txt', data1.T)
-    print('    td.rf0_ncalls ', td.rf0_ncalls)
-    print(' td.matvec_ncalls ', td.matvec_ncalls)
+    #print('    td.rf0_ncalls ', td.rf0_ncalls)
+    #print(' td.matvec_ncalls ', td.matvec_ncalls)
 
 if __name__ == "__main__": unittest.main()

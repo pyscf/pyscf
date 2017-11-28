@@ -5,7 +5,7 @@ Hartree-Fock with numerical atomic orbitals and SCF driver from pySCF
 
 import sys
 import numpy as np
-from pyscf.nao import scf
+from pyscf.nao import mf
 from pyscf.scf import hf
 from pyscf.lib import logger
 
@@ -13,8 +13,7 @@ from pyscf.lib import logger
 class SCF(hf.SCF):
   '''SCF class adapted for NAOs.'''
   def __init__(self, **kw):
-    from pyscf.nao.m_prod_basis import prod_basis_c
-    sv = self.sv = scf(**kw)
+    sv = self.sv = mf(**kw)
     hf.SCF.__init__(self, sv)
     self.direct_scf = False # overriding the attribute from hf.SCF ...
     self.pb = sv.pb

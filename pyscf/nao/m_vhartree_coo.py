@@ -15,7 +15,7 @@ def vhartree_coo(mf, dm=None, **kvargs):
   dm = mf.make_rdm1() if dm is None else dm
   v_dab = pb.get_dp_vertex_sparse(sparseformat=csr_matrix)
   da2cc = pb.get_da2cc_sparse(sparseformat=csr_matrix)
-  n = mf.sv.norbs
+  n = dm.shape[-2]
   vh_coo = coo_matrix( (v_dab.T*(da2cc*np.dot(hk, (da2cc.T*(v_dab*dm.reshape(n*n))))) ).reshape((n,n)))
   return vh_coo
 

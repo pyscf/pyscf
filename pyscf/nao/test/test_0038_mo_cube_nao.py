@@ -5,10 +5,10 @@ class KnowValues(unittest.TestCase):
 
   def test_mo_cube_libnao(self):
     """ Computing of the atomic orbitals """
-    from pyscf.nao import scf
+    from pyscf.nao import mf
     from pyscf.tools.cubegen import Cube
    
-    sv = scf(label='water', cd=os.path.dirname(os.path.abspath(__file__)))
+    sv = mf(label='water', cd=os.path.dirname(os.path.abspath(__file__)))
     cc = Cube(sv, nx=40, ny=40, nz=40)
     co2val = sv.comp_aos_den(cc.get_coords())
     nocc_0t = int(sv.nelectron / 2)

@@ -39,10 +39,10 @@ class KnowValues(unittest.TestCase):
 
   def test_cube_sv(self):
     """ Compute the density and store into a cube file  """
-    from pyscf.nao import scf
+    from pyscf.nao import mf
     from pyscf.tools.cubegen import Cube
     
-    sv = scf(label='water', cd=os.path.dirname(os.path.abspath(__file__)))
+    sv = mf(label='water', cd=os.path.dirname(os.path.abspath(__file__)))
     cc = Cube(sv, nx=50, ny=50, nz=50)
     dens = sv.dens_elec(cc.get_coords(), sv.make_rdm1())
     dens = dens[:,0].reshape(cc.nx,cc.ny,cc.nz)

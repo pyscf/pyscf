@@ -46,12 +46,10 @@ class KnowValues(unittest.TestCase):
     if errorcode: raise RuntimeError('siesta returned an error: {0}'.format(errorcode))
 
     # run test system_vars
-    from pyscf.nao import scf
-    sv  = scf(label=label)
+    from pyscf.nao import mf
+    sv  = mf(label=label)
     self.assertEqual(sv.norbs, 10)
     self.assertTrue( sv.diag_check() )
     self.assertTrue( sv.overlap_check())
 
-if __name__ == "__main__":
-  print("Full Tests for siesta-based sodium")
-  unittest.main()
+if __name__ == "__main__": unittest.main()

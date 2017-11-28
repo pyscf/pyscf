@@ -6,11 +6,11 @@ class KnowValues(unittest.TestCase):
 
   def test_vrtx_cc_apairs(self):
     """ This is to test a batch generation vertices for bilocal atomic pairs. """
-    from pyscf.nao import scf, prod_basis_c
+    from pyscf.nao import mf, prod_basis_c
     from numpy import allclose
 
     dname = os.path.dirname(os.path.abspath(__file__))
-    sv = scf(label='water', cd=dname)
+    sv = mf(label='water', cd=dname)
     pbb = sv.pb
     pba = prod_basis_c().init_prod_basis_pp(sv)
 

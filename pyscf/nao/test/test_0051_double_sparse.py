@@ -1,14 +1,14 @@
 from __future__ import print_function, division
 import unittest, numpy as np
 import os
-from pyscf.nao import scf 
+from pyscf.nao import mf as mf_c 
 
 class KnowValues(unittest.TestCase):
 
   def test_double_sparse(self):
     """ This is a test of a double-sparse storage of the vertex """
     dname = os.path.dirname(os.path.abspath(__file__))
-    mf = scf(label='water', cd=dname)
+    mf = mf_c(label='water', cd=dname)
     pb = mf.pb
     v_dab_array = pb.get_dp_vertex_array()
     nnn = v_dab_array.size

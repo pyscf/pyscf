@@ -3,10 +3,11 @@ import numpy as np
 from scipy.sparse import csr_matrix, coo_matrix
 from scipy.linalg import blas
 from timeit import default_timer as timer
-from pyscf.nao import scf
+from pyscf.nao import mf
 from pyscf.nao.m_tddft_iter_gpu import tddft_iter_gpu_c
 from pyscf.nao.m_chi0_noxv import chi0_mv_gpu, chi0_mv
 from pyscf.nao.m_blas_wrapper import spmv_wrapper
+from copy import copy
 
 import scipy
 if int(scipy.__version__[0]) > 0:
@@ -22,7 +23,7 @@ except:
     use_numba = False
 
 
-class tddft_iter(scf):
+class tddft_iter(mf):
   """ 
     Iterative TDDFT a la PK, DF, OC JCTC
     
@@ -36,8 +37,9 @@ class tddft_iter(scf):
   def __init__(self, **kw):
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
 
-    scf.__init__(self, **kw)
-    self.xc_code_scf = np.copy(self.xc_code)
+    mf.__init__(self, **kw)
+    self.xc_code_mf = copy(self.xc_code)
+    self.dealloc_hsx = kw['dealloc_hsx'] if 'dealloc_hsx' in kw else True
     self.maxiter = kw['maxiter'] if 'maxiter' in kw else 1000
     self.tddft_iter_tol = kw['tddft_iter_tol'] if 'tddft_iter_tol' in kw else 1e-3
     self.eps = kw['iter_broadening'] if 'iter_broadening' in kw else 0.00367493
@@ -67,7 +69,7 @@ class tddft_iter(scf):
     pb = self.pb
 
     # deallocate hsx
-    if hasattr(self, 'hsx'): self.hsx.deallocate()
+    if hasattr(self, 'hsx') and self.dealloc_hsx: self.hsx.deallocate()
     
     self.rf0_ncalls = 0
     self.matvec_ncalls = 0

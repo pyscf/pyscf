@@ -5,11 +5,11 @@ class KnowValues(unittest.TestCase):
 
   def test_water_pp_pb(self):
     """ This is for initializing with SIESTA radial orbitals """
-    from pyscf.nao import scf
+    from pyscf.nao import mf
     from numpy import einsum, array
     import os
     dname = os.path.dirname(os.path.abspath(__file__))
-    sv = scf(label='water', cd=dname)
+    sv = mf(label='water', cd=dname)
     self.assertTrue(abs(sv.ucell).sum()>0)
     pb = sv.pb
     self.assertEqual(sv.norbs, 23)
@@ -41,5 +41,4 @@ class KnowValues(unittest.TestCase):
 #    print(moms[1].shape)
     
 
-if __name__ == "__main__":
-  unittest.main()
+if __name__ == "__main__": unittest.main()

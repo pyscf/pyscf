@@ -1,10 +1,10 @@
 from __future__ import print_function, division
 import os,unittest
-from pyscf.nao import scf, prod_basis_c
+from pyscf.nao import mf, prod_basis_c
 from numpy import allclose, float32, einsum
 
 dname = os.path.dirname(os.path.abspath(__file__))
-sv = scf(label='water', cd=dname)
+sv = mf(label='water', cd=dname)
 pb = sv.pb
 
 class KnowValues(unittest.TestCase):
@@ -38,5 +38,4 @@ class KnowValues(unittest.TestCase):
     cc_den = pb.get_da2cc_den(float32)
     self.assertTrue(allclose(cc_coo, cc_den) )    
 
-if __name__ == "__main__":
-  unittest.main()
+if __name__ == "__main__": unittest.main()
