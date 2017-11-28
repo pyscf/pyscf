@@ -12,6 +12,8 @@ PySCF 1.4.2 (201?-?-?)
   - pyberny interface
   - PBC GDF initialization for hybrid functional
   - guess of wfn symmetry for given fci wfn
+  - Entropy of Gaussian smearing
+  - k-point RCCSD for non-canonical HF reference
 
 
 PySCF 1.4.1 (2017-11-12)

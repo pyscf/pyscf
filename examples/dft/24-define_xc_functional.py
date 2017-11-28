@@ -23,9 +23,11 @@ mol = gto.M(
     basis = 'ccpvdz')
 
 # half-half exact exchange and GGA functional
+hybrid_coeff = 0.5
+
 def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
     # A fictitious XC functional to demonstrate the usage
-    rho0, dx, dy, dz = rho
+    rho0, dx, dy, dz = rho[:4]
     gamma = (dx**2 + dy**2 + dz**2)
     exc = .01 * rho0**2 + .02 * (gamma+.001)**.5
     vrho = .01 * 2 * rho0
@@ -38,6 +40,6 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
     return exc, vxc, fxc, kxc
 
 mf = dft.RKS(mol)
-mf.define_xc_(eval_xc, xctype='GGA', hyb=0.1)
+mf = mf.define_xc_(eval_xc, 'GGA', hyb=hybrid_coeff)
 mf.verbose = 4
 mf.kernel()
