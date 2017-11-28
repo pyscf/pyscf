@@ -452,7 +452,7 @@ class _ERIS:
         nocc = cc.get_nocc()
         nmo = cc.get_nmo()
         nvir = nmo - nocc
-        mem_incore, mem_outcore, mem_basic = pyscf.cc.ccsd._mem_usage(nocc, nvir)
+        mem_incore = nkpts**3*nmo**4 * 8/1e6
         mem_now = lib.current_memory()[0]
 
         # Convert to spin-orbitals and anti-symmetrize

@@ -10,23 +10,27 @@ from pyscf import ao2mo
 def cc_Foo(t1, t2, eris):
     nocc, nvir = t1.shape
     foo = eris.fock[:nocc,:nocc]
+    fov = eris.fock[:nocc,nocc:]
     eris_ovov = _get_ovov(eris)
     Fki  = 2*lib.einsum('kcld,ilcd->ki', eris_ovov, t2)
     Fki -=   lib.einsum('kdlc,ilcd->ki', eris_ovov, t2)
     Fki += 2*lib.einsum('kcld,ic,ld->ki', eris_ovov, t1, t1)
     Fki -=   lib.einsum('kdlc,ic,ld->ki', eris_ovov, t1, t1)
     Fki += foo
+    Fki += 0.5 * lib.einsum('ke,ie->ki', fov, t1)
     return Fki
 
 def cc_Fvv(t1, t2, eris):
     nocc, nvir = t1.shape
     fvv = eris.fock[nocc:,nocc:]
+    fov = eris.fock[:nocc,nocc:]
     eris_ovov = _get_ovov(eris)
     Fac  =-2*lib.einsum('kcld,klad->ac', eris_ovov, t2)
     Fac +=   lib.einsum('kdlc,klad->ac', eris_ovov, t2)
     Fac -= 2*lib.einsum('kcld,ka,ld->ac', eris_ovov, t1, t1)
     Fac +=   lib.einsum('kdlc,ka,ld->ac', eris_ovov, t1, t1)
     Fac += fvv
+    Fac -= 0.5*lib.einsum('mc,ma->ac', fov, t1)
     return Fac
 
 def cc_Fov(t1, t2, eris):
@@ -212,7 +216,8 @@ def _get_ovov(eris):
         return np.asarray(eris.ovvo).transpose(0,1,3,2)
 
 def _get_ovvv(eris, *slices):
-    if eris.ovvv.ndim == 3:
+    if len(eris.ovvv.shape) == 3:  # DO not use .ndim here for h5py library
+                                   # backward compatbility
         ovw = np.asarray(eris.ovvv[slices])
         nocc, nvir, nvir_pair = ovw.shape
         ovvv = lib.unpack_tril(ovw.reshape(nocc*nvir,nvir_pair))
@@ -225,7 +230,8 @@ def _get_vvvv(eris):
         vvL = np.asarray(eris.vvL)
         nvir = int(np.sqrt(eris.vvL.shape[0]*2))
         return ao2mo.restore(1, lib.dot(vvL, vvL.T), nvir)
-    elif eris.vvvv.ndim == 2:
+    elif len(eris.vvvv.shape) == 2:  # DO not use .ndim here for h5py library
+                                     # backward compatbility
         nvir = int(np.sqrt(eris.vvvv.shape[0]*2))
         return ao2mo.restore(1, np.asarray(eris.vvvv), nvir)
     else:

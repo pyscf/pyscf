@@ -4,9 +4,8 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-#import unittest
-import numpy as np
 import unittest
+import numpy as np
 
 from pyscf import gto, scf
 

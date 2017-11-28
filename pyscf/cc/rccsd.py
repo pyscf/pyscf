@@ -14,7 +14,6 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.cc import ccsd
 from pyscf.cc import rintermediates as imd
-from pyscf.lib import linalg_helper
 
 def update_amps(cc, t1, t2, eris):
     # Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004) Eqs.(35)-(36)
@@ -235,7 +234,7 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
             vvvv = self.vvvv
         return _contract_vvvv_t2(self.mol, vvvv, t2, out, max_memory, verbose)
 
-def _make_eris_incore(mycc, mo_coeff=None):
+def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     cput0 = (time.clock(), time.time())
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
@@ -243,32 +242,18 @@ def _make_eris_incore(mycc, mo_coeff=None):
     nmo = eris.fock.shape[0]
     nvir = nmo - nocc
 
-    eri1 = ao2mo.incore.full(mycc._scf._eri, eris.mo_coeff)
-    eris.ovoo = np.empty((nocc,nvir,nocc,nocc))
-    eris.ovvo = np.empty((nocc,nvir,nvir,nocc))
-    eris.ovov = np.empty((nocc,nvir,nocc,nvir))
-    eris.ovvv = np.empty((nocc,nvir,nvir,nvir))
-    eris.vvvv = np.empty((nvir,nvir,nvir,nvir))
-    tril2sq = lib.square_mat_in_trilu_indices(nmo)
-
-    nocc_pair = nocc*(nocc+1)//2
-    eris.oooo = ao2mo.restore(1, eri1[:nocc_pair,:nocc_pair], nocc)
-    oovv = lib.take_2d(eri1[:nocc_pair], tril2sq[:nocc,:nocc].ravel(),
-                       tril2sq[nocc:,nocc:].ravel())
-    eris.oovv = oovv.reshape(nocc,nocc,nvir,nvir)
-
-    outbuf = np.empty((nmo,nmo,nmo))
-    p1 = nocc*(nocc+1)//2
-    for i in range(nocc,nmo):
-        p0, p1 = p1, p1 + i + 1
-        buf = lib.unpack_tril(eri1[p0:p1], out=outbuf)
-        eris.ovoo[:,i-nocc] = buf[:nocc,:nocc,:nocc]
-        eris.ovvo[:,i-nocc] = buf[:nocc,nocc:,:nocc]
-        eris.ovov[:,i-nocc] = buf[:nocc,:nocc,nocc:]
-        eris.ovvv[:,i-nocc] = buf[:nocc,nocc:,nocc:]
-        eris.vvvv[i-nocc,:i+1-nocc] = buf[nocc:i+1,nocc:,nocc:]
-        if i > nocc:
-            eris.vvvv[:i-nocc,i-nocc] = buf[nocc:i,nocc:,nocc:]
+    if callable(ao2mofn):
+        eri1 = ao2mofn(eris.mo_coeff).reshape([nmo]*4)
+    else:
+        eri1 = ao2mo.incore.full(mycc._scf._eri, eris.mo_coeff)
+        eri1 = ao2mo.restore(1, eri1, nmo)
+    eris.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
+    eris.ovoo = eri1[:nocc,nocc:,:nocc,:nocc].copy()
+    eris.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
+    eris.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
+    eris.ovvo = eri1[:nocc,nocc:,nocc:,:nocc].copy()
+    eris.ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
+    eris.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy()
     logger.timer(mycc, 'CCSD integral transformation', *cput0)
     return eris
 

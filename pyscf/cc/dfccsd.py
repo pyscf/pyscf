@@ -12,7 +12,7 @@ from pyscf.cc import _ccsd
 
 class RCCSD(ccsd.CCSD):
     def ao2mo(self, mo_coeff=None):
-        return _make_eris_df(self, mo_coeff)
+        return _make_df_eris(self, mo_coeff)
 
     def _add_vvvv(self, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
         assert(not self.direct)
@@ -90,7 +90,7 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
         assert(not direct)
         return _contract_vvvv_t2(self.mol, self.vvL, t2, out, max_memory, verbose)
 
-def _make_eris_df(cc, mo_coeff=None):
+def _make_df_eris(cc, mo_coeff=None):
     cput0 = (time.clock(), time.time())
     eris = _ChemistsERIs()
     eris._common_init_(cc, mo_coeff)

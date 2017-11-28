@@ -3,7 +3,6 @@ UCCSD with spatial integrals
 '''
 
 import time
-import ctypes
 from functools import reduce
 import numpy
 import numpy as np
@@ -12,15 +11,9 @@ from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.cc import ccsd
-from pyscf.cc import _ccsd
 from pyscf.ao2mo import _ao2mo
-from pyscf.lib import linalg_helper
-from pyscf.cc import uintermediates as imd
 
-#einsum = np.einsum
-einsum = lib.einsum
-
-# This is unrestricted (U)CCSD, i.e. spin-orbital form.
+# This is unrestricted (U)CCSD, in spatial-orbital form.
 
 def update_amps(cc, t1, t2, eris):
     time0 = time.clock(), time.time()
@@ -740,7 +733,7 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
         return self
 
 
-def _make_eris_incore(mycc, mo_coeff=None):
+def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     cput0 = (time.clock(), time.time())
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
@@ -754,10 +747,16 @@ def _make_eris_incore(mycc, mo_coeff=None):
     nmoa = moa.shape[1]
     nmob = mob.shape[1]
 
-    eri_aa = ao2mo.restore(1, ao2mo.full(mycc._scf._eri, moa), nmoa)
-    eri_bb = ao2mo.restore(1, ao2mo.full(mycc._scf._eri, mob), nmob)
-    eri_ab = ao2mo.general(mycc._scf._eri, (moa,moa,mob,mob), compact=False)
+    if callable(ao2mofn):
+        eri_aa = ao2mofn(moa).reshape([nmoa]*4)
+        eri_bb = ao2mofn(mob).reshape([nmob]*4)
+        eri_ab = ao2mofn((moa,moa,mob,mob)).reshape(nmoa,nmoa,nmob,nmob)
+    else:
+        eri_aa = ao2mo.restore(1, ao2mo.full(mycc._scf._eri, moa), nmoa)
+        eri_bb = ao2mo.restore(1, ao2mo.full(mycc._scf._eri, mob), nmob)
+        eri_ab = ao2mo.general(mycc._scf._eri, (moa,moa,mob,mob), compact=False)
     eri_ba = lib.transpose(eri_ab)
+    assert(eri_aa.dtype == numpy.double)
 
     eri_aa = eri_aa.reshape(nmoa,nmoa,nmoa,nmoa)
     eri_ab = eri_ab.reshape(nmoa,nmoa,nmob,nmob)
