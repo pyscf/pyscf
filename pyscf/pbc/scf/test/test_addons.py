@@ -72,6 +72,28 @@ class KnowValues(unittest.TestCase):
         occ = mf.get_occ(mo_energy)
         self.assertAlmostEqual(mf.entropy, 1.1173540623523119, 9)
 
+    def test_convert_to_rhf(self):
+        cell = pbcgto.Cell()
+        cell.atom = '''He 0 0 1; He 1 0 1'''
+        cell.a = numpy.eye(3) * 3
+        cell.mesh = [4] * 3
+        cell.build()
+        nks = [2,1,1]
+        mf = pscf.KUHF(cell, cell.make_kpts(nks)).run()
+        mf1 = pscf.addons.convert_to_rhf(mf)
+        self.assertTrue(mf1.__class__ == pscf.khf.KRHF)
+
+    def test_convert_to_uhf(self):
+        cell = pbcgto.Cell()
+        cell.atom = '''He 0 0 1; He 1 0 1'''
+        cell.a = numpy.eye(3) * 3
+        cell.mesh = [4] * 3
+        cell.build()
+        nks = [2,1,1]
+        mf = pscf.KRHF(cell, cell.make_kpts(nks)).run()
+        mf1 = pscf.addons.convert_to_uhf(mf)
+        self.assertTrue(mf1.__class__ == pscf.kuhf.KUHF)
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.scf.addons")

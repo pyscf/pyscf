@@ -16,7 +16,7 @@ import sys
 import time
 import numpy as np
 import h5py
-from pyscf.scf import hf
+from pyscf.scf import hf as mol_hf
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf.hf import make_rdm1
@@ -25,6 +25,7 @@ from pyscf.pbc.gto import ecp
 from pyscf.pbc.gto.pseudo import get_pp
 from pyscf.pbc.scf import chkfile
 from pyscf.pbc import df
+from pyscf.pbc.scf import addons
 
 
 def get_ovlp(cell, kpt=np.zeros(3)):
@@ -177,7 +178,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpt=None):
     return dm[0] + dm[1]
 
 
-class RHF(hf.RHF):
+class SCF(mol_hf.SCF):
     '''SCF class adapted for PBCs.
 
     Attributes:
@@ -205,7 +206,7 @@ class RHF(hf.RHF):
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()
         self.cell = cell
-        hf.SCF.__init__(self, cell)
+        mol_hf.SCF.__init__(self, cell)
 
         self.with_df = df.FFTDF(cell)
         self.exxdiv = exxdiv
@@ -222,7 +223,7 @@ class RHF(hf.RHF):
         self.with_df.kpts = np.reshape(x, (-1,3))
 
     def dump_flags(self):
-        hf.SCF.dump_flags(self)
+        mol_hf.SCF.dump_flags(self)
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'kpt = %s', self.kpt)
         logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
@@ -237,7 +238,7 @@ class RHF(hf.RHF):
         return self
 
     def check_sanity(self):
-        hf.SCF.check_sanity(self)
+        mol_hf.SCF.check_sanity(self)
         self.with_df.check_sanity()
         if (isinstance(self.exxdiv, str) and self.exxdiv.lower() != 'ewald' and
             isinstance(self.with_df, df.df.DF)):
@@ -288,7 +289,7 @@ class RHF(hf.RHF):
             if self._eri is None:
                 logger.debug(self, 'Building PBC AO integrals incore')
                 self._eri = self.with_df.get_ao_eri(kpt, compact=True)
-            vj, vk = hf.dot_eri_dm(self._eri, dm, hermi)
+            vj, vk = mol_hf.dot_eri_dm(self._eri, dm, hermi)
 
             if self.exxdiv == 'ewald':
                 from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0
@@ -328,7 +329,7 @@ class RHF(hf.RHF):
             if self._eri is None:
                 logger.debug(self, 'Building PBC AO integrals incore')
                 self._eri = self.with_df.get_ao_eri(kpt, compact=True)
-            vj, vk = hf.dot_eri_dm(self._eri, dm.reshape(-1,nao,nao), hermi)
+            vj, vk = mol_hf.dot_eri_dm(self._eri, dm.reshape(-1,nao,nao), hermi)
         else:
             vj = self.with_df.get_jk(dm.reshape(-1,nao,nao), hermi,
                                      kpt, kpts_band, with_k=False)[0]
@@ -371,7 +372,7 @@ class RHF(hf.RHF):
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell
-        dm = hf.SCF.get_init_guess(self, cell, key)
+        dm = mol_hf.SCF.get_init_guess(self, cell, key)
         if cell.dimension < 3:
             ne = np.einsum('ij,ji', dm, self.get_ovlp(cell))
             if abs(ne - cell.nelectron).sum() > 1e-7:
@@ -389,7 +390,7 @@ class RHF(hf.RHF):
         if cell.dimension < 3:
             logger.warn(self, 'Hcore initial guess is not recommended in '
                         'the SCF of low-dimensional systems.')
-        return hf.SCF.init_guess_by_1e(cell)
+        return mol_hf.SCF.init_guess_by_1e(cell)
 
     def init_guess_by_chkfile(self, chk=None, project=True, kpt=None):
         if chk is None: chk = self.chkfile
@@ -399,7 +400,7 @@ class RHF(hf.RHF):
         return self.init_guess_by_chkfile(chk, project, kpt)
 
     def dump_chk(self, envs):
-        hf.SCF.dump_chk(self, envs)
+        mol_hf.SCF.dump_chk(self, envs)
         if self.chkfile:
             with h5py.File(self.chkfile) as fh5:
                 fh5['scf/kpt'] = self.kpt
@@ -425,7 +426,12 @@ class RHF(hf.RHF):
         from pyscf.pbc.scf import x2c
         return x2c.sfx2c1e(self)
 
-SCF = RHF
+class RHF(SCF, mol_hf.RHF):
+    def convert_from_(self, mf):
+        '''Convert given mean-field object to RHF'''
+        addons.convert_to_rhf(mf, self)
+        return self
+
 
 def _format_jks(vj, dm, kpts_band):
     if kpts_band is None:

@@ -493,8 +493,8 @@ def convert_to_ghf(mf, out=None, convert_df=None):
                 mf1.mo_energy[orbspin==0] = mf.mo_energy
                 mf1.mo_energy[orbspin==1] = mf.mo_energy
                 mf1.mo_occ = numpy.empty(nmo*2)
-                mf1.mo_occ[orbspin==0] = mf.mo_occ * .5
-                mf1.mo_occ[orbspin==1] = mf.mo_occ * .5
+                mf1.mo_occ[orbspin==0] = mf.mo_occ > 0
+                mf1.mo_occ[orbspin==1] = mf.mo_occ == 2
 
                 mo_coeff = numpy.zeros((nao*2,nmo*2), dtype=mf.mo_coeff.dtype)
                 mo_coeff[:nao,orbspin==0] = mf.mo_coeff
