@@ -36,7 +36,7 @@ def get_fft_freq(t):
 #                       #
 #########################
 
-def mod_FFT_ND(t, f, axis=0):
+def FT1(t, f, axis=0):
     """
     Calculate the FFT of a ND dimensionnal array over the axes axes
     corresponding to the FT by using numpy fft
@@ -73,7 +73,7 @@ def mod_FFT_ND(t, f, axis=0):
 
     return F
 
-def mod_iFFT_ND(w, F, axis = 0):
+def iFT1(w, F, axis = 0):
     """
     Calculate the FFT of a 1D dimensionnal array
     corresponding to the FT by using numpy fft
@@ -394,3 +394,68 @@ def iFT3(kx, ky, kz, F):
     calc_post(x, y, z, wmin, f)
 
     return f/(2*np.pi)**(3/2)
+
+#################################
+#                               #
+#       FFT Covolution          #
+#                               #
+#################################
+
+def FTconvolve(f, g, *args):
+    """
+        Perform a corrected version of the fft convolution from scipy
+
+        Input arguments:
+            f (1, 2 or 3D array): first term of the product
+            g (1, 2 or 3D array): second term of the product (same dim than f)
+            args (list of 1D array): contains the real space array variable,
+                it must contains at least 1 argument and in maximum 3.
+                the sumber of arguments must match the dimemension of f and g.
+
+        Output arguments:
+            conv (1, 2, or 3D array): convolution product
+    """
+
+    if len(args) == 0:
+        raise ValueError("you must provide at least one array for the real space variable")
+    elif len(args) == 1:
+        assert f.size == args[0].size
+        assert g.size == args[0].size
+
+        k = get_fft_freq(args[0])
+        f_FT = FT1(args[0], f)
+        g_FT = FT1(args[0], g)
+
+        return iFT1(k, f_FT*g_FT)
+
+    elif len(args) == 2:
+        assert f.shape == (args[0].size, args[1].size)
+        assert g.shape == (args[0].size, args[1].size)
+
+        kx = get_fft_freq(args[0])
+        ky = get_fft_freq(args[1])
+
+        f_FT = FT2(args[0], args[1], f)
+        g_FT = FT2(args[0], args[1], g)
+
+        return iFT2(kx, ky, f_FT*g_FT)
+
+    elif len(args) == 3:
+        assert f.shape == (args[0].size, args[1].size, args[2].size)
+        assert g.shape == (args[0].size, args[1].size, args[2].size)
+
+        kx = get_fft_freq(args[0])
+        ky = get_fft_freq(args[1])
+        kz = get_fft_freq(args[2])
+
+        f_FT = FT3(args[0], args[1], args[2], f)
+        g_FT = FT3(args[0], args[1], args[2], g)
+
+        return iFT3(kx, ky, kz, f_FT*g_FT)
+
+    else:
+        raise ValueError("Only up to 3 real space array are accepted")
+
+
+
+

@@ -202,39 +202,25 @@ class spatial_distribution(mf):
         """
 
 
-        from scipy.signal import fftconvolve
+        from pyscf.nao.m_fft import FTconvolve
 
         Nx, Ny, Nz = self.mesh[0].size, self.mesh[1].size, self.mesh[2].size
 
-        # Need to initialize the fft operation, the grid should be enlarge
-        # (2, 3) to be in same order than fortran
-        self.id = np.zeros((2, 3), dtype=np.int32)
-        self.ip = np.zeros((2, 3), dtype=np.int32)
-        for i in range(3):
-            self.id[:, i] = np.rint(self.box[i, :]/self.dr[i])
-            self.ip[:, i] = np.rint((self.box[i, :] - self.dr[i]/2)/self.dr[i])
-
-        nffr = np.zeros((3), dtype=np.int32)
-        nffc = np.zeros((3), dtype=np.int32)
-        n1 = np.zeros((3), dtype=np.int32)
-        libnao.initialize_fft(self.id.ctypes.data_as(POINTER(c_int)),
-                self.ip.ctypes.data_as(POINTER(c_int)),
-                nffr.ctypes.data_as(POINTER(c_int)),
-                nffc.ctypes.data_as(POINTER(c_int)),
-                n1.ctypes.data_as(POINTER(c_int)),
-                )
-        
         Efield = []# np.zeros((3, Nx, Ny, Nz), dtype = np.complex64)
-        grid = np.zeros((nffr[0], nffr[1], nffr[2]), dtype = np.float64)
+        grid = np.zeros((Nx, Ny, Nz), dtype = np.float64)
 
         for xyz in range(3):
             grid.fill(0.0)
             libnao.comp_spatial_grid(
                 self.dr.ctypes.data_as(POINTER(c_double)), 
+                self.mesh[0].ctypes.data_as(POINTER(c_double)),
+                self.mesh[1].ctypes.data_as(POINTER(c_double)),
+                self.mesh[2].ctypes.data_as(POINTER(c_double)),
                 c_int(xyz+1), 
-                grid.ctypes.data_as(POINTER(c_double)))
+                grid.ctypes.data_as(POINTER(c_double)),
+                c_int(Nx), c_int(Ny), c_int(Nz))
 
-            Efield.append(fftconvolve(grid, self.dn_spatial, mode="valid")[0:Nx, 0:Ny, 0:Nz])
+            Efield.append(FTconvolve(grid, self.dn_spatial, *self.mesh))
 
         return np.array(Efield)
 
