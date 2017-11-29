@@ -5,7 +5,7 @@ import os,unittest,numpy as np
 class KnowValues(unittest.TestCase):
 
   def test_rescf(self):
-    """ reSCF than G0W0 N2 example is marked with level change """
+    """ reSCF than G0W0 N2 example is marked with level-ordering change """
     from pyscf.nao import gw as gw_c
     
     dname = os.path.dirname(os.path.abspath(__file__))
