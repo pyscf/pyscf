@@ -53,7 +53,9 @@ mf.kernel()
 #
 mf = dft.RKS(cell).density_fit(auxbasis='weigend')
 mf.xc = 'bp86'
-mf = scf.newton(mf)
+# You should first set mf.xc then apply newton method (see also
+# examples/scf/22-newton.py)
+mf = mf.newton()
 mf.kernel()
 
 #
