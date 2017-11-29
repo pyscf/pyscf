@@ -298,7 +298,7 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
                 veff2[0] += lib.dot(ao[1].T, aow)
                 veff2[1] += lib.dot(ao[2].T, aow)
                 veff2[2] += lib.dot(ao[3].T, aow)
-                wv = _get_wv(rho, rho1Y, weight, vxc, fxc) * 2
+                wv = get_wv(rho, rho1Y, weight, vxc, fxc) * 2
                 aow = numpy.einsum('npi,np->pi', ao[[1,XX,XY,XZ]], wv)
                 veff2[3] += lib.dot(aow.T, ao[0])
                 aow = numpy.einsum('npi,np->pi', ao[[2,YX,YY,YZ]], wv)
