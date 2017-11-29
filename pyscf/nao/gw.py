@@ -226,8 +226,12 @@ class gw(scf):
     if not hasattr(self, 'sn2eval_gw'): self.g0w0_eigvals()
     #print(self.mo_energy)
 
+    self.mo_energy = self.mo_energy.reshape((self.norbs))
     self.mo_energy_g0w0 = np.copy(self.mo_energy)
     self.mo_coeff_g0w0 = np.copy(self.mo_coeff)
+    #print(self.sn2eval_gw.shape, type(self.sn2eval_gw))
+    #print(self.nn, type(self.nn))
+    #print(self.mo_energy_g0w0.shape, type(self.mo_energy_g0w0))
     self.mo_energy_g0w0[self.nn] = self.sn2eval_gw
 
     nn_occ = [n for n in self.nn if n<self.nocc_0t]
@@ -242,8 +246,10 @@ class gw(scf):
     self.mo_energy_g0w0[mm_occ] +=scissor_occ
     self.mo_energy_g0w0[mm_vrt] +=scissor_vrt
     #print(self.mo_energy_g0w0)
-    #print(np.argsort(self.mo_energy_g0w0))
+    if self.verbosity>0: print('np.argsort(self.mo_energy_g0w0)', np.argsort(self.mo_energy_g0w0))
     argsrt = np.argsort(self.mo_energy_g0w0)
     np.sort(self.mo_energy_g0w0)
     for n,m in enumerate(argsrt): self.mo_coeff_g0w0[0,0,n] = self.mo_coeff[0,0,m]
-    
+  
+  kernel_g0w0 = make_mo_g0w0
+  
