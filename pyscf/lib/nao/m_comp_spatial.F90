@@ -212,18 +212,18 @@ subroutine comp_spatial_grid(dr, meshx, meshy, meshz, axis, &
   real(c_double), intent(in) :: dr(3), meshx(Nx), meshy(Ny), meshz(Nz)
   real(c_double), intent(inout) :: grid(Nx*Ny*Nz)
 
-  integer :: ix, iy, iz, i1, i2, i3, ind
+  integer :: i1, i2, i3, ind
   real(8) :: br(3)
 
-!  !$OMP PARALLEL DEFAULT(NONE) &
-!  !$OMP PRIVATE (ix, iy, iz, br, i1,i2,i3, ind) &
-!  !$OMP SHARED(axis, grid, fft_vars, dr)
+  !$OMP PARALLEL DEFAULT(NONE) &
+  !$OMP PRIVATE (br, i1,i2,i3, ind) &
+  !$OMP SHARED(axis, grid, fft_vars, dr)
 
-!  !$OMP DO
+  !$OMP DO
   do i3 = 1, Nz 
   do i2 = 1, Ny
   do i1 = 1, Nx
-    br = (/meshx(i1), meshy(i2), meshz(i3)/)*dr + dr*0.5D0
+    br = (/meshx(i1), meshy(i2), meshz(i3)/) + dr*0.5D0
     
     ind = i3 + (i2-1)*Nz + (i1-1)*Nz*Ny
     grid(ind) = br(axis)/(sqrt(sum(br**2))**3)
@@ -231,38 +231,37 @@ subroutine comp_spatial_grid(dr, meshx, meshy, meshz, axis, &
   enddo
   enddo
   enddo
-!  !$OMP END DO
-!  
-!  !$OMP END PARALLEL
+  !$OMP END DO
+  
+  !$OMP END PARALLEL
 
 end subroutine !comp_spatial_grid
 
 !
 !
 !
-subroutine comp_spatial_grid_pot(dr, grid) bind(c, name='comp_spatial_grid_pot')
+subroutine comp_spatial_grid_pot(dr, meshx, meshy, meshz, grid, &
+  Nx, Ny, Nz) bind(c, name='comp_spatial_grid_pot')
 
   implicit none
-  real(c_double), intent(in) :: dr(3)
-  real(c_double), intent(inout) :: grid(fft_vars%nffr(1)*fft_vars%nffr(2)*fft_vars%nffr(3))
+  integer(c_int), intent(in), value :: Nx, Ny, Nz
+  real(c_double), intent(in) :: dr(3), meshx(Nx), meshy(Ny), meshz(Nz)
+  real(c_double), intent(inout) :: grid(Nx*Ny*Nz)
 
-  integer :: ix, iy, iz, i1, i2, i3, ind
+  integer :: i1, i2, i3, ind
   real(8) :: br(3)
 
   !$OMP PARALLEL DEFAULT(NONE) &
-  !$OMP PRIVATE (ix, iy, iz, br, i1,i2,i3, ind) &
-  !$OMP SHARED(grid, fft_vars, dr)
+  !$OMP PRIVATE (br, i1,i2,i3, ind) &
+  !$OMP SHARED(axis, grid, fft_vars, dr)
 
   !$OMP DO
-  do i3 = fft_vars%ic(1, 3), fft_vars%ic(2, 3)
-  do i2 = fft_vars%ic(1, 2), fft_vars%ic(2, 2)
-  do i1 = fft_vars%ic(1, 1), fft_vars%ic(2, 1)
-    br = (/i1,i2,i3/)*dr + dr*0.5D0
+  do i3 = 1, Nz 
+  do i2 = 1, Ny
+  do i1 = 1, Nx
+    br = (/meshx(i1), meshy(i2), meshz(i3)/) + dr*0.5D0
     
-    ix = i1 + fft_vars%n2(1)/2 +1
-    iy = i2 + fft_vars%n2(2)/2 +1
-    iz = i3 + fft_vars%n2(3)/2 +1
-    ind = iz + (iy-1)*fft_vars%nffr(3) + (ix-1)*fft_vars%nffr(3)*fft_vars%nffr(2)
+    ind = i3 + (i2-1)*Nz + (i1-1)*Nz*Ny
     grid(ind) = 1.0/sqrt(sum(br**2))
 
   enddo
@@ -271,6 +270,7 @@ subroutine comp_spatial_grid_pot(dr, grid) bind(c, name='comp_spatial_grid_pot')
   !$OMP END DO
   
   !$OMP END PARALLEL
+
 
 end subroutine !comp_spatial_grid
 
