@@ -5,15 +5,13 @@ from pyscf.nao import gw as gw_c
 
 class KnowValues(unittest.TestCase):
 
-  def test_gw(self):
-    """ This is GW """
-    mol = gto.M( verbose = 1, atom = '''H 0.0 0.0 -0.3707;  H 0.0 0.0 0.3707''', basis = 'cc-pvdz',)
+  def test_sf_gw_res_corr(self):
+    """ This is choice of wmin and wmax in GW """
+    mol = gto.M( verbose = 1, atom = '''H 0 0 0;  H 0.17 0.7 0.587''', basis = 'cc-pvdz',)
     gto_mf = scf.RHF(mol)
     gto_mf.kernel()
-    #print('gto_mf.mo_energy:', gto_mf.mo_energy)
     gw = gw_c(mf=gto_mf, gto=mol)
-    gw.make_mo_g0w0()
-    
-    
-        
+    sn2eval_gw = np.copy(gw.ksn2e[0,:,gw.nn]).T    
+    gw_corr_res = gw.gw_corr_res(sn2eval_gw)
+
 if __name__ == "__main__": unittest.main()
