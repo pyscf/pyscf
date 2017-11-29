@@ -14,19 +14,20 @@ class gw(scf):
     scf.__init__(self, **kw)
     self.xc_code_scf = copy(self.xc_code)
     self.xc_code = 'G0W0'
-    self.niter_max_ev = kw['niter_max_ev'] if 'niter_max_ev' in kw else 5
+    self.niter_max_ev = kw['niter_max_ev'] if 'niter_max_ev' in kw else 15
     self.nocc_0t = nocc_0t = self.nelectron // (3 - self.nspin)
     self.nocc = min(kw['nocc'],nocc_0t) if 'nocc' in kw else min(6,nocc_0t)
     self.nvrt = min(kw['nvrt'],self.norbs-nocc_0t) if 'nvrt' in kw else min(6,self.norbs-nocc_0t)
     self.start_st = self.nocc_0t-self.nocc
     self.finish_st = self.nocc_0t+self.nvrt
     self.nn = range(self.start_st, self.finish_st) # list of states to correct?
+    self.tol_ev = kw['tol_ev'] if 'tol_ev' in kw else 1e-6
     #print('nocc_0t:', nocc_0t)
     #print(self.nocc, self.nvrt)
     #print(self.start_st, self.finish_st)
     #print('     nn:', self.nn)
     self.nff_ia = kw['nff_ia'] if 'nff_ia' in kw else 32
-    self.tol_ia = kw['tol_ia'] if 'tol_ia' in kw else 1e-5
+    self.tol_ia = kw['tol_ia'] if 'tol_ia' in kw else 1e-6
     (wmin_def,wmax_def,tmin_def,tmax_def) = self.get_wmin_wmax_tmax_ia_def(self.tol_ia)
     self.wmin_ia = kw['wmin_ia'] if 'wmin_ia' in kw else wmin_def
     self.wmax_ia = kw['wmax_ia'] if 'wmax_ia' in kw else wmax_def
@@ -40,7 +41,8 @@ class gw(scf):
     self.kernel_sq = self.hkernel_den
     self.v_dab_ds = self.pb.get_dp_vertex_doubly_sparse(axis=2)
     self.snmw2sf = self.sf_gw_corr()
-
+    self.get_h0_vh_x_expval()
+    
   def get_h0_vh_x_expval(self):
     mat = -0.5*self.get_k()
     mat += 0.5*self.laplace_coo()
@@ -197,12 +199,62 @@ class gw(scf):
 
     if ipol!=npol: raise RuntimeError('loop logics incompat???')
     return i2zsc
-
   
-  def correct_ev(self):
-    """ This computes the corrections to the eigenvalues """
+  def g0w0_eigvals(self):
+    """ This computes the G0W0 corrections to the eigenvalues """
     sn2eval_gw = np.copy(self.ksn2e[0,:,self.nn]).T
-    gw_corr_int = self.gw_corr_int(sn2eval_gw)
-    gw_corr_res = self.gw_corr_res(sn2eval_gw)
-    gw_eigvals = self.h0_vh_x_expval[self.nn] + gw_corr_int + gw_corr_res
-    return gw_eigvals
+    sn2eval_gw_prev = np.copy(sn2eval_gw)
+    self.nn_close = range(max(self.nocc_0t-3,0), min(self.nocc_0t+3,self.norbs)) # list of states for checking convergence
+    
+    mo_eigval = np.zeros(self.norbs)
+    for i in range(self.niter_max_ev):
+      gw_corr_int = self.gw_corr_int(sn2eval_gw)
+      gw_corr_res = self.gw_corr_res(sn2eval_gw)
+      sn2eval_gw = self.h0_vh_x_expval[self.nn] + gw_corr_int + gw_corr_res
+      sn2mismatch = np.zeros(self.norbs)
+      sn2mismatch[self.nn] = sn2eval_gw-sn2eval_gw_prev
+      mo_eigval[self.nn] = sn2eval_gw
+      sn2eval_gw_prev = np.copy(sn2eval_gw)
+      err = abs(sn2mismatch[self.nn_close]).sum()/len(self.nn_close)
+      if self.verbosity>0: print('iter', i, mo_eigval[self.nn_close], err)
+      if err<self.tol_ev : break
+    
+    self.sn2eval_gw = sn2eval_gw
+    return sn2eval_gw
+
+  def make_mo_g0w0(self):
+    """ This creates the fields mo_energy_g0w0, and mo_coeff_g0w0 """
+
+    if not hasattr(self, 'sn2eval_gw'): self.g0w0_eigvals()
+    #print(self.mo_energy)
+
+    self.mo_energy = self.mo_energy.reshape((self.norbs))
+    self.mo_energy_g0w0 = np.copy(self.mo_energy)
+    self.mo_coeff_g0w0 = np.copy(self.mo_coeff)
+    #print(self.sn2eval_gw.shape, type(self.sn2eval_gw))
+    #print(self.nn, type(self.nn))
+    #print(self.mo_energy_g0w0.shape, type(self.mo_energy_g0w0))
+    self.mo_energy_g0w0[self.nn] = self.sn2eval_gw
+
+    nn_occ = [n for n in self.nn if n<self.nocc_0t]
+    nn_vrt = [n for n in self.nn if n>=self.nocc_0t]
+    #print(nn_occ, nn_vrt)
+    scissor_occ = (self.mo_energy_g0w0[nn_occ] - self.mo_energy[nn_occ]).sum()/len(nn_occ)
+    scissor_vrt = (self.mo_energy_g0w0[nn_vrt] - self.mo_energy[nn_vrt]).sum()/len(nn_vrt)
+    #print(scissor_occ, scissor_vrt)
+    mm_occ = list(set(range(self.nocc_0t))-set(nn_occ))
+    mm_vrt = list(set(range(self.nocc_0t,self.norbs)) - set(nn_vrt))
+    #print(mm_occ, mm_vrt)
+    self.mo_energy_g0w0[mm_occ] +=scissor_occ
+    self.mo_energy_g0w0[mm_vrt] +=scissor_vrt
+    #print(self.mo_energy_g0w0)
+    if self.verbosity>0: print('np.argsort(self.mo_energy_g0w0)', np.argsort(self.mo_energy_g0w0))
+    argsrt = np.argsort(self.mo_energy_g0w0)
+    self.mo_energy_g0w0 = np.sort(self.mo_energy_g0w0)
+    for n,m in enumerate(argsrt): self.mo_coeff_g0w0[0,0,n] = self.mo_coeff[0,0,m]
+    if self.verbosity>0: 
+      print('self.mo_energy_g0w0')
+      print(self.mo_energy_g0w0)
+    
+  kernel_g0w0 = make_mo_g0w0
+  
