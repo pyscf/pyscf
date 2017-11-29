@@ -204,17 +204,19 @@ class gw(scf):
     """ This computes the G0W0 corrections to the eigenvalues """
     sn2eval_gw = np.copy(self.ksn2e[0,:,self.nn]).T
     sn2eval_gw_prev = np.copy(sn2eval_gw)
-    self.nn_close = range(max(self.nocc_0t-2,0), min(self.nocc_0t+2,self.norbs)) # list of states for checking convergence
+    self.nn_close = range(max(self.nocc_0t-3,0), min(self.nocc_0t+3,self.norbs)) # list of states for checking convergence
     
+    mo_eigval = np.zeros(self.norbs)
     for i in range(self.niter_max_ev):
       gw_corr_int = self.gw_corr_int(sn2eval_gw)
       gw_corr_res = self.gw_corr_res(sn2eval_gw)
       sn2eval_gw = self.h0_vh_x_expval[self.nn] + gw_corr_int + gw_corr_res
       sn2mismatch = np.zeros(self.norbs)
       sn2mismatch[self.nn] = sn2eval_gw-sn2eval_gw_prev
+      mo_eigval[self.nn] = sn2eval_gw
       sn2eval_gw_prev = np.copy(sn2eval_gw)
       err = abs(sn2mismatch[self.nn_close]).sum()/len(self.nn_close)
-      if self.verbosity>0: print('iter', i, sn2eval_gw[0,0:3], err)
+      if self.verbosity>0: print('iter', i, mo_eigval[self.nn_close], err)
       if err<self.tol_ev : break
     
     self.sn2eval_gw = sn2eval_gw
@@ -248,8 +250,11 @@ class gw(scf):
     #print(self.mo_energy_g0w0)
     if self.verbosity>0: print('np.argsort(self.mo_energy_g0w0)', np.argsort(self.mo_energy_g0w0))
     argsrt = np.argsort(self.mo_energy_g0w0)
-    np.sort(self.mo_energy_g0w0)
+    self.mo_energy_g0w0 = np.sort(self.mo_energy_g0w0)
     for n,m in enumerate(argsrt): self.mo_coeff_g0w0[0,0,n] = self.mo_coeff[0,0,m]
-  
+    if self.verbosity>0: 
+      print('self.mo_energy_g0w0')
+      print(self.mo_energy_g0w0)
+    
   kernel_g0w0 = make_mo_g0w0
   
