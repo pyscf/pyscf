@@ -26,3 +26,4 @@ MaxSCFIterations           100
 
 COOP.Write     .true.
 WriteDenchar   .true.
+xml.write      .true.

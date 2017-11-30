@@ -216,7 +216,7 @@ class gw(scf):
       mo_eigval[self.nn] = sn2eval_gw
       sn2eval_gw_prev = np.copy(sn2eval_gw)
       err = abs(sn2mismatch[self.nn_close]).sum()/len(self.nn_close)
-      if self.verbosity>0: print('iter', i, mo_eigval[self.nn_close], err)
+      if self.verbosity>0: print('iter', i, mo_eigval[self.nn_close], err, gw_corr_int, gw_corr_res)
       if err<self.tol_ev : break
     
     self.sn2eval_gw = sn2eval_gw
