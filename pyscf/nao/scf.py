@@ -30,9 +30,12 @@ class scf(tddft_iter):
     etot = self.pyscf_hf.kernel(dm0=dm0, dump_chk=dump_chk, **kw)
     self.mo_coeff[0,0,:,:,0] = self.pyscf_hf.mo_coeff.T
     self.mo_energy[0,0,:] = self.pyscf_hf.mo_energy
+    self.ksn2e = self.mo_energy
     self.mo_occ[0,0,:] = self.pyscf_hf.mo_occ
     self.xc_code_previous = copy(self.xc_code)
     self.xc_code = "HF"
+    print('self.fermi_energy is not updated in scf!!!')
+    self.fermi_energy = self.fermi_energy
     return etot
 
   def get_hcore(self, mol=None, **kw):

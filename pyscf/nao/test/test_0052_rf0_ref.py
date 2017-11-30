@@ -13,7 +13,7 @@ class KnowValues(unittest.TestCase):
     gw = gw_c(mf=gto_mf, gto=mol)
     ww = [0.0+1j*4.0, 1.0+1j*0.1, -2.0-1j*0.1]
 
-    rf0_fm = gw.rf0_cmplx_ref(ww)
+    rf0_fm = gw.rf0_cmplx_vertex_ac(ww)
     rf0_mv  = np.zeros_like(rf0_fm)
     vec = np.zeros((gw.nprod), dtype=gw.dtypeComplex)
     for iw,w in enumerate(ww):

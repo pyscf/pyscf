@@ -23,6 +23,4 @@ class KnowValues(unittest.TestCase):
     for e1,e2 in zip(nao_hf.mo_energy,gto_hf.mo_energy): self.assertAlmostEqual(e1, e2, 3)
     for o1,o2 in zip(nao_hf.mo_occ,gto_hf.mo_occ): self.assertAlmostEqual(o1, o2)
 
-if __name__ == "__main__":
-  print("Test of SCF done via NAOs")
-  unittest.main()
+if __name__ == "__main__": unittest.main()

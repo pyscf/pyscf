@@ -22,6 +22,9 @@ class gw(scf):
     self.finish_st = self.nocc_0t+self.nvrt
     self.nn = range(self.start_st, self.finish_st) # list of states to correct?
     self.tol_ev = kw['tol_ev'] if 'tol_ev' in kw else 1e-6
+    self.nocc_conv = kw['nocc_conv'] if 'nocc_conv' in kw else self.nocc
+    self.nvrt_conv = kw['nvrt_conv'] if 'nvrt_conv' in kw else self.nvrt
+
     #print('nocc_0t:', nocc_0t)
     #print(self.nocc, self.nvrt)
     #print(self.start_st, self.finish_st)
@@ -34,6 +37,10 @@ class gw(scf):
     self.tmin_ia = kw['tmin_ia'] if 'tmin_ia' in kw else tmin_def
     self.tmax_ia = kw['tmax_ia'] if 'tmax_ia' in kw else tmax_def
     self.tt_ia,self.ww_ia = log_mesh(self.nff_ia, self.tmin_ia, self.tmax_ia, self.wmax_ia)
+    #print('self.tmin_ia, self.tmax_ia, self.wmax_ia')    
+    #print(self.tmin_ia, self.tmax_ia, self.wmax_ia)
+    #print(self.ww_ia[0], self.ww_ia[-1])
+
     self.dw_ia = self.ww_ia*(log(self.ww_ia[-1])-log(self.ww_ia[0]))/(len(self.ww_ia)-1)
     self.dw_excl = self.ww_ia[0]
     
@@ -42,6 +49,7 @@ class gw(scf):
     self.v_dab_ds = self.pb.get_dp_vertex_doubly_sparse(axis=2)
     self.snmw2sf = self.sf_gw_corr()
     self.get_h0_vh_x_expval()
+    if self.verbosity>0: print(__name__, '.h0_vh_x_expval: ', self.h0_vh_x_expval)
     
   def get_h0_vh_x_expval(self):
     mat = -0.5*self.get_k()
@@ -71,10 +79,10 @@ class gw(scf):
     tmin_def = -100*log(1.0-tol)/E_maxdiff
     return wmin_def, wmax_def, tmin_def,tmax_def
 
-  def rf0_cmplx_ref(self, ww):
+  def rf0_cmplx_vertex_dp(self, ww):
     """ Full matrix response in the basis of atom-centered product functions """
     rf0 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtypeComplex)
-    v_arr = self.pb.get_dp_vertex_array()    
+    v_arr = self.pb.get_dp_vertex_array()
     
     zvxx_a = zeros((len(ww), self.nprod), dtype=self.dtypeComplex)
     for n,(en,fn) in enumerate(zip(self.ksn2e[0,0,0:self.nfermi], self.ksn2f[0, 0, 0:self.nfermi])):
@@ -85,10 +93,25 @@ class gw(scf):
         for iw,comega in enumerate(ww):
           zvxx_a[iw,:] = vxx_a * (fn - fm) * ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
         rf0 = rf0 + einsum('wa,b->wab', zvxx_a, vxx_a)
+    return rf0
 
+  def rf0_cmplx_vertex_ac(self, ww):
+    """ Full matrix response in the basis of atom-centered product functions """
+    rf0 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtypeComplex)
+    v = self.pb.get_ac_vertex_array()
+    
+    zvxx_a = zeros((len(ww), self.nprod), dtype=self.dtypeComplex)
+    for n,(en,fn) in enumerate(zip(self.ksn2e[0,0,0:self.nfermi], self.ksn2f[0, 0, 0:self.nfermi])):
+      vx = dot(v, self.xocc[n,:])
+      for m,(em,fm) in enumerate(zip(self.ksn2e[0,0,self.vstart:],self.ksn2f[0,0,self.vstart:])):
+        if (fn - fm)<0 : break
+        vxx_a = dot(vx, self.xvrt[m,:])
+        for iw,comega in enumerate(ww):
+          zvxx_a[iw,:] = vxx_a * (fn - fm) * ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
+        rf0 = rf0 + einsum('wa,b->wab', zvxx_a, vxx_a)
     return rf0
   
-  rf0 = rf0_cmplx_ref
+  rf0 = rf0_cmplx_vertex_ac
   
   def si_c(self, ww=None):
     from numpy.linalg import solve
@@ -129,11 +152,14 @@ class gw(scf):
     """ This computes an integral part of the GW correction at energies sn2e[spin,len(self.nn)] """
     sn2int = np.zeros_like(sn2w, dtype=self.dtype)
     eps = self.dw_excl if eps is None else eps
+    #print(__name__, 'self.dw_ia', self.dw_ia)
     for s,ww in enumerate(sn2w):
       for n,w in enumerate(ww):
         for m in range(self.norbs):
           if abs(w-self.ksn2e[0,s,m])<eps : continue
-          sn2int[s,n] -= ((self.dw_ia*self.snmw2sf[s,n,m,:] / (w + 1j*self.ww_ia-self.ksn2e[0,s,m])).sum()/pi).real
+          state_corr = ((self.dw_ia*self.snmw2sf[s,n,m,:] / (w + 1j*self.ww_ia-self.ksn2e[0,s,m])).sum()/pi).real
+          #print(n, m, -state_corr, w-self.ksn2e[0,s,m])
+          sn2int[s,n] -= state_corr
     return sn2int
 
   def gw_corr_res(self, sn2w):
@@ -204,7 +230,10 @@ class gw(scf):
     """ This computes the G0W0 corrections to the eigenvalues """
     sn2eval_gw = np.copy(self.ksn2e[0,:,self.nn]).T
     sn2eval_gw_prev = np.copy(sn2eval_gw)
-    self.nn_close = range(max(self.nocc_0t-3,0), min(self.nocc_0t+3,self.norbs)) # list of states for checking convergence
+    nocc_conv = self.nocc_conv
+    nvrt_conv = self.nvrt_conv
+    self.nn_close = range(max(self.nocc_0t-nocc_conv,0), 
+                          min(self.nocc_0t+nvrt_conv,self.norbs)) # list of states for checking convergence
     
     mo_eigval = np.zeros(self.norbs)
     for i in range(self.niter_max_ev):
@@ -252,7 +281,7 @@ class gw(scf):
     argsrt = np.argsort(self.mo_energy_g0w0)
     self.mo_energy_g0w0 = np.sort(self.mo_energy_g0w0)
     for n,m in enumerate(argsrt): self.mo_coeff_g0w0[0,0,n] = self.mo_coeff[0,0,m]
-    if self.verbosity>0: 
+    if self.verbosity>0:
       print('self.mo_energy_g0w0')
       print(self.mo_energy_g0w0)
     
