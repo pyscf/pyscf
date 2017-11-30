@@ -341,7 +341,6 @@ def FT3(x, y, z, f):
         calc_post = calc_postfactor_3D
 
     f_new = calc_pre(x, y, z, f, wmin, tmin, dt, sign=-1.0)
-    print("f_new: ", np.sum(abs(f_new.real)),  np.sum(abs(f_new.imag)))
     F = np.fft.fftn(f_new)
     calc_post(kx, ky, kz, tmin, F, sign=-1.0)
 
