@@ -164,11 +164,12 @@ class spatial_distribution(mf):
             calculated in get_spatial_density
         """
 
-        from pyscf.nao.m_fft import FTconvolve
+        from scipy.signal import convolve
 
         Nx, Ny, Nz = self.mesh[0].size, self.mesh[1].size, self.mesh[2].size
 
         grid = np.zeros((Nx, Ny, Nz), dtype = np.float64)
+        factor = self.dr[0]*self.dr[1]*self.dr[2]/(np.sqrt(2*np.pi)**3)
 
         libnao.comp_spatial_grid_pot(
             self.dr.ctypes.data_as(POINTER(c_double)), 
@@ -178,7 +179,7 @@ class spatial_distribution(mf):
             grid.ctypes.data_as(POINTER(c_double)),
             c_int(Nx), c_int(Ny), c_int(Nz))
 
-        return FTconvolve(grid, self.dn_spatial, *self.mesh)
+        return convolve(grid, self.dn_spatial, mode="same", method="fft")*factor
 
 
     def comp_induce_field(self):
@@ -186,13 +187,14 @@ class spatial_distribution(mf):
             Compute the induce Electric field corresponding to the density change
             calculated in get_spatial_density
         """
-
-        from pyscf.nao.m_fft import FTconvolve
+        
+        from scipy.signal import convolve
 
         Nx, Ny, Nz = self.mesh[0].size, self.mesh[1].size, self.mesh[2].size
 
-        Efield = []# np.zeros((3, Nx, Ny, Nz), dtype = np.complex64)
+        Efield = np.zeros((3, Nx, Ny, Nz), dtype = np.complex64)
         grid = np.zeros((Nx, Ny, Nz), dtype = np.float64)
+        factor = self.dr[0]*self.dr[1]*self.dr[2]/(np.sqrt(2*np.pi)**3)
 
         for xyz in range(3):
             grid.fill(0.0)
@@ -205,9 +207,10 @@ class spatial_distribution(mf):
                 grid.ctypes.data_as(POINTER(c_double)),
                 c_int(Nx), c_int(Ny), c_int(Nz))
 
-            Efield.append(FTconvolve(grid, self.dn_spatial, *self.mesh))
+            Efield[xyz, :, :, :] = convolve(grid, self.dn_spatial, 
+                                            mode="same", method="fft")*factor
 
-        return np.array(Efield)
+        return Efield
 
     def comp_intensity_Efield(self, Efield):
         """
