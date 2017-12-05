@@ -24,7 +24,10 @@ class gw(scf):
     self.tol_ev = kw['tol_ev'] if 'tol_ev' in kw else 1e-6
     self.nocc_conv = kw['nocc_conv'] if 'nocc_conv' in kw else self.nocc
     self.nvrt_conv = kw['nvrt_conv'] if 'nvrt_conv' in kw else self.nvrt
-
+    
+    self.rescf = kw['rescf'] if 'rescf' in kw else False
+    if self.rescf: self.kernel_scf()
+    
     #print('nocc_0t:', nocc_0t)
     #print(self.nocc, self.nvrt)
     #print(self.start_st, self.finish_st)
@@ -100,15 +103,22 @@ class gw(scf):
     rf0 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtypeComplex)
     v = self.pb.get_ac_vertex_array()
     
+    print('self.ksn2e', __name__)
+    print(self.ksn2e[0,0,0]-self.ksn2e)
+    print(self.ksn2f)
+    print(' abs(v).sum(), ww.sum(), self.nfermi, self.vstart ')
+    print(abs(v).sum(), ww.sum(), self.nfermi, self.vstart)
+    
     zvxx_a = zeros((len(ww), self.nprod), dtype=self.dtypeComplex)
     for n,(en,fn) in enumerate(zip(self.ksn2e[0,0,0:self.nfermi], self.ksn2f[0, 0, 0:self.nfermi])):
       vx = dot(v, self.xocc[n,:])
+      print(n, abs(vx).sum())
       for m,(em,fm) in enumerate(zip(self.ksn2e[0,0,self.vstart:],self.ksn2f[0,0,self.vstart:])):
         if (fn - fm)<0 : break
-        vxx_a = dot(vx, self.xvrt[m,:])
+        vxx_a = dot(vx, self.xvrt[m,:].T)
         for iw,comega in enumerate(ww):
           zvxx_a[iw,:] = vxx_a * (fn - fm) * ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
-        rf0 = rf0 + einsum('wa,b->wab', zvxx_a, vxx_a)
+        rf0 += einsum('wa,b->wab', zvxx_a, vxx_a)
     return rf0
   
   rf0 = rf0_cmplx_vertex_ac
