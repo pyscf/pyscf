@@ -217,11 +217,11 @@ class gw(scf):
       elif abs(zr)<eps and zi>0:
         ipol += 1
         if ipol>npol: raise RuntimeError('ipol>npol')
-        i2zsc.append( [zr+1j*zi, i, -0.5] )
+        i2zsc.append( [zr+1j*zi, i, -1.0] ) #[zr+1j*zi, i, -0.5]
       elif abs(zr)<eps and zi<0:
         ipol +=1
         if ipol>npol: raise RuntimeError('ipol>npol')
-        i2zsc.append( [zr+1j*zi, i, +0.5] )
+        i2zsc.append( [zr+1j*zi, i, +1.0] ) #[zr+1j*zi, i, +0.5]
 
     if ipol!=npol: raise RuntimeError('loop logics incompat???')
     return i2zsc
