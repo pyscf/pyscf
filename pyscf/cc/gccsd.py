@@ -234,14 +234,16 @@ class _PhysicistsERIs:
         if mo_coeff is None:
             mo_coeff = mycc.mo_coeff
         mo_idx = ccsd.get_moidx(mycc)
+        self.mo_coeff = mo_coeff = mo_coeff[:,mo_idx]
         if hasattr(mo_coeff, 'orbspin'):
             self.orbspin = mo_coeff.orbspin[mo_idx]
+            self.mo_coeff = lib.tag_array(mo_coeff, orbspin=self.orbspin)
         else:
             orbspin = scf.ghf.guess_orbspin(mo_coeff)
             if not np.any(orbspin == -1):
                 self.orbspin = orbspin[mo_idx]
+                self.mo_coeff = lib.tag_array(mo_coeff, orbspin=self.orbspin)
 
-        self.mo_coeff = mo_coeff = mo_coeff[:,mo_idx]
 # Note: Recomputed fock matrix since SCF may not be fully converged.
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
         fockao = mycc._scf.get_hcore() + mycc._scf.get_veff(mycc.mol, dm)

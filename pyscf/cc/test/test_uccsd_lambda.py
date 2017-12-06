@@ -7,7 +7,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf.cc import uccsd
 from pyscf.cc import addons
-from pyscf.cc import uccsd_lambda_slow as uccsd_lambda
+from pyscf.cc import uccsd_lambda
 
 mol = gto.Mole()
 mol.atom = [
@@ -59,11 +59,6 @@ class ccsd:
         self.w_vvvo = int2e[self.nocc:,self.nocc:,self.nocc:,:self.nocc]
         self.w_vvvv = int2e[self.nocc:,self.nocc:,self.nocc:,self.nocc:]
 
-
-def update_amps(res1,res2,cc):
-    "compute lambda_ia/lambda_ijab updates based on perturbation quasi-Newton method"
-
-    return L1new, L2new
 
 def update_l1l2_sub(mycc, t1, t2, l1, l2):
     l1new  = mycc.f_ov.copy()
@@ -211,25 +206,36 @@ class KnownValues(unittest.TestCase):
         mycc = uccsd.UCCSD(mf)
         eris = mycc.ao2mo()
 
-        nocc = mol.nelectron // 2
-        nvir = mol.nao_nr() - nocc
+        nocc = mol.nelectron
+        nvir = mol.nao_nr()*2 - nocc
         numpy.random.seed(1)
 
+        orbspin = numpy.zeros((nocc+nvir), dtype=int)
+        orbspin[1::2] = 1
+        orbspin[nocc-1] = 0
+        orbspin[nocc] = 1
         t1r = numpy.random.random((nocc,nvir))*.1
         t2r = numpy.random.random((nocc,nocc,nvir,nvir))*.1
-        t2r = t2r + t2r.transpose(1,0,3,2)
-        t1 = addons.spatial2spin(t1r)
-        t2 = addons.spatial2spin(t2r)
+        t2r = t2r - t2r.transpose(1,0,2,3)
+        t2r = t2r - t2r.transpose(0,1,3,2)
         l1r = numpy.random.random((nocc,nvir))*.1
         l2r = numpy.random.random((nocc,nocc,nvir,nvir))*.1
-        l2r = l2r + l2r.transpose(1,0,3,2)
-        l1 = addons.spatial2spin(l1r)
-        l2 = addons.spatial2spin(l2r)
-        l1ref, l2ref = update_l1l2(mf, t1, t2, l1, l2, eris.orbspin)
+        l2r = l2r - l2r.transpose(1,0,2,3)
+        l2r = l2r - l2r.transpose(0,1,3,2)
+        l1ref, l2ref = update_l1l2(mf, t1r, t2r, l1r, l2r, orbspin)
 
-        eris = uccsd_lambda._eris_spatial2spin(mycc, eris)
+        t1 = addons.spin2spatial(t1r, orbspin)
+        t2 = addons.spin2spatial(t2r, orbspin)
+        l1 = addons.spin2spatial(l1r, orbspin)
+        l2 = addons.spin2spatial(l2r, orbspin)
         imds = uccsd_lambda.make_intermediates(mycc, t1, t2, eris)
         l1, l2 = uccsd_lambda.update_amps(mycc, t1, t2, l1, l2, eris, imds)
+        l1ref = addons.spin2spatial(l1ref, orbspin)
+        l2ref = addons.spin2spatial(l2ref, orbspin)
+        self.assertAlmostEqual(abs(l1[0]-l1ref[0]).max(), 0, 8)
+        self.assertAlmostEqual(abs(l2[0]-l2ref[0]).max(), 0, 8)
+        l1 = addons.spatial2spin(l1, orbspin)
+        l2 = addons.spatial2spin(l2, orbspin)
         self.assertAlmostEqual(abs(l1-l1ref).max(), 0, 8)
         self.assertAlmostEqual(abs(l2-l2ref).max(), 0, 8)
 

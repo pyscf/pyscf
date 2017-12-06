@@ -211,21 +211,22 @@ class KnownValues(unittest.TestCase):
         mycc = cc.GCCSD(mf)
         eris = mycc.ao2mo()
 
-        nocc = mol.nelectron // 2
-        nvir = mol.nao_nr() - nocc
+        nocc = mol.nelectron
+        nvir = mol.nao_nr()*2 - nocc
         numpy.random.seed(1)
 
-        t1r = numpy.random.random((nocc,nvir))*.1
-        t2r = numpy.random.random((nocc,nocc,nvir,nvir))*.1
-        t2r = t2r + t2r.transpose(1,0,3,2)
-        t1 = addons.spatial2spin(t1r)
-        t2 = addons.spatial2spin(t2r)
-        l1r = numpy.random.random((nocc,nvir))*.1
-        l2r = numpy.random.random((nocc,nocc,nvir,nvir))*.1
-        l2r = l2r + l2r.transpose(1,0,3,2)
-        l1 = addons.spatial2spin(l1r)
-        l2 = addons.spatial2spin(l2r)
-        orbspin = scf.addons.get_ghf_orbspin(mf.mo_energy, mf.mo_occ)
+        orbspin = numpy.zeros((nocc+nvir), dtype=int)
+        orbspin[1::2] = 1
+        orbspin[nocc-1] = 0
+        orbspin[nocc] = 1
+        t1 = numpy.random.random((nocc,nvir))*.1
+        t2 = numpy.random.random((nocc,nocc,nvir,nvir))*.1
+        t2 = t2 - t2.transpose(1,0,2,3)
+        t2 = t2 - t2.transpose(0,1,3,2)
+        l1 = numpy.random.random((nocc,nvir))*.1
+        l2 = numpy.random.random((nocc,nocc,nvir,nvir))*.1
+        l2 = l2 - l2.transpose(1,0,2,3)
+        l2 = l2 - l2.transpose(0,1,3,2)
         l1ref, l2ref = update_l1l2(mf, t1, t2, l1, l2, orbspin)
 
         imds = gccsd_lambda.make_intermediates(mycc, t1, t2, eris)
