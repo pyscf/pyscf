@@ -673,6 +673,11 @@ class CCSD(lib.StreamObject):
 You see this error message because of the API updates in pyscf v0.10.
 In the new API, the first argument of CC class is HF objects.  Please see
 http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventions''')
+
+        if 'dft' in str(mf.__module__):
+            raise RuntimeError('CCSD Warning: The first argument mf is a DFT object. '
+                               'CCSD calculation should be used with HF object')
+
         if mo_coeff  is None: mo_coeff  = mf.mo_coeff
         if mo_occ    is None: mo_occ    = mf.mo_occ
 

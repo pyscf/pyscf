@@ -94,6 +94,7 @@ def amplitudes_from_rccsd(t1, t2):
 
 class GCCSD(ccsd.CCSD):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+        assert(isinstance(mf, scf.ghf.GHF))
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         # Spin-orbital CCSD needs a stricter tolerance than spatial-orbital
         self.conv_tol_normt = 1e-6
@@ -114,7 +115,7 @@ class GCCSD(ccsd.CCSD):
     update_amps = update_amps
 
     def kernel(self, t1=None, t2=None, eris=None, mbpt2=False):
-        return self.ccsd(t1, t2, eris, mbpt2)
+        return self.ccsd(t1, t2, eris, mbpt2=mbpt2)
     def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
         '''Ground-state unrestricted (U)CCSD.
 

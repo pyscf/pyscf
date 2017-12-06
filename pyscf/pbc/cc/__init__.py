@@ -15,13 +15,22 @@ def GCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     assert(isinstance(mf, ghf.GHF))
     return ccsd.GCCSD(mf, frozen, mo_coeff, mo_occ)
 
-def KCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+def KGCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     from pyscf.pbc.cc import kccsd
-    return kccsd.CCSD(mf, frozen, mo_coeff, mo_occ)
+    return kccsd.GCCSD(mf, frozen, mo_coeff, mo_occ)
+
+KCCSD = KGCCSD
 
 def KRCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     from pyscf.pbc.cc import kccsd_rhf
+    mf = _convert_to_rhf(mf)
     return kccsd_rhf.RCCSD(mf, frozen, mo_coeff, mo_occ)
+
+def KUCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+    raise NotImplementedError
+    from pyscf.pbc.cc import kccsd_uhf
+    mf = _convert_to_uhf(mf)
+    return kccsd_uhf.UCCSD(mf, frozen, mo_coeff, mo_occ)
 
 def _convert_to_rhf(mf):
     from pyscf.pbc import scf
