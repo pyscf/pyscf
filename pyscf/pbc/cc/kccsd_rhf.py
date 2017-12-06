@@ -17,6 +17,7 @@ import pyscf.ao2mo
 from pyscf.lib import logger
 import pyscf.cc
 import pyscf.cc.ccsd
+from pyscf.pbc import scf
 from pyscf.pbc.cc.kccsd import get_moidx
 from pyscf.pbc.cc import kintermediates_rhf as imdk
 from pyscf.lib import linalg_helper
@@ -36,6 +37,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     else:
         log = logger.Logger(cc.stdout, verbose)
 
+    assert(isinstance(eris, pyscf.cc.ccsd._ChemistsERIs))
     if t1 is None and t2 is None:
         t1, t2 = cc.init_amps(eris)[1:]
     elif t1 is None:
@@ -311,6 +313,7 @@ def get_nmo(cc):
 class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+        assert(isinstance(mf, scf.khf.KSCF))
         pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.max_space = 20
         self._keys = self._keys.union(['max_space'])
@@ -373,7 +376,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         return self.emp2, t1, t2
 
     def kernel(self, t1=None, t2=None, eris=None, mbpt2=False):
-        return self.ccsd(t1, t2, eris, mbpt2)
+        return self.ccsd(t1, t2, eris, mbpt2=mbpt2)
     def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
         '''Ground-state CCSD.
 
@@ -921,7 +924,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         return t1, t2
 
 
-class _ERIS:
+class _ERIS(pyscf.cc.ccsd._ChemistsERIs):
     def __init__(self, cc, mo_coeff=None, method='incore',
                  ao2mofn=pyscf.ao2mo.outcore.general_iofree):
         cput0 = (time.clock(), time.time())
@@ -944,12 +947,7 @@ class _ERIS:
                 self.mo_coeff[kp] = mo_coeff[kp][:,moidx[kp]]
             mo_coeff = self.mo_coeff
             dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
-            # Don't use get_veff(), because cc._scf might be DFT,
-            # but veff should be Fock, not Kohn-Sham.
-            #fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
-            vj, vk = cc._scf.get_jk(cc.mol, dm)
-            veff = vj - vk * .5
-            fockao = cc._scf.get_hcore() + veff
+            fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc._scf.cell, dm)
             for kp in range(nkpts):
                 self.fock[kp] = reduce(numpy.dot, (mo_coeff[kp].T.conj(), fockao[kp], mo_coeff[kp])).astype(dtype)
 

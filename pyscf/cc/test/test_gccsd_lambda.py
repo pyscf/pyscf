@@ -59,12 +59,6 @@ class ccsd:
         self.w_vvvo = int2e[self.nocc:,self.nocc:,self.nocc:,:self.nocc]
         self.w_vvvv = int2e[self.nocc:,self.nocc:,self.nocc:,self.nocc:]
 
-
-def update_amps(res1,res2,cc):
-    "compute lambda_ia/lambda_ijab updates based on perturbation quasi-Newton method"
-
-    return L1new, L2new
-
 def update_l1l2_sub(mycc, t1, t2, l1, l2):
     l1new  = mycc.f_ov.copy()
     l1new += np.einsum('jiba,jb->ia', mycc.w_oovv, t1)
@@ -181,20 +175,16 @@ def update_l1l2(mf, t1, t2, l1, l2, orbspin):
     nelec = mol.nelectron
     nso = nmo * 2
     hcore = mf.get_hcore()
-    h1e = np.zeros((nso,nso))
-    idxa = orbspin == 0
-    idxb = orbspin == 1
-    idxaa = idxa[:,None]&idxa
-    idxbb = idxb[:,None]&idxb
-    h1e[idxaa] = reduce(np.dot, (mf.mo_coeff[0].T, hcore, mf.mo_coeff[0])).ravel()
-    h1e[idxbb] = reduce(np.dot, (mf.mo_coeff[1].T, hcore, mf.mo_coeff[1])).ravel()
-    int2e = np.zeros((nso,nso,nso,nso))
-    int2e[idxaa[:,:,None,None]&idxaa] = ao2mo.full(mol, mf.mo_coeff[0], aosym='s1').ravel()
-    int2e[idxbb[:,:,None,None]&idxbb] = ao2mo.full(mol, mf.mo_coeff[1], aosym='s1').ravel()
-    eri_aabb = ao2mo.general(mol, [mf.mo_coeff[0],mf.mo_coeff[0],
-                                   mf.mo_coeff[1],mf.mo_coeff[1]], aosym='s1').reshape([nmo]*4)
-    int2e[idxaa[:,:,None,None]&idxbb] = eri_aabb.ravel()
-    int2e[idxbb[:,:,None,None]&idxaa] = eri_aabb.transpose(2,3,0,1).ravel()
+    mo = np.zeros((nao,nso))
+    mo[:,orbspin==0] = mf.mo_coeff[0]
+    mo[:,orbspin==1] = mf.mo_coeff[1]
+    h1e = reduce(np.dot, (mo.T, hcore, mo))
+    h1e[orbspin[:,None]!=orbspin] = 0
+    int2e = ao2mo.full(mf._eri, mo)
+    sym_forbid = (orbspin[:,None] != orbspin)[np.tril_indices(nso)]
+    int2e[sym_forbid] = 0
+    int2e[:,sym_forbid] = 0
+    int2e = ao2mo.restore(1, int2e, nso)
     int2e = int2e.transpose(0,2,1,3)
     int2e = int2e - int2e.transpose(0,1,3,2)
     mycc = ccsd(nso,nelec,h1e,int2e,h1e_is_fock=False)
@@ -207,25 +197,21 @@ class KnownValues(unittest.TestCase):
     def test_update_amps(self):
         mf = scf.UHF(mol).run()
         numpy.random.seed(21)
-        mf.mo_coeff = [numpy.random.random(mf.mo_coeff[0].shape)*.1] * 2
         mycc = cc.GCCSD(mf)
         eris = mycc.ao2mo()
+        orbspin = eris.orbspin
 
-        nocc = mol.nelectron // 2
-        nvir = mol.nao_nr() - nocc
-        numpy.random.seed(1)
+        nocc = mol.nelectron
+        nvir = mol.nao_nr()*2 - nocc
 
-        t1r = numpy.random.random((nocc,nvir))*.1
-        t2r = numpy.random.random((nocc,nocc,nvir,nvir))*.1
-        t2r = t2r + t2r.transpose(1,0,3,2)
-        t1 = addons.spatial2spin(t1r)
-        t2 = addons.spatial2spin(t2r)
-        l1r = numpy.random.random((nocc,nvir))*.1
-        l2r = numpy.random.random((nocc,nocc,nvir,nvir))*.1
-        l2r = l2r + l2r.transpose(1,0,3,2)
-        l1 = addons.spatial2spin(l1r)
-        l2 = addons.spatial2spin(l2r)
-        orbspin = scf.addons.get_ghf_orbspin(mf.mo_energy, mf.mo_occ)
+        t1 = numpy.random.random((nocc,nvir))*.1
+        t2 = numpy.random.random((nocc,nocc,nvir,nvir))*.1
+        t2 = t2 - t2.transpose(1,0,2,3)
+        t2 = t2 - t2.transpose(0,1,3,2)
+        l1 = numpy.random.random((nocc,nvir))*.1
+        l2 = numpy.random.random((nocc,nocc,nvir,nvir))*.1
+        l2 = l2 - l2.transpose(1,0,2,3)
+        l2 = l2 - l2.transpose(0,1,3,2)
         l1ref, l2ref = update_l1l2(mf, t1, t2, l1, l2, orbspin)
 
         imds = gccsd_lambda.make_intermediates(mycc, t1, t2, eris)

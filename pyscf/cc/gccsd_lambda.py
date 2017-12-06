@@ -74,13 +74,13 @@ def make_intermediates(mycc, t1, t2, eris):
     v4 = einsum('ljdb,klcd->jcbk', eris.oovv, t2)
     v4+= numpy.asarray(eris.ovvo)
 
-    v5 = fvo + einsum('kc,jkbc->bj', fov, t2)
-    tmp = fov - einsum('kldc,ld->kc', eris.oovv, t1)
+    v5 = fvo + numpy.einsum('kc,jkbc->bj', fov, t2)
+    tmp = fov - numpy.einsum('kldc,ld->kc', eris.oovv, t1)
     v5+= numpy.einsum('kc,kb,jc->bj', tmp, t1, t1)
     v5-= einsum('kljc,klbc->bj', eris.ooov, t2) * .5
     v5+= einsum('kbdc,jkcd->bj', eris.ovvv, t2) * .5
 
-    w3 = v5 + einsum('jcbk,jb->ck', v4, t1)
+    w3 = v5 + numpy.einsum('jcbk,jb->ck', v4, t1)
     w3 += numpy.einsum('cb,jb->cj', v1, t1)
     w3 -= numpy.einsum('jk,jb->bk', v2, t1)
 
@@ -113,8 +113,6 @@ def make_intermediates(mycc, t1, t2, eris):
     imds.wovvv[:] = wovvv
     imds.v1 = v1
     imds.v2 = v2
-    imds.v3 = v3
-    imds.v4 = v4
     imds.w3 = w3
     imds.ftmp.flush()
     return imds
@@ -137,30 +135,28 @@ def update_amps(mycc, t1, t2, l1, l2, eris, imds):
     m3 = numpy.einsum('klab,ijkl->ijab', l2, numpy.asarray(imds.woooo))
     tau = t2 + einsum('ia,jb->ijab', t1, t1) * 2
     tmp = numpy.einsum('ijcd,klcd->ijkl', l2, tau)
-    ovov = numpy.asarray(eris.ovov)
-    ovov = ovov - ovov.transpose(0,3,2,1)
-    m4 = numpy.einsum('kalb,ijkl->ijab', ovov, tmp) * .25
+    oovv = numpy.asarray(eris.oovv)
+    m3 += numpy.einsum('klab,ijkl->ijab', oovv, tmp) * .25
     tmp = numpy.einsum('ijcd,kd->ijck', l2, t1)
-    m4 -= numpy.einsum('kcba,ijck->ijab', eris.ovvv, tmp)
-    m4 += numpy.einsum('ijcd,cdab->ijab', l2, eris.vvvv) * .5
+    m3 -= numpy.einsum('kcba,ijck->ijab', eris.ovvv, tmp)
+    m3 += numpy.einsum('ijcd,cdab->ijab', l2, eris.vvvv) * .5
 
-    l2new += ovov.transpose(0,2,1,3)
+    l2new += oovv
     l2new += m3
-    l2new += m4
-    fov1 = fov + einsum('kcjb,kc->jb', ovov, t1)
+    fov1 = fov + einsum('kjcb,kc->jb', oovv, t1)
     tmp = einsum('ia,jb->ijab', l1, fov1)
     tmp+= einsum('kica,jcbk->ijab', l2, numpy.asarray(imds.wovvo))
     tmp = tmp - tmp.transpose(1,0,2,3)
     l2new += tmp - tmp.transpose(0,1,3,2)
     tmp = einsum('ka,ijkb->ijab', l1, eris.ooov)
     tmp+= einsum('ijca,cb->ijab', l2, imds.v1)
-    m1tmp = mba + einsum('ka,kc->ca', l1, t1)
-    tmp+= einsum('ca,icjb->ijab', m1tmp, ovov)
+    tmp1vv = mba + einsum('ka,kb->ba', l1, t1)
+    tmp+= einsum('ca,ijcb->ijab', tmp1vv, oovv)
     l2new -= tmp - tmp.transpose(0,1,3,2)
-    tmp = einsum('ic,jcba->ijab', l1, eris.ovvv)
+    tmp = einsum('ic,jcba->jiba', l1, eris.ovvv)
     tmp+= einsum('kiab,jk->ijab', l2, imds.v2)
-    m2tmp = mij + einsum('ic,kc->ik', l1, t1)
-    tmp-= einsum('ik,kajb->ijab', m2tmp, ovov)
+    tmp1oo = mij + einsum('ic,kc->ik', l1, t1)
+    tmp-= einsum('ik,kjab->ijab', tmp1oo, oovv)
     l2new += tmp - tmp.transpose(1,0,2,3)
 
     l1new += fov
@@ -169,21 +165,16 @@ def update_amps(mycc, t1, t2, l1, l2, eris, imds):
     l1new -= einsum('ja,ij->ia', l1, imds.v2)
     l1new -= einsum('kjca,kjci->ia', l2, imds.woovo)
     l1new -= einsum('ikbc,kbca->ia', l2, imds.wovvv)
-    l1new += einsum('ijab,jb->ia', m4, t1)
     l1new += einsum('ijab,jb->ia', m3, t1)
     l1new += einsum('jiba,bj->ia', l2, imds.w3)
     tmp =(t1 + einsum('kc,kjcb->jb', l1, t2)
-          - einsum('kc,jc,kb->jb', l1, t1, t1)
-          - einsum('bd,jd->jb', mba, t1)
+          - einsum('bd,jd->jb', tmp1vv, t1)
           - einsum('lj,lb->jb', mij, t1))
-    l1new += numpy.einsum('jbia,jb->ia', ovov, tmp)
-    tmp = numpy.einsum('jc,jb->bc', l1, t1) + mba
-    l1new += numpy.einsum('icab,bc->ia', eris.ovvv, tmp)
-    tmp = numpy.einsum('kb,jb->kj', l1, t1) + mij
-    l1new -= numpy.einsum('jika,kj->ia', eris.ooov, tmp)
-    tmp = fov - einsum('kbja,jb->ka', ovov, t1)
+    l1new += numpy.einsum('jiba,jb->ia', oovv, tmp)
+    l1new += numpy.einsum('icab,bc->ia', eris.ovvv, tmp1vv)
+    l1new -= numpy.einsum('jika,kj->ia', eris.ooov, tmp1oo)
+    tmp = fov - einsum('kjba,jb->ka', oovv, t1)
     l1new -= numpy.einsum('ik,ka->ia', mij, tmp)
-    tmp = fov - einsum('ibjc,jb->ic', ovov, t1)
     l1new -= numpy.einsum('ca,ic->ia', mba, tmp)
 
     tmp = einsum('kcad,jkbd->jacb', eris.ovvv, t2)
@@ -216,6 +207,7 @@ if __name__ == '__main__':
     mol.spin = 0
     mol.build()
     mf = scf.RHF(mol).run()
+    mf0 = mf
     mf = scf.addons.convert_to_ghf(mf)
     mycc = gccsd.GCCSD(mf)
     eris = mycc.ao2mo()
@@ -230,3 +222,23 @@ if __name__ == '__main__':
     print(lib.finger(l2[2]) --0.041444910588788492 )
     print(abs(l2[1]-l2[1].transpose(1,0,2,3)-l2[0]).max())
     print(abs(l2[1]-l2[1].transpose(0,1,3,2)-l2[0]).max())
+
+    from pyscf.cc import ccsd, ccsd_lambda
+    mycc0 = ccsd.CCSD(mf0)
+    eris0 = mycc0.ao2mo()
+    mycc0.kernel(eris=eris0)
+    t1 = mycc0.t1
+    t2 = mycc0.t2
+    imds = ccsd_lambda.make_intermediates(mycc0, t1, t2, eris0)
+    l1, l2 = ccsd_lambda.update_amps(mycc0, t1, t2, t1, t2, eris0, imds)
+    l1ref, l2ref = ccsd_lambda.update_amps(mycc0, t1, t2, l1, l2, eris0, imds)
+    t1 = mycc.spatial2spin(t1, mycc.mo_coeff.orbspin)
+    t2 = mycc.spatial2spin(t2, mycc.mo_coeff.orbspin)
+    l1 = mycc.spatial2spin(l1, mycc.mo_coeff.orbspin)
+    l2 = mycc.spatial2spin(l2, mycc.mo_coeff.orbspin)
+    imds = make_intermediates(mycc, t1, t2, eris)
+    l1, l2 = update_amps(mycc, t1, t2, l1, l2, eris, imds)
+    l1 = mycc.spin2spatial(l1, mycc.mo_coeff.orbspin)
+    l2 = mycc.spin2spatial(l2, mycc.mo_coeff.orbspin)
+    print(abs(l1[0]-l1ref).max())
+    print(abs(l2[1]-l2ref).max())

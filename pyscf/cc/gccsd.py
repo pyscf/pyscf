@@ -94,6 +94,7 @@ def amplitudes_from_rccsd(t1, t2):
 
 class GCCSD(ccsd.CCSD):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+        assert(isinstance(mf, scf.ghf.GHF))
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         # Spin-orbital CCSD needs a stricter tolerance than spatial-orbital
         self.conv_tol_normt = 1e-6
@@ -114,7 +115,7 @@ class GCCSD(ccsd.CCSD):
     update_amps = update_amps
 
     def kernel(self, t1=None, t2=None, eris=None, mbpt2=False):
-        return self.ccsd(t1, t2, eris, mbpt2)
+        return self.ccsd(t1, t2, eris, mbpt2=mbpt2)
     def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
         '''Ground-state unrestricted (U)CCSD.
 
@@ -234,14 +235,16 @@ class _PhysicistsERIs:
         if mo_coeff is None:
             mo_coeff = mycc.mo_coeff
         mo_idx = ccsd.get_moidx(mycc)
+        self.mo_coeff = mo_coeff = mo_coeff[:,mo_idx]
         if hasattr(mo_coeff, 'orbspin'):
             self.orbspin = mo_coeff.orbspin[mo_idx]
+            self.mo_coeff = lib.tag_array(mo_coeff, orbspin=self.orbspin)
         else:
             orbspin = scf.ghf.guess_orbspin(mo_coeff)
             if not np.any(orbspin == -1):
                 self.orbspin = orbspin[mo_idx]
+                self.mo_coeff = lib.tag_array(mo_coeff, orbspin=self.orbspin)
 
-        self.mo_coeff = mo_coeff = mo_coeff[:,mo_idx]
 # Note: Recomputed fock matrix since SCF may not be fully converged.
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
         fockao = mycc._scf.get_hcore() + mycc._scf.get_veff(mycc.mol, dm)

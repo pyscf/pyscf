@@ -11,9 +11,12 @@ from functools import reduce
 import pyscf.pbc.tools.pbc as tools
 from pyscf import lib
 from pyscf.lib import logger
-import pyscf.cc
-import pyscf.cc.ccsd
+from pyscf.pbc import scf
+from pyscf.cc import gccsd
 from pyscf.pbc.cc import kintermediates as imdk
+from pyscf.pbc.cc.kpoint_helper import loop_kkk
+
+DEBUG = False
 
 #
 #FIXME: When linear dependence is found in KHF and handled by function
@@ -33,6 +36,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     else:
         log = logger.Logger(cc.stdout, verbose)
 
+    assert(isinstance(eris, gccsd._PhysicistsERIs))
     if t1 is None and t2 is None:
         t1, t2 = cc.init_amps(eris)[1:]
     elif t1 is None:
@@ -77,7 +81,7 @@ def energy(cc, t1, t2, eris):
     nkpts, nocc, nvir = t1.shape
     fock = eris.fock
     eris_oovv = eris.oovv.copy()
-    e = 0.0 + 1j * 0.0
+    e = 0.0 + 0j
     for ki in range(nkpts):
         e += einsum('ia,ia', fock[ki,:nocc,nocc:], t1[ki,:,:])
     t1t1 = numpy.zeros(shape=t2.shape,dtype=t2.dtype)
@@ -127,19 +131,17 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     eris_ovvo = numpy.zeros(shape=(nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc), dtype=t2.dtype)
     eris_oovo = numpy.zeros(shape=(nkpts,nkpts,nkpts,nocc,nocc,nvir,nocc), dtype=t2.dtype)
     eris_vvvo = numpy.zeros(shape=(nkpts,nkpts,nkpts,nvir,nvir,nvir,nocc), dtype=t2.dtype)
-    for km in range(nkpts):
-        for kb in range(nkpts):
-            for ke in range(nkpts):
-                kj = kconserv[km,ke,kb]
-                # <mb||je> -> -<mb||ej>
-                eris_ovvo[km,kb,ke] = -eris.ovov[km,kb,kj].transpose(0,1,3,2)
-                # <mn||je> -> -<mn||ej>
-                # let kb = kn as a dummy variable
-                eris_oovo[km,kb,ke] = -eris.ooov[km,kb,kj].transpose(0,1,3,2)
-                # <ma||be> -> - <be||am>*
-                # let kj = ka as a dummy variable
-                kj = kconserv[km,ke,kb]
-                eris_vvvo[ke,kj,kb] = -eris.ovvv[km,kb,ke].transpose(2,3,1,0).conj()
+    for km, kb, ke in loop_kkk(nkpts):
+        kj = kconserv[km,ke,kb]
+        # <mb||je> -> -<mb||ej>
+        eris_ovvo[km,kb,ke] = -eris.ovov[km,kb,kj].transpose(0,1,3,2)
+        # <mn||je> -> -<mn||ej>
+        # let kb = kn as a dummy variable
+        eris_oovo[km,kb,ke] = -eris.ooov[km,kb,kj].transpose(0,1,3,2)
+        # <ma||be> -> - <be||am>*
+        # let kj = ka as a dummy variable
+        kj = kconserv[km,ke,kb]
+        eris_vvvo[ke,kj,kb] = -eris.ovvv[km,kb,ke].transpose(2,3,1,0).conj()
 
     # T1 equation
     t1new = numpy.zeros(shape=t1.shape, dtype=t1.dtype)
@@ -158,71 +160,69 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
 
     # T2 equation
     t2new = numpy.array(eris.oovv).conj()
-    for ki in range(nkpts):
-      for kj in range(nkpts):
-        for ka in range(nkpts):
-            # Chemist's notation for momentum conserving t2(ki,kj,ka,kb)
-            kb = kconserv[ki,ka,kj]
+    for ki, kj, ka in loop_kkk(nkpts):
+        # Chemist's notation for momentum conserving t2(ki,kj,ka,kb)
+        kb = kconserv[ki,ka,kj]
 
-            Ftmp = Fvv[kb] - 0.5*einsum('mb,me->be',t1[kb],Fov[kb])
-            tmp = einsum('ijae,be->ijab',t2[ki,kj,ka],Ftmp)
+        Ftmp = Fvv[kb] - 0.5*einsum('mb,me->be',t1[kb],Fov[kb])
+        tmp = einsum('ijae,be->ijab',t2[ki,kj,ka],Ftmp)
+        t2new[ki,kj,ka] += tmp
+
+        #t2new[ki,kj,kb] -= tmp.transpose(0,1,3,2)
+        Ftmp = Fvv[ka] - 0.5*einsum('ma,me->ae',t1[ka],Fov[ka])
+        tmp = einsum('ijbe,ae->ijab',t2[ki,kj,kb],Ftmp)
+        t2new[ki,kj,ka] -= tmp
+
+        Ftmp = Foo[kj] + 0.5*einsum('je,me->mj',t1[kj],Fov[kj])
+        tmp = einsum('imab,mj->ijab',t2[ki,kj,ka],Ftmp)
+        t2new[ki,kj,ka] -= tmp
+
+        #t2new[kj,ki,ka] += tmp.transpose(1,0,2,3)
+        Ftmp = Foo[ki] + 0.5*einsum('ie,me->mi',t1[ki],Fov[ki])
+        tmp = einsum('jmab,mi->ijab',t2[kj,ki,ka],Ftmp)
+        t2new[ki,kj,ka] += tmp
+
+        for km in range(nkpts):
+            # Wminj
+            #   - km - kn + ka + kb = 0
+            # =>  kn = ka - km + kb
+            kn = kconserv[ka,km,kb]
+            t2new[ki,kj,ka] += 0.5*einsum('mnab,mnij->ijab',tau[km,kn,ka],Woooo[km,kn,ki])
+            ke = km
+            t2new[ki,kj,ka] += 0.5*einsum('ijef,abef->ijab',tau[ki,kj,ke],Wvvvv[ka,kb,ke])
+
+            # Wmbej
+            #     - km - kb + ke + kj = 0
+            #  => ke = km - kj + kb
+            ke = kconserv[km,kj,kb]
+            tmp = einsum('imae,mbej->ijab',t2[ki,km,ka],Wovvo[km,kb,ke])
+            #     - km - kb + ke + kj = 0
+            # =>  ke = km - kj + kb
+            #
+            # t[i,e] => ki = ke
+            # t[m,a] => km = ka
+            if km == ka and ke == ki:
+                tmp -= einsum('ie,ma,mbej->ijab',t1[ki],t1[km],eris_ovvo[km,kb,ke])
             t2new[ki,kj,ka] += tmp
+            t2new[ki,kj,kb] -= tmp.transpose(0,1,3,2)
+            t2new[kj,ki,ka] -= tmp.transpose(1,0,2,3)
+            t2new[kj,ki,kb] += tmp.transpose(1,0,3,2)
 
-            #t2new[ki,kj,kb] -= tmp.transpose(0,1,3,2)
-            Ftmp = Fvv[ka] - 0.5*einsum('ma,me->ae',t1[ka],Fov[ka])
-            tmp = einsum('ijbe,ae->ijab',t2[ki,kj,kb],Ftmp)
-            t2new[ki,kj,ka] -= tmp
+        ke = ki
+        tmp = einsum('ie,abej->ijab',t1[ki],eris_vvvo[ka,kb,ke])
+        t2new[ki,kj,ka] += tmp
+        # P(ij) term
+        ke = kj
+        tmp = einsum('je,abei->ijab',t1[kj],eris_vvvo[ka,kb,ke])
+        t2new[ki,kj,ka] -= tmp
 
-            Ftmp = Foo[kj] + 0.5*einsum('je,me->mj',t1[kj],Fov[kj])
-            tmp = einsum('imab,mj->ijab',t2[ki,kj,ka],Ftmp)
-            t2new[ki,kj,ka] -= tmp
-
-            #t2new[kj,ki,ka] += tmp.transpose(1,0,2,3)
-            Ftmp = Foo[ki] + 0.5*einsum('ie,me->mi',t1[ki],Fov[ki])
-            tmp = einsum('jmab,mi->ijab',t2[kj,ki,ka],Ftmp)
-            t2new[ki,kj,ka] += tmp
-
-            for km in range(nkpts):
-                # Wminj
-                #   - km - kn + ka + kb = 0
-                # =>  kn = ka - km + kb
-                kn = kconserv[ka,km,kb]
-                t2new[ki,kj,ka] += 0.5*einsum('mnab,mnij->ijab',tau[km,kn,ka],Woooo[km,kn,ki])
-                ke = km
-                t2new[ki,kj,ka] += 0.5*einsum('ijef,abef->ijab',tau[ki,kj,ke],Wvvvv[ka,kb,ke])
-
-                # Wmbej
-                #     - km - kb + ke + kj = 0
-                #  => ke = km - kj + kb
-                ke = kconserv[km,kj,kb]
-                tmp = einsum('imae,mbej->ijab',t2[ki,km,ka],Wovvo[km,kb,ke])
-                #     - km - kb + ke + kj = 0
-                # =>  ke = km - kj + kb
-                #
-                # t[i,e] => ki = ke
-                # t[m,a] => km = ka
-                if km == ka and ke == ki:
-                    tmp -= einsum('ie,ma,mbej->ijab',t1[ki],t1[km],eris_ovvo[km,kb,ke])
-                t2new[ki,kj,ka] += tmp
-                t2new[ki,kj,kb] -= tmp.transpose(0,1,3,2)
-                t2new[kj,ki,ka] -= tmp.transpose(1,0,2,3)
-                t2new[kj,ki,kb] += tmp.transpose(1,0,3,2)
-
-            ke = ki
-            tmp = einsum('ie,abej->ijab',t1[ki],eris_vvvo[ka,kb,ke])
-            t2new[ki,kj,ka] += tmp
-            # P(ij) term
-            ke = kj
-            tmp = einsum('je,abei->ijab',t1[kj],eris_vvvo[ka,kb,ke])
-            t2new[ki,kj,ka] -= tmp
-
-            km = ka
-            tmp = einsum('ma,mbij->ijab',t1[ka],eris.ovoo[km,kb,ki])
-            t2new[ki,kj,ka] -= tmp
-            # P(ab) term
-            km = kb
-            tmp = einsum('mb,maij->ijab',t1[kb],eris.ovoo[km,ka,ki])
-            t2new[ki,kj,ka] += tmp
+        km = ka
+        tmp = einsum('ma,mbij->ijab',t1[ka],eris.ovoo[km,kb,ki])
+        t2new[ki,kj,ka] -= tmp
+        # P(ab) term
+        km = kb
+        tmp = einsum('mb,maij->ijab',t1[kb],eris.ovoo[km,ka,ki])
+        t2new[ki,kj,ka] += tmp
 
     eia = numpy.zeros(shape=t1new.shape, dtype=t1new.dtype)
     for ki in range(nkpts):
@@ -233,17 +233,15 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
 
     eijab = numpy.zeros(shape=t2new.shape, dtype=t2new.dtype)
     kconserv = tools.get_kconserv(cc._scf.cell, cc.kpts)
-    for ki in range(nkpts):
-        for kj in range(nkpts):
-            for ka in range(nkpts):
-                kb = kconserv[ki,ka,kj]
-                for i in range(nocc):
-                    for a in range(nvir):
-                        for j in range(nocc):
-                            for b in range(nvir):
-                                eijab[ki,kj,ka,i,j,a,b] = ( foo[ki,i,i] + foo[kj,j,j]
-                                                          - fvv[ka,a,a] - fvv[kb,b,b] )
-                t2new[ki,kj,ka] /= eijab[ki,kj,ka]
+    for ki, kj, ka in loop_kkk(nkpts):
+        kb = kconserv[ki,ka,kj]
+        for i in range(nocc):
+            for a in range(nvir):
+                for j in range(nocc):
+                    for b in range(nvir):
+                        eijab[ki,kj,ka,i,j,a,b] = ( foo[ki,i,i] + foo[kj,j,j]
+                                                  - fvv[ka,a,a] - fvv[kb,b,b] )
+        t2new[ki,kj,ka] /= eijab[ki,kj,ka]
 
     time0 = log.timer_debug1('update t1 t2', *time0)
 
@@ -270,7 +268,7 @@ def get_nmo(cc):
     if cc._nmo is not None:
         return cc._nmo
     elif isinstance(cc.frozen, (int, numpy.integer)):
-        nmo = len(cc.mo_energy[0]) - cc.frozen
+        nmo = len(cc.mo_occ[0]) - cc.frozen
     elif isinstance(cc.frozen[0], (int, numpy.integer)):
         nmo = len(cc.mo_occ[0]) - len(cc.frozen)
     else:
@@ -278,53 +276,18 @@ def get_nmo(cc):
     return nmo
 
 
-class CCSD(pyscf.cc.ccsd.CCSD):
+class GCCSD(gccsd.GCCSD):
 
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+        assert(isinstance(mf, scf.khf.KSCF))
+        if not isinstance(mf, scf.kghf.KGHF):
+            mf = scf.addons.convert_to_ghf(mf)
         self.kpts = mf.kpts
-        self.nkpts = len(self.kpts)
-        nkpts = self.nkpts
+        gccsd.GCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
-        nao = mf.cell.nao_nr()
-        nmo = mf.mo_energy[0].size
-        nso = 2*nmo
-        # calculating spin orbitals...
-        mo_energy = numpy.zeros(shape=(nkpts,nso))
-        mo_energy[:,0::2] = mo_energy[:,1::2] = mf.mo_energy
-        self.mo_energy = mo_energy
-        if mo_coeff is None:
-            # TODO: Careful for real/complex here, in the future
-            so_coeffT = numpy.zeros((nkpts,nso,nao*2), dtype=numpy.complex128)
-            mo_coeffT = numpy.zeros((nkpts,nmo,nao), dtype=numpy.complex128)
-            mo_coeff = numpy.zeros((nkpts,nao*2,nso), dtype=numpy.complex128)
-            for k in range(nkpts):
-                mo_coeffT[k] = numpy.conj(mf.mo_coeff[k]).T
-            for k in range(nkpts):
-                for i in range(nso):
-                    if i%2 == 0:
-                        so_coeffT[k,i,:nao] = mo_coeffT[k][i//2]
-                    else:
-                        so_coeffT[k,i,nao:] = mo_coeffT[k][i//2]
-            # Each col is an eigenvector, first n/2 rows are alpha, then n/2 beta
-            for k in range(nkpts):
-                mo_coeff[k] = numpy.conj(so_coeffT[k]).T
-        if mo_occ is None:
-            mo_occ = numpy.zeros((nkpts,nso))
-            for k in range(nkpts):
-                mo_occ[k,0:mf.cell.nelectron] = 1
-
-        pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
-
-
-    nocc = property(get_nocc)
-    @nocc.setter
-    def nocc(self, n):
-        self._nocc = n
-
-    nmo = property(get_nmo)
-    @nmo.setter
-    def nmo(self, n):
-        self._nmo = n
+    @property
+    def nkpts(self):
+        return len(self.kpts)
 
     get_nocc = get_nocc
     get_nmo = get_nmo
@@ -332,7 +295,7 @@ class CCSD(pyscf.cc.ccsd.CCSD):
     def dump_flags(self):
         logger.info(self, '\n')
         logger.info(self, '******** PBC CC flags ********')
-        pyscf.cc.ccsd.CCSD.dump_flags(self)
+        gccsd.GCCSD.dump_flags(self)
         return self
 
     def init_amps(self, eris):
@@ -350,18 +313,16 @@ class CCSD(pyscf.cc.ccsd.CCSD):
         eijab = numpy.zeros((nocc,nocc,nvir,nvir))
 
         kconserv = tools.get_kconserv(self._scf.cell,self.kpts)
-        for ki in range(nkpts):
-          for kj in range(nkpts):
-            for ka in range(nkpts):
-                kb = kconserv[ki,ka,kj]
-                for i in range(nocc):
-                    for a in range(nvir):
-                        eia[i,a] = foo[ki,i,i] - fvv[ka,a,a]
-                        for j in range(nocc):
-                            for b in range(nvir):
-                                eijab[i,j,a,b] = ( foo[ki,i,i] + foo[kj,j,j]
-                                                 - fvv[ka,a,a] - fvv[kb,b,b] )
-                                t2[ki,kj,ka,i,j,a,b] = eris_oovv[ki,kj,ka,i,j,a,b]/eijab[i,j,a,b]
+        for ki, kj, ka in loop_kkk(nkpts):
+            kb = kconserv[ki,ka,kj]
+            for i in range(nocc):
+                for a in range(nvir):
+                    eia[i,a] = (foo[ki,i,i] - fvv[ka,a,a]).real
+                    for j in range(nocc):
+                        for b in range(nvir):
+                            eijab[i,j,a,b] = ( foo[ki,i,i] + foo[kj,j,j]
+                                             - fvv[ka,a,a] - fvv[kb,b,b]).real
+                            t2[ki,kj,ka,i,j,a,b] = eris_oovv[ki,kj,ka,i,j,a,b]/eijab[i,j,a,b]
 
         t2 = numpy.conj(t2)
         self.emp2 = 0.25*numpy.einsum('pqrijab,pqrijab',t2,eris_oovv).real
@@ -371,8 +332,8 @@ class CCSD(pyscf.cc.ccsd.CCSD):
         #print("MP2 energy =", self.emp2)
         return self.emp2, t1, t2
 
-    def ccsd(self, t1=None, t2=None, mo_coeff=None, eris=None):
-        if eris is None: eris = self.ao2mo(mo_coeff)
+    def ccsd(self, t1=None, t2=None, eris=None, **kwargs):
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
         self.converged, self.e_corr, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                        tol=self.conv_tol,
@@ -390,7 +351,15 @@ class CCSD(pyscf.cc.ccsd.CCSD):
         return self.e_corr, self.t1, self.t2
 
     def ao2mo(self, mo_coeff=None):
-        return _ERIS(self, mo_coeff)
+        nkpts = self.nkpts
+        nmo = self.nmo
+        mem_incore = nkpts**3*nmo**4 * 8/1e6
+        mem_now = lib.current_memory()[0]
+
+        if (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway:
+            return _make_eris_incore(self, mo_coeff)
+        else:
+            raise NotImplementedError
 
     def update_amps(self, t1, t2, eris, max_memory=2000):
         return update_amps(self, t1, t2, eris, max_memory)
@@ -408,9 +377,11 @@ class CCSD(pyscf.cc.ccsd.CCSD):
         t2 = vec[nov:].reshape(nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir)
         return t1, t2
 
+CCSD = GCCSD
+
 
 def get_moidx(cc):
-    moidx = [numpy.ones(x.size, dtype=numpy.bool) for x in cc.mo_energy]
+    moidx = [numpy.ones(x.size, dtype=numpy.bool) for x in cc.mo_occ]
     if isinstance(cc.frozen, (int, numpy.integer)):
         for idx in moidx:
             idx[:cc.frozen] = False
@@ -423,143 +394,129 @@ def get_moidx(cc):
     return moidx
 
 
-class _ERIS:
-    """_ERIS handler for PBCs."""
-    def __init__(self, cc, mo_coeff=None, method='incore'):
-        cput0 = (time.clock(), time.time())
-        moidx = get_moidx(cc)
-        nkpts = cc.nkpts
-        nmo = cc.get_nmo()
-        assert(sum(numpy.count_nonzero(x) for x in moidx) % 2 == 0) # works for restricted CCSD only
-        if mo_coeff is None:
-            # TODO make this work for frozen maybe... seems like it should work
-            nao = cc._scf.cell.nao_nr()
-            self.mo_coeff = numpy.zeros((nkpts,nao*2,nmo),dtype=numpy.complex128)
-            for k in range(nkpts):
-                self.mo_coeff[k] = cc.mo_coeff[k][:,moidx[k]]
-            mo_coeff = self.mo_coeff
-            self.fock = numpy.zeros((nkpts,nmo,nmo))
-            for k in range(nkpts):
-                self.fock[k] = numpy.diag(cc.mo_energy[k][moidx[k]])
-        else:  # If mo_coeff is not canonical orbital
-            # TODO does this work for k-points? changed to conjugate.
-            raise NotImplementedError
-            self.mo_coeff = mo_coeff = [c[:,moidx[k]] for k,c in enumerate(mo_coeff)]
-            dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
-            fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
-            self.fock = reduce(numpy.dot, (numpy.conj(mo_coeff.T), fockao, mo_coeff))
+def _make_eris_incore(cc, mo_coeff=None):
+    log = logger.Logger(cc.stdout, cc.verbose)
+    cput0 = (time.clock(), time.time())
+    eris = gccsd._PhysicistsERIs()
+    kpts = cc.kpts
+    nkpts = cc.nkpts
 
-        nocc = cc.get_nocc()
-        nmo = cc.get_nmo()
-        nvir = nmo - nocc
-        mem_incore = nkpts**3*nmo**4 * 8/1e6
-        mem_now = lib.current_memory()[0]
+    if mo_coeff is None:
+        # If mo_coeff is not canonical orbital
+        # TODO does this work for k-points? changed to conjugate.
+        raise NotImplementedError
+        mo_coeff = cc.mo_coeff
+    moidx = get_moidx(cc)
+    eris.mo_coeff = []
+    eris.orbspin = []
+    for k in range(nkpts):
+        mo = mo_coeff[k][:,moidx[k]]
+        if hasattr(mo_coeff[k], 'orbspin'):
+            orbspin = mo_coeff[k].orbspin[moidx[k]]
+            mo = lib.tag_array(mo, orbspin=orbspin)
+            eris.orbspin.append(orbspin)
+        else:
+            assert(numpy.count_nonzero(moidx[k]) % 2 == 0) # works for restricted CCSD only
+            orbspin = numpy.zeros(mo.shape[1], dtype=int)
+            orbspin[1::2] = 1
+            mo = lib.tag_array(mo, orbspin=orbspin)
+            eris.orbspin.append(orbspin)
+        eris.mo_coeff.append(mo)
 
-        # Convert to spin-orbitals and anti-symmetrize
-        nao = cc._scf.cell.nao_nr()
-        so_coeff = numpy.zeros((nkpts,nao,nmo),dtype=numpy.complex128)
-        so_coeff[:,:,::2] = so_coeff[:,:,1::2] = mo_coeff[:,:nao,::2]
+    dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
+    fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc._scf.cell, dm)
+    eris.fock = numpy.asarray([reduce(numpy.dot, (mo.T.conj(), fockao[k], mo))
+                               for k, mo in enumerate(eris.mo_coeff)])
 
-        log = logger.Logger(cc.stdout, cc.verbose)
-        if (method == 'incore' and cc._scf._eri is None and
-            (mem_incore+mem_now < cc.max_memory) or cc.mol.incore_anyway):
+    nao, nmo = eris.mo_coeff[0].shape
+    nocc = cc.get_nocc()
+    nvir = nmo - nocc
+    eris.nocc = nocc
 
-            kconserv = tools.get_kconserv(cc._scf.cell,cc.kpts)
+    kconserv = tools.get_kconserv(cc._scf.cell,cc.kpts)
+    so_coeff = [mo[:nao//2] + mo[nao//2:] for mo in eris.mo_coeff]
 
-            eri = numpy.zeros((nkpts,nkpts,nkpts,nmo,nmo,nmo,nmo), dtype=numpy.complex128)
-            fao2mo = cc._scf.with_df.ao2mo
-            for kp in range(nkpts):
-                for kq in range(nkpts):
-                    for kr in range(nkpts):
-                        ks = kconserv[kp,kq,kr]
-                        eri_kpt = fao2mo((so_coeff[kp],so_coeff[kq],so_coeff[kr],so_coeff[ks]),
-                                         (cc.kpts[kp],cc.kpts[kq],cc.kpts[kr],cc.kpts[ks]), compact=False)
-                        eri_kpt = eri_kpt.reshape(nmo,nmo,nmo,nmo)
-                        eri[kp,kq,kr] = eri_kpt.copy()
+    eri = numpy.empty((nkpts,nkpts,nkpts,nmo,nmo,nmo,nmo), dtype=numpy.complex128)
+    fao2mo = cc._scf.with_df.ao2mo
+    for kp, kq, kr in loop_kkk(nkpts):
+        ks = kconserv[kp,kq,kr]
+        eri_kpt = fao2mo((so_coeff[kp],so_coeff[kq],so_coeff[kr],so_coeff[ks]),
+                         (kpts[kp],kpts[kq],kpts[kr],kpts[ks]), compact=False)
+        eri_kpt[(eris.orbspin[kp][:,None] != eris.orbspin[kq]).ravel()] = 0
+        eri_kpt[:,(eris.orbspin[kr][:,None] != eris.orbspin[ks]).ravel()] = 0
+        eri_kpt = eri_kpt.reshape(nmo,nmo,nmo,nmo)
+        eri[kp,kq,kr] = eri_kpt
 
-            eri[:,:,:,::2,1::2] = eri[:,:,:,1::2,::2] = eri[:,:,:,:,:,::2,1::2] = eri[:,:,:,:,:,1::2,::2] = 0.
+    # Checking some things...
+    if DEBUG:
+        maxdiff = 0.0
+        for kp, kq, kr in loop_kkk(nkpts):
+            ks = kconserv[kp,kq,kr]
+            for p in range(nmo):
+                for q in range(nmo):
+                    for r in range(nmo):
+                        for s in range(nmo):
+                            pqrs = eri[kp,kq,kr,p,q,r,s]
+                            rspq = eri[kr,ks,kp,r,s,p,q]
+                            diff = numpy.linalg.norm(pqrs - rspq).real
+                            if diff > 1e-5:
+                                print "** Warning: ERI diff at ",
+                                print "kp,kq,kr,ks,p,q,r,s =", kp, kq, kr, ks, p, q, r, s
+                            maxdiff = max(maxdiff,diff)
+        print("Max difference in (pq|rs) - (rs|pq) = %.15g" % maxdiff)
+        #print "ERI ="
+        #print eri
 
-            # Checking some things...
-            maxdiff = 0.0
-            for kp in range(nkpts):
-                for kq in range(nkpts):
-                    for kr in range(nkpts):
-                        ks = kconserv[kp,kq,kr]
-                        for p in range(nmo):
-                            for q in range(nmo):
-                                for r in range(nmo):
-                                    for s in range(nmo):
-                                        pqrs = eri[kp,kq,kr,p,q,r,s]
-                                        rspq = eri[kr,ks,kp,r,s,p,q]
-                                        diff = numpy.linalg.norm(pqrs - rspq).real
-                                        if diff > 1e-5:
-                                            print "** Warning: ERI diff at ",
-                                            print "kp,kq,kr,ks,p,q,r,s =", kp, kq, kr, ks, p, q, r, s
-                                        maxdiff = max(maxdiff,diff)
-            print "Max difference in (pq|rs) - (rs|pq) = %.15g" % maxdiff
-            #print "ERI ="
-            #print eri
+    # Antisymmetrizing (pq|rs)-(ps|rq), where the latter integral is equal to
+    # (rq|ps); done since we aren't tracking the kpoint of orbital 's'
+    eri1 = eri - eri.transpose(2,1,0,5,4,3,6)
+    # Chemist -> physics notation
+    eri1 = eri1.transpose(0,2,1,3,5,4,6)
 
-            # Antisymmetrizing (pq|rs)-(ps|rq), where the latter integral is equal to
-            # (rq|ps); done since we aren't tracking the kpoint of orbital 's'
-            eri1 = eri - eri.transpose(2,1,0,5,4,3,6)
-            # Chemist -> physics notation
-            eri1 = eri1.transpose(0,2,1,3,5,4,6)
+    eris.dtype = eri1.dtype
+    eris.oooo = eri1[:,:,:,:nocc,:nocc,:nocc,:nocc].copy() / nkpts
+    eris.ooov = eri1[:,:,:,:nocc,:nocc,:nocc,nocc:].copy() / nkpts
+    eris.ovoo = eri1[:,:,:,:nocc,nocc:,:nocc,:nocc].copy() / nkpts
+    eris.oovv = eri1[:,:,:,:nocc,:nocc,nocc:,nocc:].copy() / nkpts
+    eris.ovov = eri1[:,:,:,:nocc,nocc:,:nocc,nocc:].copy() / nkpts
+    eris.ovvv = eri1[:,:,:,:nocc,nocc:,nocc:,nocc:].copy() / nkpts
+    eris.vvvv = eri1[:,:,:,nocc:,nocc:,nocc:,nocc:].copy() / nkpts
 
-            self.dtype = eri1.dtype
-            self.oooo = eri1[:,:,:,:nocc,:nocc,:nocc,:nocc].copy() / nkpts
-            self.ooov = eri1[:,:,:,:nocc,:nocc,:nocc,nocc:].copy() / nkpts
-            self.ovoo = eri1[:,:,:,:nocc,nocc:,:nocc,:nocc].copy() / nkpts
-            self.oovv = eri1[:,:,:,:nocc,:nocc,nocc:,nocc:].copy() / nkpts
-            self.ovov = eri1[:,:,:,:nocc,nocc:,:nocc,nocc:].copy() / nkpts
-            self.ovvv = eri1[:,:,:,:nocc,nocc:,nocc:,nocc:].copy() / nkpts
-            self.vvvv = eri1[:,:,:,nocc:,nocc:,nocc:,nocc:].copy() / nkpts
-            #ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
-            #self.ovvv = numpy.empty((nocc,nvir,nvir*(nvir+1)//2))
-            #for i in range(nocc):
-            #    for j in range(nvir):
-            #        self.ovvv[i,j] = lib.pack_tril(ovvv[i,j])
-            #self.vvvv = pyscf.ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:], nvir)
-
-
-        log.timer('CCSD integral transformation', *cput0)
+    log.timer('CCSD integral transformation', *cput0)
+    return eris
 
 
 def check_antisymm_12( cc, kpts, integrals ):
     kconserv = tools.get_kconserv(cc._scf.cell,cc.kpts)
     nkpts = len(kpts)
     diff = 0.0
-    for kp in range(nkpts):
-        for kq in range(nkpts):
-            for kr in range(nkpts):
-                ks = kconserv[kp,kr,kq]
-                for p in range(integrals.shape[3]):
-                    for q in range(integrals.shape[4]):
-                        for r in range(integrals.shape[5]):
-                            for s in range(integrals.shape[6]):
-                                pqrs = integrals[kp,kq,kr,p,q,r,s]
-                                qprs = integrals[kq,kp,kr,q,p,r,s]
-                                cdiff = numpy.linalg.norm(pqrs+qprs).real
-                                print "AS diff = %.15g" % cdiff, pqrs, qprs, kp, kq, kr, ks, p, q, r, s
-                                diff = max(diff,cdiff)
+    for kp, kq, kr in loop_kkk(nkpts):
+        ks = kconserv[kp,kr,kq]
+        for p in range(integrals.shape[3]):
+            for q in range(integrals.shape[4]):
+                for r in range(integrals.shape[5]):
+                    for s in range(integrals.shape[6]):
+                        pqrs = integrals[kp,kq,kr,p,q,r,s]
+                        qprs = integrals[kq,kp,kr,q,p,r,s]
+                        cdiff = numpy.linalg.norm(pqrs+qprs).real
+                        print "AS diff = %.15g" % cdiff, pqrs, qprs, kp, kq, kr, ks, p, q, r, s
+                        diff = max(diff,cdiff)
     print "antisymmetrization : max diff = %.15g" % diff
 
 def check_antisymm_34( cc, kpts, integrals ):
     kconserv = tools.get_kconserv(cc._scf.cell,cc.kpts)
     nkpts = len(kpts)
     diff = 0.0
-    for kp in range(nkpts):
-        for kq in range(nkpts):
-            for kr in range(nkpts):
-                ks = kconserv[kp,kr,kq]
-                for p in range(integrals.shape[3]):
-                    for q in range(integrals.shape[4]):
-                        for r in range(integrals.shape[5]):
-                            for s in range(integrals.shape[6]):
-                                pqrs = integrals[kp,kq,kr,p,q,r,s]
-                                pqsr = integrals[kp,kq,ks,p,q,s,r]
-                                cdiff = numpy.linalg.norm(pqrs+pqsr).real
-                                print "AS diff = %.15g" % cdiff, pqrs, pqsr, kp, kq, kr, ks, p, q, r, s
-                                diff = max(diff,cdiff)
+    for kp, kq, kr in loop_kkk(nkpts):
+        ks = kconserv[kp,kr,kq]
+        for p in range(integrals.shape[3]):
+            for q in range(integrals.shape[4]):
+                for r in range(integrals.shape[5]):
+                    for s in range(integrals.shape[6]):
+                        pqrs = integrals[kp,kq,kr,p,q,r,s]
+                        pqsr = integrals[kp,kq,ks,p,q,s,r]
+                        cdiff = numpy.linalg.norm(pqrs+pqsr).real
+                        print "AS diff = %.15g" % cdiff, pqrs, pqsr, kp, kq, kr, ks, p, q, r, s
+                        diff = max(diff,cdiff)
     print "antisymmetrization : max diff = %.15g" % diff
 

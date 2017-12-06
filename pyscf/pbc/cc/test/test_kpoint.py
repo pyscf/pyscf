@@ -49,7 +49,7 @@ def run_kcell(cell, n, nk):
 #    print "*********************************"
 #    print ""
 
-    cc = pyscf.pbc.cc.kccsd.CCSD(kmf)
+    cc = pyscf.pbc.cc.kccsd.CCSD(pbchf.addons.convert_to_ghf(kmf))
     cc.conv_tol=1e-8
     #cc.verbose = 7
     ecc, t1, t2 = cc.kernel()

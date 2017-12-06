@@ -517,7 +517,7 @@ def convert_to_ghf(mf, out=None, convert_df=None):
                 mf1.mo_occ[orbspin==0] = mf.mo_occ[0]
                 mf1.mo_occ[orbspin==1] = mf.mo_occ[1]
 
-                mo_coeff = numpy.zeros((nao*2,nmo*2), dtype=mf.mo_coeff.dtype)
+                mo_coeff = numpy.zeros((nao*2,nmo*2), dtype=mf.mo_coeff[0].dtype)
                 mo_coeff[:nao,orbspin==0] = mf.mo_coeff[0]
                 mo_coeff[nao:,orbspin==1] = mf.mo_coeff[1]
                 if hasattr(mf.mo_coeff[0], 'orbsym'):
