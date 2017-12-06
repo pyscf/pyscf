@@ -525,10 +525,10 @@ def update_amps(mycc, t1, t2, l1, l2, eris, imds):
     u1b -= einsum('IKBC,KCAB->IA', l2bb, imds.wOVVV1)
     u1b -= einsum('kIcB,kcAB->IA', l2ab, imds.wovVV1)
 
-    u1a += einsum('jiba,bj->ia', l2aa, imds.w3a)
-    u1a += einsum('iJaB,BJ->ia', l2ab, imds.w3b)
-    u1b += einsum('jiba,bj->ia', l2bb, imds.w3b)
-    u1b += einsum('jIbA,bj->IA', l2ab, imds.w3a)
+    u1a += numpy.einsum('jiba,bj->ia', l2aa, imds.w3a)
+    u1a += numpy.einsum('iJaB,BJ->ia', l2ab, imds.w3b)
+    u1b += numpy.einsum('JIBA,BJ->IA', l2bb, imds.w3b)
+    u1b += numpy.einsum('jIbA,bj->IA', l2ab, imds.w3a)
 
     tmpa  = t1a + einsum('kc,kjcb->jb', l1a, t2aa)
     tmpa += einsum('KC,jKbC->jb', l1b, t2ab)
