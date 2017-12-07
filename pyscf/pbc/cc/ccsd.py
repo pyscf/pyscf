@@ -1,41 +1,26 @@
-from pyscf.lib import logger
 from pyscf import lib
-import pyscf.cc
-import pyscf.cc.ccsd
-import pyscf.pbc.ao2mo
+from pyscf.lib import logger
 
-from pyscf.cc.uccsd import UCCSD as molCCSD
-from pyscf.cc.uccsd import _ERIS
+from pyscf.cc import rccsd
+from pyscf.cc import uccsd
+from pyscf.cc import gccsd
 
-from pyscf.cc.rccsd import RCCSD as molRCCSD
-from pyscf.cc.rccsd import _ERIS as _RERIS
-
-#einsum = np.einsum
-einsum = lib.einsum
-
-class CCSD(molCCSD):
-
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
-        molCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
-
-    def dump_flags(self):
-        molCCSD.dump_flags(self)
-        logger.info(self, '\n')
-        logger.info(self, '******** PBC CC flags ********')
-
+class RCCSD(rccsd.RCCSD):
     def ao2mo(self, mo_coeff=None):
-        return _ERIS(self, mo_coeff, ao2mofn=pyscf.pbc.ao2mo.general)
+        ao2mofn = _gen_ao2mofn(self._scf)
+        return rccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
 
-class RCCSD(molRCCSD):
-
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
-        molRCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
-
-    def dump_flags(self):
-        molRCCSD.dump_flags(self)
-        logger.info(self, '\n')
-        logger.info(self, '******** PBC CC flags ********')
-
+class UCCSD(uccsd.UCCSD):
     def ao2mo(self, mo_coeff=None):
-        return _RERIS(self, mo_coeff, ao2mofn=pyscf.pbc.ao2mo.general)
+        ao2mofn = _gen_ao2mofn(self._scf)
+        return uccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
 
+class GCCSD(gccsd.GCCSD):
+    def ao2mo(self, mo_coeff=None):
+        ao2mofn = _gen_ao2mofn(self._scf)
+        return gccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
+
+def _gen_ao2mofn(mf):
+    def ao2mofn(mo_coeff):
+        return mf.with_df.ao2mo(mo_coeff, mf.kpt, compact=False)
+    return ao2mofn

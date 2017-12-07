@@ -4,6 +4,7 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
+import itertools
 import pyscf.pbc.tools.pbc as tools
 import pyscf.pbc.ao2mo
 import pyscf.lib
@@ -104,3 +105,7 @@ class unique_pqr_list:
             return numpy.conj(invec.transpose(1,0,3,2))
         if operation == 3:
             return numpy.conj(invec.transpose(3,2,1,0))
+
+def loop_kkk(nkpts):
+    range_nkpts = range(nkpts)
+    return itertools.product(range_nkpts, range_nkpts, range_nkpts)

@@ -7,7 +7,7 @@
 Unrestricted Hartree-Fock for periodic systems at a single k-point
 
 See Also:
-    pyscf.pbc.scf.khf.py : Hartree-Fock for periodic systems with k-point sampling
+    pyscf/pbc/scf/khf.py : Hartree-Fock for periodic systems with k-point sampling
 '''
 
 import numpy as np
@@ -70,13 +70,13 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
     '''
     def __init__(self, cell, kpt=np.zeros(3), exxdiv='ewald'):
         pbchf.SCF.__init__(self, cell, kpt, exxdiv)
-        n_b = (cell.nelectron - cell.spin) // 2
-        self.nelec = (cell.nelectron-n_b, n_b)
+        self.nelec = cell.nelec
         self._keys = self._keys.union(['nelec'])
 
     def dump_flags(self):
         pbchf.SCF.dump_flags(self)
-        logger.info(self, 'number electrons alpha = %d  beta = %d', *self.nelec)
+        logger.info(self, 'number of electrons per unit cell  '
+                    'alpha = %d beta = %d', *self.nelec)
         return self
 
     check_sanity = pbchf.SCF.check_sanity
@@ -144,7 +144,15 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
     _is_mem_enough = pbchf.SCF._is_mem_enough
 
     density_fit = pbchf.SCF.density_fit
-    # mix_density_fit inherits from hf.RHF.mix_density_fit
+    # mix_density_fit inherits from hf.SCF.mix_density_fit
 
     x2c1e = pbchf.SCF.x2c1e
+
+    def convert_from_(self, mf):
+        '''Convert given mean-field object to RHF/ROHF'''
+        addons.convert_to_uhf(mf, self)
+        return self
+
+    stability = None
+    nuc_grad_method = None
 

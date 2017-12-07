@@ -492,7 +492,8 @@ def dot_eri_dm(eri, dm, hermi=0):
 
     Args:
         eri : ndarray
-            8-fold or 4-fold ERIs
+            8-fold or 4-fold ERIs or complex integral array with N^4 elements
+            (N is the number of orbitals)
         dm : ndarray or list of ndarrays
             A density matrix or a list of density matrices
 
@@ -520,16 +521,26 @@ def dot_eri_dm(eri, dm, hermi=0):
     >>> print(j.shape)
     (3, 2, 2)
     '''
-    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-        vj, vk = _vhf.incore(eri, dm, hermi=hermi)
+    dm = numpy.asarray(dm)
+    nao = dm.shape[-1]
+    dms = dm.reshape(-1,nao,nao)
+    if eri.dtype == numpy.complex128:
+        eri = eri.reshape((nao,)*4)
+        vj = numpy.empty(dms.shape, dtype=numpy.complex128)
+        vk = numpy.empty(dms.shape, dtype=numpy.complex128)
+        for i, dmi in enumerate(dms):
+            vj[i] = numpy.einsum('ijkl,ji->kl', eri, dmi)
+            vk[i] = numpy.einsum('ijkl,jk->il', eri, dmi)
     else:
-        dm = numpy.asarray(dm, order='C')
-        nao = dm.shape[-1]
-        dms = dm.reshape(-1,nao,nao)
-        vjk = [_vhf.incore(eri, dmi, hermi=hermi) for dmi in dms]
-        vj = numpy.array([v[0] for v in vjk]).reshape(dm.shape)
-        vk = numpy.array([v[1] for v in vjk]).reshape(dm.shape)
-    return vj, vk
+        vj = numpy.empty_like(dms)
+        vk = numpy.empty_like(dms)
+        for i, dmi in enumerate(dms):
+            vjk = _vhf.incore(eri, dmi.real, hermi=hermi)
+            if dms.dtype == numpy.complex128:
+                vjk = vjk + _vhf.incore(eri, dmi.imag, hermi=hermi) * 1j
+            vj[i] = vjk[0]
+            vk[i] = vjk[1]
+    return vj.reshape(dm.shape), vk.reshape(dm.shape)
 
 
 def get_jk(mol, dm, hermi=1, vhfopt=None):

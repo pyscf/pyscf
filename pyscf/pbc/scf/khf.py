@@ -143,7 +143,6 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     nkpts = len(mo_energy_kpts)
     nocc = (mf.cell.nelectron * nkpts) // 2
 
-    # TODO: implement Fermi smearing and print mo_energy kpt by kpt
     mo_energy = np.sort(np.hstack(mo_energy_kpts))
     fermi = mo_energy[nocc-1]
     mo_occ_kpts = []
@@ -287,7 +286,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
     return dm[0] + dm[1]
 
 
-class KSCF(hf.SCF):
+class KSCF(pbchf.SCF):
     '''SCF class with k-point sampling.
 
     Compared to molecular SCF, some members such as mo_coeff, mo_occ
@@ -566,7 +565,11 @@ class KSCF(hf.SCF):
         from pyscf.pbc.scf import x2c
         return x2c.sfx2c1e(self)
 
-KRHF = KSCF
+class KRHF(KSCF, pbchf.RHF):
+    def convert_from_(self, mf):
+        '''Convert given mean-field object to KRHF'''
+        addons.convert_to_rhf(mf, self)
+        return self
 
 
 if __name__ == '__main__':

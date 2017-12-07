@@ -25,7 +25,7 @@ ndpointer = numpy.ctypeslib.ndpointer
 
 # Settings
 try:
-   from pyscf.future.shciscf import settings
+   from pyscf.shciscf import settings
 except ImportError:
     import sys
     sys.stderr.write('''settings.py not found.  Please create %s

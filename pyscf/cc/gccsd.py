@@ -13,8 +13,7 @@ from pyscf.cc.addons import spatial2spin, spin2spatial
 #einsum = np.einsum
 einsum = lib.einsum
 
-# This is unrestricted (U)CCSD, i.e. spin-orbital form.
-
+# This is unrestricted (U)CCSD in spin-orbital form.
 
 def update_amps(cc, t1, t2, eris):
     assert(isinstance(eris, _PhysicistsERIs))
@@ -94,8 +93,8 @@ def amplitudes_from_rccsd(t1, t2):
 
 
 class GCCSD(ccsd.CCSD):
-
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+        assert(isinstance(mf, scf.ghf.GHF))
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         # Spin-orbital CCSD needs a stricter tolerance than spatial-orbital
         self.conv_tol_normt = 1e-6
@@ -116,7 +115,7 @@ class GCCSD(ccsd.CCSD):
     update_amps = update_amps
 
     def kernel(self, t1=None, t2=None, eris=None, mbpt2=False):
-        return self.ccsd(t1, t2, eris, mbpt2)
+        return self.ccsd(t1, t2, eris, mbpt2=mbpt2)
     def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
         '''Ground-state unrestricted (U)CCSD.
 
@@ -236,14 +235,16 @@ class _PhysicistsERIs:
         if mo_coeff is None:
             mo_coeff = mycc.mo_coeff
         mo_idx = ccsd.get_moidx(mycc)
+        self.mo_coeff = mo_coeff = mo_coeff[:,mo_idx]
         if hasattr(mo_coeff, 'orbspin'):
             self.orbspin = mo_coeff.orbspin[mo_idx]
+            self.mo_coeff = lib.tag_array(mo_coeff, orbspin=self.orbspin)
         else:
             orbspin = scf.ghf.guess_orbspin(mo_coeff)
             if not np.any(orbspin == -1):
                 self.orbspin = orbspin[mo_idx]
+                self.mo_coeff = lib.tag_array(mo_coeff, orbspin=self.orbspin)
 
-        self.mo_coeff = mo_coeff = mo_coeff[:,mo_idx]
 # Note: Recomputed fock matrix since SCF may not be fully converged.
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
         fockao = mycc._scf.get_hcore() + mycc._scf.get_veff(mycc.mol, dm)
@@ -251,32 +252,47 @@ class _PhysicistsERIs:
         self.nocc = mycc.nocc
         return self
 
-def _make_eris_incore(mycc, mo_coeff=None):
+def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     cput0 = (time.clock(), time.time())
     eris = _PhysicistsERIs()
     eris._common_init_(mycc, mo_coeff)
     nocc = eris.nocc
     nao, nmo = eris.mo_coeff.shape
     nvir = nmo - nocc
-    assert(eris.mo_coeff.dtype == np.double)
     mo_a = eris.mo_coeff[:nao//2]
     mo_b = eris.mo_coeff[nao//2:]
     orbspin = eris.orbspin
 
-    if orbspin is None:
-        eri  = ao2mo.kernel(mycc._scf._eri, mo_a)
-        eri += ao2mo.kernel(mycc._scf._eri, mo_b)
-        eri1 = ao2mo.kernel(mycc._scf._eri, (mo_a,mo_a,mo_b,mo_b))
-        eri += eri1
-        eri += eri1.T
+    if callable(ao2mofn):
+        if orbspin is None:
+            eri  = ao2mofn(mo_a).reshape([nmo]*4)
+            eri += ao2mofn(mo_b).reshape([nmo]*4)
+            eri1 = ao2mofn((mo_a,mo_a,mo_b,mo_b)).reshape([nmo]*4)
+            eri += eri1
+            eri += eri1.transpose(2,3,0,1)
+        else:
+            mo = mo_a + mo_b
+            eri = ao2mofn(mo).reshape([nmo]*4)
+            sym_forbid = (orbspin[:,None] != orbspin)
+            eri[sym_forbid,:,:] = 0
+            eri[:,:,sym_forbid] = 0
     else:
-        mo = mo_a + mo_b
-        eri = ao2mo.kernel(mycc._scf._eri, mo)
-        sym_forbid = (orbspin[:,None] != orbspin)[np.tril_indices(nmo)]
-        eri[sym_forbid,:] = 0
-        eri[:,sym_forbid] = 0
+        assert(eris.mo_coeff.dtype == np.double)
+        if orbspin is None:
+            eri  = ao2mo.kernel(mycc._scf._eri, mo_a)
+            eri += ao2mo.kernel(mycc._scf._eri, mo_b)
+            eri1 = ao2mo.kernel(mycc._scf._eri, (mo_a,mo_a,mo_b,mo_b))
+            eri += eri1
+            eri += eri1.T
+        else:
+            mo = mo_a + mo_b
+            eri = ao2mo.kernel(mycc._scf._eri, mo)
+            sym_forbid = (orbspin[:,None] != orbspin)[np.tril_indices(nmo)]
+            eri[sym_forbid,:] = 0
+            eri[:,sym_forbid] = 0
 
-    eri = ao2mo.restore(1, eri, nmo)
+        eri = ao2mo.restore(1, eri, nmo)
+
     eri = eri.transpose(0,2,1,3) - eri.transpose(0,2,3,1)
 
     eris.oooo = eri[:nocc,:nocc,:nocc,:nocc].copy()

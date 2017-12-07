@@ -45,6 +45,7 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
     '''
     q = numpy.reshape(q, 3)
     kptjs = numpy.asarray(kptjs, order='C').reshape(-1,3)
+    Gv = numpy.asarray(Gv, order='C').reshape(-1,3)
     nGv = Gv.shape[0]
     GvT = numpy.asarray(Gv.T, order='C')
     GvT += q.reshape(-1,1)

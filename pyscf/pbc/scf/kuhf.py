@@ -16,6 +16,7 @@ import scipy.linalg
 from pyscf.scf import hf as mol_hf
 from pyscf.scf import uhf as mol_uhf
 from pyscf.pbc.scf import khf
+from pyscf.pbc.scf import uhf as pbcuhf
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import addons
@@ -267,24 +268,24 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
     return dm
 
 
-class KUHF(mol_uhf.UHF, khf.KSCF):
+class KUHF(pbcuhf.UHF, khf.KSCF):
     '''UHF class with k-point sampling.
     '''
     def __init__(self, cell, kpts=np.zeros((1,3)), exxdiv='ewald'):
         khf.KSCF.__init__(self, cell, kpts, exxdiv)
-        n_b = (cell.nelectron - cell.spin) // 2
-        self.nelec = (cell.nelectron-n_b, n_b)
+        self.nelec = cell.nelec
         self._keys = self._keys.union(['nelec'])
 
     def dump_flags(self):
         khf.KSCF.dump_flags(self)
-        logger.info(self, 'number electrons alpha = %d  beta = %d', *self.nelec)
+        logger.info(self, 'number of electrons per unit cell  '
+                    'alpha = %d beta = %d', *self.nelec)
         return self
 
     check_sanity = khf.KSCF.check_sanity
 
     def build(self, cell=None):
-        mol_uhf.UHF.build(self, cell)
+        pbcuhf.UHF.build(self, cell)
         #if self.exxdiv == 'vcut_ws':
         #    self.precompute_exx()
 
@@ -330,13 +331,6 @@ class KUHF(mol_uhf.UHF, khf.KSCF):
                             'of electrons', ne.mean())
                 dm_kpts *= (nelec/ne).reshape(2,-1,1,1)
         return dm_kpts
-
-    def init_guess_by_1e(self, cell=None):
-        if cell is None: cell = self.cell
-        if cell.dimension < 3:
-            logger.warn(self, 'Hcore initial guess is not recommended in '
-                        'the SCF of low-dimensional systems.')
-        return mol_uhf.UHF.init_guess_by_1e(self, cell)
 
     get_hcore = khf.KSCF.get_hcore
     get_ovlp = khf.KSCF.get_ovlp
@@ -467,6 +461,11 @@ class KUHF(mol_uhf.UHF, khf.KSCF):
     def stability(self, internal=True, external=False, verbose=None):
         from pyscf.pbc.scf.stability import uhf_stability
         return uhf_stability(self, internal, external, verbose)
+
+    def convert_from_(self, mf):
+        '''Convert given mean-field object to KUHF'''
+        addons.convert_to_uhf(mf, self)
+        return self
 
 
 if __name__ == '__main__':

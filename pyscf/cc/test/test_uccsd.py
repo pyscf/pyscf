@@ -25,10 +25,6 @@ mf = scf.addons.convert_to_uhf(rhf)
 myucc = cc.UCCSD(mf).run(conv_tol=1e-10)
 
 class KnownValues(unittest.TestCase):
-    def test_uccsd_from_dft(self):
-        mf = dft.UKS(mol)
-        mycc = cc.UCCSD(mf)
-
 #    def test_with_df(self):
 #        mf = scf.UHF(mol).density_fit(auxbasis='weigend').run()
 #        mycc = cc.UCCSD(mf).run()

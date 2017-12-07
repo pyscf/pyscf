@@ -71,10 +71,6 @@ def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     from pyscf.cc import rccsd
     from pyscf.cc import dfccsd
 
-    if 'dft' in str(mf.__module__):
-        sys.stderr.write('RCCSD Warning: The first argument mf is a DFT object. '
-                         'RCCSD calculation should be used with HF object\n')
-
     if isinstance(mf, scf.uhf.UHF):
         raise RuntimeError('RCCSD cannot be used with UHF method.')
     elif isinstance(mf, scf.rohf.ROHF):
@@ -95,10 +91,6 @@ def UCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     import sys
     from pyscf import scf
 
-    if 'dft' in str(mf.__module__):
-        sys.stderr.write('UCCSD Warning: The first argument mf is a DFT object. '
-                         'UCCSD calculation should be used with HF object')
-
     mf = scf.addons.convert_to_uhf(mf)
     if hasattr(mf, 'with_df') and mf.with_df:
         raise NotImplementedError('DF-UCCSD')
@@ -110,10 +102,6 @@ def GCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     import sys
     from pyscf import scf
     from pyscf.cc import gccsd
-
-    if 'dft' in str(mf.__module__):
-        sys.stderr.write('GCCSD Warning: The first argument mf is a DFT object. '
-                         'GCCSD calculation should be used with HF object')
 
     mf = scf.addons.convert_to_ghf(mf)
     if hasattr(mf, 'with_df') and mf.with_df:

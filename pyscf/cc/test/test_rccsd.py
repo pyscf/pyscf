@@ -26,11 +26,6 @@ mycc = rccsd.RCCSD(mf).run(conv_tol=1e-10)
 
 
 class KnownValues(unittest.TestCase):
-    def test_rccsd_from_dft(self):
-        mf = dft.RKS(mol)
-        mycc = cc.CCSD(mf)
-        mycc = cc.RCCSD(mf)
-
     def test_roccsd(self):
         mf = scf.ROHF(mol).run()
         mycc = cc.RCCSD(mf).run()

@@ -1223,7 +1223,8 @@ def eeccsd_diag(eom, imds=None):
     Wvvaa = Wvvaa + Wvvaa.T
     if eris.vvvv is None: # AO-direct CCSD, vvvv is not generated.
         pass
-    elif eris.vvvv.ndim == 4:
+    elif len(eris.vvvv.shape) == 4:  # DO not use .ndim here for h5py library
+                                     # backward compatbility
         eris_vvvv = ao2mo.restore(1,np.asarray(eris.vvvv), t1.shape[1])
         tmp = np.einsum('aabb->ab', eris_vvvv)
         Wvvaa += tmp
