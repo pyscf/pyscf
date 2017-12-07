@@ -142,6 +142,22 @@ endif() # ENABLE_XCFUN
 add_subdirectory(dft)
 endif() # DISABLE_DFT
 
+option(ENABLE_TBLIS "Using tblis tensor contraction library" OFF)
+
+if(ENABLE_TBLIS)
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/libtblis.so")
+  ExternalProject_Add(tblis
+    GIT_REPOSITORY https://github.com/sunqm/tblis
+    GIT_TAG python
+    PREFIX ${PROJECT_BINARY_DIR}/deps
+    INSTALL_DIR ${PROJECT_SOURCE_DIR}
+    #INSTALL_COMMAND "make install && cp <SOURCE_DIR>/src/python/tblis_einsum.py ${PROJECT_SOURCE_DIR}"
+    CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>
+          --enable-einsum CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
+  )
+endif()
+endif() # ENABLE_TBLIS
+
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/cmake.user.inc")
   include("${PROJECT_SOURCE_DIR}/cmake.user.inc")
