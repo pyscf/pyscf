@@ -14,9 +14,15 @@ PySCF 1.5 alpha (2018-03-??)
   - UHF analytical nuclear Hessian
   - UKS analytical nuclear Hessian
   - FFT for low-dimension (2D) PBC systems
+  - Generalized CCSD
+  - Generalized CCSD lambda solver
+  - Generalized Hartree-Fock with PBC
+  - Generalized CCSD and k-point CCSD with PBC
+  - RCCSD(T) and UCCSD(T) for non-canonical HF orbitals
 * Improved
   - Support of setting omp threads in FCI solver
   - Supported even number of grids in pbc calculations
+  - Performance of UCCSD lambda solver
 
 
 PySCF 1.4.2 (201?-?-?)

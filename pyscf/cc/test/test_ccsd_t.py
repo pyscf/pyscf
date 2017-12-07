@@ -81,7 +81,8 @@ class KnownValues(unittest.TestCase):
         orbsym = symm.addons.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
                                             mcc.mo_coeff)
         orbsym = numpy.asarray(orbsym, dtype=numpy.int32)
-        mo_energy, t1T, t2T, vooo = ccsd_t._sort_t2_vooo_(mcc, orbsym, t1, t2.copy(), eris)
+        mo_energy, t1T, t2T, vooo, foVT = \
+                ccsd_t._sort_t2_vooo_(mcc, orbsym, t1, t2.copy(), eris)
 
         o_sorted = numpy.hstack([numpy.where(orbsym[:nocc] == i)[0] for i in range(8)])
         v_sorted = numpy.hstack([numpy.where(orbsym[nocc:] == i)[0] for i in range(8)])

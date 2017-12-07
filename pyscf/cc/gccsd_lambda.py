@@ -182,7 +182,7 @@ def update_amps(mycc, t1, t2, l1, l2, eris, imds):
     tmp = einsum('likc,jlbc->jkib', eris.ooov, t2)
     l1new += einsum('kjab,jkib->ia', l2, tmp)
 
-    mo_e = eris.fock.diagonal()
+    mo_e = eris.fock.diagonal().real
     eia = lib.direct_sum('i-j->ij', mo_e[:nocc], mo_e[nocc:])
     l1new /= eia
     l1new += l1
