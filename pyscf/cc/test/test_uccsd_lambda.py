@@ -49,14 +49,14 @@ class KnownValues(unittest.TestCase):
         l1r = addons.spatial2spin(l1r, orbspin)
         l2r = addons.spatial2spin(l2r, orbspin)
         imds = gccsd_lambda.make_intermediates(gcc1, t1r, t2r, eri1)
-        l1ref, l2ref = gccsd_lambda.update_amps(gcc1, t1r, t2r, l1r, l2r, eri1, imds)
+        l1ref, l2ref = gccsd_lambda.update_lambda(gcc1, t1r, t2r, l1r, l2r, eri1, imds)
 
         t1 = addons.spin2spatial(t1r, orbspin)
         t2 = addons.spin2spatial(t2r, orbspin)
         l1 = addons.spin2spatial(l1r, orbspin)
         l2 = addons.spin2spatial(l2r, orbspin)
         imds = uccsd_lambda.make_intermediates(mycc, t1, t2, eris)
-        l1, l2 = uccsd_lambda.update_amps(mycc, t1, t2, l1, l2, eris, imds)
+        l1, l2 = uccsd_lambda.update_lambda(mycc, t1, t2, l1, l2, eris, imds)
         self.assertAlmostEqual(abs(addons.spatial2spin(l1, orbspin)-l1ref).max(), 0, 8)
         self.assertAlmostEqual(abs(addons.spatial2spin(l2, orbspin)-l2ref).max(), 0, 8)
 

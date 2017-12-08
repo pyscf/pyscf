@@ -133,7 +133,7 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
 
     max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     unit = nocc*nvir**2 + nvir**3*2.5
-    blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/unit))
+    blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory*1e6/8/unit)))
     log.debug1('IX_intermediates pass 2: block size = %d, nvir = %d in %d blocks',
                blksize, nvir, int((nvir+blksize-1)/blksize))
     for p0, p1 in lib.prange(0, nvir, blksize):
@@ -154,7 +154,7 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
         Ivo += lib.einsum('xca,xci->ai', d_vvvv, eris_vvvo) * 2
         d_vvvv = None
         Ioo += lib.einsum('xcj,xci->ij', d_vvvo, eris_vvvo)
-        Ivv += lib.einsum('xai,xbi->ab', d_vvvo, eris_vvvo)
+        Ivv += lib.einsum('xbi,xai->ab', d_vvvo, eris_vvvo)
 
         d_vvoo = _cp(fswap['d_woo'][off0:off1])
         Xvo += lib.einsum('xij,xaj->ai', d_vvoo, eris_vvvo)
@@ -210,7 +210,7 @@ def response_dm1(mycc, t1, t2, l1, l2, eris=None, IX=None):
 # Non-canonical formula refers to JCP, 95, 2639
 #
 def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
-           mf_grad=None, verbose=logger.INFO):
+           mf_grad=None, d1=None, d2=None, verbose=logger.INFO):
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
     if l1 is None: l1 = mycc.l1
@@ -232,13 +232,15 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     nao_pair = nao * (nao+1) // 2
 
     log.debug('Build ccsd rdm1 intermediates')
-    d1 = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2)
+    if d1 is None:
+        d1 = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2)
     doo, dov, dvo, dvv = d1
     time1 = log.timer('rdm1 intermediates', *time0)
 
     log.debug('Build ccsd rdm2 intermediates')
-    fd2intermediate = lib.H5TmpFile()
-    d2 = ccsd_rdm.gamma2_outcore(mycc, t1, t2, l1, l2, fd2intermediate)
+    if d2 is None:
+        fd2intermediate = lib.H5TmpFile()
+        d2 = ccsd_rdm.gamma2_outcore(mycc, t1, t2, l1, l2, fd2intermediate)
     time1 = log.timer('rdm2 intermediates', *time1)
     log.debug('Build ccsd response_rdm1')
     Ioo, Ivv, Ivo, Xvo = IX_intermediates(mycc, t1, t2, l1, l2, eris, d1, d2)
@@ -264,7 +266,6 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         dm1_with_hf[i,i] += 1
     _rdm2_mo2ao(mycc, d2, dm1_with_hf, mo_coeff, fdm2)
     time1 = log.timer('MO->AO transformation', *time1)
-    fd2intermediate = None
 
 #TODO: pass hf_grad object to compute h1 and s1
     log.debug('h1 and JK1')

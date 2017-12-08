@@ -13,44 +13,15 @@ from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.cc import uccsd
+from pyscf.cc import ccsd_lambda
 
 einsum = lib.einsum
 
-def kernel(mycc, eris, t1=None, t2=None, l1=None, l2=None,
+def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
            max_cycle=50, tol=1e-8, verbose=logger.INFO):
-    cput0 = (time.clock(), time.time())
-    log = logger.new_logger(mycc, verbose)
-
-    if t1 is None: t1 = mycc.t1
-    if t2 is None: t2 = mycc.t2
-    if l1 is None: l1 = t1
-    if l2 is None: l2 = t2
-
-    imds = make_intermediates(mycc, t1, t2, eris)
-
-    if mycc.diis:
-        adiis = lib.diis.DIIS(mycc, mycc.diis_file)
-        adiis.space = mycc.diis_space
-    else:
-        adiis = None
-    cput0 = log.timer('UCCSD lambda initialization', *cput0)
-
-    conv = False
-    for istep in range(max_cycle):
-        l1new, l2new = update_amps(mycc, t1, t2, l1, l2, eris, imds)
-        normt = numpy.linalg.norm(mycc.amplitudes_to_vector(l1new, l2new) -
-                                  mycc.amplitudes_to_vector(l1, l2))
-        l1, l2 = l1new, l2new
-        l1new = l2new = None
-        if mycc.diis:
-            l1, l2 = mycc.diis(l1, l2, istep, normt, 0, adiis)
-        log.info('cycle = %d  norm(lambda1,lambda2) = %.6g', istep+1, normt)
-        cput0 = log.timer('UCCSD iter', *cput0)
-        if normt < tol:
-            conv = True
-            break
-    return conv, l1, l2
-
+    if eris is None: eris = mycc.ao2mo()
+    return ccsd_lambda.kernel(mycc, eris, t1, t2, l1, l2, max_cycle, tol,
+                              verbose, make_intermediates, update_lambda)
 
 # l2, t2 as ijab
 def make_intermediates(mycc, t1, t2, eris):
@@ -295,7 +266,7 @@ def make_intermediates(mycc, t1, t2, eris):
 
 
 # update L1, L2
-def update_amps(mycc, t1, t2, l1, l2, eris, imds):
+def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
     time1 = time0 = time.clock(), time.time()
     log = logger.Logger(mycc.stdout, mycc.verbose)
 
@@ -634,7 +605,7 @@ if __name__ == '__main__':
     l2[2] = l2[2] - l2[2].transpose(0,1,3,2)
 
     imds = make_intermediates(mycc, t1, t2, eris)
-    l1, l2 = update_amps(mycc, t1, t2, l1, l2, eris, imds)
+    l1, l2 = update_lambda(mycc, t1, t2, l1, l2, eris, imds)
     print(lib.finger(l1[0]) --104.55975252585894)
     print(lib.finger(l1[1]) --241.12677819375281)
     print(lib.finger(l2[0]) --0.4957533529669417)

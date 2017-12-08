@@ -215,7 +215,7 @@ class KnownValues(unittest.TestCase):
         l1ref, l2ref = update_l1l2(mf, t1, t2, l1, l2, orbspin)
 
         imds = gccsd_lambda.make_intermediates(mycc, t1, t2, eris)
-        l1, l2 = gccsd_lambda.update_amps(mycc, t1, t2, l1, l2, eris, imds)
+        l1, l2 = gccsd_lambda.update_lambda(mycc, t1, t2, l1, l2, eris, imds)
         self.assertAlmostEqual(abs(l1-l1ref).max(), 0, 8)
         self.assertAlmostEqual(abs(l2-l2ref).max(), 0, 8)
 

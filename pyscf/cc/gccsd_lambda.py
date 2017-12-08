@@ -36,7 +36,7 @@ def kernel(mycc, eris, t1=None, t2=None, l1=None, l2=None,
 
     conv = False
     for istep in range(max_cycle):
-        l1new, l2new = update_amps(mycc, t1, t2, l1, l2, eris, imds)
+        l1new, l2new = update_lambda(mycc, t1, t2, l1, l2, eris, imds)
         normt = numpy.linalg.norm(l1new-l1) + numpy.linalg.norm(l2new-l2)
         l1, l2 = l1new, l2new
         l1new = l2new = None
@@ -119,7 +119,7 @@ def make_intermediates(mycc, t1, t2, eris):
 
 
 # update L1, L2
-def update_amps(mycc, t1, t2, l1, l2, eris, imds):
+def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
     time1 = time0 = time.clock(), time.time()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
@@ -230,14 +230,14 @@ if __name__ == '__main__':
     t1 = mycc0.t1
     t2 = mycc0.t2
     imds = ccsd_lambda.make_intermediates(mycc0, t1, t2, eris0)
-    l1, l2 = ccsd_lambda.update_amps(mycc0, t1, t2, t1, t2, eris0, imds)
-    l1ref, l2ref = ccsd_lambda.update_amps(mycc0, t1, t2, l1, l2, eris0, imds)
+    l1, l2 = ccsd_lambda.update_lambda(mycc0, t1, t2, t1, t2, eris0, imds)
+    l1ref, l2ref = ccsd_lambda.update_lambda(mycc0, t1, t2, l1, l2, eris0, imds)
     t1 = mycc.spatial2spin(t1, mycc.mo_coeff.orbspin)
     t2 = mycc.spatial2spin(t2, mycc.mo_coeff.orbspin)
     l1 = mycc.spatial2spin(l1, mycc.mo_coeff.orbspin)
     l2 = mycc.spatial2spin(l2, mycc.mo_coeff.orbspin)
     imds = make_intermediates(mycc, t1, t2, eris)
-    l1, l2 = update_amps(mycc, t1, t2, l1, l2, eris, imds)
+    l1, l2 = update_lambda(mycc, t1, t2, l1, l2, eris, imds)
     l1 = mycc.spin2spatial(l1, mycc.mo_coeff.orbspin)
     l2 = mycc.spin2spatial(l2, mycc.mo_coeff.orbspin)
     print(abs(l1[0]-l1ref).max())

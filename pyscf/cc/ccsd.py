@@ -884,16 +884,16 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         # nocc = self.nocc
         # nmo = self.nmo
         # nvir = nmo - nocc
-        # eris = lambda:None
-        # eri1 = ao2mo.incore.full(self._scf._eri, mo_coeff)
-        # eri1 = ao2mo.restore(1, eri1, nmo)
-        # eris.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
-        # eris.ovoo = eri1[:nocc,nocc:,:nocc,:nocc].copy()
-        # eris.ovvo = eri1[nocc:,:nocc,:nocc,nocc:].copy()
-        # eris.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
-        # ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
+        # eris = _ChemistsERIs()
+        # eri = ao2mo.incore.full(self._scf._eri, mo_coeff)
+        # eri = ao2mo.restore(1, eri, nmo)
+        # eris.oooo = eri[:nocc,:nocc,:nocc,:nocc].copy()
+        # eris.ovoo = eri[:nocc,nocc:,:nocc,:nocc].copy()
+        # eris.ovvo = eri[nocc:,:nocc,:nocc,nocc:].copy()
+        # eris.oovv = eri[:nocc,:nocc,nocc:,nocc:].copy()
+        # ovvv = eri[:nocc,nocc:,nocc:,nocc:].copy()
         # eris.ovvv = lib.pack_tril(ovvv.reshape(-1,nvir,nvir))
-        # eris.vvvv = ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:], nvir)
+        # eris.vvvv = ao2mo.restore(4, eri[nocc:,nocc:,nocc:,nocc:], nvir)
         # eris.fock = numpy.diag(self._scf.mo_energy)
         # return eris
 

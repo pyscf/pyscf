@@ -4,20 +4,18 @@
 #
 
 import time
-import ctypes
-import tempfile
 from functools import reduce
 import numpy
-import h5py
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
 
 # t2,l2 as ijab
-def kernel(mycc, eris, t1=None, t2=None, l1=None, l2=None,
-           max_cycle=50, tol=1e-8, verbose=logger.INFO):
+def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
+           max_cycle=50, tol=1e-8, verbose=logger.INFO,
+           fintermediates=None, fupdate=None):
+    if eris is None: eris = mycc.ao2mo()
     cput0 = (time.clock(), time.time())
     log = logger.new_logger(mycc, verbose)
 
@@ -25,9 +23,12 @@ def kernel(mycc, eris, t1=None, t2=None, l1=None, l2=None,
     if t2 is None: t2 = mycc.t2
     if l1 is None: l1 = t1
     if l2 is None: l2 = t2
+    if fintermediates is None:
+        fintermediates = make_intermediates
+    if fupdate is None:
+        fupdate = update_lambda
 
-    nocc, nvir = t1.shape
-    saved = make_intermediates(mycc, t1, t2, eris)
+    saved = fintermediates(mycc, t1, t2, eris)
 
     if mycc.diis:
         adiis = lib.diis.DIIS(mycc, mycc.diis_file)
@@ -38,8 +39,9 @@ def kernel(mycc, eris, t1=None, t2=None, l1=None, l2=None,
 
     conv = False
     for istep in range(max_cycle):
-        l1new, l2new = update_amps(mycc, t1, t2, l1, l2, eris, saved)
-        normt = numpy.linalg.norm(l1new-l1) + numpy.linalg.norm(l2new-l2)
+        l1new, l2new = fupdate(mycc, t1, t2, l1, l2, eris, saved)
+        normt = numpy.linalg.norm(mycc.amplitudes_to_vector(l1new, l2new) -
+                                  mycc.amplitudes_to_vector(l1, l2))
         l1, l2 = l1new, l2new
         l1new = l2new = None
         if mycc.diis:
@@ -218,7 +220,7 @@ def make_intermediates(mycc, t1, t2, eris):
 
 
 # update L1, L2
-def update_amps(mycc, t1, t2, l1, l2, eris=None, saved=None):
+def update_lambda(mycc, t1, t2, l1, l2, eris=None, saved=None):
     if saved is None: saved = make_intermediates(mycc, t1, t2, eris)
     time1 = time0 = time.clock(), time.time()
     log = logger.Logger(mycc.stdout, mycc.verbose)
@@ -357,6 +359,7 @@ def _cp(a):
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
+    from pyscf import ao2mo
     from pyscf.cc import ccsd
 
     mol = gto.M()
@@ -379,7 +382,7 @@ if __name__ == '__main__':
     l2 = numpy.random.random((nocc,nocc,nvir,nvir))
     l2 = l2 + l2.transpose(1,0,3,2)
 
-    eris = lambda:None
+    eris = ccsd._ChemistsERIs()
     eris.oooo = eri0[:nocc,:nocc,:nocc,:nocc].copy()
     eris.ovoo = eri0[:nocc,nocc:,:nocc,:nocc].copy()
     eris.oovv = eri0[:nocc,:nocc,nocc:,nocc:].copy()
@@ -390,14 +393,14 @@ if __name__ == '__main__':
     eris.fock = fock0
 
     saved = make_intermediates(mcc, t1, t2, eris)
-    l1new, l2new = update_amps(mcc, t1, t2, l1, l2, eris, saved)
+    l1new, l2new = update_lambda(mcc, t1, t2, l1, l2, eris, saved)
     print(lib.finger(l1new) - -6699.5335665027187)
     print(lib.finger(l2new) - -514.7001243502192 )
     print(abs(l2new-l2new.transpose(1,0,3,2)).sum())
 
     mcc.max_memory = 0
     saved = make_intermediates(mcc, t1, t2, eris)
-    l1new, l2new = update_amps(mcc, t1, t2, l1, l2, eris, saved)
+    l1new, l2new = update_lambda(mcc, t1, t2, l1, l2, eris, saved)
     print(lib.finger(l1new) - -6699.5335665027187)
     print(lib.finger(l2new) - -514.7001243502192 )
     print(abs(l2new-l2new.transpose(1,0,3,2)).sum())
