@@ -65,3 +65,25 @@ mf.xc = 'b88*1,lyp*1'
 eref = mf.kernel()
 print('%.15g == %.15g' % (e1, eref))
 
+#
+# Compound functionals can be used as part of the definition
+#
+mf = dft.RKS(mol)
+mf.xc = '0.5*b3lyp, 0.5*lyp'
+e1 = mf.kernel()
+print('E = %.15g  ref = -76.5537161912495' % e1)
+
+#
+# If compound XC functional (including both X and C functionals, such as
+# b3lyp) is used, no matter whehter it is specified in the X part (the string
+# before comma) or the C part (the string after comma), both X and C
+# functionals of the compound XC functional will be used.
+#
+mf = dft.RKS(mol)
+mf.xc = '0.5*b3lyp, 0.5*b3p86'
+e1 = mf.kernel()
+
+mf = dft.RKS(mol)
+mf.xc = '0.5*b3lyp + 0.5*b3p86'
+e2 = mf.kernel()
+print('E1 = %.15g  E2 = %.15g  ref = -86.018332932318' % (e1, e2))
