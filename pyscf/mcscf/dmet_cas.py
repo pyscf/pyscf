@@ -8,7 +8,7 @@ import numpy
 import scipy.linalg
 from pyscf.lib import logger
 from pyscf.tools import dump_mat
-from pyscf import scf
+from pyscf import scf, gto
 
 def kernel(mf, dm, aolabels_or_baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
            orth_method='meta_lowdin', s=None, canonicalize=True,
