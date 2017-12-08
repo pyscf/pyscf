@@ -938,7 +938,7 @@ class UCCSD(rccsd.RCCSD):
         for n, en, vn, convn in zip(range(nroots), eee, evecs, conv):
             t1, t2 = self.vector_to_amplitudes(vn, (nmoa,nmob), (nocca,noccb))
             qpwt = np.linalg.norm(t1[0])**2 + np.linalg.norm(t1[1])**2
-            logger.info(self, 'EOM-EE root %d E = %.16g  qpwt = %.6  conv = %s',
+            logger.info(self, 'EOM-EE root %d E = %.16g  qpwt = %.6g  conv = %s',
                         n, en, qpwt, convn)
         logger.timer(self, 'EOM-EE-CCSD', *cput0)
         if nroots == 1:
