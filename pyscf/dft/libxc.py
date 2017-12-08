@@ -562,9 +562,10 @@ def parse_xc(description):
                     else:
                         raise KeyError('Unknown key %s' % key)
                 if isinstance(x_id, str):
-                    hyb1, acc1 = parse_xc(x_id)
-                    hyb[0] += hyb1
-                    fn_facs.extend(acc1)
+                    hyb1, fn_facs1 = parse_xc(x_id)
+# Recursively scale the composed functional, to support '0.5*b3lyp'
+                    hyb[0] += hyb1 * fac
+                    fn_facs.extend([(xid, c*fac) for xid, c in fn_facs1])
                 elif x_id is None:
                     raise NotImplementedError(key)
                 else:
