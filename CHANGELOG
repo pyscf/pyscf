@@ -6,8 +6,15 @@ PySCF 1.5 alpha (2018-03-??)
   - range-separated hybrid feature for RKS and UKS
 
 
-PySCF 1.4.2 (2017-12-6)
-----------------------
+PySCF 1.4.3 (2018-01-?)
+-----------------------
+* Bugfix
+  - XC parser to support the scaled compound functional
+  - The effects of level_shift in second order SCF
+
+
+PySCF 1.4.2 (2017-12-06)
+------------------------
 * Added
   - Frank Jensen, Polarization consistent basis sets
 * Improved
@@ -21,7 +28,7 @@ PySCF 1.4.2 (2017-12-6)
 
 
 PySCF 1.4.1 (2017-11-12)
-----------------------
+------------------------
 * Bugfix
   - meta-GGA functional detection code in XC parser
   - Orbital symmetry label in mcscf initial guess projection
