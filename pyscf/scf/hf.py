@@ -171,7 +171,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         fock = mf.get_fock(h1e, s1e, vhf, dm)
         norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, fock))
         norm_ddm = numpy.linalg.norm(dm-dm_last)
-        scf_conv = (abs(e_tot-last_hf_e) < conv_tol*10 and
+        scf_conv = (abs(e_tot-last_hf_e) < conv_tol*10 or
                     norm_gorb < conv_tol_grad*3)
         logger.info(mf, 'Extra cycle  E= %.15g  delta_E= %4.3g  |g|= %4.3g  |ddm|= %4.3g',
                     e_tot, e_tot-last_hf_e, norm_gorb, norm_ddm)

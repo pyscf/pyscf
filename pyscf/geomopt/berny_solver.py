@@ -28,7 +28,7 @@ def to_berny_log(pyscf_log):
                 pyscf_log.info('%d %s', self.n, msg)
     return BernyLogger()
 
-def as_berny_solver(method):
+def as_berny_solver(method, assert_convergence=False):
     '''Generate a solver for berny optimize function.
     '''
     mol = copy.copy(method.mol)
@@ -37,6 +37,9 @@ def as_berny_solver(method):
     while True:
         mol.set_geom_(geom_to_atom(geom))
         energy, gradients = g_scanner(mol)
+        if assert_convergence and not g_scanner.converged:
+            raise RuntimeError('Nuclear gradients of %s not converged' % method)
+
         geom = yield energy, gradients
 
 
@@ -54,7 +57,7 @@ def optimize(method, **kwargs):
 #                          log=to_berny_log(log), **kwargs)
 # temporary interface, taken from berny.py optimize function
     log = to_berny_log(log)
-    solver = as_berny_solver(method)
+    solver = as_berny_solver(method, kwargs.get('assert_convergence', False))
     geom = to_berny_geom(mol)
     next(solver)
     optimizer = Berny(geom, log=log, **kwargs)

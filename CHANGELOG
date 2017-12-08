@@ -8,6 +8,8 @@ PySCF 1.5 alpha (2018-03-??)
 
 PySCF 1.4.3 (2018-01-?)
 -----------------------
+* Improved
+  - Assert convergence in geometry optimization
 * Bugfix
   - XC parser to support the scaled compound functional
   - The effects of level_shift in second order SCF
