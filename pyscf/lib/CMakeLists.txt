@@ -10,8 +10,8 @@ if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
   endif()
 endif()
 
-set(CMAKE_MACOSX_RPATH OFF)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
+cmake_policy(SET CMP0042 NEW)
 
 #enable_language(Fortran)
 find_package(BLAS)
@@ -66,6 +66,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
     GIT_TAG v3.0.2
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+    PATCH_COMMAND patch -p1 < ${CMAKE_CURRENT_LIST_DIR}/libcint.patch
     CMAKE_ARGS -DWITH_F12=${WITH_F12} -DWITH_RANGE_COULOMB=1 -DWITH_COULOMB_ERF=1
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
             -DCMAKE_INSTALL_LIBDIR:PATH=lib -DBLA_VENDOR=${BLA_VENDOR}
@@ -133,6 +134,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xcfun.h" AND
     GIT_TAG origin/stable-1.x
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+    PATCH_COMMAND patch -p1 < ${CMAKE_CURRENT_LIST_DIR}/libxcfun.patch
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
             -DXC_MAX_ORDER=3 -DXCFUN_ENABLE_TESTS=0
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>

@@ -89,30 +89,6 @@ To ensure the installation is successful, start a Python shell, and type::
 
   >>> import pyscf
 
-For Mac OS X/macOS, you may get an import error if your OS X/macOS version is
-10.11 or newer::
-
-    OSError: dlopen(xxx/pyscf/pyscf/lib/libcgto.dylib, 6): Library not loaded: libcint.3.0.dylib
-    Referenced from: xxx/pyscf/pyscf/lib/libcgto.dylib
-    Reason: unsafe use of relative rpath libcint.3.0.dylib in xxx/pyscf/pyscf/lib/libcgto.dylib with restricted binary
-
-This is caused by the incorrect RPATH.  Script
-``pyscf/lib/_runme_to_fix_dylib_osx10.11.sh`` in ``pyscf/lib`` directory can be
-used to fix this problem::
- 
-    cd pyscf/lib
-    sh _runme_to_fix_dylib_osx10.11.sh
-
-
-.. note::
-
-  RPATH has been built in the dynamic library.  This may cause library loading
-  error on some systems.  You can run ``pyscf/lib/_runme_to_remove_rpath.sh`` to
-  remove the rpath code from the library head.  Another workaround is to set
-  ``-DCMAKE_SKIP_RPATH=1`` and ``-DCMAKE_MACOSX_RPATH=0`` in cmake command line.
-  When the RPATH was removed, you need to add ``pyscf/lib`` and
-  ``pyscf/lib/deps/lib`` in ``LD_LIBRARY_PATH``.
-
 Last, it's recommended to set a scratch directory for PySCF.  The default scratch
 directory is controlled by environment variable :code:`PYSCF_TMPDIR`.  If it's
 not specified, the system temporary directory :code:`TMPDIR` will be used as the
