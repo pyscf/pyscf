@@ -103,16 +103,16 @@ class gw(scf):
     rf0 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtypeComplex)
     v = self.pb.get_ac_vertex_array()
     
-    print('self.ksn2e', __name__)
-    print(self.ksn2e[0,0,0]-self.ksn2e)
-    print(self.ksn2f)
-    print(' abs(v).sum(), ww.sum(), self.nfermi, self.vstart ')
-    print(abs(v).sum(), ww.sum(), self.nfermi, self.vstart)
+    #print('self.ksn2e', __name__)
+    #print(self.ksn2e[0,0,0]-self.ksn2e)
+    #print(self.ksn2f)
+    #print(' abs(v).sum(), ww.sum(), self.nfermi, self.vstart ')
+    #print(abs(v).sum(), ww.sum(), self.nfermi, self.vstart)
     
     zvxx_a = zeros((len(ww), self.nprod), dtype=self.dtypeComplex)
     for n,(en,fn) in enumerate(zip(self.ksn2e[0,0,0:self.nfermi], self.ksn2f[0, 0, 0:self.nfermi])):
       vx = dot(v, self.xocc[n,:])
-      print(n, abs(vx).sum())
+      #print(n, abs(vx).sum(), en)
       for m,(em,fm) in enumerate(zip(self.ksn2e[0,0,self.vstart:],self.ksn2f[0,0,self.vstart:])):
         if (fn - fm)<0 : break
         vxx_a = dot(vx, self.xvrt[m,:].T)
