@@ -147,6 +147,9 @@ class ao_log_c(log_mesh_c):
     from pyscf.nao.m_log_interp import log_interp_c
     from pyscf.nao.m_siesta_ion_interp import siesta_ion_interp
     from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
+    from pyscf.nao.m_spline_diff2 import spline_diff2
+    from pyscf.nao.m_spline_interp import spline_interp
+    
     import numpy as np
 
     self.init_log_mesh_ion(sp2ion, **kvargs)
@@ -154,9 +157,20 @@ class ao_log_c(log_mesh_c):
     _siesta_ion_add_sp2(self, sp2ion) # adds the fields for counting, .nspecies etc.
     self.jmx = max([mu2j.max() for mu2j in self.sp_mu2j])
     self.sp2norbs = np.array([mu2s[self.sp2nmult[sp]] for sp,mu2s in enumerate(self.sp_mu2s)], dtype='int64')
-        
-    self.psi_log = siesta_ion_interp(self.rr, sp2ion, 1)
-    self.psi_log_rl = siesta_ion_interp(self.rr, sp2ion, 0)
+    
+    rr = self.rr
+    nr = len(rr)
+    
+    self.psi_log = siesta_ion_interp(rr, sp2ion, 1)
+    self.psi_log_rl = siesta_ion_interp(rr, sp2ion, 0)
+    
+    self.sp2vna = []
+    for ion in sp2ion:
+      h,dat = ion["vna"]["delta"], ion["vna"]["data"][0][:, 1]
+      yy_diff2 = spline_diff2(h, dat, 0.0, 1.0e301)
+      vna = np.zeros(nr)
+      for ir,r in enumerate(rr): vna[ir] = spline_interp(h, dat, yy_diff2, r)
+      self.sp2vna.append(vna)
 
     self.sp2ion = sp2ion
     

@@ -322,29 +322,29 @@ class nao():
   def get_orb2j(self): return get_orb2j(self)
   def get_orb2m(self): return get_orb2m(self)
 
-  def overlap_coo(self, **kvargs):   # Compute overlap matrix for the molecule
+  def overlap_coo(self, **kw):   # Compute overlap matrix for the molecule
     from pyscf.nao.m_overlap_coo import overlap_coo
     return overlap_coo(self, **kvargs)
 
-  def overlap_lil(self, **kvargs):   # Compute overlap matrix in list of lists format
+  def overlap_lil(self, **kw):   # Compute overlap matrix in list of lists format
     from pyscf.nao.m_overlap_lil import overlap_lil
-    return overlap_lil(self, **kvargs)
+    return overlap_lil(self, **kw)
 
   def laplace_coo(self):   # Compute matrix of Laplace brakets for the whole molecule
     from pyscf.nao.m_overlap_coo import overlap_coo
     from pyscf.nao.m_laplace_am import laplace_am
     return overlap_coo(self, funct=laplace_am)
   
-  def vnucele_coo_coulomb(self, **kvargs): # Compute matrix elements of attraction by Coulomb forces from point nuclei
+  def vnucele_coo_coulomb(self, **kw): # Compute matrix elements of attraction by Coulomb forces from point nuclei
     from pyscf.nao.m_vnucele_coo_coulomb import vnucele_coo_coulomb
-    return vnucele_coo_coulomb(self, **kvargs)
+    return vnucele_coo_coulomb(self, **kw)
 
-  def dipole_coo(self, **kvargs):   # Compute dipole matrix elements for the given system
+  def dipole_coo(self, **kw):   # Compute dipole matrix elements for the given system
     from pyscf.nao.m_dipole_coo import dipole_coo
-    return dipole_coo(self, **kvargs)
+    return dipole_coo(self, **kw)
   
-  def overlap_check(self, tol=1e-5, **kvargs): # Works only after init_siesta_xml(), extend ?
-    return overlap_check(self, tol=1e-5, **kvargs)
+  def overlap_check(self, tol=1e-5, **kw): # Works only after init_siesta_xml(), extend ?
+    return overlap_check(self, tol=1e-5, **kw)
 
   def energy_nuc(self, charges=None, coords=None):
     """ Potential energy of electrostatic repulsion of point nuclei """
