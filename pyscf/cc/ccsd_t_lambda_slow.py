@@ -14,7 +14,7 @@ from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
 from pyscf.cc import ccsd_lambda
 
-# t2,l2 as ijab
+# Note: not support fov != 0
 
 def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
            max_cycle=50, tol=1e-8, verbose=logger.INFO):
@@ -31,7 +31,7 @@ def make_intermediates(mycc, t1, t2, eris):
     eris_ovvv = numpy.asarray(eris.ovvv)
     eris_ovvv = lib.unpack_tril(eris_ovvv.reshape(nocc*nvir,-1))
     eris_ovvv = eris_ovvv.reshape(nocc,nvir,nvir,nvir)
-    mo_e = mycc._scf.mo_energy
+    mo_e = eris.fock.diagonal()
     eia = lib.direct_sum('i-a->ia',mo_e[:nocc], mo_e[nocc:])
     d3 = lib.direct_sum('ia,jb,kc->ijkabc', eia, eia, eia)
     eris_ovoo = numpy.asarray(eris.ovoo)

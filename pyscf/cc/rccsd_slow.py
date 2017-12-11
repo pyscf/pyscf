@@ -13,7 +13,7 @@ from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.cc import ccsd
-from pyscf.cc import rintermediates_slow as imd
+from pyscf.cc import rintermediates as imd
 from pyscf.lib import linalg_helper
 
 #einsum = np.einsum
@@ -60,7 +60,7 @@ def update_amps(cc, t1, t2, eris):
     t1new +=   einsum('likc,lc,ka->ia', eris.ooov, t1, t1)
 
     # T2 equation
-    t2new = np.asarray(eris.ovov).transpose(0,2,1,3).copy()
+    t2new = np.asarray(eris.ovov).conj().transpose(0,2,1,3).copy()
     if cc.cc2:
         Woooo2 = np.asarray(eris.oooo).transpose(0,2,1,3).copy()
         Woooo2 += einsum('kilc,jc->klij', eris.ooov, t1)
@@ -942,6 +942,7 @@ class _ChemistsERIs:
         eri1 = ao2mo.restore(1, eri1, nmo)
         self.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
         self.ooov = eri1[:nocc,:nocc,:nocc,nocc:].copy()
+        self.ovoo = eri1[:nocc,nocc:,:nocc,:nocc].copy()
         self.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
         self.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
         self.ovvo = eri1[:nocc,nocc:,nocc:,:nocc].copy()
@@ -1072,6 +1073,7 @@ if __name__ == '__main__':
     eri1 *= .1
     eris.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
     eris.ooov = eri1[:nocc,:nocc,:nocc,nocc:].copy()
+    eris.ovoo = eri1[:nocc,nocc:,:nocc,:nocc].copy()
     eris.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
     eris.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
     eris.ovvo = eri1[:nocc,nocc:,nocc:,:nocc].copy()
@@ -1091,7 +1093,6 @@ if __name__ == '__main__':
     t1a, t2a = update_amps(mycc, t1, t2, eris)
     print(lib.finger(t1a) - (-13.32050019680894-1.8825765910430254j))
     print(lib.finger(t2a) - (-0.056223856104895858+0.025472249329733986j))
-    exit()
 
     mol = gto.Mole()
     mol.atom = [
