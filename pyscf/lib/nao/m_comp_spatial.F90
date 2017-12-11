@@ -217,7 +217,8 @@ subroutine comp_spatial_grid(dr, meshx, meshy, meshz, axis, &
 
   !$OMP PARALLEL DEFAULT(NONE) &
   !$OMP PRIVATE (br, i1,i2,i3, ind) &
-  !$OMP SHARED(axis, grid, fft_vars, dr)
+  !$OMP SHARED(grid, fft_vars, meshx, meshy, meshz, dr) &
+  !$OMP SHARED(axis, Nx, Ny, Nz)
 
   !$OMP DO
   do i3 = 1, Nz 
@@ -253,7 +254,8 @@ subroutine comp_spatial_grid_pot(dr, meshx, meshy, meshz, grid, &
 
   !$OMP PARALLEL DEFAULT(NONE) &
   !$OMP PRIVATE (br, i1,i2,i3, ind) &
-  !$OMP SHARED(axis, grid, fft_vars, dr)
+  !$OMP SHARED(grid, fft_vars, meshx, meshy, meshz, dr) &
+  !$OMP SHARED(Nx, Ny, Nz)
 
   !$OMP DO
   do i3 = 1, Nz 
