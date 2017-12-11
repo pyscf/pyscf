@@ -46,7 +46,7 @@ class scf(tddft_iter):
 
   def vnucele_coo(self, **kw): # Compute matrix elements of nuclear-electron interaction (attraction)
     if self.pseudo:
-      # this will be wrong after a repeated SCF...
+      # This is wrong after a repeated SCF. A better way would be to use pseudo-potentials and really recompute.
       tkin = (0.5*self.laplace_coo()).tocsr()
       dm = self.make_rdm1()
       vhar = self.vhartree_coo(dm=dm, **kw).tocsr()

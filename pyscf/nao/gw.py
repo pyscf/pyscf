@@ -52,7 +52,7 @@ class gw(scf):
     self.kernel_sq = self.hkernel_den
     self.v_dab_ds = self.pb.get_dp_vertex_doubly_sparse(axis=2)
     self.snmw2sf = self.sf_gw_corr()
-    self.get_h0_vh_x_expval()
+    self.h0_vh_x_expval = self.get_h0_vh_x_expval()
     if self.verbosity>0: print(__name__, '.h0_vh_x_expval: ', self.h0_vh_x_expval)
     
   def get_h0_vh_x_expval(self):
@@ -62,7 +62,6 @@ class gw(scf):
     mat += self.get_j()
     mat1 = np.dot(self.mo_coeff[0,0,:,:,0], mat)
     expval = np.einsum('nb,nb->n', mat1, self.mo_coeff[0,0,:,:,0])
-    self.h0_vh_x_expval = expval
     return expval
     
   def get_wmin_wmax_tmax_ia_def(self, tol):
