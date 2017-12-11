@@ -138,7 +138,7 @@ class ao_log_c(log_mesh_c):
 
   #
   #  
-  def init_ao_log_ion(self, sp2ion, **kvargs):
+  def init_ao_log_ion(self, sp2ion, **kw):
     """
         Reads data from a previous SIESTA calculation,
         interpolates the orbitals on a single log mesh.
@@ -152,11 +152,13 @@ class ao_log_c(log_mesh_c):
     
     import numpy as np
 
-    self.init_log_mesh_ion(sp2ion, **kvargs)
+    self.init_log_mesh_ion(sp2ion, **kw)
     self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
     _siesta_ion_add_sp2(self, sp2ion) # adds the fields for counting, .nspecies etc.
     self.jmx = max([mu2j.max() for mu2j in self.sp_mu2j])
     self.sp2norbs = np.array([mu2s[self.sp2nmult[sp]] for sp,mu2s in enumerate(self.sp_mu2s)], dtype='int64')
+
+    self.sp2ion = sp2ion
     
     rr = self.rr
     nr = len(rr)
@@ -164,7 +166,7 @@ class ao_log_c(log_mesh_c):
     self.psi_log = siesta_ion_interp(rr, sp2ion, 1)
     self.psi_log_rl = siesta_ion_interp(rr, sp2ion, 0)
     
-    self.sp2vna = []
+    self.sp2vna = []     # Interpolate a Neutral-atom potential V_NA(r) for each specie 
     for ion in sp2ion:
       h,dat = ion["vna"]["delta"], ion["vna"]["data"][0][:, 1]
       yy_diff2 = spline_diff2(h, dat, 0.0, 1.0e301)
@@ -172,10 +174,8 @@ class ao_log_c(log_mesh_c):
       for ir,r in enumerate(rr): vna[ir] = spline_interp(h, dat, yy_diff2, r)
       self.sp2vna.append(vna)
 
-    self.sp2ion = sp2ion
-    
-    self.sp_mu2rcut = [ np.array(ion["paos"]["cutoff"], dtype='float64') for ion in sp2ion]
-    self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut], dtype='float64')
+    self.sp_mu2rcut = [ np.array(ion["paos"]["cutoff"]) for ion in sp2ion]
+    self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut])
     self.sp2charge = [int(ion['z']) for ion in self.sp2ion]
     self.sp2valence = [int(ion['valence']) for ion in self.sp2ion]
 
