@@ -324,7 +324,7 @@ class nao():
 
   def overlap_coo(self, **kw):   # Compute overlap matrix for the molecule
     from pyscf.nao.m_overlap_coo import overlap_coo
-    return overlap_coo(self, **kvargs)
+    return overlap_coo(self, **kw)
 
   def overlap_lil(self, **kw):   # Compute overlap matrix in list of lists format
     from pyscf.nao.m_overlap_lil import overlap_lil
