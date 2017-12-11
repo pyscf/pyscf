@@ -19,7 +19,7 @@ try:
     from pyscf.lib import tblis_einsum
     einsum = tblis_einsum.einsum
 
-except ImportError, OSError:
+except (ImportError, OSError):
     def einsum(idx_str, *tensors, **kwargs):
         '''Perform a more efficient einsum via reshaping to a matrix multiply.
 

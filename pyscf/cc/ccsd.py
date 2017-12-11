@@ -91,9 +91,9 @@ def update_amps(mycc, t1, t2, eris):
     fvv[numpy.diag_indices(nvir)] = 0
     fvv -= .5 * numpy.einsum('ia,ib->ab', t1, fock[:nocc,nocc:])
 
-    unit = nocc**2*nvir*7 + nocc**3
+    unit = nocc**2*nvir*7 + nocc**3 + nocc*nvir**2
     max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
-    blksize = min(nocc, max(BLKMIN, int((max_memory*.9e6/8-nocc**4)/unit)))
+    blksize = max(BLKMIN, int((max_memory*.9e6/8-nocc**4)/unit))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
 
@@ -452,7 +452,7 @@ def _contract_vvvv_t2(mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
     else:
         nvir_pair = nvirb * (nvirb+1) // 2
         unit = nvira*nvir_pair*2 + nvirb**2*nvira/4
-        blksize = min((nvira+3)/4, max(BLKMIN, numpy.sqrt(max_memory*.95e6/8/unit)))
+        blksize = int(min((nvira+3)/4, max(BLKMIN, numpy.sqrt(max_memory*.95e6/8/unit))))
 
         tril2sq = lib.square_mat_in_trilu_indices(nvira)
         loadbuf = numpy.empty((blksize,blksize,nvirb,nvirb))
