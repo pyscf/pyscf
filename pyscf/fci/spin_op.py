@@ -82,19 +82,19 @@ def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
     # if ovlp=1, ssz = (neleca-nelecb)**2 * .25
     (dm1a, dm1b), (dm2aa, dm2ab, dm2bb) = \
             direct_spin1.make_rdm12s(fcivec, norb, nelec)
-    ssz =(_bi_trace(dm2aa, ovlpaa, ovlpaa)
-        - _bi_trace(dm2ab, ovlpaa, ovlpbb)
-        + _bi_trace(dm2bb, ovlpbb, ovlpbb)
-        - _bi_trace(dm2ab, ovlpaa, ovlpbb)) * .25 \
-        +(_trace(dm1a, ovlpaa)
-        + _trace(dm1b, ovlpbb)) *.25
+    ssz =(numpy.einsum('jilk,ij,kl->', dm2aa, ovlpaa, ovlpaa)
+        - numpy.einsum('jilk,ij,kl->', dm2ab, ovlpaa, ovlpbb)
+        + numpy.einsum('jilk,ij,kl->', dm2bb, ovlpbb, ovlpbb)
+        - numpy.einsum('jilk,ij,kl->', dm2ab, ovlpaa, ovlpbb)) * .25 \
+        +(numpy.einsum('ji,ij->', dm1a, ovlpaa)
+        + numpy.einsum('ji,ij->', dm1b, ovlpbb)) *.25
 
     dm2abba = -dm2ab.transpose(0,3,2,1)  # alpha^+ beta^+ alpha beta
     dm2baab = -dm2ab.transpose(2,1,0,3)  # beta^+ alpha^+ beta alpha
-    ssxy =(_bi_trace(dm2abba, ovlpab, ovlpba)
-         + _bi_trace(dm2baab, ovlpba, ovlpab) \
-         + _trace(dm1a, ovlpaa)
-         + _trace(dm1b, ovlpbb)) * .5
+    ssxy =(numpy.einsum('jilk,ij,kl->', dm2abba, ovlpba, ovlpab)
+         + numpy.einsum('jilk,ij,kl->', dm2baab, ovlpab, ovlpba)
+         + numpy.einsum('ji,ij->', dm1a, ovlpaa)
+         + numpy.einsum('ji,ij->', dm1b, ovlpbb)) * .5
     ss = ssxy + ssz
 
     s = numpy.sqrt(ss+.25) - .5
@@ -109,13 +109,6 @@ def spin_square0(fcivec, norb, nelec):
     s = numpy.sqrt(ss+.25) - .5
     multip = s*2+1
     return ss, multip
-
-
-def _trace(dm1, ovlp):
-    return numpy.einsum('ij,ji->', dm1, ovlp)
-
-def _bi_trace(dm2, ovlp1, ovlp2):
-    return numpy.einsum('jilk,ij,kl->', dm2, ovlp1, ovlp2)
 
 def local_spin(fcivec, norb, nelec, mo_coeff=None, ovlp=1, aolst=[]):
     '''Local spin expectation value, which is defined as
