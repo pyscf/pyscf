@@ -13,6 +13,5 @@ class KnowValues(unittest.TestCase):
     s = mf(mf=gto_mf, gto=mol)
     #s.plot_contour(s.mo_energy[0])
     #s.plot_contour(s.mo_energy[1])
-    
 
 if __name__ == "__main__": unittest.main()

@@ -9,18 +9,38 @@ class KnowValues(unittest.TestCase):
     from pyscf.nao import gw as gw_c
     
     dname = os.path.dirname(os.path.abspath(__file__))
-    gw = gw_c(label='n2', cd=dname, verbosity=1, jcutoff=9, nff_ia=64, tol_ia=1e-6)
-    gw.kernel_scf()
-    #self.assertAlmostEqual(gw.mo_energy[0,0,0], -1.327560859909974)
-    #self.assertAlmostEqual(gw.mo_energy[0,0,22], 3.9299990455381715)
-    print(gw.mo_energy[0,0,0:8])    
+    gw = gw_c(label='n2', cd=dname, verbosity=1, jcutoff=9, nff_ia=64, tol_ia=1e-6, rescf=True)
     gw.kernel_g0w0()
-    print(gw.mo_energy_g0w0)
+    #np.savetxt('eigvals_g0w0_pyscf_rescf_n2_0062.txt', gw.mo_energy_g0w0.T)
 
-#    for e,eref in zip(gw.mo_energy_g0w0[0:6], [-2.32001863,-0.66298796,-0.5049757,-0.41390237,0.21671625,0.31001297]):
-#      self.assertAlmostEqual(e,eref)
-    
-    
-    
+    fc = """-1.294910390463269723e+00
+-6.914426700260764003e-01
+-5.800631098408213226e-01
+-5.800630912944181317e-01
+-5.488682018442180288e-01
+1.831305221095872460e-01
+1.831305925807518165e-01
+7.003698201553041347e-01
+7.609521815330196892e-01
+7.953706485575250396e-01
+7.953707042048162590e-01
+9.385062725430328712e-01
+9.553819617686154508e-01
+9.557372926158315130e-01
+9.769254942961748123e-01
+9.769258344753622980e-01
+1.033749364514201741e+00
+1.323622829437763881e+00
+1.323622831800760569e+00
+1.631897154460114852e+00
+1.632680402343911652e+00
+1.657952682599951544e+00
+2.729770515636606998e+00
+3.002491147471110899e+00
+3.002491923857071310e+00
+3.191379493098387865e+00
+"""
+    for e,eref_str in zip(gw.mo_energy_g0w0,fc.splitlines()):
+      self.assertAlmostEqual(e,float(eref_str))
 
 if __name__ == "__main__": unittest.main()

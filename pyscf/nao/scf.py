@@ -44,15 +44,16 @@ class scf(tddft_iter):
     hcore += self.vnucele_coo(**kw).toarray()
     return hcore
 
-  def vnucele_coo(self, **kvargs): # Compute matrix elements of nuclear-electron interaction (attraction)
+  def vnucele_coo(self, **kw): # Compute matrix elements of nuclear-electron interaction (attraction)
     if self.pseudo:
+      # this will be wrong after a repeated SCF...
       tkin = (0.5*self.laplace_coo()).tocsr()
       dm = self.make_rdm1()
-      vhar = self.vhartree_coo(dm=dm, **kvargs).tocsr()
-      vxc  = self.vxc_lil(dm=dm, xc_code=self.xc_code_mf, **kvargs).tocsr()
+      vhar = self.vhartree_coo(dm=dm, **kw).tocsr()
+      vxc  = self.vxc_lil(dm=dm, xc_code=self.xc_code_mf, **kw).tocsr()
       vne  = self.get_hamiltonian()[0].tocsr()-tkin-vhar-vxc
     else :
-      vne  = self.vnucele_coo_coulomb(**kvargs)
+      vne  = self.vnucele_coo_coulomb(**kw)
     return vne.tocoo()
 
   def vhartree_coo(self, **kvargs):

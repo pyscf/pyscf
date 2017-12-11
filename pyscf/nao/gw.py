@@ -25,6 +25,7 @@ class gw(scf):
     self.nocc_conv = kw['nocc_conv'] if 'nocc_conv' in kw else self.nocc
     self.nvrt_conv = kw['nvrt_conv'] if 'nvrt_conv' in kw else self.nvrt
     
+    self.vnucele_coo_data = self.vnucele_coo()
     self.rescf = kw['rescf'] if 'rescf' in kw else False
     if self.rescf: self.kernel_scf()
     
@@ -57,7 +58,7 @@ class gw(scf):
   def get_h0_vh_x_expval(self):
     mat = -0.5*self.get_k()
     mat += 0.5*self.laplace_coo()
-    mat += self.vnucele_coo()
+    mat += self.vnucele_coo_data
     mat += self.get_j()
     mat1 = np.dot(self.mo_coeff[0,0,:,:,0], mat)
     expval = np.einsum('nb,nb->n', mat1, self.mo_coeff[0,0,:,:,0])
@@ -227,11 +228,11 @@ class gw(scf):
       elif abs(zr)<eps and zi>0:
         ipol += 1
         if ipol>npol: raise RuntimeError('ipol>npol')
-        i2zsc.append( [zr+1j*zi, i, -1.0] ) #[zr+1j*zi, i, -0.5]
+        i2zsc.append( [zr+1j*zi, i, -0.5] ) #[zr+1j*zi, i, -0.5]
       elif abs(zr)<eps and zi<0:
         ipol +=1
         if ipol>npol: raise RuntimeError('ipol>npol')
-        i2zsc.append( [zr+1j*zi, i, +1.0] ) #[zr+1j*zi, i, +0.5]
+        i2zsc.append( [zr+1j*zi, i, +0.5] ) #[zr+1j*zi, i, +0.5]
 
     if ipol!=npol: raise RuntimeError('loop logics incompat???')
     return i2zsc
