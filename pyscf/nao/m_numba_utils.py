@@ -8,6 +8,13 @@ from pyscf.nao.m_fact import sgn, onedivsqrt4pi
 """
 
 @nb.jit(nopython=True)
+def ls_contributing_numba(atom2coord, ia2dist):
+
+    for ia in range(atom2coord.shape[0]):
+        rvec = atom2coord[ia, :]
+        ia2dist[ia] = np.sqrt(np.dot(rvec, rvec))
+
+@nb.jit(nopython=True)
 def triu_indices_numba(ind, dim):
 
     count = 0
