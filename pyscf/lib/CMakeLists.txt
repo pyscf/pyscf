@@ -63,10 +63,9 @@ if(BUILD_LIBCINT)
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
   ExternalProject_Add(libcint
     GIT_REPOSITORY https://github.com/sunqm/libcint.git
-    GIT_TAG v3.0.2
+    GIT_TAG v3.0.5
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    PATCH_COMMAND patch -p1 < ${CMAKE_CURRENT_LIST_DIR}/libcint.patch
     CMAKE_ARGS -DWITH_F12=${WITH_F12} -DWITH_RANGE_COULOMB=1 -DWITH_COULOMB_ERF=1
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
             -DCMAKE_INSTALL_LIBDIR:PATH=lib -DBLA_VENDOR=${BLA_VENDOR}
