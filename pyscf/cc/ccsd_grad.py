@@ -445,8 +445,8 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     return de
 
 
-def as_scanner(cc):
-    '''Generating a scanner/solver for CCSD PES.
+def as_scanner(grad_cc):
+    '''Generating a nuclear gradients scanner/solver (for geometry optimizer).
 
     The returned solver is a function. This function requires one argument
     "mol" as input and returns total CCSD energy.
@@ -468,26 +468,38 @@ def as_scanner(cc):
         >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
     import copy
-    logger.info(cc, 'Set nuclear gradients of %s as a scanner', cc.__class__)
-    cc = copy.copy(cc)
-    cc._scf = cc._scf.as_scanner()
-    class CCSD_GradScanner(lib.GradScanner):
+    logger.info(grad_cc, 'Set nuclear gradients of %s as a scanner', grad_cc.__class__)
+    class CCSD_GradScanner(grad_cc.__class__, lib.GradScanner):
+        def __init__(self, g):
+            self.__dict__.update(g.__dict__)
+            self._cc = grad_cc._cc.as_scanner()
         def __call__(self, mol):
+            # The following simple version also works.  But eris object is
+            # recomputed in cc_scanner and solve_lambda.
+            # cc_scanner = self._cc
+            # cc_scanner(mol)
+            # eris = cc_scanner.ao2mo()
+            # cc_scanner.solve_lambda(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris)
+            # mf_grad = mf_scanner.nuc_grad_method()
+            # de = self.kernel(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris, mf_grad=mf_grad)
+
+            cc = self._cc
             mf_scanner = cc._scf
             mf_scanner(mol)
             cc.mol = mol
             cc.mo_coeff = mf_scanner.mo_coeff
             cc.mo_occ = mf_scanner.mo_occ
             eris = cc.ao2mo(cc.mo_coeff)
-            mf_grad = cc._scf.nuc_grad_method()
             cc.kernel(cc.t1, cc.t2, eris=eris)
             cc.solve_lambda(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris)
-            de = kernel(cc, cc.t1, cc.t2, cc.l1, cc.l2, eris=eris, mf_grad=mf_grad)
+            mf_grad = mf_scanner.nuc_grad_method()
+            de = self.kernel(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris, mf_grad=mf_grad)
             return cc.e_tot, de
         @property
         def converged(self):
+            cc = self._cc
             return all((cc._scf.converged, cc.converged, cc.converged_lambda))
-    return CCSD_GradScanner()
+    return CCSD_GradScanner(grad_cc)
 
 
 def shell_prange(mol, start, stop, blksize):
@@ -734,9 +746,8 @@ class Gradients(lib.StreamObject):
             t1, t2 = self._cc.kernel(eris=eris)
         if l1 is None or l2 is None:
             l1, l2 = self._cc.solve_lambda(eris=eris)
-        if atmlst is None:
-            # Exclude ghost atoms
-            atmlst = numpy.where(self._cc.mol.atom_charges() != 0)[0]
+        if atmlst is None: atmlst = range(self._cc.mol.natm)
+
         self.de = kernel(self._cc, t1, t2, l1, l2, eris, atmlst,
                          mf_grad, d1, d2, log)
         if self.verbose >= logger.NOTE:
@@ -744,6 +755,8 @@ class Gradients(lib.StreamObject):
             rhf_grad._write(self, self._cc.mol, self.de, atmlst)
             log.note('----------------------------------------------')
         return self.de
+
+    as_scanner = as_scanner
 
 
 if __name__ == '__main__':
