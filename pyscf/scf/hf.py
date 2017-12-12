@@ -1019,8 +1019,9 @@ def as_scanner(mf):
 
             if self.mo_coeff is None:
                 dm0 = None
-            elif mol.natm > 0:
-                dm0 = self.from_chk(self.chkfile)
+#            elif mol.natm > 0:
+# Project wfn from another geometry seems providing a bad initial guess
+#                dm0 = self.from_chk(self.chkfile)
             else:
                 dm0 = self.make_rdm1()
             e_tot = self.kernel(dm0=dm0, **kwargs)
