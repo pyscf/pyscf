@@ -19,6 +19,7 @@ PySCF 1.5 alpha (2018-03-??)
   - Generalized Hartree-Fock with PBC
   - Generalized CCSD and k-point CCSD with PBC
   - RCCSD(T) and UCCSD(T) for non-canonical HF orbitals
+  - Frozen orbitals in CCSD nuclear gradients
 * Improved
   - Support of setting omp threads in FCI solver
   - Supported even number of grids in pbc calculations

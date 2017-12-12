@@ -231,7 +231,8 @@ class Gradients(lib.StreamObject):
         if mo_coeff is None: mo_coeff = self._scf.mo_coeff
         if mo_occ is None: mo_occ = self._scf.mo_occ
         if atmlst is None:
-            atmlst = range(self.mol.natm)
+            # Exclude ghost atoms
+            atmlst = numpy.where(self.mol.atom_charges() != 0)[0]
 
         if self.verbose >= logger.WARN:
             self.check_sanity()

@@ -129,8 +129,8 @@ class KnownValues(unittest.TestCase):
         mcc.solve_lambda()
         dm1 = mcc.make_rdm1()
         dm2 = mcc.make_rdm2()
-        self.assertAlmostEqual(numpy.linalg.norm(dm1), 4.4227785269355078, 4)
-        self.assertAlmostEqual(numpy.linalg.norm(dm2), 20.074587448789089, 4)
+        self.assertAlmostEqual(numpy.linalg.norm(dm1), 4.4227785269355078, 3)
+        self.assertAlmostEqual(numpy.linalg.norm(dm2), 20.074587448789089, 3)
 
     def test_scanner(self):
         mol1 = mol.copy()

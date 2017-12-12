@@ -11,7 +11,7 @@ def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
     if d1 is None:
         d1 = ccsd_t_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2, eris)
     if d2 is None:
-        d2 = ccsd_t_rdm.gamma2_outcore(mycc, t1, t2, l1, l2, eris=eris)
+        d2 = ccsd_t_rdm._gamma2_outcore(mycc, t1, t2, l1, l2, eris=eris)
     return ccsd_grad.IX_intermediates(mycc, t1, t2, l1, l2, eris, d1, d2)
 
 
@@ -20,7 +20,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
            mf_grad=None, verbose=lib.logger.INFO):
     d1 = ccsd_t_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2, eris)
     fd2intermediate = lib.H5TmpFile()
-    d2 = ccsd_t_rdm.gamma2_outcore(mycc, t1, t2, l1, l2, eris, fd2intermediate)
+    d2 = ccsd_t_rdm._gamma2_outcore(mycc, t1, t2, l1, l2, eris, fd2intermediate)
     return ccsd_grad.kernel(mycc, t1, t2, l1, l2, eris, atmlst, mf_grad,
                             d1, d2, verbose)
 

@@ -809,6 +809,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def kernel(self, t1=None, t2=None, eris=None):
         return self.ccsd(t1, t2, eris)
     def ccsd(self, t1=None, t2=None, eris=None):
+        assert(self.mo_coeff is not None)
+        assert(self.mo_occ is not None)
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self.dump_flags()
@@ -892,6 +894,10 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
         return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2)
+
+    def nuc_grad_method(self):
+        from pyscf.cc import ccsd_grad
+        return ccsd_grad.Gradients(self)
 
     def ao2mo(self, mo_coeff=None):
         # Pseudo code how eris are implemented:

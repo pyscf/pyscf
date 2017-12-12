@@ -102,11 +102,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(t2-r2).max(), 0, 14)
 
         t1a, t2a = mycc.update_amps(t1, t2, eris)
-        self.assertAlmostEqual(lib.finger(t1a), 20.805393111419136-300.1138026015621j, 11)
-        self.assertAlmostEqual(lib.finger(t2a),-313.54117398035567+8.3700078645035205j, 11)
+        self.assertAlmostEqual(lib.finger(t1a), 20.805393111419136-300.1138026015621j, 9)
+        self.assertAlmostEqual(lib.finger(t2a),-313.54117398035567+8.3700078645035205j, 9)
 
 
 if __name__ == "__main__":
-    print("Full Tests for GCCSD")
+    print("Tests for GCCSD")
     unittest.main()
 

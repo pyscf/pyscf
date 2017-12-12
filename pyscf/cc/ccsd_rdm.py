@@ -35,7 +35,7 @@ def gamma1_intermediates(mycc, t1, t2, l1, l2):
 # gamma2 intermediates in Chemist's notation
 def gamma2_intermediates(mycc, t1, t2, l1, l2):
     f = lib.H5TmpFile()
-    gamma2_outcore(mycc, t1, t2, l1, l2, f)
+    _gamma2_outcore(mycc, t1, t2, l1, l2, f)
     d2 = (f['dvovo'].value.transpose(1,0,3,2),
           f['dvvvv'].value,
           f['doooo'].value,
@@ -46,7 +46,7 @@ def gamma2_intermediates(mycc, t1, t2, l1, l2):
           f['dvooo'].value.transpose(3,2,1,0))
     return d2
 
-def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
+def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
     nov = nocc * nvir
@@ -333,7 +333,7 @@ if __name__ == '__main__':
 
     fdm2 = lib.H5TmpFile()
     dvovo, dvvvv, doooo, dvvoo, dvoov, dvvov, dvovv, dvooo = \
-            gamma2_outcore(mcc, t1, t2, l1, l2, fdm2)
+            _gamma2_outcore(mcc, t1, t2, l1, l2, fdm2)
     print('dvovo', lib.finger(numpy.array(dvovo)) -  5371.8073743106979)
     print('dvvvv', lib.finger(numpy.array(dvvvv)) - -25.374007033024839)
     print('doooo', lib.finger(numpy.array(doooo)) -  60.114594698129963)

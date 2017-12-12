@@ -71,7 +71,7 @@ def gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None):
     dvvov = dovvv.transpose(2,3,0,1)
     return dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov
 
-def gamma2_outcore(mycc, t1, t2, l1, l2, eris=None, h5fobj=None):
+def _gamma2_outcore(mycc, t1, t2, l1, l2, eris=None, h5fobj=None):
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
             gamma2_intermediates(mycc, t1, t2, l1, l2, eris)
     dvovo = dovov.transpose(3,2,1,0)

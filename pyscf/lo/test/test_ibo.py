@@ -26,31 +26,31 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(abs(s_b.diagonal() - 1).max() < 1e-9)
         pop = pipek.atomic_pops(mol, b)
         z = numpy.einsum('xii,xii->', pop, pop)
-        self.assertAlmostEqual(z, 4.0663610846219127, 6)
+        self.assertAlmostEqual(z, 4.0663610846219127, 5)
 
         b = ibo.ibo(mol, mf.mo_coeff[:,mf.mo_occ>0], exponent=2)
         s_b = reduce(numpy.dot, (b.T, mf.get_ovlp(), b))
         self.assertTrue(abs(s_b.diagonal() - 1).max() < 1e-9)
         pop = pipek.atomic_pops(mol, b)
         z = numpy.einsum('xii,xii->', pop, pop)
-        self.assertAlmostEqual(z, 4.0663609732471571, 6)
+        self.assertAlmostEqual(z, 4.0663609732471571, 5)
 
     def test_ibo_PM(self):
         mf = scf.RHF(mol).run()
         b = ibo.PM(mol, mf.mo_coeff[:,mf.mo_occ>0], exponent=4).kernel()
         pop = pipek.atomic_pops(mol, b)
         z = numpy.einsum('xii,xii->', pop, pop)
-        self.assertAlmostEqual(z, 3.9206879872618576, 6)
+        self.assertAlmostEqual(z, 3.9206879872618576, 5)
 
         b = ibo.PM(mol, mf.mo_coeff[:,mf.mo_occ>0], exponent=2).kernel()
         pop = pipek.atomic_pops(mol, b)
         z = numpy.einsum('xii,xii->', pop, pop)
-        self.assertAlmostEqual(z, 4.0573975932440476, 6)
+        self.assertAlmostEqual(z, 4.0573975932440476, 5)
 
         b = ibo.PM(mol, b, exponent=4).kernel()
         pop = pipek.atomic_pops(mol, b)
         z = numpy.einsum('xii,xii->', pop, pop)
-        self.assertAlmostEqual(z, 4.0508136007117201, 6)
+        self.assertAlmostEqual(z, 4.0508136007117201, 5)
 
 
 if __name__ == "__main__":
