@@ -7,7 +7,8 @@ from pyscf.nao.m_siesta2blanko_csr import _siesta2blanko_csr
 from pyscf.nao.m_siesta2blanko_denvec import _siesta2blanko_denvec
 from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
 from pyscf.nao.m_ao_log import ao_log_c
-
+from scipy.spatial.distance import cdist
+    
 #
 #
 #
@@ -381,13 +382,37 @@ class nao():
     return aos_libnao(coords, self.norbs)
 
   def comp_vnuc_coulomb(self, coords):
-    from scipy.spatial.distance import cdist
     ncoo = coords.shape[0]
     vnuc = np.zeros(ncoo)
     for R,sp in zip(self.atom2coord, self.atom2sp):
       dd, Z = cdist(R.reshape((1,3)), coords).reshape(ncoo), self.sp2charge[sp]
       vnuc = vnuc - Z / dd 
     return vnuc
+
+  def vna(self, coords, sp2v=None):
+    """ Compute the neutral-atom potential V_NA(coords) for a set of Cartesian coordinates coords.
+        The subroutine could be also used for computing the non-linear core corrections or some other atom-centered fields."""
+    sp2v = self.ao_log.sp2vna if sp2v is None else sp2v
+    ncoo = coords.shape[0]
+    vna = np.zeros(ncoo)
+    for R,sp in zip(self.atom2coord, self.atom2sp):
+      dd = cdist(R.reshape((1,3)), coords).reshape(ncoo)
+      vnaa = self.ao_log.interp_rr(sp2v[sp], dd)
+      vna = vna + vnaa 
+    return vna
+
+  def vna_coo(self, sp2v=None, **kw):
+    """ Compute matrix elements of a potential which is given as superposition of central fields from each nuclei """
+    from numpy import einsum, dot
+    from scipy.sparse import coo_matrix
+    sp2v = self.ao_log.sp2vna if sp2v is None else sp2v
+    g = self.build_3dgrid_ae(**kw)
+    ca2o = self.comp_aos_den(g.coords)
+    vna = self.vna(g.coords, sp2v=sp2v, **kw)
+    vna_w = g.weights*vna
+    cb2vo = einsum('co,c->co', ca2o, vna_w)
+    vna = dot(ca2o.T,cb2vo)
+    return coo_matrix(vna)
 
   def init_libnao_orbs(self):
     """ Initialization of data on libnao site """

@@ -1,3 +1,4 @@
+from __future__ import print_function, division
 import numpy as np
 
 #
@@ -92,16 +93,61 @@ class log_interp_c():
     self.gammin_jt = np.log(gg[0])
     self.dg_jt = np.log(gg[1]/gg[0])
 
-  def __call__(self, ff, r):
+  def __call__(self, ff, rr):
+    """ Interpolation of vector data ff[...,:] and vector arguments rr[:] """
+    assert ff.shape[-1]==self.nr
+    r2k,ir2cc = self.coeffs_vv(rr)
+    ifr2vv = np.zeros(tuple([6])+ff.shape[0:-1]+rr.shape[:])
+    for j in range(6): ifr2vv[j,...] = ff[...,r2k+j]
+    #print(ifr2vv.shape, ir2cc.shape)
+    return np.einsum('i...,i...->...', ifr2vv, ir2cc)
+
+  def interp_v(self, ff, r):
     """ Interpolation right away """
     assert ff.shape[-1]==self.nr
     k,cc = comp_coeffs(self, r)
-    result = np.zeros(ff.shape[0:-2])
+    result = np.zeros(ff.shape[0:-1])
     for j,c in enumerate(cc): result = result + c*ff[...,j+k]
     return result
+
+  def interp_vv(self, ff, rr):
+    """ Interpolation of vector data ff[...,:] and vector arguments rr[:] """
+    assert ff.shape[-1]==self.nr
+    r2k,ir2cc = self.coeffs_vv(rr)
+    ifr2vv = np.zeros(tuple([6])+ff.shape[0:-1]+rr.shape[:])
+    for j in range(6): ifr2vv[j,...] = ff[...,r2k+j]
+    return np.einsum('if...,i...->f...', ifr2vv, ir2cc)
+
+  def coeffs_vv(self, rr):
+    """ Compute an array of interpolation coefficients (6, rr.shape) """
+    ir2c = np.zeros(tuple([6])+rr.shape[:])
+
+    lr = np.ma.log(rr)
+    #print('lr', lr)
+    r2k = np.zeros(rr.shape, dtype=np.int32)
+    r2k[...] = (lr-self.gammin_jt)/self.dg_jt-2
+    #print('r2r 1', r2k)
+  
+    r2k = np.where(r2k<0,0,r2k)
+    r2k = np.where(r2k>self.nr-6,self.nr-6,r2k)
+    r2k = np.where(rr<=0.0, 0, r2k)
+    #print('r2k 2 ', r2k)
     
-  comp_coeffs=comp_coeffs
-  """ Interpolation right away """
+    dy = (lr-self.gammin_jt-(r2k+2)*self.dg_jt)/self.dg_jt
+    #print('dy    ', dy)
+  
+    ir2c[0] = np.where(rr<=0.0, 1.0, -dy*(dy**2-1.0)*(dy-2.0)*(dy-3.0)/120.0)
+    ir2c[1] = np.where(rr<=0.0, 0.0, +5.0*dy*(dy-1.0)*(dy**2-4.0)*(dy-3.0)/120.0)
+    ir2c[2] = np.where(rr<=0.0, 0.0, -10.0*(dy**2-1.0)*(dy**2-4.0)*(dy-3.0)/120.0)
+    ir2c[3] = np.where(rr<=0.0, 0.0, +10.0*dy*(dy+1.0)*(dy**2-4.0)*(dy-3.0)/120.0)
+    ir2c[4] = np.where(rr<=0.0, 0.0, -5.0*dy*(dy**2-1.0)*(dy+2.0)*(dy-3.0)/120.0)
+    ir2c[5] = np.where(rr<=0.0, 0.0, dy*(dy**2-1.0)*(dy**2-4.0)/120.0)
+    #print('ir2c[0]    ', ir2c[0])
+    #print('ir2c[1]    ', ir2c[1])
+    return r2k,ir2c
+
+  coeffs=comp_coeffs
+  """ Interpolation pointers and coefficients """
   
   def diff(self, za):
     """

@@ -120,9 +120,7 @@ class log_mesh_c():
     return self
 
   def init_log_mesh_gpaw(self, setups, nr=None, rmin=None, rmax=None, kmax=None):
-    """
-        This initializes an optimal logarithmic mesh based on setups from GPAW
-    """
+    """ This initializes an optimal logarithmic mesh based on setups from GPAW"""
 
     #self.setups = setups same problem than in m_ao_log
     nr_def,rmin_def,rmax_def,kmax_def = get_default_log_mesh_param4gpaw(setups.setups)
