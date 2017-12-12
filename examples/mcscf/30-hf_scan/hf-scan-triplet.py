@@ -28,8 +28,6 @@ def run(b, dm, mo):
     mc = mcscf.CASSCF(m, 6, 6)
     if mo is None:
         mo = mcscf.sort_mo(mc, m.mo_coeff, [3,4,5,6,8,9])
-    else:
-        mo = mcscf.project_init_guess(mc, mo)
     e1 = mc.mc1step(mo)[0]
     emc.append(e1)
     return m.make_rdm1(), mc.mo_coeff

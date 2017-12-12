@@ -1317,6 +1317,21 @@ def aoslice_by_atom(mol, ao_loc=None):
     return aorange
 offset_nr_by_atom = aoslice_by_atom
 
+def same_basis_set(mol1, mol2):
+    '''Check whether two molecules use the same basis sets.
+    The two molecules can have different geometry.
+    '''
+    atomtypes1 = atom_types(mol1._atom, mol1._basis)
+    atomtypes2 = atom_types(mol2._atom, mol2._basis)
+    if set(atomtypes1.keys()) != set(atomtypes2.keys()):
+        return False
+    for k in atomtypes1:
+        if len(atomtypes1[k]) != len(atomtypes2[k]):
+            return False
+        elif mol1._basis[k] != mol2._basis[k]:
+            return False
+    return True
+
 def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
     '''Compare the two molecules whether they have the same structure.
 
@@ -1336,21 +1351,13 @@ def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
     if not numpy.all(numpy.sort(chg1) == numpy.sort(chg2)):
         return False
 
-    if cmp_basis:
-        atomtypes1 = atom_types(mol1._atom, mol1._basis)
-        atomtypes2 = atom_types(mol2._atom, mol2._basis)
-        for k in atomtypes1:
-            if k not in atomtypes2:
-                return False
-            elif len(atomtypes1[k]) != len(atomtypes2[k]):
-                return False
-            elif mol1._basis[k] != mol2._basis[k]:
-                return False
+    if cmp_basis and not same_basis_set(mol1, mol2):
+        return False
 
     def finger(mol, chgs, coord):
         center = charge_center(mol._atom, chgs, coord)
         im = inertia_momentum(mol._atom, chgs, coord)
-        w, v = numpy.linalg.eigh(im)
+        w, v = scipy.linalg.eigh(im)
         axes = v.T
         if numpy.linalg.det(axes) < 0:
             axes *= -1

@@ -83,7 +83,7 @@ class KnownValues(unittest.TestCase):
         H   0.   0.   0.9
         F   0.   0.1  0.''')
         mycc = cc.CCSD(scf.RHF(mol).set(conv_tol=1e-14))
-        cc_scanner = grad.ccsd.as_scanner(mycc)
+        cc_scanner = mycc.nuc_grad_method().as_scanner()
         e, de = cc_scanner(mol)
         self.assertAlmostEqual(finger(de), 0.4330503011412547, 5)
         e, de = cc_scanner(mol1)

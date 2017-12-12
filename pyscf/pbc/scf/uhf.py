@@ -19,14 +19,18 @@ from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile
 
 
-def init_guess_by_chkfile(cell, chkfile_name, project=True, kpt=None):
-    '''Read the HF results from checkpoint file, then project it to the
-    basis defined by ``cell``
+def init_guess_by_chkfile(cell, chkfile_name, project=None, kpt=None):
+    '''Read the HF results from checkpoint file and make the density matrix
+    for UHF initial guess.
 
     Returns:
         Density matrix, (nao,nao) ndarray
     '''
+    from pyscf import gto
     chk_cell, scf_rec = chkfile.load_scf(chkfile_name)
+    if project is None:
+        project = not gto.same_basis_set(chk_cell, cell)
+
     mo = scf_rec['mo_coeff']
     mo_occ = scf_rec['mo_occ']
     if kpt is None:
@@ -46,11 +50,15 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpt=None):
     else:  # from molecular code
         chk_kpt = np.zeros(3)
 
+    if project:
+        s = cell.pbc_intor('int1e_ovlp', kpt=kpt)
     def fproj(mo):
         if project:
-            return addons.project_mo_nr2nr(chk_cell, mo, cell, chk_kpt-kpt)
-        else:
-            return mo
+            mo = addons.project_mo_nr2nr(chk_cell, mo, cell, chk_kpt-kpt)
+            norm = np.einsum('pi,pi->i', mo.conj(), s.dot(mo))
+            mo /= np.sqrt(norm)
+        return mo
+
     if mo.ndim == 2:
         mo = fproj(mo)
         mo_occa = (mo_occ>1e-8).astype(np.double)

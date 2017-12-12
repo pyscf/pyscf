@@ -201,14 +201,17 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
         mo_energy[1].append(mo_e)
     return mo_energy, mo_coeff
 
-def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
+def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
     '''Read the KHF results from checkpoint file, then project it to the
     basis defined by ``cell``
 
     Returns:
         Density matrix, 3D ndarray
     '''
+    from pyscf import gto
     chk_cell, scf_rec = chkfile.load_scf(chkfile_name)
+    if project is None:
+        project = not gto.same_basis_set(chk_cell, cell)
 
     if kpts is None:
         kpts = scf_rec['kpts']
@@ -232,11 +235,15 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
             mo_occ = [np.expand_dims(mo_occ[0], axis=0),
                       np.expand_dims(mo_occ[1], axis=0)]
 
+    if project:
+        s = cell.pbc_intor('int1e_ovlp', kpts=kpts)
     def fproj(mo, kpts):
         if project:
-            return addons.project_mo_nr2nr(chk_cell, mo, cell, kpts)
-        else:
-            return mo
+            mo = addons.project_mo_nr2nr(chk_cell, mo, cell, kpts)
+            for k, c in enumerate(mo):
+                norm = np.einsum('pi,pi->i', c.conj(), s[k].dot(c))
+                mo[k] /= np.sqrt(norm)
+        return mo
 
     if kpts.shape == chk_kpts.shape and np.allclose(kpts, chk_kpts):
         def makedm(mos, occs):

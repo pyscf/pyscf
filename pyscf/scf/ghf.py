@@ -319,7 +319,7 @@ class GHF(hf.SCF):
     def init_guess_by_atom(self, mol=None):
         return _from_rhf_init_dm(hf.SCF.init_guess_by_atom(self, mol))
 
-    def init_guess_by_chkfile(self, chkfile=None, project=True):
+    def init_guess_by_chkfile(self, chkfile=None, project=None):
         dma, dmb = uhf.init_guess_by_chkfile(mol, chkfile, project)
         return scipy.linalg.block_diag(dma, dmb)
 
