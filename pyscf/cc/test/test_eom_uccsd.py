@@ -160,7 +160,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(u1g[0]-t1[0]).max(), 0, 7)
         self.assertAlmostEqual(abs(u1g[1]-t1[1]).max(), 0, 7)
         self.assertAlmostEqual(abs(u2g[0]-t2[0]).max(), 0, 7)
-        self.assertAlmostEqual(abs(u2g[1]-t2[1]).max(), 0, 7)
+        self.assertAlmostEqual(abs(u2g[1]-t2[1]).max(), 0, 6)
         self.assertAlmostEqual(abs(u2g[2]-t2[2]).max(), 0, 7)
         self.assertAlmostEqual(abs(r1g-gcc1.spatial2spin(t1, orbspin)).max(), 0, 7)
         self.assertAlmostEqual(abs(r2g-gcc1.spatial2spin(t2, orbspin)).max(), 0, 7)

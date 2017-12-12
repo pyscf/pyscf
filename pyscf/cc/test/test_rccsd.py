@@ -136,8 +136,8 @@ class KnownValues(unittest.TestCase):
         t2 = t2 + t2.transpose(1,0,3,2)
 
         t1b, t2b = cc.ccsd.update_amps(mycc2, t1, t2, eris2)
-        self.assertAlmostEqual(lib.finger(t1b), -106360.5276951083, 8)
-        self.assertAlmostEqual(lib.finger(t2b), 66540.100267798145, 8)
+        self.assertAlmostEqual(lib.finger(t1b), -106360.5276951083, 7)
+        self.assertAlmostEqual(lib.finger(t2b), 66540.100267798145, 7)
 
         mycc2.max_memory = 0
         t1a, t2a = cc.ccsd.update_amps(mycc2, t1, t2, eris2)
@@ -152,14 +152,14 @@ class KnownValues(unittest.TestCase):
 
         mycc1.cc2 = False
         t1a, t2a = rccsd.update_amps(mycc1, t1, t2, eris1)
-        self.assertAlmostEqual(lib.finger(t1a), -106360.5276951083, 8)
-        self.assertAlmostEqual(lib.finger(t2a), 66540.100267798145, 8)
+        self.assertAlmostEqual(lib.finger(t1a), -106360.5276951083, 7)
+        self.assertAlmostEqual(lib.finger(t2a), 66540.100267798145, 7)
         self.assertAlmostEqual(abs(t1a-t1b).max(), 0, 9)
         self.assertAlmostEqual(abs(t2a-t2b).max(), 0, 9)
         mycc1.cc2 = True
         t1a, t2a = rccsd.update_amps(mycc1, t1, t2, eris1)
-        self.assertAlmostEqual(lib.finger(t1a), -106360.5276951083, 8)
-        self.assertAlmostEqual(lib.finger(t2a), -1517.9391800662809, 8)
+        self.assertAlmostEqual(lib.finger(t1a), -106360.5276951083, 7)
+        self.assertAlmostEqual(lib.finger(t2a), -1517.9391800662809, 7)
 
         mol = gto.Mole()
         mol.verbose = 0

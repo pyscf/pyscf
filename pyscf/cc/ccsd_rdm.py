@@ -214,6 +214,7 @@ def make_rdm1(mycc, t1, t2, l1, l2, d1=None):
     return dm1
 
 # rdm2 in Chemist's notation
+# Note vvvv of rdm2 does not correspond to vvvv of FCI rdm2
 def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None):
     if d1 is None: d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
     if d2 is None: d2 = gamma2_intermediates(mycc, t1, t2, l1, l2)

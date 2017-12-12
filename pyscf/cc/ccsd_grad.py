@@ -463,7 +463,7 @@ def as_scanner(grad_cc):
 
         >>> from pyscf import gto, scf, cc
         >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
-        >>> cc_scanner = cc.CCSD(scf.RHF(mol)).as_scanner()
+        >>> cc_scanner = cc.CCSD(scf.RHF(mol)).nuc_grad_method().as_scanner()
         >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
         >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
@@ -473,7 +473,7 @@ def as_scanner(grad_cc):
         def __init__(self, g):
             self.__dict__.update(g.__dict__)
             self._cc = grad_cc._cc.as_scanner()
-        def __call__(self, mol):
+        def __call__(self, mol, **kwargs):
             # The following simple version also works.  But eris object is
             # recomputed in cc_scanner and solve_lambda.
             # cc_scanner = self._cc
@@ -493,7 +493,8 @@ def as_scanner(grad_cc):
             cc.kernel(cc.t1, cc.t2, eris=eris)
             cc.solve_lambda(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris)
             mf_grad = mf_scanner.nuc_grad_method()
-            de = self.kernel(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris, mf_grad=mf_grad)
+            de = self.kernel(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris,
+                             mf_grad=mf_grad, **kwargs)
             return cc.e_tot, de
         @property
         def converged(self):
@@ -729,8 +730,10 @@ def index_frozen_active(cc):
 class Gradients(lib.StreamObject):
     def __init__(self, mycc):
         self._cc = mycc
+        self.mol = mycc.mol
         self.stdout = mycc.stdout
         self.verbose = mycc.verbose
+        self.atmlst = range(mycc.mol.natm)
         self.de = None
 
     def kernel(self, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
@@ -746,13 +749,16 @@ class Gradients(lib.StreamObject):
             t1, t2 = self._cc.kernel(eris=eris)
         if l1 is None or l2 is None:
             l1, l2 = self._cc.solve_lambda(eris=eris)
-        if atmlst is None: atmlst = range(self._cc.mol.natm)
+        if atmlst is None:
+            atmlst = self.atmlst
+        else:
+            self.atmlst = atmlst
 
         self.de = kernel(self._cc, t1, t2, l1, l2, eris, atmlst,
                          mf_grad, d1, d2, log)
         if self.verbose >= logger.NOTE:
             log.note('--------------- CCSD gradients ---------------')
-            rhf_grad._write(self, self._cc.mol, self.de, atmlst)
+            rhf_grad._write(self, self.mol, self.de, atmlst)
             log.note('----------------------------------------------')
         return self.de
 

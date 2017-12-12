@@ -239,15 +239,15 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(r2), -1.1568913404570922, 12)
         imds = myeom.make_imds(eris1)
         vec1 = myeom.matvec(vec, imds)
-        self.assertAlmostEqual(lib.finger(vec1), -14894.654120117426, 9)
-        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 1182.3000325052058, 9)
+        self.assertAlmostEqual(lib.finger(vec1), -14894.669606811192, 9)
+        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 1182.3095479451745, 9)
 
         myeom.partition = 'full'
         imds = myeom.make_imds(eris1)
         diag = myeom.get_diag(imds)
         vec1 = myeom.matvec(vec, imds, diag=diag)
-        self.assertAlmostEqual(lib.finger(vec1), -3795.9399155875417, 9)
-        self.assertAlmostEqual(lib.finger(diag), 1106.2938587757221, 9)
+        self.assertAlmostEqual(lib.finger(vec1), -3795.9122245246967, 9)
+        self.assertAlmostEqual(lib.finger(diag), 1106.260154202434, 9)
 
     def test_ea_matvec(self):
         numpy.random.seed(12)
@@ -261,15 +261,15 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(r2), 0.97080165032287469, 12)
         imds = myeom.make_imds(eris1)
         vec1 = myeom.matvec(vec, imds)
-        self.assertAlmostEqual(lib.finger(vec1), -34426.369029147601, 9)
-        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 2724.8244143537472, 9)
+        self.assertAlmostEqual(lib.finger(vec1), -34426.363943760276, 9)
+        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 2724.8239646679217, 9)
 
         myeom.partition = 'full'
         imds = myeom.make_imds(eris1)
         diag = myeom.get_diag(imds)
         vec1 = myeom.matvec(vec, imds, diag=diag)
-        self.assertAlmostEqual(lib.finger(vec1), -17030.352024681037, 9)
-        self.assertAlmostEqual(lib.finger(diag), 4688.9325104309555, 9)
+        self.assertAlmostEqual(lib.finger(vec1), -17030.363405297598, 9)
+        self.assertAlmostEqual(lib.finger(diag), 4688.9122122011922, 9)
 
 
 ########################################
@@ -285,8 +285,8 @@ class KnownValues(unittest.TestCase):
         eris1
         imds = myeom.make_imds(erisi)
         vec1 = myeom.matvec(vec, imds)
-        self.assertAlmostEqual(lib.finger(vec1), 25176.256229196297-4955.5686181946812j, 9)
-        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 1106.2938587757221, 9)
+        self.assertAlmostEqual(lib.finger(vec1), 25176.428829164193-4955.5351324520125j, 9)
+        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 1106.2601542024306, 9)
 
     def test_ea_matvec1(self):
         numpy.random.seed(12)
@@ -298,9 +298,8 @@ class KnownValues(unittest.TestCase):
         r1,r2 = myeom.vector_to_amplitudes(vec)
         imds = myeom.make_imds(erisi)
         vec1 = myeom.matvec(vec, imds)
-        self.assertAlmostEqual(lib.finger(vec1), -105083.52119728975+25155.852109039704j, 8)
-        self.assertAlmostEqual(lib.finger(myeom.get_diag()),
-                               4688.9325104309555, 9)
+        self.assertAlmostEqual(lib.finger(vec1), -105083.60825558871+25155.909195554908j, 8)
+        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 4688.9122122011895, 9)
 
 
 ########################################
@@ -467,15 +466,15 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(r2), -1.1568913404570922, 12)
         imds = myeom.make_imds(eris21)
         vec1 = myeom.matvec(vec, imds)
-        self.assertAlmostEqual(lib.finger(vec1), -14894.654120117426, 9)
-        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 1182.3000325052058, 9)
+        self.assertAlmostEqual(lib.finger(vec1), -14894.669606811192, 9)
+        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 1182.3095479451745, 9)
 
         myeom.partition = 'full'
         imds = myeom.make_imds(eris21)
         diag = myeom.get_diag(imds)
         vec1 = myeom.matvec(vec, imds, diag=diag)
-        self.assertAlmostEqual(lib.finger(vec1), -3795.9399155875417, 9)
-        self.assertAlmostEqual(lib.finger(diag), 1106.2938587757221, 9)
+        self.assertAlmostEqual(lib.finger(vec1), -3795.9122245246967, 9)
+        self.assertAlmostEqual(lib.finger(diag), 1106.260154202434, 9)
 
     def test_ea_matvec2(self):
         numpy.random.seed(12)
@@ -489,65 +488,21 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(r2), 0.97080165032287469, 12)
         imds = myeom.make_imds(eris21)
         vec1 = myeom.matvec(vec, imds)
-        self.assertAlmostEqual(lib.finger(vec1), -34426.369029147601, 9)
-        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 2724.8244143537472, 9)
+        self.assertAlmostEqual(lib.finger(vec1), -34426.363943760276, 9)
+        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 2724.8239646679217, 9)
 
         myeom.partition = 'full'
         imds = myeom.make_imds(eris21)
         diag = myeom.get_diag(imds)
         vec1 = myeom.matvec(vec, imds, diag=diag)
-        self.assertAlmostEqual(lib.finger(vec1), -17030.352024681037, 9)
-        self.assertAlmostEqual(lib.finger(diag), 4688.9325104309555, 9)
+        self.assertAlmostEqual(lib.finger(vec1), -17030.363405297598, 9)
+        self.assertAlmostEqual(lib.finger(diag), 4688.9122122011922, 9)
 
 
 ########################################
 # With 4-fold symmetry in integrals
 # max_memory = 0
 # direct = True
-    def test_ip_matvec3(self):
-        numpy.random.seed(12)
-        r1 = numpy.random.random((no)) - .9
-        r2 = numpy.random.random((no,no,nv)) - .9
-        myeom = eom_rccsd.EOMIP(mycc1)
-        vec = myeom.amplitudes_to_vector(r1,r2)
-        r1,r2 = myeom.vector_to_amplitudes(vec)
-        myeom.partition = 'mp'
-        self.assertAlmostEqual(lib.finger(r1), 0.37404344676857076, 12)
-        self.assertAlmostEqual(lib.finger(r2), -1.1568913404570922, 12)
-        imds = myeom.make_imds(eris1)
-        vec1 = myeom.matvec(vec, imds)
-        self.assertAlmostEqual(lib.finger(vec1), -14894.654120117426, 9)
-        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 1182.3095479451745, 9)
-
-        myeom.partition = 'full'
-        imds = myeom.make_imds(eris1)
-        diag = myeom.get_diag(imds)
-        vec1 = myeom.matvec(vec, imds, diag=diag)
-        self.assertAlmostEqual(lib.finger(vec1), -3795.9399155875417, 9)
-        self.assertAlmostEqual(lib.finger(diag), 1106.2938587757221, 9)
-
-    def test_ea_matvec3(self):
-        numpy.random.seed(12)
-        r1 = numpy.random.random((nv)) - .9
-        r2 = numpy.random.random((no,nv,nv)) - .9
-        myeom = eom_rccsd.EOMEA(mycc1)
-        vec = myeom.amplitudes_to_vector(r1,r2)
-        r1,r2 = myeom.vector_to_amplitudes(vec)
-        myeom.partition = 'mp'
-        self.assertAlmostEqual(lib.finger(r1), 1.4488291275539353, 12)
-        self.assertAlmostEqual(lib.finger(r2), 0.97080165032287469, 12)
-        imds = myeom.make_imds(eris1)
-        vec1 = myeom.matvec(vec, imds)
-        self.assertAlmostEqual(lib.finger(vec1), -34426.369029147601, 9)
-        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 2724.8244143537472, 9)
-
-        myeom.partition = 'full'
-        imds = myeom.make_imds(eris1)
-        diag = myeom.get_diag(imds)
-        vec1 = myeom.matvec(vec, imds, diag=diag)
-        self.assertAlmostEqual(lib.finger(vec1), -17030.352024681037, 9)
-        self.assertAlmostEqual(lib.finger(diag), 4688.9325104309555, 9)
-
     def test_ipccsd3(self):
         e,v = mycc3.ipccsd(nroots=1)
         self.assertAlmostEqual(e, 0.4335604332073799, 6)
@@ -710,15 +665,15 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(r2), -1.1568913404570922, 12)
         imds = myeom.make_imds(eris31)
         vec1 = myeom.matvec(vec, imds)
-        self.assertAlmostEqual(lib.finger(vec1), -14894.654120117426, 9)
-        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 1182.3000325052058, 9)
+        self.assertAlmostEqual(lib.finger(vec1), -14894.669606811192, 9)
+        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 1182.3095479451745, 9)
 
         myeom.partition = 'full'
         imds = myeom.make_imds(eris31)
         diag = myeom.get_diag(imds)
         vec1 = myeom.matvec(vec, imds, diag=diag)
-        self.assertAlmostEqual(lib.finger(vec1), -3795.9399155875417, 9)
-        self.assertAlmostEqual(lib.finger(diag), 1106.2938587757221, 9)
+        self.assertAlmostEqual(lib.finger(vec1), -3795.9122245246967, 9)
+        self.assertAlmostEqual(lib.finger(diag), 1106.260154202434, 9)
 
 
 #    def test_ea_matvec3(self):
@@ -733,16 +688,17 @@ class KnownValues(unittest.TestCase):
 #        self.assertAlmostEqual(lib.finger(r2), 0.97080165032287469, 12)
 #        imds = myeom.make_imds(eris31)
 #        vec1 = myeom.matvec(vec, imds)
-#        self.assertAlmostEqual(lib.finger(vec1), -34426.369029147601, 9)
-#        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 2724.8244143537472, 9)
+#        self.assertAlmostEqual(lib.finger(vec1), -34426.363943760276, 9)
+#        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 2724.8239646679217, 9)
 #
 #        myeom.partition = 'full'
 #        imds = myeom.make_imds(eris31)
 #        diag = myeom.get_diag(imds)
 #        vec1 = myeom.matvec(vec, imds, diag=diag)
-#        self.assertAlmostEqual(lib.finger(vec1), -17030.352024681037, 9)
-#        self.assertAlmostEqual(lib.finger(diag), 4688.9325104309555, 9)
+#        self.assertAlmostEqual(lib.finger(vec1), -17030.363405297598, 9)
+#        self.assertAlmostEqual(lib.finger(diag), 4688.9122122011922, 9)
 
 if __name__ == "__main__":
     print("Tests for EOM RCCSD")
     unittest.main()
+

@@ -616,21 +616,21 @@ def as_scanner(cc):
         >>> from pyscf import gto, scf, cc
         >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
         >>> cc_scanner = cc.CCSD(scf.RHF(mol)).as_scanner()
-        >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
-        >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
+        >>> e_tot = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
+        >>> e_tot = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
     logger.info(cc, 'Set %s as a scanner', cc.__class__)
     class CCSD_Scanner(cc.__class__, lib.SinglePointScanner):
         def __init__(self, cc):
             self.__dict__.update(cc.__dict__)
             self._scf = cc._scf.as_scanner()
-        def __call__(self, mol):
+        def __call__(self, mol, **kwargs):
             mf_scanner = self._scf
             mf_scanner(mol)
             self.mol = mol
             self.mo_coeff = mf_scanner.mo_coeff
             self.mo_occ = mf_scanner.mo_occ
-            self.kernel(self.t1, self.t2)[0]
+            self.kernel(self.t1, self.t2, **kwargs)[0]
             return self.e_tot
     return CCSD_Scanner(cc)
 
