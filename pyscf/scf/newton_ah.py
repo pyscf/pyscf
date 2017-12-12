@@ -637,7 +637,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
     dm = mf.make_rdm1(mo_coeff, mo_occ)
 # call mf._scf.get_veff, to avoid density_fit module polluting get_veff function
     vhf = mf._scf.get_veff(mol, dm)
-    fock = mf.get_fock(h1e, s1e, vhf, dm)
+    fock = mf.get_fock(h1e, s1e, vhf, dm, level_shift_factor=0)
     log.info('Initial guess |g|= %g',
              numpy.linalg.norm(mf._scf.get_grad(mo_coeff, mo_occ, fock)))
 # NOTE: DO NOT change the initial guess mo_occ, mo_coeff
@@ -660,7 +660,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         mo_coeff = mf.rotate_mo(mo_coeff, u, log)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         vhf = mf._scf.get_veff(mol, dm, dm_last=dm_last, vhf_last=vhf)
-        fock = mf.get_fock(h1e, s1e, vhf, dm)
+        fock = mf.get_fock(h1e, s1e, vhf, dm, level_shift_factor=0)
 # NOTE: DO NOT change the initial guess mo_occ, mo_coeff
         if mf.verbose >= logger.DEBUG:
             mo_energy, mo_tmp = mf.eig(fock, s1e)

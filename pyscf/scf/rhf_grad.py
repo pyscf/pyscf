@@ -141,6 +141,9 @@ def as_scanner(grad_mf):
             self.mol = mol
             de = self.kernel()
             return e_tot, de
+        @property
+        def converged(self):
+            return self._scf.converged
     return SCF_GradScanner(grad_mf)
 
 
