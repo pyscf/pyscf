@@ -2,7 +2,7 @@
 
 <basis_specs>
 ===============================================================================
-H                    Z=   1    Mass=  1.0100        Charge= 0.17977+309
+H.lih                Z=   1    Mass=  1.0100        Charge= 0.17977+309
 Lmxo=0 Lmxkb= 2    BasisType=split      Semic=F
 L=0  Nsemic=0  Cnfigmx=1
           n=1  nzeta=2  polorb=1
@@ -28,7 +28,7 @@ L=2  Nkbl=1  erefs: 0.23651E-02
 </pseudopotential_header>
 </preamble>
 H                             # Symbol
-H                             # Label
+H.lih                         # Label
     1                         # Atomic number
      1.00000000000                             # Valence charge
      1.01000000000        # Mass 
