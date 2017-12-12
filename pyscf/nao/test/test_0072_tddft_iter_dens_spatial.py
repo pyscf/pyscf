@@ -9,7 +9,7 @@ dname = os.path.dirname(os.path.abspath(__file__))
 
 Ha = 27.211386024367243
 td = tddft_iter(label='water', iter_broadening=0.15/Ha, xc_code='LDA,PZ',
-        tol_loc=1e-4, tol_biloc=1e-6, cd=dname)
+        tol_loc=1e-4, tol_biloc=1e-6, cd=dname, verbosity=0)
 
 class KnowValues(unittest.TestCase):
   
