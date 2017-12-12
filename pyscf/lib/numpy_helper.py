@@ -806,6 +806,8 @@ def einsum(idx_str, *tensors, **kwargs):
     idxA, idxBC = idx_str.split(',')
     idxB, idxC = idxBC.split('->')
     idxA, idxB, idxC = [list(x) for x in [idxA,idxB,idxC]]
+    assert(len(idxA) == A.ndim)
+    assert(len(idxB) == B.ndim)
 
     if DEBUG:
         print("*** Einsum for", idx_str)

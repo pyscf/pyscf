@@ -37,7 +37,7 @@ class KnownValues(unittest.TestCase):
         eris.fock = fock0
 
         saved = ccsd_lambda.make_intermediates(mcc, t1, t2, eris)
-        l1new, l2new = ccsd_lambda.update_amps(mcc, t1, t2, l1, l2, eris, saved)
+        l1new, l2new = ccsd_lambda.update_lambda(mcc, t1, t2, l1, l2, eris, saved)
         self.assertAlmostEqual(abs(l1new).sum(), 38172.7896467303, 8)
         self.assertAlmostEqual(numpy.dot(l1new.flatten(), numpy.arange(35)), 739312.005491083, 8)
         self.assertAlmostEqual(numpy.dot(l1new.flatten(), numpy.sin(numpy.arange(35))), 7019.50937051188, 8)
@@ -51,7 +51,7 @@ class KnownValues(unittest.TestCase):
 
         mcc.max_memory = 0
         saved = ccsd_lambda.make_intermediates(mcc, t1, t2, eris)
-        l1new, l2new = ccsd_lambda.update_amps(mcc, t1, t2, l1, l2, eris, saved)
+        l1new, l2new = ccsd_lambda.update_lambda(mcc, t1, t2, l1, l2, eris, saved)
         self.assertAlmostEqual(abs(l1new).sum(), 38172.7896467303, 8)
         self.assertAlmostEqual(numpy.dot(l1new.flatten(), numpy.arange(35)), 739312.005491083, 8)
         self.assertAlmostEqual(numpy.dot(l1new.flatten(), numpy.sin(numpy.arange(35))), 7019.50937051188, 8)

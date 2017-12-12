@@ -238,6 +238,9 @@ def make_rdm2(cc, t1, t2, l1, l2, d1=None, d2=None):
     dm1b[noccb:,:noccb] = dm1b[:noccb,noccb:].T
     dm1b[noccb:,noccb:] = dvvb + dvvb.T
 
+    if mycc.frozen is not 0:
+        raise NotImplementedError
+
     oidxa = cc.orbspin[:nocc] == 0
     oidxb = cc.orbspin[:nocc] == 1
     vidxa = cc.orbspin[nocc:] == 0

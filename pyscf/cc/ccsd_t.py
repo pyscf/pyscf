@@ -3,6 +3,10 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+RHF-CCSD(T) for real integrals
+'''
+
 import gc
 import time
 import ctypes
@@ -11,10 +15,6 @@ from pyscf import lib
 from pyscf import symm
 from pyscf.lib import logger
 from pyscf.cc import _ccsd
-
-'''
-CCSD(T)
-'''
 
 # t3 as ijkabc
 
@@ -35,7 +35,8 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     orbsym = _sort_eri(mycc, eris, nocc, nvir, eris_vvop, log)
 
     ftmp['t2'] = t2  # read back late.  Cache t2T in t2 to reduce memory footprint
-    mo_energy, t1T, t2T, vooo = _sort_t2_vooo_(mycc, orbsym, t1, t2, eris)
+    mo_energy, t1T, t2T, vooo, fovT = \
+            _sort_t2_vooo_(mycc, orbsym, t1, t2, eris)
     cpu1 = log.timer_debug1('CCSD(T) sort_eri', *cpu1)
 
     cpu2 = list(cpu1)
@@ -60,6 +61,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
                  t1T.ctypes.data_as(ctypes.c_void_p),
                  t2T.ctypes.data_as(ctypes.c_void_p),
                  vooo.ctypes.data_as(ctypes.c_void_p),
+                 fovT.ctypes.data_as(ctypes.c_void_p),
                  ctypes.c_int(nocc), ctypes.c_int(nvir),
                  ctypes.c_int(a0), ctypes.c_int(a1),
                  ctypes.c_int(b0), ctypes.c_int(b1),
@@ -152,6 +154,8 @@ def _sort_t2_vooo_(mycc, orbsym, t1, t2, eris):
         mo_energy = numpy.hstack((mo_energy[:nocc][o_sorted],
                                   mo_energy[nocc:][v_sorted]))
         t1T = numpy.asarray(t1.T[v_sorted][:,o_sorted], order='C')
+        fovT = eris.fock[:nocc,nocc:].T
+        fovT = numpy.asarray(fovT[v_sorted][:,o_sorted], order='C')
 
         o_sym = orbsym[o_sorted]
         oo_sym = (o_sym[:,None] ^ o_sym).ravel()
@@ -175,12 +179,13 @@ def _sort_t2_vooo_(mycc, orbsym, t1, t2, eris):
         t2T = lib.take_2d(t2T.reshape(nvir**2,-1), vv_idx, oo_idx, out=t2)
         t2T = t2T.reshape(nvir,nvir,nocc,nocc)
     else:
+        fovT = eris.fock[:nocc,nocc:].T.copy()
         t1T = t1.T.copy()
         t2T = lib.transpose(t2.reshape(nocc**2,-1))
         t2T = lib.transpose(t2T.reshape(-1,nocc,nocc), axes=(0,2,1), out=t2)
         mo_energy = numpy.asarray(eris.fock.diagonal(), order='C')
     t2T = t2T.reshape(nvir,nvir,nocc,nocc)
-    return mo_energy, t1T, t2T, vooo
+    return mo_energy, t1T, t2T, vooo, fovT
 
 def _irrep_argsort(orbsym):
     return numpy.hstack([numpy.where(orbsym == i)[0] for i in range(8)])
@@ -203,9 +208,9 @@ if __name__ == '__main__':
     t2 = t2 + t2.transpose(1,0,3,2)
     mf = scf.RHF(mol)
     mcc = cc.CCSD(mf)
-    mcc.mo_energy = mcc._scf.mo_energy = numpy.arange(0., nocc+nvir)
-    eris.fock = numpy.diag(mcc.mo_energy)
-    print(kernel(mcc, eris, t1, t2) - -8.501010390740708)
+    f = numpy.random.random((nocc+nvir,nocc+nvir)) * .1
+    eris.fock = f+f.T + numpy.diag(numpy.arange(nocc+nvir))
+    print(kernel(mcc, eris, t1, t2) - -8.7130467232959781)
 
     mol = gto.Mole()
     mol.atom = [

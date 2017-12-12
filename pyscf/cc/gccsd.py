@@ -66,7 +66,7 @@ def update_amps(cc, t1, t2, eris):
     tmp = einsum('ma,ijmb->ijab', t1, np.asarray(eris.ooov).conj())
     t2new -= (tmp - tmp.transpose(0,1,3,2))
 
-    mo_e = eris.fock.diagonal()
+    mo_e = eris.fock.diagonal().real
     eia = mo_e[:nocc,None] - mo_e[None,nocc:]
     eijab = lib.direct_sum('ia,jb->ijab', eia, eia)
     t1new /= eia
@@ -100,7 +100,7 @@ class GCCSD(ccsd.CCSD):
         self.conv_tol_normt = 1e-6
 
     def init_amps(self, eris):
-        mo_e = eris.fock.diagonal()
+        mo_e = eris.fock.diagonal().real
         nocc = self.nocc
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
         eijab = lib.direct_sum('ia,jb->ijab', eia, eia)

@@ -30,8 +30,6 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     nmob = eris.fockb.shape[0]
     nvira = nmoa - nocca
     nvirb = nmob - noccb
-    mo_ea = eris.focka.diagonal().copy()
-    mo_eb = eris.fockb.diagonal().copy()
 
     ftmp = lib.H5TmpFile()
     ftmp['t2ab'] = t2ab
@@ -58,8 +56,8 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     # aaa
     bufsize = max(1, int((max_memory*1e6/8-nocca**3*100)*.7/(nocca*nmoa)))
     log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
-    orbsym = numpy.zeros(mo_ea.size, dtype=int)
-    contract = _gen_contract_aaa(t1aT, t2aaT, eris_vooo, mo_ea, orbsym, log)
+    orbsym = numpy.zeros(nocca, dtype=int)
+    contract = _gen_contract_aaa(t1aT, t2aaT, eris_vooo, eris.focka, orbsym, log)
     for a0, a1 in reversed(list(lib.prange_tril(0, nvira, bufsize))):
         with lib.call_in_background(contract) as ctr:
             cache_row_a = numpy.asarray(eris_vvop[a0:a1,:a1], order='C')
@@ -79,8 +77,8 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     # bbb
     bufsize = max(1, int((max_memory*1e6/8-noccb**3*100)*.7/(noccb*nmob)))
     log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
-    orbsym = numpy.zeros(mo_eb.size, dtype=int)
-    contract = _gen_contract_aaa(t1bT, t2bbT, eris_VOOO, mo_eb, orbsym, log)
+    orbsym = numpy.zeros(noccb, dtype=int)
+    contract = _gen_contract_aaa(t1bT, t2bbT, eris_VOOO, eris.fockb, orbsym, log)
     for a0, a1 in reversed(list(lib.prange_tril(0, nvirb, bufsize))):
         with lib.call_in_background(contract) as ctr:
             cache_row_a = numpy.asarray(eris_VVOP[a0:a1,:a1], order='C')
@@ -103,8 +101,9 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     # baa
     bufsize = max(1, int((max_memory*.9e6/8-noccb*nocca**2*7)*.3/nocca*nmob))
     ts = t1aT, t1bT, t2aaT, t2abT
+    fock = (eris.focka, eris.fockb)
     vooo = (eris_vooo, eris_vOoO, eris_VoOo)
-    contract = _gen_contract_baa(ts, vooo, (mo_ea,mo_eb), orbsym, log)
+    contract = _gen_contract_baa(ts, vooo, fock, orbsym, log)
     for a0, a1 in lib.prange(0, nvirb, int(bufsize/nvira+1)):
         with lib.call_in_background(contract) as ctr:
             cache_row_a = numpy.asarray(eris_VvOp[a0:a1,:], order='C')
@@ -122,8 +121,9 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     t2baT[:] = t2abT.copy().transpose(1,0,3,2)
     # abb
     ts = t1bT, t1aT, t2bbT, t2baT
+    fock = (eris.fockb, eris.focka)
     vooo = (eris_VOOO, eris_VoOo, eris_vOoO)
-    contract = _gen_contract_baa(ts, vooo, (mo_eb,mo_ea), orbsym, log)
+    contract = _gen_contract_baa(ts, vooo, fock, orbsym, log)
     for a0, a1 in lib.prange(0, nvira, int(bufsize/nvirb+1)):
         with lib.call_in_background(contract) as ctr:
             cache_row_a = numpy.asarray(eris_vVoP[a0:a1,:], order='C')
@@ -143,8 +143,10 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     log.note('UCCSD(T) correction = %.15g', et)
     return et
 
-def _gen_contract_aaa(t1T, t2T, vooo, mo_energy, orbsym, log):
+def _gen_contract_aaa(t1T, t2T, vooo, fock, orbsym, log):
     nvir, nocc = t1T.shape
+    mo_energy = fock.diagonal().copy()
+    fovT = fock[:nocc,nocc:].T.copy()
 
     cpu2 = [time.clock(), time.time()]
     orbsym = numpy.hstack((numpy.sort(orbsym[:nocc]),numpy.sort(orbsym[nocc:])))
@@ -167,6 +169,7 @@ def _gen_contract_aaa(t1T, t2T, vooo, mo_energy, orbsym, log):
                  t1T.ctypes.data_as(ctypes.c_void_p),
                  t2T.ctypes.data_as(ctypes.c_void_p),
                  vooo.ctypes.data_as(ctypes.c_void_p),
+                 fovT.ctypes.data_as(ctypes.c_void_p),
                  ctypes.c_int(nocc), ctypes.c_int(nvir),
                  ctypes.c_int(a0), ctypes.c_int(a1),
                  ctypes.c_int(b0), ctypes.c_int(b1),
@@ -184,12 +187,16 @@ def _gen_contract_aaa(t1T, t2T, vooo, mo_energy, orbsym, log):
         return et
     return contract
 
-def _gen_contract_baa(ts, vooo, mo_energy, orbsym, log):
+def _gen_contract_baa(ts, vooo, fock, orbsym, log):
     t1aT, t1bT, t2aaT, t2abT = ts
+    focka, fockb = fock
     vooo, vOoO, VoOo = vooo
-    mo_ea, mo_eb = mo_energy
     nvira, nocca = t1aT.shape
     nvirb, noccb = t1bT.shape
+    mo_ea = focka.diagonal().copy()
+    mo_eb = fockb.diagonal().copy()
+    fovT = focka[:nocca,nocca:].T.copy()
+    fOVT = fockb[:noccb,noccb:].T.copy()
 
     cpu2 = [time.clock(), time.time()]
     def contract(et_sum, a0, a1, b0, b1, cache):
@@ -205,6 +212,8 @@ def _gen_contract_baa(ts, vooo, mo_energy, orbsym, log):
                  vooo.ctypes.data_as(ctypes.c_void_p),
                  vOoO.ctypes.data_as(ctypes.c_void_p),
                  VoOo.ctypes.data_as(ctypes.c_void_p),
+                 fovT.ctypes.data_as(ctypes.c_void_p),
+                 fOVT.ctypes.data_as(ctypes.c_void_p),
                  ctypes.c_int(nocca), ctypes.c_int(noccb),
                  ctypes.c_int(nvira), ctypes.c_int(nvirb),
                  ctypes.c_int(a0), ctypes.c_int(a1),
@@ -367,5 +376,12 @@ if __name__ == '__main__':
     mycc = cc.UCCSD(mf)
     eris = mycc.ao2mo(mf.mo_coeff)
     e3a = kernel(mycc, eris, [t1a,t1b], [t2aa, t2ab, t2bb])
-    print(e3a - 8193.064821311109)
+    print(e3a - 9877.2780859693339)
 
+    mycc = cc.GCCSD(scf.addons.convert_to_ghf(mf))
+    eris = mycc.ao2mo()
+    t1 = mycc.spatial2spin(t1, eris.orbspin)
+    t2 = mycc.spatial2spin(t2, eris.orbspin)
+    from pyscf.cc import gccsd_t_slow
+    et = gccsd_t_slow.kernel(mycc, eris, t1, t2)
+    print(et - 9877.2780859693339)

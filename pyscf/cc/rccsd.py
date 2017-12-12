@@ -48,7 +48,7 @@ def update_amps(cc, t1, t2, eris):
     t1new +=  -lib.einsum('kcad,ikcd->ia', eris_ovvv, t2)
     t1new += 2*lib.einsum('kdac,kd,ic->ia', eris_ovvv, t1, t1)
     t1new +=  -lib.einsum('kcad,kd,ic->ia', eris_ovvv, t1, t1)
-    eris_ovoo = _cp(eris.ovoo)
+    eris_ovoo = np.asarray(eris.ovoo, order='C')
     t1new +=-2*lib.einsum('lcki,klac->ia', eris_ovoo, t2)
     t1new +=   lib.einsum('kcli,klac->ia', eris_ovoo, t2)
     t1new +=-2*lib.einsum('lcki,lc,ka->ia', eris_ovoo, t1, t1)
@@ -287,8 +287,8 @@ def _make_eris_outcore(mycc, mo_coeff=None):
 
     nocc_pair = nocc*(nocc+1)//2
     tril2sq = lib.square_mat_in_trilu_indices(nmo)
-    oo = _cp(eri[:nocc_pair])
-    eris.oooo[:] = ao2mo.restore(1, _cp(oo[:,:nocc_pair]), nocc)
+    oo = eri[:nocc_pair]
+    eris.oooo[:] = ao2mo.restore(1, oo[:,:nocc_pair], nocc)
     oovv = lib.take_2d(oo, tril2sq[:nocc,:nocc].ravel(), tril2sq[nocc:,nocc:].ravel())
     eris.oovv[:] = oovv.reshape(nocc,nocc,nvir,nvir)
     oo = oovv = None
@@ -299,7 +299,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
         q0, q1 = p0+nocc, p1+nocc
         off0 = q0*(q0+1)//2
         off1 = q1*(q1+1)//2
-        buf = lib.unpack_tril(_cp(eri[off0:off1]))
+        buf = lib.unpack_tril(eri[off0:off1])
 
         tmp = buf[ tril2sq[q0:q1,:nocc] - off0 ]
         eris.ovoo[:,p0:p1] = tmp[:,:,:nocc,:nocc].transpose(1,0,2,3)
@@ -316,72 +316,9 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     return eris
 
 
-def _cp(a):
-    return np.array(a, copy=False, order='C')
-
-
 if __name__ == '__main__':
-    from functools import reduce
     from pyscf import scf
     from pyscf import gto
-
-    mol = gto.M()
-    nocc, nvir = 5, 12
-    nmo = nocc + nvir
-    nmo_pair = nmo*(nmo+1)//2
-    mf = scf.RHF(mol)
-    np.random.seed(12)
-    mf._eri = np.random.random(nmo_pair*(nmo_pair+1)//2)
-    mf.mo_coeff = np.random.random((nmo,nmo))
-    mf.mo_energy = np.arange(0., nmo)
-    mf.mo_occ = np.zeros(nmo)
-    mf.mo_occ[:nocc] = 2
-    vhf = mf.get_veff(mol, mf.make_rdm1())
-    cinv = np.linalg.inv(mf.mo_coeff)
-    mf.get_hcore = lambda *args: (reduce(np.dot, (cinv.T*mf.mo_energy, cinv)) - vhf)
-    mycc = RCCSD(mf)
-    eris = mycc.ao2mo()
-    a = np.random.random((nmo,nmo)) * .1
-    eris.fock += a + a.T.conj()
-    t1 = np.random.random((nocc,nvir)) * .1
-    t2 = np.random.random((nocc,nocc,nvir,nvir)) * .1
-    t2 = t2 + t2.transpose(1,0,3,2)
-
-    mycc.cc2 = False
-    t1a, t2a = update_amps(mycc, t1, t2, eris)
-    print(lib.finger(t1a) - -106360.5276951083)
-    print(lib.finger(t2a) - 66540.100267798145)
-    mycc.cc2 = True
-    t1a, t2a = update_amps(mycc, t1, t2, eris)
-    print(lib.finger(t1a) - -106360.5276951083)
-    print(lib.finger(t2a) - -1517.9391800662809)
-
-    eri1 = np.random.random((nmo,nmo,nmo,nmo)) + np.random.random((nmo,nmo,nmo,nmo))*1j
-    eri1 = eri1.transpose(0,2,1,3)
-    eri1 = eri1 + eri1.transpose(1,0,3,2).conj()
-    eri1 = eri1 + eri1.transpose(2,3,0,1)
-    eri1 *= .1
-    eris.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
-    eris.ovoo = eri1[:nocc,nocc:,:nocc,:nocc].copy()
-    eris.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
-    eris.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
-    eris.ovvo = eri1[:nocc,nocc:,nocc:,:nocc].copy()
-    eris.ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
-    eris.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy()
-    a = np.random.random((nmo,nmo)) * .1j
-    eris.fock = eris.fock + a + a.T.conj()
-
-    t1 = t1 + np.random.random((nocc,nvir)) * .1j
-    t2 = t2 + np.random.random((nocc,nocc,nvir,nvir)) * .1j
-    t2 = t2 + t2.transpose(1,0,3,2)
-    mycc.cc2 = False
-    t1a, t2a = update_amps(mycc, t1, t2, eris)
-    print(lib.finger(t1a) - (-13.32050019680894-1.8825765910430254j))
-    print(lib.finger(t2a) - (9.2521062044785189+29.999480274811873j))
-    mycc.cc2 = True
-    t1a, t2a = update_amps(mycc, t1, t2, eris)
-    print(lib.finger(t1a) - (-13.32050019680894-1.8825765910430254j))
-    print(lib.finger(t2a) - (-0.056223856104895858+0.025472249329733986j))
 
     mol = gto.Mole()
     mol.atom = [

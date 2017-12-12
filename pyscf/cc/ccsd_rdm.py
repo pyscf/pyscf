@@ -35,7 +35,7 @@ def gamma1_intermediates(mycc, t1, t2, l1, l2):
 # gamma2 intermediates in Chemist's notation
 def gamma2_intermediates(mycc, t1, t2, l1, l2):
     f = lib.H5TmpFile()
-    gamma2_outcore(mycc, t1, t2, l1, l2, f)
+    _gamma2_outcore(mycc, t1, t2, l1, l2, f)
     d2 = (f['dvovo'].value.transpose(1,0,3,2),
           f['dvvvv'].value,
           f['doooo'].value,
@@ -46,7 +46,7 @@ def gamma2_intermediates(mycc, t1, t2, l1, l2):
           f['dvooo'].value.transpose(3,2,1,0))
     return d2
 
-def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
+def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
     nov = nocc * nvir
@@ -108,8 +108,8 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
         gvvoo[p0:p1] -= lib.einsum('bd,ijad->abij', mvv*.5, tau)
         gvvoo[p0:p1] += lib.einsum('ijkl,klab->abij', goooo, tau)
 
-        pvOOv = _cp(fswap['mvOOv'][p0:p1])
-        pvoOV = _cp(fswap['mvoOV'][p0:p1])
+        pvOOv = fswap['mvOOv'][p0:p1]
+        pvoOV = fswap['mvoOV'][p0:p1]
         gvOOv = lib.einsum('kiac,jc,kb->aijb', l2[:,:,p0:p1], t1, t1)
         gvOOv += pvOOv
         gvoOV = numpy.einsum('ia,jb->aijb', l1[:,p0:p1], t1)
@@ -173,8 +173,8 @@ def gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
         gvovv = lib.einsum('adbc,id->aibc', gvvvv, t1*-2)
         gvvvv = None
 
-        gvovv += lib.einsum('akic,kb->aibc', _cp(fswap['mvoOV'][p0:p1]), t1)
-        gvovv -= lib.einsum('akib,kc->aibc', _cp(fswap['mvOOv'][p0:p1]), t1)
+        gvovv += lib.einsum('akic,kb->aibc', fswap['mvoOV'][p0:p1], t1)
+        gvovv -= lib.einsum('akib,kc->aibc', fswap['mvOOv'][p0:p1], t1)
 
         gvovv += lib.einsum('ja,jibc->aibc', l1[:,p0:p1], t2)
         gvovv += lib.einsum('jibc,ja->aibc', l2, t1[:,p0:p1])
@@ -201,8 +201,16 @@ def make_rdm1(mycc, t1, t2, l1, l2, d1=None):
     dm1[:nocc,nocc:] = dov + dvo.T
     dm1[nocc:,:nocc] = dm1[:nocc,nocc:].T
     dm1[nocc:,nocc:] = dvv + dvv.T
-    for i in range(nocc):
-        dm1[i,i] += 2
+    dm1[numpy.diag_indices(nocc)] += 2
+
+    if not (mycc.frozen is 0 or mycc.frozen is None):
+        nmo = mycc.mo_occ.size
+        nocc = numpy.count_nonzero(mycc.mo_occ > 0)
+        rdm1 = numpy.zeros((nmo,nmo))
+        rdm1[numpy.diag_indices(nocc)] = 2
+        moidx = numpy.count_nonzero(ccsd.get_moidx(mycc))
+        rdm1[moidx[:,None],moidx] = dm1
+        dm1 = rdm1
     return dm1
 
 # rdm2 in Chemist's notation
@@ -250,6 +258,20 @@ def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None):
     dm1[:nocc,nocc:] = dov + dvo.T
     dm1[nocc:,:nocc] = dm1[:nocc,nocc:].T
     dm1[nocc:,nocc:] = dvv + dvv.T
+
+    if not (mycc.frozen is 0 or mycc.frozen is None):
+        nmo = mycc.mo_occ.size
+        nocc = numpy.count_nonzero(mycc.mo_occ > 0)
+        rdm1 = numpy.zeros((nmo,nmo))
+        rdm2 = numpy.zeros((nmo,nmo,nmo,nmo))
+        moidx = numpy.count_nonzero(ccsd.get_moidx(mycc))
+        nmo0 = moidx.size
+        sidx = (moidx.reshape(-1,1) * nmo + moidx).ravel()
+        rdm1[moidx[:,None],moidx] = dm1
+        lib.takebak_2d(rdm2.reshape(nmo**2,nmo**2),
+                       dm2.reshape(nmo0**2,nmo0**2), sidx, sidx)
+        dm1, dm2 = rdm1, rdm2
+
     for i in range(nocc):
         dm2[i,i,:,:] += dm1 * 2
         dm2[:,:,i,i] += dm1 * 2
@@ -262,9 +284,6 @@ def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None):
             dm2[i,j,j,i] -= 2
 
     return dm2
-
-def _cp(a):
-    return numpy.array(a, copy=False, order='C')
 
 
 if __name__ == '__main__':
@@ -314,27 +333,27 @@ if __name__ == '__main__':
 
     fdm2 = lib.H5TmpFile()
     dvovo, dvvvv, doooo, dvvoo, dvoov, dvvov, dvovv, dvooo = \
-            gamma2_outcore(mcc, t1, t2, l1, l2, fdm2)
-    print('dvovo', lib.finger(_cp(dvovo)) -  5371.8073743106979)
-    print('dvvvv', lib.finger(_cp(dvvvv)) - -25.374007033024839)
-    print('doooo', lib.finger(_cp(doooo)) -  60.114594698129963)
-    print('dvvoo', lib.finger(_cp(dvvoo)) -   5.718307760949088)
-    print('dvoov', lib.finger(_cp(dvoov)) -  41.399881265666437)
-    print('dvvov', lib.finger(_cp(dvvov)) - -1129.9636175187422)
-    print('dvovv', lib.finger(_cp(dvovv)) - -1038.3437534763445)
-    print('dvooo', lib.finger(_cp(dvooo)) -  979.27741472637604)
+            _gamma2_outcore(mcc, t1, t2, l1, l2, fdm2)
+    print('dvovo', lib.finger(numpy.array(dvovo)) -  5371.8073743106979)
+    print('dvvvv', lib.finger(numpy.array(dvvvv)) - -25.374007033024839)
+    print('doooo', lib.finger(numpy.array(doooo)) -  60.114594698129963)
+    print('dvvoo', lib.finger(numpy.array(dvvoo)) -   5.718307760949088)
+    print('dvoov', lib.finger(numpy.array(dvoov)) -  41.399881265666437)
+    print('dvvov', lib.finger(numpy.array(dvvov)) - -1129.9636175187422)
+    print('dvovv', lib.finger(numpy.array(dvovv)) - -1038.3437534763445)
+    print('dvooo', lib.finger(numpy.array(dvooo)) -  979.27741472637604)
     fdm2 = None
 
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
             gamma2_intermediates(mcc, t1, t2, l1, l2)
-    print('dovov', lib.finger(_cp(dovov)) - -14384.907042073517)
-    print('dvvvv', lib.finger(_cp(dvvvv)) - -25.374007033024839)
-    print('doooo', lib.finger(_cp(doooo)) -  60.114594698129963)
-    print('doovv', lib.finger(_cp(doovv)) - -79.176348067958401)
-    print('dovvo', lib.finger(_cp(dovvo)) -  60.596864321502196)
-    print('dvvov', lib.finger(_cp(dvvov)) - -1129.9636175187422)
-    print('dovvv', lib.finger(_cp(dovvv)) - -421.90333700061342)
-    print('dooov', lib.finger(_cp(dooov)) - -592.66863759586136)
+    print('dovov', lib.finger(numpy.array(dovov)) - -14384.907042073517)
+    print('dvvvv', lib.finger(numpy.array(dvvvv)) - -25.374007033024839)
+    print('doooo', lib.finger(numpy.array(doooo)) -  60.114594698129963)
+    print('doovv', lib.finger(numpy.array(doovv)) - -79.176348067958401)
+    print('dovvo', lib.finger(numpy.array(dovvo)) -  60.596864321502196)
+    print('dvvov', lib.finger(numpy.array(dvvov)) - -1129.9636175187422)
+    print('dovvv', lib.finger(numpy.array(dovvv)) - -421.90333700061342)
+    print('dooov', lib.finger(numpy.array(dooov)) - -592.66863759586136)
 
     dvvvv = ao2mo.restore(1, dvvvv, nvir)
     print('doooo',numpy.einsum('kilj,kilj', doooo, eris.oooo)*2-15939.9007625418)

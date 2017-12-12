@@ -32,6 +32,8 @@ def kernel(eris, t1, t2):
     mo_eb = eris.fockb.diagonal()
     eia = mo_ea[:nocca,None] - mo_ea[nocca:]
     eIA = mo_eb[:noccb,None] - mo_eb[noccb:]
+    fov = eris.focka[:nocca,nocca:]
+    fOV = eris.fockb[:noccb,noccb:]
 
     # aaa
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eia, eia, eia)
@@ -39,6 +41,7 @@ def kernel(eris, t1, t2):
     w-= numpy.einsum('imab,ckmj->ijkabc', t2aa, eris.vooo)
     r = r6(w)
     v = numpy.einsum('bjck,ia->ijkabc', eris.vovp[:,:,:,:nocca], t1a)
+    v+= numpy.einsum('jkbc,ia->ijkabc', t2aa, fov) * .5
     wvd = p6(w + v) / d3
     et = numpy.einsum('ijkabc,ijkabc', wvd, r)
 
@@ -48,6 +51,7 @@ def kernel(eris, t1, t2):
     w-= numpy.einsum('imab,ckmj->ijkabc', t2bb, eris.VOOO)
     r = r6(w)
     v = numpy.einsum('bjck,ia->ijkabc', eris.VOVP[:,:,:,:noccb], t1b)
+    v+= numpy.einsum('jkbc,ia->ijkabc', t2bb, fOV) * .5
     wvd = p6(w + v) / d3
     et += numpy.einsum('ijkabc,ijkabc', wvd, r)
 
@@ -62,6 +66,8 @@ def kernel(eris, t1, t2):
     v  = numpy.einsum('bjck,IA->IjkAbc', eris.vovp[:,:,:,:nocca], t1b)
     v += numpy.einsum('AIck,jb->IjkAbc', eris.VOvp[:,:,:,:nocca], t1a)
     v += numpy.einsum('ckAI,jb->IjkAbc', eris.voVP[:,:,:,:noccb], t1a)
+    v += numpy.einsum('jkbc,IA->IjkAbc', t2aa, fOV) * .5
+    v += numpy.einsum('kIcA,jb->IjkAbc', t2ab, fov) * 2
     w += v
     w = w + w.transpose(0,2,1,3,5,4)
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eIA, eia, eia)
@@ -79,6 +85,8 @@ def kernel(eris, t1, t2):
     v  = numpy.einsum('bjck,ia->ijkabc', eris.VOVP[:,:,:,:noccb], t1a)
     v += numpy.einsum('aick,jb->ijkabc', eris.voVP[:,:,:,:noccb], t1b)
     v += numpy.einsum('ckai,jb->ijkabc', eris.VOvp[:,:,:,:nocca], t1b)
+    v += numpy.einsum('JKBC,ia->iJKaBC', t2bb, fov) * .5
+    v += numpy.einsum('iKaC,JB->iJKaBC', t2ab, fOV) * 2
     w += v
     w = w + w.transpose(0,2,1,3,5,4)
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eia, eIA, eIA)
@@ -91,7 +99,7 @@ def kernel(eris, t1, t2):
 
 class _ChemistsERIs:
     def __init__(self, mycc, mo_coeff=None):
-        moidx = uccsd.get_umoidx(mycc)
+        moidx = uccsd.get_moidx(mycc)
         if mo_coeff is None:
             mo_coeff = (mycc.mo_coeff[0][:,moidx[0]], mycc.mo_coeff[1][:,moidx[1]])
         else:
@@ -138,26 +146,26 @@ if __name__ == '__main__':
     from pyscf import scf
     from pyscf import cc
 
-    mol = gto.Mole()
-    mol.atom = [
-        [8 , (0. , 0.     , 0.)],
-        [1 , (0. , -.757 , .587)],
-        [1 , (0. ,  .757 , .587)]]
-
-    mol.basis = '631g'
-    mol.build()
-    rhf = scf.RHF(mol)
-    rhf.conv_tol = 1e-14
-    rhf.scf()
-    mcc = cc.CCSD(rhf)
-    mcc.conv_tol = 1e-14
-    mcc.ccsd()
-    t1a = t1b = mcc.t1
-    t2ab = mcc.t2
-    t2aa = t2bb = t2ab - t2ab.transpose(1,0,2,3)
-    e3a = kernel(_ChemistsERIs(uccsd.UCCSD(scf.addons.convert_to_uhf(rhf))),
-                 (t1a,t1b), (t2aa,t2ab,t2bb))
-    print(e3a - -0.00099642337843278096)
+#    mol = gto.Mole()
+#    mol.atom = [
+#        [8 , (0. , 0.     , 0.)],
+#        [1 , (0. , -.757 , .587)],
+#        [1 , (0. ,  .757 , .587)]]
+#
+#    mol.basis = '631g'
+#    mol.build()
+#    rhf = scf.RHF(mol)
+#    rhf.conv_tol = 1e-14
+#    rhf.scf()
+#    mcc = cc.CCSD(rhf)
+#    mcc.conv_tol = 1e-14
+#    mcc.ccsd()
+#    t1a = t1b = mcc.t1
+#    t2ab = mcc.t2
+#    t2aa = t2bb = t2ab - t2ab.transpose(1,0,2,3)
+#    e3a = kernel(_ChemistsERIs(uccsd.UCCSD(scf.addons.convert_to_uhf(rhf))),
+#                 (t1a,t1b), (t2aa,t2ab,t2bb))
+#    print(e3a - -0.00099642337843278096)
 
     mol = gto.Mole()
     mol.atom = [
@@ -168,8 +176,9 @@ if __name__ == '__main__':
     mol.basis = '3-21g'
     mol.build()
     mf = scf.UHF(mol).run(conv_tol=1e-14)
+    nao, nmo = mf.mo_coeff[0].shape
     numpy.random.seed(10)
-    mf.mo_coeff = numpy.random.random(mf.mo_coeff.shape)
+    mf.mo_coeff = numpy.random.random((2,nao,nmo))
 
     numpy.random.seed(12)
     nocca, noccb = mol.nelec
@@ -189,5 +198,12 @@ if __name__ == '__main__':
     t2 = t2aa, t2ab, t2bb
     e3a = kernel(_ChemistsERIs(uccsd.UCCSD(scf.addons.convert_to_uhf(mf)), mf.mo_coeff),
                  [t1a,t1b], [t2aa, t2ab, t2bb])
-    print(e3a - 8193.064821311109)
+    print(e3a - 9877.2780859693339)
 
+    mycc = cc.GCCSD(scf.addons.convert_to_ghf(mf))
+    eris = mycc.ao2mo()
+    t1 = mycc.spatial2spin(t1, eris.orbspin)
+    t2 = mycc.spatial2spin(t2, eris.orbspin)
+    from pyscf.cc import gccsd_t_slow
+    et = gccsd_t_slow.kernel(mycc, eris, t1, t2)
+    print(et - 9877.2780859693339)
