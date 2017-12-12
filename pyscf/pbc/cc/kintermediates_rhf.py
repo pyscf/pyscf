@@ -23,7 +23,6 @@ def cc_Foo(t1,t2,eris,kconserv):
     for ki in range(nkpts):
         kk = ki
         Fki[ki] = eris.fock[ki,:nocc,:nocc].copy()
-        Fki[ki] += 0.5*einsum('ke,ie->ki',eris.fock[ki,:nocc,nocc:],t1[ki])
         for kl in range(nkpts):
             for kc in range(nkpts):
                 kd = kconserv[kk,kc,kl]
@@ -41,7 +40,6 @@ def cc_Fvv(t1,t2,eris,kconserv):
     for ka in range(nkpts):
         kc = ka
         Fac[ka] = eris.fock[ka,nocc:,nocc:].copy()
-        Fac[ka] -= 0.5*einsum('mc,ma->ac',eris.fock[ka,:nocc,nocc:],t1[ka])
         for kl in range(nkpts):
             for kk in range(nkpts):
                 kd = kconserv[kk,kc,kl]
