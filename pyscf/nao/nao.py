@@ -408,7 +408,7 @@ class nao():
     sp2v = self.ao_log.sp2vna if sp2v is None else sp2v
     g = self.build_3dgrid_ae(**kw)
     ca2o = self.comp_aos_den(g.coords)
-    vna = self.vna(g.coords, sp2v=sp2v, **kw)
+    vna = self.vna(g.coords, sp2v=sp2v)
     vna_w = g.weights*vna
     cb2vo = einsum('co,c->co', ca2o, vna_w)
     vna = dot(ca2o.T,cb2vo)
