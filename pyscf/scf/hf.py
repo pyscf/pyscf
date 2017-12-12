@@ -998,7 +998,7 @@ def as_scanner(mf):
                 else:
                     break
 
-        def __call__(self, mol):
+        def __call__(self, mol, **kwargs):
             mf_obj = self
             while mf_obj is not None:
                 mf_obj.mol = mol
@@ -1023,7 +1023,7 @@ def as_scanner(mf):
                 dm0 = self.from_chk(self.chkfile)
             else:
                 dm0 = self.make_rdm1()
-            e_tot = self.kernel(dm0=dm0)
+            e_tot = self.kernel(dm0=dm0, **kwargs)
             return e_tot
 
     return SCF_Scanner(mf)

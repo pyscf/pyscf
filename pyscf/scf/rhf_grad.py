@@ -135,11 +135,11 @@ def as_scanner(grad_mf):
         def __init__(self, g):
             self.__dict__.update(g.__dict__)
             self._scf = g._scf.as_scanner()
-        def __call__(self, mol):
+        def __call__(self, mol, **kwargs):
             mf_scanner = self._scf
             e_tot = mf_scanner(mol)
             self.mol = mol
-            de = self.kernel()
+            de = self.kernel(**kwargs)
             return e_tot, de
         @property
         def converged(self):
@@ -157,6 +157,7 @@ class Gradients(lib.StreamObject):
         self.chkfile = scf_method.chkfile
         self.max_memory = self.mol.max_memory
 
+        self.atmlst = range(self.mol.natm)
         self.de = numpy.zeros((0,3))
         self._keys = set(self.__dict__.keys())
 
@@ -233,7 +234,10 @@ class Gradients(lib.StreamObject):
         if mo_energy is None: mo_energy = self._scf.mo_energy
         if mo_coeff is None: mo_coeff = self._scf.mo_coeff
         if mo_occ is None: mo_occ = self._scf.mo_occ
-        if atmlst is None: atmlst = range(self.mol.natm)
+        if atmlst is None:
+            atmlst = self.atmlst
+        else:
+            self.atmlst = atmlst
 
         if self.verbose >= logger.WARN:
             self.check_sanity()

@@ -17,7 +17,7 @@ from pyscf.data import nist
 def kernel(hobj):
     mol = hobj.mol
     atom_charges = mol.atom_charges()
-    atmlst = numpy.arange(mol.natm)[atom_charges != 0]  # Exclude ghost atoms
+    atmlst = numpy.where(atom_charges != 0)[0]  # Exclude ghost atoms
     natm = len(atmlst)
     mass = numpy.array([elements.MASSES[atom_charges[i]] for i in atmlst])
     reduced_mass = 1./(1./mass).sum()
@@ -65,6 +65,7 @@ class Frequency(rhf_hess.Hessian):
         self.mode = None
         self.conv_tol = 1e-3
         rhf_hess.Hessian.__init__(self, mf)
+        self.atmlst = None
 
     kernel = kernel
 

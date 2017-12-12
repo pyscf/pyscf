@@ -432,6 +432,7 @@ class Hessian(lib.StreamObject):
         self.chkfile = scf_method.chkfile
         self.max_memory = self.mol.max_memory
 
+        self.atmlst = range(self.mol.natm)
         self.de = numpy.zeros((0,0,3,3))  # (A,B,dR_A,dR_B)
         self._keys = set(self.__dict__.keys())
 
@@ -453,7 +454,10 @@ class Hessian(lib.StreamObject):
         if mo_energy is None: mo_energy = self._scf.mo_energy
         if mo_coeff is None: mo_coeff = self._scf.mo_coeff
         if mo_occ is None: mo_occ = self._scf.mo_occ
-        if atmlst is None: atmlst = range(self.mol.natm)
+        if atmlst is None:
+            atmlst = self.atmlst
+        else:
+            self.atmlst = atmlst
 
         de = self.hess_elec(mo_energy, mo_coeff, mo_occ, atmlst=atmlst)
         self.de = de + self.hess_nuc(self.mol, atmlst=atmlst)
