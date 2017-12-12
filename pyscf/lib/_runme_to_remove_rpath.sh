@@ -1,4 +1,8 @@
 #!/bin/bash
+#
+# This issue has been solved in PR #149.  Remove me in the future
+#
+
 
 dirnow=$(pwd)/$(dirname $0)
 

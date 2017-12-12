@@ -42,8 +42,8 @@ class load(object):
 
 
 def restore(symmetry, eri, norb, tao=None):
-    r'''Convert the 2e integrals between different level of permutation symmetry
-    (8-fold, 4-fold, or no symmetry)
+    r'''Convert the 2e integrals (in Chemist's notation) between different
+    level of permutation symmetry (8-fold, 4-fold, or no symmetry)
 
     Args:
         symmetry : int or str
@@ -54,6 +54,9 @@ def restore(symmetry, eri, norb, tao=None):
             | 's1' or '1' or 1 : no symmetry
             | 's2ij' or '2ij' : symmetric ij pair for (ij|kl) (TODO)
             | 's2ij' or '2kl' : symmetric kl pair for (ij|kl) (TODO)
+
+            Note the 4-fold symmetry requires (ij|kl) == (ij|lk) == (ij|lk)
+            while (ij|kl) != (kl|ij) is not required.
 
         eri : ndarray
             The symmetry of eri is determined by the size of eri and norb

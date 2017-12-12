@@ -26,8 +26,12 @@ PySCF 1.5 alpha (2018-03-??)
   - Performance of UCCSD lambda solver
 
 
-PySCF 1.4.2 (201?-?-?)
+PySCF 1.4.2 (2017-12-6)
 ----------------------
+* Added
+  - Frank Jensen, Polarization consistent basis sets
+* Improved
+  - Memory usage of pbc KHF calculation when HF exchange is computed with FFTDF
 * Bugfix
   - pyberny interface
   - PBC GDF initialization for hybrid functional

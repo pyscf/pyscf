@@ -95,7 +95,7 @@ def update_amps(mycc, t1, t2, eris):
     fwVOov, fwVooV = _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap)
     time1 = log.timer_debug1('ovvv', *time1)
 
-    unit = nocc**2*nvir*7 + nocc**3
+    unit = nocc**2*nvir*7 + nocc**3 + nocc*nvir**2
     max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     blksize = min(nvir, max(BLKMIN, int((max_memory*.9e6/8-nocc**4)/unit)))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
