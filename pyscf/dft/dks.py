@@ -101,7 +101,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     return vxc
 
 
-def energy_elec(ks, dm, h1e=None, vhf=None):
+def energy_elec(ks, dm=None, h1e=None, vhf=None):
     return rks.energy_elec(ks, dm, h1e, vhf)
 
 

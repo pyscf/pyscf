@@ -544,20 +544,95 @@ def parse_xc(description):
       first part describes the exchange functional, the second is the correlation
       functional.
 
-      - If "," was not appeared in string, the entire string is considered as
+      - If "," not presented in string, the entire string is treated as
         X functional.
       - To neglect X functional (just apply C functional), leave blank in the
         first part, eg description=',vwn' for pure VWN functional
+      - If compound XC functional (including both X and C functionals, such as
+        b3lyp) is specified, no matter whehter it is in the X part (the string
+        in front of comma) or the C part (the string behind comma), both X and C
+        functionals of the compound XC functional will be used.
 
-    * The functional name can be placed in arbitrary order.  Two names need to
-      be separated by operators "+" or "-".  Blank spaces are ignored.
-      NOTE the parser only reads operators "+" "-" "*".  "/" is not supported.
+    * The functional name can be placed in arbitrary order.  Two names needs to
+      be separated by operators + or -.  Blank spaces are ignored.
+      NOTE the parser only reads operators + - *.  / is not supported.
     * A functional name is associated with one factor.  If the factor is not
-      given, it is assumed to equal 1.
+      given, it is assumed equaling 1.  Compound functional can be scaled as a
+      unit. For example '0.5*b3lyp' is equivalent to
+      'HF*0.1 + .04*LDA + .36*B88, .405*LYP + .095*VWN'
     * String "HF" stands for exact exchange (HF K matrix).  It is allowed to
-      in the C functional part.
+      put "HF" in C (correlation) functional part.
     * Be careful with the libxc convention on GGA functional, in which the LDA
       contribution is included.
+
+    Args:
+        xc_code : str
+            A string to describe the linear combination of different XC functionals.
+            The X and C functional are separated by comma like '.8*LDA+.2*B86,VWN'.
+            If "HF" was appeared in the string, it stands for the exact exchange.
+        rho : ndarray
+            Shape of ((*,N)) for electron density (and derivatives) if spin = 0;
+            Shape of ((*,N),(*,N)) for alpha/beta electron density (and derivatives) if spin > 0;
+            where N is number of grids.
+            rho (*,N) are ordered as (den,grad_x,grad_y,grad_z,laplacian,tau)
+            where grad_x = d/dx den, laplacian = \nabla^2 den, tau = 1/2(\nabla f)^2
+            In spin unrestricted case,
+            rho is ((den_u,grad_xu,grad_yu,grad_zu,laplacian_u,tau_u)
+                    (den_d,grad_xd,grad_yd,grad_zd,laplacian_d,tau_d))
+
+    Kwargs:
+        spin : int
+            spin polarized if spin > 0
+        relativity : int
+            No effects.
+        verbose : int or object of :class:`Logger`
+            No effects.
+
+    Returns:
+        ex, vxc, fxc, kxc
+
+        where
+
+        * vxc = (vrho, vsigma, vlapl, vtau) for restricted case
+
+        * vxc for unrestricted case
+          | vrho[:,2]   = (u, d)
+          | vsigma[:,3] = (uu, ud, dd)
+          | vlapl[:,2]  = (u, d)
+          | vtau[:,2]   = (u, d)
+
+        * fxc for restricted case:
+          (v2rho2, v2rhosigma, v2sigma2, v2lapl2, vtau2, v2rholapl, v2rhotau, v2lapltau, v2sigmalapl, v2sigmatau)
+
+        * fxc for unrestricted case:
+          | v2rho2[:,3]     = (u_u, u_d, d_d)
+          | v2rhosigma[:,6] = (u_uu, u_ud, u_dd, d_uu, d_ud, d_dd)
+          | v2sigma2[:,6]   = (uu_uu, uu_ud, uu_dd, ud_ud, ud_dd, dd_dd)
+          | v2lapl2[:,3]
+          | vtau2[:,3]
+          | v2rholapl[:,4]
+          | v2rhotau[:,4]
+          | v2lapltau[:,4]
+          | v2sigmalapl[:,6]
+          | v2sigmatau[:,6]
+
+        * kxc for restricted case:
+          v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3,
+          v3rho2tau, v3rhosigmatau, v3rhotau2, v3sigma2tau, v3sigmatau2, v3tau3
+
+        * kxc for unrestricted case:
+          | v3rho3[:,4]       = (u_u_u, u_u_d, u_d_d, d_d_d)
+          | v3rho2sigma[:,9]  = (u_u_uu, u_u_ud, u_u_dd, u_d_uu, u_d_ud, u_d_dd, d_d_uu, d_d_ud, d_d_dd)
+          | v3rhosigma2[:,12] = (u_uu_uu, u_uu_ud, u_uu_dd, u_ud_ud, u_ud_dd, u_dd_dd, d_uu_uu, d_uu_ud, d_uu_dd, d_ud_ud, d_ud_dd, d_dd_dd)
+          | v3sigma3[:,10]     = (uu_uu_uu, uu_uu_ud, uu_uu_dd, uu_ud_ud, uu_ud_dd, uu_dd_dd, ud_ud_ud, ud_ud_dd, ud_dd_dd, dd_dd_dd)
+          | v3rho2tau
+          | v3rhosigmatau
+          | v3rhotau2
+          | v3sigma2tau
+          | v3sigmatau2
+          | v3tau3
+
+        see also libxc_itrf.c
     '''
 
     if isinstance(description, int):

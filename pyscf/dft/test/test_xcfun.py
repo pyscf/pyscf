@@ -27,7 +27,7 @@ def finger(a):
 class KnowValues(unittest.TestCase):
     def test_parse_xc(self):
         hyb, fn_facs = dft.libxc.parse_xc('.5*HF+.5*B3LYP,.5*VWN')
-        self.assertAlmostEqual(hyb, .7, 12)
+        self.assertAlmostEqual(hyb, .6, 12)
         self.assertEqual([x[0] for x in fn_facs], [1,106,131,7])
         self.assertTrue(numpy.allclose([x[1] for x in fn_facs],
                                        (0.08, 0.72, 0.81, 0.69)))

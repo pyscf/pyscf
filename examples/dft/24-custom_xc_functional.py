@@ -26,20 +26,25 @@ mol = gto.M(
 # * The functional description string has two parts, separated by ",".  The
 #   first part describes the exchange functional, the second is the correlation
 #   functional.
-#   - If "," not appeared in string, the entire string is considered as
+#   - If "," not presented in string, the entire string is treated as
 #     X functional.
 #   - To neglect X functional (just apply C functional), leave blank in the
 #     first part, eg description=',vwn' for pure VWN functional
+#   - If compound XC functional (including both X and C functionals, such as
+#     b3lyp) is specified, no matter whehter it is in the X part (the string
+#     in front of comma) or the C part (the string behind comma), both X and C
+#     functionals of the compound XC functional will be used.
 # * The functional name can be placed in arbitrary order.  Two names needs to
 #   be separated by operators + or -.  Blank spaces are ignored.
 #   NOTE the parser only reads operators + - *.  / is not supported.
 # * A functional name is associated with one factor.  If the factor is not
-#   given, it is assumed equaling 1.
+#   given, it is assumed equaling 1.  Compound functional can be scaled as a
+#   unit. For example '0.5*b3lyp' is equivalent to
+#   'HF*0.1 + .04*LDA + .36*B88, .405*LYP + .095*VWN'
 # * String "HF" stands for exact exchange (HF K matrix).  It is allowed to
 #   put "HF" in C (correlation) functional part.
 # * Be careful with the libxc convention on GGA functional, in which the LDA
 #   contribution is included.
-#
 
 mf = dft.RKS(mol)
 mf.xc = 'HF*0.2 + .08*LDA + .72*B88, .81*LYP + .19*VWN'
@@ -73,11 +78,9 @@ mf.xc = '0.5*b3lyp, 0.5*lyp'
 e1 = mf.kernel()
 print('E = %.15g  ref = -76.5537161912495' % e1)
 
-#
-# If compound XC functional (including both X and C functionals, such as
-# b3lyp) is used, no matter whehter it is specified in the X part (the string
-# before comma) or the C part (the string after comma), both X and C
-# functionals of the compound XC functional will be used.
+# Compound XC functional can be presented in the C part (the string behind
+# comma). Both X and C functionals of the compound XC functional will be used.
+# Compound XC functional can be scaled as a unit.
 #
 mf = dft.RKS(mol)
 mf.xc = '0.5*b3lyp, 0.5*b3p86'
