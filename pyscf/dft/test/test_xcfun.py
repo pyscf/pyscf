@@ -30,7 +30,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(hyb, .6, 12)
         self.assertEqual([x[0] for x in fn_facs], [1,106,131,7])
         self.assertTrue(numpy.allclose([x[1] for x in fn_facs],
-                                       (0.08, 0.72, 0.81, 0.69)))
+                                       (0.04, 0.36, 0.405, 0.595)))
 
     def test_lyp(self):
         e,v,f = dft.xcfun.eval_xc(',LYP', rho, deriv=2)[:3]
