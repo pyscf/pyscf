@@ -28,6 +28,8 @@ def run(b, dm, mo, ci=None):
         # the initial guess for b = 1.5
         caslst = [19,20,21,22,23,24,25,28,29,31,32,33]
         mo = mcscf.addons.sort_mo(mc, m.mo_coeff, caslst, 1)
+    else:
+        mo = mcscf.project_init_guess(mc, mo)
     emc.append(mc.kernel(mo)[0])
     mc.analyze()
     ept.append(mrpt.NEVPT(mc).kernel())

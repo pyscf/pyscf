@@ -27,6 +27,8 @@ def run(i, dm0, mo0, ci0):
 
     mc = mcscf.CASSCF(mf, 2, 2)
     mc.fcisolver.davidson_only = True # force the CI solver stick on (A1)^2(B1)^0 configuration
+    if mo0 is not None:
+        mo0 = mcscf.project_init_guess(mc, mo0)
 
     emc = mc.mc1step(mo0, ci0)[0]
 

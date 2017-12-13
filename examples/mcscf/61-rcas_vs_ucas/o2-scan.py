@@ -22,7 +22,11 @@ def run(b, mo0=None, dm0=None):
     mf.scf(dm0)
 
     mc = mcscf.CASSCF(mf, 12, 8)
-    if mo0 is None:
+    if mo0 is not None:
+        #from pyscf import lo
+        #mo0 = lo.orth.vec_lowdin(mo0, mf.get_ovlp())
+        mo0 = mcscf.project_init_guess(mc, mo0)
+    else:
         mo0 = mcscf.sort_mo(mc, mf.mo_coeff, [5,6,7,8,9,11,12,13,14,15,16,17])
         mc.max_orb_stepsize = .02
     mc.kernel(mo0)
@@ -46,6 +50,11 @@ def urun(b, mo0=None, dm0=None):
     mf.scf(dm0)
 
     mc = mcscf.CASSCF(mf, 12, 8)
+    if mo0 is not None:
+        #from pyscf import lo
+        #mo0 =(lo.orth.vec_lowdin(mo0[0], mf.get_ovlp()),
+        #      lo.orth.vec_lowdin(mo0[1], mf.get_ovlp()))
+        mo0 = mcscf.project_init_guess(mc, mo0)
     mc.kernel(mo0)
     mc.analyze()
     return mf, mc
