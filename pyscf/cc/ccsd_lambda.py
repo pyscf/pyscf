@@ -240,7 +240,8 @@ def update_lambda(mycc, t1, t2, l1, l2, eris=None, saved=None):
     mia1 -= numpy.einsum('bd,jd->jb', mba, t1)
     mia1 -= numpy.einsum('lj,lb->jb', mij, t1)
 
-    l2new = mycc._add_vvvv(numpy.zeros_like(l1), l2, eris)
+    l2new = mycc._add_vvvv(numpy.zeros_like(l1), l2, eris,
+                           with_ovvv=False, t2sym='jiba')
     l2new *= .5  # *.5 because of l2+l2.transpose(1,0,3,2) in the end
     l1new  = numpy.einsum('ijab,jb->ia', l2new, t1) * 4
     l1new -= numpy.einsum('jiab,jb->ia', l2new, t1) * 2

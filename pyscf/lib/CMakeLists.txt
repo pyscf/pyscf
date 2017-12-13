@@ -10,8 +10,11 @@ if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
   endif()
 endif()
 
+if (${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}.${CMAKE_PATCH_VERSION} VERSION_GREATER 3.0.0)
+  cmake_policy(SET CMP0042 NEW)
+endif()
+
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
-cmake_policy(SET CMP0042 NEW)
 
 #enable_language(Fortran)
 find_package(BLAS)
