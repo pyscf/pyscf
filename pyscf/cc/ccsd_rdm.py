@@ -214,7 +214,8 @@ def make_rdm1(mycc, t1, t2, l1, l2, d1=None):
     return dm1
 
 # rdm2 in Chemist's notation
-# Note vvvv of rdm2 does not correspond to vvvv of FCI rdm2
+# Note vvvv part of 2pdm have been symmetrized.  It does not correspond to
+# vvvv part of CI 2pdm
 def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None):
     if d1 is None: d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
     if d2 is None: d2 = gamma2_intermediates(mycc, t1, t2, l1, l2)
@@ -223,38 +224,9 @@ def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None):
     nocc, nvir = t1.shape
     nmo = nocc + nvir
 
-    dm2 = numpy.empty((nmo,nmo,nmo,nmo))
+    dm2 = _make_rdm2(mycc, t1, t2, l1, l2, d2=None)
 
-    dm2[:nocc,nocc:,:nocc,nocc:] = \
-            (dovov                   +dovov.transpose(2,3,0,1))
-    dm2[nocc:,:nocc,nocc:,:nocc] = \
-            (dovov.transpose(1,0,3,2)+dovov.transpose(3,2,1,0))
-
-    dm2[:nocc,:nocc,nocc:,nocc:] = \
-            (doovv.transpose(0,1,3,2)+doovv.transpose(1,0,2,3))
-    dm2[nocc:,nocc:,:nocc,:nocc] = \
-            (doovv.transpose(3,2,0,1)+doovv.transpose(2,3,1,0))
-    dm2[:nocc,nocc:,nocc:,:nocc] = \
-            (dovvo                   +dovvo.transpose(3,2,1,0))
-    dm2[nocc:,:nocc,:nocc,nocc:] = \
-            (dovvo.transpose(2,3,0,1)+dovvo.transpose(1,0,3,2))
-
-    dm2[nocc:,nocc:,nocc:,nocc:] = ao2mo.restore(1, dvvvv, nvir)
-    dm2[nocc:,nocc:,nocc:,nocc:] *= 4
-
-    dm2[:nocc,:nocc,:nocc,:nocc] =(doooo+doooo.transpose(1,0,3,2)) * 2
-
-    dm2[:nocc,nocc:,nocc:,nocc:] = dovvv
-    dm2[nocc:,nocc:,:nocc,nocc:] = dovvv.transpose(2,3,0,1)
-    dm2[nocc:,nocc:,nocc:,:nocc] = dovvv.transpose(3,2,1,0)
-    dm2[nocc:,:nocc,nocc:,nocc:] = dovvv.transpose(1,0,3,2)
-
-    dm2[:nocc,:nocc,:nocc,nocc:] = dooov
-    dm2[:nocc,nocc:,:nocc,:nocc] = dooov.transpose(2,3,0,1)
-    dm2[:nocc,:nocc,nocc:,:nocc] = dooov.transpose(1,0,3,2)
-    dm2[nocc:,:nocc,:nocc,:nocc] = dooov.transpose(3,2,1,0)
-
-    dm1 = numpy.zeros((nmo,nmo))
+    dm1 = numpy.empty((nmo,nmo))
     dm1[:nocc,:nocc] = doo + doo.T
     dm1[:nocc,nocc:] = dov + dvo.T
     dm1[nocc:,:nocc] = dm1[:nocc,nocc:].T
@@ -284,6 +256,45 @@ def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None):
             dm2[i,i,j,j] += 4
             dm2[i,j,j,i] -= 2
 
+    return dm2
+
+def _make_rdm2(mycc, t1, t2, l1, l2, d2=None):
+    '''The 2-PDM associated to the normal ordered 2-particle interactions
+    '''
+    if d2 is None: d2 = gamma2_intermediates(mycc, t1, t2, l1, l2)
+    dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
+    nocc, nvir = dovov.shape[:2]
+    nmo = nocc + nvir
+
+    dm2 = numpy.empty((nmo,nmo,nmo,nmo))
+
+    dm2[:nocc,nocc:,:nocc,nocc:] = dovov
+    dm2[:nocc,nocc:,:nocc,nocc:]+= dovov.transpose(2,3,0,1)
+    dm2[nocc:,:nocc,nocc:,:nocc] = dm2[:nocc,nocc:,:nocc,nocc:].transpose(1,0,3,2)
+
+    dm2[:nocc,:nocc,nocc:,nocc:] = doovv
+    dm2[:nocc,:nocc,nocc:,nocc:]+= doovv.transpose(1,0,3,2)
+    dm2[nocc:,nocc:,:nocc,:nocc] = dm2[:nocc,:nocc,nocc:,nocc:].transpose(2,3,0,1)
+    dm2[:nocc,nocc:,nocc:,:nocc] = dovvo
+    dm2[:nocc,nocc:,nocc:,:nocc]+= dovvo.transpose(3,2,1,0)
+    dm2[nocc:,:nocc,:nocc,nocc:] = dm2[:nocc,nocc:,nocc:,:nocc].transpose(1,0,3,2)
+
+    dm2[nocc:,nocc:,nocc:,nocc:] = ao2mo.restore(1, dvvvv, nvir)
+    dm2[nocc:,nocc:,nocc:,nocc:]*= 4
+
+    dm2[:nocc,:nocc,:nocc,:nocc] = doooo
+    dm2[:nocc,:nocc,:nocc,:nocc]+= doooo.transpose(1,0,3,2)
+    dm2[:nocc,:nocc,:nocc,:nocc]*= 2
+
+    dm2[:nocc,nocc:,nocc:,nocc:] = dovvv
+    dm2[nocc:,nocc:,:nocc,nocc:] = dovvv.transpose(2,3,0,1)
+    dm2[nocc:,nocc:,nocc:,:nocc] = dovvv.transpose(3,2,1,0)
+    dm2[nocc:,:nocc,nocc:,nocc:] = dovvv.transpose(1,0,3,2)
+
+    dm2[:nocc,:nocc,:nocc,nocc:] = dooov
+    dm2[:nocc,nocc:,:nocc,:nocc] = dooov.transpose(2,3,0,1)
+    dm2[:nocc,:nocc,nocc:,:nocc] = dooov.transpose(1,0,3,2)
+    dm2[nocc:,:nocc,:nocc,:nocc] = dooov.transpose(3,2,1,0)
     return dm2
 
 
@@ -387,6 +398,7 @@ if __name__ == '__main__':
 
     print(numpy.allclose(dm2, dm2.transpose(1,0,3,2)))
     print(numpy.allclose(dm2, dm2.transpose(2,3,0,1)))
+    print abs(dm2-dm2.transpose(2,3,0,1)).max(),'m'
 
     d1 = numpy.einsum('kkpq->pq', dm2) / 9
     print(numpy.allclose(d1, dm1))

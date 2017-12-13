@@ -7,131 +7,14 @@
 
 import time
 import numpy
+import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import ccsd_rdm
+from pyscf.cc import ccsd_grad
 from pyscf import grad
-
-def IX_intermediates(cc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
-    if eris is None:
-# Note eris are in Chemist's notation
-        eris = _ERIS(cc, cc._scf.mo_coeff)
-    if d1 is None:
-        d1 = gamma1_intermediates(cc, t1, t2, l1, l2)
-    if d2 is None:
-# Note gamma2 are in Chemist's notation
-        d2 = gamma2_intermediates(cc, t1, t2, l1, l2)
-    doo, dov, dvo, dvv = d1
-    dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
-    nocc, nvir = dov.shape
-
-# Note Ioo is not hermitian
-    Ioo  =(numpy.einsum('jakb,iakb->ij', dovov, eris.ovov)
-         + numpy.einsum('kbja,iakb->ij', dovov, eris.ovov))
-    Ioo +=(numpy.einsum('jabk,iakb->ij', dovvo, eris.ovov)
-         + numpy.einsum('kbaj,iakb->ij', dovvo, eris.ovov)
-         + numpy.einsum('jkab,ikab->ij', doovv, eris.oovv)
-         + numpy.einsum('kjba,ikab->ij', doovv, eris.oovv))
-    Ioo +=(numpy.einsum('jmlk,imlk->ij', doooo, eris.oooo) * 2
-         + numpy.einsum('mjkl,imlk->ij', doooo, eris.oooo) * 2)
-    Ioo +=(numpy.einsum('jlka,ilka->ij', dooov, eris.ooov)
-         + numpy.einsum('klja,klia->ij', dooov, eris.ooov))
-    Ioo += numpy.einsum('abjc,abic->ij', dvvov, eris.vvov)
-    Ioo += numpy.einsum('ljka,lika->ij', dooov, eris.ooov)
-    Ioo *= -1
-
-# Note Ivv is not hermitian
-    Ivv  =(numpy.einsum('ibjc,iajc->ab', dovov, eris.ovov)
-         + numpy.einsum('jcib,iajc->ab', dovov, eris.ovov))
-    Ivv +=(numpy.einsum('jcbi,iajc->ab', dovvo, eris.ovov)
-         + numpy.einsum('ibcj,iajc->ab', dovvo, eris.ovov)
-         + numpy.einsum('jibc,jiac->ab', doovv, eris.oovv)
-         + numpy.einsum('ijcb,jiac->ab', doovv, eris.oovv))
-    Ivv +=(numpy.einsum('bced,aced->ab', dvvvv, eris.vvvv) * 2
-         + numpy.einsum('cbde,aced->ab', dvvvv, eris.vvvv) * 2)
-    Ivv +=(numpy.einsum('dbic,daic->ab', dvvov, eris.vvov)
-         + numpy.einsum('dcib,dcia->ab', dvvov, eris.vvov))
-    Ivv += numpy.einsum('bcid,acid->ab', dvvov, eris.vvov)
-    Ivv += numpy.einsum('jikb,jika->ab', dooov, eris.ooov)
-    Ivv *= -1
-
-    Ivo  =(numpy.einsum('kajb,kijb->ai', dovov, eris.ooov)
-         + numpy.einsum('kbja,jikb->ai', dovov, eris.ooov))
-    Ivo +=(numpy.einsum('acbd,icbd->ai', dvvvv, eris.ovvv) * 2
-         + numpy.einsum('cadb,icbd->ai', dvvvv, eris.ovvv) * 2)
-    Ivo +=(numpy.einsum('jbak,jbik->ai', dovvo, eris.ovoo)
-         + numpy.einsum('kabj,jbik->ai', dovvo, eris.ovoo)
-         + numpy.einsum('jkab,jkib->ai', doovv, eris.ooov)
-         + numpy.einsum('kjba,jkib->ai', doovv, eris.ooov))
-    Ivo +=(numpy.einsum('dajc,dijc->ai', dvvov, eris.voov)
-         + numpy.einsum('dcja,dcji->ai', dvvov, eris.vvoo))
-    Ivo += numpy.einsum('abjc,ibjc->ai', dvvov, eris.ovov)
-    Ivo += numpy.einsum('jlka,jlki->ai', dooov, eris.oooo)
-    Ivo *= -1
-
-    if not (cc.frozen is None or cc.frozen is 0):
-        mo_e_o = eris.fock.diagonal()[:nocc]
-        mo_e_v = eris.fock.diagonal()[nocc:]
-        OA, VA, OF, VF = index_frozen_active(cc)
-        doo = doo.copy()
-        dvv = dvv.copy()
-        doo[OF[:,None],OA] = Ioo[OF[:,None],OA] / lib.direct_sum('i-j->ij', mo_e_o[OF], mo_e_o[OA])
-        doo[OA[:,None],OF] = Ioo[OA[:,None],OF] / lib.direct_sum('i-j->ij', mo_e_o[OA], mo_e_o[OF])
-        dvv[VF[:,None],VA] = Ivv[VF[:,None],VA] / lib.direct_sum('a-b->ab', mo_e_v[VF], mo_e_v[VA])
-        dvv[VA[:,None],VF] = Ivv[VA[:,None],VF] / lib.direct_sum('a-b->ab', mo_e_v[VA], mo_e_v[VF])
-
-    Xvo  =(numpy.einsum('kj,kjai->ai', doo+doo.T, eris.oovo) * 2
-         - numpy.einsum('kj,ajki->ai', doo+doo.T, eris.vooo))
-    Xvo +=(numpy.einsum('cb,cbai->ai', dvv+dvv.T, eris.vvvo) * 2
-         - numpy.einsum('cb,ibca->ai', dvv+dvv.T, eris.ovvv))
-    Xvo +=(numpy.einsum('icjb,acjb->ai', dovov, eris.vvov)
-         + numpy.einsum('jcib,abjc->ai', dovov, eris.vvov))
-    Xvo +=(numpy.einsum('iklj,aklj->ai', doooo, eris.vooo) * 2
-         + numpy.einsum('kijl,aklj->ai', doooo, eris.vooo) * 2)
-    Xvo +=(numpy.einsum('ibcj,abcj->ai', dovvo, eris.vvvo)
-         + numpy.einsum('jcbi,abcj->ai', dovvo, eris.vvvo)
-         + numpy.einsum('ijcb,ajcb->ai', doovv, eris.vovv)
-         + numpy.einsum('jibc,ajcb->ai', doovv, eris.vovv))
-    Xvo +=(numpy.einsum('ijkb,ajkb->ai', dooov, eris.voov)
-         + numpy.einsum('kjib,kjab->ai', dooov, eris.oovv))
-    Xvo += numpy.einsum('dbic,dbac->ai', dvvov, eris.vvvv)
-    Xvo += numpy.einsum('jikb,jakb->ai', dooov, eris.ovov)
-    Xvo += Ivo
-    return Ioo, Ivv, Ivo, Xvo
-
-
-def response_dm1(cc, t1, t2, l1, l2, eris=None, IX=None):
-    from pyscf.scf import cphf
-    if eris is None:
-# Note eris are in Chemist's notation
-        eris = _ERIS(cc, cc.mo_coeff)
-    if IX is None:
-        IX = IX_intermediates(cc, t1, t2, l1, l2, eris)
-    Ioo, Ivv, Ivo, Xvo = IX
-    nvir, nocc = Ivo.shape
-    nmo = nocc + nvir
-    def fvind(x):
-        x = x.reshape(Xvo.shape)
-        if eris is None:
-            mo_coeff = cc.mo_coeff
-            dm = reduce(numpy.dot, (mo_coeff[:,nocc:], x, mo_coeff[:,:nocc].T))
-            v = reduce(numpy.dot, (mo_coeff[:,nocc:].T, cc._scf.get_veff(mol, dm),
-                                   mo_coeff[:,:nocc]))
-        else:
-            v  = numpy.einsum('iajb,bj->ai', eris.ovov, x) * 4
-            v -= numpy.einsum('abji,bj->ai', eris.vvoo, x)
-            v -= numpy.einsum('ibja,bj->ai', eris.ovov, x)
-        return v
-    mo_energy = eris.fock.diagonal()
-    mo_occ = numpy.zeros_like(mo_energy)
-    mo_occ[:nocc] = 2
-    dvo = cphf.solve(fvind, mo_energy, mo_occ, Xvo, max_cycle=30)[0]
-    dm1 = numpy.zeros((nmo,nmo))
-    dm1[nocc:,:nocc] = dvo
-    dm1[:nocc,nocc:] = dvo.T
-    return dm1
 
 def kernel(cc, t1, t2, l1, l2, eris=None):
     if eris is None:
@@ -148,25 +31,28 @@ def kernel(cc, t1, t2, l1, l2, eris=None):
 
     d1 = gamma1_intermediates(cc, t1, t2, l1, l2)
     d2 = gamma2_intermediates(cc, t1, t2, l1, l2)
-    IX = IX_intermediates(cc, t1, t2, l1, l2, eris, d1, d2)
-    doo, dov, dvo, dvv = d1
-    Ioo, Ivv, Ivo, Xvo = IX
 
+    dm2 = ccsd_rdm._make_rdm2(mycc, t1, t2, l1, l2, d2)
+    eri = ao2mo.restore(1, ao2mo.full(mycc.mol, mo_coeff), nmo)
+# Note Imat is not hermitian
+    Imat = numpy.einsum('jqrs,iqrs->ij', dm2, eri) * -1
+    Ioo = Imat[:nocc,:nocc]
+    Ivv = Imat[nocc:,nocc:]
+    doo, dov, dvo, dvv = d1
     if with_frozen:
         OA, VA, OF, VF = index_frozen_active(cc)
         doo[OF[:,None],OA] = Ioo[OF[:,None],OA] / lib.direct_sum('i-j->ij', mo_e_o[OF], mo_e_o[OA])
         doo[OA[:,None],OF] = Ioo[OA[:,None],OF] / lib.direct_sum('i-j->ij', mo_e_o[OA], mo_e_o[OF])
         dvv[VF[:,None],VA] = Ivv[VF[:,None],VA] / lib.direct_sum('a-b->ab', mo_e_v[VF], mo_e_v[VA])
         dvv[VA[:,None],VF] = Ivv[VA[:,None],VF] / lib.direct_sum('a-b->ab', mo_e_v[VA], mo_e_v[VF])
-    dm1 = response_dm1(cc, t1, t2, l1, l2, eris, IX)
-    dm1[:nocc,:nocc] = doo + doo.T
-    dm1[nocc:,nocc:] = dvv + dvv.T
+    dm1 = scipy.linalg.block_diag(doo+doo.T, dvv+dvv.T)
+    dm1ao = reduce(numpy.dot, (mo_coeff, dm1, mo_coeff.T))
+    vj, vk = mycc._scf.get_jk(mycc.mol, dm1ao)
+    Xvo = reduce(numpy.dot, (mo_coeff[:,nocc:].T, vj*2-vk, mo_coeff[:,:nocc]))
+    Xvo += Imat[:nocc,nocc:].T - Imat[nocc:,:nocc]
 
-    im1 = numpy.zeros_like(dm1)
-    im1[:nocc,:nocc] = Ioo
-    im1[nocc:,nocc:] = Ivv
-    im1[nocc:,:nocc] = Ivo
-    im1[:nocc,nocc:] = Ivo.T
+    dm1 += ccsd_grad._response_dm1(cc, Xvo, eris)
+    Imat[nocc:,:nocc] = Imat[:nocc,nocc:].T
 
     h1 =-(mol.intor('cint1e_ipkin_sph', comp=3)
          +mol.intor('cint1e_ipnuc_sph', comp=3))
@@ -176,10 +62,6 @@ def kernel(cc, t1, t2, l1, l2, eris=None):
     eri1 = numpy.einsum('xipkl,pj->xijkl', eri1, mo_coeff)
     eri1 = numpy.einsum('xijpl,pk->xijkl', eri1, mo_coeff)
     eri1 = numpy.einsum('xijkp,pl->xijkl', eri1, mo_coeff)
-
-    dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
-    dvvov = dovvv.transpose(2,3,0,1)
-    dvvvv = ao2mo.restore(1, dvvvv, nvir).reshape((nvir,)*4)
     g0 = ao2mo.restore(1, ao2mo.full(mol, mo_coeff), nmo)
 
     de = numpy.empty((mol.natm,3))
@@ -234,15 +116,9 @@ def kernel(cc, t1, t2, l1, l2, eris=None):
             f1[nocc:,:nocc] = fai
             f1[:nocc,nocc:] = fai.T
             de2[i] += numpy.einsum('ij,ij', f1, dm1)
-            de2[i] += numpy.einsum('ij,ij', sx, im1)
+            de2[i] += numpy.einsum('ij,ij', sx, Imat)
+            de2[i] += numpy.einsum('iajb,iajb', dm2, g1) * .5
 
-            de2[i] += numpy.einsum('iajb,iajb', dovov, g1[:nocc,nocc:,:nocc,nocc:]) * 2
-            de2[i] += numpy.einsum('acbd,acbd', dvvvv, g1[nocc:,nocc:,nocc:,nocc:]) * 2
-            de2[i] += numpy.einsum('kilj,kilj', doooo, g1[:nocc,:nocc,:nocc,:nocc]) * 2
-            de2[i] += numpy.einsum('jbai,jbai', dovvo, g1[:nocc,nocc:,nocc:,:nocc]) * 2
-            de2[i] += numpy.einsum('jiab,jiab', doovv, g1[:nocc,:nocc,nocc:,nocc:]) * 2
-            de2[i] += numpy.einsum('abic,abic', dvvov, g1[nocc:,nocc:,:nocc,nocc:]) * 2
-            de2[i] += numpy.einsum('jika,jika', dooov, g1[:nocc,:nocc,:nocc,nocc:]) * 2
         de[k] = de2
 
     return de
