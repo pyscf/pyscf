@@ -71,6 +71,9 @@ if LooseVersion(numpy.__version__) <= LooseVersion('1.8.0'):
                       "You still can use all features of PySCF with the old numpy by removing this warning msg. "
                       "Some modules (DFT, CC, MRPT) might be affected because of the bug in old numpy." %
                       numpy.__version__)
+import h5py
+if h5py.__version__[:4] == '2.2.':
+    raise SystemError("h5py-%s has bug in threading mode." % h5py.__version__)
 from pyscf import gto
 from pyscf import lib
 from pyscf import scf
@@ -81,4 +84,4 @@ __path__.append(os.path.join(os.path.dirname(__file__), 'tools'))
 
 DEBUG = False
 
-del(os, LooseVersion, numpy)
+del(os, LooseVersion, numpy, h5py)
