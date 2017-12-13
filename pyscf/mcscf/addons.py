@@ -5,9 +5,11 @@
 
 import os
 import sys
+import copy
 from functools import reduce
 import numpy
 from pyscf import lib
+from pyscf import gto
 from pyscf.lib import logger
 from pyscf import fci
 from pyscf import scf
@@ -333,18 +335,23 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
                   - reduce(numpy.dot, (mocore, mocore.T, s, init_mo[:,ncore:nocc]))
             mocc = lo.orth.vec_lowdin(numpy.hstack((mocore, mocas)), s)
         else:
-            mocc = init_mo[:,:nocc]
+            mocc = lo.orth.vec_lowdin(init_mo[:,:nocc], s)
 
         # remove core and active space from rest
         if mocc.shape[1] < mfmo.shape[1]:
-            rest = mfmo - reduce(numpy.dot, (mocc, mocc.T, s, mfmo))
-            e, u = numpy.linalg.eigh(reduce(numpy.dot, (rest.T, s, rest)))
-            restorb = numpy.dot(rest, u[:,e>1e-7])
             if casscf.mol.symmetry:
-                t = casscf.mol.intor_symmetric('int1e_kin')
-                t = reduce(numpy.dot, (restorb.T, t, restorb))
-                e, u = numpy.linalg.eigh(t)
-                restorb = numpy.dot(restorb, u)
+                restorb = []
+                orbsym = scf.hf_symm.get_orbsym(casscf.mol, mfmo, s)
+                for ir in set(orbsym):
+                    mo_ir = mfmo[:,orbsym==ir]
+                    rest = mo_ir - reduce(numpy.dot, (mocc, mocc.T, s, mo_ir))
+                    e, u = numpy.linalg.eigh(reduce(numpy.dot, (rest.T, s, rest)))
+                    restorb.append(numpy.dot(rest, u[:,e>1e-7]))
+                restorb = numpy.hstack(restorb)
+            else:
+                rest = mfmo - reduce(numpy.dot, (mocc, mocc.T, s, mfmo))
+                e, u = numpy.linalg.eigh(reduce(numpy.dot, (rest.T, s, rest)))
+                restorb = numpy.dot(rest, u[:,e>1e-7])
             mo = numpy.hstack((mocc, restorb))
         else:
             mo = mocc
@@ -360,18 +367,21 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
     ncore = casscf.ncore
     mfmo = casscf._scf.mo_coeff
     s = casscf._scf.get_ovlp()
-    if isinstance(ncore, (int, numpy.integer)):
-        if prev_mol is not None:
-            init_mo = scf.addons.project_mo_nr2nr(prev_mol, init_mo, casscf.mol)
+    if prev_mol is None:
+        if init_mo.shape[0] != mfmo.shape[0]:
+            raise RuntimeError('Initial guess orbitals has wrong dimension')
+    elif not gto.same_basis_set(prev_mol, casscf.mol):
+        pmol = copy.copy(casscf.mol)
+        pmol._atom = prev_mol._atom
+        pmol.build(0, 0)
+        if isinstance(ncore, (int, numpy.integer)):  # RHF
+            init_mo = scf.addons.project_mo_nr2nr(prev_mol, init_mo, pmol)
         else:
-            assert(mfmo.shape[0] == init_mo.shape[0])
+            init_mo = (scf.addons.project_mo_nr2nr(prev_mol, init_mo[0], pmol),
+                       scf.addons.project_mo_nr2nr(prev_mol, init_mo[1], pmol))
+    if isinstance(ncore, (int, numpy.integer)):
         mo = project(mfmo, init_mo, ncore, s)
     else: # UHF-based CASSCF
-        if prev_mol is not None:
-            init_mo = (scf.addons.project_mo_nr2nr(prev_mol, init_mo[0], casscf.mol),
-                       scf.addons.project_mo_nr2nr(prev_mol, init_mo[1], casscf.mol))
-        else:
-            assert(mfmo[0].shape[0] == init_mo[0].shape[0])
         mo = (project(mfmo[0], init_mo[0], ncore[0], s),
               project(mfmo[1], init_mo[1], ncore[1], s))
     return mo

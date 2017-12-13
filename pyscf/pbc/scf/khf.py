@@ -274,7 +274,7 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
     return mo_energy, mo_coeff
 
 
-def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
+def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
     '''Read the KHF results from checkpoint file, then project it to the
     basis defined by ``cell``
 
@@ -521,11 +521,11 @@ class KSCF(pbchf.SCF):
             mo_coeff = mo_coeff[0]
         return mo_energy, mo_coeff
 
-    def init_guess_by_chkfile(self, chk=None, project=True, kpts=None):
+    def init_guess_by_chkfile(self, chk=None, project=None, kpts=None):
         if chk is None: chk = self.chkfile
         if kpts is None: kpts = self.kpts
         return init_guess_by_chkfile(self.cell, chk, project, kpts)
-    def from_chk(self, chk=None, project=True, kpts=None):
+    def from_chk(self, chk=None, project=None, kpts=None):
         return self.init_guess_by_chkfile(chk, project, kpts)
 
     def dump_chk(self, envs):

@@ -24,12 +24,15 @@ PySCF 1.5 alpha (2018-03-??)
   - Support of setting omp threads in FCI solver
   - Supported even number of grids in pbc calculations
   - Performance of UCCSD lambda solver
+  - The function to make SCF initial guess from the chkfile of the
+    molecule with different geometry
 
 
 PySCF 1.4.3 (2018-01-?)
 -----------------------
 * Improved
   - Assert convergence in geometry optimization
+  - Initial guess in SCF PES scanning
 * Bugfix
   - XC parser to support the scaled compound functional
   - The effects of level_shift in second order SCF

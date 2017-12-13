@@ -64,6 +64,9 @@ except (ImportError, OSError):
             return einsum(",".join(indices_in)+"->"+idx_final,*tensors)
 
         A, B = tensors
+        # Call numpy.asarray because A or B may be HDF5 Datasets 
+        A = numpy.asarray(A, order='A')
+        B = numpy.asarray(B, order='A')
         # Split the strings into a list of idx char's
         idxA, idxBC = idx_str.split(',')
         idxB, idxC = idxBC.split('->')
@@ -150,9 +153,8 @@ except (ImportError, OSError):
             shapeCt = [shapeCt[i] for i in new_orderCt]
             return numpy.zeros(shapeCt, dtype=numpy.result_type(A,B))
 
-        # Call numpy.asarray because A or B may be HDF5 Datasets 
-        At = numpy.asarray(A, order='A').transpose(new_orderA)
-        Bt = numpy.asarray(B, order='A').transpose(new_orderB)
+        At = A.transpose(new_orderA)
+        Bt = B.transpose(new_orderB)
 
         if At.flags.f_contiguous:
             At = numpy.asarray(At.reshape(-1,inner_shape), order='F')

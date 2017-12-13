@@ -255,23 +255,23 @@ class KnowValues(unittest.TestCase):
             mol1.build()
             mf1 = HFclass(mol1)
             mf1.chkfile = ftmp.name
-            dm1 = mf1.init_guess_by_chkfile()
+            dm1 = mf1.init_guess_by_chkfile(project=True)
             self.assertAlmostEqual(numpy.linalg.norm(dm1), ref, 9)
 
         save(scf.hf.RHF)
-        check(scf.hf.RHF, 5.2644790347333048)
-        check(scf.rohf.ROHF, 3.7225488248743273)
-        check(scf.uhf.UHF, 3.7225488248743273)
-        check(scf.dhf.UHF, 3.7225488248743273)
+        check(scf.hf.RHF, 5.2653611000274259)
+        check(scf.rohf.ROHF, 3.7231725392252519)
+        check(scf.uhf.UHF, 3.7231725392252519)
+        check(scf.dhf.UHF, 3.7225488248743241)
 
         save(scf.uhf.UHF)
-        check(scf.hf.RHF, 5.2644790347333048)
-        check(scf.rohf.ROHF, 3.7225488248743273)
-        check(scf.uhf.UHF, 3.7225488248743273)
-        check(scf.dhf.UHF, 3.7225488248743273)
+        check(scf.hf.RHF, 5.2653611000274259)
+        check(scf.rohf.ROHF, 3.7231725392252519)
+        check(scf.uhf.UHF, 3.7231725392252519)
+        check(scf.dhf.UHF, 3.7225488248743241)
 
         save(scf.dhf.UHF)
-        check(scf.dhf.UHF, 7.3540281989311271)
+        check(scf.dhf.UHF, 7.3552498540235245)
 
     def test_scanner(self):
         from pyscf import dft
@@ -281,16 +281,25 @@ class KnowValues(unittest.TestCase):
         H   0.   -0.757   0.587
         H   0.   0.757    0.587''')
         mf_scanner = scf.UHF(molsym).density_fit('weigend').as_scanner()
-        self.assertAlmostEqual(mf_scanner(molsym), -75.98321088694874, 9)
-        self.assertAlmostEqual(mf_scanner(mol1), -75.97901175977492, 9)
+        self.assertAlmostEqual(mf_scanner(molsym), -75.98321088694874, 8)
+        self.assertAlmostEqual(mf_scanner(mol1), -75.97901175977492, 8)
 
         mf_scanner = scf.fast_newton(scf.ROHF(molsym)).as_scanner()
-        self.assertAlmostEqual(mf_scanner(molsym), -75.983948498066198, 9)
-        self.assertAlmostEqual(mf_scanner(mol1), -75.97974371226907, 9)
+        self.assertAlmostEqual(mf_scanner(molsym), -75.983948498066198, 8)
+        self.assertAlmostEqual(mf_scanner(mol1), -75.97974371226907, 8)
 
         mf_scanner = dft.RKS(molsym).set(xc='bp86').as_scanner()
-        self.assertAlmostEqual(mf_scanner(molsym), -76.385043416002361, 9)
-        self.assertAlmostEqual(mf_scanner(mol1), -76.372784697245777, 9)
+        self.assertAlmostEqual(mf_scanner(molsym), -76.385043416002361, 8)
+        self.assertAlmostEqual(mf_scanner(mol1), -76.372784697245777, 8)
+
+        # Test init_guess_by_chkfile for stretched geometry and different basis set
+        mol1.atom = '''
+        O   0.   0.      -.5
+        H   0.  -0.957   0.587
+        H   0.   0.957   0.587'''
+        mol1.basis = 'ccpvdz'
+        mol1.build(0,0)
+        self.assertAlmostEqual(mf_scanner(mol1), -76.273052274103648, 8)
 
 
 

@@ -477,7 +477,7 @@ def overlap(bra, ket, norb, nelec, s=None):
     '''
     if s is not None:
         bra = transform_ci_for_orbital_rotation(bra, norb, nelec, s)
-    return numpy.dot(bra.ravel(), ket.ravel())
+    return numpy.dot(bra.ravel().conj(), ket.ravel())
 
 def fix_spin_(fciobj, shift=.2, ss=None, **kwargs):
     r'''If FCI solver cannot stay on spin eigenfunction, this function can

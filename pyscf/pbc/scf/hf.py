@@ -166,7 +166,7 @@ def get_bands(mf, kpts_band, cell=None, dm=None, kpt=None):
     return mo_energy, mo_coeff
 
 
-def init_guess_by_chkfile(cell, chkfile_name, project=True, kpt=None):
+def init_guess_by_chkfile(cell, chkfile_name, project=None, kpt=None):
     '''Read the HF results from checkpoint file, then project it to the
     basis defined by ``cell``
 
@@ -392,11 +392,11 @@ class SCF(mol_hf.SCF):
                         'the SCF of low-dimensional systems.')
         return mol_hf.SCF.init_guess_by_1e(cell)
 
-    def init_guess_by_chkfile(self, chk=None, project=True, kpt=None):
+    def init_guess_by_chkfile(self, chk=None, project=None, kpt=None):
         if chk is None: chk = self.chkfile
         if kpt is None: kpt = self.kpt
         return init_guess_by_chkfile(self.cell, chk, project, kpt)
-    def from_chk(self, chk=None, project=True, kpt=None):
+    def from_chk(self, chk=None, project=None, kpt=None):
         return self.init_guess_by_chkfile(chk, project, kpt)
 
     def dump_chk(self, envs):

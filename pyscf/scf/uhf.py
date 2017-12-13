@@ -6,6 +6,7 @@ from functools import reduce
 import numpy
 import scipy.linalg
 from pyscf import lib
+from pyscf import gto
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import chkfile
@@ -48,15 +49,47 @@ def init_guess_by_atom(mol, breaksym=True):
     return numpy.array((dma,dmb))
 
 
-def init_guess_by_chkfile(mol, chkfile_name, project=True):
+def init_guess_by_chkfile(mol, chkfile_name, project=None):
+    '''Read SCF chkfile and make the density matrix for UHF initial guess.
+
+    Kwargs:
+        project : None or bool
+            Whether to project chkfile's orbitals to the new basis.  Note when
+            the geometry of the chkfile and the given molecule are very
+            different, this projection can produce very poor initial guess.
+            In PES scanning, it is recommended to swith off project.
+
+            If project is set to None, the projection is only applied when the
+            basis sets of the chkfile's molecule are different to the basis
+            sets of the given molecule (regardless whether the geometry of
+            the two molecules are different).  Note the basis sets are
+            considered to be different if the two molecules are derived from
+            the same molecule with different ordering of atoms.
+    '''
     from pyscf.scf import addons
     chk_mol, scf_rec = chkfile.load_scf(chkfile_name)
+    if project is None:
+        project = not gto.same_basis_set(chk_mol, mol)
+
+    # Check whether the two molecules are similar enough
+    def inertia_momentum(mol):
+        im = gto.inertia_momentum(mol._atom, mol.atom_charges(),
+                                  mol.atom_coords())
+        return scipy.linalg.eigh(im)[0]
+    if abs(inertia_momentum(mol) - inertia_momentum(chk_mol)).sum() > 0.5:
+        logger.warn(mol, "Large deviations found between the input "
+                    "molecule and the molecule from chkfile\n"
+                    "Initial guess density matrix may have large error.")
+
+    if project:
+        s = hf.get_ovlp(mol)
 
     def fproj(mo):
         if project:
-            return addons.project_mo_nr2nr(chk_mol, mo, mol)
-        else:
-            return mo
+            mo = addons.project_mo_nr2nr(chk_mol, mo, mol)
+            norm = numpy.einsum('pi,pi->i', mo.conj(), s.dot(mo))
+            mo /= numpy.sqrt(norm)
+        return mo
 
     mo = scf_rec['mo_coeff']
     mo_occ = scf_rec['mo_occ']
@@ -682,7 +715,7 @@ class UHF(hf.SCF):
                 dmb[p0:p1,p0:p1] = dma[p0:p1,p0:p1]
         return numpy.array((dma,dmb))
 
-    def init_guess_by_chkfile(self, chkfile=None, project=True):
+    def init_guess_by_chkfile(self, chkfile=None, project=None):
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
 

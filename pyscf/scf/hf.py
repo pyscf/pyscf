@@ -403,7 +403,7 @@ def init_guess_by_atom(mol):
     return dm
 
 
-def init_guess_by_chkfile(mol, chkfile_name, project=True):
+def init_guess_by_chkfile(mol, chkfile_name, project=None):
     '''Read the HF results from checkpoint file, then project it to the
     basis defined by ``mol``
 
@@ -1234,14 +1234,14 @@ class SCF(lib.StreamObject):
         return self.make_rdm1(mo_coeff, mo_occ)
 
     @lib.with_doc(init_guess_by_chkfile.__doc__)
-    def init_guess_by_chkfile(self, chkfile=None, project=True):
+    def init_guess_by_chkfile(self, chkfile=None, project=None):
         if isinstance(chkfile, gto.Mole):
             raise TypeError('''
     You see this error message because of the API updates.
     The first argument is chkfile name.''')
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
-    def from_chk(self, chkfile=None, project=True):
+    def from_chk(self, chkfile=None, project=None):
         return self.init_guess_by_chkfile(chkfile, project)
     from_chk.__doc__ = init_guess_by_chkfile.__doc__
 
