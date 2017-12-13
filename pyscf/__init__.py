@@ -63,6 +63,7 @@ Eg
 __version__ = '1.4.2'
 
 import os
+import sys
 from distutils.version import LooseVersion
 import numpy
 if LooseVersion(numpy.__version__) <= LooseVersion('1.8.0'):
@@ -73,7 +74,10 @@ if LooseVersion(numpy.__version__) <= LooseVersion('1.8.0'):
                       numpy.__version__)
 import h5py
 if h5py.__version__[:4] == '2.2.':
-    raise SystemError("h5py-%s has bug in threading mode." % h5py.__version__)
+    sys.stderr.write('h5py-%s is found in your environment. '
+                     'h5py-%s has bug in threading mode.\n'
+                     'Async-IO is disabled.\n' %
+                     h5py.__version__, h5py.__version__)
 from pyscf import gto
 from pyscf import lib
 from pyscf import scf
@@ -84,4 +88,4 @@ __path__.append(os.path.join(os.path.dirname(__file__), 'tools'))
 
 DEBUG = False
 
-del(os, LooseVersion, numpy, h5py)
+del(os, sys, LooseVersion, numpy, h5py)

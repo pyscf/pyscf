@@ -576,6 +576,12 @@ class call_in_background(object):
 # Disable the asynchoronous mode for safe importing
             def def_async_fn(fn):
                 return fn
+
+        elif h5py.__version__[:4] == '2.2.':
+# h5py-2.2.* has bug in threading mode.
+            def def_async_fn(fn):
+                return fn
+
         else:
             def def_async_fn(fn):
                 def async_fn(*args, **kwargs):
