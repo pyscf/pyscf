@@ -17,7 +17,11 @@ if(CUDA_FOUND)
 
   set(CUDA_HELPER "${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc")
   set(CUDA_LIBRARIES "-L${CUDA_TOOLKIT_ROOT_DIR}/lib64 -lcuda -lcudart -lcublas -lcublas_device -lcudadevrt -lstdc++")
-  #set(CUDA_NVCC_FLAGS_DEBUG "-O0 -G -lineinfo")
+  set(CUDA_HOST_COMPILER "${HOST_COMPILER}")
+  set(CUDA_PROPAGATE_HOST_FLAGS OFF)
+  set(CUDA_NVCC_FLAGS "${CUDA_FLAGS}")
+
+  message("CUDA FLAGS: ${CUDA_NVCC_FLAGS}")
   message("CUDA LIB: ${CUDA_LIBRARIES}")
   include_directories(${CUDA_HELPER})
   message("CUDA Helper: ${CUDA_HELPER}")

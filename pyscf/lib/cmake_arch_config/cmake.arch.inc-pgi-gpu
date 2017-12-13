@@ -1,0 +1,26 @@
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ")
+enable_language(Fortran)
+
+set(CMAKE_Fortran_FLAGS "-DTIMING -O3 -fast")
+#set(CMAKE_Fortran_FLAGS "-pedantic -O0 -Wall -Wall -fbounds-check -fbacktrace -ffree-line-length-0")
+
+set(HAVE_OPENMP 1)
+message("OpenMP_C_FLAGS ${OpenMP_C_FLAGS}")
+
+# pgcc is not working with nvcc, need to use gcc
+set(HOST_COMPILER "gcc")
+set(CUDA_FLAGS "-O3 -Xcompiler -fopenmp")
+
+# MKL blas
+#set(MKL_ROOT "PATH to MKL")
+#set(BLAS_LIBRARIES "-L${MKL_ROOT} -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lmkl_def -lpthread -lm -ldl -lgomp")
+#set(LAPACK_LIBRARIES "-L${MKL_ROOT} -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lmkl_def -lpthread -lm -ldl -lgomp")
+
+# openBlas
+set(BLAS_LIBRARIES "-lblas")
+set(LAPACK_LIBRARIES "-llapack -lfftw3 -lfftw3f")
+message("BLAS libraries: ${BLAS_LIBRARIES}")
+message("LAPACK libraries: ${LAPACK_LIBRARIES}")
+
+add_subdirectory(nao)
+add_subdirectory(sparsetools)
