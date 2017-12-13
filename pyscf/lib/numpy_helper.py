@@ -517,11 +517,11 @@ def hermi_sum(a, axes=None, hermi=HERMITIAN, inplace=False, out=None):
             na = a.shape[0]
             for c0, c1 in misc.prange(0, na, BLOCK_DIM):
                 for r0, r1 in misc.prange(0, c0, BLOCK_DIM):
-                    tmp = a[r0:r1,c0:c1] + a[c0:c1,r0:r1].T.conj()
+                    tmp = a[r0:r1,c0:c1] + a[c0:c1,r0:r1].conj().T
                     out[c0:c1,r0:r1] = tmp.T.conj()
                     out[r0:r1,c0:c1] = tmp
                 # diagonal blocks
-                tmp = a[c0:c1,c0:c1] + a[c0:c1,c0:c1].T.conj()
+                tmp = a[c0:c1,c0:c1] + a[c0:c1,c0:c1].conj().T
                 out[c0:c1,c0:c1] = tmp
             return out
         else:
