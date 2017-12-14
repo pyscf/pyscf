@@ -10,9 +10,9 @@ import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.grad import rhf as rhf_grad
+from pyscf.scf import rhf_grad
+from pyscf.dft import rks_grad
 from pyscf.grad import uhf as uhf_grad
-from pyscf.grad import rks as rks_grad
 from pyscf.dft import numint, gen_grid
 
 
