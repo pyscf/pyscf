@@ -895,10 +895,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
         return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2)
 
-    def nuc_grad_method(self):
-        from pyscf.cc import ccsd_grad
-        return ccsd_grad.Gradients(self)
-
     def ao2mo(self, mo_coeff=None):
         # Pseudo code how eris are implemented:
         # nocc = self.nocc
@@ -976,6 +972,10 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         else:
             chkfile = self._scf.chkfile
         lib.chkfile.save(chkfile, 'ccsd', cc_chk)
+
+    def nuc_grad_method(self):
+        from pyscf.cc import ccsd_grad
+        return ccsd_grad.Gradients(self)
 
 CC = CCSD
 

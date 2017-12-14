@@ -8,19 +8,15 @@ Solve CISD equation  H C = C e  where e = E_HF + E_CORR
 '''
 
 import time
-import ctypes
-import tempfile
 from functools import reduce
 import numpy
-import h5py
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.cc import ccsd
-from pyscf.cc import _ccsd
+from pyscf.cc import ccsd_rdm
 from pyscf.fci import cistring
 from functools import reduce
-_dgemm = lib.numpy_helper._dgemm
 
 def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8, verbose=logger.INFO):
     if isinstance(verbose, logger.Logger):
@@ -103,7 +99,7 @@ def contract(myci, civec, eris):
     nvir = nmo - nocc
     nov = nocc * nvir
     noo = nocc**2
-    c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
+    c0, c1, c2 = myci.cisdvec_to_amplitudes(civec, nmo, nocc)
 
     t2 = myci._add_vvvv(c2, eris, t2sym='jiba')
     t2 *= .5  # due to t2+t2.transpose(1,0,3,2) in the end
@@ -128,7 +124,6 @@ def contract(myci, civec, eris):
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
     nvir_pair = nvir * (nvir+1) // 2
-    blksize = 3
     for p0, p1 in lib.prange(0, nvir, blksize):
         eris_oVoV = _cp(_cp(eris.oovv[:,:,p0:p1]).transpose(0,2,1,3))
         tmp = lib.einsum('jbkc,ikca->jiba', eris_oVoV, c2)
@@ -196,6 +191,7 @@ def dot(v1, v2, nmo, nocc):
     return val
 
 def t1strs(norb, nelec):
+    '''FCI strings (address) for CIS single-excitation amplitues'''
     nocc = nelec
     hf_str = int('1'*nocc, 2)
     addrs = []
@@ -208,6 +204,7 @@ def t1strs(norb, nelec):
     return numpy.asarray(addrs), numpy.asarray(signs)
 
 def to_fcivec(cisdvec, norb, nelec):
+    '''Convert CISD coefficients to FCI coefficients'''
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -243,6 +240,7 @@ def to_fcivec(cisdvec, norb, nelec):
     return fcivec
 
 def from_fcivec(ci0, norb, nelec):
+    '''Extract CISD coefficients from FCI coefficients'''
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -259,95 +257,153 @@ def from_fcivec(ci0, norb, nelec):
     c2 = c2.reshape(nvir,nocc,nvir,nocc).transpose(1,3,0,2)
     return amplitudes_to_cisdvec(c0, c1[::-1], c2[::-1,::-1])
 
+def make_rdm1(myci, civec, nmo, nocc, d1=None):
+    if d1 is None:
+        d1 = gamma1_intermediates(myci, civec, nmo, nocc)
+    return ccsd_rdm.make_rdm1(myci, None, None, None, None, d1)
 
-def make_rdm1(ci, nmo, nocc):
-    nvir = nmo - nocc
-    c0, c1, c2 = cisdvec_to_amplitudes(ci, nmo, nocc)
-    dov = c0*c1 * 2
-    dov += numpy.einsum('jb,ijab->ia', c1, c2) * 4
-    dov -= numpy.einsum('jb,ijba->ia', c1, c2) * 2
-    doo  = numpy.einsum('ia,ka->ik', c1, c1) * -2
-    #:doo -= numpy.einsum('ijab,ikab->jk', c2, c2) * 4
-    #:doo += numpy.einsum('ijab,kiab->jk', c2, c2) * 2
-    theta = c2*2 - c2.transpose(0,1,3,2)
-    lib.ddot(c2.reshape(nocc,-1), theta.reshape(nocc,-1).T, -2, doo, 1)
-    dvv  = numpy.einsum('ia,ic->ca', c1, c1) * 2
-    #:dvv += numpy.einsum('ijab,ijac->cb', c2, c2) * 4
-    #:dvv -= numpy.einsum('ijab,jiac->cb', c2, c2) * 2
-    lib.ddot(c2.reshape(-1,nvir).T, theta.reshape(-1,nvir), 2, dvv, 1)
-
-    rdm1 = numpy.empty((nmo,nmo))
-    rdm1[:nocc,nocc:] = dov
-    rdm1[nocc:,:nocc] = dov.T
-    rdm1[:nocc,:nocc] = doo
-    rdm1[nocc:,nocc:] = dvv
-
-    for i in range(nocc):
-        rdm1[i,i] += 2
-    return rdm1
-
-def make_rdm2(ci, nmo, nocc):
+def make_rdm2(myci, civec, nmo, nocc, d1=None, d2=None):
     '''spin-traced 2pdm in chemist's notation
     '''
+    if d1 is None:
+        d1 = gamma1_intermediates(myci, civec, nmo, nocc)
+    if d2 is None:
+        f = lib.H5TmpFile()
+        d2 = _gamma2_outcore(myci, civec, nmo, nocc, f)
+    return ccsd_rdm.make_rdm2(myci, None, None, None, None, d1, d2)
+
+def gamma1_intermediates(myci, civec, nmo, nocc):
+    c0, c1, c2 = myci.cisdvec_to_amplitudes(civec, nmo, nocc)
+    dov = c0*c1
+    dov += numpy.einsum('jb,ijab->ia', c1, c2) * 2
+    dov -= numpy.einsum('jb,ijba->ia', c1, c2)
+
+    theta = c2*2 - c2.transpose(0,1,3,2)
+    doo  =-numpy.einsum('ia,ka->ik', c1, c1)
+    doo -= lib.einsum('ijab,ikab->jk', theta, c2)
+    dvv  = numpy.einsum('ia,ic->ca', c1, c1)
+    dvv += lib.einsum('ijab,ijac->cb', theta, c2)
+    return doo, dov, dov.T, dvv
+
+def gamma2_intermediates(myci, civec, nmo, nocc):
+    f = lib.H5TmpFile()
+    _gamma2_outcore(myci, civec, nmo, f)
+    d2 = (f['dovov'].value, f['dvvvv'].value, f['doooo'].value, f['doovv'].value,
+          f['dovvo'].value, None,             f['dovvv'].value, f['dooov'].value)
+    return d2
+
+def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj):
+    log = logger.Logger(myci.stdout, myci.verbose)
+    nocc = myci.nocc
+    nmo = myci.nmo
     nvir = nmo - nocc
-    noo = nocc**2
-    nov = nocc * nvir
-    c0, c1, c2 = cisdvec_to_amplitudes(ci, nmo, nocc)
-    doovv = c0*c2
-    dvvvo = numpy.einsum('ia,ikcd->cdak', c1, c2)
-    dovoo =-numpy.einsum('ia,klac->ickl', c1, c2)
-    doooo = lib.ddot(c2.reshape(noo,-1), c2.reshape(noo,-1).T).reshape((nocc,)*4)
-    dvvvv = lib.ddot(c2.reshape(noo,-1).T, c2.reshape(noo,-1)).reshape((nvir,)*4)
+    nvir_pair = nvir * (nvir+1) // 2
+    c0, c1, c2 = myci.cisdvec_to_amplitudes(civec, nmo, nocc)
 
-    rdm2 = numpy.zeros((nmo,nmo,nmo,nmo))
-    rdm2[:nocc,:nocc,:nocc,:nocc] = doooo*4-doooo.transpose(1,0,2,3)*2
-    rdm2[:nocc,nocc:,:nocc,:nocc] = dovoo*4-dovoo.transpose(0,1,3,2)*2
-    rdm2[nocc:,:nocc,:nocc,:nocc] = rdm2[:nocc,nocc:,:nocc,:nocc].transpose(1,0,3,2)
-    rdm2[:nocc,:nocc,:nocc,nocc:] = rdm2[:nocc,nocc:,:nocc,:nocc].transpose(2,3,0,1)
-    rdm2[:nocc,:nocc,nocc:,:nocc] = rdm2[:nocc,nocc:,:nocc,:nocc].transpose(3,2,1,0)
+    h5fobj['dovov'] = 2*c0*c2.transpose(0,2,1,3) - c0*c2.transpose(1,2,0,3)
 
-    rdm2[:nocc,:nocc,nocc:,nocc:] = doovv*4-doovv.transpose(1,0,2,3)*2
-    rdm2[nocc:,nocc:,:nocc,:nocc] = rdm2[:nocc,:nocc,nocc:,nocc:].transpose(2,3,0,1)
-    rdm2[nocc:,nocc:,nocc:,:nocc] = dvvvo*4-dvvvo.transpose(1,0,2,3)*2
-    rdm2[nocc:,nocc:,:nocc,nocc:] = rdm2[nocc:,nocc:,nocc:,:nocc].transpose(1,0,3,2)
-    rdm2[nocc:,:nocc,nocc:,nocc:] = rdm2[nocc:,nocc:,nocc:,:nocc].transpose(2,3,0,1)
-    rdm2[:nocc,nocc:,nocc:,nocc:] = rdm2[nocc:,nocc:,nocc:,:nocc].transpose(3,2,1,0)
-    rdm2[nocc:,nocc:,nocc:,nocc:] = dvvvv*4-dvvvv.transpose(1,0,2,3)*2
+    doooo = lib.einsum('ijab,klab->ijkl', c2, c2)
+    h5fobj['doooo'] = doooo.transpose(0,2,1,3) - doooo.transpose(1,2,0,3)*.5
+    doooo = None
+
+    dooov =-numpy.einsum('ia,klac->klic', c1*2, c2)
+    h5fobj['dooov'] = dooov.transpose(0,2,1,3)*2 - dooov.transpose(1,2,0,3)
+    dooov = None
+
+    #:dvovv = numpy.einsum('ia,ikcd->akcd', c1, c2)
+    #:dvvvv = lib.einsum('ijab,ijcd->abcd', c2, c2)
+    max_memory = max(0, myci.max_memory - lib.current_memory()[0])
+    unit = max(nocc**2*nvir*2+nocc*nvir**2*3, nvir**3*2+nocc*nvir**2)
+    blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit)))
+    iobuflen = int(256e6/8/blksize)
+    log.debug1('rdm intermediates: block size = %d, nvir = %d in %d blocks',
+               blksize, nocc, int((nvir+blksize-1)/blksize))
+    dovvv = h5fobj.create_dataset('dovvv', (nocc,nvir,nvir,nvir), 'f8',
+                                  chunks=(nocc,nvir,blksize,nvir))
+    dvvvv = h5fobj.create_dataset('dvvvv', (nvir_pair,nvir_pair), 'f8')
+
+    for istep, (p0, p1) in enumerate(lib.prange(0, nvir, blksize)):
+        gvvvv = lib.einsum('ijab,ijcd->abcd', c2[:,:,p0:p1], c2)
+# symmetrize dvvvv because it is symmetrized in cisd_grad and make_rdm2 anyway
+#:dvvvv = .5*(gvvvv+gvvvv.transpose(0,1,3,2))
+#:dvvvv = .5*(dvvvv+dvvvv.transpose(1,0,3,2))
+# now dvvvv == dvvvv.transpose(2,3,0,1) == dvvvv.transpose(0,1,3,2) == dvvvv.transpose(1,0,3,2)
+        tmp = numpy.empty((nvir,nvir,nvir))
+        tmpvvvv = numpy.empty((p1-p0,nvir,nvir_pair))
+        for i in range(p1-p0):
+            tmp[:] = gvvvv[i].transpose(1,0,2) - gvvvv[i].transpose(2,0,1)*.5
+            lib.pack_tril(tmp+tmp.transpose(0,2,1), out=tmpvvvv[i])
+        # tril of (dvvvv[p0:p1,p0:p1]+dvvvv[p0:p1,p0:p1].T)
+        for i in range(p0, p1):
+            for j in range(p0, i):
+                tmpvvvv[i-p0,j] += tmpvvvv[j-p0,i]
+            tmpvvvv[i-p0,i] *= 2
+        for i in range(p1, nvir):
+            off = i * (i+1) // 2
+            dvvvv[off+p0:off+p1] = tmpvvvv[:,i]
+        for i in range(p0, p1):
+            off = i * (i+1) // 2
+            if p0 > 0:
+                tmpvvvv[i-p0,:p0] += dvvvv[off:off+p0]
+            dvvvv[off:off+i+1] = tmpvvvv[i-p0,:i+1] * .25
+        tmp = tmpvvvv = None
+
+        gvovv = numpy.einsum('ia,ikcd->akcd', c1[:,p0:p1]*2, c2)
+        dovvv[:,:,p0:p1] = gvovv.transpose(1,3,0,2)*2 - gvovv.transpose(1,2,0,3)
 
     theta = c2*2 - c2.transpose(1,0,2,3)
-    dovov  = numpy.einsum('ia,kc->icka', c1, c1) * -2
-    #:dovov -= numpy.einsum('kjcb,kica->jaib', c2, theta) * 2
-    #:dovov -= numpy.einsum('ikcb,jkca->iajb', c2, theta) * 2
-    dovov -= lib.ddot(c2.transpose(0,2,1,3).reshape(nov,-1).T,
-                      theta.transpose(0,2,1,3).reshape(nov,-1),
-                      2).reshape(nocc,nvir,nocc,nvir).transpose(0,3,2,1)
-    dovov -= lib.ddot(c2.transpose(0,3,1,2).reshape(nov,-1),
-                      theta.transpose(0,3,1,2).reshape(nov,-1).T,
-                      2).reshape(nocc,nvir,nocc,nvir).transpose(0,3,2,1)
-    dvoov  = numpy.einsum('ia,kc->cika', c1, c1) * 4
-    #:dvoov += numpy.einsum('kica,kjcb->ajib', theta, theta) * 2
-    dvoov += lib.ddot(theta.transpose(0,2,1,3).reshape(nov,-1).T,
-                      theta.transpose(0,2,1,3).reshape(nov,-1),
-                      2).reshape(nocc,nvir,nocc,nvir).transpose(1,2,0,3)
+    doovv  = numpy.einsum('ia,kc->ikca', c1, -c1)
+    doovv -= lib.einsum('kjcb,kica->jiab', c2, theta)
+    doovv -= lib.einsum('ikcb,jkca->ijab', c2, theta)
+    h5fobj['doovv'] = doovv
+    doovv = None
 
-    rdm2[:nocc,nocc:,:nocc,nocc:] = dovov
-    rdm2[nocc:,:nocc,nocc:,:nocc] = dovov.transpose(1,0,3,2)
-    rdm2[nocc:,:nocc,:nocc,nocc:] = dvoov
-    rdm2[:nocc,nocc:,nocc:,:nocc] = dvoov.transpose(1,0,3,2)
+    dovvo  = lib.einsum('ikac,jkbc->jbai', theta, theta)
+    dovvo += numpy.einsum('ia,kc->iack', c1, c1) * 2
+    h5fobj['dovvo'] = dovvo
+    theta = dovvo = None
 
-    rdm1 = make_rdm1(ci, nmo, nocc)
-    for i in range(nocc):
-        rdm1[i,i] -= 2
-    for i in range(nocc):
-        for j in range(nocc):
-            rdm2[i,j,i,j] += 4
-            rdm2[i,j,j,i] -= 2
-        rdm2[i,:,i,:] += rdm1 * 2
-        rdm2[:,i,:,i] += rdm1 * 2
-        rdm2[:,i,i,:] -= rdm1
-        rdm2[i,:,:,i] -= rdm1
+    dvvov = None
+    return (h5fobj['dovov'], h5fobj['dvvvv'], h5fobj['doooo'], h5fobj['doovv'],
+            h5fobj['dovvo'], dvvov          , h5fobj['dovvv'], h5fobj['dooov'])
 
-    return rdm2.transpose(0,2,1,3)  # to chemist's notation
+
+def as_scanner(ci):
+    '''Generating a scanner/solver for CISD PES.
+
+    The returned solver is a function. This function requires one argument
+    "mol" as input and returns total CISD energy.
+
+    The solver will automatically use the results of last calculation as the
+    initial guess of the new calculation.  All parameters assigned in the
+    CISD and the underlying SCF objects (conv_tol, max_memory etc) are
+    automatically applied in the solver.
+
+    Note scanner has side effects.  It may change many underlying objects
+    (_scf, with_df, with_x2c, ...) during calculation.
+
+    Examples::
+
+        >>> from pyscf import gto, scf, ci
+        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
+        >>> ci_scanner = ci.CISD(scf.RHF(mol)).as_scanner()
+        >>> e_tot = ci_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
+        >>> e_tot = ci_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
+    '''
+    logger.info(ci, 'Set %s as a scanner', ci.__class__)
+    class CISD_Scanner(ci.__class__, lib.SinglePointScanner):
+        def __init__(self, ci):
+            self.__dict__.update(ci.__dict__)
+            self._scf = ci._scf.as_scanner()
+        def __call__(self, mol, **kwargs):
+            mf_scanner = self._scf
+            mf_scanner(mol)
+            self.mol = mol
+            self.mo_coeff = mf_scanner.mo_coeff
+            self.mo_occ = mf_scanner.mo_occ
+            self.kernel(self.ci, **kwargs)[0]
+            return self.e_tot
+    return CISD_Scanner(ci)
 
 
 class CISD(lib.StreamObject):
@@ -504,11 +560,11 @@ class CISD(lib.StreamObject):
 
     def make_rdm1(self, ci=None):
         if ci is None: ci = self.ci
-        return make_rdm1(ci, self.nmo, self.nocc)
+        return make_rdm1(self, ci, self.nmo, self.nocc)
 
     def make_rdm2(self, ci=None):
         if ci is None: ci = self.ci
-        return make_rdm2(ci, self.nmo, self.nocc)
+        return make_rdm2(self, ci, self.nmo, self.nocc)
 
     def dump_chk(self, ci=None, frozen=None, mo_coeff=None, mo_occ=None):
         if ci is None: ci = self.ci
@@ -535,6 +591,10 @@ class CISD(lib.StreamObject):
         if nmo is None: nmo = self.nmo
         if nocc is None: nocc = self.nocc
         return cisdvec_to_amplitudes(civec, nmo, nocc)
+
+    def nuc_grad_method(self):
+        from pyscf.ci import cisd_grad
+        return cisd_grad.Gradients(self)
 
 def _cp(a):
     return numpy.array(a, copy=False, order='C')
@@ -576,6 +636,10 @@ if __name__ == '__main__':
                           c2.ravel()))
     hcivec = contract(myci, civec, eris)
     print(lib.finger(hcivec) - 2059.5730673341673)
+
+    rdm2 = make_rdm2(myci, civec, nmo, nocc)
+    #print(lib.finger(rdm2) - 2.0492023431953221)
+    print(lib.finger(rdm2) - 2.0756323491386017)
 
     ci0 = to_fcivec(civec, nmo, mol.nelectron)
     print(abs(civec-from_fcivec(ci0, nmo, nocc*2)).sum())

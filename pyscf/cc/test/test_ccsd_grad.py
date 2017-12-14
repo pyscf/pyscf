@@ -1,14 +1,8 @@
 #!/usr/bin/env python
-from functools import reduce
 import unittest
-import copy
-import numpy
-import numpy as np
-
 from pyscf import gto, lib
 from pyscf import scf, dft
 from pyscf import cc
-from pyscf import ao2mo
 from pyscf.cc import ccsd_grad
 from pyscf import grad
 

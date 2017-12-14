@@ -28,24 +28,24 @@ from pyscf.scf import cphf
 #
 def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
            mf_grad=None, d1=None, d2=None, verbose=logger.INFO):
+    if eris is not None:
+        if abs(eris.fock - numpy.diag(eris.fock.diagonal())).max() > 1e-3:
+            raise RuntimeError('CCSD gradients does not support NHF (non-canonical HF)')
+
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
     if l1 is None: l1 = mycc.l1
     if l2 is None: l2 = mycc.l2
-    if eris is None: eris = mycc.ao2mo()
     if mf_grad is None:
         mf_grad = rhf_grad.Gradients(mycc._scf)
 
     log = logger.new_logger(mycc, verbose)
     time0 = time.clock(), time.time()
-    if mycc.direct:
-        raise NotImplementedError('AO-direct CCSD gradients')
-    if abs(eris.fock - numpy.diag(eris.fock.diagonal())).max() > 1e-3:
-        raise RuntimeError('CCSD gradients does not support NHF (non-canonical HF)')
 
     log.debug('Build ccsd rdm1 intermediates')
     if d1 is None:
         d1 = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2)
+    doo, dov, dvo, dvv = d1
     time1 = log.timer_debug1('rdm1 intermediates', *time0)
     log.debug('Build ccsd rdm2 intermediates')
     fdm2 = lib.H5TmpFile()
@@ -54,27 +54,19 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     time1 = log.timer_debug1('rdm2 intermediates', *time1)
 
     mol = mycc.mol
-    with_frozen = not (mycc.frozen is None or mycc.frozen is 0)
-    if with_frozen:
-        mo_coeff = mycc.mo_coeff
-        mo_energy = mycc._scf.mo_energy
-        nao, nmo = mo_coeff.shape
-        nocc = numpy.count_nonzero(mycc.mo_occ > 0)
-        nvir = nmo - nocc
-        mo_e_o = mo_energy[mycc.mo_occ > 0]
-        mo_e_v = mo_energy[mycc.mo_occ ==0]
-    else:
-        mo_coeff = eris.mo_coeff
-        mo_energy = eris.fock.diagonal()
-        nao, nmo = mo_coeff.shape
-        nocc, nvir = t1.shape
-        mo_e_o = mo_energy[:nocc]
-        mo_e_v = mo_energy[nocc:]
+    mo_coeff = mycc.mo_coeff
+    mo_energy = mycc._scf.mo_energy
+    nao, nmo = mo_coeff.shape
+    nocc = numpy.count_nonzero(mycc.mo_occ > 0)
+    nvir = nmo - nocc
     nao_pair = nao * (nao+1) // 2
+    with_frozen = not (mycc.frozen is None or mycc.frozen is 0)
+    OA, VA, OF, VF = index_frozen_active(mycc)
 
     log.debug('symmetrized rdm2 and MO->AO transformation')
 # Roughly, dm2*2 is computed in _rdm2_mo2ao
-    _rdm2_mo2ao(mycc, d2, eris.mo_coeff, fdm2)  # transform the active orbitals
+    mo_active = mo_coeff[:,numpy.hstack((OA,VA))]
+    _rdm2_mo2ao(mycc, d2, mo_active, fdm2)  # transform the active orbitals
     time1 = log.timer_debug1('MO->AO transformation', *time1)
     hf_dm1 = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
 
@@ -124,20 +116,19 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
 
     Imat = reduce(numpy.dot, (mo_coeff.T, Imat, mycc._scf.get_ovlp(), mo_coeff)) * -1
 
-    doo, dov, dvo, dvv = d1
     dm1mo = numpy.zeros((nmo,nmo))
     if with_frozen:
         OA, VA, OF, VF = index_frozen_active(mycc)
         dco = (Imat[OF[:,None],OA]
-               / lib.direct_sum('i-j->ij', mo_e_o[OF], mo_e_o[OA]))
-        dfv = (Imat[VF[:,None]+nocc,VA+nocc]
-               / lib.direct_sum('a-b->ab', mo_e_v[VF], mo_e_v[VA]))
+               / lib.direct_sum('i-j->ij', mo_energy[OF], mo_energy[OA]))
+        dfv = (Imat[VF[:,None],VA]
+               / lib.direct_sum('a-b->ab', mo_energy[VF], mo_energy[VA]))
         dm1mo[OA[:,None],OA] = doo + doo.T
         dm1mo[OF[:,None],OA] = dco
         dm1mo[OA[:,None],OF] = dco.T
-        dm1mo[VA[:,None]+nocc,VA+nocc] = dvv + dvv.T
-        dm1mo[VF[:,None]+nocc,VA+nocc] = dfv
-        dm1mo[VA[:,None]+nocc,VF+nocc] = dfv.T
+        dm1mo[VA[:,None],VA] = dvv + dvv.T
+        dm1mo[VF[:,None],VA] = dfv
+        dm1mo[VA[:,None],VF] = dfv.T
     else:
         dm1mo[:nocc,:nocc] = doo + doo.T
         dm1mo[nocc:,nocc:] = dvv + dvv.T
@@ -190,7 +181,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         de[k] -= numpy.einsum('xij,ij->x', vhf1[k], dm1p)
 
     de += rhf_grad.grad_nuc(mol)
-    log.timer('CCSD gradients', *time0)
+    log.timer('%s gradients' % mycc.__class__.__name__, *time0)
     return de
 
 
@@ -216,7 +207,6 @@ def as_scanner(grad_cc):
         >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
         >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
-    import copy
     logger.info(grad_cc, 'Set nuclear gradients of %s as a scanner', grad_cc.__class__)
     class CCSD_GradScanner(grad_cc.__class__, lib.GradScanner):
         def __init__(self, g):
@@ -225,11 +215,11 @@ def as_scanner(grad_cc):
         def __call__(self, mol, **kwargs):
             # The following simple version also works.  But eris object is
             # recomputed in cc_scanner and solve_lambda.
-            # cc_scanner = self._cc
-            # cc_scanner(mol)
-            # eris = cc_scanner.ao2mo()
-            # cc_scanner.solve_lambda(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris)
-            # mf_grad = mf_scanner.nuc_grad_method()
+            # cc = self._cc
+            # cc(mol)
+            # eris = cc.ao2mo()
+            # cc.solve_lambda(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris)
+            # mf_grad = cc._scf.nuc_grad_method()
             # de = self.kernel(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris, mf_grad=mf_grad)
 
             cc = self._cc
@@ -265,8 +255,6 @@ def shell_prange(mol, start, stop, blksize):
     yield (ib0, stop, nao)
 
 def _response_dm1(mycc, Xvo, eris=None):
-    if eris is None:
-        eris = mycc.ao2mo()
     nvir, nocc = Xvo.shape
     nmo = nocc + nvir
     with_frozen = not (mycc.frozen is None or mycc.frozen is 0)
@@ -313,9 +301,9 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
         fsave = lib.H5TmpFile()
     else:
         incore = False
-    dvovo, dvvvv, doooo, dvvoo, dvoov, dvvov, dvovv, dvooo = d2
+    dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
 
-    nvir, nocc = dvovo.shape[:2]
+    nocc, nvir = dovov.shape[:2]
     nov = nocc * nvir
     mo_coeff = numpy.asarray(mo_coeff, order='F')
     nao, nmo = mo_coeff.shape
@@ -352,18 +340,21 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
     fswap.create_dataset('o', (nmo,nocc,nao_pair), 'f8', chunks=(nmo,nocc,blksize))
     buf1 = numpy.zeros((nocc,nocc,nmo,nmo))
     buf1[:,:,:nocc,:nocc] = doooo
-    buf1[:,:,nocc:,nocc:] = _cp(dvvoo).transpose(2,3,0,1)
+    buf1[:,:,nocc:,nocc:] = _cp(doovv)
     buf1 = _trans(buf1.reshape(nocc**2,-1), (0,nmo,0,nmo))
     fswap['o'][:nocc] = buf1.reshape(nocc,nocc,nao_pair)
+    dovoo = numpy.asarray(dooov).transpose(2,3,0,1)
     for p0, p1 in lib.prange(nocc, nmo, nocc):
-        buf1 = numpy.zeros((p1-p0,nocc,nmo,nmo))
-        buf1[:,:,:nocc,:nocc] = dvooo[p0-nocc:p1-nocc]
-        buf1[:,:,:nocc,nocc:] = dvoov[p0-nocc:p1-nocc]
-        buf1[:,:,nocc:,:nocc] = dvovo[p0-nocc:p1-nocc]
-        buf1[:,:,nocc:,nocc:] = dvovv[p0-nocc:p1-nocc]
-        buf1 = _trans(buf1.reshape((p1-p0)*nocc,-1), (0,nmo,0,nmo))
+        buf1 = numpy.zeros((nocc,p1-p0,nmo,nmo))
+        buf1[:,:,:nocc,:nocc] = dovoo[:,p0-nocc:p1-nocc]
+        buf1[:,:,nocc:,:nocc] = dovvo[:,p0-nocc:p1-nocc]
+        buf1[:,:,:nocc,nocc:] = dovov[:,p0-nocc:p1-nocc]
+        buf1[:,:,nocc:,nocc:] = dovvv[:,p0-nocc:p1-nocc]
+        buf1 = buf1.transpose(1,0,3,2).reshape((p1-p0)*nocc,-1)
+        buf1 = _trans(buf1, (0,nmo,0,nmo))
         fswap['o'][p0:p1] = buf1.reshape(p1-p0,nocc,nao_pair)
     time1 = log.timer_debug1('_rdm2_mo2ao pass 2', *time1)
+    dovoo = buf1 = None
 
 # transform dm2_kl then dm2 + dm2.transpose(2,3,0,1)
     gsave = fsave.create_dataset('dm2', (nao_pair,nao_pair), 'f8', chunks=(nao_pair,blksize))
@@ -422,8 +413,8 @@ def index_frozen_active(cc):
     moidx = ccsd.get_moidx(cc)
     OA = numpy.where( moidx[:nocc])[0] # occupied active orbitals
     OF = numpy.where(~moidx[:nocc])[0] # occupied frozen orbitals
-    VA = numpy.where( moidx[nocc:])[0] # virtual active orbitals
-    VF = numpy.where(~moidx[nocc:])[0] # virtual frozen orbitals
+    VA = numpy.where( moidx[nocc:])[0] + nocc # virtual active orbitals
+    VF = numpy.where(~moidx[nocc:])[0] + nocc # virtual frozen orbitals
     return OA, VA, OF, VF
 
 class Gradients(lib.StreamObject):
@@ -435,8 +426,8 @@ class Gradients(lib.StreamObject):
         self.atmlst = range(mycc.mol.natm)
         self.de = None
 
-    def kernel(self, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
-               mf_grad=None, d1=None, d2=None, verbose=None):
+    def kernel(self, t1=None, t2=None, l1=None, l2=None, eris=None,
+               atmlst=None, mf_grad=None, verbose=None):
         log = logger.new_logger(self, verbose)
         if t1 is None: t1 = self._cc.t1
         if t2 is None: t2 = self._cc.t2
@@ -454,9 +445,10 @@ class Gradients(lib.StreamObject):
             self.atmlst = atmlst
 
         self.de = kernel(self._cc, t1, t2, l1, l2, eris, atmlst,
-                         mf_grad, d1, d2, log)
+                         mf_grad, verbose=log)
         if self.verbose >= logger.NOTE:
-            log.note('--------------- CCSD gradients ---------------')
+            log.note('--------------- %s gradients ---------------',
+                     self.__class__.__name__)
             rhf_grad._write(self, self.mol, self.de, atmlst)
             log.note('----------------------------------------------')
         return self.de
@@ -481,9 +473,6 @@ if __name__ == '__main__':
     ehf = mf.scf()
 
     mycc = ccsd.CCSD(mf)
-#    mycc.max_memory = 1
-#    mycc.conv_tol = 1e-10
-#    mycc.conv_tol_normt = 1e-10
     mycc.kernel()
     g1 = Gradients(mycc).kernel()
 #[[ 0   0                1.00950925e-02]

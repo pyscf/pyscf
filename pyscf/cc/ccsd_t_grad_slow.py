@@ -7,14 +7,6 @@ from pyscf import lib
 from pyscf.cc import ccsd_grad
 from pyscf.cc import ccsd_t_rdm_slow as ccsd_t_rdm
 
-def IX_intermediates(mycc, t1, t2, l1, l2, eris=None, d1=None, d2=None):
-    if d1 is None:
-        d1 = ccsd_t_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2, eris)
-    if d2 is None:
-        d2 = ccsd_t_rdm._gamma2_outcore(mycc, t1, t2, l1, l2, eris=eris)
-    return ccsd_grad.IX_intermediates(mycc, t1, t2, l1, l2, eris, d1, d2)
-
-
 # Only works with canonical orbitals
 def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
            mf_grad=None, verbose=lib.logger.INFO):

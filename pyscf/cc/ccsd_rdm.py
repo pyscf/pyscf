@@ -36,14 +36,8 @@ def gamma1_intermediates(mycc, t1, t2, l1, l2):
 def gamma2_intermediates(mycc, t1, t2, l1, l2):
     f = lib.H5TmpFile()
     _gamma2_outcore(mycc, t1, t2, l1, l2, f)
-    d2 = (f['dvovo'].value.transpose(1,0,3,2),
-          f['dvvvv'].value,
-          f['doooo'].value,
-          f['dvvoo'].value.transpose(2,3,0,1),
-          f['dvoov'].value.transpose(2,3,0,1),
-          f['dvvov'].value,
-          f['dvovv'].value.transpose(1,0,2,3),
-          f['dvooo'].value.transpose(3,2,1,0))
+    d2 = (f['dovov'].value, f['dvvvv'].value, f['doooo'].value, f['doovv'].value,
+          f['dovvo'].value, None,             f['dovvv'].value, f['dooov'].value)
     return d2
 
 def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
@@ -52,16 +46,15 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
     nov = nocc * nvir
     nvir_pair = nvir * (nvir+1) //2
     dvvvv = h5fobj.create_dataset('dvvvv', (nvir_pair,nvir_pair), 'f8')
-    dvvov = h5fobj.create_dataset('dvvov', (nvir,nvir,nocc,nvir), 'f8')
-    dvoov = h5fobj.create_dataset('dvoov', (nvir,nocc,nocc,nvir), 'f8')
-    dvvoo = h5fobj.create_dataset('dvvoo', (nvir,nvir,nocc,nocc), 'f8')
+    dovvo = h5fobj.create_dataset('dovvo', (nocc,nvir,nvir,nocc), 'f8',
+                                  chunks=(nocc,1,nvir,nocc))
     fswap = lib.H5TmpFile()
 
     time1 = time.clock(), time.time()
     pvOOv = lib.einsum('ikca,jkcb->aijb', l2, t2)
     moo = numpy.einsum('dljd->jl', pvOOv) * 2
     mvv = numpy.einsum('blld->db', pvOOv) * 2
-    gvooo = lib.einsum('kc,cija->aikj', t1, pvOOv)
+    gooov = lib.einsum('kc,cija->jkia', t1, pvOOv)
     fswap['mvOOv'] = pvOOv
     pvOOv = None
 
@@ -70,7 +63,7 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
     pvoOV += lib.einsum('ikac,jkbc->aijb', l2, theta)
     moo += numpy.einsum('dljd->jl', pvoOV)
     mvv += numpy.einsum('blld->db', pvoOV)
-    gvooo -= lib.einsum('jc,cika->aikj', t1, pvoOV)
+    gooov -= lib.einsum('jc,cika->jkia', t1, pvoOV)
     fswap['mvoOV'] = pvoOV
     pvoOV = None
 
@@ -84,51 +77,55 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
     goooo = lib.einsum('ijab,klab->klij', l2, tau)*.5
     h5fobj['doooo'] = goooo.transpose(0,2,1,3)*2 - goooo.transpose(0,3,1,2)
 
-    gvooo += numpy.einsum('ji,ka->aikj', -.5*moo, t1)
-    gvooo += lib.einsum('la,jkil->aikj', 2*t1, goooo)
-    gvooo -= lib.einsum('ib,jkba->aikj', l1, tau)
-    gvooo -= lib.einsum('jkba,ib->aikj', l2, t1)
-    h5fobj['dvooo'] = gvooo.transpose(0,2,1,3)*2 - gvooo.transpose(0,3,1,2)
-    tau = gvooo = None
+    gooov += numpy.einsum('ji,ka->jkia', -.5*moo, t1)
+    gooov += lib.einsum('la,jkil->jkia', 2*t1, goooo)
+    gooov -= lib.einsum('ib,jkba->jkia', l1, tau)
+    gooov -= lib.einsum('jkba,ib->jkia', l2, t1)
+    h5fobj['dooov'] = gooov.transpose(0,2,1,3)*2 - gooov.transpose(1,2,0,3)
+    tau = goovo = None
     time1 = log.timer_debug1('rdm intermediates pass1', *time1)
 
-    gvvoo = numpy.einsum('ia,jb->abij', mia, t1)
+    goovv = numpy.einsum('ia,jb->ijab', mia, t1)
     max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     unit = nocc**2*nvir*6
     blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit)))
+    doovv = h5fobj.create_dataset('doovv', (nocc,nocc,nvir,nvir), 'f8',
+                                  chunks=(nocc,nocc,blksize,nvir))
+
     log.debug1('rdm intermediates pass 2: block size = %d, nvir = %d in %d blocks',
                blksize, nvir, int((nvir+blksize-1)/blksize))
     for p0, p1 in lib.prange(0, nvir, blksize):
         tau = numpy.einsum('ia,jb->ijab', t1[:,p0:p1], t1)
         tau += t2[:,:,p0:p1]
-        gvvoo[p0:p1] -= lib.einsum('jk,ikab->abij', mij, tau)
-        gvvoo[p0:p1] += .5 * l2[:,:,p0:p1].transpose(2,3,0,1)
-        gvvoo[p0:p1] += .5 * tau.transpose(2,3,0,1)
-        gvvoo[p0:p1] -= lib.einsum('cb,ijac->abij', mab, t2[:,:,p0:p1])
-        gvvoo[p0:p1] -= lib.einsum('bd,ijad->abij', mvv*.5, tau)
-        gvvoo[p0:p1] += lib.einsum('ijkl,klab->abij', goooo, tau)
+        goovv[:,:,p0:p1] -= lib.einsum('jk,ikab->ijab', mij, tau)
+        goovv[:,:,p0:p1] += .5 * l2[:,:,p0:p1]
+        goovv[:,:,p0:p1] += .5 * tau
+        goovv[:,:,p0:p1] -= lib.einsum('cb,ijac->ijab', mab, t2[:,:,p0:p1])
+        goovv[:,:,p0:p1] -= lib.einsum('bd,ijad->ijab', mvv*.5, tau)
+        goovv[:,:,p0:p1] += lib.einsum('ijkl,klab->ijab', goooo, tau)
+        #ijAb
 
         pvOOv = fswap['mvOOv'][p0:p1]
         pvoOV = fswap['mvoOV'][p0:p1]
-        gvOOv = lib.einsum('kiac,jc,kb->aijb', l2[:,:,p0:p1], t1, t1)
-        gvOOv += pvOOv
-        gvoOV = numpy.einsum('ia,jb->aijb', l1[:,p0:p1], t1)
-        gvoOV -= lib.einsum('ikac,jc,kb->aijb', l2[:,:,p0:p1], t1, t1)
-        gvoOV += pvoOV
-        dvoov[p0:p1] = ( 2*gvoOV + gvOOv)
-        dvvoo[p0:p1] = (-2*gvOOv - gvoOV).transpose(0,3,2,1)
-        gvOOv = gvoOV = None
+        gOvvO = lib.einsum('kiac,jc,kb->iabj', l2[:,:,p0:p1], t1, t1)
+        gOvvO += pvOOv.transpose(1,0,3,2)
+        govVO = numpy.einsum('ia,jb->iabj', l1[:,p0:p1], t1)
+        govVO -= lib.einsum('ikac,jc,kb->iabj', l2[:,:,p0:p1], t1, t1)
+        govVO += pvoOV.transpose(1,0,3,2)
+        dovvo[:,p0:p1] = 2*govVO + gOvvO
+        doovv[:,:,p0:p1] = (-2*gOvvO - govVO).transpose(3,0,1,2)
+        gOvvO = govVO = None
 
         tau -= t2[:,:,p0:p1] * .5
         for q0, q1 in lib.prange(0, nvir, blksize):
-            gvvoo[q0:q1,:] += lib.einsum('dlib,jlda->abij', pvOOv, tau[:,:,:,q0:q1])
-            gvvoo[:,q0:q1] -= lib.einsum('dlia,jldb->abij', pvoOV, tau[:,:,:,q0:q1])
+            goovv[:,:,q0:q1,:] += lib.einsum('dlib,jlda->ijab', pvOOv, tau[:,:,:,q0:q1])
+            goovv[:,:,:,q0:q1] -= lib.einsum('dlia,jldb->ijab', pvoOV, tau[:,:,:,q0:q1])
             tmp = pvoOV[:,:,:,q0:q1] + pvOOv[:,:,:,q0:q1]*.5
-            gvvoo[q0:q1,:] += lib.einsum('dlia,jlbd->abij', tmp, t2[:,:,:,p0:p1])
+            goovv[:,:,q0:q1,:] += lib.einsum('dlia,jlbd->ijab', tmp, t2[:,:,:,p0:p1])
         pvOOv = pvoOV = tau = None
         time1 = log.timer_debug1('rdm intermediates pass2 [%d:%d]'%(p0, p1), *time1)
-    h5fobj['dvovo'] = gvvoo.transpose(0,2,1,3) * 2 - gvvoo.transpose(0,3,1,2)
-    gvvoo = goooo = None
+    h5fobj['dovov'] = goovv.transpose(0,2,1,3) * 2 - goovv.transpose(1,2,0,3)
+    goovv = goooo = None
 
     max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     unit = max(nocc**2*nvir*2+nocc*nvir**2*3, nvir**3*2+nocc*nvir**2)
@@ -136,8 +133,8 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
     iobuflen = int(256e6/8/blksize)
     log.debug1('rdm intermediates pass 3: block size = %d, nvir = %d in %d blocks',
                blksize, nocc, int((nvir+blksize-1)/blksize))
-    dvovv = h5fobj.create_dataset('dvovv', (nvir,nocc,nvir,nvir), 'f8',
-                                  chunks=(nvir,nocc,blksize,nvir))
+    dovvv = h5fobj.create_dataset('dovvv', (nocc,nvir,nvir,nvir), 'f8',
+                                  chunks=(nocc,nvir,blksize,nvir))
     time1 = time.clock(), time.time()
     for istep, (p0, p1) in enumerate(lib.prange(0, nvir, blksize)):
         l2tmp = l2[:,:,p0:p1] * .5
@@ -181,20 +178,19 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
         gvovv += lib.einsum('ja,jb,ic->aibc', l1[:,p0:p1], t1, t1)
         gvovv += numpy.einsum('ba,ic->aibc', mvv[:,p0:p1]*.5, t1)
 
-        gvvov = gvovv.transpose(0,2,1,3)*2 - gvovv.transpose(0,3,1,2)
-        dvovv[:,:,p0:p1] = gvvov.transpose(3,2,0,1)
-        dvvov[p0:p1] = gvvov
-        gvovv = gvvov = None
+        dovvv[:,:,p0:p1] = gvovv.transpose(1,3,0,2)*2 - gvovv.transpose(1,2,0,3)
+        gvvov = None
         time1 = log.timer_debug1('rdm intermediates pass3 [%d:%d]'%(p0, p1), *time1)
 
     fswap = None
-    return (h5fobj['dvovo'], h5fobj['dvvvv'], h5fobj['doooo'], h5fobj['dvvoo'],
-            h5fobj['dvoov'], h5fobj['dvvov'], h5fobj['dvovv'], h5fobj['dvooo'])
+    dvvov = None
+    return (h5fobj['dovov'], h5fobj['dvvvv'], h5fobj['doooo'], h5fobj['doovv'],
+            h5fobj['dovvo'], dvvov          , h5fobj['dovvv'], h5fobj['dooov'])
 
 def make_rdm1(mycc, t1, t2, l1, l2, d1=None):
     if d1 is None: d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
     doo, dov, dvo, dvv = d1
-    nocc, nvir = t1.shape
+    nocc, nvir = dov.shape
     nmo = nocc + nvir
     dm1 = numpy.empty((nmo,nmo))
     dm1[:nocc,:nocc] = doo + doo.T
@@ -218,13 +214,11 @@ def make_rdm1(mycc, t1, t2, l1, l2, d1=None):
 # vvvv part of CI 2pdm
 def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None):
     if d1 is None: d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
-    if d2 is None: d2 = gamma2_intermediates(mycc, t1, t2, l1, l2)
     doo, dov, dvo, dvv = d1
-    dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
-    nocc, nvir = t1.shape
+    nocc, nvir = dov.shape
     nmo = nocc + nvir
 
-    dm2 = _make_rdm2(mycc, t1, t2, l1, l2, d2=None)
+    dm2 = _make_rdm2(mycc, t1, t2, l1, l2, d2)
 
     dm1 = numpy.empty((nmo,nmo))
     dm1[:nocc,:nocc] = doo + doo.T
@@ -261,36 +255,50 @@ def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None):
 def _make_rdm2(mycc, t1, t2, l1, l2, d2=None):
     '''The 2-PDM associated to the normal ordered 2-particle interactions
     '''
-    if d2 is None: d2 = gamma2_intermediates(mycc, t1, t2, l1, l2)
+    if d2 is None:
+        f = lib.H5TmpFile()
+        d2 = _gamma2_outcore(mycc, t1, t2, l1, l2, f)
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
     nocc, nvir = dovov.shape[:2]
     nmo = nocc + nvir
 
     dm2 = numpy.empty((nmo,nmo,nmo,nmo))
 
+    dovov = numpy.asarray(dovov)
     dm2[:nocc,nocc:,:nocc,nocc:] = dovov
     dm2[:nocc,nocc:,:nocc,nocc:]+= dovov.transpose(2,3,0,1)
     dm2[nocc:,:nocc,nocc:,:nocc] = dm2[:nocc,nocc:,:nocc,nocc:].transpose(1,0,3,2)
+    dovov = None
 
+    doovv = numpy.asarray(doovv)
     dm2[:nocc,:nocc,nocc:,nocc:] = doovv
     dm2[:nocc,:nocc,nocc:,nocc:]+= doovv.transpose(1,0,3,2)
     dm2[nocc:,nocc:,:nocc,:nocc] = dm2[:nocc,:nocc,nocc:,nocc:].transpose(2,3,0,1)
+    dovov = None
+
+    dovvo = numpy.asarray(dovvo)
     dm2[:nocc,nocc:,nocc:,:nocc] = dovvo
     dm2[:nocc,nocc:,nocc:,:nocc]+= dovvo.transpose(3,2,1,0)
     dm2[nocc:,:nocc,:nocc,nocc:] = dm2[:nocc,nocc:,nocc:,:nocc].transpose(1,0,3,2)
+    dovvo = None
 
     dm2[nocc:,nocc:,nocc:,nocc:] = ao2mo.restore(1, dvvvv, nvir)
     dm2[nocc:,nocc:,nocc:,nocc:]*= 4
 
+    doooo = numpy.asarray(doooo)
     dm2[:nocc,:nocc,:nocc,:nocc] = doooo
     dm2[:nocc,:nocc,:nocc,:nocc]+= doooo.transpose(1,0,3,2)
     dm2[:nocc,:nocc,:nocc,:nocc]*= 2
+    doooo = None
 
+    dovvv = numpy.asarray(dovvv)
     dm2[:nocc,nocc:,nocc:,nocc:] = dovvv
     dm2[nocc:,nocc:,:nocc,nocc:] = dovvv.transpose(2,3,0,1)
     dm2[nocc:,nocc:,nocc:,:nocc] = dovvv.transpose(3,2,1,0)
     dm2[nocc:,:nocc,nocc:,nocc:] = dovvv.transpose(1,0,3,2)
+    dovvv = None
 
+    dooov = numpy.asarray(dooov)
     dm2[:nocc,:nocc,:nocc,nocc:] = dooov
     dm2[:nocc,nocc:,:nocc,:nocc] = dooov.transpose(2,3,0,1)
     dm2[:nocc,:nocc,nocc:,:nocc] = dooov.transpose(1,0,3,2)
@@ -344,16 +352,15 @@ if __name__ == '__main__':
     print((numpy.einsum('ai,ai', dvo, fock0[nocc:,:nocc]))*2-34.010188025702391)
 
     fdm2 = lib.H5TmpFile()
-    dvovo, dvvvv, doooo, dvvoo, dvoov, dvvov, dvovv, dvooo = \
+    dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
             _gamma2_outcore(mcc, t1, t2, l1, l2, fdm2)
-    print('dvovo', lib.finger(numpy.array(dvovo)) -  5371.8073743106979)
+    print('dovov', lib.finger(numpy.array(dovov)) - -14384.907042073517)
     print('dvvvv', lib.finger(numpy.array(dvvvv)) - -25.374007033024839)
     print('doooo', lib.finger(numpy.array(doooo)) -  60.114594698129963)
-    print('dvvoo', lib.finger(numpy.array(dvvoo)) -   5.718307760949088)
-    print('dvoov', lib.finger(numpy.array(dvoov)) -  41.399881265666437)
-    print('dvvov', lib.finger(numpy.array(dvvov)) - -1129.9636175187422)
-    print('dvovv', lib.finger(numpy.array(dvovv)) - -1038.3437534763445)
-    print('dvooo', lib.finger(numpy.array(dvooo)) -  979.27741472637604)
+    print('doovv', lib.finger(numpy.array(doovv)) - -79.176348067958401)
+    print('dovvo', lib.finger(numpy.array(dovvo)) -   9.864134457251815)
+    print('dovvv', lib.finger(numpy.array(dovvv)) - -421.90333700061342)
+    print('dooov', lib.finger(numpy.array(dooov)) - -592.66863759586136)
     fdm2 = None
 
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
@@ -363,7 +370,6 @@ if __name__ == '__main__':
     print('doooo', lib.finger(numpy.array(doooo)) -  60.114594698129963)
     print('doovv', lib.finger(numpy.array(doovv)) - -79.176348067958401)
     print('dovvo', lib.finger(numpy.array(dovvo)) -  60.596864321502196)
-    print('dvvov', lib.finger(numpy.array(dvvov)) - -1129.9636175187422)
     print('dovvv', lib.finger(numpy.array(dovvv)) - -421.90333700061342)
     print('dooov', lib.finger(numpy.array(dooov)) - -592.66863759586136)
 
