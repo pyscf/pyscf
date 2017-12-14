@@ -25,7 +25,6 @@ class scf(tddft_iter):
 
   def kernel_scf(self, dump_chk=False, **kw):
     """ This does the actual SCF loop so far only HF """
-    from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
     from pyscf.nao.m_fermi_energy import fermi_energy as comput_fermi_energy
     dm0 = self.get_init_guess(**kw)
     etot = self.pyscf_hf.kernel(dm0=dm0, dump_chk=dump_chk, **kw)

@@ -13,6 +13,7 @@ class mf(nao):
     self.dtype = kw['dtype'] if 'dtype' in kw else np.float32
     self.pseudo = hasattr(self, 'sp2ion') 
     self.verbosity = kw['verbosity'] if 'verbosity' in kw else 0
+    self.gen_pb = kw['gen_pb'] if 'gen_pb' in kw else True
     
     if 'mf' in kw:
       self.init_mf(**kw)
@@ -29,10 +30,10 @@ class mf(nao):
       raise RuntimeError('unknown constructor')
     if self.verbosity>0: print('before self.init_libnao()')
     self.init_libnao()
-    self.pb = prod_basis_c()
-    if self.verbosity>0: print('before self.pb.init_prod_basis_pp_batch(nao=self, **kw)')
-    self.pb.init_prod_basis_pp_batch(nao=self, **kw)
-    # I am not initializing it here because different methods need different kernels...
+    if self.gen_pb:
+      self.pb = prod_basis_c()
+      if self.verbosity>0: print('before self.pb.init_prod_basis_pp_batch(nao=self, **kw)')
+      self.pb.init_prod_basis_pp_batch(nao=self, **kw)
 
   def plot_contour(self, w=0.0):
     """
@@ -208,6 +209,9 @@ class mf(nao):
   def read_wfsx(self, fname, **kw):
     """ An occasional reading of the SIESTA's .WFSX file """
     from pyscf.nao.m_siesta_wfsx import siesta_wfsx_c
+    from pyscf.nao.m_siesta2blanko_denvec import _siesta2blanko_denvec
+    from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
+
     self.wfsx = siesta_wfsx_c(fname=fname, **kw)
     
     assert self.nkpoints == self.wfsx.nkpoints
