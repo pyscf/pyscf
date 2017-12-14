@@ -414,10 +414,12 @@ class AFTDF(lib.StreamObject):
 ################################################################################
 # With this function to mimic the molecular DF.loop function, the pbc gamma
 # point DF object can be used in the molecular code
-    def loop(self):
+    def loop(self, blksize=None):
+        if blksize is None:
+            blksize = self.blockdim
         Lpq = None
         coulG = self.weighted_coulG()
-        for pqkR, pqkI, p0, p1 in self.pw_loop(aosym='s2', blksize=self.blockdim):
+        for pqkR, pqkI, p0, p1 in self.pw_loop(aosym='s2', blksize=blksize):
             vG = numpy.sqrt(coulG[p0:p1])
             pqkR *= vG
             pqkI *= vG

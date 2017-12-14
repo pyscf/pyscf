@@ -281,7 +281,9 @@ class FFTDF(lib.StreamObject):
 ################################################################################
 # With this function to mimic the molecular DF.loop function, the pbc gamma
 # point DF object can be used in the molecular code
-    def loop(self):
+    def loop(self, blksize=None):
+        if blksize is None:
+            blksize = self.blockdim
         kpts0 = numpy.zeros((2,3))
         coulG = tools.get_coulG(self.cell, numpy.zeros(3), mesh=self.mesh,
                                 low_dim_ft_type=self.low_dim_ft_type)
@@ -290,7 +292,7 @@ class FFTDF(lib.StreamObject):
         ao_pairs_G *= numpy.sqrt(coulG*(self.cell.vol/ngrids**2)).reshape(-1,1)
 
         Lpq = numpy.empty((self.blockdim, ao_pairs_G.shape[1]))
-        for p0, p1 in lib.prange(0, ngrids, self.blockdim):
+        for p0, p1 in lib.prange(0, ngrids, blksize):
             Lpq[:p1-p0] = ao_pairs_G[p0:p1].real
             yield Lpq[:p1-p0]
             Lpq[:p1-p0] = ao_pairs_G[p0:p1].imag

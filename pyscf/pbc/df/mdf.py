@@ -284,10 +284,10 @@ class MDF(df.DF):
 ################################################################################
 # With this function to mimic the molecular DF.loop function, the pbc gamma
 # point DF object can be used in the molecular code
-    def loop(self):
-        for dat in aft.AFTDF.loop(self):
+    def loop(self, blksize=None):
+        for dat in aft.AFTDF.loop(self, blksize):
             yield dat
-        for dat in df.DF.loop(self):
+        for dat in df.DF.loop(self, blksize):
             yield dat
 
     def get_naoaux(self):

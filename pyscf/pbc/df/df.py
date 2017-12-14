@@ -565,8 +565,10 @@ class GDF(aft.AFTDF):
 ################################################################################
 # With this function to mimic the molecular DF.loop function, the pbc gamma
 # point DF object can be used in the molecular code
-    def loop(self):
-        for LpqR, LpqI in self.sr_loop(compact=True, blksize=self.blockdim):
+    def loop(self, blksize=None):
+        if blksize is None:
+            blksize = self.blockdim
+        for LpqR, LpqI in self.sr_loop(compact=True, blksize=blksize):
 # LpqI should be 0 for gamma point DF
 #            assert(numpy.linalg.norm(LpqI) < 1e-12)
             yield LpqR
