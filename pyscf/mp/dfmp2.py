@@ -15,11 +15,15 @@ from pyscf import df
 from pyscf.mp import mp2
 #from pyscf.mp.mp2 import make_rdm1, make_rdm2, make_rdm1_ao
 
-def kernel(mp, mo_energy, mo_coeff, nocc, ioblk=256, verbose=None):
-    nmo = mo_coeff.shape[1]
-    nvir = nmo - nocc
+def kernel(mp, eris=None, with_t2=False, verbose=None):
 
-    eia = lib.direct_sum('i-a->ia', mo_energy[:nocc], mo_energy[nocc:])
+    nocc = mp.nocc
+    nvir = mp.nmo - nocc
+    moidx = mp.get_frozen_mask()
+    mo_coeff = mp.mo_coeff[:,moidx]
+    mo_e = mp.mo_energy[moidx]
+    eia = mo_e[:nocc,None] - mo_e[None,nocc:]
+
     t2 = None
     emp2 = 0
     for istep, qov in enumerate(mp.loop_ao2mo(mo_coeff, nocc)):
@@ -37,37 +41,17 @@ def kernel(mp, mo_energy, mo_coeff, nocc, ioblk=256, verbose=None):
 
 
 class DFMP2(mp2.MP2):
-    def __init__(self, mf):
-        self.mol = mf.mol
-        self.verbose = self.mol.verbose
-        self.stdout = self.mol.stdout
-        self.max_memory = mf.max_memory
-        self._scf = mf
+    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         if hasattr(mf, 'with_df') and mf.with_df:
             self.with_df = None
         else:
             self.with_df = df.DF(mol)
             self.with_df.auxbasis = df.make_auxbasis(mol, mp2fit=True)
-
-        self.emp2 = None
-        self.t2 = None
+        mp2.MP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     @lib.with_doc(mp2.MP2.kernel.__doc__)
     def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=True):
         return mp2.MP2.kernel(self, mo_energy, mo_coeff, eris, with_t2, kernel)
-
-    def kernel(self, mo_energy=None, mo_coeff=None, nocc=None):
-        if mo_coeff is None:
-            mo_coeff = self._scf.mo_coeff
-        if mo_energy is None:
-            mo_energy = self._scf.mo_energy
-        if nocc is None:
-            nocc = self.mol.nelectron // 2
-
-        self.emp2, self.t2 = \
-                kernel(self, mo_energy, mo_coeff, nocc, verbose=self.verbose)
-        logger.log(self, 'DF-RMP2 energy = %.15g', self.emp2)
-        return self.emp2, self.t2
 
     def loop_ao2mo(self, mo_coeff, nocc):
         mo = numpy.asarray(mo_coeff, order='F')
@@ -78,7 +62,14 @@ class DFMP2(mp2.MP2):
             with_df = self._scf.with_df
         else:
             with_df = self.with_df
-        for eri1 in with_df.loop():
+
+        nvir = nmo - nocc
+        naux = with_df.get_naoaux()
+        mem_now = lib.current_memory()[0]
+        max_memory = max(2000, self.max_memory*.9-mem_now)
+        blksize = int(min(naux, max(with_df.blockdim,
+                                    (max_memory*1e6/8-nocc*nvir**2*2)/(nocc*nvir))))
+        for eri1 in with_df.loop(blksize=blksize):
             Lov = _ao2mo.nr_e2(eri1, mo, ijslice, aosym='s2', out=Lov)
             yield Lov
 
@@ -123,3 +114,7 @@ if __name__ == '__main__':
     pt.with_df.auxbasis = df.make_auxbasis(mol, mp2fit=True)
     emp2, t2 = pt.kernel()
     print(emp2 - -0.203738031827)
+
+    pt.frozen = 2
+    emp2, t2 = pt.kernel()
+    print(emp2 - -0.14433975122418313)

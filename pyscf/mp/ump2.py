@@ -128,6 +128,7 @@ class UMP2(mp2.MP2):
         return mp2.MP2.kernel(self, mo_energy, mo_coeff, eris, with_t2, kernel)
 
     def ao2mo(self, mo_coeff=None):
+        if mo_coeff is None: mo_coeff = self.mo_coeff
         return _make_eris(self, mo_coeff, verbose=self.verbose)
 
 class _ChemistsERIs(mp2._ChemistsERIs):

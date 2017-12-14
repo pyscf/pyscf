@@ -24,7 +24,7 @@ mf.conv_tol = 1e-14
 ehf = mf.scf()
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_mp2(self):
         nocc = mol.nelectron//2
         nmo = mf.mo_energy.size
@@ -100,7 +100,7 @@ class KnowValues(unittest.TestCase):
         e = pt.kernel(with_t2=False)[0]
         self.assertAlmostEqual(e, -0.20425449198401671, 9)
 
-        pt = mp.dfmp2.MP2(mf.density_fit('weigend'))
+        pt = mp.dfmp2.DFMP2(mf.density_fit('weigend'))
         e = pt.kernel()[0]
         self.assertAlmostEqual(e, -0.20425449198401671, 9)
 

@@ -246,6 +246,7 @@ class MP2(lib.StreamObject):
         return self.emp2, self.t2
 
     def ao2mo(self, mo_coeff=None):
+        if mo_coeff is None: mo_coeff = self.mo_coeff
         return _make_eris(self, mo_coeff, verbose=self.verbose)
 
     def make_rdm1(self, t2=None, eris=None):
@@ -283,6 +284,7 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
     log = logger.new_logger(mp, verbose)
     time0 = (time.clock(), time.time())
     eris = _ChemistsERIs(mp, mo_coeff)
+    mo_coeff = eris.mo_coeff
 
     nocc = mp.nocc
     nmo = mp.nmo
