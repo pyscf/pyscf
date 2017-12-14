@@ -2,6 +2,11 @@
 # $Id$
 # -*- coding: utf-8
 
+
+'''
+RMP2
+'''
+
 import time
 from functools import reduce
 import copy
@@ -12,20 +17,13 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 
-
-'''
-spin-adapted MP2
-t2[i,j,a,b] = (ia|jb) / D_ij^ab
-'''
-
-def kernel(mp, mo_energy, mo_coeff, eris=None, with_t2=True,
-           verbose=logger.NOTE):
+def kernel(mp, eris=None, with_t2=True, verbose=logger.NOTE):
     if eris is None:
-        eris = mp.ao2mo(mo_coeff)
+        eris = mp.ao2mo()
 
     nocc = mp.nocc
     nvir = mp.nmo - nocc
-    mo_e = _mo_energy_without_core(mp, mo_energy)
+    mo_e = _mo_energy_without_core(mp, mp.mo_energy)
     eia = mo_e[:nocc,None] - mo_e[None,nocc:]
 
     if with_t2:
@@ -34,22 +32,22 @@ def kernel(mp, mo_energy, mo_coeff, eris=None, with_t2=True,
         t2 = None
 
     emp2 = 0.0
-    ovov = eris.ovov
     for i in range(nocc):
-        gi = numpy.asarray(ovov[i*nvir:(i+1)*nvir])
+        gi = numpy.asarray(eris.ovov[i*nvir:(i+1)*nvir])
         gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
         t2i = gi/lib.direct_sum('jb+a->jba', eia, eia[i])
-        # 2*ijab-ijba
-        theta = gi*2 - gi.transpose(0,2,1)
-        emp2 += numpy.einsum('jab,jab', t2i, theta)
-        #emp2 -= numpy.einsum('jab,jab', t2i, theta)
+        emp2 += numpy.einsum('jab,jab', t2i, gi) * 2
+        emp2 -= numpy.einsum('jab,jba', t2i, gi)
         if with_t2:
             t2[i] = t2i
 
     return emp2, t2
 
-# Need less memory
 def make_rdm1_ao(mp, mo_energy, mo_coeff, eris=None, verbose=logger.NOTE):
+    '''1-particle density matrix in AO basis.  The occupied-virtual orbital
+    response is not included.  This function uses small amount of memory.  The
+    MP2 t2 amplitudes are generated on the fly using the given eris object.
+    '''
     mp = copy.copy(mp)
     mp.mo_energy = mo_energy
     mp.mo_coeff = mo_coeff
@@ -127,6 +125,48 @@ def make_rdm2(mp, t2, eris=None, verbose=logger.NOTE):
     return dm2
 
 
+def get_nocc(mp):
+    if mp._nocc is not None:
+        return mp._nocc
+    elif mp.frozen is None:
+        nocc = numpy.count_nonzero(mp.mo_occ > 0)
+        assert(nocc > 0)
+        return nocc
+    elif isinstance(mp.frozen, (int, numpy.integer)):
+        nocc = numpy.count_nonzero(mp.mo_occ > 0) - mp.frozen
+        assert(nocc > 0)
+        return nocc
+    else:
+        occ_idx = mp.mo_occ > 0
+        occ_idx[list(mp.frozen)] = False
+        return numpy.count_nonzero(occ_idx)
+
+def get_nmo(mp):
+    if mp._nmo is not None:
+        return mp._nmo
+    elif mp.frozen is None:
+        return len(mp.mo_occ)
+    elif isinstance(mp.frozen, (int, numpy.integer)):
+        return len(mp.mo_occ) - mp.frozen
+    else:
+        return len(mp.mo_occ) - len(mp.frozen)
+
+def get_frozen_mask(mp):
+    '''Get boolean mask for the restricted reference orbitals.
+    
+    In the returned boolean (mask) array of frozen orbital indices, the
+    element is False if it corresonds to the frozen orbital.
+    '''
+    moidx = numpy.ones(mp.mo_occ.size, dtype=numpy.bool)
+    if mp.frozen is None:
+        pass
+    elif isinstance(mp.frozen, (int, numpy.integer)):
+        moidx[:mp.frozen] = False
+    elif len(mp.frozen) > 0:
+        moidx[list(mp.frozen)] = False
+    return moidx
+
+
 class MP2(lib.StreamObject):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
 
@@ -155,33 +195,34 @@ class MP2(lib.StreamObject):
 
     @property
     def nocc(self):
-        if self._nocc is not None:
-            return self._nocc
-        elif isinstance(self.frozen, (int, numpy.integer)):
-            return int(self.mo_occ.sum()) // 2 - self.frozen
-        elif self.frozen:
-            occ_idx = self.mo_occ > 0
-            occ_idx[numpy.asarray(self.frozen)] = False
-            return numpy.count_nonzero(occ_idx)
-        else:
-            return int(self.mo_occ.sum()) // 2
+        return self.get_nocc()
     @nocc.setter
     def nocc(self, n):
         self._nocc = n
 
     @property
     def nmo(self):
-        if self._nmo is not None:
-            return self._nmo
-        if isinstance(self.frozen, (int, numpy.integer)):
-            return len(self.mo_occ) - self.frozen
-        else:
-            return len(self.mo_occ) - len(self.frozen)
+        return self.get_nmo()
     @nmo.setter
     def nmo(self, n):
         self._nmo = n
 
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=True):
+    get_nocc = get_nocc
+    get_nmo = get_nmo
+    get_frozen_mask = get_frozen_mask
+
+    def dump_flags(self):
+        log = logger.Logger(self.stdout, self.verbose)
+        log.info('')
+        log.info('******** %s flags ********', self.__class__)
+        log.info('nocc = %s, nmo = %s', self.nocc, self.nmo)
+        if self.frozen is not 0:
+            log.info('frozen orbitals %s', self.frozen)
+        log.info('max_memory %d MB (current use %d MB)',
+                 self.max_memory, lib.current_memory()[0])
+
+    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
+               _kern=kernel):
         '''
         Args:
             with_t2 : bool
@@ -195,15 +236,17 @@ class MP2(lib.StreamObject):
             log.warn('mo_coeff, mo_energy are not given.\n'
                      'You may need to call mf.kernel() to generate them.')
             raise RuntimeError
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        self.dump_flags()
 
-        self.emp2, self.t2 = \
-                kernel(self, mo_energy, mo_coeff, eris, with_t2, verbose=self.verbose)
-        logger.log(self, 'RMP2 energy = %.15g', self.emp2)
+        self.emp2, self.t2 = _kern(self, eris, with_t2, self.verbose)
+        logger.log(self, '%s energy = %.15g', self.__class__.__name__, self.emp2)
         self.e_corr = self.emp2
         return self.emp2, self.t2
 
     def ao2mo(self, mo_coeff=None):
-        return _ERIS(self, mo_coeff, verbose=self.verbose)
+        return _make_eris(self, mo_coeff, verbose=self.verbose)
 
     def make_rdm1(self, t2=None, eris=None):
         if t2 is None: t2 = self.t2
@@ -213,19 +256,14 @@ class MP2(lib.StreamObject):
         if t2 is None: t2 = self.t2
         return make_rdm2(self, t2, eris, verbose=self.verbose)
 
+RMP2 = MP2
+
+
 def _mo_energy_without_core(mp, mo_energy):
-    return mo_energy[_active_idx(mp)]
+    return mo_energy[get_frozen_mask(mp)]
 
 def _mo_without_core(mp, mo):
-    return mo[:,_active_idx(mp)]
-
-def _active_idx(mp):
-    moidx = numpy.ones(mp.mo_occ.size, dtype=numpy.bool)
-    if isinstance(mp.frozen, (int, numpy.integer)):
-        moidx[:mp.frozen] = False
-    elif len(mp.frozen) > 0:
-        moidx[numpy.asarray(mp.frozen)] = False
-    return moidx
+    return mo[:,get_frozen_mask(mp)]
 
 def _mem_usage(nocc, nvir):
     nmo = nocc + nvir
@@ -234,54 +272,58 @@ def _mem_usage(nocc, nvir):
     outcore = basic
     return incore, outcore, basic
 
-class _ERIS:
-    def __init__(self, mp, mo_coeff=None, verbose=None):
-        cput0 = (time.clock(), time.time())
+class _ChemistsERIs:
+    def __init__(self, mp, mo_coeff=None):
         if mo_coeff is None:
-            self.mo_coeff = mo_coeff = _mo_without_core(mp, mp.mo_coeff)
+            self.mo_coeff = _mo_without_core(mp, mp.mo_coeff)
         else:
-            self.mo_coeff = mo_coeff = _mo_without_core(mp, mo_coeff)
+            self.mo_coeff = _mo_without_core(mp, mo_coeff)
 
-        nocc = mp.nocc
-        nmo = mp.nmo
-        nvir = nmo - nocc
-        mem_incore, mem_outcore, mem_basic = _mem_usage(nocc, nvir)
-        mem_now = lib.current_memory()[0]
-        max_memory = max(2000, mp.max_memory*.9-mem_now)
-        log = logger.Logger(mp.stdout, mp.verbose)
-        if max_memory < mem_basic:
-            log.warn('Not enough memory for integral transformation. '
-                     'Available mem %s MB, required mem %s MB',
-                     max_memory, mem_basic)
+def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
+    log = logger.new_logger(mp, verbose)
+    time0 = (time.clock(), time.time())
+    eris = _ChemistsERIs(mp, mo_coeff)
 
-        time0 = (time.clock(), time.time())
+    nocc = mp.nocc
+    nmo = mp.nmo
+    nvir = nmo - nocc
+    mem_incore, mem_outcore, mem_basic = _mem_usage(nocc, nvir)
+    mem_now = lib.current_memory()[0]
+    max_memory = max(2000, mp.max_memory*.9-mem_now)
+    if max_memory < mem_basic:
+        log.warn('Not enough memory for integral transformation. '
+                 'Available mem %s MB, required mem %s MB',
+                 max_memory, mem_basic)
 
-        co = numpy.asarray(mo_coeff[:,:nocc], order='F')
-        cv = numpy.asarray(mo_coeff[:,nocc:], order='F')
-        if hasattr(mp._scf, 'with_df') and mp._scf.with_df:
-            # To handle the PBC or custom 2-electron with 3-index tensor.
-            # Call dfmp2.MP2 for efficient DF-MP2 implementation.
-            log.warn('DF-HF is found. (ia|jb) is computed based on the DF '
-                     '3-tensor integrals.\n'
-                     'You can switch to dfmp2.MP2 for better performance')
-            log.debug('transform (ia|jb) with_df')
-            self.ovov = mp._scf.with_df.ao2mo((co,cv,co,cv))
-
-        elif (mp.mol.incore_anyway or
-              (mp._scf._eri is not None and
-               mem_incore+mem_now < mp.max_memory)):
-            log.debug('transform (ia|jb) incore')
-            self.ovov = ao2mo.incore.general(mp._scf._eri, (co,cv,co,cv))
-
+    co = numpy.asarray(mo_coeff[:,:nocc], order='F')
+    cv = numpy.asarray(mo_coeff[:,nocc:], order='F')
+    if (mp.mol.incore_anyway or
+        (mp._scf._eri is not None and mem_incore+mem_now < mp.max_memory)):
+        log.debug('transform (ia|jb) incore')
+        if callable(ao2mofn):
+            eris.ovov = ao2mofn((co,cv,co,cv)).reshape(nocc*nvir,nocc*nvir)
         else:
-            log.debug('transform (ia|jb) outcore')
-            self.feri = lib.H5TmpFile()
-            #ao2mo.outcore.general(mp.mol, (co,cv,co,cv), self.feri,
-            #                      max_memory=max_memory, verbose=mp.verbose)
-            #self.ovov = self.feri['eri_mo']
-            self.ovov = _ao2mo_ovov(mp, co, cv, self.feri, max_memory, mp.verbose)
+            eris.ovov = ao2mo.general(mp._scf._eri, (co,cv,co,cv))
 
-        time1 = log.timer('Integral transformation', *time0)
+    elif hasattr(mp._scf, 'with_df') and mp._scf.with_df:
+        # To handle the PBC or custom 2-electron with 3-index tensor.
+        # Call dfmp2.MP2 for efficient DF-MP2 implementation.
+        log.warn('DF-HF is found. (ia|jb) is computed based on the DF '
+                 '3-tensor integrals.\n'
+                 'You can switch to dfmp2.MP2 for better performance')
+        log.debug('transform (ia|jb) with_df')
+        eris.ovov = mp._scf.with_df.ao2mo((co,cv,co,cv))
+
+    else:
+        log.debug('transform (ia|jb) outcore')
+        eris.feri = lib.H5TmpFile()
+        #ao2mo.outcore.general(mp.mol, (co,cv,co,cv), eris.feri,
+        #                      max_memory=max_memory, verbose=log)
+        #eris.ovov = eris.feri['eri_mo']
+        eris.ovov = _ao2mo_ovov(mp, co, cv, eris.feri, max_memory, log)
+
+    time1 = log.timer('Integral transformation', *time0)
+    return eris
 
 #
 # the MO integral for MP2 is (ov|ov). This is the efficient integral
@@ -345,42 +387,23 @@ def _ao2mo_ovov(mp, orbo, orbv, feri, max_memory=2000, verbose=None):
     chunks = (nvir,nvir)
     h5dat = feri.create_dataset('ovov', (nocc*nvir,nocc*nvir), 'f8',
                                 chunks=chunks)
-    # jk_where is the sorting indices for the stacked (oO|pP) integrals in pass 2
-    jk_where = []
-    aoao_idx = numpy.arange(nao*nao).reshape(nao,nao)
-    for i0, i1, j0, j1 in jk_blk_slices:
-        # idx of pP in <oO|pP>
-        jk_where.append(aoao_idx[i0:i1,j0:j1].ravel())
-        if i0 != j0:
-            # idx of pP in (<oO|pP>).transpose(1,0,3,2)
-            jk_where.append(aoao_idx[j0:j1,i0:i1].ravel())
-    jk_where = numpy.argsort(numpy.hstack(jk_where)).astype(numpy.int32)
-    orbv = numpy.asarray(orbv, order='F')
-
     occblk = int(min(nocc, max(4, 250/nocc, max_memory*.9e6/8/(nao**2*nocc)/5)))
     def load(i0, eri):
-        if i0 >= nocc:
-            return
-        i1 = min(i0+occblk, nocc)
-        eri = eri[:(i1-i0)*nocc]
-        p1 = 0
-        for k, jk_slice in enumerate(jk_blk_slices):
-            dat = numpy.asarray(ftmp[str(k)][i0:i1]).reshape((i1-i0)*nocc,-1)
-            p0, p1 = p1, p1 + dat.shape[1]
-            eri[:,p0:p1] = dat
-            if jk_slice[0] != jk_slice[2]:
-                dat = numpy.asarray(ftmp[str(k)][:,i0:i1])
-                dat = dat.transpose(1,0,3,2).reshape((i1-i0)*nocc,-1)
-                p0, p1 = p1, p1 + dat.shape[1]
-                eri[:,p0:p1] = dat
+        if i0 < nocc:
+            i1 = min(i0+occblk, nocc)
+            for k, (p0,p1,q0,q1) in enumerate(jk_blk_slices):
+                eri[:i1-i0,:,p0:p1,q0:q1] = ftmp[str(k)][i0:i1]
+                if p0 != q0:
+                    dat = numpy.asarray(ftmp[str(k)][:,i0:i1])
+                    eri[:i1-i0,:,q0:q1,p0:p1] = dat.transpose(1,0,3,2)
 
     def save(i0, i1, dat):
         for i in range(i0, i1):
             h5dat[i*nvir:(i+1)*nvir] = dat[i-i0].reshape(nvir,nocc*nvir)
 
-    buf_prefecth = numpy.empty((occblk*nocc,nao**2))
+    orbv = numpy.asarray(orbv, order='F')
+    buf_prefecth = numpy.empty((occblk,nocc,nao,nao))
     buf = numpy.empty_like(buf_prefecth)
-    buf1 = numpy.empty_like(buf_prefecth)
     bufw = numpy.empty((occblk*nocc,nvir**2))
     bufw1 = numpy.empty_like(bufw)
     with lib.call_in_background(load) as prefetch:
@@ -388,12 +411,10 @@ def _ao2mo_ovov(mp, orbo, orbv, feri, max_memory=2000, verbose=None):
             load(0, buf_prefecth)
             for i0, i1 in lib.prange(0, nocc, occblk):
                 buf, buf_prefecth = buf_prefecth, buf
-                eri = buf[:(i1-i0)*nocc]
                 prefetch(i1, buf_prefecth)
+                eri = buf[:i1-i0].reshape((i1-i0)*nocc,nao,nao)
 
-                idx = numpy.arange(eri.shape[0], dtype=numpy.int32)
-                dat = lib.take_2d(eri, idx, jk_where, out=buf1)
-                dat = _ao2mo.nr_e2(dat, orbv, (0,nvir,0,nvir), 's1', 's1', out=bufw)
+                dat = _ao2mo.nr_e2(eri, orbv, (0,nvir,0,nvir), 's1', 's1', out=bufw)
                 bsave(i0, i1, dat.reshape(i1-i0,nocc,nvir,nvir).transpose(0,2,1,3))
                 bufw, bufw1 = bufw1, bufw
                 time1 = log.timer_debug1('pass2 ao2mo [%d:%d]' % (i0,i1), *time1)

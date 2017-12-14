@@ -291,6 +291,7 @@ class GCCSD(gccsd.GCCSD):
 
     get_nocc = get_nocc
     get_nmo = get_nmo
+    get_frozen_mask = get_frozen_mask
 
     def dump_flags(self):
         logger.info(self, '\n')
@@ -380,7 +381,7 @@ class GCCSD(gccsd.GCCSD):
 CCSD = GCCSD
 
 
-def get_moidx(cc):
+def get_frozen_mask(cc):
     moidx = [numpy.ones(x.size, dtype=numpy.bool) for x in cc.mo_occ]
     if isinstance(cc.frozen, (int, numpy.integer)):
         for idx in moidx:
@@ -406,7 +407,7 @@ def _make_eris_incore(cc, mo_coeff=None):
         # TODO does this work for k-points? changed to conjugate.
         raise NotImplementedError
         mo_coeff = cc.mo_coeff
-    moidx = get_moidx(cc)
+    moidx = get_frozen_mask(cc)
     eris.mo_coeff = []
     eris.orbspin = []
     for k in range(nkpts):

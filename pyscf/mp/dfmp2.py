@@ -12,13 +12,8 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf import df
+from pyscf.mp import mp2
 #from pyscf.mp.mp2 import make_rdm1, make_rdm2, make_rdm1_ao
-
-
-# the MO integral for MP2 is (ov|ov). The most efficient integral
-# transformation is
-# (ij|kl) => (ij|ol) => (ol|ij) => (ol|oj) => (ol|ov) => (ov|ov)
-#   or    => (ij|ol) => (oj|ol) => (oj|ov) => (ov|ov)
 
 def kernel(mp, mo_energy, mo_coeff, nocc, ioblk=256, verbose=None):
     nmo = mo_coeff.shape[1]
@@ -33,16 +28,15 @@ def kernel(mp, mo_energy, mo_coeff, nocc, ioblk=256, verbose=None):
             buf = numpy.dot(qov[:,i*nvir:(i+1)*nvir].T,
                             qov).reshape(nvir,nocc,nvir)
             gi = numpy.array(buf, copy=False)
-            gi = gi.reshape(nvir,nocc,nvir).transpose(1,2,0)
+            gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
             t2i = gi/lib.direct_sum('jb+a->jba', eia, eia[i])
-            # 2*ijab-ijba
-            theta = gi*2 - gi.transpose(0,2,1)
-            emp2 += numpy.einsum('jab,jab', t2i, theta)
+            emp2 += numpy.einsum('jab,jab', t2i, gi) * 2
+            emp2 -= numpy.einsum('jab,jba', t2i, gi)
 
     return emp2, t2
 
 
-class MP2(lib.StreamObject):
+class DFMP2(mp2.MP2):
     def __init__(self, mf):
         self.mol = mf.mol
         self.verbose = self.mol.verbose
@@ -57,6 +51,10 @@ class MP2(lib.StreamObject):
 
         self.emp2 = None
         self.t2 = None
+
+    @lib.with_doc(mp2.MP2.kernel.__doc__)
+    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=True):
+        return mp2.MP2.kernel(self, mo_energy, mo_coeff, eris, with_t2, kernel)
 
     def kernel(self, mo_energy=None, mo_coeff=None, nocc=None):
         if mo_coeff is None:
@@ -106,7 +104,7 @@ if __name__ == '__main__':
     mol.basis = 'cc-pvdz'
     mol.build()
     mf = scf.RHF(mol).run()
-    pt = MP2(mf)
+    pt = DFMP2(mf)
     emp2, t2 = pt.kernel()
     print(emp2 - -0.204004830285)
 
@@ -117,7 +115,7 @@ if __name__ == '__main__':
 
     mf = scf.density_fit(scf.RHF(mol), 'weigend')
     mf.kernel()
-    pt = MP2(mf)
+    pt = DFMP2(mf)
     emp2, t2 = pt.kernel()
     print(emp2 - -0.203986171133)
 

@@ -19,6 +19,7 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.cc import _ccsd
+from pyscf.mp import mp2
 
 BLKMIN = 4
 
@@ -517,31 +518,10 @@ def _unpack_4fold(c2vec, nocc, nvir, anti_symm=True):
     return t2.reshape(nocc,nocc,nvir,nvir)
 
 
-def get_nocc(mycc):
-    if mycc._nocc is not None:
-        return mycc._nocc
-    elif mycc.frozen is None:
-        nocc = numpy.count_nonzero(mycc.mo_occ > 0)
-        assert(nocc > 0)
-        return nocc
-    elif isinstance(mycc.frozen, (int, numpy.integer)):
-        nocc = numpy.count_nonzero(mycc.mo_occ > 0) - mycc.frozen
-        assert(nocc > 0)
-        return nocc
-    else:
-        occ_idx = mycc.mo_occ > 0
-        occ_idx[list(mycc.frozen)] = False
-        return numpy.count_nonzero(occ_idx)
-
-def get_nmo(mycc):
-    if mycc._nmo is not None:
-        return mycc._nmo
-    elif mycc.frozen is None:
-        return len(mycc.mo_occ)
-    elif isinstance(mycc.frozen, (int, numpy.integer)):
-        return len(mycc.mo_occ) - mycc.frozen
-    else:
-        return len(mycc.mo_occ) - len(mycc.frozen)
+get_nocc = mp2.get_nocc
+get_nmo = mp2.get_nmo
+get_frozen_mask = mp2.get_frozen_mask
+_mo_without_core = mp2._mo_without_core
 
 def amplitudes_to_vector(t1, t2, out=None):
     nocc, nvir = t1.shape
@@ -756,6 +736,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
     get_nocc = get_nocc
     get_nmo = get_nmo
+    get_frozen_mask = get_frozen_mask
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -1212,18 +1193,6 @@ def _make_df_eris_outcore(mycc, mo_coeff=None):
     eris.vvvv[:] = lib.ddot(Lvv.T, Lvv)
     log.timer('CCSD integral transformation', *cput0)
     return eris
-
-def get_moidx(cc):
-    moidx = numpy.ones(cc.mo_occ.size, dtype=numpy.bool)
-    if cc.frozen is None:
-        pass
-    elif isinstance(cc.frozen, (int, numpy.integer)):
-        moidx[:cc.frozen] = False
-    elif len(cc.frozen) > 0:
-        moidx[list(cc.frozen)] = False
-    return moidx
-def _mo_without_core(cc, mo):
-    return mo[:,get_moidx(cc)]
 
 def _fp(nocc, nvir):
     '''Total float points'''

@@ -161,9 +161,11 @@ class RCCSD(ccsd.CCSD):
                 Use one-shot MBPT2 approximation to CCSD.
         '''
         if mbpt2:
-            #cctyp = 'MBPT2'
-            #self.e_corr, self.t1, self.t2 = self.init_amps(eris)
-            raise NotImplementedError
+            pt = ccsd.mp2.MP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
+            self.e_corr, self.t2 = pt.kernel(eris=eris)
+            nocc, nvir = self.t2.shape[1:3]
+            self.t1 = numpy.zeros((nocc,nvir))
+            return self.e_corr, self.t1, self.t2
 
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)

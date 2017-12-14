@@ -12,6 +12,7 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.cc import ccsd
 from pyscf.ao2mo import _ao2mo
+from pyscf.mp import ump2
 
 # This is unrestricted (U)CCSD, in spatial-orbital form.
 
@@ -321,41 +322,6 @@ def update_amps(cc, t1, t2, eris):
     return t1new, t2new
 
 
-def get_nocc(mycc):
-    if mycc._nocc is not None:
-        return mycc._nocc
-    if isinstance(mycc.frozen, (int, numpy.integer)):
-        nocca = int(mycc.mo_occ[0].sum()) - mycc.frozen
-        noccb = int(mycc.mo_occ[1].sum()) - mycc.frozen
-        #assert(nocca > 0 and noccb > 0)
-    else:
-        frozen = mycc.frozen
-        if len(frozen) > 0 and isinstance(frozen[0], (int, numpy.integer)):
-# The same frozen orbital indices for alpha and beta orbitals
-            frozen = [frozen, frozen]
-        occidxa = mycc.mo_occ[0] > 0
-        occidxa[list(frozen[0])] = False
-        occidxb = mycc.mo_occ[1] > 0
-        occidxb[list(frozen[1])] = False
-        nocca = np.count_nonzero(occidxa)
-        noccb = np.count_nonzero(occidxb)
-    return nocca, noccb
-
-def get_nmo(mycc):
-    if mycc._nmo is not None:
-        return mycc._nmo
-    elif isinstance(mycc.frozen, (int, numpy.integer)):
-        nmoa = mycc.mo_occ[0].size - mycc.frozen
-        nmob = mycc.mo_occ[1].size - mycc.frozen
-    elif isinstance(mycc.frozen[0], (int, numpy.integer)):
-        nmoa = mycc.mo_occ[0].size - len(mycc.frozen)
-        nmob = mycc.mo_occ[1].size - len(mycc.frozen)
-    else:
-        nmoa = len(mycc.mo_occ[0]) - len(mycc.frozen[0])
-        nmob = len(mycc.mo_occ[1]) - len(mycc.frozen[1])
-    return nmoa, nmob
-
-
 def energy(cc, t1, t2, eris):
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
@@ -378,6 +344,12 @@ def energy(cc, t1, t2, eris):
     e -= 0.5*np.einsum('ia,jb,ibja',t1b,t1b,eris_OVOV)
     e +=     np.einsum('ia,jb,iajb',t1a,t1b,eris_ovOV)
     return e.real
+
+
+get_nocc = ump2.get_nocc
+get_nmo = ump2.get_nmo
+get_frozen_mask = ump2.get_frozen_mask
+
 
 def amplitudes_to_vector(t1, t2, out=None):
     nocca, nvira = t1[0].shape
@@ -433,7 +405,7 @@ def _add_vvVV(mycc, t1, t2ab, eris, out=None):
         if hasattr(eris, 'mo_coeff'):
             mo_a, mo_b = eris.mo_coeff
         else:
-            moidxa, moidxb = get_moidx(mycc)
+            moidxa, moidxb = mycc.get_frozen_mask()
             mo_a = mycc.mo_coeff[0][:,moidxa]
             mo_b = mycc.mo_coeff[1][:,moidxb]
         tau = lib.einsum('ijab,pa->ijpb', t2ab, mo_a[:,nocca:])
@@ -464,7 +436,7 @@ def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
         if hasattr(eris, 'mo_coeff'):
             mo_a, mo_b = eris.mo_coeff
         else:
-            moidxa, moidxb = get_moidx(mycc)
+            moidxa, moidxb = mycc.get_frozen_mask()
             mo_a = mycc.mo_coeff[0][:,moidxa]
             mo_b = mycc.mo_coeff[1][:,moidxb]
         nao = mo_a.shape[0]
@@ -538,6 +510,7 @@ class UCCSD(ccsd.CCSD):
 
     get_nocc = get_nocc
     get_nmo = get_nmo
+    get_frozen_mask = get_frozen_mask
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
@@ -588,9 +561,13 @@ class UCCSD(ccsd.CCSD):
                 Use one-shot MBPT2 approximation to CCSD.
         '''
         if mbpt2:
-            #cctyp = 'MBPT2'
-            #self.e_corr, self.t1, self.t2 = self.init_amps(eris)
-            raise NotImplementedError
+            pt = ump2.UMP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
+            self.e_corr, self.t2 = pt.kernel(eris=eris)
+            nocca, nvira = self.nocc
+            nmoa, nmoa = self.nmo
+            nvira, nvirb = nmoa-nocca, nmob-noccb
+            self.t1 = (numpy.zeros((nocca,nvira)), numpy.zeros((noccb,nvirb)))
+            return self.e_corr, self.t1, self.t2
 
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         return ccsd.CCSD.ccsd(self, t1, t2, eris)
@@ -718,7 +695,7 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
     def _common_init_(self, mycc, mo_coeff=None):
         if mo_coeff is None:
             mo_coeff = mycc.mo_coeff
-        mo_idx = get_moidx(mycc)
+        mo_idx = mycc.get_frozen_mask()
         self.mo_coeff = mo_coeff = \
                 (mo_coeff[0][:,mo_idx[0]], mo_coeff[1][:,mo_idx[1]])
 # Note: Recomputed fock matrix since SCF may not be fully converged.
@@ -911,22 +888,6 @@ def _make_eris_outcore(mycc, mo_coeff=None):
         cput1 = logger.timer_debug1(mycc, 'transforming vvvv', *cput1)
 
     return eris
-
-
-def get_moidx(cc):
-    '''Get MO boolean indices for unrestricted reference, accounting for frozen orbs.'''
-    moidxa = numpy.ones(cc.mo_occ[0].size, dtype=bool)
-    moidxb = numpy.ones(cc.mo_occ[1].size, dtype=bool)
-    if isinstance(cc.frozen, (int, numpy.integer)):
-        moidxa[:cc.frozen] = False
-        moidxb[:cc.frozen] = False
-    elif isinstance(cc.frozen[0], (int, numpy.integer)):
-        moidxa[list(cc.frozen)] = False
-        moidxb[list(cc.frozen)] = False
-    else:
-        moidxa[list(cc.frozen[0])] = False
-        moidxb[list(cc.frozen[1])] = False
-    return moidxa,moidxb
 
 
 def make_tau(t2, t1, r1, fac=1, out=None):

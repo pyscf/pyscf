@@ -204,7 +204,7 @@ def make_rdm1(mycc, t1, t2, l1, l2, d1=None):
         nocc = numpy.count_nonzero(mycc.mo_occ > 0)
         rdm1 = numpy.zeros((nmo,nmo))
         rdm1[numpy.diag_indices(nocc)] = 2
-        moidx = numpy.count_nonzero(ccsd.get_moidx(mycc))
+        moidx = numpy.count_nonzero(ccsd.get_frozen_mask(mycc))
         rdm1[moidx[:,None],moidx] = dm1
         dm1 = rdm1
     return dm1
@@ -231,7 +231,7 @@ def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None):
         nocc = numpy.count_nonzero(mycc.mo_occ > 0)
         rdm1 = numpy.zeros((nmo,nmo))
         rdm2 = numpy.zeros((nmo,nmo,nmo,nmo))
-        moidx = numpy.count_nonzero(ccsd.get_moidx(mycc))
+        moidx = numpy.count_nonzero(ccsd.get_frozen_mask(mycc))
         nmo0 = moidx.size
         sidx = (moidx.reshape(-1,1) * nmo + moidx).ravel()
         rdm1[moidx[:,None],moidx] = dm1

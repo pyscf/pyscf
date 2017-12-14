@@ -99,7 +99,7 @@ def kernel(eris, t1, t2):
 
 class _ChemistsERIs:
     def __init__(self, mycc, mo_coeff=None):
-        moidx = uccsd.get_moidx(mycc)
+        moidx = mycc.get_frozen_mask()
         if mo_coeff is None:
             mo_coeff = (mycc.mo_coeff[0][:,moidx[0]], mycc.mo_coeff[1][:,moidx[1]])
         else:

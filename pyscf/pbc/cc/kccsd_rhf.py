@@ -18,7 +18,7 @@ from pyscf.lib import logger
 import pyscf.cc
 import pyscf.cc.ccsd
 from pyscf.pbc import scf
-from pyscf.pbc.cc.kccsd import get_moidx
+from pyscf.pbc.cc.kccsd import get_frozen_mask
 from pyscf.pbc.cc import kintermediates_rhf as imdk
 from pyscf.lib import linalg_helper
 
@@ -928,7 +928,7 @@ class _ERIS(pyscf.cc.ccsd._ChemistsERIs):
     def __init__(self, cc, mo_coeff=None, method='incore',
                  ao2mofn=pyscf.ao2mo.outcore.general_iofree):
         cput0 = (time.clock(), time.time())
-        moidx = get_moidx(cc)
+        moidx = get_frozen_mask(cc)
         nkpts = cc.nkpts
         nmo = cc.nmo
 

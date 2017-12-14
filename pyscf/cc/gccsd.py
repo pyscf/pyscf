@@ -124,9 +124,12 @@ class GCCSD(ccsd.CCSD):
                 Use one-shot MBPT2 approximation to CCSD.
         '''
         if mbpt2:
-            #cctyp = 'MBPT2'
-            #self.e_corr, self.t1, self.t2 = self.init_amps(eris)
-            raise NotImplementedError
+            from pyscf.mp import gmp2
+            pt = gmp2.GMP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
+            self.e_corr, self.t2 = pt.kernel(eris=eris)
+            nocc, nvir = self.t2.shape[1:3]
+            self.t1 = numpy.zeros((nocc,nvir))
+            return self.e_corr, self.t1, self.t2
 
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         # Initialize orbspin so that we can attach the 
@@ -204,14 +207,14 @@ class GCCSD(ccsd.CCSD):
         if orbspin is None:
             orbspin = getattr(self.mo_coeff, 'orbspin', None)
             if orbspin is not None:
-                orbspin = orbspin[ccsd.get_moidx(self)]
+                orbspin = orbspin[self.get_frozen_mask()]
         return spatial2spin(tx, orbspin)
 
     def spin2spatial(self, tx, orbspin=None):
         if orbspin is None:
             orbspin = getattr(self.mo_coeff, 'orbspin', None)
             if orbspin is not None:
-                orbspin = orbspin[ccsd.get_moidx(self)]
+                orbspin = orbspin[self.get_frozen_mask()]
         return spin2spatial(tx, orbspin)
 
 
@@ -234,13 +237,14 @@ class _PhysicistsERIs:
     def _common_init_(self, mycc, mo_coeff=None):
         if mo_coeff is None:
             mo_coeff = mycc.mo_coeff
-        mo_idx = ccsd.get_moidx(mycc)
-        self.mo_coeff = mo_coeff = mo_coeff[:,mo_idx]
+        mo_idx = ccsd.get_frozen_mask(mycc)
         if hasattr(mo_coeff, 'orbspin'):
             self.orbspin = mo_coeff.orbspin[mo_idx]
-            self.mo_coeff = lib.tag_array(mo_coeff, orbspin=self.orbspin)
+            mo_coeff = lib.tag_array(mo_coeff[:,mo_idx], orbspin=self.orbspin)
+            self.mo_coeff = mo_coeff
         else:
             orbspin = scf.ghf.guess_orbspin(mo_coeff)
+            self.mo_coeff = mo_coeff = mo_coeff[:,mo_idx]
             if not np.any(orbspin == -1):
                 self.orbspin = orbspin[mo_idx]
                 self.mo_coeff = lib.tag_array(mo_coeff, orbspin=self.orbspin)

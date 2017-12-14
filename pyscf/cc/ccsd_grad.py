@@ -410,7 +410,7 @@ def _cp(a):
 
 def index_frozen_active(cc):
     nocc = numpy.count_nonzero(cc.mo_occ > 0)
-    moidx = ccsd.get_moidx(cc)
+    moidx = cc.get_frozen_mask()
     OA = numpy.where( moidx[:nocc])[0] # occupied active orbitals
     OF = numpy.where(~moidx[:nocc])[0] # occupied frozen orbitals
     VA = numpy.where( moidx[nocc:])[0] + nocc # virtual active orbitals
