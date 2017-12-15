@@ -12,15 +12,16 @@ def omask2wgts_loops(mf, omask, over):
   return ksn2w
 
 
-def omask_dos(mf, zomegas, omask, over=None, nkpoints=1): 
-  """ Compute some partial Density of States """
-  over = mf.hsx.s4_csr.toarray() if over is None else over
-  ksn2w = omask2wgts_loops(mf, omask, over)
-  mdos = zeros(len(zomegas))
+def gdos(mf, zomegas, omask=None, mat=None, nkpoints=1):
+  """ Compute some masked (over atomic orbitals) or total Density of States or any population analysis """
+  mat = mf.hsx.s4_csr.toarray() if mat is None else mat
+  omask = np.ones(mf.norbs) if omask is None else omask
+  ksn2w = omask2wgts_loops(mf, omask, mat)
+  gdos = zeros(len(zomegas))
   for iw,zw in enumerate(zomegas):
-    mdos[iw] = (ksn2w[:,:,:]/(zw - mf.wfsx.ksn2e[:,:,:])).sum().imag
+    gdos[iw] = (ksn2w[:,:,:]/(zw - mf.mo_energy[:,:,:])).sum().imag
 
-  return -mdos/np.pi/nkpoints
+  return -gdos/np.pi/nkpoints
 
 
 def lsoa_dos(mf, zomegas, lsoa=None, nkpoints=1): 
@@ -31,7 +32,7 @@ def lsoa_dos(mf, zomegas, lsoa=None, nkpoints=1):
   for a in lsoa: mask[mf.atom2s[a]:mf.atom2s[a+1]] = 1.0
 
   over = mf.hsx.s4_csr.toarray()
-  dos = omask_dos(mf, zomegas, mask, over, nkpoints)
+  dos = gdos(mf, zomegas, mask, over, nkpoints)
   return dos
 
 
@@ -45,6 +46,6 @@ def pdos(mf, zomegas, nkpoints=1):
   pdos = zeros((jmx+1,len(zomegas)))
   for j in range(jmx+1):
     mask = (orb2j==j)
-    pdos[j] = omask_dos(mf, zomegas, mask, over, nkpoints)
+    pdos[j] = gdos(mf, zomegas, mask, over, nkpoints)
 
   return pdos

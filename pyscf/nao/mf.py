@@ -213,6 +213,11 @@ class mf(nao):
     from pyscf.nao.pdos import lsoa_dos
     return lsoa_dos(self, comegas, **kw)
 
+  def gdos(self, comegas, **kw):
+    """ Some molecular orbital population analysis """
+    from pyscf.nao.pdos import gdos
+    return gdos(self, comegas, **kw)
+
   def read_wfsx(self, fname, **kw):
     """ An occasional reading of the SIESTA's .WFSX file """
     from pyscf.nao.m_siesta_wfsx import siesta_wfsx_c
