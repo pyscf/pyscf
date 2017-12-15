@@ -359,6 +359,7 @@ class GDF(aft.AFTDF):
         self._auxbasis = x
         self.auxcell = None
         self._cderi = None
+        self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
 
     def dump_flags(self, log=None):
         log = logger.new_logger(self, log)
