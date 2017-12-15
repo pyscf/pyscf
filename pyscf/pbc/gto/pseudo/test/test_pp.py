@@ -174,10 +174,12 @@ He
 
         ref = get_pp_nl(cell)
         dat = pp_int.get_pp_nl(cell)
+        self.assertTrue(dat.dtype == np.double)
         self.assertAlmostEqual(np.linalg.norm(ref-dat), 0, 12)
 
         ref = get_pp_nl(cell, kpt)
         dat = pp_int.get_pp_nl(cell, (kpt,kpt))
+        self.assertTrue(dat.dtype == np.complex128)
         self.assertAlmostEqual(np.linalg.norm(ref-dat[0]), 0, 12)
         self.assertAlmostEqual(np.linalg.norm(ref-dat[1]), 0, 12)
 

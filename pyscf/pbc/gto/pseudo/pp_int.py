@@ -111,13 +111,12 @@ def get_pp_nl(cell, kpts=None):
                 offset[i] = p0 + nd
             ppnl[k] += numpy.einsum('ilp,ij,jlq->pq', ilp.conj(), hl, ilp)
 
-        if abs(kpt).sum() < 1e-9:  # gamma_point:
-            ppnl[k] = ppnl[k].real
-
+    if abs(kpts_lst).sum() < 1e-9:  # gamma_point:
+        ppnl = ppnl.real
 
     if kpts is None or numpy.shape(kpts) == (3,):
         ppnl = ppnl[0]
-    return lib.asarray(ppnl)
+    return ppnl
 
 
 def fake_cell_vloc(cell, cn=0):
