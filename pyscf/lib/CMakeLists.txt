@@ -13,7 +13,6 @@ endif()
 set(CMAKE_MACOSX_RPATH OFF)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-#enable_language(Fortran)
 find_package(BLAS REQUIRED)
 message("BLAS libraries: ${BLAS_LIBRARIES}")
 # if unable to find mkl library, just create BLAS_LIBRARIES here, e.g.
@@ -44,12 +43,6 @@ endif()
 #execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import numpy; print(numpy.get_include())"
 #  OUTPUT_VARIABLE NUMPY_INCLUDE)
 #include_directories(${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE})
-
-# Architecture specified cmake flags.  See also the templates in
-# pyscf/lib/cmake_arch_config
-if(EXISTS "${PROJECT_SOURCE_DIR}/cmake.arch.inc")
-  include("${PROJECT_SOURCE_DIR}/cmake.arch.inc")
-endif()
 
 
 include(ExternalProject)
@@ -95,6 +88,13 @@ add_subdirectory(ri)
 add_subdirectory(hci)
 add_subdirectory(pbc)
 add_subdirectory(extras/mbd)
+
+# Architecture specified cmake flags.  See also the templates in
+# pyscf/lib/cmake_arch_config
+if(EXISTS "${PROJECT_SOURCE_DIR}/cmake.arch.inc")
+  include("${PROJECT_SOURCE_DIR}/cmake.arch.inc")
+endif()
+
 
 option(ENABLE_LIBXC "Using libxc for XC functional library" ON)
 option(ENABLE_XCFUN "Using xcfun for XC functional library" ON)
