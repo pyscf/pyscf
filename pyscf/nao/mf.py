@@ -199,12 +199,19 @@ class mf(nao):
     return self.hsx.spin2h4_csr
   
   def dos(self, comegas, **kw):
+    """ Ordinary Density of States (from the current mean-field eigenvalues) """
     from pyscf.nao.scf_dos import scf_dos
     return scf_dos(self, comegas, **kw)
 
   def pdos(self, comegas, **kw):
-    from pyscf.nao.scf_dos import scf_pdos
-    return scf_pdos(self, comegas, **kw)
+    """ Partial Density of States (resolved in angular momentum of atomic orbitals) """
+    from pyscf.nao.pdos import pdos
+    return pdos(self, comegas, **kw)
+
+  def lsoa_dos(self, comegas, **kw):
+    """ Partial Density of States (contributions from a given list of atoms) """
+    from pyscf.nao.pdos import lsoa_dos
+    return lsoa_dos(self, comegas, **kw)
 
   def read_wfsx(self, fname, **kw):
     """ An occasional reading of the SIESTA's .WFSX file """
