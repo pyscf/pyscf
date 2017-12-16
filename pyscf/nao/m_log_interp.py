@@ -22,7 +22,7 @@ def log_interp(ff, r, rho_min_jt, dr_jt):
       rho_min, dr = log(rr[0]), log(rr[1]/rr[0])
       y = interp_log(ff, 0.2, rho, dr)
   """
-  if r<=np.exp(rho_min_jt): return ff[0] #  here should be less than or equal gg[0]
+  if r<np.exp(rho_min_jt)/2: return ff[0] #  here should be less than or equal gg[0]
 
   lr = np.log(r)
   k=int((lr-rho_min_jt)/dr_jt)
@@ -52,7 +52,7 @@ def comp_coeffs_(self, r, i2coeff):
       Array of weights to sum with the functions values to obtain the interpolated value coeff
       and the index k where summation starts sum(ff[k:k+6]*coeffs)
   """
-  if r<=self.gg[0]:
+  if r<self.gg[0]/2:
     i2coeff.fill(0.0)
     i2coeff[0] = 1
     return 0
@@ -130,18 +130,19 @@ class log_interp_c():
   
     r2k = np.where(r2k<0,0,r2k)
     r2k = np.where(r2k>self.nr-6,self.nr-6,r2k)
-    r2k = np.where(rr<=self.gg[0], 0, r2k)
+    hp = self.gg[0]/2
+    r2k = np.where(rr<hp, 0, r2k)
     #print('r2k 2 ', r2k)
     
     dy = (lr-self.gammin_jt-(r2k+2)*self.dg_jt)/self.dg_jt
     #print('dy    ', dy)
   
-    ir2c[0] = np.where(rr<=self.gg[0], 1.0, -dy*(dy**2-1.0)*(dy-2.0)*(dy-3.0)/120.0)
-    ir2c[1] = np.where(rr<=self.gg[0], 0.0, +5.0*dy*(dy-1.0)*(dy**2-4.0)*(dy-3.0)/120.0)
-    ir2c[2] = np.where(rr<=self.gg[0], 0.0, -10.0*(dy**2-1.0)*(dy**2-4.0)*(dy-3.0)/120.0)
-    ir2c[3] = np.where(rr<=self.gg[0], 0.0, +10.0*dy*(dy+1.0)*(dy**2-4.0)*(dy-3.0)/120.0)
-    ir2c[4] = np.where(rr<=self.gg[0], 0.0, -5.0*dy*(dy**2-1.0)*(dy+2.0)*(dy-3.0)/120.0)
-    ir2c[5] = np.where(rr<=self.gg[0], 0.0, dy*(dy**2-1.0)*(dy**2-4.0)/120.0)
+    ir2c[0] = np.where(rr<hp, 1.0, -dy*(dy**2-1.0)*(dy-2.0)*(dy-3.0)/120.0)
+    ir2c[1] = np.where(rr<hp, 0.0, +5.0*dy*(dy-1.0)*(dy**2-4.0)*(dy-3.0)/120.0)
+    ir2c[2] = np.where(rr<hp, 0.0, -10.0*(dy**2-1.0)*(dy**2-4.0)*(dy-3.0)/120.0)
+    ir2c[3] = np.where(rr<hp, 0.0, +10.0*dy*(dy+1.0)*(dy**2-4.0)*(dy-3.0)/120.0)
+    ir2c[4] = np.where(rr<hp, 0.0, -5.0*dy*(dy**2-1.0)*(dy+2.0)*(dy-3.0)/120.0)
+    ir2c[5] = np.where(rr<hp, 0.0, dy*(dy**2-1.0)*(dy**2-4.0)/120.0)
     #print('ir2c[0]    ', ir2c[0])
     #print('ir2c[1]    ', ir2c[1])
     return r2k,ir2c
