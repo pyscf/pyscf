@@ -13,8 +13,6 @@ import numpy
 from pyscf import lib
 from functools import reduce
 from pyscf.lib import logger
-from pyscf import gto
-from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
 from pyscf.cc import ccsd_rdm
@@ -61,7 +59,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     nvir = nmo - nocc
     nao_pair = nao * (nao+1) // 2
     with_frozen = not (mycc.frozen is None or mycc.frozen is 0)
-    OA, VA, OF, VF = index_frozen_active(mycc)
+    OA, VA, OF, VF = _index_frozen_active(mycc.get_frozen_mask(), nocc)
 
     log.debug('symmetrized rdm2 and MO->AO transformation')
 # Roughly, dm2*2 is computed in _rdm2_mo2ao
@@ -82,7 +80,6 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
 # 2e AO integrals dot 2pdm
     max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     blksize = max(1, int(max_memory*1e6/8/(nao**3*2.5)))
-    ioblksize = fdm2['dm2'].chunks[1]
 
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = offsetdic[ia]
@@ -90,9 +87,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         vhf = 0
         for b0, b1, nf in shell_prange(mol, shl0, shl1, blksize):
             ip0, ip1 = ip1, ip1 + nf
-            dm2buf = numpy.empty((nf,nao,nao_pair))
-            for i0, i1 in lib.prange(0, nao_pair, ioblksize):
-                _load_block_tril(fdm2['dm2'], ip0, ip1, i0, i1, dm2buf[:,:,i0:i1])
+            dm2buf = _load_block_tril(fdm2['dm2'], ip0, ip1, nao)
             dm2buf[:,:,diagidx] *= .5
             shls_slice = (b0,b1,0,mol.nbas,0,mol.nbas,0,mol.nbas)
             eri0 = mol.intor('int2e', aosym='s2kl', shls_slice=shls_slice)
@@ -118,11 +113,8 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
 
     dm1mo = numpy.zeros((nmo,nmo))
     if with_frozen:
-        OA, VA, OF, VF = index_frozen_active(mycc)
-        dco = (Imat[OF[:,None],OA]
-               / lib.direct_sum('i-j->ij', mo_energy[OF], mo_energy[OA]))
-        dfv = (Imat[VF[:,None],VA]
-               / lib.direct_sum('a-b->ab', mo_energy[VF], mo_energy[VA]))
+        dco = Imat[OF[:,None],OA] / (mo_energy[OF,None] - mo_energy[OA])
+        dfv = Imat[VF[:,None],VA] / (mo_energy[VF,None] - mo_energy[VA])
         dm1mo[OA[:,None],OA] = doo + doo.T
         dm1mo[OF[:,None],OA] = dco
         dm1mo[OA[:,None],OF] = dco.T
@@ -134,12 +126,11 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         dm1mo[nocc:,nocc:] = dvv + dvv.T
 
     dm1 = reduce(numpy.dot, (mo_coeff, dm1mo, mo_coeff.T))
-    vj, vk = mycc._scf.get_jk(mycc.mol, dm1)
-    Xvo = reduce(numpy.dot, (mo_coeff[:,nocc:].T, vj*2-vk, mo_coeff[:,:nocc]))
+    vhf = mycc._scf.get_veff(mycc.mol, dm1) * 2
+    Xvo = reduce(numpy.dot, (mo_coeff[:,nocc:].T, vhf, mo_coeff[:,:nocc]))
     Xvo+= Imat[:nocc,nocc:].T - Imat[nocc:,:nocc]
 
     dm1mo += _response_dm1(mycc, Xvo, eris)
-    dm1 = reduce(numpy.dot, (mo_coeff, dm1mo, mo_coeff.T))
     time1 = log.timer_debug1('response_rdm1 intermediates', *time1)
 
     Imat[nocc:,:nocc] = Imat[:nocc,nocc:].T
@@ -153,15 +144,16 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     zeta[nocc:,:nocc] = mo_energy[:nocc]
     zeta[:nocc,nocc:] = mo_energy[:nocc].reshape(-1,1)
     zeta = reduce(numpy.dot, (mo_coeff, zeta*dm1mo, mo_coeff.T))
+
+    dm1 = reduce(numpy.dot, (mo_coeff, dm1mo, mo_coeff.T))
     p1 = numpy.dot(mo_coeff[:,:nocc], mo_coeff[:,:nocc].T)
-    vhf4sij = reduce(numpy.dot, (p1, mycc._scf.get_veff(mol, dm1+dm1.T), p1))
+    vhf_s1occ = reduce(numpy.dot, (p1, mycc._scf.get_veff(mol, dm1+dm1.T), p1))
     time1 = log.timer_debug1('h1 and JK1', *time1)
 
     # Hartree-Fock part contribution
     dm1p = hf_dm1 + dm1*2
     dm1 += hf_dm1
-    zeta += mf_grad.make_rdm1e(mycc._scf.mo_energy, mycc._scf.mo_coeff,
-                               mycc._scf.mo_occ)
+    zeta += mf_grad.make_rdm1e(mo_energy, mo_coeff, mycc.mo_occ)
 
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = offsetdic[ia]
@@ -177,7 +169,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], zeta[p0:p1]  )
         de[k] -= numpy.einsum('xji,ij->x', s1[:,p0:p1], zeta[:,p0:p1])
 # -vhf[s_ij[1]],  contribute to f1, *2 for s1+s1.T
-        de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], vhf4sij[p0:p1]) * 2
+        de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], vhf_s1occ[p0:p1]) * 2
         de[k] -= numpy.einsum('xij,ij->x', vhf1[k], dm1p)
 
     de += rhf_grad.grad_nuc(mol)
@@ -260,9 +252,9 @@ def _response_dm1(mycc, Xvo, eris=None):
     with_frozen = not (mycc.frozen is None or mycc.frozen is 0)
     if eris is None or with_frozen:
         mo_energy = mycc._scf.mo_energy
-        mo_occ = mycc._scf.mo_occ
+        mo_occ = mycc.mo_occ
+        mo_coeff = mycc.mo_coeff
         def fvind(x):
-            mo_coeff = mycc.mo_coeff
             x = x.reshape(Xvo.shape)
             dm = reduce(numpy.dot, (mo_coeff[:,nocc:], x, mo_coeff[:,:nocc].T))
             v = mycc._scf.get_veff(mycc.mol, dm + dm.T)
@@ -304,19 +296,20 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
 
     nocc, nvir = dovov.shape[:2]
-    nov = nocc * nvir
     mo_coeff = numpy.asarray(mo_coeff, order='F')
     nao, nmo = mo_coeff.shape
     nao_pair = nao * (nao+1) // 2
     nvir_pair = nvir * (nvir+1) //2
 
+    fdrv = getattr(_ccsd.libcc, 'AO2MOnr_e2_drv')
+    ftrans = _ccsd.libcc.AO2MOtranse2_nr_s1
+    fmm = _ccsd.libcc.CCmmm_transpose_sum
+    pao_loc = ctypes.POINTER(ctypes.c_void_p)()
     def _trans(vin, orbs_slice, out=None):
         nrow = vin.shape[0]
         if out is None:
             out = numpy.empty((nrow,nao_pair))
-        fdrv = getattr(_ccsd.libcc, 'AO2MOnr_e2_drv')
-        pao_loc = ctypes.POINTER(ctypes.c_void_p)()
-        fdrv(_ccsd.libcc.AO2MOtranse2_nr_s1, _ccsd.libcc.CCmmm_transpose_sum,
+        fdrv(ftrans, fmm,
              out.ctypes.data_as(ctypes.c_void_p),
              vin.ctypes.data_as(ctypes.c_void_p),
              mo_coeff.ctypes.data_as(ctypes.c_void_p),
@@ -358,15 +351,11 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
 
 # transform dm2_kl then dm2 + dm2.transpose(2,3,0,1)
     gsave = fsave.create_dataset('dm2', (nao_pair,nao_pair), 'f8', chunks=(nao_pair,blksize))
-    diagidx = numpy.arange(nao)
-    diagidx = diagidx*(diagidx+1)//2 + diagidx
     for p0, p1 in lib.prange(0, nao_pair, blksize):
         buf1 = numpy.zeros((p1-p0,nmo,nmo))
         buf1[:,nocc:,nocc:] = lib.unpack_tril(_cp(fswap['v'][p0:p1]))
         buf1[:,:,:nocc] = fswap['o'][:,:,p0:p1].transpose(2,0,1)
         buf2 = _trans(buf1, (0,nmo,0,nmo))
-        ic = 0
-        idx = diagidx[diagidx<p1]
         if p0 > 0:
             buf1 = _cp(gsave[:p0,p0:p1])
             buf1[:p0,:p1-p0] += buf2[:p1-p0,:p0].T
@@ -388,33 +377,30 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
 # . . | | .
 # . . | | . .
 #
-def _load_block_tril(dat, row0, row1, col0, col1, out=None):
-    shape = dat.shape
-    nd = int(numpy.sqrt(shape[0]*2))
+def _load_block_tril(h5dat, row0, row1, nao, out=None):
+    nao_pair = nao * (nao+1) // 2
     if out is None:
-        out = numpy.empty((row1-row0,nd,col1-col0)+shape[2:])
-    dat1 = dat[row0*(row0+1)//2:row1*(row1+1)//2,col0:col1]
+        out = numpy.ndarray((row1-row0,nao,nao_pair))
+    dat = h5dat[row0*(row0+1)//2:row1*(row1+1)//2]
     p1 = 0
     for i in range(row0, row1):
         p0, p1 = p1, p1 + i+1
-        out[i-row0,:i+1] = dat1[p0:p1]
+        out[i-row0,:i+1] = dat[p0:p1]
         for j in range(row0, i):
             out[j-row0,i] = out[i-row0,j]
-    for i in range(row1, nd):
+    for i in range(row1, nao):
         i2 = i*(i+1)//2
-        out[:,i] = dat[i2+row0:i2+row1,col0:col1]
+        out[:,i] = h5dat[i2+row0:i2+row1]
     return out
 
 def _cp(a):
     return numpy.array(a, copy=False, order='C')
 
-def index_frozen_active(cc):
-    nocc = numpy.count_nonzero(cc.mo_occ > 0)
-    moidx = cc.get_frozen_mask()
-    OA = numpy.where( moidx[:nocc])[0] # occupied active orbitals
-    OF = numpy.where(~moidx[:nocc])[0] # occupied frozen orbitals
-    VA = numpy.where( moidx[nocc:])[0] + nocc # virtual active orbitals
-    VF = numpy.where(~moidx[nocc:])[0] + nocc # virtual frozen orbitals
+def _index_frozen_active(frozen_mask, nocc):
+    OA = numpy.where( frozen_mask[:nocc])[0] # occupied active orbitals
+    OF = numpy.where(~frozen_mask[:nocc])[0] # occupied frozen orbitals
+    VA = numpy.where( frozen_mask[nocc:])[0] + nocc # virtual active orbitals
+    VF = numpy.where(~frozen_mask[nocc:])[0] + nocc # virtual frozen orbitals
     return OA, VA, OF, VF
 
 class Gradients(lib.StreamObject):
@@ -427,7 +413,7 @@ class Gradients(lib.StreamObject):
         self.de = None
 
     def kernel(self, t1=None, t2=None, l1=None, l2=None, eris=None,
-               atmlst=None, mf_grad=None, verbose=None):
+               atmlst=None, mf_grad=None, verbose=None, _kern=kernel):
         log = logger.new_logger(self, verbose)
         if t1 is None: t1 = self._cc.t1
         if t2 is None: t2 = self._cc.t2
@@ -444,8 +430,8 @@ class Gradients(lib.StreamObject):
         else:
             self.atmlst = atmlst
 
-        self.de = kernel(self._cc, t1, t2, l1, l2, eris, atmlst,
-                         mf_grad, verbose=log)
+        self.de = _kern(self._cc, t1, t2, l1, l2, eris, atmlst,
+                        mf_grad, verbose=log)
         if self.verbose >= logger.NOTE:
             log.note('--------------- %s gradients ---------------',
                      self.__class__.__name__)
@@ -459,8 +445,6 @@ class Gradients(lib.StreamObject):
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    from pyscf import ao2mo
-    from pyscf import grad
 
     mol = gto.M(
         atom = [
@@ -469,11 +453,8 @@ if __name__ == '__main__':
             [1   , (0. , 0.757  , 0.587)]],
         basis = '631g'
     )
-    mf = scf.RHF(mol)
-    ehf = mf.scf()
-
-    mycc = ccsd.CCSD(mf)
-    mycc.kernel()
+    mf = scf.RHF(mol).run()
+    mycc = ccsd.CCSD(mf).run()
     g1 = Gradients(mycc).kernel()
 #[[ 0   0                1.00950925e-02]
 # [ 0   2.28063426e-02  -5.04754623e-03]
@@ -488,9 +469,7 @@ if __name__ == '__main__':
             [1   , (0. , 0.757  , 0.587)]],
         basis = '631g'
     )
-    mf = scf.RHF(mol)
-    ehf = mf.scf()
-
+    mf = scf.RHF(mol).run()
     mycc = ccsd.CCSD(mf)
     mycc.frozen = [0,1,10,11,12]
     mycc.max_memory = 1

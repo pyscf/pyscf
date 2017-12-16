@@ -204,7 +204,7 @@ def make_rdm1(mycc, t1, t2, l1, l2, d1=None):
         nocc = numpy.count_nonzero(mycc.mo_occ > 0)
         rdm1 = numpy.zeros((nmo,nmo))
         rdm1[numpy.diag_indices(nocc)] = 2
-        moidx = numpy.count_nonzero(ccsd.get_frozen_mask(mycc))
+        moidx = numpy.where(ccsd.get_frozen_mask(mycc))[0]
         rdm1[moidx[:,None],moidx] = dm1
         dm1 = rdm1
     return dm1
@@ -227,16 +227,15 @@ def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None):
     dm1[nocc:,nocc:] = dvv + dvv.T
 
     if not (mycc.frozen is 0 or mycc.frozen is None):
-        nmo = mycc.mo_occ.size
+        nmo, nmo0 = mycc.mo_occ.size, nmo
         nocc = numpy.count_nonzero(mycc.mo_occ > 0)
         rdm1 = numpy.zeros((nmo,nmo))
         rdm2 = numpy.zeros((nmo,nmo,nmo,nmo))
-        moidx = numpy.count_nonzero(ccsd.get_frozen_mask(mycc))
-        nmo0 = moidx.size
-        sidx = (moidx.reshape(-1,1) * nmo + moidx).ravel()
+        moidx = numpy.where(ccsd.get_frozen_mask(mycc))[0]
+        idx = (moidx.reshape(-1,1) * nmo + moidx).ravel()
         rdm1[moidx[:,None],moidx] = dm1
         lib.takebak_2d(rdm2.reshape(nmo**2,nmo**2),
-                       dm2.reshape(nmo0**2,nmo0**2), sidx, sidx)
+                       dm2.reshape(nmo0**2,nmo0**2), idx, idx)
         dm1, dm2 = rdm1, rdm2
 
     for i in range(nocc):
@@ -407,3 +406,27 @@ if __name__ == '__main__':
 
     d1 = numpy.einsum('kkpq->pq', dm2) / 9
     print(numpy.allclose(d1, dm1))
+
+    mol = gto.Mole()
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+    mol.basis = '631g'
+    mol.build()
+    mf = scf.RHF(mol).run()
+
+    mycc = ccsd.CCSD(mf)
+    mycc.frozen = 2
+    ecc, t1, t2 = mycc.kernel()
+    l1, l2 = mycc.solve_lambda()
+    dm1 = make_rdm1(mycc, t1, t2, l1, l2)
+    dm2 = make_rdm2(mycc, t1, t2, l1, l2)
+    nmo = mf.mo_coeff.shape[1]
+    eri = ao2mo.kernel(mf._eri, mf.mo_coeff, compact=False).reshape([nmo]*4)
+    hcore = mf.get_hcore()
+    h1 = reduce(numpy.dot, (mf.mo_coeff.T, hcore, mf.mo_coeff))
+    e1 = numpy.einsum('ij,ji', h1, dm1)
+    e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+    e1+= mol.energy_nuc()
+    print(e1 - mycc.e_tot)
