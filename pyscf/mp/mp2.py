@@ -27,21 +27,21 @@ def kernel(mp, eris=None, with_t2=True, verbose=logger.NOTE):
     eia = mo_e[:nocc,None] - mo_e[None,nocc:]
 
     if with_t2:
-        t2 = numpy.empty((nocc,nocc,nvir,nvir))
+        t2 = numpy.empty((nocc,nocc,nvir,nvir), dtype=eris.ovov.dtype)
     else:
         t2 = None
 
-    emp2 = 0.0
+    emp2 = 0
     for i in range(nocc):
         gi = numpy.asarray(eris.ovov[i*nvir:(i+1)*nvir])
         gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
-        t2i = gi/lib.direct_sum('jb+a->jba', eia, eia[i])
+        t2i = gi.conj()/lib.direct_sum('jb+a->jba', eia, eia[i])
         emp2 += numpy.einsum('jab,jab', t2i, gi) * 2
         emp2 -= numpy.einsum('jab,jba', t2i, gi)
         if with_t2:
             t2[i] = t2i
 
-    return emp2, t2
+    return emp2.real, t2
 
 def make_rdm1_ao(mp, mo_energy, mo_coeff, eris=None, verbose=logger.NOTE):
     '''1-particle density matrix in AO basis.  The occupied-virtual orbital

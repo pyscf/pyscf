@@ -187,6 +187,11 @@ class TDA(lib.StreamObject):
         self.xy = [(xi.reshape(nvir,nocc)*numpy.sqrt(.5),0) for xi in x1]
         #TODO: analyze CIS wfn point group symmetry
         return self.e, self.xy
+
+    def nuc_grad_method(self):
+        from pyscf.tddft import rhf_grad
+        return rhf_grad.Gradients(self)
+
 CIS = TDA
 
 
@@ -306,6 +311,11 @@ class TDHF(TDA):
         self.xy = [norm_xy(z) for z in x1]
 
         return self.e, self.xy
+
+    def nuc_grad_method(self):
+        from pyscf.tddft import rhf_grad
+        return rhf_grad.Gradients(self)
+
 RPA = TDHF
 
 

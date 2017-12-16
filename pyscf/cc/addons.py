@@ -39,6 +39,7 @@ def spatial2spin(tx, orbspin=None):
         t1 = numpy.zeros((nocc,nvir), dtype=t1a.dtype)
         lib.takebak_2d(t1, t1a, idxoa, idxva)
         lib.takebak_2d(t1, t1b, idxob, idxvb)
+        t1 = lib.tag_array(t1, orbspin=orbspin)
         return t1
 
     else:
@@ -61,6 +62,7 @@ def spatial2spin(tx, orbspin=None):
         abba = -t2ab
         lib.takebak_2d(t2, abba, idxoab.ravel()  , idxvba.T.ravel())
         lib.takebak_2d(t2, abba, idxoba.T.ravel(), idxvab.ravel()  )
+        t2 = lib.tag_array(t2, orbspin=orbspin)
         return t2.reshape(nocc,nocc,nvir,nvir)
 
 spatial2spinorb = spatial2spin

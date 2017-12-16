@@ -314,7 +314,6 @@ if __name__ == '__main__':
 
     mol = gto.M()
     mf = scf.RHF(mol)
-
     mcc = ccsd.CCSD(mf)
 
     numpy.random.seed(2)

@@ -574,7 +574,7 @@ class UCCSD(ccsd.CCSD):
 
     def solve_lambda(self, t1=None, t2=None, l1=None, l2=None,
                      eris=None):
-        from pyscf.cc import uccsd_lambda_slow as uccsd_lambda
+        from pyscf.cc import uccsd_lambda
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
         if eris is None: eris = self.ao2mo(self.mo_coeff)
@@ -599,7 +599,7 @@ class UCCSD(ccsd.CCSD):
         Returns:
             dm1a, dm1b
         '''
-        from pyscf.cc import uccsd_rdm_slow as uccsd_rdm
+        from pyscf.cc import uccsd_rdm
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
         if l1 is None: l1 = self.l1
@@ -610,7 +610,7 @@ class UCCSD(ccsd.CCSD):
     def make_rdm2(self, t1=None, t2=None, l1=None, l2=None):
         '''2-particle density matrix in spin-oribital basis.
         '''
-        from pyscf.cc import uccsd_rdm_slow as uccsd_rdm
+        from pyscf.cc import uccsd_rdm
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
         if l1 is None: l1 = self.l1

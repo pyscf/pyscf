@@ -26,15 +26,15 @@ def kernel(mp, eris=None, with_t2=True, verbose=logger.NOTE):
     else:
         t2 = None
 
-    emp2 = 0.0
+    emp2 = 0
     for i in range(nocc):
         gi = numpy.asarray(eris.oovv[i]).reshape(nocc,nvir,nvir)
-        t2i = gi/lib.direct_sum('jb+a->jba', eia, eia[i])
+        t2i = gi.conj()/lib.direct_sum('jb+a->jba', eia, eia[i])
         emp2 += numpy.einsum('jab,jab', t2i, gi) * .25
         if with_t2:
             t2[i] = t2i
 
-    return emp2, t2
+    return emp2.real, t2
 
 
 class GMP2(mp2.MP2):

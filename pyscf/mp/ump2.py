@@ -26,9 +26,10 @@ def kernel(mp, eris=None, with_t2=True, verbose=logger.NOTE):
     eia_b = mo_eb[:noccb,None] - mo_eb[None,noccb:]
 
     if with_t2:
-        t2aa = numpy.empty((nocca,nocca,nvira,nvira))
-        t2ab = numpy.empty((nocca,noccb,nvira,nvirb))
-        t2bb = numpy.empty((noccb,noccb,nvirb,nvirb))
+        dtype = eris.ovov.dtype
+        t2aa = numpy.empty((nocca,nocca,nvira,nvira), dtype=dtype)
+        t2ab = numpy.empty((nocca,noccb,nvira,nvirb), dtype=dtype)
+        t2bb = numpy.empty((noccb,noccb,nvirb,nvirb), dtype=dtype)
         t2 = (t2aa,t2ab,t2bb)
     else:
         t2 = None
@@ -37,7 +38,7 @@ def kernel(mp, eris=None, with_t2=True, verbose=logger.NOTE):
     for i in range(nocca):
         eris_ovov = numpy.asarray(eris.ovov[i*nvira:(i+1)*nvira])
         eris_ovov = eris_ovov.reshape(nvira,nocca,nvira).transpose(1,0,2)
-        t2i = eris_ovov/lib.direct_sum('a+jb->jab', eia_a[i], eia_a)
+        t2i = eris_ovov.conj()/lib.direct_sum('a+jb->jab', eia_a[i], eia_a)
         emp2 += numpy.einsum('jab,jab', t2i, eris_ovov) * .5
         emp2 -= numpy.einsum('jab,jba', t2i, eris_ovov) * .5
         if with_t2:
@@ -45,7 +46,7 @@ def kernel(mp, eris=None, with_t2=True, verbose=logger.NOTE):
 
         eris_ovov = numpy.asarray(eris.ovOV[i*nvira:(i+1)*nvira])
         eris_ovov = eris_ovov.reshape(nvira,noccb,nvirb).transpose(1,0,2)
-        t2i = eris_ovov/lib.direct_sum('a+jb->jab', eia_a[i], eia_b)
+        t2i = eris_ovov.conj()/lib.direct_sum('a+jb->jab', eia_a[i], eia_b)
         emp2 += numpy.einsum('JaB,JaB', t2i, eris_ovov)
         if with_t2:
             t2ab[i] = t2i
@@ -53,13 +54,13 @@ def kernel(mp, eris=None, with_t2=True, verbose=logger.NOTE):
     for i in range(noccb):
         eris_ovov = numpy.asarray(eris.OVOV[i*nvirb:(i+1)*nvirb])
         eris_ovov = eris_ovov.reshape(nvirb,noccb,nvirb).transpose(1,0,2)
-        t2i = eris_ovov/lib.direct_sum('a+jb->jab', eia_b[i], eia_b)
+        t2i = eris_ovov.conj()/lib.direct_sum('a+jb->jab', eia_b[i], eia_b)
         emp2 += numpy.einsum('jab,jab', t2i, eris_ovov) * .5
         emp2 -= numpy.einsum('jab,jba', t2i, eris_ovov) * .5
         if with_t2:
             t2bb[i] = t2i
 
-    return emp2, t2
+    return emp2.real, t2
 
 
 def get_nocc(mp):

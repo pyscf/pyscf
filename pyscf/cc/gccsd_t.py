@@ -15,7 +15,7 @@ from pyscf.cc import gccsd
 
 # spin-orbital formula
 # JCP, 98, 8718
-def kernel(cc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
+def kernel(cc, eris, t1=None, t2=None, verbose=logger.INFO):
     assert(isinstance(eris, gccsd._PhysicistsERIs))
     if t1 is None or t2 is None:
         t1, t2 = cc.t1, cc.t2

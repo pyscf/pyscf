@@ -138,9 +138,9 @@ class GCCSD(ccsd.CCSD):
             if not np.any(orbspin == -1):
                 self.mo_coeff = lib.tag_array(self.mo_coeff, orbspin=orbspin)
         e_corr, self.t1, self.t2 = ccsd.CCSD.ccsd(self, t1, t2, eris)
-        if hasattr(self.mo_coeff, 'orbspin'):
-            self.t1 = lib.tag_array(self.t1, orbspin=self.mo_coeff.orbspin)
-            self.t2 = lib.tag_array(self.t2, orbspin=self.mo_coeff.orbspin)
+        if hasattr(eris, 'orbspin') and eris.orbspin is not None:
+            self.t1 = lib.tag_array(self.t1, orbspin=eris.orbspin)
+            self.t2 = lib.tag_array(self.t2, orbspin=eris.orbspin)
         return e_corr, self.t1, self.t2
 
     def amplitudes_to_vector(self, t1, t2, out=None):
@@ -154,10 +154,23 @@ class GCCSD(ccsd.CCSD):
 
     def solve_lambda(self, t1=None, t2=None, l1=None, l2=None,
                      eris=None):
-        raise NotImplementedError
+        from pyscf.cc import gccsd_lambda
+        if t1 is None: t1 = self.t1
+        if t2 is None: t2 = self.t2
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        self.converged_lambda, self.l1, self.l2 = \
+                gccsd_lambda.kernel(self, eris, t1, t2, l1, l2,
+                                    max_cycle=self.max_cycle,
+                                    tol=self.conv_tol_normt,
+                                    verbose=self.verbose)
+        return self.l1, self.l2
 
     def ccsd_t(self, t1=None, t2=None, eris=None):
-        raise NotImplementedError
+        from pyscf.cc import gccsd_t
+        if t1 is None: t1 = self.t1
+        if t2 is None: t2 = self.t2
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        return gccsd_t.kernel(self, eris, t1, t2, self.verbose)
 
     def ipccsd(self, nroots=1, left=False, koopmans=False, guess=None,
                partition=None, eris=None):
@@ -177,7 +190,13 @@ class GCCSD(ccsd.CCSD):
 
     def make_rdm1(self, t1=None, t2=None, l1=None, l2=None):
         '''Un-relaxed 1-particle density matrix in MO space'''
-        raise NotImplementedError
+        from pyscf.cc import gccsd_rdm
+        if t1 is None: t1 = self.t1
+        if t2 is None: t2 = self.t2
+        if l1 is None: l1 = self.l1
+        if l2 is None: l2 = self.l2
+        if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
+        return gccsd_rdm.make_rdm1(self, t1, t2, l1, l2)
 
     def make_rdm2(self, t1=None, t2=None, l1=None, l2=None):
         '''2-particle density matrix in MO space.  The density matrix is
@@ -185,7 +204,13 @@ class GCCSD(ccsd.CCSD):
 
         dm2[p,r,q,s] = <p^+ q^+ s r>
         '''
-        raise NotImplementedError
+        from pyscf.cc import gccsd_rdm
+        if t1 is None: t1 = self.t1
+        if t2 is None: t2 = self.t2
+        if l1 is None: l1 = self.l1
+        if l2 is None: l2 = self.l2
+        if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
+        return gccsd_rdm.make_rdm2(self, t1, t2, l1, l2)
 
     def ao2mo(self, mo_coeff=None):
         nmo = self.nmo
