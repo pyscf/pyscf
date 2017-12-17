@@ -89,9 +89,17 @@ def gamma2_intermediates(mycc, t1, t2, l1, l2):
     dvvov = None
     return (dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov)
 
-def make_rdm1(mycc, t1, t2, l1, l2, d1=None):
-    if d1 is None:
-        d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
+def make_rdm1(mycc, t1, t2, l1, l2):
+    d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
+    return _make_rdm1(mycc, d1, with_frozen=True)
+
+# spin-orbital rdm2 in Chemist's notation
+def make_rdm2(mycc, t1, t2, l1, l2):
+    d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
+    d2 = gamma2_intermediates(mycc, t1, t2, l1, l2)
+    return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True)
+
+def _make_rdm1(mycc, d1, with_frozen=True):
     doo, dov, dvo, dvv = d1
     nocc, nvir = dov.shape
     nmo = nocc + nvir
@@ -104,42 +112,18 @@ def make_rdm1(mycc, t1, t2, l1, l2, d1=None):
     dm1 *= .5
     dm1[numpy.diag_indices(nocc)] += 1
 
-    if not (mycc.frozen is 0 or mycc.frozen is None):
-        raise NotImplementedError
+    if with_frozen and not (mycc.frozen is 0 or mycc.frozen is None):
+        nmo = mycc.mo_occ.size
+        nocc = numpy.count_nonzero(mycc.mo_occ > 0)
+        rdm1 = numpy.zeros((nmo,nmo))
+        rdm1[numpy.diag_indices(nocc)] = 1
+        moidx = numpy.where(ccsd.get_frozen_mask(mycc))[0]
+        rdm1[moidx[:,None],moidx] = dm1
+        dm1 = rdm1
 
     return dm1
 
-# spin-orbital rdm2 in Chemist's notation
-def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None):
-    dm2 = _make_rdm2(mycc, t1, t2, l1, l2, d2)
-
-    moidx = mycc.get_frozen_mask()
-    if not (mycc.frozen is 0 or mycc.frozen is None):
-        raise NotImplementedError
-    else:
-        nocc = numpy.count_nonzero(mycc.mo_occ[moidx] > 0)
-
-    dm1 = make_rdm1(mycc, t1, t2, l1, l2, d1)
-    dm1[numpy.diag_indices(nocc)] -= 1
-
-    for i in range(nocc):
-        dm2[i,i,:,:] += dm1
-        dm2[:,:,i,i] += dm1
-        dm2[:,i,i,:] -= dm1
-        dm2[i,:,:,i] -= dm1
-
-    for i in range(nocc):
-        for j in range(nocc):
-            dm2[i,i,j,j] += 1
-            dm2[i,j,j,i] -= 1
-
-    return dm2
-
-def _make_rdm2(mycc, t1, t2, l1, l2, d2=None):
-    '''The 2-PDM associated to the normal ordered 2-particle interactions
-    '''
-    if d2 is None:
-        d2 = gamma2_intermediates(mycc, t1, t2, l1, l2)
+def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
     nocc, nvir = dovov.shape[:2]
     nmo = nocc + nvir
@@ -173,6 +157,32 @@ def _make_rdm2(mycc, t1, t2, l1, l2, d2=None):
     dm2[:nocc,nocc:,:nocc,:nocc] = dooov.transpose(2,3,0,1)
     dm2[:nocc,:nocc,nocc:,:nocc] = dooov.transpose(1,0,3,2).conj()
     dm2[nocc:,:nocc,:nocc,:nocc] = dooov.transpose(3,2,1,0).conj()
+
+    if with_frozen and not (mycc.frozen is 0 or mycc.frozen is None):
+        nmo, nmo0 = mycc.mo_occ.size, nmo
+        nocc = numpy.count_nonzero(mycc.mo_occ > 0)
+        rdm2 = numpy.zeros((nmo,nmo,nmo,nmo))
+        moidx = numpy.where(mycc.get_frozen_mask())[0]
+        idx = (moidx.reshape(-1,1) * nmo + moidx).ravel()
+        lib.takebak_2d(rdm2.reshape(nmo**2,nmo**2),
+                       dm2.reshape(nmo0**2,nmo0**2), idx, idx)
+        dm2 = rdm2
+
+    if with_dm1:
+        dm1 = _make_rdm1(mycc, d1, with_frozen)
+        dm1[numpy.diag_indices(nocc)] -= 1
+
+        for i in range(nocc):
+            dm2[i,i,:,:] += dm1
+            dm2[:,:,i,i] += dm1
+            dm2[:,i,i,:] -= dm1
+            dm2[i,:,:,i] -= dm1
+
+        for i in range(nocc):
+            for j in range(nocc):
+                dm2[i,i,j,j] += 1
+                dm2[i,j,j,i] -= 1
+
     return dm2
 
 

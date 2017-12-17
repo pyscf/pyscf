@@ -9,13 +9,9 @@ Unrestricted CISD
 
 import time
 from functools import reduce
-import tempfile
 import numpy
-import h5py
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf import ao2mo
-from pyscf.cc import ccsd
 from pyscf.cc import uccsd
 from pyscf.cc import uccsd_rdm
 from pyscf.ci import cisd
@@ -370,8 +366,8 @@ def cisdvec_to_amplitudes(civec, nmo, nocc):
     c1a = civec[loc[0]:loc[1]].reshape(nocca,nvira)
     c1b = civec[loc[1]:loc[2]].reshape(noccb,nvirb)
     c2ab = civec[loc[2]:loc[3]].reshape(nocca,noccb,nvira,nvirb)
-    c2aa = ccsd._unpack_4fold(civec[loc[3]:loc[4]], nocca, nvira)
-    c2bb = ccsd._unpack_4fold(civec[loc[4]:loc[5]], noccb, nvirb)
+    c2aa = _unpack_4fold(civec[loc[3]:loc[4]], nocca, nvira)
+    c2bb = _unpack_4fold(civec[loc[4]:loc[5]], noccb, nvirb)
     return c0, (c1a,c1b), (c2aa,c2ab,c2bb)
 
 def to_fcivec(cisdvec, nmo, nocc):
@@ -448,7 +444,7 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None):
     if nmo is None: nmo = myci.nmo
     if nocc is None: nocc = myci.nocc
     d1 = gamma1_intermediates(myci, civec, nmo, nocc)
-    return uccsd_rdm.make_rdm1(myci, None, None, None, None, d1)
+    return uccsd_rdm._make_rdm1(myci, d1, with_frozen=True)
 
 def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     '''2-particle density matrix in chemist's notation
@@ -458,7 +454,7 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     if nocc is None: nocc = myci.nocc
     d1 = gamma1_intermediates(myci, civec, nmo, nocc)
     d2 = gamma2_intermediates(myci, civec, nmo, nocc)
-    return uccsd_rdm.make_rdm2(myci, None, None, None, None, d1, d2)
+    return uccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True)
 
 def gamma1_intermediates(myci, civec, nmo, nocc):
     nmoa, nmob = nmo
@@ -638,7 +634,7 @@ class UCISD(cisd.CISD):
             raise NotImplementedError
 
         else:
-            return _uccsd.make_eris_outcore(self, mo_coeff)
+            return uccsd._make_eris_outcore(self, mo_coeff)
 
     def to_fcivec(self, cisdvec, nmo=None, nocc=None):
         return to_fcivec(cisdvec, nmo, nocc)
@@ -657,6 +653,10 @@ class UCISD(cisd.CISD):
     make_rdm1 = make_rdm1
     make_rdm2 = make_rdm2
 
+    def nuc_grad_method(self):
+        from pyscf.ci import ucisd_grad
+        return ucisd_grad.Gradients(self)
+
 CISD = UCISD
 
 def _cp(a):
@@ -667,6 +667,7 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     from pyscf import fci
+    from pyscf import ao2mo
     numpy.random.seed(12)
     nocc = 3
     nvir = 5

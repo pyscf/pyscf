@@ -334,9 +334,17 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
             (dovvv, dovVV, dOVvv, dOVVV),
             (dooov, dooOV, dOOov, dOOOV))
 
-def make_rdm1(mycc, t1, t2, l1, l2, d1=None):
-    if d1 is None:
-        d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
+def make_rdm1(mycc, t1, t2, l1, l2):
+    d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
+    return _make_rdm1(mycc, d1, with_frozen=True)
+
+# spin-orbital rdm2 in Chemist's notation
+def make_rdm2(mycc, t1, t2, l1, l2):
+    d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
+    d2 = gamma2_intermediates(mycc, t1, t2, l1, l2)
+    return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True)
+
+def _make_rdm1(mycc, d1, with_frozen=True):
     doo, dOO = d1[0]
     dov, dOV = d1[1]
     dvo, dVO = d1[2]
@@ -362,7 +370,7 @@ def make_rdm1(mycc, t1, t2, l1, l2, d1=None):
     dm1b *= .5
     dm1b[numpy.diag_indices(noccb)] += 1
 
-    if not (mycc.frozen is 0 or mycc.frozen is None):
+    if with_frozen and not (mycc.frozen is 0 or mycc.frozen is None):
         nmoa = mycc.mo_occ[0].size
         nmob = mycc.mo_occ[1].size
         nocca = numpy.count_nonzero(mycc.mo_occ[0] > 0)
@@ -380,72 +388,7 @@ def make_rdm1(mycc, t1, t2, l1, l2, d1=None):
         dm1b = rdm1b
     return dm1a, dm1b
 
-# spin-orbital rdm2 in Chemist's notation
-def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None):
-    dm2aa, dm2ab, dm2bb = _make_rdm2(mycc, t1, t2, l1, l2, d2)
-    moidxa, moidxb = mycc.get_frozen_mask()
-    if not (mycc.frozen is 0 or mycc.frozen is None):
-        nmoa0 = dm2aa.shape[0]
-        nmob0 = dm2bb.shape[0]
-        nmoa = mycc.mo_occ[0].size
-        nmob = mycc.mo_occ[1].size
-        nocca = numpy.count_nonzero(mycc.mo_occ[0] > 0)
-        noccb = numpy.count_nonzero(mycc.mo_occ[1] > 0)
-
-        rdm2aa = numpy.zeros((nmoa,nmoa,nmoa,nmoa))
-        rdm2ab = numpy.zeros((nmoa,nmoa,nmob,nmob))
-        rdm2bb = numpy.zeros((nmob,nmob,nmob,nmob))
-        moidxa = numpy.where(moidxa)[0]
-        moidxb = numpy.where(moidxb)[0]
-        idxa = (moidxa.reshape(-1,1) * nmoa + moidxa).ravel()
-        idxb = (moidxb.reshape(-1,1) * nmob + moidxb).ravel()
-        lib.takebak_2d(rdm2aa.reshape(nmoa**2,nmoa**2),
-                       dm2aa.reshape(nmoa0**2,nmoa0**2), idxa, idxa)
-        lib.takebak_2d(rdm2bb.reshape(nmob**2,nmob**2),
-                       dm2bb.reshape(nmob0**2,nmob0**2), idxb, idxb)
-        lib.takebak_2d(rdm2ab.reshape(nmoa**2,nmob**2),
-                       dm2ab.reshape(nmoa0**2,nmob0**2), idxa, idxb)
-        dm2aa, dm2ab, dm2bb = rdm2aa, rdm2ab, rdm2bb
-    else:
-        nocca = numpy.count_nonzero(mycc.mo_occ[0][moidxa] > 0)
-        noccb = numpy.count_nonzero(mycc.mo_occ[1][moidxb] > 0)
-
-    dm1a, dm1b = make_rdm1(mycc, t1, t2, l1, l2, d1)
-    dm1a[numpy.diag_indices(nocca)] -= 1
-    dm1b[numpy.diag_indices(noccb)] -= 1
-
-    for i in range(nocca):
-        dm2aa[i,i,:,:] += dm1a
-        dm2aa[:,:,i,i] += dm1a
-        dm2aa[:,i,i,:] -= dm1a
-        dm2aa[i,:,:,i] -= dm1a
-        dm2ab[i,i,:,:] += dm1b
-    for i in range(noccb):
-        dm2bb[i,i,:,:] += dm1b
-        dm2bb[:,:,i,i] += dm1b
-        dm2bb[:,i,i,:] -= dm1b
-        dm2bb[i,:,:,i] -= dm1b
-        dm2ab[:,:,i,i] += dm1a
-
-    for i in range(nocca):
-        for j in range(nocca):
-            dm2aa[i,i,j,j] += 1
-            dm2aa[i,j,j,i] -= 1
-    for i in range(noccb):
-        for j in range(noccb):
-            dm2bb[i,i,j,j] += 1
-            dm2bb[i,j,j,i] -= 1
-    for i in range(nocca):
-        for j in range(noccb):
-            dm2ab[i,i,j,j] += 1
-
-    return dm2aa, dm2ab, dm2bb
-
-def _make_rdm2(mycc, t1, t2, l1, l2, d2=None):
-    '''The 2-PDM associated to the normal ordered 2-particle interactions
-    '''
-    if d2 is None:
-        d2 = gamma2_intermediates(mycc, t1, t2, l1, l2)
+def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     dovov, dovOV, dOVov, dOVOV = d2[0]
     dvvvv, dvvVV, dVVvv, dVVVV = d2[1]
     doooo, dooOO, dOOoo, dOOOO = d2[2]
@@ -551,6 +494,61 @@ def _make_rdm2(mycc, t1, t2, l1, l2, d2=None):
     dm2ab[:nocca,:nocca,noccb:,:noccb] = dooOV.transpose(1,0,3,2).conj()
     dm2ab[nocca:,:nocca,:noccb,:noccb] = dOOov.transpose(3,2,1,0).conj()
     dooOV = None
+
+    if with_frozen and not (mycc.frozen is 0 or mycc.frozen is None):
+        nmoa0 = dm2aa.shape[0]
+        nmob0 = dm2bb.shape[0]
+        nmoa = mycc.mo_occ[0].size
+        nmob = mycc.mo_occ[1].size
+        nocca = numpy.count_nonzero(mycc.mo_occ[0] > 0)
+        noccb = numpy.count_nonzero(mycc.mo_occ[1] > 0)
+
+        rdm2aa = numpy.zeros((nmoa,nmoa,nmoa,nmoa))
+        rdm2ab = numpy.zeros((nmoa,nmoa,nmob,nmob))
+        rdm2bb = numpy.zeros((nmob,nmob,nmob,nmob))
+        moidxa, moidxb = mycc.get_frozen_mask()
+        moidxa = numpy.where(moidxa)[0]
+        moidxb = numpy.where(moidxb)[0]
+        idxa = (moidxa.reshape(-1,1) * nmoa + moidxa).ravel()
+        idxb = (moidxb.reshape(-1,1) * nmob + moidxb).ravel()
+        lib.takebak_2d(rdm2aa.reshape(nmoa**2,nmoa**2),
+                       dm2aa.reshape(nmoa0**2,nmoa0**2), idxa, idxa)
+        lib.takebak_2d(rdm2bb.reshape(nmob**2,nmob**2),
+                       dm2bb.reshape(nmob0**2,nmob0**2), idxb, idxb)
+        lib.takebak_2d(rdm2ab.reshape(nmoa**2,nmob**2),
+                       dm2ab.reshape(nmoa0**2,nmob0**2), idxa, idxb)
+        dm2aa, dm2ab, dm2bb = rdm2aa, rdm2ab, rdm2bb
+
+    if with_dm1:
+        dm1a, dm1b = _make_rdm1(mycc, d1, with_frozen=True)
+        dm1a[numpy.diag_indices(nocca)] -= 1
+        dm1b[numpy.diag_indices(noccb)] -= 1
+
+        for i in range(nocca):
+            dm2aa[i,i,:,:] += dm1a
+            dm2aa[:,:,i,i] += dm1a
+            dm2aa[:,i,i,:] -= dm1a
+            dm2aa[i,:,:,i] -= dm1a
+            dm2ab[i,i,:,:] += dm1b
+        for i in range(noccb):
+            dm2bb[i,i,:,:] += dm1b
+            dm2bb[:,:,i,i] += dm1b
+            dm2bb[:,i,i,:] -= dm1b
+            dm2bb[i,:,:,i] -= dm1b
+            dm2ab[:,:,i,i] += dm1a
+
+        for i in range(nocca):
+            for j in range(nocca):
+                dm2aa[i,i,j,j] += 1
+                dm2aa[i,j,j,i] -= 1
+        for i in range(noccb):
+            for j in range(noccb):
+                dm2bb[i,i,j,j] += 1
+                dm2bb[i,j,j,i] -= 1
+        for i in range(nocca):
+            for j in range(noccb):
+                dm2ab[i,i,j,j] += 1
+
     return dm2aa, dm2ab, dm2bb
 
 
@@ -601,7 +599,10 @@ if __name__ == '__main__':
     t2 = addons.spatial2spin(t2, orbspin)
     l1 = addons.spatial2spin(l1, orbspin)
     l2 = addons.spatial2spin(l2, orbspin)
-    mycc1 = scf.GHF(mol).apply(gccsd.GCCSD)
+    mf1 = scf.GHF(mol)
+    mf1.mo_occ = numpy.zeros((nocc+nvir)*2)
+    mf.mo_occ[:,:nocc*2] = 1
+    mycc1 = gccsd.GCCSD(mf1)
     dm1 = mycc1.make_rdm1(t1, t2, l1, l2)
     dm2 = mycc1.make_rdm2(t1, t2, l1, l2)
     print(abs(dm1[ia][:,ia]-dm1a).max())

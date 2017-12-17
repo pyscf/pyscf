@@ -233,7 +233,7 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None):
     if nmo is None: nmo = myci.nmo
     if nocc is None: nocc = myci.nocc
     d1 = gamma1_intermediates(myci, civec, nmo, nocc)
-    return gccsd_rdm.make_rdm1(myci, None, None, None, None, d1)
+    return gccsd_rdm._make_rdm1(myci, d1, with_frozen=True)
 
 def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     '''spin-orbital 2-particle density matrix in chemist's notation
@@ -243,7 +243,7 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     if nocc is None: nocc = myci.nocc
     d1 = gamma1_intermediates(myci, civec, nmo, nocc)
     d2 = gamma2_intermediates(myci, civec, nmo, nocc)
-    return gccsd_rdm.make_rdm2(myci, None, None, None, None, d1, d2)
+    return gccsd_rdm.make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True)
 
 def gamma1_intermediates(myci, civec, nmo, nocc):
     c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)

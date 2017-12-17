@@ -187,8 +187,17 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
     return (h5fobj['dovov'], h5fobj['dvvvv'], h5fobj['doooo'], h5fobj['doovv'],
             h5fobj['dovvo'], dvvov          , h5fobj['dovvv'], h5fobj['dooov'])
 
-def make_rdm1(mycc, t1, t2, l1, l2, d1=None):
-    if d1 is None: d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
+def make_rdm1(mycc, t1, t2, l1, l2):
+    d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
+    return _make_rdm1(mycc, d1, with_frozen=True)
+
+def make_rdm2(mycc, t1, t2, l1, l2):
+    d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
+    f = lib.H5TmpFile()
+    d2 = _gamma2_outcore(mycc, t1, t2, l1, l2, f)
+    return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True)
+
+def _make_rdm1(mycc, d1, with_frozen=True):
     doo, dov, dvo, dvv = d1
     nocc, nvir = dov.shape
     nmo = nocc + nvir
@@ -199,7 +208,7 @@ def make_rdm1(mycc, t1, t2, l1, l2, d1=None):
     dm1[nocc:,nocc:] = dvv + dvv.T
     dm1[numpy.diag_indices(nocc)] += 2
 
-    if not (mycc.frozen is 0 or mycc.frozen is None):
+    if with_frozen and not (mycc.frozen is 0 or mycc.frozen is None):
         nmo = mycc.mo_occ.size
         nocc = numpy.count_nonzero(mycc.mo_occ > 0)
         rdm1 = numpy.zeros((nmo,nmo))
@@ -212,51 +221,7 @@ def make_rdm1(mycc, t1, t2, l1, l2, d1=None):
 # rdm2 in Chemist's notation
 # Note vvvv part of 2pdm have been symmetrized.  It does not correspond to
 # vvvv part of CI 2pdm
-def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None):
-    if d1 is None: d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
-    doo, dov, dvo, dvv = d1
-    nocc, nvir = dov.shape
-    nmo = nocc + nvir
-
-    dm2 = _make_rdm2(mycc, t1, t2, l1, l2, d2)
-
-    dm1 = numpy.empty((nmo,nmo))
-    dm1[:nocc,:nocc] = doo + doo.T
-    dm1[:nocc,nocc:] = dov + dvo.T
-    dm1[nocc:,:nocc] = dm1[:nocc,nocc:].T
-    dm1[nocc:,nocc:] = dvv + dvv.T
-
-    if not (mycc.frozen is 0 or mycc.frozen is None):
-        nmo, nmo0 = mycc.mo_occ.size, nmo
-        nocc = numpy.count_nonzero(mycc.mo_occ > 0)
-        rdm1 = numpy.zeros((nmo,nmo))
-        rdm2 = numpy.zeros((nmo,nmo,nmo,nmo))
-        moidx = numpy.where(ccsd.get_frozen_mask(mycc))[0]
-        idx = (moidx.reshape(-1,1) * nmo + moidx).ravel()
-        rdm1[moidx[:,None],moidx] = dm1
-        lib.takebak_2d(rdm2.reshape(nmo**2,nmo**2),
-                       dm2.reshape(nmo0**2,nmo0**2), idx, idx)
-        dm1, dm2 = rdm1, rdm2
-
-    for i in range(nocc):
-        dm2[i,i,:,:] += dm1 * 2
-        dm2[:,:,i,i] += dm1 * 2
-        dm2[:,i,i,:] -= dm1
-        dm2[i,:,:,i] -= dm1
-
-    for i in range(nocc):
-        for j in range(nocc):
-            dm2[i,i,j,j] += 4
-            dm2[i,j,j,i] -= 2
-
-    return dm2
-
-def _make_rdm2(mycc, t1, t2, l1, l2, d2=None):
-    '''The 2-PDM associated to the normal ordered 2-particle interactions
-    '''
-    if d2 is None:
-        f = lib.H5TmpFile()
-        d2 = _gamma2_outcore(mycc, t1, t2, l1, l2, f)
+def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
     nocc, nvir = dovov.shape[:2]
     nmo = nocc + nvir
@@ -281,8 +246,11 @@ def _make_rdm2(mycc, t1, t2, l1, l2, d2=None):
     dm2[nocc:,:nocc,:nocc,nocc:] = dm2[:nocc,nocc:,nocc:,:nocc].transpose(1,0,3,2)
     dovvo = None
 
-    dm2[nocc:,nocc:,nocc:,nocc:] = ao2mo.restore(1, dvvvv, nvir)
+    if len(dvvvv.shape) == 2:
+        dvvvv = ao2mo.restore(1, dvvvv, nvir)
+    dm2[nocc:,nocc:,nocc:,nocc:] = dvvvv
     dm2[nocc:,nocc:,nocc:,nocc:]*= 4
+    dvvvv = None
 
     doooo = numpy.asarray(doooo)
     dm2[:nocc,:nocc,:nocc,:nocc] = doooo
@@ -302,6 +270,32 @@ def _make_rdm2(mycc, t1, t2, l1, l2, d2=None):
     dm2[:nocc,nocc:,:nocc,:nocc] = dooov.transpose(2,3,0,1)
     dm2[:nocc,:nocc,nocc:,:nocc] = dooov.transpose(1,0,3,2)
     dm2[nocc:,:nocc,:nocc,:nocc] = dooov.transpose(3,2,1,0)
+
+    if with_frozen and not (mycc.frozen is 0 or mycc.frozen is None):
+        nmo, nmo0 = mycc.mo_occ.size, nmo
+        nocc = numpy.count_nonzero(mycc.mo_occ > 0)
+        rdm2 = numpy.zeros((nmo,nmo,nmo,nmo))
+        moidx = numpy.where(ccsd.get_frozen_mask(mycc))[0]
+        idx = (moidx.reshape(-1,1) * nmo + moidx).ravel()
+        lib.takebak_2d(rdm2.reshape(nmo**2,nmo**2),
+                       dm2.reshape(nmo0**2,nmo0**2), idx, idx)
+        dm2 = rdm2
+
+    if with_dm1:
+        dm1 = _make_rdm1(mycc, d1, with_frozen)
+        dm1[numpy.diag_indices(nocc)] -= 2
+
+        for i in range(nocc):
+            dm2[i,i,:,:] += dm1 * 2
+            dm2[:,:,i,i] += dm1 * 2
+            dm2[:,i,i,:] -= dm1
+            dm2[i,:,:,i] -= dm1
+
+        for i in range(nocc):
+            for j in range(nocc):
+                dm2[i,i,j,j] += 4
+                dm2[i,j,j,i] -= 2
+
     return dm2
 
 

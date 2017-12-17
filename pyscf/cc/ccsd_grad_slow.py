@@ -32,7 +32,7 @@ def kernel(cc, t1, t2, l1, l2, eris=None):
     d1 = gamma1_intermediates(cc, t1, t2, l1, l2)
     d2 = gamma2_intermediates(cc, t1, t2, l1, l2)
 
-    dm2 = ccsd_rdm._make_rdm2(mycc, t1, t2, l1, l2, d2)
+    dm2 = ccsd_rdm._make_rdm2(mycc, d1, d2, with_dm1=False, with_frozen=False)
     eri = ao2mo.restore(1, ao2mo.full(mycc.mol, mo_coeff), nmo)
 # Note Imat is not hermitian
     Imat = numpy.einsum('jqrs,iqrs->ij', dm2, eri) * -1

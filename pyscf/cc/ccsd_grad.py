@@ -278,7 +278,7 @@ def _response_dm1(mycc, Xvo, eris=None):
     return dm1
 
 def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
-# dm2 = ccsd_rdm._make_rdm2(mycc, t1, t2, l1, l2)
+# dm2 = ccsd_rdm._make_rdm2(mycc, None, d2, with_dm1=False)
 # dm2 = numpy.einsum('pi,ijkl->pjkl', mo_coeff, dm2)
 # dm2 = numpy.einsum('pj,ijkl->ipkl', mo_coeff, dm2)
 # dm2 = numpy.einsum('pk,ijkl->ijpl', mo_coeff, dm2)

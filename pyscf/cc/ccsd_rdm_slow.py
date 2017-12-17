@@ -5,13 +5,9 @@
 #
 
 import time
-import ctypes
-import tempfile
 import numpy
-import h5py
-import pyscf.lib as lib
 from pyscf.lib import logger
-import pyscf.ao2mo
+from pyscf.cc import ccsd_rdm
 
 def gamma1_intermediates(cc, t1, t2, l1, l2):
     nocc, nvir = t1.shape
@@ -123,99 +119,14 @@ def gamma2_intermediates(cc, t1, t2, l1, l2):
     dooov = dooov.transpose(0,2,1,3)
     return (dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov)
 
-def make_rdm1(cc, t1, t2, l1, l2, d1=None):
-    if d1 is None:
-        doo, dov, dvo, dvv = gamma1_intermediates(cc, t1, t2, l1, l2)
-    else:
-        doo, dov, dvo, dvv = d1
+def make_rdm1(cc, t1, t2, l1, l2):
+    d1 = gamma1_intermediates(cc, t1, t2, l1, l2)
+    return ccsd_rdm._make_rdm1(cc, d1, with_frozen=True)
 
-    nocc, nvir = t1.shape
-    nmo = nocc + nvir
-
-    dm1 = numpy.empty((nmo,nmo))
-    dm1[:nocc,:nocc] = doo + doo.T
-    dm1[:nocc,nocc:] = dov + dvo.T
-    dm1[nocc:,:nocc] = dm1[:nocc,nocc:].T
-    dm1[nocc:,nocc:] = dvv + dvv.T
-
-    for i in range(nocc):
-        dm1[i,i] += 2
-    return dm1
-
-# rdm2 in Chemist's notation
 def make_rdm2(cc, t1, t2, l1, l2, d1=None, d2=None):
-    if d1 is None:
-        doo, dov, dvo, dvv = gamma1_intermediates(cc, t1, t2, l1, l2)
-    else:
-        doo, dov, dvo, dvv = d1
-    if d2 is None:
-        dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
-                gamma2_intermediates(cc, t1, t2, l1, l2)
-    else:
-        dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
-    nocc, nvir = t1.shape
-    nmo = nocc + nvir
-
-    dm2 = numpy.empty((nmo,nmo,nmo,nmo))
-
-    dm2[:nocc,nocc:,:nocc,nocc:] = \
-            (dovov                   +dovov.transpose(2,3,0,1))
-    dm2[nocc:,:nocc,nocc:,:nocc] = \
-            (dovov.transpose(1,0,3,2)+dovov.transpose(3,2,1,0))
-
-    dm2[:nocc,:nocc,nocc:,nocc:] = \
-            (doovv.transpose(0,1,3,2)+doovv.transpose(1,0,2,3))
-    dm2[nocc:,nocc:,:nocc,:nocc] = \
-            (doovv.transpose(3,2,0,1)+doovv.transpose(2,3,1,0))
-    dm2[:nocc,nocc:,nocc:,:nocc] = \
-            (dovvo                   +dovvo.transpose(3,2,1,0))
-    dm2[nocc:,:nocc,:nocc,nocc:] = \
-            (dovvo.transpose(2,3,0,1)+dovvo.transpose(1,0,3,2))
-
-    dm2[nocc:,nocc:,nocc:,nocc:] = \
-            (dvvvv                   +dvvvv.transpose(1,0,3,2)) * 2
-
-    dm2[:nocc,:nocc,:nocc,:nocc] = \
-            (doooo                   +doooo.transpose(1,0,3,2)) * 2
-
-    dm2[nocc:,nocc:,:nocc,nocc:] = dvvov
-    dm2[:nocc,nocc:,nocc:,nocc:] = dvvov.transpose(2,3,0,1)
-    dm2[nocc:,nocc:,nocc:,:nocc] = dvvov.transpose(1,0,3,2)
-    dm2[nocc:,:nocc,nocc:,nocc:] = dvvov.transpose(3,2,1,0)
-
-    dm2[:nocc,:nocc,:nocc,nocc:] = dooov
-    dm2[:nocc,nocc:,:nocc,:nocc] = dooov.transpose(2,3,0,1)
-    dm2[:nocc,:nocc,nocc:,:nocc] = dooov.transpose(1,0,3,2)
-    dm2[nocc:,:nocc,:nocc,:nocc] = dooov.transpose(3,2,1,0)
-
-    doo = doo + doo.T
-    dvv = dvv + dvv.T
-    dov = dov + dvo.T
-    dvo = dov.T
-    for i in range(nocc):
-        dm2[i,i,:nocc,:nocc] += doo * 2
-        dm2[:nocc,:nocc,i,i] += doo * 2
-        dm2[i,i,nocc:,nocc:] += dvv * 2
-        dm2[nocc:,nocc:,i,i] += dvv * 2
-        dm2[:nocc,nocc:,i,i] += dov * 2
-        dm2[i,i,:nocc,nocc:] += dov * 2
-        dm2[nocc:,:nocc,i,i] += dvo * 2
-        dm2[i,i,nocc:,:nocc] += dvo * 2
-        dm2[:nocc,i,i,:nocc] -= doo
-        dm2[i,:nocc,:nocc,i] -= doo
-        dm2[nocc:,i,i,nocc:] -= dvv
-        dm2[i,nocc:,nocc:,i] -= dvv
-        dm2[:nocc,i,i,nocc:] -= dov
-        dm2[i,:nocc,nocc:,i] -= dov
-        dm2[nocc:,i,i,:nocc] -= dvo
-        dm2[i,nocc:,:nocc,i] -= dvo
-
-    for i in range(nocc):
-        for j in range(nocc):
-            dm2[i,i,j,j] += 4
-            dm2[i,j,j,i] -= 2
-
-    return dm2
+    d1 = gamma1_intermediates(cc, t1, t2, l1, l2)
+    d2 = gamma2_intermediates(cc, t1, t2, l1, l2)
+    return ccsd_rdm._make_rdm2(cc, d1, d2, with_dm1=True, with_frozen=True)
 
 
 if __name__ == '__main__':

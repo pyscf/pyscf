@@ -20,7 +20,7 @@ def CISD(mf, frozen=0, mo_coeff=None, mo_occ=None):
         return cisd.CISD(mf, frozen, mo_coeff, mo_occ)
 
 
-def UCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+def UCISD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = ucisd.UCISD.__doc__
     import sys
     from pyscf import scf

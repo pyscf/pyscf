@@ -76,7 +76,7 @@ class Gradients(lib.StreamObject):
         self.de = None
 
     def kernel(self, civec=None, eris=None, atmlst=None,
-               mf_grad=None, verbose=None):
+               mf_grad=None, verbose=None, _kern=kernel):
         log = logger.new_logger(self, verbose)
         if civec is None: civec = self._ci.ci
         if civec is None: civec = self._ci.kernel(eris=eris)
@@ -85,7 +85,7 @@ class Gradients(lib.StreamObject):
         else:
             self.atmlst = atmlst
 
-        self.de = kernel(self._ci, civec, eris, atmlst, mf_grad, log)
+        self.de = _kern(self._ci, civec, eris, atmlst, mf_grad, log)
         if self.verbose >= logger.NOTE:
             log.note('--------------- %s gradients ---------------',
                      self.__class__.__name__)

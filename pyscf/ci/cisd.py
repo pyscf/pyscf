@@ -12,7 +12,6 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import ccsd_rdm
 from pyscf.fci import cistring
@@ -257,26 +256,23 @@ def from_fcivec(ci0, norb, nelec):
     c2 = c2.reshape(nvir,nocc,nvir,nocc).transpose(1,3,0,2)
     return amplitudes_to_cisdvec(c0, c1[::-1], c2[::-1,::-1])
 
-def make_rdm1(myci, civec=None, nmo=None, nocc=None, d1=None):
+def make_rdm1(myci, civec=None, nmo=None, nocc=None):
     if civec is None: civec = myci.ci
     if nmo is None: nmo = myci.nmo
     if nocc is None: nocc = myci.nocc
-    if d1 is None:
-        d1 = gamma1_intermediates(myci, civec, nmo, nocc)
-    return ccsd_rdm.make_rdm1(myci, None, None, None, None, d1)
+    d1 = gamma1_intermediates(myci, civec, nmo, nocc)
+    return ccsd_rdm._make_rdm1(myci, d1, with_frozen=True)
 
-def make_rdm2(myci, civec=None, nmo=None, nocc=None, d1=None, d2=None):
+def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     '''spin-traced 2pdm in chemist's notation
     '''
     if civec is None: civec = myci.ci
     if nmo is None: nmo = myci.nmo
     if nocc is None: nocc = myci.nocc
-    if d1 is None:
-        d1 = gamma1_intermediates(myci, civec, nmo, nocc)
-    if d2 is None:
-        f = lib.H5TmpFile()
-        d2 = _gamma2_outcore(myci, civec, nmo, nocc, f)
-    return ccsd_rdm.make_rdm2(myci, None, None, None, None, d1, d2)
+    d1 = gamma1_intermediates(myci, civec, nmo, nocc)
+    f = lib.H5TmpFile()
+    d2 = _gamma2_outcore(myci, civec, nmo, nocc, f)
+    return ccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True)
 
 def gamma1_intermediates(myci, civec, nmo, nocc):
     c0, c1, c2 = myci.cisdvec_to_amplitudes(civec, nmo, nocc)
@@ -565,13 +561,8 @@ class CISD(lib.StreamObject):
     def from_fcivec(self, fcivec, norb, nelec):
         return from_fcivec(fcivec, norb, nelec)
 
-    def make_rdm1(self, ci=None):
-        if ci is None: ci = self.ci
-        return make_rdm1(self, ci, self.nmo, self.nocc)
-
-    def make_rdm2(self, ci=None):
-        if ci is None: ci = self.ci
-        return make_rdm2(self, ci, self.nmo, self.nocc)
+    make_rdm1 = make_rdm1
+    make_rdm2 = make_rdm2
 
     def dump_chk(self, ci=None, frozen=None, mo_coeff=None, mo_occ=None):
         if ci is None: ci = self.ci
@@ -611,6 +602,7 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     from pyscf import fci
+    from pyscf import ao2mo
     def fcicontract(h1, h2, norb, nelec, ci0):
         g2e = fci.direct_spin1.absorb_h1e(h1, h2, norb, nelec, .5)
         ci1 = fci.direct_spin1.contract_2e(g2e, ci0, norb, nelec)
