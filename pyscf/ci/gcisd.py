@@ -232,7 +232,7 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None):
     if civec is None: civec = myci.ci
     if nmo is None: nmo = myci.nmo
     if nocc is None: nocc = myci.nocc
-    d1 = gamma1_intermediates(myci, civec, nmo, nocc)
+    d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
     return gccsd_rdm._make_rdm1(myci, d1, with_frozen=True)
 
 def make_rdm2(myci, civec=None, nmo=None, nocc=None):
@@ -241,11 +241,11 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     if civec is None: civec = myci.ci
     if nmo is None: nmo = myci.nmo
     if nocc is None: nocc = myci.nocc
-    d1 = gamma1_intermediates(myci, civec, nmo, nocc)
-    d2 = gamma2_intermediates(myci, civec, nmo, nocc)
+    d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
+    d2 = _gamma2_intermediates(myci, civec, nmo, nocc)
     return gccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True)
 
-def gamma1_intermediates(myci, civec, nmo, nocc):
+def _gamma1_intermediates(myci, civec, nmo, nocc):
     c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
     dov = c0 * c1
     dov += numpy.einsum('jb,ijab->ia', c1.conj(), c2)
@@ -255,7 +255,7 @@ def gamma1_intermediates(myci, civec, nmo, nocc):
     dvv += numpy.einsum('ijab,ijac->bc', c2, c2.conj()) * .5
     return doo, dov, dov.conj().T, dvv
 
-def gamma2_intermediates(myci, civec, nmo, nocc):
+def _gamma2_intermediates(myci, civec, nmo, nocc):
     c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
     goovv = c0 * c2 * .5
     govvv = numpy.einsum('ia,ikcd->kadc', c1.conj(), c2) * .5

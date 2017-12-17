@@ -19,8 +19,8 @@ def kernel(myci, civec=None, eris=None, atmlst=None, mf_grad=None,
     if civec is None: civec = mycc.ci
     nocc = myci.nocc
     nmo = myci.nmo
-    d1 = ucisd.gamma1_intermediates(myci, civec, nmo, nocc)
-    d2 = ucisd.gamma2_intermediates(myci, civec, nmo, nocc)
+    d1 = ucisd._gamma1_intermediates(myci, civec, nmo, nocc)
+    d2 = ucisd._gamma2_intermediates(myci, civec, nmo, nocc)
     dovov, dovOV, dOVov, dOVOV = d2[0]
     dvvvv, dvvVV, dVVvv, dVVVV = d2[1]
     doooo, dooOO, dOOoo, dOOOO = d2[2]

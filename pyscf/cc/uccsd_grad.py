@@ -45,12 +45,12 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
 
     log.debug('Build ccsd rdm1 intermediates')
     if d1 is None:
-        d1 = uccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2)
+        d1 = uccsd_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2)
     time1 = log.timer_debug1('rdm1 intermediates', *time0)
     log.debug('Build ccsd rdm2 intermediates')
     fdm2 = lib.H5TmpFile()
     if d2 is None:
-        d2 = uccsd_rdm._gamma2_outcore(mycc, t1, t2, l1, l2, fdm2)
+        d2 = uccsd_rdm._gamma2_outcore(mycc, t1, t2, l1, l2, fdm2, True)
     time1 = log.timer_debug1('rdm2 intermediates', *time1)
 
     mol = mycc.mol

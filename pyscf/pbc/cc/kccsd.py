@@ -276,6 +276,20 @@ def get_nmo(cc):
     return nmo
 
 
+def get_frozen_mask(cc):
+    moidx = [numpy.ones(x.size, dtype=numpy.bool) for x in cc.mo_occ]
+    if isinstance(cc.frozen, (int, numpy.integer)):
+        for idx in moidx:
+            idx[:cc.frozen] = False
+    elif isinstance(cc.frozen[0], (int, numpy.integer)):
+        frozen = list(cc.frozen)
+        for idx in moidx:
+            idx[frozen] = False
+    else:
+        raise NotImplementedError
+    return moidx
+
+
 class GCCSD(gccsd.GCCSD):
 
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
@@ -379,20 +393,6 @@ class GCCSD(gccsd.GCCSD):
         return t1, t2
 
 CCSD = GCCSD
-
-
-def get_frozen_mask(cc):
-    moidx = [numpy.ones(x.size, dtype=numpy.bool) for x in cc.mo_occ]
-    if isinstance(cc.frozen, (int, numpy.integer)):
-        for idx in moidx:
-            idx[:cc.frozen] = False
-    elif isinstance(cc.frozen[0], (int, numpy.integer)):
-        frozen = list(cc.frozen)
-        for idx in moidx:
-            idx[frozen] = False
-    else:
-        raise NotImplementedError
-    return moidx
 
 
 def _make_eris_incore(cc, mo_coeff=None):

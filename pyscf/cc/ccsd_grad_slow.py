@@ -29,8 +29,8 @@ def kernel(cc, t1, t2, l1, l2, eris=None):
     mo_e_v = mo_energy[nocc:]
     with_frozen = not (cc.frozen is None or cc.frozen is 0)
 
-    d1 = gamma1_intermediates(cc, t1, t2, l1, l2)
-    d2 = gamma2_intermediates(cc, t1, t2, l1, l2)
+    d1 = _gamma1_intermediates(cc, t1, t2, l1, l2)
+    d2 = _gamma2_intermediates(cc, t1, t2, l1, l2)
 
     dm2 = ccsd_rdm._make_rdm2(mycc, d1, d2, with_dm1=False, with_frozen=False)
     eri = ao2mo.restore(1, ao2mo.full(mycc.mol, mo_coeff), nmo)
@@ -157,8 +157,8 @@ def index_frozen_active(cc):
     VF = numpy.where(~moidx[nocc:])[0] # virtual frozen orbitals
     return OA, VA, OF, VF
 
-def gamma1_intermediates(cc, t1, t2, l1, l2):
-    d1 = ccsd_rdm.gamma1_intermediates(cc, t1, t2, l1, l2)
+def _gamma1_intermediates(cc, t1, t2, l1, l2):
+    d1 = ccsd_rdm._gamma1_intermediates(cc, t1, t2, l1, l2)
     if cc.frozen is None or cc.frozen is 0:
         return d1
     nocc = numpy.count_nonzero(cc.mo_occ>0)
@@ -174,8 +174,8 @@ def gamma1_intermediates(cc, t1, t2, l1, l2):
     dvv[VA[:,None],VA] = d1[3]
     return doo, dov, dvo, dvv
 
-def gamma2_intermediates(cc, t1, t2, l1, l2):
-    d2 = ccsd_rdm.gamma2_intermediates(cc, t1, t2, l1, l2)
+def _gamma2_intermediates(cc, t1, t2, l1, l2):
+    d2 = ccsd_rdm._gamma2_intermediates(cc, t1, t2, l1, l2)
     nocc, nvir = t1.shape
     if cc.frozen is None or cc.frozen is 0:
         dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2

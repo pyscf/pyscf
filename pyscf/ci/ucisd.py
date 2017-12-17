@@ -443,7 +443,7 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None):
     if civec is None: civec = myci.ci
     if nmo is None: nmo = myci.nmo
     if nocc is None: nocc = myci.nocc
-    d1 = gamma1_intermediates(myci, civec, nmo, nocc)
+    d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
     return uccsd_rdm._make_rdm1(myci, d1, with_frozen=True)
 
 def make_rdm2(myci, civec=None, nmo=None, nocc=None):
@@ -452,11 +452,11 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     if civec is None: civec = myci.ci
     if nmo is None: nmo = myci.nmo
     if nocc is None: nocc = myci.nocc
-    d1 = gamma1_intermediates(myci, civec, nmo, nocc)
-    d2 = gamma2_intermediates(myci, civec, nmo, nocc)
+    d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
+    d2 = _gamma2_intermediates(myci, civec, nmo, nocc)
     return uccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True)
 
-def gamma1_intermediates(myci, civec, nmo, nocc):
+def _gamma1_intermediates(myci, civec, nmo, nocc):
     nmoa, nmob = nmo
     nocca, noccb = nocc
     c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
@@ -486,7 +486,7 @@ def gamma1_intermediates(myci, civec, nmo, nocc):
     return ((dooa, doob), (dova, dovb), (dova.conj().T, dovb.conj().T),
             (dvva, dvvb))
 
-def gamma2_intermediates(myci, civec, nmo, nocc):
+def _gamma2_intermediates(myci, civec, nmo, nocc):
     nmoa, nmob = nmo
     nocca, noccb = nocc
     c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)

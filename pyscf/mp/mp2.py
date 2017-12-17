@@ -115,8 +115,18 @@ def make_rdm2(mp, t2, eris=None, verbose=logger.NOTE):
             t2i = gi/lib.direct_sum('jb+a->jba', eia, eia[i])
         else:
             t2i = t2[i]
-        dm2[i,nocc:,:nocc,nocc:] = t2i.transpose(1,0,2)*2 - t2i.transpose(2,0,1)
+        dovov = t2i.transpose(1,0,2)*2 - t2i.transpose(2,0,1)
+        dm2[i,nocc:,:nocc,nocc:] = dovov * 2
         dm2[nocc:,i,nocc:,:nocc] = dm2[i,nocc:,:nocc,nocc:].transpose(0,2,1)
+
+    dm1 = make_rdm1(mp, t2, eris, verbose)
+    dm1[numpy.diag_indices(nocc)] -= 2
+
+    for i in range(nocc):
+        dm2[i,i,:,:] += dm1 * 2
+        dm2[:,:,i,i] += dm1 * 2
+        dm2[:,i,i,:] -= dm1
+        dm2[i,:,:,i] -= dm1
 
     for i in range(nocc):
         for j in range(nocc):
@@ -188,7 +198,6 @@ class MP2(lib.StreamObject):
         self.mo_occ = mo_occ
         self._nocc = None
         self._nmo = None
-        self.emp2 = None
         self.e_corr = None
         self.t2 = None
         self._keys = set(self.__dict__.keys())
@@ -221,6 +230,14 @@ class MP2(lib.StreamObject):
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
 
+    @property
+    def emp2(self):
+        return self.e_corr
+
+    @property
+    def e_tot(self):
+        return self.e_corr + self._scf.e_tot
+
     def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
                _kern=kernel):
         '''
@@ -240,10 +257,9 @@ class MP2(lib.StreamObject):
             self.check_sanity()
         self.dump_flags()
 
-        self.emp2, self.t2 = _kern(self, eris, with_t2, self.verbose)
-        logger.log(self, '%s energy = %.15g', self.__class__.__name__, self.emp2)
-        self.e_corr = self.emp2
-        return self.emp2, self.t2
+        self.e_corr, self.t2 = _kern(self, eris, with_t2, self.verbose)
+        logger.log(self, '%s energy = %.15g', self.__class__.__name__, self.e_corr)
+        return self.e_corr, self.t2
 
     def ao2mo(self, mo_coeff=None):
         if mo_coeff is None: mo_coeff = self.mo_coeff
@@ -465,10 +481,14 @@ if __name__ == '__main__':
                                             mf.mo_coeff.T)), rdm1))
 
     eri = ao2mo.restore(1, ao2mo.kernel(mf._eri, mf.mo_coeff), nmo)
+    hcore = mf.get_hcore()
+    rdm1 = pt.make_rdm1()
     rdm2 = pt.make_rdm2()
-    e1 = numpy.einsum('ij,ij', mf.make_rdm1(), mf.get_hcore())
-    e2 = .5 * numpy.dot(eri.flatten(), rdm2.flatten())
-    print(e1+e2+mf.energy_nuc()-mf.e_tot - -0.204019976381)
+    h1 = reduce(numpy.dot, (mf.mo_coeff.T, hcore, mf.mo_coeff))
+    e1 = numpy.einsum('ij,ji', h1, rdm1)
+    e1+= numpy.einsum('ijkl,jilk', eri, rdm2) * .5
+    e1+= mol.energy_nuc()
+    print(e1 - pt.e_tot)
 
     pt = MP2(scf.density_fit(mf, 'weigend'))
     print(pt.kernel()[0] - -0.204254500454)

@@ -13,7 +13,7 @@ from pyscf import ao2mo
 #einsum = numpy.einsum
 einsum = lib.einsum
 
-def gamma1_intermediates(cc, t1, t2, l1, l2):
+def _gamma1_intermediates(cc, t1, t2, l1, l2):
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     l1a, l1b = l1
@@ -65,7 +65,7 @@ def gamma1_intermediates(cc, t1, t2, l1, l2):
     return ((dooa, doob), (dova, dovb), (dvoa, dvob), (dvva, dvvb))
 
 # gamma2 intermediates in Chemist's notation
-def gamma2_intermediates(cc, t1, t2, l1, l2):
+def _gamma2_intermediates(cc, t1, t2, l1, l2):
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     l1a, l1b = l1
@@ -306,8 +306,10 @@ def gamma2_intermediates(cc, t1, t2, l1, l2):
             (dovvv, dovVV, dOVvv, dOVVV),
             (dooov, dooOV, dOOov, dOOOV))
 
-def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
-    d2 = gamma2_intermediates(mycc, t1, t2, l1, l2)
+def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
+    d2 = _gamma2_intermediates(mycc, t1, t2, l1, l2)
+    if not compress_vvvv:
+        return d2
     dovov, dovOV, dOVov, dOVOV = d2[0]
     dvvvv, dvvVV, dVVvv, dVVVV = d2[1]
     doooo, dooOO, dOOoo, dOOOO = d2[2]
@@ -335,13 +337,13 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
             (dooov, dooOV, dOOov, dOOOV))
 
 def make_rdm1(mycc, t1, t2, l1, l2):
-    d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
+    d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     return _make_rdm1(mycc, d1, with_frozen=True)
 
 # spin-orbital rdm2 in Chemist's notation
 def make_rdm2(mycc, t1, t2, l1, l2):
-    d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
-    d2 = gamma2_intermediates(mycc, t1, t2, l1, l2)
+    d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
+    d2 = _gamma2_intermediates(mycc, t1, t2, l1, l2)
     return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True)
 
 def _make_rdm1(mycc, d1, with_frozen=True):

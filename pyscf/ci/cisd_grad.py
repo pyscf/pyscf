@@ -19,9 +19,9 @@ def kernel(myci, civec=None, eris=None, atmlst=None, mf_grad=None,
     if civec is None: civec = mycc.ci
     nocc = myci.nocc
     nmo = myci.nmo
-    d1 = cisd.gamma1_intermediates(myci, civec, nmo, nocc)
+    d1 = cisd._gamma1_intermediates(myci, civec, nmo, nocc)
     fd2intermediate = lib.H5TmpFile()
-    d2 = cisd._gamma2_outcore(myci, civec, nmo, nocc, fd2intermediate)
+    d2 = cisd._gamma2_outcore(myci, civec, nmo, nocc, fd2intermediate, True)
     t1 = t2 = l1 = l2 = civec
     return ccsd_grad.kernel(myci, t1, t2, l1, l2, eris, atmlst, mf_grad,
                             d1, d2, verbose)

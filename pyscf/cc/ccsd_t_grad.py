@@ -10,9 +10,10 @@ from pyscf.cc import ccsd_t_rdm_slow as ccsd_t_rdm
 # Only works with canonical orbitals
 def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
            mf_grad=None, verbose=lib.logger.INFO):
-    d1 = ccsd_t_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2, eris)
+    d1 = ccsd_t_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2, eris)
     fd2intermediate = lib.H5TmpFile()
-    d2 = ccsd_t_rdm._gamma2_outcore(mycc, t1, t2, l1, l2, eris, fd2intermediate)
+    d2 = ccsd_t_rdm._gamma2_outcore(mycc, t1, t2, l1, l2, eris,
+                                    fd2intermediate, True)
     return ccsd_grad.kernel(mycc, t1, t2, l1, l2, eris, atmlst, mf_grad,
                             d1, d2, verbose)
 

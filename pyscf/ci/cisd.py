@@ -260,7 +260,7 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None):
     if civec is None: civec = myci.ci
     if nmo is None: nmo = myci.nmo
     if nocc is None: nocc = myci.nocc
-    d1 = gamma1_intermediates(myci, civec, nmo, nocc)
+    d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
     return ccsd_rdm._make_rdm1(myci, d1, with_frozen=True)
 
 def make_rdm2(myci, civec=None, nmo=None, nocc=None):
@@ -269,12 +269,12 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     if civec is None: civec = myci.ci
     if nmo is None: nmo = myci.nmo
     if nocc is None: nocc = myci.nocc
-    d1 = gamma1_intermediates(myci, civec, nmo, nocc)
+    d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
     f = lib.H5TmpFile()
-    d2 = _gamma2_outcore(myci, civec, nmo, nocc, f)
+    d2 = _gamma2_outcore(myci, civec, nmo, nocc, f, False)
     return ccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True)
 
-def gamma1_intermediates(myci, civec, nmo, nocc):
+def _gamma1_intermediates(myci, civec, nmo, nocc):
     c0, c1, c2 = myci.cisdvec_to_amplitudes(civec, nmo, nocc)
     dov = c0*c1
     dov += numpy.einsum('jb,ijab->ia', c1, c2) * 2
@@ -287,14 +287,14 @@ def gamma1_intermediates(myci, civec, nmo, nocc):
     dvv += lib.einsum('ijab,ijac->cb', theta, c2)
     return doo, dov, dov.T, dvv
 
-def gamma2_intermediates(myci, civec, nmo, nocc):
+def _gamma2_intermediates(myci, civec, nmo, nocc):
     f = lib.H5TmpFile()
-    _gamma2_outcore(myci, civec, nmo, f)
+    _gamma2_outcore(myci, civec, nmo, nocc, f, False)
     d2 = (f['dovov'].value, f['dvvvv'].value, f['doooo'].value, f['doovv'].value,
           f['dovvo'].value, None,             f['dovvv'].value, f['dooov'].value)
     return d2
 
-def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj):
+def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
     log = logger.Logger(myci.stdout, myci.verbose)
     nocc = myci.nocc
     nmo = myci.nmo
@@ -322,33 +322,43 @@ def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj):
                blksize, nocc, int((nvir+blksize-1)/blksize))
     dovvv = h5fobj.create_dataset('dovvv', (nocc,nvir,nvir,nvir), 'f8',
                                   chunks=(nocc,nvir,blksize,nvir))
-    dvvvv = h5fobj.create_dataset('dvvvv', (nvir_pair,nvir_pair), 'f8')
+    if compress_vvvv:
+        dvvvv = h5fobj.create_dataset('dvvvv', (nvir_pair,nvir_pair), 'f8')
+    else:
+        dvvvv = h5fobj.create_dataset('dvvvv', (nvir,nvir,nvir,nvir), 'f8')
 
     for istep, (p0, p1) in enumerate(lib.prange(0, nvir, blksize)):
         gvvvv = lib.einsum('ijab,ijcd->abcd', c2[:,:,p0:p1], c2)
-# symmetrize dvvvv because it is symmetrized in cisd_grad and make_rdm2 anyway
-#:dvvvv = .5*(gvvvv+gvvvv.transpose(0,1,3,2))
-#:dvvvv = .5*(dvvvv+dvvvv.transpose(1,0,3,2))
-# now dvvvv == dvvvv.transpose(2,3,0,1) == dvvvv.transpose(0,1,3,2) == dvvvv.transpose(1,0,3,2)
-        tmp = numpy.empty((nvir,nvir,nvir))
-        tmpvvvv = numpy.empty((p1-p0,nvir,nvir_pair))
-        for i in range(p1-p0):
-            tmp[:] = gvvvv[i].transpose(1,0,2) - gvvvv[i].transpose(2,0,1)*.5
-            lib.pack_tril(tmp+tmp.transpose(0,2,1), out=tmpvvvv[i])
-        # tril of (dvvvv[p0:p1,p0:p1]+dvvvv[p0:p1,p0:p1].T)
-        for i in range(p0, p1):
-            for j in range(p0, i):
-                tmpvvvv[i-p0,j] += tmpvvvv[j-p0,i]
-            tmpvvvv[i-p0,i] *= 2
-        for i in range(p1, nvir):
-            off = i * (i+1) // 2
-            dvvvv[off+p0:off+p1] = tmpvvvv[:,i]
-        for i in range(p0, p1):
-            off = i * (i+1) // 2
-            if p0 > 0:
-                tmpvvvv[i-p0,:p0] += dvvvv[off:off+p0]
-            dvvvv[off:off+i+1] = tmpvvvv[i-p0,:i+1] * .25
-        tmp = tmpvvvv = None
+        if compress_vvvv:
+# symmetrize dvvvv because it does not affect the results of cisd_grad
+# dvvvv = gvvvv.transpose(0,2,1,3)-gvvvv.transpose(0,3,1,2)*.5
+# dvvvv = (dvvvv+dvvvv.transpose(0,1,3,2)) * .5
+# dvvvv = (dvvvv+dvvvv.transpose(1,0,2,3)) * .5
+# now dvvvv == dvvvv.transpose(0,1,3,2) == dvvvv.transpose(1,0,3,2)
+            tmp = numpy.empty((nvir,nvir,nvir))
+            tmpvvvv = numpy.empty((p1-p0,nvir,nvir_pair))
+            for i in range(p1-p0):
+                tmp[:] = (gvvvv[i].transpose(1,0,2) -
+                          gvvvv[i].transpose(2,0,1)*.5)
+                lib.pack_tril(tmp+tmp.transpose(0,2,1), out=tmpvvvv[i])
+            # tril of (dvvvv[p0:p1,p0:p1]+dvvvv[p0:p1,p0:p1].T)
+            for i in range(p0, p1):
+                for j in range(p0, i):
+                    tmpvvvv[i-p0,j] += tmpvvvv[j-p0,i]
+                tmpvvvv[i-p0,i] *= 2
+            for i in range(p1, nvir):
+                off = i * (i+1) // 2
+                dvvvv[off+p0:off+p1] = tmpvvvv[:,i]
+            for i in range(p0, p1):
+                off = i * (i+1) // 2
+                if p0 > 0:
+                    tmpvvvv[i-p0,:p0] += dvvvv[off:off+p0]
+                dvvvv[off:off+i+1] = tmpvvvv[i-p0,:i+1] * .25
+            tmp = tmpvvvv = None
+        else:
+            for i in range(p0, p1):
+                dvvvv[i] = (gvvvv[i-p0].transpose(1,0,2) -
+                            gvvvv[i-p0].transpose(2,0,1)*.5)
 
         gvovv = numpy.einsum('ia,ikcd->akcd', c1[:,p0:p1]*2, c2)
         dovvv[:,:,p0:p1] = gvovv.transpose(1,3,0,2)*2 - gvovv.transpose(1,2,0,3)
@@ -637,8 +647,7 @@ if __name__ == '__main__':
     print(lib.finger(hcivec) - 2059.5730673341673)
 
     rdm2 = make_rdm2(myci, civec, nmo, nocc)
-    #print(lib.finger(rdm2) - 2.0492023431953221)
-    print(lib.finger(rdm2) - 2.0756323491386017)
+    print(lib.finger(rdm2) - 2.0492023431953221)
 
     ci0 = to_fcivec(civec, nmo, mol.nelectron)
     print(abs(civec-from_fcivec(ci0, nmo, nocc*2)).sum())

@@ -15,7 +15,7 @@ from pyscf.cc import ccsd
 # JCP, 95, 2639
 #
 
-def gamma1_intermediates(mycc, t1, t2, l1, l2):
+def _gamma1_intermediates(mycc, t1, t2, l1, l2):
     nocc, nvir = t1.shape
     doo =-numpy.einsum('ja,ia->ij', l1, t1)
     dvv = numpy.einsum('ia,ib->ab', l1, t1)
@@ -33,19 +33,22 @@ def gamma1_intermediates(mycc, t1, t2, l1, l2):
     return doo, dov, dvo, dvv
 
 # gamma2 intermediates in Chemist's notation
-def gamma2_intermediates(mycc, t1, t2, l1, l2):
+def _gamma2_intermediates(mycc, t1, t2, l1, l2):
     f = lib.H5TmpFile()
-    _gamma2_outcore(mycc, t1, t2, l1, l2, f)
+    _gamma2_outcore(mycc, t1, t2, l1, l2, f, False)
     d2 = (f['dovov'].value, f['dvvvv'].value, f['doooo'].value, f['doovv'].value,
           f['dovvo'].value, None,             f['dovvv'].value, f['dooov'].value)
     return d2
 
-def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
+def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
     nov = nocc * nvir
     nvir_pair = nvir * (nvir+1) //2
-    dvvvv = h5fobj.create_dataset('dvvvv', (nvir_pair,nvir_pair), 'f8')
+    if compress_vvvv:
+        dvvvv = h5fobj.create_dataset('dvvvv', (nvir_pair,nvir_pair), 'f8')
+    else:
+        dvvvv = h5fobj.create_dataset('dvvvv', (nvir,nvir,nvir,nvir), 'f8')
     dovvo = h5fobj.create_dataset('dovvo', (nocc,nvir,nvir,nocc), 'f8',
                                   chunks=(nocc,1,nvir,nocc))
     fswap = lib.H5TmpFile()
@@ -137,37 +140,44 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
                                   chunks=(nocc,nvir,blksize,nvir))
     time1 = time.clock(), time.time()
     for istep, (p0, p1) in enumerate(lib.prange(0, nvir, blksize)):
-        l2tmp = l2[:,:,p0:p1] * .5
+        l2tmp = l2[:,:,p0:p1]
         gvvvv = lib.einsum('ijab,ijcd->abcd', l2tmp, t2)
         jabc = lib.einsum('ijab,ic->jabc', l2tmp, t1)
         gvvvv += lib.einsum('jabc,jd->abcd', jabc, t1)
         l2tmp = jabc = None
 
-# symmetrize dvvvv because it is symmetrized in ccsd_grad and make_rdm2 anyway
-#:dvvvv = .5*(gvvvv+gvvvv.transpose(0,1,3,2))
-#:dvvvv = .5*(dvvvv+dvvvv.transpose(1,0,3,2))
-# now dvvvv == dvvvv.transpose(2,3,0,1) == dvvvv.transpose(0,1,3,2) == dvvvv.transpose(1,0,3,2)
-        tmp = numpy.empty((nvir,nvir,nvir))
-        tmpvvvv = numpy.empty((p1-p0,nvir,nvir_pair))
-        for i in range(p1-p0):
-            tmp[:] = gvvvv[i].transpose(1,0,2)*2 - gvvvv[i].transpose(2,0,1)
-            lib.pack_tril(tmp+tmp.transpose(0,2,1), out=tmpvvvv[i])
-        # tril of (dvvvv[p0:p1,p0:p1]+dvvvv[p0:p1,p0:p1].T)
-        for i in range(p0, p1):
-            for j in range(p0, i):
-                tmpvvvv[i-p0,j] += tmpvvvv[j-p0,i]
-            tmpvvvv[i-p0,i] *= 2
-        for i in range(p1, nvir):
-            off = i * (i+1) // 2
-            dvvvv[off+p0:off+p1] = tmpvvvv[:,i]
-        for i in range(p0, p1):
-            off = i * (i+1) // 2
-            if p0 > 0:
-                tmpvvvv[i-p0,:p0] += dvvvv[off:off+p0]
-            dvvvv[off:off+i+1] = tmpvvvv[i-p0,:i+1] * .25
-        tmp = tmpvvvv = None
+        if compress_vvvv:
+# symmetrize dvvvv because it does not affect the results of ccsd_grad
+# dvvvv = gvvvv.transpose(0,2,1,3)-gvvvv.transpose(0,3,1,2)*.5
+# dvvvv = (dvvvv+dvvvv.transpose(0,1,3,2)) * .5
+# dvvvv = (dvvvv+dvvvv.transpose(1,0,2,3)) * .5
+# now dvvvv == dvvvv.transpose(0,1,3,2) == dvvvv.transpose(1,0,3,2)
+            tmp = numpy.empty((nvir,nvir,nvir))
+            tmpvvvv = numpy.empty((p1-p0,nvir,nvir_pair))
+            for i in range(p1-p0):
+                tmp[:] = (gvvvv[i].transpose(1,0,2) -
+                          gvvvv[i].transpose(2,0,1)*.5)
+                lib.pack_tril(tmp+tmp.transpose(0,2,1), out=tmpvvvv[i])
+            # tril of (dvvvv[p0:p1,p0:p1]+dvvvv[p0:p1,p0:p1].T)
+            for i in range(p0, p1):
+                for j in range(p0, i):
+                    tmpvvvv[i-p0,j] += tmpvvvv[j-p0,i]
+                tmpvvvv[i-p0,i] *= 2
+            for i in range(p1, nvir):
+                off = i * (i+1) // 2
+                dvvvv[off+p0:off+p1] = tmpvvvv[:,i]
+            for i in range(p0, p1):
+                off = i * (i+1) // 2
+                if p0 > 0:
+                    tmpvvvv[i-p0,:p0] += dvvvv[off:off+p0]
+                dvvvv[off:off+i+1] = tmpvvvv[i-p0,:i+1] * .25
+            tmp = tmpvvvv = None
+        else:
+            for i in range(p0, p1):
+                dvvvv[i] = (gvvvv[i-p0].transpose(1,0,2) -
+                            gvvvv[i-p0].transpose(2,0,1)*.5)
 
-        gvovv = lib.einsum('adbc,id->aibc', gvvvv, t1*-2)
+        gvovv = lib.einsum('adbc,id->aibc', gvvvv, -t1)
         gvvvv = None
 
         gvovv += lib.einsum('akic,kb->aibc', fswap['mvoOV'][p0:p1], t1)
@@ -188,13 +198,13 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
             h5fobj['dovvo'], dvvov          , h5fobj['dovvv'], h5fobj['dooov'])
 
 def make_rdm1(mycc, t1, t2, l1, l2):
-    d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
+    d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     return _make_rdm1(mycc, d1, with_frozen=True)
 
 def make_rdm2(mycc, t1, t2, l1, l2):
-    d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
+    d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     f = lib.H5TmpFile()
-    d2 = _gamma2_outcore(mycc, t1, t2, l1, l2, f)
+    d2 = _gamma2_outcore(mycc, t1, t2, l1, l2, f, False)
     return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True)
 
 def _make_rdm1(mycc, d1, with_frozen=True):
@@ -236,40 +246,46 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
 
     doovv = numpy.asarray(doovv)
     dm2[:nocc,:nocc,nocc:,nocc:] = doovv
-    dm2[:nocc,:nocc,nocc:,nocc:]+= doovv.transpose(1,0,3,2)
+    dm2[:nocc,:nocc,nocc:,nocc:]+= doovv.transpose(1,0,3,2).conj()
     dm2[nocc:,nocc:,:nocc,:nocc] = dm2[:nocc,:nocc,nocc:,nocc:].transpose(2,3,0,1)
     dovov = None
 
     dovvo = numpy.asarray(dovvo)
     dm2[:nocc,nocc:,nocc:,:nocc] = dovvo
-    dm2[:nocc,nocc:,nocc:,:nocc]+= dovvo.transpose(3,2,1,0)
+    dm2[:nocc,nocc:,nocc:,:nocc]+= dovvo.transpose(3,2,1,0).conj()
     dm2[nocc:,:nocc,:nocc,nocc:] = dm2[:nocc,nocc:,nocc:,:nocc].transpose(1,0,3,2)
     dovvo = None
 
     if len(dvvvv.shape) == 2:
+# To handle the case of compressed vvvv, which is used in nuclear gradients
         dvvvv = ao2mo.restore(1, dvvvv, nvir)
-    dm2[nocc:,nocc:,nocc:,nocc:] = dvvvv
-    dm2[nocc:,nocc:,nocc:,nocc:]*= 4
+        dm2[nocc:,nocc:,nocc:,nocc:] = dvvvv
+        dm2[nocc:,nocc:,nocc:,nocc:]*= 4
+    else:
+        dvvvv = numpy.asarray(dvvvv)
+        dm2[nocc:,nocc:,nocc:,nocc:] = dvvvv
+        dm2[nocc:,nocc:,nocc:,nocc:]+= dvvvv.transpose(1,0,3,2).conj()
+        dm2[nocc:,nocc:,nocc:,nocc:]*= 2
     dvvvv = None
 
     doooo = numpy.asarray(doooo)
     dm2[:nocc,:nocc,:nocc,:nocc] = doooo
-    dm2[:nocc,:nocc,:nocc,:nocc]+= doooo.transpose(1,0,3,2)
+    dm2[:nocc,:nocc,:nocc,:nocc]+= doooo.transpose(1,0,3,2).conj()
     dm2[:nocc,:nocc,:nocc,:nocc]*= 2
     doooo = None
 
     dovvv = numpy.asarray(dovvv)
     dm2[:nocc,nocc:,nocc:,nocc:] = dovvv
     dm2[nocc:,nocc:,:nocc,nocc:] = dovvv.transpose(2,3,0,1)
-    dm2[nocc:,nocc:,nocc:,:nocc] = dovvv.transpose(3,2,1,0)
-    dm2[nocc:,:nocc,nocc:,nocc:] = dovvv.transpose(1,0,3,2)
+    dm2[nocc:,nocc:,nocc:,:nocc] = dovvv.transpose(3,2,1,0).conj()
+    dm2[nocc:,:nocc,nocc:,nocc:] = dovvv.transpose(1,0,3,2).conj()
     dovvv = None
 
     dooov = numpy.asarray(dooov)
     dm2[:nocc,:nocc,:nocc,nocc:] = dooov
     dm2[:nocc,nocc:,:nocc,:nocc] = dooov.transpose(2,3,0,1)
-    dm2[:nocc,:nocc,nocc:,:nocc] = dooov.transpose(1,0,3,2)
-    dm2[nocc:,:nocc,:nocc,:nocc] = dooov.transpose(3,2,1,0)
+    dm2[:nocc,:nocc,nocc:,:nocc] = dooov.transpose(1,0,3,2).conj()
+    dm2[nocc:,:nocc,:nocc,:nocc] = dooov.transpose(3,2,1,0).conj()
 
     if with_frozen and not (mycc.frozen is 0 or mycc.frozen is None):
         nmo, nmo0 = mycc.mo_occ.size, nmo
@@ -337,7 +353,7 @@ if __name__ == '__main__':
     eris.vvvv = eri0[nocc:,nocc:,nocc:,nocc:].copy()
     eris.fock = fock0
 
-    doo, dov, dvo, dvv = gamma1_intermediates(mcc, t1, t2, l1, l2)
+    doo, dov, dvo, dvv = _gamma1_intermediates(mcc, t1, t2, l1, l2)
     print((numpy.einsum('ij,ij', doo, fock0[:nocc,:nocc]))*2+20166.329861034799)
     print((numpy.einsum('ab,ab', dvv, fock0[nocc:,nocc:]))*2-58078.964019246778)
     print((numpy.einsum('ia,ia', dov, fock0[:nocc,nocc:]))*2+74994.356886784764)
@@ -345,7 +361,7 @@ if __name__ == '__main__':
 
     fdm2 = lib.H5TmpFile()
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
-            _gamma2_outcore(mcc, t1, t2, l1, l2, fdm2)
+            _gamma2_outcore(mcc, t1, t2, l1, l2, fdm2, True)
     print('dovov', lib.finger(numpy.array(dovov)) - -14384.907042073517)
     print('dvvvv', lib.finger(numpy.array(dvvvv)) - -25.374007033024839)
     print('doooo', lib.finger(numpy.array(doooo)) -  60.114594698129963)
@@ -356,16 +372,15 @@ if __name__ == '__main__':
     fdm2 = None
 
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
-            gamma2_intermediates(mcc, t1, t2, l1, l2)
+            _gamma2_intermediates(mcc, t1, t2, l1, l2)
     print('dovov', lib.finger(numpy.array(dovov)) - -14384.907042073517)
-    print('dvvvv', lib.finger(numpy.array(dvvvv)) - -25.374007033024839)
+    print('dvvvv', lib.finger(numpy.array(dvvvv)) -  45.872344902116758)
     print('doooo', lib.finger(numpy.array(doooo)) -  60.114594698129963)
     print('doovv', lib.finger(numpy.array(doovv)) - -79.176348067958401)
-    print('dovvo', lib.finger(numpy.array(dovvo)) -  60.596864321502196)
+    print('dovvo', lib.finger(numpy.array(dovvo)) -   9.864134457251815)
     print('dovvv', lib.finger(numpy.array(dovvv)) - -421.90333700061342)
     print('dooov', lib.finger(numpy.array(dooov)) - -592.66863759586136)
 
-    dvvvv = ao2mo.restore(1, dvvvv, nvir)
     print('doooo',numpy.einsum('kilj,kilj', doooo, eris.oooo)*2-15939.9007625418)
     print('dvvvv',numpy.einsum('acbd,acbd', dvvvv, eris.vvvv)*2-37581.823919588 )
     print('dooov',numpy.einsum('jkia,jkia', dooov, eris.ooov)*2-128470.009687716)
@@ -396,7 +411,6 @@ if __name__ == '__main__':
 
     print(numpy.allclose(dm2, dm2.transpose(1,0,3,2)))
     print(numpy.allclose(dm2, dm2.transpose(2,3,0,1)))
-    print abs(dm2-dm2.transpose(2,3,0,1)).max(),'m'
 
     d1 = numpy.einsum('kkpq->pq', dm2) / 9
     print(numpy.allclose(d1, dm1))

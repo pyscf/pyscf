@@ -12,7 +12,7 @@ from pyscf.lib import logger
 #einsum = numpy.einsum
 einsum = lib.einsum
 
-def gamma1_intermediates(mycc, t1, t2, l1, l2):
+def _gamma1_intermediates(mycc, t1, t2, l1, l2):
     doo  =-einsum('ie,je->ij', l1, t1)
     doo -= einsum('imef,jmef->ij', l2, t2) * .5
 
@@ -32,7 +32,7 @@ def gamma1_intermediates(mycc, t1, t2, l1, l2):
     return doo, dov, dvo, dvv
 
 # gamma2 intermediates in Chemist's notation
-def gamma2_intermediates(mycc, t1, t2, l1, l2):
+def _gamma2_intermediates(mycc, t1, t2, l1, l2):
     tau = t2 + einsum('ia,jb->ijab', t1, t1) * 2
     miajb = einsum('ikac,kjcb->iajb', l2, t2)
 
@@ -90,13 +90,13 @@ def gamma2_intermediates(mycc, t1, t2, l1, l2):
     return (dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov)
 
 def make_rdm1(mycc, t1, t2, l1, l2):
-    d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
+    d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     return _make_rdm1(mycc, d1, with_frozen=True)
 
 # spin-orbital rdm2 in Chemist's notation
 def make_rdm2(mycc, t1, t2, l1, l2):
-    d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
-    d2 = gamma2_intermediates(mycc, t1, t2, l1, l2)
+    d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
+    d2 = _gamma2_intermediates(mycc, t1, t2, l1, l2)
     return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True)
 
 def _make_rdm1(mycc, d1, with_frozen=True):

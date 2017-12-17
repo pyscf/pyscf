@@ -15,8 +15,8 @@ from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
 from pyscf.cc import ccsd_rdm
 
-def gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None):
-    doo, dov, dvo, dvv = ccsd_rdm.gamma1_intermediates(mycc, t1, t2, l1, l2)
+def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None):
+    doo, dov, dvo, dvv = ccsd_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2)
 
     if eris is None: eris = mycc.ao2mo()
     nocc, nvir = t1.shape
@@ -43,9 +43,9 @@ def gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None):
     return doo, dov, dvo, dvv
 
 # gamma2 intermediates in Chemist's notation
-def gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None):
+def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None):
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
-            ccsd_rdm.gamma2_intermediates(mycc, t1, t2, l1, l2)
+            ccsd_rdm._gamma2_intermediates(mycc, t1, t2, l1, l2)
     if eris is None: eris = mycc.ao2mo()
 
     nocc, nvir = t1.shape
@@ -71,29 +71,15 @@ def gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None):
     dvvov = dovvv.transpose(2,3,0,1)
     return dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov
 
-def _gamma2_outcore(mycc, t1, t2, l1, l2, eris=None, h5fobj=None):
-    dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
-            gamma2_intermediates(mycc, t1, t2, l1, l2, eris)
-    dvovo = dovov.transpose(3,2,1,0)
-    dvvoo = doovv.transpose(2,3,0,1)
-    dvoov = dovvo.transpose(2,3,0,1)
-    dvovv = dovvv.transpose(1,0,2,3)
-    dvooo = dooov.transpose(3,2,1,0)
-    return dvovo, dvvvv, doooo, dvvoo, dvoov, dvvov, dvovv, dvooo
-
-
-def make_rdm1(mycc, t1, t2, l1, l2, d1=None, eris=None):
-    if d1 is None:
-        d1 = gamma1_intermediates(mycc, t1, t2, l1, l2, eris)
-    return ccsd_rdm.make_rdm1(mycc, t1, t2, l1, l2, d1)
+def make_rdm1(mycc, t1, t2, l1, l2, eris=None):
+    d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2, eris)
+    return ccsd_rdm._make_rdm1(mycc, d1, True)
 
 # rdm2 in Chemist's notation
-def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None, eris=None):
-    if d1 is None:
-        d1 = gamma1_intermediates(mycc, t1, t2, l1, l2, eris)
-    if d2 is None:
-        d2 = gamma2_intermediates(mycc, t1, t2, l1, l2, eris)
-    return ccsd_rdm.make_rdm2(mycc, t1, t2, l1, l2, d1, d2)
+def make_rdm2(mycc, t1, t2, l1, l2, eris=None):
+    d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2, eris)
+    d2 = _gamma2_intermediates(mycc, t1, t2, l1, l2, eris)
+    return ccsd_rdm._make_rdm2(mycc, d1, d2, True, True)
 
 
 def p6_(t):
