@@ -257,14 +257,20 @@ def from_fcivec(ci0, norb, nelec):
     c2 = c2.reshape(nvir,nocc,nvir,nocc).transpose(1,3,0,2)
     return amplitudes_to_cisdvec(c0, c1[::-1], c2[::-1,::-1])
 
-def make_rdm1(myci, civec, nmo, nocc, d1=None):
+def make_rdm1(myci, civec=None, nmo=None, nocc=None, d1=None):
+    if civec is None: civec = myci.ci
+    if nmo is None: nmo = myci.nmo
+    if nocc is None: nocc = myci.nocc
     if d1 is None:
         d1 = gamma1_intermediates(myci, civec, nmo, nocc)
     return ccsd_rdm.make_rdm1(myci, None, None, None, None, d1)
 
-def make_rdm2(myci, civec, nmo, nocc, d1=None, d2=None):
+def make_rdm2(myci, civec=None, nmo=None, nocc=None, d1=None, d2=None):
     '''spin-traced 2pdm in chemist's notation
     '''
+    if civec is None: civec = myci.ci
+    if nmo is None: nmo = myci.nmo
+    if nocc is None: nocc = myci.nocc
     if d1 is None:
         d1 = gamma1_intermediates(myci, civec, nmo, nocc)
     if d2 is None:
@@ -477,6 +483,7 @@ class CISD(lib.StreamObject):
 
     get_nocc = ccsd.get_nocc
     get_nmo = ccsd.get_nmo
+    get_frozen_mask = ccsd.get_frozen_mask
 
     def kernel(self, ci0=None, eris=None):
         return self.cisd(ci0, eris)

@@ -334,9 +334,9 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj):
             (dovvv, dovVV, dOVvv, dOVVV),
             (dooov, dooOV, dOOov, dOOOV))
 
-def make_rdm1(cc, t1, t2, l1, l2, d1=None):
+def make_rdm1(mycc, t1, t2, l1, l2, d1=None):
     if d1 is None:
-        d1 = gamma1_intermediates(cc, t1, t2, l1, l2)
+        d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
     doo, dOO = d1[0]
     dov, dOV = d1[1]
     dvo, dVO = d1[2]
@@ -381,50 +381,22 @@ def make_rdm1(cc, t1, t2, l1, l2, d1=None):
     return dm1a, dm1b
 
 # spin-orbital rdm2 in Chemist's notation
-def make_rdm2(cc, t1, t2, l1, l2, d1=None, d2=None):
-    if d1 is None:
-        d1 = gamma1_intermediates(cc, t1, t2, l1, l2)
-    doo, dOO = d1[0]
-    dov, dOV = d1[1]
-    dvo, dVO = d1[2]
-    dvv, dVV = d1[3]
-    nocca, nvira = dov.shape
-    noccb, nvirb = dOV.shape
-    nmoa = nocca + nvira
-    nmob = noccb + nvirb
-
+def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None):
     dm2aa, dm2ab, dm2bb = _make_rdm2(mycc, t1, t2, l1, l2, d2)
-
-    dm1a = numpy.empty((nmoa,nmoa))
-    dm1a[:nocca,:nocca] = doo + doo.conj().T
-    dm1a[:nocca,nocca:] = dov + dvo.conj().T
-    dm1a[nocca:,:nocca] = dm1a[:nocca,nocca:].conj().T
-    dm1a[nocca:,nocca:] = dvv + dvv.conj().T
-    dm1a *= .5
-    dm1b = numpy.empty((nmoa,nmoa))
-    dm1b[:noccb,:noccb] = dOO + dOO.conj().T
-    dm1b[:noccb,noccb:] = dOV + dVO.conj().T
-    dm1b[noccb:,:noccb] = dm1b[:noccb,noccb:].conj().T
-    dm1b[noccb:,noccb:] = dVV + dVV.conj().T
-    dm1b *= .5
-
+    moidxa, moidxb = mycc.get_frozen_mask()
     if not (mycc.frozen is 0 or mycc.frozen is None):
-        nmoa, nmoa0 = mycc.mo_occ[0].size, nmoa
-        nmob, nmob0 = mycc.mo_occ[1].size, nmob
+        nmoa0 = dm2aa.shape[0]
+        nmob0 = dm2bb.shape[0]
+        nmoa = mycc.mo_occ[0].size
+        nmob = mycc.mo_occ[1].size
         nocca = numpy.count_nonzero(mycc.mo_occ[0] > 0)
         noccb = numpy.count_nonzero(mycc.mo_occ[1] > 0)
-        rdm1a = numpy.zeros((nmoa,nmoa))
-        rdm1b = numpy.zeros((nmob,nmob))
-        moidx = mycc.get_frozen_mask()
-        moidxa = numpy.where(moidx[0])[0]
-        moidxb = numpy.where(moidx[1])[0]
-        rdm1a[moidxa[:,None],moidxa] = dm1a
-        rdm1b[moidxb[:,None],moidxb] = dm1b
-        dm1a, dm1b = rdm1a, rdm1b
 
         rdm2aa = numpy.zeros((nmoa,nmoa,nmoa,nmoa))
         rdm2ab = numpy.zeros((nmoa,nmoa,nmob,nmob))
         rdm2bb = numpy.zeros((nmob,nmob,nmob,nmob))
+        moidxa = numpy.where(moidxa)[0]
+        moidxb = numpy.where(moidxb)[0]
         idxa = (moidxa.reshape(-1,1) * nmoa + moidxa).ravel()
         idxb = (moidxb.reshape(-1,1) * nmob + moidxb).ravel()
         lib.takebak_2d(rdm2aa.reshape(nmoa**2,nmoa**2),
@@ -434,6 +406,13 @@ def make_rdm2(cc, t1, t2, l1, l2, d1=None, d2=None):
         lib.takebak_2d(rdm2ab.reshape(nmoa**2,nmob**2),
                        dm2ab.reshape(nmoa0**2,nmob0**2), idxa, idxb)
         dm2aa, dm2ab, dm2bb = rdm2aa, rdm2ab, rdm2bb
+    else:
+        nocca = numpy.count_nonzero(mycc.mo_occ[0][moidxa] > 0)
+        noccb = numpy.count_nonzero(mycc.mo_occ[1][moidxb] > 0)
+
+    dm1a, dm1b = make_rdm1(mycc, t1, t2, l1, l2, d1)
+    dm1a[numpy.diag_indices(nocca)] -= 1
+    dm1b[numpy.diag_indices(noccb)] -= 1
 
     for i in range(nocca):
         dm2aa[i,i,:,:] += dm1a
@@ -587,6 +566,8 @@ if __name__ == '__main__':
     nvir = 7
     mol = gto.M()
     mf = scf.UHF(mol)
+    mf.mo_occ = numpy.zeros((2,nocc+nvir))
+    mf.mo_occ[:,:nocc] = 1
     mycc = uccsd.UCCSD(mf)
 
     def antisym(t2):
@@ -664,5 +645,38 @@ if __name__ == '__main__':
     e1+= mol.energy_nuc()
     print(e1 - mycc.e_tot)
 
-    #TODO: test 1pdm, 2pdm against FCI
-
+    from pyscf.fci import direct_uhf
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.atom = [
+        ['H', ( 1.,-1.    , 0.   )],
+        ['H', ( 0.,-1.    ,-1.   )],
+        ['H', ( 1.,-0.5   , 0.   )],
+        ['H', ( 0.,-1.    , 1.   )],
+    ]
+    mol.charge = 2
+    mol.spin = 2
+    mol.basis = '6-31g'
+    mol.build()
+    mf = scf.UHF(mol).run(conv_tol=1e-14)
+    ehf0 = mf.e_tot - mol.energy_nuc()
+    mycc = uccsd.UCCSD(mf).run()
+    mycc.solve_lambda()
+    eri_aa = ao2mo.kernel(mf._eri, mf.mo_coeff[0])
+    eri_bb = ao2mo.kernel(mf._eri, mf.mo_coeff[1])
+    eri_ab = ao2mo.kernel(mf._eri, [mf.mo_coeff[0], mf.mo_coeff[0],
+                                    mf.mo_coeff[1], mf.mo_coeff[1]])
+    h1a = reduce(numpy.dot, (mf.mo_coeff[0].T, mf.get_hcore(), mf.mo_coeff[0]))
+    h1b = reduce(numpy.dot, (mf.mo_coeff[1].T, mf.get_hcore(), mf.mo_coeff[1]))
+    efci, fcivec = direct_uhf.kernel((h1a,h1b), (eri_aa,eri_ab,eri_bb),
+                                     h1a.shape[0], mol.nelec)
+    dm1ref, dm2ref = direct_uhf.make_rdm12s(fcivec, h1a.shape[0], mol.nelec)
+    t1, t2 = mycc.t1, mycc.t2
+    l1, l2 = mycc.l1, mycc.l2
+    rdm1 = make_rdm1(mycc, t1, t2, l1, l2)
+    rdm2 = make_rdm2(mycc, t1, t2, l1, l2)
+    print('dm1a', abs(dm1ref[0] - rdm1[0]).max())
+    print('dm1b', abs(dm1ref[1] - rdm1[1]).max())
+    print('dm2aa', abs(dm2ref[0] - rdm2[0]).max())
+    print('dm2ab', abs(dm2ref[1] - rdm2[1]).max())
+    print('dm2bb', abs(dm2ref[2] - rdm2[2]).max())

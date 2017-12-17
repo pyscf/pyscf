@@ -14,6 +14,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.cc import ccsd
 from pyscf.cc import gccsd
+from pyscf.cc import gccsd_rdm
 from pyscf.ci import cisd
 from pyscf.fci import cistring
 
@@ -225,74 +226,54 @@ def from_fcivec(ci0, nelec, orbspin):
     return cisdvec
 
 
-def make_rdm1(ci, nmo, nocc):
-    c0, c1, c2 = cisdvec_to_amplitudes(ci, nmo, nocc)
-    dov = c0 * c1
-    dov += numpy.einsum('jb,ijab->ia', c1, c2)
-    doo  =-numpy.einsum('ia,ka->ik', c1, c1)
-    doo -= numpy.einsum('ijab,ikab->jk', c2, c2) * .25
-    doo -= numpy.einsum('jiab,kiab->jk', c2, c2) * .25
-    dvv  = numpy.einsum('ia,ic->ca', c1, c1)
-    dvv += numpy.einsum('ijab,ijac->cb', c2, c2) * .25
-    dvv += numpy.einsum('ijba,ijca->cb', c2, c2) * .25
-
-    rdm1 = numpy.empty((nmo,nmo))
-    rdm1[:nocc,nocc:] = dov
-    rdm1[nocc:,:nocc] = dov.T.conj()
-    rdm1[:nocc,:nocc] = doo
-    rdm1[nocc:,nocc:] = dvv
-
-    for i in range(nocc):
-        rdm1[i,i] += 1
-    return rdm1
-
-def make_rdm2(ci, nmo, nocc):
-    '''spin-orbital 2pdm in physicist's notation
+def make_rdm1(myci, civec=None, nmo=None, nocc=None):
+    '''spin-orbital 1-particle density matrix
     '''
-    c0, c1, c2 = cisdvec_to_amplitudes(ci, nmo, nocc)
-    doovv = c0 * c2 * .5
-    dvvvo = numpy.einsum('ia,ikcd->cdak', c1, c2) * .5
-    dovoo = numpy.einsum('ia,klac->ickl', c1, c2) *-.5
-    doooo = numpy.einsum('klab,ijab->klij', c2, c2) * .25
-    dvvvv = numpy.einsum('ijcd,ijab->cdab', c2, c2) * .25
-    dovov =-numpy.einsum('ijab,ikac->jckb', c2, c2)
-    dovov-= numpy.einsum('ia,jb->jaib', c1, c1)
-    dvoov = numpy.einsum('ijab,ikac->cjkb', c2, c2)
-    dvoov+= numpy.einsum('ia,jb->ajib', c1, c1)
+    if civec is None: civec = myci.ci
+    if nmo is None: nmo = myci.nmo
+    if nocc is None: nocc = myci.nocc
+    d1 = gamma1_intermediates(myci, civec, nmo, nocc)
+    return gccsd_rdm.make_rdm1(myci, None, None, None, None, d1)
 
-    rdm2 = numpy.zeros((nmo,nmo,nmo,nmo))
-    rdm2[:nocc,:nocc,:nocc,:nocc] = doooo - doooo.transpose(1,0,2,3)
-    rdm2[:nocc,nocc:,:nocc,:nocc] = dovoo - dovoo.transpose(0,1,3,2)
-    rdm2[nocc:,:nocc,:nocc,:nocc] = rdm2[:nocc,nocc:,:nocc,:nocc].transpose(1,0,3,2)
-    rdm2[:nocc,:nocc,:nocc,nocc:] = rdm2[:nocc,nocc:,:nocc,:nocc].transpose(2,3,0,1)
-    rdm2[:nocc,:nocc,nocc:,:nocc] = rdm2[:nocc,nocc:,:nocc,:nocc].transpose(3,2,1,0)
+def make_rdm2(myci, civec=None, nmo=None, nocc=None):
+    '''spin-orbital 2-particle density matrix in chemist's notation
+    '''
+    if civec is None: civec = myci.ci
+    if nmo is None: nmo = myci.nmo
+    if nocc is None: nocc = myci.nocc
+    d1 = gamma1_intermediates(myci, civec, nmo, nocc)
+    d2 = gamma2_intermediates(myci, civec, nmo, nocc)
+    return gccsd_rdm.make_rdm2(myci, None, None, None, None, d1, d2)
 
-    rdm2[:nocc,:nocc,nocc:,nocc:] = doovv - doovv.transpose(1,0,2,3)
-    rdm2[nocc:,nocc:,:nocc,:nocc] = rdm2[:nocc,:nocc,nocc:,nocc:].transpose(2,3,0,1)
-    rdm2[nocc:,nocc:,nocc:,:nocc] = dvvvo - dvvvo.transpose(1,0,2,3)
-    rdm2[nocc:,nocc:,:nocc,nocc:] = rdm2[nocc:,nocc:,nocc:,:nocc].transpose(1,0,3,2)
-    rdm2[nocc:,:nocc,nocc:,nocc:] = rdm2[nocc:,nocc:,nocc:,:nocc].transpose(2,3,0,1)
-    rdm2[:nocc,nocc:,nocc:,nocc:] = rdm2[nocc:,nocc:,nocc:,:nocc].transpose(3,2,1,0)
-    rdm2[nocc:,nocc:,nocc:,nocc:] = dvvvv - dvvvv.transpose(1,0,2,3)
+def gamma1_intermediates(myci, civec, nmo, nocc):
+    c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
+    dov = c0 * c1
+    dov += numpy.einsum('jb,ijab->ia', c1.conj(), c2)
+    doo  =-numpy.einsum('ia,ka->ik', c1.conj(), c1)
+    doo -= numpy.einsum('jiab,kiab->jk', c2.conj(), c2) * .5
+    dvv  = numpy.einsum('ia,ic->ac', c1, c1.conj())
+    dvv += numpy.einsum('ijab,ijac->bc', c2, c2.conj()) * .5
+    return doo, dov, dov.conj().T, dvv
 
-    rdm2[:nocc,nocc:,:nocc,nocc:] = dovov
-    rdm2[nocc:,:nocc,nocc:,:nocc] = rdm2[:nocc,nocc:,:nocc,nocc:].transpose(1,0,3,2)
-    rdm2[nocc:,:nocc,:nocc,nocc:] = dvoov
-    rdm2[:nocc,nocc:,nocc:,:nocc] = rdm2[nocc:,:nocc,:nocc,nocc:].transpose(1,0,3,2)
+def gamma2_intermediates(myci, civec, nmo, nocc):
+    c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
+    goovv = c0 * c2 * .5
+    govvv = numpy.einsum('ia,ikcd->kadc', c1.conj(), c2) * .5
+    gooov = numpy.einsum('ia,klac->klic', c1.conj(), c2) *-.5
+    goooo = numpy.einsum('ijab,klab->ijkl', c2.conj(), c2) * .25
+    gvvvv = numpy.einsum('ijab,ijcd->abcd', c2, c2.conj()) * .25
+    govvo = numpy.einsum('ijab,ikac->jcbk', c2.conj(), c2)
+    govvo+= numpy.einsum('ia,jb->ibaj', c1.conj(), c1)
 
-    rdm1 = make_rdm1(ci, nmo, nocc)
-    for i in range(nocc):
-        rdm1[i,i] -= 1
-    for i in range(nocc):
-        for j in range(nocc):
-            rdm2[i,j,i,j] += 1
-            rdm2[i,j,j,i] -= 1
-        rdm2[i,:,i,:] += rdm1
-        rdm2[:,i,:,i] += rdm1
-        rdm2[:,i,i,:] -= rdm1
-        rdm2[i,:,:,i] -= rdm1
-
-    return rdm2
+    dovov = goovv.transpose(0,2,1,3) - goovv.transpose(0,3,1,2)
+    doooo = goooo.transpose(0,2,1,3) - goooo.transpose(0,3,1,2)
+    dvvvv = gvvvv.transpose(0,2,1,3) - gvvvv.transpose(0,3,1,2)
+    dovvo = govvo.transpose(0,2,1,3)
+    dooov = gooov.transpose(0,2,1,3) - gooov.transpose(1,2,0,3)
+    dovvv = govvv.transpose(0,2,1,3) - govvv.transpose(0,3,1,2)
+    doovv = None
+    dvvov = None
+    return dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov
 
 
 class GCISD(cisd.CISD):
@@ -335,13 +316,8 @@ class GCISD(cisd.CISD):
     def from_fcivec(self, fcivec, nelec, orbspin):
         return from_fcivec(fcivec, nelec, orbspin)
 
-    def make_rdm1(self, ci=None):
-        if ci is None: ci = self.ci
-        return make_rdm1(ci, self.nmo, self.nocc)
-
-    def make_rdm2(self, ci=None):
-        if ci is None: ci = self.ci
-        return make_rdm2(ci, self.nmo, self.nocc)
+    make_rdm1 = make_rdm1
+    make_rdm2 = make_rdm2
 
     def amplitudes_to_cisdvec(self, c0, c1, c2):
         return amplitudes_to_cisdvec(c0, c1, c2)
@@ -468,10 +444,9 @@ if __name__ == '__main__':
                                          h1a.shape[0], mol.nelec)
     print(ecisd, '== E(fci)', efci-ehf0)
     dm1ref, dm2ref = fci.direct_uhf.make_rdm12s(fcivec, h1a.shape[0], mol.nelec)
-    dm2ref = [x.transpose(0,2,1,3) for x in dm2ref]
     nmo = myci.nmo
-    rdm1 = make_rdm1(myci.ci, nmo, mol.nelectron)
-    rdm2 = make_rdm2(myci.ci, nmo, mol.nelectron)
+    rdm1 = myci.make_rdm1(myci.ci, nmo, mol.nelectron)
+    rdm2 = myci.make_rdm2(myci.ci, nmo, mol.nelectron)
     idxa = eris.orbspin == 0
     idxb = eris.orbspin == 1
     print('dm1a', abs(dm1ref[0] - rdm1[idxa][:,idxa]).max())
@@ -479,14 +454,6 @@ if __name__ == '__main__':
     print('dm2aa', abs(dm2ref[0] - rdm2[idxa][:,idxa][:,:,idxa][:,:,:,idxa]).max())
     print('dm2ab', abs(dm2ref[1] - rdm2[idxa][:,idxb][:,:,idxa][:,:,:,idxb]).max())
     print('dm2bb', abs(dm2ref[2] - rdm2[idxb][:,idxb][:,:,idxb][:,:,:,idxb]).max())
-#    nocca, noccb = mol.nelec
-#    rdm2ab = rdm2[idxa][:,idxb][:,:,idxa][:,:,:,idxb]
-#    print(abs(rdm2ab[:nocca,:noccb,:nocca,:noccb]-dm2ref[1][:nocca,:noccb,:nocca,:noccb]).sum(), 'oooo')
-#    print(abs(rdm2ab[nocca:,noccb:,nocca:,noccb:]-dm2ref[1][nocca:,noccb:,nocca:,noccb:]).sum(), 'vvvv')
-#    print(abs(rdm2ab[nocca:,:noccb,:nocca,:noccb]-dm2ref[1][nocca:,:noccb,:nocca,:noccb]).sum(), 'vooo')
-#    print(abs(rdm2ab[:nocca,noccb:,nocca:,noccb:]-dm2ref[1][:nocca,noccb:,nocca:,noccb:]).sum(), 'ovvv')
-#    print(abs(rdm2ab[nocca:,:noccb,:nocca,noccb:]-dm2ref[1][nocca:,:noccb,:nocca,noccb:]).sum(), 'voov')
-#    print(abs(rdm2ab[:nocca,:noccb,nocca:,noccb:]-dm2ref[1][:nocca,:noccb,nocca:,noccb:]).sum(), 'ovov')
 
     mol = gto.Mole()
     mol.verbose = 0
@@ -505,8 +472,8 @@ if __name__ == '__main__':
     print(ecisd - -0.048878084082066106)
 
     nmo = eris.mo_coeff.shape[1]
-    rdm1 = make_rdm1(civec, nmo, mol.nelectron)
-    rdm2 = make_rdm2(civec, nmo, mol.nelectron)
+    rdm1 = myci.make_rdm1(civec, nmo, mol.nelectron)
+    rdm2 = myci.make_rdm2(civec, nmo, mol.nelectron)
 
     mo = eris.mo_coeff[:7] + eris.mo_coeff[7:]
     eri = ao2mo.kernel(mf._eri, mo, compact=False)
@@ -524,8 +491,8 @@ if __name__ == '__main__':
     h1e[idxa[:,None]&idxa] = h1a.ravel()
     h1e[idxb[:,None]&idxb] = h1b.ravel()
     e2 = (numpy.einsum('ij,ji', h1e, rdm1) +
-          numpy.einsum('ikjl,ijkl', eri, rdm2) * .5)
+          numpy.einsum('ijkl,jilk', eri, rdm2) * .5)
     print(ecisd + mf.e_tot - mol.energy_nuc() - e2)   # = 0
 
-    print(abs(rdm1 - numpy.einsum('ikjk->ij', rdm2)/(mol.nelectron-1)).sum())
+    print(abs(rdm1 - numpy.einsum('ijkk->ij', rdm2)/(mol.nelectron-1)).sum())
 

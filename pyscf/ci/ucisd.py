@@ -17,6 +17,7 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import uccsd
+from pyscf.cc import uccsd_rdm
 from pyscf.ci import cisd
 from pyscf.cc.ccsd import _unpack_4fold
 
@@ -440,195 +441,149 @@ def from_fcivec(ci0, nmo, nocc):
     return amplitudes_to_cisdvec(c0, (c1a,c1b), (c2aa,c2ab,c2bb))
 
 
-def make_rdm1(ci, nmo, nocc):
+def make_rdm1(myci, civec=None, nmo=None, nocc=None):
+    '''1-particle density matrix
+    '''
+    if civec is None: civec = myci.ci
+    if nmo is None: nmo = myci.nmo
+    if nocc is None: nocc = myci.nocc
+    d1 = gamma1_intermediates(myci, civec, nmo, nocc)
+    return uccsd_rdm.make_rdm1(myci, None, None, None, None, d1)
+
+def make_rdm2(myci, civec=None, nmo=None, nocc=None):
+    '''2-particle density matrix in chemist's notation
+    '''
+    if civec is None: civec = myci.ci
+    if nmo is None: nmo = myci.nmo
+    if nocc is None: nocc = myci.nocc
+    d1 = gamma1_intermediates(myci, civec, nmo, nocc)
+    d2 = gamma2_intermediates(myci, civec, nmo, nocc)
+    return uccsd_rdm.make_rdm2(myci, None, None, None, None, d1, d2)
+
+def gamma1_intermediates(myci, civec, nmo, nocc):
     nmoa, nmob = nmo
     nocca, noccb = nocc
-    c0, c1, c2 = cisdvec_to_amplitudes(ci, nmo, nocc)
+    c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
     c1a, c1b = c1
     c2aa, c2ab, c2bb = c2
 
     dova = c0 * c1a
     dovb = c0 * c1b
-    dova += numpy.einsum('jb,ijab->ia', c1a, c2aa)
-    dova += numpy.einsum('jb,ijab->ia', c1b, c2ab)
-    dovb += numpy.einsum('jb,ijab->ia', c1b, c2bb)
-    dovb += numpy.einsum('jb,jiba->ia', c1a, c2ab)
+    dova += numpy.einsum('jb,ijab->ia', c1a.conj(), c2aa)
+    dova += numpy.einsum('jb,ijab->ia', c1b.conj(), c2ab)
+    dovb += numpy.einsum('jb,ijab->ia', c1b.conj(), c2bb)
+    dovb += numpy.einsum('jb,jiba->ia', c1a.conj(), c2ab)
 
-    dooa  =-numpy.einsum('ia,ka->ik', c1a, c1a)
-    doob  =-numpy.einsum('ia,ka->ik', c1b, c1b)
-    dooa -= numpy.einsum('ijab,ikab->jk', c2aa, c2aa) * .5
-    dooa -= numpy.einsum('jiab,kiab->jk', c2ab, c2ab)
-    doob -= numpy.einsum('ijab,ikab->jk', c2bb, c2bb) * .5
-    doob -= numpy.einsum('ijab,ikab->jk', c2ab, c2ab)
+    dooa  =-numpy.einsum('ia,ka->ik', c1a.conj(), c1a)
+    doob  =-numpy.einsum('ia,ka->ik', c1b.conj(), c1b)
+    dooa -= numpy.einsum('ijab,ikab->jk', c2aa.conj(), c2aa) * .5
+    dooa -= numpy.einsum('jiab,kiab->jk', c2ab.conj(), c2ab)
+    doob -= numpy.einsum('ijab,ikab->jk', c2bb.conj(), c2bb) * .5
+    doob -= numpy.einsum('ijab,ikab->jk', c2ab.conj(), c2ab)
 
-    dvva  = numpy.einsum('ia,ic->ca', c1a, c1a)
-    dvvb  = numpy.einsum('ia,ic->ca', c1b, c1b)
-    dvva += numpy.einsum('ijab,ijac->cb', c2aa, c2aa) * .5
-    dvva += numpy.einsum('ijba,ijca->cb', c2ab, c2ab)
-    dvvb += numpy.einsum('ijba,ijca->cb', c2bb, c2bb) * .5
-    dvvb += numpy.einsum('ijab,ijac->cb', c2ab, c2ab)
+    dvva  = numpy.einsum('ia,ic->ca', c1a, c1a.conj())
+    dvvb  = numpy.einsum('ia,ic->ca', c1b, c1b.conj())
+    dvva += numpy.einsum('ijab,ijac->cb', c2aa, c2aa.conj()) * .5
+    dvva += numpy.einsum('ijba,ijca->cb', c2ab, c2ab.conj())
+    dvvb += numpy.einsum('ijba,ijca->cb', c2bb, c2bb.conj()) * .5
+    dvvb += numpy.einsum('ijab,ijac->cb', c2ab, c2ab.conj())
+    return ((dooa, doob), (dova, dovb), (dova.conj().T, dovb.conj().T),
+            (dvva, dvvb))
 
-    dm1a = numpy.empty((nmoa,nmoa))
-    dm1b = numpy.empty((nmob,nmob))
-    dm1a[:nocca,nocca:] = dova
-    dm1b[:noccb,noccb:] = dovb
-    dm1a[nocca:,:nocca] = dova.T.conj()
-    dm1b[noccb:,:noccb] = dovb.T.conj()
-    dm1a[:nocca,:nocca] = dooa
-    dm1b[:noccb,:noccb] = doob
-    dm1a[nocca:,nocca:] = dvva
-    dm1b[noccb:,noccb:] = dvvb
-    dm1a[numpy.diag_indices(nocca)] += 1
-    dm1b[numpy.diag_indices(noccb)] += 1
-    return dm1a, dm1b
-
-def make_rdm2(ci, nmo, nocc):
-    '''spin-orbital 2pdm in chemist's notation
-    '''
+def gamma2_intermediates(myci, civec, nmo, nocc):
     nmoa, nmob = nmo
     nocca, noccb = nocc
-    c0, c1, c2 = cisdvec_to_amplitudes(ci, nmo, nocc)
+    c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
     c1a, c1b = c1
     c2aa, c2ab, c2bb = c2
 
-    d2oovv = c0 * c2aa * .5
-    d2oOvV = c0 * c2ab
-    d2OOVV = c0 * c2bb * .5
-    #:dvvvo = numpy.einsum('ia,ikcd->cdak', c1, c2) * .5
-    d2vvvo = numpy.einsum('ia,ikcd->cdak', c1a, c2aa) * .5
-    d2vVvO = numpy.einsum('ia,ikcd->cdak', c1a, c2ab)
-    d2VvVo = numpy.einsum('ia,kidc->cdak', c1b, c2ab)
-    d2VVVO = numpy.einsum('ia,ikcd->cdak', c1b, c2bb) * .5
-    #:dovoo = numpy.einsum('ia,klac->ickl', c1, c2) *-.5
-    d2ovoo = numpy.einsum('ia,klac->ickl', c1a, c2aa) *-.5
-    d2oVoO =-numpy.einsum('ia,klac->ickl', c1a, c2ab)
-    d2OvOo =-numpy.einsum('ia,lkca->ickl', c1b, c2ab)
-    d2OVOO = numpy.einsum('ia,klac->ickl', c1b, c2bb) *-.5
-    #:doooo = numpy.einsum('klab,ijab->klij', c2, c2) * .25
-    d2oooo = numpy.einsum('klab,ijab->klij', c2aa, c2aa) * .25
-    d2oOoO = numpy.einsum('klab,ijab->klij', c2ab, c2ab)
-    d2OOOO = numpy.einsum('klab,ijab->klij', c2bb, c2bb) * .25
-    #:dvvvv = numpy.einsum('ijcd,ijab->cdab', c2, c2) * .25
-    d2vvvv = numpy.einsum('ijcd,ijab->cdab', c2aa, c2aa) * .25
-    d2vVvV = numpy.einsum('ijcd,ijab->cdab', c2ab, c2ab)
-    d2VVVV = numpy.einsum('ijcd,ijab->cdab', c2bb, c2bb) * .25
-    #:dovov =-numpy.einsum('ijab,ikac->jckb', c2, c2)
-    #:dovov-= numpy.einsum('ia,jb->jaib', c1, c1)
-    d2ovov =-numpy.einsum('ijab,ikac->jckb', c2aa, c2aa)
-    d2ovov-= numpy.einsum('jiba,kica->jckb', c2ab, c2ab)
-    d2oVoV =-numpy.einsum('jIaB,kIaC->jCkB', c2ab, c2ab)
-    d2OvOv =-numpy.einsum('iJbA,iKcA->JcKb', c2ab, c2ab)
-    d2OVOV =-numpy.einsum('ijab,ikac->jckb', c2bb, c2bb)
-    d2OVOV-= numpy.einsum('ijab,ikac->jckb', c2ab, c2ab)
-    d2ovov-= numpy.einsum('ia,jb->jaib', c1a, c1a)
-    d2OVOV-= numpy.einsum('ia,jb->jaib', c1b, c1b)
-    #:dvoov = numpy.einsum('ijab,ikac->cjkb', c2, c2)
-    #:dvoov+= numpy.einsum('ia,jb->ajib', c1, c1)
-    d2voov = numpy.einsum('ijab,ikac->cjkb', c2aa, c2aa)
-    d2voov+= numpy.einsum('jIbA,kIcA->cjkb', c2ab, c2ab)
-    d2vOoV = numpy.einsum('iJaB,ikac->cJkB', c2ab, c2aa)
-    d2vOoV+= numpy.einsum('IJAB,kIcA->cJkB', c2bb, c2ab)
-    d2VOOV = numpy.einsum('ijab,ikac->cjkb', c2bb, c2bb)
-    d2VOOV+= numpy.einsum('iJaB,iKaC->CJKB', c2ab, c2ab)
-    d2voov+= numpy.einsum('ia,jb->ajib', c1a, c1a)
-    d2vOoV+= numpy.einsum('ia,jb->ajib', c1a, c1b)
-    d2VOOV+= numpy.einsum('ia,jb->ajib', c1b, c1b)
+    goovv = c0 * c2aa * .5
+    goOvV = c0 * c2ab
+    gOOVV = c0 * c2bb * .5
 
-    dm2aa = numpy.zeros((nmoa,nmoa,nmoa,nmoa))
-    dm2ab = numpy.zeros((nmoa,nmoa,nmob,nmob))
-    dm2bb = numpy.zeros((nmob,nmob,nmob,nmob))
-    dm2aa[:nocca,:nocca,:nocca,:nocca] = d2oooo - d2oooo.transpose(1,0,2,3)
-    dm2ab[:nocca,:noccb,:nocca,:noccb] = d2oOoO
-    dm2bb[:noccb,:noccb,:noccb,:noccb] = d2OOOO - d2OOOO.transpose(1,0,2,3)
+    govvv = numpy.einsum('ia,ikcd->kadc', c1a.conj(), c2aa) * .5
+    gOvVv = numpy.einsum('ia,ikcd->kadc', c1a.conj(), c2ab)
+    goVvV = numpy.einsum('ia,kidc->kadc', c1b.conj(), c2ab)
+    gOVVV = numpy.einsum('ia,ikcd->kadc', c1b.conj(), c2bb) * .5
 
-    dm2aa[:nocca,nocca:,:nocca,:nocca] = d2ovoo - d2ovoo.transpose(0,1,3,2)
-    dm2aa[nocca:,:nocca,:nocca,:nocca] = dm2aa[:nocca,nocca:,:nocca,:nocca].transpose(1,0,3,2)
-    dm2aa[:nocca,:nocca,:nocca,nocca:] = dm2aa[:nocca,nocca:,:nocca,:nocca].transpose(2,3,0,1)
-    dm2aa[:nocca,:nocca,nocca:,:nocca] = dm2aa[:nocca,nocca:,:nocca,:nocca].transpose(3,2,1,0)
-    dm2ab[:nocca,noccb:,:nocca,:noccb] = d2oVoO
-    dm2ab[nocca:,:noccb,:nocca,:noccb] = d2OvOo.transpose(1,0,3,2)
-    dm2ab[:nocca,:noccb,:nocca,noccb:] = dm2ab[:nocca,noccb:,:nocca,:noccb].transpose(2,3,0,1)
-    dm2ab[:nocca,:noccb,nocca:,:noccb] = dm2ab[nocca:,:noccb,:nocca,:noccb].transpose(2,3,0,1)
-    dm2bb[:noccb,noccb:,:noccb,:noccb] = d2OVOO - d2OVOO.transpose(0,1,3,2)
-    dm2bb[noccb:,:noccb,:noccb,:noccb] = dm2bb[:noccb,noccb:,:noccb,:noccb].transpose(1,0,3,2)
-    dm2bb[:noccb,:noccb,:noccb,noccb:] = dm2bb[:noccb,noccb:,:noccb,:noccb].transpose(2,3,0,1)
-    dm2bb[:noccb,:noccb,noccb:,:noccb] = dm2bb[:noccb,noccb:,:noccb,:noccb].transpose(3,2,1,0)
+    gooov = numpy.einsum('ia,klac->klic', c1a.conj(), c2aa) *-.5
+    goOoV =-numpy.einsum('ia,klac->klic', c1a.conj(), c2ab)
+    gOoOv =-numpy.einsum('ia,lkca->klic', c1b.conj(), c2ab)
+    gOOOV = numpy.einsum('ia,klac->klic', c1b.conj(), c2bb) *-.5
 
-    dm2aa[:nocca,:nocca,nocca:,nocca:] = d2oovv - d2oovv.transpose(1,0,2,3)
-    dm2ab[:nocca,:noccb,nocca:,noccb:] = d2oOvV
-    dm2bb[:noccb,:noccb,noccb:,noccb:] = d2OOVV - d2OOVV.transpose(1,0,2,3)
-    dm2aa[nocca:,nocca:,:nocca,:nocca] = dm2aa[:nocca,:nocca,nocca:,nocca:].transpose(2,3,0,1)
-    dm2ab[nocca:,noccb:,:nocca,:noccb] = dm2ab[:nocca,:noccb,nocca:,noccb:].transpose(2,3,0,1)
-    dm2bb[noccb:,noccb:,:noccb,:noccb] = dm2bb[:noccb,:noccb,noccb:,noccb:].transpose(2,3,0,1)
+    goooo = numpy.einsum('ijab,klab->ijkl', c2aa.conj(), c2aa) * .25
+    goOoO = numpy.einsum('ijab,klab->ijkl', c2ab.conj(), c2ab)
+    gOOOO = numpy.einsum('ijab,klab->ijkl', c2bb.conj(), c2bb) * .25
+    gvvvv = numpy.einsum('ijab,ijcd->abcd', c2aa, c2aa.conj()) * .25
+    gvVvV = numpy.einsum('ijab,ijcd->abcd', c2ab, c2ab.conj())
+    gVVVV = numpy.einsum('ijab,ijcd->abcd', c2bb, c2bb.conj()) * .25
 
-    dm2aa[nocca:,nocca:,nocca:,:nocca] = d2vvvo - d2vvvo.transpose(1,0,2,3)
-    dm2aa[nocca:,nocca:,:nocca,nocca:] = dm2aa[nocca:,nocca:,nocca:,:nocca].transpose(1,0,3,2)
-    dm2aa[nocca:,:nocca,nocca:,nocca:] = dm2aa[nocca:,nocca:,nocca:,:nocca].transpose(2,3,0,1)
-    dm2aa[:nocca,nocca:,nocca:,nocca:] = dm2aa[nocca:,nocca:,nocca:,:nocca].transpose(3,2,1,0)
-    dm2ab[nocca:,noccb:,nocca:,:noccb] = d2vVvO
-    dm2ab[nocca:,noccb:,:nocca,noccb:] = d2VvVo.transpose(1,0,3,2)
-    dm2ab[nocca:,:noccb,nocca:,noccb:] = dm2ab[nocca:,noccb:,nocca:,:noccb].transpose(2,3,0,1)
-    dm2ab[:nocca,noccb:,nocca:,noccb:] = dm2ab[nocca:,noccb:,:nocca,noccb:].transpose(2,3,0,1)
-    dm2bb[noccb:,noccb:,noccb:,:noccb] = d2VVVO - d2VVVO.transpose(1,0,2,3)
-    dm2bb[noccb:,noccb:,:noccb,noccb:] = dm2bb[noccb:,noccb:,noccb:,:noccb].transpose(1,0,3,2)
-    dm2bb[noccb:,:noccb,noccb:,noccb:] = dm2bb[noccb:,noccb:,noccb:,:noccb].transpose(2,3,0,1)
-    dm2bb[:noccb,noccb:,noccb:,noccb:] = dm2bb[noccb:,noccb:,noccb:,:noccb].transpose(3,2,1,0)
+    goVoV = numpy.einsum('jIaB,kIaC->jCkB', c2ab.conj(), c2ab)
+    gOvOv = numpy.einsum('iJbA,iKcA->JcKb', c2ab.conj(), c2ab)
 
-    dm2aa[nocca:,nocca:,nocca:,nocca:] = d2vvvv - d2vvvv.transpose(1,0,2,3)
-    dm2ab[nocca:,noccb:,nocca:,noccb:] = d2vVvV
-    dm2bb[noccb:,noccb:,noccb:,noccb:] = d2VVVV - d2VVVV.transpose(1,0,2,3)
+    govvo = numpy.einsum('ijab,ikac->jcbk', c2aa.conj(), c2aa)
+    govvo+= numpy.einsum('jIbA,kIcA->jcbk', c2ab.conj(), c2ab)
+    goVvO = numpy.einsum('jIbA,IKAC->jCbK', c2ab.conj(), c2bb)
+    goVvO+= numpy.einsum('ijab,iKaC->jCbK', c2aa.conj(), c2ab)
+    gOVVO = numpy.einsum('ijab,ikac->jcbk', c2bb.conj(), c2bb)
+    gOVVO+= numpy.einsum('iJaB,iKaC->JCBK', c2ab.conj(), c2ab)
+    govvo+= numpy.einsum('ia,jb->ibaj', c1a.conj(), c1a)
+    goVvO+= numpy.einsum('ia,jb->ibaj', c1a.conj(), c1b)
+    gOVVO+= numpy.einsum('ia,jb->ibaj', c1b.conj(), c1b)
 
-    dm2aa[:nocca,nocca:,:nocca,nocca:] = d2ovov
-    dm2aa[nocca:,:nocca,nocca:,:nocca] = dm2aa[:nocca,nocca:,:nocca,nocca:].transpose(1,0,3,2)
-    dm2ab[:nocca,noccb:,:nocca,noccb:] = d2oVoV
-    dm2ab[nocca:,:noccb,nocca:,:noccb] = d2OvOv.transpose(1,0,3,2)
-    dm2bb[:noccb,noccb:,:noccb,noccb:] = d2OVOV
-    dm2bb[noccb:,:noccb,noccb:,:noccb] = dm2bb[:noccb,noccb:,:noccb,noccb:].transpose(1,0,3,2)
+    dovov = goovv.transpose(0,2,1,3) - goovv.transpose(0,3,1,2)
+    doooo = goooo.transpose(0,2,1,3) - goooo.transpose(0,3,1,2)
+    dvvvv = gvvvv.transpose(0,2,1,3) - gvvvv.transpose(0,3,1,2)
+    dovvo = govvo.transpose(0,2,1,3)
+    dooov = gooov.transpose(0,2,1,3) - gooov.transpose(1,2,0,3)
+    dovvv = govvv.transpose(0,2,1,3) - govvv.transpose(0,3,1,2)
+    doovv =-dovvo.transpose(0,3,2,1)
+    dvvov = None
 
-    dm2aa[nocca:,:nocca,:nocca,nocca:] = d2voov
-    dm2aa[:nocca,nocca:,nocca:,:nocca] = dm2aa[nocca:,:nocca,:nocca,nocca:].transpose(1,0,3,2)
-    dm2ab[nocca:,:noccb,:nocca,noccb:] = d2vOoV
-    dm2ab[:nocca,noccb:,nocca:,:noccb] = d2vOoV.transpose(2,3,0,1)
-    dm2bb[noccb:,:noccb,:noccb,noccb:] = d2VOOV
-    dm2bb[:noccb,noccb:,noccb:,:noccb] = dm2bb[noccb:,:noccb,:noccb,noccb:].transpose(1,0,3,2)
+    dOVOV = gOOVV.transpose(0,2,1,3) - gOOVV.transpose(0,3,1,2)
+    dOOOO = gOOOO.transpose(0,2,1,3) - gOOOO.transpose(0,3,1,2)
+    dVVVV = gVVVV.transpose(0,2,1,3) - gVVVV.transpose(0,3,1,2)
+    dOVVO = gOVVO.transpose(0,2,1,3)
+    dOOOV = gOOOV.transpose(0,2,1,3) - gOOOV.transpose(1,2,0,3)
+    dOVVV = gOVVV.transpose(0,2,1,3) - gOVVV.transpose(0,3,1,2)
+    dOOVV =-dOVVO.transpose(0,3,2,1)
+    dVVOV = None
 
-    dm1a, dm1b = make_rdm1(ci, nmo, nocc)
-    dm1a[numpy.diag_indices(nocca)] -= 1
-    dm1b[numpy.diag_indices(noccb)] -= 1
-    for i in range(nocca):
-        for j in range(nocca):
-            dm2aa[i,j,i,j] += 1
-            dm2aa[i,j,j,i] -= 1
-        dm2aa[i,:,i,:] += dm1a
-        dm2aa[:,i,:,i] += dm1a
-        dm2aa[:,i,i,:] -= dm1a
-        dm2aa[i,:,:,i] -= dm1a
-    for i in range(noccb):
-        for j in range(noccb):
-            dm2bb[i,j,i,j] += 1
-            dm2bb[i,j,j,i] -= 1
-        dm2bb[i,:,i,:] += dm1b
-        dm2bb[:,i,:,i] += dm1b
-        dm2bb[:,i,i,:] -= dm1b
-        dm2bb[i,:,:,i] -= dm1b
-    for i in range(nocca):
-        for j in range(noccb):
-            dm2ab[i,j,i,j] += 1
-        dm2ab[i,:,i,:] += dm1b
-    for i in range(noccb):
-        dm2ab[:,i,:,i] += dm1a
+    dovOV = goOvV.transpose(0,2,1,3)
+    dooOO = goOoO.transpose(0,2,1,3)
+    dvvVV = gvVvV.transpose(0,2,1,3)
+    dovVO = goVvO.transpose(0,2,1,3)
+    dooOV = goOoV.transpose(0,2,1,3)
+    dovVV = goVvV.transpose(0,2,1,3)
+    dooVV = goVoV.transpose(0,2,1,3)
+    dooVV = -(dooVV + dooVV.transpose(1,0,3,2).conj()) * .5
+    dvvOV = None
 
-    # To chemist's convention
-    dm2aa = dm2aa.transpose(0,2,1,3)
-    dm2ab = dm2ab.transpose(0,2,1,3)
-    dm2bb = dm2bb.transpose(0,2,1,3)
-    return dm2aa, dm2ab, dm2bb
+    dOVov = None
+    dOOoo = None
+    dVVvv = None
+    dOVvo = dovVO.transpose(3,2,1,0).conj()
+    dOOov = gOoOv.transpose(0,2,1,3)
+    dOVvv = gOvVv.transpose(0,2,1,3)
+    dOOvv = gOvOv.transpose(0,2,1,3)
+    dOOvv =-(dOOvv + dOOvv.transpose(1,0,3,2).conj()) * .5
+    dVVov = None
+
+    return ((dovov, dovOV, dOVov, dOVOV),
+            (dvvvv, dvvVV, dVVvv, dVVVV),
+            (doooo, dooOO, dOOoo, dOOOO),
+            (doovv, dooVV, dOOvv, dOOVV),
+            (dovvo, dovVO, dOVvo, dOVVO),
+            (dvvov, dvvOV, dVVov, dVVOV),
+            (dovvv, dovVV, dOVvv, dOVVV),
+            (dooov, dooOV, dOOov, dOOOV))
 
 
 class UCISD(cisd.CISD):
 
     get_nocc = uccsd.get_nocc
     get_nmo = uccsd.get_nmo
+    get_frozen_mask = uccsd.get_frozen_mask
 
     def get_init_guess(self, eris=None):
         if eris is None:
@@ -691,17 +646,16 @@ class UCISD(cisd.CISD):
     def from_fcivec(self, fcivec, nmo=None, nocc=None):
         return from_fcivec(fcivec, nmo, nocc)
 
-    def make_rdm1(self, ci=None, nmo=None, nocc=None):
-        if ci is None: ci = self.ci
-        if nmo is None: nmo = self.nmo
-        if nocc is None: nocc = self.nocc
-        return make_rdm1(ci, nmo, nocc)
+    def amplitudes_to_cisdvec(self, c0, c1, c2):
+        return amplitudes_to_cisdvec(c0, c1, c2)
 
-    def make_rdm2(self, ci=None, nmo=None, nocc=None):
-        if ci is None: ci = self.ci
+    def cisdvec_to_amplitudes(self, civec, nmo=None, nocc=None):
         if nmo is None: nmo = self.nmo
         if nocc is None: nocc = self.nocc
-        return make_rdm2(ci, nmo, nocc)
+        return cisdvec_to_amplitudes(civec, nmo, nocc)
+
+    make_rdm1 = make_rdm1
+    make_rdm2 = make_rdm2
 
 CISD = UCISD
 
@@ -823,8 +777,8 @@ if __name__ == '__main__':
                                          h1a.shape[0], mol.nelec)
     print(ecisd, '== E(fci)', efci-ehf0)
     dm1ref, dm2ref = fci.direct_uhf.make_rdm12s(fcivec, h1a.shape[0], mol.nelec)
-    rdm1 = make_rdm1(myci.ci, myci.get_nmo(), myci.get_nocc())
-    rdm2 = make_rdm2(myci.ci, myci.get_nmo(), myci.get_nocc())
+    rdm1 = myci.make_rdm1(myci.ci, myci.get_nmo(), myci.get_nocc())
+    rdm2 = myci.make_rdm2(myci.ci, myci.get_nmo(), myci.get_nocc())
     print('dm1a', abs(dm1ref[0] - rdm1[0]).max())
     print('dm1b', abs(dm1ref[1] - rdm1[1]).max())
     print('dm2aa', abs(dm2ref[0] - rdm2[0]).max())

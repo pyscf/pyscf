@@ -104,26 +104,23 @@ def make_rdm1(mycc, t1, t2, l1, l2, d1=None):
     dm1 *= .5
     dm1[numpy.diag_indices(nocc)] += 1
 
+    if not (mycc.frozen is 0 or mycc.frozen is None):
+        raise NotImplementedError
+
     return dm1
 
 # spin-orbital rdm2 in Chemist's notation
 def make_rdm2(mycc, t1, t2, l1, l2, d1=None, d2=None):
-    if d1 is None: d1 = gamma1_intermediates(mycc, t1, t2, l1, l2)
-    doo, dov, dvo, dvv = d1
-    nocc, nvir = dov.shape
-    nmo = nocc + nvir
-
     dm2 = _make_rdm2(mycc, t1, t2, l1, l2, d2)
 
-    dm1 = numpy.empty((nmo,nmo))
-    dm1[:nocc,:nocc] = doo + doo.conj().T
-    dm1[:nocc,nocc:] = dov + dvo.conj().T
-    dm1[nocc:,:nocc] = dm1[:nocc,nocc:].conj().T
-    dm1[nocc:,nocc:] = dvv + dvv.conj().T
-    dm1 *= .5
-
-    if mycc.frozen is not 0:
+    moidx = mycc.get_frozen_mask()
+    if not (mycc.frozen is 0 or mycc.frozen is None):
         raise NotImplementedError
+    else:
+        nocc = numpy.count_nonzero(mycc.mo_occ[moidx] > 0)
+
+    dm1 = make_rdm1(mycc, t1, t2, l1, l2, d1)
+    dm1[numpy.diag_indices(nocc)] -= 1
 
     for i in range(nocc):
         dm2[i,i,:,:] += dm1
