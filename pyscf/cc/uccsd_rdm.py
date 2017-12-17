@@ -557,59 +557,6 @@ if __name__ == '__main__':
     from pyscf import scf
     from pyscf import ao2mo
     from pyscf.cc import uccsd
-    from pyscf.cc import gccsd
-    from pyscf.cc import addons
-
-    nocc = 5
-    nvir = 7
-    mol = gto.M()
-    mf = scf.UHF(mol)
-    mf.mo_occ = numpy.zeros((2,nocc+nvir))
-    mf.mo_occ[:,:nocc] = 1
-    mycc = uccsd.UCCSD(mf)
-
-    def antisym(t2):
-        t2 = t2 - t2.transpose(0,1,3,2)
-        t2 = t2 - t2.transpose(1,0,2,3)
-        return t2
-    orbspin = numpy.zeros((nocc+nvir)*2, dtype=int)
-    orbspin[1::2] = 1
-    numpy.random.seed(1)
-    t1 = numpy.random.random((2,nocc,nvir))*.1 - .1
-    t2ab = numpy.random.random((nocc,nocc,nvir,nvir))*.1 - .1
-    t2aa = antisym(numpy.random.random((nocc,nocc,nvir,nvir))*.1 - .1)
-    t2bb = antisym(numpy.random.random((nocc,nocc,nvir,nvir))*.1 - .1)
-    t2 = (t2aa,t2ab,t2bb)
-    l1 = numpy.random.random((2,nocc,nvir))*.1 - .1
-    l2ab = numpy.random.random((nocc,nocc,nvir,nvir))*.1 - .1
-    l2aa = antisym(numpy.random.random((nocc,nocc,nvir,nvir))*.1 - .1)
-    l2bb = antisym(numpy.random.random((nocc,nocc,nvir,nvir))*.1 - .1)
-    l2 = (l2aa,l2ab,l2bb)
-
-    dm1a, dm1b = make_rdm1(mycc, t1, t2, l1, l2)
-    dm2aa, dm2ab, dm2bb = make_rdm2(mycc, t1, t2, l1, l2)
-    ia = orbspin == 0
-    ib = orbspin == 1
-    oa = orbspin[:nocc*2] == 0
-    ob = orbspin[:nocc*2] == 1
-    va = orbspin[nocc*2:] == 0
-    vb = orbspin[nocc*2:] == 1
-
-    t1 = addons.spatial2spin(t1, orbspin)
-    t2 = addons.spatial2spin(t2, orbspin)
-    l1 = addons.spatial2spin(l1, orbspin)
-    l2 = addons.spatial2spin(l2, orbspin)
-    mf1 = scf.GHF(mol)
-    mf1.mo_occ = numpy.zeros((nocc+nvir)*2)
-    mf.mo_occ[:,:nocc*2] = 1
-    mycc1 = gccsd.GCCSD(mf1)
-    dm1 = mycc1.make_rdm1(t1, t2, l1, l2)
-    dm2 = mycc1.make_rdm2(t1, t2, l1, l2)
-    print(abs(dm1[ia][:,ia]-dm1a).max())
-    print(abs(dm1[ib][:,ib]-dm1b).max())
-    print(abs(dm2[ia][:,ia][:,:,ia][:,:,:,ia]-dm2aa).max())
-    print(abs(dm2[ia][:,ia][:,:,ib][:,:,:,ib]-dm2ab).max())
-    print(abs(dm2[ib][:,ib][:,:,ib][:,:,:,ib]-dm2bb).max())
 
     mol = gto.Mole()
     mol.atom = [

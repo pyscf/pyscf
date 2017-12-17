@@ -243,7 +243,7 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     if nocc is None: nocc = myci.nocc
     d1 = gamma1_intermediates(myci, civec, nmo, nocc)
     d2 = gamma2_intermediates(myci, civec, nmo, nocc)
-    return gccsd_rdm.make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True)
+    return gccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True)
 
 def gamma1_intermediates(myci, civec, nmo, nocc):
     c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
