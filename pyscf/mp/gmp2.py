@@ -11,14 +11,21 @@ from pyscf.lib import logger
 from pyscf.mp import mp2
 from pyscf import scf
 
-def kernel(mp, eris=None, with_t2=True, verbose=logger.NOTE):
-    if eris is None:
-        eris = mp.ao2mo()
+def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
+           verbose=logger.NOTE):
+    if mo_energy is None or mo_coeff is None:
+        mo_coeff = None
+        mo_energy = mp.mo_energy[mp.get_frozen_mask()]
+    else:
+        # For backward compatibility.  In pyscf-1.4 or earlier, mp.frozen is
+        # not supported when mo_energy or mo_coeff is given.
+        assert(mp.frozen is 0 or mp.frozen is None)
+
+    if eris is None: eris = mp.ao2mo(mo_coeff)
 
     nocc = mp.nocc
     nvir = mp.nmo - nocc
     moidx = mp.get_frozen_mask()
-    mo_energy = mp.mo_energy[moidx]
     eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
 
     if with_t2:

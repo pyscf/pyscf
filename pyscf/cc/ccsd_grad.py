@@ -59,7 +59,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     nvir = nmo - nocc
     nao_pair = nao * (nao+1) // 2
     with_frozen = not (mycc.frozen is None or mycc.frozen is 0)
-    OA, VA, OF, VF = _index_frozen_active(mycc.get_frozen_mask(), nocc)
+    OA, VA, OF, VF = _index_frozen_active(mycc.get_frozen_mask(), mycc.mo_occ)
 
     log.debug('symmetrized rdm2 and MO->AO transformation')
 # Roughly, dm2*2 is computed in _rdm2_mo2ao
@@ -396,11 +396,11 @@ def _load_block_tril(h5dat, row0, row1, nao, out=None):
 def _cp(a):
     return numpy.array(a, copy=False, order='C')
 
-def _index_frozen_active(frozen_mask, nocc):
-    OA = numpy.where( frozen_mask[:nocc])[0] # occupied active orbitals
-    OF = numpy.where(~frozen_mask[:nocc])[0] # occupied frozen orbitals
-    VA = numpy.where( frozen_mask[nocc:])[0] + nocc # virtual active orbitals
-    VF = numpy.where(~frozen_mask[nocc:])[0] + nocc # virtual frozen orbitals
+def _index_frozen_active(frozen_mask, mo_occ):
+    OA = numpy.where(( frozen_mask) & (mo_occ> 0))[0] # occupied active orbitals
+    OF = numpy.where((~frozen_mask) & (mo_occ> 0))[0] # occupied frozen orbitals
+    VA = numpy.where(( frozen_mask) & (mo_occ==0))[0] # virtual active orbitals
+    VF = numpy.where((~frozen_mask) & (mo_occ==0))[0] # virtual frozen orbitals
     return OA, VA, OF, VF
 
 class Gradients(lib.StreamObject):

@@ -12,16 +12,23 @@ from pyscf.ao2mo import _ao2mo
 
 # This is unrestricted (U)MP2, i.e. spin-orbital form.
 
-def kernel(mp, eris=None, with_t2=True, verbose=logger.NOTE):
-    if eris is None:
-        eris = mp.ao2mo()
+def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
+           verbose=logger.NOTE):
+    if mo_energy is None or mo_coeff is None:
+        moidx = mp.get_frozen_mask()
+        mo_coeff = None
+        mo_energy = (mp.mo_energy[0][moidx[0]], mp.mo_energy[1][moidx[1]])
+    else:
+        # For backward compatibility.  In pyscf-1.4 or earlier, mp.frozen is
+        # not supported when mo_energy or mo_coeff is given.
+        assert(mp.frozen is 0 or mp.frozen is None)
+
+    if eris is None: eris = mp.ao2mo(mo_coeff)
 
     nocca, noccb = mp.get_nocc()
     nmoa, nmob = mp.get_nmo()
     nvira, nvirb = nmoa-nocca, nmob-noccb
-    moidx = mp.get_frozen_mask()
-    mo_ea = mp.mo_energy[0][moidx[0]]
-    mo_eb = mp.mo_energy[1][moidx[1]]
+    mo_ea, mo_eb = mo_energy
     eia_a = mo_ea[:nocca,None] - mo_ea[None,nocca:]
     eia_b = mo_eb[:noccb,None] - mo_eb[None,noccb:]
 

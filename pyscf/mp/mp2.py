@@ -17,14 +17,21 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 
-def kernel(mp, eris=None, with_t2=True, verbose=logger.NOTE):
-    if eris is None:
-        eris = mp.ao2mo()
+def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
+           verbose=logger.NOTE):
+    if mo_energy is None or mo_coeff is None:
+        mo_coeff = None
+        mo_energy = _mo_energy_without_core(mp, mp.mo_energy)
+    else:
+        # For backward compatibility.  In pyscf-1.4 or earlier, mp.frozen is
+        # not supported when mo_energy or mo_coeff is given.
+        assert(mp.frozen is 0 or mp.frozen is None)
+
+    if eris is None: eris = mp.ao2mo(mo_coeff)
 
     nocc = mp.nocc
     nvir = mp.nmo - nocc
-    mo_e = _mo_energy_without_core(mp, mp.mo_energy)
-    eia = mo_e[:nocc,None] - mo_e[None,nocc:]
+    eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
 
     if with_t2:
         t2 = numpy.empty((nocc,nocc,nvir,nvir), dtype=eris.ovov.dtype)
@@ -43,14 +50,21 @@ def kernel(mp, eris=None, with_t2=True, verbose=logger.NOTE):
 
     return emp2.real, t2
 
-def make_rdm1_ao(mp, mo_energy, mo_coeff, eris=None, verbose=logger.NOTE):
+def make_rdm1_ao(mp, mo_energy=None, mo_coeff=None, eris=None, verbose=logger.NOTE):
     '''1-particle density matrix in AO basis.  The occupied-virtual orbital
     response is not included.  This function uses small amount of memory.  The
     MP2 t2 amplitudes are generated on the fly using the given eris object.
     '''
-    mp = copy.copy(mp)
-    mp.mo_energy = mo_energy
-    mp.mo_coeff = mo_coeff
+    if mo_energy is None or mo_coeff is None:
+        mo_coeff = None
+    else:
+        assert(mp.frozen is 0 or mp.frozen is None)
+        mp = copy.copy(mp)
+        mp.mo_energy = mo_energy
+        mp.mo_coeff = mo_coeff
+
+    if eris is None: eris = mp.ao2mo(mo_coeff)
+
     rdm1_mo = make_rdm1(mp, None, eris, verbose)
     rdm1 = reduce(numpy.dot, (mo_coeff, rdm1_mo, mo_coeff.T))
     return rdm1
@@ -59,19 +73,36 @@ def make_rdm1(mp, t2=None, eris=None, verbose=logger.NOTE):
     '''1-particle density matrix in MO basis.  The off-diagonal blocks due to
     the orbital response contribution are not included.
     '''
-    if isinstance(verbose, numpy.ndarray):
-        raise RuntimeError('''
-You see this error message because of the API updates in pyscf v1.0-alpha.
-The old make_rdm1 has been renamed to make_rdm1_ao.
-Given t2 amplitude, current function returns 1-RDM in MO basis''')
+    dm1occ, dm1vir = _gamma1_intermediates(mp, t2, eris)
+    nocc = dm1occ.shape[0]
+    nvir = dm1vir.shape[0]
+    nmo = nocc + nvir
+    dm1 = numpy.zeros((nmo,nmo))
+    dm1[:nocc,:nocc] = dm1occ * 2
+    dm1[nocc:,nocc:] = dm1vir * 2
+
+    if not (mp.frozen is 0 or mp.frozen is None):
+        nmo = mp.mo_occ.size
+        nocc = numpy.count_nonzero(mp.mo_occ > 0)
+        rdm1 = numpy.zeros((nmo,nmo))
+        moidx = numpy.where(get_frozen_mask(mp))[0]
+        rdm1[moidx[:,None],moidx] = dm1
+        dm1 = rdm1
+
+    for i in range(nocc):
+        dm1[i,i] += 2
+    return dm1
+
+def _gamma1_intermediates(mp, t2=None, eris=None):
+    if t2 is None: t2 = mp.t2
     nmo = mp.nmo
     nocc = mp.nocc
     nvir = nmo - nocc
     if t2 is None:
-        if eris is None:
-            eris = mp.ao2mo(mp.mo_coeff)
+        if eris is None: eris = mp.ao2mo()
         mo_energy = _mo_energy_without_core(mp, mp.mo_energy)
         eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
+
     dm1occ = numpy.zeros((nocc,nocc))
     dm1vir = numpy.zeros((nvir,nvir))
     emp2 = 0
@@ -86,26 +117,31 @@ Given t2 amplitude, current function returns 1-RDM in MO basis''')
                 - numpy.einsum('jca,jbc->ab', t2i, t2i)
         dm1occ += numpy.einsum('iab,jab->ij', t2i, t2i) * 2 \
                 - numpy.einsum('iab,jba->ij', t2i, t2i)
-    rdm1 = numpy.zeros((nmo,nmo))
-# *2 for beta electron
-    rdm1[:nocc,:nocc] =-dm1occ * 2
-    rdm1[nocc:,nocc:] = dm1vir * 2
-    for i in range(nocc):
-        rdm1[i,i] += 2
-    return rdm1
+    dov = numpy.zeros((nocc,nvir))
+    return -dm1occ, dm1vir
 
 
-def make_rdm2(mp, t2, eris=None, verbose=logger.NOTE):
+def make_rdm2(mp, t2=None, eris=None, verbose=logger.NOTE):
     '''2-RDM in MO basis'''
-    nmo = mp.nmo
-    nocc = mp.nocc
+    if t2 is None: t2 = mp.t2
+    nmo = nmo0 = mp.nmo
+    nocc = nocc0 = mp.nocc
     nvir = nmo - nocc
     if t2 is None:
-        if eris is None:
-            eris = mp.ao2mo(mp.mo_coeff)
+        if eris is None: eris = mp.ao2mo()
         mo_energy = _mo_energy_without_core(mp, mp.mo_energy)
         eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
-    dm2 = numpy.zeros((nmo,nmo,nmo,nmo)) # Chemist notation
+
+    if not (mp.frozen is 0 or mp.frozen is None):
+        nmo0 = mp.mo_occ.size
+        nocc0 = numpy.count_nonzero(mp.mo_occ > 0)
+        moidx = get_frozen_mask(mp)
+        oidx = numpy.where(moidx & (mp.mo_occ > 0))[0]
+        vidx = numpy.where(moidx & (mp.mo_occ ==0))[0]
+    else:
+        moidx = None
+
+    dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0)) # Chemist notation
     #dm2[:nocc,nocc:,:nocc,nocc:] = t2.transpose(0,3,1,2)*2 - t2.transpose(0,2,1,3)
     #dm2[nocc:,:nocc,nocc:,:nocc] = t2.transpose(3,0,2,1)*2 - t2.transpose(2,0,3,1)
     for i in range(nocc):
@@ -116,20 +152,25 @@ def make_rdm2(mp, t2, eris=None, verbose=logger.NOTE):
         else:
             t2i = t2[i]
         dovov = t2i.transpose(1,0,2)*2 - t2i.transpose(2,0,1)
-        dm2[i,nocc:,:nocc,nocc:] = dovov * 2
-        dm2[nocc:,i,nocc:,:nocc] = dm2[i,nocc:,:nocc,nocc:].transpose(0,2,1)
+        dovov *= 2
+        if moidx is None:
+            dm2[i,nocc:,:nocc,nocc:] = dovov
+            dm2[nocc:,i,nocc:,:nocc] = dovov.transpose(0,2,1)
+        else:
+            dm2[oidx[i],vidx[:,None,None],oidx[:,None],vidx] = dovov
+            dm2[vidx[:,None,None],oidx[i],vidx[:,None],oidx] = dovov.transpose(0,2,1)
 
     dm1 = make_rdm1(mp, t2, eris, verbose)
-    dm1[numpy.diag_indices(nocc)] -= 2
+    dm1[numpy.diag_indices(nocc0)] -= 2
 
-    for i in range(nocc):
+    for i in range(nocc0):
         dm2[i,i,:,:] += dm1 * 2
         dm2[:,:,i,i] += dm1 * 2
         dm2[:,i,i,:] -= dm1
         dm2[i,:,:,i] -= dm1
 
-    for i in range(nocc):
-        for j in range(nocc):
+    for i in range(nocc0):
+        for j in range(nocc0):
             dm2[i,i,j,j] += 4
             dm2[i,j,j,i] -= 2
     return dm2
@@ -245,33 +286,29 @@ class MP2(lib.StreamObject):
             with_t2 : bool
                 Whether to generate and hold t2 amplitudes in memory.
         '''
-        if mo_energy is None:
-            mo_energy = self.mo_energy
-        if mo_coeff is None:
-            mo_coeff = self.mo_coeff
-        if mo_energy is None or mo_coeff is None:
-            log.warn('mo_coeff, mo_energy are not given.\n'
+        if mo_energy is not None:
+            self.mo_energy = mo_energy
+        if mo_coeff is not None:
+            self.mo_coeff = mo_coeff
+
+        if self.mo_energy is None or self.mo_coeff is None:
+            log.warn('mo_coeff, mo_energy are not initialized.\n'
                      'You may need to call mf.kernel() to generate them.')
             raise RuntimeError
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self.dump_flags()
 
-        self.e_corr, self.t2 = _kern(self, eris, with_t2, self.verbose)
+        self.e_corr, self.t2 = _kern(self, mo_energy, mo_coeff,
+                                     eris, with_t2, self.verbose)
         logger.log(self, '%s energy = %.15g', self.__class__.__name__, self.e_corr)
         return self.e_corr, self.t2
 
     def ao2mo(self, mo_coeff=None):
-        if mo_coeff is None: mo_coeff = self.mo_coeff
         return _make_eris(self, mo_coeff, verbose=self.verbose)
 
-    def make_rdm1(self, t2=None, eris=None):
-        if t2 is None: t2 = self.t2
-        return make_rdm1(self, t2, eris, verbose=self.verbose)
-
-    def make_rdm2(self, t2=None, eris=None):
-        if t2 is None: t2 = self.t2
-        return make_rdm2(self, t2, eris, verbose=self.verbose)
+    make_rdm1 = make_rdm1
+    make_rdm2 = make_rdm2
 
 RMP2 = MP2
 
@@ -455,9 +492,7 @@ if __name__ == '__main__':
     mf = scf.RHF(mol).run()
     mp = MP2(mf)
     mp.verbose = 5
-    #print mp.kernel(with_t2=False)
 
-############
     nocc = mol.nelectron//2
     nmo = mf.mo_energy.size
     nvir = nmo - nocc
@@ -480,6 +515,20 @@ if __name__ == '__main__':
     print(numpy.allclose(reduce(numpy.dot, (mf.mo_coeff, pt.make_rdm1(),
                                             mf.mo_coeff.T)), rdm1))
 
+    eri = ao2mo.restore(1, ao2mo.kernel(mf._eri, mf.mo_coeff), nmo)
+    hcore = mf.get_hcore()
+    rdm1 = pt.make_rdm1()
+    rdm2 = pt.make_rdm2()
+    h1 = reduce(numpy.dot, (mf.mo_coeff.T, hcore, mf.mo_coeff))
+    e1 = numpy.einsum('ij,ji', h1, rdm1)
+    e1+= numpy.einsum('ijkl,jilk', eri, rdm2) * .5
+    e1+= mol.energy_nuc()
+    print(e1 - pt.e_tot)
+
+    pt = MP2(mf)
+    pt.frozen = 2
+    pt.max_memory = 1
+    emp2, t2 = pt.kernel()
     eri = ao2mo.restore(1, ao2mo.kernel(mf._eri, mf.mo_coeff), nmo)
     hcore = mf.get_hcore()
     rdm1 = pt.make_rdm1()

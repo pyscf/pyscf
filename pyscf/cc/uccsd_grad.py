@@ -65,8 +65,8 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     nao_pair = nao * (nao+1) // 2
     with_frozen = not (mycc.frozen is None or mycc.frozen is 0)
     moidx = mycc.get_frozen_mask()
-    OA_a, VA_a, OF_a, VF_a = ccsd_grad._index_frozen_active(moidx[0], nocca)
-    OA_b, VA_b, OF_b, VF_b = ccsd_grad._index_frozen_active(moidx[1], noccb)
+    OA_a, VA_a, OF_a, VF_a = ccsd_grad._index_frozen_active(moidx[0], mycc.mo_occ[0])
+    OA_b, VA_b, OF_b, VF_b = ccsd_grad._index_frozen_active(moidx[1], mycc.mo_occ[1])
 
     log.debug('symmetrized rdm2 and MO->AO transformation')
 # Roughly, dm2*2 is computed in _rdm2_mo2ao
