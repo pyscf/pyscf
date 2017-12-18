@@ -18,6 +18,7 @@ from pyscf.cc import _ccsd
 from pyscf.cc import ccsd_rdm
 from pyscf.scf import rhf_grad
 from pyscf.scf import cphf
+from pyscf.mp.mp2_grad import _shell_prange, _index_frozen_active
 
 
 #
@@ -56,8 +57,6 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     mo_energy = mycc._scf.mo_energy
     nao, nmo = mo_coeff.shape
     nocc = numpy.count_nonzero(mycc.mo_occ > 0)
-    nvir = nmo - nocc
-    nao_pair = nao * (nao+1) // 2
     with_frozen = not (mycc.frozen is None or mycc.frozen is 0)
     OA, VA, OF, VF = _index_frozen_active(mycc.get_frozen_mask(), mycc.mo_occ)
 
@@ -85,7 +84,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         shl0, shl1, p0, p1 = offsetdic[ia]
         ip1 = p0
         vhf = 0
-        for b0, b1, nf in shell_prange(mol, shl0, shl1, blksize):
+        for b0, b1, nf in _shell_prange(mol, shl0, shl1, blksize):
             ip0, ip1 = ip1, ip1 + nf
             dm2buf = _load_block_tril(fdm2['dm2'], ip0, ip1, nao)
             dm2buf[:,:,diagidx] *= .5
@@ -395,13 +394,6 @@ def _load_block_tril(h5dat, row0, row1, nao, out=None):
 
 def _cp(a):
     return numpy.array(a, copy=False, order='C')
-
-def _index_frozen_active(frozen_mask, mo_occ):
-    OA = numpy.where(( frozen_mask) & (mo_occ> 0))[0] # occupied active orbitals
-    OF = numpy.where((~frozen_mask) & (mo_occ> 0))[0] # occupied frozen orbitals
-    VA = numpy.where(( frozen_mask) & (mo_occ==0))[0] # virtual active orbitals
-    VF = numpy.where((~frozen_mask) & (mo_occ==0))[0] # virtual frozen orbitals
-    return OA, VA, OF, VF
 
 class Gradients(lib.StreamObject):
     def __init__(self, mycc):

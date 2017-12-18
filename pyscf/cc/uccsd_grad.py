@@ -95,7 +95,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         shl0, shl1, p0, p1 = offsetdic[ia]
         ip1 = p0
         vhf = numpy.zeros((2,3,nao,nao))
-        for b0, b1, nf in ccsd_grad.shell_prange(mol, shl0, shl1, blksize):
+        for b0, b1, nf in ccsd_grad._shell_prange(mol, shl0, shl1, blksize):
             ip0, ip1 = ip1, ip1 + nf
             dm2bufa = ccsd_grad._load_block_tril(fdm2['dm2aa+ab'], ip0, ip1, nao)
             dm2bufb = ccsd_grad._load_block_tril(fdm2['dm2bb+ab'], ip0, ip1, nao)

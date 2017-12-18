@@ -20,6 +20,7 @@ PySCF 1.5 alpha (2018-03-??)
   - Generalized CCSD and k-point CCSD with PBC
   - RCCSD(T) and UCCSD(T) for non-canonical HF orbitals
   - RCISD and UCISD nuclear gradients
+  - RMP2 nuclear gradients
   - UCCSD nuclear gradients
   - Frozen orbitals in CISD, CCSD, CCSD(T) nuclear gradients
 * Improved

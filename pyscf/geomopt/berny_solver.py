@@ -96,7 +96,7 @@ kernel = optimize
 
 if __name__ == '__main__':
     from pyscf import gto
-    from pyscf import scf, dft, cc
+    from pyscf import scf, dft, cc, mp
     mol = gto.M(atom='''
 C       1.1879  -0.3829 0.0000
 C       0.0000  0.5526  0.0000
@@ -119,6 +119,9 @@ H       -0.0227 1.1812  -0.8852
     mf.xc = 'pbe'
     mf.conv_tol = 1e-7
     mol1 = optimize(mf)
+
+    mymp2 = mp.MP2(scf.RHF(mol))
+    mol1 = optimize(mymp2)
 
     mycc = cc.CCSD(scf.RHF(mol))
     mol1 = optimize(mycc)

@@ -218,6 +218,45 @@ def get_frozen_mask(mp):
     return moidx
 
 
+def as_scanner(mp):
+    '''Generating a scanner/solver for MP2 PES.
+
+    The returned solver is a function. This function requires one argument
+    "mol" as input and returns total MP2 energy.
+
+    The solver will automatically use the results of last calculation as the
+    initial guess of the new calculation.  All parameters assigned in the
+    MP2 and the underlying SCF objects (conv_tol, max_memory etc) are
+    automatically applied in the solver.
+
+    Note scanner has side effects.  It may change many underlying objects
+    (_scf, with_df, with_x2c, ...) during calculation.
+
+    Examples::
+
+        >>> from pyscf import gto, scf, mp
+        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
+        >>> mp2_scanner = mp.MP2(scf.RHF(mol)).as_scanner()
+        >>> e_tot = mp2_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
+        >>> e_tot = mp2_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
+    '''
+    logger.info(mp, 'Set %s as a scanner', mp.__class__)
+    class MP2_Scanner(mp.__class__, lib.SinglePointScanner):
+        def __init__(self, mp):
+            self.__dict__.update(mp.__dict__)
+            self._scf = mp._scf.as_scanner()
+        def __call__(self, mol, **kwargs):
+            mf_scanner = self._scf
+            mf_scanner(mol)
+            self.mol = mol
+            self.mo_energy = mf_scanner.mo_energy
+            self.mo_coeff = mf_scanner.mo_coeff
+            self.mo_occ = mf_scanner.mo_occ
+            self.kernel(**kwargs)[0]
+            return self.e_tot
+    return MP2_Scanner(mp)
+
+
 class MP2(lib.StreamObject):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
 
@@ -301,7 +340,8 @@ class MP2(lib.StreamObject):
 
         self.e_corr, self.t2 = _kern(self, mo_energy, mo_coeff,
                                      eris, with_t2, self.verbose)
-        logger.log(self, '%s energy = %.15g', self.__class__.__name__, self.e_corr)
+        logger.log(self, 'E(%s) = %.15g  E_corr = %.15g',
+                   self.__class__.__name__, self.e_tot, self.e_corr)
         return self.e_corr, self.t2
 
     def ao2mo(self, mo_coeff=None):
@@ -309,6 +349,12 @@ class MP2(lib.StreamObject):
 
     make_rdm1 = make_rdm1
     make_rdm2 = make_rdm2
+
+    as_scanner = as_scanner
+
+    def nuc_grad_method(self):
+        from pyscf.mp import mp2_grad
+        return mp2_grad.Gradients(self)
 
 RMP2 = MP2
 
