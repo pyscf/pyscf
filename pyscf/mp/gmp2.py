@@ -43,6 +43,59 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
 
     return emp2.real, t2
 
+def make_rdm1(mp, t2=None):
+    if t2 is None: t2 = mp.t2
+    from pyscf.cc import gccsd_rdm
+    doo, dvv = _gamma1_intermediates(mp, t2)
+    nocc, nvir = t2.shape[1:3]
+    dov = numpy.zeros((nocc,nvir))
+    d1 = doo, dov, dov.T, dvv
+    return gccsd_rdm._make_rdm1(mp, d1, with_frozen=True)
+
+def _gamma1_intermediates(mp, t2):
+    doo = lib.einsum('imef,jmef->ij', t2.conj(), t2) *-.5
+    dvv = lib.einsum('mnea,mneb->ab', t2, t2.conj()) * .5
+    return doo, dvv
+
+# spin-orbital rdm2 in Chemist's notation
+def make_rdm2(mp, t2=None):
+    if t2 is None: t2 = mp.t2
+    nmo = nmo0 = mp.nmo
+    nocc = nocc0 = mp.nocc
+
+    if not (mp.frozen is 0 or mp.frozen is None):
+        nmo0 = mp.mo_occ.size
+        nocc0 = numpy.count_nonzero(mp.mo_occ > 0)
+        moidx = mp.get_frozen_mask()
+        oidx = numpy.where(moidx & (mp.mo_occ > 0))[0]
+        vidx = numpy.where(moidx & (mp.mo_occ ==0))[0]
+
+        dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0)) # Chemist notation
+        dm2[oidx[:,None,None,None],vidx[:,None,None],oidx[:,None],vidx] = \
+                (t2.transpose(0,2,1,3) - t2.transpose(0,3,1,2)) * .5
+        dm2[nocc0:,:nocc0,nocc0:,:nocc0] = \
+                dm2[:nocc0,nocc0:,:nocc0,nocc0:].transpose(1,0,3,2).conj()
+    else:
+        dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0)) # Chemist notation
+        dm2[:nocc,nocc:,:nocc,nocc:] = (t2.transpose(0,2,1,3) - t2.transpose(0,3,1,2)) * .5
+        dm2[nocc:,:nocc,nocc:,:nocc] = dm2[:nocc,nocc:,:nocc,nocc:].transpose(1,0,3,2).conj()
+
+    dm1 = make_rdm1(mp, t2)
+    dm1[numpy.diag_indices(nocc0)] -= 1
+
+    for i in range(nocc0):
+        dm2[i,i,:,:] += dm1
+        dm2[:,:,i,i] += dm1
+        dm2[:,i,i,:] -= dm1
+        dm2[i,:,:,i] -= dm1
+
+    for i in range(nocc0):
+        for j in range(nocc0):
+            dm2[i,i,j,j] += 1
+            dm2[i,j,j,i] -= 1
+
+    return dm2
+
 
 class GMP2(mp2.MP2):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
@@ -67,6 +120,9 @@ class GMP2(mp2.MP2):
             raise NotImplementedError
         else:
             return _make_eris_outcore(self, mo_coeff, self.verbose)
+
+    make_rdm1 = make_rdm1
+    make_rdm2 = make_rdm2
 
 
 class _PhysicistsERIs:
@@ -210,3 +266,22 @@ if __name__ == '__main__':
     pt.max_memory = 1
     emp2, t2 = pt.kernel()
     print(emp2 - -0.345306881488508)
+
+    dm1 = pt.make_rdm1(t2)
+    dm2 = pt.make_rdm2(t2)
+    nao = mol.nao_nr()
+    mo_a = mf.mo_coeff[:nao]
+    mo_b = mf.mo_coeff[nao:]
+    nmo = mo_a.shape[1]
+    eri = ao2mo.kernel(mf._eri, mo_a+mo_b, compact=False).reshape([nmo]*4)
+    orbspin = mf.mo_coeff.orbspin
+    sym_forbid = (orbspin[:,None] != orbspin)
+    eri[sym_forbid,:,:] = 0
+    eri[:,:,sym_forbid] = 0
+    hcore = scf.RHF(mol).get_hcore()
+    h1 = reduce(numpy.dot, (mo_a.T.conj(), hcore, mo_a))
+    h1+= reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
+    e1 = numpy.einsum('ij,ji', h1, dm1)
+    e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+    e1+= mol.energy_nuc()
+    print(e1 - pt.e_tot)

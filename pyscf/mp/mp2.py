@@ -117,7 +117,6 @@ def _gamma1_intermediates(mp, t2=None, eris=None):
                 - numpy.einsum('jca,jbc->ab', t2i, t2i)
         dm1occ += numpy.einsum('iab,jab->ij', t2i, t2i) * 2 \
                 - numpy.einsum('iab,jba->ij', t2i, t2i)
-    dov = numpy.zeros((nocc,nvir))
     return -dm1occ, dm1vir
 
 
@@ -139,7 +138,7 @@ def make_rdm2(mp, t2=None, eris=None, verbose=logger.NOTE):
         oidx = numpy.where(moidx & (mp.mo_occ > 0))[0]
         vidx = numpy.where(moidx & (mp.mo_occ ==0))[0]
     else:
-        moidx = None
+        moidx = oidx = vidx = None
 
     dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0)) # Chemist notation
     #dm2[:nocc,nocc:,:nocc,nocc:] = t2.transpose(0,3,1,2)*2 - t2.transpose(0,2,1,3)

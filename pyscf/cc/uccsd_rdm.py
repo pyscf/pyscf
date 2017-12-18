@@ -21,19 +21,19 @@ def _gamma1_intermediates(cc, t1, t2, l1, l2):
     nocca, nvira = t1a.shape
     noccb, nvirb = t1b.shape
 
-    dooa  = -einsum('ie,je->ij', t1a, l1a)
-    dooa -=  einsum('imef,jmef->ij', t2ab, l2ab)
-    dooa -=  einsum('imef,jmef->ij', t2aa, l2aa) * .5
-    doob  = -einsum('ie,je->ij', t1b, l1b)
-    doob -=  einsum('mief,mjef->ij', t2ab, l2ab)
-    doob -=  einsum('imef,jmef->ij', t2bb, l2bb) * .5
+    dooa  = -einsum('ie,je->ij', l1a, t1a)
+    dooa -=  einsum('imef,jmef->ij', l2ab, t2ab)
+    dooa -=  einsum('imef,jmef->ij', l2aa, t2aa) * .5
+    doob  = -einsum('ie,je->ij', l1b, t1b)
+    doob -=  einsum('mief,mjef->ij', l2ab, t2ab)
+    doob -=  einsum('imef,jmef->ij', l2bb, t2bb) * .5
 
-    dvva  = einsum('ma,mb->ab', l1a, t1a)
-    dvva += einsum('mnae,mnbe->ab', l2ab, t2ab)
-    dvva += einsum('mnae,mnbe->ab', l2aa, t2aa) * .5
-    dvvb  = einsum('ma,mb->ab', l1b, t1b)
-    dvvb += einsum('mnea,mneb->ab', l2ab, t2ab)
-    dvvb += einsum('mnae,mnbe->ab', l2bb, t2bb) * .5
+    dvva  = einsum('ma,mb->ab', t1a, l1a)
+    dvva += einsum('mnae,mnbe->ab', t2ab, l2ab)
+    dvva += einsum('mnae,mnbe->ab', t2aa, l2aa) * .5
+    dvvb  = einsum('ma,mb->ab', t1b, l1b)
+    dvvb += einsum('mnea,mneb->ab', t2ab, l2ab)
+    dvvb += einsum('mnae,mnbe->ab', t2bb, l2bb) * .5
 
     xt1a  = einsum('mnef,inef->mi', l2aa, t2aa) * .5
     xt1a += einsum('mnef,inef->mi', l2ab, t2ab)

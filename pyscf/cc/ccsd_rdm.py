@@ -248,7 +248,7 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     dm2[:nocc,:nocc,nocc:,nocc:] = doovv
     dm2[:nocc,:nocc,nocc:,nocc:]+= doovv.transpose(1,0,3,2).conj()
     dm2[nocc:,nocc:,:nocc,:nocc] = dm2[:nocc,:nocc,nocc:,nocc:].transpose(2,3,0,1)
-    dovov = None
+    doovv = None
 
     dovvo = numpy.asarray(dovvo)
     dm2[:nocc,nocc:,nocc:,:nocc] = dovvo

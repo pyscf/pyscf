@@ -117,7 +117,7 @@ def _make_rdm1(mycc, d1, with_frozen=True):
         nocc = numpy.count_nonzero(mycc.mo_occ > 0)
         rdm1 = numpy.zeros((nmo,nmo))
         rdm1[numpy.diag_indices(nocc)] = 1
-        moidx = numpy.where(ccsd.get_frozen_mask(mycc))[0]
+        moidx = numpy.where(mycc.get_frozen_mask())[0]
         rdm1[moidx[:,None],moidx] = dm1
         dm1 = rdm1
 

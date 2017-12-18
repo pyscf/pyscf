@@ -4,7 +4,7 @@
 #
 
 '''
-CCSD analytical nuclear gradients
+UCCSD analytical nuclear gradients
 '''
 
 import time
