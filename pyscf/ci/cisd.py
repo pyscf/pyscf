@@ -524,13 +524,16 @@ class CISD(lib.StreamObject):
         mo_e = eris.fock.diagonal()
         e_ia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])
         ci0 = 1
-        ci1 = numpy.zeros_like(e_ia)
+        ci1 = eris.fock[:nocc,nocc:] / e_ia
         eris_ovvo = _cp(eris.ovvo)
         ci2  = 2 * eris_ovvo.transpose(0,3,1,2)
         ci2 -= eris_ovvo.transpose(0,3,2,1)
         ci2 /= lib.direct_sum('ia,jb->ijab', e_ia, e_ia)
         self.emp2 = numpy.einsum('ijab,iabj', ci2, eris_ovvo)
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
+
+        if abs(self.emp2) < 1e-3 and abs(ci1).sum() < 1e-3:
+            ci1 = 1e-1 / e_ia
         return self.emp2, amplitudes_to_cisdvec(ci0, ci1, ci2)
 
     contract = contract
@@ -574,6 +577,8 @@ class CISD(lib.StreamObject):
     make_rdm1 = make_rdm1
     make_rdm2 = make_rdm2
 
+    as_scanner = as_scanner
+
     def dump_chk(self, ci=None, frozen=None, mo_coeff=None, mo_occ=None):
         if ci is None: ci = self.ci
         if frozen is None: frozen = self.frozen
@@ -615,71 +620,6 @@ if __name__ == '__main__':
     from pyscf import scf
     from pyscf import fci
     from pyscf import ao2mo
-    def fcicontract(h1, h2, norb, nelec, ci0):
-        g2e = fci.direct_spin1.absorb_h1e(h1, h2, norb, nelec, .5)
-        ci1 = fci.direct_spin1.contract_2e(g2e, ci0, norb, nelec)
-        return ci1
-
-    mol = gto.M()
-    mol.nelectron = 6
-    nocc, nvir = mol.nelectron//2, 4
-    nmo = nocc + nvir
-    nmo_pair = nmo*(nmo+1)//2
-    mf = scf.RHF(mol)
-    numpy.random.seed(12)
-    mf._eri = numpy.random.random(nmo_pair*(nmo_pair+1)//2)
-    mf.mo_coeff = numpy.random.random((nmo,nmo))
-    mf.mo_occ = numpy.zeros(nmo)
-    mf.mo_occ[:nocc] = 2
-    dm = mf.make_rdm1()
-    vhf = mf.get_veff(mol, dm)
-    h1 = numpy.random.random((nmo,nmo)) * .1
-    h1 = h1 + h1.T
-    mf.get_hcore = lambda *args: h1
-
-    myci = CISD(mf)
-    eris = myci.ao2mo(mf.mo_coeff)
-    eris.ehf = (h1*dm).sum() + (vhf*dm).sum()*.5
-
-    c2 = numpy.random.random((nocc,nocc,nvir,nvir)) * .1
-    c2 = c2 + c2.transpose(1,0,3,2)
-    civec = numpy.hstack((numpy.random.random(nocc*nvir+1) * .1,
-                          c2.ravel()))
-    hcivec = contract(myci, civec, eris)
-    print(lib.finger(hcivec) - 2059.5730673341673)
-
-    rdm2 = make_rdm2(myci, civec, nmo, nocc)
-    print(lib.finger(rdm2) - 2.0492023431953221)
-
-    ci0 = to_fcivec(civec, nmo, mol.nelectron)
-    print(abs(civec-from_fcivec(ci0, nmo, nocc*2)).sum())
-    h2e = ao2mo.kernel(mf._eri, mf.mo_coeff)
-    h1e = reduce(numpy.dot, (mf.mo_coeff.T, h1, mf.mo_coeff))
-    ci1 = fcicontract(h1e, h2e, nmo, mol.nelectron, ci0)
-    ci2 = to_fcivec(hcivec, nmo, mol.nelectron)
-    e1 = numpy.dot(ci1.ravel(), ci0.ravel())
-    e2 = dot(civec, hcivec+eris.ehf*civec, nmo, nocc)
-    print(e1-e2)
-
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.atom = [
-        ['H', ( 1.,-1.    , 0.   )],
-        ['H', ( 0.,-1.    ,-1.   )],
-        ['H', ( 1.,-0.5   , 0.   )],
-        ['H', ( 0.,-1.    , 1.   )],
-    ]
-    mol.charge = 2
-    mol.basis = '3-21g'
-    mol.build()
-    mf = scf.RHF(mol).run()
-    ecisd = CISD(mf).kernel()[0]
-    print(ecisd - -0.024780739973407784)
-    h2e = ao2mo.kernel(mf._eri, mf.mo_coeff)
-    h1e = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
-    eci = fci.direct_spin0.kernel(h1e, h2e, mf.mo_coeff.shape[1], mol.nelectron)[0]
-    eci = eci + mol.energy_nuc() - mf.e_tot
-    print(ecisd - eci)
 
     mol = gto.Mole()
     mol.verbose = 0

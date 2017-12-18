@@ -89,11 +89,6 @@ class KnownValues(unittest.TestCase):
                + dm2ref[ ::2, ::2,1::2,1::2] + dm2ref[1::2,1::2, ::2, ::2]
         eris = ao2mo.restore(1, ao2mo.full(mf._eri, mf.mo_coeff), mf.mo_coeff.shape[1])
         self.assertAlmostEqual(numpy.einsum('iajb,iajb', eris, dm2ref)*.5, emp2, 9)
-        for i in range(nocc):
-            for j in range(nocc):
-                dm2ref[i,i,j,j] += 4
-                dm2ref[i,j,j,i] -= 2
-        self.assertTrue(numpy.allclose(pt.make_rdm2(), dm2ref))
 
     def test_mp2_with_df(self):
         pt = mp.mp2.MP2(mf.density_fit('weigend'))

@@ -3,15 +3,14 @@ import unittest
 import numpy
 
 from pyscf import gto
+from pyscf import lib
 from pyscf import scf
 from pyscf import fci
 from pyscf import ci
 from pyscf import ao2mo
 
-def finger(a):
-    return numpy.dot(a.ravel(), numpy.cos(numpy.arange(a.size)))
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_contract(self):
         mol = gto.M()
         mol.nelectron = 6
@@ -40,9 +39,26 @@ class KnowValues(unittest.TestCase):
         civec = numpy.hstack((numpy.random.random(nocc*nvir+1) * .1,
                               c2.ravel()))
         hcivec = ci.cisd.contract(myci, civec, eris)
-        self.assertAlmostEqual(finger(hcivec), 2059.5730673341673, 9)
+        self.assertAlmostEqual(lib.finger(hcivec), 2059.5730673341673, 9)
         e2 = ci.cisd.dot(civec, hcivec+eris.ehf*civec, nmo, nocc)
         self.assertAlmostEqual(e2, 7226.7494656749295, 9)
+
+        rdm2 = myci.make_rdm2(civec, nmo, nocc)
+        self.assertAlmostEqual(lib.finger(rdm2), 2.0492023431953221, 9)
+
+        def fcicontract(h1, h2, norb, nelec, ci0):
+            g2e = fci.direct_spin1.absorb_h1e(h1, h2, norb, nelec, .5)
+            ci1 = fci.direct_spin1.contract_2e(g2e, ci0, norb, nelec)
+            return ci1
+        ci0 = ci.cisd.to_fcivec(civec, nmo, mol.nelec)
+        self.assertAlmostEqual(abs(civec-ci.cisd.from_fcivec(ci0, nmo, nocc*2)).max(), 0, 9)
+        h2e = ao2mo.kernel(mf._eri, mf.mo_coeff)
+        h1e = reduce(numpy.dot, (mf.mo_coeff.T, h1, mf.mo_coeff))
+        ci1 = fcicontract(h1e, h2e, nmo, mol.nelec, ci0)
+        ci2 = ci.cisd.to_fcivec(hcivec, nmo, mol.nelec)
+        e1 = numpy.dot(ci1.ravel(), ci0.ravel())
+        e2 = ci.cisd.dot(civec, hcivec+eris.ehf*civec, nmo, nocc)
+        self.assertAlmostEqual(e1, e2, 9)
 
     def test_from_fcivec(self):
         mol = gto.M()
@@ -70,6 +86,12 @@ class KnowValues(unittest.TestCase):
         ecisd = ci.CISD(mf).kernel()[0]
         self.assertAlmostEqual(ecisd, -0.024780739973407784, 8)
 
+        h2e = ao2mo.kernel(mf._eri, mf.mo_coeff)
+        h1e = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
+        eci = fci.direct_spin0.kernel(h1e, h2e, mf.mo_coeff.shape[1], mol.nelectron)[0]
+        eci = eci + mol.energy_nuc() - mf.e_tot
+        self.assertAlmostEqual(ecisd, eci, 9)
+
     def test_rdm(self):
         mol = gto.Mole()
         mol.verbose = 5
@@ -93,8 +115,8 @@ class KnowValues(unittest.TestCase):
         rdm1 = myci.make_rdm1(civec)
         rdm2 = myci.make_rdm2(civec)
         self.assertTrue(numpy.allclose(rdm2, ref2))
-        self.assertAlmostEqual(finger(rdm1), 2.2685303884654933, 5)
-        self.assertAlmostEqual(finger(rdm2),-3.7944286346871299, 5)
+        self.assertAlmostEqual(lib.finger(rdm1), 2.2685303884654933, 5)
+        self.assertAlmostEqual(lib.finger(rdm2),-3.7944286346871299, 5)
         self.assertAlmostEqual(abs(rdm2-rdm2.transpose(2,3,0,1)).sum(), 0, 9)
         self.assertAlmostEqual(abs(rdm2-rdm2.transpose(1,0,3,2)).sum(), 0, 9)
         h1e = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
@@ -121,14 +143,14 @@ class KnowValues(unittest.TestCase):
             ['O', ( 0., 0.    , 0.   )],
             ['H', ( 0., -0.757, 0.587)],
             ['H', ( 0., 0.757 , 0.587)],]
-        mol.basis = 'ccpvtz'
+        mol.basis = 'ccpvdz'
         mol.build()
         mf = scf.RHF(mol).run(conv_tol=1e-14)
         myci = ci.CISD(mf)
-        myci.max_memory = 1
+        myci.max_memory = .1
         myci.direct = True
         ecisd, civec = myci.kernel()
-        self.assertAlmostEqual(ecisd, -0.2694965385156135, 8)
+        self.assertAlmostEqual(ecisd, -0.2052237859243613, 8)
 
 
 if __name__ == "__main__":

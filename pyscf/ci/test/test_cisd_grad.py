@@ -30,29 +30,28 @@ class KnownValues(unittest.TestCase):
         g1 = cisd_grad.kernel(myci, myci.ci, mf_grad=grad.RHF(mf))
         self.assertAlmostEqual(lib.finger(g1), -0.032562347119070523, 7)
 
+    def test_cisd_grad_finite_diff(self):
         mol = gto.M(
             verbose = 0,
             atom = 'H 0 0 0; H 0 0 1.706',
             basis = '631g',
             unit='Bohr')
-        mf0 = scf.RHF(mol).run(conv_tol=1e-14)
-        myci0 = ci.cisd.CISD(mf0).run(conv_tol=1e-10)
+        ci_scanner = scf.RHF(mol).set(conv_tol=1e-14).apply(ci.CISD).as_scanner()
+        e0 = ci_scanner(mol)
         mol = gto.M(
             verbose = 0,
             atom = 'H 0 0 0; H 0 0 1.704',
             basis = '631g',
             unit='Bohr')
-        mf1 = scf.RHF(mol).run(conv_tol=1e-14)
-        myci1= ci.cisd.CISD(mf1).run(conv_tol=1e-10)
+        e1 = ci_scanner(mol)
         mol = gto.M(
             verbose = 0,
             atom = 'H 0 0 0; H 0 0 1.705',
             basis = '631g',
             unit='Bohr')
-        mf2 = scf.RHF(mol).run(conv_tol=1e-14)
-        myci2 = ci.cisd.CISD(mf2).run(conv_tol=1e-10)
-        g1 = cisd_grad.kernel(myci2, myci2.ci)
-        self.assertAlmostEqual(g1[0,2], (myci1.e_tot-myci0.e_tot)*500, 6)
+        ci_scanner(mol)
+        g1 = ci_scanner.nuc_grad_method().kernel()
+        self.assertAlmostEqual(g1[0,2], (e1-e0)*500, 6)
 
     def test_frozen(self):
         myci = ci.cisd.CISD(mf)
