@@ -5,6 +5,7 @@ UMP2 with spatial integals
 import time
 import numpy
 from pyscf import lib
+from pyscf import gto
 from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.mp import mp2

@@ -78,12 +78,12 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
 
 # 2e AO integrals dot 2pdm
     max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
-    blksize = max(1, int(max_memory*1e6/8/(nao**3*2.5)))
+    blksize = max(1, int(max_memory*.9e6/8/(nao**3*2.5)))
 
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = offsetdic[ia]
         ip1 = p0
-        vhf = 0
+        vhf = numpy.zeros((3,nao,nao))
         for b0, b1, nf in _shell_prange(mol, shl0, shl1, blksize):
             ip0, ip1 = ip1, ip1 + nf
             dm2buf = _load_block_tril(fdm2['dm2'], ip0, ip1, nao)
@@ -98,12 +98,14 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
             de[k] -= numpy.einsum('xijk,ijk->x', eri1, dm2buf) * 2
             dm2buf = None
 # HF part
-            eri1 = lib.unpack_tril(eri1.reshape(3*nf*nao,-1)).reshape(3,nf,nao,nao,nao)
-            vhf += numpy.einsum('xijkl,ij->xkl', eri1, hf_dm1[ip0:ip1])
-            vhf -= numpy.einsum('xijkl,il->xkj', eri1, hf_dm1[ip0:ip1]) * .5
-            vhf[:,ip0:ip1] += numpy.einsum('xijkl,kl->xij', eri1, hf_dm1)
-            vhf[:,ip0:ip1] -= numpy.einsum('xijkl,jk->xil', eri1, hf_dm1) * .5
-            eri1 = None
+            for i in range(3):
+                eri1tmp = lib.unpack_tril(eri1[i].reshape(nf*nao,-1))
+                eri1tmp = eri1tmp.reshape(nf,nao,nao,nao)
+                vhf[i] += numpy.einsum('ijkl,ij->kl', eri1tmp, hf_dm1[ip0:ip1])
+                vhf[i] -= numpy.einsum('ijkl,il->kj', eri1tmp, hf_dm1[ip0:ip1]) * .5
+                vhf[i,ip0:ip1] += numpy.einsum('ijkl,kl->ij', eri1tmp, hf_dm1)
+                vhf[i,ip0:ip1] -= numpy.einsum('ijkl,jk->il', eri1tmp, hf_dm1) * .5
+            eri1 = eri1tmp = None
         vhf1[k] = vhf
         log.debug('2e-part grad of atom %d %s = %s', ia, mol.atom_symbol(ia), de[k])
         time1 = log.timer_debug1('2e-part grad of atom %d'%ia, *time1)
