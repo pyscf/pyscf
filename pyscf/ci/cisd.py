@@ -604,6 +604,8 @@ class CISD(lib.StreamObject):
         from pyscf.ci import cisd_grad
         return cisd_grad.Gradients(self)
 
+RCISD = CISD
+
 def _cp(a):
     return numpy.array(a, copy=False, order='C')
 
