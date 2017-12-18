@@ -31,9 +31,6 @@ class tddft_tem(tddft_iter):
         The unit of the input are in atomic untis !!!
 
         Input Parameters:
-            velec: xyz component of the electron velocity in atomic unit
-            beam_offset: xyz components of the beam offset, must be orthogonal
-                    to velec in atomic unit
             dr: spatial resolution for the electron trajectory in atomic unit.
                 Warning: This parameter influence the accuracy of the calculations.
                     if it is taken too large the results will be wrong.
@@ -43,23 +40,65 @@ class tddft_tem(tddft_iter):
         from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
 
 
-        self.velec = kw["velec"] if "velec" in kw else np.array([1.0, 0.0, 0.0])
-        self.beam_offset = kw["beam_offset"] if "beam_offset" in kw else np.array([0.0, 0.0, 0.0])
         self.dr = kw["dr"] if "dr" in kw else np.array([0.3, 0.3, 0.3])
+
+        # heavy calculations after checking !!
+        tddft_iter.__init__(self, **kw)
+        self.freq = kw["freq"] if "freq" in kw else np.arange(0.0, 0.367, 1.5*self.eps)
+
+    def get_spectrum_nonin(self, velec = np.array([1.0, 0.0, 0.0]), beam_offset = np.array([0.0, 0.0, 0.0])):
+        """
+        Calculate the non interacting TEM spectra for an electron trajectory
+        
+        Input Parameters:
+            velec: xyz component of the electron velocity in atomic unit
+            beam_offset: xyz components of the beam offset, must be orthogonal
+                    to velec in atomic unit
+        """
+        
+        assert velec.size == 3
+        assert beam_offset.size == 3
+
+        self.velec = velec
+        self.beam_offset = beam_offset
 
         self.vnorm = np.sqrt(np.dot(self.velec, self.velec))
         self.vdir = self.velec/self.vnorm
 
         assert abs(np.dot(self.velec, self.beam_offset)) < 1e-8 # check orthogonality between beam direction
                                                                 # and beam offset
-        
-        # heavy calculations after checking !!
-        tddft_iter.__init__(self, **kw)
-        self.freq = kw["freq"] if "freq" in kw else np.arange(0.0, 0.367, 1.5*self.eps)
-
         self.check_collision(self.atom2coord)
         self.get_time_range()
         self.calc_external_potential()
+
+        return self.comp_tem_spectrum_nonin()
+
+    def get_spectrum_inter(self, velec = np.array([1.0, 0.0, 0.0]), beam_offset = np.array([0.0, 0.0, 0.0])):
+        """
+        Calculate the interacting TEM spectra for an electron trajectory
+        
+        Input Parameters:
+            velec: xyz component of the electron velocity in atomic unit
+            beam_offset: xyz components of the beam offset, must be orthogonal
+                    to velec in atomic unit
+        """
+        
+        assert velec.size == 3
+        assert beam_offset.size == 3
+
+        self.velec = velec
+        self.beam_offset = beam_offset
+
+        self.vnorm = np.sqrt(np.dot(self.velec, self.velec))
+        self.vdir = self.velec/self.vnorm
+
+        assert abs(np.dot(self.velec, self.beam_offset)) < 1e-8 # check orthogonality between beam direction
+                                                                # and beam offset
+        self.check_collision(self.atom2coord)
+        self.get_time_range()
+        self.calc_external_potential()
+
+        return self.comp_tem_spectrum()
 
     def check_collision(self, atom2coord):
         """
