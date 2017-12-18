@@ -18,14 +18,8 @@ from pyscf.fci import cistring
 from functools import reduce
 
 def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8, verbose=logger.INFO):
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(myci.stdout, verbose)
-
+    log = logger.new_logger(myci, verbose)
     mol = myci.mol
-    nmo = myci.nmo
-    nocc = myci.nocc
     diag = myci.make_diagonal(eris)
     ehf = diag[0]
     diag -= ehf
@@ -42,6 +36,8 @@ def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8, verbose=logger.INFO):
         return x / diagd
 
     if myci._dot is not None:
+        nmo = myci.nmo
+        nocc = myci.nocc
         def cisd_dot(x1, x2):
             return myci._dot(x1, x2, nmo, nocc)
     else:
@@ -420,6 +416,10 @@ def as_scanner(ci):
 
 class CISD(lib.StreamObject):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+        if 'dft' in str(mf.__module__):
+             raise RuntimeError('CISD Warning: The first argument mf is a DFT object. '
+                                'CISD calculation should be initialized with HF object.')
+
         if mo_coeff is None: mo_coeff = mf.mo_coeff
         if mo_occ   is None: mo_occ   = mf.mo_occ
 
@@ -446,6 +446,7 @@ class CISD(lib.StreamObject):
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
         self.e_corr = None
+        self.emp2 = None
         self.ci = None
         self._nocc = None
         self._nmo = None
@@ -518,8 +519,7 @@ class CISD(lib.StreamObject):
 
     def get_init_guess(self, eris=None):
         # MP2 initial guess
-        if eris is None:
-            eris = self.ao2mo(self.mo_coeff)
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
         nocc = self.nocc
         mo_e = eris.fock.diagonal()
         e_ia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])

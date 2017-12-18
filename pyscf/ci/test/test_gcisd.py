@@ -9,6 +9,7 @@ from pyscf import scf
 from pyscf import fci
 from pyscf import ci
 from pyscf.ci import gcisd
+from pyscf.ci import ucisd
 from pyscf import ao2mo
 
 
@@ -72,14 +73,27 @@ class KnownValues(unittest.TestCase):
         c2aa = numpy.random.random((nocc,nocc,nvir,nvir))
         c2bb = numpy.random.random((nocc,nocc,nvir,nvir))
         c2ab = numpy.random.random((nocc,nocc,nvir,nvir))
+        c2ab = c2ab + c2ab.transpose(1,0,3,2)
         c1 = gcisd.spatial2spin((c1a, c1b), orbspin)
         c2 = gcisd.spatial2spin((c2aa, c2ab, c2bb), orbspin)
         cisdvec = gcisd.amplitudes_to_cisdvec(1., c1, c2)
+
         fcivec = gcisd.to_fcivec(cisdvec, nocc*2, orbspin)
         cisdvec1 = gcisd.from_fcivec(fcivec, nocc*2, orbspin)
         self.assertAlmostEqual(abs(cisdvec-cisdvec1).max(), 0, 12)
         ci1 = gcisd.to_fcivec(cisdvec1, nocc*2, orbspin)
         self.assertAlmostEqual(abs(fcivec-ci1).max(), 0, 12)
+
+        vec1 = gcisd.from_cisdvec(ucisd.amplitudes_to_cisdvec(1, (c1a,c1b), (c2aa,c2ab,c2bb)),
+                                  nocc, orbspin)
+        self.assertTrue(numpy.all(cisdvec == vec1))
+
+        c1 = gcisd.spatial2spin((c1a, c1a), orbspin)
+        c2aa = c2ab - c2ab.transpose(1,0,2,3)
+        c2 = gcisd.spatial2spin((c2aa, c2ab, c2aa), orbspin)
+        cisdvec = gcisd.amplitudes_to_cisdvec(1., c1, c2)
+        vec1 = gcisd.from_cisdvec(ci.cisd.amplitudes_to_cisdvec(1, c1a, c2ab), nocc, orbspin)
+        self.assertTrue(numpy.all(cisdvec == vec1))
 
     def test_h4(self):
         mol = gto.Mole()
@@ -179,8 +193,8 @@ class KnownValues(unittest.TestCase):
         c2aa = .1 * numpy.random.random((nocca,nocca,nvira,nvira))
         c2bb = .1 * numpy.random.random((noccb,noccb,nvirb,nvirb))
         c2ab = .1 * numpy.random.random((nocca,noccb,nvira,nvirb))
-        c1 = myci.spatial2spin((c1a, c1b), eris.orbspin)
-        c2 = myci.spatial2spin((c2aa, c2ab, c2bb), eris.orbspin)
+        c1 = myci.spatial2spin((c1a, c1b))
+        c2 = myci.spatial2spin((c2aa, c2ab, c2bb))
         cisdvec = myci.amplitudes_to_cisdvec(1., c1, c2)
 
         hcisd0 = myci.contract(cisdvec, eris)

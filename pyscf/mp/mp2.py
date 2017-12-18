@@ -208,7 +208,9 @@ def get_frozen_mask(mp):
     element is False if it corresonds to the frozen orbital.
     '''
     moidx = numpy.ones(mp.mo_occ.size, dtype=numpy.bool)
-    if mp.frozen is None:
+    if mp._nmo is not None:
+        moidx[mp._nmo:] = False
+    elif mp.frozen is None:
         pass
     elif isinstance(mp.frozen, (int, numpy.integer)):
         moidx[:mp.frozen] = False

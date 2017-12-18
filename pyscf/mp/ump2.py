@@ -114,7 +114,13 @@ def get_frozen_mask(mp):
     '''
     moidxa = numpy.ones(mp.mo_occ[0].size, dtype=bool)
     moidxb = numpy.ones(mp.mo_occ[1].size, dtype=bool)
-    if isinstance(mp.frozen, (int, numpy.integer)):
+
+    if mp._nmo is not None:
+        moidxa[mp._nmo[0]:] = False
+        moidxb[mp._nmo[1]:] = False
+    elif mp.frozen is None:
+        pass
+    elif isinstance(mp.frozen, (int, numpy.integer)):
         moidxa[:mp.frozen] = False
         moidxb[:mp.frozen] = False
     elif isinstance(mp.frozen[0], (int, numpy.integer)):

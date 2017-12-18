@@ -157,7 +157,7 @@ class KnownValues(unittest.TestCase):
 
         eris = myci.ao2mo(mo)
         self.assertAlmostEqual(lib.finger(myci.make_diagonal(eris)),
-                               -838.45507742639279, 9)
+                               -838.45507742639279, 8)
 
         numpy.random.seed(12)
         nocca, noccb = mol.nelec
@@ -172,7 +172,7 @@ class KnownValues(unittest.TestCase):
         cisdvec = myci.amplitudes_to_cisdvec(1., (c1a, c1b), (c2aa, c2ab, c2bb))
 
         hcisd0 = myci.contract(myci.amplitudes_to_cisdvec(1., (c1a,c1b), (c2aa,c2ab,c2bb)), eris)
-        self.assertAlmostEqual(lib.finger(hcisd0), 466.56620234351681, 9)
+        self.assertAlmostEqual(lib.finger(hcisd0), 466.56620234351681, 8)
         eris = myci.ao2mo(mf.mo_coeff)
         hcisd0 = myci.contract(cisdvec, eris)
         eri_aa = ao2mo.kernel(mf._eri, mf.mo_coeff[0])

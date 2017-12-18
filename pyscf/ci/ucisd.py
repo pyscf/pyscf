@@ -17,37 +17,6 @@ from pyscf.cc import uccsd_rdm
 from pyscf.ci import cisd
 from pyscf.cc.ccsd import _unpack_4fold
 
-einsum = lib.einsum
-
-def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8,
-           verbose=logger.INFO):
-    mol = myci.mol
-    diag = myci.make_diagonal(eris)
-    ehf = diag[0]
-    diag -= ehf
-
-    if ci0 is None:
-        ci0 = myci.get_init_guess(eris)[1]
-
-    def op(xs):
-        return [myci.contract(x, eris) for x in xs]
-
-    def precond(x, e, *args):
-        diagd = diag - (e-myci.level_shift)
-        diagd[abs(diagd)<1e-8] = 1e-8
-        return x / diagd
-
-    conv, ecisd, ci = lib.davidson1(op, ci0, precond, tol=tol,
-                                    max_cycle=max_cycle, max_space=myci.max_space,
-                                    lindep=myci.lindep, nroots=myci.nroots,
-                                    verbose=verbose)
-    if myci.nroots == 1:
-        conv = conv[0]
-        ecisd = ecisd[0]
-        ci = ci[0]
-    return conv, ecisd, ci
-
-
 def make_diagonal(myci, eris):
     nocca = eris.nocca
     noccb = eris.noccb
@@ -273,11 +242,11 @@ def contract(myci, civec, eris):
             OVvv = None
 
     #:t1  = einsum('ie,ae->ia', c1, fvv)
-    t1a += einsum('ie,ae->ia', c1a, fvva)
-    t1b += einsum('ie,ae->ia', c1b, fvvb)
+    t1a += lib.einsum('ie,ae->ia', c1a, fvva)
+    t1b += lib.einsum('ie,ae->ia', c1b, fvvb)
     #:t1 -= einsum('ma,mi->ia', c1, foo)
-    t1a -=einsum('ma,mi->ia', c1a, fooa)
-    t1b -=einsum('ma,mi->ia', c1b, foob)
+    t1a -= lib.einsum('ma,mi->ia', c1a, fooa)
+    t1b -= lib.einsum('ma,mi->ia', c1b, foob)
     #:t1 += einsum('imae,me->ia', c2, fov)
     t1a += numpy.einsum('imae,me->ia', c2aa, fova)
     t1a += numpy.einsum('imae,me->ia', c2ab, fovb)
@@ -583,8 +552,7 @@ class UCISD(cisd.CISD):
     get_frozen_mask = uccsd.get_frozen_mask
 
     def get_init_guess(self, eris=None):
-        if eris is None:
-            eris = self.ao2mo(self.mo_coeff)
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
         nocca = eris.nocca
         noccb = eris.noccb
         mo_ea = eris.focka.diagonal()

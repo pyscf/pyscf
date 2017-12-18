@@ -106,10 +106,11 @@ def cisdvec_to_amplitudes(civec, nmo, nocc):
     return c0, c1, c2
 
 def from_cisdvec(civec, nocc, orbspin):
+    '''Convert the CISD vectors'''
     from pyscf.cc import addons
     from pyscf.ci import ucisd
-    nmoa = len(orbspin == 0)
-    nmob = len(orbspin == 1)
+    nmoa = numpy.count_nonzero(orbspin == 0)
+    nmob = numpy.count_nonzero(orbspin == 1)
     if isinstance(nocc, int):
         nocca = noccb = nocc
     else:
@@ -281,8 +282,7 @@ def _gamma2_intermediates(myci, civec, nmo, nocc):
 class GCISD(cisd.CISD):
     def get_init_guess(self, eris=None):
         # MP2 initial guess
-        if eris is None:
-            eris = self.ao2mo(self.mo_coeff)
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
         time0 = time.clock(), time.time()
         mo_e = eris.fock.diagonal()
         nocc = self.nocc

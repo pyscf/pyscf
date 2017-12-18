@@ -36,8 +36,9 @@ class KnownValues(unittest.TestCase):
 
         c2 = numpy.random.random((nocc,nocc,nvir,nvir)) * .1
         c2 = c2 + c2.transpose(1,0,3,2)
-        civec = numpy.hstack((numpy.random.random(nocc*nvir+1) * .1,
-                              c2.ravel()))
+        c1 = numpy.random.random(nocc*nvir+1) * .1
+        c0, c1 = c1[0], c1[1:].reshape(nocc,nvir)
+        civec = myci.amplitudes_to_cisdvec(c0, c1, c2)
         hcivec = ci.cisd.contract(myci, civec, eris)
         self.assertAlmostEqual(lib.finger(hcivec), 2059.5730673341673, 9)
         e2 = ci.cisd.dot(civec, hcivec+eris.ehf*civec, nmo, nocc)
@@ -50,15 +51,25 @@ class KnownValues(unittest.TestCase):
             g2e = fci.direct_spin1.absorb_h1e(h1, h2, norb, nelec, .5)
             ci1 = fci.direct_spin1.contract_2e(g2e, ci0, norb, nelec)
             return ci1
-        ci0 = ci.cisd.to_fcivec(civec, nmo, mol.nelec)
-        self.assertAlmostEqual(abs(civec-ci.cisd.from_fcivec(ci0, nmo, nocc*2)).max(), 0, 9)
+        ci0 = myci.to_fcivec(civec, nmo, mol.nelec)
+        self.assertAlmostEqual(abs(civec-myci.from_fcivec(ci0, nmo, nocc*2)).max(), 0, 9)
         h2e = ao2mo.kernel(mf._eri, mf.mo_coeff)
         h1e = reduce(numpy.dot, (mf.mo_coeff.T, h1, mf.mo_coeff))
         ci1 = fcicontract(h1e, h2e, nmo, mol.nelec, ci0)
-        ci2 = ci.cisd.to_fcivec(hcivec, nmo, mol.nelec)
+        ci2 = myci.to_fcivec(hcivec, nmo, mol.nelec)
         e1 = numpy.dot(ci1.ravel(), ci0.ravel())
         e2 = ci.cisd.dot(civec, hcivec+eris.ehf*civec, nmo, nocc)
         self.assertAlmostEqual(e1, e2, 9)
+
+        dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
+                ci.cisd._gamma2_intermediates(myci, civec, nmo, nocc)
+        self.assertAlmostEqual(lib.finger(numpy.array(dovov)), 0.02868859991188923, 9)
+        self.assertAlmostEqual(lib.finger(numpy.array(dvvvv)),-0.05524957311823144, 9)
+        self.assertAlmostEqual(lib.finger(numpy.array(doooo)), 0.01014399192065793, 9)
+        self.assertAlmostEqual(lib.finger(numpy.array(doovv)), 0.02761239887072825, 9)
+        self.assertAlmostEqual(lib.finger(numpy.array(dovvo)), 0.09971200182238759, 9)
+        self.assertAlmostEqual(lib.finger(numpy.array(dovvv)), 0.12777531252787638, 9)
+        self.assertAlmostEqual(lib.finger(numpy.array(dooov)), 0.18667669732858014, 9)
 
     def test_from_fcivec(self):
         mol = gto.M()
@@ -105,7 +116,8 @@ class KnownValues(unittest.TestCase):
         mol.build()
         mf = scf.RHF(mol).run(conv_tol=1e-14)
         myci = ci.CISD(mf)
-        ecisd, civec = myci.kernel()
+        eris = myci.ao2mo()
+        ecisd, civec = myci.kernel(eris=eris)
         self.assertAlmostEqual(ecisd, -0.048878084082066106, 8)
 
         nmo = mf.mo_coeff.shape[1]
@@ -128,6 +140,28 @@ class KnownValues(unittest.TestCase):
         dm1 = numpy.einsum('ijkk->ij', rdm2)/(mol.nelectron-1)
         self.assertAlmostEqual(abs(rdm1 - dm1).sum(), 0, 9)
 
+        doo, dov, dvo, dvv = \
+                ci.cisd._gamma1_intermediates(myci, civec, nmo, nocc)
+        dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
+                ci.cisd._gamma2_intermediates(myci, civec, nmo, nocc)
+
+        nvir = nmo - nocc
+        fock0 = eris.fock
+        tril2sq = lib.square_mat_in_trilu_indices(nvir)
+        e2 =(numpy.einsum('ijkl,ijkl', doooo, eris.oooo)*2
+            +numpy.einsum('acbd,acbd', dvvvv, ao2mo.restore(1, eris.vvvv, nvir))*2
+            +numpy.einsum('jkia,iajk', dooov, eris.ovoo)*2
+            +numpy.einsum('icba,icba', dovvv, eris.ovvv[:,:,tril2sq])*2
+            +numpy.einsum('iajb,iabj', dovov, eris.ovvo)*2
+            +numpy.einsum('jbai,jbai', dovvo, eris.ovvo)*2
+            +numpy.einsum('ijab,ijab', doovv, eris.oovv)*2
+            +numpy.einsum('ij,ij', doo, fock0[:nocc,:nocc])*2
+            +numpy.einsum('ia,ia', dov, fock0[:nocc,nocc:])*2
+            +numpy.einsum('ai,ai', dvo, fock0[nocc:,:nocc])*2
+            +numpy.einsum('ab,ab', dvv, fock0[nocc:,nocc:])*2
+            )
+        self.assertAlmostEqual(e2, ecisd, 9)
+
     def test_dot(self):
         numpy.random.seed(12)
         nocc, nvir = 3, 5
@@ -148,9 +182,43 @@ class KnownValues(unittest.TestCase):
         mf = scf.RHF(mol).run(conv_tol=1e-14)
         myci = ci.CISD(mf)
         myci.max_memory = .1
+        myci.nmo = 16
+        myci.nocc = 5
         myci.direct = True
         ecisd, civec = myci.kernel()
-        self.assertAlmostEqual(ecisd, -0.2052237859243613, 8)
+        self.assertAlmostEqual(ecisd, -0.1319371817220385, 8)
+
+    def test_dump_chk(self):
+        mol = gto.Mole()
+        mol.verbose = 0
+        mol.atom = [
+            ['H', ( 1.,-1.    , 0.   )],
+            ['H', ( 0.,-1.    ,-1.   )],
+            ['H', ( 1.,-0.5   , 0.   )],
+            ['H', ( 0.,-1.    , 1.   )],
+        ]
+        mol.basis = '3-21g'
+        mol.build()
+        mf = scf.RHF(mol).run(conv_tol=1e-14)
+        myci = ci.CISD(mf)
+        myci.nroots = 3
+        myci.run()
+        myci.dump_chk()
+
+    def test_with_df(self):
+        mol = gto.Mole()
+        mol.verbose = 0
+        mol.atom = [
+            ['H', ( 1.,-1.    , 0.   )],
+            ['H', ( 0.,-1.    ,-1.   )],
+            ['H', ( 1.,-0.5   , 0.   )],
+            ['H', ( 0.,-1.    , 1.   )],
+        ]
+        mol.basis = '3-21g'
+        mol.build()
+        mf = scf.RHF(mol).density_fit('weigend').run(conv_tol=1e-14)
+        myci = ci.cisd.RCISD(mf).run()
+        self.assertAlmostEqual(myci.e_corr, -0.18730699567992737, 8)
 
 
 if __name__ == "__main__":
