@@ -285,7 +285,7 @@ def remove_linear_dep_(mf, threshold=1e-8):
     return mf
 remove_linear_dep = remove_linear_dep_
 
-def convert_to_uhf(mf, out=None, convert_df=None):
+def convert_to_uhf(mf, out=None, convert_df=False):
     '''Convert the given mean-field object to the unrestricted HF/KS object
 
     Args:
@@ -326,27 +326,30 @@ def convert_to_uhf(mf, out=None, convert_df=None):
         else:  # RHF
             out = update_mo_(mf, out)
 
+    elif isinstance(mf, scf.uhf.UHF):
+        out = copy.copy(mf)
+    elif isinstance(mf, scf.ghf.GHF):
+        raise NotImplementedError
     else:
-        if isinstance(mf, scf.uhf.UHF):
-            out = copy.copy(mf)
-        elif isinstance(mf, scf.ghf.GHF):
-            raise NotImplementedError
-        else:
-            known_cls = {scf.hf.RHF        : scf.uhf.UHF,
-                         scf.rohf.ROHF     : scf.uhf.UHF,
-                         scf.hf_symm.RHF   : scf.uhf_symm.UHF,
-                         scf.hf_symm.ROHF  : scf.uhf_symm.UHF,
-                         dft.rks.RKS       : dft.uks.UKS,
-                         dft.roks.ROKS     : dft.uks.UKS,
-                         dft.rks_symm.RKS  : dft.uks_symm.UKS,
-                         dft.rks_symm.ROKS : dft.uks_symm.UKS}
-            out = update_mo_(mf, _recursive_patch(mf.__class__, known_cls, mf.mol))
+        known_cls = {scf.hf.RHF        : scf.uhf.UHF,
+                     scf.rohf.ROHF     : scf.uhf.UHF,
+                     scf.hf_symm.RHF   : scf.uhf_symm.UHF,
+                     scf.hf_symm.ROHF  : scf.uhf_symm.UHF,
+                     dft.rks.RKS       : dft.uks.UKS,
+                     dft.roks.ROKS     : dft.uks.UKS,
+                     dft.rks_symm.RKS  : dft.uks_symm.UKS,
+                     dft.rks_symm.ROKS : dft.uks_symm.UKS}
+        out = update_mo_(mf, _recursive_patch(mf.__class__, known_cls,
+                                              mf.mol, convert_df))
 
-    if getattr(out, 'with_df', None) and _df_off(mf, convert_df):
+    if getattr(out, 'with_df', None) and convert_df:
         out.with_df = False
     return out
 
-def _recursive_patch(cls, known_class, mol):
+def _recursive_patch(cls, known_class, mol, convert_df=None):
+    if convert_df and 'DFHF' in cls.__name__:
+        cls = cls.__base__
+
     if cls in known_class:
         as_class = known_class[cls]
         if as_class is None:
@@ -355,24 +358,9 @@ def _recursive_patch(cls, known_class, mol):
     elif cls is object:
         raise RuntimeError('Unknown SCF object')
     else:
-        return cls(_recursive_patch(cls.__base__, known_class, mol))
+        return cls(_recursive_patch(cls.__base__, known_class, mol, convert_df))
 
-def _df_off(mf, convert_df):
-    from pyscf import scf
-    if convert_df is None:
-        if isinstance(mf, scf.newton_ah._CIAH_SCF):
-# To handle the case that mf is newton scf with approximate orbital hessian
-            if hasattr(mf._scf, 'with_df') and mf._scf.with_df:
-                convert_df = False
-            else:
-                # The mf should not be treated as DFHF since the underlying
-                # scf object is regular SCF object
-                convert_df = True
-        else:
-            convert_df = False
-    return convert_df
-
-def convert_to_rhf(mf, out=None, convert_df=None):
+def convert_to_rhf(mf, out=None, convert_df=False):
     '''Convert the given mean-field object to the restricted HF/KS object
 
     Args:
@@ -411,23 +399,23 @@ def convert_to_rhf(mf, out=None, convert_df=None):
         else:  # UHF
             out = update_mo_(mf, out)
 
+    elif isinstance(mf, scf.hf.RHF):
+        out = copy.copy(mf)
+    elif isinstance(mf, scf.ghf.GHF):
+        raise NotImplementedError
     else:
-        if isinstance(mf, scf.hf.RHF):
-            out = copy.copy(mf)
-        elif isinstance(mf, scf.ghf.GHF):
-            raise NotImplementedError
-        else:
-            known_cls = {scf.uhf.UHF      : scf.rohf.ROHF,
-                         scf.uhf_symm.UHF : scf.hf_symm.ROHF,
-                         dft.uks.UKS      : dft.roks.ROKS,
-                         dft.uks_symm.UKS : dft.rks_symm.ROKS}
-            out = update_mo_(mf, _recursive_patch(mf.__class__, known_cls, mf.mol))
+        known_cls = {scf.uhf.UHF      : scf.rohf.ROHF,
+                     scf.uhf_symm.UHF : scf.hf_symm.ROHF,
+                     dft.uks.UKS      : dft.roks.ROKS,
+                     dft.uks_symm.UKS : dft.rks_symm.ROKS}
+        out = update_mo_(mf, _recursive_patch(mf.__class__, known_cls, mf.mol,
+                                              convert_df))
 
-    if getattr(out, 'with_df', None) and _df_off(mf, convert_df):
+    if getattr(out, 'with_df', None) and convert_df:
         out.with_df = False
     return out
 
-def convert_to_ghf(mf, out=None, convert_df=None):
+def convert_to_ghf(mf, out=None, convert_df=False):
     '''Convert the given mean-field object to the generalized HF/KS object
 
     Args:
@@ -502,25 +490,26 @@ def convert_to_ghf(mf, out=None, convert_df=None):
         else:
             out = update_mo_(mf, out)
 
-    else:
-        if isinstance(mf, scf.ghf.GHF):
-            out = copy.copy(mf)
-        else:
-            known_cls = {scf.hf.RHF        : scf.ghf.GHF,
-                         scf.rohf.ROHF     : scf.ghf.GHF,
-                         scf.uhf.UHF       : scf.ghf.GHF,
-                         scf.hf_symm.RHF   : scf.ghf_symm.GHF,
-                         scf.hf_symm.ROHF  : scf.ghf_symm.GHF,
-                         scf.uhf_symm.UHF  : scf.ghf_symm.GHF,
-                         dft.rks.RKS       : None,
-                         dft.roks.ROKS     : None,
-                         dft.uks.UKS       : None,
-                         dft.rks_symm.RKS  : None,
-                         dft.rks_symm.ROKS : None,
-                         dft.uks_symm.UKS  : None}
-            out = update_mo_(mf, _recursive_patch(mf.__class__, known_cls, mf.mol))
+    elif isinstance(mf, scf.ghf.GHF):
+        out = copy.copy(mf)
 
-    if getattr(out, 'with_df', None) and _df_off(mf, convert_df):
+    else:
+        known_cls = {scf.hf.RHF        : scf.ghf.GHF,
+                     scf.rohf.ROHF     : scf.ghf.GHF,
+                     scf.uhf.UHF       : scf.ghf.GHF,
+                     scf.hf_symm.RHF   : scf.ghf_symm.GHF,
+                     scf.hf_symm.ROHF  : scf.ghf_symm.GHF,
+                     scf.uhf_symm.UHF  : scf.ghf_symm.GHF,
+                     dft.rks.RKS       : None,
+                     dft.roks.ROKS     : None,
+                     dft.uks.UKS       : None,
+                     dft.rks_symm.RKS  : None,
+                     dft.rks_symm.ROKS : None,
+                     dft.uks_symm.UKS  : None}
+        out = update_mo_(mf, _recursive_patch(mf.__class__, known_cls, mf.mol,
+                                              convert_df))
+
+    if getattr(out, 'with_df', None) and convert_df:
         out.with_df = False
     return out
 

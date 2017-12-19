@@ -465,25 +465,6 @@ def import_as_method(fn, default_keys=None):
     clsmethod.__defaults__ = defaults
     return clsmethod
 
-def overwrite_mro(obj, mro):
-    '''A hacky function to overwrite the __mro__ attribute'''
-    class HackMRO(type):
-        pass
-# Overwrite type.mro function so that Temp class can use the given mro
-    HackMRO.mro = lambda self: mro
-    if sys.version_info < (3,):
-        class Temp(obj.__class__):
-            __metaclass__ = HackMRO
-    else:
-        #class Temp(obj.__class__, metaclass=HackMRO):
-        #    pass
-        raise NotImplementedError()
-    obj = Temp()
-# Delete mro function otherwise all subclass of Temp are not able to
-# resolve the right mro
-    del(HackMRO.mro)
-    return obj
-
 def izip(*args):
     '''python2 izip == python3 zip'''
     if sys.version_info < (3,):

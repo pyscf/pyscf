@@ -51,11 +51,18 @@ def density_fit(mf, auxbasis=None, with_df=None):
     from pyscf import df
     from pyscf.scf import dhf
     assert(isinstance(mf, scf.hf.SCF))
+
     if isinstance(mf, _DFHF):
         if mf.with_df is None:
             mf = mf.__class__(mf)
         elif mf.with_df.auxbasis != auxbasis:
-            raise RuntimeError('DF-HF has been initialized. It cannot be initialized twice.')
+            if (isinstance(mf, scf.newton_ah._CIAH_SCF) and
+                isinstance(mf._scf, _DFHF)):  # has side effect
+                mf.with_df = copy.copy(mf.with_df)
+                mf.with_df.auxbasis = auxbasis
+            else:
+                raise RuntimeError('DFHF has been initialized. '
+                                   'It cannot be initialized twice.')
         return mf
 
     mf_class = mf.__class__

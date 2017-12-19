@@ -86,7 +86,7 @@ class KnownValues(unittest.TestCase):
         mycc.kernel()
         mycc.solve_lambda()
         g1 = grad.ccsd.kernel(mycc)
-        self.assertAlmostEqual(finger(g1), 0.065802850540912422, 8)
+        self.assertAlmostEqual(finger(g1), 0.065802850540912422, 6)
 
     def test_rks_lda(self):
         mf = dft.RKS(h2o)

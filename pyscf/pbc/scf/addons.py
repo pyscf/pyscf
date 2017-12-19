@@ -268,7 +268,7 @@ def convert_to_rhf(mf, out=None):
 
     return mol_scf.addons.convert_to_rhf(mf, out)
 
-def convert_to_ghf(mf, out=None, convert_df=None):
+def convert_to_ghf(mf, out=None, convert_df=False):
     '''Convert the given mean-field object to the generalized HF/KS object
 
     Args:
