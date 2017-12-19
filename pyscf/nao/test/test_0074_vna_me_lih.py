@@ -14,7 +14,7 @@ class KnowValues(unittest.TestCase):
     rdm = mf.make_rdm1()[0,0,:,:,0]
     Ena = 27.2114*(-0.5)*(vna*rdm).sum()
     #print('Ena   = ', Ena)
-    self.assertAlmostEqual(Ena, 6.0251859727456596)
+    self.assertAlmostEqual(Ena, 6.0251859727456596) # this does compares badly with lih.out 
     #ove = mf.overlap_coo().toarray()
     #print(ove.shape)
     #print(rdm.shape)    

@@ -55,9 +55,9 @@ class scf(tddft_iter):
       vne  = self.vnucele_coo_coulomb(**kw)
     return vne.tocoo()
 
-  def vhartree_coo(self, **kvargs):
+  def vhartree_coo(self, **kw):
     from pyscf.nao.m_vhartree_coo import vhartree_coo
-    return vhartree_coo(self, **kvargs)
+    return vhartree_coo(self, **kw)
 
   def add_pb_hk(self, **kw): return self.pb,self.hkernel_den
 
@@ -66,17 +66,17 @@ class scf(tddft_iter):
     sv = self if sv is None else sv
     return sv.overlap_coo(funct=overlap_am).toarray()
 
-  def get_j(self, dm=None, **kvargs):
-    '''Compute J matrix for the given density matrix.'''
+  def get_j(self, dm=None, **kw):
+    '''Compute J matrix for the given density matrix (matrix elements of the Hartree potential).'''
     if dm is None: dm = self.make_rdm1()
     from pyscf.nao.m_vhartree_coo import vhartree_coo
     return vhartree_coo(self, dm=dm).toarray()
 
-  def get_k(self, dm=None, **kvargs):
+  def get_k(self, dm=None, **kw):
     '''Compute K matrix for the given density matrix.'''
     from pyscf.nao.m_kmat_den import kmat_den
     if dm is None: dm = self.make_rdm1()
-    return kmat_den(self, dm=dm, **kvargs)
+    return kmat_den(self, dm=dm, **kw)
 
   def get_jk(self, sv=None, dm=None, **kvargs):
     if sv is None: sv = self.sv

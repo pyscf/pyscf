@@ -6,7 +6,8 @@ from copy import copy
 from pyscf.nao.m_pack2den import pack2den_u, pack2den_l
 
 class gw(scf):
-
+  """ G0W0 with integration along imaginary axis """
+  
   def __init__(self, **kw):
     from pyscf.nao.m_log_mesh import log_mesh
     """ Constructor G0W0 class """
@@ -24,10 +25,11 @@ class gw(scf):
     self.tol_ev = kw['tol_ev'] if 'tol_ev' in kw else 1e-6
     self.nocc_conv = kw['nocc_conv'] if 'nocc_conv' in kw else self.nocc
     self.nvrt_conv = kw['nvrt_conv'] if 'nvrt_conv' in kw else self.nvrt
+    self.perform_gw = kw['perform_gw'] if 'perform_gw' in kw else False
     
     self.vnucele_coo_data = self.vnucele_coo()
     self.rescf = kw['rescf'] if 'rescf' in kw else False
-    if self.rescf: self.kernel_scf()
+    if self.rescf: self.kernel_scf() # here is rescf with HF functional tacitly assumed
     
     #print('nocc_0t:', nocc_0t)
     #print(self.nocc, self.nvrt)
@@ -54,6 +56,7 @@ class gw(scf):
     self.snmw2sf = self.sf_gw_corr()
     self.h0_vh_x_expval = self.get_h0_vh_x_expval()
     if self.verbosity>0: print(__name__, '.h0_vh_x_expval: ', self.h0_vh_x_expval)
+    if self.perform_gw: self.kernel_gw()
     
   def get_h0_vh_x_expval(self):
     mat = -0.5*self.get_k()
@@ -295,5 +298,5 @@ class gw(scf):
       print('self.mo_energy_g0w0')
       print(self.mo_energy_g0w0)
     
-  kernel_g0w0 = make_mo_g0w0
+  kernel_gw = make_mo_g0w0
   
