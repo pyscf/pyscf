@@ -920,13 +920,13 @@ def get_kint(mol):
    return kint.reshape(3,nb,nb,nb,nb)
 
 def writeSOCIntegrals(mc, ncasorbs=None, rdm1=None, pictureChange1e="bp", pictureChange2e="bp", uncontract=True):
-       from pyscf import scf
+       from pyscf.x2c import x2c, sfx2c1e
        from pyscf.lib.parameters import LIGHT_SPEED
        LIGHT_SPEED = 137.0359895000
        alpha = 1.0/LIGHT_SPEED
 
        if (uncontract):
-          xmol, contr_coeff = scf.x2c.X2C().get_xmol(mc.mol)
+          xmol, contr_coeff = x2c.X2C().get_xmol(mc.mol)
        else:
           xmol, contr_coeff = mc.mol, numpy.eye(mc.mo_coeff.shape[0])
 
@@ -943,7 +943,7 @@ def writeSOCIntegrals(mc, ncasorbs=None, rdm1=None, pictureChange1e="bp", pictur
        np, nc = contr_coeff.shape[0], contr_coeff.shape[1]
 
        hso1e = numpy.zeros((3, np, np))
-       h1e_1c, x, rp = scf.x2c.SpinFreeX2C(mc.mol).get_hxr(mc.mol, uncontract=uncontract)
+       h1e_1c, x, rp = sfx2c1e.SpinFreeX2C(mc.mol).get_hxr(mc.mol, uncontract=uncontract)
 
        #two electron terms       
        if (pictureChange2e == "bp") :
@@ -973,7 +973,7 @@ def writeSOCIntegrals(mc, ncasorbs=None, rdm1=None, pictureChange1e="bp", pictur
           wso = (alpha)**2*0.5*get_wso(xmol)
           hso1e += get_hso1e(wso, x, rp)
        elif (pictureChange1e == "x2cn") :
-          h1e_2c = scf.x2c.get_hcore(xmol)
+          h1e_2c = x2c.get_hcore(xmol)
 
           for i in range(np):
              for j in range(np):

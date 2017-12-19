@@ -10,7 +10,7 @@ from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf.tddft import rhf
 from pyscf.scf import uhf_symm
-from pyscf.scf.newton_ah import _gen_uhf_response
+from pyscf.soscf.newton_ah import _gen_uhf_response
 
 
 def gen_tda_hop(mf, fock_ao=None, wfnsym=None, max_memory=2000):

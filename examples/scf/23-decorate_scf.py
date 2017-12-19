@@ -16,8 +16,8 @@ regardless to the order you apply the decoration.
 
 NOTE the second order SCF (New in version 1.1) decorating operation are not
 commutable with scf.density_fit operation
-        [scf.density_fit, scf.sfx2c      ] == 0
-        [scf.newton     , scf.sfx2c      ] == 0
+        [scf.density_fit, scf.sfx2c1e    ] == 0
+        [scf.newton     , scf.sfx2c1e    ] == 0
         [scf.newton     , scf.density_fit] != 0
 * scf.density_fit(scf.newton(scf.RHF(mol))) is the SOSCF for regular 2e
   integrals, but with density fitting integrals for the Hessian.  It's an
@@ -43,7 +43,7 @@ mol.build(
 #
 # 1. spin-free X2C-HF with density fitting approximation on 2E integrals
 #
-mf = scf.density_fit(scf.sfx2c(scf.RHF(mol)))
+mf = scf.density_fit(scf.sfx2c1e(scf.RHF(mol)))
 mf = scf.RHF(mol).x2c().density_fit()  # Stream style
 energy = mf.kernel()
 print('E = %.12f, ref = -76.075408156180' % energy)
@@ -52,7 +52,7 @@ print('E = %.12f, ref = -76.075408156180' % energy)
 # 2. spin-free X2C correction for density-fitting HF.  Since X2C correction is
 # commutable with density fitting operation, it is fully equivalent to case 1.
 #
-mf = scf.sfx2c(scf.density_fit(scf.RHF(mol)))
+mf = scf.sfx2c1e(scf.density_fit(scf.RHF(mol)))
 mf = scf.RHF(mol).density_fit().x2c()  # Stream style
 energy = mf.kernel()
 print('E = %.12f, ref = -76.075408156180' % energy)

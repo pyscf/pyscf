@@ -7,8 +7,7 @@ from pyscf import gto
 from pyscf import scf
 
 '''
-Second order SCF algorithm by decorating the scf object with scf.newton
-function.  (New in PySCF-1.1)
+Second order SCF algorithm by decorating the scf object with .newton method.
 
 Second order SCF method need orthonormal orbitals and the corresponding
 occupancy as the initial guess.
@@ -29,7 +28,7 @@ mf.kernel()
 mo_init = mf.mo_coeff
 mocc_init = mf.mo_occ
 
-mf = scf.newton(scf.RHF(mol))
+mf = scf.RHF(mol).newton()
 energy = mf.kernel(mo_init, mocc_init)
 print('E = %.12f, ref = -76.026765672992' % energy)
 

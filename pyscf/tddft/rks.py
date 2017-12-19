@@ -14,7 +14,7 @@ from pyscf.dft import numint
 from pyscf import dft
 from pyscf.tddft import rhf
 from pyscf.ao2mo import _ao2mo
-from pyscf.scf.newton_ah import _gen_rhf_response
+from pyscf.soscf.newton_ah import _gen_rhf_response
 
 
 class TDA(rhf.TDA):

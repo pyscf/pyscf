@@ -10,80 +10,8 @@ from pyscf import lib
 from pyscf.gto import mole
 from pyscf.lib import logger
 from pyscf.scf import hf
-from pyscf.scf import ghf
 from pyscf.scf import dhf
 from pyscf.scf import _vhf
-
-
-def sfx2c1e(mf):
-    '''Spin-free X2C.
-    For the given SCF object, it updates the hcore constructor.  All integrals
-    are computed in the real spherical GTO basis.
-
-    Args:
-        mf : an SCF object
-
-    Returns:
-        An SCF object
-
-    Examples:
-
-    >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='ccpvdz', verbose=0)
-    >>> mf = scf.sfx2c1e(scf.RHF(mol))
-    >>> mf.scf()
-
-    >>> mol.symmetry = 1
-    >>> mol.build(0, 0)
-    >>> mf = scf.sfx2c1e(scf.UHF(mol))
-    >>> mf.scf()
-    '''
-    if isinstance(mf, _X2C_HF):
-        if mf.with_x2c is None:
-            return mf.__class__(mf)
-        else:
-            return mf
-
-    assert(isinstance(mf, hf.SCF))
-
-    mf_class = mf.__class__
-    if mf_class.__doc__ is None:
-        doc = ''
-    else:
-        doc = mf_class.__doc__
-    class X2C_HF(mf_class, _X2C_HF):
-        __doc__ = doc + \
-        '''
-        Attributes for spin-free X2C:
-            with_x2c : X2C object
-        '''
-        def __init__(self, mf):
-            self.__dict__.update(mf.__dict__)
-            self.with_x2c = SpinFreeX2C(mf.mol)
-            self._keys = self._keys.union(['with_x2c'])
-
-        def get_hcore(self, mol=None):
-            if self.with_x2c:
-                hcore = self.with_x2c.get_hcore(mol)
-                if isinstance(self, ghf.GHF):
-                    hcore = scipy.linalg.block_diag(hcore, hcore)
-                return hcore
-            else:
-                return mf_class.get_hcore(self, mol)
-
-        def dump_flags(self):
-            mf_class.dump_flags(self)
-            if self.with_x2c:
-                self.with_x2c.dump_flags()
-            return self
-
-    return X2C_HF(mf)
-
-sfx2c = sfx2c1e
-
-# A tag to label the derived SCF class
-class _X2C_HF:
-    pass
-
 
 class X2C(lib.StreamObject):
     '''2-component X2c (including spin-free and spin-dependent terms) in
@@ -161,47 +89,6 @@ class X2C(lib.StreamObject):
             contr_coeff[0::2,0::2] = contr_coeff_nr
             contr_coeff[1::2,1::2] = contr_coeff_nr
             h1 = reduce(numpy.dot, (contr_coeff.T.conj(), h1, contr_coeff))
-        return h1
-
-
-class SpinFreeX2C(X2C):
-    '''1-component X2c (spin-free part only) in the real spherical GTO basis.
-    '''
-    def get_hcore(self, mol=None):
-        '''1-component X2c hcore Hamiltonian  (spin-free part only) in the
-        real spherical GTO basis.
-        '''
-        if mol is None: mol = self.mol
-        xmol, contr_coeff = self.get_xmol(mol)
-        c = lib.param.LIGHT_SPEED
-        assert('1E' in self.approx.upper())
-        t = xmol.intor_symmetric('int1e_kin')
-        v = xmol.intor_symmetric('int1e_nuc')
-        s = xmol.intor_symmetric('int1e_ovlp')
-        w = xmol.intor_symmetric('int1e_pnucp')
-        if 'ATOM' in self.approx.upper():
-            atom_slices = xmol.offset_nr_by_atom()
-            nao = xmol.nao_nr()
-            x = numpy.zeros((nao,nao))
-            for ia in range(xmol.natm):
-                ish0, ish1, p0, p1 = atom_slices[ia]
-                shls_slice = (ish0, ish1, ish0, ish1)
-                t1 = xmol.intor('int1e_kin', shls_slice=shls_slice)
-                v1 = xmol.intor('int1e_nuc', shls_slice=shls_slice)
-                s1 = xmol.intor('int1e_ovlp', shls_slice=shls_slice)
-                w1 = xmol.intor('int1e_pnucp', shls_slice=shls_slice)
-                x[p0:p1,p0:p1] = _x2c1e_xmatrix(t1, v1, w1, s1, c)
-            h1 = _get_hcore_fw(t, v, w, s, x, c)
-        else:
-            h1 = _x2c1e_get_hcore(t, v, w, s, c)
-
-        if self.basis is not None:
-            s22 = xmol.intor_symmetric('int1e_ovlp')
-            s21 = mole.intor_cross('int1e_ovlp', xmol, mol)
-            c = lib.cho_solve(s22, s21)
-            h1 = reduce(numpy.dot, (c.T, h1, c))
-        if self.xuncontract and contr_coeff is not None:
-            h1 = reduce(numpy.dot, (contr_coeff.T, h1, contr_coeff))
         return h1
 
 
@@ -558,6 +445,11 @@ def _proj_dmll(mol_nr, dm_nr, mol):
     return dm_ll
 
 
+# A tag to label the derived SCF class
+class _X2C_SCF:
+    pass
+
+
 if __name__ == '__main__':
     mol = mole.Mole()
     mol.build(
@@ -571,14 +463,6 @@ if __name__ == '__main__':
     method = hf.RHF(mol)
     enr = method.kernel()
     print('E(NR) = %.12g' % enr)
-
-    method = sfx2c1e(hf.RHF(mol))
-    esfx2c = method.kernel()
-    print('E(SFX2C1E) = %.12g' % esfx2c)
-    method.with_x2c.basis = 'unc-ccpvqz-dk'
-    print('E(SFX2C1E) = %.12g' % method.kernel())
-    method.with_x2c.approx = 'atom1e'
-    print('E(SFX2C1E) = %.12g' % method.kernel())
 
     method = UHF(mol)
     ex2c = method.kernel()

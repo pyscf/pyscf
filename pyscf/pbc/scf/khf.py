@@ -561,9 +561,9 @@ class KSCF(pbchf.SCF):
         from pyscf.pbc.scf import newton_ah
         return newton_ah.newton(self)
 
-    def x2c1e(self):
-        from pyscf.pbc.scf import x2c
-        return x2c.sfx2c1e(self)
+    def sfx2c1e(self):
+        from pyscf.pbc.x2c import sfx2c1e
+        return sfx2c1e.sfx2c1e(self)
 
 class KRHF(KSCF, pbchf.RHF):
     def convert_from_(self, mf):

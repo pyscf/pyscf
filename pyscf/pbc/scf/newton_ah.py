@@ -4,7 +4,7 @@
 #
 
 '''
-Co-iterative augmented hessian (CIAH) second order SCF solver
+Co-iterative augmented hessian second order SCF solver (CIAH-SOSCF)
 '''
 
 from functools import reduce
@@ -277,22 +277,22 @@ def _unpack(vo, mo_occ):
 
 
 def newton(mf):
-    from pyscf.scf import newton_ah
+    from pyscf.soscf import newton_ah
     from pyscf.pbc import scf as pscf
     if not isinstance(mf, (pscf.khf.KRHF, pscf.kuhf.KUHF)):
 # Note for single k-point other than gamma point (mf.kpt != 0) mf object,
 # orbital hessian is approximated by gamma point hessian.
         return newton_ah.newton(mf)
 
-    if isinstance(mf, newton_ah._CIAH_SCF):
+    if isinstance(mf, newton_ah._CIAH_SOSCF):
         return mf
 
-    KSCF = newton_ah.newton_SCF_class(mf)
+    CIAH_KSCF = newton_ah.newton_SCF_class(mf)
 
     if isinstance(mf, pscf.kuhf.KUHF):
-        class KUHF(KSCF):
+        class SecondOrderKUHF(CIAH_KSCF):
             def build(self, cell=None):
-                KSCF.build(self, cell)
+                CIAH_KSCF.build(self, cell)
 
             gen_g_hop = gen_g_hop_uhf
 
@@ -325,12 +325,12 @@ def newton(mf):
                       [numpy.dot(mo, u[1][k]) for k, mo in enumerate(mo_coeff[1])])
                 return lib.asarray(mo)
 
-        return KUHF(mf)
+        return SecondOrderKUHF(mf)
 
     else:
-        class KRHF(KSCF):
+        class SecondOrderKRHF(CIAH_KSCF):
             def build(self, cell=None):
-                KSCF.build(self, cell)
+                CIAH_KSCF.build(self, cell)
 
             gen_g_hop = gen_g_hop_rhf
 
@@ -358,7 +358,7 @@ def newton(mf):
             def rotate_mo(self, mo_coeff, u, log=None):
                 return lib.asarray([numpy.dot(mo, u[k]) for k,mo in enumerate(mo_coeff)])
 
-        return KRHF(mf)
+        return SecondOrderKRHF(mf)
 
 if __name__ == '__main__':
     import pyscf.pbc.gto as pbcgto

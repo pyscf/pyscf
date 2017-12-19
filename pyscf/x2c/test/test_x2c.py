@@ -6,6 +6,7 @@ import numpy
 import unittest
 from pyscf import gto
 from pyscf import scf
+from pyscf.x2c import x2c
 
 mol = gto.M(
     verbose = 5,
@@ -20,7 +21,7 @@ mol = gto.M(
 
 class KnowValues(unittest.TestCase):
     def test_sfx2c1e(self):
-        myx2c = scf.x2c.sfx2c1e(scf.RHF(mol))
+        myx2c = scf.RHF(mol).sfx2c1e()
         myx2c.with_x2c.xuncontract = False
         e = myx2c.kernel()
         self.assertAlmostEqual(e, -76.081765429967618, 9)
@@ -32,13 +33,13 @@ class KnowValues(unittest.TestCase):
     def test_sfx2c1e_cart(self):
         pmol = mol.copy()
         pmol.cart = True
-        myx2c = scf.x2c.sfx2c1e(scf.RHF(pmol))
+        myx2c = scf.RHF(pmol).sfx2c1e()
         myx2c.with_x2c.xuncontract = False
         e = myx2c.kernel()
         self.assertAlmostEqual(e, -76.081452837461342, 9)
 
     def test_x2c1e(self):
-        myx2c = scf.x2c.UHF(mol)
+        myx2c = x2c.UHF(mol)
         myx2c.with_x2c.xuncontract = False
         e = myx2c.kernel()
         self.assertAlmostEqual(e, -76.08176796102066, 9)

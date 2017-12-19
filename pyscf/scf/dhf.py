@@ -457,8 +457,8 @@ class UHF(hf.SCF):
         return analyze(self, verbose)
 
     def x2c(self):
-        import pyscf.scf.x2c
-        x2chf = pyscf.scf.x2c.UHF(self.mol)
+        import pyscf.x2c.x2c
+        x2chf = pyscf.x2c.x2c.UHF(self.mol)
         x2chf.__dict__.update(self.__dict__)
         return x2chf
 DHF = UHF

@@ -12,7 +12,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import ucphf
-from pyscf.scf.newton_ah import _gen_uhf_response
+from pyscf.soscf.newton_ah import _gen_uhf_response
 from pyscf.grad import rhf as rhf_grad
 from pyscf.hessian import rhf as rhf_hess
 _get_jk = rhf_hess._get_jk

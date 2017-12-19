@@ -750,6 +750,14 @@ class CASCI(lib.StreamObject):
         from pyscf.mcscf import df
         return df.approx_hessian(self, auxbasis, with_df)
 
+    def sfx2c1e(self):
+        import pyscf.x2c.sfx2c1e
+        return pyscf.x2c.sfx2c1e.sfx2c1e(self)
+    def x2c1e(self):
+        return self.sfx2c1e()
+    def x2c(self):
+        return self.x2c1e()
+
 
 if __name__ == '__main__':
     from pyscf import gto

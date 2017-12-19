@@ -7,7 +7,7 @@ from pyscf import gto, scf, mcscf
 
 '''
 Applying scalar relativistic effects for CASSCF by decorating the SCF or
-CASSCF object with scf.sfx2c function.
+CASSCF object with .x2c method.
 
 See pyscf/examples/scf/21-x2c.py
 '''
@@ -20,7 +20,7 @@ mol = gto.M(
     basis = 'ccpvdz',
 )
 
-mf = scf.sfx2c(scf.RHF(mol))
+mf = scf.RHF(mol).x2c()
 mf.kernel()
 
 mc = mcscf.CASSCF(mf, 6, 8)
@@ -28,12 +28,12 @@ mc.kernel()
 print('E = %.12f, ref = -76.128478294795' % mc.e_tot)
 
 #
-# Decorating CASSCF with scf.sfx2c has the same effects as decorating SCF object
+# Decorating CASSCF with .x2c method has the same effects as decorating SCF object
 #
 mf = scf.RHF(mol)
 mf.kernel()
 
-mc = scf.sfx2c(mcscf.CASSCF(mf, 6, 8))
+mc = mcscf.CASSCF(mf, 6, 8).x2c()
 mc.kernel()
 print('E = %.12f, ref = -76.128478294795' % mc.e_tot)
 

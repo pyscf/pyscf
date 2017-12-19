@@ -1148,6 +1148,9 @@ class SCF(lib.StreamObject):
             self.opt = self.init_direct_scf(mol)
 
     def dump_flags(self):
+        if self.verbose < logger.INFO:
+            return self
+
         logger.info(self, '\n')
         logger.info(self, '******** %s flags ********', self.__class__)
         logger.info(self, 'method = %s', self.__class__.__name__)
@@ -1422,15 +1425,17 @@ class SCF(lib.StreamObject):
         import pyscf.df.df_jk
         return pyscf.df.df_jk.density_fit(self, auxbasis, with_df)
 
+    def sfx2c1e(self):
+        import pyscf.x2c.sfx2c1e
+        return pyscf.x2c.sfx2c1e.sfx2c1e(self)
     def x2c1e(self):
-        import pyscf.scf.x2c
-        return pyscf.scf.x2c.sfx2c1e(self)
+        return self.sfx2c1e()
     def x2c(self):
         return self.x2c1e()
 
     def newton(self):
-        import pyscf.scf.newton_ah
-        return pyscf.scf.newton_ah.newton(self)
+        import pyscf.soscf.newton_ah
+        return pyscf.soscf.newton_ah.newton(self)
 
     def update(self, chkfile=None):
         '''Read attributes from the chkfile then replace the attributes of

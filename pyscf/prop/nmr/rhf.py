@@ -15,7 +15,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.scf import cphf
-from pyscf.scf.newton_ah import _gen_rhf_response
+from pyscf.soscf.newton_ah import _gen_rhf_response
 from pyscf.data import nist
 
 

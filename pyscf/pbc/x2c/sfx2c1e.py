@@ -9,7 +9,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.gto import mole
 from pyscf.lib import logger
-from pyscf.scf import x2c
+from pyscf.x2c import x2c
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.df import aft
 from pyscf.pbc.df import aft_jk
@@ -29,15 +29,15 @@ def sfx2c1e(mf):
     Examples:
 
     >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='ccpvdz', verbose=0)
-    >>> mf = scf.sfx2c1e(scf.RHF(mol))
+    >>> mf = scf.RHF(mol).sfx2c1e()
     >>> mf.scf()
 
     >>> mol.symmetry = 1
     >>> mol.build(0, 0)
-    >>> mf = scf.sfx2c1e(scf.UHF(mol))
+    >>> mf = scf.UHF(mol).sfx2c1e()
     >>> mf.scf()
     '''
-    if isinstance(mf, x2c._X2C_HF):
+    if isinstance(mf, x2c._X2C_SCF):
         if mf.with_x2c is None:
             return mf.__class__(mf)
         else:
@@ -48,7 +48,7 @@ def sfx2c1e(mf):
         doc = ''
     else:
         doc = mf_class.__doc__
-    class X2C_HF(mf_class, x2c._X2C_HF):
+    class SFX2C1E_SCF(mf_class, x2c._X2C_SCF):
         __doc__ = doc + \
         '''
         Attributes for spin-free X2C:
@@ -74,7 +74,7 @@ def sfx2c1e(mf):
             else:
                 return mf_class.get_hcore(self, cell, kpts)
 
-    return X2C_HF(mf)
+    return SFX2C1E_SCF(mf)
 
 sfx2c = sfx2c1e
 

@@ -21,7 +21,7 @@ cell.build(unit = 'B',
 class KnowValues(unittest.TestCase):
     def test_hf(self):
         lib.param.LIGHT_SPEED, c = 2, lib.param.LIGHT_SPEED
-        mf = scf.sfx2c1e(scf.RHF(cell))
+        mf = scf.RHF(cell).sfx2c1e()
         mf.with_df = df.PWDF(cell)
         dm = mf.get_init_guess()
         h1 = mf.get_hcore()
@@ -33,7 +33,7 @@ class KnowValues(unittest.TestCase):
 
     def test_khf(self):
         lib.param.LIGHT_SPEED, c = 2, lib.param.LIGHT_SPEED
-        mf = scf.sfx2c1e(scf.KRHF(cell))
+        mf = scf.KRHF(cell).sfx2c1e()
         mf.with_df = df.PWDF(cell)
         mf.kpts = cell.make_kpts([3,1,1])
         dm = mf.get_init_guess()

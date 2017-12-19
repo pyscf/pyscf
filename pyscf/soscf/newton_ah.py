@@ -4,7 +4,7 @@
 #
 
 '''
-Co-iterative augmented hessian (CIAH) second order SCF solver
+Co-iterative augmented hessian second order SCF solver (CIAH-SOSCF)
 '''
 
 import sys
@@ -21,6 +21,7 @@ from pyscf.scf import chkfile
 from pyscf.scf import addons
 from pyscf.scf import hf_symm, uhf_symm
 from pyscf.scf import hf, rohf, uhf
+from pyscf.soscf import ciah
 
 # http://scicomp.stackexchange.com/questions/1234/matrix-exponential-of-a-skew-hermitian-matrix-with-fortran-95-and-lapack
 def expmat(a):
@@ -464,7 +465,6 @@ def project_mol(mol, projectbasis={}):
 # Seems the high order terms do not help optimization?
 def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                   conv_tol_grad=None, verbose=None):
-    from pyscf.scf import ciah
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -736,7 +736,7 @@ def newton_SCF_class(mf):
         doc = ''
     else:
         doc = mf.__class__.__doc__
-    class CIAH_SCF(mf.__class__, _CIAH_SCF):
+    class CIAH_SOSCF(mf.__class__, _CIAH_SOSCF):
         __doc__ = doc + \
         '''
         Attributes for Newton solver:
@@ -877,10 +877,10 @@ def newton_SCF_class(mf):
                 orbsym = hf_symm.get_orbsym(self._scf.mol, mo_coeff)
                 mo = lib.tag_array(mo, orbsym=orbsym)
             return mo
-    return CIAH_SCF
+    return CIAH_SOSCF
 
 # A tag to label the derived SCF class
-class _CIAH_SCF:
+class _CIAH_SOSCF:
     pass
 
 def newton(mf):
@@ -895,13 +895,12 @@ def newton(mf):
     -1.0811707843774987
     '''
     from pyscf import scf
-    from pyscf.mcscf import mc1step_symm
 
-    if isinstance(mf, _CIAH_SCF):
+    if isinstance(mf, _CIAH_SOSCF):
         return mf
 
-    SCF = newton_SCF_class(mf)
-    class RHF(SCF):
+    CIAH_SOSCF = newton_SCF_class(mf)
+    class SecondOrderRHF(CIAH_SOSCF):
         def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
             return gen_g_hop_rhf(self, mo_coeff, mo_occ, fock_ao, h1e)
 
@@ -910,7 +909,7 @@ def newton(mf):
             return numpy.dot(u0, expmat(dr))
 
         def rotate_mo(self, mo_coeff, u, log=None):
-            mo = SCF.rotate_mo(self, mo_coeff, u, log)
+            mo = CIAH_SOSCF.rotate_mo(self, mo_coeff, u, log)
             if log is not None and log.verbose >= logger.DEBUG:
                 idx = self.mo_occ > 0
                 s = reduce(numpy.dot, (mo[:,idx].T, self._scf.get_ovlp(),
@@ -922,13 +921,13 @@ def newton(mf):
             return mo
 
     if isinstance(mf, rohf.ROHF):
-        class ROHF(RHF):
+        class SecondOrderROHF(SecondOrderRHF):
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 return gen_g_hop_rohf(self, mo_coeff, mo_occ, fock_ao, h1e)
-        return ROHF(mf)
+        return SecondOrderROHF(mf)
 
     elif isinstance(mf, uhf.UHF):
-        class UHF(SCF):
+        class SecondOrderUHF(CIAH_SOSCF):
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 return gen_g_hop_uhf(self, mo_coeff, mo_occ, fock_ao, h1e)
 
@@ -966,10 +965,10 @@ def newton(mf):
                 if hasattr(self, '_scf') and id(self._scf.mol) != id(self.mol):
                     s = self._scf.get_ovlp()
                 return self._scf.spin_square(mo_coeff, s)
-        return UHF(mf)
+        return SecondOrderUHF(mf)
 
     elif isinstance(mf, scf.ghf.GHF):
-        class GHF(SCF):
+        class SecondOrderGHF(CIAH_SOSCF):
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 return gen_g_hop_ghf(self, mo_coeff, mo_occ, fock_ao, h1e)
 
@@ -979,13 +978,13 @@ def newton(mf):
                     orbsym = scf.ghf_symm.get_orbsym(self._scf.mol, mo_coeff)
                     mo = lib.tag_array(mo, orbsym=orbsym)
                 return mo
-        return GHF(mf)
+        return SecondOrderGHF(mf)
 
     elif isinstance(mf, scf.dhf.UHF):
         raise RuntimeError('Not support Dirac-HF')
 
     else:
-        return RHF(mf)
+        return SecondOrderRHF(mf)
 
 def _effective_svd(a, tol=1e-5):
     w = numpy.linalg.svd(a)[1]
@@ -994,8 +993,6 @@ def _effective_svd(a, tol=1e-5):
 
 if __name__ == '__main__':
     from pyscf import scf
-    import pyscf.fci
-    from pyscf.mcscf import addons
 
     mol = gto.Mole()
     mol.verbose = 0

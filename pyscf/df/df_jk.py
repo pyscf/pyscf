@@ -50,14 +50,15 @@ def density_fit(mf, auxbasis=None, with_df=None):
     '''
     from pyscf import df
     from pyscf.scf import dhf
+    from pyscf.soscf import newton_ah
     assert(isinstance(mf, scf.hf.SCF))
 
     if isinstance(mf, _DFHF):
         if mf.with_df is None:
             mf = mf.__class__(mf)
         elif mf.with_df.auxbasis != auxbasis:
-            if (isinstance(mf, scf.newton_ah._CIAH_SCF) and
-                isinstance(mf._scf, _DFHF)):  # has side effect
+            if (isinstance(mf, newton_ah._CIAH_SOSCF) and
+                isinstance(mf._scf, _DFHF)):
                 mf.with_df = copy.copy(mf.with_df)
                 mf.with_df.auxbasis = auxbasis
             else:
