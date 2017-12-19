@@ -53,14 +53,16 @@ subroutine spline(delt,y,n,yp1,ypn,y2)
   enddo
 end subroutine !spline
   """
+  
+  if h == 0.0:
+      raise ValueError("h = 0.0, probably an error in the ion file")
+
   assert(type(yin)==numpy.ndarray)
   
   h2 = h*h
   n = len(yin)
   u = numpy.zeros((n), dtype='float64')
   yout = numpy.zeros((n), dtype='float64')
-  if h == 0.0:
-      return yout
 
   if yp1<1e300 : yout[0],u[0]=-0.5, (3.0/h)*((yin[1]-yin[0])/h-yp1)
 
