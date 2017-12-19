@@ -301,6 +301,10 @@ def convert_to_uhf(mf, out=None, convert_df=None):
     '''
     from pyscf import scf
     from pyscf import dft
+    assert(isinstance(mf, hf.SCF))
+
+    logger.debug(mf, 'Converting %s to UHF', mf.__class__)
+
     def update_mo_(mf, mf1):
         _keys = mf._keys.union(mf1._keys)
         mf1.__dict__.update(mf.__dict__)
@@ -323,52 +327,35 @@ def convert_to_uhf(mf, out=None, convert_df=None):
             out = update_mo_(mf, out)
 
     else:
-        hf_class = {scf.hf.RHF        : scf.uhf.UHF,
-                    scf.rohf.ROHF     : scf.uhf.UHF,
-                    scf.hf_symm.RHF   : scf.uhf_symm.UHF,
-                    scf.hf_symm.ROHF  : scf.uhf_symm.UHF}
-        dft_class = {dft.rks.RKS      : dft.uks.UKS,
-                     dft.roks.ROKS    : dft.uks.UKS,
-                     dft.rks_symm.RKS : dft.uks_symm.UKS,
-                     dft.rks_symm.ROKS: dft.uks_symm.UKS}
-
         if isinstance(mf, scf.uhf.UHF):
             out = copy.copy(mf)
-
-        elif mf.__class__ in hf_class:
-            out = update_mo_(mf, scf.UHF(mf.mol))
-
-        elif mf.__class__ in dft_class:
-            out = update_mo_(mf, dft.UKS(mf.mol))
-
         elif isinstance(mf, scf.ghf.GHF):
             raise NotImplementedError
-
         else:
-            msg =('Warn: Converting a decorated RHF object to the decorated '
-                  'UHF object is unsafe.\nIt is recommended to create a '
-                  'decorated UHF object explicitly and pass it to '
-                  'convert_to_uhf function eg:\n'
-                  '    convert_to_uhf(mf, out=scf.UHF(mol).density_fit())\n')
-            sys.stderr.write(msg)
-# Python resolve the subclass inheritance dynamically based on MRO.  We can
-# change the subclass inheritance order to substitute RHF/RKS with UHF/UKS.
-            mro = mf.__class__.__mro__
-            mronew = None
-            for i, cls in enumerate(mro):
-                if cls in hf_class:
-                    mronew = mro[:i] + hf_class[cls].__mro__
-                    break
-                elif cls in dft_class:
-                    mronew = mro[:i] + dft_class[cls].__mro__
-                    break
-            if mronew is None:
-                raise RuntimeError('%s object is not SCF object')
-            out = update_mo_(mf, lib.overwrite_mro(mf, mronew))
+            known_cls = {scf.hf.RHF        : scf.uhf.UHF,
+                         scf.rohf.ROHF     : scf.uhf.UHF,
+                         scf.hf_symm.RHF   : scf.uhf_symm.UHF,
+                         scf.hf_symm.ROHF  : scf.uhf_symm.UHF,
+                         dft.rks.RKS       : dft.uks.UKS,
+                         dft.roks.ROKS     : dft.uks.UKS,
+                         dft.rks_symm.RKS  : dft.uks_symm.UKS,
+                         dft.rks_symm.ROKS : dft.uks_symm.UKS}
+            out = update_mo_(mf, _recursive_patch(mf.__class__, known_cls, mf.mol))
 
     if getattr(out, 'with_df', None) and _df_off(mf, convert_df):
         out.with_df = False
     return out
+
+def _recursive_patch(cls, known_class, mol):
+    if cls in known_class:
+        as_class = known_class[cls]
+        if as_class is None:
+            raise NotImplementedError('conversion from %s' % cls)
+        return as_class(mol)
+    elif cls is object:
+        raise RuntimeError('Unknown SCF object')
+    else:
+        return cls(_recursive_patch(cls.__base__, known_class, mol))
 
 def _df_off(mf, convert_df):
     from pyscf import scf
@@ -401,6 +388,10 @@ def convert_to_rhf(mf, out=None, convert_df=None):
     '''
     from pyscf import scf
     from pyscf import dft
+    assert(isinstance(mf, hf.SCF))
+
+    logger.debug(mf, 'Converting %s to RHF', mf.__class__)
+
     def update_mo_(mf, mf1):
         _keys = mf._keys.union(mf1._keys)
         mf1.__dict__.update(mf.__dict__)
@@ -421,44 +412,16 @@ def convert_to_rhf(mf, out=None, convert_df=None):
             out = update_mo_(mf, out)
 
     else:
-        hf_class = {scf.uhf.UHF      : scf.rohf.ROHF,
-                    scf.uhf_symm.UHF : scf.hf_symm.ROHF}
-        dft_class = {dft.uks.UKS     : dft.roks.ROKS,
-                     dft.uks_symm.UKS: dft.rks_symm.ROKS}
-
         if isinstance(mf, scf.hf.RHF):
             out = copy.copy(mf)
-
-        elif mf.__class__ in hf_class:
-            out = update_mo_(mf, scf.RHF(mf.mol))
-
-        elif mf.__class__ in dft_class:
-            out = update_mo_(mf, dft.RKS(mf.mol))
-
         elif isinstance(mf, scf.ghf.GHF):
             raise NotImplementedError
-
         else:
-            msg =('Warn: Converting a decorated UHF object to the decorated '
-                  'RHF object is unsafe.\nIt is recommended to create a '
-                  'decorated RHF object explicitly and pass it to '
-                  'convert_to_rhf function eg:\n'
-                  '    convert_to_rhf(mf, out=scf.RHF(mol).density_fit())\n')
-            sys.stderr.write(msg)
-# Python resolve the subclass inheritance dynamically based on MRO.  We can
-# change the subclass inheritance order to substitute RHF/RKS with UHF/UKS.
-            mro = mf.__class__.__mro__
-            mronew = None
-            for i, cls in enumerate(mro):
-                if cls in hf_class:
-                    mronew = mro[:i] + hf_class[cls].__mro__
-                    break
-                elif cls in dft_class:
-                    mronew = mro[:i] + dft_class[cls].__mro__
-                    break
-            if mronew is None:
-                raise RuntimeError('%s object is not SCF object')
-            out = update_mo_(mf, lib.overwrite_mro(mf, mronew))
+            known_cls = {scf.uhf.UHF      : scf.rohf.ROHF,
+                         scf.uhf_symm.UHF : scf.hf_symm.ROHF,
+                         dft.uks.UKS      : dft.roks.ROKS,
+                         dft.uks_symm.UKS : dft.rks_symm.ROKS}
+            out = update_mo_(mf, _recursive_patch(mf.__class__, known_cls, mf.mol))
 
     if getattr(out, 'with_df', None) and _df_off(mf, convert_df):
         out.with_df = False
@@ -480,6 +443,10 @@ def convert_to_ghf(mf, out=None, convert_df=None):
     '''
     from pyscf import scf
     from pyscf import dft
+    assert(isinstance(mf, hf.SCF))
+
+    logger.debug(mf, 'Converting %s to GHF', mf.__class__)
+
     def update_mo_(mf, mf1):
         _keys = mf._keys.union(mf1._keys)
         mf1.__dict__.update(mf.__dict__)
@@ -536,47 +503,22 @@ def convert_to_ghf(mf, out=None, convert_df=None):
             out = update_mo_(mf, out)
 
     else:
-        hf_class = {scf.hf.RHF        : scf.ghf.GHF,
-                    scf.rohf.ROHF     : scf.ghf.GHF,
-                    scf.uhf.UHF       : scf.ghf.GHF,
-                    scf.hf_symm.RHF   : scf.ghf_symm.GHF,
-                    scf.hf_symm.ROHF  : scf.ghf_symm.GHF,
-                    scf.uhf_symm.UHF  : scf.ghf_symm.GHF}
-        dft_class = {dft.rks.RKS      : None,
-                     dft.roks.ROKS    : None,
-                     dft.uks.UKS      : None,
-                     dft.rks_symm.RKS : None,
-                     dft.rks_symm.ROKS: None,
-                     dft.uks_symm.UKS : None}
-
         if isinstance(mf, scf.ghf.GHF):
             out = copy.copy(mf)
-
-        elif mf.__class__ in hf_class:
-            out = update_mo_(mf, scf.GHF(mf.mol))
-
-        elif mf.__class__ in dft_class:
-            raise NotImplementedError
-
         else:
-            msg =('Warn: Converting a decorated SCF object to the decorated '
-                  'GHF object is unsafe.\nIt is recommended to create a '
-                  'decorated GHF object explicitly and pass it to '
-                  'convert_to_ghf function eg:\n'
-                  '    convert_to_ghf(mf, out=scf.GHF(mol).density_fit())\n')
-            sys.stderr.write(msg)
-            mro = mf.__class__.__mro__
-            mronew = None
-            for i, cls in enumerate(mro):
-                if cls in hf_class:
-                    mronew = mro[:i] + hf_class[cls].__mro__
-                    break
-                elif cls in dft_class:
-                    raise NotImplementedError
-                    break
-            if mronew is None:
-                raise RuntimeError('%s object is not SCF object')
-            out = update_mo_(mf, lib.overwrite_mro(mf, mronew))
+            known_cls = {scf.hf.RHF        : scf.ghf.GHF,
+                         scf.rohf.ROHF     : scf.ghf.GHF,
+                         scf.uhf.UHF       : scf.ghf.GHF,
+                         scf.hf_symm.RHF   : scf.ghf_symm.GHF,
+                         scf.hf_symm.ROHF  : scf.ghf_symm.GHF,
+                         scf.uhf_symm.UHF  : scf.ghf_symm.GHF,
+                         dft.rks.RKS       : None,
+                         dft.roks.ROKS     : None,
+                         dft.uks.UKS       : None,
+                         dft.rks_symm.RKS  : None,
+                         dft.rks_symm.ROKS : None,
+                         dft.uks_symm.UKS  : None}
+            out = update_mo_(mf, _recursive_patch(mf.__class__, known_cls, mf.mol))
 
     if getattr(out, 'with_df', None) and _df_off(mf, convert_df):
         out.with_df = False

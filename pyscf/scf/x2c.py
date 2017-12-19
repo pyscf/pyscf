@@ -10,6 +10,7 @@ from pyscf import lib
 from pyscf.gto import mole
 from pyscf.lib import logger
 from pyscf.scf import hf
+from pyscf.scf import ghf
 from pyscf.scf import dhf
 from pyscf.scf import _vhf
 
@@ -36,6 +37,14 @@ def sfx2c1e(mf):
     >>> mf = scf.sfx2c1e(scf.UHF(mol))
     >>> mf.scf()
     '''
+    if isinstance(mf, _X2C_HF):
+        if mf.with_x2c is None:
+            return mf.__class__(mf)
+        else:
+            return mf
+
+    assert(isinstance(mf, hf.SCF))
+
     mf_class = mf.__class__
     if mf_class.__doc__ is None:
         doc = ''
@@ -47,14 +56,17 @@ def sfx2c1e(mf):
         Attributes for spin-free X2C:
             with_x2c : X2C object
         '''
-        def __init__(self):
-            self.with_x2c = SpinFreeX2C(mf.mol)
+        def __init__(self, mf):
             self.__dict__.update(mf.__dict__)
+            self.with_x2c = SpinFreeX2C(mf.mol)
             self._keys = self._keys.union(['with_x2c'])
 
         def get_hcore(self, mol=None):
             if self.with_x2c:
-                return self.with_x2c.get_hcore(mol)
+                hcore = self.with_x2c.get_hcore(mol)
+                if isinstance(self, ghf.GHF):
+                    hcore = scipy.linalg.block_diag(hcore, hcore)
+                return hcore
             else:
                 return mf_class.get_hcore(self, mol)
 
@@ -64,7 +76,7 @@ def sfx2c1e(mf):
                 self.with_x2c.dump_flags()
             return self
 
-    return X2C_HF()
+    return X2C_HF(mf)
 
 sfx2c = sfx2c1e
 

@@ -326,7 +326,7 @@ class GDF(aft.AFTDF):
 
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
-        self.auxbasis = None
+        self._auxbasis = None
         if cell.dimension == 0:
             self.eta = 0.2
             self.mesh = cell.mesh
@@ -356,9 +356,10 @@ class GDF(aft.AFTDF):
         return self._auxbasis
     @auxbasis.setter
     def auxbasis(self, x):
-        self._auxbasis = x
-        self.auxcell = None
-        self._cderi = None
+        if self._auxbasis != x:
+            self._auxbasis = x
+            self.auxcell = None
+            self._cderi = None
 
     def dump_flags(self, log=None):
         log = logger.new_logger(self, log)

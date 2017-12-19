@@ -730,6 +730,8 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
 def newton_SCF_class(mf):
     '''Generate the CIAH base class
     '''
+    assert(isinstance(mf, hf.SCF))
+
     if mf.__class__.__doc__ is None:
         doc = ''
     else:
@@ -746,7 +748,10 @@ def newton_SCF_class(mf):
                 To control whether to canonicalize the orbitals optimized by
                 Newton solver.  Default is True.
         '''
-        def __init__(self):
+        def __init__(self, mf):
+# Note self.mol can be different to self._scf.mol.  Projected hessian is used
+# in this case.
+            self.__dict__.update(mf.__dict__)
             self._scf = mf
             self.max_cycle_inner = 12
             self.max_stepsize = .05
@@ -768,9 +773,6 @@ def newton_SCF_class(mf):
             self.kf_trust_region = 5
             self_keys = set(self.__dict__.keys())
 
-# Note self.mol can be different to self._scf.mol.  Projected hessian is used
-# in this case.
-            self.__dict__.update(mf.__dict__)
             self._keys = self_keys.union(mf._keys)
 
         def dump_flags(self):
@@ -895,6 +897,9 @@ def newton(mf):
     from pyscf import scf
     from pyscf.mcscf import mc1step_symm
 
+    if isinstance(mf, _CIAH_SCF):
+        return mf
+
     SCF = newton_SCF_class(mf)
     class RHF(SCF):
         def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
@@ -920,7 +925,7 @@ def newton(mf):
         class ROHF(RHF):
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 return gen_g_hop_rohf(self, mo_coeff, mo_occ, fock_ao, h1e)
-        return ROHF()
+        return ROHF(mf)
 
     elif isinstance(mf, uhf.UHF):
         class UHF(SCF):
@@ -961,7 +966,7 @@ def newton(mf):
                 if hasattr(self, '_scf') and id(self._scf.mol) != id(self.mol):
                     s = self._scf.get_ovlp()
                 return self._scf.spin_square(mo_coeff, s)
-        return UHF()
+        return UHF(mf)
 
     elif isinstance(mf, scf.ghf.GHF):
         class GHF(SCF):
@@ -974,13 +979,13 @@ def newton(mf):
                     orbsym = scf.ghf_symm.get_orbsym(self._scf.mol, mo_coeff)
                     mo = lib.tag_array(mo, orbsym=orbsym)
                 return mo
-        return GHF()
+        return GHF(mf)
 
     elif isinstance(mf, scf.dhf.UHF):
         raise RuntimeError('Not support Dirac-HF')
 
     else:
-        return RHF()
+        return RHF(mf)
 
 def _effective_svd(a, tol=1e-5):
     w = numpy.linalg.svd(a)[1]

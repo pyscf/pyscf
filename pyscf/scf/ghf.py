@@ -419,7 +419,6 @@ class GHF(hf.SCF):
         from pyscf.scf.stability import ghf_stability
         return ghf_stability(self, verbose)
 
-    x2c = None
     nuc_grad_method = None
 
 def _from_rhf_init_dm(dm, breaksym=True):

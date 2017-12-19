@@ -4,11 +4,13 @@
 #
 
 import sys
+import copy
 import time
 import ctypes
 from functools import reduce
 import numpy
 from pyscf import lib
+from pyscf import scf
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 
@@ -48,6 +50,14 @@ def density_fit(mf, auxbasis=None, with_df=None):
     '''
     from pyscf import df
     from pyscf.scf import dhf
+    assert(isinstance(mf, scf.hf.SCF))
+    if isinstance(mf, _DFHF):
+        if mf.with_df is None:
+            mf = mf.__class__(mf)
+        elif mf.with_df.auxbasis != auxbasis:
+            raise RuntimeError('DF-HF has been initialized. It cannot be initialized twice.')
+        return mf
+
     mf_class = mf.__class__
     if mf_class.__doc__ is None:
         doc = ''
@@ -73,7 +83,7 @@ def density_fit(mf, auxbasis=None, with_df=None):
                 The default basis 'weigend+etb' means weigend-coulomb-fit basis
                 for light elements and even-tempered basis for heavy elements.
         '''
-        def __init__(self):
+        def __init__(self, mf):
             self.__dict__.update(mf.__dict__)
             self._eri = None
             self.auxbasis = auxbasis
@@ -125,7 +135,7 @@ def density_fit(mf, auxbasis=None, with_df=None):
             else:
                 return False
 
-    return DFHF()
+    return DFHF(mf)
 
 # A tag to label the derived SCF class
 class _DFHF:

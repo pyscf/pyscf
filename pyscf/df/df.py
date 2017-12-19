@@ -61,7 +61,7 @@ class DF(lib.StreamObject):
         self.stdout = mol.stdout
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
-        self.auxbasis = None
+        self._auxbasis = None
 
 ##################################################
 # Following are not input options
@@ -79,9 +79,10 @@ class DF(lib.StreamObject):
         return self._auxbasis
     @auxbasis.setter
     def auxbasis(self, x):
-        self._auxbasis = x
-        self.auxmol = None
-        self._cderi = None
+        if self._auxbasis != x:
+            self._auxbasis = x
+            self.auxmol = None
+            self._cderi = None
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)

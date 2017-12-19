@@ -284,6 +284,9 @@ def newton(mf):
 # orbital hessian is approximated by gamma point hessian.
         return newton_ah.newton(mf)
 
+    if isinstance(mf, newton_ah._CIAH_SCF):
+        return mf
+
     KSCF = newton_ah.newton_SCF_class(mf)
 
     if isinstance(mf, pscf.kuhf.KUHF):
@@ -322,7 +325,7 @@ def newton(mf):
                       [numpy.dot(mo, u[1][k]) for k, mo in enumerate(mo_coeff[1])])
                 return lib.asarray(mo)
 
-        return KUHF()
+        return KUHF(mf)
 
     else:
         class KRHF(KSCF):
@@ -355,7 +358,7 @@ def newton(mf):
             def rotate_mo(self, mo_coeff, u, log=None):
                 return lib.asarray([numpy.dot(mo, u[k]) for k,mo in enumerate(mo_coeff)])
 
-        return KRHF()
+        return KRHF(mf)
 
 if __name__ == '__main__':
     import pyscf.pbc.gto as pbcgto

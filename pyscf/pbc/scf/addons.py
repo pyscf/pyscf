@@ -233,21 +233,14 @@ def convert_to_uhf(mf, out=None):
     from pyscf.pbc import dft
 
     if out is None:
-        scf_class = ((dft.krks.KRKS, dft.kuks.KUKS),
-                     (scf.khf.KRHF , scf.kuhf.KUHF),
-                     (dft.rks.RKS  , dft.uks.UKS  ),
-                     (scf.hf.RHF   , scf.uhf.UHF  ))
-
         if isinstance(mf, (scf.uhf.UHF, scf.kuhf.KUHF)):
             return copy.copy(mf)
-
         else:
-            for cls, newcls in scf_class:
-                if isinstance(mf, cls):
-                    out = newcls(mf.cell)
-                    break
-            if out is None:
-                raise RuntimeError('Unsupported SCF class %s' % mf)
+            known_cls = {dft.krks.KRKS : dft.kuks.KUKS,
+                         scf.khf.KRHF  : scf.kuhf.KUHF,
+                         dft.rks.RKS   : dft.uks.UKS  ,
+                         scf.hf.RHF    : scf.uhf.UHF  }
+            out = mol_scf.addons._recursive_patch(mf.__class__, known_cls, mf.mol)
     else:
         assert(isinstance(out, (scf.uhf.UHF, scf.kuhf.KUHF)))
 
@@ -262,22 +255,14 @@ def convert_to_rhf(mf, out=None):
     from pyscf.pbc import dft
 
     if out is None:
-        scf_class = ((dft.kuks.KUKS, dft.krks.KRKS),
-                     (scf.kuhf.KUHF, scf.khf.KRHF ),
-                     (dft.uks.UKS  , dft.rks.RKS  ),
-                     (scf.uhf.UHF  , scf.hf.RHF   ))
-
         if isinstance(mf, (scf.hf.RHF, scf.khf.KRHF)):
             return copy.copy(mf)
-
         else:
-            for cls, newcls in scf_class:
-                if isinstance(mf, cls):
-                    out = newcls(mf.cell)
-                    break
-            if out is None:
-                raise RuntimeError('Unsupported SCF class %s' % mf)
-
+            known_cls = {dft.kuks.KUKS : dft.krks.KRKS,
+                         scf.kuhf.KUHF : scf.khf.KRHF ,
+                         dft.uks.UKS   : dft.rks.RKS  ,
+                         scf.uhf.UHF   : scf.hf.RHF   }
+            out = mol_scf.addons._recursive_patch(mf.__class__, known_cls, mf.mol)
     else:
         assert(isinstance(out, (scf.hf.RHF, scf.khf.KRHF)))
 

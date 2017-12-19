@@ -37,6 +37,12 @@ def sfx2c1e(mf):
     >>> mf = scf.sfx2c1e(scf.UHF(mol))
     >>> mf.scf()
     '''
+    if isinstance(mf, x2c._X2C_HF):
+        if mf.with_x2c is None:
+            return mf.__class__(mf)
+        else:
+            return mf
+
     mf_class = mf.__class__
     if mf_class.__doc__ is None:
         doc = ''
@@ -48,9 +54,9 @@ def sfx2c1e(mf):
         Attributes for spin-free X2C:
             with_x2c : X2C object
         '''
-        def __init__(self):
-            self.with_x2c = SpinFreeX2C(mf.mol)
+        def __init__(self, mf):
             self.__dict__.update(mf.__dict__)
+            self.with_x2c = SpinFreeX2C(mf.mol)
             self._keys = self._keys.union(['with_x2c'])
 
         def get_hcore(self, cell=None, kpts=None, kpt=None):
@@ -68,7 +74,7 @@ def sfx2c1e(mf):
             else:
                 return mf_class.get_hcore(self, cell, kpts)
 
-    return X2C_HF()
+    return X2C_HF(mf)
 
 sfx2c = sfx2c1e
 
